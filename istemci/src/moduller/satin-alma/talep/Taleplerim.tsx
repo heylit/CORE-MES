@@ -102,7 +102,7 @@ function Satir({ t, tam, duzenle }: { t: Talebim; tam: boolean; duzenle: ((t: Ta
         <div className="sa-talep-kalem-tablo">
           <table className="sa-talep-kt">
             <thead>
-              <tr><th>Kalem</th>{OZELLIKLER.map(([, b]) => <th key={b} className="sa-talep-oz">{b}</th>)}<th className="sa-talep-sag">Miktar</th></tr>
+              <tr><th>Kalem</th>{OZELLIKLER.map(([, b]) => <th key={b} className="sa-talep-oz">{b}</th>)}<th className="sa-talep-sag">Miktar</th><th className="sa-talep-oz">Termin</th><th className="sa-talep-oz">Üretim emri</th></tr>
             </thead>
             <tbody>
               {t.kalemler.map((x, i) => (
@@ -115,6 +115,9 @@ function Satir({ t, tam, duzenle }: { t: Talebim; tam: boolean; duzenle: ((t: Ta
                     {x.aciklama && <span className="sa-talep-not">{x.aciklama}</span>}
                     {x.kabul && <span className="sa-talep-not">Kabul sınırı: {kabulOzeti(x.kabul)}</span>}
                     <OzellikAlti m={x.malzeme ?? null} />
+                    {(x.ihtiyacTarihi || x.uretimEmriNo) && (
+                      <span className="sa-talep-not sa-talep-oz-alt">{[x.ihtiyacTarihi && `Termin ${gunYaz(x.ihtiyacTarihi)}`, x.uretimEmriNo && `Üretim emri ${x.uretimEmriNo}`].filter(Boolean).join(' · ')}</span>
+                    )}
                     <KartAyrintisi m={x.malzeme ?? null} />
                     <SartliAlternatifler talepId={t.id} kalem={x} />
                   </td>
@@ -123,6 +126,8 @@ function Satir({ t, tam, duzenle }: { t: Talebim; tam: boolean; duzenle: ((t: Ta
                     <span className="sa-talep-no">{x.miktar === null ? '—' : `${x.miktar} ${x.birim}`}</span>
                     {x.karsilik && <span className="sa-talep-not">{karsilikYaz(x.karsilik)}</span>}
                   </td>
+                  <td className="sa-talep-oz" data-etiket="Termin">{x.ihtiyacTarihi ? gunYaz(x.ihtiyacTarihi) : <span className="sa-talep-bos">–</span>}</td>
+                  <td className="sa-talep-oz" data-etiket="Üretim emri">{x.uretimEmriNo ?? <span className="sa-talep-bos">–</span>}</td>
                 </tr>
               ))}
             </tbody>

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import type { MalzemeSecenekleriCevabi } from '#paylasilan/sozlesme/satin-alma.ts';
@@ -80,7 +80,11 @@ describe('3442-2 talebin çizimi', () => {
     await screen.findByRole('option', { name: /HM-00007/ });
     fireEvent.keyDown(kutu, { key: 'ArrowDown' });
     fireEvent.keyDown(kutu, { key: 'Enter' });
-    const foy = screen.getByLabelText('Kartın ayrıntısı');
-    expect(foy.textContent).toBe('KaliteORN-K1ÖlçüØ50×3000 mm');
+    // 3462 a: föyün her alanı ayrı sütun; başlık ve değer kalemin satırında.
+    const basliklar = screen.getAllByRole('columnheader').map((x) => x.textContent);
+    expect(basliklar.slice(2, 4)).toEqual(['Kalite', 'Ölçü']);
+    const satir = screen.getAllByRole('row')[1]!;
+    expect(within(satir).getByText('ORN-K1')).toBeTruthy();
+    expect(within(satir).getByText('Ø50×3000 mm')).toBeTruthy();
   });
 });

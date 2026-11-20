@@ -44,7 +44,7 @@ import {
   iptalOncesiTuret, iptalGeriAlmaHareketi, bilinmeyenKgSatirlari, kgEskimeHatirlatmalari, kgFiyatiEskiMi, kgFiyatiKartta, kgFiyatiYasi, kgSapanMi, kgSapmasi, kgSonAlislari, ondalikCarp, ondalikTopla, birlestirmeReddi, birlesmeProjesiReddi, birlesikTalep, emirHareketi, projeHareketi, projeReddi, siparisDagilimi, type SiparisDagilimi, type DagilimSatiri, genelGiderOrani, satirYolu, type SatirYolu, belgeGenelGiderOrani, eslemeListesiHatasi, eslemeSurumu, type EslemeDurumu, ayirmaReddi, kaynakKalemiReddi, BIRLESIK_KALEM_SINIRI, KUR_KILIDI, HATIRLATMA_ADLARI, type HatirlatmaAyarlari, type HatirlatmaTalebi, haftaIciGunleri, hatirlatmaAnahtari, hatirlatmaFarki, hatirlatmalar,
 } from './kurallar.ts';
 import type { BirimKarsiligi, FiyatIzi, KalemKabulu, KalemOzelligi } from './kurallar.ts';
-import { satisBagReddi } from './kurallar.ts';
+import { kalemTerminEmriTuret, satisBagReddi } from './kurallar.ts';
 import { alternatifIzniReddi, cizimIzni, alternatifKararReddi, alternatifSiparisReddi, kartBekleyenAlternatifler, alternatifOlcuReddi, alternatifSonucuHesapla, sartliAlternatifler, kabulReddi, kabulYazimi, kabulZarfi as daraltilmisZarf, emirSatinAlmaDurumlari, fasonSiparisTarihiSec, kopyaOzelligi, tedarikAsamasi } from './kurallar.ts';
 import type { EmirSatinAlmaDurumu, FasonSiparisTarihi } from './kurallar.ts';
 import { butceKullanimi, butceSatirlari, degerlendir, esitVadeOrtami, gerekenBasamak, kalemHarcamalari, kararTutari, tedarikciBasarimi, teklifHesabi, type ButceSatiri } from './hesap-kurallar.ts';
@@ -224,6 +224,10 @@ async function projeOzetleri(db: Db, idler: readonly number[]): Promise<Map<numb
 // 2611 a: proje yalnız emirsiz talepte; yeni seçilen proje aktif olmalı.
 async function projeyiDenetle(db: Db, t: TalepYazimi, eskiProjeId: number | null): Promise<void> {
   if (t.projeId == null) return;
+  // 3462 a (Risk K3): emirli talep projeye bağlanmaz kuralı kalemin kendi emrine de uyar (talep düzeyindeki kısıt bunu göremez).
+  if ((await s.kalemTerminEmirleriOku(db, [t.id])).some((x) => x.uretimEmriId !== null && t.kalemler.some((k) => k.id === x.kalemId))) {
+    throw dogrulama(ILETILER.projeEmirli, 'projeId');
+  }
   const p = t.projeId === eskiProjeId || t.uretimEmriId !== null ? null : await projeGetir(db, t.projeId);
   const red = projeReddi(t, eskiProjeId, p?.durum === 'aktif');
   if (red !== null) throw dogrulama(red, 'projeId');
@@ -526,7 +530,9 @@ export async function talebimiDuzenle(db: Db, k: Kullanici, id: string, g: Taleb
   const kabuller = await gelenKabuller(db, eski, g.kalemler, kalemler, false);
   const baslik = talebimBasligi(eski, kalemler);
   const taban = tamGorurMu(k.islemler) ? eski : talepEdenGorunumu(eski, k.id);
-  await talepKaydet(db, k, id, { ...taban, baslik, ihtiyacTarihi: g.ihtiyacTarihi, notlar: g.aciklama, kalemler, surum: g.surum }, izYaz);
+  const turev = await duzenlemeTerminEmri(db, eski, g.kalemler, g.ihtiyacTarihi);
+  await talepKaydet(db, k, id, { ...taban, baslik, ihtiyacTarihi: turev.talep.ihtiyacTarihi, uretimEmriId: turev.talep.uretimEmriId, notlar: g.aciklama, kalemler, surum: g.surum }, izYaz);
+  await kalemTerminEmriYaz(db, id, kalemler.map((x) => x.id), turev.kalemler);
   await s.kalemKabulleriYaz(db, id, kabuller);
   const son = (await talepOku(db, id))!;
   return talebim(gorunen(k, son), await kalemBagGorunumu(db, [id]), await kalemKarsiliklari(db, [son]), await kalemOzellikleri(db, [son]), await kalemKabulleri(db, [son]), sartliAlternatifler(son));
@@ -566,6 +572,24 @@ async function talebimKalemleri(
     };
   });
 }
+// 3462 a: yalnız talepten farklı değeri olan kalem yazılır; düzenlemede eski farkın silinmesi için bütün kalemler gönderilir.
+async function kalemTerminEmriYaz(db: Db, talepId: string, kalemIdleri: readonly string[], degerler: readonly { ihtiyacTarihi: string | null; uretimEmriId: number | null }[]): Promise<void> {
+  await s.kalemTerminEmirleriYaz(db, talepId, kalemIdleri.map((kalemId, i) => ({ kalemId, ...degerler[i]! })));
+}
+// 3462 a: düzenleme ve güncelleme. Kalem termini gelmezse kendi termini olan kalem onu korur, öteki formun terminini alır; emir
+// açılıştan sonra değişmez (var olan kalem kendi emrini, yeni kalem talebin emrini taşır).
+async function duzenlemeTerminEmri(db: Db, eski: Talep, gelen: TalebimiDuzenleYazimi['kalemler'], ihtiyacTarihi: string | null): Promise<ReturnType<typeof kalemTerminEmriTuret>> {
+  const kendi = new Map((await s.kalemTerminEmirleriOku(db, [eski.id])).map((x) => [x.kalemId, x]));
+  return kalemTerminEmriTuret(gelen.map((x) => {
+    const k = x.id === null ? undefined : kendi.get(x.id);
+    const varOlan = x.id !== null;
+    return {
+      ihtiyacTarihi: x.ihtiyacTarihi !== undefined ? x.ihtiyacTarihi : (k?.ihtiyacTarihi ?? ihtiyacTarihi),
+      uretimEmriId: varOlan ? (k?.uretimEmriId ?? eski.uretimEmriId) : eski.uretimEmriId,
+    };
+  }), { ihtiyacTarihi, uretimEmriId: eski.uretimEmriId });
+}
+
 // Başlık hızlı açmanın ürettiği başlıksa kalemlerle yenilenir; elle yazılmış başlık korunur.
 const talebimBasligi = (eski: Talep, kalemler: TalepYazimi['kalemler']): string =>
   (eski.baslik === hizliBaslik(eski.kalemler.map((x) => x.ad)) ? hizliBaslik(kalemler.map((x) => x.ad)) : eski.baslik);
@@ -584,12 +608,14 @@ export async function guncellemeAc(db: Db, k: Kullanici, id: string, g: TalebimG
   if (kalemRed !== null) throw gecersiz(kalemRed);
   const kalemler = await talebimKalemleri(db, k, eski, g.kalemler, true);
   const kabuller = await gelenKabuller(db, eski, g.kalemler, kalemler, true);
+  const turev = await duzenlemeTerminEmri(db, eski, g.kalemler, g.ihtiyacTarihi);
   const t: TalepYazimi = {
     id: g.id, baslik: talebimBasligi(eski, kalemler), birim: eski.birim, talepEdenKisiId: eski.talepEdenKisiId, oncelik: eski.oncelik,
-    ihtiyacTarihi: g.ihtiyacTarihi, notlar: g.aciklama, durum: 'taslak', iptalNedeni: '', agirliklar: null, kalemler, teklifIstekleri: [],
-    teklifler: [], karar: null, onaylar: [], hareketler: [], senaryolar: [], uretimEmriId: eski.uretimEmriId, projeId: eski.projeId ?? null,
+    ihtiyacTarihi: turev.talep.ihtiyacTarihi, notlar: g.aciklama, durum: 'taslak', iptalNedeni: '', agirliklar: null, kalemler, teklifIstekleri: [],
+    teklifler: [], karar: null, onaylar: [], hareketler: [], senaryolar: [], uretimEmriId: turev.talep.uretimEmriId, projeId: eski.projeId ?? null,
   };
   const acilan = await talepAc(db, k, t, izYaz);
+  await kalemTerminEmriYaz(db, g.id, kalemler.map((x) => x.id), turev.kalemler);
   await s.kalemKabulleriYaz(db, g.id, kabuller);
   const kok = (await s.talepSatirlariIdlerle(db, [id]))[0]!.guncellenenTalepId ?? id;
   await s.guncellenenTalepYaz(db, g.id, kok);
@@ -863,13 +889,20 @@ async function kalemBagGorunumu(db: Db, talepIdleri: readonly string[]): Promise
     const o = ozetler.get(id);
     return [id, o === undefined ? `#${id}` : `${o.emirNo} · Op ${o.opNo}`] as const;
   }));
-  return new Map(satirlar.map((r) => {
+  const m = new Map<string, KalemBagi>(satirlar.map((r) => {
     const kart = r.uygulananMalzemeNo === null ? undefined : kartlar.get(r.uygulananMalzemeNo);
     return [r.kalemId, {
       uygulanan: r.uygulananMalzemeNo === null ? null : kart ? `${kart.kod} · ${kart.ad ?? ''}`.trim() : `#${r.uygulananMalzemeNo}`,
       fasonAdim: r.isEmriId === null ? null : isler.get(r.isEmriId)!,
     }];
   }));
+  const kendi = talepIdleri.length === 0 ? [] : await s.kalemTerminEmirleriOku(db, talepIdleri);
+  const nolar = await emirNolari(db, [...new Set(kendi.flatMap((r) => (r.uretimEmriId === null ? [] : [r.uretimEmriId])))]);
+  for (const r of kendi) {
+    m.set(r.kalemId, { ...(m.get(r.kalemId) ?? { uygulanan: null, fasonAdim: null }),
+      kendi: { ihtiyacTarihi: r.ihtiyacTarihi, uretimEmriId: r.uretimEmriId, uretimEmriNo: r.uretimEmriId === null ? null : nolar.get(r.uretimEmriId) ?? `#${r.uretimEmriId}` } });
+  }
+  return m;
 }
 
 // 898 a: ön talep yalnız planlı ya da başlamış emrin fason adımıdır; taslak emir henüz yayımlanmamıştır.
@@ -1052,15 +1085,15 @@ const siparisNoVerici = (db: Db) => () => belgeNo(db, 'satin-alma.siparis-no', (
 
 // 2428-1: fason talebi her kalem için dış işlem emri açar, taleple aynı işlemde (biri düşerse talep de açılmaz). Emrin adımında var olan
 // belge bağlanır, ikincisi açılmaz; partide yeni belge açılır: parça uygulanan kart, işlem kalemin hizmet kartı, termin talebin ihtiyaç tarihi.
-async function fasonDieleriAc(db: Db, k: Kullanici, g: HizliAcYazimi): Promise<(number | null)[]> {
+async function fasonDieleriAc(db: Db, k: Kullanici, g: HizliAcYazimi, terminler: readonly (string | null)[]): Promise<(number | null)[]> {
   const idler: (number | null)[] = [];
-  for (const x of g.kalemler) {
+  for (const [i, x] of g.kalemler.entries()) {
     const aciklama = x.aciklama === '' ? null : x.aciklama;
     const acilan = x.isEmriId !== null
       ? await dieAc(db, k.id, { kaynak: 'emir', isEmriId: x.isEmriId, aciklama }, { acilis: 'talep', varsaVer: true })
       : await dieAc(db, k.id, {
         kaynak: 'parti', malzemeNo: x.uygulananMalzemeNo!, partiId: x.partiId!, konumId: x.konumId, operasyonTipiId: null, hizmetNo: x.malzemeNo,
-        adet: Number(x.miktar), firmaId: null, planlananGidis: null, termin: g.ihtiyacTarihi, aciklama,
+        adet: Number(x.miktar), firmaId: null, planlananGidis: null, termin: terminler[i] ?? null, aciklama,
       }, { acilis: 'talep' });
     idler.push(acilan.id);
   }
@@ -1104,18 +1137,21 @@ export async function hizliAc(db: Db, k: Kullanici, g: HizliAcYazimi, izYaz: Fiy
       miktar: sade(x.miktar), birim: kopya?.birim ?? x.birim, kategori: kopya?.kategori ?? KARTSIZ_KATEGORI[g.tur],
     };
   });
+  const turev = kalemTerminEmriTuret(g.kalemler, { ihtiyacTarihi: g.ihtiyacTarihi, uretimEmriId: g.uretimEmriId });
+  for (const e of new Set(g.kalemler.map((x) => (x.uretimEmriId !== undefined ? x.uretimEmriId : g.uretimEmriId)))) await emriDenetle(db, e, null);
   const t: TalepYazimi = {
-    id: g.id, baslik: hizliBaslik(kalemler.map((x) => x.ad)), birim: null, talepEdenKisiId: k.id, oncelik: 'normal', ihtiyacTarihi: g.ihtiyacTarihi,
+    id: g.id, baslik: hizliBaslik(kalemler.map((x) => x.ad)), birim: null, talepEdenKisiId: k.id, oncelik: 'normal', ihtiyacTarihi: turev.talep.ihtiyacTarihi,
     notlar: g.aciklama, durum: 'taslak', iptalNedeni: '', agirliklar: null, kalemler, teklifIstekleri: [], teklifler: [], karar: null,
-    onaylar: [], hareketler: [], senaryolar: [], uretimEmriId: g.uretimEmriId, projeId: null,
+    onaylar: [], hareketler: [], senaryolar: [], uretimEmriId: turev.talep.uretimEmriId, projeId: null,
   };
   await kabulleriDenetle(db, g.kalemler.map((x, i) => ({ sira: i, malzemeNo: x.malzemeNo, kabul: x.kabul ?? null })));
   const acilan = await talepAc(db, k, t, izYaz);
+  await kalemTerminEmriYaz(db, t.id, kalemler.map((x) => x.id), turev.kalemler);
   await s.kalemKabulleriYaz(db, t.id, g.kalemler.flatMap((x, i) => {
     const kabul = kabulYazimi(x.kabul ?? null);
     return kabul === null ? [] : [{ kalemId: kalemler[i]!.id, kabul }];
   }));
-  const dieler = g.tur === 'fason' ? await fasonDieleriAc(db, k, g) : g.kalemler.map(() => null);
+  const dieler = g.tur === 'fason' ? await fasonDieleriAc(db, k, g, turev.kalemler.map((x) => x.ihtiyacTarihi ?? turev.talep.ihtiyacTarihi)) : g.kalemler.map(() => null);
   await s.kalemBaglariYaz(db, t.id, g.kalemler.flatMap((x, i) => (x.uygulananMalzemeNo === null && x.isEmriId === null && dieler[i] === null && (x.satisSiparisSatiriId ?? null) === null ? []
     : [{ kalemId: kalemler[i]!.id, uygulananMalzemeNo: x.uygulananMalzemeNo, isEmriId: x.isEmriId, dieId: dieler[i] ?? null, satisSiparisSatiriId: x.satisSiparisSatiriId ?? null }])));
   if (satisNolari.length > 0) await s.hareketEkle(db, t.id, randomUUID(), `Satış siparişi kaleminden açıldı: ${satisNolari.join(', ')}`, k.id);

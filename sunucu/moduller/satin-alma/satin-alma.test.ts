@@ -25,7 +25,7 @@ import * as servis from './servis.ts';
 import { tedarikciOnayDurumlari } from '../kalite-merkezi/disari.ts';
 import { ILETILER, karneTeslimOlayi, onayliTalepGelisi, talepEdenGorunumu } from './kurallar.ts';
 import { kablola } from '../../kablolama.ts';
-import { onayliTalepGelisleri, takvimKayitlari, terminDinle } from './disari.ts';
+import { emirTedarikDurumlari, onayliTalepGelisleri, takvimKayitlari, terminDinle } from './disari.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import { acikTalepMiktarlari, siparisOdemeKosullari, terminKalemleriOku } from './sorgular.ts';
 import * as sorgu from './sorgular.ts';
@@ -817,6 +817,59 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.equal((await istek(c.talep, 'POST', '/satin-alma-talepleri/hizli-ac', g(kapali))).statusCode, 400);
     const liste = tamam<{ emirler: { id: number }[] }>(await istek(c.talep, 'GET', '/satin-alma-acik-emirler')).emirler.map((e) => e.id);
     assert.deepEqual([liste.includes(acik), liste.includes(kapali)], [true, false]);
+  });
+
+  test('3462 a: kalem kendi termini ve emriyle açılır; talep termini en erken, emri yalnız ortaksa; kalem emri okuyuculara ve düzenlemeye geçer', async () => {
+    const e1 = await emirAc(), e2 = await emirAc(), kapali = await emirAc('iptal');
+    const k = (ad: string, ihtiyacTarihi: string | null | undefined, uretimEmriId: number | null | undefined) => ({ ad, birim: 'adet', miktar: '1', aciklama: '',
+      ...(ihtiyacTarihi === undefined ? {} : { ihtiyacTarihi }), ...(uretimEmriId === undefined ? {} : { uretimEmriId }) });
+    const g = (kalemler: unknown[], uretimEmriId: number | null = null) => ({ id: randomUUID(), tur: 'malzeme' as const, ihtiyacTarihi: '2026-12-20', aciklama: '', uretimEmriId, kalemler });
+    const karisik = tamam<Talebim>(await istek(c.talep, 'POST', '/satin-alma-talepleri/hizli-ac', g([k('Deneme A', '2026-12-10', e1), k('Deneme B', undefined, e2)])));
+    assert.deepEqual([karisik.ihtiyacTarihi, karisik.uretimEmriNo], ['2026-12-10', null]);
+    assert.deepEqual(karisik.kalemler.map((x) => [x.ihtiyacTarihi, x.uretimEmriId]), [['2026-12-10', e1], ['2026-12-20', e2]]);
+    // Terminler farklı: en erken kalem dahil her kalem kendi terminini açık taşır (3475).
+    assert.deepEqual((await vt().tx((db) => sorgu.kalemTerminEmirleriOku(db, [karisik.id]))).map((x) => [x.ihtiyacTarihi, x.uretimEmriId]), [['2026-12-10', e1], ['2026-12-20', e2]]);
+    // Kalem emri talep emrinin yerine okunur (KALEM_EMRI): e2'nin tedarik durumunda yalnız B görünür.
+    const durumlar = await vt().tx((db) => emirTedarikDurumlari(db, [e2], []));
+    assert.deepEqual(durumlar.filter((x) => x.talepNo === karisik.no).map((x) => x.uretimEmriId), [e2]);
+    // Kalem termini talep termininin yerine okunur (KALEM_TERMINI): termin takibi her kalemi kendi tarihiyle verir.
+    const terminler = await vt().tx((db) => sorgu.terminKalemleriOku(db));
+    assert.deepEqual(terminler.filter((x) => x.talepId === karisik.id).map((x) => [x.ad, x.ihtiyacTarihi]).sort(), [['Deneme A', '2026-12-10'], ['Deneme B', '2026-12-20']]);
+    // Biri açık biri kapalı emirli iki kalem: talep emri boş kalır, kapalı emir kalem denetiminde reddedilir.
+    const ikiliRed = await istek(c.talep, 'POST', '/satin-alma-talepleri/hizli-ac', g([k('Deneme F', undefined, e1), k('Deneme G', undefined, kapali)]));
+    assert.equal(ikiliRed.statusCode, 400, ikiliRed.body);
+    assert.match(ikiliRed.body, /Üretim emri açık değil/);
+    const ortak = tamam<Talebim>(await istek(c.talep, 'POST', '/satin-alma-talepleri/hizli-ac', g([k('Deneme C', undefined, e1), k('Deneme D', undefined, undefined)], e1)));
+    assert.deepEqual(ortak.kalemler.map((x) => x.uretimEmriId), [e1, e1]);
+    assert.equal((await vt().tx((db) => sorgu.kalemTerminEmirleriOku(db, [ortak.id]))).length, 0);
+    assert.match(ortak.uretimEmriNo ?? '', /^UE-\d+$/);
+    const red = await istek(c.talep, 'POST', '/satin-alma-talepleri/hizli-ac', g([k('Deneme E', undefined, kapali)]));
+    assert.equal(red.statusCode, 400, red.body);
+    // Düzenleme: B'nin termini öne alınınca talebin termini değişir; emir açılıştan sonra kalemde kalır.
+    const duz = tamam<Talebim>(await istek(c.talep, 'POST', `/satin-alma-talepleri/${karisik.id}/talebimi-duzenle`, {
+      ihtiyacTarihi: '2026-12-20', aciklama: '', surum: karisik.surum,
+      kalemler: karisik.kalemler.map((x, i) => ({ id: x.id, miktar: '1', aciklama: '', ihtiyacTarihi: i === 1 ? '2026-12-05' : '2026-12-10' })) }));
+    assert.equal(duz.ihtiyacTarihi, '2026-12-05');
+    assert.deepEqual(duz.kalemler.map((x) => [x.ihtiyacTarihi, x.uretimEmriId]), [['2026-12-10', e1], ['2026-12-05', e2]]);
+    // Satın alma talebin terminini değiştirse de kalem terminleri yerinde kalır (3475).
+    const ilk = tamam<AcilisCevabi>(await istek(c.sa, 'GET', '/satin-alma-acilis')).talepler.find((x) => x.id === karisik.id)!;
+    const tarihDegisti = await kaydet(c.sa, { ...govde(ilk), ihtiyacTarihi: '2027-01-15' });
+    assert.equal(tarihDegisti.statusCode, 200, tarihDegisti.body);
+    assert.deepEqual((await vt().tx((db) => sorgu.kalemTerminEmirleriOku(db, [karisik.id]))).map((x) => [x.ihtiyacTarihi, x.uretimEmriId]), [['2026-12-10', e1], ['2026-12-05', e2]]);
+    // Stoktan karşılanıp iptal edilen kalem termini ve emriyle geri gelir (stok geri yüklemesi sütun listesiyle yazar).
+    const bId = karisik.kalemler[1]!.id!;
+    await vt().tx(async (db) => {
+      const silinen = await sorgu.stoktanKalemAzalt(db, karisik.id, bId, '1000000');
+      assert.notEqual(silinen, null);
+      assert.equal(await sorgu.stoktanKalemGeriAl(db, karisik.id, bId, '1', silinen), true);
+    });
+    assert.deepEqual((await vt().tx((db) => sorgu.kalemTerminEmirleriOku(db, [karisik.id]))).map((x) => [x.ihtiyacTarihi, x.uretimEmriId]), [['2026-12-10', e1], ['2026-12-05', e2]]);
+    // Kalemi emirli talep projeye bağlanmaz (Risk K3).
+    const tam = tamam<AcilisCevabi>(await istek(c.sa, 'GET', '/satin-alma-acilis')).talepler.find((x) => x.id === karisik.id)!;
+    const proje = await projeEkle('P3462A');
+    const pr = await kaydet(c.sa, { ...govde(tam), projeId: proje });
+    assert.equal(pr.statusCode, 400, pr.body);
+    assert.match(pr.body, new RegExp(ILETILER.projeEmirli));
   });
 
   test('siparisSatirlarininEmri: emirli talebin sipariş satırı haritada gelir, emirsizinki ve olmayan kimlik gelmez', async () => {
