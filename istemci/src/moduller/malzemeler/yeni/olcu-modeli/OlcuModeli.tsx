@@ -47,7 +47,7 @@ export function FoyModeli({ d }: { d: Taslak }) {
   return (
     <div className="tc-om-foy">
       <Model g={g} />
-      <p className="tc-om-not">Model ölçüden çizilir, kaydedilmez. Karta yüklenen 3B model "Resim, PDF ve 3B model" bölümünde durur.</p>
+      <p className="tc-om-not">Model ölçüden çizilir, kaydedilmez. Karta yüklenen 3B model "Teknik resim, 3B model ve fotoğraf" bölümünde durur.</p>
     </div>
   );
 }

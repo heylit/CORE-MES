@@ -20,7 +20,7 @@ export interface BekleyenCizim {
   tasindi: boolean;
 }
 
-// Kullanıcının istediği iki biçim: teknik resim PDF, 3B model STEP. Öteki biçimler kayıttan sonra "Resimler"den eklenir.
+// Kullanıcının istediği iki biçim: teknik resim PDF, 3B model STEP. Öteki biçimler kayıttan sonra kartın dosya panelinden eklenir.
 export function cizimTuru(ad: string): CizimTuru | null {
   const uzanti = ad.toLowerCase().split('.').pop() ?? '';
   if (uzanti === 'pdf') return 'teknik-resim';
