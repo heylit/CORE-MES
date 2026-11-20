@@ -22,6 +22,10 @@ export function sureGirdisi(r: RotaEkrani, d: Dugum): (a: Adim) => SureGirdisi {
 }
 
 const saat = (dk: number) => sayi(Math.round((dk / 60) * 10) / 10);
+// 3482: bloğun süresi; bir saatin altı dakika, üstü saat.
+export const sureMetni = (dk: number) => (dk < 1 ? '1 dk altı' : dk < 60 ? `${sayi(Math.round(dk))} dk` : `${saat(dk)} sa`);
+// Bu orandan dar blokta süre sığmaz; süre şeridin altındaki listede yazılır.
+const DAR_BLOK = 0.12;
 const seritAdi = (s: string, carpan: number | null, bagimsiz: boolean) => (s === ANA_HAT ? 'Ana hat'
   : `Dal ${s}${bagimsiz ? ' (bağımsız)' : ''}${carpan !== null && carpan > 1 ? ` ×${String(carpan)}` : ''}`);
 
@@ -55,6 +59,13 @@ export function SureSeridi({ r, d, z, miktar, ymler = [] }: { r: RotaEkrani; d: 
   const olcek = Math.max(z.bitis, ...ym.map((y) => y.c.bitis));
   const yuzde = (n: number) => String(olcek > 0 ? Math.round((n / olcek) * 10000) / 100 : 0);
   const secili = r.secim?.tur === 'adim' && r.secim.urunId === d.id ? r.secim.adimId : null;
+  const kisalar = liste.flatMap((a) => {
+    const t = z.zaman.get(a.id);
+    const dk = sure(a).dk;
+    if (!t || t.fason || t.sureYok || dk === null || olcek <= 0 || (t.bit - t.bas) / olcek >= DAR_BLOK) return [];
+    const op = r.duzen.h.op.get(a.opId);
+    return [{ id: a.id, kod: op?.abbr ?? op?.code ?? '?', metin: sureMetni(dk) }];
+  });
   return (
     <section className="tc-rr1-ss" aria-label="Süre şeridi" ref={ref}>
       <div className="tc-rr1-ss-bas">
@@ -67,7 +78,10 @@ export function SureSeridi({ r, d, z, miktar, ymler = [] }: { r: RotaEkrani; d: 
           {ym.filter((y) => y.bekletir > 0).map((y) => ` · ${y.kod} (yarı mamul) ${adimAdi(y.hedef)} adımını ${saat(y.bekletir)} sa bekletiyor`).join('')}
         </span>
         <span className="tc-rr1-ss-lejant" aria-hidden="true">
-          <i className="tc-rr1-ss-lj tc-rr1-ss-lj-hz" />hazırlık <i className="tc-rr1-ss-lj tc-rr1-ss-lj-kr" />kritik yol <i className="tc-rr1-ss-lj tc-rr1-ss-lj-fs" />fason
+          <span><i className="tc-rr1-ss-lj tc-rr1-ss-lj-hz" />hazırlık</span>
+          <span><i className="tc-rr1-ss-lj tc-rr1-ss-lj-kr" />kritik yol</span>
+          <span><i className="tc-rr1-ss-lj tc-rr1-ss-lj-fs" />fason (gün, ölçek dışı)</span>
+          <span>renk: istasyon</span>
         </span>
       </div>
       <div className="tc-rr1-ss-izler">
@@ -109,7 +123,12 @@ export function SureSeridi({ r, d, z, miktar, ymler = [] }: { r: RotaEkrani; d: 
                     onClick={() => { r.sec({ tur: 'adim', urunId: d.id, adimId: a.id, seq: a.seq, miktar: d.adimlar.find((x) => x.a.id === a.id)?.miktar ?? d.miktar }); }}
                   >
                     {!t.fason && <span className="tc-rr1-ss-hz" />}
-                    <span className="tc-rr1-ss-yazi">{op?.abbr ?? op?.code ?? '?'}{t.fason && a.terminGun ? ` ${String(a.terminGun)} gün` : ''}</span>
+                    <span className="tc-rr1-ss-yazi">
+                      {op?.abbr ?? op?.code ?? '?'}
+                      {t.fason
+                        ? <span className="tc-rr1-ss-sure">{a.terminGun ? `${String(a.terminGun)} gün · ölçek dışı` : 'ölçek dışı'}</span>
+                        : g.dk !== null && <span className="tc-rr1-ss-sure">{sureMetni(g.dk)}</span>}
+                    </span>
                   </button>
                 );
               })}
@@ -117,6 +136,11 @@ export function SureSeridi({ r, d, z, miktar, ymler = [] }: { r: RotaEkrani; d: 
           ];
         })}
       </div>
+      {kisalar.length > 0 && (
+        <div className="tc-rr1-ss-liste" aria-label="Kısa adımların süresi">
+          {kisalar.map((k) => <span key={k.id}><b>{k.kod}</b> {k.metin}</span>)}
+        </div>
+      )}
     </section>
   );
 }

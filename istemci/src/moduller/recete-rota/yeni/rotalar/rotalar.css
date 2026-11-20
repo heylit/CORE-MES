@@ -59,7 +59,8 @@
   display: flex; flex-direction: column; gap: var(--b-2); padding: var(--b-2) var(--b-3); background: var(--panel); border: 1px solid var(--edge);
   border-left: var(--b-1) solid var(--run); border-radius: var(--yari-1);
 }
-.tc-rr1-has-open { border-color: var(--hold); }
+/* 3482 a: açık taslak sol kenarda sarı çizgidir; siyah zemin kullanılmaz. */
+.tc-rr1-has-open { border-left-color: var(--hazard); }
 .tc-rr1-rv-t { font-size: var(--yazi-m); }
 .tc-rr1-rv-list { display: inline-flex; flex-wrap: wrap; gap: var(--b-1); }
 .tc-rr1-rvtab {
@@ -67,11 +68,12 @@
   padding: 0 var(--b-2); background: var(--panel-solid); color: var(--ink); border: 1px solid var(--edge); border-radius: var(--yari-1); cursor: pointer;
 }
 .tc-rr1-rvtab small { font-size: var(--yazi-xs); color: var(--muted); }
-.tc-rr1-rvtab.tc-rr1-on { border-color: var(--ink); background: var(--ink); color: var(--bg); }
+.tc-rr1-rvtab.tc-rr1-on { border-color: var(--hazard); background: var(--hazard); color: var(--on-hazard); }
 .tc-rr1-rvtab.tc-rr1-on small { color: inherit; }
 /* 3247 a: rota sekmesi iki satırdır (ad; emir türleri ve yürürlükteki revizyon, 3295 a); seçili sekmenin altı kalın çizilir. */
 .tc-rr1-rotasekme { padding: var(--b-1) var(--b-2); gap: var(--b-1); text-align: left; }
-.tc-rr1-rotasekme.tc-rr1-cur { border-bottom-width: var(--cizgi-kalin); border-bottom-color: var(--hazard); }
+.tc-rr1-rotasekme.tc-rr1-cur { border-color: var(--hazard); background: var(--hazard); color: var(--on-hazard); }
+.tc-rr1-rotasekme.tc-rr1-cur small { color: inherit; }
 .tc-rr1-rvchip {
   display: inline-block; font-size: var(--yazi-xs); font-weight: 700; padding: 0 var(--b-1); margin-left: var(--b-1); border-radius: var(--yari-1);
   border: 1px solid var(--edge); color: var(--muted); background: var(--panel-solid);
@@ -89,14 +91,19 @@
 .tc-rr1-revsec { min-height: var(--alan-boy); font-weight: 700; max-width: 100%; }
 .tc-rr1-duzencubugu {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); padding: var(--b-2) var(--b-3); border-radius: var(--yari-2);
-  background: var(--ink); color: var(--bg);
+  background: var(--panel2); color: var(--ink);
 }
 .tc-rr1-dc-ad { font-size: var(--yazi-m); }
-.tc-rr1-dc-fark { font-size: var(--yazi-s); opacity: .8; }
-.tc-rr1-duzencubugu .tc-dugme-ikincil { background: transparent; color: var(--bg); border-color: color-mix(in srgb, var(--bg) 35%, transparent); }
-.tc-rr1-duzencubugu .tc-dugme-ikincil:disabled { opacity: .5; }
+.tc-rr1-dc-fark {
+  font-size: var(--yazi-xs); font-weight: 600; padding: 0 var(--b-1); border-radius: var(--yari-1); color: var(--hazard-ink);
+  background: color-mix(in srgb, var(--hazard) 16%, var(--panel-solid)); border: 1px solid var(--hazard);
+}
 .tc-rr1-rv-status { gap: var(--b-1) var(--b-2); color: var(--muted); font-size: var(--yazi-s); }
 .tc-rr1-rv-status .tc-rr1-ipucu { margin: 0; }
+/* 3482 a: saat simgesi metnin ilk satırında kalır; metin kendi içinde kırılır. */
+.tc-rr1-rv-status { flex-wrap: nowrap; align-items: flex-start; }
+.tc-rr1-rv-status > .tc-simge { flex: none; margin-top: var(--pay-ince); }
+.tc-rr1-rv-status-ic { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); min-width: 0; }
 @media (max-width: 767px) {
   .tc-rr1-duzencubugu > .tc-rr1-dc-ad { flex: 1 1 calc(100% - var(--dokunma)); }
   .tc-rr1-duzencubugu > .tc-rr1-grow { display: none; }
@@ -134,6 +141,22 @@
   border: 1px solid var(--hold); background: color-mix(in srgb, var(--hold) 10%, var(--panel-solid)); color: var(--ink);
   border-radius: var(--yari-1); padding: var(--b-2) var(--b-3); font-size: var(--yazi-s);
 }
+/* 3482 a: uyarılar tek açılır satırda; eksik kırmızı, bilgi mavi tondadır. */
+.tc-rr1-uyarilar { display: flex; flex-direction: column; gap: var(--b-1); }
+.tc-rr1-uyarilar > summary {
+  display: flex; align-items: center; gap: var(--b-2); min-height: var(--dokunma); cursor: pointer; list-style: none; font-size: var(--yazi-s);
+}
+.tc-rr1-uyarilar > summary::-webkit-details-marker { display: none; }
+.tc-rr1-uyarilar[open] > summary .tc-simge { transform: rotate(90deg); }
+.tc-rr1-uyarilar[open] { gap: var(--b-2); }
+.tc-rr1-uy-rozet { font-size: var(--yazi-xs); font-weight: 600; padding: 0 var(--b-2); border-radius: var(--yari-2); }
+.tc-rr1-uy-hata { color: var(--stop); background: color-mix(in srgb, var(--stop) 10%, var(--panel-solid)); }
+.tc-rr1-uy-bilgi { color: var(--done); background: color-mix(in srgb, var(--done) 9%, var(--panel-solid)); }
+.tc-rr1-warnbox-hata, .tc-rr1-warnbox-bilgi { display: flex; align-items: flex-start; gap: var(--b-2); border: 0; }
+.tc-rr1-warnbox-hata { background: color-mix(in srgb, var(--stop) 10%, var(--panel-solid)); }
+.tc-rr1-warnbox-hata > .tc-simge { color: var(--stop); flex: none; }
+.tc-rr1-warnbox-bilgi { background: color-mix(in srgb, var(--done) 9%, var(--panel-solid)); }
+.tc-rr1-warnbox-bilgi > .tc-simge { color: var(--done); flex: none; }
 
 /* Gövde: adım paneli, şema ya da tablo, düzenleme paneli */
 /* Panel sütunu (B-2482-R5): sürüklenen genişlik --tc-rr1-panel'dedir; en az bildirim çekmecesi, en çok gövdenin yüzde 60'ı (PanelTutamagi ile aynı).
@@ -348,11 +371,10 @@
 .tc-rr1-noroute { padding: var(--b-3); color: var(--muted); }
 .tc-rr1-rhd-wrap { display: flex; gap: var(--b-1); align-items: center; }
 .tc-rr1-rhd {
-  flex: 1; display: flex; gap: var(--b-2); align-items: center; background: var(--ink); color: var(--bg);
-  border: 0; border-radius: var(--yari-1); padding: var(--b-2) var(--b-3); cursor: pointer; text-align: left; font: inherit;
+  flex: 1; display: flex; gap: var(--b-2); align-items: center; background: var(--panel-solid); color: var(--ink);
+  border: 1px solid var(--edge); border-radius: var(--yari-1); padding: var(--b-2) var(--b-3); cursor: pointer; text-align: left; font: inherit;
 }
-.tc-rr1-rhd .tc-rr1-slot { background: var(--bg); color: var(--ink); border-color: var(--bg); }
-.tc-rr1-rhd .tc-rr1-ci small { color: color-mix(in srgb, var(--bg) 75%, transparent); }
+.tc-rr1-rhd .tc-rr1-ci small { color: var(--muted); }
 .tc-rr1-rhd.tc-rr1-secili { outline: var(--pay-ince) solid var(--done); outline-offset: var(--pay-ince); }
 .tc-rr1-opbox {
   position: relative; display: flex; flex-direction: column; gap: var(--pay-ince); text-align: left; font: inherit; color: var(--ink);
@@ -370,7 +392,7 @@
 /* Eksik bilgi (firma seçilmedi) termin satırıyla aynı vurguda. */
 .tc-rr1-ost b { color: var(--ink); }
 .tc-rr1-renk-0 { --renk: var(--done); } .tc-rr1-renk-1 { --renk: var(--run); } .tc-rr1-renk-2 { --renk: var(--hold); }
-.tc-rr1-renk-3 { --renk: var(--stop); } .tc-rr1-renk-4 { --renk: var(--bp); } .tc-rr1-renk-5 { --renk: var(--idle); }
+.tc-rr1-renk-3 { --renk: var(--stop); } .tc-rr1-renk-4 { --renk: var(--cmm); } .tc-rr1-renk-5 { --renk: var(--idle); }
 .tc-rr1-renk-yok { --renk: var(--muted); }
 /* Çok dallı rota (1248 a): her dal kendi şeridinde, ana hattan içeride ve kendi renginde; ana hat (0) yerinde kalır. */
 .tc-rr1-dalserit { --serit: 0; padding-inline-start: calc(var(--b-4) * var(--serit)); }
@@ -868,8 +890,9 @@ tr[data-bekleyen] .tc-rr1-pr-op { color: var(--hold); }
 .tc-rr1-ss-baslik { display: inline-flex; align-items: center; gap: var(--b-1); font-weight: 700; }
 .tc-rr1-ss-ozet { color: var(--muted); }
 .tc-rr1-ss-ozet b { color: var(--ink); }
-.tc-rr1-ss-lejant { display: inline-flex; align-items: center; gap: var(--b-1); margin-left: auto; font-size: var(--yazi-xs); color: var(--muted); }
-.tc-rr1-ss-lj { display: inline-block; width: var(--b-3); height: var(--b-2); border-radius: var(--pay-ince); margin-left: var(--b-2); }
+.tc-rr1-ss-lejant { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-3); margin-left: auto; font-size: var(--yazi-xs); color: var(--muted); }
+.tc-rr1-ss-lejant > span { display: inline-flex; align-items: center; gap: var(--b-1); white-space: nowrap; }
+.tc-rr1-ss-lj { display: inline-block; width: var(--b-3); height: var(--b-2); border-radius: var(--pay-ince); }
 .tc-rr1-ss-lj-hz { background: var(--edge2); }
 .tc-rr1-ss-lj-kr { background: var(--stop); }
 .tc-rr1-ss-lj-fs { border: var(--cizgi-ince) dashed var(--muted); }
@@ -887,8 +910,15 @@ tr[data-bekleyen] .tc-rr1-pr-op { color: var(--hold); }
 }
 .tc-rr1-ss-hz { position: absolute; inset: 0 auto 0 0; width: var(--tc-rr1-ss-hz, 0%); background: color-mix(in srgb, var(--bg) 35%, transparent); }
 .tc-rr1-ss-yazi { position: relative; padding-inline: var(--b-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 3482: kısaltmanın yanında süre; dar blokta taşan kısım kesilir, süre şeridin altındaki listede de yazılır. */
+.tc-rr1-ss-sure { font-weight: 500; margin-left: var(--b-1); font-variant-numeric: tabular-nums; }
+.tc-rr1-ss-liste { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-3); font-size: var(--yazi-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+.tc-rr1-ss-liste b { color: var(--ink); }
 .tc-rr1-ss-kritik { box-shadow: inset 0 calc(-1 * var(--kayma)) 0 var(--stop); }
-.tc-rr1-ss-fason { background: transparent; color: var(--ink); border: var(--cizgi-ince) dashed var(--muted); }
+.tc-rr1-ss-fason {
+  background: repeating-linear-gradient(135deg, transparent 0 var(--b-1), var(--panel2) var(--b-1) var(--b-2)); color: var(--ink);
+  border: var(--cizgi-ince) dashed var(--muted);
+}
 .tc-rr1-ss-yok { background: var(--muted); }
 .tc-rr1-ss-cubuk.tc-rr1-secili { outline: var(--pay-ince) solid var(--done); outline-offset: var(--pay-ince); z-index: 1; }
 

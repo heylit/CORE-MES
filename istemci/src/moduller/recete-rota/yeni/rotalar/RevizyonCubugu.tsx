@@ -140,6 +140,24 @@ export function RevizyonCubugu({ r, agac, urunId, urunSec, duzenleme = null }: {
       : `Rev ${V.no} ${V.status === 'onay' ? 'onay bekliyor' : 'taslak'}: plan yürürlükteki Rev ${A?.no ?? '–'} ile devam ediyor.`}${V.note ? ` Not: ${V.note}` : ''}`
     : V?.status === 'yururlukte' && (O || taslak) ? `Yürürlükteki Rev ${V.no} gösteriliyor; açık taslağı düzenlemek için onu seç.` : null;
   const digerTaslaklar = taslaklar.filter((x) => x !== urunId);
+  // 3482 a: uyarılar tek açılır satırda; eksik (kırmızı) varsa açık gelir, yalnız bilgi (mavi) varsa kapalı.
+  const kayitHatasi = duzen.kayitHatasi(urunId);
+  const uyarilar: { anahtar: string; ton: 'hata' | 'bilgi'; metin: string }[] = [
+    ...(eksikler.length > 0 ? [{
+      anahtar: 'eksik', ton: 'hata' as const,
+      metin: `Rota eksik: ${eksikler.map((x) => x.metin).join('; ')}. ${V && (V.status === 'yururlukte' || V.status === 'onayli')
+        ? `Bu rotanın emirleri plana alınmaz; ${yetki.rotaYaz ? `düzeltmek için "⋯" menüsünden "Rev ${V.no}'dan yeni taslak aç"ı seçin.` : 'düzeltmeyi rota yazma yetkisi olan biri yapar.'}`
+        : 'Taslak kaydedilir ama onaya gönderilemez ve emri plana alınmaz.'}`,
+    }] : []),
+    ...(kayitHatasi ? [{ anahtar: 'kayit', ton: 'hata' as const, metin: `Taslak rota modülüne kaydedilemedi: ${kayitHatasi}` }] : []),
+    ...(V?.status === 'taslak' && V.geriGondermeNedeni
+      ? [{ anahtar: 'geri', ton: 'hata' as const, metin: `Rev ${V.no} onaydan düzeltmeye geri gönderildi: ${V.geriGondermeNedeni}` }] : []),
+    ...(gkksizler.length > 0 ? [{
+      anahtar: 'gkk', ton: 'bilgi' as const,
+      metin: `Fason dönüşünde GKK yok: ${gkksizler.map((x) => x.metin).join('; ')}. Onayı durdurmaz; emir açılınca fasonun arkasına otomatik GKK eklenir.`,
+    }] : []),
+  ];
+  const hataSayisi = uyarilar.filter((u) => u.ton === 'hata').length;
 
   return (
     <div className={`tc-rr1-revbar${durumu && durumu !== 'yururlukte' ? ' tc-rr1-has-open' : ''}`}>
@@ -185,6 +203,7 @@ export function RevizyonCubugu({ r, agac, urunId, urunSec, duzenleme = null }: {
       {(duzen.sonDegisiklik || digerTaslaklar.length > 0 || durumNotu) && (
         <div className="tc-rr1-rv-row tc-rr1-rv-status">
           <Simge ad="clock" boyut="k" />
+          <span className="tc-rr1-rv-status-ic">
           <SonDegisiklik r={r} />
           {durumNotu && <span className="tc-rr1-ipucu">{durumNotu}</span>}
           {digerTaslaklar.length > 0 && <span className="tc-rr1-ipucu">Bu şemadaki öteki taslaklar:</span>}
@@ -199,27 +218,25 @@ export function RevizyonCubugu({ r, agac, urunId, urunSec, duzenleme = null }: {
               </button>
             );
           })}
+          </span>
         </div>
       )}
       {rotalar.panel}
-      {eksikler.length > 0 && (
-        <div className="tc-rr1-warnbox" role="alert">
-          Rota eksik: {eksikler.map((x) => x.metin).join('; ')}.{' '}
-          {V && (V.status === 'yururlukte' || V.status === 'onayli')
-            ? `Bu rotanın emirleri plana alınmaz; ${yetki.rotaYaz ? `düzeltmek için "⋯" menüsünden "Rev ${V.no}'dan yeni taslak aç"ı seçin.` : 'düzeltmeyi rota yazma yetkisi olan biri yapar.'}`
-            : 'Taslak kaydedilir ama onaya gönderilemez ve emri plana alınmaz.'}
-        </div>
-      )}
-      {gkksizler.length > 0 && (
-        <div className="tc-rr1-warnbox" role="status">
-          Fason dönüşünde GKK yok: {gkksizler.map((x) => x.metin).join('; ')}. Onayı durdurmaz; emir açılınca fasonun arkasına otomatik GKK eklenir.
-        </div>
-      )}
-      {duzen.kayitHatasi(urunId) && (
-        <div className="tc-rr1-warnbox" role="alert">Taslak rota modülüne kaydedilemedi: {duzen.kayitHatasi(urunId)}</div>
-      )}
-      {V?.status === 'taslak' && V.geriGondermeNedeni && (
-        <div className="tc-rr1-warnbox" role="status">Rev {V.no} onaydan düzeltmeye geri gönderildi: {V.geriGondermeNedeni}</div>
+      {uyarilar.length > 0 && (
+        <details className="tc-rr1-uyarilar" open={hataSayisi > 0 || undefined} data-parca="rota-uyarilari">
+          <summary>
+            <Simge ad="chev-right" boyut="k" />
+            <b>{uyarilar.length} uyarı</b>
+            {hataSayisi > 0 && <span className="tc-rr1-uy-rozet tc-rr1-uy-hata">{hataSayisi} eksik</span>}
+            {uyarilar.length - hataSayisi > 0 && <span className="tc-rr1-uy-rozet tc-rr1-uy-bilgi">{uyarilar.length - hataSayisi} bilgi</span>}
+          </summary>
+          {uyarilar.map((u) => (
+            <div key={u.anahtar} className={`tc-rr1-warnbox tc-rr1-warnbox-${u.ton}`} role={u.ton === 'hata' ? 'alert' : 'status'}>
+              <Simge ad={u.ton === 'hata' ? 'alert' : 'help'} boyut="k" />
+              <span>{u.metin}</span>
+            </div>
+          ))}
+        </details>
       )}
       {panel === 'gonder' && durumu === 'taslak' && (
         <div className="tc-rr1-rv-panel tc-rr1-rv-row">

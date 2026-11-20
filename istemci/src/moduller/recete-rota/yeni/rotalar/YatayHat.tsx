@@ -165,6 +165,27 @@ function HatKarti({ r, d, a, t, secili, suruk }: {
   );
 }
 
+// 3482 a: rotanın kimliği (ürün, Rev, adet) taslak kartının üstünde durur; dokununca ürün seçilir ve alttaki alan ürünü gösterir.
+export function RotaBasligi({ r, kok }: { r: RotaEkrani; kok: Dugum }) {
+  const m = r.duzen.h.malzeme.get(kok.id);
+  if (!m) return null;
+  const s = r.secim;
+  const basSecili = s?.tur === 'urun' && s.urunId === kok.id;
+  const V = r.duzen.gorulen(kok.id);
+  return (
+    <div className="tc-rr1-hat-bas">
+      <button type="button" className={`tc-rr1-rhd${basSecili ? ' tc-rr1-secili' : ''}`} onClick={() => { r.sec({ tur: 'urun', urunId: kok.id, nid: kok.nid, miktar: kok.miktar }); }}>
+        <span className={`tc-rr1-slot tc-rr1-slot-${m.type}`}>{turKisa(m.type)}</span>
+        <span className="tc-rr1-ci">
+          <b>{m.code} rotası {V && <span className={`tc-rr1-rvchip tc-rr1-rv-${V.status}`}>Rev {V.no}</span>}{r.duzen.taslakVar(kok.id) && <span className="tc-rr1-rvchip tc-rr1-rv-taslak">kaydediliyor</span>}</b>
+          <small>{m.name}</small>
+        </span>
+        <span className="tc-rr1-cq">{miktarMetni(kok.miktar, m.unit)}</span>
+      </button>
+    </div>
+  );
+}
+
 export function YatayHat({ r, kok }: { r: RotaEkrani; kok: Dugum }) {
   const { h } = r.duzen;
   const kap = useRef<HTMLDivElement>(null);
@@ -272,21 +293,8 @@ export function YatayHat({ r, kok }: { r: RotaEkrani; kok: Dugum }) {
       id: a.id, x: y.kolon.get(a.id) ?? 0, y: ymBantlari.length + seritNo(a), ym: false, renk: a.stationId ? renkSinifi(a.stationId) : 'tc-rr1-renk-yok', secili: a.id === seciliAdim,
     })),
   ];
-  const basSecili = s?.tur === 'urun' && s.urunId === kok.id;
-  const V = r.duzen.gorulen(kok.id);
-
   return (
     <div className="tc-rr1-hatli-kap">
-      <div className="tc-rr1-hat-bas">
-        <button type="button" className={`tc-rr1-rhd${basSecili ? ' tc-rr1-secili' : ''}`} onClick={() => { r.sec({ tur: 'urun', urunId: kok.id, nid: kok.nid, miktar: kok.miktar }); }}>
-          <span className={`tc-rr1-slot tc-rr1-slot-${m.type}`}>{turKisa(m.type)}</span>
-          <span className="tc-rr1-ci">
-            <b>{m.code} rotası {V && <span className={`tc-rr1-rvchip tc-rr1-rv-${V.status}`}>Rev {V.no}</span>}{r.duzen.taslakVar(kok.id) && <span className="tc-rr1-rvchip tc-rr1-rv-taslak">kaydediliyor</span>}</b>
-            <small>{m.name}</small>
-          </span>
-          <span className="tc-rr1-cq">{miktarMetni(kok.miktar, m.unit)}</span>
-        </button>
-      </div>
       {liste.length > 0 && <SureSeridi r={r} d={kok} z={z} miktar={kok.miktar} ymler={ymSatirlari} />}
       {liste.length > 0 && !kok.dongu && (
         <div className="tc-rr1-hat-cubuk">
