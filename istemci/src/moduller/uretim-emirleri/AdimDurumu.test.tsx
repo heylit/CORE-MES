@@ -11,10 +11,10 @@ const EMIR = {
 const HAZIRLIK: HazirlikCevabi = { maddeler: [], muafiyetler: [], isEmirleri: [] };
 const ADIM = {
   isEmriId: 51, opNo: 10, ad: 'Testere kesim', durum: 'tamam', calisma: null, bagimlilik: 'bekleyen', fason: false, hedef: 40, yapilan: 40, yuzde: 100,
-  sistemStatusu: 'bitti', nedenler: [], maddeler: [{ madde: 'cnc', hal: 'gerekmez', ham: 'gerekmez' }, { madde: 'malzeme', hal: 'tamam', ham: 'tamam' }], elle: null, onaylar: [], elleEksikler: [], gecmis: [], tedarik: [], liste: [], ekMaddeler: [], sablon: null,
+  sistemStatusu: 'bitti', nedenler: [], maddeler: [{ madde: 'cnc', hal: 'gerekmez', ham: 'gerekmez' }, { madde: 'malzeme', hal: 'tamam', ham: 'tamam' }], elle: null, onaylar: [], elleEksikler: [], gecmis: [], tedarik: [], liste: [], sablon: null,
 } satisfies AdimDurumuCevabi['adimlar'][number];
 const CEVAP = {
-  emirId: 5, emirNo: 'UE-0005', urun: { kod: 'M-1', ad: 'Deneme flanş' }, adet: 40, teslim: null, durum: 'basladi', rotaYuzde: 45, hazirlik: HAZIRLIK, yetki: { ekMadde: false, sablon: false },
+  emirId: 5, emirNo: 'UE-0005', urun: { kod: 'M-1', ad: 'Deneme flanş' }, adet: 40, teslim: null, durum: 'basladi', rotaYuzde: 45, hazirlik: HAZIRLIK, yetki: { sablon: false },
   adimlar: [
     ADIM,
     {
@@ -423,7 +423,7 @@ describe('Adım Durumu (2893, düzen 2955)', () => {
       expect(istek?.kimlik).toMatch(/^[0-9a-f-]{36}$/);
     });
   });
-  describe('3249-2 a: türlü kontrol, kanıt, ek madde, Şablona da ekle', () => {
+  describe('3249-2 a: türlü kontrol, kanıt, elle maddeyi kaldır, Şablona da ekle', () => {
     type Madde = AdimDurumuCevabi['adimlar'][number]['liste'][number];
     const TABAN = {
       aciklama: null, asama: 'hazirlik', tamam: false, kisiAdi: null, zaman: null, kaynak: null, kanit: null, ekleyenAdi: null, eklenme: null,
@@ -437,10 +437,12 @@ describe('Adım Durumu (2893, düzen 2955)', () => {
     const SECIM: Madde = { ...TABAN, adimId: 803, ad: 'Çapak durumu', kontrol: { tur: 'secim', secenekler: ['Çapaksız', 'Hafif', 'Çapaklı'] } };
     const FOTO: Madde = { ...TABAN, adimId: 804, ad: 'Bağlama fotoğrafı', kontrol: { tur: 'foto', aciklama: 'Ayna görünsün' } };
     const FOTOLU: Madde = { ...TABAN, adimId: 805, ad: 'Ayna temizliği', tamam: true, kontrol: { tur: 'foto', aciklama: null }, fotoOzet: 'a'.repeat(64) };
-    const EK = { id: 91, ad: 'Özel pabuç alındı', tamam: false, kisiAdi: null, zaman: null, ekleyenAdi: 'Deneme Hazırlık' } as const;
+    // 3494-3 a: Üretim Hazırlık'ın eklediği madde de listededir (elle eklenmiş, kontrolsüz).
+    const EK: Madde = { ...TABAN, adimId: 806, ad: 'Özel pabuç alındı', kontrol: null, ekleyenAdi: 'Deneme Hazırlık', eklenme: '2026-11-11T06:00:00.000Z' };
+    const EK_TAMAM: Madde = { ...EK, adimId: 807, ad: 'Bağlama aparatı geldi', tamam: true, kisiAdi: 'Deneme Müdür', zaman: '2026-11-11T07:00:00.000Z', kaynak: 'adim-durumu' };
     const turlu = (yetki: AdimDurumuCevabi['yetki']) => ({
       ...CEVAP, yetki,
-      adimlar: [CEVAP.adimlar[0]!, { ...CEVAP.adimlar[1]!, liste: [OLCUM, OLCULMUS, SECIM, FOTO, FOTOLU], ekMaddeler: [EK], sablon: { id: 4, kod: 'TOR-HAZ', ad: 'Torna hazırlık' } }],
+      adimlar: [CEVAP.adimlar[0]!, { ...CEVAP.adimlar[1]!, liste: [OLCUM, OLCULMUS, SECIM, FOTO, FOTOLU, EK, EK_TAMAM], sablon: { id: 4, kod: 'TOR-HAZ', ad: 'Torna hazırlık' } }],
     }) satisfies AdimDurumuCevabi;
     const YAZAR: Parameters<typeof sunucuKur>[0] = { ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.adim-durumu', 'uretim-emirleri.adim-durumu-yaz'] };
     const matrisAc = async () => {
@@ -452,7 +454,7 @@ describe('Adım Durumu (2893, düzen 2955)', () => {
     const postlar = (istekler: ReturnType<typeof sunucuKur>) => istekler.filter((i) => i.yontem === 'POST');
 
     it('sınır dışı ölçüm simge ve metinle görünür; işaretsiz ölçüm tiki pencere açar, değer virgülle girilir, uyarı verir, kanıtla gider', async () => {
-      const V = turlu({ ekMadde: false, sablon: false });
+      const V = turlu({ sablon: false });
       const istekler = sunucuKur(YAZAR, {
         ...yollar, 'GET /adimli-emirler/5/adim-durumu': () => json(200, V), 'POST /adimli-emirler/5/is-emirleri/52/liste-isaretle': () => json(200, V),
       });
@@ -473,7 +475,7 @@ describe('Adım Durumu (2893, düzen 2955)', () => {
     });
 
     it('kanıtlı işaret kaldırılınca Geri al eski kanıtı yeniden gönderir; seçim düğmesi seçimle işaretler', async () => {
-      const V = turlu({ ekMadde: false, sablon: false });
+      const V = turlu({ sablon: false });
       const istekler = sunucuKur(YAZAR, {
         ...yollar, 'GET /adimli-emirler/5/adim-durumu': () => json(200, V), 'POST /adimli-emirler/5/is-emirleri/52/liste-isaretle': () => json(200, V),
       });
@@ -495,34 +497,43 @@ describe('Adım Durumu (2893, düzen 2955)', () => {
       expect(within(tablo).getAllByRole('link', { name: 'Görüntüle' }).length).toBeGreaterThan(0);
     });
 
-    it('ek madde Üretim Hazırlık yetkisi olmayan yazarda kilitli; yetkilide tik ek madde komutunu gönderir', async () => {
-      const kilitli = turlu({ ekMadde: false, sablon: false });
-      sunucuKur(YAZAR, { ...yollar, 'GET /adimli-emirler/5/adim-durumu': () => json(200, kilitli) });
+    it('elle eklenmiş işaretsiz madde sorularak kaldırılır, Geri al sunulmaz; talimat maddesinde, işaretli maddede ve okuyucuda düğme yok', async () => {
+      const V = turlu({ sablon: false });
+      sunucuKur(OKUYUCU, { ...yollar, 'GET /adimli-emirler/5/adim-durumu': () => json(200, V) });
       ac(ekran, '/adim-durumu?emir=5');
       let tablo = await matrisAc();
-      expect((within(tablo).getByRole('checkbox', { name: 'OP 20 Özel pabuç alındı' }) as HTMLInputElement).disabled).toBe(true);
-      expect(within(tablo).getByText(/Üretim Hazırlık yetkisi gerekir/)).toBeTruthy();
+      expect(within(tablo).getByRole('checkbox', { name: 'OP 20 Özel pabuç alındı' })).toBeTruthy();
+      expect(within(tablo).queryByRole('button', { name: /^Kaldır/ })).toBeNull();
       cleanup();
-      const acik = turlu({ ekMadde: true, sablon: false });
       const istekler = sunucuKur(YAZAR, {
-        ...yollar, 'GET /adimli-emirler/5/adim-durumu': () => json(200, acik), 'POST /adimli-emirler/5/is-emirleri/52/ek-madde-isaretle': () => json(200, acik),
+        ...yollar, 'GET /adimli-emirler/5/adim-durumu': () => json(200, V), 'POST /adimli-emirler/5/is-emirleri/52/liste-kaldir': () => json(200, V),
       });
       ac(ekran, '/adim-durumu?emir=5');
       tablo = await matrisAc();
-      fireEvent.click(within(tablo).getByRole('checkbox', { name: 'OP 20 Özel pabuç alındı' }));
+      expect(within(tablo).getAllByRole('button', { name: /^Kaldır: / }).map((d) => d.getAttribute('aria-label'))).toEqual(['Kaldır: Özel pabuç alındı']);
+      fireEvent.click(within(tablo).getByRole('button', { name: 'Kaldır: Özel pabuç alındı' }));
+      let soru = within(tablo).getByRole('group', { name: 'Özel pabuç alındı kaldırılsın mı?' });
+      fireEvent.click(within(soru).getByRole('button', { name: 'Vazgeç' }));
+      expect(postlar(istekler)).toHaveLength(0);
+      fireEvent.click(within(tablo).getByRole('button', { name: 'Kaldır: Özel pabuç alındı' }));
+      soru = within(tablo).getByRole('group', { name: 'Özel pabuç alındı kaldırılsın mı?' });
+      fireEvent.click(within(soru).getByRole('button', { name: 'Kaldır' }));
       await waitFor(() => expect(postlar(istekler)).toHaveLength(1));
-      expect(postlar(istekler)[0]?.govde).toEqual({ maddeId: 91, tamam: true });
+      expect(postlar(istekler)[0]?.govde).toEqual({ adimId: 806 });
+      expect(postlar(istekler)[0]?.kimlik).toMatch(/^[0-9a-f-]{36}$/);
+      expect(await screen.findByText('Kaldırıldı: Özel pabuç alındı')).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Geri al' })).toBeNull();
     });
 
     it('kontrol adımı türlü eklenir; Şablona da ekle yalnız talimat yetkisiyle görünür, varsayılan kapalı', async () => {
-      const yetkisiz = turlu({ ekMadde: false, sablon: false });
+      const yetkisiz = turlu({ sablon: false });
       sunucuKur(YAZAR, { ...yollar, 'GET /adimli-emirler/5/adim-durumu': () => json(200, yetkisiz) });
       ac(ekran, '/adim-durumu?emir=5');
       let tablo = await matrisAc();
       fireEvent.click(within(tablo).getAllByRole('button', { name: 'Kontrol adımı' })[0]!);
       expect(within(await screen.findByRole('dialog', { name: 'OP 20 · Kontrol adımı ekle' })).queryByLabelText('Şablona da ekle')).toBeNull();
       cleanup();
-      const V = turlu({ ekMadde: false, sablon: true });
+      const V = turlu({ sablon: true });
       const istekler = sunucuKur(YAZAR, {
         ...yollar, 'GET /adimli-emirler/5/adim-durumu': () => json(200, V), 'POST /adimli-emirler/5/is-emirleri/52/liste-ekle': () => json(200, V),
       });

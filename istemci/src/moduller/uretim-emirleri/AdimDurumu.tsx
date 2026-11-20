@@ -10,8 +10,8 @@ import { tarihMetni } from '../../ortak/veri/zaman-metni.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { ADIM_DURUMU_YAZ, ELLE_YAZILIR, STATU, STATU_KAYNAGI, adimDurumuUcu, isEmriKomutu, listeFotografiUcu } from './adim-durumu.ts';
 import {
-  BOS_TASLAK, EkMaddeKutusu, KanitGirisi, KanitHucresi, KontrolAlanlari, KontrolEtiketi, SablonSecenegi, ekMaddeKaydi, eskiKanit, kanitGerekir,
-  taslaktanKontrol, type EkMadde, type KontrolTaslagi,
+  BOS_TASLAK, KanitGirisi, KanitHucresi, KontrolAlanlari, KontrolEtiketi, SablonSecenegi, eskiKanit, kanitGerekir, taslaktanKontrol,
+  type KontrolTaslagi,
 } from './AdimListesi.tsx';
 import { anahtarlar } from './anahtarlar.ts';
 import { DURUM_ETIKETI, zamanMetni } from './gorunum.ts';
@@ -279,7 +279,7 @@ function EmrinAdimDurumu({ id, yazar, geri }: { id: number; yazar: boolean; geri
           )}
       </Kart>
       <Pencere acik={adim !== null} kapat={() => adimSec(null)} tur="yan" baslik={adim === null ? 'Adım' : `OP ${String(adim.opNo)} · ${adim.ad}`}>
-        {adim !== null && <AdimAyrintisi emirId={id} adim={adim} yazar={yazilir} ekYetki={v.yetki.ekMadde} />}
+        {adim !== null && <AdimAyrintisi emirId={id} adim={adim} yazar={yazilir} />}
       </Pencere>
       <Pencere acik={eklemeAdimi !== null && ekleme !== null} kapat={() => eklemeYaz(null)}
         baslik={eklemeAdimi === null || ekleme === null ? 'Madde' : `OP ${String(eklemeAdimi.opNo)} · ${ekleme.kontrol ? 'Kontrol adımı ekle' : 'Madde ekle'}`}>
@@ -384,12 +384,6 @@ function Matris({ v, emirId, yazar, sec, seciliHucre, secHucre, kisayol, cubuk, 
     const k = listeKomutu(a, m, { secim });
     if (!mesgul && k !== null) yap({ ...k, sonra: () => sonYaz(`l-${String(m.adimId)}`) });
   };
-  const ekYetki = v.yetki.ekMadde;
-  const ekIsaretle = (a: Adim, e: EkMadde) => {
-    if (mesgul || !ekYetki) return;
-    const komut = (tamam: boolean): Komut => ({ yol: 'ek-madde-isaretle', isEmriId: a.isEmriId, govde: { maddeId: e.id, tamam } });
-    yap({ ...komut(!e.tamam), mesaj: e.tamam ? `İşaret kaldırıldı: ${e.ad}` : `İşaretlendi: ${e.ad}`, geri: komut(e.tamam), sonra: () => sonYaz(`x-${String(e.id)}`) });
-  };
   useEffect(() => { eylemler.current = harita; });
   useEffect(() => {
     const dinle = (o: KeyboardEvent) => {
@@ -483,6 +477,7 @@ function Matris({ v, emirId, yazar, sec, seciliHucre, secHucre, kisayol, cubuk, 
         <tr key={anahtar} className="tc-ad-mx-alt" data-bosluk={anahtar} data-son={son === anahtar ? '' : undefined}>
           <td className="tc-tablo-sabit-sol">
             <ListeKutusu adim={a} m={m} yaz={yaz} mesgul={mesgul} degistir={() => maddeIsaretle(a, m)} />
+            {yaz && kaldirilir(m) && <KaldirDugmesi m={m} mesgul={mesgul} kaldir={() => yap(kaldirKomutu(a, m))} />}
             {kanit && <span className="tc-ad-kanit-tel">{kanit}</span>}
           </td>
           <td className="tc-ad-mx-liste-on" />
@@ -504,30 +499,7 @@ function Matris({ v, emirId, yazar, sec, seciliHucre, secHucre, kisayol, cubuk, 
         <td className="tc-ad-mx-liste-son" />
       </tr>
     );
-    const kilitli = yaz && !ekYetki;
-    const ekler = a.ekMaddeler.length === 0 ? [] : [
-      <tr key={`eb-${String(a.isEmriId)}`} className="tc-ad-mx-alt">
-        <td className="tc-tablo-sabit-sol"><span className="tc-ad-bolum"><Simge ad="box" boyut="k" />Üretim Hazırlık ek maddeleri</span></td>
-        <td className="tc-ad-mx-liste-on" />
-        <td colSpan={maddeler.length + 1} />
-        <td className="tc-ad-mx-liste-son" />
-      </tr>,
-      ...a.ekMaddeler.map((e) => {
-        const anahtar = `x-${String(e.id)}`;
-        if (yaz && ekYetki) harita.set(anahtar, () => ekIsaretle(a, e));
-        return (
-          <tr key={anahtar} className="tc-ad-mx-alt" data-bosluk={anahtar} data-son={son === anahtar ? '' : undefined}>
-            <td className="tc-tablo-sabit-sol">
-              <EkMaddeKutusu m={e} opNo={a.opNo} yaz={yaz} kilitli={kilitli} mesgul={mesgul} degistir={() => ekIsaretle(a, e)} />
-            </td>
-            <td className="tc-ad-mx-liste-on" />
-            <td colSpan={maddeler.length + 1} className="tc-ad-mx-kim">{ekMaddeKaydi(e, kilitli)}</td>
-            <td className="tc-ad-mx-liste-son" />
-          </tr>
-        );
-      }),
-    ];
-    return [ust, ...alt, ...ekler, ekleme];
+    return [ust, ...alt, ekleme];
   });
   return (
     <>
@@ -592,6 +564,24 @@ const listeKomutu = (a: Adim, m: ListeMaddesi, kanit?: ListeKanitiGirdisi): Komu
   return { ...komut(!m.tamam), mesaj: m.tamam ? `İşaret kaldırıldı: ${m.ad}` : `İşaretlendi: ${m.ad}`, ...geri };
 };
 
+// 3494-3 a: elle eklenmiş, işaretlenmemiş madde listeden kaldırılır. Kaldırma geri alınmaz (madde listeden, terminalden ve matristen
+// düşer; iz olay defterinde kalır), bu yüzden düğme önce sorar. Talimattan gelen madde talimattan, işaretli madde önce geri alınarak değişir.
+const kaldirilir = (m: ListeMaddesi): boolean => m.eklenme !== null && !m.tamam;
+const kaldirKomutu = (a: Adim, m: ListeMaddesi): Komut => ({ yol: 'liste-kaldir', isEmriId: a.isEmriId, govde: { adimId: m.adimId }, mesaj: `Kaldırıldı: ${m.ad}` });
+function KaldirDugmesi({ m, mesgul, kaldir }: { m: ListeMaddesi; mesgul: boolean; kaldir: () => void }) {
+  const [soruyor, soruyorYaz] = useState(false);
+  if (!soruyor) {
+    return <span className="tc-ad-kaldir"><Dugme simge="trash" disabled={mesgul} onClick={() => soruyorYaz(true)} aria-label={`Kaldır: ${m.ad}`}>Kaldır</Dugme></span>;
+  }
+  return (
+    <span className="tc-ad-kaldir" role="group" aria-label={`${m.ad} kaldırılsın mı?`}>
+      <span>Kaldırılsın mı? Geri alınmaz.</span>
+      <Dugme tur="tehlike" simge="trash" disabled={mesgul} onClick={() => { soruyorYaz(false); kaldir(); }}>Kaldır</Dugme>
+      <Dugme onClick={() => soruyorYaz(false)}>Vazgeç</Dugme>
+    </span>
+  );
+}
+
 // Tik kutusu: tıklamak ve Boşluk aynı komutu gönderir. Okuyucu ve kapalı emirde kutu yalnız durumu gösterir.
 function ListeKutusu({ adim, m, yaz, mesgul, degistir }: { adim: Adim; m: ListeMaddesi; yaz: boolean; mesgul: boolean; degistir: () => void }) {
   return (
@@ -627,7 +617,7 @@ function useAdimKomutu(emirId: number, isEmriId: number | null, bitti: () => voi
 
 // 3322: ayrıntı dört bölümdür: neden bekliyor (kaynaklı), elle değiştirilenler (elle statü yazma burada), hazırlık ve listeler (kapalı),
 // geçmiş (kapalı). Maddenin elle değeri satırdaki çipten ya da matris hücresinden değişir; burada yalnız listelenir ve kaldırılır.
-function AdimAyrintisi({ emirId, adim, yazar, ekYetki }: { emirId: number; adim: Adim; yazar: boolean; ekYetki: boolean }) {
+function AdimAyrintisi({ emirId, adim, yazar }: { emirId: number; adim: Adim; yazar: boolean }) {
   const [statu, statuYaz] = useState<AdimStatusu | ''>('');
   const [not, notYaz] = useState('');
   // Yan pencerede kanıt girişi maddenin altında açılır (pencere üstüne pencere açılmaz).
@@ -696,7 +686,7 @@ function AdimAyrintisi({ emirId, adim, yazar, ekYetki }: { emirId: number; adim:
         </section>
       ) : <p className="tc-emir-not"><Simge ad="lock" boyut="k" /> Elle değiştirme müdür ve planlama rollerindedir.</p>}
       <details className="tc-ad-ac">
-        <summary><Simge ad="clipboard-check" boyut="k" />Hazırlık, liste ve ek maddeler</summary>
+        <summary><Simge ad="clipboard-check" boyut="k" />Hazırlık ve liste</summary>
         <ul className="tc-ad-hazirlik">
           {gerekenler.map((m) => {
             const g = maddeGorunumu(adim, m);
@@ -719,27 +709,13 @@ function AdimAyrintisi({ emirId, adim, yazar, ekYetki }: { emirId: number; adim:
                   ? <KanitHucresi m={m} yaz={yazar && !mesgul} ac={() => kanitAcikYaz(m.adimId)} secimYap={(x) => listeDegistir(m, { secim: x })}
                       fotoAdresi={m.fotoOzet === null ? null : `/api${listeFotografiUcu(emirId, m.adimId, m.fotoOzet)}`} not={isaretKaydi(m, false)} />
                   : <small>{isaretKaydi(m)}</small>}
+                {yazar && kaldirilir(m) && <KaldirDugmesi m={m} mesgul={mesgul} kaldir={() => yap(kaldirKomutu(adim, m))} />}
                 {kanitAcik === m.adimId && yazar && (
                   <KanitGirisi m={m} mesgul={mesgul} gonder={(k) => listeDegistir(m, k)} kapat={() => kanitAcikYaz(null)} />
                 )}
               </li>
             ))}
           </ul>
-        )}
-        {adim.ekMaddeler.length > 0 && (
-          <>
-            <h4 className="tc-kapanis-alt"><Simge ad="box" boyut="k" />Üretim Hazırlık ek maddeleri</h4>
-            <ul className="tc-ad-liste-maddeleri" aria-label="Üretim Hazırlık ek maddeleri">
-              {adim.ekMaddeler.map((e) => (
-                <li key={e.id}>
-                  <EkMaddeKutusu m={e} opNo={adim.opNo} yaz={yazar} kilitli={yazar && !ekYetki} mesgul={mesgul}
-                    degistir={() => yap({ yol: 'ek-madde-isaretle', govde: { maddeId: e.id, tamam: !e.tamam }, mesaj: e.tamam ? `İşaret kaldırıldı: ${e.ad}` : `İşaretlendi: ${e.ad}`,
-                      geri: { yol: 'ek-madde-isaretle', govde: { maddeId: e.id, tamam: e.tamam } } })} />
-                  <small>{ekMaddeKaydi(e, yazar && !ekYetki)}</small>
-                </li>
-              ))}
-            </ul>
-          </>
         )}
       </details>
       <details className="tc-ad-ac">

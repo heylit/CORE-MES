@@ -121,8 +121,9 @@ describe('uretim-emirleri hazırlık, uyaran maddeler (2146-1 a, gerçek Postgre
       const olay = { uretimEmriId: id, isEmriId: ie1!, istasyonId, kisiId: yoneticiId };
       assert.equal(await o().vt.okumaTx((db) => hazirlikDenetimi(db, olay)), null, 'uyaran madde başlatmayı durdurmaz');
       const v = hazirlikCevabi.parse(await o().vt.okumaTx((db) => hazirlik(db, id)));
+      // Ek madde sütunu göçle kapalıdır (3494-3 a): çözücü eksik dese de sayılmaz.
       assert.deepEqual(v.maddeler.filter((m) => hazirlikUyarirMi(m.madde)).map((m) => [m.madde, m.durum, m.muafTutulur]), [
-        ['rota', 'eksik', false], ['malzeme', 'eksik', false], ['takim-omru', 'eksik', false], ['takim-hazirla', 'gerekmez', false], ['makine', 'eksik', false], ['talimat', 'gerekmez', false], ['ek-madde', 'eksik', false],
+        ['rota', 'eksik', false], ['malzeme', 'eksik', false], ['takim-omru', 'eksik', false], ['takim-hazirla', 'gerekmez', false], ['makine', 'eksik', false], ['talimat', 'gerekmez', false], ['ek-madde', 'gerekmez', false],
         ['aparat', 'gerekmez', false], ['olcu-aleti', 'gerekmez', false],
       ]);
       assert.deepEqual(v.isEmirleri[0]?.maddeler.map((m) => m.madde), ['cnc', 'yayin', 'malzeme', 'takim-omru', 'takim-hazirla', 'makine', 'talimat', 'ek-madde', 'aparat', 'olcu-aleti'], 'iş emri düzeyindeki maddeler satırda');

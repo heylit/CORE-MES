@@ -48,7 +48,7 @@ import {
   bitenIsEmirleri, gunlukAralikAdetleri, isEmriPlanBilgileri, kisininGunlukIsEmirleri, kisininHurdaNedenleri, kisininIsEmirleri, komutOnbellegiyle, standartSureler,
   makineAyrimlari as emrinMakineAyrimlari, kisininAcikIsleri, emirlerinMalzemeIhtiyaci, adimliEmirAyrintisi, emirlerinProjeleri, isEmriDugumleri, kararliSayimiSonuclandir, isEmriZamanlari,
   elleDurdurmaNedeni,
-  elleOnayliMaddeler,
+  elleOnayliMaddeler, elleMaddeBul, elleMaddeEkle, elleMaddeOlayiEkle, elleMaddeler,
 } from '../uretim-emirleri/disari.ts';
 import type { Emir, Katilim } from '../uretim-emirleri/disari.ts';
 import { planliDuruslarinHepsi, planliDurusSilArkon, planliDurusYaz } from '../vardiya/disari.ts';
@@ -3257,7 +3257,7 @@ async function gecmisBeklenenler(
 export async function hazirlikMaddeleriListesi(db: Db, isEmriId: number): Promise<HazirlikMaddeleriCevabi> {
   const ie = (await isEmriZamanlari(db, [isEmriId])).get(isEmriId);
   if (ie === undefined) throw bulunamadi(HAZIRLIK_MADDESI_ILETILERI.isEmriYok);
-  const satirlar = await sorgular.hazirlikMaddeleri(db, [isEmriId]);
+  const satirlar = await elleMaddeler(db, [isEmriId]);
   const adlar = await kisiAdlari(db, [...new Set(satirlar.flatMap((s) => (s.tamamlayanId === null ? [s.kisiId] : [s.kisiId, s.tamamlayanId])))]);
   return {
     isEmriId, kapali: ie.durum === 'tamam',
@@ -3277,19 +3277,19 @@ async function hazirlikMaddesiYazilir(db: Db, isEmriId: number): Promise<void> {
 
 export async function hazirlikMaddesiEkle(db: Db, kullanici: Kullanici, g: { isEmriId: number; ad: string }): Promise<HazirlikMaddeleriCevabi> {
   await hazirlikMaddesiYazilir(db, g.isEmriId);
-  if ((await sorgular.hazirlikMaddeleri(db, [g.isEmriId])).length >= AZAMI_HAZIRLIK_MADDESI) throw cakisma(HAZIRLIK_MADDESI_ILETILERI.dolu);
-  await sorgular.hazirlikMaddesiEkle(db, g.isEmriId, g.ad, kullanici.id);
+  if ((await elleMaddeler(db, [g.isEmriId])).length >= AZAMI_HAZIRLIK_MADDESI) throw cakisma(HAZIRLIK_MADDESI_ILETILERI.dolu);
+  if (!(await elleMaddeEkle(db, g.isEmriId, g.ad, kullanici.id))) throw bulunamadi(HAZIRLIK_MADDESI_ILETILERI.isEmriYok);
   return hazirlikMaddeleriListesi(db, g.isEmriId);
 }
 
 export async function hazirlikMaddesiIsaretle(db: Db, kullanici: Kullanici, id: number, olay: HazirlikMaddesiOlayi): Promise<HazirlikMaddeleriCevabi> {
-  const madde = await sorgular.hazirlikMaddesiBul(db, id);
+  const madde = await elleMaddeBul(db, id);
   if (madde === null) throw bulunamadi(HAZIRLIK_MADDESI_ILETILERI.maddeYok);
   await hazirlikMaddesiYazilir(db, madde.isEmriId);
-  const ret = hazirlikMaddesiOlayReddi((await sorgular.hazirlikMaddesiBul(db, id))?.sonOlay ?? null, olay);
+  const ret = hazirlikMaddesiOlayReddi((await elleMaddeBul(db, id))?.sonOlay ?? null, olay);
   if (ret === 'maddeYok') throw bulunamadi(HAZIRLIK_MADDESI_ILETILERI.maddeYok);
   if (ret === 'zaten') throw cakisma(HAZIRLIK_MADDESI_ILETILERI.zaten);
-  await sorgular.hazirlikMaddesiOlayiEkle(db, id, olay, kullanici.id);
+  await elleMaddeOlayiEkle(db, id, olay, kullanici.id);
   return hazirlikMaddeleriListesi(db, madde.isEmriId);
 }
 

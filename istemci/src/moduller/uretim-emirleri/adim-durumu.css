@@ -123,6 +123,7 @@
 .tc-ad-mx-alt > td.tc-tablo-sabit-sol { white-space: normal; }
 .tc-ad-mx-kim { font-size: var(--yazi-s); color: var(--muted); }
 .tc-ad-mx-ekle { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-ad-kaldir { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); padding: 0 0 var(--b-2) var(--b-6); font-size: var(--yazi-s); color: var(--muted); }
 .tc-ad-mx-ekle-tel { display: none; }
 .tc-ad-mx-bos { margin: 0 0 var(--b-2); font-size: var(--yazi-s); color: var(--muted); }
 .tc-ad-madde { display: flex; align-items: center; gap: var(--b-2); min-height: var(--dokunma-yogun); padding-left: var(--b-6); cursor: pointer; }

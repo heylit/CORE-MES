@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { TalimatAsamasi } from '#paylasilan/sozlesme/talimat-asamasi.ts';
-import { ISO, TERMINAL_IS_EMRI } from '../ortak/sorgular.ts';
+import { ISO, KALDIRILMAMIS, TERMINAL_IS_EMRI } from '../ortak/sorgular.ts';
 
 export interface AdimSatiri {
   id: number;
@@ -39,7 +39,7 @@ export function adimlariGetir(db: Db, emirId: number): Promise<AdimSatiri[]> {
        FROM emir_adimi a
        LEFT JOIN LATERAL (SELECT id, olay, kisi_id, zaman FROM emir_adimi_olayi WHERE adim_id = a.id ORDER BY id DESC LIMIT 1) o ON true
        LEFT JOIN emir_adimi_kaniti k ON k.olay_id = o.id AND o.olay = 'tamamla'
-      WHERE a.emir_id = $1 AND a.is_emri_id IS NOT DISTINCT FROM ${TERMINAL_IS_EMRI('$1')} ORDER BY a.sira`,
+      WHERE a.emir_id = $1 AND a.is_emri_id IS NOT DISTINCT FROM ${TERMINAL_IS_EMRI('$1')} AND ${KALDIRILMAMIS('a')} ORDER BY a.sira`,
     [emirId],
   );
 }
@@ -51,14 +51,14 @@ export function talimatHazirlikSayilari(db: Db, isEmriIdleri: readonly number[])
     `SELECT a.is_emri_id AS "isEmriId", count(*)::int AS toplam, count(*) FILTER (WHERE o.olay = 'tamamla')::int AS tamam
        FROM emir_adimi a
        LEFT JOIN LATERAL (SELECT olay FROM emir_adimi_olayi WHERE adim_id = a.id ORDER BY id DESC LIMIT 1) o ON true
-      WHERE a.is_emri_id = ANY($1::int[]) AND a.asama IN ('on_hazirlik', 'hazirlik') GROUP BY a.is_emri_id`,
+      WHERE a.is_emri_id = ANY($1::int[]) AND a.asama IN ('on_hazirlik', 'hazirlik') AND ${KALDIRILMAMIS('a')} GROUP BY a.is_emri_id`,
     [[...isEmriIdleri]],
   );
 }
 
 export async function adimEmirdeVarMi(db: Db, emirId: number, adimId: number): Promise<boolean> {
   return (await db.tek(
-    `SELECT 1 AS var FROM emir_adimi WHERE id = $1 AND emir_id = $2 AND is_emri_id IS NOT DISTINCT FROM ${TERMINAL_IS_EMRI('$2')}`, [adimId, emirId],
+    `SELECT 1 AS var FROM emir_adimi a WHERE a.id = $1 AND a.emir_id = $2 AND a.is_emri_id IS NOT DISTINCT FROM ${TERMINAL_IS_EMRI('$2')} AND ${KALDIRILMAMIS('a')}`, [adimId, emirId],
   )) !== null;
 }
 

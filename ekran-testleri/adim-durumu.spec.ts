@@ -126,17 +126,17 @@ test.describe('müdür, açılan satır', () => {
   });
 });
 
-// 3249-2 a (müdür, Üretim Hazırlık yetkisi yok): türlü kontrol satırları ve ek madde görünür. Örnek veride türlü madde olmadığından
-// adım durumu cevabına uydurma ORN- maddeler eklenir; yetki bayrakları sunucunun gerçek cevabıdır. Ek madde kutusu kilitli, sınır dışı
+// 3249-2 a (müdür): türlü kontrol satırları ve elle eklenmiş madde görünür. Örnek veride türlü madde olmadığından adım durumu cevabına
+// uydurma ORN- maddeler eklenir; yetki bayrakları sunucunun gerçek cevabıdır. Elle eklenmiş maddede Kaldır sorar (3494-3 a), sınır dışı
 // ölçüm metniyle okunur, ölçüm penceresi uyarır; Vazgeç yazmaz; sayfa üç genişlikte yatay taşmaz.
 test.describe('müdür, türlü kontrol', () => {
   test.use({ hesap: 'ornek.mudur' });
-  test('kanıt hücreleri, kilitli ek madde, ölçüm ve kontrol adımı pencereleri; sayfa taşmaz, yazmaz', async ({ page, ag, ac }) => {
+  test('kanıt hücreleri, elle maddeyi kaldır sorusu, ölçüm ve kontrol adımı pencereleri; sayfa taşmaz, yazmaz', async ({ page, ag, ac }) => {
     const taban = { aciklama: null, asama: 'hazirlik', tamam: false, kisiAdi: null, zaman: null, kaynak: null, kanit: null, ekleyenAdi: null, eklenme: null, olcum: null, secim: null, fotoOzet: null, sinirDisi: null };
-    let yetki = { ekMadde: true, sablon: false };
+    let yetki = { sablon: false };
     await page.route('**/api/adimli-emirler/*/adim-durumu', async (r) => {
       const c = await r.fetch();
-      const g = (await c.json()) as { yetki: typeof yetki; adimlar: { liste: unknown[]; ekMaddeler: unknown[]; sablon: unknown }[] };
+      const g = (await c.json()) as { yetki: typeof yetki; adimlar: { liste: unknown[]; sablon: unknown }[] };
       yetki = g.yetki;
       const [ilk, ...kalan] = g.adimlar;
       if (!ilk) throw new Error('adım yok');
@@ -146,9 +146,9 @@ test.describe('müdür, türlü kontrol', () => {
         { ...taban, adimId: 990002, ad: 'ORN toplam boy', tamam: true, kisiAdi: 'ORN Kişi', zaman: '2026-11-15T05:00:00.000Z', kaynak: 'adim-durumu', kontrol: { tur: 'olcum', ad: 'ORN toplam boy', alt: 24.95, ust: 25.05, birim: 'mm' }, olcum: 25.07, sinirDisi: true },
         { ...taban, adimId: 990003, ad: 'ORN çapak durumu', kontrol: { tur: 'secim', secenekler: ['Çapaksız', 'Hafif, temizlendi', 'Çapaklı'] } },
         { ...taban, adimId: 990004, ad: 'ORN bağlama fotoğrafı', kontrol: { tur: 'foto', aciklama: 'Ayna ve pabuçlar görünsün' } },
+        { ...taban, adimId: 990005, ad: 'ORN özel sıkma pabucu', kontrol: null, ekleyenAdi: 'ORN Kişi', eklenme: '2026-11-15T04:00:00.000Z' },
       ];
-      const ekMaddeler = [{ id: 990011, ad: 'ORN özel sıkma pabucu', tamam: false, kisiAdi: null, zaman: null, ekleyenAdi: 'ORN Kişi' }];
-      await r.fulfill({ response: c, json: { ...g, adimlar: [{ ...ilk, liste, ekMaddeler, sablon: { id: 990021, kod: 'ORN-HAZ', ad: 'ORN hazırlık' } }, ...kalan] } });
+      await r.fulfill({ response: c, json: { ...g, adimlar: [{ ...ilk, liste, sablon: { id: 990021, kod: 'ORN-HAZ', ad: 'ORN hazırlık' } }, ...kalan] } });
     });
     await ac('/adim-durumu');
     await page.getByRole('list', { name: 'Açık emirler' }).getByRole('button').first().click();
@@ -158,8 +158,13 @@ test.describe('müdür, türlü kontrol', () => {
     await expect(tablo.getByText(/25,07 mm · sınır dışı \(\+0,02\)/).filter({ visible: true })).toBeVisible();
     await expect(tablo.getByRole('radiogroup', { name: 'ORN çapak durumu' })).toBeVisible();
     await expect(tablo.getByRole('button', { name: 'Fotoğraf ekle' })).toBeVisible();
-    const ek = tablo.getByRole('checkbox', { name: /ORN özel sıkma pabucu$/ });
-    if (yetki.ekMadde) await expect(ek).toBeEnabled(); else await expect(ek).toBeDisabled();
+    await expect(tablo.getByRole('checkbox', { name: /ORN özel sıkma pabucu$/ })).toBeEnabled();
+    await tablo.getByRole('button', { name: 'Kaldır: ORN özel sıkma pabucu' }).click();
+    const soru = tablo.getByRole('group', { name: 'ORN özel sıkma pabucu kaldırılsın mı?' });
+    await expect(soru).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), 'soru açıkken sayfa taşmaz').toBeLessThanOrEqual(0);
+    await soru.getByRole('button', { name: 'Vazgeç' }).click();
+    await expect(soru).toBeHidden();
     const genislik = page.viewportSize()?.width ?? 0;
     if (genislik < 768) {
       for (const d of [tablo.getByRole('button', { name: 'Değer gir' }), tablo.getByRole('radio', { name: 'Çapaksız' })]) {

@@ -7,7 +7,7 @@ import { ADIM_STATULERI, BEKLEME_NEDENI_ADLARI } from '#paylasilan/sozlesme/uret
 import type {
   AdimDurumuCevabi, AdimStatusu, BeklemeNedeni, AdimDurumuTerminalCevabi, AdimTedariki, ElleStatuGovdesi, HazirlikElleEksikGovdesi, HazirlikMaddesi, HazirlikOnayiGovdesi,
   HazirlikOnayiKaldirGovdesi,
-  EkMaddeIsaretleGovdesi, ListeEkleGovdesi, ListeIsaretleGovdesi, ListeKontrolu,
+  ListeEkleGovdesi, ListeKaldirGovdesi, ListeIsaretleGovdesi, ListeKontrolu,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { denetimSatiri, medyaTutamagi } from '../dosya/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
@@ -49,36 +49,26 @@ async function adimTedarikleri(db: Db, emirId: number, idler: readonly number[])
   return sonuc;
 }
 
-// 3249-2 a: Üretim Hazırlık ek maddeleri (Arkon) ve operasyon tipinin emre gelen şablonu (rota). İkisi de bu modülün üstündedir;
-// kablolama.ts bağlar. Bağlı değilse ek madde listesi boştur ve şablon yoktur (yazma 409).
-export interface EkMaddeSatiri { id: number; ad: string; tamam: boolean; ekleyenId: number; tamamlayanId: number | null; tamamlanma: string | null }
-export type EkMaddeListeleyici = (db: Db, isEmriIdleri: readonly number[]) => Promise<ReadonlyMap<number, readonly EkMaddeSatiri[]>>;
-export type EkMaddeIsaretleyici = (db: Db, kullanici: Kullanici, isEmriId: number, maddeId: number, tamam: boolean) => Promise<void>;
+// Operasyon tipinin emre gelen şablonu (rota) bu modülün üstündedir; kablolama.ts bağlar. Bağlı değilse şablon yoktur (yazma 409).
+// 3494-3 a: Üretim Hazırlık ek maddesi artık emrin listesindedir (elle-madde.ts); ayrı ek madde kaynağı yoktur.
 type DenetimEki = (satirlar: readonly DenetimSecimi[]) => void;
 export type SablonOzetleyici = (db: Db, tipIdleri: readonly number[]) => Promise<ReadonlyMap<number, { id: number; kod: string; ad: string }>>;
 export type SablonaEkleyici = (
   db: Db, kullanici: Kullanici, tipId: number, adim: { baslik: string; kontrol: ListeKontrolu; asama: 'on_hazirlik' | 'hazirlik' }, denetimEki: DenetimEki,
 ) => Promise<{ id: number; kod: string; surum: number }>;
-const kaynak: { ekListe: EkMaddeListeleyici | null; ekIsaret: EkMaddeIsaretleyici | null; sablonOzet: SablonOzetleyici | null; sablonEkle: SablonaEkleyici | null } = {
-  ekListe: null, ekIsaret: null, sablonOzet: null, sablonEkle: null,
-};
+const kaynak: { sablonOzet: SablonOzetleyici | null; sablonEkle: SablonaEkleyici | null } = { sablonOzet: null, sablonEkle: null };
 const kaydedici = <K extends keyof typeof kaynak>(ad: K) => (c: (typeof kaynak)[K]): (typeof kaynak)[K] => {
   const onceki = kaynak[ad];
   kaynak[ad] = c;
   return onceki;
 };
-export const ekMaddeListeleyiciKaydet = kaydedici('ekListe');
-export const ekMaddeIsaretleyiciKaydet = kaydedici('ekIsaret');
 export const sablonOzetleyiciKaydet = kaydedici('sablonOzet');
 export const sablonaEkleyiciKaydet = kaydedici('sablonEkle');
-// Risk K1/K2: ek madde işareti Üretim Hazırlık yazma yetkisini, şablona ekleme talimat yazma yetkisini de ister; uç yalnız
-// adim-durumu-yaz'ı arar, ikinci yarı burada.
-const ekMaddeYazarMi = (k: Kullanici | null): boolean => k !== null && (islemVarMi(k, 'arkon.hazirlik') || islemVarMi(k, 'arkon.yonetici'));
+// Risk K2: şablona ekleme talimat yazma yetkisini de ister; uç yalnız adim-durumu-yaz'ı arar, ikinci yarı burada.
 const sablonYazarMi = (k: Kullanici | null): boolean => k !== null && islemVarMi(k, 'rota.talimat-yaz');
-export const EK_MADDE_YETKISI = 'Bu maddeyi Üretim Hazırlık yetkisi olan işaretler.';
 export const SABLON_YETKISI = 'Şablona eklemek talimat yazma yetkisi de ister.';
 export const SABLON_YOK = 'Bu adımın operasyon tipinin emre gelen şablonu yok.';
-export const EK_MADDE_YOK = 'Ek madde bu iş emrinde yok.';
+export const KALDIRILAMAZ = 'Yalnız elle eklenen madde kaldırılır; rota talimatından gelen madde talimatla değişir.';
 // Liste fotoğrafı (Risk K4): yalnız resim, en çok 10 MB; tür içerikten bulunur (dosya modülü). Konum bilgisi istemcide silinir (UYUM-BORCU).
 const fotoDeposu = medyaTutamagi('uretim-emirleri');
 const FOTO_SINIRI = { turler: ['png', 'jpeg', 'webp'] as const, azamiBayt: 10 * 1024 ** 2 };
@@ -108,18 +98,16 @@ export async function adimDurumu(db: Db, emirId: number, kullanici: Kullanici | 
   const atlamalar = await s.talimatAtlamalari(db, idler);
   const bekletme = await emrinBekletmesi(db, emirId, e.durum);
   const liste = await s.listeSatirlari(db, idler);
-  const ekler = kaynak.ekListe === null ? new Map<number, readonly EkMaddeSatiri[]>() : await kaynak.ekListe(db, idler);
   const sablonlar = kaynak.sablonOzet === null ? new Map<number, { id: number; kod: string; ad: string }>() : await kaynak.sablonOzet(db, isEmirleri.map((i) => i.operasyonTipiId));
   const adlar = await kisiAdlari(db, [...new Set([
     ...[...statuDefteri, ...onayDefteri, ...atlamalar].map((x) => x.kisiId),
     ...liste.flatMap((x) => [x.olayKisiId, x.ekleyenId].filter((k): k is number => k !== null)),
-    ...[...ekler.values()].flat().flatMap((x) => (x.tamamlayanId === null ? [x.ekleyenId] : [x.ekleyenId, x.tamamlayanId])),
   ])]);
   const ad = (id: number) => adlar.get(id) ?? null;
   return {
     emirId, emirNo: e.emirNo, urun: { kod: e.parcaNo, ad: e.parcaAd }, adet: e.adet, teslim: e.teslim, durum: e.durum,
     rotaYuzde: ilerleme?.rota ?? null, hazirlik: genel,
-    yetki: { ekMadde: ekMaddeYazarMi(kullanici), sablon: sablonYazarMi(kullanici) },
+    yetki: { sablon: sablonYazarMi(kullanici) },
     adimlar: isEmirleri.map((i, sira) => {
       const hal = new Map<HazirlikMaddesi, HazirlikHali>([...(haller.get(i.id) ?? [])].map(([m, h]) => [m, h.hal]));
       const sistem = adimSistemStatusu({
@@ -165,9 +153,6 @@ export async function adimDurumu(db: Db, emirId: number, kullanici: Kullanici | 
             ekleyenAdi: x.ekleyenId === null ? null : ad(x.ekleyenId), eklenme: x.eklenme,
           };
         }),
-        ekMaddeler: (ekler.get(i.id) ?? []).map((x) => ({
-          id: x.id, ad: x.ad, tamam: x.tamam, kisiAdi: x.tamamlayanId === null ? null : ad(x.tamamlayanId), zaman: x.tamamlanma, ekleyenAdi: ad(x.ekleyenId),
-        })),
         sablon: sablonlar.get(i.operasyonTipiId) ?? null,
       };
     }),
@@ -291,13 +276,15 @@ async function adimEmrinListesinde(db: Db, emirId: number, adimId: number): Prom
   return (await adimDurumu(db, emirId)).adimlar.some((a) => a.liste.some((m) => m.adimId === adimId));
 }
 
-// Risk K1: ek madde Arkon'un komutuyla yazılır; iki yetki birlikte. Emrin açıklığı ve kapsam öteki yazmalarla aynı yoldan.
-export async function ekMaddeIsaretle(db: Db, kullanici: Kullanici, emirId: number, isEmriId: number, g: EkMaddeIsaretleGovdesi): Promise<AdimDurumuCevabi> {
-  if (!ekMaddeYazarMi(kullanici)) throw yetkiYok(EK_MADDE_YETKISI);
-  const adim = await yazmaHazirla(db, emirId, isEmriId, kullanici);
-  const isaretle = kaynak.ekIsaret;
-  if (isaretle === null || !adim.ekMaddeler.some((m) => m.id === g.maddeId)) throw bulunamadi(EK_MADDE_YOK);
-  await isaretle(db, kullanici, isEmriId, g.maddeId, g.tamam);
+// 3494-3 a: elle eklenen madde kaldırılabilir (yanlış ya da gereksiz eklenen); iz kalır, kaldırma geri alınmaz. Biten adımın listesi
+// değişmez. Rota talimatından gelen madde talimatla değişir, burada kaldırılmaz.
+export async function listeMaddesiKaldir(db: Db, kullanici: Kullanici, emirId: number, isEmriId: number, g: ListeKaldirGovdesi): Promise<AdimDurumuCevabi> {
+  const adim = await yazmaHazirla(db, emirId, isEmriId);
+  const madde = adim.liste.find((m) => m.adimId === g.adimId);
+  if (madde === undefined) throw bulunamadi(LISTE_MADDESI_YOK);
+  if (adim.durum === 'tamam') throw cakisma(LISTE_ADIM_BITTI);
+  if (madde.eklenme === null) throw cakisma(KALDIRILAMAZ);
+  await s.listeOlayiEkle(db, g.adimId, kullanici.id, 'kaldir');
   return adimDurumu(db, emirId, kullanici);
 }
 

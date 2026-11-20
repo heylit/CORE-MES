@@ -5,13 +5,11 @@ import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 import { hataIletisi } from '../../ortak/veri/api.ts';
 import { DosyaHatasi, dosyaYukle } from '../belge-merkezi/disari.ts';
 import { FOTO_KABUL, fotografHazirla } from './foto-hazirla.ts';
-import { zamanMetni } from './gorunum.ts';
 
-// 3249-2 a: Adım Durumu'nun türlü kontrol adımları, ofisten kanıt ve Üretim Hazırlık ek maddeleri. Komutları AdimDurumu.tsx
+// 3249-2 a: Adım Durumu'nun türlü kontrol adımları ve ofisten kanıt. Komutları AdimDurumu.tsx
 // gönderir (aynı kanca, aynı "Geri al"); bu dosya yalnız görünüm ve girdi tutar.
 type Adim = AdimDurumuCevabi['adimlar'][number];
 export type ListeMaddesi = Adim['liste'][number];
-export type EkMadde = Adim['ekMaddeler'][number];
 type KontrolTuru = ListeKontrolu['tur'];
 
 export const sayiMetni = (n: number): string => n.toLocaleString('tr-TR', { maximumFractionDigits: 4 });
@@ -216,24 +214,6 @@ function FotoGirisi({ aciklama, mesgul, gonder, kapat }: {
     </div>
   );
 }
-
-// Üretim Hazırlık ek maddesinin kutusu. Yetkisi olmayana kilit simgeli, kesik çerçeveli ve basılamaz; tamamlanmışı yine okunur.
-export function EkMaddeKutusu({ m, opNo, yaz, kilitli, mesgul, degistir }: {
-  m: EkMadde; opNo: number; yaz: boolean; kilitli: boolean; mesgul: boolean; degistir: () => void;
-}) {
-  return (
-    <label className={`tc-ad-madde${kilitli ? ' tc-ad-madde-kilitli' : ''}`} title={kilitli ? 'Bu maddeyi Üretim Hazırlık yetkisi olan işaretler' : undefined}>
-      {kilitli ? <Simge ad="lock" boyut="k" /> : null}
-      <input type="checkbox" checked={m.tamam} disabled={!yaz || kilitli || mesgul} onChange={degistir} aria-label={`OP ${String(opNo)} ${m.ad}`} />
-      <span>{m.ad}<small className="tc-ad-kaynak"><Simge ad="box" boyut="k" />Üretim Hazırlık</small></span>
-    </label>
-  );
-}
-
-export const ekMaddeKaydi = (m: EkMadde, kilitli: boolean): string => {
-  const isaret = m.tamam && m.zaman !== null ? `${m.kisiAdi ?? 'Kişi'} · ${zamanMetni(m.zaman)}` : '—';
-  return `${isaret}${kilitli ? ' · işaretlemek için Üretim Hazırlık yetkisi gerekir' : ''}`;
-};
 
 // "Kontrol adımı" penceresinin tür alanları. Taslak metin tutar; kontrolü göndermeden önce taslaktanKontrol çevirir.
 export interface KontrolTaslagi { tur: KontrolTuru; alt: string; ust: string; birim: string; aciklama: string; secenekler: string[] }

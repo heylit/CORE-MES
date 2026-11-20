@@ -1293,8 +1293,8 @@ export const listeEkleGovdesi = z.object({
   // "Şablona da ekle" (3249-2 a, Risk K2): adımın operasyon tipinin emre gelen şablonuna da yeni sürümle eklenir; varsayılan kapalı.
   sablonaEkle: z.boolean().prefault(false),
 }).strict();
-// Üretim Hazırlık ek maddesinin işareti (3249-2 a): madde Arkon'undur, yazım Arkon'un dışarı komutuyla yapılır.
-export const ekMaddeIsaretleGovdesi = z.object({ maddeId: KIMLIK, tamam: z.boolean() }).strict();
+// 3494-3 a: elle eklenen madde kaldırılır (iz kalır, geri alınmaz); rota talimatından gelen madde kaldırılmaz.
+export const listeKaldirGovdesi = z.object({ adimId: KIMLIK }).strict();
 export const listeFotografiParametresi = z.object({
   id: z.coerce.number().int().positive().max(TAM_SAYI_UST), adimId: z.coerce.number().int().positive().max(TAM_SAYI_UST),
   ozet: z.string().regex(/^[0-9a-f]{64}$/),
@@ -1357,15 +1357,11 @@ export const adimDurumuCevabi = z.object({
     })),
     // 3249 b: adımın ön hazırlık ve hazırlık listesi, sırasıyla.
     liste: z.array(listeMaddesiSemasi),
-    // 3249-2 a: Üretim Hazırlık'ın bu iş emrine özel maddeleri (Arkon), ekleniş sırasıyla; bağlı değilse boş.
-    ekMaddeler: z.array(z.object({
-      id: KIMLIK, ad: z.string(), tamam: z.boolean(), kisiAdi: z.string().nullable(), zaman: zamanSemasi.nullable(), ekleyenAdi: z.string().nullable(),
-    })),
     // Adımın operasyon tipinin emre gelen şablonu ("Şablona da ekle" hedefi); yoksa null.
     sablon: z.object({ id: KIMLIK, kod: z.string(), ad: z.string() }).nullable(),
   })),
-  // 3249-2 a: okuyanın ek yetkileri; yazma uçları aynısını sunucuda arar. ekMadde: Üretim Hazırlık yazma; sablon: talimat yazma.
-  yetki: z.object({ ekMadde: z.boolean(), sablon: z.boolean() }),
+  // 3249-2 a: okuyanın ek yetkileri; yazma uçları aynısını sunucuda arar. sablon: talimat yazma. 3494-3 a: ek madde listededir.
+  yetki: z.object({ sablon: z.boolean() }),
 });
 // Terminal okuması (2893-3 b): operatör yalnız statüyü, nedeni ve elle yazılmış statünün kendisini görür; kişi adı, gerekçe ve geçmiş yok.
 // 3322 (Risk K5): elle "hazır değil" maddenin nedeni koyanın adıyla gelir (engeli kim kaldırır); gerekçe ve geçmiş yine yok.
@@ -1390,7 +1386,7 @@ export type TalimatAtlamaCevabi = z.output<typeof talimatAtlamaCevabi>;
 export type ListeEkleGovdesi = z.output<typeof listeEkleGovdesi>;
 export type ListeKontrolu = z.output<typeof listeKontrolSemasi>;
 export type ListeKanitiGirdisi = z.output<typeof listeKanitiGirdisi>;
-export type EkMaddeIsaretleGovdesi = z.output<typeof ekMaddeIsaretleGovdesi>;
+export type ListeKaldirGovdesi = z.output<typeof listeKaldirGovdesi>;
 export type HazirlikOnayiKaldirGovdesi = z.output<typeof hazirlikOnayiKaldirGovdesi>;
 export type HazirlikElleEksikGovdesi = z.output<typeof hazirlikElleEksikGovdesi>;
 export type AdimDurumuCevabi = z.output<typeof adimDurumuCevabi>;
