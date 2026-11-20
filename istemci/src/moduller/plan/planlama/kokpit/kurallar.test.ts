@@ -32,13 +32,14 @@ describe('Kokpit modeli', () => {
     expect(gec && durumYazisi(gec)).toMatch(/ geç$/);
   });
 
-  it('ufkun sonuna kadar yerleşen adımın emri ufuk dışı ve geç sayılır, eksik saat yazılır', () => {
+  it('3484 c: ufuk sonrasına uzayan adımın emri gerçek bitişiyle değerlendirilir, ufuk sonrası saat yazılır', () => {
     const { c, p, cx } = ornek();
     const id = Object.keys(p?.ops ?? {}).find((k) => k.startsWith('3.')) ?? '';
     const q = p && { ...p, ops: { ...p.ops, [id]: { ...p.ops[id], ufukDisi: 12 } } } as typeof p;
     const e = modelKur(c, q, cx, (x) => x).emirler.find((x) => x.id === id.split('.')[0]);
-    expect(e).toMatchObject({ durum: 'gec', ufukEksik: 12 });
-    expect(e && durumYazisi(e)).toBe(`ufuk dışı, ${sureYaz(12)} eksik`);
+    const once = modelKur(c, p, cx, (x) => x).emirler.find((x) => x.id === e?.id);
+    expect(e).toMatchObject({ durum: once?.durum, ufukEksik: 12 });
+    expect(e && durumYazisi(e)).toBe(once && durumYazisi(once));
     expect(modelKur(c, p, cx, (x) => x).emirler.find((x) => x.id === e?.id)?.ufukEksik).toBeUndefined();
   });
 

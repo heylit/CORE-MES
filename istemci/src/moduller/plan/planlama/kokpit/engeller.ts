@@ -109,15 +109,15 @@ export function engeller(p: OkunanPlan | null, m: KokpitModeli, cx: Derleme, ufu
     }
   }
 
-  // Ufka taşan adım planda durur ama bitişi gerçek değildir ve canlıya yazılmaz (3457-3 a).
+  // 3484 c: ufka sığmayan emir için ufuk uzar; adım gerçek tarihiyle yerleşir ve canlıya yazılır. Bilgi olarak gösterilir.
   for (const x of Object.values(m.isler)) {
     if (!x.ufukDisi) continue;
     const e = emir.get(x.job);
     l.push({
       tur: 'ufuk', anahtar: `ufuk:${x.id}`, emir: x.job, baslik: adimBasligi(e, x.id),
-      neOldu: `Adım planlama süresinin sonuna kadar yerleşti, ${sureYaz(x.ufukDisi)} süre dışında kaldı${bekliyor(x.id)}.`,
-      neden: `İş planlama süresine sığmıyor; bitişi bilinmediği için canlı plana yazılmaz.`,
-      neYapmali: 'Planlama süresini uzatın, çevrim süresini kontrol edin ya da başka tezgâh ekleyin.', duzelt: DUZELTME_YERLERI.ufuk,
+      neOldu: `Adım planlama ufkundan sonra bitiyor; ufuk bu emir için uzadı, ${sureYaz(x.ufukDisi)} ufuk sonrasında${bekliyor(x.id)}.`,
+      neden: 'Ayardaki ufka sığmadı; tarihleri ufuk sonrası takvimle hesaplandı ve canlı plana yazılır.',
+      neYapmali: 'Daha erken bitmesi gerekiyorsa çevrim süresine bakın ya da başka tezgâh ekleyin.', duzelt: DUZELTME_YERLERI.ufuk,
     });
   }
 

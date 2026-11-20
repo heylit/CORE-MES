@@ -22,12 +22,12 @@ const st = (m: ReturnType<typeof motorYukle>, olcek?: Record<string, unknown>, a
 const derle = (m: ReturnType<typeof motorYukle>, s: MotorDurumu) => m.compile(s) as { days: unknown[]; gen: unknown };
 
 describe('plan motoru: ufuk ve dilim (1477 a)', () => {
-  // 3457 (1681 b değişti): ufku aşan iş düşmez; ufkun son çalışma anına kadar yerleşir, sığmayan saat ufukDisi'ndedir.
-  test('ufuk 63 gün: ufku aşan iş ufuk sonuna kadar yerleşir, kalan saati ufuk dışıdır; ufuk 90 gün olunca tamamı yerleşir', () => {
+  // 3484 c: ufku aşan iş için ufuk uzar; iş gerçek bitişiyle yerleşir, ufuk sonrası saat ufukDisi'ndedir.
+  test('ufuk 63 gün: ufku aşan iş gerçek bitişiyle yerleşir, ufuk sonrası saati yazılır; ufuk 90 gün olunca ufuk dışı saat yoktur', () => {
     const m = motorYukle();
     const p63 = m.schedule(st(m, { ufukGun: 63, dilimDk: 15 }), 'yeni', null);
     const k = p63.ops['S1.10'] as { C: number; ufukDisi?: number } | undefined;
-    assert.ok(k && k.C <= 63 * 24 && (k.ufukDisi ?? 0) > 0, JSON.stringify(k));
+    assert.ok(k && k.C > 63 * 24 && (k.ufukDisi ?? 0) > 0, JSON.stringify(k));
     assert.deepEqual([...(p63.fail ?? [])], []);
     const m2 = motorYukle();
     const p90 = m2.schedule(st(m2, { ufukGun: 90, dilimDk: 15 }), 'yeni', null);
@@ -36,25 +36,25 @@ describe('plan motoru: ufuk ve dilim (1477 a)', () => {
   });
 
   // 120 adet x 6 saat = 720 saat, günde 8 saat: 90 iş günü, yaklaşık 126 takvim günü
-  test('varsayılan 120 gün: ufku aşan iş ufuk sonuna kadar yerleşir, ufuk dışı saati işin süresiyle tutarlıdır; ufuk 182 gün olunca tamamı yerleşir', () => {
+  test('varsayılan 120 gün: ufku aşan iş gerçek bitişiyle yerleşir, ufuk dışı saati işin süresinden azdır; ufuk 182 gün olunca ufuk dışı saat yoktur', () => {
     const m = motorYukle();
     const p120 = m.schedule(st(m, undefined, 120), 'yeni', null);
     const k = p120.ops['S1.10'] as { C: number; Su: number; run: number; ufukDisi?: number } | undefined;
-    assert.ok(k && k.C <= 120 * 24 && (k.ufukDisi ?? 0) > 0 && (k.ufukDisi ?? 0) < k.run, JSON.stringify(k));
+    assert.ok(k && k.C > 120 * 24 && (k.ufukDisi ?? 0) > 0 && (k.ufukDisi ?? 0) < k.run, JSON.stringify(k));
     assert.deepEqual([...(p120.fail ?? [])], []);
     const m2 = motorYukle();
     const p182 = m2.schedule(st(m2, { ufukGun: 182, dilimDk: 15 }, 120), 'yeni', null);
     const r = p182.ops['S1.10'];
-    assert.ok(r && r.C > 120 * 24 && r.C < 182 * 24, JSON.stringify(r));
+    assert.ok(r && r.C > 120 * 24 && r.C < 182 * 24 && (r as { ufukDisi?: number }).ufukDisi === undefined, JSON.stringify(r));
   });
 
-  test('derleme ufuk kadar gün kurar; sınır dışı ufuk ve tanımsız dilim varsayılana döner', () => {
+  test('derleme ufkun iki katı gün kurar (3484 c); sınır dışı ufuk ve tanımsız dilim varsayılana döner', () => {
     const m = motorYukle();
-    assert.equal(derle(m, st(m, { ufukGun: 120, dilimDk: 30 })).days.length, 120);
-    assert.equal(derle(m, st(m, { ufukGun: 63, dilimDk: 15 })).days.length, 63);
-    assert.equal(derle(m, st(m, { ufukGun: 500, dilimDk: 7 })).days.length, 120);
-    assert.equal(derle(m, st(m, { ufukGun: 'x' })).days.length, 120);
-    assert.equal(derle(m, st(m)).days.length, 120);
+    assert.equal(derle(m, st(m, { ufukGun: 120, dilimDk: 30 })).days.length, 240);
+    assert.equal(derle(m, st(m, { ufukGun: 63, dilimDk: 15 })).days.length, 126);
+    assert.equal(derle(m, st(m, { ufukGun: 500, dilimDk: 7 })).days.length, 240);
+    assert.equal(derle(m, st(m, { ufukGun: 'x' })).days.length, 240);
+    assert.equal(derle(m, st(m)).days.length, 240);
   });
 
   test('30 dakikalık dilimde plan kurulur, iş aynı saatte biter (tam saatli iş)', () => {
@@ -65,7 +65,7 @@ describe('plan motoru: ufuk ve dilim (1477 a)', () => {
     assert.equal(p30.ops['S1.10']?.C, p15.ops['S1.10']?.C);
   });
 
-  test('uzun ufukla kurulan taban, kısa ufukta sabit kipte çökmeden yeniden kurulur; ufka taşan iş ufuk sonuna kadar yerleşir', () => {
+  test('uzun ufukla kurulan taban, kısa ufukta sabit kipte çökmeden yeniden kurulur; ufka taşan iş gerçek bitişiyle yerleşir', () => {
     const m = motorYukle();
     const taban = m.schedule(st(m, { ufukGun: 90, dilimDk: 15 }), 'yeni', null);
     const m2 = motorYukle();
@@ -73,7 +73,7 @@ describe('plan motoru: ufuk ve dilim (1477 a)', () => {
     const s = st(m2, { dondurma: 0, ufukGun: 63 });
     const p = m2.schedule(s, 'sabit', taban);
     const k = p.ops['S1.10'] as { C: number; ufukDisi?: number } | undefined;
-    assert.ok(k && k.C <= 63 * 24 && (k.ufukDisi ?? 0) > 0, JSON.stringify(k));
+    assert.ok(k && k.C > 63 * 24 && (k.ufukDisi ?? 0) > 0, JSON.stringify(k));
     assert.deepEqual([...(p.fail ?? [])], []);
   });
 });

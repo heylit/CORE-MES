@@ -179,8 +179,6 @@ export function calismaIsleri(
     if (paylar.some(({ r }) => r.bitti || r.m.startsWith('@'))) { if (anahtar !== undefined) dokunulmaz.add(anahtar); continue; }
     const kaynaklar = paylar.map(({ r }) => calismaKaynagi(r.m));
     if (kaynaklar.some((k) => k === null) || anahtar === undefined || !planlanacak.has(anahtar) || paylar.some((p, n) => p.no !== n + 1)) { yazilamaz.add(anahtar ?? kok); continue; }
-    // 3457-3 a: ufka taşan işin bitişi ufuk sonudur; canlıya yazılsa sapma ve anomali ölçüsü sahte bitişi okur. Ufuk ilerleyip sığınca yazılır.
-    if (paylar.some(({ r }) => (r.ufukDisi ?? 0) > 0)) { yazilamaz.add(anahtar); uyarilar.push(`${opMetni(anahtar)}: planlama süresinin dışına taşıyor; canlıya yazılmadı, süre içine sığınca yazılır.`); continue; }
     const yaz = (n: number, parca?: CalismaIsi['parca']) => {
       const { r } = paylar[n]!;
       yazilacak.push({ k: kok, anahtar, kaynak: kaynaklar[n]!, S: r.S, C: r.C, ...(parca ? { parca } : {}) });

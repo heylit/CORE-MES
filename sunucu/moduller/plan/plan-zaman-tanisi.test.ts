@@ -58,7 +58,7 @@ function kokpitNedeni(k: ReturnType<typeof kaynak>): Record<string, { kod: strin
 const sunucuNedeni = async (k: ReturnType<typeof kaynak>) => Object.values((await coz(k as never, { ...ISTEK, kip: 'sabit', simdi: new Date(ISTEK.simdi), taslakId: 1 } as never)).nedenler)[0];
 
 describe('Kokpit yerleşmeme nedeni: zaman alt nedeni (3457)', () => {
-  test('ZT-01 (1681 b değişti): işleme ufka sığmıyorsa iş düşmez; ufkun sonuna kadar yerleşir, sığmayan saat ufuk dışıdır; canlıya yazılmaz', async () => {
+  test('ZT-01 (3484 c, 3457-3 a değişti): işleme ufka sığmıyorsa ufuk o iş için uzar; gerçek bitişle yerleşir, ufuk sonrası saat yazılır, canlıya yazılır', async () => {
     const k = kaynak(30, 60_000, [V], V, 1);
     assert.deepEqual(kokpitNedeni(k), {});
     const g = cozumGirdisi({ ...k, istek: ISTEK } as never)!;
@@ -66,24 +66,26 @@ describe('Kokpit yerleşmeme nedeni: zaman alt nedeni (3457)', () => {
     vm.runInContext(degerlendirmeKodu(), b); b['durum'] = g.st;
     const r = JSON.parse(vm.runInContext(`(() => { const st = stHazirla({ ...durum, w: { ...W0, ...(durum.w || {}) } }); const cx = compile(st);
       const p = schedule(st, 'dagit', null, { cx }); const id = Object.keys(p.ops)[0]; const M = cx.M[p.ops[id].m];
-      return JSON.stringify({ ...p.ops[id], acik: workIn(M.rw, st.now, HDAYS * 24), ufukSonu: HDAYS * 24 }); })()`, b) as string) as { ufukDisi: number; run: number; su: number; C: number; acik: number; ufukSonu: number };
-    assert.ok(r.C <= r.ufukSonu, JSON.stringify(r));
-    // Ufuk dışı saat, işin süresinden ufukta yapılabilenin çıkarılmasıdır (hazırlık ufkun içindedir).
+      return JSON.stringify({ ...p.ops[id], acik: workIn(M.rw, st.now, UFUK * 24), ufukSonu: UFUK * 24, hesapSonu: HDAYS * 24 }); })()`, b) as string) as { ufukDisi: number; run: number; su: number; C: number; acik: number; ufukSonu: number; hesapSonu: number };
+    assert.ok(r.C > r.ufukSonu && r.C <= r.hesapSonu, JSON.stringify(r));
+    // Ufuk sonrası saat, işin süresinden ufukta yapılabilenin çıkarılmasıdır (hazırlık ufkun içindedir).
     assert.ok(Math.abs(r.ufukDisi - (r.su + r.run - r.acik)) < 0.01, JSON.stringify(r));
-    // Risk K1: sunucu bu işi canlı kuyruğa yazmaz (bitişi ufuk sonudur); nedeni ufuk.
     const sunucu = await coz(k as never, { ...ISTEK, kip: 'sabit', simdi: new Date(ISTEK.simdi), taslakId: 1 } as never);
-    assert.equal(sunucu.yerlesimler.length, 0);
-    assert.equal(Object.values(sunucu.nedenler)[0]?.kod, 'ufuk');
+    assert.equal(sunucu.yerlesimler.length, 1);
+    assert.deepEqual(sunucu.nedenler, {});
   });
-  test('ZT-01b: ufka taşan adımın ardılı "önceki adım ufuk dışında" nedeniyle yerleşmez', () => {
+  test('ZT-01b (3484 c): ufka taşan adımın ardılı da uzatılmış ufukta yerleşir', () => {
     const k = kaynak(30, 60_000, [V], V, 1);
     const adimlar = (k.kaynak.durum.routes as Record<string, { steps: Record<string, unknown>[] }>)['50']!.steps;
     adimlar.push({ ...adimlar[0]!, id: '50-o20', opNo: 20, seq: 20, setup: 10, proc: 10, cycle: 10 });
     const n = kokpitNedeni(k);
-    const ardil = Object.entries(n).find(([id]) => id.endsWith('.20'));
-    assert.ok(ardil, JSON.stringify(n));
-    assert.equal(ardil[1].kod, 'oncul');
-    assert.equal((ardil[1] as { ufukDisi?: number }).ufukDisi, 1);
+    assert.equal(Object.keys(n).find((id) => id.endsWith('.20')), undefined, JSON.stringify(n));
+  });
+  test('ZT-01c (3484 c): ufkun iki katına da sığmayan iş yerleşmez; nedeni zaman', () => {
+    const k = kaynak(30, 200_000, [V], V, 1);
+    const n = Object.values(kokpitNedeni(k));
+    assert.equal(n.length, 1);
+    assert.equal(n[0]?.kod, 'zaman');
   });
   test('ZT-02: hazırlık tezgâhın kesintisiz bloğuna sığmaz: alt neden hazırlık, 30 sa ve 8 sa', async () => {
     const k = kaynak(1800, 900, [V], V, 1);
@@ -132,11 +134,10 @@ describe('Kokpit yerleşmeme nedeni: zaman alt nedeni (3457)', () => {
     assert.equal(tani(z([])).alt, 'bilinmiyor');
     assert.equal(tani('null').alt, 'bilinmiyor');
   });
-  // ZT-07 (Test T1-T3, 3457-3): kayıtlı plandan canlıya yazıma kadar ufka taşan iş: plan kaydı ufukDisi ve ufukEksik taşır, özet geç sayar,
-  // sunucunun okuduğu çalışma planı ufukDisi'ni korur ve taslak yazımı onu yazılamaz sayar.
-  test('ZT-07: ufka taşan iş plan kaydında, özette ve çalışma planında görünür; canlıya yazılmaz', () => {
+  // ZT-07 (3484 c): kayıtlı plandan canlıya yazıma kadar ufka taşan iş: plan kaydı ufukDisi ve ufukEksik taşır, özet gerçek bitişle sayar,
+  // sunucunun okuduğu çalışma planı ufukDisi'ni korur ve taslak yazımı onu yazar.
+  test('ZT-07: ufka taşan iş plan kaydında ve çalışma planında görünür; gerçek bitişle sayılır ve canlıya yazılır', () => {
     const k = kaynak(30, 60_000, [V], V, 1);
-    // Termin ufkun sonundan sonra: bitiş (ufuk sonu) terminden önce görünse de iş geç sayılır.
     (k.kaynak.durum.emirler.orders[0] as { due: string }).due = '2027-06-30';
     const g = cozumGirdisi({ ...k, istek: ISTEK } as never)!;
     const b = vm.createContext({ GIRDI_SAAT_DILIMI: TESIS_SAAT_DILIMI }); b['self'] = b;
@@ -147,11 +148,11 @@ describe('Kokpit yerleşmeme nedeni: zaman alt nedeni (3457)', () => {
     const [id, op] = Object.entries(kayit.ops)[0]!;
     assert.ok((op.ufukDisi ?? 0) > 0, JSON.stringify(op));
     assert.ok((Object.values(kayit.J)[0]?.ufukEksik ?? 0) > 0, JSON.stringify(kayit.J));
-    assert.deepEqual([kayit.ozet.late, kayit.ozet.onT], [1, 0]);
+    assert.deepEqual([kayit.ozet.late, kayit.ozet.onT], [0, 1]);
     const c = calismaPlani({ ...k, calisma: { ...k.calisma, plan: kayit } } as never, Date.parse(ISTEK.simdi));
     const islem = c?.ops?.find((x) => x.id === id);
     assert.equal(islem?.ufukDisi, op.ufukDisi);
     const r = calismaIsleri(c?.ops ?? [], c?.kimlik ?? {}, new Set(Object.values(c?.kimlik ?? {})));
-    assert.deepEqual([r.yazilacak, r.yazilamaz], [[], [c?.kimlik[id]]]);
+    assert.deepEqual([r.yazilacak.map((x) => x.anahtar), r.yazilamaz], [[c?.kimlik[id]], []]);
   });
 });
