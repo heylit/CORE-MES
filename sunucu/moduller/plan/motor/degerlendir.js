@@ -125,6 +125,9 @@ function takvimDarMi(p, cx) {
   }
   return false;
 }
+/* Kayıtlı planı güncel veriyle çözen her yol yoklar: veri kayıttan sonra değişmiş (duruş girilmiş) ve bir adımı takvimin ötesine itmiş olabilir.
+   Plan kaydına uğramadan dönen ölçü (iyileştirmenin ve hamlenin eski gecikmesi, ek mesai ve öne çekme tabanı) yoksa o adımsız ölçülür. Arama
+   bütçesi atılacak hesapta harcanmasın diye yoklama aramadan önce yapılır. */
 /** @param {any} p @param {Derleme} cx */
 function takvimYokla(p, cx) { if (DG_TAKVIM_UZAR && HDAYS < TAKVIM_ENCOK && takvimDarMi(p, cx) && takvimBuyut()) throw TAKVIM_DAR; }
 /** @param {any} [p] @param {MotorDurumu} [st] @param {any} [ref] */
@@ -160,6 +163,7 @@ function kilitliSiraIhlali(p, st, cx) {
 /* sayfanın kısa araması (t-tekyer kisaArama) */
 /** @param {MotorDurumu} [st] @param {Derleme} [cx] @param {any} [p0] @param {any} [ms] */
 function kisaArama(st, cx, p0, ms) {
+  takvimYokla(p0, cx);
   const L = lns(st, p0, null, { ms, seed: 7, free: true });
   let p = p0; if (cmpEv(L.e, evaluate(p0, st, null, true)) > 0 && (L.plan.fail || []).length <= (p0.fail || []).length && kilitliSiraIhlali(L.plan, st, cx) <= kilitliSiraIhlali(p0, st, cx)) p = L.plan;
   slack(p, cx); return p;
@@ -285,6 +289,7 @@ function pdCalistir(liste, ms = 0) { return liste.map(x => ({ ...x, k: dgPlanKur
 function ymOlc(st) {
   stHazirla(st); const cx = compile(st);
   const p0 = lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, [], cx, true); p0.cx = p0.cx || cx;
+  takvimYokla(p0, cx);
   const L = lns(st, p0, null, { ms: 300, seed: 11, free: true }); const e0 = evaluate(p0, st, null, true);
   const p = cmpEv(L.e, e0) > 0 ? L.plan : p0; p.cx = p.cx || cx; slack(p, cx); const e = evaluate(p, st, null, true);
   return { p, e, cx, gec: ymGecTL(e), diger: e.tl - (e.mesaiTL || 0), fail: (p.fail || []).length };
@@ -391,6 +396,7 @@ function moAdaylar() {
 function moOlc(a, X) {
   const st = stOf(); if (a) st.D.satinalma[a.i].gelis = a.soz - X * 24;
   stHazirla(st); const cx = compile(st); const p = lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, [], cx, true);
+  takvimYokla(p, cx);
   const e = evaluate(p, st, null, true);
   const T = {}; for (const j of (a ? a.isler : Object.keys(e.J))) T[j] = e.J[j] ? e.J[j].T : null;
   return { tl: tlToplam(e), wT: e.wT, sumT: e.sumT, late: e.late, fail: (p.fail || []).length, T };
@@ -587,12 +593,17 @@ function hamleFarki(k) {
   return l.sort((x, y) => y.d - x.d).slice(0, HAMLE_DEGISEN_EN_COK).map(({ d, ...x }) => x);
 }
 /* kayıtlı planın gecikmesi aynı ölçüyle yeniden hesaplanır: kayıttaki özet eski bir hesaptan kalmış olabilir */
-function kayitliGecikme() { const st = stHazirla(stOf()); const cx = compile(st); return evaluate(lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, [], cx, false), st, null, true).wT; }
+function kayitliGecikme() {
+  const st = stHazirla(stOf()); const cx = compile(st); const p = lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, [], cx, false);
+  takvimYokla(p, cx);
+  return evaluate(p, st, null, true).wT;
+}
 
 /* İyileştirme ara: kayıtlı plan çözülür, çalışmanın çözüm bütçesinde LNS; kayıtlı plana göre değişim bedeli sayılır. Daha iyisi yoksa plan null. */
 function planIyilestir() {
   const st = stHazirla(dengeKilit(stOf())); const cx = compile(st); const ms = (+S.w.sure || 10) * 1000; const t0 = Date.now(); const ref = { ops: S.plan.ops };
   let cur = yerindeTutarakCoz(st, cx, { ops: S.plan.ops, fail: S.plan.fail || [] }, {}); delete st.geride; slack(cur, cx);
+  takvimYokla(cur, cx);
   const E0 = evaluate(cur, st, ref, true); let E = E0, bulundu = false;
   let seed = 17, durgun = 0;
   while (Date.now() - t0 < ms && durgun < 4) {
@@ -623,6 +634,7 @@ function dgHamle(mods) {
     if (cmpEv(evaluate(q, st, null, true), evaluate(p, st, null, true)) > 0) p = q; else break;
   }
   slack(p, cx);
+  takvimYokla(p, cx);
   if (mods.length) {
     const stR = { ...st, locks: { ...st.locks } };
     for (const [id] of mods) { const r = p.ops[id]; if (r) stR.locks[id] = { m: r.m, S: r.S, gecici: 1 }; }

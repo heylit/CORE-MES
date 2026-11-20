@@ -868,6 +868,89 @@ describe('planlama değerlendirmesi: takvim kendiliğinden uzar (3501 a)', () =>
     assert.ok(kur(uzunKayit(0, 400)).ops['OU.10']!.C > TAKVIM_SONU, 'ilk hesap takvimi büyütür');
     assert.equal(kur(uzunKayit(600, 4)).failNeden['OU.10']!.tani!.ufukGun, 56);
   });
+
+  // UT-04'ün verisi: kayıtlı plan takvimin son iş gününde biter, sonradan tornaya iki günlük duruş girilir.
+  async function duruslu(): Promise<{ kayit: ReturnType<typeof uzunKayit>; c: Record<string, unknown> }> {
+    const kayit = uzunKayit(360, 225); const c = await kurulu(kayit);
+    return { kayit, c: { ...c, down: [{ id: 'd1', m: '100', from: 16 * 24, to: 18 * 24, neden: 'ariza' }] } };
+  }
+  test('UT-07: plan kaydı döndürmeyen ölçü de uzun adımı sayar: duruş girilmiş planda iyileştirmenin ve değişmeyen sıranın eski gecikmesi, öne çekmenin tabanı', async () => {
+    const { kayit, c } = await duruslu();
+    const iste = (istek: DegerlendirmeIstegi) => degerlendirmeYap({ calisma: c, kayit, kaynak: BUYUK_KAYNAK, bugun: '2026-10-19', istek }, AN);
+    const o = sonuc(await iste({ tur: 'one-al', siparisId: 'O1' })); if (o.tur !== 'one-al') return assert.fail(o.tur);
+    assert.ok(o.plan, 'öne al plan döndürür: eski gecikmesi büyümüş takvimle ölçülür');
+    const i = sonuc(await iste({ tur: 'plan-iyilestir' })); if (i.tur !== 'plan-iyilestir') return assert.fail(i.tur);
+    assert.ok(Math.abs(i.gecikmeOnce - o.gecikmeOnce) < 1e-6, `iyileştir ${String(i.gecikmeOnce)} = ${String(o.gecikmeOnce)}`);
+    const sira = Object.entries(kayitOf(c['plan']).ops).filter(([, r]) => r.m === '100').sort(([, x], [, y]) => x.S - y.S).map(([id]) => id);
+    const s = sonuc(await iste({ tur: 'sira-degistir', tezgah: '100', sira })); if (s.tur !== 'sira-degistir') return assert.fail(s.tur);
+    assert.equal(s.plan, null, s.neden ?? '');
+    assert.ok(Math.abs(s.gecikmeOnce - o.gecikmeOnce) < 1e-6, `sıra ${String(s.gecikmeOnce)} = ${String(o.gecikmeOnce)}`);
+    const m = sonuc(await iste({ tur: 'malzeme-one-cekme' })); if (m.tur !== 'malzeme-one-cekme') return assert.fail(m.tur);
+    assert.equal(m.taban.yerlesmeyen, 0);
+  });
+
+  // Motor sunucudaki gibi boş bağlamda yüklenir. Üst düzey işlevler bağlam nesnesindedir: sarılınca motorun kendi çağrıları da sayılır.
+  // turlar: her hesap turundaki arama sayısı; buyume: her büyümeden önceki takvim günü.
+  function izli(): { hesap: (calisma: unknown, kayit: unknown, istek: Record<string, unknown>) => unknown; turlar: number[]; buyume: number[] } {
+    const b = vm.createContext({ GIRDI_SAAT_DILIMI: TESIS_SAAT_DILIMI }); b['self'] = b;
+    const m = vm.runInContext(degerlendirmeKodu(), b) as { degerlendir: (...a: unknown[]) => unknown };
+    const turlar: number[] = [], buyume: number[] = [];
+    const sar = (ad: string, once: () => void): void => { const asil = b[ad] as (...a: unknown[]) => unknown; b[ad] = (...a: unknown[]) => { once(); return asil(...a); }; };
+    sar('tekHesap', () => { turlar.push(0); });
+    sar('lns', () => { turlar[turlar.length - 1]!++; });
+    sar('takvimBuyut', () => { buyume.push(vm.runInContext('HDAYS', b) as number); });
+    return { hesap: (calisma, kayit, istek) => m.degerlendir(calisma, kayit, BUYUK_KAYNAK, '2026-10-19', AN, istek), turlar, buyume };
+  }
+  test('UT-08: takvim aramadan önce yoklanır: atılacak turda arama yapılmaz', async () => {
+    const { kayit, c } = await duruslu();
+    const istekler: [string, unknown, unknown, Record<string, unknown>][] = [
+      ['planı kur', { ...calismaKur(), w: W }, uzunKayit(0, 400), { tur: 'plan-kur' }],
+      ['uygula', c, kayit, { tur: 'plan-uygula', isler: ['*'] }], ['iyileştir', c, kayit, { tur: 'plan-iyilestir' }],
+      ['öne al', c, kayit, { tur: 'one-al', siparisId: 'O1' }], ['partiyi böl', c, kayit, { tur: 'parti-bolme', siparisId: 'O1', dagitim: 'ayni', adetler: [6, 5] }],
+      ['plan seçenekleri', c, kayit, { tur: 'plan-secenekleri', sira: 0 }],
+    ];
+    for (const [ad, calisma, k, istek] of istekler) {
+      const z = izli(); assert.ok(z.hesap(calisma, k, istek), ad);
+      assert.ok(z.turlar.length >= 2, `${ad}: takvim büyür (${String(z.turlar.length)} tur)`);
+      assert.equal(z.turlar.slice(0, -1).reduce((a, x) => a + x, 0), 0, `${ad}: ${z.turlar.join(', ')}`);
+    }
+  });
+  test('UT-09: takvim her büyümede iki katına çıkar, 730 günde durur', () => {
+    const z = izli(); assert.ok(z.hesap({ ...calismaKur(), w: W }, uzunKayit(0, 4300), { tur: 'plan-kur' }));
+    assert.equal(z.buyume.join(', '), '56, 112, 224, 448');
+    assert.equal(z.turlar.length, 5);
+  });
+  test('UT-10: malzemesi takvimin ötesinde gelecek adım düşmez: takvim büyür, adım malzemenin gelişinden sonra yerleşir', async () => {
+    // Çubuğun stoğu yok; açık siparişi 70. günde gelir (takvim 56 gün).
+    const k0 = uzunKayit(0, 4);
+    const kayit = { ...k0, items: [...k0.items, { id: 'H9', code: 'H9', name: 'Ornek cubuk', type: 'ham', unit: 'kg', cost: 10, stock: 0, plan: { kod: 'H9', ad: 'Ornek cubuk', birim: 'kg', stok: 0, birimFiyat: 10, tedarikGun: 5, muayeneGun: 0 } }],
+      routes: { ...k0.routes, 52: { base: null, steps: [{ ...adim('52', 10, '10', 60, 0), ins: [{ id: 'n9', itemId: 'H9', qty: 1 }] }] } } };
+    const kaynak = { ...BUYUK_KAYNAK, ek: { ...BUYUK_KAYNAK.ek, acikSiparisler: [{ kod: 'H9', miktar: 50, tarih: '2026-12-28', siparisNo: 'SA-1' }] } };
+    const r = await degerlendirmeYap({ calisma: { ...calismaKur(), w: W }, kayit, kaynak, bugun: '2026-10-19', istek: { tur: 'plan-kur' } }, AN);
+    const s = sonuc(r); if (s.tur !== 'plan-kur') return assert.fail(s.tur);
+    const k = kayitOf(s.plan);
+    assert.deepEqual(k.fail, []);
+    assert.ok(k.ops['OU.10']!.S >= 70 * 24, `adım malzeme gelince başlar: ${String(k.ops['OU.10']?.S)}`);
+    assert.deepEqual(planBozuklari(k.ops), []);
+  });
+  test('UT-11: fason adımın çıkış günü takvime sığmıyorsa adım düşmez: takvim büyür', async () => {
+    // Fason yalnız pazartesi çıkar. Torna adımı takvimin son haftasında, son pazartesinin çıkış saatinden sonra biter: ilk çıkış günü takvimin ötesindedir.
+    const k0 = uzunKayit(0, 215);
+    const kayit = { ...k0, routes: { ...k0.routes, 52: { base: null, steps: [adim('52', 10, '10', 60, 0),
+      { id: '52-o20', seq: 20, opNo: 20, opId: '13', stationId: null, fasonId: '5', terminGun: 7, setup: null, cycle: null, alts: [], altTimes: {}, ins: [] }] } } };
+    const kaynak = { ...BUYUK_KAYNAK, durum: { ...BUYUK_KAYNAK.durum, fasonFirms: [{ id: '5', name: 'Ornek fason' }] } };
+    // Çıkış günü çalışmanın ayarıdır; kayıt okunmuş sayılsın ki ayar aynı kimlikte korunsun.
+    const c0 = calismaKur();
+    const calisma = { ...c0, w: W, rrSavedAt: kayit.savedAt, D: { ...(c0['D'] as Record<string, unknown>), fasoncular: [{ id: '5', ad: 'Ornek fason', kapasite: null, sureGun: 7, cikisGunleri: ['pzt'], cikisSaat: 16 }] } };
+    const r = await degerlendirmeYap({ calisma, kayit, kaynak, bugun: '2026-10-19', istek: { tur: 'plan-kur' } }, AN);
+    const s = sonuc(r); if (s.tur !== 'plan-kur') return assert.fail(s.tur);
+    const k = kayitOf(s.plan);
+    assert.deepEqual(k.fail, []);
+    assert.ok(k.ops['OU.10']!.C <= TAKVIM_SONU, `torna adımı takvimin içinde biter: ${String(k.ops['OU.10']?.C)}`);
+    assert.equal(k.ops['OU.20']!.m, '@5');
+    assert.ok(k.ops['OU.20']!.C > TAKVIM_SONU, `fason takvimin ötesinde döner: ${String(k.ops['OU.20']?.C)}`);
+    assert.deepEqual(planBozuklari(k.ops), []);
+  });
 });
 
 const PAROLA = 'dogru-parola-1';
