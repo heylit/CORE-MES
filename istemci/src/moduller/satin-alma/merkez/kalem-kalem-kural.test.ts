@@ -3,6 +3,7 @@ import type { PurchaseRequest, RequestItem } from './tipler.ts';
 // Uygulamadaki yükleme sırası: store önce (store ile taşıyıcı birbirini döngüsel ithal eder).
 import './store.ts';
 import { bolmeKapaliNedeni, bolunemezNedeni, bolunmusKarar } from './kalem-kalem.ts';
+import { viewApproval } from './roles.ts';
 
 const kalem = (ek: Partial<RequestItem> = {}): RequestItem => ({ id: 'k1', name: 'Deneme kalem', spec: '', qty: 10, unit: 'adet', ...ek } as RequestItem);
 const talep = (ek: Partial<PurchaseRequest> = {}): PurchaseRequest => ({
@@ -40,6 +41,20 @@ describe('3442-5 bölme kuralları', () => {
     expect(n.award?.mode).toBe('split');
     expect(n.status).toBe('approval');
     expect(metin).toContain('Karar onaya gönderildi');
+  });
+
+  it('onay ekranında bölünmüş kalem miktarıyla yazılır; tek satırlı kalem yalnız adıyla', () => {
+    const r = talep({ items: [kalem(), kalem({ id: 'k2', name: 'Öteki kalem', qty: 3 })], quotes: [
+      { id: 'qa', supplierId: '3', date: '2026-10-05', currency: 'TRY', prices: { k1: 100, k2: 50 } },
+      { id: 'qb', supplierId: '4', date: '2026-10-05', currency: 'TRY', prices: { k1: 120, k2: 55 } },
+    ] } as unknown as Partial<PurchaseRequest>);
+    const { talep: n } = bolunmusKarar(r, 'k1', { qa: 6, qb: 4 }, '');
+    document.body.innerHTML = `<div>${viewApproval(n)}</div>`;
+    const satirlar = [...document.querySelectorAll('.appr-why li')].map((li) => li.textContent ?? '');
+    expect(satirlar.some((t) => t.includes('Deneme kalem 6 adet'))).toBe(true);
+    expect(satirlar.some((t) => t.includes('Deneme kalem 4 adet'))).toBe(true);
+    expect(satirlar.join(' ')).not.toMatch(/Öteki kalem \d/);
+    document.body.innerHTML = '';
   });
 
   it('pay tek tedarikçide kalırsa karar tek teklifli olur, kalem bölünmez', () => {

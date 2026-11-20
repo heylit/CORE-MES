@@ -743,7 +743,7 @@
 .sa-kok .fsec .fsum *, .sa-kok .fsec .fsum b{ display:inline; }
 .sa-kok .appr{ align-items:start; }
 .sa-kok .appr .kv{ display:flex; flex-direction:column; gap:var(--b-4); padding:var(--b-4) var(--b-4); }
-.sa-kok .appr .kv > div{ border:0 !important; padding:0 !important; min-height:0 !important; }
+.sa-kok .appr .kv > div{ border:0 !important; padding:0 !important; min-height:0 !important; flex:0 0 auto; }
 
 /* Şablonlardaki sabit satır içi stiller buraya taşındı (TMI: ekranda satır içi stil yok). !important, satır içi stilin önceliğini korur. */
 .sa-kok [data-sa-y="1"] { margin-bottom:var(--b-4) !important; }
