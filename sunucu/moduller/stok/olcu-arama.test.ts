@@ -245,8 +245,8 @@ describe('stok kontrol: ölçüyle arama ve artık parça (3398, gerçek Postgre
     // İkinci kalem aynı stoğa: iki istek aynı anda en çok kalan kadar alır.
     const b = await talep(m, '2');
     const c = await talep(m, '2');
-    // 3437-2: kalemin kabul sınırı geri yüklemede korunur.
-    await o().sahip.sorgu('UPDATE satin_alma_talep_kalemi SET kabul_pay_mm = 2, sartli_kabul = true WHERE id = ANY($1::uuid[])', [[b.kalemId, c.kalemId]]);
+    // 3437-2: kalemin kabul sınırı geri yüklemede korunur; 3462 a: kalem termini de (kalem emri satın alma testinde, "3462 a").
+    await o().sahip.sorgu("UPDATE satin_alma_talep_kalemi SET kabul_pay_mm = 2, sartli_kabul = true, ihtiyac_tarihi = '2026-12-31' WHERE id = ANY($1::uuid[])", [[b.kalemId, c.kalemId]]);
     const ikisi = await Promise.all([b, c].map((x) => gonder('satin_alma', '/stok/kontrol-ihtiyaclari/karsila', { ...x, miktar: '2' })));
     assert.deepEqual(ikisi.map((x) => x.durum).sort(), [200, 400], JSON.stringify(ikisi.map((x) => x.govde)));
     // Tamamı karşılanan kalem talepten çıkar (teklife gitmez); depo listesinde görünür.
@@ -270,7 +270,8 @@ describe('stok kontrol: ölçüyle arama ve artık parça (3398, gerçek Postgre
     assert.equal(ip.durum, 200, JSON.stringify(ip.govde));
     assert.equal(ayirmaCevabi.parse(ip.govde).geriEklendi, true);
     assert.equal(await kalemMiktari(tamam.kalemId), '2.0000');
-    assert.deepEqual(await o().sahip.tek('SELECT kabul_pay_mm::text AS pay, sartli_kabul AS sartli FROM satin_alma_talep_kalemi WHERE id = $1', [tamam.kalemId]), { pay: '2.000', sartli: true });
+    assert.deepEqual(await o().sahip.tek("SELECT kabul_pay_mm::text AS pay, sartli_kabul AS sartli, to_char(ihtiyac_tarihi, 'YYYY-MM-DD') AS termin FROM satin_alma_talep_kalemi WHERE id = $1", [tamam.kalemId]),
+      { pay: '2.000', sartli: true, termin: '2026-12-31' });
     // Ölçüsüz kart: aynı kartın stoğu, kalem birimiyle; talep teklif aşamasına geçince iptal miktarı geri eklemez.
     const d = await talep(olcusuz, '2');
     const yd = ayirmaCevabi.parse((await gonder('satin_alma', '/stok/kontrol-ihtiyaclari/karsila', { ...d, miktar: '1' })).govde);
@@ -291,9 +292,9 @@ describe('stok kontrol: ölçüyle arama ve artık parça (3398, gerçek Postgre
     assert.match((await hareketler(d.talepId)).at(-1)!, /geri eklenemedi/);
     // Geri yükleme sütun listesiyle yazar: kaleme yeni sütun eklenirse buradan haber verir (sayi_id kimliktir, yeniden üretilir).
     const sutunlar = (await o().sahip.sorgu<{ c: string }>("SELECT column_name AS c FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'satin_alma_talep_kalemi' ORDER BY column_name COLLATE \"C\"")).map((r) => r.c);
-    assert.deepEqual(sutunlar, ['ad', 'birim', 'die_id', 'id', 'is_emri_id', 'kabul_durumlari', 'kabul_kaliteleri', 'kabul_pay_mm', 'katalog_id', 'kategori', 'kaynak_birim',
+    assert.deepEqual(sutunlar, ['ad', 'birim', 'die_id', 'id', 'ihtiyac_tarihi', 'is_emri_id', 'kabul_durumlari', 'kabul_kaliteleri', 'kabul_pay_mm', 'katalog_id', 'kategori', 'kaynak_birim',
       'kaynak_ihtiyac_tarihi', 'kaynak_sira', 'kaynak_talep_id', 'logo_satir_ref', 'miktar', 'ozellik', 'sartli_kabul', 'satis_siparis_satiri_id', 'sayi_id', 'sira', 'talep_id',
-      'uygulanan_malzeme_no', 'yalniz_ayni']);
+      'uretim_emri_id', 'uygulanan_malzeme_no', 'yalniz_ayni']);
     // Logo'ya gitmiş kalem: neden kuyrukta görünür, karşılama 422.
     const e = await talep(olcusuz, '1');
     await o().sahip.sorgu("UPDATE satin_alma_talep_kalemi SET logo_satir_ref = 'ORN-1' WHERE id = $1", [e.kalemId]);

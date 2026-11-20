@@ -1419,9 +1419,9 @@ export function hizliBagReddi(
 }
 
 // 3462 a: kalemin termini ve üretim emri. Kalem değeri gelmezse (undefined) formun varsayılanı geçerlidir. Talebin termini kalemlerin en
-// erkenidir (gecikme sayıları, listeler ve sıralama talebi okur); emri yalnız bütün kalemlerde aynıysa doludur. Kalemde yalnız talepten farklı
-// değer saklanır: boş kalem talebi izler, satın alma talebin termini ya da emrini değiştirdiğinde kalem de değişir. Terminsiz kalem, başka
-// kalemin termini varsa talebin (en erken) terminini alır.
+// erkenidir (gecikme sayıları, listeler ve sıralama talebi okur); emri yalnız bütün kalemlerde aynıysa doludur. Terminler aynıysa kalem
+// termin saklamaz (talebi izler); farklıysa her kalem kendi terminini açık taşır, talep tarihi sonradan değişse de kaymaz. Emir ortaksa
+// kalem emir saklamaz; değilse her kalem kendi emrini (boş olabilir) taşır.
 export interface KalemTerminEmri { ihtiyacTarihi: string | null; uretimEmriId: number | null }
 export function kalemTerminEmriTuret(
   kalemler: readonly { ihtiyacTarihi?: string | null | undefined; uretimEmriId?: number | null | undefined }[], varsayilan: KalemTerminEmri,
@@ -1432,12 +1432,14 @@ export function kalemTerminEmriTuret(
   }));
   const tarihler = gecerli.flatMap((k) => (k.ihtiyacTarihi === null ? [] : [k.ihtiyacTarihi])).sort();
   const ihtiyacTarihi = tarihler[0] ?? null;
+  // Terminler farklıysa her kalem kendi tarihini açık taşır: talep tarihi sonradan değişse de en erken kalem kaymaz (3475).
+  const tekTarih = new Set(gecerli.map((k) => k.ihtiyacTarihi)).size === 1;
   const emirler = new Set(gecerli.map((k) => k.uretimEmriId));
   const uretimEmriId = emirler.size === 1 ? [...emirler][0]! : null;
   return {
     talep: { ihtiyacTarihi, uretimEmriId },
     kalemler: gecerli.map((k) => ({
-      ihtiyacTarihi: k.ihtiyacTarihi === ihtiyacTarihi ? null : k.ihtiyacTarihi,
+      ihtiyacTarihi: tekTarih ? null : k.ihtiyacTarihi,
       uretimEmriId: uretimEmriId !== null ? null : k.uretimEmriId,
     })),
   };

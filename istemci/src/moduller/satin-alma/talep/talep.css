@@ -162,7 +162,7 @@
 .sa-talep-varsayilan { display: grid; gap: var(--b-3); grid-template-columns: minmax(0, 1fr); align-items: start; }
 .sa-talep-uygula { display: flex; align-items: flex-end; min-height: 100%; }
 .sa-talep-tablo { border: 1px solid var(--edge); border-radius: var(--yari-2); }
-.sa-talep-tablo .tc-tablo td { white-space: nowrap; vertical-align: top; }
+.sa-talep-tablo .tc-tablo td, .sa-talep-tablo .tc-tablo tbody th { white-space: nowrap; vertical-align: top; }
 .sa-talep-tablo .tc-tablo td .tc-alan-kutu { min-width: 9rem; }
 .sa-talep-tablo .tc-tablo td .sa-talep-sayi, .sa-talep-tablo .tc-tablo td .sa-talep-birim { min-width: 5rem; width: 6rem; }
 .sa-talep-tablo .sa-talep-sabit { position: sticky; left: 0; z-index: 1; background: var(--panel-solid); }
@@ -186,7 +186,29 @@
 @media (min-width: 768px) {
   .sa-talep-varsayilan { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; }
 }
-/* Dar ekranda sabit malzeme sütunu ekranı kaplar: yalnız sıra sabit kalır, malzeme diğer sütunlarla kayar. */
+/* Emir numarası aynı önekle başlar: seçim kutusu numarayı kesmeyecek kadar geniştir. */
+.sa-talep-tablo .tc-tablo td .sa-talep-emir { min-width: 16rem; }
+.sa-talep-tablo .tc-tablo td:has(> .sa-talep-emir) { white-space: normal; max-width: 18rem; }
+.sa-talep-tablo .tc-tablo td.sa-talep-miktar-hucre { white-space: normal; min-width: 14rem; max-width: 18rem; }
+.sa-talep-tablo .tc-tablo td.sa-talep-miktar-hucre > .sa-talep-not, .sa-talep-tablo .tc-tablo td:has(> .sa-talep-emir) > .sa-talep-not { display: block; margin-top: var(--b-1); }
+/* Dar ekranda her kalem bir karttır: sıra solda, alanlar etiketli alt alta; yana kaydırma gerekmez. */
 @media (max-width: 767px) {
-  .sa-talep-tablo .sa-talep-malzeme { position: static; min-width: 13rem; }
+  .sa-talep-tablo { border: 0; overflow: visible; }
+  .sa-talep-tablo .tc-tablo, .sa-talep-tablo .tc-tablo tbody { display: block; min-width: 0; width: 100%; }
+  .sa-talep-tablo .tc-tablo thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .sa-talep-tablo .tc-tablo tbody > tr:not(.sa-talep-ayrinti-satir) {
+    display: grid; grid-template-columns: var(--b-3) minmax(0, 1fr); column-gap: var(--b-2); padding: var(--b-2);
+    border: 1px solid var(--edge); border-radius: var(--yari-2); margin-top: var(--b-2); background: var(--panel-solid);
+  }
+  .sa-talep-tablo .tc-tablo tbody > tr > th, .sa-talep-tablo .tc-tablo tbody > tr > td { display: block; position: static; border: 0; padding: var(--b-1) 0; white-space: normal; box-shadow: none; min-width: 0; max-width: none; background: transparent; }
+  .sa-talep-tablo .tc-tablo tbody > tr > th { grid-row: 1 / span 20; }
+  .sa-talep-tablo .tc-tablo tbody > tr > td { grid-column: 2; }
+  .sa-talep-tablo .tc-tablo td[data-etiket]::before { content: attr(data-etiket); display: block; color: var(--muted); font-size: var(--yazi-s); }
+  .sa-talep-tablo .tc-tablo td[data-sutun] { display: flex; gap: var(--b-2); align-items: baseline; padding-block: 0; }
+  .sa-talep-tablo .tc-tablo td[data-sutun]::before { display: inline; min-width: 6rem; }
+  .sa-talep-tablo .tc-tablo td .tc-alan-kutu, .sa-talep-tablo .tc-tablo td .sa-talep-emir { width: 100%; min-width: 0; }
+  .sa-talep-tablo .tc-tablo td .sa-talep-sayi { width: 8rem; }
+  .sa-talep-tablo .sa-talep-ayrinti-satir { display: block; }
+  .sa-talep-tablo .sa-talep-ayrinti-satir > td { display: block; }
+  .sa-talep-ayrinti-ic { position: static; }
 }

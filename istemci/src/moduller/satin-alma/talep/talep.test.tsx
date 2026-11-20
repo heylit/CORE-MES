@@ -79,6 +79,31 @@ const sar = (cocuk: ReactNode, adres = '/taleplerim') => render(
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); onListe = ON_TALEPLER; kartListesi = KARTLAR; });
 
 describe('Ana sayfadan talep (#375)', () => {
+  it('3462 a: kalem başına termin ve emir; yalnız varsayılandan farklı olan kalem gövdede taşır', async () => {
+    const cagrilar = sunucuKur();
+    sar(<TalepAc />);
+    fireEvent.change(screen.getByLabelText('İstenen tarih'), { target: { value: '2026-12-05' } });
+    fireEvent.change(screen.getByLabelText('Malzeme'), { target: { value: 'rulman' } });
+    fireEvent.click(await screen.findByRole('option', { name: /HM-00007 Deneme rulman/ }));
+    fireEvent.change(screen.getByLabelText(/^Miktar/), { target: { value: '1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Kalem ekle' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Adıyla yazın' }));
+    fireEvent.change(screen.getByLabelText(/Kalem adı/), { target: { value: 'Deneme serbest' } });
+    fireEvent.change(screen.getByLabelText(/Birim/), { target: { value: 'adet' } });
+    fireEvent.change(screen.getAllByLabelText(/^Miktar/)[1]!, { target: { value: '2' } });
+    expect(screen.getAllByLabelText('Termin').map((x) => (x as HTMLInputElement).value)).toEqual(['2026-12-05', '2026-12-05']);
+    const emirler = screen.getAllByLabelText('Kalemin üretim emri');
+    await within(emirler[1]!).findByRole('option', { name: 'UE-000031' });
+    fireEvent.change(emirler[1]!, { target: { value: '31' } });
+    fireEvent.change(screen.getAllByLabelText('Termin')[1]!, { target: { value: '2026-12-19' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Talebi gönder' }));
+    await screen.findByText('ST-2026-042 açıldı; satın almaya düştü.');
+    const g = cagrilar.find((c) => c.yol === '/satin-alma-talepleri/hizli-ac')!.govde as { ihtiyacTarihi: string; uretimEmriId: number | null; kalemler: Record<string, unknown>[] };
+    expect([g.ihtiyacTarihi, g.uretimEmriId]).toEqual(['2026-12-05', null]);
+    expect(['ihtiyacTarihi' in g.kalemler[0]!, 'uretimEmriId' in g.kalemler[0]!]).toEqual([false, false]);
+    expect([g.kalemler[1]!.ihtiyacTarihi, g.kalemler[1]!.uretimEmriId]).toEqual(['2026-12-19', 31]);
+  });
+
   it('kartlı ve adıyla yazılan kalemle talep gönderir; gövdede kişi alanı yok, kartsız kalem kart bekler', async () => {
     const cagrilar = sunucuKur();
     sar(<TalepAc />);
@@ -398,7 +423,7 @@ describe('Planlama menüsünde Taleplerim sayfası (12.10.2026)', () => {
     expect(rotalar.find((r) => r.yol === '/taleplerim')?.ekran).toBe(TaleplerimSayfasi);
     sunucuKur();
     sar(<TaleplerimSayfasi />);
-    expect(await screen.findByText('UE-000031')).toBeTruthy();
+    expect((await screen.findAllByText('UE-000031')).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('tab', { name: /^Taleplerim/ }));
     expect(await screen.findByText('ST-2026-001')).toBeTruthy();
     fireEvent.click(screen.getByRole('tab', { name: /^Yeni talep/ }));

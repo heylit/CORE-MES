@@ -462,6 +462,10 @@ test('898 a: uygulanan parça ve fason adım yalnız hizmette; fason adım açı
   assert.equal(hizliBagReddi('hizmet', [k(null, 7)], 200, emir), ILETILER.fasonEmirFarkli);
   assert.equal(hizliBagReddi('hizmet', [k(null, 8)], null, emir), ILETILER.fasonOnTalepYok);
   assert.equal(hizliBagReddi('hizmet', [k(null, 7), k(null, 7)], null, emir), ILETILER.fasonTekrar);
+  // 3462 a: kalemin kendi emri talebin emrinin yerine geçer (boş kalem emri de).
+  assert.equal(hizliBagReddi('hizmet', [{ ...k(null, 7), uretimEmriId: 200 }], null, emir), ILETILER.fasonEmirFarkli);
+  assert.equal(hizliBagReddi('hizmet', [{ ...k(null, 7), uretimEmriId: 100 }], 200, emir), null);
+  assert.equal(hizliBagReddi('hizmet', [{ ...k(null, 7), uretimEmriId: null }], 200, emir), null);
   assert.equal(uygulananKartReddi(undefined), ILETILER.uygulananKartYok);
   assert.equal(uygulananKartReddi({ tur: 'hizmet' }), ILETILER.uygulananHizmet);
   assert.equal(uygulananKartReddi({ tur: 'mamul' }), null);
@@ -954,17 +958,17 @@ test('fiyatsizGorunum: onay notu, karar gerekçesi ve teklif fiyatı boşalır; 
   assert.doesNotMatch(JSON.stringify(g), /777|888|555|1234\.5/);
 });
 
-test('3462 a kalemTerminEmriTuret: talep termini en erken, emir yalnız ortaksa; kalemde yalnız talepten farklı değer saklanır', () => {
+test('3462 a kalemTerminEmriTuret: talep termini en erken, emir yalnız ortaksa; terminler farklıysa her kalem kendi terminini açık taşır (3475)', () => {
   const v = { ihtiyacTarihi: '2026-12-20', uretimEmriId: 5 };
   assert.deepEqual(kalemTerminEmriTuret([{}, {}], v), { talep: v, kalemler: [{ ihtiyacTarihi: null, uretimEmriId: null }, { ihtiyacTarihi: null, uretimEmriId: null }] });
   assert.deepEqual(kalemTerminEmriTuret([{ ihtiyacTarihi: '2026-12-10', uretimEmriId: 7 }, {}], v), {
     talep: { ihtiyacTarihi: '2026-12-10', uretimEmriId: null },
-    kalemler: [{ ihtiyacTarihi: null, uretimEmriId: 7 }, { ihtiyacTarihi: '2026-12-20', uretimEmriId: 5 }],
+    kalemler: [{ ihtiyacTarihi: '2026-12-10', uretimEmriId: 7 }, { ihtiyacTarihi: '2026-12-20', uretimEmriId: 5 }],
   });
-  // Terminsiz kalem en erken terminden ayrı saklanmaz (talebi izler); emirsiz kalem karışık talepte emirsiz kalır.
+  // En erken kalem de açık yazılır; terminsiz kalem boş kalır (talebi izler); emirsiz kalem karışık talepte emirsiz kalır.
   assert.deepEqual(kalemTerminEmriTuret([{ ihtiyacTarihi: null, uretimEmriId: null }, { ihtiyacTarihi: '2026-12-01' }], v), {
     talep: { ihtiyacTarihi: '2026-12-01', uretimEmriId: null },
-    kalemler: [{ ihtiyacTarihi: null, uretimEmriId: null }, { ihtiyacTarihi: null, uretimEmriId: 5 }],
+    kalemler: [{ ihtiyacTarihi: null, uretimEmriId: null }, { ihtiyacTarihi: '2026-12-01', uretimEmriId: 5 }],
   });
   assert.deepEqual(kalemTerminEmriTuret([{}], { ihtiyacTarihi: null, uretimEmriId: null }).talep, { ihtiyacTarihi: null, uretimEmriId: null });
 });
