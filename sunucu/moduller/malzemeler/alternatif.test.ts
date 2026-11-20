@@ -8,7 +8,7 @@ import type { AlternatifTanimlariCevabi, KartAlternatifleriCevabi, KartZarfiCeva
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { alternatifDegerlendir, alternatifZarfiOku, kartinAlternatifKartlari } from './disari.ts';
+import { alternatifDegerlendir, alternatifZarfiOku, esdegerGruplari, kartinAlternatifKartlari } from './disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -211,6 +211,9 @@ describe('Malzemeler ikame ve alternatifler', () => {
     assert.equal((await ret(400, 'DOGRULAMA', yonetici, 'POST', yol, { kartNo: c, esdegerNo: a })).alan, 'esdegerNo');
     const grup = async (no: number) => (await tamam<KartAlternatifleriCevabi>(okuyucu, 'GET', `/malzeme-alternatifleri/kart/${String(no)}`)).esdegerler.map((e) => e.no);
     assert.deepEqual([await grup(a), await grup(b), await grup(c)], [[b, c], [a, c], [a, b]]);
+    // 3463-1b: plan ve stok grubu bu okumayla alır; grupta olmayan kart haritada yoktur.
+    const gruplar = await vt().tx((db) => esdegerGruplari(db, [a, lama]));
+    assert.deepEqual([...gruplar], [[a, [a, b, c].sort((x, y) => x - y)]]);
     const okuma = await vt().tx((db) => kartinAlternatifKartlari(db, a, { kullanimYeri: 'satin_alma' }));
     assert.deepEqual(okuma.filter((k) => k.tur === 'esdeger').map((k) => [k.no, k.sonuc]), [[b, 'ayni'], [c, 'ayni']]);
     assert.ok(!okuma.some((k) => k.tur === 'alternatif' && (k.no === b || k.no === c)), 'eşdeğer alternatif listesinde tekrar etmez');

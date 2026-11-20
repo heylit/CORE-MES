@@ -185,6 +185,16 @@ export async function esdegerCikar(db: Db, no: number, grup: number): Promise<vo
   }
 }
 
+// 3463-1b: verilen kartların eşdeğer grubu (kart dahil, iptal olmayan üyeler); grupta olmayan kart haritada yoktur.
+export async function esdegerUyeleri(db: Db, nolar: readonly number[]): Promise<Map<number, number[]>> {
+  if (nolar.length === 0) return new Map();
+  const r = await db.sorgu<{ kart_no: number; uyeler: number[] }>(`SELECT b.kart_no, array_agg(o.kart_no ORDER BY o.kart_no) AS uyeler
+      FROM malzeme_esdeger_bagi b JOIN malzeme_esdeger_bagi o ON o.grup = b.grup
+      JOIN malzeme_katalog_karti k ON k.no = o.kart_no AND k.onay_durumu <> 'iptal'
+     WHERE b.kart_no = ANY($1::int[]) GROUP BY b.kart_no`, [[...nolar]]);
+  return new Map(r.filter((x) => x.uyeler.length > 1).map((x) => [x.kart_no, x.uyeler]));
+}
+
 // Bağ denetimi için: tür, form, ölçü anahtarları ve stok birimi.
 export function esdegerKarti(db: Db, no: number): Promise<{ no: number; tur: string; form: string | null; anahtarlar: string[]; birim: string | null } | null> {
   return db.tek(`SELECT k.no, k.tur, ${KATALOG_METIN('form')} AS form,

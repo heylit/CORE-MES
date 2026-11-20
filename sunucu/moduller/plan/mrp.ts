@@ -4,7 +4,7 @@ import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import type { MrpIhtiyaciCevabi } from '#paylasilan/sozlesme/plan.ts';
-import { malzemeOzetleri } from '../malzemeler/disari.ts';
+import { esdegerGruplari, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { urunAgaci } from '../rota/disari.ts';
 import { malzemeGelisTarihleri } from '../satin-alma/disari.ts';
 import { emirlerinNetSarfi, emirlerinZincirdekiMiktari, malzemeStokDurumlari } from '../stok/disari.ts';
@@ -64,8 +64,12 @@ export async function mrpIhtiyaci(db: Db, kullanici: Kullanici, simdi = Date.now
   const tumKartlar = new Map([...kartlar, ...altKartlar]);
   for (const [no, x] of await stokOku(alt)) stoklar.set(no, x);
   if (gelisler !== null) for (const [no, x] of await gelisOku(alt)) gelisler.set(no, x);
+  // 3463-1b: eşdeğer grubun stoğu birlikte sayılır (stok görünmeyende stok yok sayıldığı için grup da yok sayılır).
+  const esdegerler = stokGorunur ? await esdegerGruplari(db, [...tumKartlar.keys()]) : new Map<number, number[]>();
+  const uyeler = [...new Set([...esdegerler.values()].flat())].filter((no) => !stoklar.has(no));
+  for (const [no, x] of await stokOku(uyeler)) stoklar.set(no, x);
   const kritik = new Map([...stoklar].flatMap(([no, x]) => (x.kritikSeviye === null ? [] : [[no, x.kritikSeviye] as const])));
-  const satirlar = mrpSatirlari({ ...temel, kartlar: tumKartlar, serbest: serbestler(), kritik, gelisler, agaclar });
+  const satirlar = mrpSatirlari({ ...temel, kartlar: tumKartlar, serbest: serbestler(), kritik, gelisler, agaclar, esdegerler });
 
   const kart = (no: number) => tumKartlar.get(no);
   return {

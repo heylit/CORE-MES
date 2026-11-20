@@ -1,4 +1,5 @@
 import { tesisGunu } from '#paylasilan/zaman.ts';
+import { esdegerStokPayi } from './esdeger-stok-kurallar.ts';
 
 // 1472 M1: malzeme ihtiyaç raporu (brüt ve net), saf; yazmaz. Açık emirlerin kalan ihtiyacı (brüt eksi verilmiş net sarf) zamana göre
 // sıralanır; serbest stok en erken tüketime, açık satın alma siparişi gelişi ihtiyaç gününden önce ya da aynı gün olan tüketime düşer.
@@ -31,6 +32,8 @@ export interface MrpGirdisi {
   gelisler: ReadonlyMap<number, readonly { tarih: string | null; miktar: string }[]> | null;
   // Açılan ürün -> 1 adedi için yaprak malzeme miktarları. Haritada olmayan ürün açılmaz (rotası yok ya da satın alınır).
   agaclar: ReadonlyMap<number, ReadonlyMap<number, number>>;
+  // 3463-1b: kart -> eşdeğer grubu (kart dahil); satın alınan yaprakta grubun stoğu birlikte sayılır (serbest sütunu kartın kendisidir).
+  esdegerler?: ReadonlyMap<number, readonly number[]>;
 }
 
 export interface MrpSatiri {
@@ -89,10 +92,10 @@ function brutTalepler(g: MrpGirdisi): Talep[] {
 
 // Tek malzemenin talepleri: stok önce, sonra geliş günü tüketim gününden sonra olmayan sipariş. Günü bilinmeyen tüketime her geliş düşer;
 // tarihsiz geliş yalnız günü bilinmeyen tüketime düşer.
-function netle(malzemeNo: number, talepler: readonly Talep[], g: MrpGirdisi, acildi: boolean): Netleme {
+function netle(malzemeNo: number, talepler: readonly Talep[], g: MrpGirdisi, acildi: boolean, grupPayi = 0): Netleme {
   const sirali = [...talepler].sort(zamanSirasi);
   const kayit = g.serbest.get(malzemeNo);
-  let stok = kayit === undefined ? 0 : Math.max(0, sayi(kayit));
+  let stok = Math.max(0, (kayit === undefined ? 0 : Math.max(0, sayi(kayit))) + grupPayi);
   const gelis = (g.gelisler?.get(malzemeNo) ?? []).map((x) => ({ tarih: x.tarih, kalan: Math.max(0, sayi(x.miktar)) }))
     .sort((a, b) => (a.tarih ?? '9999-12-31').localeCompare(b.tarih ?? '9999-12-31'));
   const acikSiparis = gelis.reduce((t, x) => t + x.kalan, 0);
@@ -121,7 +124,7 @@ function netle(malzemeNo: number, talepler: readonly Talep[], g: MrpGirdisi, aci
   const emniyetPayi = kayit === undefined || kritik === undefined || g.gelisler === null
     ? null
     : Math.max(0, sayi(kritik) - stok - gelis.reduce((t, x) => t + x.kalan, 0));
-  const netBilinir = kayit !== undefined && g.gelisler !== null;
+  const netBilinir = (kayit !== undefined || grupPayi > ESIK) && g.gelisler !== null;
   const ilk = sirali[0]?.zaman ?? null;
   const emirler: string[] = [];
   for (const t of sirali) if (!emirler.includes(t.emirNo)) emirler.push(t.emirNo);
@@ -179,7 +182,10 @@ export function mrpSatirlari(g: MrpGirdisi): MrpSatiri[] {
       }
     }
   }
-  for (const [no, l] of grupla(yapraklar)) satirlar.push(netle(no, l, g, false).satir);
+  const yaprakGrubu = grupla(yapraklar);
+  const toplam = new Map([...yaprakGrubu].map(([no, l]) => [no, l.reduce((t, x) => t + x.miktar, 0)]));
+  const pay = esdegerStokPayi(toplam, g.serbest, g.esdegerler ?? new Map());
+  for (const [no, l] of yaprakGrubu) satirlar.push(netle(no, l, g, false, pay.get(no) ?? 0).satir);
   return satirlar.sort((a, b) =>
     (a.eksikTarihi ?? '9999-12-31').localeCompare(b.eksikTarihi ?? '9999-12-31')
     || (a.ihtiyacTarihi ?? '9999-12-31').localeCompare(b.ihtiyacTarihi ?? '9999-12-31')

@@ -197,3 +197,6 @@ export async function esdegerKaldir(db: Db, kartNo: number): Promise<{ tamam: tr
   await s.esdegerCikar(db, kartNo, grup);
   return { tamam: true };
 }
+
+// 3463-1b (Risk K1): stok ve plan, eşdeğer kartların stoğunu birlikte sayar. Yetki denetlemez.
+export const esdegerGruplari = (db: Db, nolar: readonly number[]): Promise<Map<number, number[]>> => s.esdegerUyeleri(db, nolar);

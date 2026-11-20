@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import { cakisma } from '#cekirdek/hata.ts';
-import { malzemeOzetleri } from '../malzemeler/disari.ts';
+import { esdegerGruplari, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { malzemeStokDurumlari } from '../stok/disari.ts';
 import { emirlerinMalzemeIhtiyaci } from '../uretim-emirleri/disari.ts';
 import { eksikStokIletisi, eksikStoklar, type EksikStokIsi } from './eksik-stok-kurallar.ts';
@@ -13,7 +13,11 @@ export async function eksikStokDenetle(db: Db, taslakId: number, isler: readonly
   const ihtiyaclar = await emirlerinMalzemeIhtiyaci(db, [...new Set(isler.map((i) => i.uretimEmriId))]);
   const malzemeler = [...new Set([...ihtiyaclar.values()].flatMap((l) => (l ?? []).map((m) => m.malzemeNo)))];
   const kartlar = await malzemeOzetleri(db, malzemeler);
-  const stoklu = new Set((await malzemeStokDurumlari(db, malzemeler)).keys());
+  // 3463-1b: eşdeğer kartlardan birinin stok kaydı varsa kartın stoğu bilinir sayılır.
+  const esdegerler = await esdegerGruplari(db, malzemeler);
+  const uyeler = [...new Set([...malzemeler, ...[...esdegerler.values()].flat()])];
+  const kayitli = new Set((await malzemeStokDurumlari(db, uyeler)).keys());
+  const stoklu = new Set(malzemeler.filter((no) => kayitli.has(no) || (esdegerler.get(no) ?? []).some((u) => kayitli.has(u))));
   const eksik = eksikStoklar({ isler, ihtiyaclar, kartlar, stokluKartlar: stoklu });
   if (eksik.length > 0) throw cakisma(eksikStokIletisi(eksik));
 }
