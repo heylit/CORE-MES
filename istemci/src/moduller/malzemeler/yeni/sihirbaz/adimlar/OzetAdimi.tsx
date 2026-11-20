@@ -109,7 +109,22 @@ function AciklamaKutusu() {
           />
         );
       })}
+      <Sigmayanlar />
     </Kutu>
+  );
+}
+
+// 3476-2: uzunluk sınırına sığmadığı için otomatik satırdan düşen seçimler söylenir; kalıp ayarlardan değiştirilir.
+function Sigmayanlar() {
+  const { taslak: d, b } = useSihirbaz();
+  const s = K.aciklamaSigmayan(d, b).map((l, i) => ({ i, l })).filter((x) => x.l.length);
+  if (!s.length) return null;
+  return (
+    <Uyari kimlik="tc-my-sigmayan">
+      <b>Açıklamaya sığmayan seçimler</b>
+      <ul>{s.map((x) => <li key={x.i}>Açıklama {String(x.i + 1)}: {x.l.join(', ')}</li>)}</ul>
+      Sırayı ve içeriği Malzeme ayarları &gt; Ad, açıklama ve zorunlu alanlar bölümündeki açıklama kalıbıyla değiştirebilir ya da satırı elle yazabilirsin. Tam teknik tanım föyün başında kesilmeden durur.
+    </Uyari>
   );
 }
 

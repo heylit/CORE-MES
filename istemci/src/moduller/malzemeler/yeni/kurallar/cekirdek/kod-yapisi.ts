@@ -3,6 +3,7 @@ import { _nm, onayDurum } from './onay.ts';
 import type { StokOzeti } from './operasyon.ts';
 import { bomSatirlari, rota } from './operasyon.ts';
 import { gradeLabel } from './standartlar.ts';
+import { hammaddeJetonlari } from './aciklama-jetonlari.ts';
 import { finalKod, finalStd } from './taslak.ts';
 import { _gnum, _katalog, _tStr, _tarih, autoAd, autoKod__1, dbKat, dimsStr, flatItem__1, gAd, gAlanDegeri, gAlanGorunur, hzCesit, hzKat, hzKodu, sarfKat, specHTML__1, stokOzeti__1, turAdimlari } from './turler.ts';
 import type { Alan, HizmetKategorisi, Sozluk, Taslak, TurAdimi } from './tipler.ts';
@@ -130,6 +131,11 @@ export function kalipUygula(kalip: unknown, d: Taslak, oto?: string, ad?: string
             return ad === undefined ? (oto || '') : (ad || '');
         if (k === 'FIRMA')
             return kartFirmaKodu(d);
+        if ((d.tur || 'hammadde') === 'hammadde') {
+            const h = hammaddeJetonu(k, d);
+            if (h !== null)
+                return h;
+        }
         const a = alanlar.find(x => x.k === k);
         if (a)
             return gAlanDegeri(d, a);
@@ -138,8 +144,25 @@ export function kalipUygula(kalip: unknown, d: Taslak, oto?: string, ad?: string
     });
     return s.replace(/\(\s*\)/g, '').replace(/\s+([,;])/g, '$1').replace(/([,;])(\s*[,;])+/g, '$1').replace(/\s+/g, ' ').replace(/^[\s,;/-]+|[\s,;/-]+$/g, '');
 }
+// 3476-2: hammadde kalıbındaki yer tutucunun değeri; yer tutucu hammaddenin değilse null (öteki kaynaklara bakılır).
+function hammaddeJetonu(k: string, d: Taslak): string | null {
+    const fm = FORMS[d.form as string];
+    switch (k) {
+        case 'kalite': return gradeLabel(d);
+        case 'form': return fm ? fm.ad.split(' /')[0]!.toLocaleLowerCase('tr') : '';
+        case 'olcu': return dimsStr(d, true);
+        case 'std': return finalStd(d);
+        case 'tol': return d.tol || '';
+        case 'sertifika': return ((d.com && d.com.sertifika) || []).join(' ');
+    }
+    if (!hammaddeJetonlari(FAMS).some(([j]) => j === k))
+        return null;
+    const v = d.opts && d.opts[k];
+    return v === undefined || v === null ? '' : Array.isArray(v) ? v.join(', ') : String(v);
+}
 export function musteriKoduAc(g: Nesne): string { const v = String(g.musteri || '').trim(); return v ? 'Müşteri kodu ' + v : ''; }
-export function aciklamaOtomatik(d: Taslak = D): string[] {
+// Kalıp uygulanmış, kısaltılmamış açıklama satırları.
+export function aciklamaHam(d: Taslak = D): string[] {
     const t = d.tur || 'hammadde';
     const g: Nesne = d.g || {};
     let a = ['', '', ''];
@@ -194,9 +217,23 @@ export function aciklamaOtomatik(d: Taslak = D): string[] {
         a[2] = [g.alis ? 'Alış ' + tr(g.alis) : '', g.fatura ? 'Fatura ' + g.fatura : '', g.kalibrasyon === 'Gerekli' && g.kalAy ? `Kalibrasyon ${g.kalAy} ay` : '', isNum(_gnum(g.bakimAy)) ? `Bakım ${_gnum(g.bakimAy)} ay` : ''].filter(Boolean).join('; ');
     }
     const K = turKurali(t).ac || [];
-    a = a.map((x, i) => K[i] ? kalipUygula(K[i], d, x, autoAd(d)) : x);
+    return a.map((x, i) => K[i] ? kalipUygula(K[i], d, x, autoAd(d)) : x);
+}
+export function aciklamaOtomatik(d: Taslak = D): string[] {
     const L = AYAR.acUzunluk || 50;
-    return a.map(x => { const y = _sigdir(x, L); return AYAR.acBuyuk ? y.toLocaleUpperCase('tr') : y; });
+    return aciklamaHam(d).map(x => { const y = _sigdir(x, L); return AYAR.acBuyuk ? y.toLocaleUpperCase('tr') : y; });
+}
+// 3476-2: uzunluk sınırı yüzünden otomatik satırdan düşen parçalar (elle yazılan satırda yok). Parça kısaltılmış hâliyle
+// de aranır: kısaltma (AC_KISA) parçayı düşürmez, yalnız kısaltır.
+export function aciklamaSigmayan(d: Taslak = D): string[][] {
+    const L = AYAR.acUzunluk || 50;
+    const kisa = (x: string) => AC_KISA.reduce((y, [r, z]) => y.replace(r, z), x);
+    return aciklamaHam(d).map((ham, i) => {
+        if (d.acManual && (d.acManual as boolean[])[i])
+            return [];
+        const kesik = _nm(_sigdir(ham, L));
+        return ham.split(/\s*[;,]\s*/).map(x => x.trim()).filter(Boolean).filter(p => { const a = _nm(p); const b = _nm(kisa(p)); return !!a && !kesik.includes(a) && !(b && kesik.includes(b)); });
+    });
 }
 export function finalAc(d: Taslak, i: number): string { const m = d.acManual && (d.acManual as boolean[])[i]; const v = d.com && d.com['ac' + (i + 1)]; if (m && v !== undefined)
     return String(v); return aciklamaOtomatik(d)[i]!; }
