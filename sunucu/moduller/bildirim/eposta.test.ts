@@ -268,6 +268,25 @@ describe('bildirim e-postası (ADR 0015, 3397; gerçek PostgreSQL, sahte posta s
     assert.deepEqual(await kuyruk(), []);
   });
 
+  test('3478 (Risk K3): kapalı olay e-posta kuyruğuna girmez; kuyruktayken kapanan olayın e-postası gitmez, kuyruktan düşer', async () => {
+    await gonder(TUR, ['mudur']);
+    assert.equal((await kuyruk()).length, 1);
+    await o().sahip.sorgu('UPDATE bildirim_olay_acik SET acik = false WHERE tur = $1', [TUR]);
+    try {
+      assert.deepEqual(await tur(), { gonderilen: 0, hata: 0, atlanan: 0, ertelenen: 0 });
+      assert.equal(posta.iletiler.length, 0);
+      assert.deepEqual(await kuyruk(), []);
+      assert.equal(await gonder(TUR, ['mudur']), 0);
+      assert.deepEqual(await kuyruk(), []);
+      // Görev sınıfı (onay bekliyor) kapalıyken yalnız Gelenler'e yazılır: e-posta kuyruğuna girmez.
+      await o().sahip.sorgu('UPDATE bildirim_olay_acik SET acik = false WHERE tur = $1', [ONAY]);
+      assert.equal(await gonder(ONAY, ['mudur']), 1);
+      assert.deepEqual(await kuyruk(), []);
+    } finally {
+      await o().sahip.sorgu('UPDATE bildirim_olay_acik SET acik = true WHERE tur = ANY($1)', [[TUR, ONAY]]);
+    }
+  });
+
   test('defter yalnız eklenir ve sonuca göre süzülür', async () => {
     await ayar('bildirim.eposta', true);
     await gonder(TUR, ['adressiz']);

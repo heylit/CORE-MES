@@ -331,6 +331,8 @@ describe('siparisler teklif termin ve fiyat denemesi (gerçek PostgreSQL, gerçe
   });
 
   test('TKL-15 iskonto ve termin onayı birlikte: ikisi de verilmeden teklif müşteriye gitmez', async () => {
+    // 3478: iskonto onay işi planlamacıya da düşsün diye bu testte ona iskonto onayı verilir.
+    await o().sahip.sorgu("INSERT INTO kisi_islemi (kisi_id, islem, veren_id) VALUES ($1, 'siparisler.iskonto-onayla', $1)", [planlama.id]);
     let t = await teklifAc();
     geciktirir = true;
     t = await komut(t, 'surum-ver', satisSurumu(t, '2099-07-05', { iskontoOrani: '15' }));
@@ -339,6 +341,15 @@ describe('siparisler teklif termin ve fiyat denemesi (gerçek PostgreSQL, gerçe
     assert.equal(t.durum, 'onay-bekliyor');
     t = await komut(t, 'termin-onayla', {}, 200, planlama.cerez);
     assert.equal(t.durum, 'verildi');
+    // 3478: iskonto onayında bekleyen iş kapanır; sürümü veren kararı kendisi verdiyse sonucu almaz, termini başkası onaylayınca alır.
+    const yol = `/siparisler/teklifler/${t.id}`;
+    const veren = (await o().sahip.tek<{ id: number }>('SELECT olusturan_id AS id FROM siparisler_teklif_surumu WHERE teklif_id = $1 ORDER BY surum_no DESC LIMIT 1', [t.id]))?.id;
+    const bildirim = (tur: string) => o().sahip.sorgu<{ kisi_id: number; acik: boolean }>(
+      'SELECT kisi_id, okundu IS NULL AS acik FROM bildirim_kaydi WHERE tur = $1 AND yol = $2 ORDER BY kisi_id', [tur, yol]);
+    assert.deepEqual(await bildirim('siparisler.iskonto-onay-bekliyor'), [{ kisi_id: planlama.id, acik: false }], 'iskonto onay işi kapandı');
+    assert.deepEqual(await bildirim('siparisler.iskonto-onaylandi'), [], 'kararı veren sürümü verdiyse sonuç gitmez');
+    assert.deepEqual((await bildirim('siparisler.termin-onaylandi')).map((b) => b.kisi_id), [veren]);
+    await o().sahip.sorgu("DELETE FROM kisi_islemi WHERE kisi_id = $1 AND islem = 'siparisler.iskonto-onayla'", [planlama.id]);
     let u = await teklifAc();
     u = await komut(u, 'surum-ver', satisSurumu(u, '2099-07-05', { iskontoOrani: '15' }));
     u = await komut(u, 'termin-onayla', {}, 200, planlama.cerez);

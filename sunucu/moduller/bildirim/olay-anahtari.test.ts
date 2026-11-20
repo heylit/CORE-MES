@@ -75,6 +75,12 @@ describe('3478 olay anahtarı (gerçek PostgreSQL)', () => {
     assert.ok(await gonder({ tur: 'satin-alma.talep-onay-bekliyor', baslik: 'Onay bekleyen talep', yol: '/satin-alma/onaylar', kaynakKimlik: 't1' }) >= 1);
     const gorev = await satirlar('satin-alma.talep-onay-bekliyor');
     assert.ok(gorev.length >= 1 && gorev.every((s) => !s.ortada), 'görev satırı yazıldı, ekran ortasına çıkmaz');
+    // Onay bekleyen sipariş, teklif ve izin de sizden iş bekler (3478-2 a): kapalıyken Gelenler'e düşer.
+    for (const [tur, yol] of [['siparisler.onay-bekliyor', '/siparisler'], ['siparisler.iskonto-onay-bekliyor', '/siparisler/teklifler'],
+      ['siparisler.termin-onay-bekliyor', '/siparisler/teklifler'], ['ik.izin-onay-bekliyor', '/ik-islemlerim/onaylar']] as const) {
+      assert.ok(await gonder({ tur, baslik: 'Onay bekliyor', yol, kaynakKimlik: 'o1' }) >= 1, tur);
+      assert.ok((await satirlar(tur)).every((s) => !s.ortada), tur);
+    }
     assert.equal(await gonder({ tur: 'arkon.ekip-cagrisi', baslik: 'Bakım çağrısı', yol: null, kaynakKimlik: 'c1', kisiler: [yoneticiId] }), 1);
   });
 
@@ -86,9 +92,12 @@ describe('3478 olay anahtarı (gerçek PostgreSQL)', () => {
     assert.deepEqual([satir?.acik, satir?.surum], [true, 1]);
     assert.ok(await gonder({ tur: 'istasyonlar.makine-durdu', baslik: 'Makine durdu', yol: '/istasyonlar' }) >= 1);
     assert.equal((await istek('yonetici', 'POST', '/bildirimler/olaylar/istasyonlar.makine-durdu/degistir', { acik: false, surum: null })).durum, 409, 'satır varken boş sürüm');
+    assert.equal((await istek('yonetici', 'POST', '/bildirimler/olaylar/istasyonlar.makine-durdu/degistir', { acik: false, surum: 7 })).durum, 409, 'eski sürüm');
     const toplu = await istek('yonetici', 'POST', '/bildirimler/olaylar/toplu', { turler: ['istasyonlar.makine-durdu', 'cnc-kurulum.takim-omru'], acik: false });
     assert.equal(toplu.durum, 200, toplu.metin);
     assert.ok(bildirimOlayAciklariCevabi.parse(toplu.govde).satirlar.filter((s) => s.tur === 'istasyonlar.makine-durdu' || s.tur === 'cnc-kurulum.takim-omru').every((s) => !s.acik));
+    assert.equal(bildirimOlayAciklariCevabi.parse(toplu.govde).satirlar.find((s) => s.tur === 'istasyonlar.makine-durdu')?.surum, 2, 'toplu yazım sürümü artırır');
+    assert.equal((await istek('yonetici', 'POST', '/bildirimler/olaylar/istasyonlar.makine-durdu/degistir', { acik: true, surum: 1 })).durum, 409, 'topludan önceki sürüm');
     await o().sahip.sorgu('DELETE FROM bildirim_kaydi');
     assert.equal(await gonder({ tur: 'istasyonlar.makine-durdu', baslik: 'Makine durdu', yol: '/istasyonlar' }), 0);
     assert.equal((await istek('yonetici', 'POST', '/bildirimler/olaylar/toplu', { turler: ['arkon.ekip-cagrisi'], acik: false })).durum, 400, 'anahtarsız tür');
@@ -96,8 +105,9 @@ describe('3478 olay anahtarı (gerçek PostgreSQL)', () => {
 
   test('Önceki hale dön: olaylar açılır; saklanan kademe ayarı geri yazılır, saklanmayan kaynak eski varsayılanıyla açılır', async () => {
     await o().sahip.sorgu(
-      `INSERT INTO bildirim_kademe_ayari (kaynak, acik, k2_gun, k3_gun, k4_gun, k5_gun, eposta_kademe, serit, kapatilamaz) VALUES ('arkon.bakim-vade', false, 5, null, 2, 5, 3, true, true)`);
-    await o().sahip.sorgu(`UPDATE bildirim_onceki_hal SET kademe = '[{"kaynak": "arkon.bakim-vade", "acik": false}, {"kaynak": "malzemeler.kart-onay", "acik": true}]'`);
+      `INSERT INTO bildirim_kademe_ayari (kaynak, acik, k2_gun, k3_gun, k4_gun, k5_gun, eposta_kademe, serit, kapatilamaz) VALUES
+       ('arkon.bakim-vade', false, 5, null, 2, 5, 3, true, true), ('kalibrasyon.vade', false, 9, null, 4, 8, 3, true, false)`);
+    await o().sahip.sorgu(`UPDATE bildirim_onceki_hal SET kademe = '[{"kaynak": "arkon.bakim-vade", "acik": false}, {"kaynak": "kalibrasyon.vade", "acik": true}, {"kaynak": "malzemeler.kart-onay", "acik": true}]'`);
     assert.equal((await istek('operator', 'POST', '/bildirimler/olaylar/onceki-hale-don', {})).durum, 403);
     const c = await istek('yonetici', 'POST', '/bildirimler/olaylar/onceki-hale-don', {});
     assert.equal(c.durum, 200, c.metin);
@@ -106,7 +116,9 @@ describe('3478 olay anahtarı (gerçek PostgreSQL)', () => {
     assert.notEqual(a.oncekiHal.donuldu, null);
     const kademe = new Map((await o().sahip.sorgu<{ kaynak: string; acik: boolean }>('SELECT kaynak, acik FROM bildirim_kademe_ayari')).map((r) => [r.kaynak, r.acik]));
     assert.equal(kademe.get('arkon.bakim-vade'), false, 'saklanan kapalı ayar kapalı kalır');
-    assert.equal(kademe.get('kalibrasyon.vade'), true, 'saklanmayan, eski varsayılanı açık kaynak açılır');
+    assert.equal(kademe.get('siparisler.termin'), true, 'saklanmayan, eski varsayılanı açık kaynak açılır');
+    const kal = await o().sahip.tek<{ acik: boolean; k2_gun: number; k5_gun: number }>("SELECT acik, k2_gun, k5_gun FROM bildirim_kademe_ayari WHERE kaynak = 'kalibrasyon.vade'");
+    assert.deepEqual(kal, { acik: true, k2_gun: 9, k5_gun: 8 }, 'satırı olan, göçle kapanmış kaynak açılır; günleri korunur');
     assert.equal(kademe.get('malzemeler.kart-onay'), true, 'saklanan açık ayar geri gelir');
     assert.equal(kademe.get('kalite-merkezi.dof'), undefined, 'eski varsayılanı kapalı kaynağa satır açılmaz');
     void operatorId;

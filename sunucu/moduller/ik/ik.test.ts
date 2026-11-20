@@ -478,6 +478,19 @@ describe('İnsan Kaynakları (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.deepEqual(await bildirimler('leave_bl2'), [], 'onay beklemeyen izin bildirim açmaz');
   });
 
+  test('IK-76 (3478): izin kararı talep sahibinin CORE kullanıcısına sonuç olarak düşer (kendi talebine karar verilemez)', async () => {
+    const sonuc = async (kaynak: string) => vt().sorgu<{ kisi_id: number; tur: string }>(
+      "SELECT kisi_id, tur FROM bildirim_kaydi WHERE tur IN ('ik.izin-onaylandi', 'ik.izin-reddedildi') AND tekil_anahtar LIKE $1 ORDER BY kisi_id", [`%:${kaynak}`]);
+    const gun = (n: number) => ({ baslangic: gunSonra(izinBasi, n), bitis: gunSonra(izinBasi, n), gun: 1 });
+    const t1 = await kaydet(c.uzm, 'izinler', izin('leave_sn1', 'emp_a', 'Beklemede', gun(28)));
+    assert.deepEqual(await sonuc('leave_sn1'), [], 'karar yokken sonuç yok');
+    await tamam<IkYazCevabi>(c.yon, 'POST', '/ik/izinler/leave_sn1/karar', { durum: 'Onaylandı', surum: t1.kayit.surum });
+    assert.deepEqual(await sonuc('leave_sn1'), [{ kisi_id: kim.opr, tur: 'ik.izin-onaylandi' }]);
+    const t2 = await kaydet(c.uzm, 'izinler', izin('leave_sn2', 'emp_a', 'Beklemede', gun(35)));
+    await tamam<IkYazCevabi>(c.yon, 'POST', '/ik/izinler/leave_sn2/karar', { durum: 'Reddedildi', surum: t2.kayit.surum });
+    assert.deepEqual(await sonuc('leave_sn2'), [{ kisi_id: kim.opr, tur: 'ik.izin-reddedildi' }]);
+  });
+
   test('IK-74 (168 c, 244 a): çıkış tarihi yazılan kişinin İdari İşler\'de açık zimmeti varsa çıkış kaydedilir ve cevap uyarı taşır', async () => {
     const acik = new Map<number, { demirbasNo: string; markaModel: string | null }[]>([[kim.uzm, [{ demirbasNo: 'DB-00007', markaModel: 'Deneme dizüstü' }]]]);
     const istenen: number[][] = [];

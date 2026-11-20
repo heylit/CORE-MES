@@ -77,18 +77,18 @@ const ELLE_TANIMLI_TURLER = {
   'ik.izin-onaylandi': { baslik: 'İzin talebin onaylandı', onem: 'bilgi', alanIslemler: [], yol: '/ik-islemlerim', varsayilan: { mesaj: false, eposta: false } },
   'ik.izin-reddedildi': { baslik: 'İzin talebin reddedildi', onem: 'uyari', alanIslemler: [], yol: '/ik-islemlerim', varsayilan: { mesaj: false, eposta: false } },
   'siparisler.onay-bekliyor': {
-    baslik: 'Sipariş onay bekliyor', onem: 'uyari', alanIslemler: ['siparisler.onayla'], yol: '/siparisler', varsayilan: { mesaj: false, eposta: true },
+    baslik: 'Sipariş onay bekliyor', onem: 'uyari', sinif: 'gorev', alanIslemler: ['siparisler.onayla'], yol: '/siparisler', varsayilan: { mesaj: false, eposta: true },
   },
   // 291 a: %10 üstü iskontolu teklif sürümü müdür onayını bekler.
   'siparisler.iskonto-onay-bekliyor': {
-    baslik: 'Teklif iskonto onayı bekliyor', onem: 'uyari', alanIslemler: ['siparisler.iskonto-onayla'], yol: '/siparisler/teklifler', varsayilan: { mesaj: false, eposta: true },
+    baslik: 'Teklif iskonto onayı bekliyor', onem: 'uyari', sinif: 'gorev', alanIslemler: ['siparisler.iskonto-onayla'], yol: '/siparisler/teklifler', varsayilan: { mesaj: false, eposta: true },
   },
   // 63 b: istenen termini başka siparişi geciktiren satış taslağı termin onayını bekler; bildirim onay yetkilisine gider (871).
   'siparisler.termin-onay-bekliyor': {
-    baslik: 'Teklif termin onayı bekliyor', onem: 'uyari', alanIslemler: ['siparisler.termin-onayla'], yol: '/siparisler/teklifler', varsayilan: { mesaj: false, eposta: true },
+    baslik: 'Teklif termin onayı bekliyor', onem: 'uyari', sinif: 'gorev', alanIslemler: ['siparisler.termin-onayla'], yol: '/siparisler/teklifler', varsayilan: { mesaj: false, eposta: true },
   },
   'ik.izin-onay-bekliyor': {
-    baslik: 'İzin talebi onay bekliyor', onem: 'uyari', alanIslemler: ['ik.izin-onay'], yol: '/ik-islemlerim/onaylar', varsayilan: { mesaj: false, eposta: true },
+    baslik: 'İzin talebi onay bekliyor', onem: 'uyari', sinif: 'gorev', alanIslemler: ['ik.izin-onay'], yol: '/ik-islemlerim/onaylar', varsayilan: { mesaj: false, eposta: true },
   },
   'istasyonlar.makine-durdu': {
     baslik: 'Makine durdu', onem: 'acil', alanIslemler: ['arkon.bakim', 'arkon.amir'], yol: '/istasyonlar', varsayilan: { mesaj: false, eposta: false },
