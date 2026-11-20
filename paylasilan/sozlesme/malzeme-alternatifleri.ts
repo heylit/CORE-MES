@@ -83,14 +83,20 @@ export const alternatifZarfi = z.object({
   kapaliKaynak: kaynak,
   sartliAcik: z.boolean(),
   sartliKaynak: kaynak,
-  kalite: z.object({ istenen: z.string().nullable(), acik: z.boolean(), secenekler: z.array(secenek), kaynak }),
-  durum: z.object({ istenen: z.string().nullable(), acik: z.boolean(), secenekler: z.array(secenek), kaynak }),
+  // sinir: seçenekler kartta seçilen kabul sınırından (3463); o zaman yalnız listedekiler kabul edilir, kaynak sınırın kapsamıdır.
+  kalite: z.object({ istenen: z.string().nullable(), acik: z.boolean(), secenekler: z.array(secenek), kaynak, sinir: z.boolean() }),
+  durum: z.object({ istenen: z.string().nullable(), acik: z.boolean(), secenekler: z.array(secenek), kaynak, sinir: z.boolean() }),
   form: z.string().nullable(),
-  // Kesit ölçüleri: istenenden küçük olamaz, en çok enCok kadar.
-  olcu: z.array(z.object({ anahtar: z.string(), istenen: z.number(), enCok: z.number() })),
+  // Kesit ölçüleri: en az enAz (sınır yoksa istenen), en çok enCok kadar. sinirKaynak: aralık kartta seçildiyse kapsamı.
+  olcu: z.array(z.object({ anahtar: z.string(), istenen: z.number(), enAz: z.number(), enCok: z.number(), sinirKaynak: kaynak })),
   pay: z.object({ tur: z.enum(PAY_TURLERI), deger: z.number(), enAzMm: z.number(), kaynak }),
-  boy: z.object({ anahtar: z.string(), istenen: z.number().nullable(), uzunKesilir: z.boolean(), kaynak }).nullable(),
-  yuzey: z.object({ istenen: z.string().nullable(), serbest: z.boolean(), kaynak }),
+  // Boyda aralık seçildiyse enAz/enCok dolu, uzun boy kuralının yerine geçer.
+  boy: z.object({
+    anahtar: z.string(), istenen: z.number().nullable(), uzunKesilir: z.boolean(), kaynak,
+    enAz: z.number().nullable(), enCok: z.number().nullable(), sinirKaynak: kaynak,
+  }).nullable(),
+  // Yüzeyde liste seçildiyse (secenekler dolu) yalnız listedekiler kabul edilir; serbest yok sayılır.
+  yuzey: z.object({ istenen: z.string().nullable(), serbest: z.boolean(), kaynak, secenekler: z.array(secenek), sinir: z.boolean() }),
 });
 export type AlternatifZarfi = z.output<typeof alternatifZarfi>;
 
@@ -128,3 +134,47 @@ export const alternatifKarti = z.object({
 });
 export type AlternatifKarti = z.output<typeof alternatifKarti>;
 export interface AlternatifBaglami { kullanimYeri: KullanimYeri; mamulNo?: number | undefined }
+
+// 3463: kabul sınırı (kartta seçilen). Liste niteliğinde izinli değerler ve türleri; ölçüde mm cinsinden alt ve üst.
+export const LISTE_NITELIKLERI = ['kalite', 'durum', 'yuzey'] as const;
+export const OLCU_NITELIKLERI = ['d', 's', 'a', 'b', 't', 'D', 'h', 'l'] as const;
+export const SINIR_NITELIKLERI = [...LISTE_NITELIKLERI, ...OLCU_NITELIKLERI] as const;
+export type SinirNiteligi = (typeof SINIR_NITELIKLERI)[number];
+const sinirDegeri = z.object({ deger: z.string().trim().min(1).max(60), tur: z.enum(MUADIL_TURLERI) });
+export type SinirDegeri = z.output<typeof sinirDegeri>;
+const mm = z.number().min(0).max(100000).nullable();
+export const kabulSiniri = z.object({
+  id: z.number().int(),
+  kapsamTuru: z.enum(KAPSAM_TURLERI),
+  kapsam: z.string(),
+  nitelik: z.enum(SINIR_NITELIKLERI),
+  degerler: z.array(sinirDegeri).nullable(),
+  alt: z.number().nullable(),
+  ust: z.number().nullable(),
+  surum: surumSemasi,
+});
+export type KabulSiniri = z.output<typeof kabulSiniri>;
+export const kabulSiniriKaydetGovdesi = z.object({
+  kapsamTuru: z.enum(KAPSAM_TURLERI),
+  kapsam: kod(64),
+  nitelik: z.enum(SINIR_NITELIKLERI),
+  degerler: z.array(sinirDegeri).max(40).nullable(),
+  alt: mm,
+  ust: mm,
+  surum: surumSemasi.optional(),
+}).strict();
+export type KabulSiniriKaydetGovdesi = z.input<typeof kabulSiniriKaydetGovdesi>;
+export const kabulSiniriParametresi = z.object({ id: z.coerce.number<number>().int().positive() });
+export const kabulSiniriKaldirGovdesi = z.object({ ...beklenenSurum }).strict();
+
+// Eşdeğer kart: aynı malzemenin başka kartı. Bağ aynı tür, form, ölçü anahtarı ve stok biriminde kurulur.
+export const esdegerKart = z.object({ no: z.number().int(), kod: z.string().nullable(), ad: z.string().nullable() });
+export const esdegerBaglaGovdesi = z.object({ kartNo: z.number().int().positive(), esdegerNo: z.number().int().positive() }).strict();
+export const esdegerKaldirGovdesi = z.object({ kartNo: z.number().int().positive() }).strict();
+
+// Kartın Alternatifler bölümü: kendi ve üst kapsamlardan gelen sınırlar, eşdeğerler.
+export const kartAlternatifleriCevabi = z.object({
+  siniri: z.array(kabulSiniri),
+  esdegerler: z.array(esdegerKart),
+});
+export type KartAlternatifleriCevabi = z.output<typeof kartAlternatifleriCevabi>;

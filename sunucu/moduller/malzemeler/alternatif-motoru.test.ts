@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { KAPSAM_DOGRULAMA, alternatifEtiketi, alternatifKartAdi, uyanKurallar, zarfaGirenler, zarfDegerlendir, zarfHesapla, type KuralSatiri, type ZarfKarti } from './alternatif/kurallar.ts';
+import {
+  KAPSAM_DOGRULAMA, alternatifEtiketi, alternatifKartAdi, sinirHatasi, uyanKurallar, zarfaGirenler, zarfDegerlendir, zarfHesapla,
+  type KuralSatiri, type SinirSatiri, type ZarfKarti,
+} from './alternatif/kurallar.ts';
 import type { DurumMuadili, KaliteMuadili } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 
 const kart: ZarfKarti = { no: 42, aile: 'metal', sinif: 'aluminyum', kalite: '6082', durum: 'T6', yuzey: 'Ham', form: 'cubuk', olcu: { d: 50, l: 3000 } };
@@ -19,7 +22,7 @@ const aday = (a: Partial<ZarfKarti>): ZarfKarti => ({ ...kart, no: 99, ...a });
 
 test('kural yoksa varsayılanlar: pay +%15 en az 3 mm, şartlı kapalı, uzun boy kesilir, yüzey aynı', () => {
   const z = zarfHesapla(kart, [], km, dm);
-  assert.deepEqual(z.olcu, [{ anahtar: 'd', istenen: 50, enCok: 57.5 }]);
+  assert.deepEqual(z.olcu, [{ anahtar: 'd', istenen: 50, enAz: 50, enCok: 57.5, sinirKaynak: null }]);
   assert.equal(z.sartliAcik, false);
   assert.equal(z.boy?.uzunKesilir, true);
   assert.equal(z.yuzey.serbest, false);
@@ -82,7 +85,7 @@ test('lama ve blokta ölçüler döndürülerek eşlenir; boruda iç çap büyü
 test('yüzdeli payda küçük ölçüde en az mm uygulanır; tam payda yalnız aynı ölçü', () => {
   const kucuk: ZarfKarti = { ...kart, olcu: { d: 10, l: 3000 } };
   const z = zarfHesapla(kucuk, [], km, dm);
-  assert.deepEqual(z.olcu, [{ anahtar: 'd', istenen: 10, enCok: 13 }]);
+  assert.deepEqual(z.olcu, [{ anahtar: 'd', istenen: 10, enAz: 10, enCok: 13, sinirKaynak: null }]);
   assert.equal(zarfDegerlendir(z, aday({ olcu: { d: 13, l: 3000 } })).sonuc, 'icinde');
   assert.equal(zarfDegerlendir(z, aday({ olcu: { d: 13.5, l: 3000 } })).sonuc, 'disi');
   const tam = zarfHesapla(kart, [kural('kart', '42', { payTuru: 'tam' })], km, dm);
@@ -127,4 +130,70 @@ test('3b-2: alternatif kartının adı ana adı korur, etiket ölçüyü mm ile 
   assert.deepEqual([ad.length, ad.startsWith(uzun), ad.endsWith(')')], [200, true, true]);
   assert.equal(alternatifKartAdi('Ö'.repeat(205), e), 'Ö'.repeat(200));
   assert.equal(alternatifEtiketi({ kalite: null, durum: null, yuzey: null, olcu: {} }), 'alternatif');
+});
+
+// 3463-1: kartta seçilen kabul sınırı.
+const sinir = (kapsamTuru: SinirSatiri['kapsamTuru'], kapsam: string, nitelik: SinirSatiri['nitelik'], a: Partial<SinirSatiri> = {}): SinirSatiri =>
+  ({ kapsamTuru, kapsam, nitelik, degerler: null, alt: null, ust: null, ...a });
+
+test('sınır yoksa zarf 3437 ile aynıdır; başka karta ait sınır zarfı değiştirmez (Risk K2)', () => {
+  const kurallar = [kural('sinif', 'metal/aluminyum', { payTuru: 'mm', payDeger: 5, yuzeySerbest: true })];
+  const once = zarfHesapla(kart, kurallar, km, dm);
+  const sonra = zarfHesapla(kart, kurallar, km, dm, [sinir('kart', '7', 'd', { alt: 40, ust: 60 }), sinir('kalite', '304', 'kalite', { degerler: [] })]);
+  assert.deepEqual(sonra, once);
+  for (const a of [aday({ olcu: { d: 53, l: 3000 } }), aday({ kalite: '6060' }), aday({ yuzey: 'Taşlanmış' })]) {
+    assert.deepEqual(zarfDegerlendir(sonra, a), zarfDegerlendir(once, a));
+  }
+});
+
+test('ölçü aralığı payın yerine geçer; alt sınır istenenin altına inebilir, dar kapsam geniş olanı ezer', () => {
+  const s = [sinir('sinif', 'metal/aluminyum', 'd', { alt: 50, ust: 52 }), sinir('kart', '42', 'd', { alt: 49, ust: 55 })];
+  const z = zarfHesapla(kart, [], km, dm, s);
+  assert.deepEqual(z.olcu, [{ anahtar: 'd', istenen: 50, enAz: 49, enCok: 55, sinirKaynak: { kapsamTuru: 'kart', kapsam: '42' } }]);
+  assert.deepEqual(zarfDegerlendir(z, aday({ olcu: { d: 49, l: 3000 } })), { sonuc: 'icinde', nedenler: ['d -1 mm'] });
+  assert.equal(zarfDegerlendir(z, aday({ olcu: { d: 48.9, l: 3000 } })).sonuc, 'disi');
+  assert.equal(zarfDegerlendir(z, aday({ olcu: { d: 55, l: 3000 } })).sonuc, 'icinde');
+  assert.equal(zarfDegerlendir(z, aday({ olcu: { d: 56, l: 3000 } })).sonuc, 'disi');
+  const yalnizUst = zarfHesapla(kart, [], km, dm, [sinir('kart', '42', 'd', { ust: 51 })]);
+  assert.deepEqual([yalnizUst.olcu[0]!.enAz, yalnizUst.olcu[0]!.enCok], [50, 51]);
+});
+
+test('kalite listesi muadil tablosunun yerine geçer; listede olmayan sınır dışı, şartlı izin ister', () => {
+  const z = zarfHesapla(kart, [kural('kart', '42', { kaliteAcik: false })], km, dm, [
+    sinir('kalite', '6082', 'kalite', { degerler: [{ deger: '6082', tur: 'tam' }, { deger: '7075', tur: 'ust' }, { deger: '5083', tur: 'sartli' }] }),
+  ]);
+  assert.deepEqual([z.kalite.sinir, z.kalite.acik, z.kalite.secenekler.map((x) => x.deger)], [true, true, ['7075', '5083']]);
+  assert.equal(zarfDegerlendir(z, aday({ kalite: '7075' })).sonuc, 'icinde');
+  assert.equal(zarfDegerlendir(z, aday({ kalite: '5083' })).sonuc, 'sartli');
+  assert.deepEqual(zarfDegerlendir(z, aday({ kalite: '6061' })), { sonuc: 'disi', nedenler: ['Kalite 6061 sınır dışı'] });
+});
+
+test('yüzey listesi ve boy aralığı; kapalı zarf sınırdan önce gelir', () => {
+  const z = zarfHesapla(kart, [], km, dm, [
+    sinir('kart', '42', 'yuzey', { degerler: [{ deger: 'Soyulmuş', tur: 'tam' }] }), sinir('kart', '42', 'l', { alt: 2500, ust: 3500 }),
+  ]);
+  assert.equal(zarfDegerlendir(z, aday({ yuzey: 'Soyulmuş' })).sonuc, 'icinde');
+  assert.equal(zarfDegerlendir(z, aday({ yuzey: 'Taşlanmış' })).sonuc, 'disi');
+  assert.equal(zarfDegerlendir(z, aday({ olcu: { d: 50, l: 2600 } })).sonuc, 'icinde');
+  assert.deepEqual(zarfDegerlendir(z, aday({ olcu: { d: 50, l: 4000 } })).nedenler, ['Boy uzun']);
+  assert.deepEqual(zarfDegerlendir(z, aday({ olcu: { d: 50, l: 2400 } })).nedenler, ['Boy kısa']);
+  const kapali = zarfHesapla(kart, [kural('kart', '42', { kapali: true, gerekce: 'Örnek' })], km, dm, [sinir('kart', '42', 'd', { ust: 55 })]);
+  assert.equal(zarfDegerlendir(kapali, aday({ olcu: { d: 52, l: 3000 } })).sonuc, 'disi');
+});
+
+test('boruda et kalınlığına alt sınır verilirse atlanmaz', () => {
+  const boru: ZarfKarti = { ...kart, form: 'boru', olcu: { D: 50, t: 5, l: 3000 } };
+  const z = zarfHesapla(boru, [], km, dm, [sinir('kart', '42', 't', { alt: 6, ust: 8 })]);
+  assert.deepEqual(zarfDegerlendir(z, aday({ form: 'boru', olcu: { D: 50, t: 5, l: 3000 } })), { sonuc: 'disi', nedenler: ['t 5 < 6'] });
+  assert.equal(zarfDegerlendir(z, aday({ form: 'boru', olcu: { D: 52, t: 7, l: 3000 } })).sonuc, 'icinde');
+});
+
+test('sınır biçimi: liste niteliğine tekrarsız değer, ölçüye alt ya da üst', () => {
+  assert.equal(sinirHatasi('kalite', [{ deger: 'A', tur: 'tam' }], null, null), null);
+  assert.equal(sinirHatasi('kalite', null, null, null)?.alan, 'degerler');
+  assert.equal(sinirHatasi('kalite', [{ deger: 'A', tur: 'tam' }, { deger: 'A', tur: 'ust' }], null, null)?.alan, 'degerler');
+  assert.equal(sinirHatasi('d', null, null, null)?.alan, 'alt');
+  assert.equal(sinirHatasi('d', null, 5, 4)?.alan, 'alt');
+  assert.equal(sinirHatasi('d', [], 1, null)?.alan, 'alt');
+  assert.equal(sinirHatasi('d', null, 4, null), null);
 });

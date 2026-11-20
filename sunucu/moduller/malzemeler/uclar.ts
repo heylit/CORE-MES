@@ -10,7 +10,8 @@ import {
 } from '#paylasilan/sozlesme/malzemeler.ts';
 import {
   alternatifKomutCevabi, alternatifKuraliKaldirGovdesi, alternatifKuraliKaydetGovdesi, alternatifKuraliParametresi, alternatifTanimlariCevabi,
-  durumMuadiliKaldirGovdesi, durumMuadiliKaydetGovdesi, kaliteMuadiliKaldirGovdesi, kaliteMuadiliKaydetGovdesi, kartZarfiCevabi, kartZarfiParametresi,
+  durumMuadiliKaldirGovdesi, durumMuadiliKaydetGovdesi, esdegerBaglaGovdesi, esdegerKaldirGovdesi, kabulSiniriKaldirGovdesi, kabulSiniriKaydetGovdesi,
+  kabulSiniriParametresi, kaliteMuadiliKaldirGovdesi, kaliteMuadiliKaydetGovdesi, kartAlternatifleriCevabi, kartZarfiCevabi, kartZarfiParametresi,
 } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 import * as alternatif from './alternatif/servis.ts';
 import { katalogKaydiAlanlari } from './kurallar.ts';
@@ -161,6 +162,27 @@ export const uclar = [
   uc({
     yontem: 'GET', yol: '/malzeme-alternatifleri/zarf/:no', yetki: OKUMA, parametre: kartZarfiParametresi, cevap: kartZarfiCevabi,
     isle: ({ db, parametre }) => alternatif.kartZarfi(db, parametre.no),
+  }),
+  // 3463: kartın Alternatifler bölümü. Sınır ve eşdeğer bağ tanım yazanın (3463-1 K4 cevabına kadar yeni işlem yok).
+  uc({
+    yontem: 'GET', yol: '/malzeme-alternatifleri/kart/:no', yetki: OKUMA, parametre: kartZarfiParametresi, cevap: kartAlternatifleriCevabi,
+    isle: ({ db, parametre }) => alternatif.kartAlternatifleri(db, parametre.no),
+  }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-alternatifleri/siniri/kaydet', yetki: 'malzemeler.tanim-yaz', govde: kabulSiniriKaydetGovdesi, cevap: alternatifKomutCevabi,
+    isle: ({ db, kullanici, govde }) => alternatif.kabulSiniriKaydet(db, kullanici, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-alternatifleri/siniri/:id/kaldir', yetki: 'malzemeler.tanim-yaz', parametre: kabulSiniriParametresi,
+    govde: kabulSiniriKaldirGovdesi, cevap: alternatifKomutCevabi, isle: ({ db, parametre, govde }) => alternatif.kabulSiniriKaldir(db, parametre.id, govde.surum),
+  }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-alternatifleri/esdeger/bagla', yetki: 'malzemeler.tanim-yaz', govde: esdegerBaglaGovdesi, cevap: alternatifKomutCevabi,
+    isle: ({ db, kullanici, govde }) => alternatif.esdegerBagla(db, kullanici, govde.kartNo, govde.esdegerNo),
+  }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-alternatifleri/esdeger/kaldir', yetki: 'malzemeler.tanim-yaz', govde: esdegerKaldirGovdesi, cevap: alternatifKomutCevabi,
+    isle: ({ db, govde }) => alternatif.esdegerKaldir(db, govde.kartNo),
   }),
   uc({
     yontem: 'POST', yol: '/malzeme-alternatifleri/kurallar/kaydet', yetki: 'malzemeler.tanim-yaz', govde: alternatifKuraliKaydetGovdesi, cevap: alternatifKomutCevabi,

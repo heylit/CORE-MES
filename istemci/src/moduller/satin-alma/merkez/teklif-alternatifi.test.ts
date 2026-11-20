@@ -36,10 +36,10 @@ const ZARFLAR: KalemZarflariCevabi = { kalemler: [{
   kalemId: K1, malzemeNo: 21, kabul: null,
   zarf: {
     kapali: false, gerekce: null, kapaliKaynak: null, sartliAcik: false, sartliKaynak: null,
-    kalite: { istenen: '6082', acik: true, kaynak: null, secenekler: [{ deger: '6061', tur: 'tam', notu: null }] },
-    durum: { istenen: 'T6', acik: true, kaynak: null, secenekler: [] },
-    form: 'cubuk', olcu: [{ anahtar: 'd', istenen: 50, enCok: 55 }], pay: { tur: 'mm', deger: 5, enAzMm: 0, kaynak: null },
-    boy: { anahtar: 'l', istenen: 3000, uzunKesilir: true, kaynak: null }, yuzey: { istenen: null, serbest: false, kaynak: null },
+    kalite: { istenen: '6082', acik: true, kaynak: null, secenekler: [{ deger: '6061', tur: 'tam', notu: null }], sinir: false },
+    durum: { istenen: 'T6', acik: true, kaynak: null, secenekler: [], sinir: false },
+    form: 'cubuk', olcu: [{ anahtar: 'd', istenen: 50, enAz: 50, enCok: 55, sinirKaynak: null }], pay: { tur: 'mm', deger: 5, enAzMm: 0, kaynak: null },
+    boy: { anahtar: 'l', istenen: 3000, uzunKesilir: true, kaynak: null, enAz: null, enCok: null, sinirKaynak: null }, yuzey: { istenen: null, serbest: false, kaynak: null, secenekler: [], sinir: false },
   },
 }] };
 
