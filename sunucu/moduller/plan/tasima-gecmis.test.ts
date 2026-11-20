@@ -52,5 +52,5 @@ test('TG-02 (3501 a): büyümüş takvimle kurulmuş planda 240 günün ötesind
   const yakin = calisma({ 'S1.10': yer('S1.10', 'T1', 32), 'S1.20': yer('S1.20', 'T2', 34) });
   const r = tasimaHesabi(yakin as unknown as Record<string, unknown>, 32, { isId: 'S1.10', tezgah: 'T1', baslangic: G + 32 });
   assert.equal(r.gecerli, false);
-  assert.match(r.ileti ?? '', /ufk/);
+  assert.match(r.ileti ?? '', /plan en geç .+ tarihine kadar uzanıyor/);
 });

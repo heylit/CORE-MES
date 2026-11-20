@@ -3,6 +3,7 @@ import { describe, test } from 'node:test';
 import type { PlanMotoruIstegi } from './disari.ts';
 import { motorPlaniDenetle } from './motor-sinir.ts';
 import { adayNedeni, coz } from './plan-cozucusu.ts';
+import { planCoz } from './plan-motoru.ts';
 
 // B-2482-32 (2696): sunucu çözücüsü yerleştiremediği işin nedenini motorun failNeden'inden yazar; 'aday' nedeninde (işi yapabilecek tezgâh
 // yok) kaynaktaki sebebi ayırır. Fikstür plan-cozucusu.test.ts'inkinin en azıdır. Veriler uydurmadır.
@@ -86,6 +87,12 @@ describe('sunucu çözücüsünde yerleşmeme nedeni (2696, B-2482-32, 2780)', (
     assert.deepEqual(r.yerlesmeyen, ['E-1|10']);
     // Açık süre iki yıllık takvimden ölçülür (haftada 40 saat, 104 hafta civarı); 240 günlük takvimin 1.376 saati değildir.
     assert.match(r.nedenler['E-1|10']?.metin ?? '', /önümüzdeki iki yıldaki açık süresinden \(4\.1\d\d(,\d)? sa\) uzun/);
+  });
+  test('YN-13 (3506): çözüm süre sınırı yüzünden takvimi büyütmediyse iş yerleşmez, nedeni hesap süresini söyler', async () => {
+    // YN-12'nin 2.000 saatlik adımı; çözümün büyüme payı bitmiş verilir.
+    const r = await coz(kaynakKur({ adimlar: [adim(10, 60_000)] }), istek({ kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10'] }] }), (i) => planCoz(i, undefined, -1));
+    assert.deepEqual(r.yerlesmeyen, ['E-1|10']);
+    assert.match(r.nedenler['E-1|10']?.metin ?? '', /planlama ufkunda \(240 gün\) açık süresinden \(1\.376 sa\) uzun\. Hesap süresi yetmediği için plan iki yıla kadar uzatılamadı;/);
   });
   test('YN-10: vardiyası hiç tanımsız tezgâhın işi motora girmez, vardiyasız listesindedir (168 b; neden servisçe takvim-yok)', async () => {
     const k = kaynakKur({});

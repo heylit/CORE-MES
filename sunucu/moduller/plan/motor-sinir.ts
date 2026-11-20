@@ -47,9 +47,10 @@ export const motorYerlesimi = yerlesim.refine((r) => r.C >= r.S - 1e-9, { messag
 // Motora yeni kod eklenirse plan reddedilmez: tanınmayan neden düşer, ileti motorun genel metnine kalır.
 const motorNedeni = z.object({ kod: z.enum(['aday', 'oncul', 'zaman']), oncul: z.string().optional() }).optional().catch(undefined);
 // takvimGun: çözümün kurduğu takvim (gün; 3501 a: sığmayan iş kalınca büyür). Yerleşmeme nedeni aynı takvimle ölçülür.
+// buyumeKesildi: sığmayan iş kaldı ama süre sınırı yüzünden takvim büyütülmedi; neden iletisi ufku değil hesap süresini söyler.
 export const motorPlani = z.object({
   ops: z.record(z.string(), motorYerlesimi), fail: z.array(z.unknown()).optional(), failNeden: z.record(z.string(), motorNedeni).optional(),
-  takvimGun: z.number().int().positive().optional(),
+  takvimGun: z.number().int().positive().optional(), buyumeKesildi: z.boolean().optional(),
 });
 
 export type MotorYerlesimi = z.output<typeof motorYerlesimi>;

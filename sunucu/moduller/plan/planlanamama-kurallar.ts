@@ -44,13 +44,16 @@ export interface ZamanAdayi {
   // Hazırlığın süresi ve ufukta tezgâhın kesintisiz bloklarının (vardiyaların molalar içindeki birleşimi) en uzun çalışma süresi, saat.
   blok?: { gerekSaat: number; enUzunSaat: number } | null;
 }
-const TAKVIM_ENCOK_GUN = 730;
-export function zamanNedeni(g: { ufukGun: number; malzemeHazirSaat: number | null; adaylar: readonly ZamanAdayi[] }): YerlesmemeNedeni {
+// takvimSinirda: ölçünün takvimi motorun en çok büyüdüğü yerde (iki yıl). buyumeKesildi: sığmayan iş kaldı ama çözüm süre sınırı yüzünden
+// takvimi büyütmedi.
+export function zamanNedeni(g: { ufukGun: number; malzemeHazirSaat: number | null; adaylar: readonly ZamanAdayi[]; takvimSinirda?: boolean; buyumeKesildi?: boolean }): YerlesmemeNedeni {
   // 3501 a: takvim sığmayan iş için iki yıla kadar uzar (motor TAKVIM_ENCOK). O sınırda ölçülen neden ayardaki ufku değil iki yılı söyler:
   // kişinin bildiği "planlama ufku" ayardaki gündür, iletide başka bir gün sayısı aynı adla çıkmasın.
-  const sinirda = g.ufukGun >= TAKVIM_ENCOK_GUN;
+  const sinirda = g.takvimSinirda === true;
+  // Takvim büyüseydi iş yerleşebilirdi: neden hesap süresidir, kişi onu ufuk ayarında aramasın (ufku büyütmek hesabı daha da uzatır).
+  const kesik = g.buyumeKesildi === true ? ' Hesap süresi yetmediği için plan iki yıla kadar uzatılamadı; bu iş daha ileri bir tarihe yerleşebilirdi. Yöneticinize bildirin.' : '';
   const ufuk = sinirda ? 'önümüzdeki iki yılda' : `planlama ufkunda (${String(g.ufukGun)} gün)`;
-  if (g.malzemeHazirSaat !== null && g.malzemeHazirSaat >= g.ufukGun * 24) return yerlesmemeNedeni('malzeme', `Malzemesi ${ufuk} karşılanmıyor.`);
+  if (g.malzemeHazirSaat !== null && g.malzemeHazirSaat >= g.ufukGun * 24) return yerlesmemeNedeni('malzeme', `Malzemesi ${ufuk} karşılanmıyor.${kesik}`);
   const l = g.adaylar;
   if (l.length === 0) return NEDEN_OLCULEMEDI;
   const ad = (a: ZamanAdayi) => a.makine?.ad ?? 'aday tezgâh';
@@ -86,10 +89,10 @@ export function zamanNedeni(g: { ufukGun: number; malzemeHazirSaat: number | nul
     const p = uygun.reduce((x, y) => (y.acikSaat > x.acikSaat ? y : x));
     return yerlesmemeNedeni('ufuk', sinirda
       ? `İşin süresi (${saat(p.sureSaat)} sa), ${ad(p)} tezgâhının önümüzdeki iki yıldaki açık süresinden (${saat(p.acikSaat)} sa) uzun. Tezgâhın çalışma takvimini kontrol edin.`
-      : `İşin süresi (${saat(p.sureSaat)} sa) ${ad(p)} tezgâhının ${ufuk} açık süresinden (${saat(p.acikSaat)} sa) uzun.`, p.makine);
+      : `İşin süresi (${saat(p.sureSaat)} sa) ${ad(p)} tezgâhının ${ufuk} açık süresinden (${saat(p.acikSaat)} sa) uzun.${kesik}`, p.makine);
   }
   const p = uygun[0]!;
-  return yerlesmemeNedeni('ufuk', uygun.length === 1 ? `${ad(p)} tezgâhı ${ufuk} dolu.` : `Aday tezgâhlar ${ufuk} dolu (${uygun.map(ad).join(', ')}).`, p.makine);
+  return yerlesmemeNedeni('ufuk', (uygun.length === 1 ? `${ad(p)} tezgâhı ${ufuk} dolu.` : `Aday tezgâhlar ${ufuk} dolu (${uygun.map(ad).join(', ')}).`) + kesik, p.makine);
 }
 
 // 2779: planlanabilirlik sayfasının adım kontrolleri. Her yuva bir kontroldür ve kodu 2780 listesindendir; ölçülemeyen yuva uydurulmaz,

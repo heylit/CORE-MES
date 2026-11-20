@@ -62,7 +62,7 @@ b.self = b;
 const m = vm.runInContext(workerData.kod, b, { filename: 'plan-motoru.js' });
 const { durum, kip, taban } = workerData.istek;
 const p = m.takvimliCoz(m.stHazirla({ ...durum, w: { ...m.W0, ...(durum.w || {}) } }), kip, taban, { buyumeSonu: Date.now() + workerData.buyumeMs });
-parentPort.postMessage({ ops: p.ops, fail: p.fail || [], takvimGun: m.takvimGunu() });
+parentPort.postMessage({ ops: p.ops, fail: p.fail || [], takvimGun: m.takvimGunu(), ...(p.buyumeKesildi ? { buyumeKesildi: true } : {}) });
 `;
 
 // Aynı anda tek çözüm: kuyruk sırayla çalışır. Süre aşılırsa iş parçacığı durdurulur ve çağrı reddedilir.

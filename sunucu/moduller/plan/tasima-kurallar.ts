@@ -77,7 +77,7 @@ export function tasimaItmesi(g: TasimaGirdisi, isId: string, m0: string, S0: num
     return `${op(id)} başlamış ya da donuk bölgede.`;
   };
   const bosRed = (id: string, m: string, r: 'uygunsuz' | 'ufuk') => red(r === 'uygunsuz'
-    ? `${op(id)} ${g.tezgahAdi(m)} tezgâhında yerleşemiyor; taşıma yapılmadı.` : `${op(id)} planlama ufkuna sığmıyor (plan takvimi ${g.saatMetni(g.ufuk)} bitiyor); taşıma yapılmadı.`);
+    ? `${op(id)} ${g.tezgahAdi(m)} tezgâhında yerleşemiyor; taşıma yapılmadı.` : `${op(id)} sığmıyor: plan en geç ${g.saatMetni(g.ufuk)} tarihine kadar uzanıyor; taşıma yapılmadı.`);
   const alt = Math.max(g.simdi, g.donuk);
   // Geri çekme: öncül, ardılının başlangıcına yetişecek en geç boş yere çekilir; kendi öncülleri de gerekirse çekilir. Yer yoksa null.
   const cek = (id: string, ty: BagTuru, sonHazir: number, derinlik: number): boolean => {
@@ -124,7 +124,7 @@ export function tasimaItmesi(g: TasimaGirdisi, isId: string, m0: string, S0: num
     if (yx.S < s.bas - E || yx.C < s.bit - E) {
       const y = g.yer(isId, m0, Math.max(S0, s.bas));
       const y2 = y === null ? null : y.C < s.bit - E ? g.yer(isId, m0, y.S + (s.bit - y.C)) : y;
-      if (y2 === null || y2.C > g.ufuk + E) return red(`${op(isId)} planlama ufkuna sığmıyor (plan takvimi ${g.saatMetni(g.ufuk)} bitiyor); taşıma yapılmadı.`);
+      if (y2 === null || y2.C > g.ufuk + E) return red(`${op(isId)} sığmıyor: plan en geç ${g.saatMetni(g.ufuk)} tarihine kadar uzanıyor; taşıma yapılmadı.`);
       yeni.set(isId, { ...y2, m: m0, tur: 'tasinan' });
       notlar.push(`${op(isId)} ${g.saatMetni(y2.S)} saatine kaydı`);
     }

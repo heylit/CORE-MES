@@ -27,6 +27,7 @@ export const sunucuPlanCozucusu: PlanMotoruCozucusu = async (db: Db, istek: Plan
 export async function coz(
   kaynak: { calisma: unknown; kayit: unknown; kaynak: Parameters<typeof cozumGirdisi>[0]['kaynak'] },
   istek: PlanMotoruIstegi & { ekAdimlar?: readonly EkAdim[] } & PlanBenzetimi,
+  cozucu: typeof planCoz = planCoz,
 ): Promise<Awaited<ReturnType<PlanMotoruCozucusu>> & { vardiyasiz: string[]; malzemeBekleyen: string[]; nedenler: Record<string, YerlesmemeNedeni> }> {
   // 1952 iş 2b: paralel bölme yalnız motor önerisindedir ('yeni'); sabit kip kuyruğun tezgâh sırasını korur, pay oraya sığmaz.
   const calisma = istek.kip === 'yeni' ? kaynak.calisma : bolmesiz(kaynak.calisma);
@@ -57,14 +58,14 @@ export async function coz(
   const malzemeBekleyen: string[] = [];
   const kisiYerlesimleri: KisiYerlesimi[] = [];
   if (g.sira.length === 0) return { yerlesimler: [], yerlesmeyen, vardiyasiz, malzemeBekleyen, nedenler };
-  const plan = await planCoz({ durum: g.st, kip: istek.kip, taban: g.taban });
+  const plan = await cozucu({ durum: g.st, kip: istek.kip, taban: g.taban });
   const basarisiz = new Set((plan.fail ?? []).map(String));
   const gelmeyen = basarisiz.size > 0 ? malzemesiGelmeyenler(g.st, plan.takvimGun) : new Set<string>();
   const neden = (id: string): MotorNedeni | undefined => (plan.failNeden ?? {})[id];
   // Motorun 'zaman' nedeni aday tezgâhların ölçüsüyle ayrılır; ölçü yalnız böyle iş varken bir kez kurulur.
   const zamanli = [...basarisiz].filter((id) => neden(id)?.kod === 'zaman' || neden(id) === undefined);
   let olcum: Record<string, ZamanOlcumu | null> | null = null;
-  const zaman = (id: string): ZamanOlcumu | null => { olcum ??= zamanOlcumu(g.st, zamanli, plan.takvimGun); return olcum[id] ?? null; };
+  const zaman = (id: string): ZamanOlcumu | null => { olcum ??= zamanOlcumu(g.st, zamanli, plan); return olcum[id] ?? null; };
   const yerlesimler: { anahtar: string; makineId: number; baslangic: string; bitis: string }[] = [];
   const parcaliYerlesimler: ParcaliYerlesim[] = [];
   for (const id of g.sira) {
@@ -167,22 +168,22 @@ type MotorNedeni = NonNullable<MotorPlani['failNeden']>[string];
 // Aday tezgâhların ufuktaki ölçüsü motorun derlemesinden (malzemesiGelmeyenler gibi aynı hazırlık): açık saat vardiya takvimi, tatil ve
 // kapalı gündür (workIn); işçi kısıtı checkUse'un kalıcı ret koşuludur (yetkin kişi, grup ve toplam personel ufkun hiçbir diliminde yok).
 type ZamanOlcumu = Parameters<typeof zamanNedeni>[0];
-function zamanOlcumu(durum: MotorDurumu, idler: readonly string[], takvimGun: number | undefined): Record<string, ZamanOlcumu | null> {
+function zamanOlcumu(durum: MotorDurumu, idler: readonly string[], plan: Pick<MotorPlani, 'takvimGun' | 'buyumeKesildi'>): Record<string, ZamanOlcumu | null> {
   if (idler.length === 0) return {};
   const b = vm.createContext({ GIRDI_SAAT_DILIMI: TESIS_SAAT_DILIMI }); b['self'] = b;
   vm.runInContext(motorKodu(), b, { filename: 'plan-motoru.js' });
-  b['durum'] = durum; b['idler'] = [...idler]; b['takvimGun'] = takvimGun ?? 0;
+  b['durum'] = durum; b['idler'] = [...idler]; b['takvimGun'] = plan.takvimGun ?? 0;
   // 3457: ölçü motorun zamanOlcusu'dur (engine.js); Kokpit'in plan kaydı da aynısını okur. Ölçü çözümün kurduğu takvimle alınır (3501 a).
   const ham = vm.runInContext(`(() => {
     takvimIste(takvimGun);
     const cx = compile(stHazirla({ ...durum, w: { ...W0, ...(durum.w || {}) } }));
-    return idler.map((id) => { const o = cx.byId[id]; return o ? zamanOlcusu(cx, o, null) : null; });
-  })()`, b) as ({ ufukGun: number; malzemeHazirSaat: number | null; adaylar: { m: string; ad: string | null; acikSaat: number; sureSaat: number; personelYok: boolean; blok: { gerekSaat: number; enUzunSaat: number } | null; ayarci: { gerekSaat: number; enUzunSaat: number } | null }[] } | null)[];
+    return { sinirda: HDAYS >= TAKVIM_ENCOK, olculer: idler.map((id) => { const o = cx.byId[id]; return o ? zamanOlcusu(cx, o, null) : null; }) };
+  })()`, b) as { sinirda: boolean; olculer: ({ ufukGun: number; malzemeHazirSaat: number | null; adaylar: { m: string; ad: string | null; acikSaat: number; sureSaat: number; personelYok: boolean; blok: { gerekSaat: number; enUzunSaat: number } | null; ayarci: { gerekSaat: number; enUzunSaat: number } | null }[] } | null)[] };
   return Object.fromEntries(idler.map((id, n) => {
-    const x = ham[n] ?? null;
+    const x = ham.olculer[n] ?? null;
     if (x === null) return [id, null];
     const adaylar: ZamanAdayi[] = x.adaylar.map((a) => ({ makine: hedef('makine', a.m, a.ad), acikSaat: a.acikSaat, sureSaat: a.sureSaat, personelYok: a.personelYok, blok: a.blok, ayarci: a.ayarci }));
-    return [id, { ufukGun: x.ufukGun, malzemeHazirSaat: x.malzemeHazirSaat, adaylar }];
+    return [id, { ufukGun: x.ufukGun, malzemeHazirSaat: x.malzemeHazirSaat, adaylar, takvimSinirda: ham.sinirda, buyumeKesildi: plan.buyumeKesildi === true }];
   }));
 }
 
