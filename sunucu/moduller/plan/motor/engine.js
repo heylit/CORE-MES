@@ -228,10 +228,12 @@ function compile(st){olcekKur(st.w);
       const ad0=D.opAdet&&D.opAdet[id]!=null&&isFinite(+D.opAdet[id])?+D.opAdet[id]:j.adet;
       const adaylar=o.fason?[]:(o.tezgahlar||[]).filter(t=>M[t.id]);
       /* 1952 (1956 a, 1958 a): rotada "paralel böl" adımı adayları arasında N paya bölünür; N = aday sayısı, adet / en küçük parça ve
-         bölme sınırının (st.w.bolMaks) en küçüğü. Kilitli, çalışan
-         ve yeri sabit adım bölünmez: yeri tek kaynaktadır. Paylar ayrı işlemdir (ilk pay adımın kimliğini, ötekiler "~2", "~3" ekini taşır); hepsi
+         bölme sınırının (st.w.bolMaks) en küçüğü. Elle kilitli, çalışan
+         ve yeri sabit adım bölünmez: yeri tek kaynaktadır. Geçici kilit (denge bölgesi, yerinde tutma) bölmeyi bozmaz: kayıtlı plandaki
+         paylar kendi kilitleriyle yerinde kalır; adım tek parçaya inseydi payı plandan düşer, tam süresiyle tezgâhtaki sonraki işe ve
+         ardılına taşardı (3498). Paylar ayrı işlemdir (ilk pay adımın kimliğini, ötekiler "~2", "~3" ekini taşır); hepsi
          adımın öncüllerini bekler, ardıl hepsini bekler. Adet eşit bölünür, kalan ilk paylara. */
-      const sabit=(st.locks&&st.locks[id])||(st.gercek&&st.gercek[id])||(st.sabitYer&&st.sabitYer[id]);
+      const kl=st.locks&&st.locks[id],sabit=(kl&&!kl.gecici)||(st.gercek&&st.gercek[id])||(st.sabitYer&&st.sabitYer[id]);
       /* 3488 c: planlamacının elle bölmesi (st.elleBol, çalışmanın elleBol'u) otomatik bölmenin yerine geçer: pay sayısı, adedi ve tezgâhı
          ondandır; rotadaki "paralel böl" ve bölme ayarı aranmaz. Başlamış ya da yeri sabit adım bölünmez; kilit payları ayrıca kilitlenir. */
       const eb=!o.fason&&!(st.gercek&&st.gercek[id])&&!(st.sabitYer&&st.sabitYer[id])?elleBolCoz(st.elleBol&&st.elleBol[id],ad0,adaylar):null;

@@ -418,8 +418,46 @@ function planKur() {
   return { plan: { ...planKaydi(cur, st, null), lb: lbx.wT, lbC, ilk, dataVer: S.dataVer } };
 }
 
+/* 3498: kayıtlı planı çözen hesap geçici kilitli işi ve başlaması geçmiş, başlamamış işi (çalışıyor sayılır) eski yerinde tutar. Öncülü o
+   saatte bitmiyorsa (geç biten iş, saati geçip yeniden dizilen adım, dönüşü kayan fason) ardıl öncülünden önce başlar; tezgâhında başka
+   iş sürüyorsa onunla çakışır. Çözülen planda böyle kalan iş bulunur: geçici kilidi kalkar, geride iş yeniden dizilir. Elle kilit,
+   başlamış ve bitmiş iş gerçektir, yerinde kalır. Dönen liste: [işlem, 'kilit' | 'geride']. */
+/** @param {any} p @param {MotorDurumu} st @param {Derleme} cx */
+function yerindeTutmaBozuklari(p, st, cx) {
+  const tur = r => r.act || r.done || r.fas ? null : st.locks[r.id] ? (st.locks[r.id].gecici ? 'kilit' : null) : r.pin && !r.frz && r.S < st.now - 1e-9 ? 'geride' : null;
+  const out = {};
+  for (const id in p.ops) {
+    const r = p.ops[id], o = cx.byId[id], t = o && tur(r); if (!t) continue;
+    for (const [pid, ty] of o.pr) { const q = p.ops[pid]; if (q && (ty === 'o' && !q.fas ? q.lot1 : q.C) > r.S + 1e-6) { out[id] = t; break; } }
+  }
+  const byM = {}; for (const r of Object.values(p.ops)) if (!r.fas && isFinite(r.S) && isFinite(r.C)) (byM[r.m] = byM[r.m] || []).push(r);
+  for (const m in byM) {
+    let on = null;
+    for (const r of byM[m].sort((x, y) => x.S - y.S)) {
+      if (on && r.S < on.C - 1e-6) { const tr = tur(r), to = tur(on); if (tr) out[r.id] = tr; else if (to) out[on.id] = to; }
+      if (!on || r.C > on.C) on = r;
+    }
+  }
+  return Object.entries(out);
+}
+/* Tabanı çözer; yerinde tutulamayan iş kalmayana kadar kilidi kaldırıp yeniden çözer. Her tur en az bir işi serbest bırakır; tur sınırı
+   aşılırsa bozuk kalan emirlerin bütün geçici kilitleri kalkar. geride: çağıranın yeniden dizdirdiği işler; buraya eklenenler ona yazılır. */
+/** @param {MotorDurumu} st @param {Derleme} cx @param {any} taban @param {Record<string, number>} geride */
+function yerindeTutarakCoz(st, cx, taban, geride) {
+  for (let tur = 0; ; tur++) {
+    if (Object.keys(geride).length) st.geride = geride;
+    const p = lnsDecode(st, taban, [], cx, false);
+    const boz = yerindeTutmaBozuklari(p, st, cx); if (!boz.length || tur >= 60) return p;
+    const emir = tur >= 40 ? new Set(boz.map(([id]) => p.ops[id].job)) : null;
+    if (emir) for (const id in st.locks) if (st.locks[id].gecici && p.ops[id] && emir.has(p.ops[id].job)) delete st.locks[id];
+    for (const [id, t] of boz) { if (t === 'kilit') delete st.locks[id]; else geride[id] = 1; }
+  }
+}
+
 /* Bekleyen değişikliği uygula (755 a; sayfanın eski 'onar' kipi): kayıtlı plan taban ve başvurudur. Etkilenmeyen siparişin işleri o
-   plandaki yerinde geçici kilitlenir; yalnız etkilenen siparişlerin işleri yeniden dizilir ('*': hepsi). Kilitli ve donuk işler yerinde. */
+   plandaki yerinde geçici kilitlenir; yalnız etkilenen siparişlerin işleri yeniden dizilir ('*': hepsi). Kilitli ve donuk işler yerinde.
+   Yerinde tutulamayan iş (öncülü o saatte bitmiyor ya da tezgâhında başka iş sürüyor) etkilenmeyen emirde de yeniden dizilir
+   (yerindeTutarakCoz); plan sıraya aykırı ve çakışan iş taşımaz. */
 function planUygula(isler) {
   const hepsi = isler.includes('*'), etk = new Set(isler);
   const st = stHazirla(dengeKilit(stOf())); const var_ = new Set(st.D.siparisler.map(s => s.id));
@@ -433,16 +471,18 @@ function planUygula(isler) {
   /* Geride işi olan emrin öteki işleri denge ufku için geçici kilitlenmiş olabilir; kilitli ardıl eski saatinde kalır ve ileri kayan
      öncülünden önce başlardı. O emrin geçici kilitleri kalkar (elle kilit durur). */
   if (gerideVar) { const ej = new Set(Object.keys(geride).map(id => S.plan.ops[id].job)); for (const r of Object.values(S.plan.ops)) if (ej.has(r.job) && st.locks[r.id] && st.locks[r.id].gecici) delete st.locks[r.id]; }
-  const refOps = gerideVar ? Object.fromEntries(Object.entries(S.plan.ops).filter(([id]) => !geride[id])) : S.plan.ops;
-  const cx = compile(st); const ms = (+S.w.sure || 10) * 1000; const t0 = Date.now(); const ref = { ops: refOps };
-  let cur = lnsDecode(st, { ops: S.plan.ops, fail: [] }, [], cx, false); slack(cur, cx);
-  if (gerideVar) delete st.geride;
+  const cx = compile(st); const ms = (+S.w.sure || 10) * 1000; const t0 = Date.now();
+  let cur = yerindeTutarakCoz(st, cx, { ops: S.plan.ops, fail: [] }, geride); slack(cur, cx);
+  delete st.geride;
+  const ref = { ops: Object.keys(geride).length ? Object.fromEntries(Object.entries(S.plan.ops).filter(([id]) => !geride[id])) : S.plan.ops };
   let E = evaluate(cur, st, ref, true); const ilk = E.wT;
   let seed = 17, durgun = 0;
   while (Date.now() - t0 < ms && durgun < 4) {
     const L = lns(st, cur, ref, { ms: Math.max(250, Math.min(1500, ms - (Date.now() - t0))), seed: seed++, free: false });
     if (cmpEv(L.e, E) > 0) { cur = L.plan; E = L.e; durgun = 0; } else durgun++;
   }
+  /* Arama serbest işi kilitli ardılının ötesine taşımış olabilir; son plan aynı ölçüyle bir kez daha bakılır. */
+  if (yerindeTutmaBozuklari(cur, st, cx).length) { cur = yerindeTutarakCoz(st, cx, cur, {}); slack(cur, cx); delete st.geride; }
   return { plan: { ...planKaydi(cur, st, ref), ilk, dataVer: S.dataVer } };
 }
 

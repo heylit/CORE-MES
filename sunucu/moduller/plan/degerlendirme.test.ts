@@ -423,6 +423,53 @@ describe('planlama değerlendirmesi: arama (457 1-3 b)', () => {
     assert.equal((baslamis.plan['ops'] as Record<string, Is>)[sonraki]?.S, eski[sonraki]!.S);
   });
 
+  test('PD-31 (3498): paralel bölünen adım denge bölgesinde yerinde tutulunca bölünmüş kalır; payı düşmez, ardılı paylardan önce başlamaz', async () => {
+    type Is = { job: string; m: string; S: number; C: number };
+    // İki torna, tek emir: OP 10 paralel bölünür (iki pay, iki tornada), OP 20 frezede ikisini bekler.
+    const kayit = { ...BUYUK_KAYIT,
+      machines: [...BUYUK_KAYIT.machines, { id: '101', code: 'T2', name: 'Torna 2', stationId: '10', plan: tezgah('101', '10', 750) }],
+      routes: { 50: { base: null, steps: [{ ...adim('50', 10, '10', 30, 0), split: 'bol', minLot: 1 }, adim('50', 20, '20', 15, 0)] } },
+      orders: [{ id: 'O1', no: 'E-1', itemId: '50', qty: 8, start: '2026-10-19', due: '2026-10-23', priority: 2, status: 'serbest' }] };
+    const kaynak = { ...BUYUK_KAYNAK, durum: { ...BUYUK_KAYNAK.durum, machines: [...BUYUK_KAYNAK.durum.machines, { id: '101', code: 'T2', name: 'Torna 2', stationId: '10', status: 'aktif', aktif: true }] } };
+    const kur = (c: unknown) => degerlendirmeYap({ calisma: c, kayit, kaynak, bugun: '2026-10-19', istek: { tur: 'plan-kur' } }, AN);
+    const ilk = sonuc(await kur(calismaKur())); if (ilk.tur !== 'plan-kur') return assert.fail(ilk.tur);
+    const eski = ilk.plan['ops'] as Record<string, Is>;
+    assert.deepEqual(Object.keys(eski).sort(), ['O1.10', 'O1.10~2', 'O1.20'], 'OP 10 iki paya bölünür');
+    assert.notEqual(eski['O1.10']!.m, eski['O1.10~2']!.m);
+    // Kayıtlı planın üstüne yeniden kur: bütün işler bölgededir (şimdiden 24 saat), yerinde tutulur.
+    const k = sonuc(await kur({ ...calismaKur(), plan: ilk.plan })); if (k.tur !== 'plan-kur') return assert.fail(k.tur);
+    const yeni = k.plan['ops'] as Record<string, Is>;
+    assert.deepEqual(k.plan['fail'], []);
+    for (const id of Object.keys(eski)) assert.deepEqual([yeni[id]?.m, yeni[id]?.S, yeni[id]?.C], [eski[id]!.m, eski[id]!.S, eski[id]!.C], id);
+    assert.ok(yeni['O1.20']!.S >= Math.max(yeni['O1.10']!.C, yeni['O1.10~2']!.C) - 1e-6, 'ardıl iki payı da bekler');
+  });
+
+  test('PD-32 (3498): değişikliği uygula: istenmeyen emrin saati geçmiş, başlamamış adımı yeniden dizilince ardılı eski yerinde kalmaz; öncülü yerinde olan işler yerinde kalır', async () => {
+    type Is = { job: string; m: string; S: number; C: number };
+    const { calisma } = buyukPlanli();
+    const eski = (calisma['plan'] as { ops: Record<string, Is> }).ops;
+    // Şimdi 60. saat. O0 ve O6.10 bitmiş, O6.20 sürüyor. O4.10 (37-58) hiç başlamamış, saati geçmiş: şimdiden sonraya yeniden dizilir;
+    // ardılı O4.20 (83'te) eski yerinde kalsaydı öncülü bitmeden başlardı. O4 istenen emir değildir (istenen O7).
+    const simdi = 60, gecmis = 'O4.10', ardil = 'O4.20';
+    assert.ok(eski[gecmis]!.C <= simdi && eski[ardil]!.S > simdi, 'örnek plan değişmiş');
+    const bitti = (id: string) => ({ m: eski[id]!.m, S: eski[id]!.S, C: eski[id]!.C });
+    const gercek = { 'O0.10': bitti('O0.10'), 'O0.20': bitti('O0.20'), 'O6.10': bitti('O6.10'), 'O6.20': { m: eski['O6.20']!.m, S: eski['O6.20']!.S } };
+    const an = Date.parse('2026-10-18T21:00:00Z') + simdi * 3_600_000;
+    const z = zarf(await degerlendirmeYap({ calisma: { ...calisma, gercek }, kayit: BUYUK_KAYIT, kaynak: BUYUK_KAYNAK, bugun: '2026-10-19', istek: { tur: 'plan-uygula', isler: ['O7'] } }, an));
+    assert.equal(z.simdi, simdi);
+    const s = degerlendirmeSonucu.parse(z.sonuc); if (s.tur !== 'plan-uygula') return assert.fail(s.tur);
+    const yeni = s.plan['ops'] as Record<string, Is>;
+    assert.deepEqual(s.plan['fail'], []);
+    assert.ok(yeni[gecmis]!.S >= simdi - 1e-6, `saati geçmiş adım şimdiden sonra: ${String(yeni[gecmis]?.S)}`);
+    assert.ok(yeni[ardil]!.S >= yeni[gecmis]!.C - 1e-6, `ardıl öncülünden sonra: ${String(yeni[ardil]?.S)} >= ${String(yeni[gecmis]?.C)}`);
+    // Hiçbir adım öncülünden önce başlamaz, tezgâhta iki iş üst üste gelmez.
+    for (const [id, y] of Object.entries(yeni)) if (id.endsWith('.20')) { const p = yeni[id.replace(/\.20$/, '.10')]; if (p) assert.ok(y.S >= p.C - 1e-6, `${id} öncülünden önce`); }
+    const tezgahlar: Record<string, Is[]> = {}; for (const y of Object.values(yeni)) (tezgahlar[y.m] ??= []).push(y);
+    for (const l of Object.values(tezgahlar)) { l.sort((a, b) => a.S - b.S); for (let i = 1; i < l.length; i++) assert.ok(l[i]!.S >= l[i - 1]!.C - 1e-6, `tezgâh ${l[i]!.m} ${String(l[i]!.S)} < ${String(l[i - 1]!.C)}`); }
+    // Yalnız tutulamayan iş serbest kalır: öncülü yerinde olan öteki emirlerin gelecekteki işleri kayıtlı plandaki yerindedir.
+    for (const id of ['O3.10', 'O3.20', 'O2.20', 'O1.10', 'O1.20', 'O5.10', 'O5.20']) assert.deepEqual([yeni[id]?.m, yeni[id]?.S], [eski[id]!.m, eski[id]!.S], id);
+  });
+
   test('PD-30 (3233 a): plana yeni giren emir tek başına dizilir, yerleşmiş öteki işler tezgâhı ve başlangıcıyla yerinde kalır; plan kur bütün işleri yeniden dizer', async () => {
     type Is = { job: string; m: string; S: number };
     const yedi = { ...BUYUK_KAYIT, orders: BUYUK_KAYIT.orders.slice(0, 7) };
