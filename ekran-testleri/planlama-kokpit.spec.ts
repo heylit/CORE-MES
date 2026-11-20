@@ -1790,7 +1790,8 @@ test('Kokpit 3282 1b: Ayarlar paneli açılır, dondurma değişir, etkisi önce
   await arac(kokpit, 'Ayarlar');
   const panel = kokpit.getByRole('complementary', { name: 'Plan ayarları' });
   await expect(panel).toBeVisible();
-  await expect(panel.getByText('ATCS (öncelik, termin ve süre birlikte)')).toBeVisible();
+  // 3487: yönetici motor ayarını panelde değiştirebilir; kural salt metin değil, seçili seçenektir.
+  await expect(panel.getByRole('combobox', { name: 'Sıralama kuralı' }).locator('option:checked')).toHaveText('ATCS (öncelik, termin ve süre birlikte)');
   const dondurma = panel.getByLabel(/Dondurulmuş bölge/);
   await dondurma.fill('8');
   await dondurma.blur();
