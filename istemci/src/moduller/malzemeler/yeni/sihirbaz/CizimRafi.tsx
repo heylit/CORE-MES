@@ -1,10 +1,10 @@
 import { useEffect, useState, type DragEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { Dugme, Rozet, Simge, type RozetTonu } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, Girdi, Rozet, Simge, type RozetTonu } from '../../../../ortak/arayuz/index.ts';
 import { hataIletisi } from '../../../../ortak/veri/api.ts';
 import { DosyaHatasi, malzemeBelgesiYukle, useMalzemeResimYetkisi } from '../../../cizimler/disari.ts';
 import { useSihirbaz } from './baglam.ts';
-import { CIZIM_GRUPLARI, cizimEkle, cizimHedefi, ortadanKisalt, rafVar, tasimaIletisi, type BekleyenCizim, type CizimDurumu, type CizimGrubu } from './cizim-rafi.ts';
+import { CIZIM_GRUPLARI, cizimEkle, cizimHedefi, dosyaHedefi, hedefMetni, ortadanKisalt, rafVar, tasimaIletisi, type BekleyenCizim, type CizimDurumu, type CizimGrubu } from './cizim-rafi.ts';
 import type { Sihirbaz } from './baglam.ts';
 
 const DURUM: Readonly<Record<CizimDurumu, { ad: string; ton: RozetTonu }>> = {
@@ -36,8 +36,8 @@ export function CizimRafi({ serit = false }: { serit?: boolean }) {
   const { taslak: d, b, cizimler, cizimlerYaz, bildir } = useSihirbaz();
   const { merkezGorur } = useMalzemeResimYetkisi();
   if (!rafVar(d, b) || (d.id && cizimler.length === 0)) return null;
-  const { resimNo, rev } = cizimHedefi(d);
-  const hedef = `${resimNo ?? 'resim no yok'} · Rev ${rev ?? '—'}`;
+  const kartHedefi = cizimHedefi(d);
+  const hedef = (c: BekleyenCizim) => hedefMetni(dosyaHedefi(d, c));
   const kayitli = !!d.id;
   const ekle = (dosyalar: readonly File[], tur: CizimGrubu['tur']) => {
     cizimlerYaz((l) => {
@@ -57,18 +57,21 @@ export function CizimRafi({ serit = false }: { serit?: boolean }) {
           key={g.tur} grup={g} cizimler={cizimler.filter((c) => c.tur === g.tur)} hedef={hedef} kayitli={kayitli} merkezGorur={merkezGorur}
           ekle={(f) => { ekle(f, g.tur); }} kaldir={(a) => { cizimlerYaz((l) => l.filter((x) => x.anahtar !== a)); }}
           yenidenDene={(a) => { cizimlerYaz((l) => l.map((x) => (x.anahtar === a ? { ...x, durum: 'bekler', hata: null } : x))); }}
+          elleYaz={(a, elle) => { cizimlerYaz((l) => l.map((x) => (x.anahtar === a ? { ...x, elle } : x))); }} kartHedefi={kartHedefi}
         />
       ))}
-      {!kayitli && <p className="tc-my-cz-not">Kayıtta {hedef} ile Çizim Merkezi'ne gider. Teknik resim hemen yayında olur, 3B model taslak girer. Sayfa yenilenirse dosyalar yeniden seçilir.</p>}
+      {!kayitli && <p className="tc-my-cz-not">Kayıtta kartın teknik resim no ve revizyonuyla ({hedefMetni(kartHedefi)}) Çizim Merkezi'ne gider; dosyada "Düzenle" ile değiştirilebilir. Teknik resim hemen yayında olur, 3B model taslak girer. Sayfa yenilenirse dosyalar yeniden seçilir.</p>}
     </section>
   );
 }
 
-function CizimGrubuBolumu({ grup, cizimler, hedef, kayitli, merkezGorur, ekle, kaldir, yenidenDene }: {
-  grup: CizimGrubu; cizimler: readonly BekleyenCizim[]; hedef: string; kayitli: boolean; merkezGorur: boolean;
+function CizimGrubuBolumu({ grup, cizimler, hedef, kayitli, merkezGorur, ekle, kaldir, yenidenDene, elleYaz, kartHedefi }: {
+  grup: CizimGrubu; cizimler: readonly BekleyenCizim[]; hedef: (c: BekleyenCizim) => string; kayitli: boolean; merkezGorur: boolean;
   ekle: (dosyalar: readonly File[]) => void; kaldir: (anahtar: string) => void; yenidenDene: (anahtar: string) => void;
+  elleYaz: (anahtar: string, elle: BekleyenCizim['elle']) => void; kartHedefi: { resimNo: string | null; rev: string | null };
 }) {
   const [uzerinde, uzerindeYaz] = useState(false);
+  const [duzenlenen, duzenlenenYaz] = useState<string | null>(null);
   const birak = (e: DragEvent) => { e.preventDefault(); uzerindeYaz(false); ekle([...e.dataTransfer.files]); };
   return (
     <section className="tc-my-cz-grup" aria-label={grup.ad}>
@@ -81,11 +84,18 @@ function CizimGrubuBolumu({ grup, cizimler, hedef, kayitli, merkezGorur, ekle, k
           <li key={c.anahtar} className={c.tasindi ? 'tc-my-cz-kare tc-my-cz-tasindi' : 'tc-my-cz-kare'} aria-label={c.dosya.name}>
             <Resimcik tur={c.tur} />
             <b title={c.dosya.name}>{ortadanKisalt(c.dosya.name)}</b>
-            <span className="tc-my-cz-hedef mono">{hedef}</span>
-            <Rozet ton={DURUM[c.durum].ton}>{DURUM[c.durum].ad}</Rozet>
+            {c.durum === 'bekler' && !kayitli
+              ? (
+                <HedefDuzenle
+                  c={c} metin={hedef(c)} kartHedefi={kartHedefi} yaz={(elle) => { elleYaz(c.anahtar, elle); }}
+                  acik={duzenlenen === c.anahtar} acikYaz={(a) => { duzenlenenYaz(a ? c.anahtar : null); }}
+                />
+              )
+              : <span className="tc-my-cz-hedef mono">{hedef(c)}</span>}
+            {duzenlenen !== c.anahtar && <Rozet ton={DURUM[c.durum].ton}>{DURUM[c.durum].ad}</Rozet>}
             {c.durum === 'gidiyor' && <progress max={1} value={c.oran} aria-label={`${c.dosya.name} yükleniyor`} />}
             {c.hata !== null && <small className="tc-my-cz-hata" role="alert">{c.hata}</small>}
-            {c.durum === 'bekler' && !kayitli && (
+            {c.durum === 'bekler' && !kayitli && duzenlenen !== c.anahtar && (
               <Dugme simge="x" aria-label={`${c.dosya.name} kaldır`} onClick={() => { kaldir(c.anahtar); }}>Kaldır</Dugme>
             )}
             {c.durum === 'hata' && <Dugme simge="rotate" onClick={() => { yenidenDene(c.anahtar); }}>Yeniden dene</Dugme>}
@@ -111,6 +121,33 @@ function CizimGrubuBolumu({ grup, cizimler, hedef, kayitli, merkezGorur, ekle, k
   );
 }
 
+// 3479: dosya başına teknik resim no ve revizyon; karttan dolu açılır, düzenlenirse yalnız bu dosya için geçer.
+// Düzenlerken rozet ve Kaldır gizlenir (karede yalnız alanlar ve iki düğme kalır).
+function HedefDuzenle({ c, metin, kartHedefi, yaz, acik, acikYaz }: {
+  c: BekleyenCizim; metin: string; kartHedefi: { resimNo: string | null; rev: string | null }; yaz: (elle: BekleyenCizim['elle']) => void;
+  acik: boolean; acikYaz: (acik: boolean) => void;
+}) {
+  const deger = c.elle ?? { resimNo: kartHedefi.resimNo ?? '', rev: kartHedefi.rev ?? '' };
+  if (!acik) {
+    return (
+      <>
+        <span className="tc-my-cz-hedef mono">{metin}{c.elle && <small> (elle)</small>}</span>
+        <Dugme simge="edit" aria-label={`${c.dosya.name} teknik resim no ve revizyonu düzenle`} onClick={() => { acikYaz(true); }}>Düzenle</Dugme>
+      </>
+    );
+  }
+  return (
+    <div className="tc-my-cz-duzenle">
+      <Girdi etiket="Teknik resim no" value={deger.resimNo} maxLength={60} onChange={(e) => { yaz({ ...deger, resimNo: e.target.value }); }} />
+      <Girdi etiket="Revizyon kodu" value={deger.rev} maxLength={20} onChange={(e) => { yaz({ ...deger, rev: e.target.value }); }} />
+      <div className="tc-my-cz-duzenle-dugmeler">
+        {c.elle && <Dugme simge="rotate" onClick={() => { yaz(null); }}>Karttan al</Dugme>}
+        <Dugme simge="check" onClick={() => { acikYaz(false); }}>Tamam</Dugme>
+      </div>
+    </div>
+  );
+}
+
 // Kart kaydedilip numarası gelince bekleyen dosyalar sırayla yüklenir; sihirbazda bir kez çağrılır (raf iki yerde çizilse de).
 export function useCizimYukleme(s: Pick<Sihirbaz, 'taslak' | 'kartlar' | 'cizimler' | 'cizimlerYaz' | 'bildir'> & { tazeleArttir: () => void }) {
   const { taslak: d, kartlar, cizimler, cizimlerYaz, bildir, tazeleArttir } = s;
@@ -120,7 +157,7 @@ export function useCizimYukleme(s: Pick<Sihirbaz, 'taslak' | 'kartlar' | 'ciziml
   useEffect(() => {
     if (!no || !bekleyen || suruyor) return;
     suruyorYaz(true);
-    const { resimNo, rev } = cizimHedefi(d);
+    const { resimNo, rev } = dosyaHedefi(d, bekleyen);
     const yaz = (p: Partial<BekleyenCizim>) => { cizimlerYaz((l) => l.map((x) => (x.anahtar === bekleyen.anahtar ? { ...x, ...p } : x))); };
     yaz({ durum: 'gidiyor', oran: 0 });
     void (async () => {

@@ -455,62 +455,94 @@ test.describe('M-3319 katalogda Logo araması', () => {
   });
 });
 
-// 3343: Logo geçişi cariler sekmesi. Köprü ekran ortamında yoktur; Logo arama ve toplu komut sahte cevapla döner.
+// 3343, 3474-1: Logo geçişi cariler sekmesi, eşleştirme listesi. Liste Logo cari aynasından gelir; ekran ortamında ayna ve köprü
+// yoktur, liste, ön kontrol okuması, toplu komut ve son işlem sahte cevapla döner.
 test.describe('M-3343 Logo geçişi cariler', () => {
-  const oneri = (kod: string, tur: 'musteri' | 'tedarikci') => ({
-    kod, ad: `ORN Deneme ${kod}`, tur, ulkeKodu: 'TR', vergiNo: null, vergiDairesi: null, adres: null, ilce: null, il: 'Deneme Il', postaKodu: null,
-    telefon: null, ePosta: null, logoCariKodu: kod,
+  const aday = (firmaId: number, ek: Record<string, unknown> = {}) => ({
+    firmaId, kod: `ORN-F-${firmaId}`, ad: `ORN Deneme Firma ${firmaId}`, aktif: true, neden: 'kod', logoyaBagli: false, baglanabilir: true, surum: 2, ...ek,
   });
-  const satir = (no: number, kod: string, ek: Record<string, unknown> = {}) => ({
-    logoKayitNo: no, kod, ad: `ORN Deneme Cari ${no}`, aktif: true, vergiNo: null, il: 'Deneme Il', telefon: null, eslesme: null, alinamaz: null,
-    oneri: oneri(kod, 'musteri'), ...ek,
-  });
-  const eslesme = (firmaId: number, neden: string, baglanabilir: boolean) =>
-    ({ firmaId, kod: `ORN-F-${firmaId}`, ad: `ORN Deneme Firma ${firmaId}`, neden, baglanabilir, surum: 2 });
-  const cariler = [
-    satir(1, 'ORN-C-1001', { eslesme: eslesme(11, 'kayit-no', false) }),
-    satir(2, 'ORN-C-1002', { eslesme: eslesme(12, 'kod', true) }),
-    satir(3, 'ORN-C-1003', { oneri: oneri('ORN-C-1003', 'tedarikci') }),
-    satir(4, 'ORN-C-1004'),
-    satir(5, 'ORN-C-1005', { eslesme: eslesme(15, 'vergi-no', false) }),
-    satir(6, `ORN-C-1006-${'X'.repeat(36)}`, { alinamaz: 'Logo cari kodu 1-40 karakter olmalı; bu cari TMI\'ye alınamaz.' }),
-    satir(7, 'ORN-C-0990', { aktif: false }),
+  const satir = (kod: string, durum: string, adaylar: unknown[] = [], alinamaz: string | null = null) =>
+    ({ kod, ad: `ORN Deneme Cari ${kod}`, durum, alinamaz, adaylar });
+  const satirlar = [
+    satir('ORN-C-1001', 'bagli', [aday(11, { neden: 'cari-kodu', logoyaBagli: true, baglanabilir: false })]),
+    satir('ORN-C-1002', 'baglanabilir', [aday(12)]),
+    satir('ORN-C-1003', 'yeni'),
+    satir('ORN-C-1004', 'yeni'),
+    satir('ORN-C-1005', 'eslesik', [aday(15), aday(16, { neden: 'vergi-no' })]),
+    satir(`ORN-C-1006-${'X'.repeat(36)}`, 'alinamaz', [], 'Logo cari kodu 1-40 karakter olmalı; bu cari TMI\'ye alınamaz.'),
   ];
+  const liste = {
+    baglanti: true, okuma: { acik: true, sonOkuma: '2026-11-20T06:00:00Z' },
+    sayilar: { tumu: 6, yeni: 2, baglanabilir: 1, bagli: 1, eslesik: 1, alinamaz: 1 },
+    suzgec: 'tumu', uyan: 6, sayfa: 0, sonrakiSayfa: null, satirlar,
+    secilebilir: [
+      { kod: 'ORN-C-1002', islem: 'bagla', firmaId: 12, surum: 2 }, { kod: 'ORN-C-1003', islem: 'al', firmaId: null, surum: null },
+      { kod: 'ORN-C-1004', islem: 'al', firmaId: null, surum: null },
+    ],
+  };
+  const kart = (no: number, kod: string, eslesme: unknown = null) => ({
+    logoKayitNo: no, kod, ad: `ORN Deneme Cari ${kod}`, aktif: true, vergiNo: null, il: 'Deneme Il', telefon: null, eslesme, alinamaz: null,
+    oneri: {
+      kod, ad: `ORN Deneme Cari ${kod}`, tur: 'musteri', ulkeKodu: 'TR', vergiNo: null, vergiDairesi: null, adres: null, ilce: null, il: 'Deneme Il',
+      postaKodu: null, telefon: null, ePosta: null, logoCariKodu: kod,
+    },
+  });
+  const okunan = [
+    kart(2, 'ORN-C-1002', { firmaId: 12, kod: 'ORN-F-12', ad: 'ORN Deneme Firma 12', neden: 'kod', baglanabilir: true, surum: 2 }),
+    kart(3, 'ORN-C-1003'), kart(4, 'ORN-C-1004'),
+  ];
+  const toplu = {
+    islem: '00000000-0000-4000-8000-000000003343',
+    sonuclar: [
+      { logoKodu: 'ORN-C-1002', islem: 'bagla', tamam: true, firma: { id: 12, kod: 'ORN-C-1002', ad: 'ORN Deneme Firma 12' }, ileti: null },
+      { logoKodu: 'ORN-C-1003', islem: 'al', tamam: true, firma: { id: 30, kod: 'ORN-C-1003', ad: 'ORN Deneme Cari ORN-C-1003' }, ileti: null },
+      { logoKodu: 'ORN-C-1004', islem: 'al', tamam: false, firma: null, ileti: 'Bu cari TMI\'de var: ORN-F-40. Yeni kart açılmaz; firmayı Logo\'ya bağlayın.' },
+    ],
+  };
 
-  test('arama, durumlar, toplu işlem penceresi ve sonuç; sayfa yatay taşmaz', async ({ page, ag, ac }) => {
-    await page.route('**/api/musteri-tedarikci/logo-cari/ara?*', (r) => r.fulfill({ json: { durum: 'tamam', ileti: null, cariler } }));
-    await page.route('**/api/musteri-tedarikci/logo-cari/toplu', (r) => r.fulfill({
-      json: {
-        sonuclar: [
-          { logoKodu: 'ORN-C-1002', islem: 'bagla', tamam: true, firma: { id: 12, kod: 'ORN-F-12', ad: 'ORN Deneme Firma 12' }, ileti: null },
-          { logoKodu: 'ORN-C-1003', islem: 'al', tamam: true, firma: { id: 30, kod: 'ORN-C-1003', ad: 'ORN Deneme ORN-C-1003' }, ileti: null },
-          { logoKodu: 'ORN-C-1004', islem: 'al', tamam: false, firma: null, ileti: 'Bu cari TMI\'de var: ORN-F-40. Yeni kart açılmaz; firmayı Logo\'ya bağlayın.' },
-        ],
-      },
-    }));
+  test('liste, önerileri kabul et, ön kontrol, toplu işlem, sonuç ve son işlem şeridi; sayfa yatay taşmaz', async ({ page, ag, ac }) => {
+    let son: unknown = { islem: null };
+    await page.route('**/api/musteri-tedarikci/logo-cari/liste?*', (r) => r.fulfill({ json: liste }));
+    await page.route('**/api/musteri-tedarikci/logo-cari/son-islem', (r) => r.fulfill({ json: son }));
+    await page.route('**/api/logo/cari-crm?*', (r) => r.fulfill({ json: { durumlar: [] } }));
+    await page.route('**/api/musteri-tedarikci/logo-cari/kartlar?*', (r) => {
+      const kodlar = decodeURIComponent(new URL(r.request().url()).searchParams.get('kodlar') ?? '').split(',');
+      return r.fulfill({ json: { durum: 'tamam', ileti: null, cariler: okunan.filter((k) => kodlar.includes(k.kod)), okunamayan: [] } });
+    });
+    await page.route('**/api/musteri-tedarikci/logo-cari/toplu', (r) => {
+      son = {
+        islem: {
+          islem: toplu.islem, zaman: '2026-11-20T07:00:00Z', geriAlinabilir: true,
+          satirlar: toplu.sonuclar.map((x) => ({ ...x, geriAlindi: false, geriIleti: null })),
+        },
+      };
+      return r.fulfill({ json: toplu });
+    });
     await ac('/logo-gecisi');
     await page.getByRole('tab', { name: 'Cariler' }).click();
-    await page.getByRole('textbox', { name: "Logo'da ara" }).fill('ORN');
-    await page.getByRole('button', { name: "Logo'da ara" }).click();
     const tablo = page.getByRole('table', { name: 'Logo carileri' });
     await expect(tablo.getByText('ORN-C-1002').first()).toBeVisible();
     await expect(tablo.getByText('Bağlanabilir').first()).toBeVisible();
-    await expect(tablo.getByText("Logo'da pasif").first()).toBeVisible();
+    await expect(tablo.getByText('Elle bakılmalı').first()).toBeVisible();
+    await expect(tablo.getByText('Alınamaz').first()).toBeVisible();
     expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
     await page.screenshot({ path: test.info().outputPath('cariler.png'), fullPage: true });
-    // Dar genişlikte tablo kart kipindedir, "Tümünü seç" yoktur: satırlar tek tek seçilir.
-    const kartKipi = (await page.locator('.tc-tablo-kap[data-kip="kart"]').count()) > 0;
-    if (!kartKipi) await page.getByRole('checkbox', { name: 'Tümünü seç' }).check();
-    else for (const k of await tablo.locator('tbody').getByRole('checkbox').all()) await k.check();
-    await page.getByRole('button', { name: 'Seçilenleri işle' }).click();
-    const pencere = page.getByRole('dialog', { name: 'Seçilen carileri işle' });
-    await expect(pencere.getByRole('button', { name: '1 bağla, 2 al' })).toBeVisible();
+    await page.getByRole('button', { name: 'Önerileri kabul et' }).click();
+    await expect(page.getByText('3 seçili: 1 bağla, 2 yeni firma')).toBeVisible();
+    await page.getByRole('button', { name: 'Ön kontrol' }).click();
+    const pencere = page.getByRole('dialog', { name: 'Ön kontrol' });
+    const isle = pencere.getByRole('button', { name: '1 bağla, 2 al' });
+    await expect(isle).toBeEnabled();
     expect((await tasmaOlc(page)).belge, 'pencerede yatay taşma').toBeLessThanOrEqual(0);
     await page.screenshot({ path: test.info().outputPath('cariler-pencere.png') });
-    await pencere.getByRole('button', { name: '1 bağla, 2 al' }).click();
+    await isle.click();
     const sonuc = page.getByRole('dialog', { name: 'Sonuç' });
     await expect(sonuc.getByText('1 bağlandı, 1 firma açıldı, 1 işlenemedi.')).toBeVisible();
     await page.screenshot({ path: test.info().outputPath('cariler-sonuc.png') });
+    await sonuc.getByRole('button', { name: 'Tamam' }).click();
+    const serit = page.getByRole('region', { name: 'Son toplu işlem' });
+    await expect(serit.getByRole('button', { name: 'Geri al' })).toBeVisible();
+    expect((await tasmaOlc(page)).belge, 'şeritte yatay taşma').toBeLessThanOrEqual(0);
     expect(ag.hatalar).toEqual([]);
   });
 });

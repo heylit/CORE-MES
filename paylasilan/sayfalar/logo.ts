@@ -11,6 +11,22 @@ export const LOGO_SAYFALARI = [
   { yol: '/logo', islem: 'sayfa.logo', baslik: 'Logo', simge: 'gear', grup: 'Yönetim', sira: 9 },
 ] as const satisfies readonly SayfaTanimi[];
 
+// 3474-1: Logo sayfasının yan menüsü. Logo geçişi Logo sayfasının altında da açılır (/logo/gecis); Tanımlar'daki sayfası durur ki
+// Logo sayfasını görmeyen (yönetici olmayan) malzeme yazan roller geçişi yine açabilsin (görünürlük değişmez). Logo irsaliyeleri kendi menüsüyle ayrıdır.
+export const LOGO_IKINCI_MENU = {
+  kok: '/logo',
+  baslik: 'Logo',
+  simge: 'gear',
+  gruplar: [
+    {
+      maddeler: [
+        { anahtar: 'yonetim', baslik: 'Yönetim', yol: '/logo', simge: 'gear', islem: 'sayfa.logo' },
+        { anahtar: 'gecis', baslik: 'Logo geçişi', yol: '/logo/gecis', simge: 'login', islem: 'sayfa.logo-gecisi' },
+      ],
+    },
+  ],
+} as const satisfies IkinciMenuTanimi;
+
 export const LOGO_IRSALIYELERI_IKINCI_MENU = {
   kok: '/logo-irsaliyeleri',
   baslik: 'Logo İrsaliyeleri',

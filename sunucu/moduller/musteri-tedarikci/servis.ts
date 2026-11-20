@@ -22,9 +22,11 @@ import { kisiAdlari } from '../kisiler/disari.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { LOGO_CARI_SONUC_SINIRI, firmaKimligi } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import type {
-  LogoCariAramaCevabi, LogoCariCevabi, LogoCariSatiri, LogoCariTopluCevabi, LogoCariTopluSonucu, logoCariTopluGovdesi, LogodanFirmaAlGovdesi,
-  LogoyaBaglaGovdesi,
+  LogoCariAramaCevabi, LogoCariCevabi, LogoCariGeriAlCevabi, LogoCariKartlariCevabi, LogoCariListeCevabi, LogoCariSatiri, LogoCariSonIslemCevabi,
+  LogoCariTopluCevabi, LogoCariTopluSonucu, logoCariListeSorgusu, logoCariTopluGovdesi, LogodanFirmaAlGovdesi, LogoyaBaglaGovdesi,
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
+import { LOGO_CARI_SAYFA_BOYU, LOGO_CARI_TOPLU_SINIRI } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
+import { randomUUID } from 'node:crypto';
 import type {
   Adres, AdresKimligi, Firma, FirmaAyrintiCevabi, FirmaDuzeltmesi, FirmaKimligi, FirmaSatiri, FirmaTuru, MusteriSinifi, firmaListeSorgusu,
   firmaSecimSorgusu,
@@ -34,7 +36,7 @@ import {
   FASON_SECIM_SINIRI, LOGO_KILIDI_ILETISI, adresSiniriHatasi, gecikmeOzetleri, agirlikSurumHatasi, karneDonemi, karneHesapla, karneYazmaHatasi, zamanindaMi, aramaSiniri, defterFarki, durumGecisiHatasi, firmaAramaSonucu, firmaKaydiHatasi, koordinatHatasi, logoKilidiIhlali, logoKoduCakismasi, musteriSinifiTuru, turKapsami,
 } from './kurallar.ts';
 import type { DefterSatiri, FirmaDurumu, GecikmeOrnegi, GecikmeOzeti, KarneSayilari, LogoCariBilgisi } from './kurallar.ts';
-import { logoCariBellegiGecerliMi, logoCariEslesmesi, logoCariKoduHatasi, logoCariOnerisi, logoyaBaglanabilir } from './kurallar.ts';
+import { aynaCariDurumu, aynadaAranir, logoCariBellegiGecerliMi, logoCariEslesmesi, logoCariKoduHatasi, logoCariOnerisi, logoyaBaglanabilir } from './kurallar.ts';
 import { firmaDegistiBildir } from './firma-olaylari.ts';
 import * as sorgular from './sorgular.ts';
 
@@ -496,6 +498,15 @@ export type LogoCrmKodCozucusu = (db: Db, cariKodu: string) => Promise<LogoCariS
 let logoCrmKodlari: LogoCrmKodCozucusu | null = null;
 export function logoCrmCozucusuKaydet(c: LogoCrmKodCozucusu | null): void { logoCrmKodlari = c; }
 
+// 3474-1: Logo geçişi tam listesi Logo cari aynasını okur (logo modülü kaydeder); bağlı değilse liste boştur.
+export type LogoCariAynasiCozucusu = (db: Db) => Promise<{ acik: boolean; sonOkuma: string | null; cariler: { kod: string; ad: string | null }[] }>;
+let logoCariAynasi: LogoCariAynasiCozucusu | null = null;
+export function logoCariAynasiKaydet(c: LogoCariAynasiCozucusu | null): void { logoCariAynasi = c; }
+// Geri almada açılan firma pasife alınır; pasife almayı engelleyen finans kuralı (FNS-60) finansın kaydettiği çözücüyle sorulur.
+export type FirmaPasifEngeliCozucusu = (db: Db, firmaId: number, kullanici: Kullanici) => Promise<string | null>;
+let firmaPasifEngeli: FirmaPasifEngeliCozucusu | null = null;
+export function firmaPasifEngeliKaydet(c: FirmaPasifEngeliCozucusu | null): void { firmaPasifEngeli = c; }
+
 const BAGLI_DEGIL: LogoCariSonucu<never> = { tur: 'kapali', ileti: 'Logo cari okuması bu sunucuda bağlı değil.' };
 
 // Alma ve bağlama komutu köprüye gitmez: kişinin aramada ya da tek okumada gördüğü cari süreç belleğinde tutulur (tek sunucu).
@@ -619,9 +630,20 @@ export async function firmaLogoCrmSec(db: Db, kullanici: Kullanici, id: number, 
 // Toplu almada form yoktur: aramadaki öneri olduğu gibi yazılır; öneri kart kurallarına uymuyorsa satır reddedilir, cari tek tek alınır.
 export async function logoCarileriniTopluIsle(db: Db, kullanici: Kullanici, g: z.output<typeof logoCariTopluGovdesi>): Promise<LogoCariTopluCevabi> {
   const sonuclar: LogoCariTopluSonucu[] = [];
+  const izler: sorgular.LogoGecisIzi[] = [];
+  const izle = (s: LogoCariTopluSonucu, r: KayitNoktasiSonucu<Firma>, onceki: sorgular.LogoBagOncesi | null) => {
+    izler.push({
+      sira: izler.length, tur: s.islem, logoKodu: s.logoKodu, tamam: s.tamam, firmaId: r.tamam ? r.deger.id : null, ileti: s.ileti,
+      firmaSurumu: r.tamam ? r.deger.surum : null, onceki: r.tamam && s.islem === 'bagla' ? onceki : null,
+    });
+  };
   for (const b of g.bagla) {
+    const once = await sorgular.firmaGetir(db, b.firmaId);
+    const onceki = once && { kod: once.kod, logoCariKodu: once.logoCariKodu, logoGonderimDurumu: once.logoGonderimDurumu };
     const r = await kayitNoktasi(db, () => firmayiLogoyaBagla(db, kullanici, b.firmaId, { logoKodu: b.logoKodu, surum: b.surum }));
-    sonuclar.push(topluSonucu(b.logoKodu, 'bagla', r));
+    const s = topluSonucu(b.logoKodu, 'bagla', r);
+    sonuclar.push(s);
+    izle(s, r, onceki);
   }
   for (const a of g.al) {
     const r = await kayitNoktasi(db, () => {
@@ -631,9 +653,106 @@ export async function logoCarileriniTopluIsle(db: Db, kullanici: Kullanici, g: z
       }
       return logodanFirmaAl(db, kullanici, { ...kimlik.data, logoKodu: a.logoKodu });
     });
-    sonuclar.push(topluSonucu(a.logoKodu, 'al', r));
+    const s = topluSonucu(a.logoKodu, 'al', r);
+    sonuclar.push(s);
+    izle(s, r, null);
   }
-  return { sonuclar };
+  const islem = randomUUID();
+  await sorgular.logoGecisIziYaz(db, islem, kullanici.id, izler);
+  return { islem, sonuclar };
+}
+
+// 3474-1: Logo geçişi tam listesi. Sayılar ve süzgeç bütün aynadan, sayfa yalnız süzgece uyanlardan; Logo'ya istek gitmez.
+export async function logoCariListesi(db: Db, q: z.output<typeof logoCariListeSorgusu>): Promise<LogoCariListeCevabi> {
+  const sayilar = { tumu: 0, yeni: 0, baglanabilir: 0, bagli: 0, eslesik: 0, alinamaz: 0 };
+  if (!logoCariAynasi) {
+    return { baglanti: false, okuma: { acik: false, sonOkuma: null }, sayilar, suzgec: q.suzgec, uyan: 0, sayfa: 0, sonrakiSayfa: null, satirlar: [], secilebilir: [] };
+  }
+  const ayna = await logoCariAynasi(db);
+  const adaylar = ayna.cariler.length === 0 ? [] : await sorgular.aynaAdaylari(db, ayna.cariler.map((c) => c.kod));
+  const satirlar = ayna.cariler.map((c) => ({ ...c, ...aynaCariDurumu(c.kod, adaylar) }));
+  for (const s of satirlar) { sayilar.tumu += 1; sayilar[s.durum] += 1; }
+  const uyanlar = satirlar.filter((s) => (q.suzgec === 'tumu' || s.durum === q.suzgec) && (q.ara === undefined || aynadaAranir(s, q.ara)
+    || s.adaylar.some((a) => a.kod !== null && aynadaAranir({ kod: a.kod, ad: a.ad }, q.ara!))));
+  const sayfa = uyanlar.slice(q.sayfa * LOGO_CARI_SAYFA_BOYU, (q.sayfa + 1) * LOGO_CARI_SAYFA_BOYU);
+  return {
+    baglanti: true, okuma: { acik: ayna.acik, sonOkuma: ayna.sonOkuma }, sayilar, suzgec: q.suzgec, uyan: uyanlar.length, sayfa: q.sayfa,
+    sonrakiSayfa: (q.sayfa + 1) * LOGO_CARI_SAYFA_BOYU < uyanlar.length ? q.sayfa + 1 : null,
+    satirlar: sayfa.map((s) => ({ kod: s.kod, ad: s.ad, durum: s.durum, alinamaz: s.alinamaz, adaylar: s.adaylar.slice(0, 10) })),
+    secilebilir: uyanlar.filter((s) => s.durum === 'yeni' || s.durum === 'baglanabilir').slice(0, LOGO_CARI_TOPLU_SINIRI).map((s) => {
+      const a = s.durum === 'baglanabilir' ? s.adaylar[0]! : null;
+      return { kod: s.kod, islem: a ? 'bagla' as const : 'al' as const, firmaId: a?.firmaId ?? null, surum: a?.surum ?? null };
+    }),
+  };
+}
+
+// 3474-1: ön kontrol. Seçilen cariler sırayla Logo'dan okunur (uç transaction dışında, köprü tek sıradan); okunan kişinin belleğine
+// yazılır ve vergi no dahil bugünkü eşleşmeyle döner. Okunamayan cari atlanır, ötekiler sürer; bağlantı kapalıysa ilk okumada durur.
+export async function logoCariKartlariOku(db: Db, kullanici: Kullanici, kodlar: readonly string[]): Promise<LogoCariKartlariCevabi> {
+  if (!logoCariOkumasi) return { durum: 'kapali', ileti: 'Logo cari okuması bu sunucuda bağlı değil.', cariler: [], okunamayan: [] };
+  const okunan: LogoCariBilgisi[] = [];
+  const okunamayan: { kod: string; ileti: string }[] = [];
+  for (const kod of kodlar) {
+    const r = await logoCariOkumasi(db, kod);
+    if (r.tur === 'kapali' || r.tur === 'ortam-degiskeni-yok') return { durum: r.tur, ileti: r.ileti, cariler: [], okunamayan: [] };
+    if (r.tur !== 'tamam') okunamayan.push({ kod, ileti: r.ileti });
+    else if (r.veri === null) okunamayan.push({ kod, ileti: 'Logo\'da bu kodla cari yok.' });
+    else okunan.push(r.veri);
+  }
+  bellegeYaz(kullanici.id, okunan);
+  return { durum: 'tamam', ileti: null, cariler: await logoCariSatirlari(db, okunan), okunamayan };
+}
+
+function izSonucu(i: sorgular.LogoGecisIziSatiri) {
+  return {
+    logoKodu: i.logoKodu, islem: i.tur, tamam: i.tamam, ileti: i.ileti, geriAlindi: i.geriAlindi !== null, geriIleti: i.geriIleti,
+    firma: i.firma && { id: i.firma.id, kod: i.firma.kod, ad: i.firma.ad },
+  };
+}
+export async function logoCariSonIslem(db: Db, kullanici: Kullanici): Promise<LogoCariSonIslemCevabi> {
+  const izler = await sorgular.logoGecisIzleri(db, kullanici.id, null);
+  if (izler.length === 0) return { islem: null };
+  return {
+    islem: {
+      islem: izler[0]!.islem, zaman: izler[0]!.zaman.toISOString(), satirlar: izler.map(izSonucu),
+      // Atlanan satır (sonradan değişmiş firma) yeniden denenmez; şerit yalnız bekleyen satır varken geri al sunar.
+      geriAlinabilir: izler.some((i) => i.tamam && i.geriAlindi === null && i.geriIleti === null),
+    },
+  };
+}
+
+// 3474-1 (fark 3): geri al yalnız CORE'da ve yalnız işlemden sonra değişmemiş firmada. Açılan firma silinmez, pasife alınır (MT-6);
+// bağlama çözülür, önceki kod ve Logo cari kodu geri yazılır. Her satır kendi kayıt noktasındadır; olmayan atlanır ve nedeni izde kalır.
+export async function logoCariGeriAl(db: Db, kullanici: Kullanici, islem: string): Promise<LogoCariGeriAlCevabi> {
+  const izler = await sorgular.logoGecisIzleri(db, kullanici.id, islem, true);
+  if (izler.length === 0) throw bulunamadi('Toplu işlem bulunamadı.');
+  let geriAlinan = 0;
+  const atlanan: LogoCariGeriAlCevabi['atlanan'] = [];
+  const atla = async (i: sorgular.LogoGecisIziSatiri, neden: string) => {
+    atlanan.push({ logoKodu: i.logoKodu, neden });
+    await sorgular.logoGecisIziGeriAlindi(db, i.id, neden);
+  };
+  for (const i of izler) {
+    if (!i.tamam || i.geriAlindi !== null) continue;
+    const f = i.firma;
+    if (f === null || f.surum !== i.firmaSurumu) { await atla(i, 'Firma işlemden sonra değişti.'); continue; }
+    const r = await kayitNoktasi(db, async () => {
+      if (i.tur === 'bagla') {
+        const eskiKod = i.onceki!.kod;
+        const kullanan = eskiKod === null ? null : await sorgular.koduKullananFirma(db, eskiKod, f.id);
+        if (kullanan) throw gecersiz(`Eski kod ${eskiKod} artık ${kullanan.kod} ${kullanan.ad} firmasında; bağlama çözülmedi.`);
+        if (!(await sorgular.logoBaginiGeriAl(db, f.id, f.surum, i.onceki!, kullanici.id, i.zaman))) throw eskiSurum();
+      } else {
+        const engel = firmaPasifEngeli ? await firmaPasifEngeli(db, f.id, kullanici) : null;
+        if (engel) throw gecersiz(engel);
+        if (f.aktif && !(await sorgular.firmaAktiflikYaz(db, f.id, f.surum, false, kullanici.id))) throw eskiSurum();
+      }
+      await firmaDegistiBildir(db, { firmaId: f.id, kaldirilanAdresId: null, kisiId: kullanici.id });
+    });
+    if (r.tamam) { geriAlinan += 1; await sorgular.logoGecisIziGeriAlindi(db, i.id, null); }
+    else await atla(i, r.hata.message);
+  }
+  return { geriAlinan, atlanan };
 }
 function topluSonucu(logoKodu: string, islem: LogoCariTopluSonucu['islem'], r: KayitNoktasiSonucu<Firma>): LogoCariTopluSonucu {
   return r.tamam

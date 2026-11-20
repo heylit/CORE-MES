@@ -2,7 +2,8 @@ import { uc } from '#cekirdek/uc.ts';
 import {
   adresEkleGovdesi, adresGuncelleGovdesi, adresKaldirGovdesi, adresParametresi, firmaAyrintiCevabi, firmaCevabi, firmaEkleGovdesi,
   firmaGuncelleGovdesi, firmaListeSorgusu, firmaListesiCevabi, firmaSecimCevabi, firmaSecimSorgusu, hizmetPuaniGovdesi, karneCevabi, degerlendirmeCevabi, karneAgirlikCevabi, karneAgirlikGovdesi,
-  kimlikParametresi, logoCariAramaCevabi, logoCariAramaSorgusu, logoCariCevabi, logoCariSorgusu, logoCariTopluCevabi, logoCariTopluGovdesi, logodanFirmaAlGovdesi, logoyaBaglaGovdesi, firmaLogoCrmSecGovdesi,
+  kimlikParametresi, logoCariAramaCevabi, logoCariAramaSorgusu, logoCariCevabi, logoCariSorgusu, logoCariTopluCevabi, logoCariTopluGovdesi, logoCariGeriAlCevabi, logoCariGeriAlGovdesi, logoCariKartlariCevabi, logoCariKartlariSorgusu,
+  logoCariListeCevabi, logoCariListeSorgusu, logoCariSonIslemCevabi, logodanFirmaAlGovdesi, logoyaBaglaGovdesi, firmaLogoCrmSecGovdesi,
   yillikKarneGovdesi,
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import * as servis from './servis.ts';
@@ -191,6 +192,40 @@ export const uclar = [
     govde: firmaLogoCrmSecGovdesi,
     cevap: firmaCevabi,
     isle: async ({ db, kullanici, parametre, govde }) => ({ firma: await servis.firmaLogoCrmSec(db, kullanici, parametre.id, govde) }),
+  }),
+  // 3474-1: Logo geçişi tam listesi (aynadan, Logo'ya istek yok), ön kontrol okuması (Logo'dan, transaction dışında), son işlem ve geri al.
+  uc({
+    yontem: 'GET',
+    yol: '/musteri-tedarikci/logo-cari/liste',
+    yetki: 'musteri-tedarikci.yaz',
+    sorgu: logoCariListeSorgusu,
+    cevap: logoCariListeCevabi,
+    isle: ({ db, sorgu }) => servis.logoCariListesi(db, sorgu),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/musteri-tedarikci/logo-cari/kartlar',
+    yetki: 'musteri-tedarikci.yaz',
+    txDisi: true,
+    sorgu: logoCariKartlariSorgusu,
+    cevap: logoCariKartlariCevabi,
+    isle: ({ db, kullanici, sorgu }) => servis.logoCariKartlariOku(db, kullanici, sorgu.kodlar),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/musteri-tedarikci/logo-cari/son-islem',
+    yetki: 'musteri-tedarikci.yaz',
+    cevap: logoCariSonIslemCevabi,
+    isle: ({ db, kullanici }) => servis.logoCariSonIslem(db, kullanici),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/musteri-tedarikci/logo-cari/geri-al',
+    yetki: 'musteri-tedarikci.yaz',
+    tekrarKorumali: true,
+    govde: logoCariGeriAlGovdesi,
+    cevap: logoCariGeriAlCevabi,
+    isle: ({ db, kullanici, govde }) => servis.logoCariGeriAl(db, kullanici, govde.islem),
   }),
   uc({
     yontem: 'POST',

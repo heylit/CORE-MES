@@ -1160,6 +1160,14 @@ export interface LogoAynaOzeti {
   // 3079 a: kullanım izi en az bir tam turda okunduysa "Kullanılanlar" süzgeci kurulur; okunmadıysa liste "Stoğu olanlar"la kalır.
   kullanim: { acik: boolean; sonTamam: string | null };
 }
+// 3474-1: Logo geçişi cariler sekmesi. Ayna saatlik cari listesi okumasıdır (listeOkumaTuru); okuma kapalıysa ayna eskir, sekme bunu söyler.
+export interface LogoCariAynasi { acik: boolean; sonOkuma: string | null; cariler: { kod: string; ad: string | null }[] }
+export async function logodakiCariAynasi(db: Db): Promise<LogoCariAynasi> {
+  const acik = (await sistemAyariOku(db, 'logo.baglanti')) === true && (await sistemAyariOku(db, 'logo.liste-okumasi')) === true;
+  const okuma = await s.listeOkumasi(db, 'cari');
+  return { acik, sonOkuma: okuma?.sonOkumaAn.toISOString() ?? null, cariler: await s.cariAynasi(db) };
+}
+
 export async function logodakiMalzemeOzeti(db: Db, o: { ara?: string }): Promise<LogoAynaOzeti> {
   const acik = (await sistemAyariOku(db, 'logo.baglanti')) === true && (await sistemAyariOku(db, 'logo.malzeme-okumasi')) === true;
   const i = await s.okumaImleci(db, 'malzeme-karti');

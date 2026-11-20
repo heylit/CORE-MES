@@ -145,3 +145,6 @@
 }
 .tc-cz-dz-oge[aria-current='true'] { border-color: var(--hazard); }
 .tc-cz-dz-oge span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.tc-cz-rp-kab { min-width: 0; }
+.tc-cz-rp-kab .tc-kart-ust { flex-wrap: wrap; }
+.tc-cz-foto-uyari { display: grid; gap: var(--b-2); justify-items: start; }

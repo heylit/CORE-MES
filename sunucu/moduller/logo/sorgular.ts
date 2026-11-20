@@ -259,6 +259,11 @@ export async function malKabulYaz(db: Db, satirlar: readonly MalKabulSatiri[], z
   );
 }
 
+// 3474-1: Logo geçişi cariler sekmesi bütün aynayı okur (aktif cariler, kod ve ad); sıralama kodla.
+export function cariAynasi(db: Db): Promise<{ kod: string; ad: string | null }[]> {
+  return db.sorgu<{ kod: string; ad: string | null }>('SELECT kod, ad FROM logo_cari ORDER BY kod');
+}
+
 export function listeOkumasi(db: Db, liste: 'cari' | 'ambar' | 'malzeme'): Promise<{ sonOkumaAn: Date } | null> {
   return db.tek<{ sonOkumaAn: Date }>('SELECT son_okuma AS "sonOkumaAn" FROM logo_liste_okuma WHERE liste = $1', [liste]);
 }

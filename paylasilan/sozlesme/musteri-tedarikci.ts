@@ -2,9 +2,9 @@ import { z } from 'zod';
 import { listeCevapSemasi, listeSorguAlanlari } from '../liste.ts';
 import { beklenenSurum, surumSemasi } from '../surum.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
-import { LOGO_CARI_ARAMA_EN_AZ, LOGO_CARI_SONUC_SINIRI, LOGO_CARI_TOPLU_SINIRI } from './logo-gecisi-sabitleri.ts';
+import { LOGO_CARI_ARAMA_EN_AZ, LOGO_CARI_OKUMA_PARTISI, LOGO_CARI_SAYFA_BOYU, LOGO_CARI_SONUC_SINIRI, LOGO_CARI_TOPLU_SINIRI } from './logo-gecisi-sabitleri.ts';
 
-export { LOGO_CARI_ARAMA_EN_AZ, LOGO_CARI_SONUC_SINIRI, LOGO_CARI_TOPLU_SINIRI };
+export { LOGO_CARI_ARAMA_EN_AZ, LOGO_CARI_OKUMA_PARTISI, LOGO_CARI_SAYFA_BOYU, LOGO_CARI_SONUC_SINIRI, LOGO_CARI_TOPLU_SINIRI };
 
 export const FIRMA_TURLERI = ['musteri', 'tedarikci', 'ikisi'] as const;
 export const LOGO_GONDERIM_DURUMLARI = ['bekliyor', 'gonderildi', 'hata'] as const;
@@ -467,5 +467,94 @@ export const logoCariTopluSonucu = z.object({
   ileti: z.string().nullable(),
 });
 export type LogoCariTopluSonucu = z.output<typeof logoCariTopluSonucu>;
-export const logoCariTopluCevabi = z.object({ sonuclar: z.array(logoCariTopluSonucu).max(LOGO_CARI_TOPLU_SINIRI) });
+// 3474-1: işlem izinin kimliği; "Son toplu işlem" şeridi ve geri al bununla çalışır.
+export const logoCariTopluCevabi = z.object({ islem: z.uuid(), sonuclar: z.array(logoCariTopluSonucu).max(LOGO_CARI_TOPLU_SINIRI) });
 export type LogoCariTopluCevabi = z.output<typeof logoCariTopluCevabi>;
+
+// 3474-1: Logo geçişi cariler sekmesi tam listeden çalışır. Liste Logo cari aynasından (saatlik okuma: kod ve ad) gelir ve CORE firmalarıyla
+// kod ve Logo cari koduyla eşlenir; vergi numarası aynada yoktur, ön kontrolde her cari Logo'dan okunurken denetlenir.
+export const LOGO_CARI_LISTE_DURUMLARI = ['yeni', 'baglanabilir', 'bagli', 'eslesik', 'alinamaz'] as const;
+export type LogoCariListeDurumu = (typeof LOGO_CARI_LISTE_DURUMLARI)[number];
+export const logoCariListeSorgusu = z.object({
+  suzgec: z.enum([...LOGO_CARI_LISTE_DURUMLARI, 'tumu']).prefault('tumu'),
+  ara: z.string().trim().min(2, 'En az 2 karakter yazın.').max(100).optional(),
+  sayfa: z.coerce.number<number>().int().min(0).max(100_000).prefault(0),
+});
+export type LogoCariListeSorgusu = z.input<typeof logoCariListeSorgusu>;
+export const logoCariListeAdayi = z.object({
+  firmaId: z.number().int().positive(),
+  kod: z.string().nullable(),
+  ad: z.string(),
+  aktif: z.boolean(),
+  neden: z.enum(['cari-kodu', 'kod']),
+  // Firma başka bir Logo kaydına bağlı mı (bağlıysa bu cariye bağlanmaz).
+  logoyaBagli: z.boolean(),
+  baglanabilir: z.boolean(),
+  surum: surumSemasi,
+});
+export type LogoCariListeAdayi = z.output<typeof logoCariListeAdayi>;
+export const logoCariListeSatiri = z.object({
+  kod: z.string(),
+  ad: z.string().nullable(),
+  durum: z.enum(LOGO_CARI_LISTE_DURUMLARI),
+  // Kodu CORE'a sığmayan carinin nedeni; ötekilerde null.
+  alinamaz: z.string().nullable(),
+  adaylar: z.array(logoCariListeAdayi).max(10),
+});
+export type LogoCariListeSatiri = z.output<typeof logoCariListeSatiri>;
+const logoCariListeSayilari = z.object({
+  tumu: z.number().int(), yeni: z.number().int(), baglanabilir: z.number().int(), bagli: z.number().int(), eslesik: z.number().int(), alinamaz: z.number().int(),
+});
+export const logoCariListeCevabi = z.object({
+  // Logo modülü kurulu değilse false; liste boştur.
+  baglanti: z.boolean(),
+  okuma: z.object({ acik: z.boolean(), sonOkuma: zamanSemasi.nullable() }),
+  sayilar: logoCariListeSayilari,
+  suzgec: z.enum([...LOGO_CARI_LISTE_DURUMLARI, 'tumu']),
+  uyan: z.number().int(),
+  sayfa: z.number().int(),
+  sonrakiSayfa: z.number().int().nullable(),
+  satirlar: z.array(logoCariListeSatiri).max(LOGO_CARI_SAYFA_BOYU),
+  // "Süzgeçtekilerin tümünü seç": süzgece uyan, işlenebilir (yeni ya da bağlanabilir) ilk carilerin kodu ve önerilen işlemi.
+  secilebilir: z.array(z.object({ kod: z.string(), islem: z.enum(LOGO_CARI_TOPLU_ISLEMLERI), firmaId: z.number().int().positive().nullable(), surum: surumSemasi.nullable() }))
+    .max(LOGO_CARI_TOPLU_SINIRI),
+});
+export type LogoCariListeCevabi = z.output<typeof logoCariListeCevabi>;
+
+// Ön kontrol: seçilen cariler partiler hâlinde Logo'dan okunur (uç transaction dışında); okunan kart aynı kişinin belleğine yazılır,
+// toplu komut köprüye gitmeden onu kullanır. Kodlar virgülle; Logo cari kodunda virgül yok sayılır (VARSAYIM).
+export const logoCariKartlariSorgusu = z.object({
+  kodlar: z.string().trim().min(1, 'Cari seçin.').max(LOGO_CARI_OKUMA_PARTISI * 41)
+    .transform((d) => [...new Set(d.split(',').map((k) => k.trim()).filter((k) => k !== ''))])
+    .pipe(z.array(logoKodu).min(1, 'Cari seçin.').max(LOGO_CARI_OKUMA_PARTISI, `Tek istekte en çok ${LOGO_CARI_OKUMA_PARTISI} cari okunur.`)),
+});
+export type LogoCariKartlariSorgusu = z.input<typeof logoCariKartlariSorgusu>;
+export const logoCariKartlariCevabi = z.object({
+  ...logoCariDurumu,
+  cariler: z.array(logoCariSatiri).max(LOGO_CARI_OKUMA_PARTISI),
+  // Logo'da bulunamayan ya da okunamayan cari; ön kontrolde atlanır.
+  okunamayan: z.array(z.object({ kod: z.string(), ileti: z.string() })).max(LOGO_CARI_OKUMA_PARTISI),
+});
+export type LogoCariKartlariCevabi = z.output<typeof logoCariKartlariCevabi>;
+
+// Kişinin son toplu işlemi ("Son toplu işlem" şeridi). Geri al yalnız CORE'da: açılan firma pasife alınır (MT-6), bağlama çözülür.
+export const logoCariIslemSatiri = logoCariTopluSonucu.extend({
+  geriAlindi: z.boolean(),
+  geriIleti: z.string().nullable(),
+});
+export const logoCariSonIslemCevabi = z.object({
+  islem: z.object({
+    islem: z.uuid(),
+    zaman: zamanSemasi,
+    satirlar: z.array(logoCariIslemSatiri).max(LOGO_CARI_TOPLU_SINIRI),
+    geriAlinabilir: z.boolean(),
+  }).nullable(),
+});
+export type LogoCariSonIslemCevabi = z.output<typeof logoCariSonIslemCevabi>;
+export const logoCariGeriAlGovdesi = z.object({ islem: z.uuid() }).strict();
+export type LogoCariGeriAlGovdesi = z.input<typeof logoCariGeriAlGovdesi>;
+export const logoCariGeriAlCevabi = z.object({
+  geriAlinan: z.number().int(),
+  atlanan: z.array(z.object({ logoKodu: z.string(), neden: z.string() })).max(LOGO_CARI_TOPLU_SINIRI),
+});
+export type LogoCariGeriAlCevabi = z.output<typeof logoCariGeriAlCevabi>;

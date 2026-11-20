@@ -18,6 +18,8 @@ export interface BekleyenCizim {
   belgeId: number | null;
   // Başka grubun alanına bırakılıp kendi grubuna geçen dosya; bir sonraki eklemeye kadar vurgulanır (3305).
   tasindi: boolean;
+  // 3479: dosyada elle düzenlenen teknik resim no ve revizyon; null iken kartın o anki alanları gider.
+  elle: { resimNo: string; rev: string } | null;
 }
 
 // Kullanıcının istediği iki biçim: teknik resim PDF, 3B model STEP. Öteki biçimler kayıttan sonra kartın dosya panelinden eklenir.
@@ -50,6 +52,13 @@ export function cizimHedefi(d: Taslak): { resimNo: string | null; rev: string | 
   return { resimNo: metin(d.g.resim), rev: metin(d.g.rev) };
 }
 
+// Tek dosyanın gideceği no ve revizyon: elle düzenlendiyse o, yoksa kartınki.
+export function dosyaHedefi(d: Taslak, c: Pick<BekleyenCizim, 'elle'>): { resimNo: string | null; rev: string | null } {
+  return c.elle ? { resimNo: metin(c.elle.resimNo), rev: metin(c.elle.rev) } : cizimHedefi(d);
+}
+
+export const hedefMetni = (h: { resimNo: string | null; rev: string | null }): string => `${h.resimNo ?? 'resim no yok'} · Rev ${h.rev ?? '—'}`;
+
 // Aynı ad ve boyutta dosya iki kez eklenmez; desteklenmeyen biçim adıyla döner. Tür her zaman uzantıdan gelir: başka grubun
 // alanına bırakılan dosya kendi grubuna geçer ve `tasinan`da adıyla döner.
 export function cizimEkle(
@@ -65,7 +74,7 @@ export function cizimEkle(
     if (yeni.some((c) => c.anahtar === anahtar)) continue;
     const tasindi = hedef !== undefined && hedef !== tur;
     if (tasindi) tasinan.push(dosya.name);
-    yeni.push({ anahtar, dosya, tur, durum: 'bekler', oran: 0, hata: null, belgeId: null, tasindi });
+    yeni.push({ anahtar, dosya, tur, durum: 'bekler', oran: 0, hata: null, belgeId: null, tasindi, elle: null });
   }
   return { liste: yeni, reddedilen, tasinan };
 }

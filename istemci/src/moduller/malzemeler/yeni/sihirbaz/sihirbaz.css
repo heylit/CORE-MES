@@ -295,6 +295,9 @@
 .tc-my-cz-kare progress { inline-size: 100%; }
 .tc-my-cz-hedef { color: var(--muted); overflow-wrap: anywhere; }
 .tc-my-cz-hata { color: var(--stop); }
+.tc-my-cz-duzenle { display: grid; gap: var(--b-1); min-width: 0; }
+.tc-my-cz-duzenle-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-1); }
+.tc-my-cz-kare .tc-my-cz-duzenle-dugmeler .tc-dugme { inline-size: auto; flex: 1 1 0; }
 .tc-my-cz-ac { display: inline-flex; gap: var(--b-1); align-items: center; min-block-size: var(--dokunma); color: var(--ink); }
 .tc-my-cz-resim { inline-size: 100%; block-size: var(--b-6); display: block; fill: none; stroke: var(--muted); stroke-width: 1.2; }
 .tc-my-cz-resim .tc-my-cz-olcu { stroke: var(--done); }
@@ -306,6 +309,7 @@
 .tc-my-cz-not { margin: 0; color: var(--muted); font-size: var(--yazi-xs); }
 .tc-my-duzen.tc-my-genis .tc-my-cz-serit { display: grid; }
 @container (width < 780px) { .tc-my-cz-serit { display: grid; } }
+@container (width < 480px) { .tc-my-cz-kareler { grid-template-columns: minmax(0, 1fr); } }
 
 /* 3B modelden öneri (Form ve ölçüler adımının başı). */
 .tc-my-mo { display: grid; gap: var(--b-3); padding: var(--b-3) var(--b-4); border: thin solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); min-width: 0; }

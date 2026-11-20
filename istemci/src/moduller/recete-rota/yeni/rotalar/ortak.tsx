@@ -2,9 +2,9 @@ import { useEffect, useState, type ReactNode } from 'react';
 import type { SekmeAnahtari } from '../sekmeler.ts';
 import type { RrYetkisi } from '../yetki.ts';
 import { sayi } from '../bicim.ts';
-import { Simge } from '../../../../ortak/arayuz/index.ts';
+import { AramaliSecim, Simge, type AramaliSecenek } from '../../../../ortak/arayuz/index.ts';
 import { sayiGirisi, type Adim, type Bagimlilik } from './kurallar.ts';
-import type { RotaDuzeni } from './useRotaDuzeni.ts';
+import type { Haritalar, RotaDuzeni } from './useRotaDuzeni.ts';
 
 // Seçim düzenleme panelinin konusudur. Giren ve yan ürünün kimliği yoktur: adımdaki sırasıyla bulunur.
 export type Secim =
@@ -130,6 +130,27 @@ export function SecimAlani({ etiket, deger, secenekler, yaz, kapali, bos }: {
         {secenekler.map((s) => <option key={s.deger} value={s.deger}>{s.baslik}</option>)}
       </select>
     </label>
+  );
+}
+
+// Pasif operasyon yalnız adımda seçiliyse listede kalır. Kod ve istasyon da aranır (palet araması gibi).
+export function operasyonSecenekleri(h: Haritalar, seciliId: string): AramaliSecenek[] {
+  return [...h.op.values()].filter((o) => o.aktif || o.id === seciliId).map((o) => {
+    const ist = o.stationId ? h.istasyon.get(o.stationId) : undefined;
+    const alt = [o.abbr ? o.code : null, ist ? `${ist.code} ${ist.name}` : null].filter((x) => x !== null).join(' · ');
+    return { deger: o.id, baslik: `${o.abbr ?? o.code} ${o.name}`, ...(alt ? { alt } : {}) };
+  });
+}
+
+// Seçenek çoksa (operasyon) yazarak aranır; düz listede kaydırarak aranıyordu.
+export function AramaliSecimAlani({ etiket, deger, secenekler, yaz, kapali, bos }: {
+  etiket: string; deger: string; secenekler: readonly AramaliSecenek[]; yaz: (v: string) => void; kapali?: boolean; bos?: string;
+}) {
+  return (
+    <div className="tc-rr1-alan">
+      <span>{etiket}</span>
+      <AramaliSecim etiket={etiket} deger={deger} secenekler={secenekler} sec={yaz} disabled={kapali} bos={bos} />
+    </div>
   );
 }
 

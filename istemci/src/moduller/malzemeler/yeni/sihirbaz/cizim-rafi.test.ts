@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
-import { CIZIM_GRUPLARI, cizimEkle, cizimTuru, ortadanKisalt, tasimaIletisi } from './cizim-rafi.ts';
+import { CIZIM_GRUPLARI, cizimEkle, cizimTuru, dosyaHedefi, hedefMetni, ortadanKisalt, tasimaIletisi } from './cizim-rafi.ts';
+import type { Taslak } from './durum.ts';
 
 describe('3242 d çizim rafı kuralları', () => {
   test('PDF teknik resim, STEP ve STP 3B model; öteki biçim alınmaz', () => {
@@ -39,5 +40,14 @@ describe('3242 d çizim rafı kuralları', () => {
     const cok = cizimEkle([], [new File(['a'], 'A.step'), new File(['b'], 'B.stp')], 'teknik-resim');
     expect(tasimaIletisi(cok.tasinan, cok.liste)).toBe('2 dosya kendi grubuna alındı.');
     expect(tasimaIletisi(['A.step'], cok.liste)).toBe('A.step 3B model olarak alındı.');
+  });
+
+  test('3479: dosyanın hedefi elle düzenlenmediyse kartınki, düzenlendiyse onunki; boş alan yok sayılır', () => {
+    const d = { g: { resim: ' ORN-2045-01 ', rev: 'B' } } as unknown as Taslak;
+    const [c] = cizimEkle([], [new File(['x'], 'ORN-1.pdf')]).liste;
+    expect(c!.elle).toBeNull();
+    expect(dosyaHedefi(d, c!)).toEqual({ resimNo: 'ORN-2045-01', rev: 'B' });
+    expect(dosyaHedefi(d, { elle: { resimNo: 'ORN-9', rev: ' ' } })).toEqual({ resimNo: 'ORN-9', rev: null });
+    expect(hedefMetni({ resimNo: null, rev: null })).toBe('resim no yok · Rev —');
   });
 });

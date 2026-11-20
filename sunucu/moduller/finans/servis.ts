@@ -56,6 +56,11 @@ export function firmaDurumuDegistir(db: Db, kullanici: Kullanici, id: number, su
     pasifeAlmaEngeli(await sorgular.firmaAcikKayitlari(db, firmaId), kullanici.islemler.includes('finans.oku')));
 }
 
+// 3474-1: Logo geçişinde geri alınan firma pasife alınırken aynı engel (FNS-60) sorulur; akışı musteri-tedarikci başlatır, engel finansındır.
+export async function firmaPasifEngeli(db: Db, firmaId: number, kullanici: Kullanici): Promise<string | null> {
+  return pasifeAlmaEngeli(await sorgular.firmaAcikKayitlari(db, firmaId), kullanici.islemler.includes('finans.oku'));
+}
+
 // OS5: kur finanstadır. Kur yoksa null döner; çağıran kendi kaydına kur ister, finansın kur tablosuna yazmaz (SA3 a).
 export interface GecerliKur { kur: string; tarih: string }
 const TL_KURU = (tarih: string): GecerliKur => ({ kur: '1', tarih });
