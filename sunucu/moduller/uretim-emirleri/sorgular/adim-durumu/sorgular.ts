@@ -119,7 +119,8 @@ export function elleMaddeler(db: Db, isEmriIdleri: readonly number[]): Promise<E
 export function elleMaddeBul(db: Db, id: number): Promise<{ isEmriId: number; sonOlay: string | null } | null> {
   return db.tek(
     `SELECT a.is_emri_id AS "isEmriId", (SELECT olay FROM emir_adimi_olayi WHERE adim_id = a.id ORDER BY id DESC LIMIT 1) AS "sonOlay"
-       FROM emir_adimi a WHERE a.id = $1 AND a.ekleyen_id IS NOT NULL AND a.kontrol IS NULL AND a.asama IN ('on_hazirlik', 'hazirlik')`,
+       FROM emir_adimi a WHERE a.id = $1 AND a.ekleyen_id IS NOT NULL AND a.kontrol IS NULL AND a.asama IN ('on_hazirlik', 'hazirlik')
+        AND ${KALDIRILMAMIS('a')}`,
     [id],
   );
 }

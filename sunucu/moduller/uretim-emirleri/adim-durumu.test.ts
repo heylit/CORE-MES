@@ -565,13 +565,16 @@ describe('uretim-emirleri adım durumu (2893, gerçek PostgreSQL)', () => {
     const kaldir = (adimId: number, kisi = 'planlama_proje') => istek<AdimDurumuCevabi & Hata>(kisi, 'POST', yol('liste-kaldir'), { adimId });
     assert.equal((await kaldir(olcumId)).durum, 409, 'talimattan gelen madde kaldırılmaz');
     assert.equal((await kaldir(secimId, 'hazirlik_yalniz')).durum, 403, 'adım durumu yazmayan');
+    const isaretli = await kaldir(secimId);
+    assert.deepEqual([isaretli.durum, isaretli.govde.mesaj], [409, 'İşaretli madde kaldırılmaz; önce işareti geri alın.'], 'işaretli madde kaldırılmaz');
+    assert.equal((await isaretle({ adimId: secimId, tamam: false })).durum, 200);
     const kaldirildi = await kaldir(secimId);
     assert.equal(kaldirildi.durum, 200, JSON.stringify(kaldirildi.govde));
     assert.equal(kaldirildi.govde.adimlar[0]?.liste.some((x) => x.adimId === secimId), false, 'kaldırılan listede yok');
     assert.equal((await kaldir(secimId)).durum, 404, 'ikinci kez kaldırılmaz');
     assert.equal((await isaretle({ adimId: secimId, tamam: false })).durum, 404, 'kaldırılan işaretlenmez');
     const olaylar = await o().sahip.sorgu<{ olay: string }>('SELECT olay FROM emir_adimi_olayi WHERE adim_id = $1 ORDER BY id', [secimId]);
-    assert.deepEqual(olaylar.map((x) => x.olay), ['tamamla', 'kaldir'], 'iz kalır');
+    assert.deepEqual(olaylar.map((x) => x.olay), ['tamamla', 'geri-al', 'kaldir'], 'iz kalır');
 
     await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'iptal', iptal = now() WHERE id = $1", [id]);
     assert.equal((await kaldir(fotoId)).durum, 409, 'kapanmış emre yazılmaz');

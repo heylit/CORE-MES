@@ -545,8 +545,12 @@ type ListeMaddesi = Adim['liste'][number];
 const ASAMA_ADI: Readonly<Record<ListeMaddesi['asama'], string>> = { on_hazirlik: 'Ön hazırlık', hazirlik: 'Hazırlık' };
 const KAYNAK_ADI: Readonly<Record<NonNullable<ListeMaddesi['kaynak']>, string>> = { terminal: 'terminalden', 'adim-durumu': "Adım Durumu'ndan" };
 const isaretKaydi = (m: ListeMaddesi, kanitla = true): string => {
-  const isaret = m.tamam && m.zaman !== null ? `${m.kisiAdi ?? 'Kişi'} · ${zamanMetni(m.zaman)}${m.kaynak === null ? '' : ` · ${KAYNAK_ADI[m.kaynak]}`}` : '—';
-  return `${isaret}${!kanitla || m.kanit === null ? '' : ` · ${m.kanit}`}${m.eklenme === null ? '' : ` · ekleyen ${m.ekleyenAdi ?? 'Kişi'}`}`;
+  const parcalar = [
+    ...(m.tamam && m.zaman !== null ? [`${m.kisiAdi ?? 'Kişi'} · ${zamanMetni(m.zaman)}${m.kaynak === null ? '' : ` · ${KAYNAK_ADI[m.kaynak]}`}`] : []),
+    ...(!kanitla || m.kanit === null ? [] : [m.kanit]),
+    ...(m.eklenme === null ? [] : [`Ekleyen: ${m.ekleyenAdi ?? 'Kişi'}`]),
+  ];
+  return parcalar.length === 0 ? '—' : parcalar.join(' · ');
 };
 
 // Tik ve geri alması (3249-2 a). Kanıt verilirse madde o kanıtla işaretlenir (işaretliyse değer değişir); geri alma önceki hâle döner.
@@ -568,16 +572,48 @@ const listeKomutu = (a: Adim, m: ListeMaddesi, kanit?: ListeKanitiGirdisi): Komu
 // düşer; iz olay defterinde kalır), bu yüzden düğme önce sorar. Talimattan gelen madde talimattan, işaretli madde önce geri alınarak değişir.
 const kaldirilir = (m: ListeMaddesi): boolean => m.eklenme !== null && !m.tamam;
 const kaldirKomutu = (a: Adim, m: ListeMaddesi): Komut => ({ yol: 'liste-kaldir', isEmriId: a.isEmriId, govde: { adimId: m.adimId }, mesaj: `Kaldırıldı: ${m.ad}` });
+// Odak (Arayüz 3494-3): soru açılınca Vazgeç'e, Vazgeç ya da Escape sonrası Kaldır'a döner; kaldırınca satırdan sonraki ilk
+// denetime (sonraki madde ya da Madde düğmesi) geçer, kaybolmaz.
 function KaldirDugmesi({ m, mesgul, kaldir }: { m: ListeMaddesi; mesgul: boolean; kaldir: () => void }) {
   const [soruyor, soruyorYaz] = useState(false);
-  if (!soruyor) {
-    return <span className="tc-ad-kaldir"><Dugme simge="trash" disabled={mesgul} onClick={() => soruyorYaz(true)} aria-label={`Kaldır: ${m.ad}`}>Kaldır</Dugme></span>;
-  }
+  const kap = useRef<HTMLSpanElement>(null);
+  const donus = useRef(false);
+  useEffect(() => {
+    if (soruyor) kap.current?.querySelector<HTMLButtonElement>('[data-vazgec]')?.focus();
+    else if (donus.current) { donus.current = false; kap.current?.querySelector<HTMLButtonElement>('button')?.focus(); }
+  }, [soruyor]);
+  const vazgec = () => { donus.current = true; soruyorYaz(false); };
+  // Escape yerel dinleyicide yakalanır: yan pencerenin Escape'i (katman) kutuya ulaşmadan durur, pencere kapanmaz.
+  useEffect(() => {
+    const el = kap.current;
+    if (!soruyor || el === null) return undefined;
+    const tus = (o: KeyboardEvent) => { if (o.key === 'Escape') { o.preventDefault(); o.stopPropagation(); donus.current = true; soruyorYaz(false); } };
+    el.addEventListener('keydown', tus);
+    return () => el.removeEventListener('keydown', tus);
+  }, [soruyor]);
+  const onayla = () => {
+    const satir = kap.current?.closest('tr, li');
+    let sonraki = satir?.nextElementSibling ?? null;
+    let hedef: HTMLElement | null = null;
+    while (sonraki !== null && hedef === null) {
+      hedef = sonraki.querySelector<HTMLElement>('input:not(:disabled), button:not(:disabled)');
+      sonraki = sonraki.nextElementSibling;
+    }
+    soruyorYaz(false);
+    kaldir();
+    hedef?.focus();
+  };
   return (
-    <span className="tc-ad-kaldir" role="group" aria-label={`${m.ad} kaldırılsın mı?`}>
-      <span>Kaldırılsın mı? Geri alınmaz.</span>
-      <Dugme tur="tehlike" simge="trash" disabled={mesgul} onClick={() => { soruyorYaz(false); kaldir(); }}>Kaldır</Dugme>
-      <Dugme onClick={() => soruyorYaz(false)}>Vazgeç</Dugme>
+    <span ref={kap} className="tc-ad-kaldir" role={soruyor ? 'group' : undefined} aria-label={soruyor ? `${m.ad} kaldırılsın mı?` : undefined}>
+      {soruyor ? (
+        <>
+          <span>Madde listeden, terminalden ve matristen kalkar. Geri alınmaz.</span>
+          <span className="tc-ad-kaldir-dugmeler">
+            <Dugme tur="tehlike" simge="trash" disabled={mesgul} onClick={onayla}>Kaldır</Dugme>
+            <Dugme data-vazgec="" onClick={vazgec}>Vazgeç</Dugme>
+          </span>
+        </>
+      ) : <Dugme simge="trash" disabled={mesgul} onClick={() => soruyorYaz(true)} aria-label={`Kaldır: ${m.ad}`}>Kaldır</Dugme>}
     </span>
   );
 }

@@ -513,11 +513,18 @@ describe('Adım Durumu (2893, düzen 2955)', () => {
       expect(within(tablo).getAllByRole('button', { name: /^Kaldır: / }).map((d) => d.getAttribute('aria-label'))).toEqual(['Kaldır: Özel pabuç alındı']);
       fireEvent.click(within(tablo).getByRole('button', { name: 'Kaldır: Özel pabuç alındı' }));
       let soru = within(tablo).getByRole('group', { name: 'Özel pabuç alındı kaldırılsın mı?' });
+      expect(document.activeElement).toBe(within(soru).getByRole('button', { name: 'Vazgeç' }));
       fireEvent.click(within(soru).getByRole('button', { name: 'Vazgeç' }));
+      expect(document.activeElement).toBe(within(tablo).getByRole('button', { name: 'Kaldır: Özel pabuç alındı' }));
+      fireEvent.click(within(tablo).getByRole('button', { name: 'Kaldır: Özel pabuç alındı' }));
+      fireEvent.keyDown(within(tablo).getByRole('group', { name: 'Özel pabuç alındı kaldırılsın mı?' }), { key: 'Escape' });
+      expect(within(tablo).queryByRole('group', { name: 'Özel pabuç alındı kaldırılsın mı?' })).toBeNull();
+      expect(document.activeElement).toBe(within(tablo).getByRole('button', { name: 'Kaldır: Özel pabuç alındı' }));
       expect(postlar(istekler)).toHaveLength(0);
       fireEvent.click(within(tablo).getByRole('button', { name: 'Kaldır: Özel pabuç alındı' }));
       soru = within(tablo).getByRole('group', { name: 'Özel pabuç alındı kaldırılsın mı?' });
       fireEvent.click(within(soru).getByRole('button', { name: 'Kaldır' }));
+      expect(document.activeElement).toBe(within(tablo).getByRole('checkbox', { name: 'OP 20 Bağlama aparatı geldi' }));
       await waitFor(() => expect(postlar(istekler)).toHaveLength(1));
       expect(postlar(istekler)[0]?.govde).toEqual({ adimId: 806 });
       expect(postlar(istekler)[0]?.kimlik).toMatch(/^[0-9a-f-]{36}$/);
