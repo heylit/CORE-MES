@@ -12,5 +12,6 @@ export function onaylayabilecekler(s: Pick<Settings, 'approvalLimits' | 'onayKad
   const adlar = [...new Set(ustler.map((l) => l.rolAdi).filter((x): x is string => !!x))];
   const kisiler = [...new Set(ustler.flatMap((l) => (l.kisiler ?? []).map((k) => k.ad)))];
   if (!adlar.length && !kisiler.length) return 'Onaylayabilir: basamağın rolünü taşıyan';
-  return `Onaylayabilir: ${[...adlar, ...kisiler].join(', ')}`;
+  // Rol ile kişi ayrı söylenir: ikisi de ad olduğu için karışmasın (Arayüz 3442-7b).
+  return `Onaylayabilir: ${[adlar.join(', '), kisiler.length ? `kişi olarak ${kisiler.join(', ')}` : ''].filter(Boolean).join('; ')}`;
 }

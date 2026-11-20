@@ -5,6 +5,9 @@ import './store.ts';
 import { ekranliBagla } from './test-ekrani.ts';
 import { onayLimitleriEkrana, onayLimitleriGovdesi } from './tasiyici.ts';
 import { onaylayabilecekler } from './onaylayan.ts';
+import { DEFAULT_SETTINGS } from './constants.ts';
+import { S, bump } from './store.ts';
+import { setBasamakYazar, viewSettings } from './memory.ts';
 
 const LIMITLER = [
   { azamiTutar: '1000', seviye: 'Uzman', rolId: 3, rolAdi: 'Deneme uzman rolü', kisiler: [] },
@@ -31,7 +34,7 @@ function sunucu(): { yol: string; govde: unknown }[] {
   }));
   return istekler;
 }
-afterEach(() => { vi.unstubAllGlobals(); document.body.innerHTML = ''; });
+afterEach(() => { vi.unstubAllGlobals(); setBasamakYazar(false); document.body.innerHTML = ''; });
 
 describe('3442-7b onay basamağına kişi', () => {
   it('kişiler sunucudan gelir ve kayıtta kimlikleriyle gider; kişisi bilinmeyen basamak kişi göndermez', () => {
@@ -46,8 +49,19 @@ describe('3442-7b onay basamağına kişi', () => {
 
   it('onay ekranında basamağın ve üst basamağın kişileri adıyla sayılır; rolsüz ama kişili basamak denetimlidir', () => {
     const L = onayLimitleriEkrana(LIMITLER);
-    expect(onaylayabilecekler({ approvalLimits: L, onayKademesi: true }, L[0]!)).toBe('Onaylayabilir: Deneme uzman rolü, Deneme Onaylayan');
-    expect(onaylayabilecekler({ approvalLimits: L, onayKademesi: true }, L[1]!)).toBe('Onaylayabilir: Deneme Onaylayan');
+    expect(onaylayabilecekler({ approvalLimits: L, onayKademesi: true }, L[0]!)).toBe('Onaylayabilir: Deneme uzman rolü; kişi olarak Deneme Onaylayan');
+    expect(onaylayabilecekler({ approvalLimits: L, onayKademesi: true }, L[1]!)).toBe('Onaylayabilir: kişi olarak Deneme Onaylayan');
+  });
+
+  it('denetim kapalıyken kişili basamak kişinin şimdilik kısıtlamadığını söyler; açıkken söylemez', () => {
+    setBasamakYazar(true);
+    for (const [kademe, beklenen] of [[false, 1], [true, 0]] as const) {
+      S.settings = { ...DEFAULT_SETTINGS, approvalLimits: onayLimitleriEkrana(LIMITLER), onayKademesi: kademe };
+      bump();
+      document.body.innerHTML = `<div id="settings-form">${viewSettings()}</div>`;
+      expect(document.querySelectorAll('[data-ap-kisi-kapali]')).toHaveLength(beklenen);
+    }
+    expect(document.body.textContent).not.toContain('onay yetkisi yeter');
   });
 
   it('yönetici ayarlarda kişi ekler ve çıkarır; kayıt kişi kimliklerini gönderir', async () => {

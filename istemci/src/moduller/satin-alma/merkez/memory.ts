@@ -212,11 +212,11 @@ function onayBasamaklariPaneli(s: Settings): string {
   const rolAdi = (l: Basamak) => l.rolAdi ?? (l.rolId ? ROLLER.find(r => r.id === l.rolId)?.ad ?? null : null);
   const kademe = s.onayKademesi === undefined ? "" : `<p class="small">${s.onayKademesi
     ? `<span class="flag good">${simge(SIMGELER.check)} Basamak denetimi açık</span> <span class="muted">Onaylayan, karar tutarının düştüğü basamağın ya da üst basamağın rolünü taşımalı ya da o basamaklardan birinde kişi olarak yazılı olmalı.</span>`
-    : `<span class="flag mute">Basamak denetimi kapalı</span> <span class="muted">Onay yetkisi olan herkes onaylar; roller kayıtlı kalır.</span>`}${basamakYazar ? ' <span class="muted">Açıp kapatmak: Sistem Ayarları, “Satın alma onay basamakları”.</span>' : ""}</p>`;
+    : `<span class="flag mute">Basamak denetimi kapalı</span> <span class="muted">Onay yetkisi olan herkes onaylar; roller ve kişiler kayıtlı kalır, denetim açılınca geçerli olur.</span>`}${basamakYazar ? ' <span class="muted">Açıp kapatmak: Sistem Ayarları, “Satın alma onay basamakları”.</span>' : ""}</p>`;
   const rolSecenekleri = (l: Basamak) => {
     const bilinen = ROLLER.some(r => r.id === l.rolId);
     const eski = !bilinen && l.rolId ? `<option value="${l.rolId}" selected>${esc(rolAdi(l) ?? `Rol #${l.rolId}`)}</option>` : "";
-    return `<option value="">Rol yok (onay yetkisi yeter)</option>${eski}${ROLLER.map(r => `<option value="${r.id}"${l.rolId === r.id ? " selected" : ""}>${esc(r.ad)}</option>`).join("")}`;
+    return `<option value="">Rol yok</option>${eski}${ROLLER.map(r => `<option value="${r.id}"${l.rolId === r.id ? " selected" : ""}>${esc(r.ad)}</option>`).join("")}`;
   };
   // 3442-7b a: basamağa yazılı kişi rolü olmasa da o basamağı ve alttakileri onaylar; seçenekler satın alma onaylama yetkisi taşıyanlar.
   const kisiHucresi = (l: Basamak, i: number) => {
@@ -226,7 +226,9 @@ function onayBasamaklariPaneli(s: Settings): string {
     const ekle = secilebilir.length
       ? `<span class="row sa-onay-kisi-ekle"><select data-apk="kisiSec" aria-label="Basamağa kişi ekle"><option value="">Kişi seç</option>${secilebilir.map(k => `<option value="${k.id}">${esc(k.ad)}</option>`).join("")}</select><button type="button" class="btn sm" data-act="ap-kisi-ekle" data-i="${i}">${simge(SIMGELER.plus)} Ekle</button></span>`
       : "";
-    return `<div class="chips">${ciplar}</div>${ekle}`;
+    // Arayüz 3442-7b 1: denetim kapalıyken yazılı kişi bir şeyi kısıtlamaz; ekran bunu söyler.
+    const kapali = yazili.length && s.onayKademesi === false ? `<p class="xs muted" data-ap-kisi-kapali>Denetim kapalı; bu kişi şimdilik kısıtlamaz.</p>` : "";
+    return `<div class="chips">${ciplar}</div>${kapali}${ekle}`;
   };
   const kisiAdlari = (l: Basamak) => (l.kisiler ?? []).map(k => esc(k.ad)).join(", ");
   const satirlar = basamakYazar
