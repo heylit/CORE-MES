@@ -655,13 +655,23 @@ namespace LogoYardimcisi
         {
             var kod = Kod(g, "code", StokKoduEnCok);
             var ad = Json.Metin(g, "name", true);
+            // Açıklama 2-3 açmadaki gibi NAME3, NAME4'e; boş gelen alan Logo'da olduğu gibi kalır (yalnız dolu alan yazılır).
+            var ad3 = Json.Metin(g, "name3", false);
+            var ad4 = Json.Metin(g, "name4", false);
+            if (Json.Metin(g, "name2", false) != null)
+                return Cevap.Ret("Açıklama 1'in Logo etiketi ölçülmedi; kart güncellenmedi. Ölçüm: logo-yardimcisi --olc malzeme <kod> (kurulum/logo-yardimcisi.md).");
             var kayit = oku.MalzemeRef(kod);
             if (kayit == 0) return Cevap.Ret("Card not found");
-            var h = yaz.Guncelle(Nesne.Malzeme, kayit, new AlanListesi().Ekle("NAME", ad), new Dictionary<int, AlanListesi>(), new List<AlanListesi>());
+            var alanlar = new AlanListesi().Ekle("NAME", ad);
+            if (ad3 != null) alanlar.Ekle("NAME3", ad3);
+            if (ad4 != null) alanlar.Ekle("NAME4", ad4);
+            var h = yaz.Guncelle(Nesne.Malzeme, kayit, alanlar, new Dictionary<int, AlanListesi>(), new List<AlanListesi>());
             if (h != null) return Cevap.Ret(h);
             var k = oku.Malzeme(kod);
             var f = new List<string>();
             Esit(f, "NAME", ad, k == null ? null : k.Ad);
+            if (ad3 != null) Esit(f, "NAME3", ad3, k == null ? null : k.Aciklama2);
+            if (ad4 != null) Esit(f, "NAME4", ad4, k == null ? null : k.Aciklama3);
             return f.Count > 0 ? DogrulamaTutmadi("Malzeme kartı adı", kayit, f) : Cevap.Basari(kayit);
         }
 

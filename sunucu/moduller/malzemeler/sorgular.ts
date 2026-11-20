@@ -26,6 +26,7 @@ export interface KatalogKartiSatiri {
   benzersizAnahtar: string | null;
   mukerrerGerekcesi: string | null;
   kayit: Record<string, unknown>;
+  aciklamalar: [string | null, string | null, string | null];
 }
 
 // `guncelleme` yazan transaction'ın başladığı andır; transaction okumadan önce başlayıp sonra biterse kartın anı okuma
@@ -62,7 +63,7 @@ export function katalogKartiKilitle(db: Db, kimlik: string): Promise<KatalogKart
   return db.tek<KatalogKartiSatiri>(
     `SELECT no, kimlik, aktif_oldu AS "aktifOlmus", logo_kayit_no AS "logoKayitNo", logo_pasif_durumu AS "logoPasifDurumu", stok_kodu AS "stokKodu", onek, onay_durumu AS "onayDurumu", surum, gonderen_kisi_id AS "gonderenKisiId",
             acan_kisi_id AS "acanKisiId", tur, hizmet_yonu AS "hizmetYonu", benzersiz_anahtar AS "benzersizAnahtar",
-            mukerrer_gerekcesi AS "mukerrerGerekcesi", kayit
+            mukerrer_gerekcesi AS "mukerrerGerekcesi", kayit, ARRAY[aciklama_1, aciklama_2, aciklama_3] AS aciklamalar
        FROM malzeme_katalog_karti WHERE kimlik = $1 FOR UPDATE`,
     [kimlik],
   );
@@ -700,13 +701,14 @@ export async function logoHataYaz(db: Db, no: number, hata: string): Promise<voi
 
 export interface LogoGuncellemeSatiri {
   no: number; stokKodu: string; ad: string | null; logoKayitNo: string; durum: 'bekliyor' | 'hata'; tur: KatalogTuru; hizmetYonu: HizmetYonu | null;
+  aciklama1: string | null; aciklama2: string | null; aciklama3: string | null;
 }
 
 // Bekleyen ve hatalı güncellemeler, en eski istek ya da son deneme önce.
 export function logoGuncellemeKuyrugu(db: Db, sinir: number): Promise<LogoGuncellemeSatiri[]> {
   return db.sorgu<LogoGuncellemeSatiri>(
     `SELECT no, stok_kodu AS "stokKodu", ${KATALOG_AD} AS ad, logo_kayit_no AS "logoKayitNo", logo_guncelleme_durumu AS durum,
-            tur, hizmet_yonu AS "hizmetYonu"
+            tur, hizmet_yonu AS "hizmetYonu", aciklama_1 AS aciklama1, aciklama_2 AS aciklama2, aciklama_3 AS aciklama3
        FROM malzeme_katalog_karti
       WHERE logo_guncelleme_durumu IN ('bekliyor', 'hata')
       ORDER BY logo_guncelleme_zamani, no
@@ -715,9 +717,12 @@ export function logoGuncellemeKuyrugu(db: Db, sinir: number): Promise<LogoGuncel
   );
 }
 
-export function logoGuncellemeKilitle(db: Db, no: number): Promise<{ durum: LogoGonderimDurumu | null; ad: string | null } | null> {
-  return db.tek<{ durum: LogoGonderimDurumu | null; ad: string | null }>(
-    `SELECT logo_guncelleme_durumu AS durum, ${KATALOG_AD} AS ad FROM malzeme_katalog_karti WHERE no = $1 FOR UPDATE`,
+export function logoGuncellemeKilitle(db: Db, no: number): Promise<{
+  durum: LogoGonderimDurumu | null; ad: string | null; aciklama1: string | null; aciklama2: string | null; aciklama3: string | null;
+} | null> {
+  return db.tek(
+    `SELECT logo_guncelleme_durumu AS durum, ${KATALOG_AD} AS ad, aciklama_1 AS aciklama1, aciklama_2 AS aciklama2, aciklama_3 AS aciklama3
+       FROM malzeme_katalog_karti WHERE no = $1 FOR UPDATE`,
     [no],
   );
 }

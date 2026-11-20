@@ -451,6 +451,8 @@ namespace LogoYardimcisi
                 var k = Kartlar.FirstOrDefault(x => x.Ref == kayit);
                 if (k == null) return new LogoHatasi(-1, "Read false");
                 if (baslik.Var("NAME")) k.Ad = (string)baslik.Deger("NAME");
+                if (baslik.Var("NAME3")) k.Aciklama2 = (string)baslik.Deger("NAME3");
+                if (baslik.Var("NAME4")) k.Aciklama3 = (string)baslik.Deger("NAME4");
                 if (baslik.Var(Islemler.KayitDurumuAlani)) k.Pasif = I(baslik.Deger(Islemler.KayitDurumuAlani)) == 1;
                 return null;
             }

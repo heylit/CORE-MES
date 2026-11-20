@@ -4,7 +4,7 @@ import {
   kartBilesenKimlikleri, kartHizmetYonu, katalogAnahtarZorunluMu, katalogGecisiDenetle, katalogIcerigiDegistiMi, katalogKodDegisebilirMi, katalogSilinirMi, katalogKodOneki,
   katalogOnayAkisiAcikMi, katalogOnayiBas, katalogOnekiTureUyarMi, katalogRolu, katalogStokKodu, katalogSurumUyarMi, katalogTalebiBas,
   katalogTalepDenetle, katalogKaydiAlanlari, katalogFirmaKoduGecerliMi, katalogGecmisiDenetle, katalogGecmisiniBas, katalogIptalYetkiliMi, katalogFarki, katalogTalepUygulamaDenetle,
-  katalogAgirlikAlanlari, katalogNetAgirlikKg, katalogGkkAyari, GKK_TURU_ILETISI, hammaddeOlcuHatasi, LOGO_HATA_EN_COK, logoAdiDegistiMi, logoKarsiligiHatasi, logoBirimSetiGecersizHatasi, logoGuncellemeSonucuDurumu, logoBirimiDegistiMi, logoDurumSirasi, logoEksikleri, logoHataMetni,
+  katalogAgirlikAlanlari, katalogNetAgirlikKg, katalogGkkAyari, GKK_TURU_ILETISI, hammaddeOlcuHatasi, LOGO_HATA_EN_COK, logoAciklamasiDegistiMi, logoAdiDegistiMi, logoKarsiligiHatasi, logoBirimSetiGecersizHatasi, logoGuncellemeSonucuDurumu, logoBirimiDegistiMi, logoDurumSirasi, logoEksikleri, logoHataMetni,
 } from './kurallar.ts';
 import { arsivdenDonusDurumu, arsivIzAdetleri, arsivKaliciSilmeEngeli } from './kurallar.ts';
 import type { KatalogGecisi } from './kurallar.ts';
@@ -326,6 +326,15 @@ test('S4 b (kart #783): güncelleme sonucu gönderilen ad güncel adla aynıysa 
   assert.equal(logoGuncellemeSonucuDurumu({ ad: 'Mil', hata: 'yok' }, 'Mil 2'), null);
   assert.deepEqual(logoGuncellemeSonucuDurumu({ ad: null, tamam: true }, null), { durum: 'gonderildi', hata: null });
   assert.equal(logoGuncellemeSonucuDurumu({ ad: 'Mil', hata: '   ' }, 'Mil 2'), 'bos-hata');
+  const guncel = { ad: 'Mil', aciklama1: 'A1', aciklama2: null, aciklama3: 'A3' };
+  assert.deepEqual(logoGuncellemeSonucuDurumu({ ad: 'Mil', aciklama1: 'A1', aciklama2: null, aciklama3: 'A3', tamam: true }, guncel), { durum: 'gonderildi', hata: null });
+  assert.equal(logoGuncellemeSonucuDurumu({ ad: 'Mil', aciklama1: 'A1', aciklama2: null, aciklama3: null, tamam: true }, guncel), null, '3491: açıklama bu arada değişti');
+  assert.deepEqual(logoGuncellemeSonucuDurumu({ ad: 'Mil', tamam: true }, guncel), { durum: 'gonderildi', hata: null }, 'açıklama gelmeyen cevapta yalnız ad');
+  assert.equal(logoAciklamasiDegistiMi([null, 'A2', null], null), false, 'açıklamalar gelmedi');
+  assert.equal(logoAciklamasiDegistiMi([null, ' A2 ', null], [null, 'A2', null]), false);
+  assert.equal(logoAciklamasiDegistiMi(['', null, null], [null, null, null]), false, 'boş metin null');
+  assert.equal(logoAciklamasiDegistiMi([null, 'A2', null], ['A1', 'A2', null]), true);
+  assert.equal(logoAciklamasiDegistiMi([null, 'A2', 'A3'], [null, 'A2', null]), true, 'boşaltma da değişimdir');
 });
 
 test('MKL-5 (kart #232): hata metni kırpılır ve sınırda kesilir; boş hata yok sayılmaz, reddedilir', () => {

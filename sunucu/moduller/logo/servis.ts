@@ -108,8 +108,9 @@ export interface MalzemePasifKaynagi {
 }
 export interface MalzemeGuncellemeKaynagi {
   gidecekler(db: Db, sinir: number): Promise<LogoyaGuncellemeGidecekMalzeme[]>;
-  // Gönderilen ad da gelir: kart bu arada yeniden değiştiyse sahibi kuyrukta tutar (malzemeler #783).
-  sonuc(db: Db, no: number, sonuc: { ad: string | null } & ({ tamam: true } | { hata: string })): Promise<void>;
+  // Gönderilen ad ve açıklamalar da gelir: kart bu arada yeniden değiştiyse sahibi kuyrukta tutar (malzemeler #783, 3491).
+  sonuc(db: Db, no: number, sonuc: { ad: string | null; aciklama1?: string | null | undefined; aciklama2?: string | null | undefined; aciklama3?: string | null | undefined }
+    & ({ tamam: true } | { hata: string })): Promise<void>;
 }
 
 // Kartın giden kutusundaki belge türü: hizmet Logo'da ayrı karttır.
@@ -304,7 +305,10 @@ async function guncellemeTuru(db: Db, o: TurOrtami, kopru: KopruIstemcisi): Prom
           : await kopru.malzemeGuncelle(r.govde);
         return c.tur === 'basarili' ? { tamam: true, kayitNo: kart.logoKayitNo, deger: { tamam: true as const } } : { sonuc: c.tur, hata: `Güncelleme: ${c.ileti}` };
       },
-      bildir: (yazDb, x) => kaynak.sonuc(yazDb, kart.no, { ad: kart.ad, ...x }),
+      // Kaynağın verdiği açıklamalar da döner (3491); vermediği alan cevapta yoktur.
+      bildir: (yazDb, x) => kaynak.sonuc(yazDb, kart.no, {
+        ad: kart.ad, ...Object.fromEntries((['aciklama1', 'aciklama2', 'aciklama3'] as const).filter((a) => kart[a] !== undefined).map((a) => [a, kart[a]])), ...x,
+      }),
     });
     return turla(adim, (sonuc) => ({ tur: 'guncelleme', no: kart.no, sonuc }));
   }

@@ -21,7 +21,7 @@ Bağlantıyı yazacak modül için. Bu modül Logo'ya bağlanmaz; yalnız kuyru�
 5. Kart ilk kez aktif olduğu yazımda "bekliyor" olur (tetikleyici, aynı işlem); taslak ve onaydaki kart, bugün aktif olan eski kart ve pasiften dönen kart kuyruğa girmez.
 6. `logoBirimSetiKullaniliyorMu(db, kod)`: bir birim seti kodu herhangi bir birim karşılığında kullanılıyorsa `true` (Logo modülü listeden kaldırmadan önce bakar).
    Tür karşılığı yalnız `10`-`13` olabilir; birim karşılığı yalnız biçimce denetlenir, listede olup olmadığına gönderimde Logo modülü bakar (kart #232, LB9 a).
-7. Ad güncellemesi (kart #783, S4 b): Logo kaydı olan kartın adı değişince aynı yazımda `logo_guncelleme_durumu` "bekliyor" olur. `logoyaGuncellemeGidecekMalzemeler(db, sinir)`
+7. Ad güncellemesi (kart #783, S4 b; 3491 açıklamalar): Logo kaydı olan kartın adı ya da Açıklama 1-3'ü değişince aynı yazımda `logo_guncelleme_durumu` "bekliyor" olur. `logoyaGuncellemeGidecekMalzemeler(db, sinir)`
    "bekliyor" ve "hata" güncellemeleri en eski önce verir (`no`, `stokKodu`, `ad`, `logoKayitNo`, `durum`, `tur`, `hizmetYonu`). Cevap `malzemeLogoGuncellemeSonucu(db, no, sonuc)` ile:
    `{ ad, tamam: true }` ya da `{ ad, hata }`; `ad` kuyruktan alınan ad olduğu gibi geri verilir. Ad bu arada yine değiştiyse sonuç yazılmaz, güncelleme "bekliyor" kalır ve sonraki
    tur yeni adı alır. Kuyrukta olmayan kart 422 GECERSIZ, boş hata 400 DOGRULAMA, olmayan kart 404. İlk gönderimi bekleyen kartın ad değişimi güncelleme açmaz (ilk gönderim güncel adı alır).

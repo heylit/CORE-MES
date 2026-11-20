@@ -1014,15 +1014,28 @@ const adMetni = (kayit: Nesne): string | null => {
 };
 export const logoAdiDegistiMi = (kayitli: Nesne, yeni: Nesne): boolean => adMetni(kayitli) !== adMetni(yeni);
 
-export type LogoGuncellemeSonucu = { ad: string | null } & ({ tamam: true } | { hata: string });
-// Logo'nun güncelleme cevabı; `ad` kuyruktaki ad olduğu gibi döner. Gönderilen ad karttaki güncel addan farklıysa ad bu arada yine değişmiştir: güncelleme bekliyor kalır,
-// sonraki tur yeni adı gönderir (null: yazılacak bir şey yok). Boş hata metni reddedilir ('bos-hata').
-export function logoGuncellemeSonucuDurumu(sonuc: LogoGuncellemeSonucu, guncelAd: string | null):
+// 3491: Logo adı Açıklama 1'den, NAME3-NAME4 Açıklama 2-3'ten çıkar; açıklaması değişen kart da Logo'da güncellenir.
+// `yeni` null: açıklamalar gelmedi, kayıtlılar korunur (katalogAciklamalari).
+export function logoAciklamasiDegistiMi(kayitli: KatalogAciklamalari, yeni: KatalogAciklamalari | null): boolean {
+  if (yeni === null) return false;
+  const metin = (d: string | null): string | null => d?.trim() || null;
+  return kayitli.some((a, i) => metin(a) !== yeni[i]);
+}
+
+export interface LogoGuncellemeAlanlari { ad: string | null; aciklama1?: string | null | undefined; aciklama2?: string | null | undefined; aciklama3?: string | null | undefined }
+export type LogoGuncellemeSonucu = LogoGuncellemeAlanlari & ({ tamam: true } | { hata: string });
+// Logo'nun güncelleme cevabı; ad ve açıklamalar kuyruktaki değerleriyle olduğu gibi döner. Gönderilen değer karttaki güncelden farklıysa kart bu arada
+// yine değişmiştir: güncelleme bekliyor kalır, sonraki tur yeni değerleri gönderir (null: yazılacak bir şey yok). Açıklama gelmeyen cevapta yalnız ad
+// karşılaştırılır. Boş hata metni reddedilir ('bos-hata').
+export function logoGuncellemeSonucuDurumu(sonuc: LogoGuncellemeSonucu, guncel: string | null | LogoGuncellemeAlanlari):
   { durum: 'gonderildi' | 'hata'; hata: string | null } | null | 'bos-hata' {
-  if ('tamam' in sonuc) return sonuc.ad === guncelAd ? { durum: 'gonderildi', hata: null } : null;
+  const g: LogoGuncellemeAlanlari = typeof guncel === 'object' && guncel !== null ? guncel : { ad: guncel };
+  const ayni = sonuc.ad === g.ad
+    && (['aciklama1', 'aciklama2', 'aciklama3'] as const).every((a) => sonuc[a] === undefined || (sonuc[a] ?? null) === (g[a] ?? null));
+  if ('tamam' in sonuc) return ayni ? { durum: 'gonderildi', hata: null } : null;
   const hata = logoHataMetni(sonuc.hata);
   if (hata === null) return 'bos-hata';
-  return sonuc.ad === guncelAd ? { durum: 'hata', hata } : null;
+  return ayni ? { durum: 'hata', hata } : null;
 }
 
 // MKL-5: Logo'nun döndürdüğü hata metni saklanır; boş hata kabul edilmez, uzun metin kesilir (son hata yalnız gösterilir).

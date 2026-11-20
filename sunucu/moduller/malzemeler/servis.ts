@@ -28,7 +28,7 @@ import {
   katalogAnahtarCakismalari, katalogAnahtarZorunluMu, katalogOnayEksigi, katalogCakismaAlanlari, katalogKuralAnahtari, katalogKurallariGecerliMi, katalogYeniAnahtar, katalogGecisiDenetle, katalogGecmisiDenetle, katalogGecmisiniBas, katalogIcerigiDegistiMi, katalogSilinirMi,
   kartFirmaKodu, onekFirmaKodu, katalogIptalYetkiliMi, katalogHicOnaylanmadiMi, katalogKodDegisebilirMi, katalogYeniOnek, katalogFirmaKodu, katalogFirmaKoduTurleriGecerliMi, katalogKodOneki, katalogFirmaOneki, katalogOnayAkisiAcikMi, katalogStokKodu,
   katalogAgirlikAlanlari, katalogGkkAyari, katalogNetAgirlikKg, katalogOnayiBas, katalogOnekiTureUyarMi, katalogRolu, katalogSurumUyarMi, katalogTalebiBas, katalogTalepBicimiGecerliMi, katalogTalepYokMu,
-  katalogTalepDenetle, katalogTalepUygulamaDenetle, katalogKaydiAlanlari, ayarBirimleri, ayarKaliteYogunluklari, ayarKategorileri, kartBilesenKimlikleri, kartOperasyonlari, kartRotaIcerigiDegistiMi, ROTALI_KART_ILETISI, hammaddeOlcuHatasi, hammaddeTanimHatasi, kartZorunluAlanEksigi, kartYerlilikHatasi, katalogSunucuAnahtari, kartTedarikciFirmaId, katalogAciklamalari, kartBirimDonusumu, kartBirimDonusumleri, kartBirimi, kartTedarikciKimlikleri, tedarikciDegistiMi, kartAletNo, kartAletNolari, kartAletNoYaz, eskiKalibrasyonAlanlariniKoru, denetlenecekKategoriler, MUKERRER_GEREKCE_ILETISI, mukerrerGerekcesiKisaMi, logoAdiDegistiMi, logoBirimiDegistiMi, logoGuncellemeSonucuDurumu, logoKarsiligiHatasi, logoBirimSetiGecersizHatasi, logoDurumSirasi, logoEksikleri, logoHataMetni, ornekKartKimligi,
+  katalogTalepDenetle, katalogTalepUygulamaDenetle, katalogKaydiAlanlari, ayarBirimleri, ayarKaliteYogunluklari, ayarKategorileri, kartBilesenKimlikleri, kartOperasyonlari, kartRotaIcerigiDegistiMi, ROTALI_KART_ILETISI, hammaddeOlcuHatasi, hammaddeTanimHatasi, kartZorunluAlanEksigi, kartYerlilikHatasi, katalogSunucuAnahtari, kartTedarikciFirmaId, katalogAciklamalari, kartBirimDonusumu, kartBirimDonusumleri, kartBirimi, kartTedarikciKimlikleri, tedarikciDegistiMi, kartAletNo, kartAletNolari, kartAletNoYaz, eskiKalibrasyonAlanlariniKoru, denetlenecekKategoriler, MUKERRER_GEREKCE_ILETISI, mukerrerGerekcesiKisaMi, logoAciklamasiDegistiMi, logoAdiDegistiMi, logoBirimiDegistiMi, logoGuncellemeSonucuDurumu, logoKarsiligiHatasi, logoBirimSetiGecersizHatasi, logoDurumSirasi, logoEksikleri, logoHataMetni, ornekKartKimligi,
 } from './kurallar.ts';
 import type { BirimDonusumu, KimlikliKartOperasyonu, LogoGuncellemeSonucu, OrnekMalzemeAnahtari } from './kurallar.ts';
 import { kalkmaSonradirMi, kartOperasyonKimlikleri, OPERASYON_AYARI_ILETISI } from './kurallar.ts';
@@ -384,12 +384,12 @@ export async function logoyaGuncellemeGidecekMalzemeler(db: Db, sinir: number): 
   return s.logoGuncellemeKuyrugu(db, sinir);
 }
 
-// `ad`: Logo'ya gönderilen ad (kuyruktan alınan). Ad bu arada yine değiştiyse güncelleme bekliyor kalır. Kuyrukta olmayan kart 422.
+// `ad` ve açıklamalar: Logo'ya gönderilenler (kuyruktan alınan). Bu arada yine değiştiyse güncelleme bekliyor kalır. Kuyrukta olmayan kart 422.
 export async function malzemeLogoGuncellemeSonucu(db: Db, no: number, sonuc: LogoGuncellemeSonucu): Promise<void> {
   const kart = await s.logoGuncellemeKilitle(db, no);
   if (!kart) throw bulunamadi('Malzeme kartı bulunamadı.');
   if (kart.durum !== 'bekliyor' && kart.durum !== 'hata') throw gecersiz('Kart Logo güncelleme kuyruğunda değil.');
-  const yazilacak = logoGuncellemeSonucuDurumu(sonuc, kart.ad);
+  const yazilacak = logoGuncellemeSonucuDurumu(sonuc, kart);
   if (yazilacak === 'bos-hata') throw dogrulama('Logo hata metni boş olamaz.', 'hata');
   if (yazilacak !== null) await s.logoGuncellemeSonucuYaz(db, no, yazilacak.durum, yazilacak.hata);
 }
@@ -724,7 +724,8 @@ export async function katalogKartiKaydet(
     kimlik, tur: tur, hizmetYonu, benzersizAnahtar: anahtar, varsayilanAnahtar, mukerrerGerekcesi: gerekce, onayDurumu: yeniDurum, kayit,
     kisiId: kullanici.id, gonderenKisiId: gonderildi ? kullanici.id : kayitli?.gonderenKisiId ?? null,
     onaylayanKisiId: onaylandi ? kullanici.id : null, onaylandi, dortGozsuz: onaylandi && !dortGozAcik,
-    logoAdGuncellemesi: !!kayitli?.logoKayitNo && logoAdiDegistiMi(kayitli.kayit, kayit),
+    logoAdGuncellemesi: !!kayitli?.logoKayitNo
+      && (logoAdiDegistiMi(kayitli.kayit, kayit) || logoAciklamasiDegistiMi(kayitli.aciklamalar, katalogAciklamalari(g.ozet))),
     agirlik: katalogAgirlikAlanlari(tur, g.ozet),
     netAgirlikKg: katalogNetAgirlikKg(tur, kayit),
     tedarikciFirmaId: kartTedarikciFirmaId(kayit),
