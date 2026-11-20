@@ -20,13 +20,14 @@ interface Ozellikler {
   sartnameler: readonly SartnameOzeti[];
   yeniAcik: boolean;
   yeniKapat: () => void;
+  ilkSablonId?: number | null;
 }
 
 // Talimat şablonları sekmesi (prototip Main): solda arama ve liste, sağda seçili şablonun adım adım önizlemesi.
-export function TalimatSablonlari({ yazabilir, sartnameler, yeniAcik, yeniKapat }: Ozellikler) {
+export function TalimatSablonlari({ yazabilir, sartnameler, yeniAcik, yeniKapat, ilkSablonId = null }: Ozellikler) {
   const liste = useSablonlar();
   const [q, setQ] = useState('');
-  const [seciliId, setSeciliId] = useState<number | null>(null);
+  const [seciliId, setSeciliId] = useState<number | null>(ilkSablonId);
   const [duzen, setDuzen] = useState<Duzen | null>(null);
   const sablonlar = liste.data?.sablonlar ?? [];
   const gorunen = sablonlar.filter((s) => eslesir(q, s.kod, s.ad, s.sartname?.kod ?? null, s.sartname?.ad ?? null));

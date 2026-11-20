@@ -5,6 +5,7 @@ import type {
 } from '#paylasilan/sozlesme/projeler.ts';
 import { CokSatir, Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Pencere, Rozet, Secim, Tablo, type Secenek, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { HazirlikAdimlari } from './HazirlikAdimlari.tsx';
 import { anahtarlar } from './anahtarlar.ts';
 import { AtamaSecimi, YAPAN_IPUCU, atamaCoz, atamaDegeri, useAtamaSecenekleri } from './Atama.tsx';
 import { SIKLIK_METNI, siklik, useHazirlikMaddeleri } from './hazirlik-maddeleri.ts';
@@ -30,6 +31,7 @@ const baslangicMetni = (k: Pick<SablonKalemi, 'dayanak' | 'gun'>): string =>
 
 // 3494-1 a: hazırlık tek yerden yönetilir. Görevler > Şablonlar ekranında şablonlar ve matris sütunları birliktedir; sütunu
 // yöneten ama şablon yazamayan yalnız sütunları görür. Okuma ve yazma yetkileri değişmez, her bölüm kendi işlemini ister.
+// 3494-2 a: operasyon başına işaretlenecek adımlar talimat şablonunda kalır; kartı rota okuyabilen görür.
 export function GorevSablonlari() {
   const yazabilir = useIslemVar(SABLON_ISLEMI);
   const sutunYazar = useIslemVar('uretim-emirleri.hazirlik-ayar');
@@ -38,6 +40,7 @@ export function GorevSablonlari() {
     <div className="tc-prj-icerik">
       {yazabilir && <SablonListesi />}
       <HazirlikMaddeleri />
+      <HazirlikAdimlari />
     </div>
   );
 }
