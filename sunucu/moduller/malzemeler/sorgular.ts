@@ -2,7 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import type { Dilim } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import { icindeDeseni } from '#paylasilan/kayit-aramasi.ts';
-import { GKK_VARSAYILAN_TURLER, LOGO_TUR_KARSILIGI_TURLERI } from '#paylasilan/sozlesme/malzemeler.ts';
+import { GKK_VARSAYILAN_TURLER, LOGO_TUR_KARSILIGI_TURLERI, type ErpKoduSonucu } from '#paylasilan/sozlesme/malzemeler.ts';
 import type {
   DemirbasOzelligi, DemirbasTeknikAlanlari, HizmetYonu, KatalogKartDurumu, KatalogMalzemeOzeti, KatalogTuru, LogoGonderimDurumu, LogoKarsilikCesidi, LogoKarsiligi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
@@ -274,6 +274,8 @@ const COM_METNI = (alan: string): string => `CASE WHEN jsonb_typeof(k.kayit -> '
 // Kod ve ad Türkçe harfle sadeleşerek karşılaştırılır (1233): veritabanının dil ayarı (C.UTF-8) 'I'/'ı' eşlemez. İfadeler trigram
 // indeksleriyle (göç 20261029133000) birebir aynıdır.
 const SADE = (ifade: string): string => `public.arama_sade(${ifade})`;
+// 3474-3: kartın "Eski / ERP kodu" alanı; boş metin yok sayılır.
+const ERP_KODU = (t: string): string => `NULLIF(btrim(CASE WHEN jsonb_typeof(${t}.kayit -> 'com' -> 'eskiKod') = 'string' THEN ${t}.kayit -> 'com' ->> 'eskiKod' END), '')`;
 const ARAMA_KOSULU = `k.onay_durumu <> 'iptal'
         AND ($1::text IS NULL OR ${SADE('k.stok_kodu')} LIKE $1 OR ${SADE(KATALOG_AD.replaceAll('kayit', 'k.kayit'))} LIKE $1 OR k.no = $2::int
              OR ${SADE(COM_METNI('eskiKod'))} LIKE $1 OR ${SADE(COM_METNI('tkod'))} LIKE $1
@@ -663,6 +665,9 @@ export function logoKartiKilitle(db: Db, no: number): Promise<{ durum: LogoGonde
 }
 
 // Logo'ya giden tür ve birim karşılığı karta yazılır; tetikleyici sonradan değiştirilmesine izin vermez.
+// 3474-3: kartın ERP kodu boşsa Logo'daki kod (stok kodu) yazılır; dolu alan ezilmez, aynı ERP kodlu başka kart varsa yazılmaz.
+// Sürüm artmaz (gönderim alanları gibi): arka plandaki gönderim kartı açık tutan kullanıcının kaydını reddettirmesin; kullanıcının
+// eski sürümle kaydı alanı yeniden boşaltırsa "Eksik ERP kodlarını doldur" yeniden yazar.
 // `gonderilen` verilirse Logo'ya gerçekten giden değer yazılır (kuyruk okunduktan sonra karşılık değişmiş olabilir); verilmezse o anki karşılık.
 export async function logoGonderildiYaz(
   db: Db, no: number, kayitNo: string, gonderilen?: { logoKartTuru: string | null; logoBirimSeti: string | null },
@@ -670,11 +675,16 @@ export async function logoGonderildiYaz(
   await db.sorgu(
     `UPDATE malzeme_katalog_karti k
         SET logo_gonderim_durumu = 'gonderildi', logo_kayit_no = $2, logo_gonderim_zamani = now(), logo_hata = NULL,
+            kayit = CASE WHEN d.yaz THEN jsonb_set(k.kayit, '{com,eskiKod}', to_jsonb(k.stok_kodu), true) ELSE k.kayit END,
             logo_kart_turu = CASE WHEN $3::boolean THEN $4::text
               ELSE (SELECT logo_degeri FROM malzeme_logo_karsiligi WHERE cesit = 'tur' AND tmi_degeri = k.tur) END,
             logo_birim_seti = CASE WHEN $3::boolean THEN $5::text
               ELSE (SELECT logo_degeri FROM malzeme_logo_karsiligi WHERE cesit = 'birim' AND tmi_degeri = ${KATALOG_BIRIM.replaceAll('kayit', 'k.kayit')}) END
-      WHERE no = $1`,
+       FROM (SELECT ${ERP_KODU('y')} IS NULL AND jsonb_typeof(y.kayit -> 'com') = 'object' AND NOT EXISTS (
+               SELECT 1 FROM malzeme_katalog_karti x
+                WHERE x.no <> y.no AND x.onay_durumu <> 'iptal' AND upper(${ERP_KODU('x')}) = upper(y.stok_kodu)) AS yaz
+               FROM malzeme_katalog_karti y WHERE y.no = $1) d
+      WHERE k.no = $1`,
     [no, kayitNo, gonderilen !== undefined, gonderilen?.logoKartTuru ?? null, gonderilen?.logoBirimSeti ?? null],
   );
 }
@@ -1070,6 +1080,72 @@ export async function logoKaydiYaz(
   );
 }
 
+/* ---------------- 3474-3: kartın "Eski / ERP kodu" Logo'daki kod olur ---------------- */
+
+
+// Aynı ERP kodu iki canlı kartta olmaz (benzer kart denetimi); karşılaştırma büyük-küçük harf ve boşluktan bağımsız.
+export async function erpKoduKullananKart(db: Db, kod: string, haricKimlik: string | null): Promise<string | null> {
+  const r = await db.tek<{ stokKodu: string }>(
+    `SELECT k.stok_kodu AS "stokKodu" FROM malzeme_katalog_karti k
+      WHERE k.onay_durumu <> 'iptal' AND upper(${ERP_KODU('k')}) = upper(btrim($1)) AND ($2::text IS NULL OR k.kimlik <> $2)
+      ORDER BY k.no LIMIT 1`,
+    [kod, haricKimlik],
+  );
+  return r?.stokKodu ?? null;
+}
+
+// Alan yalnız boşsa yazılır; dolu ve farklı alan ezilmez. Yazılırsa kartın sürümü artar.
+export async function erpKoduDoldur(
+  db: Db, kimlik: string, kod: string, kisiId: number,
+): Promise<{ sonuc: ErpKoduSonucu; mevcut: string | null; surum: number } | null> {
+  const kart = await db.tek<{ mevcut: string | null; surum: number }>(
+    `SELECT ${ERP_KODU('k')} AS mevcut, k.surum FROM malzeme_katalog_karti k WHERE k.kimlik = $1 FOR UPDATE`,
+    [kimlik],
+  );
+  if (!kart) return null;
+  if (kart.mevcut !== null) {
+    return { sonuc: kart.mevcut.toUpperCase() === kod.trim().toUpperCase() ? 'ayni' : 'farkli', mevcut: kart.mevcut, surum: kart.surum };
+  }
+  if ((await erpKoduKullananKart(db, kod, kimlik)) !== null) return { sonuc: 'mukerrer', mevcut: null, surum: kart.surum };
+  const r = await db.tek<{ surum: number }>(
+    `UPDATE malzeme_katalog_karti
+        SET kayit = jsonb_set(kayit, '{com,eskiKod}', to_jsonb(btrim($2)), true), surum = surum + 1, guncelleyen_kisi_id = $3, guncelleme = now()
+      WHERE kimlik = $1 AND jsonb_typeof(kayit -> 'com') = 'object'
+      RETURNING surum`,
+    [kimlik, kod, kisiId],
+  );
+  return r ? { sonuc: 'yazildi', mevcut: null, surum: r.surum } : null;
+}
+
+// Geri almada yalnız bu işlemin yazdığı değer silinir; kullanıcı sonradan değiştirdiyse dokunulmaz. Sürümü bağı çözen yazma artırır.
+export async function erpKoduSil(db: Db, kimlik: string, kod: string): Promise<void> {
+  await db.sorgu(
+    `UPDATE malzeme_katalog_karti k SET kayit = k.kayit #- '{com,eskiKod}'
+      WHERE k.kimlik = $1 AND ${ERP_KODU('k')} = btrim($2)`,
+    [kimlik, kod],
+  );
+}
+
+export interface ErpKoduAdayi { kimlik: string; stokKodu: string; logoKayitNo: string; erpKodu: string | null }
+
+export async function erpKoduBosBagliSayisi(db: Db): Promise<number> {
+  const r = await db.tek<{ n: number }>(
+    `SELECT count(*)::int AS n FROM malzeme_katalog_karti k
+      WHERE k.logo_kayit_no IS NOT NULL AND k.onay_durumu <> 'iptal' AND ${ERP_KODU('k')} IS NULL`,
+  );
+  return r?.n ?? 0;
+}
+
+// Logo'ya bağlı canlı kartlar ve ERP kodları; doldurma ve fark listesi bunlardan kurulur.
+export function logoyaBagliKartlarinErpKodlari(db: Db): Promise<ErpKoduAdayi[]> {
+  return db.sorgu<ErpKoduAdayi>(
+    `SELECT k.kimlik, k.stok_kodu AS "stokKodu", k.logo_kayit_no AS "logoKayitNo", ${ERP_KODU('k')} AS "erpKodu"
+       FROM malzeme_katalog_karti k
+      WHERE k.logo_kayit_no IS NOT NULL AND k.onay_durumu <> 'iptal'
+      ORDER BY k.stok_kodu, k.no`,
+  );
+}
+
 // 2116-2 a: kullanıcı Logo'dakini alınca açıklamalar Logo'dan yazılır; ad güncellemesi kuyruğa girmez (Logo'da zaten bu değer var).
 export async function logoAciklamalariniYaz(
   db: Db, kimlik: string, a: [string | null, string | null, string | null], o: { surum: number; kisiId: number },
@@ -1084,7 +1160,8 @@ export async function logoAciklamalariniYaz(
 
 /* ---------------- 3068 a: Logo geçişi toplu işlem izi ve geri alma ---------------- */
 
-export interface LogoGonderimAlanlari { durum: string | null; zaman: string | null; hata: string | null; kartTuru: string | null; birimSeti: string | null }
+// erpKodu: bağlamanın kartın ERP kodu alanına yazdığı değer (3474-3); geri almada yalnız bu silinir. Eski izlerde yoktur.
+export interface LogoGonderimAlanlari { durum: string | null; zaman: string | null; hata: string | null; kartTuru: string | null; birimSeti: string | null; erpKodu?: string | null }
 
 export function logoGonderimAlanlari(db: Db, kimlik: string): Promise<LogoGonderimAlanlari | null> {
   return db.tek<LogoGonderimAlanlari>(

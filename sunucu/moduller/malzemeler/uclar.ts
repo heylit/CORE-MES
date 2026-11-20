@@ -1,6 +1,6 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
-  logoGecisCevabi, logoGecisSorgusu, logoGeriAlCevabi, logoGeriAlGovdesi, logoTopluAlGovdesi, logoTopluBaglaGovdesi, logoTopluCevabi,
+  erpKoduDoldurCevabi, erpKoduOzetiCevabi, logoGecisCevabi, logoGecisSorgusu, logoGeriAlCevabi, logoGeriAlGovdesi, logoTopluAlGovdesi, logoTopluBaglaGovdesi, logoTopluCevabi,
   katalogAyarKaydetGovdesi, katalogAyarParametresi, katalogAyarlariCevabi, katalogKartiKaydetCevabi, katalogKartiKaydetGovdesi, katalogKartiRotasiCevabi,
   katalogKartlariCevabi, katalogKartlariSorgusu, katalogKimlikCevabi, katalogKimlikParametresi, katalogSablonlariCevabi, katalogSablonuKaydetGovdesi, katalogSurumluKayitCevabi,
   demirbasMakineSecenekleriCevabi, demirbasTeknikCevabi, demirbasTeknikKaydetGovdesi,
@@ -117,6 +117,12 @@ export const uclar = [
   uc({
     yontem: 'POST', yol: '/malzeme-logo-gecisi/toplu-al', yetki: 'malzemeler.yaz', tekrarKorumali: true, govde: logoTopluAlGovdesi, cevap: logoTopluCevabi,
     isle: ({ db, kullanici, govde }) => servis.logoTopluAl(db, kullanici, govde),
+  }),
+  // 3474-3: boş ERP kodları Logo'daki kodla doldurulur; kart yazma işlemiyle (yeni işlem yok), Logo'ya istek gitmez.
+  uc({ yontem: 'GET', yol: '/malzeme-logo-gecisi/erp-kodlari', yetki: OKUMA, cevap: erpKoduOzetiCevabi, isle: ({ db }) => servis.erpKoduOzeti(db) }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-logo-gecisi/erp-kodlari-doldur', yetki: 'malzemeler.yaz', tekrarKorumali: true, cevap: erpKoduDoldurCevabi,
+    isle: ({ db, kullanici }) => servis.erpKodlariniDoldur(db, kullanici),
   }),
   uc({
     yontem: 'POST', yol: '/malzeme-logo-gecisi/geri-al', yetki: 'malzemeler.yaz', tekrarKorumali: true, govde: logoGeriAlGovdesi, cevap: logoGeriAlCevabi,

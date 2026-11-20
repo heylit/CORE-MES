@@ -1,8 +1,9 @@
 import './malzemeler.css';
 import { useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import type {
-  LogoDurumuCevabi, LogoGecisCevabi, LogoGecisSuzgeci, LogodanAlCevabi, LogoGeriAlCevabi, LogoKarsiligi, LogoTopluCevabi, OlcuBirimleriCevabi,
+  ErpKoduDoldurCevabi, ErpKoduOzetiCevabi, LogoDurumuCevabi, LogoGecisCevabi, LogoGecisSuzgeci, LogodanAlCevabi, LogoGeriAlCevabi, LogoKarsiligi, LogoTopluCevabi, OlcuBirimleriCevabi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
 import { LOGO_GECIS_SAYFA_BOYU, LOGO_TOPLU_AZAMI } from '#paylasilan/sozlesme/logo-gecisi-sabitleri.ts';
 import type { LogoMalzemeAramaCevabi, LogoMalzemeEkleCevabi } from '#paylasilan/sozlesme/logo.ts';
@@ -10,6 +11,7 @@ import {
   Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Pencere, Rozet, Secim, Simge, Tablo, useBildirim, type RozetTonu, type Sutun,
 } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { csvIndir } from '../../ortak/veri/csv.ts';
 import { useKorumaliKomut, useTekGonderim } from '../../ortak/veri/korumali-komut.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { LOGO_GELEN_ANAHTARI } from './LogodanGelenler.tsx';
@@ -199,6 +201,7 @@ export function LogoMalzemeGecisi({ turAdlari }: Ozellikler) {
           {aranan && !okumaSuruyor && veri.kartlar.length > 0 && (
             <CanliAramaDugmesi metin={aranan} acik={veri.canliArama} yazabilir={yazabilir} bulundu={() => { suzgecYaz('tumu'); sayfaYaz(1); }} />
           )}
+          {yazabilir && <ErpDoldurDugmesi bitti={yenile} />}
           {ayarYazabilir && okuma.acik && (
             <Dugme simge="flag" yukleniyor={okumaIstegi.isPending} onClick={() => bitirSor(true)}>Geçişi bitir</Dugme>
           )}
@@ -270,7 +273,7 @@ export function LogoMalzemeGecisi({ turAdlari }: Ozellikler) {
         vazgec={() => tekYaz(null)}
       >
         {tek?.islem === 'bagla'
-          ? `${tek.satir.tmi?.stokKodu ?? ''} Logo'daki kartla aynı malzeme sayılır, eşlenir ve Logo'ya yeniden gönderilmez. CORE'daki bilgiler değişmez.`
+          ? `${tek.satir.tmi?.stokKodu ?? ''} Logo'daki kartla aynı malzeme sayılır, eşlenir ve Logo'ya yeniden gönderilmez. Kartın ERP kodu boşsa Logo kodu yazılır; öteki bilgiler değişmez.`
           : tek?.islem === 'yeni-koda-gec'
             ? `${tek.satir.tmi?.stokKodu ?? ''} Logo'daki ${tek.satir.ad ?? tek.satir.kod} ile farklı malzeme sayılır ve aynı önekte sıradaki boş koda geçer. Eski kod kartta önceki kod olarak kalır ve aramada bulunur; basılı etiketler yeniden basılmalıdır. Bağlı kayıtlar değişmez.`
             : `${tek?.satir.tmi?.stokKodu ?? ''} kartının açıklamaları Logo'daki değerlerle değişir. Logo'ya bir şey gönderilmez.`}
@@ -432,8 +435,98 @@ function SonucPenceresi({ sonuc, kapat, geriAlindi }: { sonuc: TopluSonuc; kapat
           {sonuc.atlanan.map((a) => <li key={a.logoKayitNo}><Simge ad="minus" boyut="k" /><span className="tc-lg-kod">{a.kod}</span> {a.neden}</li>)}
         </ul>
       )}
+      <ErpUyarilari satirlar={sonuc.basarili} />
     </Pencere>
   );
+}
+
+// 3474-3: ERP kodu kartta farklıysa ezilmez, kullanıcı kartta düzeltir; aynı ERP kodlu başka kart varsa boş kalır.
+function ErpUyarilari({ satirlar }: { satirlar: TopluSonuc['basarili'] }) {
+  const farkli = satirlar.filter((x) => x.erp === 'farkli');
+  const mukerrer = satirlar.filter((x) => x.erp === 'mukerrer');
+  if (farkli.length === 0 && mukerrer.length === 0) return null;
+  return (
+    <ul className="tc-lg-on-sonuc" aria-label="ERP kodu uyarıları">
+      {farkli.map((x) => (
+        <li key={x.logoKayitNo}><Simge ad="alert" boyut="k" /><span className="tc-lg-kod">{x.stokKodu}</span> ERP kodu farklı: kartta {x.mevcutErpKodu}, Logo'da {x.kod}. Kartta düzeltin.</li>
+      ))}
+      {mukerrer.map((x) => (
+        <li key={x.logoKayitNo}><Simge ad="alert" boyut="k" /><span className="tc-lg-kod">{x.stokKodu}</span> ERP kodu yazılmadı: {x.kod} başka kartta var.</li>
+      ))}
+    </ul>
+  );
+}
+
+// 3474-3: Logo'ya bağlı kartlarda boş ERP kodu Logo'daki kodla doldurulur; dolu alan ezilmez. Logo'ya bir şey gitmez.
+function ErpDoldurDugmesi({ bitti }: { bitti: () => Promise<void> }) {
+  const [soruluyor, sor] = useState(false);
+  const [sonuc, sonucYaz] = useState<ErpKoduDoldurCevabi | null>(null);
+  const { bildir } = useBildirim();
+  const ozet = useQuery({
+    queryKey: [...LOGO_GECIS_ANAHTARI, 'erp-kodlari'],
+    queryFn: () => api.get<ErpKoduOzetiCevabi>('/malzeme-logo-gecisi/erp-kodlari'),
+    enabled: soruluyor,
+  });
+  const doldur = useKorumaliKomut({
+    gonder: (_: void, deneme) => api.post<ErpKoduDoldurCevabi>('/malzeme-logo-gecisi/erp-kodlari-doldur', {}, deneme),
+    onSuccess: async (c) => { sor(false); sonucYaz(c); await bitti(); },
+    onError: (e) => { sor(false); bildir('hata', hataIletisi(e, 'Yapılamadı')); },
+  });
+  return (
+    <>
+      <Dugme simge="edit" yukleniyor={doldur.isPending} onClick={() => sor(true)}>Eksik ERP kodlarını doldur</Dugme>
+      <OnayPenceresi
+        acik={soruluyor}
+        baslik="Eksik ERP kodları doldurulsun mu?"
+        onayMetni="Doldur"
+        yukleniyor={doldur.isPending}
+        onayla={() => doldur.mutate()}
+        vazgec={() => sor(false)}
+      >
+        {`${ozet.data ? `Logo'ya bağlı ${sayi(ozet.data.bos)} kartta ERP kodu boş; bunlara Logo'daki kod yazılır.` : "Logo'ya bağlı kartlarda ERP kodu boşsa Logo'daki kod yazılır."} Dolu ERP kodu değişmez; farklı olanlar listelenir. Bu işlem geri alınmaz; yazılan kod gerekirse kartta silinir. Logo'ya bir şey gönderilmez.`}
+      </OnayPenceresi>
+      {sonuc && (
+        <Pencere
+          acik
+          kapat={() => sonucYaz(null)}
+          baslik="ERP kodları"
+          alt={(
+            <>
+              <Dugme simge="download" onClick={() => erpSonucuIndir(sonuc)}>CSV indir</Dugme>
+              <Dugme tur="birincil" onClick={() => sonucYaz(null)}>Tamam</Dugme>
+            </>
+          )}
+        >
+          <p className="tc-lg-not">
+            {sayi(sonuc.doldurulan)} kartın ERP kodu yazıldı, {sayi(sonuc.ayni)} kart zaten aynı, {sayi(sonuc.farkli.length)} kartta farklı, {sayi(sonuc.atlanan.length)} atlandı.
+          </p>
+          {(sonuc.farkli.length > 0 || sonuc.atlanan.length > 0) && (
+            <ul className="tc-lg-on-sonuc">
+              {sonuc.farkli.map((x) => (
+                <li key={`f-${x.stokKodu}`}>
+                  <Simge ad="alert" boyut="k" />
+                  <Link className="tc-lg-kod" to={`/malzemeler?${new URLSearchParams({ kart: x.kimlik }).toString()}`} aria-label={`${x.stokKodu} kartını aç`}>{x.stokKodu}</Link>
+                  {' '}ERP kodu farklı: kartta {x.erpKodu}, Logo'da {x.logoKodu}. Kartta düzeltin.
+                </li>
+              ))}
+              {sonuc.atlanan.map((x) => (
+                <li key={`a-${x.stokKodu}`}><Simge ad="minus" boyut="k" /><span className="tc-lg-kod">{x.stokKodu}</span> {x.neden}</li>
+              ))}
+            </ul>
+          )}
+        </Pencere>
+      )}
+    </>
+  );
+}
+
+// Yazılan kartlar da dosyada: doldurma geri alınmaz, hangi kartın yazıldığı buradan izlenir.
+function erpSonucuIndir(c: ErpKoduDoldurCevabi): void {
+  csvIndir('erp-kodlari', ['CORE kodu', 'Sonuç', 'Kartta ERP kodu', "Logo'da kod", 'Neden'], [
+    ...c.yazilan.map((x) => [x.stokKodu, 'Yazıldı', x.erpKodu, x.erpKodu, null]),
+    ...c.farkli.map((x) => [x.stokKodu, 'Farklı', x.erpKodu, x.logoKodu, null]),
+    ...c.atlanan.map((x) => [x.stokKodu, 'Atlandı', null, null, x.neden]),
+  ]);
 }
 
 // Tek kart alma (2116-4 a, 2116-3 c): bugünkü "Al" penceresi aynen.

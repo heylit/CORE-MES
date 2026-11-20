@@ -5,7 +5,7 @@ import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import type { LogoGecisCevabi, LogoGeriAlCevabi, LogoTopluCevabi } from '#paylasilan/sozlesme/malzemeler.ts';
+import type { ErpKoduDoldurCevabi, ErpKoduOzetiCevabi, LogoGecisCevabi, LogoGeriAlCevabi, LogoTopluCevabi } from '#paylasilan/sozlesme/malzemeler.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
@@ -80,13 +80,18 @@ describe('Logo geçişi: liste, toplu bağla ve al, geri al (3068 a; gerçek Pos
     `SELECT stok_kodu AS kod, logo_kayit_no AS logo, logo_gonderim_durumu AS gonderim, logo_birim_seti AS set, surum FROM malzeme_katalog_karti WHERE kimlik = $1`,
     [kimlik],
   );
+  // 3474-3: kartın "Eski / ERP kodu" alanı.
+  const erpKodu = async (kimlik: string): Promise<string | null> =>
+    (await vt().tek<{ e: string | null }>("SELECT kayit -> 'com' ->> 'eskiKod' AS e FROM malzeme_katalog_karti WHERE kimlik = $1", [kimlik]))?.e ?? null;
   let sayac = 0;
   // Taslak kodu önekteki sıradan gelir; Logo kopyasındaki kart dönen kodla kurulur.
-  async function taslakAc(kod: string): Promise<{ kimlik: string; kod: string; surum: number }> {
+  async function taslakAc(kod: string, eskiKod?: string): Promise<{ kimlik: string; kod: string; surum: number }> {
     const kimlik = `lgg${++sayac}`;
     const url = `/malzeme-katalogu-kartlari/${kimlik}/kaydet`;
     const govde = {
-      kayit: { id: kimlik, tur: 'hammadde', fam: 'metal', com: { kod, ad: `CORE ${kimlik}`, birim: 'kg' }, onay: { durum: 'taslak' } },
+      kayit: {
+        id: kimlik, tur: 'hammadde', fam: 'metal', com: { kod, ad: `CORE ${kimlik}`, birim: 'kg', ...(eskiKod === undefined ? {} : { eskiKod }) }, onay: { durum: 'taslak' },
+      },
       ozet: { benzersiz_anahtar: `hammadde|metal|${kimlik}`, mukerrer_gerekcesi: null }, surum: null,
     };
     const r = await tamam<{ stok_kodu: string; surum: number }>('POST', url, tamGovde(url, govde));
@@ -159,7 +164,8 @@ describe('Logo geçişi: liste, toplu bağla ve al, geri al (3068 a; gerçek Pos
     const once = await kartSatiri(b.kimlik);
     const s = await tamam<LogoTopluCevabi>('POST', '/malzeme-logo-gecisi/toplu-bagla', { kartlar: [{ logoKayitNo: 210, surum: b.surum }, { logoKayitNo: 211, surum: c.surum }] });
     assert.equal(s.tur, 'bagla');
-    assert.deepEqual(s.basarili, [{ logoKayitNo: 210, kod: b.kod, stokKodu: b.kod }], JSON.stringify(s.atlanan));
+    assert.deepEqual(s.basarili, [{ logoKayitNo: 210, kod: b.kod, stokKodu: b.kod, erp: 'yazildi', mevcutErpKodu: null }], JSON.stringify(s.atlanan));
+    assert.equal(await erpKodu(b.kimlik), b.kod, '3474-3: bağlanan kartın ERP kodu Logo kodu');
     assert.deepEqual(s.atlanan.map((x) => [x.kod, x.neden]), [[c.kod, 'Birim farklı; tek tek bağlayın.']]);
     assert.deepEqual({ ...(await kartSatiri(b.kimlik)), surum: undefined }, { kod: b.kod, logo: '210', gonderim: 'gonderildi', set: '06', surum: undefined });
     assert.equal((await kartSatiri(c.kimlik))?.logo, null);
@@ -169,7 +175,8 @@ describe('Logo geçişi: liste, toplu bağla ve al, geri al (3068 a; gerçek Pos
     assert.deepEqual(g, { geriAlinan: 1, atlanan: [] });
     const sonra = await kartSatiri(b.kimlik);
     assert.deepEqual({ ...sonra, surum: undefined }, { ...once, surum: undefined });
-    assert.equal(sonra!.surum, once!.surum + 2, 'bağlama ve geri alma sürüm artırır');
+    assert.equal(sonra!.surum, once!.surum + 3, 'bağlama, ERP kodu ve geri alma sürüm artırır');
+    assert.equal(await erpKodu(b.kimlik), null, 'geri almada bağlamanın yazdığı ERP kodu silinir');
     assert.equal((await istek('POST', '/malzeme-logo-gecisi/geri-al', { islem: s.islem })).statusCode, 404, 'ikinci kez geri alınmaz');
   });
 
@@ -178,7 +185,8 @@ describe('Logo geçişi: liste, toplu bağla ve al, geri al (3068 a; gerçek Pos
     const s = await tamam<LogoTopluCevabi>('POST', '/malzeme-logo-gecisi/toplu-al', {
       kartlar: [{ logoKayitNo: 220, surum: null }, { logoKayitNo: 221, surum: null }, { logoKayitNo: 222, surum: null }], tur: null, birim: null,
     });
-    assert.deepEqual(s.basarili, [{ logoKayitNo: 220, kod: 'HM-LGZ-00020', stokKodu: 'HM-LGZ-00021' }]);
+    assert.deepEqual(s.basarili, [{ logoKayitNo: 220, kod: 'HM-LGZ-00020', stokKodu: 'HM-LGZ-00021', erp: 'yazildi', mevcutErpKodu: null }]);
+    assert.equal(await erpKodu('logo-220'), 'HM-LGZ-00020', '3474-3: alınan kartın ERP kodu Logo kodu');
     assert.equal(eslemeler.get('HM-LGZ-00020'), 'HM-LGZ-00021');
     assert.deepEqual(s.atlanan.map((x) => [x.kod, x.neden]), [
       ['SR-LGZ-00021', 'Logo kodu seçilen türün koduna uymuyor; tek tek alın.'],
@@ -223,6 +231,89 @@ describe('Logo geçişi: liste, toplu bağla ve al, geri al (3068 a; gerçek Pos
     assert.equal(r1.statusCode, 400, r1.body);
     const cok = Array.from({ length: 201 }, (_, i) => ({ logoKayitNo: 10_000 + i, surum: null }));
     assert.equal((await istek('POST', '/malzeme-logo-gecisi/toplu-al', { kartlar: cok, tur: null, birim: null })).statusCode, 400);
+  });
+
+  test('LGG-9 ERP kodu (3474-3): dolu ve farklı ERP kodu ezilmez, sonuçta döner, geri almada kalır; aynı ERP kodlu başka kart varsa alınan kartta boş kalır', async () => {
+    const e = await taslakAc('HM-LGE-00001', 'ORN-ESKI-1');
+    ayna.push(kart(901, e.kod));
+    const s = await tamam<LogoTopluCevabi>('POST', '/malzeme-logo-gecisi/toplu-bagla', { kartlar: [{ logoKayitNo: 901, surum: e.surum }] });
+    assert.deepEqual(s.basarili.map((x) => [x.erp, x.mevcutErpKodu]), [['farkli', 'ORN-ESKI-1']]);
+    assert.equal(await erpKodu(e.kimlik), 'ORN-ESKI-1');
+    assert.deepEqual(await tamam<LogoGeriAlCevabi>('POST', '/malzeme-logo-gecisi/geri-al', { islem: s.islem }), { geriAlinan: 1, atlanan: [] });
+    assert.equal(await erpKodu(e.kimlik), 'ORN-ESKI-1', 'kullanıcının kodu geri almada da kalır');
+
+    await taslakAc('HM-LGE-00010', 'hm-lge-00902 ');
+    ayna.push(kart(902, 'HM-LGE-00902'));
+    const a = await tamam<LogoTopluCevabi>('POST', '/malzeme-logo-gecisi/toplu-al', { kartlar: [{ logoKayitNo: 902, surum: null }], tur: null, birim: null });
+    assert.deepEqual(a.basarili.map((x) => [x.kod, x.erp]), [['HM-LGE-00902', 'mukerrer']], JSON.stringify(a.atlanan));
+    assert.equal(await erpKodu('logo-902'), null, 'aynı ERP kodu ikinci karta yazılmaz (harf ve boşluk farkı sayılmaz)');
+
+    // Alan bağdan önce Logo koduyla zaten aynıysa (harf farkı sayılmaz) bağlama yazmaz; geri alma kullanıcının değerini silmez.
+    const ayni = await taslakAc('HM-LGE-00003');
+    const harf = await taslakAc('HM-LGE-00005');
+    await vt().sorgu("UPDATE malzeme_katalog_karti SET kayit = jsonb_set(kayit, '{com,eskiKod}', to_jsonb(stok_kodu)) WHERE kimlik = $1", [ayni.kimlik]);
+    await vt().sorgu("UPDATE malzeme_katalog_karti SET kayit = jsonb_set(kayit, '{com,eskiKod}', to_jsonb(lower(stok_kodu))) WHERE kimlik = $1", [harf.kimlik]);
+    ayna.push(kart(903, ayni.kod), kart(905, harf.kod));
+    const b = await tamam<LogoTopluCevabi>('POST', '/malzeme-logo-gecisi/toplu-bagla', {
+      kartlar: [{ logoKayitNo: 903, surum: (await kartSatiri(ayni.kimlik))!.surum }, { logoKayitNo: 905, surum: (await kartSatiri(harf.kimlik))!.surum }],
+    });
+    assert.deepEqual(b.basarili.map((x) => [x.logoKayitNo, x.erp]), [[903, 'ayni'], [905, 'ayni']]);
+    await tamam('POST', '/malzeme-logo-gecisi/geri-al', { islem: b.islem });
+    assert.equal(await erpKodu(ayni.kimlik), ayni.kod, 'bağlamanın yazmadığı değer geri almada kalır');
+    assert.equal(await erpKodu(harf.kimlik), harf.kod.toLowerCase());
+
+    // İptal kartın ERP kodu bağlanan karta yazımı engellemez.
+    const yeni = await taslakAc('HM-LGE-00004');
+    const iptal = await taslakAc('HM-LGE-00011');
+    await vt().sorgu("UPDATE malzeme_katalog_karti SET onay_durumu = 'iptal', kayit = jsonb_set(kayit, '{com,eskiKod}', to_jsonb($2::text)) WHERE kimlik = $1", [iptal.kimlik, yeni.kod]);
+    ayna.push(kart(904, yeni.kod));
+    const c = await tamam<LogoTopluCevabi>('POST', '/malzeme-logo-gecisi/toplu-bagla', { kartlar: [{ logoKayitNo: 904, surum: yeni.surum }] });
+    assert.deepEqual(c.basarili.map((x) => x.erp), ['yazildi'], JSON.stringify(c.atlanan));
+    assert.equal(await erpKodu(yeni.kimlik), yeni.kod);
+  });
+
+  test('LGG-10 Eksik ERP kodlarını doldur (3474-3): yalnız boş alan yazılır; farklı olan listelenir, okumada olmayan ve mükerrer atlanır; ikinci kez yazacak bir şey kalmaz; okuyan çalıştıramaz', async () => {
+    ayna.length = 0;
+    const bos = await taslakAc('HM-LGD-00001');
+    const farkli = await taslakAc('HM-LGD-00002', 'ORN-ELLE-2');
+    const kayip = await taslakAc('HM-LGD-00003');
+    const mukerrer = await taslakAc('HM-LGD-00004');
+    await taslakAc('HM-LGD-00005', 'ORN-LOGO-4');
+    ayna.push(kart(1001, bos.kod), kart(1002, farkli.kod), kart(1003, kayip.kod), kart(1004, mukerrer.kod));
+    await tamam('POST', '/malzeme-logo-gecisi/toplu-bagla', { kartlar: [bos, farkli, kayip, mukerrer].map((k, i) => ({ logoKayitNo: 1001 + i, surum: k.surum })) });
+    // Bugün bağlı ve alanı boş kartlar: bağlama 3474-3'ten önce yapılmış gibi alan boşaltılır; Logo'daki kod sonradan değişmiş sayılır.
+    await vt().sorgu("UPDATE malzeme_katalog_karti SET kayit = kayit #- '{com,eskiKod}' WHERE kimlik = ANY($1)", [[bos.kimlik, kayip.kimlik, mukerrer.kimlik]]);
+    ayna.splice(ayna.findIndex((k) => k.logoKayitNo === 1003), 1);
+    // Logo'daki kodun başında ve sonunda boşluk olsa da aynı kodlu kart mükerrer sayılır.
+    ayna.splice(ayna.findIndex((k) => k.logoKayitNo === 1004), 1, kart(1004, ' ORN-LOGO-4 '));
+    // İptal edilmiş bağlı karta yazılmaz.
+    const iptal = await taslakAc('HM-LGD-00006');
+    ayna.push(kart(1006, iptal.kod));
+    await tamam('POST', '/malzeme-logo-gecisi/toplu-bagla', { kartlar: [{ logoKayitNo: 1006, surum: iptal.surum }] });
+    await vt().sorgu("UPDATE malzeme_katalog_karti SET onay_durumu = 'iptal', kayit = kayit #- '{com,eskiKod}' WHERE kimlik = $1", [iptal.kimlik]);
+    const once = (await kartSatiri(bos.kimlik))!.surum;
+
+    const bosOnce = (await tamam<ErpKoduOzetiCevabi>('GET', '/malzeme-logo-gecisi/erp-kodlari', undefined, okuyucuCerezi)).bos;
+    assert.ok(bosOnce >= 3, 'onaydaki sayı: bağlı ve ERP kodu boş kartlar');
+    assert.equal((await istek('POST', '/malzeme-logo-gecisi/erp-kodlari-doldur', undefined, okuyucuCerezi)).statusCode, 403);
+    const d = await tamam<ErpKoduDoldurCevabi>('POST', '/malzeme-logo-gecisi/erp-kodlari-doldur');
+    assert.equal(d.doldurulan, 1);
+    assert.deepEqual(d.yazilan.filter((x) => x.stokKodu.startsWith('HM-LGD')), [{ kimlik: bos.kimlik, stokKodu: bos.kod, erpKodu: bos.kod }]);
+    assert.deepEqual(d.farkli.filter((x) => x.stokKodu.startsWith('HM-LGD')), [{ kimlik: farkli.kimlik, stokKodu: farkli.kod, erpKodu: 'ORN-ELLE-2', logoKodu: farkli.kod }]);
+    assert.equal((await tamam<ErpKoduOzetiCevabi>('GET', '/malzeme-logo-gecisi/erp-kodlari')).bos, bosOnce - 1);
+    assert.deepEqual(d.atlanan.filter((x) => x.stokKodu.startsWith('HM-LGD')).map((x) => [x.stokKodu, x.neden]), [
+      [kayip.kod, 'Logo okumasında yok; okuma bitince yeniden deneyin.'],
+      [mukerrer.kod, 'ORN-LOGO-4 ERP kodu başka kartta var.'],
+    ]);
+    assert.equal(await erpKodu(bos.kimlik), bos.kod);
+    assert.equal((await kartSatiri(bos.kimlik))!.surum, once + 1, 'doldurma sürümü artırır');
+    assert.equal(await erpKodu(farkli.kimlik), 'ORN-ELLE-2', 'dolu alan ezilmez');
+    assert.equal(await erpKodu(mukerrer.kimlik), null);
+    assert.equal(await erpKodu(iptal.kimlik), null, 'iptal karta yazılmaz');
+
+    const ikinci = await tamam<ErpKoduDoldurCevabi>('POST', '/malzeme-logo-gecisi/erp-kodlari-doldur');
+    assert.equal(ikinci.doldurulan, 0);
+    assert.ok(ikinci.ayni >= 1);
   });
 
   test('LGG-7 Kullanılanlar (3079 a): iz okununca açılış süzgeci; stok, son 12 ayda hareket ya da açık sipariş; neden satırda; 12 aydan eski hareket saymaz', async () => {

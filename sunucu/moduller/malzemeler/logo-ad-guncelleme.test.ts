@@ -151,4 +151,20 @@ describe('Logo kartının ad güncellemesi (kart #783, S4 b, gerçek PostgreSQL)
     await vt().sorgu(`UPDATE malzeme_katalog_karti SET logo_guncelleme_durumu = 'hata', logo_guncelleme_zamani = now(), logo_guncelleme_hata = 'x' WHERE kimlik = $1`, [kayitli.kimlik]);
     assert.deepEqual(await guncelleme(kayitli.kimlik), { durum: 'hata', hata: 'x', zaman: true });
   });
+  test('3474-3: Logo\'ya gönderilen kartın boş ERP kodu stok koduyla dolar, sürüm artmaz; dolu ERP kodu ezilmez, aynısı başka kartta varsa yazılmaz', async () => {
+    const erp = async (kimlik: string) => (await vt().tek<{ e: string | null; surum: number; kod: string }>(
+      "SELECT kayit -> 'com' ->> 'eskiKod' AS e, surum, stok_kodu AS kod FROM malzeme_katalog_karti WHERE kimlik = $1", [kimlik]))!;
+    const a = await kartAc('90001');
+    const ra = await erp(a.kimlik);
+    assert.deepEqual([ra.e, ra.surum], [ra.kod, a.surum]);
+    const b = await kartAc(null);
+    await vt().sorgu("UPDATE malzeme_katalog_karti SET kayit = jsonb_set(kayit, '{com,eskiKod}', '\"ORN-ELLE-9\"') WHERE kimlik = $1", [b.kimlik]);
+    await vt().tx((db) => malzemeLogoSonucu(db, b.no, { kayitNo: '90002' }));
+    assert.equal((await erp(b.kimlik)).e, 'ORN-ELLE-9');
+    const c = await kartAc(null);
+    const cKod = (await erp(c.kimlik)).kod;
+    await vt().sorgu("UPDATE malzeme_katalog_karti SET kayit = jsonb_set(kayit, '{com,eskiKod}', to_jsonb($2::text)) WHERE kimlik = $1", [b.kimlik, cKod.toLowerCase()]);
+    await vt().tx((db) => malzemeLogoSonucu(db, c.no, { kayitNo: '90003' }));
+    assert.equal((await erp(c.kimlik)).e, null);
+  });
 });

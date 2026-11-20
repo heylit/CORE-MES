@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
-import type { LogoGecisCevabi, LogoKarsiligi, LogoTopluCevabi } from '#paylasilan/sozlesme/malzemeler.ts';
+import type { ErpKoduDoldurCevabi, ErpKoduOzetiCevabi, LogoGecisCevabi, LogoKarsiligi, LogoTopluCevabi } from '#paylasilan/sozlesme/malzemeler.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { LogoMalzemeGecisi } from './LogoMalzemeGecisi.tsx';
 import { LogodanGelenler } from './LogodanGelenler.tsx';
@@ -62,14 +62,25 @@ function sunucuKur(kullanici: Kullanici, liste: LogoGecisCevabi = LISTE, karsili
       return json(200, { durum: 'tamam', ileti: null, kartlar: [{ logoKayitNo: 9, kod: 'ORN-CANLI-9', ad: 'Deneme canli' }] });
     }
     if (yol === '/malzeme-birimleri') return json(200, { birimler: [{ kod: 'kg', aktif: true }, { kod: 'adet', aktif: true }] });
+    if (yol === '/malzeme-logo-gecisi/erp-kodlari') return json(200, { bos: 12 } satisfies ErpKoduOzetiCevabi);
     if (secenek?.method !== 'POST') return json(404, { kod: 'BULUNAMADI', mesaj: 'yok' });
     istekler.push({ yol, govde });
     if (yol.startsWith('/malzeme-logo-gecisi/toplu-')) {
       const tur = yol.endsWith('bagla') ? 'bagla' : 'al';
       return json(200, {
         islem: '00000000-0000-4000-8000-000000000001', tur,
-        basarili: [{ logoKayitNo: tur === 'bagla' ? 3 : 1, kod: 'HM-DEN-0000X', stokKodu: 'HM-DEN-0000X' }], atlanan: [],
+        basarili: [{
+          logoKayitNo: tur === 'bagla' ? 3 : 1, kod: 'HM-DEN-0000X', stokKodu: 'HM-DEN-0000X',
+          erp: tur === 'bagla' ? 'farkli' : 'mukerrer', mevcutErpKodu: tur === 'bagla' ? 'ORN-ESKI-3' : null,
+        }], atlanan: [],
       } satisfies LogoTopluCevabi);
+    }
+    if (yol === '/malzeme-logo-gecisi/erp-kodlari-doldur') {
+      return json(200, {
+        doldurulan: 12, ayni: 3, yazilan: [{ kimlik: 'k9', stokKodu: 'HM-DEN-00009', erpKodu: 'HM-DEN-00009' }],
+        farkli: [{ kimlik: 'k4', stokKodu: 'HM-DEN-00004', erpKodu: 'ORN-ELLE-4', logoKodu: 'HM-DEN-00004' }],
+        atlanan: [{ stokKodu: 'HM-DEN-00006', neden: 'Logo okumasında yok; okuma bitince yeniden deneyin.' }],
+      } satisfies ErpKoduDoldurCevabi);
     }
     if (yol === '/malzeme-logo-gecisi/geri-al') return json(200, { geriAlinan: 1, atlanan: [] });
     if (yol === '/logo-gecisi/malzeme-ekle') return json(200, { eklenen: 1 });
@@ -203,12 +214,41 @@ describe('LogoMalzemeGecisi (3068 a; satır işlemleri 2116)', () => {
     fireEvent.click(screen.getByRole('button', { name: '1 kartı bağla' }));
     await waitFor(() => expect(istekler.find((i) => i.yol === '/malzeme-logo-gecisi/toplu-bagla')?.govde).toEqual({ kartlar: [{ logoKayitNo: 3, surum: 4 }] }));
     expect(await screen.findByText('1 bağlandı, 0 atlandı.')).toBeTruthy();
+    expect(screen.getByText(/ERP kodu farklı: kartta ORN-ESKI-3, Logo'da HM-DEN-0000X\. Kartta düzeltin\./)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Bu işlemi geri al' }));
     await waitFor(() => expect(istekler.find((i) => i.yol === '/malzeme-logo-gecisi/geri-al')?.govde).toEqual({ islem: '00000000-0000-4000-8000-000000000001' }));
     expect(await screen.findByText(/Geri alındı; Logo'ya bir şey gönderilmedi/)).toBeTruthy();
   });
 
-  it('toplu al: tür ve birim boşsa Logo karşılığından; seçilirse hepsine gider', async () => {
+  it('Eksik ERP kodlarını doldur (3474-3): yalnız yazana; onaydan sonra gider; sonuçta sayılar, farklı ve atlanan kartlar', async () => {
+    sunucuKur(OKUYUCU);
+    ac();
+    await screen.findByText('HM-DEN-00001');
+    expect(screen.queryByRole('button', { name: 'Eksik ERP kodlarını doldur' })).toBeNull();
+    cleanup(); vi.unstubAllGlobals();
+    const istekler = sunucuKur(YAZAN);
+    ac();
+    fireEvent.click(await screen.findByRole('button', { name: 'Eksik ERP kodlarını doldur' }));
+    expect(await screen.findByText(/Logo'ya bağlı 12 kartta ERP kodu boş; bunlara Logo'daki kod yazılır\..*Bu işlem geri alınmaz/)).toBeTruthy();
+    expect(istekler.some((i) => i.yol === '/malzeme-logo-gecisi/erp-kodlari-doldur')).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Doldur' }));
+    expect(await screen.findByText('12 kartın ERP kodu yazıldı, 3 kart zaten aynı, 1 kartta farklı, 1 atlandı.')).toBeTruthy();
+    expect(screen.getByText(/ERP kodu farklı: kartta ORN-ELLE-4, Logo'da HM-DEN-00004/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'HM-DEN-00004 kartını aç' }).getAttribute('href')).toBe('/malzemeler?kart=k4');
+    expect(screen.getByText(/Logo okumasında yok/)).toBeTruthy();
+    // Doldurma geri alınmaz: yazılan kartlar indirilen dosyada durur.
+    const indirilen: Blob[] = [];
+    vi.stubGlobal('URL', Object.assign(Object.create(URL) as typeof URL, { createObjectURL: (b: Blob) => { indirilen.push(b); return 'blob:deneme'; }, revokeObjectURL: () => {} }));
+    const tikla = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    fireEvent.click(screen.getByRole('button', { name: 'CSV indir' }));
+    await waitFor(() => expect(indirilen).toHaveLength(1));
+    tikla.mockRestore();
+    const satirlar = (await new Promise<string>((coz) => { const o = new FileReader(); o.onload = () => coz(o.result as string); o.readAsText(indirilen[0]!); })).split(/\r?\n/);
+    expect(satirlar.some((x) => x.includes('HM-DEN-00009') && x.includes('Yazıldı'))).toBe(true);
+    expect(satirlar.some((x) => x.includes('HM-DEN-00004') && x.includes('Farklı'))).toBe(true);
+  });
+
+  it('toplu al: tür ve birim boşsa Logo karşılığından; seçilirse hepsine gider; ERP kodu başka kartta varsa sonuçta söylenir (3474-3)', async () => {
     const istekler = sunucuKur(YAZAN);
     ac();
     await screen.findByText('HM-DEN-00001');
@@ -218,6 +258,7 @@ describe('LogoMalzemeGecisi (3068 a; satır işlemleri 2116)', () => {
     fireEvent.change(await screen.findByLabelText(/Birim \(hepsine\)/), { target: { value: 'adet' } });
     fireEvent.click(screen.getByRole('button', { name: '1 taslak aç' }));
     await waitFor(() => expect(istekler.find((i) => i.yol === '/malzeme-logo-gecisi/toplu-al')?.govde).toEqual({ kartlar: [{ logoKayitNo: 1, surum: null }], tur: null, birim: 'adet' }));
+    expect(await screen.findByText(/ERP kodu yazılmadı: HM-DEN-0000X başka kartta var\./)).toBeTruthy();
   });
 
   it('listede yoksa Logo\'da canlı ara: açıkken arar, bulunanı ekler ve Tümü\'ne geçer; kapalıyken nedeniyle pasif (3080 a)', async () => {
