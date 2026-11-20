@@ -1,3 +1,4 @@
+import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -32,12 +33,12 @@ const DENEME: HazirlikDagitCevabi = {
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
 function kur(dagitir: boolean, emirAcik = true) {
-  const cagrilar: { yontem: string; yol: string; govde: unknown }[] = [];
+  const cagrilar: { yontem: string; yol: string; govde: unknown; kimlik: string | null }[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, ayar?: RequestInit) => {
     const yol = adres.replace('/api', '');
     const yontem = ayar?.method ?? 'GET';
     const govde = typeof ayar?.body === 'string' ? JSON.parse(ayar.body) as { deneme?: boolean } : undefined;
-    cagrilar.push({ yontem, yol, govde });
+    cagrilar.push({ yontem, yol, govde, kimlik: new Headers(ayar?.headers).get(ISTEK_KIMLIGI_BASLIGI) });
     if (yol.startsWith('/hazirlik-matrisi?')) return json(200, MATRIS(dagitir, emirAcik));
     if (yol === '/hazirlik-matrisi/dagit') return json(200, govde?.deneme ? DENEME : { ...DENEME, eklenen: 3 });
     if (yol === '/projeler/sablon-secenekleri') return json(200, { sablonlar: [{ id: 2, ad: 'ORN-CNC Standart', varsayilan: true, gorevSayisi: 1, hazirlikSayisi: 3 }] });
@@ -109,6 +110,10 @@ describe('Proje > Görevler > Emir × madde (3396 A, 3430 a)', () => {
     fireEvent.click(within(p).getByRole('button', { name: '3 görevi aç' }));
     await waitFor(() => expect(cagrilar.filter((c) => c.yol === '/hazirlik-matrisi/dagit')).toHaveLength(2));
     expect(cagrilar.filter((c) => c.yol === '/hazirlik-matrisi/dagit')[1]?.govde).toEqual({ projeId: 9, sablonId: null, deneme: false });
+    // Uç tekrar korumalı: deneme de açma da istek kimliğiyle gider (canlıda "Bu komut istek kimliği ister." hatası).
+    const kimlikler = cagrilar.filter((c) => c.yol === '/hazirlik-matrisi/dagit').map((c) => c.kimlik);
+    expect(kimlikler.every((k) => k !== null && k !== '')).toBe(true);
+    expect(kimlikler[0]).not.toBe(kimlikler[1]);
     await screen.findByText('3 hazırlık görevi açıldı.');
   });
 
