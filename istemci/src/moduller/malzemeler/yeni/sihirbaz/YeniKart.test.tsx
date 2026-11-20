@@ -506,7 +506,7 @@ describe('1882 yeni kart kayıtlı kartın kimliğini taşımaz', () => {
     ac();
     const foy = await screen.findByRole('complementary', { name: 'Canlı föy önizlemesi' });
     const raf = within(foy).getByRole('region', { name: 'Çizimler' });
-    expect(within(raf).getByText(/Kayıtta ORN-2045-01 · Rev B ile Çizim Merkezi'ne gider/)).toBeTruthy();
+    expect(within(raf).getByText(/Kayıtta kartın teknik resim no ve revizyonuyla \(ORN-2045-01 · Rev B\) Çizim Merkezi'ne gider/)).toBeTruthy();
     // 3305 a: iki grup; PDF 3B model alanına bırakılsa da teknik resim grubuna geçer.
     const modelGrubu = within(raf).getByRole('region', { name: '3B model' });
     const resimGrubu = within(raf).getByRole('region', { name: 'Teknik resim' });
@@ -523,11 +523,23 @@ describe('1882 yeni kart kayıtlı kartın kimliğini taşımaz', () => {
     expect(yukleme.cagrilar).toHaveLength(0);
     fireEvent.click(within(raf).getByRole('button', { name: 'ORN-2045-01_Rev-B.step kaldır' }));
     fireEvent.change(girdi, { target: { files: [new File(['y'], 'ORN-2045-01_Rev-B.step')] } });
+    // 3479: dosya başına no ve revizyon karttan dolu açılır; düzenlenen yalnız o dosyayla gider, "Karttan al" geri döndürür.
+    const pdfKare = within(resimGrubu).getByRole('listitem', { name: 'ORN-2045-01_Rev-B.pdf' });
+    fireEvent.click(within(pdfKare).getByRole('button', { name: 'ORN-2045-01_Rev-B.pdf teknik resim no ve revizyonu düzenle' }));
+    expect(within(pdfKare).getByLabelText<HTMLInputElement>('Teknik resim no').value).toBe('ORN-2045-01');
+    expect(within(pdfKare).queryByRole('button', { name: 'ORN-2045-01_Rev-B.pdf kaldır' })).toBeNull();
+    expect(within(pdfKare).queryByText('Kayıtta gönderilir')).toBeNull();
+    fireEvent.change(within(pdfKare).getByLabelText('Revizyon kodu'), { target: { value: 'X' } });
+    fireEvent.click(within(pdfKare).getByRole('button', { name: 'Karttan al' }));
+    expect(within(pdfKare).getByLabelText<HTMLInputElement>('Revizyon kodu').value).toBe('B');
+    fireEvent.change(within(pdfKare).getByLabelText('Revizyon kodu'), { target: { value: 'C' } });
+    fireEvent.click(within(pdfKare).getByRole('button', { name: 'Tamam' }));
+    expect(within(pdfKare).getByText('ORN-2045-01 · Rev C')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Kataloğa kaydet' }));
     await waitFor(() => { expect(yukleme.cagrilar).toHaveLength(2); });
     expect(yukleme.cagrilar.map((c) => [c.no, c.ad, c.g])).toEqual([
-      [100, 'ORN-2045-01_Rev-B.pdf', { tur: 'teknik-resim', resimNo: 'ORN-2045-01', antetRev: 'B' }],
+      [100, 'ORN-2045-01_Rev-B.pdf', { tur: 'teknik-resim', resimNo: 'ORN-2045-01', antetRev: 'C' }],
       [100, 'ORN-2045-01_Rev-B.step', { tur: '3b-model', resimNo: 'ORN-2045-01', antetRev: 'B' }],
     ]);
     expect(await within(raf).findByText('Yayında')).toBeTruthy();

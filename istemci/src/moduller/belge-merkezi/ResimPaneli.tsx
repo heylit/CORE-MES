@@ -21,10 +21,13 @@ import './belge-merkezi.css';
 // kopya tutmaz. Malzeme yazan kişi yalnız bu kartın belgelerine yazar. Foto ve teknik resim hemen yayına girer (1991 b); 3B model
 // taslak girer, yayını çizim merkezi yapar. Küçük resim yüklemede bu cihazda üretilir; 3B modelde taslakken de (1990 a).
 
-const MALZEME_TURLERI: readonly MalzemeBelgeTuru[] = ['fotograf', 'teknik-resim', '3b-model'];
+// 3479: pencere teknik resimle açılır (no ve revizyon karttan dolu gelir); fotoğraf en sonda.
+const MALZEME_TURLERI: readonly MalzemeBelgeTuru[] = ['teknik-resim', '3b-model', 'fotograf'];
 
 // Panel yalnız resim değil teknik resim ve STEP de alır; başlık üç türü de söyler (3479).
 const PANEL_BASLIGI = 'Teknik resim, 3B model ve fotoğraf';
+
+const FOTO_BICIMLERI = new Set(['png', 'jpeg', 'webp']);
 
 const kok = (no: number): string => `/cizimler/malzemeler/${no}`;
 
@@ -122,20 +125,24 @@ const antetOnDegeri = (tur: MalzemeBelgeTuru, kartRev: string | null): string =>
 // 3242: teknik resim no da kartınkiyle dolu açılır; fotoğrafın numarası yoktur.
 const resimNoOnDegeri = (tur: MalzemeBelgeTuru, kartResimNo: string | null): string => (tur === 'fotograf' ? '' : kartResimNo ?? '');
 
+// Fotoğrafta no ve revizyon alanları gizlidir; elle yazılıp tür değişmişse gizli değer gitmesin (3479).
+export const antetAlanlari = (tur: MalzemeBelgeTuru, resimNo: string, antetRev: string): { resimNo: string; antetRev: string } =>
+  (tur === 'fotograf' ? { resimNo: '', antetRev: '' } : { resimNo, antetRev });
+
 function BelgeEkle({ no, kartRev, kartResimNo, kapat }: { no: number; kartRev: string | null; kartResimNo: string | null; kapat: () => void }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
-  const [tur, turYaz] = useState<MalzemeBelgeTuru>('fotograf');
+  const [tur, turYaz] = useState<MalzemeBelgeTuru>('teknik-resim');
   const [dosya, dosyaYaz] = useState<File | null>(null);
   const [ad, adYaz] = useState('');
-  const [resimNo, resimNoYaz] = useState(resimNoOnDegeri('fotograf', kartResimNo));
+  const [resimNo, resimNoYaz] = useState(resimNoOnDegeri('teknik-resim', kartResimNo));
   const [resimNoElle, resimNoElleYaz] = useState(false);
-  const [antetRev, antetRevYaz] = useState(antetOnDegeri('fotograf', kartRev));
+  const [antetRev, antetRevYaz] = useState(antetOnDegeri('teknik-resim', kartRev));
   const [antetElle, antetElleYaz] = useState(false);
   const [ilerleme, ilerlemeYaz] = useState<number | null>(null);
   const [hata, hataYaz] = useState<string | null>(null);
   const komut = useMutation({
-    mutationFn: (d: File) => malzemeBelgesiYukle(no, d, { tur, ad, resimNo, antetRev }, ilerlemeYaz),
+    mutationFn: (d: File) => malzemeBelgesiYukle(no, d, { tur, ad, ...antetAlanlari(tur, resimNo, antetRev) }, ilerlemeYaz),
     onMutate: () => { hataYaz(null); ilerlemeYaz(0); },
     onSuccess: async ({ kareHatasi }) => {
       await istemci.invalidateQueries({ queryKey: anahtarlar.kok });
@@ -146,6 +153,8 @@ function BelgeEkle({ no, kartRev, kartResimNo, kapat }: { no: number; kartRev: s
     onError: (e) => { ilerlemeYaz(null); hataYaz(e instanceof DosyaHatasi ? e.message : hataIletisi(e, 'Belge eklenemedi')); },
   });
   const red = dosyaReddi(dosya, tur);
+  // 3479 Risk N1: teknik resim hemen yayına girer; seçilen resim dosyası fotoğrafsa yanlışlıkla atölyeye gitmesin.
+  const resimDosyasi = tur === 'teknik-resim' && dosya !== null && FOTO_BICIMLERI.has(dosyaTuruBul(dosya.name) ?? '');
   return (
     <Pencere
       acik
@@ -163,8 +172,14 @@ function BelgeEkle({ no, kartRev, kartResimNo, kapat }: { no: number; kartRev: s
           {...(red ? { hata: red } : {})}
         />
         <Girdi etiket="Belge adı" value={ad} maxLength={120} onChange={(e) => { adYaz(e.target.value); }} />
-        <Girdi etiket="Teknik resim no" value={resimNo} maxLength={60} onChange={(e) => { resimNoYaz(e.target.value); resimNoElleYaz(true); }} ipucu="Kartın teknik resim numarasıyla dolu gelir; çizim merkezinde bu numarayla aranır." />
-        <Girdi etiket="Revizyon kodu" value={antetRev} maxLength={20} onChange={(e) => { antetRevYaz(e.target.value); antetElleYaz(true); }} ipucu="Resmin antetindeki revizyon; kartın revizyonuyla karşılaştırılır. Boşsa kartın revizyonu gösterilir." />
+        {tur !== 'fotograf' && <Girdi etiket="Teknik resim no" value={resimNo} maxLength={60} onChange={(e) => { resimNoYaz(e.target.value); resimNoElleYaz(true); }} ipucu="Kartın teknik resim numarasıyla dolu gelir; çizim merkezinde bu numarayla aranır." />}
+        {tur !== 'fotograf' && <Girdi etiket="Revizyon kodu" value={antetRev} maxLength={20} onChange={(e) => { antetRevYaz(e.target.value); antetElleYaz(true); }} ipucu="Resmin antetindeki revizyon; kartın revizyonuyla karşılaştırılır. Boşsa kartın revizyonu gösterilir." />}
+        {resimDosyasi && (
+          <div className="tc-cz-foto-uyari" role="status">
+            <p className="tc-cz-uyari">Bu bir resim dosyası. Teknik resim yüklenince hemen yayına girer ve atölyede geçerli olur. Fotoğrafsa türü Fotoğraf yapın.</p>
+            <Dugme simge="camera" onClick={() => { turYaz('fotograf'); if (!antetElle) antetRevYaz(''); if (!resimNoElle) resimNoYaz(''); }}>Fotoğraf olarak ekle</Dugme>
+          </div>
+        )}
         <Ilerleme oran={ilerleme} />
         {hata !== null && <p className="tc-cz-hata" role="alert">{hata}</p>}
       </div>
@@ -263,9 +278,11 @@ export function ResimPaneli({ malzemeNo, tazele = 0 }: { malzemeNo: number; taze
     }
   };
 
-  if (sorgu.isError) return <Kart baslik={PANEL_BASLIGI}><DurumKutusu durum="hata" mesaj={hataIletisi(sorgu.error, 'Dosyalar alınamadı')} yenile={() => { void sorgu.refetch(); }} /></Kart>;
+  if (sorgu.isError) return <div className="tc-cz-rp-kab"><Kart baslik={PANEL_BASLIGI}><DurumKutusu durum="hata" mesaj={hataIletisi(sorgu.error, 'Dosyalar alınamadı')} yenile={() => { void sorgu.refetch(); }} /></Kart></div>;
   const veri = sorgu.data;
   return (
+    // Dar ekranda düğme başlığın altına iner (3479 Arayüz bakışı); sarmalayıcı yalnız bunun için.
+    <div className="tc-cz-rp-kab">
     <Kart baslik={PANEL_BASLIGI} sag={yazar && <Dugme simge="plus" onClick={() => { acikYaz('ekle'); }}>Dosya ekle</Dugme>}>
       {!veri
         ? <DurumKutusu durum="yukleniyor" />
@@ -279,7 +296,7 @@ export function ResimPaneli({ malzemeNo, tazele = 0 }: { malzemeNo: number; taze
                 </p>
               )}
               {veri.kucukResim?.taslak === true && <p className="tc-cz-ipucu" role="status">Resim taslak 3B modelden; model yayınlanınca ölçülür ve atölyeye gider.</p>}
-              {veri.kucukResim === null && <p className="tc-cz-ipucu">Küçük resim yok. Teknik resim (PDF), 3B model (STEP) ya da fotoğraf ekleyin.</p>}
+              {veri.kucukResim === null && veri.belgeler.length > 0 && <p className="tc-cz-ipucu">Küçük resim yok. Teknik resim (PDF), 3B model (STEP) ya da fotoğraf ekleyin.</p>}
             </div>
             {veri.belgeler.length === 0
               ? <DurumKutusu durum="bos" mesaj="Bağlı teknik resim, 3B model ya da fotoğraf yok" />
@@ -367,5 +384,6 @@ export function ResimPaneli({ malzemeNo, tazele = 0 }: { malzemeNo: number; taze
       {acik === 'ekle' && <BelgeEkle no={malzemeNo} kartRev={sorgu.data?.kartRevizyon ?? null} kartResimNo={sorgu.data?.kartResimNo ?? null} kapat={() => { acikYaz(null); }} />}
       {acik !== null && acik !== 'ekle' && <RevizyonYukle no={malzemeNo} belge={acik.revizyon} kartRev={sorgu.data?.kartRevizyon ?? null} kapat={() => { acikYaz(null); }} />}
     </Kart>
+    </div>
   );
 }
