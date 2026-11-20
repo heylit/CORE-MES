@@ -575,6 +575,90 @@ describe('planlama değerlendirmesi: arama (457 1-3 b)', () => {
   });
 });
 
+// Hamleler bayat planı reddeder: kayıtlı plan veriyle aynı sürümde olmalı. Kaynak birleşmesi sürümü artırır; kararlı olana dek yinelenir (PD-21).
+function guncelPlanli(kayit = BUYUK_KAYIT, kaynak = BUYUK_KAYNAK): Record<string, unknown> {
+  let S: Record<string, unknown> = calismaKur();
+  let g = planGirdisi({ calisma: S, kayit, kaynak, bugun: '2026-10-19' });
+  for (let i = 0; i < 4 && g && g.S['dataVer'] !== S['dataVer']; i++) { S = g.S; g = planGirdisi({ calisma: S, kayit, kaynak, bugun: '2026-10-19' }); }
+  assert.ok(g && g.S['dataVer'] === S['dataVer'], 'birleşme kararlı');
+  const m = motorYukle(); const p = m.schedule(g.st, 'dagit', null);
+  const e = m.evaluate(p, g.st, null, false) as { J: Record<string, { C: number; T: number }> };
+  return { ...S, plan: { ops: p.ops, fail: [], J: Object.fromEntries(Object.entries(e.J).map(([k, x]) => [k, { C: x.C, T: x.T }])), dataVer: S['dataVer'] } };
+}
+
+describe('planlama değerlendirmesi: çıkış denetimi (3499)', () => {
+  // Şimdi 38. saat. O6.10 (planda 12-37) 34'te başlamış, sürüyor: 59'da biter. Aynı tezgâhtaki O4.10 (37-58) başlamamış, O2.10 58'de sırada.
+  // Kayıtlı planı çözen her hesap O4.10'u eski yerinde çalışıyor sayar; onarılmazsa süren işle üst üste gelir.
+  const SIMDI = 38, AN38 = Date.parse('2026-10-18T21:00:00Z') + SIMDI * 3_600_000;
+  function suren(ek: Record<string, unknown> = {}): { calisma: Record<string, unknown>; eski: Record<string, PlanIsi> } {
+    const c = guncelPlanli(); const eski = (c['plan'] as { ops: Record<string, PlanIsi> }).ops;
+    assert.ok(eski['O4.10']!.m === eski['O6.10']!.m && eski['O4.10']!.S < SIMDI && eski['O4.10']!.C > SIMDI, 'örnek plan değişmiş');
+    const bitti = (id: string) => ({ m: eski[id]!.m, S: eski[id]!.S, C: eski[id]!.C });
+    return { calisma: { ...c, gercek: { 'O0.10': bitti('O0.10'), 'O0.20': bitti('O0.20'), 'O6.10': { m: eski['O6.10']!.m, S: 34 } }, ...ek }, eski };
+  }
+  const iste = (calisma: unknown, istek: DegerlendirmeIstegi) => degerlendirmeYap({ calisma, kayit: BUYUK_KAYIT, kaynak: BUYUK_KAYNAK, bugun: '2026-10-19', istek }, AN38);
+
+  const planOps = (x: Record<string, unknown> | null | undefined): Record<string, PlanIsi> => { assert.ok(x, 'plan döndü'); return x['ops'] as Record<string, PlanIsi>; };
+
+  test('CD-01: sıra değiştir: tezgâhta öne alınan adımın ardından gelen plan sıraya aykırı adım ve çakışan iş taşımaz; istenen sıra tutulur', async () => {
+    const c = guncelPlanli(); const eski = (c['plan'] as { ops: Record<string, PlanIsi> }).ops;
+    const kuyruk = Object.entries(eski).filter(([, r]) => r.m === '100').sort((x, y) => x[1].S - y[1].S).map((x) => x[0]);
+    assert.deepEqual(kuyruk, ['O0.20', 'O6.20', 'O4.20', 'O3.10', 'O2.20', 'O7.10', 'O1.10', 'O5.10'], 'örnek plan değişmiş');
+    const sira = ['O3.10', 'O0.20', 'O6.20', 'O4.20', 'O2.20', 'O7.10', 'O1.10', 'O5.10'];
+    const s = sonuc(await degerlendirmeYap({ calisma: c, kayit: BUYUK_KAYIT, kaynak: BUYUK_KAYNAK, bugun: '2026-10-19', istek: { tur: 'sira-degistir', tezgah: '100', sira } }, AN));
+    if (s.tur !== 'sira-degistir') return assert.fail(s.tur);
+    assert.equal(s.neden, null);
+    assert.deepEqual(s.sira, sira);
+    assert.deepEqual(planBozuklari(planOps(s.plan)), []);
+  });
+
+  test('CD-02: öne al ve iyileştir: süren işin tezgâhında sırası gelmiş, başlamamış iş çalışıyor sayılmaz; plan geçerli döner', async () => {
+    const { calisma } = suren();
+    const o = sonuc(await iste(calisma, { tur: 'one-al', siparisId: 'O1' })); if (o.tur !== 'one-al') return assert.fail(o.tur);
+    const i = sonuc(await iste(calisma, { tur: 'plan-iyilestir' })); if (i.tur !== 'plan-iyilestir') return assert.fail(i.tur);
+    for (const [ad, x] of [['öne al', o.plan], ['iyileştir', i.plan]] as const) {
+      const yeni = planOps(x);
+      assert.equal(yeni['O6.10']!.S, 34, ad);
+      assert.ok(yeni['O4.10']!.S >= yeni['O6.10']!.C - 1e-6, `${ad}: bekleyen iş süren iş bitince: ${String(yeni['O4.10']?.S)} >= ${String(yeni['O6.10']?.C)}`);
+      assert.deepEqual(planBozuklari(yeni), [], ad);
+    }
+  });
+
+  test('CD-03: parti böl (dağıt): başka tornaya verilen parti öncülü bitmeden başlamaz, verildiği tornada kalır', async () => {
+    const kayit = { ...BUYUK_KAYIT, machines: [...BUYUK_KAYIT.machines, { id: '101', code: 'T2', name: 'Torna 2', stationId: '10', plan: tezgah('101', '10', 750) }] };
+    const kaynak = { ...BUYUK_KAYNAK, durum: { ...BUYUK_KAYNAK.durum, machines: [...BUYUK_KAYNAK.durum.machines, { id: '101', code: 'T2', name: 'Torna 2', stationId: '10', status: 'aktif', aktif: true }] } };
+    const s = sonuc(await degerlendirmeYap({ calisma: guncelPlanli(kayit, kaynak), kayit, kaynak, bugun: '2026-10-19', istek: { tur: 'parti-bolme', siparisId: 'O2', dagitim: 'dag', adetler: [4, 5] } }, AN));
+    if (s.tur !== 'parti-bolme' || !s.sonuc) return assert.fail(s.tur);
+    assert.deepEqual(s.sonuc.partiler.map((x) => x.makineId), [null, '101']);
+    const yeni = planOps(s.sonuc.plan);
+    assert.equal(yeni['O2/2.20']!.m, '101');
+    assert.deepEqual(planBozuklari(yeni), []);
+  });
+
+  test('CD-04: plan seçenekleri: saati geçmiş, başlamamış adımın ardılları bölgede eski yerinde kilitlenip öncülünden önce başlamaz', async () => {
+    const kayit = zincirKayit(8), calisma = kuralPlanli(kayit);
+    const an = Date.parse('2026-10-18T21:00:00Z') + 10.5 * 3_600_000;
+    const s = sonuc(await degerlendirmeYap({ calisma, kayit, kaynak: BUYUK_KAYNAK, bugun: '2026-10-19', istek: { tur: 'plan-secenekleri' } }, an));
+    if (s.tur !== 'plan-secenekleri') return assert.fail(s.tur);
+    assert.ok(s.secenekler.length > 0);
+    for (const x of s.secenekler) { const yeni = planOps(x.plan); assert.ok(yeni['OA.10']!.S >= 10.5 - 1e-6, String(x.denge)); assert.deepEqual(planBozuklari(yeni), [], `denge ${String(x.denge)}`); }
+  });
+
+  test('CD-05: kişinin kilidi süren işle üst üste geliyorsa motor kilidi oynatmaz; çakışma planın uyarılarında bildirilir', async () => {
+    const { calisma, eski } = suren({ locks: { 'O4.10': { m: '200', S: 40 } } });
+    assert.equal(eski['O4.10']!.m, '200');
+    const s = sonuc(await iste(calisma, { tur: 'plan-uygula', isler: ['O7'] })); if (s.tur !== 'plan-uygula') return assert.fail(s.tur);
+    const yeni = planOps(s.plan);
+    assert.equal(yeni['O4.10']!.S, 40, 'elle kilit yerinde');
+    assert.ok(yeni['O6.10']!.C > 40, 'süren iş kilit saatinden sonra bitiyor');
+    const uyari = (s.plan['warn'] as { t: string; id?: string; txt: string }[]).filter((w) => w.t === 'cakisma');
+    assert.deepEqual(uyari.map((w) => w.id), ['O4.10']);
+    assert.match(uyari[0]!.txt, /O6\.10/);
+    const temiz = sonuc(await iste(suren().calisma, { tur: 'plan-uygula', isler: ['O7'] })); if (temiz.tur !== 'plan-uygula') return assert.fail(temiz.tur);
+    assert.deepEqual((temiz.plan['warn'] as { t: string }[]).filter((w) => w.t === 'cakisma'), [], 'geçerli planda bu uyarı yok');
+  });
+});
+
 const PAROLA = 'dogru-parola-1';
 const URL = '/api/plan/planlama-degerlendirmesi';
 
