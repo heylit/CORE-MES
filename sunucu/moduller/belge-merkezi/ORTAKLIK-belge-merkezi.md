@@ -3,7 +3,7 @@
 Modülün tuttuğu ve başka modülde de olabilecek kavramlar; Aşama 2 tablosuna girer. Kaynak: `sunucu/gocler/20261012101500_cizimler_tablolar.sql`, `paylasilan/sozlesme/belge-merkezi.ts`.
 
 ## Tablolar
-- `belge_merkezi_belge`: `id`, `ad`, `tur`, `resim_no`, `aciklama`, `aktif`, `surum`, `olusturan_id` -> `kisi`, `olusturuldu`, `guncellendi`.
+- `belge_merkezi_belge`: `id`, `ad`, `tur`, `resim_no`, `aciklama`, `aktif`, `surum`, `olusturan_id` -> `kisi`, `olusturuldu`, `guncellendi`, `kaynak_belge_id`, `kaynak_revizyon_id`, `kullanim` (3468-2 türev; kullanım listesi sözleşmede `KULLANIMLAR`).
 - `belge_merkezi_revizyon`: `id`, `belge_id`, `sira`, `ozet` -> `dosya`, `dosya_turu`, `antet_rev`, `durum`, `not`, `yukleyen_id` -> `kisi`, `yuklendi`, `yayinlayan_id` -> `kisi`, `yayinlandi`.
 - `belge_merkezi_bag`: `belge_id`, `hedef_modul`, `hedef_id`, `kapak`, `ekleyen_id` -> `kisi`, `eklendi`.
 

@@ -2,7 +2,8 @@ import { useDeferredValue, useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import type {
-  BagGovdesi, BelgeAyrintisi, BelgeGuncelleGovdesi, BelgeOlusturGovdesi, BelgeTuru, MalzemeSecimiCevabi, RevizyonEkleGovdesi,
+  BagGovdesi, BelgeAyrintisi, BelgeGuncelleGovdesi, BelgeListesiCevabi, BelgeOlusturGovdesi, BelgeTuru, Kullanim, MalzemeSecimiCevabi, Revizyon,
+  RevizyonEkleGovdesi, TurevBagGovdesi,
 } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import { CokSatir, Dugme, Girdi, Pencere, Secim } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
@@ -11,6 +12,8 @@ import { IstasyonSecimi } from '../istasyonlar/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { AyniDosyaPenceresi } from './AyniDosya.tsx';
 import { useDosyaliKomut, useKomut } from './komut.ts';
+import { revKoduMetni } from './revizyon-kodu.ts';
+import { KISA_AD_ZORUNLU, KullanimSecimi, kisaAdGerekli, turevAdi } from './Turev.tsx';
 import { BELGE_TURLERI, IZINLI_DOSYA_TURLERI, TUR_ADI, boyutMetni, dosyaTuruBul, izinliMetni, kabulMetni } from './gosterim.ts';
 
 const adindan = (ad: string): string => (ad.replace(/\.[^.]+$/, '').replace(/_+/g, ' ').trim() || 'Belge').slice(0, 120);
@@ -204,6 +207,127 @@ export function IstasyonaBagla({ belge, kapat }: { belge: BelgeAyrintisi; kapat:
           <p className="tc-cz-uyari" role="status">Bu makine fabrika haritasında yok. Eşleştirdikten sonra Fabrika Haritası &gt; Düzenle &gt; Ekle &gt; Eklenecek makineler'den yerleştirin.</p>
         )}
         {!yayinda && <p className="tc-cz-uyari" role="status">Çizim taslakta. Harita yalnız yayındaki modeli gösterir; çizim yayınlanınca görünür.</p>}
+        {komut.hata !== null && <p className="tc-cz-hata" role="alert">{komut.hata}</p>}
+      </div>
+    </Pencere>
+  );
+}
+
+// 3468-2 "Türev ekle": bilgisayardan yüklenen dosya orijinalin bu revizyonunun türevi olarak açılır (PDF düzenleyicinin kaydet
+// penceresiyle aynı alanlar). Revizyon kodu kaynağınkiyle başlar.
+export function TurevEkle({ kaynak, revizyon, ilkKullanim, kapat }: {
+  kaynak: BelgeAyrintisi; revizyon: Revizyon; ilkKullanim: Kullanim | null; kapat: () => void;
+}) {
+  const yonlendir = useNavigate();
+  const [kullanim, kullanimYaz] = useState<Kullanim | null>(ilkKullanim);
+  const [kisaAd, kisaAdYaz] = useState('');
+  const [not, notYaz] = useState('');
+  const [dosya, dosyaYaz] = useState<File | null>(null);
+  const ad = kullanim === null ? '' : turevAdi(kaynak.ad, kullanim, kisaAd);
+  const komut = useDosyaliKomut(
+    '/cizimler',
+    (ozet): BelgeOlusturGovdesi => ({
+      ad, tur: kaynak.tur, aciklama: kaynak.aciklama ?? '', resimNo: kaynak.resimNo ?? '', antetRev: revizyon.antetRev ?? revizyon.revKodu ?? '', not, ozet,
+      dosyaAdi: dosya?.name.slice(0, 120) ?? '', turev: kullanim === null ? null : { kaynakBelgeId: kaynak.id, kaynakRevizyonId: revizyon.id, kullanim },
+    }),
+    (c) => { kapat(); void yonlendir(`/cizimler/belge/${String(c.id)}`); },
+    'Türev açılamadı',
+    true,
+  );
+  const red = dosyaReddi(dosya, kaynak.tur);
+  const kisaGerekli = kullanim !== null && kisaAdGerekli(kaynak.turevler ?? [], kullanim);
+  const eksik = kullanim === null ? 'Kullanım seçin.' : kisaGerekli && kisaAd.trim() === '' ? KISA_AD_ZORUNLU : null;
+  return (
+    <Pencere
+      acik
+      tur="yan"
+      kapat={kapat}
+      baslik={`${kaynak.ad} · Rev ${revKoduMetni(revizyon.revKodu)} · türev ekle`}
+      alt={<Dugme tur="birincil" simge="upload" yukleniyor={komut.yukleniyor} disabled={!dosya || red !== null || eksik !== null} onClick={() => { if (dosya) komut.gonder(dosya); }}>Yükle</Dugme>}
+    >
+      <div className="tc-cz-form">
+        <KullanimSecimi deger={kullanim} sec={kullanimYaz} />
+        <TurevAdAlani kisaAd={kisaAd} yaz={kisaAdYaz} gerekli={kisaGerekli} ad={ad} />
+        <DosyaAlani tur={kaynak.tur} dosya={dosya} sec={dosyaYaz} hata={red} />
+        <Girdi etiket="Revizyon notu" value={not} maxLength={300} onChange={(e) => { notYaz(e.target.value); }} ipucu="Türev ayrı belgedir; ilk revizyonu taslak açılır. Orijinal değişmez." />
+        {eksik !== null && eksik !== KISA_AD_ZORUNLU && dosya !== null && <p className="tc-cz-ipucu" role="status">{eksik}</p>}
+        <Ilerleme oran={komut.ilerleme} />
+        {komut.hata !== null && <p className="tc-cz-hata" role="alert">{komut.hata}</p>}
+      </div>
+      {komut.ayni !== null && <AyniDosyaPenceresi {...komut.ayni} devamMetni="Yine de türev aç" />}
+    </Pencere>
+  );
+}
+
+export function TurevAdAlani({ kisaAd, yaz, gerekli, ad }: { kisaAd: string; yaz: (m: string) => void; gerekli: boolean; ad: string }) {
+  // Hata kullanıcı alana dokunmadan gösterilmez; Kaydet zaten kapalıdır, alttaki not nedenini söyler.
+  const [dokunuldu, dokunulduYaz] = useState(false);
+  return (
+    <Girdi
+      etiket="Kısa ad" value={kisaAd} maxLength={38} required={gerekli} onChange={(e) => { yaz(e.target.value); }} onBlur={() => { dokunulduYaz(true); }}
+      hata={dokunuldu && gerekli && kisaAd.trim() === '' ? KISA_AD_ZORUNLU : undefined}
+      ipucu={`${gerekli ? 'Bu kullanımda başka türev var; ayırmak için zorunlu (örn. kaplama, ısıl işlem). ' : 'İsteğe bağlı. '}Belge adı: ${ad || '(kullanım seçin)'}`}
+    />
+  );
+}
+
+// 3468-2 "Türev olarak bağla": bugüne kadar ayrı belge açılmış düzenleme orijinaline bağlanır. Kaynak yalnız orijinal belgelerden,
+// revizyonu yalnız yayına girmişlerden seçilir.
+export function TurevOlarakBagla({ belge, kapat }: { belge: BelgeAyrintisi; kapat: () => void }) {
+  const [ara, araYaz] = useState('');
+  const [kaynakId, kaynakYaz] = useState<number | null>(belge.kaynak?.belgeId ?? null);
+  const [revizyonId, revizyonYaz] = useState<number | null>(belge.kaynak?.revizyonId ?? null);
+  const [kullanim, kullanimYaz] = useState<Kullanim | null>(belge.kaynak?.kullanim ?? null);
+  const aranan = useDeferredValue(ara.trim());
+  const sorgu = `?kullanim=orijinal&tur=${belge.tur}&sayfaBoyu=20${aranan === '' ? '' : `&ara=${encodeURIComponent(aranan)}`}`;
+  const adaylar = useQuery({
+    queryKey: [...anahtarlar.kok, 'turev-kaynagi', sorgu],
+    queryFn: () => api.get<BelgeListesiCevabi>(`/cizimler${sorgu}`),
+    placeholderData: keepPreviousData,
+  });
+  const kaynak = useQuery({
+    queryKey: anahtarlar.ayrinti(kaynakId ?? 0),
+    queryFn: () => api.get<BelgeAyrintisi>(`/cizimler/${String(kaynakId)}`),
+    enabled: kaynakId !== null,
+  });
+  const secenekler = (adaylar.data?.satirlar ?? []).filter((s) => s.id !== belge.id && s.yayindakiHarf !== null);
+  const revizyonlar = (kaynak.data?.revizyonlar ?? []).filter((r) => r.durum !== 'taslak');
+  const komut = useKomut(`/cizimler/${belge.id}/turev-bagla`, kapat, 'Türev bağlanamadı');
+  const hazir = kaynakId !== null && revizyonId !== null && kullanim !== null;
+  const gonder = () => {
+    if (!hazir) return;
+    const govde: TurevBagGovdesi = { kaynakBelgeId: kaynakId, kaynakRevizyonId: revizyonId, kullanim, surum: belge.surum };
+    komut.gonder(govde);
+  };
+  return (
+    <Pencere
+      acik
+      kapat={kapat}
+      baslik={belge.kaynak ? 'Türev bağını değiştir' : 'Türev olarak bağla'}
+      alt={<Dugme tur="birincil" simge="layers" yukleniyor={komut.yukleniyor} disabled={!hazir} onClick={gonder}>Bağla</Dugme>}
+    >
+      <div className="tc-cz-form">
+        <p className="tc-cz-ipucu">Bu belge orijinalin altında türev olarak görünür; dosyası ve revizyonları değişmez.</p>
+        <Girdi etiket="Orijinal belgeyi ara" type="search" value={ara} maxLength={80} onChange={(e) => { araYaz(e.target.value); }} ipucu="Belge adı ya da resim no." />
+        <Secim
+          etiket="Orijinal belge"
+          value={kaynakId === null ? '' : String(kaynakId)}
+          onChange={(e) => { kaynakYaz(e.target.value === '' ? null : Number(e.target.value)); revizyonYaz(null); }}
+          bosSecenek="Seçiniz"
+          secenekler={[
+            ...(belge.kaynak && !secenekler.some((s) => s.id === belge.kaynak?.belgeId) ? [{ deger: String(belge.kaynak.belgeId), baslik: belge.kaynak.ad }] : []),
+            ...secenekler.map((s) => ({ deger: String(s.id), baslik: s.ad })),
+          ]}
+          ipucu={adaylar.isError ? 'Belge listesi alınamadı.' : 'Yalnız yayında revizyonu olan orijinal belgeler.'}
+        />
+        <Secim
+          etiket="Kaynak revizyon"
+          value={revizyonId === null ? '' : String(revizyonId)}
+          onChange={(e) => { revizyonYaz(e.target.value === '' ? null : Number(e.target.value)); }}
+          bosSecenek={kaynakId === null ? 'Önce belge seçin' : 'Seçiniz'}
+          secenekler={revizyonlar.map((r) => ({ deger: String(r.id), baslik: `Rev ${revKoduMetni(r.revKodu)}${r.durum === 'yayinda' ? ' (yayında)' : ' (eski)'}` }))}
+        />
+        <KullanimSecimi deger={kullanim} sec={kullanimYaz} />
         {komut.hata !== null && <p className="tc-cz-hata" role="alert">{komut.hata}</p>}
       </div>
     </Pencere>

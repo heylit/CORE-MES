@@ -29,6 +29,14 @@ export const ILETILER = {
   malzemeYok: 'Malzeme kartı bulunamadı.',
   malzemeyeBagliDegil: 'Belge bu malzeme kartına bağlı değil.',
   kapakTaslak: 'Yayına girmiş revizyonu olmayan belge kapak olamaz.',
+  turevKaynakYok: 'Kaynak belge bulunamadı.',
+  turevKendisi: 'Belge kendi türevi olamaz.',
+  turevinTurevi: 'Türevin türevi olmaz; kaynağın orijinal belgesini seçin.',
+  turevKaynakArsivde: 'Arşivdeki belgeden türev çıkmaz.',
+  turevRevizyonYok: 'Kaynak revizyon bu belgede yok.',
+  turevRevizyonTaslak: 'Türev yalnız yayına girmiş revizyondan çıkar.',
+  turevliBelge: 'Türevi olan belge türev olamaz.',
+  turevDegil: 'Bu belge bir türev değil.',
 } as const;
 
 // CZ-03: belge türü, kabul ettiği dosya türlerini belirler (makine ve diğer her türü alır).
@@ -237,3 +245,25 @@ export function ayniDosyaCizimYeri(r: {
     durum: r.aktif ? REVIZYON_DURUM_METNI[r.durum] : 'Arşivde',
   };
 }
+
+// 3468-2: türev bağı. Kaynak orijinal (türev değil), etkin ve revizyonu yayına girmiş olmalı; türevi olan belge türev olamaz
+// (tek seviye; göçteki tetikleyici de aynı kuralı korur). Aynı belge yeniden bağlanabilir (kaynak revizyonu ya da kullanımı değişir).
+export function turevReddi(t: {
+  hedefId: number | null;
+  hedefTurevSayisi: number;
+  kaynak: { id: number; aktif: boolean; turevMi: boolean } | null;
+  revizyonDurumu: RevizyonDurumu | null;
+}): keyof typeof ILETILER | null {
+  if (t.kaynak === null) return 'turevKaynakYok';
+  if (t.hedefId === t.kaynak.id) return 'turevKendisi';
+  if (t.kaynak.turevMi) return 'turevinTurevi';
+  if (!t.kaynak.aktif) return 'turevKaynakArsivde';
+  if (t.revizyonDurumu === null) return 'turevRevizyonYok';
+  if (t.revizyonDurumu === 'taslak') return 'turevRevizyonTaslak';
+  if (t.hedefTurevSayisi > 0) return 'turevliBelge';
+  return null;
+}
+
+// "Kaynağı eski": türevin çıktığı revizyon artık yayında değil. Türev kendiliğinden eskiye düşmez; eski revizyonla üretilen
+// parçanın izi kalır, kullanıcı yenisini çıkarır.
+export const kaynakEskiMi = (kaynakDurumu: RevizyonDurumu): boolean => kaynakDurumu !== 'yayinda';

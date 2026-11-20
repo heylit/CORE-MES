@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import type { BelgeListesiCevabi, BelgeListesiSorgusu, BelgeSatiri, BelgeTuru } from '#paylasilan/sozlesme/belge-merkezi.ts';
-import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Sekmeler, Simge, Tablo, type Sekme, type Sutun } from '../../ortak/arayuz/index.ts';
+import type { BelgeListesiCevabi, BelgeListesiSorgusu, BelgeSatiri, BelgeTuru, Kullanim } from '#paylasilan/sozlesme/belge-merkezi.ts';
+import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Secim, Sekmeler, Simge, Tablo, type Sekme, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
 import { anahtarlar } from './anahtarlar.ts';
@@ -10,13 +10,31 @@ import { revKoduMetni } from './revizyon-kodu.ts';
 import { useYetki } from './komut.ts';
 import { useMenuSayaclari } from './menu-sayaclari.ts';
 import { YeniBelge } from './formlar.tsx';
-import { TUR_ADI, TUR_SIMGESI, zamanMetni } from './gosterim.ts';
+import { KULLANIMLAR, KULLANIM_ADLARI, TUR_ADI, TUR_SIMGESI, zamanMetni } from './gosterim.ts';
+import { KaynakEskiRozeti, KullanimRozeti } from './Turev.tsx';
 import './belge-merkezi.css';
 
 const SUTUNLAR: Sutun<BelgeSatiri>[] = [
   {
     anahtar: 'ad', baslik: 'Belge', sirala: true,
-    hucre: (b) => <span className="tc-cz-ad"><Simge ad={TUR_SIMGESI[b.tur]} />{b.ad}</span>,
+    // 3468-2 (D): türev orijinalinin altında girintili; kullanımı, kaynağı ve "Kaynağı eski" durumu satırda.
+    hucre: (b) => (b.kullanim && b.kaynak
+      ? (
+        <span className="tc-cz-liste-turev">
+          <span className="tc-cz-ad"><Simge ad="layers" />{b.ad}</span>
+          <span className="tc-cz-liste-turev-alt">
+            <KullanimRozeti kullanim={b.kullanim} />
+            <span>Kaynak {b.kaynak.ad} · <span className="mono">Rev {revKoduMetni(b.kaynak.revKodu)}</span></span>
+            {b.kaynak.eski && <KaynakEskiRozeti />}
+          </span>
+        </span>
+      )
+      : (
+        <span className="tc-cz-ad">
+          <Simge ad={TUR_SIMGESI[b.tur]} />{b.ad}
+          {(b.turevSayisi ?? 0) > 0 && <span className="tc-cz-ipucu tc-cz-turev-sayisi">{b.turevSayisi} türev</span>}
+        </span>
+      )),
   },
   { anahtar: 'tur', baslik: 'Tür', hucre: (b) => TUR_ADI[b.tur] },
   { anahtar: 'dosya', baslik: 'Dosya', mono: true, hucre: (b) => b.dosyaTuru.toUpperCase() },
@@ -32,6 +50,13 @@ const SUTUNLAR: Sutun<BelgeSatiri>[] = [
 
 // 3B modeller iki sekmede: bir makineye (istasyona) eşleşmiş model makinenindir, geri kalanı (bağsız dahil) malzemenin. Veri aynıdır.
 type UcBSekmesi = 'makine' | 'malzeme';
+type KullanimSuzgeci = '' | 'orijinal' | Kullanim;
+const KULLANIM_SECENEKLERI = [
+  { deger: '', baslik: 'Tümü (türevler orijinalin altında)' },
+  { deger: 'orijinal', baslik: 'Yalnız orijinaller' },
+  ...KULLANIMLAR.map((k) => ({ deger: k, baslik: `${KULLANIM_ADLARI[k]} türevleri` })),
+];
+
 const UC_B_SEKMELERI: Sekme<UcBSekmesi>[] = [
   { anahtar: 'makine', baslik: 'Makineler 3B', simge: 'gear' },
   { anahtar: 'malzeme', baslik: 'Malzemeler 3B', simge: 'box' },
@@ -57,7 +82,8 @@ export function Belgeler({ tur, arsiv = false }: { tur?: BelgeTuru; arsiv?: bool
   const [ucB, ucBYaz] = useState<UcBSekmesi>('makine');
   const ucBGorunumu = tur === '3b-model' && !arsiv;
   const liste = useListeDurumu({
-    suzgecler: { ara: '' },
+    suzgecler: { ara: '', kullanim: '' as KullanimSuzgeci },
+    suzgecDegerleri: { kullanim: ['orijinal', ...KULLANIMLAR] },
     siralamaAlanlari: ['ad', 'guncellendi'],
     sayfaBoyu: 50,
     adres: true,
@@ -81,7 +107,10 @@ export function Belgeler({ tur, arsiv = false }: { tur?: BelgeTuru; arsiv?: bool
     >
       <div className="tc-cz-icerik">
         {ucBGorunumu && <Sekmeler etiket="3B modeller" sekmeler={UC_B_SEKMELERI} secili={ucB} sec={(s) => { ucBYaz(s); liste.sayfaDegistir(1); }} />}
-        <Girdi etiket="Ara" type="search" placeholder="Belge adı ya da resim no" value={liste.suzgecler.ara} onChange={(e) => { liste.suzgecDegistir({ ara: e.target.value }); }} />
+        <div className="tc-cz-suzgecler">
+          <Girdi etiket="Ara" type="search" placeholder="Belge adı ya da resim no" value={liste.suzgecler.ara} onChange={(e) => { liste.suzgecDegistir({ ara: e.target.value }); }} />
+          <Secim etiket="Kullanım" value={liste.suzgecler.kullanim} secenekler={KULLANIM_SECENEKLERI} onChange={(e) => { liste.suzgecDegistir({ kullanim: e.target.value as KullanimSuzgeci }); }} />
+        </div>
         {l.isError
           ? <DurumKutusu durum="hata" mesaj={hataIletisi(l.error, 'Belgeler alınamadı')} yenile={() => { void l.refetch(); }} />
           : (

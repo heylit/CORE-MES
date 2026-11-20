@@ -10,6 +10,11 @@ import { DOSYA_TURLERI, dosyaOzeti } from './dosya.ts';
 export const BELGE_TURLERI = ['teknik-resim', '3b-model', 'fotograf', 'makine', 'sertifika', 'rapor', 'kroki', 'diger', 'irsaliye'] as const;
 export type BelgeTuru = (typeof BELGE_TURLERI)[number];
 
+// 3468-2 (3468 a): türev, orijinalin bir revizyonundan bir iş için hazırlanmış ayrı belgedir (düzenlenmiş PDF, 2123-2 b). Tek
+// seviye: türevin türevi olmaz. Liste sabittir; yeni kullanım küçük göçle eklenir (kısıt `belge_merkezi_belge_kullanim_degeri`).
+export const KULLANIMLAR = ['ic-uretim', 'dis-uretim', 'dis-operasyon', 'kalite', 'teklif', 'diger'] as const;
+export type Kullanim = (typeof KULLANIMLAR)[number];
+
 export const REVIZYON_DURUMLARI = ['taslak', 'yayinda', 'eski'] as const;
 export type RevizyonDurumu = (typeof REVIZYON_DURUMLARI)[number];
 
@@ -49,6 +54,8 @@ export const belgeListesiSorgusu = z.object({
   makine: z.enum(['evet', 'hayir']).optional(),
   // Arşivdekiler ayrı görünümdür; varsayılan liste etkin belgelerdir.
   arsiv: z.enum(['evet', 'hayir']).prefault('hayir'),
+  // 3468-2: "orijinal" türev olmayanlar; kullanım adı o kullanımdaki türevler. Verilmezse ikisi birlikte, türevler orijinalin altında.
+  kullanim: z.enum(['orijinal', ...KULLANIMLAR]).optional(),
 });
 
 // İlk revizyonun dosyası: istemci önce `/dosyalar/:ozet/parca` ile yükler, sonra özeti burada bağlatır.
@@ -62,16 +69,24 @@ const dosyaGirdisi = {
 // Belgenin teknik resim numarası: malzeme kartındaki "Teknik resim no" ile karşılaştırılır.
 const resimNo = istege(60);
 
+const kimlik = z.number().int().positive();
+// Türevin kaynağı: orijinal belge ve yayına girmiş revizyonu, türevin kullanımı.
+export const turevGirdisi = z.object({ kaynakBelgeId: kimlik, kaynakRevizyonId: kimlik, kullanim: z.enum(KULLANIMLAR) });
+
 export const belgeOlusturGovdesi = z.object({
   ad: zorunluMetin('Belge adı zorunlu.', 120),
   tur: z.enum(BELGE_TURLERI),
   aciklama: istege(500),
   resimNo,
   ...dosyaGirdisi,
+  // 3468-2: verilirse belge bu kaynağın türevi olarak açılır (PDF düzenleyici, "Türev ekle").
+  turev: turevGirdisi.nullish(),
 });
 export const belgeGuncelleGovdesi = z.object({ ad: zorunluMetin('Belge adı zorunlu.', 120), aciklama: istege(500), resimNo, ...beklenenSurum });
 export const revizyonEkleGovdesi = z.object({ ...dosyaGirdisi, ...beklenenSurum });
 export const surumGovdesi = z.object({ ...beklenenSurum });
+// 3468-2: var olan belgeyi türev olarak bağlar ("Türev olarak bağla"; bugüne kadar ayrı belge açılmış düzenlemeler) ya da bağı kaldırır.
+export const turevBagGovdesi = turevGirdisi.extend({ ...beklenenSurum });
 export const bagGovdesi = z.object({ hedefModul: z.enum(BAG_MODULLERI), hedefId: z.number().int().positive(), ...beklenenSurum });
 
 export const belgeSatiri = z.object({
@@ -89,6 +104,10 @@ export const belgeSatiri = z.object({
   bagSayisi: z.number().int().min(0),
   guncellendi: zamanSemasi,
   surum: surumSemasi,
+  // 3468-2: türevde kullanım ve kaynak; orijinalde null. eski: kaynak revizyon artık yayında değil ("Kaynağı eski").
+  kullanim: z.enum(KULLANIMLAR).nullable().optional(),
+  kaynak: z.object({ belgeId: z.number().int(), ad: z.string(), revKodu: z.string().nullable(), eski: z.boolean() }).nullable().optional(),
+  turevSayisi: z.number().int().min(0).optional(),
 });
 
 export const revizyonSemasi = z.object({
@@ -124,6 +143,29 @@ export const bagSemasi = z.object({
 // 3324 a: silinen belge; istemci listeye bu türün sekmesiyle döner.
 export const belgeSilmeCevabi = z.object({ id: z.number().int(), ad: z.string(), tur: z.enum(BELGE_TURLERI) });
 
+// 3468-2: orijinalin sayfasında revizyon ağacı; türev hangi revizyondan çıktıysa onun altında durur.
+export const turevOzeti = z.object({
+  id: z.number().int(),
+  ad: z.string(),
+  kullanim: z.enum(KULLANIMLAR),
+  aktif: z.boolean(),
+  kaynakRevizyonId: z.number().int(),
+  // Türevin kendi yayındaki revizyon kodu; yayında revizyonu yoksa (yalnız taslak) null.
+  yayindakiRevKodu: z.string().nullable(),
+  yayindakiHarf: z.string().nullable(),
+  kaynakEski: z.boolean(),
+});
+export const turevKaynagi = z.object({
+  belgeId: z.number().int(),
+  ad: z.string(),
+  aktif: z.boolean(),
+  revizyonId: z.number().int(),
+  harf: z.string(),
+  revKodu: z.string().nullable(),
+  kullanim: z.enum(KULLANIMLAR),
+  eski: z.boolean(),
+});
+
 export const belgeAyrintisi = z.object({
   id: z.number().int(),
   ad: z.string(),
@@ -137,6 +179,9 @@ export const belgeAyrintisi = z.object({
   surum: surumSemasi,
   revizyonlar: z.array(revizyonSemasi),
   baglar: z.array(bagSemasi),
+  // 3468-2: türevde kaynak (orijinalde null); orijinalde türevleri (türevde boş).
+  kaynak: turevKaynagi.nullable().optional(),
+  turevler: z.array(turevOzeti).optional(),
 });
 
 export const belgeListesiCevabi = listeCevapSemasi(belgeSatiri);
@@ -242,6 +287,10 @@ export type RevizyonEkleGovdesi = z.input<typeof revizyonEkleGovdesi>;
 export type SurumGovdesi = z.input<typeof surumGovdesi>;
 export type OnizlemeGovdesi = z.input<typeof onizlemeGovdesi>;
 export type BagGovdesi = z.input<typeof bagGovdesi>;
+export type TurevGirdisi = z.input<typeof turevGirdisi>;
+export type TurevBagGovdesi = z.input<typeof turevBagGovdesi>;
+export type TurevOzeti = z.output<typeof turevOzeti>;
+export type TurevKaynagi = z.output<typeof turevKaynagi>;
 export type BelgeSatiri = z.output<typeof belgeSatiri>;
 export type Revizyon = z.output<typeof revizyonSemasi>;
 export type Bag = z.output<typeof bagSemasi>;

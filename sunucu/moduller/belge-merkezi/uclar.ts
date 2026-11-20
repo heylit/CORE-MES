@@ -4,7 +4,7 @@ import {
   bagGovdesi, belgeAyrintisi, belgeGuncelleGovdesi, belgeSilmeCevabi, belgeListesiCevabi, belgeListesiSorgusu, belgeOlusturGovdesi, idParametresi, kucukResimKareParametresi,
   kucukResimlerCevabi, kucukResimSorgusu, malzemeBelgeEkleGovdesi, malzemeBelgeleriCevabi, malzemeBelgeParametresi, malzemeBelgeSurumGovdesi,
   malzemeParametresi, malzemeRevizyonEkleGovdesi, malzemeRevizyonParametresi, malzemeSecimiCevabi, malzemeSecimiSorgusu, onizlemeGovdesi,
-  onizlemeKareParametresi, revizyonEkleGovdesi, revizyonParametresi, surumGovdesi,
+  onizlemeKareParametresi, revizyonEkleGovdesi, revizyonParametresi, surumGovdesi, turevBagGovdesi,
 } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import { ayniDosyaCevabi, ayniDosyaSorgusu } from '#paylasilan/sozlesme/dosya.ts';
 import { AYNI_DOSYA_YETKISI, ayniDosyaYerleri } from './ayni-dosya.ts';
@@ -121,6 +121,25 @@ export const uclar = [
     govde: surumGovdesi,
     cevap: belgeSilmeCevabi,
     isle: ({ db, parametre, govde, denetimEki }) => servis.belgeSil(db, parametre.id, govde.surum, denetimEki),
+  }),
+  // 3468-2: türev bağı; yetki belge düzenlemeyle aynı (yeni yetki işlemi yok, 3468 a).
+  uc({
+    yontem: 'POST',
+    yol: '/cizimler/:id/turev-bagla',
+    yetki: 'belge-merkezi.yaz',
+    parametre: idParametresi,
+    govde: turevBagGovdesi,
+    cevap: belgeAyrintisi,
+    isle: ({ db, parametre, govde }) => servis.turevBagla(db, parametre.id, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/cizimler/:id/turev-bagini-kaldir',
+    yetki: 'belge-merkezi.yaz',
+    parametre: idParametresi,
+    govde: surumGovdesi,
+    cevap: belgeAyrintisi,
+    isle: ({ db, parametre, govde }) => servis.turevBaginiKaldir(db, parametre.id, govde.surum),
   }),
   uc({
     yontem: 'POST',

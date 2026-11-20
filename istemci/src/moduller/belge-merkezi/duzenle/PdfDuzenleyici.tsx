@@ -3,7 +3,7 @@ import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerE
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { PDFDocumentProxy } from 'pdfjs-dist/legacy/build/pdf.mjs';
-import type { BelgeAyrintisi, BelgeOlusturGovdesi, Revizyon } from '#paylasilan/sozlesme/belge-merkezi.ts';
+import type { BelgeAyrintisi, BelgeOlusturGovdesi, Kullanim, Revizyon, TurevGirdisi } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import { CokSatir, Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Pencere, Rozet, Secim, Simge } from '../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../ortak/tasarim/simgeler.ts';
 import { api, hataIletisi } from '../../../ortak/veri/api.ts';
@@ -22,6 +22,8 @@ import {
 } from './duzenleme.ts';
 import type { DuzenlemeSonucu, ResimliOge, Silinen } from './pdf-yaz.ts';
 import { revKoduMetni, revizyonAdi } from '../revizyon-kodu.ts';
+import { KISA_AD_ZORUNLU, KullanimSecimi, kisaAdGerekli, turevAdi } from '../Turev.tsx';
+import { TurevAdAlani } from '../formlar.tsx';
 
 // Çizim Merkezi PDF düzenleyicisi (kart 2123; kararlar 2123-1 b pdf-lib, 2123-2 b ayrı yeni belge, 2123-3 b belge-merkezi.yaz,
 // 2123-4 b dolgu, logo, yazı, renk ve çizgi; 2123-5 c alttaki nesnelerin PDF'ten silinmesi). Asıl belge değişmez; düzenlenen dosya yeni belge olarak yüklenir.
@@ -52,7 +54,17 @@ function KaydetPenceresi({ belge, revizyon, dolguVar, olustur, kapat }: {
   belge: BelgeAyrintisi; revizyon: Revizyon; dolguVar: boolean; olustur: (ayikla: boolean) => Promise<DuzenlemeSonucu>; kapat: () => void;
 }) {
   const yonlendir = useNavigate();
-  const [ad, adYaz] = useState(belgeAdiYap(belge.ad));
+  // 3468-2: düzenlenen dosya orijinalin bu revizyonunun türevi olur; türev düzenlenirse yenisi aynı orijinalin türevidir (tek seviye).
+  // Taslak revizyondan türev çıkmaz: o zaman bugünkü gibi bağsız ayrı belge.
+  const kaynak: { belgeId: number; ad: string; revizyonId: number } | null = belge.kaynak
+    ? { belgeId: belge.kaynak.belgeId, ad: belge.kaynak.ad, revizyonId: belge.kaynak.revizyonId }
+    : revizyon.durum === 'taslak' ? null : { belgeId: belge.id, ad: belge.ad, revizyonId: revizyon.id };
+  const [kullanim, kullanimYaz] = useState<Kullanim | null>(belge.kaynak?.kullanim ?? null);
+  const [kisaAd, kisaAdYaz] = useState('');
+  const [serbestAd, adYaz] = useState(belgeAdiYap(belge.ad));
+  const ad = kaynak === null ? serbestAd : kullanim === null ? '' : turevAdi(kaynak.ad, kullanim, kisaAd);
+  const kisaGerekli = kaynak !== null && kullanim !== null && !belge.kaynak && kisaAdGerekli(belge.turevler ?? [], kullanim);
+  const turev: TurevGirdisi | null = kaynak === null || kullanim === null ? null : { kaynakBelgeId: kaynak.belgeId, kaynakRevizyonId: kaynak.revizyonId, kullanim };
   const [dosyaAdi, dosyaAdiYaz] = useState(dosyaAdiYap(revizyon.dosyaAdi));
   const [antetRev, antetRevYaz] = useState(revizyon.antetRev ?? '');
   const [gerekce, gerekceYaz] = useState('');
@@ -66,13 +78,16 @@ function KaydetPenceresi({ belge, revizyon, dolguVar, olustur, kapat }: {
     '/cizimler',
     (ozet): BelgeOlusturGovdesi => ({
       ad: ad.trim(), tur: belge.tur, aciklama: belge.aciklama ?? '', resimNo: belge.resimNo ?? '', antetRev,
-      not: duzenlemeNotu(belge.ad, revKoduMetni(revizyon.revKodu), gerekce, silinen.current), ozet, dosyaAdi: dosyaAdi.trim(),
+      not: duzenlemeNotu(belge.ad, revKoduMetni(revizyon.revKodu), gerekce, silinen.current), ozet, dosyaAdi: dosyaAdi.trim(), turev,
     }),
     (c) => { kapat(); void yonlendir(`/cizimler/belge/${String(c.id)}`); },
     'Belge kaydedilemedi',
   );
-  const eksik = ad.trim() === '' ? 'Belge adı zorunlu.' : gerekce.trim() === '' ? 'Gerekçe zorunlu.'
+  const eksik = kaynak !== null && kullanim === null ? 'Kullanım seçin.' : kisaGerekli && kisaAd.trim() === '' ? KISA_AD_ZORUNLU
+    : ad.trim() === '' ? 'Belge adı zorunlu.' : gerekce.trim() === '' ? 'Gerekçe zorunlu.'
     : !/\.pdf$/i.test(dosyaAdi.trim()) ? 'Dosya adı .pdf ile bitmeli.' : null;
+  // Kısa ad eksiği alanın kendisinde gösterilir; pencerenin altında ayrıca kırmızı satır olmaz.
+  const gosterilenEksik = eksik === KISA_AD_ZORUNLU ? null : eksik;
   const gonder = (s: DuzenlemeSonucu) => {
     silinen.current = s.silinen;
     komut.gonder(new File([new Uint8Array(s.veri)], dosyaAdi.trim(), { type: 'application/pdf' }));
@@ -94,7 +109,7 @@ function KaydetPenceresi({ belge, revizyon, dolguVar, olustur, kapat }: {
     <Pencere
       acik
       kapat={kapat}
-      baslik="Yeni belge olarak kaydet"
+      baslik={kaynak === null ? 'Yeni belge olarak kaydet' : 'Türev olarak kaydet'}
       alt={(
         <>
           <Dugme onClick={kapat}>Vazgeç</Dugme>
@@ -104,9 +119,11 @@ function KaydetPenceresi({ belge, revizyon, dolguVar, olustur, kapat }: {
     >
       <div className="tc-cz-form">
         <p className="tc-cz-dz-uyari">
-          Asıl belge ve revizyonları değişmez. Düzenlenen dosya <b>ayrı yeni belge</b> olur, ilk revizyonu taslak açılır; malzeme ve istasyon
-          bağları yeni belgeye ayrıca kurulur.
+          {kaynak === null
+            ? <>Asıl belge ve revizyonları değişmez. Düzenlenen dosya <b>ayrı yeni belge</b> olur, ilk revizyonu taslak açılır. Taslak revizyondan türev çıkmaz; malzeme ve istasyon bağları yeni belgeye ayrıca kurulur.</>
+            : <>Asıl belge ve revizyonları değişmez. Düzenlenen dosya <b>{kaynak.ad}</b> belgesinin <b>türevi</b> olarak ayrı belge açılır, ilk revizyonu taslaktır; orijinalin altında görünür, malzeme bağı orijinalde kalır.</>}
         </p>
+        {kaynak !== null && <KullanimSecimi deger={kullanim} sec={kullanimYaz} />}
         {dolguVar && (
           <>
             <IsaretKutusu
@@ -120,7 +137,9 @@ function KaydetPenceresi({ belge, revizyon, dolguVar, olustur, kapat }: {
             </p>
           </>
         )}
-        <Girdi etiket="Yeni belge adı" value={ad} maxLength={120} required onChange={(e) => { adYaz(e.target.value); }} />
+        {kaynak === null
+          ? <Girdi etiket="Yeni belge adı" value={serbestAd} maxLength={120} required onChange={(e) => { adYaz(e.target.value); }} />
+          : <TurevAdAlani kisaAd={kisaAd} yaz={kisaAdYaz} gerekli={kisaGerekli} ad={ad} />}
         <Girdi etiket="Kaynak" value={`${belge.ad} · Rev ${revKoduMetni(revizyon.revKodu)}`} readOnly />
         <Girdi etiket="Revizyon kodu" value={antetRev} maxLength={20} onChange={(e) => { antetRevYaz(e.target.value); }} />
         <Girdi etiket="Dosya adı" value={dosyaAdi} maxLength={120} required onChange={(e) => { dosyaAdiYaz(e.target.value); }} />
@@ -134,7 +153,7 @@ function KaydetPenceresi({ belge, revizyon, dolguVar, olustur, kapat }: {
           </p>
         )}
         {komut.ilerleme !== null && <progress max={1} value={komut.ilerleme} aria-label="Yükleme" />}
-        {(hata ?? eksik) !== null && <p className="tc-cz-hata" role="alert">{hata ?? eksik}</p>}
+        {(hata ?? gosterilenEksik) !== null && <p className="tc-cz-hata" role="alert">{hata ?? gosterilenEksik}</p>}
       </div>
     </Pencere>
   );

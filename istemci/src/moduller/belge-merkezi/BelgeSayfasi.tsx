@@ -1,14 +1,15 @@
 import { Suspense, lazy, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
-import type { Bag, BelgeAyrintisi, BelgeSilmeCevabi, Revizyon } from '#paylasilan/sozlesme/belge-merkezi.ts';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import type { Bag, BelgeAyrintisi, BelgeSilmeCevabi, Kullanim, Revizyon } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import { Dugme, DurumKutusu, Kart, OnayPenceresi, Rozet, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { ApiHatasi, api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useTekGonderim } from '../../ortak/veri/korumali-komut.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { revKoduMetni, revizyonAdi } from './revizyon-kodu.ts';
 import { ikiliOku, kaydet } from './dosya-aktarimi.ts';
-import { BelgeDuzenle, IstasyonaBagla, MalzemeBagla, RevizyonEkle } from './formlar.tsx';
+import { BelgeDuzenle, IstasyonaBagla, MalzemeBagla, RevizyonEkle, TurevEkle, TurevOlarakBagla } from './formlar.tsx';
+import { KAYNAK_ESKI_ACIKLAMASI, KaynakEskiRozeti, KullanimRozeti, RevizyonTurevleri } from './Turev.tsx';
 import { BAG_ADI, DURUM_ADI, DURUM_TONU, TUR_ADI, TUR_SIMGESI, boyutMetni, zamanMetni } from './gosterim.ts';
 import { useKomut, useYetki } from './komut.ts';
 import { useMenuSayaclari } from './menu-sayaclari.ts';
@@ -22,7 +23,8 @@ const Goruntuleyici = lazy(() => import('./goruntu/Goruntuleyici.tsx'));
 // Bağlı kayıt okunur adıyla görünür; adı gelmeyen kayıtta (sahibi ad vermiyor ya da kayıt silinmiş) kimlik yazılır.
 const bagHedefi = (b: Pick<Bag, 'hedefAdi' | 'hedefId'>): string => b.hedefAdi ?? `#${String(b.hedefId)}`;
 
-type Acik = 'duzenle' | 'revizyon' | 'bag' | 'istasyon' | 'arsiv' | 'belgeSil' | { sil: Revizyon } | { yayinla: Revizyon } | { bagKaldir: Bag } | null;
+type Acik = 'duzenle' | 'revizyon' | 'bag' | 'istasyon' | 'arsiv' | 'belgeSil' | 'turevBagla' | 'turevKaldir' | { turevEkle: Revizyon; kullanim: Kullanim | null }
+  | { sil: Revizyon } | { yayinla: Revizyon } | { bagKaldir: Bag } | null;
 
 const DOSYA_MIME: Record<Revizyon['dosyaTuru'], string> = {
   pdf: 'application/pdf', png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp', step: 'model/step', stl: 'model/stl', iges: 'model/iges',
@@ -34,7 +36,7 @@ const DOSYA_MIME: Record<Revizyon['dosyaTuru'], string> = {
 
 interface OnayOzellikleri {
   belge: BelgeAyrintisi;
-  acik: Exclude<Acik, 'duzenle' | 'revizyon' | 'bag' | 'istasyon' | 'belgeSil' | null>;
+  acik: Exclude<Acik, 'duzenle' | 'revizyon' | 'bag' | 'istasyon' | 'belgeSil' | 'turevBagla' | 'turevKaldir' | { turevEkle: Revizyon } | null>;
   kapat: () => void;
   // Yayınlama başarılı olunca, yayınlanan revizyonun güncel hâliyle.
   yayinlandi: (belge: BelgeAyrintisi, revizyonId: number) => void;
@@ -123,6 +125,17 @@ function BelgeSil({ belge, kapat }: { belge: BelgeAyrintisi; kapat: () => void }
   );
 }
 
+// 3468-2: bağ kalkınca belge orijinal olur; dosyası ve revizyonları değişmez.
+function TurevBaginiKaldir({ belge, kapat }: { belge: BelgeAyrintisi; kapat: () => void }) {
+  const komut = useKomut(`/cizimler/${belge.id}/turev-bagini-kaldir`, kapat, 'Türev bağı kaldırılamadı');
+  return (
+    <OnayPenceresi acik baslik="Türev bağını kaldır" onayMetni="Kaldır" yukleniyor={komut.yukleniyor} onayla={() => { komut.gonder({ surum: belge.surum }); }} vazgec={kapat}>
+      <p>Belge {belge.kaynak?.ad ?? 'orijinal'} belgesinin altından çıkar ve ayrı belge olarak kalır; dosyası ve revizyonları değişmez.</p>
+      {komut.hata !== null && <p className="tc-cz-hata" role="alert">{komut.hata}</p>}
+    </OnayPenceresi>
+  );
+}
+
 function IndirDugmesi({ belgeId, r }: { belgeId: number; r: Revizyon }) {
   const [inen, inenYaz] = useState(false);
   const [hata, hataYaz] = useState<string | null>(null);
@@ -181,13 +194,27 @@ export function BelgeSayfasi() {
         <Rozet ton="bilgi">{TUR_ADI[belge.tur]}</Rozet>
         {!belge.aktif && <Rozet ton="pasif">Arşivde</Rozet>}
         {yalnizTaslak && <Rozet ton="uyari">Yalnız taslak</Rozet>}
+        {belge.kaynak && <KullanimRozeti kullanim={belge.kaynak.kullanim} />}
+        {belge.kaynak?.eski && <KaynakEskiRozeti />}
         <div className="tc-cz-bas-sag">
+          {yazar && belge.kaynak && <Dugme simge="x" onClick={() => { acikYaz('turevKaldir'); }}>Türev bağını kaldır</Dugme>}
+          {degisir && !belge.kaynak && (belge.turevler ?? []).length === 0 && <Dugme simge="layers" onClick={() => { acikYaz('turevBagla'); }}>Türev olarak bağla</Dugme>}
           {degisir && <Dugme simge="edit" onClick={() => { acikYaz('duzenle'); }}>Düzenle</Dugme>}
           {yazar && <Dugme simge="box" onClick={() => { acikYaz('arsiv'); }}>{belge.aktif ? 'Arşivle' : 'Arşivden çıkar'}</Dugme>}
           {yazar && yalnizTaslak && <Dugme tur="tehlike" simge="trash" onClick={() => { acikYaz('belgeSil'); }}>Belgeyi sil</Dugme>}
           {degisir && <Dugme tur="birincil" simge="upload" onClick={() => { acikYaz('revizyon'); }}>Yeni revizyon</Dugme>}
         </div>
       </header>
+      {belge.kaynak && (
+        <p className="tc-cz-turev-kaynak tc-cz-simgeli">
+          <Simge ad="layers" />
+          <span>
+            Türev · Kaynak <Link to={`/cizimler/belge/${String(belge.kaynak.belgeId)}`}>{belge.kaynak.ad}</Link> <span className="mono">Rev {revKoduMetni(belge.kaynak.revKodu)}</span>
+            {degisir && <> · <button type="button" className="tc-cz-baglanti" onClick={() => { acikYaz('turevBagla'); }}>Değiştir</button></>}
+            {belge.kaynak.eski && <> <span className="tc-cz-uyari">{KAYNAK_ESKI_ACIKLAMASI}</span> <Link to={`/cizimler/belge/${String(belge.kaynak.belgeId)}`}>Orijinale git ve yenile</Link></>}
+          </span>
+        </p>
+      )}
       {yazar && !yalnizTaslak && <p className="tc-cz-ipucu tc-cz-simgeli"><Simge ad="help" /><span>Yayınlanmış belge silinmez; izlenebilirlik kaydıdır. Kullanımdan kaldırmak için arşivleyin.</span></p>}
 
       <div className="tc-cz-duzen">
@@ -243,6 +270,12 @@ export function BelgeSayfasi() {
                     )}
                     {degisir && r.durum === 'taslak' && belge.revizyonlar.length > 1 && <Dugme tur="tehlike" simge="trash" onClick={() => { acikYaz({ sil: r }); }}>Sil</Dugme>}
                   </div>
+                  {!belge.kaynak && (
+                    <RevizyonTurevleri
+                      revizyon={r} revizyonlar={belge.revizyonlar} turevler={belge.turevler ?? []} ekleyebilir={degisir}
+                      turevEkle={(kullanim) => { acikYaz({ turevEkle: r, kullanim }); }}
+                    />
+                  )}
                 </li>
               ))}
             </ul>
@@ -280,7 +313,11 @@ export function BelgeSayfasi() {
       {acik === 'revizyon' && <RevizyonEkle belge={belge} kapat={kapat} />}
       {acik === 'bag' && <MalzemeBagla belge={belge} kapat={kapat} />}
       {acik === 'istasyon' && <IstasyonaBagla belge={belge} kapat={kapat} />}
-      {acik !== null && acik !== 'duzenle' && acik !== 'revizyon' && acik !== 'bag' && acik !== 'istasyon' && acik !== 'belgeSil' && <Onay belge={belge} acik={acik} kapat={kapat} yayinlandi={yayinlandi} />}
+      {acik === 'turevBagla' && <TurevOlarakBagla belge={belge} kapat={kapat} />}
+      {acik === 'turevKaldir' && <TurevBaginiKaldir belge={belge} kapat={kapat} />}
+      {typeof acik === 'object' && acik !== null && 'turevEkle' in acik && <TurevEkle kaynak={belge} revizyon={acik.turevEkle} ilkKullanim={acik.kullanim} kapat={kapat} />}
+      {acik !== null && acik !== 'duzenle' && acik !== 'revizyon' && acik !== 'bag' && acik !== 'istasyon' && acik !== 'belgeSil' && acik !== 'turevBagla'
+        && acik !== 'turevKaldir' && (acik === 'arsiv' || !('turevEkle' in acik)) && <Onay belge={belge} acik={acik} kapat={kapat} yayinlandi={yayinlandi} />}
     </section>
   );
 }
