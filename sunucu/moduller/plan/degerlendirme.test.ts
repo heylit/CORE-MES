@@ -1,6 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
+import vm from 'node:vm';
 import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
@@ -8,12 +9,13 @@ import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { degerlendirmeCevabi, degerlendirmeDurumuCevabi, degerlendirmeGovdesi, degerlendirmeSonucu, type DegerlendirmeDurumuCevabi, type DegerlendirmeIstegi, type DegerlendirmeSonucu } from '#paylasilan/sozlesme/planlama.ts';
 import { HATA_DURUMU } from '#paylasilan/hata.ts';
 import { ISLEMLER } from '#paylasilan/islemler.ts';
+import { TESIS_SAAT_DILIMI } from '#paylasilan/zaman.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
-import { degerlendirmeBaslat, degerlendirmeDurumu, degerlendirmeYap, maliyetsiz, MESGUL, SONUC_OMRU_MS, type DegerlendirmeZarfi } from './degerlendirme.ts';
+import { degerlendirmeBaslat, degerlendirmeDurumu, degerlendirmeKodu, degerlendirmeYap, maliyetsiz, MESGUL, SONUC_OMRU_MS, type DegerlendirmeZarfi } from './degerlendirme.ts';
 import { DURUM_ANAHTARI } from '../recete-rota/disari.ts';
 import { PLANLAMA_ANAHTARI } from './disari.ts';
 import { planGirdisi, type KaynakOkumasi } from './plan-girdisi.ts';
@@ -694,6 +696,59 @@ describe('planlama değerlendirmesi: çıkış denetimi (3499)', () => {
     assert.equal(eski['O0.10']!.m, eski['O6.10']!.m);
     const temiz = sonuc(await iste(gecmis.calisma, { tur: 'plan-uygula', isler: ['O7'] })); if (temiz.tur !== 'plan-uygula') return assert.fail(temiz.tur);
     assert.deepEqual((temiz.plan['warn'] as { t: string }[]).filter((w) => w.t === 'cakisma'), [], 'geçerli planda bu uyarı yok');
+  });
+});
+
+describe('planlama değerlendirmesi: çok başlangıçlı ilk yerleştirme (3500)', () => {
+  // 32 emir, üç ürün, iki tezgâh; üçüncü ürünün ayarı uzun, işlemi kısa. Varsayılan kural ayarı (k1 2, k2 0,6) bu veride en iyi ilk planı vermez.
+  const kayit = { ...BUYUK_KAYIT,
+    items: [...BUYUK_KAYIT.items, { id: '52', code: 'MM-3', name: 'Ornek govde', type: 'mamul' }],
+    routes: { ...BUYUK_KAYIT.routes, 52: { base: null, steps: [adim('52', 10, '10', 20, 150), adim('52', 20, '20', 35, 120)] } },
+    orders: Array.from({ length: 32 }, (_, i) => ({ id: `O${String(i)}`, no: `E-${String(i)}`, itemId: ['50', '51', '52'][i % 3]!, qty: 3 + ((i * 7) % 11), start: '2026-10-19',
+      due: `2026-10-${String(20 + ((i * 5) % 9))}`, priority: 1 + (i % 3), status: 'serbest' })) };
+  const iste = (sure: number, istek: DegerlendirmeIstegi) => degerlendirmeYap({ calisma: { ...calismaKur(), w: { famK: 0.3, mat: 'sert', dondurma: 4, sure } }, kayit, kaynak: BUYUK_KAYNAK, bugun: '2026-10-19', istek }, AN);
+  const gecikme = (plan: Record<string, unknown>): number => (plan['ozet'] as { wT: number }).wT;
+  // Bütçe bir ek dizmeye yetmeyecek kadar kısa: tek ayarla dizilir, arama da koşmaz; dönen plan varsayılan ayarın ilk planıdır.
+  const varsayilan = async (): Promise<number> => {
+    const s = sonuc(await iste(0.001, { tur: 'plan-kur' })); if (s.tur !== 'plan-kur') return assert.fail(s.tur);
+    assert.equal(gecikme(s.plan), s.plan['ilk'], 'kısa bütçede ek ayar denenmez');
+    return gecikme(s.plan);
+  };
+
+  test('CB-01: planı kur ilk planı birkaç kural ayarıyla dizer, en iyisinden arar; "ilk" varsayılan ayarın gecikmesidir, aynı girdi aynı sonucu verir', async () => {
+    const ilk = await varsayilan();
+    const a = await iste(0.6, { tur: 'plan-kur' });
+    const s = sonuc(a); if (s.tur !== 'plan-kur') return assert.fail(s.tur);
+    assert.equal(s.plan['ilk'], ilk);
+    assert.ok(gecikme(s.plan) <= ilk * 0.96, `${String(gecikme(s.plan))} <= ${String(ilk * 0.96)}`);
+    assert.deepEqual(planBozuklari(s.plan['ops'] as Record<string, PlanIsi>), []);
+    assert.deepEqual(await iste(0.6, { tur: 'plan-kur' }), a);
+  });
+
+  test('CB-02: plan seçenekleri de ilk planı birkaç kural ayarıyla dizer', async () => {
+    const ilk = await varsayilan();
+    const s = sonuc(await iste(0.6, { tur: 'plan-secenekleri' })); if (s.tur !== 'plan-secenekleri') return assert.fail(s.tur);
+    assert.ok(s.secenekler.length > 0);
+    for (const x of s.secenekler) assert.ok(gecikme(x.plan) <= ilk * 0.96, `denge ${String(x.denge)}: ${String(gecikme(x.plan))} <= ${String(ilk * 0.96)}`);
+  });
+
+  // Motorun saati sabit adımlıdır: hesaptan sonra bağlamın saati hesabın harcadığı iş miktarını verir. Motor sunucudaki gibi boş bağlamda yüklenir.
+  const harcanan = (istek: Record<string, unknown>, kural?: string): number => {
+    const b = vm.createContext({ GIRDI_SAAT_DILIMI: TESIS_SAAT_DILIMI }); b['self'] = b;
+    const m = vm.runInContext(degerlendirmeKodu(), b) as { degerlendir: (...a: unknown[]) => unknown };
+    assert.ok(m.degerlendir({ ...calismaKur(), w: { famK: 0.3, mat: 'sert', dondurma: 4, sure: 0.6, ...(kural ? { rule: kural } : {}) } }, kayit, BUYUK_KAYNAK, '2026-10-19', AN, istek));
+    return (vm.runInContext('Date.now()', b) as number) - AN;
+  };
+
+  test('CB-03: ek dizmelerin bedeli arama payından düşer, hesap süre ayarını aşmaz; ATCS dışı kuralda tek dizme yapılır, arama payı tam kalır', () => {
+    // Süre ayarı 0,6 sn (600 adımlık iş); plan seçeneklerinin payı 1500'dür. Arama son diliminde payı biraz aşar: bedel düşülmezse aşım ek dizmeler kadar büyür.
+    const kur = harcanan({ tur: 'plan-kur' }), secenek = harcanan({ tur: 'plan-secenekleri', sira: 0 });
+    assert.ok(kur < 600, `planı kur ${String(kur)} < 600`);
+    assert.ok(secenek < 1500, `plan seçenekleri ${String(secenek)} < 1500`);
+    // Öteki kurallar katsayı kullanmaz: ek dizme aynı planı verir, payı boşa yer.
+    const kurEdd = harcanan({ tur: 'plan-kur' }, 'edd'), secenekEdd = harcanan({ tur: 'plan-secenekleri', sira: 0 }, 'edd');
+    assert.ok(kurEdd >= 600, `planı kur, EDD ${String(kurEdd)} >= 600`);
+    assert.ok(secenekEdd >= 1500, `plan seçenekleri, EDD ${String(secenekEdd)} >= 1500`);
   });
 });
 
