@@ -62,7 +62,9 @@ export async function coz(
   const gelmeyen = basarisiz.size > 0 ? malzemesiGelmeyenler(g.st) : new Set<string>();
   const neden = (id: string): MotorNedeni | undefined => (plan.failNeden ?? {})[id];
   // Motorun 'zaman' nedeni aday tezgâhların ölçüsüyle ayrılır; ölçü yalnız böyle iş varken bir kez kurulur.
-  const zamanli = [...basarisiz].filter((id) => neden(id)?.kod === 'zaman' || neden(id) === undefined);
+  // 3457-3 a: ufka taşan (ufukDisi) iş canlıya yazılmaz; nedeni de aynı ölçüden yazılır.
+  const tasan = new Set(Object.entries(plan.ops).filter(([, x]) => Number((x as { ufukDisi?: unknown }).ufukDisi) > 0).map(([id]) => id));
+  const zamanli = [...basarisiz].filter((id) => neden(id)?.kod === 'zaman' || neden(id) === undefined).concat([...tasan].map((id) => id.replace(/~\d+$/, '')));
   let olcum: Record<string, ZamanOlcumu | null> | null = null;
   const zaman = (id: string): ZamanOlcumu | null => { olcum ??= zamanOlcumu(g.st, zamanli); return olcum[id] ?? null; };
   const yerlesimler: { anahtar: string; makineId: number; baslangic: string; bitis: string }[] = [];
@@ -75,7 +77,7 @@ export async function coz(
       if (basarisiz.has(id) && gelmeyen.has(id.slice(0, id.lastIndexOf('.')))) { malzemeBekleyen.push(anahtar); continue; }
       const adetler = payAdetleri(g.st, id, paylar.length);
       const parcalar = paylar.map((p, n) => ({ p, n, r: plan.ops[p] })).flatMap(({ p, n, r: x }) => {
-        if (x === undefined || basarisiz.has(p) || !Number.isFinite(x.S) || !Number.isFinite(x.C) || adetler === null) return [];
+        if (x === undefined || basarisiz.has(p) || tasan.has(p) || !Number.isFinite(x.S) || !Number.isFinite(x.C) || adetler === null) return [];
         const m = String(x.m), kisiId = m.startsWith(KISI_TEZGAHI) ? Number(m.slice(KISI_TEZGAHI.length)) : null, makineId = kisiId === null ? Number(m) : null;
         if (!Number.isInteger(kisiId ?? makineId)) return [];
         return [{ no: n + 1, adet: adetler[n]!, makineId, kisiId, baslangic: planAni(g.baslangic, x.S), bitis: planAni(g.baslangic, x.C) }];
@@ -91,6 +93,13 @@ export async function coz(
     const kisiId = r !== undefined && String(r.m).startsWith(KISI_TEZGAHI) ? Number(String(r.m).slice(KISI_TEZGAHI.length)) : null;
     const makineId = r === undefined || kisiId !== null ? NaN : Number(r.m);
     if (basarisiz.has(id) && gelmeyen.has(id.slice(0, id.lastIndexOf('.')))) { malzemeBekleyen.push(anahtar); continue; }
+    // 3457-3 a: ufka taşan iş (ufukDisi) canlıya yazılmaz; bitişi ufuk sonudur, gerçek değil.
+    if (r !== undefined && tasan.has(id)) {
+      yerlesmeyen.push(anahtar);
+      const z = zaman(id);
+      nedenler[anahtar] = z === null ? yerlesmemeNedeni('ufuk', `Adım planlama süresine sığmıyor: ${String(Math.round(Number(r.ufukDisi) * 10) / 10)} sa süre dışında kalıyor.`) : zamanNedeni(z);
+      continue;
+    }
     if (r === undefined || basarisiz.has(id) || !(Number.isInteger(makineId) || Number.isInteger(kisiId)) || !Number.isFinite(r.S) || !Number.isFinite(r.C)) {
       yerlesmeyen.push(anahtar);
       nedenler[anahtar] = yerlesmemeNedeniOf(g, id, (p) => plan.ops[p] !== undefined && !basarisiz.has(p), neden(id), kaynak.kaynak, zaman);
@@ -172,37 +181,10 @@ function zamanOlcumu(durum: MotorDurumu, idler: readonly string[]): Record<strin
   const b = vm.createContext({ GIRDI_SAAT_DILIMI: TESIS_SAAT_DILIMI }); b['self'] = b;
   vm.runInContext(motorKodu(), b, { filename: 'plan-motoru.js' });
   b['durum'] = durum; b['idler'] = [...idler];
+  // 3457: ölçü motorun zamanOlcusu'dur (engine.js); Kokpit'in plan kaydı da aynısını okur.
   const ham = vm.runInContext(`(() => {
-    const cx = compile(stHazirla({ ...durum, w: { ...W0, ...(durum.w || {}) } })), st = cx.st, H = HDAYS * 24;
-    const enBuyuk = (a) => { let m = -Infinity; if (a) for (let k = 0; k < a.length; k++) if (a[k] > m) m = a[k]; return m; };
-    const herhangi = (a) => { if (a) for (let k = 0; k < a.length; k++) if (a[k]) return true; return false; };
-    return idler.map((id) => {
-      const o = cx.byId[id]; if (!o) return null;
-      const mr = cx.mat.res[o.job], mt = mr && mr.op ? mr.op[o.id] : null;
-      const adaylar = (o.c || []).filter((c) => !c.fas && cx.M[c.m]).map((c) => {
-        const M = cx.M[c.m], d = M.opOran;
-        const personelYok = d > 0 && (M.kisiler ? !herhangi(M.kav) : enBuyuk(cx.capTot) < d - 1e-6 || (cx.capG && cx.capG[M.grup] ? enBuyuk(cx.capG[M.grup]) < d - 1e-6 : false));
-        // 2785 b (tMach): hazırlık tek parçadır, tezgâhın kesintisiz bloğunda (molalar içinde) biter; checkUse her hazırlık diliminde ayarcı
-        // ister. Blok dışı ve ayarcısız dilim aralığı keser, mola kesmez.
-        let blok = null, ayarci = null;
-        if (+c.su > 0) {
-          const ileri = (M.sblok || []).filter(([, z]) => z > st.now);
-          blok = { gerekSaat: +c.su, enUzunSaat: ileri.reduce((x, [a, z]) => Math.max(x, workIn(M.sw, Math.max(a, st.now), z)), 0) };
-          if (!o.ayarsiz && o.ayarSaat !== 0) {
-            const bm = mask(ileri);
-            let sure = 0, enUzun = 0;
-            for (let k = Math.max(0, Math.floor(st.now / SL)); k < NS; k++) {
-              if (!bm[k]) { sure = 0; continue; }
-              if (!M.smask[k]) continue;
-              if (cx.capAyar[k] >= 1 - 1e-6) { sure += SL; if (sure > enUzun) enUzun = sure; } else sure = 0;
-            }
-            ayarci = { gerekSaat: o.ayarSaat != null && o.ayarSaat < +c.su ? o.ayarSaat : +c.su, enUzunSaat: enUzun };
-          }
-        }
-        return { m: String(c.m), ad: M.ad == null ? null : String(M.ad), acikSaat: workIn(M.rw, st.now, H), sureSaat: (+c.su || 0) + (+c.run || 0), personelYok, blok, ayarci };
-      });
-      return { ufukGun: HDAYS, malzemeHazirSaat: st.w.mat === 'sert' && mt != null && isFinite(mt) ? mt : st.w.mat === 'sert' && mt != null ? Infinity : null, adaylar };
-    });
+    const cx = compile(stHazirla({ ...durum, w: { ...W0, ...(durum.w || {}) } }));
+    return idler.map((id) => { const o = cx.byId[id]; return o ? zamanOlcusu(cx, o, null) : null; });
   })()`, b) as ({ ufukGun: number; malzemeHazirSaat: number | null; adaylar: { m: string; ad: string | null; acikSaat: number; sureSaat: number; personelYok: boolean; blok: { gerekSaat: number; enUzunSaat: number } | null; ayarci: { gerekSaat: number; enUzunSaat: number } | null }[] } | null)[];
   return Object.fromEntries(idler.map((id, n) => {
     const x = ham[n] ?? null;

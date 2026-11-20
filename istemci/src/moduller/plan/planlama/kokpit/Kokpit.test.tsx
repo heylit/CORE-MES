@@ -627,6 +627,48 @@ describe('Kokpit', () => {
     expect(screen.getByRole('button', { name: 'Araçlar' }).hasAttribute('data-etkin')).toBe(false);
   });
 
+  // 3457-1 A: Engeller düğmesi hep durur, sayısını taşır; panel açılır, Duruş ve mesai onu kapatır, kapat düğmesi kapatır.
+  it('Engeller düğmesi paneli açar ve kapatır; Duruş ve mesai açılınca Engeller kapanır', () => {
+    ac();
+    const dugme = (): HTMLElement => document.querySelector<HTMLElement>('.tc-pyq-ust .tc-pyq-engel-dugme')!;
+    expect(dugme().textContent).toMatch(/^\d+Engeller$/);
+    fireEvent.click(dugme());
+    expect(screen.getByRole('complementary', { name: 'Engeller' })).toBeTruthy();
+    expect(dugme().getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(arac('Duruş ve mesai'));
+    expect(screen.queryByRole('complementary', { name: 'Engeller' })).toBeNull();
+    fireEvent.click(dugme());
+    expect(screen.queryByRole('complementary', { name: 'Duruş ve mesai' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Engelleri kapat' }));
+    expect(screen.queryByRole('complementary', { name: 'Engeller' })).toBeNull();
+  });
+
+  // 3457-1 A (Test T2, T3): panel Kokpit'in oturum yetkisini kullanır; Emri göster emri seçer.
+  it('Engeller: düzeltme düğmesi kişinin açabildiği sayfada çıkar, açamadığında metin; Emri göster emri seçer', () => {
+    const c = structuredClone(ornekCalisma());
+    const plan = c.plan as unknown as { ops: Record<string, unknown>; fail: string[]; failNeden: Record<string, unknown> };
+    delete plan.ops['2.20']; delete plan.ops['2.30']; delete plan.ops['2.40'];
+    plan.fail = ['2.20', '2.30', '2.40'];
+    plan.failNeden = { '2.20': { kod: 'zaman', tani: { alt: 'sure', m: '3', ad: 'ORN-Freze', gerek: 100, mevcut: 50, ufukGun: 120 } }, '2.30': { kod: 'oncul', oncul: '2.20' }, '2.40': { kod: 'oncul', oncul: '2.30' } };
+    const panel = (islemler: string[]) => {
+      const r = ac({ calisma: c, yetki: yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz', ...islemler]) });
+      fireEvent.click(document.querySelector<HTMLElement>('.tc-pyq-ust .tc-pyq-engel-dugme')!);
+      return { r, p: within(screen.getByRole('complementary', { name: 'Engeller' })) };
+    };
+    let { p } = panel(['sayfa.recete-rota']);
+    expect(p.getByRole('button', { name: 'Süreleri aç' })).toBeTruthy();
+    expect(p.queryByRole('button', { name: 'Vardiya takvimini aç' })).toBeNull();
+    expect(p.getByText('Bu düzeltme Vardiyalar sayfasında yapılır; açma yetkiniz yok, planlama sorumlusuna başvurun.')).toBeTruthy();
+    cleanup();
+    const x = panel(['sayfa.vardiya']);
+    p = x.p;
+    expect(p.getByRole('button', { name: 'Vardiya takvimini aç' })).toBeTruthy();
+    expect(p.queryByRole('button', { name: 'Süreleri aç' })).toBeNull();
+    fireEvent.click(p.getByRole('button', { name: 'Emri göster' }));
+    expect(x.r.sec).toHaveBeenLastCalledWith({ siparis: '2', adim: null });
+    expect(screen.queryByRole('complementary', { name: 'Engeller' })).toBeNull();
+  });
+
   // 3335 a: tahtada tezgâh adına basınca o tezgâhın arıza ve bakım formu açılır (Duruş ve mesai bölümü, aynı taslak komutu ve etki akışı).
   it('tezgâh adından sorun bildir: Duruş ve mesai o tezgâhla açılır, tür alanı odaktadır; başka tezgâha basınca tezgâh değişir; fason satırında düğme yok', () => {
     ac();

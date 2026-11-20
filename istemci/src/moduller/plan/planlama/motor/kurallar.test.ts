@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { planGuncel } from '../durum.ts';
-import { bitenler, derle, girdiKur, olayAdi, planOku, plandanBitenler, saatYaz, simdiSaati, sorunlar, veriDenetimi, yerlesmeyenSiparisler } from './kurallar.ts';
+import { bitenler, derle, zamanTanisiYazisi, girdiKur, olayAdi, planOku, plandanBitenler, saatYaz, simdiSaati, sorunlar, veriDenetimi, yerlesmeyenSiparisler } from './kurallar.ts';
 import { ornekCalisma } from './ornek.ts';
 import { ACIK_TEZGAH_YOK, beklemeler, cevap, gostergeler, ozetVerisi, yorumlar, type Metin } from './ozet/veri.ts';
 import { nabizDurumu } from './ust/nabiz.ts';
@@ -28,6 +28,15 @@ describe('planlama motoru hesapları', () => {
     const c2 = { ...c, plan: { ...c.plan!, ops: { ...ops, [a]: { ...ops[a], done: 1, act: 1 }, [b]: { ...ops[b], done: 1, act: 0, bitti: 1 }, [d]: { ...ops[d], done: 0, act: 1 }, [e]: { ...ops[e], done: 1, act: 0 } } } } as typeof c;
     const p = planOku(c2)!;
     expect([p.ops[a]?.bitti, p.ops[b]?.bitti, p.ops[d]?.bitti, p.ops[e]?.bitti]).toEqual([true, true, undefined, undefined]);
+  });
+  it('3457: plan kaydındaki zaman alt nedeni okunur; bilinmeyen alt neden ve zaman dışı kodda tanı atılır', () => {
+    const c = ornekCalisma();
+    const tani = { alt: 'sure', m: '100', ad: 'ORN-Torna 1', gerek: 1170, mevcut: 640, ufukGun: 120 };
+    const c2 = { ...c, plan: { ...c.plan!, failNeden: { a: { kod: 'zaman', tani }, b: { kod: 'zaman', tani: { ...tani, alt: 'uydurma' } }, d: { kod: 'aday', tani } } } } as typeof c;
+    const n = planOku(c2)!.failNeden!;
+    expect(n['a']).toEqual({ kod: 'zaman', tani });
+    expect(n['b']).toEqual({ kod: 'zaman' });
+    expect(n['d']).toEqual({ kod: 'aday' });
   });
   it('Yapılacaklar ve veri denetimi eski sayfanınkiyle aynı', () => {
     const { c, p, cx } = kur();
@@ -190,5 +199,22 @@ describe('ekranın şimdisi (B-2500-3, 2506 a)', () => {
     const kisit = (kapali: string[]) => ((girdiKur({ ...x, kapali }).D as unknown as { ikincilKaynaklar: { kisit: string }[] }).ikincilKaynaklar[0]!.kisit);
     expect(kisit([])).toBe('sert');
     expect(kisit(['aparat'])).toBe('izle');
+  });
+});
+
+// 3457 Test T4: her alt neden kendi önlemini yazar; sayısı olmayan tanıda sayısız cümle.
+describe('zaman tanısı yazısı', () => {
+  const t = (alt: Parameters<typeof zamanTanisiYazisi>[0]['alt'], gerek: number | null = null, mevcut: number | null = null) =>
+    zamanTanisiYazisi({ alt, m: '100', ad: 'ORN-Torna 1', gerek, mevcut, ufukGun: 120 });
+  it.each([
+    ['vardiya', 'ORN-Torna 1 tezgâhı 120 günlük planlama süresi içinde hiç vardiyada değil. Tezgâha vardiya atayın.'],
+    ['kisi', 'ORN-Torna 1 tezgâhı için vardiyada çalışacak yetkin kişi yok. Vardiyaya yetkin kişi atayın.'],
+    ['malzeme', 'malzemesi 120 günlük planlama süresi içinde karşılanmıyor (stok ve sipariş yetmiyor). Satın alma talebi açın.'],
+    ['hazirlik', 'hazırlık ORN-Torna 1 tezgâhında kesintisiz çalışma süresine sığmıyor; hazırlık bölünmez. Hazırlık süresini kontrol edin ya da vardiyayı uzatın.'],
+  ] as const)('%s', (alt, yazi) => { expect(t(alt)).toBe(yazi); });
+  it('hazırlık ve ayarcı sayılarıyla yazılır; tezgâh adı yoksa "uygun tezgâh"', () => {
+    expect(t('hazirlik', 30, 8)).toBe('hazırlık 30 sa, ORN-Torna 1 tezgâhı en çok 8 sa kesintisiz çalışıyor; hazırlık bölünmez. Hazırlık süresini kontrol edin ya da vardiyayı uzatın.');
+    expect(t('ayarci', 15, 8)).toBe('hazırlık 15 sa, ORN-Torna 1 tezgâhında ayarcı en çok 8 sa kesintisiz bulunuyor. Ayarcı atayın ya da hazırlık süresini kontrol edin.');
+    expect(zamanTanisiYazisi({ alt: 'kisi', m: null, ad: null, gerek: null, mevcut: null, ufukGun: null })).toBe('uygun tezgâh için vardiyada çalışacak yetkin kişi yok. Vardiyaya yetkin kişi atayın.');
   });
 });

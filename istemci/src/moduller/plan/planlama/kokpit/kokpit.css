@@ -787,3 +787,24 @@
   .tc-pyq-ld-satir > [data-ad]::before { content: attr(data-ad) " "; color: var(--muted); }
   .tc-pyq-ld-satir > span:last-child { grid-column: 2; grid-row: 1 / span 2; min-width: 0; }
 }
+
+/* Engeller paneli (3457-1 A): nedene göre gruplu satırlar; satır başlığı emir ve adım, altında ne oldu, neden, ne yapmalı. */
+.tc-pyq-engel-dugme b { font-family: var(--font-mono); }
+.tc-pyq-engel-dugme[data-engel-var]:not([aria-pressed="true"]) b { color: var(--d-gec); }
+.tc-pyq-engeller section { display: flex; flex-direction: column; gap: var(--b-2); }
+.tc-pyq-engeller h3 { display: flex; align-items: center; gap: var(--b-2); }
+.tc-pyq-engel-sayi { font-family: var(--font-mono); color: var(--muted); font-size: var(--yazi-s); font-weight: 400; }
+.tc-pyq-engel-liste { display: flex; flex-direction: column; gap: var(--b-3); margin: 0; padding: 0; list-style: none; }
+.tc-pyq-engel-liste > li { display: flex; flex-direction: column; gap: var(--b-2); padding-bottom: var(--b-3); border-bottom: var(--cizgi-ince) solid var(--edge2); font-size: var(--yazi-s); }
+.tc-pyq-engeller [data-ton] > ul > li { padding-left: var(--b-3); border-left: var(--cizgi) solid var(--muted); }
+.tc-pyq-engeller [data-ton="hata"] > ul > li { border-left-color: var(--d-gec); }
+.tc-pyq-engeller [data-ton="uyari"] > ul > li { border-left-color: var(--d-risk); }
+.tc-pyq-engel-liste > li:last-child { border-bottom: 0; padding-bottom: 0; }
+.tc-pyq-engel-liste dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--b-1) var(--b-2); margin: 0; }
+.tc-pyq-engel-liste dt { color: var(--muted); }
+.tc-pyq-engel-liste dd { margin: 0; min-width: 0; text-align: start; font-weight: 400; }
+.tc-pyq-engel-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+/* Telefonda Engeller uzun bir listedir: alt yarıya sıkışmaz, ekranı üstten alt menüye kadar kaplar. */
+@media (max-width: 767px) {
+  .tc-pyq-ayrinti.tc-pyq-engeller { top: var(--b-4); max-height: none; }
+}

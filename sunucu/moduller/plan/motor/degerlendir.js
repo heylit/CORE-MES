@@ -66,7 +66,7 @@ function dengeKilit(st, geriyiKaydir = false) {
 }
 
 /* planın kaydı (c-masa): ekranın sakladığı biçim. 3199: özel takımın ömür hesabı (değişim anı, kalan) yalnız takımlı işte taşınır */
-function opKaydi(r) { return { id: r.id, job: r.job, m: r.m, S: r.S, Su: r.Su, C: r.C, su: r.su, run: r.run, lot1: r.lot1, fas: r.fas ? 1 : 0, why: r.why || null, sl: r.sl, famHit: !!r.famHit, pin: r.pin ? 1 : 0, done: r.done ? 1 : 0, act: r.act ? 1 : 0, ...(r.bitti ? { bitti: 1 } : {}), ...(r.takim && r.takim.length ? { takim: r.takim } : {}), ...(r.ikBas != null ? { ikBas: r.ikBas } : {}) }; }
+function opKaydi(r) { return { ...(r.ufukDisi > 0 ? { ufukDisi: Math.round(r.ufukDisi * 100) / 100 } : {}), id: r.id, job: r.job, m: r.m, S: r.S, Su: r.Su, C: r.C, su: r.su, run: r.run, lot1: r.lot1, fas: r.fas ? 1 : 0, why: r.why || null, sl: r.sl, famHit: !!r.famHit, pin: r.pin ? 1 : 0, done: r.done ? 1 : 0, act: r.act ? 1 : 0, ...(r.bitti ? { bitti: 1 } : {}), ...(r.takim && r.takim.length ? { takim: r.takim } : {}), ...(r.ikBas != null ? { ikBas: r.ikBas } : {}) }; }
 /* 3369: emrin malzemesi nereden karşılanıyor (motorun dağıtımı, compile matAlloc). Plan kaydında yalnız miktar, an ve gelişin kararlı
    anahtarı (kim: Satın Alma satırı) durur; sipariş numarası ve tedarikçi adı kayda girmez, ekran onları kendi okuma yetkisiyle ayrıca okur.
    pay.tur 'sa': verilmiş sipariş ya da onaylı talep; 'yok': siparişi verilmemiş eksik için motorun varsaydığı satır. tb: termini girilmemiş,
@@ -83,14 +83,24 @@ function malKaydi(p, st) {
       return { kod: d.kod, adim: d.adim, need: d.need, t: d.t != null && isFinite(d.t) ? d.t : null, stok, eksik: d.eksikQ || 0, pay }; }); }
   return mal;
 }
+/* 3457: Kokpit yerleşmeyen adımın somut nedenini gösterir: motorun genel 'zaman' nedeni (ya da nedensiz fail) aday tezgâhların ölçüsüyle
+   alt nedene iner (engine.js zamanTanisi: süre ufka sığmıyor, vardiya yok, hazırlık sığmıyor, kişi ya da ayarcı yok, tezgâh dolu, malzeme). */
+/** @param {any} [p] @param {MotorDurumu} [st] */
+function failNedenKaydi(p, st) {
+  const n = { ...(p.failNeden || {}) }; const fail = p.fail || []; if (!fail.length) return n;
+  const cx = p.cx || compile(st);
+  for (const id of fail) { const x = n[id]; if (x && x.kod !== 'zaman') continue; const o = cx.byId[id]; if (!o) continue;
+    n[id] = { kod: 'zaman', tani: zamanTanisi(zamanOlcusu(cx, o, p)) }; }
+  return n;
+}
 /** @param {any} [p] @param {MotorDurumu} [st] @param {any} [ref] */
 function planKaydi(p, st, ref) {
   const ef = evaluate(p, st, ref, false);
   const ops = {}; for (const id in p.ops) ops[id] = opKaydi(p.ops[id]);
-  const J = {}; for (const k in ef.J) { const x = ef.J[k]; J[k] = { C: isFinite(x.C) ? x.C : null, T: x.T }; }
+  const J = {}; for (const k in ef.J) { const x = ef.J[k]; J[k] = { C: isFinite(x.C) ? x.C : null, T: x.T, ...(x.ufukEksik > 0 ? { ufukEksik: Math.round(x.ufukEksik * 100) / 100 } : {}) }; }
   const util = {}; for (const m in ef.util) util[m] = ef.util[m];
   const kisiTezgahIsleri = kisiTezgahIsleriOf(p);
-  return { ops, fail: p.fail || [], failNeden: p.failNeden || {}, ozet: { kisiTezgahIsleri, wT: ef.wT, onT: ef.onT, late: ef.late, yerlesmeyenSip: ef.yerlesmeyenSip, n: ef.n, suH: ef.suH, suN: ef.suN, famN: ef.famN, Cmax: ef.Cmax, tl: ef.tl, wB: ef.wB, chg: ref ? ef.chg : null }, J, util, warn: ef.warn.slice(0, 300), mal: malKaydi(p, st) };
+  return { ops, fail: p.fail || [], failNeden: failNedenKaydi(p, st), ozet: { kisiTezgahIsleri, wT: ef.wT, onT: ef.onT, late: ef.late, yerlesmeyenSip: ef.yerlesmeyenSip, n: ef.n, suH: ef.suH, suN: ef.suN, famN: ef.famN, Cmax: ef.Cmax, tl: ef.tl, wB: ef.wB, chg: ref ? ef.chg : null }, J, util, warn: ef.warn.slice(0, 300), mal: malKaydi(p, st) };
 }
 /* aynı veriyle kural tabanlı ilk plan (zw-denge PD_ISCI, ms 0) */
 /** @param {MotorDurumu} [st] @param {any} [ms] */

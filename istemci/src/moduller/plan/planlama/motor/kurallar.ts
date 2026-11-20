@@ -34,9 +34,43 @@ export interface PlanIslemi {
   takim?: TakimOmru[];
   // İkincil kaynak yüzünden kayan işin ilk aday başlangıcı (çizelgedeki bekleme taraması ve Oynat).
   ikBas?: number;
+  // 3457: iş ufkun sonuna kadar yerleşti; bu kadar saati ufkun dışında kaldı.
+  ufukDisi?: number;
 }
 export interface PlanOzeti { wT: number; late: number; n: number; suH: number | null; suN: number | null; famN: number | null; Cmax: number | null }
-export interface FailNedeni { kod: 'aday' | 'oncul' | 'zaman'; oncul?: string }
+// 3457: 'zaman' nedeninin motordaki alt nedeni (engine.js zamanTanisi). gerek ve mevcut saattir; m ve ad aday tezgâhtır. Eski kayıtta yok.
+export const ZAMAN_ALTLARI = ['sure', 'vardiya', 'kisi', 'hazirlik', 'ayarci', 'dolu', 'malzeme', 'bilinmiyor'] as const;
+export interface ZamanTanisi { alt: (typeof ZAMAN_ALTLARI)[number]; m: string | null; ad: string | null; gerek: number | null; mevcut: number | null; ufukGun: number | null }
+// ufukDisi: öncül ufka taştığı için yerleşmedi (3457, zincir boyunca).
+export interface FailNedeni { kod: 'aday' | 'oncul' | 'zaman'; oncul?: string; tani?: ZamanTanisi; ufukDisi?: true }
+// 3457: motor 'zaman' nedenini ölçtüyse kişiye ne olduğunu, sayısıyla nedenini ve ne yapacağını yazar (kod ve teknik ad yazılmaz).
+// Sayı bilinmiyorsa cümle sayısız kurulur; tezgâhın adı yoksa "uygun tezgâh" yazılır.
+const sa = (x: number): string => `${(Math.round(x * 10) / 10).toLocaleString('tr-TR')} sa`;
+export const NEDEN_OLCULEMEDI_YAZISI = 'nedeni ölçülemedi; Reçete ve Rota > Planlanabilirlik sayfasında adımın kontrollerine bakın.';
+// Tanının iki parçası: neden (ne oldu, sayısıyla) ve öneri (ne yapmalı). Kokpit'in Engeller paneli ikisini ayrı satırda yazar; plan
+// satırları ikisini tek cümlede okur (zamanTanisiYazisi). Neden küçük harfle başlar, sonunda nokta yoktur.
+export function zamanTanisiParcalari(t: ZamanTanisi): { neden: string; oneri: string } {
+  const ad = t.ad ?? t.m, tz = ad === null ? 'uygun tezgâh' : `${ad} tezgâhı`, tzda = ad === null ? 'uygun tezgâhta' : `${ad} tezgâhında`;
+  const ufuk = t.ufukGun === null ? 'planlama süresi' : `${String(t.ufukGun)} günlük planlama süresi`;
+  const g = t.gerek, v = t.mevcut;
+  switch (t.alt) {
+    case 'sure': return { neden: g !== null && v !== null ? `iş ${sa(g)} sürüyor, ${tz} ${ufuk} içinde yalnız ${sa(v)} çalışıyor` : `iş ${tzda} ${ufuk} içine sığmıyor`, oneri: 'Çevrim süresini kontrol edin, başka tezgâh ekleyin ya da vardiyayı artırın.' };
+    case 'dolu': return { neden: `${tz} dolu${g !== null && v !== null ? `: iş ${sa(g)} istiyor, ${ufuk} içinde boş ${sa(v)} kaldı` : ''}`, oneri: 'Başka tezgâh ekleyin, ek mesai açın ya da siparişe öncelik verin.' };
+    case 'vardiya': return { neden: `${tz} ${ufuk} içinde hiç vardiyada değil`, oneri: 'Tezgâha vardiya atayın.' };
+    case 'kisi': return { neden: `${tz} için vardiyada çalışacak yetkin kişi yok`, oneri: 'Vardiyaya yetkin kişi atayın.' };
+    case 'hazirlik': return { neden: `${g !== null && v !== null ? `hazırlık ${sa(g)}, ${tz} en çok ${sa(v)} kesintisiz çalışıyor` : `hazırlık ${tzda} kesintisiz çalışma süresine sığmıyor`}; hazırlık bölünmez`, oneri: 'Hazırlık süresini kontrol edin ya da vardiyayı uzatın.' };
+    case 'ayarci': return v === 0
+      ? { neden: `${ad === null ? 'uygun tezgâhın' : `${ad} tezgâhının`} vardiyalarında ayarcı yok`, oneri: 'Vardiyaya ayarcı atayın.' }
+      : { neden: g !== null && v !== null ? `hazırlık ${sa(g)}, ${tzda} ayarcı en çok ${sa(v)} kesintisiz bulunuyor` : `hazırlık ${tzda} ayarcının bulunduğu süreye sığmıyor`, oneri: 'Ayarcı atayın ya da hazırlık süresini kontrol edin.' };
+    case 'malzeme': return { neden: `malzemesi ${ufuk} içinde karşılanmıyor (stok ve sipariş yetmiyor)`, oneri: 'Satın alma talebi açın.' };
+    case 'bilinmiyor': return { neden: 'nedeni ölçülemedi', oneri: 'Reçete ve Rota > Planlanabilirlik sayfasında adımın kontrollerine bakın.' };
+  }
+}
+export function zamanTanisiYazisi(t: ZamanTanisi): string {
+  if (t.alt === 'bilinmiyor') return NEDEN_OLCULEMEDI_YAZISI;
+  const { neden, oneri } = zamanTanisiParcalari(t);
+  return `${neden}. ${oneri}`;
+}
 // Emrin malzemesinin karşılanışı (3369, motor degerlendir.js malKaydi). pay.tur 'sa': verilmiş sipariş ya da onaylı talep (kim: Satın
 // Alma satırının anahtarı; elle girilen satırda yok); 'yok': siparişi verilmemiş eksik için motorun varsaydığı satır. tb: termini
 // girilmemiş, plan malzemeyi `gelis` anında gelmiş saydı. t: malzemenin hazır anı; karşılanmayan miktar (eksik) varsa null.
@@ -99,6 +133,7 @@ export function planOku(c: PlanlamaCalismasi | null): OkunanPlan | null {
       ...(r.done && (r.act || r.bitti) ? { bitti: true } : {}),
       ...(Array.isArray(r.takim) && r.takim.length ? { takim: takimOku(r.takim) } : {}),
       ...(sayi(r.ikBas) !== null ? { ikBas: r.ikBas as number } : {}),
+      ...((sayi(r.ufukDisi) ?? 0) > 0 ? { ufukDisi: r.ufukDisi as number } : {}),
     };
   }
   const o = p.ozet;
@@ -122,7 +157,13 @@ function failNedenOku(v: unknown): Record<string, FailNedeni> {
   if (!nesne(v)) return l;
   for (const [id, x] of Object.entries(v)) {
     if (!nesne(x) || (x.kod !== 'aday' && x.kod !== 'oncul' && x.kod !== 'zaman')) continue;
-    l[id] = { kod: x.kod, ...(typeof x.oncul === 'string' ? { oncul: x.oncul } : {}) };
+    const t = nesne(x.tani) ? x.tani : null;
+    const alt = t === null ? undefined : ZAMAN_ALTLARI.find((a) => a === t.alt);
+    l[id] = {
+      kod: x.kod, ...(typeof x.oncul === 'string' ? { oncul: x.oncul } : {}), ...(x.kod === 'oncul' && x.ufukDisi ? { ufukDisi: true as const } : {}),
+      ...(t !== null && alt !== undefined && x.kod === 'zaman'
+        ? { tani: { alt, m: metin(t.m), ad: metin(t.ad), gerek: sayi(t.gerek), mevcut: sayi(t.mevcut), ufukGun: sayi(t.ufukGun) } } : {}),
+    };
   }
   return l;
 }

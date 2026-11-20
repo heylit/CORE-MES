@@ -55,6 +55,19 @@ describe('yarım planlı emir', () => {
     expect(eksikNedeni({ fail: [] }, 'a')).toBe('son planlamada yoktu');
     expect(eksikNedeni(null, 'a')).toBe('son planlamada yoktu');
   });
+
+  it('3457: motor zaman nedenini ölçtüyse ne olduğu, sayısı ve ne yapılacağı yazar; ölçülemediyse eski metin', () => {
+    const t = (alt: 'sure' | 'dolu' | 'hazirlik' | 'ayarci' | 'bilinmiyor', gerek: number | null, mevcut: number | null) =>
+      ({ fail: ['a'], failNeden: { a: { kod: 'zaman' as const, tani: { alt, m: '100', ad: 'ORN-Torna 1', gerek, mevcut, ufukGun: 120 } } } });
+    expect(eksikNedeni(t('sure', 1170, 640), 'a')).toBe('iş 1.170 sa sürüyor, ORN-Torna 1 tezgâhı 120 günlük planlama süresi içinde yalnız 640 sa çalışıyor. Çevrim süresini kontrol edin, başka tezgâh ekleyin ya da vardiyayı artırın.');
+    expect(eksikNedeni(t('dolu', 40.25, 12), 'a')).toBe('ORN-Torna 1 tezgâhı dolu: iş 40,3 sa istiyor, 120 günlük planlama süresi içinde boş 12 sa kaldı. Başka tezgâh ekleyin, ek mesai açın ya da siparişe öncelik verin.');
+    expect(eksikNedeni(t('ayarci', 15, 0), 'a')).toBe('ORN-Torna 1 tezgâhının vardiyalarında ayarcı yok. Vardiyaya ayarcı atayın.');
+    expect(eksikNedeni(t('hazirlik', 30, 8), 'a')).toContain('hazırlık 30 sa, ORN-Torna 1 tezgâhı en çok 8 sa kesintisiz çalışıyor');
+    expect(eksikNedeni(t('bilinmiyor', null, null), 'a')).toBe('nedeni ölçülemedi; Reçete ve Rota > Planlanabilirlik sayfasında adımın kontrollerine bakın.');
+    expect(eksikNedeni(t('sure', null, null), 'a')).toBe('iş ORN-Torna 1 tezgâhında 120 günlük planlama süresi içine sığmıyor. Çevrim süresini kontrol edin, başka tezgâh ekleyin ya da vardiyayı artırın.');
+    expect(eksikNedeni({ fail: ['a'], failNeden: { a: { kod: 'zaman', tani: { alt: 'vardiya', m: null, ad: null, gerek: null, mevcut: 0, ufukGun: 120 } } } }, 'a'))
+      .toBe('uygun tezgâh 120 günlük planlama süresi içinde hiç vardiyada değil. Tezgâha vardiya atayın.');
+  });
 });
 
 describe('Kokpit liste düzeni (3414 b)', () => {
@@ -127,6 +140,18 @@ describe('Kokpit liste düzeni (3414 b)', () => {
     cleanup();
     ciz(kur(), '2');
     expect(document.querySelector('[data-durdurma-bekliyor]')).toBeNull();
+  });
+
+  it('3457-3 a: ufkun sonuna kadar yerleşen adım ufuk dışında kalan saatini yazar; sonraki adım bunu söyler', () => {
+    const c0 = ornekCalisma(), plan = c0.plan as unknown as { ops: Record<string, { job: string }> };
+    const ids = Object.keys(plan.ops).filter((id) => plan.ops[id]?.job === '3').sort();
+    const [ilk, son] = [ids[0] as string, ids.at(-1) as string];
+    const { [son]: _cikan, ...kalan } = plan.ops;
+    const c = { ...c0, plan: { ...plan, ops: { ...kalan, [ilk]: { ...kalan[ilk], ufukDisi: 6 } }, fail: [son], failNeden: { [son]: { kod: 'oncul', oncul: ilk, ufukDisi: 1 } } } } as unknown as typeof c0;
+    const p = planOku(c), m = modelKur(c, p, derle(girdiKur(c, plandanBitenler(c, p))), (id) => `ORN-${id}`);
+    ciz({ m, p, kartlar: siraKartlari(m) }, '3');
+    expect(document.querySelector(`.tc-pyq-ld-adimlar button[data-adim="${ilk}"]`)?.textContent).toContain('6 sa ufuk dışında');
+    expect(document.querySelector(`[data-yeri-yok="${son}"]`)?.textContent).toContain('planlama süresinin dışına taşıyor');
   });
 
   it('planda yeri olan adım düğmedir ve basınca emri ile işi bildirir; seçili adım basılı görünür; yeri olmayan adım düğme değildir', () => {

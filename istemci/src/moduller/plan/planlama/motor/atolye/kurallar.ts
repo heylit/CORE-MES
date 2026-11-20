@@ -2,7 +2,7 @@ import type { CanliyaAlmaGecmisiCevabi, PlanCevabi, SenaryolarCevabi } from '#pa
 import type { CanliFarkiCevabi, TabanVeCanliCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import type { PlanlamaCalismasi, PlanVerisi } from '../../tipler.ts';
-import { acikSaat, elleSayilari, saatOku, tabanMs, type Derleme, type FailNedeni, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
+import { acikSaat, elleSayilari, saatOku, tabanMs, zamanTanisiYazisi, type Derleme, type FailNedeni, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
 import { emirKuyrugu, type EmirNo } from '../../ortak/emir-no.ts';
 import { ufukGunu } from '../../ufuk-olcegi.ts';
 import { gunBaslayanlar, gunDonuk, gunNumarasi } from '../cizelge/kurallar.ts';
@@ -624,6 +624,7 @@ export function ekMesaiFarki(a: PlanCevabi, b: PlanCevabi | null): ['clock' | 'm
 const NEDEN_METNI: Readonly<Record<FailNedeni['kod'], string>> = { aday: 'uygun tezgâh ya da fasoncu yok', oncul: 'önceki adım yerleşmedi', zaman: 'kaynak ya da ufuk yetmedi' };
 export function yerlesmemeNedeni(cx: Pick<Derleme, 'byId'>, fail: readonly string[], id: string, neden?: Readonly<Record<string, FailNedeni>>): string {
   const m = neden?.[id];
+  if (m?.tani) return zamanTanisiYazisi(m.tani);
   if (m) return m.kod === 'oncul' && m.oncul ? `önceki adım ${m.oncul} yerleşmedi` : NEDEN_METNI[m.kod];
   const a = cx.byId[id];
   if (!a) return 'adım derlenmedi';

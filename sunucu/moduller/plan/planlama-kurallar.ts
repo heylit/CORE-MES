@@ -158,7 +158,7 @@ const opMetni = (anahtar: string): string => { const b = anahtar.lastIndexOf('|'
 // kalan ilk paylara) ve parça motorBolmesi taşır. Motor elle bölmeyi uygulamadıysa (iş bütün ya da başka paylarla) uyarı yazılır. Adım adedi
 // bilinmeyen ya da pay sayısından az olan bölünmüş iş yazılamaz; payı bitmiş ya da fasonda olan bölünmüş işe dokunulmaz.
 export function calismaIsleri(
-  ops: readonly { id: string; m: string; S: number; C: number; bitti: boolean }[], kimlik: Readonly<Record<string, string>>, planlanacak: ReadonlySet<string>,
+  ops: readonly { id: string; m: string; S: number; C: number; bitti: boolean; ufukDisi?: number }[], kimlik: Readonly<Record<string, string>>, planlanacak: ReadonlySet<string>,
   elleBol: ReadonlyMap<string, ElleBolme> = new Map(), adimAdetleri: ReadonlyMap<string, number> = new Map(),
 ): { yazilacak: CalismaIsi[]; yazilamaz: string[]; dokunulmaz: Set<string>; uyarilar: string[] } {
   const yazilacak: CalismaIsi[] = [];
@@ -179,6 +179,8 @@ export function calismaIsleri(
     if (paylar.some(({ r }) => r.bitti || r.m.startsWith('@'))) { if (anahtar !== undefined) dokunulmaz.add(anahtar); continue; }
     const kaynaklar = paylar.map(({ r }) => calismaKaynagi(r.m));
     if (kaynaklar.some((k) => k === null) || anahtar === undefined || !planlanacak.has(anahtar) || paylar.some((p, n) => p.no !== n + 1)) { yazilamaz.add(anahtar ?? kok); continue; }
+    // 3457-3 a: ufka taşan işin bitişi ufuk sonudur; canlıya yazılsa sapma ve anomali ölçüsü sahte bitişi okur. Ufuk ilerleyip sığınca yazılır.
+    if (paylar.some(({ r }) => (r.ufukDisi ?? 0) > 0)) { yazilamaz.add(anahtar); uyarilar.push(`${opMetni(anahtar)}: planlama süresinin dışına taşıyor; canlıya yazılmadı, süre içine sığınca yazılır.`); continue; }
     const yaz = (n: number, parca?: CalismaIsi['parca']) => {
       const { r } = paylar[n]!;
       yazilacak.push({ k: kok, anahtar, kaynak: kaynaklar[n]!, S: r.S, C: r.C, ...(parca ? { parca } : {}) });

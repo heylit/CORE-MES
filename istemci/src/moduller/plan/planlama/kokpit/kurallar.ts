@@ -1,5 +1,5 @@
 import type { EmirNo } from '../ortak/emir-no.ts';
-import { acikSaat, type Derleme, type OkunanPlan } from '../motor/kurallar.ts';
+import { acikSaat, zamanTanisiYazisi, type Derleme, type OkunanPlan } from '../motor/kurallar.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 
 // Kokpit'in saf kuralları (kart 3151): tahtanın, matrisin ve sorun turunun okuduğu model çalışmadan ve kayıtlı plandan kurulur.
@@ -17,6 +17,8 @@ export interface KokpitIsi {
   durdurmaBekliyor?: boolean;
   // Rotadaki yeri (0'dan).
   sira: number;
+  // 3457: ufkun sonuna kadar yerleşti; bu kadar saati ufkun dışında.
+  ufukDisi?: number;
 }
 // onculler: adımın rotadaki bitmemiş öncülleri ve bağ türü (b: öncül bitince başlar, o: örtüşmeli, öncül bitmeden başlayabilir).
 export type BagTuru = 'b' | 'o';
@@ -89,6 +91,8 @@ export interface KokpitEmri {
   durum: EmirDurumu;
   // Artı: terminden sonra biter (saat). Plansızda ve terminsizde null.
   gecikme: number | null;
+  // 3457: adımlarının ufkun dışında kalan saati; ufka sığan emirde yok. Böyle emir geç sayılır.
+  ufukEksik?: number;
   adimlar: KokpitAdimi[];
 }
 // grup: planın istasyon kimliği; grupAdi istasyonun adı (yoksa kodu), 3B istasyona göre toplarken başlık olur.
@@ -131,21 +135,22 @@ export function modelKur(c: PlanlamaCalismasi, p: OkunanPlan | null, cx: Derleme
   let enSon = simdi;
   for (const j of Object.values(cx.jobs)) {
     const s = siparis.get(j.id);
-    let yerlesen = 0, bitis: number | null = null;
+    let yerlesen = 0, bitis: number | null = null, ufukEksik = 0;
     j.ops.forEach((a, sira) => {
       const x = p?.ops[a.id];
       if (!x || !Number.isFinite(x.S) || !Number.isFinite(x.C)) return;
       yerlesen++;
-      isler[a.id] = { id: a.id, job: j.id, ad: a.ad, m: x.m, S: x.S, C: x.C, basladi: x.act, fason: x.fas || fasonMu(x.m), kilitli: !!c.locks[a.id], sira, ...(x.bitti ? { bitti: true } : {}), ...(bekleyen.has(a.id) ? { durdurmaBekliyor: true } : {}) };
+      isler[a.id] = { id: a.id, job: j.id, ad: a.ad, m: x.m, S: x.S, C: x.C, basladi: x.act, fason: x.fas || fasonMu(x.m), kilitli: !!c.locks[a.id], sira, ...(x.bitti ? { bitti: true } : {}), ...(bekleyen.has(a.id) ? { durdurmaBekliyor: true } : {}), ...(x.ufukDisi ? { ufukDisi: x.ufukDisi } : {}) };
+      ufukEksik += x.ufukDisi ?? 0;
       bitis = bitis === null ? x.C : Math.max(bitis, x.C);
       enSon = Math.max(enSon, x.C);
     });
     const plansiz = j.ops.length > 0 && yerlesen < j.ops.length;
     const gecikme = plansiz || bitis === null || j.due === null ? null : bitis - j.due;
-    const durum: EmirDurumu = plansiz ? 'plansiz' : gecikme === null ? 'iyi' : gecikme > 0.01 ? 'gec' : gecikme > -RISK_SAATI ? 'risk' : 'iyi';
+    const durum: EmirDurumu = plansiz ? 'plansiz' : ufukEksik > 0 ? 'gec' : gecikme === null ? 'iyi' : gecikme > 0.01 ? 'gec' : gecikme > -RISK_SAATI ? 'risk' : 'iyi';
     if (!j.ops.length) continue;
     emirler.push({
-      id: j.id, no: emirNo(j.id), urun: urunAdi.get(s?.urun ?? '') ?? s?.ad ?? '', adet: j.adet, termin: j.due, bitis: plansiz ? null : bitis, durum, gecikme,
+      id: j.id, no: emirNo(j.id), urun: urunAdi.get(s?.urun ?? '') ?? s?.ad ?? '', adet: j.adet, termin: j.due, bitis: plansiz ? null : bitis, durum, gecikme, ...(ufukEksik > 0 ? { ufukEksik } : {}),
       adimlar: j.ops.map((a) => ({ id: a.id, ad: a.ad, adaylar: a.c, ...(a.pr.length ? { onculler: a.pr.map(([q, t]) => [q, t === 'o' ? 'o' : 'b'] as const) } : {}) })),
     });
   }
@@ -420,11 +425,14 @@ export const eksikAdimlar = (m: Pick<KokpitModeli, 'isler'>, e: KokpitEmri): Kok
 const EKSIK_NEDENI = { aday: 'uygun tezgâh ya da fasoncu yok', oncul: 'önceki adım yerleşmedi', zaman: 'ufuk içinde tezgâh, vardiya, kaynak ya da malzeme yeri bulunamadı' } as const;
 export function eksikNedeni(p: Pick<OkunanPlan, 'fail' | 'failNeden'> | null, id: string): string {
   const n = p?.failNeden?.[id];
+  if (n?.tani) return zamanTanisiYazisi(n.tani);
+  if (n?.ufukDisi) return 'önceki adım planlama süresinin dışına taşıyor; o bitmeden başlayamaz. Önceki adımın nedenine bakın.';
   if (n) return EKSIK_NEDENI[n.kod];
   return p?.fail.includes(id) ? EKSIK_NEDENI.zaman : 'son planlamada yoktu';
 }
 export function durumYazisi(e: KokpitEmri): string {
   if (e.durum === 'plansiz') return 'plansız';
+  if (e.ufukEksik) return `ufuk dışı, ${sureYaz(e.ufukEksik)} eksik`;
   if (e.gecikme === null) return 'termin yok';
   return e.gecikme > 0.01 ? `${sureYaz(e.gecikme)} geç` : e.durum === 'risk' ? `termine ${sureYaz(-e.gecikme)}` : 'zamanında';
 }
