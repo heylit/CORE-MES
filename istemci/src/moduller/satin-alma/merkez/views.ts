@@ -24,6 +24,7 @@ import { grupMetni, ikinciAlimUyarisi } from "./guncelleme-grubu.ts";
 import { rehberRozetleri } from "./onayli-ekran.ts";
 import { getRole, onaylayabilir, viewApproval, viewApprovals, viewRequesterHome, viewRequestRequester } from "./roles.ts";
 import { secilemezAlternatif, sonucRozeti } from "./alternatif.ts";
+import { kalemKalemHTML, siparisKalemleriHTML } from "./kalem-kalem.ts";
 /* ================= render çekirdeği ================= */
 // Ortak parçalarla çizilen ekranlar (iş kutusu, Talepler, talep ayrıntısı; 2412-2) merkezin durumunu her çizimde yeniden okur.
 let cizimSurumu = 0;
@@ -393,8 +394,8 @@ export function talepGovdesi(r: PurchaseRequest): string {
         : "";
       // Kart #956: önde tek tablo ve tek düğme; ağırlık, kalem kalem tablo, bölme ve paylaştırma kapalı "Ayrıntılar" altında.
       const acik = UI.adv.detay || r.award?.mode === "split";
-      govde = `<div data-sa-y="46">${tabDecision(r, "select")}</div>
-        <details class="adv sa-detay" data-adv="detay" ${acik ? "open" : ""}><summary>Ayrıntılar ve bölme <span class="muted">(ağırlıklar, kalem kalem tablo, bölme, paylaştırma)</span></summary>
+      govde = `<div data-sa-y="46">${tabDecision(r, "select")}</div>${kalemKalemHTML(r)}
+        <details class="adv sa-detay" data-adv="detay" ${acik ? "open" : ""}><summary>Ayrıntılar ve bölme <span class="muted">(ağırlıklar, şartlar tablosu, kalemleri dağıtma, paylaştırma)</span></summary>
         <div class="stack">${tabCompare(r, true)}${tabDecision(r, "split")}${paylas}</div></details>`;
     }
   } else if (sec === "approval" || sec === "order" || sec === "delivery") govde = tabDecision(r, sec);
@@ -586,10 +587,10 @@ function tabCompare(r: PurchaseRequest, detay = false): string {
       <div class="panel-b"><div class="weights">${CRIT.map(c => `<label><span class="wv"><span><i class="${c.c}" data-sa-y="48"></i>${c.l}</span><b id="wv-${c.k}">%${nf0.format((+ev.w[c.k] || 0) / tw * 100)}</b></span><input type="range" min="0" max="100" step="5" value="${+ev.w[c.k] || 0}" data-w="${c.k}" aria-label="${c.l} ağırlığı"></label>`).join("")}</div></div>
     </section></details>
     ${detay ? "" : `<section class="panel" id="rank-panel">${rankHTML(r, ev)}</section>`}
-    ${ev.split && ev.split.suggested ? `<div class="callout"><h3>Kalem bazlı bölme seçeneği</h3><p data-sa-y="20">${ev.split.best ? `Kalemleri ${ev.split.used.length} tedarikçiye bölerseniz nakliye ve masraflar dahil net maliyet ${money(ev.split.total, "TRY", 0)} olur; en uygun tek tedarikçi ${esc(supName(ev.split.best.q))} ile ${money(ev.split.bestTotal, "TRY", 0)}. Fark <b>${money(ev.split.saving, "TRY", 0)}</b>.` : `Hiçbir tedarikçi tüm kalemlere teklif vermedi; alım ancak bölünerek yapılabilir. En uygun dağılım nakliye dahil ${money(ev.split.total, "TRY", 0)}.`}</p>
-      <ul data-sa-y="49">${ev.split.plan.groups.map(g => `<li>${esc(supName(g.x.q))}: ${g.items.map(it => esc(it.name)).join(", ")}${g.extras > 0.5 ? ` <span class="muted small">(+${money(g.extras, "TRY", 0)} nakliye ve masraf)</span>` : ""}${g.late ? ` <span class="flag bad">ihtiyaç tarihini ${g.late} gün kaçırır</span>` : ""}</li>`).join("")}</ul>
-      <div class="row" data-sa-y="16"><button class="btn sm" data-act="split-review">Dağılımı karar ekranında incele</button><button class="btn sm" data-act="paylastir-git">Miktarı bölerek dene</button><span class="small muted">Ayrı siparişler, ayrı teslimat takibi gerektirir.</span></div></div>` : ""}
-    <details class="adv" data-adv="matrix" ${UI.adv.matrix ? "open" : ""}><summary>Kalem kalem karşılaştırma tablosu</summary><section class="panel"><div class="panel-h"><h2>Kalem ve şart karşılaştırması</h2><span class="spacer"></span><button class="btn sm" data-act="csv">CSV indir</button></div>${matrixHTML(r, ev)}</section></details>
+    ${ev.split && ev.split.suggested ? `<div class="callout"><h3>Kalemleri tedarikçilere dağıtma seçeneği</h3><p data-sa-y="20">${ev.split.best ? `Kalemleri ${ev.split.used.length} tedarikçiye dağıtırsanız nakliye ve masraflar dahil net maliyet ${money(ev.split.total, "TRY", 0)} olur; en uygun tek tedarikçi ${esc(supName(ev.split.best.q))} ile ${money(ev.split.bestTotal, "TRY", 0)}. Fark <b>${money(ev.split.saving, "TRY", 0)}</b>.` : `Hiçbir tedarikçi tüm kalemlere teklif vermedi; alım ancak kalemler dağıtılarak yapılabilir. En uygun dağılım nakliye dahil ${money(ev.split.total, "TRY", 0)}.`}</p>
+      <ul data-sa-y="49">${ev.split.plan.groups.map(g => `<li>${esc(supName(g.x.q))}: ${g.items.map(it => `${esc(it.name)} ${numIn(parseNum(it.qty))} ${esc(it.unit)}`).join(", ")}${g.extras > 0.5 ? ` <span class="muted small">(+${money(g.extras, "TRY", 0)} nakliye ve masraf)</span>` : ""}${g.late ? ` <span class="flag bad">ihtiyaç tarihini ${g.late} gün kaçırır</span>` : ""}</li>`).join("")}</ul>
+      <div class="row" data-sa-y="16"><button class="btn sm" data-act="split-review">Dağılımı karar ekranında incele</button><button class="btn sm" data-act="paylastir-git">Paylaştırmada dene</button><span class="small muted">Ayrı siparişler, ayrı teslimat takibi gerektirir.</span></div></div>` : ""}
+    <details class="adv" data-adv="matrix" ${UI.adv.matrix ? "open" : ""}><summary>Teklif şartları tablosu <span class="muted">(fiyat, ödeme, teslimat, geçmiş)</span></summary><section class="panel"><div class="panel-h"><h2>Teklif şartları karşılaştırması</h2><span class="spacer"></span><button class="btn sm" data-act="csv">CSV indir</button></div>${matrixHTML(r, ev)}</section></details>
     ${faizUyarisi(ev.all.filter(x => x.c.faizYok).map(x => x.q.currency))}
     <p class="small muted">Tutarlar KDV hariç. Net maliyet: vade etkisi dahil, ${OPEN.includes(r.status) ? "güncel" : "sipariş günü"} kurla TL. Her teklifin adım adım hesabı için "Hesabı göster".</p>
   </div>`;
@@ -677,7 +678,7 @@ function matrixHTML(r: PurchaseRequest, ev: Evaluation): string {
   };
   const sec = (l: string) => `<tr class="sec"><td class="rl">${l}</td>${cols.map(() => "<td></td>").join("")}</tr>`;
   const sst = supplierStats();
-  let h = `<div class="tw"><table class="matrix"><thead><tr><th class="rl">Kalem / şart</th>${cols.map(x => `<th class="r ${x.q.id === winner ? "win" : ""}"><span class="sn">${esc(supName(x.q))}</span>${esc(x.q.currency)}, ${fmtDate(x.q.date)}</th>`).join("")}</tr></thead><tbody>`;
+  let h = `${cols.length > 2 ? `<p class="xs muted sa-kaydir-ipucu">${cols.length} teklif var; öteki tedarikçiler için tabloyu yana kaydırın.</p>` : ""}<div class="tw"><table class="matrix${cols.length <= 2 ? " sa-matris-dar" : ""}"><thead><tr><th class="rl">Kalem / şart</th>${cols.map(x => `<th class="r ${x.q.id === winner ? "win" : ""}"><span class="sn">${esc(supName(x.q))}</span>${esc(x.q.currency)}, ${fmtDate(x.q.date)}</th>`).join("")}</tr></thead><tbody>`;
   h += sec("Birim fiyatlar");
   items.forEach(it => {
     // 3437 a: sınır dışı alternatif seçilemez; en düşük fiyat vurgusunu almaz.
@@ -694,7 +695,7 @@ function matrixHTML(r: PurchaseRequest, ev: Evaluation): string {
   h += row(OPEN.includes(r.status) ? "Kur (güncel)" : "Kur (sipariş günü)", cols.map(x => x.q.currency === "TRY" ? "–" : `${nfx.format(x.c.rate)}${isNum(x.q.fxRate) && Math.abs(x.q.fxRate - x.c.rate) > 1e-6 ? `<span class="sub">teklif günü ${nfx.format(x.q.fxRate)}</span>` : ""}`));
   h += row("Toplam TL", cols.map(x => money(x.c.totalTRY)), cols.map(x => x.c.covered === items.length ? x.c.totalTRY : null), "min", "key");
   h += row("Ödeme şekli", cols.map(x => payText(x.q)), cols.map(x => (parseNum(x.q.payDays) || 0) * (1 - clamp((parseNum(x.q.advancePct) || 0) / 100, 0, 1))), "max", "wrap");
-  h += row("Vade avantajı", cols.map(x => x.c.faizYok ? "faiz yok" : x.c.vadeGain > 0.5 ? money(x.c.vadeGain) : "–"));
+  h += row("Vade avantajı", cols.map(x => x.c.faizYok ? "faiz girilmedi" : x.c.vadeGain > 0.5 ? money(x.c.vadeGain) : "–"));
   h += row("Net bugünkü maliyet", cols.map(x => money(x.c.pvTRY)), cols.map(x => x.c.covered === items.length ? x.c.pvTRY : null), "min", "key");
   h += sec("Teslimat");
   h += row("Termin", cols.map(x => { const l = parseNum(x.q.leadDays); const late = lateBy(r, x.q); return l === null ? "–" : `${l} gün${late ? `<span class="sub"><span class="flag bad">${late} gün geç</span></span>` : ""}`; }), cols.map(x => parseNum(x.q.leadDays)), "min");
@@ -764,7 +765,7 @@ export function tabDecision(r: PurchaseRequest, part: "select" | "split" | "appr
   const tekGerekce = !isSplit && sel !== top.q.id;
   const p1 = `<section class="panel sa-karar" data-top="${top.q.id}">
     <div class="panel-h"><h2>Teklifler</h2><span class="sub">${ordered ? "Sipariş verildiği için seçim kilitli" : "Önerilen seçili gelir; başka teklif için satırına basın"}</span><span class="spacer"></span>${decided ? '<span class="flag good">karar verildi</span>' : ""}</div>
-    ${isSplit ? '<div class="callout small">Karar kalem bazlı bölmeyle verildi; ayrıntısı "Ayrıntılar ve bölme" altında. Tek tedarikçiye dönmek için bir satır seçip onaya gönderin.</div>' : ""}
+    ${isSplit ? '<div class="callout small">Karar kalemler tedarikçilere dağıtılarak verildi; ayrıntısı "Ayrıntılar ve bölme" altında. Tek tedarikçiye dönmek için bir satır seçip onaya gönderin.</div>' : ""}
     <div class="tw"><table class="rt sa-karar-t"><thead><tr><th><span class="sr-only">Seç</span></th><th>Tedarikçi</th><th class="r">Net maliyet</th><th>Termin</th><th>Ödeme</th><th>Garanti</th><th class="r">Puan</th><th></th></tr></thead><tbody>
       ${ev.ranking.map(satir).join("")}
       ${disarida.map(x => `<tr class="off"><td></td><td class="lead">${esc(supName(x.q))}<span class="sub">${x.q.compliant === false ? "teknik uygun değil" : "fiyat girilmemiş"}</span></td><td colspan="6" class="muted small">Değerlendirme dışı</td></tr>`).join("")}
@@ -775,10 +776,10 @@ export function tabDecision(r: PurchaseRequest, part: "select" | "split" | "appr
     <label class="f" id="d-reason-wrap" ${tekGerekce ? "" : "hidden"}><span>Gerekçe <small>— önerilen teklif seçilmediği için zorunlu</small></span><textarea id="d-reason" placeholder="Örn. termin kritik, ikinci sıradaki tedarikçi stoktan teslim ediyor" ${lock}>${esc(!isSplit ? a.reason || "" : "")}</textarea></label>
     ${ordered ? "" : `<div class="row"><button class="btn primary" data-act="save-decision" data-mode="single">${aps.state === "rejected" ? "Yeniden onaya gönder" : decided ? "Kararı güncelle ve onaya gönder" : "Onaya gönder"}</button>${decided ? '<button class="btn ghost danger" data-act="clear-decision">Kararı kaldır</button>' : ""}</div>`}
   </section>`;
-  const bolme = canSplit ? `<section class="panel" id="d-split-panel"><div class="panel-h"><h2>Kalem bazlı böl</h2>${splitLabel}</div><div class="panel-b stack">
+  const bolme = canSplit ? `<section class="panel" id="d-split-panel"><div class="panel-h"><h2>Kalemleri tedarikçilere dağıt</h2>${splitLabel}</div><div class="panel-b stack">
     <div id="d-split">${splitEditorHTML(r, ev, assign, ordered)}</div>
     <label class="f"><span>Gerekçe <small>— en uygun dağılım seçilmezse zorunlu</small></span><textarea id="d-reason-split" ${lock}>${esc(isSplit ? a.reason || "" : "")}</textarea></label>
-    ${ordered ? "" : '<div class="row"><button class="btn" data-act="save-decision" data-mode="split">Bölerek onaya gönder</button></div>'}
+    ${ordered ? "" : '<div class="row"><button class="btn" data-act="save-decision" data-mode="split">Dağıtarak onaya gönder</button></div>'}
   </div></section>` : "";
   const p2 = `${panel(2, "Onay", approved ? '<span class="flag good">onaylandı</span>' : aps.state === "rejected" ? '<span class="flag bad">reddedildi</span>' : aps.resubmitted ? '<span class="flag warn">yeniden onay bekliyor</span>' : decided ? '<span class="flag warn">onay bekliyor</span>' : '<span class="flag mute">karardan sonra</span>', `
     <div class="kv">
@@ -798,6 +799,7 @@ export function tabDecision(r: PurchaseRequest, part: "select" | "split" | "appr
   </div></section>` : "";
   const p3 = `${panel(3, isSplit ? `Siparişler (${orders.length} tedarikçi)` : "Sipariş", ordered ? '<span class="flag good">sipariş verildi</span>' : '<span class="flag mute">onaydan sonra</span>', `
     ${approved || ordered ? `${isSplit ? ordersFormHTML(r, orders) : singleOrderHTML(r, a)}
+    ${siparisKalemleriHTML(r)}
     <div class="row"><button class="btn primary" data-act="place-order">${ordered ? "Sipariş bilgisini güncelle" : isSplit ? "Siparişleri verildi olarak işaretle" : "Siparişi verildi olarak işaretle"}</button>${ordered ? '<button class="btn" data-act="order-item-change">Kalemi değiştir</button><button class="btn" data-act="order-close">Kalanı kapat</button>' + logoBekletDugmeleri(orders) + '<button class="btn" data-act="order-invoices">Faturalar</button><button class="btn" data-act="order-certs">Sertifikalar</button>' : ""}</div>
     ${teslimYontemiHTML(r)}` : '<p class="small muted">Sipariş, karar onaylandıktan sonra verilir.</p>'}`, decided)}`;
   // Kart #1124: sipariş verilince üzerinde mal kabul ve finans takibi ile ödeme planı görünür.

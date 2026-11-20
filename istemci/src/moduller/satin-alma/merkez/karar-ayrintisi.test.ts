@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PurchaseRequest, Quote } from './tipler.ts';
 import { DEFAULT_SETTINGS } from './constants.ts';
 import { S, bump } from './store.ts';
-import { evaluate } from './calc.ts';
+import { evaluate, requiredApprover } from './calc.ts';
 import { kararAyrintisiHTML, odemeAyrintisi, onaylayanOzeti } from './karar-ayrintisi.ts';
 
 const q = (id: string, o: Partial<Quote> = {}): Quote => ({
@@ -65,5 +65,42 @@ describe('karar ve onayda ödeme, kur ve faiz', () => {
     const onayli = talep({ award: { mode: 'single', quoteId: 'a', reason: '', by: '', decidedAt: '2026-11-10', approvals: [{ id: 'o1', at: Date.parse('2026-11-11T09:00:00Z'), by: '', name: 'ORN- Yönetici', decision: 'approved', note: '' }] } });
     expect(onaylayanOzeti(onayli, 1000)).toMatchObject({ baslik: 'ORN- Yönetici' });
     expect(onaylayanOzeti(onayli, 1000)?.ayrinti).toContain('onayladı');
+  });
+});
+
+// 3442-6 Test T2 ve T3 (3442-5 ile): faizsiz hal ve vade gününün öteki kaynakları.
+describe('karar ayrıntısı: faizsiz finans ve vade günü', () => {
+  it('finansta faiz yoksa faiz "girilmedi", vade etkisi "hesaba katılmadı"; sıfır uydurulmaz', () => {
+    S.settings = { ...DEFAULT_SETTINGS, currencies: { ...DEFAULT_SETTINGS.currencies, TRY: { rate: 1, monthly: null as unknown as number } } };
+    S.suppliers = {};
+    bump();
+    const r = talep({ quotes: [q('a')], award: { mode: 'single', quoteId: 'a', reason: '', by: '', decidedAt: '2026-11-10' } });
+    const x = evaluate(r).all[0]!;
+    expect(odemeAyrintisi(r, x).aylikFaiz).toBeNull();
+    const h = kararAyrintisiHTML(r, [x], new Set(['a']));
+    expect(h).toContain('girilmedi');
+    expect(h).toContain('hesaba katılmadı');
+  });
+
+  it('siparişin beklenen teslimi vade günü tabanıdır; vade sipariş tarihinden sayılabilir; tam avansta vadeli kısım yoktur', () => {
+    ayar();
+    const r = talep({ quotes: [q('a')], award: { mode: 'single', quoteId: 'a', reason: '', by: '', decidedAt: '2026-11-10', orderDate: '2026-11-20', expectedDate: '2026-12-05' } });
+    const x = () => evaluate(r).all[0]!;
+    expect(odemeAyrintisi(r, x()).kalan).toMatchObject({ gun: '2027-01-04', baslangic: 'teslim' });
+    r.award!.vadeBaslangici = 'siparis';
+    bump();
+    expect(odemeAyrintisi(r, x()).kalan).toMatchObject({ gun: '2026-12-20', baslangic: 'siparis' });
+    bump();
+    const tam = talep({ quotes: [q('b', { advancePct: 100 })], award: { mode: 'single', quoteId: 'b', reason: '', by: '', decidedAt: '2026-11-10', orderDate: '2026-11-20' } });
+    const d = odemeAyrintisi(tam, evaluate(tam).all[0]!);
+    expect(d.kalan).toBeNull();
+    expect(d.avans).toMatchObject({ yuzde: 100, gun: '2026-11-20' });
+  });
+
+  it('bekleyen onayda alt satır yalnız beklenen basamağı söyler (Arayüz 3442-6 a)', () => {
+    ayar();
+    const bekleyen = talep({ award: { mode: 'single', quoteId: 'a', reason: '', by: '', decidedAt: '2026-11-10', approvals: [] } });
+    // Kişi listesi "Gereken onay" kutusundadır; burada tekrarlanmaz.
+    expect(onaylayanOzeti(bekleyen, 1000)?.ayrinti).toBe(`${requiredApprover(1000)!.role} onayı bekleniyor`);
   });
 });

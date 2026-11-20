@@ -122,6 +122,8 @@ export interface RequestItem {
   karsilik?: string | null;
   /** 3121: kartın kalite, durum, işlem ve ölçüsü (bugünkü hâli); kartsız kalemde yok. Yalnız okunur. */
   malzeme?: MalzemeOzelligi;
+  /** 3442-5: kimliği değişmemesi gereken kalem (parça, fason, die ya da satış siparişi bağı; birleşik talebin kaynak kalemi). Yalnız okunur. */
+  sabit?: "bag" | "kaynak";
 }
 
 /** 3121: satın alma tablolarında ayrı sütun olan kart alanları; `kayitsiz` sipariş kopyası işlem ve ölçüden önce alınmış demektir. */
