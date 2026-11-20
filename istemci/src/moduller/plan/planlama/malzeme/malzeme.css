@@ -88,3 +88,44 @@
 @media (max-width: 767px) {
   .tc-pyz { padding: var(--b-2); }
 }
+
+/* 3485 a: günlük tüketim ve toplu plan. Malzeme sütunu yapışık, günler yatay kayar; seçili satır sol kenarla, eksik ve siparişli gün tonla. */
+.tc-pyz-tp-ust { gap: var(--b-2) var(--b-3); }
+.tc-pyz-tp-grup { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); min-width: 0; }
+.tc-pyz-tp-ust input.tc-alan-kutu { width: auto; min-height: var(--dokunma); }
+.tc-pyz-tp-n { max-width: calc(var(--b-6) * 2); }
+.tc-pyz-tp-sec { width: auto; min-height: var(--dokunma); }
+.tc-pyz-tp-tarihler { display: inline-grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--b-1); }
+.tc-pyz-tp th, .tc-pyz-tp td { white-space: nowrap; }
+.tc-pyz-tp td.tc-pyz-tp-ad { white-space: normal; text-align: left; }
+.tc-pyz-tp-ad-ic { display: flex; align-items: flex-start; gap: var(--b-2); min-width: 0; }
+.tc-tablo-kap[data-kaydir] .tc-pyz-tp td.tc-pyz-tp-ad { min-width: calc(var(--b-6) * 5); max-inline-size: calc(var(--b-6) * 8); white-space: normal; }
+.tc-pyz-tp-kim { display: flex; flex-direction: column; align-items: flex-start; gap: var(--b-1); min-width: 0; }
+.tc-pyz-tp-kod { white-space: nowrap; }
+.tc-pyz-tp tr[data-tp-secili] td.tc-pyz-tp-ad { box-shadow: inset calc(var(--pay-ince) + var(--cizgi-ince)) 0 0 var(--hazard); }
+.tc-pyz-tp-gun small { display: block; font-size: var(--yazi-xs); }
+.tc-tablo-kap .tc-pyz-tp td[data-ton="hata"] { background: color-mix(in srgb, var(--stop) 12%, var(--panel-solid)); }
+.tc-tablo-kap .tc-pyz-tp td[data-ton="hata"] small, .tc-pyz-tp b[data-ton="hata"] { color: var(--stop); }
+.tc-tablo-kap .tc-pyz-tp td[data-ton="bilgi"] { background: color-mix(in srgb, var(--done) 12%, var(--panel-solid)); }
+/* Eksik asıl sayıdır: orta ekranda da sağda yapışık kalır (ortak kural 1024 altında bırakır; bu tabloda sol sütun dar). */
+@media (min-width: 768px) {
+  .tc-tablo-kap[data-kaydir] .tc-tablo.tc-pyz-tp td.tc-tablo-sabit-sag { position: sticky; }
+  .tc-tablo-kap[data-kaydir] .tc-tablo.tc-pyz-tp thead th.tc-tablo-sabit-sag { right: 0; z-index: 3; }
+}
+.tc-pyz-tp-ac { min-height: var(--dokunma); padding: 0 var(--b-2); border: 0; background: none; color: var(--muted); font: inherit; font-size: var(--yazi-xs); cursor: pointer; }
+[data-kip="kart"] .tc-tablo.tc-pyz-tp td.tc-pyz-tp-ad { justify-content: flex-start; }
+[data-kip="kart"] .tc-tablo.tc-pyz-tp td.tc-pyz-tp-ad::before { content: none; }
+[data-kip="kart"] .tc-tablo.tc-pyz-tp td.tc-pyz-tp-gun { padding-right: var(--b-1); }
+.tc-pyz-tp-serit {
+  position: sticky; bottom: var(--b-3); z-index: 2; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2);
+  margin-top: var(--b-3); padding: var(--b-2) var(--b-3); background: var(--panel-solid); border: var(--cizgi-ince) solid var(--hazard); border-radius: var(--yari-2); box-shadow: var(--shadow);
+}
+.tc-pyz-tp-serit[data-dar], .tc-pyz-tp-serit[data-dar] .tc-pyz-tp-grup { flex-wrap: nowrap; white-space: nowrap; }
+.tc-pyz-tp-kutu { flex: none; width: var(--b-5); height: var(--b-5); accent-color: var(--hazard); }
+.tc-pyz-tp-kutu-yer { flex: none; width: var(--b-5); }
+@media (max-width: 767px) {
+  .tc-pyz-tp-serit { bottom: calc(var(--alt-cubuk) + var(--b-3)); }
+  .tc-pyz-tp-tarihler { display: grid; width: 100%; }
+  .tc-pyz-tp-tarihler input.tc-alan-kutu { width: 100%; min-width: 0; }
+  .tc-pyz-tp-kpi { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

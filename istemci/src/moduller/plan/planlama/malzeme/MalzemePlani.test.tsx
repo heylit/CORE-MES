@@ -77,10 +77,10 @@ describe('Malzeme satın alma planı', () => {
     stokSun();
     ac('/plan/malzplan');
     const kirilim = await screen.findByRole('group', { name: 'Kırılım' }, { timeout: 10000 });
-    expect(screen.getByText('Günlük')).toBeTruthy();
+    expect(screen.getByText('Günlük', { selector: 'b' })).toBeTruthy();
     fireEvent.click(within(kirilim).getByRole('button', { name: 'Hafta' }));
     expect(within(kirilim).getByRole('button', { name: 'Hafta' }).getAttribute('aria-pressed')).toBe('true');
-    expect(screen.getByText('Haftalık')).toBeTruthy();
+    expect(screen.getByText('Haftalık', { selector: 'b' })).toBeTruthy();
     fireEvent.click(within(screen.getByRole('group', { name: 'Dağılım' })).getByRole('button', { name: 'Tedarikçi' }));
     const d = screen.getByRole('table', { name: 'Malzeme dağılımı' });
     expect(within(d).getAllByRole('columnheader')[0]?.textContent).toBe('Tedarikçi');
