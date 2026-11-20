@@ -5,6 +5,7 @@ import type { HazirlikDagitCevabi, HazirlikDagitGovdesi, HazirlikMatrisiCevabi }
 import { Dugme, DurumKutusu, Pencere, Rozet, Secim, Sekmeler, Simge, useBildirim, type RozetTonu, type Sekme } from '../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { tarihMetni, zamanMetni } from '../../ortak/veri/zaman-metni.ts';
 import { KADEME_TONU, kademeMetni } from './gosterim.ts';
 import { anahtarlar } from './anahtarlar.ts';
@@ -287,7 +288,8 @@ function DagitPenceresi({ projeId, kapat }: { projeId: number; kapat: () => void
   const govde = (deneme: boolean): HazirlikDagitGovdesi => ({ projeId, sablonId: sablonDeger === '' ? null : Number(sablonDeger), deneme });
   const deneme = useQuery({
     queryKey: ['projeler', 'hazirlik-deneme', projeId, sablonDeger],
-    queryFn: () => api.post<HazirlikDagitCevabi>('/hazirlik-matrisi/dagit', govde(true)),
+    // Uç tekrar korumalıdır; deneme yazmaz ama yine istek kimliği ister. Her deneme yeni kimlikle gider (sonucu saklanmış eski denemeye takılmaz).
+    queryFn: () => api.post<HazirlikDagitCevabi>('/hazirlik-matrisi/dagit', govde(true), { istekKimligi: yeniIstekKimligi() }),
   });
   const komut = useMutation({
     mutationFn: () => api.post<HazirlikDagitCevabi>('/hazirlik-matrisi/dagit', govde(false), { istekKimligi: istek.al() }),
