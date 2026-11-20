@@ -7,7 +7,7 @@ import { MalzemeSatirlari } from './MalzemeSatiri.tsx';
 import { malzemeNedeni, malzemeVarsayimi, terminYazisi, type EmirMalzemeleri } from './malzeme.ts';
 import { OdakPaneli } from './OdakPaneli.tsx';
 import { planaAlOnizle, type PlanaAlOnizlemesi } from './plana-al.ts';
-import { BEKLEME_ADI, adimEkYazisi, adimSecimleri, bagimlilik, durumYazisi, eksikAdimlar, eksikNedeni, enCokBekleyen, fasonMu, kismiPlanli, onizlemeBitisi, sureYaz, tasimaSaati, tasinabilir, DURDURMA_BEKLIYOR, SUREN_TASIMA, type AdimBeklemesi, type AdimSecimi, type EmirDurumu, type FirmaYazisi, type KokpitEmri, type KokpitModeli, type TurAdayi } from './kurallar.ts';
+import { BEKLEME_ADI, adimEkYazisi, adimSecimleri, bagimlilik, durumYazisi, eksikAdimlar, eksikNedeni, enCokBekleyen, fasonMu, ilkBosluk, kismiPlanli, onizlemeBitisi, sureYaz, tasimaSaati, tasinabilir, DURDURMA_BEKLIYOR, SUREN_TASIMA, type AdimBeklemesi, type AdimSecimi, type EmirDurumu, type FirmaYazisi, type KokpitEmri, type KokpitModeli, type TurAdayi } from './kurallar.ts';
 import { adimYeri, bosYerler, siradakiAdim, tasimaAdaylari, uygunTezgahlar, type BosYer, type SiraKarti } from './yerlestirme.ts';
 import './yerlestirme.css';
 
@@ -268,6 +268,48 @@ export function useTasima(m: KokpitModeli, e: KokpitEmri, isId: string | null, s
     // Aday yerler anahtarda toplanır; liste her hesapta yeni dizidir.
   }, [anahtar, surum]);
   return yerler !== null && yerler.anahtar === anahtar ? yerler.l : null;
+}
+
+// Yerleşmeyen adımın elle yerleştirileceği yerler (3488 a): planda satırı olmadığı için süresi bilinmez. Her uygun tezgâhta önce
+// öncüllerinin bitişine sorulur (sunucu adımın o tezgâhtaki süresiyle yerleştirir), sonra o süreye yeten ilk boşluk sorulur; başka işi
+// iterek yerleşen ilk yanıt yalnız boşluk bulunamazsa kalır. gerekli: adımın en kısa süresi (saat, hazırlık dahil); bilinmiyorsa null.
+export function useElleYer(m: KokpitModeli, e: KokpitEmri, isId: string | null, surum: number | null): { yerler: TasimaYeri[] | null; gerekli: number | null } {
+  const [sonuc, setSonuc] = useState<{ anahtar: string; yerler: TasimaYeri[]; gerekli: number | null } | null>(null);
+  const k = isId === null ? -1 : e.adimlar.findIndex((a) => a.id === isId);
+  const onceki = k < 0 ? m.simdi : e.adimlar.slice(0, k).reduce((t, a) => Math.max(t, m.isler[a.id]?.C ?? t), m.simdi);
+  const tezgahlar = useMemo(() => (isId === null ? [] : uygunTezgahlar(e, isId).filter((t) => !fasonMu(t)).slice(0, ADAY_SINIRI)), [e, isId]);
+  const anahtar = JSON.stringify([isId, tezgahlar, onceki, surum]);
+  useEffect(() => {
+    if (isId === null || m.isler[isId] !== undefined) { setSonuc(null); return undefined; }
+    let gecerli = true;
+    setSonuc(null);
+    void (async () => {
+      const oz: { tezgah: string; baslangic: number; gecerli: boolean; isler: { isId: string; tezgah: string; S: number; C: number }[] }[] = [];
+      let gerekli: number | null = null;
+      for (const t of tezgahlar) {
+        const b0 = tasimaSaati(onceki, m.simdi);
+        let x = await isTasiOnizle({ isId, tezgah: t, baslangic: b0 }), b = b0;
+        if (!gecerli) return;
+        const y = x?.gecerli ? x.isler.find((i) => i.isId === isId) : undefined;
+        if (y) {
+          gerekli = gerekli === null ? y.C - y.S : Math.min(gerekli, y.C - y.S);
+          const b1 = tasimaSaati(ilkBosluk(m, t, y.C - y.S, onceki, isId), m.simdi);
+          if (Math.abs(b1 - y.S) > 0.25) {
+            const x1 = await isTasiOnizle({ isId, tezgah: t, baslangic: b1 });
+            if (!gecerli) return;
+            if (x1?.gecerli) { x = x1; b = b1; }
+          }
+        }
+        if (x !== null) oz.push({ tezgah: t, baslangic: b, gecerli: x.gecerli, isler: x.isler });
+      }
+      const bas = new Map(oz.map((o) => [o.tezgah, o.baslangic]));
+      const bitis = (t: string): number | null => onizlemeBitisi(m, e, oz.find((o) => o.tezgah === t)?.isler ?? []);
+      setSonuc({ anahtar, yerler: bosYerler(isId, oz).map((b) => ({ ...b, baslangic: bas.get(b.tezgah) ?? b.S, bitis: bitis(b.tezgah) })), gerekli });
+    })();
+    return () => { gecerli = false; };
+    // Tezgâhlar, öncüllerin bitişi ve sürüm anahtarda toplanır.
+  }, [anahtar]);
+  return sonuc !== null && sonuc.anahtar === anahtar ? { yerler: sonuc.yerler, gerekli: sonuc.gerekli } : { yerler: null, gerekli: null };
 }
 
 export interface EmirAdimlariOzellikleri {

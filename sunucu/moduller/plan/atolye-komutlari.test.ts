@@ -57,6 +57,17 @@ describe('atölye komutlarının kuralı', () => {
     assert.deepEqual(c.locks, {});
   });
 
+  test('3488 a: yerleşmeyen adım (planda satırı yok, plan.fail) elle verilen tezgâha kilitlenir; bekleyen satırı siparişini işaretler', () => {
+    const c = planli();
+    (c.plan as { fail?: string[] }).fail = ['J2.10'];
+    const y = deger(isTasi(c, { isId: 'J2.10', tezgah: 'T2', baslangic: 16 }, KISI, yalniz));
+    assert.deepEqual(y.locks, { 'J2.10': { m: 'T2', S: 16 } });
+    const b = (y.bekleyen as { ne: string; isler: string[]; geri: unknown }[])[0];
+    assert.deepEqual([b?.ne, b?.isler, b?.geri], ['Yerleşmeyen adım elle yerleştirildi', ['J2'], [{ yol: ['locks'], id: 'J2.10' }]]);
+    // Planda da yerleşmeyenlerde de olmayan adım taşınmaz.
+    assert.equal(hata(isTasi(planli(), { isId: 'J2.10', tezgah: 'T2', baslangic: 16 }, KISI, yalniz)).ileti, 'İş planda bulunamadı; plan değişmiş olabilir, sayfayı yenileyin.');
+  });
+
   test('2790: itilen ve çekilen adımlar da tek değişiklikle kilitlenir; geri alma hepsini döndürür; geçersiz itme hiçbir şey yazmaz', () => {
     const c = planli({ locks: { 'J1.50': { m: 'T2', S: 30 } } });
     const itme = (): TasimaSonucu => ({ gecerli: true, ileti: 'OP 50 ileri itildi.', isler: [

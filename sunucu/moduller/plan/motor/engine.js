@@ -79,6 +79,7 @@ function mask(W){const m=new Uint8Array(NS);for(const [a,b] of W){const k0=Math.
     @property {any} [sapma]
     @property {any} [adimEk]
     @property {any} [adimBekle]
+    @property {any} [elleBol]
     @property {any} [geride]
     @property {string[]} [beklemeKilit]
     @property {any} [bitti]
@@ -231,21 +232,24 @@ function compile(st){olcekKur(st.w);
          ve yeri sabit adım bölünmez: yeri tek kaynaktadır. Paylar ayrı işlemdir (ilk pay adımın kimliğini, ötekiler "~2", "~3" ekini taşır); hepsi
          adımın öncüllerini bekler, ardıl hepsini bekler. Adet eşit bölünür, kalan ilk paylara. */
       const sabit=(st.locks&&st.locks[id])||(st.gercek&&st.gercek[id])||(st.sabitYer&&st.sabitYer[id]);
-      const N=st.w.bol&&o.bol&&!o.fason&&!sabit?Math.max(1,Math.min(adaylar.length,Math.floor(ad0/Math.max(1,+o.minParti||1)),Math.max(1,+st.w.bolMaks||1))):1;
+      /* 3488 c: planlamacının elle bölmesi (st.elleBol, çalışmanın elleBol'u) otomatik bölmenin yerine geçer: pay sayısı, adedi ve tezgâhı
+         ondandır; rotadaki "paralel böl" ve bölme ayarı aranmaz. Başlamış ya da yeri sabit adım bölünmez; kilit payları ayrıca kilitlenir. */
+      const eb=!o.fason&&!(st.gercek&&st.gercek[id])&&!(st.sabitYer&&st.sabitYer[id])?elleBolCoz(st.elleBol&&st.elleBol[id],ad0,adaylar):null;
+      const N=eb?eb.length:st.w.bol&&o.bol&&!o.fason&&!sabit?Math.max(1,Math.min(adaylar.length,Math.floor(ad0/Math.max(1,+o.minParti||1)),Math.max(1,+st.w.bolMaks||1))):1;
       if(N>1)bolunen[id]=[];
       for(let p=0;p<N;p++){
-      const pid=p===0?id:id+'~'+(p+1),ad=N>1?Math.floor(ad0/N)+(p<ad0%N?1:0):ad0;
+      const pid=p===0?id:id+'~'+(p+1),ad=eb?eb[p].adet:N>1?Math.floor(ad0/N)+(p<ad0%N?1:0):ad0;
       const tb=Math.max(1,Math.min(ad,o.transfer||Math.ceil(ad*(A.transferOran||.25))));
       const c=[];
       if(o.fason){const f=fasonFirmasi(o,id);c.push(f===FASON_BELIRSIZ&&+o.fasonGun>0?{m:'@'+f,fas:1,gun:+o.fasonGun}:{m:'@'+f,fas:1});}
-      else for(const t of adaylar){const mm=M[t.id];const cyc=(+t.cevrim||0)/60*x/(1-mm.pay);
+      else for(const t of eb?adaylar.filter(t=>t.id===eb[p].m):adaylar){const mm=M[t.id];const cyc=(+t.cevrim||0)/60*x/(1-mm.pay);
         c.push({m:t.id,run:ad*cyc/mm.verim+(p===0?ekS:0),cyc:cyc/mm.verim,su:(+t.ayar||0)/60,tbRun:tb*cyc/mm.verim,pay:mm.pay});}
       if(o.fasonIzin&&A.fasonTalas&&FS[A.fasonTalas])c.push({m:'@'+A.fasonTalas,fas:1,opt:1});
       const lr=(st.ogren||{})[j.urun+' '+o.k];const sig=lr&&lr.n>=3&&lr.v!=null?Math.sqrt(lr.v)/Math.max(.3,lr.f):(+st.w.mcSigma||0);
       const pr=(o.bag||[]).map(([k,t])=>[j.id+'.'+k,t]),prK=pr.filter(([p])=>!bitti[p]);
       const ik=D.opKaynak&&Array.isArray(D.opKaynak[id])&&D.opKaynak[id].length?D.opKaynak[id]:null;
       const op={id:pid,job:j.id,k:o.k,ad:o.ad,c,sig,pr:prK,aile:o.aile||'',aparat:o.aparat||null,ik,
-        program:o.program!==false,fai:!!o.fai,adet:ad,x,matYok:prK.length<pr.length,ayarsiz:o.ayarci===false,ayarSaat:o.ayarDk!=null&&isFinite(+o.ayarDk)?Math.max(0,+o.ayarDk)/60:null,...(N>1?{parca:p+1,parcaAdedi:N,asil:id}:{})};
+        program:o.program!==false,fai:!!o.fai,adet:ad,x,matYok:prK.length<pr.length,ayarsiz:o.ayarci===false,ayarSaat:o.ayarDk!=null&&isFinite(+o.ayarDk)?Math.max(0,+o.ayarDk)/60:null,...(N>1?{parca:p+1,parcaAdedi:N,asil:id,...(eb?{elle:1}:{})}:{})};
       if(N>1)bolunen[id].push(pid);
       ops.push(op);jobs[j.id].ops.push(op);}}
   }
@@ -335,6 +339,17 @@ function newUse(cx){const u={tot:new Float32Array(NS),ayar:new Float32Array(NS),
    Sunucunun kalanı adetten hesaplanır ve her sayımda yenilenir; ek süre kalana eklenseydi her sayımda yeniden sayılırdı. */
 function kalanBitis(M,a){if(a.kalan==null||!isFinite(+a.kalan))return null;const b=adv(M.rw,a.sayim!=null&&isFinite(+a.sayim)?+a.sayim:a.S,Math.max(0,+a.kalan));
   const e=a.ek;return e&&isFinite(+e.bitis0)&&isFinite(+e.ekSaat)?Math.max(b,adv(M.rw,+e.bitis0,Math.max(0,+e.ekSaat))):b;}
+/* 3488 c: elle bölmenin payları (adet, tezgâh). Geçerli: en az iki pay, her pay adımın uygun tezgâhında ve adedi pozitif tam sayı. Pay
+   adetleri adımın adedine uyar (sunucu planlama-kurallar.ts elleBolmeAdetleri ile aynı kural): toplam tutarsa olduğu gibi, tutmazsa orana göre,
+   her pay en az 1; adım adedi pay sayısından azsa bölme uygulanmaz. Geçersiz kayıt yok sayılır (adım otomatik kuralla yerleşir). */
+/** @param {any} l @param {number} ad0 @param {{id:string}[]} adaylar @returns {{adet:number,m:string}[]|null} */
+function elleBolCoz(l,ad0,adaylar){
+  if(!Array.isArray(l)||l.length<2||!Number.isInteger(ad0)||ad0<l.length)return null;
+  if(!l.every(x=>x&&Number.isInteger(x.adet)&&x.adet>0&&typeof x.m==='string'&&adaylar.some(t=>t.id===x.m)))return null;
+  const top=l.reduce((t,x)=>t+x.adet,0);if(top===ad0)return l.map(x=>({adet:x.adet,m:x.m}));
+  const a=l.map(x=>Math.max(1,Math.floor(ad0*x.adet/top)));let k=ad0-a.reduce((t,v)=>t+v,0);
+  for(let i=0;k!==0&&i<a.length*ad0;i++){const j=i%a.length;if(k>0){a[j]++;k--;}else if(a[j]>1){a[j]--;k++;}}
+  return l.map((x,i)=>({adet:a[i],m:x.m}));}
 /* Kilitli iş (kilit a): saati şimdiden ileriyse tezgâhında tam kilit saatinde sabittir; öncülünü beklemez (dondurulmuş gibi), öteki işler
    etrafına dizilir. Saatte arıza ya da bakım varsa iş arıza süresince durur, uyarı çıkar. Saati geçmiş kilit yalnız tezgâhı bağlar. */
 /** @param {any} [o] @param {any} [lk] @param {Derleme} [cx] */
@@ -759,7 +774,8 @@ function evaluate(plan,st,ref,fast){
       if(r.fas){if(r.cost==null)miss.push('fason fiyatı');else fc+=r.cost;if(r.m==='@'+A.fasonTalas)fas++;}
       else{const M=cx.M[r.m];if(M.ucret==null)miss.push(r.m+' saat ücreti');else{mc+=r.run*(1-(M.pay||0))*M.ucret;sc+=r.su*(M.ucret+(+A.ayarciUcret||0));}}
       suH+=r.su;if(r.su>0&&!r.done)suN++;if(r.famHit)famN++;
-      if(!fast&&!r.pin){const mr=cx.mat.res[jid],mt=mr&&mr.op?mr.op[o.id]:undefined;if(mt!=null&&r.S<mt-1e-9)warn.push({t:'malzeme',j:jid,txt:isFinite(mt)?`${jid}: malzeme ${fmtDT(cx.D,mt)} geliyor, iş ${fmtDT(cx.D,r.S)} başlıyor`:`${jid}: malzeme eksik (stok ve sipariş yetmiyor), iş ${fmtDT(cx.D,r.S)} başlıyor`});}
+      /* 3488: elle kilitlenen (kilit) ama başlamamış adım da malzemeden önce başlıyorsa uyarılır; motor kilidi malzemeye göre kaydırmaz */
+      if(!fast&&(!r.pin||(r.kilit&&!r.act&&!r.done))){const mr=cx.mat.res[jid],mt=mr&&mr.op?mr.op[o.id]:undefined;if(mt!=null&&r.S<mt-1e-9)warn.push({t:'malzeme',j:jid,txt:isFinite(mt)?`${jid}: malzeme ${fmtDT(cx.D,mt)} geliyor, iş ${fmtDT(cx.D,r.S)} başlıyor`:`${jid}: malzeme eksik (stok ve sipariş yetmiyor), iş ${fmtDT(cx.D,r.S)} başlıyor`});}
       if(!fast&&!o.program&&!r.pin&&r.S<cx.progRel)warn.push({t:'program',j:jid,txt:`${o.id}: NC program hazır değil`});}
     const comp=nIn===nOps;if(!comp)C=Infinity;
     const due=j.due;const T=due==null||!isFinite(C)?(isFinite(C)?0:null):Math.max(0,C-due);const E=due==null||!isFinite(C)?0:Math.min(120,Math.max(0,due-C));

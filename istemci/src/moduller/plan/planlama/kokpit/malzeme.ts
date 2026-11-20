@@ -85,3 +85,15 @@ export function malzemeNedeni(e: KokpitEmri, k: number, bekleyen: Readonly<Recor
   if (!a || bekleyen[a.id] === undefined) return null;
   return `${String(k + 1)}. adım (${a.ad}) malzemeyi bekliyor; malzeme ${zaman(bekleyen[a.id]!)} geliyor.`;
 }
+
+// 3488: adımın malzemesinin hazır anı (elle yerleştirmede yerin yanında yazılır). Eksik malzeme Infinity; stokta ve termini girilmemiş
+// malzeme beklenmez, yazılmaz. Adımı belli olmayan (eski) satır emrin ilk adımına sayılır.
+export function adimMalzemeAnlari(mz: EmirMalzemeleri, emirler: readonly Pick<KokpitEmri, 'id' | 'adimlar'>[]): Record<string, number> {
+  const an: Record<string, number> = {};
+  for (const e of emirler) for (const x of mz.satirlar[e.id] ?? []) {
+    const id = x.adimId ?? e.adimlar[0]?.id;
+    const t = x.durum === 'eksik' ? Infinity : x.durum === 'geliyor' ? x.an : null;
+    if (id !== undefined && t !== null) an[id] = Math.max(an[id] ?? -Infinity, t);
+  }
+  return an;
+}

@@ -4,7 +4,7 @@ import type { TaslakKomutu } from '#paylasilan/sozlesme/planlama.ts';
 import type { PlanaAlSonucu } from './plana-al-kurallar.ts';
 import { planAni } from './planlama-kurallar.ts';
 import {
-  DIZ_BAYAT, DIZ_ESKI_VERI, EKSEN_DEGISTI, adimBeklerSilUygula, adimBeklerUygula, adimUzadiSilUygula, adimUzadiUygula, ayarUygula, ekMesaiSilUygula, ekMesaiUygula, operatorSorunu, catismalar, dizImzasi, dizUygula, durusSilUygula, durusUygula, emirOf, imza, komutAnahtarlari, komutAdi, oynat, secimeGore, uygulaKarari, yenidenPlanlaUygula, yonUygula,
+  DIZ_BAYAT, DIZ_ESKI_VERI, EKSEN_DEGISTI, digerDegisiklikleri, elleBolSilUygula, elleBolUygula, adimBeklerSilUygula, adimBeklerUygula, adimUzadiSilUygula, adimUzadiUygula, ayarUygula, ekMesaiSilUygula, ekMesaiUygula, operatorSorunu, catismalar, dizImzasi, dizUygula, durusSilUygula, durusUygula, emirOf, imza, komutAnahtarlari, komutAdi, oynat, secimeGore, uygulaKarari, yenidenPlanlaUygula, yonUygula,
   type DizKomutu, type TaslakHesaplari, type TaslakSatiri,
 } from './taslak-kurallar.ts';
 
@@ -596,3 +596,58 @@ describe('3335-3c: adım bekliyor komutu', () => {
     assert.equal(JSON.parse(dizImzasi(c(), c())).length, 6);
   });
 });
+
+describe('3488 c: adımı elle böl', () => {
+  // S1 ürünü U: OP 10 T1, T2 ya da T3'te; OP 20 fason. S1 9 adet. S1.10'un kilidi var; S1.30 planda yok (yerleşmedi).
+  const c = (ek: Record<string, unknown> = {}) => calisma({
+    locks: { 'S1.10': { m: 'T1', S: 8 }, 'S2.10': { m: 'T2', S: 30 } },
+    D: {
+      siparisler: [{ id: 'S1', urun: 'U', adet: 9 }, { id: 'S2', urun: 'U', adet: 1 }],
+      urunler: [{ id: 'U', rota: [{ k: '10', tezgahlar: [{ id: 'T1' }, { id: 'T2' }, { id: 'T3' }] }, { k: '20', fason: true, tezgahlar: [] }, { k: '30', tezgahlar: [{ id: 'T2' }, { id: 'T3' }] }] }],
+    },
+    ...ek,
+  });
+  const bol = (isId: string, paylar: [string, number][]) => ({ isId, paylar: paylar.map(([tezgah, adet]) => ({ tezgah, adet })) });
+
+  test('bölme çalışmanın elleBol\'una yazılır, adımın kilidi kalkar, geri alma ikisini döndürür; aynısı yeniden değişiklik değildir', () => {
+    const r = elleBolUygula(c(), bol('S1.10', [['T2', 6], ['T3', 3]]), k);
+    assert.ok('deger' in r && r.degisti, JSON.stringify(r));
+    const y = r.deger as Record<string, unknown>;
+    assert.deepEqual(y.elleBol, { 'S1.10': [{ adet: 6, m: 'T2' }, { adet: 3, m: 'T3' }] });
+    assert.deepEqual(y.locks, { 'S2.10': { m: 'T2', S: 30 } });
+    const b = (y.bekleyen as { ne: string; ayrinti: string; isler: string[]; geri: unknown }[])[0];
+    assert.deepEqual([b?.ne, b?.ayrinti, b?.isler], ['Adım elle bölündü', 'S1.10: 2 parça (T2 6, T3 3)', ['S1']]);
+    assert.deepEqual(b?.geri, [{ yol: ['elleBol'], id: 'S1.10' }, { yol: ['locks'], id: 'S1.10', once: { m: 'T1', S: 8 } }]);
+    const ayni = elleBolUygula(y, bol('S1.10', [['T2', 6], ['T3', 3]]), k);
+    assert.ok('deger' in ayni && !ayni.degisti);
+    // Yerleşmeyen adım da bölünür.
+    assert.ok('deger' in elleBolUygula(c(), bol('S1.30', [['T2', 5], ['T3', 4]]), k));
+  });
+
+  test('reddedilen: toplam adımın adedi değil, uygun olmayan tezgâh, fason, başlamış, pay, rotada olmayan adım', () => {
+    const ileti = (r: ReturnType<typeof elleBolUygula>) => ('hata' in r ? r.hata.ileti : 'gecti');
+    assert.equal(ileti(elleBolUygula(c(), bol('S1.10', [['T2', 5], ['T3', 3]]), k)), 'Parçaların toplamı 8; adımın adedi 9.');
+    assert.equal(ileti(elleBolUygula(c(), bol('S1.30', [['T1', 5], ['T3', 4]]), k)), 'T1 bu adıma uygun değil.');
+    assert.equal(ileti(elleBolUygula(c(), bol('S1.20', [['T1', 5], ['T3', 4]]), k)), 'Fason adım elle bölünmez.');
+    assert.equal(ileti(elleBolUygula(c({ gercek: { 'S1.10': { m: 'T1', S: 8 } } }), bol('S1.10', [['T2', 5], ['T3', 4]]), k)), 'Adım başlamış; başlamış adım bölünmez.');
+    assert.equal(ileti(elleBolUygula(c(), bol('S1.10~2', [['T2', 5], ['T3', 4]]), k)), 'Adımın kendisi bölünür, payı değil.');
+    assert.equal(ileti(elleBolUygula(c(), bol('S1.40', [['T2', 5], ['T3', 4]]), k)), 'Adım emrin rotasında yok.');
+    assert.equal(ileti(elleBolUygula(c(), bol('S2.10', [['T2', 1], ['T3', 1]]), k)), 'Adımın adedi bölmeye yetmiyor (en az 2).');
+  });
+
+  test('silme bölmeyi ve payların kilidini kaldırır; imza, çatışma anahtarı ve dizme imzası bölmeyi görür', () => {
+    const r = elleBolUygula(c(), bol('S1.10', [['T2', 6], ['T3', 3]]), k);
+    assert.ok('deger' in r);
+    const kilitli = { ...(r.deger as Record<string, unknown>), locks: { 'S1.10~2': { m: 'T3', S: 40 } } };
+    const s = elleBolSilUygula(kilitli, { isId: 'S1.10' }, k);
+    assert.ok('deger' in s && s.degisti);
+    assert.deepEqual([(s.deger as Record<string, unknown>).elleBol, (s.deger as Record<string, unknown>).locks], [{}, {}]);
+    assert.ok('deger' in elleBolSilUygula(c(), { isId: 'S1.10' }, k) && !(elleBolSilUygula(c(), { isId: 'S1.10' }, k) as { degisti: boolean }).degisti);
+    assert.deepEqual(imza(r.deger).elleBol, { 'S1.10': '6@T2,3@T3' });
+    assert.deepEqual([...digerDegisiklikleri(imza(c()), imza(r.deger)).emir], ['S1']);
+    assert.deepEqual(komutAnahtarlari({ tur: 'elle-bol', isId: 'S1.10', paylar: [{ adet: 6, tezgah: 'T2' }, { adet: 3, tezgah: 'T3' }] }, imza(c())), ['emir:S1', 'tezgah:T2', 'tezgah:T3']);
+    assert.equal(komutAdi({ tur: 'elle-bol', isId: 'S1.10', paylar: [{ adet: 6, tezgah: 'T2' }, { adet: 3, tezgah: 'T3' }] }), 'S1.10 2 parçaya bölündü: T2 6, T3 3');
+    assert.notEqual(dizImzasi(r.deger, c()), dizImzasi(c(), c()));
+  });
+});
+

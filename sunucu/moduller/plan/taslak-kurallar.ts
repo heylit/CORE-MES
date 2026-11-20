@@ -26,6 +26,8 @@ export interface TaslakImzasi {
   adimEk?: Record<string, string>;
   // 3335-3c: adıma bildirilen bekleme (w.adimBekle); aynı kural.
   adimBekle?: Record<string, string>;
+  // 3488 c: elle bölme (çalışmanın elleBol'u); aynı kural.
+  elleBol?: Record<string, string>;
 }
 // İmzaya giren plan ayarı alanları: Kokpit'in yazdığı çalışma ayarları ve kapalı kısıtlar (taslakAyarlari ile aynı küme).
 const W_ALANLARI = ['dondurma', 'mat', 'yon'] as const;
@@ -46,7 +48,7 @@ export function imza(c: unknown): TaslakImzasi {
   const ayar = JSON.stringify([[...W_ALANLARI.map((k) => w[k] ?? null), ...(typeof w.gerideTasinir === 'boolean' ? [w.gerideTasinir] : [])], PARAM_ALANLARI.map((k) => param[k] ?? null), Array.isArray(d.kapali) ? [...d.kapali].map(String).sort() : []]);
   const yon = Object.fromEntries(Object.entries(nesne(w.yonEmir) ? w.yonEmir : {}).filter(([, v]) => v === 'ileri' || v === 'geri').map(([id, v]) => [id, String(v)]));
   const D = nesne(d.D) ? d.D : {}, meta = nesne(D.meta) ? D.meta : {};
-  return { yer, kilit, ayar, yon, kapasite: kapasiteImzasi(d), eksen: typeof meta.baslangic === 'string' ? meta.baslangic : null, ...mesaiImzasi(d), adimEk: adimEkImzasi(w), adimBekle: adimBekleImzasi(w) };
+  return { yer, kilit, ayar, yon, kapasite: kapasiteImzasi(d), eksen: typeof meta.baslangic === 'string' ? meta.baslangic : null, ...mesaiImzasi(d), adimEk: adimEkImzasi(w), adimBekle: adimBekleImzasi(w), elleBol: elleBolImzasi(d) };
 }
 
 // Adıma bildirilen ek süre: geçerli satır sayı taşıyan ekSaat ve bitis0'dır; anahtarlar sıralı yazılır.
@@ -110,6 +112,8 @@ export function komutAnahtarlari(k: SatirKomutu, taban: TaslakImzasi): string[] 
     case 'plana-al': return [`emir:${k.emirId}`, `tezgah:${k.tezgah}`, ...(k.adimlar ?? []).map((a) => `tezgah:${a.tezgah}`)];
     case 'yon': return [`emir:${k.emirId}`];
     case 'adim-uzadi': case 'adim-uzadi-sil': case 'adim-bekler': case 'adim-bekler-sil': return [`emir:${emirOf(k.isId)}`];
+    case 'elle-bol': return [`emir:${emirOf(k.isId)}`, ...[...new Set(k.paylar.map((p) => p.tezgah))].map((t) => `tezgah:${t}`)];
+    case 'elle-bol-sil': return [`emir:${emirOf(k.isId)}`];
     case 'yeniden-planla': return k.isler.includes('*') ? ['*'] : [...new Set(k.isler)].map((id) => `emir:${id}`);
     case 'ayar': return ['*'];
     case 'durus': case 'durus-sil': case 'ek-mesai-sil': return [`tezgah:${k.tezgah}`];
@@ -138,6 +142,8 @@ export function digerDegisiklikleri(taban: TaslakImzasi, simdi: TaslakImzasi): {
   for (const id of new Set([...Object.keys(te), ...Object.keys(se)])) if (te[id] !== se[id]) emir.add(emirOf(id));
   const tb = taban.adimBekle ?? {}, sb = simdi.adimBekle ?? {};
   for (const id of new Set([...Object.keys(tb), ...Object.keys(sb)])) if (tb[id] !== sb[id]) emir.add(emirOf(id));
+  const tl = taban.elleBol ?? {}, sl = simdi.elleBol ?? {};
+  for (const id of new Set([...Object.keys(tl), ...Object.keys(sl)])) if (tl[id] !== sl[id]) emir.add(emirOf(id));
   // Başkasının değiştirdiği kapasite o tezgâhı, eksenin kayması bütün planı etkiler (saatler başka güne düşer; Risk 2a S2).
   const tk = taban.kapasite, sk = simdi.kapasite ?? {};
   if (tk !== undefined) for (const m of new Set([...Object.keys(tk), ...Object.keys(sk)])) if (tk[m] !== sk[m]) tezgah.add(m);
@@ -335,6 +341,77 @@ export function adimBeklerSilUygula(deger: unknown, k: { isId: string }, kisi: K
   const geri: GeriYama[] = [{ yol: ['w'], id: 'adimBekle', once: w.adimBekle }];
   return { deger: isle(deger, yeni, { ne: 'Adım beklemesi kaldırıldı', ayrinti: `${k.isId}: ${BEKLEME_NEDENI[onceki.neden]}`, isler: [emirOf(k.isId)], geri }, kisi), degisti: true };
 }
+// Elle böl (3488 c): çalışmanın elleBol'u (işlem -> [{ adet, m }], motor girdi.js ve canlıya yazma planlama-kurallar.ts aynı alanı okur).
+// Adım emrin rotasında, fason değil, başlamamış ve bitmemiş olmalı; payların tezgâhı adımın uygun tezgâhlarından, adet toplamı adımın adedidir.
+// Adım planda yerleşmemiş olabilir (yerleşmeyen adımı bölmek bu komutun asıl işidir). Bölünen adımın ve paylarının kilidi kalkar: pay
+// tezgâhı kilidinkinden başkaysa motor payı yerleştiremezdi. Payların yeri motorundur; kişi isterse payı ayrıca taşır.
+const elleBolmeleri = (d: Nesne): Record<string, { adet: number; m: string }[]> => Object.fromEntries(Object.entries(nesne(d.elleBol) ? d.elleBol : {})
+  .flatMap(([id, l]) => (Array.isArray(l) && l.length >= 2 && l.every((x) => nesne(x) && typeof x.adet === 'number' && typeof x.m === 'string')
+    ? [[id, (l as { adet: number; m: string }[]).map((x) => ({ adet: x.adet, m: x.m }))] as const] : []))
+  .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+const elleBolImzasi = (d: Nesne): Record<string, string> => Object.fromEntries(Object.entries(elleBolmeleri(d)).map(([id, l]) => [id, l.map((x) => `${String(x.adet)}@${x.m}`).join(',')]));
+export function elleBolAdimi(deger: Nesne, isId: string): { adet: number; tezgahlar: string[] } | string {
+  if (isId.includes('~')) return 'Adımın kendisi bölünür, payı değil.';
+  const D = nesne(deger.D) ? deger.D : {};
+  const emirId = emirOf(isId), k = isId.slice(emirId.length + 1);
+  const s = (Array.isArray(D.siparisler) ? D.siparisler : []).find((x): x is Nesne => nesne(x) && String(x.id) === emirId);
+  if (s === undefined || s.iptal === true || s.havuz === true) return 'Emir çalışmada yok ya da plan dışında.';
+  const u = (Array.isArray(D.urunler) ? D.urunler : []).find((x): x is Nesne => nesne(x) && String(x.id) === String(s.urun));
+  const o = (u !== undefined && Array.isArray(u.rota) ? u.rota : []).find((x): x is Nesne => nesne(x) && String(x.k) === k);
+  if (o === undefined) return 'Adım emrin rotasında yok.';
+  if (o.fason === true || (typeof o.fason === 'string' && o.fason !== '')) return 'Fason adım elle bölünmez.';
+  const opAdet = nesne(D.opAdet) ? D.opAdet[isId] : undefined;
+  const adet = typeof opAdet === 'number' && Number.isFinite(opAdet) ? opAdet : typeof s.adet === 'number' ? s.adet : NaN;
+  if (!Number.isInteger(adet) || adet < 2) return 'Adımın adedi bölmeye yetmiyor (en az 2).';
+  const g = nesne(deger.gercek) ? deger.gercek[isId] : undefined;
+  if (nesne(g) && g.S != null) return 'Adım başlamış; başlamış adım bölünmez.';
+  const r = nesne(deger.plan) && nesne(deger.plan.ops) ? deger.plan.ops[isId] : undefined;
+  if (nesne(r) && r.done && (r.act || r.bitti)) return 'Adım bitmiş; bölünmez.';
+  const tezgahlar = (Array.isArray(o.tezgahlar) ? o.tezgahlar : []).flatMap((t) => (nesne(t) && t.id !== undefined ? [String(t.id)] : []));
+  return { adet, tezgahlar };
+}
+export function elleBolUygula(deger: unknown, k: { isId: string; paylar: readonly { adet: number; tezgah: string }[] }, kisi: KomutKisisi): KomutSonucu {
+  if (!nesne(deger)) return { hata: { tur: 'cakisma', ileti: 'Çalışma kaydı okunamadı; sayfayı yenileyin.' } };
+  const a = elleBolAdimi(deger, k.isId);
+  if (typeof a === 'string') return { hata: { tur: 'dogrulama', ileti: a, alan: 'isId' } };
+  const uygunsuz = k.paylar.find((p) => !a.tezgahlar.includes(p.tezgah));
+  if (uygunsuz !== undefined) return { hata: { tur: 'dogrulama', ileti: `${uygunsuz.tezgah} bu adıma uygun değil.`, alan: 'paylar' } };
+  const top = k.paylar.reduce((t, p) => t + p.adet, 0);
+  if (top !== a.adet) return { hata: { tur: 'dogrulama', ileti: `Parçaların toplamı ${String(top)}; adımın adedi ${String(a.adet)}.`, alan: 'paylar' } };
+  const yeniBol = k.paylar.map((p) => ({ adet: p.adet, m: p.tezgah }));
+  const eskiBol = nesne(deger.elleBol) ? deger.elleBol : {};
+  const locks = nesne(deger.locks) ? deger.locks : {};
+  const kilitler = Object.keys(locks).filter((id) => id === k.isId || id.startsWith(`${k.isId}~`));
+  if (JSON.stringify(eskiBol[k.isId]) === JSON.stringify(yeniBol) && kilitler.length === 0) return { deger, degisti: false };
+  const yeni = kopya(deger);
+  yeni.elleBol = { ...eskiBol, [k.isId]: yeniBol };
+  const geri: GeriYama[] = [eskiBol[k.isId] === undefined ? { yol: ['elleBol'], id: k.isId } : { yol: ['elleBol'], id: k.isId, once: eskiBol[k.isId] }];
+  if (kilitler.length > 0) {
+    const l = { ...locks };
+    for (const id of kilitler) { delete l[id]; geri.push({ yol: ['locks'], id, once: locks[id] }); }
+    yeni.locks = l;
+  }
+  const ayrinti = `${k.isId}: ${String(k.paylar.length)} parça (${k.paylar.map((p) => `${p.tezgah} ${String(p.adet)}`).join(', ')})`;
+  return { deger: isle(deger, yeni, { ne: 'Adım elle bölündü', ayrinti, isler: [emirOf(k.isId)], geri }, kisi), degisti: true };
+}
+export function elleBolSilUygula(deger: unknown, k: { isId: string }, kisi: KomutKisisi): KomutSonucu {
+  if (!nesne(deger)) return { hata: { tur: 'cakisma', ileti: 'Çalışma kaydı okunamadı; sayfayı yenileyin.' } };
+  const eskiBol = nesne(deger.elleBol) ? deger.elleBol : {};
+  if (eskiBol[k.isId] === undefined) return { deger, degisti: false };
+  const { [k.isId]: _, ...kalan } = eskiBol;
+  const yeni = kopya(deger);
+  yeni.elleBol = kalan;
+  const geri: GeriYama[] = [{ yol: ['elleBol'], id: k.isId, once: eskiBol[k.isId] }];
+  // Payların kilidi de kalkar; ilk pay adımın kimliğini taşır, onun kilidi adımın kilidi olarak kalır.
+  const locks = nesne(deger.locks) ? deger.locks : {};
+  const paylar = Object.keys(locks).filter((id) => id.startsWith(`${k.isId}~`));
+  if (paylar.length > 0) {
+    const l = { ...locks };
+    for (const id of paylar) { delete l[id]; geri.push({ yol: ['locks'], id, once: locks[id] }); }
+    yeni.locks = l;
+  }
+  return { deger: isle(deger, yeni, { ne: 'Elle bölme kaldırıldı', ayrinti: k.isId, isler: [emirOf(k.isId)], geri }, kisi), degisti: true };
+}
 // Çalışmada adımın kayıtlı ilk bitişi (satıra yazılmak üzere); yoksa undefined.
 export const adimEkBitisi = (deger: unknown, isId: string): number | undefined => (nesne(deger) && nesne(deger.w) ? adimEkleri(deger.w)[isId]?.bitis0 : undefined);
 
@@ -504,6 +581,8 @@ export function komutAdi(k: SatirKomutu): string {
     case 'adim-uzadi-sil': return `${k.isId} uzaması kaldırıldı`;
     case 'adim-bekler': return `${k.isId} bekliyor: ${BEKLEME_NEDENI[k.neden]}, ${saatYazisi(k.kadar)}'e kadar`;
     case 'adim-bekler-sil': return `${k.isId} beklemesi kaldırıldı`;
+    case 'elle-bol': return `${k.isId} ${String(k.paylar.length)} parçaya bölündü: ${k.paylar.map((p) => `${p.tezgah} ${String(p.adet)}`).join(', ')}`;
+    case 'elle-bol-sil': return `${k.isId} bölmesi kaldırıldı`;
   }
 }
 
@@ -530,6 +609,8 @@ export function komutUygula(deger: unknown, k: TaslakKomutu, kisi: KomutKisisi, 
     case 'adim-uzadi-sil': return adimUzadiSilUygula(deger, k, kisi);
     case 'adim-bekler': return adimBeklerUygula(deger, k, kisi, oynatma);
     case 'adim-bekler-sil': return adimBeklerSilUygula(deger, k, kisi);
+    case 'elle-bol': return elleBolUygula(deger, k, kisi);
+    case 'elle-bol-sil': return elleBolSilUygula(deger, k, kisi);
   }
 }
 
@@ -562,7 +643,7 @@ export function oynat(c: unknown, l: readonly { komut: SatirKomutu; eksen?: stri
 // (kişinin ve başkasının kararları; Risk 2a S5). Yer görünümden alınmaz: kişinin önceki dizmesinin planı düştüğünde (yalnız son dizme plan taşır) sonraki bayatlamasın.
 export const dizImzasi = (gorunum: unknown, taban: unknown): string => {
   const g = imza(gorunum);
-  return JSON.stringify([imza(taban).yer, g.kilit, g.ayar, g.yon ?? {}, g.kapasite ?? {}, g.mesai ?? {}, ...(Object.keys(g.adimEk ?? {}).length > 0 ? [g.adimEk] : []), ...(Object.keys(g.adimBekle ?? {}).length > 0 ? [{ bekle: g.adimBekle }] : [])]);
+  return JSON.stringify([imza(taban).yer, g.kilit, g.ayar, g.yon ?? {}, g.kapasite ?? {}, g.mesai ?? {}, ...(Object.keys(g.adimEk ?? {}).length > 0 ? [g.adimEk] : []), ...(Object.keys(g.adimBekle ?? {}).length > 0 ? [{ bekle: g.adimBekle }] : []), ...(Object.keys(g.elleBol ?? {}).length > 0 ? [{ bol: g.elleBol }] : [])]);
 };
 export const dataVerOf = (c: unknown): number => (nesne(c) && typeof c.dataVer === 'number' ? c.dataVer : 0);
 

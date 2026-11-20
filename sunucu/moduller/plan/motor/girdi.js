@@ -833,6 +833,8 @@ function stKur(S, ek = [], gevset = true) {
     delete st.gercek[id];
     if (kalan != null) D.opAdet = Object.assign({}, D.opAdet, { [id]: kalan });
   }
+  /* 3488 c: planlamacının elle bölmesi (çalışmanın elleBol'u: işlem -> [{ adet, m }]); motor derlemede payları ondan kurar (engine elleBolCoz) */
+  if (S.elleBol && typeof S.elleBol === 'object' && !Array.isArray(S.elleBol) && Object.keys(S.elleBol).length) st.elleBol = clone(S.elleBol);
   const adimEk = S.w && S.w.adimEk && typeof S.w.adimEk === 'object' ? S.w.adimEk : {};
   if (Object.keys(adimEk).length) { st.adimEk = clone(adimEk); for (const id in adimEk) if (st.gercek[id]) st.gercek[id].ek = clone(adimEk[id]); }
   /* 3335-3c: adıma bildirilen bekleme (w.adimBekle: işlem -> { kadar, neden }): işlem o andan önce başlayamaz. Başlamış ya da bitmiş

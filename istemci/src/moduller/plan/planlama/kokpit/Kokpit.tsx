@@ -17,6 +17,7 @@ import { girdiSaati, girdidenSaat } from '../ic/veri/kurallar.ts';
 import { useEmirNo } from '../ortak/emir-no.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import { AdimSorunu } from './AdimSorunu.tsx';
+import { ElleBol } from './ElleBol.tsx';
 import { Ayarlar } from './Ayarlar.tsx';
 import { useBitinceBildir } from './bitince-bildir.ts';
 import { emirYonu, planYonu } from './ayarlar.ts';
@@ -36,7 +37,7 @@ import { Matris, darEkran, type MatrisDuzeni } from './Matris.tsx';
 import { ODAK_PAYI, Tahta, type OkKipi } from './Tahta.tsx';
 import { Liste } from './Liste.tsx';
 import { ListeDuzeni, satirBirincilIster } from './ListeDuzeni.tsx';
-import { emirMalzemeleri } from './malzeme.ts';
+import { adimMalzemeAnlari, emirMalzemeleri } from './malzeme.ts';
 import { planaAlOnizle } from './plana-al.ts';
 import { sonDegisiklikleriGeriAl, taslakOzeti, useTaslak, type TaslakYazici } from './taslak.ts';
 import { TaslakCubugu } from './TaslakCubugu.tsx';
@@ -59,6 +60,8 @@ const BOLUM_ADI: Record<Goz, string> = { T: 'Tezgâhlar', S: 'Emirlere göre pla
 // Matris ve 3B'de tahta yoktur: iş ok tuşuyla kaymaz; emrin neden geciktiği emrin satırında yazar.
 const tahtasiz = (g: Goz): boolean => g === 'M' || g === 'B';
 const DURUM_ADI: Record<Exclude<EmirDurumu, 'iyi'>, string> = { gec: 'Geç', risk: 'Riskli', plansiz: 'Plansız' };
+// 3493 b: liste düzeninin görünümleri; ilk açılış Emirler (emir satırlı Gantt).
+const LD_GORUNUMLER: readonly (readonly ['emir' | 'tezgah' | 'siparis', string, SimgeAdi])[] = [['emir', 'Emirler', 'gantt'], ['tezgah', 'Tezgâhlar', 'cpu'], ['siparis', 'Siparişler', 'list']];
 const DURUMLAR = ['gec', 'risk', 'plansiz'] as const;
 const yazimda = (): boolean => /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName ?? '');
 // Tahtada iş tutulurken ya da tutma menüsü açıkken ok tuşları iş kaydırmaz.
@@ -146,6 +149,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const cx = useMemo(() => derle(girdiKur(c, emirKaynagi ? bitenler(emirKaynagi, c.D) : plandanBitenler(c, p), an)), [c, p, emirKaynagi, an]);
   const m = useMemo(() => modelKur(c, p, cx, emirNo), [c, p, cx, emirNo]);
   const malzeme = useMemo(() => emirMalzemeleri(c, p, o.depo.acikSiparisler, cx.now), [c, p, o.depo.acikSiparisler, cx.now]);
+  const malzemeAni = useMemo(() => adimMalzemeAnlari(malzeme, m.emirler), [malzeme, m.emirler]);
   const zaman = useCallback((t: number) => saatYaz(c.D, t), [c]);
   const saatGirdisi = useMemo(() => ({ yaz: (t: number) => girdiSaati(c.D, t), oku: (v: string) => girdidenSaat(c.D, v) }), [c]);
   const emir = useMemo(() => new Map(m.emirler.map((e) => [e.id, e])), [m]);
@@ -180,6 +184,10 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     sorguYaz((q) => { const y = new URLSearchParams(q); if (k) y.set('duzen', 'klasik'); else y.delete('duzen'); return y; });
   }, [sorguYaz]);
   const [butunTezgahlar, setButunTezgahlar] = useState(false);
+  // 3493 b: liste düzeninin görünümü. Emirler: emir satırlı Gantt ağacı (açılır kapanır); Tezgâhlar: tezgâh tahtası; Siparişler: sipariş tablosu.
+  const [ldGorunum, setLdGorunum] = useState<'emir' | 'tezgah' | 'siparis'>('emir');
+  const [agacAcik, setAgacAcik] = useState<ReadonlySet<string>>(() => new Set());
+  const agacAc = useCallback((id: string): void => { setAgacAcik((o) => { const y = new Set(o); if (y.has(id)) y.delete(id); else y.add(id); return y; }); }, []);
   const onayIstendi = useRef(onayIstegiVar());
   // Bölüm taslak çubuğundan, taslak ortak plana yazıldıktan sonra açıldıysa Onay ve canlı bunu kalıcı bir satırla söyler.
   const [onayTaslaktan, setOnayTaslaktan] = useState(false);
@@ -192,6 +200,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const [sorunTezgahi, setSorunTezgahi] = useState<{ tezgah: string; n: number } | null>(null);
   // Sorun bildirilen adım (3335-3b); paneli Ayarlar ve Duruş ve mesai ile aynı yerdedir, biri açılınca öteki kapanır.
   const [sorunAdimi, setSorunAdimi] = useState<string | null>(null);
+  // Elle bölünen adım (3488 c); paneli öteki panellerle aynı yerdedir, onlar açıksa önce onlar görünür.
+  const [bolAdimi, setBolAdimi] = useState<string | null>(null);
   // Üst şeritteki yön düğmesi paneli o yönle açar ve etkisini hesaplatır; geçerli yönün düğmesi paneli yön bölümüyle açar (ölü tıklama olmasın).
   const [ayarYon, setAyarYon] = useState<'ileri' | 'geri' | null>(null);
   // Ayarın etkisi Uygula ya da Vazgeç beklerken taslak çubuğundaki birincil düğme kapanır: ekranda tek birincil kalır.
@@ -276,9 +286,9 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     // Yön geri alınamazsa (araya başka değişiklik girdiyse) taslakta kalır; kişiye söylenir.
     if (!tamam && yonYaz && !(await taslak.geriAl(true, false))) bildir('hata', 'Emir yerleştirilemedi; yön değişikliği kaldı. Geri al ile alabilirsiniz.');
     if (tamam && a.planaAl === undefined && grup.current?.bekleyen.has(a.isId)) { grup.current.yazilan += 1; return tamam; }
-    if (tamam) bildir('bilgi', a.planaAl === undefined ? 'İş taşındı; Geri al ile alınır.' : yonYaz ? 'Emir teslimden geriye planlandı (iki değişiklik: yön ve yerleşim); Geri al ile alınır.' : 'Emir planlandı; Geri al ile alınır.');
+    if (tamam) bildir('bilgi', a.planaAl === undefined ? (m.isler[a.isId] ? 'İş taşındı; Geri al ile alınır.' : 'Adım elle yerleştirildi ve o yerde kilitlendi; Geri al ile alınır.') : yonYaz ? 'Emir teslimden geriye planlandı (iki değişiklik: yön ve yerleşim); Geri al ile alınır.' : 'Emir planlandı; Geri al ile alınır.');
     return tamam;
-  }, [taslak, yazabilir, bildir, c]);
+  }, [taslak, yazabilir, bildir, c, m.isler]);
   // Yeniden planlama isteği taslağa kendi satırıyla yazılır (Geri onu ve dizmesini birlikte alır); plan taslağın görünümünde yeniden dizilir.
   const yenidenPlanla = useCallback(async (isler: readonly string[], ileti: string): Promise<void> => {
     if (!taslak || !yazabilir || isler.length === 0) return;
@@ -297,8 +307,9 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const [sirada, setSirada] = useState(0);
   const [tasimaBitti, setTasimaBitti] = useState(0);
   const tasiDene = useCallback((isId: string, tezgah: string, hedefS: number): void => {
-    const x = m.isler[isId], e = x ? emir.get(x.job) : undefined;
-    if (!x) return;
+    // 3488 a: yerleşmeyen adımın planda satırı yoktur; emri adımlarından bulunur, taşıma onu verilen yerde kilitler.
+    const x = m.isler[isId], e = x ? emir.get(x.job) : m.emirler.find((y) => y.adimlar.some((a) => a.id === isId));
+    if (!x && !e) return;
     if (mesgul || tasiyor.current || onay !== null) { kuyruk.current.set(isId, { tezgah, S: hedefS }); setSirada(kuyruk.current.size); return; }
     tasiyor.current = true; suren.current = { isId, tezgah, S: hedefS };
     const bitir = (): void => {
@@ -645,6 +656,10 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const adimSorunu = yazabilir && !tur
     ? (isId: string): void => { setAyarAcik(false); setAyarYon(null); setKapasiteAcik(false); setSorunTezgahi(null); setEngelAcik(false); setSorunAdimi(isId); }
     : null;
+  // Elle böl (3488 c): yerleşmeyen adımın satırından açılır; öteki paneller kapanır.
+  const elleBolAc = yazabilir && !tur
+    ? (isId: string): void => { setAyarAcik(false); setAyarYon(null); setKapasiteAcik(false); setSorunTezgahi(null); setEngelAcik(false); setSorunAdimi(null); setBolAdimi(isId); }
+    : null;
   const adimEk = useMemo(() => adimEkleri(c), [c]);
   const adimBekle = useMemo(() => adimBeklemeleri(c, m.simdi), [c, m.simdi]);
   const listeKartlari = useMemo(() => kartlar.filter((k) => k.emirler.some((e) => gorunenKume.has(e.id))), [kartlar, gorunenKume]);
@@ -673,6 +688,13 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
       {!onayAcik && !klasik && (
         <div className="tc-pyq-ust tc-pyq-ust-sade">
           {tahtasiz(goz) && <button type="button" className="tc-pyq-ok" title="Sipariş listesine dön" onClick={() => { setGoz('T'); }}><Simge ad="chev-left" boyut="k" /><span>Listeye dön</span></button>}
+          {!tahtasiz(goz) && (
+            <span className="tc-pyq-seg tc-pyq-ld-gorunum" role="group" aria-label="Görünüm">
+              {LD_GORUNUMLER.map(([k, ad, simge]) => (
+                <button type="button" key={k} data-ld-gorunum={k} aria-pressed={ldGorunum === k} onClick={() => { setLdGorunum(k); }}><Simge ad={simge} boyut="k" /><span>{ad}</span></button>
+              ))}
+            </span>
+          )}
           <span className="tc-pyq-suzgec" role="group" aria-label="Durum süzgeci">
             {DURUMLAR.map((d) => (
               <button type="button" key={d} data-d={d} aria-pressed={suz === d} onClick={() => { setSuz(suz === d ? null : d); }}><b>{say[d]}</b>{DURUM_ADI[d]}</button>
@@ -860,6 +882,18 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
             <section className="tc-pyq-bolum tc-pyq-bolum-plan" aria-label="Matris">
               <Matris m={m} cx={cx} duzen={duzen} duzenSec={setDuzen} emirler={gorunen} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} gecSuz={() => { setSuz('gec'); }} />
             </section>
+          ) : ldGorunum === 'emir' ? (
+            <section className="tc-pyq-bolum tc-pyq-bolum-plan tc-pyq-agac-bolum" aria-label="Emirler">
+              <Tahta
+                m={m} cx={cx} goz="S" olcek={olcek} emirler={gorunen} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
+                tasi={yazabilir && !tur ? tasiDene : null} planaAl={null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
+                yerlestirme={null} yanan={null} sorunBildir={null} onizle={tur ? null : onizle} okKipi={tur ? 'yok' : okKipi}
+                saatEni={saatEni} malzeme={malzeme} agac={{ acik: agacAcik, ac: agacAc }}
+              />
+              <Liste m={m} cx={cx} goz="S" emirler={gorunen} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} sorunBildir={null} />
+            </section>
+          ) : ldGorunum === 'tezgah' ? (
+            <section className="tc-pyq-bolum tc-pyq-bolum-plan tc-pyq-agac-bolum" aria-label="Tezgâhlar">{listeTahtasi}</section>
           ) : (
             <>
           <ListeDuzeni
@@ -868,6 +902,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
             planla={yazabilir && c.plan !== null ? (k) => { void yenidenPlanla(k.emirler.filter((e) => e.durum === 'plansiz').map((e) => e.id), `${k.siparis?.no ?? k.emirler[0]?.no ?? ''} planlandı.`); } : null}
             yenidenPlanla={yazabilir && c.plan !== null ? (k) => { void yenidenPlanla(k.emirler.map((e) => e.id), `${k.siparis?.no ?? k.emirler[0]?.no ?? ''} yeniden planlandı.`); } : null}
             tahta={listeTahtasi} satirBirincil={satirBirincil} adimSec={listeAdimSec} seciliIs={secIs}
+            tasi={yazabilir && !tur ? tasiDene : null} bol={elleBolAc} malzemeAni={malzemeAni} hedef={setYerHedefi} secimiBirak={() => { sec(null, null); }}
           />
           {butunTezgahlar && !vurgu && <section className="tc-pyq-bolum tc-pyq-bolum-plan" aria-label="Tezgâhlar"><h2>Tezgâhlar</h2>{listeTahtasi}</section>}
             </>
@@ -880,6 +915,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         ) : engelAcik ? (
           <Engeller gruplar={engelGruplari} ozet={engelOzet} ufukSonu={zaman(ufukSonu)} kapat={() => { setEngelAcik(false); }}
             emirGoster={(e) => { setEngelAcik(false); sec(e, null); }} mesaiAc={() => { setEngelAcik(false); setKapasiteAcik(true); }} acabilir={yetki.islemVar} />
+        ) : bolAdimi !== null ? (
+          <ElleBol key={bolAdimi} c={c} m={m} isId={bolAdimi} taslak={taslak} yazabilir={yazabilir} kapat={() => { setBolAdimi(null); }} />
         ) : null}
         </div>
       ) : (
@@ -941,6 +978,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         ) : engelAcik ? (
           <Engeller gruplar={engelGruplari} ozet={engelOzet} ufukSonu={zaman(ufukSonu)} kapat={() => { setEngelAcik(false); }}
             emirGoster={(e) => { setEngelAcik(false); sec(e, null); }} mesaiAc={() => { setEngelAcik(false); setKapasiteAcik(true); }} acabilir={yetki.islemVar} />
+        ) : bolAdimi !== null ? (
+          <ElleBol key={bolAdimi} c={c} m={m} isId={bolAdimi} taslak={taslak} yazabilir={yazabilir} kapat={() => { setBolAdimi(null); }} />
         ) : null}
       </div>
       )}

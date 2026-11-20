@@ -777,6 +777,30 @@
 .tc-pyq-ld-adimlar li > button[aria-pressed="true"] { box-shadow: inset 0 0 0 var(--cizgi-kalin) var(--hazard); font-weight: 700; }
 .tc-pyq-ld-adimlar li > button:focus-visible { outline: var(--cizgi-kalin) solid var(--ink); outline-offset: calc(var(--cizgi-ince) * -1); }
 .tc-pyq-ld-adimlar li[data-yok] small { color: var(--d-risk); }
+/* 3488: yerleşmeyen adımın eylemleri ve elle yerleştirme paneli (satırın altında, telefonda tahtanın yerine yer listesi). */
+.tc-pyq-ld-elle-eylem { display: flex; flex-wrap: wrap; gap: var(--b-1); flex: 1 1 100%; }
+.tc-pyq-elle { flex: 1 1 100%; display: flex; flex-direction: column; gap: var(--b-2); padding: var(--b-2); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); background: var(--panel); min-width: 0; }
+.tc-pyq-elle-yerler { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--b-1); }
+.tc-pyq-ld-adimlar .tc-pyq-elle-yerler li { padding: 0; border: 0; }
+.tc-pyq-elle-yerler button {
+  display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--b-1) var(--b-3); width: 100%; min-height: var(--dokunma); min-width: 0; padding: 0 var(--b-2);
+  border: var(--cizgi-ince) dashed var(--d-iyi); border-radius: var(--yari-1); background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.tc-pyq-elle-yerler button[aria-pressed="true"] { border-style: solid; box-shadow: inset 0 0 0 var(--cizgi-kalin) var(--hazard); font-weight: 700; }
+.tc-pyq-elle-yerler button:focus-visible { outline: var(--cizgi-kalin) solid var(--ink); outline-offset: var(--cizgi-ince); }
+/* Malzemeden önce başlayan yer (3488): uyarı kendi satırında, risk tonunda; yeşil kenarlı düğmede de görünür. */
+.tc-pyq-elle-malzeme { flex-basis: 100%; display: inline-flex; align-items: center; gap: var(--b-1); color: var(--d-risk); font-weight: 600; }
+.tc-pyq-elle-yerler button:has(.tc-pyq-elle-malzeme) { padding-block: var(--b-1); }
+.tc-pyq-elle-sonuc { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-3); padding: var(--b-1) var(--b-2); border-radius: var(--yari-1); background: var(--panel2); font-variant-numeric: tabular-nums; }
+.tc-pyq-elle-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-1); }
+.tc-pyq-elle-parca { display: flex; flex-wrap: wrap; align-items: end; gap: var(--b-2); margin: 0; padding: var(--b-2); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); min-width: 0; }
+.tc-pyq-ld-kilit { display: inline-flex; align-items: center; gap: var(--b-1); }
+/* Böl panelinde başlık üstte, düğmeler altta sabit; parçalar ve bilgi satırları aradaki kayan alandadır (form yapışırsa özeti örter). */
+.tc-pyq-elle-bol > header { position: sticky; top: calc(var(--b-3) * -1); z-index: 1; margin: calc(var(--b-3) * -1) calc(var(--b-3) * -1) 0; padding: var(--b-3); border-bottom: var(--cizgi-ince) solid var(--edge2); background: var(--panel-solid); }
+.tc-pyq-ayarlar.tc-pyq-elle-bol form.tc-pyq-ayar-etki { position: static; margin: 0; padding: 0; border-top: 0; background: none; }
+.tc-pyq-elle-bol form .tc-pyq-ayar-dugmeler { position: sticky; bottom: calc(var(--b-3) * -1); margin: 0 calc(var(--b-3) * -1) calc(var(--b-3) * -1); padding: var(--b-2) var(--b-3) var(--b-3); border-top: var(--cizgi-ince) solid var(--edge2); background: var(--panel-solid); }
+.tc-pyq-elle-parca legend { font-weight: 700; padding: 0 var(--b-1); }
+.tc-pyq-elle-parca .tc-pyq-ayar-alan { flex: 1 1 calc(var(--b-6) * 2); min-width: 0; }
 /* Çok emirli siparişte her emir (ana emir, partileri) başlıklı ayrı öbektir. */
 .tc-pyq-ld-emir { display: flex; flex-direction: column; gap: var(--b-1); padding-top: var(--b-2); }
 .tc-pyq-ld-emir + .tc-pyq-ld-emir { border-top: var(--cizgi-kalin) solid var(--edge); margin-top: var(--b-2); }
@@ -814,3 +838,29 @@
 @media (max-width: 767px) {
   .tc-pyq-ayrinti.tc-pyq-engeller { top: var(--b-4); max-height: none; }
 }
+
+/* 3493 b: emir satırlı ağaç. Tahta kendi içinde değil sayfayla kayar; yatay kaydırma tahtada kalır. */
+.tc-pyq-agac-bolum .tc-pyq-tahta { max-height: none; }
+/* Emir satırı başlığı emir no, ürün, adet ve durumu birlikte taşır (sipariş gözündeki genişlik). */
+.tc-pyq-agac-bolum:has(.tc-pyq-agac-ac) { --bas-en: calc(var(--b-6) * 6); }
+.tc-pyq-ld-gorunum button { display: inline-flex; align-items: center; gap: var(--b-1); }
+.tc-pyq-bas:has(> .tc-pyq-agac-ac) { padding: 0; }
+.tc-pyq-agac-ac {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto; column-gap: var(--b-1); align-content: center; align-items: center;
+  width: 100%; min-height: var(--dokunma); padding: 0 var(--b-2); border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.tc-pyq-agac-ac .tc-simge { grid-row: 1 / 3; color: var(--muted); transition: transform var(--hareket-sure); }
+.tc-pyq-agac-ac[aria-expanded="true"] .tc-simge { transform: rotate(90deg); }
+.tc-pyq-agac-ac b, .tc-pyq-agac-ac small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-pyq-agac-ac small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pyq-agac-ac:hover b { color: var(--ink); text-decoration: underline; }
+.tc-pyq-agac-ac:focus-visible { outline: var(--cizgi) solid var(--run); outline-offset: calc(var(--cizgi) * -1); }
+.tc-pyq-satir[data-agac-adim] { background: var(--panel2); }
+.tc-pyq-satir[data-agac-adim] > .tc-pyq-bas { padding-left: calc(var(--b-2) + var(--b-4)); background: linear-gradient(var(--panel2), var(--panel2)), var(--panel-solid); }
+.tc-pyq-satir[data-agac-adim] > .tc-pyq-bas b { font-weight: 500; }
+.tc-pyq-ozet-cubuk {
+  position: absolute; top: 50%; left: var(--x); width: var(--w); height: var(--b-2); transform: translateY(-50%);
+  border-radius: var(--yari-tam); background: color-mix(in oklab, var(--muted) 45%, transparent); pointer-events: none;
+}
+.tc-pyq-agac-bos { position: sticky; left: var(--bas-en); display: inline-flex; align-items: center; height: 100%; padding: 0 var(--b-2); color: var(--muted); font-size: var(--yazi-xs); font-style: italic; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .tc-pyq-agac-ac .tc-simge { transition: none; } }

@@ -1,12 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import * as gonder from '../motor/atolye/gonder.ts';
 import { derle, girdiKur, planOku, plandanBitenler } from '../motor/kurallar.ts';
 import { ornekCalisma } from '../motor/ornek.ts';
 import { ListeDuzeni, satirBirincilIster } from './ListeDuzeni.tsx';
 import { eksikNedeni, modelKur } from './kurallar.ts';
 import { siraKartlari } from './yerlestirme.ts';
 
-afterEach(() => { cleanup(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 // Örnek çalışma uydurmadır: iki emir (ORN-2 geç, ORN-3 riskli); 2.20 süren iştir.
 function kur(ek: { w?: Record<string, unknown>; gercek?: Record<string, unknown> } = {}) {
@@ -31,6 +32,95 @@ function yarimKur(neden: Record<string, unknown>) {
   const p = planOku(c), m = modelKur(c, p, derle(girdiKur(c, plandanBitenler(c, p))), (id) => `ORN-${id}`);
   return { m, p, kartlar: siraKartlari(m), eksik };
 }
+
+// 3488 a, c: yerleşmeyen adım elle yerleştirilir ya da bölünür. Önizleme uydurmadır: adım verilen saatte başlar, 5 saat sürer.
+describe('yerleşmeyen adımı elle yerleştirme (3488)', () => {
+  function elleKur(ek: Partial<Parameters<typeof ListeDuzeni>[0]> = {}) {
+    const x = yarimKur({ kod: 'zaman' });
+    const oz = vi.spyOn(gonder, 'isTasiOnizle').mockImplementation((g) => Promise.resolve({
+      calismaSurumu: 4, gecerli: true, ileti: null, isler: [{ isId: g.isId, tezgah: g.tezgah, S: g.baslangic, C: g.baslangic + 5, eskiTezgah: g.tezgah, eskiS: g.baslangic, tur: 'tasinan' as const }],
+    }));
+    const tasi = vi.fn(), bol = vi.fn(), hedef = vi.fn(), secimiBirak = vi.fn();
+    ciz(x, '3', { tasi, bol, hedef, secimiBirak, ...ek });
+    return { x, oz, tasi, bol, hedef, secimiBirak };
+  }
+
+  it('yalnız yerleşmeyen adımda Elle yerleştir ve Böl çıkar; yazamayan kişide çıkmaz; Böl paneli o adımla açar', () => {
+    const { x, bol } = elleKur();
+    expect([...document.querySelectorAll('[data-elle-ac]')].map((b) => b.getAttribute('data-elle-ac'))).toEqual([x.eksik]);
+    fireEvent.click(document.querySelector(`[data-bol-ac="${x.eksik}"]`)!);
+    expect(bol).toHaveBeenCalledWith(x.eksik);
+    cleanup();
+    ciz(yarimKur({ kod: 'zaman' }), '3');
+    expect(document.querySelector('[data-elle-ac]')).toBeNull();
+  });
+
+  it('Elle yerleştir uygun tezgâhlardaki yerleri sorar, tahtaya verir ve listeler; seçilen yerin sonucu yazar; Yerleştir ve kilitle taşıma komutunu verir', async () => {
+    const { x, oz, tasi, hedef, secimiBirak } = elleKur();
+    fireEvent.click(document.querySelector(`[data-elle-ac="${x.eksik}"]`)!);
+    expect(secimiBirak).toHaveBeenCalled();
+    const panel = screen.getByRole('group', { name: /için elle yerleştirme$/ });
+    const yer = await within(panel).findAllByRole('button', { pressed: false, name: /→/ });
+    expect(oz).toHaveBeenCalled();
+    expect(oz.mock.calls.every(([g]) => g.isId === x.eksik)).toBe(true);
+    expect(panel.querySelector('[data-gerekli]')?.textContent).toBe('Gerekli 5 sa (hazırlık dahil). ');
+    await waitFor(() => { expect(hedef).toHaveBeenLastCalledWith(expect.objectContaining({ adimId: x.eksik, fiil: 'tasi' })); });
+    const kilitle = within(panel).getByRole('button', { name: 'Yerleştir ve kilitle' });
+    expect(kilitle.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(yer[0]!);
+    const t = yer[0]!.getAttribute('data-elle-yer')!;
+    expect(panel.querySelector('[data-elle-secilen]')?.getAttribute('data-elle-secilen')).toBe(t);
+    fireEvent.click(kilitle);
+    expect(tasi).toHaveBeenCalledWith(x.eksik, t, expect.any(Number));
+    expect(screen.queryByRole('group', { name: /için elle yerleştirme$/ })).toBeNull();
+    expect(hedef).toHaveBeenLastCalledWith(null);
+  });
+
+  it('önceki adımı da yerleşmeyen adımda düğme yoktur, önce hangi adımın yerleşeceği yazar (Risk K1)', () => {
+    const c0 = ornekCalisma(), plan = c0.plan as unknown as { ops: Record<string, { job: string }> };
+    const iki = Object.keys(plan.ops).filter((id) => plan.ops[id]?.job === '3').sort().slice(-2);
+    const ops = Object.fromEntries(Object.entries(plan.ops).filter(([id]) => !iki.includes(id)));
+    const c = { ...c0, plan: { ...plan, ops, fail: iki } } as unknown as typeof c0;
+    const p = planOku(c), m = modelKur(c, p, derle(girdiKur(c, plandanBitenler(c, p))), (id) => `ORN-${id}`);
+    ciz({ m, p, kartlar: siraKartlari(m) }, '3', { tasi: vi.fn(), bol: vi.fn() });
+    expect([...document.querySelectorAll('[data-elle-ac]')].map((b) => b.getAttribute('data-elle-ac'))).toEqual([iki[0]]);
+    const sira = m.emirler.find((e) => e.id === '3')!.adimlar.findIndex((a) => a.id === iki[0]) + 1;
+    expect(document.querySelector(`[data-once-yerlestir="${iki[1]!}"]`)?.textContent).toBe(`Önce ${String(sira)}. adımı yerleştirin; bu adım ondan sonra gelir.`);
+  });
+
+  it('malzemesi gelmeden başlayan yerde malzemenin gelişi yazar; seçilince kilitli adımın malzemeyi beklemediğini söyler', async () => {
+    const x0 = yarimKur({ kod: 'zaman' });
+    elleKur({ malzemeAni: { [x0.eksik]: 1e6 } });
+    fireEvent.click(document.querySelector(`[data-elle-ac="${x0.eksik}"]`)!);
+    const panel = screen.getByRole('group', { name: /için elle yerleştirme$/ });
+    const yer = await within(panel).findAllByRole('button', { pressed: false, name: /→/ });
+    expect(yer[0]!.querySelector('[data-elle-malzeme]')?.textContent).toBe(`malzeme ${zaman(1e6)} geliyor`);
+    fireEvent.click(yer[0]!);
+    expect(panel.querySelector('[data-elle-malzeme-uyari]')?.textContent).toContain('kilitli adım malzemeyi beklemez, plan uyarı verir');
+    cleanup();
+    elleKur({ malzemeAni: { [x0.eksik]: Infinity } });
+    fireEvent.click(document.querySelector(`[data-elle-ac="${x0.eksik}"]`)!);
+    const y2 = await within(screen.getByRole('group', { name: /için elle yerleştirme$/ })).findAllByRole('button', { pressed: false, name: /→/ });
+    expect(y2[0]!.querySelector('[data-elle-malzeme]')?.textContent).toBe('malzeme eksik');
+    cleanup();
+    elleKur({ malzemeAni: { [x0.eksik]: 0 } });
+    fireEvent.click(document.querySelector(`[data-elle-ac="${x0.eksik}"]`)!);
+    const y3 = await within(screen.getByRole('group', { name: /için elle yerleştirme$/ })).findAllByRole('button', { pressed: false, name: /→/ });
+    expect(y3[0]!.querySelector('[data-elle-malzeme]')).toBeNull();
+  });
+
+  it('tahtadaki yere basmak yeri seçer; Vazgeç paneli kapatır, komut yazılmaz', async () => {
+    const { x, tasi, hedef } = elleKur();
+    fireEvent.click(document.querySelector(`[data-elle-ac="${x.eksik}"]`)!);
+    await waitFor(() => { expect(hedef).toHaveBeenLastCalledWith(expect.objectContaining({ adimId: x.eksik })); });
+    const h = hedef.mock.calls.at(-1)![0] as { yerler: { tezgah: string }[]; yerlestir: (t: string) => void };
+    act(() => { h.yerlestir(h.yerler[0]!.tezgah); });
+    expect(document.querySelector('[data-elle-secilen]')?.getAttribute('data-elle-secilen')).toBe(h.yerler[0]!.tezgah);
+    fireEvent.click(screen.getByRole('button', { name: 'Vazgeç' }));
+    expect(screen.queryByRole('group', { name: /için elle yerleştirme$/ })).toBeNull();
+    expect(tasi).not.toHaveBeenCalled();
+  });
+});
 
 describe('yarım planlı emir', () => {
   it('satır "N / M planda" der; açık satır kaç adımın eksik olduğunu ve nedenini yazar; Planla eksik adımlar için çağrılır', () => {

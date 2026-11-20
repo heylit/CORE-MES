@@ -49,6 +49,8 @@ function oynat(d: Durum, l: readonly Komut[]): Durum {
     if (k.tur === 'tasi') {
       const id = String(k['isId']), x = ops[id];
       if (x) { ops = { ...ops, [id]: { ...x, m, S, C: S + (x.C - x.S) } }; locks = { ...locks, [id]: { m, S } }; }
+      // 3488 a: yerleşmeyen adım elle yerleştirilir (uydurma süre sekiz saat).
+      else if (id.includes('.')) { ops = { ...ops, [id]: { job: id.slice(0, id.lastIndexOf('.')), m, S, C: S + 8 } }; locks = { ...locks, [id]: { m, S } }; }
     } else if (k.tur === 'plana-al') {
       const job = String(k['emirId']);
       ops = { ...ops, [`${job}.a1`]: { job, m, S, C: S + 4 } }; locks = { ...locks, [`${job}.a1`]: { m, S } };
@@ -2266,6 +2268,8 @@ test('Kokpit 3414 b: liste düzeni; plansız sipariş satırdan planlanır, sonu
   const tasma = async () => { expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0); };
   const cek = async (ad: string) => { await page.waitForTimeout(800); await page.screenshot({ path: `/tmp/tmiv2-ekran/3414b-${ad}-${bilgi.project.name}.png` }); };
   const telefon = bilgi.project.name === 'g360';
+  // 3493 b: açılış Emirler ağacıdır; sipariş tablosu Siparişler görünümündedir.
+  await kokpit.getByRole('group', { name: 'Görünüm' }).getByRole('button', { name: 'Siparişler' }).click();
   const tablo = kokpit.getByRole('table', { name: 'Siparişler' });
   await expect(tablo).toBeVisible();
   // Bölümler, operasyon tablosu ve Planla menüsü bu düzende yoktur.
@@ -2320,5 +2324,132 @@ test('Kokpit 3414 b: liste düzeni; plansız sipariş satırdan planlanır, sonu
   await tasma();
   await kokpit.getByRole('button', { name: 'Listeye dön' }).click();
   await expect(tablo).toBeVisible();
+  expect(ag.hatalar).toEqual([]);
+});
+
+// Kart 3488 a: yerleşmeyen adım liste düzeninde elle yerleştirilir. Boş yerler önizlemeyle bulunur, seçilen yerin sonucu yazar,
+// "Yerleştir ve kilitle" taşıma komutunu taslağa yazar; Böl paneli adımı tezgâhlara paylaştırma formunu açar.
+test('Kokpit 3488: yerleşmeyen adım elle yerleştirilir ve kilitlenir; Böl paneli açılır; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  // S1'in Freze adımı planda yeri olmadan başlar; kilitlenince (taslakta elle yerleştirilince) plana girer.
+  const { 'S1.a2': _, ...yerlesmeyen } = ILK;
+  // Freze adımının malzemesi salı 16:00'da (40) gelir: daha erken başlayan yerde uyarı yazar (0004).
+  const mal = { S1: [{ kod: 'ORN-H1', adim: 'a2', need: 8, t: 40, stok: 0, eksik: 0, pay: [{ tur: 'sa', kim: null, q: 8, gelis: 40, tb: false }] }] };
+  const t = await taslakSunucusu(page, (d) => ({ ...calismaKur(d), plan: { ...(d.locks['S1.a2'] ? plan(d.ops) : { ...plan(d.ops), fail: ['S1.a2'] }), mal } }));
+  t.s.ortak = { ...t.s.ortak, ops: yerlesmeyen };
+  await page.route('**/api/plan/planlama-calismasi/is-tasi-onizlemesi?*', (r) => {
+    const q = new URL(r.request().url()).searchParams, S = Number(q.get('baslangic'));
+    return json(r, { calismaSurumu: t.s.surum, gecerli: true, ileti: null, isler: [{ isId: q.get('isId'), tezgah: q.get('tezgah'), S, C: S + 8, tur: 'tasinan' }] });
+  });
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const karsilama = page.getByRole('button', { name: 'Başlayalım' });
+  if (await karsilama.isVisible()) await karsilama.click();
+  const tasma = async () => { expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0); };
+  const cek = async (ad: string) => { await page.waitForTimeout(800); await page.screenshot({ path: `/tmp/tmiv2-ekran/3488-${ad}-${bilgi.project.name}.png` }); };
+  await kokpit.getByRole('group', { name: 'Görünüm' }).getByRole('button', { name: 'Siparişler' }).click();
+  const tablo = kokpit.getByRole('table', { name: 'Siparişler' });
+  const s1 = tablo.locator('.tc-pyq-ld-kart', { has: page.locator('[data-kart]', { hasText: 'S1' }) });
+  await s1.locator('[data-kart]').getByRole('button').click();
+  const ac2 = s1.locator('[data-elle-ac="S1.a2"]');
+  await expect(ac2).toBeVisible();
+  // Böl adımın adedini tezgâhlara paylaştıran paneli açar (komut ve etkisi birim testlerinde).
+  await s1.locator('[data-bol-ac="S1.a2"]').click();
+  const bol = kokpit.getByRole('complementary', { name: 'Adımı böl' });
+  await expect(bol.getByLabel('Adet')).toHaveCount(2);
+  await tasma();
+  await cek('0-bol');
+  // Etkisini gör komutu taslağa yazar ve sonucu Uygula ile gösterir; Vazgeç taslağı boşaltır.
+  await bol.getByRole('button', { name: 'Etkisini gör' }).click();
+  const etki = bol.getByRole('region', { name: 'Bölmenin etkisi' });
+  await expect(etki.getByRole('button', { name: 'Uygula' })).toBeVisible();
+  expect(t.s.komutlar.at(-1)).toMatchObject({ tur: 'elle-bol', isId: 'S1.a2', paylar: [{ adet: 4, tezgah: 'M2' }, { adet: 4, tezgah: 'M3' }] });
+  await tasma();
+  await cek('0b-bol-etki');
+  await etki.getByRole('button', { name: 'Vazgeç' }).click();
+  await expect(etki).toHaveCount(0);
+  await bol.getByRole('button', { name: 'Adımı bölmeyi kapat' }).click();
+  await expect(bol).toHaveCount(0);
+  await ac2.click();
+  const elle = s1.getByRole('group', { name: 'Freze için elle yerleştirme' });
+  await expect(elle.getByRole('list', { name: 'Boş yerler' })).toBeVisible();
+  await expect(elle.locator('[data-gerekli]')).toContainText('Gerekli 8 sa');
+  await expect(elle.locator('[data-elle-yer="M3"] [data-elle-malzeme]')).toContainText('malzeme 20.10 Sal 16:00 geliyor');
+  await elle.locator('[data-elle-yer="M3"]').click();
+  await expect(elle.locator('[data-elle-malzeme-uyari]')).toContainText('kilitli adım malzemeyi beklemez');
+  await expect(elle.locator('[data-elle-secilen="M3"]')).toContainText('Adım biter');
+  await tasma();
+  await cek('1-elle');
+  await elle.getByRole('button', { name: 'Yerleştir ve kilitle' }).click();
+  await expect.poll(() => t.tasinan().length).toBe(1);
+  expect(t.tasinan()[0]).toMatchObject({ tur: 'tasi', isId: 'S1.a2', tezgah: 'M3' });
+  await expect(kokpit.getByRole('region', { name: 'Değişiklikleriniz' })).toBeVisible();
+  await expect(s1.locator('[data-elle-ac="S1.a2"]')).toHaveCount(0);
+  await expect(s1.locator('[data-elle-kilit="S1.a2"]')).toContainText('elle · kilitli');
+  await tasma();
+  await cek('2-yerlesti');
+  expect(ag.hatalar).toEqual([]);
+});
+
+// Kart 3493 b: Kokpit emir satırlı Gantt ile açılır. Her satır bir emir, çubukları aynı satırda; emir açılınca adımları alt satır olur.
+// Tahta kendi içinde değil sayfayla kayar. Tezgâhlar ve Siparişler ayrı görünümdür. Telefonda tahta yerine emir listesi.
+test('Kokpit 3493 b: emir satırlı Gantt; emir açılır kapanır, adımlar alt satırda; tahta sayfayla kayar; Tezgâhlar ve Siparişler ayrı görünüm; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  await taslakSunucusu(page, (d) => calismaKur(d));
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const karsilama = page.getByRole('button', { name: 'Başlayalım' });
+  if (await karsilama.isVisible()) await karsilama.click();
+  const tasma = async () => { expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0); };
+  const cek = async (ad: string) => { await page.waitForTimeout(800); await page.screenshot({ path: `/tmp/tmiv2-ekran/3493-${ad}-${bilgi.project.name}.png` }); };
+  const gorunum = kokpit.getByRole('group', { name: 'Görünüm' });
+  await expect(gorunum.getByRole('button', { name: 'Emirler' })).toHaveAttribute('aria-pressed', 'true');
+  const bolum = kokpit.getByRole('region', { name: 'Emirler' });
+  if (bilgi.project.name === 'g360') {
+    await expect(bolum.getByRole('list', { name: 'Emirler' }).getByRole('button')).toHaveCount(4);
+    await expect(bolum.locator('.tc-pyq-tahta')).toBeHidden();
+    await tasma();
+    await cek('0-telefon');
+  } else {
+    const tahta = bolum.locator('.tc-pyq-tahta');
+    await expect(tahta).toBeVisible();
+    // Tahta kendi içinde dikey kaymaz: yüksekliği içeriği kadardır.
+    expect(await tahta.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
+    const s1 = bolum.locator('button[data-agac="S1"]');
+    await expect(s1).toHaveAttribute('aria-expanded', 'false');
+    await expect(bolum.locator('[data-satir="S1"] [data-is]')).toHaveCount(2);
+    await expect(bolum.locator('[data-agac-adim]')).toHaveCount(0);
+    // Plansız emir de satırdır; çubuk alanında soluk not.
+    await expect(bolum.locator('button[data-agac="S4"]')).toBeVisible();
+    await expect(bolum.locator('[data-satir="S4"] [data-agac-bos]')).toHaveText('planda yeri yok');
+    await expect(bolum.locator('[data-satir="S1"] [data-agac-bos]')).toHaveCount(0);
+    await tasma();
+    await cek('0-kapali');
+    await s1.click();
+    await expect(s1).toHaveAttribute('aria-expanded', 'true');
+    await expect(bolum.locator('[data-agac-adim][data-satir^="S1>"]')).toHaveCount(2);
+    await expect(bolum.locator('[data-satir="S1>S1.a1"] .tc-pyq-bas b')).toHaveText('1. Torna');
+    await expect(bolum.locator('[data-satir="S1>S1.a2"] .tc-pyq-bas small')).toContainText('F-01');
+    await expect(bolum.locator('[data-satir="S1"] [data-ozet="S1"]')).toBeVisible();
+    await expect(bolum.locator('[data-satir="S1"] [data-is]')).toHaveCount(0);
+    await tasma();
+    await cek('1-acik');
+    await s1.click();
+    await expect(bolum.locator('[data-agac-adim]')).toHaveCount(0);
+  }
+  await gorunum.getByRole('button', { name: 'Tezgâhlar' }).click();
+  const tezgahlar = kokpit.getByRole('region', { name: 'Tezgâhlar' });
+  await expect(tezgahlar).toBeVisible();
+  // Telefonda tahta yerine tezgâh ve iş listesi; bölüm boş kalmaz.
+  if (bilgi.project.name === 'g360') await expect(tezgahlar.getByRole('group', { name: 'Tezgâhlar ve işler' })).toBeVisible();
+  else await expect(tezgahlar.locator('.tc-pyq-tahta')).toBeVisible();
+  await tasma();
+  await cek('2-tezgahlar');
+  await gorunum.getByRole('button', { name: 'Siparişler' }).click();
+  await expect(kokpit.getByRole('table', { name: 'Siparişler' })).toBeVisible();
+  await tasma();
+  await cek('3-siparisler');
   expect(ag.hatalar).toEqual([]);
 });

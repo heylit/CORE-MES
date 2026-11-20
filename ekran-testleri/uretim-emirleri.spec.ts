@@ -88,6 +88,31 @@ test.describe('yönetici', () => {
     expect(ag.yazmalar, 'açıp kapatmak yazmaz').toEqual([]);
   });
 
+  // 3496: durum hücresi uzun olan satırda (örnek veride fason OP 30: dış üretim yeri ve statü nedeni) adım adı sıkışıp harf harf
+  // kırılmaz; "Sağlam" etiketi bölünmez; statü rozeti satırdan taşıp kesilmez.
+  test('adım listesinde uzun durum hücresi adı sıkıştırmaz, etiket ve rozet kesilmez', async ({ page, ag, ac }) => {
+    await ac('/uretim-emirleri/2?sekme=adimlar');
+    const panel = page.getByRole('tabpanel', { name: 'Adımlar' });
+    const adlar = panel.locator('.tc-rr3-adim-ad');
+    await expect(adlar.first()).toBeVisible();
+    // Ön koşul: örnek veride uzun durum hücreli satır var; yoksa test hiçbir şeyi sınamaz.
+    await expect(panel.locator('.tc-rr3-adimlar > li').filter({ hasText: 'Dış üretim' }).first()).toBeVisible();
+    const genislikler = await adlar.evaluateAll((l) => l.map((e) => Math.round(e.getBoundingClientRect().width)));
+    expect(genislikler.length).toBeGreaterThan(1);
+    // 768 ve üstünde ad sütununun alt sınırı --acilir-enaz (200 px); telefonda durum alt satırdadır, ad satırı paylaşmaz.
+    const enaz = (page.viewportSize()?.width ?? 1280) >= 768 ? 199 : 120;
+    for (const g of genislikler) expect(g, 'adım adı sütunu').toBeGreaterThanOrEqual(enaz);
+    const satirSayilari = await panel.locator('.tc-rr3-adim-saglam > small').evaluateAll((l) => l.map((e) => {
+      const r = document.createRange(); r.selectNodeContents(e);
+      return new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size;
+    }));
+    for (const n of satirSayilari) expect(n, '"Sağlam" tek satırda').toBe(1);
+    const tasmalar = await panel.locator('.tc-rr3-adimlar .tc-rozet').evaluateAll((l) => l.map((e) => e.scrollWidth - e.clientWidth));
+    expect(tasmalar.length).toBeGreaterThan(0);
+    for (const t of tasmalar) expect(t, 'rozet içeriği kutusuna sığar').toBeLessThanOrEqual(1);
+    expect(ag.hatalar).toEqual([]);
+  });
+
   // Kart depoda lotla açılır (Soru 586); bölüm stok okumasıdır, emir sayfası kart açmaz ve eski emir kartını basmaz. 3039: "Malzeme" sekmesinde.
   test('Malzeme sekmesinde refakat kartları bölümü görünür, eski kart düğmesi yok', async ({ page, ag, ac }) => {
     await ac('/uretim-emirleri/2?sekme=malzeme');

@@ -45,14 +45,14 @@ function kur(yazabilir: boolean) {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 // 3396 a: madde listesi veride; durduran madde formda kapatılamaz, özel madde eklenir.
-describe('Hazırlık maddeleri (3396)', () => {
+describe('Matris sütunları (3396, 3494-1 a)', () => {
   it('liste sahibi, etkiyi ve özel maddeyi gösterir; yetkisiz kişide düğme ve satır seçimi yok', async () => {
     kur(false);
     await screen.findByText('Boya onayı');
     expect(screen.getByText('Özel')).toBeTruthy();
-    expect(screen.getAllByText('Durduran').length).toBe(1);
-    expect(screen.getByText('Hazırlık görevi')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /Yeni madde/ })).toBeNull();
+    expect(screen.getAllByText('Durdurur').length).toBe(1);
+    expect(screen.getByText('Görev')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Yeni sütun/ })).toBeNull();
   });
 
   it('durduran maddenin formunda Açık kutusu kilitli; uyaran madde kapatılınca sürümle gönderilir', async () => {
@@ -74,9 +74,9 @@ describe('Hazırlık maddeleri (3396)', () => {
 
   it('yeni özel madde ekleme ucuna gider', async () => {
     const cagrilar = kur(true);
-    fireEvent.click(await screen.findByRole('button', { name: /Yeni madde/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Yeni sütun/ }));
     const p = await screen.findByRole('dialog');
-    fireEvent.change(within(p).getByLabelText(/^Ad/), { target: { value: 'Paketleme onayı' } });
+    fireEvent.change(within(p).getByLabelText(/Sütun adı/), { target: { value: 'Paketleme onayı' } });
     fireEvent.change(within(p).getByLabelText(/Kısa ad/), { target: { value: 'Paket' } });
     fireEvent.click(within(p).getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => expect(cagrilar.some((c) => c.yontem === 'POST')).toBe(true));

@@ -81,11 +81,18 @@ export function tasimaDenetimi(deger: unknown, g: Omit<IsTasiGovdesi, 'calismaSu
   const ops = plan !== null && nesne(plan.ops) ? plan.ops : null;
   if (ops === null) return h(cakisma('Çalışmada plan yok; önce planı kurun.'));
   const r = ops[g.isId];
+  // 3488 a: planda yeri olmayan (yerleşmeyen) adım da elle yerleştirilir: kilit onu verilen yere koyar. Adımın emirde olduğunu taşıma hesabı
+  // motorun derlemesinden denetler.
+  const yerlesmeyen = !nesne(r) && Array.isArray(plan?.fail) && plan.fail.includes(g.isId);
+  if (yerlesmeyen) return tezgahVeSaat(deger, g, an, h);
   if (!nesne(r)) return h(cakisma('İş planda bulunamadı; plan değişmiş olabilir, sayfayı yenileyin.'));
   if (r.bitti) return h(cakisma('Biten iş taşınamaz.'));
   if (r.act && r.done) return h(cakisma('Biten iş taşınamaz.'));
   if (surenIs(r) && surenKalani(deger, g.isId)?.kalan === 0) return h(cakisma('Bu işin bütün adedi yapılmış; taşınacak kalan adet yok. İş terminalde bitirilince plandan düşer.'));
   if (r.fas) return h(cakisma('Fason iş tezgâha taşınamaz.'));
+  return tezgahVeSaat(deger, g, an, h);
+}
+function tezgahVeSaat(deger: Nesne, g: Omit<IsTasiGovdesi, 'calismaSurumu'>, an: number, h: (r: KomutSonucu) => { hata: KomutHatasi }): { hata: KomutHatasi } | { deger: Nesne; simdi: number } {
   if (!kimligiVar(veriOf(deger).tezgahlar, 'id', g.tezgah)) return h(dogrulama('Tezgâh çalışmada yok.', 'tezgah'));
   const simdi = simdiSaati(deger, an);
   if (simdi === null) return h(cakisma(EKSENSIZ));
@@ -108,9 +115,10 @@ export function isTasi(deger: unknown, g: Omit<IsTasiGovdesi, 'calismaSurumu'>, 
   if (degisen.length === 0) return { deger: d.deger, degisti: false, ileti: sonuc.ileti };
   const yeni = kopya(d.deger);
   yeni.locks = { ...locks, ...yeniKilit };
-  const r = (planOf(d.deger)!.ops as Nesne)[g.isId] as Nesne;
-  const durdur = surenIs(r);
-  const ne = durdur ? 'Süren iş durduruldu, kalanı taşındı' : String(r.m) === g.tezgah ? 'İş saati kaydırıldı' : 'İş başka tezgâha taşındı';
+  const r = (planOf(d.deger)!.ops as Nesne)[g.isId];
+  // 3488 a: yerleşmeyen adımın planda satırı yoktur.
+  const durdur = nesne(r) && surenIs(r);
+  const ne = !nesne(r) ? 'Yerleşmeyen adım elle yerleştirildi' : durdur ? 'Süren iş durduruldu, kalanı taşındı' : String(r.m) === g.tezgah ? 'İş saati kaydırıldı' : 'İş başka tezgâha taşındı';
   const geri: GeriYama[] = degisen.map((id) => (locks[id] === undefined ? { yol: ['locks'], id } : { yol: ['locks'], id, once: locks[id] }));
   if (durdur) {
     const w = nesne(d.deger.w) ? d.deger.w : {};
@@ -118,7 +126,7 @@ export function isTasi(deger: unknown, g: Omit<IsTasiGovdesi, 'calismaSurumu'>, 
     geri.push(w.durdurulan === undefined ? { yol: ['w'], id: 'durdurulan' } : { yol: ['w'], id: 'durdurulan', once: w.durdurulan });
   }
   const ops = planOf(d.deger)!.ops as Nesne;
-  const emirler = [...new Set([g.isId, ...degisen].map((id) => (nesne(ops[id]) ? ops[id].job : null)))];
+  const emirler = [...new Set([g.isId, ...degisen].map((id) => (nesne(ops[id]) ? ops[id].job : id.lastIndexOf('.') > 0 ? id.slice(0, id.lastIndexOf('.')) : null)))];
   const isler = emirler.every((j): j is string => typeof j === 'string') ? emirler : ['*'];
   const ayrinti = `${g.isId} → ${g.tezgah}${sonuc.ileti === null ? '' : `; ${sonuc.ileti}`}`;
   return { deger: isle(d.deger, yeni, { ne, ayrinti, isler, geri }, k), degisti: true, ileti: sonuc.ileti };

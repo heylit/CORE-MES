@@ -153,7 +153,7 @@ function matKarmaUygula() {
     const cx = plan.cx || compile(st);
     /* 1473 a: malzemeyi tüketen adım (opU) malzemenin tahmini gelişinden önce başlıyorsa siparişte bir kez, en erken böyle adımla uyarılır */
     for (const j in cx.mat.res) { const m = cx.mat.res[j]; if (m.readyU == null || !m.opU) continue; let S = null, T = null;
-      for (const id in m.opU) { const r = plan.ops[id]; if (!r || r.pin || r.S >= m.opU[id] - 1e-9) continue; if (S == null || r.S < S) { S = r.S; T = m.opU[id]; } }
+      for (const id in m.opU) { const r = plan.ops[id]; if (!r || (r.pin && !(r.kilit && !r.act && !r.done)) || r.S >= m.opU[id] - 1e-9) continue; if (S == null || r.S < S) { S = r.S; T = m.opU[id]; } }
       if (S == null) continue;
       e.warn.push({ t: 'malzeme', j, txt: isFinite(T) ? `${j}: malzeme tahminen ${fmtDT(cx.D, T)} geliyor, iş ${fmtDT(cx.D, S)} başlıyor` : `${j}: malzeme eksik (stok ve sipariş yetmiyor), iş ${fmtDT(cx.D, S)} başlıyor` }); }
     return e;

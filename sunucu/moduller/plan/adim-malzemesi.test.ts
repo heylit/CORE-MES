@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { planGirdisi } from './plan-girdisi.ts';
-import { motorYukle, type MotorDurumu } from './plan-motoru.ts';
+import { motorYukle, type MotorDurumu, type MotorPlani } from './plan-motoru.ts';
 
 // 1473 a: siparişin malzemesi rotanın bütün adımlarının hammaddesidir; her satır tükettiği adımı taşır, motor malzemeyi o adımın başlangıcında
 // bekler, biten adımın malzemesini dağıtmaz. Veriler uydurmadır.
@@ -91,5 +91,45 @@ describe('plan motoru: malzeme tükettiği adımda beklenir (1473 a)', () => {
     const uyari = (m.evaluate(p, s, null, false) as { warn: { t: string; txt: string }[] }).warn.filter((w) => w.t === 'malzeme').map((w) => w.txt);
     assert.equal(uyari.length, 1, uyari.join(' | '));
     assert.match(uyari[0] ?? '', /^S1: malzeme .* geliyor/);
+  });
+
+  test('3488: elle kilitlenen adım malzemeyi beklemez ama malzemeden önce başlıyorsa uyarılır', () => {
+    // S1.20 salı 08:00'e (32) kilitli; H2 çarşamba 08:00'de (56) gelir. Motor kilidi kaydırmaz; uyarı verir.
+    const s = st({ locks: { 'S1.20': { m: 'T2', S: 32 } } });
+    const p = m.schedule(s, 'yeni', null);
+    assert.equal(p.ops['S1.20']?.S, 32);
+    const uyari = (m.evaluate(p, s, null, false) as { warn: { t: string; txt: string }[] }).warn.filter((w) => w.t === 'malzeme').map((w) => w.txt);
+    assert.equal(uyari.length, 1, uyari.join(' | '));
+    assert.match(uyari[0] ?? '', /^S1: malzeme .* geliyor, iş .* başlıyor/);
+  });
+
+  const malzemeUyarisi = (p: MotorPlani, s: MotorDurumu): string[] =>
+    (m.evaluate(p, s, null, false) as { warn: { t: string; txt: string }[] }).warn.filter((w) => w.t === 'malzeme').map((w) => w.txt);
+
+  test('3488: karma kipte termini belli olmayan malzemede de elle kilitli adım uyarılır', () => {
+    // H2'nin gelişi tahmindir (firma termini yok): karma kip adımı bekletmez, uyarır. Kilitli adım da bu uyarıyı alır.
+    // Karma kip motor durumunda matKarma bayrağıyla taşınır (durum.js), malzeme kipi sert kalır.
+    const s = st({ locks: { 'S1.20': { m: 'T2', S: 32 } }, w: { ...m.W0, mat: 'sert', matKarma: true } });
+    (s.D as { satinalma: Record<string, unknown>[] }).satinalma[0]!['tm'] = 'tahmin';
+    const p = m.schedule(s, 'yeni', null);
+    assert.equal(p.ops['S1.20']?.S, 32);
+    assert.ok(((p as unknown as { cx: unknown }).cx as { mat: { res: Record<string, { readyU?: number }> } }).mat.res['S1']?.readyU, 'karma kip gelişi bekletmeden uyarıya çevirdi');
+    const uyari = malzemeUyarisi(p, s);
+    assert.equal(uyari.length, 1, uyari.join(' | '));
+    assert.match(uyari[0] ?? '', /^S1: malzeme .* geliyor, iş .* başlıyor/);
+  });
+
+  test('3488: başlamış ya da bitmiş kilitli adım malzeme uyarısı almaz', () => {
+    const kilit = { 'S1.20': { m: 'T2', S: 32 } };
+    const once = m.schedule(st({ locks: kilit }), 'yeni', null);
+    assert.equal((once.ops['S1.20'] as { kilit?: number } | undefined)?.kilit, 1);
+    for (const gercek of [{ 'S1.20': { m: 'T2', S: 32 } }, { 'S1.20': { m: 'T2', S: 32, C: 33 } }]) {
+      const s = st({ locks: kilit, gercek });
+      const p = m.schedule(s, 'yeni', once);
+      assert.equal((p.ops['S1.20'] as { act?: number; kilit?: number } | undefined)?.act, 1);
+      assert.equal((p.ops['S1.20'] as { kilit?: number } | undefined)?.kilit, 1);
+      const uyari = malzemeUyarisi(p, s);
+      assert.equal(uyari.length, 0, `${JSON.stringify(gercek)} ${uyari.join(' | ')}`);
+    }
   });
 });

@@ -193,3 +193,7 @@ button.tc-prj-pano-kart { cursor: pointer; }
   padding: var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-1); background: var(--panel2); margin-bottom: var(--b-3);
 }
 .tc-prj-dagit-projeler { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+
+/* 3494-1 a: şablon satırında sütun seçimi ve yanında "Yeni sütun" düğmesi; dar ekranda düğme alta iner. */
+.tc-prj-alan-dugmeli { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--b-2); }
+.tc-prj-alan-dugmeli > :first-child { flex: 1 1 14rem; min-width: 0; }
