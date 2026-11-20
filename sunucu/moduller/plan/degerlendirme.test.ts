@@ -1,6 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
+import vm from 'node:vm';
 import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
@@ -8,12 +9,13 @@ import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { degerlendirmeCevabi, degerlendirmeDurumuCevabi, degerlendirmeGovdesi, degerlendirmeSonucu, type DegerlendirmeDurumuCevabi, type DegerlendirmeIstegi, type DegerlendirmeSonucu } from '#paylasilan/sozlesme/planlama.ts';
 import { HATA_DURUMU } from '#paylasilan/hata.ts';
 import { ISLEMLER } from '#paylasilan/islemler.ts';
+import { TESIS_SAAT_DILIMI } from '#paylasilan/zaman.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
-import { degerlendirmeBaslat, degerlendirmeDurumu, degerlendirmeYap, maliyetsiz, MESGUL, SONUC_OMRU_MS, type DegerlendirmeZarfi } from './degerlendirme.ts';
+import { degerlendirmeBaslat, degerlendirmeDurumu, degerlendirmeKodu, degerlendirmeYap, maliyetsiz, MESGUL, SONUC_OMRU_MS, type DegerlendirmeZarfi } from './degerlendirme.ts';
 import { DURUM_ANAHTARI } from '../recete-rota/disari.ts';
 import { PLANLAMA_ANAHTARI } from './disari.ts';
 import { planGirdisi, type KaynakOkumasi } from './plan-girdisi.ts';
@@ -728,6 +730,25 @@ describe('planlama değerlendirmesi: çok başlangıçlı ilk yerleştirme (3500
     const s = sonuc(await iste(0.6, { tur: 'plan-secenekleri' })); if (s.tur !== 'plan-secenekleri') return assert.fail(s.tur);
     assert.ok(s.secenekler.length > 0);
     for (const x of s.secenekler) assert.ok(gecikme(x.plan) <= ilk * 0.96, `denge ${String(x.denge)}: ${String(gecikme(x.plan))} <= ${String(ilk * 0.96)}`);
+  });
+
+  // Motorun saati sabit adımlıdır: hesaptan sonra bağlamın saati hesabın harcadığı iş miktarını verir. Motor sunucudaki gibi boş bağlamda yüklenir.
+  const harcanan = (istek: Record<string, unknown>, kural?: string): number => {
+    const b = vm.createContext({ GIRDI_SAAT_DILIMI: TESIS_SAAT_DILIMI }); b['self'] = b;
+    const m = vm.runInContext(degerlendirmeKodu(), b) as { degerlendir: (...a: unknown[]) => unknown };
+    assert.ok(m.degerlendir({ ...calismaKur(), w: { famK: 0.3, mat: 'sert', dondurma: 4, sure: 0.6, ...(kural ? { rule: kural } : {}) } }, kayit, BUYUK_KAYNAK, '2026-10-19', AN, istek));
+    return (vm.runInContext('Date.now()', b) as number) - AN;
+  };
+
+  test('CB-03: ek dizmelerin bedeli arama payından düşer, hesap süre ayarını aşmaz; ATCS dışı kuralda tek dizme yapılır, arama payı tam kalır', () => {
+    // Süre ayarı 0,6 sn (600 adımlık iş); plan seçeneklerinin payı 1500'dür. Arama son diliminde payı biraz aşar: bedel düşülmezse aşım ek dizmeler kadar büyür.
+    const kur = harcanan({ tur: 'plan-kur' }), secenek = harcanan({ tur: 'plan-secenekleri', sira: 0 });
+    assert.ok(kur < 600, `planı kur ${String(kur)} < 600`);
+    assert.ok(secenek < 1500, `plan seçenekleri ${String(secenek)} < 1500`);
+    // Öteki kurallar katsayı kullanmaz: ek dizme aynı planı verir, payı boşa yer.
+    const kurEdd = harcanan({ tur: 'plan-kur' }, 'edd'), secenekEdd = harcanan({ tur: 'plan-secenekleri', sira: 0 }, 'edd');
+    assert.ok(kurEdd >= 600, `planı kur, EDD ${String(kurEdd)} >= 600`);
+    assert.ok(secenekEdd >= 1500, `plan seçenekleri, EDD ${String(secenekEdd)} >= 1500`);
   });
 });
 
