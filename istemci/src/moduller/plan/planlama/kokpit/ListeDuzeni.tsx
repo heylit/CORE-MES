@@ -1,9 +1,11 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { Dugme, Rozet, type RozetTonu } from '../../../../ortak/arayuz/index.ts';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { Dugme, Rozet, Simge, type RozetTonu } from '../../../../ortak/arayuz/index.ts';
 import type { OkunanPlan } from '../motor/kurallar.ts';
+import { ElleYerlestir } from './ElleYerlestir.tsx';
 import { Hamleler, type HamleOzellikleri } from './Hamleler.tsx';
 import { DURDURMA_BEKLIYOR, durumYazisi as emirDurumYazisi, eksikNedeni, engelleyenAdim, sureYaz, type EmirDurumu, type KokpitModeli } from './kurallar.ts';
-import type { SiraKarti } from './yerlestirme.ts';
+import { adimYeri, type SiraKarti } from './yerlestirme.ts';
+import type { YerlestirmeHedefi } from './Yerlestirme.tsx';
 import { kartSonucu, listeSirasi } from './yol.ts';
 
 // Liste ortada düzeni (3414 b): tek sipariş tablosu. Satırda siparişin durumu ve tek düğme durur; satır açılınca o siparişin sonucu
@@ -29,6 +31,12 @@ export interface ListeDuzeniOzellikleri {
   satirBirincil: boolean;
   // Planda yeri olan adıma basınca iş seçilir ve tezgâhlarda görünür; seçili adıma yeniden basmak bırakır.
   adimSec: (emirId: string, isId: string) => void; seciliIs: string | null;
+  // 3488: yerleşmeyen adımı elle yerleştirme (taşıma komutu, adım o yerde kilitlenir) ve elle bölme. Yazamayan kişide ve turda null.
+  tasi?: ((isId: string, tezgah: string, baslangic: number) => void) | null;
+  bol?: ((isId: string) => void) | null;
+  // Elle yerleştirmede tahtada yanan yerler; seçili iş varsa elle yerleştirme açılınca seçim bırakılır (tahta seçili işin yerlerini çizer).
+  hedef?: (h: YerlestirmeHedefi | null) => void;
+  secimiBirak?: () => void;
 }
 
 // Açık satırın kendi birincil düğmesi var mı: plansızda Planla, geç ya da riskli siparişte Seçenekleri göster.
@@ -48,7 +56,13 @@ const durumYazisi = (k: SiraKarti): string => {
   return `${sureYaz(g)} geç`;
 };
 
-export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, yenidenPlanla, hamle, surum, malzemeBekleyen, tahta, satirBirincil, adimSec, seciliIs }: ListeDuzeniOzellikleri) {
+export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, yenidenPlanla, hamle, surum, malzemeBekleyen, tahta, satirBirincil, adimSec, seciliIs, tasi = null, bol = null, hedef, secimiBirak }: ListeDuzeniOzellikleri) {
+  // Elle yerleştirilen adım (3488 a); satır kapanınca ya da başka iş seçilince düşer.
+  const [elle, setElle] = useState<string | null>(null);
+  useEffect(() => { setElle(null); }, [acik]);
+  useEffect(() => { if (seciliIs !== null) setElle(null); }, [seciliIs]);
+  const elleKapat = useCallback(() => { setElle(null); }, []);
+  const bosHedef = useCallback(() => undefined, []);
   const [secenekAcik, setSecenekAcik] = useState(false);
   useEffect(() => { setSecenekAcik(false); }, [acik]);
   // Basılan Planla düğmesi iş sürerken döner; iş bitince (mesgul düşünce) bırakılır.
@@ -114,20 +128,35 @@ export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, ye
                           const x = m.isler[a.id];
                           // Yerleşmeyen adımı tutan adım planda varsa (ör. ufka taşan önceki adım) basınca o gösterilir.
                           const engel = x ? null : engelleyenAdim(p, m.isler, a.id);
-                          const hedef = x ? a.id : engel;
+                          const gosterilen = x ? a.id : engel;
                           const govde = (
                             <>
                               <span>{String(i + 1)}. {a.ad}</span>
                               <small data-yeri-yok={x ? undefined : a.id}>{x ? `${x.fason ? 'Fason' : kod(x.m)} · ${zaman(x.S)} → ${zaman(x.C).slice(6)}${x.ufukDisi ? ` · ufuk sonrasında ${sureYaz(x.ufukDisi)} çalışma` : ''}` : `yeri yok: ${eksikNedeni(p, a.id)}`}</small>
+                              {x?.kilitli && <small className="tc-pyq-ld-kilit" data-elle-kilit={a.id}><Simge ad="lock" boyut="k" />elle · kilitli</small>}
                               {x?.durdurmaBekliyor && <small data-durdurma-bekliyor={a.id}>{DURDURMA_BEKLIYOR}; canlıda eski yerinde</small>}
                             </>
                           );
-                          const hedefIs = hedef === null ? undefined : m.isler[hedef];
+                          const hedefIs = gosterilen === null ? undefined : m.isler[gosterilen];
+                          // Yerleşmeyen tezgâh adımı elle yerleştirilir ya da bölünür (3488); fason adımı sistem yerleştirir.
+                          // Önceki adımı da yerleşmediyse önce o yerleştirilir (sunucu da reddeder): düğme yerine sırası yazılır.
+                          const oncekiYok = e.adimlar.slice(0, i).findIndex((o) => m.isler[o.id] === undefined);
+                          const elleOlur = !x && tasi !== null && adimYeri(m, a, {}) === 'bos' && oncekiYok < 0;
                           return (
                             <li key={a.id} data-yok={x ? undefined : ''}>
-                              {hedef !== null && hedefIs
-                                ? <button type="button" data-adim={a.id} data-engel={engel ?? undefined} aria-pressed={x ? seciliIs === a.id : undefined} title={x ? 'Tezgâhlarda göster' : 'Bu adımı tutan önceki adımı tezgâhlarda göster'} onClick={() => { adimSec(hedefIs.job, hedef); }}>{govde}</button>
+                              {gosterilen !== null && hedefIs
+                                ? <button type="button" data-adim={a.id} data-engel={engel ?? undefined} aria-pressed={x ? seciliIs === a.id : undefined} title={x ? 'Tezgâhlarda göster' : 'Bu adımı tutan önceki adımı tezgâhlarda göster'} onClick={() => { adimSec(hedefIs.job, gosterilen); }}>{govde}</button>
                                 : govde}
+                              {!x && tasi !== null && oncekiYok >= 0 && adimYeri(m, a, {}) === 'bos' && <small data-once-yerlestir={a.id}>Önce {String(oncekiYok + 1)}. adımı yerleştirin; bu adım ondan sonra gelir.</small>}
+                              {elleOlur && elle !== a.id && (
+                                <span className="tc-pyq-ld-elle-eylem">
+                                  <Dugme tur="ikincil" simge="pin" data-elle-ac={a.id} disabled={mesgul} onClick={() => { secimiBirak?.(); setElle(a.id); }}>Elle yerleştir</Dugme>
+                                  {bol && <Dugme tur="ikincil" simge="layers" data-bol-ac={a.id} disabled={mesgul} onClick={() => { bol(a.id); }}>Böl</Dugme>}
+                                </span>
+                              )}
+                              {elleOlur && elle === a.id && tasi && (
+                                <ElleYerlestir m={m} e={e} isId={a.id} ad={a.ad} zaman={zaman} surum={surum} hedef={hedef ?? bosHedef} tasi={tasi} bol={bol} kapat={elleKapat} />
+                              )}
                             </li>
                           );
                         })}

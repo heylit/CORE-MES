@@ -17,6 +17,7 @@ import { girdiSaati, girdidenSaat } from '../ic/veri/kurallar.ts';
 import { useEmirNo } from '../ortak/emir-no.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import { AdimSorunu } from './AdimSorunu.tsx';
+import { ElleBol } from './ElleBol.tsx';
 import { Ayarlar } from './Ayarlar.tsx';
 import { useBitinceBildir } from './bitince-bildir.ts';
 import { emirYonu, planYonu } from './ayarlar.ts';
@@ -192,6 +193,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const [sorunTezgahi, setSorunTezgahi] = useState<{ tezgah: string; n: number } | null>(null);
   // Sorun bildirilen adım (3335-3b); paneli Ayarlar ve Duruş ve mesai ile aynı yerdedir, biri açılınca öteki kapanır.
   const [sorunAdimi, setSorunAdimi] = useState<string | null>(null);
+  // Elle bölünen adım (3488 c); paneli öteki panellerle aynı yerdedir, onlar açıksa önce onlar görünür.
+  const [bolAdimi, setBolAdimi] = useState<string | null>(null);
   // Üst şeritteki yön düğmesi paneli o yönle açar ve etkisini hesaplatır; geçerli yönün düğmesi paneli yön bölümüyle açar (ölü tıklama olmasın).
   const [ayarYon, setAyarYon] = useState<'ileri' | 'geri' | null>(null);
   // Ayarın etkisi Uygula ya da Vazgeç beklerken taslak çubuğundaki birincil düğme kapanır: ekranda tek birincil kalır.
@@ -276,9 +279,9 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     // Yön geri alınamazsa (araya başka değişiklik girdiyse) taslakta kalır; kişiye söylenir.
     if (!tamam && yonYaz && !(await taslak.geriAl(true, false))) bildir('hata', 'Emir yerleştirilemedi; yön değişikliği kaldı. Geri al ile alabilirsiniz.');
     if (tamam && a.planaAl === undefined && grup.current?.bekleyen.has(a.isId)) { grup.current.yazilan += 1; return tamam; }
-    if (tamam) bildir('bilgi', a.planaAl === undefined ? 'İş taşındı; Geri al ile alınır.' : yonYaz ? 'Emir teslimden geriye planlandı (iki değişiklik: yön ve yerleşim); Geri al ile alınır.' : 'Emir planlandı; Geri al ile alınır.');
+    if (tamam) bildir('bilgi', a.planaAl === undefined ? (m.isler[a.isId] ? 'İş taşındı; Geri al ile alınır.' : 'Adım elle yerleştirildi ve o yerde kilitlendi; Geri al ile alınır.') : yonYaz ? 'Emir teslimden geriye planlandı (iki değişiklik: yön ve yerleşim); Geri al ile alınır.' : 'Emir planlandı; Geri al ile alınır.');
     return tamam;
-  }, [taslak, yazabilir, bildir, c]);
+  }, [taslak, yazabilir, bildir, c, m.isler]);
   // Yeniden planlama isteği taslağa kendi satırıyla yazılır (Geri onu ve dizmesini birlikte alır); plan taslağın görünümünde yeniden dizilir.
   const yenidenPlanla = useCallback(async (isler: readonly string[], ileti: string): Promise<void> => {
     if (!taslak || !yazabilir || isler.length === 0) return;
@@ -297,8 +300,9 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const [sirada, setSirada] = useState(0);
   const [tasimaBitti, setTasimaBitti] = useState(0);
   const tasiDene = useCallback((isId: string, tezgah: string, hedefS: number): void => {
-    const x = m.isler[isId], e = x ? emir.get(x.job) : undefined;
-    if (!x) return;
+    // 3488 a: yerleşmeyen adımın planda satırı yoktur; emri adımlarından bulunur, taşıma onu verilen yerde kilitler.
+    const x = m.isler[isId], e = x ? emir.get(x.job) : m.emirler.find((y) => y.adimlar.some((a) => a.id === isId));
+    if (!x && !e) return;
     if (mesgul || tasiyor.current || onay !== null) { kuyruk.current.set(isId, { tezgah, S: hedefS }); setSirada(kuyruk.current.size); return; }
     tasiyor.current = true; suren.current = { isId, tezgah, S: hedefS };
     const bitir = (): void => {
@@ -645,6 +649,10 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const adimSorunu = yazabilir && !tur
     ? (isId: string): void => { setAyarAcik(false); setAyarYon(null); setKapasiteAcik(false); setSorunTezgahi(null); setEngelAcik(false); setSorunAdimi(isId); }
     : null;
+  // Elle böl (3488 c): yerleşmeyen adımın satırından açılır; öteki paneller kapanır.
+  const elleBolAc = yazabilir && !tur
+    ? (isId: string): void => { setAyarAcik(false); setAyarYon(null); setKapasiteAcik(false); setSorunTezgahi(null); setEngelAcik(false); setSorunAdimi(null); setBolAdimi(isId); }
+    : null;
   const adimEk = useMemo(() => adimEkleri(c), [c]);
   const adimBekle = useMemo(() => adimBeklemeleri(c, m.simdi), [c, m.simdi]);
   const listeKartlari = useMemo(() => kartlar.filter((k) => k.emirler.some((e) => gorunenKume.has(e.id))), [kartlar, gorunenKume]);
@@ -868,6 +876,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
             planla={yazabilir && c.plan !== null ? (k) => { void yenidenPlanla(k.emirler.filter((e) => e.durum === 'plansiz').map((e) => e.id), `${k.siparis?.no ?? k.emirler[0]?.no ?? ''} planlandı.`); } : null}
             yenidenPlanla={yazabilir && c.plan !== null ? (k) => { void yenidenPlanla(k.emirler.map((e) => e.id), `${k.siparis?.no ?? k.emirler[0]?.no ?? ''} yeniden planlandı.`); } : null}
             tahta={listeTahtasi} satirBirincil={satirBirincil} adimSec={listeAdimSec} seciliIs={secIs}
+            tasi={yazabilir && !tur ? tasiDene : null} bol={elleBolAc} hedef={setYerHedefi} secimiBirak={() => { sec(null, null); }}
           />
           {butunTezgahlar && !vurgu && <section className="tc-pyq-bolum tc-pyq-bolum-plan" aria-label="Tezgâhlar"><h2>Tezgâhlar</h2>{listeTahtasi}</section>}
             </>
@@ -880,6 +889,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         ) : engelAcik ? (
           <Engeller gruplar={engelGruplari} ozet={engelOzet} ufukSonu={zaman(ufukSonu)} kapat={() => { setEngelAcik(false); }}
             emirGoster={(e) => { setEngelAcik(false); sec(e, null); }} mesaiAc={() => { setEngelAcik(false); setKapasiteAcik(true); }} acabilir={yetki.islemVar} />
+        ) : bolAdimi !== null ? (
+          <ElleBol key={bolAdimi} c={c} m={m} isId={bolAdimi} taslak={taslak} yazabilir={yazabilir} kapat={() => { setBolAdimi(null); }} />
         ) : null}
         </div>
       ) : (
@@ -941,6 +952,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         ) : engelAcik ? (
           <Engeller gruplar={engelGruplari} ozet={engelOzet} ufukSonu={zaman(ufukSonu)} kapat={() => { setEngelAcik(false); }}
             emirGoster={(e) => { setEngelAcik(false); sec(e, null); }} mesaiAc={() => { setEngelAcik(false); setKapasiteAcik(true); }} acabilir={yetki.islemVar} />
+        ) : bolAdimi !== null ? (
+          <ElleBol key={bolAdimi} c={c} m={m} isId={bolAdimi} taslak={taslak} yazabilir={yazabilir} kapat={() => { setBolAdimi(null); }} />
         ) : null}
       </div>
       )}
