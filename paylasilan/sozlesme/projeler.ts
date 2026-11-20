@@ -275,6 +275,8 @@ const gorevPlanAlanlari = {
   kontrolRolId: kimlikYaDaYok,
   yedekKontrolKisiId: kimlikYaDaYok,
   yedekKontrolRolId: kimlikYaDaYok,
+  // 3458: kanıtı zorunlu görev kanıtsız bitmez. Verilmezse eklemede kapalı, düzenlemede olduğu gibi kalır.
+  kanitZorunlu: z.boolean().optional(),
 };
 const planSirasi = (g: { planBaslangic: string; planBitis: string }) => g.planBitis >= g.planBaslangic;
 const PLAN_SIRASI = { message: 'Plan bitişi başlangıçtan önce olamaz.', path: ['planBitis'] };
@@ -330,6 +332,10 @@ export const gorevSemasi = z.object({
   onaylandi: z.boolean(),
   // 3430 a: hazırlık görevi (maddeye ve emre bağlı) listede "Hazırlık" rozetiyle ayrılır; proje görevinde null.
   hazirlikMaddesi: z.string().nullable(),
+  // 3458: kanıt zorunluluğu ve yapılacak adımların sayısı (adımı olan görevde ilerleme bunlardan gelir).
+  kanitZorunlu: z.boolean(),
+  adimToplam: z.number().int(),
+  adimYapilan: z.number().int(),
   surum: surumSemasi,
 });
 
@@ -373,12 +379,40 @@ export const gorevOlayiSemasi = z.object({
 export const gorevIzinleriSemasi = z.object({
   ustlenebilir: z.boolean(), baslayabilir: z.boolean(), bitirebilir: z.boolean(), onaylayabilir: z.boolean(),
 });
+// 3458: görevin içi. Adım işaretleyen ve kanıt ekleyen atanmış yapandır; adım listesini görev yazan da değiştirir; not herkesindir.
+export const gorevAdimiSemasi = z.object({
+  id: z.number().int(), ad: z.string(), yapildi: z.boolean(), yapanAd: z.string().nullable(), an: zamanSemasi.nullable(),
+});
+export const gorevNotuSemasi = z.object({ id: z.number().int(), kisiAd: z.string().nullable(), metin: z.string(), an: zamanSemasi });
+export const gorevKanitiSemasi = z.object({
+  ozet: z.string(), ad: z.string(), boyut: z.number().int(), tur: z.string(), ekleyenAd: z.string().nullable(), zaman: z.string(),
+});
+export const gorevIcerikIzinleriSemasi = z.object({
+  adimIsaretler: z.boolean(), adimYazar: z.boolean(), kanitEkler: z.boolean(), notYazar: z.boolean(),
+});
 export const gorevAyrintisiCevabi = z.object({
   gorev: gorevSemasi,
   proje: z.object({ id: z.number().int(), kod: z.string(), ad: z.string() }),
   olaylar: z.array(gorevOlayiSemasi),
   izinler: gorevIzinleriSemasi,
+  adimlar: z.array(gorevAdimiSemasi),
+  notlar: z.array(gorevNotuSemasi),
+  kanitlar: z.array(gorevKanitiSemasi),
+  icerikIzinleri: gorevIcerikIzinleriSemasi,
 });
+export const adimEkleGovdesi = z.object({ ad: zorunluMetin(200, 'Adım adı zorunlu.') });
+export const adimIsaretleGovdesi = z.object({ yapildi: z.boolean() });
+export const adimParametresi = gorevParametresi.extend({ adimId: z.coerce.number<number>().int().positive().max(2147483647) });
+export const notEkleGovdesi = z.object({ metin: zorunluMetin(2000, 'Not boş olamaz.') });
+export const kanitBaglaGovdesi = z.object({ ozet: z.string().regex(/^[0-9a-f]{64}$/), dosyaAdi: zorunluMetin(200, 'Dosya adı zorunlu.') });
+export const kanitParametresi = gorevParametresi.extend({ ozet: z.string().regex(/^[0-9a-f]{64}$/) });
+export type AdimEkleGovdesi = z.input<typeof adimEkleGovdesi>;
+export type AdimIsaretleGovdesi = z.input<typeof adimIsaretleGovdesi>;
+export type NotEkleGovdesi = z.input<typeof notEkleGovdesi>;
+export type KanitBaglaGovdesi = z.input<typeof kanitBaglaGovdesi>;
+export type GorevAdimi = z.output<typeof gorevAdimiSemasi>;
+export type GorevNotu = z.output<typeof gorevNotuSemasi>;
+export type GorevKaniti = z.output<typeof gorevKanitiSemasi>;
 // Proje görevlerim: kişinin açık görevleri. "bana" kişiye atanan, "rolume" rolüne açık (üstlenilmemiş), "kontrolumde" onayını
 // bekleyen, "yaptim" kişinin bitirip kontrolde bekleyen görevi.
 export const GOREVLERIM_TURLERI = ['bana', 'rolume', 'kontrolumde', 'yaptim'] as const;

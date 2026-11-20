@@ -22,7 +22,7 @@ const YONETIM: ProjeYonetimiCevabi = {
     planBaslangic: '2026-10-01', planBitis: '2026-10-10', gercekBaslangic: null, gercekBitis: null, ilerleme: 0, durum: 'yapilacak',
     oncekiGorevId: null, asama: null, yapanRolId: null, yapanRolAd: null, kontrolKisiId: null, kontrolKisiAd: null, kontrolRolId: null,
     kontrolRolAd: null, yedekKontrolKisiId: null, yedekKontrolKisiAd: null, yedekKontrolRolId: null, yedekKontrolRolAd: null, onaylandi: false, hazirlikMaddesi: null,
-    surum: 1,
+    kanitZorunlu: false, adimToplam: 0, adimYapilan: 0, surum: 1,
   }],
 };
 const GOREVLERIM: GorevlerimCevabi = { gorevler: [] };

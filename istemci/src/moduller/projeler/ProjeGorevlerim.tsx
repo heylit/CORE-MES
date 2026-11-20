@@ -1,13 +1,12 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import type { GorevlerimCevabi, GorevlerimSatiri, GorevlerimTuru } from '#paylasilan/sozlesme/projeler.ts';
 import { DurumKutusu, Kart, Rozet, SayiKarti, Sekmeler, Tablo, type Sekme, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { GOREV_DURUM_TONU, KADEME_TONU, atamaMetni, bugun, gorevDurumMetni, kademeMetni, tarihMetni } from './gosterim.ts';
-import { GorevPaneli } from './GorevPaneli.tsx';
-import { gorevGecikiyor } from './ProjeGorevleri.tsx';
+import { GorevIlerlemesi, YapanMetni, gorevGecikiyor } from './ProjeGorevleri.tsx';
 import './projeler.css';
 
 type Suzgec = 'hepsi' | 'geciken' | GorevlerimTuru;
@@ -21,7 +20,7 @@ const SIRA: Record<GorevlerimTuru, number> = { kontrolumde: 0, bana: 1, rolume: 
 // 3269 a: kişinin bütün açık proje görevleri tek listede. Projeyi okuyamayan kişi de kendi görevini ve projenin kodunu görür.
 export function ProjeGorevlerim() {
   const [suzgec, suzgecYaz] = useState<Suzgec>('hepsi');
-  const [panel, panelYaz] = useState<number | null>(null);
+  const yonlendir = useNavigate();
   const l = useQuery({ queryKey: anahtarlar.gorevlerim, queryFn: () => api.get<GorevlerimCevabi>('/projeler/gorevlerim/liste') });
   const gun = bugun();
   const hepsi = [...(l.data?.gorevler ?? [])].sort((a, b) => SIRA[a.tur] - SIRA[b.tur] || a.planBitis.localeCompare(b.planBitis));
@@ -40,11 +39,12 @@ export function ProjeGorevlerim() {
       <span>{g.ad}<span className="tc-prj-soluk"> · {TUR_METNI[g.tur]}</span></span>
     ), csv: (g) => g.ad },
     { anahtar: 'proje', baslik: 'Proje', mono: true, kirilmaz: true, hucre: (g) => <Link to={`/projeler/${g.projeId}`}>{g.projeKod}</Link>, csv: (g) => g.projeKod },
-    { anahtar: 'yapan', baslik: 'Yapan', kirilmaz: true, hucre: (g) => atamaMetni(g.sorumluAd, g.yapanRolAd) },
+    { anahtar: 'yapan', baslik: 'Yapan', hucre: (g) => <YapanMetni g={g} />, csv: (g) => atamaMetni(g.sorumluAd, g.yapanRolAd) },
     { anahtar: 'kontrol', baslik: 'Kontrol eden', kirilmaz: true, hucre: (g) => atamaMetni(g.kontrolKisiAd, g.kontrolRolAd, 'Yok') },
     { anahtar: 'bitis', baslik: 'Bitiş', mono: true, kirilmaz: true, hucre: (g) => (
       <span className={gorevGecikiyor(g, gun) ? 'tc-prj-gec' : undefined}>{tarihMetni(g.planBitis)}</span>
     ), csv: (g) => g.planBitis },
+    { anahtar: 'ilerleme', baslik: 'İlerleme', hucre: (g) => <GorevIlerlemesi g={g} />, csv: (g) => String(g.ilerleme) },
     { anahtar: 'durum', baslik: 'Durum', hucre: (g) => <Rozet ton={GOREV_DURUM_TONU[g.durum]}>{gorevDurumMetni(g)}</Rozet>, csv: gorevDurumMetni },
     ...(hepsi.some((g) => g.kademe !== null) ? [{
       anahtar: 'kademe', baslik: 'Kademe', kirilmaz: true,
@@ -72,7 +72,7 @@ export function ProjeGorevlerim() {
                 sutunlar={sutunlar}
                 satirlar={satirlar}
                 satirAnahtari={(g) => g.id}
-                satirSec={(g) => { panelYaz(g.id); }}
+                satirSec={(g) => { void yonlendir(`/proje-gorevlerim/${String(g.id)}`); }}
                 yukleniyor={l.isPending}
                 bosMesaj="Sana düşen açık proje görevi yok"
               />
@@ -80,7 +80,6 @@ export function ProjeGorevlerim() {
           <p className="tc-prj-soluk">Görev sana ya da rolüne atanınca ve kontrolüne düşünce bildirim gelir.</p>
         </div>
       </Kart>
-      {panel !== null && <GorevPaneli gorevId={panel} kapat={() => { panelYaz(null); }} />}
     </div>
   );
 }

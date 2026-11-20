@@ -3,13 +3,14 @@ import { useQuery } from '@tanstack/react-query';
 import type {
   Gorev, GorevDurumu, GorevEkleGovdesi, GorevGuncelleGovdesi, ProjeYonetimiCevabi, SablonSecenekleriCevabi,
 } from '#paylasilan/sozlesme/projeler.ts';
-import { CokSatir, Dugme, Girdi, Kart, Menu, Pencere, Rozet, Secim, Tablo, type MenuOgesi, type Sutun } from '../../ortak/arayuz/index.ts';
+import { useNavigate } from 'react-router-dom';
+import { CokSatir, Dugme, Girdi, IsaretKutusu, Kart, Menu, Pencere, Rozet, Secim, Tablo, type MenuOgesi, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import {
   GOREV_DURUMLARI, GOREV_DURUM_METNI, GOREV_DURUM_TONU, GOREV_ISLEMI, atamaMetni, bugun, gorevDurumMetni, gunFarki, sapmaMetni, tarihMetni,
 } from './gosterim.ts';
-import { AtamaSecimi, GorevPaneli, atamaCoz, atamaDegeri, useAtamaSecenekleri } from './GorevPaneli.tsx';
+import { AtamaSecimi, atamaCoz, atamaDegeri, useAtamaSecenekleri } from './Atama.tsx';
 import { bosIseNull, sayiYaDaNull, useIslemVar, useYonetimKomutu } from './komut.ts';
 import { HazirlikGorevleriAc, ProjeHazirlik, useHazirlikAcilabilir } from './ProjeHazirlik.tsx';
 
@@ -64,7 +65,6 @@ export function ProjeGorevleri({ projeId, yonetim, acik, emirleriGorur }: {
   const [secilenGorunum, gorunumYaz] = useState<Gorunum>('tablo');
   const gorunum = secilenGorunum === 'matris' && !emirleriGorur ? 'tablo' : secilenGorunum;
   const [form, formYaz] = useState<Gorev | 'yeni' | null>(null);
-  const [panel, panelYaz] = useState<number | null>(null);
   const [sablondan, sablondanYaz] = useState(false);
   const [hazirlikAcik, hazirlikAcikYaz] = useState(false);
   const hazirlikAcilabilir = useHazirlikAcilabilir(projeId, emirleriGorur);
@@ -77,9 +77,9 @@ export function ProjeGorevleri({ projeId, yonetim, acik, emirleriGorur }: {
   const genis = useGenisEkran();
   const yil = gun.slice(0, 4);
   const taslar = new Map(yonetim.kilometreTaslari.map((t) => [t.id, t.ad]));
-  // 3269 a: satır görevin yan panelini açar (akış düğmeleri ve geçmiş); düzenleme panelden.
-  const sec = (g: Gorev) => { panelYaz(g.id); };
-  const paneldeki = yonetim.gorevler.find((g) => g.id === panel);
+  // 3458 (1 b): satır görevin kendi sayfasını açar (içerik, akış düğmeleri, düzenleme ve geçmiş orada).
+  const yonlendir = useNavigate();
+  const sec = (g: Gorev) => { void yonlendir(`/proje-gorevlerim/${String(g.id)}`); };
 
   const sutunlar: Sutun<Gorev>[] = [
     { anahtar: 'ad', baslik: 'Görev', hucre: (g) => (
@@ -90,7 +90,7 @@ export function ProjeGorevleri({ projeId, yonetim, acik, emirleriGorur }: {
         {g.asama !== null && <span className="tc-prj-soluk"> · {g.asama}</span>}
       </span>
     ), csv: gorevCsvAdi },
-    { anahtar: 'yapan', baslik: 'Yapan', hucre: (g) => atamaMetni(g.sorumluAd, g.yapanRolAd) },
+    { anahtar: 'yapan', baslik: 'Yapan', hucre: (g) => <YapanMetni g={g} />, csv: (g) => atamaMetni(g.sorumluAd, g.yapanRolAd) },
     { anahtar: 'kontrol', baslik: 'Kontrol eden', hucre: (g) => atamaMetni(g.kontrolKisiAd, g.kontrolRolAd, 'Yok') },
     { anahtar: 'plan', baslik: 'Plan', mono: true, hucre: (g) => `${kisaTarih(g.planBaslangic, yil)} – ${kisaTarih(g.planBitis, yil)}`, csv: (g) => `${tarihMetni(g.planBaslangic)} – ${tarihMetni(g.planBitis)}` },
     { anahtar: 'gercek', baslik: 'Gerçekleşen', mono: true, hucre: (g) => (
@@ -100,7 +100,7 @@ export function ProjeGorevleri({ projeId, yonetim, acik, emirleriGorur }: {
       const s = gorevSapmasi(g, gun);
       return <span className={s !== null && s > 0 ? 'tc-prj-gec' : undefined}>{sapmaMetni(s)}</span>;
     } },
-    { anahtar: 'ilerleme', baslik: 'İlerleme', hucre: (g) => <Ilerleme deger={g.ilerleme} /> },
+    { anahtar: 'ilerleme', baslik: 'İlerleme', hucre: (g) => <GorevIlerlemesi g={g} />, csv: (g) => String(g.ilerleme) },
     { anahtar: 'durum', baslik: 'Durum', sabit: 'sag', hucre: (g) => <Rozet ton={GOREV_DURUM_TONU[g.durum]}>{gorevDurumMetni(g)}</Rozet>, csv: gorevDurumMetni },
   ];
 
@@ -133,15 +133,8 @@ export function ProjeGorevleri({ projeId, yonetim, acik, emirleriGorur }: {
           />
         )
         : <GorevPanosu gorevler={yonetim.gorevler} gun={gun} sec={sec} />}
-      {panel !== null && form === null && (
-        <GorevPaneli
-          gorevId={panel} kapat={() => { panelYaz(null); }}
-          duzenle={yazabilir && paneldeki !== undefined ? () => { formYaz(paneldeki); } : undefined}
-          iptalEdebilir={yazabilir}
-        />
-      )}
       {form !== null && (
-        <GorevFormu projeId={projeId} yonetim={yonetim} gorev={form === 'yeni' ? null : form} kapat={() => { formYaz(null); panelYaz(null); }} />
+        <GorevFormu projeId={projeId} yonetim={yonetim} gorev={form === 'yeni' ? null : form} kapat={() => { formYaz(null); }} />
       )}
       {sablondan && <SablondanEkle projeId={projeId} kapat={() => { sablondanYaz(false); }} />}
     </Kart>
@@ -227,7 +220,25 @@ function SablondanEkle({ projeId, kapat }: { projeId: number; kapat: () => void 
   );
 }
 
-function GorevFormu({ projeId, yonetim, gorev, kapat }: {
+// 3458: rol görevinde kimin üstlendiği listede de görünür; adımı olan görevde ilerlemenin yanında adım sayısı ve kanıt zorunluluğu.
+export function YapanMetni({ g }: { g: Pick<Gorev, 'sorumluAd' | 'yapanRolAd'> }) {
+  if (g.yapanRolAd === null) return <>{atamaMetni(g.sorumluAd, null)}</>;
+  return <span>{atamaMetni(null, g.yapanRolAd)} <span className="tc-prj-soluk">· {g.sorumluAd === null ? 'üstlenen yok' : `üstlenen ${g.sorumluAd}`}</span></span>;
+}
+export function GorevIlerlemesi({ g }: { g: Pick<Gorev, 'ilerleme' | 'adimToplam' | 'adimYapilan' | 'kanitZorunlu'> }) {
+  return (
+    <span className="tc-prj-ilerleme-hucre">
+      <Ilerleme deger={g.ilerleme} />
+      {(g.adimToplam > 0 || g.kanitZorunlu) && (
+        <span className="tc-prj-soluk">
+          {[g.adimToplam > 0 ? `${String(g.adimYapilan)}/${String(g.adimToplam)} adım` : null, g.kanitZorunlu ? 'kanıt ister' : null].filter(Boolean).join(' · ')}
+        </span>
+      )}
+    </span>
+  );
+}
+
+export function GorevFormu({ projeId, yonetim, gorev, kapat }: {
   projeId: number; yonetim: ProjeYonetimiCevabi; gorev: Gorev | null; kapat: () => void;
 }) {
   const kimlik = useId();
@@ -245,6 +256,7 @@ function GorevFormu({ projeId, yonetim, gorev, kapat }: {
   const [gercekBitis, gercekBitisYaz] = useState(gorev?.gercekBitis ?? '');
   const [ilerleme, ilerlemeYaz] = useState(gorev === null ? '0' : String(gorev.ilerleme));
   const [durum, durumYaz] = useState<GorevDurumu>(gorev?.durum ?? 'yapilacak');
+  const [kanitZorunlu, kanitZorunluYaz] = useState(gorev?.kanitZorunlu ?? false);
   // Sunucu da reddeder (409): kontrolde bekleyen görevin kontrol edeni iş bittikten sonra seçilmez.
   const kontrolKilitli = gorev?.durum === 'kontrolde';
   const atamalar = useAtamaSecenekleri();
@@ -279,6 +291,7 @@ function GorevFormu({ projeId, yonetim, gorev, kapat }: {
       kontrolRolId: k.rolId,
       yedekKontrolKisiId: yd.kisiId,
       yedekKontrolRolId: yd.rolId,
+      kanitZorunlu,
     };
     komut.mutate(gorev === null ? plan satisfies GorevEkleGovdesi : {
       ...plan,
@@ -327,6 +340,7 @@ function GorevFormu({ projeId, yonetim, gorev, kapat }: {
         )}
         <Girdi etiket="Plan başlangıç" type="date" required value={planBaslangic} onChange={(e) => { planBaslangicYaz(e.target.value); }} />
         <Girdi etiket="Plan bitiş" type="date" required value={planBitis} onChange={(e) => { planBitisYaz(e.target.value); }} />
+        <IsaretKutusu etiket="Bitirmek için kanıt zorunlu" checked={kanitZorunlu} onChange={(e) => { kanitZorunluYaz(e.target.checked); }} />
         <Secim
           etiket="Önceki görev" value={oncekiId} bosSecenek="Yok" secenekler={oncekiSecenekleri}
           ipucu="Bu görev hangi görevin ardından başlar."

@@ -302,11 +302,12 @@ export interface GorevSatiri {
   onceki_gorev_id: number | null; surum: number;
   asama: string | null; yapan_rol_id: number | null; kontrol_kisi_id: number | null; kontrol_rol_id: number | null;
   yedek_kontrol_kisi_id: number | null; yedek_kontrol_rol_id: number | null; onaylandi: boolean; hazirlik_maddesi: string | null;
+  kanit_zorunlu: boolean;
 }
 const GOREV_SUTUNLARI = [
   'id', 'proje_id', 'kilometre_tasi_id', 'ad', 'aciklama', 'sorumlu_kisi_id', 'plan_baslangic', 'plan_bitis', 'gercek_baslangic', 'gercek_bitis',
   'ilerleme', 'durum', 'onceki_gorev_id', 'surum', 'asama', 'yapan_rol_id', 'kontrol_kisi_id', 'kontrol_rol_id', 'yedek_kontrol_kisi_id',
-  'yedek_kontrol_rol_id', 'onaylandi', 'hazirlik_maddesi',
+  'yedek_kontrol_rol_id', 'onaylandi', 'hazirlik_maddesi', 'kanit_zorunlu',
 ] as const;
 const GOREV_ALANLARI = GOREV_SUTUNLARI.join(', ');
 const GOREV_SECIMI = `SELECT ${GOREV_ALANLARI} FROM projeler_gorev`;
@@ -336,15 +337,17 @@ export interface GorevAlanlari {
   kilometreTasiId: number | null; ad: string; aciklama: string | null; sorumluKisiId: number | null; planBaslangic: string; planBitis: string;
   oncekiGorevId: number | null; asama: string | null; yapanRolId: number | null; kontrolKisiId: number | null; kontrolRolId: number | null;
   yedekKontrolKisiId: number | null; yedekKontrolRolId: number | null;
+  // 3458: verilmezse eklemede false, düzenlemede olduğu gibi kalır.
+  kanitZorunlu?: boolean | undefined;
 }
 
 export async function gorevEkle(db: Db, projeId: number, g: GorevAlanlari, kisiId: number): Promise<number> {
   const satir = await db.tek<{ id: number }>(
     `INSERT INTO projeler_gorev (proje_id, kilometre_tasi_id, ad, aciklama, sorumlu_kisi_id, plan_baslangic, plan_bitis, onceki_gorev_id, olusturan_id,
-                                 asama, yapan_rol_id, kontrol_kisi_id, kontrol_rol_id, yedek_kontrol_kisi_id, yedek_kontrol_rol_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id`,
+                                 asama, yapan_rol_id, kontrol_kisi_id, kontrol_rol_id, yedek_kontrol_kisi_id, yedek_kontrol_rol_id, kanit_zorunlu)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id`,
     [projeId, g.kilometreTasiId, g.ad, g.aciklama, g.sorumluKisiId, g.planBaslangic, g.planBitis, g.oncekiGorevId, kisiId,
-      g.asama, g.yapanRolId, g.kontrolKisiId, g.kontrolRolId, g.yedekKontrolKisiId, g.yedekKontrolRolId],
+      g.asama, g.yapanRolId, g.kontrolKisiId, g.kontrolRolId, g.yedekKontrolKisiId, g.yedekKontrolRolId, g.kanitZorunlu ?? false],
   );
   if (satir === null) throw new Error('Görev eklenemedi');
   return satir.id;
@@ -360,11 +363,11 @@ export function gorevGuncelle(
         SET kilometre_tasi_id = $2, ad = $3, aciklama = $4, sorumlu_kisi_id = $5, plan_baslangic = $6, plan_bitis = $7, onceki_gorev_id = $8,
             gercek_baslangic = $9, gercek_bitis = $10, ilerleme = $11, durum = $12, guncelleyen_id = $13, guncelleme = now(), surum = surum + 1,
             asama = $15, yapan_rol_id = $16, kontrol_kisi_id = $17, kontrol_rol_id = $18, yedek_kontrol_kisi_id = $19, yedek_kontrol_rol_id = $20,
-            onaylandi = onaylandi AND $12 = 'bitti'
+            onaylandi = onaylandi AND $12 = 'bitti', kanit_zorunlu = COALESCE($21, kanit_zorunlu)
       WHERE id = $1 AND surum = $14 RETURNING id`,
     [id, g.kilometreTasiId, g.ad, g.aciklama, g.sorumluKisiId, g.planBaslangic, g.planBitis, g.oncekiGorevId,
       g.gercekBaslangic, g.gercekBitis, g.ilerleme, g.durum, kisiId, surum,
-      g.asama, g.yapanRolId, g.kontrolKisiId, g.kontrolRolId, g.yedekKontrolKisiId, g.yedekKontrolRolId],
+      g.asama, g.yapanRolId, g.kontrolKisiId, g.kontrolRolId, g.yedekKontrolKisiId, g.yedekKontrolRolId, g.kanitZorunlu ?? null],
   );
 }
 
@@ -395,13 +398,17 @@ export function gorevBasla(db: Db, id: number, kisiId: number, surum: number): P
   );
 }
 
-export function gorevBitir(db: Db, id: number, durum: 'kontrolde' | 'bitti', kisiId: number, surum: number): Promise<{ id: number } | null> {
+// Adımı olan görevde kontrole giderken ilerleme verilir (bütün adımlar işaretlendi); adımsız görevde kişinin yazdığı kalır.
+export function gorevBitir(
+  db: Db, id: number, durum: 'kontrolde' | 'bitti', kisiId: number, surum: number, ilerleme: number | null = null,
+): Promise<{ id: number } | null> {
   return db.tek<{ id: number }>(
     `UPDATE projeler_gorev SET durum = $2, gercek_baslangic = LEAST(COALESCE(gercek_baslangic, current_date), current_date),
-            gercek_bitis = CASE WHEN $2 = 'bitti' THEN current_date ELSE NULL END, ilerleme = CASE WHEN $2 = 'bitti' THEN 100 ELSE ilerleme END,
+            gercek_bitis = CASE WHEN $2 = 'bitti' THEN current_date ELSE NULL END,
+            ilerleme = CASE WHEN $2 = 'bitti' THEN 100 ELSE COALESCE($5::int, ilerleme) END,
             guncelleyen_id = $3, guncelleme = now(), surum = surum + 1
       WHERE id = $1 AND surum = $4 RETURNING id`,
-    [id, durum, kisiId, surum],
+    [id, durum, kisiId, surum, ilerleme],
   );
 }
 
@@ -710,4 +717,79 @@ export function toplantiAksiyonGorevleri(db: Db, aksiyonIdler: readonly number[]
       WHERE toplanti_aksiyon_id = ANY($1::int[]) AND durum <> 'iptal' ORDER BY id`,
     [aksiyonIdler],
   );
+}
+
+// --- 3458: görevin adımları ve notları ---
+
+export interface AdimSatiri { id: number; gorev_id: number; sira: number; ad: string; yapildi: boolean; yapan_id: number | null; an: string | null }
+
+export function adimlar(db: Db, gorevId: number): Promise<AdimSatiri[]> {
+  return db.sorgu<AdimSatiri>(
+    `SELECT id, gorev_id, sira, ad, yapildi, yapan_id, ${zamanMetni('an')} AS an FROM projeler_gorev_adimi WHERE gorev_id = $1 ORDER BY sira`,
+    [gorevId],
+  );
+}
+
+export async function adimSayilari(db: Db, gorevIdleri: readonly number[]): Promise<Map<number, { toplam: number; yapilan: number }>> {
+  if (gorevIdleri.length === 0) return new Map();
+  const satirlar = await db.sorgu<{ gorev_id: number; toplam: number; yapilan: number }>(
+    `SELECT gorev_id, count(*)::int AS toplam, count(*) FILTER (WHERE yapildi)::int AS yapilan
+       FROM projeler_gorev_adimi WHERE gorev_id = ANY($1::int[]) GROUP BY gorev_id`,
+    [gorevIdleri],
+  );
+  return new Map(satirlar.map((s) => [s.gorev_id, { toplam: s.toplam, yapilan: s.yapilan }]));
+}
+
+export async function adimEkle(db: Db, gorevId: number, ad: string): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO projeler_gorev_adimi (gorev_id, sira, ad)
+     VALUES ($1, COALESCE((SELECT max(sira) FROM projeler_gorev_adimi WHERE gorev_id = $1), 0) + 1, $2)`,
+    [gorevId, ad],
+  );
+}
+
+export function adimIsaretle(db: Db, gorevId: number, adimId: number, yapildi: boolean, kisiId: number): Promise<{ id: number } | null> {
+  return db.tek<{ id: number }>(
+    `UPDATE projeler_gorev_adimi
+        SET yapildi = $3, yapan_id = CASE WHEN $3 THEN $4::int END, an = CASE WHEN $3 THEN now() END
+      WHERE id = $2 AND gorev_id = $1 RETURNING id`,
+    [gorevId, adimId, yapildi, kisiId],
+  );
+}
+
+// Bitti denince işaretsiz adımlar bitirenin adına işaretlenir (Risk 3458 K1): biten görevin ilerlemesi 100'dür.
+export async function acikAdimlariIsaretle(db: Db, gorevId: number, kisiId: number): Promise<void> {
+  await db.sorgu('UPDATE projeler_gorev_adimi SET yapildi = true, yapan_id = $2, an = now() WHERE gorev_id = $1 AND NOT yapildi', [gorevId, kisiId]);
+}
+
+export function adimSil(db: Db, gorevId: number, adimId: number): Promise<{ yapildi: boolean } | null> {
+  return db.tek<{ yapildi: boolean }>(
+    'DELETE FROM projeler_gorev_adimi WHERE id = $2 AND gorev_id = $1 AND NOT yapildi RETURNING yapildi',
+    [gorevId, adimId],
+  );
+}
+
+export async function adimVarMi(db: Db, gorevId: number, adimId: number): Promise<boolean> {
+  return (await db.tek('SELECT 1 AS var FROM projeler_gorev_adimi WHERE id = $2 AND gorev_id = $1', [gorevId, adimId])) !== null;
+}
+
+// Adım değişince ilerleme aynı işlemde yazılır ve sürüm artar: açık ekranlar eski sürümle görev yazamaz (Risk 3458 K1).
+export async function ilerlemeYaz(db: Db, gorevId: number, ilerleme: number, kisiId: number): Promise<void> {
+  await db.sorgu(
+    'UPDATE projeler_gorev SET ilerleme = $2, guncelleyen_id = $3, guncelleme = now(), surum = surum + 1 WHERE id = $1',
+    [gorevId, ilerleme, kisiId],
+  );
+}
+
+export interface NotSatiri { id: number; kisi_id: number; metin: string; an: string }
+
+export async function notlar(db: Db, gorevId: number): Promise<NotSatiri[]> {
+  return (await db.sorgu<{ id: string; kisi_id: number; metin: string; an: string }>(
+    `SELECT id, kisi_id, metin, ${zamanMetni('an')} AS an FROM projeler_gorev_notu WHERE gorev_id = $1 ORDER BY id`,
+    [gorevId],
+  )).map((n) => ({ ...n, id: Number(n.id) }));
+}
+
+export async function notEkle(db: Db, gorevId: number, kisiId: number, metin: string): Promise<void> {
+  await db.sorgu('INSERT INTO projeler_gorev_notu (gorev_id, kisi_id, metin) VALUES ($1, $2, $3)', [gorevId, kisiId, metin]);
 }

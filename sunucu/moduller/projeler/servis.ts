@@ -1,4 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
+import type { DenetimSecimi, IkiliCevap } from '#cekirdek/uc.ts';
 import { bulunamadi, cakisma, dogrulama, yetkiYok } from '#cekirdek/hata.ts';
 import type { UygulamaHatasi } from '#cekirdek/hata.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
@@ -11,11 +12,12 @@ import type {
   BitisBaglaGovdesi, GeriGonderGovdesi, Gorev, GorevAyrintisiCevabi, GorevKomutuGovdesi, GorevlerimCevabi, GorevlerimSatiri, GorevOlayi,
   Sablon, SablonEkleVerisi, SablonGuncelleVerisi, SablonListesiCevabi, SablonSecenekleriCevabi, GorevEkleVerisi, GorevGuncelleVerisi, GuncelStatu, KilometreTasi, KilometreTasiGuncelleVerisi, Proje, ProjeDurumu, ProjeGuncelleVerisi,
   ProjeListesiSuzgeci, ProjeOlusturVerisi, ProjeSiparisKalemleriCevabi, ProjeYonetimiCevabi, SiparistenProjeVerisi, Statu, StatuKaydi, StatuListesiCevabi, StatuTonu,
-  StatuYazVerisi,
+  StatuYazVerisi, AdimEkleGovdesi, AdimIsaretleGovdesi, NotEkleGovdesi, KanitBaglaGovdesi, GorevKaniti,
 } from '#paylasilan/sozlesme/projeler.ts';
 import { PROJE_KODU_BICIMI } from '#paylasilan/sozlesme/projeler.ts';
 import { siparisListesiSorgusu } from '#paylasilan/sozlesme/siparisler.ts';
 import { firmaKoduSecimi } from '../ayarlar/disari.ts';
+import { denetimSatiri, dosyaTutamagi } from '../dosya/disari.ts';
 import { bildirimGonder, bildirimKapat, enYuksekKademeler } from '../bildirim/disari.ts';
 import { kisiAdlari, kisiSecenekleri as kisiListesi, kisininRolleri, rolSecenekleri as rolListesi, rollerdekiKisiler } from '../kisiler/disari.ts';
 import { firmaAdlari, firmaAra, firmaVarMi } from '../musteri-tedarikci/disari.ts';
@@ -26,6 +28,8 @@ import {
   tabanReddi, yenidenAcmaMi, yenidenAcmaReddi,
   BASKASI_USTLENDI, KENDI_ISIN, KONTROLUN_DEGIL, SABLON_KAPALI, SABLON_YOK, SANA_ATANMADI, USTLENILEMEZ, baslaReddi, bitirSonucu, duzenlemeDurumReddi,
   gorevIzinleri, gorevlerimTuru, iptalReddi, kontrolluMu, kontroldeAtamaReddi, kontrolReddi, sablonTarihleri, ustlenReddi,
+  ADIM_EN_COK, ADIM_ISARETLI_SILINMEZ, ADIM_SINIRI, ADIM_YOK, KANIT_AZAMI_BAYT, KANIT_TURLERI, KANIT_YOK, adimIlerlemesi, adimListesiReddi,
+  icerikReddi, kanitKaydi, kanitReddi,
 } from './kurallar.ts';
 import type { GorevAtamasi, Isleyen } from './kurallar.ts';
 import { kademeBildirimleriniKapat } from './hazirlik-kademe.ts';
@@ -231,7 +235,8 @@ function guncelStatu(k: StatuKaydiSatiri): GuncelStatu {
   return { statuId: k.statu_id, ad: k.ad, ton: tonu(k.ton), serbest: k.statu_id === null, an: k.an };
 }
 const statuCevir = (s: StatuSatiri): Statu => ({ id: s.id, ad: s.ad, ton: s.ton as StatuTonu, sira: s.sira, etkin: s.etkin, surum: s.surum });
-interface Adlar { kisiler: Map<number, string>; roller: Map<number, string> }
+type AdimSayilari = Map<number, { toplam: number; yapilan: number }>;
+interface Adlar { kisiler: Map<number, string>; roller: Map<number, string>; adimlar: AdimSayilari }
 const ad = (m: Map<number, string>, id: number | null): string | null => (id === null ? null : m.get(id) ?? null);
 const gorevCevir = (g: GorevSatiri, a: Adlar): Gorev => ({
   id: g.id, kilometreTasiId: g.kilometre_tasi_id, ad: g.ad, aciklama: g.aciklama, sorumluKisiId: g.sorumlu_kisi_id,
@@ -243,7 +248,8 @@ const gorevCevir = (g: GorevSatiri, a: Adlar): Gorev => ({
   kontrolRolId: g.kontrol_rol_id, kontrolRolAd: ad(a.roller, g.kontrol_rol_id),
   yedekKontrolKisiId: g.yedek_kontrol_kisi_id, yedekKontrolKisiAd: ad(a.kisiler, g.yedek_kontrol_kisi_id),
   yedekKontrolRolId: g.yedek_kontrol_rol_id, yedekKontrolRolAd: ad(a.roller, g.yedek_kontrol_rol_id),
-  onaylandi: g.onaylandi, hazirlikMaddesi: g.hazirlik_maddesi, surum: g.surum,
+  onaylandi: g.onaylandi, hazirlikMaddesi: g.hazirlik_maddesi, kanitZorunlu: g.kanit_zorunlu,
+  adimToplam: a.adimlar.get(g.id)?.toplam ?? 0, adimYapilan: a.adimlar.get(g.id)?.yapilan ?? 0, surum: g.surum,
 });
 const gorevKisileri = (g: GorevSatiri): number[] =>
   [g.sorumlu_kisi_id, g.kontrol_kisi_id, g.yedek_kontrol_kisi_id].filter((x): x is number => x !== null);
@@ -302,7 +308,8 @@ export async function projeYonetimi(db: Db, projeId: number): Promise<ProjeYonet
       eskiTarih: x.eski_tarih, yeniTarih: x.yeni_tarih, gerekce: x.gerekce, kisiAd: adlar.get(x.kisi_id) ?? null, an: x.an,
     })),
   }));
-  const gorevler = gorevSatirlari.map((g) => gorevCevir(g, { kisiler: adlar, roller }));
+  const adimlar = await sorgular.adimSayilari(db, gorevSatirlari.map((g) => g.id));
+  const gorevler = gorevSatirlari.map((g) => gorevCevir(g, { kisiler: adlar, roller, adimlar }));
   return {
     statu: gecmis[0] === undefined ? null : guncelStatu(gecmis[0]),
     statuGecmisi, kilometreTaslari, gorevler, ilerleme: projeIlerlemesi(gorevler),
@@ -393,8 +400,17 @@ export async function gorevDuzenle(db: Db, kisiId: number, id: number, g: GorevG
     esleme.delete(id);
     if (oncekiDonguVarMi(id, g.oncekiGorevId, esleme)) throw dogrulama(ONCEKI_DONGU, 'oncekiGorevId');
   }
+  // 3458: adımı olan görevde ilerleme adımlardan gelir; düzenlemeyle biten görevin açık adımları işaretlenir (bitti = 100).
+  // Zorunluluğu aynı yazmada kaldırıp kanıtsız bitirmek kanıt kapısını atlar: eski ya da yeni değer zorunluysa kanıt sayılır.
+  if (g.durum === 'bitti' && mevcut.durum !== 'bitti') {
+    const zorunlu = mevcut.kanit_zorunlu || g.kanitZorunlu === true;
+    const kanitRet = kanitReddi(zorunlu, (await kanitTutamagi.bagliDosyalar(db, kanitKaydi(id))).length);
+    if (kanitRet !== null) throw dogrulama(kanitRet, 'durum');
+    await sorgular.acikAdimlariIsaretle(db, id, kisiId);
+  }
+  const sayi = (await sorgular.adimSayilari(db, [id])).get(id) ?? { toplam: 0, yapilan: 0 };
   await kisitKorumali(YONETIM_KISITLARI, () => surumluGuncelle({
-    guncelle: () => sorgular.gorevGuncelle(db, id, { ...g, ilerleme: d.ilerleme }, g.surum, kisiId),
+    guncelle: () => sorgular.gorevGuncelle(db, id, { ...g, ilerleme: adimIlerlemesi(sayi.toplam, sayi.yapilan, d.ilerleme) }, g.surum, kisiId),
     varMi: () => sorgular.gorevVarMi(db, id),
     bulunamadiIletisi: GOREV_YOK,
   }));
@@ -468,7 +484,12 @@ export async function gorevBitir(db: Db, kullanici: Kullanici, gorevId: number, 
   const { g: mevcut, k } = await akisaHazirla(db, kullanici, gorevId);
   const sonuc = bitirSonucu(atamasi(mevcut), k);
   if ('ileti' in sonuc) throw reddet(sonuc.ileti);
-  await akisYaz(db, gorevId, () => sorgular.gorevBitir(db, gorevId, sonuc.durum, k.kisiId, g.surum));
+  // 3458: görev kilitliyken kanıt sayılır (kaldırma yarışı kapalı); açık adımlar bitirenin adına işaretlenir (Risk K1).
+  const kanitRet = kanitReddi(mevcut.kanit_zorunlu, (await kanitTutamagi.bagliDosyalar(db, kanitKaydi(gorevId))).length);
+  if (kanitRet !== null) throw dogrulama(kanitRet);
+  await sorgular.acikAdimlariIsaretle(db, gorevId, k.kisiId);
+  const adimli = ((await sorgular.adimSayilari(db, [gorevId])).get(gorevId)?.toplam ?? 0) > 0;
+  await akisYaz(db, gorevId, () => sorgular.gorevBitir(db, gorevId, sonuc.durum, k.kisiId, g.surum, adimli ? 100 : null));
   await sorgular.gorevOlayiEkle(db, gorevId, 'bitti', k.kisiId, null);
   await kademeBildirimleriniKapat(db, gorevId);
   if (sonuc.durum === 'kontrolde') await kontrolBildir(db, mevcut, k.kisiId);
@@ -513,25 +534,139 @@ export async function gorevIptal(db: Db, kullanici: Kullanici, gorevId: number, 
 }
 
 // Projeyi okuyamayan kişi yalnız kendisine, rolüne ya da kontrolüne düşen ya da işlediği görevi açar; ötekisi yok sayılır.
-export async function gorevAyrintisi(db: Db, kullanici: Kullanici, gorevId: number): Promise<GorevAyrintisiCevabi> {
+async function gorulenGorev(db: Db, kullanici: Kullanici, gorevId: number): Promise<{ g: GorevSatiri; k: Isleyen; olaylar: sorgular.GorevOlayiSatiri[] }> {
   const g = await sorgular.gorevGetir(db, gorevId);
   if (g === null) throw bulunamadi(GOREV_YOK);
-  const proje = await sorgular.projeGetir(db, g.proje_id);
-  if (proje === null) throw bulunamadi(PROJE_YOK);
   const k = await isleyen(db, kullanici.id);
   const olaylar = await sorgular.gorevOlaylari(db, gorevId);
   const bitiren = (await sorgular.sonBitirenler(db, [gorevId])).get(gorevId) ?? null;
   const ilgili = gorevlerimTuru(atamasi(g), k, bitiren?.kisiId ?? null, bitiren?.gun ?? 0) !== null
     || olaylar.some((o) => o.kisi_id === k.kisiId);
   if (!projeyiOkur(kullanici) && !ilgili) throw bulunamadi(GOREV_YOK);
-  const adlar = await kisiAdlari(db, [...gorevKisileri(g), ...olaylar.map((o) => o.kisi_id)]);
+  return { g, k, olaylar };
+}
+
+// 3458: kanıt dosya modülünün bağındadır; modül adı tutamakta sabittir, kayıt "gorev:<id>".
+const kanitTutamagi = dosyaTutamagi('projeler');
+const KANIT_SINIRI = { turler: KANIT_TURLERI, azamiBayt: KANIT_AZAMI_BAYT };
+const gorevYazar = (k: Kullanici): boolean => islemVarMi(k, 'projeler.gorev-yaz');
+const NOT_ISLEMLERI = ['projeler.gorev-isle', 'projeler.gorev-kontrol', 'projeler.gorev-yaz'] as const;
+const notYazar = (k: Kullanici): boolean => NOT_ISLEMLERI.some((i) => islemVarMi(k, i));
+
+export async function gorevAyrintisi(db: Db, kullanici: Kullanici, gorevId: number): Promise<GorevAyrintisiCevabi> {
+  const { g, k, olaylar } = await gorulenGorev(db, kullanici, gorevId);
+  const proje = await sorgular.projeGetir(db, g.proje_id);
+  if (proje === null) throw bulunamadi(PROJE_YOK);
+  const bitiren = (await sorgular.sonBitirenler(db, [gorevId])).get(gorevId) ?? null;
+  const adimlar = await sorgular.adimlar(db, gorevId);
+  const notlar = await sorgular.notlar(db, gorevId);
+  const kanitlar = await kanitTutamagi.bagliDosyalar(db, kanitKaydi(gorevId));
+  const adlar = await kisiAdlari(db, [
+    ...gorevKisileri(g), ...olaylar.map((o) => o.kisi_id), ...notlar.map((n) => n.kisi_id), ...kanitlar.map((d) => d.ekleyenId),
+    ...adimlar.flatMap((a) => (a.yapan_id === null ? [] : [a.yapan_id])),
+  ]);
   const roller = await rolAdlari(db);
+  const sayilar: AdimSayilari = new Map([[gorevId, { toplam: adimlar.length, yapilan: adimlar.filter((a) => a.yapildi).length }]]);
+  const isle = akisIslemleri(kullanici).isle;
+  const yazar = gorevYazar(kullanici);
   return {
-    gorev: gorevCevir(g, { kisiler: adlar, roller }),
+    gorev: gorevCevir(g, { kisiler: adlar, roller, adimlar: sayilar }),
     proje: { id: proje.id, kod: proje.kod, ad: proje.ad },
     olaylar: olaylar.map((o): GorevOlayi => ({ olay: o.olay as GorevOlayi['olay'], kisiAd: adlar.get(o.kisi_id) ?? null, gerekce: o.gerekce, an: o.an })),
     izinler: gorevIzinleri(atamasi(g), k, akisIslemleri(kullanici), bitiren?.kisiId ?? null, bitiren?.gun ?? 0),
+    adimlar: adimlar.map((a) => ({ id: a.id, ad: a.ad, yapildi: a.yapildi, yapanAd: ad(adlar, a.yapan_id), an: a.an })),
+    notlar: notlar.map((n) => ({ id: n.id, kisiAd: adlar.get(n.kisi_id) ?? null, metin: n.metin, an: n.an })),
+    kanitlar: kanitlar.map((d): GorevKaniti => ({ ozet: d.ozet, ad: d.ad, boyut: d.boyut, tur: d.tur, ekleyenAd: adlar.get(d.ekleyenId) ?? null, zaman: d.zaman })),
+    icerikIzinleri: {
+      adimIsaretler: isle && icerikReddi(atamasi(g), k) === null,
+      adimYazar: (isle || yazar) && adimListesiReddi(atamasi(g), k, yazar) === null,
+      kanitEkler: isle && icerikReddi(atamasi(g), k) === null,
+      notYazar: notYazar(kullanici),
+    },
   };
+}
+
+// Adım ve kanıt yazan uçlar görevi kilitler (akış uçlarıyla aynı sıra: görev, sonra proje); görevi göremeyen "bulunamadı" alır.
+async function icerigeHazirla(db: Db, kullanici: Kullanici, gorevId: number): Promise<{ g: GorevSatiri; k: Isleyen }> {
+  await gorulenGorev(db, kullanici, gorevId);
+  return akisaHazirla(db, kullanici, gorevId);
+}
+
+async function ilerlemeyiYenile(db: Db, g: GorevSatiri, kisiId: number): Promise<void> {
+  const sayi = (await sorgular.adimSayilari(db, [g.id])).get(g.id) ?? { toplam: 0, yapilan: 0 };
+  await sorgular.ilerlemeYaz(db, g.id, adimIlerlemesi(sayi.toplam, sayi.yapilan, g.ilerleme), kisiId);
+}
+
+export async function adimEkle(db: Db, kullanici: Kullanici, gorevId: number, govde: AdimEkleGovdesi): Promise<GorevAyrintisiCevabi> {
+  const { g, k } = await icerigeHazirla(db, kullanici, gorevId);
+  const ret = adimListesiReddi(atamasi(g), k, gorevYazar(kullanici));
+  if (ret !== null) throw reddet(ret);
+  if (((await sorgular.adimSayilari(db, [gorevId])).get(gorevId)?.toplam ?? 0) >= ADIM_EN_COK) throw dogrulama(ADIM_SINIRI, 'ad');
+  await sorgular.adimEkle(db, gorevId, govde.ad);
+  await ilerlemeyiYenile(db, g, k.kisiId);
+  return gorevAyrintisi(db, kullanici, gorevId);
+}
+
+export async function adimIsaretle(
+  db: Db, kullanici: Kullanici, gorevId: number, adimId: number, govde: AdimIsaretleGovdesi,
+): Promise<GorevAyrintisiCevabi> {
+  const { g, k } = await icerigeHazirla(db, kullanici, gorevId);
+  const ret = icerikReddi(atamasi(g), k);
+  if (ret !== null) throw reddet(ret);
+  if ((await sorgular.adimIsaretle(db, gorevId, adimId, govde.yapildi, k.kisiId)) === null) throw bulunamadi(ADIM_YOK);
+  await ilerlemeyiYenile(db, g, k.kisiId);
+  return gorevAyrintisi(db, kullanici, gorevId);
+}
+
+export async function adimSil(db: Db, kullanici: Kullanici, gorevId: number, adimId: number): Promise<GorevAyrintisiCevabi> {
+  const { g, k } = await icerigeHazirla(db, kullanici, gorevId);
+  const ret = adimListesiReddi(atamasi(g), k, gorevYazar(kullanici));
+  if (ret !== null) throw reddet(ret);
+  if ((await sorgular.adimSil(db, gorevId, adimId)) === null) {
+    throw (await sorgular.adimVarMi(db, gorevId, adimId)) ? dogrulama(ADIM_ISARETLI_SILINMEZ) : bulunamadi(ADIM_YOK);
+  }
+  await ilerlemeyiYenile(db, g, k.kisiId);
+  return gorevAyrintisi(db, kullanici, gorevId);
+}
+
+// Not yalnız eklenir; görevi gören ve görev işlemlerinden biri olan yazar, görev kapalı olsa da.
+export const NOT_YAZAMAZ = 'Bu göreve not yazamazsın.';
+export async function notEkle(db: Db, kullanici: Kullanici, gorevId: number, govde: NotEkleGovdesi): Promise<GorevAyrintisiCevabi> {
+  await gorulenGorev(db, kullanici, gorevId);
+  if (!notYazar(kullanici)) throw yetkiYok(NOT_YAZAMAZ);
+  await sorgular.notEkle(db, gorevId, kullanici.id, govde.metin);
+  return gorevAyrintisi(db, kullanici, gorevId);
+}
+
+type DenetimEki = (satirlar: readonly DenetimSecimi[]) => void;
+
+export async function kanitBagla(
+  db: Db, kullanici: Kullanici, gorevId: number, govde: KanitBaglaGovdesi, denetimEki: DenetimEki,
+): Promise<GorevAyrintisiCevabi> {
+  const { g, k } = await icerigeHazirla(db, kullanici, gorevId);
+  const ret = icerikReddi(atamasi(g), k);
+  if (ret !== null) throw reddet(ret);
+  const d = await kanitTutamagi.dosyaBagla(db, kullanici, { ozet: govde.ozet, kayit: kanitKaydi(gorevId), ad: govde.dosyaAdi, belgeTuru: 'kanit' }, KANIT_SINIRI);
+  denetimEki([denetimSatiri('bagla', d)]);
+  return gorevAyrintisi(db, kullanici, gorevId);
+}
+
+export async function kanitKaldir(db: Db, kullanici: Kullanici, gorevId: number, ozet: string, denetimEki: DenetimEki): Promise<GorevAyrintisiCevabi> {
+  const { g, k } = await icerigeHazirla(db, kullanici, gorevId);
+  const ret = icerikReddi(atamasi(g), k);
+  if (ret !== null) throw reddet(ret);
+  const kalkan = await kanitTutamagi.bagKaldir(db, kanitKaydi(gorevId), ozet);
+  if (kalkan.length === 0) throw bulunamadi(KANIT_YOK);
+  denetimEki(kalkan.map((d) => denetimSatiri('kaldir', d)));
+  return gorevAyrintisi(db, kullanici, gorevId);
+}
+
+// Kanıt yalnız bu göreve bağlıysa ve görevi gören kişiye akar.
+export async function kanitDosyasi(db: Db, kullanici: Kullanici, gorevId: number, ozet: string): Promise<IkiliCevap> {
+  await gorulenGorev(db, kullanici, gorevId);
+  const akis = await kanitTutamagi.dosyaAkisi(db, kanitKaydi(gorevId), ozet);
+  if (akis === null) throw bulunamadi(KANIT_YOK);
+  return akis;
 }
 
 // Proje görevlerim: aktif projelerdeki açık görevlerden kişiye düşenler. Kontrol işlemi olmayana "kontrolümde" satırı gelmez.
@@ -543,13 +678,14 @@ export async function gorevlerim(db: Db, kullanici: Kullanici): Promise<Gorevler
   const adlar = await kisiAdlari(db, adaylar.flatMap(gorevKisileri));
   const roller = await rolAdlari(db);
   const kademeler = await enYuksekKademeler(db, 'projeler.hazirlik', adaylar.map((g) => String(g.id)));
+  const adimlar = await sorgular.adimSayilari(db, adaylar.map((g) => g.id));
   const satirlar: GorevlerimSatiri[] = [];
   for (const g of adaylar) {
     const b = bitirenler.get(g.id) ?? null;
     const tur = gorevlerimTuru(atamasi(g), k, b?.kisiId ?? null, b?.gun ?? 0);
     if (tur === null || (tur === 'kontrolumde' && !islem.kontrol)) continue;
     satirlar.push({
-      ...gorevCevir(g, { kisiler: adlar, roller }), tur, projeId: g.proje_id, projeKod: g.proje_kod, projeAd: g.proje_ad,
+      ...gorevCevir(g, { kisiler: adlar, roller, adimlar }), tur, projeId: g.proje_id, projeKod: g.proje_kod, projeAd: g.proje_ad,
       izinler: gorevIzinleri(atamasi(g), k, islem, b?.kisiId ?? null, b?.gun ?? 0), kademe: kademeler.get(String(g.id)) ?? null,
     });
   }

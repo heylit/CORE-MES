@@ -269,3 +269,38 @@ export function sablonTarihleri(
   const planBaslangic = tarihEkle(temel, k.gun);
   return { planBaslangic, planBitis: tarihEkle(planBaslangic, k.sureGun - 1) };
 }
+
+// --- 3458: görevin içi (yapılacak adımlar, kanıt, not) ---
+
+export const ADIM_EN_COK = 50;
+export const ADIM_YOK = 'Adım bulunamadı.';
+export const ADIM_SINIRI = `Bir görevde en çok ${ADIM_EN_COK} adım olur.`;
+export const ADIM_ISARETLI_SILINMEZ = 'İşaretlenmiş adım silinmez; önce işareti kaldır.';
+export const ICERIK_KAPALI = 'Kontrolde, bitmiş ya da iptal edilmiş görevin adımı ve kanıtı değişmez.';
+export const KANIT_YOK = 'Kanıt bu göreve bağlı değil.';
+export const KANIT_GEREKLI = 'Bu görev kanıt ister: bitirmeden önce fotoğraf ya da PDF ekle.';
+// Kanıt fotoğraf ya da PDF'tir; boyut sınırı Kalite Merkezi ekleriyle aynı (20 MB).
+export const KANIT_TURLERI = ['jpeg', 'png', 'webp', 'pdf'] as const;
+export const KANIT_AZAMI_BAYT = 20 * 1024 * 1024;
+export const kanitKaydi = (gorevId: number): string => `gorev:${gorevId}`;
+
+// Adımı işaretleyen ve kanıtı ekleyen ya da kaldıran, göreve atanmış yapandır; rol görevi önce üstlenilir. Kontrole giden, biten
+// ve iptal edilen görevin içeriği değişmez: kontrol edenin gördüğü kanıt onaydan sonra kalkmaz (Risk 3458 K3).
+export function icerikReddi(g: Pick<GorevAtamasi, 'durum' | 'sorumluKisiId'>, k: Isleyen): string | null {
+  if (g.durum === 'kontrolde' || kapaliMi(g.durum)) return ICERIK_KAPALI;
+  return g.sorumluKisiId === k.kisiId ? null : SANA_ATANMADI;
+}
+
+// Adım listesini görev yazan ya da göreve atanmış yapan değiştirir; görev açıkken.
+export function adimListesiReddi(g: Pick<GorevAtamasi, 'durum' | 'sorumluKisiId'>, k: Isleyen, gorevYazar: boolean): string | null {
+  if (g.durum === 'kontrolde' || kapaliMi(g.durum)) return ICERIK_KAPALI;
+  return gorevYazar || g.sorumluKisiId === k.kisiId ? null : SANA_ATANMADI;
+}
+
+// Adımı olan görevde ilerleme işaretli adımların payıdır; adımsız görevde kişinin yazdığı kalır.
+export function adimIlerlemesi(toplam: number, yapilan: number, elle: number): number {
+  return toplam === 0 ? elle : Math.round((100 * yapilan) / toplam);
+}
+
+// Bitirme kanıt ister mi: zorunlu görevde en az bir kanıt bağlı olmalı (görev kilitliyken sayılır).
+export const kanitReddi = (zorunlu: boolean, kanitSayisi: number): string | null => (zorunlu && kanitSayisi === 0 ? KANIT_GEREKLI : null);

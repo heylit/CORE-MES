@@ -6,7 +6,7 @@ import type {
 import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Pencere, Rozet, Secim, Tablo, type Secenek, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { AtamaSecimi, atamaCoz, atamaDegeri, useAtamaSecenekleri } from './GorevPaneli.tsx';
+import { AtamaSecimi, atamaCoz, atamaDegeri, useAtamaSecenekleri } from './Atama.tsx';
 import { useHazirlikMaddeleri } from './hazirlik-maddeleri.ts';
 import { HAZIRLIK_METNI, SABLON_ISLEMI, atamaMetni } from './gosterim.ts';
 import { bosIseNull, useIslemVar, useIstekKimligi } from './komut.ts';

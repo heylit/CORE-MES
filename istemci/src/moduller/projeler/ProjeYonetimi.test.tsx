@@ -28,7 +28,7 @@ const gorev = (ek: Partial<Gorev>): Gorev => ({
   planBaslangic: '2026-10-01', planBitis: '2026-10-10', gercekBaslangic: null, gercekBitis: null, ilerleme: 40, durum: 'suruyor',
   oncekiGorevId: null, asama: null, yapanRolId: null, yapanRolAd: null, kontrolKisiId: null, kontrolKisiAd: null, kontrolRolId: null,
   kontrolRolAd: null, yedekKontrolKisiId: null, yedekKontrolKisiAd: null, yedekKontrolRolId: null, yedekKontrolRolAd: null, onaylandi: false, hazirlikMaddesi: null,
-  surum: 1, ...ek,
+  kanitZorunlu: false, adimToplam: 0, adimYapilan: 0, surum: 1, ...ek,
 });
 const YONETIM: ProjeYonetimiCevabi = {
   statu: { statuId: 1, ad: 'Yolunda', ton: 'tamam', serbest: false, an: '2026-10-20T10:00:00+03:00' },
@@ -174,7 +174,7 @@ describe('Proje yönetimi (890 c)', () => {
     expect(yazma?.yol).toBe('/projeler/1/gorevler');
     expect(yazma?.govde).toEqual({
       kilometreTasiId: 5, ad: 'Numune ölçümü', aciklama: null, sorumluKisiId: 3, planBaslangic: '2026-11-02', planBitis: '2026-11-05', oncekiGorevId: null,
-      asama: null, yapanRolId: null, kontrolKisiId: null, kontrolRolId: 8, yedekKontrolKisiId: null, yedekKontrolRolId: null,
+      asama: null, yapanRolId: null, kontrolKisiId: null, kontrolRolId: 8, yedekKontrolKisiId: null, yedekKontrolRolId: null, kanitZorunlu: false,
     });
     expect(yazma?.kimlik).toBeDefined();
   });
