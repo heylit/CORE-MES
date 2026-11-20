@@ -13,7 +13,7 @@ const SALT_OKUR = { 'GET /malzeme-katalogu-ayarlari': () => json(200, { ...ORNEK
 async function durumAdiminiAc() {
   yeniEkranAc('/malzemeler/yeni?kart=mornek1');
   await screen.findByRole('heading', { name: 'Özet ve kayıt' });
-  fireEvent.click(screen.getByRole('button', { name: /Durum ve işlem/ }));
+  fireEvent.click(screen.getByRole('button', { name: /Kondisyon, üretim, yüzey/ }));
   return screen.findByRole('searchbox', { name: 'Durum ve işlemde ara' });
 }
 
@@ -114,7 +114,7 @@ describe('2117 EN / ASTM adları: Ayarlar', () => {
     fireEvent.change(ara, { target: { value: 'qt-e' } });
     expect(screen.getByText('Islah (+QT)')).toBeTruthy();
     expect(screen.queryByText('Normalize (+N)')).toBeNull();
-  });
+  }, 30_000); // Ayar listesinin tamamını çizer; yüklü toplu koşuda 15 sn varsayılanı sınırda kalıyordu (3476-1 Test T3).
 
   test('ayar yazamayan eşli adı görür ama düzenleme düğmesi yoktur (reddedilen)', async () => {
     sunucuKur(OKUYAN, SALT_OKUR);

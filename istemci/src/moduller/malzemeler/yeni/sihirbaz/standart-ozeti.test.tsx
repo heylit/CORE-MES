@@ -7,13 +7,13 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); localStorage.clear(); });
 
 const durumAdimi = async (sorgu: string) => {
   yeniEkranAc(`/malzemeler/yeni${sorgu}`);
-  await screen.findAllByRole('heading', { name: /Form ve ölçüler|Özet ve kayıt/ });
-  fireEvent.click(within(screen.getByRole('navigation', { name: 'Adımlar' })).getByRole('button', { name: /Durum ve işlem/ }));
+  await screen.findAllByRole('heading', { name: /Form, ölçü, tolerans|Özet ve kayıt/ });
+  fireEvent.click(within(screen.getByRole('navigation', { name: 'Adımlar' })).getByRole('button', { name: /Kondisyon, üretim, yüzey/ }));
   return (await screen.findByRole('heading', { name: 'Standartlar', level: 4 })).closest('section')!;
 };
 const deger = (bolum: HTMLElement, ad: string) => within(bolum).getByText(ad, { selector: 'dt' }).nextElementSibling?.textContent;
 
-describe('3436 Durum ve işlem adımı: standartlar', () => {
+describe('3436 Kondisyon, üretim, yüzey adımı: standartlar', () => {
   test('yeni kartta (kopya) kimyasal ve mekanik standart sınıf, kalite ve forma göre seçilir; eski EN 10083-2 adı yeni adıyla', async () => {
     sunucuKur(YAZAN);
     const bolum = await durumAdimi('?kopya=mornek1');

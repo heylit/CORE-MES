@@ -14,8 +14,19 @@ type Secenek = AileSecenegi;
 
 const TON: Record<string, CipTonu | undefined> = { rec: 'yaygin', warn: 'dikkat', no: 'uyumsuz' };
 
+// Eksen düzeninde (3476) adım bölümlere ayrılır; bir bölüm seçenek anahtarlarını ve gerekirse değer süzgecini taşır.
+export interface DurumBolumu { no: string; ad: string; anahtarlar: readonly string[]; degerSuz?: (k: string, v: string) => boolean }
+interface DurumAdimiOzellikleri {
+  /** Yalnız bu anahtarlar; başlık, arama ve uyarı olmadan (başka adıma taşınan seçenekler). */
+  anahtarlar?: readonly string[];
+  /** Adım bölümlü çizilir; hiçbir bölüme düşmeyen anahtar "Diğer seçimler" bölümüne gider. */
+  bolumler?: readonly DurumBolumu[];
+  /** Başka adımda gösterilen anahtarlar bu adımda çizilmez. */
+  haric?: readonly string[];
+}
+
 // Hammadde 4. adım (prototipte `s3`): seçenekler kalite ve forma göre süzülür; uyumsuz olanlar istenirse görünür.
-export function DurumAdimi() {
+export function DurumAdimi({ anahtarlar, bolumler, haric = [] }: DurumAdimiOzellikleri = {}) {
   const { taslak: d, b, degistir, yenisiniKur, secim, secimYaz, bildir } = useSihirbaz();
   const standart = kartStandardi(d);
   const [ara, araYaz] = useState('');
@@ -24,15 +35,23 @@ export function DurumAdimi() {
   const f = d.fam ? aileler(b)[d.fam] : undefined;
   if (!f) return <p className="tc-my-bos">Önce bir malzeme ailesi seç.</p>;
   const c = d.fam && d.cls ? f.classes[d.cls] : undefined;
-  const gruplar: { ad: string; ogeler: Secenek[] }[] = [];
-  f.opts.forEach((o) => {
-    const ad = o.grp || 'Diğer';
-    let g = gruplar.find((x) => x.ad === ad);
-    if (!g) { g = { ad, ogeler: [] }; gruplar.push(g); }
-    g.ogeler.push(o);
-  });
+  const grupla = (secenekler: readonly Secenek[]) => {
+    const gruplar: { ad: string; ogeler: Secenek[] }[] = [];
+    secenekler.forEach((o) => {
+      const ad = o.grp || 'Diğer';
+      let g = gruplar.find((x) => x.ad === ad);
+      if (!g) { g = { ad, ogeler: [] }; gruplar.push(g); }
+      g.ogeler.push(o);
+    });
+    return gruplar;
+  };
+  const gorunenler = f.opts.filter((o) => (anahtarlar ? anahtarlar.includes(o.k) : !haric.includes(o.k)));
   let gizli = 0;
-  const liste = (o: Secenek): readonly string[] => {
+  const liste = (o: Secenek, suz?: DurumBolumu['degerSuz']): readonly string[] => {
+    const l = hamListe(o);
+    return suz ? l.filter((x) => suz(o.k, x)) : l;
+  };
+  const hamListe = (o: Secenek): readonly string[] => {
     if (!o.from) return o.opts ?? [];
     if (o.k === 'mekstd') return K.mekanikStandartlari(c, d.form);
     const l = c?.[o.from];
@@ -75,10 +94,11 @@ export function DurumAdimi() {
   const baslik = (o: Secenek) => (S.LINFO[o.k]
     ? <span className="tc-my-ipucu" tabIndex={0} title={S.LINFO[o.k]}>{o.ad}<span className="tc-my-ipucu-isaret" aria-hidden="true">?</span></span>
     : o.ad);
-  const bir = (o: Secenek) => {
+  const bir = (o: Secenek, suz?: DurumBolumu['degerSuz']) => {
     if (o.type === 'select' || o.type === 'multi') {
-      const cur = o.type === 'select' ? (d.opts[o.k] ? [String(d.opts[o.k])] : []) : ((d.opts[o.k] as string[] | undefined) ?? []);
-      const l = liste(o);
+      const tum = o.type === 'select' ? (d.opts[o.k] ? [String(d.opts[o.k])] : []) : ((d.opts[o.k] as string[] | undefined) ?? []);
+      const l = liste(o, suz);
+      const cur = suz ? tum.filter((x) => suz(o.k, x)) : tum;
       const uyanlar = l.filter((x) => secim.tumSecenekler || cur.includes(x) || K.optStatus(o.k, x, d, b).s !== 'no');
       gizli += l.length - uyanlar.length;
       // Arama değerin kendisinde, ASTM ve EN adında bakar; seçili değer süzülse de görünür kalır.
@@ -104,6 +124,8 @@ export function DurumAdimi() {
         </SecenekGrubu>
       );
     }
+    // Sayı ve metin alanı aramada yalnız adı uyarsa görünür; yoksa her arama sonucunda kalırdı.
+    if (ara.trim() && !o.ad.toLocaleLowerCase('tr').includes(ara.trim().toLocaleLowerCase('tr'))) return null;
     const v = d.opts[o.k];
     return (
       <SecenekGrubu key={o.k} baslik={baslik(o)} ikon={K.optIcon(d.fam, o, b)} ikonAcik={v !== undefined && v !== ''}>
@@ -114,11 +136,11 @@ export function DurumAdimi() {
       </SecenekGrubu>
     );
   };
-  const govde = gruplar.map((g) => {
-    if (g.ad === 'Standartlar' && !stdAcik && !ara.trim()) {
+  const grupCiz = (secenekler: readonly Secenek[], suz?: DurumBolumu['degerSuz']) => grupla(secenekler).map((g) => {
+    if (g.ad === 'Standartlar' && !stdAcik && !ara.trim() && !anahtarlar) {
       return <StandartOzeti key={g.ad} ogeler={g.ogeler} ac={() => { stdAcikYaz(true); }} />;
     }
-    const ic = g.ogeler.map(bir).filter(Boolean);
+    const ic = g.ogeler.map((o) => bir(o, suz)).filter(Boolean);
     if (!ic.length) return null;
     const ik = S.GRP_ICON[g.ad];
     return (
@@ -128,6 +150,23 @@ export function DurumAdimi() {
       </section>
     );
   });
+  const bolumluCiz = (bl: readonly DurumBolumu[]) => {
+    const kapsanan = new Set(bl.flatMap((x) => x.anahtarlar));
+    const artan = gorunenler.filter((o) => !kapsanan.has(o.k));
+    const tum = artan.length ? [...bl, { no: '', ad: 'Diğer seçimler', anahtarlar: artan.map((o) => o.k) }] : bl;
+    return tum.map((x) => {
+      const ic = grupCiz(gorunenler.filter((o) => x.anahtarlar.includes(o.k)), x.degerSuz).filter(Boolean);
+      if (!ic.length) return null;
+      return (
+        <section key={x.ad} className="tc-ek-bolum" aria-label={x.ad}>
+          <h3 className="tc-ek-bolum-baslik">{x.no && <span className="tc-ek-no">{x.no}</span>}{x.ad}</h3>
+          {ic}
+        </section>
+      );
+    });
+  };
+  const govde = bolumler ? bolumluCiz(bolumler) : grupCiz(gorunenler);
+  if (anahtarlar) return <>{govde}</>;
   const sorunlar = K.compatIssues(d, b).filter((i) => i.step === 3);
   const uyumsuz = sorunlar.filter((i) => i.s === 'no').length;
   const g = K.grade(d, b);

@@ -38,7 +38,7 @@ const YOLLAR = {
 
 async function formAdiminiAc() {
   yeniEkranAc('/malzemeler/yeni?kopya=mornek1');
-  await screen.findByRole('heading', { name: 'Form ve ölçüler' });
+  await screen.findByRole('heading', { name: 'Form, ölçü, tolerans' });
 }
 
 async function modelSec() {
@@ -141,6 +141,6 @@ describe('3243 a: hammadde kartında 3B modelden öneri', () => {
     await formAdiminiAc();
     await vi.waitFor(() => { expect(istekler.some((i) => i.yol.startsWith('/geometri/modeller'))).toBe(true); });
     await vi.waitFor(() => { expect(screen.queryByRole('region', { name: '3B modelden öner' })).toBeNull(); });
-    expect(screen.getByRole('heading', { name: 'Form ve ölçüler' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Form, ölçü, tolerans' })).toBeTruthy();
   });
 });

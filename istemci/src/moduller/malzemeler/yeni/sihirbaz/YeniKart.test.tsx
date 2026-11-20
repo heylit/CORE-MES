@@ -78,7 +78,7 @@ describe('M1 yeni kart sihirbazı', () => {
     ac('?kart=mornek1');
     expect(await screen.findByRole('heading', { name: 'Özet ve kayıt' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Değişiklikleri kaydet' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /Ticari bilgiler/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Ticari ve sertifika/ }));
     const kod = await screen.findByLabelText('Malzeme kodu') as HTMLInputElement;
     expect(kod.readOnly).toBe(true);
     expect(kod.value).toBe('HM-MET-C45-0001');
@@ -198,7 +198,7 @@ describe('M1 yeni kart sihirbazı', () => {
       'GET /malzeme-firma-secenekleri': () => json(200, { firmalar: [{ id: 17, ad: 'ORNEK Firma A.Ş.', kod: 'F-1' }] }),
     });
     ac('?kart=mornek1');
-    fireEvent.click(await screen.findByRole('button', { name: /Ticari bilgiler/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Ticari ve sertifika/ }));
     const ara = await screen.findByRole('searchbox', { name: /Tedarikçi/ });
     fireEvent.change(ara, { target: { value: 'o' } });
     await new Promise((r) => { setTimeout(r, 350); });
@@ -216,7 +216,7 @@ describe('M1 yeni kart sihirbazı', () => {
     sunucuKur(YAZAN);
     ac('?kopya=mornek1');
     expect(await screen.findByText('Kopya oluşturuldu. Ölçüleri değiştirip yeni kod olarak kaydedebilirsin.')).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Form ve ölçüler' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Form, ölçü, tolerans' })).toBeTruthy();
   });
 
   test('kg fiyatı yalnız fiyat görene sorulur; yalnız satin-alma.oku (planlama) sormaz (195 a, 3401-1 a)', async () => {
@@ -237,13 +237,13 @@ describe('M1 yeni kart sihirbazı', () => {
   test('açılış yarım taslak yazmaz; ilk değişiklikten sonra sayfa yenilenince taslak sürer', async () => {
     sunucuKur(YAZAN);
     ac('?kopya=mornek1');
-    await screen.findByRole('heading', { name: 'Form ve ölçüler' });
+    await screen.findByRole('heading', { name: 'Form, ölçü, tolerans' });
     expect(localStorage.length).toBe(0);
     fireEvent.click(within(screen.getByRole('navigation', { name: 'Sihirbaz' })).getByRole('button', { name: 'Geri' }));
-    await screen.findByRole('heading', { name: 'Sınıf ve kalite' });
+    await screen.findByRole('heading', { name: 'Kalite ve standart' });
     cleanup();
     ac();
-    expect(await screen.findByRole('heading', { name: 'Sınıf ve kalite' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Kalite ve standart' })).toBeTruthy();
   });
 
   test('rotası olan kartta operasyonlar salt okunur ve Reçete ve Rota bağlantısı; rotasız kartta düzenleyici (233 a)', async () => {
@@ -432,7 +432,7 @@ describe('1882 yeni kart kayıtlı kartın kimliğini taşımaz', () => {
     expect(screen.queryByText('HM-MET-C45-0001')).toBeNull();
     cleanup();
     ac('?kart=mornek1');
-    expect(await screen.findByRole('heading', { name: 'Ticari bilgiler' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Ticari ve sertifika' })).toBeTruthy();
   });
 
   test('düzenleme bırakıldıktan sonra "Yeni kart"ta seçilen mamul kimlik taşımaz (bildirilen hata)', async () => {

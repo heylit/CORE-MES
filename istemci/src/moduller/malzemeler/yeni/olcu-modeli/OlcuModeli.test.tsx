@@ -11,7 +11,7 @@ describe('3215 hammaddede ölçülü kesit', () => {
   test('kesit çizimi ölçüden çizilir ve ölçü yazınca değişir; ölçü silinince çizim kalkar', async () => {
     sunucuKur(YAZAN);
     yeniEkranAc('/malzemeler/yeni?kopya=mornek1');
-    await screen.findByRole('heading', { name: 'Form ve ölçüler' });
+    await screen.findByRole('heading', { name: 'Form, ölçü, tolerans' });
     expect(screen.getByRole('img', { name: 'Ölçülü kesit çizimi: Ø50 × 1000' })).toBeTruthy();
     fireEvent.change(screen.getByRole('textbox', { name: /Çap/ }), { target: { value: '80' } });
     expect(await screen.findByRole('img', { name: 'Ölçülü kesit çizimi: Ø80 × 1000' })).toBeTruthy();
