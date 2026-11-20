@@ -476,9 +476,11 @@ const FASON_DONUS_SAATI = '08:00';
    emri durumu (durum.emirler) ya da kayıttaki kopyası: { orders: [{ id, status }], opStatus: { "emir|root|sıra": durum } }. Sıra adımın
    rotadaki yeridir (1'den, seq sırasıyla; iş emirleri rotadan bu sırayla açılır). Bütün adımı biten emir de düşer. */
 function tmiBitenler(emirler, D) {
-  const y = { siparis: {}, adim: {}, firma: {}, firmaKim: {} };
+  const y = { siparis: {}, adim: {}, firma: {}, firmaKim: {}, ust: {} };
   if (!emirler || typeof emirler !== 'object') return y;
   for (const o of emirler.orders || []) if (o && (o.status === 'tamam' || o.status === 'iptal')) y.siparis[String(o.id)] = 1;
+  /* 3511: bölünen emrin yeni partisi üst emrine bağlıdır (parentId); üst emrin adımına bildirilen bekleme partiye bu bağla geçer (ustBeklemesiUygula) */
+  for (const o of emirler.orders || []) if (o && o.parentId != null && o.parentId !== '') y.ust[String(o.id)] = String(o.parentId);
   const durum = emirler.opStatus || {};
   const yer = emirler.opYer || {};
   const urun = Object.fromEntries(((D && D.urunler) || []).map(u => [u.id, u]));
@@ -517,7 +519,35 @@ function bitenUygula(st, b) {
   if (Object.keys(b.siparis).length) { st.D.siparisler = (st.D.siparisler || []).filter(s => !b.siparis[s.id]); tmEksikYaz(st); }
   /* 1473 a: biten adımın malzemesi tüketilmiştir; siparişi verilmemiş eksik onsuz yeniden yazılır */
   if (Object.keys(b.adim).length) { st.bitti = Object.assign({}, st.bitti || {}, b.adim); tmEksikYaz(st); }
+  if (b.ust && st.adimBekle && Object.keys(b.ust).length) ustBeklemesiUygula(st, b);
   return st;
+}
+/* 3511: emir Üretim Emirleri'nde bölününce yeni parti ayrı kimlikle açılır; adıma bildirilen bekleme üst emrin adım kimliğinde kalır.
+   Beklemenin nedeni (malzeme yok, kişi yok) adıma aittir: partinin aynı adımı da o andan önce başlayamaz. Partinin kendi geçerli beklemesi
+   varsa o geçer; en yakın üst emrin kaydı okunur. Üst emrin adımı bittiyse ya da üst emir kapandıysa neden kalkmıştır, bekleme geçmez
+   (başlamış adımın kaydını stKur zaten saymaz). Ek süre bildirildiği emirde kalır: hangi partide harcanacağı bilinmez. */
+function ustBeklemesiUygula(st, b) {
+  const kendi = Object.assign({}, st.adimBekle), idler = Object.keys(kendi);
+  for (const s of st.D.siparisler || []) {
+    const gorulen = new Set([String(s.id)]);
+    for (let p = b.ust[s.id]; p != null && !gorulen.has(p); p = b.ust[p]) {
+      gorulen.add(p);
+      if (b.siparis[p]) continue;
+      for (const id of idler) {
+        if (!id.startsWith(p + '.') || b.adim[id]) continue;
+        const hedef = s.id + '.' + id.slice(p.length + 1);
+        if (st.adimBekle[hedef] || (st.gercek[hedef] && st.gercek[hedef].S != null)) continue;
+        beklemeKoy(st, hedef, kendi[id].kadar);
+      }
+    }
+  }
+}
+/* Bekleme kilitli saatten sonra bitiyorsa kilit bu hesapta uygulanmaz (kayıttaki kilit durur; motor uyarı yazar): kilit beklemeyi
+   sessizce ezmesin. */
+function beklemeKoy(st, id, k) {
+  (st.adimBekle = st.adimBekle || {})[id] = { kadar: k };
+  const lk = st.locks && st.locks[id];
+  if (lk && isFinite(+lk.S) && k > +lk.S + 1e-9) { delete st.locks[id]; (st.beklemeKilit = st.beklemeKilit || []).push(id); }
 }
 /* Başlamış adımlar (391 a): kalanın tek kaynağı sunucudur (durum.calisanAdimlar, anahtar "emir no|OP no"). Anahtar planın işlem kimliğine
    (sipariş.adım) kayıttaki emir ve rota adımından çevrilir; karşılığı olmayan adım (rotasız emir, emirde değişen adım) gelmez. Saatler
@@ -838,17 +868,14 @@ function stKur(S, ek = [], gevset = true) {
   const adimEk = S.w && S.w.adimEk && typeof S.w.adimEk === 'object' ? S.w.adimEk : {};
   if (Object.keys(adimEk).length) { st.adimEk = clone(adimEk); for (const id in adimEk) if (st.gercek[id]) st.gercek[id].ek = clone(adimEk[id]); }
   /* 3335-3c: adıma bildirilen bekleme (w.adimBekle: işlem -> { kadar, neden }): işlem o andan önce başlayamaz. Başlamış ya da bitmiş
-     adımın kaydı etkisizdir (gerçekleşen yer sabittir). Bekleme kilitli saatten sonra bitiyorsa kilit bu hesapta uygulanmaz (kayıttaki
-     kilit durur; motor uyarı yazar): kilit beklemeyi sessizce ezmesin. */
+     adımın kaydı etkisizdir (gerçekleşen yer sabittir). */
   const adimBekle = S.w && S.w.adimBekle && typeof S.w.adimBekle === 'object' ? S.w.adimBekle : {};
   /* st.now burada henüz başlangıç değeridir (gerçek saat simdiUygula ile sonra konur); geçmişte kalan kayıt çalışmanın saatiyle süzülür */
   const beklemeSimdi = S.simdi != null && isFinite(+S.simdi) && +S.simdi >= 0 ? +S.simdi : st.now;
   for (const id in adimBekle) {
     const k = +(adimBekle[id] && adimBekle[id].kadar);
     if (!isFinite(k) || k <= beklemeSimdi || (st.gercek[id] && st.gercek[id].S != null)) continue;
-    (st.adimBekle = st.adimBekle || {})[id] = { kadar: k };
-    const lk = st.locks && st.locks[id];
-    if (lk && isFinite(+lk.S) && k > +lk.S + 1e-9) { delete st.locks[id]; (st.beklemeKilit = st.beklemeKilit || []).push(id); }
+    beklemeKoy(st, id, k);
   }
   const kapali = new Set([...(gevset ? kapaliKisitlar(S) : []), ...ek]);
   for (const k of kapali) if (GEVSEK[k]) GEVSEK[k](st);
