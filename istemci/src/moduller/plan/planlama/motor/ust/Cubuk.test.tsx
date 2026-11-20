@@ -159,4 +159,13 @@ describe('plan şeridinde sayfa yuvaları (3317)', () => {
     render(<Cubuk plan={false} guncel={false} planYaz nabiz={null} nabizAcik={false} nabizAc={() => {}} ozeteGit={() => {}} refSec={null} sabitle={null} sabitAd={null} yuva={{ satir: () => {}, alt: () => {} }} />);
     expect(cubuk().getByText('Plan yok')).toBeTruthy();
   });
+  it('3486: uygulama sürerken toplu düğme döner ve "Uygulanıyor" der', () => {
+    render(
+      <Cubuk plan guncel={false} planYaz nabiz={nabiz(0)} nabizAcik={false} nabizAc={() => {}} ozeteGit={() => {}} refSec={null} sabitle={null} sabitAd={null}
+        bekleyenUygula={{ uygula: vi.fn(), suruyor: true, say: 2 }} yuva={null} />,
+    );
+    const d = screen.getByText('Uygulanıyor').closest('button')!;
+    expect(d.getAttribute('aria-busy')).toBe('true');
+    expect(d.querySelector('.tc-dugme-doner')).not.toBeNull();
+  });
 });

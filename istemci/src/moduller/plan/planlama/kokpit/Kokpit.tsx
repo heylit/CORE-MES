@@ -18,6 +18,7 @@ import { useEmirNo } from '../ortak/emir-no.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import { AdimSorunu } from './AdimSorunu.tsx';
 import { Ayarlar } from './Ayarlar.tsx';
+import { useBitinceBildir } from './bitince-bildir.ts';
 import { emirYonu, planYonu } from './ayarlar.ts';
 import { Kapasite } from './Kapasite.tsx';
 import { Engeller } from './Engeller.tsx';
@@ -236,11 +237,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   }, [onayAcik, bekleyenUygulayici, uyarYaz]);
   const mesgul = diziliyor || taslak?.mesgul === true || taslak?.diziliyor === true;
   // Planla düğmesinin sonucu: dizme bitince bir kez bildirilir.
-  const planlaIletisi = useRef<string | null>(null);
-  useEffect(() => {
-    if (mesgul || planlaIletisi.current === null) return;
-    bildir('bilgi', planlaIletisi.current); planlaIletisi.current = null;
-  }, [mesgul, bildir]);
+  const planlaIletisi = useBitinceBildir(mesgul, bildir);
 
   const secEmir = o.secim.siparis !== null && emir.has(o.secim.siparis) ? o.secim.siparis : null;
   const secIs = o.secim.adim !== null && m.isler[o.secim.adim] ? o.secim.adim : null;
@@ -286,8 +283,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const yenidenPlanla = useCallback(async (isler: readonly string[], ileti: string): Promise<void> => {
     if (!taslak || !yazabilir || isler.length === 0) return;
     // Sonuç dizme bitince söylenir: komut yazıldığında plan henüz yeniden dizilmemiştir (kişi düğmenin işe yaradığını bitişte görür).
-    if (await taslak.yaz({ tur: 'yeniden-planla', isler: [...isler] })) planlaIletisi.current = `${ileti} Geri al ile alınır.`;
-  }, [taslak, yazabilir]);
+    if (await taslak.yaz({ tur: 'yeniden-planla', isler: [...isler] })) planlaIletisi(`${ileti} Geri al ile alınır.`);
+  }, [taslak, yazabilir, planlaIletisi]);
   const planlaIste = useCallback((t: PlanlaIstegi['tur']) => { setPlanla((p) => ({ n: (p?.n ?? 0) + 1, tur: t })); }, []);
 
   // Tahtadan bırakılan iş: önce sunucu önizlemesi. Geçersiz yer yazılmaz; emri terminden sonraya atan taşıma onay ister.
