@@ -52,6 +52,8 @@ describe('Grup sınırları (3463-1b)', () => {
     expect(await screen.findByText('50 – 56 mm')).toBeTruthy();
     expect(screen.getByText('metal/celik')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Sınır ekle' })).toBeNull();
+    fireEvent.click(screen.getByText('50 – 56 mm'));
+    expect(screen.queryByRole('dialog')).toBeNull();
     fireEvent.click(screen.getByRole('tab', { name: /Kart zarfı/ }));
     fireEvent.click(await screen.findByRole('button', { name: /HM-MET-C45-0001/ }));
     const ayrinti = screen.getByRole('region', { name: 'Kartın zarfı' });
@@ -78,6 +80,10 @@ describe('Grup sınırları (3463-1b)', () => {
     fireEvent.change(yer, { target: { value: 'metal/pirinc' } });
     expect(within(pencere).getByText('Bu kapsamda hammadde kartı yok')).toBeTruthy();
     fireEvent.change(yer, { target: { value: 'metal/celik' } });
+    fireEvent.change(within(pencere).getByLabelText('Kapsam'), { target: { value: 'kalite' } });
+    expect((within(pencere).getByLabelText('Uygulandığı yer') as HTMLSelectElement).value).toBe('');
+    fireEvent.change(within(pencere).getByLabelText('Kapsam'), { target: { value: 'sinif' } });
+    fireEvent.change(yer, { target: { value: 'metal/celik' } });
     expect(within(pencere).getByText(/Sınıf metal\/celik: 12 hammadde kartı/)).toBeTruthy();
     fireEvent.change(within(pencere).getByLabelText('Nitelik'), { target: { value: 'd' } });
     fireEvent.change(within(pencere).getByLabelText('En az (mm)'), { target: { value: '49,5' } });
@@ -94,4 +100,19 @@ describe('Grup sınırları (3463-1b)', () => {
     fireEvent.click(within(onay).getByRole('button', { name: 'Sınırı kaldır' }));
     await waitFor(() => expect(istekler.find((i) => i.yol === '/malzeme-alternatifleri/siniri/4/kaldir')?.govde).toEqual({ surum: 2 }));
   });
+
+  test('var olan grup sınırı sürümüyle güncellenir; kapsamı değişmez', async () => {
+    const istekler = sunucuKur(YONETICI, yollar({ 'POST /malzeme-alternatifleri/siniri/kaydet': () => json(200, { tamam: true }) }));
+    yeniEkranAc(ADRES);
+    fireEvent.click(await screen.findByRole('tab', { name: /Grup sınırları/ }));
+    fireEvent.click(await screen.findByText('50 – 56 mm'));
+    const pencere = await screen.findByRole('dialog');
+    expect(within(pencere).queryByLabelText('Uygulandığı yer')).toBeNull();
+    fireEvent.change(within(pencere).getByLabelText('En çok (mm)'), { target: { value: '58' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => expect(istekler.find((i) => i.yol === '/malzeme-alternatifleri/siniri/kaydet')?.govde).toEqual({
+      kapsamTuru: 'kalite', kapsam: 'C45', nitelik: 'd', degerler: null, alt: 50, ust: 58, surum: 2,
+    }));
+  });
 });
+

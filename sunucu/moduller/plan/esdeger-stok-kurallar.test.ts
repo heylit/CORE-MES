@@ -24,6 +24,12 @@ describe('plan: eşdeğer kartların stoğu (3463-1b)', () => {
     assert.deepEqual([pay.get(A), pay.get(B), pay.get(C)], [4, -4, undefined]);
   });
 
+  test('artan, eksiği olan üyelere kart numarası sırasıyla dağılır (VARSAYIM: K1 sıra yazmıyor)', () => {
+    const uc = new Map([[A, [A, B, C]], [B, [A, B, C]], [C, [A, B, C]]]);
+    const pay = esdegerStokPayi(new Map([[B, 6], [C, 6]]), new Map([[A, '10']]), uc);
+    assert.deepEqual([pay.get(A), pay.get(B), pay.get(C)], [-10, 6, 4]);
+  });
+
   const plan: IhtiyacGirdisi = {
     emirler: [{ id: 1, no: 'E-1' }, { id: 2, no: 'E-2' }],
     ihtiyaclar: new Map([[1, [{ malzemeNo: A, opNo: 10, brut: '8' }]], [2, [{ malzemeNo: B, opNo: 10, brut: '8' }]]]),

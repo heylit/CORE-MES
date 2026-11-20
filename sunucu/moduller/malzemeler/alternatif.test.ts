@@ -236,6 +236,14 @@ describe('Malzemeler ikame ve alternatifler', () => {
     // 3463-1b: plan ve stok grubu bu okumayla alır; grupta olmayan kart haritada yoktur.
     const gruplar = await vt().tx((db) => esdegerGruplari(db, [a, lama]));
     assert.deepEqual([...gruplar], [[a, [a, b, c].sort((x, y) => x - y)]]);
+    // İptal kart grupta sayılmaz; tek üye kalan grup hiç dönmez (durum sonra geri konur).
+    const durumYaz = (nolar: number[], d: string) => vt().tx((db) => db.sorgu('UPDATE malzeme_katalog_karti SET onay_durumu = $2 WHERE no = ANY($1::int[])', [nolar, d]));
+    const eski = (await vt().tek<{ d: string }>('SELECT onay_durumu AS d FROM malzeme_katalog_karti WHERE no = $1', [c]))!.d;
+    await durumYaz([c], 'iptal');
+    assert.deepEqual([...(await vt().tx((db) => esdegerGruplari(db, [a, c])))], [[a, [a, b].sort((x, y) => x - y)]]);
+    await durumYaz([b], 'iptal');
+    assert.deepEqual([...(await vt().tx((db) => esdegerGruplari(db, [a])))], []);
+    await durumYaz([b, c], eski);
     const okuma = await vt().tx((db) => kartinAlternatifKartlari(db, a, { kullanimYeri: 'satin_alma' }));
     assert.deepEqual(okuma.filter((k) => k.tur === 'esdeger').map((k) => [k.no, k.sonuc]), [[b, 'ayni'], [c, 'ayni']]);
     assert.ok(!okuma.some((k) => k.tur === 'alternatif' && (k.no === b || k.no === c)), 'eşdeğer alternatif listesinde tekrar etmez');
