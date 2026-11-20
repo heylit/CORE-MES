@@ -99,14 +99,15 @@ export async function planUygula(a: PlanKurmaAyari & { liste: readonly BekleyenD
 
 // Düğmelerin yüzü: yazamayan ya da çalışması olmayan için null (düğme yerinde pasif kalır).
 export interface PlanKurucu { kur: () => void; suruyor: boolean }
-export function usePlanKur(o: Pick<PlanlamaEkranOzellikleri, 'komut' | 'yetki' | 'calisma' | 'depo'>, uyar: (ileti: string) => void): PlanKurucu | null {
+// uyar hatayı, tamam başarıyı söyler: çağıran ikisini kendi tonuyla bağlar (hata kırmızı, başarı bilgi). tamam verilmezse başarı söylenmez.
+export function usePlanKur(o: Pick<PlanlamaEkranOzellikleri, 'komut' | 'yetki' | 'calisma' | 'depo'>, uyar: (ileti: string) => void, tamam?: (ileti: string) => void): PlanKurucu | null {
   const s = useSyncExternalStore(abone, () => suruyor);
   const { komut, calisma } = o; const kim = o.depo.ben?.kisi.ad ?? '';
   const kur = useCallback(() => {
     if (!komut) return;
     const calisti = !suruyor;
-    void planKur({ komut, kim }).then((h) => { if (h) uyar(h); else if (calisti) uyar('Plan kuruldu.'); });
-  }, [komut, kim, uyar]);
+    void planKur({ komut, kim }).then((h) => { if (h) uyar(h); else if (calisti) tamam?.('Plan kuruldu.'); });
+  }, [komut, kim, uyar, tamam]);
   return komut && calisma && o.yetki.planYaz ? { kur, suruyor: s } : null;
 }
 
@@ -128,7 +129,7 @@ export function useBekleyenKarari(o: Pick<PlanlamaEkranOzellikleri, 'komut' | 'y
 // yazamıyorsa null.
 // `komutunDevami`: sunucu komutundan sonra kendiliğinden uygulama; komutla tek geri alma adımıdır.
 export interface BekleyenUygulayici { uygula: (komutunDevami?: boolean) => void; suruyor: boolean; say: number }
-export function useBekleyenUygula(o: Pick<PlanlamaEkranOzellikleri, 'komut' | 'yetki' | 'calisma' | 'depo'>, uyar: (ileti: string) => void): BekleyenUygulayici | null {
+export function useBekleyenUygula(o: Pick<PlanlamaEkranOzellikleri, 'komut' | 'yetki' | 'calisma' | 'depo'>, uyar: (ileti: string) => void, tamam?: (ileti: string) => void): BekleyenUygulayici | null {
   const s = useSyncExternalStore(abone, () => suruyor);
   const { komut, calisma } = o; const kim = o.depo.ben?.kisi.ad ?? '';
   const liste = useMemo(() => (calisma && calisma.plan !== null && calisma.plan.dataVer !== calisma.dataVer ? bekleyenListesi(calisma) : []), [calisma]);
@@ -137,9 +138,9 @@ export function useBekleyenUygula(o: Pick<PlanlamaEkranOzellikleri, 'komut' | 'y
     // Bitince sonuç söylenir: düğme çalışırken döner, biter bitmez kişi neyin işlendiğini görür. Zaten süren uygulama ikinci kez söylenmez.
     const calisti = !suruyor, n = liste.length;
     void planUygula({ komut, kim, liste, idler: liste.map((e) => e.id), ...(komutunDevami === true ? { komutunDevami: true } : {}) }).then((h) => {
-      if (h) uyar(h); else if (calisti) uyar(n > 1 ? `${String(n)} veri değişikliği plana işlendi.` : 'Veri değişikliği plana işlendi.');
+      if (h) uyar(h); else if (calisti) tamam?.(n > 1 ? `${String(n)} veri değişikliği plana işlendi.` : 'Veri değişikliği plana işlendi.');
     });
-  }, [komut, kim, liste, uyar]);
+  }, [komut, kim, liste, uyar, tamam]);
   return komut && calisma && o.yetki.planYaz && liste.length > 0 ? { uygula, suruyor: s, say: liste.length } : null;
 }
 

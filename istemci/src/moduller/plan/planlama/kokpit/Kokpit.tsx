@@ -225,7 +225,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const ortakBekler = taslakVar || (taslak !== null && taslak.cevap === null);
   const ortak = ortakBekler ? { ...o, komut: null, depo: { ...o.depo, calismaSurumu: null } } : o;
   useOtomatikUygula(ortak, uyarYaz);
-  const bekleyenUygulayici = useBekleyenUygula(ortak, uyarYaz);
+  const bekleyenUygulayici = useBekleyenUygula(ortak, uyarYaz, uyarYaz);
   const diziliyor = bekleyenUygulayici?.suruyor === true;
   // 3414-5 a: Canlıya al bekleyen veri değişikliklerini kendisi plana işler (ayrı bir Uygula adımı yoktur). Kişinin değişiklikleri plana
   // yazılana kadar uygulayıcı yoktur (ortakBekler); yazılınca gelir ve bir kez çalışır.

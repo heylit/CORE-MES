@@ -109,8 +109,9 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
 
   const { bildir } = useBildirim();
   const uyar = useCallback((ileti: string) => bildir('hata', ileti), [bildir]);
-  const planKur = usePlanKur(o, uyar);
-  const bekleyenUygula = useBekleyenUygula(o, uyar);
+  const bilgi = useCallback((ileti: string) => bildir('bilgi', ileti), [bildir]);
+  const planKur = usePlanKur(o, uyar, bilgi);
+  const bekleyenUygula = useBekleyenUygula(o, uyar, bilgi);
 
   // Klavye: yazı alanında ve açık pencerede çalışmaz. V dönem, G H K görünüm, F sığdır, + ve - yakınlık, Esc seçimi bırakır.
   const tuslar = useRef({ gorunumSec, sec, secim, olcekSec: o.olcekSec, donem });

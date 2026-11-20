@@ -41,8 +41,9 @@ export function PlanSeridi(o: PlanlamaEkranOzellikleri & { gorunum: PlanlamaGoru
   const y = c ? nabizYazmalari(c, o.komut, o.yetki, p, nabiz) : { refSec: null, sabitle: null, sabitAd: null };
   const { bildir } = useBildirim();
   const hata = useCallback((ileti: string) => bildir('hata', ileti), [bildir]);
-  const planKur = usePlanKur(o, hata);
-  const bekleyenUygula = useBekleyenUygula(o, hata);
+  const bilgi = useCallback((ileti: string) => bildir('bilgi', ileti), [bildir]);
+  const planKur = usePlanKur(o, hata, bilgi);
+  const bekleyenUygula = useBekleyenUygula(o, hata, bilgi);
   return (
     <div className="tc-pym" data-serit="">
       <Cubuk plan={!!p} guncel={c ? planGuncel(c) : false} planYaz={o.yetki.planYaz} nabiz={nabiz} nabizAcik={acik} nabizAc={setAcik}
