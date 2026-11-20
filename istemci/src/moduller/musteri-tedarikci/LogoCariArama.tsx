@@ -5,6 +5,7 @@ import { Dugme, DurumKutusu, Girdi, Rozet, Simge, Tablo, useBildirim, type Sutun
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useTekGonderim } from '../../ortak/veri/korumali-komut.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { CrmRozeti, useLogoCrmKodla } from './logo-crm.tsx';
 import { cevabiYaz } from './yazma.ts';
 
 // Logo'dan cari arama (2118). Eşleşen firma varsa yeni kart açılmaz, bağlanır (2118-2 a); bağlama Logo kodunu, kaydını ve firma kodunu (3473) yazar.
@@ -78,6 +79,9 @@ export function LogoCariArama({ hedef, formaAl, baglandi, ilkMetin = '' }: Ozell
       </Dugme>
     );
   };
+  // 3480: CRM bağı bağlamadan önce de görünür; tedarikçi carisi ve alınamayan cari sorulmaz.
+  const bulunan = sonuc.data?.durum === 'tamam' ? sonuc.data.cariler : [];
+  const crm = useLogoCrmKodla(bulunan.filter((c) => c.oneri.tur !== 'tedarikci' && c.alinamaz === null).map((c) => c.kod));
   const sutunlar: readonly Sutun<LogoCariSatiri>[] = [
     { anahtar: 'kod', baslik: 'Logo kodu', mono: true, kirilmaz: true, hucre: (c) => c.kod },
     { anahtar: 'ad', baslik: 'Ad', hucre: (c) => c.ad },
@@ -91,6 +95,7 @@ export function LogoCariArama({ hedef, formaAl, baglandi, ilkMetin = '' }: Ozell
             ? <Rozet ton="bilgi"><Simge ad="plus" boyut="k" />Yok</Rozet>
             : <Rozet ton="uyari"><Simge ad="alert" boyut="k" />{ESLESME_NEDENI[c.eslesme.neden]}: {c.eslesme.kod ?? c.eslesme.ad}</Rozet>}
           {!c.aktif && <Rozet ton="pasif">Logo'da kullanım dışı</Rozet>}
+          <CrmRozeti bilgi={crm.durum(c.kod)} />
         </span>
       ),
     },

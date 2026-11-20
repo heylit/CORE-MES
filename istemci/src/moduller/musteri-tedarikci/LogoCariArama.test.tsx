@@ -34,6 +34,9 @@ function sunucuKur(arama: LogoCariAramaCevabi) {
     const yontem = secenek?.method ?? 'GET';
     istekler.push({ yontem, yol, govde: secenek?.body ? JSON.parse(String(secenek.body)) as unknown : undefined });
     if (yontem === 'GET' && yol.startsWith('/musteri-tedarikci/logo-cari/ara?')) return json(200, arama);
+    if (yontem === 'GET' && yol.startsWith('/logo/cari-crm-kod?')) {
+      return json(200, { durumlar: [{ kod: 'LG.003', durum: 'var', neden: null, kodlar: null }, { kod: 'LG.004', durum: 'yok', neden: null, kodlar: null }] });
+    }
     if (yontem === 'GET' && yol.startsWith('/musteri-tedarikci/firmalar?')) return json(200, { satirlar: [], toplam: 0, sayfa: 1, sayfaBoyu: 20 });
     if (yontem === 'POST') return json(200, { firma: { ...FIRMA, logoCariKodu: 'LG.002', logoKayitNo: 2, logoGonderimDurumu: 'gonderildi', surum: 5 } });
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Yok' });
@@ -97,6 +100,21 @@ describe('Logo\'dan cari (2118)', () => {
     await waitFor(() => expect(baglandi).toHaveBeenCalled());
     const b = istekler.find((i) => i.yontem === 'POST');
     expect([b?.yol, b?.govde]).toEqual(['/musteri-tedarikci/firmalar/20/logo-bagla', { logoKodu: 'LG.002', surum: 4 }]);
+  });
+
+  // 3480 (kullanıcı 20.11 08:15): CRM bağı bağlamadan önce görünür; tedarikçi carisi sorulmaz.
+  it('aramada müşteri carisinin CRM bağı bağlamadan görünür; CRM\'siz carede rozet yok; tedarikçi, virgüllü ve alınamaz cari sorulmaz', async () => {
+    const musteri = (kod: string): LogoCariSatiri => ({ ...YENI, kod, ad: `Deneme ${kod}`, oneri: { ...oneri(kod, `Deneme ${kod}`), tur: 'musteri' } });
+    // Test T2, T3: virgüllü kod (sorgu ayırıcısı) ve alınamaz cari sorulmaz.
+    const virgullu = musteri('LG,005');
+    const alinamaz = { ...musteri('LG.006'), alinamaz: 'Logo cari kodu 1-40 karakter olmalı.' };
+    const istekler = sunucuKur({ durum: 'tamam', ileti: null, cariler: [musteri('LG.003'), musteri('LG.004'), YENI, virgullu, alinamaz] });
+    ciz(<LogoCariArama hedef={null} formaAl={() => undefined} baglandi={() => undefined} />);
+    await ara('Deneme');
+    const satir = (kod: string) => within(((screen.getByText(kod)).closest('tr') ?? document.body) as HTMLElement);
+    await waitFor(() => expect(satir('LG.003').getByText('CRM')).toBeTruthy());
+    expect(satir('LG.004').queryByText('CRM')).toBeNull();
+    expect(istekler.filter((i) => i.yol.startsWith('/logo/cari-crm-kod?')).map((i) => decodeURIComponent(i.yol))).toEqual(['/logo/cari-crm-kod?kod=LG.003,LG.004']);
   });
 
   it('firma ayrıntısında başka firmaya bağlı cari bağlanamaz; Logo kapalıysa ileti görünür', async () => {

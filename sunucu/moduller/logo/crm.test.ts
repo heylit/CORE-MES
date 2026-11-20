@@ -6,7 +6,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { logoCrmCevabi } from '#paylasilan/sozlesme/logo.ts';
-import type { LogoCariHazirlikCevabi, LogoCrmCevabi } from '#paylasilan/sozlesme/logo.ts';
+import type { LogoCariHazirlikCevabi, LogoCrmCevabi, LogoCrmKodCevabi } from '#paylasilan/sozlesme/logo.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -16,7 +16,7 @@ import type { KopruIstemcisi } from './kopru.ts';
 import { crmDurumu, crmKodlari, crmKodlariniAyikla, crmSorguyuKeser, crmSorulurMu, crmSorunu, satisTeklifiGovdesi, seciliCrmEngeli } from './kurallar.ts';
 import { sahteKopruAc } from './sahte-kopru.ts';
 import type { SahteKopru } from './sahte-kopru.ts';
-import { cariCrmDurumlari, cariHazirligi, crmDenetimi, LOGO_CRM_DENETIM_SURESI_MS } from './servis.ts';
+import { CRM_KOD_BELLEK_MS, cariCrmDurumlari, cariKodCrmDurumlari, crmKodBelleginiTemizle, cariHazirligi, crmDenetimi, LOGO_CRM_DENETIM_SURESI_MS } from './servis.ts';
 
 // 3359 a: carinin Logo CRM satış müşterisi durumu. Yardımcı sahte köprüdür; veriler uydurmadır (ORN-).
 const PAROLA = 'dogru-parola-1';
@@ -282,6 +282,63 @@ describe('Logo CRM durumu (3359, gerçek PostgreSQL ve sahte köprü)', () => {
     assert.deepEqual(okuyan.govde.durumlar.map((d) => d.firmaId), [f.crmli]);
     assert.equal((await oku('crm-satis', `id=${f.crmli}`)).durum, 403);
     assert.equal((await oku('crm-yonetici', `id=${Array.from({ length: 51 }, (_, i) => i + 1).join(',')}`)).durum, 400);
+  });
+
+  // 3480 (kullanıcı 20.11 08:15): Logo cari aramasında bağlanmamış carinin CRM'i koddan; CORE firması gerekmez.
+  test('CRM-13 koddan: CORE firması olmayan carinin de durumu döner; yalnız GET; kapalıda istek yok; uç okuyana açık, 50\'den fazla kod 400', async () => {
+    await ayar(true);
+    crmKodBelleginiTemizle();
+    const once = kopru.istekler.length;
+    const c = await cariKodCrmDurumlari(vt(), istemci(), ['ORN-C-1003', 'ORN-C-9999']);
+    assert.deepEqual(c.durumlar.map((d) => [d.kod, d.durum]), [['ORN-C-1003', 'var'], ['ORN-C-9999', 'yok']]);
+    assert.deepEqual(kopru.istekler.slice(once).map((i) => [i.yontem, i.yol]),
+      [['GET', '/api/SalesOffer/customer/ORN-C-1003'], ['GET', '/api/SalesOffer/customer/ORN-C-9999']]);
+    await ayar(false);
+    const sonra = kopru.istekler.length;
+    const kapali = await cariKodCrmDurumlari(vt(), istemci(), ['ORN-C-1001']);
+    assert.equal(kapali.durumlar[0]?.durum, 'okunamadi');
+    assert.equal(kopru.istekler.length, sonra);
+    await ayar(true);
+    const oku = async (kim: string, q: string) => {
+      const r = await app.inject({ method: 'GET', url: `/api/logo/cari-crm-kod?${q}`, headers: { cookie: cerez.get(kim) ?? '' } });
+      return { durum: r.statusCode, govde: r.json<LogoCrmKodCevabi>() };
+    };
+    assert.equal((await oku('crm-okuyan', 'kod=ORN-C-1001')).durum, 200);
+    assert.equal((await oku('crm-satis', 'kod=ORN-C-1001')).durum, 403);
+    assert.equal((await oku('crm-yonetici', `kod=${Array.from({ length: 51 }, (_, i) => `ORN-K${String(i)}`).join(',')}`)).durum, 400);
+  });
+
+  test('CRM-14 koddan (Risk K1): aynı kod 5 dakika içinde yeniden sorulunca yardımcıya gitmez; süre dolunca ve okunamayan yeniden sorulur; ulaşılamayınca kalanlar sorulmaz', async () => {
+    await ayar(true);
+    crmKodBelleginiTemizle();
+    let simdi = 1_000_000;
+    const saat = () => simdi;
+    const once = kopru.istekler.length;
+    await cariKodCrmDurumlari(vt(), istemci(), ['ORN-C-1001'], saat);
+    simdi += CRM_KOD_BELLEK_MS - 1;
+    const ikinci = await cariKodCrmDurumlari(vt(), istemci(), ['orn-c-1001'], saat);
+    assert.deepEqual(ikinci.durumlar.map((d) => [d.kod, d.durum]), [['orn-c-1001', 'var']]);
+    assert.equal(kopru.istekler.length - once, 1);
+    simdi += 1;
+    await cariKodCrmDurumlari(vt(), istemci(), ['ORN-C-1001'], saat);
+    assert.equal(kopru.istekler.length - once, 2);
+    // Okunamayan bellekte tutulmaz: yardımcı kapalıyken okunan kod açılınca yeniden sorulur.
+    const kapali = await sahteKopruAc();
+    const adres = kapali.adres;
+    await kapali.kapat();
+    crmKodBelleginiTemizle();
+    // Kesme (Test T1): ilk kodda yardımcıya ulaşılamazsa kalan kodlar için yardımcı çağrılmaz, hepsi aynı nedenle okunamadı.
+    const ulasilamayan = kopruIstemcisiKur({ adres, anahtar: kopru.anahtar }, { sureMs: 2000 });
+    const cagrilan: string[] = [];
+    const sayan = { ...ulasilamayan, satisMusterisiVarMi: (k: string) => { cagrilan.push(k); return ulasilamayan.satisMusterisiVarMi(k); } };
+    const r = await cariKodCrmDurumlari(vt(), sayan, ['ORN-C-1003', 'ORN-C-1001', 'ORN-C-1002'], saat);
+    assert.deepEqual(r.durumlar.map((d) => d.durum), ['okunamadi', 'okunamadi', 'okunamadi']);
+    assert.deepEqual(cagrilan, ['ORN-C-1003']);
+    assert.match(r.durumlar[0]?.neden ?? '', /ulaşılamadı/);
+    assert.ok(r.durumlar.every((d) => d.neden === r.durumlar[0]?.neden));
+    const sonra = kopru.istekler.length;
+    assert.equal((await cariKodCrmDurumlari(vt(), istemci(), ['ORN-C-1003'], saat)).durumlar[0]?.durum, 'var');
+    assert.equal(kopru.istekler.length - sonra, 1);
   });
 
   test('CRM-6 teklif hazırlığı: cari kodu yoksa "cari-yok" ve istek yok; varsa CRM durumu; kapalıyken okunamadı; uç teklifi görebilene açık, firma yoksa 404', async () => {

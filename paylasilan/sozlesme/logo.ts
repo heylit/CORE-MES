@@ -364,6 +364,23 @@ export const logoCrmCevabi = z.object({
   })),
 });
 export type LogoCrmCevabi = z.output<typeof logoCrmCevabi>;
+// Logo cari aramasında ve geçiş listesinde bağlanmamış carinin de CRM durumu: firma numarası yerine Logo cari kodu (virgülle ayrılır;
+// virgül içeren kod sorulamaz). Cevap durumları koddan bağlar.
+export const logoCrmKodSorgusu = z.object({
+  kod: z.string().trim().min(1, 'En az bir cari kodu verin.')
+    .transform((v) => [...new Set(v.split(',').map((p) => p.trim()).filter((p) => p !== ''))])
+    .pipe(z.array(z.string().max(40)).min(1, 'En az bir cari kodu verin.').max(LOGO_CRM_SINIRI, `En çok ${LOGO_CRM_SINIRI} cari kodu.`)),
+});
+export type LogoCrmKodSorgusu = z.input<typeof logoCrmKodSorgusu>;
+export const logoCrmKodCevabi = z.object({
+  durumlar: z.array(z.object({
+    kod: z.string(),
+    durum: z.enum(LOGO_CRM_DURUMLARI),
+    neden: z.string().nullable(),
+    kodlar: z.object({ kodlar: z.array(z.string()), sayi: z.number().int().nonnegative(), secilebilir: z.boolean() }).nullable(),
+  })),
+});
+export type LogoCrmKodCevabi = z.output<typeof logoCrmKodCevabi>;
 // 3391-2 a: Logo geçişinde CRM bağı denetimi. Aktif müşteri firmalarının Logo carileri tek tek sorulur (en çok LOGO_CRM_DENETIM_SINIRI);
 // yalnız düzeltilecekler döner: CRM'siz cari, birden fazla bağı olup seçimi olmayan cari, seçili kodu Logo'da artık bağlı olmayan cari.
 export const LOGO_CRM_SORUNLARI = ['crm-yok', 'cok-bag', 'secim-kalkti'] as const;
