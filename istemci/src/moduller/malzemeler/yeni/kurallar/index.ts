@@ -18,6 +18,7 @@ export type {
   OperasyonGrubu, OperasyonTanimi, Ozellik, OzellikDegerleri, Sinif, Sozluk, Taslak, Tur, TurAdimi,
 } from './cekirdek/tipler.ts';
 export type { UyumSorunu } from './cekirdek/uyumluluk.ts';
+export { HAMMADDE_KART_JETONLARI, hammaddeJetonlari } from './cekirdek/aciklama-jetonlari.ts';
 export {
   DURUM_ADI_STANDARDI, STANDART_FORM_GRUPLARI, kimyasalStandartlari, mekanikFormaBagli, mekanikStandartlari, standartSecenegiMi,
 } from './cekirdek/metal-standartlari.ts';
@@ -421,6 +422,7 @@ export function teknikKod(d: KartKaydi, b: KuralBaglami): ReturnType<Cekirdek['t
 export function kodGrubu(d: KartKaydi, b: KuralBaglami): ReturnType<Cekirdek['kodGrubu']> { return taslakla(b, d, (m, d) => m.kodGrubu(d)); }
 export function kodOnek(d: Parameters<Cekirdek['kodOnek']>[0], b: KuralBaglami): ReturnType<Cekirdek['kodOnek']> { return cekirdek(b).kodOnek(d); }
 export function firmaKodluTur(d: Parameters<Cekirdek['firmaKodluTur']>[0], b: KuralBaglami): ReturnType<Cekirdek['firmaKodluTur']> { return cekirdek(b).firmaKodluTur(d); }
+export function aciklamaSigmayan(d: Parameters<Cekirdek['aciklamaSigmayan']>[0], b: KuralBaglami): ReturnType<Cekirdek['aciklamaSigmayan']> { return cekirdek(b).aciklamaSigmayan(d); }
 export function finalAc(d: Parameters<Cekirdek['finalAc']>[0], i: Parameters<Cekirdek['finalAc']>[1], b: KuralBaglami): ReturnType<Cekirdek['finalAc']> { return cekirdek(b).finalAc(d, i); }
 export function opListe(b: KuralBaglami): ReturnType<Cekirdek['opListe']> { return cekirdek(b).opListe(); }
 export function opGruplar(b: KuralBaglami): ReturnType<Cekirdek['opGruplar']> { return cekirdek(b).opGruplar(); }

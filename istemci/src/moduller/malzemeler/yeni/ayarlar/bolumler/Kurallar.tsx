@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Dugme, Girdi, IsaretKutusu, Tablo, type Sutun } from '../../../../../ortak/arayuz/index.ts';
 import type { Duzen } from '../duzen.ts';
 import {
-  CAKISMA_OZEL, CAKISMA_VARSAYILAN, KOD_TUR, TURLER, alanZorunlu, cakismaAlanAdi, firmaKodluTurler, turAlanlari, type Alan,
+  CAKISMA_OZEL, CAKISMA_VARSAYILAN, KOD_TUR, TURLER, alanZorunlu, cakismaAlanAdi, firmaKodluTurler, hammaddeJetonlari, turAlanlari, type Alan,
 } from '../kaynak.ts';
 import {
   CAKISMA_VARSAYILAN_ALANI, cakismaVarsayilanaDon, cakismaYaz, kalipYaz, kuralVarsayilanaDon, turKurali, varsayilanBirlesirMi, zorunluYaz,
@@ -63,7 +63,8 @@ export function TurKurallari({ d }: { d: Duzen }) {
     if (birlesir) d.degis(cakismaYaz(d.v, t, CAKISMA_VARSAYILAN_ALANI, secili));
     else if (secili) d.degis(cakismaVarsayilanaDon(d.v, t));
   };
-  const jetonlar = [['OTO', 'bu yerin otomatik değeri'], ['AD', 'kartın adı'], ...alanlar.map((a) => [a.k, a.ad])] as const;
+  // 3476-2: hammaddenin seçimleri kartta türün alan listesinde değil, aile seçeneklerindedir; yer tutucuları ayrıca listelenir.
+  const jetonlar = [['OTO', 'bu yerin otomatik değeri'], ['AD', 'kartın adı'], ...(t === 'hammadde' ? hammaddeJetonlari(d.b.t.FAMS) : alanlar.map((a) => [a.k, a.ad] as const))] as const;
   // 1948 a: yer tutucu, son odaklanan kalıbın sonuna eklenir ve hemen kaydedilir (kutudan çıkınca kaydedilen değer de aynı yoldan geçer).
   const [hedef, hedefYaz] = useState<KalipYolu>('ad');
   const kayitliKalip = (yol: KalipYolu) => (yol === 'ad' ? K.ad ?? '' : ac[Number(yol.slice(2))] ?? '');
@@ -128,7 +129,9 @@ export function TurKurallari({ d }: { d: Duzen }) {
           ))}
         </div>
         <p className="tc-ma-yardim">
-          Örnek: <code>{'{OTO}; {musteri}'}</code> otomatik değerin sonuna müşteri kodunu ekler.
+          {t === 'hammadde'
+            ? <>Örnek: Açıklama 3'e <code>{'{sertifika}; {ut}; {std}; {test}'}</code> yazılırsa sertifika ve UT öne geçer. Her satır Genel'deki azami uzunlukta kısaltılır; sığmazsa önce sondakiler düşer ve kart özeti hangilerinin düştüğünü söyler.</>
+            : <>Örnek: <code>{'{OTO}; {musteri}'}</code> otomatik değerin sonuna müşteri kodunu ekler.</>}
           {(t === 'mamul' || t === 'yarimamul') && ' Bu türde otomatik Açıklama 3 müşteri kodunu zaten başta taşır.'}
         </p>
       </Kutu>
