@@ -4,6 +4,7 @@ import { CRIT, FLOW, OPEN, COMMITTED, PRIO, QUALITY, stLabel } from "./constants
 import { SIMGELER } from "../../../ortak/tasarim/simgeler.ts";
 import { S, V, memo, nameOf, settings, type Page } from "./store.ts";
 import { onaylayabilecekler } from "./onaylayan.ts";
+import { kararAyrintisiHTML, onaylayanOzeti } from "./karar-ayrintisi.ts";
 import {
   awardTotals, budgetUse, evaluate, lateBy, matOf, matStats, payText, priceHistory, quoteCalc, requiredApprover,
   savingsOf, spendLines, supName, supplierStats, validity, vsLast, fiyatUyarisi, type EvalRow, type Evaluation, type PriceEntry,
@@ -720,6 +721,7 @@ export function tabDecision(r: PurchaseRequest, part: "select" | "split" | "appr
   const canSplit = !!ev.split;
   const tt = r.award ? awardTotals(r) : null;
   const ap = tt ? requiredApprover(tt.totalTRY) : null;
+  const oz = onaylayanOzeti(r, tt ? tt.totalTRY : null);
   const approvals = a.approvals || [];
   const aps = approvalState(r);
   const approved = aps.state === "approved";
@@ -782,11 +784,18 @@ export function tabDecision(r: PurchaseRequest, part: "select" | "split" | "appr
     <div class="kv">
       <div><div class="k">Tutar</div><div class="v">${tt ? money(tt.totalTRY, "TRY", 0) : "–"}</div><div class="d">KDV hariç${isSplit ? ", nakliye dahil" : ""}</div></div>
       <div><div class="k">Gereken onay</div><div class="v" data-sa-y="22">${ap ? esc(ap.role) : "Limit tanımlı değil"}</div><div class="d${ap ? " sa-onaylayan" : ""}">${ap ? esc(onaylayabilecekler(settings(), ap)) : "Ayarlar'da onay limiti girilince yazılır"}</div></div>
+      ${oz ? `<div data-sa-onaylayan-ozeti><div class="k">Onaylayan</div><div class="v">${esc(oz.baslik)}</div><div class="d">${esc(oz.ayrinti)}</div></div>` : ""}
       ${bu && tt ? `<div><div class="k">${esc(r.department)} bütçesi</div><div class="v">${bu.budget ? pct((bu.used + (ordered ? 0 : tt!.totalTRY)) / bu.budget * 100) : "–"}</div><div class="d">${bu.budget ? `bu alımla ${short(bu.used + (ordered ? 0 : tt!.totalTRY))} / ${short(bu.budget)}` : "bütçe tanımlı değil"}</div></div>` : ""}
     </div>
     ${approvals.length ? `<ul class="log">${approvals.map(x => `<li><time>${fmtTs(x.at)}</time><span><b>${x.decision === "approved" ? "Onaylandı" : "Reddedildi"}</b>, ${esc(x.name || nameOf(x.by))}${x.note ? `: ${esc(x.note)}` : ""}</span></li>`).join("")}</ul>` : ""}
     ${canApprove ? `<label class="f"><span>Not</span><input type="text" id="ap-note" placeholder="İsteğe bağlı" data-onay-eylemi="reddet"></label>
     <div class="row"><button class="btn good" id="ap-onayla" data-act="approve" data-onay-eylemi="onayla">Onayla</button><button class="btn" data-act="approval-form">Onay formu</button><button class="btn bad" data-act="reject">Reddet ve değerlendirmeye geri gönder</button><span class="small muted">Onay özetini e-postayla göndermek için aşağıdaki karar özetini kopyalayın.</span></div>` : ordered ? "" : `<div class="row"><button class="btn" data-act="approval-form">Onay formu</button><span class="small muted">${aps.state === "rejected" ? "Karar reddedildi. Seçimi güncelleyip yeniden onaya gönderin." : approved ? "Karar onaylandı; sipariş verilebilir." : baskasiOnaylar ? "Onay, onay yetkisi olan kişide; Onaylar sayfasından verilir." : "Onay, karar onaya gönderildiğinde açılır."}</span></div>`}`, decided)}`;
+  const secilenler = new Set(isSplit ? Object.values(a.splits ?? {}) : [sel]);
+  const pd = decided ? `<section class="panel" data-sa-karar-ayrintisi><div class="panel-h"><h2>Ödeme, kur ve faiz</h2><span class="sub">Kararın ve diğer uygun tekliflerin ödeme karşılaştırması</span></div><div class="panel-b stack">
+    ${kararAyrintisiHTML(r, ev.elig, secilenler)}
+    ${faizUyarisi(ev.elig.filter(x => x.c.faizYok).map(x => x.q.currency))}
+    <p class="small muted">Tutarlar KDV hariç. ${OPEN.includes(r.status) ? "Kur güncel kurdur; karar onaya gönderildiğinde sabitlenen kur ayrıca yazılır." : "Kur sipariş günü sabitlenen kurdur."} Ödeme günleri tahminidir: avans sipariş günü, vadeli kısım ${a.vadeBaslangici === "siparis" ? "siparişten" : "beklenen teslimden"} sayılır.${isSplit ? " Kalem bazlı kararda sütunlar tekliflerin tamamıdır; siparişlere düşen tutar Onay formundadır." : ""}</p>
+  </div></section>` : "";
   const p3 = `${panel(3, isSplit ? `Siparişler (${orders.length} tedarikçi)` : "Sipariş", ordered ? '<span class="flag good">sipariş verildi</span>' : '<span class="flag mute">onaydan sonra</span>', `
     ${approved || ordered ? `${isSplit ? ordersFormHTML(r, orders) : singleOrderHTML(r, a)}
     <div class="row"><button class="btn primary" data-act="place-order">${ordered ? "Sipariş bilgisini güncelle" : isSplit ? "Siparişleri verildi olarak işaretle" : "Siparişi verildi olarak işaretle"}</button>${ordered ? '<button class="btn" data-act="order-item-change">Kalemi değiştir</button><button class="btn" data-act="order-close">Kalanı kapat</button>' + logoBekletDugmeleri(orders) + '<button class="btn" data-act="order-invoices">Faturalar</button><button class="btn" data-act="order-certs">Sertifikalar</button>' : ""}</div>
@@ -800,8 +809,8 @@ export function tabDecision(r: PurchaseRequest, part: "select" | "split" | "appr
   const ps = `${decided ? `<section class="panel"><div class="panel-h"><h2>Karar özeti</h2><span class="sub">Onay e-postası veya dosya için</span><span class="spacer"></span><button class="btn sm" data-act="approval-form">Onay formu</button><button class="btn sm" data-act="copy-summary">Kopyala</button><button class="btn sm" data-act="csv">CSV indir</button></div><div class="panel-b"><pre class="out">${esc(summaryText(r))}</pre></div></section>` : ""}`;
   if (part === "select") return p1;
   if (part === "split") return bolme;
-  if (part !== "all") return decided ? `<div class="stack">${part === "approval" ? p2 + ps : part === "order" ? p3 + pt : pt + p4}</div>` : `<div class="panel">${empty("Henüz karar verilmedi", "Önce karşılaştırıp bir teklif ya da dağılım seçin; karar onaya gönderilince bu bölüm açılır.", '<button class="btn primary" data-act="tab" data-tab="compare">Karşılaştır ve karar ver</button>')}</div>`;
-  return `<div class="stack">${p1}${p2}${p3}${pt}${p4}${ps}</div>`;
+  if (part !== "all") return decided ? `<div class="stack">${part === "approval" ? p2 + pd + ps : part === "order" ? p3 + pt : pt + p4}</div>` : `<div class="panel">${empty("Henüz karar verilmedi", "Önce karşılaştırıp bir teklif ya da dağılım seçin; karar onaya gönderilince bu bölüm açılır.", '<button class="btn primary" data-act="tab" data-tab="compare">Karşılaştır ve karar ver</button>')}</div>`;
+  return `<div class="stack">${p1}${p2}${pd}${p3}${pt}${p4}${ps}</div>`;
 }
 /** Siparişin Logo rozeti (#205 karar 1): durum, gönderildiyse Logo kayıt numarası, hatada metni. İptal varsa onun durumu öne geçer. */
 export function logoRozeti(l: SiparisLogo | null | undefined): string {

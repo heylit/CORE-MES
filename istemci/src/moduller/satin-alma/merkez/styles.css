@@ -588,6 +588,19 @@
 .sa-kok .doc-note{ font-size:var(--yazi-xs); color:dimgray; margin-top:var(--b-2); }
 .sa-kok .doc-box{ border:1px solid silver; padding:var(--b-2) var(--b-2); min-height:40px; }
 .sa-kok .sigs{ display:grid; grid-template-columns:repeat(3,1fr); gap:var(--b-4); margin-top:var(--b-5); }
+.sa-kok .doc-onay{ break-inside:avoid; page-break-inside:avoid; }
+.sa-kok .sa-ka-kartlar{ display:none; }
+.sa-kok .sa-ka-kart{ border:1px solid var(--sa-line); border-radius:var(--sa-radius); padding:var(--b-3); }
+.sa-kok .sa-ka-kart.sec{ box-shadow:inset 4px 0 0 var(--sa-signal); }
+.sa-kok .sa-ka-kart h3{ margin:0 0 var(--b-2); font-size:var(--yazi-m); display:flex; flex-wrap:wrap; gap:var(--b-2); align-items:baseline; }
+.sa-kok .sa-ka-kart h3 .sn{ flex:1 1 100%; }
+.sa-kok .sa-ka-kart dl{ margin:0; display:grid; gap:var(--b-2); }
+.sa-kok .sa-ka-kart dl > div{ display:grid; grid-template-columns:minmax(0, 2fr) minmax(0, 3fr); gap:var(--b-2); border-top:1px solid var(--sa-line); padding-top:var(--b-2); }
+.sa-kok .sa-ka-kart dt{ color:var(--sa-muted); font-size:var(--yazi-s); }
+.sa-kok .sa-ka-kart dd{ margin:0; text-align:right; font-variant-numeric:tabular-nums; }
+.sa-kok .sa-ka-kart dd .sub{ display:block; }
+.sa-kok .sa-ka-kart .key dd{ font-weight:600; }
+@container (max-width:560px){ .sa-kok .sa-ka-tablo{ display:none; } .sa-kok .sa-ka-kartlar{ display:grid; gap:var(--b-3); } }
 .sa-kok .sig{ border:1px solid silver; padding:var(--b-2) var(--b-2); min-height:110px; display:flex; flex-direction:column; }
 .sa-kok .sig-t{ font-weight:600; } .sa-kok .sig-n{ color:dimgray; } .sa-kok .sig-l{ margin-top:auto; border-top:1px dashed darkgray; padding-top:var(--b-1); font-size:var(--yazi-xs); color:gray; }
 /* teklif isteme formu; geniş ekranda alanlar solda kağıt sağda, dar ekranda alt alta. Fiyat sütunları tedarikçi doldursun diye boş. */
