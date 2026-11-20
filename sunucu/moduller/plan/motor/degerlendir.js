@@ -110,9 +110,30 @@ function cakisanIsler(p, cx) {
   }
   return l;
 }
+/* 3501 a: adım takvim bittiği için yerleşmediyse hesap takvimi büyütüp baştan kurulur (degerlendir). Takvimle geçmeyen nedenler (vardiya, kişi
+   ya da ayarcı yok, hazırlık hiçbir bloğa sığmıyor, malzemenin tarihi yok, aday yok, öncülü yerleşmedi) takvimi büyütmez: büyük takvim o adımı
+   yine yerleştirmez, yalnız hesabı yavaşlatır. Fasonda takvimle geçen tek neden çıkış gününün takvime sığmamasıdır. */
+const TAKVIM_DAR = { takvimDar: true };
+let DG_TAKVIM_UZAR = false;
+/** @param {any} p @param {Derleme} cx */
+function takvimDarMi(p, cx) {
+  for (const id of p.fail || []) {
+    const x = (p.failNeden || {})[id]; if (x && x.kod !== 'zaman') continue; const o = cx.byId[id]; if (!o) continue;
+    const z = zamanOlcusu(cx, o, p), alt = zamanTanisi(z).alt;
+    if (alt === 'sure' || alt === 'dolu' || (alt === 'malzeme' && isFinite(z.malzemeHazirSaat))) return true;
+    if (alt === 'bilinmiyor' && (o.c || []).some(c => { const f = c.fas && cx.FS[c.m.slice(1)]; return f && !f.hemen && (f.cikisGunleri || []).length > 0; })) return true;
+  }
+  return false;
+}
+/* Kayıtlı planı güncel veriyle çözen her yol yoklar: veri kayıttan sonra değişmiş (duruş girilmiş) ve bir adımı takvimin ötesine itmiş olabilir.
+   Plan kaydına uğramadan dönen ölçü (iyileştirmenin ve hamlenin eski gecikmesi, ek mesai ve öne çekme tabanı) yoksa o adımsız ölçülür. Arama
+   bütçesi atılacak hesapta harcanmasın diye yoklama aramadan önce yapılır. */
+/** @param {any} p @param {Derleme} cx */
+function takvimYokla(p, cx) { if (DG_TAKVIM_UZAR && HDAYS < TAKVIM_ENCOK && takvimDarMi(p, cx) && takvimBuyut()) throw TAKVIM_DAR; }
 /** @param {any} [p] @param {MotorDurumu} [st] @param {any} [ref] */
 function planKaydi(p, st, ref) {
   const cx = p.cx || compile(st);
+  takvimYokla(p, cx);
   const ef = evaluate(p.cx ? p : { ...p, cx }, st, ref, false);
   const ops = {}; for (const id in p.ops) ops[id] = opKaydi(p.ops[id]);
   const J = {}; for (const k in ef.J) { const x = ef.J[k]; J[k] = { C: isFinite(x.C) ? x.C : null, T: x.T, ...(x.ufukEksik > 0 ? { ufukEksik: Math.round(x.ufukEksik * 100) / 100 } : {}) }; }
@@ -142,6 +163,7 @@ function kilitliSiraIhlali(p, st, cx) {
 /* sayfanın kısa araması (t-tekyer kisaArama) */
 /** @param {MotorDurumu} [st] @param {Derleme} [cx] @param {any} [p0] @param {any} [ms] */
 function kisaArama(st, cx, p0, ms) {
+  takvimYokla(p0, cx);
   const L = lns(st, p0, null, { ms, seed: 7, free: true });
   let p = p0; if (cmpEv(L.e, evaluate(p0, st, null, true)) > 0 && (L.plan.fail || []).length <= (p0.fail || []).length && kilitliSiraIhlali(L.plan, st, cx) <= kilitliSiraIhlali(p0, st, cx)) p = L.plan;
   slack(p, cx); return p;
@@ -267,6 +289,7 @@ function pdCalistir(liste, ms = 0) { return liste.map(x => ({ ...x, k: dgPlanKur
 function ymOlc(st) {
   stHazirla(st); const cx = compile(st);
   const p0 = lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, [], cx, true); p0.cx = p0.cx || cx;
+  takvimYokla(p0, cx);
   const L = lns(st, p0, null, { ms: 300, seed: 11, free: true }); const e0 = evaluate(p0, st, null, true);
   const p = cmpEv(L.e, e0) > 0 ? L.plan : p0; p.cx = p.cx || cx; slack(p, cx); const e = evaluate(p, st, null, true);
   return { p, e, cx, gec: ymGecTL(e), diger: e.tl - (e.mesaiTL || 0), fail: (p.fail || []).length };
@@ -373,6 +396,7 @@ function moAdaylar() {
 function moOlc(a, X) {
   const st = stOf(); if (a) st.D.satinalma[a.i].gelis = a.soz - X * 24;
   stHazirla(st); const cx = compile(st); const p = lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, [], cx, true);
+  takvimYokla(p, cx);
   const e = evaluate(p, st, null, true);
   const T = {}; for (const j of (a ? a.isler : Object.keys(e.J))) T[j] = e.J[j] ? e.J[j].T : null;
   return { tl: tlToplam(e), wT: e.wT, sumT: e.sumT, late: e.late, fail: (p.fail || []).length, T };
@@ -451,7 +475,7 @@ function ilkYerlestirme(st, cx, ms) {
   for (const [k1, k2] of ILK_KATSAYILAR.slice(0, n)) {
     st.w.k1 = k1; st.w.k2 = k2;
     const p = schedule(st, 'dagit', null, { cx }); slack(p, cx); const e = evaluate(p, st, null, true);
-    if (!en) ilk = e.wT;
+    if (!en) { ilk = e.wT; takvimYokla(p, cx); }
     if (!en || cmpEv(e, en.e) > 0) en = { p, e };
   }
   [st.w.k1, st.w.k2] = w0;
@@ -537,6 +561,7 @@ function planUygula(isler) {
   if (gerideVar) { const ej = new Set(Object.keys(geride).map(id => S.plan.ops[id].job)); for (const r of Object.values(S.plan.ops)) if (ej.has(r.job) && st.locks[r.id] && st.locks[r.id].gecici) delete st.locks[r.id]; }
   const cx = compile(st); const ms = (+S.w.sure || 10) * 1000; const t0 = Date.now();
   let cur = yerindeTutarakCoz(st, cx, { ops: S.plan.ops, fail: [] }, geride); slack(cur, cx);
+  takvimYokla(cur, cx);
   delete st.geride;
   const ref = { ops: Object.keys(geride).length ? Object.fromEntries(Object.entries(S.plan.ops).filter(([id]) => !geride[id])) : S.plan.ops };
   let E = evaluate(cur, st, ref, true); const ilk = E.wT;
@@ -568,12 +593,17 @@ function hamleFarki(k) {
   return l.sort((x, y) => y.d - x.d).slice(0, HAMLE_DEGISEN_EN_COK).map(({ d, ...x }) => x);
 }
 /* kayıtlı planın gecikmesi aynı ölçüyle yeniden hesaplanır: kayıttaki özet eski bir hesaptan kalmış olabilir */
-function kayitliGecikme() { const st = stHazirla(stOf()); const cx = compile(st); return evaluate(lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, [], cx, false), st, null, true).wT; }
+function kayitliGecikme() {
+  const st = stHazirla(stOf()); const cx = compile(st); const p = lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, [], cx, false);
+  takvimYokla(p, cx);
+  return evaluate(p, st, null, true).wT;
+}
 
 /* İyileştirme ara: kayıtlı plan çözülür, çalışmanın çözüm bütçesinde LNS; kayıtlı plana göre değişim bedeli sayılır. Daha iyisi yoksa plan null. */
 function planIyilestir() {
   const st = stHazirla(dengeKilit(stOf())); const cx = compile(st); const ms = (+S.w.sure || 10) * 1000; const t0 = Date.now(); const ref = { ops: S.plan.ops };
   let cur = yerindeTutarakCoz(st, cx, { ops: S.plan.ops, fail: S.plan.fail || [] }, {}); delete st.geride; slack(cur, cx);
+  takvimYokla(cur, cx);
   const E0 = evaluate(cur, st, ref, true); let E = E0, bulundu = false;
   let seed = 17, durgun = 0;
   while (Date.now() - t0 < ms && durgun < 4) {
@@ -604,6 +634,7 @@ function dgHamle(mods) {
     if (cmpEv(evaluate(q, st, null, true), evaluate(p, st, null, true)) > 0) p = q; else break;
   }
   slack(p, cx);
+  takvimYokla(p, cx);
   if (mods.length) {
     const stR = { ...st, locks: { ...st.locks } };
     for (const [id] of mods) { const r = p.ops[id]; if (r) stR.locks[id] = { m: r.m, S: r.S, gecici: 1 }; }
@@ -704,9 +735,21 @@ const DG_PLANLI = new Set(['plan-uygula', 'termin-uzatma', 'malzeme-terminleri',
 /* Hamle kayıtlı planı taban alır: plan veriden eskiyse önce bekleyen değişiklik uygulanır. */
 const DG_GUNCEL = new Set(['plan-iyilestir', 'one-al', 'sira-degistir']);
 function degerlendir(calisma, kayit, kaynak, bugun, an, istek) {
+  DG_TAKVIM_UZAR = true;
+  try {
+    for (;;) {
+      try { return tekHesap(calisma, kayit, kaynak, bugun, an, istek); } catch (e) { if (e !== TAKVIM_DAR) throw e; }
+    }
+  } finally { DG_TAKVIM_UZAR = false; takvimSifirla(); }
+}
+function tekHesap(calisma, kayit, kaynak, bugun, an, istek) {
   S = null; U = {}; DG_CX = null;
   const g = girdiKur(calisma, kayit, kaynak, bugun); if (!g) return null;
-  S = g.S; const k = kayit && kayit.items ? kayit : null;
+  S = g.S; olcekKur(S.w); const k = kayit && kayit.items ? kayit : null;
+  /* Kayıtlı plan büyümüş takvimle kurulmuş olabilir: takvim en baştan o planın son bitişini kapsar. Yoksa planı çözen hesap ötedeki adımı
+     yerleştiremez; plan kaydı döndürmeyen yollar (iyileştirmede daha iyisi yok, hamlenin eski gecikmesi) bunu sessizce eksik planla ölçerdi. */
+  if (S.plan && S.plan.ops) { let son = 0; for (const id in S.plan.ops) { const C = S.plan.ops[id].C; if (isFinite(C) && C > son) son = C; }
+    while (son > HDAYS * 24 && takvimBuyut()) olcekKur(S.w); }
   DG_BITEN = tmiBitenler((kaynak && kaynak.durum && kaynak.durum.emirler) || k, S.D);
   const n = tmiSaat(S.D, an); if (n != null && n >= 0) S.simdi = Math.floor(n * 4) / 4;
   saatSabitle(an, cxAl().ops.length);
