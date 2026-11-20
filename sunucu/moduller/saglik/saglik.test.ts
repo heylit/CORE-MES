@@ -27,6 +27,7 @@ import type { AyrintiGirdisi, MetrikKaynagi } from './servis.ts';
 import { vtIstatistigiOku, walArsiviOku } from './sorgular.ts';
 import { saglikUclari } from './uclar.ts';
 import type { SaglikKaynagi } from './uclar.ts';
+import { butunOlaylariVeEskiKademeleriAc } from '../bildirim/disari.ts';
 
 const GOC_KLASORU = fileURLToPath(new URL('../../gocler/', import.meta.url));
 
@@ -329,6 +330,8 @@ describe('sağlık (gerçek PostgreSQL)', () => {
 
   before(async () => {
     ortam = await testVeritabaniKur('saglik');
+    // 3478: olaylar varsayılan kapalıdır; bu dosya 3478'den önceki gibi açık olaylarla çalışır.
+    await ortam.vt.tx((db) => butunOlaylariVeEskiKademeleriAc(db, null));
     const asil = ortam.vt;
     baglanti = kesilebilirVt(asil);
     app = await uygulamaKur({ vt: baglanti.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(baglanti.vt) });

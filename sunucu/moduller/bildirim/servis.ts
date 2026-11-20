@@ -7,16 +7,17 @@ import { kayitYoluMu } from '#paylasilan/sayfa-tanimi.ts';
 import type { CagriEkibi } from '#paylasilan/sozlesme/durus-nedenleri.ts';
 import {
   ALICI_AYARLI_TURLER, BILDIRIM_TUR_ANAHTARLARI, BILDIRIM_TURLERI, CAGRI_EKIP_ADLARI, type Bildirim, type BildirimAliciDegistirGovdesi, type BildirimAlicilariCevabi, type BildirimGosterimDegistirGovdesi, type BildirimGosterimleriCevabi, type CagriEkiplerimCevabi, type CagriYonlendirmeCevabi, type CagriYonlendirmeDegistirGovdesi, type BildirimListeDurumu, type BildirimSayacCevabi,
-  type BildirimTuru, type TumunuOkunduCevabi, type YayinSimgesi, type YayinTuru, turSinifi,
+  type BildirimTuru, type BildirimTuruTanimi, type TumunuOkunduCevabi, type YayinSimgesi, type YayinTuru, anahtarliTurMu, turSinifi,
   type BildirimPushAbonelikGovdesi, type BildirimPushDurumuCevabi, type BildirimPushTurDegistirGovdesi, type BildirimPushTurleriCevabi, turPushVarsayilani,
 } from '#paylasilan/sozlesme/bildirim.ts';
 import { kisiAdlari, kisiSecenekleri, kisilerinIslemleri, rolSecenekleri, rollerdekiKisiler } from '../kisiler/disari.ts';
 import {
-  ONAY_ILETILERI, alicilariSec, kaynakModulu, metniHazirla, olmayanKimlikler, otomatikGosterim, tekilAnahtar, varsayilanGosterim, varsayilanMi, yolTureUyar,
+  ONAY_ILETILERI, alicilariSec, kaynakModulu, metniHazirla, olayYazimi, olmayanKimlikler, otomatikGosterim, tekilAnahtar, varsayilanGosterim, varsayilanMi, yolTureUyar,
 } from './kurallar.ts';
 import { epostaKuyrugaAl, type EpostaEki } from './eposta.ts';
 import { izinliUcNoktaMi, ortamPushAyari } from './push.ts';
 import * as s from './sorgular.ts';
+import * as so from './sorgular/olay/sorgular.ts';
 
 const BULUNAMADI = 'Bildirim bulunamadı.';
 
@@ -56,6 +57,9 @@ export async function bildirimGonder(db: Db, olay: BildirimOlayi): Promise<numbe
   const tanim = BILDIRIM_TURLERI[olay.tur];
   if (olay.yol !== undefined && olay.yol !== null && !kayitYoluMu(olay.yol)) throw new Error(`Bildirim yolu geçersiz: ${olay.yol}`);
   if (!yolTureUyar(olay.tur, olay.yol)) throw new Error(`Bildirim yolu türün ekranında değil: ${olay.tur} ${olay.yol}`);
+  const anahtarli = anahtarliTurMu(olay.tur);
+  const yazim = olayYazimi({ anahtarli, acik: anahtarli && await so.turAcikMi(db, olay.tur), sinif: turSinifi(olay.tur), onayIstenir: (tanim as BildirimTuruTanimi).onayIstenir === true });
+  if (yazim === 'yok') return 0;
   const { baslik, metin } = metniHazirla(olay.baslik, olay.metin);
   const islemler = await kisilerinIslemleri(db);
   const alicilar = alicilariSec(olay.tur, islemler, {
@@ -67,9 +71,10 @@ export async function bildirimGonder(db: Db, olay: BildirimOlayi): Promise<numbe
   for (const kisiId of alicilar) {
     yazilan.push({ kisiId, ...await s.bildirimYaz(db, {
       kisiId, tur: olay.tur, onem: tanim.onem, baslik, metin, yol: olay.yol ?? null, kaynakModul: kaynakModulu(olay.tur), tekilAnahtar: anahtar,
-      ortada: gosterim.ortada, onayIstenir: gosterim.onayIstenir, sinif: turSinifi(olay.tur),
+      ortada: yazim === 'tam' && gosterim.ortada, onayIstenir: gosterim.onayIstenir, sinif: turSinifi(olay.tur),
     }) });
   }
+  if (yazim !== 'tam') return alicilar.length;
   await epostaKuyrugaAl(db, { tur: olay.tur, baslik, yol: olay.yol ?? null, eposta: olay.eposta, epostaYok: olay.epostaYok }, yazilan, islemler);
   if (alicilar.length > 0 && await pushTuruAcik(db, olay.tur)) await s.pushKuyrugaIsaretle(db, alicilar);
   return alicilar.length;

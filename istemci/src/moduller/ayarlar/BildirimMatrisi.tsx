@@ -4,8 +4,8 @@ import { islemAdi } from '#paylasilan/islem-adlari.ts';
 import { KADEME_ADLARI, KADEME_KAYNAK_ANAHTARLARI, kademeTuru, kaynakKademeleri, type KademeKaynagi } from '#paylasilan/sozlesme/kademe-sabitleri.ts';
 import { EPOSTA_KONU_ADLARI } from '#paylasilan/sozlesme/eposta-sabitleri.ts';
 import type {
-  BildirimAliciSatiri, BildirimAlicilariCevabi, BildirimGosterimSatiri, BildirimGosterimleriCevabi, BildirimOnemi, BildirimPushTurSatiri,
-  BildirimPushTurleriCevabi,
+  BildirimAliciSatiri, BildirimAlicilariCevabi, BildirimGosterimSatiri, BildirimGosterimleriCevabi, BildirimOlayAciklariCevabi, BildirimOlayAcikSatiri,
+  BildirimOnemi, BildirimPushTurSatiri, BildirimPushTurleriCevabi,
 } from '#paylasilan/sozlesme/bildirim.ts';
 import type {
   EpostaSablonlariCevabi, EpostaTetikleyiciDegistirGovdesi, EpostaTetikleyiciSatiri, EpostaTetikleyicileriCevabi,
@@ -17,7 +17,7 @@ import {
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useYetki } from '../../ortak/veri/yetki.ts';
-import { modulAdi } from '../bildirim/disari.ts';
+import { KADEME_AYAR_ANAHTARI, KademeAyarPenceresi, kademeGovdesi, MiniMerdiven, modulAdi } from '../bildirim/disari.ts';
 import './eposta.css';
 
 // 3435-3 a: olay başına bütün kanallar tek tabloda (satır olay, sütun kanal); satıra basınca tek panel, tek Kaydet. Yetki modeli
@@ -29,8 +29,12 @@ export const MATRIS_ANAHTARI = {
   push: ['ayarlar', 'bildirim-push-turleri'] as const,
   tetikleyiciler: ['ayarlar', 'eposta', 'tetikleyiciler'] as const,
   sablonlar: ['ayarlar', 'eposta', 'sablonlar'] as const,
-  kademe: ['ayarlar', 'kademe-kaynaklari'] as const,
+  kademe: KADEME_AYAR_ANAHTARI,
+  olaylar: ['ayarlar', 'bildirim-olaylari'] as const,
 };
+
+// 3478-1 a: ekip çağrısı anahtarsızdır, her zaman gider. Liste sözleşmede (zod'lu dosya); istemci değer ithal etmez, burada tekrarlanır.
+const HER_ZAMAN_GIDEN: ReadonlySet<string> = new Set(['arkon.ekip-cagrisi']);
 
 const ONEM_SIMGESI: Record<BildirimOnemi, SimgeAdi> = { bilgi: 'bell', uyari: 'alert', acil: 'fire' };
 const ONEM_TONU: Record<BildirimOnemi, RozetTonu> = { bilgi: 'pasif', uyari: 'uyari', acil: 'hata' };
@@ -51,12 +55,18 @@ export interface MatrisSatiri {
   push: BildirimPushTurSatiri | null;
   eposta: EpostaTetikleyiciSatiri | null;
   kademe: { kaynak: KademeAyarSatiri | null; no: 2 | 3 | 4 | 5 } | null;
+  // 3478-1 a: olayın ana anahtarı (yoksa olay anahtarsızdır ya da okunamadı) ve kademe kaynağı satırının ayarı.
+  olay: BildirimOlayAcikSatiri | null;
+  kaynak: KademeAyarSatiri | null;
+  herZaman: boolean;
 }
+
+export const acikMi = (m: MatrisSatiri): boolean | null => m.olay?.acik ?? m.kaynak?.acik ?? null;
 
 // Satırlar okunabilen kaynakların birleşimidir; tür ilk okunan kaynaktan adını ve önemini alır.
 export function matrisSatirlari(v: {
   alicilar?: BildirimAlicilariCevabi | undefined; gosterim?: BildirimGosterimleriCevabi | undefined; push?: BildirimPushTurleriCevabi | undefined;
-  tetikleyiciler?: EpostaTetikleyicileriCevabi | undefined; kademe?: KademeAyarlariCevabi | undefined;
+  tetikleyiciler?: EpostaTetikleyicileriCevabi | undefined; kademe?: KademeAyarlariCevabi | undefined; olaylar?: BildirimOlayAciklariCevabi | undefined;
 }): MatrisSatiri[] {
   const satirlar = new Map<string, MatrisSatiri>();
   const al = (s: { tur: string; baslik: string; onem: BildirimOnemi; kaynakModul?: string }): MatrisSatiri => {
@@ -65,7 +75,7 @@ export function matrisSatirlari(v: {
       const k = KADEME_TURLERI.get(s.tur);
       m = {
         tur: s.tur, baslik: s.baslik, onem: s.onem, kaynakModul: s.kaynakModul ?? s.tur.slice(0, s.tur.indexOf('.')),
-        alici: null, gosterim: null, push: null, eposta: null,
+        alici: null, gosterim: null, push: null, eposta: null, olay: null, kaynak: null, herZaman: HER_ZAMAN_GIDEN.has(s.tur),
         kademe: k ? { kaynak: v.kademe?.kaynaklar.find((x) => x.kaynak === k.kaynak) ?? null, no: k.no } : null,
       };
       satirlar.set(s.tur, m);
@@ -76,7 +86,14 @@ export function matrisSatirlari(v: {
   for (const s of v.alicilar?.satirlar ?? []) al(s).alici = s;
   for (const s of v.push?.satirlar ?? []) al(s).push = s;
   for (const s of v.tetikleyiciler?.satirlar ?? []) al(s).eposta = s;
-  return [...satirlar.values()];
+  for (const s of v.olaylar?.satirlar ?? []) al(s).olay = s;
+  // Kademe basamağı türleri (K2-K5) ve kademenin yönettiği türler ayrı satır değildir: kaynak tek satırda, merdiveniyle durur.
+  const olaylar = [...satirlar.values()].filter((m) => m.kademe === null && (v.olaylar === undefined || m.olay !== null || m.herZaman));
+  const kaynaklar = (v.kademe?.kaynaklar ?? []).map((k): MatrisSatiri => ({
+    tur: `kademe:${k.kaynak}`, baslik: k.ad, onem: 'uyari', kaynakModul: k.kaynak.slice(0, k.kaynak.indexOf('.')),
+    alici: null, gosterim: null, push: null, eposta: null, kademe: null, olay: null, kaynak: k, herZaman: false,
+  }));
+  return [...olaylar, ...kaynaklar];
 }
 
 // Seçim yapılmamışsa alıcı varsayılandır (yetkisi olanlar ya da kayda bağlı kişi); tabloda soluk görünür.
@@ -103,6 +120,7 @@ function kademeMetni(m: MatrisSatiri): string | null {
 // sonra yeniden okunan sürümle eski değeri yazar.
 export type Kanal = 'ortada' | 'onay' | 'telefon' | 'eposta';
 export const KANAL_ADI: Record<Kanal, string> = { ortada: 'Ekran ortası', onay: 'Okudum onayı', telefon: 'Telefon', eposta: 'E-posta' };
+const KANAL_SIMGESI: Record<Kanal, SimgeAdi> = { ortada: 'expand', onay: 'check', telefon: 'bell', eposta: 'mail' };
 
 export function kanalDegeri(m: MatrisSatiri, k: Kanal): boolean | null {
   if (k === 'ortada') return m.gosterim?.ortada ?? null;
@@ -139,7 +157,7 @@ function useKanalYazici() {
   const guncel = (): MatrisSatiri[] => matrisSatirlari({
     alicilar: istemci.getQueryData(MATRIS_ANAHTARI.alicilar), gosterim: istemci.getQueryData(MATRIS_ANAHTARI.gosterim),
     push: istemci.getQueryData(MATRIS_ANAHTARI.push), tetikleyiciler: istemci.getQueryData(MATRIS_ANAHTARI.tetikleyiciler),
-    kademe: istemci.getQueryData(MATRIS_ANAHTARI.kademe),
+    kademe: istemci.getQueryData(MATRIS_ANAHTARI.kademe), olaylar: istemci.getQueryData(MATRIS_ANAHTARI.olaylar),
   });
   const anahtar = (x: KanalIsi) => `${x.tur}:${x.kanal}`;
   const yaz = async (isler: readonly KanalIsi[], ozet: string, geriAlinabilir = true): Promise<void> => {
@@ -173,19 +191,34 @@ function useKanalYazici() {
 }
 
 // Grubun kanal anahtarı üç durumludur (hepsi, bazıları, hiç); switch rolü üç durumu taşımadığı için checkbox rolündedir.
+const OLAY_KAPALI_KANAL = 'Olay kapalı; açınca bu kanal kullanılır.';
+
 function TopluAnahtar({ etiket, satirlar, kanal, degistir, disabled }: {
   etiket: string; satirlar: readonly MatrisSatiri[]; kanal: Kanal; degistir: (deger: boolean, hedef: readonly MatrisSatiri[]) => void; disabled: boolean;
 }) {
   const olan = satirlar.filter((m) => kanalDegeri(m, kanal) !== null);
-  if (olan.length === 0) return null;
+  // Kanalı olmayan modülde yer tutulur: Açık anahtarı her modül başlığında aynı yerde kalır.
+  if (olan.length === 0) {
+    return (
+      <span className="tc-matris-toplu tc-matris-toplu-bos" aria-hidden="true">
+        <span className="tc-ackapa tc-matris-toplu-dugme">
+          <span className="tc-ackapa-ray"><span className="tc-ackapa-top" /></span>
+          <span className="tc-matris-toplu-ad">{KANAL_ADI[kanal]}</span>
+        </span>
+        <span className="tc-matris-toplu-sayi">0/0 açık</span>
+      </span>
+    );
+  }
   const acik = olan.filter((m) => kanalDegeri(m, kanal) === true).length;
+  const olayKapali = olan.every((m) => acikMi(m) === false);
   const durum = acik === 0 ? 'false' : acik === olan.length ? 'true' : 'mixed';
   const yeni = durum !== 'true';
   return (
     <span className="tc-matris-toplu">
       <button
         type="button" role="checkbox" aria-checked={durum} aria-label={`${etiket}: ${KANAL_ADI[kanal]}, ${String(acik)}/${String(olan.length)} açık`}
-        className="tc-ackapa tc-matris-toplu-dugme" disabled={disabled}
+        className={`tc-ackapa tc-matris-toplu-dugme${olayKapali ? ' tc-kanal-soluk' : ''}`} disabled={disabled}
+        title={olayKapali ? OLAY_KAPALI_KANAL : undefined}
         onClick={() => { degistir(yeni, olan.filter((m) => kanalDegeri(m, kanal) !== yeni)); }}
       >
         <span className="tc-ackapa-ray" aria-hidden="true"><span className="tc-ackapa-top" /></span>
@@ -195,6 +228,71 @@ function TopluAnahtar({ etiket, satirlar, kanal, degistir, disabled }: {
     </span>
   );
 }
+
+// 3478-1 a, 3478-2 a: olayın ana anahtarı. Olaylar tek uca (bir ya da toplu), kademe kaynakları kendi ayar ucuna yazılır; cevap
+// önbelleğe doğrudan konur. Biri kalırsa öteki geri alınmaz, kalan adıyla bildirilir.
+function useAcikYazici() {
+  const istemci = useQueryClient();
+  const { bildir } = useBildirim();
+  const [bekliyor, setBekliyor] = useState(false);
+  const yaz = async (hedef: readonly MatrisSatiri[], deger: boolean, ozet: string): Promise<void> => {
+    const olaylar = hedef.filter((m) => m.olay !== null && m.olay.acik !== deger);
+    const kaynaklar = hedef.filter((m) => m.kaynak !== null && m.kaynak.acik !== deger);
+    if (olaylar.length + kaynaklar.length === 0) return;
+    setBekliyor(true);
+    const kalan: string[] = [];
+    let ilkHata: unknown = null;
+    const tek = olaylar.length === 1 ? olaylar[0] : undefined;
+    try {
+      const cevap = tek?.olay
+        ? await api.post<BildirimOlayAciklariCevabi>(`/bildirimler/olaylar/${tek.tur}/degistir`, { acik: deger, surum: tek.olay.surum })
+        : olaylar.length > 1 ? await api.post<BildirimOlayAciklariCevabi>('/bildirimler/olaylar/toplu', { turler: olaylar.map((m) => m.tur), acik: deger }) : null;
+      if (cevap) istemci.setQueryData(MATRIS_ANAHTARI.olaylar, cevap);
+    } catch (h) {
+      kalan.push(olaylar.length === 1 ? (tek?.baslik ?? '') : `${String(olaylar.length)} olay`);
+      ilkHata = h;
+      void istemci.invalidateQueries({ queryKey: MATRIS_ANAHTARI.olaylar });
+    }
+    for (const m of kaynaklar) {
+      if (!m.kaynak) continue;
+      try {
+        istemci.setQueryData(MATRIS_ANAHTARI.kademe, await api.post<KademeAyarlariCevabi>(`/bildirim-kademe/kaynaklar/${m.kaynak.kaynak}/ayarla`, kademeGovdesi(m.kaynak, deger)));
+      } catch (h) { kalan.push(m.baslik); ilkHata ??= h; void istemci.invalidateQueries({ queryKey: MATRIS_ANAHTARI.kademe }); }
+    }
+    setBekliyor(false);
+    if (kalan.length > 0) { bildir('hata', `${kalan.join(', ')}: kaydedilemedi. ${hataIletisi(ilkHata, 'Bilinmeyen hata.')}`); return; }
+    bildir('tamam', ozet);
+  };
+  return { yaz, bekliyor };
+}
+
+// Modül başlığında olayların ana anahtarı ve kaçının açık olduğu (oran çubuğu). Üç durumlu: hepsi, bazıları, hiç.
+function AcikTopluAnahtar({ etiket, satirlar, degistir, disabled }: {
+  etiket: string; satirlar: readonly MatrisSatiri[]; degistir: (deger: boolean, hedef: readonly MatrisSatiri[]) => void; disabled: boolean;
+}) {
+  if (satirlar.length === 0) return null;
+  const acik = satirlar.filter((m) => acikMi(m) === true).length;
+  const durum = acik === 0 ? 'false' : acik === satirlar.length ? 'true' : 'mixed';
+  const yeni = durum !== 'true';
+  return (
+    <span className="tc-matris-toplu tc-matris-toplu-acik">
+      <button
+        type="button" role="checkbox" aria-checked={durum} aria-label={`${etiket}: Açık, ${String(acik)}/${String(satirlar.length)} açık`}
+        className="tc-ackapa tc-matris-toplu-dugme" disabled={disabled}
+        onClick={() => { degistir(yeni, satirlar.filter((m) => acikMi(m) !== yeni)); }}
+      >
+        <span className="tc-ackapa-ray" aria-hidden="true"><span className="tc-ackapa-top" /></span>
+        <span className="tc-matris-toplu-ad">Açık</span>
+      </button>
+      <span className="tc-matris-oran-satir">
+        <progress className="tc-matris-oran" value={acik} max={satirlar.length} aria-hidden="true" />
+        <span className="tc-matris-toplu-sayi">{`${String(acik)}/${String(satirlar.length)} açık`}</span>
+      </span>
+    </span>
+  );
+}
+
+const zamanMetni = (deger: string) => new Date(deger).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' });
 
 export function BildirimMatrisi() {
   const yetki = useYetki();
@@ -207,13 +305,21 @@ export function BildirimMatrisi() {
   const tetik = useQuery({ queryKey: MATRIS_ANAHTARI.tetikleyiciler, enabled: eposta, queryFn: () => api.get<EpostaTetikleyicileriCevabi>('/bildirimler/eposta/tetikleyiciler') });
   const sablonlar = useQuery({ queryKey: MATRIS_ANAHTARI.sablonlar, enabled: eposta, queryFn: () => api.get<EpostaSablonlariCevabi>('/bildirimler/eposta/sablonlar') });
   const kademe = useQuery({ queryKey: MATRIS_ANAHTARI.kademe, enabled: kademeYetki, queryFn: () => api.get<KademeAyarlariCevabi>('/bildirim-kademe/kaynaklar') });
+  const olaylar = useQuery({ queryKey: MATRIS_ANAHTARI.olaylar, enabled: ayar, queryFn: () => api.get<BildirimOlayAciklariCevabi>('/bildirimler/olaylar') });
+  const istemci = useQueryClient();
+  const { bildir } = useBildirim();
   const { yaz, bekliyor } = useKanalYazici();
+  const acikYazici = useAcikYazici();
+  const [acikSor, setAcikSor] = useState<{ baslik: string; hedef: readonly MatrisSatiri[] } | null>(null);
+  const [geriSor, setGeriSor] = useState(false);
+  const [geriDonuluyor, setGeriDonuluyor] = useState(false);
+  const [kaynakAcik, setKaynakAcik] = useState<string | null>(null);
   const [arama, setArama] = useState('');
   const [modul, setModul] = useState('');
   const [acik, setAcik] = useState<string | null>(null);
   const [topluSor, setTopluSor] = useState<{ grup: string; kanal: Kanal; hedef: readonly MatrisSatiri[] } | null>(null);
 
-  const sorgular = [ayar ? [alicilar, gosterim, push] : [], eposta ? [tetik] : [], kademeYetki ? [kademe] : []].flat();
+  const sorgular = [ayar ? [alicilar, gosterim, push, olaylar] : [], eposta ? [tetik] : [], kademeYetki ? [kademe] : []].flat();
   if (!yetki.hazir || sorgular.some((q) => q.isPending)) return <Kart baslik="Olaylar ve kanallar"><DurumKutusu durum="yukleniyor" /></Kart>;
   const hatali = sorgular.find((q) => q.isError);
   if (hatali) {
@@ -223,7 +329,9 @@ export function BildirimMatrisi() {
       </Kart>
     );
   }
-  const tumu = matrisSatirlari({ alicilar: alicilar.data, gosterim: gosterim.data, push: push.data, tetikleyiciler: tetik.data, kademe: kademe.data });
+  const tumu = matrisSatirlari({
+    alicilar: alicilar.data, gosterim: gosterim.data, push: push.data, tetikleyiciler: tetik.data, kademe: kademe.data, olaylar: olaylar.data,
+  });
   const rolAdi = new Map((alicilar.data?.roller ?? tetik.data?.roller ?? []).map((r) => [r.id, r.ad]));
   const ozelAdi = new Map((sablonlar.data?.ozel ?? []).map((o) => [o.id, o.ad]));
   const moduller = [...new Set(tumu.map((m) => m.kaynakModul))];
@@ -232,6 +340,29 @@ export function BildirimMatrisi() {
     .filter((m) => modul === '' || m.kaynakModul === modul)
     .filter((m) => aranan === '' || m.baslik.toLocaleLowerCase('tr').includes(aranan));
   const secili = tumu.find((m) => m.tur === acik) ?? null;
+  const seciliKaynak = kademe.data?.kaynaklar.find((k) => k.kaynak === kaynakAcik) ?? null;
+  const oncekiHal = olaylar.data?.oncekiHal ?? null;
+  // Anahtarı yazılabilen satırlar: olay (ayarlar.yaz) ve kademe kaynağı (bildirim.kademe-yonet).
+  const anahtarli = (m: MatrisSatiri) => (m.olay !== null && ayar) || (m.kaynak !== null && kademeYetki);
+  // Açmak kişilere yeni yük düşürür; kademe kaynağı açılınca bekleyen bütün işler ilk turda çalar. Toplu açma ve kaynak açma önce sorulur.
+  const acikDegistir = (baslik: string) => (deger: boolean, hedef: readonly MatrisSatiri[]) => {
+    const yazilacak = hedef.filter(anahtarli);
+    if (yazilacak.length === 0) return;
+    if (deger && (yazilacak.length > 1 || yazilacak.some((m) => m.kaynak !== null))) { setAcikSor({ baslik, hedef: yazilacak }); return; }
+    void acikYazici.yaz(yazilacak, deger, yazilacak.length === 1 ? `${baslik}: ${deger ? 'açıldı' : 'kapandı'}.` : `${baslik}: ${String(yazilacak.length)} olay ${deger ? 'açıldı' : 'kapandı'}.`);
+  };
+  const oncekiHaleDon = async () => {
+    setGeriDonuluyor(true);
+    try {
+      istemci.setQueryData(MATRIS_ANAHTARI.olaylar, await api.post<BildirimOlayAciklariCevabi>('/bildirimler/olaylar/onceki-hale-don', {}));
+      bildir('tamam', 'Bütün olaylar açıldı; kademeli uyarılar önceki hale döndü.');
+    } catch (h) {
+      bildir('hata', hataIletisi(h, 'Önceki hale dönülemedi.'));
+    }
+    void istemci.invalidateQueries({ queryKey: MATRIS_ANAHTARI.kademe });
+    setGeriDonuluyor(false);
+    setGeriSor(false);
+  };
   const kanallar: Kanal[] = [...(ayar ? ['ortada', 'onay', 'telefon'] as const : []), ...(eposta ? ['eposta'] as const : [])];
 
   const tekYaz = (m: MatrisSatiri, k: Kanal, deger: boolean) => {
@@ -247,54 +378,103 @@ export function BildirimMatrisi() {
     topluYaz(grup, k, hedef, deger);
   };
 
-  const anahtarHucresi = (k: Kanal) => (m: MatrisSatiri) => {
-    const d = kanalDegeri(m, k);
-    if (d === null) return <span className="tc-matris-yok">—</span>;
+  // 3478-1 a: kanallar tek "Nasıl" sütununda simge anahtarlarıdır (satır olay başına tek kalır, 1280'de tablo sığar).
+  const nasilHucresi = (m: MatrisSatiri) => {
+    const olan = kanallar.filter((k) => kanalDegeri(m, k) !== null);
+    if (olan.length === 0) return <span className="tc-matris-yok">—</span>;
     return (
       <span className="tc-matris-anahtar">
-        <AcKapa etiket={`${m.baslik}: ${KANAL_ADI[k]}`} acik={d} disabled={bekliyor(m.tur, k)} degistir={(y) => { tekYaz(m, k, y); }} />
-        {k === 'eposta' && m.eposta?.eposta && (
+        <span className="tc-kanal-dugmeler">
+          {kanallar.map((k) => {
+            const d = kanalDegeri(m, k);
+            if (d === null) return <span key={k} className="tc-kanal-dugme tc-kanal-yok" aria-hidden="true" />;
+            const olayKapali = acikMi(m) === false;
+            return (
+              <button
+                key={k} type="button" role="switch" aria-checked={d} aria-label={`${m.baslik}: ${KANAL_ADI[k]}`}
+                title={`${KANAL_ADI[k]}: ${d ? 'açık' : 'kapalı'}${olayKapali ? `. ${OLAY_KAPALI_KANAL}` : ''}`}
+                className={`tc-kanal-dugme${olayKapali ? ' tc-kanal-soluk' : ''}`} disabled={bekliyor(m.tur, k)}
+                onClick={() => { tekYaz(m, k, !d); }}
+              >
+                <Simge ad={KANAL_SIMGESI[k]} boyut="k" />
+              </button>
+            );
+          })}
+        </span>
+        {m.eposta?.eposta && kanallar.includes('eposta') && (
           <span className="tc-matris-alt">
-            {m.eposta.zaman === 'hemen' ? 'Hemen' : 'Özet'}
+            {m.eposta.zaman === 'hemen' ? 'E-posta hemen' : 'E-posta özette'}
             {m.eposta.sablonId !== null && ` · ${ozelAdi.get(m.eposta.sablonId) ?? 'Şablon'}`}
           </span>
         )}
       </span>
     );
   };
-  const kanalCsv = (k: Kanal) => (m: MatrisSatiri) => { const d = kanalDegeri(m, k); return d === null ? '' : d ? 'Açık' : 'Kapalı'; };
+  const acikHucresi = (m: MatrisSatiri) => {
+    if (m.herZaman) return <span className="tc-matris-alt">Her zaman gider</span>;
+    const d = acikMi(m);
+    if (d === null) return <span className="tc-matris-yok">—</span>;
+    if (!anahtarli(m)) return d ? 'Açık' : 'Kapalı';
+    return (
+      <AcKapa
+        etiket={`${m.baslik}: Açık`} acik={d} disabled={acikYazici.bekliyor}
+        degistir={(y) => { acikDegistir(m.baslik)(y, [m]); }}
+      />
+    );
+  };
+  const nasilCsv = (m: MatrisSatiri) => kanallar.flatMap((k) => { const d = kanalDegeri(m, k); return d ? [KANAL_ADI[k]] : []; }).join(', ');
   const sutunlar: Sutun<MatrisSatiri>[] = [
     {
       anahtar: 'olay', baslik: 'Olay', kartTamSatir: true, csv: (m) => m.baslik,
       hucre: (m) => {
-        const km = kademeMetni(m);
+        const km = m.kaynak
+          ? ['Kademeli uyarı', m.kaynak.takipte === null ? null : `${String(m.kaynak.takipte)} takipte`, m.kaynak.gecikti === null ? null : `${String(m.kaynak.gecikti)} gecikti`]
+            .filter((x) => x !== null).join(' · ')
+          : kademeMetni(m);
         return (
-          <span className="tc-eposta-olay-hucre">
+          <span className={`tc-eposta-olay-hucre${acikMi(m) === false ? ' tc-matris-kapali' : ''}`}>
             <span className={`tc-matris-onem tc-matris-onem-${m.onem}`} title={ONEM_ADI[m.onem]}><Simge ad={ONEM_SIMGESI[m.onem]} boyut="k" /></span>
             <span className="tc-matris-olay">
               <span>{m.baslik}</span>
               {km !== null && <span className="tc-matris-alt">{km}</span>}
+              {m.kaynak && <MiniMerdiven ayar={m.kaynak} etiket={m.baslik} />}
             </span>
           </span>
         );
       },
     },
-    ...kanallar.map((k): Sutun<MatrisSatiri> => ({ anahtar: k, baslik: KANAL_ADI[k], csv: kanalCsv(k), hucre: anahtarHucresi(k) })),
+    ...(ayar || kademeYetki ? [{
+      anahtar: 'acik', baslik: 'Açık', csv: (m: MatrisSatiri) => (m.herZaman ? 'Her zaman' : acikMi(m) === null ? '' : acikMi(m) ? 'Açık' : 'Kapalı'), hucre: acikHucresi,
+    }] satisfies Sutun<MatrisSatiri>[] : []),
+    ...(kanallar.length > 0 ? [{ anahtar: 'nasil', baslik: 'Nasıl', csv: nasilCsv, hucre: nasilHucresi }] satisfies Sutun<MatrisSatiri>[] : []),
     ...(ayar ? [{
       anahtar: 'alicilar', baslik: 'Alıcılar', kartTamSatir: true, csv: (m: MatrisSatiri) => aliciOzeti(m, rolAdi),
       hucre: (m: MatrisSatiri) => (aliciVarsayilanMi(m) ? <span className="tc-matris-varsayilan">{`${aliciOzeti(m, rolAdi)} (varsayılan)`}</span> : aliciOzeti(m, rolAdi)),
     }] satisfies Sutun<MatrisSatiri>[] : []),
     {
       anahtar: 'ayrinti', baslik: 'Ayrıntı', csv: false,
-      hucre: (m) => <Dugme simge="edit" aria-label={`${m.baslik}: ayrıntı`} onClick={() => { setAcik(m.tur); }} />,
+      hucre: (m) => (m.kaynak
+        ? (kademeYetki ? <Dugme simge="edit" aria-label={`${m.baslik}: ayrıntı`} onClick={() => { setKaynakAcik(m.kaynak?.kaynak ?? null); }} /> : null)
+        : <Dugme simge="edit" aria-label={`${m.baslik}: ayrıntı`} onClick={() => { setAcik(m.tur); }} />),
     },
   ];
   return (
     <Kart baslik="Olaylar ve kanallar">
       <p className="tc-ayar-aciklama">
         Anahtar basınca hemen kaydedilir; birkaç saniye Geri al çıkar. Modül başlığındaki anahtar o modülün görünen bütün olaylarını değiştirir.
-        Alıcılar, e-posta şablonu, tekrar ve üst kademe kalem düğmesiyle açılan paneldedir. Uygulama zili her olayda açıktır.
+        Alıcılar, e-posta şablonu, tekrar ve üst kademe kalem düğmesiyle açılan paneldedir. Kademeli uyarı kaynağı tek satırdır; merdiveni
+        iş yapılmazsa sırayla çıkan basamaklardır (yaklaşıyor, gecikti, yöneticide, devret).
       </p>
+      <div className="tc-matris-uyari" role="note">
+        <Simge ad="alert" boyut="k" />
+        <p>
+          Kapalı olay bildirim göndermez. Sizden iş bekleyen olaylar (onay, görev) kapalıyken de Gelenler&apos;de kalır; ekran ortasına çıkmaz,
+          telefon ve e-posta gitmez. Ekip çağrısı her zaman gider.
+        </p>
+        {ayar && oncekiHal?.alindi != null && (
+          <Dugme simge="rotate" disabled={geriDonuluyor} onClick={() => { setGeriSor(true); }}>Önceki hale dön</Dugme>
+        )}
+      </div>
       <Tablo
         etiket="Bildirim olayları"
         sutunlar={sutunlar}
@@ -308,6 +488,7 @@ export function BildirimMatrisi() {
             const ad = modulAdi(yol[0] ?? '');
             return (
               <span className="tc-matris-toplular" role="group" aria-label={`${ad}: bütün olaylar`}>
+                <AcikTopluAnahtar etiket={ad} satirlar={grupSatirlari.filter(anahtarli)} degistir={acikDegistir(ad)} disabled={acikYazici.bekliyor} />
                 {kanallar.map((k) => (
                   <TopluAnahtar
                     key={k} etiket={ad} satirlar={grupSatirlari} kanal={k} degistir={topluDegistir(ad, k)}
@@ -341,6 +522,42 @@ export function BildirimMatrisi() {
             {' Sonradan tek tek kapatabilirsiniz.'}
           </p>
         </OnayPenceresi>
+      )}
+      {acikSor && (
+        <OnayPenceresi
+          acik
+          baslik={`${acikSor.baslik}: açılsın mı?`}
+          onayMetni={acikSor.hedef.length === 1 ? 'Aç' : `${String(acikSor.hedef.length)} satırı aç`}
+          vazgec={() => { setAcikSor(null); }}
+          onayla={() => {
+            const { baslik, hedef } = acikSor;
+            setAcikSor(null);
+            void acikYazici.yaz(hedef, true, `${baslik}: ${String(hedef.length)} satır açıldı.`);
+          }}
+        >
+          <p>
+            {`${String(acikSor.hedef.length)} satır açılacak; seçili kanallardan bildirim gitmeye başlar.`}
+            {acikSor.hedef.some((m) => m.kaynak !== null) && ' Kademeli uyarı açılınca bekleyen bütün işler ilk turda değerlendirilir; geciken her iş için uyarı birden çıkabilir.'}
+            {' Sonradan tek tek kapatabilirsiniz.'}
+          </p>
+        </OnayPenceresi>
+      )}
+      {geriSor && oncekiHal?.alindi != null && (
+        <OnayPenceresi
+          acik
+          baslik="Önceki hale dönülsün mü?"
+          onayMetni="Önceki hale dön"
+          vazgec={() => { setGeriSor(false); }}
+          onayla={() => { void oncekiHaleDon(); }}
+        >
+          <p>
+            {`Bütün olaylar açılır; kademeli uyarılar ${zamanMetni(oncekiHal.alindi)} tarihindeki ayara döner; o tarihten sonra kademeli uyarılarda yaptığınız değişiklikler kalmaz. Açılan uyarılar bekleyen bütün işler için ilk turda çalar.`}
+            {oncekiHal.donuldu !== null && ` Son dönüş: ${zamanMetni(oncekiHal.donuldu)}.`}
+          </p>
+        </OnayPenceresi>
+      )}
+      {seciliKaynak && kademe.data && (
+        <KademeAyarPenceresi key={seciliKaynak.kaynak} satir={seciliKaynak} roller={kademe.data.roller} kapat={() => { setKaynakAcik(null); }} />
       )}
       {secili && (
         <OlayPaneli

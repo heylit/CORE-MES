@@ -23,6 +23,7 @@ import { adimCiktisiCozucusuKaydet, adimStatusuCozucusuKaydet, bakiyeDegistir, c
 import { emirlerinNetSarfi, emirMalzemeFisleri, emrinRefakatKartlari, istasyonKonumlari, istasyonLotKarari, malzemeStokDurumlari, numuneKarariYansit, numuneTeslimi } from './disari.ts';
 import * as sorgular from './sorgular.ts';
 import { BASLATMA_KARTI_BASKA, BASLATMA_KARTI_YOK, KARTSIZ_BASLATMA, bindenMetin } from './kurallar.ts';
+import { butunOlaylariVeEskiKademeleriAc } from '../bildirim/disari.ts';
 
 // Malzeme · Teslim (kart #1208): STK-T1 (stok yok), STK-T2 (yalnız yoldayken kapanır), STK-T3 (iptal gönderenin),
 // STK-T4 (alan taraf: istasyon kapsamı ya da depo işlemi), STK-T5 (isteğe bağlı teslim); Hazırlık (STK-H1..H4): listedeki istek,
@@ -139,6 +140,8 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
 
   before(async () => {
     ortam = await testVeritabaniKur('stok_teslim');
+    // 3478: olaylar varsayılan kapalıdır; bu dosya 3478'den önceki gibi açık olaylarla çalışır.
+    await ortam.vt.tx((db) => butunOlaylariVeEskiKademeleriAc(db, null));
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     kisiler.set('yonetici', await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA })));
     denemeProjeId = (await ortam.sahip.tek<{ id: number }>(

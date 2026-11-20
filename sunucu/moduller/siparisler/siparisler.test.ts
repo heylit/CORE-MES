@@ -19,6 +19,7 @@ import type { BeklenenTahsilatlarCevabi } from '#paylasilan/sozlesme/finans.ts';
 import { kablola } from '../../kablolama.ts';
 import { satisSevkleriCozucusu } from '../finans/disari.ts';
 import { siparisinSevkleri } from '../sevkiyat/disari.ts';
+import { butunOlaylariVeEskiKademeleriAc } from '../bildirim/disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -92,6 +93,8 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
 
   before(async () => {
     ortam = await testVeritabaniKur('siparisler');
+    // 3478: olaylar varsayılan kapalıdır; bu dosya 3478'den önceki gibi açık olaylarla çalışır.
+    await ortam.vt.tx((db) => butunOlaylariVeEskiKademeleriAc(db, null));
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     const y = await girisYap(null);
     yonetici = y.cerez;
@@ -236,6 +239,10 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await gonder(onaylayan.cerez, `/siparisler/${s.id}/onayla`, { surum: s.surum })).statusCode, 200);
     assert.equal(await acik(), 0, 'onaylanan siparişin onay bildirimi kapandı');
     assert.ok(!(await o().vt.tx((db) => onayBekleyenSiparisler(db))).some((x) => x.id === s.id), 'onaylanan sipariş kademeli onay takibinden düşer');
+    const sonuc = (tur: string, kisiId: number, id: number) => o().sahip.sorgu<{ baslik: string }>(
+      'SELECT baslik FROM bildirim_kaydi WHERE tur = $1 AND kisi_id = $2 AND yol = $3', [tur, kisiId, `/siparisler/${id}`]);
+    assert.deepEqual(await sonuc('siparisler.siparis-onaylandi', acan.id, s.id), [{ baslik: `Onaylanan sipariş: ${s.no}` }], 'açan onayı öğrenir');
+    assert.deepEqual(await sonuc('siparisler.siparis-onaylandi', onaylayan.id, s.id), [], 'onaylayan kendi kararını almaz');
     // Risk N1: onayı geri alınan sipariş yeniden onay bekler.
     const onayli = (await oku(acan.cerez, `/siparisler/${s.id}`)).json<SiparisAyrintisi>();
     const geri = await gonder(onaylayan.cerez, `/siparisler/${s.id}/onay-geri-al`, { surum: onayli.surum, neden: 'Deneme geri alma' });
@@ -250,6 +257,7 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
     const ip = await gonder(onaylayan.cerez, `/siparisler/${iptalEdilen.id}/iptal`, { surum: iptalEdilen.surum, neden: 'Deneme iptali' });
     assert.equal(ip.statusCode, 200, ip.body);
     assert.equal(await acikIptal(), 0, 'iptal edilen siparişin onay bildirimi kapandı');
+    assert.deepEqual(await sonuc('siparisler.siparis-iptal-edildi', acan.id, iptalEdilen.id), [{ baslik: `İptal edilen sipariş: ${iptalEdilen.no}` }]);
   });
 
   test('SIP-11 (201 a): planlama kalemi fiyatsız açar, fiyat gönderirse 403; fiyatsız sipariş onaylanmaz (409); müdür fiyatı girer, planlamanın düzenlemesi fiyatı silmez', async () => {

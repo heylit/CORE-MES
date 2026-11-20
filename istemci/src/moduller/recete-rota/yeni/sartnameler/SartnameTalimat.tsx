@@ -17,7 +17,10 @@ export function SartnameTalimat(o: EkranOzellikleri) {
   // Genel aramanın komutu (kart #1241): `?yeni=sartname` ya da `?yeni=talimat` o sekmenin yeni kayıt penceresini açar; yetki düğmeninkidir.
   const istenen = sorgu.get('yeni');
   const acilis: Sekme | null = istenen === 'sartname' && o.yetki.sartnameYaz ? 'sartname' : istenen === 'talimat' && o.yetki.talimatYaz ? 'talimat' : null;
-  const [sekme, setSekme] = useState<Sekme>(acilis ?? 'sartname');
+  // 3494-2 a: hazırlığın tek ekranı (Görevler > Şablonlar) şablonu `?sablon=<id>` ile açar; talimat sekmesi o şablon seçili gelir.
+  const istenenSablon = Number(sorgu.get('sablon'));
+  const ilkSablonId = Number.isInteger(istenenSablon) && istenenSablon > 0 ? istenenSablon : null;
+  const [sekme, setSekme] = useState<Sekme>(acilis ?? (ilkSablonId === null ? 'sartname' : 'talimat'));
   const [yeni, setYeni] = useState<Sekme | null>(acilis);
   const sartnameler = useSartnameler();
   const sablonlar = useSablonlar();
@@ -41,7 +44,7 @@ export function SartnameTalimat(o: EkranOzellikleri) {
           yeniAcik={yeni === 'sartname'} yeniKapat={() => { setYeni(null); }} />
       )}
       {sartnameler.data && sekme === 'talimat' && (
-        <TalimatSablonlari yazabilir={o.yetki.talimatYaz} sartnameler={sartnameler.data.sartnameler}
+        <TalimatSablonlari yazabilir={o.yetki.talimatYaz} sartnameler={sartnameler.data.sartnameler} ilkSablonId={ilkSablonId}
           yeniAcik={yeni === 'talimat'} yeniKapat={() => { setYeni(null); }} />
       )}
     </div>

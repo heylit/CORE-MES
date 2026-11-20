@@ -12,6 +12,7 @@ import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { hazirlikHedefCozucusuKaydet } from './dagitim.ts';
 import { SABLON_DAGITILMADI, hazirlikGorevleriAc } from './hazirlik-gorevleri.ts';
+import { butunOlaylariVeEskiKademeleriAc } from '../bildirim/disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 interface Kisi { cerez: string; id: number }
@@ -81,6 +82,8 @@ describe('3458 dilim 2 Görevleri dağıt (gerçek PostgreSQL, gerçek giriş)',
 
   before(async () => {
     ortam = await testVeritabaniKur('gorev_dagitimi');
+    // 3478: olaylar varsayılan kapalıdır; bu dosya 3478'den önceki gibi açık olaylarla çalışır.
+    await ortam.vt.tx((db) => butunOlaylariVeEskiKademeleriAc(db, null));
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     for (const r of await ortam.vt.sorgu<{ id: number; kod: string }>('SELECT id, kod FROM rol')) rol.set(r.kod, r.id);
     yonetici = await girisYap(null, null);

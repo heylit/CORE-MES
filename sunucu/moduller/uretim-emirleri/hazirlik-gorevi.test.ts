@@ -17,6 +17,7 @@ import { hazirlikCozucusuKaydet } from './hazirlik.ts';
 import { gorevinSistemHali, hazirligiKapatanEmir } from './kurallar.ts';
 import { EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { IsEmriGirdisi } from './disari.ts';
+import { butunOlaylariVeEskiKademeleriAc } from '../bildirim/disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 interface Cevap<T = unknown> { durum: number; govde: T }
@@ -91,6 +92,8 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
 
   before(async () => {
     ortam = await testVeritabaniKur('uretim_hazirlik_gorevi');
+    // 3478: olaylar varsayılan kapalıdır; bu dosya 3478'den önceki gibi açık olaylarla çalışır.
+    await ortam.vt.tx((db) => butunOlaylariVeEskiKademeleriAc(db, null));
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA }));
     const yeniProje = async (kod: string) => (await ortam!.sahip.tek<{ id: number }>(

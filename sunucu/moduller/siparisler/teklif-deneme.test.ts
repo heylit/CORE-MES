@@ -13,6 +13,7 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import { satisTaslagiKilitleri, teklifDenemeCozucusu } from './disari.ts';
 import type { TeklifDenemeGirdisi, TeklifDenemeSonucu } from './disari.ts';
 import { DENENECEK_KALEM_YOK, ONAYLANACAK_ISKONTO_YOK, TERMIN_DENEMESI_YOK } from './kurallar.ts';
+import { butunOlaylariVeEskiKademeleriAc } from '../bildirim/disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 const GECERLILIK = '2099-06-30';
@@ -129,6 +130,8 @@ describe('siparisler teklif termin ve fiyat denemesi (gerçek PostgreSQL, gerçe
 
   before(async () => {
     ortam = await testVeritabaniKur('siparisler_teklif_deneme');
+    // 3478: olaylar varsayılan kapalıdır; bu dosya 3478'den önceki gibi açık olaylarla çalışır.
+    await ortam.vt.tx((db) => butunOlaylariVeEskiKademeleriAc(db, null));
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     const y = await girisYap(null);
     yonetici = y.cerez;
@@ -267,6 +270,13 @@ describe('siparisler teklif termin ve fiyat denemesi (gerçek PostgreSQL, gerçe
     await komut({ ...t, surum: t.surum - 1 }, 'termin-onayla', {}, 409, planlama.cerez);
     t = await komut(t, 'termin-onayla', {}, 200, planlama.cerez);
     assert.equal(t.durum, 'verildi');
+    // 3478: onaylanınca bekleyen onay işi kapanır; sürümü veren (onaylayan değilse) sonucu alır.
+    const yol = `/siparisler/teklifler/${t.id}`;
+    assert.equal((await o().sahip.tek<{ n: number }>(
+      "SELECT count(*)::int AS n FROM bildirim_kaydi WHERE tur = 'siparisler.termin-onay-bekliyor' AND yol = $1 AND okundu IS NULL", [yol]))?.n, 0);
+    const veren = (await o().sahip.tek<{ id: number }>('SELECT olusturan_id AS id FROM siparisler_teklif_surumu WHERE teklif_id = $1 ORDER BY surum_no DESC LIMIT 1', [t.id]))?.id;
+    assert.deepEqual(await o().sahip.sorgu<{ kisi_id: number }>("SELECT kisi_id FROM bildirim_kaydi WHERE tur = 'siparisler.termin-onaylandi' AND yol = $1", [yol]),
+      veren === planlama.id ? [] : [{ kisi_id: veren }]);
     const onayli = (await taslaklar(t))[0]!;
     assert.deepEqual([onayli.gorunum, onayli.onaylayan?.startsWith('Deneme tdeneme-'), onayli.onayAni !== null], ['satis', true, true]);
     await komut(t, 'termin-onayla', {}, 422, planlama.cerez);
@@ -321,6 +331,8 @@ describe('siparisler teklif termin ve fiyat denemesi (gerçek PostgreSQL, gerçe
   });
 
   test('TKL-15 iskonto ve termin onayı birlikte: ikisi de verilmeden teklif müşteriye gitmez', async () => {
+    // 3478: iskonto onay işi planlamacıya da düşsün diye bu testte ona iskonto onayı verilir.
+    await o().sahip.sorgu("INSERT INTO kisi_islemi (kisi_id, islem, veren_id) VALUES ($1, 'siparisler.iskonto-onayla', $1)", [planlama.id]);
     let t = await teklifAc();
     geciktirir = true;
     t = await komut(t, 'surum-ver', satisSurumu(t, '2099-07-05', { iskontoOrani: '15' }));
@@ -329,6 +341,15 @@ describe('siparisler teklif termin ve fiyat denemesi (gerçek PostgreSQL, gerçe
     assert.equal(t.durum, 'onay-bekliyor');
     t = await komut(t, 'termin-onayla', {}, 200, planlama.cerez);
     assert.equal(t.durum, 'verildi');
+    // 3478: iskonto onayında bekleyen iş kapanır; sürümü veren kararı kendisi verdiyse sonucu almaz, termini başkası onaylayınca alır.
+    const yol = `/siparisler/teklifler/${t.id}`;
+    const veren = (await o().sahip.tek<{ id: number }>('SELECT olusturan_id AS id FROM siparisler_teklif_surumu WHERE teklif_id = $1 ORDER BY surum_no DESC LIMIT 1', [t.id]))?.id;
+    const bildirim = (tur: string) => o().sahip.sorgu<{ kisi_id: number; acik: boolean }>(
+      'SELECT kisi_id, okundu IS NULL AS acik FROM bildirim_kaydi WHERE tur = $1 AND yol = $2 ORDER BY kisi_id', [tur, yol]);
+    assert.deepEqual(await bildirim('siparisler.iskonto-onay-bekliyor'), [{ kisi_id: planlama.id, acik: false }], 'iskonto onay işi kapandı');
+    assert.deepEqual(await bildirim('siparisler.iskonto-onaylandi'), [], 'kararı veren sürümü verdiyse sonuç gitmez');
+    assert.deepEqual((await bildirim('siparisler.termin-onaylandi')).map((b) => b.kisi_id), [veren]);
+    await o().sahip.sorgu("DELETE FROM kisi_islemi WHERE kisi_id = $1 AND islem = 'siparisler.iskonto-onayla'", [planlama.id]);
     let u = await teklifAc();
     u = await komut(u, 'surum-ver', satisSurumu(u, '2099-07-05', { iskontoOrani: '15' }));
     u = await komut(u, 'termin-onayla', {}, 200, planlama.cerez);

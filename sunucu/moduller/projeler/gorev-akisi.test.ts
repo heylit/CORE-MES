@@ -12,6 +12,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
+import { butunOlaylariVeEskiKademeleriAc } from '../bildirim/disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -111,6 +112,8 @@ describe('3269 görev akışı ve şablon (gerçek PostgreSQL, gerçek giriş)',
 
   before(async () => {
     ortam = await testVeritabaniKur('gorev_akisi');
+    // 3478: olaylar varsayılan kapalıdır; bu dosya 3478'den önceki gibi açık olaylarla çalışır.
+    await ortam.vt.tx((db) => butunOlaylariVeEskiKademeleriAc(db, null));
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     for (const r of await ortam.vt.sorgu<{ id: number; kod: string }>('SELECT id, kod FROM rol')) rol.set(r.kod, r.id);
     yonetici = await girisYap(null, null);
@@ -165,6 +168,8 @@ describe('3269 görev akışı ve şablon (gerçek PostgreSQL, gerçek giriş)',
     assert.deepEqual([onay.gorev.durum, onay.gorev.onaylandi, onay.gorev.ilerleme], ['bitti', true, 100]);
     assert.deepEqual(await olaylar(g.id), ['ustlen', 'basla', 'bitti', 'geri', 'bitti', 'onay']);
     assert.equal(await okunmamis(operator1.id, 'projeler.gorev-kontrol-bekliyor'), 0);
+    assert.equal(await okunmamis(kalite1.id, 'projeler.gorev-onaylandi'), 1, '3478: bitiren onayı öğrenir');
+    assert.equal(await okunmamis(operator2.id, 'projeler.gorev-onaylandi'), 0, 'onaylayan kendi kararını almaz');
     assert.equal((await komut(kalite1, g.id, 'bitir')).statusCode, 400, 'biten görev yeniden bitmez');
   });
 
@@ -503,5 +508,20 @@ describe('3269 görev akışı ve şablon (gerçek PostgreSQL, gerçek giriş)',
     });
     assert.equal(d.statusCode, 200, d.body);
     assert.equal(await okunmamis(kisi.id, 'projeler.gorev-atandi'), 1, 'düzenlemede iptal edilenin bildirimi kapandı, sonuncusu kaldı');
+  });
+
+  test('3478 Risk N4: görev başkasına verilince eskisinin atama bildirimi kapanır, yenisine düşer', async () => {
+    const eski = await islemliKisi(['projeler.gorev-isle']);
+    const yeni = await islemliKisi(['projeler.gorev-isle']);
+    const p = await projeAc();
+    const g = await gorevAc(p, { sorumluKisiId: eski.id });
+    assert.equal(await okunmamis(eski.id, 'projeler.gorev-atandi'), 1);
+    const surum = (await vt().tek<{ surum: number }>('SELECT surum FROM projeler_gorev WHERE id = $1', [g.id]))?.surum ?? 0;
+    const d = await gonder(planlama, `/projeler/gorevler/${g.id}/guncelle`, {
+      ad: 'Akış görevi', planBaslangic: '2026-12-01', planBitis: '2026-12-05', sorumluKisiId: yeni.id, ilerleme: 0, durum: 'yapilacak', surum,
+    });
+    assert.equal(d.statusCode, 200, d.body);
+    assert.equal(await okunmamis(eski.id, 'projeler.gorev-atandi'), 0, 'eski kişinin bildirimi kapandı');
+    assert.equal(await okunmamis(yeni.id, 'projeler.gorev-atandi'), 1, 'yeni kişiye düştü');
   });
 });

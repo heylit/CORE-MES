@@ -16,6 +16,7 @@ import { acikZimmetCozucusu } from './disari.ts';
 import { ornekTckn } from './ornek-veri.ts';
 import { motorKur } from '#paylasilan/ik-motor/arayuz.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
+import { butunOlaylariVeEskiKademeleriAc } from '../bildirim/disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 type Govde = Record<string, unknown>;
@@ -93,6 +94,8 @@ describe('İnsan Kaynakları (gerçek PostgreSQL, gerçek giriş)', () => {
 
   before(async () => {
     ortam = await testVeritabaniKur('ik');
+    // 3478: olaylar varsayılan kapalıdır; bu dosya 3478'den önceki gibi açık olaylarla çalışır.
+    await ortam.vt.tx((db) => butunOlaylariVeEskiKademeleriAc(db, null));
     gocDagilimi = await ortam.vt.sorgu<{ kod: string; islem: string }>(
       "SELECT r.kod, ri.islem FROM rol_islemi ri JOIN rol r ON r.id = ri.rol_id WHERE ri.islem LIKE 'ik.%' OR ri.islem IN ('sayfa.ik', 'sayfa.ik-islemlerim') ORDER BY 1, 2");
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
@@ -473,6 +476,19 @@ describe('İnsan Kaynakları (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal(await acikSayisi('leave_bl4'), 0, 'düzeltmeyle karara çekilen talebin onay bildirimi kapandı');
     await kaydet(c.yon, 'izinler', izin('leave_bl2', 'emp_bl', 'Onaylandı', { baslangic: gunSonra(izinBasi, 7), bitis: gunSonra(izinBasi, 7), gun: 1 }));
     assert.deepEqual(await bildirimler('leave_bl2'), [], 'onay beklemeyen izin bildirim açmaz');
+  });
+
+  test('IK-76 (3478): izin kararı talep sahibinin CORE kullanıcısına sonuç olarak düşer (kendi talebine karar verilemez)', async () => {
+    const sonuc = async (kaynak: string) => vt().sorgu<{ kisi_id: number; tur: string }>(
+      "SELECT kisi_id, tur FROM bildirim_kaydi WHERE tur IN ('ik.izin-onaylandi', 'ik.izin-reddedildi') AND tekil_anahtar LIKE $1 ORDER BY kisi_id", [`%:${kaynak}`]);
+    const gun = (n: number) => ({ baslangic: gunSonra(izinBasi, n), bitis: gunSonra(izinBasi, n), gun: 1 });
+    const t1 = await kaydet(c.uzm, 'izinler', izin('leave_sn1', 'emp_a', 'Beklemede', gun(28)));
+    assert.deepEqual(await sonuc('leave_sn1'), [], 'karar yokken sonuç yok');
+    await tamam<IkYazCevabi>(c.yon, 'POST', '/ik/izinler/leave_sn1/karar', { durum: 'Onaylandı', surum: t1.kayit.surum });
+    assert.deepEqual(await sonuc('leave_sn1'), [{ kisi_id: kim.opr, tur: 'ik.izin-onaylandi' }]);
+    const t2 = await kaydet(c.uzm, 'izinler', izin('leave_sn2', 'emp_a', 'Beklemede', gun(35)));
+    await tamam<IkYazCevabi>(c.yon, 'POST', '/ik/izinler/leave_sn2/karar', { durum: 'Reddedildi', surum: t2.kayit.surum });
+    assert.deepEqual(await sonuc('leave_sn2'), [{ kisi_id: kim.opr, tur: 'ik.izin-reddedildi' }]);
   });
 
   test('IK-74 (168 c, 244 a): çıkış tarihi yazılan kişinin İdari İşler\'de açık zimmeti varsa çıkış kaydedilir ve cevap uyarı taşır', async () => {

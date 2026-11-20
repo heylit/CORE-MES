@@ -72,6 +72,24 @@ describe('Şartname ve talimatlar: okuyan', () => {
   });
 });
 
+describe('3494-2 a: hazırlığın tek ekranından şablon açılışı', () => {
+  it('?sablon=<id> talimat sekmesini o şablon seçili açar', async () => {
+    const { adimlar, ...ilk } = SABLON.sablon;
+    const ikinci = { ...ilk, id: 9, kod: 'TS-HZR', ad: 'Deneme hazırlık' };
+    const hazirlikAdimi = { sira: 1, baslik: 'Aparatı hazırla', metin: null, kontrol: { tur: 'yok' as const }, zorunlu: false, medya: [], asama: 'on_hazirlik' as const, hedefSureDk: null };
+    sunucuKur(OKUYAN, { yazmalar: {
+      ...okumalar,
+      'GET /rota/talimat-sablonlari': () => json(200, { sablonlar: [ilk, ikinci] } satisfies TalimatSablonlariCevabi),
+      'GET /rota/talimat-sablonlari/9': () => json(200, { sablon: { ...ikinci, adimlar: [hazirlikAdimi] } } satisfies TalimatSablonuCevabi),
+    } });
+    rrAc('/recete-rota/sartnameler?sablon=9');
+    const onizleme = await screen.findByRole('region', { name: 'Şablon önizlemesi' });
+    expect(await within(onizleme).findByText('Aparatı hazırla')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /Talimat şablonları/ }).getAttribute('aria-selected')).toBe('true');
+    expect(within(onizleme).queryByText(adimlar[0]?.baslik ?? '')).toBeNull();
+  });
+});
+
 describe('Şartname ve talimatlar: yazan', () => {
   it('yeni şartname taslak olarak eklenir; taslak sürüm yayınlanır', async () => {
     const istekler = sunucuKur(YAZAN, {

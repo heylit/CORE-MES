@@ -228,7 +228,7 @@ export async function iskontoOnayla(db: Db, kullanici: Kullanici, id: number, g:
   }));
   await sorgular.iskontoOnayiEkle(db, id, kullanici.id);
   if (onayHedefi({ ...bekleyen, iskonto: false }) === 'verildi') await sorgular.logoTeklifSirasinaEkle(db, id, null);
-  return teklifAyrintisi(db, id);
+  return onaySonucunuBildir(db, kullanici, id, 'iskonto', veren);
 }
 
 // TKL-15 (63 b): istenen termin bir siparişi geciktiren satış taslağını `siparisler.termin-onayla` yetkilisi onaylar; onaya kadar yer tutar,
@@ -246,7 +246,20 @@ export async function terminOnayla(db: Db, kullanici: Kullanici, id: number, g: 
   }));
   if ((await sorgular.terminOnayiYaz(db, id, kullanici.id)) === null) throw new Error('Termin onayı yazılamadı');
   if (onayHedefi({ ...bekleyen, termin: false }) === 'verildi') await sorgular.logoTeklifSirasinaEkle(db, id, null);
-  return teklifAyrintisi(db, id);
+  return onaySonucunuBildir(db, kullanici, id, 'termin', veren);
+}
+
+// 3478: onaylanan iskonto ya da termin için bekleyen onay işi kapanır, sürümü veren haber alır (olay varsayılan kapalı).
+async function onaySonucunuBildir(db: Db, kullanici: Kullanici, id: number, ne: 'iskonto' | 'termin', veren: number | null): Promise<TeklifAyrintisi> {
+  await bildirimKapat(db, { tur: ne === 'iskonto' ? 'siparisler.iskonto-onay-bekliyor' : 'siparisler.termin-onay-bekliyor', kaynakKimlik: String(id) });
+  const t = await teklifAyrintisi(db, id);
+  if (veren !== null) {
+    await bildirimGonder(db, {
+      tur: ne === 'iskonto' ? 'siparisler.iskonto-onaylandi' : 'siparisler.termin-onaylandi',
+      baslik: `${ne === 'iskonto' ? 'İskontosu' : 'Termini'} onaylanan teklif: ${t.no}`, yol: `/siparisler/teklifler/${id}`, kaynakKimlik: String(id), kisiler: [veren], haric: kullanici.id,
+    });
+  }
+  return t;
 }
 
 export async function notluGecis(

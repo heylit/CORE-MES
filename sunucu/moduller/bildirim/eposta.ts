@@ -7,7 +7,7 @@ import { isBekliyor, type IsBekliyor } from '#cekirdek/zamanlayici.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { tesisGunBasi, tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
-import { BILDIRIM_TUR_ANAHTARLARI, BILDIRIM_TURLERI, turSinifi, type BildirimOnemi, type BildirimTuru } from '#paylasilan/sozlesme/bildirim.ts';
+import { BILDIRIM_TUR_ANAHTARLARI, BILDIRIM_TURLERI, anahtarliTurMu, turSinifi, type BildirimOnemi, type BildirimTuru } from '#paylasilan/sozlesme/bildirim.ts';
 import {
   EPOSTA_KONULARI, turKonusu, turOnayi, type EpostaDefterSatiri, type EpostaDenemeCevabi, type EpostaDurumuCevabi, type EpostaKonusu, type EpostaSablonDegistirGovdesi,
   type EpostaOzelSablonDegistirGovdesi, type EpostaOzelSablonYeniGovdesi, type EpostaSablonIcerigi, type EpostaSablonlariCevabi, type EpostaSablonu,
@@ -23,6 +23,7 @@ import { BOS_TOPLANTI_DEGERLERI, disKipMi, epostaKipi, epostaLogosu, toplantiAla
 import { ortamPostaAyari, postaGonder, iletiKur, izinliAdresMi, type HatAc, type PostaAyari } from './posta.ts';
 import { simgePng } from './posta-simgeleri.ts';
 import * as s from './sorgular.ts';
+import * as so from './sorgular/olay/sorgular.ts';
 
 // Kişinin iş e-postası İK'dadır; İK bu modülü ithal ettiği için adres kablolamada verilir (döngü olmasın). Bağlı değilse e-posta gitmez.
 export type EpostaAdresCozucusu = (db: Db, kisiIdleri: readonly number[]) => Promise<Map<number, string>>;
@@ -199,6 +200,7 @@ export async function epostaTuru(vt: Veritabani, gunluk: Gunluk, ac?: HatAc, sim
       const logoGerek = !ozet && [...sablonlar.values(), ...ozelSablonlar.values()].some((x) => x.logo);
       return {
         sira, adresler, adlar, sablonlar, ozelSablonlar, tetikler, rolAdlari, ayarlar: await gonderimAyarlari(db), bugun: await s.epostaBugunGidenler(db, kisiler, gunBasi),
+        acikTurler: await so.acikTurler(db),
         logo: logoGerek ? await logoOku(db) : null,
       };
     });
@@ -218,7 +220,9 @@ export async function epostaTuru(vt: Veritabani, gunluk: Gunluk, ac?: HatAc, sim
       const adres = hazirlik.adresler.get(kisiId);
       const ad = hazirlik.adlar.get(kisiId) ?? null;
       // Kaynak bildirimi kapanmış tekrar satırı gönderilmez, düşer.
-      const gidecek = satirlar.filter((q) => q.tekrarNo === 0 || q.kaynak === null || bildirimAcikMi(q.kaynak));
+      // 3478 (Risk K3): kuyruktayken anahtarı kapanan olayın e-postası da gitmez.
+      const gidecek = satirlar.filter((q) => (q.tekrarNo === 0 || q.kaynak === null || bildirimAcikMi(q.kaynak))
+        && (!anahtarliTurMu(q.tur) || hazirlik.acikTurler.has(q.tur)));
       silinecek.push(...satirlar.filter((q) => !gidecek.includes(q)).map((q) => q.id));
       if (adres === undefined || !izinliAdresMi(adres, ayar.alanAdlari)) {
         for (const q of gidecek) { isle(q, { durum: 'atlandi', neden: adres === undefined ? 'İK\'da iş e-postası yok' : 'Adres izinli alan adında değil', kalici: true }); silinecek.push(q.id); }

@@ -7,6 +7,7 @@ import { isGunuFarki, kademeleriIlerlet, kademeTatilCozucusuKaydet } from '../bi
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { bekletmeKademeOkuyucusu } from './disari.ts';
 import { emirAc, emirAyrintisi, emirBeklet, izlemeListesi } from './servis.ts';
+import { butunOlaylariVeEskiKademeleriAc } from '../bildirim/disari.ts';
 
 // 3416-1 a: yeni nedenler kısıttan geçer; beklemedeki emir kademeli uyarıya neden başına ve süren bekleme olarak girer; bekleme günü
 // ekranda motorla aynı sayılır. Geçmiş anlı olaylar doğrudan eklenir (defter yalnız ekleme alır).
@@ -33,6 +34,8 @@ describe('uretim-emirleri bekletme kademeli uyarı (gerçek PostgreSQL)', () => 
 
   before(async () => {
     ortam = await testVeritabaniKur('uebkademe');
+    // 3478: olaylar varsayılan kapalıdır; bu dosya 3478'den önceki gibi açık olaylarla çalışır.
+    await ortam.vt.tx((db) => butunOlaylariVeEskiKademeleriAc(db, null));
     yoneticiId = await vt().tx((db) => yoneticiOlustur(db, { ad: 'Yönetici', kullaniciAdi: 'uebk-yonetici', parola: 'dogru-parola-1' }));
     kademeTatilCozucusuKaydet(null);
   });

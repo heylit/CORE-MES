@@ -17,6 +17,7 @@ import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { bildirimGonder } from './disari.ts';
 import { epostaTuru, type EpostaTuruSonucu } from './eposta.ts';
+import { butunOlaylariVeEskiKademeleriAc } from './olay-anahtari.ts';
 
 const PAROLA = 'dogru-parola-1';
 const ONAY: BildirimTuru = 'satin-alma.talep-onay-bekliyor';
@@ -174,6 +175,8 @@ describe('bildirim e-postası (ADR 0015, 3397; gerçek PostgreSQL, sahte posta s
       TMIV2_POSTA_SUNUCUSU: `127.0.0.1:${String(f.kapi)}`, TMIV2_POSTA_ALAN_ADI: 'ornek.local', TMIV2_POSTA_GONDEREN: 'mes@ornek.local', TMIV2_POSTA_GUVENLIK: 'yok',
     });
     ortam = await testVeritabaniKur('eposta');
+    // 3478: olaylar varsayılan kapalıdır; bu dosya 3478'den önceki gibi açık olaylarla çalışır.
+    await ortam.vt.tx((db) => butunOlaylariVeEskiKademeleriAc(db, null));
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     kisiler.set('yonetici', await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA })));
     await giris('yonetici');
@@ -263,6 +266,25 @@ describe('bildirim e-postası (ADR 0015, 3397; gerçek PostgreSQL, sahte posta s
       { kisiId: kim('disari'), tur: TUR, sonuc: 'atlandi', neden: 'Adres izinli alan adında değil', kayitNo: 'ORN-TLP-0042' },
     ].sort((a, b) => (a.kisiId ?? 0) - (b.kisiId ?? 0)));
     assert.deepEqual(await kuyruk(), []);
+  });
+
+  test('3478 (Risk K3): kapalı olay e-posta kuyruğuna girmez; kuyruktayken kapanan olayın e-postası gitmez, kuyruktan düşer', async () => {
+    await gonder(TUR, ['mudur']);
+    assert.equal((await kuyruk()).length, 1);
+    await o().sahip.sorgu('UPDATE bildirim_olay_acik SET acik = false WHERE tur = $1', [TUR]);
+    try {
+      assert.deepEqual(await tur(), { gonderilen: 0, hata: 0, atlanan: 0, ertelenen: 0 });
+      assert.equal(posta.iletiler.length, 0);
+      assert.deepEqual(await kuyruk(), []);
+      assert.equal(await gonder(TUR, ['mudur']), 0);
+      assert.deepEqual(await kuyruk(), []);
+      // Görev sınıfı (onay bekliyor) kapalıyken yalnız Gelenler'e yazılır: e-posta kuyruğuna girmez.
+      await o().sahip.sorgu('UPDATE bildirim_olay_acik SET acik = false WHERE tur = $1', [ONAY]);
+      assert.equal(await gonder(ONAY, ['mudur']), 1);
+      assert.deepEqual(await kuyruk(), []);
+    } finally {
+      await o().sahip.sorgu('UPDATE bildirim_olay_acik SET acik = true WHERE tur = ANY($1)', [[TUR, ONAY]]);
+    }
   });
 
   test('defter yalnız eklenir ve sonuca göre süzülür', async () => {

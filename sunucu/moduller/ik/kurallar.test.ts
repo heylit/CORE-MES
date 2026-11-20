@@ -5,7 +5,7 @@ import {
   adayGecisiDenetle, gorusmeAdayiDenetle, gorusmeciMi, izinBakiyeUyarisi, izinTarihiDenetle,
   AZAMI_KAYIT_BAYT, EKIP_ALANLARI, IK_ALANLARI, IK_YAZMA_ISLEMLERI, alanlariSec, ayarDegisikligiDenetle, bordroKaydi, bordroOnayDenetle, boyutDenetle,
   bugunIzindekiler, cikisZimmetUyarisi, degisiklikler, devamGorunurMu, ekipKimlikleri,
-  enErkenDonemBaslangici, esitMi, etiket, govdeKimligiDenetle, ikRolu, iletisimDenetle, istemciAlanlariniAyikla, izinCakismasiDenetle, izinGecisiDenetle, izinOnayBildirimi, izinOnayKapanirMi,
+  enErkenDonemBaslangici, esitMi, etiket, govdeKimligiDenetle, ikRolu, iletisimDenetle, istemciAlanlariniAyikla, izinCakismasiDenetle, izinGecisiDenetle, izinKarari, izinOnayBildirimi, izinOnayKapanirMi,
   GUNLUK_AZAMI_SAAT, ibanGecerliMi, kayitIsMerkezi, katilimciIsMerkezleri, kesinlestirmeDenetle, kimlikIbanDenetle, personelBul, pozisyonGecisiDenetle, resmiTatilTarihleri, tcknGecerliMi, turDenetle,
   ucretDenetle, yillikMesaiSiniri,
 } from './kurallar.ts';
@@ -341,6 +341,11 @@ describe('soru 75: kişinin haftalık vardiya planı', () => {
     assert.equal(izinOnayKapanirMi(izin('Beklemede'), izin('Onaylandı')), true);
     assert.equal(izinOnayKapanirMi(izin('Beklemede'), izin('Reddedildi')), true);
     assert.equal(izinOnayKapanirMi(izin('Beklemede'), izin('İptal')), true);
+    assert.equal(izinKarari(izin('Beklemede'), izin('Onaylandı')), 'onaylandi');
+    assert.equal(izinKarari(izin('Beklemede'), izin('Reddedildi')), 'reddedildi');
+    assert.equal(izinKarari(izin('Beklemede'), izin('İptal')), null);
+    assert.equal(izinKarari(izin('Onaylandı'), izin('Reddedildi')), null);
+    assert.equal(izinKarari(null, izin('Onaylandı')), null);
     assert.equal(izinOnayKapanirMi(izin('Beklemede'), izin('Beklemede', { gun: 2 })), false);
     assert.equal(izinOnayKapanirMi(null, izin('Onaylandı')), false);
     assert.equal(izinOnayKapanirMi(izin('Onaylandı'), izin('Reddedildi')), false);

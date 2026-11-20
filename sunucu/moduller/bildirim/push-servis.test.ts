@@ -6,6 +6,7 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import type { BildirimPushDurumuCevabi, BildirimPushTurleriCevabi } from '#paylasilan/sozlesme/bildirim.ts';
 import type { BildirimOlayi } from './disari.ts';
 import type { Getir } from './push.ts';
+import { butunOlaylariVeEskiKademeleriAc } from './olay-anahtari.ts';
 
 // ADR 0031 uçtan uca. Ortam değişkeni push modülü yüklenmeden kurulur (açılış okuması geçsin diye modüller dinamik alınır) ve test
 // bitince eski hâline döner: modül testleri aynı süreçte koşabilir.
@@ -77,6 +78,8 @@ describe('Web Push (gerçek PostgreSQL, gerçek giriş)', () => {
     const { bildirimGonder } = await import('./disari.ts');
     const push = await import('./push.ts');
     ortam = await testVeritabaniKur('bildirim_push');
+    // 3478: olaylar varsayılan kapalıdır; bu dosya 3478'den önceki gibi açık olaylarla çalışır.
+    await ortam.vt.tx((db) => butunOlaylariVeEskiKademeleriAc(db, null));
     const vt = ortam.vt;
     const ayar = push.ortamPushAyari();
     assert.ok(ayar, 'push ayarı açık olmalı');

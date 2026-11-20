@@ -38,12 +38,21 @@ export interface KademeVarsayilani {
   kapatilamaz: boolean;
 }
 
+// 3478-2 a: bütün kaynaklar kapalı başlar. "Önceki hale dön" ayar satırı olmayan kaynağı bu listeye göre açar: 3478'den önce
+// varsayılanı açık olan ve okuyucusu bağlı kaynaklar.
+export const ESKI_ACIK_KADEMELER = [
+  'projeler.hazirlik', 'projeler.gorev', 'satin-alma.talep-onay', 'satin-alma.siparis-verilmedi', 'satin-alma.teklif-cevapsiz', 'satin-alma.teslim',
+  'kalibrasyon.vade', 'arkon.bakim-vade', 'siparisler.termin', 'siparisler.plan-riski', 'uretim-emirleri.bekleme-malzeme', 'uretim-emirleri.bekleme-fason',
+  'uretim-emirleri.bekleme-takim', 'uretim-emirleri.bekleme-kalite', 'uretim-emirleri.bekleme-muhendislik', 'uretim-emirleri.bekleme-teslim',
+  'uretim-emirleri.bekleme-suruyor',
+] as const satisfies readonly KademeKaynagi[];
+
 export interface KademeKaynagiTanimi {
   ad: string;
   // Ekranda grup başlığı.
   grup: string;
   sayac: KademeSayaci;
-  // 1: bu işte açılan kaynak; 2: kodda var, ayarda kapalı gelir (3405 a).
+  // 1: bu işte açılan kaynak; 2: kodda var, sonraki aşamada açılır (3405 a). İkisi de ayarda kapalı başlar (3478-2 a).
   asama: 1 | 2;
   // Risk K1: alıcı bu işlemlerden birini taşımalıdır; Açık takipler satırı yalnız bunları taşıyana görünür (K2).
   okumaIslemleri: readonly Islem[];
@@ -55,10 +64,10 @@ export interface KademeKaynagiTanimi {
 }
 
 const sonGun = (k2: number, k4: number, k5: number | null, ek: Partial<KademeVarsayilani> = {}): KademeVarsayilani => ({
-  acik: true, k2Gun: k2, k3Gun: null, k3Birim: 'gun', k4Gun: k4, k5Gun: k5, epostaKademe: 3, serit: true, kapatilamaz: true, ...ek,
+  acik: false, k2Gun: k2, k3Gun: null, k3Birim: 'gun', k4Gun: k4, k5Gun: k5, epostaKademe: 3, serit: true, kapatilamaz: true, ...ek,
 });
 const bekleme = (k3: number, k4: number, k5: number | null, ek: Partial<KademeVarsayilani> = {}): KademeVarsayilani => ({
-  acik: true, k2Gun: null, k3Gun: k3, k3Birim: 'gun', k4Gun: k4, k5Gun: k5, epostaKademe: 3, serit: true, kapatilamaz: true, ...ek,
+  acik: false, k2Gun: null, k3Gun: k3, k3Birim: 'gun', k4Gun: k4, k5Gun: k5, epostaKademe: 3, serit: true, kapatilamaz: true, ...ek,
 });
 
 // Anahtar `<modül>.<kaynak>`; bildirim türleri bu anahtardan türetilir (kademeTuru). Hazırlık görevi 3396'nın türlerini korur.
@@ -95,19 +104,17 @@ export const KADEME_KAYNAKLARI = {
     ad: 'Bakım vadesi', grup: 'Bakım', sayac: 'son-gun', asama: 1, okumaIslemleri: ['arkon.bakim', 'arkon.amir', 'arkon.yonetici'],
     yol: '/arkon/bakim', varsayilan: sonGun(5, 2, 5),
   },
-  // 3478: DÖF ve hatalı parça okuyucuları bu işte bağlandı; yeni gelen uyarı kapalı başlar.
   'kalite-merkezi.dof': {
     ad: 'DÖF termini', grup: 'Kalite', sayac: 'son-gun', asama: 1, okumaIslemleri: ['kalite-merkezi.oku', 'kalite-merkezi.yaz'],
-    yol: '/kalite-merkezi/dof', varsayilan: sonGun(3, 3, 7, { acik: false }),
+    yol: '/kalite-merkezi/dof', varsayilan: sonGun(3, 3, 7),
   },
   'kalite-merkezi.hatali-parca': {
     ad: 'Hatalı parça kararı bekliyor', grup: 'Kalite', sayac: 'bekleme', asama: 1, okumaIslemleri: ['kalite-merkezi.yaz', 'kalite-merkezi.onayla'],
-    yol: '/kalite-merkezi/uygunsuzluklar', varsayilan: bekleme(1, 1, 3, { acik: false }),
+    yol: '/kalite-merkezi/uygunsuzluklar', varsayilan: bekleme(1, 1, 3),
   },
   'siparisler.onay': {
     ad: 'Satış siparişi onay bekliyor', grup: 'Satış', sayac: 'bekleme', asama: 1, okumaIslemleri: ['siparisler.onayla'],
-    // 3478: okuyucusu bu işte bağlandı; yeni gelen uyarı kapalı başlar (açık kayıtlar birden çalmaz).
-    yol: '/siparisler', varsayilan: bekleme(1, 2, 4, { acik: false }),
+    yol: '/siparisler', varsayilan: bekleme(1, 2, 4),
   },
   'siparisler.termin': {
     ad: 'Satış siparişi termini', grup: 'Satış', sayac: 'son-gun', asama: 1, okumaIslemleri: ['siparisler.oku', 'siparisler.yaz'],

@@ -20,3 +20,6 @@ export { kademeKaynagiKaydet, enYuksekKademeler, kademeleriIlerlet, kademeTatilC
 export type { KademeKaydi, KademeOkuyucusu, TatilCozucusu } from './kademe.ts';
 // İş günü farkı motorun saydığıdır: kaynak modül ekranda gösterdiği bekleme gününü aynı kuralla sayar (3416-1).
 export { isGunuFarki } from './kurallar.ts';
+// 3478: olaylar varsayılan kapalıdır. Modül testleri 3478'den önceki gibi açık olaylarla çalışmak için bunu çağırır ("Önceki hale
+// dön" ile aynı yazım); uygulama kodu çağırmaz.
+export { butunOlaylariVeEskiKademeleriAc } from './olay-anahtari.ts';

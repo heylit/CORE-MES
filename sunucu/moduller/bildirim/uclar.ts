@@ -24,6 +24,10 @@ import {
   acikTakiplerCevabi, gecikenlerimCevabi, kademeAyarDegistirGovdesi, kademeAyarlariCevabi, kademeKaynagiParametresi,
 } from '#paylasilan/sozlesme/bildirim-kademe.ts';
 import { acikTakipler, gecikenlerim, kademeAyarlari, kademeAyariYaz, seridim } from './kademe.ts';
+import { olayAnahtarlari, olayAnahtarlariTopluDegistir, olayAnahtariDegistir, oncekiHaleDon } from './olay-anahtari.ts';
+import {
+  bildirimOlayAcikDegistirGovdesi, bildirimOlayAciklariCevabi, bildirimOlayParametresi, bildirimOlayTopluGovdesi, bildirimOncekiHaleDonGovdesi,
+} from '#paylasilan/sozlesme/bildirim.ts';
 import {
   geriCek, hedefSecenekleri, onayla, ortadakiBildirimler, yayinAyrintisi, yayinGorseli, yayinla, yayinListesi,
 } from './yayin.ts';
@@ -80,6 +84,22 @@ export const uclar = [
     yontem: 'POST', yol: '/bildirimler/alicilar/:tur/degistir', yetki: 'ayarlar.yaz', parametre: bildirimAliciParametresi,
     govde: bildirimAliciDegistirGovdesi, cevap: bildirimAlicilariCevabi,
     isle: ({ db, kullanici, parametre, govde }) => bildirimAlicilariYaz(db, kullanici, parametre.tur, govde),
+  }),
+  // 3478: olay başına ana anahtar ve "Önceki hale dön" (3478-2 a). Sistem Ayarları'nın işlemiyle okunur ve yazılır; geri dönüş kademe
+  // ayarının ana anahtarını da geri yazar (kullanıcının kapanış kararının geri alınışıdır, kademe ayrıntısına dokunmaz).
+  uc({ yontem: 'GET', yol: '/bildirimler/olaylar', yetki: 'ayarlar.yaz', cevap: bildirimOlayAciklariCevabi, isle: ({ db }) => olayAnahtarlari(db) }),
+  uc({
+    yontem: 'POST', yol: '/bildirimler/olaylar/:tur/degistir', yetki: 'ayarlar.yaz', parametre: bildirimOlayParametresi,
+    govde: bildirimOlayAcikDegistirGovdesi, cevap: bildirimOlayAciklariCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => olayAnahtariDegistir(db, kullanici, parametre.tur, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/bildirimler/olaylar/toplu', yetki: 'ayarlar.yaz', govde: bildirimOlayTopluGovdesi, cevap: bildirimOlayAciklariCevabi,
+    isle: ({ db, kullanici, govde }) => olayAnahtarlariTopluDegistir(db, kullanici, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/bildirimler/olaylar/onceki-hale-don', yetki: 'ayarlar.yaz', govde: bildirimOncekiHaleDonGovdesi, cevap: bildirimOlayAciklariCevabi,
+    isle: ({ db, kullanici }) => oncekiHaleDon(db, kullanici),
   }),
   // Otomatik bildirimin gösterimi (2147 Y4): Sistem Ayarları'nın işlemiyle okunur ve yazılır.
   uc({ yontem: 'GET', yol: '/bildirimler/gosterim', yetki: 'ayarlar.yaz', cevap: bildirimGosterimleriCevabi, isle: ({ db }) => bildirimGosterimleri(db) }),

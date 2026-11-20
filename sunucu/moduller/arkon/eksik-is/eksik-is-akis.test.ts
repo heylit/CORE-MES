@@ -16,6 +16,7 @@ import { kimlikCozucu } from '../../oturum/disari.ts';
 import { uretimEmriAc } from '../../uretim-emirleri/disari.ts';
 import { gunEkle } from '../kurallar.ts';
 import { eksikIsleriYenile } from './servis.ts';
+import { butunOlaylariVeEskiKademeleriAc } from '../../bildirim/disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 const SAAT = 3_600_000;
@@ -115,6 +116,8 @@ describe('arkon eksik iş olayları (gerçek PostgreSQL)', () => {
 
   before(async () => {
     ortam = await testVeritabaniKur('arkoneksik');
+    // 3478: olaylar varsayılan kapalıdır; bu dosya 3478'den önceki gibi açık olaylarla çalışır.
+    await ortam.vt.tx((db) => butunOlaylariVeEskiKademeleriAc(db, null));
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA }));
     projeId = (await ortam.sahip.tek<{ id: number }>("INSERT INTO projeler_proje (kod, ad, olusturan_id) VALUES ('ARKON.EK', 'Deneme proje', $1) RETURNING id", [yoneticiId]))!.id;
