@@ -5,7 +5,7 @@ import {
   adimCarpani, adimDali, dalBilgileri, dalEtiketi, dalHatasi, kolaEkle, adimGuncelle, adimSil, adimSuresi, adimSurukle, agacKur, akisKarti, bagimlilikYaz, degisimOrani, fasonMu, islemSuresiBos, istasyonYaz, kartBasligi,
   operasyonYaz, sirali, sonrakiBagimlilik, statuNo, adimAdi, sureYaz, tuketilenAdimlar, turKisa, yeniAdim, type Adim, type Dugum, type Malzeme,
 } from './kurallar.ts';
-import { bagMetni, fasonAdi, renkSinifi, SayiAlani, SecimAlani, type RotaEkrani, SURE_EN_COK } from './ortak.tsx';
+import { bagMetni, fasonAdi, renkSinifi, AramaliSecimAlani, operasyonSecenekleri, SayiAlani, SecimAlani, type RotaEkrani, SURE_EN_COK } from './ortak.tsx';
 import { SURUKLE_TURU, surukleAdim, surukleCoz, yereBirak } from './AkisSemasi.tsx';
 import { yeniKimlik } from './useRotaDuzeni.ts';
 
@@ -114,7 +114,7 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
     const secili = sec?.tur === 'adim' && sec.urunId === urunId && sec.adimId === a.id;
     const istasyonlar = [...h.istasyon.values()].filter((x) => x.aktif || x.id === a.stationId);
     const makineler = h.makineler(a.stationId).filter((x) => x.status === 'aktif' || x.id === a.machineId);
-    const opSecenek = [...h.op.values()].filter((o) => o.aktif || o.id === a.opId).map((o) => ({ deger: o.id, baslik: `${o.abbr ?? o.code} ${o.name}` }));
+    const opSecenek = operasyonSecenekleri(h, a.opId);
     const oran = degisimOrani(a.proc, a.chg);
     const kart = son ? null : akisKarti(urunId, liste, j, r.duzen.malzemeVar);
 
@@ -204,7 +204,7 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
             })()}
             {adimDali(a) !== null && dallar.find((x) => x.adimlar[0]?.id === a.id) === undefined && <p className="tc-rr1-ipucu">Dal {adimDali(a)}</p>}
             {dalHata && dalHata.adimId === a.id && <p className="tc-rr1-warnbox" role="alert" data-parca="dal-hatasi">{dalHata.ileti}</p>}
-            <SecimAlani etiket="Operasyon" deger={a.opId} secenekler={opSecenek} kapali={!duzen} bos={op ? undefined : 'Operasyon seç…'}
+            <AramaliSecimAlani etiket="Operasyon" deger={a.opId} secenekler={opSecenek} kapali={!duzen} bos={op ? undefined : 'Operasyon seç…'}
               yaz={(v) => { yaz(a, (x) => operasyonYaz(x, h.op.get(v)), 'Operasyon değişti'); }} />
             {fason ? (
               <span className="tc-rr1-ipucu"><span className="tc-rr1-tag">Dış üretim</span> {a.fasonId ? fasonAdi(r.duzen.durum.fasonFirms, a.fasonId) : <b>firma seçilmedi</b>}</span>

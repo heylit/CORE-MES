@@ -52,6 +52,7 @@ export {
   IstasyonSecici, KayitSecici, KisiSecici, MakineSecici, MalzemeSecici,
   type KayitSeciciOzellikleri, type SecimAramaCevabi, type SecimKaydi, type SeciliKayit,
 } from './KayitSecici.tsx';
+export { AramaliSecim, type AramaliSecenek } from './AramaliSecim.tsx';
 export { acilirYonu, useAcilirKonum, type AcilirYonu } from './acilir-konum.ts';
 export { LOGO_DURUM_ADI, LOGO_DURUM_TONU, LogoRozeti, LogoRozetHucresi, useLogoRozetleri, type LogoRozetBilgisi } from './LogoRozeti.tsx';
 export { KilitliDeger, KilitliSutunNotu, YETKI_ADI } from './KilitliDeger.tsx';

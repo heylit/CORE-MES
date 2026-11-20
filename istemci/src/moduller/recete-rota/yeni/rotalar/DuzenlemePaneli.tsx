@@ -13,7 +13,7 @@ import { AdimSartnameleri } from './AdimSartnameleri.tsx';
 import { AdimEkipmani, useAdimEkipmanSayisi } from './AdimEkipmani.tsx';
 import { AdimTalimati } from './AdimTalimati.tsx';
 import { HamOnerisi } from './HamOnerisi.tsx';
-import { BAG_ADI, Bolme, KatBolme, SayiAlani, SecimAlani, type RotaEkrani, type Secim, SURE_EN_COK, useKatlar } from './ortak.tsx';
+import { BAG_ADI, Bolme, KatBolme, AramaliSecimAlani, operasyonSecenekleri, SayiAlani, SecimAlani, type RotaEkrani, type Secim, SURE_EN_COK, useKatlar } from './ortak.tsx';
 import { useRevizyonSartnameleri, useTalimatlar } from '../sartnameler/veri.ts';
 import { HizliEkle, MalzemeListesi } from './MalzemeSecici.tsx';
 import { AdimCiktisi } from './AdimCiktisi.tsx';
@@ -184,7 +184,7 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
   const yeniDal = serbestDal(liste);
   const birlesmemis = birlesebilenDallar(liste, idx).filter((d) => !adimBirlesen(a).includes(d));
   const kart = son ? null : akisKarti(sahip.id, liste, idx, dz.malzemeVar);
-  const opSecenek = [...h.op.values()].filter((o) => o.aktif || o.id === a.opId).map((o) => ({ deger: o.id, baslik: `${o.abbr ?? o.code} ${o.name}` }));
+  const opSecenek = operasyonSecenekleri(h, a.opId);
   const girenEkle = (m: Malzeme, n: number) => {
     const varOlan = girenTekrari(a, m.id);
     if (varOlan !== null) {
@@ -257,7 +257,7 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
       {!duzen && r.yetki.rotaYaz && <p className="tc-rr1-ipucu">Bu revizyon salt gösteriliyor; değiştirmek için açık taslağı seç.</p>}
       {eksik && <div className="tc-rr1-warnbox" role="alert">{eksik.metin}. Eksik rota onaya gönderilemez ve emri plana alınmaz.</div>}
       <KatBolme k="op" baslik={fason ? 'Operasyon ve firma' : 'Operasyon ve yer'} ozet={ozetOp} acik={katlar.acik.op} ayarla={katlar.ayarla}>
-        <SecimAlani etiket="Operasyon" deger={a.opId} secenekler={opSecenek} kapali={!duzen} bos={op ? undefined : 'Operasyon seç…'}
+        <AramaliSecimAlani etiket="Operasyon" deger={a.opId} secenekler={opSecenek} kapali={!duzen} bos={op ? undefined : 'Operasyon seç…'}
           yaz={(v) => { yaz((x) => operasyonYaz(x, h.op.get(v)), 'Operasyon değişti'); }} />
         <UretimYeri r={r} s={s} a={a} duzen={duzen} />
         {!fason && (
@@ -265,6 +265,13 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
             <SecimAlani etiket="İstasyon" deger={a.stationId ?? ''} kapali={!duzen} bos="Seç…"
               secenekler={istasyonlar.map((x) => ({ deger: x.id, baslik: `${x.code} ${x.name}` }))}
               yaz={(v) => { yaz((x) => istasyonYaz(x, v || null), 'İstasyon değişti'); }} />
+            {/* Operasyon seçilince istasyon gelir; varsayılan istasyon sonradan tanımlanınca eski adım boş kalır, aynı operasyonu yeniden seçmek de bir şey değiştirmez. */}
+            {duzen && !a.stationId && op?.stationId && h.istasyon.get(op.stationId)?.aktif === true && (
+              <p className="tc-rr1-ipucu tc-rr1-satirnot">
+                {`${op.abbr ?? op.code} operasyonunun varsayılan istasyonu ${[h.istasyon.get(op.stationId)?.code, h.istasyon.get(op.stationId)?.name].filter(Boolean).join(' ')}.`}{' '}
+                <button type="button" className="tc-rr1-linkbtn" onClick={() => { yaz((x) => istasyonYaz(x, op.stationId), 'Varsayılan istasyon atandı'); }}>Bu istasyonu ata</button>
+              </p>
+            )}
             {ist && (
               <p className="tc-rr1-ipucu tc-rr1-satirnot">
                 {[im ? `${im.code} ${im.name}` : null, `verim %${sayi(ist.eff)}`, `paralel ${sayi(ist.count)}`].filter(Boolean).join(' · ')}{' '}
