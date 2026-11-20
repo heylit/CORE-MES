@@ -447,9 +447,10 @@ function partiBol(jid, dagitim, adetler) {
      Kayıt taşınmasaydı ilk parti de tek tezgâha iner, bölünmüş payın kilidi sahipsiz kalırdı. Pay adetleri partinin adedine oranlanır (elleBolCoz). */
   for (const id of Object.keys(st.elleBol || {})) if (id.startsWith(pref)) { st.elleBol[`${jid}/1.${id.slice(pref.length)}`] = st.elleBol[id]; delete st.elleBol[id]; }
   /* Adıma bildirilen bekleme her partide geçerlidir: nedeni (malzeme ya da kişi yok) adımındır, hiçbir parti o adıma daha erken başlayamaz.
-     Bildirilen ek süre partilere adetle paylaştırılır: toplamı değişmez. Taşınmasalardı ölçüm partileri beklemeden önce ve ek süresiz dizerdi. */
+     Bildirilen ek süre ilk partide kalır: emir gerçekten bölününce kayıt üst emirde durur, yeni partiye geçmez (kilit ve elle bölme gibi).
+     Taşınmasalardı ölçüm partileri beklemeden önce ve ek süresiz dizerdi. */
   for (const id of Object.keys(st.adimBekle || {})) if (id.startsWith(pref)) { parcalar.forEach((x, i) => { st.adimBekle[`${jid}/${i + 1}.${id.slice(pref.length)}`] = st.adimBekle[id]; }); delete st.adimBekle[id]; }
-  for (const id of Object.keys(st.adimEk || {})) if (id.startsWith(pref)) { const e = st.adimEk[id]; parcalar.forEach((x, i) => { st.adimEk[`${jid}/${i + 1}.${id.slice(pref.length)}`] = { ...e, ekSaat: (+e.ekSaat || 0) * x.n / s.adet }; }); delete st.adimEk[id]; }
+  for (const id of Object.keys(st.adimEk || {})) if (id.startsWith(pref)) { st.adimEk[`${jid}/1.${id.slice(pref.length)}`] = st.adimEk[id]; delete st.adimEk[id]; }
   const r0 = S.plan.ops[opId];
   parcalar.forEach((x, i) => { if (x.m) st.locks[`${jid}/${i + 1}.${k}`] = { m: x.m, S: r0 ? r0.S : st.now, gecici: 1 }; });
   stHazirla(st); const cx = compile(st);

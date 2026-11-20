@@ -702,7 +702,7 @@ describe('planlama değerlendirmesi: çıkış denetimi (3499)', () => {
     assert.deepEqual([kp['O2/1.20~2']?.m, kp['O2/1.20~2']?.S], [k.m, k.S + 30], 'payın kilidi ilk partide');
     assert.deepEqual(planBozuklari(kp), []);
   });
-  test('CD-10: parti böl: adıma bildirilen bekleme her partide geçerlidir, ek süre partilere adetle paylaşılır', async () => {
+  test('CD-10: parti böl: adıma bildirilen bekleme her partide geçerlidir, ek süre ilk partide kalır', async () => {
     // İki torna: partiler ayrı tezgâha dağıtılınca ikinci parti ilkini beklemez; beklemesi yoksa erken başlar.
     const kayit = { ...BUYUK_KAYIT, machines: [...BUYUK_KAYIT.machines, { id: '101', code: 'T2', name: 'Torna 2', stationId: '10', plan: tezgah('101', '10', 750) }] };
     const kaynak = { ...BUYUK_KAYNAK, durum: { ...BUYUK_KAYNAK.durum, machines: [...BUYUK_KAYNAK.durum.machines, { id: '101', code: 'T2', name: 'Torna 2', stationId: '10', status: 'aktif', aktif: true }] } };
@@ -720,11 +720,11 @@ describe('planlama değerlendirmesi: çıkış denetimi (3499)', () => {
     const kadar = Math.max(dagitik['O2/1.20']!.S, dagitik['O2/2.20']!.S) + 40;
     const bekleyen = await bol({ adimBekle: { 'O2.20': { kadar, neden: 'malzeme' } } }, 'dag');
     assert.ok(bekleyen['O2/1.20']!.S >= kadar && bekleyen['O2/2.20']!.S >= kadar, `iki parti de beklemeden sonra başlar: ${String(bekleyen['O2/1.20']?.S)}, ${String(bekleyen['O2/2.20']?.S)} >= ${String(kadar)}`);
-    // Ek süre 9 saat, partiler 6 + 3 adet: 6 ve 3 saat.
+    // Ek süre 9 saat: gerçek bölmede kayıt üst emirde kalır; ölçümde de ilk parti 9 saat uzar, ikinci parti uzamaz.
     const sure = (r: PlanIsi): number => (r as PlanIsi & { run: number }).run;
     const yalin = await bol({}, 'ayni'), ekli = await bol({ adimEk: { 'O2.20': { ekSaat: 9, bitis0: null } } }, 'ayni');
-    assert.ok(Math.abs(sure(ekli['O2/1.20']!) - sure(yalin['O2/1.20']!) - 6) < 1e-6, `ilk parti 6 saat uzar: ${String(sure(ekli['O2/1.20']!) - sure(yalin['O2/1.20']!))}`);
-    assert.ok(Math.abs(sure(ekli['O2/2.20']!) - sure(yalin['O2/2.20']!) - 3) < 1e-6, `ikinci parti 3 saat uzar: ${String(sure(ekli['O2/2.20']!) - sure(yalin['O2/2.20']!))}`);
+    assert.ok(Math.abs(sure(ekli['O2/1.20']!) - sure(yalin['O2/1.20']!) - 9) < 1e-6, `ilk parti 9 saat uzar: ${String(sure(ekli['O2/1.20']!) - sure(yalin['O2/1.20']!))}`);
+    assert.equal(sure(ekli['O2/2.20']!), sure(yalin['O2/2.20']!), 'ikinci parti uzamaz');
   });
 
   test('CD-05: kişinin kilidi süren işle üst üste geliyorsa motor kilidi oynatmaz; çakışma planın uyarılarında bildirilir', async () => {
