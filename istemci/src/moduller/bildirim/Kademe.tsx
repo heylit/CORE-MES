@@ -142,7 +142,7 @@ export function KademeAyarPenceresi({ satir, roller, kapat }: { satir: KademeAya
     >
       <div className="tc-bildirim-kademe-form">
         {satir.para && <p className="tc-bildirim-serit"><Simge ad="alert" boyut="k" />Bu kaynak para taşır: e-postaya yalnız kayıt numarası yazılır.</p>}
-        <IsaretKutusu etiket="Bu kaynak takip edilsin" checked={g.acik} onChange={(o) => degistir({ acik: o.target.checked })} />
+        <AcKapa etiket={`${satir.ad}: Açık`} acik={g.acik} degistir={(acik) => { degistir({ acik }); }} />
         <DikeyMerdiven ayar={{ ...g, sayac: satir.sayac }} />
         {satir.sayac === 'son-gun'
           ? gunAlani('K2 Yaklaşıyor: son günden kaç iş günü önce', g.k2Gun, 'k2Gun', 'Boş bırakılırsa hatırlatma gitmez.')

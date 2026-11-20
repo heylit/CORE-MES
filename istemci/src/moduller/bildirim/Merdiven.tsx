@@ -27,13 +27,13 @@ export function kademeMerdiveni(s: MerdivenAyari): Basamak[] {
   });
 }
 
-// Kısa gün yazısı: "K2 2 · K3 · +2 · +5" (K2 son güne kalan, K3 gecikme, + gecikmeden sonraki gün).
+// Kısa gün yazısı, kelimeyle: "1g kala · gecikince · +1g yönetici · +2g devret" (+ gecikmeden sonraki iş günü).
 export function merdivenOzeti(s: MerdivenAyari): string {
   const p: string[] = [];
-  if (s.sayac === 'son-gun') { if (s.k2Gun !== null) p.push(`K2 ${String(s.k2Gun)}`); p.push('K3'); }
-  else if (s.k3Gun !== null) p.push(`K3 ${String(s.k3Gun)}${s.k3Birim === 'saat' ? ' sa' : ''}`);
-  if (s.k4Gun !== null) p.push(`+${String(s.k4Gun)}`);
-  if (s.k5Gun !== null) p.push(`+${String(s.k5Gun)}`);
+  if (s.sayac === 'son-gun') { if (s.k2Gun !== null) p.push(`${String(s.k2Gun)}g kala`); p.push('gecikince'); }
+  else if (s.k3Gun !== null) p.push(`${String(s.k3Gun)}${s.k3Birim === 'saat' ? 'sa' : 'g'} bekleyince`);
+  if (s.k4Gun !== null) p.push(`+${String(s.k4Gun)}g yönetici`);
+  if (s.k5Gun !== null) p.push(`+${String(s.k5Gun)}g devret`);
   return p.join(' · ');
 }
 
@@ -45,7 +45,9 @@ export function MiniMerdiven({ ayar, etiket }: { ayar: MerdivenAyari; etiket: st
       <span className="tc-merdiven-basamaklar" aria-hidden="true">
         {b.map((x) => <span key={x.no} className={`tc-merdiven-basamak tc-merdiven-${x.ton}`} />)}
       </span>
-      <span className="tc-merdiven-gun" aria-hidden="true">{merdivenOzeti(ayar)}</span>
+      <span className="tc-merdiven-gun" aria-hidden="true">
+        {merdivenOzeti(ayar).split(' · ').map((x, i, l) => <span key={x}>{i < l.length - 1 ? `${x} ·` : x}</span>)}
+      </span>
     </span>
   );
 }

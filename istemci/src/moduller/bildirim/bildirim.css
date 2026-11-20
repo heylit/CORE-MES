@@ -198,7 +198,8 @@
 .tc-merdiven { display: inline-flex; flex-direction: column; gap: var(--b-1); }
 .tc-merdiven-basamaklar { display: inline-flex; gap: var(--b-1); }
 .tc-merdiven-basamak { inline-size: var(--b-4); block-size: var(--b-2); border-radius: var(--yari-1); background: var(--faint); }
-.tc-merdiven-gun { color: var(--muted); font-size: var(--yazi-xs); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tc-merdiven-gun { display: flex; flex-wrap: wrap; column-gap: var(--b-1); color: var(--muted); font-size: var(--yazi-xs); font-variant-numeric: tabular-nums; }
+.tc-merdiven-gun > span { white-space: nowrap; }
 .tc-merdiven-acik { --merdiven-renk: var(--run); }
 .tc-merdiven-gecikti { --merdiven-renk: var(--hold); }
 .tc-merdiven-yonetici { --merdiven-renk: var(--stop); }

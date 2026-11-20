@@ -131,4 +131,8 @@
 }
 .tc-kanal-dugme[aria-checked="true"] { border-style: solid; border-color: var(--run); background: var(--panel2); color: var(--run); }
 .tc-kanal-dugme:disabled { cursor: progress; }
+/* Olay kapalıyken kanal ayarı durur ama kullanılmaz: açık kanal yeşil değil soluk görünür. */
+.tc-kanal-dugme.tc-kanal-soluk[aria-checked="true"] { border-color: var(--edge); color: var(--faint); }
+.tc-matris-toplu-dugme.tc-kanal-soluk[aria-checked="true"] .tc-ackapa-ray { background: var(--faint); }
+.tc-matris-toplu-bos { visibility: hidden; }
 .tc-kanal-yok { border-color: transparent; cursor: default; }

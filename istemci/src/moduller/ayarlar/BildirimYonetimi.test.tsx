@@ -420,12 +420,14 @@ describe('bildirim ve uyarı yönetimi: olaylar (3435-3, 3456)', () => {
     const tablo = await screen.findByRole('table', { name: 'Bildirim olayları' });
     const satir = within(tablo).getByText('Talep onayı').closest('tr');
     expect(satir?.textContent).toMatch(/3 takipte · 1 gecikti/);
+    expect(satir?.textContent).toMatch(/2g bekleyince ·\s*\+\d+g yönetici/);
     expect(within(tablo).getByRole('img', { name: /^Talep onayı merdiveni \(kapalı\): K1 Atandı: İş açılınca; K3 Gecikti: 2 iş günü bekleyince; K4/ })).toBeTruthy();
     expect(okunanlar).not.toContain('/bildirimler/alicilar');
     expect(okunanlar).not.toContain('/bildirimler/olaylar');
     fireEvent.click(screen.getByRole('button', { name: 'Talep onayı: ayrıntı' }));
     const panel = await screen.findByRole('dialog', { name: 'Talep onayı' });
     expect(within(panel).getByRole('list', { name: 'Merdiven' })).toBeTruthy();
+    expect(within(panel).getByRole('switch', { name: 'Talep onayı: Açık' }).getAttribute('aria-checked')).toBe('false');
   });
 
   it('3478: kapalı olay tek anahtarla sürümüyle açılır; modülün toplu açması önce sorar', async () => {
@@ -433,10 +435,14 @@ describe('bildirim ve uyarı yönetimi: olaylar (3435-3, 3456)', () => {
     ac();
     await screen.findByRole('table', { name: 'Bildirim olayları' });
     expect(screen.getByRole('note').textContent).toMatch(/Gelenler'de kalır/);
+    const kanal = () => screen.getAllByRole('switch', { name: /^Makine durdu: / }).find((d) => d.getAttribute('aria-label') !== 'Makine durdu: Açık' && d.getAttribute('aria-checked') === 'true');
+    expect(kanal()?.className).toContain('tc-kanal-soluk');
+    expect(kanal()?.getAttribute('title')).toMatch(/Olay kapalı; açınca bu kanal kullanılır/);
     fireEvent.click(anahtar('Makine durdu: Açık'));
     await waitFor(() => { expect(yazilanlar).toHaveLength(1); });
     expect(yazilanlar[0]).toEqual({ yol: '/bildirimler/olaylar/istasyonlar.makine-durdu/degistir', govde: { acik: true, surum: null } });
     await waitFor(() => { expect(anahtar('Makine durdu: Açık').getAttribute('aria-checked')).toBe('true'); });
+    expect(kanal()?.className).not.toContain('tc-kanal-soluk');
     fireEvent.click(screen.getByRole('checkbox', { name: 'Stok: Açık, 0/1 açık' }));
     await waitFor(() => { expect(yazilanlar).toHaveLength(2); });
     expect(yazilanlar[1]).toEqual({ yol: '/bildirimler/olaylar/stok.birakildi/degistir', govde: { acik: true, surum: null } });

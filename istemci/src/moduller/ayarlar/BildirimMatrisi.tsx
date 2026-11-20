@@ -191,19 +191,34 @@ function useKanalYazici() {
 }
 
 // Grubun kanal anahtarı üç durumludur (hepsi, bazıları, hiç); switch rolü üç durumu taşımadığı için checkbox rolündedir.
+const OLAY_KAPALI_KANAL = 'Olay kapalı; açınca bu kanal kullanılır.';
+
 function TopluAnahtar({ etiket, satirlar, kanal, degistir, disabled }: {
   etiket: string; satirlar: readonly MatrisSatiri[]; kanal: Kanal; degistir: (deger: boolean, hedef: readonly MatrisSatiri[]) => void; disabled: boolean;
 }) {
   const olan = satirlar.filter((m) => kanalDegeri(m, kanal) !== null);
-  if (olan.length === 0) return null;
+  // Kanalı olmayan modülde yer tutulur: Açık anahtarı her modül başlığında aynı yerde kalır.
+  if (olan.length === 0) {
+    return (
+      <span className="tc-matris-toplu tc-matris-toplu-bos" aria-hidden="true">
+        <span className="tc-ackapa tc-matris-toplu-dugme">
+          <span className="tc-ackapa-ray"><span className="tc-ackapa-top" /></span>
+          <span className="tc-matris-toplu-ad">{KANAL_ADI[kanal]}</span>
+        </span>
+        <span className="tc-matris-toplu-sayi">0/0 açık</span>
+      </span>
+    );
+  }
   const acik = olan.filter((m) => kanalDegeri(m, kanal) === true).length;
+  const olayKapali = olan.every((m) => acikMi(m) === false);
   const durum = acik === 0 ? 'false' : acik === olan.length ? 'true' : 'mixed';
   const yeni = durum !== 'true';
   return (
     <span className="tc-matris-toplu">
       <button
         type="button" role="checkbox" aria-checked={durum} aria-label={`${etiket}: ${KANAL_ADI[kanal]}, ${String(acik)}/${String(olan.length)} açık`}
-        className="tc-ackapa tc-matris-toplu-dugme" disabled={disabled}
+        className={`tc-ackapa tc-matris-toplu-dugme${olayKapali ? ' tc-kanal-soluk' : ''}`} disabled={disabled}
+        title={olayKapali ? OLAY_KAPALI_KANAL : undefined}
         onClick={() => { degistir(yeni, olan.filter((m) => kanalDegeri(m, kanal) !== yeni)); }}
       >
         <span className="tc-ackapa-ray" aria-hidden="true"><span className="tc-ackapa-top" /></span>
@@ -373,10 +388,12 @@ export function BildirimMatrisi() {
           {kanallar.map((k) => {
             const d = kanalDegeri(m, k);
             if (d === null) return <span key={k} className="tc-kanal-dugme tc-kanal-yok" aria-hidden="true" />;
+            const olayKapali = acikMi(m) === false;
             return (
               <button
                 key={k} type="button" role="switch" aria-checked={d} aria-label={`${m.baslik}: ${KANAL_ADI[k]}`}
-                title={`${KANAL_ADI[k]}: ${d ? 'açık' : 'kapalı'}`} className="tc-kanal-dugme" disabled={bekliyor(m.tur, k)}
+                title={`${KANAL_ADI[k]}: ${d ? 'açık' : 'kapalı'}${olayKapali ? `. ${OLAY_KAPALI_KANAL}` : ''}`}
+                className={`tc-kanal-dugme${olayKapali ? ' tc-kanal-soluk' : ''}`} disabled={bekliyor(m.tur, k)}
                 onClick={() => { tekYaz(m, k, !d); }}
               >
                 <Simge ad={KANAL_SIMGESI[k]} boyut="k" />
@@ -534,7 +551,7 @@ export function BildirimMatrisi() {
           onayla={() => { void oncekiHaleDon(); }}
         >
           <p>
-            {`Bütün olaylar açılır; kademeli uyarılar ${zamanMetni(oncekiHal.alindi)} tarihindeki ayara döner. Açılan uyarılar bekleyen bütün işler için ilk turda çalar.`}
+            {`Bütün olaylar açılır; kademeli uyarılar ${zamanMetni(oncekiHal.alindi)} tarihindeki ayara döner; o tarihten sonra kademeli uyarılarda yaptığınız değişiklikler kalmaz. Açılan uyarılar bekleyen bütün işler için ilk turda çalar.`}
             {oncekiHal.donuldu !== null && ` Son dönüş: ${zamanMetni(oncekiHal.donuldu)}.`}
           </p>
         </OnayPenceresi>
