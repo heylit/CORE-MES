@@ -977,6 +977,61 @@ describe('planlama değerlendirmesi: takvim kendiliğinden uzar (3501 a)', () =>
   });
 });
 
+describe('planlama değerlendirmesi: elle kilitli adımın öncülü (3502)', () => {
+  // Üç adımlı ürün: uzun torna, kısa freze, kısa torna. Kilit üçüncü adıma konur.
+  const kayit = { ...BUYUK_KAYIT,
+    items: [...BUYUK_KAYIT.items, { id: '53', code: 'MM-4', name: 'Ornek flans', type: 'mamul' }],
+    routes: { ...BUYUK_KAYIT.routes, 53: { base: null, steps: [adim('53', 10, '10', 120, 30), adim('53', 20, '20', 30, 15), adim('53', 30, '10', 30, 15)] } },
+    orders: [...BUYUK_KAYIT.orders, { id: 'OK', no: 'E-K', itemId: '53', qty: 2, start: '2026-10-19', due: '2026-11-20', priority: 1, status: 'serbest' }] };
+  const kur = async (sure: number, locks: Record<string, { m: string; S: number }>): Promise<Record<string, PlanIsi & { why: { t: string; r?: string } | null }>> => {
+    const s = sonuc(await degerlendirmeYap({ calisma: { ...calismaKur(), w: { famK: 0.3, mat: 'sert', dondurma: 4, sure }, locks }, kayit, kaynak: BUYUK_KAYNAK, bugun: '2026-10-19', istek: { tur: 'plan-kur' } }, AN));
+    if (s.tur !== 'plan-kur') return assert.fail(s.tur);
+    return s.plan['ops'] as Record<string, PlanIsi & { why: { t: string; r?: string } | null }>;
+  };
+
+  test('KZ-01: kilitli adımın öncülü, önceliği düşük olsa da kilit saatinden önce biter; kilit yerinde kalır, arama bunu bozmaz', async () => {
+    const p0 = await kur(0.001, {});
+    // Kilitsiz planda son sıralarda yapılan iş: ikinci adımı, birinci adımın o plandaki başlangıcına kilitlenir.
+    const x = Object.keys(p0).filter((id) => id.endsWith('.10') && p0[id.replace(/\.10$/, '.20')] && !p0[id.replace(/\.10$/, '.30')]).sort((a, b) => p0[b]!.S - p0[a]!.S)[0]!;
+    const k = x.replace(/\.10$/, '.20'), kilit = { m: p0[k]!.m, S: p0[x]!.S };
+    for (const sure of [0.001, 0.6]) {
+      const p = await kur(sure, { [k]: kilit });
+      assert.deepEqual([p[k]!.m, p[k]!.S], [kilit.m, kilit.S], 'kilit yerinde');
+      assert.deepEqual(planBozuklari(p), [], `süre ${String(sure)}`);
+    }
+    // Öncül kilide yaslanır: öne çekilip öteki işlerin önüne geçmez.
+    const p = await kur(0.001, { [k]: kilit });
+    assert.deepEqual(p[x]!.why, { t: 'kilit-oncul', r: k });
+    assert.ok(kilit.S - p[x]!.C < 0.5 && p[x]!.S > Math.min(...Object.values(p).map((r) => r.S)), `${String(p[x]!.S)}-${String(p[x]!.C)}, kilit ${String(kilit.S)}`);
+  });
+
+  test('KZ-03: kayıtlı planda bir adım yerine kilitlenip değişiklik uygulanınca öncülü kilide doğru ileri kaymaz', async () => {
+    const c = guncelPlanli(kayit); const eski = (c['plan'] as { ops: Record<string, PlanIsi> }).ops;
+    // Öncülü ile arasında boşluk olan adım: öncül kilide yaslansaydı ileri kayardı.
+    const k = Object.keys(eski).filter((id) => id.endsWith('.20') && eski[id]!.S - eski[id.replace(/\.20$/, '.10')]!.C > 2).sort()[0]!;
+    assert.ok(k, 'öncülüyle arası açık adım var');
+    const x = k.replace(/\.20$/, '.10');
+    const s = sonuc(await degerlendirmeYap({ calisma: { ...c, locks: { [k]: { m: eski[k]!.m, S: eski[k]!.S } } }, kayit, kaynak: BUYUK_KAYNAK, bugun: '2026-10-19', istek: { tur: 'plan-uygula', isler: ['*'] } }, AN));
+    if (s.tur !== 'plan-uygula') return assert.fail(s.tur);
+    const yeni = s.plan['ops'] as Record<string, PlanIsi>;
+    assert.ok(yeni[x]!.S <= eski[x]!.S + 1e-6, `${String(yeni[x]!.S)} <= ${String(eski[x]!.S)}`);
+    assert.deepEqual([yeni[k]!.m, yeni[k]!.S], [eski[k]!.m, eski[k]!.S]);
+    assert.deepEqual(planBozuklari(yeni), []);
+  });
+
+  test('KZ-02: zincir kilide sığmıyorsa hiçbir öncülün yeri ayrılmaz; sıra yalnız kilitli adımda bozulur, kilitsiz adımlar sıralı kalır', async () => {
+    const p0 = await kur(0.001, {});
+    const t0 = Math.min(...Object.values(p0).map((r) => r.S)), d1 = p0['OK.10']!.C - p0['OK.10']!.S, d2 = p0['OK.20']!.C - p0['OK.20']!.S;
+    // İkinci adım kilitten önceye sığar, birinci adım onun önüne sığmaz.
+    const kilit = { m: p0['OK.30']!.m, S: t0 + d2 + d1 / 2 };
+    const p = await kur(0.001, { 'OK.30': kilit });
+    assert.deepEqual([p['OK.30']!.m, p['OK.30']!.S], [kilit.m, kilit.S]);
+    const bozuk = planBozuklari(p);
+    assert.equal(bozuk.length, 1, bozuk.join('; '));
+    assert.match(bozuk[0]!, /^OK\.30 /);
+  });
+});
+
 const PAROLA = 'dogru-parola-1';
 const URL = '/api/plan/planlama-degerlendirmesi';
 

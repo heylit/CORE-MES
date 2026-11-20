@@ -464,6 +464,8 @@ function addUse(cx,u,M,r,apId,sign=1){
 /** @param {any} st @param {string} id @returns {number} */
 function beklemeAni(st,id){const b=st.adimBekle&&st.adimBekle[id],k=b?+b.kadar:NaN;return isFinite(k)?k:-Infinity;}
 /* ---- tek işlem zamanlaması ---- */
+/* ctx.eksikli: yerleşmemiş öncül sınır koymaz (zincir geriye doğru yerleşirken öncül henüz yoktur). İşaret ctx'te durur, çünkü kancalar bu
+   işlevi sarar ve fazladan değişkeni aktarmaz. */
 /** @param {any} [o] @param {Derleme} [cx] @param {any} [ctx] */
 function predBound(o,cx,ctx){
   const st=cx.st,A=cx.A,P=ctx.P,j=cx.jobs[o.job];
@@ -473,7 +475,7 @@ function predBound(o,cx,ctx){
   {const mr=cx.mat.res[o.job],mt=mr&&mr.op?mr.op[o.id]:undefined;if(st.w.mat==='sert'&&mt!=null&&mt>s){s=mt;why={t:'malzeme'};}}
   if(!o.program&&cx.progRel>s){s=cx.progRel;why={t:'program'};}
   const tas=+A.tasimaSaat||0;
-  for(const [pid,ty] of o.pr){const p=P[pid];if(!p)return null;
+  for(const [pid,ty] of o.pr){const p=P[pid];if(!p){if(ctx.eksikli)continue;return null;}
     if(ty==='o'&&!p.fas){const t=p.lot1+tas;if(t>s){s=t;why={t:'rota',r:pid,o:1};}if(p.C+tas>fin){fin=p.C+tas;finRef=pid;}}
     else{const t=p.C+(p.fas?0:tas);if(t>s){s=t;why={t:'rota',r:pid};}}}
   const lk=st.locks[o.id];if(lk&&lk.S>s){s=lk.S;why={t:'kilit'};}
@@ -629,6 +631,52 @@ function candM(o,st,opt,base){
 }
 /** @param {Derleme} [cx] @param {any} [ctx] @param {any} [j] */
 function remH(cx,ctx,j){let h=0;for(const o of j.ops)if(!ctx.P[o.id]){const m=o.c.filter(c=>!c.fas).map(c=>c.su+c.run);h+=m.length?Math.min(...m):24;}return h;}
+/* Yer ayırma: iş tezgâhın boş anını ilerletmeden yerleşir (kilit gibi); önüne sığan iş yine önce yapılır. */
+/** @param {Derleme} cx @param {any} ctx @param {any} r */
+function yerAyir(cx,ctx,r){
+  if(r.fas){commit(cx,ctx,r);return;}
+  ctx.P[r.id]=r;ctx.ver[r.m]=(ctx.ver[r.m]||0)+1;(ctx.kilit[r.m]=ctx.kilit[r.m]||[]).push([r.S,r.C,r.id]);addUse(cx,ctx.u,cx.M[r.m],r,cx.byId[r.id].aparat);
+}
+/** @param {Derleme} cx @param {any} ctx @param {any} r */
+function yerBirak(cx,ctx,r){
+  delete ctx.P[r.id];
+  if(r.fas){const l=ctx.fas[r.m.slice(1)]||[],i=l.findIndex((/** @type {number[]} */x)=>x[0]===r.S&&x[1]===r.C);if(i>=0)l.splice(i,1);return;}
+  ctx.ver[r.m]=(ctx.ver[r.m]||0)+1;const l=ctx.kilit[r.m],i=l.findIndex((/** @type {any[]} */x)=>x[2]===r.id);if(i>=0)l.splice(i,1);
+  addUse(cx,ctx.u,cx.M[r.m],r,cx.byId[r.id].aparat,-1);
+}
+/* İşin, d anına kadar biten en geç yeri. Bitiş başlangıçla birlikte ilerlediği için ikiye bölerek aranır; en erken yeri bile d'yi aşıyorsa null. */
+/** @param {any} o @param {any} c @param {Derleme} cx @param {any} ctx @param {any} b @param {number} d */
+function sonaYasla(o,c,cx,ctx,b,d){
+  /** @param {number} s */
+  const dene=s=>{const bb={...b,s:Math.max(b.s,s)};return c.fas?tFason(o,c,cx,ctx,bb):tMach(o,c,cx,ctx,bb,false);};
+  let en=dene(b.s);if(!en||en.C>d+1e-6)return null;
+  let alt=en.S,ust=d;
+  for(let i=0;i<24&&ust-alt>SL/2;i++){const orta=(alt+ust)/2,r=dene(orta);if(r&&r.C<=d+1e-6){en=r;alt=Math.max(orta,r.S);}else ust=orta;}
+  return en;
+}
+/* Kişinin kilitlediği adım saatinde durur; öncülü o saate yetişmezse plan sıra ihlaliyle çıkar ve kilit oynamadığı için onarılamaz. İleri
+   dağıtım bunu güvenceye alamaz: başlangıcı ileride olan iş sırası gelene dek seçilmez, o arada tezgâh dolar. Bu yüzden kilitli adımın
+   yerleşmemiş öncülleri dağıtımdan önce, kilitten geriye doğru, sığdıkları en geç yere yerleşir. En geç yer bilerek seçilir: en erkene
+   çekilen zincir öteki işlerin önüne geçer, ölçümde gecikmeyi daha çok artırdı. Zincir sığmıyorsa hiçbir yeri ayrılmaz, işler olağan
+   dağıtıma kalır (öncülü geride kalan iş yeri ayrılmış ardılından sonra bitseydi kilitsiz işte de sıra bozulurdu). */
+/** @param {Derleme} cx @param {any} ctx @param {any[]} kilitler @param {any} opt @param {any} base */
+function kilitZincirleri(cx,ctx,kilitler,opt,base){
+  const st=cx.st,tas=+cx.A.tasimaSaat||0;
+  const elle=kilitler.filter(kr=>{const lk=st.locks[kr.id];return lk&&!lk.gecici;}).sort((a,b)=>a.S-b.S||(a.id<b.id?-1:a.id>b.id?1:0));
+  ctx.eksikli=true;
+  for(const kr of elle){/** @type {any[]} */const konan=[];
+    /** @type {(id:string,son:number)=>boolean} */
+    const yetisir=(id,son)=>{const yerli=ctx.P[id];
+      if(yerli)return yerli.C+(yerli.fas?0:tas)<=son+1e-6;
+      const o=cx.byId[id],b=o&&predBound(o,cx,ctx);if(!b)return false;
+      let en=null;for(const c of candM(o,st,opt,base)){const r=sonaYasla(o,c,cx,ctx,b,son-(c.fas?0:tas));if(r&&(!en||r.S>en.S))en=r;}
+      if(!en)return false;
+      en.why={t:'kilit-oncul',r:kr.id};yerAyir(cx,ctx,en);konan.push(en);
+      return o.pr.every((/** @type {[string,string]} */[pid])=>yetisir(pid,en.S));};
+    if(!cx.byId[kr.id].pr.every((/** @type {[string,string]} */[pid])=>yetisir(pid,kr.S)))for(const r of konan)yerBirak(cx,ctx,r);
+  }
+  ctx.eksikli=false;
+}
 /** @param {any} [r] @param {Derleme} [cx] @param {any} [ctx] @param {any} [opt] */
 function prio(r,cx,ctx,opt){
   const st=cx.st,w=st.w,j=cx.jobs[r.job],p=Math.max(.25,r.su+r.run),pw=isAgirligi(j);let v;
@@ -728,6 +776,8 @@ function schedule(st,mode,base,opt={}){
   /* sunucu (669 a): yeri sabit iş tam saatinde durur, tezgâhın boş anını ilerletmez (kilit gibi); ardılı bitişini bekler */
   for(const id in st.sabitYer||{}){const a=st.sabitYer[id];if(ctx.P[id]||!cx.byId[id]||!cx.M[a.m])continue;
     kilitKoy(cx,ctx,{id,job:cx.byId[id].job,m:a.m,S:a.S,Su:a.S,C:a.C,lot1:a.C,su:0,run:a.C-a.S,pin:1,kilit:1,why:{t:'sabit'}});}
+  /* Tabandaki sırayı izleyen kiplerde iş zaten kilitten önceki yerindedir; yeri yalnız baştan dağıtımda ayrılır. */
+  if(mode==='dagit')kilitZincirleri(cx,ctx,kilitler,opt,base);
   const U=new Set(cx.ops.filter(o=>!ctx.P[o.id]&&o.c.length).map(o=>o.id));
   const ready=o=>o.pr.every(([p])=>ctx.P[p]);
   if((mode==='sabit'||mode==='sabit-mc')&&base){

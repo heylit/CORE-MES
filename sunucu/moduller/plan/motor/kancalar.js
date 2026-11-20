@@ -387,7 +387,10 @@ function kayanPencereKur() {
     let dec = 0, acc = 0, is = 0, bitti = false; const log = [];
     const sure = () => { if (bitti) return true; if (is < 1) return false; is = 0; bitti = Date.now() - t0 > budget; return bitti; };
     let HT = BAS.get(cx); if (!HT) { HT = lbHeadsTails(st, cx); BAS.set(cx, HT); }
-    const ok = (p, e) => (p.fail || []).length <= failN && e.chg <= maxChg;
+    /* Değerlendirme rota sırasını saymaz; kişinin kilitlediği adımın öncülünü kilidin sonrasına iten aday bedelsiz görünür ve onarılamaz.
+       Böyle adımların sayısını artıran aday alınmaz. Elle kilit yoksa denetim hiç çalışmaz. */
+    const elle = Object.keys(st.locks).filter(id => !st.locks[id].gecici);
+    const ok = (p, e) => (p.fail || []).length <= failN && e.chg <= maxChg && (!elle.length || kilitliSiraIhlali(p, st, cx, elle) <= kilitliSiraIhlali(cur, st, cx, elle));
     const pw = j => isAgirligi(cx.jobs[j]);
     /* pencere çözümü işlemleri dondurulmuş diye işaretler; asıl dondurma sınırının ötesindekiler sonraki pencerelerde yine oynar */
     const temizle = p => { for (const id in p.ops) { const r = p.ops[id]; if (r.frz && !r.act && !r.done && (free || r.S >= frz - 1e-9)) { const q = { ...r }; delete q.pin; delete q.frz; p.ops[id] = q; } } return p; };

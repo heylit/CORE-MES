@@ -139,10 +139,10 @@ function dgPlanKur(st, ms = 0) {
 }
 /* Kişinin kilitlediği işlerden öncülü bitmeden başlayanların sayısı. Değerlendirme rota sırasını saymaz: arama, ardılı kilitli işi
    geciktirmeyi bedelsiz görür. Kişinin kilidi yerinden oynamadığı için böyle bir sonuç onarılamaz; arama sonucu bu sayıyı artırıyorsa alınmaz. */
-/** @param {any} p @param {MotorDurumu} st @param {Derleme} cx */
-function kilitliSiraIhlali(p, st, cx) {
+/** @param {any} p @param {MotorDurumu} st @param {Derleme} cx @param {string[]} [idler] */
+function kilitliSiraIhlali(p, st, cx, idler) {
   let n = 0;
-  for (const id in st.locks) {
+  for (const id of idler || Object.keys(st.locks)) {
     const r = p.ops[id], o = cx.byId[id]; if (!r || !o || st.locks[id].gecici) continue;
     if (o.pr.some(([pid, ty]) => { const q = p.ops[pid]; return q && (ty === 'o' && !q.fas ? q.lot1 : q.C) > r.S + 1e-6; })) n++;
   }
