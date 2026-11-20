@@ -18,7 +18,7 @@ import {
 import { viewMaterial, viewMaterials, viewReports, viewSettings, viewSupplier, viewSuppliers } from "./memory.ts";
 import { tabSim } from "./sim.ts";
 import { siparisTakibiHTML } from "./takip.ts";
-import { inlineBulkHTML } from "./ui.ts";
+import { inlineBulkHTML, rfqPanelHTML } from "./ui.ts";
 import { kalemAdiParcayla, kalemBagMetinleri, parcaAltSatiri, uygulananSatiri } from "./kalem-bagi.ts";
 import { grupMetni, ikinciAlimUyarisi } from "./guncelleme-grubu.ts";
 import { rehberRozetleri } from "./onayli-ekran.ts";
@@ -333,47 +333,49 @@ export function boardHTML(): string {
 }
 
 /* ================= talep detayı ================= */
-/** Talebin altı adımı; ilerleme çizgisi, bölümler ve listedeki noktalar aynı sırayı kullanır (kart #939). */
-const ADIMLAR = [["items", "Talep"], ["quotes", "Teklif"], ["compare", "Karar"], ["approval", "Onay"], ["order", "Sipariş"], ["delivery", "Teslim"]] as const;
+/** Talebin yedi adımı; ilerleme çizgisi, bölümler ve listedeki noktalar aynı sırayı kullanır (kart #939). Teklif istemek
+ *  teklif girişinden ayrı adımdır (3467): kalemler bitince tedarikçiler seçilir, e-posta taslağı ve form buradan çıkar. */
+const ADIMLAR = [["items", "Talep"], ["rfq", "Teklif al"], ["quotes", "Teklif"], ["compare", "Karar"], ["approval", "Onay"], ["order", "Sipariş"], ["delivery", "Teslim"]] as const;
+const SON_ADIM = ADIMLAR.length - 1;
 export const KARAR_SONRASI = ["approval", "order", "delivery"];
-/** Şimdiki adımın sırası: 6 bütün adımlar bitti, -1 iptal. Reddedilen karar karar adımına döner. */
+/** Şimdiki adımın sırası: 7 bütün adımlar bitti, -1 iptal. Reddedilen karar karar adımına döner. */
 export function adimSirasi(r: PurchaseRequest): number {
   switch (r.status) {
     case "cancelled": return -1;
     case "draft": return (r.items || []).length ? 1 : 0;
-    case "rfq": return 1;
-    case "eval": return 2;
-    case "approval": { const st = approvalState(r).state; return st === "rejected" ? 2 : st === "approved" ? 4 : 3; }
-    case "ordered": return 5;
-    case "received": return 6;
+    case "rfq": return 2;
+    case "eval": return 3;
+    case "approval": { const st = approvalState(r).state; return st === "rejected" ? 3 : st === "approved" ? 5 : 4; }
+    case "ordered": return 6;
+    case "received": return 7;
   }
 }
 /** Talebin aşamasına göre açık olacak bölüm */
 function defaultSection(r: PurchaseRequest): string {
   const i = adimSirasi(r);
-  return i < 0 ? "items" : ADIMLAR[Math.min(i, 5)]![0];
+  return i < 0 ? "items" : ADIMLAR[Math.min(i, SON_ADIM)]![0];
 }
-/** Liste ve panoda talebin ilerlemesi: altı nokta, biten yeşil, şimdiki koyu. */
+/** Liste ve panoda talebin ilerlemesi: adım başına nokta, biten yeşil, şimdiki koyu. */
 export function ilerlemeNoktalari(r: PurchaseRequest): string {
   const i = adimSirasi(r);
-  const etiket = i < 0 ? "İptal" : i > 5 ? "Bütün adımlar tamam" : `Adım ${i + 1}/6: ${ADIMLAR[i]![1]}`;
+  const etiket = i < 0 ? "İptal" : i > SON_ADIM ? "Bütün adımlar tamam" : `Adım ${i + 1}/${ADIMLAR.length}: ${ADIMLAR[i]![1]}`;
   return `<span class="sa-noktalar" role="img" aria-label="${etiket}" title="${etiket}">${ADIMLAR.map((_, k) => `<i class="${i < 0 ? "" : k < i ? "done" : k === i ? "cur" : ""}"></i>`).join("")}</span>`;
 }
 /** İşin kimde beklediği; biten ya da iptal talepte null. */
 function kimde(r: PurchaseRequest): string | null {
   const i = adimSirasi(r);
-  if (i < 0 || i > 5) return null;
-  if (i === 3) { const tt = awardTotals(r); const req = tt ? requiredApprover(tt.totalTRY) : null; return req?.role || "Onaylayan"; }
-  if (i === 5) return "Tedarikçi (teslimat)";
+  if (i < 0 || i > SON_ADIM) return null;
+  if (i === 4) { const tt = awardTotals(r); const req = tt ? requiredApprover(tt.totalTRY) : null; return req?.role || "Onaylayan"; }
+  if (i === 6) return "Tedarikçi (teslimat)";
   const rfqs = r.rfqs || [];
-  if (i === 1 && rfqs.length && rfqs.some(x => !(r.quotes || []).some(q => q.supplierId === x.supplierId)) && !(r.quotes || []).length) return "Tedarikçi (teklif)";
+  if (i === 2 && rfqs.length && rfqs.some(x => !(r.quotes || []).some(q => q.supplierId === x.supplierId)) && !(r.quotes || []).length) return "Tedarikçi (teklif)";
   return "Satın alma";
 }
 /** Açık adım: adreste ya da sekmede seçilen, yoksa talebin şimdiki adımı. Eski "sim" ve "decision" bağlantıları karşılığına gider. */
 export function talepBolumu(r: PurchaseRequest): string {
   const tab = V.tab || defaultSection(r);
   const curI = adimSirasi(r);
-  return tab === "sim" ? "compare" : tab === "decision" ? (curI >= 3 ? ADIMLAR[Math.min(curI, 5)]![0] : "approval") : tab;
+  return tab === "sim" ? "compare" : tab === "decision" ? (curI >= 4 ? ADIMLAR[Math.min(curI, SON_ADIM)]![0] : "approval") : tab;
 }
 /** Talep ayrıntısının seçili adımının içeriği; başlık, adım şeridi ve "Şimdi yapılacak" ortak parçalarla çizilir (2412-2, 2420 a). */
 export function talepGovdesi(r: PurchaseRequest): string {
@@ -383,6 +385,7 @@ export function talepGovdesi(r: PurchaseRequest): string {
   // 3401-1 a: teklif girişi, karşılaştırma ve karar/onay adımı fiyat taşır; fiyat görmeyen okuyucuya kilit paneli çizilir.
   if (fiyatKilitli() && (sec === "quotes" || sec === "compare" || sec === "approval")) govde = kilitPaneli("Teklif ve karar fiyatları");
   else if (sec === "items") govde = tabItems(r);
+  else if (sec === "rfq") govde = tabRfq(r);
   else if (sec === "quotes") govde = tabQuotes(r);
   else if (sec === "compare") {
     if (!(r.quotes || []).length) govde = tabCompare(r);
@@ -417,7 +420,8 @@ export function adimBilgisi(r: PurchaseRequest): Record<string, string> {
   const req = tt ? requiredApprover(tt.totalTRY) : null;
   return {
     items: `${(r.items || []).length} kalem`,
-    quotes: nq ? `${nq} teklif${nr > nq ? ` / ${nr}` : ""}` : nr ? `${nr} istendi` : "istenmedi",
+    rfq: nr ? `${nr} tedarikçiden istendi` : "istenmedi",
+    quotes: nq ? `${nq} teklif${nr > nq ? ` / ${nr} istendi` : ""}` : nr ? "cevap bekleniyor" : "teklif yok",
     compare: tt ? (tt.x ? supName(tt.x.q) : "kalem bazlı") : "bekliyor",
     approval: aps.state === "approved" || COMMITTED.includes(r.status) ? "onaylandı" : aps.state === "rejected" ? "reddedildi" : r.award ? `${req?.role || "onay"} bekliyor` : "",
     order: COMMITTED.includes(r.status) ? "verildi" : "",
@@ -481,8 +485,8 @@ export function nextStep(r: PurchaseRequest): { cls: string; t: string; s: strin
   if (a) { const tt = awardTotals(r); const req = tt ? requiredApprover(tt.totalTRY) : null; return { cls: "warn", t: "Onay bekleniyor", s: `${[req ? req.role + " onayı gerekli" : "", tt ? money(tt.totalTRY, "TRY", 0) : ""].filter(Boolean).join(", ")}. Karar özetini onaylayana gönderebilirsiniz.`.replace(/^\. /, ""), b: [["tab", "Onay ekranı", 1, "decision"], ["copy-summary", "Özeti kopyala", 0]] }; }
   if (!rfqs.length && !q) return { cls: "", t: "Tedarikçilerden teklif isteyin", s: "Hafıza bu kalemleri daha önce veren tedarikçileri önerir; hepsine aynı formatta soru gider.", b: [["rfq", "Teklif iste", 1], ["bulk", "Elimde teklifler var", 0]] };
   const ev = q ? evaluate(r) : null;
-  if (!ev || !ev.elig.length) return { cls: "", t: pending.length ? `${pending.length} tedarikçiden cevap bekleniyor` : "Teklifleri girin", s: pending.length ? pending.map(x => (S.suppliers[x.supplierId] || {}).name).filter(Boolean).join(", ") : "", b: ([["bulk", "Teklifleri gir", 1], pending.length ? ["tab", "Hatırlat", 0, "quotes"] : null] as (NextBtn | null)[]).filter((x): x is NextBtn => !!x) };
-  if (ev.elig.length < set.minQuotes && pending.length) return { cls: "warn", t: `${ev.elig.length} teklif geldi, ${pending.length} cevap bekleniyor`, s: `En az ${set.minQuotes} teklifle karar vermek önerilir. Beklemek istemiyorsanız şimdiki tekliflerle karar verebilirsiniz.`, b: [["bulk", "Teklifleri gir", 1], ["tab", "Hatırlat", 0, "quotes"], ["tab", "Karşılaştır", 0, "compare"]] };
+  if (!ev || !ev.elig.length) return { cls: "", t: pending.length ? `${pending.length} tedarikçiden cevap bekleniyor` : "Teklifleri girin", s: pending.length ? pending.map(x => (S.suppliers[x.supplierId] || {}).name).filter(Boolean).join(", ") : "", b: ([["bulk", "Teklifleri gir", 1], pending.length ? ["tab", "Hatırlat", 0, "rfq"] : null] as (NextBtn | null)[]).filter((x): x is NextBtn => !!x) };
+  if (ev.elig.length < set.minQuotes && pending.length) return { cls: "warn", t: `${ev.elig.length} teklif geldi, ${pending.length} cevap bekleniyor`, s: `En az ${set.minQuotes} teklifle karar vermek önerilir. Beklemek istemiyorsanız şimdiki tekliflerle karar verebilirsiniz.`, b: [["bulk", "Teklifleri gir", 1], ["tab", "Hatırlat", 0, "rfq"], ["tab", "Karşılaştır", 0, "compare"]] };
   const top = ev.ranking[0]!;
   return { cls: "", t: `Karar verin: önerilen ${supName(top.q)}`, s: `${ev.elig.length} teklif karşılaştırıldı, net maliyet ${money(top.c.pvTRY, "TRY", 0)}, puan ${nf0.format(top.score)}.`, b: [["tab", "Karşılaştırmayı gör", 1, "compare"], ["pick-top", "Önerileni seç", 0]] };
 }
@@ -550,12 +554,28 @@ export function tabItems(r: PurchaseRequest, simple = false): string {
 function tabQuotes(r: PurchaseRequest): string {
   const quotes = r.quotes || [], set = settings(), rfqs = r.rfqs || [];
   const pending = rfqs.filter(x => !quotes.some(q => q.supplierId === x.supplierId));
-  const rfqPanel = rfqs.length ? `<section class="panel"><div class="panel-h"><h2>Teklif istekleri</h2><span class="sub">${rfqs.length - pending.length}/${rfqs.length} cevap geldi</span><span class="spacer"></span><button class="btn sm" data-act="rfq">Başka tedarikçiden iste</button>${pending.length ? '<button class="btn sm" data-act="bulk">Teklifleri gir</button>' : ""}</div>
+  const rfqPanel = pending.length ? `<div class="callout" data-sa-rfq-bekleyen=""><b>${pending.length} tedarikçiden cevap bekleniyor:</b> ${esc(pending.map(x => S.suppliers[x.supplierId]?.name ?? "Silinmiş tedarikçi").join(", "))}. <button class="btn sm ghost" data-act="tab" data-tab="rfq">Teklif isteklerini aç</button></div>` : "";
+  return tabQuotesGovde(r, rfqPanel, quotes, set, rfqs);
+}
+/** Teklif al adımı (3467): gönderilen isteklerin takibi ve yeni istek (tedarikçi seçimi, e-posta taslağı, PDF form). */
+function tabRfq(r: PurchaseRequest): string {
+  if (!(r.items || []).length) return `<div class="panel">${empty("Kalem yok", "Teklif istemeden önce ne alınacağını miktar ve birimiyle girin.", '<button class="btn primary" data-act="edit-request">Kalem ekle</button>')}</div>`;
+  const tablo = rfqTablosu(r);
+  const form = OPEN.includes(r.status) && S.ready ? rfqPanelHTML(r) : "";
+  if (!tablo && !form) return `<div class="panel">${empty("Teklif istenmedi", "Bu talep için tedarikçilerden teklif istenmemiş.")}</div>`;
+  return `<div class="stack">${tablo}${form}</div>`;
+}
+function rfqTablosu(r: PurchaseRequest): string {
+  const quotes = r.quotes || [], rfqs = r.rfqs || [];
+  const pending = rfqs.filter(x => !quotes.some(q => q.supplierId === x.supplierId));
+  return rfqs.length ? `<section class="panel"><div class="panel-h"><h2>Teklif istekleri</h2><span class="sub">${rfqs.length - pending.length}/${rfqs.length} cevap geldi</span><span class="spacer"></span>${pending.length ? '<button class="btn sm" data-act="bulk">Teklifleri gir</button>' : ""}</div>
     <div class="tw"><table class="rt"><thead><tr><th>Tedarikçi</th><th>İstendi</th><th>Son cevap</th><th>Durum</th><th></th></tr></thead><tbody>
     ${rfqs.map(x => { const q = quotes.find(q => q.supplierId === x.supplierId); const late = !q && x.dueDate && x.dueDate < todayStr(); const s = S.suppliers[x.supplierId]; return `<tr><td class="lead">${supLink(x.supplierId, s ? s.name : "Silinmiş tedarikçi")}</td><td class="num">${fmtDate(x.sentAt)}</td><td class="num">${fmtDate(x.dueDate)}</td><td>${q ? `<span class="flag good">cevap geldi ${fmtDate(q.date)}</span>` : late ? '<span class="flag bad">süre geçti</span>' : '<span class="flag mute">bekleniyor</span>'}</td><td class="r acts">${q ? "" : `<button class="btn sm" data-act="remind" data-sid="${x.supplierId}">Hatırlatma metni</button> <button class="btn sm" data-act="new-quote" data-sid="${x.supplierId}">Teklifini gir</button>`}</td></tr>`; }).join("")}
     </tbody></table></div></section>` : "";
+}
+function tabQuotesGovde(r: PurchaseRequest, rfqPanel: string, quotes: Quote[], set: ReturnType<typeof settings>, rfqs: NonNullable<PurchaseRequest["rfqs"]>): string {
   if (OPEN.includes(r.status) && (r.items || []).length) return `<div class="stack">${rfqPanel}${inlineBulkHTML(r)}</div>`;
-  if (!quotes.length) return `<div class="stack">${rfqPanel}<div class="panel">${empty("Henüz teklif yok", rfqs.length ? "Tedarikçilerden cevap geldikçe teklifleri girin. Fiyatları Excel sütunundan toplu yapıştırabilirsiniz." : "Önce tedarikçilere aynı formatta teklif isteyin; hafıza bu kalemleri daha önce veren tedarikçileri önerir.", `${rfqs.length ? "" : '<button class="btn" data-act="rfq">Teklif iste</button>'}<button class="btn" data-act="new-quote" ${(r.items || []).length ? "" : "disabled"}>Tek teklif formu</button><button class="btn primary" data-act="bulk" ${(r.items || []).length ? "" : "disabled"}>Teklifleri gir</button>`)}</div></div>`;
+  if (!quotes.length) return `<div class="stack">${rfqPanel}<div class="panel">${empty("Henüz teklif yok", rfqs.length ? "Tedarikçilerden cevap geldikçe teklifleri girin. Fiyatları Excel sütunundan toplu yapıştırabilirsiniz." : "Önce Teklif al adımında tedarikçilere aynı formatta teklif isteyin; hafıza bu kalemleri daha önce veren tedarikçileri önerir.", `${rfqs.length ? "" : '<button class="btn" data-act="tab" data-tab="rfq">Teklif al adımına git</button>'}<button class="btn" data-act="new-quote" ${(r.items || []).length ? "" : "disabled"}>Tek teklif formu</button><button class="btn primary" data-act="bulk" ${(r.items || []).length ? "" : "disabled"}>Teklifleri gir</button>`)}</div></div>`;
   return `<div class="stack">${rfqPanel}
   <section class="panel"><div class="panel-h"><h2>Alınan teklifler</h2><span class="spacer"></span><button class="btn sm ghost" data-act="new-quote">Tek teklif formu</button><button class="btn sm" data-act="bulk">Teklifleri gir</button></div><div class="tw"><table class="rt"><thead><tr><th>Tedarikçi</th><th class="r">Toplam</th><th>Ödeme ve termin</th><th>Durum</th><th></th></tr></thead><tbody>
   ${quotes.map(q => {

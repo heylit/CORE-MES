@@ -38,7 +38,7 @@ export function jobs(): Record<string, Job[]> {
     const needFlag = need !== null && OPEN.includes(r.status) ? (need < 0 ? `<span class="flag bad">ihtiyaç ${-need} gün geçti</span>` : need <= 5 ? `<span class="flag warn">ihtiyaca ${need} gün</span>` : "") : "";
     const nq = (r.quotes || []).length, rfqs = r.rfqs || [];
     const pending = rfqs.filter(x => !(r.quotes || []).some(q => q.supplierId === x.supplierId)).length;
-    if (r.status === "draft") g.draft!.push({ r, info: `${(r.items || []).length} kalem`, flag: needFlag, act: "Teklif iste", tab: "quotes" });
+    if (r.status === "draft") g.draft!.push({ r, info: `${(r.items || []).length} kalem`, flag: needFlag, act: "Teklif iste", tab: "rfq" });
     else if (r.status === "rfq") {
       const exp = (r.quotes || []).filter(q => q.validUntil && q.validUntil >= t && dayDiff(t, q.validUntil) <= 3).length;
       g.quotes!.push({ r, info: nq ? `${nq} teklif geldi, ${pending} bekleniyor` : `${rfqs.length} tedarikçiden istendi`, flag: exp ? `<span class="flag warn">${exp} teklifin süresi doluyor</span>` : needFlag, act: "Teklifleri gir", tab: "quotes" });

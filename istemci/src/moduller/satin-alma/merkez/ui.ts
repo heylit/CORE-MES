@@ -29,6 +29,8 @@ import { onaylayabilir, setRole, type Role } from "./roles.ts";
 import type { OdemePlaniSatiri, SiparisBelgesi, TeklifIstekFormuIcerigi } from "#paylasilan/sozlesme/satin-alma.ts";
 import { DosyaHatasi, dosyaYukle } from "../../belge-merkezi/disari.ts";
 import { pdfOkuAc, type PdfAktarimi } from "../pdf-teklif/ekran.ts";
+import { api } from "../../../ortak/veri/api.ts";
+import type { KurumLogosuCevabi } from "#paylasilan/sozlesme/ayarlar.ts";
 import { BELIRSIZ_MIKTAR } from "../../../ortak/veri/miktar.ts";
 import { alternatifDegisti, alternatifSatiri, alternatifleriOku, type KalemZarfi } from "./alternatif.ts";
 import { SIMGELER } from "../../../ortak/tasarim/simgeler.ts";
@@ -344,30 +346,62 @@ function rfqSuggestions(r: PurchaseRequest): Suggestion[] {
   const sira = (id: string) => rehberSirasi(talepRehberi(r, id));
   return Object.values(out).filter(o => S.suppliers[o.id] && S.suppliers[o.id]!.status !== "suspended").map(o => Object.assign(o, { p: perfScore(o.id) })).sort((a, b) => sira(a.id) - sira(b.id) || b.score - a.score || perfDesc(a.p, b.p));
 }
-function rfqModal(r: PurchaseRequest): void {
+// Teklif al adımının "Teklif iste" bölümü (3467): pencere değil, adımın içinde. Seçim, son tarih ve önizlenen tedarikçi çizimler
+// arasında korunur (adım her kayıtta yeniden çizilir); talep değişince sıfırlanır.
+interface RfqTaslagi { rid: string; secilen: string[] | null; sonTarih: string; onizleme: string }
+let RFQ_TASLAK: RfqTaslagi | null = null;
+function rfqTaslagi(r: PurchaseRequest): RfqTaslagi {
+  if (!RFQ_TASLAK || RFQ_TASLAK.rid !== r.id) RFQ_TASLAK = { rid: r.id, secilen: null, sonTarih: addDays(todayStr(), 3), onizleme: "" };
+  return RFQ_TASLAK;
+}
+export function rfqPanelHTML(r: PurchaseRequest): string {
+  const t = rfqTaslagi(r);
   const sugg = rfqSuggestions(r); const sids = new Set(sugg.map(s => s.id));
   const asked = new Set((r.rfqs || []).map(x => x.supplierId));
   const others = Object.values(S.suppliers).filter(s => !sids.has(s.id)).sort((a, b) => rehberSirasi(talepRehberi(r, a.id)) - rehberSirasi(talepRehberi(r, b.id)) || a.name.localeCompare(b.name, "tr"));
   const sst = supplierStats();
-  const line = (s: Supplier, why: string, checked: boolean) => { const st = sst[s.id] || EMPTY_STATS; return `<label><input type="checkbox" data-rfq="${s.id}" ${checked ? "checked" : ""}><span><b>${esc(s.name)}${pasifEki(s)}</b>${s.status === "suspended" ? ' <span class="flag bad">askıda</span>' : ""}${asked.has(s.id) ? ' <span class="flag mute">daha önce istendi</span>' : ""}${rehberRozetleri(r, s.id).map(x => " " + x).join("")}<span class="why">${esc(why)}</span></span><span class="xs muted num">${st.asked ? "cevap " + pct(st.responseRate) : ""}${st.deliveries ? ", zamanında " + pct(st.onTimeRate) : ""}</span></label>`; };
-  openModal(`<div class="mh"><h2>Teklif iste</h2><span class="spacer"></span><span class="muted small">${esc(r.no)}</span></div>
-  <div class="mb">
+  const secili = (id: string, varsayilan: boolean) => (t.secilen ? t.secilen.includes(id) : varsayilan);
+  // Cevabı beklenen tedarikçi yeniden seçilmez (ikinci kez istenmiş olurdu); onun işi üstteki tablodaki hatırlatmadır.
+  const bekleyen = new Set((r.rfqs || []).filter(x => !(r.quotes || []).some(q => q.supplierId === x.supplierId)).map(x => x.supplierId));
+  const line = (s: Supplier, why: string, checked: boolean) => { const st = sst[s.id] || EMPTY_STATS; const b = bekleyen.has(s.id); return `<label${b ? ' class="sa-rfq-bekleyen"' : ""}><input type="checkbox" data-rfq="${s.id}" ${checked && !b ? "checked" : ""}${b ? " disabled" : ""}><span><b>${esc(s.name)}${pasifEki(s)}</b>${s.status === "suspended" ? ' <span class="flag bad">askıda</span>' : ""}${b ? ' <span class="flag mute">istendi, cevap bekleniyor</span>' : asked.has(s.id) ? ' <span class="flag mute">daha önce istendi</span>' : ""}${rehberRozetleri(r, s.id).map(x => " " + x).join("")}<span class="why">${esc(why)}</span></span><span class="xs muted num">${st.asked && !b ? "cevap " + pct(st.responseRate) : ""}${st.deliveries ? ", zamanında " + pct(st.onTimeRate) : ""}</span></label>`; };
+  const acikDiger = !sugg.length || others.some(s => secili(s.id, false));
+  return `<section class="panel sa-rfq" id="sa-rfq"><div class="panel-h"><h2>${(r.rfqs || []).length ? "Başka tedarikçiden teklif iste" : "Teklif iste"}</h2><span class="sub">Tedarikçileri seçin, e-posta taslağını ya da formu gönderin, sonra istendi olarak kaydedin.</span></div>
+  <div class="panel-b stack">
     ${kategoriNotu(r)}<p class="small muted">Her tedarikçiye aynı soruları sormak cevapları karşılaştırılabilir kılar. Seçtiklerinizi "istendi" olarak kaydederseniz cevap süreleri ve oranları tedarikçi karnesine işlenir.</p>
-    ${sugg.length ? `<div><h4 data-sa-y="30">Hafızanın önerdikleri</h4><div class="sugg">${sugg.map(o => line(S.suppliers[o.id]!, o.why.slice(0, 2).join("; "), !asked.has(o.id))).join("")}</div></div>` : ""}
-    ${others.length ? `<details ${sugg.length ? "" : "open"}><summary class="small" data-sa-y="31">Diğer tedarikçiler (${others.length})</summary><div class="sugg">${others.map(s => line(s, (s.categories || []).join(", "), false)).join("")}</div></details>` : ""}
-    ${!Object.keys(S.suppliers).length ? '<div class="note small">Henüz tedarikçi kaydı yok. Metni genel olarak kopyalayabilir ya da önce tedarikçi ekleyebilirsiniz.</div>' : ""}
-    <div class="grid g3"><label class="f"><span>Son cevap tarihi</span><input type="date" id="rfq-due" value="${addDays(todayStr(), 3)}"></label><label class="f span2"><span>Önizleme</span><select id="rfq-prev"><option value="">Genel metin</option></select></label></div>
-    <pre class="out" id="rfq-out"></pre>
+    ${sugg.length ? `<div><h4 data-sa-y="30">Hafızanın önerdikleri</h4><div class="sugg">${sugg.map(o => line(S.suppliers[o.id]!, o.why.slice(0, 2).join("; "), secili(o.id, !asked.has(o.id)))).join("")}</div></div>` : ""}
+    ${others.length ? `<details ${acikDiger ? "open" : ""}><summary class="small" data-sa-y="31">Diğer tedarikçiler (${others.length})</summary><div class="sugg">${others.map(s => line(s, (s.categories || []).join(", "), secili(s.id, false))).join("")}</div></details>` : ""}
+    ${!Object.keys(S.suppliers).length ? '<div class="note small">Henüz tedarikçi kaydı yok. E-posta taslağını genel olarak kopyalayabilir ya da önce tedarikçi ekleyebilirsiniz.</div>' : ""}
+    <label class="f sa-rfq-tarih"><span>Son cevap tarihi</span><input type="date" id="rfq-due" value="${esc(t.sonTarih)}"></label>
+    <label class="sa-rfq-taslak"><span>Taslak:</span><select id="rfq-prev" aria-label="Taslağın tedarikçisi"><option value="">Genel (tedarikçisiz)</option></select></label>
+    <div class="sa-rfq-cikti">
+      <div class="sa-rfq-kutu" data-sa-rfq="eposta"><div class="sa-rfq-kutu-h">${SIMGE_EPOSTA}<h3>E-posta taslağı</h3></div>
+        <dl class="sa-rfq-kv"><dt>Alıcı</dt><dd id="rfq-alici"></dd><dt>Konu</dt><dd id="rfq-konu"></dd></dl>
+        <pre class="out" id="rfq-out"></pre>
+        <div class="row"><button class="btn sm" data-act="copy-rfq">Metni kopyala</button><a class="btn sm" id="rfq-posta" hidden>E-posta programında aç</a></div>
+        <p class="xs muted">Sistem e-posta göndermez; taslak sizin e-posta programınızda açılır. Formu PDF olarak kaydedip ekleyin. Uzun metin programda kesilirse "Metni kopyala"yı kullanın.</p></div>
+      ${S.istekFormu ? `<div class="sa-rfq-kutu" data-sa-rfq="form"><div class="sa-rfq-kutu-h">${SIMGE_FORM}<h3>Teklif isteme formu (PDF)</h3></div>
+        <p class="small">Kurum logosu ve antetiyle A4 form: kalemler, teknik satırlar, miktar; birim fiyat ve termin sütunları tedarikçi için boş.</p>
+        <div class="row"><button class="btn sm" data-act="rfq-form">Form hazırla (PDF)</button></div></div>` : ""}
+    </div>
   </div>
-  <div class="mf"><button class="btn" data-act="copy-rfq">Metni kopyala</button>${S.istekFormu ? '<button class="btn" data-act="rfq-form">Form hazırla (PDF)</button>' : ""}<span class="spacer"></span><button class="btn ghost" data-act="close">Kapat</button><button class="btn primary" data-act="mark-rfq">Seçilenlerden istendi olarak kaydet</button></div>`);
-  syncRfqPreview();
+  <div class="panel-f row"><span class="spacer"></span><button class="btn primary" data-act="mark-rfq">Seçilenlerden istendi olarak kaydet</button></div></section>`;
 }
+const kutuSimgesi = (ad: "mail" | "file") => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${SIMGELER[ad]}"/></svg>`;
+const SIMGE_EPOSTA = kutuSimgesi("mail");
+const SIMGE_FORM = kutuSimgesi("file");
 // teklif isteme formu. Seçilen tedarikçiler ve son tarih teklif iste penceresinden gelir; geri dönünce korunur.
 // Metin şablondan dolar, burada değiştirilir ve basılır; değişiklik saklanmaz (şablon Sistem Ayarları > Formlar'da).
 interface IstekFormuTaslagi { secilen: string[]; sonTarih: string; tedarikci: string; icerik: TeklifIstekFormuIcerigi }
 let ISTEK_FORMU: IstekFormuTaslagi | null = null;
+// Kurum logosu Sistem Ayarları > Genel'dedir (herkes okur); form ilk açılışta bir kez okur. Okunamazsa logosuz basılır.
+let KURUM_LOGOSU: string | null | undefined;
+async function kurumLogosu(): Promise<string | null> {
+  if (KURUM_LOGOSU !== undefined) return KURUM_LOGOSU;
+  try { KURUM_LOGOSU = (await api.get<KurumLogosuCevabi>("/kurum-logosu")).logo; } catch { return null; }
+  return KURUM_LOGOSU;
+}
 function istekKagidi(r: PurchaseRequest, t: IstekFormuTaslagi): string {
-  return istekFormuHTML(r, S.suppliers[t.tedarikci], t.sonTarih, t.icerik, S.istekFormu!.kurum, settings().company, todayStr());
+  return istekFormuHTML(r, S.suppliers[t.tedarikci], t.sonTarih, t.icerik, S.istekFormu!.kurum, settings().company, todayStr(), KURUM_LOGOSU ?? null);
 }
 function istekFormuPenceresi(r: PurchaseRequest, t: IstekFormuTaslagi): void {
   const alan = (ad: "baslik" | "giris" | "kapanis", etiket: string, satir = 0) => satir
@@ -382,7 +416,7 @@ function istekFormuPenceresi(r: PurchaseRequest, t: IstekFormuTaslagi): void {
       ${alan("kapanis", "Kapanış", 3)}
       <p class="small muted">Kalemler talepten gelir. Buradaki değişiklik yalnız bu baskı içindir; kalıcı metin Sistem Ayarları &gt; Formlar &gt; Teklif isteme formu'ndadır.</p>
     </div>
-    <div>${antetBosMu(S.istekFormu!.kurum) ? '<p class="sa-istek-uyari" role="note">Antet boş: firma adı ve adresi Sistem Ayarları &gt; Formlar &gt; Teklif formu\'nda girilir; boşken basılmaz.</p>' : ""}<div class="doc-wrap" id="ifo-kagit" aria-label="Formun ön izlemesi">${istekKagidi(r, t)}</div></div>
+    <div>${antetBosMu(S.istekFormu!.kurum) ? '<p class="sa-istek-uyari" role="note">Antet boş: firma adı ve adresi Sistem Ayarları &gt; Formlar &gt; Teklif formu\'nda girilir; boşken basılmaz.</p>' : ""}${KURUM_LOGOSU ? "" : '<p class="sa-istek-uyari" role="note">Kurum logosu yüklü değil: Sistem Ayarları &gt; Genel\'den yükleyin; yüklenince formun sol üstüne basılır.</p>'}<div class="doc-wrap" id="ifo-kagit" aria-label="Formun ön izlemesi">${istekKagidi(r, t)}</div></div>
   </div>
   <div class="mf"><button class="btn" data-act="rfq-form-back">Geri</button><span class="spacer"></span><button class="btn primary" data-act="rfq-form-print">Yazdır / PDF olarak kaydet</button></div>`, "wide", true);
   kagidiOlcekle($("#ifo-kagit"));
@@ -397,11 +431,25 @@ function istekFormuOku(): void {
 }
 function syncRfqPreview(): void {
   const r = S.requests[V.id ?? ""]; if (!r || !$("#rfq-prev")) return;
+  const t = rfqTaslagi(r);
   const sel = $$("[data-rfq]").filter(i => i.checked).map(i => i.dataset.rfq!);
-  const p = $("#rfq-prev"); const cur = p.value;
-  p.innerHTML = `<option value="">Genel metin</option>${sel.map(id => `<option value="${id}" ${cur === id ? "selected" : ""}>${esc(S.suppliers[id]?.name)}</option>`).join("")}`;
-  if (cur && !sel.includes(cur)) p.value = "";
-  $("#rfq-out").textContent = rfqText(r, p.value, $("#rfq-due").value || addDays(todayStr(), 3));
+  const p = $("#rfq-prev"); const cur = p.value || t.onizleme;
+  p.innerHTML = `<option value="">Genel (tedarikçisiz)</option>${sel.map(id => `<option value="${esc(id)}" ${cur === id ? "selected" : ""}>${esc(S.suppliers[id]?.name)}</option>`).join("")}`;
+  p.value = sel.includes(cur) ? cur : "";
+  t.secilen = sel; t.sonTarih = $("#rfq-due").value || addDays(todayStr(), 3); t.onizleme = p.value;
+  const e = rfqEposta(r, p.value, t.sonTarih);
+  $("#rfq-out").textContent = e.govde;
+  $("#rfq-konu").textContent = e.konu;
+  $("#rfq-alici").textContent = e.alici || (p.value ? "e-posta adresi kayıtlı değil" : "tedarikçi seçin");
+  const a = $<HTMLAnchorElement>("#rfq-posta");
+  a.hidden = !e.alici;
+  if (e.alici) a.href = `mailto:${encodeURIComponent(e.alici)}?subject=${encodeURIComponent(e.konu)}&body=${encodeURIComponent(e.govde)}`;
+  else a.removeAttribute("href");
+}
+/** E-posta taslağı: teklif metninin ilk satırı konudur, gerisi gövde; alıcı tedarikçi kartındaki e-posta (yoksa boş). */
+export function rfqEposta(r: PurchaseRequest, supId: string, due: string): { alici: string; konu: string; govde: string } {
+  const [ilk = "", , ...govde] = rfqText(r, supId, due).split("\n");
+  return { alici: (S.suppliers[supId]?.email ?? "").trim(), konu: ilk.replace(/^Konu: /, ""), govde: govde.join("\n") };
 }
 export function rfqText(r: PurchaseRequest, supId: string, due: string, reminder = false): string {
   const set = settings(), s = S.suppliers[supId];
@@ -894,7 +942,7 @@ function receiveSplitOrders(r: PurchaseRequest): void {
 }
 
 /** Modüller yüklendikten sonra main.ts çağırır (döngüsel içe aktarmada sıralama sorununu önler) */
-export function registerUIHooks(): void { onAfterRender(() => { if (BULK && $("#bulk")) bulkLive(); }); }
+export function registerUIHooks(): void { onAfterRender(() => { if (BULK && $("#bulk")) bulkLive(); }); onAfterRender(syncRfqPreview); }
 
 /* ================= hesap dökümü ================= */
 function calcModal(r: PurchaseRequest, qid: string | undefined): void {
@@ -1073,29 +1121,32 @@ const ACTIONS: Record<string, Action> = {
   },
 
   /* teklif isteği */
-  "rfq": (_el, r) => { if (r && canWrite()) { if (!(r.items || []).length) { toast("Önce kalem ekleyin."); return; } rfqModal(r); } },
-  "copy-rfq": () => { void copyText($("#rfq-out").textContent ?? ""); },
+  "rfq": (_el, r) => {
+    if (!r) return; if (!(r.items || []).length) { toast("Önce kalem ekleyin."); return; }
+    V.tab = "rfq"; render(); requestAnimationFrame(() => $<HTMLElement>("#sa-rfq")?.scrollIntoView({ block: "start", behavior: "smooth" }));
+  },
+  "copy-rfq": () => { void copyText(`Konu: ${$("#rfq-konu").textContent ?? ""}\n\n${$("#rfq-out").textContent ?? ""}`); },
   "rfq-form": (_el, r) => {
     if (!r || !S.istekFormu) return;
     const secilen = $$("[data-rfq]").filter(i => i.checked).map(i => i.dataset.rfq!);
-    ISTEK_FORMU = { secilen, sonTarih: $("#rfq-due").value, tedarikci: $("#rfq-prev").value || (secilen[0] ?? ""), icerik: clone(S.istekFormu.icerik) };
-    istekFormuPenceresi(r, ISTEK_FORMU);
+    const t: IstekFormuTaslagi = { secilen, sonTarih: $("#rfq-due").value, tedarikci: $("#rfq-prev").value || (secilen[0] ?? ""), icerik: clone(S.istekFormu.icerik) };
+    ISTEK_FORMU = t;
+    void kurumLogosu().then(() => { if (ISTEK_FORMU === t) istekFormuPenceresi(r, t); });
   },
   "rfq-form-back": (_el, r) => {
-    if (!r) return; const t = ISTEK_FORMU; rfqModal(r);
-    if (!t) return;
-    $$("[data-rfq]").forEach(i => { i.checked = t.secilen.includes(i.dataset.rfq!); });
-    $("#rfq-due").value = t.sonTarih; syncRfqPreview();
+    closeModal(); const t = ISTEK_FORMU;
+    if (!r || !t) return;
+    const d = rfqTaslagi(r); d.secilen = t.secilen; d.sonTarih = t.sonTarih; d.onizleme = t.tedarikci; render();
   },
   "rfq-form-print": () => { const d = $("#ifo-kagit .doc"); if (d) printDoc(d.outerHTML); },
   "mark-rfq": (el, r) => {
-    const sel = $$("[data-rfq]").filter(i => i.checked).map(i => i.dataset.rfq!);
+    const sel = $$("[data-rfq]").filter(i => i.checked && !i.disabled).map(i => i.dataset.rfq!);
     if (!sel.length) { toast("İstendi olarak kaydetmek için en az bir tedarikçi seçin."); return; }
     if (!r) return; const n = clone(r); n.rfqs = n.rfqs || []; const due = $("#rfq-due").value;
     sel.forEach(id => { const ex = n.rfqs.find(x => x.supplierId === id); if (ex) { ex.sentAt = todayStr(); ex.dueDate = due; } else n.rfqs.push({ supplierId: id, sentAt: todayStr(), dueDate: due }); });
     if (n.status === "draft") n.status = "rfq";
     saveRequest(n, `${sel.length} tedarikçiden teklif istendi: ${sel.map(id => S.suppliers[id]?.name ?? "").join(", ")}`);
-    closeModal(); V.tab = "quotes"; toast("Teklif istekleri kaydedildi");
+    RFQ_TASLAK = null; V.tab = "rfq"; render(); toast("Teklif istekleri kaydedildi");
   },
   "remind": (el, r) => {
     if (!r) return; const sid = el.dataset.sid!;

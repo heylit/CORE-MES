@@ -14,10 +14,10 @@ import { useOturum } from '../../../ortak/veri/oturum.ts';
 import { TalepCizimleri } from '../talep/Cizimler.tsx';
 import { KimlikSeridi, durumTonu, ihtiyacMetni } from './KimlikSeridi.tsx';
 
-// Talep ayrıntısı (2412-2): altı adım tek sekme şeridinde (biten adım onay işaretli), altında "Şimdi yapılacak" ve tek ana düğme
+// Talep ayrıntısı (2412-2): yedi adım tek sekme şeridinde (biten adım onay işaretli), altında "Şimdi yapılacak" ve tek ana düğme
 // başlıkta. Seçili adımın içeriği merkezin gövdesindedir (#main); düğmeler merkezin işlemlerini adıyla çağırır.
 const ADIM_SIMGESI: Record<string, SimgeAdi> = {
-  items: 'list', quotes: 'tag', compare: 'chart', approval: 'clipboard-check', order: 'cart', delivery: 'truck', log: 'clock',
+  items: 'list', rfq: 'mail', quotes: 'tag', compare: 'chart', approval: 'clipboard-check', order: 'cart', delivery: 'truck', log: 'clock',
 };
 const ISLEM_SIMGESI: Record<string, SimgeAdi> = {
   'req-edit': 'edit', rfq: 'tag', 'approval-form': 'file', 'req-uncancel': 'rotate', 'req-cancel': 'x', 'req-delete': 'trash',

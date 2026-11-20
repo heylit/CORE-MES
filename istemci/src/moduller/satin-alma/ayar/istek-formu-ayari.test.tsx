@@ -9,6 +9,8 @@ const FORM: TeklifIstekFormuCevabi = {
   icerik: { baslik: 'TEKLİF İSTEME FORMU', giris: 'Sayın {YETKILI},', istenenler: ['Birim fiyat', 'Termin'], kapanis: 'Son tarih {SON_TARIH}.', imza1: 'Satın alma', imza2: '', alt: '' },
   surum: 3, kurum: { unvan: 'ORN- Atölye', adres: '', telefon: '', eposta: '', vergi: '' },
 };
+const LOGO = 'data:image/png;base64,iVBORw0KGgo=';
+const logoCevabi = (logo: string | null) => new Response(JSON.stringify({ logo }), { status: 200 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('3442-4 Sistem Ayarları > Formlar > Teklif isteme formu', () => {
@@ -16,6 +18,7 @@ describe('3442-4 Sistem Ayarları > Formlar > Teklif isteme formu', () => {
     const gonderilen: unknown[] = [];
     vi.stubGlobal('fetch', vi.fn(async (adres: string, ayar?: RequestInit) => {
       if (ayar?.method === 'POST') { gonderilen.push(JSON.parse(String(ayar.body))); return new Response(JSON.stringify({ ...FORM, surum: 4 }), { status: 200 }); }
+      if (adres === '/api/kurum-logosu') return logoCevabi(null);
       expect(adres).toBe('/api/satin-alma-teklif-istek-formu');
       return new Response(JSON.stringify(FORM), { status: 200 });
     }));
@@ -35,8 +38,9 @@ describe('3442-4 Sistem Ayarları > Formlar > Teklif isteme formu', () => {
   });
   it('kaydet 409 dönünce ileti gösterilir, taslak bırakılır ve güncel metin yeniden okunur', async () => {
     let okuma = 0;
-    vi.stubGlobal('fetch', vi.fn(async (_adres: string, ayar?: RequestInit) => {
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, ayar?: RequestInit) => {
       if (ayar?.method === 'POST') return new Response(JSON.stringify({ hata: 'surum' }), { status: 409 });
+      if (adres === '/api/kurum-logosu') return logoCevabi(null);
       okuma += 1;
       return new Response(JSON.stringify(okuma === 1 ? FORM : { ...FORM, surum: 5, icerik: { ...FORM.icerik, baslik: 'ORN- GÜNCEL BAŞLIK' } }), { status: 200 });
     }));
@@ -47,6 +51,22 @@ describe('3442-4 Sistem Ayarları > Formlar > Teklif isteme formu', () => {
     await waitFor(() => expect(okuma).toBe(2));
     await waitFor(() => expect((screen.getByLabelText('Başlık') as HTMLInputElement).value).toBe('ORN- GÜNCEL BAŞLIK'));
     expect((screen.getByRole('button', { name: 'Kaydet' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+  it('3467: kurum logosu yüklüyse kağıdın sol üstünde basılır; yoksa ön izlemede yükleme yeri yazılır (kağıda basılmaz)', async () => {
+    let logo: string | null = LOGO;
+    vi.stubGlobal('fetch', vi.fn(async (adres: string) => (adres === '/api/kurum-logosu' ? logoCevabi(logo) : new Response(JSON.stringify(FORM), { status: 200 }))));
+    const ciz = () => render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><BildirimSaglayici><IstekFormuAyari /></BildirimSaglayici></QueryClientProvider>);
+    ciz();
+    await screen.findByLabelText('Başlık');
+    const kagit = () => screen.getByLabelText('Formun ön izlemesi');
+    await waitFor(() => expect(kagit().querySelector('.doc-h img.doc-logo')?.getAttribute('src')).toBe(LOGO));
+    expect(screen.queryByText(/Kurum logosu yüklü değil/)).toBeNull();
+    cleanup();
+    logo = null;
+    ciz();
+    expect(await screen.findByText(/Kurum logosu yüklü değil/)).toBeTruthy();
+    expect(kagit().querySelector('img')).toBeNull();
+    expect(kagit().textContent).not.toContain('Kurum logosu');
   });
 });
 

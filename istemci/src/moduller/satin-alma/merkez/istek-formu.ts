@@ -36,7 +36,7 @@ export function istekDegerleri(r: PurchaseRequest, s: Supplier | undefined, sonT
 const satirlar = (metin: string) => metin.split("\n").map((x) => esc(x)).join("<br>");
 
 /** Formun kağıdı: antet, tedarikçi ve talep kutusu, kalemler, istenen bilgiler, kapanış ve imzalar. Fiyat yoktur. */
-export function istekFormuHTML(r: PurchaseRequest, s: Supplier | undefined, sonTarih: string, icerik: TeklifIstekFormuIcerigi, kurum: Kurum, firma: string, bugun: string): string {
+export function istekFormuHTML(r: PurchaseRequest, s: Supplier | undefined, sonTarih: string, icerik: TeklifIstekFormuIcerigi, kurum: Kurum, firma: string, bugun: string, logo: string | null = null): string {
   const d = istekDegerleri(r, s, sonTarih, kurum.unvan || firma);
   const giris = istekMetniDoldur(icerik.giris, d), kapanis = istekMetniDoldur(icerik.kapanis, d), alt = istekMetniDoldur(icerik.alt, d);
   const antet = [kurum.adres, [kurum.telefon, kurum.eposta].filter(Boolean).join(" · "), kurum.vergi].filter(Boolean);
@@ -47,7 +47,7 @@ export function istekFormuHTML(r: PurchaseRequest, s: Supplier | undefined, sonT
   }).join("");
   const imzalar = [icerik.imza1, icerik.imza2].filter((x) => x.trim() !== "");
   return `<div class="doc doc-istek">
-    <div class="doc-h"><div><div class="doc-co">${esc(kurum.unvan || firma || "")}</div>${antet.map((x) => `<div class="doc-antet">${esc(x)}</div>`).join("")}<h2>${esc(icerik.baslik)}</h2></div>
+    <div class="doc-h"><div class="doc-h-sol">${logo ? `<img class="doc-logo" src="${esc(logo)}" alt="">` : ""}<div><div class="doc-co">${esc(kurum.unvan || firma || "")}</div>${antet.map((x) => `<div class="doc-antet">${esc(x)}</div>`).join("")}<h2>${esc(icerik.baslik)}</h2></div></div>
       <table class="doc-meta"><tr><th>Talep no</th><td>${esc(r.no)}</td></tr><tr><th>Tarih</th><td>${fmtDate(bugun)}</td></tr>${sonTarih ? `<tr><th>Son cevap</th><td>${fmtDate(sonTarih)}</td></tr>` : ""}</table></div>
     <table class="doc-kv"><tr><th>Tedarikçi</th><td>${s ? esc(s.name) : ""}</td><th>Konu</th><td>${esc(r.title)}</td></tr>
       <tr><th>İlgili</th><td>${s?.contact ? esc(s.contact) : ""}</td><th>İhtiyaç tarihi</th><td>${r.needDate ? fmtDate(r.needDate) : "–"}</td></tr></table>

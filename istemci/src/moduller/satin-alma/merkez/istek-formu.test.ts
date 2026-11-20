@@ -49,4 +49,14 @@ describe('teklif isteme formu (3442-4)', () => {
     expect(d.querySelector('.doc-liste li')?.textContent).toBe(kotu);
     expect(d.querySelector('.doc-t tbody tr')?.textContent).toContain(kotu);
   });
+  it('3467: kurum logosu antetin solunda basılır; yoksa resim yok, değer öznitelikten taşamaz', () => {
+    const d = document.createElement('div');
+    d.innerHTML = istekFormuHTML(R, T, '', ICERIK, KURUM, '', '2026-11-19', 'data:image/png;base64,iVBORw0KGgo=');
+    expect(d.querySelector('.doc-h .doc-h-sol > img.doc-logo')?.getAttribute('src')).toBe('data:image/png;base64,iVBORw0KGgo=');
+    d.innerHTML = istekFormuHTML(R, T, '', ICERIK, KURUM, '', '2026-11-19');
+    expect(d.querySelector('img')).toBeNull();
+    d.innerHTML = istekFormuHTML(R, T, '', ICERIK, KURUM, '', '2026-11-19', 'x" onerror="1');
+    expect(d.querySelectorAll('img')).toHaveLength(1);
+    expect(d.querySelector('img')?.getAttribute('onerror')).toBeNull();
+  });
 });
