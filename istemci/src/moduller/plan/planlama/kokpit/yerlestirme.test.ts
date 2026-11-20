@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { KokpitEmri, KokpitIsi, KokpitModeli } from './kurallar.ts';
-import { adimYeri, bosYerler, ilkKart, kartAnahtari, kokKimligi, siparisAramasi, siraKartlari, siradakiAdim, tasimaAdaylari, uygunTezgahlar, type SiparisBaglari } from './yerlestirme.ts';
+import { adimYeri, bosYerler, ilkKart, kartAnahtari, kokCozucu, kokKimligi, siparisAramasi, siraKartlari, siradakiAdim, tasimaAdaylari, uygunTezgahlar, type SiparisBaglari } from './yerlestirme.ts';
 
 // Veri uydurmadır (ORN-).
 const emir = (id: string, durum: KokpitEmri['durum'], termin: number | null, adimlar: [string, string[]][] = [['10', ['M1']]]): KokpitEmri => ({
@@ -150,5 +150,37 @@ describe('Kokpit planlı adımı taşıma adayları (3297-4)', () => {
     expect(tasimaAdaylari(model({ basladi: true }), e, '5.20', 6).length).toBe(2);
     expect(tasimaAdaylari({ ...model(), isler: {} }, e, '5.20', 6)).toEqual([]);
     expect(tasimaAdaylari(model(), e, '8.10', 6)).toEqual([]);
+  });
+});
+
+// 3483: partinin plandaki kimliği sunucudaki kendi emir kimliğidir ("7/2" değil); kökünü numarası ("ORN-7/2") söyler.
+describe('Kokpit partili emir (3483)', () => {
+  const parti = (id: string, no: string, termin: number | null = 5): KokpitEmri => ({ ...emir(id, 'iyi', termin), no });
+
+  it('çözücü partiyi numarasıyla kök emre indirir; partinin partisi de köke iner; kök yoksa kardeşler en küçük numaralıda toplanır', () => {
+    const k = kokCozucu([emir('7', 'iyi', 9), parti('11', 'ORN-7/1'), parti('12', 'ORN-7/2'), parti('13', 'ORN-7/1/1'), parti('21', 'ORN-8/3'), parti('22', 'ORN-8/2'), emir('9', 'iyi', 1)]);
+    expect(['7', '11', '12', '13', '21', '22', '9', '7-Y1'].map(k)).toEqual(['7', '7', '7', '7', '22', '22', '9', '7']);
+  });
+
+  it('siparişsiz partiler ana emrin kartında, ana emir başta, partiler numara sırasıyla (/2, /10\'dan önce)', () => {
+    const m = { emirler: [parti('30', 'ORN-7/10', 1), emir('7', 'iyi', 50), parti('12', 'ORN-7/2', 2), emir('9', 'iyi', 20)], isler: {} };
+    const l = siraKartlari(m);
+    expect(l.map((x) => [x.kok, x.emirler.map((e) => e.no)])).toEqual([['9', ['ORN-9']], ['7', ['ORN-7', 'ORN-7/2', 'ORN-7/10']]]);
+  });
+
+  it('siparişli kartta partiler ana emrinin ardında öbeklenir, araya başka kalem girmez', () => {
+    const bag: SiparisBaglari = Object.fromEntries(['7', '8', '11', '12'].map((id) => [id, { siparis: '50', no: 'ORN-SP-50', musteri: null, kalem: 1 }]));
+    const m = { emirler: [parti('12', 'ORN-7/2', 1), emir('8', 'iyi', 3), emir('7', 'iyi', 9), parti('11', 'ORN-7/1', 2)], isler: {} };
+    const l = siraKartlari(m, bag);
+    expect(l).toHaveLength(1);
+    const no = l[0]?.emirler.map((e) => e.no) ?? [];
+    expect(no.indexOf('ORN-7/1')).toBe(no.indexOf('ORN-7') + 1);
+    expect(no.indexOf('ORN-7/2')).toBe(no.indexOf('ORN-7') + 2);
+  });
+
+  it('kart anahtarı çözücüyle: parti kök emrin kartını bulur; bağ partinin kendi kimliğinde olsa da sipariş kartı', () => {
+    const k = kokCozucu([emir('7', 'iyi', 9), parti('11', 'ORN-7/1')]);
+    expect(kartAnahtari('11', null, k)).toBe('7');
+    expect(kartAnahtari('11', { '11': { siparis: '5', no: null, musteri: null, kalem: null } }, k)).toBe('sp:5');
   });
 });
