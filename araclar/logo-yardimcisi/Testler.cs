@@ -1223,6 +1223,61 @@ namespace LogoYardimcisi
             Esit("AlanlaEkle 3", s.Cagrilar.Last(), "STATUS 4 yazılmaz");
         }
 
+        // 3469: Logo'da iptal edilmiş teklif ya da teklif satırı siparişe çevrilmez; Logo'ya hiçbir şey gitmez.
+        static void T_iptal_teklif_ve_iptal_teklif_satiri_siparise_cevrilmez()
+        {
+            var s = Logo();
+            var t = Teklif(s, "TKL-I", Alici);
+            var teklifSatiri = Satirlar(C(s, "GET", "/api/SalesOffer/" + Ref(t), null), "offer")[0];
+            var fis = s.Fisler.First(x => x.Ref == Ref(t));
+            var govde = N("number", "SS-I", "date", "26.09.2026", "orderStatus", 4, "lines", new[] { N("offerLineRef", teklifSatiri, "quantity", 1) });
+            fis.Iptal = true;
+            var once = s.Cagrilar.Count;
+            Icerir(Hata(C(s, "POST", "/api/SalesOffer/" + Ref(t) + "/toOrder", govde)), "Teklif Logo'da iptal edilmiş");
+            Esit(once, s.Cagrilar.Count, "iptal teklifte Logo'ya gidilmez");
+            fis.Iptal = false;
+            fis.Satirlar[0].Iptal = true;
+            Icerir(Hata(C(s, "POST", "/api/SalesOffer/" + Ref(t) + "/toOrder", govde)), "teklif satırı " + teklifSatiri + " Logo'da iptal edilmiş");
+            Esit(once, s.Cagrilar.Count, "iptal satırda Logo'ya gidilmez");
+            Esit(null, s.Siparis("SS-I", 1), "sipariş yazılmadı");
+        }
+
+        // 3469: Logo teklif satırının siparişe dönen miktarını artırmadıysa yardımcı yazar; artırdıysa dokunmaz (kısmi dönüş testi).
+        static void T_logo_donen_miktari_artirmazsa_yardimci_yazar_tamami_donunce_onaylar()
+        {
+            var s = Logo();
+            s.TeklifDonenArtmaz = true;
+            var t = Teklif(s, "TKL-D", Alici);
+            var teklifSatiri = Satirlar(C(s, "GET", "/api/SalesOffer/" + Ref(t), null), "offer")[0];
+            Dogru(Basari(C(s, "POST", "/api/SalesOffer/" + Ref(t) + "/toOrder", N("number", "SS-D1", "date", "26.09.2026", "orderStatus", 4,
+                "lines", new[] { N("offerLineRef", teklifSatiri, "quantity", 1) }))), "ilk kısım");
+            Icerir(s.Cagrilar.Last(), "Guncelle 135");
+            Dogru(!s.Cagrilar.Last().Contains("STATUS=4"), "kısmi dönüşte STATUS 4 yok");
+            Esit(1m, (decimal)s.SonGuncellenenSatirlar[teklifSatiri].Deger("ORDEREDAMOUNT"), "dönen miktar yazıldı");
+            Esit(1m, s.TeklifSatirlari(Ref(t))[0].SipariseDonen, "teklif satırında 1");
+            Icerir(Hata(C(s, "POST", "/api/SalesOffer/" + Ref(t) + "/toOrder", N("number", "SS-D2", "date", "26.09.2026", "orderStatus", 4,
+                "lines", new[] { N("offerLineRef", teklifSatiri, "quantity", 2) }))), "kalan miktarı aşıyor");
+            Dogru(Basari(C(s, "POST", "/api/SalesOffer/" + Ref(t) + "/toOrder", N("number", "SS-D3", "date", "26.09.2026", "orderStatus", 4,
+                "lines", new[] { N("offerLineRef", teklifSatiri, "quantity", 1) }))), "kalan kısım");
+            Icerir(s.Cagrilar.Last(), "STATUS=4");
+            Esit(2m, (decimal)s.SonGuncellenenSatirlar[teklifSatiri].Deger("ORDEREDAMOUNT"), "toplam dönen");
+        }
+
+        // 3469: iptal teklif satırı "hepsi siparişe döndü" hesabına girmez.
+        static void T_iptal_teklif_satiri_varken_kalanlar_donunce_teklif_onaylanir()
+        {
+            var s = Logo();
+            var t = C(s, "POST", "/api/SalesOffer/AddRich", N("number", "TKL-2S", "date", "25.09.2026", "arpCode", Alici, "status", 1,
+                "lines", new[] { N("type", 0, "masterCode", Malzeme, "quantity", 2, "price", 100, "unitCode", "ADET"),
+                    N("type", 0, "masterCode", Malzeme, "quantity", 5, "price", 100, "unitCode", "ADET") }));
+            Dogru(Basari(t), Json.Yaz(t.Govde));
+            var refler = Satirlar(C(s, "GET", "/api/SalesOffer/" + Ref(t), null), "offer");
+            s.Fisler.First(x => x.Ref == Ref(t)).Satirlar[1].Iptal = true;
+            Dogru(Basari(C(s, "POST", "/api/SalesOffer/" + Ref(t) + "/toOrder", N("number", "SS-2S", "date", "26.09.2026", "orderStatus", 4,
+                "lines", new[] { N("offerLineRef", refler[0], "quantity", 2) }))), "iptal olmayan satır");
+            Icerir(s.Cagrilar.Last(), "STATUS=4");
+        }
+
         /* ---------------- Malzeme fişi ---------------- */
 
         static Dictionary<string, object> Fis(int tur, string no)

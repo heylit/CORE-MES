@@ -1503,6 +1503,8 @@ namespace LogoYardimcisi
 
         // Teklif bağı satırdadır (OFFERREF, OFFTRANSREF); başlığa OFFER_REFERENCE yazılırsa Logo satırları sessizce atar (tuzak 10).
         // Bütün teklif satırları siparişe döndüyse teklifin STATUS'u 4 yazılır; Logo bunu kendisi yapmaz (rehber §9).
+        // 3469: Logo'da iptal edilmiş teklif ya da teklif satırı siparişe çevrilmez; "hepsi döndü" hesabı iptal satırı saymaz. Logo satırın
+        // ORDEREDAMOUNT'unu siparişten sonra artırmadıysa yardımcı yazar (EkoTigerAPI toOrder'daki gibi; Logo'nun kendisi artırıp artırmadığı ölçülmedi).
         Cevap SatisSiparisiAc(int teklifRef, Dictionary<string, object> g)
         {
             var no = Kod(g, "number", FisNoEnCok);
@@ -1511,6 +1513,7 @@ namespace LogoYardimcisi
             var govdeSatirlari = Satirlar(g, "lines");
             var t = oku.TeklifRefIle(teklifRef);
             if (t == null) return Cevap.Ret("Offer not found");
+            if (t.Iptal) return Cevap.Ret("Teklif Logo'da iptal edilmiş; siparişe çevrilmez.");
             var varolan = oku.Siparis(no, 1);
             if (varolan != null) return Cevap.Ret("Bu numarada satış siparişi zaten var (logicalRef " + varolan.Ref + ").");
             var teklifSatirlari = new Dictionary<int, TeklifSatiri>();
@@ -1535,6 +1538,7 @@ namespace LogoYardimcisi
                 TeklifSatiri ts;
                 if (!teklifSatirlari.TryGetValue(r, out ts)) return Cevap.Ret("Satır " + (i + 1) + ": teklif satırı " + r + " bu teklifte yok.");
                 if (!kullanilan.Add(r)) return Cevap.Ret("Satır " + (i + 1) + ": aynı teklif satırı iki kez verilmiş.");
+                if (ts.Iptal) return Cevap.Ret("Satır " + (i + 1) + ": teklif satırı " + r + " Logo'da iptal edilmiş; siparişe çevrilmez.");
                 if (miktar > ts.Miktar - ts.SipariseDonen) return Cevap.Ret("Satır " + (i + 1) + ": miktar teklifte kalan miktarı aşıyor.");
                 var l = new AlanListesi().Ekle("TYPE", ts.SatirTuru).Ekle("MASTER_CODE", ts.Kod).Ekle("QUANTITY", miktar);
                 if (doviz) l.Ekle("EDT_CURR", ts.DovizTuru).Ekle("CURR_TRANSACTIN", ts.DovizTuru).Ekle("EDT_PRICE", ts.DovizFiyati).Ekle("RC_XRATE", t.Kur);
@@ -1566,12 +1570,28 @@ namespace LogoYardimcisi
             }
             if (f.Count > 0) return DogrulamaTutmadi("Satış siparişi", b.Ref, f);
 
-            var tamami = true;
-            foreach (var s in oku.TeklifSatirlari(teklifRef)) if (s.SipariseDonen < s.Miktar) tamami = false;
-            if (tamami && t.Durum != 4)
+            // Sipariş yazıldı; teklif tarafındaki düzeltme siparişi geri almaz, yazılamazsa yalnız günlüğe düşer.
+            var sonraki = oku.TeklifSatirlari(teklifRef);
+            var donen = new Dictionary<int, AlanListesi>();
+            for (var i = 0; i < bekleneRefler.Count; i++)
             {
-                var hs = yaz.Guncelle(Nesne.SatisTeklifi, teklifRef, new AlanListesi().Ekle("STATUS", 4), new Dictionary<int, AlanListesi>(), new List<AlanListesi>());
-                if (hs != null) Gunluk.Yaz("Teklif " + teklifRef + " STATUS 4 yazılamadı: " + hs);
+                var once = teklifSatirlari[bekleneRefler[i]].SipariseDonen;
+                var simdi = sonraki.Find(x => x.Ref == bekleneRefler[i]);
+                if (simdi != null && simdi.SipariseDonen == once) donen[simdi.Ref] = new AlanListesi().Ekle("ORDEREDAMOUNT", once + beklenenMiktar[i]);
+            }
+            var tamami = true;
+            foreach (var s in sonraki)
+            {
+                if (s.Iptal) continue;
+                AlanListesi a;
+                var d = donen.TryGetValue(s.Ref, out a) ? (decimal)a.Deger("ORDEREDAMOUNT") : s.SipariseDonen;
+                if (d < s.Miktar) tamami = false;
+            }
+            var baslik = tamami && t.Durum != 4 ? new AlanListesi().Ekle("STATUS", 4) : new AlanListesi();
+            if (donen.Count > 0 || baslik.Count > 0)
+            {
+                var hs = yaz.Guncelle(Nesne.SatisTeklifi, teklifRef, baslik, donen, new List<AlanListesi>());
+                if (hs != null) Gunluk.Yaz("Teklif " + teklifRef + " güncellenemedi (STATUS 4 ya da ORDEREDAMOUNT): " + hs);
             }
             return Cevap.Basari(b.Ref, "order", Kap(b.Ref, no, refler));
         }

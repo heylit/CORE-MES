@@ -210,6 +210,7 @@ namespace LogoYardimcisi
         public decimal SipariseDonen;
         public int DovizTuru;
         public decimal DovizFiyati;
+        public bool Iptal;
     }
 
     public sealed class TalepSatiri

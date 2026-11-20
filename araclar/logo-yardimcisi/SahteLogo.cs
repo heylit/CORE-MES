@@ -70,7 +70,7 @@ namespace LogoYardimcisi
         static readonly Dictionary<int, HashSet<string>> AlanSatir = new Dictionary<int, HashSet<string>>
         {
             { Nesne.SatisTeklifi, K("TYPE", "MASTER_CODE", "QUANTITY", "PRICE", "EDT_CURR", "EDT_PRICE", "TRCURR", "TRRATE", "VAT", "UEDIT", "DUEDATE", "LINEEXP",
-                "DISCPER", "PROJECT_CODE", "STATUS") },
+                "DISCPER", "PROJECT_CODE", "STATUS", "ORDEREDAMOUNT") },
             { Nesne.SatisSiparisi, K("TYPE", "MASTER_CODE", "QUANTITY", "PRICE", "EDT_CURR", "CURR_TRANSACTIN", "EDT_PRICE", "RC_XRATE", "DISCOUNT_RATE", "VAT_RATE",
                 "UNIT_CODE", "DUE_DATE", "ORG_DUE_DATE", "TRANS_DESCRIPTION", "PROJECT_CODE", "OFFERREF", "OFFTRANSREF") },
             { Nesne.SatinAlmaSiparisi, K("TYPE", "MASTER_CODE", "QUANTITY", "PRICE", "EDT_PRICE", "EDT_CURR", "RC_XRATE", "VAT_RATE", "UNIT_CODE", "UNIT_CONV1",
@@ -85,7 +85,7 @@ namespace LogoYardimcisi
             public string Kod, Birim, Aciklama;
             public decimal Miktar, Fiyat, Kdv, Iskonto, Karsilanan, SipariseDonen, DovizFiyati;
             public DateTime? Termin;
-            public bool Kapali;
+            public bool Kapali, Iptal;
             public Fis Ust;
         }
 
@@ -127,6 +127,8 @@ namespace LogoYardimcisi
         public Dictionary<int, AlanListesi> SonGuncellenenSatirlar;
         public List<AlanListesi> SonYeniSatirlar;
         public bool BaglantiYok, Kopsun, SatirlariDusur;
+        // 3469: gerçek Logo'nun teklif satırındaki ORDEREDAMOUNT'u siparişten sonra artırıp artırmadığı ölçülmedi; test iki durumu da dener.
+        public bool TeklifDonenArtmaz;
         int sonRef = 1000;
 
         public SahteLogo()
@@ -416,7 +418,7 @@ namespace LogoYardimcisi
                         x.Ust = f;
                         f.Satirlar.Add(x);
                         var ts = TumSatirlar().FirstOrDefault(y => y.Ref == x.TeklifSatirRef && y.Ust.Nesne == Nesne.SatisTeklifi);
-                        if (ts != null) ts.SipariseDonen += x.Miktar;
+                        if (ts != null && !TeklifDonenArtmaz) ts.SipariseDonen += x.Miktar;
                     }
             }
             if (toplamSifir) f.Net = 0;
@@ -488,6 +490,7 @@ namespace LogoYardimcisi
                 if (a.Var("ORDER_CLOSED")) x.Kapali = I(a.Deger("ORDER_CLOSED")) == 1;
                 if (a.Var("QUANTITY")) x.Miktar = D(a.Deger("QUANTITY"));
                 if (a.Var("MASTER_CODE")) x.Kod = (string)a.Deger("MASTER_CODE");
+                if (a.Var("ORDEREDAMOUNT")) x.SipariseDonen = D(a.Deger("ORDEREDAMOUNT"));
                 if (siparis) SiparisSatiriYaz(x, Alanlardan(a));
             }
             foreach (var a in yeniSatirlar)
@@ -858,6 +861,7 @@ namespace LogoYardimcisi
                 t.SipariseDonen = s.SipariseDonen;
                 t.DovizTuru = s.DovizTuru;
                 t.DovizFiyati = s.DovizFiyati;
+                t.Iptal = s.Iptal;
                 return t;
             }).ToList();
         }
