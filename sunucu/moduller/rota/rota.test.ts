@@ -1754,12 +1754,17 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     const kunye = await tamam<{ revizyonlar: { id: number; yururlukteId: number | null }[] }>(c.kalite, 'GET', `/rota/revizyon-kunyeleri?idler=${faiTaslak},${stA}`);
     assert.deepEqual(kunye.revizyonlar.map((r) => [r.id, r.yururlukteId]), [[stA, stB], [faiTaslak, faiTaslak]]);
 
-    // Tür başka rotaya taşınır (15.11'den kalan eşleme ucu); eski rotanın sürümü artar.
+    // 3482-1 b: tür rotasının türü sunucuda da değişmez (eklenemez, çıkarılamaz, başkasıyla değişmez).
     const numune = (await tamam<UrunRevizyonlariCevabi>(c.planlama, 'POST', rotaYol, { emirTuru: 'numune' })).rotalar.find((r) => r.ad === 'Numune')!;
     assert.deepEqual(numune.emirTurleri, ['numune']);
-    const tasindi = await tamam<UrunRevizyonlariCevabi>(c.mudur, 'POST', turYol(numune.id), { emirTurleri: ['numune', 'fai'], surum: numune.surum });
-    assert.deepEqual(tasindi.rotalar.map((r) => [r.ad, r.emirTurleri]), [['Seri', []], ['FAI', []], ['ORN Prototip hattı', ['prototip']], ['Numune', ['fai', 'numune']]]);
-    assert.ok(tasindi.rotalar.find((r) => r.ad === 'FAI')!.surum > bagli.rotalar.find((r) => r.ad === 'FAI')!.surum);
+    for (const emirTurleri of [['numune', 'fai'], [], ['fai']]) {
+      assert.equal((await istek(c.mudur, 'POST', turYol(numune.id), { emirTurleri, surum: numune.surum })).statusCode, 422, String(emirTurleri));
+    }
+    // 15.11'den kalan türsüz rotaya tür yazılır; tür rotasının türü oradan taşınmaz (422, kaynak türünü korur).
+    await vt().sorgu('DELETE FROM rota_tanimi_turu WHERE rota_id = $1', [numune.id]);
+    assert.equal((await istek(c.mudur, 'POST', turYol(numune.id), { emirTurleri: ['numune', 'fai'], surum: numune.surum })).statusCode, 422);
+    const tasindi = await tamam<UrunRevizyonlariCevabi>(c.mudur, 'POST', turYol(numune.id), { emirTurleri: ['numune'], surum: numune.surum });
+    assert.deepEqual(tasindi.rotalar.map((r) => [r.ad, r.emirTurleri]), [['Seri', []], ['FAI', ['fai']], ['ORN Prototip hattı', ['prototip']], ['Numune', ['numune']]]);
     // Ad değişir; eski sürüm 409, başka ürünün rotası 409.
     const faiSon = tasindi.rotalar.find((r) => r.ad === 'FAI')!;
     assert.equal((await istek(c.planlama, 'POST', `/rota/urunler/${urun}/rotalar/${faiSon.id}/ad`, { ad: 'İlk parça', surum: faiSon.surum - 1 })).statusCode, 409);

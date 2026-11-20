@@ -13,6 +13,7 @@ import { urunRevizyonlari } from './liste.ts';
 
 const ROTA_ADI_KULLANILIYOR = 'Bu üründe bu adla bir rota var; başka bir ad yazın.';
 const turunRotasiVarIletisi = (tur: string): string => `Bu üründe ${tur} türünün rotası var.`;
+const TUR_ROTASI_TURU_DEGISMEZ = 'Tür rotasının türü değişmez; başka tür için yeni rota açın.';
 const STANDART_TURSUZ = 'Seri rotasına emir türü bağlanmaz; bağlanmayan her tür zaten Seri rotasını kullanır.';
 
 async function adiKoru<T>(is: () => Promise<T>): Promise<T> {
@@ -54,6 +55,12 @@ export async function rotaAdiYaz(db: Db, kullanici: Kullanici, urunId: number, r
 export async function rotaTurleriYaz(db: Db, kullanici: Kullanici, urunId: number, rotaId: number, turler: readonly EmirTuru[], surum: number): Promise<UrunRevizyonlariCevabi> {
   const rota = await urununRotasi(db, urunId, rotaId);
   if (rota.standart && turler.length > 0) throw gecersiz(STANDART_TURSUZ);
-  if ((await s.rotaTurleriniYaz(db, rotaId, urunId, [...new Set(turler)], surum)) === null) throw eskiSurum();
+  // 3482-1 b: tek türlü rota tür rotasıdır, türü değişmez (istemci de sunmaz). Yalnız 15.11'den kalan türsüz ya da çok türlü rotada değişir.
+  const yeni = [...new Set(turler)];
+  if (!rota.standart && rota.emirTurleri.length === 1 && (yeni.length !== 1 || yeni[0] !== rota.emirTurleri[0])) throw gecersiz(TUR_ROTASI_TURU_DEGISMEZ);
+  // Yazılan tür başka rotadan taşınır (sorgu); kaynak tür rotasıysa o da türünü kaybederdi.
+  const diger = (await s.urunRotalari(db, urunId)).filter((r) => r.id !== rotaId && !r.standart && r.emirTurleri.length === 1);
+  if (diger.some((r) => yeni.includes(r.emirTurleri[0]!))) throw gecersiz(TUR_ROTASI_TURU_DEGISMEZ);
+  if ((await s.rotaTurleriniYaz(db, rotaId, urunId, yeni, surum)) === null) throw eskiSurum();
   return urunRevizyonlari(db, kullanici, urunId);
 }
