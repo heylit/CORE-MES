@@ -78,9 +78,12 @@ function logoSatirlari(o: OrderInfo, logo: LogoOzetleri): string {
     : ozet.irsaliyeler.length === 0
       ? `<li class="${irs?.fark ? "" : "muted"}" data-sa-takip="${irs?.fark ? "fark" : "bekliyor"}" data-sa-logo-takip><span>${irs?.fark ? UYARI_SIMGE : isaret(false)} <b>${irs?.fark ? `Logo: irsaliye yok, ${ozet.farkliKalem} kalemde fark` : "Logo: irsaliye bekleniyor"}</b></span><span class="small">Logo'da siparişe bağlı irsaliye girilince görünür</span></li>`
       : `<li data-sa-takip="${irs?.fark ? "fark" : "tamam"}" data-sa-logo-takip><span>${irs?.fark ? UYARI_SIMGE : isaret(true)} <b>${irs?.fark ? `Logo: irsaliye girildi, ${ozet.farkliKalem} kalemde fark` : "Logo: irsaliye girildi"}</b></span><span class="small">${ozet.irsaliyeler.map(irsaliyeAdi).join("<br>")}<br><a href="/logo-irsaliyeleri">Logo İrsaliyeleri'nde aç</a></span></li>`;
+  // 3472 b: Logo'da iptal edilmiş fatura aynı satırın küçük metninde "İptal" rozetiyle; sipariş onunla faturalandı sayılmaz.
+  const iptaller = ozet.iptalFaturalar.length
+    ? `<br><span data-sa-logo-iptal-fatura>İptal edilen: ${ozet.iptalFaturalar.map(f => `Logo faturası <del>${esc(f)}</del> <span class="st cancelled">İptal</span>`).join(", ")}</span>` : "";
   const fatSatiri = fat === null ? "" : ozet.faturalar && ozet.faturalar.length
-    ? `<li data-sa-takip="tamam" data-sa-logo-takip><span>${isaret(true)} <b>Logo: fatura var</b></span><span class="small">${ozet.faturalar.map(f => `Logo faturası ${esc(f)}`).join("<br>")} <span class="muted">(numara Logo'dan okundu; tutar ve fiyat okunmuyor)</span></span></li>`
-    : `<li class="muted" data-sa-takip="bekliyor" data-sa-logo-takip><span>${isaret(false)} <b>Logo: fatura yok</b></span><span class="small">Logo'da siparişe fatura girilince görünür</span></li>`;
+    ? `<li data-sa-takip="tamam" data-sa-logo-takip><span>${isaret(true)} <b>Logo: fatura var</b></span><span class="small">${ozet.faturalar.map(f => `Logo faturası ${esc(f)}`).join("<br>")} <span class="muted">(numara Logo'dan okundu; tutar ve fiyat okunmuyor)</span>${iptaller}</span></li>`
+    : `<li class="muted" data-sa-takip="bekliyor" data-sa-logo-takip><span>${isaret(false)} <b>Logo: fatura yok</b></span><span class="small">Logo'da siparişe fatura girilince görünür${iptaller}</span></li>`;
   return irsSatiri + fatSatiri;
 }
 function logoKalemTablosu(o: OrderInfo, logo: LogoOzetleri | null): string {

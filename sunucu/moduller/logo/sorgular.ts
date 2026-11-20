@@ -328,6 +328,7 @@ export function faturaSiparisleri(db: Db, eskiden: Date, sinir: number): Promise
   );
 }
 
+// 3472 b: kopya silinmez; Logo'da iptal edilen fatura yeniden okumada ham kaydındaki "cancelled" ile işaretlenir.
 export async function faturaYaz(db: Db, siparisNo: string, faturalar: readonly FaturaKaydi[], zaman: Date): Promise<void> {
   if (faturalar.length > 0) {
     await db.sorgu(
@@ -866,16 +867,20 @@ export function siparisIrsaliyeSatirlari(db: Db, nolar: readonly string[]): Prom
 }
 
 // 3384 a: siparişlerin Logo'dan okunan fatura numaraları; yalnız en az bir kez okunmuş sipariş döner (okunmamış "fatura yok" sayılmaz).
-export async function siparisFaturaNolari(db: Db, nolar: readonly string[]): Promise<Map<string, string[]>> {
-  if (nolar.length === 0) return new Map();
-  const r = await db.sorgu<{ siparisNo: string; faturalar: (string | null)[] }>(
-    `SELECT o.siparis_no AS "siparisNo", coalesce(array_agg(f.fatura_no ORDER BY f.fatura_no) FILTER (WHERE f.fatura_no IS NOT NULL), '{}') AS faturalar
+// 3472 b: Logo'da iptal edilmiş fatura (yardımcının "cancelled" alanı) ayrı listededir; eski yardımcının kaydında alan yoktur, geçerli sayılır.
+export interface SiparisFaturaNolari { gecerli: Map<string, string[]>; iptal: Map<string, string[]> }
+export async function siparisFaturaNolari(db: Db, nolar: readonly string[]): Promise<SiparisFaturaNolari> {
+  if (nolar.length === 0) return { gecerli: new Map(), iptal: new Map() };
+  const r = await db.sorgu<{ siparisNo: string; faturalar: string[]; iptaller: string[] }>(
+    `SELECT o.siparis_no AS "siparisNo",
+            coalesce(array_agg(f.fatura_no ORDER BY f.fatura_no) FILTER (WHERE f.fatura_no IS NOT NULL AND f.ham->'cancelled' IS DISTINCT FROM 'true'::jsonb), '{}') AS faturalar,
+            coalesce(array_agg(f.fatura_no ORDER BY f.fatura_no) FILTER (WHERE f.fatura_no IS NOT NULL AND f.ham->'cancelled' = 'true'::jsonb), '{}') AS iptaller
        FROM logo_fatura_okuma o LEFT JOIN logo_fatura f ON f.siparis_no = o.siparis_no
       WHERE o.siparis_no = ANY($1::text[])
       GROUP BY o.siparis_no`,
     [[...new Set(nolar)]],
   );
-  return new Map(r.map((x) => [x.siparisNo, x.faturalar.filter((n): n is string => n !== null)]));
+  return { gecerli: new Map(r.map((x) => [x.siparisNo, x.faturalar])), iptal: new Map(r.map((x) => [x.siparisNo, x.iptaller])) };
 }
 
 export function irsaliyeSonOkumasi(db: Db): Promise<string | null> {

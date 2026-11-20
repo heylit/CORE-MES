@@ -278,6 +278,9 @@ namespace LogoYardimcisi
     {
         public int Ref;
         public string No;
+        // 3472: INVOICE.TRCODE (1 alış, 6 alış iade ...) ve CANCELLED; iptal fatura da döner, CORE "iptal" diye gösterir.
+        public int Tur;
+        public bool Iptal;
     }
 
     // Kart 2987: satın alma siparişinin içeriği (Logo'da CORE MES dışında açılmış siparişi düzeltmek için okuma; D7). Yalnız TRCODE 2.

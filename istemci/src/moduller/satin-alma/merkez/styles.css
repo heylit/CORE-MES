@@ -167,6 +167,8 @@
 .sa-kok .st.rfq{ background:var(--sa-info-soft); color:var(--sa-info); } .sa-kok .st.eval{ background:color-mix(in srgb, var(--sa-info-soft) 70%, var(--sa-bad-soft)); color:color-mix(in srgb, var(--sa-info) 60%, var(--sa-bad)); }
 .sa-kok .st.approval{ background:var(--sa-warn-soft); color:var(--sa-warn); } .sa-kok .st.ordered{ background:color-mix(in srgb, var(--sa-info) 10%, var(--sa-good-soft)); color:color-mix(in srgb, var(--sa-info) 55%, var(--sa-good)); }
 .sa-kok .st.received{ background:var(--sa-good-soft); color:var(--sa-good); } .sa-kok .st.cancelled{ background:var(--sa-line-2); color:var(--sa-faint); text-decoration:line-through; }
+/* 3472 b: iptal faturada çizgi numaradadır (del), rozet okunur kalır. */
+.sa-kok [data-sa-logo-iptal-fatura] .st.cancelled{ text-decoration:none; }
 .sa-kok .flag{ display:inline-block; font-size:var(--yazi-xs); font-weight:600; padding:1px var(--b-2); border-radius:4px; white-space:nowrap; }
 .sa-kok .flag.bad{ background:var(--sa-bad-soft); color:var(--sa-bad); } .sa-kok .flag.warn{ background:var(--sa-warn-soft); color:var(--sa-warn); } .sa-kok .flag.good{ background:var(--sa-good-soft); color:var(--sa-good); } .sa-kok .flag.info{ background:var(--sa-info-soft); color:var(--sa-info); } .sa-kok .flag.mute{ background:var(--sa-line-2); color:var(--sa-muted); }
 .sa-kok .prio{ display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:var(--b-2); vertical-align:1px; }

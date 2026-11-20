@@ -2219,6 +2219,8 @@ export interface SiparisOzeti {
   siparisNo: string; logoda: boolean;
   irsaliyeler: { firma: number; donem: number; kayitNo: number; fisNo: string | null; belgeNo: string | null; tarih: string; iade: boolean }[];
   kalemler: SiparisOzetiKalemi[]; irsaliyeliKalem: number; farkliKalem: number; faturalar: string[] | null;
+  // 3472 b: Logo'da iptal edilmiş fatura numaraları; "faturalar"a girmez (sipariş faturalandı sayılmaz), ekranda "iptal" rozetiyle görünür.
+  iptalFaturalar: string[];
 }
 const ALIS_IADE = 6;
 const isaretliOlcekli = (d: string): bigint => (d.startsWith('-') ? -olcekli(d.slice(1)) : olcekli(d));
@@ -2227,6 +2229,7 @@ const isaretliMetin = (o: bigint): string => (o < 0n ? `-${metne(-o)}` : metne(o
 export function siparisLogoOzetleri(
   nolar: readonly string[], kalemler: readonly OzetKalemi[], irsaliyeSatirlari: readonly OzetIrsaliyeSatiri[],
   faturalar: ReadonlyMap<string, readonly string[]> | null, pencereBasi: string,
+  iptalFaturalar: ReadonlyMap<string, readonly string[]> = new Map(),
 ): SiparisOzeti[] {
   return nolar.map((no) => {
     const benim = kalemler.filter((k) => k.siparisNo === no);
@@ -2253,7 +2256,9 @@ export function siparisLogoOzetleri(
       firma: x.firma, donem: x.donem, kayitNo: x.irsaliyeRef, fisNo: x.fisNo, belgeNo: x.belgeNo, tarih: x.tarih, iade: x.tur === ALIS_IADE,
     }])).values()];
     const fatura = faturalar?.get(no) ?? null;
-    const irsaliyeFaturalari = satirlar.flatMap((x) => (x.faturaNo === null ? [] : [x.faturaNo]));
+    const iptaller = [...new Set(iptalFaturalar.get(no) ?? [])].sort();
+    // İrsaliyenin taşıdığı numara iptal edilmiş faturaysa geçerli sayılmaz.
+    const irsaliyeFaturalari = satirlar.flatMap((x) => (x.faturaNo === null || iptaller.includes(x.faturaNo) ? [] : [x.faturaNo]));
     return {
       siparisNo: no,
       logoda: benim.some((k) => k.logoSatirRef !== null),
@@ -2263,6 +2268,7 @@ export function siparisLogoOzetleri(
       farkliKalem: ozetKalemler.filter((k) => k.durum === 'fark').length,
       // Fatura okuması kapalıysa ya da sipariş henüz okunmadıysa yalnız irsaliyenin faturası bilinir; o da yoksa "bilinmiyor" (null).
       faturalar: fatura === null && irsaliyeFaturalari.length === 0 ? null : [...new Set([...(fatura ?? []), ...irsaliyeFaturalari])].sort(),
+      iptalFaturalar: iptaller,
     };
   });
 }

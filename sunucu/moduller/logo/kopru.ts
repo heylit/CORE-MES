@@ -47,7 +47,8 @@ export interface KopruIstemcisi {
   irsaliyeRefleriOku(from: string): Promise<OkumaSonucu<{ firma: number; donem: number; refler: number[] }>>;
   cariListesiOku(): Promise<OkumaSonucu<ListeKaydi[]>>;
   ambarListesiOku(): Promise<OkumaSonucu<ListeKaydi[]>>;
-  // Siparişin faturaları; 404 "fatura yok" sayılır (VARSAYIM).
+  // Siparişin faturaları (3472: iptal fatura "cancelled" ile gelir). Yardımcı faturasız siparişe boş liste, bulamadığı siparişe 404 verir;
+  // 404 reddir (dönem değişince eski dönemin siparişi bulunamaz).
   faturaOku(siparisNo: string): Promise<OkumaSonucu<FaturaKaydi[]>>;
   // 2116: malzeme kartları ve ambar başına stok toplamı, kart kaydı sırasıyla sayfa sayfa (since = önceki sayfanın imleci).
   malzemeKartlariOku(since: number): Promise<OkumaSonucu<Sayfa<LogoMalzemeKarti>>>;
@@ -233,7 +234,7 @@ export function kopruIstemcisiKur(ayar: LogoAyari, secenek: KopruSecenegi = {}):
     irsaliyeRefleriOku: (from) => oku(`/api/Dispatch/refs?from=${encodeURIComponent(from)}`, irsaliyeRefleriniAyikla),
     cariListesiOku: () => oku('/api/Arp/list', (g) => listeKayitlariniAyikla(g, 'cari')),
     ambarListesiOku: () => oku('/api/Lookup/warehouses', (g) => listeKayitlariniAyikla(g, 'ambar')),
-    faturaOku: (no) => oku(`/api/PurchaseOrder/${encodeURIComponent(no)}/invoices`, faturalariAyikla, []),
+    faturaOku: (no) => oku(`/api/PurchaseOrder/${encodeURIComponent(no)}/invoices`, faturalariAyikla),
     malzemeKartlariOku: (since) => oku(`/api/Material/list?since=${since}`, malzemeKartlariniAyikla),
     stokToplamlariOku: (since) => oku(`/api/Stock/totals?since=${since}`, stokToplamlariniAyikla),
     kullanimlariOku: (since) => oku(`/api/Material/usage?since=${since}`, kullanimlariAyikla),

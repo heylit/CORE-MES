@@ -773,9 +773,15 @@ namespace LogoYardimcisi
             var l = (object[])C(s, "GET", "/api/PurchaseOrder/SP%2F6/lines", null).Govde;
             Esit(1, l.Length, "satır listesi dizi");
             Esit(404, C(s, "GET", "/api/PurchaseOrder/YOK/invoices", null).Durum, "faturada olmayan sipariş 404");
-            s.FaturaListesi[Ref(c)] = new List<FaturaOzeti> { new FaturaOzeti { Ref = 77, No = "F-1" } };
+            s.FaturaListesi[Ref(c)] = new List<FaturaOzeti> { new FaturaOzeti { Ref = 77, No = "F-1", Tur = 1 }, new FaturaOzeti { Ref = 78, No = "F-2", Tur = 1, Iptal = true } };
             var f = (object[])C(s, "GET", "/api/PurchaseOrder/SP%2F6/invoices", null).Govde;
+            Esit(2, f.Length, "iptal fatura da gelir (3472)");
             Esit("F-1", ((Dictionary<string, object>)f[0])["number"], "fatura no");
+            Esit(1, ((Dictionary<string, object>)f[0])["trCode"], "fatura türü");
+            Esit(false, ((Dictionary<string, object>)f[0])["cancelled"], "geçerli fatura");
+            Esit(true, ((Dictionary<string, object>)f[1])["cancelled"], "iptal fatura işaretli");
+            s.FaturaListesi[Ref(c)] = new List<FaturaOzeti>();
+            Esit(0, ((object[])C(s, "GET", "/api/PurchaseOrder/SP%2F6/invoices", null).Govde).Length, "faturasız sipariş boş liste, 404 değil");
             s.MalKabulSatirlari.Add(new MalKabulSatiri { Ref = 10, SiparisSatirRef = 5, SiparisRef = 4, FisNo = "IR-1", MalzemeKodu = Malzeme, Miktar = 2.5m, Birim = "ADET" });
             s.MalKabulSatirlari.Add(new MalKabulSatiri { Ref = 20, SiparisSatirRef = 6, SiparisRef = 4, FisNo = "IR-2", MalzemeKodu = Malzeme, Miktar = 1, Birim = "ADET" });
             var m = (object[])C(s, "GET", "/api/PurchaseOrder/receipts", null, new Dictionary<string, string> { { "since", "10" } }).Govde;

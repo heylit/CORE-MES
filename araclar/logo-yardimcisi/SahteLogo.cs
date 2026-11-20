@@ -790,7 +790,7 @@ namespace LogoYardimcisi
         public List<FaturaOzeti> Faturalar(int siparisRef)
         {
             List<FaturaOzeti> l;
-            return FaturaListesi.TryGetValue(siparisRef, out l) ? l : new List<FaturaOzeti>();
+            return FaturaListesi.TryGetValue(siparisRef, out l) ? l.ToList() : new List<FaturaOzeti>();
         }
 
         public FisBasligi Talep(string no) { return Baslik(Fisler.FirstOrDefault(x => x.Nesne == Nesne.TalepFisi && x.No == no)); }

@@ -1247,6 +1247,8 @@ namespace LogoYardimcisi
                 var o = new Dictionary<string, object>();
                 o["logicalRef"] = x.Ref;
                 o["number"] = x.No;
+                o["trCode"] = x.Tur;
+                o["cancelled"] = x.Iptal;
                 l.Add(o);
             }
             return new Cevap(200, l);

@@ -26,6 +26,7 @@ import {
 import type { MalzemeFisiKaynagi, MalzemeFisiTurOrtami, StokFisDegisikligi, StokFisKaynaklari, TurOrtami, TurSonucu } from './servis.ts';
 import type { MalzemeFisiTuru } from '#paylasilan/sozlesme/stok.ts';
 import type { FisTuru } from './sorgular.ts';
+import { siparisFaturaNolari } from './sorgular.ts';
 
 const PAROLA = 'dogru-parola-1';
 const TEST_ISTEK_SURESI_MS = 5000;
@@ -311,7 +312,7 @@ describe('Logo okuma akışları ve malzeme fişi, sahte köprüyle (gerçek Pos
     await vt().sorgu(`INSERT INTO logo_siparis_no (belge_no, siparis_no) VALUES (98, 'SP-DEN-98')`);
     const bellek = yeniSurecBellegi();
     const kos = (): Promise<TurSonucu> => faturaTuru(vt(), ortami(bellek));
-    assert.deepEqual(await kos(), { tur: 'okuma', akis: 'fatura', sonuc: 'okundu', sayi: (FATURA_TUR_SINIRI - 1) * 2 }, 'sipariş 2\'nin faturası yok (404 = boş)');
+    assert.deepEqual(await kos(), { tur: 'okuma', akis: 'fatura', sonuc: 'okundu', sayi: (FATURA_TUR_SINIRI - 1) * 2 }, 'sipariş 2 Logo\'da bulunamadı (404): okunmuş sayılır, faturası yazılmaz');
     assert.deepEqual(kopru.istekler.map((i) => `${i.yontem} ${i.yol}`), Array.from({ length: FATURA_TUR_SINIRI }, (_, i) => `GET /api/PurchaseOrder/SP-DEN-${i + 1}/invoices`));
     assert.deepEqual(await kos(), { tur: 'okuma', akis: 'fatura', sonuc: 'okundu', sayi: 4 }, 'kalan iki sipariş');
     assert.equal(istekSayisi(), toplam);
@@ -321,6 +322,16 @@ describe('Logo okuma akışları ve malzeme fişi, sahte köprüyle (gerçek Pos
     simdi += FATURA_YENIDEN_OKUMA_MS + 1000;
     assert.equal((await kos()).tur, 'okuma');
     assert.equal(await sayi('logo_fatura'), (toplam - 1) * 2);
+    // 3472 b: Logo'da iptal edilen fatura yeniden okumada "cancelled" ile işaretlenir; kopyadan silinmez, okumada gelmeyen fatura da silinmez.
+    const [ilkFatura] = (kopru.faturalar.get('SP-DEN-1') ?? []) as Record<string, unknown>[];
+    assert.ok(ilkFatura);
+    kopru.faturalar.set('SP-DEN-1', [{ ...ilkFatura, cancelled: true }]);
+    kopru.faturalar.set('SP-DEN-3', []);
+    simdi += FATURA_YENIDEN_OKUMA_MS + 1000;
+    while ((await kos()).tur !== 'bos');
+    assert.equal(await sayi('logo_fatura'), (toplam - 1) * 2, 'kopyadan satır silinmez');
+    const nolar = await vt().tx((db) => siparisFaturaNolari(db, ['SP-DEN-1']));
+    assert.deepEqual([nolar.iptal.get('SP-DEN-1'), nolar.gecerli.get('SP-DEN-1')?.length], [['FT-1'], 1]);
     assert.ok(kopru.istekler.every((i) => i.yontem === 'GET'));
     assert.equal(await sayi('logo_giden'), toplam + 2, 'okuma giden kutusunu değiştirmez');
   });

@@ -521,6 +521,8 @@ export const siparisLogoOzeti = z.object({
   farkliKalem: z.number().int().min(0),
   // Logo'daki fatura numaraları (sipariş faturası ve irsaliyenin faturası); fatura okuması kapalıysa ya da sipariş hiç okunmadıysa null.
   faturalar: z.array(z.string()).nullable(),
+  // 3472 b: Logo'da iptal edilmiş fatura numaraları ("faturalar"a girmez; ekranda "iptal" rozetiyle).
+  iptalFaturalar: z.array(z.string()),
 });
 export type SiparisLogoOzeti = z.output<typeof siparisLogoOzeti>;
 
