@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -28,18 +29,26 @@ const cevap = (ek: Partial<DagitimCevabi> = {}): DagitimCevabi => ({
 });
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
-interface Cagri { yontem: string; yol: string; govde: unknown }
+interface Cagri { yontem: string; yol: string; govde: unknown; kimlik: string | null }
 
 function sunucuKur(ilk: DagitimCevabi) {
   const cagrilar: Cagri[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, ayar?: RequestInit) => {
     const yol = adres.replace('/api', '');
     const yontem = ayar?.method ?? 'GET';
-    cagrilar.push({ yontem, yol, govde: typeof ayar?.body === 'string' ? JSON.parse(ayar.body) : undefined });
+    cagrilar.push({ yontem, yol, govde: typeof ayar?.body === 'string' ? JSON.parse(ayar.body) : undefined, kimlik: new Headers(ayar?.headers).get(ISTEK_KIMLIGI_BASLIGI) });
     if (yol === '/oturum') return json(200, { kullanici: PLANLAMA } satisfies OturumCevabi);
     if (yol === '/projeler/sorumlu-secenekleri') return json(200, { kisiler: [{ id: 8, ad: 'Deneme Kalite' }] });
     if (yol === '/projeler/rol-secenekleri') return json(200, { roller: [{ id: 5, ad: 'Planlama' }] });
     if (yontem === 'GET' && yol.startsWith('/projeler/4/dagitim')) return json(200, ilk);
+    if (yol === '/hazirlik-matrisi?projeId=4') {
+      return json(200, { proje: { id: 4, kod: 'ORN-PRJ-1', ad: 'Deneme', durum: 'aktif' }, dagitir: true, maddeler: [], gorevler: [],
+        emirler: [{ id: 1, emirNo: 'ORN-UE-1', parcaNo: 'ORN-P-1', adet: 1, acik: true, isEmirleri: [] }] });
+    }
+    if (yontem === 'POST' && yol === '/hazirlik-matrisi/dagit') {
+      const deneme = (JSON.parse(String(ayar?.body)) as { deneme: boolean }).deneme;
+      return json(200, { eklenen: deneme ? 0 : 2, gorevSayisi: 2, toplamKisi: 1, atanmamis: 0, alicilar: [] });
+    }
     if (yontem === 'POST' && yol === '/projeler/4/dagit') return json(200, { projeGorevi: 2, hazirlikGorevi: 4 });
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
   }));
@@ -111,6 +120,14 @@ describe('3458-2 a Görevleri dağıt', () => {
     expect((screen.getByRole('button', { name: 'Dağıt' }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText('Bu şablon dağıtıldı: Dağıt yalnız bu işe özel görev eklenince açılır.')).toBeTruthy();
     expect(screen.queryByText(/Şimdi değil: görevler açılmaz/)).toBeNull();
+    // Risk N1 (3458-3): dağıtılmış şablonda sonradan doğan eksik emir görevleri buradan, önce denenip açılır.
+    fireEvent.click(await screen.findByRole('button', { name: 'Eksik emir görevlerini aç' }));
+    expect(screen.getByText(/açılmamış 2 emir görevi var/)).toBeTruthy();
+    await waitFor(() => { expect(cagrilar.filter((x) => x.yol === '/hazirlik-matrisi/dagit').length).toBeGreaterThanOrEqual(2); });
+    // Açınca deneme yeniden sorulur (eksik kalmadıysa şerit kalkar).
+    const acma = cagrilar.filter((x) => x.yol === '/hazirlik-matrisi/dagit');
+    expect(acma.slice(0, 2).map((x) => x.govde)).toEqual([{ projeId: 4, sablonId: 3, deneme: true }, { projeId: 4, sablonId: 3, deneme: false }]);
+    expect(acma.every((x) => x.kimlik !== null && x.kimlik !== '')).toBe(true);
     fireEvent.change(screen.getByLabelText('Görev şablonu'), { target: { value: '2' } });
     await waitFor(() => { expect(cagrilar.some((x) => x.yol === '/projeler/4/dagitim?sablonId=2')).toBe(true); });
   });

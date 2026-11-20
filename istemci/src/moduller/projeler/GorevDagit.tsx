@@ -6,6 +6,8 @@ import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Rozet, Secim } from '../
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { AtamaSecimi, YAPAN_IPUCU, atamaCoz, atamaDegeri, useAtamaSecenekleri } from './Atama.tsx';
+import { SIKLIK_METNI, siklik, useHazirlikMaddeleri } from './hazirlik-maddeleri.ts';
+import { EksikEmirGorevleri } from './ProjeHazirlik.tsx';
 import { useIstekKimligi } from './komut.ts';
 import './projeler.css';
 
@@ -49,6 +51,7 @@ export function GorevDagit() {
   const istemci = useQueryClient();
   const kimlik = useIstekKimligi();
   const atama = useAtamaSecenekleri();
+  const maddeler = useHazirlikMaddeleri().data?.maddeler;
   const [duzen, duzenYaz] = useState<Map<number, Duzen>>(new Map());
   const [ozel, ozelYaz] = useState<Ozel[]>([]);
   const [sayac, sayacYaz] = useState(1);
@@ -131,6 +134,7 @@ export function GorevDagit() {
               />
               {d.dagitildi && <p className="tc-prj-soluk" role="note">Bu projede görev dağıtıldı. Başka bir şablon ya da bu işe özel görev eklenebilir.</p>}
               {secilenDagitildi && <p className="tc-prj-soluk" role="note">Bu şablon bu projede zaten dağıtıldı; satırları yeniden açılmaz.</p>}
+              {secilenDagitildi && d.sablonId !== null && <EksikEmirGorevleri projeId={projeId} sablonId={d.sablonId} />}
               {d.emirSayisi !== null && d.satirlar.some((s) => s.hazirlikMaddesi !== null) && (
                 <p className="tc-prj-soluk">
                   Projeye bağlı açık emir: {d.emirSayisi}. Emir başına görevler her emir için açılır; sonra gelen emirde de burada verilen atamayla doğar.
@@ -148,9 +152,9 @@ export function GorevDagit() {
                     <li key={s.kalemId} className="tc-prj-dagit-satir" data-dahil={x.dahil ? 'evet' : 'hayir'}>
                       <div className="tc-prj-dagit-bas">
                         <IsaretKutusu etiket={s.ad} checked={x.dahil} onChange={(e) => { degistir(s, { dahil: e.target.checked }); }} />
-                        {s.hazirlikMaddesi === null ? <Rozet ton="pasif">Proje</Rozet> : <Rozet ton="bilgi">Her emir için: {s.hazirlikAd}</Rozet>}
+                        <Rozet ton={s.hazirlikMaddesi === null ? 'pasif' : 'bilgi'}>{SIKLIK_METNI[siklik(s.hazirlikMaddesi, maddeler)]}</Rozet>
                         <span className="tc-prj-soluk">
-                          {s.asama !== null && `${s.asama} · `}{s.adimlar.length > 0 ? `${String(s.adimlar.length)} adım · ` : ''}{dogacakMetni(s, d.emirSayisi)}
+                          {s.hazirlikAd !== null && `${s.hazirlikAd} · `}{s.asama !== null && `${s.asama} · `}{s.adimlar.length > 0 ? `${String(s.adimlar.length)} adım · ` : ''}{dogacakMetni(s, d.emirSayisi)}
                         </span>
                       </div>
                       {x.dahil && (

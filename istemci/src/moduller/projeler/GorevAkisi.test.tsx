@@ -199,9 +199,17 @@ describe('3269 proje görevlerim ve şablon', () => {
     const ornek = within(pencere).getByRole('button', { name: 'Örnekle başla' });
     await waitFor(() => { expect((ornek as HTMLButtonElement).disabled).toBe(false); });
     fireEvent.click(ornek);
-    expect(within(pencere).getAllByRole('option', { name: 'Her operasyon için: CNC kurulumu' }).length).toBeGreaterThan(0);
-    expect(within(pencere).queryByRole('button', { name: 'Örnekle başla' })).toBeNull();
+        expect(within(pencere).queryByRole('button', { name: 'Örnekle başla' })).toBeNull();
     expect((within(pencere).getByLabelText(/Şablon adı/) as HTMLInputElement).value).toBe('Talaşlı imalat hazırlığı (örnek)');
+    // Örnekten gelen bloklar kapalı: başlıkta ad, kaç kez ve atanmamış yapan uyarısı.
+    expect(within(pencere).queryAllByLabelText(/Görev adı/)).toHaveLength(0);
+    const bloklar = within(pencere).getAllByRole('group').filter((g) => g.tagName === 'FIELDSET');
+    expect(bloklar[5]?.textContent).toContain('6. CNC programı ve simülasyon');
+    expect(bloklar[5]?.textContent).toContain('Operasyon başına');
+    expect(bloklar[0]?.textContent).toContain('Proje başına');
+    expect(within(bloklar[5]!).getByText('Yapan yok')).toBeTruthy();
+    fireEvent.click(within(bloklar[5]!).getByRole('button', { name: 'Düzenle' }));
+    expect((within(bloklar[5]!).getByLabelText(/Görev adı/) as HTMLInputElement).value).toBe('CNC programı ve simülasyon');
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => { expect(cagrilar.some((c) => c.yontem === 'POST')).toBe(true); });
     const govde = cagrilar.find((c) => c.yontem === 'POST')?.govde as { kalemler: Record<string, unknown>[] };

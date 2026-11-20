@@ -1,13 +1,15 @@
 import { Fragment, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { HazirlikAtaGovdesi, KademeGecmisiCevabi, KisiSecenekleriCevabi, RolSecenekleriCevabi } from '#paylasilan/sozlesme/projeler.ts';
-import type { HazirlikMatrisiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { HazirlikDagitCevabi, HazirlikDagitGovdesi, HazirlikMatrisiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { Dugme, DurumKutusu, Rozet, Secim, Sekmeler, Simge, useBildirim, type RozetTonu, type Sekme } from '../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { tarihMetni, zamanMetni } from '../../ortak/veri/zaman-metni.ts';
 import { KADEME_TONU, kademeMetni } from './gosterim.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { useIstekKimligi } from './komut.ts';
 import './projeler.css';
 
 // 3396 a, 3430 a: Proje > Görevler > Emir × madde. Satır emir ve iş emri, sütun görevi olan madde. Hücrede iki hâl: görevin hâli
@@ -249,5 +251,38 @@ function AtaFormu({ gorev, projeId, bitti }: { gorev: Gorev; projeId: number; bi
       </span>
       {komut.isError && <p className="tc-prj-hata" role="alert">{hataIletisi(komut.error, 'Görev atanamadı')}</p>}
     </form>
+  );
+}
+
+// Dağıtılmış şablonda sonradan açılan madde, şablona sonradan eklenen emir başına satır ya da emir açılırken kapalı olan madde
+// projedeki emirlerde görev doğurmaz; bunlar Görevleri dağıt ekranından toplu açılır. Önce deneme, eksik yoksa görünmez.
+export function EksikEmirGorevleri({ projeId, sablonId }: { projeId: number; sablonId: number }) {
+  const istemci = useQueryClient();
+  const istek = useIstekKimligi();
+  const { bildir } = useBildirim();
+  const matris = useHazirlikMatrisi(projeId).data;
+  const acabilir = matris !== undefined && matris.dagitir && matris.emirler.some((e) => e.acik);
+  const govde = (deneme: boolean): HazirlikDagitGovdesi => ({ projeId, sablonId, deneme });
+  const deneme = useQuery({
+    queryKey: ['projeler', 'hazirlik-deneme', projeId, sablonId],
+    queryFn: () => api.post<HazirlikDagitCevabi>('/hazirlik-matrisi/dagit', govde(true), { istekKimligi: yeniIstekKimligi() }),
+    enabled: acabilir,
+  });
+  const komut = useMutation({
+    mutationFn: () => api.post<HazirlikDagitCevabi>('/hazirlik-matrisi/dagit', govde(false), { istekKimligi: istek.al() }),
+    onSuccess: async (c) => {
+      bildir('tamam', `${String(c.eklenen)} emir görevi açıldı.`);
+      await istemci.invalidateQueries({ queryKey: anahtarlar.kok });
+    },
+    onError: istek.hataSonrasi,
+  });
+  const d = deneme.data;
+  if (!acabilir || d === undefined || d.gorevSayisi === 0) return null;
+  return (
+    <div className="tc-prj-dagit-serit" role="note">
+      <span>{`Projedeki emirlerde açılmamış ${String(d.gorevSayisi)} emir görevi var (sonradan açılan madde ya da şablona sonradan eklenen satır). Açınca atananlara bildirim gider.`}</span>
+      <Dugme simge="users" yukleniyor={komut.isPending} onClick={() => { komut.mutate(); }}>Eksik emir görevlerini aç</Dugme>
+      {komut.isError && <p className="tc-prj-hata" role="alert">{hataIletisi(komut.error, 'Görevler açılamadı')}</p>}
+    </div>
   );
 }
