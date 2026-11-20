@@ -178,3 +178,11 @@ export const kartAlternatifleriCevabi = z.object({
   esdegerler: z.array(esdegerKart),
 });
 export type KartAlternatifleriCevabi = z.output<typeof kartAlternatifleriCevabi>;
+
+// 3463-1b: grup şablonu; aile, sınıf ve kalite kapsamındaki sınırlar (kart sınırı kartın kendi bölümündedir).
+export const grupSinirlariCevabi = z.object({
+  siniri: z.array(kabulSiniri),
+  // Seçilebilir grup kapsamları ve kapsamdaki hammadde kartı sayısı (iptal dışı).
+  kapsamlar: z.array(z.object({ kapsamTuru: z.enum(['aile', 'sinif', 'kalite']), kapsam: z.string(), kart: z.number().int() })),
+});
+export type GrupSinirlariCevabi = z.output<typeof grupSinirlariCevabi>;

@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { malzemeOzetleri } from '../malzemeler/disari.ts';
+import { esdegerGruplari, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { urunAgaci } from '../rota/disari.ts';
 import { planIhtiyaclariniYaz } from '../satin-alma/disari.ts';
 import { malzemeStokDurumlari } from '../stok/disari.ts';
@@ -43,11 +43,17 @@ export async function canliPlanIhtiyaclari(db: Db): Promise<PlanIhtiyaci[]> {
     if (a !== null) agaclar.set(urun, new Map(a.toplamlar.map((t) => [t.malzeme.id, Number(t.miktar) / miktar])));
   }
   const alt = [...new Set([...agaclar.values()].flatMap((m) => [...m.keys()]))].filter((no) => !temel.kartlar.has(no));
+  const serbest = new Map([...temel.serbest, ...(await serbestOku(alt))]);
+  // 3463-1b: eşdeğer grubun stoğu birlikte sayılır; ihtiyacı olmayan üyenin stoğu da okunur.
+  const esdegerler = await esdegerGruplari(db, [...malzemeler, ...alt]);
+  const uyeler = [...new Set([...esdegerler.values()].flat())].filter((no) => !serbest.has(no));
+  for (const [no, m] of await serbestOku(uyeler)) serbest.set(no, m);
   return planIhtiyaclari({
     ...temel,
     kartlar: new Map([...temel.kartlar, ...(await malzemeOzetleri(db, alt))]),
-    serbest: new Map([...temel.serbest, ...(await serbestOku(alt))]),
+    serbest,
     agaclar,
+    esdegerler,
   });
 }
 // Canlıya almanın sonunda, aynı işlemde: liste her seferinde tamdır, plan artık istemiyorsa satın almadaki satır silinir.

@@ -409,4 +409,80 @@ describe('3269 görev akışı ve şablon (gerçek PostgreSQL, gerçek giriş)',
     await basarili(kalite1, b.id, 'bitir');
     assert.equal((await komut(planlama, b.id, 'iptal')).statusCode, 400);
   });
+
+  test('geri çevir (3458-4 a): atanan gerekçeyle geri çevirir; kişi görevi atanmamış, üstlenilen rol görevi role döner; yazana zil', async () => {
+    const p = await projeAc();
+    const zil = 'projeler.gorev-geri-cevrildi';
+    const onceki = await okunmamis(planlama.id, zil);
+    const a = await gorevAc(p, { sorumluKisiId: operator1.id });
+    await basarili(operator1, a.id, 'basla');
+    assert.equal((await ayrinti(operator1, a.id)).izinler.geriCevirebilir, true);
+    assert.equal((await komut(operator1, a.id, 'geri-cevir', { gerekce: '  ' })).statusCode, 400, 'gerekçesiz geri çevrilmez');
+    assert.equal((await komut(kalite1, a.id, 'geri-cevir', { gerekce: 'Benim değil' })).statusCode, 403, 'atanmayan geri çeviremez');
+    // Projeyi okuyamayan atanan kişi geri çevirince de cevap alır (geçmişteki olayı onu ilgili tutar).
+    const c = await basarili(operator1, a.id, 'geri-cevir', { gerekce: 'Tezgah arızalı' });
+    assert.deepEqual([c.gorev.sorumluKisiId, c.gorev.yapanRolId, c.gorev.durum], [null, null, 'suruyor']);
+    assert.deepEqual([c.olaylar[0]?.olay, c.olaylar[0]?.gerekce], ['cevir', 'Tezgah arızalı']);
+    assert.equal(c.izinler.geriCevirebilir, false);
+    assert.equal(await okunmamis(planlama.id, zil), onceki + 1, 'görevi yazana zil');
+    assert.equal(await okunmamis(operator1.id, zil), 0, 'geri çevirene zil gitmez');
+    assert.equal((await komut(operator1, a.id, 'bitir')).statusCode, 403, 'geri çeviren artık işleyemez');
+    assert.deepEqual(await olaylar(a.id), ['basla', 'cevir']);
+
+    // Rol görevi: üstlenen geri çevirince görev role döner, rolden başkası üstlenir.
+    const r = await gorevAc(p, { yapanRolId: rolId('kalite') });
+    await basarili(kalite1, r.id, 'ustlen');
+    const satir = async () => vt().tek<{ yapan_rol_id: number | null; ustlenilen_rol_id: number | null; sorumlu_kisi_id: number | null }>(
+      'SELECT yapan_rol_id, ustlenilen_rol_id, sorumlu_kisi_id FROM projeler_gorev WHERE id = $1', [r.id]);
+    assert.deepEqual(await satir(), { yapan_rol_id: null, ustlenilen_rol_id: rolId('kalite'), sorumlu_kisi_id: kalite1.id });
+    // Atama zili proje başına tek kayıttır; önceki zil okununca yenisi sayılır.
+    await vt().sorgu("UPDATE bildirim_kaydi SET okundu = now() WHERE kisi_id = $1 AND tur = 'projeler.gorev-atandi'", [kalite2.id]);
+    const atamaOnce = 0;
+    const rc = await basarili(kalite1, r.id, 'geri-cevir', { gerekce: 'Ölçü aleti kalibrasyonda' });
+    assert.equal(await okunmamis(kalite2.id, 'projeler.gorev-atandi'), atamaOnce + 1, 'role dönünce rolün öteki üyesine atama zili');
+    assert.deepEqual([rc.gorev.sorumluKisiId, rc.gorev.yapanRolId], [null, rolId('kalite')]);
+    assert.deepEqual(await satir(), { yapan_rol_id: rolId('kalite'), ustlenilen_rol_id: null, sorumlu_kisi_id: null });
+    assert.equal((await ayrinti(kalite2, r.id)).izinler.ustlenebilir, true, 'rolden başkası üstlenir');
+    await basarili(kalite2, r.id, 'ustlen');
+
+    // Düzenleme: aynı kişi kalınca üstlenilen rol korunur; kişi değişince silinir (görev artık rolden üstlenilmiş değildir).
+    const x = (await ayrinti(planlama, r.id)).gorev;
+    const govde = (d: Record<string, unknown>) => ({
+      kilometreTasiId: null, ad: x.ad, aciklama: null, sorumluKisiId: x.sorumluKisiId, planBaslangic: x.planBaslangic, planBitis: x.planBitis,
+      oncekiGorevId: null, gercekBaslangic: x.gercekBaslangic, gercekBitis: x.gercekBitis, ilerleme: x.ilerleme, durum: x.durum, surum: x.surum, ...d,
+    });
+    const yol = `/projeler/gorevler/${r.id}/guncelle`;
+    assert.equal((await gonder(planlama, yol, govde({ ad: 'Akış görevi (ad)' }))).statusCode, 200);
+    assert.equal((await satir())?.ustlenilen_rol_id, rolId('kalite'));
+    assert.equal((await gonder(planlama, yol, govde({ sorumluKisiId: kalite1.id, surum: x.surum + 1 }))).statusCode, 200);
+    assert.deepEqual(await satir(), { yapan_rol_id: null, ustlenilen_rol_id: null, sorumlu_kisi_id: kalite1.id });
+
+    // Kontrolde, bitmiş ve iptal görev geri çevrilmez.
+    const k = await gorevAc(p, { sorumluKisiId: kalite1.id, kontrolKisiId: kalite2.id });
+    await basarili(kalite1, k.id, 'basla');
+    await basarili(kalite1, k.id, 'bitir');
+    assert.equal((await komut(kalite1, k.id, 'geri-cevir', { gerekce: 'Geç kaldım' })).statusCode, 400, 'kontrolde');
+    await basarili(kalite2, k.id, 'onayla');
+    assert.equal((await komut(kalite1, k.id, 'geri-cevir', { gerekce: 'Geç kaldım' })).statusCode, 400, 'bitti');
+    const i = await gorevAc(p, { sorumluKisiId: kalite1.id });
+    await basarili(planlama, i.id, 'iptal');
+    assert.equal((await komut(kalite1, i.id, 'geri-cevir', { gerekce: 'Gerek yok' })).statusCode, 400, 'iptal');
+
+    // Kısıt: üstlenilen rol yalnız kişili ve rolsüz satırda durur; cevir olayı gerekçesiz yazılmaz.
+    await assert.rejects(vt().sorgu('UPDATE projeler_gorev SET ustlenilen_rol_id = $2, sorumlu_kisi_id = NULL WHERE id = $1', [i.id, rolId('kalite')]));
+    await assert.rejects(vt().sorgu('UPDATE projeler_gorev SET ustlenilen_rol_id = $2, yapan_rol_id = $2, sorumlu_kisi_id = NULL WHERE id = $1', [i.id, rolId('kalite')]));
+    await assert.rejects(vt().sorgu("INSERT INTO projeler_gorev_olayi (gorev_id, olay, kisi_id) VALUES ($1, 'cevir', $2)", [i.id, kalite1.id]));
+  });
+
+  test('geri çevir yetkisi (T1): yalnız gorev-isle taşıyan atanan geri çevirir', async () => {
+    const isleyen = await islemliKisi(['projeler.gorev-isle']);
+    const kontrolcu = await islemliKisi(['projeler.gorev-kontrol']);
+    const p = await projeAc();
+    const a = await gorevAc(p, { sorumluKisiId: kontrolcu.id });
+    assert.equal((await ayrinti(kontrolcu, a.id)).izinler.geriCevirebilir, false, 'gorev-isle yoksa düğme yok');
+    assert.equal((await komut(kontrolcu, a.id, 'geri-cevir', { gerekce: 'Bende değil' })).statusCode, 403);
+    const b = await gorevAc(p, { sorumluKisiId: isleyen.id });
+    const c = await basarili(isleyen, b.id, 'geri-cevir', { gerekce: 'Bende değil' });
+    assert.equal(c.gorev.sorumluKisiId, null);
+  });
 });

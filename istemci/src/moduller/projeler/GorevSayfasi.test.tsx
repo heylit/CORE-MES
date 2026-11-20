@@ -19,7 +19,7 @@ const gorev = (ek: Partial<Gorev>): Gorev => ({
 });
 const ayrinti = (g: Gorev, ek: Partial<GorevAyrintisiCevabi> = {}): GorevAyrintisiCevabi => ({
   gorev: g, proje: { id: 1, kod: 'PRJ.01', ad: 'Deneme projesi' },
-  izinler: { ustlenebilir: false, baslayabilir: false, bitirebilir: true, onaylayabilir: false },
+  izinler: { ustlenebilir: false, baslayabilir: false, bitirebilir: true, onaylayabilir: false, geriCevirebilir: true },
   olaylar: [{ olay: 'basla', kisiAd: 'Deneme Yapan', gerekce: null, an: '2026-12-01T09:00:00+03:00' }],
   adimlar: [
     { id: 1, ad: 'Çizimi oku', yapildi: true, yapanAd: 'Deneme Yapan', an: '2026-12-01T10:00:00+03:00' },
@@ -130,5 +130,33 @@ describe('3458 görev sayfası', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Notu ekle' }));
     await waitFor(() => { expect(postlar(cagrilar)).toHaveLength(1); });
     expect(postlar(cagrilar)[0]).toMatchObject({ yol: '/projeler/gorevler/7/notlar', govde: { metin: 'Malzeme geldi' } });
+  });
+
+  it('3458-4 a: Geri çevir gerekçesiz gitmez; gerekçe ve sürümle gider; geçmişte gerekçesiyle görünür; izin yoksa düğme yok', async () => {
+    const cagrilar = sunucuKur(ayrinti(gorev({}), {
+      olaylar: [{ olay: 'cevir', kisiAd: 'Deneme Yapan', gerekce: 'Fikstür bende değil', an: '2026-12-01T12:00:00+03:00' }],
+    }));
+    ac();
+    expect(await screen.findByText(/Deneme Yapan geri çevirdi: "Fikstür bende değil"/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Geri çevir' }));
+    const kutu = screen.getByLabelText(/Geri çevirme gerekçesi/);
+    expect(document.activeElement).toBe(kutu);
+    expect(screen.queryByRole('group', { name: 'Görev adımları' })).toBeNull();
+    fireEvent.click(within(kutu.closest('.tc-prj-icerik') as HTMLElement).getByRole('button', { name: 'Vazgeç' }));
+    await waitFor(() => { expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Geri çevir' })); });
+    fireEvent.click(screen.getByRole('button', { name: 'Geri çevir' }));
+    const grup = screen.getByLabelText(/Geri çevirme gerekçesi/).closest('.tc-prj-icerik') as HTMLElement;
+    fireEvent.click(within(grup).getByRole('button', { name: 'Geri çevir' }));
+    expect(await screen.findByText('Neden geri çeviriyorsun? Gerekçe zorunlu.')).toBeTruthy();
+    expect(postlar(cagrilar)).toHaveLength(0);
+    fireEvent.change(screen.getByLabelText(/Geri çevirme gerekçesi/), { target: { value: '  Tezgah arızalı ' } });
+    fireEvent.click(within(grup).getByRole('button', { name: 'Geri çevir' }));
+    await waitFor(() => { expect(postlar(cagrilar)).toHaveLength(1); });
+    expect(postlar(cagrilar)[0]).toMatchObject({ yol: '/projeler/gorevler/7/geri-cevir', govde: { gerekce: 'Tezgah arızalı', surum: 4 } });
+    cleanup();
+    sunucuKur(ayrinti(gorev({}), { izinler: { ustlenebilir: false, baslayabilir: false, bitirebilir: true, onaylayabilir: false, geriCevirebilir: false } }));
+    ac();
+    await screen.findByRole('list', { name: 'Yapılacaklar' });
+    expect(screen.queryByRole('button', { name: 'Geri çevir' })).toBeNull();
   });
 });

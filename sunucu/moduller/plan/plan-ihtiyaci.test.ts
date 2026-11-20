@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import type { PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
+import type { MrpIhtiyaciCevabi, PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { canliPlanIhtiyaclari, planIhtiyaclariniBildir } from './plan-ihtiyaci.ts';
 import { acilacakUrunler, planIhtiyaclari, type IhtiyacGirdisi } from './plan-ihtiyaci-kurallar.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
@@ -107,5 +107,20 @@ describe('plan (gerçek PostgreSQL): canlı planın malzeme ihtiyacı', () => {
     const l = await vt().tx((db) => canliPlanIhtiyaclari(db));
     assert.deepEqual(l.filter((x) => x.malzemeNo === ham).map((x) => [x.miktar, x.emirler.length]), [[30, 1]]);
     assert.equal(l.find((x) => x.malzemeNo === yari), undefined, 'yarı mamul satın almaya gitmez');
+  });
+
+  test('3463-1b K1: eşdeğer kartın stoğu plan ihtiyacında ve MRP\'de birlikte sayılır (A stok 10, A ve B 8\'er, B kayıtsız)', async () => {
+    const a = await kartAc('hammadde');
+    const b = await kartAc('hammadde');
+    const { ortam } = durum();
+    await ortam!.sahip.sorgu(`INSERT INTO malzeme_esdeger_bagi (kart_no, grup, ekleyen_kisi_id) SELECT x, $1, (SELECT min(id) FROM kisi) FROM unnest($2::int[]) x`, [Math.min(a, b), [a, b]]);
+    await ortam!.sahip.sorgu("INSERT INTO stok_bakiye (malzeme_id, konum_id, miktar, ilk_giris) SELECT $1, id, '10', now() FROM stok_konum WHERE kod = 'KABUL'", [a]);
+    await isEmirleriAc([yeniAdim({ bilesenler: [{ malzemeId: a, miktar: 2, fireYuzde: 0 }, { malzemeId: b, miktar: 2, fireYuzde: 0 }] })], 4);
+    const mrp = await tamam<MrpIhtiyaciCevabi>(c.planlama, 'GET', '/plan/mrp-ihtiyaci');
+    const s = (no: number) => mrp.satirlar.find((x) => x.malzeme.id === no)!;
+    assert.deepEqual([s(a).brut, s(a).serbest, s(a).net, s(b).brut, s(b).serbest, s(b).net], [8, 10, 0, 8, null, 6], 'MRP: B net grubun stoğuyla');
+    await canliyaAl(await taslaktaOner());
+    const l = (await vt().tx((db) => canliPlanIhtiyaclari(db))).filter((x) => x.malzemeNo === a || x.malzemeNo === b);
+    assert.deepEqual(l.map((x) => [x.malzemeNo, x.miktar, x.stokBilinmiyor]), [[b, 6, false]], 'A artanı 2 B\'ye geçer; B stoğu bilinir');
   });
 });

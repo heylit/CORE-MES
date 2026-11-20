@@ -1,8 +1,8 @@
-import { useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import type {
-  AdimEkleGovdesi, AdimIsaretleGovdesi, GeriGonderGovdesi, GorevAyrintisiCevabi, GorevKaniti, GorevKomutuGovdesi, GorevOlayi, KanitBaglaGovdesi,
+  AdimEkleGovdesi, AdimIsaretleGovdesi, GeriCevirGovdesi, GeriGonderGovdesi, GorevAyrintisiCevabi, GorevKaniti, GorevKomutuGovdesi, GorevOlayi, KanitBaglaGovdesi,
   NotEkleGovdesi, ProjeYonetimiCevabi,
 } from '#paylasilan/sozlesme/projeler.ts';
 import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Rozet, Simge } from '../../ortak/arayuz/index.ts';
@@ -16,14 +16,15 @@ import './projeler.css';
 
 const OLAY_METNI: Record<GorevOlayi['olay'], string> = {
   ustlen: 'üstlendi', basla: 'başladı', bitti: 'bitirdi', onay: 'onayladı', geri: 'geri gönderdi',
+  cevir: 'geri çevirdi',
 };
 const anMetni = (an: string): string => `${tarihMetni(an.slice(0, 10))} ${an.slice(11, 16)}`;
 const KANIT_TURU = 'image/jpeg,image/png,image/webp,application/pdf';
 const KANIT_AZAMI = 20 * 1024 * 1024;
 
-type Komut = 'ustlen' | 'basla' | 'bitir' | 'onayla' | 'geri-gonder' | 'iptal';
+type Komut = 'ustlen' | 'basla' | 'bitir' | 'onayla' | 'geri-gonder' | 'geri-cevir' | 'iptal';
 type Istek =
-  | { ad: Komut; govde: GorevKomutuGovdesi | GeriGonderGovdesi }
+  | { ad: Komut; govde: GorevKomutuGovdesi | GeriGonderGovdesi | GeriCevirGovdesi }
   | { ad: 'adim'; govde: AdimEkleGovdesi }
   | { ad: 'isaret'; adimId: number; govde: AdimIsaretleGovdesi }
   | { ad: 'adim-sil'; adimId: number }
@@ -40,7 +41,7 @@ function istekYolu(gorevId: number, i: Istek): { yol: string; govde: unknown; ko
     case 'not': return { yol: `${kok}/notlar`, govde: i.govde, korumali: true };
     case 'kanit': return { yol: `${kok}/kanitlar`, govde: i.govde, korumali: true };
     case 'kanit-kaldir': return { yol: `${kok}/kanitlar/${i.ozet}/kaldir`, govde: {}, korumali: false };
-    case 'ustlen': case 'basla': case 'bitir': case 'onayla': case 'geri-gonder': case 'iptal':
+    case 'ustlen': case 'basla': case 'bitir': case 'onayla': case 'geri-gonder': case 'geri-cevir': case 'iptal':
       return { yol: `${kok}/${i.ad}`, govde: i.govde, korumali: false };
   }
 }
@@ -57,6 +58,9 @@ export function GorevSayfasi() {
   const kimlik = useIstekKimligi();
   const [geri, geriYaz] = useState<string | null>(null);
   const [geriHatasi, geriHatasiYaz] = useState<string | undefined>(undefined);
+  const [cevir, cevirYaz] = useState<string | null>(null);
+  const [cevirHatasi, cevirHatasiYaz] = useState<string | undefined>(undefined);
+  const cevirDonus = useRef(false);
   const [iptalSor, iptalSorYaz] = useState(false);
   const [bittiSor, bittiSorYaz] = useState(false);
   const [duzenle, duzenleYaz] = useState(false);
@@ -66,6 +70,13 @@ export function GorevSayfasi() {
   const [yukleniyor, yukleniyorYaz] = useState(false);
   const [yuklemeHatasi, yuklemeHatasiYaz] = useState<string | null>(null);
   const dosyaGirdisi = useRef<HTMLInputElement>(null);
+
+  // Gerekçe kutusu kapanınca (Vazgeç) odak yeniden açan düğmeye döner; klavyeyle kullanan yerini kaybetmez.
+  useEffect(() => {
+    if (cevir !== null || !cevirDonus.current) return;
+    cevirDonus.current = false;
+    document.getElementById('gorev-geri-cevir')?.focus();
+  }, [cevir]);
 
   const a = useQuery({
     queryKey: anahtarlar.gorevAyrinti(gorevId),
@@ -87,7 +98,7 @@ export function GorevSayfasi() {
     onSuccess: async (cevap, i) => {
       istemci.setQueryData(anahtarlar.gorevAyrinti(gorevId), cevap);
       kimlik.hataSonrasi(null);
-      geriYaz(null); iptalSorYaz(false); bittiSorYaz(false);
+      geriYaz(null); cevirYaz(null); iptalSorYaz(false); bittiSorYaz(false);
       if (i.ad === 'adim') yeniAdimYaz('');
       if (i.ad === 'not') notYaz('');
       if (i.ad === 'kanit-kaldir') kaldirilacakYaz(null);
@@ -108,6 +119,11 @@ export function GorevSayfasi() {
     if (geri === null) return;
     if (geri.trim() === '') { geriHatasiYaz('Neden geri gönderiyorsun? Gerekçe zorunlu.'); return; }
     komut.mutate({ ad: 'geri-gonder', govde: { gerekce: geri.trim(), surum: g.surum } });
+  };
+  const geriCevir = () => {
+    if (cevir === null) return;
+    if (cevir.trim() === '') { cevirHatasiYaz('Neden geri çeviriyorsun? Gerekçe zorunlu.'); return; }
+    komut.mutate({ ad: 'geri-cevir', govde: { gerekce: cevir.trim(), surum: g.surum } });
   };
   const adimEkle = (o: FormEvent) => {
     o.preventDefault();
@@ -157,7 +173,7 @@ export function GorevSayfasi() {
         <dt>İlerleme</dt><dd><Ilerleme deger={g.ilerleme} /></dd>
         <dt>Kanıt</dt><dd>{kanitlar.length} dosya · {g.kanitZorunlu ? 'bitirmek için zorunlu' : 'zorunlu değil'}</dd>
       </dl>
-      {(izin.ustlenebilir || izin.baslayabilir || izin.bitirebilir || izin.onaylayabilir || iptalAcik || yazar) && (
+      {cevir === null && (izin.ustlenebilir || izin.baslayabilir || izin.bitirebilir || izin.onaylayabilir || izin.geriCevirebilir || iptalAcik || yazar) && (
         <div className="tc-prj-gorunum" role="group" aria-label="Görev adımları">
           {izin.ustlenebilir && <Dugme tur="birincil" simge="user-plus" yukleniyor={komut.isPending} onClick={() => { komut.mutate({ ad: 'ustlen', govde: surum }); }}>Üstlen</Dugme>}
           {izin.baslayabilir && <Dugme simge="play" yukleniyor={komut.isPending} onClick={() => { komut.mutate({ ad: 'basla', govde: surum }); }}>Başla</Dugme>}
@@ -168,6 +184,7 @@ export function GorevSayfasi() {
           )}
           {izin.onaylayabilir && <Dugme tur="birincil" simge="check" yukleniyor={komut.isPending} onClick={() => { komut.mutate({ ad: 'onayla', govde: surum }); }}>Onayla</Dugme>}
           {izin.onaylayabilir && geri === null && <Dugme simge="back" onClick={() => { geriYaz(''); geriHatasiYaz(undefined); }}>Geri gönder</Dugme>}
+          {izin.geriCevirebilir && <Dugme id="gorev-geri-cevir" simge="back" onClick={() => { cevirYaz(''); cevirHatasiYaz(undefined); }}>Geri çevir</Dugme>}
           {yazar && <Dugme simge="edit" onClick={() => { duzenleYaz(true); }}>Düzenle</Dugme>}
           {iptalAcik && !iptalSor && <Dugme simge="x" onClick={() => { iptalSorYaz(true); }}>İptal et</Dugme>}
         </div>
@@ -185,6 +202,19 @@ export function GorevSayfasi() {
           <div className="tc-prj-gorunum">
             <Dugme onClick={() => { geriYaz(null); }} disabled={komut.isPending}>Vazgeç</Dugme>
             <Dugme tur="birincil" simge="back" yukleniyor={komut.isPending} onClick={geriGonder}>Geri gönder</Dugme>
+          </div>
+        </div>
+      )}
+      {cevir !== null && (
+        <div className="tc-prj-icerik">
+          <CokSatir
+            etiket="Geri çevirme gerekçesi" required autoFocus value={cevir} maxLength={500} hata={cevirHatasi}
+            ipucu="Görev senden alınır: rol görevi role döner, değilse atanmamış kalır. Görevi yazana haber gider."
+            onChange={(e) => { cevirYaz(e.target.value); cevirHatasiYaz(undefined); }}
+          />
+          <div className="tc-prj-gorunum">
+            <Dugme onClick={() => { cevirDonus.current = true; cevirYaz(null); }} disabled={komut.isPending}>Vazgeç</Dugme>
+            <Dugme tur="birincil" simge="back" yukleniyor={komut.isPending} onClick={geriCevir}>Geri çevir</Dugme>
           </div>
         </div>
       )}

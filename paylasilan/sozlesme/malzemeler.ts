@@ -431,6 +431,9 @@ export const logoGecisCevabi = z.object({
   sonrakiSayfa: z.number().int().nullable(),
 });
 export type LogoGecisCevabi = z.output<typeof logoGecisCevabi>;
+// 3474-3: ERP kodu yazımının sonucu: yazıldı, zaten aynı, kartta farklı kod var (ezilmez), aynı ERP kodlu başka kart var (yazılmaz).
+export const ERP_KODU_SONUCLARI = ['yazildi', 'ayni', 'farkli', 'mukerrer'] as const;
+export type ErpKoduSonucu = (typeof ERP_KODU_SONUCLARI)[number];
 // Toplu işlem (3068 a): tek işlemde en çok 200 kart; her kart kendi kayıt noktasında işlenir, olmayan atlanır ve nedeni döner.
 // Bağlamada CORE kartının sürümü gelir (arada değişen kart atlanır); almada tür ve birim bir kez seçilir, boşsa satırın Logo karşılığından.
 const logoTopluKartlari = z.array(z.object({ logoKayitNo: z.number().int().positive(), surum: surumSemasi.nullable() }).strict())
@@ -446,10 +449,26 @@ export const logoTopluCevabi = z.object({
   // Geri alma bu kimlikle yapılır; yalnız işlemi yapan kişi geri alır.
   islem: z.uuid(),
   tur: z.enum(['bagla', 'al']),
-  basarili: z.array(z.object({ logoKayitNo: z.number().int(), kod: z.string(), stokKodu: z.string() })),
+  // 3474-3: kartın "Eski / ERP kodu" alanı; farklıysa kartta duran kod döner (ezilmez).
+  basarili: z.array(z.object({
+    logoKayitNo: z.number().int(), kod: z.string(), stokKodu: z.string(), erp: z.enum(ERP_KODU_SONUCLARI), mevcutErpKodu: z.string().nullable(),
+  })),
   atlanan: z.array(z.object({ logoKayitNo: z.number().int(), kod: z.string(), neden: z.string() })),
 });
 export type LogoTopluCevabi = z.output<typeof logoTopluCevabi>;
+// 3474-3: Logo'ya bağlı kartlarda boş ERP kodu Logo'daki kodla doldurulur; dolu ve farklı olan ezilmez, listelenir. Logo'ya bir şey gitmez.
+// yazilan: bu işlemde yazılan kartlar (geri alınmaz; hangi kartın yazıldığı iz olarak döner).
+export const erpKoduDoldurCevabi = z.object({
+  doldurulan: z.number().int().nonnegative(),
+  ayni: z.number().int().nonnegative(),
+  yazilan: z.array(z.object({ kimlik: z.string(), stokKodu: z.string(), erpKodu: z.string() })),
+  farkli: z.array(z.object({ kimlik: z.string(), stokKodu: z.string(), erpKodu: z.string(), logoKodu: z.string() })),
+  atlanan: z.array(z.object({ stokKodu: z.string(), neden: z.string() })),
+});
+export type ErpKoduDoldurCevabi = z.output<typeof erpKoduDoldurCevabi>;
+// Doldurmadan önce onayda gösterilir: Logo'ya bağlı, canlı ve ERP kodu boş kart sayısı.
+export const erpKoduOzetiCevabi = z.object({ bos: z.number().int().nonnegative() });
+export type ErpKoduOzetiCevabi = z.output<typeof erpKoduOzetiCevabi>;
 export const logoGeriAlGovdesi = z.object({ islem: z.uuid() }).strict();
 export const logoGeriAlCevabi = z.object({
   geriAlinan: z.number().int().nonnegative(),

@@ -22,7 +22,7 @@ const gorev = (ek: Partial<Gorev>): Gorev => ({
   kontrolRolAd: 'Kalite', yedekKontrolKisiId: null, yedekKontrolKisiAd: null, yedekKontrolRolId: null, yedekKontrolRolAd: null, onaylandi: false, hazirlikMaddesi: null,
   kanitZorunlu: false, adimToplam: 0, adimYapilan: 0, surum: 4, ...ek,
 });
-const IZIN = { ustlenebilir: false, baslayabilir: false, bitirebilir: false, onaylayabilir: true };
+const IZIN = { ustlenebilir: false, baslayabilir: false, bitirebilir: false, onaylayabilir: true, geriCevirebilir: false };
 const satir = (ek: Partial<GorevlerimSatiri>): GorevlerimSatiri => ({
   ...gorev({}), tur: 'kontrolumde', projeId: 1, projeKod: 'PRJ.01', projeAd: 'Deneme projesi', izinler: IZIN, kademe: null, ...ek,
 });

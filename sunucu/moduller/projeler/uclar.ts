@@ -7,7 +7,7 @@ import {
   projeListesiCevabi, projeListesiSorgusu, projeOlusturGovdesi, projeSemasi, projeSiparisKalemleriCevabi, projeYonetimiCevabi, siparisParametresi, siparisProjeleriCevabi,
   siparisSecenekleriCevabi, siparisSecenekleriSorgusu, siparistenProjeGovdesi, statuAyariGovdesi, statuEkleGovdesi, statuGuncelleGovdesi,
   statuListesiCevabi, statuYazGovdesi, tabanYenileGovdesi,
-  geriGonderGovdesi, gorevAyrintisiCevabi, gorevKomutuGovdesi, gorevlerimCevabi, rolSecenekleriCevabi, sablondanEkleGovdesi, sablonEkleGovdesi,
+  geriCevirGovdesi, geriGonderGovdesi, gorevAyrintisiCevabi, gorevKomutuGovdesi, gorevlerimCevabi, rolSecenekleriCevabi, sablondanEkleGovdesi, sablonEkleGovdesi,
   sablonGuncelleGovdesi, sablonListesiCevabi, sablonSecenekleriCevabi,
   adimEkleGovdesi, adimIsaretleGovdesi, adimParametresi, kanitBaglaGovdesi, kanitParametresi, notEkleGovdesi,
   dagitCevabi, dagitGovdesi, dagitilmamisCevabi, dagitimCevabi, dagitimSorgusu,
@@ -16,7 +16,7 @@ import {
   bitisBagla, firmaSecenekleri, gorevDuzenle, gorevEkle, kilometreTasiDuzenle, kilometreTasiEkle, projeAc, projeAyrintisi, projeDuzenle, projeListesi,
   projeSiparisKalemleri, projeYonetimi, siparisProjeleri, siparisSecenekleri, siparistenProjeAc, sorumluSecenekleri, statuAyariDuzenle, statuDuzenle, statuEkle,
   statuListesi, statuYaz, tabanYenile,
-  gorevAyrintisi, gorevBasla, gorevBitir, gorevGeriGonder, gorevIptal, gorevlerim, gorevOnayla, gorevUstlen, rolSecenekleri, sablonDuzenle,
+  gorevAyrintisi, gorevBasla, gorevBitir, gorevGeriCevir, gorevGeriGonder, gorevIptal, gorevlerim, gorevOnayla, gorevUstlen, rolSecenekleri, sablonDuzenle,
   sablonEkle, sablonListesi, sablonSecenekleri,
   adimEkle, adimIsaretle, adimSil, kanitBagla, kanitDosyasi, kanitKaldir, notEkle,
 } from './servis.ts';
@@ -174,6 +174,16 @@ export const uclar = [
     govde: geriGonderGovdesi,
     cevap: gorevAyrintisiCevabi,
     isle: ({ db, kullanici, parametre, govde }) => gorevGeriGonder(db, kullanici, parametre.gorevId, govde),
+  }),
+  // 3458-4 a: atanan kişi görevi gerekçeyle geri çevirir (kayıt düzeyi denetim serviste).
+  uc({
+    yontem: 'POST',
+    yol: '/projeler/gorevler/:gorevId/geri-cevir',
+    yetki: 'projeler.gorev-isle',
+    parametre: gorevParametresi,
+    govde: geriCevirGovdesi,
+    cevap: gorevAyrintisiCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => gorevGeriCevir(db, kullanici, parametre.gorevId, govde),
   }),
   // 3458: görevin içi. Adımı işaretleyen ve kanıtı ekleyen atanmış yapandır (servis denetler).
   uc({

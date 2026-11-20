@@ -371,13 +371,19 @@ export const geriGonderGovdesi = z.object({
   gerekce: zorunluMetin(500, 'Neden geri gönderiyorsun? Gerekçe zorunlu.'),
   ...beklenenSurum,
 });
-export const GOREV_OLAYLARI = ['ustlen', 'basla', 'bitti', 'onay', 'geri'] as const;
+// 3458-4 a: atanan kişi görevi gerekçeyle geri çevirir.
+export const geriCevirGovdesi = z.object({
+  gerekce: zorunluMetin(500, 'Neden geri çeviriyorsun? Gerekçe zorunlu.'),
+  ...beklenenSurum,
+});
+export type GeriCevirGovdesi = z.input<typeof geriCevirGovdesi>;
+export const GOREV_OLAYLARI = ['ustlen', 'basla', 'bitti', 'onay', 'geri', 'cevir'] as const;
 export const gorevOlayiSemasi = z.object({
   olay: z.enum(GOREV_OLAYLARI), kisiAd: z.string().nullable(), gerekce: z.string().nullable(), an: zamanSemasi,
 });
 // Ekranın göstereceği düğmeler: sunucu aynı kuralla yazmayı da denetler.
 export const gorevIzinleriSemasi = z.object({
-  ustlenebilir: z.boolean(), baslayabilir: z.boolean(), bitirebilir: z.boolean(), onaylayabilir: z.boolean(),
+  ustlenebilir: z.boolean(), baslayabilir: z.boolean(), bitirebilir: z.boolean(), onaylayabilir: z.boolean(), geriCevirebilir: z.boolean(),
 });
 // 3458: görevin içi. Adım işaretleyen ve kanıt ekleyen atanmış yapandır; adım listesini görev yazan da değiştirir; not herkesindir.
 export const gorevAdimiSemasi = z.object({

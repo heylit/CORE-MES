@@ -84,4 +84,20 @@ describe('plan (gerçek PostgreSQL): stoku bilinmeyen malzeme ile canlıya alma'
     await ortam!.sahip.sorgu('INSERT INTO stok_malzeme_ayari (malzeme_id) VALUES ($1)', [stoksuz]);
     assert.equal((await canliyaAl(p2.taslak!.id, s2)).statusCode, 200);
   });
+
+  test('3463-1b: stok kaydı olmayan kart eşdeğerinin kaydıyla "dur" ayarında da canlıya geçer', async () => {
+    await motorAyariYaz(c.yonetici, { eksikStok: 'dur' });
+    const a = await kartAc('hammadde');
+    const b = await kartAc('hammadde');
+    await ortam!.sahip.sorgu('INSERT INTO stok_malzeme_ayari (malzeme_id) VALUES ($1)', [a]);
+    const [is] = await isEmirleriAc([yeniAdim({ bilesenler: [{ malzemeId: b, miktar: 1, fireYuzde: 0 }] })]);
+    const p = await taslaktaOner();
+    assert.ok(p.yerlesimler.some((y) => y.isEmriId === is));
+    const s = await gonder(p);
+    assert.equal((await canliyaAl(p.taslak!.id, s)).statusCode, 409, 'bağsız B durur');
+    await ortam!.sahip.sorgu(`INSERT INTO malzeme_esdeger_bagi (kart_no, grup, ekleyen_kisi_id) SELECT x, $1, (SELECT min(id) FROM kisi) FROM unnest($2::int[]) x`, [Math.min(a, b), [a, b]]);
+    const r = await canliyaAl(p.taslak!.id, s);
+    assert.equal(r.statusCode, 200, r.body);
+  });
 });
+

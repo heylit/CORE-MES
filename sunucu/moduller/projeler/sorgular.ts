@@ -363,7 +363,8 @@ export function gorevGuncelle(
         SET kilometre_tasi_id = $2, ad = $3, aciklama = $4, sorumlu_kisi_id = $5, plan_baslangic = $6, plan_bitis = $7, onceki_gorev_id = $8,
             gercek_baslangic = $9, gercek_bitis = $10, ilerleme = $11, durum = $12, guncelleyen_id = $13, guncelleme = now(), surum = surum + 1,
             asama = $15, yapan_rol_id = $16, kontrol_kisi_id = $17, kontrol_rol_id = $18, yedek_kontrol_kisi_id = $19, yedek_kontrol_rol_id = $20,
-            onaylandi = onaylandi AND $12 = 'bitti', kanit_zorunlu = COALESCE($21, kanit_zorunlu)
+            onaylandi = onaylandi AND $12 = 'bitti', kanit_zorunlu = COALESCE($21, kanit_zorunlu),
+            ustlenilen_rol_id = CASE WHEN sorumlu_kisi_id IS NOT DISTINCT FROM $5::int AND $16::int IS NULL THEN ustlenilen_rol_id END
       WHERE id = $1 AND surum = $14 RETURNING id`,
     [id, g.kilometreTasiId, g.ad, g.aciklama, g.sorumluKisiId, g.planBaslangic, g.planBitis, g.oncekiGorevId,
       g.gercekBaslangic, g.gercekBitis, g.ilerleme, g.durum, kisiId, surum,
@@ -383,7 +384,7 @@ export async function oncekiEslemesi(db: Db, projeId: number): Promise<Map<numbe
 // Akış yazmaları sürüm koşulludur; tarih sunucunun günüdür. Bitmeyen görev gerçek bitiş taşımaz.
 export function gorevUstlen(db: Db, id: number, kisiId: number, surum: number): Promise<{ id: number } | null> {
   return db.tek<{ id: number }>(
-    `UPDATE projeler_gorev SET sorumlu_kisi_id = $2, yapan_rol_id = NULL, guncelleyen_id = $2, guncelleme = now(), surum = surum + 1
+    `UPDATE projeler_gorev SET sorumlu_kisi_id = $2, ustlenilen_rol_id = yapan_rol_id, yapan_rol_id = NULL, guncelleyen_id = $2, guncelleme = now(), surum = surum + 1
       WHERE id = $1 AND surum = $3 AND sorumlu_kisi_id IS NULL RETURNING id`,
     [id, kisiId, surum],
   );
@@ -451,6 +452,21 @@ export function gorevGeriGonder(db: Db, id: number, kisiId: number, surum: numbe
       WHERE id = $1 AND surum = $3 RETURNING id`,
     [id, kisiId, surum],
   );
+}
+
+// 3458-4 a: geri çevrilen görev kişiden düşer; üstlenilmiş rol görevi o role döner, kişiye atanmış görev atanmamış kalır.
+// Durum ve ilerleme olduğu gibi kalır (sürüyorsa yeni yapan sürdürür).
+export function gorevGeriCevir(db: Db, id: number, kisiId: number, surum: number): Promise<{ yapan_rol_id: number | null } | null> {
+  return db.tek<{ yapan_rol_id: number | null }>(
+    `UPDATE projeler_gorev SET sorumlu_kisi_id = NULL, yapan_rol_id = ustlenilen_rol_id, ustlenilen_rol_id = NULL,
+            guncelleyen_id = $2, guncelleme = now(), surum = surum + 1
+      WHERE id = $1 AND surum = $3 AND sorumlu_kisi_id = $2 RETURNING yapan_rol_id`,
+    [id, kisiId, surum],
+  );
+}
+
+export function gorevOlusturani(db: Db, id: number): Promise<number | null> {
+  return db.tek<{ olusturan_id: number }>('SELECT olusturan_id FROM projeler_gorev WHERE id = $1', [id]).then((r) => r?.olusturan_id ?? null);
 }
 
 export async function gorevOlayiEkle(db: Db, gorevId: number, olay: string, kisiId: number, gerekce: string | null): Promise<void> {
@@ -681,7 +697,7 @@ export function hazirlikGoreviAta(
   db: Db, id: number, g: { sorumluKisiId: number | null; yapanRolId: number | null }, surum: number, kisiId: number,
 ): Promise<{ id: number; proje_id: number; surum: number } | null> {
   return db.tek(
-    `UPDATE projeler_gorev SET sorumlu_kisi_id = $2, yapan_rol_id = $3, guncelleyen_id = $4, guncelleme = now(), surum = surum + 1
+    `UPDATE projeler_gorev SET sorumlu_kisi_id = $2, yapan_rol_id = $3, ustlenilen_rol_id = NULL, guncelleyen_id = $4, guncelleme = now(), surum = surum + 1
       WHERE id = $1 AND surum = $5 AND hazirlik_maddesi IS NOT NULL AND durum IN ('yapilacak', 'suruyor', 'bekliyor')
       RETURNING id, proje_id, surum`,
     [id, g.sorumluKisiId, g.yapanRolId, kisiId, surum],

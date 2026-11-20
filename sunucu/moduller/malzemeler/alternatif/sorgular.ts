@@ -55,6 +55,12 @@ export async function kuralGuncelle(db: Db, k: KuralYazimi, surum: number, kisiI
 const KAPSAM_IFADESI: Record<Exclude<KapsamTuru, 'kart'>, string> = {
   aile: KATALOG_METIN('fam'), sinif: `${KATALOG_METIN('fam')} || '/' || ${KATALOG_METIN('cls')}`, kalite: KATALOG_KALITE,
 };
+// Grup kapsamlarının seçenekleri ve her birinin hammadde kartı sayısı (iptal dışı); ekran yazım hatası yerine listeden seçer.
+export function kapsamSayilari(db: Db): Promise<{ kapsamTuru: Exclude<KapsamTuru, 'kart'>; kapsam: string; kart: number }[]> {
+  const parca = (t: Exclude<KapsamTuru, 'kart'>) => `SELECT '${t}' AS "kapsamTuru", ${KAPSAM_IFADESI[t]} AS kapsam, count(*)::int AS kart
+    FROM malzeme_katalog_karti k WHERE k.onay_durumu <> 'iptal' AND k.tur = 'hammadde' AND ${KAPSAM_IFADESI[t]} IS NOT NULL GROUP BY 2`;
+  return db.sorgu(`${(['aile', 'sinif', 'kalite'] as const).map(parca).join(' UNION ALL ')} ORDER BY 1, 2`);
+}
 export async function kapsamKatalogdaMi(db: Db, turu: Exclude<KapsamTuru, 'kart'>, kapsam: string): Promise<boolean> {
   return (await db.tek(`SELECT 1 AS v FROM malzeme_katalog_karti k WHERE k.onay_durumu <> 'iptal' AND ${KAPSAM_IFADESI[turu]} = $1 LIMIT 1`, [kapsam])) !== null;
 }
@@ -183,6 +189,17 @@ export async function esdegerCikar(db: Db, no: number, grup: number): Promise<vo
   if (no === grup) {
     await db.sorgu(`UPDATE malzeme_esdeger_bagi SET grup = (SELECT min(kart_no) FROM malzeme_esdeger_bagi WHERE grup = $1) WHERE grup = $1`, [grup]);
   }
+}
+
+// 3463-1b: verilen kartların eşdeğer grubu (kart dahil, iptal olmayan üyeler); grupta olmayan kart haritada yoktur.
+// İptal kart grup dönmez (stok payı almaz); grupta yalnız iptal dışı üyeler sayılır, tek üye kalan grup yoktur.
+export async function esdegerUyeleri(db: Db, nolar: readonly number[]): Promise<Map<number, number[]>> {
+  if (nolar.length === 0) return new Map();
+  const r = await db.sorgu<{ kart_no: number; uyeler: number[] }>(`SELECT b.kart_no, array_agg(o.kart_no ORDER BY o.kart_no) AS uyeler
+      FROM malzeme_esdeger_bagi b JOIN malzeme_esdeger_bagi o ON o.grup = b.grup
+      JOIN malzeme_katalog_karti k ON k.no = o.kart_no AND k.onay_durumu <> 'iptal'
+     WHERE b.kart_no = ANY($1::int[]) GROUP BY b.kart_no`, [[...nolar]]);
+  return new Map(r.filter((x) => x.uyeler.length > 1 && x.uyeler.includes(x.kart_no)).map((x) => [x.kart_no, x.uyeler]));
 }
 
 // Bağ denetimi için: tür, form, ölçü anahtarları ve stok birimi.

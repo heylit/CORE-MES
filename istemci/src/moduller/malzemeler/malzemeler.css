@@ -23,6 +23,7 @@
 .tc-lg-okuma-metin { display: inline-flex; align-items: center; gap: var(--b-2); color: var(--muted); overflow-wrap: anywhere; min-width: 0; }
 .tc-lg-taraf { display: flex; flex-direction: column; gap: var(--b-1); min-width: 0; overflow-wrap: anywhere; }
 .tc-lg-kod { font-family: var(--font-mono); white-space: nowrap; }
+a.tc-lg-kod { color: var(--bp); text-decoration: underline; }
 .tc-lg-yok { color: var(--muted); }
 .tc-lg-ek { color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
 .tc-lg-rozetler, .tc-lg-eylemler { display: inline-flex; flex-wrap: wrap; gap: var(--b-1); }

@@ -1,6 +1,6 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
-  logoGecisCevabi, logoGecisSorgusu, logoGeriAlCevabi, logoGeriAlGovdesi, logoTopluAlGovdesi, logoTopluBaglaGovdesi, logoTopluCevabi,
+  erpKoduDoldurCevabi, erpKoduOzetiCevabi, logoGecisCevabi, logoGecisSorgusu, logoGeriAlCevabi, logoGeriAlGovdesi, logoTopluAlGovdesi, logoTopluBaglaGovdesi, logoTopluCevabi,
   katalogAyarKaydetGovdesi, katalogAyarParametresi, katalogAyarlariCevabi, katalogKartiKaydetCevabi, katalogKartiKaydetGovdesi, katalogKartiRotasiCevabi,
   katalogKartlariCevabi, katalogKartlariSorgusu, katalogKimlikCevabi, katalogKimlikParametresi, katalogSablonlariCevabi, katalogSablonuKaydetGovdesi, katalogSurumluKayitCevabi,
   demirbasMakineSecenekleriCevabi, demirbasTeknikCevabi, demirbasTeknikKaydetGovdesi,
@@ -11,7 +11,7 @@ import {
 import {
   alternatifKomutCevabi, alternatifKuraliKaldirGovdesi, alternatifKuraliKaydetGovdesi, alternatifKuraliParametresi, alternatifTanimlariCevabi,
   durumMuadiliKaldirGovdesi, durumMuadiliKaydetGovdesi, esdegerBaglaGovdesi, esdegerKaldirGovdesi, kabulSiniriKaldirGovdesi, kabulSiniriKaydetGovdesi,
-  kabulSiniriParametresi, kaliteMuadiliKaldirGovdesi, kaliteMuadiliKaydetGovdesi, kartAlternatifleriCevabi, kartZarfiCevabi, kartZarfiParametresi,
+  kabulSiniriParametresi, kaliteMuadiliKaldirGovdesi, kaliteMuadiliKaydetGovdesi, grupSinirlariCevabi, kartAlternatifleriCevabi, kartZarfiCevabi, kartZarfiParametresi,
 } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 import * as alternatif from './alternatif/servis.ts';
 import { katalogKaydiAlanlari } from './kurallar.ts';
@@ -118,6 +118,12 @@ export const uclar = [
     yontem: 'POST', yol: '/malzeme-logo-gecisi/toplu-al', yetki: 'malzemeler.yaz', tekrarKorumali: true, govde: logoTopluAlGovdesi, cevap: logoTopluCevabi,
     isle: ({ db, kullanici, govde }) => servis.logoTopluAl(db, kullanici, govde),
   }),
+  // 3474-3: boş ERP kodları Logo'daki kodla doldurulur; kart yazma işlemiyle (yeni işlem yok), Logo'ya istek gitmez.
+  uc({ yontem: 'GET', yol: '/malzeme-logo-gecisi/erp-kodlari', yetki: OKUMA, cevap: erpKoduOzetiCevabi, isle: ({ db }) => servis.erpKoduOzeti(db) }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-logo-gecisi/erp-kodlari-doldur', yetki: 'malzemeler.yaz', tekrarKorumali: true, cevap: erpKoduDoldurCevabi,
+    isle: ({ db, kullanici }) => servis.erpKodlariniDoldur(db, kullanici),
+  }),
   uc({
     yontem: 'POST', yol: '/malzeme-logo-gecisi/geri-al', yetki: 'malzemeler.yaz', tekrarKorumali: true, govde: logoGeriAlGovdesi, cevap: logoGeriAlCevabi,
     isle: ({ db, kullanici, govde }) => servis.logoGecisiGeriAl(db, kullanici, govde.islem),
@@ -168,6 +174,7 @@ export const uclar = [
     yontem: 'GET', yol: '/malzeme-alternatifleri/kart/:no', yetki: OKUMA, parametre: kartZarfiParametresi, cevap: kartAlternatifleriCevabi,
     isle: ({ db, parametre }) => alternatif.kartAlternatifleri(db, parametre.no),
   }),
+  uc({ yontem: 'GET', yol: '/malzeme-alternatifleri/siniri', yetki: OKUMA, cevap: grupSinirlariCevabi, isle: ({ db }) => alternatif.grupSinirlari(db) }),
   uc({
     yontem: 'POST', yol: '/malzeme-alternatifleri/siniri/kaydet', yetki: 'malzemeler.tanim-yaz', govde: kabulSiniriKaydetGovdesi, cevap: alternatifKomutCevabi,
     isle: ({ db, kullanici, govde }) => alternatif.kabulSiniriKaydet(db, kullanici, govde),

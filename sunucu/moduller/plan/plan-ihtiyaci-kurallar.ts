@@ -1,4 +1,5 @@
 import { tesisGunu } from '#paylasilan/zaman.ts';
+import { esdegerStokPayi } from './esdeger-stok-kurallar.ts';
 
 // Plan malzeme ihtiyacı (898 a, Dal 2), saf. Canlıya alınan planın açık emirlerinden satın alınacak malzeme eksiği: emrin kalan sarfı
 // (brüt ihtiyaç eksi verilmiş net sarf) malzemeyi tüketen adımların canlı başlangıcına göre sıralanır, serbest stok en erken tüketime
@@ -25,6 +26,8 @@ export interface IhtiyacGirdisi {
   serbest: ReadonlyMap<number, string>;
   // Açılan ürün -> 1 adedi için yaprak malzeme miktarları; haritada olmayan ürün açılmaz.
   agaclar: ReadonlyMap<number, ReadonlyMap<number, number>>;
+  // 3463-1b: kart -> eşdeğer grubu (kart dahil); grubun stoğu birlikte sayılır. Üyelerin serbest miktarı serbest'te olmalıdır.
+  esdegerler?: ReadonlyMap<number, readonly number[]>;
 }
 
 export interface PlanIhtiyaci {
@@ -105,10 +108,15 @@ export function planIhtiyaclari(g: IhtiyacGirdisi): PlanIhtiyaci[] {
     }
   }
   const sonuc: PlanIhtiyaci[] = [];
+  // Açılan ürün stoğunu kendi talebine kullanır: eşdeğer payında yalnız artanı verir, pay almaz (Risk 3463-1b K1).
+  const toplam = new Map([...urunler].map(([no, l]) => [no, Math.min(Math.max(0, sayi(g.serbest.get(no) ?? '0')), l.reduce((t, x) => t + x.miktar, 0))]));
+  for (const [no, l] of tuketimler) toplam.set(no, (toplam.get(no) ?? 0) + l.reduce((t, x) => t + x.miktar, 0));
+  const pay = esdegerStokPayi(toplam, g.serbest, g.esdegerler ?? new Map());
   for (const [no, l] of tuketimler) {
     l.sort((a, b) => a.zaman - b.zaman || a.emirNo.localeCompare(b.emirNo, 'tr'));
     const kayit = g.serbest.get(no);
-    let stok = kayit === undefined ? 0 : Math.max(0, sayi(kayit));
+    const grupPayi = pay.get(no) ?? 0;
+    let stok = Math.max(0, (kayit === undefined ? 0 : Math.max(0, sayi(kayit))) + grupPayi);
     let eksik = 0;
     let ilk: number | null = null;
     const emirler: string[] = [];
@@ -122,7 +130,7 @@ export function planIhtiyaclari(g: IhtiyacGirdisi): PlanIhtiyaci[] {
       if (emirler.length < EN_COK_EMIR && !emirler.includes(t.emirNo)) emirler.push(t.emirNo);
     }
     if (ilk === null || yuvarla(eksik) <= 0) continue;
-    sonuc.push({ malzemeNo: no, miktar: yuvarla(eksik), gerekenTarih: tesisGunu(ilk), emirler, stokBilinmiyor: kayit === undefined });
+    sonuc.push({ malzemeNo: no, miktar: yuvarla(eksik), gerekenTarih: tesisGunu(ilk), emirler, stokBilinmiyor: kayit === undefined && grupPayi <= ESIK });
   }
   return sonuc.sort((a, b) => a.gerekenTarih.localeCompare(b.gerekenTarih) || a.malzemeNo - b.malzemeNo);
 }

@@ -4,11 +4,11 @@ import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import type { AlternatifTanimlariCevabi, KartAlternatifleriCevabi, KartZarfiCevabi } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
+import type { AlternatifTanimlariCevabi, GrupSinirlariCevabi, KartAlternatifleriCevabi, KartZarfiCevabi } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { alternatifDegerlendir, alternatifZarfiOku, kartinAlternatifKartlari } from './disari.ts';
+import { alternatifDegerlendir, alternatifZarfiOku, esdegerGruplari, kartinAlternatifKartlari } from './disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -192,6 +192,28 @@ describe('Malzemeler ikame ve alternatifler', () => {
     assert.deepEqual(await vt().tx((db) => kartinAlternatifKartlari(db, ana, { kullanimYeri: 'talep' })), once);
   });
 
+  test('ALT-7 (3463-1b): grup şablonu; kalite sınırı o kalitedeki kartlara geçer, kart sınırı ezer, liste yalnız grup sınırlarını verir', async () => {
+    const ana = await kartAc(cubuk('6063', 20, 'T5'));
+    const yol = '/malzeme-alternatifleri/siniri/kaydet';
+    const grup = { kapsamTuru: 'kalite', kapsam: '6063', nitelik: 'd', degerler: null, alt: 19, ust: 23 };
+    assert.equal((await ret(400, 'DOGRULAMA', yonetici, 'POST', yol, { ...grup, kapsam: 'ORN-YOK' })).alan, 'kapsam');
+    await tamam(yonetici, 'POST', yol, grup);
+    const z = async () => (await tamam<KartZarfiCevabi>(okuyucu, 'GET', `/malzeme-alternatifleri/zarf/${String(ana)}`)).zarf?.olcu[0];
+    assert.deepEqual(await z(), { anahtar: 'd', istenen: 20, enAz: 19, enCok: 23, sinirKaynak: { kapsamTuru: 'kalite', kapsam: '6063' } });
+    await tamam(yonetici, 'POST', yol, { ...grup, kapsamTuru: 'kart', kapsam: String(ana), alt: 20, ust: 21 });
+    assert.deepEqual(await z(), { anahtar: 'd', istenen: 20, enAz: 20, enCok: 21, sinirKaynak: { kapsamTuru: 'kart', kapsam: String(ana) } });
+    const cevap = await tamam<GrupSinirlariCevabi>(okuyucu, 'GET', '/malzeme-alternatifleri/siniri');
+    const liste = cevap.siniri;
+    // Kapsam seçenekleri katalogdan gelir ve kart sayısını taşır; yazım hatası olan kapsam listede yoktur.
+    assert.ok((cevap.kapsamlar.find((k) => k.kapsamTuru === 'kalite' && k.kapsam === '6063')?.kart ?? 0) >= 1);
+    assert.equal(cevap.kapsamlar.some((k) => k.kapsam === 'ORN-YOK'), false);
+    assert.deepEqual(liste.map((x) => [x.kapsamTuru, x.kapsam, x.nitelik, x.alt, x.ust]), [['kalite', '6063', 'd', 19, 23]]);
+    for (const x of [...liste, ...(await tamam<KartAlternatifleriCevabi>(okuyucu, 'GET', `/malzeme-alternatifleri/kart/${String(ana)}`)).siniri]) {
+      await tamam(yonetici, 'POST', `/malzeme-alternatifleri/siniri/${String(x.id)}/kaldir`, { surum: x.surum });
+    }
+    assert.equal((await z())?.sinirKaynak, null);
+  });
+
   test('ALT-6 (3463-1): eşdeğer kart; aynı tür, form, ölçü alanı ve birimde bağlanır, ortak okumada önce gelir, kaldırılınca grup çözülür', async () => {
     const a = await kartAc(cubuk('2017A', 30));
     const b = await kartAc(cubuk('2017A', 30));
@@ -211,6 +233,17 @@ describe('Malzemeler ikame ve alternatifler', () => {
     assert.equal((await ret(400, 'DOGRULAMA', yonetici, 'POST', yol, { kartNo: c, esdegerNo: a })).alan, 'esdegerNo');
     const grup = async (no: number) => (await tamam<KartAlternatifleriCevabi>(okuyucu, 'GET', `/malzeme-alternatifleri/kart/${String(no)}`)).esdegerler.map((e) => e.no);
     assert.deepEqual([await grup(a), await grup(b), await grup(c)], [[b, c], [a, c], [a, b]]);
+    // 3463-1b: plan ve stok grubu bu okumayla alır; grupta olmayan kart haritada yoktur.
+    const gruplar = await vt().tx((db) => esdegerGruplari(db, [a, lama]));
+    assert.deepEqual([...gruplar], [[a, [a, b, c].sort((x, y) => x - y)]]);
+    // İptal kart grupta sayılmaz; tek üye kalan grup hiç dönmez (durum sonra geri konur).
+    const durumYaz = (nolar: number[], d: string) => vt().tx((db) => db.sorgu('UPDATE malzeme_katalog_karti SET onay_durumu = $2 WHERE no = ANY($1::int[])', [nolar, d]));
+    const eski = (await vt().tek<{ d: string }>('SELECT onay_durumu AS d FROM malzeme_katalog_karti WHERE no = $1', [c]))!.d;
+    await durumYaz([c], 'iptal');
+    assert.deepEqual([...(await vt().tx((db) => esdegerGruplari(db, [a, c])))], [[a, [a, b].sort((x, y) => x - y)]]);
+    await durumYaz([b], 'iptal');
+    assert.deepEqual([...(await vt().tx((db) => esdegerGruplari(db, [a])))], []);
+    await durumYaz([b, c], eski);
     const okuma = await vt().tx((db) => kartinAlternatifKartlari(db, a, { kullanimYeri: 'satin_alma' }));
     assert.deepEqual(okuma.filter((k) => k.tur === 'esdeger').map((k) => [k.no, k.sonuc]), [[b, 'ayni'], [c, 'ayni']]);
     assert.ok(!okuma.some((k) => k.tur === 'alternatif' && (k.no === b || k.no === c)), 'eşdeğer alternatif listesinde tekrar etmez');
