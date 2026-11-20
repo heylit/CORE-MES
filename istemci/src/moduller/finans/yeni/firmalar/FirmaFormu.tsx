@@ -96,7 +96,7 @@ export function FirmaFormu({ firma, kapat, kaydedildi, yenile }: {
             {...form.alan(ad)}
           />
         ))}
-        {kilit && <p className="tc-fk-not">Logo'ya gönderildiği için kod ve Logo cari kodu değiştirilemez.</p>}
+        {kilit && <p className="tc-fk-not">Logo'ya bağlı olduğu için kod ve Logo cari kodu değiştirilemez.</p>}
       </div>
     </FormPenceresi>
   );

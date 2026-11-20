@@ -17,7 +17,8 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import { logoCariCozuculeriKaydet } from './disari.ts';
 import type { LogoCariBilgisi, LogoCariSonucu } from './disari.ts';
 import { LOGO_CARI_BELLEK_MS } from './kurallar.ts';
-import { logoCariSaatiKur } from './servis.ts';
+import { firmaKoduVarMi } from './sorgular.ts';
+import { firmaNoKoddan, logoCariSaatiKur } from './servis.ts';
 
 // 2118 (2118-1 a, 2118-2 a, 2118-3 a). Cariler uydurmadır; gerçek ad, kod ya da vergi numarası yoktur. Logo köprüsü yerine sahte
 // çözücü vardır: yalnız okuma çağrısı alır; komutların köprüye hiç gitmediği çağrı sayısıyla denetlenir.
@@ -196,7 +197,7 @@ describe('Logo\'dan cari arama ve alma (gerçek PostgreSQL, sahte köprü)', () 
     assert.equal((await al('yazan', govde)).durum, 200);
   });
 
-  test('LCA-6 bağlama yalnız Logo alanlarını yazar; bağlı, başka cari kodlu ve eski sürümlü firma bağlanmaz', async () => {
+  test('LCA-6 bağlama Logo alanlarını ve kodu yazar (3473), öteki alanlar kalır; bağlı, başka cari kodlu ve eski sürümlü firma bağlanmaz', async () => {
     const f = await firmaKur({ ad: 'LCA6 Firma', kod: 'LCA6.TMI', il: 'TMI İli' });
     const farkli = await firmaKur({ ad: 'LCA6 Farklı', logoCariKodu: 'LCA6.FARKLI' });
     logodakiler = [cari('LCA6.001', { logoKayitNo: 601, il: 'Logo İli', ad: 'Logo Adı' })];
@@ -207,7 +208,10 @@ describe('Logo\'dan cari arama ve alma (gerçek PostgreSQL, sahte köprü)', () 
     const c = await bagla('yazan', f.id, 'LCA6.001', f.surum);
     assert.equal(c.durum, 200, JSON.stringify(c.govde));
     const b = c.govde.firma;
-    assert.deepEqual([b.kod, b.ad, b.il, b.logoCariKodu, b.logoKayitNo, b.logoGonderimDurumu, b.surum], ['LCA6.TMI', 'LCA6 Firma', 'TMI İli', 'LCA6.001', 601, 'gonderildi', f.surum + 1]);
+    assert.deepEqual(
+      [b.kod, b.eskiKod, b.ad, b.il, b.logoCariKodu, b.logoKayitNo, b.logoGonderimDurumu, b.surum],
+      ['LCA6.001', 'LCA6.TMI', 'LCA6 Firma', 'TMI İli', 'LCA6.001', 601, 'gonderildi', f.surum + 1],
+    );
     assert.equal((await bagla('yazan', b.id, 'LCA6.001', b.surum)).durum, 422);
     assert.equal((await bagla('yazan', farkli.id, 'LCA6.001', farkli.surum)).durum, 422);
     assert.deepEqual(cagrilar, []);
@@ -294,5 +298,46 @@ describe('Logo\'dan cari arama ve alma (gerçek PostgreSQL, sahte köprü)', () 
     assert.equal(baskasi.govde.sonuclar[0]?.tamam, false);
     assert.match(baskasi.govde.sonuclar[0]?.ileti ?? '', /yeniden arayın/);
     assert.equal(await firmaSayisi(), once);
+  });
+
+  // 3473: bağlanınca kod Logo cari kodu olur; eski kod geçmişte kalır, aramada ve koddan çözmede bulunur, otomatik numaraya verilmez.
+  test('LCA-10 eski kod geçmişte: kartta görünür, listede aranır, koddan firma bulunur, numara olarak dolu sayılır', async () => {
+    const f = await firmaKur({ ad: 'LCA10 Firma', kod: 'LCA10.ESKI' });
+    logodakiler = [cari('LCA10.LOGO', { logoKayitNo: 1001 })];
+    await ara('yazan', 'LCA10');
+    const c = await bagla('yazan', f.id, 'LCA10.LOGO', f.surum);
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    assert.deepEqual([c.govde.firma.kod, c.govde.firma.eskiKod], ['LCA10.LOGO', 'LCA10.ESKI']);
+    const ayrinti = await istek<FirmaCevabi>('okuyan', 'GET', `/musteri-tedarikci/firmalar/${f.id}`);
+    assert.equal(ayrinti.govde.firma.eskiKod, 'LCA10.ESKI');
+    const liste = await istek<FirmaListesiCevabi>('okuyan', 'GET', '/musteri-tedarikci/firmalar?ara=10.ESK');
+    assert.deepEqual(liste.govde.satirlar.map((r) => r.id), [f.id]);
+    const gecmis = await vt().sorgu<{ kod: string; birakan: boolean }>(
+      'SELECT kod, birakan_id IS NOT NULL AS birakan FROM musteri_tedarikci_kod_gecmisi WHERE firma_id = $1', [f.id],
+    );
+    assert.deepEqual(gecmis, [{ kod: 'LCA10.ESKI', birakan: true }]);
+    assert.deepEqual(await vt().tx(async (db) => [
+      await firmaNoKoddan(db, 'LCA10.ESKI'), await firmaNoKoddan(db, 'LCA10.LOGO'), await firmaKoduVarMi(db, 'lca10.eski'), await firmaNoKoddan(db, 'LCA10.YOK'),
+    ]), [f.id, f.id, true, null]);
+    // Eski kod sonradan başka firmaya elle verilirse bugünkü kod önce gelir.
+    const yeni = await firmaKur({ ad: 'LCA10 Yeni', kod: 'LCA10.ESKI' });
+    assert.equal(await vt().tx((db) => firmaNoKoddan(db, 'LCA10.ESKI')), yeni.id);
+  });
+
+  test('LCA-11 kodu Logo kodundan aynı olan firma geçmiş yazmaz; Logo kodu başka firmanın koduysa bağlanmaz, ileti iki firmayı adlandırır', async () => {
+    const ayni = await firmaKur({ ad: 'LCA11 Aynı', kod: 'LCA11.001' });
+    const hedef = await firmaKur({ ad: 'LCA11 Hedef', kod: 'LCA11.H' });
+    const sahip = await firmaKur({ ad: 'LCA11 Sahip', kod: 'LCA11.002' });
+    logodakiler = [cari('LCA11.001', { logoKayitNo: 1101 }), cari('LCA11.002', { logoKayitNo: 1102 })];
+    await ara('yazan', 'LCA11');
+    const a = await bagla('yazan', ayni.id, 'LCA11.001', ayni.surum);
+    assert.equal(a.durum, 200, JSON.stringify(a.govde));
+    assert.deepEqual([a.govde.firma.kod, a.govde.firma.eskiKod], ['LCA11.001', null]);
+    const r = await bagla('yazan', hedef.id, 'LCA11.002', hedef.surum);
+    assert.equal(r.durum, 422);
+    assert.match(JSON.stringify(r.govde), /LCA11\.002 LCA11 Sahip/);
+    const sonra = await vt().tek<{ kod: string; logo_kayit_no: number | null }>('SELECT kod, logo_kayit_no FROM musteri_tedarikci_firma WHERE id = $1', [hedef.id]);
+    assert.deepEqual(sonra, { kod: 'LCA11.H', logo_kayit_no: null });
+    assert.equal((await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM musteri_tedarikci_kod_gecmisi WHERE firma_id = ANY($1::int[])', [[ayni.id, hedef.id, sahip.id]]))?.n, 0);
   });
 });

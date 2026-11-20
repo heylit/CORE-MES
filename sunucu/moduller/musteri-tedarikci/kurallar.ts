@@ -51,12 +51,16 @@ export function firmaKaydiHatasi(k: Pick<FirmaKimligi, 'ulkeKodu' | 'vergiNo' | 
   return koordinatHatasi(k);
 }
 
-// MT-5 (FNS-45): Logo'ya gönderilmiş (Logo kayıt numarası dolu) firmanın kodu ve Logo cari kodu değişmez. Büyük/küçük harf farkı da değişikliktir.
+// MT-5 (FNS-45): Logo'ya bağlı (Logo kayıt numarası dolu) firmanın kodu ve Logo cari kodu değişmez. Büyük/küçük harf farkı da değişikliktir.
 export interface LogoKimligi { logoKayitNo: number | null; kod: string | null; logoCariKodu: string | null }
 export function logoKilidiIhlali(eski: LogoKimligi, yeni: Pick<LogoKimligi, 'kod' | 'logoCariKodu'>): boolean {
   return eski.logoKayitNo !== null && (eski.kod !== yeni.kod || eski.logoCariKodu !== yeni.logoCariKodu);
 }
-export const LOGO_KILIDI_ILETISI = 'Logo\'ya gönderilmiş firmanın kodu ve Logo cari kodu değiştirilemez.';
+// 3473: bağlanınca kod Logo cari kodu olur; kod başka firmada kullanılıyorsa iki firma da ileti içinde adıyla görünür.
+export function logoKoduCakismasi(logoKodu: string, cakisan: { kod: string; ad: string }): string {
+  return `Logo cari kodu ${logoKodu} başka bir firmanın kodu (${cakisan.kod} ${cakisan.ad}); bağlanınca kod Logo kodu olacağı için bağlanamaz. Önce o firmanın Logo bağını ya da kodunu düzeltin.`;
+}
+export const LOGO_KILIDI_ILETISI = 'Logo\'ya bağlı firmanın kodu ve Logo cari kodu değiştirilemez.';
 
 // MT-8 (FNS-53): pasife alma yalnız aktif firmada, aktif yapma yalnız pasif firmada.
 export type FirmaDurumu = 'aktif' | 'pasif';
@@ -365,8 +369,8 @@ export function logoCariEslesmesi(c: LogoCariBilgisi, adaylar: readonly LogoCari
   return null;
 }
 
-// Bağlama yalnız Logo alanlarını yazar (TMI kazanır, 2116-2 a ile aynı): firma Logo'ya bağlı olmamalı, cari kodu boş ya da aynı olmalı;
-// kodu doluysa ve Logo kodundan farklıysa kod korunur (bağlama kodu değiştirmez). Kodu TMI'ye sığmayan cari bağlanmaz.
+// Bağlama Logo alanlarını ve firma kodunu yazar (3473: kod Logo cari kodu olur, eski kod geçmişte kalır; öteki alanlarda TMI kazanır,
+// 2116-2 a): firma Logo'ya bağlı olmamalı, cari kodu boş ya da aynı olmalı. Kodu TMI'ye sığmayan cari bağlanmaz.
 export function logoyaBaglanabilir(a: Pick<LogoCariAdayi, 'logoKayitNo' | 'logoCariKodu'>, logoKodu: string): boolean {
   return a.logoKayitNo === null && (a.logoCariKodu === null || ayni(a.logoCariKodu, logoKodu)) && logoCariKoduHatasi(logoKodu) === null;
 }

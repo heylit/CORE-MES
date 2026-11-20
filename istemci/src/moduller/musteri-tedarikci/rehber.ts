@@ -11,7 +11,7 @@ export const rehber: readonly SayfaRehberi[] = [
     ],
     sinirlar: [
       'Yazmak firma yazma yetkisi ister.',
-      'Logo\'ya gönderilmiş firmanın kodu değiştirilemez; bir firmaya en çok 50 adres eklenir.',
+      'Logo\'ya bağlanınca firmanın kodu Logo cari kodu olur, eski kod kartta kalır ve firma listesinde aranır; bağlı firmanın kodu değiştirilemez; bir firmaya en çok 50 adres eklenir.',
     ],
     sozcukler: ['firma', 'cari', 'müşteri', 'tedarikçi', 'fason', 'adres'],
   },

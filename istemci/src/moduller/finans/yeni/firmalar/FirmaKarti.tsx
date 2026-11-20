@@ -116,8 +116,8 @@ export function FirmaKarti({ id, finans, yetki, kayitGir, geri }: EkranOzellikle
             <p className="tc-fk-not">Logo köprüsü yazar; elle değişmez</p>
             <Alan ad="Logo cari kodu" deger={f.logoCariKodu} />
             <Alan ad="Logo kayıt no" deger={f.logoKayitNo} />
-            <Alan ad="Logo gönderim durumu" deger={f.logoGonderimDurumu ? LOGO_DURUM_ADI[f.logoGonderimDurumu] : null} />
-            {f.logoKayitNo !== null && <p className="tc-fk-not">Logo'ya gönderildiği için kod ve Logo cari kodu değiştirilemez.</p>}
+            <Alan ad="Logo durumu" deger={f.logoGonderimDurumu ? LOGO_DURUM_ADI[f.logoGonderimDurumu] : null} />
+            {f.logoKayitNo !== null && <p className="tc-fk-not">Logo'ya bağlı olduğu için kod ve Logo cari kodu değiştirilemez.</p>}
           </Kart>
         </div>
       </div>
