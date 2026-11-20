@@ -11,7 +11,7 @@ import { tercihOku, tercihYaz, type RotaEkrani, type Secim } from './ortak.tsx';
 import { useRotaDuzeni, yeniKimlik } from './useRotaDuzeni.ts';
 import { duzenlemeAcar, yeniRotaAcar } from '../yetki.ts';
 import { AkisSemasi, SURUKLE_TURU, surukleCoz } from './AkisSemasi.tsx';
-import { YatayHat } from './YatayHat.tsx';
+import { RotaBasligi, YatayHat } from './YatayHat.tsx';
 import { AkisTablosu } from './AkisTablosu.tsx';
 import { PatlamisRota } from './PatlamisRota.tsx';
 import { AdimPaneli } from './AdimPaneli.tsx';
@@ -366,6 +366,7 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
       </OnayPenceresi>
       {liste ? <UrunListesi duzen={duzen} ac={(id) => { kokSec(id); secimYaz(null); }} /> : (
         <>
+          {hatli && dugum && <RotaBasligi r={r} kok={dugum} />}
           {kokId && revId && <RevizyonCubugu r={r} agac={agac} urunId={revId} urunSec={setRevUrun} duzenleme={duzenleme} />}
           {gorunum === 'patlamis' && kokId ? (
             <PatlamisRota revizyonId={yururlukteRevizyon} miktar={miktar} baz={kip === 'baz'} />
