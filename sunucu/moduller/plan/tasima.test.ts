@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { tasimaHesabi } from './tasima.ts';
+import { tasimaDenetimi } from './atolye-komutlari-kurallar.ts';
 
 // 2790: taşıma hesabı motorun takvimiyle (vardiya 08:00-16:00, hafta içi; eksen pazartesi 00:00). Adım 2 adet x 60 dk = 2 sa. Veriler uydurmadır.
 const GUN = ['pzt', 'sal', 'car', 'per', 'cum', 'cmt', 'paz'];
@@ -155,5 +156,31 @@ describe('taşıma hesabı motorun takvimiyle (2790)', () => {
     const sayimsiz = tasimaHesabi(calisma('b', isler, { gercek: { 'S1.10': { m: 'T1', S: 8 } } }), 9, { isId: 'S1.10', tezgah: 'T1', baslangic: 12 });
     assert.deepEqual(ozet(sayimsiz)['S1.10'], ['T1', 12, 14, 'tasinan']);
     assert.match(sayimsiz.ileti!, /kalan adet yeni yerine planlandı/);
+  });
+  test('TH-16 (3488 a): planda yeri olmayan (yerleşmeyen) adım elle verilen tezgâha ve saate taşınır; önündeki başka siparişin işi itilir', () => {
+    // S2.10 yerleşmedi (plan.fail). T2'de salı 09:00'a (33) bırakılır; orada S1.20 (33-35) başka siparişin işidir, arkaya itilir.
+    const c = { ...calisma('b', { 'S1.10': op('S1', 'T1', 8), 'S1.20': op('S1', 'T2', 33) }), plan: { dataVer: 1, ops: { 'S1.10': op('S1', 'T1', 8), 'S1.20': op('S1', 'T2', 33) }, fail: ['S2.10'] } };
+    const r = tasimaHesabi(c, 8, { isId: 'S2.10', tezgah: 'T2', baslangic: 33 });
+    assert.equal(r.gecerli, true, r.ileti ?? '');
+    assert.deepEqual(ozet(r), { 'S2.10': ['T2', 33, 35, 'tasinan'], 'S1.20': ['T2', 35, 37, 'itilen'] });
+    // Adıma uygun olmayan tezgâh (S2.10 yalnız T2'de yapılır) itme hesabının nedeniyle reddedilir.
+    const uygunsuz = tasimaHesabi(c, 8, { isId: 'S2.10', tezgah: 'T1', baslangic: 33 });
+    assert.equal(uygunsuz.gecerli, false);
+    assert.doesNotMatch(uygunsuz.ileti!, /planda bulunamadı/);
+    // Denetim yerleşmeyen adımı geçirir; planda da fail'de de olmayan adım "bulunamadı" der; olmayan tezgâh reddedilir.
+    const an = Date.parse('2026-01-05T08:00:00+03:00');
+    assert.equal('deger' in tasimaDenetimi(c, { isId: 'S2.10', tezgah: 'T2', baslangic: 33 }, an), true);
+    const yok = tasimaDenetimi(c, { isId: 'S9.10', tezgah: 'T2', baslangic: 33 }, an);
+    assert.match('hata' in yok ? JSON.stringify(yok.hata) : '', /İş planda bulunamadı/);
+    const tezgahsiz = tasimaDenetimi(c, { isId: 'S2.10', tezgah: 'T9', baslangic: 33 }, an);
+    assert.match('hata' in tezgahsiz ? JSON.stringify(tezgahsiz.hata) : '', /Tezgâh çalışmada yok/);
+  });
+
+  test('TH-17 (3488 a, Risk K1): öncülü de yerleşmemiş adım elle yerleştirilmez; öncül planda ise yerleşir', () => {
+    const iki = { ...calisma('b', { 'S2.10': op('S2', 'T2', 8) }), plan: { dataVer: 1, ops: { 'S2.10': op('S2', 'T2', 8) }, fail: ['S1.10', 'S1.20'] } };
+    const r = tasimaHesabi(iki, 8, { isId: 'S1.20', tezgah: 'T2', baslangic: 33 });
+    assert.deepEqual(r, { gecerli: false, ileti: 'Önce OP 10 adımını yerleştirin; OP 20 ondan sonra gelir. Taşıma yapılmadı.', isler: [] });
+    const tek = { ...calisma('b', { 'S1.10': op('S1', 'T1', 8) }), plan: { dataVer: 1, ops: { 'S1.10': op('S1', 'T1', 8) }, fail: ['S1.20'] } };
+    assert.equal(tasimaHesabi(tek, 8, { isId: 'S1.20', tezgah: 'T2', baslangic: 33 }).gecerli, true);
   });
 });
