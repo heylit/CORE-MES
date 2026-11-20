@@ -14,6 +14,7 @@ import type {
 } from '#paylasilan/sozlesme/siparisler.ts';
 import { denemeIsaretliKimlikler, firmaKoduSecimi, numaraAl } from '../ayarlar/disari.ts';
 import { bildirimGonder, bildirimKapat, kalanGun } from '../bildirim/disari.ts';
+import { olayAlanlari } from '#paylasilan/sozlesme/bildirim-kural-sabitleri.ts';
 import { malzemeAra, malzemeOzetleri, malzemeSatinAlmaAyrintilari, malzemeYerlilikOranlari, revizyonBilgileri, satisBirimleri, type RevizyonBilgisi } from '../malzemeler/disari.ts';
 import { beklenenTahsilatKaldir, beklenenTahsilatYaz } from '../finans/disari.ts';
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
@@ -92,7 +93,9 @@ export async function siparisListesi(db: Db, sorgu: SiparisListesiSuzgeci): Prom
 }
 
 // 3478-3: bildirim kuralının koşul alanları. Tutar yalnız koşulda kullanılır, bildirim metnine yazılmaz (bildirim modülü denetler).
-const kuralAlanlari = (s: SiparisAyrintisi) => ({ firma: s.firmaAd, tutar: s.genelToplam, para_birimi: s.paraBirimi, termine_kalan_gun: kalanGun(s.termin, Date.now()) });
+const kuralAlanlari = (s: SiparisAyrintisi) => olayAlanlari('siparisler.onay-bekliyor', {
+  firma: s.firmaAd, tutar: s.genelToplam, para_birimi: s.paraBirimi, termine_kalan_gun: kalanGun(s.termin, Date.now()),
+});
 
 export async function siparisAyrintisi(db: Db, id: number): Promise<SiparisAyrintisi> {
   const satir = await sorgular.siparisGetir(db, id);

@@ -13,6 +13,7 @@ import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { bildirimGonder, bildirimKapat, type BildirimOlayi } from './disari.ts';
 import { olayIzleriniTemizle } from './kural.ts';
+import { createECDH } from 'node:crypto';
 
 // 3478-3 a: kural uçları, ön izleme ve olay yazılırken kuralın uygulanışı. Olay "Makine durdu"dur (alanı: makine kodu);
 // ana bildirim yalnız A'ya gider (yalnizKisiler), kural B ve C'ye gider, C olayın okuma işlemini taşımaz (Risk K1).
@@ -88,6 +89,7 @@ describe('3478-3 bildirim kuralları (gerçek PostgreSQL)', () => {
   test('KM-1 kural ekleme: yalnız ayarlar.yaz; geçersiz koşul, para alanı ve alıcısız kural 400', async () => {
     assert.equal((await istek('kisi-c', 'GET', '/bildirimler/kurallar')).durum, 403);
     assert.equal((await istek('kisi-c', 'POST', '/bildirimler/kurallar/ekle', govde())).durum, 403);
+    assert.equal((await istek('kisi-c', 'POST', '/bildirimler/kurallar/on-izleme', govde())).durum, 403);
     assert.equal((await istek('kisi-a', 'POST', '/bildirimler/kurallar/ekle', govde({ kosullar: [{ alan: 'tutar', karsilastirma: '>', deger: 1 }] }))).durum, 400);
     assert.equal((await istek('kisi-a', 'POST', '/bildirimler/kurallar/ekle', govde({ sablonBaslik: 'Tutar {tutar}' }))).durum, 400, 'şablonda olayın alanı olmayan yer tutucu');
     assert.equal((await istek('kisi-a', 'POST', '/bildirimler/kurallar/ekle', govde({ kisiIdleri: [] }))).durum, 400);
@@ -95,6 +97,9 @@ describe('3478-3 bildirim kuralları (gerçek PostgreSQL)', () => {
     const k = await ekle();
     assert.equal(k.surum, 1);
     assert.equal(k.gecersiz, null);
+    const { tur: _t, ...yeni } = govde();
+    assert.equal((await istek('kisi-c', 'POST', `/bildirimler/kurallar/${String(k.id)}/degistir`, { ...yeni, surum: 1 })).durum, 403);
+    assert.equal((await istek('kisi-c', 'POST', `/bildirimler/kurallar/${String(k.id)}/sil`, { surum: 1 })).durum, 403);
     const liste = bildirimKurallariCevabi.parse((await istek('kisi-a', 'GET', `/bildirimler/kurallar?tur=${TUR}`)).govde);
     assert.deepEqual(liste.kurallar.map((x) => x.id), [k.id]);
   });
@@ -104,6 +109,7 @@ describe('3478-3 bildirim kuralları (gerçek PostgreSQL)', () => {
     await gonder('M-2', 'on-2');
     await gonder('m-1 ', 'on-3');
     await gonder(null, 'on-4');
+    await o().sahip.sorgu(`INSERT INTO bildirim_olay_izi (tur, degerler, zaman) VALUES ($1, '{"makine": "M-1"}', now() - interval '8 days')`, [TUR]);
     const r = await istek('kisi-a', 'POST', '/bildirimler/kurallar/on-izleme', govde());
     assert.equal(r.durum, 200, r.metin);
     assert.deepEqual(bildirimKuralOnIzlemeCevabi.parse(r.govde), { gun: 7, olay: 4, uyan: 2, kisi: 1, yetkisiz: 1 });
@@ -170,6 +176,7 @@ describe('3478-3 bildirim kuralları (gerçek PostgreSQL)', () => {
   test('KM-8 değiştir ve sil sürümlüdür (eski sürüm 409); alanı kalkan kural geçersiz görünür', async () => {
     const k = await ekle();
     const { tur: _t, ...yeni } = govde({ ad: 'Yeni ad' });
+    assert.equal((await istek('kisi-a', 'POST', `/bildirimler/kurallar/${String(k.id)}/degistir`, { ...yeni, kosullar: [{ alan: 'makine', karsilastirma: '>', deger: 3 }], surum: 1 })).durum, 400, 'değiştirmede de geçerlilik denetlenir');
     assert.equal((await istek('kisi-a', 'POST', `/bildirimler/kurallar/${String(k.id)}/degistir`, { ...yeni, surum: 9 })).durum, 409);
     const r = await istek('kisi-a', 'POST', `/bildirimler/kurallar/${String(k.id)}/degistir`, { ...yeni, surum: 1 });
     assert.equal(r.durum, 200, r.metin);
@@ -179,8 +186,41 @@ describe('3478-3 bildirim kuralları (gerçek PostgreSQL)', () => {
     assert.match(g.kurallar[0]?.gecersiz ?? '', /eski_alan/);
     await gonder('M-1', 'k8');
     assert.deepEqual((await satirlar('k8')).map((x) => x.kisi_id), [a], 'geçersiz kural çalışmaz');
+    await o().sahip.sorgu(`UPDATE bildirim_kurali SET kosullar = '[]', sablon_baslik = '{eski_alan} durdu'`);
+    const g2 = bildirimKurallariCevabi.parse((await istek('kisi-a', 'GET', '/bildirimler/kurallar')).govde);
+    assert.match(g2.kurallar[0]?.gecersiz ?? '', /bilinmeyen alan/);
+    await gonder('M-1', 'k8b');
+    assert.deepEqual((await satirlar('k8b')).map((x) => x.kisi_id), [a], 'şablondaki alanı kalkan kural çalışmaz');
     assert.equal((await istek('kisi-a', 'POST', `/bildirimler/kurallar/${String(k.id)}/sil`, { surum: 1 })).durum, 409);
     assert.equal((await istek('kisi-a', 'POST', `/bildirimler/kurallar/${String(k.id)}/sil`, { surum: 2 })).durum, 200);
     assert.equal((await istek('kisi-a', 'POST', `/bildirimler/kurallar/${String(k.id)}/sil`, { surum: 2 })).durum, 404);
+  });
+
+  test('KM-10 kuralın e-posta ve telefon kanalı yalnız kural alıcısına kuyruk yazar; kanal kapalıysa yazmaz', async () => {
+    const eski = { ...process.env };
+    const ecdh = createECDH('prime256v1');
+    ecdh.generateKeys();
+    Object.assign(process.env, {
+      TMIV2_POSTA_SUNUCUSU: '127.0.0.1:2525', TMIV2_POSTA_ALAN_ADI: 'ornek.local', TMIV2_POSTA_GONDEREN: 'mes@ornek.local', TMIV2_POSTA_GUVENLIK: 'yok',
+      TMIV2_PUSH_ACIK: '1', TMIV2_PUSH_VAPID_OZEL: ecdh.getPrivateKey().toString('base64url'), TMIV2_PUSH_KONU: 'mailto:yonetici@ornek.invalid',
+    });
+    try {
+      const kip = await istek('kisi-a', 'POST', '/ayarlar/bildirim.eposta-kipi/degistir', { deger: 'kurum-ici' });
+      assert.equal(kip.durum, 200, kip.metin);
+      await o().sahip.sorgu('DELETE FROM bildirim_eposta_kuyrugu');
+      await o().sahip.sorgu('DELETE FROM bildirim_push_kuyruk');
+      await o().sahip.sorgu("INSERT INTO bildirim_push_abonelik (kisi_id, uc_nokta) VALUES ($1, 'https://fcm.googleapis.com/fcm/send/kural-b') ON CONFLICT DO NOTHING", [b]);
+      await ekle({ kisiIdleri: [b] });
+      await gonder('M-1', 'k10a');
+      assert.deepEqual(await o().sahip.sorgu('SELECT kisi_id, baslik FROM bildirim_eposta_kuyrugu'), [], 'kanal kapalıyken e-posta yok');
+      assert.deepEqual(await o().sahip.sorgu('SELECT kisi_id FROM bildirim_push_kuyruk'), [], 'kanal kapalıyken telefon yok');
+      await o().sahip.sorgu('UPDATE bildirim_kurali SET eposta = true, telefon = true');
+      await gonder('M-1', 'k10b');
+      assert.deepEqual(await o().sahip.sorgu('SELECT kisi_id, baslik FROM bildirim_eposta_kuyrugu'), [{ kisi_id: b, baslik: 'M-1 durdu' }]);
+      assert.deepEqual((await o().sahip.sorgu<{ kisi_id: number }>('SELECT kisi_id FROM bildirim_push_kuyruk')).map((x) => x.kisi_id), [b]);
+    } finally {
+      for (const k of Object.keys(process.env)) if (!(k in eski)) delete process.env[k];
+      Object.assign(process.env, eski);
+    }
   });
 });

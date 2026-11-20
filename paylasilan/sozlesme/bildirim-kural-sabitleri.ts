@@ -35,6 +35,9 @@ export const KURAL_ALANLARI = {
   'ik.izin-onay-bekliyor': [{ ad: 'izin_turu', etiket: 'İzin türü', tip: 'metin' }, { ad: 'gun', etiket: 'Gün sayısı', tip: 'sayi' }],
 } as const satisfies Partial<Record<BildirimTuru, readonly KuralAlani[]>>;
 export type KuralliTur = keyof typeof KURAL_ALANLARI;
+// Olayı yayan modül alanları bununla verir: alan adı yanlış yazılırsa derleme kırılır (değer sessizce boş kalmaz).
+export type KuralAlanAdi<T extends KuralliTur> = (typeof KURAL_ALANLARI)[T][number]['ad'];
+export const olayAlanlari = <T extends KuralliTur>(_tur: T, degerler: { readonly [K in KuralAlanAdi<T>]: unknown }): Readonly<Record<string, unknown>> => degerler;
 export const KURALLI_TURLER = Object.keys(KURAL_ALANLARI) as [KuralliTur, ...KuralliTur[]];
 export const kuralliTurMu = (tur: string): tur is KuralliTur => Object.hasOwn(KURAL_ALANLARI, tur);
 export const kuralAlanlari = (tur: string): readonly KuralAlani[] => (kuralliTurMu(tur) ? KURAL_ALANLARI[tur] : []);

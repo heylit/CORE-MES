@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { KURAL_ALANLARI, type KuralKosulu } from '#paylasilan/sozlesme/bildirim-kural.ts';
+import { KURAL_ALANLARI, olayAlanlari, type KuralKosulu } from '#paylasilan/sozlesme/bildirim-kural.ts';
 import { BILDIRIM_TURLERI } from '#paylasilan/sozlesme/bildirim.ts';
 import { kalanGun, kosullarTutar, kuralAnahtari, kuralDegerleriniAyikla, kuralGecersizligi, kuralSablonuDoldur, tekilAnahtar } from './kurallar.ts';
 
@@ -78,5 +78,13 @@ describe('3478-3 kural motoru kuralları', () => {
     assert.equal(kalanGun('2026-11-19', simdi), -1);
     assert.equal(kalanGun(null, simdi), null);
     assert.equal(kalanGun('20.11.2026', simdi), null);
+  });
+
+  test('KR-9 olay alanı adı derleyicide denetlenir (yanlış ya da eksik ad derlenmez)', () => {
+    assert.deepEqual(olayAlanlari('istasyonlar.makine-durdu', { makine: 'M-1' }), { makine: 'M-1' });
+    // @ts-expect-error yanlış alan adı
+    olayAlanlari('istasyonlar.makine-durdu', { makina: 'M-1' });
+    // @ts-expect-error eksik alan
+    olayAlanlari('ik.izin-onay-bekliyor', { izin_turu: 'Yıllık izin' });
   });
 });

@@ -32,6 +32,7 @@ import {
 } from '../uretim-emirleri/disari.ts';
 import { operasyonTipleri } from '../istasyonlar/disari.ts';
 import { bildirimGonder, bildirimKapat, kalanGun, type KademeKaydi } from '../bildirim/disari.ts';
+import { olayAlanlari } from '#paylasilan/sozlesme/bildirim-kural-sabitleri.ts';
 import { resmiTatilGunleri } from '../ik/disari.ts';
 import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
@@ -1310,7 +1311,7 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
   if (yazilacak.durum === 'onayda' && eski.durum !== 'onayda') {
     await bildirimGonder(db, {
       tur: 'satin-alma.talep-onay-bekliyor', baslik: `Onay bekleyen talep: ${eski.no}`, metin: yazilacak.baslik, yol: `/satin-alma/onaylar?talep=${encodeURIComponent(id)}`, kaynakKimlik: id, haric: k.id,
-      alanlar: { oncelik: yazilacak.oncelik, ihtiyaca_kalan_gun: kalanGun(yazilacak.ihtiyacTarihi, Date.now()) },
+      alanlar: olayAlanlari('satin-alma.talep-onay-bekliyor', { oncelik: yazilacak.oncelik, ihtiyaca_kalan_gun: kalanGun(yazilacak.ihtiyacTarihi, Date.now()) }),
     });
   }
   const guncellenecek = logoGuncellenecekSiparisler(eski, yazilacak);

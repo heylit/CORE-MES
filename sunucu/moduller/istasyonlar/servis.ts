@@ -12,6 +12,7 @@ import type {
 import { TESIS_SABLONU } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
+import { olayAlanlari } from '#paylasilan/sozlesme/bildirim-kural-sabitleri.ts';
 import { kisiAdlari, kisiBayrakliMi, kisileriListele, kisiVarMi } from '../kisiler/disari.ts';
 import type { AtamaTuru } from './kurallar.ts';
 import {
@@ -682,7 +683,7 @@ export const makineDurumlari = async (db: Db): Promise<MakineDurumu[]> => degist
 const arizaBildir = (db: Db, kullanici: Kullanici, makine: { id: number; kod: string }, aciklama: string | null): Promise<number> =>
   bildirimGonder(db, {
     tur: 'istasyonlar.makine-durdu', baslik: `Makine durdu: ${makine.kod}`, metin: aciklama, yol: '/istasyonlar/makineler', kaynakKimlik: String(makine.id), haric: kullanici.id,
-    alanlar: { makine: makine.kod },
+    alanlar: olayAlanlari('istasyonlar.makine-durdu', { makine: makine.kod }),
   });
 
 // IS-05: durum değişikliği kişi ve zamanla yazılır.

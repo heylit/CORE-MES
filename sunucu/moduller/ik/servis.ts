@@ -18,6 +18,7 @@ import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { tesisGunBasi, tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { bildirimGonder, bildirimKapat } from '../bildirim/disari.ts';
+import { olayAlanlari } from '#paylasilan/sozlesme/bildirim-kural-sabitleri.ts';
 import { aktifIstasyonlar, isMerkezleri, istasyonAtamasiAc, istasyonKisileri, kisininIzinliIsMerkezleri } from '../istasyonlar/disari.ts';
 import { etkinPersonelKartlari, kisininPersonelKarti as nizamiyePersonelKarti, personelKartiniKaldir, personelKartiVer } from '../nizamiye/disari.ts';
 import { ikHesabiAc, ikKisisiAc, ikRolSecenekleri, kisiAdlari, kisiKullaniciAdi, kisiSecenekleri, ozlukBaginiKaldir, ozluguIkdenYaz } from '../kisiler/disari.ts';
@@ -370,7 +371,7 @@ async function yaz(db: Db, kullanici: Kullanici, g: YazGirdisi, d: Durum): Promi
   if (g.tur === 'leave') {
     const haber = izinOnayBildirimi(onceki, kayit.govde, adHaritasi(d).get(String(kayit.govde['empId'])) ?? '');
     if (haber) await bildirimGonder(db, { tur: 'ik.izin-onay-bekliyor', ...haber, yol: `/ik-islemlerim/onaylar?talep=${encodeURIComponent(g.kimlik)}`, kaynakKimlik: g.kimlik, haric: kullanici.id,
-      alanlar: { izin_turu: kayit.govde['tur'], gun: kayit.govde['gun'] } });
+      alanlar: olayAlanlari('ik.izin-onay-bekliyor', { izin_turu: kayit.govde['tur'], gun: kayit.govde['gun'] }) });
     if (izinOnayKapanirMi(onceki, kayit.govde)) await bildirimKapat(db, { tur: 'ik.izin-onay-bekliyor', kaynakKimlik: g.kimlik });
     const karar = izinKarari(onceki, kayit.govde);
     const sahibi = d.harita.get(String(kayit.govde['empId']))?.govde['kisiId'];
