@@ -3,6 +3,7 @@ import {
   KADEME_ADLARI, KADEME_KAYNAK_ANAHTARLARI, kademeTuru, kaynakKademeleri, type KademeBirimi, type KademeSayaci,
 } from '#paylasilan/sozlesme/kademe-sabitleri.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
+import { kuralAlanlari, type KuralDegerleri, type KuralKosulu } from '#paylasilan/sozlesme/bildirim-kural.ts';
 import {
   BILDIRIM_BASLIK_EN_COK, BILDIRIM_METIN_EN_COK, BILDIRIM_TURLERI, type BildirimOnemi, type BildirimTuru, type BildirimTuruTanimi, type YayinTuru,
   type BildirimSinifi,
@@ -476,4 +477,90 @@ export function kademeAyarHatasi(
   if (sayac === 'bekleme' && g.acik && g.k3Gun === null) return { mesaj: 'Gecikti için bekleme günü gerekir.', alan: 'k3Gun' };
   if (g.k4Gun !== null && g.k5Gun !== null && g.k5Gun <= g.k4Gun) return { mesaj: 'Devret, Yöneticide kademesinden sonra gelmelidir.', alan: 'k5Gun' };
   return null;
+}
+
+// --- 3478-3 a: kural motoru ---------------------------------------------------------------------------------------------
+
+// Şablonda {ad} yer tutucuları: olayın para olmayan alanları ve olayın kendi başlığı ({olay}).
+const YER_TUTUCU = /\{([a-z_]+)\}/g;
+export const sablonYerTutuculari = (metin: string): string[] => [...metin.matchAll(YER_TUTUCU)].map((m) => m[1] ?? '');
+
+export function kuralSablonuDoldur(metin: string, degerler: KuralDegerleri, olay: string): string {
+  return metin.replace(YER_TUTUCU, (_, ad: string) => {
+    if (ad === 'olay') return olay;
+    const d = degerler[ad];
+    return d === null || d === undefined ? '' : String(d);
+  });
+}
+
+// Kaydedilen kuralın olaya göre geçerliliği: alan kalktıysa ya da türü değiştiyse kural çalışmaz, ekran nedenini gösterir.
+export function kuralGecersizligi(tur: string, kosullar: readonly KuralKosulu[], sablon: readonly string[]): string | null {
+  const alanlar = new Map(kuralAlanlari(tur).map((a) => [a.ad, a]));
+  for (const k of kosullar) {
+    const a = alanlar.get(k.alan);
+    if (a === undefined) return `"${k.alan}" alanı bu olayda yok.`;
+    const sayisal = k.karsilastirma === '>' || k.karsilastirma === '>=' || k.karsilastirma === '<' || k.karsilastirma === '<=';
+    if (sayisal && a.tip !== 'sayi') return `${a.etiket} sayı değil; büyük ya da küçük karşılaştırılamaz.`;
+    if (k.karsilastirma === 'icinde' && a.tip === 'sayi') return `${a.etiket} sayıdır; "şunlardan biri" yerine eşit ya da büyük, küçük kullanılır.`;
+    if (k.karsilastirma === 'icinde' ? !Array.isArray(k.deger) : Array.isArray(k.deger)) return `${a.etiket}: "şunlardan biri" liste, öteki karşılaştırmalar tek değer ister.`;
+    if (a.tip === 'sayi' && !Array.isArray(k.deger) && typeof k.deger !== 'number') return `${a.etiket} için sayı yazılmalı.`;
+    if (a.tip !== 'sayi' && typeof k.deger === 'number') return `${a.etiket} için metin yazılmalı.`;
+    if (a.tip === 'secim') {
+      const izinli = new Set((a.secenekler ?? []).map((s) => s.deger));
+      if ((Array.isArray(k.deger) ? k.deger : [k.deger]).some((d) => !izinli.has(String(d)))) return `${a.etiket}: seçeneklerden biri seçilmeli.`;
+    }
+  }
+  for (const metin of sablon) {
+    for (const ad of sablonYerTutuculari(metin)) {
+      if (ad === 'olay') continue;
+      const a = alanlar.get(ad);
+      if (a === undefined) return `Şablonda bilinmeyen alan: {${ad}}.`;
+      if (a.para === true) return `${a.etiket} para tutarıdır; şablona yazılamaz, yalnız koşulda kullanılır.`;
+    }
+  }
+  return null;
+}
+
+// Koşullar VE ile bağlanır; değeri olmayan alana bakan koşul tutmaz. Metin karşılaştırması büyük-küçük harf ve baştaki,
+// sondaki boşluğu saymaz.
+export function kosullarTutar(kosullar: readonly KuralKosulu[], degerler: KuralDegerleri): boolean {
+  const duz = (x: string | number) => (typeof x === 'number' ? x : x.trim().toLocaleLowerCase('tr'));
+  return kosullar.every((k) => {
+    const d = degerler[k.alan];
+    if (d === null || d === undefined) return false;
+    if (k.karsilastirma === 'icinde') return Array.isArray(k.deger) && k.deger.some((x) => duz(x) === duz(d));
+    if (Array.isArray(k.deger)) return false;
+    const a = duz(d);
+    const b = duz(k.deger);
+    switch (k.karsilastirma) {
+      case '=': return a === b;
+      case '!=': return a !== b;
+      case '>': return typeof a === 'number' && typeof b === 'number' && a > b;
+      case '>=': return typeof a === 'number' && typeof b === 'number' && a >= b;
+      case '<': return typeof a === 'number' && typeof b === 'number' && a < b;
+      case '<=': return typeof a === 'number' && typeof b === 'number' && a <= b;
+    }
+  });
+}
+
+// Olayı yayan modül yalnız kendi alanlarını verir; tanımsız ad ve türü tutmayan değer atılır (yanlış veri kuralı tetiklemesin).
+export function kuralDegerleriniAyikla(tur: string, ham: Readonly<Record<string, unknown>> | undefined): Record<string, string | number | null> {
+  const sonuc: Record<string, string | number | null> = {};
+  for (const a of kuralAlanlari(tur)) {
+    const d = ham?.[a.ad];
+    if (d === null || d === undefined) sonuc[a.ad] = null;
+    else if (a.tip === 'sayi') sonuc[a.ad] = typeof d === 'number' && Number.isFinite(d) ? d : typeof d === 'string' && d.trim() !== '' && Number.isFinite(Number(d)) ? Number(d) : null;
+    else sonuc[a.ad] = typeof d === 'string' ? d.slice(0, 200) : typeof d === 'number' ? String(d) : null;
+  }
+  return sonuc;
+}
+
+// Kural satırının tekil anahtarı ana bildirimin anahtarına bağlıdır: kaynak kapanınca (bildirimKapat) kural satırı da kapanır.
+export const kuralAnahtari = (tur: string, kaynakKimlik: string | null | undefined, kuralId: number): string =>
+  `${tur}:${kaynakKimlik ?? ''}#kural-${String(kuralId)}`;
+
+// Takvim gününe kalan gün (bugün 0, dün -1); tarih yoksa null.
+export function kalanGun(tarih: string | null | undefined, simdi: number): number | null {
+  if (tarih === null || tarih === undefined || !/^\d{4}-\d{2}-\d{2}$/.test(tarih)) return null;
+  return Math.round((Date.parse(`${tarih}T00:00:00Z`) - Date.parse(`${tesisGunu(simdi)}T00:00:00Z`)) / 86_400_000);
 }

@@ -23,6 +23,7 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
 import type { z } from 'zod';
 import { bildirimGonder, bildirimKapat } from '../bildirim/disari.ts';
+import { olayAlanlari } from '#paylasilan/sozlesme/bildirim-kural-sabitleri.ts';
 import { kisiAdlari, kisiBayrakliMi } from '../kisiler/disari.ts';
 import {
   katalogAnahtarCakismalari, katalogAnahtarZorunluMu, katalogOnayEksigi, katalogCakismaAlanlari, katalogKuralAnahtari, katalogKurallariGecerliMi, katalogYeniAnahtar, katalogGecisiDenetle, katalogGecmisiDenetle, katalogGecmisiniBas, katalogIcerigiDegistiMi, katalogSilinirMi,
@@ -767,6 +768,7 @@ async function kartOnayiBildir(db: Db, g: {
   if (g.gonderildi) {
     await bildirimGonder(db, {
       tur: 'malzemeler.kart-onay-bekliyor', baslik: `Onay bekleyen malzeme kartı: ${g.stokKodu}`, metin, yol: `/malzemeler?kart=${encodeURIComponent(g.kimlik)}`, kaynakKimlik: g.kimlik, haric: g.kisiId,
+      alanlar: olayAlanlari('malzemeler.kart-onay-bekliyor', { stok_kodu: g.stokKodu }),
     });
   }
   // Geri çekme (ret damgasında `geri`) ret değildir; gönderen kendi kartını taslağa aldıysa `haric` onu düşürür.

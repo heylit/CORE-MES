@@ -42,6 +42,7 @@ const IS_ADLARI: Readonly<Record<string, string>> = {
   'smartes-is-emri-gonderimi': 'SmartES: iş emri gönderimi',
   'smartes-tanim-gonderimi': 'SmartES: tanım gönderimi',
   'stok-yolda-suresi': 'Stok: süresi dolan yoldaki teslimler',
+  'bildirim-olay-izi-temizle': 'Bildirim: kural ön izleme izini temizleme',
   'bildirim-yayin-dagit': 'Bildirim: ileri tarihli bildirimleri dağıtma',
   'bildirim-push-gonder': 'Bildirim: anlık bildirim gönderimi',
   'denetim-okuma-saklama': 'Denetim: süresi dolan okuma kayıtlarını silme',

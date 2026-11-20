@@ -23,3 +23,5 @@ export { isGunuFarki } from './kurallar.ts';
 // 3478: olaylar varsayılan kapalıdır. Modül testleri 3478'den önceki gibi açık olaylarla çalışmak için bunu çağırır ("Önceki hale
 // dön" ile aynı yazım); uygulama kodu çağırmaz.
 export { butunOlaylariVeEskiKademeleriAc } from './olay-anahtari.ts';
+// 3478-3: kural alanı "... kalan gün" olayı yayan modülde bu kuralla sayılır (tesis günü; bugün 0, dün -1).
+export { kalanGun } from './kurallar.ts';

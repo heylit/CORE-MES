@@ -19,6 +19,7 @@ import { siparisListesiSorgusu } from '#paylasilan/sozlesme/siparisler.ts';
 import { firmaKoduSecimi } from '../ayarlar/disari.ts';
 import { denetimSatiri, dosyaTutamagi } from '../dosya/disari.ts';
 import { bildirimGonder, bildirimKapat, enYuksekKademeler } from '../bildirim/disari.ts';
+import { olayAlanlari } from '#paylasilan/sozlesme/bildirim-kural-sabitleri.ts';
 import { kisiAdlari, kisiSecenekleri as kisiListesi, kisininRolleri, rolSecenekleri as rolListesi, rollerdekiKisiler } from '../kisiler/disari.ts';
 import { firmaAdlari, firmaAra, firmaVarMi } from '../musteri-tedarikci/disari.ts';
 import { siparisAyrintisi, siparisKilitliAyrinti, siparisListesi } from '../siparisler/disari.ts';
@@ -753,7 +754,7 @@ export async function atamaBildir(
   const proje = await sorgular.projeGetir(db, projeId);
   await bildirimGonder(db, {
     tur: 'projeler.gorev-atandi', baslik: 'Sana proje görevi var', metin: proje?.kod ?? null, yol: '/proje-gorevlerim',
-    kaynakKimlik: atamaKaynagi(gorevId === null ? { projeId } : { gorevId }), kisiler: alicilar, yalnizKisiler: true, haric,
+    kaynakKimlik: atamaKaynagi(gorevId === null ? { projeId } : { gorevId }), kisiler: alicilar, yalnizKisiler: true, haric, alanlar: olayAlanlari('projeler.gorev-atandi', { proje: proje?.kod ?? null }),
   });
 }
 export const atamaKapat = (db: Db, gorevId: number): Promise<number> => bildirimKapat(db, { tur: 'projeler.gorev-atandi', kaynakKimlik: atamaKaynagi({ gorevId }) });
@@ -768,7 +769,7 @@ async function kontrolBildir(db: Db, g: GorevSatiri, bitiren: number): Promise<v
   const proje = await sorgular.projeGetir(db, g.proje_id);
   await bildirimGonder(db, {
     tur: 'projeler.gorev-kontrol-bekliyor', baslik: 'Proje görevi kontrolünü bekliyor', metin: proje?.kod ?? null, yol: '/proje-gorevlerim',
-    kaynakKimlik: String(g.id), kisiler: alicilar, yalnizKisiler: true, haric: bitiren,
+    kaynakKimlik: String(g.id), kisiler: alicilar, yalnizKisiler: true, haric: bitiren, alanlar: olayAlanlari('projeler.gorev-kontrol-bekliyor', { proje: proje?.kod ?? null }),
   });
 }
 

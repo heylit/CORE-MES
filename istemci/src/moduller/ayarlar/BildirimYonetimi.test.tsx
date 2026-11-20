@@ -8,6 +8,7 @@ import type {
   CagriYonlendirmeDegistirGovdesi,
 } from '#paylasilan/sozlesme/bildirim.ts';
 import type { KademeAyarlariCevabi, KademeAyarSatiri } from '#paylasilan/sozlesme/bildirim-kademe.ts';
+import type { BildirimKurallariCevabi } from '#paylasilan/sozlesme/bildirim-kural.ts';
 import type { EpostaSablonlariCevabi, EpostaTetikleyicileriCevabi } from '#paylasilan/sozlesme/bildirim-eposta.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { anahtarlar as ortakAnahtarlar } from '../../ortak/veri/anahtarlar.ts';
@@ -154,6 +155,14 @@ const KAYNAK: KademeAyarSatiri = {
   varsayilan: true, surum: 0, degistiren: null, degisti: null, takipte: 3, gecikti: 1,
 };
 
+const KURALLAR: BildirimKurallariCevabi = {
+  kurallar: [{
+    id: 4, tur: 'istasyonlar.makine-durdu', ad: 'M-1 bakıma', acik: true, kosullar: [{ alan: 'makine', karsilastirma: '=', deger: 'M-1' }],
+    rolIdleri: [1], kisiIdleri: [], ortada: false, eposta: true, telefon: false, sablonBaslik: '{makine} durdu', sablonMetin: null,
+    surum: 1, degisti: '2026-11-20T09:00:00Z', gecersiz: null,
+  }],
+};
+
 function matrisSunucusu(hataliYol?: string, secenek: { acik?: boolean; kademe?: boolean } = {}) {
   const yazilanlar: { yol: string; govde: unknown }[] = [];
   const okunanlar: string[] = [];
@@ -179,6 +188,8 @@ function matrisSunucusu(hataliYol?: string, secenek: { acik?: boolean; kademe?: 
         for (const x of kademe.kaynaklar) if (x.kaynak === kaynak[1]) Object.assign(x, { acik: g.acik ?? false, surum: x.surum + 1 });
         return json(200, kademe);
       }
+      if (yol === '/bildirimler/kurallar/on-izleme') return json(200, { gun: 7, olay: 3, uyan: 1, kisi: 1, yetkisiz: 0 });
+      if (yol === '/bildirimler/kurallar/ekle') return json(200, KURALLAR);
       const alici = /^\/bildirimler\/alicilar\/([^/]+)\/degistir$/.exec(yol);
       const satir = alici ? alicilar.satirlar.find((a) => a.tur === alici[1]) : undefined;
       if (satir) {
@@ -195,6 +206,7 @@ function matrisSunucusu(hataliYol?: string, secenek: { acik?: boolean; kademe?: 
     if (yol === '/bildirimler/eposta/sablonlar') return json(200, SABLONLAR);
     if (yol === '/bildirim-kademe/kaynaklar') return json(200, kademe);
     if (yol === '/bildirimler/olaylar') return json(200, olaylar);
+    if (yol === '/bildirimler/kurallar') return json(200, KURALLAR);
     if (yol === '/bildirimler/cagri-yonlendirme') return json(200, BASLANGIC);
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
   }));
@@ -478,5 +490,56 @@ describe('bildirim ve uyarı yönetimi: olaylar (3435-3, 3456)', () => {
     if (!madde) throw new Error('madde yok');
     for (const islem of ['ayarlar.yaz', 'bildirim.eposta-yonet', 'bildirim.kademe-yonet']) expect(maddeGorunurMu(madde, [islem]), islem).toBe(true);
     expect(maddeGorunurMu(madde, ['sayfa.bildirim-merkezi'])).toBe(false);
+  });
+});
+
+describe('3478-3 olay kuralları', () => {
+  it('kurallı olayın satırında kural sayısı, panelde kural özeti görünür', async () => {
+    matrisSunucusu();
+    ac();
+    const tablo = await screen.findByRole('table', { name: 'Bildirim olayları' });
+    expect(within(tablo).getByText('Makine durdu').closest('tr')?.textContent).toMatch(/1 kural/);
+    expect(within(tablo).getByText('1 kural').closest('[title]')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Makine durdu: ayrıntı' }));
+    const liste = await screen.findByRole('list', { name: 'Kurallar' });
+    expect(within(liste).getByText('M-1 bakıma')).toBeTruthy();
+    expect(within(liste).getByText('Makine kodu eşit M-1')).toBeTruthy();
+    expect(within(liste).getByRole('switch', { name: 'M-1 bakıma: Açık' }).getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('olay kapalıyken kural rozeti soluk ve nedenini söyler', async () => {
+    matrisSunucusu(undefined, { acik: false });
+    ac();
+    const tablo = await screen.findByRole('table', { name: 'Bildirim olayları' });
+    expect(within(tablo).getByText('1 kural').closest('[title]')?.getAttribute('title')).toBe('Olay kapalı; kural çalışmaz.');
+  });
+
+  it('kural ön izlenmeden kaydedilmez; form değişince ön izleme yenilenmeli', async () => {
+    const { yazilanlar } = matrisSunucusu();
+    ac();
+    await screen.findByRole('table', { name: 'Bildirim olayları' });
+    fireEvent.click(screen.getByRole('button', { name: 'Makine durdu: ayrıntı' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Kural ekle' }));
+    expect(screen.queryByRole('button', { name: 'Kaydet' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Kuraldan vazgeç' })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Kural adı'), { target: { value: 'M-2 durunca' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Koşul ekle' }));
+    fireEvent.change(screen.getByLabelText('Koşul 1: değer'), { target: { value: 'M-2' } });
+    fireEvent.change(screen.getByLabelText('Kurala kişi ekle'), { target: { value: '7' } });
+    const kaydet = screen.getByRole('button', { name: 'Kuralı kaydet' }) as HTMLButtonElement;
+    expect(kaydet.disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Ön izle' }));
+    expect(await screen.findByText(/Son 7 günde bu olay 3 kez oldu; 1 tanesi koşula uydu/)).toBeTruthy();
+    expect(kaydet.disabled).toBe(false);
+    fireEvent.change(screen.getByLabelText('Koşul 1: değer'), { target: { value: 'M-3' } });
+    expect(kaydet.disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Ön izle' }));
+    await waitFor(() => { expect(kaydet.disabled).toBe(false); });
+    fireEvent.click(kaydet);
+    await waitFor(() => { expect(yazilanlar.some((y) => y.yol === '/bildirimler/kurallar/ekle')).toBe(true); });
+    expect(yazilanlar.find((y) => y.yol === '/bildirimler/kurallar/ekle')?.govde).toEqual({
+      tur: 'istasyonlar.makine-durdu', ad: 'M-2 durunca', acik: true, kosullar: [{ alan: 'makine', karsilastirma: '=', deger: 'M-3' }],
+      rolIdleri: [], kisiIdleri: [7], ortada: false, eposta: false, telefon: false, sablonBaslik: '{olay}', sablonMetin: null,
+    });
   });
 });

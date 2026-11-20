@@ -8,13 +8,15 @@ import type { CagriEkibi } from '#paylasilan/sozlesme/durus-nedenleri.ts';
 import {
   ALICI_AYARLI_TURLER, BILDIRIM_TUR_ANAHTARLARI, BILDIRIM_TURLERI, CAGRI_EKIP_ADLARI, type Bildirim, type BildirimAliciDegistirGovdesi, type BildirimAlicilariCevabi, type BildirimGosterimDegistirGovdesi, type BildirimGosterimleriCevabi, type CagriEkiplerimCevabi, type CagriYonlendirmeCevabi, type CagriYonlendirmeDegistirGovdesi, type BildirimListeDurumu, type BildirimSayacCevabi,
   type BildirimTuru, type BildirimTuruTanimi, type TumunuOkunduCevabi, type YayinSimgesi, type YayinTuru, anahtarliTurMu, turSinifi,
-  type BildirimPushAbonelikGovdesi, type BildirimPushDurumuCevabi, type BildirimPushTurDegistirGovdesi, type BildirimPushTurleriCevabi, turPushVarsayilani,
+  type BildirimPushAbonelikGovdesi,  type BildirimPushDurumuCevabi, type BildirimPushTurDegistirGovdesi, type BildirimPushTurleriCevabi, turPushVarsayilani,
 } from '#paylasilan/sozlesme/bildirim.ts';
+import { kuralliTurMu } from '#paylasilan/sozlesme/bildirim-kural.ts';
 import { kisiAdlari, kisiSecenekleri, kisilerinIslemleri, rolSecenekleri, rollerdekiKisiler } from '../kisiler/disari.ts';
 import {
-  ONAY_ILETILERI, alicilariSec, kaynakModulu, metniHazirla, olayYazimi, olmayanKimlikler, otomatikGosterim, tekilAnahtar, varsayilanGosterim, varsayilanMi, yolTureUyar,
+  ONAY_ILETILERI, alicilariSec, kaynakModulu, kuralDegerleriniAyikla, metniHazirla, olayYazimi, olmayanKimlikler, otomatikGosterim, tekilAnahtar, varsayilanGosterim, varsayilanMi, yolTureUyar,
 } from './kurallar.ts';
-import { epostaKuyrugaAl, type EpostaEki } from './eposta.ts';
+import { epostaKuyrugaAl, kuralEpostasiKuyrugaAl, type EpostaEki } from './eposta.ts';
+import { kurallariUygula } from './kural.ts';
 import { izinliUcNoktaMi, ortamPushAyari } from './push.ts';
 import * as s from './sorgular.ts';
 import * as so from './sorgular/olay/sorgular.ts';
@@ -37,6 +39,8 @@ interface BildirimOlayiTemeli {
   eposta?: EpostaEki;
   // 3405: kademeli uyarı e-postayı kaynağın ayarıyla verir; e-posta yok bu olayda e-posta açmaz.
   epostaYok?: boolean;
+  // 3478-3: kural koşulunun baktığı olay alanları (KURAL_ALANLARI[tur]); listede olmayan ad ve tipi tutmayan değer atılır.
+  alanlar?: Readonly<Record<string, unknown>>;
 }
 // 2453: yalnizKisiler true iken alıcı yalnız `kisiler` içinden türü alanlardır (liste yalnız daraltır); kişi listesi zorunludur.
 export type BildirimOlayi =
@@ -77,6 +81,17 @@ export async function bildirimGonder(db: Db, olay: BildirimOlayi): Promise<numbe
   if (yazim !== 'tam') return alicilar.length;
   await epostaKuyrugaAl(db, { tur: olay.tur, baslik, yol: olay.yol ?? null, eposta: olay.eposta, epostaYok: olay.epostaYok }, yazilan, islemler);
   if (alicilar.length > 0 && await pushTuruAcik(db, olay.tur)) await s.pushKuyrugaIsaretle(db, alicilar);
+  if (kuralliTurMu(olay.tur)) {
+    const kural = await kurallariUygula(db, {
+      tur: olay.tur, baslik, yol: olay.yol ?? null, kaynakKimlik: olay.kaynakKimlik, haric: olay.haric,
+      degerler: kuralDegerleriniAyikla(olay.tur, olay.alanlar),
+    }, new Set(alicilar), islemler);
+    for (const k of kural.filter((x) => x.eposta)) {
+      await kuralEpostasiKuyrugaAl(db, { tur: olay.tur, baslik: k.baslik, yol: olay.yol ?? null, eposta: olay.eposta }, [k], islemler);
+    }
+    const telefon = kural.filter((x) => x.telefon && x.yeni).map((x) => x.kisiId);
+    if (telefon.length > 0 && ortamPushAyari() !== null) await s.pushKuyrugaIsaretle(db, telefon);
+  }
   return alicilar.length;
 }
 
