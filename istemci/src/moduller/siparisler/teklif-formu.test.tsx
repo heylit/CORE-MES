@@ -32,12 +32,13 @@ const FORM_VERISI = {
 const SURUM = {
   surumNo: 1, iskontoOrani: '10.00', teslimGun: 14, terminTarihi: null, odemeKosulu: '30 gün', gecerlilik: '2026-11-01', aciklama: null, olusturma: '2026-10-02T09:00:00+03:00',
   fiyatlar: [{ satirId: 11, birimFiyat: '10.0000', iskontoluFiyat: '9.0000', tutar: '360.00' }], toplam: '360.00', iskontoOnaylayan: null, iskontoOnayAni: null,
+  kdvOrani: null, kdvTutari: null, genelToplam: null,
 };
 const TEKLIF = {
   id: 21, no: 'TK-2026-0021', durum: 'verildi', firmaId: 7, firmaAd: 'Deneme Musteri A', firmaKodu: null, baslik: 'Deneme braket ihtiyacı', paraBirimi: 'TRY',
   istenenTarih: null, aciklama: null, not: null, kabulSurumu: null, siparisId: null, sonSurumNo: 1, olusturma: '2026-10-01T09:00:00+03:00', guncelleme: null, surum: 4, olusturanId: 3, arsiv: null,
   satirlar: [{ id: 11, sira: 1, malzemeNo: 31, malzemeKodu: 'DNM-001', malzemeAdi: 'Deneme Mil', aciklamalar: [], tanim: 'Deneme Mil 20mm', birim: 'adet', miktar: '40.000', yerlilikOrani: '62.50' }],
-  surumler: [SURUM],
+  surumler: [SURUM], kdvSecenekleri: { oranlar: ['0.00', '1.00', '10.00', '20.00'], genel: '20.00' },
 } satisfies TeklifAyrintiCevabi;
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
@@ -193,6 +194,40 @@ describe('Teklif formu penceresi', () => {
     fireEvent.change(within(pencere).getByLabelText('KDV oranı (%)'), { target: { value: '150' } });
     expect(within(pencere).getByText(/KDV oranı 0 ile 100 arasında/)).toBeTruthy();
     expect((within(pencere).getByRole('button', { name: 'Yazdır / PDF' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('3461: sürümün KDV oranıyla açılır; pencerede değiştirilen oran yalnız sorguya gider ve sürümden ayrıldığı uyarılır', async () => {
+    const istekler = sunucuKur(YONETICI);
+    const surum = { ...SURUM, kdvOrani: '10.00', kdvTutari: '36.00', genelToplam: '396.00' };
+    sar(<TeklifFormuPenceresi acik kapat={() => undefined} teklif={{ ...TEKLIF, surumler: [surum] }} surum={surum} />);
+    const pencere = await screen.findByRole('dialog', { name: /Teklif formu · TK-2026-0021/ });
+    expect((within(pencere).getByLabelText('KDV oranı (%)') as HTMLInputElement).value).toBe('10');
+    expect(within(pencere).getByText('Teklifte %10; burada değiştirmek teklifi değiştirmez.')).toBeTruthy();
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/siparisler/teklifler/21/form?surumNo=1&kdvOrani=10')).toBe(true));
+    expect(istekler.some((i) => i.yol.includes('kdvOrani=20'))).toBe(false);
+    expect(within(pencere).queryByRole('status')).toBeNull();
+    fireEvent.change(within(pencere).getByLabelText('KDV oranı (%)'), { target: { value: '20' } });
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/siparisler/teklifler/21/form?surumNo=1&kdvOrani=20')).toBe(true));
+    // Müşteriye giden form sürümden ayrılırsa pencere uyarır.
+    expect(within(pencere).getByRole('status').textContent).toBe('Bu formda %20 yazacak; teklif sürümünde %10.');
+    expect(istekler.filter((i) => i.yontem !== 'GET')).toHaveLength(0);
+  });
+
+  it('3461: pencere açıkken gösterilen sürüm değişirse oran yeni sürümün oranına döner', async () => {
+    sunucuKur(YONETICI);
+    const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const s1 = { ...SURUM, kdvOrani: '10.00', kdvTutari: '36.00', genelToplam: '396.00' };
+    const s2 = { ...SURUM, surumNo: 2, kdvOrani: '20.00', kdvTutari: '72.00', genelToplam: '432.00' };
+    const ciz = (s: typeof s1) => (
+      <QueryClientProvider client={istemci}><BildirimSaglayici>
+        <TeklifFormuPenceresi acik kapat={() => undefined} teklif={{ ...TEKLIF, surumler: [s1, s2] }} surum={s} />
+      </BildirimSaglayici></QueryClientProvider>
+    );
+    const { rerender } = render(ciz(s1));
+    const pencere = await screen.findByRole('dialog', { name: /Teklif formu · TK-2026-0021/ });
+    expect((within(pencere).getByLabelText('KDV oranı (%)') as HTMLInputElement).value).toBe('10');
+    rerender(ciz(s2));
+    await waitFor(() => expect((within(screen.getByRole('dialog', { name: /Teklif formu · TK-2026-0021/ })).getByLabelText('KDV oranı (%)') as HTMLInputElement).value).toBe('20'));
   });
 
   it('ilgili kişi hitaba girer, kaydedilmez; şablon değişince dil değişir; Yazdır basım penceresini açar', async () => {

@@ -9,7 +9,7 @@ import { useForm, useHataOdagi, type AlanHatalari } from '../../ortak/veri/form.
 import { AdetTablosu } from './AdetTablosu.tsx';
 import { anahtarlar } from './anahtarlar.ts';
 import {
-  BELIRSIZ_SAYI, ISKONTO_ONAY_ESIGI, belirsizSayi, bosYap, fiyatMetni, miktarMetni, paraMetni, sayiGirdisi, tarihMetni, zamanMetni,
+  BELIRSIZ_SAYI, ISKONTO_ONAY_ESIGI, belirsizSayi, bosYap, fiyatMetni, kdvDegeri, kdvKutuMetni, kdvSecimleri, miktarMetni, paraMetni, sayiGirdisi, tarihMetni, zamanMetni,
 } from './gorunum.ts';
 import {
   ODEME_TURLERI, ODEME_YONTEMLERI, VADE_BIRIMLERI, odemeHatasi, odemeMetni, odemeSecimi, vadeli, type OdemeSecimi, type OdemeTuru, type OdemeYontemi,
@@ -28,6 +28,8 @@ interface Degerler {
   // Talep satırlarıyla aynı sırada; her satıra bir birim fiyat.
   fiyatlar: string[];
   iskontoOrani: string;
+  // 3461: sürümün KDV oranı; finansın geçerli oranlarından seçilir, oran tanımlı değilse elle yazılır.
+  kdvOrani: string;
   teslimGun: string;
   terminTarihi: string;
   // Ödeme koşulu seçimle kurulur (odeme-kosulu.ts); düz metin alanlar form.alan'a bağlanır, gönderimde metne çevrilir.
@@ -83,6 +85,7 @@ function ilkDegerler(t: TeklifAyrintiCevabi): Degerler {
   return {
     fiyatlar: t.satirlar.map((s) => { const f = fiyat.get(s.id); return f === undefined || f === null ? '' : miktarMetni(f).replace(/\./g, ''); }),
     iskontoOrani: son?.iskontoOrani ? miktarMetni(son.iskontoOrani) : '0',
+    kdvOrani: (t.kdvSecenekleri.oranlar.length > 0 ? kdvDegeri : kdvKutuMetni)(son?.kdvOrani ?? t.kdvSecenekleri.genel),
     // 3326: önceki sürüm yoksa termin talepteki istenen tarihtir; süre ondan hesaplanır.
     ...teslimVeTermin(son?.teslimGun ?? null, son?.terminTarihi ?? t.istenenTarih),
     ...odemeDegerleri(son?.odemeKosulu ?? null),
@@ -124,6 +127,8 @@ function dogrula(planli: boolean, kademe: FiyatKademesi, denenir: boolean, karGo
     if (denenir && d.yerlesim === 'baslat' && d.baslangic === '') hata['baslangic'] = BASLAT_TARIHI_ZORUNLU;
     if (kademe === 3) return hata;
     if (belirsizSayi(d.iskontoOrani)) hata['iskontoOrani'] = BELIRSIZ_SAYI;
+    if (d.kdvOrani.trim() === '') hata['kdvOrani'] = 'KDV oranı zorunlu.';
+    else if (belirsizSayi(d.kdvOrani)) hata['kdvOrani'] = BELIRSIZ_SAYI;
     const gun = d.teslimGun.trim();
     if (gun !== '' && !/^\d+$/.test(gun)) hata['teslimGun'] = 'Teslim süresi gün olarak tam sayı yazılır.';
     const odeme = odemeHatasi(odemeSecimiOku(d));
@@ -176,6 +181,7 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
         surum: teklif.surum,
         fiyatlar: teklif.satirlar.map((s, i) => ({ satirId: s.id, birimFiyat: sayiGirdisi(d.fiyatlar[i] ?? '') })),
         iskontoOrani: sayiGirdisi(d.iskontoOrani) || '0',
+        kdvOrani: sayiGirdisi(d.kdvOrani),
         // Planlı teklifte süre plan termininden hesaplanır (3326); sunucu termini plandan yazar.
         teslimGun: planli ? teslimGunu(planTerminRef.current, bugun()) : d.teslimGun.trim() === '' ? null : Number(d.teslimGun),
         odemeKosulu: odemeMetni(odemeSecimiOku(d)),
@@ -275,6 +281,8 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
   const sonAlis = useLogoSonAlislar(karsiz.flatMap((k) => (k.hammaddeler ?? []).map((h) => h.kod)), maliyetGorur && !gizli);
   const iskonto = Number(sayiGirdisi(d.iskontoOrani) || '0');
   const net = satis === null ? null : satis * (1 - iskonto / 100);
+  const kdv = d.kdvOrani.trim() === '' || belirsizSayi(d.kdvOrani) ? null : Number(sayiGirdisi(d.kdvOrani));
+  const kdvDahil = net === null || kdv === null || !Number.isFinite(kdv) ? null : net * (1 + kdv / 100);
   // Fiyatsız kalem varken kademe 3'ten geçilmez; neden alt çubukta yazar (Ne değişti 8).
   const gecilmez = kademe === 3 && fiyatsiz > 0 ? `${String(fiyatsiz)} kalemin birim fiyatı yok; fiyat girilince devam edilir.` : null;
   const yerlesimSec = (y: TerminYerlesimi) =>
@@ -451,6 +459,11 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
         <Kart baslik="Koşullar ve gönder">
           <div className="tc-sp-izgara">
             <Girdi etiket="İskonto (%)" inputMode="decimal" autoComplete="off" ipucu={`%${ISKONTO_ONAY_ESIGI} üstü iskonto müdür onayından sonra müşteriye gider.`} {...form.alan('iskontoOrani')} />
+            {teklif.kdvSecenekleri.oranlar.length > 0
+              ? <Secim etiket="KDV oranı" required bosSecenek="Seçin" secenekler={kdvSecimleri(teklif.kdvSecenekleri.oranlar, d.kdvOrani)}
+                ipucu="Teklif formu ve siparişe çevirme bu oranla açılır." {...form.alan('kdvOrani')} />
+              : <Girdi etiket="KDV oranı (%)" required inputMode="decimal" autoComplete="off" ipucu="Finansta geçerli KDV oranı tanımlı değil; oranı yazın."
+                {...form.alan('kdvOrani')} />}
             {!planli && (
               <Girdi etiket="Teslim süresi (gün)" inputMode="numeric" autoComplete="off" ipucu="Bugünden itibaren takvim günü; termin tarihi kendiliğinden dolar."
                 {...form.alan('teslimGun')}
@@ -506,6 +519,7 @@ export function TerminFiyat({ teklif, kademe, kademeYaz, geri, verildi }: Ozelli
           <dl className="tc-sp-cubuk-tutar" aria-label="Tutar">
             <div><dt>Teklif tutarı</dt><dd>{tutarMetni(satis, pb)}</dd></div>
             <div><dt>{`İskontolu (%${miktarMetni(sayiGirdisi(d.iskontoOrani) || '0')})`}</dt><dd>{tutarMetni(net, pb)}</dd></div>
+            {kademe === 4 && <div><dt>{kdv === null ? 'KDV dahil' : `KDV dahil (%${miktarMetni(String(kdv))})`}</dt><dd>{tutarMetni(kdvDahil, pb)}</dd></div>}
           </dl>
           <Dugme simge="back" onClick={() => (kademe === 4 ? kademeYaz(3) : geri())} disabled={form.gonderiliyor}>Geri</Dugme>
           {kademe === 3

@@ -123,7 +123,7 @@ describe('elle bağlama, sahte köprüyle (3360-2; gerçek PostgreSQL)', () => {
     const t = await yaz<{ id: number; no: string; surum: number; satirlar: { id: number }[] }>('/siparisler/teklifler/ekle', {
       firmaId, baslik: 'ORN bag', istenenTarih: null, aciklama: null, satirlar: [{ malzemeNo: mamul, tanim: 'ORN parça', miktar: '3' }],
     });
-    await yaz(`/siparisler/teklifler/${String(t.id)}/surum-ver`, { surum: t.surum, fiyatlar: [{ satirId: t.satirlar[0]!.id, birimFiyat: '50' }], iskontoOrani: '0' });
+    await yaz(`/siparisler/teklifler/${String(t.id)}/surum-ver`, { surum: t.surum, fiyatlar: [{ satirId: t.satirlar[0]!.id, birimFiyat: '50' }], iskontoOrani: '0', kdvOrani: '20' });
     teklifId = t.id;
     teklifNo = t.no;
     siparisId = (await yaz<{ id: number }>('/siparisler/ekle', {
@@ -150,7 +150,7 @@ describe('elle bağlama, sahte köprüyle (3360-2; gerçek PostgreSQL)', () => {
 
   test('EB-2 aramada bağlanacak belge verilince her kayda uygunluk ve neden gelir; bağlama sırayı ve giden kutusunu "Logo\'da, elle" yazar, Logo\'ya yazmaz', async () => {
     const r = await ara('teklif', 'ORN-BAG', teklifId);
-    assert.deepEqual(r.baglanacak, { no: teklifNo, tarih: r.baglanacak?.tarih ?? null, engel: null, tutar: { kdvHaric: '150.00', kdvDahil: null, paraBirimi: 'TRY' } });
+    assert.deepEqual(r.baglanacak, { no: teklifNo, tarih: r.baglanacak?.tarih ?? null, engel: null, tutar: { kdvHaric: '150.00', kdvDahil: '180.00', paraBirimi: 'TRY' } });
     const fiyatsiz = await logoBelgeAra(vt(), k(), 'teklif', 'ORN-BAG', false, { kisiId: yoneticiId, belge: teklifId });
     assert.equal(fiyatsiz.baglanacak?.tutar, null, 'fiyatı görmeyene tutar gitmez');
     assert.deepEqual(r.belgeler.map((b) => [b.logoKayitNo, b.bagla?.uygun, b.bagla?.neden ?? null]), [

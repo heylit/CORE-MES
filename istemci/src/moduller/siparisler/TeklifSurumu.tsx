@@ -32,7 +32,16 @@ export function TeklifSurumu({ teklif, surum, kabul }: { teklif: TeklifAyrintiCe
       {fiyatGorur && (
         <dl className="tc-sp-toplamlar">
           {iskontolu && <div><dt>İskonto</dt><dd>{`%${miktarMetni(surum.iskontoOrani)}`}</dd></div>}
-          <div className="tc-sp-genel"><dt>Toplam (KDV hariç)</dt><dd>{paraMetni(surum.toplam, para)}</dd></div>
+          {surum.kdvOrani === null
+            ? <>
+              <div className="tc-sp-genel"><dt>Toplam (KDV hariç)</dt><dd>{paraMetni(surum.toplam, para)}</dd></div>
+              <div className="tc-sp-soluk"><dt>KDV oranı girilmemiş (eski sürüm)</dt><dd /></div>
+            </>
+            : <>
+              <div><dt>Toplam (KDV hariç)</dt><dd>{paraMetni(surum.toplam, para)}</dd></div>
+              <div><dt>{`KDV (%${miktarMetni(surum.kdvOrani)})`}</dt><dd>{paraMetni(surum.kdvTutari, para)}</dd></div>
+              <div className="tc-sp-genel"><dt>Genel toplam (KDV dahil)</dt><dd>{paraMetni(surum.genelToplam, para)}</dd></div>
+            </>}
         </dl>
       )}
       <dl className="tc-sp-ozellikler">

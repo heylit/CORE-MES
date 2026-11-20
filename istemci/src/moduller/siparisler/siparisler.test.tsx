@@ -54,15 +54,16 @@ const SURUM_1 = {
   surumNo: 1, iskontoOrani: '10.00', teslimGun: 14, terminTarihi: null, odemeKosulu: '30 gün', gecerlilik: '2099-01-01', aciklama: 'Kaplama dahil',
   olusturma: '2026-10-02T09:00:00+03:00',
   fiyatlar: [{ satirId: 11, birimFiyat: '10.0000', iskontoluFiyat: '9.0000', tutar: '360.00' }], toplam: '360.00',
-  iskontoOnaylayan: null, iskontoOnayAni: null,
+  iskontoOnaylayan: null, iskontoOnayAni: null, kdvOrani: null, kdvTutari: null, genelToplam: null,
 };
-const TEKLIF_VERILDI = { ...TEKLIF, satirlar: [TEKLIF_SATIR], surumler: [SURUM_1] } satisfies TeklifAyrintisi;
-const TEKLIF_YENI = { ...TEKLIF, durum: 'yeni', sonSurumNo: null, satirlar: [TEKLIF_SATIR], surumler: [] } satisfies TeklifAyrintisi;
+const KDV_SECENEKLERI = { oranlar: ['0.00', '1.00', '10.00', '20.00'], genel: '20.00' };
+const TEKLIF_VERILDI = { ...TEKLIF, kdvSecenekleri: KDV_SECENEKLERI, satirlar: [TEKLIF_SATIR], surumler: [SURUM_1] } satisfies TeklifAyrintisi;
+const TEKLIF_YENI = { ...TEKLIF, kdvSecenekleri: KDV_SECENEKLERI, durum: 'yeni', sonSurumNo: null, satirlar: [TEKLIF_SATIR], surumler: [] } satisfies TeklifAyrintisi;
 const TEKLIF_KABUL = { ...TEKLIF_VERILDI, durum: 'kabul', kabulSurumu: 1, surum: 5 } satisfies TeklifAyrintisi;
 // Sunucunun fiyat yetkisi olmayana döndüğü biçim.
 const AYRINTI_FIYATSIZ = { ...AYRINTI_TASLAK, araToplam: null, kdvTutari: null, genelToplam: null, satirlar: [{ ...SATIR, birimFiyat: null, tutar: null }] } satisfies SiparisAyrintisi;
 const TEKLIF_FIYATSIZ = {
-  ...TEKLIF_VERILDI, surumler: [{ ...SURUM_1, iskontoOrani: null, toplam: null, fiyatlar: [{ satirId: 11, birimFiyat: null, iskontoluFiyat: null, tutar: null }] }],
+  ...TEKLIF_VERILDI, surumler: [{ ...SURUM_1, iskontoOrani: null, toplam: null, kdvTutari: null, genelToplam: null, fiyatlar: [{ satirId: 11, birimFiyat: null, iskontoluFiyat: null, tutar: null }] }],
 } satisfies TeklifAyrintiCevabi;
 const TEKLIF_LISTESI = { satirlar: [TEKLIF], toplam: 1, sayfa: 1, sayfaBoyu: 50 } satisfies TeklifListesiCevabi;
 
@@ -1312,6 +1313,73 @@ describe('Teklifler', () => {
     await screen.findByText('Teklif müşteride');
   });
 
+  it('3461: KDV oranı önceki sürümden seçili gelir, finansın oranlarından değişir; alt çubuk KDV dahil tutarı yazar, oran sürümle gider', async () => {
+    const kdvli = { ...TEKLIF_VERILDI, surumler: [{ ...SURUM_1, kdvOrani: '10.00', kdvTutari: '36.00', genelToplam: '396.00' }] } satisfies TeklifAyrintisi;
+    const istekler = sunucuKur(FIYATCI, (yontem, yol) => {
+      if (yontem === 'GET' && yol === '/siparisler/teklifler/21') return json(200, kdvli);
+      if (yontem === 'POST' && yol === '/siparisler/teklifler/21/surum-ver') return json(200, kdvli);
+      return undefined;
+    });
+    ac('/siparisler/teklifler/21');
+    // Sürüm föyü: KDV hariç toplam, KDV ve KDV dahil genel toplam.
+    expect(await screen.findByText('KDV (%10)')).toBeTruthy();
+    expect(screen.getByText('396,00 TRY')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Yeni sürüm ver' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Devam' }));
+    const kdv = await screen.findByLabelText(/^KDV oranı/) as HTMLSelectElement;
+    expect(kdv.value).toBe('10.00');
+    expect([...kdv.options].map((x) => x.textContent)).toEqual(['Seçin', '%20', '%10', '%1', '%0']);
+    // 40 x 10 = 400, %10 iskonto 360, %20 KDV dahil 432.
+    fireEvent.change(kdv, { target: { value: '20.00' } });
+    expect(within(screen.getByLabelText('Tutar')).getByText('KDV dahil (%20)')).toBeTruthy();
+    expect(within(screen.getByLabelText('Tutar')).getByText('432,00 TRY')).toBeTruthy();
+    fireEvent.change(kdv, { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sürüm 2 olarak ver' }));
+    expect(await screen.findAllByText('KDV oranı zorunlu.')).toHaveLength(2);
+    expect(yazmalar(istekler)).toHaveLength(0);
+    fireEvent.change(kdv, { target: { value: '20.00' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sürüm 2 olarak ver' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/teklifler/21/surum-ver', govde: { kdvOrani: '20.00', iskontoOrani: '10' } });
+  });
+
+  it('3461: sürümde kalmış, bugün geçerli olmayan oran listede durur ve seçili gelir; finans oranı yokken kutu oranı "20,5" biçiminde açar', async () => {
+    const eskiOran = { ...TEKLIF_VERILDI, surumler: [{ ...SURUM_1, kdvOrani: '18.00', kdvTutari: '64.80', genelToplam: '424.80' }] } satisfies TeklifAyrintisi;
+    let cevap: TeklifAyrintisi = eskiOran;
+    sunucuKur(FIYATCI, (yontem, yol) => (yontem === 'GET' && yol === '/siparisler/teklifler/21' ? json(200, cevap) : undefined));
+    ac('/siparisler/teklifler/21/teklif-ver');
+    fireEvent.click(await screen.findByRole('button', { name: 'Devam' }));
+    const kdv = await screen.findByLabelText(/^KDV oranı/) as HTMLSelectElement;
+    expect(kdv.value).toBe('18.00');
+    expect([...kdv.options].map((x) => x.textContent)).toEqual(['Seçin', '%20', '%18', '%10', '%1', '%0']);
+    cleanup();
+    cevap = { ...eskiOran, kdvSecenekleri: { oranlar: [], genel: null }, surumler: [{ ...SURUM_1, kdvOrani: '20.50', kdvTutari: '73.80', genelToplam: '433.80' }] };
+    ac('/siparisler/teklifler/21/teklif-ver');
+    fireEvent.click(await screen.findByRole('button', { name: 'Devam' }));
+    expect((await screen.findByLabelText(/^KDV oranı \(%\)/) as HTMLInputElement).value).toBe('20,5');
+  });
+
+  it('3461: finansta geçerli KDV oranı yoksa oran elle yazılır; oransız eski sürümün föyü yalnız KDV hariç toplamı yazar', async () => {
+    const oransiz = { ...TEKLIF_VERILDI, kdvSecenekleri: { oranlar: [], genel: null } } satisfies TeklifAyrintisi;
+    const istekler = sunucuKur(FIYATCI, (yontem, yol) => {
+      if (yontem === 'GET' && yol === '/siparisler/teklifler/21') return json(200, oransiz);
+      if (yontem === 'POST' && yol === '/siparisler/teklifler/21/surum-ver') return json(200, oransiz);
+      return undefined;
+    });
+    ac('/siparisler/teklifler/21');
+    expect(await screen.findByText('Toplam (KDV hariç)')).toBeTruthy();
+    expect(screen.getByText('KDV oranı girilmemiş (eski sürüm)')).toBeTruthy();
+    expect(screen.queryByText(/^KDV \(%/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Yeni sürüm ver' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Devam' }));
+    const kdv = await screen.findByLabelText(/^KDV oranı \(%\)/) as HTMLInputElement;
+    expect(kdv.value).toBe('');
+    fireEvent.change(kdv, { target: { value: '18' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sürüm 2 olarak ver' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]).toMatchObject({ govde: { kdvOrani: '18' } });
+  });
+
   it('ödeme koşulu seçilir: vadede süre ve gün ya da ay; süre hatalıysa gitmez, metin olarak gider', async () => {
     const istekler = sunucuKur(FIYATCI, (yontem, yol) => {
       if (yontem === 'GET' && yol === '/siparisler/teklifler/21') return json(200, TEKLIF_YENI);
@@ -1489,10 +1557,34 @@ describe('Teklifler', () => {
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     const istek = yazmalar(istekler)[0]!;
     expect(istek.yol).toBe('/siparisler/teklifler/21/siparise-donustur');
-    expect(istek.govde).toEqual({ surum: 5, musteriSiparisNo: 'DM-9', siparisTarihi: '2026-10-20', termin: '2026-11-15', kdvOrani: '20' });
+    // 3461: oransız sürümde KDV finansın genel oranıyla seçili gelir.
+    expect(istek.govde).toEqual({ surum: 5, musteriSiparisNo: 'DM-9', siparisTarihi: '2026-10-20', termin: '2026-11-15', kdvOrani: '20.00' });
     expect(Object.keys(istek.baslik).map((k) => k.toLowerCase())).toContain(ISTEK_KIMLIGI_BASLIGI.toLowerCase());
     await screen.findByText('Taslak sipariş');
     expect(screen.getByText('SS-2026-0005')).toBeTruthy();
+  });
+
+  it('3461: siparişe dönüştürme penceresi kabul edilen sürümün KDV oranıyla açılır; başka oran seçilince uyarır ve seçilen oran gider', async () => {
+    const kdvli = { ...TEKLIF_KABUL, surumler: [{ ...SURUM_1, kdvOrani: '10.00', kdvTutari: '36.00', genelToplam: '396.00' }] } satisfies TeklifAyrintisi;
+    const donus = { teklif: { ...kdvli, durum: 'siparis', siparisId: 5, surum: 6 }, siparisId: 5 } satisfies SiparisDonusumCevabi;
+    const istekler = sunucuKur(YAZAR, (yontem, yol) => {
+      if (yontem === 'GET' && yol === '/siparisler/teklifler/21') return json(200, kdvli);
+      if (yontem === 'POST' && yol === '/siparisler/teklifler/21/siparise-donustur') return json(200, donus);
+      return undefined;
+    });
+    ac('/siparisler/teklifler/21');
+    fireEvent.click(await screen.findByRole('button', { name: 'Satış siparişine dönüştür' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Satış siparişine dönüştür' });
+    const kdv = within(pencere).getByLabelText(/^KDV oranı/) as HTMLSelectElement;
+    expect(kdv.value).toBe('10.00');
+    expect(within(pencere).getByText('Kabul edilen teklifte %10.')).toBeTruthy();
+    expect(within(pencere).queryByRole('status')).toBeNull();
+    // Teklifteki orandan ayrılan oran uyarıyla yazılır.
+    fireEvent.change(kdv, { target: { value: '20.00' } });
+    expect(within(pencere).getByRole('status').textContent).toBe('Kabul edilen teklifte %10; siparişe %20 yazılacak.');
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Taslak sipariş aç' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/teklifler/21/siparise-donustur', govde: { kdvOrani: '20.00' } });
   });
 
   it('kartsız satır için uyarı yazılır ve kart bağlama kimlikle gider', async () => {
