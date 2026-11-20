@@ -454,8 +454,18 @@ describe('İnsan Kaynakları (gerçek PostgreSQL, gerçek giriş)', () => {
     // Bağlantı alıcının açabildiği sayfaya gider: müdürde sayfa.ik yok; Onaylar maddesi izin onayı yetkisiyle görünür.
     const madde = IK_ISLEMLERIM_IKINCI_MENU.gruplar.flatMap((g): readonly { yol: string; islem: string }[] => g.maddeler).find((m) => m.yol === ilk[0]!.yol?.split('?')[0]);
     assert.equal(madde?.islem, 'ik.izin-onay');
-    await kaydet(c.uzm, 'izinler', { ...izin('leave_bl1', 'emp_bl', 'Beklemede'), aciklama: 'not' });
+    const duzeltilen = await kaydet(c.uzm, 'izinler', { ...izin('leave_bl1', 'emp_bl', 'Beklemede'), aciklama: 'not' });
     assert.equal((await bildirimler('leave_bl1')).length, ilk.length, 'bekleyen talebin düzeltilmesi yeni bildirim açmaz');
+    // 3478: karar verilince onay işi kapanır.
+    const acikSayisi = async (kaynak: string) => (await vt().tek<{ n: number }>(
+      'SELECT count(*)::int AS n FROM bildirim_kaydi WHERE tekil_anahtar = $1 AND okundu IS NULL', [`ik.izin-onay-bekliyor:${kaynak}`]))?.n;
+    assert.ok((await acikSayisi('leave_bl1') ?? 0) > 0);
+    await tamam<IkYazCevabi>(c.yon, 'POST', '/ik/izinler/leave_bl1/karar', { durum: 'Onaylandı', surum: duzeltilen.kayit.surum });
+    assert.equal(await acikSayisi('leave_bl1'), 0, 'karar verilen talebin onay bildirimi kapandı');
+    const silinecek = await kaydet(c.uzm, 'izinler', izin('leave_bl3', 'emp_bl', 'Beklemede', { baslangic: gunSonra(izinBasi, 14), bitis: gunSonra(izinBasi, 14), gun: 1 }));
+    assert.ok((await acikSayisi('leave_bl3') ?? 0) > 0);
+    await tamam<IkYazCevabi>(c.uzm, 'POST', '/ik/izinler/leave_bl3/iptal', { surum: silinecek.kayit.surum });
+    assert.equal(await acikSayisi('leave_bl3'), 0, 'iptal edilen talebin onay bildirimi kapandı');
     await kaydet(c.yon, 'izinler', izin('leave_bl2', 'emp_bl', 'Onaylandı', { baslangic: gunSonra(izinBasi, 7), bitis: gunSonra(izinBasi, 7), gun: 1 }));
     assert.deepEqual(await bildirimler('leave_bl2'), [], 'onay beklemeyen izin bildirim açmaz');
   });

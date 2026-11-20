@@ -376,8 +376,8 @@ export async function tabanYenile(
 
 export async function gorevEkle(db: Db, kisiId: number, projeId: number, g: GorevEkleVerisi): Promise<ProjeYonetimiCevabi> {
   await projeKilitle(db, projeId, true);
-  await kisitKorumali(YONETIM_KISITLARI, () => sorgular.gorevEkle(db, projeId, g, kisiId));
-  await atamaBildir(db, projeId, [{ sorumluKisiId: g.sorumluKisiId, yapanRolId: g.yapanRolId }], kisiId);
+  const id = await kisitKorumali(YONETIM_KISITLARI, () => sorgular.gorevEkle(db, projeId, g, kisiId));
+  await atamaBildir(db, projeId, [{ sorumluKisiId: g.sorumluKisiId, yapanRolId: g.yapanRolId }], kisiId, id);
   return projeYonetimi(db, projeId);
 }
 
@@ -415,11 +415,14 @@ export async function gorevDuzenle(db: Db, kisiId: number, id: number, g: GorevG
     varMi: () => sorgular.gorevVarMi(db, id),
     bulunamadiIletisi: GOREV_YOK,
   }));
-  if (g.durum !== 'yapilacak' && g.durum !== 'suruyor' && g.durum !== 'bekliyor') await kademeBildirimleriniKapat(db, id);
+  if (g.durum !== 'yapilacak' && g.durum !== 'suruyor' && g.durum !== 'bekliyor') {
+    await kademeBildirimleriniKapat(db, id);
+    if (g.durum === 'iptal') await atamaKapat(db, id);
+  }
   const yeniKisi = g.sorumluKisiId !== null && g.sorumluKisiId !== mevcut.sorumlu_kisi_id;
   const yeniRol = g.yapanRolId !== null && g.yapanRolId !== mevcut.yapan_rol_id;
   if (yeniKisi || yeniRol) {
-    await atamaBildir(db, mevcut.proje_id, [{ sorumluKisiId: yeniKisi ? g.sorumluKisiId : null, yapanRolId: yeniRol ? g.yapanRolId : null }], kisiId);
+    await atamaBildir(db, mevcut.proje_id, [{ sorumluKisiId: yeniKisi ? g.sorumluKisiId : null, yapanRolId: yeniRol ? g.yapanRolId : null }], kisiId, id);
   }
   return projeYonetimi(db, mevcut.proje_id);
 }
@@ -519,7 +522,7 @@ export async function gorevGeriGonder(db: Db, kullanici: Kullanici, gorevId: num
   await akisYaz(db, gorevId, () => sorgular.gorevGeriGonder(db, gorevId, k.kisiId, g.surum));
   await sorgular.gorevOlayiEkle(db, gorevId, 'geri', k.kisiId, g.gerekce);
   await bildirimKapat(db, { tur: 'projeler.gorev-kontrol-bekliyor', kaynakKimlik: String(gorevId) });
-  await atamaBildir(db, mevcut.proje_id, [{ sorumluKisiId: mevcut.sorumlu_kisi_id, yapanRolId: null }], k.kisiId);
+  await atamaBildir(db, mevcut.proje_id, [{ sorumluKisiId: mevcut.sorumlu_kisi_id, yapanRolId: null }], k.kisiId, gorevId);
   return gorevAyrintisi(db, kullanici, gorevId);
 }
 
@@ -536,7 +539,9 @@ export async function gorevGeriCevir(db: Db, kullanici: Kullanici, gorevId: numb
     return r === null ? null : { id: gorevId };
   });
   await sorgular.gorevOlayiEkle(db, gorevId, 'cevir', k.kisiId, g.gerekce);
-  if (rol !== null) await atamaBildir(db, mevcut.proje_id, [{ sorumluKisiId: null, yapanRolId: rol }], k.kisiId);
+  // 3478: geri çevirenin atama bildirimi kapanır; görev role dönerse roldekilere görev başına yeniden yazılır.
+  await atamaKapat(db, gorevId);
+  if (rol !== null) await atamaBildir(db, mevcut.proje_id, [{ sorumluKisiId: null, yapanRolId: rol }], k.kisiId, gorevId);
   const yazan = await sorgular.gorevOlusturani(db, gorevId);
   if (yazan !== null && yazan !== k.kisiId) {
     const proje = await sorgular.projeGetir(db, mevcut.proje_id);
@@ -548,13 +553,15 @@ export async function gorevGeriCevir(db: Db, kullanici: Kullanici, gorevId: numb
   return gorevAyrintisi(db, kullanici, gorevId);
 }
 
-// 3303-1 c: görevi görev yazan iptal eder; veri silinmez. Kontrol bildirimi kapanır, atama bildirimi projeye bağlı olduğu için kalır.
+// 3303-1 c: görevi görev yazan iptal eder; veri silinmez. Kontrol ve tek görev atama bildirimi kapanır (3478); toplu açılışın
+// bildirimi projenin öteki görevlerini de taşır, kalır.
 export async function gorevIptal(db: Db, kullanici: Kullanici, gorevId: number, g: GorevKomutuGovdesi): Promise<GorevAyrintisiCevabi> {
   const { g: mevcut } = await akisaHazirla(db, kullanici, gorevId);
   const ret = iptalReddi(mevcut.durum);
   if (ret !== null) throw dogrulama(ret);
   await akisYaz(db, gorevId, () => sorgular.gorevIptal(db, gorevId, kullanici.id, g.surum));
   await bildirimKapat(db, { tur: 'projeler.gorev-kontrol-bekliyor', kaynakKimlik: String(gorevId) });
+  await atamaKapat(db, gorevId);
   await kademeBildirimleriniKapat(db, gorevId);
   return gorevAyrintisi(db, kullanici, gorevId);
 }
@@ -718,10 +725,12 @@ export async function gorevlerim(db: Db, kullanici: Kullanici): Promise<Gorevler
   return { gorevler: satirlar };
 }
 
-// Atama bildirimi: kişiye atanan görevde kişi, role açılan görevde roldeki kişiler. Kaynak projedir: okunmamışken aynı projedeki
-// yeni atama yeni satır açmaz. Metinde görev adı yoktur (3269 V10).
+// Atama bildirimi: kişiye atanan görevde kişi, role açılan görevde roldeki kişiler. Metinde görev adı yoktur (3269 V10).
+// 3478: tek görevin ataması görevin kaynağıyla yazılır (iptalde kapanır, ikinci görev öncekinin altında kaybolmaz); toplu açılış
+// (şablon, dağıtım, hazırlık) projenin kaynağıyla tek zil olur.
+export const atamaKaynagi = (k: { gorevId: number } | { projeId: number }): string => ('gorevId' in k ? `gorev-${String(k.gorevId)}` : `proje-${String(k.projeId)}`);
 export async function atamaBildir(
-  db: Db, projeId: number, atamalar: readonly { sorumluKisiId: number | null; yapanRolId: number | null }[], haric: number,
+  db: Db, projeId: number, atamalar: readonly { sorumluKisiId: number | null; yapanRolId: number | null }[], haric: number, gorevId: number | null = null,
 ): Promise<void> {
   const kisiler = atamalar.flatMap((a) => (a.sorumluKisiId === null ? [] : [a.sorumluKisiId]));
   const roller = [...new Set(atamalar.flatMap((a) => (a.yapanRolId === null ? [] : [a.yapanRolId])))];
@@ -730,9 +739,10 @@ export async function atamaBildir(
   const proje = await sorgular.projeGetir(db, projeId);
   await bildirimGonder(db, {
     tur: 'projeler.gorev-atandi', baslik: 'Sana proje görevi var', metin: proje?.kod ?? null, yol: '/proje-gorevlerim',
-    kaynakKimlik: String(projeId), kisiler: alicilar, yalnizKisiler: true, haric,
+    kaynakKimlik: atamaKaynagi(gorevId === null ? { projeId } : { gorevId }), kisiler: alicilar, yalnizKisiler: true, haric,
   });
 }
+export const atamaKapat = (db: Db, gorevId: number): Promise<number> => bildirimKapat(db, { tur: 'projeler.gorev-atandi', kaynakKimlik: atamaKaynagi({ gorevId }) });
 
 // Kontrol bildirimi asıl kontrol edene; asıl kontrol eden işi bitiren kişiyse yedek kontrol edene de (onu yedek onaylar).
 async function kontrolBildir(db: Db, g: GorevSatiri, bitiren: number): Promise<void> {
@@ -834,8 +844,10 @@ export interface SatirDuzeni {
 // Şablon projeye uygulanır: hazırlık maddesine bağlı olmayan kalemler proje görevi olur (hazırlık kalemleri emir açılınca, 3269-B).
 // Dağıtılan satırlar düzenlenmiş hâliyle projede donar: sonradan gelen emrin hazırlık görevi de bu atamalarla doğar (Risk K2).
 // Dışarıda bırakılan satır donmaz; ona bağlı sonraki görevin öncülü boş kalır.
+// `toplanan` verilirse atamalar bildirilmez, ona eklenir: dağıtım bütün açılışı tek zille bildirir (3478, Risk N4).
 export async function sablonUygula(
   db: Db, kisiId: number, projeId: number, sablon: SablonSatiri, duzen: ReadonlyMap<number, SatirDuzeni> = new Map(),
+  toplanan: { sorumluKisiId: number | null; yapanRolId: number | null }[] | null = null,
 ): Promise<number> {
   const proje = await sorgular.projeGetir(db, projeId);
   if (proje === null) throw bulunamadi(PROJE_YOK);
@@ -873,7 +885,8 @@ export async function sablonUygula(
   await sorgular.projeSablonuEkle(db, projeId, sablon.id, sablon.surum, kalemler.map(({ planBitis: _p, ...k }) => kalemDonmus({
     ...k, onceki_kalem_id: k.onceki_kalem_id !== null && dahil.has(k.onceki_kalem_id) ? k.onceki_kalem_id : null,
   })), kisiId);
-  await atamaBildir(db, projeId, atamalar, kisiId);
+  if (toplanan === null) await atamaBildir(db, projeId, atamalar, kisiId);
+  else toplanan.push(...atamalar);
   return atamalar.length;
 }
 

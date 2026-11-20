@@ -610,6 +610,11 @@ export function izinOnayBildirimi(onceki: Govde | null, yeni: Govde, kisiAdi: st
   return { baslik: 'İzin talebi onay bekliyor', metin: parcalar.join(' · ') };
 }
 
+// 3478: bekleyen talep karara bağlanınca ya da başka duruma çekilince onay işi kapanır. İptal (silme) servisin işidir.
+export function izinOnayKapanirMi(onceki: Govde | null, yeni: Govde): boolean {
+  return onceki?.['durum'] === 'Beklemede' && yeni['durum'] !== 'Beklemede';
+}
+
 /* ---------------- çıkışta zimmet: IK-74 ---------------- */
 
 // IK-74 (karar 168 c, 244 a): çıkış engellenmez; çıkış tarihi yazılı kişinin iade edilmemiş zimmeti varsa yazan uyarılır. Zimmetin sahibi

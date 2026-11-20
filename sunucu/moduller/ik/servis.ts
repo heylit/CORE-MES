@@ -17,7 +17,7 @@ import type { BesTuru } from '#paylasilan/sozlesme/ik-bes.ts';
 import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { tesisGunBasi, tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
-import { bildirimGonder } from '../bildirim/disari.ts';
+import { bildirimGonder, bildirimKapat } from '../bildirim/disari.ts';
 import { aktifIstasyonlar, isMerkezleri, istasyonAtamasiAc, istasyonKisileri, kisininIzinliIsMerkezleri } from '../istasyonlar/disari.ts';
 import { etkinPersonelKartlari, kisininPersonelKarti as nizamiyePersonelKarti, personelKartiniKaldir, personelKartiVer } from '../nizamiye/disari.ts';
 import { ikHesabiAc, ikKisisiAc, ikRolSecenekleri, kisiAdlari, kisiKullaniciAdi, kisiSecenekleri, ozlukBaginiKaldir, ozluguIkdenYaz } from '../kisiler/disari.ts';
@@ -30,7 +30,7 @@ import {
   bordroKaydi, bordroKimligi, bordroOnayDenetle, boyutDenetle, bugunIzindekiler, degisiklikler, devamGorunurMu, devamOnayDenetle, devamOnayiKur, ekipKimlikleri, enErkenDonemBaslangici, etiket, govdeKimligiDenetle, ikRolu,
   adayGecisiDenetle, GORUSMECI_ADAY_ALANLARI, GORUSMECI_POZISYON_ALANLARI, gorusmeAdayiDenetle, gorusmeciMi, iletisimDenetle, istemciAlanlariniAyikla, kimlikIbanDenetle, izinBakiyeUyarisi, izinCakismasiDenetle, izinGecisiDenetle, izinTarihiDenetle, izinGunuDenetle, izinIcerigiDegistiMi, izinIsGunu, katilimciIsMerkezleri, kayitIsMerkezi, kesinlestirmeDenetle, personelBul,
   besHareketDenetle, besIsareti, korunanBesIsareti, ozelVeriDenetle, ozelVeriyiAyikla, ozelVeriyiKoru, OZEL_VERI_ISLEMI, gecmisteGizliMi, pozisyonGecisiDenetle, turDenetle, ucretDenetle, yillikMesaiSiniri,
-  OZLUK_SON_YONETICI_UYARISI, YENI_KISI_SICIL_CAKISMASI, ilkAtamaGunu, ilkIstasyonHatasi, ozlukItmesi, yeniPersonelKisiAdi, calismaAraligi, calismaHesabi, cikisZimmetUyarisi, fazlaTuru, izinOnayBildirimi, haftalikVardiyaPlani, puantajGunuDenetle, puantajKilidiDenetle, puantajTarihiDenetle,
+  OZLUK_SON_YONETICI_UYARISI, YENI_KISI_SICIL_CAKISMASI, ilkAtamaGunu, ilkIstasyonHatasi, ozlukItmesi, yeniPersonelKisiAdi, calismaAraligi, calismaHesabi, cikisZimmetUyarisi, fazlaTuru, izinOnayBildirimi, izinOnayKapanirMi, haftalikVardiyaPlani, puantajGunuDenetle, puantajKilidiDenetle, puantajTarihiDenetle,
 } from './kurallar.ts';
 import type { GunPlani, VardiyaMatrisSatiri, VardiyaTanimi } from './kurallar.ts';
 import { gunMetni, motorGunu, motorKur } from '#paylasilan/ik-motor/arayuz.ts';
@@ -370,6 +370,7 @@ async function yaz(db: Db, kullanici: Kullanici, g: YazGirdisi, d: Durum): Promi
   if (g.tur === 'leave') {
     const haber = izinOnayBildirimi(onceki, kayit.govde, adHaritasi(d).get(String(kayit.govde['empId'])) ?? '');
     if (haber) await bildirimGonder(db, { tur: 'ik.izin-onay-bekliyor', ...haber, yol: `/ik-islemlerim/onaylar?talep=${encodeURIComponent(g.kimlik)}`, kaynakKimlik: g.kimlik, haric: kullanici.id });
+    if (izinOnayKapanirMi(onceki, kayit.govde)) await bildirimKapat(db, { tur: 'ik.izin-onay-bekliyor', kaynakKimlik: g.kimlik });
   }
   const ozlukUyarisi = g.tur === 'emp' ? await ozluguKisiyeIt(db, kullanici, onceki, kayit.govde, kisiAcilacak !== null) : null;
   const uyari = g.tur === 'emp'
@@ -447,6 +448,7 @@ export async function iptalEt(db: Db, kullanici: Kullanici, alan: IkAlani, kimli
   const kayit = kayitKur(iptal);
   d.harita.set(kimlik, kayit);
   if (tur === 'emp') await ozluguKisiyeIt(db, kullanici, kayitli.govde, null);
+  if (tur === 'leave') await bildirimKapat(db, { tur: 'ik.izin-onay-bekliyor', kaynakKimlik: kimlik });
   const gecmis = await s.gecmisYaz(db, { kimlik, tur, islem: 'sil', etiket: etiket(tur, kayitli.govde, adHaritasi(d)), degisiklikler: [], notu: null, kisiId: kullanici.id });
   return { kayit: kayitCevabi(kayit, d), gecmis: await gecmisCevaplari(db, [gecmis], d) };
 }

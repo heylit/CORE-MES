@@ -41,7 +41,7 @@ import { araHalCozucusuKaydet as rotaAraHalCozucusu, opNumaralariDizildiDinle as
 import { talasliAdimCozucusu, yuzeyAdimlariCozucusu } from './moduller/geometri/disari.ts';
 import * as sevkiyat from './moduller/sevkiyat/disari.ts';
 import { bagliTalepCozucusu, satinAlinacakKalemler } from './moduller/siparisler/disari.ts';
-import { bagliEmirCozucusu, kalemEmirCozucusu, kapanisEksigiCozucusu, malzemeKartiIzleri as siparisKartIzleri, siparisAyrintisi, siparisDegistiDinle, siparisIptalEdildiDinle, siparisListesi, siparisSatiriOzetleri, siparisOnayiGeriAlindiDinle, siparisOnaylandiDinle, siparisRevizeEdildiDinle, takvimKayitlari as siparisTakvimi, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
+import { bagliEmirCozucusu, kalemEmirCozucusu, kapanisEksigiCozucusu, malzemeKartiIzleri as siparisKartIzleri, siparisAyrintisi, siparisDegistiDinle, siparisIptalEdildiDinle, siparisListesi, onayBekleyenSiparisler, siparisSatiriOzetleri, siparisOnayiGeriAlindiDinle, siparisOnaylandiDinle, siparisRevizeEdildiDinle, takvimKayitlari as siparisTakvimi, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
 import { siparisListesiSorgusu } from '#paylasilan/sozlesme/siparisler.ts';
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
@@ -116,6 +116,25 @@ export const siparisTerminKademeKayitlari = (kayitlar: Awaited<ReturnType<typeof
     kayit: `${k.kimlik}:${k.tarih}`, no: k.no ?? k.kimlik, baslik: k.baslik, yol: '/siparisler' as const, sonGun: k.tarih, yapanlar: yazan, yoneticiler: onaylayan,
   }]));
 };
+// 3478: onay bekleyen satış siparişi; işi onaylayanlar yapar, yönetici ayardaki rol ya da kademe yöneticileridir. Kayıt açılış anını taşır.
+export const siparisOnayKademeKayitlari = (siparisler: Awaited<ReturnType<typeof onayBekleyenSiparisler>>, sahip: Sahip): bildirim.KademeKaydi[] => {
+  const onaylayan = sahip('siparisler.onayla');
+  return siparisler.map((s) => ({
+    kayit: `${String(s.id)}:${s.beklemeAni}`, no: s.no, baslik: `${s.no}: onay bekliyor`, yol: `/siparisler/${String(s.id)}` as const,
+    baslangic: tesisGunu(new Date(s.beklemeAni)), baslangicAni: s.beklemeAni, yapanlar: onaylayan, yoneticiler: [],
+  }));
+};
+// 3478: açık DÖF termini kaliteyi yazana, MRB kararı bekleyen uygunsuzluk kararı verene (onaylayan) gider; yönetici ayardaki rol.
+export const dofKademeKayitlari = (dofler: Awaited<ReturnType<typeof kaliteMerkezi.acikDofler>>, sahip: Sahip): bildirim.KademeKaydi[] => {
+  const yazan = sahip('kalite-merkezi.yaz');
+  return dofler.map((d) => ({ kayit: `${d.kimlik}:${d.termin}`, no: d.no, baslik: `${d.no}: DÖF termini`, yol: '/kalite-merkezi/dof' as const, sonGun: d.termin, yapanlar: yazan, yoneticiler: [] }));
+};
+export const hataliParcaKademeKayitlari = (ncrler: Awaited<ReturnType<typeof kaliteMerkezi.kararBekleyenNcrler>>, sahip: Sahip): bildirim.KademeKaydi[] => {
+  const karar = sahip('kalite-merkezi.onayla');
+  return ncrler.map((n) => ({
+    kayit: `${n.kimlik}:${n.tarih}`, no: n.no, baslik: `${n.no}: karar bekliyor`, yol: '/kalite-merkezi/uygunsuzluklar' as const, baslangic: n.tarih, yapanlar: karar, yoneticiler: [],
+  }));
+};
 // 3429-2 D: termin riskli onaylı sipariş; işi satış yazanlar yapar, onaylayanlar yönetir (siparisler.termin ile aynı alıcılar).
 export const siparisTerminRiskiKademeKayitlari = (
   riskler: readonly akis.SiparisTerminRiski[], numaralar: ReadonlyMap<number, string>, sahip: Sahip,
@@ -138,6 +157,9 @@ const siparisTerminleri = async (db: Db) => {
 };
 // Açık (bitmemiş) siparişler termin takviminden; risk yalnız onaylıda hesaplanır (akış). VARSAYIM: termini 60 günden uzak sipariş
 // henüz izlenmez (takvim penceresi siparisler.termin ile aynı).
+const siparisOnaylari = async (db: Db) => siparisOnayKademeKayitlari(await onayBekleyenSiparisler(db), await islemSahipleri(db));
+const dofTerminleri = async (db: Db) => dofKademeKayitlari(await kaliteMerkezi.acikDofler(db), await islemSahipleri(db));
+const hataliParcaKararlari = async (db: Db) => hataliParcaKademeKayitlari(await kaliteMerkezi.kararBekleyenNcrler(db), await islemSahipleri(db));
 const siparisTerminRiskleriOku = async (db: Db) => {
   const bugun = tesisGunu(new Date());
   const acik = (await siparisTakvimi(db, gunEkle(bugun, -400), gunEkle(bugun, 60))).filter((k) => !k.bitti);
@@ -533,6 +555,9 @@ export function sunucununBaglari(): Bag[] {
     bag('kalibrasyon vadesi -> kademeli uyarı', (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet('kalibrasyon.vade', o); }, typeof kalibrasyonAletleri === 'function' ? kalibrasyonVadeleri : undefined),
     bag('arkon bakım vadesi -> kademeli uyarı', (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet('arkon.bakim-vade', o); }, typeof arkon.periyodikBakimlar === 'function' ? bakimVadeleri : undefined),
     bag('satış siparişi termini -> kademeli uyarı', (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet('siparisler.termin', o); }, typeof siparisTakvimi === 'function' ? siparisTerminleri : undefined),
+    bag('satış siparişi onayı -> kademeli uyarı', (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet('siparisler.onay', o); }, typeof onayBekleyenSiparisler === 'function' ? siparisOnaylari : undefined),
+    bag('kalite DÖF termini -> kademeli uyarı', (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet('kalite-merkezi.dof', o); }, typeof kaliteMerkezi.acikDofler === 'function' ? dofTerminleri : undefined),
+    bag('kalite hatalı parça kararı -> kademeli uyarı', (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet('kalite-merkezi.hatali-parca', o); }, typeof kaliteMerkezi.kararBekleyenNcrler === 'function' ? hataliParcaKararlari : undefined),
     bag('satış siparişi termin riski -> kademeli uyarı', (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet('siparisler.plan-riski', o); }, typeof akis.siparisTerminRiskleri === 'function' ? siparisTerminRiskleriOku : undefined),
     // 3416-1 a: bekletilen emir neden başına ve aynı nedenle süren bekleme.
     ...(['uretim-emirleri.bekleme-malzeme', 'uretim-emirleri.bekleme-fason', 'uretim-emirleri.bekleme-takim', 'uretim-emirleri.bekleme-kalite',

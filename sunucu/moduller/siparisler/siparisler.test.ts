@@ -228,6 +228,26 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
       "SELECT baslik, yol FROM bildirim_kaydi WHERE kisi_id = $1 AND tur = 'siparisler.onay-bekliyor' AND yol = $2", [kisiId, `/siparisler/${s.id}`]);
     assert.deepEqual(await bildirimler(onaylayan.id), [{ baslik: `Onay bekleyen sipariş: ${s.no}`, yol: `/siparisler/${s.id}` }]);
     assert.deepEqual(await bildirimler(acan.id), []);
+    // 3478: onaylanınca onay işi kapanır.
+    const acik = async () => (await o().sahip.tek<{ n: number }>(
+      "SELECT count(*)::int AS n FROM bildirim_kaydi WHERE tur = 'siparisler.onay-bekliyor' AND yol = $1 AND okundu IS NULL", [`/siparisler/${s.id}`]))?.n;
+    assert.ok((await acik() ?? 0) > 0);
+    assert.equal((await gonder(onaylayan.cerez, `/siparisler/${s.id}/onayla`, { surum: s.surum })).statusCode, 200);
+    assert.equal(await acik(), 0, 'onaylanan siparişin onay bildirimi kapandı');
+    // Risk N1: onayı geri alınan sipariş yeniden onay bekler.
+    const onayli = (await oku(acan.cerez, `/siparisler/${s.id}`)).json<SiparisAyrintisi>();
+    const geri = await gonder(onaylayan.cerez, `/siparisler/${s.id}/onay-geri-al`, { surum: onayli.surum, neden: 'Deneme geri alma' });
+    assert.equal(geri.statusCode, 200, geri.body);
+    assert.ok((await acik() ?? 0) >= 1, 'onaylayanlara yeniden düştü');
+    assert.deepEqual((await o().sahip.sorgu<{ n: number }>(
+      "SELECT count(*)::int AS n FROM bildirim_kaydi WHERE tur = 'siparisler.onay-bekliyor' AND yol = $1 AND kisi_id = $2 AND okundu IS NULL", [`/siparisler/${s.id}`, onaylayan.id]))[0]?.n, 0, 'geri alan almaz');
+    const iptalEdilen = (await gonder(acan.cerez, '/siparisler/ekle', govde())).json<SiparisAyrintisi>();
+    const acikIptal = async () => (await o().sahip.tek<{ n: number }>(
+      "SELECT count(*)::int AS n FROM bildirim_kaydi WHERE tur = 'siparisler.onay-bekliyor' AND yol = $1 AND okundu IS NULL", [`/siparisler/${iptalEdilen.id}`]))?.n;
+    assert.ok((await acikIptal() ?? 0) > 0);
+    const ip = await gonder(onaylayan.cerez, `/siparisler/${iptalEdilen.id}/iptal`, { surum: iptalEdilen.surum, neden: 'Deneme iptali' });
+    assert.equal(ip.statusCode, 200, ip.body);
+    assert.equal(await acikIptal(), 0, 'iptal edilen siparişin onay bildirimi kapandı');
   });
 
   test('SIP-11 (201 a): planlama kalemi fiyatsız açar, fiyat gönderirse 403; fiyatsız sipariş onaylanmaz (409); müdür fiyatı girer, planlamanın düzenlemesi fiyatı silmez', async () => {

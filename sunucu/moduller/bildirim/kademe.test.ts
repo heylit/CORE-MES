@@ -140,7 +140,7 @@ describe('kademeli uyarı motoru (3405, gerçek PostgreSQL)', () => {
   let sayac = 0;
   let kayitlar: KademeKaydi[] = [];
   let hata = false;
-  // İkinci kaynak: son gün sayacı (K2 var), kablolamada bağlı değil; varsayılanı açık, K4 3, K5 7, e-posta K3'ten, kapatılamaz.
+  // İkinci kaynak: son gün sayacı (K2 var); test kendi okuyucusunu kaydeder. Varsayılanı kapalı (3478), test açar; K4 3, K5 7, e-posta K3'ten, kapatılamaz.
   const DOF = 'kalite-merkezi.dof' as const;
   let dofKayitlari: KademeKaydi[] = [];
   const dof = (kayit: string, sonGun: string, yapanlar: readonly number[]): KademeKaydi =>
@@ -199,6 +199,8 @@ describe('kademeli uyarı motoru (3405, gerçek PostgreSQL)', () => {
       return kayitlar;
     });
     kademeKaynagiKaydet(DOF, async () => dofKayitlari);
+    const ac = await ayarla({ acik: true }, DOF);
+    assert.equal(ac.statusCode, 200, ac.body);
   });
   after(async () => { kademeKaynagiKaydet(KAYNAK, null); kademeKaynagiKaydet(DOF, null); await app?.close(); await ortam?.kaldir(); });
 

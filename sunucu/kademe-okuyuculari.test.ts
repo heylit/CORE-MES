@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Islem } from '#paylasilan/islemler.ts';
-import { bakimKademeKayitlari, kalibrasyonKademeKayitlari, siparisTerminKademeKayitlari, siparisTerminRiskiKademeKayitlari } from './kablolama.ts';
+import { bakimKademeKayitlari, dofKademeKayitlari, hataliParcaKademeKayitlari, kalibrasyonKademeKayitlari, siparisOnayKademeKayitlari, siparisTerminKademeKayitlari, siparisTerminRiskiKademeKayitlari } from './kablolama.ts';
 
 // Kablolamadaki kademe okuyucularının eşlemesi: açık kayıt kimliği, son günü ve alıcılarıyla döner; kapanma koşulundaki kayıt dönmez.
 const SAHIPLER: Partial<Record<Islem, number[]>> = {
-  'kalibrasyon.yaz': [11], 'arkon.bakim': [21], 'arkon.amir': [22], 'siparisler.yaz': [31], 'siparisler.onayla': [32],
+  'kalibrasyon.yaz': [11], 'arkon.bakim': [21], 'arkon.amir': [22], 'siparisler.yaz': [31], 'siparisler.onayla': [32], 'kalite-merkezi.yaz': [41], 'kalite-merkezi.onayla': [42],
 };
 const sahip = (i: Islem): number[] => SAHIPLER[i] ?? [];
 
@@ -41,4 +41,18 @@ test('satış siparişi termin riski: kayıt sipariş ve riskli termin dönemind
     ['7:2030-01-15', 'ORN-SS-7', 'Sipariş ORN-SS-7: plan termini 3 gün aşıyor', '/siparisler/7', '2030-01-15', [31], [32]],
     ['8:2030-02-01', '8', 'Sipariş 8: plan termini 1 gün aşıyor', '/siparisler/8', '2030-02-01', [31], [32]],
   ]);
+});
+
+test('satış siparişi onayı: kayıt sipariş ve açılış anıyla; bekleme açılış gününden; yapan onaylayan (3478)', () => {
+  const l = siparisOnayKademeKayitlari([{ id: 5, no: 'ORN-SS-5', beklemeAni: '2030-01-14T21:30:00.000Z' }], sahip);
+  assert.deepEqual(l.map((k) => [k.kayit, k.no, k.yol, k.baslangic, k.baslangicAni, k.yapanlar, k.yoneticiler]), [
+    ['5:2030-01-14T21:30:00.000Z', 'ORN-SS-5', '/siparisler/5', '2030-01-15', '2030-01-14T21:30:00.000Z', [32], []],
+  ]);
+});
+
+test('DÖF termini ve hatalı parça kararı: kayıt kimlik ve tarihle; yapan yazan ya da karar veren (3478)', () => {
+  assert.deepEqual(dofKademeKayitlari([{ kimlik: 'capa_1', no: 'ORN-DOF-1', termin: '2030-01-20' }], sahip).map((k) => [k.kayit, k.no, k.sonGun, k.yol, k.yapanlar]),
+    [['capa_1:2030-01-20', 'ORN-DOF-1', '2030-01-20', '/kalite-merkezi/dof', [41]]]);
+  assert.deepEqual(hataliParcaKademeKayitlari([{ kimlik: 'ncr_1', no: 'ORN-NCR-1', tarih: '2030-01-10' }], sahip).map((k) => [k.kayit, k.baslangic, k.yol, k.yapanlar]),
+    [['ncr_1:2030-01-10', '2030-01-10', '/kalite-merkezi/uygunsuzluklar', [42]]]);
 });
