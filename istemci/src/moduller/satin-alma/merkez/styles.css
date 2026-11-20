@@ -581,6 +581,8 @@
 .sa-kok .doc h3{ font-size:var(--yazi-s); margin:var(--b-4) 0 var(--b-2); text-transform:none; color:black; border-bottom:1.5px solid black; padding-bottom:var(--b-1); }
 .sa-kok .doc-h{ display:flex; justify-content:space-between; gap:var(--b-5); align-items:flex-start; border-bottom:3px solid black; padding-bottom:var(--b-3); }
 .sa-kok .doc-co{ font-weight:600; color:dimgray; }
+.sa-kok .doc-h-sol{ display:flex; gap:var(--b-4); align-items:flex-start; min-width:0; }
+.sa-kok .doc-logo{ max-height:4rem; max-width:11rem; object-fit:contain; flex:0 0 auto; }
 .sa-kok .doc table{ border-collapse:collapse; width:100%; }
 .sa-kok .doc th, .sa-kok .doc td{ border:1px solid silver; padding:var(--b-1) var(--b-2); text-align:left; vertical-align:top; font-size:var(--yazi-xs); color:black; background:white; }
 .sa-kok .doc th{ background:whitesmoke; font-weight:600; white-space:nowrap; }
@@ -618,6 +620,21 @@
 .sa-kok .doc td.doc-bos{ min-width:6rem; }
 .sa-kok .doc-istek{ width:794px; max-width:none; zoom:var(--sa-kagit-olcek, 1); }
 .sa-kok .sa-istek-uyari{ margin:0 0 var(--b-2); font-size:var(--yazi-s); color:var(--sa-ink); }
+/* Teklif al adımı: tedarikçi seçimi üstte, altta iki çıktı (e-posta taslağı, PDF form) yan yana; dar ekranda alt alta. */
+.sa-kok .sa-rfq-cikti{ display:grid; grid-template-columns:minmax(0, 3fr) minmax(0, 2fr); gap:var(--b-3); align-items:start; }
+.sa-kok .sa-rfq-kutu{ border:1px solid var(--sa-line); border-radius:var(--sa-radius); padding:var(--b-3); display:flex; flex-direction:column; gap:var(--b-2); min-width:0; }
+.sa-kok .sa-rfq-kutu-h{ display:flex; gap:var(--b-2); align-items:center; }
+.sa-kok .sa-rfq-kutu-h h3{ margin:0; font-size:var(--yazi-m); }
+.sa-kok .sa-rfq-kutu .out{ max-height:16rem; overflow:auto; margin:0; }
+.sa-kok .sa-rfq-tarih{ max-width:16rem; }
+.sa-kok .sa-rfq-taslak{ display:flex; flex-wrap:wrap; gap:var(--b-2); align-items:center; font-weight:600; }
+.sa-kok .sa-rfq-taslak select{ flex:1 1 14rem; max-width:24rem; font-weight:400; }
+.sa-kok .sa-rfq-bekleyen{ opacity:.7; }
+.sa-kok .doc-istek .doc-h h2{ margin-top:var(--b-3); }
+.sa-kok .sa-rfq-kv{ display:grid; grid-template-columns:auto minmax(0, 1fr); gap:var(--b-1) var(--b-3); margin:0; font-size:var(--yazi-s); }
+.sa-kok .sa-rfq-kv dt{ color:var(--sa-muted); }
+.sa-kok .sa-rfq-kv dd{ margin:0; overflow-wrap:anywhere; }
+@media (max-width:900px){ .sa-kok .sa-rfq-cikti{ grid-template-columns:minmax(0, 1fr); } }
 .sa-baski-koku{ display:none; }
 @media print{
   body.sa-baskida > *:not(.sa-baski-koku){ display:none !important; }

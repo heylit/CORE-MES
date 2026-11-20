@@ -21,12 +21,12 @@ const ZARF: KartZarfiCevabi = {
   kart: { no: 1, kod: 'HM-MET-C45-0001', ad: 'Örnek çubuk C45 Ø50', aile: 'metal', sinif: 'celik' },
   zarf: {
     kapali: false, gerekce: null, kapaliKaynak: null, sartliAcik: false, sartliKaynak: null,
-    kalite: { istenen: 'C45', acik: true, secenekler: [{ deger: '42CrMo4', tur: 'ust', notu: null }, { deger: 'C40', tur: 'sartli', notu: null }], kaynak: null },
-    durum: { istenen: null, acik: true, secenekler: [], kaynak: null },
-    form: 'cubuk', olcu: [{ anahtar: 'd', istenen: 50, enCok: 55 }],
+    kalite: { istenen: 'C45', acik: true, secenekler: [{ deger: '42CrMo4', tur: 'ust', notu: null }, { deger: 'C40', tur: 'sartli', notu: null }], kaynak: null, sinir: false },
+    durum: { istenen: null, acik: true, secenekler: [], kaynak: null, sinir: false },
+    form: 'cubuk', olcu: [{ anahtar: 'd', istenen: 50, enAz: 50, enCok: 55, sinirKaynak: null }],
     pay: { tur: 'mm', deger: 5, enAzMm: 0, kaynak: { kapsamTuru: 'sinif', kapsam: 'metal/celik' } },
-    boy: { anahtar: 'l', istenen: 1000, uzunKesilir: true, kaynak: null },
-    yuzey: { istenen: null, serbest: false, kaynak: null },
+    boy: { anahtar: 'l', istenen: 1000, uzunKesilir: true, kaynak: null, enAz: null, enCok: null, sinirKaynak: null },
+    yuzey: { istenen: null, serbest: false, kaynak: null, secenekler: [], sinir: false },
   },
   kartlar: [{
     no: 8, kod: 'HM-MET-42C-0001', ad: 'Örnek çubuk 42CrMo4 Ø52', kalite: '42CrMo4', durum: null, form: 'cubuk', olcu: { d: 52, l: 1000 },

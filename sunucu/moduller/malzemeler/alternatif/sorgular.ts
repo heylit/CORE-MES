@@ -1,9 +1,9 @@
 import type { Db } from '#cekirdek/db.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
-import type { DurumMuadili, KaliteMuadili, KapsamTuru, MuadilTuru } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
+import type { DurumMuadili, KaliteMuadili, KapsamTuru, MuadilTuru, SinirDegeri, SinirNiteligi } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 import type { PayTuru } from '#paylasilan/sozlesme/stok-kontrol-sabitleri.ts';
 import { KATALOG_AD, KATALOG_KALITE, KATALOG_METIN } from '../sorgular.ts';
-import type { KuralSatiri } from './kurallar.ts';
+import type { KuralSatiri, SinirSatiri } from './kurallar.ts';
 
 export interface KuralKaydi extends KuralSatiri { id: number; kapsamAdi: string | null; surum: number; guncelleyenKisiId: number; guncelleme: string }
 
@@ -116,4 +116,79 @@ export function zarfAdaylari(db: Db, form: string): Promise<ZarfKartSatiri[]> {
   return db.sorgu<ZarfKartSatiri>(
     `SELECT * FROM (SELECT ${KART_SUTUNLARI} FROM malzeme_katalog_karti k WHERE k.onay_durumu = 'aktif' AND k.tur = 'hammadde') x
       WHERE x.form = $1 ORDER BY x.no`, [form]);
+}
+
+// 3463: kabul sınırları. Tablo küçüktür (nitelik başına satır); motor hepsini bir kez okur.
+export interface SinirKaydi extends SinirSatiri { id: number; surum: number }
+const SINIR_SUTUNLARI = `s.id, s.kapsam_turu AS "kapsamTuru", s.kapsam, s.nitelik, s.degerler, s.alt::float8 AS alt, s.ust::float8 AS ust, s.surum`;
+
+export function siniri(db: Db): Promise<SinirKaydi[]> {
+  return db.sorgu<SinirKaydi>(`SELECT ${SINIR_SUTUNLARI} FROM malzeme_kabul_siniri s
+    ORDER BY array_position(ARRAY['aile', 'sinif', 'kalite', 'kart'], s.kapsam_turu), s.kapsam, s.nitelik`);
+}
+
+export interface SinirYazimi {
+  kapsamTuru: KapsamTuru; kapsam: string; nitelik: SinirNiteligi; degerler: readonly SinirDegeri[] | null; alt: number | null; ust: number | null;
+}
+const sinirDegerleri = (s: SinirYazimi) => [s.kapsamTuru, s.kapsam, s.nitelik, s.degerler === null ? null : JSON.stringify(s.degerler), s.alt, s.ust];
+
+export async function sinirEkle(db: Db, s: SinirYazimi, kisiId: number): Promise<void> {
+  await db.sorgu(`INSERT INTO malzeme_kabul_siniri (kapsam_turu, kapsam, nitelik, degerler, alt, ust, guncelleyen_kisi_id)
+    VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7)`, [...sinirDegerleri(s), kisiId]);
+}
+
+// Kapsam ve nitelik değişmez (ayrı satır olur); sürüm koşullu.
+export async function sinirGuncelle(db: Db, s: SinirYazimi, surum: number, kisiId: number): Promise<boolean> {
+  return (await db.tek(`UPDATE malzeme_kabul_siniri SET degerler = $4::jsonb, alt = $5, ust = $6, guncelleyen_kisi_id = $7, guncelleme = now(),
+      surum = surum + 1 WHERE kapsam_turu = $1 AND kapsam = $2 AND nitelik = $3 AND surum = $8 RETURNING id`,
+  [...sinirDegerleri(s), kisiId, surum])) !== null;
+}
+
+export async function sinirVarMi(db: Db, kapsamTuru: KapsamTuru, kapsam: string, nitelik: SinirNiteligi): Promise<boolean> {
+  return (await db.tek(`SELECT 1 FROM malzeme_kabul_siniri WHERE kapsam_turu = $1 AND kapsam = $2 AND nitelik = $3`, [kapsamTuru, kapsam, nitelik])) !== null;
+}
+
+export async function sinirSil(db: Db, id: number, surum: number): Promise<boolean> {
+  return (await db.tek(`DELETE FROM malzeme_kabul_siniri WHERE id = $1 AND surum = $2 RETURNING id`, [id, surum])) !== null;
+}
+
+export function sinirGetir(db: Db, id: number): Promise<{ id: number } | null> {
+  return db.tek(`SELECT id FROM malzeme_kabul_siniri WHERE id = $1`, [id]);
+}
+
+// 3463: eşdeğer kartlar. Grup, ilk bağlanan kartın numarasıdır.
+// Bağlama ve çıkarma sırayla yürür: grubu kuran çıkarken grup numarası değişir, eş zamanlı bağlama eski numaraya yazıp grubu bölmesin.
+export const esdegerKilidi = (db: Db): Promise<unknown> => db.sorgu("SELECT pg_advisory_xact_lock(hashtext('malzeme_esdeger_bagi'))");
+export async function esdegerGrubu(db: Db, no: number, kilitle = false): Promise<number | null> {
+  const r = await db.tek<{ grup: number }>(`SELECT grup FROM malzeme_esdeger_bagi WHERE kart_no = $1${kilitle ? ' FOR UPDATE' : ''}`, [no]);
+  return r?.grup ?? null;
+}
+
+// Grubun iptal olmayan öteki kartları, numara sırasıyla.
+export function esdegerler(db: Db, no: number): Promise<{ no: number; kod: string | null; ad: string | null }[]> {
+  return db.sorgu(`SELECT k.no, k.stok_kodu AS kod, ${KATALOG_AD.replaceAll('kayit', 'k.kayit')} AS ad
+      FROM malzeme_esdeger_bagi b JOIN malzeme_esdeger_bagi o ON o.grup = b.grup AND o.kart_no <> b.kart_no
+      JOIN malzeme_katalog_karti k ON k.no = o.kart_no AND k.onay_durumu <> 'iptal'
+     WHERE b.kart_no = $1 ORDER BY k.no`, [no]);
+}
+
+export async function esdegerEkle(db: Db, no: number, grup: number, kisiId: number): Promise<void> {
+  await db.sorgu(`INSERT INTO malzeme_esdeger_bagi (kart_no, grup, ekleyen_kisi_id) VALUES ($1, $2, $3)`, [no, grup, kisiId]);
+}
+
+// Kartı gruptan çıkarır; tek kişilik kalan grup da silinir, grubu kuran çıkarsa grup kalan en küçük numaraya geçer.
+export async function esdegerCikar(db: Db, no: number, grup: number): Promise<void> {
+  await db.sorgu(`DELETE FROM malzeme_esdeger_bagi WHERE kart_no = $1`, [no]);
+  await db.sorgu(`DELETE FROM malzeme_esdeger_bagi WHERE grup = $1 AND (SELECT count(*) FROM malzeme_esdeger_bagi WHERE grup = $1) = 1`, [grup]);
+  if (no === grup) {
+    await db.sorgu(`UPDATE malzeme_esdeger_bagi SET grup = (SELECT min(kart_no) FROM malzeme_esdeger_bagi WHERE grup = $1) WHERE grup = $1`, [grup]);
+  }
+}
+
+// Bağ denetimi için: tür, form, ölçü anahtarları ve stok birimi.
+export function esdegerKarti(db: Db, no: number): Promise<{ no: number; tur: string; form: string | null; anahtarlar: string[]; birim: string | null } | null> {
+  return db.tek(`SELECT k.no, k.tur, ${KATALOG_METIN('form')} AS form,
+      COALESCE((SELECT array_agg(a ORDER BY a) FROM jsonb_object_keys(CASE WHEN jsonb_typeof(k.kayit -> 'dims') = 'object' THEN k.kayit -> 'dims' ELSE '{}'::jsonb END) a), '{}') AS anahtarlar,
+      ${KATALOG_METIN('com,birim')} AS birim
+    FROM malzeme_katalog_karti k WHERE k.no = $1 AND k.onay_durumu <> 'iptal'`, [no]);
 }

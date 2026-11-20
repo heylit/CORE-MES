@@ -17,10 +17,10 @@ const KARTLAR = { malzemeler: [
 ] } satisfies MalzemeSecenekleriCevabi;
 const ZARF: AlternatifZarfi = {
   kapali: false, gerekce: null, kapaliKaynak: null, sartliAcik: false, sartliKaynak: null,
-  kalite: { istenen: '6082', acik: true, kaynak: null, secenekler: [{ deger: '6061', tur: 'tam', notu: null }, { deger: '7075', tur: 'ust', notu: null }, { deger: '6060', tur: 'sartli', notu: 'Deneme not' }] },
-  durum: { istenen: 'T6', acik: true, kaynak: null, secenekler: [{ deger: 'T651', tur: 'ust', notu: null }] },
-  form: 'cubuk', olcu: [{ anahtar: 'd', istenen: 50, enCok: 55 }], pay: { tur: 'mm', deger: 5, enAzMm: 0, kaynak: null },
-  boy: { anahtar: 'l', istenen: 3000, uzunKesilir: true, kaynak: null }, yuzey: { istenen: 'Ham', serbest: false, kaynak: null },
+  kalite: { istenen: '6082', acik: true, kaynak: null, secenekler: [{ deger: '6061', tur: 'tam', notu: null }, { deger: '7075', tur: 'ust', notu: null }, { deger: '6060', tur: 'sartli', notu: 'Deneme not' }], sinir: false },
+  durum: { istenen: 'T6', acik: true, kaynak: null, secenekler: [{ deger: 'T651', tur: 'ust', notu: null }], sinir: false },
+  form: 'cubuk', olcu: [{ anahtar: 'd', istenen: 50, enAz: 50, enCok: 55, sinirKaynak: null }], pay: { tur: 'mm', deger: 5, enAzMm: 0, kaynak: null },
+  boy: { anahtar: 'l', istenen: 3000, uzunKesilir: true, kaynak: null, enAz: null, enCok: null, sinirKaynak: null }, yuzey: { istenen: 'Ham', serbest: false, kaynak: null, secenekler: [], sinir: false },
 };
 let zarf: AlternatifZarfi | null = ZARF;
 const talep = (kalemler: Talebim['kalemler']): Talebim => ({

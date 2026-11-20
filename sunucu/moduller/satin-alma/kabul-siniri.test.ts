@@ -19,10 +19,11 @@ const PAROLA = 'dogru-parola-1';
 
 const zarf = (ek: Partial<AlternatifZarfi> = {}): AlternatifZarfi => ({
   kapali: false, gerekce: null, kapaliKaynak: null, sartliAcik: false, sartliKaynak: null,
-  kalite: { istenen: '6082', acik: true, kaynak: null, secenekler: [{ deger: '6061', tur: 'tam', notu: null }, { deger: '7075', tur: 'ust', notu: null }, { deger: '6060', tur: 'sartli', notu: null }] },
-  durum: { istenen: 'T6', acik: true, kaynak: null, secenekler: [{ deger: 'T651', tur: 'ust', notu: null }] },
-  form: 'cubuk', olcu: [{ anahtar: 'd', istenen: 50, enCok: 55 }], pay: { tur: 'mm', deger: 5, enAzMm: 0, kaynak: null },
-  boy: { anahtar: 'l', istenen: 3000, uzunKesilir: true, kaynak: null }, yuzey: { istenen: 'Ham', serbest: false, kaynak: null }, ...ek,
+  kalite: { istenen: '6082', acik: true, kaynak: null, secenekler: [{ deger: '6061', tur: 'tam', notu: null }, { deger: '7075', tur: 'ust', notu: null }, { deger: '6060', tur: 'sartli', notu: null }], sinir: false },
+  durum: { istenen: 'T6', acik: true, kaynak: null, secenekler: [{ deger: 'T651', tur: 'ust', notu: null }], sinir: false },
+  form: 'cubuk', olcu: [{ anahtar: 'd', istenen: 50, enAz: 50, enCok: 55, sinirKaynak: null }], pay: { tur: 'mm', deger: 5, enAzMm: 0, kaynak: null },
+  boy: { anahtar: 'l', istenen: 3000, uzunKesilir: true, kaynak: null, enAz: null, enCok: null, sinirKaynak: null },
+  yuzey: { istenen: 'Ham', serbest: false, kaynak: null, secenekler: [], sinir: false }, ...ek,
 });
 
 describe('3437-2: talep kaleminin kabul sınırı (saf)', () => {
@@ -54,10 +55,10 @@ describe('3437-2: talep kaleminin kabul sınırı (saf)', () => {
     const d = kabulZarfi(z, { ...VARSAYILAN_KABUL, kaliteler: ['6061'], durumlar: [], payMm: 2, sartliKabul: true });
     assert.deepEqual(d.kalite.secenekler.map((x) => x.deger), ['6061']);
     assert.deepEqual(d.durum.secenekler, []);
-    assert.deepEqual(d.olcu, [{ anahtar: 'd', istenen: 50, enCok: 52 }]);
+    assert.deepEqual(d.olcu, [{ anahtar: 'd', istenen: 50, enAz: 50, enCok: 52, sinirKaynak: null }]);
     assert.equal(d.sartliAcik, true);
     // Pay zarfınkinden büyük yazılmış eski kayıt (kural sonradan daraldı) zarfı genişletmez.
-    assert.deepEqual(kabulZarfi(zarf({ olcu: [{ anahtar: 'd', istenen: 50, enCok: 53 }] }), { ...VARSAYILAN_KABUL, payMm: 5 }).olcu[0]?.enCok, 53);
+    assert.deepEqual(kabulZarfi(zarf({ olcu: [{ anahtar: 'd', istenen: 50, enAz: 50, enCok: 53, sinirKaynak: null }] }), { ...VARSAYILAN_KABUL, payMm: 5 }).olcu[0]?.enCok, 53);
     const a = kabulZarfi(z, { ...VARSAYILAN_KABUL, yalnizAyni: true });
     assert.deepEqual([a.kapali, a.gerekce], [true, ILETILER.kabulYalnizAyniGerekce]);
   });
@@ -127,7 +128,7 @@ describe('3437-2: talep formu ve Taleplerim kabul sınırı (gerçek PostgreSQL)
     const r = await get(c.talep, `/satin-alma-kabul-zarfi/${String(kart)}`);
     assert.equal(r.statusCode, 200, r.body);
     const z = (r.json() as KabulZarfiCevabi).zarf!;
-    assert.deepEqual(z.olcu, [{ anahtar: 'd', istenen: 50, enCok: 55 }]);
+    assert.deepEqual(z.olcu, [{ anahtar: 'd', istenen: 50, enAz: 50, enCok: 55, sinirKaynak: null }]);
     assert.ok(z.kalite.secenekler.some((x) => x.deger === '6061'));
     assert.equal((JSON.parse((await get(c.talep, `/satin-alma-kabul-zarfi/${String(sarf)}`)).body) as KabulZarfiCevabi).zarf, null);
     assert.equal((await get(c.operator, `/satin-alma-kabul-zarfi/${String(kart)}`)).statusCode, 403);

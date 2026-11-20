@@ -44,3 +44,24 @@
 .tc-alt-secenekler { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
 
 .tc-alt-form { display: grid; gap: var(--b-3); }
+
+/* 3463: kart föyündeki Alternatifler bölümü; satır dar ekranda alt alta kayar. */
+.tc-kalt-liste { display: grid; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+.tc-kalt-satir {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2) var(--b-3); padding-bottom: var(--b-2);
+  border-bottom: 1px solid var(--edge2); min-width: 0;
+}
+.tc-kalt-satir:last-child { border-bottom: 0; }
+.tc-kalt-ad { flex: 0 0 9rem; font-weight: 600; }
+.tc-kalt-deger { display: flex; flex: 1 1 12rem; flex-wrap: wrap; gap: var(--b-1); min-width: 0; }
+.tc-kalt-ad-metin { flex: 1 1 10rem; color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
+.tc-kalt-bagla { display: flex; flex-wrap: wrap; align-items: end; gap: var(--b-2); }
+
+.tc-kalt-oge { display: inline-flex; align-items: center; gap: var(--b-1); margin-right: var(--b-2); }
+.tc-kalt-fark { color: var(--muted); font-size: var(--yazi-s); }
+.tc-kalt-kalem {
+  display: inline-flex; align-items: center; justify-content: center; min-width: var(--isaret-boy); min-height: var(--isaret-boy);
+  padding: 0; border: 1px solid var(--edge2); border-radius: var(--yari-1); background: none; color: inherit; cursor: pointer;
+}
+.tc-kalt-sag { display: flex; gap: var(--b-2); margin-left: auto; }
+.tc-kalt-aralik > * { flex: 1 1 10rem; }

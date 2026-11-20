@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { TeklifIstekFormuCevabi, TeklifIstekFormuIcerigi } from '#paylasilan/sozlesme/satin-alma.ts';
 import { CokSatir, DurumKutusu, Dugme, Girdi, Kart, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { ApiHatasi } from '../../../ortak/veri/api.ts';
+import { useKurumLogosu } from '../../../ortak/veri/kurum-logosu.ts';
 import { antetBosMu, istekFormuHTML, kagidiOlcekle } from '../merkez/istek-formu.ts';
 import type { PurchaseRequest, Supplier } from '../merkez/tipler.ts';
 import { SURE, cagri } from '../talep/ortak.ts';
@@ -47,6 +48,7 @@ export function IstekFormuAyari() {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const form = useQuery({ queryKey: ANAHTAR, queryFn: () => cagri.get('/satin-alma-teklif-istek-formu', SURE) });
+  const logo = useKurumLogosu();
   const [taslak, taslakYaz] = useState<Taslak | null>(null);
   const [hata, hataYaz] = useState<string | null>(null);
   const kaydet = useMutation({
@@ -67,8 +69,8 @@ export function IstekFormuAyari() {
     <div className="sa-ifa">
       <Kart baslik="Form metni" simge="edit">
         <div className="sa-ifa-alanlar">
-          <p className="sa-ifa-not">Teklif iste penceresinde "Form hazırla (PDF)" bu metinle açılır; orada bir kerelik değiştirilebilir. Kalemler talepten gelir.
-            Antet (firma adı, adres) Formlar &gt; Teklif formu'ndaki firma bilgisidir. Kullanılabilen alanlar: {ALANLAR}. Değeri olmayan alanın geçtiği satır basılmaz.</p>
+          <p className="sa-ifa-not">Talebin Teklif al adımında "Form hazırla (PDF)" bu metinle açılır; orada bir kerelik değiştirilebilir. Kalemler talepten gelir.
+            Antet (firma adı, adres) Formlar &gt; Teklif formu'ndaki firma bilgisidir; logo Sistem Ayarları &gt; Genel'deki kurum logosudur. Kullanılabilen alanlar: {ALANLAR}. Değeri olmayan alanın geçtiği satır basılmaz.</p>
           <Girdi etiket="Başlık" value={t.baslik} maxLength={80} onChange={yaz('baslik')} />
           <CokSatir etiket="Giriş" rows={3} value={t.giris} maxLength={1000} onChange={yaz('giris')} />
           <CokSatir etiket="Teklifte istenen bilgiler" ipucu="Her satır bir madde; en çok 20." rows={7} value={t.istenenler} onChange={yaz('istenenler')} />
@@ -87,7 +89,8 @@ export function IstekFormuAyari() {
       </Kart>
       <div className="sa-ifa-sag">
         {antetBosMu(c.kurum) && <p className="sa-ifa-not" role="note">Antet boş; boşken basılmaz. Firma adı ve adresi bu sayfadaki "Teklif formu" sekmesinde, Firma bilgileri bölümünde girilir.</p>}
-        <Kagit html={istekFormuHTML(ORNEK_TALEP, ORNEK_TEDARIKCI, ORNEK_SON_TARIH, icerikOf(t), c.kurum, '', '2026-11-19')} />
+        {logo.isSuccess && !logo.data.logo && <p className="sa-ifa-not" role="note">Kurum logosu yüklü değil; Sistem Ayarları &gt; Genel'den yükleyin. Yüklenince formun sol üstüne basılır.</p>}
+        <Kagit html={istekFormuHTML(ORNEK_TALEP, ORNEK_TEDARIKCI, ORNEK_SON_TARIH, icerikOf(t), c.kurum, '', '2026-11-19', logo.data?.logo ?? null)} />
       </div>
     </div>
   );

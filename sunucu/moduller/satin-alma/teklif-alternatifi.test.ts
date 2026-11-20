@@ -22,10 +22,11 @@ const PAROLA = 'dogru-parola-1';
 // 3437-3a: teklif satırı istenenin yerine alternatif teklif eder; sonuç kalemin daraltılmış kabul zarfından sunucuda hesaplanır.
 const zarf = (ek: Partial<AlternatifZarfi> = {}): AlternatifZarfi => ({
   kapali: false, gerekce: null, kapaliKaynak: null, sartliAcik: false, sartliKaynak: null,
-  kalite: { istenen: '6082', acik: true, kaynak: null, secenekler: [{ deger: '6061', tur: 'tam', notu: null }, { deger: '7075', tur: 'ust', notu: null }, { deger: '6060', tur: 'sartli', notu: null }] },
-  durum: { istenen: 'T6', acik: true, kaynak: null, secenekler: [{ deger: 'T651', tur: 'ust', notu: null }] },
-  form: 'cubuk', olcu: [{ anahtar: 'd', istenen: 50, enCok: 55 }], pay: { tur: 'mm', deger: 5, enAzMm: 0, kaynak: null },
-  boy: { anahtar: 'l', istenen: 3000, uzunKesilir: true, kaynak: null }, yuzey: { istenen: 'Ham', serbest: false, kaynak: null }, ...ek,
+  kalite: { istenen: '6082', acik: true, kaynak: null, secenekler: [{ deger: '6061', tur: 'tam', notu: null }, { deger: '7075', tur: 'ust', notu: null }, { deger: '6060', tur: 'sartli', notu: null }], sinir: false },
+  durum: { istenen: 'T6', acik: true, kaynak: null, secenekler: [{ deger: 'T651', tur: 'ust', notu: null }], sinir: false },
+  form: 'cubuk', olcu: [{ anahtar: 'd', istenen: 50, enAz: 50, enCok: 55, sinirKaynak: null }], pay: { tur: 'mm', deger: 5, enAzMm: 0, kaynak: null },
+  boy: { anahtar: 'l', istenen: 3000, uzunKesilir: true, kaynak: null, enAz: null, enCok: null, sinirKaynak: null },
+  yuzey: { istenen: 'Ham', serbest: false, kaynak: null, secenekler: [], sinir: false }, ...ek,
 });
 const alt = (ek: Partial<{ kalite: string; durum: string; yuzey: string; olcu: Record<string, number> }> = {}) => ({ kalite: null, durum: null, yuzey: null, olcu: {}, ...ek });
 
@@ -210,7 +211,7 @@ describe('3437-3a: teklifte alternatif (gerçek PostgreSQL)', () => {
     const r = await get(c.sa, `/satin-alma-talepleri/${t.id}/kalem-zarflari`);
     assert.equal(r.statusCode, 200, r.body);
     const l = (r.json() as KalemZarflariCevabi).kalemler;
-    assert.deepEqual(l.map((x) => [x.kalemId, x.malzemeNo, x.kabul?.payMm, x.zarf.olcu]), [[t.kalemler[0]!.id, kart, 3, [{ anahtar: 'd', istenen: 50, enCok: 53 }]]]);
+    assert.deepEqual(l.map((x) => [x.kalemId, x.malzemeNo, x.kabul?.payMm, x.zarf.olcu]), [[t.kalemler[0]!.id, kart, 3, [{ anahtar: 'd', istenen: 50, enAz: 50, enCok: 53, sinirKaynak: null }]]]);
     assert.equal((await get(c.talep, `/satin-alma-talepleri/${t.id}/kalem-zarflari`)).statusCode, 403);
     assert.equal((await get('', `/satin-alma-talepleri/${t.id}/kalem-zarflari`)).statusCode, 401);
   });

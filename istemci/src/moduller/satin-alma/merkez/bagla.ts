@@ -168,7 +168,7 @@ export function merkeziBagla(kok: HTMLElement, secenek: BaglamaSecenegi): () => 
 
 // Ctrl K sonucu (1237) ekranı adresle açar: talep ayrıntısı (bölümüyle). Yeni talep merkezde açılmaz, Taleplerim'dedir (2405 a).
 export interface MerkezAcilisi { talep: string; bolum: string | null }
-export const ACILIS_BOLUMLERI = ["items", "quotes", "compare", "approval", "order", "delivery"] as const;
+export const ACILIS_BOLUMLERI = ["items", "rfq", "quotes", "compare", "approval", "order", "delivery"] as const;
 
 export function acilisOku(adres: URLSearchParams): MerkezAcilisi | null {
   const talep = adres.get("talep");
