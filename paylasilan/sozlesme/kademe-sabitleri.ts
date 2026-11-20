@@ -52,7 +52,7 @@ export interface KademeKaynagiTanimi {
   // Ekranda grup başlığı.
   grup: string;
   sayac: KademeSayaci;
-  // 1: bu işte açılan kaynak; 2: kodda var, ayarda kapalı gelir (3405 a).
+  // 1: bu işte açılan kaynak; 2: kodda var, sonraki aşamada açılır (3405 a). İkisi de ayarda kapalı başlar (3478-2 a).
   asama: 1 | 2;
   // Risk K1: alıcı bu işlemlerden birini taşımalıdır; Açık takipler satırı yalnız bunları taşıyana görünür (K2).
   okumaIslemleri: readonly Islem[];
