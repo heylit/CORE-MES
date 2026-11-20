@@ -16,13 +16,17 @@ export function atamaCoz(deger: string): Atama {
 export function useAtamaSecenekleri(): { secenekler: Secenek[]; hata: string | undefined } {
   const kisiler = useQuery({ queryKey: anahtarlar.sorumlular, queryFn: () => api.get<KisiSecenekleriCevabi>('/projeler/sorumlu-secenekleri') });
   const roller = useQuery({ queryKey: anahtarlar.roller, queryFn: () => api.get<RolSecenekleriCevabi>('/projeler/rol-secenekleri') });
+  // Kişiler önce ve "Kişi:" önekiyle: rol satırlarının arasında kişi seçeneği gözden kaçıyordu.
   const secenekler = [
+    ...(kisiler.data?.kisiler ?? []).map((k) => ({ deger: `k:${k.id}`, baslik: `Kişi: ${k.ad}` })),
     ...(roller.data?.roller ?? []).map((r) => ({ deger: `r:${r.id}`, baslik: `Rol: ${r.ad}` })),
-    ...(kisiler.data?.kisiler ?? []).map((k) => ({ deger: `k:${k.id}`, baslik: k.ad })),
   ];
   const hata = kisiler.isError || roller.isError ? hataIletisi(kisiler.error ?? roller.error, 'Kişi ve roller alınamadı') : undefined;
   return { secenekler, hata };
 }
+
+// Yapan alanının ipucu: kişi seçimi rol seçimiyle aynı listede, açıkça söylenir.
+export const YAPAN_IPUCU = 'Kişi seçersen görev doğrudan ona gider; rol seçersen roldeki biri üstlenir.';
 
 // Seçili atama listede yoksa (pasif kişi gibi) adıyla eklenir; seçim kaybolmaz.
 export function AtamaSecimi({ etiket, deger, ad, secenekler, hata, bos, ipucu, kilitli = false, degistir }: {

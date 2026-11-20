@@ -8,13 +8,13 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import {
   GOREV_DURUMLARI, GOREV_DURUM_METNI, GOREV_DURUM_TONU, GOREV_ISLEMI, atamaMetni, bugun, gorevDurumMetni, gunFarki, sapmaMetni, tarihMetni,
 } from './gosterim.ts';
-import { AtamaSecimi, atamaCoz, atamaDegeri, useAtamaSecenekleri } from './Atama.tsx';
+import { AtamaSecimi, YAPAN_IPUCU, atamaCoz, atamaDegeri, useAtamaSecenekleri } from './Atama.tsx';
 import { bosIseNull, sayiYaDaNull, useIslemVar, useYonetimKomutu } from './komut.ts';
-import { HazirlikGorevleriAc, ProjeHazirlik, useHazirlikAcilabilir } from './ProjeHazirlik.tsx';
+import { ProjeHazirlik } from './ProjeHazirlik.tsx';
 
 // Bitiş sapması: biten görevde gerçek bitiş, açık görevde bugün plan bitişini geçtiyse bugün; iptal edilen görevde yoktur.
 // CSV'de tür ayrı sütun değil, adın önekidir: ekrandaki rozetle aynı ayrım.
-export const gorevCsvAdi = (g: Gorev): string => `${g.hazirlikMaddesi === null ? 'Proje' : 'Hazırlık'}: ${g.ad}`;
+export const gorevCsvAdi = (g: Gorev): string => g.hazirlikMaddesi === null ? g.ad : `Emir görevi: ${g.ad}`;
 
 export function gorevSapmasi(g: Gorev, bugunTarihi: string): number | null {
   if (g.durum === 'iptal') return null;
@@ -54,8 +54,8 @@ function useGenisEkran(): boolean {
   return genis;
 }
 
-// 3430 a: proje görevleri ve hazırlık görevleri tek sekmede. Hazırlık görevi maddeye ve emre bağlı proje görevidir; listede rozetle ayrılır,
-// "Emir × madde" görünümü hazırlık görevlerini emir ve madde tablosunda, maddenin sistemdeki hâliyle gösterir (emri okuyamayana yok).
+// Tek görev şablonu: şablon satırı ya proje başına bir kez ya da her üretim emri için (maddeye bağlı) açılır; ikincisi listede
+// "Emir görevi" rozetiyle ayrılır. "Emir × madde" görünümü onları emir ve madde tablosunda, maddenin sistemdeki hâliyle gösterir.
 export function ProjeGorevleri({ projeId, yonetim, acik, emirleriGorur }: {
   projeId: number; yonetim: ProjeYonetimiCevabi; acik: boolean; emirleriGorur: boolean;
 }) {
@@ -63,16 +63,13 @@ export function ProjeGorevleri({ projeId, yonetim, acik, emirleriGorur }: {
   const [secilenGorunum, gorunumYaz] = useState<Gorunum>('tablo');
   const gorunum = secilenGorunum === 'matris' && !emirleriGorur ? 'tablo' : secilenGorunum;
   const [form, formYaz] = useState<Gorev | 'yeni' | null>(null);
-  const [hazirlikAcik, hazirlikAcikYaz] = useState(false);
-  const hazirlikAcilabilir = useHazirlikAcilabilir(projeId, emirleriGorur);
   const yonlendir = useNavigate();
   // Görevsiz projede şerit dağıt düğmesini taşır; araç çubuğunda ikincisi çıkmaz.
   const seritVar = yazabilir && yonetim.gorevler.length === 0;
   const dagitaGit = () => { void yonlendir(`/projeler/${String(projeId)}/gorev-dagit`); };
-  // 3444: dar ekranda yalnız "Görev ekle" açıkta; öteki iki işlem bu menüde.
+  // 3444: dar ekranda yalnız "Görev ekle" açıkta; öteki işlem bu menüde.
   const digerleri: MenuOgesi[] = [
     ...(yazabilir && !seritVar ? [{ anahtar: 'dagit', baslik: 'Görevleri dağıt', simge: 'users', sec: dagitaGit } satisfies MenuOgesi] : []),
-    ...(hazirlikAcilabilir ? [{ anahtar: 'hazirlik', baslik: 'Hazırlık görevlerini aç', simge: 'users', sec: () => { hazirlikAcikYaz(true); } } satisfies MenuOgesi] : []),
   ];
   const gun = bugun();
   const genis = useGenisEkran();
@@ -84,7 +81,7 @@ export function ProjeGorevleri({ projeId, yonetim, acik, emirleriGorur }: {
   const sutunlar: Sutun<Gorev>[] = [
     { anahtar: 'ad', baslik: 'Görev', hucre: (g) => (
       <span>
-        {g.hazirlikMaddesi === null ? <Rozet ton="pasif">Proje</Rozet> : <Rozet ton="bilgi">Hazırlık</Rozet>}{' '}
+        {g.hazirlikMaddesi !== null && <><Rozet ton="bilgi">Emir görevi</Rozet>{' '}</>}
         {g.ad}
         {g.kilometreTasiId !== null && <span className="tc-prj-soluk"> · {taslar.get(g.kilometreTasiId) ?? '—'}</span>}
         {g.asama !== null && <span className="tc-prj-soluk"> · {g.asama}</span>}
@@ -122,7 +119,6 @@ export function ProjeGorevleri({ projeId, yonetim, acik, emirleriGorur }: {
           {yazabilir && !seritVar && <span className="tc-prj-genis"><Dugme simge="users" onClick={dagitaGit}>Görevleri dağıt</Dugme></span>}
           {digerleri.length > 0 && <span className="tc-prj-dar"><Menu etiket="Diğer görev işlemleri" metin="Diğer" ogeler={digerleri} /></span>}
           {yazabilir && <Dugme simge="plus" onClick={() => { formYaz('yeni'); }}>Görev ekle</Dugme>}
-          {emirleriGorur && <HazirlikGorevleriAc projeId={projeId} acik={hazirlikAcik} acikYaz={hazirlikAcikYaz} />}
         </div>
       </div>
       {gorunum === 'matris' && <ProjeHazirlik projeId={projeId} />}
@@ -159,7 +155,7 @@ function GorevPanosu({ gorevler, gun, sec }: { gorevler: readonly Gorev[]; gun: 
               const icerik = (
                 <>
                   <strong>{g.ad}</strong>
-                  {g.hazirlikMaddesi !== null && <Rozet ton="bilgi">Hazırlık</Rozet>}
+                  {g.hazirlikMaddesi !== null && <Rozet ton="bilgi">Emir görevi</Rozet>}
                   <span className="tc-prj-soluk">{atamaMetni(g.sorumluAd, g.yapanRolAd, 'Atanmadı')} · {tarihMetni(g.planBitis)}</span>
                   {g.onaylandi && <span className="tc-prj-soluk">Onaylandı</span>}
                   {gorevGecikiyor(g, gun) && <span className="tc-prj-gec">Gecikiyor</span>}
@@ -180,8 +176,6 @@ const KONTROLDE_IPUCU = 'Kontrol bekliyor: önce onaylanmalı ya da geri gönder
 const durumSecenekleri = (mevcut: GorevDurumu | undefined) => GOREV_DURUMLARI
   .filter((d) => d !== 'kontrolde' || mevcut === 'kontrolde')
   .map((d) => ({ deger: d, baslik: GOREV_DURUM_METNI[d] }));
-
-// 3269: seçilen şablonun görevleri (hazırlık maddesine bağlı olmayanlar) projeye eklenir; tarihler projenin başlangıç ve bitişinden.
 
 // 3458: rol görevinde kimin üstlendiği listede de görünür; adımı olan görevde ilerlemenin yanında adım sayısı ve kanıt zorunluluğu.
 export function YapanMetni({ g }: { g: Pick<Gorev, 'sorumluAd' | 'yapanRolAd'> }) {
@@ -287,7 +281,7 @@ export function GorevFormu({ projeId, yonetim, gorev, kapat }: {
         <Girdi etiket="Aşama" value={asama} maxLength={80} ipucu="Görevler listede aşamaya göre okunur." onChange={(e) => { asamaYaz(e.target.value); }} />
         <AtamaSecimi
           etiket="Yapan" deger={yapan} ad={gorev === null ? null : atamaMetni(gorev.sorumluAd, gorev.yapanRolAd)} secenekler={atamalar.secenekler}
-          hata={atamalar.hata} bos="Atanmadı" ipucu="Role atanan görevi roldeki biri üstlenir." degistir={yapanYaz}
+          hata={atamalar.hata} bos="Atanmadı" ipucu={YAPAN_IPUCU} degistir={yapanYaz}
         />
         <AtamaSecimi
           etiket="Kontrol eden" deger={kontrol} ad={gorev === null ? null : atamaMetni(gorev.kontrolKisiAd, gorev.kontrolRolAd)}

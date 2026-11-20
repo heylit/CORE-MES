@@ -209,7 +209,7 @@ export function GorevSayfasi() {
       <div className="tc-prj-bas">
         <h2 className="tc-prj-gorev-ad">{g.ad}</h2>
         <span className="tc-prj-soluk">{proje.kod} · {proje.ad}{g.asama !== null && ` · ${g.asama}`}</span>
-        {g.hazirlikMaddesi !== null && <Rozet ton="bilgi">Hazırlık</Rozet>}
+        {g.hazirlikMaddesi !== null && <Rozet ton="bilgi">Emir görevi</Rozet>}
       </div>
       <div className="tc-prj-gorev-sayfa">
         <div className="tc-prj-gorev-kol">

@@ -70,13 +70,13 @@ describe('3458-2 a Görevleri dağıt', () => {
     ac();
     const liste = await screen.findByRole('list', { name: 'Şablonun görevleri' });
     expect(within(liste).getByText(/2 adım · 1 proje görevi/)).toBeTruthy();
-    expect(within(liste).getByText(/4 hazırlık görevi/)).toBeTruthy();
-    expect(screen.getByText(/^2 proje görevi, 4 hazırlık görevi açılacak; atananlara bildirim gider./)).toBeTruthy();
+    expect(within(liste).getByText(/4 emir görevi/)).toBeTruthy();
+    expect(screen.getByText(/^2 proje görevi, 4 emir görevi açılacak; atananlara bildirim gider./)).toBeTruthy();
 
     fireEvent.click(within(liste).getByRole('checkbox', { name: 'Başlangıç toplantısı' }));
     expect(screen.getByText('2/3 dağıtılacak')).toBeTruthy();
     const ikinci = within(liste).getAllByRole('listitem')[1]!;
-    await waitFor(() => { expect(within(ikinci).getAllByRole('option', { name: 'Deneme Kalite' }).length).toBeGreaterThan(0); });
+    await waitFor(() => { expect(within(ikinci).getAllByRole('option', { name: 'Kişi: Deneme Kalite' }).length).toBeGreaterThan(0); });
     fireEvent.change(within(ikinci).getByLabelText('Kontrol eden'), { target: { value: 'k:8' } });
     fireEvent.change(within(ikinci).getByLabelText(/^Bitiş/), { target: { value: '2026-12-10' } });
 

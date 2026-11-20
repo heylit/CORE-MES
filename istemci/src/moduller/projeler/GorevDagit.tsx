@@ -5,7 +5,7 @@ import type { DagitCevabi, DagitGovdesi, DagitimCevabi, DagitimSatiri } from '#p
 import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Rozet, Secim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { AtamaSecimi, atamaCoz, atamaDegeri, useAtamaSecenekleri } from './Atama.tsx';
+import { AtamaSecimi, YAPAN_IPUCU, atamaCoz, atamaDegeri, useAtamaSecenekleri } from './Atama.tsx';
 import { useIstekKimligi } from './komut.ts';
 import './projeler.css';
 
@@ -30,11 +30,11 @@ function dogacakMetni(s: DagitimSatiri, emirSayisi: number | null): string {
   if (s.hazirlikMaddesi === null) return '1 proje görevi';
   if (s.dogacak === null) return 'emir bilgisi okunamadı';
   if (emirSayisi === 0) return 'emir gelince açılır';
-  return s.dogacak === 0 ? 'açık görevi var' : `${String(s.dogacak)} hazırlık görevi`;
+  return s.dogacak === 0 ? 'açık görevi var' : `${String(s.dogacak)} emir görevi`;
 }
 
 const ATANMADI = 'Yapan atanmadı: kimseye bildirim gitmez; görev açılır, görev sayfasından atanır.';
-const SIMDI_DEGIL = 'Şimdi değil: görevler açılmaz, emirlerin hazırlık görevleri de dağıtınca açılır; proje Görevler sayfasında dağıtılmamış görünür.';
+const SIMDI_DEGIL = 'Şimdi değil: görevler açılmaz, emir görevleri de dağıtınca açılır; proje Görevler sayfasında dağıtılmamış görünür.';
 
 // 3458-2 a: iş başlangıcında görevler bu ekranda dağıtılır. Şablon satırları yapan, kontrol eden, bitiş ve kanıtla düzenlenir;
 // istenmeyen satır dışarıda bırakılır, bu işe özel görev eklenir. Hazırlık satırları projeye bağlı her açık emir için açılır;
@@ -133,7 +133,7 @@ export function GorevDagit() {
               {secilenDagitildi && <p className="tc-prj-soluk" role="note">Bu şablon bu projede zaten dağıtıldı; satırları yeniden açılmaz.</p>}
               {d.emirSayisi !== null && d.satirlar.some((s) => s.hazirlikMaddesi !== null) && (
                 <p className="tc-prj-soluk">
-                  Projeye bağlı açık emir: {d.emirSayisi}. Hazırlık görevleri her emir için açılır; sonra gelen emirde de burada verilen atamayla doğar.
+                  Projeye bağlı açık emir: {d.emirSayisi}. Emir başına görevler her emir için açılır; sonra gelen emirde de burada verilen atamayla doğar.
                 </p>
               )}
             </div>
@@ -148,7 +148,7 @@ export function GorevDagit() {
                     <li key={s.kalemId} className="tc-prj-dagit-satir" data-dahil={x.dahil ? 'evet' : 'hayir'}>
                       <div className="tc-prj-dagit-bas">
                         <IsaretKutusu etiket={s.ad} checked={x.dahil} onChange={(e) => { degistir(s, { dahil: e.target.checked }); }} />
-                        {s.hazirlikMaddesi === null ? <Rozet ton="pasif">Proje</Rozet> : <Rozet ton="bilgi">Hazırlık: {s.hazirlikAd}</Rozet>}
+                        {s.hazirlikMaddesi === null ? <Rozet ton="pasif">Proje</Rozet> : <Rozet ton="bilgi">Her emir için: {s.hazirlikAd}</Rozet>}
                         <span className="tc-prj-soluk">
                           {s.asama !== null && `${s.asama} · `}{s.adimlar.length > 0 ? `${String(s.adimlar.length)} adım · ` : ''}{dogacakMetni(s, d.emirSayisi)}
                         </span>
@@ -184,7 +184,7 @@ export function GorevDagit() {
                   <div className="tc-prj-dagit-alanlar">
                     <Girdi etiket="Görev adı" required maxLength={200} value={o.ad} onChange={(e) => { ozelDegistir(o.anahtar, { ad: e.target.value }); }} />
                     <AtamaSecimi
-                      etiket="Yapan" deger={o.yapan} ad={null} secenekler={atama.secenekler} hata={atama.hata} bos="Atanmadı"
+                      etiket="Yapan" deger={o.yapan} ad={null} secenekler={atama.secenekler} hata={atama.hata} bos="Atanmadı" ipucu={YAPAN_IPUCU}
                       degistir={(y) => { ozelDegistir(o.anahtar, { yapan: y }); }}
                     />
                     <AtamaSecimi
@@ -209,7 +209,7 @@ export function GorevDagit() {
             <span className="tc-prj-soluk">
               {bos
                 ? secilenDagitildi ? 'Bu şablon dağıtıldı: Dağıt yalnız bu işe özel görev eklenince açılır.' : 'Dağıtılacak görev yok.'
-                : `${String(projeSayisi)} proje görevi${hazirlikSayisi > 0 ? `, ${String(hazirlikSayisi)} hazırlık görevi` : ''} açılacak; atananlara bildirim gider.`}
+                : `${String(projeSayisi)} proje görevi${hazirlikSayisi > 0 ? `, ${String(hazirlikSayisi)} emir görevi` : ''} açılacak; atananlara bildirim gider.`}
               {!d.dagitildi && <><br />{SIMDI_DEGIL}</>}
             </span>
             <div className="tc-prj-gorunum">

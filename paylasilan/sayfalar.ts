@@ -39,7 +39,7 @@ import { ORTAK_DOSYALAR_IKINCI_MENU, ORTAK_DOSYALAR_SAYFALARI } from './sayfalar
 import { OEE_IKINCI_MENU, OEE_SAYFALARI } from './sayfalar/oee.ts';
 import { PROSES_IKINCI_MENU, PROSES_SAYFALARI } from './sayfalar/proses.ts';
 import { PROFIL_IKINCI_MENU, PROFIL_SAYFALARI } from './sayfalar/profil.ts';
-import { PROJELER_IKINCI_MENU, PROJELER_SAYFALARI } from './sayfalar/projeler.ts';
+import { GOREVLER_IKINCI_MENU, PROJELER_IKINCI_MENU, PROJELER_SAYFALARI } from './sayfalar/projeler.ts';
 import { ROTA_IKINCI_MENU, ROTA_SAYFALARI } from './sayfalar/rota.ts';
 import { SATIN_ALMA_IKINCI_MENU, SATIN_ALMA_SAYFALARI } from './sayfalar/satin-alma.ts';
 import { SEVKIYAT_IKINCI_MENU, SEVKIYAT_SAYFALARI } from './sayfalar/sevkiyat.ts';
@@ -152,6 +152,7 @@ export const TUM_IKINCI_MENULER = [
   TEZGAH_BAGLANTISI_IKINCI_MENU,
   PORTAL_IKINCI_MENU,
   PROJELER_IKINCI_MENU,
+  GOREVLER_IKINCI_MENU,
   MESAJ_IKINCI_MENU,
   ORTAK_DOSYALAR_IKINCI_MENU,
   CNC_KURULUM_IKINCI_MENU,

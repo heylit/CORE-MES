@@ -58,6 +58,10 @@ function sunucuKur(kullanici: Kullanici) {
     if (yontem === 'GET' && yol === '/projeler/sablonlar/liste') return json(200, { sablonlar: [] } satisfies SablonListesiCevabi);
     if (yontem === 'GET' && yol === '/projeler/sorumlu-secenekleri') return json(200, { kisiler: [{ id: 9, ad: 'Deneme Yapan' }] });
     if (yontem === 'GET' && yol === '/projeler/rol-secenekleri') return json(200, { roller: [{ id: 2, ad: 'Kalite' }] });
+    if (yontem === 'GET' && yol === '/hazirlik-maddeleri') {
+      const m = (kod: string, ad: string, acik: boolean) => ({ kod, ad, kisa: ad, sira: 10, acik, sistem: true, durduran: false, sahip: 'Deneme', isEmriDuzeyi: true, surum: 1 });
+      return json(200, { yazabilir: false, maddeler: [m('cnc', 'CNC kurulumu', true), m('malzeme', 'Malzeme', true), m('cizim', 'Çizim revizyonu', false)] });
+    }
     if (yontem === 'POST' && yol === '/projeler/sablonlar') return json(200, { sablonlar: [] } satisfies SablonListesiCevabi);
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
   }));
@@ -185,5 +189,27 @@ describe('3269 proje görevlerim ve şablon', () => {
     expect(govde.kalemler).toHaveLength(2);
     expect(govde.kalemler[0]).toMatchObject({ ad: 'Çizim incelemesi', yapanRolId: 2, yapanKisiId: null, kontrolKisiId: 9, kontrolRolId: null, oncekiSira: null });
     expect(govde.kalemler[1]).toMatchObject({ ad: 'Sevk öncesi', dayanak: 'termin', gun: -2, oncekiSira: 0, hazirlikMaddesi: null });
+  });
+
+  it('yeni şablon talaşlı imalat örneğiyle dolar; açık olmayan madde proje başına kalır, yapan boş', async () => {
+    const cagrilar = sunucuKur(SABLONCU);
+    ac('/projeler/sablonlar');
+    fireEvent.click(await screen.findByRole('button', { name: /Şablon ekle/ }));
+    const pencere = await screen.findByRole('dialog');
+    const ornek = within(pencere).getByRole('button', { name: 'Örnekle başla' });
+    await waitFor(() => { expect((ornek as HTMLButtonElement).disabled).toBe(false); });
+    fireEvent.click(ornek);
+    expect(within(pencere).getAllByRole('option', { name: 'Her operasyon için: CNC kurulumu' }).length).toBeGreaterThan(0);
+    expect(within(pencere).queryByRole('button', { name: 'Örnekle başla' })).toBeNull();
+    expect((within(pencere).getByLabelText(/Şablon adı/) as HTMLInputElement).value).toBe('Talaşlı imalat hazırlığı (örnek)');
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(cagrilar.some((c) => c.yontem === 'POST')).toBe(true); });
+    const govde = cagrilar.find((c) => c.yontem === 'POST')?.govde as { kalemler: Record<string, unknown>[] };
+    expect(govde.kalemler).toHaveLength(8);
+    expect(govde.kalemler[0]).toMatchObject({ ad: 'Sipariş ve çizim gözden geçirme', hazirlikMaddesi: null, yapanKisiId: null, yapanRolId: null });
+    expect(govde.kalemler[2]).toMatchObject({ hazirlikMaddesi: 'malzeme', kanitZorunlu: true, oncekiSira: 0 });
+    expect(govde.kalemler[5]).toMatchObject({ ad: 'CNC programı ve simülasyon', hazirlikMaddesi: 'cnc', oncekiSira: 1 });
+    expect(govde.kalemler[7]).toMatchObject({ ad: 'İlk parça onayı', hazirlikMaddesi: null, kanitZorunlu: true, oncekiSira: 5 });
+    expect((govde.kalemler[7]?.adimlar as string[]).length).toBe(3);
   });
 });

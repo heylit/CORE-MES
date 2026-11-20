@@ -50,20 +50,21 @@ async function projeVeGorev(page: Page, ad: string, kontrolde: boolean): Promise
 test.describe('yönetici', () => {
   test.use({ hesap: 'ornek.yonetici' });
 
-  // 3444 a: projenin görevleri Görevler sayfasında; proje başlığındaki düğme sayfayı proje seçili açar.
-  test('projenin Görevler sayfası, yan panel ve görev formu taşmaz; kapatmak yazmaz', async ({ page, ac, ag }) => {
+  // 3444 a: projenin görevleri Görevler sayfasında; proje başlığındaki düğme sayfayı proje seçili açar. 3458-1 b: satır görevin kendi sayfasını açar.
+  test('projenin Görevler sayfası, görev sayfası ve görev formu taşmaz; açmak yazmaz', async ({ page, ac, ag }) => {
     const ad = `ORN görev ${randomUUID().slice(0, 6)}`;
     const { projeId } = await projeVeGorev(page, ad, false);
     await ac(`/projeler/${String(projeId)}`);
     await page.getByRole('button', { name: /^Görevler \(/ }).click();
     await expect(page).toHaveURL(new RegExp(`/proje-gorevlerim\\?proje=${String(projeId)}$`));
     await expect(page.getByText(ad).first()).toBeVisible();
-    // Dar ekranda "Şablondan ekle" Diğer menüsündedir.
-    await expect(page.getByRole('button', { name: /Şablondan ekle|Diğer görev işlemleri/ })).toBeVisible();
+    // Dar ekranda "Görevleri dağıt" Diğer menüsündedir.
+    await expect(page.getByRole('button', { name: /^Görevleri dağıt$|Diğer görev işlemleri/ })).toBeVisible();
     expect(await tasmaOlc(page)).toMatchObject({ belge: 0 });
     ag.sifirla();
     await page.getByText(ad).first().click();
-    const panel = page.getByRole('dialog');
+    await expect(page).toHaveURL(/\/proje-gorevlerim\/\d+$/);
+    const panel = page.getByRole('region', { name: 'Görev bilgisi' });
     await expect(panel.getByText('Örnek Kaliteci')).toBeVisible();
     // 3303-1 c: görev silinmez; İptal et onay sorar, Vazgeç yazmaz.
     await panel.getByRole('button', { name: 'İptal et' }).click();
@@ -80,7 +81,7 @@ test.describe('yönetici', () => {
   });
 
   test('Görev şablonları listesi ve şablon formu taşmaz; Vazgeç yazmaz', async ({ page, ac, ag }) => {
-    await ac('/projeler/sablonlar');
+    await ac('/proje-gorevlerim/sablonlar');
     await page.getByRole('button', { name: /Şablon ekle/ }).click();
     const pencere = page.getByRole('dialog');
     await pencere.getByRole('button', { name: /Görev ekle/ }).click();
@@ -119,7 +120,7 @@ test.describe('yönetici', () => {
 test.describe('kalite', () => {
   test.use({ hesap: 'ornek.kalite' });
 
-  test('Proje görevlerim: kontrolündeki görev panelde onaylanabilir, geri gönderme gerekçe ister; taşmaz', async ({ page, ac, ag, browser }) => {
+  test('Proje görevlerim: kontrolündeki görev kendi sayfasında onaylanabilir, geri gönderme gerekçe ister; taşmaz', async ({ page, ac, ag, browser }) => {
     const ad = `ORN kontrol ${randomUUID().slice(0, 6)}`;
     const yonetici = await browser.newContext({ storageState: oturumDosyasi('ornek.yonetici') });
     await projeVeGorev(await yonetici.newPage(), ad, true);
@@ -130,9 +131,10 @@ test.describe('kalite', () => {
     await expect(tablo.getByText(ad).first()).toBeVisible();
     expect(await tasmaOlc(page)).toMatchObject({ belge: 0 });
     await tablo.getByText(ad).first().click();
-    const panel = page.getByRole('dialog');
+    await expect(page).toHaveURL(/\/proje-gorevlerim\/\d+$/);
+    const panel = page.getByRole('region', { name: 'Görev bilgisi' });
     await expect(panel.getByRole('button', { name: 'Onayla' })).toBeVisible();
-    await expect(panel.getByText(/bitirdi/)).toBeVisible();
+    await expect(page.getByText(/bitirdi/).first()).toBeVisible();
     await panel.getByRole('button', { name: 'Geri gönder' }).click();
     await expect(panel.getByLabel(/Geri gönderme gerekçesi/)).toBeVisible();
     expect(await tasmaOlc(page)).toMatchObject({ belge: 0 });

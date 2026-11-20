@@ -6,10 +6,11 @@ import type {
 import { CokSatir, Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Pencere, Rozet, Secim, Tablo, type Secenek, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { AtamaSecimi, atamaCoz, atamaDegeri, useAtamaSecenekleri } from './Atama.tsx';
+import { AtamaSecimi, YAPAN_IPUCU, atamaCoz, atamaDegeri, useAtamaSecenekleri } from './Atama.tsx';
 import { useHazirlikMaddeleri } from './hazirlik-maddeleri.ts';
 import { HAZIRLIK_METNI, SABLON_ISLEMI, atamaMetni } from './gosterim.ts';
 import { bosIseNull, useIslemVar, useIstekKimligi } from './komut.ts';
+import { ORNEK_SABLON, ORNEK_SABLON_ADI } from './ornek-sablon.ts';
 import './projeler.css';
 
 const DAYANAK_SECENEKLERI: Secenek[] = [{ deger: 'baslangic', baslik: 'Proje başlangıcından' }, { deger: 'termin', baslik: 'Proje bitişinden (termin)' }];
@@ -17,9 +18,9 @@ const KOSUL_SECENEKLERI: Secenek[] = [{ deger: 'her-zaman', baslik: 'Her zaman' 
 // 3396 a: seçenekler sunucudaki madde listesidir (açık maddeler, özel dahil); liste okunamazsa kod adları.
 function useHazirlikSecenekleri(secili: readonly string[]): Secenek[] {
   const l = useHazirlikMaddeleri().data?.maddeler;
-  if (l === undefined) return Object.entries(HAZIRLIK_METNI).map(([m, ad]) => ({ deger: m, baslik: `${ad} (iş emri başına)` }));
+  if (l === undefined) return Object.entries(HAZIRLIK_METNI).map(([m, ad]) => ({ deger: m, baslik: `Her üretim emri için: ${ad}` }));
   return l.filter((m) => m.acik || secili.includes(m.kod))
-    .map((m) => ({ deger: m.kod, baslik: `${m.ad}${m.acik ? '' : ' (kapalı)'} (${m.isEmriDuzeyi ? 'iş emri' : 'emir'} başına)` }));
+    .map((m) => ({ deger: m.kod, baslik: `${m.isEmriDuzeyi ? 'Her operasyon için' : 'Her üretim emri için'}: ${m.ad}${m.acik ? '' : ' (kapalı)'}` }));
 }
 
 const baslangicMetni = (k: Pick<SablonKalemi, 'dayanak' | 'gun'>): string =>
@@ -32,8 +33,8 @@ export function GorevSablonlari() {
   const l = useQuery({ queryKey: anahtarlar.sablonlar, queryFn: () => api.get<SablonListesiCevabi>('/projeler/sablonlar/liste'), enabled: yazabilir });
   const sutunlar: Sutun<Sablon>[] = [
     { anahtar: 'ad', baslik: 'Şablon', hucre: (s) => s.ad },
-    { anahtar: 'gorev', baslik: 'Proje görevi', hizala: 'sag', mono: true, hucre: (s) => s.kalemler.filter((k) => k.hazirlikMaddesi === null).length },
-    { anahtar: 'hazirlik', baslik: 'Hazırlık görevi', hizala: 'sag', mono: true, hucre: (s) => s.kalemler.filter((k) => k.hazirlikMaddesi !== null).length },
+    { anahtar: 'gorev', baslik: 'Proje başına', hizala: 'sag', mono: true, hucre: (s) => s.kalemler.filter((k) => k.hazirlikMaddesi === null).length },
+    { anahtar: 'hazirlik', baslik: 'Emir başına', hizala: 'sag', mono: true, hucre: (s) => s.kalemler.filter((k) => k.hazirlikMaddesi !== null).length },
     { anahtar: 'durum', baslik: 'Durum', hucre: (s) => (
       <span className="tc-prj-bag">
         {s.varsayilan && <Rozet ton="tamam">Varsayılan</Rozet>}
@@ -163,6 +164,19 @@ function SablonFormu({ sablon, kapat }: { sablon: Sablon | null; kapat: () => vo
       onceki: null, hazirlik: '', kosul: 'her-zaman', adimlar: '', kanitZorunlu: false, adlar: { yapan: null, kontrol: null, yedek: null },
     }]);
   };
+  // Örnek yalnız boş yeni şablonu doldurur; açık olmayan madde proje başına satıra döner.
+  const maddeListesi = useHazirlikMaddeleri().data?.maddeler;
+  const acikMaddeler = new Set((maddeListesi ?? []).filter((m) => m.acik).map((m) => m.kod));
+  const ornekleDoldur = () => {
+    const anahtarlar = ORNEK_SABLON.map(() => yeniAnahtar());
+    if (ad.trim() === '') adYaz(ORNEK_SABLON_ADI);
+    kalemlerYaz(ORNEK_SABLON.map((o, i) => ({
+      anahtar: anahtarlar[i] ?? 0, ad: o.ad, aciklama: '', asama: o.asama, dayanak: o.dayanak, gun: String(o.gun), sureGun: String(o.sureGun),
+      yapan: '', kontrol: '', yedek: '', onceki: o.onceki === null ? null : anahtarlar[o.onceki] ?? null,
+      hazirlik: o.madde !== null && acikMaddeler.has(o.madde) ? o.madde : '', kosul: 'her-zaman', adimlar: o.adimlar.join('\n'),
+      kanitZorunlu: o.kanitZorunlu, adlar: { yapan: null, kontrol: null, yedek: null },
+    })));
+  };
   const ilet = (o: FormEvent) => {
     o.preventDefault();
     const sira = new Map(kalemler.map((k, i) => [k.anahtar, i]));
@@ -195,9 +209,15 @@ function SablonFormu({ sablon, kapat }: { sablon: Sablon | null; kapat: () => vo
           onChange={(e) => { varsayilanYaz(e.target.checked); }}
         />
         <IsaretKutusu etiket="Etkin (seçilebilir)" checked={varsayilan || etkin} disabled={varsayilan} onChange={(e) => { etkinYaz(e.target.checked); }} />
+        {sablon === null && kalemler.length === 0 && (
+          <div className="tc-form-tam tc-prj-dagit-serit" role="note">
+            <span>Boş başlamak yerine talaşlı imalat hazırlığı örneğiyle başlayabilirsin: 8 görev, adımları ve kanıt kuralıyla. Yapan ve kontrol edeni sen seçersin.</span>
+            <Dugme simge="layers" disabled={maddeListesi === undefined} onClick={ornekleDoldur}>Örnekle başla</Dugme>
+          </div>
+        )}
         {kalemler.map((k, i) => (
           <fieldset key={k.anahtar} className="tc-form-tam tc-prj-kalem">
-            <legend>{i + 1}. görev{k.hazirlik !== '' && ' · iş emri başına'}</legend>
+            <legend>{i + 1}. görev{k.hazirlik !== '' && ' · emir başına'}</legend>
             <div className="tc-form">
               <Girdi etiket="Görev adı" required value={k.ad} maxLength={200} onChange={(e) => { degistir(k.anahtar, { ad: e.target.value }); }} />
               <Girdi etiket="Aşama" value={k.asama} maxLength={80} onChange={(e) => { degistir(k.anahtar, { asama: e.target.value }); }} />
@@ -215,11 +235,11 @@ function SablonFormu({ sablon, kapat }: { sablon: Sablon | null; kapat: () => vo
                 onChange={(e) => { degistir(k.anahtar, { sureGun: e.target.value }); }}
               />
               <Secim
-                etiket="Hazırlık görevi olsun" value={k.hazirlik} bosSecenek="Hayır, proje başına bir kez" secenekler={hazirlikSecenekleri}
+                etiket="Kaç kez açılsın" value={k.hazirlik} bosSecenek="Proje başına bir kez" secenekler={hazirlikSecenekleri}
                 onChange={(e) => { degistir(k.anahtar, { hazirlik: e.target.value }); }}
               />
               <AtamaSecimi
-                etiket="Yapan" deger={k.yapan} ad={k.adlar.yapan} secenekler={atamalar.secenekler} hata={atamalar.hata} bos="Atanmadı"
+                etiket="Yapan" deger={k.yapan} ad={k.adlar.yapan} secenekler={atamalar.secenekler} hata={atamalar.hata} bos="Atanmadı" ipucu={YAPAN_IPUCU}
                 degistir={(d) => { degistir(k.anahtar, { yapan: d }); }}
               />
               <AtamaSecimi
