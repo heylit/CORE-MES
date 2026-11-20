@@ -1,5 +1,5 @@
 // Sevkiyat listesinde bir aracın grubu: başlıkta özet ve yük, altında sırasıyla durakları.
-// Her satırdaki "Araç" seçimi işi başka araca verir ya da atanmamışlara alır (elle dağıtma); sıra ve iş işlemleri ⋯ menüsündedir.
+// Durağın tek denetimi ⋯ menüsüdür (3489 b): başka araca ver, havuza al, sıra ve iş işlemleri. Sütunlar arası sürükleme de işi taşır.
 import { Fragment, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
 import type { Amac, Arac, Is, Nokta, PlanRotasi, RotaOgesi } from '#paylasilan/sozlesme/sevkiyat.ts';
 import { Dugme, Rozet } from '../../ortak/arayuz/index.ts';
@@ -94,8 +94,13 @@ export function AracRotasi({ arac, renk, rota, secili, vurgulu, isler, noktalar,
   const durakSayisi = ogeler.filter((o) => !araDonusMu(o)).length;
   // Harita paketi yokken hesap gelmez; yük çubuğu atanmış işlerden sayılır.
   const yuk = hesap ? { kilogram: hesap.enCokKilogram, palet: hesap.enCokPalet } : yukTepesi(ogeler, (id) => isler.get(id));
-  // Tek birincil düğme: sırada sonucu girilecek ilk durak.
-  const siradakiSonuc = sonuclar ? ogeler.flatMap((o) => (araDonusMu(o) ? [] : [isler.get(o.isId)])).find((x) => x && x.durum === 'yolda' && !sonuclar.has(x.id))?.id ?? null : null;
+  // Tek birincil düğme: sonucu girilen satırlar arasında (bırakış, alımda alış) sıradaki ilk durak.
+  const sonucSatiriMi = (alis: boolean, is: Is) => !alis || is.tur === 'alim';
+  const siradakiSonuc = sonuclar ? ogeler.flatMap((o) => {
+    if (araDonusMu(o)) return [];
+    const x = isler.get(o.isId);
+    return x && sonucSatiriMi(o.alis, x) ? [x] : [];
+  }).find((x) => x.durum === 'yolda' && !sonuclar.has(x.id))?.id ?? null : null;
 
   const menu = (sira: number, is: Is, ad: string) => (
     <select className="tc-sevkiyat-menu tc-sevkiyat-menu-kucuk" value="" title="Sırayı değiştir, sabitle, düzenle" aria-label={`${ad} durağı işlemleri`}
@@ -107,8 +112,14 @@ export function AracRotasi({ arac, renk, rota, secili, vurgulu, isler, noktalar,
         else if (v === 'sabitle') islem.sabitle(is, is.sabitAracId === arac.id ? null : arac.id);
         else if (v === 'duzenle') islem.duzenle(is);
         else if (v === 'iptal') islem.iptalEt(is);
+        else if (v === 'havuz') islem.isiTasi(is.id, null);
+        else if (v.startsWith('arac:')) islem.isiTasi(is.id, Number(v.slice(5)));
       }}>
       <option value="">⋯</option>
+      <optgroup label="Araç">
+        {araclar.filter((a) => a.id !== arac.id).map((a) => <option key={a.id} value={`arac:${a.id}`}>{a.ad} aracına ver</option>)}
+        <option value="havuz">Havuza al</option>
+      </optgroup>
       <optgroup label="Sıra">
         {sira > 0 && <option value="yukari">Yukarı al</option>}
         {sira < ogeler.length - 1 && <option value="asagi">Aşağı al</option>}
@@ -221,19 +232,18 @@ export function AracRotasi({ arac, renk, rota, secili, vurgulu, isler, noktalar,
                 </span>
                 <time title={onaySaati ? 'Onayda kaydedilen varış' : 'Tahmini varış'}>{onaySaati ? saatMetni(onaySaati.varis) : hesapDuragi ? saatMetni(hesapDuragi.baslama) : '--:--'}</time>
                 {(!oge.alis || is.tur === 'alim') && tetik?.(is)}
-                {duzenlenebilir && <AracSecimi isAdi={ad} aracId={arac.id} araclar={araclar} sec={(hedef) => { if (hedef !== arac.id) islem.isiTasi(is.id, hedef); }} />}
                 {duzenlenebilir && menu(sira, is, ad)}
                 {/* İki uçlu işin sonucu bırakış satırında girilir; alımın tek ucu alıştır. */}
-                {sonuclar && (!oge.alis || is.tur === 'alim') && (
+                {sonuclar && (sonucSatiriMi(oge.alis, is) ? (
                   <DurakSonucu is={is} sonuc={sonuclar.get(is.id)} yazabilir={sonucYazabilir} birincil={is.id === siradakiSonuc} degistir={(durum) => islem.durumDegistir(is, durum)} />
-                )}
+                ) : <span className="tc-sevkiyat-sonuc-dugmeleri"><Rozet ton="pasif">Sonuç bırakışta</Rozet></span>)}
               </li>
             );
           })}
           <li className="tc-sevkiyat-fabrika-satiri"><time>{hesap ? saatMetni(hesap.donus) : '--:--'}</time> Fabrikaya dönüş</li>
         </ol>
       ) : duzenlenebilir ? (
-        <p className="tc-sevkiyat-ince">Bu araca iş vermek için işin satırındaki “Araç” seçiminden {arac.ad} seçin ya da işi buraya sürükleyin.</p>
+        <p className="tc-sevkiyat-ince">Havuzdaki işin “Araç seç…” kutusundan {arac.ad} seçin ya da işi bu sütuna sürükleyin.</p>
       ) : null}
     </section>
   );

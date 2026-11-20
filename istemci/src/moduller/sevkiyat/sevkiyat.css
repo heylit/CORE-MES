@@ -53,10 +53,13 @@
 .tc-sevkiyat-adimlar li[data-durum="aktif"] .tc-sevkiyat-adim-no { border-color: var(--hazard); color: var(--hazard-ink); }
 .tc-sevkiyat-adimlar li[data-durum="bekliyor"] b { color: var(--muted); }
 .tc-sevkiyat-adim {
-  display: flex; align-items: flex-start; gap: var(--b-2); padding: var(--b-2) var(--b-3); font-size: var(--yazi-s);
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); padding: var(--b-2) var(--b-3); font-size: var(--yazi-s);
   background: var(--panel2); border-left: var(--b-1) solid var(--done); border-radius: var(--yari-1);
 }
 .tc-sevkiyat-adim > svg { flex: none; color: var(--done); }
+.tc-sevkiyat-adim > span:not(.tc-sevkiyat-adim-eylemleri) { flex: 1 1 calc(var(--b-6) * 10); min-width: 0; }
+.tc-sevkiyat-adim-eylemleri { display: flex; flex-wrap: wrap; gap: var(--b-2); margin-left: auto; }
+@media (max-width: 767px) { .tc-sevkiyat-adim-eylemleri, .tc-sevkiyat-adim-eylemleri > * { flex: 1 1 100%; } }
 .tc-sevkiyat-adim[data-ton="tamam"] { border-left-color: var(--run); }
 .tc-sevkiyat-adim[data-ton="tamam"] > svg { color: var(--run); }
 .tc-sevkiyat-adim[data-ton="uyari"] { border-left-color: var(--hold); }
@@ -115,14 +118,28 @@
 .tc-sevkiyat-alan-grubu legend { color: var(--muted); font-size: var(--yazi-xs); }
 .tc-sevkiyat-form { display: grid; gap: var(--b-3); min-width: 0; }
 
-/* yerleşim: harita ve pano yan yana, dar ekranda alt alta. Gün planında pano tek kolondur; araç kartları alt alta okunur. */
-.tc-sevkiyat-plan-duzen { display: grid; gap: var(--b-4); align-items: start; }
-@media (min-width: 1280px) {
-  .tc-sevkiyat-plan-duzen { grid-template-columns: minmax(0, 7fr) minmax(0, 6fr); }
+/* gün planı (3489 b): havuz ve her araç bir sütun, geniş ekranda yan yana ve yana kayar; 1024 altında sekmeyle tek sütun
+   (768'de üç sütun sığmaz, kesik sütun yerine sekme). Boş araç dar çizilir: yer işi olan sütunlara kalır. Harita isteğe bağlı, sütunların üstünde. */
+.tc-sevkiyat-sutunlar {
+  display: flex; align-items: flex-start; gap: var(--b-3); overflow-x: auto; min-width: 0; padding-bottom: var(--b-2);
 }
-@media (max-width: 1279px) {
-  .tc-sevkiyat-plan-duzen .tc-sevkiyat-harita-paneli { position: relative; top: auto; }
-  .tc-sevkiyat-plan-duzen .tc-sevkiyat-harita { aspect-ratio: 16 / 10; }
+.tc-sevkiyat-sutun { display: grid; flex: 1 1 0; min-width: calc(var(--b-6) * 9); }
+.tc-sevkiyat-sutun[data-bos] { flex: 0 0 calc(var(--b-6) * 6); min-width: 0; }
+/* Araç sütunu dar: durak adı kısa tabanla başlar ki saat ve ⋯ aynı satırda kalsın. */
+.tc-sevkiyat-sutun .tc-sevkiyat-arac .tc-sevkiyat-durak-adi { flex-basis: calc(var(--b-6) * 3); }
+.tc-sevkiyat-sutun-sekmeleri { display: none; min-width: 0; }
+.tc-sevkiyat-liste > .tc-sevkiyat-harita-paneli { position: relative; top: auto; }
+.tc-sevkiyat-liste > .tc-sevkiyat-harita-paneli .tc-sevkiyat-harita { aspect-ratio: 16 / 7; }
+.tc-sevkiyat-oncelik-yazisi b { color: var(--ink); }
+@media (max-width: 1023px) {
+  .tc-sevkiyat-sutun-sekmeleri { display: block; }
+  .tc-sevkiyat-sutunlar { flex-direction: column; align-items: stretch; overflow: visible; }
+  .tc-sevkiyat-sutun, .tc-sevkiyat-sutun[data-bos] { flex: none; min-width: 0; }
+  .tc-sevkiyat-sutun[data-gizli] { display: none; }
+}
+@media (max-width: 767px) {
+  .tc-sevkiyat-liste > .tc-sevkiyat-harita-paneli .tc-sevkiyat-harita { aspect-ratio: 4 / 3; }
+  .tc-sevkiyat-oncelik-yazisi { display: none; }
 }
 .tc-sevkiyat-pano-baslik { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2); }
 .tc-sevkiyat-pano-baslik h2, .tc-sevkiyat-liste h2 { font-size: var(--yazi-l); }

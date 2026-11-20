@@ -37,6 +37,11 @@ function ac(ek = '') {
 }
 const aracAc = (ad: string) => screen.findByRole('region', { name: ad });
 const yazmalar = (istekler: Istek[]) => istekler.filter((i) => i.yontem === 'POST');
+// Dağıtım ayarları (otomatik dağıt, öncelik, geri al, yinele, boşalt) tek menüdedir (3489 b).
+const dagitimSec = async (ad: string | RegExp) => {
+  fireEvent.click(await screen.findByRole('button', { name: 'Dağıtım ayarları' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: ad }));
+};
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
@@ -64,20 +69,13 @@ describe('SevkiyatPlani', () => {
     expect(screen.getByText(/iş yerleşti/).textContent).toBe(`${GUN_PLANI.isler.length - GUN_PLANI.bekleyen.length}/${GUN_PLANI.isler.length} iş yerleşti`);
   });
 
-  it('boş günde tek birincil "İlk işi ekle"dir; Otomatik dağıt ikincil kalır; iş yazamayan planlayıcıda dağıt birincil, okuyucuda birincil yok', async () => {
+  it('boş günde tek birincil "İlk işi ekle"dir; dağıtılacak iş yokken dağıt düğmesi yoktur; okuyucuda birincil yok', async () => {
     const bos: GunPlaniCevabi = { ...GUN_PLANI, isler: [], bekleyen: [], rotalar: GUN_PLANI.rotalar.map((r) => ({ ...r, ogeler: [], hesap: null })) };
     sunucuKur(PLANCI, undefined, bos);
     ac();
     const ilk = await screen.findByRole('button', { name: 'İlk işi ekle' });
     expect(ilk.className).toContain('tc-dugme-birincil');
-    expect(screen.getByRole('button', { name: 'Otomatik dağıt' }).className).not.toContain('tc-dugme-birincil');
-    expect(document.querySelectorAll('.tc-dugme-birincil')).toHaveLength(1);
-    cleanup();
-    sunucuKur({ ...PLANCI, islemler: PLANCI.islemler.filter((i) => i !== 'sevkiyat.is-yaz') }, undefined, bos);
-    ac();
-    const dagit = await screen.findByRole('button', { name: 'Otomatik dağıt' });
-    expect(screen.queryByRole('button', { name: 'İlk işi ekle' })).toBeNull();
-    expect(dagit.className).toContain('tc-dugme-birincil');
+    expect(screen.queryByRole('button', { name: 'Otomatik dağıt' })).toBeNull();
     expect(document.querySelectorAll('.tc-dugme-birincil')).toHaveLength(1);
     cleanup();
     sunucuKur(OKUYUCU, undefined, bos);
@@ -87,15 +85,17 @@ describe('SevkiyatPlani', () => {
     expect(document.querySelectorAll('.tc-dugme-birincil')).toHaveLength(0);
   });
 
-  it('liste önce gelir: atanmamış iş satırındaki Araç seçimiyle araca verilir; akışta etkin adım dağıtmadır; tek birincil eylem onaydır', async () => {
+  it('havuz ve araçlar sütundur; havuzdaki iş Araç seçimiyle araca verilir; havuzda iş varken tek birincil "Havuzu yerleştir", onay ikincildir', async () => {
     const istekler = sunucuKur(PLANCI);
     ac();
-    await screen.findByRole('button', { name: 'Otomatik dağıt' });
+    await screen.findByRole('button', { name: 'Dağıtım ayarları' });
     const liste = screen.getByRole('region', { name: 'Sevkiyat listesi' });
     const bekleyen = within(liste).getByRole('region', { name: 'Sevkiyat havuzu' });
     expect(screen.getByRole('region', { name: 'Sevkiyat adımları' }).querySelector('[aria-current="step"]')!.textContent).toContain('Araca ver');
-    expect(screen.getByRole('button', { name: 'Planı onayla' }).className).toContain('tc-dugme-birincil');
-    expect(screen.getByRole('button', { name: 'Otomatik dağıt' }).className).not.toContain('tc-dugme-birincil');
+    expect(screen.getByRole('button', { name: 'Havuzu yerleştir' }).className).toContain('tc-dugme-birincil');
+    expect(screen.getByRole('button', { name: 'Planı onayla' }).className).not.toContain('tc-dugme-birincil');
+    expect(document.querySelectorAll('.tc-dugme-birincil')).toHaveLength(1);
+    expect(within(liste).getAllByRole('region').map((r) => r.getAttribute('aria-label'))).toEqual(['Sevkiyat havuzu', ...GUN_PLANI.araclar.map((a) => a.ad)]);
     const bekleyenIs = GUN_PLANI.isler.find((i) => i.id === GUN_PLANI.bekleyen[0])!;
     const secim = within(bekleyen).getByRole('combobox', { name: /işinin aracı$/ });
     fireEvent.change(secim, { target: { value: '2' } });
@@ -104,14 +104,14 @@ describe('SevkiyatPlani', () => {
     expect(govde.rotalar.find((r) => r.aracId === 2)!.ogeler.some((o) => 'isId' in o && o.isId === bekleyenIs.id)).toBe(true);
   });
 
-  it('öncelik seçimi seçilmeyen seçeneğin farkını gösterir; değişince plan yeni öncelikle kaydedilir', async () => {
+  it('seçili öncelik Dağıtım düğmesinin yanında yazar; menüde seçilmeyenin farkı görünür; değişince plan yeni öncelikle kaydedilir', async () => {
     const istekler = sunucuKur(PLANCI);
     ac();
-    await screen.findByRole('button', { name: 'Otomatik dağıt' });
-    const grup = screen.getByRole('group', { name: 'Rota önceliği' });
-    const enKisa = within(grup).getByRole('button', { name: /En kısa yol/ });
-    expect(enKisa.getAttribute('aria-pressed')).toBe('false');
-    fireEvent.click(enKisa);
+    await screen.findByRole('button', { name: 'Dağıtım ayarları' });
+    expect(screen.getByText('Öncelik:').textContent).toBe('Öncelik: En hızlı');
+    fireEvent.click(screen.getByRole('button', { name: 'Dağıtım ayarları' }));
+    expect(screen.getByRole('menuitem', { name: 'Öncelik: En hızlı ✓' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('menuitem', { name: /^Öncelik: En kısa yol \(/ }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     expect((yazmalar(istekler)[0]!.govde as KaydetGovdesi).amac).toBe('mesafe');
   });
@@ -120,7 +120,7 @@ describe('SevkiyatPlani', () => {
     const istekler = sunucuKur(PLANCI);
     ac();
     await screen.findByRole('region', { name: 'Kamyonet 1' });
-    fireEvent.click(screen.getByRole('button', { name: 'Otomatik dağıt' }));
+    await dagitimSec('Otomatik dağıt (baştan)');
     await screen.findByText(/Otomatik dağıtıldı \(en hızlı\)/);
     expect(yazmalar(istekler)).toEqual([{ yontem: 'POST', yol: `/sevkiyat/planlar/${TARIH}/dagit`, govde: { amac: 'sure', kilitliAraclar: [], surum: GUN_PLANI.surum } }]);
   });
@@ -128,10 +128,11 @@ describe('SevkiyatPlani', () => {
   it('durağı bekleyenlere almak işin bütün uçlarını çıkararak kaydeder; geri al önceki rotayı kaydeder', async () => {
     const istekler = sunucuKur(PLANCI);
     ac();
-    await screen.findByRole('button', { name: 'Otomatik dağıt' });
+    await screen.findByRole('button', { name: 'Dağıtım ayarları' });
     const kamyon = await aracAc('Kamyonet 1');
-    const aracSecimi = within(kamyon).getAllByRole('combobox', { name: 'Örnek Fason B işinin aracı' })[0]!;
-    fireEvent.change(aracSecimi, { target: { value: 'yok' } });
+    expect(within(kamyon).queryByRole('combobox', { name: /işinin aracı$/ })).toBeNull();
+    const durakMenusu = within(kamyon).getAllByRole('combobox', { name: 'Örnek Fason B durağı işlemleri' })[0]!;
+    fireEvent.change(durakMenusu, { target: { value: 'havuz' } });
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     const govde = yazmalar(istekler)[0]!.govde as KaydetGovdesi;
     expect(yazmalar(istekler)[0]!.yol).toBe(`/sevkiyat/planlar/${TARIH}/kaydet`);
@@ -140,10 +141,50 @@ describe('SevkiyatPlani', () => {
     const tasinan = GUN_PLANI.rotalar.find((r) => r.aracId === 1)!.ogeler[0]!;
     expect(kamyonRotasi.ogeler.some((o) => !('araDonus' in o) && 'isId' in tasinan && o.isId === tasinan.isId)).toBe(false);
 
-    await waitFor(() => expect((screen.getByRole('button', { name: 'Geri al' }) as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(screen.getByRole('button', { name: 'Geri al' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    await dagitimSec(/^Geri al: /);
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(2));
     expect((yazmalar(istekler)[1]!.govde as KaydetGovdesi).rotalar).toEqual(GUN_PLANI.rotalar.map((r) => ({ aracId: r.aracId, kilitli: r.kilitli, ogeler: r.ogeler })));
+  });
+
+  it('durak menüsü işi başka araca verir; kendi aracı listede yoktur', async () => {
+    const istekler = sunucuKur(PLANCI);
+    ac();
+    const kamyonet = await aracAc('Kamyonet 1');
+    const durakMenusu = within(kamyonet).getAllByRole('combobox', { name: 'Örnek Fason B durağı işlemleri' })[0]!;
+    const secenekler = within(durakMenusu).getAllByRole('option').map((o) => o.textContent);
+    expect(secenekler).toContain('Kamyon 1 aracına ver');
+    expect(secenekler).not.toContain('Kamyonet 1 aracına ver');
+    fireEvent.change(durakMenusu, { target: { value: 'arac:2' } });
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    const govde = yazmalar(istekler)[0]!.govde as KaydetGovdesi;
+    const tasinan = GUN_PLANI.rotalar.find((r) => r.aracId === 1)!.ogeler[0]!;
+    const isId = 'isId' in tasinan ? tasinan.isId : null;
+    expect(govde.rotalar.find((r) => r.aracId === 2)!.ogeler.some((o) => 'isId' in o && o.isId === isId)).toBe(true);
+    expect(govde.rotalar.find((r) => r.aracId === 1)!.ogeler.some((o) => 'isId' in o && o.isId === isId)).toBe(false);
+  });
+
+  it('dar ekranda sütun sekmesi tek sütunu açar: havuzda iş varken havuz, sekmeye basınca o araç', async () => {
+    sunucuKur(PLANCI);
+    ac();
+    const sekmeler = await screen.findByRole('tablist', { name: 'Gösterilen sütun' });
+    const sutun = (ad: string) => screen.getByRole('region', { name: ad }).closest('.tc-sevkiyat-sutun')!;
+    expect(sutun('Sevkiyat havuzu').hasAttribute('data-gizli')).toBe(false);
+    for (const a of GUN_PLANI.araclar) expect(sutun(a.ad).hasAttribute('data-gizli')).toBe(true);
+    fireEvent.click(within(sekmeler).getByRole('tab', { name: /Kamyonet 1/ }));
+    expect(sutun('Kamyonet 1').hasAttribute('data-gizli')).toBe(false);
+    expect(sutun('Sevkiyat havuzu').hasAttribute('data-gizli')).toBe(true);
+    expect(sutun('Kamyon 1').hasAttribute('data-gizli')).toBe(true);
+  });
+
+  it('onaylı planda havuz boşsa havuz sütunu yoktur; durağı olan ilk araç açılır', async () => {
+    sunucuKur(PLANCI, undefined, { ...GUN_PLANI, bekleyen: [], yerlesemeyen: [], onaylandi: '2026-10-08T07:00:00.000+03:00' });
+    ac('&adim=teslim');
+    const sekmeler = await screen.findByRole('tablist', { name: 'Gösterilen sütun' });
+    expect(within(sekmeler).queryByRole('tab', { name: /Havuz/ })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Sevkiyat havuzu' })).toBeNull();
+    expect(screen.getByRole('region', { name: 'Kamyonet 1' }).closest('.tc-sevkiyat-sutun')!.hasAttribute('data-gizli')).toBe(false);
+    expect(screen.getByRole('region', { name: 'Kamyon 1' }).closest('.tc-sevkiyat-sutun')!.hasAttribute('data-gizli')).toBe(true);
   });
 
   it('sunucu reddederse sunucunun iletisi yazılır', async () => {
@@ -151,7 +192,7 @@ describe('SevkiyatPlani', () => {
     sunucuKur(PLANCI, () => json(409, CAKISMA));
     ac();
     await screen.findByRole('region', { name: 'Kamyonet 1' });
-    fireEvent.click(screen.getByRole('button', { name: 'Otomatik dağıt' }));
+    await dagitimSec('Otomatik dağıt (baştan)');
     expect((await screen.findByRole('alert')).textContent).toBe(CAKISMA.mesaj);
   });
 
@@ -162,14 +203,14 @@ describe('SevkiyatPlani', () => {
     // Yokluk sınanmadan önce oturum (yetkiler) gelmiş olmalı.
     await waitFor(() => expect(okuyucuIstekleri.some((i) => i.yol === '/oturum')).toBe(true));
     await new Promise((coz) => setTimeout(coz, 20));
-    expect(screen.queryByRole('button', { name: 'Otomatik dağıt' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Dağıtım ayarları|Havuzu yerleştir/ })).toBeNull();
     expect(within(kamyon).queryAllByRole('combobox')).toHaveLength(0);
     expect(screen.queryByRole('button', { name: 'Planı onayla' })).toBeNull();
     cleanup();
 
     sunucuKur(PLANCI);
     ac();
-    await screen.findByRole('button', { name: 'Otomatik dağıt' });
+    await screen.findByRole('button', { name: 'Dağıtım ayarları' });
     const kamyon2 = await aracAc('Kamyonet 1');
     expect(within(kamyon2).getAllByRole('combobox').length).toBeGreaterThan(0);
     expect((screen.getByRole('button', { name: 'Planı onayla' }) as HTMLButtonElement).disabled).toBe(false);
@@ -250,7 +291,7 @@ describe('SevkiyatPlani onaylı plan', () => {
     const kamyon = await aracAc('Kamyonet 1');
     expect(within(kamyon).getAllByRole('listitem').filter((li) => li.getAttribute('aria-label'))[0]!.querySelector('time')!.textContent).toBe('10:00');
     expect(within(kamyon).queryAllByRole('combobox')).toHaveLength(0);
-    expect(screen.queryByRole('button', { name: 'Otomatik dağıt' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Dağıtım ayarları|Otomatik dağıt|Havuzu yerleştir/ })).toBeNull();
   });
 
   it('yoldaki iş teslim edildi ya da yapılamadı olarak işaretlenir; yapılamadı nedeni sorulur ve iş havuza döner', async () => {
@@ -264,6 +305,12 @@ describe('SevkiyatPlani onaylı plan', () => {
     const istekler = sunucuKur(PLANCI, () => json(200, { is: teslim }), yolda);
     ac('&adim=teslim');
     const kamyon = await screen.findByRole('region', { name: 'Kamyonet 1' });
+    // Tek birincil sonucu girilecek ilk satırdadır (aktarmanın alış satırı atlanır, orada yalnız rozet).
+    const birincil = [...kamyon.querySelectorAll('.tc-dugme-birincil')];
+    expect(birincil.map((d) => d.closest('li')?.getAttribute('aria-label') ?? '')).toEqual([expect.stringContaining('al Örnek Tedarikçi C')]);
+    const aktarmaAlisi = within(kamyon).getAllByRole('listitem').find((li) => li.getAttribute('aria-label')?.includes('al Örnek Fason B'))!;
+    expect(within(aktarmaAlisi).getByText('Sonuç bırakışta')).toBeTruthy();
+    expect(within(aktarmaAlisi).queryByRole('button', { name: 'Yapılamadı' })).toBeNull();
     const teslimSatiri = within(kamyon).getAllByRole('listitem').find((li) => li.getAttribute('aria-label')?.includes('bırak Örnek Müşteri A'))!;
     fireEvent.click(within(teslimSatiri).getByRole('button', { name: 'Teslim edildi' }));
     await waitFor(() => expect(yazmalar(istekler)).toEqual([{ yontem: 'POST', yol: `/sevkiyat/isler/${teslim.id}/durum`, govde: { durum: 'tamamlandi', tarih: TARIH, not: null } }]));
