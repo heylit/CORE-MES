@@ -93,14 +93,32 @@ function failNedenKaydi(p, st) {
     n[id] = { kod: 'zaman', tani: zamanTanisi(zamanOlcusu(cx, o, p)) }; }
   return n;
 }
+/* 3499: hesaplar çıkışta yerinde tutulamayan işi onarır (tutulamayaniOnar). Motorun oynatamadığı iş kalır: kişinin kilidi ve gerçekleşen iş.
+   Bunlardan biri tezgâhında başka işle üst üste geliyorsa plan sessiz dönmez, uyarı olarak bildirilir. Kilitli işin sıra ihlalini evaluate
+   'kilit' diye yazar; ikisi de başlamış ya da bitmiş iş geçmiştir, sayılmaz. */
+/** @param {any} p @param {Derleme} cx */
+function cakisanIsler(p, cx) {
+  const l = [], gecmis = r => r.act || r.done;
+  const ad = Object.fromEntries((cx.D.tezgahlar || []).map(x => [String(x.id), String(x.ad || x.id)]));
+  const byM = {}; for (const r of Object.values(p.ops)) if (!r.fas && isFinite(r.S) && isFinite(r.C)) (byM[r.m] = byM[r.m] || []).push(r);
+  for (const m in byM) {
+    let on = null;
+    for (const r of byM[m].sort((x, y) => x.S - y.S)) {
+      if (on && r.S < on.C - 1e-6 && !(gecmis(r) && gecmis(on))) l.push({ t: 'cakisma', j: r.job, id: r.id, txt: `${r.id}: ${fmtDT(cx.D, r.S)} başlıyor; ${ad[m] || m} tezgâhındaki ${on.id} ${fmtDT(cx.D, on.C)} bitiyor, iki iş üst üste geliyor` });
+      if (!on || r.C > on.C) on = r;
+    }
+  }
+  return l;
+}
 /** @param {any} [p] @param {MotorDurumu} [st] @param {any} [ref] */
 function planKaydi(p, st, ref) {
-  const ef = evaluate(p, st, ref, false);
+  const cx = p.cx || compile(st);
+  const ef = evaluate(p.cx ? p : { ...p, cx }, st, ref, false);
   const ops = {}; for (const id in p.ops) ops[id] = opKaydi(p.ops[id]);
   const J = {}; for (const k in ef.J) { const x = ef.J[k]; J[k] = { C: isFinite(x.C) ? x.C : null, T: x.T, ...(x.ufukEksik > 0 ? { ufukEksik: Math.round(x.ufukEksik * 100) / 100 } : {}) }; }
   const util = {}; for (const m in ef.util) util[m] = ef.util[m];
   const kisiTezgahIsleri = kisiTezgahIsleriOf(p);
-  return { ops, fail: p.fail || [], failNeden: failNedenKaydi(p, st), ozet: { kisiTezgahIsleri, wT: ef.wT, onT: ef.onT, late: ef.late, yerlesmeyenSip: ef.yerlesmeyenSip, n: ef.n, suH: ef.suH, suN: ef.suN, famN: ef.famN, Cmax: ef.Cmax, tl: ef.tl, wB: ef.wB, chg: ref ? ef.chg : null }, J, util, warn: ef.warn.slice(0, 300), mal: malKaydi(p, st) };
+  return { ops, fail: p.fail || [], failNeden: failNedenKaydi(p, st), ozet: { kisiTezgahIsleri, wT: ef.wT, onT: ef.onT, late: ef.late, yerlesmeyenSip: ef.yerlesmeyenSip, n: ef.n, suH: ef.suH, suN: ef.suN, famN: ef.famN, Cmax: ef.Cmax, tl: ef.tl, wB: ef.wB, chg: ref ? ef.chg : null }, J, util, warn: [...cakisanIsler(p, cx), ...ef.warn].slice(0, 300), mal: malKaydi(p, st) };
 }
 /* aynı veriyle kural tabanlı ilk plan (zw-denge PD_ISCI, ms 0) */
 /** @param {MotorDurumu} [st] @param {any} [ms] */
@@ -108,13 +126,24 @@ function dgPlanKur(st, ms = 0) {
   stHazirla(st); const cx = compile(st); let cur = schedule(st, 'dagit', null, { cx }); slack(cur, cx); let E = evaluate(cur, st, null, true);
   const t0 = Date.now(); let seed = 17, durgun = 0;
   while (ms > 0 && Date.now() - t0 < ms && durgun < 3) { const L = lns(st, cur, null, { ms: Math.max(200, Math.min(1000, ms - (Date.now() - t0))), seed: seed++, free: true }); if (cmpEv(L.e, E) > 0) { cur = L.plan; E = L.e; durgun = 0; } else durgun++; }
-  return planKaydi(cur, st, null);
+  return planKaydi(tutulamayaniOnar(cur, st, cx, true), st, null);
+}
+/* Kişinin kilitlediği işlerden öncülü bitmeden başlayanların sayısı. Değerlendirme rota sırasını saymaz: arama, ardılı kilitli işi
+   geciktirmeyi bedelsiz görür. Kişinin kilidi yerinden oynamadığı için böyle bir sonuç onarılamaz; arama sonucu bu sayıyı artırıyorsa alınmaz. */
+/** @param {any} p @param {MotorDurumu} st @param {Derleme} cx */
+function kilitliSiraIhlali(p, st, cx) {
+  let n = 0;
+  for (const id in st.locks) {
+    const r = p.ops[id], o = cx.byId[id]; if (!r || !o || st.locks[id].gecici) continue;
+    if (o.pr.some(([pid, ty]) => { const q = p.ops[pid]; return q && (ty === 'o' && !q.fas ? q.lot1 : q.C) > r.S + 1e-6; })) n++;
+  }
+  return n;
 }
 /* sayfanın kısa araması (t-tekyer kisaArama) */
 /** @param {MotorDurumu} [st] @param {Derleme} [cx] @param {any} [p0] @param {any} [ms] */
 function kisaArama(st, cx, p0, ms) {
   const L = lns(st, p0, null, { ms, seed: 7, free: true });
-  let p = p0; if (cmpEv(L.e, evaluate(p0, st, null, true)) > 0 && (L.plan.fail || []).length <= (p0.fail || []).length) p = L.plan;
+  let p = p0; if (cmpEv(L.e, evaluate(p0, st, null, true)) > 0 && (L.plan.fail || []).length <= (p0.fail || []).length && kilitliSiraIhlali(L.plan, st, cx) <= kilitliSiraIhlali(p0, st, cx)) p = L.plan;
   slack(p, cx); return p;
 }
 /* sabit adımlı saat: her okunuşta bir plan çözümü kadar ilerler; adım veri boyuyla büyür (zz8) */
@@ -227,7 +256,7 @@ function pdOzet(k, st) {
 /* teklif için havuzdaki sipariş plana alınmış gibi kopyalanır; motor havuzu görmez */
 function pdSt(id, termin) {
   const s0 = S.D.siparisler.find(x => x.id === id); const h = s0 && s0.havuz; if (h) s0.havuz = false;
-  let st; try { st = dengeKilit(stOf()); } finally { if (h) s0.havuz = h; }
+  let st; try { st = dengeKilit(stOf(), true); } finally { if (h) s0.havuz = h; }
   if (termin !== undefined) { const s = st.D.siparisler.find(x => x.id === id); if (s) s.termin = termin; }
   return st;
 }
@@ -273,7 +302,7 @@ function ymMesaiAdaylari() {
 function pdSecenekler(sira) {
   const M = ymMesaiAdaylari();
   const D0 = [...new Set([0, 50, 100, pdDenge()])].sort((a, b) => a - b);
-  const l = (sira == null ? D0 : D0.slice(sira, sira + 1)).map(d => { const st = dengeKilit(stOf()); st.tlAmac.kT = pdKat(d);
+  const l = (sira == null ? D0 : D0.slice(sira, sira + 1)).map(d => { const st = dengeKilit(stOf(), true); st.tlAmac.kT = pdKat(d);
     const ac = M.filter(a => a.tl != null && a.dGec * pdKat(d) - a.tl - a.dDiger > 0).map(a => ({ m: a.m, gun: a.gun, vardiya: a.vardiya, tl: a.tl }));
     st.ekMesai = [...st.ekMesai, ...ac.map(({ tl, ...e }) => e)]; return { id: 'd' + d, d, st, mesai: ac }; });
   const r = pdCalistir(l, pdMs()); Object.assign(TL_AMAC, stOf().tlAmac);
@@ -294,7 +323,7 @@ function pdTeklif(id) {
   if (mev != null && !adaylar.some(a => Math.abs(a[1] - mev) < 12)) adaylar.push(['girilen', mev]);
   adaylar.sort((a, b) => a[1] - b[1]);
   const l = adaylar.map(([ad, t], i) => ({ id: 't' + i, ad, t, st: pdSt(id, tmYaz(t)) }));
-  const r2 = pdCalistir([{ id: 'taban', st: dengeKilit(stOf()) }, ...l]);
+  const r2 = pdCalistir([{ id: 'taban', st: dengeKilit(stOf(), true) }, ...l]);
   const T0 = r2.find(x => x.id === 'taban'); const o0 = pdOzet(T0.k, T0.st);
   const satirlar = r2.filter(x => x.id !== 'taban').map(x => { const o = pdOzet(x.k, x.st); const b = o.sip[id] || {};
     let diger = 0;
@@ -310,7 +339,7 @@ function pdUzatma(gun) {
     .map(s => ({ s, b: agGecTL(agBedel(S.D, s), p.J[s.id].T) })).sort((a, b) => b.b - a.b).slice(0, 6);
   if (!gec.length) return { gun, satirlar: [] };
   const yeni = {}; for (const { s } of gec) yeni[s.id] = tmYaz(parseT(S.D, s.termin) + gun * 24);
-  const r = pdCalistir([{ id: 'taban', st: dengeKilit(stOf()) }, ...gec.map(({ s }) => ({ id: s.id, st: pdSt(s.id, yeni[s.id]) }))]);
+  const r = pdCalistir([{ id: 'taban', st: dengeKilit(stOf(), true) }, ...gec.map(({ s }) => ({ id: s.id, st: pdSt(s.id, yeni[s.id]) }))]);
   const t = r.find(x => x.id === 'taban'); const o0 = pdOzet(t.k, t.st);
   const satirlar = r.filter(x => x.id !== 'taban').map(x => { const o = pdOzet(x.k, x.st); const a = o0.sip[x.id] || {}, b = o.sip[x.id] || {};
     return { siparisId: x.id, yeniTermin: yeni[x.id], gecikmeSimdi: a.T == null ? null : a.T, gecikmeUzatinca: b.T == null ? null : b.T, netKarFarki: o.eksik === o0.eksik ? o.net - o0.net : null,
@@ -388,11 +417,12 @@ function partiBol(jid, dagitim, adetler) {
     const kk = id.slice(pref.length);
     parcalar.forEach((x, i) => { const j = `${jid}/${i + 1}`; ops[`${j}.${kk}`] = { ...r, id: `${j}.${kk}`, job: j, S: r.S + i * 1e-3, m: x.m && kk === k ? x.m : r.m }; });
   }
-  for (const id of Object.keys(st.locks)) if (id.startsWith(pref)) { const kk = id.slice(pref.length), l = st.locks[id]; delete st.locks[id]; parcalar.forEach((x, i) => { st.locks[`${jid}/${i + 1}.${kk}`] = { ...l }; }); }
+  /* Kişinin kilidi ilk partide kalır. Öteki partilere de kopyalansaydı hepsi aynı saatte aynı tezgâha kilitlenir, üst üste gelirdi. */
+  for (const id of Object.keys(st.locks)) if (id.startsWith(pref)) { st.locks[`${jid}/1.${id.slice(pref.length)}`] = st.locks[id]; delete st.locks[id]; }
   const r0 = S.plan.ops[opId];
-  parcalar.forEach((x, i) => { if (x.m) st.locks[`${jid}/${i + 1}.${k}`] = { m: x.m, S: r0 ? r0.S : st.now }; });
+  parcalar.forEach((x, i) => { if (x.m) st.locks[`${jid}/${i + 1}.${k}`] = { m: x.m, S: r0 ? r0.S : st.now, gecici: 1 }; });
   stHazirla(st); const cx = compile(st);
-  const p = kisaArama(st, cx, lnsDecode(st, { ops, fail: S.plan.fail || [] }, [], cx, true), 500);
+  const p = tutulamayaniOnar(kisaArama(st, cx, lnsDecode(st, { ops, fail: S.plan.fail || [] }, [], cx, true), 500), st, cx, true);
   const kayit = planKaydi(p, st, null);
   let T = 0, C = -1e9; for (const y of yeni) { const J = kayit.J[y.id] || {}; T = Math.max(T, J.T || 0); C = Math.max(C, J.C ?? 1e9); }
   return { siparisId: jid, darbogaz, sonuc: {
@@ -444,12 +474,12 @@ function yerindeTutmaBozuklari(p, st, cx) {
    zincirde ihlal tur başına bir adım ilerler: 40. turdan sonra bozuk kalan emirlerin bütün geçici kilitleri kalkar. 60. turda hâlâ bozuk iş
    varsa yerinde tutmaktan vazgeçilir: bütün geçici kilitler kalkar, tabanda çalışıyor sayılacak her iş yeniden dizilir. O çözümde yerinde
    tutulan iş kalmadığı için plan sınıra takılıp sıraya aykırı dönemez. geride: çağıranın yeniden dizdirdiği işler; buraya eklenenler ona yazılır. */
-/** @param {MotorDurumu} st @param {Derleme} cx @param {any} taban @param {Record<string, number>} geride */
-function yerindeTutarakCoz(st, cx, taban, geride) {
+/** @param {MotorDurumu} st @param {Derleme} cx @param {any} taban @param {Record<string, number>} geride @param {boolean} [free] */
+function yerindeTutarakCoz(st, cx, taban, geride, free = false) {
   const g = st.gercek || {};
   for (let tur = 0; ; tur++) {
     if (Object.keys(geride).length) st.geride = geride;
-    const p = lnsDecode(st, taban, [], cx, false);
+    const p = lnsDecode(st, taban, [], cx, free);
     const boz = yerindeTutmaBozuklari(p, st, cx); if (!boz.length || tur > 60) return p;
     for (const [id, t] of boz) { if (t === 'kilit') delete st.locks[id]; else geride[id] = 1; }
     if (tur < 40) continue;
@@ -457,6 +487,14 @@ function yerindeTutarakCoz(st, cx, taban, geride) {
     for (const id in st.locks) if (st.locks[id].gecici && (tur >= 60 || (p.ops[id] && emir.has(p.ops[id].job)))) delete st.locks[id];
     if (tur >= 60) for (const b of Object.values(taban.ops)) if (!st.locks[b.id] && !b.fas && !(g[b.id] && g[b.id].S != null) && b.S < st.now - 1e-9 && b.C > st.now + 1e-9) geride[b.id] = 1;
   }
+}
+
+/* 3499: plan döndüren her hesap çıkışta aynı ölçüyle bakar. Çözülen planda yerinde tutulamayan iş varsa onarılır, yoksa plan olduğu gibi
+   döner. free: hesabın kendi çözüm kipi (sıfırdan kuran ve kayıtlı planı serbest çözen hesaplarda true). */
+/** @param {any} p @param {MotorDurumu} st @param {Derleme} cx @param {boolean} [free] */
+function tutulamayaniOnar(p, st, cx, free = false) {
+  if (!yerindeTutmaBozuklari(p, st, cx).length) return p;
+  const q = yerindeTutarakCoz(st, cx, p, {}, free); delete st.geride; slack(q, cx); return q;
 }
 
 /* Bekleyen değişikliği uygula (755 a; sayfanın eski 'onar' kipi): kayıtlı plan taban ve başvurudur. Etkilenmeyen siparişin işleri o
@@ -487,7 +525,7 @@ function planUygula(isler) {
     if (cmpEv(L.e, E) > 0) { cur = L.plan; E = L.e; durgun = 0; } else durgun++;
   }
   /* Arama serbest işi kilitli ardılının ötesine taşımış olabilir; son plan aynı ölçüyle bir kez daha bakılır. */
-  if (yerindeTutmaBozuklari(cur, st, cx).length) { cur = yerindeTutarakCoz(st, cx, cur, {}); slack(cur, cx); delete st.geride; }
+  cur = tutulamayaniOnar(cur, st, cx);
   return { plan: { ...planKaydi(cur, st, ref), ilk, dataVer: S.dataVer } };
 }
 
@@ -514,7 +552,7 @@ function kayitliGecikme() { const st = stHazirla(stOf()); const cx = compile(st)
 /* İyileştirme ara: kayıtlı plan çözülür, çalışmanın çözüm bütçesinde LNS; kayıtlı plana göre değişim bedeli sayılır. Daha iyisi yoksa plan null. */
 function planIyilestir() {
   const st = stHazirla(dengeKilit(stOf())); const cx = compile(st); const ms = (+S.w.sure || 10) * 1000; const t0 = Date.now(); const ref = { ops: S.plan.ops };
-  let cur = lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, [], cx, false); slack(cur, cx);
+  let cur = yerindeTutarakCoz(st, cx, { ops: S.plan.ops, fail: S.plan.fail || [] }, {}); delete st.geride; slack(cur, cx);
   const E0 = evaluate(cur, st, ref, true); let E = E0, bulundu = false;
   let seed = 17, durgun = 0;
   while (Date.now() - t0 < ms && durgun < 4) {
@@ -522,7 +560,7 @@ function planIyilestir() {
     if (cmpEv(L.e, E) > 0 && (L.plan.fail || []).length <= (cur.fail || []).length) { cur = L.plan; E = L.e; durgun = 0; bulundu = true; } else durgun++;
   }
   if (!bulundu) return { plan: null, gecikmeOnce: E0.wT, gecikmeSonra: null, degisen: [] };
-  const k = planKaydi(cur, st, ref);
+  const k = planKaydi(tutulamayaniOnar(cur, st, cx, true), st, ref);
   return { plan: { ...k, ilk: E0.wT, dataVer: S.dataVer }, gecikmeOnce: E0.wT, gecikmeSonra: k.ozet.wT, degisen: hamleFarki(k) };
 }
 
@@ -530,7 +568,7 @@ function planIyilestir() {
    taşınanlar yerinde tutulup çevre kısa süre toparlanır, yalnız daha iyiyse alınır. */
 function dgHamle(mods) {
   const st = stHazirla(stOf());
-  const cx = compile(st); let p = lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, mods, cx, true, true);
+  const cx = compile(st); let p = tutulamayaniOnar(lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, mods, cx, true, true), st, cx, true);
   const tas = +cx.A.tasimaSaat || 0, tasinan = new Set(mods.map(x => x[0]));
   for (let i = 0; i < 4; i++) {
     const yeni = [];
@@ -547,7 +585,7 @@ function dgHamle(mods) {
   slack(p, cx);
   if (mods.length) {
     const stR = { ...st, locks: { ...st.locks } };
-    for (const [id] of mods) { const r = p.ops[id]; if (r) stR.locks[id] = { m: r.m, S: r.S }; }
+    for (const [id] of mods) { const r = p.ops[id]; if (r) stR.locks[id] = { m: r.m, S: r.S, gecici: 1 }; }
     const cxR = compile(stR); const pR = lnsDecode(stR, p, [], cxR, true);
     const L = lns(stR, pR, null, { ms: 450, seed: 7, free: true });
     const e0 = evaluate(p, st, null, true);
@@ -555,7 +593,7 @@ function dgHamle(mods) {
     const p2 = lnsDecode(stR, L.plan, geri, cxR, true, true); slack(p2, cxR);
     const e1 = evaluate(p2, st, null, true);
     const yerinde = geri.every(([id]) => { const a = p.ops[id], b = p2.ops[id]; return a && b && b.S <= a.S + 0.25; });
-    if (yerinde && cmpEv(e1, e0) > 0 && (p2.fail || []).length <= (p.fail || []).length) p = p2;
+    if (yerinde && cmpEv(e1, e0) > 0 && (p2.fail || []).length <= (p.fail || []).length && !yerindeTutmaBozuklari(p2, stR, cxR).length) p = p2;
   }
   return { p, st };
 }
