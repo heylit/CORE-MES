@@ -43,6 +43,7 @@ describe('3478-3 kural motoru kuralları', () => {
     assert.match(kuralGecersizligi(SIP, [k('tutar', '=', '5')], ['x']) ?? '', /sayı yazılmalı/);
     assert.match(kuralGecersizligi(SIP, [k('firma', 'icinde', 'X')], ['x']) ?? '', /liste/);
     assert.match(kuralGecersizligi(SIP, [k('firma', '=', ['X'])], ['x']) ?? '', /liste/);
+    assert.match(kuralGecersizligi(SIP, [k('tutar', 'icinde', ['5'])], ['x']) ?? '', /sayıdır/);
     const talep = 'satin-alma.talep-onay-bekliyor';
     assert.equal(kuralGecersizligi(talep, [k('oncelik', 'icinde', ['acil', 'normal'])], ['x']), null);
     assert.match(kuralGecersizligi(talep, [k('oncelik', '=', 'cok-acil')], ['x']) ?? '', /seçeneklerden/);

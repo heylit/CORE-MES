@@ -18,6 +18,8 @@ import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useYetki } from '../../ortak/veri/yetki.ts';
 import { KADEME_AYAR_ANAHTARI, KademeAyarPenceresi, kademeGovdesi, MiniMerdiven, modulAdi } from '../bildirim/disari.ts';
+import { KuralBolumu, useKurallar } from './BildirimKurallari.tsx';
+import { kuralliTurMu } from '#paylasilan/sozlesme/bildirim-kural-sabitleri.ts';
 import './eposta.css';
 
 // 3435-3 a: olay başına bütün kanallar tek tabloda (satır olay, sütun kanal); satıra basınca tek panel, tek Kaydet. Yetki modeli
@@ -306,6 +308,10 @@ export function BildirimMatrisi() {
   const sablonlar = useQuery({ queryKey: MATRIS_ANAHTARI.sablonlar, enabled: eposta, queryFn: () => api.get<EpostaSablonlariCevabi>('/bildirimler/eposta/sablonlar') });
   const kademe = useQuery({ queryKey: MATRIS_ANAHTARI.kademe, enabled: kademeYetki, queryFn: () => api.get<KademeAyarlariCevabi>('/bildirim-kademe/kaynaklar') });
   const olaylar = useQuery({ queryKey: MATRIS_ANAHTARI.olaylar, enabled: ayar, queryFn: () => api.get<BildirimOlayAciklariCevabi>('/bildirimler/olaylar') });
+  // 3478-3: kural sayısı satırda gösterilir; okunamazsa sayı çıkmaz, tablo yine açılır.
+  const kurallar = useKurallar(ayar);
+  const kuralSayisi = new Map<string, number>();
+  for (const k of kurallar.data?.kurallar ?? []) kuralSayisi.set(k.tur, (kuralSayisi.get(k.tur) ?? 0) + 1);
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const { yaz, bekliyor } = useKanalYazici();
@@ -455,7 +461,12 @@ export function BildirimMatrisi() {
       anahtar: 'ayrinti', baslik: 'Ayrıntı', csv: false,
       hucre: (m) => (m.kaynak
         ? (kademeYetki ? <Dugme simge="edit" aria-label={`${m.baslik}: ayrıntı`} onClick={() => { setKaynakAcik(m.kaynak?.kaynak ?? null); }} /> : null)
-        : <Dugme simge="edit" aria-label={`${m.baslik}: ayrıntı`} onClick={() => { setAcik(m.tur); }} />),
+        : (
+          <span className="tc-matris-ayrinti">
+            <Dugme simge="edit" aria-label={`${m.baslik}: ayrıntı`} onClick={() => { setAcik(m.tur); }} />
+            {(kuralSayisi.get(m.tur) ?? 0) > 0 && <Rozet ton="pasif">{`${String(kuralSayisi.get(m.tur))} kural`}</Rozet>}
+          </span>
+        )),
     },
   ];
   return (
@@ -721,6 +732,7 @@ function OlayPaneli({ satir, roller, kisiler, epostaRolleri, epostaKisileri, sab
             )}
           </fieldset>
         )}
+        {yetki.ayar && kuralliTurMu(satir.tur) && <KuralBolumu tur={satir.tur} roller={roller} kisiler={kisiler} />}
         {yetki.eposta && e && (
           <fieldset className="tc-eposta-grup">
             <legend>E-posta ayrıntısı</legend>

@@ -501,6 +501,7 @@ export function kuralGecersizligi(tur: string, kosullar: readonly KuralKosulu[],
     if (a === undefined) return `"${k.alan}" alanı bu olayda yok.`;
     const sayisal = k.karsilastirma === '>' || k.karsilastirma === '>=' || k.karsilastirma === '<' || k.karsilastirma === '<=';
     if (sayisal && a.tip !== 'sayi') return `${a.etiket} sayı değil; büyük ya da küçük karşılaştırılamaz.`;
+    if (k.karsilastirma === 'icinde' && a.tip === 'sayi') return `${a.etiket} sayıdır; "şunlardan biri" yerine eşit ya da büyük, küçük kullanılır.`;
     if (k.karsilastirma === 'icinde' ? !Array.isArray(k.deger) : Array.isArray(k.deger)) return `${a.etiket}: "şunlardan biri" liste, öteki karşılaştırmalar tek değer ister.`;
     if (a.tip === 'sayi' && !Array.isArray(k.deger) && typeof k.deger !== 'number') return `${a.etiket} için sayı yazılmalı.`;
     if (a.tip !== 'sayi' && typeof k.deger === 'number') return `${a.etiket} için metin yazılmalı.`;
