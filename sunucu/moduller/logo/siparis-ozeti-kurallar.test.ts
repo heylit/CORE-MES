@@ -56,6 +56,13 @@ describe('3384 a: sipariş Logo özeti', () => {
     assert.deepEqual(ozet([kalem(1, '901')], [irs(10, '901', '1', { faturaNo: 'ORN-F-3' })], null).faturalar, ['ORN-F-3']);
   });
 
+  test('3472 b: iptal fatura ayrı listededir, faturalar\'a girmez; irsaliyenin taşıdığı iptal fatura numarası da girmez', () => {
+    const iptal = new Map([['SP-2026-001', ['ORN-F-9']]]);
+    const o = siparisLogoOzetleri(['SP-2026-001'], [kalem(1, '901')], [irs(10, '901', '1', { faturaNo: 'ORN-F-9' })], new Map([['SP-2026-001', []]]), PENCERE, iptal)[0]!;
+    assert.deepEqual([o.faturalar, o.iptalFaturalar], [[], ['ORN-F-9']]);
+    assert.deepEqual(ozet([kalem(1, '901')], [], null).iptalFaturalar, []);
+  });
+
   test('okunamayan miktar karşılaştırılmaz', () => {
     const o = ozet([kalem(1, '901', { teslim: '1' })], [irs(10, '901', null)]);
     assert.deepEqual(o.kalemler.map((k) => k.durum), ['okunmadi']);

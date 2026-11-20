@@ -67,6 +67,22 @@ describe('Logo satış teklifi ve tekliften sipariş gövdesi (köprü notu 2.6,
       { hata: 'Satır 1: teklif satırı Logo\'da yok.' });
   });
 
+  test('LGT-13 (3471) not, satır açıklaması ve müşteri sipariş no gider; boşsa alan yazılmaz; uzun müşteri sipariş no reddedilir', () => {
+    const tk = satisTeklifiGovdesi({ ...teklif, not: ' Teslim notu ', satirlar: [{ ...teklif.satirlar[0]!, aciklama: 'Ø20 mil' }, { ...teklif.satirlar[1]!, aciklama: '  ' }] }, secenek);
+    assert.ok('govde' in tk);
+    assert.equal(tk.govde['note'], 'Teslim notu');
+    const tl = tk.govde['lines'] as Record<string, unknown>[];
+    assert.equal(tl[0]!['description'], 'Ø20 mil');
+    assert.equal('description' in tl[1]!, false);
+    const bos = satisTeklifiGovdesi({ ...teklif, not: null }, secenek);
+    assert.ok('govde' in bos && !('note' in bos.govde));
+    const sp = satisSiparisiGovdesi({ ...siparis, musteriSiparisNo: 'MS-77', not: 'Acil', satirlar: [{ ...siparis.satirlar[0]!, aciklama: 'Satır notu' }] });
+    assert.deepEqual(sp, {
+      govde: { number: 'SS-2026-001', date: '13.10.2026', orderStatus: 4, customerOrderNo: 'MS-77', note: 'Acil', lines: [{ offerLineRef: 4101, quantity: 6, dueDate: '20.11.2026', description: 'Satır notu' }] },
+    });
+    assert.deepEqual(satisSiparisiGovdesi({ ...siparis, musteriSiparisNo: 'M'.repeat(41) }), { hata: 'Müşteri sipariş no 40 karakteri aşıyor.' });
+  });
+
   test('LGT-12 (3315 Test T4) satış siparişinin projesi: tek projeli sipariş o projeyle, projesiz ve çok projeli sipariş projesiz gider', () => {
     assert.equal(satisSiparisiProjesi([{ id: 7 }]), 7);
     assert.equal(satisSiparisiProjesi([]), null);

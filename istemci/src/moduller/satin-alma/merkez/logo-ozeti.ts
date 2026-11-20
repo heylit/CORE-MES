@@ -44,6 +44,12 @@ export function faturaOzeti(o: SiparisLogoOzeti): string | null {
   return `Fatura ${o.faturalar[0]}${o.faturalar.length > 1 ? ` +${o.faturalar.length - 1}` : ""}`;
 }
 
+// 3472 b: Logo'da iptal edilmiş fatura ayrı rozetle yazılır; sipariş onunla faturalandı sayılmaz.
+export function iptalFaturaOzeti(o: SiparisLogoOzeti): string | null {
+  if (!o.logoda || o.iptalFaturalar.length === 0) return null;
+  return `Fatura ${o.iptalFaturalar[0]}${o.iptalFaturalar.length > 1 ? ` +${o.iptalFaturalar.length - 1}` : ""} iptal`;
+}
+
 const sade = (d: string): string => new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 4 }).format(Number(d));
 // Fark Logo eksi CORE'dur; kullanıcıya yönüyle yazılır.
 export function farkMetni(fark: string, birim: string): string {

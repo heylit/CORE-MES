@@ -851,14 +851,14 @@ export async function logoSiparisSirasinaEkle(db: Db, teklifId: number, surumNo:
 
 export interface LogoTeklifSirasi {
   id: number; teklif_id: number; no: string; surum_no: number; tarih: string; gecerlilik: string | null; para_birimi: string; firma_id: number;
-  iskonto_orani: string; termin_tarihi: string | null;
+  iskonto_orani: string; termin_tarihi: string | null; aciklama: string | null;
 }
 
 // Bekleyen satır hatalıların önüne geçer: kalıcı reddedilen satırlar sınırı doldurup yeni teklifi bekletmez.
 export function logoyaGidecekTeklifSiralari(db: Db, sinir: number): Promise<LogoTeklifSirasi[]> {
   return db.sorgu<LogoTeklifSirasi>(
     `SELECT g.id, g.teklif_id, t.no, g.surum_no, (v.olusturma AT TIME ZONE 'Europe/Istanbul')::date::text AS tarih, v.gecerlilik::text AS gecerlilik,
-            t.para_birimi, t.firma_id, v.iskonto_orani, v.termin_tarihi::text AS termin_tarihi
+            t.para_birimi, t.firma_id, v.iskonto_orani, v.termin_tarihi::text AS termin_tarihi, v.aciklama
        FROM siparisler_logo_gonderim g
        JOIN siparisler_teklif t ON t.id = g.teklif_id
        JOIN siparisler_teklif_surumu v ON v.teklif_id = g.teklif_id AND v.surum_no = g.surum_no
@@ -867,11 +867,11 @@ export function logoyaGidecekTeklifSiralari(db: Db, sinir: number): Promise<Logo
   );
 }
 
-export interface LogoTeklifSatiri { satir_id: number; malzeme_no: number | null; miktar: string; birim: string | null; birim_fiyat: string }
+export interface LogoTeklifSatiri { satir_id: number; malzeme_no: number | null; miktar: string; birim: string | null; birim_fiyat: string; tanim: string }
 
 export function logoTeklifSatirlari(db: Db, teklifId: number, surumNo: number): Promise<LogoTeklifSatiri[]> {
   return db.sorgu<LogoTeklifSatiri>(
-    `SELECT r.id AS satir_id, r.malzeme_no, r.miktar, r.birim, f.birim_fiyat
+    `SELECT r.id AS satir_id, r.malzeme_no, r.miktar, r.birim, f.birim_fiyat, r.tanim
        FROM siparisler_teklif_satiri r
        JOIN siparisler_teklif_surumu v ON v.teklif_id = r.teklif_id AND v.surum_no = $2
        JOIN siparisler_teklif_fiyati f ON f.surum_id = v.id AND f.satir_id = r.id
@@ -880,12 +880,16 @@ export function logoTeklifSatirlari(db: Db, teklifId: number, surumNo: number): 
   );
 }
 
-export interface LogoSiparisSirasi { id: number; teklif_id: number; siparis_id: number; no: string; tarih: string; teklif_kayit_no: string; teklif_refleri: Record<string, unknown> }
+export interface LogoSiparisSirasi {
+  id: number; teklif_id: number; siparis_id: number; no: string; tarih: string; teklif_kayit_no: string; teklif_refleri: Record<string, unknown>;
+  musteri_siparis_no: string | null; aciklama: string | null;
+}
 
 // Sipariş onaylanınca ve teklifi Logo'da açıldıktan sonra gider; taslak sipariş düzenlenebilir ya da iptal edilebilir.
 export function logoyaGidecekSiparisSiralari(db: Db, sinir: number): Promise<LogoSiparisSirasi[]> {
   return db.sorgu<LogoSiparisSirasi>(
-    `SELECT g.id, g.teklif_id, g.siparis_id, s.no, s.siparis_tarihi::text AS tarih, t.logo_kayit_no AS teklif_kayit_no, t.satir_refleri AS teklif_refleri
+    `SELECT g.id, g.teklif_id, g.siparis_id, s.no, s.siparis_tarihi::text AS tarih, t.logo_kayit_no AS teklif_kayit_no, t.satir_refleri AS teklif_refleri,
+            s.musteri_siparis_no, s.aciklama
        FROM siparisler_logo_gonderim g
        JOIN siparisler_siparis s ON s.id = g.siparis_id
        JOIN siparisler_logo_gonderim t ON t.tur = 'teklif' AND t.teklif_id = g.teklif_id AND t.surum_no = g.surum_no
@@ -895,12 +899,12 @@ export function logoyaGidecekSiparisSiralari(db: Db, sinir: number): Promise<Log
   );
 }
 
-export interface LogoSiparisSatiri { satir_id: number; miktar: string; termin: string | null; teklif_satir_id: number | null }
+export interface LogoSiparisSatiri { satir_id: number; miktar: string; termin: string | null; teklif_satir_id: number | null; aciklama: string | null }
 
 // Tekliften açılan siparişin satırı teklif satırıyla aynı sırada ve aynı karttadır; sonradan değişen satır teklif satırına bağlanmaz.
 export function logoSiparisSatirlari(db: Db, siparisId: number, teklifId: number): Promise<LogoSiparisSatiri[]> {
   return db.sorgu<LogoSiparisSatiri>(
-    `SELECT s.id AS satir_id, s.miktar, s.termin::text AS termin, r.id AS teklif_satir_id
+    `SELECT s.id AS satir_id, s.miktar, s.termin::text AS termin, r.id AS teklif_satir_id, s.aciklama
        FROM siparisler_siparis_satiri s
        LEFT JOIN siparisler_teklif_satiri r ON r.teklif_id = $2 AND r.sira = s.sira AND r.malzeme_no = s.malzeme_no
       WHERE s.siparis_id = $1 ORDER BY s.sira`,

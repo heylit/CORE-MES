@@ -18,7 +18,7 @@ export async function siparisLogoOzeti(db: Db, simdi: Date, nolar: readonly stri
   const var_ = [...new Set(kalemler.map((k) => k.siparisNo))];
   const satirlar = irsaliye ? await s.siparisIrsaliyeSatirlari(db, var_) : [];
   const faturalar = fatura ? await s.siparisFaturaNolari(db, var_) : null;
-  const ozetler = siparisLogoOzetleri(var_, kalemler, satirlar, faturalar, irsaliyeBaslangicGunu(simdi));
+  const ozetler = siparisLogoOzetleri(var_, kalemler, satirlar, faturalar?.gecerli ?? null, irsaliyeBaslangicGunu(simdi), faturalar?.iptal);
   // Okuma kapalıyken o tarafın verisi gösterilmez: kalem karşılaştırması ya da fatura "bilinmiyor"dur.
   return {
     okuma,

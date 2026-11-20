@@ -100,7 +100,7 @@ describe('Siparişler (2430)', () => {
     const cevap: SiparisLogoOzetiCevabi = {
       okuma: { irsaliye: true, fatura: true, sonOkuma: null },
       siparisler: [{
-        siparisNo: 'SP-DEN-001', logoda: true, irsaliyeler: [], irsaliyeliKalem: 1, farkliKalem: 1, faturalar: [],
+        siparisNo: 'SP-DEN-001', logoda: true, irsaliyeler: [], irsaliyeliKalem: 1, farkliKalem: 1, faturalar: [], iptalFaturalar: ['ORN-F-9'],
         kalemler: [{ siparisSatiriId: 1, kalemAdi: 'Deneme rulman 6204', siparisMiktari: '40', birim: 'adet', coreMiktari: '30', logoMiktari: '28', logoBirimi: 'adet', durum: 'fark', fark: '-2' }],
       }],
     };
@@ -117,6 +117,8 @@ describe('Siparişler (2430)', () => {
     expect(istekler.filter((a) => a !== '/api/logo/belge-arama-durumu')).toEqual([`/api/logo/satin-alma-siparisleri/ozet?nolar=${encodeURIComponent('SP-DEN-001')}`]);
     expect(k.querySelector('.sa-sp-logo-ozet')?.textContent).toContain('İrsaliye 1/1 kalem · 1 kalemde fark');
     expect(k.querySelector('.sa-sp-logo-ozet')?.textContent).toContain('Fatura yok');
+    // 3472 b: iptal fatura ayrı rozetle.
+    expect(k.querySelector('.sa-sp-logo-ozet .tc-rozet')?.textContent).toContain('Fatura ORN-F-9 iptal');
     expect(sekme(k, 'logo-fark')?.textContent).toContain("Logo'da fark · 1");
     expect(k.textContent).not.toMatch(/undefined|NaN/);
     // Sayı kartına basınca "Logo'da fark" sekmesi seçilir ve yalnız farklı sipariş kalır.

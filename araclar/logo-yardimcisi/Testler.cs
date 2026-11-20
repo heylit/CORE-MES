@@ -773,9 +773,15 @@ namespace LogoYardimcisi
             var l = (object[])C(s, "GET", "/api/PurchaseOrder/SP%2F6/lines", null).Govde;
             Esit(1, l.Length, "satır listesi dizi");
             Esit(404, C(s, "GET", "/api/PurchaseOrder/YOK/invoices", null).Durum, "faturada olmayan sipariş 404");
-            s.FaturaListesi[Ref(c)] = new List<FaturaOzeti> { new FaturaOzeti { Ref = 77, No = "F-1" } };
+            s.FaturaListesi[Ref(c)] = new List<FaturaOzeti> { new FaturaOzeti { Ref = 77, No = "F-1", Tur = 1 }, new FaturaOzeti { Ref = 78, No = "F-2", Tur = 1, Iptal = true } };
             var f = (object[])C(s, "GET", "/api/PurchaseOrder/SP%2F6/invoices", null).Govde;
+            Esit(2, f.Length, "iptal fatura da gelir (3472)");
             Esit("F-1", ((Dictionary<string, object>)f[0])["number"], "fatura no");
+            Esit(1, ((Dictionary<string, object>)f[0])["trCode"], "fatura türü");
+            Esit(false, ((Dictionary<string, object>)f[0])["cancelled"], "geçerli fatura");
+            Esit(true, ((Dictionary<string, object>)f[1])["cancelled"], "iptal fatura işaretli");
+            s.FaturaListesi[Ref(c)] = new List<FaturaOzeti>();
+            Esit(0, ((object[])C(s, "GET", "/api/PurchaseOrder/SP%2F6/invoices", null).Govde).Length, "faturasız sipariş boş liste, 404 değil");
             s.MalKabulSatirlari.Add(new MalKabulSatiri { Ref = 10, SiparisSatirRef = 5, SiparisRef = 4, FisNo = "IR-1", MalzemeKodu = Malzeme, Miktar = 2.5m, Birim = "ADET" });
             s.MalKabulSatirlari.Add(new MalKabulSatiri { Ref = 20, SiparisSatirRef = 6, SiparisRef = 4, FisNo = "IR-2", MalzemeKodu = Malzeme, Miktar = 1, Birim = "ADET" });
             var m = (object[])C(s, "GET", "/api/PurchaseOrder/receipts", null, new Dictionary<string, string> { { "since", "10" } }).Govde;
@@ -1221,6 +1227,101 @@ namespace LogoYardimcisi
             Dogru(Basari(C(s, "POST", "/api/SalesOffer/" + Ref(t) + "/toOrder", N("number", "SS-2", "date", "26.09.2026", "orderStatus", 4,
                 "lines", new[] { N("offerLineRef", teklifSatiri, "quantity", 1) }))), "kısmi");
             Esit("AlanlaEkle 3", s.Cagrilar.Last(), "STATUS 4 yazılmaz");
+        }
+
+        // 3469: Logo'da iptal edilmiş teklif ya da teklif satırı siparişe çevrilmez; Logo'ya hiçbir şey gitmez.
+        static void T_iptal_teklif_ve_iptal_teklif_satiri_siparise_cevrilmez()
+        {
+            var s = Logo();
+            var t = Teklif(s, "TKL-I", Alici);
+            var teklifSatiri = Satirlar(C(s, "GET", "/api/SalesOffer/" + Ref(t), null), "offer")[0];
+            var fis = s.Fisler.First(x => x.Ref == Ref(t));
+            var govde = N("number", "SS-I", "date", "26.09.2026", "orderStatus", 4, "lines", new[] { N("offerLineRef", teklifSatiri, "quantity", 1) });
+            fis.Iptal = true;
+            var once = s.Cagrilar.Count;
+            Icerir(Hata(C(s, "POST", "/api/SalesOffer/" + Ref(t) + "/toOrder", govde)), "Teklif Logo'da iptal edilmiş");
+            Esit(once, s.Cagrilar.Count, "iptal teklifte Logo'ya gidilmez");
+            fis.Iptal = false;
+            fis.Satirlar[0].Iptal = true;
+            Icerir(Hata(C(s, "POST", "/api/SalesOffer/" + Ref(t) + "/toOrder", govde)), "teklif satırı " + teklifSatiri + " Logo'da iptal edilmiş");
+            Esit(once, s.Cagrilar.Count, "iptal satırda Logo'ya gidilmez");
+            Esit(null, s.Siparis("SS-I", 1), "sipariş yazılmadı");
+        }
+
+        // 3469: Logo teklif satırının siparişe dönen miktarını artırmadıysa yardımcı yazar; artırdıysa dokunmaz (kısmi dönüş testi).
+        static void T_logo_donen_miktari_artirmazsa_yardimci_yazar_tamami_donunce_onaylar()
+        {
+            var s = Logo();
+            s.TeklifDonenArtmaz = true;
+            var t = Teklif(s, "TKL-D", Alici);
+            var teklifSatiri = Satirlar(C(s, "GET", "/api/SalesOffer/" + Ref(t), null), "offer")[0];
+            Dogru(Basari(C(s, "POST", "/api/SalesOffer/" + Ref(t) + "/toOrder", N("number", "SS-D1", "date", "26.09.2026", "orderStatus", 4,
+                "lines", new[] { N("offerLineRef", teklifSatiri, "quantity", 1) }))), "ilk kısım");
+            Icerir(s.Cagrilar.Last(), "Guncelle 135");
+            Dogru(!s.Cagrilar.Last().Contains("STATUS=4"), "kısmi dönüşte STATUS 4 yok");
+            Esit(1m, (decimal)s.SonGuncellenenSatirlar[teklifSatiri].Deger("ORDEREDAMOUNT"), "dönen miktar yazıldı");
+            Esit(1m, s.TeklifSatirlari(Ref(t))[0].SipariseDonen, "teklif satırında 1");
+            Icerir(Hata(C(s, "POST", "/api/SalesOffer/" + Ref(t) + "/toOrder", N("number", "SS-D2", "date", "26.09.2026", "orderStatus", 4,
+                "lines", new[] { N("offerLineRef", teklifSatiri, "quantity", 2) }))), "kalan miktarı aşıyor");
+            Dogru(Basari(C(s, "POST", "/api/SalesOffer/" + Ref(t) + "/toOrder", N("number", "SS-D3", "date", "26.09.2026", "orderStatus", 4,
+                "lines", new[] { N("offerLineRef", teklifSatiri, "quantity", 1) }))), "kalan kısım");
+            Icerir(s.Cagrilar.Last(), "STATUS=4");
+            Esit(2m, (decimal)s.SonGuncellenenSatirlar[teklifSatiri].Deger("ORDEREDAMOUNT"), "toplam dönen");
+        }
+
+        // 3469: iptal teklif satırı "hepsi siparişe döndü" hesabına girmez.
+        static void T_iptal_teklif_satiri_varken_kalanlar_donunce_teklif_onaylanir()
+        {
+            var s = Logo();
+            var t = C(s, "POST", "/api/SalesOffer/AddRich", N("number", "TKL-2S", "date", "25.09.2026", "arpCode", Alici, "status", 1,
+                "lines", new[] { N("type", 0, "masterCode", Malzeme, "quantity", 2, "price", 100, "unitCode", "ADET"),
+                    N("type", 0, "masterCode", Malzeme, "quantity", 5, "price", 100, "unitCode", "ADET") }));
+            Dogru(Basari(t), Json.Yaz(t.Govde));
+            var refler = Satirlar(C(s, "GET", "/api/SalesOffer/" + Ref(t), null), "offer");
+            s.Fisler.First(x => x.Ref == Ref(t)).Satirlar[1].Iptal = true;
+            Dogru(Basari(C(s, "POST", "/api/SalesOffer/" + Ref(t) + "/toOrder", N("number", "SS-2S", "date", "26.09.2026", "orderStatus", 4,
+                "lines", new[] { N("offerLineRef", refler[0], "quantity", 2) }))), "iptal olmayan satır");
+            Icerir(s.Cagrilar.Last(), "STATUS=4");
+        }
+
+        // 3471: not, satır açıklaması ve müşteri sipariş no Logo'ya gider; uzun not 50 karakterlik parçalara bölünür.
+        static void T_teklif_ve_siparise_not_aciklama_ve_musteri_siparis_no_yazilir()
+        {
+            var uzun = "Teslim adresi depo kapisi; ambalaj ahsap sandik olacak, her kutuya etiket yapistirilacak ve irsaliye ile birlikte gonderilecek ek notlar burada kesilir ve yazilmaz cunku dort parcayi asiyor uzun";
+            var p = Islemler.NotParcalari(uzun);
+            Esit(4, p.Count, "en çok dört parça");
+            Dogru(p.All(x => x.Length <= Islemler.NotParcasi && x.Length > 0), "parça 50 karakteri aşmaz");
+            Esit("Teslim adresi depo kapisi; ambalaj ahsap sandik", p[0], "kelime bölünmez");
+            Esit(0, Islemler.NotParcalari("  \n ").Count, "boş not yazılmaz");
+            Esit("a b", Islemler.NotParcalari(" a \n b ")[0], "boşluk sadeleşir");
+            Esit(new string('x', 50), Islemler.NotParcalari(new string('x', 70))[0], "boşluksuz uzun kelime 50'de kesilir");
+
+            var s = Logo();
+            var c = C(s, "POST", "/api/SalesOffer/AddRich", N("number", "TKL-N", "date", "25.09.2026", "arpCode", Alici, "status", 1, "note", "Kisa not",
+                "lines", new[] { N("type", 0, "masterCode", Malzeme, "quantity", 2, "price", 100, "unitCode", "ADET", "description", new string('d', 300)),
+                    N("type", 0, "masterCode", Malzeme, "quantity", 1, "price", 100, "unitCode", "ADET") }));
+            Dogru(Basari(c), Json.Yaz(c.Govde));
+            Esit("Kisa not", s.SonBaslik.Deger("GENEXP1"), "teklif notu GENEXP1");
+            Dogru(!s.SonBaslik.Var("GENEXP2"), "kısa notta ikinci parça yok");
+            Esit(new string('d', 250), s.SonSatirlar[0].Deger("LINEEXP"), "satır açıklaması 250'de kesilir");
+            Dogru(!s.SonSatirlar[1].Var("LINEEXP"), "açıklamasız satırda alan yok");
+            var teklifSatiri = Satirlar(C(s, "GET", "/api/SalesOffer/" + Ref(c), null), "offer")[0];
+            var once = s.Cagrilar.Count;
+            Esit(400, C(s, "POST", "/api/SalesOffer/" + Ref(c) + "/toOrder", N("number", "SS-N", "date", "26.09.2026", "orderStatus", 4, "customerOrderNo", new string('m', 41),
+                "lines", new[] { N("offerLineRef", teklifSatiri, "quantity", 1) })).Durum, "41 karakter müşteri sipariş no");
+            Esit(once, s.Cagrilar.Count, "uzun numarada Logo'ya gidilmez");
+            var o = C(s, "POST", "/api/SalesOffer/" + Ref(c) + "/toOrder", N("number", "SS-N", "date", "26.09.2026", "orderStatus", 4, "customerOrderNo", "MS-77", "note", uzun,
+                "lines", new[] { N("offerLineRef", teklifSatiri, "quantity", 1, "description", "Satir notu") }));
+            Dogru(Basari(o), Json.Yaz(o.Govde));
+            Esit("MS-77", s.SonBaslik.Deger("CUST_ORD_NO"), "CUST_ORD_NO");
+            Esit(p[0], s.SonBaslik.Deger("NOTES1"), "NOTES1");
+            Esit(p[3], s.SonBaslik.Deger("NOTES4"), "NOTES4");
+            Esit("Satir notu", s.SonSatirlar[0].Deger("TRANS_DESCRIPTION"), "sipariş satırı açıklaması");
+            var sade = C(s, "POST", "/api/SalesOffer/" + Ref(c) + "/toOrder", N("number", "SS-N2", "date", "26.09.2026", "orderStatus", 4,
+                "lines", new[] { N("offerLineRef", teklifSatiri, "quantity", 1) }));
+            Dogru(Basari(sade), Json.Yaz(sade.Govde));
+            foreach (var a in new[] { "CUST_ORD_NO", "NOTES1" }) Dogru(!s.SonBaslik.Var(a), a + " boşsa yazılmaz");
+            Dogru(!s.SonSatirlar[0].Var("TRANS_DESCRIPTION"), "açıklamasız sipariş satırı");
         }
 
         /* ---------------- Malzeme fişi ---------------- */

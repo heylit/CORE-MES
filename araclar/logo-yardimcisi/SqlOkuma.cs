@@ -21,7 +21,7 @@ namespace LogoYardimcisi
         public static readonly string[] Dogrulanmadi =
         {
             "LG_<f>_SRVCARD.CARDTYPE (1 alınan, 2 verilen)", "LG_<f>_<d>_STLINE.IOCODE, LINETYPE, STOCKREF, UOMREF", "LG_<f>_<d>_DEMANDLINE.LOGICALREF ile satır okuma",
-            "LG_<f>_PURCHOFFER.CLIENTREF, NETTOTAL, TRCURR, TRRATE", "LG_<f>_PURCHOFFERLN.STOCKREF, LINETYPE, AMOUNT, PRICE, UOMREF",
+            "LG_<f>_PURCHOFFER.CLIENTREF, NETTOTAL, TRCURR, TRRATE, CANCELLED", "LG_<f>_<d>_INVOICE.CANCELLED, TRCODE (3472 sipariş faturası)", "LG_<f>_PURCHOFFERLN.CANCELLED, ORDEREDAMOUNT (3469; EkoTigerAPI toOrder aynı kolonları okur)", "LG_<f>_PURCHOFFERLN.STOCKREF, LINETYPE, AMOUNT, PRICE, UOMREF",
             "LG_<f>_ITEMS.ACTIVE (0 kullanımda)", "LG_<f>_<d>_GNTOTST.STOCKREF, INVENNO (-1 bütün ambarların toplamı), ONHAND",
             "LG_<f>_CLCARD.CARDTYPE, TAXNR, TCKNO, TAXOFFICE, ADDR1, ADDR2, TOWN, CITY, POSTCODE, TELNRS1, EMAILADDR",
             "LG_<f>_SRVCARD.ACTIVE (0 kullanımda) ve Logo Objects RECORD_STATUS alanı (malzeme ve hizmet kartı) kart pasife almada",
@@ -85,7 +85,8 @@ namespace LogoYardimcisi
             MalKabul = "SELECT TOP (@enCok) L.LOGICALREF, L.ORDTRANSREF, L.ORDFICHEREF, F.FICHENO, I.CODE, L.AMOUNT, U.CODE FROM " + d("STLINE") + " L JOIN "
                 + d("STFICHE") + " F ON F.LOGICALREF = L.STFICHEREF LEFT JOIN " + f("ITEMS") + " I ON I.LOGICALREF = L.STOCKREF LEFT JOIN " + f("UNITSETL")
                 + " U ON U.LOGICALREF = L.UOMREF WHERE F.TRCODE = 1 AND L.IOCODE = 1 AND L.LINETYPE = 0 AND L.ORDTRANSREF > 0 AND L.LOGICALREF > @son ORDER BY L.LOGICALREF";
-            Faturalar = "SELECT DISTINCT V.LOGICALREF, V.FICHENO FROM " + d("STLINE") + " L JOIN " + d("INVOICE")
+            // 3472: tür ve iptal bilgisi cevaptadır (iade ve iptal fatura ayrılabilsin).
+            Faturalar = "SELECT DISTINCT V.LOGICALREF, V.FICHENO, V.TRCODE, V.CANCELLED FROM " + d("STLINE") + " L JOIN " + d("INVOICE")
                 + " V ON V.LOGICALREF = L.INVOICEREF WHERE L.ORDFICHEREF = @ref AND L.INVOICEREF > 0 ORDER BY V.LOGICALREF";
             Talep = "SELECT LOGICALREF, FICHENO, STATUS FROM " + d("DEMANDFICHE") + " WHERE FICHENO = @no";
             TalepSatirlari = "SELECT LOGICALREF, STATUS, AMOUNT, MEETAMNT FROM " + d("DEMANDLINE") + " WHERE LOGICALREF IN ({0})";
@@ -98,11 +99,11 @@ namespace LogoYardimcisi
                 + " C ON C.LOGICALREF = A.ARPREF WHERE C.CODE = @kod AND A.FIRMNO = @firma AND S.ACTIVE = 0 ORDER BY A.DEFAULTFLG DESC, A.LOGICALREF";
             SatisMusterisi = "SELECT TOP 1 S.CODE " + crmBagi;
             SatisMusterileri = "SELECT TOP " + LogoYardimcisi.SatisMusterileri.Sinir + " S.CODE, COUNT(*) OVER () " + crmBagi;
-            var teklifBasligi = "SELECT T.LOGICALREF, T.FICHENO, T.STATUS, C.CODE, T.NETTOTAL, T.TRCURR, T.TRRATE FROM " + f("PURCHOFFER") + " T LEFT JOIN "
+            var teklifBasligi = "SELECT T.LOGICALREF, T.FICHENO, T.STATUS, C.CODE, T.NETTOTAL, T.TRCURR, T.TRRATE, T.CANCELLED FROM " + f("PURCHOFFER") + " T LEFT JOIN "
                 + f("CLCARD") + " C ON C.LOGICALREF = T.CLIENTREF WHERE T.TRCODE = 1 AND ";
             Teklif = teklifBasligi + "T.FICHENO = @no";
             TeklifRefIle = teklifBasligi + "T.LOGICALREF = @ref";
-            TeklifSatirlari = "SELECT L.LOGICALREF, L.LINETYPE, " + satirKodu + ", L.AMOUNT, L.PRICE, L.VAT, L.DISCPER, U.CODE, L.ORDEREDAMOUNT, L.PRCURR, L.PRPRICE FROM "
+            TeklifSatirlari = "SELECT L.LOGICALREF, L.LINETYPE, " + satirKodu + ", L.AMOUNT, L.PRICE, L.VAT, L.DISCPER, U.CODE, L.ORDEREDAMOUNT, L.PRCURR, L.PRPRICE, L.CANCELLED FROM "
                 + f("PURCHOFFERLN") + " L" + kodBirlesimi + " LEFT JOIN " + f("UNITSETL") + " U ON U.LOGICALREF = L.UOMREF WHERE L.ORDFICHEREF = @ref ORDER BY L.LOGICALREF";
             MalzemeFisi = "SELECT LOGICALREF, FICHENO FROM " + d("STFICHE") + " WHERE FICHENO = @no AND TRCODE = @tr";
             // 2961-D4: iptal satır ve malzeme dışı satır (LINETYPE <> 0) gelmez; fişsiz satırın fiş numarası boş kalır.
@@ -771,6 +772,8 @@ namespace LogoYardimcisi
                 var x = new FaturaOzeti();
                 x.Ref = Tam(s[0]);
                 x.No = Metin(s[1]);
+                x.Tur = Tam(s[2]);
+                x.Iptal = Tam(s[3]) != 0;
                 l.Add(x);
             }
             return l;
@@ -870,6 +873,7 @@ namespace LogoYardimcisi
             b.NetToplam = Ondalik(s[4]);
             b.DovizTuru = Tam(s[5]);
             b.Kur = Ondalik(s[6]);
+            b.Iptal = Tam(s[7]) != 0;
             return b;
         }
 
@@ -893,6 +897,7 @@ namespace LogoYardimcisi
                 x.SipariseDonen = Ondalik(s[8]);
                 x.DovizTuru = Tam(s[9]);
                 x.DovizFiyati = Ondalik(s[10]);
+                x.Iptal = Tam(s[11]) != 0;
                 l.Add(x);
             }
             return l;

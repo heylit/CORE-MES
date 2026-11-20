@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SiparisLogoOzeti } from '#paylasilan/sozlesme/logo.ts';
-import { faturaOzeti, irsaliyeOzeti, logoOzetleriniOku } from './logo-ozeti.ts';
+import { faturaOzeti, iptalFaturaOzeti, irsaliyeOzeti, logoOzetleriniOku } from './logo-ozeti.ts';
 
 const ozet = (o: Partial<SiparisLogoOzeti>): SiparisLogoOzeti => ({
-  siparisNo: 'SP-DEN-1', logoda: true, irsaliyeler: [], irsaliyeliKalem: 0, farkliKalem: 0, faturalar: null,
+  siparisNo: 'SP-DEN-1', logoda: true, irsaliyeler: [], irsaliyeliKalem: 0, farkliKalem: 0, faturalar: null, iptalFaturalar: [],
   kalemler: [{ siparisSatiriId: 1, kalemAdi: 'Deneme', siparisMiktari: '10', birim: 'adet', coreMiktari: '0', logoMiktari: '0', logoBirimi: 'adet', durum: 'bekliyor', fark: '0' }],
   ...o,
 });
@@ -17,6 +17,14 @@ describe('3384 a: Logo özeti metni', () => {
     expect(faturaOzeti(ozet({ faturalar: [] }))).toBe('Fatura yok');
     expect(faturaOzeti(ozet({ faturalar: ['ORN-F-1', 'ORN-F-2'] }))).toBe('Fatura ORN-F-1 +1');
     expect(faturaOzeti(ozet({ logoda: false, faturalar: [] }))).toBeNull();
+  });
+
+  it('3472 b: iptal fatura ayrı yazılır, sipariş onunla faturalandı sayılmaz', () => {
+    const o = ozet({ faturalar: [], iptalFaturalar: ['ORN-F-9', 'ORN-F-8'] });
+    expect(faturaOzeti(o)).toBe('Fatura yok');
+    expect(iptalFaturaOzeti(o)).toBe('Fatura ORN-F-9 +1 iptal');
+    expect(iptalFaturaOzeti(ozet({}))).toBeNull();
+    expect(iptalFaturaOzeti(ozet({ logoda: false, iptalFaturalar: ['ORN-F-9'] }))).toBeNull();
   });
 
   it('irsaliye yoksa "İrsaliye bekleniyor"; varsa n/m kalem ve fark; okuma kapalıysa yazılmaz', () => {

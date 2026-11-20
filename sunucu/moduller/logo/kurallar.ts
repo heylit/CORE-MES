@@ -715,8 +715,14 @@ export function malzemeGuncellemeGovdesi(k: {
 export const SATIS_TEKLIF_ALANLARI = Object.freeze({
   no: 'number', tarih: 'date', cari: 'arpCode', gecerlilik: 'validUntil', doviz: 'currencyCode', kur: 'rate', durum: 'status', satirlar: 'lines',
   tur: 'type', kod: 'masterCode', miktar: 'quantity', fiyat: 'price', iskonto: 'discountRate', kdv: 'vatRate', birim: 'unitCode', termin: 'dueDate',
-  crm: 'salesCustomerCode',
+  crm: 'salesCustomerCode', not: 'note', aciklama: 'description',
 });
+// 3471: yardımcı notu Logo'nun dört kısa not alanına böler, satır açıklamasını 250 karakterde keser; müşteri sipariş no Logo'da 40 karakter (VARSAYIM).
+export const MUSTERI_SIPARIS_NO_EN_COK = 40;
+const metinVarsa = (m: string | null | undefined): string | null => {
+  const x = m?.trim() ?? '';
+  return x === '' ? null : x;
+};
 export const SATIS_TEKLIF_LOGO_DURUMU = 1;
 
 export interface GonderilecekSatisTeklifiSatiri {
@@ -728,6 +734,7 @@ export interface GonderilecekSatisTeklifiSatiri {
   birimFiyat: string;
   iskontoYuzdesi: string | null;
   termin: string | null;
+  aciklama?: string | null;
 }
 
 export interface GonderilecekSatisTeklifi {
@@ -737,6 +744,7 @@ export interface GonderilecekSatisTeklifi {
   gecerlilikBitis: string | null;
   paraBirimi: string;
   kur: string | null;
+  not?: string | null;
   satirlar: readonly GonderilecekSatisTeklifiSatiri[];
 }
 
@@ -773,9 +781,13 @@ export function satisTeklifiGovdesi(t: GonderilecekSatisTeklifi, o: SiparisGovde
     if (kdv !== null) satir[a.kdv] = kdv;
     const termin = x.termin === null ? null : logoTarihi(x.termin);
     if (termin !== null) satir[a.termin] = termin;
+    const aciklama = metinVarsa(x.aciklama);
+    if (aciklama !== null) satir[a.aciklama] = aciklama;
     satirlar.push(satir);
   }
   const govde: Record<string, unknown> = { [a.no]: no, [a.tarih]: tarih, [a.cari]: cari, [a.durum]: SATIS_TEKLIF_LOGO_DURUMU };
+  const not = metinVarsa(t.not);
+  if (not !== null) govde[a.not] = not;
   const crm = o.crmKodu?.trim() ?? '';
   if (crm !== '') govde[a.crm] = crm;
   const gecerlilik = t.gecerlilikBitis === null ? null : logoTarihi(t.gecerlilikBitis);
@@ -797,7 +809,9 @@ export interface GonderilecekSatisSiparisi {
   no: string;
   tarih: string;
   teklifKayitNo: string | null;
-  satirlar: readonly { satirId: number; teklifSatirRef: string | null; miktar: string; termin: string | null }[];
+  satirlar: readonly { satirId: number; teklifSatirRef: string | null; miktar: string; termin: string | null; aciklama?: string | null }[];
+  musteriSiparisNo?: string | null;
+  not?: string | null;
   // 3315: Siparişler'deki sipariş kimliği; projesi buradan bulunur.
   siparisId?: number | null;
 }
@@ -819,9 +833,18 @@ export function satisSiparisiGovdesi(s: GonderilecekSatisSiparisi): { govde: Rec
     const satir: Record<string, unknown> = { offerLineRef: ref, quantity: Number(x.miktar) };
     const termin = x.termin === null ? null : logoTarihi(x.termin);
     if (termin !== null) satir['dueDate'] = termin;
+    const aciklama = metinVarsa(x.aciklama);
+    if (aciklama !== null) satir['description'] = aciklama;
     satirlar.push(satir);
   }
-  return { govde: { number: no, date: tarih, orderStatus: SATIS_SIPARIS_LOGO_DURUMU, lines: satirlar } };
+  const musteriNo = metinVarsa(s.musteriSiparisNo);
+  if (musteriNo !== null && musteriNo.length > MUSTERI_SIPARIS_NO_EN_COK) return { hata: `Müşteri sipariş no ${MUSTERI_SIPARIS_NO_EN_COK} karakteri aşıyor.` };
+  const govde: Record<string, unknown> = { number: no, date: tarih, orderStatus: SATIS_SIPARIS_LOGO_DURUMU };
+  if (musteriNo !== null) govde['customerOrderNo'] = musteriNo;
+  const not = metinVarsa(s.not);
+  if (not !== null) govde['note'] = not;
+  govde['lines'] = satirlar;
+  return { govde };
 }
 
 /* ---------------- Okuma akışları (logo -> TMI): yalnız GET, yalnız saklanır ---------------- */
@@ -2219,6 +2242,8 @@ export interface SiparisOzeti {
   siparisNo: string; logoda: boolean;
   irsaliyeler: { firma: number; donem: number; kayitNo: number; fisNo: string | null; belgeNo: string | null; tarih: string; iade: boolean }[];
   kalemler: SiparisOzetiKalemi[]; irsaliyeliKalem: number; farkliKalem: number; faturalar: string[] | null;
+  // 3472 b: Logo'da iptal edilmiş fatura numaraları; "faturalar"a girmez (sipariş faturalandı sayılmaz), ekranda "iptal" rozetiyle görünür.
+  iptalFaturalar: string[];
 }
 const ALIS_IADE = 6;
 const isaretliOlcekli = (d: string): bigint => (d.startsWith('-') ? -olcekli(d.slice(1)) : olcekli(d));
@@ -2227,6 +2252,7 @@ const isaretliMetin = (o: bigint): string => (o < 0n ? `-${metne(-o)}` : metne(o
 export function siparisLogoOzetleri(
   nolar: readonly string[], kalemler: readonly OzetKalemi[], irsaliyeSatirlari: readonly OzetIrsaliyeSatiri[],
   faturalar: ReadonlyMap<string, readonly string[]> | null, pencereBasi: string,
+  iptalFaturalar: ReadonlyMap<string, readonly string[]> = new Map(),
 ): SiparisOzeti[] {
   return nolar.map((no) => {
     const benim = kalemler.filter((k) => k.siparisNo === no);
@@ -2253,7 +2279,9 @@ export function siparisLogoOzetleri(
       firma: x.firma, donem: x.donem, kayitNo: x.irsaliyeRef, fisNo: x.fisNo, belgeNo: x.belgeNo, tarih: x.tarih, iade: x.tur === ALIS_IADE,
     }])).values()];
     const fatura = faturalar?.get(no) ?? null;
-    const irsaliyeFaturalari = satirlar.flatMap((x) => (x.faturaNo === null ? [] : [x.faturaNo]));
+    const iptaller = [...new Set(iptalFaturalar.get(no) ?? [])].sort();
+    // İrsaliyenin taşıdığı numara iptal edilmiş faturaysa geçerli sayılmaz.
+    const irsaliyeFaturalari = satirlar.flatMap((x) => (x.faturaNo === null || iptaller.includes(x.faturaNo) ? [] : [x.faturaNo]));
     return {
       siparisNo: no,
       logoda: benim.some((k) => k.logoSatirRef !== null),
@@ -2263,6 +2291,7 @@ export function siparisLogoOzetleri(
       farkliKalem: ozetKalemler.filter((k) => k.durum === 'fark').length,
       // Fatura okuması kapalıysa ya da sipariş henüz okunmadıysa yalnız irsaliyenin faturası bilinir; o da yoksa "bilinmiyor" (null).
       faturalar: fatura === null && irsaliyeFaturalari.length === 0 ? null : [...new Set([...(fatura ?? []), ...irsaliyeFaturalari])].sort(),
+      iptalFaturalar: iptaller,
     };
   });
 }

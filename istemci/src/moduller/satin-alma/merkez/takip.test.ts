@@ -154,7 +154,7 @@ describe('sipariş takibi ve ödeme planı (kart #1124)', () => {
     const acik: SiparisLogoOzetiCevabi = {
       okuma: { irsaliye: true, fatura: true, sonOkuma: null },
       siparisler: [{
-        siparisNo: 'SP-2026-001', logoda: true, irsaliyeliKalem: 1, farkliKalem: 1, faturalar: ['ORN-F-1'],
+        siparisNo: 'SP-2026-001', logoda: true, irsaliyeliKalem: 1, farkliKalem: 1, faturalar: ['ORN-F-1'], iptalFaturalar: ['ORN-F-9'],
         irsaliyeler: [{ firma: 1, donem: 1, kayitNo: 77, fisNo: 'ORN-IRS-1', belgeNo: 'ORN-B-1', tarih: '2026-10-10', iade: false }],
         kalemler: [{ siparisSatiriId: 41, kalemAdi: 'Deneme çubuk', siparisMiktari: '10', birim: 'kg', coreMiktari: '10', logoMiktari: '8', logoBirimi: 'kg', durum: 'fark', fark: '-2' }],
       }],
@@ -186,12 +186,18 @@ describe('sipariş takibi ve ödeme planı (kart #1124)', () => {
     };
 
     const { kok, kapat } = await ac();
-    const [irs, fat] = [...kok.querySelectorAll<HTMLElement>('[data-sa-logo-takip]')];
+    const [irs, fat, fazla] = [...kok.querySelectorAll<HTMLElement>('[data-sa-logo-takip]')];
     expect(irs!.dataset.saTakip).toBe('fark');
     expect(irs!.textContent).toContain('Logo: irsaliye girildi, 1 kalemde fark');
     expect(irs!.querySelector('a')?.getAttribute('href')).toBe('/logo-irsaliyeleri');
     expect(fat!.textContent).toContain('Logo: fatura var');
     expect(fat!.textContent).toContain('ORN-F-1');
+    // 3472 b: iptal fatura ayrı satır açmaz; fatura satırının küçük metninde, numara üstü çizili ve "İptal" rozetiyle.
+    expect(fazla).toBeUndefined();
+    const iptal = fat!.querySelector<HTMLElement>('[data-sa-logo-iptal-fatura]')!;
+    expect(iptal.textContent).toContain('İptal edilen: Logo faturası ORN-F-9');
+    expect(iptal.querySelector('del')?.textContent).toBe('ORN-F-9');
+    expect(iptal.querySelector('.st.cancelled')?.textContent).toBe('İptal');
     const tablo = kok.querySelector<HTMLDetailsElement>('[data-sa-logo-kalemleri]')!;
     expect(tablo.open).toBe(true);
     expect(tablo.querySelector('tr[data-sa-logo-kalem="fark"]')!.textContent).toContain("Logo'da 2 kg az");

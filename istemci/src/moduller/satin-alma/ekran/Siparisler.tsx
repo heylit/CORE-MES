@@ -5,7 +5,7 @@ import { LogoBelgeAramasi, KilitliSutunNotu, LOGO_DURUM_ADI, LOGO_DURUM_TONU, Ro
 import type { Siralama } from '../../../ortak/veri/liste-durumu.ts';
 import { useYetki } from '../../../ortak/veri/yetki.ts';
 import { siparisListesi, siparisEtiketi, type SiparisSatiri } from '../merkez/calc.ts';
-import { faturaOzeti, irsaliyeOzeti, logoOzetleriniOku, type LogoOzetiOkumasi } from '../merkez/logo-ozeti.ts';
+import { faturaOzeti, iptalFaturaOzeti, irsaliyeOzeti, logoOzetleriniOku, type LogoOzetiOkumasi } from '../merkez/logo-ozeti.ts';
 import { go } from '../merkez/ui.ts';
 import { fiyatKilitli, fmtDate, money, norm, todayStr } from '../merkez/util.ts';
 
@@ -47,16 +47,18 @@ function LogoOzeti({ o, okuma }: { o: SiparisLogoOzeti | undefined; okuma: LogoO
   if (!o || !okuma) return null;
   const irs = irsaliyeOzeti(o, okuma);
   const fat = faturaOzeti(o);
-  if (!irs && !fat) return null;
+  const iptal = iptalFaturaOzeti(o);
+  if (!irs && !fat && !iptal) return null;
   return (
     <span className="sa-sp-logo-ozet">
       {irs && <span data-fark={irs.fark ? '' : undefined}><Simge ad={irs.fark ? 'alert' : 'truck'} boyut="k" />{irs.metin}</span>}
       {fat && <span><Simge ad="file" boyut="k" />{fat}</span>}
+      {iptal && <Rozet ton="pasif" gorunum="cizgi">{iptal}</Rozet>}
     </span>
   );
 }
 const logoOzetiMetni = (o: SiparisLogoOzeti | undefined, okuma: LogoOzetiOkumasi | undefined): string =>
-  (o && okuma ? [irsaliyeOzeti(o, okuma)?.metin, faturaOzeti(o)].filter(Boolean).join(' · ') : '');
+  (o && okuma ? [irsaliyeOzeti(o, okuma)?.metin, faturaOzeti(o), iptalFaturaOzeti(o)].filter(Boolean).join(' · ') : '');
 const gecikmeMetni = (s: SiparisSatiri) => (s.teslim ? 'Geldi' : s.gecikme !== null ? `${s.gecikme} gün` : s.buHafta ? 'Bu hafta' : '');
 
 // Varsayılan sıra: geciken önce (çok geciken üstte), sonra beklenen teslimi yakın olan; termini olmayan sonda.
