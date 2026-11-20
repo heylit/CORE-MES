@@ -44,8 +44,12 @@ export interface ZamanAdayi {
   // Hazırlığın süresi ve ufukta tezgâhın kesintisiz bloklarının (vardiyaların molalar içindeki birleşimi) en uzun çalışma süresi, saat.
   blok?: { gerekSaat: number; enUzunSaat: number } | null;
 }
+const TAKVIM_ENCOK_GUN = 730;
 export function zamanNedeni(g: { ufukGun: number; malzemeHazirSaat: number | null; adaylar: readonly ZamanAdayi[] }): YerlesmemeNedeni {
-  const ufuk = `planlama ufkunda (${String(g.ufukGun)} gün)`;
+  // 3501 a: takvim sığmayan iş için iki yıla kadar uzar (motor TAKVIM_ENCOK). O sınırda ölçülen neden ayardaki ufku değil iki yılı söyler:
+  // kişinin bildiği "planlama ufku" ayardaki gündür, iletide başka bir gün sayısı aynı adla çıkmasın.
+  const sinirda = g.ufukGun >= TAKVIM_ENCOK_GUN;
+  const ufuk = sinirda ? 'önümüzdeki iki yılda' : `planlama ufkunda (${String(g.ufukGun)} gün)`;
   if (g.malzemeHazirSaat !== null && g.malzemeHazirSaat >= g.ufukGun * 24) return yerlesmemeNedeni('malzeme', `Malzemesi ${ufuk} karşılanmıyor.`);
   const l = g.adaylar;
   if (l.length === 0) return NEDEN_OLCULEMEDI;
@@ -80,7 +84,9 @@ export function zamanNedeni(g: { ufukGun: number; malzemeHazirSaat: number | nul
   const saat = (x: number) => (Math.round(x * 10) / 10).toLocaleString('tr-TR');
   if (uygun.every((a) => a.sureSaat > a.acikSaat)) {
     const p = uygun.reduce((x, y) => (y.acikSaat > x.acikSaat ? y : x));
-    return yerlesmemeNedeni('ufuk', `İşin süresi (${saat(p.sureSaat)} sa) ${ad(p)} tezgâhının ${ufuk} açık süresinden (${saat(p.acikSaat)} sa) uzun.`, p.makine);
+    return yerlesmemeNedeni('ufuk', sinirda
+      ? `İşin süresi (${saat(p.sureSaat)} sa), ${ad(p)} tezgâhının önümüzdeki iki yıldaki açık süresinden (${saat(p.acikSaat)} sa) uzun. Tezgâhın çalışma takvimini kontrol edin.`
+      : `İşin süresi (${saat(p.sureSaat)} sa) ${ad(p)} tezgâhının ${ufuk} açık süresinden (${saat(p.acikSaat)} sa) uzun.`, p.makine);
   }
   const p = uygun[0]!;
   return yerlesmemeNedeni('ufuk', uygun.length === 1 ? `${ad(p)} tezgâhı ${ufuk} dolu.` : `Aday tezgâhlar ${ufuk} dolu (${uygun.map(ad).join(', ')}).`, p.makine);

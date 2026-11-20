@@ -656,12 +656,18 @@ function takvimDarMi(p, cx) {
   return false;
 }
 /* schedule'ın, işi takvim bittiği için yerleştiremeyince takvimi büyütüp baştan çözen biçimi (canlı plan, kıyas). Büyüyen takvim bağlamda
-   kalır: sonraki derleme ve değerlendirme aynı takvimi görür; bağlam tek girdiyle çalışır. */
+   kalır: sonraki derleme ve değerlendirme aynı takvimi görür; bağlam tek girdiyle çalışır.
+   opt.buyumeSonu (an, ms): çağıranın süre sınırı varsa verir. Sonraki turun bu andan sonra biteceği öngörülüyorsa takvim büyütülmez, eldeki
+   plan sığmayan işleriyle döner: süre aşılıp planın hiç yazılmamasındansa birkaç işin yerleşmemesi yeğdir. Öngörü son turun süresidir,
+   takvimin büyüme oranıyla çarpılır. */
 /** @param {MotorDurumu} st @param {string} mode @param {any} [base] @param {any} [opt] */
 function takvimliCoz(st,mode,base,opt){
+  const o=opt||{},son=+o.buyumeSonu;
   takvimPlanaGore(st.w,base&&base.ops);
-  for(;;){const p=schedule(st,mode,base,opt);
-    if(!(p.fail&&p.fail.length)||HDAYS>=TAKVIM_ENCOK||!takvimDarMi(p,compile(st))||!takvimBuyut())return p;}
+  for(;;){const t0=Date.now(),gun=HDAYS,cx=compile(st),p=schedule(st,mode,base,{...o,cx});
+    if(!(p.fail&&p.fail.length)||gun>=TAKVIM_ENCOK||!takvimDarMi(p,cx))return p;
+    if(isFinite(son)&&Date.now()+(Date.now()-t0)*Math.min(TAKVIM_ENCOK,gun*2)/gun>son)return p;
+    if(!takvimBuyut())return p;}
 }
 /** @param {MotorDurumu} [st] @param {any} [mode] @param {any} [base] @param {any} [opt] */
 function schedule(st,mode,base,opt={}){

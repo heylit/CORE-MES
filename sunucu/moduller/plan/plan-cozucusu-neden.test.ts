@@ -64,15 +64,15 @@ describe('sunucu çözücüsünde yerleşmeme nedeni (2696, B-2482-32, 2780)', (
     const var_ = await coz(kaynakKur({ insanli: ['10'], kisiler: [KISI], kisiVardiyasi: { 7: V } }), istek({}));
     assert.ok(!var_.yerlesmeyen.includes('E-1|10'), JSON.stringify(var_.nedenler));
   });
-  test('YN-04 zaman: işin süresi tezgâhın ufuktaki açık süresinden uzunsa neden ufuktur, iki süreyle', async () => {
+  test('YN-04 zaman: işin süresi tezgâhın iki yıllık takvimdeki açık süresinden de uzunsa neden ufuktur, iki süreyle', async () => {
     const r = await coz(kaynakKur({ adimlar: [adim(10, 1e7)] }), istek({ kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10'] }] }));
     assert.deepEqual(r.yerlesmeyen, ['E-1|10']);
     const n = r.nedenler['E-1|10'];
     assert.equal(n?.kod, 'ufuk');
     assert.deepEqual(n?.hedef, { tur: 'makine', id: 100, ad: 'Torna 1' });
-    assert.match(n?.metin ?? '', /^İşin süresi \([\d.,]+ sa\) Torna 1 tezgâhının planlama ufkunda \(\d+ gün\) açık süresinden \([\d.,]+ sa\) uzun\.$/);
+    assert.match(n?.metin ?? '', /^İşin süresi \([\d.,]+ sa\), Torna 1 tezgâhının önümüzdeki iki yıldaki açık süresinden \([\d.,]+ sa\) uzun\. Tezgâhın çalışma takvimini kontrol edin\.$/);
   });
-  test('YN-12 (3501 a): takvime (240 gün) sığmayan iş düşmez, takvim büyür; iki yıla da sığmayan işin nedeni büyümüş takvimi söyler', async () => {
+  test('YN-12 (3501 a): takvime (240 gün) sığmayan iş düşmez, takvim büyür; iki yıla da sığmayan işin nedeni iki yılı söyler', async () => {
     // Haftada 40 saat: 240 günde 1.376 saat açık. 2.000 saatlik adım ancak büyüyen takvime sığar; ardılı da onunla yerleşir.
     for (const kip of ['yeni', 'sabit'] as const) {
       const r = await coz(kaynakKur({ adimlar: [adim(10, 60_000), adim(20, 30)] }), istek({ kip, kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10', 'E-1|20'] }] }));
@@ -84,7 +84,8 @@ describe('sunucu çözücüsünde yerleşmeme nedeni (2696, B-2482-32, 2780)', (
     }
     const r = await coz(kaynakKur({ adimlar: [adim(10, 1e7)] }), istek({ kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10'] }] }));
     assert.deepEqual(r.yerlesmeyen, ['E-1|10']);
-    assert.match(r.nedenler['E-1|10']?.metin ?? '', /planlama ufkunda \(730 gün\)/);
+    // Açık süre iki yıllık takvimden ölçülür (haftada 40 saat, 104 hafta civarı); 240 günlük takvimin 1.376 saati değildir.
+    assert.match(r.nedenler['E-1|10']?.metin ?? '', /önümüzdeki iki yıldaki açık süresinden \(4\.1\d\d(,\d)? sa\) uzun/);
   });
   test('YN-10: vardiyası hiç tanımsız tezgâhın işi motora girmez, vardiyasız listesindedir (168 b; neden servisçe takvim-yok)', async () => {
     const k = kaynakKur({});

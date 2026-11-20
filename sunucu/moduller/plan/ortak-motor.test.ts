@@ -183,8 +183,21 @@ describe('ortak plan motoru, sunucuda çalışma (ADR 0018)', () => {
   test('süre aşılırsa çözüm reddedilir ve sıradaki çözüm yine koşar', async () => {
     const m = motorYukle();
     const st = durum(m, {}, 0, ikiSiparis());
-    await assert.rejects(planCoz({ durum: st, kip: 'yeni', taban: null }, 1), /içinde bitmedi/);
+    await assert.rejects(planCoz({ durum: st, kip: 'yeni', taban: null }, 1), /Plan 1 saniyede hesaplanamadı; plan değişmedi\./);
     assert.ok((await planCoz({ durum: st, kip: 'yeni', taban: null })).ops['S1.10']);
+  });
+
+  test('takvime sığmayan iş için takvim büyür (3501 a); sürenin büyüme payı dolmuşsa büyümez, iş yerleşmemiş döner', async () => {
+    // Tezgâh gün boyu açık: 240 günlük takvimde 5.760 saat. 6.000 saatlik sipariş ancak büyüyen takvime sığar.
+    const m = motorYukle();
+    const uzun = (): MotorDurumu => durum(m, {}, 0, veri([{ id: 'S1', adet: 6000, termin: '2026-01-20' }]));
+    const p = await planCoz({ durum: uzun(), kip: 'yeni', taban: null });
+    assert.deepEqual([(p.fail ?? []).length, p.takvimGun, p.ops['S1.10']?.C], [0, 480, 6000]);
+    const kisik = await planCoz({ durum: uzun(), kip: 'yeni', taban: null }, undefined, -1);
+    assert.deepEqual([kisik.fail, kisik.takvimGun, kisik.ops['S1.10']], [['S1.10'], 240, undefined]);
+    // Motorda: pay verilmezse sınır yoktur (kıyas); geçmiş bir an büyümeyi durdurur.
+    assert.equal((m.takvimliCoz(uzun(), 'yeni', null, { buyumeSonu: 0 }).fail ?? []).length, 1);
+    assert.equal(m.takvimGunu(), 240);
   });
 
   test('bozuk girdi iş parçacığında hata olarak döner', async () => {
