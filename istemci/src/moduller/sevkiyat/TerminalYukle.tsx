@@ -210,7 +210,7 @@ function IrsaliyeGirisi({ deger, degistir, kaydet }: { deger: string; degistir: 
         onChange={(e) => degistir(e.target.value.toLocaleUpperCase('tr'))} onKeyDown={(e) => { if (e.key === 'Enter') kaydet(); }} />
       <div className="tc-sevkiyat-ty-klavye" role="group" aria-label="Klavye">
         {IRSALIYE_TUSLARI.map((t) => <button key={t} type="button" onClick={() => degistir((deger + t).slice(0, 60))}>{t}</button>)}
-        <button type="button" aria-label="Sil" onClick={() => degistir(deger.slice(0, -1))}><Simge ad="back" /></button>
+        <button type="button" aria-label="Sil" onClick={() => degistir(deger.slice(0, -1))}><Simge ad="backspace" /></button>
       </div>
     </>
   );

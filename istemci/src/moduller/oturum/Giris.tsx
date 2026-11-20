@@ -430,7 +430,7 @@ export function Giris() {
             <span aria-hidden="true" />
             <button type="button" className="tc-giris-tus mono" onClick={() => tus('0')}>0</button>
             <button type="button" className="tc-giris-tus" aria-label="Sil" onClick={() => tus('sil')}>
-              <Simge ad="back" />
+              <Simge ad="backspace" />
             </button>
           </div>
         )}
