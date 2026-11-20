@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { CALISMA_ACILINCA } from '../ortak.tsx';
 import { OLAY_YOK, OlayAcBaglami } from '../../gorunumler.ts';
-import { Cubuk } from './Cubuk.tsx';
+import { Cubuk, UFUK_BILGISI, UFUK_BILGISI_ANAHTARI } from './Cubuk.tsx';
 import type { NabizDurumu } from './nabiz.ts';
 
 afterEach(() => { cleanup(); });
@@ -182,5 +182,68 @@ describe('plan şeridinde sayfa yuvaları (3317)', () => {
     cleanup();
     render(<Cubuk plan={false} guncel={false} planYaz nabiz={null} nabizAcik={false} nabizAc={() => {}} ozeteGit={() => {}} refSec={null} sabitle={null} sabitAd={null} />);
     expect(screen.queryByRole('button', { name: 'Plan nasıl çalışır' })).toBeNull();
+  });
+});
+
+// Plan hesabı büyük veride yarım dakikayı geçiyor; şerit ilk saniyelerden sonra geçen süreyi ve üst sınırı yazar, bitince kalkar.
+describe('plan şeridinde hesap süresi', () => {
+  afterEach(() => { vi.useRealTimers(); });
+  const ciz2 = (suruyor: boolean) => (
+    <Cubuk plan guncel={false} planYaz nabiz={nabiz(0)} nabizAcik={false} nabizAc={() => {}} ozeteGit={() => {}} refSec={null} sabitle={null} sabitAd={null}
+      bekleyenUygula={{ uygula: vi.fn(), suruyor, say: 2 }} yuva={null} />
+  );
+  it('güncelleme sürerken ilk 3 saniye yalnız düğme döner, sonra geçen saniye ve "bir dakikaya kadar" yazar; bitince yazı kalkar', () => {
+    vi.useFakeTimers();
+    const { rerender } = render(ciz2(true));
+    const sure = () => document.querySelector('.tc-pym-sb-sure');
+    act(() => { vi.advanceTimersByTime(2000); });
+    expect(sure()).toBeNull();
+    // Eşik tam 3 saniyedir.
+    act(() => { vi.advanceTimersByTime(1000); });
+    expect(sure()?.textContent).toMatch(/^3 sn/);
+    act(() => { vi.advanceTimersByTime(9000); });
+    expect(sure()?.textContent).toBe('12 sn · büyük planda bir dakikaya kadar sürebilir');
+    // Canlı bölgede yalnız sabit yazı; saniye aria-hidden (ekran okuyucu her saniye okumasın).
+    expect(sure()?.querySelector('[role="status"]')?.textContent).toBe('büyük planda bir dakikaya kadar sürebilir');
+    expect(sure()?.querySelector('[aria-hidden="true"]')?.textContent).toBe('12 sn · ');
+    // Dıştaki kap canlı bölge değildir (iç içe canlı bölge saniyeyi okuturdu).
+    expect(sure()?.getAttribute('role')).toBeNull();
+    expect(sure()?.getAttribute('aria-live')).toBeNull();
+    rerender(ciz2(false));
+    expect(sure()).toBeNull();
+    // Sayaç bitince durur.
+    expect(vi.getTimerCount()).toBe(0);
+    // Yeni hesap sıfırdan sayar.
+    rerender(ciz2(true));
+    expect(sure()).toBeNull();
+    act(() => { vi.advanceTimersByTime(4000); });
+    expect(sure()?.textContent).toMatch(/^4 sn/);
+  });
+  it('ilk plan kurulurken de (plan yok) süre yazılır', () => {
+    vi.useFakeTimers();
+    render(<Cubuk plan={false} guncel={false} planYaz nabiz={null} nabizAcik={false} nabizAc={() => {}} ozeteGit={() => {}} refSec={null} sabitle={null} sabitAd={null}
+      planKur={{ kur: vi.fn(), suruyor: true }} />);
+    act(() => { vi.advanceTimersByTime(7000); });
+    expect(document.querySelector('.tc-pym-sb-sure')?.textContent).toBe('7 sn · büyük planda bir dakikaya kadar sürebilir');
+  });
+});
+
+// 3501 a / 3506: takvim uzayınca gecikme sayıları artar; şerit bunu bir kez söyler, Anladım deyince bu tarayıcıda bir daha çıkmaz.
+describe('plan şeridinde tek seferlik takvim bilgisi', () => {
+  afterEach(() => { localStorage.removeItem(UFUK_BILGISI_ANAHTARI); });
+  it('plan varken bilgi çıkar; Anladım kapatır ve yeniden açılışta çıkmaz; plan yokken çıkmaz', () => {
+    localStorage.removeItem(UFUK_BILGISI_ANAHTARI);
+    ciz({});
+    const not = screen.getByRole('note');
+    expect(not.textContent).toContain(UFUK_BILGISI);
+    fireEvent.click(within(not).getByRole('button', { name: 'Anladım' }));
+    expect(screen.queryByRole('note')).toBeNull();
+    cleanup();
+    ciz({});
+    expect(screen.queryByRole('note')).toBeNull();
+    localStorage.removeItem(UFUK_BILGISI_ANAHTARI);
+    cleanup();
+    ciz({ plan: false });
+    expect(screen.queryByRole('note')).toBeNull();
   });
 });

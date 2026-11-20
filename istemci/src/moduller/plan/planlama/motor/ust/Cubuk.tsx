@@ -6,6 +6,7 @@ import { CALISMA_ACILINCA, YOK_NOTU } from '../ortak.tsx';
 import { OLAY_YOK, useOlayAc } from '../../gorunumler.ts';
 import { egriNoktalari, NABIZ_GOSTERGELERI, nabizDegeri, type NabizDurumu } from './nabiz.ts';
 import type { SeritYuvaBaglari } from './yuva.ts';
+import { HesapSuresi } from './HesapSuresi.tsx';
 
 // Plan şeridi (3308-2 a): durum ışığı, üç nabız sayısı, olay sayısı, plan durumu ve tek eylem; tek satırdır, dokununca plan nabzı ve olaylar açılır.
 interface Ozellikler {
@@ -85,6 +86,7 @@ export function Cubuk(o: Ozellikler) {
           {!o.plan ? <Rozet ton="pasif">Plan yok</Rozet> : o.yuva || o.ek ? null : o.guncel ? <Rozet ton="tamam">Güncel</Rozet> : <Rozet ton="uyari">Veri değişti</Rozet>}
           {/* Motor sunucuda açıktır (576): düğme ancak çalışma yokken pasiftir; nedeni yalnız ipucunda kalınca kullanıcı düğmeyi bozuk sanıyor. */}
           {pasifNot !== null && <small className="tc-pym-sb-not">{pasifNot}</small>}
+          {o.planYaz && <HesapSuresi className="tc-pym-sb-sure" suruyor={uyg?.suruyor === true || kur?.suruyor === true} />}
           {o.planYaz && uyg ? (
             <button type="button" className={`tc-dugme tc-pym-kucuk tc-pym-sb-iyi${o.yuva ? '' : ' tc-dugme-birincil'}`} disabled={uyg.suruyor} aria-busy={uyg.suruyor || undefined}
               title={uyg.suruyor ? KURULUYOR : `Başka sayfalarda yapılan ${String(uyg.say)} değişiklik plana işlenir. Sıra korunur, saatler yeniden hesaplanır; başlamış ve elle kilitli iş yerinde kalır.`}
@@ -105,6 +107,7 @@ export function Cubuk(o: Ozellikler) {
           {o.plan && <NasilCalisir />}
         </span>
       </div>
+      {o.plan && <UfukBilgisi />}
       {n && o.nabizAcik && <NabizPaneli {...o} n={n} />}
       {o.yuva && <div className="tc-pym-sb-alt-yuva" ref={o.yuva.alt} />}
       {o.ek && o.ek.alt !== null && <div className="tc-pym-sb-alt-yuva">{o.ek.alt}</div>}
@@ -175,6 +178,22 @@ function NabizPaneli(o: Ozellikler & { n: NabizDurumu }) {
         </div>
       </section>
     </div>
+  );
+}
+
+// Takvim kendiliğinden uzayınca (3501 a, 3506) sığmayan adımlar plandan düşmüyor; gecikme sayıları bir anda artıyor ve kişi bunu
+// "plan bozuldu" diye okuyor. Tek seferlik bilgi: kişi kapatınca bu tarayıcıda bir daha çıkmaz; depo kapalıysa her açılışta çıkar.
+export const UFUK_BILGISI = 'Planlama süresine sığmayan adımlar artık plandan düşmüyor, gerçek tarihleriyle yerleşiyor; gecikme sayıları bu yüzden arttı.';
+export const UFUK_BILGISI_ANAHTARI = 'tc-pym-bilgi-takvim-uzar';
+function UfukBilgisi() {
+  const [kapali, setKapali] = useState(() => { try { return localStorage.getItem(UFUK_BILGISI_ANAHTARI) !== null; } catch { return false; } });
+  if (kapali) return null;
+  const kapat = () => { setKapali(true); try { localStorage.setItem(UFUK_BILGISI_ANAHTARI, '1'); } catch { /* depo kapalı: yalnız bu açılışta kapanır */ } };
+  return (
+    <p className="tc-pym-sb-bilgi" role="note">
+      <Simge ad="clock" boyut="k" /><span>{UFUK_BILGISI}</span>
+      <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet" onClick={kapat}>Anladım</button>
+    </p>
   );
 }
 

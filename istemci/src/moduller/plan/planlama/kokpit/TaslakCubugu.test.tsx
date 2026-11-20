@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { TaslakCevabi, TaslakUygulaCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import type { TaslakSatiri } from './taslak.ts';
 import { sahteTaslak } from './taslak-test-yardim.ts';
@@ -125,5 +125,21 @@ describe('TaslakCubugu', () => {
     expect(d.querySelector('.tc-dugme-doner')).not.toBeNull();
     rerender(<TaslakCubugu taslak={{ ...t, diziliyor: false }} ozet={null} canliyaAlir kilit={null} yazildi={vi.fn()} onayiAc={vi.fn()} />);
     expect(dugme('Planı güncelle').getAttribute('aria-busy')).toBeNull();
+  });
+  it('dizme 3 saniyeyi geçince durum yazısı geçen süreyi ve üst sınırı söyler', () => {
+    vi.useFakeTimers();
+    try {
+      const { t } = sahteTaslak(1);
+      t.cevap = cevap([satir(TASI, 'a'), satir(DIZ, 'd', 'Plan bu arada değişti')]);
+      t.diziliyor = true;
+      render(<TaslakCubugu taslak={t} ozet={null} canliyaAlir kilit={null} yazildi={vi.fn()} onayiAc={vi.fn()} />);
+      const durum = () => within(screen.getByRole('region', { name: 'Değişiklikleriniz' })).getAllByRole('status')[0];
+      expect(durum()?.parentElement?.textContent).toBe('Güncelleniyor');
+      act(() => { vi.advanceTimersByTime(5000); });
+      expect(durum()?.parentElement?.textContent).toBe('Güncelleniyor · 5 sn · büyük planda bir dakikaya kadar sürebilir');
+      // Canlı bölge saniyeyle değişmez (ekran okuyucu her saniye okumasın); saniye görseldir.
+      expect(durum()?.textContent).toBe('Güncelleniyor');
+      expect(durum()?.nextElementSibling?.getAttribute('aria-hidden')).toBe('true');
+    } finally { vi.useRealTimers(); }
   });
 });

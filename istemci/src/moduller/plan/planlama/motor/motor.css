@@ -74,6 +74,12 @@
 .tc-pym-sb-nb-k[data-ton="kotu"] small { color: var(--stop); }
 .tc-pym-sb-sag { display: inline-flex; align-items: center; gap: var(--b-2); margin-left: auto; }
 .tc-pym-sb-not { color: var(--muted); font-size: var(--yazi-xs); white-space: nowrap; }
+/* Tek seferlik bilgi (takvim uzar): şeridin altında ince satır; kapatılınca kalkar. */
+.tc-pym-sb-bilgi { display: flex; align-items: center; gap: var(--b-2); margin: 0 var(--b-2) var(--b-2); padding: var(--b-1) var(--b-2); border-radius: var(--yari-2); background: var(--panel2); color: var(--muted); font-size: var(--yazi-s); }
+.tc-pym-sb-bilgi > span { flex: 1 1 auto; min-width: 0; }
+.tc-pym-sb-bilgi > button { flex: none; }
+/* Hesap uzun sürerken geçen süre (sessiz bekleme "takıldı" diye okunuyordu); telefonda düğmelerin altına kendi satırına iner. */
+.tc-pym-sb-sure { color: var(--muted); font-size: var(--yazi-xs); white-space: nowrap; font-variant-numeric: tabular-nums; }
 /* Plan nasıl çalışır (3504 b): soru işaretinin altında açılan kısa açıklama; şeridin sağ kenarına yaslanır, dar ekranda ekran enini aşmaz. */
 .tc-pym-sb-nasil { position: relative; display: inline-flex; }
 .tc-pym-sb-nasil-kutu {
@@ -411,6 +417,14 @@
   .tc-pym-br-dar > button { flex-direction: row; justify-content: flex-start; padding: var(--b-2) var(--b-3); }
   .tc-pym-br-dar > button > span { writing-mode: horizontal-tb; }
   .tc-pym-oz-yer { height: calc(var(--b-1) * 95); }
+  .tc-pym-sb-sag:has(.tc-pym-sb-sure) { flex-wrap: wrap; justify-content: flex-end; flex-shrink: 1; min-width: 0; }
+  .tc-pym-sb-sure { order: 9; flex-basis: 100%; text-align: right; white-space: normal; }
+}
+/* Telefonda bilgi metni uzun: Anladım metnin altına, sağa iner. */
+@container (max-width: 599px) {
+  .tc-pym-sb-bilgi { flex-wrap: wrap; }
+  .tc-pym-sb-bilgi > span { flex-basis: calc(100% - var(--b-6)); }
+  .tc-pym-sb-bilgi > button { margin-left: auto; }
 }
 @container (max-width: 760px) {
   .tc-pym-ol-ortak .tc-pym-ol-kay { display: none; }
