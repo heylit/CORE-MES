@@ -188,7 +188,8 @@ describe('adım ortasından bölünen parti (3512)', () => {
   });
 
   test('KL-12: katılma adımının sahibi de o yeri kendi işleyen en yakın üst emirdir', () => {
-    // 3 (10 ve 20) 2'ye 3. adımda katılır; 4 (10 ve 20) 3'ten ayrıldı, o da 3. adımda katılır. 30. adımı 3 işlemez: 4'ü bekleyecek olan 2'dir.
+    // 3 (10 ve 20) 2'ye 3. adımda katılır; 4 (10 ve 20) 3'ten ayrıldı ve 3'e katılmaz: adımları 3'ün katılma yerinde biter (kaynak böyle
+    // partiye { 0, 3 } verir). 30. adımı 3 işlemez: 4'ü bekleyecek olan 2'dir.
     const emirler = [ust, emir('3', 1, '2', { n: 0, m: 3 }), emir('4', 3, '3', { n: 0, m: 3 })];
     const r = kur(emirler, { adimAdetleri: { 'E-2|30': 10 }, w: { adimBekle: { '4.20': { kadar: 200, neden: 'malzeme' } } } });
     assert.deepEqual(r.isler, ['2.10', '2.20', '2.30', '3.10', '3.20', '4.10', '4.20']);
