@@ -556,8 +556,9 @@ function bitenUygula(st, b) {
 function ustBeklemesiUygula(st, b) {
   const kendi = Object.assign({}, st.adimBekle), idler = Object.keys(kendi);
   for (const s of st.D.siparisler || []) {
-    const gorulen = new Set([String(s.id)]);
-    for (let p = b.ust[s.id]; p != null && !gorulen.has(p); p = b.ust[p]) {
+    /* "Partiyi böl" ölçümünün partisi ('emir/1') bölünen emrin üst bağını taşır. */
+    const kok = String(s.id).split('/')[0], gorulen = new Set([kok]);
+    for (let p = b.ust[kok]; p != null && !gorulen.has(p); p = b.ust[p]) {
       gorulen.add(p);
       if (b.siparis[p]) continue;
       for (const id of idler) {
