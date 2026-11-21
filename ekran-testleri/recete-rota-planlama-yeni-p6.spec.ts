@@ -42,8 +42,8 @@ test.describe('P6 Sevkiyat', () => {
     await izgara.getByRole('button', { name: /^ORN-S2, 03\.03 Sal: / }).click();
     const acilim = kap.getByRole('region', { name: /^ORN-S2 · / });
     await expect(acilim.getByText('ORN-S2 termini 02.03 Pzt, plan 03.03 Sal sevke hazır diyor: 6 sa geç.')).toBeVisible();
-    await expect(acilim.getByRole('button', { name: /ORN-S2 çizelgede/ })).toBeEnabled();
-    await expect(acilim.getByText('Bunu değiştirme yetkiniz yok.')).toBeVisible();
+    await expect(acilim.getByRole('button', { name: /ORN-S2 Kokpit'te/ })).toBeEnabled();
+    await expect(acilim.getByText(/yetkiniz yok/)).toHaveCount(0);
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
     await page.keyboard.press('Escape');
     await expect(acilim).toBeHidden();
@@ -62,9 +62,9 @@ test.describe('P6 Sevkiyat', () => {
     await expect(kap.getByText(/\. hafta · 02\.03/).first()).toBeVisible();
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
     await expect(kap.locator('input[type="date"]')).toHaveCount(0);
-    // "çizelgede" siparişi seçip Planlama motoru tahtasını açar (Y5).
+    // "Kokpit'te" siparişi seçip Kokpit'i açar (3537 a).
     await izgara.getByRole('button', { name: /^ORN-S2, 03\.03 Sal: / }).click();
-    await acilim.getByRole('button', { name: /ORN-S2 çizelgede/ }).click();
+    await acilim.getByRole('button', { name: /ORN-S2 Kokpit'te/ }).click();
     await expect(page).toHaveURL(/\/plan$/);
     expect(ag.yazmalar).toEqual([]);
     expect(ag.hatalar).toEqual([]);

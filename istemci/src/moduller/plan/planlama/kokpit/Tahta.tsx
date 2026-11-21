@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as FareOlayi, type PointerEvent as ImlecOlayi } from 'react';
-import { Simge } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, Simge } from '../../../../ortak/arayuz/index.ts';
 import { emirKuyrugu } from '../ortak/emir-no.ts';
 import type { Derleme } from '../motor/kurallar.ts';
 import type { IsTasiOnizlemesi } from '../motor/atolye/gonder.ts';
@@ -89,6 +89,33 @@ const SURUKLE_ESIGI = 4;
 const ETKI_BEKLE = 150;
 // Bu genişlikten (px) dar iş okunur genişlikte çizilir; satır en çok bu kadar şeride açılır.
 const KISA_IS = 40, OKUNUR_EN = 64, EN_COK_SERIT = 4;
+// Önizlemede yeni bitişi emrin terminini aşan işler; yalnız henüz gecikmemiş emirde (emrin bitişi terminde ya da önce). Emir başına bir kez,
+// termine göre sıralı. Zaten geç emrin işi kayınca yeniden "gecikir" denmez.
+export function gecikenler(isler: readonly { isId: string; C: number }[], eski: Readonly<Record<string, KokpitIsi>>, emir: ReadonlyMap<string, KokpitEmri>): Etki['geciken'] {
+  const ids = new Set<string>(), em = new Map<string, number>();
+  for (const y of isler) {
+    const x = eski[y.isId], e = x ? emir.get(x.job) : undefined;
+    if (!x || !e || e.termin === null || y.C <= e.termin + 1e-6 || (e.bitis !== null && e.bitis > e.termin + 1e-6)) continue;
+    ids.add(y.isId); em.set(e.no, e.termin);
+  }
+  return { isler: ids, emirler: [...em].map(([no, termin]) => ({ no, termin })).sort((a, b) => a.termin - b.termin) };
+}
+// Bırakılan taşımanın onay cümlesinin başı: hangi iş, hangi tezgâh, hangi saat ve eski yerine göre ne kadar erken ya da geç.
+export function onayCumlesi(is: string, tezgah: string, saat: string, fark: number): string {
+  return `${is} · ${tezgah}, ${saat} (${Math.abs(fark) < 0.01 ? 'aynı saat' : `${sureYaz(fark)} ${fark < 0 ? 'erken' : 'geç'}`})`;
+}
+// Sürüklerken ipucu satırına eklenen neden cümlesi: kaç iş itilir ya da çekilir, hangi emir termini kaçırır.
+// Termin bugünse yalnız saat, değilse gün ve saat yazılır; ikiden çok geciken emir "+N emir daha gecikir" diye toplanır.
+export function etkiCumlesi(e: Pick<Etki, 'kayan' | 'geciken'> | null, zaman: (t: number) => string, simdi: number): string {
+  if (!e) return '';
+  const kayan = Object.values(e.kayan), it = kayan.filter((d) => d > 0).length, cek = kayan.length - it;
+  const parca = [it > 0 ? `aynı tezgâhta ${String(it)} iş arkaya itilir` : '', cek > 0 ? `${String(cek)} iş öne çekilir` : ''].filter(Boolean);
+  const gun = (t: number): string => zaman(t).slice(0, 5);
+  const saat = (t: number): string => (gun(t) === gun(simdi) ? zaman(t).slice(-5) : zaman(t).slice(6));
+  const g = e.geciken.emirler;
+  if (g.length > 0) parca.push(g.slice(0, 2).map((x) => `${x.no} termini ${saat(x.termin)}, gecikir`).join('; ') + (g.length > 2 ? `; +${String(g.length - 2)} emir daha gecikir` : ''));
+  return parca.length ? ` · ${parca.join(' · ')}` : '';
+}
 const yazimda = (): boolean => /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName ?? '');
 
 // fis: tepsiden tutulan plansız emir; id o emrin ilk adımıdır (planda yeri yoktur).
@@ -97,7 +124,9 @@ interface Tasinan { id: string; tut: number; fis?: string; suruk?: boolean }
 const FIS_SAATI = 2;
 interface Hedef { satir: string; S: number; gecerli: boolean }
 const BOS_KUME: ReadonlySet<string> = new Set();
-interface Etki { anahtar: string; gecerli: boolean; ileti: string | null; kayan: Record<string, number> }
+// kayan: itilen ya da çekilen işin kayma süresi; yeni: o işin önizlemedeki yeri (iş oraya akar); geciken: yeni bitişi emrin terminini ilk kez aşan
+// işler ve emir numaraları (3531).
+interface Etki { anahtar: string; gecerli: boolean; ileti: string | null; kayan: Record<string, number>; yeni: Record<string, { S: number; C: number }>; geciken: { isler: ReadonlySet<string>; emirler: readonly { no: string; termin: number }[] } }
 
 export function Tahta(o: TahtaOzellikleri) {
   const { m, cx, goz, olcek, emirler, uyar, secEmir, secIs, sec, zaman, tasi, planaAl, once, gunAc, uyari, goster, odak, oneri } = o;
@@ -117,6 +146,8 @@ export function Tahta(o: TahtaOzellikleri) {
   const [oklar, setOklar] = useState<Ok[]>([]);
   const [ustteki, setUstteki] = useState<string | null>(null);
   const [etki, setEtki] = useState<Etki | null>(null);
+  // 3531 b: bırakılan iş hemen taşınmaz; hayalet, itilen işler ve neden cümlesi yerinde durur, Uygula yazar, Vazgeç (ya da Esc) bırakır.
+  const [onay, setOnay] = useState(false);
   // Fareyle basılan iş: kıpırdayınca sürükleme başlar; sürükleyerek tutulanı bırakmak imleci kaldırmaktır.
   const basilan = useRef<{ id: string; x: number; y: number; tut: number } | null>(null);
   const surukleniyor = useRef(false);
@@ -199,6 +230,7 @@ export function Tahta(o: TahtaOzellikleri) {
   }, [emir, m, planaAl, goz, uyari, fisAdaylari]);
   // vazgecer: sürükleyerek tutulan iş geçersiz yere bırakılınca tutma biter (yapışarak tutmada iş elde kalır, kişi başka yere tıklar).
   const birak = useCallback((vazgecer = false): void => {
+    if (onay) return;
     const birakma = (ileti: string): void => { uyari(ileti); if (vazgecer) { setTasinan(null); setHedef(null); } };
     if (tasinan?.fis !== undefined) {
       if (!hedef) { birakma('Emri bir tezgâh satırına bırakın'); return; }
@@ -215,8 +247,16 @@ export function Tahta(o: TahtaOzellikleri) {
     setTasinan(null); setHedef(null);
     // Çoklu seçimin bir işi bırakılınca hepsi aynı süre kayar; tezgâh değişmez (her iş kendi satırında kalır).
     if (grupKaydir && coklu.size > 1 && coklu.has(x.id)) { if (Math.abs(hedef.S - x.S) > 0.01) grupKaydir(hedef.S - x.S); return; }
-    if (tezgah !== x.m || Math.abs(hedef.S - x.S) > 0.01) tasi(x.id, tezgah, hedef.S);
-  }, [tasinan, hedef, m, tasi, planaAl, goz, uyari, grupKaydir, coklu]);
+    if (tezgah === x.m && Math.abs(hedef.S - x.S) <= 0.01) return;
+    // Tek iş: önizleme durur, kişi Uygula ya da Vazgeç der (3531 b).
+    setTasinan(tasinan); setHedef(hedef); setOnay(true);
+  }, [onay, tasinan, hedef, m, tasi, planaAl, goz, uyari, grupKaydir, coklu]);
+  const vazgec = useCallback((): void => { surukleniyor.current = false; setOnay(false); setTasinan(null); setHedef(null); }, []);
+  const uygula = useCallback((): void => {
+    const x = tasinan ? m.isler[tasinan.id] : undefined;
+    if (x && hedef && tasi) tasi(x.id, goz === 'T' ? hedef.satir : x.m, hedef.S);
+    setOnay(false); setTasinan(null); setHedef(null);
+  }, [tasinan, hedef, m, tasi, goz]);
 
   // Tutulan iş imleci izler: satır imlecin altındaki satırdır, saat imlecin yeri eksi tutulan noktadır (çeyrek saate oturur).
   const izle = (ev: ImlecOlayi<HTMLDivElement>): void => {
@@ -228,7 +268,7 @@ export function Tahta(o: TahtaOzellikleri) {
       setTasinan((t) => (t ? { ...t, suruk: true } : t));
       return;
     }
-    if (!tasinan) return;
+    if (!tasinan || onay) return;
     const x = m.isler[tasinan.id];
     const satir = (ev.target as Element).closest<HTMLElement>('[data-satir]');
     const alan = satir?.querySelector<HTMLElement>('.tc-pyq-alan');
@@ -272,9 +312,9 @@ export function Tahta(o: TahtaOzellikleri) {
     const t = setTimeout(() => {
       void onizle(tasinanId, tezgah, S).then((oz) => {
         if (etkiSon.current !== anahtar || !oz) return;
-        const kayan: Record<string, number> = {};
-        for (const y of oz.isler) if (y.tur !== 'tasinan' && Math.abs(y.S - y.eskiS) > 0.01) kayan[y.isId] = y.S - y.eskiS;
-        setEtki({ anahtar, gecerli: oz.gecerli, ileti: oz.ileti, kayan });
+        const kayan: Record<string, number> = {}, yeni: Record<string, { S: number; C: number }> = {};
+        for (const y of oz.isler) if (y.tur !== 'tasinan' && y.tezgah === y.eskiTezgah && Math.abs(y.S - y.eskiS) > 0.01) { kayan[y.isId] = y.S - y.eskiS; yeni[y.isId] = { S: y.S, C: y.C }; }
+        setEtki({ anahtar, gecerli: oz.gecerli, ileti: oz.ileti, kayan, yeni, geciken: gecikenler(oz.isler, m.isler, emir) });
       });
     }, ETKI_BEKLE);
     return () => { clearTimeout(t); };
@@ -283,7 +323,8 @@ export function Tahta(o: TahtaOzellikleri) {
 
   useEffect(() => {
     const tus = (ev: KeyboardEvent): void => {
-      if (ev.key === 'Escape' && (tasinan || menu)) { ev.stopPropagation(); surukleniyor.current = false; setTasinan(null); setHedef(null); setMenu(null); return; }
+      if (ev.key === 'Escape' && (tasinan || menu)) { ev.stopPropagation(); surukleniyor.current = false; setOnay(false); setTasinan(null); setHedef(null); setMenu(null); return; }
+      if (onay) return;
       if (yazimda() || ev.ctrlKey || ev.metaKey || ev.altKey) return;
       if (ev.key !== ' ' || uzakMi(olcek)) return;
       if (tasinan) { ev.preventDefault(); birak(); return; }
@@ -297,7 +338,7 @@ export function Tahta(o: TahtaOzellikleri) {
     };
     document.addEventListener('keydown', tus, true);
     return () => { document.removeEventListener('keydown', tus, true); };
-  }, [tasinan, menu, tut, tutFis, birak, secIs, secEmir, emir, planaAl, m, olcek]);
+  }, [tasinan, menu, onay, tut, tutFis, birak, secIs, secEmir, emir, planaAl, m, olcek]);
 
   // Açılışta şimdi görünür; istenen iş görünüme gelir.
   useEffect(() => {
@@ -434,15 +475,18 @@ export function Tahta(o: TahtaOzellikleri) {
     const cizim = yerlesim.is.get(x.id), gercek = (C - S) * px, kisa = cizim !== undefined && cizim.en > gercek + 0.5;
     // Sürüklenen işin etkisiyle itilen ya da çekilen iş (3365): çerçevesi kesik, kayma süresi yazılır.
     const itilen = tasinan?.id !== x.id ? etkiNe?.kayan[x.id] : undefined;
+    // 3531: itilen iş önizlemedeki yerine akar (geçiş CSS'te); bırakınca ya da vazgeçince plandaki yerine döner.
+    const cizS = itilen !== undefined ? etkiNe?.yeni[x.id]?.S ?? S : S;
+    const gecikir = etkiNe?.geciken.isler.has(x.id) === true;
     const ad = `${e?.no ?? x.job} · ${x.ad} · ${zaman(x.S)} – ${zaman(x.C).slice(-5)}${e ? ` · ${durumYazisi(e)}` : ''}${x.basladi && !x.bitti && tasi ? ' · sürüyor, taşınırsa durdurulur' : ''}${x.durdurmaBekliyor ? ` · ${DURDURMA_BEKLIYOR}` : ''}`;
     return (
       <button
         type="button" key={x.id} className="tc-pyq-is" data-is={x.id} data-d={e?.durum ?? 'iyi'} title={ad} aria-label={ad}
         aria-pressed={secIs === x.id} data-suruyor={x.basladi ? '' : undefined} data-emir-secili={secEmir === x.job ? '' : undefined} data-yanan={yanan?.has(x.job) ? '' : undefined} data-sonuk={uyar(x.job) && (!yanan || yanan.has(x.job)) ? undefined : ''}
         data-sabit={neden ? '' : undefined} data-durdurma-bekliyor={x.durdurmaBekliyor ? '' : undefined} data-tasinan={tasinan?.id === x.id ? '' : undefined} data-kaydi={(canli && Math.abs(kayma) > 0.25) || itilen !== undefined ? '' : undefined}
-        data-kisa={kisa ? '' : undefined}
+        data-kisa={kisa ? '' : undefined} data-gecikir={gecikir ? '' : undefined}
         ref={(el) => {
-          yerYaz(el, (S - m.bas) * px, cizim?.en ?? gercek);
+          yerYaz(el, (cizS - m.bas) * px, cizim?.en ?? gercek);
           el?.style.setProperty('--serit', String(tek ? 0 : cizim?.serit ?? 0));
           if (kisa) el?.style.setProperty('--gercek', `${String(Math.max(2, Math.round(gercek)))}px`);
         }}
@@ -468,7 +512,7 @@ export function Tahta(o: TahtaOzellikleri) {
       >
         {x.kilitli && <Simge ad="lock" boyut="k" />}
         <b>{goz === 'T' ? emirKuyrugu(e?.no ?? x.job) : tezgahKodu.get(x.m) ?? x.m}</b>
-        <span>{itilen !== undefined ? `${itilen > 0 ? '+' : '−'}${sureYaz(itilen)}` : canli && Math.abs(kayma) > 0.25 ? `${kayma > 0 ? '+' : '−'}${sureYaz(kayma)}` : kisa ? sureYaz(C - S) : goz === 'T' ? e?.urun ?? x.ad : x.ad}</span>
+        <span>{itilen !== undefined ? `${gecikir ? 'gecikir · ' : ''}${itilen > 0 ? '+' : '−'}${sureYaz(itilen)}` : canli && Math.abs(kayma) > 0.25 ? `${kayma > 0 ? '+' : '−'}${sureYaz(kayma)}` : kisa ? sureYaz(C - S) : goz === 'T' ? e?.urun ?? x.ad : x.ad}</span>
         {x.basladi && <i className="tc-pyq-ilerleme" ref={(el) => { el?.style.setProperty('--oran', String(Math.min(1, Math.max(0, (m.simdi - S) / Math.max(0.01, C - S))))); }} />}
       </button>
     );
@@ -477,7 +521,7 @@ export function Tahta(o: TahtaOzellikleri) {
   return (
     <div
       className="tc-pyq-tahta" data-olcek={olcek} data-tasima={tasinan ? '' : undefined} ref={kap}
-      onPointerMove={izle} onClickCapture={(ev) => { if (tasinan) { ev.preventDefault(); ev.stopPropagation(); birak(); } else if (menu && !(ev.target as Element).closest('.tc-pyq-menu')) setMenu(null); }}
+      onPointerMove={izle} onClickCapture={(ev) => { if (tasinan && !onay) { ev.preventDefault(); ev.stopPropagation(); birak(); } else if (menu && !(ev.target as Element).closest('.tc-pyq-menu')) setMenu(null); }}
     >
       <div className="tc-pyq-ic" ref={(el) => { ic.current = el; el?.style.setProperty('--en', `${String(en)}px`); el?.style.setProperty('--gun', `${String(24 * px)}px`); }}>
         {eksen}
@@ -553,7 +597,7 @@ export function Tahta(o: TahtaOzellikleri) {
               )}
               {tasinanIs && hedef?.satir === r.kimlik && (
                 <span className="tc-pyq-hayalet" data-gecersiz={hedef.gecerli && etkiNe?.gecerli !== false ? undefined : ''} title={etkiNe?.gecerli === false ? etkiNe.ileti ?? undefined : undefined} ref={(el) => { yerYaz(el, (hedef.S - m.bas) * px, Math.max((tasinanIs.C - tasinanIs.S) * px, OKUNUR_EN)); }}>
-                  {!hedef.gecerli || etkiNe?.gecerli === false ? 'buraya olmaz' : `${zaman(hedef.S).slice(6)} · ${hedef.S === tasinanIs.S ? 'yerinde' : `${hedef.S > tasinanIs.S ? '+' : '−'}${sureYaz(hedef.S - tasinanIs.S)}`}${etkiNe && Object.keys(etkiNe.kayan).length > 0 ? ` · ${String(Object.keys(etkiNe.kayan).length)} iş kayar` : ''}`}
+                  <span>{!hedef.gecerli || etkiNe?.gecerli === false ? 'buraya olmaz' : `${zaman(hedef.S).slice(6)} · ${hedef.S === tasinanIs.S ? 'yerinde' : `${hedef.S > tasinanIs.S ? '+' : '−'}${sureYaz(hedef.S - tasinanIs.S)}`}${etkiNe && Object.keys(etkiNe.kayan).length > 0 ? ` · ${String(Object.keys(etkiNe.kayan).length)} iş kayar` : ''}`}</span>
                 </span>
               )}
             </div>
@@ -576,7 +620,18 @@ export function Tahta(o: TahtaOzellikleri) {
           </div>
         )}
       </div>
-      {tasinan && <p className="tc-pyq-ipucu" role="status">{tasinan.suruk ? 'Bırakın: iş taşınır' : 'Bırakmak için tıklayın ya da Space'}{grupKaydir && coklu.size > 1 && coklu.has(tasinan.id) ? ` · seçili ${String(coklu.size)} iş aynı süre kayar` : ''}{etkiNe?.gecerli === false && etkiNe.ileti ? ` · ${etkiNe.ileti}` : ''} · Esc vazgeçer</p>}
+      {onay && tasinanIs && hedef && (
+        <div className="tc-pyq-ipucu tc-pyq-tasima-onayi" role="group" aria-label="Taşımayı onayla">
+          <span role="status">{`${onayCumlesi(
+            emirKuyrugu(emir.get(tasinanIs.job)?.no ?? tasinanIs.job),
+            goz !== 'T' || hedef.satir === satirKimligi(tasinanIs) ? (tasinanIs.fason ? 'Fason' : tezgahKodu.get(tasinanIs.m) ?? tasinanIs.m) : tezgahKodu.get(hedef.satir) ?? hedef.satir,
+            zaman(hedef.S).slice(6), hedef.S - tasinanIs.S,
+          )}${etkiNe?.gecerli !== false ? etkiCumlesi(etkiNe, zaman, m.simdi) : ''}`}</span>
+          <Dugme onClick={vazgec}>Vazgeç</Dugme>
+          <Dugme tur="birincil" simge="check" disabled={etkiNe?.gecerli === false} onClick={uygula} autoFocus>Uygula</Dugme>
+        </div>
+      )}
+      {tasinan && !onay && <p className="tc-pyq-ipucu" role="status">{tasinan.suruk ? 'Bırakın: iş taşınır' : 'Bırakmak için tıklayın ya da Space'}{grupKaydir && coklu.size > 1 && coklu.has(tasinan.id) ? ` · seçili ${String(coklu.size)} iş aynı süre kayar` : ''}{etkiNe?.gecerli === false && etkiNe.ileti ? ` · ${etkiNe.ileti}` : ''}{etkiNe?.gecerli !== false ? etkiCumlesi(etkiNe, zaman, m.simdi) : ''} · Esc vazgeçer</p>}
       {once && <p className="tc-pyq-ipucu" role="status">Onaylı plan gösteriliyor · işlerin üzerinde sizin değişikliğinizle ne kadar kaydığı yazar</p>}
     </div>
   );

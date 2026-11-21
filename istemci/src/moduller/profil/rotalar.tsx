@@ -6,6 +6,7 @@ import { GeriBildirimOzeti } from './GeriBildirimOzeti.tsx';
 import { MiniPanoSayfasi } from './MiniPanoSayfasi.tsx';
 import { MINI_PANO_YOLU } from './mini-pano-penceresi.ts';
 import { Profil } from './Profil.tsx';
+import { TANITIM_YOLU, Tanitim } from './Tanitim.tsx';
 
 function EskiGelenler() {
   return <Navigate to="/geri-bildirim" replace />;
@@ -18,6 +19,9 @@ export const rotalar: ModulRotasi[] = [
   { yol: '/profil/gelenler', ekran: EskiGelenler },
   // Mini pano penceresi (3093 a): Hesap menüsü açar; panoyu üstte açan sayfa budur.
   { yol: MINI_PANO_YOLU, ekran: MiniPanoSayfasi },
+  // Tanıtım (3535 a): konu listesi ve seçilen konunun anlatımı; konu adreste (?konu=) durur. Profilim'in altındadır: her rol görür,
+  // ayrı sayfa yetkisi istemez (her menü sayfası kendi sayfa.<yol> işlemini ister). Hesap menüsündeki Tanıtım maddesi açar.
+  { yol: TANITIM_YOLU, ekran: Tanitim },
   { yol: '/geri-bildirim', ekran: GeriBildirimMerkezi },
   { yol: '/geri-bildirim/ozet', ekran: GeriBildirimOzeti },
   { yol: '/geri-bildirim/kategoriler', ekran: GeriBildirimKategorileri },

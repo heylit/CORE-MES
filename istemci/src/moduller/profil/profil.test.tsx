@@ -175,8 +175,8 @@ describe('Profil sayfası', () => {
 
 describe('Şikayet, istek ve öneri düğmesi', () => {
   it('her oturumda görünür (işlem istemez); tema eşitleyicisi de her oturumda durur', () => {
-    expect(ustEylemler.map((e) => [e.anahtar, e.islem])).toEqual([['geri-bildirim', 'oturum'], ['tema-tercihi', 'oturum'], ['mini-pano', 'oturum']]);
-    expect(gorunenUstEylemler(ustEylemler, []).map((e) => e.anahtar)).toEqual(['mini-pano', 'geri-bildirim', 'tema-tercihi']);
+    expect(ustEylemler.map((e) => [e.anahtar, e.islem])).toEqual([['geri-bildirim', 'oturum'], ['tema-tercihi', 'oturum'], ['mini-pano', 'oturum'], ['tanitim', 'oturum']]);
+    expect(gorunenUstEylemler(ustEylemler, []).map((e) => e.anahtar)).toEqual(['mini-pano', 'tanitim', 'geri-bildirim', 'tema-tercihi']);
   });
 
   it('çubukta yer tutmaz, Hesap menüsünden açılır (516 a)', async () => {

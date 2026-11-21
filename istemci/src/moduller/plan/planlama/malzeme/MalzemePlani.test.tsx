@@ -87,7 +87,7 @@ describe('Malzeme satın alma planı', () => {
     expect(within(d).getByText('Tedarikçi seçilmedi')).toBeTruthy();
   }, 20000);
 
-  it('ısı haritası katmanı: durum satırı, malzeme x gün ızgarası, hücre açılımı yazmaz, çizelgede motoru açar (zz30-isi, Y5)', async () => {
+  it('ısı haritası katmanı: durum satırı, malzeme x gün ızgarası, hücre açılımı yazmaz, kilit metni yok, emir Kokpit sayfasında açılır (zz30-isi, 3537 a)', async () => {
     const istekler = sunucuKur(YONETICI, kayit());
     stokSun();
     ac('/plan/malzplan');
@@ -101,11 +101,11 @@ describe('Malzeme satın alma planı', () => {
     fireEvent.click(son as HTMLElement);
     const acilim = screen.getByRole('region', { name: '11 · Termin bekleniyor' });
     expect(within(acilim).getByText(/11 için sipariş verilmedi; plan .* günü 10 kg istiyor\./)).toBeTruthy();
-    expect(within(acilim).getByText(/Bunu değiştirme yetkiniz yok\./)).toBeTruthy();
+    expect(within(acilim).queryByText(/yetkiniz yok/)).toBeNull();
     expect(screen.getByText('Tüm satırlar')).toBeTruthy();
     expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
-    fireEvent.click(within(acilim).getByRole('button', { name: /E-1 çizelgede/ }));
-    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/plan/plan'); }, { timeout: 10000 });
+    fireEvent.click(within(acilim).getByRole('button', { name: /E-1 Kokpit'te/ }));
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/plan'); }, { timeout: 10000 });
   }, 20000);
 
   it('plan yoksa plan kurulmasını ister', async () => {

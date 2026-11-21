@@ -1,0 +1,20 @@
+/* Tanıtım çerçevesi (3535 a): solda konu listesi, sağda içerik; 1024 altında liste üstte yatay kayar. */
+.tc-tnt { display: grid; text-align: start; grid-template-columns: calc(var(--b-6) * 5) minmax(0, 1fr); gap: var(--b-5); align-items: start; }
+.tc-tnt-baslik { grid-column: 1 / -1; margin: 0; font-size: var(--yazi-2xl); }
+.tc-tnt-konular { position: sticky; top: var(--b-3); display: grid; gap: var(--b-1); }
+.tc-tnt-konular button {
+  display: flex; align-items: center; gap: var(--b-2); min-height: var(--dokunma); padding: var(--b-2) var(--b-3); border: var(--cizgi-ince) solid transparent;
+  border-radius: var(--yari-2); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+  transition: background var(--hareket-sure) var(--hareket-egri);
+}
+.tc-tnt-konular button:hover { background: var(--hi); }
+.tc-tnt-konular button[aria-current="page"] { background: var(--secili-zemin); color: var(--secili-yazi); }
+.tc-tnt-konular button[aria-current="page"] small { color: inherit; opacity: .8; }
+.tc-tnt-konular span { display: flex; flex-direction: column; min-width: 0; }
+.tc-tnt-konular small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-tnt-icerik { min-width: 0; }
+@media (max-width: 1023px) {
+  .tc-tnt { grid-template-columns: minmax(0, 1fr); gap: var(--b-3); }
+  .tc-tnt-konular { position: static; display: flex; overflow-x: auto; }
+  .tc-tnt-konular button { flex: none; }
+}
