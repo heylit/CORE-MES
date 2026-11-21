@@ -184,3 +184,50 @@ describe('Kokpit ek mesai (3282 2a-2)', () => {
     expect(within(panel).queryByRole('form', { name: 'Ek mesai ekle' })).toBeNull();
   });
 });
+
+describe('Kokpit kapasite bölümü, Vardiya\'dan gelen uzak duruşlar kapalı durur (3521)', () => {
+  // Şimdi 10; yakın sınırı 10 + 28 gün = 682. saat.
+  const haftalik = (m: string, n: number, ilk = 30) => Array.from({ length: n }, (_, i) => ({ m, from: ilk + 168 * i, to: ilk + 10 + 168 * i, neden: 'planlı duruş', baslik: 'ORN-Bakım', oto: 1, bakim: `vd:1:${String(i)}` }));
+  const UZAK_ELLE = { m: 'ORN-T1', from: 2000, to: 2008, neden: 'arıza' };
+  const UZAK_ARIZA = { m: 'ORN-T1', from: 3000, to: 3010, neden: 'arıza', oto: 1 };
+  const satirlar = (panel: HTMLElement) => within(panel).getAllByRole('listitem').map((x) => x.textContent ?? '');
+
+  it('yakın dört hafta ile elle girilen ve arızadan gelen duruş açıktır; ötesi düğmeyle açılır ve kapanır', () => {
+    const { panel } = kur(true, [...haftalik('ORN-T1', 52), UZAK_ELLE, UZAK_ARIZA]);
+    const kapali = satirlar(panel);
+    expect(kapali).toHaveLength(7);
+    expect(kapali.slice(0, 4).every((x) => x.startsWith('Planlı duruş (ORN-Bakım)'))).toBe(true);
+    expect(kapali.slice(4)).toEqual([expect.stringMatching(/^Arıza [^·]*$/), expect.stringMatching(/^Arıza .* · kendiliğinden geldi$/), 'Daha sonraki 48 duruşu göster']);
+    const dugme = within(panel).getByRole('button', { name: 'Daha sonraki 48 duruşu göster' });
+    expect(dugme.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(dugme);
+    const acik = satirlar(panel);
+    expect(acik).toHaveLength(55);
+    // Açılan satırlar düğmenin altına gelir; üstteki satırlar yerinden oynamaz.
+    expect(acik.slice(0, 6)).toEqual(kapali.slice(0, 6));
+    expect(acik[6]).toBe('Daha sonraki 48 duruşu gizle');
+    expect(acik.slice(7).every((x) => x.endsWith('· Vardiya ekranından geldi; orada değişir'))).toBe(true);
+    expect(dugme.getAttribute('aria-expanded')).toBe('true');
+    fireEvent.click(dugme);
+    expect(satirlar(panel)).toEqual(kapali);
+  });
+
+  it('sınır şimdiden 28 gün sonradır; tek uzak duruş için düğme konmaz', () => {
+    const tek = (from: number) => ({ m: 'ORN-T1', from, to: from + 4, neden: 'planlı duruş', baslik: 'ORN-Bakım', oto: 1 });
+    const v = kur(true, [tek(681.75), tek(682), tek(700)]);
+    expect(satirlar(v.panel)).toHaveLength(2);
+    expect(within(v.panel).getByRole('button', { name: 'Daha sonraki 2 duruşu göster' })).toBeTruthy();
+    v.yenile([tek(681.75), tek(700)]);
+    expect(satirlar(v.panel)).toHaveLength(2);
+    expect(within(v.panel).queryByRole('button', { name: /^Daha sonraki/ })).toBeNull();
+  });
+
+  it('açık liste tezgâha aittir: başka tezgâha geçince onun uzak duruşları kapalı gelir', () => {
+    const { panel } = kur(true, [...haftalik('ORN-T1', 8), ...haftalik('ORN-T2', 9)]);
+    fireEvent.click(within(panel).getByRole('button', { name: 'Daha sonraki 4 duruşu göster' }));
+    expect(satirlar(panel)).toHaveLength(9);
+    fireEvent.change(within(panel).getByLabelText('Tezgâh'), { target: { value: 'ORN-T2' } });
+    expect(within(panel).getByRole('button', { name: 'Daha sonraki 5 duruşu göster' }).getAttribute('aria-expanded')).toBe('false');
+    expect(satirlar(panel)).toHaveLength(5);
+  });
+});
