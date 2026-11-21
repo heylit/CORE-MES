@@ -446,17 +446,12 @@ function partiBol(jid, dagitim, adetler) {
   const r0 = S.plan.ops[opId];
   parcalar.forEach((x, i) => { if (x.m) st.locks[`${jid}/${i + 1}.${k}`] = { m: x.m, S: r0 ? r0.S : st.now, gecici: 1 }; });
   stHazirla(st); const cx = compile(st);
-  /* Plana göre sürüyor sayılan adım (başlangıcı geçmiş, bitişi gelmemiş, gerçekleşen kaydı yok) dizilirken olduğu gibi tutulur. Parti
-     kopyası emrin bütün adedinin süresini taşır: ilk parti o süreyle kalır, ölçüm bölmeyi olduğundan uzun gösterirdi. İlk parti adımı aynı
-     saatte ve aynı ayarla, kendi adedinin süresiyle sürdürür; öteki partiler adıma başlamamıştır, şimdiden sonraya dizilir. */
+  /* Plana göre sürüyor sayılan adımı (başlangıcı geçmiş, bitişi gelmemiş, gerçekleşen kaydı yok) ilk parti aynı saatte sürdürür; süresini
+     motor kendi adedinden yeniler (schedule). Öteki partiler adıma başlamamıştır, şimdiden sonraya dizilir. */
   for (const [id0, r] of Object.entries(S.plan.ops)) {
     if (!id0.startsWith(pref) || r.fas || !(r.S < st.now - 1e-9 && r.C > st.now + 1e-9)) continue;
     const kk = id0.slice(pref.length);
-    parcalar.forEach((x, i) => { const id = `${jid}/${i + 1}.${kk}`;
-      if (i) { ops[id] = { ...ops[id], S: st.now + i * 1e-3 }; return; }
-      const o = cx.byId[id], c = o && o.c.find(y => y.m === r.m && !y.fas), M = c && cx.M[c.m]; if (!M) return;
-      const run = o.fai ? Math.max(0, c.run - c.cyc) : c.run, Su = adv(M.sw, r.S, r.su), C = adv(M.rw, Su, run);
-      ops[id] = { ...ops[id], run, Su, C, lot1: Math.min(C, r.lot1) }; });
+    parcalar.forEach((x, i) => { if (i) { const id = `${jid}/${i + 1}.${kk}`; ops[id] = { ...ops[id], S: st.now + i * 1e-3 }; } });
   }
   const p = tutulamayaniOnar(kisaArama(st, cx, lnsDecode(st, { ops, fail: S.plan.fail || [] }, [], cx, true), 500), st, cx, true);
   const kayit = planKaydi(p, st, null);
