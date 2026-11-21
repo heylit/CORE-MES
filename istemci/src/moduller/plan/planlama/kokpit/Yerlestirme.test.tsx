@@ -870,4 +870,14 @@ describe('adım ortasından bölünen partinin notları ekranda (3523)', () => {
     expect(document.querySelector('[data-emir-kol]')).not.toBeNull();
     expect(document.querySelector('[data-adim-parti]')).toBeNull();
   });
+
+  it('Akış görünümünde de partinin satırı emir başlığında, bekleme katılma adımının kutusunda durur; başlamış adımda yoktur', () => {
+    const { unmount } = render(<EmirAdimlari m={M} kart={kart('1')} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} kol={KOL} ilkGorunum="akis" />);
+    expect(document.querySelector('[data-emir="1"] [data-emir-kol]')?.textContent).toBe(KOL.emir[1]);
+    expect([...document.querySelectorAll('[data-adim-parti]')].map((x) => [x.closest('[data-adim]')?.getAttribute('data-adim'), x.textContent])).toEqual([['1.10', 'bekliyor: parti ORN-UE-9/1']]);
+    unmount();
+    const basladi = { ...M, isler: { '1.10': { ...is('1.10', 'T1', 8, 12), basladi: true } } };
+    render(<EmirAdimlari m={basladi} kart={kart('1')} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} kol={KOL} ilkGorunum="akis" />);
+    expect(document.querySelector('[data-adim-parti]')).toBeNull();
+  });
 });

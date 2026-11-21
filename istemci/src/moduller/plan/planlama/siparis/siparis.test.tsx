@@ -399,12 +399,39 @@ describe('Partiyi böl (uç açılınca)', () => {
       Object.assign(x, { elleBol: elle, w: { adimEk: { 'S1.a1': { ekSaat: 9 }, 'S1.a3': { ekSaat: 1.5 }, 'S2.a1': { ekSaat: 4 }, 'S1.a2': { ekSaat: 0 } } } });
       Object.assign(x.D, { opAdet: { 'S1.a1': 13, 'S1.a2': 10, 'S1.a3': 8, 'S2.a1': 9 } });
     });
-    // Rotadaki sırayla; adedi emrinkine eşit (a2) ya da ondan az (a3) olan adım fazlalık değildir.
+    // Rotadaki sırayla; adedi emrinkine eşit olan adım (a2) satır üretmez, az olan (a3) eksik diye aynı satıra girer.
     expect(satirlar(hepsi)).toEqual([
       'a1 adımı: elle bölme (M1, M2), ek süre (9 sa) ve 3 adet fazlalık 1. partide kalır; öteki partilerin tezgâhını plan seçer.',
-      'a3 adımı: ek süre (1,5 sa) 1. partide kalır.',
+      'a3 adımı: ek süre (1,5 sa) 1. partide kalır; 2 adet eksik (önceki adımın hurdası) 1. partiden düşülür.',
     ]);
     expect(satirlar(calismaKur((x) => { Object.assign(x.D, { opAdet: { 'S1.a2': 12 } }); }))).toEqual(['a2 adımı: 2 adet fazlalık 1. partide kalır.']);
+  });
+
+  it('adım adıyla yazılır; aynı adlı adımda adın kaçıncısı olduğu başa gelir, adı olmayan adım anahtarıyla kalır', () => {
+    const d = vi.fn() as unknown as Degerlendirici;
+    const c = calismaKur((x) => {
+      (x.D.urunler[0] as Record<string, unknown>).rota = [{ k: 'a1', ad: 'Torna' }, { k: 'a2', ad: 'Freze' }, { k: 'a3', ad: 'Torna' }, { k: 'a4', ad: '' }];
+      Object.assign(x, { w: { adimEk: { 'S1.a1': { ekSaat: 1 }, 'S1.a2': { ekSaat: 2 }, 'S1.a3': { ekSaat: 3 }, 'S1.a4': { ekSaat: 4 } } } });
+    });
+    const { container } = render(<BildirimSaglayici><PartiBolmeKarti c={c} p={kayitliPlan(c)} degerlendir={d} yenile={vi.fn()} /></BildirimSaglayici>);
+    expect([...container.querySelectorAll('[data-ilk-parti]')].map((x) => x.textContent)).toEqual([
+      '1. Torna adımı: ek süre (1 sa) 1. partide kalır.', 'Freze adımı: ek süre (2 sa) 1. partide kalır.',
+      '2. Torna adımı: ek süre (3 sa) 1. partide kalır.', 'a4 adımı: ek süre (4 sa) 1. partide kalır.',
+    ]);
+  });
+
+  it('adımın adedi emrinkinden azsa eksik 1. partiden düşülür; ilk partiye adet bırakmıyorsa yazılmaz, ilk partinin adedi değişince yeniden bakılır', () => {
+    const d = vi.fn() as unknown as Degerlendirici;
+    // Emir 10 adet, eşit iki parti 5 + 5. a1'de 4 eksik ilk partiye 1 adet bırakır; a3'te 5 eksik bırakmaz.
+    const c = calismaKur((x) => { Object.assign(x.D, { opAdet: { 'S1.a1': 6, 'S1.a3': 5 } }); });
+    const { container } = render(<BildirimSaglayici><PartiBolmeKarti c={c} p={kayitliPlan(c)} degerlendir={d} yenile={vi.fn()} /></BildirimSaglayici>);
+    const satirlar = () => [...container.querySelectorAll('[data-ilk-parti]')].map((x) => x.textContent);
+    expect(satirlar()).toEqual(['a1 adımı: 4 adet eksik (önceki adımın hurdası) 1. partiden düşülür.']);
+    const kutular = within(screen.getByRole('group', { name: 'Parti adetleri' })).getAllByRole('spinbutton');
+    fireEvent.change(kutular[0]!, { target: { value: '6' } });
+    expect(satirlar()).toEqual(['a1 adımı: 4 adet eksik (önceki adımın hurdası) 1. partiden düşülür.', 'a3 adımı: 5 adet eksik (önceki adımın hurdası) 1. partiden düşülür.']);
+    fireEvent.change(kutular[0]!, { target: { value: '' } });
+    expect(satirlar()).toEqual([]);
   });
 
   it('darboğaz plandan yazılır, tezgâh dağılımı seçilir; en küçük partinin altında Böl kilitli', () => {

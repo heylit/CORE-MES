@@ -566,6 +566,7 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
                   {bagimlilik(e, a) && <small data-bag-kisa="">{bagimlilik(e, a)!.kisa}</small>}
                   <small>{x ? `${x.fason ? 'Fason' : tz(x.m)} · ${an(x.S, x.C)}` : yer === 'fason' ? 'Fason · sistem yerleştirir' : s !== undefined ? `${tz(s)} seçildi` : 'yerleşmedi'}</small>
                   {(yer === 'fason' || x?.fason) && firmaNotu(a.id)}
+                  {x && !x.basladi && kol?.adim[a.id] !== undefined && <small data-adim-parti={a.id}>{kol.adim[a.id]}</small>}
                 </button>
               </li>
             );

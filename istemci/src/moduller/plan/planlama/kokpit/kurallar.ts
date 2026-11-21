@@ -1,6 +1,6 @@
 import type { EmirNo } from '../ortak/emir-no.ts';
 import { acikSaat, zamanTanisiYazisi, type Bitenler, type Derleme, type OkunanPlan } from '../motor/kurallar.ts';
-import type { PlanlamaCalismasi } from '../tipler.ts';
+import { adimAdi, type PlanlamaCalismasi } from '../tipler.ts';
 
 // Kokpit'in saf kuralları (kart 3151): tahtanın, matrisin ve sorun turunun okuduğu model çalışmadan ve kayıtlı plandan kurulur.
 // Saat ekseni çalışmanın eksenidir (başlangıç gününün 00:00'ından saat). Veri yoksa null; sıfır uydurulmaz.
@@ -600,7 +600,7 @@ export function kolNotlari(m: Pick<KokpitModeli, 'emirler'>, D: Pick<PlanlamaCal
   const no = (id: string): string => m.emirler.find((e) => e.id === id)?.no ?? id;
   const bekleyen: Record<string, string[]> = {};
   for (const [id, a] of aralik) {
-    const rota = rotaOf(id), ad = (yer: number): string => rota[yer - 1]?.ad ?? rota[yer - 1]?.k ?? '';
+    const rota = rotaOf(id), ad = (yer: number): string => adimAdi(rota, yer - 1);
     const l: string[] = [];
     if (a.n >= 1) l.push(`${a.n === 1 ? `${ad(1)} adımını` : `İlk ${String(a.n)} adımı`} üst emir (${no(sahip(id, a.n))}) yapar; bu parti ${ad(a.n + 1)} adımından başlar.`);
     if (a.m <= rota.length) {

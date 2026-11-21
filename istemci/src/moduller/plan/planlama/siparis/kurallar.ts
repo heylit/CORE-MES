@@ -1,7 +1,7 @@
 import { kisaTl, maliyetBaglami, siparisMaliyeti, type SiparisMaliyeti } from '../maliyet/kurallar.ts';
 import { DURUM_ADI, DURUM_TONU, tedarikciAdi, type AlimPlaniSatiri } from '../malzeme/kurallar.ts';
 import type { ExtraAlanlar, Fasoncu, Malzeme, PlanVerisi, PlanlamaCalismasi, RotaAdimi, Siparis } from '../tipler.ts';
-import { planDisi } from '../tipler.ts';
+import { adimAdi, planDisi } from '../tipler.ts';
 import { isAdi, type EmirNo } from '../ortak/emir-no.ts';
 
 // P2'nin saf hesapları (205 a): Siparişler, Terminler ve Termin ve kâr görünümlerinin kayıtlı plandan ve çalışmanın verisinden çıkan değerleri.
@@ -443,31 +443,39 @@ export const PARTI_EN_COK = 20;
 // paylar; en az iki pay bölmedir), adıma bildirilen ek süre (w.adimEk) ve adımın adedindeki fazlalık (opAdet emrin adedinden büyükse:
 // üst emir o adımı ayrılan partinin adediyle birlikte işler). Öteki partiler bunları taşımaz; kart kişiye bölünce ne olacağını bununla
 // söyler. Adım başına tek kayıt, rotadaki sırayla.
-export interface IlkPartideKalan { k: string; tezgahlar: string[]; ekSaat: number | null; fazla: number | null }
-export function ilkPartideKalanlar(c: PlanlamaCalismasi, jid: string): IlkPartideKalan[] {
+export interface IlkPartideKalan { k: string; ad: string; tezgahlar: string[]; ekSaat: number | null; fazla: number | null; eksik: number | null }
+export function ilkPartideKalanlar(c: PlanlamaCalismasi, jid: string, ilkAdet: number): IlkPartideKalan[] {
   const s = c.D.siparisler.find((x) => x.id === jid);
   if (!s) return [];
   const elle = (c as unknown as { elleBol?: unknown }).elleBol, ek = (c.w as Record<string, unknown>)['adimEk'], opAdet = c.D.opAdet;
   const rota = c.D.urunler.find((u) => u.id === s.urun)?.rota ?? [];
-  return rota.flatMap((a): IlkPartideKalan[] => {
+  return rota.flatMap((a, i): IlkPartideKalan[] => {
     const id = `${jid}.${a.k}`;
     const p = nesne(elle) ? elle[id] : null, e = nesne(ek) ? ek[id] : null, n = nesne(opAdet) ? opAdet[id] : null;
     const tezgahlar = Array.isArray(p) && p.length >= 2 ? (p as unknown[]).map((x) => (nesne(x) && typeof x.m === 'string' ? x.m : '')).filter((m) => m !== '') : [];
     const ekSaat = nesne(e) && sonlu(e.ekSaat) && e.ekSaat > 0 ? e.ekSaat : null;
-    const fazla = n != null && Number.isFinite(+(n as number)) && +(n as number) > s.adet ? +(n as number) - s.adet : null;
-    return tezgahlar.length >= 2 || ekSaat !== null || fazla !== null ? [{ k: a.k, tezgahlar: tezgahlar.length >= 2 ? tezgahlar : [], ekSaat, fazla }] : [];
+    const fark = n != null && Number.isFinite(+(n as number)) ? +(n as number) - s.adet : 0;
+    const fazla = fark > 0 ? fark : null;
+    // Eksik, ilk partiye en az bir adet bırakıyorsa düşülür; bırakmıyorsa motor farkı taşımaz, partiler kendi adediyle dizilir (partiBol).
+    const eksik = fark < 0 && ilkAdet + fark >= 1 ? -fark : null;
+    return tezgahlar.length >= 2 || ekSaat !== null || fazla !== null || eksik !== null ? [{ k: a.k, ad: adimAdi(rota, i), tezgahlar: tezgahlar.length >= 2 ? tezgahlar : [], ekSaat, fazla, eksik }] : [];
   });
 }
-// "a1 adımı: elle bölme (M1, M2), ek süre (9 sa) ve 3 adet fazlalık 1. partide kalır; öteki partilerin tezgâhını plan seçer."
-// Yalnız var olan parçalar yazılır; tezgâh cümlesi yalnız elle bölme varken.
+// "Torna adımı: elle bölme (M1, M2), ek süre (9 sa) ve 3 adet fazlalık 1. partide kalır; öteki partilerin tezgâhını plan seçer."
+// Yalnız var olan parçalar yazılır; tezgâh cümlesi yalnız elle bölme varken. Adımın adedi emrinkinden azsa (önceki adımın hurdası düşülmüş)
+// fazlalık yerine eksik yazılır: "... 2 adet eksik (önceki adımın hurdası) 1. partiden düşülür".
 export function ilkPartiYazisi(x: IlkPartideKalan): string {
   const l = [
     ...(x.tezgahlar.length ? [`elle bölme (${x.tezgahlar.join(', ')})`] : []),
     ...(x.ekSaat !== null ? [`ek süre (${sayi(x.ekSaat, 2)} sa)`] : []),
     ...(x.fazla !== null ? [`${sayi(x.fazla, 2)} adet fazlalık`] : []),
   ];
-  const parcalar = l.length > 1 ? `${l.slice(0, -1).join(', ')} ve ${l.at(-1) ?? ''}` : l[0] ?? '';
-  return `${x.k} adımı: ${parcalar} 1. partide kalır${x.tezgahlar.length ? '; öteki partilerin tezgâhını plan seçer' : ''}.`;
+  const cumleler = [
+    ...(l.length ? [`${l.length > 1 ? `${l.slice(0, -1).join(', ')} ve ${l.at(-1) ?? ''}` : l[0] ?? ''} 1. partide kalır`] : []),
+    ...(x.eksik !== null ? [`${sayi(x.eksik, 2)} adet eksik (önceki adımın hurdası) 1. partiden düşülür`] : []),
+    ...(x.tezgahlar.length ? ['öteki partilerin tezgâhını plan seçer'] : []),
+  ];
+  return `${x.ad} adımı: ${cumleler.join('; ')}.`;
 }
 
 // ---- örtüşme (zz16-ortusme orAdaylar, ze-rota rtTur, engine isAgirligi) ----

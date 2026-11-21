@@ -345,7 +345,7 @@ export function PartiBolmeKarti({ c, p, degerlendir, yenile, emirNo = (j) => j }
           {dar && ` Darboğaz adımı ${dar.k} (${dar.m}).`} Partiler {emirNo(s.id)}/1, /2 … adıyla ayrı iş emri olur; termin, öncelik ve malzeme oranı aynı kalır.
         </p>
         <p className="tc-pys-kucuk"><Simge ad="ruler" boyut="k" /> {kural.k ?? ''} adımında en küçük parti {kural.qmin} adet{kural.kasa > 1 ? `, kasa ${String(kural.kasa)} adet` : ''}.</p>
-        {ilkPartideKalanlar(c, s.id).map((x) => <p key={x.k} className="tc-pys-kucuk" data-ilk-parti={x.k}>{ilkPartiYazisi(x)}</p>)}
+        {ilkPartideKalanlar(c, s.id, adetler[0] ?? NaN).map((x) => <p key={x.k} className="tc-pys-kucuk" data-ilk-parti={x.k}>{ilkPartiYazisi(x)}</p>)}
         {hata && <p className="tc-pys-uyari" role="alert"><Simge ad="alert" boyut="k" /> {hata}</p>}
         <div className="tc-pys-dugmeler">
           <Dugme tur="birincil" type="submit" simge="ruler" disabled={!degerlendir || Boolean(hata) || d.tur === 'bekliyor'}>Böl</Dugme>
