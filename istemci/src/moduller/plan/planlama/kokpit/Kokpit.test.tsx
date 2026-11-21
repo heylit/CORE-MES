@@ -20,6 +20,8 @@ import { yetkiKur } from '../yetki.ts';
 import { Kokpit } from './index.tsx';
 import { onayAcIste } from './istek.ts';
 import * as gonder from '../motor/atolye/gonder.ts';
+import { etkiCumlesi, gecikenler } from './Tahta.tsx';
+import type { KokpitEmri, KokpitIsi } from './kurallar.ts';
 
 // Oklar seçimi Araçlar menüsündedir (3365).
 function okKipiSec(ad: string): void {
@@ -1175,6 +1177,68 @@ describe('Kokpit', () => {
     expect(oklar()).toEqual(['3.10>3.20']);
     fireEvent.pointerLeave(is);
     expect(oklar()).toEqual([]);
+  });
+
+  it('sürüklerken itilen iş önizlemedeki yerine akar ve kayma süresini yazar; ipucu kaç işin itildiğini söyler; bırakmadan vazgeçince yerine döner (3531)', async () => {
+    const geriKur = imlecOlayiKur();
+    // 3.20, 3.10'un ardından aynı tezgâhta: 3.10 sürüklenir, 3.20 itilir.
+    const c = ornekCalisma();
+    type Op = { S: number; C: number; m: string; Su: number; lot1: number };
+    const ops = structuredClone((c.plan as unknown as { ops: Record<string, Op> }).ops);
+    const a = ops['3.10']!, b = ops['3.20']!;
+    Object.assign(b, { m: a.m, S: a.C + 1, C: a.C + 1 + (b.C - b.S), Su: a.C + 1, lot1: a.C + 1 });
+    ac({ calisma: { ...c, plan: { ...c.plan, ops } } as typeof c });
+    const is = (id: string) => document.querySelector<HTMLElement>(`.tc-pyq-tahta [data-is="${id}"]`)!;
+    const tasinanId = '3.10', komsu = '3.20';
+    const satir = is(tasinanId).closest<HTMLElement>('[data-satir]')!;
+    expect(is(komsu).closest('[data-satir]')).toBe(satir);
+    const x0 = is(komsu!).style.getPropertyValue('--x');
+    const oz = vi.spyOn(gonder, 'isTasiOnizle').mockImplementation((g) => Promise.resolve({
+      calismaSurumu: 1, gecerli: true, ileti: null,
+      isler: [
+        { isId: tasinanId!, tezgah: g.tezgah, S: g.baslangic, C: g.baslangic + 1, eskiTezgah: g.tezgah, eskiS: 0, tur: 'tasinan' as const },
+        // Uzak bitiş: emrin terminini (24.10) aşar, iş gecikir olarak işaretlenir.
+        { isId: komsu!, tezgah: g.tezgah, S: 200, C: 100_000, eskiTezgah: g.tezgah, eskiS: 198, tur: 'itilen' as const },
+      ],
+    }));
+    const alan = satir.querySelector<HTMLElement>('.tc-pyq-alan')!;
+    fireEvent.pointerDown(is(tasinanId!), { button: 0, pointerType: 'mouse', clientX: 0, clientY: 0 });
+    fireEvent.pointerMove(alan, { pointerType: 'mouse', clientX: 30, clientY: 0 });
+    fireEvent.pointerMove(alan, { pointerType: 'mouse', clientX: 60, clientY: 0 });
+    await waitFor(() => { expect(is(komsu!).hasAttribute('data-kaydi')).toBe(true); });
+    expect(is(komsu!).style.getPropertyValue('--x')).not.toBe(x0);
+    expect(is(komsu!).textContent).toContain('gecikir · +2 sa');
+    expect(is(komsu!).hasAttribute('data-gecikir')).toBe(true);
+    expect(screen.getByText(/termini .* gecikir/)).toBeTruthy();
+    expect(screen.getByText(/aynı tezgâhta 1 iş arkaya itilir/)).toBeTruthy();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => { expect(is(komsu!).style.getPropertyValue('--x')).toBe(x0); });
+    expect(is(komsu!).hasAttribute('data-kaydi')).toBe(false);
+    expect(is(komsu!).hasAttribute('data-gecikir')).toBe(false);
+    oz.mockRestore();
+    geriKur();
+  });
+
+  it('gecikenler yalnız terminini ilk kez aşan işi sayar, emir başına bir kez; etki cümlesi itilen, çekilen ve geciken emri yazar (3531)', () => {
+    // e1 zamanında; e2 zaten geç (bitişi 30 > termin 20; erken biten adımı f bile termini geçse yeniden sayılmaz); e3 terminsiz; e4'ün işi kayar ama termine yetişir.
+    const isler = {
+      a: { id: 'a', job: 'e1', C: 10 }, b: { id: 'b', job: 'e1', C: 11 }, c: { id: 'c', job: 'e2', C: 30 }, f: { id: 'f', job: 'e2', C: 15 },
+      d: { id: 'd', job: 'e3', C: 5 }, h: { id: 'h', job: 'e4', C: 20 },
+    } as unknown as Record<string, KokpitIsi>;
+    const emirler = new Map([
+      ['e1', { id: 'e1', no: 'ORN-1', termin: 12, bitis: 11 }], ['e2', { id: 'e2', no: 'ORN-2', termin: 20, bitis: 30 }], ['e3', { id: 'e3', no: 'ORN-3', termin: null, bitis: 5 }],
+      ['e4', { id: 'e4', no: 'ORN-4', termin: 50, bitis: 20 }],
+    ]) as unknown as Map<string, KokpitEmri>;
+    const g = gecikenler([{ isId: 'a', C: 13 }, { isId: 'b', C: 14 }, { isId: 'c', C: 40 }, { isId: 'f', C: 25 }, { isId: 'd', C: 99 }, { isId: 'h', C: 45 }], isler, emirler);
+    expect([...g.isler].sort()).toEqual(['a', 'b']);
+    expect(g.emirler).toEqual([{ no: 'ORN-1', termin: 12 }]);
+    // Saat 24'ten küçükse bugün (21.11 Cum), değilse ertesi gün (22.11 Cmt).
+    const zaman = (t: number) => (t < 24 ? `21.11 Cum ${String(t).padStart(2, '0')}:00` : `22.11 Cmt ${String(t - 24).padStart(2, '0')}:00`);
+    expect(etkiCumlesi({ kayan: { a: 1, b: 2, c: -1 }, geciken: g }, zaman, 8)).toBe(' · aynı tezgâhta 2 iş arkaya itilir · 1 iş öne çekilir · ORN-1 termini 12:00, gecikir');
+    const uc = { isler: new Set(['a']), emirler: [{ no: 'ORN-1', termin: 12 }, { no: 'ORN-2', termin: 30 }, { no: 'ORN-3', termin: 40 }] };
+    expect(etkiCumlesi({ kayan: {}, geciken: uc }, zaman, 8)).toBe(' · ORN-1 termini 12:00, gecikir; ORN-2 termini Cmt 06:00, gecikir; +1 emir daha gecikir');
+    expect(etkiCumlesi({ kayan: {}, geciken: { isler: new Set(), emirler: [] } }, zaman, 8)).toBe('');
+    expect(etkiCumlesi(null, zaman, 8)).toBe('');
   });
 
   it('aday olmayan tezgâha bırakmak uyarır ve taşıma gitmez (3365)', async () => {
