@@ -227,6 +227,8 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, taslak, Geri ve Canlıya al, Mat
     await expect(tahta.getByText(/Bırakın: iş taşınır/)).toBeVisible();
     await expect(tahta.locator('.tc-pyq-hayalet')).toBeVisible();
     await page.mouse.up();
+    // 3531 b: bırakılan taşıma onay bekler; Uygula yazar.
+    await kokpit.getByRole('group', { name: 'Taşımayı onayla' }).getByRole('button', { name: 'Uygula' }).click();
     await expect.poll(() => tasinan().length).toBe(1);
     expect(onizleme).toContain('S2.a1');
     expect(tasinan()[0]).toMatchObject({ isId: 'S2.a1', tezgah: 'M2' });
