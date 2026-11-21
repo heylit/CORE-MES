@@ -776,6 +776,45 @@ describe('Kokpit', () => {
     expect([...ust.bolum.querySelectorAll('[data-adim-parti]')].map((x) => [x.getAttribute('data-adim-parti'), x.textContent])).toEqual([[son, 'bekliyor: parti ORN-0009']]);
   });
 
+  // Açılıştaki düzende bölümlü eski düzen yoktur: notlar ve neden cümlesi Siparişler görünümündeki açık satırda durur.
+  it('adım ortasından bölünen partinin notları ve geç üst emrin nedeni açılıştaki düzende Siparişler satırında, eski düzende Yol şeridinde yazar', () => {
+    const kur = (adres: string) => {
+      const c = ornekCalisma();
+      const s2 = c.D.siparisler.find((x) => x.id === '2')!, rota = c.D.urunler.find((u) => u.id === s2.urun)!.rota!, n = rota.length;
+      c.D.siparisler.push({ ...s2, id: '9' });
+      const ops = (c.plan as unknown as { ops: Record<string, { id: string; job: string; S: number; C: number; why: unknown }> }).ops;
+      for (const r of Object.values(ops).filter((x) => x.job === '2')) ops[`9${r.id.slice(1)}`] = { ...r, id: `9${r.id.slice(1)}`, job: '9', S: r.S + 400, C: r.C + 400 };
+      // Üst emrin ilk adımı bitmiştir (partinin adediyle birlikte yaptı). Son adımı partinin son adımının bitişini bekler: motor nedeni öncülü partinin adımı olan rota diye yazar.
+      const son = ops[`2.${rota[n - 1]!.k}`]!, partiSon = ops[`9.${rota[n - 2]!.k}`]!;
+      Object.assign(son, { S: partiSon.C, C: partiSon.C + (son.C - son.S), why: { t: 'rota', r: partiSon.id } });
+      const emirler = { orders: [{ id: '2', no: 'ORN-0002', status: 'serbest' }, { id: '9', no: 'ORN-0002/1', status: 'serbest', parentId: '2', kol: { n: 1, m: n } }], opStatus: { '2|root|1': 'tamam' }, opProg: {} };
+      render(
+        <MemoryRouter initialEntries={[adres]}><BildirimSaglayici><Yuvali>
+          <Kokpit
+            depo={{ ...DEPO, durum: { emirler } } as unknown as PlanlamaDeposu} calisma={c} komut={komutKur(0)} git={vi.fn()} yenile={vi.fn()} yetki={yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz'])}
+            olcek={ACILIS_OLCEGI} olcekSec={vi.fn()} kaydir={vi.fn()} secim={{ ...BOS_SECIM, siparis: '2' }} sec={vi.fn()}
+          />
+        </Yuvali></BildirimSaglayici></MemoryRouter>,
+      );
+      return { rota, n, son: `2.${rota[n - 1]!.k}` };
+    };
+    const NEDEN = /adım \(.+\) .+ bekledi: katılan partinin \(ORN-0002\/1\) son adımı bitince başladı\.$/;
+    const x = kur('/');
+    fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: 'Siparişler' }));
+    const kart = document.querySelector<HTMLElement>('.tc-pyq-ld-kart[data-acik]')!;
+    expect(kart.querySelector('[data-kart]')?.getAttribute('data-kart')).toBe('2');
+    const ad = (i: number) => x.rota[i]!.ad ?? x.rota[i]!.k;
+    expect(kart.querySelector('.tc-pyq-yol-govde small')?.textContent).toMatch(NEDEN);
+    expect(kart.querySelector('.tc-pyq-yol-govde small')?.textContent).toContain(`adım (${ad(x.n - 1)}) `);
+    expect(kart.querySelector('[data-emir="9"] [data-emir-kol]')?.textContent)
+      .toBe(`${ad(0)} adımını üst emir (ORN-0002) yapar; bu parti ${ad(1)} adımından başlar. ${ad(x.n - 2)} adımından sonra üst emre (ORN-0002) katılır; ${ad(x.n - 1)} adımından itibaren üst emirle sürer.`);
+    expect(kart.querySelector('[data-emir="2"] [data-emir-kol]')).toBeNull();
+    expect([...kart.querySelectorAll('[data-adim-parti]')].map((y) => [y.closest('[data-emir]')?.getAttribute('data-emir'), y.getAttribute('data-adim-parti'), y.textContent])).toEqual([['2', x.son, 'bekliyor: parti ORN-0002/1']]);
+    cleanup();
+    kur('/?duzen=klasik');
+    expect(screen.getByRole('region', { name: 'Planlama yolu' }).textContent).toMatch(/Neden: .*bekledi: katılan partinin \(ORN-0002\/1\) son adımı bitince başladı\./);
+  });
+
   // 3513: bölünen emrin partisi üst emrin beklemesiyle dizilir (3511); satır ve form beklemenin üst emirden geldiğini söyler.
   it('üst emrin beklemesi partinin adım satırında kaynağıyla yazar; formu kutuyu gösterir ve üst emrin adımına götürür', () => {
     const c = ornekCalisma();

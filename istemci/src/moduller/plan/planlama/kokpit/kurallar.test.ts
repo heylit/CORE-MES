@@ -573,7 +573,8 @@ describe('adım ortasından bölünen partinin notları (3523)', () => {
   });
 
   it('aynı adlı iki adım varsa ad kaçıncısı olduğuyla yazılır (rotadaki sırayla değil); adı boş adım anahtarıyla', () => {
-    const rota = [{ k: '10', ad: 'Torna' }, { k: '20', ad: 'Freze' }, { k: '30', ad: 'Torna' }, { k: '40', ad: '' }];
+    // Baştaki ve sondaki boşluk ekranda ayırt edilmez: "Torna " ikinci Torna'dır, yalnız boşluk olan ad yoktur.
+    const rota = [{ k: '10', ad: 'Torna' }, { k: '20', ad: 'Freze' }, { k: '30', ad: 'Torna ' }, { k: '40', ad: '  ' }];
     const D2 = { siparisler: ['2', '3'].map((id) => ({ id, urun: 'U', adet: 1 })), urunler: [{ id: 'U', rota }] } as unknown as Parameters<typeof kolNotlari>[1];
     expect(kolNotlari(m(), D2, kaynak(['3', '2', { n: 1, m: 4 }])).emir).toEqual({ 3: '1. Torna adımını üst emir (E-2) yapar; bu parti Freze adımından başlar. 2. Torna adımından sonra üst emre (E-2) katılır; 40 adımından itibaren üst emirle sürer.' });
   });

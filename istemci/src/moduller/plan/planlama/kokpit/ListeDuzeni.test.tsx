@@ -282,6 +282,28 @@ describe('partiye bölünen emir (3483)', () => {
     expect(obekler[1]?.querySelector('.tc-pyq-ld-emir-bas small')?.textContent).toContain(`${String(m.emirler.find((e) => e.id === '3')?.adet)} adet`);
   });
 
+  // 3523: adım ortasından bölünen partinin bağı partinin öbeğinde, bekleme üst emrin katılma adımında yazar.
+  it('adım ortasından bölünen partinin notu öbeğinde, üst emrin katılma adımında bekleme yazar; not verilmezse ve başlamış adımda yoktur', () => {
+    const c = ornekCalisma(), p = planOku(c), m = partili(c, p), kartlar = siraKartlari(m);
+    const { unmount } = render(<ListeDuzeni m={m} p={p} kartlar={kartlar} acik="2" ac={vi.fn()} zaman={zaman} mesgul={false} planla={null} yenidenPlanla={null} hamle={null} surum={4} tahta={null} satirBirincil adimSec={vi.fn()} seciliIs={null} />);
+    expect(document.querySelector('[data-emir-kol], [data-adim-parti]')).toBeNull();
+    unmount();
+    // 2.20 süren iştir; 2.40 başlamamıştır.
+    expect([m.isler['2.20']?.basladi, m.isler['2.40']?.basladi]).toEqual([true, false]);
+    const kol = { emir: { 3: 'Torna adımını üst emir (ORN-2) yapar; bu parti Freze adımından başlar.' }, adim: { '2.20': 'bekliyor: parti x', '2.40': 'bekliyor: parti ORN-2/1' } };
+    ciz({ m, p, kartlar }, '2', { kol });
+    expect([...document.querySelectorAll('[data-emir-kol]')].map((x) => [x.closest('[data-emir]')?.getAttribute('data-emir'), x.textContent])).toEqual([['3', kol.emir[3]]]);
+    expect([...document.querySelectorAll('[data-adim-parti]')].map((x) => [x.closest('[data-emir]')?.getAttribute('data-emir'), x.closest('li')?.querySelector('span')?.textContent, x.textContent]))
+      .toEqual([['2', expect.stringMatching(/^\d+\. /), 'bekliyor: parti ORN-2/1']]);
+  });
+
+  it('tek emirli satırda da partinin notu adımların üstünde durur', () => {
+    const x = kur();
+    ciz(x, '2', { kol: { emir: { 2: 'Not.' }, adim: {} } });
+    expect(document.querySelector('.tc-pyq-ld-kart[data-acik] [data-emir-kol] + .tc-pyq-ld-adimlar')).not.toBeNull();
+    expect(document.querySelector('[data-emir-kol]')?.textContent).toBe('Not.');
+  });
+
   it('yerleşmeyen adımı tutan önceki adım planda varsa adıma basınca o adım seçilir', () => {
     const x = yarimKur({ kod: 'oncul', oncul: '__', ufukDisi: 1 });
     const kalan = Object.keys(x.m.isler).filter((id) => x.m.isler[id]?.job === '3').sort().at(-1) as string;

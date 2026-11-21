@@ -49,11 +49,11 @@ export interface Siparis extends ExtraAlanlar {
 // Planın dışındaki sipariş: havuzdaki (taslak, teklif) ya da iptal edilen. Plan, maliyet, malzeme ve gecikme hesapları bunları saymaz.
 export const planDisi = (s: Pick<Siparis, 'havuz' | 'iptal'>): boolean => s.havuz === true || s.iptal === true;
 
-// Ekranda adım adıyla söylenir; adı yoksa rota anahtarıyla. Aynı rotada aynı adlı başka adım varsa ad tek başına hangisi olduğunu söylemez:
+// Ekranda adım adıyla söylenir; adı yoksa ya da yalnız boşluksa rota anahtarıyla (baştaki ve sondaki boşluk ekranda ayırt edilmez, sayılmaz). Aynı rotada aynı adlı başka adım varsa ad tek başına hangisi olduğunu söylemez:
 // o adın kaçıncısı olduğu başa yazılır ("2. Torna"). Rotadaki ya da tablodaki sıra yazılmaz: bölünen partinin tablosu kendi adımlarını
 // 1'den sayar, üst emrin ve partinin aynı adlı adımları aynı sırayı alabilirdi.
 export function adimAdi(rota: readonly RotaAdimi[], i: number): string {
-  const ad = (a: RotaAdimi | undefined): string => (a?.ad !== undefined && a.ad !== '' ? a.ad : a?.k ?? '');
+  const ad = (a: RotaAdimi | undefined): string => { const t = (a?.ad ?? '').trim(); return t !== '' ? t : a?.k ?? ''; };
   const benim = ad(rota[i]);
   return rota.filter((a) => ad(a) === benim).length < 2 ? benim : `${String(rota.slice(0, i + 1).filter((a) => ad(a) === benim).length)}. ${benim}`;
 }

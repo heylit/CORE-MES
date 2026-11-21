@@ -899,7 +899,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
           ) : (
             <>
           <ListeDuzeni
-            m={m} p={p} kartlar={listeKartlari} acik={vurgu ? kart : null} zaman={zaman} mesgul={mesgul} hamle={yazabilir ? hamleUygula : null} surum={surum} malzemeBekleyen={malzeme?.bekleyen} kolPartileri={kol.partiler}
+            m={m} p={p} kartlar={listeKartlari} acik={vurgu ? kart : null} zaman={zaman} mesgul={mesgul} hamle={yazabilir ? hamleUygula : null} surum={surum} malzemeBekleyen={malzeme?.bekleyen} kolPartileri={kol.partiler} kol={kol}
             ac={(k) => { if (k === null) secimiKaldir(); else { sec(null, null); setKart(k); setVurgu(true); } }}
             planla={yazabilir && c.plan !== null ? (k) => { void yenidenPlanla(k.emirler.filter((e) => e.durum === 'plansiz').map((e) => e.id), `${k.siparis?.no ?? k.emirler[0]?.no ?? ''} planlandı.`); } : null}
             yenidenPlanla={yazabilir && c.plan !== null ? (k) => { void yenidenPlanla(k.emirler.map((e) => e.id), `${k.siparis?.no ?? k.emirler[0]?.no ?? ''} yeniden planlandı.`); } : null}
