@@ -49,6 +49,23 @@ export interface Siparis extends ExtraAlanlar {
 // Planın dışındaki sipariş: havuzdaki (taslak, teklif) ya da iptal edilen. Plan, maliyet, malzeme ve gecikme hesapları bunları saymaz.
 export const planDisi = (s: Pick<Siparis, 'havuz' | 'iptal'>): boolean => s.havuz === true || s.iptal === true;
 
+// 3512: adım ortasından bölünen parti (kol) rotanın yalnız n+1..m-1 yerlerini işler; öteki adımları üst emir yapar, motor onları dizmez
+// (motor girdi.js kolAraligi ile aynı kural). Kaynak sunucunun emirleridir (`durum.emirler.orders[]`: parentId, kol { n, m }).
+// Dönen: emir kimliği -> yer (1'den) kolun içinde mi; aralık rotaya uymuyorsa emir bütün rotasıyla kalır (her yer içindedir).
+export type KolYeri = (yer: number, adimSayisi: number) => boolean;
+export function kolYerleri(orders: readonly unknown[]): Map<string, KolYeri> {
+  const y = new Map<string, KolYeri>();
+  for (const o of orders) {
+    if (typeof o !== 'object' || o === null) continue;
+    const { id, parentId, kol } = o as { id?: unknown; parentId?: unknown; kol?: unknown };
+    if (parentId == null || parentId === '' || typeof kol !== 'object' || kol === null) continue;
+    const n = Number((kol as { n?: unknown }).n), m = Number((kol as { m?: unknown }).m);
+    if (!Number.isInteger(n) || !Number.isInteger(m)) continue;
+    y.set(String(id), (yer, adimSayisi) => !(n >= 0 && m - n >= 2 && m <= adimSayisi + 1) || (yer > n && yer < m));
+  }
+  return y;
+}
+
 // Tezgâh (makine). `grup` istasyondur; ücret okunamazsa null (69 a: sıfır uydurulmaz). Kimlik veritabanı anahtarıdır: ekran tezgâhı
 // `kod`, grubu `grupKod` ve `grupAd` ile yazar (1786 PLN-7); eski kayıtta yoksa kimlik yazılır.
 export interface Tezgah extends ExtraAlanlar {

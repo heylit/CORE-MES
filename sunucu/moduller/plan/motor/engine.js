@@ -98,6 +98,8 @@ function mask(W){const m=new Uint8Array(NS);for(const [a,b] of W){const k0=Math.
     @property {any} [PWek]
     @property {any} [seq]
     @property {any} [montaj]
+    @property {any} [kol]
+    @property {any} [kolDisi]
     @property {any} [ekOncul]
     @property {any} [yHedef]
     @property {any} [tmUyari]
@@ -222,7 +224,9 @@ function compile(st){olcekKur(st.w);
   // işlemler
   const ops=[],jobs={},bolunen={};
   const urun=Object.fromEntries(D.urunler.map(u=>[u.id,u]));
-  const bitti=st.bitti||{};
+  /* 3512: kolun işlemediği adım (st.kolDisi) da plana girmez, ardılı onu rotadan beklemez (üst emre kancalar.js kolBagiUygula bağlar);
+     biten adımdan farkı: maliyeti bu emre yazılmaz, malzemesi sahibi adımı bitirene dek ihtiyaçta kalır */
+  const bitti=st.bitti||{},kolDisi=st.kolDisi||{};
   for(const [sira,j] of D.siparisler.entries()){const u=urun[j.urun];if(!u)continue;
     const due=parseT(D,j.termin),rel=parseT(D,j.serbest);
     jobs[j.id]={...j,due,rel,gelisSira:sira,ops:[]};
@@ -230,7 +234,7 @@ function compile(st){olcekKur(st.w);
       /* 3335-3b: adıma bildirilen ek süre (saat); çarpan değil, koşu süresine eklenir: hangi tezgâha yerleşirse yerleşsin aynı saat */
       const ekS=st.adimEk&&st.adimEk[id]&&isFinite(+st.adimEk[id].ekSaat)?Math.max(0,+st.adimEk[id].ekSaat):0;
       /* biten adım (st.bitti, sunucunun iş emri durumu) plana girmez; ardılı onu beklemez, malzemesi o adımda alınmıştır */
-      if(bitti[id])continue;
+      if(bitti[id]||kolDisi[id])continue;
       /* adımın işleyeceği adet (24 a): önceki biten adımın hurdası düşülmüş; verilmezse sipariş adedi */
       const ad0=D.opAdet&&D.opAdet[id]!=null&&isFinite(+D.opAdet[id])?+D.opAdet[id]:j.adet;
       const adaylar=o.fason?[]:(o.tezgahlar||[]).filter(t=>M[t.id]);
@@ -255,7 +259,7 @@ function compile(st){olcekKur(st.w);
         c.push({m:t.id,run:ad*cyc/mm.verim+(p===0?ekS:0),cyc:cyc/mm.verim,su:(+t.ayar||0)/60,tbRun:tb*cyc/mm.verim,pay:mm.pay});}
       if(o.fasonIzin&&A.fasonTalas&&FS[A.fasonTalas])c.push({m:'@'+A.fasonTalas,fas:1,opt:1});
       const lr=(st.ogren||{})[j.urun+' '+o.k];const sig=lr&&lr.n>=3&&lr.v!=null?Math.sqrt(lr.v)/Math.max(.3,lr.f):(+st.w.mcSigma||0);
-      const pr=(o.bag||[]).map(([k,t])=>[j.id+'.'+k,t]),prK=pr.filter(([p])=>!bitti[p]);
+      const pr=(o.bag||[]).map(([k,t])=>[j.id+'.'+k,t]),prK=pr.filter(([p])=>!bitti[p]&&!kolDisi[p]);
       const ik=D.opKaynak&&Array.isArray(D.opKaynak[id])&&D.opKaynak[id].length?D.opKaynak[id]:null;
       const op={id:pid,job:j.id,k:o.k,ad:o.ad,c,sig,pr:prK,aile:o.aile||'',aparat:o.aparat||null,ik,
         program:o.program!==false,fai:!!o.fai,adet:ad,x,matYok:prK.length<pr.length,ayarsiz:o.ayarci===false,ayarSaat:o.ayarDk!=null&&isFinite(+o.ayarDk)?Math.max(0,+o.ayarDk)/60:null,...(N>1?{parca:p+1,parcaAdedi:N,asil:id,...(eb?{elle:1}:{})}:{})};
@@ -306,10 +310,10 @@ function matAlloc(st,jobs){
   const order=Object.values(jobs).sort((a,b)=>(a.oncelik-b.oncelik)||((a.due==null?1e9:a.due)-(b.due==null?1e9:b.due)));
   /* 1473 a: satır tükettiği adımı (adim) taşırsa malzeme o adımın başlangıcında beklenir (op: işlem -> hazır anı); biten adımın malzemesi
      tüketilmiştir, dağıtılmaz. Adımsız (eski) satır öncülsüz adımlarda beklenir. ready siparişin bütün malzemesinin hazır anıdır. */
-  const bitti=st.bitti||{};
+  const bitti=st.bitti||{},kolDisi=st.kolDisi||{};
   for(const j of order){let ready=st.now;const det=[],op={};
     const kok=(j.ops||[]).filter(o=>!o.pr.length&&!o.matYok).map(o=>o.id);
-    for(const r of j.malzeme||[]){const ad=r.adim!=null?j.id+'.'+r.adim:null;if(ad&&bitti[ad])continue;
+    for(const r of j.malzeme||[]){const ad=r.adim!=null?j.id+'.'+r.adim:null;if(ad&&(bitti[ad]||kolDisi[ad]===2))continue;
       const ops=ad?(j.ops||[]).some(o=>o.id===ad)?[ad]:[]:kok;
       const need=(+r.miktar||0)*j.adet,s=sup[r.kod]||[];let rem=need,t=-1e9;const use=[];
       for(const x of s){if(rem<=1e-9)break;if(x.kalan<=1e-9)continue;const q=Math.min(x.kalan,rem);x.kalan-=q;rem-=q;use.push({k:x.k,i:x.i,q});t=Math.max(t,x.t);if(x.k==='sa')x.jobs.push({j:j.id,q,kod:r.kod,ops});}

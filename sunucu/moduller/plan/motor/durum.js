@@ -187,8 +187,8 @@ function tmUygula(st, S) {
 function tmEksikYaz(st) {
   const D = st.D, E = st.tmEk; if (!E) return st;
   D.satinalma = (D.satinalma || []).filter(p => p.tm !== 'siparis-yok');
-  const bitti = st.bitti || {};
-  const ihtiyac = {}; for (const s of D.siparisler || []) { if (s.havuz || s.iptal) continue; for (const r of s.malzeme || []) { if (r.adim != null && bitti[s.id + '.' + r.adim]) continue; ihtiyac[r.kod] = (ihtiyac[r.kod] || 0) + (+r.miktar || 0) * s.adet; } }
+  const bitti = st.bitti || {}, kolDisi = st.kolDisi || {};
+  const ihtiyac = {}; for (const s of D.siparisler || []) { if (s.havuz || s.iptal) continue; for (const r of s.malzeme || []) { if (r.adim != null && (bitti[s.id + '.' + r.adim] || kolDisi[s.id + '.' + r.adim] === 2)) continue; ihtiyac[r.kod] = (ihtiyac[r.kod] || 0) + (+r.miktar || 0) * s.adet; } }
   /* B-2483-67: sunucunun eksiği (girdi.js tmiMrpEksikleri) varsa o kullanılır: başlamış emrin verilen sarfı, fire ve yarı mamul orada sayılır;
      brüt hesap (sarfı bilmez, malzemeyi iki kez düşer) yalnız sunucu sayısı yokken kalır. Sunucunun hesaplayamadığı (null) malzemeye satır yazılmaz. */
   const sunucu = (D.malzemeler || []).filter(m => m.mrpEksik !== undefined);

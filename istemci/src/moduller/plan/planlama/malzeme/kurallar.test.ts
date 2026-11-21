@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PlanVerisi } from '../tipler.ts';
 import { kaynakKur, stokOku, type Okuyucu, type StokKaynagi } from './kaynak.ts';
 import {
-  alimDurumu, alimPlani, alimSayaclari, alimTablolari, belgedekiAlimlar, bitenler, calismaSimdisi, ilkVardiyaBasi, dagilim, grafikSutunlari, kovaAdi,
+  alimDurumu, alimPlani, alimSayaclari, alimTablolari, belgedekiAlimlar, bitenler, calismaSimdisi, ilkIslemler, ilkVardiyaBasi, dagilim, grafikSutunlari, kovaAdi,
   kovaBasi, kovala, malzemePlani, motorGirdisi, ozet, planIslemleri, saatOku, sayiYaz, sonrakiKova, tabanMs, tahsisEt, terminDurumu, tlKisa,
   tlYaz, TOPLAM, type MrpGirdisi,
 } from './kurallar.ts';
@@ -219,6 +219,18 @@ describe('motorun girdisi (stTamKur)', () => {
     expect([...b.siparis].sort()).toEqual(['B', 'F', 'X']);
     expect([...b.adim]).toEqual(['C.OP10']);
     expect(bitenler(null, D).siparis.size).toBe(0);
+  });
+
+  it('adım ortasından bölünen partinin (kol) ilk işlemi kendi ilk adımıdır; kendi adımları bitince parti biter (3512)', () => {
+    const KD: PlanVerisi = { ...D, urunler: [{ id: 'U3', rota: [{ k: 'OP10' }, { k: 'OP20', bag: [['OP10', 'FS']] }, { k: 'OP30', bag: [['OP20', 'FS']] }] }], siparisler: [{ id: 'U', urun: 'U3', adet: 6, termin: null }, { id: 'K', urun: 'U3', adet: 3, termin: null }] };
+    const emirler = (kol: unknown, opStatus: Record<string, string> = {}) => ({ orders: [{ id: 'U', status: 'uretimde' }, { id: 'K', status: 'serbest', parentId: 'U', kol }], opStatus });
+    const b = bitenler(emirler({ n: 1, m: 4 }), KD);
+    expect([...b.adim]).toEqual(['K.OP10']);
+    expect([...(ilkIslemler(KD, KD.siparisler, b.adim).get('K') ?? [])]).toEqual(['K.OP20']);
+    expect([...(ilkIslemler(KD, KD.siparisler, b.adim).get('U') ?? [])]).toEqual(['U.OP10']);
+    expect(bitenler(emirler({ n: 1, m: 3 }, { 'K|root|2': 'tamam' }), KD).siparis.has('K')).toBe(true);
+    // Tam rotalı parti ve rotaya uymayan aralık bütün rotasıyla kalır.
+    for (const kol of [null, { n: 2, m: 3 }, { n: 1, m: 5 }]) expect(bitenler(emirler(kol), KD).adim.size).toBe(0);
   });
 
   it('havuz ve biten sipariş girmez; fire miktarı büyütür', () => {

@@ -182,6 +182,43 @@ describe('yerleşmeyen siparişler', () => {
   });
 });
 
+// 3512: adım ortasından bölünen parti (kol) yalnız kendi adımlarını işler; öteki adımları üst emir yapar. Kaynak sunucunun emir okumasıdır
+// (parentId, kol { n, m }); kural motorun girdisiyle aynıdır (girdi.js kolAraligi).
+describe('adım ortasından bölünen parti (3512)', () => {
+  const kur = (kol: unknown, opStatus: Record<string, string> = {}, parentId: string | null = 'U') => {
+    const c = ornekCalisma();
+    c.D.urunler.push({ id: 'KU', ad: 'Ornek burc', rota: [{ k: '10', tezgahlar: [] }, { k: '20', tezgahlar: [], bag: [['10', 'b']] }, { k: '30', tezgahlar: [], bag: [['20', 'b']] }] });
+    c.D.siparisler.push({ id: 'U', urun: 'KU', adet: 6, termin: null }, { id: 'K', urun: 'KU', adet: 3, termin: null });
+    const b = bitenler({ orders: [{ id: 'U', status: 'uretimde' }, { id: 'K', status: 'serbest', parentId, kol }], opStatus }, c.D);
+    return { b, cx: derle(girdiKur(c, b)) };
+  };
+  it('kolun işlemediği adım plana girmez ama biten adım da değildir; ardılı onu beklemez', () => {
+    const { b, cx } = kur({ n: 1, m: 4 });
+    expect([...(b.kolDisi ?? [])]).toEqual(['K.10']);
+    expect([...b.adim].filter((id) => id.startsWith('K.'))).toEqual([]);
+    expect(cx.jobs['K']?.ops.map((o) => [o.id, o.pr.map(([q]) => q)])).toEqual([['K.20', []], ['K.30', ['K.20']]]);
+    expect(cx.jobs['U']?.ops.map((o) => o.id)).toEqual(['U.10', 'U.20', 'U.30']);
+    // Katılan kol: katıldığı adımdan sonrası da üst emirdedir.
+    expect([...(kur({ n: 1, m: 3 }).b.kolDisi ?? [])]).toEqual(['K.10', 'K.30']);
+  });
+  it('kendi adımlarının hepsi biten kol bitmiştir; bir kısmı bittiyse o adım biten adımdır', () => {
+    expect(kur({ n: 1, m: 3 }, { 'K|root|2': 'tamam' }).b.siparis.has('K')).toBe(true);
+    const kismi = kur({ n: 1, m: 4 }, { 'K|root|2': 'tamam' });
+    expect(kismi.b.siparis.has('K')).toBe(false);
+    expect([...kismi.b.adim].filter((id) => id.startsWith('K.'))).toEqual(['K.20']);
+    expect(kismi.cx.jobs['K']?.ops.map((o) => o.id)).toEqual(['K.30']);
+  });
+  it('tam rotalı parti (kol yok) ve rotaya uymayan aralık bütün rotasıyla kalır', () => {
+    for (const kol of [null, { n: 2, m: 3 }, { n: 1, m: 5 }, { n: 3, m: 4 }]) {
+      const { b, cx } = kur(kol);
+      expect(b.kolDisi?.size ?? 0).toBe(0);
+      expect(cx.jobs['K']?.ops.map((o) => o.id)).toEqual(['K.10', 'K.20', 'K.30']);
+    }
+    // Üst emri olmayan emir kol değildir.
+    expect(kur({ n: 1, m: 4 }, {}, null).cx.jobs['K']?.ops.length).toBe(3);
+  });
+});
+
 describe('ekranın şimdisi (B-2500-3, 2506 a)', () => {
   it('verilen an tesis saatiyle planın eksenine çevrilir; an yoksa ya da eksen yoksa kayıttaki simdi, o da yoksa 07:00', () => {
     const c = { ...ornekCalisma(), simdi: 8 };
