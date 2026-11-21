@@ -387,15 +387,22 @@ const EMIR_DURUMU_PROTOTIP = { taslak: 'taslak', planli: 'serbest', basladi: 'ur
 // Alt emir ana emrin hangi adımından ayrılıp hangisinde katılır: ayrılma adımı bölünme sırasından, katılma adımı ana emrin o op numaralı iş emrinin
 // sırasından gelir. Bölünme sırası 1 olan ve katılmayan alt emir tam rotalı partidir (kol değildir). Katılmayan ve ortadan ayrılan kol
 // ana emrin sonuna kadar yürür (VARSAYIM: katılma adımı = adım sayısı + 1).
-export function kolCevir(e: EmirKaydi, ana: EmirKaydi | undefined): DurumEmirleri['orders'][number]['kol'] {
+// Ana emir kendisi kolsa (koldan bölünen parti) sıraları kolun içindedir; rotadaki yer ananın kolu kadar kayar (anaKolu.n). Kolun ilk
+// adımından ayrılan parti de koldur: ananın adımları rotanın başından değil.
+export function kolCevir(
+  e: EmirKaydi, ana: EmirKaydi | undefined, anaKolu: DurumEmirleri['orders'][number]['kol'] = null,
+): DurumEmirleri['orders'][number]['kol'] {
   if (ana === undefined || e.ustEmirId === null) return null;
-  const n = kolAyrilmaYeri(e, ana);
+  const kayma = anaKolu?.n ?? 0;
+  const yerel = kolAyrilmaYeri(e, ana);
+  const n = kayma + yerel;
   if (e.birlesmeOpNo !== null) {
     const katilma = ana.isEmirleri.find((i) => i.opNo === e.birlesmeOpNo);
-    const m = katilma === undefined ? null : rotaYeri(ana, katilma.sira);
+    const m = katilma === undefined ? null : rotaYeri(ana, katilma.sira, kayma);
     return m === null ? null : { n, m };
   }
-  return n > 0 ? { n, m: (ana.kaynakRotaRevizyonId === null ? ana.isEmirleri : ana.isEmirleri.filter((i) => !ekAdimMi(i))).length + 1 } : null;
+  return yerel > 0 || anaKolu !== null
+    ? { n, m: kayma + (ana.kaynakRotaRevizyonId === null ? ana.isEmirleri : ana.isEmirleri.filter((i) => !ekAdimMi(i))).length + 1 } : null;
 }
 
 // Rotasız emrin iş emri -> prototipin adım satırı. Süre numeric metnidir; okunamayan süre bilinmiyordur (null), sıfır uydurulmaz.
@@ -450,13 +457,22 @@ export function fasonSiparisleriniYaz(
 // kapanislar: sahibinin (uretim-emirleri) onaylı kapanış sonucu; haritada olmayan bitmiş emir onay bekliyordur (null).
 export function emirleriCevir(emirler: readonly EmirKaydi[], kapanislar: ReadonlyMap<number, 'tamamlandi' | 'saglamsiz' | null> = new Map()): DurumEmirleri {
   const kimlige = new Map(emirler.map((e) => [e.id, e]));
+  const kollar = new Map<number, DurumEmirleri['orders'][number]['kol']>();
+  const kolu = (e: EmirKaydi, yol: readonly number[] = []): DurumEmirleri['orders'][number]['kol'] => {
+    const hazir = kollar.get(e.id);
+    if (hazir !== undefined) return hazir;
+    const ana = e.ustEmirId === null || yol.includes(e.ustEmirId) ? undefined : kimlige.get(e.ustEmirId);
+    const k = kolCevir(e, ana, ana === undefined ? null : kolu(ana, [...yol, e.id]));
+    kollar.set(e.id, k);
+    return k;
+  };
   const opStatus: DurumEmirleri['opStatus'] = {};
   const opProg: DurumEmirleri['opProg'] = {};
   const opSaglam: NonNullable<DurumEmirleri['opSaglam']> = {};
   const opYer: NonNullable<DurumEmirleri['opYer']> = {};
   const orders = emirler.map((e): DurumEmirleri['orders'][number] => {
     // Sayfa kolu kol (n, m) geçerliyse rotanın n+1. adımından kurar; kol değilse emir kendi sırasıyla rotanın başından yürür.
-    const kol = kolCevir(e, e.ustEmirId === null ? undefined : kimlige.get(e.ustEmirId));
+    const kol = kolu(e);
     const kolKaymasi = kol?.n ?? 0;
     for (const i of e.isEmirleri) {
       const yer = rotaYeri(e, i.sira, kolKaymasi);
