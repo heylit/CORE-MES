@@ -172,6 +172,7 @@
 .tc-pyq-liste button[aria-current="true"] { border-color: var(--ink); }
 .tc-pyq-liste span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
 .tc-pyq-liste small { grid-column: 1 / -1; color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pyq-liste li > .tc-pyq-not { padding: var(--b-1) var(--b-3) 0; font-size: var(--yazi-xs); }
 
 /* --- tahta --- */
 .tc-pyq-ana { container-type: inline-size; }
@@ -858,6 +859,14 @@
 .tc-pyq-satir[data-agac-adim] { background: var(--panel2); }
 .tc-pyq-satir[data-agac-adim] > .tc-pyq-bas { padding-left: calc(var(--b-2) + var(--b-4)); background: linear-gradient(var(--panel2), var(--panel2)), var(--panel-solid); }
 .tc-pyq-satir[data-agac-adim] > .tc-pyq-bas b { font-weight: 500; }
+/* Açık emrin not satırı: yazı çizelge yatay kaysa da görünen alanın eninde kalır ve satır kırar; satır yazı kadar uzar. */
+.tc-pyq-satir[data-agac-not] { background: var(--panel2); }
+.tc-pyq-satir[data-agac-not] > .tc-pyq-bas { background: linear-gradient(var(--panel2), var(--panel2)), var(--panel-solid); }
+/* Şimdi ve gün çizgileri yazının arkasında kalır: yazı kendi zeminini satırın rengiyle boyar. */
+.tc-pyq-satir[data-agac-not] > .tc-pyq-alan { padding: var(--b-1) 0; }
+.tc-pyq-satir[data-agac-not] > .tc-pyq-alan > .tc-pyq-not {
+  z-index: 3; width: max-content; max-width: calc(100cqi - var(--bas-en) - var(--b-6)); background: linear-gradient(var(--panel2), var(--panel2)), var(--panel-solid); line-height: inherit;
+}
 .tc-pyq-ozet-cubuk {
   position: absolute; top: 50%; left: var(--x); width: var(--w); height: var(--b-2); transform: translateY(-50%);
   border-radius: var(--yari-tam); background: color-mix(in oklab, var(--muted) 45%, transparent); pointer-events: none;
