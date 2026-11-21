@@ -33,7 +33,8 @@ import { brutAlanlariniCikar, calismayaMotorAyari, mesaiSaatiniCikar, saklanmaya
 import { sureOgrenmesi } from './ogrenme.ts';
 import { planGirdisi, yeniCalisma, type KaynakOkumasi } from './plan-girdisi.ts';
 import {
-  acikSiparisSatirlari, type AcikSiparisGelisi, ayarCevir, gelisleriBirlestir, bitisAkisiEkle, calisanAdimlariCevir, gerekenTarihler, planAni, planGunu, planSaati,
+  acikSiparisSatirlari, type AcikSiparisGelisi, ayarCevir, gelisleriBirlestir, bitisAkisiEkle, calisanAdimlariCevir, durusOkumaSonuYaz, gerekenTarihler, planAni, planGunu,
+  planSaati,
 } from './planlama-kurallar.ts';
 import { type Gorunum, maliyetiGeriKoy, maliyetsizCalisma } from './maliyet-gizleme.ts';
 import { satinAlmaCalismasi } from './satin-alma-gorunumu.ts';
@@ -301,11 +302,16 @@ async function kaynakOkuKur(db: Db, kullanici: Kullanici): Promise<KaynakOkumasi
   // Makineleri okuyamayan kişide null: duruş satırlarına dokunulmaz. Pencere canlı planın takvimiyle aynıdır (TAKVIM_GUN), planlama ufkuyla
   // değil: takvime sığmayan iş ufkun ötesine yerleşir; oradaki duruş okunmazsa iş duruşun içine konur, canlı plan aynı günü kapalı görür.
   let planliDuruslar: { anahtar: string; m: string; bas: string; bit: string; baslik: string }[] | null = null;
+  // Duruşu okunmayan ilk gün (tesis günü): bugün ve pencerenin son günü dahildir, son günün gece vardiyası için bir gün daha okunur (vardiya
+  // durusAraliklari). Sayfa bitişi bu günden sonraya düşen emirde duruşların hesaba katılmadığını söyler; sınırı okumanın kendisi verir ki
+  // sayfa ayrı bir sabitle ve kendi saatinin günüyle hesaplamasın. Okunmadıysa null.
+  let planliDurusSonu: string | null = null;
   if (yetkiliMi(kullanici, ISTASYON_OKUMA)) {
     const bugun = tesisGunu(Date.now());
-    const bitis = new Date(Date.parse(`${bugun}T00:00:00Z`) + TAKVIM_GUN * 86_400_000).toISOString().slice(0, 10);
-    planliDuruslar = (await makinePlanliDuruslari(db, { baslangic: bugun, bitis }))
+    const gunSonra = (n: number): string => new Date(Date.parse(`${bugun}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+    planliDuruslar = (await makinePlanliDuruslari(db, { baslangic: bugun, bitis: gunSonra(TAKVIM_GUN) }))
       .map((d) => ({ anahtar: `vd:${String(d.durusId)}|${String(d.makineId)}|${d.bas}|${d.bit}`, m: String(d.makineId), bas: d.bas, bit: d.bit, baslik: d.baslik }));
+    planliDurusSonu = gunSonra(TAKVIM_GUN + 2);
   }
   // 3199 (A + D): aparat ve özel takım ikincil kaynaktır; tanımı İstasyonlar'da, adımın isteği iş emrinin ekipman listesinde.
   const emirOkur = yetkiliMi(kullanici, KAYNAK_OKUMA.emir);
@@ -314,7 +320,7 @@ async function kaynakOkuKur(db: Db, kullanici: Kullanici): Promise<KaynakOkumasi
   // 1329: fiyat alanı birleştirmede hep bulunur (malzemeyi okuyamayanda null): girdi.betik önceki kayıttaki fiyatı taşımaz.
   return {
     durum: d,
-    ek: { takvim: null, makineNotu, kisiGorevi: gorev, insanliIstasyonlar, ekipUyeleri: ekipUyeleriEki, kapasite: await kapasite(db, kullanici), malzemeFiyatlari: null, ...sa, siparisBedelleri: await siparisBedelleri(db, kullanici), bakimlar, planliDuruslar, ikincil },
+    ek: { takvim: null, makineNotu, kisiGorevi: gorev, insanliIstasyonlar, ekipUyeleri: ekipUyeleriEki, kapasite: await kapasite(db, kullanici), malzemeFiyatlari: null, ...sa, siparisBedelleri: await siparisBedelleri(db, kullanici), bakimlar, planliDuruslar, planliDurusSonu, ikincil },
   };
 }
 
@@ -446,7 +452,8 @@ export async function planlamaCalismasi(db: Db, kullanici: Kullanici, simdi: num
   const fin = finansman.gun === gun ? finansman.oran : await planFinansmanOrani(db, gun);
   const gg = genelGider.gun === gun ? genelGider.oran : await planGenelGideri(db, kullanici, gun);
   // 2728 a: brüt (göçten önceki kayıtta kalmış olsa da) sayfaya gitmez.
-  const calisma = mesaiSaatiniCikar(brutAlanlariniCikar(calismayaMotorAyari(g.S, degerler, fin, olcek, undefined, gg)));
+  const calisma = durusOkumaSonuYaz(mesaiSaatiniCikar(brutAlanlariniCikar(calismayaMotorAyari(g.S, degerler, fin, olcek, undefined, gg))),
+    (k.girdi.kaynak.ek as { planliDurusSonu?: unknown } | null)?.planliDurusSonu);
   return {
     calisma: maliyetsizCalisma(calisma, gorunum(kullanici)) as PlanlamaCalismasiCevabi['calisma'],
     surum: k.surum, kaynakDegisikligi: g.kaynakDegisikligi ?? null,

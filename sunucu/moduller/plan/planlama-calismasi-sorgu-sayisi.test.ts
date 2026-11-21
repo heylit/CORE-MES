@@ -6,7 +6,7 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ISLEMLER } from '#paylasilan/islemler.ts';
 import { kisiGorevi, yoneticiOlustur } from '../kisiler/disari.ts';
-import { DURUM_ANAHTARI } from '../recete-rota/disari.ts';
+import { DURUM_ANAHTARI, KAYNAK_OKUMA } from '../recete-rota/disari.ts';
 import { PLANLAMA_ANAHTARI } from './disari.ts';
 import { kaynakOku, planlamaCalismasi } from './planlama-servis.ts';
 import * as sorgular from './sorgular.ts';
@@ -74,5 +74,15 @@ describe('planlama çalışması sorgu sayısı (gerçek PostgreSQL)', () => {
     });
     assert.deepEqual(gorev.kisiGorevi, tek);
     assert.deepEqual(eklenen.map((id) => gorev.kisiGorevi?.[String(id)]), ['Operator', null, 'Ayarci', 'Operator']);
+  });
+
+  // Kokpit bitişi duruşların okunduğu pencerenin ötesine düşen emirde bunu söyler; sınırı sayfa hesaplamaz, çalışmayla gelir.
+  test('çalışma duruşların okunduğu pencerenin sonunu aynı okumadan taşır; makineleri okuyamayan kişinin okuması alanı yazmaz', async () => {
+    const makinesiz: Kullanici = { ...yonetici, islemler: ISLEMLER.filter((i) => !(KAYNAK_OKUMA.istasyon as readonly string[]).includes(i)) };
+    const sonu = (k: Kullanici) => vt().tx(async (db) => ((await planlamaCalismasi(db, k)).calisma as { durusOkumaSonu?: unknown } | null)?.durusOkumaSonu);
+    const okunan = ((await vt().tx((db) => kaynakOku(db, yonetici))).ek as { planliDurusSonu: string | null }).planliDurusSonu;
+    assert.match(String(okunan), /^\d{4}-\d{2}-\d{2}$/);
+    assert.equal(await sonu(yonetici), okunan);
+    assert.equal(await sonu(makinesiz), undefined);
   });
 });

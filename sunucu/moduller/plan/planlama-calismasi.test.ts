@@ -92,18 +92,25 @@ describe('planlama çalışması ucu (gerçek PostgreSQL)', () => {
 
   test('PC-01: çalışma, kayıt ve kaynak okuması eski çerçevenin betiğiyle birleşmiş döner; takvim eki vardiya takvimindendir; sürüm çalışma kaydınındır', async () => {
     const surum = await calismaYaz(calisma(2));
+    const yonetici: Kullanici = { id: yoneticiId, ad: 'Deneme Yonetici', islemler: [...ISLEMLER] };
+    const onceki = await vt().tx((db) => kaynakOku(db, yonetici));
     const cevap = await oku(tam);
     assert.equal(cevap.statusCode, 200, cevap.body);
     const c = cevap.json() as PlanlamaCalismasiCevabi;
     assert.equal(c.surum, surum);
-    const yonetici: Kullanici = { id: yoneticiId, ad: 'Deneme Yonetici', islemler: [...ISLEMLER] };
     const kaynak = await vt().tx((db) => kaynakOku(db, yonetici));
     const takvim = { hafta: { [String(isMerkeziId)]: { 1: [String(vardiyaId)], 0: [String(vardiyaId)] } }, kisiVardiyasi: { [String(yoneticiId)]: String(vardiyaId) } };
     const beklenen = planGirdisi({ calisma: calisma(2), kayit, kaynak: { durum: kaynak.durum, ek: { ...(kaynak.ek as object), takvim } }, bugun: tesisGunu(Date.now()) });
     assert.ok(beklenen);
     // Plan amacı motor ayarındandır (kart 811, 771 a); ayar yazılmamışsa varsayılan. Motor ölçeği sistem ayarının varsayılanıdır (1477 a).
     // 2601 a: Finans'ta genel gider oranı yok, genel gider null.
-    assert.deepEqual(c.calisma, JSON.parse(JSON.stringify(calismayaMotorAyari(beklenen.S, MOTOR_AYARI_VARSAYILAN, null, { ufukGun: 120, dilimDk: 15 }, undefined, { saatBasi: null, gizli: false }))));
+    // Duruş okuma penceresinin sonu birleşmenin değil okumanın ürünüdür ve her gün ilerler: çalışmanın gerisinden ayrı ölçülür. Beklenen gün
+    // testin saatinden hesaplanmaz; isteğin önündeki ve arkasındaki iki okumanın arasında kalmalıdır (gün dönümünde ikisi ayrılabilir).
+    const { durusOkumaSonu, ...gerisi } = c.calisma ?? {};
+    assert.deepEqual(gerisi, JSON.parse(JSON.stringify(calismayaMotorAyari(beklenen.S, MOTOR_AYARI_VARSAYILAN, null, { ufukGun: 120, dilimDk: 15 }, undefined, { saatBasi: null, gizli: false }))));
+    const sonu = (k: { ek: unknown }) => String((k.ek as { planliDurusSonu: string | null }).planliDurusSonu);
+    assert.match(String(durusOkumaSonu), /^\d{4}-\d{2}-\d{2}$/);
+    assert.ok(sonu(onceki) <= String(durusOkumaSonu) && String(durusOkumaSonu) <= sonu(kaynak), `${sonu(onceki)} <= ${String(durusOkumaSonu)} <= ${sonu(kaynak)}`);
     // Takvim eki girdiye girer: eksiz birleşme başka çalışma verir.
     const eksiz = planGirdisi({ calisma: calisma(2), kayit, kaynak, bugun: tesisGunu(Date.now()) });
     assert.notDeepEqual(c.calisma, JSON.parse(JSON.stringify(eksiz?.S)));
@@ -137,6 +144,24 @@ describe('planlama çalışması ucu (gerçek PostgreSQL)', () => {
     assert.notEqual((izinli.json() as PlanlamaCalismasiCevabi).calisma, null);
     assert.equal((await oku(yalnizYazar)).statusCode, 403);
     assert.equal((await app.inject({ method: 'GET', url: '/api/plan/planlama-calismasi' })).statusCode, 401);
+  });
+
+  test('PC-07: makineleri okuyamayan kişi kayıttaki duruş okuma sonunu olduğu gibi alır; okuyabilen kişinin okuması onu kendi okumasıyla değiştirir; kayıt değişmez', async () => {
+    const eski = '2026-01-05';
+    const surum = await calismaYaz({ ...calisma(2), durusOkumaSonu: eski });
+    const alan = async (cerez: string): Promise<unknown> => {
+      const cevap = await oku(cerez);
+      assert.equal(cevap.statusCode, 200, cevap.body);
+      return (cevap.json() as PlanlamaCalismasiCevabi).calisma?.['durusOkumaSonu'];
+    };
+    assert.equal(await alan(planlamaci), eski);
+    const yeni = await alan(tam);
+    assert.match(String(yeni), /^\d{4}-\d{2}-\d{2}$/);
+    assert.ok(String(yeni) > eski, String(yeni));
+    assert.equal(await alan(planlamaci), eski);
+    const k = await vt().tx((db) => sorgular.planlamaKaydi(db, PLANLAMA_ANAHTARI));
+    assert.equal(k?.surum, surum);
+    assert.equal((k?.deger as { durusOkumaSonu?: unknown }).durusOkumaSonu, eski);
   });
 
   // 657 a: kayıt yoksa sayfa boş çalışmayı sunucuya kurdurur ve düzenlenebilir açılır.
