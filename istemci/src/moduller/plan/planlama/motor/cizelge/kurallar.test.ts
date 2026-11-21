@@ -116,6 +116,10 @@ describe('çizelge hesapları', () => {
     // 3335-3c: adıma bildirilen bekleme (malzeme yok, kişi yok) motorun nedenidir; iki yazısı da vardır.
     expect(nedenMetni({ ...r, why: { t: 'bekleme' } })).toBe('Adıma bildirilen beklemenin (malzeme yok, kişi yok) bitmesini bekledi.');
     expect(nedenKisa({ ...r, why: { t: 'bekleme' } })).toBe('bildirilen bekleme');
+    // 3538 b: süren işin arkasına kayan elle kilit.
+    expect(nedenMetni({ ...r, why: { t: 'kilit-kaydi', r: '2.10', o: 14 } })).toBe('Kilitli: tezgâhta süren iş 2.10 uzadığı için kilidi onun bitişine taşındı.');
+    expect(nedenMetni({ ...r, why: { t: 'kilit-kaydi' } })).toBe('Kilitli: tezgâhta süren iş uzadığı için kilidi onun bitişine taşındı.');
+    expect(nedenKisa({ ...r, why: { t: 'kilit-kaydi', r: '2.10', o: 14 } })).toBe('kilit kaydırıldı');
   });
 
   it('kapasitesiz en erken: kayıttaki lbC; yoksa ya da sonlu değilse null', () => {

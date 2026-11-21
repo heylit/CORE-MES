@@ -1,7 +1,7 @@
 import type { DegerlendirmeCevabi as SunucuCevabi, DegerlendirmeDurumuCevabi, DegerlendirmeIstegi as SunucuIstegi } from '#paylasilan/sozlesme/planlama.ts';
 import { HATA_DURUMU } from '#paylasilan/hata.ts';
 import { ApiHatasi, api } from '../../../../ortak/veri/api.ts';
-import type { CozulmusPlan, PlanlamaCalismasi } from '../tipler.ts';
+import { kilitKaydiniAl, type CozulmusPlan, type PlanlamaCalismasi } from '../tipler.ts';
 
 // Plan değerlendirme ucu (Soru 357 a, 463 a). Motor yalnız sunucudadır (288 a, ADR 0018); ekran neyin deneneceğini gönderir, sonucu çizer.
 // Tipler sözleşmedendir. Saatler planın ekseninde (başlangıç günü 00:00'dan saat), terminler 'GGGG-AA-GG SS:DD'.
@@ -96,6 +96,7 @@ export function secenegiAl(t: PlanlamaCalismasi, x: PlanSecenegi, dataVer: numbe
   }
   const once = t.plan === null ? null : (t.plan.ozet ?? null);
   t.plan = { ...x.plan, dataVer: t.dataVer + 1, kim, zaman, kaynak: 'denge', oncekiOzet: once, kapali: t.kapali.slice() } as CozulmusPlan;
+  kilitKaydiniAl(t.locks, x.plan.ops);
   return true;
 }
 

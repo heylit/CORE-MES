@@ -80,6 +80,9 @@ const ust = emir('2', 6);
 const ADET = { adimAdetleri: { 'E-2|10': 9 } };
 // "Partiyi böl" ölçümü: kayıtlı planın üstünde emri partilere ayırıp yeniden dizer. Dönen: ölçümün planındaki işler.
 async function bol(orders: Emir[], ek: Ek, siparisId: string, adetler: number[], an = '2026-10-19T05:00:00Z'): Promise<Record<string, Is>> {
+  return (await bolPlani(orders, ek, siparisId, adetler, an))['ops'] as Record<string, Is>;
+}
+async function bolPlani(orders: Emir[], ek: Ek, siparisId: string, adetler: number[], an = '2026-10-19T05:00:00Z'): Promise<Record<string, unknown>> {
   const onceki = kur(orders, ek);
   const r = await degerlendirmeYap({ calisma: { ...onceki.S, plan: onceki.plan }, kayit: ek.kayit ?? kayit(), kaynak: kaynak(orders, ek), bugun: '2026-10-19',
     istek: { tur: 'parti-bolme', siparisId, dagitim: 'ayni', adetler } }, Date.parse(an));
@@ -87,7 +90,7 @@ async function bol(orders: Emir[], ek: Ek, siparisId: string, adetler: number[],
   const s = degerlendirmeSonucu.parse(r.sonuc);
   if (s.tur !== 'parti-bolme' || !s.sonuc) return assert.fail(JSON.stringify(s));
   assert.deepEqual(s.sonuc.plan['fail'] ?? [], [], 'ölçümde bütün adımlar yerleşti');
-  return s.sonuc.plan['ops'] as Record<string, Is>;
+  return s.sonuc.plan;
 }
 
 describe('adım ortasından bölünen parti (3512)', () => {
@@ -351,10 +354,27 @@ describe('"Partiyi böl" ölçümü plana göre süren adımı ilk partinin aded
     assert.deepEqual([yer(sonra)['2/1.10'], yer(sonra)['2/2.10']], [['200', 8, 12, 3], ['200', 12, 14, 1]]);
     assert.deepEqual(yer(sonra), yer(basta));
   });
+
+  test('PB-12: ölçüm süren adımı nasıl aldığını söyler: ilk partinin payı ölçüm anından önce bitiyorsa erken, sürüyorsa süresi yenilendi (3520)', async () => {
+    // 1 adetlik ilk partinin payı 09:00'da biterdi; ölçüm 09:30'da. Kaydı olmayan pay şimdiden sonraya dizilir.
+    const erken = await bolPlani([emir('2', 6)], {}, '2', [1, 5], '2026-10-19T06:30:00Z');
+    assert.deepEqual(erken['partiBilgi'], [{ id: '2/1.10', k: '10', tur: 'erken', adet: 1 }]);
+    // 4 adetlik ilk parti 09:00'da adımı sürdürür, 12:00'de biter.
+    const suren = await bolPlani([emir('2', 6)], {}, '2', [4, 2], SONRA);
+    assert.deepEqual(suren['partiBilgi'], [{ id: '2/1.10', k: '10', tur: 'yenilendi', adet: 4 }]);
+    // İlk partide kalan fazlalık adede girer (üst emir 10. adımı kolun 3 adediyle 9 adet işler: ilk parti 7).
+    const fazla = await bolPlani([ust, emir('3', 3, '2', { n: 1, m: 4 })], ADET, '2', [4, 2], SONRA);
+    assert.deepEqual(fazla['partiBilgi'], [{ id: '2/1.10', k: '10', tur: 'yenilendi', adet: 7 }]);
+    // Adım başlamadan ölçülürse bilgi yoktur.
+    assert.equal((await bolPlani([emir('2', 6)], {}, '2', [4, 2]))['partiBilgi'], undefined);
+  });
 });
 
 // "Değişikliği uygula": plan `once` emirleriyle kurulur; sonra emirler `sonra` olur (bölme, adet düzeltmesi) ve istenen emirler dizilir.
 async function uygula(once: Emir[], sonra: Emir[], isler: string[], an: string, ek: Ek = {}, calismaEki: Record<string, unknown> = {}): Promise<Record<string, Is>> {
+  return (await uygulaPlani(once, sonra, isler, an, ek, calismaEki))['ops'] as Record<string, Is>;
+}
+async function uygulaPlani(once: Emir[], sonra: Emir[], isler: string[], an: string, ek: Ek = {}, calismaEki: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
   const onceki = kur(once, ek);
   const r = await degerlendirmeYap({ calisma: { ...onceki.S, plan: onceki.plan, ...calismaEki }, kayit: ek.kayit ?? kayit(), kaynak: kaynak(sonra, ek), bugun: '2026-10-19',
     istek: { tur: 'plan-uygula', isler } }, Date.parse(an));
@@ -362,13 +382,15 @@ async function uygula(once: Emir[], sonra: Emir[], isler: string[], an: string, 
   const s = degerlendirmeSonucu.parse(r.sonuc);
   if (s.tur !== 'plan-uygula') return assert.fail(JSON.stringify(s));
   assert.deepEqual(s.plan['fail'] ?? [], [], 'bütün adımlar yerleşti');
-  return s.plan['ops'] as Record<string, Is>;
+  return s.plan;
 }
 
 describe('plana göre süren adım yerinde kalır, süresi yeni adetle yenilenir (3519)', () => {
   // Plan 6 adetle kuruldu: 10. adım 08:00-14:00 (8.-14. saat), gerçekleşen kaydı yok. 09:00'da (06:00Z) adım plana göre sürüyor sayılır.
   const SONRA = '2026-10-19T06:00:00Z';
   const yer = (ops: Record<string, Is>, id: string): (string | number)[] => { const r = ops[id]; return r ? [r.m, r.S, r.C, r.run] : []; };
+  // İşin nedeni (motor başka bağlamda koşar: düz nesneye çevrilir).
+  const nedeni = (ops: Record<string, Is>, id: string): { t: string; r?: string; o?: number } => JSON.parse(JSON.stringify((ops[id] as unknown as { why: unknown }).why)) as { t: string };
   // Aynı tezgâhta üst üste binen ya da aynı emirde bir önceki adımı bitmeden başlayan işler.
   const bozuk = (ops: Record<string, Is>): string[] => {
     const l: string[] = [], tezgahlar: Record<string, [string, Is][]> = {};
@@ -429,13 +451,14 @@ describe('plana göre süren adım yerinde kalır, süresi yeni adetle yenilenir
 
   // Motorun tek geçişi: plan `once` ile kuruldu; emirler `sonra` olunca saat 09:30'da kayıtlı plan taban alınarak yeniden çözülür.
   type TekIs = Is & { kesik?: number; Su?: number; frz?: number };
-  const tekGecis = (sonra: Emir[], calismaEki: Record<string, unknown> = {}, kyt = kayit(), ilk: Emir[] = [emir('2', 6)], an = 9.5, ek: Ek = {}): Record<string, TekIs> => {
+  // durusBilinir: taban bütün duruşları biliyor sayılır (Değişikliği uygula aramasının sahte tabanı gibi, lnsDecode).
+  const tekGecis = (sonra: Emir[], calismaEki: Record<string, unknown> = {}, kyt = kayit(), ilk: Emir[] = [emir('2', 6)], an = 9.5, ek: Ek = {}, durusBilinir = false): Record<string, TekIs> => {
     const once = kur(ilk, { ...ek, kayit: kyt }), k = kaynak(sonra, ek);
     let S: Record<string, unknown> = { ...once.S, plan: once.plan, ...calismaEki };
     let g = planGirdisi({ calisma: S, kayit: kyt, kaynak: k, bugun: '2026-10-19' });
     for (let i = 0; i < 4 && g && g.S['dataVer'] !== S['dataVer']; i++) { S = g.S; g = planGirdisi({ calisma: S, kayit: kyt, kaynak: k, bugun: '2026-10-19' }); }
     assert.ok(g && g.S['dataVer'] === S['dataVer'], 'birleşme kararlı');
-    const p = motorYukle().schedule({ ...g.st, now: an } as typeof g.st, 'sabit', { ops: once.ops, fail: [], downIds: [] } as never);
+    const p = motorYukle().schedule({ ...g.st, now: an } as typeof g.st, 'sabit', { ops: once.ops, fail: [], downIds: durusBilinir ? ((g.st as { down?: { id?: string }[] }).down ?? []).map((d) => d.id) : [] } as never);
     assert.equal((p.fail ?? []).length, 0, 'bütün adımlar yerleşti');
     return p.ops as unknown as Record<string, TekIs>;
   };
@@ -486,7 +509,7 @@ describe('plana göre süren adım yerinde kalır, süresi yeni adetle yenilenir
     assert.ok(ayri['4.30']!.S >= 16 - 1e-9, `frezedeki donuk iş süren adım bitince: ${String(ayri['4.30']!.S)}`);
   });
 
-  test('SU-09: arkaya kayan donuk işin başka tezgâhtaki donuk ardılı da onunla kayar; elle kilitli iş kaymaz', async () => {
+  test('SU-09: arkaya kayan donuk işin başka tezgâhtaki donuk ardılı da onunla kayar; elle kilitli iş de süren işin arkasına kayar (3538 b)', async () => {
     // Öteki emir 1 adet: frezede 14:00-15:00, tornada 15:00-16:00; saat 11:30'da ikisi de donuk. Süren adım 7 adede çıkıp 15:00'e uzar.
     const once = [emir('2', 6), emir('4', 1)], sonra = [emir('2', 7), emir('4', 1)];
     const basta = kur(once).ops;
@@ -498,15 +521,104 @@ describe('plana göre süren adım yerinde kalır, süresi yeni adetle yenilenir
     const ops = await uygula(once, [...sonra, emir('5', 1)], ['5'], '2026-10-19T08:30:00Z');
     assert.deepEqual(yer(ops, '2.10'), ['200', 8, 15, 7]);
     assert.deepEqual(bozuk(ops), []);
-    // Elle kilit kişinin kararıdır, kaymaz: süren adım onun üstüne uzuyorsa yerinde tutulamaz, kilitli işin arkasına yeniden dizilir.
-    const kilitli = await uygula(once, [emir('2', 8), emir('4', 1), emir('5', 1)], ['5'], '2026-10-19T08:00:00Z', {}, { locks: { '4.10': { m: '200', S: 14 } } });
-    assert.equal(kilitli['4.10']!.S, 14);
-    assert.ok(kilitli['2.10']!.S >= 15 - 1e-9, `süren adım kilitli işin arkasında: ${String(kilitli['2.10']!.S)}`);
+    // 3538 b: süren adım elle kilitli işin üstüne uzarsa yerinde kalır; kilitli iş süren adımın bitişine kayar, nedeni kilidin eski saatini
+    // taşır. Süren adım vardiya sonunda (16:00) bittiği için kilit ertesi sabaha (32. saat) konur.
+    const plan = await uygulaPlani(once, [emir('2', 8), emir('4', 1), emir('5', 1)], ['5'], '2026-10-19T08:00:00Z', {}, { locks: { '4.10': { m: '200', S: 14 } } });
+    const kilitli = plan['ops'] as Record<string, Is>;
+    const uyari = (plan['warn'] as { t: string; id?: string; txt: string }[]).filter((w) => w.id === '4.10');
+    assert.deepEqual(uyari.map((w) => [w.t, w.txt]), [['kilit', '4.10: tezgâhta süren 2.10 uzadı; kilit 19.10 Pzt 14:00 yerine 20.10 Sal 08:00 saatine kaydı']]);
+    assert.deepEqual(yer(kilitli, '2.10'), ['200', 8, 16, 8]);
+    assert.deepEqual(yer(kilitli, '4.10'), ['200', 32, 33, 1]);
+    assert.deepEqual(nedeni(kilitli, '4.10'), { t: 'kilit-kaydi', r: '2.10', o: 14 });
+    assert.ok(kilitli['4.20']!.S >= 33 - 1e-9, `kilitli işin ardılı onun arkasında: ${String(kilitli['4.20']!.S)}`);
     assert.deepEqual(bozuk(kilitli), []);
+  });
+
+  test('SU-10: süren adım elle kilitli işin üstüne uzarsa kilitli iş kayar; arkasındaki kilit üst üste binmeyecek kadar kayar, uzamayan kilit yerinde (3538 b)', () => {
+    // Saat 11:00. Plan: süren adım 08:00-14:00 (6 adet), öteki emirler 14:00 ve 15:00'te; ikisi elle kilitli. Süren adım 7 adede çıkıp 15:00'e
+    // uzar: ilk kilit 15:00'e, ikincisi vardiya 16:00'da bittiği için ertesi sabaha (32. saat) kayar.
+    const once = [emir('2', 6), emir('4', 1), emir('6', 1)];
+    const basta = kur(once).ops;
+    assert.deepEqual([yer(basta, '4.10').slice(0, 2), yer(basta, '6.10').slice(0, 2)], [['200', 14], ['200', 15]], 'örnek plan');
+    const kilit = { locks: { '4.10': { m: '200', S: 14 }, '6.10': { m: '200', S: 15 } } };
+    const tek = tekGecis([emir('2', 7), emir('4', 1), emir('6', 1)], kilit, kayit(), once, 11);
+    assert.deepEqual([yer(tek, '2.10'), yer(tek, '4.10'), yer(tek, '6.10')], [['200', 8, 15, 7], ['200', 15, 16, 1], ['200', 32, 33, 1]]);
+    assert.deepEqual([nedeni(tek, '4.10'), nedeni(tek, '6.10')],
+      [{ t: 'kilit-kaydi', r: '2.10', o: 14 }, { t: 'kilit-kaydi', r: '4.10', o: 15 }]);
+    assert.deepEqual(bozuk(tek), []);
+    // Süren adım uzamadıysa kilitler yerinde kalır.
+    const ayni = tekGecis(once, kilit, kayit(), once, 11);
+    assert.deepEqual([yer(ayni, '4.10').slice(0, 2), nedeni(ayni, '4.10').t], [['200', 14], 'kilit']);
+    // Uzayan süren adım yalnız üstüne bindiği kilidi kaydırır: 16:00'daki kilit 15:00'e uzayan adımdan sonradır, yerinde kalır.
+    const uzak = tekGecis([emir('2', 7), emir('4', 1)], { locks: { '4.10': { m: '200', S: 16 } } }, kayit(), [emir('2', 6), emir('4', 1)], 11);
+    assert.deepEqual([yer(uzak, '4.10').slice(0, 2), nedeni(uzak, '4.10').t], [['200', 16], 'kilit']);
+  });
+
+  test('SU-11: başlamış (gerçekleşen kaydı olan) adımın kalanı elle kilitli işin üstüne uzarsa kilitli iş kayar (3538 b)', () => {
+    // 10. adım 08:00'de terminalde başladı; 11:00'deki sayımda kalan 5 saat: 16:00'da, vardiya sonunda biter. 14:00'teki kilitli iş ertesi
+    // sabaha (32. saat) kayar: kilit tezgâhın açık olduğu ilk ana konur.
+    const once = [emir('2', 6), emir('4', 1)];
+    const ek = { locks: { '4.10': { m: '200', S: 14 } }, gercek: { '2.10': { m: '200', S: 8, kalan: 5, sayim: 11 } } };
+    const tek = tekGecis(once, ek, kayit(), once, 11);
+    assert.deepEqual([tek['2.10']!.S, tek['2.10']!.C], [8, 16]);
+    assert.deepEqual([yer(tek, '4.10').slice(0, 3), nedeni(tek, '4.10')], [['200', 32, 33], { t: 'kilit-kaydi', r: '2.10', o: 14 }]);
+    assert.deepEqual(bozuk(tek), []);
+  });
+
+  test('SU-12: geçici kilit (değişikliği uygula) süren adımın arkasına kaydırılmaz; çakışmayı onarım çözer, neden kilit kaydı olmaz (3538 b)', async () => {
+    // Saat 11:00. Süren adım 6 adetten 7 adede çıkıp 15:00'e uzar; 14:00'teki işin kilidi geçici. Tek geçişte geçici kilit yerinde kalır.
+    const once = [emir('2', 6), emir('4', 1)], sonra = [emir('2', 7), emir('4', 1)];
+    const tek = tekGecis(sonra, { locks: { '4.10': { m: '200', S: 14, gecici: 1 } } }, kayit(), once, 11);
+    assert.deepEqual(yer(tek, '4.10').slice(0, 2), ['200', 14]);
+    assert.notEqual(nedeni(tek, '4.10').t, 'kilit-kaydi');
+    // Değişikliği uygula öteki emirlere geçici kilit koyar: süren adım yerinde, 4.10 onun arkasında; neden kilit kaydı değil, kilit uyarısı yok.
+    const plan = await uygulaPlani(once, [...sonra, emir('5', 1)], ['5'], '2026-10-19T08:00:00Z');
+    const ops = plan['ops'] as Record<string, Is>;
+    assert.deepEqual(yer(ops, '2.10'), ['200', 8, 15, 7]);
+    assert.ok(ops['4.10']!.S >= 15 - 1e-9, `geçici kilitli iş süren adımdan sonra: ${String(ops['4.10']!.S)}`);
+    assert.notEqual(nedeni(ops, '4.10').t, 'kilit-kaydi');
+    assert.deepEqual((plan['warn'] as { t: string }[]).filter((w) => w.t === 'kilit'), []);
+    assert.deepEqual(bozuk(ops), []);
+  });
+
+  test('DS-03: taban duruşu biliyor sayılsa da plana göre süren adımın takvimle bitişi kayıtlı bitişi aşarsa adım uzar ve kesik işaretlenir (3534)', () => {
+    const durus = { down: [{ id: 'd1', m: '200', from: 10, to: 11, neden: 'ariza' }] };
+    const d = tekGecis([emir('2', 6)], durus, kayit(), [emir('2', 6)], 9.5, {}, true);
+    assert.deepEqual([yer(d, '2.10'), d['2.10']!.kesik], [['200', 8, 15, 6], 1]);
+    // Duruş yokken yalnız süresi yeni adetle yenilenen adım işaret taşımaz.
+    const y = tekGecis([emir('2', 4), emir('3', 2, '2')], {}, kayit(), [emir('2', 6)], 9.5, {}, true);
+    assert.deepEqual([yer(y, '2.10'), y['2.10']!.kesik], [['200', 8, 12, 4], undefined]);
   });
 
   test('SU-05: kişi süren adımın emrini de yeniden dizdirirse adım şimdiden sonraya, yeni adedinin süresiyle dizilir (3335-2b)', async () => {
     const ops = await uygula([emir('2', 6)], [emir('2', 4), emir('3', 2, '2')], ['2', '3'], SONRA);
     assert.deepEqual([yer(ops, '2.10'), yer(ops, '3.10')], [['200', 9, 13, 4], ['200', 13, 15, 2]]);
+  });
+});
+
+describe('"Değişikliği uygula" planın bilmediği duruşu plana göre süren ve donuk işe işler (3534)', () => {
+  // Plan 6 adetle kuruldu (duruş yokken): 10. adım 08:00-14:00. Sonra arıza girilir, yeni emir uygulanır (öteki emirler etkilenmez).
+  const yer = (ops: Record<string, Is>, id: string): (string | number)[] => { const r = ops[id]; return r ? [r.m, r.S, r.C, r.run] : []; };
+  const ariza = (from: number, to: number) => ({ down: [{ id: 'd1', m: '200', from, to, neden: 'ariza' }] });
+
+  test('DS-01: adedi değişmeyen süren adım yeni duruş kadar uzar, arkasındaki iş onun bitişinden sonra; ikinci uygulamada bir daha uzamaz', async () => {
+    // 09:00'da 10:00-11:00 arıza: adım 14:00 yerine 15:00'te biter.
+    const ops = await uygula([emir('2', 6)], [emir('2', 6), emir('4', 1)], ['4'], '2026-10-19T06:00:00Z', {}, ariza(10, 11));
+    assert.deepEqual(yer(ops, '2.10'), ['200', 8, 15, 6]);
+    assert.ok(ops['4.10']!.S >= 15 - 1e-9, `öteki emir süren adım bitince: ${String(ops['4.10']!.S)}`);
+    // Duruşu zaten işlemiş plan taban alınınca adım aynı yerde kalır.
+    const ikinci = await uygula([emir('2', 6)], [emir('2', 6), emir('4', 1), emir('5', 1)], ['5'], '2026-10-19T06:00:00Z', {},
+      { ...ariza(10, 11), plan: { ops: { '2.10': { id: '2.10', job: '2', m: '200', S: 8, Su: 8, C: 15, su: 0, run: 6, lot1: 9 } }, fail: [] } });
+    assert.deepEqual(yer(ikinci, '2.10'), ['200', 8, 15, 6]);
+  });
+
+  test('DS-02: dondurma penceresinde başlamamış iş yeni duruşun içinde kalmaz', async () => {
+    // Saat 11:00, dondurma 4 saat: 14:00-15:00'teki öteki emir donuk. 14:00-15:00'e arıza girilir, o emir uygulanır; iş arızadan sonraya kayar.
+    // Denge ufku yok (otomatik): ufuktaki işler geçici kilitlenseydi kilitli iş arıza süresince durur, uyarı çıkardı (kilit a).
+    const once = [emir('2', 6), emir('4', 1)], ek: Ek = { w: { denge: 'otomatik' } };
+    assert.deepEqual(yer(kur(once, ek).ops, '4.10').slice(0, 3), ['200', 14, 15], 'örnek plan');
+    const ops = await uygula(once, once, ['4'], '2026-10-19T08:00:00Z', ek, ariza(14, 15));
+    assert.deepEqual(yer(ops, '2.10'), ['200', 8, 14, 6]);
+    assert.ok(ops['4.10']!.S >= 15 - 1e-9, `donuk iş arızadan sonra: ${String(ops['4.10']!.S)}`);
   });
 });

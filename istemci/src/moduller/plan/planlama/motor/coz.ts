@@ -2,7 +2,7 @@ import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import type { DegerlendirmeCevabi, DegerlendirmeIstegi } from '#paylasilan/sozlesme/planlama.ts';
 import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import { bekleyenler, bekleyenListesi, type CalismaKomutu } from '../kayit.ts';
-import type { BekleyenDegisiklik, CozulmusPlan, PlanlamaCalismasi } from '../tipler.ts';
+import { kilitKaydiniAl, type BekleyenDegisiklik, type CozulmusPlan, type PlanlamaCalismasi } from '../tipler.ts';
 import { degerlendirmeHatasi, degerlendirmeIste } from '../siparis/degerlendirme.ts';
 
 // Planı kur (576, eski e-coz coz 'sifir'): motor sunucuda koşar (288 a, ADR 0018), plan değerlendirme ucunun `plan-kur` turuyla; ekran
@@ -25,6 +25,7 @@ export function kurulanPlaniAl(t: PlanlamaCalismasi, plan: Record<string, unknow
   if (dataVer !== t.dataVer) return false;
   const once = t.plan === null ? null : (t.plan.ozet ?? null);
   t.plan = { ...plan, dataVer: t.dataVer + 1, kim, zaman, kaynak: 'sifir', oncekiOzet: once, kapali: t.kapali.slice() } as CozulmusPlan;
+  kilitKaydiniAl(t.locks, plan.ops);
   return true;
 }
 
@@ -67,6 +68,7 @@ export function uygulananiAl(t: PlanlamaCalismasi, plan: Record<string, unknown>
   const kalan = bekleyenler(t).filter((e) => !sec.has(e.id));
   const once = t.plan.ozet ?? null;
   t.plan = { ...plan, dataVer: kalan.length === 0 ? t.dataVer + 1 : t.plan.dataVer, kim, zaman, kaynak: 'uygula', oncekiOzet: once, kapali: t.kapali.slice() } as CozulmusPlan;
+  kilitKaydiniAl(t.locks, plan.ops);
   t.bekleyen = kalan;
   return true;
 }

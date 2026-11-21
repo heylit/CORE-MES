@@ -727,16 +727,19 @@ describe('planlama değerlendirmesi: çıkış denetimi (3499)', () => {
     assert.equal(sure(ekli['O2/2.20']!), sure(yalin['O2/2.20']!), 'ikinci parti uzamaz');
   });
 
-  test('CD-05: kişinin kilidi süren işle üst üste geliyorsa motor kilidi oynatmaz; çakışma planın uyarılarında bildirilir', async () => {
+  test('CD-05: kişinin kilidi süren işle üst üste geliyorsa süren iş yerinde kalır, kilitli iş onun arkasına kayar ve uyarıda söylenir (3538 b)', async () => {
     const { calisma, eski } = suren({ locks: { 'O4.10': { m: '200', S: 40 } } });
     assert.equal(eski['O4.10']!.m, '200');
     const s = sonuc(await iste(calisma, { tur: 'plan-uygula', isler: ['O7'] })); if (s.tur !== 'plan-uygula') return assert.fail(s.tur);
     const yeni = planOps(s.plan);
-    assert.equal(yeni['O4.10']!.S, 40, 'elle kilit yerinde');
     assert.ok(yeni['O6.10']!.C > 40, 'süren iş kilit saatinden sonra bitiyor');
-    const uyari = (s.plan['warn'] as { t: string; id?: string; txt: string }[]).filter((w) => w.t === 'cakisma');
-    assert.deepEqual(uyari.map((w) => w.id), ['O4.10']);
-    assert.match(uyari[0]!.txt, /Freze 1 tezgâhındaki O6\.10/);
+    assert.equal(yeni['O6.10']!.S, 34, 'süren iş yerinde');
+    assert.ok(Math.abs(yeni['O4.10']!.S - yeni['O6.10']!.C) < 1e-6, `kilitli iş süren işin bitişinde: ${String(yeni['O4.10']!.S)}`);
+    assert.deepEqual(JSON.parse(JSON.stringify((yeni['O4.10'] as unknown as { why: unknown }).why)), { t: 'kilit-kaydi', r: 'O6.10', o: 40 });
+    const uyari = s.plan['warn'] as { t: string; id?: string; txt: string }[];
+    assert.deepEqual(uyari.filter((w) => w.t === 'cakisma'), [], 'çakışma kalmadı');
+    assert.deepEqual(uyari.filter((w) => w.id === 'O4.10').map((w) => w.t), ['kilit']);
+    assert.match(uyari.find((w) => w.id === 'O4.10')!.txt, /^O4\.10: tezgâhta süren O6\.10 uzadı; kilit .+ yerine .+ saatine kaydı$/);
     // Bitmiş O0.10'un bildirilen bitişi, aynı tezgâhta süren O6.10'un başlangıcından (34) sonra: ikisi de geçmiştir, uyarı konusu değildir.
     const gecmis = suren(); (gecmis.calisma['gercek'] as Record<string, { m: string; S: number; C?: number }>)['O0.10'] = { m: eski['O0.10']!.m, S: eski['O0.10']!.S, C: 36 };
     assert.equal(eski['O0.10']!.m, eski['O6.10']!.m);

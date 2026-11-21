@@ -10,7 +10,7 @@ import { planaAlmaHesabi } from './plana-al.ts';
 import { PLANLAMA_ANAHTARI, planlamaCalismasi, planlamaYaz, planlamaYazmaDenetimi } from './planlama-servis.ts';
 import * as sorgular from './sorgular.ts';
 import {
-  adimEkBitisi, dataVerOf, dizImzasi, eksenOf, imza, kapasiteKomutuMu, komutAdi, komutUygula, oynat, uygulaKarari, type DizKomutu, type SatirKomutu, type TaslakHesaplari, type TaslakImzasi, type TaslakSatiri as Satir,
+  adimEkBitisi, dataVerOf, dizImzasi, eksenOf, imza, kapasiteKomutuMu, kilitKaydi, komutAdi, komutUygula, oynat, uygulaKarari, type DizKomutu, type KilitKaydi, type SatirKomutu, type TaslakHesaplari, type TaslakImzasi, type TaslakSatiri as Satir,
 } from './taslak-kurallar.ts';
 import { tasimaHesabi } from './tasima.ts';
 
@@ -27,10 +27,13 @@ const kisiOf = (kullanici: Kullanici, simdi: number) => ({ kim: kullanici.ad, sa
 // Satırları bu modül yazar; okurken yine de sözleşmeden geçer (dizme satırı kendi biçimiyle), bozuk satır oynatılmaz.
 const nesneMi = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
 function dizKomutu(x: Record<string, unknown>): DizKomutu | null {
-  const { isler, plan, onceki } = x;
+  const { isler, plan, onceki, kilit } = x;
   if (!Array.isArray(isler) || !isler.every((i) => typeof i === 'string') || !(plan === null || nesneMi(plan)) || !nesneMi(onceki)) return null;
   const { imza: i, n, dataVer } = onceki;
-  return typeof i === 'string' && typeof n === 'number' && typeof dataVer === 'number' ? { tur: 'diz', isler: isler as string[], plan, onceki: { imza: i, n, dataVer } } : null;
+  if (typeof i !== 'string' || typeof n !== 'number' || typeof dataVer !== 'number') return null;
+  const k: KilitKaydi = {};
+  if (nesneMi(kilit)) for (const [id, y] of Object.entries(kilit)) if (nesneMi(y) && typeof y.S === 'number' && typeof y.o === 'number') k[id] = { m: y.m, S: y.S, o: y.o };
+  return { tur: 'diz', isler: isler as string[], plan, onceki: { imza: i, n, dataVer }, ...(Object.keys(k).length > 0 ? { kilit: k } : {}) };
 }
 function satirlar(x: unknown): Satir[] {
   if (!Array.isArray(x)) return [];
@@ -173,7 +176,8 @@ export async function taslakDiz(db: Db, kullanici: Kullanici, g: { taslakSurumu:
   // Yalnız son dizme planı taşır (boyut); öncekilerin planı düşer, satırları kalır.
   const eski = satirlar(t!.komutlar).map((s) => (s.komut.tur === 'diz' ? { ...s, komut: { ...s.komut, plan: null } } : s));
   if (eski.length >= TASLAK_KOMUTU_EN_COK) throw dogrulama(`Taslakta en çok ${String(TASLAK_KOMUTU_EN_COK)} değişiklik durur; önce uygulayın.`, 'komut');
-  const komut: DizKomutu = { tur: 'diz', isler: d.isler, plan: d.plan, onceki: d.onceki };
+  const kilit = kilitKaydi(d.plan.ops);
+  const komut: DizKomutu = { tur: 'diz', isler: d.isler, plan: d.plan, onceki: d.onceki, ...(Object.keys(kilit).length > 0 ? { kilit } : {}) };
   const komutlar = [...eski, { komut, ne: komutAdi(komut), t: simdi }];
   if (degerCokBuyukMu(komutlar)) throw cokBuyuk(BUYUK);
   if ((await sorgular.taslakKomutlariYaz(db, { kisiId: kullanici.id, beklenenSurum: t!.surum, komutlar })) === null) throw cakisma(ESKI);

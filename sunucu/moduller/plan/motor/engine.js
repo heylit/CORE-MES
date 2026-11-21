@@ -754,11 +754,14 @@ function schedule(st,mode,base,opt={}){
   const g=st.gercek||{};
   // sabitler: gerçekleşen, başlamış, dondurulmuş
   const pins=[],kilitler=[],gecmis=new Set();/** @type {Record<string,number>} */const surenBitis={};
+  /** @type {Record<string,{id:string,S:number,C:number}>} */const suren={};
+  const surenKoy=(/** @type {any} */r)=>{const x=suren[r.m];if(!x||r.C>x.C)suren[r.m]={id:r.id,S:r.S,C:r.C};};
   for(const o of cx.ops){const b=base&&base.ops[o.id],a=g[o.id];
     if(a&&a.S!=null){const src=b||{m:a.m,su:0,run:1,lot1:a.S};const M=cx.M[a.m||src.m];
       let r={...src,id:o.id,job:o.job,m:a.m||src.m,S:a.S,pin:1,act:1};
       if(a.C!=null){r.C=a.C;r.Su=Math.min(a.C,src.Su!=null?a.S+(src.Su-src.S):a.S);r.lot1=Math.min(r.C,src.lot1||r.C);r.done=1;}
-      else if(M){r.Su=adv(M.sw,a.S,src.su||0);const kb=kalanBitis(M,a);if(kb!=null){r.C=kb;r.Su=Math.min(r.Su,kb);}else r.C=adv(M.rw,Math.max(r.Su,now),Math.max(0,(src.run||0)-workIn(M.rw,r.Su,now)));r.lot1=Math.max(r.Su,src.lot1||r.Su);}
+      else if(M){r.Su=adv(M.sw,a.S,src.su||0);const kb=kalanBitis(M,a);if(kb!=null){r.C=kb;r.Su=Math.min(r.Su,kb);}else r.C=adv(M.rw,Math.max(r.Su,now),Math.max(0,(src.run||0)-workIn(M.rw,r.Su,now)));r.lot1=Math.max(r.Su,src.lot1||r.Su);
+        if(r.C>now+1e-9)surenKoy(r);}
       pins.push(r);continue;}
     const kr=kilitYeri(o,st.locks&&st.locks[o.id],cx);if(kr){kilitler.push(kr);continue;}
     if(!b)continue;
@@ -766,6 +769,10 @@ function schedule(st,mode,base,opt={}){
     // sayılanlar: dönüş saati geçen fason (gerçekleşme kaydı yoktur), tabana bitmiş diye konan adım (bitti) ve gerçekleşeni olan iş (act).
     if(b.C<=now+1e-9){if(b.fas||b.bitti||b.act)pins.push({...b,pin:1,done:1});else gecmis.add(o.id);continue;}
     const hit=!b.fas&&tezgahDuruslari(st,b.m).some(d=>d.from<b.C-1e-9&&d.to>b.S+1e-9&&!(base.downIds||[]).includes(d.id));
+    /* 3534: tabanın duruş listesi her yolda gelmez: kayıtlı planı çözen yol (lnsDecode) bütün duruşları bilinir sayar, kayıtlı planda
+       liste de yoktur, kimlik sıradandır. Tabandaki iş bugünkü takvimle (yeni duruş, kısalan vardiya) daha geç bitiyorsa plan bunu
+       bilmiyordur: süren iş uzar, donuk iş sabit kalmaz. Daha erken bitmesi (takım değişimi, ek mesai) işi oynatmaz. */
+    const Mb=!b.fas&&cx.M[b.m],uzar=!!Mb&&adv(Mb.rw,adv(Mb.sw,b.S,b.su||0),b.run)>b.C+1e-6;
     if(b.S<now-1e-9){
       /* 3335-2b: kişi yeniden planlama istediyse (st.geride: işlem -> 1) başlaması geçmiş, başlamamış iş çalışıyor sayılmaz; saati geçmiş iş
          gibi şimdiden sonraya yeniden dizilir, ardılı da aşağıdaki kuralla (B-2499-7) sabit kalmaz. */
@@ -776,15 +783,25 @@ function schedule(st,mode,base,opt={}){
          iş gibi şimdiden sonraya yeniden dizilir. */
       const M=cx.M[b.m],c=M&&o.c.find(x=>x.m===b.m&&!x.fas);
       const run=c?(o.fai?Math.max(0,c.run-c.cyc):c.run):b.run,yeni=Math.abs(run-b.run)>1e-6;
-      if(M&&(hit||yeni)){const Su=adv(M.sw,b.S,b.su),C=adv(M.rw,Su,run);
+      if(M&&(hit||yeni||uzar)){const Su=adv(M.sw,b.S,b.su),C=adv(M.rw,Su,run);
         if(yeni&&!(C>now+1e-9)){gecmis.add(o.id);continue;}
         const r={...b,run,Su,C,lot1:yeni?Math.min(C,adv(M.rw,Su,Math.min(run,c.tbRun))):Math.min(C,b.lot1),pin:1};
-        if(hit)r.kesik=1;
-        surenBitis[b.m]=Math.max(surenBitis[b.m]||0,C);
+        if(hit||(uzar&&!yeni))r.kesik=1;
+        surenBitis[b.m]=Math.max(surenBitis[b.m]||0,C);surenKoy(r);
         pins.push(r);}
-      else pins.push({...b,pin:1});continue;}
-    if(b.S<frz-1e-9&&!hit&&!opt.noFreeze&&mode!=='sabit-mc')pins.push({...b,pin:1,frz:1});
+      else{pins.push({...b,pin:1});if(M)surenKoy(b);}continue;}
+    if(b.S<frz-1e-9&&!hit&&!uzar&&!opt.noFreeze&&mode!=='sabit-mc')pins.push({...b,pin:1,frz:1});
   }
+  /* 3538 b: tezgâhta süren iş (başlamış ya da plana göre süren) uzayıp aynı tezgâhta elle kilitli sonraki işin üstüne binerse süren iş
+     yerinde kalır: dönen iş gerçektir, kilit niyettir. Kilitli iş süren işin bitişine kayar, nedeni (kilit-kaydi, o: kilidin eski saati)
+     planla kaydedilir, kilidi kaydedilen planla yeni saate taşınır. Arkasındaki kilitli iş de üst üste binmeyecek kadar kayar. Geçici
+     kilit (değişikliği uygula, denge ufku) burada kaymaz: üstüne binildiğini yerindeTutarakCoz görür, kilidi kaldırıp işi yeniden dizer. */
+  for(const m in suren){const s=suren[m];let son=s.C,on=s.id;
+    const sira=kilitler.map((kr,i)=>[kr,i]).filter(([kr])=>kr.m===m&&kr.S>s.S+1e-9&&!(st.locks[kr.id]&&st.locks[kr.id].gecici)).sort((a,b)=>a[0].S-b[0].S);
+    for(const [kr,i] of sira){if(kr.S>=son-1e-6)break;
+      const M=cx.M[m],y=M&&kilitYeri(cx.byId[kr.id],{m,S:openAt(kr.su>0?M.sw:M.rw,son)},cx);if(!y)break;
+      y.why={t:'kilit-kaydi',r:on,o:kr.S};kilitler[i]=y;son=y.C;on=y.id;}
+    if(son>s.C+1e-9)surenBitis[m]=Math.max(surenBitis[m]||0,son);}
   /* Süren iş uzayınca (yenilenen süre, yeni duruş) aynı tezgâhta arkasındaki donuk işin üstüne biner. Tezgâhtaki iş yerinde kalır;
      başlamamış donuk iş sabit bırakılmaz, onun arkasına yeniden dizilir. Yoksa çakışmayı onaran hesap süren işi yerinden atar. İş sabitler
      arasından da çıkar: aşağıdaki kural (B-2499-7) öncülü eski yerinde hazır görmesin, donuk ardılı da onunla birlikte serbest kalsın. */
@@ -959,9 +976,11 @@ function evaluate(plan,st,ref,fast){
   const tl=cost+(mesaiTL||0);const lex=[wT,wB,chg,suH,tl,fast?null:idle,Cmax];Z=-wT;
   /* 2507 a: kilitli iş saatinde sabittir, öncülünü beklemez; öncül (örtüşmeli bağda ilk partisi) taşımayla kilit saatinden sonra hazırsa
      rota sırası bozulur, uyarılır */
-  if(!fast){const tas=+A.tasimaSaat||0;for(const r of Object.values(plan.ops)){if(!r.kilit||!r.why||r.why.t!=='kilit')continue;const o=cx.byId[r.id];if(!o)continue;
+  if(!fast){const tas=+A.tasimaSaat||0;for(const r of Object.values(plan.ops)){if(!r.kilit||!r.why||(r.why.t!=='kilit'&&r.why.t!=='kilit-kaydi'))continue;const o=cx.byId[r.id];if(!o)continue;
     for(const [pid,ty] of o.pr){const q=plan.ops[pid];const t=!q||!isFinite(q.C)?null:(ty==='o'&&!q.fas?q.lot1:q.C)+(q.fas?0:tas);
       if(t==null||t>r.S+1e-6)warn.push({t:'kilit',j:r.job,id:r.id,oncul:pid,txt:t==null?`${r.id}: kilitli iş ${fmtDT(cx.D,r.S)} başlıyor; öncülü ${pid} planda yerleşmedi, rota sırası bozuluyor`:`${r.id}: kilitli iş ${fmtDT(cx.D,r.S)} başlıyor; öncülü ${pid} ${fmtDT(cx.D,t)} hazır, rota sırası bozuluyor`});}}}
+  /* 3538 b: kilidi süren işin arkasına kayan iş söylenir; eski saat kilidin kayıttaki saatidir */
+  for(const r of Object.values(plan.ops))if(r.why&&r.why.t==='kilit-kaydi')warn.push({t:'kilit',j:r.job,id:r.id,txt:`${r.id}: tezgâhta süren ${r.why.r} uzadı; kilit ${fmtDT(cx.D,r.why.o)} yerine ${fmtDT(cx.D,r.S)} saatine kaydı`});
   for(const r of Object.values(plan.ops))if(r.kilit&&r.downHit)warn.push({t:'kilit',j:r.job,txt:`${r.id}: kilitli saatte tezgâhta arıza ya da bakım var; iş ${fmtDT(cx.D,r.S)} kilidinde başlıyor, arıza süresince duruyor`});
   /* 1459 a: stoku bilinmeyen malzeme dağıtımda 0 sayılır; plana gerçekten girdiyse söylenir */
   if(!fast)for(const m of cx.D.malzemeler||[])if(m.stok==null&&cx.mat.summ[m.kod])warn.push({t:'malzeme',txt:`${m.kod}: stok bilinmiyor; 0 sayıldı`});
