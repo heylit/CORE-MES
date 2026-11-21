@@ -79,10 +79,15 @@ const TEKER_ORANI = 1.25, SIGDIRMA_ENI = 1000;
 const YON_ACIKLAMASI = { ileri: 'Bütün planı ileriye diz: iş ilk boş saatte başlar', geri: 'Bütün planı teslimden geriye diz: iş termine yetişecek en geç saatte başlar' } as const;
 
 // Menü düğmenin sağ kenarına yaslı açılır; düğme şeridin solundaysa menü sola taşıp kesilir. O zaman düğmenin sol kenarına yaslanır.
+// Menü ekranın altından da taşmaz: üstüyle pencere altı arasındaki boşluğa sığar, fazlası içinde kaydırılır (şeridin üstüne bilgi satırı gelince düğme aşağı iner).
+const ALT_PAY = 8, EN_AZ_BOY = 160;
 const solaYasla = (el: HTMLDivElement | null): void => {
-  if (!el || el.hasAttribute('data-hiza')) return;
+  if (!el) return;
+  const k = el.getBoundingClientRect();
+  if (typeof window !== 'undefined' && window.innerHeight > 0) el.style.setProperty('--acilir-boy', `${String(Math.max(EN_AZ_BOY, Math.floor(window.innerHeight - k.top - ALT_PAY)))}px`);
+  if (el.hasAttribute('data-hiza')) return;
   const sinir = Math.max(0, el.closest('.tc-pyq')?.getBoundingClientRect().left ?? 0);
-  if (el.getBoundingClientRect().left < sinir) el.setAttribute('data-hiza', 'sol');
+  if (k.left < sinir) el.setAttribute('data-hiza', 'sol');
 };
 
 // Üst şeritte açılır menü (3297): az kullanılan araçlar ve planın yönü tek düğmenin altında durur. Dışarı tıklamak, Esc ve seçim kapatır.

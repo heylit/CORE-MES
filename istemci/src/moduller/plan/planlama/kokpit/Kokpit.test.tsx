@@ -1548,6 +1548,14 @@ describe('Kokpit Plan menüsü (3335-2, 3504 b)', () => {
   };
   const SAHA = { depo: { ...DEPO, durum: { emirler: [] } } as unknown as PlanlamaDeposu };
 
+  it('menü üstüyle pencere altı arasındaki boşluğa sığar: yüksekliği --acilir-boy ile sınırlanır, en az 160 px (3510)', async () => {
+    kur(ornekCalisma());
+    const m = await menu();
+    const boy = parseFloat(m.style.getPropertyValue('--acilir-boy'));
+    expect(boy).toBeGreaterThanOrEqual(160);
+    expect(boy).toBeLessThanOrEqual(window.innerHeight);
+  });
+
   it('toplu ve yeniden planlama taslağa yeniden-planla komutu yazar: plansızların hepsi, seçili sipariş, bütün plan', async () => {
     const komutlar = kur(birPlansiz(), SAHA);
     let m = await menu();
