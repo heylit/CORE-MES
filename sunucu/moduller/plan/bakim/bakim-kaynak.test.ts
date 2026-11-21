@@ -5,7 +5,9 @@ import { ISLEMLER } from '#paylasilan/islemler.ts';
 import { tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import { KAYNAK_OKUMA } from '../../recete-rota/disari.ts';
 import { planTestOrtami } from '../plan-ortak.test.ts';
+import { DURUS_OKUMA_GUN, durusOkumaSonu } from '../../../../istemci/src/moduller/plan/planlama/tipler.ts';
 import { kaynakOku } from '../planlama-servis.ts';
+import { TAKVIM_GUN } from '../servis.ts';
 
 // 2319 (2311 S10): kaynak okumasının ek.bakimlar alanı yalnız bayrak (plan.bakim-girdisi) açık ve kişi makineleri okuyabiliyorsa dolar;
 // kapalıyken null (girdi.betik bakım satırına dokunmaz). 2512 a: bayrak varsayılan açık. Gerçek PostgreSQL, uydurma veri.
@@ -94,5 +96,13 @@ describe('plan (gerçek PostgreSQL): periyodik bakım kaynak okumasında', () =>
     } finally {
       for (const id of idler) await ortam!.sahip.sorgu('DELETE FROM vardiya_planli_durus WHERE id = $1', [id]);
     }
+  });
+
+  // 3522: Kokpit bitişi bu pencerenin ötesindeki emirde "duruşlar hesaba katılmadı" der ve pencereyi kendi sabitinden hesaplar (istemci
+  // sunucuyu ithal edemez). Biri değişip öbürü kalırsa not yanlış emirde çıkar: BK-K4'te gelen son gün (366) pencerenin içinde, gelmeyen ilk
+  // gün (367) dışında kalmalıdır.
+  test('istemcinin duruş okuma penceresi sunucununkiyle aynıdır', () => {
+    assert.equal(DURUS_OKUMA_GUN, TAKVIM_GUN);
+    assert.equal(durusOkumaSonu(10) / 24, 367);
   });
 });

@@ -3,7 +3,7 @@ import { Dugme, Rozet, Simge, type RozetTonu } from '../../../../ortak/arayuz/in
 import type { OkunanPlan } from '../motor/kurallar.ts';
 import { ElleYerlestir } from './ElleYerlestir.tsx';
 import { Hamleler, type HamleOzellikleri } from './Hamleler.tsx';
-import { DURDURMA_BEKLIYOR, durumYazisi as emirDurumYazisi, eksikNedeni, engelleyenAdim, sureYaz, type EmirDurumu, type KokpitModeli, type KolNotlari } from './kurallar.ts';
+import { DURDURMA_BEKLIYOR, DURUS_OKUNMADI, durumYazisi as emirDurumYazisi, durusOkunmadi, eksikNedeni, engelleyenAdim, sureYaz, type EmirDurumu, type KokpitModeli, type KolNotlari } from './kurallar.ts';
 import { adimYeri, type SiraKarti } from './yerlestirme.ts';
 import type { YerlestirmeHedefi } from './Yerlestirme.tsx';
 import { kartSonucu, listeSirasi } from './yol.ts';
@@ -169,13 +169,15 @@ export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, ye
                       </ol>
                     );
                     const kolNotu = kol?.emir[e.id] !== undefined && <p className="tc-pyq-not" data-emir-kol="">{kol.emir[e.id]}</p>;
-                    if (!ayri) return <div key={e.id}>{kolNotu}{adimlar}</div>;
+                    const okunmadi = durusOkunmadi(m, e) && <p className="tc-pyq-not" data-durus-okunmadi="">{DURUS_OKUNMADI}</p>;
+                    if (!ayri) return <div key={e.id}>{okunmadi}{kolNotu}{adimlar}</div>;
                     return (
                       <section key={e.id} className="tc-pyq-ld-emir" aria-label={e.no} data-emir={e.id}>
                         <p className="tc-pyq-ld-emir-bas">
                           <b className="tc-pyq-mono">{e.no}</b>
                           <small>{String(e.adet)} adet · {emirDurumYazisi(e)}</small>
                         </p>
+                        {okunmadi}
                         {kolNotu}
                         {adimlar}
                       </section>

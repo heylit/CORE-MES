@@ -3,7 +3,7 @@ import { derle, girdiKur, planOku, plandanBitenler } from '../motor/kurallar.ts'
 import { ornekCalisma } from '../motor/ornek.ts';
 import {
   firmaYazilari, adimBaglari, adimBeklemesi, aralikYuku, bagimlilik, okUcu, okYolu, aramaUyar, darbogaz, emirGunleri, enCokBekleyen, tezgahGunundeMi, durumYazisi, ilkBosluk, matrisSirasi, modelKur, olcekKomsusu, onizlemeBitisi, satirKimligi, sayim, sorunlular, sureYaz,
-  acigaOtur, kolNotlari, durdurmaBekleyenler, durusYazisi, ekMesaiYazisi, mesaiButcesi, operatorSorunu, uygunOperatorler, vardiyaAdi, planliDurusYazisi, hucreler3B, suAndakiDurus, onayliGecSayisi, yeriDegisti, tasimaSaati, tasinabilir, turAdaylari, yukSinifi, yukYuzdesi, SAAT_ENI, YAKIN_EN_AZ, YAKIN_EN_COK, sigdirma, surguDegeri, surgudenEn, yakinOlcegi, yakinSinirla, ustBeklemeleri, ustEmirNotu, type AdimBeklemesi, type KokpitEmri, type KokpitIsi, type KokpitModeli,
+  acigaOtur, kolNotlari, durusOkunmadi, durdurmaBekleyenler, durusYazisi, ekMesaiYazisi, mesaiButcesi, operatorSorunu, uygunOperatorler, vardiyaAdi, planliDurusYazisi, hucreler3B, suAndakiDurus, onayliGecSayisi, yeriDegisti, tasimaSaati, tasinabilir, turAdaylari, yukSinifi, yukYuzdesi, SAAT_ENI, YAKIN_EN_AZ, YAKIN_EN_COK, sigdirma, surguDegeri, surgudenEn, yakinOlcegi, yakinSinirla, ustBeklemeleri, ustEmirNotu, type AdimBeklemesi, type KokpitEmri, type KokpitIsi, type KokpitModeli,
 } from './kurallar.ts';
 
 // Örnek çalışma uydurmadır: iki emir (biri geç, biri riskli), beş tezgâh, bir fason adım.
@@ -581,5 +581,19 @@ describe('adım ortasından bölünen partinin notları (3523)', () => {
 
   it('üst emir modelde yoksa numarası yerine kimliği yazar', () => {
     expect(kolNotlari(m({ 3: ['20', '30'] }), D(), kaynak(['3', '2', { n: 1, m: 4 }])).emir['3']).toContain('üst emir (2) yapar');
+  });
+});
+
+// 3522: Vardiya'nın planlı duruşları bugünden 365 gün sonrasına kadar okunur (son günün gece vardiyası için bir gün daha); ötesi bilinmez.
+describe('bitişi duruş okuma penceresinin ötesindeki emir (3522)', () => {
+  it('okunmayan ilk gün bugünden 367 gün sonradır; bitişi o günün başından sonra olan emir işaretlenir', () => {
+    // Şimdi 10: bugün planın 0. günü; okunmayan ilk gün 367. gün, 8808. saatte başlar.
+    expect(durusOkunmadi({ simdi: 10 }, { bitis: 8808 })).toBe(false);
+    expect(durusOkunmadi({ simdi: 10 }, { bitis: 8808.25 })).toBe(true);
+    expect(durusOkunmadi({ simdi: 10 }, { bitis: null })).toBe(false);
+    // Pencere bugünle birlikte kayar; gün içindeki saat sınırı değiştirmez. Plan başlamadan önceki gün de sayılır.
+    expect([23.75, 24, 47.75].map((simdi) => durusOkunmadi({ simdi }, { bitis: 8820 }))).toEqual([true, false, false]);
+    expect(durusOkunmadi({ simdi: -1 }, { bitis: 8784.25 })).toBe(true);
+    expect(durusOkunmadi({ simdi: -1 }, { bitis: 8784 })).toBe(false);
   });
 });

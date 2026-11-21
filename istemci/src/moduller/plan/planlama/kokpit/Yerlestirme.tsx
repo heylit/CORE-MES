@@ -7,7 +7,7 @@ import { MalzemeSatirlari } from './MalzemeSatiri.tsx';
 import { malzemeNedeni, malzemeVarsayimi, terminYazisi, type EmirMalzemeleri } from './malzeme.ts';
 import { OdakPaneli } from './OdakPaneli.tsx';
 import { planaAlOnizle, type PlanaAlOnizlemesi } from './plana-al.ts';
-import { BEKLEME_ADI, adimEkYazisi, adimSecimleri, bagimlilik, durumYazisi, eksikAdimlar, eksikNedeni, enCokBekleyen, fasonMu, ilkBosluk, kismiPlanli, onizlemeBitisi, sureYaz, tasimaSaati, tasinabilir, ustEmirNotu, DURDURMA_BEKLIYOR, SUREN_TASIMA, type AdimBeklemesi, type AdimSecimi, type EmirDurumu, type FirmaYazisi, type KokpitEmri, type KokpitModeli, type KolNotlari, type TurAdayi } from './kurallar.ts';
+import { BEKLEME_ADI, DURUS_OKUNMADI, adimEkYazisi, adimSecimleri, bagimlilik, durumYazisi, durusOkunmadi, eksikAdimlar, eksikNedeni, enCokBekleyen, fasonMu, ilkBosluk, kismiPlanli, onizlemeBitisi, sureYaz, tasimaSaati, tasinabilir, ustEmirNotu, DURDURMA_BEKLIYOR, SUREN_TASIMA, type AdimBeklemesi, type AdimSecimi, type EmirDurumu, type FirmaYazisi, type KokpitEmri, type KokpitModeli, type KolNotlari, type TurAdayi } from './kurallar.ts';
 import { adimYeri, bosYerler, siradakiAdim, tasimaAdaylari, uygunTezgahlar, type BosYer, type SiraKarti } from './yerlestirme.ts';
 import './yerlestirme.css';
 
@@ -539,6 +539,7 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
           {`${String(e.adet)} adet · `}<b data-d={e.durum}>{kismi ? `kısmen planda, ${String(eksik.length)} adımın yeri yok` : durumYazisi(e)}{varsayim ? ' (malzeme varsayımıyla)' : ''}</b>
           {e.termin !== null && ` · termin ${zaman(e.termin)}`}{e.bitis !== null && ` · biter ${zaman(e.bitis)}`}
         </small>
+        {durusOkunmadi(m, e) && <small data-durus-okunmadi="">{DURUS_OKUNMADI}</small>}
         {kol?.emir[e.id] !== undefined && <small data-emir-kol="">{kol.emir[e.id]}</small>}
         {kismi && <small data-emir-neden="kismi">Yeri olmayan: {eksik.map((x) => `${String(e.adimlar.indexOf(x) + 1)}. ${x.ad}: ${eksikNedeni(plan, x.id)}`).join('; ')}. Yoldaki "Eksik adımları planla" ya da Planla menüsündeki "Seçili siparişi yeniden planla" yerleştirir.</small>}
         {malNeden !== null && <small data-emir-neden="malzeme">Neden {e.durum === 'gec' ? 'geç' : 'riskli'}: {malNeden}</small>}

@@ -297,6 +297,35 @@ describe('partiye bölünen emir (3483)', () => {
       .toEqual([['2', expect.stringMatching(/^\d+\. /), 'bekliyor: parti ORN-2/1']]);
   });
 
+  // 3522: bitişi planlı duruşların okunduğu pencerenin ötesinde kalan emir, bitişin erken görünebileceğini söyler.
+  it('bitişi bir yıldan ileride olan emrin öbeğinde duruşların okunmadığı yazar; öteki emirde ve pencere içinde yoktur', () => {
+    const c = ornekCalisma(), p = planOku(c), m0 = partili(c, p);
+    const uzak = (id: string, bitis: number) => ({ ...m0, emirler: m0.emirler.map((e) => (e.id === id ? { ...e, bitis } : e)) });
+    const NOT = 'Bitiş bir yıldan ileride; o tarihlerdeki planlı duruşlar hesaba katılmadı, bitiş daha geç olabilir.';
+    const sinir = (Math.floor(m0.simdi / 24) + 367) * 24;
+    const notlar = () => [...document.querySelectorAll('[data-durus-okunmadi]')].map((x) => [x.closest('[data-emir]')?.getAttribute('data-emir'), x.textContent, x.previousElementSibling?.className]);
+    ciz({ m: m0, p, kartlar: siraKartlari(m0) }, '2');
+    expect(notlar()).toEqual([]);
+    cleanup();
+    const m1 = uzak('3', sinir + 1);
+    ciz({ m: m1, p, kartlar: siraKartlari(m1) }, '2', { kol: { emir: { 3: 'Parti notu.' }, adim: {} } });
+    // Emir başına tek satır, başlığın hemen altında; partinin notu ondan sonra gelir.
+    expect(notlar()).toEqual([['3', NOT, 'tc-pyq-ld-emir-bas']]);
+    expect(document.querySelector('[data-emir="3"] [data-durus-okunmadi] + [data-emir-kol]')).not.toBeNull();
+    cleanup();
+    const m2 = uzak('3', sinir);
+    ciz({ m: m2, p, kartlar: siraKartlari(m2) }, '2');
+    expect(notlar()).toEqual([]);
+  });
+
+  it('tek emirli satırda bitişi bir yıldan ileride olan emrin notu adımların üstünde durur', () => {
+    const x = kur(), sinir = (Math.floor(x.m.simdi / 24) + 367) * 24;
+    const m = { ...x.m, emirler: x.m.emirler.map((e) => (e.id === '2' ? { ...e, bitis: sinir + 100 } : e)) };
+    ciz({ m, p: x.p, kartlar: siraKartlari(m) }, '2');
+    expect(document.querySelector('.tc-pyq-ld-kart[data-acik] [data-durus-okunmadi] + .tc-pyq-ld-adimlar')).not.toBeNull();
+    expect(document.querySelectorAll('[data-durus-okunmadi]')).toHaveLength(1);
+  });
+
   it('tek emirli satırda da partinin notu adımların üstünde durur', () => {
     const x = kur();
     ciz(x, '2', { kol: { emir: { 2: 'Not.' }, adim: {} } });

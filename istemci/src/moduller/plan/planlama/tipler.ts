@@ -49,6 +49,12 @@ export interface Siparis extends ExtraAlanlar {
 // Planın dışındaki sipariş: havuzdaki (taslak, teklif) ya da iptal edilen. Plan, maliyet, malzeme ve gecikme hesapları bunları saymaz.
 export const planDisi = (s: Pick<Siparis, 'havuz' | 'iptal'>): boolean => s.havuz === true || s.iptal === true;
 
+// Vardiya'nın planlı duruşları bugünden DURUS_OKUMA_GUN gün sonrasına kadar okunur (sunucu plan servis.ts TAKVIM_GUN): bugün ve son gün
+// dahildir, son günün gece vardiyası için bir gün daha gelir (vardiya durusAraliklari). Motor işi bunun ötesine de yerleştirir (takvim iki
+// yıla kadar büyür); oradaki duruş bilinmez. Dönen: duruşu okunmayan ilk günün başlangıcı, plan saatiyle.
+export const DURUS_OKUMA_GUN = 365;
+export const durusOkumaSonu = (simdi: number): number => (Math.floor(simdi / 24) + DURUS_OKUMA_GUN + 2) * 24;
+
 // Ekranda adım adıyla söylenir; adı yoksa ya da yalnız boşluksa rota anahtarıyla (baştaki ve sondaki boşluk ekranda ayırt edilmez, sayılmaz). Aynı rotada aynı adlı başka adım varsa ad tek başına hangisi olduğunu söylemez:
 // o adın kaçıncısı olduğu başa yazılır ("2. Torna"). Rotadaki ya da tablodaki sıra yazılmaz: bölünen partinin tablosu kendi adımlarını
 // 1'den sayar, üst emrin ve partinin aynı adlı adımları aynı sırayı alabilirdi.
