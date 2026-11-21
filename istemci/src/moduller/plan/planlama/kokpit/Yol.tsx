@@ -17,6 +17,8 @@ export interface YolOzellikleri {
   pd: PlanlaDurumu | null;
   plansiz: number; taslakVar: boolean; mesgul: boolean;
   malzemeBekleyen?: Readonly<Record<string, number>>;
+  // Adım ortasından bölünen partiler (3512): üst emrin gecikme nedeninde adıyla yazılır.
+  kolPartileri?: ReadonlySet<string>;
   oner: (yon: 'ileri' | 'geri') => void;
   // Kısmen planlı emrin eksik adımlarını sistem yerleştirir (plana alma böyle emri reddeder).
   eksikPlanla: () => void;
@@ -26,11 +28,11 @@ export interface YolOzellikleri {
   hamle: HamleOzellikleri['uygula']; surum: number | null;
 }
 
-export function Yol({ m, p, kart, vurgu, zaman, pd, plansiz, taslakVar, mesgul, malzemeBekleyen, oner, eksikPlanla, hepsiniPlanla, yenidenPlanla, onayaGec, hamle, surum }: YolOzellikleri) {
+export function Yol({ m, p, kart, vurgu, zaman, pd, plansiz, taslakVar, mesgul, malzemeBekleyen, kolPartileri, oner, eksikPlanla, hepsiniPlanla, yenidenPlanla, onayaGec, hamle, surum }: YolOzellikleri) {
   const adim = yolAdimi(kart, vurgu);
   const sira = YOL_ADIMLARI.findIndex(([k]) => k === adim);
   const ad = kart ? kart.siparis?.no ?? kart.emirler[0]?.no ?? '' : '';
-  const sonuc = adim === 'duzelt' && kart ? kartSonucu(m, p, kart, zaman, malzemeBekleyen) : null;
+  const sonuc = adim === 'duzelt' && kart ? kartSonucu(m, p, kart, zaman, malzemeBekleyen, kolPartileri) : null;
   // Seçenekler istenince hesaplanır: her seçeneğin sonucu sunucu önizlemesidir, sipariş seçmek tek başına istek atmaz.
   const [secenekAcik, setSecenekAcik] = useState(false);
   useEffect(() => { setSecenekAcik(false); }, [kart?.kok]);

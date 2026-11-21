@@ -241,3 +241,33 @@ describe('Kokpit kapasite bölümü, Vardiya\'dan gelen uzak duruşlar kapalı d
     expect(satirlar(panel)).toHaveLength(5);
   });
 });
+
+// 3524: liste bir yıl ileriye uzanır; başka takvim yılındaki tarih yılıyla yazılır. Örnek başlangıç 2026-10-19, 1776. saat 2027'nin ilk saatidir.
+describe('Kokpit kapasite bölümü, başka yılın tarihi yılıyla yazılır (3524)', () => {
+  const satirlar = (panel: HTMLElement) => within(panel).getAllByRole('listitem').map((x) => x.textContent ?? '');
+  const elle = (from: number, to: number) => ({ m: 'ORN-T1', from, to, neden: 'arıza' });
+
+  it('bu yılın tarihi kısa kalır; gelecek yılın aynı günü yılıyla yazar; yıl sınırını aşan duruşta yalnız bitiş yıl taşır', () => {
+    const { panel } = kur(true, [elle(30, 40), elle(1770, 1780), elle(8790, 8800)]);
+    expect(satirlar(panel)).toEqual(['Arıza 20.10 Sal 06:00 → 20.10 Sal 16:00', 'Arıza 31.12 Per 18:00 → 01.01.2027 Cum 04:00', 'Arıza 20.10.2027 Çar 06:00 → 20.10.2027 Çar 16:00']);
+    // Silme düğmesinin adı satırla aynı tarihi söyler: iki 20.10 duruşu adından ayrılır.
+    expect(within(panel).getAllByRole('button', { name: /duruşunu sil$/ }).map((x) => x.getAttribute('aria-label'))).toEqual([
+      'T1 20.10 Sal 06:00 → 20.10 Sal 16:00 duruşunu sil', 'T1 31.12 Per 18:00 → 01.01.2027 Cum 04:00 duruşunu sil', 'T1 20.10.2027 Çar 06:00 → 20.10.2027 Çar 16:00 duruşunu sil',
+    ]);
+  });
+
+  it('yıl şimdinin yılına göredir: şimdi 2027 ise 2027 kısa, 2028 yılıyla yazar; Vardiya\'dan gelen duruşta da', () => {
+    const down = [elle(1810, 1818), { m: 'ORN-T1', from: 10570, to: 10578, neden: 'planlı duruş', baslik: 'ORN-Bakım', oto: 1 }];
+    const c = { ...ornekCalisma(), down } as unknown as PlanlamaCalismasi;
+    render(<Kapasite c={c} m={{ tezgahlar: TEZGAHLAR, simdi: 1800 }} taslak={sahteTaslak(c.dataVer).t} yazabilir zaman={(x) => saatYaz(c.D, x)} kapat={vi.fn()} />);
+    expect(satirlar(screen.getByRole('complementary', { name: 'Duruş ve mesai' }))).toEqual([
+      'Arıza 02.01 Cmt 10:00 → 02.01 Cmt 18:00', 'Planlı duruş (ORN-Bakım) 02.01.2028 Paz 10:00 → 02.01.2028 Paz 18:00 · Vardiya ekranından geldi; orada değişir',
+    ]);
+  });
+
+  it('zaman yazısı gün.ay ile başlamıyorsa olduğu gibi kalır', () => {
+    const c = { ...ornekCalisma(), down: [elle(8790, 8800)] } as unknown as PlanlamaCalismasi;
+    render(<Kapasite c={c} m={{ tezgahlar: TEZGAHLAR, simdi: 10 }} taslak={sahteTaslak(c.dataVer).t} yazabilir zaman={(x) => `saat ${String(x)}`} kapat={vi.fn()} />);
+    expect(satirlar(screen.getByRole('complementary', { name: 'Duruş ve mesai' }))).toEqual(['Arıza saat 8790 → saat 8800']);
+  });
+});

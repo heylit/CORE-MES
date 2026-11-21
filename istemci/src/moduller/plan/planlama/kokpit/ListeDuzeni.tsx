@@ -3,7 +3,7 @@ import { Dugme, Rozet, Simge, type RozetTonu } from '../../../../ortak/arayuz/in
 import type { OkunanPlan } from '../motor/kurallar.ts';
 import { ElleYerlestir } from './ElleYerlestir.tsx';
 import { Hamleler, type HamleOzellikleri } from './Hamleler.tsx';
-import { DURDURMA_BEKLIYOR, durumYazisi as emirDurumYazisi, eksikNedeni, engelleyenAdim, sureYaz, type EmirDurumu, type KokpitModeli } from './kurallar.ts';
+import { DURDURMA_BEKLIYOR, durumYazisi as emirDurumYazisi, eksikNedeni, engelleyenAdim, sureYaz, type EmirDurumu, type KokpitModeli, type KolNotlari } from './kurallar.ts';
 import { adimYeri, type SiraKarti } from './yerlestirme.ts';
 import type { YerlestirmeHedefi } from './Yerlestirme.tsx';
 import { kartSonucu, listeSirasi } from './yol.ts';
@@ -25,6 +25,9 @@ export interface ListeDuzeniOzellikleri {
   yenidenPlanla: ((k: SiraKarti) => void) | null;
   hamle: HamleOzellikleri['uygula']; surum: number | null;
   malzemeBekleyen?: Readonly<Record<string, number>>;
+  kolPartileri?: ReadonlySet<string>;
+  // Adım ortasından bölünen partinin notları (kurallar.ts kolNotlari): partinin öbeğinde bağ yazısı, üst emrin katılma adımında bekleme.
+  kol?: Pick<KolNotlari, 'emir' | 'adim'>;
   // Açık siparişin tezgâhlardaki yeri (tahta ve telefondaki listesi); sayfa çizer, işleri vurgular.
   tahta: ReactNode;
   // Sayfada tek birincil düğme olur (2155-9 a): Canlıya al birincilken açık satırın düğmesi ikincil çizilir.
@@ -58,7 +61,7 @@ const durumYazisi = (k: SiraKarti): string => {
   return `${sureYaz(g)} geç`;
 };
 
-export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, yenidenPlanla, hamle, surum, malzemeBekleyen, tahta, satirBirincil, adimSec, seciliIs, tasi = null, bol = null, hedef, secimiBirak, malzemeAni }: ListeDuzeniOzellikleri) {
+export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, yenidenPlanla, hamle, surum, malzemeBekleyen, kolPartileri, kol, tahta, satirBirincil, adimSec, seciliIs, tasi = null, bol = null, hedef, secimiBirak, malzemeAni }: ListeDuzeniOzellikleri) {
   // Elle yerleştirilen adım (3488 a); satır kapanınca ya da başka iş seçilince düşer.
   const [elle, setElle] = useState<string | null>(null);
   useEffect(() => { setElle(null); }, [acik]);
@@ -82,7 +85,7 @@ export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, ye
         const bas = k.emirler[0], ad = k.siparis?.no ?? bas?.no ?? k.kok, secili = acik === k.kok;
         const bitisler = k.emirler.flatMap((e) => (e.bitis === null ? [] : [e.bitis]));
         const bitis = k.durum === 'plansiz' || bitisler.length === 0 ? null : Math.max(...bitisler);
-        const sonuc = secili && k.durum !== 'plansiz' ? kartSonucu(m, p, k, zaman, malzemeBekleyen) : null;
+        const sonuc = secili && k.durum !== 'plansiz' ? kartSonucu(m, p, k, zaman, malzemeBekleyen, kolPartileri) : null;
         const bekleyen = k.emirler.filter((e) => e.durum === 'plansiz').length;
         // Kısmen planlı sipariş: tezgâh adımlarından planda yeri olmayanlar.
         const eksik = k.adim - k.yerlesen;
@@ -137,6 +140,7 @@ export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, ye
                               <small data-yeri-yok={x ? undefined : a.id}>{x ? `${x.fason ? 'Fason' : kod(x.m)} · ${zaman(x.S)} → ${zaman(x.C).slice(6)}${x.ufukDisi ? ` · ufuk sonrasında ${sureYaz(x.ufukDisi)} çalışma` : ''}` : `yeri yok: ${eksikNedeni(p, a.id)}`}</small>
                               {x?.kilitli && <small className="tc-pyq-ld-kilit" data-elle-kilit={a.id}><Simge ad="lock" boyut="k" />elle · kilitli</small>}
                               {x?.durdurmaBekliyor && <small data-durdurma-bekliyor={a.id}>{DURDURMA_BEKLIYOR}; canlıda eski yerinde</small>}
+                              {x && !x.basladi && kol?.adim[a.id] !== undefined && <small data-adim-parti={a.id}>{kol.adim[a.id]}</small>}
                             </>
                           );
                           const hedefIs = gosterilen === null ? undefined : m.isler[gosterilen];
@@ -164,13 +168,15 @@ export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, ye
                         })}
                       </ol>
                     );
-                    if (!ayri) return <div key={e.id}>{adimlar}</div>;
+                    const kolNotu = kol?.emir[e.id] !== undefined && <p className="tc-pyq-not" data-emir-kol="">{kol.emir[e.id]}</p>;
+                    if (!ayri) return <div key={e.id}>{kolNotu}{adimlar}</div>;
                     return (
                       <section key={e.id} className="tc-pyq-ld-emir" aria-label={e.no} data-emir={e.id}>
                         <p className="tc-pyq-ld-emir-bas">
                           <b className="tc-pyq-mono">{e.no}</b>
                           <small>{String(e.adet)} adet · {emirDurumYazisi(e)}</small>
                         </p>
+                        {kolNotu}
                         {adimlar}
                       </section>
                     );

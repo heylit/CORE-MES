@@ -61,6 +61,16 @@ describe('planlama yolu (3414)', () => {
     expect(kartSonucu(m, plan({ '1.2': { why: { t: 'malzeme' } } }), kart([e]), zaman, { '1.2': 60 }).neden).toBe('2. adım (Freze) malzemeyi bekliyor; malzeme g2 12:00 geliyor.');
   });
 
+  it('üst emrin adımı katılan partiyi beklediyse neden partinin numarasıyla yazar (3523); parti bilinmiyorsa ve öncül kendi adımıysa yalnız bekleme', () => {
+    const e = emir('1', { durum: 'gec', bitis: 130, gecikme: 30 }), parti = emir('7', { durum: 'iyi', bitis: 60, gecikme: -40 });
+    const m = model([e, parti], [is('1.1', 'T1', 0, 10, 0), is('1.2', 'T2', 60, 130, 1), is('7.1', 'T1', 10, 60, 0)]);
+    const p = plan({ '1.2': { why: { t: 'rota', r: '7.1' } } });
+    expect(kartSonucu(m, p, kart([e]), zaman, {}, new Set(['7'])).neden).toBe('2. adım (Freze) 2 gün 2 sa bekledi: katılan partinin (ORN-7) son adımı bitince başladı.');
+    expect(kartSonucu(m, p, kart([e]), zaman).neden).toBe('2. adım (Freze) 2 gün 2 sa bekledi.');
+    expect(kartSonucu(m, plan({ '1.2': { why: { t: 'rota', r: '1.1' } } }), kart([e]), zaman, {}, new Set(['1', '7'])).neden).toBe('2. adım (Freze) 2 gün 2 sa bekledi.');
+    expect(kartSonucu(m, plan({ '1.2': { why: { t: 'tezgah', r: '7.1' } } }), kart([e]), zaman, {}, new Set(['7'])).neden).toContain('tezgâhının boşalmasını');
+  });
+
   it('termini olmayan emirde termin girilmemiş yazar', () => {
     const e = emir('1', { durum: 'iyi', termin: null, bitis: 76, gecikme: null });
     expect(kartSonucu(model([e], [is('1.1', 'T1', 0, 10, 0), is('1.2', 'T2', 10, 76, 1)]), null, kart([e]), zaman).baslik).toBe('2 operasyon planda. Bitiş g3 04:00; termin girilmemiş.');
