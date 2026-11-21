@@ -19,7 +19,7 @@ export interface ListeOzellikleri {
   yanan?: ReadonlySet<string> | null;
   // Tezgâhta sorun bildir (3335 a): tezgâh başlığındaki düğme o tezgâhın arıza ve bakım formunu açar; fason satırında yok.
   sorunBildir?: ((tezgah: string) => void) | null;
-  // Emir düzeyindeki notlar (kurallar.ts emirNotlari): telefonda ağaç yoktur, not emrin satırının altında yazar.
+  // Emir düzeyindeki notlar (kurallar.ts emirNotlari): telefonda ağaç yoktur, not emrin kartında durum satırının altında yazar.
   emirNotu?: ((e: KokpitEmri) => readonly string[]) | null;
 }
 
@@ -40,8 +40,8 @@ export function Liste({ m, cx, goz, emirler, secEmir, secIs, zaman, sec, yanan =
     <li key={e.id}>
       <button type="button" data-d={e.durum} aria-current={secEmir === e.id} {...isaret(e.id)} onClick={() => { sec(e.id, null); }}>
         <b>{e.no}</b><span>{e.urun}</span><small>{durumYazisi(e)}{e.bitis === null ? (e.termin === null ? '' : ` · termin ${zaman(e.termin).slice(0, 9)}`) : ` · biter ${zaman(e.bitis).slice(0, 9)}`}</small>
+        {emirNotu?.(e).map((y) => <small data-emir-not={e.id} key={y}>{y}</small>)}
       </button>
-      {emirNotu?.(e).map((y) => <p className="tc-pyq-not" data-emir-not={e.id} key={y}>{y}</p>)}
     </li>
   );
   const isSatiri = (x: KokpitIsi) => {

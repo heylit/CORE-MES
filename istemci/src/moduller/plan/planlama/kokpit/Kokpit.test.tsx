@@ -840,7 +840,7 @@ describe('Kokpit', () => {
   });
 
   // 3525: açılış görünümü Emirler ağacıdır. Açılan emrin adım satırlarının üstünde tek not satırı durur: önce emrin notları, sonra adım
-  // notları adım satırının başlığıyla. Telefonda ağacın yerini tutan listede emir düzeyindeki not emrin satırının altındadır.
+  // notları adım satırının başlığıyla. Telefonda ağacın yerini tutan listede emir düzeyindeki not emrin kartının içindedir.
   it('Emirler ağacında açılan emrin not satırı partinin bağını ve adımların bekleme, parti ve uzama notlarını yazar; kapalı ve notsuz emirde satır yoktur', () => {
     const c0 = ornekCalisma(), rota0 = c0.D.urunler.find((u) => u.id === c0.D.siparisler.find((y) => y.id === '2')!.urun)!.rota!;
     const sonK = rota0.at(-1)!.k;
@@ -857,6 +857,7 @@ describe('Kokpit', () => {
     expect(not.previousElementSibling?.getAttribute('data-satir')).toBe('9');
     expect(not.nextElementSibling?.hasAttribute('data-agac-adim')).toBe(true);
     expect(not.querySelector('.tc-pyq-bas')?.textContent).toBe('');
+    expect(not.querySelector('button')).toBeNull();
     fireEvent.click(bolum.querySelector<HTMLElement>('button[data-agac="2"]')!);
     // 2.20 başlamıştır: beklemesi yazmaz, uzaması yazar. Adım satırının başlığıyla aynı ad; aynı adımın notları tek satırda.
     const baslik = (id: string) => bolum.querySelector(`[data-satir="2>${id}"] .tc-pyq-bas b`)?.textContent;
@@ -865,8 +866,8 @@ describe('Kokpit', () => {
       `${baslik(x.son) ?? ''}: bekliyor: malzeme yok, ${saatYaz(c0.D, 9000)}'e kadar · bekliyor: parti ORN-0002/1 · uzadı +1,5 sa`,
     ]);
     expect(baslik(x.son)).toMatch(new RegExp(`^\\d+\\. ${ad(x.n - 1)}$`));
-    // Telefon listesi: yalnız emir düzeyindeki not, emrin satırının altında.
-    expect([...document.querySelectorAll('.tc-pyq-liste [data-emir-not]')].map((y) => [y.getAttribute('data-emir-not'), y.textContent, y.previousElementSibling?.tagName])).toEqual([['9', bag, 'BUTTON']]);
+    // Telefon listesi: yalnız emir düzeyindeki not, emrin kartının içinde durum satırının altında.
+    expect([...document.querySelectorAll('.tc-pyq-liste [data-emir-not]')].map((y) => [y.getAttribute('data-emir-not'), y.textContent, y.parentElement?.tagName, y.previousElementSibling?.textContent.includes('biter')])).toEqual([['9', bag, 'BUTTON', true]]);
     // Notu olmayan emir açılınca not satırı çizilmez; emir kapanınca not satırı da gider.
     fireEvent.click(bolum.querySelector<HTMLElement>('button[data-agac="3"]')!);
     expect(bolum.querySelectorAll('[data-satir^="3>"]').length).toBeGreaterThan(0);
