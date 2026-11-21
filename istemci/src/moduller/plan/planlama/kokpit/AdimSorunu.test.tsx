@@ -21,13 +21,13 @@ const M = {
 // Başlamamış adım: malzeme ve kişi yokluğu yalnız ona bildirilir.
 const M_BEKLER = { ...M, isler: { 'ORN-1.10': { ...M.isler['ORN-1.10']!, basladi: false } } };
 
-function kur({ yazabilir = true, ek = null as number | null, isId = 'ORN-1.10', m = M, bekle = null as { kadar: number; neden: string } | null, ust = null as AdimBeklemesi | null, ustAc = undefined as ((isId: string) => void) | undefined } = {}) {
+function kur({ yazabilir = true, ek = null as number | null, isId = 'ORN-1.10', m = M, bekle = null as { kadar: number; neden: string } | null, ust = null as AdimBeklemesi | null, ustAc = undefined as ((isId: string) => void) | undefined, taslakYok = false } = {}) {
   const c = ornekCalisma() as unknown as PlanlamaCalismasi;
   if (ek !== null) (c.w as Record<string, unknown>)['adimEk'] = { 'ORN-1.10': { ekSaat: ek, bitis0: 34 } };
   if (bekle !== null) (c.w as Record<string, unknown>)['adimBekle'] = { 'ORN-1.10': bekle };
   const { t, yazilan } = sahteTaslak(c.dataVer);
   const kapat = vi.fn();
-  render(<AdimSorunu c={c} m={m} isId={isId} taslak={t} yazabilir={yazabilir} zaman={(x) => saatYaz(c.D, x)} kapat={kapat} ustBekleme={ust} {...(ustAc ? { ustAc } : {})} />);
+  render(<AdimSorunu c={c} m={m} isId={isId} taslak={taslakYok ? null : t} yazabilir={yazabilir} zaman={(x) => saatYaz(c.D, x)} kapat={kapat} ustBekleme={ust} {...(ustAc ? { ustAc } : {})} />);
   return { c, t, yazilan, kapat, panel: screen.getByRole('complementary', { name: 'Adıma sorun bildir' }) };
 }
 
@@ -89,6 +89,11 @@ describe('Kokpit adıma sorun bildir (3335-3b)', () => {
     expect(within(panel).queryByRole('textbox')).toBeNull();
     expect(within(panel).getByText('Adıma sorunu yalnız planı yazabilen kişi bildirir.')).toBeTruthy();
     expect(document.activeElement).toBe(panel);
+    cleanup();
+    // Taslak yokken alan durur ama kilitlidir; kilitli alan odak almaz.
+    const { panel: taslaksiz } = kur({ taslakYok: true });
+    expect(within(taslaksiz).getByRole<HTMLInputElement>('textbox').disabled).toBe(true);
+    expect(document.activeElement).toBe(taslaksiz);
     cleanup();
     const { panel: bos } = kur({ isId: 'ORN-9.10' });
     expect(within(bos).getByText('Bu adım planda yerleşmemiş; önce plana alın.')).toBeTruthy();
