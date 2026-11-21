@@ -797,30 +797,33 @@ describe('Kokpit', () => {
     expect([...ust.bolum.querySelectorAll('[data-adim-parti]')].map((x) => [x.getAttribute('data-adim-parti'), x.textContent])).toEqual([[son, 'bekliyor: parti ORN-0009']]);
   });
 
+  // Emir 2'nin partisi (9, no ORN-0002/1) ilk adımdan sonra ayrılır ve son adımda üst emre katılır; üst emrin son adımı partiyi bekler.
+  function partiliAc(adres: string, w: Record<string, unknown> = {}) {
+    const c = ornekCalisma();
+    Object.assign(c.w, w);
+    const s2 = c.D.siparisler.find((x) => x.id === '2')!, rota = c.D.urunler.find((u) => u.id === s2.urun)!.rota!, n = rota.length;
+    c.D.siparisler.push({ ...s2, id: '9' });
+    const ops = (c.plan as unknown as { ops: Record<string, { id: string; job: string; S: number; C: number; why: unknown }> }).ops;
+    for (const r of Object.values(ops).filter((x) => x.job === '2')) ops[`9${r.id.slice(1)}`] = { ...r, id: `9${r.id.slice(1)}`, job: '9', S: r.S + 400, C: r.C + 400 };
+    // Üst emrin ilk adımı bitmiştir (partinin adediyle birlikte yaptı). Son adımı partinin son adımının bitişini bekler: motor nedeni öncülü partinin adımı olan rota diye yazar.
+    const son = ops[`2.${rota[n - 1]!.k}`]!, partiSon = ops[`9.${rota[n - 2]!.k}`]!;
+    Object.assign(son, { S: partiSon.C, C: partiSon.C + (son.C - son.S), why: { t: 'rota', r: partiSon.id } });
+    const emirler = { orders: [{ id: '2', no: 'ORN-0002', status: 'serbest' }, { id: '9', no: 'ORN-0002/1', status: 'serbest', parentId: '2', kol: { n: 1, m: n } }], opStatus: { '2|root|1': 'tamam' }, opProg: {} };
+    render(
+      <MemoryRouter initialEntries={[adres]}><BildirimSaglayici><Yuvali>
+        <Kokpit
+          depo={{ ...DEPO, durum: { emirler } } as unknown as PlanlamaDeposu} calisma={c} komut={komutKur(0)} git={vi.fn()} yenile={vi.fn()} yetki={yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz'])}
+          olcek={ACILIS_OLCEGI} olcekSec={vi.fn()} kaydir={vi.fn()} secim={{ ...BOS_SECIM, siparis: '2' }} sec={vi.fn()}
+        />
+      </Yuvali></BildirimSaglayici></MemoryRouter>,
+    );
+    return { rota, n, son: `2.${rota[n - 1]!.k}` };
+  }
+
   // Açılıştaki düzende bölümlü eski düzen yoktur: notlar ve neden cümlesi Siparişler görünümündeki açık satırda durur.
   it('adım ortasından bölünen partinin notları ve geç üst emrin nedeni açılıştaki düzende Siparişler satırında, eski düzende Yol şeridinde yazar', () => {
-    const kur = (adres: string) => {
-      const c = ornekCalisma();
-      const s2 = c.D.siparisler.find((x) => x.id === '2')!, rota = c.D.urunler.find((u) => u.id === s2.urun)!.rota!, n = rota.length;
-      c.D.siparisler.push({ ...s2, id: '9' });
-      const ops = (c.plan as unknown as { ops: Record<string, { id: string; job: string; S: number; C: number; why: unknown }> }).ops;
-      for (const r of Object.values(ops).filter((x) => x.job === '2')) ops[`9${r.id.slice(1)}`] = { ...r, id: `9${r.id.slice(1)}`, job: '9', S: r.S + 400, C: r.C + 400 };
-      // Üst emrin ilk adımı bitmiştir (partinin adediyle birlikte yaptı). Son adımı partinin son adımının bitişini bekler: motor nedeni öncülü partinin adımı olan rota diye yazar.
-      const son = ops[`2.${rota[n - 1]!.k}`]!, partiSon = ops[`9.${rota[n - 2]!.k}`]!;
-      Object.assign(son, { S: partiSon.C, C: partiSon.C + (son.C - son.S), why: { t: 'rota', r: partiSon.id } });
-      const emirler = { orders: [{ id: '2', no: 'ORN-0002', status: 'serbest' }, { id: '9', no: 'ORN-0002/1', status: 'serbest', parentId: '2', kol: { n: 1, m: n } }], opStatus: { '2|root|1': 'tamam' }, opProg: {} };
-      render(
-        <MemoryRouter initialEntries={[adres]}><BildirimSaglayici><Yuvali>
-          <Kokpit
-            depo={{ ...DEPO, durum: { emirler } } as unknown as PlanlamaDeposu} calisma={c} komut={komutKur(0)} git={vi.fn()} yenile={vi.fn()} yetki={yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz'])}
-            olcek={ACILIS_OLCEGI} olcekSec={vi.fn()} kaydir={vi.fn()} secim={{ ...BOS_SECIM, siparis: '2' }} sec={vi.fn()}
-          />
-        </Yuvali></BildirimSaglayici></MemoryRouter>,
-      );
-      return { rota, n, son: `2.${rota[n - 1]!.k}` };
-    };
     const NEDEN = /adım \(.+\) .+ bekledi: katılan partinin \(ORN-0002\/1\) son adımı bitince başladı\.$/;
-    const x = kur('/');
+    const x = partiliAc('/');
     fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: 'Siparişler' }));
     const kart = document.querySelector<HTMLElement>('.tc-pyq-ld-kart[data-acik]')!;
     expect(kart.querySelector('[data-kart]')?.getAttribute('data-kart')).toBe('2');
@@ -832,8 +835,45 @@ describe('Kokpit', () => {
     expect(kart.querySelector('[data-emir="2"] [data-emir-kol]')).toBeNull();
     expect([...kart.querySelectorAll('[data-adim-parti]')].map((y) => [y.closest('[data-emir]')?.getAttribute('data-emir'), y.getAttribute('data-adim-parti'), y.textContent])).toEqual([['2', x.son, 'bekliyor: parti ORN-0002/1']]);
     cleanup();
-    kur('/?duzen=klasik');
+    partiliAc('/?duzen=klasik');
     expect(screen.getByRole('region', { name: 'Planlama yolu' }).textContent).toMatch(/Neden: .*bekledi: katılan partinin \(ORN-0002\/1\) son adımı bitince başladı\./);
+  });
+
+  // 3525: açılış görünümü Emirler ağacıdır. Açılan emrin adım satırlarının üstünde tek not satırı durur: önce emrin notları, sonra adım
+  // notları adım satırının başlığıyla. Telefonda ağacın yerini tutan listede emir düzeyindeki not emrin kartının içindedir.
+  it('Emirler ağacında açılan emrin not satırı partinin bağını ve adımların bekleme, parti ve uzama notlarını yazar; kapalı ve notsuz emirde satır yoktur', () => {
+    const c0 = ornekCalisma(), rota0 = c0.D.urunler.find((u) => u.id === c0.D.siparisler.find((y) => y.id === '2')!.urun)!.rota!;
+    const sonK = rota0.at(-1)!.k;
+    const x = partiliAc('/', { adimBekle: { [`2.${sonK}`]: { kadar: 9000, neden: 'malzeme' }, '2.20': { kadar: 9000, neden: 'kisi' } }, adimEk: { [`2.${sonK}`]: { ekSaat: 1.5, bitis0: 40 }, '2.20': { ekSaat: 2, bitis0: 40 } } });
+    const bolum = screen.getByRole('region', { name: 'Emirler' });
+    const satirlar = () => [...bolum.querySelectorAll<HTMLElement>('[data-agac-not]')].map((r) => [r.getAttribute('data-satir'), [...r.querySelectorAll('.tc-pyq-alan > .tc-pyq-not')].map((y) => y.textContent)]);
+    expect(satirlar()).toEqual([]);
+    const ad = (i: number) => x.rota[i]!.ad ?? x.rota[i]!.k;
+    const bag = `${ad(0)} adımını üst emir (ORN-0002) yapar; bu parti ${ad(1)} adımından başlar. ${ad(x.n - 2)} adımından sonra üst emre (ORN-0002) katılır; ${ad(x.n - 1)} adımından itibaren üst emirle sürer.`;
+    fireEvent.click(bolum.querySelector<HTMLElement>('button[data-agac="9"]')!);
+    expect(satirlar()).toEqual([['9>not', [bag]]]);
+    // Not satırı emrin satırının hemen altında, adım satırlarının üstündedir; başlığı boştur.
+    const not = bolum.querySelector<HTMLElement>('[data-satir="9>not"]')!;
+    expect(not.previousElementSibling?.getAttribute('data-satir')).toBe('9');
+    expect(not.nextElementSibling?.hasAttribute('data-agac-adim')).toBe(true);
+    expect(not.querySelector('.tc-pyq-bas')?.textContent).toBe('');
+    expect(not.querySelector('button')).toBeNull();
+    fireEvent.click(bolum.querySelector<HTMLElement>('button[data-agac="2"]')!);
+    // 2.20 başlamıştır: beklemesi yazmaz, uzaması yazar. Adım satırının başlığıyla aynı ad; aynı adımın notları tek satırda.
+    const baslik = (id: string) => bolum.querySelector(`[data-satir="2>${id}"] .tc-pyq-bas b`)?.textContent;
+    expect(satirlar().find((r) => r[0] === '2>not')?.[1]).toEqual([
+      `${baslik('2.20') ?? ''}: uzadı +2 sa`,
+      `${baslik(x.son) ?? ''}: bekliyor: malzeme yok, ${saatYaz(c0.D, 9000)}'e kadar · bekliyor: parti ORN-0002/1 · uzadı +1,5 sa`,
+    ]);
+    expect(baslik(x.son)).toMatch(new RegExp(`^\\d+\\. ${ad(x.n - 1)}$`));
+    // Telefon listesi: yalnız emir düzeyindeki not, emrin kartının içinde durum satırının altında.
+    expect([...document.querySelectorAll('.tc-pyq-liste [data-emir-not]')].map((y) => [y.getAttribute('data-emir-not'), y.textContent, y.parentElement?.tagName, y.previousElementSibling?.textContent.includes('biter')])).toEqual([['9', bag, 'BUTTON', true]]);
+    // Notu olmayan emir açılınca not satırı çizilmez; emir kapanınca not satırı da gider.
+    fireEvent.click(bolum.querySelector<HTMLElement>('button[data-agac="3"]')!);
+    expect(bolum.querySelectorAll('[data-satir^="3>"]').length).toBeGreaterThan(0);
+    expect(satirlar().map((r) => r[0])).toEqual(['2>not', '9>not']);
+    fireEvent.click(bolum.querySelector<HTMLElement>('button[data-agac="9"]')!);
+    expect(satirlar().map((r) => r[0])).toEqual(['2>not']);
   });
 
   // 3513: bölünen emrin partisi üst emrin beklemesiyle dizilir (3511); satır ve form beklemenin üst emirden geldiğini söyler.

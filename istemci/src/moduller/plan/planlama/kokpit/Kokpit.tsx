@@ -30,8 +30,8 @@ import { useSatirEtkisi } from './satir-etkisi.ts';
 import { bekleyenDegisiklikleri, degisiklikler, gerideEmirleri, gorunumdeBekleyenler, type Degisiklik } from './degisiklikler.ts';
 import { onayIstegiAl, onayIstegiVar } from './istek.ts';
 import {
-  OLCEKLER, SAAT_ENI, YAKIN_EN_AZ, adimBeklemeleri, ustBeklemeleri, kolNotlari, sigdirma, surguDegeri, surgudenEn, yakinOlcegi, yakinSinirla, adimEkleri, aramaUyar, firmaYazilari, kismiPlanli, modelKur, olcekKomsusu, onizlemeBitisi, sayim, sorunlular, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, fasonMu, uzakMi,
-  type EmirDurumu, type KokpitOlcegi, type TurAdayi,
+  OLCEKLER, SAAT_ENI, YAKIN_EN_AZ, adimBeklemeleri, agacNotlari, emirNotlari, ustBeklemeleri, kolNotlari, sigdirma, surguDegeri, surgudenEn, yakinOlcegi, yakinSinirla, adimEkleri, aramaUyar, firmaYazilari, kismiPlanli, modelKur, olcekKomsusu, onizlemeBitisi, sayim, sorunlular, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, fasonMu, uzakMi,
+  type EmirDurumu, type KokpitEmri, type KokpitOlcegi, type TurAdayi,
 } from './kurallar.ts';
 import { Matris, darEkran, type MatrisDuzeni } from './Matris.tsx';
 import { ODAK_PAYI, Tahta, type OkKipi } from './Tahta.tsx';
@@ -664,6 +664,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const adimEk = useMemo(() => adimEkleri(c), [c]);
   const adimBekle = useMemo(() => ustBeklemeleri(adimBeklemeleri(c, m.simdi), emirKaynagi, biten, m), [c, m, emirKaynagi, biten]);
   const kol = useMemo(() => kolNotlari(m, c.D, emirKaynagi), [c, m, emirKaynagi]);
+  const agacNotu = useCallback((e: KokpitEmri) => agacNotlari(m, e, { kol, adimBekle, adimEk }, zaman), [m, kol, adimBekle, adimEk, zaman]);
+  const emirNotu = useCallback((e: KokpitEmri) => emirNotlari(m, e, kol), [m, kol]);
   const listeKartlari = useMemo(() => kartlar.filter((k) => k.emirler.some((e) => gorunenKume.has(e.id))), [kartlar, gorunenKume]);
   // Sayfada tek birincil düğme (2155-9 a): taslak varken çubuktaki Canlıya al; yoksa açık satırın düğmesi, o da yoksa araç çubuğundaki Canlıya al.
   const satirBirincil = !taslakVar && vurgu && satirBirincilIster(listeKartlari.find((k) => k.kok === kart));
@@ -890,9 +892,9 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
                 m={m} cx={cx} goz="S" olcek={olcek} emirler={gorunen} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
                 tasi={yazabilir && !tur ? tasiDene : null} planaAl={null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
                 yerlestirme={null} yanan={null} sorunBildir={null} onizle={tur ? null : onizle} okKipi={tur ? 'yok' : okKipi}
-                saatEni={saatEni} malzeme={malzeme} agac={{ acik: agacAcik, ac: agacAc }}
+                saatEni={saatEni} malzeme={malzeme} agac={{ acik: agacAcik, ac: agacAc, notlar: agacNotu }}
               />
-              <Liste m={m} cx={cx} goz="S" emirler={gorunen} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} sorunBildir={null} />
+              <Liste m={m} cx={cx} goz="S" emirler={gorunen} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} sorunBildir={null} emirNotu={emirNotu} />
             </section>
           ) : ldGorunum === 'tezgah' ? (
             <section className="tc-pyq-bolum tc-pyq-bolum-plan tc-pyq-agac-bolum" aria-label="Tezgâhlar">{listeTahtasi}</section>

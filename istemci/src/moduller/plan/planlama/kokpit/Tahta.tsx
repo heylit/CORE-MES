@@ -4,7 +4,7 @@ import { emirKuyrugu } from '../ortak/emir-no.ts';
 import type { Derleme } from '../motor/kurallar.ts';
 import type { IsTasiOnizlemesi } from '../motor/atolye/gonder.ts';
 import {
-  SAAT_ENI, adimBaglari, aralikYuku, durumYazisi, DURDURMA_BEKLIYOR, durusYazisi, ekMesaiYazisi, okUcu, okYolu, planliDurusYazisi, satirKimligi, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, uzakMi, yukSinifi, yukYuzdesi,
+  SAAT_ENI, adimBaglari, agacAdimBasligi, aralikYuku, durumYazisi, DURDURMA_BEKLIYOR, durusYazisi, ekMesaiYazisi, okUcu, okYolu, planliDurusYazisi, satirKimligi, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, uzakMi, yukSinifi, yukYuzdesi,
   type AdimBagi, type KokpitEmri, type KokpitIsi, type KokpitModeli, type KokpitOlcegi, type TurAdayi,
 } from './kurallar.ts';
 import { MalzemeSeridi, malzemeCubuklari } from './MalzemeCubugu.tsx';
@@ -64,7 +64,8 @@ export interface TahtaOzellikleri {
   malzeme?: EmirMalzemeleri | null;
   // 3493 b: emir satırlı Gantt ağacı (yalnız Sipariş gözünde). Verilince plansız emirler de satırdır (tepsi yok); emir adına basınca
   // satır açılır, adımları alt satır olur: emrin satırında özet çubuğu kalır, adımın çubuğu kendi satırındadır.
-  agac?: { acik: ReadonlySet<string>; ac: (emirId: string) => void } | null;
+  // notlar: açık emrin adım satırlarının üstündeki not satırının yazıları (kurallar.ts agacNotlari); boşsa satır çizilmez.
+  agac?: { acik: ReadonlySet<string>; ac: (emirId: string) => void; notlar?: (e: KokpitEmri) => readonly string[] } | null;
 }
 export type OkKipi = 'is' | 'siparis' | 'yok';
 // Odaklanan saat görünümün sol kenarından bu kadar içeride durur (px).
@@ -398,7 +399,7 @@ export function Tahta(o: TahtaOzellikleri) {
   }
 
   const tezgahKodu = new Map(m.tezgahlar.map((t) => [t.id, t.kod]));
-  type Satir = { kimlik: string; bas: string; alt: string; isler: KokpitIsi[]; durum?: string; tam?: string; termin?: number | null; durus?: string; agacEmir?: string; acik?: boolean; adim?: true; ozet?: [number, number] };
+  type Satir = { kimlik: string; bas: string; alt: string; isler: KokpitIsi[]; durum?: string; tam?: string; termin?: number | null; durus?: string; agacEmir?: string; acik?: boolean; adim?: true; ozet?: [number, number]; notlar?: readonly string[] };
   const agac = goz !== 'T' ? o.agac ?? null : null;
   const satirlar0: Satir[] = goz === 'T'
     ? m.tezgahlar.map((t) => ({ kimlik: t.id, bas: t.kod, alt: t.ad, ...(suAndakiDurus(m, t.id) ? { durus: durusYazisi(suAndakiDurus(m, t.id)!, zaman) } : {}), isler: Object.values(m.isler).filter((x) => satirKimligi(x) === t.id) }))
@@ -412,9 +413,10 @@ export function Tahta(o: TahtaOzellikleri) {
     if (!acik) return [ana];
     const yer = r.isler.map((x) => once?.[x.id] ?? x);
     const ozet: [number, number] | undefined = yer.length > 0 ? [Math.min(...yer.map((x) => x.S)), Math.max(...yer.map((x) => x.C))] : undefined;
-    return [{ ...ana, isler: [], ...(ozet ? { ozet } : {}) }, ...e.adimlar.map((a, i): Satir => {
+    const notlar = agac.notlar?.(e) ?? [];
+    return [{ ...ana, isler: [], ...(ozet ? { ozet } : {}) }, ...(notlar.length ? [{ kimlik: `${e.id}>not`, bas: '', alt: '', isler: [], notlar }] : []), ...e.adimlar.map((a, i): Satir => {
       const x = m.isler[a.id];
-      return { kimlik: `${e.id}>${a.id}`, bas: `${String(i + 1)}. ${a.ad}`, alt: x ? `${x.fason ? 'Fason' : tezgahKodu.get(x.m) ?? x.m} · ${zaman(x.S).slice(6)}` : 'planda yeri yok', isler: x ? [x] : [], adim: true, ...(r.durum ? { durum: r.durum } : {}) };
+      return { kimlik: `${e.id}>${a.id}`, bas: agacAdimBasligi(i, a), alt: x ? `${x.fason ? 'Fason' : tezgahKodu.get(x.m) ?? x.m} · ${zaman(x.S).slice(6)}` : 'planda yeri yok', isler: x ? [x] : [], adim: true, ...(r.durum ? { durum: r.durum } : {}) };
     })];
   });
   const plansiz = agac !== null ? [] : emirler.filter((e) => e.durum === 'plansiz');
@@ -506,11 +508,11 @@ export function Tahta(o: TahtaOzellikleri) {
         {satirlar.map((r) => (
           <div
             className="tc-pyq-satir" key={r.kimlik} data-satir={r.kimlik} data-d={r.durum} data-seritli={!r.adim && !r.ozet && (yerlesim.satir.get(r.kimlik) ?? 1) > 1 ? '' : undefined}
-            data-agac-adim={r.adim ? '' : undefined}
+            data-agac-adim={r.adim ? '' : undefined} data-agac-not={r.notlar ? '' : undefined}
             ref={(el) => { el?.style.setProperty('--seritler', String(r.adim || r.ozet ? 1 : yerlesim.satir.get(r.kimlik) ?? 1)); }}
             data-aday={adaySatirlari ? (adaySatirlari.has(r.kimlik) ? 'evet' : 'hayir') : undefined}
           >
-            <div className="tc-pyq-bas" data-durus={r.durus ? '' : undefined} title={`${r.tam ?? r.bas} · ${r.durus ?? r.alt}${yuk.get(r.kimlik)?.yazi ?? ''}`}>
+            <div className="tc-pyq-bas" data-durus={r.durus ? '' : undefined} title={r.notlar ? undefined : `${r.tam ?? r.bas} · ${r.durus ?? r.alt}${yuk.get(r.kimlik)?.yazi ?? ''}`}>
               {r.agacEmir !== undefined && agac
                 ? <button type="button" className="tc-pyq-agac-ac" data-agac={r.agacEmir} aria-expanded={r.acik} title={`${r.tam ?? r.bas} · ${r.acik ? 'adımları gizle' : 'adımları göster'}`} onClick={() => { agac.ac(r.agacEmir!); }}><Simge ad="chev-right" boyut="k" /><b>{r.bas}</b><small>{r.alt}</small></button>
                 : sorunBildir && !fasonlar.has(r.kimlik)
@@ -525,6 +527,7 @@ export function Tahta(o: TahtaOzellikleri) {
               {r.termin !== undefined && r.termin !== null && <span className="tc-pyq-satir-termin" data-d={r.durum} title={`Termin ${zaman(r.termin)}`} ref={(el) => { yerYaz(el, (r.termin! - m.bas) * px); }} />}
               {r.ozet && <span className="tc-pyq-ozet-cubuk" data-ozet={r.agacEmir} title={`${r.tam ?? r.bas} · adımlar ${zaman(r.ozet[0])} – ${zaman(r.ozet[1])}`} ref={(el) => { yerYaz(el, (r.ozet![0] - m.bas) * px, (r.ozet![1] - r.ozet![0]) * px); }} />}
               {r.agacEmir !== undefined && !r.ozet && r.isler.length === 0 && <span className="tc-pyq-agac-bos" data-agac-bos>planda yeri yok</span>}
+              {r.notlar?.map((y) => <p className="tc-pyq-not" key={y}>{y}</p>)}
               {r.isler.map((x) => isDugmesi(x, r.adim))}
               {oneriIsi && oneri && !tasinanIs && (goz === 'T' ? oneri.tezgah : oneriIsi.job) === r.kimlik && (
                 <span className="tc-pyq-hayalet" data-oneri="" ref={(el) => { yerYaz(el, (oneri.baslangic - m.bas) * px, (oneriIsi.C - oneriIsi.S) * px); }}>

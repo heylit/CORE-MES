@@ -623,6 +623,26 @@ export const adimEkYazisi = (saat: number): string => `+${String(Math.round(saat
 export const adimBeklemeYazisi = (m: Pick<KokpitModeli, 'emirler'>, b: AdimBeklemesi, zaman: (t: number) => string): string =>
   `bekliyor: ${BEKLEME_ADI[b.neden]}, ${zaman(b.kadar)}'e kadar${ustEmirNotu(m, b)}`;
 export const adimUzamaYazisi = (saat: number): string => `uzadı ${adimEkYazisi(saat)}`;
+// Ağaçta adım alt satırının başlığı; açık emrin not satırı adımı aynı yazıyla anar.
+export const agacAdimBasligi = (i: number, a: Pick<KokpitAdimi, 'ad'>): string => `${String(i + 1)}. ${a.ad}`;
+// Emir düzeyindeki notlar: önce bitişin erken görünebileceği, sonra bölünen partinin bağı.
+export const emirNotlari = (m: Pick<KokpitModeli, 'simdi'>, e: Pick<KokpitEmri, 'id' | 'bitis'>, kol?: Pick<KolNotlari, 'emir'>): string[] =>
+  [...(durusOkunmadi(m, e) ? [DURUS_OKUNMADI] : []), ...(kol?.emir[e.id] !== undefined ? [kol.emir[e.id]!] : [])];
+// Ağaçta açılan emrin not satırı. Adım alt satırının başlığı dar ve tek satırdır, not oraya sığmaz: adımın notları emrin notlarının
+// ardından adımın başlığıyla anılarak yazılır, aynı adımınkiler tek satırda birleşir. Koşullar adımı listeleyen düzenlerle aynıdır.
+export interface AdimNotlari { kol?: Pick<KolNotlari, 'emir' | 'adim'>; adimBekle?: Readonly<Record<string, AdimBeklemesi>>; adimEk?: Readonly<Record<string, number>> }
+export function agacNotlari(m: Pick<KokpitModeli, 'simdi' | 'isler' | 'emirler'>, e: Pick<KokpitEmri, 'id' | 'bitis' | 'adimlar'>, n: AdimNotlari, zaman: (t: number) => string): string[] {
+  return [...emirNotlari(m, e, n.kol), ...e.adimlar.flatMap((a, i) => {
+    const x = m.isler[a.id];
+    if (!x) return [];
+    const l = [
+      ...(!x.basladi && n.adimBekle?.[a.id] !== undefined ? [adimBeklemeYazisi(m, n.adimBekle[a.id]!, zaman)] : []),
+      ...(!x.basladi && n.kol?.adim[a.id] !== undefined ? [n.kol.adim[a.id]!] : []),
+      ...(n.adimEk?.[a.id] !== undefined ? [adimUzamaYazisi(n.adimEk[a.id]!)] : []),
+    ];
+    return l.length ? [`${agacAdimBasligi(i, a)}: ${l.join(' · ')}`] : [];
+  })];
+}
 
 // Vardiyanın adı yoksa saatleri ("16:00–24:00"); çalışmada yoksa kimliği.
 export function vardiyaAdi(c: PlanlamaCalismasi, id: string): string {

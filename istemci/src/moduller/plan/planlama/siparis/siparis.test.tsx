@@ -452,4 +452,27 @@ describe('Partiyi böl (uç açılınca)', () => {
     expect(screen.getByRole('alert').textContent).toContain('1. parti 3 adet; bu adımda en küçük parti 4.');
     expect(dugme('Böl').disabled).toBe(true);
   });
+
+  // 3525: kart adımı her satırda adıyla söyler; aynı adlı adım varsa kaçıncısı olduğuyla ("2. Torna"), adı yoksa anahtarıyla.
+  it('darboğaz, en küçük parti ve tezgâh seçimi satırları adımı adıyla yazar; aynı adlı adımda kaçıncısı olduğu başa gelir', () => {
+    const kur = (rota: Record<string, unknown>[]) => calismaKur((x) => {
+      (x.D.urunler[0] as Record<string, unknown>).rota = rota;
+      (x.D.tezgahlar as Record<string, unknown>[]).push({ id: 'M2', ad: 'Deneme 2' });
+      x.plan.ops = { 'S1.a2': { job: 'S1', m: 'M1', S: 8, C: 20 } } as typeof x.plan.ops;
+    });
+    const dar = { k: 'a2', minParti: 4, tezgahlar: [{ id: 'M1', cevrim: 6 }, { id: 'M2', cevrim: 3 }] };
+    const yazilar = (c: PlanlamaCalismasi) => {
+      const { container, unmount } = render(<BildirimSaglayici><PartiBolmeKarti c={c} p={kayitliPlan(c)} degerlendir={vi.fn() as unknown as Degerlendirici} yenile={vi.fn()} /></BildirimSaglayici>);
+      const y = [/Darboğaz adımı .+? \(M1\)\./.exec(container.textContent)?.[0], [...container.querySelectorAll('p')].map((x) => x.textContent.trim()).find((x) => x.includes('en küçük parti'))?.replace(/\.$/, ''),
+        within(screen.getByRole('combobox', { name: 'Tezgâh' })).getAllByRole('option')[1]?.textContent];
+      unmount();
+      return y;
+    };
+    expect(yazilar(kur([{ k: 'a1', ad: 'Testere' }, { ...dar, ad: 'Torna' }])))
+      .toEqual(['Darboğaz adımı Torna (M1).', 'Torna adımında en küçük parti 4 adet', 'Torna adımında partiler M1, M2 arasında dağılır']);
+    expect(yazilar(kur([{ k: 'a1', ad: 'Torna' }, { ...dar, ad: 'Torna' }])))
+      .toEqual(['Darboğaz adımı 2. Torna (M1).', '2. Torna adımında en küçük parti 4 adet', '2. Torna adımında partiler M1, M2 arasında dağılır']);
+    expect(yazilar(kur([{ k: 'a1', ad: 'Torna' }, dar])))
+      .toEqual(['Darboğaz adımı a2 (M1).', 'a2 adımında en küçük parti 4 adet', 'a2 adımında partiler M1, M2 arasında dağılır']);
+  });
 });

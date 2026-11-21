@@ -3,7 +3,7 @@ import { derle, girdiKur, planOku, plandanBitenler } from '../motor/kurallar.ts'
 import { ornekCalisma } from '../motor/ornek.ts';
 import {
   firmaYazilari, adimBaglari, adimBeklemesi, aralikYuku, bagimlilik, okUcu, okYolu, aramaUyar, darbogaz, emirGunleri, enCokBekleyen, tezgahGunundeMi, durumYazisi, ilkBosluk, matrisSirasi, modelKur, olcekKomsusu, onizlemeBitisi, satirKimligi, sayim, sorunlular, sureYaz,
-  acigaOtur, kolNotlari, durusOkunmadi, durdurmaBekleyenler, durusYazisi, ekMesaiYazisi, mesaiButcesi, operatorSorunu, uygunOperatorler, vardiyaAdi, planliDurusYazisi, hucreler3B, suAndakiDurus, onayliGecSayisi, yeriDegisti, tasimaSaati, tasinabilir, turAdaylari, yukSinifi, yukYuzdesi, SAAT_ENI, YAKIN_EN_AZ, YAKIN_EN_COK, sigdirma, surguDegeri, surgudenEn, yakinOlcegi, yakinSinirla, ustBeklemeleri, ustEmirNotu, type AdimBeklemesi, type KokpitEmri, type KokpitIsi, type KokpitModeli,
+  acigaOtur, agacAdimBasligi, agacNotlari, emirNotlari, kolNotlari, durusOkunmadi, DURUS_OKUNMADI, durdurmaBekleyenler, durusYazisi, ekMesaiYazisi, mesaiButcesi, operatorSorunu, uygunOperatorler, vardiyaAdi, planliDurusYazisi, hucreler3B, suAndakiDurus, onayliGecSayisi, yeriDegisti, tasimaSaati, tasinabilir, turAdaylari, yukSinifi, yukYuzdesi, SAAT_ENI, YAKIN_EN_AZ, YAKIN_EN_COK, sigdirma, surguDegeri, surgudenEn, yakinOlcegi, yakinSinirla, ustBeklemeleri, ustEmirNotu, type AdimBeklemesi, type KokpitEmri, type KokpitIsi, type KokpitModeli,
 } from './kurallar.ts';
 
 // Örnek çalışma uydurmadır: iki emir (biri geç, biri riskli), beş tezgâh, bir fason adım.
@@ -595,5 +595,44 @@ describe('bitişi duruş okuma penceresinin ötesindeki emir (3522)', () => {
     expect([23.75, 24, 47.75].map((simdi) => durusOkunmadi({ simdi }, { bitis: 8820 }))).toEqual([true, false, false]);
     expect(durusOkunmadi({ simdi: -1 }, { bitis: 8784.25 })).toBe(true);
     expect(durusOkunmadi({ simdi: -1 }, { bitis: 8784 })).toBe(false);
+  });
+});
+
+// 3525: Emirler ağacında açılan emrin not satırı. Emrin notları önce, adım notları adım satırının başlığıyla; koşullar adımı listeleyen düzenlerle aynı.
+describe('ağaçta açılan emrin not satırı (3525)', () => {
+  type M = Parameters<typeof agacNotlari>[0];
+  const zaman = (t: number): string => `s${String(t)}`;
+  const e = { id: '2', bitis: 100, adimlar: ['Torna', 'Freze', 'Taşlama', 'Kontrol'].map((ad, i) => ({ id: `2.${String(i + 1)}0`, ad, adaylar: [] })) };
+  // 2.10 başlamış, 2.20 ve 2.30 başlamamış, 2.40'ın planda yeri yok.
+  const m = { simdi: 10, emirler: [{ id: '2', no: 'E-2' }, { id: '7', no: 'E-7' }], isler: { '2.10': { basladi: true }, '2.20': { basladi: false }, '2.30': { basladi: false } } } as unknown as M;
+
+  it('not yoksa boştur; emrin notları sırayla: önce bitişin erken görünebileceği, sonra partinin bağı', () => {
+    expect(agacNotlari(m, e, {}, zaman)).toEqual([]);
+    expect(agacNotlari(m, e, { kol: { emir: { 2: 'Parti bağı.', 3: 'Başka emir.' }, adim: {} } }, zaman)).toEqual(['Parti bağı.']);
+    const uzak = { ...e, bitis: 9000 };
+    expect(agacNotlari(m, uzak, { kol: { emir: { 2: 'Parti bağı.' }, adim: {} } }, zaman)).toEqual([DURUS_OKUNMADI, 'Parti bağı.']);
+    expect(emirNotlari(m, uzak, { emir: { 2: 'Parti bağı.' } })).toEqual([DURUS_OKUNMADI, 'Parti bağı.']);
+    expect(emirNotlari(m, uzak)).toEqual([DURUS_OKUNMADI]);
+    expect(emirNotlari(m, e)).toEqual([]);
+  });
+
+  it('adım notları rota sırasıyla, adım satırının başlığıyla yazar; aynı adımın notları bekleme, parti, uzama sırasıyla tek satırda birleşir', () => {
+    const n = {
+      kol: { emir: {}, adim: { '2.30': 'bekliyor: parti E-2/1' } },
+      adimBekle: { '2.30': { kadar: 50, neden: 'malzeme' as const }, '2.20': { kadar: 60, neden: 'kisi' as const, ust: '7' } },
+      adimEk: { '2.30': 1.5, '2.20': 0.5 },
+    };
+    expect(agacNotlari(m, e, n, zaman)).toEqual([
+      "2. Freze: bekliyor: kişi yok, s60'e kadar · üst emirden (E-7) · uzadı +0,5 sa",
+      "3. Taşlama: bekliyor: malzeme yok, s50'e kadar · bekliyor: parti E-2/1 · uzadı +1,5 sa",
+    ]);
+    expect(agacAdimBasligi(2, e.adimlar[2]!)).toBe('3. Taşlama');
+    // Emrin notu adım notlarından önce gelir.
+    expect(agacNotlari(m, e, { ...n, kol: { ...n.kol, emir: { 2: 'Parti bağı.' } } }, zaman)[0]).toBe('Parti bağı.');
+  });
+
+  it('başlamış adımda bekleme ve parti notu yazmaz, uzama yazar; planda yeri olmayan adımın notu yoktur', () => {
+    const n = { kol: { emir: {}, adim: { '2.10': 'bekliyor: parti E-2/1', '2.40': 'bekliyor: parti E-2/2' } }, adimBekle: { '2.10': { kadar: 50, neden: 'malzeme' as const }, '2.40': { kadar: 50, neden: 'kisi' as const } }, adimEk: { '2.10': 2, '2.40': 3 } };
+    expect(agacNotlari(m, e, n, zaman)).toEqual(['1. Torna: uzadı +2 sa']);
   });
 });

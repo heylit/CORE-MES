@@ -4,7 +4,7 @@ import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import type { PlanlamaDeposu } from '../veri.ts';
 import type { CalismaKomutu } from '../kayit.ts';
 import { DURUM_ADI, DURUM_TONU, type AlimPlaniSatiri } from '../malzeme/kurallar.ts';
-import type { PlanVerisi, PlanlamaCalismasi } from '../tipler.ts';
+import { adimAdi, type PlanVerisi, type PlanlamaCalismasi } from '../tipler.ts';
 import {
   MALZEME_DURUM_AD, TERMIN_SECENEK_AD, degerlendirici, degerlendirmeHatasi, esitPartiler, partiAdetleriDenetle, secenegiAl,
   type DegerlendirmeCevabi, type DegerlendirmeIstegi, type DegerlendirmeTuru, type Degerlendirici, type MalzemeTerminiSatiri,
@@ -302,6 +302,9 @@ export function PartiBolmeKarti({ c, p, degerlendir, yenile, emirNo = (j) => j }
   const dar = darbogaz(D, p, s.id, simdi(c));
   const kural = partiKurali(D, s.id, dar);
   const tez = dar ? [dar.m, ...dar.alt] : [];
+  // Kart adımı her satırda aynı adla söyler (ilk partide kalanlar satırı gibi); rotada bulunmayan anahtar olduğu gibi yazılır.
+  const rota = D.urunler.find((u) => u.id === s.urun)?.rota ?? [];
+  const adim = (k: string | null): string => { const i = rota.findIndex((a) => a.k === k); return i < 0 ? k ?? '' : adimAdi(rota, i); };
   const nGercek = Math.min(n, s.adet);
   const esit = esitPartiler(s.adet, nGercek);
   const metin = elle ?? (esit ? kasayaBol(esit, kural.kasa, kural.qmin) ?? esit : []).map(String);
@@ -327,7 +330,7 @@ export function PartiBolmeKarti({ c, p, degerlendir, yenile, emirNo = (j) => j }
           {dar && dar.alt.length > 0 && (
             <Secim etiket="Tezgâh" value={dagitim} onChange={(e) => { dagitimYaz(e.target.value === 'dag' ? 'dag' : 'ayni'); }}
               secenekler={[{ deger: 'ayni', baslik: 'Bütün partiler aynı tezgâhlarda, sırayla' },
-                { deger: 'dag', baslik: `${dar.k} adımında partiler ${tez.join(', ')} arasında dağılır` }]} />
+                { deger: 'dag', baslik: `${adim(dar.k)} adımında partiler ${tez.join(', ')} arasında dağılır` }]} />
           )}
           <Dugme simge="grid" onClick={() => { elleYaz(null); }}>Eşit dağıt</Dugme>
         </div>
@@ -342,9 +345,9 @@ export function PartiBolmeKarti({ c, p, degerlendir, yenile, emirNo = (j) => j }
         </div>
         <p className="tc-pys-kucuk">
           {emirNo(s.id)}: {s.adet} adet, termin {gunYaz(D, saatOku(D, s.termin))}{T > 0.05 ? `, şimdi ${sayi(T, 1)} sa gecikiyor` : ', zamanında'}.
-          {dar && ` Darboğaz adımı ${dar.k} (${dar.m}).`} Partiler {emirNo(s.id)}/1, /2 … adıyla ayrı iş emri olur; termin, öncelik ve malzeme oranı aynı kalır.
+          {dar && ` Darboğaz adımı ${adim(dar.k)} (${dar.m}).`} Partiler {emirNo(s.id)}/1, /2 … adıyla ayrı iş emri olur; termin, öncelik ve malzeme oranı aynı kalır.
         </p>
-        <p className="tc-pys-kucuk"><Simge ad="ruler" boyut="k" /> {kural.k ?? ''} adımında en küçük parti {kural.qmin} adet{kural.kasa > 1 ? `, kasa ${String(kural.kasa)} adet` : ''}.</p>
+        <p className="tc-pys-kucuk"><Simge ad="ruler" boyut="k" /> {adim(kural.k)} adımında en küçük parti {kural.qmin} adet{kural.kasa > 1 ? `, kasa ${String(kural.kasa)} adet` : ''}.</p>
         {ilkPartideKalanlar(c, s.id, adetler[0] ?? NaN).map((x) => <p key={x.k} className="tc-pys-kucuk" data-ilk-parti={x.k}>{ilkPartiYazisi(x)}</p>)}
         {hata && <p className="tc-pys-uyari" role="alert"><Simge ad="alert" boyut="k" /> {hata}</p>}
         <div className="tc-pys-dugmeler">
