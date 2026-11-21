@@ -13,7 +13,7 @@ import {
 import { MOTOR_NOTU } from '../motor/ortak.tsx';
 import { MotorNotu } from './IsiHaritasi.tsx';
 import {
-  PARTI_EN_COK, darbogaz, dengeAdi, ilkPartideKalanlar, ilkPartiYazisi, dengeKatYazi, gunYaz, kasayaBol, ortusmeAdaylari, ortusmesiAcik, partiAdaylari, partiKurali, partiKuraliDenetle, 
+  PARTI_EN_COK, darbogaz, dengeAdi, ilkPartideKalanlar, ilkPartiYazisi, partiBilgileri, partiBilgiYazisi, dengeKatYazi, gunYaz, kasayaBol, ortusmeAdaylari, ortusmesiAcik, partiAdaylari, partiKurali, partiKuraliDenetle,
   katsayi, saatOku, saatYaz, sayi, simdi, terminAyari,
   taramaKapsami, taramaSecenekSayisi, tl, type KayitliPlan,
 } from './kurallar.ts';
@@ -269,9 +269,10 @@ export function TerminUzatmaKarti({ planVar, degerlendir, yenile }: { planVar: b
 
 // ---- Siparişler: partiyi böl, parti taraması (zz10 ebFormHtml, zz11 btKart) ----
 
-export function PartiBolme({ cevap }: { cevap: DegerlendirmeCevabi<'parti-bolme'> }) {
+export function PartiBolme({ cevap, adim = (k) => k }: { cevap: DegerlendirmeCevabi<'parti-bolme'>; adim?: (k: string) => string }) {
   const s = cevap.sonuc;
   if (!s.sonuc) return null;
+  const bilgi = partiBilgileri(s.sonuc.plan);
   return (
     <>
       <Tablo etiket="Partiler" sutunlar={[
@@ -280,6 +281,7 @@ export function PartiBolme({ cevap }: { cevap: DegerlendirmeCevabi<'parti-bolme'
         { anahtar: 'makine', baslik: 'Tezgâh', mono: true, hucre: (x) => x.makineId },
       ]} satirlar={s.sonuc.partiler} satirAnahtari={(x) => x.siparisId} />
       <p className="tc-pys-deger">Gecikme <b className="mono">{sa(s.sonuc.gecikmeOnce)} → {sa(s.sonuc.gecikmeSonra)}</b> (en geç parti){cevap.maliyetGorunur && <> · <span className="mono">{tl(s.sonuc.tl)}</span></>}</p>
+      {bilgi.map((x) => <p key={x.id} className="tc-pys-kucuk" data-parti-bilgi={x.tur}><Simge ad={x.tur === 'erken' ? 'alert' : 'clock'} boyut="k" /> {partiBilgiYazisi(x, adim(x.k))}</p>)}
     </>
   );
 }
@@ -356,7 +358,7 @@ export function PartiBolmeKarti({ c, p, degerlendir, yenile, emirNo = (j) => j }
         {/* 451/2: bölme Üretim emirlerinde yapılır; burada yalnız etkisi ölçülür (ölçüm sunucu motorundadır). */}
         <p className="tc-pys-kucuk">İş emri Reçete ve Rota &gt; Üretim emirlerinde bölünür; burada bölmenin gecikmeye etkisi ölçülür.</p>
         <DurumSatiri d={d} yenile={yenile} />
-        {d.tur === 'sonuc' && <PartiBolme cevap={d.cevap} />}
+        {d.tur === 'sonuc' && <PartiBolme cevap={d.cevap} adim={adim} />}
       </form>
     </Kart>
   );

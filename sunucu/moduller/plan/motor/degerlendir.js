@@ -455,6 +455,20 @@ function partiBol(jid, dagitim, adetler) {
   }
   const p = tutulamayaniOnar(kisaArama(st, cx, lnsDecode(st, { ops, fail: S.plan.fail || [] }, [], cx, true), 500), st, cx, true);
   const kayit = planKaydi(p, st, null);
+  /* 3520: ölçümün plana göre süren adımı nasıl aldığı söylenir. İlk partinin payı ölçüm anından önce bitiyorsa (kaydı olmayan iş bitmiş
+     sayılmaz) pay şimdiden sonraya dizilir, bölme olduğundan geç görünür: 'erken'. Pay şimdiden sonra bitiyorsa ilk parti adımı aynı
+     saatte sürdürür, süresi kendi adedinden yenilenir: 'yenilendi'. Yalnız kayıtta (plan.partiBilgi) döner; metni ekran kurar. */
+  const partiBilgi = [], g0 = st.gercek || {};
+  for (const [id0, r] of Object.entries(S.plan.ops)) {
+    if (!id0.startsWith(pref) || r.fas || r.act || (g0[id0] && g0[id0].S != null) || !(r.S < st.now - 1e-9 && r.C > st.now + 1e-9)) continue;
+    const kk = id0.slice(pref.length), id1 = `${jid}/1.${kk}`, q = p.ops[id1], o1 = cx.byId[id1], M = cx.M[r.m], c = o1 && o1.c.find(x => x.m === r.m && !x.fas);
+    if (!q || !M || !c) continue;
+    const run1 = o1.fai ? Math.max(0, c.run - c.cyc) : c.run, C1 = adv(M.rw, adv(M.sw, r.S, r.su), run1);
+    const adet = st.D.opAdet && st.D.opAdet[id1] != null && isFinite(+st.D.opAdet[id1]) ? +st.D.opAdet[id1] : parcalar[0].n;
+    if (!(C1 > st.now + 1e-9)) partiBilgi.push({ id: id1, k: kk, tur: 'erken', adet });
+    else if (Math.abs(run1 - r.run) > 1e-6 && Math.abs(q.S - r.S) < 1e-6) partiBilgi.push({ id: id1, k: kk, tur: 'yenilendi', adet });
+  }
+  if (partiBilgi.length) kayit.partiBilgi = partiBilgi;
   let T = 0, C = -1e9; for (const y of yeni) { const J = kayit.J[y.id] || {}; T = Math.max(T, J.T || 0); C = Math.max(C, J.C ?? 1e9); }
   return { siparisId: jid, darbogaz, sonuc: {
     partiler: parcalar.map((x, i) => ({ siparisId: `${jid}/${i + 1}`, adet: x.n, makineId: x.m })),

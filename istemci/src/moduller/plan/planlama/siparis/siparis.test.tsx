@@ -8,7 +8,7 @@ import type { PlanlamaCalismasi } from '../tipler.ts';
 import { MALIYETSIZ, YONETICI, ac, sunucuKur } from '../test-ortak.tsx';
 import { PLANLAMA_ANAHTARI } from '../veri.ts';
 import type { DegerlendirmeCevabi, Degerlendirici } from './degerlendirme.ts';
-import { PartiBolmeKarti, PlanSecenekleriKarti, TerminUzatmaKarti } from './Degerlendirme.tsx';
+import { PartiBolme, PartiBolmeKarti, PlanSecenekleriKarti, TerminUzatmaKarti } from './Degerlendirme.tsx';
 import { kayitliPlan } from './kurallar.ts';
 import { CALISMA_DEGERI, calismaKur } from './test-veri.ts';
 
@@ -381,6 +381,20 @@ describe('Partiyi böl (uç açılınca)', () => {
     await waitFor(() => { expect(d).toHaveBeenCalledWith({ tur: 'parti-bolme', siparisId: 'S1', dagitim: 'ayni', adetler: [4, 6] }); });
     fireEvent.click(dugme('Eşit dağıt'));
     expect((within(grup).getAllByRole('spinbutton') as HTMLInputElement[]).map((k) => k.value)).toEqual(['5', '5']);
+  });
+
+  it('3520: ölçüm planının parti bilgisi adım adıyla sonuçta yazılır; bilgi yoksa satır yoktur', () => {
+    const cevap = (partiBilgi?: unknown[]) => ({ calismaSurumu: 9, dataVer: 3, baslangic: '2026-10-19', simdi: 7, maliyetGorunur: false, sonuc: { tur: 'parti-bolme', siparisId: 'S1', darbogaz: null, sonuc: {
+      partiler: [{ siparisId: 'S1/1', adet: 4, makineId: 'M1' }, { siparisId: 'S1/2', adet: 6, makineId: null }], gecikmeOnce: 5, gecikmeSonra: 2, bitisSonra: 40, tl: null,
+      siparisler: [], plan: { dataVer: 3, ops: {}, J: {}, ...(partiBilgi ? { partiBilgi } : {}) },
+    } } }) as unknown as DegerlendirmeCevabi<'parti-bolme'>;
+    const { container, rerender } = render(<PartiBolme cevap={cevap([{ id: 'S1/1.a1', k: 'a1', tur: 'yenilendi', adet: 4 }, { id: 'S1/1.a2', k: 'a2', tur: 'erken', adet: 4 }])} adim={(k) => (k === 'a1' ? 'Torna' : k)} />);
+    expect([...container.querySelectorAll('[data-parti-bilgi]')].map((x) => [x.getAttribute('data-parti-bilgi'), x.textContent.trim()])).toEqual([
+      ['yenilendi', 'Torna adımı: 1. parti tezgâhtaki adımı sürdürür; süre yeni adede (4 adet) göre yenilendi.'],
+      ['erken', 'a2 adımı: kaydı girilmediği için şimdiden sonra başlıyor sayıldı; bu yüzden gecikme gerçekte olandan fazla görünüyor olabilir. Başlangıç kaydı girilirse bölme daha erken biter.'],
+    ]);
+    rerender(<PartiBolme cevap={cevap()} />);
+    expect(container.querySelectorAll('[data-parti-bilgi]').length).toBe(0);
   });
 
   it('1. partide kalanlar adım başına tek satırda yazılır: elle bölme, ek süre, adet fazlalığı; hiçbiri yoksa satır yoktur', () => {

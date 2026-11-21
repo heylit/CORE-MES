@@ -4,7 +4,7 @@ import { KAYDEDILEMEDI, degerlendirici, degerlendirmeHatasi, esitPartiler, parti
 import {
   darbogaz, kasayaBol, partiKurali, partiKuraliDenetle, taramaKapsami, taramaSecenekSayisi,
   dengeIsisi, dengeKatsayisi, fasonDurumu, fasonSatirlari, fasonTerminiYaz, kademe, kayitliPlan, planDengesi, saatOku, saatYaz,
-  fasonKalemleri, malzemeKalemleri, ortusmeAdaylari, siparisIsisi, siparisMaliyetleri, terminIsisi, tl,
+  fasonKalemleri, malzemeKalemleri, ortusmeAdaylari, partiBilgileri, partiBilgiYazisi, siparisIsisi, siparisMaliyetleri, terminIsisi, tl,
 } from './kurallar.ts';
 import { kaynakKur } from '../malzeme/kaynak.ts';
 import { alimPlani, calismaSimdisi, motorGirdisi, planIslemleri, tabanMs } from '../malzeme/kurallar.ts';
@@ -169,6 +169,18 @@ describe('Parti bölme kuralları (zz4, zz14, zz11)', () => {
     expect(taramaSecenekSayisi(10, { k: 'a3', m: 'M1', alt: ['M2'] }, { k: 'a3', qmin: 3, kasa: 1 })).toBe(5);
     const c = calismaKur(); const p = kayitliPlan(c)!;
     expect(taramaKapsami(c.D, p, 3).map((s) => s.id)).toEqual(['S1']);
+  });
+  it('3520 parti bilgisi: plandan yalnız geçerli kayıtlar okunur; erken ve yenilendi cümleleri', () => {
+    const plan = { ops: {}, partiBilgi: [
+      { id: 'S1/1.a1', k: 'a1', tur: 'erken', adet: 5 }, { id: 'S1/1.a3', k: 'a3', tur: 'yenilendi', adet: 4 },
+      { id: 'S1/1.a2', k: 'a2', tur: 'baska', adet: 1 }, { id: 'S1/1.a4', k: 'a4', tur: 'erken', adet: null }, 'bozuk',
+    ] };
+    const l = partiBilgileri(plan);
+    expect(l.map((x) => [x.k, x.tur, x.adet])).toEqual([['a1', 'erken', 5], ['a3', 'yenilendi', 4]]);
+    expect(partiBilgileri(null)).toEqual([]);
+    expect(partiBilgileri({ ops: {} })).toEqual([]);
+    expect(partiBilgiYazisi(l[0]!, 'Torna')).toBe('Torna adımı: kaydı girilmediği için şimdiden sonra başlıyor sayıldı; bu yüzden gecikme gerçekte olandan fazla görünüyor olabilir. Başlangıç kaydı girilirse bölme daha erken biter.');
+    expect(partiBilgiYazisi(l[1]!, 'Freze')).toBe('Freze adımı: 1. parti tezgâhtaki adımı sürdürür; süre yeni adede (4 adet) göre yenilendi.');
   });
 });
 

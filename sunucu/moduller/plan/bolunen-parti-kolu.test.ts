@@ -80,6 +80,9 @@ const ust = emir('2', 6);
 const ADET = { adimAdetleri: { 'E-2|10': 9 } };
 // "Partiyi böl" ölçümü: kayıtlı planın üstünde emri partilere ayırıp yeniden dizer. Dönen: ölçümün planındaki işler.
 async function bol(orders: Emir[], ek: Ek, siparisId: string, adetler: number[], an = '2026-10-19T05:00:00Z'): Promise<Record<string, Is>> {
+  return (await bolPlani(orders, ek, siparisId, adetler, an))['ops'] as Record<string, Is>;
+}
+async function bolPlani(orders: Emir[], ek: Ek, siparisId: string, adetler: number[], an = '2026-10-19T05:00:00Z'): Promise<Record<string, unknown>> {
   const onceki = kur(orders, ek);
   const r = await degerlendirmeYap({ calisma: { ...onceki.S, plan: onceki.plan }, kayit: ek.kayit ?? kayit(), kaynak: kaynak(orders, ek), bugun: '2026-10-19',
     istek: { tur: 'parti-bolme', siparisId, dagitim: 'ayni', adetler } }, Date.parse(an));
@@ -87,7 +90,7 @@ async function bol(orders: Emir[], ek: Ek, siparisId: string, adetler: number[],
   const s = degerlendirmeSonucu.parse(r.sonuc);
   if (s.tur !== 'parti-bolme' || !s.sonuc) return assert.fail(JSON.stringify(s));
   assert.deepEqual(s.sonuc.plan['fail'] ?? [], [], 'ölçümde bütün adımlar yerleşti');
-  return s.sonuc.plan['ops'] as Record<string, Is>;
+  return s.sonuc.plan;
 }
 
 describe('adım ortasından bölünen parti (3512)', () => {
@@ -350,6 +353,20 @@ describe('"Partiyi böl" ölçümü plana göre süren adımı ilk partinin aded
     const sonra = await bol([emir('2', 6)], { kayit: faili }, '2', [4, 2], SONRA);
     assert.deepEqual([yer(sonra)['2/1.10'], yer(sonra)['2/2.10']], [['200', 8, 12, 3], ['200', 12, 14, 1]]);
     assert.deepEqual(yer(sonra), yer(basta));
+  });
+
+  test('PB-12: ölçüm süren adımı nasıl aldığını söyler: ilk partinin payı ölçüm anından önce bitiyorsa erken, sürüyorsa süresi yenilendi (3520)', async () => {
+    // 1 adetlik ilk partinin payı 09:00'da biterdi; ölçüm 09:30'da. Kaydı olmayan pay şimdiden sonraya dizilir.
+    const erken = await bolPlani([emir('2', 6)], {}, '2', [1, 5], '2026-10-19T06:30:00Z');
+    assert.deepEqual(erken['partiBilgi'], [{ id: '2/1.10', k: '10', tur: 'erken', adet: 1 }]);
+    // 4 adetlik ilk parti 09:00'da adımı sürdürür, 12:00'de biter.
+    const suren = await bolPlani([emir('2', 6)], {}, '2', [4, 2], SONRA);
+    assert.deepEqual(suren['partiBilgi'], [{ id: '2/1.10', k: '10', tur: 'yenilendi', adet: 4 }]);
+    // İlk partide kalan fazlalık adede girer (üst emir 10. adımı kolun 3 adediyle 9 adet işler: ilk parti 7).
+    const fazla = await bolPlani([ust, emir('3', 3, '2', { n: 1, m: 4 })], ADET, '2', [4, 2], SONRA);
+    assert.deepEqual(fazla['partiBilgi'], [{ id: '2/1.10', k: '10', tur: 'yenilendi', adet: 7 }]);
+    // Adım başlamadan ölçülürse bilgi yoktur.
+    assert.equal((await bolPlani([emir('2', 6)], {}, '2', [4, 2]))['partiBilgi'], undefined);
   });
 });
 

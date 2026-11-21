@@ -461,6 +461,21 @@ export function ilkPartideKalanlar(c: PlanlamaCalismasi, jid: string, ilkAdet: n
     return tezgahlar.length >= 2 || ekSaat !== null || fazla !== null || eksik !== null ? [{ k: a.k, ad: adimAdi(rota, i), tezgahlar: tezgahlar.length >= 2 ? tezgahlar : [], ekSaat, fazla, eksik }] : [];
   });
 }
+// 3520: "Partiyi böl" ölçümünün plana göre süren adımı nasıl aldığı (motor partiBol, ölçüm planının partiBilgi alanı). erken: ilk partinin
+// payı ölçüm anından önce biterdi, kaydı olmadığı için şimdiden sonraya dizildi (bölme olduğundan geç görünür); yenilendi: ilk parti
+// adımı aynı saatte sürdürür, süresi kendi adedinden yenilendi.
+export interface PartiBilgisi { id: string; k: string; tur: 'erken' | 'yenilendi'; adet: number }
+export function partiBilgileri(plan: unknown): PartiBilgisi[] {
+  const l = nesne(plan) && Array.isArray(plan.partiBilgi) ? (plan.partiBilgi as unknown[]) : [];
+  return l.flatMap((x): PartiBilgisi[] => (nesne(x) && typeof x.id === 'string' && typeof x.k === 'string' && (x.tur === 'erken' || x.tur === 'yenilendi') && sonlu(x.adet)
+    ? [{ id: x.id, k: x.k, tur: x.tur, adet: x.adet }] : []));
+}
+export function partiBilgiYazisi(x: PartiBilgisi, ad: string): string {
+  return x.tur === 'erken'
+    ? `${ad} adımı: kaydı girilmediği için şimdiden sonra başlıyor sayıldı; bu yüzden gecikme gerçekte olandan fazla görünüyor olabilir. Başlangıç kaydı girilirse bölme daha erken biter.`
+    : `${ad} adımı: 1. parti tezgâhtaki adımı sürdürür; süre yeni adede (${sayi(x.adet, 2)} adet) göre yenilendi.`;
+}
+
 // "Torna adımı: elle bölme (M1, M2), ek süre (9 sa) ve 3 adet fazlalık 1. partide kalır; öteki partilerin tezgâhını plan seçer."
 // Yalnız var olan parçalar yazılır; tezgâh cümlesi yalnız elle bölme varken. Adımın adedi emrinkinden azsa (önceki adımın hurdası düşülmüş)
 // fazlalık yerine eksik yazılır: "... 2 adet eksik (önceki adımın hurdası) 1. partiden düşülür".
