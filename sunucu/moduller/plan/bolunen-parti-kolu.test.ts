@@ -163,6 +163,22 @@ describe('adım ortasından bölünen parti (3512)', () => {
     assert.deepEqual(biten.malzeme, { 2: 0, 3: 0, 4: 0 });
   });
 
+  test('KL-11: üst emir kapandıysa (bitti ya da iptal) kolun işlemediği adım yapılmış sayılır, malzeme payı düşer', () => {
+    for (const status of ['tamam', 'iptal']) {
+      const r = kur([{ ...ust, status }, emir('3', 3, '2', { n: 1, m: 4 })], ADET);
+      assert.deepEqual([r.emirler, r.isler, r.kolDisi, r.malzeme, r.eksik], [['3'], ['3.20', '3.30'], { '3.10': 2 }, { 3: 0 }, 0], status);
+    }
+  });
+
+  test('KL-12: katılma adımının sahibi de o yeri kendi işleyen en yakın üst emirdir', () => {
+    // 3 (10 ve 20) 2'ye 3. adımda katılır; 4 (10 ve 20) 3'ten ayrıldı, o da 3. adımda katılır. 30. adımı 3 işlemez: 4'ü bekleyecek olan 2'dir.
+    const emirler = [ust, emir('3', 1, '2', { n: 0, m: 3 }), emir('4', 3, '3', { n: 0, m: 3 })];
+    const r = kur(emirler, { adimAdetleri: { 'E-2|30': 10 }, w: { adimBekle: { '4.20': { kadar: 200, neden: 'malzeme' } } } });
+    assert.deepEqual(r.isler, ['2.10', '2.20', '2.30', '3.10', '3.20', '4.10', '4.20']);
+    assert.deepEqual(r.kolDisi, { '3.30': 1, '4.30': 1 });
+    assert.ok(r.ops['4.20']!.S >= 200 && r.ops['2.30']!.S >= r.ops['4.20']!.C - 1e-9, `2'nin 30. adımı 4'ün son adımını bekler: ${String(r.ops['2.30']!.S)} >= ${String(r.ops['4.20']!.C)}`);
+  });
+
   test('KL-10: motor ile Kokpit\'in kendi hesabı kolun adımlarını aynı kuralla seçer', () => {
     // Kural iki yerde yazılıdır (motor girdisi ve istemci tipler.ts); biri değişip öbürü kalırsa Kokpit partiyi motordan farklı gösterir.
     const adimlar = [adim(10, '20', 60, 0), adim(20, '10', 60, 0), adim(30, '20', 60, 0)];
