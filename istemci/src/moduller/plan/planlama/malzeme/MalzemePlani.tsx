@@ -10,7 +10,7 @@ import {
   malzemeIsisi, tedarikciAdi, tlKisa, tlYaz,
   type AlimPlaniSatiri, type DagilimHucresi, type DagilimTuru, type GrafikTuru, type Kirilim,
 } from './kurallar.ts';
-import { Acilim, BosHarita, IsiIzgarasi, IsiSayfasi, IzinYok, Lejant, type IsiSecimi, type LejantOgesi } from '../ortak/isi/index.ts';
+import { Acilim, BosHarita, IsiIzgarasi, IsiSayfasi, Lejant, type IsiSecimi, type LejantOgesi } from '../ortak/isi/index.ts';
 import { OneCekme } from './OneCekme.tsx';
 import { useEmirNo, type EmirNo } from '../ortak/emir-no.ts';
 import { TedarikTerminiKarti } from './TedarikTermini.tsx';
@@ -64,11 +64,11 @@ const Baslik = ({ simge, ad, ek }: { simge: SimgeAdi; ad: string; ek?: string })
 export function MalzemePlani({ depo, calisma, yetki, yenile, sec, git }: PlanlamaEkranOzellikleri) {
   const emirNo = useEmirNo(depo.receteRotaKaydi, depo.durum?.emirler);
   return <MalzemePlaniGorunumu calisma={calisma} emirNo={emirNo} emirler={depo.durum?.emirler ?? depo.receteRotaKaydi} maliyetOku={yetki.maliyetOku} calismaSurumu={depo.calismaSurumu} terminYazar={yetki.planYaz} yenile={yenile}
-    goster={(j) => { sec({ siparis: j, adim: null, tezgah: null }); git('plan'); }} />;
+    goster={(j) => { sec({ siparis: j, adim: null, tezgah: null }); git('kokpit'); }} />;
 }
 
 // Satın Alma'nın sayfası (546 a) aynı görünümü daraltılmış çalışmayla çizer: emirler çalışmayla gelir, tutar ve öne çekme yoktur.
-// goster yoksa (Satın Alma) "çizelgede" pasif kalır: orada Planlama motoru tahtası yoktur.
+// goster yoksa (Satın Alma) "Kokpit'te" pasif kalır: orada Kokpit yoktur. Plan Kokpit'te kurulur (3282-1 a), emir orada seçilir (3537 a).
 export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSurumu, terminYazar, yenile, goster, emirNo = (j) => j }: {
   calisma: PlanlamaCalismasi | null; emirler: unknown; maliyetOku: boolean; calismaSurumu: number | null; terminYazar: boolean; yenile: () => void;
   goster?: (siparis: string) => void; emirNo?: EmirNo;
@@ -194,9 +194,8 @@ export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSuru
             return (
               <Acilim baslik={`${r.kod} · ${x.d}`} simge="box" ton={x.ton === 'tamam' ? '' : x.ton} neden={neden} kapat={kapat}
                 bilgi={[['Gerekli', gunYaz(taban, r.gerekli)], ['Geliş', gunYaz(taban, r.etkin)], ['Miktar', miktar(Math.ceil(r.miktar), r.kod)], ['Bağlı siparişler', r.isler.map(emirNo).join(', ')]]}
-                // Sipariş ve geliş tarihi formu satın almanındır (222 a): eski sayfanın yetkisiz hali.
-                form={<IzinYok />}
-                secenekler={r.isler[0] ? [{ ad: `${emirNo(r.isler[0])} çizelgede`, etki: 'Bu malzemeyi bekleyen siparişin adımlarını gösterir.', simge: 'gantt', ...cizelge(r.isler[0]) }] : []} />
+                // Sipariş ve geliş tarihi formu satın almanındır (222 a); burada form yoktur, kilit metni de gösterilmez (3537 a).
+                secenekler={r.isler[0] ? [{ ad: `${emirNo(r.isler[0])} Kokpit'te`, etki: 'Bu malzemeyi bekleyen emri Kokpit\'te seçer.', simge: 'target', ...cizelge(r.isler[0]) }] : []} />
             );
           }} />
       </IsiSayfasi>

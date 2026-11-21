@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } 
 import { Kart, Rozet, SayiKarti, Simge } from '../../../../ortak/arayuz/index.ts';
 import '../../../../ortak/arayuz/tablo.css';
 import { planGuncel } from '../durum.ts';
-import { Acilim, BosHarita, IsiIzgarasi, IsiSayfasi, IzinYok, Lejant, type IsiSecimi } from '../ortak/isi/index.ts';
+import { Acilim, BosHarita, IsiIzgarasi, IsiSayfasi, Lejant, type IsiSecimi } from '../ortak/isi/index.ts';
 import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import { useEmirNo, type EmirNo } from '../ortak/emir-no.ts';
 import {
@@ -107,7 +107,7 @@ export function Sevkiyat({ calisma, sec, git, depo }: PlanlamaEkranOzellikleri) 
               <IsiIzgarasi
                 etiket="Sipariş × gün, termine kalan süre" satirAd="Sipariş" genis="gun" sutunlar={isi.sutunlar} satirlar={isi.satirlar}
                 secim={secim} sec={secimYaz} gizliAd="termine üç günden çok pay"
-                acilim={(r, _sutun, kapat) => <SevkAcilimKarti r={r} taban={liste.taban} emirNo={emirNo} kapat={kapat} goster={() => { sec({ siparis: r.x.id, adim: null, tezgah: null }); git('plan'); }} />}
+                acilim={(r, _sutun, kapat) => <SevkAcilimKarti r={r} taban={liste.taban} emirNo={emirNo} kapat={kapat} goster={() => { sec({ siparis: r.x.id, adim: null, tezgah: null }); git('kokpit'); }} />}
               />
             </>
           )
@@ -117,14 +117,14 @@ export function Sevkiyat({ calisma, sec, git, depo }: PlanlamaEkranOzellikleri) 
   );
 }
 
-// Satırın açılımı. "Sevk edildi olarak işaretle" formu sevkiyat modülünündür (455/1 a): yerinde eski sayfanın yetkisiz hali durur.
-// "çizelgede": sipariş seçilir, Planlama motoru tahtası açılır.
+// Satırın açılımı. "Sevk edildi olarak işaretle" formu sevkiyat modülünündür (455/1 a); burada form ve kilit metni yoktur (3537 a).
+// "Kokpit'te": sipariş seçilir, Kokpit açılır (planın tek yeri, 3282-1 a).
 function SevkAcilimKarti({ r, taban, emirNo, kapat, goster }: { r: SevkIsiSatiri; taban: number; emirNo: EmirNo; kapat: () => void; goster: () => void }) {
   const a = sevkAcilimi(r, taban, emirNo);
   return (
     <Acilim
-      baslik={a.baslik} simge="truck" ton={a.ton} neden={a.neden} bilgi={a.bilgi} kapat={kapat} form={<IzinYok />}
-      secenekler={[{ ad: `${emirNo(r.x.id)} çizelgede`, etki: 'Siparişin adımlarını tezgâh çizelgesinde gösterir.', simge: 'gantt', yap: goster }]}
+      baslik={a.baslik} simge="truck" ton={a.ton} neden={a.neden} bilgi={a.bilgi} kapat={kapat}
+      secenekler={[{ ad: `${emirNo(r.x.id)} Kokpit'te`, etki: 'Siparişi Kokpit\'te seçer.', simge: 'target', yap: goster }]}
     />
   );
 }
