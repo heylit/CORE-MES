@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import type { TaslakCatismasi } from '#paylasilan/sozlesme/planlama.ts';
 import { Dugme, OnayPenceresi, Pencere, Simge } from '../../../../ortak/arayuz/index.ts';
 import { taslakOzeti, type TaslakYazici } from './taslak.ts';
+import { hesapSuresiEki, useGecenSaniye } from '../motor/ust/HesapSuresi.tsx';
 
 // Taslak çubuğu (3282 1d-2b, 1d-3): kişinin taslağı varken üst şeridin altında durur. Değişiklik sayısı, artık uygulanamayanlar ve bayat dizme
 // burada görünür; Geri al son değişikliği, Vazgeç bütün taslağı siler. Tek birincil düğme (Canlıya al ya da Onaya gönder, 3282-5 a) taslağı
@@ -30,6 +31,7 @@ export function TaslakCubugu({ taslak, ozet, canliyaAlir, kilit = null, seritteG
   const [vazgecAcik, setVazgecAcik] = useState(false);
   const [catisma, setCatisma] = useState<TaslakCatismasi[] | null>(null);
   const [secim, setSecim] = useState<Secim>({});
+  const gecen = useGecenSaniye(taslak.diziliyor);
   if (t === null && !taslak.mesgul) return null;
   const bekle = taslak.mesgul || taslak.diziliyor;
   const engel = kilit ?? (o.bozuk.length > 0 ? 'Önce artık geçerli olmayan değişikliği geri alın.' : o.bayat ? 'Önce Planı güncelle ile planı güncelleyin.' : null);
@@ -51,7 +53,7 @@ export function TaslakCubugu({ taslak, ozet, canliyaAlir, kilit = null, seritteG
     <div className="tc-pyq-degisim tc-pyq-taslak" role="region" aria-label="Değişiklikleriniz">
       <b>{o.n} değişiklik · canlıya alınmadı</b>
       {ozet}
-      {taslak.diziliyor ? <span role="status">Güncelleniyor</span> : taslak.mesgul && <span role="status">Yazılıyor</span>}
+      {taslak.diziliyor ? <span><span role="status">Güncelleniyor</span>{hesapSuresiEki(gecen) !== null && <span aria-hidden="true">{hesapSuresiEki(gecen)}</span>}</span> : taslak.mesgul && <span role="status">Yazılıyor</span>}
       {o.bozuk.map((b, i) => (
         <span key={`${String(i)}-${b.ne}`} className="tc-pyq-taslak-hata" role="alert"><Simge ad="alert" boyut="k" />{`Artık geçerli değil: ${b.ne} (${b.hata})`}</span>
       ))}

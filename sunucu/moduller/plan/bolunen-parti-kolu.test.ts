@@ -26,12 +26,14 @@ type Kol = { n: number; m: number } | null;
 type Emir = { id: string; no: string; itemId: string; qty: number; start: string; due: string; priority: number; status: string; note: string; parentId: string | null; kol: Kol };
 const emir = (id: string, qty: number, parentId: string | null = null, kol: Kol = null): Emir =>
   ({ id, no: `E-${id}`, itemId: '51', qty, start: '2026-10-19', due: '2026-10-30', priority: 2, status: 'serbest', note: '', parentId, kol });
-interface Ek { opStatus?: Record<string, string>; adimAdetleri?: Record<string, number>; w?: Record<string, unknown>; locks?: Record<string, { m: string; S: number }>; kayit?: ReturnType<typeof kayit>; acikSiparisler?: { kod: string; miktar: number; tarih: string; siparisNo: string }[] }
+interface Ek { yavasFreze?: boolean; opStatus?: Record<string, string>; adimAdetleri?: Record<string, number>; w?: Record<string, unknown>; locks?: Record<string, { m: string; S: number }>; kayit?: ReturnType<typeof kayit>; acikSiparisler?: { kod: string; miktar: number; tarih: string; siparisNo: string }[] }
 const kaynak = (orders: Emir[], ek: Ek) => ({
   durum: {
     wcs: [{ id: '1', code: 'IM-1', name: 'Talasli', week: null, aktif: true }],
     stations: [{ id: '10', code: 'TOR', name: 'Torna', wcId: '1', eff: 100, opPer: 1, count: 1, aktif: true }, { id: '20', code: 'FRZ', name: 'Freze', wcId: '1', eff: 100, opPer: 1, count: 1, aktif: true }],
-    machines: [{ id: '100', code: 'T1', name: 'Torna 1', stationId: '10', status: 'aktif', aktif: true }, { id: '200', code: 'F1', name: 'Freze 1', stationId: '20', status: 'aktif', aktif: true }],
+    machines: [{ id: '100', code: 'T1', name: 'Torna 1', stationId: '10', status: 'aktif', aktif: true },
+      ...(ek.yavasFreze ? [{ id: '201', code: 'F0', name: 'Freze 0', stationId: '20', status: 'aktif', aktif: true }] : []),
+      { id: '200', code: 'F1', name: 'Freze 1', stationId: '20', status: 'aktif', aktif: true }],
     people: [], cal: { shifts: [{ id: '3', name: 'Gunduz', start: '08:00', end: '16:00', breaks: [] }], holidays: [] },
     emirler: { orders, opStatus: ek.opStatus ?? {}, opProg: {} },
     adimAdetleri: ek.adimAdetleri ?? {},
@@ -142,6 +144,43 @@ describe('adım ortasından bölünen parti (3512)', () => {
     assert.equal(gecParti.ops['3.20']!.S, 100);
     assert.ok(gecParti.ops['2.20']!.C <= 100, `üst emrin 20. adımı partiyi beklemez: ${String(gecParti.ops['2.20']!.S)}`);
     assert.ok(gecParti.ops['2.30']!.S >= gecParti.ops['3.20']!.C - 1e-9, 'katılma adımı bekler');
+  });
+
+  test('KZ-05 (3502): kilitli adımın öncülünü bölünen parti de bekliyorsa öncül kilide yaslanmaz, en erken yere konur; başka bekleyeni yoksa kilide yaslanır', () => {
+    const kilit = { locks: { '2.20': { m: '100', S: 100 } } };
+    // Parti (20. adımdan ayrılan kol) üst emrin 10. adımını bekler: o adım geç yapılırsa parti kilide kadar boşuna bekler.
+    const partili = kur([ust, emir('3', 3, '2', { n: 1, m: 4 })], { ...ADET, ...kilit }).ops;
+    assert.equal(partili['2.20']!.S, 100);
+    assert.deepEqual([partili['2.10']!.S, partili['2.10']!.C], [8, 33], 'öncül planın başında');
+    assert.equal(partili['3.20']!.S, partili['2.10']!.C, 'parti öncül biter bitmez başlar');
+    const neden = (r: Is | undefined): string => JSON.stringify((r as unknown as { why?: unknown }).why);
+    assert.equal(neden(partili['2.10']), JSON.stringify({ t: 'kilit-oncul', r: '2.20', o: 1 }), 'öne çekilen öncülün nedeni ayrı');
+    // Aynı emir partisiz: öncülü yalnız kilitli adım bekler. Kilitten önceki son iş gününe (80.-88. saat) yaslanır.
+    const yalin = kur([ust], kilit).ops;
+    assert.equal(yalin['2.20']!.S, 100);
+    assert.ok(yalin['2.10']!.S >= 80 && yalin['2.10']!.C <= 88 + 1e-9, `öncül kilide yaslanır: ${String(yalin['2.10']!.S)}-${String(yalin['2.10']!.C)}`);
+    assert.equal(neden(yalin['2.10']), JSON.stringify({ t: 'kilit-oncul', r: '2.20' }));
+  });
+
+  test('KZ-06 (3502): en erken yere konan öncül, en erken bitirdiği tezgâha konur', () => {
+    // İkinci freze yarı hızda ve listede önde: iki tezgâh da boş, başlangıç aynı. Bitişe bakılmazsa öncül yavaş tezgâha düşer, parti daha geç başlar.
+    const k = kayit();
+    k.machines.splice(1, 0, { id: '201', code: 'F0', name: 'Freze 0', stationId: '20', plan: { ...tezgah('201', '20'), verim: 0.5 } });
+    const r = kur([ust, emir('3', 3, '2', { n: 1, m: 4 })], { ...ADET, yavasFreze: true, kayit: k, locks: { '2.20': { m: '100', S: 100 } } }).ops;
+    assert.deepEqual([r['2.10']!.m, r['2.10']!.S, r['2.10']!.C], ['200', 8, 33]);
+    assert.equal(r['3.20']!.S, 33);
+  });
+
+  test('KZ-07 (3502): öne çekilen öncülün kendi öncülü de onunla birlikte öne gelir', () => {
+    // Parti 30. adımdan ayrılır: üst emrin 20. adımını hem kilitli 30. adım hem parti bekler. 20. adım öne gelebilsin diye 10. adım da öne gelir.
+    const r = kur([ust, emir('3', 3, '2', { n: 2, m: 4 })], { adimAdetleri: { 'E-2|10': 9, 'E-2|20': 9 }, locks: { '2.30': { m: '200', S: 200 } } }).ops;
+    assert.equal(r['2.30']!.S, 200);
+    assert.deepEqual([r['2.10']!.S, r['2.10']!.C, r['2.20']!.S], [8, 33, 33]);
+    assert.equal(r['3.30']!.S, r['2.20']!.C, 'parti 20. adım biter bitmez başlar');
+    // Partisiz aynı emir: iki öncülü de yalnız zincir bekler, ikisi de kilide yaslı kalır (kilit ikinci haftanın salısında, öncüller o haftada).
+    const yalin = kur([ust], { locks: { '2.30': { m: '200', S: 200 } } }).ops;
+    assert.ok(yalin['2.20']!.S >= 176 && yalin['2.20']!.C <= 200 + 1e-9, `20. adım kilide yaslı: ${String(yalin['2.20']!.S)}`);
+    assert.ok(yalin['2.10']!.S >= 104 && yalin['2.10']!.C <= yalin['2.20']!.S + 1e-9, `10. adım 20. adıma yaslı: ${String(yalin['2.10']!.S)}`);
   });
 
   test('KL-07: üst emrin beklemesi kolun yalnız kendi adımına geçer (3511)', () => {

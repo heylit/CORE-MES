@@ -1548,6 +1548,28 @@ describe('Kokpit Plan menüsü (3335-2, 3504 b)', () => {
   };
   const SAHA = { depo: { ...DEPO, durum: { emirler: [] } } as unknown as PlanlamaDeposu };
 
+  it('menü üstüyle pencere altı arasındaki boşluğa sığar: yüksekliği --acilir-boy ile sınırlanır, en az 160 px (3510)', async () => {
+    const yukseklik = Object.getOwnPropertyDescriptor(window, 'innerHeight');
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 768 });
+    try {
+      // jsdom kutu ölçmez; menünün üst kenarı taklit edilir: 768 - 100 - 8 = 660; 768 - 700 - 8 = 60, alt sınır 160.
+      for (const [ust, beklenen] of [[100, '660px'], [700, '160px']] as const) {
+        cleanup();
+        vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+          const u = this.classList.contains('tc-pyq-acilir-menu') ? ust : 0;
+          return { top: u, bottom: u + 300, left: 0, right: 200, width: 200, height: 300, x: 0, y: u, toJSON: () => ({}) } as DOMRect;
+        });
+        kur(ornekCalisma());
+        const m = await menu();
+        expect(m.classList.contains('tc-pyq-acilir-menu')).toBe(true);
+        expect(m.style.getPropertyValue('--acilir-boy')).toBe(beklenen);
+        vi.restoreAllMocks();
+      }
+    } finally {
+      if (yukseklik) Object.defineProperty(window, 'innerHeight', yukseklik);
+    }
+  });
+
   it('toplu ve yeniden planlama taslağa yeniden-planla komutu yazar: plansızların hepsi, seçili sipariş, bütün plan', async () => {
     const komutlar = kur(birPlansiz(), SAHA);
     let m = await menu();
