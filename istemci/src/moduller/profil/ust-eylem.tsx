@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Simge } from '../../ortak/arayuz/index.ts';
 import type { UstEylem, UstEylemOzellikleri } from '../../ortak/rota/ust-eylemler.ts';
 import { GeriBildirimPenceresi } from './GeriBildirimPenceresi.tsx';
 import { MINI_PANO_EYLEMI, MiniPanoEylemi } from './mini-pano-tercihi.tsx';
+import { TANITIM_YOLU } from './Tanitim.tsx';
 import { TemaEsitleyici } from './tema-tercihi.ts';
 import './profil.css';
 
@@ -19,6 +21,17 @@ function GeriBildirimDugmesi({ acmaIstegi = 0 }: UstEylemOzellikleri) {
   );
 }
 
+// Tanıtım (3535 a): Hesap menüsünden açılır; sayfa Profilim'in altındadır, her rol görür.
+function TanitimDugmesi({ acmaIstegi = 0 }: UstEylemOzellikleri) {
+  const git = useNavigate();
+  useEffect(() => { if (acmaIstegi > 0) void git(TANITIM_YOLU); }, [acmaIstegi, git]);
+  return (
+    <button type="button" className="tc-kabuk-tema" onClick={() => { void git(TANITIM_YOLU); }} aria-label="Tanıtım" title="Tanıtım">
+      <Simge ad="play" />
+    </button>
+  );
+}
+
 // Her çalışanın Hesap menüsünde (516 a; seyrek kullanılır, çubukta yer tutmaz): gönderme yalnız oturum ister, kişi sunucuda
 // oturumdan alınır.
 export const ustEylemler: readonly UstEylem[] = [{
@@ -31,4 +44,6 @@ export const ustEylemler: readonly UstEylem[] = [{
   // Mini pano (2425): Hesap menüsünde durur; kişinin yetkisinin açtığı ve profilinde kapatmadığı pano yoksa madde çizilmez.
   anahtar: MINI_PANO_EYLEMI, sira: 80, islem: 'oturum', yer: 'hesap', hesapMaddesi: { baslik: 'Mini pano', simge: 'grid' },
   dugme: MiniPanoEylemi,
+}, {
+  anahtar: 'tanitim', sira: 85, islem: 'oturum', yer: 'hesap', hesapMaddesi: { baslik: 'Tanıtım', simge: 'play' }, dugme: TanitimDugmesi,
 }];
