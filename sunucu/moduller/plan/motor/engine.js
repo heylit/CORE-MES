@@ -769,6 +769,10 @@ function schedule(st,mode,base,opt={}){
     // sayılanlar: dönüş saati geçen fason (gerçekleşme kaydı yoktur), tabana bitmiş diye konan adım (bitti) ve gerçekleşeni olan iş (act).
     if(b.C<=now+1e-9){if(b.fas||b.bitti||b.act)pins.push({...b,pin:1,done:1});else gecmis.add(o.id);continue;}
     const hit=!b.fas&&tezgahDuruslari(st,b.m).some(d=>d.from<b.C-1e-9&&d.to>b.S+1e-9&&!(base.downIds||[]).includes(d.id));
+    /* 3534: tabanın duruş listesi her yolda gelmez: kayıtlı planı çözen yol (lnsDecode) bütün duruşları bilinir sayar, kayıtlı planda
+       liste de yoktur, kimlik sıradandır. Tabandaki iş bugünkü takvimle (yeni duruş, kısalan vardiya) daha geç bitiyorsa plan bunu
+       bilmiyordur: süren iş uzar, donuk iş sabit kalmaz. Daha erken bitmesi (takım değişimi, ek mesai) işi oynatmaz. */
+    const Mb=!b.fas&&cx.M[b.m],uzar=!!Mb&&adv(Mb.rw,adv(Mb.sw,b.S,b.su||0),b.run)>b.C+1e-6;
     if(b.S<now-1e-9){
       /* 3335-2b: kişi yeniden planlama istediyse (st.geride: işlem -> 1) başlaması geçmiş, başlamamış iş çalışıyor sayılmaz; saati geçmiş iş
          gibi şimdiden sonraya yeniden dizilir, ardılı da aşağıdaki kuralla (B-2499-7) sabit kalmaz. */
@@ -779,14 +783,14 @@ function schedule(st,mode,base,opt={}){
          iş gibi şimdiden sonraya yeniden dizilir. */
       const M=cx.M[b.m],c=M&&o.c.find(x=>x.m===b.m&&!x.fas);
       const run=c?(o.fai?Math.max(0,c.run-c.cyc):c.run):b.run,yeni=Math.abs(run-b.run)>1e-6;
-      if(M&&(hit||yeni)){const Su=adv(M.sw,b.S,b.su),C=adv(M.rw,Su,run);
+      if(M&&(hit||yeni||uzar)){const Su=adv(M.sw,b.S,b.su),C=adv(M.rw,Su,run);
         if(yeni&&!(C>now+1e-9)){gecmis.add(o.id);continue;}
         const r={...b,run,Su,C,lot1:yeni?Math.min(C,adv(M.rw,Su,Math.min(run,c.tbRun))):Math.min(C,b.lot1),pin:1};
-        if(hit)r.kesik=1;
+        if(hit||(uzar&&!yeni))r.kesik=1;
         surenBitis[b.m]=Math.max(surenBitis[b.m]||0,C);surenKoy(r);
         pins.push(r);}
       else{pins.push({...b,pin:1});if(M)surenKoy(b);}continue;}
-    if(b.S<frz-1e-9&&!hit&&!opt.noFreeze&&mode!=='sabit-mc')pins.push({...b,pin:1,frz:1});
+    if(b.S<frz-1e-9&&!hit&&!uzar&&!opt.noFreeze&&mode!=='sabit-mc')pins.push({...b,pin:1,frz:1});
   }
   /* 3538 b: tezgâhta süren iş (başlamış ya da plana göre süren) uzayıp aynı tezgâhta elle kilitli sonraki işin üstüne binerse süren iş
      yerinde kalır: dönen iş gerçektir, kilit niyettir. Kilitli iş süren işin bitişine kayar, nedeni (kilit-kaydi, o: kilidin eski saati)
