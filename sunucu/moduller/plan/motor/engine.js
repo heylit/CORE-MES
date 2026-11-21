@@ -175,7 +175,7 @@ function compile(st){olcekKur(st.w);
     for(const e of ek)if(e.m===m.id){const w=inst(e.gun,e.vardiya);if(w)sb.push(w);}
     let rw=sw;
     if(m.isiksiz){rw=[];for(let d=0;d<HDAYS;d++)if(gunu(d).length)rw.push([d*24,d*24+24]);rw=merge(rw.concat(sw));}
-    const dn=(st.down||[]).filter(x=>x.m===m.id).map(x=>[x.from,x.to]);
+    const dn=tezgahDuruslari(st,m.id).map(x=>[x.from,x.to]);
     sw=subtract(sw,dn);rw=subtract(rw,dn);sb=subtract(merge(sb),dn);
     const pay=st.w.tampon?Math.min(.35,(m.arizaGun>0?(+m.onarimSaat||0)/(m.arizaGun*24):0)+(+st.w.acilPay||0)):0;
     M[m.id]={...m,sw,rw,sblok:sb,smask:mask(sw),rmask:mask(rw),opOran:m.opOran==null?1:+m.opOran,verim:m.verim||1,pay};
@@ -370,12 +370,22 @@ function elleBolCoz(l,ad0,adaylar){
   const a=l.map(x=>Math.max(1,Math.floor(ad0*x.adet/top)));let k=ad0-a.reduce((t,v)=>t+v,0);
   for(let i=0;k!==0&&i<a.length*ad0;i++){const j=i%a.length;if(k>0){a[j]++;k--;}else if(a[j]>1){a[j]--;k++;}}
   return l.map((x,i)=>({adet:a[i],m:x.m}));}
+/* Duruş satırları tezgâha göre dizinlenir. Her yerleştirme denemesi yalnız kendi tezgâhının duruşuna bakar; satırların hepsi her denemede
+   taranırsa hesap süresi atölyedeki bütün tezgâhların duruş sayısıyla büyür (planlı duruş her tezgâha, her tekrarına ayrı satırdır). Dizin
+   duruş listesinin kendisine bağlıdır: liste yenilenince ya da satır eklenince yeniden kurulur; satır yerinde değiştirilmez. */
+const DURUS_DIZINI=new WeakMap(),DURUS_YOK={n:0,m:{},ids:[]};
+/** @param {MotorDurumu} st */
+function durusDizini(st){const d=st.down;if(!d||!d.length)return DURUS_YOK;let x=DURUS_DIZINI.get(d);
+  if(!x||x.n!==d.length){x={n:d.length,m:{},ids:d.map(y=>y.id)};for(const y of d)(x.m[y.m]=x.m[y.m]||[]).push(y);DURUS_DIZINI.set(d,x);}
+  return x;}
+/** @param {MotorDurumu} st @param {string} m */
+const tezgahDuruslari=(st,m)=>durusDizini(st).m[m]||[];
 /* Kilitli iş (kilit a): saati şimdiden ileriyse tezgâhında tam kilit saatinde sabittir; öncülünü beklemez (dondurulmuş gibi), öteki işler
    etrafına dizilir. Saatte arıza ya da bakım varsa iş arıza süresince durur, uyarı çıkar. Saati geçmiş kilit yalnız tezgâhı bağlar. */
 /** @param {any} [o] @param {any} [lk] @param {Derleme} [cx] */
 function kilitYeri(o,lk,cx){if(!lk||lk.S==null||!isFinite(+lk.S)||+lk.S<cx.st.now-1e-9)return null;const c=o.c.find(x=>x.m===lk.m&&!x.fas),M=c&&cx.M[c.m];if(!M)return null;
   const S=+lk.S,su=c.su+(o.fai?c.cyc+(+cx.A.faiSaat||0):0),run=o.fai?Math.max(0,c.run-c.cyc):c.run;const Su=adv(M.sw,S,su),C=adv(M.rw,Su,run);if(!isFinite(C))return null;
-  const downHit=(cx.st.down||[]).some(d=>d.m===c.m&&d.from<C-1e-9&&d.to>S+1e-9);
+  const downHit=tezgahDuruslari(cx.st,c.m).some(d=>d.from<C-1e-9&&d.to>S+1e-9);
   return {id:o.id,job:o.job,m:c.m,S,Su,C,lot1:adv(M.rw,Su,Math.min(run,c.tbRun)),su,run,pin:1,kilit:1,why:{t:'kilit'},downHit,pay:c.pay||0};}
 /* Kilitli iş tezgâhın boş anını ilerletmez: önüne sığan iş kilitten önce yapılır, sığmayan kilitten sonra başlar (tMach). */
 /** @param {Derleme} [cx] @param {any} [ctx] @param {any} [r] */
@@ -526,7 +536,7 @@ function tMach(o,c,cx,ctx,b,fast){
       s=Math.max(s+1e-6,k*SL);why={t:bad.t};continue;}
     const lot1=Math.min(C,adv(M.rw,Su,Math.min(run,c.tbRun)));
     const cost=M.ucret==null?null:(run*(1-M.pay)*M.ucret+su*(M.ucret+(+cx.A.ayarciUcret||0)));
-    const dl=(st.down||[]).filter(d=>d.m===c.m);
+    const dl=tezgahDuruslari(st,c.m);
     const downHit=dl.some(d=>d.from<C-1e-9&&d.to>s+1e-9)||dl.some(d=>d.from<=s_in+1e-9&&d.to>=s-1e-9&&s>s_in+1e-9);
     if(s>s_in+1e-9&&dl.some(d=>d.from<=s_in+1e-9&&d.to>=s-1e-9))why={t:'ariza',r:c.m};
     /* 2509 a: pay, işleme süresini uzatan pay oranıdır (acil iş payı ve arıza payı); canlı plan saati uzatılmış süredir, sapma ve öğrenme
@@ -691,7 +701,7 @@ function schedule(st,mode,base,opt={}){
     // Saati geçmiş ama gerçekleşme kaydı olmayan tezgâh işi yapılmamıştır: bitti sayılmaz, şimdiden sonraya yeniden yerleşir. Bitmiş
     // sayılanlar: dönüş saati geçen fason (gerçekleşme kaydı yoktur), tabana bitmiş diye konan adım (bitti) ve gerçekleşeni olan iş (act).
     if(b.C<=now+1e-9){if(b.fas||b.bitti||b.act)pins.push({...b,pin:1,done:1});else gecmis.add(o.id);continue;}
-    const hit=!b.fas&&(st.down||[]).some(d=>d.m===b.m&&d.from<b.C-1e-9&&d.to>b.S+1e-9&&!(base.downIds||[]).includes(d.id));
+    const hit=!b.fas&&tezgahDuruslari(st,b.m).some(d=>d.from<b.C-1e-9&&d.to>b.S+1e-9&&!(base.downIds||[]).includes(d.id));
     if(b.S<now-1e-9){
       /* 3335-2b: kişi yeniden planlama istediyse (st.geride: işlem -> 1) başlaması geçmiş, başlamamış iş çalışıyor sayılmaz; saati geçmiş iş
          gibi şimdiden sonraya yeniden dizilir, ardılı da aşağıdaki kuralla (B-2499-7) sabit kalmaz. */
@@ -775,7 +785,7 @@ function schedule(st,mode,base,opt={}){
   }
   for(const id of U){ctx.fail.push(id);const p=(cx.byId[id].pr.find(([q])=>!ctx.P[q])||[])[0];if(p)ctx.neden[id]={kod:'oncul',oncul:p};}
   const fail=[...new Set(ctx.fail)],failNeden={};for(const id of fail)failNeden[id]=ctx.neden[id]||{kod:'zaman'};
-  const plan={ops:ctx.P,fail,failNeden,mode,downIds:(st.down||[]).map(d=>d.id)};
+  const plan={ops:ctx.P,fail,failNeden,mode,downIds:durusDizini(st).ids};
   if(!opt.noSlack)slack(plan,cx);
   plan.cx=undefined;Object.defineProperty(plan,'cx',{value:cx,enumerable:false,writable:true});
   return plan;
@@ -1156,7 +1166,7 @@ function lnsDecode(st,cur,mods,cx,free,bekletme){
   // sıra anahtarları dondurma sınırının ötesine sıralı yayılır: anahtar yalnız tezgâhtaki sırayı taşır
   const frz=st.now+(free?0:(st.w.dondurma||0));const mid=new Set(mods.map(x=>x[0]));const mv=Object.values(ops).filter(r=>!r.act&&!r.done&&(free||!r.pin)&&(r.S>=frz-1e-9||mid.has(r.id))).sort((a,b)=>a.S-b.S);
   mv.forEach((r,i)=>{ops[r.id]={...r,S:frz+1+i*1e-3};});
-  const fake={...cur,ops,downIds:(st.down||[]).map(d=>d.id)};
+  const fake={...cur,ops,downIds:durusDizini(st).ids};
   // başvuru planı yoksa dondurma da yoktur
   const o={cx,noFreeze:!!free,noSlack:true,liste:true};const a=schedule(st,'sabit',fake,o);if(!bekletme)return a;
   // erteleme kaynak ve ayar sırasını da değiştirir; taşınmamış plan kendini aynen üretsin diye iki çözümden iyisi alınır

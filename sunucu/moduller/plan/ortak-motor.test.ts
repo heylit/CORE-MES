@@ -384,3 +384,36 @@ describe('ortak plan motoru, bedeli bilinmeyen tezgâh (763)', () => {
     assert.equal(m.schedule(durum(m, {}, 0, bilinen), 'yeni', null).ops['S1.10']?.m, 'T1');
   });
 });
+
+// Duruş satırları tezgâha göre dizinlenir (3509): dizin duruş listesine bağlıdır, liste değişince eskisi kullanılmaz.
+describe('ortak plan motoru, duruş satırları tezgâha göre okunur (3509)', () => {
+  const durus = (m: string, from: number, to: number, id = 'd0') => ({ id, m, from, to, neden: 'planlı duruş' });
+  const bitis = (m: Motor, st: MotorDurumu): number | undefined => m.schedule(st, 'yeni', null).ops['S1.10']?.C;
+
+  test('iş kendi tezgâhının duruşunda bekler; başka tezgâhın duruşu onu geciktirmez', () => {
+    const m = motorYukle();
+    assert.equal(bitis(m, { ...durum(m, {}, 0), down: [durus('T1', 2, 5)] }), 13);
+    assert.equal(bitis(m, { ...durum(m, {}, 0), down: [durus('T9', 2, 5)] }), 10);
+  });
+
+  test('listeye sonradan eklenen duruş da geçerlidir; aynı uzunlukta yeni liste eskisinin yerine geçer', () => {
+    const m = motorYukle();
+    const st = { ...durum(m, {}, 0), down: [durus('T9', 2, 5)] };
+    assert.equal(bitis(m, st), 10);
+    st.down.push(durus('T1', 2, 5, 'd1'));
+    assert.equal(bitis(m, st), 13, 'eklenen satır');
+    st.down = [durus('T9', 2, 5), durus('T1', 20, 24, 'd1')];
+    assert.equal(bitis(m, st), 10, 'yeni liste');
+  });
+
+  test('plan, dizildiği andaki duruşları tanır: sonradan eklenen duruş süren işi keser', () => {
+    const m = motorYukle();
+    const st = { ...durum(m, {}, 0), down: [durus('T1', 12, 14)] };
+    const taban = m.schedule(st, 'yeni', null);
+    assert.deepEqual((taban as unknown as { downIds: string[] }).downIds, ['d0']);
+    st.down.push(durus('T1', 8, 9, 'd1'));
+    const sonra = m.schedule({ ...st, now: 7 }, 'sabit', taban);
+    assert.deepEqual((taban as unknown as { downIds: string[] }).downIds, ['d0'], 'eski planın listesi değişmez');
+    assert.equal(sonra.ops['S1.10']?.C, 11, 'süren iş yeni duruş kadar geç biter');
+  });
+});
