@@ -145,6 +145,7 @@ export function Kapasite({ c, m, taslak, yazabilir, zaman, kapat, istenen = null
       <h3>Duruşlar</h3>
       {l.length === 0 ? <p className="tc-pyq-not">{`${kod(tezgah)} için önümüzdeki duruş yok.`}</p> : (
         <ul className="tc-pyq-kap-liste">
+          {yakin.length === 0 && <li className="tc-pyq-not">Önümüzdeki 4 haftada duruş yok.</li>}
           {yakin.map(durusSatiri)}
           {sonraki.length > 0 && (
             <li>

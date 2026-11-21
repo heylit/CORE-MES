@@ -222,6 +222,16 @@ describe('Kokpit kapasite bölümü, Vardiya\'dan gelen uzak duruşlar kapalı d
     expect(within(v.panel).queryByRole('button', { name: /^Daha sonraki/ })).toBeNull();
   });
 
+  it('yakında duruş yoksa düğmenin üstünde bunu söyler; yakın duruş gelince cümle kalkar', () => {
+    const uzak = haftalik('ORN-T1', 3, 1000);
+    const v = kur(true, uzak);
+    expect(satirlar(v.panel)).toEqual(['Önümüzdeki 4 haftada duruş yok.', 'Daha sonraki 3 duruşu göster']);
+    fireEvent.click(within(v.panel).getByRole('button', { name: 'Daha sonraki 3 duruşu göster' }));
+    expect(satirlar(v.panel).slice(0, 2)).toEqual(['Önümüzdeki 4 haftada duruş yok.', 'Daha sonraki 3 duruşu gizle']);
+    v.yenile([...uzak, ELLE]);
+    expect(satirlar(v.panel).some((x) => x.startsWith('Önümüzdeki'))).toBe(false);
+  });
+
   it('açık liste tezgâha aittir: başka tezgâha geçince onun uzak duruşları kapalı gelir', () => {
     const { panel } = kur(true, [...haftalik('ORN-T1', 8), ...haftalik('ORN-T2', 9)]);
     fireEvent.click(within(panel).getByRole('button', { name: 'Daha sonraki 4 duruşu göster' }));
