@@ -232,6 +232,29 @@ describe('Kokpit liste düzeni (3414 b)', () => {
     expect(document.querySelector('[data-durdurma-bekliyor]')).toBeNull();
   });
 
+  // 3526: sahadan bildirilen bekleme ve uzama adımın satırında yazar; eski düzendeki adım tablosuyla aynı cümle.
+  it('bildirilen bekleme başlamamış adımın satırında nedeni ve anıyla, uzama adımın satırında yazar; başlamış adımın beklemesi, yeri olmayan adım ve bildirim yokken yazmaz', () => {
+    const x = kur();
+    // 2.20 süren iştir; 2.40 başlamamıştır.
+    expect([x.m.isler['2.20']?.basladi, x.m.isler['2.40']?.basladi]).toEqual([true, false]);
+    ciz(x, '2');
+    expect(document.querySelector('[data-adim-bekle], [data-adim-ek]')).toBeNull();
+    cleanup();
+    ciz(x, '2', { adimBekle: { '2.40': { kadar: 9000, neden: 'malzeme' }, '2.20': { kadar: 9000, neden: 'kisi' }, '2.30': { kadar: 9000.4, neden: 'kisi', ust: '3' } }, adimEk: { '2.20': 1.5, '2.40': 0.254 } });
+    const yazi = (q: string) => [...document.querySelectorAll(q)].map((y) => [y.closest('li')?.querySelector('span')?.textContent.replace(/^\d+\. /, ''), y.textContent]);
+    const ad = (id: string) => x.m.emirler.find((e) => e.id === '2')!.adimlar.find((a) => a.id === id)!.ad;
+    expect(x.m.isler['2.30']?.basladi).toBe(false);
+    expect(yazi('[data-adim-bekle]')).toEqual([[ad('2.30'), "bekliyor: kişi yok, 01.01 9000'e kadar · üst emirden (ORN-3)"], [ad('2.40'), "bekliyor: malzeme yok, 01.01 9000'e kadar"]]);
+    expect(yazi('[data-adim-ek]')).toEqual([[ad('2.20'), 'uzadı +1,5 sa'], [ad('2.40'), 'uzadı +0,25 sa']]);
+    // Not adımın düğmesinin içindedir: basınca adım seçilir.
+    expect(document.querySelector('[data-adim-bekle="2.40"]')?.closest('button')?.getAttribute('data-adim')).toBe('2.40');
+    cleanup();
+    const y = yarimKur({ kod: 'zaman' });
+    ciz(y, '3', { adimBekle: { [y.eksik]: { kadar: 9000, neden: 'malzeme' } }, adimEk: { [y.eksik]: 2 } });
+    expect(document.querySelector(`[data-yeri-yok="${y.eksik}"]`)).not.toBeNull();
+    expect(document.querySelector('[data-adim-bekle], [data-adim-ek]')).toBeNull();
+  });
+
   it('3484 c: ufuk sonrasına uzayan adım ufuk sonrası saatini yazar; eski kayıttaki ardıl nedenini söyler', () => {
     const c0 = ornekCalisma(), plan = c0.plan as unknown as { ops: Record<string, { job: string }> };
     const ids = Object.keys(plan.ops).filter((id) => plan.ops[id]?.job === '3').sort();
@@ -295,6 +318,44 @@ describe('partiye bölünen emir (3483)', () => {
     expect([...document.querySelectorAll('[data-emir-kol]')].map((x) => [x.closest('[data-emir]')?.getAttribute('data-emir'), x.textContent])).toEqual([['3', kol.emir[3]]]);
     expect([...document.querySelectorAll('[data-adim-parti]')].map((x) => [x.closest('[data-emir]')?.getAttribute('data-emir'), x.closest('li')?.querySelector('span')?.textContent, x.textContent]))
       .toEqual([['2', expect.stringMatching(/^\d+\. /), 'bekliyor: parti ORN-2/1']]);
+  });
+
+  // 3522: bitişi planlı duruşların okunduğu pencerenin ötesinde kalan emir, bitişin erken görünebileceğini söyler.
+  it('bitişi bir yıldan ileride olan emrin öbeğinde duruşların okunmadığı yazar; öteki emirde ve pencere içinde yoktur', () => {
+    const c = ornekCalisma(), p = planOku(c), m0 = partili(c, p);
+    const uzak = (id: string, bitis: number) => ({ ...m0, emirler: m0.emirler.map((e) => (e.id === id ? { ...e, bitis } : e)) });
+    const NOT = 'Bitiş bir yıldan ileride; o tarihlerdeki planlı duruşlar hesaba katılmadı, bitiş daha geç olabilir.';
+    const sinir = (Math.floor(m0.simdi / 24) + 367) * 24;
+    const notlar = () => [...document.querySelectorAll('[data-durus-okunmadi]')].map((x) => [x.closest('[data-emir]')?.getAttribute('data-emir'), x.textContent, x.previousElementSibling?.className]);
+    ciz({ m: m0, p, kartlar: siraKartlari(m0) }, '2');
+    expect(notlar()).toEqual([]);
+    cleanup();
+    const m1 = uzak('3', sinir + 1);
+    ciz({ m: m1, p, kartlar: siraKartlari(m1) }, '2', { kol: { emir: { 3: 'Parti notu.' }, adim: {} } });
+    // Emir başına tek satır, başlığın hemen altında; partinin notu ondan sonra gelir.
+    expect(notlar()).toEqual([['3', NOT, 'tc-pyq-ld-emir-bas']]);
+    expect(document.querySelector('[data-emir="3"] [data-durus-okunmadi] + [data-emir-kol]')).not.toBeNull();
+    cleanup();
+    const m2 = uzak('3', sinir);
+    ciz({ m: m2, p, kartlar: siraKartlari(m2) }, '2');
+    expect(notlar()).toEqual([]);
+    cleanup();
+    // Pencere planın başından değil bugünden sayılır: iki gün sonra aynı bitiş pencerenin içindedir.
+    const m3 = { ...m1, simdi: m0.simdi + 48 };
+    ciz({ m: m3, p, kartlar: siraKartlari(m3) }, '2');
+    expect(notlar()).toEqual([]);
+  });
+
+  it('tek emirli satırda bitişi bir yıldan ileride olan emrin notu adımların üstünde durur', () => {
+    const x = kur(), sinir = (Math.floor(x.m.simdi / 24) + 367) * 24;
+    const m = { ...x.m, emirler: x.m.emirler.map((e) => (e.id === '2' ? { ...e, bitis: sinir + 100 } : e)) };
+    ciz({ m, p: x.p, kartlar: siraKartlari(m) }, '2');
+    expect(document.querySelector('.tc-pyq-ld-kart[data-acik] [data-durus-okunmadi] + .tc-pyq-ld-adimlar')).not.toBeNull();
+    expect(document.querySelectorAll('[data-durus-okunmadi]')).toHaveLength(1);
+    cleanup();
+    // Partinin notu da varsa sıra aynıdır: önce emrin notu, sonra partinin notu, sonra adımlar.
+    ciz({ m, p: x.p, kartlar: siraKartlari(m) }, '2', { kol: { emir: { 2: 'Parti notu.' }, adim: {} } });
+    expect(document.querySelector('.tc-pyq-ld-kart[data-acik] [data-durus-okunmadi] + [data-emir-kol] + .tc-pyq-ld-adimlar')).not.toBeNull();
   });
 
   it('tek emirli satırda da partinin notu adımların üstünde durur', () => {

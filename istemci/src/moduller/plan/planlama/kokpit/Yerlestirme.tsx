@@ -7,7 +7,7 @@ import { MalzemeSatirlari } from './MalzemeSatiri.tsx';
 import { malzemeNedeni, malzemeVarsayimi, terminYazisi, type EmirMalzemeleri } from './malzeme.ts';
 import { OdakPaneli } from './OdakPaneli.tsx';
 import { planaAlOnizle, type PlanaAlOnizlemesi } from './plana-al.ts';
-import { BEKLEME_ADI, adimEkYazisi, adimSecimleri, bagimlilik, durumYazisi, eksikAdimlar, eksikNedeni, enCokBekleyen, fasonMu, ilkBosluk, kismiPlanli, onizlemeBitisi, sureYaz, tasimaSaati, tasinabilir, ustEmirNotu, DURDURMA_BEKLIYOR, SUREN_TASIMA, type AdimBeklemesi, type AdimSecimi, type EmirDurumu, type FirmaYazisi, type KokpitEmri, type KokpitModeli, type KolNotlari, type TurAdayi } from './kurallar.ts';
+import { DURUS_OKUNMADI, adimBeklemeYazisi, adimSecimleri, adimUzamaYazisi, bagimlilik, durumYazisi, durusOkunmadi, eksikAdimlar, eksikNedeni, enCokBekleyen, fasonMu, ilkBosluk, kismiPlanli, onizlemeBitisi, sureYaz, tasimaSaati, tasinabilir, DURDURMA_BEKLIYOR, SUREN_TASIMA, type AdimBeklemesi, type AdimSecimi, type EmirDurumu, type FirmaYazisi, type KokpitEmri, type KokpitModeli, type KolNotlari, type TurAdayi } from './kurallar.ts';
 import { adimYeri, bosYerler, siradakiAdim, tasimaAdaylari, uygunTezgahlar, type BosYer, type SiraKarti } from './yerlestirme.ts';
 import './yerlestirme.css';
 
@@ -539,6 +539,7 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
           {`${String(e.adet)} adet · `}<b data-d={e.durum}>{kismi ? `kısmen planda, ${String(eksik.length)} adımın yeri yok` : durumYazisi(e)}{varsayim ? ' (malzeme varsayımıyla)' : ''}</b>
           {e.termin !== null && ` · termin ${zaman(e.termin)}`}{e.bitis !== null && ` · biter ${zaman(e.bitis)}`}
         </small>
+        {durusOkunmadi(m, e) && <small data-durus-okunmadi="">{DURUS_OKUNMADI}</small>}
         {kol?.emir[e.id] !== undefined && <small data-emir-kol="">{kol.emir[e.id]}</small>}
         {kismi && <small data-emir-neden="kismi">Yeri olmayan: {eksik.map((x) => `${String(e.adimlar.indexOf(x) + 1)}. ${x.ad}: ${eksikNedeni(plan, x.id)}`).join('; ')}. Yoldaki "Eksik adımları planla" ya da Planla menüsündeki "Seçili siparişi yeniden planla" yerleştirir.</small>}
         {malNeden !== null && <small data-emir-neden="malzeme">Neden {e.durum === 'gec' ? 'geç' : 'riskli'}: {malNeden}</small>}
@@ -627,14 +628,14 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
                     {yer === 'fason' || x?.fason ? <span className="tc-pyq-not">{x ? zaman(x.S) : 'sistem yerleştirir'}</span>
                       : saatGirdisi ? <input className="tc-alan-kutu" type="datetime-local" step={900} aria-label={`${a.ad} başlangıcı`} aria-invalid={hata !== null || undefined} aria-describedby={hata !== null ? notKimligi : undefined} disabled={!girilir} title={kilit ?? undefined} value={x ? saatGirdisi.yaz(duzenli?.baslangic ?? x.S) : s?.baslangic !== undefined ? saatGirdisi.yaz(s.baslangic) : ''} onChange={(ev) => { saatDegisti(ev.target.value); }} />
                         : <span>{x ? zaman(x.S) : '—'}</span>}
-                    {x && !x.basladi && adimBekle?.[a.id] !== undefined && <small data-adim-bekle={a.id}>bekliyor: {BEKLEME_ADI[adimBekle[a.id]!.neden]}, {zaman(adimBekle[a.id]!.kadar)}'e kadar{ustEmirNotu(m, adimBekle[a.id]!)}</small>}
+                    {x && !x.basladi && adimBekle?.[a.id] !== undefined && <small data-adim-bekle={a.id}>{adimBeklemeYazisi(m, adimBekle[a.id]!, zaman)}</small>}
                     {x && !x.basladi && kol?.adim[a.id] !== undefined && <small data-adim-parti={a.id}>{kol.adim[a.id]}</small>}
                     {x?.durdurmaBekliyor && <small data-durdurma-bekliyor={a.id}>{DURDURMA_BEKLIYOR}; canlıda eski yerinde</small>}
                     {!x && tahmin && s?.baslangic === undefined && <small data-ongoru="">öngörü {tz(tahmin.tezgah)} · {zaman(tahmin.S)}</small>}
                   </td>
                   <td data-ad="Bitiş" className="tc-pyq-mono">
                     {x ? zaman(x.C) : tahmin ? <span data-ongoru="" title="Öngörü: yazılmadı">{zaman(tahmin.C)}</span> : '—'}
-                    {x && adimEk?.[a.id] !== undefined && <small data-adim-ek={a.id}>uzadı {adimEkYazisi(adimEk[a.id]!)}</small>}
+                    {x && adimEk?.[a.id] !== undefined && <small data-adim-ek={a.id}>{adimUzamaYazisi(adimEk[a.id]!)}</small>}
                   </td>
                   <td data-ad="Durum">
                     <Rozet ton={yer === 'yerli' ? 'tamam' : yer === 'fason' ? 'bilgi' : 'hata'} gorunum="cizgi">{yer === 'yerli' ? 'Yerleşti' : yer === 'fason' ? 'Fason' : 'Yerleşmedi'}</Rozet>

@@ -1,6 +1,6 @@
 import type { EmirNo } from '../ortak/emir-no.ts';
 import { acikSaat, zamanTanisiYazisi, type Bitenler, type Derleme, type OkunanPlan } from '../motor/kurallar.ts';
-import { adimAdi, type PlanlamaCalismasi } from '../tipler.ts';
+import { adimAdi, durusOkumaSonu, type PlanlamaCalismasi } from '../tipler.ts';
 
 // Kokpit'in saf kuralları (kart 3151): tahtanın, matrisin ve sorun turunun okuduğu model çalışmadan ve kayıtlı plandan kurulur.
 // Saat ekseni çalışmanın eksenidir (başlangıç gününün 00:00'ından saat). Veri yoksa null; sıfır uydurulmaz.
@@ -614,7 +614,15 @@ export function kolNotlari(m: Pick<KokpitModeli, 'emirler'>, D: Pick<PlanlamaCal
   for (const [adim, l] of Object.entries(bekleyen)) y.adim[adim] = `bekliyor: parti ${l.join(', ')}`;
   return y;
 }
+// Bitişi planlı duruşların okunduğu pencerenin ötesinde kalan emir: oradaki duruşlar hesaba girmediği için bitiş olduğundan erken görünebilir.
+// Ufku aşan her emirde değil, yalnız bu emirlerde söylenir.
+export const DURUS_OKUNMADI = 'Bitiş bir yıldan ileride; o tarihlerdeki planlı duruşlar hesaba katılmadı, bitiş daha geç olabilir.';
+export const durusOkunmadi = (m: Pick<KokpitModeli, 'simdi'>, e: Pick<KokpitEmri, 'bitis'>): boolean => e.bitis !== null && e.bitis > durusOkumaSonu(m.simdi);
 export const adimEkYazisi = (saat: number): string => `+${String(Math.round(saat * 100) / 100).replace('.', ',')} sa`;
+// Adımın satırındaki bekleme ve uzama yazıları; adımı listeleyen her düzen aynı cümleyi kurar.
+export const adimBeklemeYazisi = (m: Pick<KokpitModeli, 'emirler'>, b: AdimBeklemesi, zaman: (t: number) => string): string =>
+  `bekliyor: ${BEKLEME_ADI[b.neden]}, ${zaman(b.kadar)}'e kadar${ustEmirNotu(m, b)}`;
+export const adimUzamaYazisi = (saat: number): string => `uzadı ${adimEkYazisi(saat)}`;
 
 // Vardiyanın adı yoksa saatleri ("16:00–24:00"); çalışmada yoksa kimliği.
 export function vardiyaAdi(c: PlanlamaCalismasi, id: string): string {

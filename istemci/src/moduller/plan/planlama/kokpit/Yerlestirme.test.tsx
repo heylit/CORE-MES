@@ -881,3 +881,20 @@ describe('adım ortasından bölünen partinin notları ekranda (3523)', () => {
     expect(document.querySelector('[data-adim-parti]')).toBeNull();
   });
 });
+
+describe('bitişi duruş okuma penceresinin ötesindeki emir, eski düzende (3522)', () => {
+  it('emir başlığında, bitişin altında tek satır yazar; pencere içindeki emirde yoktur', () => {
+    const { unmount } = render(<EmirAdimlari m={M} kart={kart('1')} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} />);
+    expect(document.querySelector('[data-durus-okunmadi]')).toBeNull();
+    unmount();
+    const k = kart('1'), sinir = (Math.floor(M.simdi / 24) + 367) * 24;
+    render(<EmirAdimlari m={M} kart={{ ...k, emirler: k.emirler.map((e) => ({ ...e, bitis: sinir + 1 })) }} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} />);
+    const not = document.querySelector('[data-emir="1"] [data-durus-okunmadi]');
+    expect(not?.textContent).toBe('Bitiş bir yıldan ileride; o tarihlerdeki planlı duruşlar hesaba katılmadı, bitiş daha geç olabilir.');
+    expect(not?.previousElementSibling?.hasAttribute('data-emir-ozet')).toBe(true);
+    cleanup();
+    // Pencere planın başından değil bugünden sayılır: iki gün sonra aynı bitiş pencerenin içindedir.
+    render(<EmirAdimlari m={{ ...M, simdi: M.simdi + 48 }} kart={{ ...k, emirler: k.emirler.map((e) => ({ ...e, bitis: sinir + 1 })) }} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} />);
+    expect(document.querySelector('[data-durus-okunmadi]')).toBeNull();
+  });
+});
