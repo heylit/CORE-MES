@@ -352,3 +352,111 @@ describe('"Partiyi böl" ölçümü plana göre süren adımı ilk partinin aded
     assert.deepEqual(yer(sonra), yer(basta));
   });
 });
+
+// "Değişikliği uygula": plan `once` emirleriyle kurulur; sonra emirler `sonra` olur (bölme, adet düzeltmesi) ve istenen emirler dizilir.
+async function uygula(once: Emir[], sonra: Emir[], isler: string[], an: string, ek: Ek = {}, calismaEki: Record<string, unknown> = {}): Promise<Record<string, Is>> {
+  const onceki = kur(once, ek);
+  const r = await degerlendirmeYap({ calisma: { ...onceki.S, plan: onceki.plan, ...calismaEki }, kayit: ek.kayit ?? kayit(), kaynak: kaynak(sonra, ek), bugun: '2026-10-19',
+    istek: { tur: 'plan-uygula', isler } }, Date.parse(an));
+  assert.ok(r && !('hata' in r), JSON.stringify(r));
+  const s = degerlendirmeSonucu.parse(r.sonuc);
+  if (s.tur !== 'plan-uygula') return assert.fail(JSON.stringify(s));
+  assert.deepEqual(s.plan['fail'] ?? [], [], 'bütün adımlar yerleşti');
+  return s.plan['ops'] as Record<string, Is>;
+}
+
+describe('plana göre süren adım yerinde kalır, süresi yeni adetle yenilenir (3519)', () => {
+  // Plan 6 adetle kuruldu: 10. adım 08:00-14:00 (8.-14. saat), gerçekleşen kaydı yok. 09:00'da (06:00Z) adım plana göre sürüyor sayılır.
+  const SONRA = '2026-10-19T06:00:00Z';
+  const yer = (ops: Record<string, Is>, id: string): (string | number)[] => { const r = ops[id]; return r ? [r.m, r.S, r.C, r.run] : []; };
+  // Aynı tezgâhta üst üste binen ya da aynı emirde bir önceki adımı bitmeden başlayan işler.
+  const bozuk = (ops: Record<string, Is>): string[] => {
+    const l: string[] = [], tezgahlar: Record<string, [string, Is][]> = {};
+    for (const [id, r] of Object.entries(ops)) {
+      (tezgahlar[r.m] ??= []).push([id, r]);
+      const [j, k] = id.split('.'), q = ops[`${String(j)}.${String(Number(k) - 10)}`];
+      if (q && r.S < q.C - 1e-6) l.push(`${id} öncülü bitmeden başlıyor`);
+    }
+    for (const t of Object.values(tezgahlar)) { t.sort((a, b) => a[1].S - b[1].S); for (let i = 1; i < t.length; i++) if (t[i]![1].S < t[i - 1]![1].C - 1e-6) l.push(`${t[i]![0]} ile ${t[i - 1]![0]} üst üste`); }
+    return l;
+  };
+
+  test('SU-01: emir gerçekten bölününce üst emrin süren adımı aynı saatte, kalan adedinin süresiyle sürer; parti ondan sonra başlar', async () => {
+    const ops = await uygula([emir('2', 6)], [emir('2', 4), emir('3', 2, '2')], ['3'], SONRA);
+    assert.deepEqual([yer(ops, '2.10'), yer(ops, '3.10')], [['200', 8, 12, 4], ['200', 12, 14, 2]]);
+    assert.deepEqual(bozuk(ops), []);
+    // Ardılın bindirmeli başlayabileceği an (ilk aktarma partisinin bitişi) da yeni adettendir: 4 adette 1 parça, 09:00.
+    assert.equal((ops['2.10'] as unknown as { lot1: number }).lot1, 9);
+    // Adet değişmediyse süren adım olduğu gibi kalır.
+    const ayni = await uygula([emir('2', 6)], [emir('2', 6), emir('4', 2)], ['4'], SONRA);
+    assert.deepEqual([yer(ayni, '2.10'), yer(ayni, '4.10')], [['200', 8, 14, 6], ['200', 14, 16, 2]]);
+  });
+
+  test('SU-02: adet artınca süren adım yerinde uzar; eski bitişine yaslanan iş onunla üst üste kalmaz', async () => {
+    const once = [emir('2', 6), emir('4', 3)];
+    assert.deepEqual(yer(kur(once).ops, '4.10').slice(0, 2), ['200', 14], 'örnek plan: öteki emir süren adımın eski bitişinde başlıyor');
+    const ops = await uygula(once, [emir('2', 8), emir('4', 3), emir('5', 1)], ['5'], SONRA);
+    assert.deepEqual(yer(ops, '2.10'), ['200', 8, 16, 8]);
+    assert.ok(ops['4.10']!.S >= 16 - 1e-9, `öteki emir süren adım bitince: ${String(ops['4.10']!.S)}`);
+    assert.deepEqual(bozuk(ops), []);
+  });
+
+  test('SU-03: yenilenen bitiş şimdiden önceyse adım yapılmış sayılmaz, şimdiden sonraya dizilir', async () => {
+    // 1 adede inen üst emrin payı 09:00'da biterdi; an 09:30. Kaydı olmayan iş bitmiş sayılmaz.
+    const ops = await uygula([emir('2', 6)], [emir('2', 1), emir('3', 5, '2')], ['3'], '2026-10-19T06:30:00Z');
+    assert.equal(ops['2.10']!.run, 1);
+    assert.ok(ops['2.10']!.S >= 9.5 - 1e-9, `şimdiden sonra: ${String(ops['2.10']!.S)}`);
+    assert.deepEqual(bozuk(ops), []);
+  });
+
+  test('SU-04: ilk parça kontrollü süren adımda ilk parçanın süresi ayarda kalır; yeni duruş da yenilenen süreyle birlikte sayılır', async () => {
+    const faili = kayit([{ ...adim(10, '20', 60, 0), plan: { k: '10', fai: true } } as unknown as ReturnType<typeof adim>, adim(20, '10', 60, 0), adim(30, '20', 60, 0)]);
+    const f = await uygula([emir('2', 6)], [emir('2', 4), emir('3', 2, '2')], ['3'], SONRA, { kayit: faili });
+    assert.deepEqual(yer(f, '2.10'), ['200', 8, 12, 3]);
+    // Plandan sonra girilen duruş (10:00-11:00) süren adımı böler: 4 adetlik iş 12:00 yerine 13:00'te biter.
+    const durus = { down: [{ id: 'd1', m: '200', from: 10, to: 11, neden: 'ariza' }] };
+    const d = await uygula([emir('2', 6)], [emir('2', 4), emir('3', 2, '2')], ['3'], SONRA, {}, durus);
+    assert.deepEqual(yer(d, '2.10'), ['200', 8, 13, 4]);
+    assert.ok(d['3.10']!.S >= 13 - 1e-9, `parti süren adım bitince: ${String(d['3.10']!.S)}`);
+    assert.deepEqual(bozuk(d), []);
+  });
+
+  // Motorun tek geçişi: plan `once` ile kuruldu; emirler `sonra` olunca saat 09:30'da kayıtlı plan taban alınarak yeniden çözülür.
+  const tekGecis = (sonra: Emir[], calismaEki: Record<string, unknown> = {}, kyt = kayit()): Record<string, Is & { kesik?: number; Su?: number }> => {
+    const once = kur([emir('2', 6)], { kayit: kyt }), k = kaynak(sonra, {});
+    let S: Record<string, unknown> = { ...once.S, plan: once.plan, ...calismaEki };
+    let g = planGirdisi({ calisma: S, kayit: kyt, kaynak: k, bugun: '2026-10-19' });
+    for (let i = 0; i < 4 && g && g.S['dataVer'] !== S['dataVer']; i++) { S = g.S; g = planGirdisi({ calisma: S, kayit: kyt, kaynak: k, bugun: '2026-10-19' }); }
+    assert.ok(g && g.S['dataVer'] === S['dataVer'], 'birleşme kararlı');
+    const p = motorYukle().schedule({ ...g.st, now: 9.5 } as typeof g.st, 'sabit', { ops: once.ops, fail: [], downIds: [] } as never);
+    assert.equal((p.fail ?? []).length, 0, 'bütün adımlar yerleşti');
+    return p.ops as unknown as Record<string, Is & { kesik?: number; Su?: number }>;
+  };
+
+  test('SU-06: motorun tek geçişinde de yenilenen bitişi şimdiden önce kalan adım yerinde bırakılmaz', () => {
+    // "Değişikliği uygula" motoru art arda çalıştırır; sonraki geçiş saati geçmiş işi zaten yeniden dizer. Kural tek geçişte de geçerlidir:
+    // kaydı olmayan iş plana bitmiş diye girmez.
+    const ops = tekGecis([emir('2', 1), emir('3', 5, '2')]);
+    assert.equal(ops['2.10']!.run, 1);
+    assert.ok(ops['2.10']!.S >= 9.5 - 1e-9, `şimdiden sonra: ${String(ops['2.10']!.S)}`);
+    // Bitişi şimdiyi aşan adım aynı geçişte yerinde kalır (4 adet, 08:00-12:00).
+    assert.deepEqual(yer(tekGecis([emir('2', 4), emir('3', 2, '2')]), '2.10'), ['200', 8, 12, 4]);
+  });
+
+  test('SU-07: planın bilmediği duruş süren adımı adedi değişmese de uzatır ve işaretler; yalnız süresi yenilenen adım işaret taşımaz', () => {
+    const durus = { down: [{ id: 'd1', m: '200', from: 10, to: 11, neden: 'ariza' }] };
+    const d = tekGecis([emir('2', 6)], durus);
+    assert.deepEqual([yer(d, '2.10'), d['2.10']!.kesik], [['200', 8, 15, 6], 1]);
+    const y = tekGecis([emir('2', 4), emir('3', 2, '2')]);
+    assert.deepEqual([yer(y, '2.10'), y['2.10']!.kesik], [['200', 8, 12, 4], undefined]);
+    // Duruş ayarın içine düşerse ayarın bitişi de kayar: 2 saatlik ayar 08:00-10:00 yerine 11:00'de biter, işleme ondan sonra başlar.
+    const ayarli = kayit([adim(10, '20', 60, 120), adim(20, '10', 60, 0), adim(30, '20', 60, 0)]);
+    const a = tekGecis([emir('2', 6)], { down: [{ id: 'd1', m: '200', from: 9, to: 10, neden: 'ariza' }] }, ayarli);
+    assert.deepEqual([a['2.10']!.S, a['2.10']!.Su, a['2.10']!.C], [8, 11, 33]);
+  });
+
+  test('SU-05: kişi süren adımın emrini de yeniden dizdirirse adım şimdiden sonraya, yeni adedinin süresiyle dizilir (3335-2b)', async () => {
+    const ops = await uygula([emir('2', 6)], [emir('2', 4), emir('3', 2, '2')], ['2', '3'], SONRA);
+    assert.deepEqual([yer(ops, '2.10'), yer(ops, '3.10')], [['200', 9, 13, 4], ['200', 13, 15, 2]]);
+  });
+});
