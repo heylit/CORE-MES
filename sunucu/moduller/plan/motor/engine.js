@@ -664,7 +664,8 @@ function takvimDarMi(p, cx) {
 function takvimliCoz(st,mode,base,opt){
   const o=opt||{},son=+o.buyumeSonu;
   takvimPlanaGore(st.w,base&&base.ops);
-  for(;;){const t0=Date.now(),gun=HDAYS,cx=compile(st),p=schedule(st,mode,base,{...o,cx});
+  /* gun derlemeden sonra okunur: bu turun takvimini derleme kurar (olcekKur), önceki turun takvimi kestirimi iki katına çıkarırdı */
+  for(;;){const t0=Date.now(),cx=compile(st),gun=HDAYS,p=schedule(st,mode,base,{...o,cx});
     if(!(p.fail&&p.fail.length)||gun>=TAKVIM_ENCOK||!takvimDarMi(p,cx))return p;
     if(isFinite(son)&&Date.now()+(Date.now()-t0)*Math.min(TAKVIM_ENCOK,gun*2)/gun>son){p.buyumeKesildi=true;return p;}
     if(!takvimBuyut())return p;}

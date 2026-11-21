@@ -209,6 +209,21 @@ describe('sunucu plan çözücüsü', () => {
     assert.equal(yer(karma, 'E-1|10')!.baslangic, '2026-10-23T05:00:00.000Z');
   });
 
+  test('3506: malzemesi büyüyen takvimin içinde gelen iş malzeme bekleyen sayılmaz; yerleşmiyorsa kendi nedeni yazılır', async () => {
+    // Malzeme 300. günde gelir: 240 günlük takvimin dışında, büyüyen takvimin (480 gün) içinde. Hazırlık (10 sa) 8 saatlik vardiyaya sığmaz.
+    const ham = { id: '60', code: 'HM-1', name: 'Ornek cubuk', type: 'ham', unit: 'kg', stock: 0 };
+    const k = {
+      ...KAYNAK, calisma: { ...KAYNAK.calisma, w: { ...KAYNAK.calisma.w, mat: 'sert' } },
+      kayit: { ...KAYNAK.kayit, items: [{ ...ham, plan: { kod: '60', ad: 'Ornek cubuk', birim: 'kg', stok: 0, birimFiyat: 0, tedarikGun: null, muayeneGun: 0 } }] },
+      kaynak: { ...KAYNAK.kaynak, ek: { tedarikTerminleri: [{ kod: '60', termin: '2027-08-15', surum: 1, aciklama: '' }] },
+        durum: { ...KAYNAK.kaynak.durum, items: [...KAYNAK.kaynak.durum.items, ham],
+          routes: { 50: { base: null, steps: [{ ...adim(10, 30), setup: 600, ins: [{ itemId: '60', qty: 1 }] }] } } } },
+    };
+    const r = await coz(k, istek({ kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10'] }] }));
+    assert.deepEqual([r.yerlesmeyen, r.malzemeBekleyen], [['E-1|10'], []]);
+    assert.equal(r.nedenler['E-1|10']?.kod, 'takvim-yok');
+  });
+
   test('512 1 a: taslağın ek vardiyası motorun kapasitesidir; verilmezse çalışmanınki, boş liste çalışmanınkini siler', async () => {
     const aksam = { id: '9', name: 'Aksam', start: '16:00', end: '23:59', breaks: [] };
     const k = (ekMesai: unknown[]) => ({

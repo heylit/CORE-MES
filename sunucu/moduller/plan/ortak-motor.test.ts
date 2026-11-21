@@ -200,6 +200,44 @@ describe('ortak plan motoru, sunucuda çalışma (ADR 0018)', () => {
     assert.equal(m.takvimGunu(), 240);
   });
 
+  // Saat sabit adımlıdır: her çözüm turu takvim günü x 10 adım sürer (büyük takvim daha pahalıdır). Dönen: tur başına takvim günü.
+  const adimliSaat = (): { m: Motor; turlar: number[]; saat: () => number } => {
+    const b = vm.createContext({ GIRDI_SAAT_DILIMI: 'Europe/Istanbul' }); b['self'] = b;
+    const m = vm.runInContext(motorKodu(), b) as Motor;
+    b['turlar'] = [];
+    vm.runInContext('var __t = 0; Date.now = () => __t; { const s0 = schedule; schedule = function () { turlar.push(HDAYS); __t += HDAYS * 10; return s0.apply(this, arguments); }; }', b);
+    return { m, turlar: b['turlar'] as number[], saat: () => vm.runInContext('__t', b) as number };
+  };
+  // 12.000 saatlik sipariş 480 günlük takvime (11.520 saat) sığmaz, iki yıllık takvime sığar.
+  const cokUzun = (m: Motor): MotorDurumu => m.stHazirla(durum(m, {}, 0, veri([{ id: 'S1', adet: 12000, termin: '2026-01-20' }])));
+
+  test('süre koruması sonraki turu bu turun takvimiyle kestirir: sığmayacaksa büyümez, sığacaksa iki yıla kadar büyür (3506)', () => {
+    // 240 günlük tur 2.400 adım; 480 günlük tur iki katı (4.800) kestirilir: 7.000'e sığmaz, takvim büyümez.
+    const dar = adimliSaat();
+    const kesilen = dar.m.takvimliCoz(cokUzun(dar.m), 'yeni', null, { buyumeSonu: 7000 });
+    assert.deepEqual([[...dar.turlar], kesilen.buyumeKesildi, (kesilen.fail ?? []).length, dar.saat() <= 7000], [[240], true, 1, true]);
+    // 480 günlük turdan sonra (7.200. adım) 730 günlük tur 4.800 x 730 / 480 = 7.300 adım kestirilir: 14.500, sınıra sığar.
+    const genis = adimliSaat();
+    const tam = genis.m.takvimliCoz(cokUzun(genis.m), 'yeni', null, { buyumeSonu: 15000 });
+    assert.deepEqual([[...genis.turlar], tam.buyumeKesildi, (tam.fail ?? []).length, genis.saat()], [[240, 480, 730], undefined, 0, 14500]);
+  });
+
+  test('kayıtlı plan takvimden uzunsa çözüm takvimi baştan ona göre kurar: tek tur (3506)', () => {
+    const uzun = (m: Motor): MotorDurumu => m.stHazirla(durum(m, {}, 0, veri([{ id: 'S1', adet: 6000, termin: '2026-01-20' }])));
+    // Kayıtlı plan başka bağlamda kurulur: bu çözümün bağlamı takvimi yalnız plandan öğrenir.
+    const once = motorYukle();
+    const ilk = JSON.parse(JSON.stringify(once.takvimliCoz(uzun(once), 'yeni', null))) as MotorPlani;
+    const s = adimliSaat();
+    const p = s.m.takvimliCoz(uzun(s.m), 'sabit', ilk);
+    assert.deepEqual([[...s.turlar], s.m.takvimGunu(), (p.fail ?? []).length], [[480], 480, 0]);
+  });
+
+  test('takvimle geçmeyecek neden takvimi büyütmez: hazırlığı vardiyaya sığmayan iş yerleşmez, takvim 240 gün kalır (3506)', async () => {
+    const D = { ...veri(), vardiyalar: [{ id: 'V', bas: '08:00', bit: '16:00' }], urunler: [{ id: 'U', rota: [{ k: 10, ad: 'Torna', tezgahlar: [{ id: 'T1', cevrim: 60, ayar: 600 }] }] }] };
+    const p = await planCoz({ durum: durum(motorYukle(), {}, 0, D), kip: 'yeni', taban: null });
+    assert.deepEqual([p.fail, p.takvimGun, p.buyumeKesildi], [['S1.10'], 240, undefined]);
+  });
+
   test('bozuk girdi iş parçacığında hata olarak döner', async () => {
     await assert.rejects(planCoz({ durum: { D: {} }, kip: 'yeni', taban: null }));
   });
