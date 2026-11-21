@@ -742,6 +742,53 @@ describe('Kokpit', () => {
     expect(screen.getByRole('button', { name: 'Araçlar' }).hasAttribute('data-etkin')).toBe(false);
   });
 
+  // 3528: açılış düzeninde sorun bildirme Siparişler görünümünde adımın satırından açılır; panel eski düzendekiyle aynı paneldir.
+  it('açılış düzeninde adımın satırındaki düğme Adıma sorun bildir panelini o adımla açar; sipariş satırı açık kalır; salt okuyan kişide düğme yoktur', () => {
+    const kur = (yaz: boolean) => {
+      const c = ornekCalisma();
+      (c.w as Record<string, unknown>)['adimEk'] = { '2.20': { ekSaat: 1.5, bitis0: 40 } };
+      render(
+        <MemoryRouter initialEntries={['/']}><BildirimSaglayici><Yuvali>
+          <Kokpit
+            depo={DEPO} calisma={c} komut={yaz ? komutKur(0) : null} git={vi.fn()} yenile={vi.fn()} yetki={yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz'] : [])])}
+            olcek={ACILIS_OLCEGI} olcekSec={vi.fn()} kaydir={vi.fn()} secim={{ ...BOS_SECIM, siparis: '2' }} sec={vi.fn()}
+          />
+        </Yuvali></BildirimSaglayici></MemoryRouter>,
+      );
+      fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: 'Siparişler' }));
+      return document.querySelector<HTMLElement>('.tc-pyq-ld-kart[data-acik]')!;
+    };
+    const kart = kur(true);
+    expect(screen.queryByRole('complementary', { name: 'Adıma sorun bildir' })).toBeNull();
+    fireEvent.click(kart.querySelector<HTMLElement>('[data-adim-sorun="2.20"]')!);
+    const panel = screen.getByRole('complementary', { name: 'Adıma sorun bildir' });
+    expect((within(panel).getByLabelText('Toplam kaç saat uzadı') as HTMLInputElement).value).toBe('1,5');
+    expect(document.querySelector('.tc-pyq-ld-kart[data-acik] [data-adim-sorun="2.20"]')).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Adıma sorun bildirmeyi kapat' }));
+    expect(screen.queryByRole('complementary', { name: 'Adıma sorun bildir' })).toBeNull();
+    // Panel açık satırın adımına bağlıdır: başka sipariş açılınca, satır kapanınca ve görünüm değişince kapanır.
+    const sorunAc = (): void => { fireEvent.click(document.querySelector<HTMLElement>('.tc-pyq-ld-kart[data-acik] [data-adim-sorun]')!); };
+    const panelVar = (): boolean => screen.queryByRole('complementary', { name: 'Adıma sorun bildir' }) !== null;
+    const baska = document.querySelector<HTMLElement>('.tc-pyq-ld-kart:not([data-acik]) [data-kart] button[aria-expanded="false"]')!;
+    sorunAc();
+    expect(panelVar()).toBe(true);
+    fireEvent.click(baska);
+    expect([panelVar(), document.querySelector('.tc-pyq-ld-kart[data-acik] [data-kart]')?.getAttribute('data-kart') === '2']).toEqual([false, false]);
+    sorunAc();
+    expect(panelVar()).toBe(true);
+    fireEvent.click(document.querySelector<HTMLElement>('.tc-pyq-ld-kart[data-acik] [data-kart] button[aria-expanded="true"]')!);
+    expect([panelVar(), document.querySelector('.tc-pyq-ld-kart[data-acik]')]).toEqual([false, null]);
+    fireEvent.click(document.querySelector<HTMLElement>('[data-kart="2"] button[aria-expanded="false"]')!);
+    sorunAc();
+    expect(panelVar()).toBe(true);
+    fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: 'Emirler' }));
+    expect(panelVar()).toBe(false);
+    cleanup();
+    const okur = kur(false);
+    expect(okur.querySelector('.tc-pyq-ld-adimlar')).not.toBeNull();
+    expect(okur.querySelector('[data-adim-sorun]')).toBeNull();
+  });
+
   // 3335-3c: bildirilen bekleme operasyon satırının Başlangıç hücresinde yazar; başlamış adımın kaydı yazmaz.
   it('adıma bildirilen bekleme satırda nedeni ve anıyla yazar; başlamış adımın kaydı yazmaz', () => {
     const c = ornekCalisma();

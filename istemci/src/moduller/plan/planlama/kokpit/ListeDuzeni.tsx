@@ -31,6 +31,9 @@ export interface ListeDuzeniOzellikleri {
   // Sahadan bildirilen bekleme (adım → ne zamana kadar, neden) ve uzama (adım → ek saat): adımın neden o saatte durduğunu söyler.
   adimBekle?: Readonly<Record<string, AdimBeklemesi>>;
   adimEk?: Readonly<Record<string, number>>;
+  // Adıma sorun bildir (uzadı, malzeme yok, kişi yok): planda yeri olan, fason olmayan adımın satırının sonundaki düğme paneli o adımla açar.
+  // Yazamayan kişide ve turda null.
+  adimSorunu?: ((isId: string) => void) | null;
   // Açık siparişin tezgâhlardaki yeri (tahta ve telefondaki listesi); sayfa çizer, işleri vurgular.
   tahta: ReactNode;
   // Sayfada tek birincil düğme olur (2155-9 a): Canlıya al birincilken açık satırın düğmesi ikincil çizilir.
@@ -64,7 +67,7 @@ const durumYazisi = (k: SiraKarti): string => {
   return `${sureYaz(g)} geç`;
 };
 
-export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, yenidenPlanla, hamle, surum, malzemeBekleyen, kolPartileri, kol, adimBekle, adimEk, tahta, satirBirincil, adimSec, seciliIs, tasi = null, bol = null, hedef, secimiBirak, malzemeAni }: ListeDuzeniOzellikleri) {
+export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, yenidenPlanla, hamle, surum, malzemeBekleyen, kolPartileri, kol, adimBekle, adimEk, adimSorunu = null, tahta, satirBirincil, adimSec, seciliIs, tasi = null, bol = null, hedef, secimiBirak, malzemeAni }: ListeDuzeniOzellikleri) {
   // Elle yerleştirilen adım (3488 a); satır kapanınca ya da başka iş seçilince düşer.
   const [elle, setElle] = useState<string | null>(null);
   useEffect(() => { setElle(null); }, [acik]);
@@ -158,6 +161,11 @@ export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, ye
                               {gosterilen !== null && hedefIs
                                 ? <button type="button" data-adim={a.id} data-engel={engel ?? undefined} aria-pressed={x ? seciliIs === a.id : undefined} title={x ? 'Tezgâhlarda göster' : 'Bu adımı tutan önceki adımı tezgâhlarda göster'} onClick={() => { adimSec(hedefIs.job, gosterilen); }}>{govde}</button>
                                 : govde}
+                              {adimSorunu && x && !x.fason && (
+                                <button type="button" className="tc-pyq-simge-dugme tc-pyq-ld-sorun" data-adim-sorun={a.id} aria-label={`${a.ad} için sorun bildir`} title="Sorun bildir: adım uzadı, malzeme yok, kişi yok" onClick={() => { adimSorunu(a.id); }}>
+                                  <Simge ad="flag" />
+                                </button>
+                              )}
                               {!x && tasi !== null && oncekiYok >= 0 && adimYeri(m, a, {}) === 'bos' && <small data-once-yerlestir={a.id}>Önce {String(oncekiYok + 1)}. adımı yerleştirin; bu adım ondan sonra gelir.</small>}
                               {elleOlur && elle !== a.id && (
                                 <span className="tc-pyq-ld-elle-eylem">

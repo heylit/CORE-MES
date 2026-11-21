@@ -281,6 +281,32 @@ describe('Kokpit liste düzeni (3414 b)', () => {
     expect(document.querySelectorAll('.tc-pyq-ld-adimlar button').length).toBe((e?.adimlar.length ?? 0) - 1);
   });
 
+  // 3528: adıma sorun bildirme (uzadı, malzeme yok, kişi yok) açılış düzeninden de açılır; düğme adımın satırının sonundadır.
+  it('planda yeri olan, fason olmayan adımın satırının sonunda sorun bildir düğmesi vardır ve basınca o adımı bildirir; fason adımda, yeri olmayan adımda ve yazamayan kişide yoktur', () => {
+    const x = kur(), adimSorunu = vi.fn(), adimSec = vi.fn();
+    const e = x.m.emirler.find((y) => y.id === '2')!;
+    const fason = e.adimlar.filter((a) => x.m.isler[a.id]?.fason).map((a) => a.id), tezgahli = e.adimlar.filter((a) => x.m.isler[a.id] && !x.m.isler[a.id]!.fason);
+    expect([fason.length > 0, tezgahli.length > 1]).toEqual([true, true]);
+    ciz(x, '2', { adimSorunu, adimSec });
+    const dugmeler = [...document.querySelectorAll<HTMLElement>('[data-adim-sorun]')];
+    expect(dugmeler.map((d) => [d.getAttribute('data-adim-sorun'), d.getAttribute('aria-label'), d.previousElementSibling?.getAttribute('data-adim'), d.closest('li')?.lastElementChild === d]))
+      .toEqual(tezgahli.map((a) => [a.id, `${a.ad} için sorun bildir`, a.id, true]));
+    fireEvent.click(dugmeler.at(-1)!);
+    expect(adimSorunu.mock.calls).toEqual([[tezgahli.at(-1)!.id]]);
+    expect(adimSec).not.toHaveBeenCalled();
+    cleanup();
+    ciz(x, '2');
+    expect(document.querySelector('[data-adim-sorun]')).toBeNull();
+    cleanup();
+    ciz(x, '2', { adimSorunu: null });
+    expect(document.querySelector('[data-adim-sorun]')).toBeNull();
+    cleanup();
+    const y = yarimKur({ kod: 'zaman' });
+    ciz(y, '3', { adimSorunu });
+    expect(document.querySelector(`[data-adim-sorun="${y.eksik}"]`)).toBeNull();
+    expect(document.querySelectorAll('[data-adim-sorun]').length).toBeGreaterThan(0);
+  });
+
   it('süzgeçle eşleşen sipariş yoksa bunu söyler', () => {
     ciz({ ...kur(), kartlar: [] }, null);
     expect(screen.getByText('Bu süzgeçle eşleşen sipariş ya da emir yok.')).toBeTruthy();

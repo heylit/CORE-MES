@@ -773,6 +773,11 @@
   margin: 0; padding: 0 var(--b-1); border: 0; border-radius: var(--yari-1); background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
 }
 .tc-pyq-ld-adimlar li > button:hover:not([aria-pressed="true"]) { background: var(--edge2); }
+/* Adıma sorun bildir düğmesi satırın sonunda durur: adım düğmesi kalan eni alır. */
+.tc-pyq-ld-adimlar li > button:has(+ .tc-pyq-ld-sorun) { flex: 1 1 0; }
+.tc-pyq-ld-adimlar li > .tc-pyq-ld-sorun { flex: 0 0 var(--dokunma); justify-content: center; padding: 0; color: var(--muted); }
+/* Üzerine gelince zemin açılır; ikon da koyulaşmazsa zeminden ayrılmaz. */
+.tc-pyq-ld-adimlar li > .tc-pyq-ld-sorun:is(:hover, :focus-visible) { color: var(--ink); }
 /* Seçili operasyon tezgâhtaki seçili işle aynı çerçeveyi taşır. */
 .tc-pyq-ld-adimlar li > button[aria-pressed="true"] { box-shadow: inset 0 0 0 var(--cizgi-kalin) var(--hazard); font-weight: 700; }
 .tc-pyq-ld-adimlar li > button:focus-visible { outline: var(--cizgi-kalin) solid var(--ink); outline-offset: calc(var(--cizgi-ince) * -1); }
