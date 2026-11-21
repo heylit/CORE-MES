@@ -62,7 +62,9 @@ export function AdimSorunu({ c, m, isId, taslak, yazabilir, zaman, kapat, ustBek
   const kilitli = !yazabilir || taslak === null || taslak.mesgul || durum.tur === 'hesap' || durum.tur === 'etki';
   const kok = useRef<HTMLElement>(null);
   useEffect(() => {
-    kok.current?.querySelector<HTMLElement>('#tc-pyq-adim-ek, #tc-pyq-adim-bekle')?.focus({ preventScroll: true });
+    const alan = kok.current?.querySelector<HTMLInputElement>('#tc-pyq-adim-ek, #tc-pyq-adim-bekle');
+    // Kilitli alan odak almaz; form başka formun düğmesinden açıldıysa odak sayfanın başına düşmesin diye panele verilir.
+    (alan && !alan.disabled ? alan : kok.current)?.focus({ preventScroll: true });
     kok.current?.scrollIntoView?.({ block: 'start' });
   }, []);
 
@@ -90,7 +92,7 @@ export function AdimSorunu({ c, m, isId, taslak, yazabilir, zaman, kapat, ustBek
   const bekler = tur !== 'uzadi';
 
   return (
-    <aside ref={kok} className="tc-pyq-ayrinti tc-pyq-ayarlar tc-pyq-adim-sorunu" aria-label="Adıma sorun bildir">
+    <aside ref={kok} tabIndex={-1} className="tc-pyq-ayrinti tc-pyq-ayarlar tc-pyq-adim-sorunu" aria-label="Adıma sorun bildir">
       <header>
         <div><b>Adıma sorun bildir</b><small>Adım uzadıysa kaç saat uzadığını, malzeme ya da kişi yoksa ne zaman başlayabileceğini yazın.</small></div>
         <button type="button" className="tc-pyq-simge-dugme" aria-label="Adıma sorun bildirmeyi kapat" onClick={kapat}><Simge ad="x" boyut="k" /></button>

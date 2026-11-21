@@ -88,6 +88,7 @@ describe('Kokpit adıma sorun bildir (3335-3b)', () => {
     const { panel } = kur({ yazabilir: false });
     expect(within(panel).queryByRole('textbox')).toBeNull();
     expect(within(panel).getByText('Adıma sorunu yalnız planı yazabilen kişi bildirir.')).toBeTruthy();
+    expect(document.activeElement).toBe(panel);
     cleanup();
     const { panel: bos } = kur({ isId: 'ORN-9.10' });
     expect(within(bos).getByText('Bu adım planda yerleşmemiş; önce plana alın.')).toBeTruthy();

@@ -770,6 +770,7 @@ describe('Kokpit', () => {
     expect(panel().querySelector('[data-ust-bekleme="2"]')?.textContent).toMatch(/^Üst emrin \(ORN-0002\) beklemesi bu adımda da geçerli: malzeme yok, /);
     fireEvent.click(within(panel()).getByRole('button', { name: 'Üst emrin adımını aç' }));
     expect(panel().querySelector('dl')?.textContent).toContain('ORN-0002 ·');
+    expect(document.activeElement).toBe(panel().querySelector('#tc-pyq-adim-bekle'));
     expect(panel().querySelector('[data-ust-bekleme]')).toBeNull();
     expect(panel().querySelector('[data-adim-bekle]')?.textContent).toMatch(/^malzeme yok, .+'e kadar$/);
   });
