@@ -118,11 +118,15 @@ export function Kapasite({ c, m, taslak, yazabilir, zaman, kapat, istenen = null
   const mesaiEtkisi = etkiAdi === MESAI_ETKISI;
   const etkiBolumu = (e: Parameters<typeof uygula>[0]) => <EtkiBolumu ad={etkiAdi} e={e} uygula={() => { void uygula(e); }} vazgec={() => { setOdak(null); void vazgec(); }} />;
 
+  // Liste bir yıl ileriye uzanır: gelecek yılın aynı günü bu yılınkiyle aynı yazılırdı. Tarih şimdinin takvim yılında değilse yılıyla yazılır
+  // ("21.11.2027 Cmt 08:00"); bu yılın tarihleri kısa kalır.
+  const yil = (t: number): string => girdiSaati(c.D, t).slice(0, 4);
+  const an = (t: number): string => (yil(t) === yil(m.simdi) ? zaman(t) : zaman(t).replace(/^(\d\d\.\d\d)(?= )/, `$1.${yil(t)}`));
   const durusSatiri = (d: Durus) => (
     <li key={anahtar(d.from, d.to, d.oto)} data-anahtar={anahtar(d.from, d.to, d.oto)} tabIndex={-1} data-oto={d.oto ? '' : undefined}>
-      <span><b>{durusAdi(d.neden, d.baslik)}</b> {zaman(d.from)} → {zaman(d.to)}{d.oto && <small>{d.neden === 'planlı duruş' ? ' · Vardiya ekranından geldi; orada değişir' : ' · kendiliğinden geldi'}</small>}</span>
+      <span><b>{durusAdi(d.neden, d.baslik)}</b> {an(d.from)} → {an(d.to)}{d.oto && <small>{d.neden === 'planlı duruş' ? ' · Vardiya ekranından geldi; orada değişir' : ' · kendiliğinden geldi'}</small>}</span>
       {!d.oto && yazabilir && (
-        <button type="button" className="tc-pyq-simge-dugme" disabled={kilitli} aria-label={`${kod(d.m)} ${zaman(d.from)} → ${zaman(d.to)} duruşunu sil`} title="Duruşu sil" onClick={() => { sil(d); }}>
+        <button type="button" className="tc-pyq-simge-dugme" disabled={kilitli} aria-label={`${kod(d.m)} ${an(d.from)} → ${an(d.to)} duruşunu sil`} title="Duruşu sil" onClick={() => { sil(d); }}>
           <Simge ad="trash" boyut="k" />
         </button>
       )}
