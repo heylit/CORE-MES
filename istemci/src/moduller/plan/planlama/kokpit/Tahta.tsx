@@ -212,22 +212,23 @@ export function Tahta(o: TahtaOzellikleri) {
   const emir = useMemo(() => new Map(m.emirler.map((e) => [e.id, e])), [m]);
   const adaylar = useCallback((x: KokpitIsi): string[] => emir.get(x.job)?.adimlar.find((a) => a.id === x.id)?.adaylar ?? [], [emir]);
 
+  // Onay açıkken bırakılan taşıma bekler: başka işi tutmak onu sessizce başka işe çevirmesin.
   const tut = useCallback((id: string, tutma = 0): void => {
     const x = m.isler[id];
-    if (!x || !tasi) return;
+    if (onay || !x || !tasi) return;
     const neden = tasinabilir(x);
     if (neden) { uyari(neden); return; }
     setMenu(null); setTasinan({ id, tut: tutma }); setHedef({ satir: goz === 'T' ? satirKimligi(x) : x.job, S: x.S, gecerli: true });
-  }, [m, tasi, goz, uyari]);
+  }, [onay, m, tasi, goz, uyari]);
   const fisAdaylari = useCallback((emirId: string): string[] => (emir.get(emirId)?.adimlar[0]?.adaylar ?? []).filter((t) => !t.startsWith('@')), [emir]);
   const tutFis = useCallback((emirId: string): void => {
     const e = emir.get(emirId), ilk = e?.adimlar[0];
-    if (!e || !ilk || !planaAl) return;
+    if (onay || !e || !ilk || !planaAl) return;
     if (goz !== 'T') { uyari('Planlamak için Tezgâh görünümüne geçin'); return; }
     if (e.adimlar.some((a) => m.isler[a.id])) { uyari('Bu emrin bir adımı planda; öteki adımları planlanınca yerleşir'); return; }
     if (!fisAdaylari(emirId).length) { uyari('Bu emrin ilk adımı tezgâhta yapılmıyor'); return; }
     setMenu(null); setTasinan({ id: ilk.id, tut: 0, fis: emirId }); setHedef(null);
-  }, [emir, m, planaAl, goz, uyari, fisAdaylari]);
+  }, [onay, emir, m, planaAl, goz, uyari, fisAdaylari]);
   // vazgecer: sürükleyerek tutulan iş geçersiz yere bırakılınca tutma biter (yapışarak tutmada iş elde kalır, kişi başka yere tıklar).
   const birak = useCallback((vazgecer = false): void => {
     if (onay) return;
@@ -252,6 +253,11 @@ export function Tahta(o: TahtaOzellikleri) {
     setTasinan(tasinan); setHedef(hedef); setOnay(true);
   }, [onay, tasinan, hedef, m, tasi, planaAl, goz, uyari, grupKaydir, coklu]);
   const vazgec = useCallback((): void => { surukleniyor.current = false; setOnay(false); setTasinan(null); setHedef(null); }, []);
+  // Onay açıkken iş plandan düşerse ya da taşıma yetkisi kalkarsa çubuk çizilemez; tahta kilitli kalmasın diye taşıma bırakılır.
+  useEffect(() => {
+    if (!onay || !tasinan) return;
+    if (!m.isler[tasinan.id]) { vazgec(); uyari('İş planda yok; taşıma iptal edildi'); } else if (!tasi) { vazgec(); uyari('Taşıma şu an yapılamıyor; iptal edildi'); }
+  }, [onay, tasinan, m, tasi, vazgec, uyari]);
   const uygula = useCallback((): void => {
     const x = tasinan ? m.isler[tasinan.id] : undefined;
     if (x && hedef && tasi) tasi(x.id, goz === 'T' ? hedef.satir : x.m, hedef.S);

@@ -1262,6 +1262,86 @@ describe('Kokpit', () => {
     geriKur();
   });
 
+  // Onay çubuğu testleri: 3.20, 3.10'un ardından aynı tezgâhta; 3.10 sürüklenip bırakılır, çubuk açılır.
+  const onayKur = () => {
+    const c = ornekCalisma();
+    type Op = { S: number; C: number; m: string; Su: number; lot1: number };
+    const ops = structuredClone((c.plan as unknown as { ops: Record<string, Op> }).ops);
+    const a = ops['3.10']!, b = ops['3.20']!;
+    Object.assign(b, { m: a.m, S: a.C + 1, C: a.C + 1 + (b.C - b.S), Su: a.C + 1, lot1: a.C + 1 });
+    const sec = vi.fn();
+    const ciz = (o: Record<string, Op>, yaz = true) => (
+      <MemoryRouter initialEntries={['/?duzen=klasik']}><BildirimSaglayici><Yuvali>
+        <Kokpit depo={DEPO} calisma={{ ...c, plan: { ...c.plan, ops: o } } as typeof c} komut={komutKur(0)} git={vi.fn()} yenile={vi.fn()} yetki={yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz'] : [])])}
+          olcek={ACILIS_OLCEGI} olcekSec={vi.fn()} kaydir={vi.fn()} secim={BOS_SECIM} sec={sec} />
+      </Yuvali></BildirimSaglayici></MemoryRouter>
+    );
+    const r = render(ciz(ops));
+    const oz = vi.spyOn(gonder, 'isTasiOnizle').mockImplementation((g) => Promise.resolve({
+      calismaSurumu: 1, gecerli: true, ileti: null,
+      isler: [{ isId: g.isId, tezgah: g.tezgah, S: g.baslangic, C: g.baslangic + 1, eskiTezgah: g.tezgah, eskiS: 0, tur: 'tasinan' as const }],
+    }));
+    const is = (id: string) => document.querySelector<HTMLElement>(`.tc-pyq-tahta [data-is="${id}"]`)!;
+    const alan = is('3.10').closest<HTMLElement>('[data-satir]')!.querySelector<HTMLElement>('.tc-pyq-alan')!;
+    fireEvent.pointerDown(is('3.10'), { button: 0, pointerType: 'mouse', clientX: 0, clientY: 0 });
+    fireEvent.pointerMove(alan, { pointerType: 'mouse', clientX: 30, clientY: 0 });
+    fireEvent.pointerMove(alan, { pointerType: 'mouse', clientX: 60, clientY: 0 });
+    fireEvent.pointerUp(document, { pointerType: 'mouse' });
+    return { r, ciz, ops, oz, is, sec };
+  };
+
+  it('onay açıkken başka işe çift tıklamak bekleyen taşımayı değiştirmez; Uygula ilk işi sorar (3531-1)', async () => {
+    const geriKur = imlecOlayiKur();
+    const { oz, is } = onayKur();
+    const grup = await screen.findByRole('group', { name: 'Taşımayı onayla' });
+    await waitFor(() => { expect(oz.mock.calls.length).toBeGreaterThan(0); });
+    const metin = grup.textContent;
+    const gosterilen = oz.mock.calls.at(-1)?.[0];
+    fireEvent.doubleClick(is('3.20'));
+    expect(screen.getByRole('group', { name: 'Taşımayı onayla' }).textContent).toBe(metin);
+    expect(is('3.20').hasAttribute('data-tasinan')).toBe(false);
+    const n = oz.mock.calls.length;
+    fireEvent.click(within(screen.getByRole('group', { name: 'Taşımayı onayla' })).getByRole('button', { name: 'Uygula' }));
+    await waitFor(() => { expect(oz.mock.calls.length).toBe(n + 1); });
+    expect(oz.mock.calls.at(-1)?.[0]).toEqual(gosterilen);
+    expect(oz.mock.calls.at(-1)![0]).toMatchObject({ isId: '3.10' });
+    geriKur();
+  });
+
+  it('onay açıkken iş plandan düşerse taşıma bırakılır, uyarı çıkar, tahta açılır; iş geri gelince çubuk açılmaz (3531-1)', async () => {
+    const geriKur = imlecOlayiKur();
+    const { r, ciz, ops, is, sec } = onayKur();
+    await screen.findByRole('group', { name: 'Taşımayı onayla' });
+    const dusuk = structuredClone(ops);
+    delete (dusuk as Record<string, unknown>)['3.10'];
+    r.rerender(ciz(dusuk));
+    expect(await screen.findByText('İş planda yok; taşıma iptal edildi')).toBeTruthy();
+    expect(screen.queryByRole('group', { name: 'Taşımayı onayla' })).toBeNull();
+    expect(document.querySelector('.tc-pyq-tahta')?.hasAttribute('data-tasima')).toBe(false);
+    sec.mockClear();
+    fireEvent.click(is('3.20'));
+    expect(sec).toHaveBeenCalledWith({ siparis: '3', adim: '3.20' });
+    r.rerender(ciz(ops));
+    expect(screen.queryByRole('group', { name: 'Taşımayı onayla' })).toBeNull();
+    geriKur();
+  });
+
+  it('onay açıkken taşıma yetkisi kalkarsa taşıma bırakılır, uyarı çıkar, Uygula yazmaz (3531-1)', async () => {
+    const geriKur = imlecOlayiKur();
+    const { r, ciz, ops, oz } = onayKur();
+    await screen.findByRole('group', { name: 'Taşımayı onayla' });
+    const n = oz.mock.calls.length;
+    r.rerender(ciz(ops, false));
+    expect(await screen.findByText('Taşıma şu an yapılamıyor; iptal edildi')).toBeTruthy();
+    expect(screen.queryByRole('group', { name: 'Taşımayı onayla' })).toBeNull();
+    expect(document.querySelector('.tc-pyq-tahta')?.hasAttribute('data-tasima')).toBe(false);
+    r.rerender(ciz(ops));
+    expect(screen.queryByRole('group', { name: 'Taşımayı onayla' })).toBeNull();
+    await new Promise((res) => setTimeout(res, 250));
+    expect(oz.mock.calls.length).toBe(n);
+    geriKur();
+  });
+
   it('gecikenler yalnız terminini ilk kez aşan işi sayar, emir başına bir kez; etki cümlesi itilen, çekilen ve geciken emri yazar (3531)', () => {
     // e1 zamanında; e2 zaten geç (bitişi 30 > termin 20; erken biten adımı f bile termini geçse yeniden sayılmaz); e3 terminsiz; e4'ün işi kayar ama termine yetişir.
     const isler = {
