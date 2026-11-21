@@ -162,8 +162,8 @@ export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, ye
                                 ? <button type="button" data-adim={a.id} data-engel={engel ?? undefined} aria-pressed={x ? seciliIs === a.id : undefined} title={x ? 'Tezgâhlarda göster' : 'Bu adımı tutan önceki adımı tezgâhlarda göster'} onClick={() => { adimSec(hedefIs.job, gosterilen); }}>{govde}</button>
                                 : govde}
                               {adimSorunu && x && !x.fason && (
-                                <button type="button" className="tc-pyq-simge-dugme tc-pyq-ld-sorun" data-adim-sorun={a.id} aria-label={`${a.ad}: sorun bildir`} title="Sorun bildir: adım uzadı, malzeme yok, kişi yok" onClick={() => { adimSorunu(a.id); }}>
-                                  <Simge ad="flag" boyut="k" />
+                                <button type="button" className="tc-pyq-simge-dugme tc-pyq-ld-sorun" data-adim-sorun={a.id} aria-label={`${a.ad} için sorun bildir`} title="Sorun bildir: adım uzadı, malzeme yok, kişi yok" onClick={() => { adimSorunu(a.id); }}>
+                                  <Simge ad="flag" />
                                 </button>
                               )}
                               {!x && tasi !== null && oncekiYok >= 0 && adimYeri(m, a, {}) === 'bos' && <small data-once-yerlestir={a.id}>Önce {String(oncekiYok + 1)}. adımı yerleştirin; bu adım ondan sonra gelir.</small>}

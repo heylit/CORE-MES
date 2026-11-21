@@ -290,7 +290,7 @@ describe('Kokpit liste düzeni (3414 b)', () => {
     ciz(x, '2', { adimSorunu, adimSec });
     const dugmeler = [...document.querySelectorAll<HTMLElement>('[data-adim-sorun]')];
     expect(dugmeler.map((d) => [d.getAttribute('data-adim-sorun'), d.getAttribute('aria-label'), d.previousElementSibling?.getAttribute('data-adim'), d.closest('li')?.lastElementChild === d]))
-      .toEqual(tezgahli.map((a) => [a.id, `${a.ad}: sorun bildir`, a.id, true]));
+      .toEqual(tezgahli.map((a) => [a.id, `${a.ad} için sorun bildir`, a.id, true]));
     fireEvent.click(dugmeler.at(-1)!);
     expect(adimSorunu.mock.calls).toEqual([[tezgahli.at(-1)!.id]]);
     expect(adimSec).not.toHaveBeenCalled();
