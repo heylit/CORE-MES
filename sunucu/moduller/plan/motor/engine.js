@@ -786,8 +786,9 @@ function schedule(st,mode,base,opt={}){
     if(b.S<frz-1e-9&&!hit&&!opt.noFreeze&&mode!=='sabit-mc')pins.push({...b,pin:1,frz:1});
   }
   /* Süren iş uzayınca (yenilenen süre, yeni duruş) aynı tezgâhta arkasındaki donuk işin üstüne biner. Tezgâhtaki iş yerinde kalır;
-     başlamamış donuk iş sabit bırakılmaz, onun arkasına yeniden dizilir. Yoksa çakışmayı onaran hesap süren işi yerinden atar. */
-  for(const r of pins)if(r.frz&&surenBitis[r.m]>r.S+1e-6)gecmis.add(r.id);
+     başlamamış donuk iş sabit bırakılmaz, onun arkasına yeniden dizilir. Yoksa çakışmayı onaran hesap süren işi yerinden atar. İş sabitler
+     arasından da çıkar: aşağıdaki kural (B-2499-7) öncülü eski yerinde hazır görmesin, donuk ardılı da onunla birlikte serbest kalsın. */
+  for(let i=pins.length-1;i>=0;i--){const r=pins[i];if(r.frz&&surenBitis[r.m]>r.S+1e-6){gecmis.add(r.id);pins.splice(i,1);}}
   /* B-2499-7: başvuru planından sabitlenen (geçmişte kalmış ya da donuk) iş öncülü o saatte hazır değilse olmuş sayılamaz: öncülü başlamış
      ve hâlâ sürüyorsa ya da öncülü bu yüzden yeniden diziliyorsa sabit bırakılmaz, yeniden dizilir. Öncülü hiç sabitlenmemişse (sunucu
      kuyruğunda olmayan adım "şimdi bitti" diye tabana girer, plan-girdisi) dokunulmaz. Yoksa başlamış emrin sonraki adımları eski

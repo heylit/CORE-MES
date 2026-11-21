@@ -486,6 +486,25 @@ describe('plana göre süren adım yerinde kalır, süresi yeni adetle yenilenir
     assert.ok(ayri['4.30']!.S >= 16 - 1e-9, `frezedeki donuk iş süren adım bitince: ${String(ayri['4.30']!.S)}`);
   });
 
+  test('SU-09: arkaya kayan donuk işin başka tezgâhtaki donuk ardılı da onunla kayar; elle kilitli iş kaymaz', async () => {
+    // Öteki emir 1 adet: frezede 14:00-15:00, tornada 15:00-16:00; saat 11:30'da ikisi de donuk. Süren adım 7 adede çıkıp 15:00'e uzar.
+    const once = [emir('2', 6), emir('4', 1)], sonra = [emir('2', 7), emir('4', 1)];
+    const basta = kur(once).ops;
+    assert.deepEqual([yer(basta, '4.10').slice(0, 3), yer(basta, '4.20').slice(0, 3)], [['200', 14, 15], ['100', 15, 16]], 'örnek plan');
+    const tek = tekGecis(sonra, {}, kayit(), once, 11.5);
+    assert.deepEqual(yer(tek, '2.10'), ['200', 8, 15, 7]);
+    assert.ok(tek['4.10']!.S >= 15 - 1e-9 && tek['4.20']!.S >= tek['4.10']!.C - 1e-9, `ardıl öncülünden sonra: ${String(tek['4.10']!.S)}, ${String(tek['4.20']!.S)}`);
+    assert.deepEqual(bozuk(tek), []);
+    const ops = await uygula(once, [...sonra, emir('5', 1)], ['5'], '2026-10-19T08:30:00Z');
+    assert.deepEqual(yer(ops, '2.10'), ['200', 8, 15, 7]);
+    assert.deepEqual(bozuk(ops), []);
+    // Elle kilit kişinin kararıdır, kaymaz: süren adım onun üstüne uzuyorsa yerinde tutulamaz, kilitli işin arkasına yeniden dizilir.
+    const kilitli = await uygula(once, [emir('2', 8), emir('4', 1), emir('5', 1)], ['5'], '2026-10-19T08:00:00Z', {}, { locks: { '4.10': { m: '200', S: 14 } } });
+    assert.equal(kilitli['4.10']!.S, 14);
+    assert.ok(kilitli['2.10']!.S >= 15 - 1e-9, `süren adım kilitli işin arkasında: ${String(kilitli['2.10']!.S)}`);
+    assert.deepEqual(bozuk(kilitli), []);
+  });
+
   test('SU-05: kişi süren adımın emrini de yeniden dizdirirse adım şimdiden sonraya, yeni adedinin süresiyle dizilir (3335-2b)', async () => {
     const ops = await uygula([emir('2', 6)], [emir('2', 4), emir('3', 2, '2')], ['2', '3'], SONRA);
     assert.deepEqual([yer(ops, '2.10'), yer(ops, '3.10')], [['200', 9, 13, 4], ['200', 13, 15, 2]]);
