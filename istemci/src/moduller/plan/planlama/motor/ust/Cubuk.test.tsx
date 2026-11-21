@@ -247,3 +247,28 @@ describe('plan şeridinde tek seferlik takvim bilgisi', () => {
     expect(screen.queryByRole('note')).toBeNull();
   });
 });
+
+// 3537 a: planı kurmayan sayfada (Malzeme satın alma planı, Sevk takvimi) şerit birincil taşımaz; Planı kur ve Planı güncelle yerine Kokpit'e götürür.
+describe('Kokpit\'e götüren şerit', () => {
+  it('plan yokken "Kokpit\'te planı kur", plan eskiyken "Kokpit\'te planı güncelle"; ikisi de ikincil, güncelken düğme yok', () => {
+    const git = vi.fn();
+    const kur = { kur: vi.fn(), suruyor: false };
+    const uyg = { uygula: vi.fn(), suruyor: false, say: 2 };
+    const ciz3 = (plan: boolean, guncel: boolean) => (
+      <Cubuk plan={plan} guncel={guncel} planYaz nabiz={plan ? nabiz(0) : null} nabizAcik={false} nabizAc={() => {}} ozeteGit={() => {}} refSec={null} sabitle={null}
+        sabitAd={null} planKur={kur} bekleyenUygula={uyg} kokpiteGit={git} />
+    );
+    const { rerender } = render(ciz3(false, false));
+    expect(document.querySelectorAll('.tc-dugme-birincil')).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: 'Planı kur' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: "Kokpit'te planı kur" }));
+    expect(git).toHaveBeenCalledTimes(1);
+    expect(kur.kur).not.toHaveBeenCalled();
+    rerender(ciz3(true, false));
+    expect(screen.queryByRole('button', { name: /^Planı güncelle/ })).toBeNull();
+    expect(screen.getByRole('button', { name: "Kokpit'te planı güncelle" })).toBeTruthy();
+    expect(document.querySelectorAll('.tc-dugme-birincil')).toHaveLength(0);
+    rerender(ciz3(true, true));
+    expect(screen.queryByRole('button', { name: /Kokpit'te planı/ })).toBeNull();
+  });
+});

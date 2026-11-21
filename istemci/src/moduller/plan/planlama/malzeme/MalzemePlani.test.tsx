@@ -48,10 +48,11 @@ function stokSun(): void {
 }
 
 // Açık talepler satın almanın termin takibinden okunur (3485 a); `talepte` verilirse 11 numaralı malzemede o kadar talep var.
-function talepSun(talepte: number | null): void {
+function talepSun(talepte: number | null | 'bekle'): void {
   const once = globalThis.fetch;
   vi.stubGlobal('fetch', vi.fn(async (adres: string, istek?: RequestInit) => {
     if (adres.replace(/^\/api/, '') === '/satin-alma-tedarik-terminleri') {
+      if (talepte === 'bekle') return new Promise<Response>(() => undefined);
       if (talepte === null) return json(403, { kod: 'YETKI', mesaj: 'yok' });
       return json(200, { takip: [{ tur: 'malzeme', malzemeNo: 11, birim: 'kg', karsilayanlar: [{ tur: 'talep', miktar: String(talepte), birim: 'kg' }] }] });
     }
@@ -119,6 +120,15 @@ describe('Malzeme satın alma planı: Liste (3537 a)', () => {
     talepSun(null);
     ac('/plan/malzplan');
     expect(await screen.findByText(/Açık talepler okunamadı/, {}, { timeout: 10000 })).toBeTruthy();
+    // Açık talepler okunurken talep açılmaz: taslak düşülmeden dolardı (3537-2 Risk).
+    cleanup();
+    sunucuKur(TALEPCI, kayit());
+    stokSun();
+    talepSun('bekle');
+    ac('/plan/malzplan');
+    const d = await screen.findByRole('button', { name: 'Talep aç: günü geçen ve eksik (1)' }, { timeout: 10000 });
+    expect((d as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: '11 için talep aç' }) as HTMLButtonElement).disabled).toBe(true);
   }, 20000);
 
   it('arama ve süzgeç; uyan yoksa "Süzgeci temizle"', async () => {
@@ -135,11 +145,13 @@ describe('Malzeme satın alma planı: Liste (3537 a)', () => {
     expect(screen.getByRole('button', { name: /^11 Deneme cubuk/ })).toBeTruthy();
   }, 20000);
 
-  it('plan yoksa ya da çalışma kaydı yoksa plan kurulmasını ister, Kokpit\'e bağlantı verir', async () => {
+  it('plan yoksa ya da çalışma kaydı yoksa plan kurulmasını ister; şerit Planı kur yerine Kokpit\'e bağlantı verir', async () => {
     sunucuKur(YONETICI, kayit(false));
     ac('/plan/malzplan');
     expect(await screen.findByText('Önce plan kurulmalı.', {}, { timeout: 10000 })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: "Kokpit'te planı kur" }));
+    const serit = screen.getByRole('toolbar', { name: 'Plan çubuğu' });
+    expect(serit.querySelectorAll('.tc-dugme-birincil')).toHaveLength(0);
+    fireEvent.click(within(serit).getByRole('button', { name: "Kokpit'te planı kur" }));
     await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/plan'); }, { timeout: 10000 });
     cleanup();
     sunucuKur(YONETICI, []);
@@ -148,15 +160,20 @@ describe('Malzeme satın alma planı: Liste (3537 a)', () => {
     expect(screen.queryByText('Planlama çalışması yok.')).toBeNull();
   }, 20000);
 
-  it('plan eskiyse nabız söyler ve Kokpit\'te güncellemeye bağlar; liste son plana göre durur', async () => {
+  it('plan eskiyse plan şeridi birincil taşımaz, Kokpit\'te güncellemeye bağlar; liste son plana göre durur (3537-2 Arayüz 1)', async () => {
     const c = calisma(true);
     sunucuKur(YONETICI, [{ anahtar: PLANLAMA_ANAHTARI, bicim: 'json' as const, deger: { ...c, dataVer: 2 }, surum: 4 }]);
     stokSun();
     talepSun(0);
     ac('/plan/malzplan');
-    expect(await screen.findByText(/^Plan eski: /, {}, { timeout: 10000 })).toBeTruthy();
-    expect(screen.getByRole('button', { name: "Kokpit'te planı güncelle" })).toBeTruthy();
-    expect(screen.getByRole('table', { name: 'Malzemeler' })).toBeTruthy();
+    expect(await screen.findByRole('table', { name: 'Malzemeler' }, { timeout: 10000 })).toBeTruthy();
+    const serit = screen.getByRole('toolbar', { name: 'Plan çubuğu' });
+    expect(serit.querySelectorAll('.tc-dugme-birincil')).toHaveLength(0);
+    expect(within(serit).queryByRole('button', { name: /Planı güncelle/ })).toBeNull();
+    expect(screen.queryByText(/^Plan eski: /)).toBeNull();
+    // Test verisinin planında motor özeti yok: şerit planı okunmuş saymaz, bağlantı "kur" der (eski plan Cubuk testinde).
+    fireEvent.click(within(serit).getByRole('button', { name: /^Kokpit'te planı (kur|güncelle)$/ }));
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/plan'); }, { timeout: 10000 });
   }, 20000);
 });
 

@@ -19,6 +19,7 @@ import { gunlukTuketim, isoGun } from './toplu-talep.ts';
 
 const ESIK = 1e-9;
 const ACILIM_GUNU = 14;
+const OKUNUYOR = 'Açık talepler okunuyor; bitince açılır.';
 
 export interface MalzemeListesiOzellikleri {
   satirlar: readonly MalzemeListeSatiri[];
@@ -54,6 +55,8 @@ export function MalzemeListesi(o: MalzemeListesiOzellikleri) {
   const [ara, araYaz] = useState('');
   const [acik, acikYaz] = useState<string | null>(null);
   const talep = (kod: string): number => talepler?.get(kod) ?? 0;
+  // Açık talepler okunurken talep açılmaz: taslak açık talep düşülmeden dolardı (3537-2 Risk).
+  const okunuyor = talepler === undefined;
   const tedarikciOf = (x: MalzemeListeSatiri): string | null => (x.tedarikci === null ? o.malzemeTedarikcisi(x.kod) : o.tedarikci(x.tedarikci));
   const say = durumSayilari(satirlar);
   const gorunen = satirlar.filter((x) => (suz === null || x.durum === suz) && aramaUyar(x, ara, malzemeAdi, emirNo, tedarikciOf(x)));
@@ -77,7 +80,7 @@ export function MalzemeListesi(o: MalzemeListesiOzellikleri) {
   const eylem = (x: MalzemeListeSatiri): ReactNode => {
     const q = talepEksigi(x, talep(x.kod));
     if (talepAcar && talepEdilebilir(x.kod) && q > 0) {
-      return <Dugme simge="plus" onClick={() => { talepAc([x]); }} aria-label={`${x.kod} için talep aç`}>Talep aç</Dugme>;
+      return <Dugme simge="plus" disabled={okunuyor} title={okunuyor ? OKUNUYOR : undefined} onClick={() => { talepAc([x]); }} aria-label={`${x.kod} için talep aç`}>Talep aç</Dugme>;
     }
     if (x.eksik > ESIK && talep(x.kod) > ESIK) {
       return <Link className="tc-pyz-l-bag" to="/taleplerim"><Simge ad="check" boyut="k" />{`Talepte ${miktar(talep(x.kod), x.kod)}`}</Link>;
@@ -102,7 +105,9 @@ export function MalzemeListesi(o: MalzemeListesiOzellikleri) {
         </span>
         <label className="tc-pyz-ara"><Simge ad="search" boyut="k" /><input type="search" value={ara} placeholder="Malzeme, emir, tedarikçi" aria-label="Ara" onChange={(e) => { araYaz(e.target.value); }} /></label>
         {talepAcar && acil.length > 0 && (
-          <Dugme tur="birincil" simge="plus" className="tc-pyz-birincil" onClick={() => { talepAc(acil); }}>{`Talep aç: günü geçen ve eksik (${acil.length})`}</Dugme>
+          <Dugme tur="birincil" simge="plus" className="tc-pyz-birincil" disabled={okunuyor} title={okunuyor ? OKUNUYOR : undefined} onClick={() => { talepAc(acil); }}>
+            {`Talep aç: günü geçen ve eksik (${acil.length})`}
+          </Dugme>
         )}
       </div>
       {talepler === null && <p className="tc-pyz-kucuk" data-ton="uyari">Açık talepler okunamadı (yetki yok ya da uç yanıt vermedi); eksikten düşülmedi.</p>}

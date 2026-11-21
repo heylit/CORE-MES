@@ -3,7 +3,6 @@ import { DurumKutusu, Kart, Simge } from '../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
-import { planGuncel } from '../durum.ts';
 import { kaynakKur, stokOku, type StokKaynagi } from './kaynak.ts';
 import {
   BAGSIZ, KAYNAKLAR, TEDARIKCISIZ, alimPlani, bitenler, calismaSimdisi, dagilim,
@@ -76,14 +75,14 @@ const Baslik = ({ simge, ad, ek }: { simge: SimgeAdi; ad: string; ek?: string })
 export function MalzemePlani({ depo, calisma, yetki, yenile, sec, git }: PlanlamaEkranOzellikleri) {
   const emirNo = useEmirNo(depo.receteRotaKaydi, depo.durum?.emirler);
   return <MalzemePlaniGorunumu calisma={calisma} emirNo={emirNo} emirler={depo.durum?.emirler ?? depo.receteRotaKaydi} maliyetOku={yetki.maliyetOku} calismaSurumu={depo.calismaSurumu} terminYazar={yetki.planYaz} yenile={yenile}
-    goster={(j) => { sec({ siparis: j, adim: null, tezgah: null }); git('kokpit'); }} kokpiteGit={() => { git('kokpit'); }} />;
+    goster={(j) => { sec({ siparis: j, adim: null, tezgah: null }); git('kokpit'); }} />;
 }
 
 // Satın Alma'nın sayfası (546 a) aynı görünümü daraltılmış çalışmayla çizer: emirler çalışmayla gelir, tutar ve öne çekme yoktur.
 // goster yoksa (Satın Alma) Kokpit düğmeleri çizilmez: orada Kokpit yoktur. Plan Kokpit'te kurulur (3282-1 a), emir orada seçilir (3537 a).
-export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSurumu, terminYazar, yenile, goster, kokpiteGit, emirNo = (j) => j, talepler: verilen }: {
+export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSurumu, terminYazar, yenile, goster, emirNo = (j) => j, talepler: verilen }: {
   calisma: PlanlamaCalismasi | null; emirler: unknown; maliyetOku: boolean; calismaSurumu: number | null; terminYazar: boolean; yenile: () => void;
-  goster?: (siparis: string) => void; kokpiteGit?: () => void; emirNo?: EmirNo;
+  goster?: (siparis: string) => void; emirNo?: EmirNo;
   // Testler için: açık talepler. Verilmezse satın almanın termin takibinden okunur.
   talepler?: ReadonlyMap<string, number> | null;
 }) {
@@ -120,14 +119,13 @@ export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSuru
     return { g, k, plan: malzemePlani(g, taban, t), alim: alimPlani(g, taban, t) };
   }, [calisma, D, taban, stok, emirler]);
 
-  // Çalışma kaydı ya da plan yokken de sayfa başlığıyla çizilir; plan Kokpit'te kurulur (3282-1 a).
+  // Çalışma kaydı ya da plan yokken de sayfa başlığıyla çizilir; plan Kokpit'te kurulur (3282-1 a), bağlantısı plan şeridindedir.
   const planYok = (
     <div className="tc-pyz">
-      <Basliklik ust={null} eski={false} />
+      <Basliklik ust={null} />
       <div className="tc-pyz-yok">
         <Simge ad="grid" boyut="k" />
         <span><b>Önce plan kurulmalı.</b> Plan kurulunca malzemenin ne zaman gerektiği ve ne zaman sipariş verilmesi gerektiği burada görünür.</span>
-        {kokpiteGit && <button type="button" className="tc-pyz-l-bag" onClick={kokpiteGit}>Kokpit'te planı kur</button>}
       </div>
     </div>
   );
@@ -137,7 +135,6 @@ export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSuru
   if (!hesap) return planYok;
 
   const fg = maliyetOku;
-  const eski = !planGuncel(calisma);
   const { g, k, plan, alim } = hesap;
   const kov = kovala(plan.satirlar, taban, kirilim, g.simdi);
   const oz = ozet(plan);
@@ -161,7 +158,7 @@ export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSuru
   const kpi: [SimgeAdi, string, string, string, string?][] = [
     ['box', 'Toplam ihtiyaç', kutu(oz.toplam), 'planlı siparişlerin malzemesi'],
     ['check', 'Stoktan', kutu(oz.stok), 'eldeki stok'],
-    ['truck', 'Açık siparişler', kutu(oz.acik), 'verilmiş satın alma; işe bağlanmayan kısım stoğa'],
+    ['truck', 'Açık siparişler', kutu(oz.acik), oz.stoga.kalem ? `işe bağlı kısım; ayrıca stoğa ${kutu(oz.stoga)}` : 'verilmiş satın alma, işe bağlı'],
     ['lira', 'Yeni alım', kutu(oz.yeni), 'verilmesi gereken sipariş', 'uyari'],
     ['alert', 'Geciken alım', String(oz.gecikenMalzeme), 'en geç sipariş günü geçmiş malzeme', oz.gecikenMalzeme ? 'hata' : 'tamam'],
   ];
@@ -225,7 +222,7 @@ export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSuru
   );
   return (
     <div className="tc-pyz">
-      <Basliklik ust={isi.ust} eski={eski} kokpiteGit={kokpiteGit} />
+      <Basliklik ust={isi.ust} />
       {k.nereden === 'belge' && <p className="tc-pyz-kucuk" data-ton="uyari">Stok ya da açık satın alma siparişleri okunamadı (yetki yok ya da uç yanıt vermedi); planın kendi kopyası kullanılıyor.</p>}
       {etkin === 'butce' ? butce : etkin === 'takvim' ? takvim : (
         <MalzemeListesi satirlar={liste} plan={plan.satirlar} D={D} taban={taban} simdi={g.simdi} dar={listeKart} fg={fg} malzemeAdi={malzemeAdi}
@@ -237,17 +234,11 @@ export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSuru
   );
 }
 
-// Sayfa başlığı ve nabız (Kokpit'in durum satırı gibi): en sıcak satır; plan eskiyse liste son plana göredir ve Kokpit'e bağlantı verilir.
-function Basliklik({ ust, eski, kokpiteGit }: { ust: IsiUstDurumu | null; eski: boolean; kokpiteGit?: () => void }) {
+// Sayfa başlığı ve nabız (Kokpit'in durum satırı gibi): en sıcak satır. Plan durumu (yok, eski) plan şeridindedir; sayfa yinelemez.
+function Basliklik({ ust }: { ust: IsiUstDurumu | null }) {
   return (
     <header className="tc-pyz-bas">
       <h2><Simge ad="box" boyut="k" />{SAYFA_ADI}</h2>
-      {eski && (
-        <p className="tc-pyz-nabiz" data-ton="uyari" role="status">
-          <Simge ad="clock" boyut="k" /><span>Plan eski: veri son plandan sonra değişti; liste son plana göre.</span>
-          {kokpiteGit && <button type="button" className="tc-pyz-l-bag" onClick={kokpiteGit}>Kokpit'te planı güncelle</button>}
-        </p>
-      )}
       {ust && <p className="tc-pyz-nabiz" data-ton={ust.ton} role="status"><Simge ad={ust.simge} boyut="k" /><span>{ust.metin}</span></p>}
     </header>
   );

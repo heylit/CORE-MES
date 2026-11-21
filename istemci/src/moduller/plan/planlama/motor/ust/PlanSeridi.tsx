@@ -26,6 +26,9 @@ export function nabizYazmalari(c: PlanlamaCalismasi, komut: CalismaKomutu | null
   return { refSec, sabitle, sabitAd };
 }
 
+// Planı kurmayan, okuyan sayfalar (3537 a): şerit Planı kur yerine Kokpit'e götürür.
+const KOKPITE_GIDEN: ReadonlySet<PlanlamaGorunumu> = new Set<PlanlamaGorunumu>(['malzplan', 'sevkiyat']);
+
 // Her planlama sayfasının üstündeki plan çubuğu (eski b-kabuk/zk-kabuk pm-sb; Soru 497/10 a). Motor sayfası kendi çubuğunu çizer;
 // iskelet bunu öteki sayfaların üstüne koyar; motor çalışma yokken de bunu çizer. Çalışma ya da plan yoksa çubuk nabızsız ve "Plan yok"la çizilir;
 // "Planı kur" çalışma varsa ve kişi yazabiliyorsa sunucudaki motorla açıktır (576), yoksa pasif.
@@ -44,10 +47,11 @@ export function PlanSeridi(o: PlanlamaEkranOzellikleri & { gorunum: PlanlamaGoru
   const bilgi = useCallback((ileti: string) => bildir('bilgi', ileti), [bildir]);
   const planKur = usePlanKur(o, hata, bilgi);
   const bekleyenUygula = useBekleyenUygula(o, hata, bilgi);
+  const kokpiteGit = KOKPITE_GIDEN.has(o.gorunum) ? () => { o.git('kokpit'); } : null;
   return (
     <div className="tc-pym" data-serit="">
       <Cubuk plan={!!p} guncel={c ? planGuncel(c) : false} planYaz={o.yetki.planYaz} nabiz={nabiz} nabizAcik={acik} nabizAc={setAcik}
-        ozeteGit={() => o.git('plan')} planKur={planKur} bekleyenUygula={bekleyenUygula} olaylar={c?.olaylar ?? []} yuva={o.yuva ?? null} {...y} />
+        ozeteGit={() => o.git('plan')} planKur={planKur} bekleyenUygula={bekleyenUygula} kokpiteGit={kokpiteGit} olaylar={c?.olaylar ?? []} yuva={o.yuva ?? null} {...y} />
     </div>
   );
 }

@@ -26,7 +26,7 @@
   min-height: var(--b-6); padding: 0 var(--b-2); border: 0; border-radius: var(--yari-1); background: none; color: var(--muted);
   font: inherit; font-weight: 700; cursor: pointer;
 }
-.tc-pyz-olcek button[aria-pressed="true"] { background: var(--hazard); color: var(--on-hazard); }
+.tc-pyz-olcek button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
 
 /* Özet kutuları (eski pm-mp-kpi). */
 .tc-pyz-kpi { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(var(--b-6) * 4.7), 1fr)); gap: var(--b-2); margin-bottom: var(--b-3); }
