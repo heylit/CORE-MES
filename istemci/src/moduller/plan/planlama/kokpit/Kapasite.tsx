@@ -18,6 +18,9 @@ const anahtar = (a: number, b: number, oto: boolean): string => `${String(a)}-${
 const MESAI_ETKISI = 'Ek mesainin etkisi';
 const mesaiAnahtari = (gun: number, vardiya: string): string => `m-${String(gun)}-${vardiya}`;
 const saatYazisi = (h: number): string => String(Math.round(h * 10) / 10);
+// Vardiya ekranından gelen planlı duruş bir yıl boyunca tekrar tekrar gelir; yakını açık, ötesi tek düğmenin arkasında durur ki elle girilen
+// ve arızadan gelen duruş aralarında kaybolmasın. Tek satır için düğme konmaz (düğme de bir satır yer tutar).
+const YAKIN_SAAT = 28 * 24;
 
 export function duruslar(c: PlanlamaCalismasi, tezgah: string, simdi: number): Durus[] {
   return c.down
@@ -50,6 +53,10 @@ export function Kapasite({ c, m, taslak, yazabilir, zaman, kapat, istenen = null
   const kilitli = !yazabilir || taslak === null || taslak.mesgul || durum.tur === 'hesap' || durum.tur === 'etki';
   const kod = (id: string) => tezgahlar.find((t) => t.id === id)?.kod ?? id;
   const l = duruslar(c, tezgah, m.simdi);
+  const sonrakiMi = (d: Durus): boolean => d.oto && d.neden === 'planlı duruş' && d.from >= m.simdi + YAKIN_SAAT;
+  const sonraki = l.filter(sonrakiMi).length > 1 ? l.filter(sonrakiMi) : [];
+  const yakin = sonraki.length === 0 ? l : l.filter((d) => !sonrakiMi(d));
+  const [sonrakiAcik, setSonrakiAcik] = useState<string | null>(null);
   const bugun = Math.floor(m.simdi / 24);
   const vardiyaListesi = (c.D.vardiyalar ?? []).flatMap((v) => (v['id'] === undefined || v['id'] === null ? [] : [{ id: String(v['id']), ad: vardiyaAdi(c, String(v['id'])) }]));
   const kisiAdi = (id: string): string => (c.D.personel ?? []).find((p) => String(p.id) === id)?.ad ?? id;
@@ -111,6 +118,17 @@ export function Kapasite({ c, m, taslak, yazabilir, zaman, kapat, istenen = null
   const mesaiEtkisi = etkiAdi === MESAI_ETKISI;
   const etkiBolumu = (e: Parameters<typeof uygula>[0]) => <EtkiBolumu ad={etkiAdi} e={e} uygula={() => { void uygula(e); }} vazgec={() => { setOdak(null); void vazgec(); }} />;
 
+  const durusSatiri = (d: Durus) => (
+    <li key={anahtar(d.from, d.to, d.oto)} data-anahtar={anahtar(d.from, d.to, d.oto)} tabIndex={-1} data-oto={d.oto ? '' : undefined}>
+      <span><b>{durusAdi(d.neden, d.baslik)}</b> {zaman(d.from)} → {zaman(d.to)}{d.oto && <small>{d.neden === 'planlı duruş' ? ' · Vardiya ekranından geldi; orada değişir' : ' · kendiliğinden geldi'}</small>}</span>
+      {!d.oto && yazabilir && (
+        <button type="button" className="tc-pyq-simge-dugme" disabled={kilitli} aria-label={`${kod(d.m)} ${zaman(d.from)} → ${zaman(d.to)} duruşunu sil`} title="Duruşu sil" onClick={() => { sil(d); }}>
+          <Simge ad="trash" boyut="k" />
+        </button>
+      )}
+    </li>
+  );
+
   return (
     <aside ref={kok} className="tc-pyq-ayrinti tc-pyq-ayarlar tc-pyq-kapasite" aria-label="Duruş ve mesai">
       <header>
@@ -127,16 +145,16 @@ export function Kapasite({ c, m, taslak, yazabilir, zaman, kapat, istenen = null
       <h3>Duruşlar</h3>
       {l.length === 0 ? <p className="tc-pyq-not">{`${kod(tezgah)} için önümüzdeki duruş yok.`}</p> : (
         <ul className="tc-pyq-kap-liste">
-          {l.map((d) => (
-            <li key={anahtar(d.from, d.to, d.oto)} data-anahtar={anahtar(d.from, d.to, d.oto)} tabIndex={-1} data-oto={d.oto ? '' : undefined}>
-              <span><b>{durusAdi(d.neden, d.baslik)}</b> {zaman(d.from)} → {zaman(d.to)}{d.oto && <small>{d.neden === 'planlı duruş' ? ' · Vardiya ekranından geldi; orada değişir' : ' · kendiliğinden geldi'}</small>}</span>
-              {!d.oto && yazabilir && (
-                <button type="button" className="tc-pyq-simge-dugme" disabled={kilitli} aria-label={`${kod(d.m)} ${zaman(d.from)} → ${zaman(d.to)} duruşunu sil`} title="Duruşu sil" onClick={() => { sil(d); }}>
-                  <Simge ad="trash" boyut="k" />
-                </button>
-              )}
+          {yakin.length === 0 && <li className="tc-pyq-not">Önümüzdeki 4 haftada duruş yok.</li>}
+          {yakin.map(durusSatiri)}
+          {sonraki.length > 0 && (
+            <li>
+              <button type="button" className="tc-pyq-kucuk" aria-expanded={sonrakiAcik === tezgah} onClick={() => { setSonrakiAcik(sonrakiAcik === tezgah ? null : tezgah); }}>
+                {`Daha sonraki ${String(sonraki.length)} duruşu ${sonrakiAcik === tezgah ? 'gizle' : 'göster'}`}
+              </button>
             </li>
-          ))}
+          )}
+          {sonrakiAcik === tezgah && sonraki.map(durusSatiri)}
         </ul>
       )}
       {l.some((d) => d.oto) && <p className="tc-pyq-not">Arıza bildiriminden ya da bakım planından gelen duruş burada silinmez; kaynağında kapanınca kalkar.</p>}

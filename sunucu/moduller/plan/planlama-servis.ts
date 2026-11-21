@@ -38,7 +38,7 @@ import {
 import { type Gorunum, maliyetiGeriKoy, maliyetsizCalisma } from './maliyet-gizleme.ts';
 import { satinAlmaCalismasi } from './satin-alma-gorunumu.ts';
 import { emirTutari, satirKuru } from './kurallar.ts';
-import { calisanAdimlar, canliOzeti, okumaBellegiyle, planFinansmanOrani, planGenelGiderSaatBasi, planlanacakIsler, type PlanGenelGideri } from './servis.ts';
+import { calisanAdimlar, canliOzeti, okumaBellegiyle, planFinansmanOrani, planGenelGiderSaatBasi, planlanacakIsler, TAKVIM_GUN, type PlanGenelGideri } from './servis.ts';
 import * as sorgular from './sorgular.ts';
 import { teklifDenemesi, type DenemeSonucu, type TeklifTaslagi } from './teklif-denemesi.ts';
 
@@ -298,11 +298,12 @@ async function kaynakOkuKur(db: Db, kullanici: Kullanici): Promise<KaynakOkumasi
   // Kapalıyken null: girdi.betik bakım satırına dokunmaz.
   const bakimlar = yetkiliMi(kullanici, ISTASYON_OKUMA) && (await sistemAyariOku(db, 'plan.bakim-girdisi')) ? await bakimAraliklariOku(db) : null;
   // Vardiya'nın planlı duruşları makineye inmiş hâliyle (tesis, iş merkezi ve istasyon duruşu): girdi.betik'te tezgâhın duruş satırı olur.
-  // Makineleri okuyamayan kişide null: duruş satırlarına dokunulmaz.
+  // Makineleri okuyamayan kişide null: duruş satırlarına dokunulmaz. Pencere canlı planın takvimiyle aynıdır (TAKVIM_GUN), planlama ufkuyla
+  // değil: takvime sığmayan iş ufkun ötesine yerleşir; oradaki duruş okunmazsa iş duruşun içine konur, canlı plan aynı günü kapalı görür.
   let planliDuruslar: { anahtar: string; m: string; bas: string; bit: string; baslik: string }[] | null = null;
   if (yetkiliMi(kullanici, ISTASYON_OKUMA)) {
     const bugun = tesisGunu(Date.now());
-    const bitis = new Date(Date.parse(`${bugun}T00:00:00Z`) + Math.min((await motorOlcegi(db)).ufukGun, 365) * 86_400_000).toISOString().slice(0, 10);
+    const bitis = new Date(Date.parse(`${bugun}T00:00:00Z`) + TAKVIM_GUN * 86_400_000).toISOString().slice(0, 10);
     planliDuruslar = (await makinePlanliDuruslari(db, { baslangic: bugun, bitis }))
       .map((d) => ({ anahtar: `vd:${String(d.durusId)}|${String(d.makineId)}|${d.bas}|${d.bit}`, m: String(d.makineId), bas: d.bas, bit: d.bit, baslik: d.baslik }));
   }

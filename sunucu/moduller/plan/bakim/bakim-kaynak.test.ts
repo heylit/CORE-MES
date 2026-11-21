@@ -74,4 +74,25 @@ describe('plan (gerçek PostgreSQL): periyodik bakım kaynak okumasında', () =>
       await ortam!.sahip.sorgu('DELETE FROM vardiya_planli_durus WHERE id = $1', [id]);
     }
   });
+
+  // 3509: takvime sığmayan iş planlama ufkunun (varsayılan 120 gün) ötesine yerleşir; duruş canlı planın takvim penceresi (365 gün) boyunca okunur.
+  test('BK-K4: planlama ufkunun ötesindeki duruş da gelir, takvim penceresinin son gününe kadar; sonraki gün gelmez', async () => {
+    const { ortam, makineA, istasyonA, yoneticiId } = durum();
+    const tam: Kullanici = { id: yoneticiId, ad: 'Deneme yonetici', islemler: [...ISLEMLER] };
+    const gun = (n: number) => tesisSaati(Date.now() + n * 86_400_000).slice(0, 10);
+    const idler: number[] = [];
+    try {
+      for (const n of [200, 366, 367]) {
+        idler.push((await ortam!.sahip.tek<{ id: number }>(
+          `INSERT INTO vardiya_planli_durus (baslik, kapsam, istasyon_id, baslangic, bitis, tekrar, gunler, aktif, yazan_id)
+           VALUES ('Deneme duruş', 'istasyon', $1, ($2 || ' 08:00')::timestamp AT TIME ZONE current_setting('TimeZone'),
+                   ($2 || ' 10:00')::timestamp AT TIME ZONE current_setting('TimeZone'), 'yok', '{}', true, $3) RETURNING id`, [istasyonA, gun(n), yoneticiId]))!.id);
+      }
+      const l = (await vt().tx(async (db) => ((await kaynakOku(db, tam)).ek as { planliDuruslar: { anahtar: string; m: string; bas: string }[] }).planliDuruslar));
+      const gelen = (id: number) => l.filter((d) => d.anahtar.startsWith(`vd:${String(id)}|`)).map((d) => [d.m, d.bas]);
+      assert.deepEqual(idler.map(gelen), [[[String(makineA), `${gun(200)} 08:00`]], [[String(makineA), `${gun(366)} 08:00`]], []]);
+    } finally {
+      for (const id of idler) await ortam!.sahip.sorgu('DELETE FROM vardiya_planli_durus WHERE id = $1', [id]);
+    }
+  });
 });
