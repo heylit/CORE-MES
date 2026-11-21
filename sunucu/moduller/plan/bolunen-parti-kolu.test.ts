@@ -153,10 +153,13 @@ describe('adım ortasından bölünen parti (3512)', () => {
     assert.equal(partili['2.20']!.S, 100);
     assert.deepEqual([partili['2.10']!.S, partili['2.10']!.C], [8, 33], 'öncül planın başında');
     assert.equal(partili['3.20']!.S, partili['2.10']!.C, 'parti öncül biter bitmez başlar');
+    const neden = (r: Is | undefined): string => JSON.stringify((r as unknown as { why?: unknown }).why);
+    assert.equal(neden(partili['2.10']), JSON.stringify({ t: 'kilit-oncul', r: '2.20', o: 1 }), 'öne çekilen öncülün nedeni ayrı');
     // Aynı emir partisiz: öncülü yalnız kilitli adım bekler. Kilitten önceki son iş gününe (80.-88. saat) yaslanır.
     const yalin = kur([ust], kilit).ops;
     assert.equal(yalin['2.20']!.S, 100);
     assert.ok(yalin['2.10']!.S >= 80 && yalin['2.10']!.C <= 88 + 1e-9, `öncül kilide yaslanır: ${String(yalin['2.10']!.S)}-${String(yalin['2.10']!.C)}`);
+    assert.equal(neden(yalin['2.10']), JSON.stringify({ t: 'kilit-oncul', r: '2.20' }));
   });
 
   test('KZ-06 (3502): en erken yere konan öncül, en erken bitirdiği tezgâha konur', () => {

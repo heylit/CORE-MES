@@ -687,7 +687,8 @@ function kilitZincirleri(cx,ctx,kilitler,opt,base){
     for(const r of konan.filter(x=>one[x.id]).sort((a,b)=>a.S-b.S||a.C-b.C)){
       yerBirak(cx,ctx,r);const o=cx.byId[r.id],b=predBound(o,cx,ctx);let en=null;
       if(b)for(const c of candM(o,st,opt,base)){const y=sonaYasla(o,c,cx,ctx,b,r.C,true);if(y&&(!en||y.C<en.C))en=y;}
-      if(en)en.why=r.why;yerAyir(cx,ctx,en||r);}
+      // Öne gelen işin nedeni ayrıdır (o:1): ekran "en geç saate kondu" demesin.
+      if(en&&(en.S<r.S-1e-6||en.C<r.C-1e-6)){en.why={...r.why,o:1};yerAyir(cx,ctx,en);}else yerAyir(cx,ctx,r);}
   }
   ctx.eksikli=false;
 }
