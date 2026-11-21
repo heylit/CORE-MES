@@ -26,7 +26,7 @@ type Kol = { n: number; m: number } | null;
 type Emir = { id: string; no: string; itemId: string; qty: number; start: string; due: string; priority: number; status: string; note: string; parentId: string | null; kol: Kol };
 const emir = (id: string, qty: number, parentId: string | null = null, kol: Kol = null): Emir =>
   ({ id, no: `E-${id}`, itemId: '51', qty, start: '2026-10-19', due: '2026-10-30', priority: 2, status: 'serbest', note: '', parentId, kol });
-interface Ek { opStatus?: Record<string, string>; adimAdetleri?: Record<string, number>; w?: Record<string, unknown>; locks?: Record<string, { m: string; S: number }>; kayit?: ReturnType<typeof kayit> }
+interface Ek { opStatus?: Record<string, string>; adimAdetleri?: Record<string, number>; w?: Record<string, unknown>; locks?: Record<string, { m: string; S: number }>; kayit?: ReturnType<typeof kayit>; acikSiparisler?: { kod: string; miktar: number; tarih: string; siparisNo: string }[] }
 const kaynak = (orders: Emir[], ek: Ek) => ({
   durum: {
     wcs: [{ id: '1', code: 'IM-1', name: 'Talasli', week: null, aktif: true }],
@@ -36,7 +36,7 @@ const kaynak = (orders: Emir[], ek: Ek) => ({
     emirler: { orders, opStatus: ek.opStatus ?? {}, opProg: {} },
     adimAdetleri: ek.adimAdetleri ?? {},
   },
-  ek: { takvim: { hafta: { 1: { 1: ['3'], 2: ['3'], 3: ['3'], 4: ['3'], 5: ['3'] } }, kisiVardiyasi: {} }, makineNotu: null, kisiGorevi: null },
+  ek: { takvim: { hafta: { 1: { 1: ['3'], 2: ['3'], 3: ['3'], 4: ['3'], 5: ['3'] } }, kisiVardiyasi: {} }, makineNotu: null, kisiGorevi: null, ...(ek.acikSiparisler ? { acikSiparisler: ek.acikSiparisler } : {}) },
 });
 const calismaKur = (w: Record<string, unknown> = {}, locks: Record<string, unknown> = {}): Record<string, unknown> => ({
   surum: 2, D: { meta: { ad: 'Ornek', baslangic: '2026-10-19' }, vardiyalar: [], calismaGunleri: {}, tatiller: [], urunler: [], malzemeler: [], tezgahlar: [], personel: [], siparisler: [], ayarlar: {} },
@@ -251,5 +251,15 @@ describe('"Partiyi böl" ölçümü biten ve kol dışı adımı partilere taş�
     // Fark ilk partiye adet bırakmıyorsa taşınmaz.
     const azalan = await bol([emir('2', 6)], { adimAdetleri: { 'E-2|20': 2 } }, '2', [4, 2]);
     assert.deepEqual(sure(azalan, '20'), [4, 2]);
+  });
+
+  test('PB-06: biten adımın malzemesi ölçümde partilerle yeniden ihtiyaca girmez; başka emir malzemesini gelişinden önce almaz', async () => {
+    // Emir 2'nin 10. adımı bitti, malzemesi tüketildi. Emir 4'ün 12 kg'ı 22.10 08:00'de (80. saat) gelecek açık siparişte.
+    const emirler = [emir('2', 6), emir('4', 6)];
+    const ek = { opStatus: { '2|root|1': 'tamam' }, acikSiparisler: [{ kod: '90', miktar: 12, tarih: '2026-10-22', siparisNo: 'SA-ORN-1' }] };
+    const onceki = kur(emirler, ek);
+    assert.deepEqual([onceki.ops['4.10']!.S, onceki.eksik], [80, 0]);
+    const ops = await bol(emirler, ek, '2', [4, 2]);
+    assert.equal(ops['4.10']!.S, 80, 'ölçüm emir 4\'ü malzemesi gelmeden başlatmaz');
   });
 });

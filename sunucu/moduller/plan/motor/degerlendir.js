@@ -445,6 +445,9 @@ function partiBol(jid, dagitim, adetler) {
   const partilere = kayit => { const y = { ...kayit }; for (const id of Object.keys(kayit)) if (id.startsWith(pref)) parcalar.forEach((x, i) => { y[`${jid}/${i + 1}.${id.slice(pref.length)}`] = kayit[id]; }); return y; };
   if (st.bitti) st.bitti = partilere(st.bitti);
   if (st.kolDisi) st.kolDisi = partilere(st.kolDisi);
+  /* Siparişi verilmemiş eksik, kayıtlar partilere taşınmadan önce yazıldı: partilerin biten adımının malzemesi ihtiyaca girdi. Motor o
+     eksiği hemen elde saydığı için başka emir malzemesini açık siparişin gelişinden önce almış görünürdü. */
+  tmEksikYaz(st);
   /* Adımın adedi emrin adedinden farklıysa (üst emir o adımı kolun adediyle birlikte işler ya da önceki adımın hurdası düşülmüştür) fark
      ilk partide kalır: emir gerçekten bölününce üst emir kolun adedini taşımayı sürdürür. Taşınmasaydı ölçüm o adımı partilerin kendi
      adediyle dizer, kolun adedini hiçbir yerde planlamazdı. Fark ilk partiye adet bırakmıyorsa taşınmaz: partiler kendi adediyle dizilir. */
