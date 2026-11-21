@@ -1089,7 +1089,8 @@ const yuvarla6 = (x: number): number => Math.round(x * 1e6) / 1e6;
 const plandaMi = (o: IhtiyacEmri): boolean => o.status === 'serbest' || o.status === 'uretimde';
 const siraliAdimlar = (adimlar: readonly IhtiyacAdimi[]): IhtiyacAdimi[] => [...adimlar].sort((a, b) => a.seq - b.seq);
 const kolIcinde = (kol: { n: number; m: number }, j: number): boolean => j >= kol.n && j <= kol.m - 2;
-const kolAraligiGecerli = (n: number, m: number, adimSayisi: number): boolean => n >= 1 && m - n >= 2 && m <= adimSayisi;
+// Ayrı ilerleyen kolun m'si adım sayısı + 1'dir (katılma adımı yok); kol en az bir adım yapar.
+const kolAraligiGecerli = (n: number, m: number, adimSayisi: number): boolean => n >= 0 && m - n >= 2 && m <= adimSayisi + 1;
 
 // Adımın yapacağı miktar çarpanı (ürün başına): rota modülünün adım miktarı kuralı (rota/disari adimMiktarlari, 2486-1). Adım kendisinin ve
 // ardıllarının ret payıyla büyür; dallı rotada bir dalın reti paralel dalı büyütmez. Ret en çok %95 sayılır.
@@ -1191,13 +1192,17 @@ export function emirMalzemeIhtiyaclari(g: IhtiyacGirdisi): EmirIhtiyacSonucu[] {
     const adimlar = o.rotasiz ? [] : (revizyonu(o)?.data ?? d.routes?.[o.itemId])?.steps ?? [];
     const sirali = siraliAdimlar(adimlar);
     const n = sirali.length;
-    const kollar = sira.filter((k) => k.parentId === o.id && k.kol !== null && kolAraligiGecerli(k.kol.n, k.kol.m, n) && k.qty > 0 && k.qty < o.qty);
-    const olcek = (j: number) => Math.max(0, kollar.reduce((f, k) => (k.kol && kolIcinde(k.kol, j) ? f - k.qty / o.qty : f), 1));
+    // Bölmede emrin adedi kolun adedi kadar düşer (uretim-emirleri kilitliEmriBol); kolun yapmadığı adımları (bölünmeden önce, katıldıktan
+    // sonra) emir kolun adedi kadar fazla yapar. Sahibinin malzeme kuralıyla aynı (uretim-emirleri malzemeIhtiyaci, tasinan).
+    const kollar = o.qty > 0 ? sira.filter((k) => k.parentId === o.id && k.kol !== null && kolAraligiGecerli(k.kol.n, k.kol.m, n) && k.qty > 0) : [];
+    // Koldan bölünen torunun adedi de koldan düşmüştür; kolun yapmadığı adımda kol alt ağacıyla sayılır (sahibinde dogrudanAltPartiler toplamı).
+    const agacAdedi = (k: IhtiyacEmri, yol: readonly string[] = []): number => (yol.includes(k.id) ? 0
+      : k.qty + sira.filter((t) => t.parentId === k.id && t.qty > 0).reduce((t, x) => t + agacAdedi(x, [...yol, k.id]), 0));
+    const olcek = (j: number) => kollar.reduce((f, k) => (k.kol && !kolIcinde(k.kol, j) ? f + agacAdedi(k) / o.qty : f), 1);
     let tut: ((j: number) => number) | null = kollar.length ? olcek : null;
     if (o.kol !== null && o.parentId !== null) {
-      const ana = sira.find((p) => p.id === o.parentId);
       const kol = o.kol;
-      tut = kolAraligiGecerli(kol.n, kol.m, n) && (!ana || o.qty < ana.qty) ? (j) => (kolIcinde(kol, j) ? olcek(j) : 0) : () => 0;
+      tut = kolAraligiGecerli(kol.n, kol.m, n) ? (j) => (kolIcinde(kol, j) ? olcek(j) : 0) : () => 0;
     }
     // Ara stok kökte adım oranıyla uygulanır: adımın yapacağı miktar azaldıkça o adımın kopyadaki bileşeni de aynı oranda azalır.
     const tam = sirali.map((_, j) => o.qty * (adimRetCarpanlari(sirali)[j] ?? 1));
