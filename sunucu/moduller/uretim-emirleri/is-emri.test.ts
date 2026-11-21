@@ -1123,6 +1123,26 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.deepEqual((await uygula(id)).degisenler, ['OP 40 eklendi'], 'kol katılınca üst yeniden rotayla güncellenir');
   });
 
+  test('3516: bölünen emrin planı kolun yapmadığı adımları üst emre kol adediyle yazar (ileri adımdan bölme, planlı birleşme)', async () => {
+    const ist = await istasyonKur();
+    const mk = { tur: 'makine' as const, id: await makineKur(ist) };
+    const { uretimEmriId: id } = await ac([adim(1, mk), adim(2, mk), adim(3, mk), adim(4, mk)], { adet: 9 });
+    const bol = async (govde: Record<string, unknown>) => {
+      const b = await istek<PartiBolCevabi & Hata>('planlama_proje', 'POST', `/adimli-emirler/${id}/bol`, { ...govde, surum: (await ayrinti(id)).surum }, randomUUID());
+      assert.equal(b.durum, 200, JSON.stringify(b.govde));
+      return b.govde.altEmirId;
+    };
+    // Hiçbir adım başlamadan: 3 adet OP 20'den ayrılıp OP 40'ta katılır, 1 adet OP 30'dan ayrılıp ayrı ilerler; üstte 5 kalır.
+    const kol = await bol({ adimSira: 2, adet: 3, birlesmeOpNo: 40 });
+    const ayri = await bol({ adimSira: 3, adet: 1 });
+    assert.equal((await ayrinti(id)).adet, 5);
+    const plan = await o().vt.tx((db) => planlanacakIsEmirleri(db));
+    const adetler = (emir: number) => plan.filter((i) => i.uretimEmriId === emir).sort((a, b) => a.sira - b.sira).map((i) => [i.opNo, i.adimAdedi]);
+    assert.deepEqual(adetler(id), [[10, 9], [20, 6], [30, 5], [40, 8]], 'bölünmeden önce bütün partiler, OP 20 ayrı ilerleyenle, OP 40 katılan kolla');
+    assert.deepEqual(adetler(kol), [[20, 3], [30, 3]], 'kol yalnız kendi adımlarını kendi adediyle');
+    assert.deepEqual(adetler(ayri), [[30, 1], [40, 1]]);
+  });
+
   test('parti bölme ve birleştirme: alt parti kalan adımları taşır, yeniden bölünür, birleşir; malzeme toplamı değişmez', async () => {
     const ist = await istasyonKur();
     const [m1, m2] = [await makineKur(ist), await makineKur(ist)];
