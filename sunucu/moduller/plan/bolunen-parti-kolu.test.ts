@@ -77,10 +77,10 @@ function kur(orders: Emir[], ek: Ek = {}): Sonuc {
 const ust = emir('2', 6);
 const ADET = { adimAdetleri: { 'E-2|10': 9 } };
 // "Partiyi böl" ölçümü: kayıtlı planın üstünde emri partilere ayırıp yeniden dizer. Dönen: ölçümün planındaki işler.
-async function bol(orders: Emir[], ek: Ek, siparisId: string, adetler: number[]): Promise<Record<string, Is>> {
+async function bol(orders: Emir[], ek: Ek, siparisId: string, adetler: number[], an = '2026-10-19T05:00:00Z'): Promise<Record<string, Is>> {
   const onceki = kur(orders, ek);
   const r = await degerlendirmeYap({ calisma: { ...onceki.S, plan: onceki.plan }, kayit: ek.kayit ?? kayit(), kaynak: kaynak(orders, ek), bugun: '2026-10-19',
-    istek: { tur: 'parti-bolme', siparisId, dagitim: 'ayni', adetler } }, Date.parse('2026-10-19T05:00:00Z'));
+    istek: { tur: 'parti-bolme', siparisId, dagitim: 'ayni', adetler } }, Date.parse(an));
   assert.ok(r && !('hata' in r), JSON.stringify(r));
   const s = degerlendirmeSonucu.parse(r.sonuc);
   if (s.tur !== 'parti-bolme' || !s.sonuc) return assert.fail(JSON.stringify(s));
@@ -261,5 +261,55 @@ describe('"Partiyi böl" ölçümü biten ve kol dışı adımı partilere taş�
     assert.deepEqual([onceki.ops['4.10']!.S, onceki.eksik], [80, 0]);
     const ops = await bol(emirler, ek, '2', [4, 2]);
     assert.equal(ops['4.10']!.S, 80, 'ölçüm emir 4\'ü malzemesi gelmeden başlatmaz');
+  });
+});
+
+describe('"Partiyi böl" ölçümü plana göre süren adımı ilk partinin adediyle sürdürür (3518)', () => {
+  // Plan 10. adımı 08:00-14:00'e (8.-14. saat) yazdı; gerçekleşen kaydı yok. Ölçüm 09:00'da (06:00Z) yapılır: adım plana göre sürüyor sayılır.
+  const SONRA = '2026-10-19T06:00:00Z';
+  const yer = (ops: Record<string, Is>): Record<string, (string | number)[]> => Object.fromEntries(Object.entries(ops).map(([id, r]) => [id, [r.m, r.S, r.C, r.run]]));
+
+  test('PB-07: ölçüm anı adımın plandaki başlangıcından sonraysa sonuç başlangıç anındaki ölçümle aynıdır', async () => {
+    const basta = await bol([emir('2', 6)], {}, '2', [4, 2]);
+    const sonra = await bol([emir('2', 6)], {}, '2', [4, 2], SONRA);
+    assert.deepEqual([yer(sonra)['2/1.10'], yer(sonra)['2/2.10']], [['200', 8, 12, 4], ['200', 12, 14, 2]]);
+    assert.deepEqual(yer(sonra), yer(basta));
+  });
+
+  test('PB-08: süren adımın adedi emrin adedinden farklıysa ilk parti fazlasıyla sürdürür', async () => {
+    // Üst emir 10. adımı kolun 3 adediyle birlikte 9 adet işler (08:00'den ertesi gün 09:00'a): ilk parti 7 adet.
+    const emirler = [ust, emir('3', 3, '2', { n: 1, m: 4 })];
+    const basta = await bol(emirler, ADET, '2', [4, 2]);
+    const sonra = await bol(emirler, ADET, '2', [4, 2], SONRA);
+    assert.deepEqual([yer(sonra)['2/1.10'], yer(sonra)['2/2.10']], [['200', 8, 15, 7], ['200', 15, 33, 2]]);
+    // Başlangıç anındaki ölçüm iki partiyi öbür sırayla dizer; 10. adımın bitişi ve sonraki adımlar aynıdır.
+    const sonrasi = (ops: Record<string, Is>): unknown => Object.fromEntries(Object.entries(yer(ops)).filter(([id]) => !id.endsWith('.10')));
+    assert.deepEqual(sonrasi(sonra), sonrasi(basta));
+  });
+
+  test('PB-09: öteki partiler adıma başlamamıştır; ilk partinin payı şimdiden önce bitiyorsa o da yapılmış sayılmaz', async () => {
+    const ops = await bol([emir('2', 6)], {}, '2', [2, 4], SONRA);
+    assert.deepEqual([ops['2/1.10']!.S, ops['2/1.10']!.C, ops['2/2.10']!.run], [8, 10, 4]);
+    assert.ok(ops['2/2.10']!.S >= 10 - 1e-9, `ikinci parti ilk partiden sonra: ${String(ops['2/2.10']!.S)}`);
+    // 1 adetlik ilk partinin payı 09:00'da biter; ölçüm 09:30'da. Kaydı olmayan iş bitmiş sayılmaz, şimdiden sonraya dizilir.
+    const kucuk = await bol([emir('2', 6)], {}, '2', [1, 5], '2026-10-19T06:30:00Z');
+    assert.deepEqual([kucuk['2/1.10']!.run, kucuk['2/2.10']!.run], [1, 5]);
+    for (const p of ['2/1.10', '2/2.10']) assert.ok(kucuk[p]!.S >= 9.5 - 1e-9, `${p} şimdiden sonra: ${String(kucuk[p]!.S)}`);
+  });
+
+  test('PB-10: fasonda süren adım bütün partilerde plandaki dönüşüyle kalır', async () => {
+    // 10. adım fason (firması seçilmemiş): 08:00'de çıktı, 176. saatte döner. Parçalar birlikte dışarıdadır; hiçbir parti yeniden gönderilmez.
+    const fasonlu = kayit([{ ...adim(10, '20', 60, 0), stationId: null as unknown as string, fasonId: 'F1', terminGun: 2 } as unknown as ReturnType<typeof adim>, adim(20, '10', 60, 0), adim(30, '20', 60, 0)]);
+    const ops = await bol([emir('2', 6)], { kayit: fasonlu }, '2', [4, 2], SONRA);
+    assert.deepEqual([ops['2/1.10']!.C, ops['2/2.10']!.C, ops['2/1.20']!.S, ops['2/2.20']!.S], [176, 176, 176, 180]);
+  });
+
+  test('PB-11: ilk parça kontrolü olan süren adımda ilk parçanın süresi ayarda kalır, işleme süresine yeniden eklenmez', async () => {
+    // İlk parça kontrollü adım: ilk parça ayara sayılır (1 saat), kalan 3 adet işlenir. 4 adetlik ilk parti 08:00-12:00.
+    const faili = kayit([{ ...adim(10, '20', 60, 0), plan: { k: '10', fai: true } } as unknown as ReturnType<typeof adim>, adim(20, '10', 60, 0), adim(30, '20', 60, 0)]);
+    const basta = await bol([emir('2', 6)], { kayit: faili }, '2', [4, 2]);
+    const sonra = await bol([emir('2', 6)], { kayit: faili }, '2', [4, 2], SONRA);
+    assert.deepEqual([yer(sonra)['2/1.10'], yer(sonra)['2/2.10']], [['200', 8, 12, 3], ['200', 12, 14, 1]]);
+    assert.deepEqual(yer(sonra), yer(basta));
   });
 });
