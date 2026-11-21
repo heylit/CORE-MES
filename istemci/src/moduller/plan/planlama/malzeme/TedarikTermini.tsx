@@ -14,7 +14,7 @@ const hataMetni = (h: unknown): string => (h instanceof ApiHatasi && h.sunucuIle
 
 // Kayıt değişim bitince gider (kutudan çıkış ya da Enter): her tuşta yazmak yarım tarihi kaydeder ve her seferinde sayfayı yeniden okurdu.
 // Yarım tarih (badInput) yazılmaz; boş kutu termini kaldırır.
-function TerminGirdisi({ x, yenile }: { x: TedarikTerminiSatiri; yenile: () => void }) {
+export function TerminGirdisi({ x, yenile }: { x: TedarikTerminiSatiri; yenile: () => void }) {
   const { bildir } = useBildirim();
   const [mesgul, mesgulYaz] = useState(false);
   // Enter'dan sonra gelen kutudan çıkış aynı değeri ikinci kez göndermesin.

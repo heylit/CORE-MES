@@ -14,7 +14,7 @@ import {
 // Taleplerim'in yeni talep formu dolu açılır (termin takibinin "Talep aç"ı gibi, TaleplerimSayfasi taslak). Plan sipariş vermez (222 a);
 // talep satın almaya form gönderilince gider. Açık talep satın almanın termin takibinden okunur; okunamazsa düşülmez ve kart bunu söyler.
 
-const TALEP_YOLU = '/taleplerim?bolum=yeni';
+export const TALEP_YOLU = '/taleplerim?bolum=yeni';
 const ESIK = 1e-9;
 type Gosterim = 'tuketim' | 'kalan' | 'eksik';
 const GOSTERIMLER: readonly [Gosterim, string][] = [['tuketim', 'Tüketim'], ['kalan', 'Kalan stok'], ['eksik', 'Eksik']];
@@ -45,7 +45,7 @@ function Segment<A extends string>({ etiket, secenekler, secili, sec }: { etiket
   );
 }
 
-function useAcikTalepler(verilen: ReadonlyMap<string, number> | null | undefined): ReadonlyMap<string, number> | null | undefined {
+export function useAcikTalepler(verilen: ReadonlyMap<string, number> | null | undefined): ReadonlyMap<string, number> | null | undefined {
   const [m, mYaz] = useState<ReadonlyMap<string, number> | null | undefined>(verilen);
   useEffect(() => {
     if (verilen !== undefined) return undefined;
@@ -56,7 +56,7 @@ function useAcikTalepler(verilen: ReadonlyMap<string, number> | null | undefined
     );
     return () => { bitti = true; };
   }, [verilen]);
-  return m;
+  return verilen !== undefined ? verilen : m;
 }
 
 export function TopluPlan({ satirlar, taban, simdi, dar, stok, malzemeAdi, birim, kart, emirNo, talepAcar, talepler: verilen }: TopluPlanOzellikleri) {
