@@ -20,7 +20,7 @@ import { yetkiKur } from '../yetki.ts';
 import { Kokpit } from './index.tsx';
 import { onayAcIste } from './istek.ts';
 import * as gonder from '../motor/atolye/gonder.ts';
-import { etkiCumlesi, gecikenler } from './Tahta.tsx';
+import { etkiCumlesi, gecikenler, onayCumlesi } from './Tahta.tsx';
 import type { KokpitEmri, KokpitIsi } from './kurallar.ts';
 
 // Oklar seçimi Araçlar menüsündedir (3365).
@@ -1215,6 +1215,49 @@ describe('Kokpit', () => {
     await waitFor(() => { expect(is(komsu!).style.getPropertyValue('--x')).toBe(x0); });
     expect(is(komsu!).hasAttribute('data-kaydi')).toBe(false);
     expect(is(komsu!).hasAttribute('data-gecikir')).toBe(false);
+    // 3531 b: bırakınca taşıma hemen yazılmaz; önizleme yerinde durur, Vazgeç bırakır, Uygula yazar.
+    const surukle = (): void => {
+      fireEvent.pointerDown(is(tasinanId), { button: 0, pointerType: 'mouse', clientX: 0, clientY: 0 });
+      fireEvent.pointerMove(alan, { pointerType: 'mouse', clientX: 30, clientY: 0 });
+      fireEvent.pointerMove(alan, { pointerType: 'mouse', clientX: 60, clientY: 0 });
+    };
+    surukle();
+    await waitFor(() => { expect(is(komsu!).hasAttribute('data-kaydi')).toBe(true); });
+    fireEvent.pointerUp(document, { pointerType: 'mouse' });
+    const onayGrubu = screen.getByRole('group', { name: 'Taşımayı onayla' });
+    expect(onayGrubu.textContent).toContain('gecikir');
+    expect(onayGrubu.textContent).toMatch(/^\S+ · .+, .+ \(\d.* (erken|geç)\)/);
+    expect(is(komsu!).hasAttribute('data-kaydi')).toBe(true);
+    // Onay beklerken imleç hedefi değiştirmez.
+    const sorulan = oz.mock.calls.length;
+    fireEvent.pointerMove(alan, { pointerType: 'mouse', clientX: 300, clientY: 0 });
+    await new Promise((r) => setTimeout(r, 250));
+    expect(oz.mock.calls.length).toBe(sorulan);
+    fireEvent.click(within(onayGrubu).getByRole('button', { name: 'Vazgeç' }));
+    expect(screen.queryByRole('group', { name: 'Taşımayı onayla' })).toBeNull();
+    await waitFor(() => { expect(is(komsu!).style.getPropertyValue('--x')).toBe(x0); });
+    expect(oz.mock.calls.length).toBe(sorulan);
+    // Esc de onay çubuğunu kapatır, yazmaz ve itilen işi yerine döndürür.
+    surukle();
+    fireEvent.pointerUp(document, { pointerType: 'mouse' });
+    expect(screen.getByRole('group', { name: 'Taşımayı onayla' })).toBeTruthy();
+    const escOncesi = oz.mock.calls.length;
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('group', { name: 'Taşımayı onayla' })).toBeNull();
+    await waitFor(() => { expect(is(komsu!).style.getPropertyValue('--x')).toBe(x0); });
+    expect(oz.mock.calls.length).toBe(escOncesi);
+    surukle();
+    fireEvent.pointerUp(document, { pointerType: 'mouse' });
+    const once = oz.mock.calls.length;
+    const gosterilen = oz.mock.calls.at(-1)?.[0];
+    // Gösterilen yer işin eski saati değildir; Uygula eski yere yazsaydı aşağıdaki eşitlik tutmazdı.
+    expect(screen.getByRole('group', { name: 'Taşımayı onayla' }).textContent).toMatch(/\((\d.*) (erken|geç)\)/);
+    fireEvent.click(within(screen.getByRole('group', { name: 'Taşımayı onayla' })).getByRole('button', { name: 'Uygula' }));
+    expect(screen.queryByRole('group', { name: 'Taşımayı onayla' })).toBeNull();
+    // Uygula taşımayı başlatır: Kokpit taşımadan önce yeri sunucuya bir kez daha sorar; sorulan yer onay çubuğunda gösterilen tezgâh ve saattir.
+    await waitFor(() => { expect(oz.mock.calls.length).toBe(once + 1); });
+    expect(oz.mock.calls.at(-1)?.[0]).toEqual(gosterilen);
+    expect(oz.mock.calls.at(-1)![0]).toMatchObject({ isId: tasinanId });
     oz.mockRestore();
     geriKur();
   });
@@ -1237,6 +1280,9 @@ describe('Kokpit', () => {
     expect(etkiCumlesi({ kayan: { a: 1, b: 2, c: -1 }, geciken: g }, zaman, 8)).toBe(' · aynı tezgâhta 2 iş arkaya itilir · 1 iş öne çekilir · ORN-1 termini 12:00, gecikir');
     const uc = { isler: new Set(['a']), emirler: [{ no: 'ORN-1', termin: 12 }, { no: 'ORN-2', termin: 30 }, { no: 'ORN-3', termin: 40 }] };
     expect(etkiCumlesi({ kayan: {}, geciken: uc }, zaman, 8)).toBe(' · ORN-1 termini 12:00, gecikir; ORN-2 termini Cmt 06:00, gecikir; +1 emir daha gecikir');
+    expect(onayCumlesi('S1', 'T-01', 'Sal 06:00', -2)).toBe('S1 · T-01, Sal 06:00 (2 sa erken)');
+    expect(onayCumlesi('S1', 'F-01', 'Sal 09:15', 1.25)).toBe('S1 · F-01, Sal 09:15 (1 sa 15 dk geç)');
+    expect(onayCumlesi('S1', 'T-01', 'Sal 06:00', 0)).toBe('S1 · T-01, Sal 06:00 (aynı saat)');
     expect(etkiCumlesi({ kayan: {}, geciken: { isler: new Set(), emirler: [] } }, zaman, 8)).toBe('');
     expect(etkiCumlesi(null, zaman, 8)).toBe('');
   });

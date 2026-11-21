@@ -361,6 +361,12 @@
   position: sticky; left: var(--b-2); bottom: var(--b-2); z-index: 6; display: inline-block; margin: var(--b-2); padding: var(--b-1) var(--b-3);
   border-radius: var(--yari-tam); background: var(--ink); color: var(--bg); font-size: var(--yazi-xs); font-weight: 600;
 }
+/* 3531 b: bırakılan taşıma onay bekler; açık panel zemini ki Vazgeç düğmesi koyu ipucu zemininde kaybolmasın; dar ekranda düğmeler alta iner. */
+.tc-pyq-tasima-onayi {
+  display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); max-width: calc(100% - var(--b-4)); border-radius: var(--yari-2);
+  border: var(--cizgi-ince) solid var(--edge2); background: var(--panel-solid); color: var(--ink); box-shadow: var(--shadow);
+}
+.tc-pyq-tasima-onayi > span { flex: 1 1 calc(var(--b-6) * 6); min-width: 0; }
 
 /* Sağ tık menüsü. */
 .tc-pyq-menu {

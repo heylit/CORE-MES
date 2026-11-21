@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as FareOlayi, type PointerEvent as ImlecOlayi } from 'react';
-import { Simge } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, Simge } from '../../../../ortak/arayuz/index.ts';
 import { emirKuyrugu } from '../ortak/emir-no.ts';
 import type { Derleme } from '../motor/kurallar.ts';
 import type { IsTasiOnizlemesi } from '../motor/atolye/gonder.ts';
@@ -100,6 +100,10 @@ export function gecikenler(isler: readonly { isId: string; C: number }[], eski: 
   }
   return { isler: ids, emirler: [...em].map(([no, termin]) => ({ no, termin })).sort((a, b) => a.termin - b.termin) };
 }
+// Bırakılan taşımanın onay cümlesinin başı: hangi iş, hangi tezgâh, hangi saat ve eski yerine göre ne kadar erken ya da geç.
+export function onayCumlesi(is: string, tezgah: string, saat: string, fark: number): string {
+  return `${is} · ${tezgah}, ${saat} (${Math.abs(fark) < 0.01 ? 'aynı saat' : `${sureYaz(fark)} ${fark < 0 ? 'erken' : 'geç'}`})`;
+}
 // Sürüklerken ipucu satırına eklenen neden cümlesi: kaç iş itilir ya da çekilir, hangi emir termini kaçırır.
 // Termin bugünse yalnız saat, değilse gün ve saat yazılır; ikiden çok geciken emir "+N emir daha gecikir" diye toplanır.
 export function etkiCumlesi(e: Pick<Etki, 'kayan' | 'geciken'> | null, zaman: (t: number) => string, simdi: number): string {
@@ -142,6 +146,8 @@ export function Tahta(o: TahtaOzellikleri) {
   const [oklar, setOklar] = useState<Ok[]>([]);
   const [ustteki, setUstteki] = useState<string | null>(null);
   const [etki, setEtki] = useState<Etki | null>(null);
+  // 3531 b: bırakılan iş hemen taşınmaz; hayalet, itilen işler ve neden cümlesi yerinde durur, Uygula yazar, Vazgeç (ya da Esc) bırakır.
+  const [onay, setOnay] = useState(false);
   // Fareyle basılan iş: kıpırdayınca sürükleme başlar; sürükleyerek tutulanı bırakmak imleci kaldırmaktır.
   const basilan = useRef<{ id: string; x: number; y: number; tut: number } | null>(null);
   const surukleniyor = useRef(false);
@@ -224,6 +230,7 @@ export function Tahta(o: TahtaOzellikleri) {
   }, [emir, m, planaAl, goz, uyari, fisAdaylari]);
   // vazgecer: sürükleyerek tutulan iş geçersiz yere bırakılınca tutma biter (yapışarak tutmada iş elde kalır, kişi başka yere tıklar).
   const birak = useCallback((vazgecer = false): void => {
+    if (onay) return;
     const birakma = (ileti: string): void => { uyari(ileti); if (vazgecer) { setTasinan(null); setHedef(null); } };
     if (tasinan?.fis !== undefined) {
       if (!hedef) { birakma('Emri bir tezgâh satırına bırakın'); return; }
@@ -240,8 +247,16 @@ export function Tahta(o: TahtaOzellikleri) {
     setTasinan(null); setHedef(null);
     // Çoklu seçimin bir işi bırakılınca hepsi aynı süre kayar; tezgâh değişmez (her iş kendi satırında kalır).
     if (grupKaydir && coklu.size > 1 && coklu.has(x.id)) { if (Math.abs(hedef.S - x.S) > 0.01) grupKaydir(hedef.S - x.S); return; }
-    if (tezgah !== x.m || Math.abs(hedef.S - x.S) > 0.01) tasi(x.id, tezgah, hedef.S);
-  }, [tasinan, hedef, m, tasi, planaAl, goz, uyari, grupKaydir, coklu]);
+    if (tezgah === x.m && Math.abs(hedef.S - x.S) <= 0.01) return;
+    // Tek iş: önizleme durur, kişi Uygula ya da Vazgeç der (3531 b).
+    setTasinan(tasinan); setHedef(hedef); setOnay(true);
+  }, [onay, tasinan, hedef, m, tasi, planaAl, goz, uyari, grupKaydir, coklu]);
+  const vazgec = useCallback((): void => { surukleniyor.current = false; setOnay(false); setTasinan(null); setHedef(null); }, []);
+  const uygula = useCallback((): void => {
+    const x = tasinan ? m.isler[tasinan.id] : undefined;
+    if (x && hedef && tasi) tasi(x.id, goz === 'T' ? hedef.satir : x.m, hedef.S);
+    setOnay(false); setTasinan(null); setHedef(null);
+  }, [tasinan, hedef, m, tasi, goz]);
 
   // Tutulan iş imleci izler: satır imlecin altındaki satırdır, saat imlecin yeri eksi tutulan noktadır (çeyrek saate oturur).
   const izle = (ev: ImlecOlayi<HTMLDivElement>): void => {
@@ -253,7 +268,7 @@ export function Tahta(o: TahtaOzellikleri) {
       setTasinan((t) => (t ? { ...t, suruk: true } : t));
       return;
     }
-    if (!tasinan) return;
+    if (!tasinan || onay) return;
     const x = m.isler[tasinan.id];
     const satir = (ev.target as Element).closest<HTMLElement>('[data-satir]');
     const alan = satir?.querySelector<HTMLElement>('.tc-pyq-alan');
@@ -308,7 +323,8 @@ export function Tahta(o: TahtaOzellikleri) {
 
   useEffect(() => {
     const tus = (ev: KeyboardEvent): void => {
-      if (ev.key === 'Escape' && (tasinan || menu)) { ev.stopPropagation(); surukleniyor.current = false; setTasinan(null); setHedef(null); setMenu(null); return; }
+      if (ev.key === 'Escape' && (tasinan || menu)) { ev.stopPropagation(); surukleniyor.current = false; setOnay(false); setTasinan(null); setHedef(null); setMenu(null); return; }
+      if (onay) return;
       if (yazimda() || ev.ctrlKey || ev.metaKey || ev.altKey) return;
       if (ev.key !== ' ' || uzakMi(olcek)) return;
       if (tasinan) { ev.preventDefault(); birak(); return; }
@@ -322,7 +338,7 @@ export function Tahta(o: TahtaOzellikleri) {
     };
     document.addEventListener('keydown', tus, true);
     return () => { document.removeEventListener('keydown', tus, true); };
-  }, [tasinan, menu, tut, tutFis, birak, secIs, secEmir, emir, planaAl, m, olcek]);
+  }, [tasinan, menu, onay, tut, tutFis, birak, secIs, secEmir, emir, planaAl, m, olcek]);
 
   // Açılışta şimdi görünür; istenen iş görünüme gelir.
   useEffect(() => {
@@ -505,7 +521,7 @@ export function Tahta(o: TahtaOzellikleri) {
   return (
     <div
       className="tc-pyq-tahta" data-olcek={olcek} data-tasima={tasinan ? '' : undefined} ref={kap}
-      onPointerMove={izle} onClickCapture={(ev) => { if (tasinan) { ev.preventDefault(); ev.stopPropagation(); birak(); } else if (menu && !(ev.target as Element).closest('.tc-pyq-menu')) setMenu(null); }}
+      onPointerMove={izle} onClickCapture={(ev) => { if (tasinan && !onay) { ev.preventDefault(); ev.stopPropagation(); birak(); } else if (menu && !(ev.target as Element).closest('.tc-pyq-menu')) setMenu(null); }}
     >
       <div className="tc-pyq-ic" ref={(el) => { ic.current = el; el?.style.setProperty('--en', `${String(en)}px`); el?.style.setProperty('--gun', `${String(24 * px)}px`); }}>
         {eksen}
@@ -604,7 +620,18 @@ export function Tahta(o: TahtaOzellikleri) {
           </div>
         )}
       </div>
-      {tasinan && <p className="tc-pyq-ipucu" role="status">{tasinan.suruk ? 'Bırakın: iş taşınır' : 'Bırakmak için tıklayın ya da Space'}{grupKaydir && coklu.size > 1 && coklu.has(tasinan.id) ? ` · seçili ${String(coklu.size)} iş aynı süre kayar` : ''}{etkiNe?.gecerli === false && etkiNe.ileti ? ` · ${etkiNe.ileti}` : ''}{etkiNe?.gecerli !== false ? etkiCumlesi(etkiNe, zaman, m.simdi) : ''} · Esc vazgeçer</p>}
+      {onay && tasinanIs && hedef && (
+        <div className="tc-pyq-ipucu tc-pyq-tasima-onayi" role="group" aria-label="Taşımayı onayla">
+          <span role="status">{`${onayCumlesi(
+            emirKuyrugu(emir.get(tasinanIs.job)?.no ?? tasinanIs.job),
+            goz !== 'T' || hedef.satir === satirKimligi(tasinanIs) ? (tasinanIs.fason ? 'Fason' : tezgahKodu.get(tasinanIs.m) ?? tasinanIs.m) : tezgahKodu.get(hedef.satir) ?? hedef.satir,
+            zaman(hedef.S).slice(6), hedef.S - tasinanIs.S,
+          )}${etkiNe?.gecerli !== false ? etkiCumlesi(etkiNe, zaman, m.simdi) : ''}`}</span>
+          <Dugme onClick={vazgec}>Vazgeç</Dugme>
+          <Dugme tur="birincil" simge="check" disabled={etkiNe?.gecerli === false} onClick={uygula} autoFocus>Uygula</Dugme>
+        </div>
+      )}
+      {tasinan && !onay && <p className="tc-pyq-ipucu" role="status">{tasinan.suruk ? 'Bırakın: iş taşınır' : 'Bırakmak için tıklayın ya da Space'}{grupKaydir && coklu.size > 1 && coklu.has(tasinan.id) ? ` · seçili ${String(coklu.size)} iş aynı süre kayar` : ''}{etkiNe?.gecerli === false && etkiNe.ileti ? ` · ${etkiNe.ileti}` : ''}{etkiNe?.gecerli !== false ? etkiCumlesi(etkiNe, zaman, m.simdi) : ''} · Esc vazgeçer</p>}
       {once && <p className="tc-pyq-ipucu" role="status">Onaylı plan gösteriliyor · işlerin üzerinde sizin değişikliğinizle ne kadar kaydığı yazar</p>}
     </div>
   );
