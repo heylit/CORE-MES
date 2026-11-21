@@ -316,6 +316,11 @@ describe('partiye bölünen emir (3483)', () => {
     const m2 = uzak('3', sinir);
     ciz({ m: m2, p, kartlar: siraKartlari(m2) }, '2');
     expect(notlar()).toEqual([]);
+    cleanup();
+    // Pencere planın başından değil bugünden sayılır: iki gün sonra aynı bitiş pencerenin içindedir.
+    const m3 = { ...m1, simdi: m0.simdi + 48 };
+    ciz({ m: m3, p, kartlar: siraKartlari(m3) }, '2');
+    expect(notlar()).toEqual([]);
   });
 
   it('tek emirli satırda bitişi bir yıldan ileride olan emrin notu adımların üstünde durur', () => {
@@ -324,6 +329,10 @@ describe('partiye bölünen emir (3483)', () => {
     ciz({ m, p: x.p, kartlar: siraKartlari(m) }, '2');
     expect(document.querySelector('.tc-pyq-ld-kart[data-acik] [data-durus-okunmadi] + .tc-pyq-ld-adimlar')).not.toBeNull();
     expect(document.querySelectorAll('[data-durus-okunmadi]')).toHaveLength(1);
+    cleanup();
+    // Partinin notu da varsa sıra aynıdır: önce emrin notu, sonra partinin notu, sonra adımlar.
+    ciz({ m, p: x.p, kartlar: siraKartlari(m) }, '2', { kol: { emir: { 2: 'Parti notu.' }, adim: {} } });
+    expect(document.querySelector('.tc-pyq-ld-kart[data-acik] [data-durus-okunmadi] + [data-emir-kol] + .tc-pyq-ld-adimlar')).not.toBeNull();
   });
 
   it('tek emirli satırda da partinin notu adımların üstünde durur', () => {
