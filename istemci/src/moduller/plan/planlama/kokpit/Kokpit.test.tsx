@@ -766,6 +766,23 @@ describe('Kokpit', () => {
     expect(document.querySelector('.tc-pyq-ld-kart[data-acik] [data-adim-sorun="2.20"]')).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Adıma sorun bildirmeyi kapat' }));
     expect(screen.queryByRole('complementary', { name: 'Adıma sorun bildir' })).toBeNull();
+    // Panel açık satırın adımına bağlıdır: başka sipariş açılınca, satır kapanınca ve görünüm değişince kapanır.
+    const sorunAc = (): void => { fireEvent.click(document.querySelector<HTMLElement>('.tc-pyq-ld-kart[data-acik] [data-adim-sorun]')!); };
+    const panelVar = (): boolean => screen.queryByRole('complementary', { name: 'Adıma sorun bildir' }) !== null;
+    const baska = document.querySelector<HTMLElement>('.tc-pyq-ld-kart:not([data-acik]) [data-kart] button[aria-expanded="false"]')!;
+    sorunAc();
+    expect(panelVar()).toBe(true);
+    fireEvent.click(baska);
+    expect([panelVar(), document.querySelector('.tc-pyq-ld-kart[data-acik] [data-kart]')?.getAttribute('data-kart') === '2']).toEqual([false, false]);
+    sorunAc();
+    expect(panelVar()).toBe(true);
+    fireEvent.click(document.querySelector<HTMLElement>('.tc-pyq-ld-kart[data-acik] [data-kart] button[aria-expanded="true"]')!);
+    expect([panelVar(), document.querySelector('.tc-pyq-ld-kart[data-acik]')]).toEqual([false, null]);
+    fireEvent.click(document.querySelector<HTMLElement>('[data-kart="2"] button[aria-expanded="false"]')!);
+    sorunAc();
+    expect(panelVar()).toBe(true);
+    fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: 'Emirler' }));
+    expect(panelVar()).toBe(false);
     cleanup();
     const okur = kur(false);
     expect(okur.querySelector('.tc-pyq-ld-adimlar')).not.toBeNull();

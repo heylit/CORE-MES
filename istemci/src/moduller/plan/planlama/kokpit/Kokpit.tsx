@@ -627,6 +627,10 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   sigdirSon.current = sigdir;
   const secimiKaldir = useCallback(() => { sec(null, null); setVurgu(false); }, [sec]);
   const kartSec = useCallback((k: string) => { if (k === kart && vurgu) secimiKaldir(); else { setKart(k); setVurgu(true); } }, [kart, vurgu, secimiKaldir]);
+  // Liste düzeninde sorun paneli açık sipariş satırındaki adımdan açılır: satır kapanınca, başka sipariş açılınca ya da görünüm değişince
+  // kapanır; açık kalırsa kayıt artık görünmeyen adıma girilir.
+  const acikKart = vurgu ? kart : null;
+  useEffect(() => { if (!klasik) setSorunAdimi(null); }, [klasik, acikKart, ldGorunum]);
   // Karta bağlı değişiklikler (saha olayı, geride kalan iş) kartta sayıyla görünür.
   const kartOlayi = useMemo(() => {
     const k = new Map<string, number>();
