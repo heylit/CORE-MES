@@ -303,4 +303,13 @@ describe('"Partiyi böl" ölçümü plana göre süren adımı ilk partinin aded
     const ops = await bol([emir('2', 6)], { kayit: fasonlu }, '2', [4, 2], SONRA);
     assert.deepEqual([ops['2/1.10']!.C, ops['2/2.10']!.C, ops['2/1.20']!.S, ops['2/2.20']!.S], [176, 176, 176, 180]);
   });
+
+  test('PB-11: ilk parça kontrolü olan süren adımda ilk parçanın süresi ayarda kalır, işleme süresine yeniden eklenmez', async () => {
+    // İlk parça kontrollü adım: ilk parça ayara sayılır (1 saat), kalan 3 adet işlenir. 4 adetlik ilk parti 08:00-12:00.
+    const faili = kayit([{ ...adim(10, '20', 60, 0), plan: { k: '10', fai: true } } as unknown as ReturnType<typeof adim>, adim(20, '10', 60, 0), adim(30, '20', 60, 0)]);
+    const basta = await bol([emir('2', 6)], { kayit: faili }, '2', [4, 2]);
+    const sonra = await bol([emir('2', 6)], { kayit: faili }, '2', [4, 2], SONRA);
+    assert.deepEqual([yer(sonra)['2/1.10'], yer(sonra)['2/2.10']], [['200', 8, 12, 3], ['200', 12, 14, 1]]);
+    assert.deepEqual(yer(sonra), yer(basta));
+  });
 });
