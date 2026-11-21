@@ -36,7 +36,7 @@ function kos(st: MotorDurumu, kip: 'yeni' | 'sabit', taban: MotorPlani | null, r
   const m = motorYukle();
   const s = hazirla(m, st);
   const t0 = performance.now();
-  const p = m.schedule(s, kip, taban);
+  const p = m.takvimliCoz(s, kip, taban);
   const sure = performance.now() - t0;
   const e = m.evaluate(p, s, ref, false) as Record<string, unknown>;
   const fail = (p.fail ?? []).length;

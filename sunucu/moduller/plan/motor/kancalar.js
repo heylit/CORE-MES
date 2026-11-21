@@ -211,6 +211,36 @@ function montajUygula() {
   };
 }
 montajUygula();
+/* ---------- Kol bağı (3512) ----------
+   Adım ortasından bölünen parti (st.kol: parti -> { once, onceUst, sonra, sonraUst }; girdi.js tmiBitenler) yalnız kendi adımlarını işler.
+   Ayrıldığı yerden önceki adımı (once) üst emir partinin adediyle birlikte yapar: partinin ilk adımı onu bekler. Parti katıldığı adımda
+   (sonra) üst emre döner: üst emrin o adımı partinin son adımını bekler. Bağ kurulmazsa parti, parçası henüz gelmeden başlar. Ölçümde üst
+   emir ya da parti partilere bölünmüşse ("emir/1") bağ her partiye kurulur. */
+function kolBagiUygula() {
+  if (self.__kolBag) return; self.__kolBag = 1;
+  /** @type {(...a: any[]) => any} */
+  const c0 = compile;
+  /** @this {unknown} */
+  // @ts-expect-error kanca motorun işlevini bilerek değiştirir (458 a)
+  compile = function (st) {
+    const cx = c0.apply(this, /** @type {any} */ (arguments)); const K = st && st.kol; if (!K || !cx || !cx.jobs) return cx;
+    const kok = id => String(id).split('/')[0];
+    const gr = {}; for (const jid in cx.jobs) (gr[kok(jid)] = gr[kok(jid)] || []).push(jid);
+    const icinde = j => new Set(cx.jobs[j].ops.map(o => o.id));
+    const ilk = j => { const ic = icinde(j); return cx.jobs[j].ops.filter(o => !o.pr.some(([p]) => ic.has(p))); };
+    const son = j => { const ic = icinde(j); return cx.jobs[j].ops.filter(o => !(cx.succ[o.id] || []).some(([s]) => ic.has(s))); };
+    const bagla = (onculler, ardillar) => { for (const a of ardillar) for (const p of onculler) { if (a.pr.some(([q]) => q === p.id)) continue; a.pr.push([p.id, 'b']); (cx.succ[p.id] = cx.succ[p.id] || []).push([a.id, 'b']); } };
+    for (const ck in K) {
+      const b = K[ck];
+      for (const cj of gr[ck] || []) {
+        if (b.once != null) for (const pj of gr[b.onceUst] || []) bagla(cx.jobs[pj].ops.filter(o => o.k === b.once), ilk(cj));
+        if (b.sonra != null) for (const pj of gr[b.sonraUst] || []) bagla(son(cj), cx.jobs[pj].ops.filter(o => o.k === b.sonra));
+      }
+    }
+    return cx;
+  };
+}
+kolBagiUygula();
 /* ---------- Bölünen partide ayar sıfırlama ----------
    Tezgâhta bir önceki iş aynı iş emrinin aynı adımının başka partisiyse bağlama ve takım sökülmemiştir; ayar ve ilk parça onayı
    yeniden yapılmaz. Arada tezgâhın boş beklemesi ayarı bozmaz, araya başka iş girerse ayar ödenir. Motor yerleştirmeyi tezgâh

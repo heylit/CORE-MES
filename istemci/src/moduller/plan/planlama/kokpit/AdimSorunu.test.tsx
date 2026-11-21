@@ -6,7 +6,7 @@ import { saatYaz } from '../motor/kurallar.ts';
 import { girdiSaati } from '../ic/veri/kurallar.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import { AdimSorunu, ekSaatOku } from './AdimSorunu.tsx';
-import type { KokpitModeli } from './kurallar.ts';
+import type { AdimBeklemesi, KokpitModeli } from './kurallar.ts';
 import { sahteTaslak } from './taslak-test-yardim.ts';
 
 // 3335-3b: adıma sorun bildirme paneli. Çalışma uydurmadır; taslak sahtedir.
@@ -21,13 +21,13 @@ const M = {
 // Başlamamış adım: malzeme ve kişi yokluğu yalnız ona bildirilir.
 const M_BEKLER = { ...M, isler: { 'ORN-1.10': { ...M.isler['ORN-1.10']!, basladi: false } } };
 
-function kur({ yazabilir = true, ek = null as number | null, isId = 'ORN-1.10', m = M, bekle = null as { kadar: number; neden: string } | null } = {}) {
+function kur({ yazabilir = true, ek = null as number | null, isId = 'ORN-1.10', m = M, bekle = null as { kadar: number; neden: string } | null, ust = null as AdimBeklemesi | null, ustAc = undefined as ((isId: string) => void) | undefined, taslakYok = false } = {}) {
   const c = ornekCalisma() as unknown as PlanlamaCalismasi;
   if (ek !== null) (c.w as Record<string, unknown>)['adimEk'] = { 'ORN-1.10': { ekSaat: ek, bitis0: 34 } };
   if (bekle !== null) (c.w as Record<string, unknown>)['adimBekle'] = { 'ORN-1.10': bekle };
   const { t, yazilan } = sahteTaslak(c.dataVer);
   const kapat = vi.fn();
-  render(<AdimSorunu c={c} m={m} isId={isId} taslak={t} yazabilir={yazabilir} zaman={(x) => saatYaz(c.D, x)} kapat={kapat} />);
+  render(<AdimSorunu c={c} m={m} isId={isId} taslak={taslakYok ? null : t} yazabilir={yazabilir} zaman={(x) => saatYaz(c.D, x)} kapat={kapat} ustBekleme={ust} {...(ustAc ? { ustAc } : {})} />);
   return { c, t, yazilan, kapat, panel: screen.getByRole('complementary', { name: 'Adıma sorun bildir' }) };
 }
 
@@ -88,6 +88,12 @@ describe('Kokpit adıma sorun bildir (3335-3b)', () => {
     const { panel } = kur({ yazabilir: false });
     expect(within(panel).queryByRole('textbox')).toBeNull();
     expect(within(panel).getByText('Adıma sorunu yalnız planı yazabilen kişi bildirir.')).toBeTruthy();
+    expect(document.activeElement).toBe(panel);
+    cleanup();
+    // Taslak yokken alan durur ama kilitlidir; kilitli alan odak almaz.
+    const { panel: taslaksiz } = kur({ taslakYok: true });
+    expect(within(taslaksiz).getByRole<HTMLInputElement>('textbox').disabled).toBe(true);
+    expect(document.activeElement).toBe(taslaksiz);
     cleanup();
     const { panel: bos } = kur({ isId: 'ORN-9.10' });
     expect(within(bos).getByText('Bu adım planda yerleşmemiş; önce plana alın.')).toBeTruthy();
@@ -152,5 +158,50 @@ describe('Kokpit adıma sorun bildir: malzeme yok ve kişi yok (3335-3c)', () =>
     const { panel: gecmis } = kur({ m: M_BEKLER, bekle: { kadar: 8, neden: 'malzeme' } });
     expect(gecmis.querySelector('[data-adim-bekle]')?.textContent).toBe('yok');
     expect(within(gecmis).queryByRole('button', { name: 'Bildirimi kaldır' })).toBeNull();
+  });
+
+  // 3513: partinin adımında üst emrin beklemesi geçerliyse form "yok" demez; kaynağını ve nereden kaldırılacağını söyler.
+  describe('üst emirden gelen bekleme (3513)', () => {
+    const M_PARTI = {
+      ...M_BEKLER,
+      isler: { ...M_BEKLER.isler, 'ORN-2.10': { ...M_BEKLER.isler['ORN-1.10']!, id: 'ORN-2.10', job: 'ORN-2' } },
+      emirler: [{ id: 'ORN-1', no: 'ORN-0001', adimlar: [{ id: 'ORN-1.10' }] }, { id: 'ORN-2', no: 'ORN-0002', adimlar: [{ id: 'ORN-2.10' }] }],
+    } as unknown as typeof M;
+    const UST: AdimBeklemesi = { kadar: 58, neden: 'malzeme', ust: 'ORN-2' };
+
+    it('özet ve bilgi kutusu üst emri ve beklemeyi yazar; düğme üst emrin aynı adımını açar; sorun türü uzama olarak açılır', () => {
+      const ustAc = vi.fn();
+      const { c, panel } = kur({ m: M_PARTI, ust: UST, ustAc });
+      expect(panel.querySelector('[data-adim-bekle]')?.textContent).toBe('üst emirden (ORN-0002)');
+      expect(panel.querySelector('[data-adim-bekle]')?.getAttribute('data-adim-bekle')).toBe('ust');
+      expect(panel.querySelector('[data-ust-bekleme="ORN-2"]')?.textContent)
+        .toBe(`Üst emrin (ORN-0002) beklemesi bu adımda da geçerli: malzeme yok, ${saatYaz(c.D, 58)}'e kadar. Kaldırmak için üst emrin adımında kaldırın.`);
+      expect(tur(panel).value).toBe('uzadi');
+      expect(within(panel).queryByRole('button', { name: 'Bildirimi kaldır' })).toBeNull();
+      fireEvent.click(within(panel).getByRole('button', { name: 'Üst emrin adımını aç' }));
+      expect(ustAc).toHaveBeenCalledWith('ORN-2.10');
+    });
+
+    it('bekleme türü seçilince ayrı beklemenin üst emrinkinin yerine geçeceği yazar; uzamada yazmaz', () => {
+      const { panel } = kur({ m: M_PARTI, ust: UST });
+      const not = () => panel.querySelector('#tc-pyq-adim-ek-not')?.textContent ?? '';
+      expect(not()).not.toContain('üst emrinkinin');
+      fireEvent.change(tur(panel), { target: { value: 'malzeme' } });
+      expect(not().endsWith(' Bu partiye ayrı bekleme girerseniz üst emrinkinin yerine o geçer.')).toBe(true);
+    });
+
+    it('partinin kendi beklemesi varsa ya da adım başladıysa kutu yoktur; üst emrin adımı planda yoksa düğme yoktur', () => {
+      const { c, panel } = kur({ m: M_PARTI, ust: UST, bekle: { kadar: 40, neden: 'kisi' } });
+      expect(panel.querySelector('[data-ust-bekleme]')).toBeNull();
+      expect(panel.querySelector('[data-adim-bekle]')?.textContent).toBe(`kişi yok, ${saatYaz(c.D, 40)}'e kadar`);
+      cleanup();
+      const { panel: baslamis } = kur({ m: { ...M_PARTI, isler: { ...M_PARTI.isler, 'ORN-1.10': M.isler['ORN-1.10']! } }, ust: UST });
+      expect(baslamis.querySelector('[data-ust-bekleme]')).toBeNull();
+      expect(baslamis.querySelector('[data-adim-bekle]')?.textContent).toBe('yok');
+      cleanup();
+      const { panel: plansiz } = kur({ m: M_BEKLER, ust: UST, ustAc: vi.fn() });
+      expect(plansiz.querySelector('[data-ust-bekleme]')?.textContent).toContain('Üst emrin (ORN-2)');
+      expect(within(plansiz).queryByRole('button', { name: 'Üst emrin adımını aç' })).toBeNull();
+    });
   });
 });

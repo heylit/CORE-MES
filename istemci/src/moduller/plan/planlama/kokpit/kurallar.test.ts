@@ -3,7 +3,7 @@ import { derle, girdiKur, planOku, plandanBitenler } from '../motor/kurallar.ts'
 import { ornekCalisma } from '../motor/ornek.ts';
 import {
   firmaYazilari, adimBaglari, adimBeklemesi, aralikYuku, bagimlilik, okUcu, okYolu, aramaUyar, darbogaz, emirGunleri, enCokBekleyen, tezgahGunundeMi, durumYazisi, ilkBosluk, matrisSirasi, modelKur, olcekKomsusu, onizlemeBitisi, satirKimligi, sayim, sorunlular, sureYaz,
-  acigaOtur, durdurmaBekleyenler, durusYazisi, ekMesaiYazisi, mesaiButcesi, operatorSorunu, uygunOperatorler, vardiyaAdi, planliDurusYazisi, hucreler3B, suAndakiDurus, onayliGecSayisi, yeriDegisti, tasimaSaati, tasinabilir, turAdaylari, yukSinifi, yukYuzdesi, SAAT_ENI, YAKIN_EN_AZ, YAKIN_EN_COK, sigdirma, surguDegeri, surgudenEn, yakinOlcegi, yakinSinirla, type KokpitEmri, type KokpitIsi, type KokpitModeli,
+  acigaOtur, durdurmaBekleyenler, durusYazisi, ekMesaiYazisi, mesaiButcesi, operatorSorunu, uygunOperatorler, vardiyaAdi, planliDurusYazisi, hucreler3B, suAndakiDurus, onayliGecSayisi, yeriDegisti, tasimaSaati, tasinabilir, turAdaylari, yukSinifi, yukYuzdesi, SAAT_ENI, YAKIN_EN_AZ, YAKIN_EN_COK, sigdirma, surguDegeri, surgudenEn, yakinOlcegi, yakinSinirla, ustBeklemeleri, ustEmirNotu, type AdimBeklemesi, type KokpitEmri, type KokpitIsi, type KokpitModeli,
 } from './kurallar.ts';
 
 // Örnek çalışma uydurmadır: iki emir (biri geç, biri riskli), beş tezgâh, bir fason adım.
@@ -478,5 +478,48 @@ describe('Kokpit firma tarihi yazısı (3330-3c)', () => {
   it('çok katmanlı emrin alt düğümünde tarih siparişin dugumFirma alanından okunur, kökün yerinden değil', () => {
     const dugumlu = { ...c, D: { ...c.D, siparisler: c.D.siparisler.map((x) => (x.id === s.id ? { ...x, dugum: 'Y1', dugumFirma: { 30: '2026-12-01' } } : x)) } } as typeof c;
     expect(firmaYazilari(dugumlu, yer({ tarih: '2026-11-24', siparisNo: 'ORN-SA-7' }), '2026-11-20')).toEqual({ [id]: { yazi: 'Firma tarihi 01.12', gecti: false, gun: '01.12' } });
+  });
+});
+
+// 3513: üst emrin adımına bildirilen bekleme partinin aynı adımında da görünür (motor girdisi ustBeklemesiUygula ile aynı kural, 3511).
+describe('üst emirden gelen bekleme (3513)', () => {
+  const B: AdimBeklemesi = { kadar: 200, neden: 'malzeme' };
+  const bos = { siparis: new Set<string>(), adim: new Set<string>() };
+  const kaynak = (...bag: [string, string][]) => ({ orders: [{ id: '2' }, ...bag.map(([id, parentId]) => ({ id, parentId }))] });
+  const m = (basladi: string[] = [], emirler = ['2', '3', '4', '5']) => model(
+    emirler.flatMap((e) => ['10', '20'].map((k) => is(`${e}.${k}`, 'T1', 0, 10, { basladi: basladi.includes(`${e}.${k}`) }))), emirler.map((e) => emir(e, { no: `E-${e}` })));
+
+  it('parti üst emrin beklemesini kaynağıyla alır; beklemesi olmayan adım, üst bağı olmayan emir ve emir kaynağı yokken kimse almaz', () => {
+    expect(ustBeklemeleri({ '2.20': B }, kaynak(['3', '2']), bos, m())).toEqual({ '2.20': B, '3.20': { ...B, ust: '2' } });
+    expect(ustBeklemeleri({ '2.20': B }, null, bos, m())).toEqual({ '2.20': B });
+    expect(ustBeklemeleri({ '2.20': B }, { orders: [{ id: '3', parentId: '' }, { id: '4', parentId: null }] }, bos, m())).toEqual({ '2.20': B });
+  });
+
+  it('partinin kendi beklemesi üst emrinkinin yerine geçer', () => {
+    const kendi: AdimBeklemesi = { kadar: 120, neden: 'kisi' };
+    expect(ustBeklemeleri({ '2.20': B, '3.20': kendi }, kaynak(['3', '2']), bos, m())).toEqual({ '2.20': B, '3.20': kendi });
+  });
+
+  it('üst emir kapandıysa, üst emrin adımı bittiyse ya da başladıysa bekleme geçmez; partinin biten ya da başlamış adımına yazılmaz', () => {
+    const k = kaynak(['3', '2']);
+    expect(ustBeklemeleri({ '2.20': B }, k, { ...bos, siparis: new Set(['2']) }, m())['3.20']).toBeUndefined();
+    expect(ustBeklemeleri({ '2.20': B }, k, { ...bos, adim: new Set(['2.20']) }, m())['3.20']).toBeUndefined();
+    expect(ustBeklemeleri({ '2.20': B }, k, bos, m(['2.20']))['3.20']).toBeUndefined();
+    expect(ustBeklemeleri({ '2.20': B }, k, { ...bos, adim: new Set(['3.20']) }, m())['3.20']).toBeUndefined();
+    expect(ustBeklemeleri({ '2.20': B }, k, bos, m(['3.20']))['3.20']).toBeUndefined();
+  });
+
+  it('partiden bölünen parti en yakın üst emrin kaydını alır; kapanan ara parti zinciri koparmaz; bağ döngüsü sonsuza gitmez', () => {
+    const ara: AdimBeklemesi = { kadar: 120, neden: 'kisi' }, k = kaynak(['3', '2'], ['4', '3']);
+    expect(ustBeklemeleri({ '2.20': B }, k, bos, m())['4.20']).toEqual({ ...B, ust: '2' });
+    expect(ustBeklemeleri({ '2.20': B, '3.20': ara }, k, bos, m())['4.20']).toEqual({ ...ara, ust: '3' });
+    expect(ustBeklemeleri({ '2.20': B, '3.20': ara }, k, { ...bos, siparis: new Set(['3']) }, m())['4.20']).toEqual({ ...B, ust: '2' });
+    expect(ustBeklemeleri({ '5.20': B }, { orders: [{ id: '4', parentId: '5' }, { id: '5', parentId: '4' }] }, bos, m())).toEqual({ '5.20': B, '4.20': { ...B, ust: '5' } });
+  });
+
+  it('kaynak notu üst emrin numarasını ek almayan kalıpta yazar; kendi beklemesinde not yoktur', () => {
+    expect(ustEmirNotu(m(), { ...B, ust: '2' })).toBe(' · üst emirden (E-2)');
+    expect(ustEmirNotu(m([], ['3']), { ...B, ust: '2' })).toBe(' · üst emirden (2)');
+    expect(ustEmirNotu(m(), B)).toBe('');
   });
 });

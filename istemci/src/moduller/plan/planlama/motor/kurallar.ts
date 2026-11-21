@@ -1,7 +1,7 @@
 import type { ExtraAlanlar, PlanlamaCalismasi, PlanVerisi, Siparis } from '../tipler.ts';
 import type { Metin } from './ozet/veri.ts';
 import { ufukGunu } from '../ufuk-olcegi.ts';
-import { planDisi } from '../tipler.ts';
+import { kolYerleri, planDisi } from '../tipler.ts';
 import { isAdi, type EmirNo } from '../ortak/emir-no.ts';
 import { tesisSaati } from '#paylasilan/tesis-zamani.ts';
 
@@ -295,7 +295,9 @@ export interface Derleme {
 interface Vardiya { bas: number; bit: number; mol: Pencere[] }
 // Biten iş (girdi.betik tmiBitenler): biten ve iptal emir plana girmez; biten adım düşer, ardılı onu beklemez. Kaynak sunucunun iş emri
 // durumu (`durum.emirler`): adım anahtarı "emir|root|sıra", sıra rotadaki yeri (1'den). Bütün adımı biten emir de düşer.
-export interface Bitenler { siparis: Set<string>; adim: Set<string> }
+// 3512: `kolDisi` adım ortasından bölünen partinin (kol) işlemediği adımlarıdır. Bitmiş değildir, üst emir yapar: plana girmez (girdiKur),
+// maliyeti kola yazılmaz (`adim`'de değildir). Yalnız kendi adımları kalan kol plansız görünmez.
+export interface Bitenler { siparis: Set<string>; adim: Set<string>; kolDisi?: Set<string> }
 // 3050 a: bekletilen emirler (sipariş kimliği emir kimliğidir): emir no ve nedenin adı. Bekletme durum değil işarettir; plan bekleyen emri
 // yerinde tutar, tezgâhını tutar. Emir durumu okunamazsa (emir yetkisi yok) boş.
 export interface BekleyenSiparis { no: string; neden: string }
@@ -319,11 +321,16 @@ export function bitenler(emirler: unknown, D: PlanVerisi): Bitenler {
   for (const o of Array.isArray(emirler.orders) ? emirler.orders : []) if (nesne(o) && (o.status === 'tamam' || o.status === 'iptal')) y.siparis.add(String(o.id));
   const durum = nesne(emirler.opStatus) ? emirler.opStatus : {};
   const urun = new Map(D.urunler.map((u) => [u.id, u]));
+  const kol = kolYerleri(Array.isArray(emirler.orders) ? emirler.orders : []);
   for (const s of D.siparisler) {
     const rota = urun.get(s.urun)?.rota ?? [];
     if (y.siparis.has(s.id) || !rota.length) continue;
-    const biten = rota.filter((_, i) => durum[`${s.id}|root|${i + 1}`] === 'tamam');
-    if (biten.length === rota.length) y.siparis.add(s.id); else for (const a of biten) y.adim.add(`${s.id}.${a.k}`);
+    const kolda = kol.get(s.id);
+    const disinda = rota.filter((_, i) => kolda !== undefined && !kolda(i + 1, rota.length));
+    const biten = rota.filter((a, i) => !disinda.includes(a) && durum[`${s.id}|root|${i + 1}`] === 'tamam');
+    if (biten.length + disinda.length === rota.length) { y.siparis.add(s.id); continue; }
+    for (const a of biten) y.adim.add(`${s.id}.${a.k}`);
+    for (const a of disinda) (y.kolDisi ??= new Set()).add(`${s.id}.${a.k}`);
   }
   return y;
 }
@@ -389,6 +396,7 @@ export function ikincilSecimi(K: readonly IkincilKaynak[], istekler: readonly Ka
 export const ikincilKod = (g: Girdi, id: string | undefined): string => ikincilKaynaklari(g.D).find((k) => k.id === id)?.kod ?? id ?? '';
 
 export interface Girdi {
+  // `bitti`: plana girmeyen adımlar (biten ve kolun işlemediği; Bitenler).
   D: PlanVerisi & { ayarlar: Record<string, unknown>; aparatlar?: unknown[]; ayarMatrisi?: unknown[] }; now: number; kapali: Set<string>; bitti: Set<string>;
   down: { m: string; from: number; to: number }[]; ekMesai: { m: string; gun: number; vardiya: string }[]; saGecik: Record<string, number>;
   // Adım süresinin çarpanı (kayıttaki "sure" ve "sureOp" olayları; engine.betik st.sapma).
@@ -417,7 +425,7 @@ export function girdiKur(c: PlanlamaCalismasi, biten: Bitenler = { siparis: new 
   const D = structuredClone(c.D) as Girdi['D'];
   D.ayarlar = nesne(D.ayarlar) ? D.ayarlar : {};
   D.siparisler = D.siparisler.filter((s) => !planDisi(s) && !biten.siparis.has(s.id));
-  const g: Girdi = { D, now: simdiSaati(c, an), kapali: new Set(c.kapali), bitti: biten.adim, down: [], ekMesai: [], saGecik: {}, sapma: {} };
+  const g: Girdi = { D, now: simdiSaati(c, an), kapali: new Set(c.kapali), bitti: biten.kolDisi?.size ? new Set([...biten.adim, ...biten.kolDisi]) : biten.adim, down: [], ekMesai: [], saGecik: {}, sapma: {} };
   for (const d of c.down) { const m = metin(d.m), a = sayi(d.from), b = sayi(d.to); if (m !== null && a !== null && b !== null) g.down.push({ m, from: a, to: b }); }
   for (const e of c.ekMesai) { const m = metin(e.m), gun = sayi(e.gun), v = metin(e.vardiya); if (m !== null && gun !== null && v !== null) g.ekMesai.push({ m, gun, vardiya: v }); }
   for (const k of g.kapali) GEVSEK[k]?.(g);

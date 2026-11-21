@@ -6,8 +6,8 @@ const UFUK_VARSAYILAN=120,UFUK_ENAZ=28,UFUK_ENCOK=182,DILIM_DK=[15,30],TAKVIM_EN
 /* 3484 c (3457-3 a değişir): ufka sığmayan emir için ufuk uzar. Motor takvimi ufkun iki katı kurar (HDAYS); UFUK ayardaki gündür.
    UFUK'tan sonraki çalışma saati iş kaydında ufukDisi'dir, tarihleri gerçektir.
    3501 a (3484 c değişir): takvim ufkun iki katında durmaz. Hesap, adımı takvim bittiği için yerleştiremezse takvimi büyütüp baştan kurar
-   (TAKVIM_ISTENEN; degerlendir.js), en çok TAKVIM_ENCOK güne kadar. Büyük takvim her hesapta kurulmaz: dilim tabloları takvim boyuncadır,
-   boşuna büyütmek her hesabı yavaşlatır. */
+   (TAKVIM_ISTENEN; Kokpit hesabında degerlendir.js, canlı plan ve kıyasta takvimliCoz), en çok TAKVIM_ENCOK güne kadar. Büyük takvim her
+   hesapta kurulmaz: dilim tabloları takvim boyuncadır, boşuna büyütmek her hesabı yavaşlatır. */
 let SL=0.25, UFUK=UFUK_VARSAYILAN, HDAYS=UFUK*2, NS=HDAYS*24/SL, TAKVIM_ISTENEN=0;
 function olcekKur(w){const o=w||{},u=Math.round(+o.ufukGun),d=+o.dilimDk;
   UFUK=u>=UFUK_ENAZ&&u<=UFUK_ENCOK?u:UFUK_VARSAYILAN;HDAYS=Math.min(TAKVIM_ENCOK,Math.max(UFUK*2,TAKVIM_ISTENEN));
@@ -15,6 +15,13 @@ function olcekKur(w){const o=w||{},u=Math.round(+o.ufukGun),d=+o.dilimDk;
 /* Sonraki derleme için takvimi iki katına çıkarır; üst sınırdaysa false. */
 function takvimBuyut(){if(HDAYS>=TAKVIM_ENCOK)return false;TAKVIM_ISTENEN=Math.min(TAKVIM_ENCOK,HDAYS*2);return true;}
 function takvimSifirla(){TAKVIM_ISTENEN=0;}
+/* Bağlamın takvimi (gün). Çözümden sonra okunur; çözümün nedenini ayrı bağlamda ölçen derleme aynı takvimi takvimIste ile kurar. */
+function takvimGunu(){return HDAYS;}
+function takvimIste(gun){const g=Math.round(+gun);if(g>0)TAKVIM_ISTENEN=Math.min(TAKVIM_ENCOK,g);}
+/* Taban plan büyümüş takvimle kurulmuş olabilir: takvim en baştan o planın son bitişini kapsar. Yoksa planı izleyen çözüm ötedeki adımı
+   yerleştiremez, elle taşıma da o adımın yerini ufuk dışı sayar. */
+function takvimPlanaGore(w,ops){olcekKur(w);let son=0;for(const id in ops||{}){const C=+ops[id].C;if(isFinite(C)&&C>son)son=C;}
+  while(son>HDAYS*24&&takvimBuyut())olcekKur(w);}
 const GUN=['pzt','sal','car','per','cum','cmt','paz'];
 const GUN_AD={pzt:'Pzt',sal:'Sal',car:'Çar',per:'Per',cum:'Cum',cmt:'Cmt',paz:'Paz'};
 const PW={1:4,2:2,3:1};
@@ -98,6 +105,8 @@ function mask(W){const m=new Uint8Array(NS);for(const [a,b] of W){const k0=Math.
     @property {any} [PWek]
     @property {any} [seq]
     @property {any} [montaj]
+    @property {any} [kol]
+    @property {any} [kolDisi]
     @property {any} [ekOncul]
     @property {any} [yHedef]
     @property {any} [tmUyari]
@@ -222,7 +231,9 @@ function compile(st){olcekKur(st.w);
   // işlemler
   const ops=[],jobs={},bolunen={};
   const urun=Object.fromEntries(D.urunler.map(u=>[u.id,u]));
-  const bitti=st.bitti||{};
+  /* 3512: kolun işlemediği adım (st.kolDisi) da plana girmez, ardılı onu rotadan beklemez (üst emre kancalar.js kolBagiUygula bağlar);
+     biten adımdan farkı: maliyeti bu emre yazılmaz, malzemesi sahibi adımı bitirene dek ihtiyaçta kalır */
+  const bitti=st.bitti||{},kolDisi=st.kolDisi||{};
   for(const [sira,j] of D.siparisler.entries()){const u=urun[j.urun];if(!u)continue;
     const due=parseT(D,j.termin),rel=parseT(D,j.serbest);
     jobs[j.id]={...j,due,rel,gelisSira:sira,ops:[]};
@@ -230,7 +241,7 @@ function compile(st){olcekKur(st.w);
       /* 3335-3b: adıma bildirilen ek süre (saat); çarpan değil, koşu süresine eklenir: hangi tezgâha yerleşirse yerleşsin aynı saat */
       const ekS=st.adimEk&&st.adimEk[id]&&isFinite(+st.adimEk[id].ekSaat)?Math.max(0,+st.adimEk[id].ekSaat):0;
       /* biten adım (st.bitti, sunucunun iş emri durumu) plana girmez; ardılı onu beklemez, malzemesi o adımda alınmıştır */
-      if(bitti[id])continue;
+      if(bitti[id]||kolDisi[id])continue;
       /* adımın işleyeceği adet (24 a): önceki biten adımın hurdası düşülmüş; verilmezse sipariş adedi */
       const ad0=D.opAdet&&D.opAdet[id]!=null&&isFinite(+D.opAdet[id])?+D.opAdet[id]:j.adet;
       const adaylar=o.fason?[]:(o.tezgahlar||[]).filter(t=>M[t.id]);
@@ -255,7 +266,7 @@ function compile(st){olcekKur(st.w);
         c.push({m:t.id,run:ad*cyc/mm.verim+(p===0?ekS:0),cyc:cyc/mm.verim,su:(+t.ayar||0)/60,tbRun:tb*cyc/mm.verim,pay:mm.pay});}
       if(o.fasonIzin&&A.fasonTalas&&FS[A.fasonTalas])c.push({m:'@'+A.fasonTalas,fas:1,opt:1});
       const lr=(st.ogren||{})[j.urun+' '+o.k];const sig=lr&&lr.n>=3&&lr.v!=null?Math.sqrt(lr.v)/Math.max(.3,lr.f):(+st.w.mcSigma||0);
-      const pr=(o.bag||[]).map(([k,t])=>[j.id+'.'+k,t]),prK=pr.filter(([p])=>!bitti[p]);
+      const pr=(o.bag||[]).map(([k,t])=>[j.id+'.'+k,t]),prK=pr.filter(([p])=>!bitti[p]&&!kolDisi[p]);
       const ik=D.opKaynak&&Array.isArray(D.opKaynak[id])&&D.opKaynak[id].length?D.opKaynak[id]:null;
       const op={id:pid,job:j.id,k:o.k,ad:o.ad,c,sig,pr:prK,aile:o.aile||'',aparat:o.aparat||null,ik,
         program:o.program!==false,fai:!!o.fai,adet:ad,x,matYok:prK.length<pr.length,ayarsiz:o.ayarci===false,ayarSaat:o.ayarDk!=null&&isFinite(+o.ayarDk)?Math.max(0,+o.ayarDk)/60:null,...(N>1?{parca:p+1,parcaAdedi:N,asil:id,...(eb?{elle:1}:{})}:{})};
@@ -306,10 +317,10 @@ function matAlloc(st,jobs){
   const order=Object.values(jobs).sort((a,b)=>(a.oncelik-b.oncelik)||((a.due==null?1e9:a.due)-(b.due==null?1e9:b.due)));
   /* 1473 a: satır tükettiği adımı (adim) taşırsa malzeme o adımın başlangıcında beklenir (op: işlem -> hazır anı); biten adımın malzemesi
      tüketilmiştir, dağıtılmaz. Adımsız (eski) satır öncülsüz adımlarda beklenir. ready siparişin bütün malzemesinin hazır anıdır. */
-  const bitti=st.bitti||{};
+  const bitti=st.bitti||{},kolDisi=st.kolDisi||{};
   for(const j of order){let ready=st.now;const det=[],op={};
     const kok=(j.ops||[]).filter(o=>!o.pr.length&&!o.matYok).map(o=>o.id);
-    for(const r of j.malzeme||[]){const ad=r.adim!=null?j.id+'.'+r.adim:null;if(ad&&bitti[ad])continue;
+    for(const r of j.malzeme||[]){const ad=r.adim!=null?j.id+'.'+r.adim:null;if(ad&&(bitti[ad]||kolDisi[ad]===2))continue;
       const ops=ad?(j.ops||[]).some(o=>o.id===ad)?[ad]:[]:kok;
       const need=(+r.miktar||0)*j.adet,s=sup[r.kod]||[];let rem=need,t=-1e9;const use=[];
       for(const x of s){if(rem<=1e-9)break;if(x.kalan<=1e-9)continue;const q=Math.min(x.kalan,rem);x.kalan-=q;rem-=q;use.push({k:x.k,i:x.i,q});t=Math.max(t,x.t);if(x.k==='sa')x.jobs.push({j:j.id,q,kod:r.kod,ops});}
@@ -631,6 +642,34 @@ function prio(r,cx,ctx,opt){
 function rng(seed){let a=seed>>>0||1;const u=()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
   return {u,n:()=>{let x=0;for(let i=0;i<6;i++)x+=u();return (x-3)/Math.SQRT2;}};}
 
+/* 3501 a: iş takvim bittiği için mi yerleşmedi? Öyleyse büyük takvim onu yerleştirir. Takvimle geçmeyen nedenler (vardiya, kişi ya da ayarcı
+   yok, hazırlık hiçbir bloğa sığmıyor, malzemenin tarihi yok, aday yok, öncülü yerleşmedi) takvimi büyütmez: büyük takvim o işi yine
+   yerleştirmez, yalnız hesabı yavaşlatır. Fasonda takvimle geçen tek neden çıkış gününün takvime sığmamasıdır. */
+/** @param {any} p @param {Derleme} cx */
+function takvimDarMi(p, cx) {
+  for (const id of p.fail || []) {
+    const x = (p.failNeden || {})[id]; if (x && x.kod !== 'zaman') continue; const o = cx.byId[id]; if (!o) continue;
+    const z = zamanOlcusu(cx, o, p), alt = zamanTanisi(z).alt;
+    if (alt === 'sure' || alt === 'dolu' || (alt === 'malzeme' && isFinite(z.malzemeHazirSaat))) return true;
+    if (alt === 'bilinmiyor' && (o.c || []).some(c => { const f = c.fas && cx.FS[c.m.slice(1)]; return f && !f.hemen && (f.cikisGunleri || []).length > 0; })) return true;
+  }
+  return false;
+}
+/* schedule'ın, işi takvim bittiği için yerleştiremeyince takvimi büyütüp baştan çözen biçimi (canlı plan, kıyas). Büyüyen takvim bağlamda
+   kalır: sonraki derleme ve değerlendirme aynı takvimi görür; bağlam tek girdiyle çalışır.
+   opt.buyumeSonu (an, ms): çağıranın süre sınırı varsa verir. Sonraki turun bu andan sonra biteceği öngörülüyorsa takvim büyütülmez, eldeki
+   plan sığmayan işleriyle ve buyumeKesildi işaretiyle döner: süre aşılıp planın hiç yazılmamasındansa birkaç işin yerleşmemesi yeğdir. Öngörü
+   son turun süresidir, takvimin büyüme oranıyla çarpılır. */
+/** @param {MotorDurumu} st @param {string} mode @param {any} [base] @param {any} [opt] */
+function takvimliCoz(st,mode,base,opt){
+  const o=opt||{},son=+o.buyumeSonu;
+  takvimPlanaGore(st.w,base&&base.ops);
+  /* gun derlemeden sonra okunur: bu turun takvimini derleme kurar (olcekKur), önceki turun takvimi kestirimi iki katına çıkarırdı */
+  for(;;){const t0=Date.now(),cx=compile(st),gun=HDAYS,p=schedule(st,mode,base,{...o,cx});
+    if(!(p.fail&&p.fail.length)||gun>=TAKVIM_ENCOK||!takvimDarMi(p,cx))return p;
+    if(isFinite(son)&&Date.now()+(Date.now()-t0)*Math.min(TAKVIM_ENCOK,gun*2)/gun>son){p.buyumeKesildi=true;return p;}
+    if(!takvimBuyut())return p;}
+}
 /** @param {MotorDurumu} [st] @param {any} [mode] @param {any} [base] @param {any} [opt] */
 function schedule(st,mode,base,opt={}){
   const cx=opt.cx||compile(st);

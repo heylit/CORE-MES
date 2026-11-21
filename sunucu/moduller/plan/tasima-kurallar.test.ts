@@ -84,7 +84,7 @@ describe('elle taşımada itme (2790, 2794)', () => {
     const r = tasimaItmesi(g, 'E1.10', 'M1', 6);
     assert.equal(r.gecerli, false);
     assert.deepEqual(r.isler, []);
-    assert.match(r.ileti!, /OP 20 planlama ufkuna sığmıyor/);
+    assert.match(r.ileti!, /^OP 20 sığmıyor: plan en geç .+ tarihine kadar uzanıyor; taşıma yapılmadı\.$/);
     assert.equal(tasimaItmesi(g, 'E1.10', 'M1', 10).gecerli, false);
   });
 

@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { Worker } from 'node:worker_threads';
+import { mesgul } from '#cekirdek/hata.ts';
 import { TESIS_SAAT_DILIMI } from '#paylasilan/zaman.ts';
 import { motorGirdisiDenetle, motorPlaniDenetle, type MotorPlani } from './motor-sinir.ts';
 
@@ -12,7 +13,7 @@ import { motorGirdisiDenetle, motorPlaniDenetle, type MotorPlani } from './motor
 // sunucunun planı sayfanın ve değerlendirme ucunun modeliyle kurulur. Kancalar girdinin ayarlarını (durum.js) okur.
 const MOTOR = join(dirname(fileURLToPath(import.meta.url)), 'motor');
 export const MOTOR_DOSYALARI = ['engine', 'kisitlar', 'mip', 'girdi', 'durum', 'kancalar'] as const;
-const DISA = ['schedule', 'compile', 'evaluate', 'lowerBound', 'lbHeadsTails', 'W0', 'stHazirla'] as const;
+const DISA = ['schedule', 'takvimliCoz', 'takvimGunu', 'compile', 'evaluate', 'lowerBound', 'lbHeadsTails', 'W0', 'stHazirla'] as const;
 
 let kod: string | null = null;
 export function motorKodu(): string {
@@ -25,6 +26,9 @@ export type MotorDurumu = Record<string, unknown>;
 export type { MotorPlani, MotorYerlesimi } from './motor-sinir.ts';
 export interface Motor {
   schedule: (st: MotorDurumu, kip: string, taban: MotorPlani | null, secenek?: Record<string, unknown>) => MotorPlani;
+  // 3501 a: iş takvim bittiği için yerleşmezse takvimi büyütüp yeniden çözer (en çok iki yıl); takvimGunu çözümün kurduğu takvimdir.
+  takvimliCoz: (st: MotorDurumu, kip: string, taban: MotorPlani | null, secenek?: Record<string, unknown>) => MotorPlani;
+  takvimGunu: () => number;
   compile: (st: MotorDurumu) => unknown;
   evaluate: (plan: MotorPlani, st: MotorDurumu, ref: unknown, hizli?: boolean) => unknown;
   lowerBound: (st: MotorDurumu, cx?: unknown) => { C: Record<string, number>; wT: number };
@@ -46,6 +50,9 @@ export const SUNUCU_KIPLERI = ['sabit', 'yeni'] as const;
 export type SunucuKipi = (typeof SUNUCU_KIPLERI)[number];
 export interface PlanIstegi { durum: MotorDurumu; kip: SunucuKipi; taban: MotorPlani | null }
 export const COZUM_SURESI_MS = 60_000;
+// 3501 a: takvim büyüdükçe çözüm yeniden koşar. Sonraki turun sürenin bu payından sonra biteceği öngörülürse takvim büyütülmez; plan sığmayan
+// işleriyle döner (motor takvimliCoz). Süre aşılırsa plan hiç yazılmaz; birkaç işin yerleşmemesi ondan hafiftir.
+const BUYUME_PAYI = 0.75;
 
 const ISCI = `
 const { parentPort, workerData } = require('node:worker_threads');
@@ -54,29 +61,29 @@ const b = vm.createContext({ GIRDI_SAAT_DILIMI: workerData.dilim });
 b.self = b;
 const m = vm.runInContext(workerData.kod, b, { filename: 'plan-motoru.js' });
 const { durum, kip, taban } = workerData.istek;
-const p = m.schedule(m.stHazirla({ ...durum, w: { ...m.W0, ...(durum.w || {}) } }), kip, taban);
-parentPort.postMessage({ ops: p.ops, fail: p.fail || [] });
+const p = m.takvimliCoz(m.stHazirla({ ...durum, w: { ...m.W0, ...(durum.w || {}) } }), kip, taban, { buyumeSonu: Date.now() + workerData.buyumeMs });
+parentPort.postMessage({ ops: p.ops, fail: p.fail || [], takvimGun: m.takvimGunu(), ...(p.buyumeKesildi ? { buyumeKesildi: true } : {}) });
 `;
 
 // Aynı anda tek çözüm: kuyruk sırayla çalışır. Süre aşılırsa iş parçacığı durdurulur ve çağrı reddedilir.
 let sira: Promise<unknown> = Promise.resolve();
-export function planCoz(istek: PlanIstegi, sureMs: number = COZUM_SURESI_MS): Promise<MotorPlani> {
+export function planCoz(istek: PlanIstegi, sureMs: number = COZUM_SURESI_MS, buyumeMs: number = sureMs * BUYUME_PAYI): Promise<MotorPlani> {
   if (!SUNUCU_KIPLERI.includes(istek.kip)) return Promise.reject(new Error(`Plan motoru kipi geçersiz: ${String(istek.kip)}`));
   try {
     motorGirdisiDenetle(istek.durum);
     if (istek.taban !== null) motorPlaniDenetle(istek.taban, 'taban');
   } catch (e) { return Promise.reject(e as Error); }
-  const is = sira.then(() => calistir(istek, sureMs));
+  const is = sira.then(() => calistir(istek, sureMs, buyumeMs));
   sira = is.catch(() => undefined);
   return is;
 }
 
-function calistir(istek: PlanIstegi, sureMs: number): Promise<MotorPlani> {
+function calistir(istek: PlanIstegi, sureMs: number, buyumeMs: number): Promise<MotorPlani> {
   return new Promise((coz, reddet) => {
-    const isci = new Worker(ISCI, { eval: true, workerData: { kod: motorKodu(), dilim: TESIS_SAAT_DILIMI, istek } });
+    const isci = new Worker(ISCI, { eval: true, workerData: { kod: motorKodu(), dilim: TESIS_SAAT_DILIMI, istek, buyumeMs } });
     let bitti = false;
     const sonlan = (f: () => void): void => { if (bitti) return; bitti = true; clearTimeout(sayac); f(); void isci.terminate(); };
-    const sayac = setTimeout(() => sonlan(() => reddet(new Error(`Plan motoru ${String(sureMs)} ms içinde bitmedi.`))), sureMs);
+    const sayac = setTimeout(() => sonlan(() => reddet(mesgul(`Plan ${String(Math.max(1, Math.round(sureMs / 1000)))} saniyede hesaplanamadı; plan değişmedi. Biraz sonra yeniden deneyin, yinelenirse yöneticinize bildirin.`))), sureMs);
     isci.once('message', (p: unknown) => sonlan(() => {
       try { coz(motorPlaniDenetle(p)); } catch (e) { reddet(e as Error); }
     }));

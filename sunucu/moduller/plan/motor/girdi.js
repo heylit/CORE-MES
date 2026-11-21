@@ -472,11 +472,18 @@ function tmiAdimAdetleri(durum, st, D) {
 }
 /* 3257 a: siparişteki teslim günü o günün sabahı dönüş sayılır (uretim-emirleri FASON_DONUS_SAATI_MS ile aynı saat) */
 const FASON_DONUS_SAATI = '08:00';
+/* 3512: adım ortasından bölünen parti (kol: { n, m }) rotanın yalnız n+1..m-1 yerlerini işler: n'ye kadar olan adımları üst emir partinin
+   adediyle birlikte yapmıştır ya da yapacaktır, m'den sonrasını da (parti orada üst emre katılır). Katılmayan kolda m adım sayısı + 1'dir.
+   Aralık rotaya uymuyorsa emir bütün rotasıyla kalır. Dönen: yer (1'den) kolun içinde mi; kol değilse null. */
+function kolAraligi(kol, adimSayisi) {
+  const n = kol ? +kol.n : NaN, m = kol ? +kol.m : NaN;
+  return Number.isInteger(n) && Number.isInteger(m) && n >= 0 && m - n >= 2 && m <= adimSayisi + 1 ? yer => yer > n && yer < m : null;
+}
 /* Biten iş (inceleme 1): biten ve iptal emir plana girmez; biten adım motorda st.bitti ile düşer (ardılı onu beklemez). Kaynak sunucunun iş
    emri durumu (durum.emirler) ya da kayıttaki kopyası: { orders: [{ id, status }], opStatus: { "emir|root|sıra": durum } }. Sıra adımın
    rotadaki yeridir (1'den, seq sırasıyla; iş emirleri rotadan bu sırayla açılır). Bütün adımı biten emir de düşer. */
 function tmiBitenler(emirler, D) {
-  const y = { siparis: {}, adim: {}, firma: {}, firmaKim: {}, ust: {} };
+  const y = { siparis: {}, adim: {}, firma: {}, firmaKim: {}, ust: {}, kol: {}, kolDisi: {} };
   if (!emirler || typeof emirler !== 'object') return y;
   for (const o of emirler.orders || []) if (o && (o.status === 'tamam' || o.status === 'iptal')) y.siparis[String(o.id)] = 1;
   /* 3511: bölünen emrin yeni partisi üst emrine bağlıdır (parentId); üst emrin adımına bildirilen bekleme partiye bu bağla geçer (ustBeklemesiUygula) */
@@ -484,13 +491,29 @@ function tmiBitenler(emirler, D) {
   const durum = emirler.opStatus || {};
   const yer = emirler.opYer || {};
   const urun = Object.fromEntries(((D && D.urunler) || []).map(u => [u.id, u]));
+  /* 3512: kolun işlemediği adım plana girmez ama bitmiş de değildir: st.kolDisi'nde durur (1: sahibi daha yapmadı, 2: sahibi bitirdi ya da
+     kapandı; malzemesi o zaman tüketilmiştir). Adımın sahibi, o yeri kendi işleyen en yakın üst emirdir (kolun kolunda bir üstü atlar). */
+  const kollar = Object.fromEntries((emirler.orders || []).filter(o => o && o.kol && y.ust[String(o.id)] != null).map(o => [String(o.id), o.kol]));
+  const aralik = {};
+  for (const s of (D && D.siparisler) || []) if (!s.dugum && kollar[s.id]) { const a = kolAraligi(kollar[s.id], ((urun[s.urun] || {}).rota || []).length); if (a) aralik[s.id] = a; }
+  const sahip = (id, yr) => { const g = new Set([id]); let p = y.ust[id]; while (aralik[p] && !aralik[p](yr) && y.ust[p] != null && !g.has(y.ust[p])) { g.add(p); p = y.ust[p]; } return p; };
   for (const s of (D && D.siparisler) || []) {
     const rota = (urun[s.urun] || {}).rota || [];
     if (s.dugum && y.siparis[String(s.id).split('-Y')[0]]) y.siparis[s.id] = 1;
     if (y.siparis[s.id] || !rota.length) continue;
-    const biten = s.dugum ? rota.filter(a => (s.dugumBiten || []).includes(a.k)) : rota.filter((a, i) => durum[`${s.id}|root|${i + 1}`] === 'tamam');
-    if (biten.length === rota.length) y.siparis[s.id] = 1;
-    else for (const a of biten) y.adim[`${s.id}.${a.k}`] = 1;
+    const kolda = aralik[s.id] || null, tamam = (a, i) => durum[`${s.id}|root|${i + 1}`] === 'tamam';
+    const biten = s.dugum ? rota.filter(a => (s.dugumBiten || []).includes(a.k)) : rota.filter((a, i) => kolda ? kolda(i + 1) && tamam(a, i) : tamam(a, i));
+    const disinda = kolda ? rota.filter((a, i) => !kolda(i + 1)) : [];
+    if (biten.length + disinda.length === rota.length) y.siparis[s.id] = 1;
+    else {
+      for (const a of biten) y.adim[`${s.id}.${a.k}`] = 1;
+      if (kolda) {
+        const n = +kollar[s.id].n, m = +kollar[s.id].m;
+        /* kol üst emrine ayrıldığı ve katıldığı adımla bağlanır (kancalar.js kolBagiUygula) */
+        y.kol[s.id] = { once: n >= 1 ? rota[n - 1].k : null, onceUst: n >= 1 ? sahip(s.id, n) : null, sonra: m <= rota.length ? rota[m - 1].k : null, sonraUst: m <= rota.length ? sahip(s.id, m) : null };
+        rota.forEach((a, i) => { if (kolda(i + 1)) return; const u = sahip(s.id, i + 1); y.kolDisi[`${s.id}.${a.k}`] = y.siparis[u] || durum[`${u}|root|${i + 1}`] === 'tamam' ? 2 : 1; });
+      }
+    }
     /* 3330 a: bitmemiş fason adımın açık satın alma siparişindeki firma tarihi (kök: opYer, düğüm: dugumFirma); o gün FASON_DONUS_SAATI'nde döner */
     rota.forEach((a, i) => { const t = s.dugum ? (s.dugumFirma || {})[a.k] : ((yer[`${s.id}|root|${i + 1}`] || {}).fasonSiparis || {}).tarih; if (t && !y.adim[`${s.id}.${a.k}`]) y.firma[`${s.id}.${a.k}`] = t + ' ' + FASON_DONUS_SAATI; });
     /* 3355 a: rotada firması olmayan ya da fason listesinde olmayan adımın firması emrin adımından, yoksa açık fason siparişinin firmasından
@@ -518,14 +541,18 @@ function bitenUygula(st, b) {
   if (b.firmaKim && Object.keys(b.firmaKim).length) st.fasonFirma = Object.assign({}, st.fasonFirma, b.firmaKim);
   if (Object.keys(b.siparis).length) { st.D.siparisler = (st.D.siparisler || []).filter(s => !b.siparis[s.id]); tmEksikYaz(st); }
   /* 1473 a: biten adımın malzemesi tüketilmiştir; siparişi verilmemiş eksik onsuz yeniden yazılır */
-  if (Object.keys(b.adim).length) { st.bitti = Object.assign({}, st.bitti || {}, b.adim); tmEksikYaz(st); }
+  const kolVar = !!b.kolDisi && Object.keys(b.kolDisi).length > 0;
+  if (Object.keys(b.adim).length) st.bitti = Object.assign({}, st.bitti || {}, b.adim);
+  if (kolVar) { st.kol = b.kol; st.kolDisi = b.kolDisi; }
+  if (Object.keys(b.adim).length || kolVar) tmEksikYaz(st);
   if (b.ust && st.adimBekle && Object.keys(b.ust).length) ustBeklemesiUygula(st, b);
   return st;
 }
 /* 3511: emir Üretim Emirleri'nde bölününce yeni parti ayrı kimlikle açılır; adıma bildirilen bekleme üst emrin adım kimliğinde kalır.
    Beklemenin nedeni (malzeme yok, kişi yok) adıma aittir: partinin aynı adımı da o andan önce başlayamaz. Partinin kendi geçerli beklemesi
    varsa o geçer; en yakın üst emrin kaydı okunur. Üst emrin adımı bittiyse ya da üst emir kapandıysa neden kalkmıştır, bekleme geçmez
-   (başlamış adımın kaydını stKur zaten saymaz). Ek süre bildirildiği emirde kalır: hangi partide harcanacağı bilinmez. */
+   (başlamış adımın kaydını stKur zaten saymaz). Partinin biten ya da işlemediği (kol dışı) adımına bekleme yazılmaz. Ek süre bildirildiği
+   emirde kalır: hangi partide harcanacağı bilinmez. */
 function ustBeklemesiUygula(st, b) {
   const kendi = Object.assign({}, st.adimBekle), idler = Object.keys(kendi);
   for (const s of st.D.siparisler || []) {
@@ -536,7 +563,7 @@ function ustBeklemesiUygula(st, b) {
       for (const id of idler) {
         if (!id.startsWith(p + '.') || b.adim[id]) continue;
         const hedef = s.id + '.' + id.slice(p.length + 1);
-        if (st.adimBekle[hedef] || (st.gercek[hedef] && st.gercek[hedef].S != null)) continue;
+        if (st.adimBekle[hedef] || b.adim[hedef] || (b.kolDisi && b.kolDisi[hedef]) || (st.gercek[hedef] && st.gercek[hedef].S != null)) continue;
         beklemeKoy(st, hedef, kendi[id].kadar);
       }
     }

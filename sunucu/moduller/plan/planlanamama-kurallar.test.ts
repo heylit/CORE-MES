@@ -27,6 +27,20 @@ describe('zaman nedeni (saf, 2780)', () => {
     assert.deepEqual([n.kod, n.hedef], ['ufuk', T2]);
     assert.equal(n.metin, 'İşin süresi (50 sa) Torna 2 tezgâhının planlama ufkunda (120 gün) açık süresinden (20 sa) uzun.');
   });
+  test('PN-11 (3501 a): takvim iki yıllık sınırındayken ileti ayardaki ufku değil iki yılı söyler', () => {
+    const adaylar = [aday(T1, 10, 50), aday(T2, 20, 50)];
+    assert.equal(zamanNedeni({ ufukGun: 730, takvimSinirda: true, malzemeHazirSaat: null, adaylar }).metin, 'İşin süresi (50 sa), Torna 2 tezgâhının önümüzdeki iki yıldaki açık süresinden (20 sa) uzun. Tezgâhın çalışma takvimini kontrol edin.');
+    assert.equal(zamanNedeni({ ufukGun: 730, takvimSinirda: true, malzemeHazirSaat: null, adaylar: [aday(T1, 100)] }).metin, 'Torna 1 tezgâhı önümüzdeki iki yılda dolu.');
+    assert.equal(zamanNedeni({ ufukGun: 480, takvimSinirda: false, malzemeHazirSaat: null, adaylar: [aday(T1, 100)] }).metin, 'Torna 1 tezgâhı planlama ufkunda (480 gün) dolu.');
+  });
+  test('PN-12 (3506): takvim süre sınırı yüzünden büyütülmediyse takvimle geçen neden bunu söyler; takvimle geçmeyen neden söylemez', () => {
+    const EK = ' Hesap süresi yetmediği için plan iki yıla kadar uzatılamadı; bu iş daha ileri bir tarihe yerleşebilirdi. Yöneticinize bildirin.';
+    const k = (g: Pick<Parameters<typeof zamanNedeni>[0], 'adaylar'> & { malzemeHazirSaat?: number }): string => zamanNedeni({ ufukGun: 240, malzemeHazirSaat: null, buyumeKesildi: true, ...g }).metin;
+    assert.equal(k({ adaylar: [aday(T1, 100)] }), `Torna 1 tezgâhı planlama ufkunda (240 gün) dolu.${EK}`);
+    assert.equal(k({ adaylar: [aday(T1, 10, 50)] }), `İşin süresi (50 sa) Torna 1 tezgâhının planlama ufkunda (240 gün) açık süresinden (10 sa) uzun.${EK}`);
+    assert.equal(k({ adaylar: [aday(T1, 100)], malzemeHazirSaat: 240 * 24 }), `Malzemesi planlama ufkunda (240 gün) karşılanmıyor.${EK}`);
+    assert.equal(k({ adaylar: [aday(T1, 0)] }), 'Torna 1 tezgâhının planlama ufkunda (240 gün) vardiyası yok.');
+  });
   test('PN-05: süre sığıyor ama yer yoksa tezgâh doludur; adaysız ölçü bilinmiyor', () => {
     assert.deepEqual(z([aday(T1, 100)]), { kod: 'ufuk', metin: 'Torna 1 tezgâhı planlama ufkunda (120 gün) dolu.', hedef: T1 });
     assert.equal(z([aday(T1, 100), aday(T2, 100)]).metin, 'Aday tezgâhlar planlama ufkunda (120 gün) dolu (Torna 1, Torna 2).');

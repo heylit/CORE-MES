@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { depoDisinda } from './kiyas-komutu.ts';
 import { bosluk, karsilastir, type GoruntuSonucu, type KiyasSonucu, type PlanOlcusu } from './kiyas-kurallar.ts';
 import { GORUNTU_BICIMI, goruntuKos, kiyasGoruntusuAl, type KiyasGoruntusu } from './kiyas.ts';
-import type { MotorDurumu } from './plan-motoru.ts';
+import { motorYukle, type MotorDurumu } from './plan-motoru.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
 // 1475 a: plan motoru kıyas seti. Görüntüler uydurmadır; gerçek görüntü depo dışındaki klasörde durur.
@@ -91,6 +91,18 @@ describe('kıyas koşusu (1475 a)', () => {
     assert.deepEqual({ ...h.motor, sureMs: 0 }, { ...g.motor, sureMs: 0 });
     // Görüntü değişmez (her koşu kopyayla).
     assert.deepEqual(ornekGoruntu().st, st());
+  });
+
+  test('takvime (240 gün) sığmayan iş kıyasta da düşmez: motor sütunu ve ötede biten çalışma planı tam ölçülür (3501 a)', () => {
+    // Haftada 40 saat; 2.000 saatlik sipariş 240 günün ötesinde biter. Çalışmadaki plan büyümüş takvimle kurulmuş plandır.
+    const uzun = (): MotorDurumu => { const s = st(); (s['D'] as { siparisler: { adet: number }[] }).siparisler[0]!.adet = 2000; return s; };
+    const m = motorYukle(); const p = m.takvimliCoz(m.stHazirla({ ...uzun(), w: { ...m.W0, tampon: false } }), 'yeni', null);
+    assert.equal((p.fail ?? []).length, 0);
+    assert.ok(Math.max(...Object.values(p.ops).map((r) => r.C)) > 240 * 24);
+    const g = goruntuKos('uzun', { bicim: GORUNTU_BICIMI, alinma: '2026-01-05T05:00:00Z', st: uzun(), calismaPlani: { ops: p.ops, fail: [] } });
+    assert.equal(g.motor.yerlesmeyen, 0);
+    assert.equal(g.calisma?.yerlesmeyen, 0);
+    assert.equal(g.islem, 2);
   });
 
   test('komut klasördeki görüntüleri koşar, sonucu yazar; sonraki koşu öncekiyle karşılaştırılır', () => {

@@ -1,6 +1,6 @@
 import type { Malzeme, PlanlamaCalismasi, PlanVerisi, Siparis, Urun } from '../tipler.ts';
 import { hucreKoy, type IsiHucresi, type IsiSatiri, type IsiSutunu, type IsiUstDurumu } from '../ortak/isi/index.ts';
-import { planDisi } from '../tipler.ts';
+import { kolYerleri, planDisi } from '../tipler.ts';
 
 // Malzeme satın alma planının hesabı (224 a: MRP Planlama'nındır; 205 a: saf işlev). Eski ekranın zt-malzeme-plan.betik'i ve motorun
 // matAlloc ile satinalmaListe'si (sunucu/moduller/plan/motor/engine.betik), satın alma planı zv-termin.betik'i aynı kuralla
@@ -601,10 +601,13 @@ export function bitenler(emirler: unknown, D: PlanVerisi): Bitenler {
   }
   const durum = nesneMi(emirler.opStatus) ? emirler.opStatus : {};
   const urun = new Map(D.urunler.map((u) => [u.id, u]));
+  const kol = kolYerleri(Array.isArray(emirler.orders) ? (emirler.orders as unknown[]) : []);
   for (const s of D.siparisler) {
     const rota = urun.get(s.urun)?.rota ?? [];
     if (y.siparis.has(s.id) || rota.length === 0) continue;
-    const biten = rota.filter((_, i) => durum[`${s.id}|root|${i + 1}`] === 'tamam');
+    // 3512: kolun (adım ortasından bölünen parti) işlemediği adım planda yoktur; kolun ilk işlemi kendi ilk adımıdır, yalnız o adımlar sayılır.
+    const kolda = kol.get(s.id);
+    const biten = rota.filter((_, i) => durum[`${s.id}|root|${i + 1}`] === 'tamam' || (kolda !== undefined && !kolda(i + 1, rota.length)));
     if (biten.length === rota.length) y.siparis.add(s.id); else for (const a of biten) y.adim.add(`${s.id}.${a.k}`);
   }
   return y;

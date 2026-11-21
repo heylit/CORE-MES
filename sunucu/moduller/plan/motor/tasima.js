@@ -9,6 +9,8 @@
 function sunucuTasimaTakvimi(S, now) {
   const st = stTamKur(S);
   st.now = now;
+  /* 3501 a: kayıtlı plan büyümüş takvimle kurulmuş olabilir; takvim onu kapsar, ötedeki adım da taşınabilir. */
+  takvimPlanaGore(st.w, S.plan && S.plan.ops);
   const cx = compile(st);
   const onculler = {}, opNo = {}, emirler = {};
   for (const o of cx.ops) {

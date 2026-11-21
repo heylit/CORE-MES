@@ -110,21 +110,9 @@ function cakisanIsler(p, cx) {
   }
   return l;
 }
-/* 3501 a: adım takvim bittiği için yerleşmediyse hesap takvimi büyütüp baştan kurulur (degerlendir). Takvimle geçmeyen nedenler (vardiya, kişi
-   ya da ayarcı yok, hazırlık hiçbir bloğa sığmıyor, malzemenin tarihi yok, aday yok, öncülü yerleşmedi) takvimi büyütmez: büyük takvim o adımı
-   yine yerleştirmez, yalnız hesabı yavaşlatır. Fasonda takvimle geçen tek neden çıkış gününün takvime sığmamasıdır. */
+/* 3501 a: adım takvim bittiği için yerleşmediyse (engine.js takvimDarMi) hesap takvimi büyütüp baştan kurulur (degerlendir). */
 const TAKVIM_DAR = { takvimDar: true };
 let DG_TAKVIM_UZAR = false;
-/** @param {any} p @param {Derleme} cx */
-function takvimDarMi(p, cx) {
-  for (const id of p.fail || []) {
-    const x = (p.failNeden || {})[id]; if (x && x.kod !== 'zaman') continue; const o = cx.byId[id]; if (!o) continue;
-    const z = zamanOlcusu(cx, o, p), alt = zamanTanisi(z).alt;
-    if (alt === 'sure' || alt === 'dolu' || (alt === 'malzeme' && isFinite(z.malzemeHazirSaat))) return true;
-    if (alt === 'bilinmiyor' && (o.c || []).some(c => { const f = c.fas && cx.FS[c.m.slice(1)]; return f && !f.hemen && (f.cikisGunleri || []).length > 0; })) return true;
-  }
-  return false;
-}
 /* Kayıtlı planı güncel veriyle çözen her yol yoklar: veri kayıttan sonra değişmiş (duruş girilmiş) ve bir adımı takvimin ötesine itmiş olabilir.
    Plan kaydına uğramadan dönen ölçü (iyileştirmenin ve hamlenin eski gecikmesi, ek mesai ve öne çekme tabanı) yoksa o adımsız ölçülür. Arama
    bütçesi atılacak hesapta harcanmasın diye yoklama aramadan önce yapılır. */
@@ -750,11 +738,10 @@ function degerlendir(calisma, kayit, kaynak, bugun, an, istek) {
 function tekHesap(calisma, kayit, kaynak, bugun, an, istek) {
   S = null; U = {}; DG_CX = null;
   const g = girdiKur(calisma, kayit, kaynak, bugun); if (!g) return null;
-  S = g.S; olcekKur(S.w); const k = kayit && kayit.items ? kayit : null;
-  /* Kayıtlı plan büyümüş takvimle kurulmuş olabilir: takvim en baştan o planın son bitişini kapsar. Yoksa planı çözen hesap ötedeki adımı
-     yerleştiremez; plan kaydı döndürmeyen yollar (iyileştirmede daha iyisi yok, hamlenin eski gecikmesi) bunu sessizce eksik planla ölçerdi. */
-  if (S.plan && S.plan.ops) { let son = 0; for (const id in S.plan.ops) { const C = S.plan.ops[id].C; if (isFinite(C) && C > son) son = C; }
-    while (son > HDAYS * 24 && takvimBuyut()) olcekKur(S.w); }
+  S = g.S; const k = kayit && kayit.items ? kayit : null;
+  /* Kayıtlı plan büyümüş takvimle kurulmuş olabilir. Takvim onu kapsamasaydı plan kaydı döndürmeyen yollar (iyileştirmede daha iyisi yok,
+     hamlenin eski gecikmesi) ötedeki adımı sessizce düşürüp eksik planla ölçerdi. */
+  takvimPlanaGore(S.w, S.plan && S.plan.ops);
   DG_BITEN = tmiBitenler((kaynak && kaynak.durum && kaynak.durum.emirler) || k, S.D);
   const n = tmiSaat(S.D, an); if (n != null && n >= 0) S.simdi = Math.floor(n * 4) / 4;
   saatSabitle(an, cxAl().ops.length);

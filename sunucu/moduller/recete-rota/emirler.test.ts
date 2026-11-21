@@ -382,6 +382,29 @@ describe('recete-rota emir dilimi (gerçek PostgreSQL)', () => {
     assert.deepEqual(c.map((x) => x.start), [null, null, null, null], 'tarih yoksa null; uydurulmaz');
   });
 
+  test('3517: koldan bölünen partinin yeri rotadadır (üst kolun kayması); kolun ilk adımından ayrılan parti de koldur', () => {
+    const iseEmri = (sira: number, opNo: number, durum: 'bekliyor' | 'calisiyor' = 'bekliyor') => ({
+      sira, opNo, durum, saglamAdet: null, canliAdet: null, ad: 'A', operasyonTipiId: 1, istasyonId: null, ayarSuresiDk: null, birimSureDk: null,
+    });
+    const temel = {
+      malzemeNo: 1, adet: 2, baslangic: null, teslim: null, oncelik: 3, aciklama: null, kaynakRotaRevizyonId: 1, durum: 'planli' as const,
+      emirTuru: 'seri', acilma: '2030-01-01T00:00:00Z', bitis: null, birlestigiEmirId: null, surum: 0,
+    };
+    const emir = (id: number, ust: number | null, bolunmeSira: number | null, birlesmeOpNo: number | null, isEmirleri: ReturnType<typeof iseEmri>[]): EmirKaydi =>
+      ({ ...temel, id, emirNo: `E${String(id)}`, ustEmirId: ust, bolunmeSira, birlesmeOpNo, isEmirleri });
+    // Rota OP10-20-30-40. 2, 1'den OP20'de ayrılır (kendi sırası OP20=1, OP30=2, OP40=3).
+    const c = emirleriCevir([
+      emir(1, null, null, null, [iseEmri(1, 10), iseEmri(2, 20), iseEmri(3, 30), iseEmri(4, 40)]),
+      emir(2, 1, 2, null, [iseEmri(1, 20), iseEmri(2, 30), iseEmri(3, 40)]),
+      emir(3, 2, 2, null, [iseEmri(1, 30, 'calisiyor'), iseEmri(2, 40)]),
+      emir(4, 2, 1, 40, [iseEmri(1, 20), iseEmri(2, 30)]),
+      emir(5, 2, 1, null, [iseEmri(1, 20), iseEmri(2, 30), iseEmri(3, 40)]),
+    ]);
+    assert.deepEqual(c.orders.map((x) => x.kol), [null, { n: 1, m: 5 }, { n: 2, m: 5 }, { n: 1, m: 4 }, { n: 1, m: 5 }],
+      '3 kolun OP30\'unda ayrılır; 4 kolun ilk adımından ayrılıp OP40\'ta katılır; 5 kolun ilk adımından ayrılıp sona yürür');
+    assert.equal(c.opStatus['3|root|3'], 'calisiyor', 'kolun kolunda durum anahtarı rotadaki yerdir (OP30 = 3)');
+  });
+
   test('1082 a: bitmiş emir sahibinin kapanış sonucunu taşır; kaydı olmayan bitmiş emir null, bitmemiş emirde alan yok', () => {
     const temel = {
       malzemeNo: 1, adet: 5, baslangic: null, teslim: null, oncelik: 3, aciklama: null, kaynakRotaRevizyonId: 7, emirTuru: 'seri',

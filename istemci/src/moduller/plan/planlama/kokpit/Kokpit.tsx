@@ -30,7 +30,7 @@ import { useSatirEtkisi } from './satir-etkisi.ts';
 import { bekleyenDegisiklikleri, degisiklikler, gerideEmirleri, gorunumdeBekleyenler, type Degisiklik } from './degisiklikler.ts';
 import { onayIstegiAl, onayIstegiVar } from './istek.ts';
 import {
-  OLCEKLER, SAAT_ENI, YAKIN_EN_AZ, adimBeklemeleri, sigdirma, surguDegeri, surgudenEn, yakinOlcegi, yakinSinirla, adimEkleri, aramaUyar, firmaYazilari, kismiPlanli, modelKur, olcekKomsusu, onizlemeBitisi, sayim, sorunlular, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, fasonMu, uzakMi,
+  OLCEKLER, SAAT_ENI, YAKIN_EN_AZ, adimBeklemeleri, ustBeklemeleri, sigdirma, surguDegeri, surgudenEn, yakinOlcegi, yakinSinirla, adimEkleri, aramaUyar, firmaYazilari, kismiPlanli, modelKur, olcekKomsusu, onizlemeBitisi, sayim, sorunlular, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, fasonMu, uzakMi,
   type EmirDurumu, type KokpitOlcegi, type TurAdayi,
 } from './kurallar.ts';
 import { Matris, darEkran, type MatrisDuzeni } from './Matris.tsx';
@@ -146,7 +146,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const an = useAn();
   const bugun = tesisGunu(an);
   const firma = useMemo(() => (emirKaynagi ? firmaYazilari(c, emirKaynagi, bugun) : null), [c, emirKaynagi, bugun]);
-  const cx = useMemo(() => derle(girdiKur(c, emirKaynagi ? bitenler(emirKaynagi, c.D) : plandanBitenler(c, p), an)), [c, p, emirKaynagi, an]);
+  const biten = useMemo(() => (emirKaynagi ? bitenler(emirKaynagi, c.D) : plandanBitenler(c, p)), [c, p, emirKaynagi]);
+  const cx = useMemo(() => derle(girdiKur(c, biten, an)), [c, biten, an]);
   const m = useMemo(() => modelKur(c, p, cx, emirNo), [c, p, cx, emirNo]);
   const malzeme = useMemo(() => emirMalzemeleri(c, p, o.depo.acikSiparisler, cx.now), [c, p, o.depo.acikSiparisler, cx.now]);
   const malzemeAni = useMemo(() => adimMalzemeAnlari(malzeme, m.emirler), [malzeme, m.emirler]);
@@ -661,7 +662,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     ? (isId: string): void => { setAyarAcik(false); setAyarYon(null); setKapasiteAcik(false); setSorunTezgahi(null); setEngelAcik(false); setSorunAdimi(null); setBolAdimi(isId); }
     : null;
   const adimEk = useMemo(() => adimEkleri(c), [c]);
-  const adimBekle = useMemo(() => adimBeklemeleri(c, m.simdi), [c, m.simdi]);
+  const adimBekle = useMemo(() => ustBeklemeleri(adimBeklemeleri(c, m.simdi), emirKaynagi, biten, m), [c, m, emirKaynagi, biten]);
   const listeKartlari = useMemo(() => kartlar.filter((k) => k.emirler.some((e) => gorunenKume.has(e.id))), [kartlar, gorunenKume]);
   // Sayfada tek birincil düğme (2155-9 a): taslak varken çubuktaki Canlıya al; yoksa açık satırın düğmesi, o da yoksa araç çubuğundaki Canlıya al.
   const satirBirincil = !taslakVar && vurgu && satirBirincilIster(listeKartlari.find((k) => k.kok === kart));
@@ -970,7 +971,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
             atla={() => { turKarar(false); }} onceki={turOnceki} sonraki={turSonraki} bitir={turBitir} vazgec={turVazgec}
           />
         ) : sorunAdimi !== null ? (
-          <AdimSorunu key={sorunAdimi} c={c} m={m} isId={sorunAdimi} taslak={taslak} yazabilir={yazabilir} zaman={zaman} kapat={() => { setSorunAdimi(null); }} />
+          <AdimSorunu key={sorunAdimi} c={c} m={m} isId={sorunAdimi} taslak={taslak} yazabilir={yazabilir} zaman={zaman} kapat={() => { setSorunAdimi(null); }}
+            ustBekleme={adimBekle[sorunAdimi]?.ust !== undefined ? adimBekle[sorunAdimi] : null} ustAc={setSorunAdimi} />
         ) : ayarAcik ? (
           <Ayarlar key={ayarYon ?? ''} c={c} taslak={taslak} yazabilir={yazabilir} kim={o.depo.ben?.kisi.ad ?? ''} yon={ayarYon} etkiBekliyor={setAyarEtkisi} motorYazabilir={o.yetki.islemVar('plan.motor-ayari')} motorDegisti={o.yenile} kapat={() => { setAyarAcik(false); setAyarYon(null); }} />
         ) : kapasiteAcik ? (
