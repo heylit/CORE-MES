@@ -1,5 +1,5 @@
 import type { EmirNo } from '../ortak/emir-no.ts';
-import { acikSaat, zamanTanisiYazisi, type Derleme, type OkunanPlan } from '../motor/kurallar.ts';
+import { acikSaat, zamanTanisiYazisi, type Bitenler, type Derleme, type OkunanPlan } from '../motor/kurallar.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 
 // Kokpit'in saf kuralları (kart 3151): tahtanın, matrisin ve sorun turunun okuduğu model çalışmadan ve kayıtlı plandan kurulur.
@@ -530,7 +530,8 @@ export function adimEkleri(c: PlanlamaCalismasi): Record<string, number> {
 // Adıma bildirilen bekleme (3335-3c): çalışmanın w.adimBekle'sinde iş kimliğiyle durur; adım kadar'dan (plan ekseninde saat) önce başlamaz.
 // Geçmişte kalan kayıt motor için de etkisizdir, gösterilmez.
 export type BeklemeNedeni = 'malzeme' | 'kisi';
-export interface AdimBeklemesi { kadar: number; neden: BeklemeNedeni }
+// ust: bekleme adımın kendi kaydı değil, bölündüğü üst emrin kaydıysa o emrin kimliği.
+export interface AdimBeklemesi { kadar: number; neden: BeklemeNedeni; ust?: string }
 export const BEKLEME_ADI: Record<BeklemeNedeni, string> = { malzeme: 'malzeme yok', kisi: 'kişi yok' };
 export function adimBeklemeleri(c: PlanlamaCalismasi, simdi: number): Record<string, AdimBeklemesi> {
   const v = (c.w as Record<string, unknown>)['adimBekle'], s: Record<string, AdimBeklemesi> = {};
@@ -542,6 +543,34 @@ export function adimBeklemeleri(c: PlanlamaCalismasi, simdi: number): Record<str
   }
   return s;
 }
+// 3511: emir bölününce üst emrin adımına bildirilen bekleme partinin aynı adımında da geçerlidir; motor partiyi ona göre dizer (motor girdisi
+// ustBeklemesiUygula, kural aynıdır). Partinin kendi beklemesi varsa o geçer; en yakın üst emrin kaydı okunur; biten ya da iptal üst emir
+// atlanır; üst emrin biten ya da başlamış adımının kaydı geçmez (neden kalkmıştır), partinin biten ya da başlamış adımına da yazılmaz.
+export function ustBeklemeleri(
+  kendi: Readonly<Record<string, AdimBeklemesi>>, emirler: unknown, biten: Bitenler, m: Pick<KokpitModeli, 'isler' | 'emirler'>,
+): Record<string, AdimBeklemesi> {
+  const s: Record<string, AdimBeklemesi> = { ...kendi };
+  const orders = nesneMi(emirler) && Array.isArray(emirler['orders']) ? (emirler['orders'] as unknown[]) : [];
+  const ust = new Map<string, string>();
+  for (const o of orders) if (nesneMi(o) && o['parentId'] != null && o['parentId'] !== '') ust.set(String(o['id']), String(o['parentId']));
+  const kapali = (id: string): boolean => biten.adim.has(id) || m.isler[id]?.basladi === true;
+  for (const e of ust.size ? m.emirler : []) {
+    const gorulen = new Set([e.id]);
+    for (let p = ust.get(e.id); p !== undefined && !gorulen.has(p); p = ust.get(p)) {
+      gorulen.add(p);
+      if (biten.siparis.has(p)) continue;
+      for (const [id, b] of Object.entries(kendi)) {
+        if (!id.startsWith(`${p}.`) || kapali(id)) continue;
+        const hedef = `${e.id}.${id.slice(p.length + 1)}`;
+        if (s[hedef] === undefined && !kapali(hedef)) s[hedef] = { kadar: b.kadar, neden: b.neden, ust: p };
+      }
+    }
+  }
+  return s;
+}
+// Beklemenin kaynağı üst emirse satırın sonuna yazılır. Emir no ek almayan kalıpta durur: no rakamla biter, ek her rakamda değişirdi.
+export const ustEmirNotu = (m: Pick<KokpitModeli, 'emirler'>, b: AdimBeklemesi): string =>
+  (b.ust === undefined ? '' : ` · üst emirden (${m.emirler.find((e) => e.id === b.ust)?.no ?? b.ust})`);
 export const adimEkYazisi = (saat: number): string => `+${String(Math.round(saat * 100) / 100).replace('.', ',')} sa`;
 
 // Vardiyanın adı yoksa saatleri ("16:00–24:00"); çalışmada yoksa kimliği.

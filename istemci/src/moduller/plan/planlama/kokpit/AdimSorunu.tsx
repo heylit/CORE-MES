@@ -4,7 +4,7 @@ import { Dugme, Simge } from '../../../../ortak/arayuz/index.ts';
 import { girdiSaati, girdidenSaat } from '../ic/veri/kurallar.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import { EtkiBolumu, useEtki } from './etki.tsx';
-import { BEKLEME_ADI, adimBeklemeleri, adimEkleri, adimEkYazisi, type BeklemeNedeni, type KokpitModeli } from './kurallar.ts';
+import { BEKLEME_ADI, adimBeklemeleri, adimEkleri, adimEkYazisi, type AdimBeklemesi, type BeklemeNedeni, type KokpitModeli } from './kurallar.ts';
 import type { TaslakYazici } from './taslak.ts';
 
 // Adıma sorun bildirme (3335 a, dilim 3b ve 3c): planda yeri olan adımın kaç saat uzadığı ya da malzeme ve kişi yokluğundan ne zamana
@@ -38,14 +38,20 @@ export interface AdimSorunuOzellikleri {
   yazabilir: boolean;
   zaman: (t: number) => string;
   kapat: () => void;
+  // 3511: adımın kendi beklemesi yokken geçerli olan, bölündüğü üst emrin beklemesi; `ustAc` üst emrin aynı adımının formunu açar.
+  ustBekleme?: AdimBeklemesi | null;
+  ustAc?: (isId: string) => void;
 }
 
-export function AdimSorunu({ c, m, isId, taslak, yazabilir, zaman, kapat }: AdimSorunuOzellikleri) {
+export function AdimSorunu({ c, m, isId, taslak, yazabilir, zaman, kapat, ustBekleme = null, ustAc }: AdimSorunuOzellikleri) {
   const x = m.isler[isId];
   const emir = m.emirler.find((e) => e.adimlar.some((a) => a.id === isId));
   const kayitli = adimEkleri(c)[isId] ?? null;
   const bekleme = adimBeklemeleri(c, m.simdi)[isId] ?? null;
   const basladi = x?.basladi === true;
+  // Partinin kendi beklemesi üst emrinkinin yerine geçer; başlamış adımda bekleme etkisizdir.
+  const ust = bekleme === null && !basladi && ustBekleme?.ust !== undefined ? { ...ustBekleme, id: ustBekleme.ust, no: m.emirler.find((e) => e.id === ustBekleme.ust)?.no ?? ustBekleme.ust } : null;
+  const ustAdimi = ust !== null && x ? `${ust.id}${isId.slice(x.job.length)}` : null;
   const [tur, setTur] = useState<Tur>(() => (bekleme !== null && !basladi ? bekleme.neden : 'uzadi'));
   const [saat, setSaat] = useState(() => (kayitli === null ? '' : String(kayitli).replace('.', ',')));
   // Öneri: kayıtlı bekleme anı; yoksa ertesi günün aynı saati (çeyrek saate yuvarlanır).
@@ -96,8 +102,10 @@ export function AdimSorunu({ c, m, isId, taslak, yazabilir, zaman, kapat }: Adim
             <div><dt>Tezgâh</dt><dd>{tezgah}</dd></div>
             <div><dt>Plandaki bitiş</dt><dd className="tc-pyq-mono">{zaman(x.C)}</dd></div>
             <div><dt>Bildirilen uzama</dt><dd data-adim-ek={kayitli === null ? 'yok' : ''}>{kayitli === null ? 'yok' : adimEkYazisi(kayitli)}</dd></div>
-            <div><dt>Bildirilen bekleme</dt><dd data-adim-bekle={bekleme === null ? 'yok' : ''}>{bekleme === null ? 'yok' : `${BEKLEME_ADI[bekleme.neden]}, ${zaman(bekleme.kadar)}'e kadar`}</dd></div>
+            <div><dt>Bildirilen bekleme</dt><dd data-adim-bekle={bekleme === null ? (ust === null ? 'yok' : 'ust') : ''}>{bekleme !== null ? `${BEKLEME_ADI[bekleme.neden]}, ${zaman(bekleme.kadar)}'e kadar` : ust !== null ? `üst emirden (${ust.no})` : 'yok'}</dd></div>
           </dl>
+          {ust !== null && <p className="tc-pyq-not" data-ust-bekleme={ust.id}>Üst emrin ({ust.no}) beklemesi bu adımda da geçerli: {BEKLEME_ADI[ust.neden]}, {zaman(ust.kadar)}'e kadar. Kaldırmak için üst emrin adımında kaldırın.</p>}
+          {ustAc && ustAdimi !== null && m.isler[ustAdimi] !== undefined && <div className="tc-pyq-ayar-dugmeler"><Dugme tur="ikincil" onClick={() => { ustAc(ustAdimi); }}>Üst emrin adımını aç</Dugme></div>}
           {!yazabilir && <p className="tc-pyq-not">Adıma sorunu yalnız planı yazabilen kişi bildirir.</p>}
           {durum.tur === 'etki' ? <EtkiBolumu ad={etkiAdi} e={durum.e} uygula={() => { void uygula(durum.e); }} vazgec={() => { void vazgec(); }} /> : yazabilir && (
             <form className="tc-pyq-ayar-etki" noValidate aria-label="Sorun bildirimi" onSubmit={gonder}>
@@ -122,7 +130,7 @@ export function AdimSorunu({ c, m, isId, taslak, yazabilir, zaman, kapat }: Adim
                     aria-invalid={hata !== null || undefined} aria-describedby="tc-pyq-adim-ek-not" onChange={(ev) => { setSaat(ev.target.value); }} />
                 </div>
               )}
-              <p className="tc-pyq-not" id="tc-pyq-adim-ek-not">{ACIKLAMA[tur]}</p>
+              <p className="tc-pyq-not" id="tc-pyq-adim-ek-not">{ACIKLAMA[tur]}{bekler && ust !== null ? ' Bu partiye ayrı bekleme girerseniz üst emrinkinin yerine o geçer.' : ''}</p>
               {ileti !== null && <p className="tc-pyq-ayar-hata" role="alert">{ileti}</p>}
               <div className="tc-pyq-ayar-dugmeler">
                 <Dugme type="submit" tur="ikincil" simge="clock" disabled={kilitli}>{durum.tur === 'hesap' ? 'Hesaplanıyor' : 'Etkisini gör'}</Dugme>

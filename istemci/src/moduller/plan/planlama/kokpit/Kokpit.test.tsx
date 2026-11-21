@@ -752,6 +752,28 @@ describe('Kokpit', () => {
     expect(bolum.querySelector('[data-adim-satir="2.20"] [data-adim-bekle]')).toBeNull();
   });
 
+  // 3513: bölünen emrin partisi üst emrin beklemesiyle dizilir (3511); satır ve form beklemenin üst emirden geldiğini söyler.
+  it('üst emrin beklemesi partinin adım satırında kaynağıyla yazar; formu kutuyu gösterir ve üst emrin adımına götürür', () => {
+    const c = ornekCalisma();
+    // Parti 9: emir 2'nin rotasıyla, ondan bölünmüş; planda emir 2'nin adımlarından sonra.
+    c.D.siparisler.push({ ...c.D.siparisler.find((x) => x.id === '2')!, id: '9' });
+    const ops = (c.plan as unknown as { ops: Record<string, { id: string; job: string; S: number; C: number }> }).ops;
+    for (const r of Object.values(ops).filter((x) => x.job === '2')) ops[`9${r.id.slice(1)}`] = { ...r, id: `9${r.id.slice(1)}`, job: '9', S: r.S + 400, C: r.C + 400 };
+    (c.w as Record<string, unknown>)['adimBekle'] = { '2.40': { kadar: 9000, neden: 'malzeme' } };
+    const emirler = { orders: [{ id: '2', no: 'ORN-0002', status: 'serbest' }, { id: '9', no: 'ORN-0009', status: 'serbest', parentId: '2' }], opStatus: {}, opProg: {} };
+    ac({ calisma: c, depo: { ...DEPO, durum: { emirler } } as unknown as PlanlamaDeposu, secim: { ...BOS_SECIM, siparis: '9' } });
+    const bolum = screen.getByRole('region', { name: 'Emirler ve operasyonlar' });
+    expect(bolum.querySelector('[data-adim-satir="9.40"] [data-adim-bekle]')?.textContent).toMatch(/^bekliyor: malzeme yok, .+'e kadar · üst emirden \(ORN-0002\)$/);
+    expect(bolum.querySelector('[data-adim-satir="9.20"] [data-adim-bekle]')).toBeNull();
+    fireEvent.click(bolum.querySelector<HTMLElement>('[data-adim-satir="9.40"] [data-adim-sorun]')!);
+    const panel = () => screen.getByRole('complementary', { name: 'Adıma sorun bildir' });
+    expect(panel().querySelector('[data-ust-bekleme="2"]')?.textContent).toMatch(/^Üst emrin \(ORN-0002\) beklemesi bu adımda da geçerli: malzeme yok, /);
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Üst emrin adımını aç' }));
+    expect(panel().querySelector('dl')?.textContent).toContain('ORN-0002 ·');
+    expect(panel().querySelector('[data-ust-bekleme]')).toBeNull();
+    expect(panel().querySelector('[data-adim-bekle]')?.textContent).toMatch(/^malzeme yok, .+'e kadar$/);
+  });
+
   it('adıma sorun bildir düğmesi planda yeri olmayan adımın satırında yoktur', () => {
     const c = ornekCalisma();
     const plansiz = { ...c, plan: { ...c.plan, ops: Object.fromEntries(Object.entries((c.plan as unknown as { ops: Record<string, { job: string }> }).ops).filter(([, r]) => r.job !== '2')) } } as typeof c;
