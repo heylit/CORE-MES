@@ -42,7 +42,11 @@
 .tc-pyq-acilir-menu button:hover:not(:disabled), .tc-pyq-acilir-menu button:focus-visible { background: var(--panel2); outline: none; }
 .tc-pyq-acilir-menu button:disabled { opacity: var(--saydam-45); cursor: default; }
 .tc-pyq-acilir-menu button[aria-checked="true"] { box-shadow: inset var(--kayma) 0 0 var(--hazard); font-weight: 700; }
+/* Ayar satırında seçili olmayanın işaret yeri boş kalır: iki satırın yazıları aynı hizadan başlar (3504 b). */
+.tc-pyq-menu-bosluk { flex: none; width: var(--b-4); }
 .tc-pyq-acilir-menu span { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+/* Menü kaydırılırken satırlar büzülüp üst üste binmesin: satır yüksekliği içeriğinden gelir. */
+.tc-pyq-acilir-menu > *, .tc-pyq-menu-diger > * { flex-shrink: 0; }
 .tc-pyq-acilir-menu small { color: var(--muted); font-size: var(--yazi-xs); font-weight: 400; white-space: normal; }
 .tc-pyq-ariza b { font-family: var(--font-mono); color: var(--d-gec); }
 .tc-pyq-ariza[aria-pressed="true"] b { color: inherit; }
@@ -711,7 +715,7 @@
   .tc-pyq-3b-kamera button, .tc-pyq-3b-kaydir button, .tc-pyq-3b-kaydir input, .tc-pyq-3b-tablo td button { min-height: var(--dokunma); }
 }
 /* Planla menüsü (3335-2): iki başlıklı grup; seçili siparişin yönü satırın içinde iki düğmeyle seçilir. */
-.tc-pyq-planla .tc-pyq-acilir-menu { left: 0; right: auto; }
+/* Plan menüsü düğmenin sağ kenarına yaslanır; düğme şeridin solundaysa solaYasla sol kenara alır (3504 b: sade düzende düğme sağdadır). */
 .tc-pyq-acilir-menu .tc-pyq-menu-baslik { padding: var(--b-2) var(--b-2) 0; color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; letter-spacing: var(--harf-aralik-06); text-transform: uppercase; }
 .tc-pyq-acilir-menu .tc-pyq-menu-baslik:not(:first-child) { margin-top: var(--b-1); border-top: var(--cizgi-ince) solid var(--edge2); }
 .tc-pyq-menu-secili { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); padding: var(--b-1) var(--b-2); font-size: var(--yazi-s); }

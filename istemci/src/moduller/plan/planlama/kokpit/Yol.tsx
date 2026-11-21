@@ -71,7 +71,7 @@ export function Yol({ m, p, kart, vurgu, zaman, pd, plansiz, taslakVar, mesgul, 
         <div className="tc-pyq-yol-govde" data-tur={sonuc.tur}>
           <p role="status"><b>{ad}: {sonuc.baslik}</b>{sonuc.neden !== null && <small>Neden: {sonuc.neden}</small>}</p>
           {taslakVar && <Dugme tur={sonuc.tur === 'iyi' ? 'birincil' : 'ikincil'} simge="check" disabled={mesgul} onClick={onayaGec}>Onaya geç</Dugme>}
-          <Dugme simge="play" disabled={mesgul} title="Sistem bu siparişin işlerini yeniden dizer; başlamış ve kilitli iş yerinde kalır" onClick={yenidenPlanla}>Sistem yeniden dizsin</Dugme>
+          <Dugme simge="play" disabled={mesgul} title="Bu siparişin işleri yeniden dizilir; başlamış ve elle kilitli iş yerinde kalır" onClick={yenidenPlanla}>Baştan kur</Dugme>
           {sonuc.emir && !secenekAcik && <Dugme tur={taslakVar ? 'ikincil' : 'birincil'} simge="route" onClick={() => { setSecenekAcik(true); }}>Seçenekleri göster</Dugme>}
           {sonuc.emir && secenekAcik && (
             <div className="tc-pyq-yol-secenek" role="group" aria-label="Düzeltme seçenekleri">

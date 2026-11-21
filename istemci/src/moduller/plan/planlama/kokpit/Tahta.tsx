@@ -483,7 +483,7 @@ export function Tahta(o: TahtaOzellikleri) {
         {eksen}
         {plansiz.length > 0 && (
           <div className="tc-pyq-satir tc-pyq-tepsi">
-            <div className="tc-pyq-bas"><b>Plana alınacak</b><small>{plansiz.length} emir{planaAl && goz === 'T' ? ' · sürükleyip tezgâha bırakın' : ''}</small></div>
+            <div className="tc-pyq-bas"><b>Yerleştirilecek</b><small>{plansiz.length} emir{planaAl && goz === 'T' ? ' · sürükleyip tezgâha bırakın' : ''}</small></div>
             <div className="tc-pyq-alan tc-pyq-fisler"><div>
               {plansiz.map((e) => (
                 <button

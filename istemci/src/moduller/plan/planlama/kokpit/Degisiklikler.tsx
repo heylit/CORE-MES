@@ -108,7 +108,7 @@ export function Degisiklikler({ l, kart, suzgec, suzgecKoy, goster, toplu, kokpi
         );
       })}
       <p className="tc-pyq-not">
-        {toplu !== null ? `"Veri değişikliklerini uygula (${String(toplu)})" başka sayfalarda yapılan ${String(toplu)} değişikliği plana işler: yalnız etkilenen işler yeniden dizilir, öteki işler yerinde kalır. ` : ''}
+        {toplu !== null ? `"Planı güncelle (${String(toplu)})" başka sayfalarda yapılan ${String(toplu)} değişikliği plana işler: yalnız etkilenen işler yeniden dizilir, öteki işler yerinde kalır. ` : ''}
         {taslakta > 0 ? `${String(taslakta)} veri değişikliği taslağınızda uygulandı, listede durmaz; ortak plana taslak yazılınca girer, toplu düğme o zamana kadar onu da sayar. ` : ''}
         {etki !== null
           ? '"Etkisini gör" yalnız o satırın planı nasıl değiştireceğini hesaplar, plan değişmez; altında çıkan düğme taslağınıza yazar. "Sahada oldu" satırları bilgi içindir: "Emre git" siparişi açar.'

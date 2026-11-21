@@ -126,7 +126,7 @@ describe('plan şeridinde sayfa yuvaları (3317)', () => {
       bekleyenUygula={uygulayici(uygula)} yuva={yuva} />,
   );
 
-  it('yuva verilince iki öğe bağlanır; rozet yoktur; toplu düğme "Veri değişikliklerini uygula (2)" ve ikincildir, basınca uygular', () => {
+  it('yuva verilince iki öğe bağlanır; rozet yoktur; toplu düğme "Planı güncelle (2)" ve ikincildir, basınca uygular', () => {
     const satir = vi.fn(), alt = vi.fn(), uygula = vi.fn();
     yuvali({ satir, alt }, uygula);
     expect(satir.mock.calls.at(-1)?.[0]).toBeInstanceOf(HTMLElement);
@@ -136,21 +136,20 @@ describe('plan şeridinde sayfa yuvaları (3317)', () => {
     expect(cubukEl.contains(satir.mock.calls.at(-1)?.[0] as HTMLElement)).toBe(true);
     expect(cubukEl.contains(alt.mock.calls.at(-1)?.[0] as HTMLElement)).toBe(false);
     expect(cubuk().queryByText('Veri değişti')).toBeNull();
-    const d = cubuk().getByRole('button', { name: 'Veri değişikliklerini uygula' });
-    expect(d.querySelector('[data-uzun]')?.textContent).toBe('Veri değişikliklerini uygula (2)');
-    // Orta genişlikte görünen kısa ad ekran okuyucuya ikinci kez okunmaz.
-    expect(d.querySelector('[data-kisa]')?.textContent).toBe('Veriyi uygula (2)');
-    expect(d.querySelector('[data-kisa]')?.getAttribute('aria-hidden')).toBe('true');
+    const d = cubuk().getByRole('button', { name: 'Planı güncelle' });
+    // 3504 b: ad hiçbir genişlikte kısalmaz; tek ad vardır.
+    expect(d.textContent).toBe('Planı güncelle (2)');
+    expect(d.querySelector('[data-kisa], [data-uzun]')).toBeNull();
     expect(d.classList.contains('tc-dugme-birincil')).toBe(false);
     fireEvent.click(d);
     expect(uygula).toHaveBeenCalledTimes(1);
   });
 
-  it('yuva verilmeyince şerit eskisi gibidir: "Veri değişti" rozeti ve birincil "Veri değişikliklerini uygula (2)"', () => {
+  it('yuva verilmeyince şerit eskisi gibidir: "Veri değişti" rozeti ve birincil "Planı güncelle (2)"', () => {
     yuvali(null);
     expect(cubuk().getByText('Veri değişti')).toBeTruthy();
-    const d = cubuk().getByRole('button', { name: 'Veri değişikliklerini uygula' });
-    expect(d.textContent).toBe('Veri değişikliklerini uygula (2)');
+    const d = cubuk().getByRole('button', { name: 'Planı güncelle' });
+    expect(d.textContent).toBe('Planı güncelle (2)');
     expect(d.classList.contains('tc-dugme-birincil')).toBe(true);
     expect(document.querySelector('.tc-pym-sb-yuva, .tc-pym-sb-alt-yuva')).toBeNull();
   });
@@ -159,13 +158,29 @@ describe('plan şeridinde sayfa yuvaları (3317)', () => {
     render(<Cubuk plan={false} guncel={false} planYaz nabiz={null} nabizAcik={false} nabizAc={() => {}} ozeteGit={() => {}} refSec={null} sabitle={null} sabitAd={null} yuva={{ satir: () => {}, alt: () => {} }} />);
     expect(cubuk().getByText('Plan yok')).toBeTruthy();
   });
-  it('3486: uygulama sürerken toplu düğme döner ve "Uygulanıyor" der', () => {
+  it('3486: uygulama sürerken toplu düğme döner ve "Güncelleniyor" der', () => {
     render(
       <Cubuk plan guncel={false} planYaz nabiz={nabiz(0)} nabizAcik={false} nabizAc={() => {}} ozeteGit={() => {}} refSec={null} sabitle={null} sabitAd={null}
         bekleyenUygula={{ uygula: vi.fn(), suruyor: true, say: 2 }} yuva={null} />,
     );
-    const d = screen.getByText('Uygulanıyor').closest('button')!;
+    const d = screen.getByText('Güncelleniyor').closest('button')!;
     expect(d.getAttribute('aria-busy')).toBe('true');
     expect(d.querySelector('.tc-dugme-doner')).not.toBeNull();
+  });
+
+  // 3504 b: plan varken şeritte "Plan nasıl çalışır" düğmesi durur; basınca beş açıklama açılır, Esc kapatır. Plan yokken düğme yoktur.
+  it('Plan nasıl çalışır kutusu düğmeyle açılır, Esc ile kapanır; plan yokken düğme yoktur', () => {
+    yuvali(null);
+    const d = cubuk().getByRole('button', { name: 'Plan nasıl çalışır' });
+    expect(d.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(d);
+    expect(d.getAttribute('aria-expanded')).toBe('true');
+    const kutu = screen.getByRole('region', { name: 'Plan nasıl çalışır' });
+    expect([...kutu.querySelectorAll('dt')].map((x) => x.textContent)).toEqual(['Bir iş uzarsa ya da adet artarsa', 'Bir iş erken biterse', 'Başladı, yerinde kalır', 'Elle taşıdım ya da yerleştirdim', 'Sıra da değişsin']);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('region', { name: 'Plan nasıl çalışır' })).toBeNull();
+    cleanup();
+    render(<Cubuk plan={false} guncel={false} planYaz nabiz={null} nabizAcik={false} nabizAc={() => {}} ozeteGit={() => {}} refSec={null} sabitle={null} sabitAd={null} />);
+    expect(screen.queryByRole('button', { name: 'Plan nasıl çalışır' })).toBeNull();
   });
 });

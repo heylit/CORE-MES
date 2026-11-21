@@ -55,7 +55,7 @@ export function Tur({ m, tur, e, zaman, uygula, oneri, surum, oynat, atla, oncek
             <div><dt>Sorun</dt><dd data-d={e.durum}>{durumYazisi(e)}</dd></div>
             <div><dt>Termin</dt><dd>{e.termin === null ? '–' : zaman(e.termin)}</dd></div>
           </dl>
-          <h3>{e.durum === 'plansiz' ? 'Plana al' : 'Hamle'}</h3>
+          <h3>{e.durum === 'plansiz' ? 'Yerleştir' : 'Hamle'}</h3>
           <Hamleler m={m} e={e} isId={null} zaman={zaman} uygula={uygula} tek oneri={oneriVeGoster} surum={surum} oynat={oynat} bekle={mesgul} />
         </>
       ) : <p className="tc-pyq-not">Bu emir artık planda değil.</p>}

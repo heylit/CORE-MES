@@ -104,7 +104,7 @@ export function Hamleler({ m, e, isId, zaman, uygula, tek = false, oneri, surum,
   const satir = (a: TurAdayi, sira = 0) => {
     const { r, bitis, kazanc, gec, itilen, al, belirsiz, yer } = ozet(a);
     const gecBirakir = gec !== null && gec > 0.01 && e.durum !== 'gec';
-    const dugme = al ? 'Planla' : 'Taşı';
+    const dugme = al ? 'Yerleştir' : 'Taşı';
     return (
       <li key={anahtar(a)} data-hamle={a.tezgah}>
         <span>
@@ -115,7 +115,7 @@ export function Hamleler({ m, e, isId, zaman, uygula, tek = false, oneri, surum,
                 : `biter ${zaman(bitis).slice(6)}${kazanc !== null && kazanc > 0.01 ? ` · ${sureYaz(kazanc)} erken` : ''}${gec === null ? '' : gec > 0.01 ? ` · ${al ? '' : 'yine '}${sureYaz(gec)} geç` : ' · termine yetişir'}${itilen ? ` · aynı emrin ${String(itilen)} adımı kayar` : ''}`}
           </small>
         </span>
-        <Dugme tur={sira === 0 && (yalnizKazanc || (gec !== null && gec <= 0.01)) ? 'birincil' : 'ikincil'} simge="check" disabled={!uygula || r === undefined} onClick={() => { uygula?.(a, gecBirakir); }}>{tek ? (gecBirakir ? `Yine de ${al ? 'planla' : 'taşı'}` : `${dugme}, sıradaki`) : dugme}</Dugme>
+        <Dugme tur={sira === 0 && (yalnizKazanc || (gec !== null && gec <= 0.01)) ? 'birincil' : 'ikincil'} simge="check" disabled={!uygula || r === undefined} onClick={() => { uygula?.(a, gecBirakir); }}>{tek ? (gecBirakir ? `Yine de ${al ? 'yerleştir' : 'taşı'}` : `${dugme}, sıradaki`) : dugme}</Dugme>
       </li>
     );
   };

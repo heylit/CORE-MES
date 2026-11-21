@@ -176,7 +176,7 @@ export function gunCizelgesi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, g
       const o = cx.byId[r.id]; const kl = kilitli(c, r.id);
       return {
         id: r.id, job: r.job, ad: o?.ad ?? '', x: x(s), w: w(s, e), renk: renk(D, r.job),
-        baslik: `${r.id} · ${o?.ad ?? ''} · ${saatYaz(D, r.S)} → ${saatYaz(D, r.C)}${kl ? (kl.gun != null ? ' · dondurulmuş gün' : ' · sabit') : ''}`,
+        baslik: `${r.id} · ${o?.ad ?? ''} · ${saatYaz(D, r.S)} → ${saatYaz(D, r.C)}${kl ? (kl.gun != null ? ' · dondurulmuş gün' : ' · elle kilitli') : ''}`,
         sol: r.S < a, sag: r.C > b, secili: sec?.id === r.id, soluk: !!sJ && r.job !== sJ, gec: (p.J[r.job]?.T ?? 0) > 0.05, risk: riskte(p.J[r.job]), sabit: !!kl, dondu: kl?.gun != null,
       };
     });

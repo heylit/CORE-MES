@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Rozet, Simge } from '../../../../../ortak/arayuz/index.ts';
 import { nabizFarki, sayiEki, type NabizGostergesi } from '../kurallar.ts';
 import { KURULUYOR, type BekleyenUygulayici, type PlanKurucu } from '../coz.ts';
@@ -87,12 +87,10 @@ export function Cubuk(o: Ozellikler) {
           {pasifNot !== null && <small className="tc-pym-sb-not">{pasifNot}</small>}
           {o.planYaz && uyg ? (
             <button type="button" className={`tc-dugme tc-pym-kucuk tc-pym-sb-iyi${o.yuva ? '' : ' tc-dugme-birincil'}`} disabled={uyg.suruyor} aria-busy={uyg.suruyor || undefined}
-              title={uyg.suruyor ? KURULUYOR : `Başka sayfalarda yapılan ${String(uyg.say)} veri değişikliği plana işlenir: yalnız etkilenen işler yeniden dizilir; öteki işler yerinde kalır.`}
-              aria-label="Veri değişikliklerini uygula" onClick={() => { uyg.uygula(); }}>
-              {uyg.suruyor ? <span className="tc-dugme-doner" aria-hidden="true" /> : <Simge ad="play" boyut="k" />}
-              {o.yuva && !uyg.suruyor
-                ? <><span data-uzun="">{`Veri değişikliklerini uygula (${String(uyg.say)})`}</span><span data-kisa="" aria-hidden="true">{`Veriyi uygula (${String(uyg.say)})`}</span></>
-                : <span>{uyg.suruyor ? 'Uygulanıyor' : `Veri değişikliklerini uygula (${String(uyg.say)})`}</span>}
+              title={uyg.suruyor ? KURULUYOR : `Başka sayfalarda yapılan ${String(uyg.say)} değişiklik plana işlenir. Sıra korunur, saatler yeniden hesaplanır; başlamış ve elle kilitli iş yerinde kalır.`}
+              aria-label="Planı güncelle" onClick={() => { uyg.uygula(); }}>
+              {uyg.suruyor ? <span className="tc-dugme-doner" aria-hidden="true" /> : <Simge ad="rotate" boyut="k" />}
+              <span>{uyg.suruyor ? 'Güncelleniyor' : `Planı güncelle (${String(uyg.say)})`}</span>
             </button>
           ) : o.planYaz && (kur ? (
             <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-sb-iyi tc-dugme-birincil" disabled={kur.suruyor} aria-busy={kur.suruyor || undefined}
@@ -104,6 +102,7 @@ export function Cubuk(o: Ozellikler) {
               <Simge ad="play" boyut="k" /><span>Planı kur</span>
             </button>
           ))}
+          {o.plan && <NasilCalisir />}
         </span>
       </div>
       {n && o.nabizAcik && <NabizPaneli {...o} n={n} />}
@@ -176,5 +175,39 @@ function NabizPaneli(o: Ozellikler & { n: NabizDurumu }) {
         </div>
       </section>
     </div>
+  );
+}
+
+// Plan düğmelerinin ne yaptığı (3504 b): kişi düğmeye basmadan neyin yerinde kalıp neyin oynadığını okur.
+const NASIL: [string, string][] = [
+  ['Bir iş uzarsa ya da adet artarsa', 'Planı güncelle deyince arkasındaki işler aynı sırayla ileri kayar.'],
+  ['Bir iş erken biterse', 'Bitiş girildikten sonra Planı güncelle ile arkadakiler aynı sırayla öne gelir. Önümüzdeki 24 saatin işleri yerinde tutulur (plan ayarına göre 72 saate kadar).'],
+  ['Başladı, yerinde kalır', 'Başlamış iş tezgâhından ve saatinden oynamaz; yalnız bitişi kalan süreye göre değişir.'],
+  ['Elle taşıdım ya da yerleştirdim', 'O iş elle kilitlenir; plan onu bir daha oynatmaz.'],
+  ['Sıra da değişsin', 'Plan menüsündeki Baştan kur sırayı da yeniden dizer. Başlamış ve elle kilitli işler kalır.'],
+];
+function NasilCalisir() {
+  const [acik, setAcik] = useState(false);
+  const kok = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!acik) return undefined;
+    const tus = (e: KeyboardEvent) => { if (e.key === 'Escape') setAcik(false); };
+    const dokun = (e: PointerEvent) => { if (!kok.current?.contains(e.target as Node | null)) setAcik(false); };
+    document.addEventListener('keydown', tus); document.addEventListener('pointerdown', dokun, true);
+    return () => { document.removeEventListener('keydown', tus); document.removeEventListener('pointerdown', dokun, true); };
+  }, [acik]);
+  return (
+    <span className="tc-pym-sb-nasil" ref={kok}>
+      <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet tc-pym-simge-d" aria-label="Plan nasıl çalışır" aria-expanded={acik} aria-controls="tc-pym-sb-nasil-kutu"
+        title="Plan nasıl çalışır" onClick={() => { setAcik(!acik); }}>
+        <Simge ad="help" boyut="k" />
+      </button>
+      {acik && (
+        <section id="tc-pym-sb-nasil-kutu" className="tc-pym-sb-nasil-kutu" aria-label="Plan nasıl çalışır">
+          <b>Plan nasıl çalışır</b>
+          <dl>{NASIL.map(([s, c]) => <div key={s}><dt>{s}</dt><dd>{c}</dd></div>)}</dl>
+        </section>
+      )}
+    </span>
   );
 }

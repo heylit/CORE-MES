@@ -103,7 +103,7 @@ export function AdimAdim({ m, e, zaman, uygula, surum, bekle = false }: AdimAdim
               const tezgah = sonuc !== null && sonuc !== 'okunamadi' ? sonuc.tezgah : sec[ilk.id]?.tezgah ?? ilk.adaylar.find((t) => !fasonMu(t));
               if (tezgah !== undefined) uygula?.({ isId: ilk.id, tezgah, baslangic: ilkSaat, planaAl: e.id, ...(adimlar.length > 0 ? { adimlar } : {}) }, gec !== null && gec > 0.01);
             }}
-          >Plana al</Dugme>
+          >Yerleştir</Dugme>
           {secili && <Dugme tur="ikincil" onClick={() => { setSec({}); }}>Hepsini sistem seçsin</Dugme>}
         </span>
       </div>

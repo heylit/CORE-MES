@@ -70,7 +70,7 @@ export function Liste({ m, cx, goz, emirler, secEmir, secIs, zaman, sec, yanan =
     <div className="tc-pyq-liste" role="group" aria-label="Tezgâhlar ve işler">
       {plansiz.length > 0 && (
         <section>
-          <h3><b>Plana alınacak</b><small>{plansiz.length} emir</small></h3>
+          <h3><b>Yerleştirilecek</b><small>{plansiz.length} emir</small></h3>
           <ul>{plansiz.map(emirSatiri)}</ul>
         </section>
       )}
