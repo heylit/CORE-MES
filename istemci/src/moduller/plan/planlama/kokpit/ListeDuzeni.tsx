@@ -3,7 +3,7 @@ import { Dugme, Rozet, Simge, type RozetTonu } from '../../../../ortak/arayuz/in
 import type { OkunanPlan } from '../motor/kurallar.ts';
 import { ElleYerlestir } from './ElleYerlestir.tsx';
 import { Hamleler, type HamleOzellikleri } from './Hamleler.tsx';
-import { DURDURMA_BEKLIYOR, DURUS_OKUNMADI, durumYazisi as emirDurumYazisi, durusOkunmadi, eksikNedeni, engelleyenAdim, sureYaz, type EmirDurumu, type KokpitModeli, type KolNotlari } from './kurallar.ts';
+import { DURDURMA_BEKLIYOR, DURUS_OKUNMADI, adimBeklemeYazisi, adimUzamaYazisi, durumYazisi as emirDurumYazisi, durusOkunmadi, eksikNedeni, engelleyenAdim, sureYaz, type AdimBeklemesi, type EmirDurumu, type KokpitModeli, type KolNotlari } from './kurallar.ts';
 import { adimYeri, type SiraKarti } from './yerlestirme.ts';
 import type { YerlestirmeHedefi } from './Yerlestirme.tsx';
 import { kartSonucu, listeSirasi } from './yol.ts';
@@ -28,6 +28,9 @@ export interface ListeDuzeniOzellikleri {
   kolPartileri?: ReadonlySet<string>;
   // Adım ortasından bölünen partinin notları (kurallar.ts kolNotlari): partinin öbeğinde bağ yazısı, üst emrin katılma adımında bekleme.
   kol?: Pick<KolNotlari, 'emir' | 'adim'>;
+  // Sahadan bildirilen bekleme (adım → ne zamana kadar, neden) ve uzama (adım → ek saat): adımın neden o saatte durduğunu söyler.
+  adimBekle?: Readonly<Record<string, AdimBeklemesi>>;
+  adimEk?: Readonly<Record<string, number>>;
   // Açık siparişin tezgâhlardaki yeri (tahta ve telefondaki listesi); sayfa çizer, işleri vurgular.
   tahta: ReactNode;
   // Sayfada tek birincil düğme olur (2155-9 a): Canlıya al birincilken açık satırın düğmesi ikincil çizilir.
@@ -61,7 +64,7 @@ const durumYazisi = (k: SiraKarti): string => {
   return `${sureYaz(g)} geç`;
 };
 
-export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, yenidenPlanla, hamle, surum, malzemeBekleyen, kolPartileri, kol, tahta, satirBirincil, adimSec, seciliIs, tasi = null, bol = null, hedef, secimiBirak, malzemeAni }: ListeDuzeniOzellikleri) {
+export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, yenidenPlanla, hamle, surum, malzemeBekleyen, kolPartileri, kol, adimBekle, adimEk, tahta, satirBirincil, adimSec, seciliIs, tasi = null, bol = null, hedef, secimiBirak, malzemeAni }: ListeDuzeniOzellikleri) {
   // Elle yerleştirilen adım (3488 a); satır kapanınca ya da başka iş seçilince düşer.
   const [elle, setElle] = useState<string | null>(null);
   useEffect(() => { setElle(null); }, [acik]);
@@ -140,7 +143,9 @@ export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, ye
                               <small data-yeri-yok={x ? undefined : a.id}>{x ? `${x.fason ? 'Fason' : kod(x.m)} · ${zaman(x.S)} → ${zaman(x.C).slice(6)}${x.ufukDisi ? ` · ufuk sonrasında ${sureYaz(x.ufukDisi)} çalışma` : ''}` : `yeri yok: ${eksikNedeni(p, a.id)}`}</small>
                               {x?.kilitli && <small className="tc-pyq-ld-kilit" data-elle-kilit={a.id}><Simge ad="lock" boyut="k" />elle · kilitli</small>}
                               {x?.durdurmaBekliyor && <small data-durdurma-bekliyor={a.id}>{DURDURMA_BEKLIYOR}; canlıda eski yerinde</small>}
+                              {x && !x.basladi && adimBekle?.[a.id] !== undefined && <small data-adim-bekle={a.id}>{adimBeklemeYazisi(m, adimBekle[a.id]!, zaman)}</small>}
                               {x && !x.basladi && kol?.adim[a.id] !== undefined && <small data-adim-parti={a.id}>{kol.adim[a.id]}</small>}
+                              {x && adimEk?.[a.id] !== undefined && <small data-adim-ek={a.id}>{adimUzamaYazisi(adimEk[a.id]!)}</small>}
                             </>
                           );
                           const hedefIs = gosterilen === null ? undefined : m.isler[gosterilen];

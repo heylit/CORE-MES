@@ -12,6 +12,7 @@ import { kaynakSatiri } from '../ortak/degisiklik-seridi/kurallar.ts';
 import { otomatikUygulaIste, otomatikUygulaSifirla } from '../motor/atolye/gonder.ts';
 import { planKurSifirla } from '../motor/coz.ts';
 import { SeritYuvasi, type SeritYuvalari } from '../motor/ust/yuva.ts';
+import { saatYaz } from '../motor/kurallar.ts';
 import { ornekCalisma } from '../motor/ornek.ts';
 import { saatiSabitle } from '../test-saati.ts';
 import type { PlanlamaDeposu } from '../veri.ts';
@@ -750,6 +751,26 @@ describe('Kokpit', () => {
     expect(bolum.querySelector('[data-adim-satir="2.40"] [data-adim-bekle]')?.textContent).toMatch(/^bekliyor: malzeme yok, .+'e kadar$/);
     // 2.20 başlamıştır: kaydı motor için etkisizdir, satırda yazmaz.
     expect(bolum.querySelector('[data-adim-satir="2.20"] [data-adim-bekle]')).toBeNull();
+  });
+
+  // 3526: açılış düzeninde adımları Siparişler görünümünün açık satırı listeler; bildirilen bekleme ve uzama orada da yazar.
+  it('açılış düzeninde bildirilen bekleme ve uzama Siparişler görünümünde adımın satırında yazar', () => {
+    const c = ornekCalisma();
+    (c.w as Record<string, unknown>)['adimBekle'] = { '2.40': { kadar: 9000, neden: 'malzeme' }, '2.20': { kadar: 9000, neden: 'kisi' } };
+    (c.w as Record<string, unknown>)['adimEk'] = { '2.20': { ekSaat: 1.5, bitis0: 40 } };
+    render(
+      <MemoryRouter initialEntries={['/']}><BildirimSaglayici><Yuvali>
+        <Kokpit
+          depo={DEPO} calisma={c} komut={komutKur(0)} git={vi.fn()} yenile={vi.fn()} yetki={yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz'])}
+          olcek={ACILIS_OLCEGI} olcekSec={vi.fn()} kaydir={vi.fn()} secim={{ ...BOS_SECIM, siparis: '2' }} sec={vi.fn()}
+        />
+      </Yuvali></BildirimSaglayici></MemoryRouter>,
+    );
+    expect(document.querySelector('[data-adim-bekle], [data-adim-ek]')).toBeNull();
+    fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: 'Siparişler' }));
+    const kart = document.querySelector<HTMLElement>('.tc-pyq-ld-kart[data-acik]')!;
+    expect([...kart.querySelectorAll('[data-adim-bekle]')].map((y) => [y.getAttribute('data-adim-bekle'), y.textContent])).toEqual([['2.40', `bekliyor: malzeme yok, ${saatYaz(c.D, 9000)}'e kadar`]]);
+    expect([...kart.querySelectorAll('[data-adim-ek]')].map((y) => [y.getAttribute('data-adim-ek'), y.textContent])).toEqual([['2.20', 'uzadı +1,5 sa']]);
   });
 
   // 3523: adım ortasından bölünen parti (3512) yalnız kendi adımlarıyla görünür; bağ partinin satırında ve üst emrin katılma adımında yazar.

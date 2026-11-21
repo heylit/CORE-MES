@@ -232,6 +232,29 @@ describe('Kokpit liste düzeni (3414 b)', () => {
     expect(document.querySelector('[data-durdurma-bekliyor]')).toBeNull();
   });
 
+  // 3526: sahadan bildirilen bekleme ve uzama adımın satırında yazar; eski düzendeki adım tablosuyla aynı cümle.
+  it('bildirilen bekleme başlamamış adımın satırında nedeni ve anıyla, uzama adımın satırında yazar; başlamış adımın beklemesi, yeri olmayan adım ve bildirim yokken yazmaz', () => {
+    const x = kur();
+    // 2.20 süren iştir; 2.40 başlamamıştır.
+    expect([x.m.isler['2.20']?.basladi, x.m.isler['2.40']?.basladi]).toEqual([true, false]);
+    ciz(x, '2');
+    expect(document.querySelector('[data-adim-bekle], [data-adim-ek]')).toBeNull();
+    cleanup();
+    ciz(x, '2', { adimBekle: { '2.40': { kadar: 9000, neden: 'malzeme' }, '2.20': { kadar: 9000, neden: 'kisi' }, '2.30': { kadar: 9000.4, neden: 'kisi', ust: '3' } }, adimEk: { '2.20': 1.5, '2.40': 0.254 } });
+    const yazi = (q: string) => [...document.querySelectorAll(q)].map((y) => [y.closest('li')?.querySelector('span')?.textContent.replace(/^\d+\. /, ''), y.textContent]);
+    const ad = (id: string) => x.m.emirler.find((e) => e.id === '2')!.adimlar.find((a) => a.id === id)!.ad;
+    expect(x.m.isler['2.30']?.basladi).toBe(false);
+    expect(yazi('[data-adim-bekle]')).toEqual([[ad('2.30'), "bekliyor: kişi yok, 01.01 9000'e kadar · üst emirden (ORN-3)"], [ad('2.40'), "bekliyor: malzeme yok, 01.01 9000'e kadar"]]);
+    expect(yazi('[data-adim-ek]')).toEqual([[ad('2.20'), 'uzadı +1,5 sa'], [ad('2.40'), 'uzadı +0,25 sa']]);
+    // Not adımın düğmesinin içindedir: basınca adım seçilir.
+    expect(document.querySelector('[data-adim-bekle="2.40"]')?.closest('button')?.getAttribute('data-adim')).toBe('2.40');
+    cleanup();
+    const y = yarimKur({ kod: 'zaman' });
+    ciz(y, '3', { adimBekle: { [y.eksik]: { kadar: 9000, neden: 'malzeme' } }, adimEk: { [y.eksik]: 2 } });
+    expect(document.querySelector(`[data-yeri-yok="${y.eksik}"]`)).not.toBeNull();
+    expect(document.querySelector('[data-adim-bekle], [data-adim-ek]')).toBeNull();
+  });
+
   it('3484 c: ufuk sonrasına uzayan adım ufuk sonrası saatini yazar; eski kayıttaki ardıl nedenini söyler', () => {
     const c0 = ornekCalisma(), plan = c0.plan as unknown as { ops: Record<string, { job: string }> };
     const ids = Object.keys(plan.ops).filter((id) => plan.ops[id]?.job === '3').sort();

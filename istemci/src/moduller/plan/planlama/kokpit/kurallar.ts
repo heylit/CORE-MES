@@ -619,6 +619,10 @@ export function kolNotlari(m: Pick<KokpitModeli, 'emirler'>, D: Pick<PlanlamaCal
 export const DURUS_OKUNMADI = 'Bitiş bir yıldan ileride; o tarihlerdeki planlı duruşlar hesaba katılmadı, bitiş daha geç olabilir.';
 export const durusOkunmadi = (m: Pick<KokpitModeli, 'simdi'>, e: Pick<KokpitEmri, 'bitis'>): boolean => e.bitis !== null && e.bitis > durusOkumaSonu(m.simdi);
 export const adimEkYazisi = (saat: number): string => `+${String(Math.round(saat * 100) / 100).replace('.', ',')} sa`;
+// Adımın satırındaki bekleme ve uzama yazıları; adımı listeleyen her düzen aynı cümleyi kurar.
+export const adimBeklemeYazisi = (m: Pick<KokpitModeli, 'emirler'>, b: AdimBeklemesi, zaman: (t: number) => string): string =>
+  `bekliyor: ${BEKLEME_ADI[b.neden]}, ${zaman(b.kadar)}'e kadar${ustEmirNotu(m, b)}`;
+export const adimUzamaYazisi = (saat: number): string => `uzadı ${adimEkYazisi(saat)}`;
 
 // Vardiyanın adı yoksa saatleri ("16:00–24:00"); çalışmada yoksa kimliği.
 export function vardiyaAdi(c: PlanlamaCalismasi, id: string): string {
