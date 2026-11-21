@@ -96,6 +96,40 @@ describe('emir malzeme ihtiyacı (2486-8, 461 b)', () => {
     assert.equal(r.find((x) => x.emirId === 100)?.hammadde.length, 1);
   });
 
+  test('3515: bölünmüş emrin yan ürünü bölmeden sonraki adetlerledir; emir kolun yapmadığı adımları kol adedi kadar fazla yapar', () => {
+    const yanli = (op: number) => adim(1, op, { outs: [{ itemId: String(100 + op), qty: 1, kind: 'yan' }] } as Partial<Adim>);
+    const kartlar = [kart(1, 'mamul'), ...[10, 20, 30, 40].map((op) => kart(100 + op, 'ham'))];
+    const kos = (ust: number, kol: number, araligi: { n: number; m: number }) => {
+      const r = emirMalzemeIhtiyaclari(girdi(
+        { items: kartlar, routes: { 1: [yanli(10), yanli(20), yanli(30), yanli(40)] }, orders: [emir(100, 1, ust), emir(101, 1, kol, { parentId: '100', kol: araligi })] },
+        { kopyalar: new Map([[100, []], [101, []]]) },
+      ));
+      const yan = (id: number) => Object.fromEntries((r.find((x) => x.emirId === id)?.yanUrun ?? []).map((y) => [y.malzemeNo - 100, y.miktar]));
+      return [yan(100), yan(101)];
+    };
+    // 9 adetlik emir OP 20'den 3 adet bölündü, kol OP 40'ta katılır: OP 10 ve OP 40'ı emir 9 adetle, OP 20-30'u emir 6, kol 3 adetle yapar.
+    assert.deepEqual(kos(6, 3, { n: 1, m: 4 }), [{ 10: 9, 20: 6, 30: 6, 40: 9 }, { 20: 3, 30: 3 }]);
+    // Ayrı ilerleyen kol (m = adım sayısı + 1) sona kadar kendi adedini yapar.
+    assert.deepEqual(kos(6, 3, { n: 1, m: 5 }), [{ 10: 9, 20: 6, 30: 6, 40: 6 }, { 20: 3, 30: 3, 40: 3 }]);
+    // Kol üst emirden büyük olabilir: 9'dan 6 bölünür.
+    assert.deepEqual(kos(3, 6, { n: 1, m: 5 }), [{ 10: 9, 20: 3, 30: 3, 40: 3 }, { 20: 6, 30: 6, 40: 6 }]);
+    // İlk adımdan bölünüp OP 30'da katılan kol (n = 0).
+    assert.deepEqual(kos(6, 3, { n: 0, m: 3 }), [{ 10: 6, 20: 6, 30: 9, 40: 9 }, { 10: 3, 20: 3 }]);
+  });
+
+  test('3515 (Test T1): iç içe bölmede emir kolun yapmadığı adımda kolun alt ağacını sayar (9 = 6 + 2 + 1)', () => {
+    const yanli = (op: number) => adim(1, op, { outs: [{ itemId: String(100 + op), qty: 1, kind: 'yan' }] } as Partial<Adim>);
+    const r = emirMalzemeIhtiyaclari(girdi(
+      {
+        items: [kart(1, 'mamul'), ...[10, 20, 30, 40].map((op) => kart(100 + op, 'ham'))], routes: { 1: [yanli(10), yanli(20), yanli(30), yanli(40)] },
+        orders: [emir(100, 1, 6), emir(101, 1, 2, { parentId: '100', kol: { n: 1, m: 5 } }), emir(102, 1, 1, { parentId: '101', kol: { n: 2, m: 5 } })],
+      },
+      { kopyalar: new Map([[100, []], [101, []], [102, []]]) },
+    ));
+    const yan = (id: number) => Object.fromEntries((r.find((x) => x.emirId === id)?.yanUrun ?? []).map((y) => [y.malzemeNo - 100, y.miktar]));
+    assert.deepEqual([yan(100), yan(101), yan(102)], [{ 10: 9, 20: 6, 30: 6, 40: 6 }, { 20: 3, 30: 2, 40: 2 }, { 30: 1, 40: 1 }]);
+  });
+
   test('kök altı yarı mamul stoktan netleşir, kalanı rotasından açılır; rotasız yarı mamul uyarıyla satın alınan gibi', () => {
     const r = emirMalzemeIhtiyaclari(girdi(
       { items: [kart(1, 'mamul'), kart(2, 'ham'), kart(3, 'yari', 3), kart(4, 'yari')], routes: { 1: [adim(1, 10)], 3: [adim(3, 10, { ins: [{ itemId: '2', qty: 2, scrap: 0 }] })] }, orders: [emir(100, 1, 10)] },
