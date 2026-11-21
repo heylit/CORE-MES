@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { ApiHatasi } from '../../../../ortak/veri/api.ts';
 import { BildirimSaglayici } from '../../../../ortak/arayuz/index.ts';
 import type { CalismaKomutu } from '../kayit.ts';
+import type { PlanlamaCalismasi } from '../tipler.ts';
 import { MALIYETSIZ, YONETICI, ac, sunucuKur } from '../test-ortak.tsx';
 import { PLANLAMA_ANAHTARI } from '../veri.ts';
 import type { DegerlendirmeCevabi, Degerlendirici } from './degerlendirme.ts';
@@ -382,16 +383,28 @@ describe('Partiyi böl (uç açılınca)', () => {
     expect((within(grup).getAllByRole('spinbutton') as HTMLInputElement[]).map((k) => k.value)).toEqual(['5', '5']);
   });
 
-  it('elle bölünmüş adımı olan iş emrinde bölmenin 1. partide kalacağı yazılır; elle bölme yoksa satır yoktur', () => {
+  it('1. partide kalanlar adım başına tek satırda yazılır: elle bölme, ek süre, adet fazlalığı; hiçbiri yoksa satır yoktur', () => {
     const d = vi.fn() as unknown as Degerlendirici;
-    const c = calismaKur();
-    const { unmount } = render(<BildirimSaglayici><PartiBolmeKarti c={c} p={kayitliPlan(c)} degerlendir={d} yenile={vi.fn()} /></BildirimSaglayici>);
-    expect(screen.queryByText(/elle böldünüz/)).toBeNull();
-    unmount();
-    const bolunmus = calismaKur((x) => { (x as unknown as Record<string, unknown>)['elleBol'] = { 'S1.a1': [{ adet: 6, m: 'M1' }, { adet: 4, m: 'M2' }], 'S1.a2': [{ adet: 10, m: 'M1' }], 'S2.a1': [{ adet: 1, m: 'M1' }, { adet: 1, m: 'M2' }] }; });
-    render(<BildirimSaglayici><PartiBolmeKarti c={bolunmus} p={kayitliPlan(bolunmus)} degerlendir={d} yenile={vi.fn()} /></BildirimSaglayici>);
-    expect((screen.getByRole('combobox', { name: 'İş emri' }) as HTMLSelectElement).value).toBe('S1');
-    expect(screen.getAllByText(/elle böldünüz/).map((x) => x.textContent)).toEqual(['a1 adımını elle böldünüz (M1, M2): bölmeniz 1. partide kalır, öteki partilerin tezgâhını plan seçer.']);
+    const satirlar = (c: PlanlamaCalismasi) => {
+      const { container, unmount } = render(<BildirimSaglayici><PartiBolmeKarti c={c} p={kayitliPlan(c)} degerlendir={d} yenile={vi.fn()} /></BildirimSaglayici>);
+      const l = [...container.querySelectorAll('[data-ilk-parti]')].map((x) => x.textContent);
+      unmount();
+      return l;
+    };
+    expect(satirlar(calismaKur())).toEqual([]);
+    // S2'nin kayıtları S1'in kartına girmez; tek paylı bölme bölme değildir.
+    const elle = { 'S1.a1': [{ adet: 6, m: 'M1' }, { adet: 4, m: 'M2' }], 'S1.a2': [{ adet: 10, m: 'M1' }], 'S2.a1': [{ adet: 1, m: 'M1' }, { adet: 1, m: 'M2' }] };
+    expect(satirlar(calismaKur((x) => { Object.assign(x, { elleBol: elle }); }))).toEqual(['a1 adımı: elle bölme (M1, M2) 1. partide kalır; öteki partilerin tezgâhını plan seçer.']);
+    const hepsi = calismaKur((x) => {
+      Object.assign(x, { elleBol: elle, w: { adimEk: { 'S1.a1': { ekSaat: 9 }, 'S1.a3': { ekSaat: 1.5 }, 'S2.a1': { ekSaat: 4 }, 'S1.a2': { ekSaat: 0 } } } });
+      Object.assign(x.D, { opAdet: { 'S1.a1': 13, 'S1.a2': 10, 'S1.a3': 8, 'S2.a1': 9 } });
+    });
+    // Rotadaki sırayla; adedi emrinkine eşit (a2) ya da ondan az (a3) olan adım fazlalık değildir.
+    expect(satirlar(hepsi)).toEqual([
+      'a1 adımı: elle bölme (M1, M2), ek süre (9 sa) ve 3 adet fazlalık 1. partide kalır; öteki partilerin tezgâhını plan seçer.',
+      'a3 adımı: ek süre (1,5 sa) 1. partide kalır.',
+    ]);
+    expect(satirlar(calismaKur((x) => { Object.assign(x.D, { opAdet: { 'S1.a2': 12 } }); }))).toEqual(['a2 adımı: 2 adet fazlalık 1. partide kalır.']);
   });
 
   it('darboğaz plandan yazılır, tezgâh dağılımı seçilir; en küçük partinin altında Böl kilitli', () => {

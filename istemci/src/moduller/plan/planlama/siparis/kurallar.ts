@@ -439,14 +439,35 @@ export function partiAdaylari(D: PlanVerisi, p: KayitliPlan): Siparis[] {
     .sort((a, b) => (p.J[b.id]?.T ?? 0) - (p.J[a.id]?.T ?? 0) || a.id.localeCompare(b.id, 'tr'));
 }
 export const PARTI_EN_COK = 20;
-// İş emrinin elle bölünmüş adımları (çalışmanın elleBol'u: işlem -> paylar). Parti bölme ölçümü bu kaydı ilk partide tutar, öteki partilerin
-// tezgâhını plan seçer (motor degerlendir.js partiBol); kart kişiye bölmesinin ne olacağını bununla söyler. En az iki pay bölmedir.
-export interface ElleBolunenAdim { k: string; tezgahlar: string[] }
-export function elleBolunenAdimlar(c: PlanlamaCalismasi, jid: string): ElleBolunenAdim[] {
-  const l = (c as unknown as { elleBol?: unknown }).elleBol; const on = `${jid}.`;
-  if (!nesne(l)) return [];
-  return Object.entries(l).filter(([id, p]) => id.startsWith(on) && Array.isArray(p) && p.length >= 2)
-    .map(([id, p]) => ({ k: id.slice(on.length), tezgahlar: (p as unknown[]).map((x) => (nesne(x) && typeof x.m === 'string' ? x.m : '')).filter((m) => m !== '') }));
+// Parti bölme ölçümünün ilk partide bıraktıkları (motor degerlendir.js partiBol): kişinin elle bölmesi (çalışmanın elleBol'u: işlem ->
+// paylar; en az iki pay bölmedir), adıma bildirilen ek süre (w.adimEk) ve adımın adedindeki fazlalık (opAdet emrin adedinden büyükse:
+// üst emir o adımı ayrılan partinin adediyle birlikte işler). Öteki partiler bunları taşımaz; kart kişiye bölünce ne olacağını bununla
+// söyler. Adım başına tek kayıt, rotadaki sırayla.
+export interface IlkPartideKalan { k: string; tezgahlar: string[]; ekSaat: number | null; fazla: number | null }
+export function ilkPartideKalanlar(c: PlanlamaCalismasi, jid: string): IlkPartideKalan[] {
+  const s = c.D.siparisler.find((x) => x.id === jid);
+  if (!s) return [];
+  const elle = (c as unknown as { elleBol?: unknown }).elleBol, ek = (c.w as Record<string, unknown>)['adimEk'], opAdet = c.D.opAdet;
+  const rota = c.D.urunler.find((u) => u.id === s.urun)?.rota ?? [];
+  return rota.flatMap((a): IlkPartideKalan[] => {
+    const id = `${jid}.${a.k}`;
+    const p = nesne(elle) ? elle[id] : null, e = nesne(ek) ? ek[id] : null, n = nesne(opAdet) ? opAdet[id] : null;
+    const tezgahlar = Array.isArray(p) && p.length >= 2 ? (p as unknown[]).map((x) => (nesne(x) && typeof x.m === 'string' ? x.m : '')).filter((m) => m !== '') : [];
+    const ekSaat = nesne(e) && sonlu(e.ekSaat) && e.ekSaat > 0 ? e.ekSaat : null;
+    const fazla = n != null && Number.isFinite(+(n as number)) && +(n as number) > s.adet ? +(n as number) - s.adet : null;
+    return tezgahlar.length >= 2 || ekSaat !== null || fazla !== null ? [{ k: a.k, tezgahlar: tezgahlar.length >= 2 ? tezgahlar : [], ekSaat, fazla }] : [];
+  });
+}
+// "a1 adımı: elle bölme (M1, M2), ek süre (9 sa) ve 3 adet fazlalık 1. partide kalır; öteki partilerin tezgâhını plan seçer."
+// Yalnız var olan parçalar yazılır; tezgâh cümlesi yalnız elle bölme varken.
+export function ilkPartiYazisi(x: IlkPartideKalan): string {
+  const l = [
+    ...(x.tezgahlar.length ? [`elle bölme (${x.tezgahlar.join(', ')})`] : []),
+    ...(x.ekSaat !== null ? [`ek süre (${sayi(x.ekSaat, 2)} sa)`] : []),
+    ...(x.fazla !== null ? [`${sayi(x.fazla, 2)} adet fazlalık`] : []),
+  ];
+  const parcalar = l.length > 1 ? `${l.slice(0, -1).join(', ')} ve ${l.at(-1) ?? ''}` : l[0] ?? '';
+  return `${x.k} adımı: ${parcalar} 1. partide kalır${x.tezgahlar.length ? '; öteki partilerin tezgâhını plan seçer' : ''}.`;
 }
 
 // ---- örtüşme (zz16-ortusme orAdaylar, ze-rota rtTur, engine isAgirligi) ----
