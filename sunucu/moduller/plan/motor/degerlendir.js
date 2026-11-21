@@ -439,6 +439,18 @@ function partiBol(jid, dagitim, adetler) {
      Taşınmasalardı ölçüm partileri beklemeden önce ve ek süresiz dizerdi. */
   for (const id of Object.keys(st.adimBekle || {})) if (id.startsWith(pref)) { parcalar.forEach((x, i) => { st.adimBekle[`${jid}/${i + 1}.${id.slice(pref.length)}`] = st.adimBekle[id]; }); delete st.adimBekle[id]; }
   for (const id of Object.keys(st.adimEk || {})) if (id.startsWith(pref)) { st.adimEk[`${jid}/1.${id.slice(pref.length)}`] = st.adimEk[id]; delete st.adimEk[id]; }
+  /* Biten adım ve kolun işlemediği adım (üst emrin yaptığı) her partide öyledir: bölmek yapılmış işi ya da başkasının adımını partiye
+     geri getirmez. Taşınmasalardı ölçüm bu adımları her partide yeniden planlar, bölmeyi olduğundan uzun ve pahalı gösterirdi. Yeni kayıt
+     kurulur: kol dışı kayıt hesaplar arasında ortaktır, yerinde değişmez. */
+  const partilere = kayit => { const y = { ...kayit }; for (const id of Object.keys(kayit)) if (id.startsWith(pref)) parcalar.forEach((x, i) => { y[`${jid}/${i + 1}.${id.slice(pref.length)}`] = kayit[id]; }); return y; };
+  if (st.bitti) st.bitti = partilere(st.bitti);
+  if (st.kolDisi) st.kolDisi = partilere(st.kolDisi);
+  /* Adımın adedi emrin adedinden farklıysa (üst emir o adımı kolun adediyle birlikte işler ya da önceki adımın hurdası düşülmüştür) fark
+     ilk partide kalır: emir gerçekten bölününce üst emir kolun adedini taşımayı sürdürür. Taşınmasaydı ölçüm o adımı partilerin kendi
+     adediyle dizer, kolun adedini hiçbir yerde planlamazdı. Fark ilk partiye adet bırakmıyorsa taşınmaz: partiler kendi adediyle dizilir. */
+  const opAdet = st.D.opAdet || {}, partiAdedi = {};
+  for (const id of Object.keys(opAdet)) { const ilk = parcalar[0].n + (+opAdet[id] - s.adet); if (id.startsWith(pref) && ilk >= 1) partiAdedi[`${jid}/1.${id.slice(pref.length)}`] = ilk; }
+  if (Object.keys(partiAdedi).length) st.D.opAdet = { ...opAdet, ...partiAdedi };
   const r0 = S.plan.ops[opId];
   parcalar.forEach((x, i) => { if (x.m) st.locks[`${jid}/${i + 1}.${k}`] = { m: x.m, S: r0 ? r0.S : st.now, gecici: 1 }; });
   stHazirla(st); const cx = compile(st);

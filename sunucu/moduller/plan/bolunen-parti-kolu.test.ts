@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
+import { degerlendirmeSonucu } from '#paylasilan/sozlesme/planlama.ts';
+import { degerlendirmeYap } from './degerlendirme.ts';
 import { planGirdisi } from './plan-girdisi.ts';
 import { motorYukle } from './plan-motoru.ts';
 import { kolYerleri } from '../../../istemci/src/moduller/plan/planlama/tipler.ts';
@@ -46,6 +48,8 @@ interface Sonuc {
   ops: Record<string, Is>; isler: string[]; adimBekle: Record<string, { kadar: number }>;
   // Motorun gördüğü: plandaki emirler, biten adımlar, kolun işlemediği adımlar, emir başına ayrılan malzeme ve siparişi verilmemiş eksik (kg).
   emirler: string[]; bitti: string[]; kolDisi: Record<string, number>; malzeme: Record<string, number>; eksik: number;
+  // Ölçüm (değerlendirme hesabı) için: birleşmiş çalışma ve sayfanın kaydettiği biçimin en azıyla plan.
+  S: Record<string, unknown>; plan: Record<string, unknown>;
 }
 function kur(orders: Emir[], ek: Ek = {}): Sonuc {
   const k = kaynak(orders, ek), kyt = ek.kayit ?? kayit();
@@ -58,18 +62,31 @@ function kur(orders: Emir[], ek: Ek = {}): Sonuc {
   const emirler = st.D.siparisler.map((x) => x.id).sort();
   const cx = motorYukle().compile(g.st) as unknown as { mat: { res: Record<string, { det: { need: number }[] }> } };
   const malzeme = Object.fromEntries(Object.entries(cx.mat.res).map(([j, r]) => [j, r.det.reduce((t, d) => t + d.need, 0)]));
-  const p = motorYukle().schedule(g.st, 'dagit', null);
+  const m = motorYukle(), p = m.schedule(g.st, 'dagit', null);
+  const e = m.evaluate(p, g.st, null, false) as { J: Record<string, { C: number; T: number }> };
   const yerlesmeyen = p.fail ?? [];
   assert.equal(yerlesmeyen.length, 0, `bütün adımlar yerleşti: ${yerlesmeyen.join(', ')}`);
   const ops = p.ops as unknown as Record<string, Is>;
   return {
     ops, isler: Object.keys(ops).sort(), adimBekle: JSON.parse(JSON.stringify(st.adimBekle ?? {})) as Record<string, { kadar: number }>,
     emirler, bitti: Object.keys(st.bitti ?? {}).sort(), kolDisi: JSON.parse(JSON.stringify(st.kolDisi ?? {})) as Record<string, number>, malzeme, eksik,
+    S: g.S, plan: { ops, fail: [], J: Object.fromEntries(Object.entries(e.J).map(([id, x]) => [id, { C: x.C, T: x.T }])), dataVer: g.S['dataVer'] },
   };
 }
 // Üst emir 2 (9 adetten 6'sı kaldı), 2. adımdan bölünen parti 3 (3 adet). Üst emrin 1. adımı 9 adet işler (adimAdetleri).
 const ust = emir('2', 6);
 const ADET = { adimAdetleri: { 'E-2|10': 9 } };
+// "Partiyi böl" ölçümü: kayıtlı planın üstünde emri partilere ayırıp yeniden dizer. Dönen: ölçümün planındaki işler.
+async function bol(orders: Emir[], ek: Ek, siparisId: string, adetler: number[]): Promise<Record<string, Is>> {
+  const onceki = kur(orders, ek);
+  const r = await degerlendirmeYap({ calisma: { ...onceki.S, plan: onceki.plan }, kayit: ek.kayit ?? kayit(), kaynak: kaynak(orders, ek), bugun: '2026-10-19',
+    istek: { tur: 'parti-bolme', siparisId, dagitim: 'ayni', adetler } }, Date.parse('2026-10-19T05:00:00Z'));
+  assert.ok(r && !('hata' in r), JSON.stringify(r));
+  const s = degerlendirmeSonucu.parse(r.sonuc);
+  if (s.tur !== 'parti-bolme' || !s.sonuc) return assert.fail(JSON.stringify(s));
+  assert.deepEqual(s.sonuc.plan['fail'] ?? [], [], 'ölçümde bütün adımlar yerleşti');
+  return s.sonuc.plan['ops'] as Record<string, Is>;
+}
 
 describe('adım ortasından bölünen parti (3512)', () => {
   test('KL-01: katılmayan kol yalnız ayrıldığı adımdan sonrasını işler; önceki adımı üst emir partinin adediyle yapar, parti onu bekler', () => {
@@ -191,5 +208,47 @@ describe('adım ortasından bölünen parti (3512)', () => {
       const istemci = rota.filter((_, i) => !yer || yer(i + 1, sayi)).map((a) => `3.${String(a.seq)}`);
       assert.deepEqual(motor, istemci, `kol ${JSON.stringify(kol)}, ${String(sayi)} adım, üst ${String(ustId)}`);
     }
+  });
+});
+
+describe('"Partiyi böl" ölçümü biten ve kol dışı adımı partilere taşır (3514)', () => {
+  test('PB-01: biten adım ölçümde yeniden planlanmaz', async () => {
+    const ops = await bol([emir('2', 6)], { opStatus: { '2|root|1': 'tamam' } }, '2', [4, 2]);
+    assert.deepEqual(Object.keys(ops).sort(), ['2/1.20', '2/1.30', '2/2.20', '2/2.30']);
+  });
+
+  test('PB-02: bölünen kol ölçümde de yalnız kendi adımlarıyla dizilir; partileri üst emrin önceki adımını bekler', async () => {
+    const ops = await bol([ust, emir('3', 3, '2', { n: 1, m: 4 })], ADET, '3', [2, 1]);
+    assert.deepEqual(Object.keys(ops).sort(), ['2.10', '2.20', '2.30', '3/1.20', '3/1.30', '3/2.20', '3/2.30']);
+    for (const p of ['3/1.20', '3/2.20']) assert.ok(ops[p]!.S >= ops['2.10']!.C - 1e-9, `${p} üst emrin 10. adımını bekler: ${String(ops[p]!.S)} >= ${String(ops['2.10']!.C)}`);
+  });
+
+  test('PB-03: bölünen üst emrin partileri de kolun adımlarına bağlıdır', async () => {
+    // Katılan kol (yalnız 20): üst emrin 30. adımı kolu bekler. Üst emir ölçümde bölününce iki partinin 30. adımı da bekler.
+    const ops = await bol([ust, emir('3', 3, '2', { n: 1, m: 3 })], { adimAdetleri: { 'E-2|10': 9, 'E-2|30': 9 } }, '2', [4, 2]);
+    assert.deepEqual(Object.keys(ops).sort(), ['2/1.10', '2/1.20', '2/1.30', '2/2.10', '2/2.20', '2/2.30', '3.20']);
+    for (const p of ['2/1.30', '2/2.30']) assert.ok(ops[p]!.S >= ops['3.20']!.C - 1e-9, `${p} kolun son adımını bekler`);
+    assert.ok(ops['3.20']!.S >= Math.max(ops['2/1.10']!.C, ops['2/2.10']!.C) - 1e-9, 'kol iki partinin 10. adımını da bekler');
+  });
+
+  test('PB-04: üst emrin beklemesi ölçümde bölünen partinin partilerinde de geçerlidir (3511)', async () => {
+    const KADAR = 200;
+    const w = { adimBekle: { '2.20': { kadar: KADAR, neden: 'malzeme', an: 1 } } };
+    const ops = await bol([ust, emir('3', 3, '2')], { w }, '3', [2, 1]);
+    for (const p of ['3/1.20', '3/2.20']) assert.ok(ops[p]!.S >= KADAR, `${p}: ${String(ops[p]!.S)} >= ${String(KADAR)}`);
+    assert.ok(ops['3/1.10']!.S < KADAR, 'beklemesi olmayan adım yerinde');
+  });
+
+  test('PB-05: adımın emrin adedinden farklı adedi ilk partide kalır', async () => {
+    const sure = (ops: Record<string, Is>, k: string): number[] => [ops[`2/1.${k}`]!.run, ops[`2/2.${k}`]!.run];
+    // Üst emir (6 adet) 10. adımı kolun 3 adediyle birlikte, 9 adet işler: ölçümde 7 + 2.
+    const kollu = await bol([ust, emir('3', 3, '2', { n: 1, m: 4 })], ADET, '2', [4, 2]);
+    assert.deepEqual([sure(kollu, '10'), sure(kollu, '20'), sure(kollu, '30')], [[7, 2], [4, 2], [4, 2]]);
+    // Hurdası düşülmüş adım (6 yerine 5 adet): 3 + 2. Başka emrin adım adedi partilere karışmaz.
+    const hurdali = await bol([emir('2', 6), emir('4', 6)], { adimAdetleri: { 'E-2|20': 5, 'E-4|30': 8 } }, '2', [4, 2]);
+    assert.deepEqual([sure(hurdali, '10'), sure(hurdali, '20'), sure(hurdali, '30'), hurdali['4.30']!.run], [[4, 2], [3, 2], [4, 2], 8]);
+    // Fark ilk partiye adet bırakmıyorsa taşınmaz.
+    const azalan = await bol([emir('2', 6)], { adimAdetleri: { 'E-2|20': 2 } }, '2', [4, 2]);
+    assert.deepEqual(sure(azalan, '20'), [4, 2]);
   });
 });
