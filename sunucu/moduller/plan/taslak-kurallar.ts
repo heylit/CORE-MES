@@ -10,7 +10,8 @@ type Nesne = Record<string, unknown>;
 // 3282 1d-2: yeniden dizme komutu. Planı sunucu hesaplar ve yazar (Risk 1d-2 K1); onceki, planın hesaplandığı yerdir: dizme imzası
 // (dizImzasi), önceki komut sayısı (K4) ve ortak çalışmanın veri sürümü. İmza ya da sıra tutmuyorsa plan bayattır, uygulanmaz. Yalnız veri
 // sürümü tutmuyorsa (saha olayı, başlayan iş) plan yazılır ama güncel sayılmaz (K4a). Yalnız son dizme planı taşır.
-export interface DizKomutu { tur: 'diz'; isler: string[]; plan: Nesne | null; onceki: { imza: string; n: number; dataVer: number } }
+// kilit (3538 b): dizmenin kilidini kaydırdığı işler (kilitKaydi); plan düşünce de kalır, sonraki dizmenin imzası kaymış kilitle hesaplandı.
+export interface DizKomutu { tur: 'diz'; isler: string[]; plan: Nesne | null; onceki: { imza: string; n: number; dataVer: number }; kilit?: KilitKaydi }
 export type SatirKomutu = TaslakKomutu | DizKomutu;
 const nesne = (x: unknown): x is Nesne => typeof x === 'object' && x !== null && !Array.isArray(x);
 const kopya = <T>(x: T): T => structuredClone(x);
@@ -628,8 +629,8 @@ export function oynat(c: unknown, l: readonly { komut: SatirKomutu; eksen?: stri
     const k = s.komut;
     const r = kapasiteKomutuMu(k) && s.eksen !== undefined && s.eksen !== eksen ? { hata: { tur: 'cakisma' as const, ileti: EKSEN_DEGISTI } }
       : k.tur !== 'diz' ? komutUygula(deger, k, kisi, h, s.bitis0, true)
-      // Planı düşmüş (sonraki dizmenin örttüğü) dizme hiçbir şey yazmaz; bayatlığı da sorulmaz.
-      : k.plan === null ? { deger, degisti: false }
+      // Planı düşmüş (sonraki dizmenin örttüğü) dizme yalnız kaydırdığı kilitleri yazar (3538 b); bayatlığı sorulmaz.
+      : k.plan === null ? dizKilidiniAl(deger, k)
       : k.onceki.n !== i || k.onceki.imza !== dizImzasi(deger, c) ? { hata: { tur: 'cakisma' as const, ileti: DIZ_BAYAT } }
         : dizUygula(deger, k, kisi, tabanDataVer);
     if ('hata' in r) return r.hata.ileti;
@@ -646,6 +647,36 @@ export const dizImzasi = (gorunum: unknown, taban: unknown): string => {
   return JSON.stringify([imza(taban).yer, g.kilit, g.ayar, g.yon ?? {}, g.kapasite ?? {}, g.mesai ?? {}, ...(Object.keys(g.adimEk ?? {}).length > 0 ? [g.adimEk] : []), ...(Object.keys(g.adimBekle ?? {}).length > 0 ? [{ bekle: g.adimBekle }] : []), ...(Object.keys(g.elleBol ?? {}).length > 0 ? [{ bol: g.elleBol }] : [])]);
 };
 export const dataVerOf = (c: unknown): number => (nesne(c) && typeof c.dataVer === 'number' ? c.dataVer : 0);
+
+// 3538 b: süren iş uzayıp elle kilitli işin üstüne binince motor kilitli işi arkasına kaydırır (nedeni 'kilit-kaydi', o: kilidin eski
+// saati); dizilen plan yazılırken kilit de yeni saate taşınır (istemcide tipler.ts kilitKaydiniAl). Kilit bu arada değiştiyse (saati ya da
+// tezgâhı başka, kalkmış, geçici) dokunulmaz.
+export type KilitKaydi = Record<string, { m: unknown; S: number; o: number }>;
+export function kilitKaydi(ops: unknown): KilitKaydi {
+  const y: KilitKaydi = {};
+  if (!nesne(ops)) return y;
+  for (const [id, r] of Object.entries(ops)) {
+    const w = nesne(r) && nesne(r.why) ? r.why : null;
+    if (nesne(r) && w !== null && w.t === 'kilit-kaydi' && typeof r.S === 'number' && typeof w.o === 'number') y[id] = { m: r.m, S: r.S, o: w.o };
+  }
+  return y;
+}
+export function kilitKaydiniAl(locks: Nesne, kayit: KilitKaydi): number {
+  let n = 0;
+  for (const [id, x] of Object.entries(kayit)) {
+    const lk = locks[id];
+    if (!nesne(lk) || lk.gecici || lk.m !== x.m || typeof lk.S !== 'number' || Math.abs(lk.S - x.o) > 1e-6) continue;
+    locks[id] = { ...lk, S: x.S };
+    n++;
+  }
+  return n;
+}
+
+function dizKilidiniAl(deger: unknown, k: DizKomutu): { deger: unknown; degisti: boolean } {
+  if (!nesne(deger) || !nesne(deger.locks) || k.kilit === undefined || Object.keys(k.kilit).length === 0) return { deger, degisti: false };
+  const yeni = kopya(deger) as Nesne & { locks: Nesne };
+  return kilitKaydiniAl(yeni.locks, k.kilit) > 0 ? { deger: yeni, degisti: true } : { deger, degisti: false };
+}
 
 // Dizilen planı görünüme işler (istemci motor/coz.ts uygulananiAl ve kayit.ts degistir planKoru'nun sunucudaki karşılığı): plan yerine
 // yazılır, kapsadığı bekleyen satırları düşer, veri sürümü artar; kalan bekleyen yoksa plan güncel sayılır. Bekleyen satırı yazılmaz, iz yazılır.
@@ -666,6 +697,7 @@ export function dizUygula(deger: unknown, k: DizKomutu, kisi: KomutKisisi, taban
     kapali: Array.isArray(deger.kapali) ? [...deger.kapali] : [] };
   yeni.bekleyen = kalan;
   yeni.dataVer = dataVer;
+  if (nesne(yeni.locks)) kilitKaydiniAl(yeni.locks, k.kilit ?? kilitKaydi(k.plan.ops));
   const ayrinti = `${hepsi ? 'Bütün işler' : k.isler.join(', ')}${eskiVeri ? `; ${DIZ_ESKI_VERI}` : ''}`;
   yeni.iz = [{ t: kisi.t, kim: kisi.kim, rol: '', sayfa: kisi.sayfa, ne: 'Plan yeniden dizildi', ayrinti }, ...(Array.isArray(deger.iz) ? deger.iz : [])].slice(0, IZ_SINIRI);
   return { deger: yeni, degisti: true };

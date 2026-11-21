@@ -96,6 +96,17 @@ describe('bekleyen değişikliği uygula (755 a)', () => {
     expect(durum.c.plan?.dataVer).toBe(durum.c.dataVer);
   });
 
+  it('3538 b: süren işin arkasına kayan elle kilit planla birlikte yeni saate taşınır; kilit bu arada değiştiyse dokunulmaz', async () => {
+    const kayan = { ops: { ...PLAN.ops, 'O2.10': { id: 'O2.10', job: 'O2', m: '100', S: 12, C: 13, why: { t: 'kilit-kaydi', r: 'O1.10', o: 10 } } } };
+    const liste = [e('a', ['O1'])];
+    const { komut, durum } = komutKur({ ...bayat(liste), locks: { 'O2.10': { m: '100', S: 10, gun: 1 }, 'O3.10': { m: '100', S: 14 } } } as PlanlamaCalismasi);
+    expect(await planUygula({ komut, kim: 'x', liste, idler: ['a'], iste: async () => ({ ...uyg(6), sonuc: { tur: 'plan-uygula', plan: { ...PLAN, ...kayan } } }) })).toBeNull();
+    expect(durum.c.locks).toEqual({ 'O2.10': { m: '100', S: 12, gun: 1 }, 'O3.10': { m: '100', S: 14 } });
+    const t = { ...ornekCalisma(), dataVer: 4, locks: { 'O2.10': { m: '100', S: 11 } } } as PlanlamaCalismasi;
+    expect(kurulanPlaniAl(t, { ...PLAN, ...kayan }, 4, 'x', 1)).toBe(true);
+    expect(t.locks).toEqual({ 'O2.10': { m: '100', S: 11 } });
+  });
+
   it('seçim yoksa gitmez; veri sürümü tutmazsa plan alınmaz', async () => {
     const liste = [e('a', ['S1'])];
     const k = komutKur(bayat(liste)); const iste = vi.fn(async () => uyg(5));

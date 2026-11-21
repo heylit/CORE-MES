@@ -4,7 +4,7 @@ import type { TaslakKomutu } from '#paylasilan/sozlesme/planlama.ts';
 import type { PlanaAlSonucu } from './plana-al-kurallar.ts';
 import { planAni } from './planlama-kurallar.ts';
 import {
-  DIZ_BAYAT, DIZ_ESKI_VERI, EKSEN_DEGISTI, digerDegisiklikleri, elleBolSilUygula, elleBolUygula, adimBeklerSilUygula, adimBeklerUygula, adimUzadiSilUygula, adimUzadiUygula, ayarUygula, ekMesaiSilUygula, ekMesaiUygula, operatorSorunu, catismalar, dizImzasi, dizUygula, durusSilUygula, durusUygula, emirOf, imza, komutAnahtarlari, komutAdi, oynat, secimeGore, uygulaKarari, yenidenPlanlaUygula, yonUygula,
+  DIZ_BAYAT, DIZ_ESKI_VERI, EKSEN_DEGISTI, digerDegisiklikleri, elleBolSilUygula, elleBolUygula, adimBeklerSilUygula, adimBeklerUygula, adimUzadiSilUygula, adimUzadiUygula, ayarUygula, ekMesaiSilUygula, ekMesaiUygula, operatorSorunu, catismalar, dizImzasi, dizUygula, durusSilUygula, durusUygula, emirOf, imza, kilitKaydi, kilitKaydiniAl, komutAnahtarlari, komutAdi, oynat, secimeGore, uygulaKarari, yenidenPlanlaUygula, yonUygula,
   type DizKomutu, type TaslakHesaplari, type TaslakSatiri,
 } from './taslak-kurallar.ts';
 
@@ -251,6 +251,51 @@ describe('3282 1d-2: dizme', () => {
 });
 
 // 3282 2a-1: elle girilen duruş (arıza, bakım). Saatler planın ekseninde; örnek çalışmanın başlangıcı uydurmadır.
+describe('3538 b: süren işin arkasına kayan kilit', () => {
+  // Motorun planında S2.10 elle kilitliydi (30. saat); tezgâhta süren iş uzadığı için 34. saate kaydı (nedeni kilidin eski saatini taşır).
+  const kayan = { ...op('S2.10', 'T2', 34), why: { t: 'kilit-kaydi', r: 'S1.20', o: 30 } };
+  const PLAN = { ops: { 'S1.20': op('S1.20', 'T2', 24), 'S2.10': kayan }, ozet: { gec: 0 } };
+  const kilitli = (ek: Record<string, unknown> = {}) => ortak({ locks: { 'S2.10': { m: 'T2', S: 30, gun: 2 } }, ...ek });
+  const diz = (gorunum: unknown, n: number, plan: Record<string, unknown> | null = PLAN, taban: unknown = gorunum): DizKomutu => {
+    const kilit = kilitKaydi(PLAN.ops);
+    return { tur: 'diz', isler: ['*'], plan, onceki: { imza: dizImzasi(gorunum, taban), n, dataVer: (taban as { dataVer: number }).dataVer }, kilit };
+  };
+
+  test('kayan kilit okunur; yalnız kilidin kayıttaki saati tutuyorsa taşınır, öteki alanları kalır', () => {
+    assert.deepEqual(kilitKaydi(PLAN.ops), { 'S2.10': { m: 'T2', S: 34, o: 30 } });
+    const l: Record<string, unknown> = { 'S2.10': { m: 'T2', S: 30, gun: 2 } };
+    assert.equal(kilitKaydiniAl(l, kilitKaydi(PLAN.ops)), 1);
+    assert.deepEqual(l, { 'S2.10': { m: 'T2', S: 34, gun: 2 } });
+    // Kilit bu arada değiştiyse, kalktıysa ya da geçiciyse dokunulmaz.
+    for (const lk of [{ m: 'T2', S: 31 }, { m: 'T3', S: 30 }, { m: 'T2', S: 30, gecici: 1 }]) {
+      const y: Record<string, unknown> = { 'S2.10': lk };
+      assert.equal(kilitKaydiniAl(y, kilitKaydi(PLAN.ops)), 0);
+      assert.deepEqual(y, { 'S2.10': lk });
+    }
+    assert.equal(kilitKaydiniAl({}, kilitKaydi(PLAN.ops)), 0);
+  });
+
+  test('dizilen plan yazılırken kilit yeni saate taşınır; planı düşen dizme de kilidini taşır, sonraki dizme bayatlamaz', () => {
+    const c = kilitli();
+    const r = dizUygula(c, diz(c, 0), KISI, 3);
+    assert.ok(!('hata' in r));
+    assert.deepEqual((r.deger as { locks: unknown }).locks, { 'S2.10': { m: 'T2', S: 34, gun: 2 } });
+    // Eski kayıtta kilit alanı yoksa planın nedenlerinden okunur.
+    const { kilit: _k, ...eski } = diz(c, 0);
+    const e = dizUygula(c, eski, KISI, 3);
+    assert.ok(!('hata' in e));
+    assert.deepEqual((e.deger as { locks: unknown }).locks, { 'S2.10': { m: 'T2', S: 34, gun: 2 } });
+    // İkinci dizme birincinin kaydırdığı kilitle hesaplandı; birincinin planı düşünce kilidi yine taşınır, ikinci dizme uygulanır.
+    const ilk = { komut: diz(c, 0), ne: 'Plan yeniden dizildi', t: KISI.t };
+    const v1 = oynat(c, [ilk], KISI, HESAP).deger;
+    const ikinci = { komut: { ...diz(v1, 1, { ops: { 'S1.20': op('S1.20', 'T2', 24), 'S2.10': op('S2.10', 'T2', 34) }, ozet: { gec: 0 } }, c), kilit: {} }, ne: 'Plan yeniden dizildi', t: KISI.t };
+    const dusmus = { ...ilk, komut: { ...ilk.komut, plan: null } };
+    const o = oynat(c, [dusmus, ikinci], KISI, HESAP);
+    assert.deepEqual(o.hatalar, [null, null]);
+    assert.deepEqual((o.deger as { locks: unknown }).locks, { 'S2.10': { m: 'T2', S: 34, gun: 2 } });
+  });
+});
+
 describe('3282 2a-1: duruş komutu', () => {
   const D = { siparisler: [{ id: 'S1' }], tezgahlar: [{ id: 'T1' }, { id: 'T2' }], meta: { baslangic: '2026-11-16' } };
   const oto = { m: 'T1', from: 10, to: 18, neden: 'bakım', oto: 1, bakim: 'ORN-b1' };

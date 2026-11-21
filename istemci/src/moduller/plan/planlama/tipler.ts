@@ -162,3 +162,20 @@ export interface PlanlamaCalismasi extends ExtraAlanlar {
   iz: IzSatiri[];
   bekleyen?: BekleyenDegisiklik[];
 }
+
+// 3538 b: tezgâhta süren iş uzayıp elle kilitli işin üstüne binince motor kilitli işi onun arkasına kaydırır (nedeni 'kilit-kaydi', o:
+// kilidin eski saati); plan çalışmaya alınırken kilit de yeni saate taşınır (sunucuda taslak-kurallar dizUygula). Kilit bu arada
+// değiştiyse (saati ya da tezgâhı başka, kalkmış, geçici) dokunulmaz. Dönen: taşınan kilit sayısı.
+export function kilitKaydiniAl(locks: Record<string, unknown>, ops: unknown): number {
+  if (typeof ops !== 'object' || ops === null) return 0;
+  let n = 0;
+  for (const [id, r] of Object.entries(ops as Record<string, unknown>)) {
+    const x = r as { m?: unknown; S?: unknown; why?: { t?: unknown; o?: unknown } | null } | null;
+    const lk = locks[id] as { m?: unknown; S?: unknown; gecici?: unknown } | undefined;
+    if (!x || x.why?.t !== 'kilit-kaydi' || typeof x.S !== 'number' || typeof x.why.o !== 'number' || !lk || typeof lk !== 'object' || lk.gecici) continue;
+    if (lk.m !== x.m || typeof lk.S !== 'number' || Math.abs(lk.S - x.why.o) > 1e-6) continue;
+    locks[id] = { ...lk, S: x.S };
+    n++;
+  }
+  return n;
+}

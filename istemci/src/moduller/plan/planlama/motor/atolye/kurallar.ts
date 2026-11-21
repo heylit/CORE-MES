@@ -113,7 +113,7 @@ export const ONCELIK_KISA: Record<number, string> = { 1: 'acil/yüksek', 2: 'nor
 // --- bekleme nedeni (NEDEN) ---
 const NEDEN: Record<string, string> = {
   tezgah: 'tezgâh dolu', personel: 'operatör yok', yetkin: 'yetkin operatör yok', ayarci: 'ayarcı yok', aparat: 'aparat dolu', malzeme: 'malzeme bekliyor',
-  program: 'NC program bekliyor', serbest: 'serbest bırakma tarihi', rota: 'önceki adımı bekliyor', kilit: 'kilitli saat', ariza: 'arıza', simdi: 'hemen başlıyor', plan: 'plan',
+  program: 'NC program bekliyor', serbest: 'serbest bırakma tarihi', rota: 'önceki adımı bekliyor', kilit: 'kilitli saat', 'kilit-kaydi': 'kilit kaydırıldı', ariza: 'arıza', simdi: 'hemen başlıyor', plan: 'plan',
   uyari: 'uyarı', 'fason-cikis': 'fasoncu çıkış günü', 'fason-kap': 'fasoncu dolu', oneri: 'öneri saati', bekleme: 'bildirilen bekleme',
 };
 export function nedenKisa(r: PlanIslemi): string {
