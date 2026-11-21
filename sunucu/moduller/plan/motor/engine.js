@@ -644,12 +644,14 @@ function yerBirak(cx,ctx,r){
   ctx.ver[r.m]=(ctx.ver[r.m]||0)+1;const l=ctx.kilit[r.m],i=l.findIndex((/** @type {any[]} */x)=>x[2]===r.id);if(i>=0)l.splice(i,1);
   addUse(cx,ctx.u,cx.M[r.m],r,cx.byId[r.id].aparat,-1);
 }
-/* İşin, d anına kadar biten en geç yeri. Bitiş başlangıçla birlikte ilerlediği için ikiye bölerek aranır; en erken yeri bile d'yi aşıyorsa null. */
-/** @param {any} o @param {any} c @param {Derleme} cx @param {any} ctx @param {any} b @param {number} d */
-function sonaYasla(o,c,cx,ctx,b,d){
+/* İşin, d anına kadar biten en geç yeri; erken verilirse en erken yeri. Bitiş başlangıçla birlikte ilerlediği için ikiye bölerek aranır; en
+   erken yeri bile d'yi aşıyorsa null. */
+/** @param {any} o @param {any} c @param {Derleme} cx @param {any} ctx @param {any} b @param {number} d @param {boolean} [erken] */
+function sonaYasla(o,c,cx,ctx,b,d,erken){
   /** @param {number} s */
   const dene=s=>{const bb={...b,s:Math.max(b.s,s)};return c.fas?tFason(o,c,cx,ctx,bb):tMach(o,c,cx,ctx,bb,false);};
   let en=dene(b.s);if(!en||en.C>d+1e-6)return null;
+  if(erken)return en;
   let alt=en.S,ust=d;
   for(let i=0;i<24&&ust-alt>SL/2;i++){const orta=(alt+ust)/2,r=dene(orta);if(r&&r.C<=d+1e-6){en=r;alt=Math.max(orta,r.S);}else ust=orta;}
   return en;
@@ -658,7 +660,10 @@ function sonaYasla(o,c,cx,ctx,b,d){
    dağıtım bunu güvenceye alamaz: başlangıcı ileride olan iş sırası gelene dek seçilmez, o arada tezgâh dolar. Bu yüzden kilitli adımın
    yerleşmemiş öncülleri dağıtımdan önce, kilitten geriye doğru, sığdıkları en geç yere yerleşir. En geç yer bilerek seçilir: en erkene
    çekilen zincir öteki işlerin önüne geçer, ölçümde gecikmeyi daha çok artırdı. Zincir sığmıyorsa hiçbir yeri ayrılmaz, işler olağan
-   dağıtıma kalır (öncülü geride kalan iş yeri ayrılmış ardılından sonra bitseydi kilitsiz işte de sıra bozulurdu). */
+   dağıtıma kalır (öncülü geride kalan iş yeri ayrılmış ardılından sonra bitseydi kilitsiz işte de sıra bozulurdu).
+   Öncülü zincirin dışından, yeri belli olmayan bir iş de bekliyorsa (bölünen parti, paralel pay) en geç yer o işi kilide kadar boşuna
+   bekletir. Zincir sığdıktan sonra böyle öncül, kendi öncülleriyle birlikte, sığdığı en erken yere çekilir; öne gelemeyen yerinde kalır.
+   Önce en geç yere dizmek gerekir: en erken yer öncüllerin süresini bilmeden seçilirse öncüller sığmaz, zincir boşa düşer. */
 /** @param {Derleme} cx @param {any} ctx @param {any[]} kilitler @param {any} opt @param {any} base */
 function kilitZincirleri(cx,ctx,kilitler,opt,base){
   const st=cx.st,tas=+cx.A.tasimaSaat||0;
@@ -673,7 +678,16 @@ function kilitZincirleri(cx,ctx,kilitler,opt,base){
       if(!en)return false;
       en.why={t:'kilit-oncul',r:kr.id};yerAyir(cx,ctx,en);konan.push(en);
       return o.pr.every((/** @type {[string,string]} */[pid])=>yetisir(pid,en.S));};
-    if(!cx.byId[kr.id].pr.every((/** @type {[string,string]} */[pid])=>yetisir(pid,kr.S)))for(const r of konan)yerBirak(cx,ctx,r);
+    if(!cx.byId[kr.id].pr.every((/** @type {[string,string]} */[pid])=>yetisir(pid,kr.S))){for(const r of konan)yerBirak(cx,ctx,r);continue;}
+    /** @type {Record<string,1>} */const one={};
+    /** @type {(id:string)=>void} */
+    const isaretle=id=>{if(one[id])return;one[id]=1;for(const [pid] of cx.byId[id].pr)if(konan.some(r=>r.id===pid))isaretle(pid);};
+    for(const r of konan)if((cx.succ[r.id]||[]).some((/** @type {[string,string]} */[s])=>!ctx.P[s]))isaretle(r.id);
+    // Öncül ardılından önce bittiği için başlangıç sırası öncülü önce getirir.
+    for(const r of konan.filter(x=>one[x.id]).sort((a,b)=>a.S-b.S||a.C-b.C)){
+      yerBirak(cx,ctx,r);const o=cx.byId[r.id],b=predBound(o,cx,ctx);let en=null;
+      if(b)for(const c of candM(o,st,opt,base)){const y=sonaYasla(o,c,cx,ctx,b,r.C,true);if(y&&(!en||y.C<en.C))en=y;}
+      if(en)en.why=r.why;yerAyir(cx,ctx,en||r);}
   }
   ctx.eksikli=false;
 }
