@@ -372,11 +372,12 @@ function elleBolCoz(l,ad0,adaylar){
   return l.map((x,i)=>({adet:a[i],m:x.m}));}
 /* Duruş satırları tezgâha göre dizinlenir. Her yerleştirme denemesi yalnız kendi tezgâhının duruşuna bakar; satırların hepsi her denemede
    taranırsa hesap süresi atölyedeki bütün tezgâhların duruş sayısıyla büyür (planlı duruş her tezgâha, her tekrarına ayrı satırdır). Dizin
-   duruş listesinin kendisine bağlıdır: liste yenilenince ya da satır eklenince yeniden kurulur; satır yerinde değiştirilmez. */
-const DURUS_DIZINI=new WeakMap(),DURUS_YOK={n:0,m:{},ids:[]};
+   duruş listesinin kendisine bağlıdır: liste yenilenince ya da satır eklenince yeniden kurulur; satır yerinde değiştirilmez. Kimlik
+   listesini aynı duruşlarla dizilen planlar paylaşır; biri yazarsa ötekiler de değişeceği için yazılamaz. */
+const DURUS_DIZINI=new WeakMap(),DURUS_YOK={n:0,m:{},ids:Object.freeze([])};
 /** @param {MotorDurumu} st */
 function durusDizini(st){const d=st.down;if(!d||!d.length)return DURUS_YOK;let x=DURUS_DIZINI.get(d);
-  if(!x||x.n!==d.length){x={n:d.length,m:{},ids:d.map(y=>y.id)};for(const y of d)(x.m[y.m]=x.m[y.m]||[]).push(y);DURUS_DIZINI.set(d,x);}
+  if(!x||x.n!==d.length){x={n:d.length,m:{},ids:Object.freeze(d.map(y=>y.id))};for(const y of d)(x.m[y.m]=x.m[y.m]||[]).push(y);DURUS_DIZINI.set(d,x);}
   return x;}
 /** @param {MotorDurumu} st @param {string} m */
 const tezgahDuruslari=(st,m)=>durusDizini(st).m[m]||[];
