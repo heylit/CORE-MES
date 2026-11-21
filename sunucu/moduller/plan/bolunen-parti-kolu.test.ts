@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { planGirdisi } from './plan-girdisi.ts';
 import { motorYukle } from './plan-motoru.ts';
+import { kolYerleri } from '../../../istemci/src/moduller/plan/planlama/tipler.ts';
 
 // 3512: adım ortasından bölünen parti (kol) rotanın yalnız kendi adımlarını işler; ayrıldığı yerden önceki adımı üst emir partinin adediyle
 // birlikte yapar, parti katıldığı adımda üst emre döner. Emirler kaynak okumasındaki biçimdedir (Reçete ve Rota emirleriCevir: parentId,
@@ -160,5 +161,19 @@ describe('adım ortasından bölünen parti (3512)', () => {
     const biten = kur(emirler, { opStatus: { '2|root|1': 'tamam' } });
     assert.deepEqual(biten.kolDisi, { '3.10': 2, '4.10': 2, '4.20': 1 }, "4'ün 10. adımının sahibi 2'dir (3 o adımı işlemez)");
     assert.deepEqual(biten.malzeme, { 2: 0, 3: 0, 4: 0 });
+  });
+
+  test('KL-10: motor ile Kokpit\'in kendi hesabı kolun adımlarını aynı kuralla seçer', () => {
+    // Kural iki yerde yazılıdır (motor girdisi ve istemci tipler.ts); biri değişip öbürü kalırsa Kokpit partiyi motordan farklı gösterir.
+    const adimlar = [adim(10, '20', 60, 0), adim(20, '10', 60, 0), adim(30, '20', 60, 0)];
+    const araliklar: Kol[] = [{ n: 1.5, m: 4 }, { n: 1, m: 3.5 }];
+    for (let n = -1; n <= 4; n++) for (let m = 0; m <= 6; m++) araliklar.push({ n, m });
+    for (const sayi of [2, 3]) for (const kol of araliklar) for (const ustId of ['2', null]) {
+      const parti = emir('3', 3, ustId, kol), rota = adimlar.slice(0, sayi);
+      const motor = kur([ust, parti], { kayit: kayit(rota) }).isler.filter((x) => x.startsWith('3.'));
+      const yer = kolYerleri([ust, parti]).get('3');
+      const istemci = rota.filter((_, i) => !yer || yer(i + 1, sayi)).map((a) => `3.${String(a.seq)}`);
+      assert.deepEqual(motor, istemci, `kol ${JSON.stringify(kol)}, ${String(sayi)} adım, üst ${String(ustId)}`);
+    }
   });
 });
