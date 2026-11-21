@@ -58,7 +58,7 @@ const GUN_DK = 24 * 60;
 const UFUK_GUN = 14;
 const UFUK_DK = UFUK_GUN * GUN_DK;
 // Motorun takvim ufku (vardiya en çok 366 gün okur).
-const TAKVIM_GUN = 365;
+export const TAKVIM_GUN = 365;
 // Başka modülün verisini değiştiren denemeler: taslakta benzetilir, canlıya sahibin komutuyla yazılır (bağlanınca).
 const BENZETIM = new Set(['oncelik', 'teslim', 'acil_emir', 'makine_ariza', 'gun_kapat']);
 // Canlıya alınınca sahibinin komutuyla yazılır: kapalı gün vardiya takvimine, acil sipariş taslak sipariş (286 b), öncelik emre,
