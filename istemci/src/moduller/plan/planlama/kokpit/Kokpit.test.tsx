@@ -752,6 +752,30 @@ describe('Kokpit', () => {
     expect(bolum.querySelector('[data-adim-satir="2.20"] [data-adim-bekle]')).toBeNull();
   });
 
+  // 3523: adım ortasından bölünen parti (3512) yalnız kendi adımlarıyla görünür; bağ partinin satırında ve üst emrin katılma adımında yazar.
+  it('adım ortasından bölünen partinin satırı öncesini ve sonrasını kimin yaptığını, üst emrin katılma adımı partiyi beklediğini yazar', () => {
+    const kur = (siparis: string) => {
+      const c = ornekCalisma();
+      const s2 = c.D.siparisler.find((x) => x.id === '2')!, rota = c.D.urunler.find((u) => u.id === s2.urun)!.rota!;
+      c.D.siparisler.push({ ...s2, id: '9' });
+      const ops = (c.plan as unknown as { ops: Record<string, { id: string; job: string; S: number; C: number }> }).ops;
+      for (const r of Object.values(ops).filter((x) => x.job === '2')) ops[`9${r.id.slice(1)}`] = { ...r, id: `9${r.id.slice(1)}`, job: '9', S: r.S + 400, C: r.C + 400 };
+      // Parti ilk adımdan sonra ayrılır, son adımda üst emre katılır.
+      const emirler = { orders: [{ id: '2', no: 'ORN-0002', status: 'serbest' }, { id: '9', no: 'ORN-0009', status: 'serbest', parentId: '2', kol: { n: 1, m: rota.length } }], opStatus: {}, opProg: {} };
+      ac({ calisma: c, depo: { ...DEPO, durum: { emirler } } as unknown as PlanlamaDeposu, secim: { ...BOS_SECIM, siparis } });
+      return { rota, bolum: screen.getByRole('region', { name: 'Emirler ve operasyonlar' }) };
+    };
+    const parti = kur('9'), ad = (i: number) => parti.rota[i]!.ad ?? parti.rota[i]!.k, n = parti.rota.length;
+    expect(n).toBeGreaterThanOrEqual(3);
+    expect(parti.bolum.querySelector('[data-emir="9"] [data-emir-kol]')?.textContent)
+      .toBe(`${ad(0)} adımını üst emir (ORN-0002) yapar; bu parti ${ad(1)} adımından başlar. ${ad(n - 2)} adımından sonra üst emre (ORN-0002) katılır; ${ad(n - 1)} adımından itibaren üst emirle sürer.`);
+    expect(parti.bolum.querySelectorAll('[data-emir="9"] [data-adim-satir]')).toHaveLength(n - 2);
+    cleanup();
+    const ust = kur('2'), son = `2.${ust.rota[n - 1]!.k}`;
+    expect(ust.bolum.querySelector('[data-emir="2"] [data-emir-kol]')).toBeNull();
+    expect([...ust.bolum.querySelectorAll('[data-adim-parti]')].map((x) => [x.getAttribute('data-adim-parti'), x.textContent])).toEqual([[son, 'bekliyor: parti ORN-0009']]);
+  });
+
   // 3513: bölünen emrin partisi üst emrin beklemesiyle dizilir (3511); satır ve form beklemenin üst emirden geldiğini söyler.
   it('üst emrin beklemesi partinin adım satırında kaynağıyla yazar; formu kutuyu gösterir ve üst emrin adımına götürür', () => {
     const c = ornekCalisma();

@@ -28,6 +28,7 @@ export interface KartSonucu {
 // Neden motorun kendi kaydından (işlemin `why`'ı) okunur; istemci neden uydurmaz.
 export function kartSonucu(
   m: KokpitModeli, p: OkunanPlan | null, kart: SiraKarti, zaman: (t: number) => string, malzemeBekleyen: Readonly<Record<string, number>> = {},
+  kolPartileri: ReadonlySet<string> = new Set(),
 ): KartSonucu {
   const adim = kart.emirler.reduce((n, e) => n + e.adimlar.filter((a) => m.isler[a.id]).length, 0);
   const enKotu = [...kart.emirler].sort((a, b) => (b.gecikme ?? -Infinity) - (a.gecikme ?? -Infinity))[0] ?? null;
@@ -38,10 +39,10 @@ export function kartSonucu(
     : ` ${kim}Bitiş ${zaman(enKotu.bitis)}, termin ${zaman(enKotu.termin)}: ${enKotu.gecikme > 0.01 ? `${sureYaz(enKotu.gecikme)} geç` : `${sureYaz(enKotu.gecikme)} erken`}.`;
   const baslik = `${String(adim)} operasyon planda.${yer}`;
   if (tur === 'iyi' || !enKotu) return { tur, baslik, neden: null, emir: null };
-  return { tur, baslik, neden: gecikmeNedeni(m, p, enKotu, zaman, malzemeBekleyen), emir: enKotu };
+  return { tur, baslik, neden: gecikmeNedeni(m, p, enKotu, zaman, malzemeBekleyen, kolPartileri), emir: enKotu };
 }
 
-function gecikmeNedeni(m: KokpitModeli, p: OkunanPlan | null, e: KokpitEmri, zaman: (t: number) => string, malzemeBekleyen: Readonly<Record<string, number>>): string {
+function gecikmeNedeni(m: KokpitModeli, p: OkunanPlan | null, e: KokpitEmri, zaman: (t: number) => string, malzemeBekleyen: Readonly<Record<string, number>>, kolPartileri: ReadonlySet<string>): string {
   const en = enCokBekleyen(m, e);
   if (!en) return 'Adımlar arasında uzun bekleme yok; işlerin toplam süresi termine sığmıyor.';
   const a = e.adimlar[en.k], r = a ? p?.ops[a.id] : undefined;
@@ -54,6 +55,9 @@ function gecikmeNedeni(m: KokpitModeli, p: OkunanPlan | null, e: KokpitEmri, zam
     const onundeki = r.why.r ? m.emirler.find((x) => x.id === m.isler[r.why?.r ?? '']?.job)?.no : undefined;
     return `${bas} ${kod} tezgâhının boşalmasını ${sure} bekledi${onundeki ? ` (önündeki iş ${onundeki})` : ''}.`;
   }
+  // Adım ortasından bölünen parti (3512) üst emre katıldığı adımda öncüldür: üst emir partinin son adımını bekler.
+  const parti = r?.why?.t === 'rota' && r.why.r ? m.isler[r.why.r]?.job : undefined;
+  if (parti !== undefined && parti !== e.id && kolPartileri.has(parti)) return `${bas} ${sure} bekledi: katılan partinin (${m.emirler.find((x) => x.id === parti)?.no ?? parti}) son adımı bitince başladı.`;
   // Öncül adımı ve bilinmeyen nedeni motor iş kimliğiyle yazar; burada adım adıyla söylenir.
   if (!r?.why || r.why.t === 'rota') return `${bas} ${sure} bekledi.`;
   return `${bas} ${sure} bekledi: ${nedenMetni(r)}`;

@@ -571,6 +571,49 @@ export function ustBeklemeleri(
 // Beklemenin kaynağı üst emirse satırın sonuna yazılır. Emir no ek almayan kalıpta durur: no rakamla biter, ek her rakamda değişirdi.
 export const ustEmirNotu = (m: Pick<KokpitModeli, 'emirler'>, b: AdimBeklemesi): string =>
   (b.ust === undefined ? '' : ` · üst emirden (${m.emirler.find((e) => e.id === b.ust)?.no ?? b.ust})`);
+// 3512: adım ortasından bölünen parti (kol: { n, m }) rotanın yalnız n+1..m-1 yerlerini işler; öncesini üst emir partinin adediyle
+// birlikte yapar, parti m. yerde üst emre katılır. Kokpit kolun yalnız kendi adımlarını gösterir; eksik adım "kayboldu" diye okunmasın ve
+// geç kalan üst emrin nedeni bulunabilsin diye bağ iki yerde yazılır: partinin satırında (emir) ve üst emrin katılma adımında (adim,
+// partinin son adımı bitmediyse). Aralık ve adımın sahibi motor girdisiyle aynı kuraldır (girdi.js kolAraligi, tmiBitenler): sahip, o yeri
+// kendi işleyen en yakın üst emirdir. Emir no ek almayan kalıpta durur (ustEmirNotu). partiler: bağı kurulan kolların kimlikleri.
+export interface KolNotlari { emir: Record<string, string>; adim: Record<string, string>; partiler: ReadonlySet<string> }
+export function kolNotlari(m: Pick<KokpitModeli, 'emirler'>, D: Pick<PlanlamaCalismasi['D'], 'siparisler' | 'urunler'>, emirler: unknown): KolNotlari {
+  const y = { emir: {} as Record<string, string>, adim: {} as Record<string, string>, partiler: new Set<string>() };
+  const orders = nesneMi(emirler) && Array.isArray(emirler['orders']) ? (emirler['orders'] as unknown[]) : [];
+  const ust = new Map<string, string>(), aralik = new Map<string, { n: number; m: number }>();
+  for (const o of orders) if (nesneMi(o) && o['parentId'] != null && o['parentId'] !== '') ust.set(String(o['id']), String(o['parentId']));
+  const rotaOf = (id: string) => { const s = D.siparisler.find((x) => x.id === id); return s && !s['dugum'] ? D.urunler.find((u) => u.id === s.urun)?.rota ?? [] : []; };
+  for (const o of orders) {
+    if (!nesneMi(o) || !ust.has(String(o['id'])) || !nesneMi(o['kol'])) continue;
+    const n = Number(o['kol']['n']), k = Number(o['kol']['m']);
+    if (Number.isInteger(n) && Number.isInteger(k) && n >= 0 && k - n >= 2 && k <= rotaOf(String(o['id'])).length + 1) aralik.set(String(o['id']), { n, m: k });
+  }
+  const sahip = (id: string, yer: number): string => {
+    const gorulen = new Set([id]);
+    let p = ust.get(id) ?? id;
+    for (;;) {
+      const a = aralik.get(p), u = ust.get(p);
+      if (!a || (yer > a.n && yer < a.m) || u === undefined || gorulen.has(u)) return p;
+      gorulen.add(p); p = u;
+    }
+  };
+  const no = (id: string): string => m.emirler.find((e) => e.id === id)?.no ?? id;
+  const bekleyen: Record<string, string[]> = {};
+  for (const [id, a] of aralik) {
+    const rota = rotaOf(id), ad = (yer: number): string => rota[yer - 1]?.ad ?? rota[yer - 1]?.k ?? '';
+    const l: string[] = [];
+    if (a.n >= 1) l.push(`${a.n === 1 ? `${ad(1)} adımını` : `İlk ${String(a.n)} adımı`} üst emir (${no(sahip(id, a.n))}) yapar; bu parti ${ad(a.n + 1)} adımından başlar.`);
+    if (a.m <= rota.length) {
+      const u = sahip(id, a.m);
+      l.push(`${ad(a.m - 1)} adımından sonra üst emre (${no(u)}) katılır; ${ad(a.m)} adımından itibaren üst emirle sürer.`);
+      const son = `${id}.${rota[a.m - 2]?.k ?? ''}`;
+      if (m.emirler.find((e) => e.id === id)?.adimlar.some((x) => x.id === son)) (bekleyen[`${u}.${rota[a.m - 1]?.k ?? ''}`] ??= []).push(no(id));
+    }
+    if (l.length) { y.emir[id] = l.join(' '); y.partiler.add(id); }
+  }
+  for (const [adim, l] of Object.entries(bekleyen)) y.adim[adim] = `bekliyor: parti ${l.join(', ')}`;
+  return y;
+}
 export const adimEkYazisi = (saat: number): string => `+${String(Math.round(saat * 100) / 100).replace('.', ',')} sa`;
 
 // Vardiyanın adı yoksa saatleri ("16:00–24:00"); çalışmada yoksa kimliği.

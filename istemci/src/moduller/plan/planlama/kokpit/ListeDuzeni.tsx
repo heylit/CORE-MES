@@ -25,6 +25,7 @@ export interface ListeDuzeniOzellikleri {
   yenidenPlanla: ((k: SiraKarti) => void) | null;
   hamle: HamleOzellikleri['uygula']; surum: number | null;
   malzemeBekleyen?: Readonly<Record<string, number>>;
+  kolPartileri?: ReadonlySet<string>;
   // Açık siparişin tezgâhlardaki yeri (tahta ve telefondaki listesi); sayfa çizer, işleri vurgular.
   tahta: ReactNode;
   // Sayfada tek birincil düğme olur (2155-9 a): Canlıya al birincilken açık satırın düğmesi ikincil çizilir.
@@ -58,7 +59,7 @@ const durumYazisi = (k: SiraKarti): string => {
   return `${sureYaz(g)} geç`;
 };
 
-export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, yenidenPlanla, hamle, surum, malzemeBekleyen, tahta, satirBirincil, adimSec, seciliIs, tasi = null, bol = null, hedef, secimiBirak, malzemeAni }: ListeDuzeniOzellikleri) {
+export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, yenidenPlanla, hamle, surum, malzemeBekleyen, kolPartileri, tahta, satirBirincil, adimSec, seciliIs, tasi = null, bol = null, hedef, secimiBirak, malzemeAni }: ListeDuzeniOzellikleri) {
   // Elle yerleştirilen adım (3488 a); satır kapanınca ya da başka iş seçilince düşer.
   const [elle, setElle] = useState<string | null>(null);
   useEffect(() => { setElle(null); }, [acik]);
@@ -82,7 +83,7 @@ export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, ye
         const bas = k.emirler[0], ad = k.siparis?.no ?? bas?.no ?? k.kok, secili = acik === k.kok;
         const bitisler = k.emirler.flatMap((e) => (e.bitis === null ? [] : [e.bitis]));
         const bitis = k.durum === 'plansiz' || bitisler.length === 0 ? null : Math.max(...bitisler);
-        const sonuc = secili && k.durum !== 'plansiz' ? kartSonucu(m, p, k, zaman, malzemeBekleyen) : null;
+        const sonuc = secili && k.durum !== 'plansiz' ? kartSonucu(m, p, k, zaman, malzemeBekleyen, kolPartileri) : null;
         const bekleyen = k.emirler.filter((e) => e.durum === 'plansiz').length;
         // Kısmen planlı sipariş: tezgâh adımlarından planda yeri olmayanlar.
         const eksik = k.adim - k.yerlesen;

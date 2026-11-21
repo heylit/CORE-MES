@@ -7,7 +7,7 @@ import { MalzemeSatirlari } from './MalzemeSatiri.tsx';
 import { malzemeNedeni, malzemeVarsayimi, terminYazisi, type EmirMalzemeleri } from './malzeme.ts';
 import { OdakPaneli } from './OdakPaneli.tsx';
 import { planaAlOnizle, type PlanaAlOnizlemesi } from './plana-al.ts';
-import { BEKLEME_ADI, adimEkYazisi, adimSecimleri, bagimlilik, durumYazisi, eksikAdimlar, eksikNedeni, enCokBekleyen, fasonMu, ilkBosluk, kismiPlanli, onizlemeBitisi, sureYaz, tasimaSaati, tasinabilir, ustEmirNotu, DURDURMA_BEKLIYOR, SUREN_TASIMA, type AdimBeklemesi, type AdimSecimi, type EmirDurumu, type FirmaYazisi, type KokpitEmri, type KokpitModeli, type TurAdayi } from './kurallar.ts';
+import { BEKLEME_ADI, adimEkYazisi, adimSecimleri, bagimlilik, durumYazisi, eksikAdimlar, eksikNedeni, enCokBekleyen, fasonMu, ilkBosluk, kismiPlanli, onizlemeBitisi, sureYaz, tasimaSaati, tasinabilir, ustEmirNotu, DURDURMA_BEKLIYOR, SUREN_TASIMA, type AdimBeklemesi, type AdimSecimi, type EmirDurumu, type FirmaYazisi, type KokpitEmri, type KokpitModeli, type KolNotlari, type TurAdayi } from './kurallar.ts';
 import { adimYeri, bosYerler, siradakiAdim, tasimaAdaylari, uygunTezgahlar, type BosYer, type SiraKarti } from './yerlestirme.ts';
 import './yerlestirme.css';
 
@@ -355,6 +355,8 @@ export interface EmirAdimlariOzellikleri {
   adimEk?: Readonly<Record<string, number>>;
   // Adıma bildirilen bekleme (3335-3c): iş kimliği → bekleme anı ve nedeni; Başlangıç hücresinde yazar.
   adimBekle?: Readonly<Record<string, AdimBeklemesi>>;
+  // Adım ortasından bölünen partinin üst emirle bağı (3512): partinin satırında ve üst emrin katılma adımında yazar.
+  kol?: Pick<KolNotlari, 'emir' | 'adim'>;
   // Emrin malzemesi (3369 a): rotadan önceki satır olarak yazar; verilmezse (eski plan kaydı) satır yoktur.
   malzeme?: EmirMalzemeleri | null;
 }
@@ -364,7 +366,7 @@ export interface SaatGirdisi { yaz: (t: number) => string; oku: (v: string) => n
 export type OperasyonGorunumu = 'tablo' | 'akis';
 const GORUNUMLER: readonly (readonly [OperasyonGorunumu, string])[] = [['tablo', 'Tablo'], ['akis', 'Akış']];
 
-export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, taslakVar = false, secIs = null, tasi = null, birak, yon, vurgu = null, neden = false, saatGirdisi, ilkGorunum = 'tablo', planla = null, planlaDurumu, firma = null, adimSorunu = null, adimEk, adimBekle, malzeme = null, plan = null }: EmirAdimlariOzellikleri) {
+export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, taslakVar = false, secIs = null, tasi = null, birak, yon, vurgu = null, neden = false, saatGirdisi, ilkGorunum = 'tablo', planla = null, planlaDurumu, firma = null, adimSorunu = null, adimEk, adimBekle, kol, malzeme = null, plan = null }: EmirAdimlariOzellikleri) {
   const [gorunum, setGorunum] = useState<OperasyonGorunumu>(ilkGorunum);
   // Kartta birden çok plansız emir varsa (çok katmanlı emir) sırayla çalışılır: etkin olan, kişinin dokunduğu ya da ilk plansız emirdir.
   const [dokunulan, setDokunulan] = useState<string | null>(null);
@@ -386,7 +388,7 @@ export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, tas
       </h2>
       <div className="tc-pyq-emirler">
         {kart.emirler.map((e) => (
-          <EmirSatiri key={e.id} m={m} e={e} firma={firma} zaman={zaman} uygula={uygula} surum={surum} adimAc={adimAc} etkin={etkin === e.id} etkinlestir={() => { setDokunulan(e.id); birak?.(); }} taslakVar={taslakVar} secIs={tasinan === e.id ? secIs : null} tasi={tasi} vurgu={vurgu} neden={neden} gorunum={gorunum} planla={etkin === e.id ? planla : null} {...(etkin === e.id && planlaDurumu ? { planlaDurumu } : {})} {...(saatGirdisi ? { saatGirdisi } : {})} {...(yon ? { yon } : {})} {...(hedef ? { hedef } : {})} adimSorunu={adimSorunu} {...(adimEk ? { adimEk } : {})} {...(adimBekle ? { adimBekle } : {})} malzeme={malzeme} plan={plan} />
+          <EmirSatiri key={e.id} m={m} e={e} firma={firma} zaman={zaman} uygula={uygula} surum={surum} adimAc={adimAc} etkin={etkin === e.id} etkinlestir={() => { setDokunulan(e.id); birak?.(); }} taslakVar={taslakVar} secIs={tasinan === e.id ? secIs : null} tasi={tasi} vurgu={vurgu} neden={neden} gorunum={gorunum} planla={etkin === e.id ? planla : null} {...(etkin === e.id && planlaDurumu ? { planlaDurumu } : {})} {...(saatGirdisi ? { saatGirdisi } : {})} {...(yon ? { yon } : {})} {...(hedef ? { hedef } : {})} adimSorunu={adimSorunu} {...(adimEk ? { adimEk } : {})} {...(adimBekle ? { adimBekle } : {})} {...(kol ? { kol } : {})} malzeme={malzeme} plan={plan} />
         ))}
       </div>
     </section>
@@ -411,7 +413,7 @@ function useGenis(): boolean {
   return v;
 }
 
-function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinlestir, taslakVar = false, secIs = null, tasi = null, yon, vurgu = null, neden = false, gorunum, saatGirdisi, planla = null, planlaDurumu, firma = null, adimSorunu = null, adimEk, adimBekle, malzeme = null, plan = null }: EmirSatiriOzellikleri) {
+function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinlestir, taslakVar = false, secIs = null, tasi = null, yon, vurgu = null, neden = false, gorunum, saatGirdisi, planla = null, planlaDurumu, firma = null, adimSorunu = null, adimEk, adimBekle, kol, malzeme = null, plan = null }: EmirSatiriOzellikleri) {
   const y = useYerlestirme(m, e, surum, etkin);
   // Tabloda yerleşmiş operasyonun tezgâhı ya da saati değiştirilince (3318) önce sunucuya sorulur; uygunsa "Taşı", değilse nedeni satırda.
   const [duzen, setDuzen] = useState<{ isId: string; tezgah: string; baslangic: number } | null>(null);
@@ -537,6 +539,7 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
           {`${String(e.adet)} adet · `}<b data-d={e.durum}>{kismi ? `kısmen planda, ${String(eksik.length)} adımın yeri yok` : durumYazisi(e)}{varsayim ? ' (malzeme varsayımıyla)' : ''}</b>
           {e.termin !== null && ` · termin ${zaman(e.termin)}`}{e.bitis !== null && ` · biter ${zaman(e.bitis)}`}
         </small>
+        {kol?.emir[e.id] !== undefined && <small data-emir-kol="">{kol.emir[e.id]}</small>}
         {kismi && <small data-emir-neden="kismi">Yeri olmayan: {eksik.map((x) => `${String(e.adimlar.indexOf(x) + 1)}. ${x.ad}: ${eksikNedeni(plan, x.id)}`).join('; ')}. Yoldaki "Eksik adımları planla" ya da Planla menüsündeki "Seçili siparişi yeniden planla" yerleştirir.</small>}
         {malNeden !== null && <small data-emir-neden="malzeme">Neden {e.durum === 'gec' ? 'geç' : 'riskli'}: {malNeden}</small>}
         {bekleyen && <small data-emir-neden="">Neden {e.durum === 'gec' ? 'geç' : 'riskli'}: {bekleyen.k + 1}. adım ({e.adimlar[bekleyen.k]?.ad}) {tz(bekleyen.tezgah)} tezgâhında {sureYaz(bekleyen.bekleme.sure)} sıra bekliyor.</small>}
@@ -624,6 +627,7 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
                       : saatGirdisi ? <input className="tc-alan-kutu" type="datetime-local" step={900} aria-label={`${a.ad} başlangıcı`} aria-invalid={hata !== null || undefined} aria-describedby={hata !== null ? notKimligi : undefined} disabled={!girilir} title={kilit ?? undefined} value={x ? saatGirdisi.yaz(duzenli?.baslangic ?? x.S) : s?.baslangic !== undefined ? saatGirdisi.yaz(s.baslangic) : ''} onChange={(ev) => { saatDegisti(ev.target.value); }} />
                         : <span>{x ? zaman(x.S) : '—'}</span>}
                     {x && !x.basladi && adimBekle?.[a.id] !== undefined && <small data-adim-bekle={a.id}>bekliyor: {BEKLEME_ADI[adimBekle[a.id]!.neden]}, {zaman(adimBekle[a.id]!.kadar)}'e kadar{ustEmirNotu(m, adimBekle[a.id]!)}</small>}
+                    {x && !x.basladi && kol?.adim[a.id] !== undefined && <small data-adim-parti={a.id}>{kol.adim[a.id]}</small>}
                     {x?.durdurmaBekliyor && <small data-durdurma-bekliyor={a.id}>{DURDURMA_BEKLIYOR}; canlıda eski yerinde</small>}
                     {!x && tahmin && s?.baslangic === undefined && <small data-ongoru="">öngörü {tz(tahmin.tezgah)} · {zaman(tahmin.S)}</small>}
                   </td>

@@ -3,7 +3,7 @@ import { derle, girdiKur, planOku, plandanBitenler } from '../motor/kurallar.ts'
 import { ornekCalisma } from '../motor/ornek.ts';
 import {
   firmaYazilari, adimBaglari, adimBeklemesi, aralikYuku, bagimlilik, okUcu, okYolu, aramaUyar, darbogaz, emirGunleri, enCokBekleyen, tezgahGunundeMi, durumYazisi, ilkBosluk, matrisSirasi, modelKur, olcekKomsusu, onizlemeBitisi, satirKimligi, sayim, sorunlular, sureYaz,
-  acigaOtur, durdurmaBekleyenler, durusYazisi, ekMesaiYazisi, mesaiButcesi, operatorSorunu, uygunOperatorler, vardiyaAdi, planliDurusYazisi, hucreler3B, suAndakiDurus, onayliGecSayisi, yeriDegisti, tasimaSaati, tasinabilir, turAdaylari, yukSinifi, yukYuzdesi, SAAT_ENI, YAKIN_EN_AZ, YAKIN_EN_COK, sigdirma, surguDegeri, surgudenEn, yakinOlcegi, yakinSinirla, ustBeklemeleri, ustEmirNotu, type AdimBeklemesi, type KokpitEmri, type KokpitIsi, type KokpitModeli,
+  acigaOtur, kolNotlari, durdurmaBekleyenler, durusYazisi, ekMesaiYazisi, mesaiButcesi, operatorSorunu, uygunOperatorler, vardiyaAdi, planliDurusYazisi, hucreler3B, suAndakiDurus, onayliGecSayisi, yeriDegisti, tasimaSaati, tasinabilir, turAdaylari, yukSinifi, yukYuzdesi, SAAT_ENI, YAKIN_EN_AZ, YAKIN_EN_COK, sigdirma, surguDegeri, surgudenEn, yakinOlcegi, yakinSinirla, ustBeklemeleri, ustEmirNotu, type AdimBeklemesi, type KokpitEmri, type KokpitIsi, type KokpitModeli,
 } from './kurallar.ts';
 
 // Örnek çalışma uydurmadır: iki emir (biri geç, biri riskli), beş tezgâh, bir fason adım.
@@ -521,5 +521,58 @@ describe('üst emirden gelen bekleme (3513)', () => {
     expect(ustEmirNotu(m(), { ...B, ust: '2' })).toBe(' · üst emirden (E-2)');
     expect(ustEmirNotu(m([], ['3']), { ...B, ust: '2' })).toBe(' · üst emirden (2)');
     expect(ustEmirNotu(m(), B)).toBe('');
+  });
+});
+
+// 3523: adım ortasından bölünen partinin (kol) üst emirle bağı yazıyla söylenir (aralık ve adımın sahibi motor girdisiyle aynı kural, 3512).
+describe('adım ortasından bölünen partinin notları (3523)', () => {
+  const ROTA = [{ k: '10', ad: 'Torna' }, { k: '20', ad: 'Freze' }, { k: '30', ad: 'Taşlama' }, { k: '40' }];
+  const D = (ek: Record<string, unknown> = {}) => ({ siparisler: ['2', '3', '4'].map((id) => ({ id, urun: 'U', adet: 1, ...(id === '3' ? ek : {}) })), urunler: [{ id: 'U', rota: ROTA }] }) as unknown as Parameters<typeof kolNotlari>[1];
+  const adim = (id: string) => ({ id, ad: id, adaylar: [] });
+  // Modelde emrin yalnız bitmemiş kendi adımları durur.
+  const m = (adimlar: Record<string, string[]> = { 2: ['10', '20', '30', '40'], 3: ['20', '30'], 4: ['30'] }) =>
+    model([], Object.entries(adimlar).map(([e, l]) => emir(e, { no: `E-${e}`, adimlar: l.map((k) => adim(`${e}.${k}`)) })));
+  const kaynak = (...kollar: [string, string, unknown][]) => ({ orders: [{ id: '2' }, ...kollar.map(([id, parentId, kol]) => ({ id, parentId, kol }))] });
+
+  it('ortadan ayrılıp katılan parti: öncesini ve sonrasını kimin yaptığı partinin satırında, bekleme üst emrin katılma adımında yazar', () => {
+    const y = kolNotlari(m(), D(), kaynak(['3', '2', { n: 1, m: 4 }]));
+    expect(y.emir).toEqual({ 3: 'Torna adımını üst emir (E-2) yapar; bu parti Freze adımından başlar. Taşlama adımından sonra üst emre (E-2) katılır; 40 adımından itibaren üst emirle sürer.' });
+    expect(y.adim).toEqual({ '2.40': 'bekliyor: parti E-3' });
+    expect([...y.partiler]).toEqual(['3']);
+  });
+
+  it('baştan ayrılan parti yalnız katılmayı, sona kadar giden parti yalnız başlangıcı yazar; birden çok adım sayıyla söylenir', () => {
+    expect(kolNotlari(m(), D(), kaynak(['3', '2', { n: 0, m: 3 }])).emir).toEqual({ 3: 'Freze adımından sonra üst emre (E-2) katılır; Taşlama adımından itibaren üst emirle sürer.' });
+    const sona = kolNotlari(m(), D(), kaynak(['3', '2', { n: 2, m: 5 }]));
+    expect(sona.emir).toEqual({ 3: 'İlk 2 adımı üst emir (E-2) yapar; bu parti Taşlama adımından başlar.' });
+    expect(sona.adim).toEqual({});
+  });
+
+  it('partinin son adımı bittiyse ya da parti kapandıysa üst emir beklemez; partinin satırı kalır', () => {
+    const k = kaynak(['3', '2', { n: 1, m: 4 }]);
+    expect(kolNotlari(m({ 2: ['40'], 3: ['20'] }), D(), k).adim).toEqual({});
+    const kapali = kolNotlari(m({ 2: ['40'] }), D(), k);
+    expect(kapali.adim).toEqual({});
+    expect(Object.keys(kapali.emir)).toEqual(['3']);
+  });
+
+  it('partiden bölünen parti: adımın sahibi o yeri kendi işleyen en yakın üst emirdir; aynı adıma katılan partiler tek satırda', () => {
+    const y = kolNotlari(m(), D(), kaynak(['3', '2', { n: 1, m: 4 }], ['4', '3', { n: 2, m: 4 }]));
+    expect(y.emir['4']).toBe('İlk 2 adımı üst emir (E-3) yapar; bu parti Taşlama adımından başlar. Taşlama adımından sonra üst emre (E-2) katılır; 40 adımından itibaren üst emirle sürer.');
+    expect(y.adim).toEqual({ '2.40': 'bekliyor: parti E-3, E-4' });
+  });
+
+  it('rotaya uymayan aralık, üst bağı olmayan emir, çok katmanlı emrin düğümü ve emir kaynağı yokken not yoktur; bağ döngüsü sonsuza gitmez', () => {
+    const bos = { emir: {}, adim: {}, partiler: new Set() };
+    for (const kol of [{ n: 1, m: 2 }, { n: 1, m: 6 }, { n: -1, m: 3 }, { n: 1.5, m: 4 }, null, 'x']) expect(kolNotlari(m(), D(), kaynak(['3', '2', kol]))).toEqual(bos);
+    expect(kolNotlari(m(), D(), { orders: [{ id: '3', parentId: '', kol: { n: 1, m: 4 } }] })).toEqual(bos);
+    expect(kolNotlari(m(), D({ dugum: 'Y1' }), kaynak(['3', '2', { n: 1, m: 4 }]))).toEqual(bos);
+    expect(kolNotlari(m(), D(), null)).toEqual(bos);
+    const dongu = kolNotlari(m(), D(), { orders: [{ id: '3', parentId: '4', kol: { n: 1, m: 4 } }, { id: '4', parentId: '3', kol: { n: 2, m: 4 } }] });
+    expect(Object.keys(dongu.emir).sort()).toEqual(['3', '4']);
+  });
+
+  it('üst emir modelde yoksa numarası yerine kimliği yazar', () => {
+    expect(kolNotlari(m({ 3: ['20', '30'] }), D(), kaynak(['3', '2', { n: 1, m: 4 }])).emir['3']).toContain('üst emir (2) yapar');
   });
 });

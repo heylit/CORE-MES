@@ -846,3 +846,28 @@ describe('yarım planlı emir (klasik düzen)', () => {
     expect(oz).not.toHaveBeenCalled();
   });
 });
+
+describe('adım ortasından bölünen partinin notları ekranda (3523)', () => {
+  const KOL = { emir: { 1: 'Torna adımını üst emir (ORN-UE-9) yapar; bu parti Freze adımından başlar.' }, adim: { '1.10': 'bekliyor: parti ORN-UE-9/1' } };
+
+  it('partinin satırında bağ yazısı, üst emrin katılma adımında bekleme durur; not verilmezse ikisi de yoktur', () => {
+    const { unmount } = render(<EmirAdimlari m={M} kart={kart('1')} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} />);
+    expect(document.querySelector('[data-emir-kol]')).toBeNull();
+    expect(document.querySelector('[data-adim-parti]')).toBeNull();
+    unmount();
+    render(<EmirAdimlari m={M} kart={kart('1')} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} kol={KOL} />);
+    expect(document.querySelector('[data-emir="1"] [data-emir-kol]')?.textContent).toBe(KOL.emir[1]);
+    expect(document.querySelector('[data-adim-satir="1.10"] [data-ad="Başlangıç"] [data-adim-parti="1.10"]')?.textContent).toBe('bekliyor: parti ORN-UE-9/1');
+  });
+
+  it('başka emrin notu bu emre yazılmaz; başlamış adımda bekleme yazısı yoktur', () => {
+    const { unmount } = render(<EmirAdimlari m={M} kart={kart('1')} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} kol={{ emir: { 2: 'x' }, adim: { '2.10': 'y' } }} />);
+    expect(document.querySelector('[data-emir-kol]')).toBeNull();
+    expect(document.querySelector('[data-adim-parti]')).toBeNull();
+    unmount();
+    const basladi = { ...M, isler: { '1.10': { ...is('1.10', 'T1', 8, 12), basladi: true } } };
+    render(<EmirAdimlari m={basladi} kart={kart('1')} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} kol={KOL} />);
+    expect(document.querySelector('[data-emir-kol]')).not.toBeNull();
+    expect(document.querySelector('[data-adim-parti]')).toBeNull();
+  });
+});
