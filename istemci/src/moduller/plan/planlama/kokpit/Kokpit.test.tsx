@@ -923,6 +923,34 @@ describe('Kokpit', () => {
     expect(satirlar().map((r) => r[0])).toEqual(['2>not']);
   });
 
+  // 3527: duruşların okunduğu pencerenin sonu çalışmayla gelir (sunucunun okuması); Kokpit onu kendi saatinden hesaplamaz.
+  it('bitişi çalışmadaki duruş okuma gününden sonra olan emrin notu Emirler ağacında ve Siparişler görünümünde yazar; gün ilerideyse ya da yoksa yazmaz', () => {
+    const NOT = 'Bitiş bir yıldan ileride; o tarihlerdeki planlı duruşlar hesaba katılmadı, bitiş daha geç olabilir.';
+    const notlar = (gun: string | undefined): [string[], (string | null | undefined)[]] => {
+      const c = ornekCalisma();
+      if (gun !== undefined) c.durusOkumaSonu = gun;
+      render(
+        <MemoryRouter initialEntries={['/']}><BildirimSaglayici><Yuvali>
+          <Kokpit
+            depo={DEPO} calisma={c} komut={komutKur(0)} git={vi.fn()} yenile={vi.fn()} yetki={yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz'])}
+            olcek={ACILIS_OLCEGI} olcekSec={vi.fn()} kaydir={vi.fn()} secim={{ ...BOS_SECIM, siparis: '2' }} sec={vi.fn()}
+          />
+        </Yuvali></BildirimSaglayici></MemoryRouter>,
+      );
+      const bolum = screen.getByRole('region', { name: 'Emirler' });
+      for (const id of ['2', '3']) fireEvent.click(bolum.querySelector<HTMLElement>(`button[data-agac="${id}"]`)!);
+      const agac = [...bolum.querySelectorAll<HTMLElement>('[data-agac-not]')].flatMap((r) => [...r.querySelectorAll('.tc-pyq-not')].map((y) => `${r.getAttribute('data-satir') ?? ''}: ${y.textContent}`));
+      fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: 'Siparişler' }));
+      const siparis = [...document.querySelectorAll('.tc-pyq-ld-kart[data-acik] [data-durus-okunmadi]')].map((y) => y.textContent);
+      cleanup();
+      return [agac, siparis];
+    };
+    // Örnek plan 19.10'da başlar; 2 numaralı emir 27.10 öğleden sonra, 3 numaralı emir ondan önce biter.
+    expect(notlar('2026-10-27')).toEqual([[`2>not: ${NOT}`], [NOT]]);
+    expect(notlar('2026-10-28')).toEqual([[], []]);
+    expect(notlar(undefined)).toEqual([[], []]);
+  });
+
   // 3513: bölünen emrin partisi üst emrin beklemesiyle dizilir (3511); satır ve form beklemenin üst emirden geldiğini söyler.
   it('üst emrin beklemesi partinin adım satırında kaynağıyla yazar; formu kutuyu gösterir ve üst emrin adımına götürür', () => {
     const c = ornekCalisma();

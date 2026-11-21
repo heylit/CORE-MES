@@ -7,6 +7,13 @@ import type { EmirKaydi } from '../recete-rota/disari.ts';
 
 const nesne = (d: unknown): Record<string, unknown> | null => (typeof d === 'object' && d !== null && !Array.isArray(d) ? (d as Record<string, unknown>) : null);
 
+// Vardiya'nın planlı duruşlarının okunduğu pencerenin sonu (duruşu okunmayan ilk gün, "YYYY-AA-GG") çalışmayla sayfaya gider. Duruşları
+// okuyamayan kişinin okumasında (null) çalışmadaki değer kalır: çalışmadaki duruş satırları da en son okuyabilenin okumasındandır.
+export function durusOkumaSonuYaz(calisma: unknown, sonu: unknown): unknown {
+  const c = nesne(calisma);
+  return c !== null && typeof sonu === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(sonu) ? { ...c, durusOkumaSonu: sonu } : calisma;
+}
+
 // Canlı plan ayarı prototipin `settings` alan adlarıyla.
 export function ayarCevir(a: PlanAyari): DurumCevabi['settings'] {
   return { rule: a.kural, dir: a.yon, buffer: a.tamponGun, freezeDays: a.dondurmaGun, peopleLimit: a.personelKisiti, planDrafts: a.taslakEmirler };

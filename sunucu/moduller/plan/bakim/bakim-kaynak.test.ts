@@ -5,7 +5,6 @@ import { ISLEMLER } from '#paylasilan/islemler.ts';
 import { tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import { KAYNAK_OKUMA } from '../../recete-rota/disari.ts';
 import { planTestOrtami } from '../plan-ortak.test.ts';
-import { DURUS_OKUMA_GUN, durusOkumaSonu } from '../../../../istemci/src/moduller/plan/planlama/tipler.ts';
 import { kaynakOku } from '../planlama-servis.ts';
 import { TAKVIM_GUN } from '../servis.ts';
 
@@ -98,11 +97,31 @@ describe('plan (gerçek PostgreSQL): periyodik bakım kaynak okumasında', () =>
     }
   });
 
-  // 3522: Kokpit bitişi bu pencerenin ötesindeki emirde "duruşlar hesaba katılmadı" der ve pencereyi kendi sabitinden hesaplar (istemci
-  // sunucuyu ithal edemez). Biri değişip öbürü kalırsa not yanlış emirde çıkar: BK-K4'te gelen son gün (366) pencerenin içinde, gelmeyen ilk
-  // gün (367) dışında kalmalıdır.
-  test('istemcinin duruş okuma penceresi sunucununkiyle aynıdır', () => {
-    assert.equal(DURUS_OKUMA_GUN, TAKVIM_GUN);
-    assert.equal(durusOkumaSonu(10) / 24, 367);
+  // Kokpit bitişi bu günden sonraya düşen emirde "duruşlar hesaba katılmadı" der. Sınır okumanın kendisinden gelir: verdiği gün gerçekten
+  // duruşu okunmayan ilk gündür (önceki günün son duruşu gelir, o günün ilk duruşu gelmez).
+  test('BK-K5: okuma, duruşu okunmayan ilk günü verir; önceki günün duruşu gelir, o günün duruşu gelmez; makine okuması olmayana null', async () => {
+    const { ortam, makineA, istasyonA, yoneticiId } = durum();
+    const tam: Kullanici = { id: yoneticiId, ad: 'Deneme yonetici', islemler: [...ISLEMLER] };
+    const makinesiz: Kullanici = { ...tam, islemler: ISLEMLER.filter((i) => !(KAYNAK_OKUMA.istasyon as readonly string[]).includes(i)) };
+    const ek = (k: Kullanici) => vt().tx(async (db) => (await kaynakOku(db, k)).ek as { planliDuruslar: { anahtar: string; bas: string }[] | null; planliDurusSonu: string | null });
+    const sonu = (await ek(tam)).planliDurusSonu!;
+    assert.equal(sonu, tesisSaati(Date.now() + (TAKVIM_GUN + 2) * 86_400_000).slice(0, 10));
+    const onceki = new Date(Date.parse(`${sonu}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+    const idler: number[] = [];
+    try {
+      for (const [g, bas, bit] of [[onceki, '23:00', '23:30'], [sonu, '00:15', '00:45'], [sonu, '08:00', '10:00']] as const) {
+        idler.push((await ortam!.sahip.tek<{ id: number }>(
+          `INSERT INTO vardiya_planli_durus (baslik, kapsam, istasyon_id, baslangic, bitis, tekrar, gunler, aktif, yazan_id)
+           VALUES ('Deneme duruş', 'istasyon', $1, ($2 || ' ' || $3)::timestamp AT TIME ZONE current_setting('TimeZone'),
+                   ($2 || ' ' || $4)::timestamp AT TIME ZONE current_setting('TimeZone'), 'yok', '{}', true, $5) RETURNING id`, [istasyonA, g, bas, bit, yoneticiId]))!.id);
+      }
+      const okunan = await ek(tam);
+      assert.equal(okunan.planliDurusSonu, sonu);
+      const gelen = (id: number) => okunan.planliDuruslar!.filter((d) => d.anahtar.startsWith(`vd:${String(id)}|${String(makineA)}|`)).map((d) => d.bas);
+      assert.deepEqual(idler.map(gelen), [[`${onceki} 23:00`], [], []]);
+      assert.equal((await ek(makinesiz)).planliDurusSonu, null);
+    } finally {
+      for (const id of idler) await ortam!.sahip.sorgu('DELETE FROM vardiya_planli_durus WHERE id = $1', [id]);
+    }
   });
 });

@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { ayarCevir, calismaDurdurulanlari, calismaEkMesaisi, calismaElleBolmeleri, calismaFarki, calismaIsleri, calismaKilitleri, calismaKuyruklari, durdurmaBekleyenler, planAni, taslaktanCalismaya } from './planlama-kurallar.ts';
+import {
+  ayarCevir, calismaDurdurulanlari, calismaEkMesaisi, calismaElleBolmeleri, calismaFarki, calismaIsleri, calismaKilitleri, calismaKuyruklari, durdurmaBekleyenler, durusOkumaSonuYaz, planAni,
+  taslaktanCalismaya,
+} from './planlama-kurallar.ts';
 
 // Planlama çalışmasının saf kuralları (658 b: Reçete ve Rota'dan taşındı; test kimlikleri aynı kaldı).
 describe('planlama kuralları: plan ayarı', () => {
@@ -12,6 +15,17 @@ describe('planlama kuralları: plan ayarı', () => {
 
 
 // 499 a, 503 a: çalışma planının plan modülüne yazılacak işleri, canlıyla farkı ve kuyrukları (sayfanın soKuyruklari ve paFark'ı). Uydurma.
+describe('planlama kuralları: duruşların okunduğu pencerenin sonu', () => {
+  test('okunan gün çalışmaya yazılır, öteki alanlar ve girdi nesnesi değişmez; okunmadıysa çalışmadaki değer kalır', () => {
+    const c = { surum: 2, down: [{ m: '1' }], durusOkumaSonu: '2027-01-01' };
+    assert.deepEqual(durusOkumaSonuYaz(c, '2027-11-23'), { surum: 2, down: [{ m: '1' }], durusOkumaSonu: '2027-11-23' });
+    assert.equal(c.durusOkumaSonu, '2027-01-01');
+    assert.deepEqual(durusOkumaSonuYaz({ surum: 2 }, '2027-11-23'), { surum: 2, durusOkumaSonu: '2027-11-23' });
+    for (const okunmadi of [null, undefined, '', '23.11.2027', '2027-11-23 08:00', 20271123]) assert.equal(durusOkumaSonuYaz(c, okunmadi), c);
+    assert.equal(durusOkumaSonuYaz(null, '2027-11-23'), null);
+  });
+});
+
 describe('planlama kuralları: çalışma planı ve canlı plan', () => {
   const kimlik = { '1.10': 'E1|10', '1.20': 'E1|20', '2.10': 'E2|10', '3.10': 'E3|10', '4.10': 'E4|10' };
   const ops = [

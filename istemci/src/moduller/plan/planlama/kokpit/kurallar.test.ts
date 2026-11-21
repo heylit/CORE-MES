@@ -584,17 +584,26 @@ describe('adım ortasından bölünen partinin notları (3523)', () => {
   });
 });
 
-// 3522: Vardiya'nın planlı duruşları bugünden 365 gün sonrasına kadar okunur (son günün gece vardiyası için bir gün daha); ötesi bilinmez.
-describe('bitişi duruş okuma penceresinin ötesindeki emir (3522)', () => {
-  it('okunmayan ilk gün bugünden 367 gün sonradır; bitişi o günün başından sonra olan emir işaretlenir', () => {
-    // Şimdi 10: bugün planın 0. günü; okunmayan ilk gün 367. gün, 8808. saatte başlar.
-    expect(durusOkunmadi({ simdi: 10 }, { bitis: 8808 })).toBe(false);
-    expect(durusOkunmadi({ simdi: 10 }, { bitis: 8808.25 })).toBe(true);
-    expect(durusOkunmadi({ simdi: 10 }, { bitis: null })).toBe(false);
-    // Pencere bugünle birlikte kayar; gün içindeki saat sınırı değiştirmez. Plan başlamadan önceki gün de sayılır.
-    expect([23.75, 24, 47.75].map((simdi) => durusOkunmadi({ simdi }, { bitis: 8820 }))).toEqual([true, false, false]);
-    expect(durusOkunmadi({ simdi: -1 }, { bitis: 8784.25 })).toBe(true);
-    expect(durusOkunmadi({ simdi: -1 }, { bitis: 8784 })).toBe(false);
+// Vardiya'nın planlı duruşlarının okunduğu pencerenin sonu sunucunun okumasından, çalışmayla gelir (duruşu okunmayan ilk gün); ötesi bilinmez.
+describe('bitişi duruş okuma penceresinin ötesindeki emir (3522, 3527)', () => {
+  it('bitişi pencerenin sonundan sonra olan emir işaretlenir; son bilinmiyorsa hiçbir emir işaretlenmez', () => {
+    expect(durusOkunmadi({ durusSonu: 8808 }, { bitis: 8808 })).toBe(false);
+    expect(durusOkunmadi({ durusSonu: 8808 }, { bitis: 8808.25 })).toBe(true);
+    expect(durusOkunmadi({ durusSonu: 8808 }, { bitis: null })).toBe(false);
+    expect([{ durusSonu: null }, { durusSonu: undefined }, {}].map((m) => durusOkunmadi(m, { bitis: 99999 }))).toEqual([false, false, false]);
+    // Planın 0. saati de bir sınırdır; yok sayılmaz.
+    expect(durusOkunmadi({ durusSonu: 0 }, { bitis: 0.25 })).toBe(true);
+  });
+
+  it('model sonu çalışmadaki günden kurar: o günün başı, plan saatiyle; şimdiye bağlı değildir; gün yoksa ya da okunamıyorsa null', () => {
+    const { c, p, cx } = ornek();
+    const sonu = (gun: unknown, an = cx): number | null | undefined => modelKur({ ...c, durusOkumaSonu: gun as string | null }, p, an, (id) => id).durusSonu;
+    // Örnek plan 2026-10-19'da başlar: 2027-10-21 planın 367. günüdür.
+    expect(sonu('2027-10-21')).toBe(367 * 24);
+    expect(sonu('2026-10-19')).toBe(0);
+    expect(sonu('2027-10-21', { ...cx, now: cx.now + 48 })).toBe(367 * 24);
+    expect([null, undefined, '', '21.10.2027', 20271021].map((g) => sonu(g))).toEqual([null, null, null, null, null]);
+    expect(modelKur(c, p, cx, (id) => id).durusSonu).toBeNull();
   });
 });
 
@@ -604,7 +613,7 @@ describe('ağaçta açılan emrin not satırı (3525)', () => {
   const zaman = (t: number): string => `s${String(t)}`;
   const e = { id: '2', bitis: 100, adimlar: ['Torna', 'Freze', 'Taşlama', 'Kontrol'].map((ad, i) => ({ id: `2.${String(i + 1)}0`, ad, adaylar: [] })) };
   // 2.10 başlamış, 2.20 ve 2.30 başlamamış, 2.40'ın planda yeri yok.
-  const m = { simdi: 10, emirler: [{ id: '2', no: 'E-2' }, { id: '7', no: 'E-7' }], isler: { '2.10': { basladi: true }, '2.20': { basladi: false }, '2.30': { basladi: false } } } as unknown as M;
+  const m = { simdi: 10, durusSonu: 8808, emirler: [{ id: '2', no: 'E-2' }, { id: '7', no: 'E-7' }], isler: { '2.10': { basladi: true }, '2.20': { basladi: false }, '2.30': { basladi: false } } } as unknown as M;
 
   it('not yoksa boştur; emrin notları sırayla: önce bitişin erken görünebileceği, sonra partinin bağı', () => {
     expect(agacNotlari(m, e, {}, zaman)).toEqual([]);

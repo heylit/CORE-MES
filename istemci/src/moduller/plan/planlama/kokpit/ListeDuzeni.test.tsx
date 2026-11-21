@@ -348,10 +348,9 @@ describe('partiye bölünen emir (3483)', () => {
 
   // 3522: bitişi planlı duruşların okunduğu pencerenin ötesinde kalan emir, bitişin erken görünebileceğini söyler.
   it('bitişi bir yıldan ileride olan emrin öbeğinde duruşların okunmadığı yazar; öteki emirde ve pencere içinde yoktur', () => {
-    const c = ornekCalisma(), p = planOku(c), m0 = partili(c, p);
+    const c = ornekCalisma(), p = planOku(c), sinir = 9000, m0 = { ...partili(c, p), durusSonu: sinir };
     const uzak = (id: string, bitis: number) => ({ ...m0, emirler: m0.emirler.map((e) => (e.id === id ? { ...e, bitis } : e)) });
     const NOT = 'Bitiş bir yıldan ileride; o tarihlerdeki planlı duruşlar hesaba katılmadı, bitiş daha geç olabilir.';
-    const sinir = (Math.floor(m0.simdi / 24) + 367) * 24;
     const notlar = () => [...document.querySelectorAll('[data-durus-okunmadi]')].map((x) => [x.closest('[data-emir]')?.getAttribute('data-emir'), x.textContent, x.previousElementSibling?.className]);
     ciz({ m: m0, p, kartlar: siraKartlari(m0) }, '2');
     expect(notlar()).toEqual([]);
@@ -366,15 +365,24 @@ describe('partiye bölünen emir (3483)', () => {
     ciz({ m: m2, p, kartlar: siraKartlari(m2) }, '2');
     expect(notlar()).toEqual([]);
     cleanup();
-    // Pencere planın başından değil bugünden sayılır: iki gün sonra aynı bitiş pencerenin içindedir.
-    const m3 = { ...m1, simdi: m0.simdi + 48 };
+    // Sınır okumanın verdiği gündür: iki gün ileri alınınca aynı bitiş pencerenin içindedir; şimdinin ilerlemesi sınırı oynatmaz.
+    const m3 = { ...m1, durusSonu: sinir + 48 };
     ciz({ m: m3, p, kartlar: siraKartlari(m3) }, '2');
+    expect(notlar()).toEqual([]);
+    cleanup();
+    const m4 = { ...m1, simdi: m0.simdi + 48 };
+    ciz({ m: m4, p, kartlar: siraKartlari(m4) }, '2');
+    expect(notlar()).toEqual([['3', NOT, 'tc-pyq-ld-emir-bas']]);
+    cleanup();
+    // Duruşlar hiç okunmadıysa sınır bilinmez; not çıkmaz.
+    const m5 = { ...m1, durusSonu: null };
+    ciz({ m: m5, p, kartlar: siraKartlari(m5) }, '2');
     expect(notlar()).toEqual([]);
   });
 
   it('tek emirli satırda bitişi bir yıldan ileride olan emrin notu adımların üstünde durur', () => {
-    const x = kur(), sinir = (Math.floor(x.m.simdi / 24) + 367) * 24;
-    const m = { ...x.m, emirler: x.m.emirler.map((e) => (e.id === '2' ? { ...e, bitis: sinir + 100 } : e)) };
+    const x = kur(), sinir = 9000;
+    const m = { ...x.m, durusSonu: sinir, emirler: x.m.emirler.map((e) => (e.id === '2' ? { ...e, bitis: sinir + 100 } : e)) };
     ciz({ m, p: x.p, kartlar: siraKartlari(m) }, '2');
     expect(document.querySelector('.tc-pyq-ld-kart[data-acik] [data-durus-okunmadi] + .tc-pyq-ld-adimlar')).not.toBeNull();
     expect(document.querySelectorAll('[data-durus-okunmadi]')).toHaveLength(1);

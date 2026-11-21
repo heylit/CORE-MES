@@ -1,6 +1,6 @@
 import type { EmirNo } from '../ortak/emir-no.ts';
-import { acikSaat, zamanTanisiYazisi, type Bitenler, type Derleme, type OkunanPlan } from '../motor/kurallar.ts';
-import { adimAdi, durusOkumaSonu, type PlanlamaCalismasi } from '../tipler.ts';
+import { acikSaat, saatOku, zamanTanisiYazisi, type Bitenler, type Derleme, type OkunanPlan } from '../motor/kurallar.ts';
+import { adimAdi, type PlanlamaCalismasi } from '../tipler.ts';
 
 // Kokpit'in saf kuralları (kart 3151): tahtanın, matrisin ve sorun turunun okuduğu model çalışmadan ve kayıtlı plandan kurulur.
 // Saat ekseni çalışmanın eksenidir (başlangıç gününün 00:00'ından saat). Veri yoksa null; sıfır uydurulmaz.
@@ -102,6 +102,8 @@ export interface KokpitTezgahi { id: string; kod: string; ad: string; fason: boo
 export interface KokpitDurusu { a: number; b: number; ariza: boolean; neden?: 'arıza' | 'bakım' | 'duruş'; baslik?: string }
 export interface KokpitModeli {
   simdi: number;
+  // Vardiya'nın planlı duruşlarının okunduğu pencerenin sonu (duruşu okunmayan ilk günün başı, plan saati); bilinmiyorsa null ya da yok.
+  durusSonu?: number | null;
   tezgahlar: KokpitTezgahi[];
   isler: Record<string, KokpitIsi>;
   emirler: KokpitEmri[];
@@ -167,7 +169,7 @@ export function modelKur(c: PlanlamaCalismasi, p: OkunanPlan | null, cx: Derleme
   const mesai: Record<string, (KokpitEkMesaisi & { vardiyaAd: string })[]> = {};
   for (const e of kokpitEkMesaileri(c)) if (e.gun * 24 >= bas) (mesai[e.m] ??= []).push({ ...e, vardiyaAd: vardiyaAdi(c, e.vardiya) });
   for (const l of Object.values(mesai)) l.sort((x, y) => x.gun - y.gun);
-  return { simdi, tezgahlar, isler, emirler, bas, son: Math.max(bas + 14 * 24, Math.ceil(enSon / 24) * 24 + 24), acik, durus, mesai };
+  return { simdi, durusSonu: typeof c.durusOkumaSonu === 'string' ? saatOku(c.D, c.durusOkumaSonu) : null, tezgahlar, isler, emirler, bas, son: Math.max(bas + 14 * 24, Math.ceil(enSon / 24) * 24 + 24), acik, durus, mesai };
 }
 export const gunYazisi = (g: number, zaman: (t: number) => string): string => zaman(g * 24).replace(/ \d\d:\d\d$/, '');
 export const ekMesaiYazisi = (l: readonly (KokpitEkMesaisi & { vardiyaAd: string })[], zaman: (t: number) => string): string =>
@@ -615,9 +617,10 @@ export function kolNotlari(m: Pick<KokpitModeli, 'emirler'>, D: Pick<PlanlamaCal
   return y;
 }
 // Bitişi planlı duruşların okunduğu pencerenin ötesinde kalan emir: oradaki duruşlar hesaba girmediği için bitiş olduğundan erken görünebilir.
-// Ufku aşan her emirde değil, yalnız bu emirlerde söylenir.
+// Ufku aşan her emirde değil, yalnız bu emirlerde söylenir. Pencerenin sonu bilinmiyorsa (duruşlar hiç okunmadı) söylenmez.
 export const DURUS_OKUNMADI = 'Bitiş bir yıldan ileride; o tarihlerdeki planlı duruşlar hesaba katılmadı, bitiş daha geç olabilir.';
-export const durusOkunmadi = (m: Pick<KokpitModeli, 'simdi'>, e: Pick<KokpitEmri, 'bitis'>): boolean => e.bitis !== null && e.bitis > durusOkumaSonu(m.simdi);
+export const durusOkunmadi = (m: Pick<KokpitModeli, 'durusSonu'>, e: Pick<KokpitEmri, 'bitis'>): boolean =>
+  m.durusSonu != null && e.bitis !== null && e.bitis > m.durusSonu;
 export const adimEkYazisi = (saat: number): string => `+${String(Math.round(saat * 100) / 100).replace('.', ',')} sa`;
 // Adımın satırındaki bekleme ve uzama yazıları; adımı listeleyen her düzen aynı cümleyi kurar.
 export const adimBeklemeYazisi = (m: Pick<KokpitModeli, 'emirler'>, b: AdimBeklemesi, zaman: (t: number) => string): string =>
@@ -626,12 +629,12 @@ export const adimUzamaYazisi = (saat: number): string => `uzadı ${adimEkYazisi(
 // Ağaçta adım alt satırının başlığı; açık emrin not satırı adımı aynı yazıyla anar.
 export const agacAdimBasligi = (i: number, a: Pick<KokpitAdimi, 'ad'>): string => `${String(i + 1)}. ${a.ad}`;
 // Emir düzeyindeki notlar: önce bitişin erken görünebileceği, sonra bölünen partinin bağı.
-export const emirNotlari = (m: Pick<KokpitModeli, 'simdi'>, e: Pick<KokpitEmri, 'id' | 'bitis'>, kol?: Pick<KolNotlari, 'emir'>): string[] =>
+export const emirNotlari = (m: Pick<KokpitModeli, 'durusSonu'>, e: Pick<KokpitEmri, 'id' | 'bitis'>, kol?: Pick<KolNotlari, 'emir'>): string[] =>
   [...(durusOkunmadi(m, e) ? [DURUS_OKUNMADI] : []), ...(kol?.emir[e.id] !== undefined ? [kol.emir[e.id]!] : [])];
 // Ağaçta açılan emrin not satırı. Adım alt satırının başlığı dar ve tek satırdır, not oraya sığmaz: adımın notları emrin notlarının
 // ardından adımın başlığıyla anılarak yazılır, aynı adımınkiler tek satırda birleşir. Koşullar adımı listeleyen düzenlerle aynıdır.
 export interface AdimNotlari { kol?: Pick<KolNotlari, 'emir' | 'adim'>; adimBekle?: Readonly<Record<string, AdimBeklemesi>>; adimEk?: Readonly<Record<string, number>> }
-export function agacNotlari(m: Pick<KokpitModeli, 'simdi' | 'isler' | 'emirler'>, e: Pick<KokpitEmri, 'id' | 'bitis' | 'adimlar'>, n: AdimNotlari, zaman: (t: number) => string): string[] {
+export function agacNotlari(m: Pick<KokpitModeli, 'durusSonu' | 'isler' | 'emirler'>, e: Pick<KokpitEmri, 'id' | 'bitis' | 'adimlar'>, n: AdimNotlari, zaman: (t: number) => string): string[] {
   return [...emirNotlari(m, e, n.kol), ...e.adimlar.flatMap((a, i) => {
     const x = m.isler[a.id];
     if (!x) return [];
