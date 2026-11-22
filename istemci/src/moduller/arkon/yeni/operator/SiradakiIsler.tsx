@@ -19,7 +19,15 @@ export function SiradakiIsler({ isler, ekranda, bakilan, siradakiMi, yer, sec, e
     const sol = kap.scrollLeft + li.getBoundingClientRect().left - kap.getBoundingClientRect().left - (kap.clientWidth - li.offsetWidth) / 2;
     if (typeof kap.scrollTo === 'function') kap.scrollTo({ left: sol }); else kap.scrollLeft = sol;
   }, [odak, isler.length]);
-  if (isler.length === 0) return null;
+  // 3583: iş yokken de şerit yerinde durur (aynı bölge, aynı yükseklik); yalnız içeriği "iş yok" yazar.
+  if (isler.every((x) => x.empty)) {
+    return (
+      <section className="tc-ay1-sira" aria-label="Sıradaki işler" data-bos="">
+        <span className="tc-ay1-sira-ust"><Simge ad="list" boyut="k" /><b>Sıradaki işler</b><small className="tc-ay1-mono">0 iş</small></span>
+        <div className="tc-ay1-sira-govde"><p className="tc-ay1-soluk tc-ay1-sira-bos">Sırada iş yok</p></div>
+      </section>
+    );
+  }
   const kaydir = (yon: -1 | 1) => {
     const kap = ol.current;
     const li = kap?.firstElementChild as HTMLElement | null | undefined;

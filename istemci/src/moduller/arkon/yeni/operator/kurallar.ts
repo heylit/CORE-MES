@@ -333,7 +333,6 @@ function durumDugmeleriHam(durum: string): DurumDugmesi[] {
   if (durum === 'queued') return [
     { key: 'su', eylem: 'setup', simge: 'wrench', etiket: 'Hazırlık', ton: 'hazard' },
     { key: 's', eylem: 'start', simge: 'play', etiket: 'İşi Başlat', ton: 'run', ana: true },
-    { key: 'd', eylem: 'drawing', simge: 'ruler', etiket: 'Resim', ton: 'done' },
   ];
   if (durum === 'setup') return [{ key: 's', eylem: 'start', simge: 'play', etiket: 'Üretime Geç', ton: 'run', ana: true }];
   if (durum === 'running') return [
@@ -353,10 +352,23 @@ function durumDugmeleriHam(durum: string): DurumDugmesi[] {
   ];
   return [{ key: 'n', eylem: 'next', simge: 'next', etiket: 'Sıradaki İş', ton: 'hazard', ana: true }];
 }
-// Telefonun alt eylem çubuğu (618, 615-1 b): durumun ana eylemi, Durdur ve Duraklat. Durdur dokunuşla duruş nedeni penceresini açar, orada onaylanır;
-// basılı tutulan Bitir ve ikincil eylemler (Hazırlık, Resim) aşağıdaki düğme grubunda kalır.
-export function cubukDugmeleri(durum: string, beklemede = false): DurumDugmesi[] {
-  return durumDugmeleri(durum, beklemede).filter((d) => d.ana || d.eylem === 'stop' || d.eylem === 'pause').map(({ tut: _tut, ...d }) => d);
+// 3583 Y4: eylem satırı sabit üç yuvadır (Başlat ya da Durdur · Duraklat ya da Hazırlık · Bitir). Durumun düğmesi olmayan yuva yerinde
+// pasif kalır; yuva yer değiştirmez, çünkü düğme sayısı durumla oynayınca operatörün parmağı yanlış düğmeye düşüyordu.
+export type DugmeYuvasi = 'ana' | 'ara' | 'bitir';
+export interface SabitDugme extends DurumDugmesi { yuva: DugmeYuvasi }
+const YEDEK_ARA: DurumDugmesi = { key: 'ara', eylem: 'pause', simge: 'pause', etiket: 'Duraklat', ton: 'hold', tut: true, kapali: true };
+const YEDEK_BITIR: DurumDugmesi = { key: 'bitir', eylem: 'finish', simge: 'flag', etiket: 'Bitir', ton: 'done', tut: true, kapali: true };
+export function sabitDugmeler(durum: string, beklemede = false): SabitDugme[] {
+  const l = durumDugmeleri(durum, beklemede);
+  const ana = l.find((d) => d.ana) ?? l[0]!;
+  const bitir = l.find((d) => d.eylem === 'finish') ?? YEDEK_BITIR;
+  const ara = l.find((d) => d !== ana && d.eylem !== 'finish') ?? YEDEK_ARA;
+  return [{ ...ana, key: 'ana', yuva: 'ana' }, { ...ara, key: 'ara', yuva: 'ara' }, { ...bitir, key: 'bitir', yuva: 'bitir' }];
+}
+// Telefonun alt eylem çubuğu (618, 615-1 b): ilk iki yuva (ana eylem ve Duraklat ya da Durdur ya da Hazırlık). Durdur dokunuşla duruş nedeni
+// penceresini açar, orada onaylanır; basılı tutulan Bitir sayfadaki düğme grubunda kalır.
+export function cubukDugmeleri(durum: string, beklemede = false): SabitDugme[] {
+  return sabitDugmeler(durum, beklemede).filter((d) => d.yuva !== 'bitir').map(({ tut: _tut, ...d }) => d);
 }
 // Durum düğmesinin geri alınabilir iletisi ve simgesi (act içindeki sözlükler).
 export const DURUM_ILETISI: Readonly<Record<string, string>> = { start: 'Üretim başladı', resume: 'Üretime devam', restart: 'Yeniden başlatıldı', pause: 'İş duraklatıldı', setup: 'Hazırlık süresi başladı' };

@@ -190,16 +190,13 @@ test.describe('A1 Operatör', () => {
       });
     }
 
-    test('tek işte şerit tek kart ve ekrandaki iştir (telefonda şerit yok); 900 px yükseklikte bölümler üst üste binmez', async ({ page, ag, ac }) => {
+    test('tek işte şerit tek kart ve ekrandaki iştir; 900 px yükseklikte bölümler üst üste binmez', async ({ page, ag, ac }) => {
       const serit = await ac900(page, ac, 1);
-      if (await darMi(page)) {
-        await expect(serit).toHaveCount(0);
-      } else {
-        await expect(serit.getByText('1 iş · 1/1')).toBeVisible();
-        await expect(serit.getByRole('listitem')).toHaveCount(1);
-        await expect(serit.getByRole('button', { name: 'IE-CARK-0 · ekranda' })).toHaveAttribute('aria-pressed', 'true');
-        await expect(serit.getByRole('button', { name: 'Bu işe geç' })).toHaveCount(0);
-      }
+      // 3583: sıra şeridi darda da hep vardır; tek işte tek kart ve ekrandaki iştir.
+      await expect(serit.getByText('1 iş · 1/1')).toBeVisible();
+      await expect(serit.getByRole('listitem')).toHaveCount(1);
+      await expect(serit.getByRole('button', { name: 'IE-CARK-0 · ekranda' })).toHaveAttribute('aria-pressed', 'true');
+      await expect(serit.getByRole('button', { name: 'Bu işe geç' })).toHaveCount(0);
       await altAlta(page);
       expect(await tasma(page)).toBeLessThanOrEqual(0);
       expect(yazmalar(ag.yazmalar)).toEqual([]);

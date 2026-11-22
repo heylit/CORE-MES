@@ -42,12 +42,18 @@ function ac(dar = false, islemler = ['stok.cikis', 'sevkiyat.is-yaz']) {
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}><div className="tc-ay1"><YuklemeTerminali dar={dar} /></div></QueryClientProvider>);
   return istekler;
 }
+// 3583: iskelet yüklenirken de çizilir; şerit dolana dek beklenir.
+const seritHazir = async (ad: string) => {
+  const r = await screen.findByRole('region', { name: ad });
+  await waitFor(() => { expect(within(r).getAllByRole('listitem').length).toBeGreaterThan(0); });
+  return r;
+};
 const durum = () => screen.getByRole('group', { name: 'İş durumu' });
 
 describe('yükleme terminali (3389 a)', () => {
   it('duraklar şeritte; Yüklendi +1 sıradaki kalemin çıkışını onayla yazar, sayı sunucudan gelir; Eksik +1 sıradakini atlar', async () => {
     const istekler = ac();
-    const serit = await screen.findByRole('region', { name: 'Araçtaki duraklar' });
+    const serit = await seritHazir('Araçtaki duraklar');
     expect(within(serit).getAllByRole('listitem')).toHaveLength(2);
     expect(screen.getByRole('heading', { name: 'ORN Kamyonet' })).toBeTruthy();
     fireEvent.click(within(durum()).getByRole('button', { name: /Yüklemeyi başlat/ }));
@@ -66,7 +72,8 @@ describe('yükleme terminali (3389 a)', () => {
 
   it('Bitir irsaliye no ister; yazılınca durak biter ve sıradaki durak ekrana gelir', async () => {
     const istekler = ac();
-    fireEvent.click(within(await screen.findByRole('group', { name: 'İş durumu' })).getByRole('button', { name: /Yüklemeyi başlat/ }));
+    await seritHazir('Araçtaki duraklar');
+    fireEvent.click(within(durum()).getByRole('button', { name: /Yüklemeyi başlat/ }));
     const bitir = within(durum()).getByRole('button', { name: /Bitir/ });
     fireEvent.click(bitir);
     fireEvent.click(bitir);
@@ -92,7 +99,8 @@ describe('yükleme terminali (3389 a)', () => {
     expect((await screen.findByRole('dialog', { name: 'Çıkış onayı' })).textContent).toContain('ORN Flanş');
     cleanup();
     ac(true);
+    await seritHazir('Araçtaki duraklar');
     const cubuk = await screen.findByRole('group', { name: 'İş eylemleri' });
-    expect(within(cubuk).getAllByRole('button').map((b) => b.textContent)).toEqual(['Yüklemeyi başlat', 'Yüklendi +1', 'Eksik +1']);
+    expect(within(cubuk).getAllByRole('button').map((b) => b.textContent)).toEqual(['Yüklemeyi başlat', 'Duraklat', 'Yüklendi +1', 'Eksik +1']);
   });
 });

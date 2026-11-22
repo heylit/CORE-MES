@@ -18,7 +18,7 @@ import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import type { DurusGerceklesmesi } from '../cekirdek/vardiya.ts';
 import { yerel } from '../cekirdek/yerel.ts';
 import { useSimdi } from '../veri/baglam.ts';
-import { CAGRI_ASAMALARI, cagriTonu, durumDugmeleri, hazirlikSayisi, tonDurumu, type DurumDugmesi } from './kurallar.ts';
+import { CAGRI_ASAMALARI, cagriTonu, hazirlikSayisi, sabitDugmeler, tonDurumu, type DugmeYuvasi, type DurumDugmesi } from './kurallar.ts';
 import type { Cagri, Gorev, GorevEylemi, Is } from './tipler.ts';
 
 // Operatör ekranının parçaları (bilesenler.ts Queue, EtkinKart, Dial, Orbs; operator-parcalar.ts TaskCard, PlanBanner, TopluPanel,
@@ -451,12 +451,14 @@ export function TopluGiris({ kalan, kapali, kaydet, nedenler, hurdaEtiketi = 'Hu
 }
 
 /* ── durum düğmeleri: nedensiz Duraklat ve Bitir 1,2 sn basılı tutulur; Durdur dokunuşla neden sorar (2000 b) ── */
-export function DurumDugmeleri({ durum, eylem, erken, pasif = false, gizle, beklemede = false }: {
-  durum: string; eylem: (d: DurumDugmesi) => void; erken: (etiket: string) => void; pasif?: boolean; gizle?: readonly string[]; beklemede?: boolean;
+// 3583 Y4: üç sabit yuva; durumun düğmesi olmayan yuva pasif ve yerinde kalır. yuvalar verilirse yalnız onlar çizilir (telefonda
+// ilk ikisi alt çubuktadır, sayfada Bitir kalır).
+export function DurumDugmeleri({ durum, eylem, erken, pasif = false, yuvalar, beklemede = false }: {
+  durum: string; eylem: (d: DurumDugmesi) => void; erken: (etiket: string) => void; pasif?: boolean; yuvalar?: readonly DugmeYuvasi[]; beklemede?: boolean;
 }) {
   return (
     <OrbGrubu etiket="İş durumu">
-      {durumDugmeleri(durum, beklemede).filter((d) => !gizle || !gizle.includes(d.eylem)).map((d) => (
+      {sabitDugmeler(durum, beklemede).filter((d) => !yuvalar || yuvalar.includes(d.yuva)).map((d) => (
         <Orb key={d.key} simge={d.simge} etiket={d.etiket} ton={tonDurumu(d.ton)} ana={!!d.ana} disabled={pasif || !!d.kapali} {...(d.tut ? { basiliTutMs: 1200 } : {})}
           tetikle={() => eylem(d)} erkenBirakinca={() => erken(d.etiket)} />
       ))}
@@ -511,7 +513,8 @@ export interface TerminalUyarisi {
 // Sayacın üstünde tek satır: en öncelikli uyarı ve kalanların sayısı. Sıra çağıranın verdiği sıradır (Kurgu Ek 2 Soru 3).
 export function UyariSeridi({ uyarilar, ac }: { uyarilar: readonly TerminalUyarisi[]; ac: () => void }) {
   const u = uyarilar[0];
-  if (!u) return null;
+  // 3583: uyarı yokken de bölge yerinde durur (görünmez, yer tutar); sayaç uyarının gelip gitmesiyle oynamaz.
+  if (!u) return <div className="tc-ay1-uyari-seridi" data-bos="" aria-hidden="true" />;
   return (
     <button type="button" className="tc-ay1-uyari-seridi" data-durum={u.ton} onClick={u.ac ?? ac} title={uyarilar.map((x) => x.metin).join('\n')}
       aria-label={[u.aria ?? u.metin, uyarilar.length > 1 ? `${String(uyarilar.length - 1)} uyarı daha` : null].filter(Boolean).join(' · ')}>

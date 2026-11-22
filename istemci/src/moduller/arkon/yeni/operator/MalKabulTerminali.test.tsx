@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { BildirimSaglayici } from '../../../../ortak/arayuz/index.ts';
-import { depoDugmeleri, sayimEklenir } from './DepoTerminali.tsx';
+import { depoDugmeleri, sabitDepoDugmeleri, sayimEklenir } from './DepoTerminali.tsx';
 import { MalKabulTerminali } from './MalKabulTerminali.tsx';
 
 // 3388 a: mal kabul üretim terminalinin düzeninde; Kabul +1 en çok firmada kalan kadar, Bitir'de tek kayıt. Değerler uydurmadır.
@@ -34,6 +34,12 @@ function ac(dar = false) {
   return istekler;
 }
 const durum = () => screen.getByRole('group', { name: 'İş durumu' });
+// 3583: iskelet yüklenirken de çizilir; şerit dolana dek beklenir.
+const seritHazir = async (ad: string) => {
+  const r = await screen.findByRole('region', { name: ad });
+  await waitFor(() => { expect(within(r).getAllByRole('listitem').length).toBeGreaterThan(0); });
+  return r;
+};
 const tus = (ad: string) => screen.getByRole('button', { name: ad }) as HTMLButtonElement;
 
 describe('mal kabul terminali (3388 a)', () => {
@@ -48,7 +54,7 @@ describe('mal kabul terminali (3388 a)', () => {
 
   it('bekleyen kabuller şeritte; Başlat ile Kabulde, Kabul +1 firmada kalanda durur, ret tuşu yok (ret GKK işidir); Bitir tek kayıt yazar', async () => {
     const istekler = ac();
-    const serit = await screen.findByRole('region', { name: 'Bekleyen kabuller' });
+    const serit = await seritHazir('Bekleyen kabuller');
     expect(within(serit).getAllByRole('listitem')).toHaveLength(2);
     expect(screen.getByRole('heading', { name: 'ORN-UE-1' })).toBeTruthy();
     expect(tus('Kabul +1').disabled).toBe(true);
@@ -74,7 +80,8 @@ describe('mal kabul terminali (3388 a)', () => {
 
   it('sayım cihazda saklanır: ekran yeniden açılınca iş Kabulde ve sayısıyla gelir', async () => {
     ac();
-    fireEvent.click(within(await screen.findByRole('group', { name: 'İş durumu' })).getByRole('button', { name: /Kabulü başlat/ }));
+    await seritHazir('Bekleyen kabuller');
+    fireEvent.click(within(durum()).getByRole('button', { name: /Kabulü başlat/ }));
     fireEvent.click(tus('Kabul +1'));
     cleanup();
     ac();
@@ -83,11 +90,11 @@ describe('mal kabul terminali (3388 a)', () => {
 
   it('satın alma satırında sayım tuşu kapalı; "Okut ve kabul et" Stok\'un okutmalı kabulünü açar', async () => {
     ac();
-    const serit = await screen.findByRole('region', { name: 'Bekleyen kabuller' });
+    const serit = await seritHazir('Bekleyen kabuller');
     fireEvent.click(within(serit).getByRole('button', { name: /ORN-S-31/ }));
     fireEvent.click(within(durum()).getByRole('button', { name: /Kabulü başlat/ }));
     expect(tus('Kabul +1').disabled).toBe(true);
-    expect(screen.getByRole('note').textContent).toContain('okutmayla');
+    expect(document.querySelector('.tc-ay1-depo-ileti')?.textContent).toContain('okutmayla');
     fireEvent.click(screen.getByRole('button', { name: /Okut ve kabul et/ }));
     const p = await screen.findByRole('dialog', { name: 'Okut ve kabul et' });
     expect(within(p).getAllByLabelText(/^Kod/).length).toBeGreaterThan(0);
@@ -95,6 +102,7 @@ describe('mal kabul terminali (3388 a)', () => {
 
   it('telefonda Kabul +1 alttaki eylem çubuğunda, ret yok; görünümler Kabul, Adımlar, Bilgi', async () => {
     ac(true);
+    await seritHazir('Bekleyen kabuller');
     const cubuk = await screen.findByRole('group', { name: 'İş eylemleri' });
     expect(within(cubuk).getByRole('button', { name: /Kabulü başlat/ })).toBeTruthy();
     expect(within(cubuk).getByRole('button', { name: 'Kabul +1' })).toBeTruthy();
@@ -103,5 +111,50 @@ describe('mal kabul terminali (3388 a)', () => {
     expect(within(nav).getAllByRole('button').map((b) => b.textContent)).toEqual(['Kabul', 'Adımlar', 'Bilgi']);
     fireEvent.click(within(nav).getByRole('button', { name: 'Adımlar' }));
     expect(screen.getByRole('list', { name: 'Adımlar' }).textContent).toContain('Dönen malzemeyi doğrula');
+  });
+
+  it('3583: sabit yuvalar: yükleniyorken de iskelet çizilir; üç eylem yuvası ve iki düğme yuvası her durumda yerinde', async () => {
+    for (const d of ['queued', 'running', 'paused', 'stopped', 'done'] as const) expect(sabitDepoDugmeleri(d, 'Kabulü başlat').map((x) => x.yuva)).toEqual(['ana', 'ara', 'bitir']);
+    expect(sabitDepoDugmeleri('queued', 'Kabulü başlat').map((x) => !!x.kapali)).toEqual([false, true, true]);
+    expect(sabitDepoDugmeleri('running', 'x').map((x) => x.etiket)).toEqual(['Durdur', 'Duraklat', 'Bitir']);
+    expect(sabitDepoDugmeleri('paused', 'x').map((x) => x.etiket)).toEqual(['Devam Et', 'Durdur', 'Bitir']);
+    expect(sabitDepoDugmeleri('done', 'Kabulü başlat').map((x) => !!x.kapali)).toEqual([true, true, true]);
+    ac();
+    // Yüklenirken: şerit, durum, ileti bölgeleri ve üç pasif eylem yuvası var; DurumKutusu yalnız sağ bölmede.
+    expect(screen.getByRole('region', { name: 'Bekleyen kabuller' })).toBeTruthy();
+    expect(screen.getByRole('status', { name: /Yükleniyor/ })).toBeTruthy();
+    const yuvalar = within(durum()).getAllByRole('button') as HTMLButtonElement[];
+    expect(yuvalar).toHaveLength(3);
+    expect(yuvalar.every((b) => b.disabled)).toBe(true);
+    await seritHazir('Bekleyen kabuller');
+    // Yüklenince aynı üç yuva; yalnız ilki (Kabulü başlat) açık.
+    const sonra = within(durum()).getAllByRole('button') as HTMLButtonElement[];
+    expect(sonra.map((b) => b.disabled)).toEqual([false, true, true]);
+    fireEvent.click(sonra[0]!);
+    expect((within(durum()).getAllByRole('button') as HTMLButtonElement[]).map((b) => b.disabled)).toEqual([false, false, false]);
+  });
+
+  it('3583: satın alma satırında "Okut ve kabul et" yuvası başlamadan pasif görünür, Kabulde açılır; Etiket bas yuvası ayrılmış ve görünmez', async () => {
+    ac();
+    const serit = await seritHazir('Bekleyen kabuller');
+    fireEvent.click(within(serit).getByRole('button', { name: /ORN-S-31/ }));
+    const okut = screen.getByRole('button', { name: /Okut ve kabul et/ }) as HTMLButtonElement;
+    expect(okut.disabled).toBe(true);
+    const yuvalar = okut.closest('.tc-ay1-yuvalar')!;
+    expect(yuvalar.children).toHaveLength(2);
+    expect(yuvalar.children[1]!.getAttribute('aria-hidden')).toBe('true');
+    expect(screen.queryByRole('button', { name: /Etiket bas/ })).toBeNull();
+    fireEvent.click(within(durum()).getByRole('button', { name: /Kabulü başlat/ }));
+    expect((screen.getByRole('button', { name: /Okut ve kabul et/ }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('3583: fason satırında düğme yuvaları ayrılmıştır ama görünmez; ileti satırı hep vardır', async () => {
+    ac();
+    await seritHazir('Bekleyen kabuller');
+    expect(screen.queryByRole('button', { name: /Okut ve kabul et/ })).toBeNull();
+    const yuvalar = document.querySelector('.tc-ay1-yuvalar')!;
+    expect(yuvalar.children).toHaveLength(2);
+    expect([...yuvalar.children].every((c) => c.getAttribute('aria-hidden') === 'true')).toBe(true);
+    expect(document.querySelector('.tc-ay1-depo-ileti')).toBeTruthy();
   });
 });
