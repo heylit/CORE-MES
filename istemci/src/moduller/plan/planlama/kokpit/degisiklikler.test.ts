@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { BekleyenDegisiklik, PlanlamaCalismasi } from '../tipler.ts';
 import type { KokpitEmri, KokpitIsi, KokpitModeli } from './kurallar.ts';
 import { ESKI_DEGISIKLIK } from '../kayit.ts';
-import { bekleyenDegisiklikleri, degisiklikDokumu, degisiklikler, gerideEmirleri, gorunumdeBekleyenler } from './degisiklikler.ts';
+import { bekleyenDegisiklikleri, degisiklikDokumu, degisiklikler, gelenEmirleri, gelenler, gerideEmirleri, gorunumdeBekleyenler, guncellemeEtkisi } from './degisiklikler.ts';
 
 // Uydurma örnek (ORN-): şimdi 10. saat; torna 8'de başlayacaktı ve başlamadı, freze başladı, taşlama on dakika önce başlayacaktı.
 const is = (id: string, S: number, ek: Partial<KokpitIsi> = {}): KokpitIsi => ({ id, job: id.split('.')[0] ?? '', ad: `Adım ${id}`, m: 'T1', S, C: S + 4, basladi: false, fason: false, kilitli: false, sira: 0, ...ek });
@@ -121,5 +121,48 @@ describe('gorunumdeBekleyenler', () => {
     const eski = bekleyen(ESKI_DEGISIKLIK), dis = bekleyen('dis', { dis: true });
     expect(gorunumdeBekleyenler([eski, dis], g(6, 4, [bekleyen('taslak')])).map((b) => b.id)).toEqual([ESKI_DEGISIKLIK, 'dis']);
     expect(gorunumdeBekleyenler([eski, dis], g(6, 6, [])).map((b) => b.id)).toEqual(['dis']);
+  });
+});
+
+// 3532: gelen değişikliğin gantt'taki işareti ve "Planı güncelle"nin sonucu.
+describe('gelenler (3532)', () => {
+  const m2: KokpitModeli = { ...M, tezgahlar: [...M.tezgahlar, { id: 'T2', kod: 'ORN-T2', ad: '', fason: false }], isler: { ...M.isler, '2.30': is('2.30', 12, { m: 'T2' }) } };
+  const olay = (emirNo: string | null, makineKod: string | null) => ({ neden: 'durus' as const, zaman: '2026-10-20T09:00:00Z', uretimEmriId: null, emirNo, makineId: null, makineKod });
+
+  it('veri emirlerin bütün işlerine, saha emrin olay tezgâhındaki işlerine, geride işin kendisine düşer; "*" işaret vermez', () => {
+    const l = degisiklikler({ m: m2, zaman, an, bekleyen: [bekleyen('a', { isler: ['1'] }), bekleyen('b')], olaylar: [olay('ORN-UE-2', 'ORN-T2'), olay(null, 'ORN-T1')] });
+    const g = gelenler(m2, l);
+    const tur = (id: string) => g.isler.get(id)?.map((d) => d.baslik);
+    // Bir işte birden çok tür: en acili önce (geride, saha, veri); işaret ilk türdür (Arayüz Z2).
+    expect(tur('1.10')).toEqual(['geride', 'veri']);
+    expect(tur('1.20')).toEqual(['veri']);
+    expect(tur('2.30')).toEqual(['saha']);
+    expect(tur('2.10')).toBeUndefined();
+    // Emre bağlanamayan olay yalnız tezgâh satırındadır.
+    expect([...g.satirlar.keys()]).toEqual(['T1']);
+    expect(g.satirlar.get('T1')?.[0]?.ne).toBe('Duruş: ORN-T1');
+  });
+
+  it('olay tezgâhı yoksa emrin bütün işleri; işaretin yaktığı emirler o işin değişikliklerinin emirleridir', () => {
+    const l = degisiklikler({ m: m2, zaman, an, bekleyen: [bekleyen('a', { isler: ['1', '2'] })], olaylar: [olay('ORN-UE-2', null)] });
+    const g = gelenler(m2, l);
+    expect(g.isler.get('2.20')?.map((d) => d.baslik)).toEqual(['saha', 'veri']);
+    expect([...gelenEmirleri(m2, g, '1.10')].sort()).toEqual(['1', '2']);
+    expect([...gelenEmirleri(m2, g, null)].sort()).toEqual(['1', '2', '9']);
+    expect([...gelenEmirleri(m2, g, 'yok')]).toEqual([]);
+  });
+});
+
+describe('guncellemeEtkisi (3532, Risk R2)', () => {
+  it('yalnız güncellemeden hemen önceki yerine göre kayan işler sayılır; en çok kayan ve terminini ilk kez aşan emir', () => {
+    // Elle taşınmış iş (1.20) güncellemeden önceki modelde zaten yeni yerindedir: güncelleme onu kaydırmadıysa sayılmaz.
+    const once = { emirler: [{ ...emir('1', 40), bitis: 30 }, { ...emir('3', 20), bitis: 25 }], isler: { '1.10': is('1.10', 8), '1.20': is('1.20', 20), '3.10': is('3.10', 2) } };
+    const sonra = { emirler: [{ ...emir('1', 40), bitis: 43 }, { ...emir('3', 20), bitis: 27 }], isler: { '1.10': is('1.10', 11), '1.20': is('1.20', 20), '3.10': is('3.10', 1, { m: 'T2' }), '4.10': is('4.10', 5) } };
+    const e = guncellemeEtkisi(once, sonra);
+    expect(e.kayan).toEqual([{ isId: '1.10', fark: 3, tezgahDegisti: false }, { isId: '3.10', fark: -1, tezgahDegisti: true }]);
+    expect(e.enCok?.isId).toBe('1.10');
+    // 3 zaten geçti (25 > 20): yeniden "gecikir" denmez.
+    expect(e.geciken).toEqual(['ORN-UE-1']);
+    expect(guncellemeEtkisi(once, once)).toEqual({ kayan: [], enCok: null, geciken: [] });
   });
 });

@@ -1,8 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Simge } from '../../../../ortak/arayuz/index.ts';
 import { emirKuyrugu } from '../ortak/emir-no.ts';
+import { BASLIK_ADI, GELEN_SIMGESI, gelenSirasi, type Degisiklik, type Gelenler } from './degisiklikler.ts';
+import type { CanliYer } from './Tahta.tsx';
 import type { Derleme } from '../motor/kurallar.ts';
-import { aralikYuku, bagimlilik, durumYazisi, durusYazisi, ekMesaiYazisi, matrisSirasi, satirKimligi, suAndakiDurus, yukYuzdesi, type KokpitEmri, type KokpitIsi, type KokpitModeli } from './kurallar.ts';
+import { aralikYuku, bagimlilik, durumYazisi, sureYaz, durusYazisi, ekMesaiYazisi, matrisSirasi, satirKimligi, suAndakiDurus, yukYuzdesi, type KokpitEmri, type KokpitIsi, type KokpitModeli } from './kurallar.ts';
 
 // Telefonda tahtanın yerini tutan liste. Tezgâh gözü: önce plana alınacak emirler, sonra tezgâh tezgâh sıradaki işler (ilk üçü, gerisi
 // düğmeyle); Sipariş gözü: emirler, geç olan üstte. Satıra dokununca ayrıntı alttan açılır.
@@ -21,11 +23,35 @@ export interface ListeOzellikleri {
   sorunBildir?: ((tezgah: string) => void) | null;
   // Emir düzeyindeki notlar (kurallar.ts emirNotlari): telefonda ağaç yoktur, not emrin kartında durum satırının altında yazar.
   emirNotu?: ((e: KokpitEmri) => readonly string[]) | null;
+  // 3532: gelen değişikliklerin işareti satırın solunda (işaretsiz satırda yeri boş kalır); satıra basınca cümle satırın altında açılır,
+  // dışına basınca ya da Esc ile kapanır. eskiYer: "Planı güncelle"den önceki yerler; satırda "N sa ileri/geri" yazar. Hayalet yoktur.
+  gelen?: Gelenler | null;
+  eskiYer?: Readonly<Record<string, CanliYer>> | null;
 }
 
-export function Liste({ m, cx, goz, emirler, secEmir, secIs, zaman, sec, yanan = null, sorunBildir = null, emirNotu = null }: ListeOzellikleri) {
+export function Liste({ m, cx, goz, emirler, secEmir, secIs, zaman, sec, yanan = null, sorunBildir = null, emirNotu = null, gelen = null, eskiYer = null }: ListeOzellikleri) {
   const isaret = (job: string) => ({ 'data-yanan': yanan?.has(job) ? '' : undefined, 'data-sonuk': yanan && !yanan.has(job) ? '' : undefined });
   const [acik, setAcik] = useState<ReadonlySet<string>>(new Set());
+  const [cumle, setCumle] = useState<string | null>(null);
+  useEffect(() => {
+    if (cumle === null) return undefined;
+    const bas = (ev: PointerEvent): void => { if (!(ev.target as Element | null)?.closest?.(`[data-liste-satir="${cumle.replace(/["\\]/g, '\\$&')}"]`)) setCumle(null); };
+    const tus = (ev: KeyboardEvent): void => { if (ev.key === 'Escape') setCumle(null); };
+    document.addEventListener('pointerdown', bas, true); document.addEventListener('keydown', tus);
+    return () => { document.removeEventListener('pointerdown', bas, true); document.removeEventListener('keydown', tus); };
+  }, [cumle]);
+  const isaretVar = gelen !== null && gelen.isler.size > 0;
+  const emirGelenleri = (e: KokpitEmri): Degisiklik[] => [...new Set(e.adimlar.flatMap((a) => gelen?.isler.get(a.id) ?? []))].sort(gelenSirasi);
+  const simge = (l: readonly Degisiklik[]) => (isaretVar ? <i className="tc-pyq-liste-gelen" data-tur={l[0]?.baslik}>{l[0] && <><Simge ad={GELEN_SIMGESI[l[0].baslik]} boyut="k" /><span className="tc-gizli-etiket">{BASLIK_ADI[l[0].baslik]}</span></>}</i> : null);
+  const cumleSatiri = (id: string, l: readonly Degisiklik[]) => (cumle === id && l.length > 0 ? (
+    <div className="tc-pyq-liste-cumle" role="status" data-liste-cumle={id}>{l.map((d) => <p key={d.anahtar}><b>{BASLIK_ADI[d.baslik]}:</b> {d.ne}{d.alt ? <small>{d.alt}</small> : null}</p>)}</div>
+  ) : null);
+  const kayma = (x: KokpitIsi): string => {
+    const y = eskiYer?.[x.id];
+    if (!y) return '';
+    const d = x.S - y.S;
+    return Math.abs(d) > 0.01 ? ` · ${sureYaz(d)} ${d > 0 ? 'ileri' : 'geri'}` : y.m !== x.m ? ' · yeni tezgâh' : '';
+  };
   const emir = useMemo(() => new Map(emirler.map((e) => [e.id, e])), [emirler]);
   const gruplar = useMemo(() => {
     const hepsi = Object.values(m.isler), gorunen = hepsi.filter((x) => emir.has(x.job));
@@ -36,30 +62,39 @@ export function Liste({ m, cx, goz, emirler, secEmir, secIs, zaman, sec, yanan =
     }).filter((g) => g.isler.length > 0);
   }, [m, cx, emir]);
 
-  const emirSatiri = (e: KokpitEmri) => (
-    <li key={e.id}>
-      <button type="button" data-d={e.durum} aria-current={secEmir === e.id} {...isaret(e.id)} onClick={() => { sec(e.id, null); }}>
-        <b>{e.no}</b><span>{e.urun}</span><small>{durumYazisi(e)}{e.bitis === null ? (e.termin === null ? '' : ` · termin ${zaman(e.termin).slice(0, 9)}`) : ` · biter ${zaman(e.bitis).slice(0, 9)}`}</small>
+  const emirSatiri = (e: KokpitEmri) => {
+    const l = emirGelenleri(e);
+    return (
+    <li key={e.id} data-liste-satir={e.id}>
+      <button type="button" data-d={e.durum} aria-current={secEmir === e.id} {...isaret(e.id)} data-gelen={l.length > 0 ? '' : undefined} onClick={() => { sec(e.id, null); setCumle(l.length > 0 ? e.id : null); }}>
+        {simge(l)}<b>{e.no}</b><span>{e.urun}</span><small>{durumYazisi(e)}{e.bitis === null ? (e.termin === null ? '' : ` · termin ${zaman(e.termin).slice(0, 9)}`) : ` · biter ${zaman(e.bitis).slice(0, 9)}`}</small>
         {emirNotu?.(e).map((y) => <small data-emir-not={e.id} key={y}>{y}</small>)}
       </button>
+      {cumleSatiri(e.id, l)}
     </li>
-  );
+    );
+  };
   const isSatiri = (x: KokpitIsi) => {
     const e = emir.get(x.job);
     const adim = yanan?.has(x.job) ? e?.adimlar.find((a) => a.id === x.id) : undefined;
     const bag = e && adim ? bagimlilik(e, adim)?.kisa ?? '' : '';
+    const l = gelen?.isler.get(x.id) ?? [];
     return (
-      <li key={x.id}>
-        <button type="button" data-d={e?.durum ?? 'iyi'} aria-current={secIs === x.id} {...isaret(x.job)} onClick={() => { sec(x.job, x.id); }}>
-          <b>{emirKuyrugu(e?.no ?? x.job)}</b><span>{e ? `${e.urun} · ` : ''}{x.ad}</span><small>{zaman(x.S).slice(6)}{e && e.durum !== 'iyi' ? ` · ${durumYazisi(e)}` : ''}{bag ? ` · ${bag}` : ''}</small>
+      <li key={x.id} data-liste-satir={x.id}>
+        <button
+          type="button" data-d={e?.durum ?? 'iyi'} aria-current={secIs === x.id} {...isaret(x.job)} data-gelen={l.length > 0 ? '' : undefined}
+          onClick={() => { sec(x.job, x.id); setCumle(l.length > 0 ? x.id : null); }}
+        >
+          {simge(l)}<b>{emirKuyrugu(e?.no ?? x.job)}</b><span>{e ? `${e.urun} · ` : ''}{x.ad}</span><small>{zaman(x.S).slice(6)}{e && e.durum !== 'iyi' ? ` · ${durumYazisi(e)}` : ''}{bag ? ` · ${bag}` : ''}{kayma(x) && <em data-kayma="">{kayma(x)}</em>}</small>
         </button>
+        {cumleSatiri(x.id, l)}
       </li>
     );
   };
 
   if (goz === 'S') {
     return (
-      <ul className="tc-pyq-liste" aria-label="Emirler">
+      <ul className="tc-pyq-liste" aria-label="Emirler" data-isaretli={isaretVar ? '' : undefined}>
         {matrisSirasi(emirler).map(emirSatiri)}
         {!emirler.length && <li className="tc-pyq-not">Süzgece uyan emir yok.</li>}
       </ul>
@@ -67,7 +102,7 @@ export function Liste({ m, cx, goz, emirler, secEmir, secIs, zaman, sec, yanan =
   }
   const plansiz = emirler.filter((e) => e.durum === 'plansiz');
   return (
-    <div className="tc-pyq-liste" role="group" aria-label="Tezgâhlar ve işler">
+    <div className="tc-pyq-liste" role="group" aria-label="Tezgâhlar ve işler" data-isaretli={isaretVar ? '' : undefined}>
       {plansiz.length > 0 && (
         <section>
           <h3><b>Yerleştirilecek</b><small>{plansiz.length} emir</small></h3>

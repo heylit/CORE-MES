@@ -505,7 +505,7 @@ describe('Kokpit', () => {
     expect(screen.queryByRole('complementary', { name: 'Gelenler' })).toBeNull();
     expect(screen.queryByRole('button', { name: /Tümü \(/ })).toBeNull();
     const ozet = document.querySelector('[data-test-yuva="satir"] [data-degisiklik-ozeti]') as HTMLElement;
-    expect(ozet.textContent).toBe('3 değişiklik1 veri · 2 sahaAç');
+    expect(ozet.textContent).toBe('3 değişiklik· 2 iş etkilendi1 veri · 2 sahaAç');
     const serit = screen.getByRole('region', { name: 'Siparişler, sırasıyla' });
     expect(serit.querySelector('[data-kart="3"] [data-olay]')?.textContent).toContain('1 değişiklik');
     expect(screen.queryByRole('region', { name: 'Planı etkileyen değişiklikler' })).toBeNull();
