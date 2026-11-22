@@ -158,6 +158,30 @@ describe('rol dağılımı: Arkon rolleri, bakım rolü ve malzeme tanım yetkis
     assert.equal(await arkonRolu(await girisYap('mudur', 'operator')), 'lead');
   });
 
+  // Kart 3548, kullanıcı kararı 22.11.2026: kalite GKK istasyonunu terminalden başlatır ve sayar (events ve counts: Arkon kayıt yazımı);
+  // bakım ve satın alma kapalı kalır.
+  test('kalite terminalden durum ve sayım kaydı yazar; bakım ve satın alma yazamaz; matriste prod.run yalnız kalitede eklenir', async () => {
+    const kayitYaz = async (o: Oturum, tur: 'events' | 'counts'): Promise<number> => {
+      const ortak = { cid: `rol-${tur}-${(sayac += 1)}`, at: Date.parse('2001-10-07T08:00:00Z'), machine: 'TZG-04', wc: 'TAL', orderNo: 'UE-1' };
+      const satir = tur === 'counts' ? { ...ortak, kind: 'good', delta: 1 } : { ...ortak, state: 'running' };
+      return (await gonder(o, `/arkon/kayitlar/${tur}/ekle`, { satirlar: [satir], kaynak: 'c1' })).statusCode;
+    };
+    const arkonRolu = async (o: Oturum): Promise<unknown> => (await oku(o, '/arkon/ben')).json().kisi?.rol;
+    for (const rol of ['kalite']) {
+      const oturum = await girisYap(rol);
+      for (const tur of ['events', 'counts'] as const) assert.equal(await kayitYaz(oturum, tur), 200, `${rol} ${tur}`);
+    }
+    assert.equal(await arkonRolu(await girisYap('kalite')), 'quality');
+    for (const rol of ['bakim', 'satin_alma']) {
+      const oturum = await girisYap(rol);
+      for (const tur of ['events', 'counts'] as const) assert.equal(await kayitYaz(oturum, tur), 403, `${rol} ${tur}`);
+    }
+    const kalite = await girisYap('kalite');
+    const matris = (await oku(kalite, '/arkon/belgeler/kv/perms')).json() as { belge?: { govde?: { v?: Record<string, string[]> } } };
+    assert.equal(matris.belge?.govde?.v?.['quality']?.includes('prod.run'), true);
+    assert.equal(matris.belge?.govde?.v?.['plan']?.includes('prod.run'), false);
+  });
+
   // Görmediği: işlem ve sayfa düzeyinde. Sayfası olmayan rolün oturumla açık okuma uçlarını okuyabilmesi ayrı karttadır (#247).
   test('bakım rolü Arkon bakım kaydını yazar, Arkon dışında stok sayfasını ve satın alma talebini taşır, işlem isteyen uçlarda 403 alır; operatör ve satın alma bakım kaydı yazamaz', async () => {
     const bakim = await girisYap('bakim');

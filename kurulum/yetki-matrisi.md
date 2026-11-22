@@ -77,7 +77,7 @@ Tabloda hiçbir rolde geçmeyen kayıtlı işlem de yalnız yöneticidedir.
   Alan müdürleri kendi ekip rolünün yetkilerini, alanının onaylarını ve ekip onaylarını (`ik.izin-onay` `ik.devam-onay` `ik.pozisyon-onay`) taşır:
   Planlama Müdürü planlama ve projeden, Satın Alma Müdürü satın almadan, Üretim Müdürü vardiya sorumlusundan türer. Stok geri alma ve stok onayları,
   finans rakamı ve şirket özeti alan müdürlerine verilmez.
-- Üretim yetkisi (`terminal.uret`) yalnız müdür, operatör, vardiya sorumlusu ve Üretim Müdürü'ndedir. Arkon'da başka rolle girilen sayım TMI emrine "yetki yok" diye yansır.
+- Üretim yetkisi (`terminal.uret`) yalnız müdür, operatör, vardiya sorumlusu, Üretim Müdürü ve kalitededir. Arkon'da başka rolle girilen sayım TMI emrine "yetki yok" diye yansır.
   Başkasının sayımını düzeltme (`uretim-emirleri.sayim-duzelt`) yalnız vardiya sorumlusu, Üretim Müdürü ve yöneticidedir (185 a, 195 a, 2177-1); müdür `arkon.amir` taşısa da almaz.
 - Vardiya sorumlusu vardiya ekranını görür ve yazar (`vardiya.yaz`, 195 a); kalite ve sevkiyat firma kartını okur, finans rakamı görmez (201 a); müdür Üretim Terminali'ni açar.
 - `arkon.yansima-oku` (TMI'ye yazılamayan Arkon kayıtları listesi) ve `arkon.yansima-yeniden` (hatalı kaydı yeniden deneme) Arkon rolü
@@ -101,6 +101,7 @@ Tabloda hiçbir rolde geçmeyen kayıtlı işlem de yalnız yöneticidedir.
   üretim yeri ve toplu güncelleme, adım ekleme ve düzenleme (ek adım, rework), bölme ve birleştirme, plana alma, bekletme, iptal ve arşive alma
   (kapatma dahil). Sevkiyatta ürün kalemini serbest bırakma düzenleme eylemini ister. `uretim-emirleri.yaz` hiçbir ucu açmaz, ayrı kartla kalkar.
 - Kalibrasyon okuma uçları sayfa işlemini kabul eder: `kalibrasyon.oku` hiçbir role verilmez, okuyan rol `sayfa.kalibrasyon` taşır.
+- Kalite rolü terminalden başlatır ve sayar (`prod.run`, kart 3548, 22.11.2026).
 - Depo rolü depo işini yapan kişiye ek rol olarak verilir. Bakım rolü Arkon'u açar ve stoğu yalnız okur; `stok.cikis` almaz, malzemeyi depo çıkarır.
 - Depo ve müdür Stok Merkezi'nin işlemlerini taşır; stok tanımı (raf, konum) depoya da verilir (kart #1225). Hareketi geri alma (`stok.geri-al`) ve elle eksiye
   düşüm onayı (`stok.eksi-onayla`) yalnız müdürdedir (1387 a); depo kendi hareketini geri alamaz. Terminalin ve akışların otomatik eksisi onay istemez.

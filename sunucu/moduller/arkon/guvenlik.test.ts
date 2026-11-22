@@ -1157,8 +1157,8 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
 
   describe('kayıt türü x rol, kalite kararı ve belgelerdeki kişi alanları', () => {
     const KAYIT_YAZAR: Record<string, readonly ArkonRolu[]> = {
-      events: ['admin', 'operator', 'lead'],
-      counts: ['admin', 'operator', 'lead'],
+      events: ['admin', 'operator', 'lead', 'quality'],
+      counts: ['admin', 'operator', 'lead', 'quality'],
       meas: ['admin', 'operator', 'lead', 'quality'],
       calls: ['admin', 'operator', 'lead', 'quality', 'maint'],
     };
@@ -1587,11 +1587,11 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
   });
 
   describe('yetki matrisi (kv/perms) sunucu tablolarından türer', () => {
-    // Arkon'un varsayılan matrisi: arkon/web/src/app/ortak-ayarlar.ts:48 PERMS0.
+    // Arkon'un varsayılan matrisi: arkon/web/src/app/ortak-ayarlar.ts:48 PERMS0; tek sapma kalite için prod.run (kart 3548, kullanıcı kararı).
     const PERMS0: Record<string, string[]> = {
       plan: ['page.op', 'page.board', 'page.plan', 'page.prep', 'page.quality', 'page.report', 'page.draw', 'pkg.edit', 'pkg.publish', 'prod.station', 'q.report', 'adm.shifts', 'plan.edit', 'down.edit', 'logi.handle'],
       prep: ['page.op', 'page.board', 'page.plan', 'page.prep', 'page.quality', 'page.report', 'page.draw', 'pkg.edit', 'pkg.publish', 'pkg.del', 'prod.station', 'q.report'],
-      quality: ['page.op', 'page.board', 'page.quality', 'page.report', 'q.meas', 'q.decide', 'q.report', 'prod.ack', 'pkg.approve', 'gauge.edit'],
+      quality: ['page.op', 'page.board', 'page.quality', 'page.report', 'prod.run', 'q.meas', 'q.decide', 'q.report', 'prod.ack', 'pkg.approve', 'gauge.edit'],
       lead: ['page.op', 'page.board', 'page.plan', 'page.quality', 'page.maint', 'page.report', 'prod.run', 'prod.fix', 'prod.station', 'prod.ack', 'q.report', 'adm.shifts', 'down.edit', 'logi.req', 'maint.work'],
       maint: ['page.op', 'page.board', 'page.maint', 'page.report', 'prod.ack', 'prod.station', 'maint.work', 'maint.plan'],
       operator: ['page.op', 'prod.run', 'logi.req'],
