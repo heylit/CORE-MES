@@ -92,7 +92,7 @@ export function SevkListesi(o: SevkListesiOzellikleri) {
                         <td data-baslik="" className="tc-pyv-l-ad tc-tablo-tam">
                           <button type="button" className="tc-pyv-l-ac" aria-expanded={acikMi} aria-label={`${no} ayrıntısı`} onClick={() => { acikYaz(acikMi ? null : x.id); }}>
                             <Simge ad="chev-right" boyut="k" />
-                            <span className="tc-pyv-l-kim"><b className="mono">{no}</b><small>{`${x.ad ?? '—'}${x.musteri === '—' ? '' : ` · ${x.musteri}`}`}</small></span>
+                            <span className="tc-pyv-l-kim"><b className="mono">{no}</b><small title={`${x.ad ?? '—'}${x.musteri === '—' ? '' : ` · ${x.musteri}`}`}>{`${x.ad ?? '—'}${x.musteri === '—' ? '' : ` · ${x.musteri}`}`}</small></span>
                           </button>
                         </td>
                         {adetSutunu && <td data-baslik="Adet" className="tc-pyv-num">{x.adet === null ? '—' : x.adet.toLocaleString('tr-TR')}</td>}
