@@ -16,7 +16,7 @@ import { kapanisCozucusuKaydet } from './kapanis.ts';
 import type { KapanisCozucusu } from './kapanis.ts';
 import {
   adimGirdileriGetir, adimUretimSatiriGetir, emirAdimZinciriGetir, akisEmriGetir, akisFasonGetir, akisIsEmirleriGetir, akisOlaylariGetir, akisSayimlariGetir, aralikAdetleriGetir, gunlukAralikAdetleriGetir, kisininGunlukIsEmirleriGetir,
-  tasinanGirdiGetir, dugumleriGetir, emirBul, emirDurumlariGetir, ustEmirlerBul, isEmirleriGetir, malzemelerinAcikEmirleriGetir, siparisSatiriEmirleriGetir, isEmriPlanBilgileriGetir, isEmriZamanlariGetir, katilimSureleriGetir, kisininAcikIstasyonu, kisininAcikIsleriGetir, kisininHurdalariGetir,
+  tasinanGirdiGetir, dugumleriGetir, emirBul, emirleriGetir, emirDurumlariGetir, ustEmirlerBul, isEmirleriGetir, malzemelerinAcikEmirleriGetir, siparisSatiriEmirleriGetir, isEmriPlanBilgileriGetir, isEmriZamanlariGetir, katilimSureleriGetir, kisininAcikIstasyonu, kisininAcikIsleriGetir, kisininHurdalariGetir,
   bitenEmirler as bitenEmirlerGetir, bitenIsEmirleriGetir, calismayaGecisAnlari as gecisAnlariGetir, istasyonDurusSureleri as istasyonDuruslariGetir, kisininIsEmirleriGetir, makineKullanimAraliklariGetir, makinelerdekiIslerGetir, makineSayimAnlariGetir, makineSureleriGetir, sonGirisleriGetir, standartSureleriGetir,
 } from './sorgular.ts';
 import type {
@@ -32,6 +32,16 @@ export async function acikEmirler(db: Db): Promise<Emir[]> {
   // Transaction tek bağlantıdır: sorgular sırayla koşar.
   for (const durum of ACIK_EMIR_DURUMLARI) emirler.push(...(await servis.emirleriListele(db, durum)).emirler);
   return emirler;
+}
+
+// Satın alma talebinin bağlanabileceği emirler (3579): açık her emir, istasyonsuz olan da. Sıradaki adımı fason ya da kaynaksız emrin
+// istasyonu boştur; talep tam da böyle emirler için açılır, sunucu bağı yalnız duruma göre denetler.
+export async function talepEmirSecenekleri(db: Db): Promise<{ id: number; emirNo: string; parcaNo: string; parcaAd: string }[]> {
+  const l: { id: number; emirNo: string; parcaNo: string; parcaAd: string }[] = [];
+  for (const durum of ACIK_EMIR_DURUMLARI) {
+    for (const e of await emirleriGetir(db, durum, false)) l.push({ id: e.id, emirNo: e.emirNo, parcaNo: e.parcaNo, parcaAd: e.parcaAd });
+  }
+  return l;
 }
 
 // Arkon tek paket okuması: bir emri, bütün açık emirleri kurmadan, acikEmirler'deki biçimiyle verir; açık değilse null.
