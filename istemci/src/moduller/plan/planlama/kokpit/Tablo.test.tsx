@@ -160,4 +160,23 @@ describe('Kokpit sol tablo (3533)', () => {
     expect(kart.querySelector('.tc-pyq-kart-ust svg.tc-pyq-halka[data-kucuk]')).not.toBeNull();
     expect(kart.querySelector('.tc-pyq-kart-alt')?.textContent).toMatch(/adet.*Termin/);
   });
+  it('telefon kartı geçerli HTML: düğme içinde div yok; durum yazısı başlıkta ve (plansız, riskli, terminsiz emirde) kartta yazıyla durur (Arayüz Z2, O3)', () => {
+    const bolum = ac();
+    const liste = bolum.querySelector<HTMLElement>('ul.tc-pyq-liste')!;
+    expect(liste.querySelectorAll('button div').length).toBe(0);
+    for (const d of liste.querySelectorAll<HTMLElement>('button[data-d]')) {
+      expect(d.getAttribute('title')).toMatch(/\S/);
+      if (d.getAttribute('data-d') === 'plansiz' || d.getAttribute('data-d') === 'risk') expect(d.querySelector('.tc-pyq-kart-durum')?.textContent).toMatch(/plansız|termine/);
+    }
+  });
+
+  it('telefonda Tezgâhlar listesi her tezgâhın şu an durumunu yazar (Arayüz Z1) ve gantt alanı tablo rolünde sunum sayılır (O6)', () => {
+    ac();
+    fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: 'Tezgâhlar' }));
+    const bolum = screen.getByRole('region', { name: 'Tezgâhlar' });
+    const durumlar = [...bolum.querySelectorAll('.tc-pyq-liste h3 i[data-su-an]')].map((x) => x.textContent);
+    expect(durumlar.length).toBeGreaterThan(0);
+    for (const d of durumlar) expect(d).toMatch(/Çalışıyor|Duruş|Boşta/);
+    for (const a of bolum.querySelectorAll('[role="table"] .tc-pyq-alan')) expect(a.getAttribute('role')).toBe('presentation');
+  });
 });

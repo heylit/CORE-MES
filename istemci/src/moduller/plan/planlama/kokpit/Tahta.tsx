@@ -471,7 +471,7 @@ export function Tahta(o: TahtaOzellikleri) {
           </div>
         )
         : <div className="tc-pyq-bas">{goz === 'T' || uzakMi(olcek) ? 'Tezgâh' : 'Emir'}</div>}
-      <div className="tc-pyq-alan">
+      <div className="tc-pyq-alan" role={tabloKipi ? 'presentation' : undefined}>
         {gunler.filter((g) => olcek !== 'Y' || g % 7 === 0).filter((g) => olcek !== 'A' || g % 7 === 0).map((g) => (
           <button
             type="button" key={g} className="tc-pyq-gun" ref={(el) => { yerYaz(el, g * 24 * px, (uzakMi(olcek) ? 7 : 1) * 24 * px); }}
@@ -624,14 +624,14 @@ export function Tahta(o: TahtaOzellikleri) {
       case 'emir': return (
         <button
           type="button" className="tc-pyq-agac-ac" data-agac={e.id} aria-expanded={r.acik} aria-label={`${e.no} ${r.acik ? 'adımlarını gizle' : 'adımlarını aç'}`}
-          title={`${e.no} · ${r.acik ? 'adımları gizle' : 'adımları göster'}`} onClick={() => { agac?.ac(e.id); }}
+          title={`${e.no} · ${durumYazisi(e)} · ${r.acik ? 'adımları gizle' : 'adımları göster'}`} onClick={() => { agac?.ac(e.id); }}
         ><Simge ad="chev-right" boyut="k" /><b>{emirKuyrugu(e.no)}</b></button>
       );
       case 'urun': return <span title={e.urun}>{e.urun}</span>;
       case 'adet': return <span className="tc-pyq-h-veri">{String(e.adet)}</span>;
       case 'termin': return e.termin === null ? <Bos ad="Termin yok" /> : <span className="tc-pyq-h-veri" title={`Termin ${zaman(e.termin)}`}>{tarihSaat(zaman, e.termin)}</span>;
       case 'bitis': return e.bitis === null ? <Bos ad="Plan bitişi yok" /> : <span className="tc-pyq-h-veri" title={`Plan bitişi ${zaman(e.bitis)}`}>{tarihSaat(zaman, e.bitis)}</span>;
-      case 'fark': return <FarkRozeti f={farkOlustur(e)} {...(e.bitis !== null && e.termin !== null ? { ipucu: `Plan bitişi ${zaman(e.bitis)} · termin ${zaman(e.termin)}` } : {})} />;
+      case 'fark': return <FarkRozeti f={farkOlustur(e)} ipucu={e.bitis !== null && e.termin !== null ? `${durumYazisi(e)} · plan bitişi ${zaman(e.bitis)} · termin ${zaman(e.termin)}` : durumYazisi(e)} />;
       case 'ilerleme': { const i = ilerleme(e, m.isler); return i ? <Halka i={i} /> : null; }
     }
   };
@@ -718,7 +718,7 @@ export function Tahta(o: TahtaOzellikleri) {
         {plansiz.length > 0 && (
           <div className="tc-pyq-satir tc-pyq-tepsi">
             <div className="tc-pyq-bas"><b>Yerleştirilecek</b><small>{plansiz.length} emir{planaAl && goz === 'T' ? ' · sürükleyip tezgâha bırakın' : ''}</small></div>
-            <div className="tc-pyq-alan tc-pyq-fisler"><div>
+            <div className="tc-pyq-alan tc-pyq-fisler" role={tabloKipi ? 'presentation' : undefined}><div>
               {plansiz.map((e) => (
                 <button
                   type="button" key={e.id} className="tc-pyq-fis" data-fis={e.id} aria-pressed={secEmir === e.id} data-tasinan={tasinan?.fis === e.id ? '' : undefined}
@@ -766,7 +766,7 @@ export function Tahta(o: TahtaOzellikleri) {
               </>
               )}
             </div>
-            <div className="tc-pyq-alan" onClick={(ev) => { if (!(ev.target as Element).closest('button') && !tasinan && yanan) secimiKaldir?.(); }}>
+            <div className="tc-pyq-alan" role={tabloKipi ? 'presentation' : undefined} onClick={(ev) => { if (!(ev.target as Element).closest('button') && !tasinan && yanan) secimiKaldir?.(); }}>
               {(kapali.get(r.kimlik) ?? []).map(([a, b]) => <span className="tc-pyq-kapali" key={a} ref={(el) => { yerYaz(el, (a - m.bas) * px, (b - a) * px); }} />)}
               {goz === 'T' && (m.durus[r.kimlik] ?? []).map((d) => <span className="tc-pyq-durus" key={`${String(d.a)}-${String(d.b)}`} data-plan={d.ariza ? undefined : d.neden} title={d.ariza ? durusYazisi(d, zaman) : planliDurusYazisi(d, zaman)} ref={(el) => { yerYaz(el, (Math.max(d.a, m.bas) - m.bas) * px, (Math.min(d.b, m.son) - Math.max(d.a, m.bas)) * px); }} />)}
               {r.termin !== undefined && r.termin !== null && <span className="tc-pyq-satir-termin" data-d={r.durum} title={`Termin ${zaman(r.termin)}`} ref={(el) => { yerYaz(el, (r.termin! - m.bas) * px); }} />}

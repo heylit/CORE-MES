@@ -510,12 +510,12 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const turTusu = useRef({ onceki: turOnceki, sonraki: turSonraki });
   useEffect(() => { turTusu.current = { onceki: turOnceki, sonraki: turSonraki }; });
   const sorunSec = useCallback((yon: 1 | -1) => {
-    const l = sorunlular(gorunen);
+    const l = sorunlular(emirSirali);
     if (!l.length) return;
     const i = l.findIndex((e) => e.id === secEmir), e = l[(i + yon + l.length) % l.length] ?? l[0];
     if (!e) return;
     sec(e.id, null); setGoster(e.adimlar.find((a) => m.isler[a.id])?.id ?? null);
-  }, [gorunen, secEmir, sec, m]);
+  }, [emirSirali, secEmir, sec, m]);
   // Çoklu seçim (3365): Ctrl, Cmd ya da Shift ile tıklanan işler. İlk ek tıklamada o an seçili iş de kümeye girer; seçim kümenin dışına çıkınca
   // (düz tıklama, Esc, boş alan) küme boşalır. Küme birlikte kayar: her iş kendi taşımasıdır, sıraya girer, Geri her birini ayrı alır.
   const [coklu, setCoklu] = useState<ReadonlySet<string>>(() => new Set());

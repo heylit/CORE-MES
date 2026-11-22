@@ -5,7 +5,7 @@ import { BASLIK_ADI, GELEN_SIMGESI, gelenSirasi, type Degisiklik, type Gelenler 
 import type { CanliYer } from './Tahta.tsx';
 import type { Derleme } from '../motor/kurallar.ts';
 import { Bos, FarkRozeti, Halka } from './Tablo.tsx';
-import { farkOlustur, ilerleme, siralaGecikme, tarihSaat, type Siralama } from './tablo.ts';
+import { SU_AN_ADI, farkOlustur, ilerleme, siralaGecikme, suAn, tarihSaat, type Siralama } from './tablo.ts';
 import { aralikYuku, bagimlilik, durumYazisi, sureYaz, durusYazisi, ekMesaiYazisi, matrisSirasi, satirKimligi, suAndakiDurus, yukYuzdesi, type KokpitEmri, type KokpitIsi, type KokpitModeli } from './kurallar.ts';
 
 // Telefonda tahtanın yerini tutan liste. Tezgâh gözü: önce plana alınacak emirler, sonra tezgâh tezgâh sıradaki işler (ilk üçü, gerisi
@@ -62,7 +62,7 @@ export function Liste({ m, cx, goz, emirler, secEmir, secIs, zaman, sec, yanan =
     return m.tezgahlar.map((t) => {
       const isler = gorunen.filter((x) => satirKimligi(x) === t.id).sort((a, b) => a.S - b.S);
       const yuzde = t.fason ? null : yukYuzdesi(aralikYuku(cx, hepsi, t.id, m.bas, m.bas + 7 * 24));
-      return { t, isler, yuzde };
+      return { t, isler, yuzde, durum: suAn(hepsi, t.id, suAndakiDurus(m, t.id) !== null) };
     }).filter((g) => g.isler.length > 0);
   }, [m, cx, emir]);
 
@@ -70,19 +70,20 @@ export function Liste({ m, cx, goz, emirler, secEmir, secIs, zaman, sec, yanan =
     const l = emirGelenleri(e);
     return (
     <li key={e.id} data-liste-satir={e.id}>
-      <button type="button" data-d={e.durum} aria-current={secEmir === e.id} {...isaret(e.id)} data-gelen={l.length > 0 ? '' : undefined} onClick={() => { sec(e.id, null); setCumle(l.length > 0 ? e.id : null); }}>
+      <button type="button" data-d={e.durum} title={durumYazisi(e)} aria-current={secEmir === e.id} {...isaret(e.id)} data-gelen={l.length > 0 ? '' : undefined} onClick={() => { sec(e.id, null); setCumle(l.length > 0 ? e.id : null); }}>
         {simge(l)}
-        <div className="tc-pyq-kart">
-          <div className="tc-pyq-kart-ust">
+        <span className="tc-pyq-kart">
+          <span className="tc-pyq-kart-ust">
             <b>{e.no}</b>
             <span className="tc-pyq-kart-sag"><FarkRozeti f={farkOlustur(e)} />{(() => { const i = ilerleme(e, m.isler); return i ? <Halka i={i} kucuk /> : null; })()}</span>
-          </div>
-          <div className="tc-pyq-kart-alt">
+          </span>
+          <span className="tc-pyq-kart-alt">
             <span title={e.urun}>{e.urun}</span>
             <em>{`${String(e.adet)} adet`}</em>
             <em>{e.termin === null ? <>Termin <Bos ad="yok" /></> : `Termin ${tarihSaat(zaman, e.termin)}`}</em>
-          </div>
-        </div>
+          </span>
+          {e.durum === 'plansiz' || e.durum === 'risk' || e.gecikme === null ? <small className="tc-pyq-kart-durum">{durumYazisi(e)}</small> : null}
+        </span>
         {emirNotu?.(e).map((y) => <small data-emir-not={e.id} key={y}>{y}</small>)}
       </button>
       {cumleSatiri(e.id, l)}
@@ -124,11 +125,11 @@ export function Liste({ m, cx, goz, emirler, secEmir, secIs, zaman, sec, yanan =
           <ul>{plansiz.map(emirSatiri)}</ul>
         </section>
       )}
-      {gruplar.map(({ t, isler, yuzde }) => {
+      {gruplar.map(({ t, isler, yuzde, durum }) => {
         const tum = acik.has(t.id) || isler.some((x) => x.id === secIs);
         return (
           <section key={t.id}>
-            <h3><b>{t.kod}</b><small>{t.ad}</small>{m.mesai?.[t.id]?.length ? <i className="tc-pyq-mesai-isaret" title={ekMesaiYazisi(m.mesai[t.id]!, zaman)}>+ ek mesai</i> : null}{suAndakiDurus(m, t.id) ? <i data-durus>{durusYazisi(suAndakiDurus(m, t.id)!, zaman)}</i> : yuzde !== null && <i>%{yuzde}</i>}{sorunBildir && !t.fason && <button type="button" className="tc-pyq-simge-dugme" data-sorun-bildir={t.id} aria-label={`${t.kod} için sorun bildir`} title="Sorun bildir: arıza ya da bakım" onClick={() => { sorunBildir(t.id); }}><Simge ad="wrench" boyut="k" /></button>}</h3>
+            <h3><b>{t.kod}</b><small>{t.ad}</small>{m.mesai?.[t.id]?.length ? <i className="tc-pyq-mesai-isaret" title={ekMesaiYazisi(m.mesai[t.id]!, zaman)}>+ ek mesai</i> : null}<i data-su-an={durum}>{SU_AN_ADI[durum]}</i>{suAndakiDurus(m, t.id) ? <i data-durus>{durusYazisi(suAndakiDurus(m, t.id)!, zaman)}</i> : null}{yuzde !== null && <i title="Önümüzdeki 7 günde planlı saat / açık saat">%{yuzde}</i>}{sorunBildir && !t.fason && <button type="button" className="tc-pyq-simge-dugme" data-sorun-bildir={t.id} aria-label={`${t.kod} için sorun bildir`} title="Sorun bildir: arıza ya da bakım" onClick={() => { sorunBildir(t.id); }}><Simge ad="wrench" boyut="k" /></button>}</h3>
             <ul>
               {(tum ? isler : isler.slice(0, ILK)).map(isSatiri)}
               {isler.length > ILK && (

@@ -993,7 +993,7 @@
 .tc-pyq-satir[data-agac-adim] > .tc-pyq-bas[data-tablo] .tc-pyq-h { color: var(--muted); }
 .tc-pyq-satir[data-agac-ara] { --satir: var(--dokunma-yogun); background: var(--panel2); }
 .tc-pyq-satir[data-agac-ara] > .tc-pyq-bas { background: linear-gradient(var(--panel2), var(--panel2)), var(--panel-solid); }
-.tc-pyq-satir[data-agac-ara] .tc-pyq-h { color: var(--faint); font-size: var(--yazi-xs); font-weight: 600; letter-spacing: var(--harf-aralik-06); }
+.tc-pyq-satir[data-agac-ara] .tc-pyq-h { color: var(--muted); font-size: var(--yazi-xs); font-weight: 600; letter-spacing: var(--harf-aralik-06); }
 .tc-pyq-satir[data-secili] { background: color-mix(in oklab, var(--hazard) 10%, transparent); }
 .tc-pyq-satir[data-secili] > .tc-pyq-bas { background: linear-gradient(color-mix(in oklab, var(--hazard) 10%, transparent), color-mix(in oklab, var(--hazard) 10%, transparent)), var(--panel-solid); }
 .tc-pyq-bos { color: var(--faint); }
@@ -1026,12 +1026,16 @@
 .tc-pyq-yuk i[data-yuk="asim"] { --renk: var(--d-gec); }
 /* Ayraç: tablo ile gantt arasındaki çizgi. Gerçek ayraç başlıktadır; satırlardakiler yalnız fare tutamağıdır. */
 .tc-pyq-ayrac { position: absolute; top: 0; bottom: 0; right: 0; z-index: 1; width: var(--b-2); cursor: col-resize; touch-action: none; }
-.tc-pyq-ayrac::before { content: ""; position: absolute; inset: 0 calc(var(--b-1) * -1); }
+.tc-pyq-ayrac::before { content: ""; position: absolute; inset: 0 calc(var(--b-3) * -1); }
 .tc-pyq-ayrac::after { content: ""; position: absolute; top: 0; bottom: 0; right: 0; width: var(--cizgi); background: transparent; }
 .tc-pyq-ayrac:hover::after, .tc-pyq-ayrac[data-surukle]::after, .tc-pyq-ayrac:focus-visible::after { background: var(--hazard); }
 .tc-pyq-ayrac:focus-visible { outline: var(--cizgi) solid var(--hazard); outline-offset: calc(var(--cizgi) * -1); }
-@media (pointer: coarse) { .tc-pyq-ayrac::before { inset: 0 calc(var(--b-2) * -1); } }
+@media (pointer: coarse) { .tc-pyq-ayrac::before { inset: 0 calc(var(--b-4) * -1); } }
 /* 3533: telefondaki emir kartı: üstte emir no, sağda fark rozeti ve tamamlanma dairesi; altta ürün (tek kısalan), adet ve termin. */
+.tc-pyq-kart-durum { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pyq-liste h3 i[data-su-an] { color: var(--muted); }
+.tc-pyq-liste h3 i[data-su-an="calisiyor"] { color: var(--ink); }
+.tc-pyq-liste h3 i[data-su-an="durus"] { color: var(--d-gec); }
 .tc-pyq-liste .tc-pyq-kart { display: grid; gap: var(--pay-ince); grid-column: 1 / -1; min-width: 0; }
 .tc-pyq-liste[data-isaretli] .tc-pyq-kart { grid-column: 2 / -1; }
 .tc-pyq-kart-ust { display: flex; align-items: center; justify-content: space-between; gap: var(--b-2); min-width: 0; }
