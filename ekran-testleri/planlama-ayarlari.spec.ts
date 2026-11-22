@@ -44,14 +44,17 @@ test.describe('yönetici', () => {
   });
 });
 
-test.describe('planlama müdürü', () => {
+test.describe('müdür (fabrika müdürü)', () => {
   test.use({ hesap: 'ornek.mudur' });
 
-  test('Sistem grubunda dört göz kuralı yalnız okunur; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  test('Sistem grubunda ufuk, dilim ve dört göz yalnız okunur (fabrika müdürü bunları değiştiremez); yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
     await ac('/plan/ayarlar?bolum=sistem');
     await expect(page.getByRole('heading', { name: 'Planlama ayarları' })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText('Plan onayında dört göz kuralı')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByLabel('Plan onayında dört göz kuralı')).toHaveCount(0);
+    await expect(page.getByLabel('Plan motorunun ufku (gün)')).toHaveCount(0);
+    await expect(page.getByLabel('Plan motorunun zaman dilimi')).toHaveCount(0);
+    await expect(page.getByText('Plan motorunun ufku (gün)')).toBeVisible();
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
     await page.screenshot({ path: `/tmp/tmiv2-ekran/3561-ayarlar-sistem-mudur-${bilgi.project.name}.png` });
     expect(ag.hatalar).toEqual([]);

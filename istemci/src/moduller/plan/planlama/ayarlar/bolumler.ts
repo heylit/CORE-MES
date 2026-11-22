@@ -142,6 +142,6 @@ export const sistemYazabilir = (anahtar: string, islemVar: (i: string) => boolea
 };
 // Ufuk ve dilim motorun ölçeğidir: değişince plan süresi uzayabilir (ayarın kendi açıklaması da söyler).
 export const SISTEM_UYARILARI: Record<string, string> = {
-  'plan.motor-ufuk-gun': 'Ufuk uzadıkça plan süresi uzar; değişiklik sonraki Planı güncelle ile plana girer.',
-  'plan.motor-dilim-dk': 'Kısa dilim plan süresini uzatır; değişiklik sonraki Planı güncelle ile plana girer.',
+  'plan.motor-ufuk-gun': 'Değişiklik sonraki Planı güncelle ile plana girer.',
+  'plan.motor-dilim-dk': 'Değişiklik sonraki Planı güncelle ile plana girer.',
 };

@@ -69,7 +69,7 @@ describe('Planlama ayarları sayfası (3561)', () => {
     const satir = (ad: string | RegExp) => within(tablo).getByRole('link', { name: ad }).closest('tr')!;
     // Dondurulmuş bölge: çalışmada 4 sa, taslakta 9 sa; kaynak Çalışma.
     const d = within(satir(/Dondurulmuş bölge/)).getAllByRole('cell').map((x) => x.textContent);
-    expect(d.slice(0, 3)).toEqual(['4 sa', '9 sa', 'Çalışma']);
+    expect(d.slice(0, 3)).toEqual(['4 sa', '9 sa', 'Çalışma · Planlama yönü ve zaman']);
     // Motor ve sistem satırları kaydı yazanla gelir; hiç değiştirilmemiş ayarda "—".
     expect(within(satir('Sıralama kuralı')).getAllByRole('cell').map((x) => x.textContent)).toEqual(['ATCS (öncelik, termin ve süre birlikte)', '—', 'Motor', expect.stringContaining('ORN-Kişi-02')]);
     expect(within(satir('Plan onayında dört göz kuralı')).getAllByRole('cell').map((x) => x.textContent)).toEqual(['kapalı', '—', 'Sistem', expect.stringContaining('ORN-Kişi-01')]);
@@ -203,5 +203,10 @@ describe('Planlama ayarları sayfası (3561)', () => {
     cleanup();
     kur(PLAN_YAZAR, 'motor', null);
     expect(await screen.findByRole('group', { name: 'Motor ayarları' })).toBeTruthy();
+  });
+
+  it('sistem uyarısı sunucu açıklamasındaki cümleyi yinelemez (Z6)', async () => {
+    const { SISTEM_UYARILARI } = await import('./bolumler.ts');
+    for (const u of Object.values(SISTEM_UYARILARI)) expect(u).toBe('Değişiklik sonraki Planı güncelle ile plana girer.');
   });
 });

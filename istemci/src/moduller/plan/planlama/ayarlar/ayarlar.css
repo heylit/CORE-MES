@@ -83,21 +83,30 @@
 @media (max-width: 767px) {
   .tc-pya[data-adim="liste"] .tc-pya-ayrinti { display: none; }
   .tc-pya[data-adim="ayrinti"] .tc-pya-liste, .tc-pya[data-adim="ayrinti"] .tc-pya-ozet { display: none; }
+}
+/* Yan yana yerleşim yalnız panel rahat sığınca (1100 ve üstü); altında gruplar üstte sarılır, panel tam genişliktir. */
+@media (max-width: 1099px) {
   .tc-pya-tablo thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
   .tc-pya-tablo, .tc-pya-tablo tbody, .tc-pya-tablo tr { display: block; }
   .tc-pya-tablo tr { padding: var(--b-2) 0; border-bottom: var(--cizgi-ince) solid var(--edge2); }
   .tc-pya-tablo th, .tc-pya-tablo td { display: flex; justify-content: space-between; gap: var(--b-2); padding: var(--b-1) 0; border: 0; }
   .tc-pya-tablo td::before { content: attr(data-etiket); color: var(--muted); font-size: var(--yazi-xs); }
+  .tc-pya-tablo td[data-bos] { display: none; }
   .tc-pya-tablo td:nth-child(4), .tc-pya-tablo td:nth-child(5) { color: var(--muted); font-size: var(--yazi-xs); }
 }
 @media (min-width: 768px) {
   .tc-pya { padding: var(--b-4); }
-  .tc-pya-ana { grid-template-columns: var(--kuyruk-genis) 1fr; align-items: start; }
   .tc-pya-geri { display: none; }
   .tc-pya-alanlar { grid-template-columns: 1fr 1fr; }
   .tc-pya-kisitlar, .tc-pya-kisit-salt { grid-template-columns: 1fr 1fr; }
   .tc-pya-bolum { padding: var(--b-4); }
   .tc-pya-cubuk { margin: 0 calc(var(--b-4) * -1) calc(var(--b-4) * -1); padding: var(--b-2) var(--b-4); }
+}
+@media (min-width: 768px) and (max-width: 1099px) {
+  .tc-pya-liste ul { flex-direction: row; flex-wrap: wrap; }
+}
+@media (min-width: 1100px) {
+  .tc-pya-ana { grid-template-columns: var(--kuyruk-genis) 1fr; align-items: start; }
 }
 @media (min-width: 1280px) {
   .tc-pya-kisitlar, .tc-pya-kisit-salt { grid-template-columns: 1fr 1fr 1fr; }

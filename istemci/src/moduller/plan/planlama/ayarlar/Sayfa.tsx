@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import type { MotorAyarlariCevabi, PlanSistemAyarlariCevabi, PlanSistemAyariSatiri } from '#paylasilan/sozlesme/plan.ts';
 import { Dugme, DurumKutusu, IsaretKutusu, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
@@ -64,8 +64,17 @@ export function AyarlarGovdesi({ o, ortak, c, taslak }: { o: PlanlamaEkranOzelli
   const motorSurumu = motorVeri === null ? null : motorVeri.guncel;
 
   const adim = bolumParam === null ? 'liste' : 'ayrinti';
+  // Telefonda grup değişince bakılan öğe DOM'dan kalkar: odak yeni ayrıntı başlığına, listeye dönüşte seçili gruba gider.
+  const kap = useRef<HTMLDivElement>(null);
+  const ilk = useRef(true);
+  useEffect(() => {
+    if (ilk.current) { ilk.current = false; return; }
+    const hedef = bolumParam === null ? kap.current?.querySelector<HTMLElement>('.tc-pya-liste a[aria-current="page"]') : kap.current?.querySelector<HTMLElement>('.tc-pya-ayrinti h3');
+    hedef?.focus();
+  }, [bolumParam]);
+  const calismaYok = ortak === null || c === null;
   return (
-    <div className="tc-pya" data-adim={adim} data-bolum={bolum}>
+    <div className="tc-pya" data-adim={adim} data-bolum={bolum} ref={kap}>
       <header className="tc-pya-ust">
         <h2><Simge ad="gear" boyut="k" /> Planlama ayarları</h2>
         <p>Planın nasıl kurulduğunu belirleyen ayarlar; değiştirilen ayar önce etkisiyle gösterilir.</p>
@@ -75,20 +84,20 @@ export function AyarlarGovdesi({ o, ortak, c, taslak }: { o: PlanlamaEkranOzelli
           <Simge ad="edit" boyut="k" /> <span>Taslakta {rozetler.kontrol} ayar farkı</span> <Link to="/plan">Kokpit&apos;te gör</Link>
         </p>
       )}
-      <p className="tc-pya-ozet" aria-label="Kontrol özeti">
-        <span><b>{rozetler.kontrol}</b> taslakta fark</span>
+      <section className="tc-pya-ozet" aria-label="Kontrol özeti">
+        {!calismaYok && <span><b>{rozetler.kontrol}</b> taslakta fark</span>}
         {motorSurumu !== null && <span>Motor <b>{motorSurumu.surumId === null ? 'varsayılan' : `v${String(motorSurumu.surumId)}`}</b>{motorSurumu.zaman !== null && ` ${zamanYazisi(motorSurumu.zaman)}`}</span>}
         {kisitOzeti !== null && <span><b>{kisitOzeti.acik} / {kisitOzeti.toplam}</b> kısıt açık{kisitOzeti.taslakta !== null && ` (taslakta ${String(kisitOzeti.taslakta)})`}</span>}
         <small>Sayılar kayıtlı değerdir; taslak ayrı yazılır.</small>
-      </p>
+      </section>
       <div className="tc-pya-ana">
         <Gruplar bolum={bolum} rozetler={rozetler} />
         <div className="tc-pya-ayrinti">
           <Link className="tc-pya-geri" to="?"><Simge ad="chev-left" boyut="k" /> Gruplar</Link>
-          {bolum === 'kontrol' && <KontrolTablosu satirlar={satirlar} bekliyor={motor.okuma.durum === 'bekliyor' || sistem.okuma.durum === 'bekliyor'} hatalar={[motor.okuma, sistem.okuma].flatMap((x) => (x.durum === 'hata' ? [x.ileti] : []))} />}
+          {bolum === 'kontrol' && <KontrolTablosu calismaYok={calismaYok} satirlar={satirlar} bekliyor={motor.okuma.durum === 'bekliyor' || sistem.okuma.durum === 'bekliyor'} hatalar={[motor.okuma, sistem.okuma].flatMap((x) => (x.durum === 'hata' ? [x.ileti] : []))} />}
           {(bolum === 'zaman' || bolum === 'tampon' || bolum === 'kisitlar') && (
             ortak === null || c === null
-              ? <section className="tc-pya-bolum"><h3>{bolumBasligi(bolum)}</h3><DurumKutusu durum="bos" mesaj="Planlama çalışması henüz açılmadı; bu ayarlar çalışmada durur." /></section>
+              ? <section className="tc-pya-bolum"><h3 tabIndex={-1}>{bolumBasligi(bolum)}</h3><DurumKutusu durum="bos" mesaj="Planlama çalışması henüz açılmadı; bu ayarlar çalışmada durur." /></section>
               : <CalismaFormu key={bolum} bolum={bolum} c={c} taslak={taslak} yazabilir={o.yetki.planYaz && taslak !== null} satirlar={satirlar} />
           )}
           {bolum === 'motor' && (
@@ -118,7 +127,7 @@ export function AyarlarGovdesi({ o, ortak, c, taslak }: { o: PlanlamaEkranOzelli
 
 function Baslik({ b }: { b: BolumAnahtari }) {
   const bl = BOLUMLER.find((x) => x.anahtar === b)!;
-  return <h3><Simge ad={bl.simge} boyut="k" /> {bl.baslik}</h3>;
+  return <h3 tabIndex={-1}><Simge ad={bl.simge} boyut="k" /> {bl.baslik}</h3>;
 }
 const KapiSatiri = ({ b }: { b: 'motor' | 'oncelik' | CalismaBolumu }) => <p className="tc-pya-kilit"><Simge ad="lock" boyut="k" /> Bu bölümü {BOLUM_KAPILARI[b].kim} değiştirir; değerler salt okunur.</p>;
 
@@ -147,30 +156,31 @@ function Gruplar({ bolum, rozetler }: { bolum: BolumAnahtari; rozetler: Record<B
 }
 
 // --- Kontrol: geçerli değer, kaynak, son değiştiren, taslakta fark ---
-function KontrolTablosu({ satirlar, bekliyor, hatalar }: { satirlar: readonly KontrolSatiri[]; bekliyor: boolean; hatalar: readonly string[] }) {
+function KontrolTablosu({ calismaYok, satirlar, bekliyor, hatalar }: { calismaYok: boolean; satirlar: readonly KontrolSatiri[]; bekliyor: boolean; hatalar: readonly string[] }) {
   const [suzgec, setSuzgec] = useState<KontrolSuzgeci>('hepsi');
   const liste = suz(satirlar, suzgec);
   return (
     <section className="tc-pya-bolum" aria-label="Kontrol">
-      <h3><Simge ad="list" boyut="k" /> Kontrol: tüm ayarlar</h3>
+      <h3 tabIndex={-1}><Simge ad="list" boyut="k" /> Kontrol: tüm ayarlar</h3>
       <div className="tc-pya-ciplar" role="group" aria-label="Süzgeç">
         {([['hepsi', 'Hepsi'], ['taslakta', 'Taslakta fark']] as const).map(([k, ad]) => (
           <button key={k} type="button" aria-pressed={suzgec === k} onClick={() => { setSuzgec(k); }}>{ad}</button>
         ))}
       </div>
+      {calismaYok && <p className="tc-pya-not">Planlama çalışması açılmadı: Zaman, Tampon ve Kısıtlar ayarları çalışma açılınca bu tabloda listelenir.</p>}
       {hatalar.map((h) => <p key={h} className="tc-pya-hata" role="alert">{h}</p>)}
       {bekliyor && <DurumKutusu durum="yukleniyor" />}
       {liste.length === 0 ? <p className="tc-pya-not">{suzgec === 'taslakta' ? 'Taslakta bekleyen ayar farkı yok.' : 'Gösterilecek ayar yok.'}</p> : (
-        <table className="tc-pya-tablo">
-          <thead><tr><th scope="col">Ayar</th><th scope="col">Geçerli değer</th><th scope="col">Taslakta</th><th scope="col">Kaynak</th><th scope="col">Son değiştiren</th></tr></thead>
-          <tbody>
+        <table className="tc-pya-tablo" role="table">
+          <thead role="rowgroup"><tr role="row"><th role="columnheader" scope="col">Ayar</th><th role="columnheader" scope="col">Geçerli değer</th><th role="columnheader" scope="col">Taslakta</th><th role="columnheader" scope="col">Kaynak</th><th role="columnheader" scope="col">Son değiştiren</th></tr></thead>
+          <tbody role="rowgroup">
             {liste.map((s) => (
-              <tr key={s.id} data-fark={s.taslakta !== null ? '' : undefined}>
-                <th scope="row"><Link to={`?bolum=${s.bolum}`}>{s.ad}</Link></th>
-                <td data-etiket="Geçerli değer">{s.deger}</td>
-                <td data-etiket="Taslakta">{s.taslakta ?? '—'}</td>
-                <td data-etiket="Kaynak">{s.kaynak}</td>
-                <td data-etiket="Son değiştiren">{s.degistiren === null && s.zaman === null ? '—' : `${s.degistiren ?? 'bilinmeyen kişi'}${s.zaman === null ? '' : `, ${zamanYazisi(s.zaman)}`}`}</td>
+              <tr key={s.id} role="row" data-fark={s.taslakta !== null ? '' : undefined}>
+                <th role="rowheader" scope="row"><Link to={`?bolum=${s.bolum}`}>{s.ad}</Link></th>
+                <td role="cell" data-etiket="Geçerli değer">{s.deger}</td>
+                <td role="cell" data-etiket="Taslakta" data-bos={s.taslakta === null ? '' : undefined}>{s.taslakta ?? '—'}</td>
+                <td role="cell" data-etiket="Kaynak">{s.kaynak === 'Çalışma' ? `Çalışma · ${bolumBasligi(s.bolum)}` : s.kaynak}</td>
+                <td role="cell" data-etiket="Son değiştiren" data-bos={s.degistiren === null && s.zaman === null ? '' : undefined}>{s.degistiren === null && s.zaman === null ? '—' : `${s.degistiren ?? 'bilinmeyen kişi'}${s.zaman === null ? '' : `, ${zamanYazisi(s.zaman)}`}`}</td>
               </tr>
             ))}
           </tbody>
@@ -191,6 +201,10 @@ function CalismaFormu({ bolum, c, taslak, yazabilir, satirlar }: {
   const { durum, setDurum, dene, uygula, vazgec } = useEtki({
     c, taslak, sonuc: (x) => { if (x === 'uygulandi') bildir('tamam', 'Ayar plana uygulandı; taslakta.'); setTazele(true); },
   });
+  const cubuk = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (durum.tur === 'etki') [...(cubuk.current?.querySelectorAll<HTMLElement>('button') ?? [])].find((b) => b.textContent === 'Uygula')?.focus();
+  }, [durum.tur]);
   const [hatalar, setHatalar] = useState<Record<string, string>>({});
   const degisen = farklar(c, t);
   const hataVar = Object.keys(hatalar).length > 0;
@@ -271,10 +285,9 @@ function CalismaFormu({ bolum, c, taslak, yazabilir, satirlar }: {
         </>
       )}
       {yazabilir && (degisen.length > 0 || durum.tur !== 'duzen') && (
-        <div className="tc-pya-cubuk">
-          {durum.tur === 'etki' ? (
-            <div role="status"><EtkiBolumu ad="Ayarın etkisi" e={durum.e} uygula={() => { void uygula(durum.e); }} vazgec={() => { void vazgec(); }} /></div>
-          ) : (
+        <div className="tc-pya-cubuk" ref={cubuk}>
+          <div role="status">{durum.tur === 'etki' && <EtkiBolumu ad="Ayarın etkisi" e={durum.e} uygula={() => { void uygula(durum.e); }} vazgec={() => { void vazgec(); }} />}</div>
+          {durum.tur !== 'etki' && (
             <section aria-label="Değişiklik">
               {degisen.length > 0 && <ul className="tc-pya-fark">{degisen.map((d) => <li key={d}>{d}</li>)}</ul>}
               {durum.tur === 'hata' && <p className="tc-pya-hata" role="alert">{durum.ileti}</p>}

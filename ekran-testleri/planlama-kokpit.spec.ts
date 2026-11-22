@@ -1823,6 +1823,45 @@ test('Kokpit 3282 1b: Araçlar > Ayarlar sayfaya gider; dondurma değişir, etki
   expect(ag.hatalar).toEqual([]);
 });
 
+// 3561 Z4: çalışma açıkken Planlama ayarları: Kontrol (farklı satırlı), Zaman (yapışık çubuk), Kısıtlar, Öncelik ve bedel; her genişlikte taşma yok.
+test('Planlama ayarları 3561: çalışma açıkken Kontrol, Zaman çubuğu, Kısıtlar ve Öncelik görünür; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  await taslakSunucusu(page);
+  await page.route('**/api/plan/motor-ayarlari', (r) => json(r, {
+    guncel: { surumId: null, degerler: { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali', acilPay: 0.05, bolmeKip: 'otomatik', bolmeMaks: 3 }, yazan: null, zaman: null }, taslak: null,
+  }));
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/ayarlar?bolum=zaman');
+  const sayfa = page.locator('.tc-pya');
+  await expect(sayfa).toBeVisible({ timeout: 20_000 });
+  const ad = bilgi.project.name;
+  const basla = page.getByRole('button', { name: 'Başlayalım' });
+  if (await basla.isVisible()) await basla.click();
+  const cek = async (n: string): Promise<void> => {
+    expect((await tasmaOlc(page)).belge, n).toBeLessThanOrEqual(0);
+    await page.screenshot({ path: `/tmp/tmiv2-ekran/3561-calisma-${n}-${ad}.png` });
+  };
+  const dondurma = sayfa.getByLabel(/Dondurulmuş bölge/);
+  await dondurma.fill('8');
+  await dondurma.blur();
+  await expect(sayfa.getByText('Dondurulmuş bölge: 4 sa → 8 sa')).toBeVisible();
+  await cek('zaman-cubuk');
+  const gec = async (adi: RegExp, bolum: string): Promise<void> => {
+    if (!(await page.getByRole('navigation', { name: 'Ayar grupları' }).isVisible())) await page.getByRole('link', { name: /Gruplar/ }).first().click();
+    await page.getByRole('navigation', { name: 'Ayar grupları' }).getByRole('link', { name: adi }).first().click();
+    await expect(page).toHaveURL(new RegExp(`bolum=${bolum}`));
+  };
+  await gec(/Kontrol/, 'kontrol');
+  await expect(sayfa.getByRole('table')).toBeVisible();
+  await expect(sayfa.getByText('Dondurulmuş bölge').first()).toBeVisible();
+  await cek('kontrol');
+  await gec(/Kısıtlar/, 'kisitlar');
+  await expect(sayfa.getByRole('heading', { name: 'Açılıp kapanan kısıtlar' })).toBeVisible();
+  await cek('kisitlar');
+  await gec(/Öncelik ve bedel/, 'oncelik');
+  await expect(sayfa.getByRole('heading', { name: /Öncelik ve bedel/ })).toBeVisible();
+  await cek('oncelik');
+});
+
 // Kart 3304 a: planın yönü yalnız üst şeritteki Yön düğmesindedir (her genişlikte); emrin yönü emrin satırında tek satırdır.
 test('Kokpit 3282 1c: plan yönü üst şeritte, emrin yönü emir satırında; etkisini gösterir, Uygula; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
   const t = await taslakSunucusu(page);

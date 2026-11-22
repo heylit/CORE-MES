@@ -175,7 +175,7 @@ function PlanlamaEkrani() {
           {serit && <DegisiklikSeridi calisma={calisma} dis={disSatir} canli={canliBayat} />}
           {calismaYok && (
             <div className="tc-py-calisma-yok" role="status">
-              <span>Planlama çalışması henüz açılmadı; sayfa salt okunur.</span>
+              <span>{gorunum === 'ayarlar' ? 'Planlama çalışması henüz açılmadı; Zaman, Tampon ve Kısıtlar ayarları çalışma açılınca düzenlenir.' : 'Planlama çalışması henüz açılmadı; sayfa salt okunur.'}</span>
               <Dugme tur="birincil" simge="plus" yukleniyor={kuruluyor} disabled={kuruluyor} onClick={calismaAc}>Planlama çalışmasını aç</Dugme>
             </div>
           )}
