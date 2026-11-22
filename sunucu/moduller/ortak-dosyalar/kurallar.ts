@@ -113,6 +113,17 @@ export function duzeyCoz(
   return en;
 }
 
+// OD-39 (3571, ADR 0030 seçici eki): yönetici olmayan rollerden en az biri klasörü göremiyorsa klasör dardır; oradan başka modülün
+// kaydına eklenen dosya o kaydı görenlerin hepsine açılır (seçicide uyarı).
+export function darKlasorMu(
+  id: number,
+  klasorler: ReadonlyMap<number, KlasorDugumu>,
+  yetkiler: ReadonlyMap<number, ReadonlyMap<number, VerilenDuzey>>,
+  roller: readonly KisiRolu[],
+): boolean {
+  return roller.some((r) => !r.yonetici && !gorunurMu(id, klasorler, (k) => duzeyCoz(k, klasorler, yetkiler, [r])));
+}
+
 // OD-5 (görünmezlik): bir klasör, kendisi ve bütün üstleri en az `gorur` ise görünür. Üstü görünmeyen alt klasör ağaçta asılı
 // kalmasın diye gizlenir (özel yetkiyle açılmış olsa da: ADR 0030, 5 klasörün varlığını sızdırmaz).
 export function gorunurMu(id: number, klasorler: ReadonlyMap<number, KlasorDugumu>, duzey: (id: number) => KlasorDuzeyi): boolean {

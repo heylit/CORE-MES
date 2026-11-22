@@ -96,3 +96,9 @@ Yok.
 ## Finans (2642 b, 2646 a, 2651 b: fatura eşlemesi)
 - Kablolama: `genelGiderOraniCozucusu` <- `satin-alma/disari.ts` `belgeGenelGiderOranlari(db, belgeIdler)`; değer `{ oran, esleme: 'yok' | 'kismi' | 'tam' }`. Bulunmayan, siparişsiz ve iptal belge haritada yok. Bağ satırı Finans tesliminde (kablolama.ts, ortak dosya).
 - 2671 b, 2675: eşleme ekranı Finans'ındır (`/finans/fatura-eslemesi/:belgeId`); Satın Alma'nın uçlarını HTTP ile çağırır (GET ve POST `/satin-alma-fatura-eslemeleri/:belgeId`, tipler `paylasilan/sozlesme/satin-alma.ts`, `SatinAlmaUclari`). Uç yetkisi Finans yetkisidir. Rozet `esleme` değerinden.
+
+## 3571 talep çizimi seçicisi (22.11.2026, 3571-1 ile girdi)
+- belge-merkezi `disari.ts`: `kisininSecebildigiCizimler`, `kisininYayindakiCizimi` (yalnız şu an yayındaki revizyon), `kisininMalzemeCizimleri` (öneri şeridi), `kisininGuncelRevizyonlari` ("Yeni revizyon var"); hepsi kişinin okuma işlemiyle.
+- ortak-dosyalar `disari.ts`: `kisininSecebildigiKlasorler`, `kisininKlasorDosyalari`, `kisininGorebildigiDosya` (ADR 0030 seçici eki).
+- dosya `DosyaTutamagi.kayittanKaydaBagla`: birleşen ve güncellenen talebin çizimi aynı modülde kayıttan kayda (Risk K1).
+- dosya `DosyaTutamagi.bagSayilari`: kayıt başına bağ sayısı tek sorguda (ilk tabloda talebin ataç sayısı).

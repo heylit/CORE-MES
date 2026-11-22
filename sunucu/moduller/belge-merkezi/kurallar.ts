@@ -267,3 +267,7 @@ export function turevReddi(t: {
 // "Kaynağı eski": türevin çıktığı revizyon artık yayında değil. Türev kendiliğinden eskiye düşmez; eski revizyonla üretilen
 // parçanın izi kalır, kullanıcı yenisini çıkarır.
 export const kaynakEskiMi = (kaynakDurumu: RevizyonDurumu): boolean => kaynakDurumu !== 'yayinda';
+
+// 3571 K2: başka modülün seçicisi merkezin okuma işlemiyle (uçlardaki OKUMA ile aynı liste) açılır; yetkisiz kişiye liste de dönmez.
+export const CIZIM_OKUYAN_ISLEMLER = ['sayfa.cizimler', 'belge-merkezi.oku'] as const;
+export const cizimOkurMu = (islemler: readonly string[]): boolean => CIZIM_OKUYAN_ISLEMLER.some((i) => islemler.includes(i));

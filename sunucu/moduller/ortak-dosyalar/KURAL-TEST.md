@@ -56,3 +56,4 @@ Test adları başlığın başıdır.
 | AD-1 Aynı dosya uyarısı (3468-1): aynı içeriğin görünen klasördeki ve okunabilen çizimdeki yerleri; görünmeyen klasör yok | `ayni-dosya.test.ts` `AD-1` | görünmeyen klasördeki kopya ne satırla ne sayıyla |
 | AD-2 Çizim yeri yalnız çizim okuyana, klasör yeri yalnız sayfası olana; uçlar 403 | `AD-2` | iki uç 403 |
 | AD-3/4/5 Bilinmeyen içerik boş; uyarı yüklemeyi engellemez; arşivdeki dosya yok, arşivdeki belge "Arşivde" | `AD-3`, `AD-4`, `AD-5`; ekran `aynı dosya uyarısı (3468-1)` | bozuk özet 400 |
+| OD-39 Seçici eki (3571): başka modül kişinin kendi düzeyiyle okur; görünmeyen klasör, arşivdeki dosya, olmayan sürüm ve sayfa işlemi olmayan kişi null; dar klasör (yönetici olmayan bir rol göremiyor) işaretli | `ortak-dosyalar.test.ts` `OD-39` | görünmeyen klasördeki dosya null; her rolün gördüğü klasör dar değil |

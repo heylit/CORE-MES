@@ -24,3 +24,4 @@ Sahip: çekirdek konusu. Test adları dosyadaki adın başıdır; `dosya.test.ts
 | DSK-15 Diske alınan medya özet adlı yazılır, parçaları silinir, okunur | `disk-deposu.test.ts` `bağlanan resim ve video ...` | içerik özetle uyuşmazsa `diskeYaz` hata verir |
 | DSK-16 Canlıda disk deposu kapalı | `disk-deposu.test.ts` `canlıda disk kapalı ...` | aynı test: video bağlanmaz |
 | DSK-17 Künyesi silinen diskteki dosya 30 gün bekler | `disk-deposu.test.ts` `bağı kalkan diskteki dosya ...` | aynı test: yeniden bağlanan kalır |
+| DSK-18 Kayıttan kayda bağ yalnız aynı modülde, kaynak kayda bağlı özetle (3571 K1); kayıt başına bağ sayısı yalnız kendi modülünde | `dosya.test.ts` `DSK-18 kayıttan kayda bağ ...` | aynı test: kaynakta bağ yoksa ve başka modülün tutamağında ret |

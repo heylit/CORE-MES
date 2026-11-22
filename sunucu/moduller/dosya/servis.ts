@@ -208,6 +208,18 @@ async function kaynaktanBagla(db: Db, modul: string, g: BagGirdisi, ekleyenId: n
   return bagliDosya(satir);
 }
 
+// 3571 Risk K1: aynı modülde bir kayıttan ötekine bağ (birleşen ya da güncellenen talebin çizimi). Özet kaynak kayda bağlı değilse ret;
+// kişiden özet alınmaz, yalnız sunucu kodu çağırır. Ad ve belge türü kaynak bağdan gelir; tür ve boyut kaynakta zaten denetlenmiştir.
+async function kayittanKaydaBagla(db: Db, modul: string, kaynakKayit: string, hedefKayit: string, ozet: string, ekleyenId: number): Promise<SaklananDosya> {
+  const kaynak = await sorgular.bag(db, modul, kaynakKayit, ozet);
+  if (kaynak === null) throw dogrulama(ILETILER.yuklenmemis, 'ozet');
+  if ((await sorgular.bagIcinAyir(db, ozet)) === null) throw dogrulama(ILETILER.yuklenmemis, 'ozet');
+  await sorgular.bagYaz(db, { ozet, modul, kayit: hedefKayit, ad: kaynak.ad, belgeTuru: kaynak.belge_turu, ekleyenId });
+  const satir = await sorgular.bag(db, modul, hedefKayit, ozet);
+  if (satir === null) throw new Error(`Yazılan bağ okunamadı: ${modul} ${hedefKayit} ${ozet}`);
+  return bagliDosya(satir);
+}
+
 // Kendi yükleme şeridi olan modül (Arkon, kart #732) tamamladığı ve özetini doğruladığı içeriği ortak depoya yazar; kişi yükleyen
 // olur (DSb korunur). Tür içerikten bulunur; bulunamazsa ikilidir (karar 743 a). Dosya zaten varsa yalnız yükleyen eklenir. Sınır ve
 // kota modülün şeridindedir.
@@ -237,7 +249,9 @@ export interface DosyaTutamagi<D = BagliDosya, T extends SaklananTur = DosyaTuru
   dosyaAkisi(db: Db, kayit: string, ozet: string): Promise<IkiliCevap | null>;
   // Verilenlerden bu kayda bağlı olan özetler.
   bagliOlanlar(db: Db, kayit: string, ozetler: readonly string[]): Promise<string[]>;
+  bagSayilari(db: Db, kayitlar: readonly string[]): Promise<Map<string, number>>;
   kaynaktanBagla(db: Db, g: BagGirdisi, ekleyenId: number, sinir: BagSiniri<T>): Promise<D>;
+  kayittanKaydaBagla(db: Db, kaynakKayit: string, hedefKayit: string, ozet: string, ekleyenId: number): Promise<D>;
 }
 
 // Kendi yükleme şeridi olan modülün (Arkon) tutamağı: içeriği ortak depoya yazar, ikili türünü bağlayabilir.
@@ -267,7 +281,10 @@ function tutamakKur<D>(modul: string, donustur: (d: SaklananDosya) => D): DosyaT
       return satir === null ? null : ikili(satir, satir.ad);
     },
     bagliOlanlar: (db: Db, kayit: string, ozetler: readonly string[]) => sorgular.kayittaBagliOlanlar(db, modul, kayit, ozetler),
+    bagSayilari: (db: Db, kayitlar: readonly string[]) => sorgular.bagSayilari(db, modul, kayitlar),
     kaynaktanBagla: async (db: Db, g: BagGirdisi, ekleyenId: number, sinir: BagSiniri) => donustur(await kaynaktanBagla(db, modul, g, ekleyenId, sinir)),
+    kayittanKaydaBagla: async (db: Db, kaynakKayit: string, hedefKayit: string, ozet: string, ekleyenId: number) =>
+      donustur(await kayittanKaydaBagla(db, modul, kaynakKayit, hedefKayit, ozet, ekleyenId)),
   };
 }
 

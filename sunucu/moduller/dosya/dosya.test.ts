@@ -340,6 +340,28 @@ describe('dosya saklama (gerçek PostgreSQL, gerçek giriş)', () => {
     await assert.rejects(kaynaktan('paket-2'), (h: UygulamaHatasi) => h.kod === 'DOGRULAMA');
   });
 
+  test('DSK-18 kayıttan kayda bağ (3571 K1): aynı modülde kaynak kayda bağlı dosya hedef kayda bağlanır; kaynakta bağ yoksa ret', async () => {
+    const talepler = dosyaTutamagi('satin-alma');
+    const sinir = { turler: ['pdf'] as const, azamiBayt: 1e9 };
+    const icerik = pdf(2400);
+    const ozet = ozetOf(icerik);
+    assert.equal((await yukle(a, icerik)).statusCode, 200);
+    const tasi = (kaynak: string, hedef: string, o = ozet) => vt().tx((db) => talepler.kayittanKaydaBagla(db, kaynak, hedef, o, b.id));
+    await assert.rejects(tasi('talep:k1:cizim', 'talep:h1:cizim'), (h: UygulamaHatasi) => h.kod === 'DOGRULAMA' && h.alan === 'ozet', 'kaynakta bağ yok');
+    await vt().tx((db) => talepler.dosyaBagla(db, kullanici(a), { ozet, kayit: 'talep:k1:cizim', ad: 'Flans.pdf', belgeTuru: null }, sinir));
+    await assert.rejects(tasi('talep:k2:cizim', 'talep:h1:cizim'), (h: UygulamaHatasi) => h.kod === 'DOGRULAMA', 'başka kayıttaki bağ yetmez');
+    const bag = await tasi('talep:k1:cizim', 'talep:h1:cizim');
+    assert.deepEqual({ ozet: bag.ozet, ad: bag.ad, ekleyenId: bag.ekleyenId }, { ozet, ad: 'Flans.pdf', ekleyenId: b.id });
+    assert.notEqual(await vt().tx((db) => talepler.dosyaAkisi(db, 'talep:h1:cizim', ozet)), null);
+    // Başka modülün tutamağı bu bağı kaynak saymaz.
+    await assert.rejects(vt().tx((db) => dosyalar.kayittanKaydaBagla(db, 'talep:k1:cizim', 'x', ozet, b.id)), (h: UygulamaHatasi) => h.kod === 'DOGRULAMA');
+    // Bağ sayısı kayıt başına; bağı olmayan kayıt yok, başka modülün tutamağı bu bağları saymaz.
+    assert.deepEqual([...(await vt().tx((db) => talepler.bagSayilari(db, ['talep:k1:cizim', 'talep:h1:cizim', 'talep:k2:cizim', 'talep:k1:cizim'])))].sort(),
+      [['talep:h1:cizim', 1], ['talep:k1:cizim', 1]]);
+    assert.equal((await vt().tx((db) => dosyalar.bagSayilari(db, ['talep:k1:cizim']))).size, 0);
+    assert.equal((await vt().tx((db) => talepler.bagSayilari(db, []))).size, 0);
+  });
+
   test('DSK-11 bağlamayı yalnız içeriği kendisi gönderen yapar: özeti bilen ret alır, yanlış içerikle de kazanamaz; doğru içeriği gönderince bağlar', async () => {
     const icerik = pdf();
     const ozet = ozetOf(icerik);
