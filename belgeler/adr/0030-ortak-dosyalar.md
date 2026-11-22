@@ -1,6 +1,6 @@
 # ADR 0030 — Ortak dosyalar CORE içinde, klasör başına rol düzeyiyle yetkilendirilir
 
-Durum: kabul (2067 c, 2067-1 a, 04.11.2026; kabul 2067-2 a, dizin düzeltmesi 2197-10 a, 07.11.2026). Numara 0030 koordinatörce 2067 için ayrıldı (04.11 03:10). ADR 0003'ü ve ADR 0009'u tamamlar.
+Durum: kabul (2067 c, 2067-1 a, 04.11.2026; kabul 2067-2 a, dizin düzeltmesi 2197-10 a, 07.11.2026; seçici eki 3571 K-a, 22.11.2026). Numara 0030 koordinatörce 2067 için ayrıldı (04.11 03:10). ADR 0003'ü ve ADR 0009'u tamamlar.
 
 ## Bağlam
 
@@ -83,6 +83,20 @@ ve plan) durur; kayıt seçilince kaynak modüllerdeki dosyalar kaynağına gör
 5. **Sonraki dilimler (aynı onay).** Teklif klasörü yalnız `siparisler.fiyat-oku` kitlesine (K3), klasör aktarma önce rapor ve
    sunucuda karar (K4; sunucu ağ paylaşımına bağlanmaz), metin önizlemesi `text/plain` ve ekli (K5), DWG ve CNC türü imzası
    denenince, yetki genişleten klasör taşıması denetim kaydıyla (K6).
+
+## Ek: seçici (kart 3571; K-a, 22.11.2026)
+
+Kullanıcı onay kartında bu eki açıkça seçti (K-a). Karar 1, 4 ve 5 aynen kalır; bu ek dosyayı başka modülün kaydına bağlama yolunu yazar.
+
+1. **Kişinin düzeyiyle.** Başka modülün sunucu kodu `disari.ts`'teki seçici işlevleriyle (`kisininSecebildigiKlasorler`,
+   `kisininKlasorDosyalari`, `kisininGorebildigiDosya`) kişinin gördüğü klasörü ve dosyayı okur. Düzey her çağrıda `kurallar.ts`'teki
+   aynı saf işlevle çözülür; sayfa işlemi olmayan kişiye, görünmeyen klasöre, arşivdeki dosyaya ve olmayan sürüme hiçbir şey dönmez
+   (çağıran 404 verir). Klasör yetkisi başka modüle açılmaz.
+2. **Bağ.** Özet kişiden değil seçici işlevden gelir; çağıran modül `dosya` modülünün kaynaktan bağlama işleviyle kendi kaydına bağlar.
+   İçerik kopyalanmaz.
+3. **Görünürlük.** Bağlanan dosya bağlayan kaydı okuyan herkese açılır; klasörü göremeyen role de. Yönetici olmayan bir rolün göremediği
+   klasör "dar"dır ve seçicide "talebi gören herkes görür" uyarısıyla gösterilir. Klasör yolu yalnız seçen kişinin ekranındadır.
+4. **Saklama.** Ortak Dosyalar'da kalıcı silinen dosya bağlandığı kayıtta kalır (içerik özetle tekildir, bağı olan içerik silinmez).
 
 ## Sonuçlar
 

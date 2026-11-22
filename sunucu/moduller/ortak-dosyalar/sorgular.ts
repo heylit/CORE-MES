@@ -396,3 +396,8 @@ export function ozetliSurumler(db: Db, ozet: string): Promise<{ dosyaId: number;
     [ozet],
   );
 }
+
+// Başka modülün seçicisi (3571): dosya kimliğiyle, klasörü bilinmeden; son sürümüyle.
+export function dosyaIdle(db: Db, dosyaId: number): Promise<DosyaSatiri | null> {
+  return db.tek<DosyaSatiri>(`${DOSYA_SECIMI} WHERE d.id = $1`, [dosyaId]);
+}

@@ -1,4 +1,5 @@
-// Ortak Dosyalar klasör, dosya ve klasör yetkisini başka modüle açmaz (ADR 0030): bunlar yalnız bu modülün uçlarından okunur.
+// Ortak Dosyalar klasör, dosya ve klasör yetkisini başka modüle açmaz (ADR 0030): bunlar yalnız bu modülün uçlarından ve kişinin düzeyiyle
+// okuyan seçici işlevlerinden (seçici eki) okunur.
 // Kayda bağlı klasörler (kart 3288, ADR 0030 eki): kaynak modüllerin olay dinleyicileri ve mevcut kayıt kaynağı sunucu/kablolama.ts'te
 // bunlarla bağlanır. Windows paylaşımı bağlayıcısı ayrı kart ve ADR'dir.
 export { kayitEsitle, kayitKaynagiKaydet, kayitKlasoruAc, kayitKlasoruAdiniGuncelle, kayitKlasoruArsivle } from './kayit-klasorleri.ts';
@@ -15,3 +16,6 @@ export { silmeDortGozOkuyucuKaydet } from './kalici-silme.ts';
 // 3468-1: aynı dosya uyarısı; kablolama Çizim Merkezi ile iki yönde bağlar.
 export { ayniDosyaKaynagiKaydet, klasordekiYerler } from './ayni-dosya.ts';
 export type { AyniDosyaKaynagi } from './ayni-dosya.ts';
+// 3571 (ADR 0030 seçici eki): başka modülün seçicisi kişinin kendi düzeyiyle okur; yetki açılmaz, görünmeyen null döner.
+export { kisininGorebildigiDosya, kisininKlasorDosyalari, kisininSecebildigiKlasorler } from './secici.ts';
+export type { SecilebilirDosya, SecilebilirKlasor, SecilenOrtakDosya } from './secici.ts';

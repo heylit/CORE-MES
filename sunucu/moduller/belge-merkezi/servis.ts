@@ -22,7 +22,7 @@ import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeAra, malzemeOzetleri, malzemeResimAnahtarlari } from '../malzemeler/disari.ts';
 import {
   AZAMI_BAYT, ILETILER, IZINLI_DOSYA_TURLERI, ONIZLEME_KARE_TURLERI, indirmeReddi, kucukResimSec, malzemeBelgesiResimNo, malzemedenYayinda, menuAnahtari, merkezAcmaReddi, merkezBagKaldirmaReddi, merkezBagReddi, onizlemeBoyutReddi,
-  belgeSilmeReddi, kartRevizyonu, kaynakEskiMi, onizlemeKareReddi, onizlemeRevizyonReddi, revizyonHarfi, revizyonKodu, silmeReddi, turevReddi, yayinReddi,
+  belgeSilmeReddi, cizimOkurMu, kartRevizyonu, kaynakEskiMi, onizlemeKareReddi, onizlemeRevizyonReddi, revizyonHarfi, revizyonKodu, silmeReddi, turevReddi, yayinReddi,
 } from './kurallar.ts';
 import type { AdayBelge, KartAnahtari } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -822,6 +822,7 @@ export interface MalzemeCizimi {
   tur: BelgeTuru;
   revizyonId: number;
   ozet: string;
+  dosyaTuru: BagliDosya['tur'] | null;
   revKodu: string | null;
   guncelMi: boolean;
   kullanim: Kullanim | null;
@@ -839,16 +840,80 @@ export async function malzemelerinCizimleri(db: Db, nolar: readonly number[]): P
     if (liste === undefined || b.yayindakiRevizyonId === null || b.ozet === null) continue;
     if (liste.some((c) => c.belgeId === b.id)) continue;
     liste.push({
-      belgeId: b.id, ad: b.ad, tur: b.tur, revizyonId: b.yayindakiRevizyonId, ozet: b.ozet, revKodu: kod(b.id, b.yayindakiSira), guncelMi: true,
+      belgeId: b.id, ad: b.ad, tur: b.tur, revizyonId: b.yayindakiRevizyonId, ozet: b.ozet, dosyaTuru: b.dosyaTuru, revKodu: kod(b.id, b.yayindakiSira), guncelMi: true,
       kullanim: null, kaynakBelgeId: null,
     });
     for (const t of turevSatirlari.filter((x) => x.kaynakBelgeId === b.id)) {
       if (t.yayindakiRevizyonId === null || t.ozet === null || liste.some((c) => c.belgeId === t.id)) continue;
       liste.push({
-        belgeId: t.id, ad: t.ad, tur: b.tur, revizyonId: t.yayindakiRevizyonId, ozet: t.ozet, revKodu: kod(t.id, t.yayindakiSira),
+        belgeId: t.id, ad: t.ad, tur: b.tur, revizyonId: t.yayindakiRevizyonId, ozet: t.ozet, dosyaTuru: t.dosyaTuru, revKodu: kod(t.id, t.yayindakiSira),
         guncelMi: !kaynakEskiMi(t.kaynakDurumu), kullanim: t.kullanim, kaynakBelgeId: b.id,
       });
     }
+  }
+  return sonuc;
+}
+
+/* ---------------- 3571: başka modülün seçicisi, kişinin okuma yetkisiyle ---------------- */
+
+// Okuyucu yalnız yayındaki revizyonu indirir (1885 b); seçici yazan kişide de yalnız yayındakini verir: siparişe taslak ya da eski
+// revizyon gitmesin (Risk K2). Yetkisiz kişiye null ya da boş döner; çağıran 404 verir.
+export interface SecilenCizim {
+  belgeId: number;
+  revizyonId: number;
+  ad: string;
+  ozet: string;
+  dosyaTuru: BagliDosya['tur'];
+  revKodu: string | null;
+}
+
+// Arama yazılmadan liste dönmez: seçici önce önerileri gösterir, 200 satırlık liste her açılışta okunmaz.
+export async function kisininSecebildigiCizimler(db: Db, k: Kullanici, ara: string | null): Promise<YayindakiBelge[] | null> {
+  if (!cizimOkurMu(k.islemler)) return null;
+  return ara === null || ara.trim() === '' ? [] : yayindakiBelgeler(db, { ara });
+}
+
+export async function kisininMalzemeCizimleri(db: Db, k: Kullanici, nolar: readonly number[]): Promise<Map<number, MalzemeCizimi[]>> {
+  if (!cizimOkurMu(k.islemler)) return new Map();
+  return malzemelerinCizimleri(db, nolar);
+}
+
+export async function kisininYayindakiCizimi(db: Db, k: Kullanici, belgeId: number, revizyonId: number): Promise<SecilenCizim | null> {
+  if (!cizimOkurMu(k.islemler)) return null;
+  const c = await bagliBelgeninYayindakiCizimi(db, belgeId);
+  return c === null || c.revizyonId !== revizyonId ? null : c;
+}
+
+// 3571 (karar a): çağıranın kaydına daha önce bağlanmış belgenin şimdi yayındaki revizyonu. Kişinin okuma işlemi aranmaz; yetki o
+// kaydın yetkisidir. Çağıran yalnız kendi kaydında bağlı belge kimliğiyle çağırır (belge listesi ya da arama için kullanılmaz).
+export async function bagliBelgeninYayindakiCizimi(db: Db, belgeId: number): Promise<SecilenCizim | null> {
+  const b = await sorgular.belge(db, belgeId);
+  if (b === null || !b.aktif) return null;
+  const r = await sorgular.yayindakiRevizyon(db, belgeId);
+  if (r === null) return null;
+  const kod = await revizyonKodcusu(db, [belgeId]);
+  return { belgeId, revizyonId: r.id, ad: b.ad, ozet: r.ozet, dosyaTuru: r.dosyaTuru, revKodu: kod(belgeId, r.sira) };
+}
+
+// Bağlanmış belgelerin şimdi yayındaki revizyonu ("Yeni revizyon var"); yetkisiz kişiye boş, arşivdeki ya da yayını kalkan belge yok.
+export async function kisininGuncelRevizyonlari(
+  db: Db, k: Kullanici, belgeIdler: readonly number[],
+): Promise<Map<number, { revizyonId: number; revKodu: string | null }>> {
+  return cizimOkurMu(k.islemler) ? bagliBelgelerinGuncelRevizyonlari(db, belgeIdler) : new Map();
+}
+
+// 3571 (karar a): yalnız çağıranın kaydına bağlı belgeler için, kişinin okuma işlemi aranmadan (bagliBelgeninYayindakiCizimi ile aynı sınır).
+export async function bagliBelgelerinGuncelRevizyonlari(
+  db: Db, belgeIdler: readonly number[],
+): Promise<Map<number, { revizyonId: number; revKodu: string | null }>> {
+  const sonuc = new Map<number, { revizyonId: number; revKodu: string | null }>();
+  if (belgeIdler.length === 0) return sonuc;
+  const benzersiz = [...new Set(belgeIdler)];
+  const kod = await revizyonKodcusu(db, benzersiz);
+  for (const id of benzersiz) {
+    const b = await sorgular.belge(db, id);
+    const r = b !== null && b.aktif ? await sorgular.yayindakiRevizyon(db, id) : null;
+    if (r !== null) sonuc.set(id, { revizyonId: r.id, revKodu: kod(id, r.sira) });
   }
   return sonuc;
 }

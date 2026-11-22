@@ -296,6 +296,14 @@ export async function baskaModuldeBagli(db: Db, ozet: string, modul: string): Pr
   return (await db.tek('SELECT 1 FROM dosya_bagi WHERE ozet = $1 AND modul <> $2 LIMIT 1', [ozet, modul])) !== null;
 }
 
+// Kayıt başına bağ sayısı (liste ekranında ataç sayısı); bağı olmayan kayıt sonuçta yoktur.
+export async function bagSayilari(db: Db, modul: string, kayitlar: readonly string[]): Promise<Map<string, number>> {
+  if (kayitlar.length === 0) return new Map();
+  const satirlar = await db.sorgu<{ kayit: string; sayi: number }>(
+    'SELECT kayit, count(*)::int AS sayi FROM dosya_bagi WHERE modul = $1 AND kayit = ANY($2) GROUP BY kayit', [modul, [...new Set(kayitlar)]]);
+  return new Map(satirlar.map((x) => [x.kayit, x.sayi]));
+}
+
 export async function kayittaBagliOlanlar(db: Db, modul: string, kayit: string, ozetler: readonly string[]): Promise<string[]> {
   const satirlar = await db.sorgu<{ ozet: string }>(
     'SELECT ozet FROM dosya_bagi WHERE modul = $1 AND kayit = $2 AND ozet = ANY($3)', [modul, kayit, ozetler]);

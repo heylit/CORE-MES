@@ -5,6 +5,7 @@ import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
+import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import type {
   DosyaListesiCevabi, DosyalarCevabi, GecmisCevabi, Klasor, KlasorlerCevabi, OrtakDosya, SurumlerCevabi, YetkiCevabi,
@@ -14,6 +15,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { ROL_MATRISI } from '../../../araclar/yetki-beklentisi.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
+import { kisininGorebildigiDosya, kisininKlasorDosyalari, kisininSecebildigiKlasorler } from './disari.ts';
 import { ILETILER } from './kurallar.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -355,5 +357,45 @@ describe('ortak dosyalar (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.ok((d?.n ?? 0) > 0);
     const yuklemeIzi = await vt().tek<{ n: number }>("SELECT count(*)::int AS n FROM denetim_kaydi WHERE yontem = 'POST' AND yol = '/ortak-dosyalar/klasorler/:klasorId/yukle'");
     assert.ok((yuklemeIzi?.n ?? 0) > 0);
+  });
+
+  test('OD-39 seçici eki (3571 K2): başka modül kişinin düzeyiyle okur; görünmeyen, arşivdeki ve sayfasız null; dar klasör işaretlenir', async () => {
+    const k = (o: Oturum, islemler: Kullanici['islemler'] = ['sayfa.ortak-dosyalar']): Kullanici => ({ id: o.id, ad: 'deneme', islemler });
+    const acik = await klasorAc(yonetici, ortak.id, 'Seçici açık');
+    const herkes = await klasorAc(yonetici, null, 'Seçici herkes');
+    const roller = await vt().sorgu<{ id: number }>('SELECT id FROM rol WHERE NOT yonetici ORDER BY id');
+    const once = (await oku(yonetici, `/ortak-dosyalar/klasorler/${herkes.id}/yetki`)).json<YetkiCevabi>();
+    assert.equal((await gonder(yonetici, `/ortak-dosyalar/klasorler/${herkes.id}/yetki`, {
+      surum: once.surum, ozelYetki: true, satirlar: roller.map((r) => ({ rolId: r.id, duzey: 'gorur' })),
+    })).statusCode, 200);
+    const y1 = await yukle(kalite, acik.id, 'ORN-secici.pdf');
+    assert.equal(y1.statusCode, 200, y1.body);
+    const d1 = y1.json<OrtakDosya>();
+    const y2 = await yukle(mudur, gizli.id, 'ORN-gizli.pdf');
+    assert.equal(y2.statusCode, 200, y2.body);
+    const d2 = y2.json<OrtakDosya>();
+
+    const secilen = await vt().tx((db) => kisininGorebildigiDosya(db, k(operator), d1.id, 1));
+    assert.deepEqual(secilen && { ad: secilen.ad, yol: secilen.klasorYolu }, { ad: 'ORN-secici.pdf', yol: ['Ortak', 'Seçici açık'] });
+    assert.equal(secilen?.ozet, (await vt().tek<{ ozet: string }>('SELECT ozet FROM ortak_dosyalar_surum WHERE dosya_id = $1', [d1.id]))?.ozet);
+    assert.equal(await vt().tx((db) => kisininGorebildigiDosya(db, k(operator), d2.id, 1)), null, 'görmediği klasör');
+    assert.equal(await vt().tx((db) => kisininGorebildigiDosya(db, k(operator), d1.id, 9)), null, 'olmayan sürüm');
+    assert.equal(await vt().tx((db) => kisininGorebildigiDosya(db, k(operator, []), d1.id, 1)), null, 'sayfa işlemi yok');
+    assert.equal(await vt().tx((db) => kisininKlasorDosyalari(db, k(operator), gizli.id, null)), null);
+    assert.deepEqual((await vt().tx((db) => kisininKlasorDosyalari(db, k(operator), acik.id, 'secici')))?.map((d) => d.ad), ['ORN-secici.pdf']);
+
+    const klasorler = await vt().tx((db) => kisininSecebildigiKlasorler(db, k(mudur)));
+    const dar = new Map(klasorler?.map((x) => [x.id, x.dar]));
+    assert.equal(dar.get(gizli.id), true);
+    assert.equal(dar.get(herkes.id), false, 'her rol görür: dar değil');
+    const yon = await vt().tx((db) => kisininSecebildigiKlasorler(db, k(yonetici)));
+    assert.equal(yon?.find((x) => x.id === herkes.id)?.dar, false);
+    assert.equal(yon?.find((x) => x.id === gizli.id)?.dar, true);
+    assert.equal(await vt().tx((db) => kisininSecebildigiKlasorler(db, k(operator, []))), null);
+
+    const arsiv = await gonder(kalite, `/ortak-dosyalar/klasorler/${acik.id}/dosyalar/${d1.id}/arsivle`, { surum: d1.surum });
+    assert.equal(arsiv.statusCode, 403, 'kalite ekler; arşiv yönetir ister');
+    assert.equal((await gonder(mudur, `/ortak-dosyalar/klasorler/${acik.id}/dosyalar/${d1.id}/arsivle`, { surum: d1.surum })).statusCode, 200);
+    assert.equal(await vt().tx((db) => kisininGorebildigiDosya(db, k(operator), d1.id, 1)), null, 'arşivdeki dosya');
   });
 });

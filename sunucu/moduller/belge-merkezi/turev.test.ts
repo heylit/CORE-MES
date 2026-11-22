@@ -5,13 +5,17 @@ import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
+import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import type { BelgeAyrintisi, BelgeListesiCevabi } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { kaydaBagla, malzemelerinCizimleri } from './disari.ts';
+import {
+  bagliBelgelerinGuncelRevizyonlari, bagliBelgeninYayindakiCizimi, kaydaBagla, kisininGuncelRevizyonlari, kisininMalzemeCizimleri, kisininSecebildigiCizimler,
+  kisininYayindakiCizimi, malzemelerinCizimleri,
+} from './disari.ts';
 import { ILETILER } from './kurallar.ts';
 
 // 3468-2 türev modeli: kaynak denetimi, tek seviye, "Kaynağı eski", listede gruplu sıra, 3462 okuması. Sentetik PDF, ORN- adlar.
@@ -231,5 +235,36 @@ describe('çizim türevleri (3468-2, gerçek PostgreSQL)', () => {
       vt().sorgu('UPDATE belge_merkezi_belge SET kaynak_belge_id = $1, kaynak_revizyon_id = $2 WHERE id = $3', [a.id, a.revizyonlar[0]!.id, b.id]),
       /belge_merkezi_belge_turev_butun/,
     );
+  });
+
+  test('TV-9 seçici (3571 K2): yalnız şu an yayındaki revizyon verilir, taslak ve eski 404; okuma işlemi olmayan kişiye hiçbir şey dönmez', async () => {
+    const okur: Kullanici = { id: operator.id, ad: 'okur', islemler: ['sayfa.cizimler'] };
+    const yetkisiz: Kullanici = { id: operator.id, ad: 'yetkisiz', islemler: ['satin-alma.talep-ac'] };
+    const a = await orijinal('ORN-Secici A');
+    const revA = a.revizyonlar[0]!.id;
+    const taslakli = await acTamam('ORN-Secici taslak');
+    const secilen = await vt().tx((db) => kisininYayindakiCizimi(db, okur, a.id, revA));
+    assert.equal(secilen?.ozet, a.revizyonlar[0]!.ozet);
+    assert.equal(await vt().tx((db) => kisininYayindakiCizimi(db, okur, taslakli.id, taslakli.revizyonlar[0]!.id)), null, 'taslak');
+    assert.equal(await vt().tx((db) => kisininYayindakiCizimi(db, yetkisiz, a.id, revA)), null, 'yetkisiz');
+    const liste = await vt().tx((db) => kisininSecebildigiCizimler(db, okur, 'ORN-Secici'));
+    assert.deepEqual(liste?.map((b) => b.id), [a.id], 'taslak listede yok');
+    assert.equal(await vt().tx((db) => kisininSecebildigiCizimler(db, yetkisiz, null)), null);
+    assert.deepEqual(await vt().tx((db) => kisininSecebildigiCizimler(db, okur, null)), [], 'arama yazılmadan liste yok');
+    const yeni = await yeniRevizyonYayinla(a);
+    assert.equal(await vt().tx((db) => kisininYayindakiCizimi(db, okur, a.id, revA)), null, 'eski revizyon, yazan da olsa yalnız yayındaki');
+    const guncel = await vt().tx((db) => kisininGuncelRevizyonlari(db, okur, [a.id, taslakli.id]));
+    assert.deepEqual([...guncel.keys()], [a.id]);
+    assert.equal(guncel.get(a.id)?.revizyonId, yeni.revizyonlar.find((r) => r.durum === 'yayinda')?.id);
+    assert.equal((await vt().tx((db) => kisininGuncelRevizyonlari(db, yetkisiz, [a.id]))).size, 0);
+    // Kayda bağlı belge (karar 3571 a): okuma işlemi aranmaz, yalnız şu an yayındaki revizyon; taslak belge yok.
+    assert.equal((await vt().tx((db) => bagliBelgelerinGuncelRevizyonlari(db, [a.id, taslakli.id]))).get(a.id)?.revizyonId, guncel.get(a.id)?.revizyonId);
+    assert.equal((await vt().tx((db) => bagliBelgelerinGuncelRevizyonlari(db, [taslakli.id]))).size, 0);
+    assert.equal((await vt().tx((db) => bagliBelgeninYayindakiCizimi(db, a.id)))?.revizyonId, guncel.get(a.id)?.revizyonId);
+    assert.equal(await vt().tx((db) => bagliBelgeninYayindakiCizimi(db, taslakli.id)), null);
+    const no = 910000 + Math.floor(Math.random() * 1000);
+    await vt().tx((db) => kaydaBagla(db, { id: yonetici.id, ad: 'y', islemler: [] }, a.id, 'malzemeler', no));
+    assert.equal((await vt().tx((db) => kisininMalzemeCizimleri(db, okur, [no]))).get(no)?.length, 1);
+    assert.equal((await vt().tx((db) => kisininMalzemeCizimleri(db, yetkisiz, [no]))).size, 0, 'öneri şeridi yetkisizde boş');
   });
 });

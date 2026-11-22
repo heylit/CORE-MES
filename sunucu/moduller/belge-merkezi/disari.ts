@@ -26,3 +26,9 @@ export type { AyniDosyaKaynagi } from './ayni-dosya.ts';
 export const kayitAramaKaynaklari: readonly KayitAramaKaynagi<Db>[] = [
   { tur: 'cizim', yetki: ['sayfa.cizimler', 'belge-merkezi.oku'], ara: cizimAra },
 ];
+// 3571 (talep ve satın alma çizim seçicisi): kişinin okuma yetkisiyle; yalnız şu an yayındaki revizyon, yetkisize null ya da boş.
+export {
+  bagliBelgelerinGuncelRevizyonlari, bagliBelgeninYayindakiCizimi, kisininGuncelRevizyonlari, kisininMalzemeCizimleri, kisininSecebildigiCizimler,
+  kisininYayindakiCizimi,
+} from './servis.ts';
+export type { SecilenCizim } from './servis.ts';
