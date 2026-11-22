@@ -31,8 +31,8 @@ export function komutBaytlari(komut: string): Uint8Array<ArrayBuffer> {
   return hepsi;
 }
 
-export const YERLESIMLER = ['serit', 'tam', 'buyuk', 'baslik', 'yalniz'] as const;
+export const YERLESIMLER = ['serit', 'kod-seridi', 'tam', 'buyuk', 'baslik', 'yalniz'] as const;
 export type Yerlesim = (typeof YERLESIMLER)[number];
 export const YERLESIM_ADLARI: Record<Yerlesim, string> = {
-  serit: 'Şerit', tam: 'Tam bilgi', buyuk: 'Büyük kod + az yazı', baslik: 'Kod + başlık', yalniz: 'Yalnız kod',
+  serit: 'Şerit', 'kod-seridi': 'Kod şeridi', tam: 'Tam bilgi', buyuk: 'Büyük kod + az yazı', baslik: 'Kod + başlık', yalniz: 'Yalnız kod',
 };

@@ -223,13 +223,13 @@ export function kodHazirla(tur: SablonTuru, tasarim: { genislik: number; yuksekl
   const satirlar = [
     `${KOD_TUR_ADI[tur]} · CM1`,
     k.alanlar.slice(1).filter((a) => a !== 'BT').join(' '),
-    bt === null ? '' : `Basım ${bt.slice(8, 10)}.${bt.slice(5, 7)}.${bt.slice(2, 4)}`,
+    bt === null ? '' : `Basım ${bt.slice(8, 10)}.${bt.slice(5, 7)}.${bt.slice(0, 4)}`,
     k.eksik.length === 0 ? '' : `Eksik: ${k.eksik.join(' ')}`,
   ].filter((x) => x !== '');
   // Başlık: tür adı ve etiketi tanıtan değer (lot no, kod, emir no); yoksa kodun kimliği.
   const tanitan = veri['lotNo'] ?? veri['kod'] ?? veri['emirNo'] ?? (ozet === null ? null : ozet.kimlik.deger);
   return {
-    ...veri, qr: k.metin, kodBilgi: satirlar.join(SATIR_BASI), kodEksik: k.eksik.length === 0 ? null : k.eksik.join(' '),
+    ...veri, qr: k.metin, kodBilgi: satirlar.join(SATIR_BASI), kodBasim: satirlar.find((x) => x.startsWith('Basım')) ?? null, kodEksik: k.eksik.length === 0 ? null : k.eksik.join(' '),
     // 50x25'te yalnız tür ve basım (alan anahtarları satırı önce düşer, KURGU 3.7).
     kodBilgiKisa: [satirlar[0], satirlar.find((x) => x.startsWith('Basım')), satirlar.find((x) => x.startsWith('Eksik'))].filter((x) => x !== undefined).join(SATIR_BASI),
     kodBaslik: tanitan === null || tanitan === '' ? KOD_TUR_ADI[tur] : `${KOD_TUR_ADI[tur]} ${tanitan}`,
@@ -255,6 +255,7 @@ export const KOD_ALTI_EN_KUCUK_YAZI = 1.6;
 export const KOD_ALTI_EN_BUYUK_YAZI = 2.2;
 const KOD_ALTI_YAZI_ORANI = 0.07;
 const KOD_ALTI_ARALIK = 0.15;
+const SERIT_YAN_PAY = 1.4;
 const ETIKET_KENAR_PAYI = 0.5;
 type Kutu = { x: number; y: number; genislik: number; yukseklik: number };
 const kutusu = (o: SablonOgesi): Kutu => (o.tur === 'kod' || o.tur === 'simge' ? { x: o.x, y: o.y, genislik: o.boyut, yukseklik: o.boyut } : o);
@@ -276,7 +277,10 @@ type QrYerlesimi = Extract<OnizlemeOgesi, { tur: 'kod' }>;
 function qrVeKodu(s: Sablon, o: SablonOgesi, qr: QrYerlesimi): OnizlemeOgesi[] {
   if (o.tur !== 'kod' || qr.veri === '') return [qr];
   const yer = kodAltiYeri(s, o);
-  const istenen = Math.min(KOD_ALTI_EN_BUYUK_YAZI, Math.max(KOD_ALTI_EN_KUCUK_YAZI, Math.round(o.boyut * KOD_ALTI_YAZI_ORANI * 10) / 10));
+  // Şerit (kart 3562): kod şeridin ortasındadır; kimlik kalın, en az 1,8 mm ve şerit eninde ortalanır (elle yazılacak yedek satır).
+  const serit = (s.yerlesim === 'kod-seridi' || (s.yerlesim === 'serit' && s.taban !== 'raf-100x100')) && o.alan === 'qr';
+  const seritGenisligi = serit ? 2 * (o.x + o.boyut / 2) - SERIT_YAN_PAY : o.boyut;
+  const istenen = serit ? (o.boyut >= 20 ? 2 : 1.8) : Math.min(KOD_ALTI_EN_BUYUK_YAZI, Math.max(KOD_ALTI_EN_KUCUK_YAZI, Math.round(o.boyut * KOD_ALTI_YAZI_ORANI * 10) / 10));
   const disari = yer >= KOD_ALTI_EN_KUCUK_YAZI;
   const yazi = disari ? Math.min(istenen, Math.floor(yer * 10) / 10) : istenen;
   const boyut = disari ? o.boyut : Math.round((o.boyut - yazi - KOD_ALTI_ARALIK) * 100) / 100;
@@ -284,12 +288,12 @@ function qrVeKodu(s: Sablon, o: SablonOgesi, qr: QrYerlesimi): OnizlemeOgesi[] {
   // Özet kodda (CM1) elle yazılacak metin yalnız kimliktir; kodun tamamı yazıya sığmaz ve elle yazılmaz.
   const ozet = cm1Coz(qr.veri);
   const elYazisi = ozet === null ? qr.veri : kimlikKodu(ozet);
-  const yaziMm = sigdirilmisYazi(elYazisi, o.boyut, yazi, yazi);
+  const yaziMm = sigdirilmisYazi(elYazisi, seritGenisligi, yazi, yazi, serit);
   // Yazıcının yerleşik yazı tipi ortalama komutu bilmez; ölçülen harf genişliğiyle ortalanır.
-  const genislik = Math.min(o.boyut, metinGenisligi(elYazisi, yaziMm));
+  const genislik = Math.min(seritGenisligi, metinGenisligi(elYazisi, yaziMm, serit));
   return [kare, {
-    tur: 'metin', x: o.x + (o.boyut - genislik) / 2, y: Math.round((o.y + boyut + KOD_ALTI_ARALIK) * 100) / 100, genislik, yaziMm, kalin: false,
-    satirlar: satirlaraBol(elYazisi, o.boyut, yaziMm, yaziMm),
+    tur: 'metin', x: o.x + (o.boyut - genislik) / 2, y: Math.round((o.y + boyut + KOD_ALTI_ARALIK) * 100) / 100, genislik, yaziMm, kalin: serit,
+    satirlar: satirlaraBol(elYazisi, seritGenisligi, yaziMm, yaziMm, serit),
   }];
 }
 
