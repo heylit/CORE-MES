@@ -1,8 +1,8 @@
 import type { Db } from '#cekirdek/db.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
-import type { DurumMuadili, KaliteMuadili, KapsamTuru, MuadilTuru, SinirDegeri, SinirNiteligi } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
+import type { DurumMuadili, KaliteMuadili, KapsamTuru, KullanimYeri, MuadilTuru, SetNiteligi, SinirDegeri, SinirNiteligi } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 import type { PayTuru } from '#paylasilan/sozlesme/stok-kontrol-sabitleri.ts';
-import { KATALOG_AD, KATALOG_KALITE, KATALOG_METIN } from '../sorgular.ts';
+import { KATALOG_AD, KATALOG_DIZI, KATALOG_KALITE, KATALOG_METIN } from '../sorgular.ts';
 import type { KuralSatiri, SinirSatiri } from './kurallar.ts';
 
 export interface KuralKaydi extends KuralSatiri { id: number; kapsamAdi: string | null; surum: number; guncelleyenKisiId: number; guncelleme: string }
@@ -208,4 +208,128 @@ export function esdegerKarti(db: Db, no: number): Promise<{ no: number; tur: str
       COALESCE((SELECT array_agg(a ORDER BY a) FROM jsonb_object_keys(CASE WHEN jsonb_typeof(k.kayit -> 'dims') = 'object' THEN k.kayit -> 'dims' ELSE '{}'::jsonb END) a), '{}') AS anahtarlar,
       ${KATALOG_METIN('com,birim')} AS birim
     FROM malzeme_katalog_karti k WHERE k.no = $1 AND k.onay_durumu <> 'iptal'`, [no]);
+}
+
+// 3572 a: alternatif setleri ve seçili kartlar. Aynı ana kartın yazımları sırayla yürür (sıra ve uyan sayısı tutarlı kalsın).
+export const anaKilidi = (db: Db, anaNo: number): Promise<unknown> =>
+  db.sorgu("SELECT pg_advisory_xact_lock(hashtext('malzeme_alternatif_seti'), $1)", [anaNo]);
+
+export interface SetKaydi {
+  id: number; anaNo: number; ad: string; tur: MuadilTuru; sira: number; kullanimYerleri: KullanimYeri[]; notu: string | null; uyanSayi: number;
+  genisOnay: boolean; surum: number; guncelleme: string;
+  nitelikler: { nitelik: SetNiteligi; degerler: string[] | null; alt: number | null; ust: number | null }[];
+}
+const SET_SUTUNLARI = `t.id, t.ana_no AS "anaNo", t.ad, t.tur, t.sira, t.kullanim_yerleri AS "kullanimYerleri", t.notu, t.uyan_sayi AS "uyanSayi",
+  t.genis_onay AS "genisOnay", t.surum, ${zamanMetni('t.guncelleme')} AS guncelleme,
+  COALESCE((SELECT json_agg(json_build_object('nitelik', n.nitelik, 'degerler', n.degerler, 'alt', n.alt::float8, 'ust', n.ust::float8)
+     ORDER BY array_position(ARRAY['form', 'kalite', 'durum', 'standart', 'yuzey', 'd', 's', 'a', 'b', 't', 'D', 'h', 'l'], n.nitelik))
+     FROM malzeme_alternatif_seti_niteligi n WHERE n.set_id = t.id), '[]') AS nitelikler`;
+
+export function setler(db: Db, anaNo: number): Promise<SetKaydi[]> {
+  return db.sorgu<SetKaydi>(`SELECT ${SET_SUTUNLARI} FROM malzeme_alternatif_seti t WHERE t.ana_no = $1 ORDER BY t.sira, t.id`, [anaNo]);
+}
+export function butunSetler(db: Db): Promise<SetKaydi[]> {
+  return db.sorgu<SetKaydi>(`SELECT ${SET_SUTUNLARI} FROM malzeme_alternatif_seti t ORDER BY t.ana_no, t.sira, t.id`);
+}
+export function setGetir(db: Db, id: number): Promise<{ id: number; anaNo: number; surum: number } | null> {
+  return db.tek(`SELECT id, ana_no AS "anaNo", surum FROM malzeme_alternatif_seti WHERE id = $1`, [id]);
+}
+
+export async function sonrakiSira(db: Db, anaNo: number): Promise<number> {
+  const r = await db.tek<{ sira: number }>(`SELECT COALESCE(max(sira) + 1, 0)::int AS sira FROM (
+      SELECT sira FROM malzeme_alternatif_seti WHERE ana_no = $1 UNION ALL SELECT sira FROM malzeme_secili_alternatif WHERE ana_no = $1 AND sira IS NOT NULL) x`, [anaNo]);
+  return r!.sira;
+}
+
+export interface SetYazimi { anaNo: number; ad: string; tur: MuadilTuru; kullanimYerleri: readonly KullanimYeri[]; notu: string | null; uyanSayi: number; genisOnay: boolean }
+
+export async function setEkle(db: Db, s: SetYazimi, sira: number, kisiId: number): Promise<number> {
+  const r = await db.tek<{ id: number }>(`INSERT INTO malzeme_alternatif_seti (ana_no, ad, tur, sira, kullanim_yerleri, notu, uyan_sayi, genis_onay, guncelleyen_kisi_id)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`, [s.anaNo, s.ad, s.tur, sira, [...s.kullanimYerleri], s.notu, s.uyanSayi, s.genisOnay, kisiId]);
+  return r!.id;
+}
+
+// Ana kart değişmez; sürüm koşullu. Nitelik satırları ayrıca yeniden yazılır, setin sürümü yine artar.
+export async function setGuncelle(db: Db, id: number, s: SetYazimi, surum: number, kisiId: number): Promise<boolean> {
+  return (await db.tek(`UPDATE malzeme_alternatif_seti SET ad = $3, tur = $4, kullanim_yerleri = $5, notu = $6, uyan_sayi = $7, genis_onay = $8,
+      guncelleyen_kisi_id = $9, guncelleme = now(), surum = surum + 1
+    WHERE id = $1 AND ana_no = $2 AND surum = $10 RETURNING id`,
+  [id, s.anaNo, s.ad, s.tur, [...s.kullanimYerleri], s.notu, s.uyanSayi, s.genisOnay, kisiId, surum])) !== null;
+}
+
+// Değişmeyen nitelik satırına dokunulmaz (Geçmiş yalnız değişeni gösterir).
+export async function setNitelikleriYaz(db: Db, anaNo: number, id: number, n: readonly { nitelik: SetNiteligi; degerler: readonly string[] | null; alt: number | null; ust: number | null }[]): Promise<void> {
+  await db.sorgu(`DELETE FROM malzeme_alternatif_seti_niteligi WHERE set_id = $1 AND NOT (nitelik = ANY($2::text[]))`, [id, n.map((x) => x.nitelik)]);
+  for (const x of n) {
+    await db.sorgu(`INSERT INTO malzeme_alternatif_seti_niteligi (set_id, nitelik, degerler, alt, ust, ana_no) VALUES ($1, $2, $3, $4, $5, $6)
+      ON CONFLICT (set_id, nitelik) DO UPDATE SET degerler = EXCLUDED.degerler, alt = EXCLUDED.alt, ust = EXCLUDED.ust
+      WHERE (malzeme_alternatif_seti_niteligi.degerler, malzeme_alternatif_seti_niteligi.alt, malzeme_alternatif_seti_niteligi.ust)
+        IS DISTINCT FROM (EXCLUDED.degerler, EXCLUDED.alt, EXCLUDED.ust)`,
+    [id, x.nitelik, x.degerler === null ? null : [...x.degerler], x.alt, x.ust, anaNo]);
+  }
+}
+
+export async function setSil(db: Db, id: number, surum: number): Promise<boolean> {
+  return (await db.tek(`DELETE FROM malzeme_alternatif_seti WHERE id = $1 AND surum = $2 RETURNING id`, [id, surum])) !== null;
+}
+
+// K5: uyan sayı değişti; sürüm artmaz (kullanıcı yazımı değil), değişiklik defterine düşer.
+export async function setUyanSayisiYaz(db: Db, id: number, sayi: number): Promise<void> {
+  await db.sorgu(`UPDATE malzeme_alternatif_seti SET uyan_sayi = $2 WHERE id = $1 AND uyan_sayi <> $2`, [id, sayi]);
+}
+
+export interface SeciliKaydi {
+  no: number; kod: string | null; ad: string | null; iptal: boolean; onerilmez: boolean; tur: MuadilTuru | null; sira: number | null;
+  kullanimYerleri: KullanimYeri[] | null; notu: string | null; surum: number;
+}
+export function secililer(db: Db, anaNo: number): Promise<SeciliKaydi[]> {
+  return db.sorgu<SeciliKaydi>(`SELECT k.no, k.stok_kodu AS kod, ${KATALOG_AD.replaceAll('kayit', 'k.kayit')} AS ad, k.onay_durumu <> 'aktif' AS iptal,
+      a.onerilmez, a.tur, a.sira, a.kullanim_yerleri AS "kullanimYerleri", a.notu, a.surum
+    FROM malzeme_secili_alternatif a JOIN malzeme_katalog_karti k ON k.no = a.alternatif_no
+   WHERE a.ana_no = $1 ORDER BY a.onerilmez, a.sira NULLS LAST, k.no`, [anaNo]);
+}
+export function seciliGetir(db: Db, anaNo: number, alternatifNo: number): Promise<{ onerilmez: boolean; sira: number | null; surum: number } | null> {
+  return db.tek(`SELECT onerilmez, sira, surum FROM malzeme_secili_alternatif WHERE ana_no = $1 AND alternatif_no = $2`, [anaNo, alternatifNo]);
+}
+
+export interface SeciliYazimi {
+  anaNo: number; alternatifNo: number; onerilmez: boolean; tur: MuadilTuru | null; sira: number | null; kullanimYerleri: readonly KullanimYeri[] | null; notu: string | null;
+}
+const seciliDegerleri = (s: SeciliYazimi) => [s.anaNo, s.alternatifNo, s.onerilmez, s.tur, s.sira, s.kullanimYerleri === null ? null : [...s.kullanimYerleri], s.notu];
+
+export async function seciliEkle(db: Db, s: SeciliYazimi, kisiId: number): Promise<void> {
+  await db.sorgu(`INSERT INTO malzeme_secili_alternatif (ana_no, alternatif_no, onerilmez, tur, sira, kullanim_yerleri, notu, guncelleyen_kisi_id)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, [...seciliDegerleri(s), kisiId]);
+}
+export async function seciliGuncelle(db: Db, s: SeciliYazimi, surum: number, kisiId: number): Promise<boolean> {
+  return (await db.tek(`UPDATE malzeme_secili_alternatif SET onerilmez = $3, tur = $4, sira = $5, kullanim_yerleri = $6, notu = $7,
+      guncelleyen_kisi_id = $8, guncelleme = now(), surum = surum + 1
+    WHERE ana_no = $1 AND alternatif_no = $2 AND surum = $9 RETURNING ana_no`, [...seciliDegerleri(s), kisiId, surum])) !== null;
+}
+export async function seciliSil(db: Db, anaNo: number, alternatifNo: number, surum: number): Promise<boolean> {
+  return (await db.tek(`DELETE FROM malzeme_secili_alternatif WHERE ana_no = $1 AND alternatif_no = $2 AND surum = $3 RETURNING ana_no`,
+    [anaNo, alternatifNo, surum])) !== null;
+}
+
+// Sıra yazımı sürümü artırmaz: içerik değişmez, açık pencerelerdeki düzenleme eskimesin.
+export async function siraYaz(db: Db, anaNo: number, tur: 'set' | 'kart', no: number, sira: number): Promise<boolean> {
+  return (await db.tek(tur === 'set'
+    ? `UPDATE malzeme_alternatif_seti SET sira = $3 WHERE ana_no = $1 AND id = $2 RETURNING id`
+    : `UPDATE malzeme_secili_alternatif SET sira = $3 WHERE ana_no = $1 AND alternatif_no = $2 AND NOT onerilmez RETURNING ana_no`, [anaNo, no, sira])) !== null;
+}
+
+// Sete aday kartlar: aktif hammadde, standartları ve son 7 günde onaylanıp onaylanmadığıyla.
+export interface SetAdaySatiri extends ZarfKartSatiri { standartlar: string[]; yeni: boolean }
+export function setAdaylari(db: Db): Promise<SetAdaySatiri[]> {
+  return db.sorgu<SetAdaySatiri>(`SELECT ${KART_SUTUNLARI},
+      ARRAY(SELECT DISTINCT x FROM unnest(${KATALOG_DIZI('stds')} || ARRAY[${KATALOG_METIN('com,std')}]) x WHERE x IS NOT NULL ORDER BY x) AS standartlar,
+      COALESCE(k.onaylama > now() - interval '7 days', false) AS yeni
+    FROM malzeme_katalog_karti k WHERE k.onay_durumu = 'aktif' AND k.tur = 'hammadde' ORDER BY k.no`);
+}
+
+// Seçili kart için: var mı, aktif mi, eşdeğer grubunda mı (ana kartla).
+export function seciliAdayi(db: Db, anaNo: number, no: number): Promise<{ aktif: boolean; esdeger: boolean } | null> {
+  return db.tek(`SELECT k.onay_durumu = 'aktif' AS aktif,
+      EXISTS (SELECT 1 FROM malzeme_esdeger_bagi a JOIN malzeme_esdeger_bagi b ON b.grup = a.grup WHERE a.kart_no = $1 AND b.kart_no = k.no) AS esdeger
+    FROM malzeme_katalog_karti k WHERE k.no = $2 AND k.onay_durumu <> 'iptal'`, [anaNo, no]);
 }

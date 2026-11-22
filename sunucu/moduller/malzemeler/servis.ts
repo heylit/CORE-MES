@@ -41,6 +41,7 @@ import { arsivdenDonusDurumu, arsivIzAdetleri, arsivKaliciSilmeEngeli, type Arsi
 import type { MalzemeKartiAnahtari, MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 import { logoGecisAdayligi, logoGelenDurumu, logoKullanimEsigi, logoKullanimNedenleri, logoKartFarklari, logoKodBicimi, logoKoduTureUyar } from './kurallar.ts';
 import * as s from './sorgular.ts';
+import { setSayilariniTazele } from './alternatif/servis.ts';
 
 // Dört göz ayarının tek kaynağı: Sistem Ayarları. Satır yokken ayar açıktır.
 export function dortGozAcikMi(db: Db): Promise<boolean> {
@@ -749,6 +750,8 @@ export async function katalogKartiKaydet(
       ? await kisitKorumali(KART_KISITLARI, () => s.katalogKartiGuncelle(db, yazim, { tur: tur, onek, sira, stokKodu }))
       : await kisitKorumali(KART_KISITLARI, () => s.katalogKartiEkle(db, yazim, onek, sira));
   }
+  // 3572 a (K5): hammadde kartı değişince setlerin uyan sayısı tazelenir.
+  if (tur === 'hammadde' || kayitli?.tur === 'hammadde') await setSayilariniTazele(db);
   await kartOnayiBildir(db, {
     kimlik, stokKodu: r.stokKodu, ad: katalogKartAdi(kayit), gonderildi, onceki, yeni: yeniDurum,
     geriCekildi: katalogGeriCekildiMi(kayit), gonderenKisiId: kayitli?.gonderenKisiId ?? null, kisiId: kullanici.id,
@@ -826,6 +829,7 @@ export async function katalogKartiIptal(db: Db, kullanici: Kullanici, kimlik: st
   if (!deneme.tamam && deneme.hata !== DENEME_BITTI) throw deneme.hata.kod === 'BAGIMLI_KAYIT' ? bagimliKayit(KART_KULLANIMDA) : deneme.hata;
   if (logodaPasif) return { id: kimlik, logodaPasifeAliniyor: true };
   await s.katalogKartiIptal(db, kimlik, kullanici.id);
+  if (kayitli.tur === 'hammadde') await setSayilariniTazele(db);
   return { id: kimlik, logodaPasifeAliniyor: false };
 }
 

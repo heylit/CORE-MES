@@ -2,8 +2,9 @@
 // aday kart zarfa göre "ayni", "icinde", "sartli" (izin ister) ya da "disi" çıkar. Kesit ölçüsü istenenden küçük olamaz, en çok pay kadar
 // büyük olabilir; lama ve blokta ölçüler sıralanıp eşlenir, boruda iç çap istenenden büyük olamaz (3398 stok kontrolüyle aynı kural).
 import type {
-  AlternatifZarfi, DurumMuadili, KaliteMuadili, KapsamTuru, MuadilTuru, SinirDegeri, SinirNiteligi, ZarfSonucu,
+  AlternatifKarti, AlternatifZarfi, DurumMuadili, KaliteMuadili, KapsamTuru, KullanimYeri, MuadilTuru, SetNiteligi, SinirDegeri, SinirNiteligi, ZarfSonucu,
 } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
+import { SET_LISTE_NITELIKLERI } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 import { FORM_OLCULERI, OLCULU_FORMLAR, VARSAYILAN_PAY, type OlculuForm, type PayTuru } from '#paylasilan/sozlesme/stok-kontrol-sabitleri.ts';
 
 export interface ZarfKarti {
@@ -294,3 +295,111 @@ export const alternatifKartAdi = (anaAd: string, etiket: string): string => {
   if (kalan <= 0) return anaAd.slice(0, AD_EN_COK);
   return `${anaAd} (alternatif ${etiket.slice(0, kalan).trim()})`.trim();
 };
+
+// 3572 a: alternatif seti. Satırı olan nitelik dolu sayılır; dolu niteliklerin hepsi tutmalı, listede değerlerden biri yeter.
+// Ölçüde boş uç sınırsızdır; kartta o ölçü yoksa uymaz. Standartta kartın standartlarından biri listede olmalı.
+export interface SetNiteligiSatiri { nitelik: SetNiteligi; degerler: readonly string[] | null; alt: number | null; ust: number | null }
+export interface SetKarti {
+  form: string | null; kalite: string | null; durum: string | null; yuzey: string | null; standartlar: readonly string[];
+  olcu: Readonly<Record<string, number>>;
+}
+const SET_LISTESI = new Set<string>(SET_LISTE_NITELIKLERI);
+const SET_ADI: Record<string, string> = { form: 'form', kalite: 'kalite', durum: 'durum', standart: 'standart', yuzey: 'yüzey' };
+
+export function setHatasi(n: readonly SetNiteligiSatiri[]): { ileti: string; alan: string } | null {
+  if (n.length === 0) return { ileti: 'Sette en az bir alan doldurun.', alan: 'nitelikler' };
+  if (new Set(n.map((x) => x.nitelik)).size !== n.length) return { ileti: 'Aynı alan iki kez girilmiş.', alan: 'nitelikler' };
+  for (const x of n) {
+    if (SET_LISTESI.has(x.nitelik)) {
+      if (x.degerler === null || x.degerler.length === 0 || x.alt !== null || x.ust !== null) return { ileti: `${SET_ADI[x.nitelik]} için değer seçin.`, alan: x.nitelik };
+      if (new Set(x.degerler).size !== x.degerler.length) return { ileti: 'Aynı değer iki kez seçilmiş.', alan: x.nitelik };
+    } else {
+      if (x.degerler !== null) return { ileti: 'Ölçüye değer listesi değil, en az ve en çok girilir.', alan: x.nitelik };
+      if (x.alt === null && x.ust === null) return { ileti: 'En az ya da en çoktan birini girin.', alan: x.nitelik };
+      if (x.alt !== null && x.ust !== null && x.alt > x.ust) return { ileti: 'En az en çoktan büyük olamaz.', alan: x.nitelik };
+    }
+  }
+  return null;
+}
+
+const tek = (v: string | null): readonly string[] => (v === null ? [] : [v]);
+const LISTE_DEGERI: Record<(typeof SET_LISTE_NITELIKLERI)[number], (k: SetKarti) => readonly string[]> = {
+  form: (k) => tek(k.form), kalite: (k) => tek(k.kalite), durum: (k) => tek(k.durum), yuzey: (k) => tek(k.yuzey), standart: (k) => k.standartlar,
+};
+
+// Uyuyorsa neden, uyan alanların kart değerleridir ("d 42 · kalite 6082"); uymuyorsa ilk tutmayan alan.
+export function setUyumu(n: readonly SetNiteligiSatiri[], k: SetKarti): { uyar: boolean; neden: string } {
+  if (n.length === 0) return { uyar: false, neden: 'Boş set' };
+  const parca: string[] = [];
+  for (const x of n) {
+    if (SET_LISTESI.has(x.nitelik)) {
+      const v = LISTE_DEGERI[x.nitelik as (typeof SET_LISTE_NITELIKLERI)[number]](k);
+      const tutan = v.find((d) => x.degerler!.includes(d));
+      if (tutan === undefined) return { uyar: false, neden: `${SET_ADI[x.nitelik]} ${v.join(', ') || 'yok'}` };
+      if (x.nitelik !== 'form') parca.push(`${SET_ADI[x.nitelik]} ${tutan}`);
+    } else {
+      const v = k.olcu[x.nitelik];
+      if (v === undefined) return { uyar: false, neden: `${x.nitelik} yok` };
+      if ((x.alt !== null && v + AYNI < x.alt) || (x.ust !== null && v > x.ust + AYNI)) return { uyar: false, neden: `${x.nitelik} ${sayi(v)}` };
+      parca.unshift(`${x.nitelik} ${sayi(v)}`);
+    }
+  }
+  return { uyar: true, neden: parca.join(' · ') || 'Bütün alanlar serbest' };
+}
+
+// Z4: setin türü tek başına belirler; şartlı muadil bir değer işaretliyse set şartlı kaydedilir.
+export function setTuru(tur: MuadilTuru, n: readonly SetNiteligiSatiri[], zarf: AlternatifZarfi | null): MuadilTuru {
+  if (zarf === null) return tur;
+  const sartli = (x: AlternatifZarfi['kalite'], ad: 'kalite' | 'durum') => n.some((s) => s.nitelik === ad
+    && (s.degerler ?? []).some((d) => x.secenekler.some((m) => m.deger === d && m.tur === 'sartli')));
+  return sartli(zarf.kalite, 'kalite') || sartli(zarf.durum, 'durum') ? 'sartli' : tur;
+}
+
+// K4 öncelik: Önerilmesin her şeyden ağır (eşdeğer bağ hariç: bağ üstündür); tekil kart satırı uyduğu setin türünü ve yerini ezer;
+// set kuraldan geleni ezer. Setler ve tekil kartlar kullanıcının sırasıyla, sonra kuraldan gelenler. İptal kart seçimde gelmez.
+type KartBilgisi = { no: number; kod: string | null; ad: string | null };
+export interface OncelikGirdisi {
+  kullanimYeri: KullanimYeri;
+  esdeger: readonly KartBilgisi[];
+  secili: readonly (KartBilgisi & { iptal: boolean; onerilmez: boolean; tur: MuadilTuru | null; sira: number | null; kullanimYerleri: readonly KullanimYeri[] | null })[];
+  setler: readonly { id: number; ad: string; tur: MuadilTuru; sira: number; kullanimYerleri: readonly KullanimYeri[]; uyanlar: readonly (KartBilgisi & { neden: string })[] }[];
+  kuraldan: readonly (KartBilgisi & { sonuc: 'ayni' | 'icinde' | 'sartli'; nedenler: string[] })[];
+}
+const turSonucu = (t: MuadilTuru): 'icinde' | 'sartli' => (t === 'sartli' ? 'sartli' : 'icinde');
+const TUR_METNI: Record<MuadilTuru, string> = { tam: 'tam', ust: 'üst', sartli: 'şartlı' };
+
+export function alternatifOnceligi(g: OncelikGirdisi): AlternatifKarti[] {
+  const cikti: AlternatifKarti[] = g.esdeger.map((e) => ({ ...e, tur: 'esdeger', sonuc: 'ayni', nedenler: ['Aynı malzeme'], muadilTuru: null, setId: null }));
+  const gorulen = new Set(cikti.map((x) => x.no));
+  for (const s of g.secili) if (s.onerilmez || s.iptal) gorulen.add(s.no);
+  // Tekil satırı olan kart, yeri tutmasa da sette tekrar edilmez (en dar kural).
+  const tekil = new Set(g.secili.filter((s) => !s.onerilmez).map((s) => s.no));
+  // Sete uyan kart kuraldan gelmez: setin türü ve yeri geçer (yeri tutmayan yerde de kuraldan dönmez).
+  const setli = new Set(g.setler.flatMap((t) => t.uyanlar.map((u) => u.no)));
+  const ogeler = [
+    ...g.secili.filter((s) => !s.onerilmez && !s.iptal).map((s) => ({ sira: s.sira ?? 0, tur: 0, s })),
+    ...g.setler.map((t) => ({ sira: t.sira, tur: 1, t })),
+  ].sort((a, b) => a.sira - b.sira || a.tur - b.tur);
+  for (const o of ogeler) {
+    if ('s' in o && o.s) {
+      const s = o.s;
+      if (gorulen.has(s.no) || !(s.kullanimYerleri ?? []).includes(g.kullanimYeri)) continue;
+      gorulen.add(s.no);
+      cikti.push({ no: s.no, kod: s.kod, ad: s.ad, tur: 'secili', sonuc: turSonucu(s.tur!), nedenler: [`Elle eklendi · ${TUR_METNI[s.tur!]}`], muadilTuru: s.tur, setId: null });
+    } else if ('t' in o && o.t) {
+      const t = o.t;
+      if (!t.kullanimYerleri.includes(g.kullanimYeri)) continue;
+      for (const u of t.uyanlar) {
+        if (gorulen.has(u.no) || tekil.has(u.no)) continue;
+        gorulen.add(u.no);
+        cikti.push({ no: u.no, kod: u.kod, ad: u.ad, tur: 'set', sonuc: turSonucu(t.tur), nedenler: [`${t.ad} · ${u.neden}`], muadilTuru: t.tur, setId: t.id });
+      }
+    }
+  }
+  for (const k of g.kuraldan) {
+    if (gorulen.has(k.no) || tekil.has(k.no) || setli.has(k.no)) continue;
+    gorulen.add(k.no);
+    cikti.push({ ...k, tur: 'alternatif', muadilTuru: null, setId: null });
+  }
+  return cikti;
+}

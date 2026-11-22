@@ -70,7 +70,13 @@ export function KartPenceresi({
           {/* Kartın kullanılıp kullanılmadığını ve kimin silebileceğini sunucu bilir (2114-1 a); ret iletisi bildirimde görünür. */}
           {yetki.yaz && <Dugme tur="tehlike" simge="trash" onClick={() => silSorYaz(true)}>Sil</Dugme>}
           <Dugme simge="scan" onClick={() => saha(kart.kimlik)}>Saha görünümü</Dugme>
-          <GecmisDugmesi kayitlar={[{ tablo: 'malzeme_katalog_karti', anahtar: { kimlik: kart.kimlik } }]} />
+          <GecmisDugmesi kayitlar={[
+            { tablo: 'malzeme_katalog_karti', anahtar: { kimlik: kart.kimlik } },
+            // 3572 a: kartın alternatif setleri, set alanları ve elle seçilen kartlar.
+            { tablo: 'malzeme_alternatif_seti', anahtar: { ana_no: kart.no } },
+            { tablo: 'malzeme_alternatif_seti_niteligi', anahtar: { ana_no: kart.no } },
+            { tablo: 'malzeme_secili_alternatif', anahtar: { ana_no: kart.no } },
+          ]} />
           <Dugme className="tc-mk-sona" onClick={kapat}>Kapat</Dugme>
         </div>
       )}

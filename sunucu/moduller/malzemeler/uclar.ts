@@ -12,6 +12,8 @@ import {
   alternatifKomutCevabi, alternatifKuraliKaldirGovdesi, alternatifKuraliKaydetGovdesi, alternatifKuraliParametresi, alternatifTanimlariCevabi,
   durumMuadiliKaldirGovdesi, durumMuadiliKaydetGovdesi, esdegerBaglaGovdesi, esdegerKaldirGovdesi, kabulSiniriKaldirGovdesi, kabulSiniriKaydetGovdesi,
   kabulSiniriParametresi, kaliteMuadiliKaldirGovdesi, kaliteMuadiliKaydetGovdesi, grupSinirlariCevabi, kartAlternatifleriCevabi, kartZarfiCevabi, kartZarfiParametresi,
+  alternatifSetiKaldirGovdesi, alternatifSetiKaydetCevabi, alternatifSetiKaydetGovdesi, alternatifSetiParametresi, alternatifSirasiGovdesi, onerilmesinGovdesi,
+  seciliAlternatifKaldirGovdesi, seciliAlternatifKaydetGovdesi, setOnizlemeCevabi, setOnizlemeSorgusu,
 } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 import * as alternatif from './alternatif/servis.ts';
 import { katalogKaydiAlanlari } from './kurallar.ts';
@@ -214,6 +216,35 @@ export const uclar = [
   uc({
     yontem: 'POST', yol: '/malzeme-alternatifleri/durum-muadilleri/kaldir', yetki: 'malzemeler.tanim-yaz', govde: durumMuadiliKaldirGovdesi, cevap: alternatifKomutCevabi,
     isle: ({ db, govde }) => alternatif.muadilKaldir(db, 'durum', govde.durum, govde.muadil, govde.surum),
+  }),
+  // 3572 a: kartta elle alternatif setleri ve kartlar. Yazım tanım yazanın (malzemeler.tanim-yaz; yeni işlem yok, K1).
+  uc({
+    yontem: 'GET', yol: '/malzeme-alternatifleri/kart/:no/set-onizleme', yetki: OKUMA, parametre: kartZarfiParametresi, sorgu: setOnizlemeSorgusu,
+    cevap: setOnizlemeCevabi, isle: ({ db, parametre, sorgu }) => alternatif.setOnizleme(db, parametre.no, sorgu.nitelikler),
+  }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-alternatifleri/setler/kaydet', yetki: 'malzemeler.tanim-yaz', govde: alternatifSetiKaydetGovdesi, cevap: alternatifSetiKaydetCevabi,
+    isle: ({ db, kullanici, govde }) => alternatif.setKaydet(db, kullanici, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-alternatifleri/setler/:id/kaldir', yetki: 'malzemeler.tanim-yaz', parametre: alternatifSetiParametresi,
+    govde: alternatifSetiKaldirGovdesi, cevap: alternatifKomutCevabi, isle: ({ db, parametre, govde }) => alternatif.setKaldir(db, parametre.id, govde.surum),
+  }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-alternatifleri/secili/kaydet', yetki: 'malzemeler.tanim-yaz', govde: seciliAlternatifKaydetGovdesi, cevap: alternatifKomutCevabi,
+    isle: ({ db, kullanici, govde }) => alternatif.seciliKaydet(db, kullanici, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-alternatifleri/secili/onerilmesin', yetki: 'malzemeler.tanim-yaz', govde: onerilmesinGovdesi, cevap: alternatifKomutCevabi,
+    isle: ({ db, kullanici, govde }) => alternatif.onerilmesin(db, kullanici, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-alternatifleri/secili/kaldir', yetki: 'malzemeler.tanim-yaz', govde: seciliAlternatifKaldirGovdesi, cevap: alternatifKomutCevabi,
+    isle: ({ db, govde }) => alternatif.seciliKaldir(db, govde.anaNo, govde.alternatifNo, govde.surum),
+  }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-alternatifleri/sira', yetki: 'malzemeler.tanim-yaz', govde: alternatifSirasiGovdesi, cevap: alternatifKomutCevabi,
+    isle: ({ db, govde }) => alternatif.siraKaydet(db, govde),
   }),
   // 3438 a: revizyon ve alternatif alt kartları. Bağ kart yazımıdır (malzemeler.yaz); yürürlüğe alma ürün tanımını değiştirir, onaycıdadır.
   uc({
