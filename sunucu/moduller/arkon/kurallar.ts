@@ -948,11 +948,11 @@ export function kayitBicimiHatasi(satir: Readonly<Record<string, unknown>>): Bic
 }
 
 // Kayıt türü x rol. Kaynak: Arkon'un varsayılan matrisi (ortak-ayarlar.ts PERMS0) ve kaydı yazan ekran kodu:
-// events, counts (operator.ts:191,203,216,217: prod.run) operator, amir; meas (kalite.ts:35 q.meas; operator.ts ölçümü) + kalite;
+// events, counts (operator.ts:191,203,216,217: prod.run) operator, amir, kalite (kart 3548: GKK istasyonunu terminalden başlatır ve sayar); meas (kalite.ts:35 q.meas; operator.ts ölçümü) + kalite;
 // calls (operator.ts:298,307,325; giris-ayarlar-spc.ts:63 prod.ack) + kalite, bakım. audit'i yalnız sunucu yazar.
 export const KAYIT_YAZARLARI: Readonly<Record<ArkonKayitTuru, readonly ArkonRolu[]>> = {
-  events: ['admin', 'operator', 'lead'],
-  counts: ['admin', 'operator', 'lead'],
+  events: ['admin', 'operator', 'lead', 'quality'],
+  counts: ['admin', 'operator', 'lead', 'quality'],
   meas: ['admin', 'operator', 'lead', 'quality'],
   calls: ['admin', 'operator', 'lead', 'quality', 'maint'],
   audit: [],
@@ -1441,7 +1441,7 @@ type MatrisRolu = Exclude<ArkonRolu, 'admin'>;
 const ARKON_VARSAYILAN_YETKILER: Readonly<Record<MatrisRolu, readonly string[]>> = {
   plan: ['page.op', 'page.board', 'page.plan', 'page.prep', 'page.quality', 'page.report', 'page.draw', 'pkg.edit', 'pkg.publish', 'prod.station', 'q.report', 'adm.shifts', 'plan.edit', 'down.edit', 'logi.handle'],
   prep: ['page.op', 'page.board', 'page.plan', 'page.prep', 'page.quality', 'page.report', 'page.draw', 'pkg.edit', 'pkg.publish', 'pkg.del', 'prod.station', 'q.report'],
-  quality: ['page.op', 'page.board', 'page.quality', 'page.report', 'q.meas', 'q.decide', 'q.report', 'prod.ack', 'pkg.approve', 'gauge.edit'],
+  quality: ['page.op', 'page.board', 'page.quality', 'page.report', 'prod.run', 'q.meas', 'q.decide', 'q.report', 'prod.ack', 'pkg.approve', 'gauge.edit'],
   lead: ['page.op', 'page.board', 'page.plan', 'page.quality', 'page.maint', 'page.report', 'prod.run', 'prod.fix', 'prod.station', 'prod.ack', 'q.report', 'adm.shifts', 'down.edit', 'logi.req', 'maint.work'],
   maint: ['page.op', 'page.board', 'page.maint', 'page.report', 'prod.ack', 'prod.station', 'maint.work', 'maint.plan'],
   operator: ['page.op', 'prod.run', 'logi.req'],
