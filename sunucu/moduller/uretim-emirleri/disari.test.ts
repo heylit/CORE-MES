@@ -92,7 +92,7 @@ describe('uretim-emirleri dışa açık komutlar (gerçek PostgreSQL)', () => {
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: 'dogru-parola-1' }));
     operator = await kisiEkle('operator', 'operator');
     kisitli = await kisiEkle('kisitli', 'operator');
-    depocu = await kisiEkle('depocu', 'depo');
+    depocu = await kisiEkle('depocu', 'satin_alma');
     durusId = (await ortam.sahip.tek<{ id: number }>(
       "INSERT INTO durus_nedeni (kod, ad, kategori, sira) VALUES ('DT-D1', 'Deneme duruşu', 'plansiz', 901) RETURNING id",
     ))!.id;

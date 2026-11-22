@@ -28,8 +28,8 @@ import { BASLATMA_DURUMU, BITIRME_DURUMU, DEVRAL_DEGISTI, DEVRAL_DURUMU, DURAKLI
 
 const PAROLA = 'dogru-parola-1';
 const BASLATANLAR = ['mudur', 'operator'];
-// terminal.uret taşımayan roller; kalite 1209 b ile terminalde sayar (GKK), bu listede değildir.
-const DIGER_ROLLER = ['insan_kaynaklari', 'satin_alma', 'muhasebe_finans', 'idari_isler', 'cam', 'depo'];
+// terminal.uret taşımayan roller; kalite (1209 b, GKK) ve depo (karar 3556, Toplama) terminalde sayar, bu listede değildir.
+const DIGER_ROLLER = ['insan_kaynaklari', 'satin_alma', 'muhasebe_finans', 'idari_isler', 'cam'];
 
 interface Cevap<T = unknown> { durum: number; govde: T }
 interface Hata { kod: string; mesaj: string; ayrinti?: unknown }
@@ -178,7 +178,7 @@ describe('uretim-emirleri (gerçek PostgreSQL)', () => {
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA }));
     const giris = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi: 'yonetici', parola: PAROLA } });
     cerezler.set('yonetici', String(giris.headers['set-cookie']).split(';')[0] ?? '');
-    for (const rol of ['planlama_proje', 'mudur', 'operator', 'kalite', ...DIGER_ROLLER]) await girisliKisiEkle(rol, rol);
+    for (const rol of ['planlama_proje', 'mudur', 'operator', 'kalite', 'depo', ...DIGER_ROLLER]) await girisliKisiEkle(rol, rol);
     await girisliKisiEkle('operator2', 'operator');
     kapsamliId = await girisliKisiEkle('kapsamli', 'operator');
     await girisliKisiEkle('yetkinsiz', 'operator');

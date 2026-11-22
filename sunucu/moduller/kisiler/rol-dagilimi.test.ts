@@ -83,7 +83,7 @@ describe('rol dağılımı: Arkon rolleri, bakım rolü ve malzeme tanım yetkis
     bakim: { arkon: 'maint', tanim: false, yansima: false, yeniden: false },
     satin_alma: { arkon: null, tanim: false, yansima: false, yeniden: false },
     satis: { arkon: null, tanim: false, yansima: false, yeniden: false },
-    depo: { arkon: null, tanim: false, yansima: false, yeniden: false },
+    depo: { arkon: 'operator', tanim: false, yansima: false, yeniden: false },
     insan_kaynaklari: { arkon: null, tanim: false, yansima: false, yeniden: false },
     muhasebe_finans: { arkon: null, tanim: false, yansima: false, yeniden: false },
     idari_isler: { arkon: null, tanim: false, yansima: false, yeniden: false },
@@ -124,8 +124,8 @@ describe('rol dağılımı: Arkon rolleri, bakım rolü ve malzeme tanım yetkis
       const hepsi = kod === 'yonetici';
       assert.deepEqual(alinan, {
         arkon: beklenen.arkon ?? 403,
-        // Operatör Arkon'u terminal ve kuyruk sayfasından kullanır; Arkon MES sayfası verilmez (kart #775).
-        sayfa: beklenen.arkon !== null && kod !== 'operator',
+        // Operatör Arkon'u terminal ve kuyruk sayfasından kullanır; Arkon MES sayfası verilmez (kart #775). Depo da aynı (kart 3549).
+        sayfa: beklenen.arkon !== null && kod !== 'operator' && kod !== 'depo',
         arkonIslemi: hepsi ? alinan.arkonIslemi : (beklenen.arkon === null ? 0 : 1),
         tanim: beklenen.tanim ? 200 : 403,
         yansima: beklenen.yansima ? 200 : 403,
@@ -158,19 +158,24 @@ describe('rol dağılımı: Arkon rolleri, bakım rolü ve malzeme tanım yetkis
     assert.equal(await arkonRolu(await girisYap('mudur', 'operator')), 'lead');
   });
 
-  // Kart 3548, kullanıcı kararı 22.11.2026: kalite GKK istasyonunu terminalden başlatır ve sayar (events ve counts: Arkon kayıt yazımı);
-  // bakım ve satın alma kapalı kalır.
-  test('kalite terminalden durum ve sayım kaydı yazar; bakım ve satın alma yazamaz; matriste prod.run yalnız kalitede eklenir', async () => {
+  // Kart 3548 (kalite) ve 3549 (depo), kullanıcı kararı 22.11.2026: kalite GKK istasyonunu terminalden başlatır ve sayar; depo Arkon
+  // operatör rolüyle terminalin Toplama, Mal kabul ve Yükle sekmelerini açar. Şef kayıt yazma hakkını alan roller: kalite ve depo
+  // (events ve counts: Arkon kayıt yazımı); bakım ve satın alma kapalı kalır.
+  test('kalite ve depo terminalden durum ve sayım kaydı yazar; bakım ve satın alma yazamaz; depo terminal.uret taşır; matriste prod.run kaliteye eklenir', async () => {
     const kayitYaz = async (o: Oturum, tur: 'events' | 'counts'): Promise<number> => {
       const ortak = { cid: `rol-${tur}-${(sayac += 1)}`, at: Date.parse('2001-10-07T08:00:00Z'), machine: 'TZG-04', wc: 'TAL', orderNo: 'UE-1' };
       const satir = tur === 'counts' ? { ...ortak, kind: 'good', delta: 1 } : { ...ortak, state: 'running' };
       return (await gonder(o, `/arkon/kayitlar/${tur}/ekle`, { satirlar: [satir], kaynak: 'c1' })).statusCode;
     };
     const arkonRolu = async (o: Oturum): Promise<unknown> => (await oku(o, '/arkon/ben')).json().kisi?.rol;
-    for (const rol of ['kalite']) {
+    for (const rol of ['kalite', 'depo']) {
       const oturum = await girisYap(rol);
       for (const tur of ['events', 'counts'] as const) assert.equal(await kayitYaz(oturum, tur), 200, `${rol} ${tur}`);
     }
+    assert.equal(await arkonRolu(await girisYap('depo')), 'operator');
+    // Karar 3556: depo Toplama sayımı üretim emrine yansıyabilsin diye terminal.uret taşır.
+    assert.equal((await girisYap('depo')).islemler.includes('terminal.uret'), true);
+    assert.equal((await girisYap('satin_alma')).islemler.includes('terminal.uret'), false);
     assert.equal(await arkonRolu(await girisYap('kalite')), 'quality');
     for (const rol of ['bakim', 'satin_alma']) {
       const oturum = await girisYap(rol);

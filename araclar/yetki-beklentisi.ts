@@ -40,13 +40,13 @@ export const ROL_MATRISI = {
   depo: {
     ad: 'Depo',
     islemler: [
-      'akis.kart-oku', 'etiket-merkezi.bas', 'etiket-merkezi.oku', 'idari-isler.arac-talebi-ac', 'idari-isler.talep-ac',
+      'akis.kart-oku', 'arkon.operator', 'etiket-merkezi.bas', 'etiket-merkezi.oku', 'idari-isler.arac-talebi-ac', 'idari-isler.talep-ac',
       'ik.bordro-gordum', 'ik.izin-talep', 'malzemeler.yaz', 'mesaj.oku', 'mesaj.yaz', 'musteri-tedarikci.oku', 'projeler.oku',
       'satin-alma.talep-ac', 'sayfa.atolye', 'sayfa.etiket-merkezi', 'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.logo-gecisi', 'sayfa.malzemeler',
       'sayfa.mesaj', 'sayfa.musteri-tedarikci', 'sayfa.ortak-dosyalar', 'sayfa.profil', 'sayfa.bildirim-merkezi', 'sayfa.projeler', 'sayfa.sevkiyat',
       'sayfa.siparisler', 'sayfa.stok', 'sayfa.taleplerim', 'sayfa.uretim-terminali', 'sevkiyat.is-yaz', 'sevkiyat.oku', 'sevkiyat.onayla',
       'sevkiyat.plan-yaz', 'sevkiyat.tanim-yaz', 'siparisler.oku', 'stok.cikis', 'stok.giris', 'stok.istek', 'stok.malzeme-fisi-gonder',
-      'stok.sayim', 'stok.tanim', 'stok.konum-yaz', 'stok.raf-yaz', 'stok.harita-yaz', 'stok.malzeme-ayari', 'stok.toplama', 'stok.transfer', 'uretim-emirleri.fason',
+      'stok.sayim', 'stok.tanim', 'stok.konum-yaz', 'stok.raf-yaz', 'stok.harita-yaz', 'stok.malzeme-ayari', 'stok.toplama', 'stok.transfer', 'terminal.uret', 'uretim-emirleri.fason',
       'projeler.gorev-isle', 'sayfa.proje-gorevlerim',
       'logo.irsaliye-oku', 'sayfa.logo-irsaliyeleri',
     ],
