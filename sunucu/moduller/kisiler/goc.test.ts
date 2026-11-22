@@ -762,3 +762,40 @@ describe('depo Arkon operatör göçü: kişiye ek Arkon işlemi taşıyan depo 
     assert.equal((await vt.sorgu("SELECT 1 FROM rol_islemi ri JOIN rol r ON r.id = ri.rol_id WHERE r.kod = 'depo' AND ri.islem = 'terminal.uret'")).length, 1);
   });
 });
+
+describe('sevkiyat terminal yükleme göçü: elle girilmiş satır varsa göç geçer ve satır tek kalır (gerçek PostgreSQL)', () => {
+  let ortam: TestVeritabani | undefined;
+  let oncesi = '';
+  let dahil = '';
+  const DOSYA_SONU = '_kisiler_sevkiyat_terminal_yukle.sql';
+
+  before(async () => {
+    ortam = await testSemasiAc('gocst');
+    oncesi = await mkdtemp(join(tmpdir(), 'tmiv2-gocst-'));
+    dahil = await mkdtemp(join(tmpdir(), 'tmiv2-gocstd-'));
+  });
+
+  after(async () => {
+    for (const klasor of [oncesi, dahil]) if (klasor) await rm(klasor, { recursive: true, force: true });
+    await ortam?.kaldir();
+  });
+
+  test('sevkiyata yalnız sayfa.uretim-terminali ve stok.cikis eklenir; elle girilmiş stok.cikis satırı varken göç geçer ve satır tek kalır', async () => {
+    if (!ortam) throw new Error('Test veritabanı açılamadı (TMIV2_PG_* ve TMIV2_PG_TEST_DATABASE ayarlarını denetleyin).');
+    const { ayar, sema, vt } = ortam;
+    const hepsi = (await readdir(GERCEK_KLASOR)).filter((ad) => ad.endsWith('.sql')).sort();
+    const sira = hepsi.findIndex((ad) => ad.endsWith(DOSYA_SONU));
+    assert.equal(sira > 0, true);
+    for (const ad of hepsi.slice(0, sira)) await copyFile(join(GERCEK_KLASOR, ad), join(oncesi, ad));
+    for (const ad of hepsi.slice(0, sira + 1)) await copyFile(join(GERCEK_KLASOR, ad), join(dahil, ad));
+    await gocleriUygula(ayar, oncesi, { sema });
+
+    const satirlar = async (): Promise<string[]> =>
+      (await vt.sorgu<{ kod: string; islem: string }>('SELECT r.kod, ri.islem FROM rol_islemi ri JOIN rol r ON r.id = ri.rol_id'))
+        .map((s) => `${s.kod}:${s.islem}`).sort();
+    const once = await satirlar();
+    await vt.sorgu("INSERT INTO rol_islemi (rol_id, islem) SELECT id, 'stok.cikis' FROM rol WHERE kod = 'sevkiyat'");
+    assert.deepEqual(await gocleriUygula(ayar, dahil, { sema }), [hepsi[sira]]);
+    assert.deepEqual((await satirlar()).filter((s) => !once.includes(s)), ['sevkiyat:sayfa.uretim-terminali', 'sevkiyat:stok.cikis']);
+  });
+});

@@ -4,7 +4,7 @@ import { rotalariTopla } from '../../../ortak/rota/kesif.ts';
 import { YENI_EKRAN_ILETISI } from '../../../ortak/rota/yeni-ekran.tsx';
 import { eskiAdresinYenisi, rotalar } from '../rotalar.tsx';
 import { baglantiOzeti } from './ortak/BaglantiDurumu.tsx';
-import { yalnizMalKabul } from './ArkonYeni.tsx';
+import { yalnizMalKabul, yalnizYukle } from './ArkonYeni.tsx';
 import { SAYFALAR, SAYFA_DISI, arkonGirisSayfasi, sekmeMaddeleri } from './sayfalar.ts';
 import { arkonAc, KAPISIZ, OPERATOR, sunucuKur, YONETICI } from './test-ortak.tsx';
 import { vardiyaOzetiAcilabilirMi } from './operator/vardiya-ozeti-istegi.ts';
@@ -197,6 +197,23 @@ describe('Arkon rolü olmayan depo kullanıcısı', () => {
     const istekler = sunucuKur(DEPO);
     arkonAc('/uretim-terminali');
     expect((await bolum('Mal kabul')).getAttribute('data-sayfa')).toBe('mal-kabul');
+    expect(istekler.some((i) => i.yol === '/arkon/ben')).toBe(false);
+  }, 20000);
+});
+
+// 22.11.2026: sevkiyat çalışanı terminalde yalnız yüklemeyi görür; Arkon kişi kaydı istenmez.
+describe('Arkon rolü olmayan sevkiyat kullanıcısı', () => {
+  const SEVKIYAT = { rol: 'operator', kullanici: { id: 10, ad: 'Deneme Sevkiyatçı', islemler: ['sayfa.uretim-terminali', 'stok.cikis', 'sevkiyat.oku', 'sevkiyat.is-yaz'] } } as Parameters<typeof sunucuKur>[0];
+  it('yalnız yükle kuralı: stok çıkışı var; Arkon rol işlemi ve stok girişi yok', () => {
+    expect(yalnizYukle(['sayfa.uretim-terminali', 'stok.cikis'])).toBe(true);
+    expect(yalnizYukle(['sayfa.uretim-terminali', 'stok.cikis', 'arkon.operator'])).toBe(false);
+    expect(yalnizYukle(['sayfa.uretim-terminali', 'stok.cikis', 'stok.giris'])).toBe(false);
+    expect(yalnizYukle(['sayfa.uretim-terminali'])).toBe(false);
+  });
+  it('/uretim-terminali yükleme bölümünü açar; /arkon/ben istenmez', async () => {
+    const istekler = sunucuKur(SEVKIYAT);
+    arkonAc('/uretim-terminali');
+    expect((await bolum('Yükleme')).getAttribute('data-sayfa')).toBe('yukle');
     expect(istekler.some((i) => i.yol === '/arkon/ben')).toBe(false);
   }, 20000);
 });
