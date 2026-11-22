@@ -7,7 +7,7 @@ import {
   projeListesiCevabi, projeListesiSorgusu, projeOlusturGovdesi, projeSemasi, projeSiparisKalemleriCevabi, projeYonetimiCevabi, siparisParametresi, siparisProjeleriCevabi,
   siparisSecenekleriCevabi, siparisSecenekleriSorgusu, siparistenProjeGovdesi, statuAyariGovdesi, statuEkleGovdesi, statuGuncelleGovdesi,
   statuListesiCevabi, statuYazGovdesi, tabanYenileGovdesi,
-  geriCevirGovdesi, geriGonderGovdesi, gorevAyrintisiCevabi, gorevKomutuGovdesi, gorevlerimCevabi, rolSecenekleriCevabi, sablondanEkleGovdesi, sablonEkleGovdesi,
+  geriCevirGovdesi, geriGonderGovdesi, gorevAyrintisiCevabi, gorevIptalGovdesi, gorevKomutuGovdesi, gorevlerimCevabi, topluGorevIptalCevabi, topluGorevIptalGovdesi, rolSecenekleriCevabi, sablondanEkleGovdesi, sablonEkleGovdesi,
   sablonGuncelleGovdesi, sablonListesiCevabi, sablonSecenekleriCevabi,
   adimEkleGovdesi, adimIsaretleGovdesi, adimParametresi, kanitBaglaGovdesi, kanitParametresi, notEkleGovdesi,
   dagitCevabi, dagitGovdesi, dagitilmamisCevabi, dagitimCevabi, dagitimSorgusu,
@@ -16,7 +16,7 @@ import {
   bitisBagla, firmaSecenekleri, gorevDuzenle, gorevEkle, kilometreTasiDuzenle, kilometreTasiEkle, projeAc, projeAyrintisi, projeDuzenle, projeListesi,
   projeSiparisKalemleri, projeYonetimi, siparisProjeleri, siparisSecenekleri, siparistenProjeAc, sorumluSecenekleri, statuAyariDuzenle, statuDuzenle, statuEkle,
   statuListesi, statuYaz, tabanYenile,
-  gorevAyrintisi, gorevBasla, gorevBitir, gorevGeriCevir, gorevGeriGonder, gorevIptal, gorevlerim, gorevOnayla, gorevUstlen, rolSecenekleri, sablonDuzenle,
+  gorevAyrintisi, gorevBasla, gorevBitir, gorevGeriCevir, gorevGeriGonder, gorevIptal, gorevleriIptalEt, gorevlerim, gorevOnayla, gorevUstlen, rolSecenekleri, sablonDuzenle,
   sablonEkle, sablonListesi, sablonSecenekleri,
   adimEkle, adimIsaretle, adimSil, kanitBagla, kanitDosyasi, kanitKaldir, notEkle,
 } from './servis.ts';
@@ -227,9 +227,19 @@ export const uclar = [
     yol: '/projeler/gorevler/:gorevId/iptal',
     yetki: 'projeler.gorev-yaz',
     parametre: gorevParametresi,
-    govde: gorevKomutuGovdesi,
+    govde: gorevIptalGovdesi,
     cevap: gorevAyrintisiCevabi,
     isle: ({ db, kullanici, parametre, govde }) => gorevIptal(db, kullanici, parametre.gorevId, govde),
+  }),
+  // 3580: seçilenleri tek gerekçeyle iptal et; görev başına sonuç döner, silme yok.
+  uc({
+    yontem: 'POST',
+    yol: '/projeler/gorevler/toplu-iptal',
+    yetki: 'projeler.gorev-yaz',
+    tekrarKorumali: true,
+    govde: topluGorevIptalGovdesi,
+    cevap: topluGorevIptalCevabi,
+    isle: ({ db, kullanici, govde }) => gorevleriIptalEt(db, kullanici, govde),
   }),
   // 3269: görev şablonları; yazan şablon ekranını da okur. Proje açan ve görev yazan seçici için etkin şablonları görür.
   uc({

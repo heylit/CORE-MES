@@ -1,4 +1,4 @@
-import type { Db } from '#cekirdek/db.ts';
+import { kayitNoktasi, type Db } from '#cekirdek/db.ts';
 import type { DenetimSecimi, IkiliCevap } from '#cekirdek/uc.ts';
 import { bulunamadi, cakisma, dogrulama, yetkiYok } from '#cekirdek/hata.ts';
 import type { UygulamaHatasi } from '#cekirdek/hata.ts';
@@ -9,10 +9,10 @@ import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type {
-  BitisBaglaGovdesi, GeriCevirGovdesi, GeriGonderGovdesi, Gorev, GorevAyrintisiCevabi, GorevKomutuGovdesi, GorevlerimCevabi, GorevlerimSatiri, GorevOlayi,
+  BitisBaglaGovdesi, GeriCevirGovdesi, GeriGonderGovdesi, Gorev, GorevAyrintisiCevabi, GorevIptalGovdesi, GorevKomutuGovdesi, GorevlerimCevabi, GorevlerimSatiri, GorevOlayi,
   Sablon, SablonEkleVerisi, SablonGuncelleVerisi, SablonListesiCevabi, SablonSecenekleriCevabi, GorevEkleVerisi, GorevGuncelleVerisi, GuncelStatu, KilometreTasi, KilometreTasiGuncelleVerisi, Proje, ProjeDurumu, ProjeGuncelleVerisi,
   ProjeListesiSuzgeci, ProjeOlusturVerisi, ProjeSiparisKalemleriCevabi, ProjeYonetimiCevabi, SiparistenProjeVerisi, Statu, StatuKaydi, StatuListesiCevabi, StatuTonu,
-  StatuYazVerisi, AdimEkleGovdesi, AdimIsaretleGovdesi, NotEkleGovdesi, KanitBaglaGovdesi, GorevKaniti,
+  StatuYazVerisi, TopluGorevIptalCevabi, TopluGorevIptalGovdesi, AdimEkleGovdesi, AdimIsaretleGovdesi, NotEkleGovdesi, KanitBaglaGovdesi, GorevKaniti,
 } from '#paylasilan/sozlesme/projeler.ts';
 import { PROJE_KODU_BICIMI } from '#paylasilan/sozlesme/projeler.ts';
 import { siparisListesiSorgusu } from '#paylasilan/sozlesme/siparisler.ts';
@@ -569,16 +569,36 @@ export async function gorevGeriCevir(db: Db, kullanici: Kullanici, gorevId: numb
 }
 
 // 3303-1 c: görevi görev yazan iptal eder; veri silinmez. Kontrol ve tek görev atama bildirimi kapanır (3478); toplu açılışın
-// bildirimi projenin öteki görevlerini de taşır, kalır.
-export async function gorevIptal(db: Db, kullanici: Kullanici, gorevId: number, g: GorevKomutuGovdesi): Promise<GorevAyrintisiCevabi> {
+// bildirimi projenin öteki görevlerini de taşır, kalır. 3580: iptal gerekçelidir ve görev geçmişine kim, ne zaman, neden ile yazılır;
+// sistemin kapattığı hazırlık görevi (hazirlikGoreviniKapat) bu yoldan geçmez, olay yazmaz.
+async function gorevIptalYaz(db: Db, kullanici: Kullanici, gorevId: number, surum: number, gerekce: string): Promise<void> {
   const { g: mevcut } = await akisaHazirla(db, kullanici, gorevId);
   const ret = iptalReddi(mevcut.durum);
   if (ret !== null) throw dogrulama(ret);
-  await akisYaz(db, gorevId, () => sorgular.gorevIptal(db, gorevId, kullanici.id, g.surum));
+  await akisYaz(db, gorevId, () => sorgular.gorevIptal(db, gorevId, kullanici.id, surum));
+  await sorgular.gorevOlayiEkle(db, gorevId, 'iptal', kullanici.id, gerekce);
   await bildirimKapat(db, { tur: 'projeler.gorev-kontrol-bekliyor', kaynakKimlik: String(gorevId) });
   await atamaKapat(db, gorevId);
   await kademeBildirimleriniKapat(db, gorevId);
+}
+
+export async function gorevIptal(db: Db, kullanici: Kullanici, gorevId: number, g: GorevIptalGovdesi): Promise<GorevAyrintisiCevabi> {
+  await gorevIptalYaz(db, kullanici, gorevId, g.surum, g.gerekce.trim());
   return gorevAyrintisi(db, kullanici, gorevId);
+}
+
+// 3580: seçilen görevleri tek gerekçeyle iptal eder. Her görev kendi ara kaydında tekli iptal yolundan geçer (kilit, sürüm, kural,
+// bildirim kapanışı aynı); iş kuralı reddi (bitmiş, sürüm çakışması, kapalı proje) ötekileri durdurmaz. Görevler kimlik sırasıyla
+// kilitlenir: iki toplu iptal çakışsa da kilitlenme olmaz.
+export async function gorevleriIptalEt(db: Db, kullanici: Kullanici, g: TopluGorevIptalGovdesi): Promise<TopluGorevIptalCevabi> {
+  const gerekce = g.gerekce.trim();
+  const sirali = [...g.gorevler].sort((a, b) => a.id - b.id);
+  const sonuclar: TopluGorevIptalCevabi['sonuclar'] = [];
+  for (const x of sirali) {
+    const r = await kayitNoktasi(db, () => gorevIptalYaz(db, kullanici, x.id, x.surum, gerekce));
+    sonuclar.push({ id: x.id, tamam: r.tamam, ileti: r.tamam ? null : r.hata.message, yenidenDenenir: !r.tamam && r.hata.durum === 409 });
+  }
+  return { sonuclar };
 }
 
 // Projeyi okuyamayan kişi yalnız kendisine, rolüne ya da kontrolüne düşen ya da işlediği görevi açar; ötekisi yok sayılır.

@@ -6,7 +6,10 @@ import { DurumKutusu, Kart, Rozet, SayiKarti, Sekmeler, Tablo, type Sekme, type 
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { GOREV_DURUM_TONU, KADEME_TONU, atamaMetni, bugun, gorevDurumMetni, kademeMetni, tarihMetni } from './gosterim.ts';
+import { useTopluIptal } from './GorevIptalPenceresi.tsx';
 import { GorevIlerlemesi, YapanMetni, gorevGecikiyor } from './ProjeGorevleri.tsx';
+import { useIslemVar } from './komut.ts';
+import { GOREV_ISLEMI } from './gosterim.ts';
 import './projeler.css';
 
 type Suzgec = 'hepsi' | 'geciken' | GorevlerimTuru;
@@ -23,6 +26,7 @@ export function ProjeGorevlerim() {
   const yonlendir = useNavigate();
   const l = useQuery({ queryKey: anahtarlar.gorevlerim, queryFn: () => api.get<GorevlerimCevabi>('/projeler/gorevlerim/liste') });
   const gun = bugun();
+  const yazar = useIslemVar(GOREV_ISLEMI);
   const hepsi = [...(l.data?.gorevler ?? [])].sort((a, b) => SIRA[a.tur] - SIRA[b.tur] || a.planBitis.localeCompare(b.planBitis));
   const say = (t: GorevlerimTuru): number | undefined => (l.data === undefined ? undefined : hepsi.filter((g) => g.tur === t).length);
   // Kutular sekmelerin alt kümesidir: her kutunun aynı adlı sekmesi var.
@@ -34,6 +38,11 @@ export function ProjeGorevlerim() {
     ...(['bana', 'rolume', 'kontrolumde', 'yaptim'] as const).map((t) => ({ anahtar: t, baslik: TUR_METNI[t], sayi: say(t) ?? 0 })),
     { anahtar: 'geciken', baslik: 'Geciken', sayi: geciken ?? 0 },
   ];
+  const { toplu, pencere: iptalPenceresi } = useTopluIptal(
+    hepsi,
+    (g) => ({ id: g.id, ad: g.ad, durum: g.durum, surum: g.surum, projeKod: g.projeKod, hazirlik: g.hazirlikMaddesi !== null }),
+    yazar,
+  );
   const sutunlar: Sutun<GorevlerimSatiri>[] = [
     { anahtar: 'ad', baslik: 'Görev', hucre: (g) => (
       <span>{g.ad}<span className="tc-prj-soluk"> · {TUR_METNI[g.tur]}</span></span>
@@ -74,10 +83,12 @@ export function ProjeGorevlerim() {
                 satirAnahtari={(g) => g.id}
                 satirSec={(g) => { void yonlendir(`/proje-gorevlerim/${String(g.id)}`); }}
                 yukleniyor={l.isPending}
+                {...(toplu === undefined ? {} : { toplu })}
                 bosMesaj="Sana düşen açık proje görevi yok"
               />
             )}
           <p className="tc-prj-soluk">Görev sana ya da rolüne atanınca ve kontrolüne düşünce bildirim gelir.</p>
+          {iptalPenceresi}
         </div>
       </Kart>
     </div>
