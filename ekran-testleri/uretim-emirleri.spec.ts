@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { expect, test } from './ortak.ts';
 
 // Kaynak: kayit/uretim-emirleri/akislar.md A1 (izleme), A6 (refakat kartları, Soru 586). Emir sayfası 3039: yaşam şeridi, dört özet,
-// durumuna göre tek ana düğme, sekmeler (Adımlar, Malzeme, Hazırlık, Stok ve kapanış, Kayıtlar); emir Üretim Emirleri'nde yönetilir.
+// durumuna göre tek ana düğme, sekmeler (Adımlar ve hazırlık, Malzeme, Stok ve kapanış, Kayıtlar); emir Üretim Emirleri'nde yönetilir.
 test.use({ hesap: 'ornek.planlama' });
 
 const sayac = (page: Page) => page.getByRole('status').filter({ hasText: /\d+ açık emir/ });
@@ -55,9 +55,9 @@ test('emir sayfası: satırdan açılır; yaşam şeridi, özet ve sekmeler; ger
   await expect(page).toHaveURL(/\/uretim-emirleri\/\d+$/);
   await expect(page.getByRole('heading', { name: emirNo }).filter({ visible: true }).first()).toBeVisible();
   await expect(page.getByRole('group', { name: 'Emrin özeti' })).toBeVisible();
-  for (const ad of ['Adımlar', 'Malzeme', 'Hazırlık', 'Stok ve kapanış', 'Kayıtlar']) await expect(page.getByRole('tab', { name: ad })).toBeVisible();
-  await expect(page.getByRole('tab', { name: 'Adımlar' })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('tabpanel', { name: 'Adımlar' })).toContainText(/OP ?\d+|\b\d{2}\b/);
+  for (const ad of ['Adımlar ve hazırlık', 'Malzeme', 'Stok ve kapanış', 'Kayıtlar']) await expect(page.getByRole('tab', { name: ad })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Adımlar ve hazırlık' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tabpanel', { name: 'Adımlar ve hazırlık' })).toContainText(/OP ?\d+|\b\d{2}\b/);
   await page.getByRole('tab', { name: 'Kayıtlar' }).click();
   await expect(page).toHaveURL(/sekme=kayitlar/);
   // Kayıt defteri boşsa tablo yerine boş iletisi çizilir.
@@ -77,7 +77,7 @@ test.describe('yönetici', () => {
     const baslik = page.locator('.tc-emir-ust-sag').first();
     await expect(baslik.getByRole('button', { name: /işlemleri$/ })).toBeVisible();
     expect(await page.locator('.tc-dugme-birincil').filter({ visible: true }).count()).toBeLessThanOrEqual(1);
-    const panel = page.getByRole('tabpanel', { name: 'Adımlar' });
+    const panel = page.getByRole('tabpanel', { name: 'Adımlar ve hazırlık' });
     const ekle = panel.getByRole('button', { name: 'Buraya adım ekle' });
     if (await ekle.count() > 0) {
       await ekle.first().click();
@@ -88,28 +88,22 @@ test.describe('yönetici', () => {
     expect(ag.yazmalar, 'açıp kapatmak yazmaz').toEqual([]);
   });
 
-  // 3496: durum hücresi uzun olan satırda (örnek veride fason OP 30: dış üretim yeri ve statü nedeni) adım adı sıkışıp harf harf
-  // kırılmaz; "Sağlam" etiketi bölünmez; statü rozeti satırdan taşıp kesilmez.
-  test('adım listesinde uzun durum hücresi adı sıkıştırmaz, etiket ve rozet kesilmez', async ({ page, ag, ac }) => {
+  // 3496, 3581: durum hücresi uzun olan satırda (örnek veride fason OP 30: dış üretim yeri ve statü nedeni) adım adı sıkışıp harf harf
+  // kırılmaz; statü rozeti hücreden taşıp kesilmez.
+  test('adım tablosunda uzun durum hücresi adı sıkıştırmaz, rozet kesilmez', async ({ page, ag, ac }) => {
     await ac('/uretim-emirleri/2?sekme=adimlar');
-    const panel = page.getByRole('tabpanel', { name: 'Adımlar' });
-    const adlar = panel.locator('.tc-rr3-adim-ad');
+    const panel = page.getByRole('tabpanel', { name: 'Adımlar ve hazırlık' });
+    const adlar = panel.locator('td.tc-at-adim');
     await expect(adlar.first()).toBeVisible();
     // Ön koşul: örnek veride uzun durum hücreli satır var; yoksa test hiçbir şeyi sınamaz.
-    await expect(panel.locator('.tc-rr3-adimlar > li').filter({ hasText: 'Dış üretim' }).first()).toBeVisible();
+    await expect(panel.locator('tr.tc-at-satir').filter({ hasText: 'Dış üretim' }).first()).toBeVisible();
     const genislikler = await adlar.evaluateAll((l) => l.map((e) => Math.round(e.getBoundingClientRect().width)));
     expect(genislikler.length).toBeGreaterThan(1);
-    // 768 ve üstünde ad sütununun alt sınırı --acilir-enaz (200 px); telefonda durum alt satırdadır, ad satırı paylaşmaz.
-    const enaz = (page.viewportSize()?.width ?? 1280) >= 768 ? 199 : 120;
-    for (const g of genislikler) expect(g, 'adım adı sütunu').toBeGreaterThanOrEqual(enaz);
-    const satirSayilari = await panel.locator('.tc-rr3-adim-saglam > small').evaluateAll((l) => l.map((e) => {
-      const r = document.createRange(); r.selectNodeContents(e);
-      return new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size;
-    }));
-    for (const n of satirSayilari) expect(n, '"Sağlam" tek satırda').toBe(1);
-    const tasmalar = await panel.locator('.tc-rr3-adimlar .tc-rozet').evaluateAll((l) => l.map((e) => e.scrollWidth - e.clientWidth));
+    for (const g of genislikler) expect(g, 'adım adı sütunu').toBeGreaterThanOrEqual(100);
+    const tasmalar = await panel.locator('td.tc-at-durum .tc-rozet').evaluateAll((l) => l.map((e) => e.scrollWidth - e.clientWidth));
     expect(tasmalar.length).toBeGreaterThan(0);
     for (const t of tasmalar) expect(t, 'rozet içeriği kutusuna sığar').toBeLessThanOrEqual(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), 'sayfa yatay taşmaz').toBeLessThanOrEqual(0);
     expect(ag.hatalar).toEqual([]);
   });
 

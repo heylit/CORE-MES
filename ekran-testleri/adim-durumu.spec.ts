@@ -1,10 +1,10 @@
 import { expect, test } from './ortak.ts';
 
-// Adım Durumu (2893, düzen 2955): açık emir listeden seçilir, adımlar rota sırasıyla görünür, adım ayrıntısı yan pencerede açılır.
+// Adım Durumu (2893, 3581): açık emir listeden seçilir, adımlar tek tabloda satır satır görünür, ayrıntı satırın altında açılır.
 // Dar ekranda (1024 altı) emir seçilince liste gizlenir, "Emirler" düğmesi listeye döner.
 test.use({ hesap: 'ornek.planlama' });
 
-test('emir seçilir, adımlar ve sayaç görünür, adım ayrıntısı yan pencerede açılır', async ({ page, ag, ac }) => {
+test('emir seçilir, adımlar ve sayaç görünür, adım ayrıntısı satırın altında açılır', async ({ page, ag, ac }) => {
   await ac('/adim-durumu');
   const liste = page.getByRole('list', { name: 'Açık emirler' });
   const ilk = liste.getByRole('button').first();
@@ -12,22 +12,30 @@ test('emir seçilir, adımlar ve sayaç görünür, adım ayrıntısı yan pence
   await ilk.click();
   await expect(page).toHaveURL(/emir=\d+/);
 
-  const adimlar = page.getByRole('list', { name: 'Adımlar' });
-  await expect(adimlar.getByRole('listitem').first()).toBeVisible();
+  const tablo = page.getByRole('table');
+  await expect(tablo.getByRole('row').nth(1)).toBeVisible();
   await expect(page.getByRole('list', { name: 'Adım özeti' })).toBeVisible();
   const dar = (page.viewportSize()?.width ?? 0) < 1024;
   if (dar) await expect(liste).toBeHidden();
   else await expect(ilk).toHaveAttribute('aria-current', 'true');
 
-  await adimlar.getByRole('button').first().click();
-  const pencere = page.getByRole('dialog');
-  await expect(pencere.getByText('Neden bekliyor')).toBeVisible();
-  await expect(pencere.getByRole('heading', { name: 'Elle değiştirilenler', exact: true })).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(pencere).toBeHidden();
-
-  await page.getByRole('button', { name: 'Matris' }).click();
-  await expect(page.getByRole('table', { name: 'Hazırlık matrisi' })).toBeVisible();
+  const ac1 = tablo.getByRole('button', { name: /^OP \d+ .* ayrıntısı$/ }).first();
+  // 3581 Test B1: tablo kapsayıcısından geniş olmaz (kapalı ve açık satırda), açma düğmesi kesilmez.
+  const tasmaz = async (): Promise<void> => {
+    const t = await page.evaluate(() => { const k = document.querySelector('.tc-at-kap'); const tb = k?.querySelector('table'); return { kap: k?.clientWidth ?? 0, tablo: tb?.scrollWidth ?? 0 }; });
+    expect(t.tablo, 'tablo kapsayıcıdan geniş olmaz').toBeLessThanOrEqual(t.kap);
+  };
+  await tasmaz();
+  await ac1.click();
+  await expect(ac1).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('region', { name: /^OP \d+ .* ayrıntısı$/ })).toBeVisible();
+  await tasmaz();
+  // Test B2: dar ekranda madde çipi parmak boyunda.
+  if ((page.viewportSize()?.width ?? 0) < 1024) expect((await tablo.getByRole('button', { name: /Ayrıntıyı aç$/ }).first().boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await expect(page.getByRole('region', { name: /^OP \d+ durum$/ })).toBeVisible();
+  await ac1.click();
+  await expect(ac1).toHaveAttribute('aria-expanded', 'false');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), 'sayfa yatay taşmaz').toBeLessThanOrEqual(0);
 
   if (dar) {
     await page.getByRole('button', { name: 'Emirler' }).click();
@@ -63,26 +71,23 @@ test('uzun emir no listede tam okunur, kart dışına taşmaz, etiketle çakış
   expect(ag.hatalar).toEqual([]);
 });
 
-// 3322 (müdür): hücreye tık kaynak çubuğunu açar; durduran maddeyi elle çevirmek onay alanı açar, Vazgeç yazmaz. Yazma bu testte yapılmaz.
+// 3322, 3581 (müdür): hazırlık çipi satırın altını açar; Elle değiştir gerekçe ister, Vazgeç yazmaz. Yazma bu testte yapılmaz.
 test.describe('müdür', () => {
   test.use({ hesap: 'ornek.mudur' });
-  test('matriste durduran hücreye tıklanır, kaynak çubuğu ve elle değiştirme onayı açılır, Vazgeç yazmaz', async ({ page, ag, ac }) => {
+  test('çipe basılır, ayrıntı ve elle değiştirme alanı açılır, Vazgeç yazmaz', async ({ page, ag, ac }) => {
     await ac('/adim-durumu');
     await page.getByRole('list', { name: 'Açık emirler' }).getByRole('button').first().click();
-    await page.getByRole('button', { name: 'Matris' }).click();
-    const tablo = page.getByRole('table', { name: 'Hazırlık matrisi' });
-    const hucre = tablo.getByRole('button', { name: /^OP \d+ (CNC kurulumu|Çizim revizyonu|Terminale gönderildi): (?!Gerekmez).*, otomatik/ }).first();
-    await hucre.scrollIntoViewIfNeeded();
-    await hucre.click();
-    const cubuk = page.getByRole('region', { name: /kaynak ve elle değiştirme$/ });
-    await expect(cubuk.getByText(/^Kaynak: /)).toBeVisible();
-    await expect(cubuk.getByText('Hazır değilse iş başlamaz')).toBeVisible();
-    await cubuk.getByRole('button', { name: /^Elle hazır (değil )?yap$/ }).click();
-    await expect(cubuk.getByRole('textbox', { name: 'Gerekçe' })).toBeVisible();
-    await cubuk.getByRole('button', { name: 'Vazgeç' }).click();
-    await expect(cubuk.getByRole('textbox', { name: 'Gerekçe' })).toBeHidden();
-    const sayfa = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-    expect(sayfa, 'sayfa yatay taşmaz').toBeLessThanOrEqual(0);
+    const cip = page.getByRole('table').getByRole('button', { name: /^OP \d+ .*Ayrıntıyı aç$/ }).first();
+    await cip.scrollIntoViewIfNeeded();
+    await cip.click();
+    const bolge = page.getByRole('region', { name: /^OP \d+ .* ayrıntısı$/ });
+    await expect(bolge.getByText(/^Kaynak: /).first()).toBeVisible();
+    await bolge.getByRole('button', { name: /^Elle değiştir…/ }).first().click();
+    const kutu = bolge.getByRole('group', { name: /elle değiştir$/ });
+    await expect(kutu).toBeVisible();
+    await kutu.getByRole('button', { name: 'Vazgeç' }).click();
+    await expect(kutu).toBeHidden();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), 'sayfa yatay taşmaz').toBeLessThanOrEqual(0);
     expect(ag.hatalar).toEqual([]);
     expect(ag.yazmalar, 'Vazgeç yazmaz').toEqual([]);
   });
@@ -95,16 +100,15 @@ test.describe('müdür, açılan satır', () => {
   test('satır açılır, madde ekleme penceresi açılıp kapanır, sayfa taşmaz', async ({ page, ag, ac }) => {
     await ac('/adim-durumu');
     await page.getByRole('list', { name: 'Açık emirler' }).getByRole('button').first().click();
-    await page.getByRole('button', { name: 'Matris' }).click();
-    const tablo = page.getByRole('table', { name: 'Hazırlık matrisi' });
-    const ac1 = tablo.getByRole('button', { name: /^OP \d+ maddeleri$/ }).first();
+    const tablo = page.getByRole('table');
+    const ac1 = tablo.getByRole('button', { name: /^OP \d+ .* ayrıntısı$/ }).first();
     await ac1.click();
     await expect(ac1).toHaveAttribute('aria-expanded', 'true');
     const madde = tablo.getByRole('button', { name: 'Madde', exact: true }).first();
     await expect(madde).toBeVisible();
     const genislik = page.viewportSize()?.width ?? 0;
     // OP kodu tek satırdır (Arayüz K1): kodun yüksekliği bir satırı geçmez.
-    const kod = tablo.locator('.tc-ad-mx-ad .tc-emir-kod').first();
+    const kod = tablo.locator('.tc-at-op .tc-emir-kod').first();
     const satir = await kod.evaluate((e) => parseFloat(getComputedStyle(e).lineHeight) || e.getBoundingClientRect().height);
     expect((await kod.boundingBox())?.height ?? 0).toBeLessThanOrEqual(satir + 1);
     if (genislik < 1024) expect((await madde.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
@@ -152,9 +156,8 @@ test.describe('müdür, türlü kontrol', () => {
     });
     await ac('/adim-durumu');
     await page.getByRole('list', { name: 'Açık emirler' }).getByRole('button').first().click();
-    await page.getByRole('button', { name: 'Matris' }).click();
-    const tablo = page.getByRole('table', { name: 'Hazırlık matrisi' });
-    await tablo.getByRole('button', { name: /^OP \d+ maddeleri$/ }).first().click();
+    const tablo = page.getByRole('table');
+    await tablo.getByRole('button', { name: /^OP \d+ .* ayrıntısı$/ }).first().click();
     await expect(tablo.getByText(/25,07 mm · sınır dışı \(\+0,02\)/).filter({ visible: true })).toBeVisible();
     await expect(tablo.getByRole('radiogroup', { name: 'ORN çapak durumu' })).toBeVisible();
     await expect(tablo.getByRole('button', { name: 'Fotoğraf ekle' })).toBeVisible();
@@ -174,7 +177,8 @@ test.describe('müdür, türlü kontrol', () => {
     const tasma = async () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(await tasma(), 'sayfa yatay taşmaz').toBeLessThanOrEqual(0);
     await tablo.getByRole('button', { name: 'Değer gir' }).click();
-    const olcum = page.getByRole('dialog', { name: 'ORN delik çapı' });
+    // 3581: ölçüm girişi açılan satırda satır içi açılır (pencere değil).
+    const olcum = tablo.locator('.tc-ad-hucre-pencere').filter({ has: page.getByLabel('Ölçülen değer (mm)') });
     await olcum.getByLabel('Ölçülen değer (mm)').fill('12,024');
     await expect(olcum.getByRole('status')).toContainText('Sınır dışı.');
     await olcum.getByRole('button', { name: 'Vazgeç' }).click();

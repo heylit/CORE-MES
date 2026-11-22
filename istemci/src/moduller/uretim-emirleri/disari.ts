@@ -6,7 +6,7 @@ export { FasonaGonder } from './FasonaGonder.tsx';
 // Emir ve iş emri durumunun tek sözlüğü (1389 a); sözlüğün kendisi sözleşmededir (projeler için döngüsüz).
 export { CALISMA_DURUMU, EMIR_DURUMU, IS_EMRI_DURUMU, KAPANIS_SONUCU, emirDurumuGosterimi } from '#paylasilan/sozlesme/emir-durumu.ts';
 // Hazırlık maddelerinin adı ve sahibi, iş emri hücresinin hâli (2057 a: emir ayrıntısı ve Üretim Terminali aynı listeyi okur).
-export { MADDE as HAZIRLIK_MADDE_BILGISI, hucreHali as hazirlikHucreHali } from './HazirlikListesi.tsx';
+export { MADDE as HAZIRLIK_MADDE_BILGISI, hucreHali as hazirlikHucreHali } from './hazirlik-bilgisi.ts';
 // Adım Durumu (2893-3 b): statünün adı, tonu ve simgesi; Üretim Terminali emrin adımlarını sayfayla aynı sözlükle gösterir.
 export { STATU as ADIM_STATUSU } from './adim-durumu.ts';
 // Rota akışı (3136 a): emrin adımları yan yana, bu adım ve toplam gidişat; Üretim Terminali ve refakat kartı okutması aynı parçayı çizer.
@@ -18,3 +18,5 @@ export { EmirAyrintisi } from './EmirAyrintisi.tsx';
 export const URETIM_EMIRLERI_ONBELLEGI = anahtarlar.hepsi;
 // 3155: refakat kartı okutulunca emrin özeti (Malzeme · Teslim paneli okutma sonucu).
 export { KartEmirOzeti, useEmirAdimlari } from './KartEmirOzeti.tsx';
+// Adım tablosu (3581): Reçete ve Rota emrin adım satırlarını (alt emir, ek adım, plan saati) verir, tabloyu bu modül çizer.
+export type { AdimTablosuYuvasi, EklemeYuvasi, TabloSatiri } from './AdimTablosu.tsx';

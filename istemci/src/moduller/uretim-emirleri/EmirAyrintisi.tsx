@@ -18,8 +18,8 @@ import { EmirFisleri } from './EmirFisleri.tsx';
 import { stokOkur } from './refakat.ts';
 import { UretimYerleri } from './UretimYerleri.tsx';
 import { useAdimSatirEki, type AdimSatirEki } from './AdimSatiri.tsx';
+import { AdimTablosu, type AdimTablosuYuvasi } from './AdimTablosu.tsx';
 import { SmartesEmirBasligi } from './SmartesRozeti.tsx';
-import { HazirlikListesi } from './HazirlikListesi.tsx';
 import { Ilerleme } from './Ilerleme.tsx';
 import { Iplik } from './Iplik.tsx';
 import { BeklemeSeridi, BekletPenceresi, beklemeNedeni, beklemeSuresi, useBekletOgesi } from './Bekletme.tsx';
@@ -58,13 +58,13 @@ export interface EmirParcalari {
   sar: (icerik: ReactNode) => ReactNode;
   // ekOgeler: bu modülün kendi işlemleri (3050 a "Beklet"); sahibin "İşlemler" menüsüne girer, tek menü kalır.
   islemler: (emirId: number, ekOgeler: readonly MenuOgesi[]) => ReactNode;
-  // Satırın sağını (statü, iç/fason, Adım Durumu) bu modül çizer; adım listesi her satırda çağırır.
-  adimlar: (emirId: number, satirEki: AdimSatirEki['ek']) => ReactNode;
+  // Adım tablosunu (statü, hazırlık, ayrıntı) bu modül çizer (3581); üstteki modül kendi adım satırlarıyla `tablo`yu çağırır.
+  adimlar: (emirId: number, tablo: AdimTablosuYuvasi) => ReactNode;
   malzeme: (emirId: number) => ReactNode;
 }
 
-type SekmeAdi = 'adimlar' | 'malzeme' | 'fisler' | 'hazirlik' | 'stok' | 'kayitlar';
-const SEKME_ADLARI: readonly SekmeAdi[] = ['adimlar', 'malzeme', 'fisler', 'hazirlik', 'stok', 'kayitlar'];
+type SekmeAdi = 'adimlar' | 'malzeme' | 'fisler' | 'stok' | 'kayitlar';
+const SEKME_ADLARI: readonly SekmeAdi[] = ['adimlar', 'malzeme', 'fisler', 'stok', 'kayitlar'];
 
 // Yaşam döngüsü: emir bu sırayla ilerler; iptal yan yoldur. "Kapanış onayı" üretimi biten emrin kalite ve müdür onayıdır (1082 a).
 type AsamaAdi = 'taslak' | 'planli' | 'uretimde' | 'bitti' | 'kapanis' | 'kapandi';
@@ -223,7 +223,8 @@ function EmirSayfasi({ parcalar }: { parcalar?: EmirParcalari }) {
   const sekmeHam = adres.get('sekme');
   // Açılış sekmesi emrin durumuna göre: üretimi biten emirde iş stok ve kapanıştadır, öncesinde adımlardadır.
   const acilis: SekmeAdi = emir?.durum === 'bitti' ? 'stok' : 'adimlar';
-  const sekme: SekmeAdi = SEKME_ADLARI.find((s) => s === sekmeHam) ?? acilis;
+  // Eski "Hazırlık durumu" sekmesi Adımlar ve hazırlık'a katıldı (3581): yer imi ve eski bağlantılar oraya gider.
+  const sekme: SekmeAdi = SEKME_ADLARI.find((s) => s === (sekmeHam === 'hazirlik' ? 'adimlar' : sekmeHam)) ?? acilis;
   const sekmeSec = (s: SekmeAdi) => {
     adresYaz((a) => { const y = new URLSearchParams(a); if (s === acilis) y.delete('sekme'); else y.set('sekme', s); y.delete('islem'); y.delete('yer'); return y; }, { replace: true });
   };
@@ -249,10 +250,9 @@ function EmirSayfasi({ parcalar }: { parcalar?: EmirParcalari }) {
     ...(emir && akisGorur ? [{ anahtar: 'akis', baslik: "Akış Süresi'nde aç", simge: 'gantt' as const, sec: () => { void yonlendir(`/akis/${String(emirId)}`); } }] : []),
   ];
   const sekmeler = [
-    { anahtar: 'adimlar', baslik: 'Adımlar', simge: 'route' },
+    { anahtar: 'adimlar', baslik: 'Adımlar ve hazırlık', simge: 'route' },
     { anahtar: 'malzeme', baslik: 'Malzeme', simge: 'box' },
     ...(fislerGorur ? [{ anahtar: 'fisler', baslik: 'Fişler', simge: 'file' } as const] : []),
-    { anahtar: 'hazirlik', baslik: 'Hazırlık durumu', simge: 'clipboard-check' },
     { anahtar: 'stok', baslik: 'Stok ve kapanış', simge: 'pallet' },
     { anahtar: 'kayitlar', baslik: 'Kayıtlar', simge: 'list' },
   ] as const;
@@ -298,13 +298,13 @@ function EmirSayfasi({ parcalar }: { parcalar?: EmirParcalari }) {
             {sekme === 'adimlar' && (
               <>
                 {/* Reçete ve Rota'yı okuyamayan kişi bugünkü salt okunur görünümü alır: ilerleme ve adımların durumu (1787c). */}
-                {parcalar ? parcalar.adimlar(emir.id, satirEki.ek) : (
-                  <>
-                    <Ilerleme emir={emir} ilerleme={ayrinti.data.ilerleme ?? null} />
-                    <UretimYerleri emir={emir} />
-                  </>
-                )}
-                {satirEki.pencere}
+                {parcalar ? parcalar.adimlar(emir.id, (g) => <AdimTablosu emirId={emir.id} malzemeNo={malzemeNo} satirlar={g.satirlar} ekleme={g.ekleme} />)
+                  : (
+                    <>
+                      <Ilerleme emir={emir} ilerleme={ayrinti.data.ilerleme ?? null} />
+                      {satirEki.durumOkur && malzemeNo !== null ? <AdimTablosu emirId={emir.id} malzemeNo={malzemeNo} /> : <UretimYerleri emir={emir} />}
+                    </>
+                  )}
                 {kontrolAdimlari.length > 0 && (
                   <section className="tc-emir-bolum-adim" aria-label="Kontrol adımları">
                     <h3 className="tc-emir-bolum">Kontrol adımları</h3>
@@ -325,7 +325,6 @@ function EmirSayfasi({ parcalar }: { parcalar?: EmirParcalari }) {
               </>
             )}
             {sekme === 'fisler' && fislerGorur && <EmirFisleri emirId={emir.id} emirNo={emir.emirNo} mrpGorur={mrpGorur} />}
-            {sekme === 'hazirlik' && <HazirlikListesi emir={emir} />}
             {sekme === 'stok' && (
               <>
                 {emir.durum !== 'bitti' && <p className="tc-emir-not">Üretimi biten emir burada stoğa işlenir; kapanış onayı başlıktaki "Kapanış onayları" ile verilir.</p>}

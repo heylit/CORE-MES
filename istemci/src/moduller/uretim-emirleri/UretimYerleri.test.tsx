@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
-import type { AdimliEmirAyrintisi, EmirAyrintiCevabi, IsEmri, IzlemeEmri } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { AdimDurumuCevabi, AdimliEmirAyrintisi, EmirAyrintiCevabi, IsEmri, IzlemeEmri } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { EmirAyrintisi } from './EmirAyrintisi.tsx';
 import { UretimYerleri, degisimEngeli } from './UretimYerleri.tsx';
 import { OKUYUCU, YAZAR, ac, json, sunucuKur } from './test-ortak.tsx';
@@ -28,7 +28,18 @@ const FASONDA = adim(20, {
 const ekran = [{ yol: '/uretim-emirleri/:id', ekran: EmirAyrintisi }];
 // Emrin evi (Reçete ve Rota) bileşeni `duzenlenir` ile çizer (1391 a).
 const ev = [{ yol: '/ev/:id', ekran: () => <UretimYerleri emir={{ id: 3, malzemeNo: 501 }} duzenlenir /> }];
+// Adım tablosu statüyü adım durumundan okur (3581); iş emirlerinden aynı sırayla bir adım durumu cevabı kurulur.
+const durumDan = (isEmirleri: IsEmri[]): AdimDurumuCevabi => ({
+  emirId: 3, emirNo: 'EM-3', urun: { kod: 'DNM-001', ad: 'Deneme mil' }, adet: 10, teslim: null, durum: 'planli', rotaYuzde: null,
+  hazirlik: { maddeler: [], muafiyetler: [], isEmirleri: [] }, yetki: { sablon: false },
+  adimlar: isEmirleri.map((a) => ({
+    isEmriId: a.id, opNo: a.opNo, ad: a.ad, durum: a.durum, calisma: null, bagimlilik: 'bekleyen', fason: a.fason !== null, hedef: 10, yapilan: a.saglamAdet ?? 0,
+    yuzde: 0, sistemStatusu: a.durum === 'tamam' ? 'bitti' : a.durum === 'calisiyor' ? 'uretimde' : 'baslayabilir', nedenler: [], maddeler: [], tedarik: [], elle: null,
+    onaylar: [], elleEksikler: [], gecmis: [], liste: [], sablon: null,
+  })),
+});
 const yollar = (isEmirleri: IsEmri[], ek: Record<string, (g: unknown) => Response> = {}) => ({
+  'GET /adimli-emirler/3/adim-durumu': () => json(200, durumDan(isEmirleri)),
   'GET /uretim-emirleri/3': () => json(200, { emir: EMIR, kayitlar: [] } satisfies EmirAyrintiCevabi),
   'GET /adimli-emirler/3': () => json(200, { emir: ayrinti(isEmirleri) }),
   'GET /adimli-emirler/fason-firmalari': () => json(200, { firmalar: [{ id: 41, kod: 'F-01', ad: 'Deneme kaplama' }] }),
@@ -76,7 +87,7 @@ describe('Emirde iç ve dış üretim', () => {
     const gkk = adim(25, { ad: 'GKK (otomatik)', tur: 'ek', ekAciklama: 'Otomatik GKK', tip: { id: 9, ad: 'Giriş kalite kontrol', kod: 'GKK' } });
     sunucuKur(OKUYUCU, yollar([adim(10), FASONDA, gkk, adim(30, { tur: 'ek', ekAciklama: 'Elle ek' })]));
     ac(ekran, '/uretim-emirleri/3');
-    const tablo = await screen.findByRole('table', { name: 'Operasyon adımları' });
+    const tablo = await screen.findByRole('table', { name: 'Adımlar ve hazırlık' });
     expect(within(tablo).getAllByText('Otomatik GKK')).toHaveLength(1);
     expect(within(within(tablo).getByText('Otomatik GKK').closest('tr')!).getByText('GKK (otomatik)')).toBeTruthy();
   });
@@ -99,8 +110,9 @@ describe('Emirde iç ve dış üretim', () => {
   it('3039: Reçete ve Rota\'yı okuyamayan kişinin emir sayfası salt okunurdur; yazma yetkisi olana da düğme çıkmaz', async () => {
     const istekler = sunucuKur(YAZAR, yollar([adim(10), FASONDA]));
     ac(ekran, '/uretim-emirleri/3');
-    const tablo = await screen.findByRole('table', { name: 'Operasyon adımları' });
-    expect(within(tablo).queryByRole('button')).toBeNull();
+    const tablo = await screen.findByRole('table', { name: 'Adımlar ve hazırlık' });
+    await within(tablo).findByText('Adım 10');
+    expect(within(tablo).queryByRole('button', { name: /işlemleri/ })).toBeNull();
     expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
   });
 
@@ -129,15 +141,14 @@ describe('İzleme ayrıntısında adım durumu (1787c)', () => {
       adim(40, { kararBekliyor: 0, dal: null }),
     ]));
     ac(ekran, '/uretim-emirleri/3');
-    const tablo = await screen.findByRole('table', { name: 'Operasyon adımları' });
-    const satirlar = within(tablo).getAllByRole('row').slice(1);
+    const tablo = await screen.findByRole('table', { name: 'Adımlar ve hazırlık' });
+    const satirlar = (await within(tablo).findAllByRole('row')).slice(1);
     expect(within(satirlar[0]!).getByText('K1')).toBeTruthy();
     expect(within(satirlar[0]!).getByText('DNM-ALT · rotada OP 10')).toBeTruthy();
     expect(within(satirlar[0]!).getByText('Bitti')).toBeTruthy();
-    expect(within(satirlar[0]!).getByText('8')).toBeTruthy();
-    expect(within(satirlar[1]!).getByText('Çalışıyor')).toBeTruthy();
-    expect(within(satirlar[1]!).getByText('yok · karar bekleyen 3')).toBeTruthy();
-    expect(within(satirlar[2]!).getByText('Bekliyor')).toBeTruthy();
+    expect(within(satirlar[1]!).getByText('Üretimde')).toBeTruthy();
+    expect(within(satirlar[1]!).getByText('Karar bekleyen 3')).toBeTruthy();
+    expect(within(satirlar[2]!).getByText('Başlayabilir')).toBeTruthy();
     expect(within(satirlar[2]!).queryByText(/karar bekleyen/)).toBeNull();
   });
 
@@ -148,8 +159,8 @@ describe('İzleme ayrıntısında adım durumu (1787c)', () => {
       adim(40, { durum: 'calisiyor', eksikAltParcalar: [alt] }),
     ]));
     ac(ekran, '/uretim-emirleri/3');
-    const tablo = await screen.findByRole('table', { name: 'Operasyon adımları' });
-    const satirlar = within(tablo).getAllByRole('row').slice(1);
+    const tablo = await screen.findByRole('table', { name: 'Adımlar ve hazırlık' });
+    const satirlar = (await within(tablo).findAllByRole('row')).slice(1);
     expect(within(satirlar[1]!).getByText('Alt parça bekleniyor: K1 DNM-ALT')).toBeTruthy();
     expect(within(satirlar[0]!).queryByText(/Alt parça bekleniyor/)).toBeNull();
   });

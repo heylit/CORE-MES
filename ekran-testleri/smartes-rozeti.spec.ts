@@ -68,15 +68,16 @@ test('ayrıntı: başlıkta "SmartES: Durdu" ve "Yöneticiye bildirin"; adım sa
   await expect(page.getByText('Yöneticiye bildirin')).toBeVisible();
   const panel = page.getByRole('tabpanel', { name: 'Adımlar' });
   await expect(panel.getByText('Yükleniyor')).toHaveCount(0);
-  await expect(panel.getByRole('button', { name: 'OP 10 için' })).toBeVisible();
-  await expect(panel.getByText("SmartES'te").first()).toBeVisible();
-  if (await panel.getByText('SmartES: Durdu').count() > 0) await expect(panel.getByText(NEDEN.durdu).first()).toBeVisible();
+  await expect(panel.getByRole('row', { name: /^10\b/ }).first()).toBeVisible();
+  // Dar kapta (tablet, telefon) SmartES sütunu gizlenir; durum rozeti durum hücresinde görünür (3581).
+  if (await panel.locator('th.tc-at-smartes').isVisible()) await expect(panel.getByText("SmartES'te").first()).toBeVisible();
+  if (await panel.locator('th.tc-at-smartes').isVisible() && await panel.getByText('SmartES: Durdu').count() > 0) await expect(panel.getByText(NEDEN.durdu).first()).toBeVisible();
   expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
   await page.screenshot({ path: test.info().outputPath('smartes-ayrinti.png'), fullPage: true });
   // Satırın sağına rozet eklenince adım adı daralıp harf harf kırılmaz.
-  const ad = panel.locator('.tc-rr3-adim-dal').first();
+  const ad = panel.locator('td.tc-at-adim').first();
   expect(await ad.evaluate((e) => e.getBoundingClientRect().width), 'adım adı sütunu daralmaz').toBeGreaterThan(80);
-  await panel.getByRole('button', { name: 'OP 10 için' }).scrollIntoViewIfNeeded();
+  await panel.getByRole('row', { name: /^10\b/ }).first().scrollIntoViewIfNeeded();
   await page.screenshot({ path: test.info().outputPath('smartes-adimlar.png') });
   expect(ag.hatalar).toEqual([]);
 });
