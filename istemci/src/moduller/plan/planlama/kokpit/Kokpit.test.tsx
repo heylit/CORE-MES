@@ -643,6 +643,26 @@ describe('Kokpit', () => {
     expect(screen.queryByRole('menu')).toBeNull();
   });
 
+  // Risk Y1 (Test bakışı): plansız emrin fişi de Ay'da tutulmaz; yakında tutulan iş uzak ölçekte bırakılmaz.
+  it('uzak ölçekte fiş tutulmaz, tutulan iş bırakılmaz; yakınlaşın uyarısı verir', () => {
+    const c = ornekCalisma();
+    const plansiz = { ...c, plan: { ...c.plan, ops: Object.fromEntries(Object.entries((c.plan as unknown as { ops: Record<string, { job: string }> }).ops).filter(([, r]) => r.job !== '2')) } } as typeof c;
+    ac({ calisma: plansiz, depo: { ...DEPO, durum: { emirler: [] } } as unknown as PlanlamaDeposu });
+    const olcek = (ad: string) => within(screen.getByRole('group', { name: 'Ölçek' })).getByRole('button', { name: ad });
+    fireEvent.click(olcek('Ay'));
+    const fis = document.querySelector<HTMLElement>('[data-fis="2"]');
+    if (!fis) throw new Error('fiş yok');
+    fireEvent.doubleClick(fis);
+    expect(screen.getAllByText('Planlamak için yakınlaşın').length).toBeGreaterThan(0);
+    expect(document.querySelector('[data-tasinan]')).toBeNull();
+    fireEvent.click(olcek('3 gün'));
+    fireEvent.doubleClick(document.querySelector<HTMLElement>('[data-is="3.10"]')!);
+    expect(document.querySelector('[data-tasinan]')).not.toBeNull();
+    fireEvent.click(olcek('Ay'));
+    fireEvent.click(document.querySelector<HTMLElement>('[data-is="3.10"]')!);
+    expect(screen.getAllByText('Bırakmak için yakınlaşın').length).toBeGreaterThan(0);
+  });
+
   // Yıl ölçeği Tahta'dan erken döner; sonra hook kalırsa ölçek değişince sayfa çöker (React #300).
   it('Ay, Yıl ve 3 gün ölçekleri arasında gidip gelmek sayfayı çökertmez', () => {
     ac();
