@@ -15,7 +15,7 @@ import { AYAR_ANAHTARI } from './tablo.ts';
 // Kart 3533: Emirler ve Tezgâhlar gözünün sol tablosu. Veri uydurmadır (ORN-); sunucu çağrısı yoktur.
 saatiSabitle(ornekCalisma);
 beforeEach(() => { localStorage.clear(); });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); localStorage.clear(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); localStorage.clear(); });
 
 const DEPO = { durum: null, planSurumu: null, senaryolar: null, calismaSurumu: 4, receteRotaKaydi: null } as unknown as PlanlamaDeposu;
 const degistir = vi.fn(() => false);
@@ -178,5 +178,32 @@ describe('Kokpit sol tablo (3533)', () => {
     expect(durumlar.length).toBeGreaterThan(0);
     for (const d of durumlar) expect(d).toMatch(/Çalışıyor|Duruş|Boşta/);
     for (const a of bolum.querySelectorAll('[role="table"] .tc-pyq-alan')) expect(a.getAttribute('role')).toBe('presentation');
+  });
+  it('j tuşu görünen sırayı izler: Plan sırasında plan sırasındaki ilk sorunlu emri, Termine göre gecikmede o sıradaki ilk sorunlu emri seçer (K6)', () => {
+    vi.stubGlobal('CSS', { escape: (x: string) => x });
+    const sec = vi.fn();
+    const calisma = ornekCalisma();
+    const e3 = calisma.D.siparisler.find((x) => x.id === '3');
+    if (e3) e3.termin = '2026-10-20 17:00';
+    render(
+      <MemoryRouter initialEntries={['/']}><BildirimSaglayici>
+        <Kokpit
+          depo={DEPO} calisma={calisma} komut={komutKur()} git={vi.fn()} yenile={vi.fn()} yetki={yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz'])}
+          olcek={ACILIS_OLCEGI} olcekSec={vi.fn()} kaydir={vi.fn()} secim={BOS_SECIM} sec={sec}
+        />
+      </BildirimSaglayici></MemoryRouter>,
+    );
+    const bolum = screen.getByRole('region', { name: 'Emirler' });
+    const ilkSorunlu = (): string | undefined => [...bolum.querySelectorAll<HTMLElement>('button[data-agac]')]
+      .find((b) => b.closest('.tc-pyq-satir')?.getAttribute('data-d') !== 'iyi')?.getAttribute('data-agac') ?? undefined;
+    const planIlki = ilkSorunlu();
+    fireEvent.keyDown(document, { key: 'j' });
+    expect(sec).toHaveBeenLastCalledWith({ siparis: planIlki, adim: null });
+    fireEvent.change(within(bolum).getByRole('combobox', { name: 'Sıralama' }), { target: { value: 'gecikme' } });
+    const gecikmeIlki = ilkSorunlu();
+    // Sınama boş kalmasın: iki sıralamada ilk sorunlu emir farklı olmalı.
+    expect(gecikmeIlki).not.toBe(planIlki);
+    fireEvent.keyDown(document, { key: 'j' });
+    expect(sec).toHaveBeenLastCalledWith({ siparis: gecikmeIlki, adim: null });
   });
 });

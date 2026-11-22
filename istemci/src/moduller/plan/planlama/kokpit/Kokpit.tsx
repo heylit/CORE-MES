@@ -510,7 +510,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const turTusu = useRef({ onceki: turOnceki, sonraki: turSonraki });
   useEffect(() => { turTusu.current = { onceki: turOnceki, sonraki: turSonraki }; });
   const sorunSec = useCallback((yon: 1 | -1) => {
-    const l = sorunlular(emirSirali);
+    const l = emirSirali.filter((e) => e.durum !== 'iyi');
     if (!l.length) return;
     const i = l.findIndex((e) => e.id === secEmir), e = l[(i + yon + l.length) % l.length] ?? l[0];
     if (!e) return;
