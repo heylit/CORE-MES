@@ -1,16 +1,18 @@
-import qrcode from 'qrcode-generator';
 import { adresAraliktaMi, adresCoz, type AgAraligi } from '#paylasilan/ag-araligi.ts';
+import { cm1Coz, KALITE_DURUM_KODLARI, kimlikKodu } from '#paylasilan/etiket-kodu.ts';
 import { KOD_ONEKI } from '#paylasilan/kod-sozlugu.ts';
 import { tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { KaliteDurumu } from '#paylasilan/sozlesme/stok.ts';
 import type { Bekleyen, Koli } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import type { HataliKaydiOzeti, RefakatKartiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { EN_COK_ADET, QR_KENAR_MODUL, SATIR_ARALIGI, type KayitTuru, type OnizlemeOgesi, type OzelOlcu, type Sablon, type SablonTuru, type SablonOgesi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
+import { EN_COK_ADET, KOD_KENAR_MODUL, SATIR_ARALIGI, type KayitTuru, type OnizlemeOgesi, type OzelOlcu, type Sablon, type SablonTuru, type SablonOgesi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { REFAKAT_KOPYA_SAYISI } from '#paylasilan/etiket-sabitleri.ts';
 import { simgeCoz } from '#paylasilan/etiket-piktogramlari.ts';
 import { KALIN_GENIS, NORMAL_GENIS, OLCULEN_HARFLER } from './harf-genislikleri.ts';
 import { YAZICI_AGI_DEGISKENI } from './ag.ts';
+import { kodMatrisi } from './kod-matrisi.ts';
+import { cm1Sigdir, cm1Yaz, kodUstSiniri } from './kod-yaz.ts';
 
 // Saf kurallar: yerleşim (mm -> satır ve QR matrisi), sınır denetimi ve yazıcıya giden metnin arındırılması.
 // Kural numaraları KURAL-TEST.md'deki testlere bağlıdır.
@@ -22,7 +24,7 @@ export function sablonHatalari(s: Sablon): string[] {
   const hatalar: string[] = [];
   if (s.genislik <= 0 || s.yukseklik <= 0) hatalar.push('Etiket ölçüsü sıfırdan büyük olmalı.');
   s.ogeler.forEach((o, i) => {
-    const [gen, yuk] = o.tur === 'qr' || o.tur === 'simge' ? [o.boyut, o.boyut] : [o.genislik, o.yukseklik];
+    const [gen, yuk] = o.tur === 'kod' || o.tur === 'simge' ? [o.boyut, o.boyut] : [o.genislik, o.yukseklik];
     if (o.x + gen > s.genislik + 1e-9 || o.y + yuk > s.yukseklik + 1e-9) hatalar.push(`${i + 1}. öğe etiketin dışına taşıyor.`);
     if (o.tur === 'metin' && o.yaziMm > o.yukseklik + 1e-9) hatalar.push(`${i + 1}. öğenin yazısı kutusundan büyük.`);
   });
@@ -40,7 +42,7 @@ export function olcekle(s: Sablon, olcu: OzelOlcu): { sablon: Sablon; olcek: num
   const y = (v: number) => yuvarla(dy + v * olcek);
   const o = (v: number) => Math.floor(v * olcek * 1e4) / 1e4;
   const ogeler = s.ogeler.map((g): SablonOgesi => {
-    if (g.tur === 'qr' || g.tur === 'simge') return { ...g, x: x(g.x), y: y(g.y), boyut: o(g.boyut) };
+    if (g.tur === 'kod' || g.tur === 'simge') return { ...g, x: x(g.x), y: y(g.y), boyut: o(g.boyut) };
     if (g.tur === 'metin') return { ...g, x: x(g.x), y: y(g.y), genislik: o(g.genislik), yukseklik: o(g.yukseklik), yaziMm: o(g.yaziMm) };
     // Kalınlık da aynı oranla küçülür (dolu kutu dolu kalır); yazıcı dili çizgiyi en az bir noktayla basar.
     return { ...g, x: x(g.x), y: y(g.y), genislik: o(g.genislik), yukseklik: o(g.yukseklik), kalinlik: o(g.kalinlik) };
@@ -50,35 +52,35 @@ export function olcekle(s: Sablon, olcu: OzelOlcu): { sablon: Sablon; olcek: num
 
 // EM-38: okunurluk. QR karesi (modül) ve en küçük yazı ölçekle küçülür. Sınırın altı basılmaz (yazıcı 203 dpi'de bir kareyi iki
 // noktadan az basar, tarayıcı okumaz); uyarı aralığında basılır, okutup denemesi söylenir. Eşikler denemeyle değişebilir.
-export const QR_KARE_EN_AZ_MM = 0.25;
-export const QR_KARE_UYARI_MM = 0.38;
+export const KOD_MODUL_EN_AZ_MM = 0.25;
+export const KOD_MODUL_UYARI_MM = 0.375;
 export const YAZI_EN_AZ_MM = 1;
 export const YAZI_UYARI_MM = 1.5;
 const sayiYaz = (v: number) => String(Math.floor(v * 100) / 100).replace('.', ',');
-export const qrKaresi = (o: Extract<OnizlemeOgesi, { tur: 'qr' }>): number => o.boyut / (o.kareler.length + 2 * QR_KENAR_MODUL);
+export const kodModulu = (o: Extract<OnizlemeOgesi, { tur: 'kod' }>): number => o.boyut / (o.kareler.length + 2 * KOD_KENAR_MODUL);
 const enKucukYazi = (s: Sablon): number | null => {
   const yazilar = s.ogeler.flatMap((g) => (g.tur === 'metin' ? [g.yaziMm] : []));
   return yazilar.length === 0 ? null : Math.min(...yazilar);
 };
 const enKucukKare = (ogeler: readonly OnizlemeOgesi[]): number | null => {
-  const kareler = ogeler.flatMap((g) => (g.tur === 'qr' ? [qrKaresi(g)] : []));
+  const kareler = ogeler.flatMap((g) => (g.tur === 'kod' ? [kodModulu(g)] : []));
   return kareler.length === 0 ? null : Math.min(...kareler);
 };
 // Tasarım ölçüsündeki yerleşimden: QR karesi ve yazı ölçekle doğru orantılıdır; en küçük ölçü yukarı yuvarlanır.
 export function enKucukOlcu(tasarim: Sablon, tasarimOgeleri: readonly OnizlemeOgesi[]): { genislik: number; yukseklik: number } {
   const kare = enKucukKare(tasarimOgeleri);
   const yazi = enKucukYazi(tasarim);
-  const oran = Math.max(kare === null ? 0 : QR_KARE_EN_AZ_MM / kare, yazi === null ? 0 : YAZI_EN_AZ_MM / yazi) * 1.02;
+  const oran = Math.max(kare === null ? 0 : KOD_MODUL_EN_AZ_MM / kare, yazi === null ? 0 : YAZI_EN_AZ_MM / yazi) * 1.02;
   return { genislik: Math.max(10, Math.ceil(tasarim.genislik * oran)), yukseklik: Math.max(10, Math.ceil(tasarim.yukseklik * oran)) };
 }
 export function okunurluk(olcekli: Sablon, ogeler: readonly OnizlemeOgesi[], enKucuk: { genislik: number; yukseklik: number }): { engel: string | null; uyarilar: string[] } {
   const kare = enKucukKare(ogeler);
   const yazi = enKucukYazi(olcekli);
   const sinir = `Bu etiket için en küçük ölçü ${enKucuk.genislik}x${enKucuk.yukseklik} mm.`;
-  if (kare !== null && kare < QR_KARE_EN_AZ_MM - 1e-9) return { engel: `Bu ölçüde QR okunmaz (kare ${sayiYaz(kare)} mm, en az ${sayiYaz(QR_KARE_EN_AZ_MM)} mm). ${sinir}`, uyarilar: [] };
+  if (kare !== null && kare < KOD_MODUL_EN_AZ_MM - 1e-9) return { engel: `Bu ölçüde kod okunmaz (modül ${sayiYaz(kare)} mm, en az ${sayiYaz(KOD_MODUL_EN_AZ_MM)} mm). ${sinir}`, uyarilar: [] };
   if (yazi !== null && yazi < YAZI_EN_AZ_MM - 1e-9) return { engel: `Bu ölçüde yazı okunmaz (${sayiYaz(yazi)} mm, en az ${sayiYaz(YAZI_EN_AZ_MM)} mm). ${sinir}`, uyarilar: [] };
   const uyarilar: string[] = [];
-  if (kare !== null && kare < QR_KARE_UYARI_MM) uyarilar.push(`QR küçük (kare ${sayiYaz(kare)} mm): ilk etiketi basıp okutarak deneyin.`);
+  if (kare !== null && kare < KOD_MODUL_UYARI_MM - 1e-9) uyarilar.push(`Kod küçük (modül ${sayiYaz(kare)} mm; 203 dpi'de 3 nokta ${sayiYaz(KOD_MODUL_UYARI_MM)} mm): ilk etiketi basıp okutarak deneyin.`);
   if (yazi !== null && yazi < YAZI_UYARI_MM) uyarilar.push(`En küçük yazı ${sayiYaz(yazi)} mm: yakından okunur.`);
   return { engel: null, uyarilar };
 }
@@ -199,14 +201,6 @@ export function satirlaraBol(metin: string, genislikMm: number, yukseklikMm: num
   while (son.length > 0 && !sigar(`${son.join('').trimEnd()}...`)) son = son.slice(0, -1);
   return [...satirlar.slice(0, enCokSatir - 1).map((s) => s.metin), `${son.join('').trimEnd()}...`];
 }
-// QR bugünkü etiketlerle aynı düzeltme düzeyindedir (M); kenarda iki modül boşluk kalır.
-export function qrMatrisi(veri: string): boolean[][] {
-  const q = qrcode(0, 'M');
-  q.addData(veri);
-  q.make();
-  const n = q.getModuleCount();
-  return Array.from({ length: n }, (_, y) => Array.from({ length: n }, (_, x) => q.isDark(y, x)));
-}
 
 // EM-4: değeri olmayan alan basılmaz (null sıfıra ya da "yok"a çevrilmez); sabit metin "=" ile başlar.
 export function alanDegeri(alan: string, veri: AlanDegerleri): string | null {
@@ -215,12 +209,40 @@ export function alanDegeri(alan: string, veri: AlanDegerleri): string | null {
   return deger === undefined || deger === null || deger.trim() === '' ? null : deger;
 }
 
-export function yerlesim(s: Sablon, veri: AlanDegerleri, sade: boolean): OnizlemeOgesi[] {
+// Kodun içeriği etiket türünden ve TASARIM boyundan çıkar, yerleşimden ve özel ölçüden bağımsızdır (KURGU 3.8): okuyan ekran her yerleşimde aynı
+// bilgiyi bulur. Sığmayan son alanlar düşer (kod-yaz.ts); bilgi yazısı kodun neyi taşıdığını ve düşen alanı söyler (KURGU 3.7).
+const KOD_TUR_ADI: Record<SablonTuru, string> = {
+  konum: 'KONUM', raf: 'RAF', malzeme: 'MALZEME', lot: 'LOT', refakat: 'REFAKAT', istasyon: 'İSTASYON', 'kalite-durum': 'KALİTE', 'hatali-parca': 'HATALI PARÇA', 'sevk-koli': 'SEVK KOLİSİ', deneme: 'DENEME',
+};
+export function kodHazirla(tur: SablonTuru, tasarim: { genislik: number; yukseklik: number }, veri: AlanDegerleri): AlanDegerleri {
+  const ham = veri['qr'];
+  if (ham === undefined || ham === null || cm1Coz(ham) === null) return veri;
+  const k = cm1Sigdir(ham, kodUstSiniri(tasarim.genislik, tasarim.yukseklik));
+  const ozet = cm1Coz(k.metin);
+  const bt = ozet?.basim ?? null;
+  const satirlar = [
+    `${KOD_TUR_ADI[tur]} · CM1`,
+    k.alanlar.slice(1).filter((a) => a !== 'BT').join(' '),
+    bt === null ? '' : `Basım ${bt.slice(8, 10)}.${bt.slice(5, 7)}.${bt.slice(2, 4)}`,
+    k.eksik.length === 0 ? '' : `Eksik: ${k.eksik.join(' ')}`,
+  ].filter((x) => x !== '');
+  // Başlık: tür adı ve etiketi tanıtan değer (lot no, kod, emir no); yoksa kodun kimliği.
+  const tanitan = veri['lotNo'] ?? veri['kod'] ?? veri['emirNo'] ?? (ozet === null ? null : ozet.kimlik.deger);
+  return {
+    ...veri, qr: k.metin, kodBilgi: satirlar.join(SATIR_BASI), kodEksik: k.eksik.length === 0 ? null : k.eksik.join(' '),
+    // 50x25'te yalnız tür ve basım (alan anahtarları satırı önce düşer, KURGU 3.7).
+    kodBilgiKisa: [satirlar[0], satirlar.find((x) => x.startsWith('Basım')), satirlar.find((x) => x.startsWith('Eksik'))].filter((x) => x !== undefined).join(SATIR_BASI),
+    kodBaslik: tanitan === null || tanitan === '' ? KOD_TUR_ADI[tur] : `${KOD_TUR_ADI[tur]} ${tanitan}`,
+  };
+}
+
+export function yerlesim(s: Sablon, veri0: AlanDegerleri, sade: boolean, tasarim: { genislik: number; yukseklik: number } = s): OnizlemeOgesi[] {
   const ogeler: OnizlemeOgesi[] = [];
+  const veri = kodHazirla(s.tur, tasarim, veri0);
   for (const o of s.ogeler) {
     const oge = ogeYerlesimi(o, veri, sade);
     if (oge === null) continue;
-    if (oge.tur === 'qr') ogeler.push(...qrVeKodu(s, o, oge)); else ogeler.push(oge);
+    if (oge.tur === 'kod') ogeler.push(...qrVeKodu(s, o, oge)); else ogeler.push(oge);
   }
   return ogeler;
 }
@@ -229,14 +251,14 @@ export function yerlesim(s: Sablon, veri: AlanDegerleri, sade: boolean): Onizlem
 // QR'ın altında, QR genişliğinde başka öğeye ve etiket kenarına değmeden yer varsa yazı oraya girer, QR boyutu değişmez; yoksa QR kendi
 // kutusunda yazı satırı kadar küçülür ve ortalanır (2885-1 a, 2168-2 b'deki 46 mm bu kartla yaklaşık 43 mm olur). Yer hesabı şablonun
 // düzeninden yapılır; koşullu öğeler de varmış sayılır (basılan etiket veriye göre kaymaz).
-export const QR_ALTI_EN_KUCUK_YAZI = 1.6;
-export const QR_ALTI_EN_BUYUK_YAZI = 2.2;
-const QR_ALTI_YAZI_ORANI = 0.07;
-const QR_ALTI_ARALIK = 0.15;
+export const KOD_ALTI_EN_KUCUK_YAZI = 1.6;
+export const KOD_ALTI_EN_BUYUK_YAZI = 2.2;
+const KOD_ALTI_YAZI_ORANI = 0.07;
+const KOD_ALTI_ARALIK = 0.15;
 const ETIKET_KENAR_PAYI = 0.5;
 type Kutu = { x: number; y: number; genislik: number; yukseklik: number };
-const kutusu = (o: SablonOgesi): Kutu => (o.tur === 'qr' || o.tur === 'simge' ? { x: o.x, y: o.y, genislik: o.boyut, yukseklik: o.boyut } : o);
-export function qrAltiYeri(s: Sablon, qrOgesi: SablonOgesi): number {
+const kutusu = (o: SablonOgesi): Kutu => (o.tur === 'kod' || o.tur === 'simge' ? { x: o.x, y: o.y, genislik: o.boyut, yukseklik: o.boyut } : o);
+export function kodAltiYeri(s: Sablon, qrOgesi: SablonOgesi): number {
   const qr = kutusu(qrOgesi);
   const ust = qr.y + qr.yukseklik;
   const ortusur = (k: Kutu) => k.x < qr.x + qr.genislik - 1e-9 && k.x + k.genislik > qr.x + 1e-9;
@@ -248,34 +270,37 @@ export function qrAltiYeri(s: Sablon, qrOgesi: SablonOgesi): number {
     // QR'ı içine alan çerçevenin alt çizgisi de sınırdır (durum etiketinin red çerçevesi).
     else if (o.tur === 'kutu' && k.y + k.yukseklik > ust && k.x <= qr.x && k.x + k.genislik >= qr.x + qr.genislik) alt = Math.min(alt, k.y + k.yukseklik - o.kalinlik);
   }
-  return Math.max(0, alt - ust - QR_ALTI_ARALIK);
+  return Math.max(0, alt - ust - KOD_ALTI_ARALIK);
 }
-type QrYerlesimi = Extract<OnizlemeOgesi, { tur: 'qr' }>;
+type QrYerlesimi = Extract<OnizlemeOgesi, { tur: 'kod' }>;
 function qrVeKodu(s: Sablon, o: SablonOgesi, qr: QrYerlesimi): OnizlemeOgesi[] {
-  if (o.tur !== 'qr' || qr.veri === '') return [qr];
-  const yer = qrAltiYeri(s, o);
-  const istenen = Math.min(QR_ALTI_EN_BUYUK_YAZI, Math.max(QR_ALTI_EN_KUCUK_YAZI, Math.round(o.boyut * QR_ALTI_YAZI_ORANI * 10) / 10));
-  const disari = yer >= QR_ALTI_EN_KUCUK_YAZI;
+  if (o.tur !== 'kod' || qr.veri === '') return [qr];
+  const yer = kodAltiYeri(s, o);
+  const istenen = Math.min(KOD_ALTI_EN_BUYUK_YAZI, Math.max(KOD_ALTI_EN_KUCUK_YAZI, Math.round(o.boyut * KOD_ALTI_YAZI_ORANI * 10) / 10));
+  const disari = yer >= KOD_ALTI_EN_KUCUK_YAZI;
   const yazi = disari ? Math.min(istenen, Math.floor(yer * 10) / 10) : istenen;
-  const boyut = disari ? o.boyut : Math.round((o.boyut - yazi - QR_ALTI_ARALIK) * 100) / 100;
+  const boyut = disari ? o.boyut : Math.round((o.boyut - yazi - KOD_ALTI_ARALIK) * 100) / 100;
   const kare: QrYerlesimi = { ...qr, x: o.x + (o.boyut - boyut) / 2, boyut };
-  const yaziMm = sigdirilmisYazi(qr.veri, o.boyut, yazi, yazi);
+  // Özet kodda (CM1) elle yazılacak metin yalnız kimliktir; kodun tamamı yazıya sığmaz ve elle yazılmaz.
+  const ozet = cm1Coz(qr.veri);
+  const elYazisi = ozet === null ? qr.veri : kimlikKodu(ozet);
+  const yaziMm = sigdirilmisYazi(elYazisi, o.boyut, yazi, yazi);
   // Yazıcının yerleşik yazı tipi ortalama komutu bilmez; ölçülen harf genişliğiyle ortalanır.
-  const genislik = Math.min(o.boyut, metinGenisligi(qr.veri, yaziMm));
+  const genislik = Math.min(o.boyut, metinGenisligi(elYazisi, yaziMm));
   return [kare, {
-    tur: 'metin', x: o.x + (o.boyut - genislik) / 2, y: Math.round((o.y + boyut + QR_ALTI_ARALIK) * 100) / 100, genislik, yaziMm, kalin: false,
-    satirlar: satirlaraBol(qr.veri, o.boyut, yaziMm, yaziMm),
+    tur: 'metin', x: o.x + (o.boyut - genislik) / 2, y: Math.round((o.y + boyut + KOD_ALTI_ARALIK) * 100) / 100, genislik, yaziMm, kalin: false,
+    satirlar: satirlaraBol(elYazisi, o.boyut, yaziMm, yaziMm),
   }];
 }
 
 // EM-26 (kart 2168): koşullu öğe yalnız koşul alanının değeri varken basılır; tanınmayan simge değeri basılmaz.
 function ogeYerlesimi(o: SablonOgesi, veri: AlanDegerleri, sade: boolean): OnizlemeOgesi | null {
-  if (o.tur !== 'qr' && o.kosul !== undefined && alanDegeri(o.kosul, veri) === null) return null;
+  if (o.tur !== 'kod' && o.kosul !== undefined && alanDegeri(o.kosul, veri) === null) return null;
   if (o.tur === 'kutu') return { tur: 'kutu', x: o.x, y: o.y, genislik: o.genislik, yukseklik: o.yukseklik, kalinlik: o.kalinlik };
   const ham = alanDegeri(o.alan, veri);
   if (ham === null) return null;
   // QR içeriği kimliktir ve ASCII'dir; sadeleştirme yalnız okunan yazıya uygulanır.
-  if (o.tur === 'qr') { const v = tekSatir(ham); return { tur: 'qr', x: o.x, y: o.y, boyut: o.boyut, veri: v, kareler: qrMatrisi(v) }; }
+  if (o.tur === 'kod') { const v = tekSatir(ham); return { tur: 'kod', x: o.x, y: o.y, boyut: o.boyut, veri: v, simge: o.simge ?? 'dm', kareler: kodMatrisi(v, o.simge ?? 'dm') }; }
   if (o.tur === 'simge') { const c = simgeCoz(tekSatir(ham)); return c === null ? null : { tur: 'simge', x: o.x, y: o.y, boyut: o.boyut, ...c }; }
   const metin = tekSatir(sade ? sadelestir(ham) : ham);
   const yaziMm = sigdirilmisYazi(metin, o.genislik, o.yukseklik, o.yaziMm, o.kalin);
@@ -287,7 +312,7 @@ function ogeYerlesimi(o: SablonOgesi, veri: AlanDegerleri, sade: boolean): Onizl
 // Koyu modüller satır satır birleşik dikdörtgenlere çevrilir; iki dil de QR'ı yazıcının QR komutuyla değil, kutu komutuyla basar.
 // Böylece basılan QR önizlemeyle aynı matristir ve yazıcı modeline göre değişen QR komutuna bağlı kalınmaz.
 export interface Dikdortgen { x: number; y: number; genislik: number; yukseklik: number }
-export function qrDikdortgenleri(kareler: boolean[][], x: number, y: number, modul: number): Dikdortgen[] {
+export function kodDikdortgenleri(kareler: boolean[][], x: number, y: number, modul: number): Dikdortgen[] {
   const sonuc: Dikdortgen[] = [];
   kareler.forEach((satir, sy) => {
     let bas = -1;
@@ -295,7 +320,7 @@ export function qrDikdortgenleri(kareler: boolean[][], x: number, y: number, mod
       const koyu = satir[sx] === true;
       if (koyu && bas < 0) bas = sx;
       if (!koyu && bas >= 0) {
-        sonuc.push({ x: x + (bas + QR_KENAR_MODUL) * modul, y: y + (sy + QR_KENAR_MODUL) * modul, genislik: (sx - bas) * modul, yukseklik: modul });
+        sonuc.push({ x: x + (bas + KOD_KENAR_MODUL) * modul, y: y + (sy + KOD_KENAR_MODUL) * modul, genislik: (sx - bas) * modul, yukseklik: modul });
         bas = -1;
       }
     }
@@ -304,8 +329,8 @@ export function qrDikdortgenleri(kareler: boolean[][], x: number, y: number, mod
 }
 
 // Modül genişliği tam noktadır; QR kutusuna (kenar boşluğu dahil) sığan en büyük değer, en az 1.
-export const qrModulNoktasi = (boyutNokta: number, modulSayisi: number): number =>
-  Math.max(1, Math.floor(boyutNokta / (modulSayisi + 2 * QR_KENAR_MODUL)));
+export const kodModulNoktasi = (boyutNokta: number, modulSayisi: number): number =>
+  Math.max(1, Math.floor(boyutNokta / (modulSayisi + 2 * KOD_KENAR_MODUL)));
 
 // EM-8: ağ yazıcısının adresi tek IP'dir (ad çözülmez) ve doğrudan baskı aralığının içindedir; aralık tanımlı değilse ağ yazıcısı kaydedilmez.
 // Dosya ile basan yazıcı adres taşımaz.
@@ -372,8 +397,15 @@ export function toplamEtiketHatasi(kayitSayisi: number, adet: number): string | 
 
 // EM-13: konum etiketi stoktaki konum kodunu basar ve QR'ı kod sözlüğündeki konum önekiyle kurar (94 a).
 // Ad ve yer stoktan gelmez; boş alan basılmaz (EM-4).
-export function konumDegerleri(kod: string): AlanDegerleri {
-  return { qr: `${KOD_ONEKI.konum}:${kod}`, kod, ad: null, yer: null };
+// Basılan kod özet koddur (CM1, KURGU 3.4): ilk alan eskiden basılan önekli kimliktir, ardından etiket türünün alanları ve basım tarihi.
+// Değeri olmayan alan kodda yoktur (sıfır uydurulmaz). Sığmayan alan şablon boyuna göre sondan düşer (kod-yaz.ts, yerlesim).
+const ozetKod = (kimlik: string, alanlar: Readonly<Record<string, string | null | undefined>>, sira: readonly string[] | null, basim: Date): string => {
+  const i = kimlik.indexOf(':');
+  return cm1Yaz({ anahtar: kimlik.slice(0, i), deger: kimlik.slice(i + 1) }, alanlar, basim, sira ?? undefined);
+};
+const yyaagg = (iso: string): string => iso.replace(/-/g, '').slice(2);
+export function konumDegerleri(kod: string, basim: Date): AlanDegerleri {
+  return { qr: ozetKod(`${KOD_ONEKI.konum}:${kod}`, {}, null, basim), kod, ad: null, yer: null };
 }
 
 const birlestir = (parcalar: readonly (string | null | false)[]): string | null => {
@@ -392,10 +424,12 @@ const MALZEME_TURU_ADLARI: Record<KatalogTuru, string> = {
 export function lotDegerleri(e: {
   lotNo: string; malzemeId: number; malzemeAd: string | null; malzemeKod: string | null; malzemeTuru: KatalogTuru | null; tedarikciPartiNo: string | null; dokumNo: string | null;
   sertifikaNo: string | null; giris: string; miktar: string | null; birim: string | null; belgeNo: string | null;
-}): AlanDegerleri {
+}, basim: Date, durumKodu: string | null = null): AlanDegerleri {
   const [yil, ay, gun] = tesisGunu(new Date(e.giris)).split('-');
   return {
-    qr: `${KOD_ONEKI.lot}:${e.lotNo}`,
+    qr: ozetKod(`${KOD_ONEKI.lot}:${e.lotNo}`, {
+      TPN: e.tedarikciPartiNo, DKM: e.dokumNo, SRT: e.sertifikaNo, MK: e.belgeNo, GT: yyaagg(tesisGunu(new Date(e.giris))), DRM: durumKodu,
+    }, null, basim),
     lotNo: e.lotNo,
     malzeme: birlestir([e.malzemeAd, e.malzemeKod]),
     kart: birlestir([`Kart ${e.malzemeId}`, e.malzemeTuru && MALZEME_TURU_ADLARI[e.malzemeTuru]]),
@@ -405,28 +439,33 @@ export function lotDegerleri(e: {
 }
 
 // EM-18: malzeme etiketi stoktaki malzeme etiketiyle aynı içeriği basar (stok/Etiketler.tsx): QR kart no, ad, stok kodu (269 a).
-export function malzemeDegerleri(o: { id: number; kod: string; ad: string | null }): AlanDegerleri {
-  return { qr: `${KOD_ONEKI.malzeme}:${o.id}`, ad: o.ad, kod: o.kod, kart: `Kart ${o.id}` };
+export function malzemeDegerleri(o: { id: number; kod: string; ad: string | null }, basim: Date): AlanDegerleri {
+  return { qr: ozetKod(`${KOD_ONEKI.malzeme}:${o.id}`, { SK: o.kod }, null, basim), ad: o.ad, kod: o.kod, kart: `Kart ${o.id}` };
 }
 
 // EM-20 (#116): raf etiketi rafın kodunu, adını ve yerini basar; QR raf önekiyle kurulur. Raf stok konumu değildir
 // (stok gözdedir), okutan taraf rafın gözlerini gösterir.
-export function rafDegerleri(r: { kod: string; ad: string; salonKodu: string | null; bolmeSayisi: number; katSayisi: number }): AlanDegerleri {
+export function rafDegerleri(r: { kod: string; ad: string; salonKodu: string | null; bolmeSayisi: number; katSayisi: number }, basim: Date): AlanDegerleri {
   return {
-    qr: `${KOD_ONEKI.raf}:${r.kod}`, kod: r.kod, ad: r.ad === r.kod ? null : r.ad,
+    qr: ozetKod(`${KOD_ONEKI.raf}:${r.kod}`, { AD: r.ad === r.kod ? null : r.ad, YER: [r.salonKodu, r.bolmeSayisi > 0 && `${r.bolmeSayisi}x${r.katSayisi}`].filter(Boolean).join(' ') }, null, basim), kod: r.kod, ad: r.ad === r.kod ? null : r.ad,
     yer: birlestir([r.salonKodu, r.bolmeSayisi > 0 && `${r.bolmeSayisi} bölme × ${r.katSayisi} kat`]),
   };
 }
 
 // EM-16: istasyon etiketi istasyonun stok konum kodunu basar; teslim bu kodla okutulur.
-export function istasyonDegerleri(kod: string, ad: string | null): AlanDegerleri {
-  return { qr: `${KOD_ONEKI.konum}:${kod}`, kod, ad };
+export function istasyonDegerleri(kod: string, ad: string | null, basim: Date): AlanDegerleri {
+  return { qr: ozetKod(`${KOD_ONEKI.konum}:${kod}`, { AD: ad }, null, basim), kod, ad };
 }
 
 const gunAyYil = (gun: string): string => gun.split('-').reverse().join('.');
 
 // EM-17: refakat kartı etiketi stoktaki refakat kartıyla aynı satırları basar (stok/RefakatKarti.tsx); işlem tablosu tek metinde sıralanır.
 // 2907 (2912 a): "Parti" yalnız tedarikçi partisidir; bölünmüş emrin satırı "Alt parti N · üst UE-…" diye, yalnız alt partide basılır.
+// KPY (kopya sırası) kodda yok: kopya kâğıtları aynı koddur, sırayı yazı taşır (kopyaDegerleri). RRV ve TRM-dışı alanlar kayıtta yoksa yazılmaz.
+const refakatKodAlanlari = (k: RefakatKartiCevabi): Record<string, string | null> => ({
+  PRC: k.urun.kod, REV: k.revizyon, ADT: String(k.adet), TRM: k.teslim === null ? null : yyaagg(k.teslim),
+  OPS: k.adimlar.length === 0 ? null : k.adimlar.map((a) => a.opNo).join('+'),
+});
 export function refakatDegerleri(k: RefakatKartiCevabi, basim: Date): AlanDegerleri {
   const { ustEmirNo, bolunmeSira } = k.parti;
   const parti = ustEmirNo === null ? null : `${bolunmeSira === null ? 'Alt parti' : `Alt parti ${bolunmeSira}`} · üst ${ustEmirNo}`;
@@ -435,7 +474,7 @@ export function refakatDegerleri(k: RefakatKartiCevabi, basim: Date): AlanDegerl
     return yer === '' ? `${a.opNo} ${a.ad}` : `${a.opNo} ${a.ad} (${yer})`;
   };
   return {
-    qr: k.qr,
+    qr: ozetKod(k.qr, refakatKodAlanlari(k), null, basim),
     emirNo: k.emirNo,
     urunAd: k.urun.ad,
     urunKod: `Parça no: ${k.urun.kod}`,
@@ -487,7 +526,7 @@ export function refakatPartisiDegerleri(
 ): AlanDegerleri {
   return {
     ...refakatDegerleri(k, basim),
-    qr: r.qr,
+    qr: ozetKod(r.qr, { ...refakatKodAlanlari(k), LOT: lot.lotNo }, null, basim),
     emirNo: r.etiket,
     lot: birlestir([`Lot ${lot.lotNo}`, lot.tedarikciPartiNo && `Parti ${lot.tedarikciPartiNo}`, lot.dokumNo && `Döküm ${lot.dokumNo}`, lot.sertifikaNo && `Sertifika ${lot.sertifikaNo}`]),
     lotNo: lot.lotNo,
@@ -508,10 +547,16 @@ export const HATALI_DURUM_ADLARI: Record<NonNullable<HataliKaydiOzeti['karar']>,
   rework: 'REWORK', hurda: 'HURDA', red: 'RED', kabul: 'KABUL', sartli_kabul: 'ŞARTLI KABUL',
 };
 const anYazisi = (an: string): string => { const [gun = '', saat = ''] = tesisSaati(new Date(an)).split(' '); return `${gunAyYil(gun)} ${saat}`; };
-export function hataliParcaDegerleri(h: HataliKaydiOzeti): AlanDegerleri {
+// Kod kimliği eskiden olduğu gibi parçanın emridir (UE); hatalı kayıt numarası ve karar ardından yazılır (KURGU 3.4: HP, OP, ADT, KRR).
+const HATALI_KARAR_KODU: Record<NonNullable<HataliKaydiOzeti['karar']> | 'bekliyor', string> = {
+  bekliyor: 'BEKLIYOR', rework: 'REWORK', hurda: 'HURDA', red: 'RED', kabul: 'KABUL', sartli_kabul: 'SARTLI',
+};
+export function hataliParcaDegerleri(h: HataliKaydiOzeti, basim: Date): AlanDegerleri {
   const kol = h.hedefEmir.id === h.uretimEmri.id ? null : `kol ${h.hedefEmir.emirNo}`;
   return {
-    qr: `${KOD_ONEKI['uretim-emri']}:${h.hedefEmir.id}`,
+    qr: ozetKod(`${KOD_ONEKI['uretim-emri']}:${h.hedefEmir.id}`, {
+      HP: String(h.id), OP: String(h.isEmri.opNo), ADT: String(h.adet), KRR: HATALI_KARAR_KODU[h.karar ?? 'bekliyor'],
+    }, ['UE', 'HP', 'OP', 'ADT', 'KRR', 'BT'], basim),
     durum: h.karar === null ? 'KARAR BEKLİYOR' : HATALI_DURUM_ADLARI[h.karar],
     emirNo: birlestir([h.uretimEmri.emirNo, kol]),
     parca: birlestir([h.uretimEmri.parcaNo, h.uretimEmri.parcaAd]),
@@ -538,9 +583,9 @@ export const KALITE_KARAR_SIMGESI: Record<KaliteDurumu, string> = { karar_bekliy
 export const KALITE_DURUM_ADLARI: Record<KaliteDurumu, string> = { serbest: 'SERBEST', karar_bekliyor: 'KARAR BEKLİYOR', sartli: 'ŞARTLI KABUL', red: 'RED' };
 export function kaliteDurumDegerleri(e: {
   lotNo: string; malzemeId: number; malzemeAd: string | null; malzemeKod: string | null; birim: string | null; konumKod: string; miktar: string; kaliteDurumu: KaliteDurumu;
-}): AlanDegerleri {
+}, basim: Date): AlanDegerleri {
   return {
-    qr: `${KOD_ONEKI.lot}:${e.lotNo}`,
+    qr: ozetKod(`${KOD_ONEKI.lot}:${e.lotNo}`, { DRM: KALITE_DURUM_KODLARI[e.kaliteDurumu].kod }, null, basim),
     durum: KALITE_DURUM_ADLARI[e.kaliteDurumu],
     lotNo: e.lotNo,
     malzeme: birlestir([e.malzemeAd ?? `Kart ${e.malzemeId}`, e.malzemeKod]),
@@ -596,7 +641,7 @@ export function malzemeEtiketiDegerleri(e: MalzemeEtiketiGirdisi, basim: Date): 
     : birlestir([e.gkk.gkkNo, e.gkk.gkkZaman && gunAyYil(tesisGunu(new Date(e.gkk.gkkZaman))), gkkSonucu(e.gkk, e.birim), e.gkk.ncrNo]);
   const [gun, saat] = tesisSaati(basim).split(' ');
   return {
-    ...lotDegerleri({ ...e, miktar: e.girisMiktar }),
+    ...lotDegerleri({ ...e, miktar: e.girisMiktar }, basim, e.kaliteDurumu === null ? null : KALITE_DURUM_KODLARI[e.kaliteDurumu].kod),
     durumBant: bant?.ad ?? null, durumAlt: bant?.alt ?? null, bantSimge: bant?.simge ?? null, cerceve: bant?.cerceve ? 'evet' : null,
     bakiye: birlestir([miktar(e.miktar), e.konumKod]), basimZamani: bant === null ? null : `${gunAyYil(gun ?? '')} ${saat ?? ''}`,
     tur: e.malzemeTuru && buyukHarf(MALZEME_TURU_ADLARI[e.malzemeTuru]),
@@ -613,10 +658,13 @@ export function malzemeEtiketiDegerleri(e: MalzemeEtiketiGirdisi, basim: Date): 
 // İrsaliye no uydurulmaz: belge no işin belge numarasıdır, yoksa boş kalır.
 export function sevkKoliDegerleri(k: {
   firmaAdi: string | null; tarih: string | null; belgeNo: string | null; adet: string | null; aciklama: string | null; uretimEmriId: number | null;
-}, emirNo: string | null, malzeme: { ad: string | null; kod: string | null } | null, sira: number, toplam: number, ici: number | null): AlanDegerleri {
+}, emirNo: string | null, malzeme: { ad: string | null; kod: string | null } | null, sira: number, toplam: number, ici: number | null, basim: Date): AlanDegerleri {
   const adet = ici !== null ? miktarYazisi(String(ici)) : k.adet === null ? null : miktarYazisi(k.adet);
   return {
-    qr: k.uretimEmriId === null ? null : `${KOD_ONEKI['uretim-emri']}:${k.uretimEmriId}`,
+    // Kod kimliği kalemin emridir (UE; koli kimliği kayıtta yok, KOL yazılmaz). Koli sırası n-N, sevk belge no, parça kodu ve koli içi adet eklenir.
+    qr: k.uretimEmriId === null ? null : ozetKod(`${KOD_ONEKI['uretim-emri']}:${k.uretimEmriId}`, {
+      NN: `${sira}-${toplam}`, SVK: k.belgeNo, PRC: malzeme?.kod, ADT: adet === null ? null : adet.replace(',', '.'),
+    }, ['UE', 'NN', 'SVK', 'PRC', 'ADT', 'BT'], basim),
     musteri: k.firmaAdi,
     parca: malzeme === null ? k.aciklama : birlestir([malzeme.kod, malzeme.ad]),
     adet: adet === null ? null : `${ici !== null ? 'Koli içi ' : ''}${adet} adet`,

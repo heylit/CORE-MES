@@ -25,7 +25,7 @@ test('Otomatik baskılar olay tablosunu ve kendiliğinden basılmadığını gö
 // 3306 a: Şablonlar'da varsayılan ölçü; girilen ölçü önizlenir, kaydedilmez (örnek veri değişmez).
 test('Şablonlar\'da varsayılan ölçü denenir; ölçek yazılır, kaydet açılır; sayfa yatay taşmaz', async ({ page, ag, ac }) => {
   await ac('/etiket-merkezi/sablonlar');
-  await page.getByRole('button', { name: /^Lot 100x50/ }).click();
+  await page.getByRole('button', { name: /^Lot 100x50 (?!·)/ }).click();
   const bolum = page.getByRole('region', { name: 'Varsayılan ölçü' });
   await expect(bolum).toBeVisible();
   await bolum.getByLabel('Etiket boyu (mm)').fill('60');
@@ -142,7 +142,7 @@ test.describe('Standart dışı ölçü (3011)', () => {
     await page.getByLabel('Standart dışı etikete bas').check();
     await page.getByLabel('Etiket eni (mm)').fill('20');
     await page.getByLabel('Etiket boyu (mm)').fill('10');
-    await expect(page.getByText(/Bu ölçüde (QR|yazı) okunmaz .* Bu etiket için en küçük ölçü \d+x\d+ mm\./)).toBeVisible();
+    await expect(page.getByText(/Bu ölçüde (QR|kod|yazı) okunmaz .* Bu etiket için en küçük ölçü \d+x\d+ mm\./)).toBeVisible();
     await expect(page.getByRole('button', { name: /Yeniden dene/ })).toHaveCount(0);
     // Yazarken geçen ara ölçüler de (20x50) reddedilir; beklenen yalnız bu ölçü isteklerinin 400'üdür.
     const beklenen = (h: string) => /^400 GET \/api\/etiket-merkezi\/sablonlar\/malzeme-etiketi-100x50\/cikti\?.*&en=20&boy=(10|50)$/.test(h)
@@ -151,4 +151,39 @@ test.describe('Standart dışı ölçü (3011)', () => {
     expect(ag.hatalar.filter((h) => !beklenen(h))).toEqual([]);
     expect(ag.yazmalar).toEqual([]);
   });
+});
+
+// 3544 (Arayüz Z7): katalogda Varsayılan yerleşim bölümü üç genişlikte taşmadan çizilir (yerleşim kartları birim testlerinde: kayıt seçimi gerekir).
+test('Şablonlar\'da tür ve ölçü başına Varsayılan yap görünür; sayfa yatay taşmaz', async ({ page, ag, ac }) => {
+  await ac('/etiket-merkezi/sablonlar');
+  await page.getByRole('button', { name: /^Yer 100x50/ }).first().click();
+  await expect(page.getByRole('region', { name: 'Varsayılan yerleşim' })).toBeVisible();
+  expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
+  expect(ag.hatalar).toEqual([]);
+});
+
+// 3564: baskı panelinde önizlemenin altında sıra Ölçü, Yerleşim, sonra Adet/Yazıcı; kartlar taşmaz.
+test('Etiket bas: Ölçü Yerleşim\'in, Yerleşim Yazıcı\'nın üstünde; üç genişlikte yatay taşma yok', async ({ page, ag, ac }) => {
+  const cevap = await page.request.get('/api/stok/konumlar?sayfa=1&sayfaBoyu=2');
+  const { satirlar } = await cevap.json() as { satirlar: { id: number }[] };
+  test.skip(satirlar.length === 0, 'örnek veride konum yok');
+  await ac(`/etiket-merkezi/bas?tur=konum&id=${satirlar.map((s) => s.id).join(',')}`);
+  const olcu = page.getByRole('region', { name: 'Ölçü', exact: true });
+  const yerlesim = page.getByRole('group', { name: 'Yerleşim' });
+  const yazici = page.getByRole('combobox', { name: 'Yazıcı' });
+  await expect(olcu).toBeVisible();
+  await expect(yerlesim).toBeVisible();
+  const y = async (k: typeof olcu | typeof yazici) => (await k.boundingBox())?.y ?? Number.NaN;
+  expect(await y(olcu)).toBeLessThan(await y(yerlesim));
+  expect(await y(yerlesim)).toBeLessThan(await y(yazici));
+  const onizleme = await page.getByRole('img', { name: /önizleme$/ }).first().boundingBox();
+  expect((onizleme?.y ?? 0) + (onizleme?.height ?? 0)).toBeLessThanOrEqual(await y(olcu) + 1);
+  await expect(yerlesim.getByRole('radio').first()).toBeVisible();
+  expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
+  // Yapışık Bas şeridi "ne basılacak"ı söyler ve DOM'da da sondadır (Tab sırası görsel sıra).
+  await expect(page.getByLabel('Basılacak ölçü ve yerleşim')).toContainText(/mm · /);
+  const sonda = await page.locator('.tc-etk-bas-cubuk').evaluate((d) => !!(document.querySelector('.tc-etk-gelismis')!.compareDocumentPosition(d) & Node.DOCUMENT_POSITION_FOLLOWING));
+  expect(sonda, 'Bas şeridi Gelişmiş\'ten sonra').toBe(true);
+  await yerlesim.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: test.info().outputPath('bas-olcu-yerlesim.png') });
 });

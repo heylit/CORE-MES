@@ -87,7 +87,7 @@ export const DURUM_ADLARI: Readonly<Record<string, string>> = Object.fromEntries
 export const alanAdi = (anahtar: string): string => ALANLAR[anahtar]?.ad ?? anahtar;
 
 // Sığmayan içerikte alanlar sondan düşer (KURGU 3.4 sırası = öncelik). Kimlikten sonra bu sırayla yazılır; BT hiç düşmez.
-const TUR_SIRASI: Readonly<Record<string, readonly string[]>> = {
+export const TUR_SIRASI: Readonly<Record<string, readonly string[]>> = {
   LOC: ['LOC', 'AD'], RAF: ['RAF', 'AD', 'YER'], MLZ: ['MLZ', 'SK', 'OL', 'KL'],
   LOT: ['LOT', 'TPN', 'DKM', 'SRT', 'SKT', 'MK', 'GT', 'TDR', 'DRM', 'BT'],
   UE: ['UE', 'PRC', 'REV', 'RRV', 'LOT', 'ADT', 'TRM', 'OPS', 'KPY', 'BT'], RP: ['RP', 'PRC', 'REV', 'RRV', 'LOT', 'ADT', 'TRM', 'OPS', 'KPY', 'BT'],

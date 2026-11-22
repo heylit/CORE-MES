@@ -1,5 +1,5 @@
 import { SATIR_ARALIGI, type OnizlemeOgesi, type YaziciDili } from '#paylasilan/sozlesme/etiket-merkezi.ts';
-import { HARF_ORANI, noktaya, qrDikdortgenleri, qrModulNoktasi } from './kurallar.ts';
+import { HARF_ORANI, noktaya, kodDikdortgenleri, kodModulNoktasi } from './kurallar.ts';
 import { noktaDikdortgenleri, simgeNoktalari } from './piktogram.ts';
 
 // Yerleşimi yazıcı diline çeviren saf fonksiyonlar. Komutlar Zebra ZPL II ve Argox PPLB kılavuzlarındaki temel komutlardır;
@@ -20,9 +20,9 @@ export function zpl(g: CiktiGirdisi): string {
     if (o.tur === 'kutu') {
       const t = Math.max(1, n(o.kalinlik));
       satirlar.push(`^FO${n(o.x)},${n(o.y)}^GB${Math.max(t, n(o.genislik))},${Math.max(t, n(o.yukseklik))},${t}^FS`);
-    } else if (o.tur === 'qr') {
-      const modul = qrModulNoktasi(n(o.boyut), o.kareler.length);
-      for (const d of qrDikdortgenleri(o.kareler, n(o.x), n(o.y), modul)) {
+    } else if (o.tur === 'kod') {
+      const modul = kodModulNoktasi(n(o.boyut), o.kareler.length);
+      for (const d of kodDikdortgenleri(o.kareler, n(o.x), n(o.y), modul)) {
         satirlar.push(`^FO${d.x},${d.y}^GB${d.genislik},${d.yukseklik},${Math.min(d.genislik, d.yukseklik)}^FS`);
       }
     } else if (o.tur === 'simge') {
@@ -101,9 +101,9 @@ export function pplb(g: CiktiGirdisi): string {
       if (d) {
         if (!tersBantlar.has(d)) satirlar.push(`LO${d.x},${d.y},${d.en},${d.boy}`);
       } else satirlar.push(`X${n(o.x)},${n(o.y)},${Math.max(1, n(o.kalinlik))},${n(o.x + o.genislik)},${n(o.y + o.yukseklik)}`);
-    } else if (o.tur === 'qr') {
-      const modul = qrModulNoktasi(n(o.boyut), o.kareler.length);
-      for (const d of qrDikdortgenleri(o.kareler, n(o.x), n(o.y), modul)) satirlar.push(`LO${d.x},${d.y},${d.genislik},${d.yukseklik}`);
+    } else if (o.tur === 'kod') {
+      const modul = kodModulNoktasi(n(o.boyut), o.kareler.length);
+      for (const d of kodDikdortgenleri(o.kareler, n(o.x), n(o.y), modul)) satirlar.push(`LO${d.x},${d.y},${d.genislik},${d.yukseklik}`);
     } else if (o.tur === 'simge') {
       for (const d of noktaDikdortgenleri(simgeNoktalari(o.ad, o.karo, n(o.boyut)), n(o.x), n(o.y))) satirlar.push(`LO${d.x},${d.y},${d.genislik},${d.yukseklik}`);
     } else {

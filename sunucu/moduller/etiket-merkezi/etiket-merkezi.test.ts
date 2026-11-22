@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { cm1Coz, kimlikKodu } from '#paylasilan/etiket-kodu.ts';
 import { randomUUID } from 'node:crypto';
 import { createServer, type Server } from 'node:net';
 import { after, before, describe, test } from 'node:test';
@@ -23,6 +24,9 @@ import { uretimEmriAc } from '../uretim-emirleri/disari.ts';
 const PAROLA = 'dogru-parola-1';
 
 interface Rol { id: number; yonetici: boolean | null }
+
+// Basılan kod özet koddur (CM1); ilk alan eskiden basılan önekli kimliktir.
+const kimlikOf = (veri: string | undefined): string | null => { const o = veri === undefined ? null : cm1Coz(veri); return o === null ? veri ?? null : kimlikKodu(o); };
 
 describe('etiket-merkezi (gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
@@ -104,7 +108,7 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     assert.equal(z.dosyaAdi, 'lot-100x50-203.zpl');
     assert.match(z.komut, /^\^XA\n\^CI28\n\^PW799\n\^LL400\n/);
     assert.match(z.komut, /\^PQ2\n\^XZ\n$/);
-    assert.equal(z.onizleme.some((o) => o.tur === 'qr' && o.veri === 'LOT:LT-000123'), true);
+    assert.equal(z.onizleme.some((o) => o.tur === 'kod' && kimlikOf(o.veri) === 'LOT:LT-000123'), true);
 
     const p = (await al(yonetici, '/etiket-merkezi/sablonlar/lot-100x50/cikti?dil=pplb&dpi=300&sade=true')).json() as CiktiCevabi;
     assert.equal(p.dosyaAdi, 'lot-100x50-300.prn');
@@ -271,7 +275,7 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     assert.equal(cevap.komut.match(/\^XA/g)?.length, 2);
     assert.equal(cevap.komut.match(/\^PQ2\n/g)?.length, 2);
     assert.ok(cevap.komut.indexOf('ETK-B02') < cevap.komut.indexOf('ETK-A01'));
-    assert.equal(cevap.onizleme.find((o) => o.tur === 'qr')?.tur === 'qr' ? (cevap.onizleme.find((o) => o.tur === 'qr') as { veri: string }).veri : null, 'LOC:ETK-B02');
+    assert.equal(kimlikOf((cevap.onizleme.find((o) => o.tur === 'kod') as { veri: string } | undefined)?.veri), 'LOC:ETK-B02');
 
     assert.equal((await al(yonetici, adres('lot-100x50', String(a)))).statusCode, 400);
     assert.equal((await al(yonetici, adres('konum-100x50', String(yok)))).statusCode, 404);
@@ -385,7 +389,7 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     assert.deepEqual(lc.kayitlar, [{ id: parti, baslik: 'LT-P-ETK-1' }]);
     assert.deepEqual(lc.eksikler, [2147483003]);
     assert.match(lc.komut, /Parti P-ETK-1/);
-    assert.equal((lc.onizleme.find((o) => o.tur === 'qr') as { veri: string } | undefined)?.veri, 'LOT:LT-P-ETK-1');
+    assert.equal(kimlikOf((lc.onizleme.find((o) => o.tur === 'kod') as { veri: string } | undefined)?.veri), 'LOT:LT-P-ETK-1');
     assert.equal((await al(yonetici, adres('konum-50x25', 'lot', String(parti)))).statusCode, 400);
 
     const i = await al(yonetici, adres('istasyon-100x50', 'istasyon', `${konumsuz},${ist}`));
@@ -393,7 +397,7 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     const ic = i.json() as KayitCiktiCevabi;
     assert.deepEqual(ic.kayitlar, [{ id: ist, baslik: 'ETK-IST1' }]);
     assert.deepEqual(ic.eksikler, [konumsuz]);
-    assert.equal((ic.onizleme.find((o) => o.tur === 'qr') as { veri: string } | undefined)?.veri, 'LOC:ETK-IST1');
+    assert.equal(kimlikOf((ic.onizleme.find((o) => o.tur === 'kod') as { veri: string } | undefined)?.veri), 'LOC:ETK-IST1');
     assert.match(ic.komut, /\^FDETK-IST1\^FS/);
     assert.match(ic.komut, /Deneme tezg/);
 
@@ -472,7 +476,7 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     const rc = r.json() as KayitCiktiCevabi;
     assert.deepEqual(rc.kayitlar, [{ id: e.id, baslik: `${e.emirNo}-P1` }]);
     assert.deepEqual(rc.eksikler, [iptal, 2147483004]);
-    assert.equal((rc.onizleme.find((o) => o.tur === 'qr') as { veri: string } | undefined)?.veri, `RP:${acik}`);
+    assert.equal(kimlikOf((rc.onizleme.find((o) => o.tur === 'kod') as { veri: string } | undefined)?.veri), `RP:${acik}`);
     // 2907: lot no siyah bantta büyük ve ters; döküm, sertifika ve tedarikçi partisi yanında, aynı kutuda.
     const lotNo = rc.onizleme.find((o) => o.tur === 'metin' && o.satirlar.join(' ') === `LT-ETK-${e.id}`);
     assert.ok(lotNo?.tur === 'metin' && lotNo.ters === true && lotNo.kalin);
@@ -536,7 +540,7 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     const rc = r.json() as KayitCiktiCevabi;
     assert.deepEqual(rc.kayitlar, [{ id: kayit, baslik: `${e.emirNo} OP 10` }]);
     assert.deepEqual(rc.eksikler, [2147483005]);
-    assert.equal((rc.onizleme.find((o) => o.tur === 'qr') as { veri: string } | undefined)?.veri, `UE:${e.id}`);
+    assert.equal(kimlikOf((rc.onizleme.find((o) => o.tur === 'kod') as { veri: string } | undefined)?.veri), `UE:${e.id}`);
     const metinler = rc.onizleme.flatMap((o) => (o.tur === 'metin' ? [o.satirlar.join(' ')] : []));
     assert.equal(metinler[0], 'KARAR BEKLİYOR');
     assert.ok(metinler.includes('OP 10 Torna'), metinler.join(' | '));
@@ -580,7 +584,7 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     const rc = r.json() as KayitCiktiCevabi;
     assert.deepEqual(rc.kayitlar, [{ id: bakiye, baslik: 'LT-P-ETK-KD KABUL' }]);
     assert.deepEqual(rc.eksikler, [2147483006]);
-    assert.equal((rc.onizleme.find((o) => o.tur === 'qr') as { veri: string } | undefined)?.veri, 'LOT:LT-P-ETK-KD');
+    assert.equal(kimlikOf((rc.onizleme.find((o) => o.tur === 'kod') as { veri: string } | undefined)?.veri), 'LOT:LT-P-ETK-KD');
     const metinler = rc.onizleme.flatMap((o) => (o.tur === 'metin' ? [o.satirlar.join(' ')] : []));
     assert.equal(metinler[0], 'KARAR BEKLİYOR');
     assert.ok(metinler.some((m) => m.startsWith('12,5') && m.endsWith('Konum KABUL')), metinler.join(' | '));
@@ -623,7 +627,7 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     assert.equal(rc.kayitlar.length, 2, 'bakiye başına bir etiket');
     assert.ok(rc.kayitlar.every((k) => k.id === lot.p), JSON.stringify(rc.kayitlar));
     assert.deepEqual(rc.eksikler, [2147483007]);
-    assert.equal((rc.onizleme.find((o) => o.tur === 'qr') as { veri: string } | undefined)?.veri, `LOT:${(await sahip.tek<{ l: string }>('SELECT lot_no AS l FROM stok_parti WHERE id = $1', [lot.p]))!.l}`);
+    assert.equal(kimlikOf((rc.onizleme.find((o) => o.tur === 'kod') as { veri: string } | undefined)?.veri), `LOT:${(await sahip.tek<{ l: string }>('SELECT lot_no AS l FROM stok_parti WHERE id = $1', [lot.p]))!.l}`);
     const ilk = metinler(rc);
     assert.ok(ilk.includes('SERBEST'), ilk.join(' | '));
     assert.ok(ilk.includes('Gerekmez'), `GKK'ya girmeyen mal kabulde GKK satırı "Gerekmez": ${ilk.join(' | ')}`);
@@ -720,7 +724,7 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     const t = tek.json() as KayitCiktiCevabi;
     assert.deepEqual(t.kayitlar, [{ id: kalem, baslik: `Deneme Koli Müşteri ${e.emirNo}` }]);
     assert.deepEqual(t.eksikler, [2147483004]);
-    assert.equal((t.onizleme.find((o) => o.tur === 'qr') as { veri: string } | undefined)?.veri, `UE:${e.id}`);
+    assert.equal(kimlikOf((t.onizleme.find((o) => o.tur === 'kod') as { veri: string } | undefined)?.veri), `UE:${e.id}`);
     // EM-28: adet ve koli sırası büyük sayı; tek kolide başlık koli içidir.
     assert.deepEqual(metinler(t).filter((m) => ['Deneme Koli Müşteri', 'KOLİ İÇİ', 'KALEM TOPLAMI', '200', '1/1', '02.05.2031 · Belge DNM-K1'].includes(m)),
       ['Deneme Koli Müşteri', 'KOLİ İÇİ', '200', '1/1', '02.05.2031 · Belge DNM-K1']);
@@ -759,7 +763,7 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     const mc = m.json() as KayitCiktiCevabi;
     assert.deepEqual(mc.eksikler, [2147483005]);
     assert.equal(mc.kayitlar.length, 1);
-    assert.equal((mc.onizleme.find((o) => o.tur === 'qr') as { veri: string } | undefined)?.veri, `MLZ:${kart}`);
+    assert.equal(kimlikOf((mc.onizleme.find((o) => o.tur === 'kod') as { veri: string } | undefined)?.veri), `MLZ:${kart}`);
     assert.match(mc.komut, /Deneme mil/);
 
     const kabul = await yaz(yonetici, '/stok/mal-kabul', {
@@ -864,8 +868,8 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     assert.equal(cevap.sayfalar.length, 2, 'bulunan her kayıt bir etiket');
     // Sayfa önizlemeyle aynı yerleşimdir: QR kare matrisiyle gelir (görüntü değil), metin satırları kaydın kodunu taşır.
     for (const [i, sayfa] of cevap.sayfalar.entries()) {
-      const qr = sayfa.find((o) => o.tur === 'qr');
-      assert.ok(qr && qr.tur === 'qr' && qr.kareler.length > 0 && qr.kareler.every((s) => s.length === qr.kareler.length));
+      const qr = sayfa.find((o) => o.tur === 'kod');
+      assert.ok(qr && qr.tur === 'kod' && qr.kareler.length > 0 && qr.kareler.every((s) => s.length === qr.kareler.length));
       assert.ok(sayfa.some((o) => o.tur === 'metin' && o.satirlar.some((x) => x.includes(i === 0 ? 'ETK-V01' : 'ETK-V02'))));
     }
     const yineleme = await yaz(basan, yol, govde, kimlik);
@@ -1067,7 +1071,7 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     const cevap = c.json() as KayitCiktiCevabi;
     assert.deepEqual(cevap.kayitlar, [{ id: r1, baslik: 'E1' }, { id: r2, baslik: 'E2' }]);
     assert.deepEqual(cevap.eksikler, [pasif, yok]);
-    assert.equal((cevap.onizleme.find((o) => o.tur === 'qr') as { veri: string } | undefined)?.veri, 'RAF:E1');
+    assert.equal(kimlikOf((cevap.onizleme.find((o) => o.tur === 'kod') as { veri: string } | undefined)?.veri), 'RAF:E1');
     assert.match(cevap.komut, /ETKSALON · 3 bölme × 2/);
     assert.match(cevap.komut, /Etiket palet rafı/);
     assert.equal((await al(yonetici, `/etiket-merkezi/sablonlar/konum-50x25/kayit-cikti?dil=zpl&dpi=203&tur=raf&id=${r1}`)).statusCode, 400, 'konum şablonu raf basmaz');
@@ -1159,5 +1163,29 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     await assert.rejects(vt.sorgu(`INSERT INTO etiket_merkezi_sablon_olcusu (sablon_anahtar, genislik, yukseklik, kisi_id) VALUES ('konum-50x25', 60, NULL, $1)`, [yoneticiId]), /etiket_merkezi_sablon_olcusu_ikisi/);
     await assert.rejects(vt.sorgu('UPDATE etiket_merkezi_sablon_olcusu SET genislik = 70'));
     await assert.rejects(vt.sorgu('DELETE FROM etiket_merkezi_sablon_olcusu'));
+  });
+  test('EM-U42 (3544): tür ve boyun varsayılan yerleşimi sablon-yaz ister; kayıtsız boy şeriti varsayılan sayar, boylar birbirini etkilemez; deneme seçilmez; defter yalnız eklenir', async () => {
+    const basan = await tekIslemliKisi('yerlbasan', ['etiket-merkezi.bas', 'etiket-merkezi.oku']);
+    const sablonYazan = await tekIslemliKisi('yerlyazan', ['etiket-merkezi.sablon-yaz']);
+    const varsayilan = async (tur: string) => ((await al(yonetici, '/etiket-merkezi/sablonlar')).json() as SablonlarCevabi).sablonlar.filter((s) => s.tur === tur && s.varsayilan && s.taban.endsWith('100x50')).map((s) => s.anahtar);
+    assert.deepEqual(await varsayilan('konum'), ['konum-100x50'], 'kayıt yokken türün ilk şablonu (şerit)');
+    assert.equal((await yaz(basan, '/etiket-merkezi/sablonlar/konum-100x50-buyuk/varsayilan', {})).statusCode, 403, 'basan varsayılan değiştiremez');
+    assert.equal((await yaz(sablonYazan, '/etiket-merkezi/sablonlar/deneme-50x25/varsayilan', {})).statusCode, 400, 'yazıcı denemesi seçilmez');
+    assert.equal((await yaz(sablonYazan, '/etiket-merkezi/sablonlar/yok-100x50/varsayilan', {})).statusCode, 404);
+    assert.deepEqual(await varsayilan('konum'), ['konum-100x50'], 'reddedilen istek yazmaz');
+
+    const r = await yaz(sablonYazan, '/etiket-merkezi/sablonlar/konum-100x50-buyuk/varsayilan', {});
+    assert.equal(r.statusCode, 200, r.body);
+    const o = r.json() as SablonListesiOgesi;
+    assert.deepEqual({ y: o.yerlesim, t: o.taban, v: o.varsayilan }, { y: 'buyuk', t: 'konum-100x50', v: true });
+    assert.deepEqual(await varsayilan('konum'), ['konum-100x50-buyuk']);
+    const tum = async () => ((await al(yonetici, '/etiket-merkezi/sablonlar')).json() as SablonlarCevabi).sablonlar.filter((s) => s.tur === 'konum' && s.varsayilan).map((s) => s.anahtar).sort();
+    assert.deepEqual(await tum(), ['konum-100x50-buyuk', 'konum-50x25'], 'başka boyun varsayılanı etkilenmez');
+    await yaz(sablonYazan, '/etiket-merkezi/sablonlar/konum-100x50/varsayilan', {});
+    assert.deepEqual(await varsayilan('konum'), ['konum-100x50'], 'son satır geçerli: şeride dönüş de satırdır');
+
+    const vt = ortam!.vt;
+    await assert.rejects(vt.sorgu('UPDATE etiket_merkezi_varsayilan_sablon SET sablon_anahtar = \'x\''));
+    await assert.rejects(vt.sorgu('DELETE FROM etiket_merkezi_varsayilan_sablon'));
   });
 });
