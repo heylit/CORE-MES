@@ -184,7 +184,8 @@ describe('Kokpit sol tablo (3533)', () => {
     const sec = vi.fn();
     const calisma = ornekCalisma();
     const e3 = calisma.D.siparisler.find((x) => x.id === '3');
-    if (e3) e3.termin = '2026-10-20 17:00';
+    // 3 plan sırasında (ilk adımı önce başlar) ilktir; termini 2'den az gecikecek kadar ileri alınır, gecikme sırasında 2 öne geçer.
+    if (e3) e3.termin = '2026-10-23 17:00';
     render(
       <MemoryRouter initialEntries={['/']}><BildirimSaglayici>
         <Kokpit

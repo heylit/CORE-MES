@@ -255,13 +255,16 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, taslak, Geri ve Canlıya al, Mat
     await page.keyboard.press('Escape');
     await expect(tahta.getByText(/Bırakmak için tıklayın/)).toBeHidden();
 
-    // Ölçek: Ay'da yük hücreleri; hücre o güne iner.
+    // Ölçek (gantt dilim 2, T7): Ay'da tezgâh satırlarında işler gerçek boyunda ince çubuklardır; yük hücreleri yalnız Yıl'da, hücre haftasına (Ay) iner.
     const olcek = kokpit.getByRole('group', { name: 'Ölçek' });
     await olcek.getByRole('button', { name: 'Ay' }).click();
-    await expect(tahta.locator('.tc-pyq-hucre').first()).toBeVisible();
+    await expect(tahta.locator('.tc-pyq-hucre')).toHaveCount(0);
+    await expect(tahta.locator('[data-satir="M1"] .tc-pyq-is, [data-satir="M1"] .tc-pyq-kume').first()).toBeVisible();
     await tasma();
+    await olcek.getByRole('button', { name: 'Yıl' }).click();
+    await expect(tahta.locator('.tc-pyq-hucre').first()).toBeVisible();
     await tahta.locator('[data-satir="M1"] .tc-pyq-hucre:not(:disabled)').first().click();
-    await expect(olcek.getByRole('button', { name: 'Gün', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(olcek.getByRole('button', { name: 'Ay', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await olcek.getByRole('button', { name: '3 gün' }).click();
   }
 

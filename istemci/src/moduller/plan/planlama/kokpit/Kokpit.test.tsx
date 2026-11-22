@@ -612,7 +612,7 @@ describe('Kokpit', () => {
     arac('Ayarlar');
     // Araçlar yalnız görünüm ve ayar taşır; tüm planın yönü Plan menüsündedir (3365-4, 3504 b), iki menüde planlama durmaz.
     const adi = (x: Element): string => (x.textContent ?? '').slice(0, (x.textContent ?? '').length - (x.querySelector('small')?.textContent?.length ?? 0));
-    expect([...screen.getByRole('menu', { name: 'Araçlar' }).querySelectorAll('button')].map(adi)).toEqual(['Önce / sonra', 'Oklar: seçili iş', 'Oklar: seçili sipariş', 'Oklar kapalı', 'Duruş ve mesai', 'Ayarlar']);
+    expect([...screen.getByRole('menu', { name: 'Araçlar' }).querySelectorAll('button')].map(adi)).toEqual(['Önce / sonra', 'Oklar: seçili iş', 'Oklar: seçili sipariş', 'Oklar kapalı', 'Sıkı satırlar', 'Duruş ve mesai', 'Ayarlar']);
     // Sorun turu şimdilik kapalıdır: üst şeritte düğmesi yoktur.
     expect(screen.queryByRole('button', { name: 'Sorunları sırayla çöz' })).toBeNull();
     fireEvent.click(arac('Duruş ve mesai'));
@@ -628,6 +628,48 @@ describe('Kokpit', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Duruş ve mesaiyi kapat' }));
     expect(screen.queryByRole('complementary', { name: 'Duruş ve mesai' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Araçlar' }).hasAttribute('data-etkin')).toBe(false);
+  });
+
+  // Risk Y1: Ay ve Yıl'da çubuk çizilir ama taşınmaz; çift tık ve sağ tık "yakınlaşın" der, iş elde kalmaz.
+  it('uzak ölçekte çift tık ve sağ tık işi tutmaz, yakınlaşın uyarısı verir', () => {
+    ac();
+    fireEvent.click(within(screen.getByRole('group', { name: 'Ölçek' })).getByRole('button', { name: 'Ay' }));
+    const is = document.querySelector<HTMLElement>('[data-is="3.10"]');
+    if (!is) throw new Error('iş yok');
+    fireEvent.doubleClick(is);
+    expect(screen.queryByText(/Bırakmak için tıklayın/)).toBeNull();
+    expect(screen.getAllByText('Taşımak için yakınlaşın').length).toBeGreaterThan(0);
+    fireEvent.contextMenu(is);
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  // Yıl ölçeği Tahta'dan erken döner; sonra hook kalırsa ölçek değişince sayfa çöker (React #300).
+  it('Ay, Yıl ve 3 gün ölçekleri arasında gidip gelmek sayfayı çökertmez', () => {
+    ac();
+    const olcek = (ad: string) => within(screen.getByRole('group', { name: 'Ölçek' })).getByRole('button', { name: ad });
+    fireEvent.click(olcek('Ay'));
+    fireEvent.click(olcek('Yıl'));
+    expect(document.querySelectorAll('.tc-pyq-hucre').length).toBeGreaterThan(0);
+    fireEvent.click(olcek('3 gün'));
+    expect(document.querySelectorAll('.tc-pyq-is').length).toBeGreaterThan(0);
+  });
+
+  // Gantt dilim 2 (T4): Sıkı satırlar Araçlar'dan açılır, kapanır ve bu tarayıcıda hatırlanır; sayfa yeniden açılınca Sıkı kalır.
+  it('Sıkı satırlar seçilir, kök satır boyunu taşır ve tarayıcıda saklanır', () => {
+    localStorage.removeItem('coremes.kokpit-satir-boyu');
+    ac();
+    const kok = (): HTMLElement => document.querySelector<HTMLElement>('.tc-pyq')!;
+    expect(kok().getAttribute('data-satir-boyu')).toBe('rahat');
+    fireEvent.click(arac('Sıkı satırlar'));
+    expect(kok().getAttribute('data-satir-boyu')).toBe('siki');
+    expect(localStorage.getItem('coremes.kokpit-satir-boyu')).toBe('siki');
+    expect(arac('Sıkı satırlar').getAttribute('aria-checked')).toBe('true');
+    cleanup();
+    ac();
+    expect(kok().getAttribute('data-satir-boyu')).toBe('siki');
+    fireEvent.click(arac('Sıkı satırlar'));
+    expect(kok().getAttribute('data-satir-boyu')).toBe('rahat');
+    localStorage.removeItem('coremes.kokpit-satir-boyu');
   });
 
   // 3457-1 A: Engeller düğmesi hep durur, sayısını taşır; panel açılır, Duruş ve mesai onu kapatır, kapat düğmesi kapatır.
