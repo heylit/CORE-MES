@@ -711,6 +711,58 @@ describe('Kokpit', () => {
     expect(tahta().querySelectorAll('[data-kademe="siparis"]').length).toBe(sp.length);
   });
 
+  // Dilim 3b (F): genel bakış şeridi tahtanın görünen aralığını pencere olarak çizer; pencere klavyeyle kayınca tahta o saate kayar. Şerit kapanır ve kapalı kalır.
+  it('genel bakış penceresi tahtayı kaydırır; şerit kapanır ve tarayıcıda hatırlanır', async () => {
+    localStorage.removeItem('coremes.kokpit-genel-bakis');
+    const en = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(800);
+    const kaydir = vi.fn();
+    const eski = HTMLElement.prototype.scrollTo;
+    HTMLElement.prototype.scrollTo = kaydir as never;
+    try {
+      ac();
+      const ac_ = (): HTMLElement => screen.getByRole('button', { name: 'Genel bakış' });
+      expect(ac_().getAttribute('aria-expanded')).toBe('true');
+      expect(document.querySelectorAll('.tc-pyq-genel-gun').length).toBeGreaterThan(0);
+      const pencere = await screen.findByRole('slider', { name: 'Görünen aralık' });
+      // Arayüz 3b Z1, Z2: işaretlerin anlamı görünür; şerit adlı grup, özeti ekran okuyucuya; kaydırıcının talimatı açıklamada.
+      const grup = screen.getByRole('group', { name: 'Plan genel bakışı' });
+      expect(grup.querySelector('[data-genel-ozet]')?.textContent).toMatch(/^En yoğun gün \d\d\.\d\d %\d+/);
+      expect(document.querySelector('[data-genel-lejant]')?.textContent).toContain('termini kaçan emir');
+      expect(pencere.getAttribute('aria-describedby')).not.toBeNull();
+      expect(document.getElementById(pencere.getAttribute('aria-describedby')!)?.textContent).toContain('Page Up');
+      expect(pencere.getAttribute('aria-valuenow')).toBe('0');
+      kaydir.mockClear();
+      fireEvent.keyDown(pencere, { key: 'PageDown' });
+      const son = kaydir.mock.calls.at(-1)?.[0] as { left: number } | undefined;
+      expect(son?.left).toBeCloseTo(168 * 15);
+      fireEvent.keyDown(pencere, { key: 'Home' });
+      expect((kaydir.mock.calls.at(-1)?.[0] as { left: number }).left).toBe(0);
+      // ARIA kaydırıcı kalıbı: yukarı ok ileri, aşağı ok geri (bir gün).
+      fireEvent.keyDown(pencere, { key: 'ArrowUp' });
+      expect((kaydir.mock.calls.at(-1)?.[0] as { left: number }).left).toBeCloseTo(24 * 15);
+      fireEvent.keyDown(pencere, { key: 'ArrowDown' });
+      expect((kaydir.mock.calls.at(-1)?.[0] as { left: number }).left).toBe(0);
+      // Shift ve sağ ok pencereyi bir gün genişletir: saat eni daralır, başı yerinde kalır.
+      const slider = (): HTMLElement => screen.getByRole('slider', { name: /Görünen aralık/ });
+      const once = slider().getAttribute('aria-valuetext');
+      fireEvent.keyDown(pencere, { key: 'ArrowRight', shiftKey: true });
+      await waitFor(() => { expect(slider().getAttribute('aria-valuetext')).not.toBe(once); });
+      expect(slider().getAttribute('aria-valuenow')).toBe('0');
+      expect(slider().getAttribute('aria-valuetext')?.slice(0, 5)).toBe(once?.slice(0, 5));
+      fireEvent.click(ac_());
+      expect(document.querySelector('[data-genel]')).toBeNull();
+      expect(localStorage.getItem('coremes.kokpit-genel-bakis')).toBe('kapali');
+      cleanup();
+      ac();
+      expect(ac_().getAttribute('aria-expanded')).toBe('false');
+      expect(document.querySelector('[data-genel]')).toBeNull();
+    } finally {
+      en.mockRestore();
+      HTMLElement.prototype.scrollTo = eski;
+      localStorage.removeItem('coremes.kokpit-genel-bakis');
+    }
+  });
+
   // Gantt dilim 2 (T4): Sıkı satırlar Araçlar'dan açılır, kapanır ve bu tarayıcıda hatırlanır; sayfa yeniden açılınca Sıkı kalır.
   it('Sıkı satırlar seçilir, kök satır boyunu taşır ve tarayıcıda saklanır', () => {
     localStorage.removeItem('coremes.kokpit-satir-boyu');

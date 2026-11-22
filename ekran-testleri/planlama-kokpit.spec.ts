@@ -2826,3 +2826,64 @@ test('Kokpit 3551 E: sipariş, emir ve adım kademeleri; aralık görünüme sı
   await tasma();
   expect(ag.hatalar).toEqual([]);
 });
+
+test('Kokpit 3551 F: genel bakış şeridi bütün planı gösterir; pencere klavyeyle ve basarak tahtayı kaydırır, Shift ile genişler; kapanır; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  await taslakSunucusu(page);
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await page.addInitScript(() => { try { localStorage.removeItem('coremes.kokpit-genel-bakis'); } catch { /* yok */ } });
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const karsilama = page.getByRole('button', { name: 'Başlayalım' });
+  if (await karsilama.isVisible()) await karsilama.click();
+  const tasma = async () => { expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0); };
+  const cek = async (ad: string) => { await page.waitForTimeout(800); await page.screenshot({ path: `/tmp/tmiv2-ekran/3551f-${ad}-${bilgi.project.name}.png` }); };
+  const bolum = kokpit.getByRole('region', { name: 'Emirler' });
+  const serit = bolum.locator('[data-genel]');
+  if (bilgi.project.name === 'g360') {
+    // Telefonda tahta yok, şerit de yok.
+    await expect(serit).toBeHidden();
+    await tasma();
+    await cek('0-telefon');
+    expect(ag.hatalar).toEqual([]);
+    return;
+  }
+  const tahta = bolum.locator('.tc-pyq-tahta');
+  await expect(serit).toBeVisible();
+  expect(await serit.locator('.tc-pyq-genel-gun').count()).toBeGreaterThan(0);
+  const pencere = serit.getByRole('slider', { name: 'Görünen aralık' });
+  // İşaretlerin anlamı görünür satırda (Arayüz 3b Z1); şerit adlı grup (Z2).
+  await expect(bolum.locator('[data-genel-lejant]')).toBeVisible();
+  await expect(bolum.getByRole('group', { name: 'Plan genel bakışı' })).toBeVisible();
+  await expect(pencere).toHaveAttribute('aria-valuenow', /\d+/);
+  await tasma();
+  await cek('1-acilis');
+  // Klavye: End son güne, Home başa; tahta kaydırması pencereyi izler.
+  await pencere.focus();
+  await page.keyboard.press('End');
+  await expect.poll(() => tahta.evaluate((t) => t.scrollLeft)).toBeGreaterThan(0);
+  // Pencere tahta kaydırmasını bir kare sonra izler.
+  await expect.poll(async () => Number(await pencere.getAttribute('aria-valuenow'))).toBeGreaterThan(0);
+  await page.keyboard.press('Home');
+  await expect.poll(() => tahta.evaluate((t) => t.scrollLeft)).toBe(0);
+  await expect(pencere).toHaveAttribute('aria-valuenow', '0');
+  // Shift ve oklar pencereyi genişletir: başı yerinde, sonu ileri; tahta saat eni daralır.
+  const once = await pencere.getAttribute('aria-valuetext');
+  await page.keyboard.press('Shift+ArrowRight');
+  await page.keyboard.press('Shift+ArrowRight');
+  await expect.poll(() => pencere.getAttribute('aria-valuetext')).not.toBe(once);
+  expect((await pencere.getAttribute('aria-valuetext'))?.slice(0, 5)).toBe(once?.slice(0, 5));
+  await tasma();
+  await cek('2-genis');
+  // Şeridin ortasına basınca pencere oraya gider.
+  const s = await serit.boundingBox();
+  if (!s) throw new Error('şerit yok');
+  await page.mouse.click(s.x + s.width / 2, s.y + s.height / 2);
+  await expect.poll(async () => Number(await pencere.getAttribute('aria-valuenow'))).toBeGreaterThan(0);
+  await cek('3-orta');
+  // Kapanır (hatırlanması birim testte).
+  await bolum.getByRole('button', { name: 'Genel bakış' }).click();
+  await expect(serit).toHaveCount(0);
+  await tasma();
+  expect(ag.hatalar).toEqual([]);
+});
