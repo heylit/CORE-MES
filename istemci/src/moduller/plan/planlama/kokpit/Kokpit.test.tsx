@@ -631,15 +631,17 @@ describe('Kokpit', () => {
   });
 
   // Risk Y1: Ay ve Yıl'da çubuk çizilir ama taşınmaz; çift tık ve sağ tık "yakınlaşın" der, iş elde kalmaz.
-  it('uzak ölçekte çift tık ve sağ tık işi tutmaz, yakınlaşın uyarısı verir', () => {
+  // Dilim 3c: Tezgâh gözünde Ay'da iş kutusu yok, doluluk hücresi var; hücreye çift tık ve sağ tık bir şey tutmaz, menü açmaz.
+  it('uzak ölçekte çift tık ve sağ tık işi tutmaz; Tezgâh gözünde Ay hücre gösterir', () => {
     ac();
     fireEvent.click(within(screen.getByRole('group', { name: 'Ölçek' })).getByRole('button', { name: 'Ay' }));
-    const is = document.querySelector<HTMLElement>('[data-is="3.10"]');
-    if (!is) throw new Error('iş yok');
-    fireEvent.doubleClick(is);
+    expect(document.querySelector('[data-is="3.10"]')).toBeNull();
+    const h = document.querySelector<HTMLElement>('[data-hucre]:not([disabled])');
+    if (!h) throw new Error('hücre yok');
+    fireEvent.doubleClick(h);
     expect(screen.queryByText(/Bırakmak için tıklayın/)).toBeNull();
-    expect(screen.getAllByText('Taşımak için yakınlaşın').length).toBeGreaterThan(0);
-    fireEvent.contextMenu(is);
+    expect(document.querySelector('[data-tasinan]')).toBeNull();
+    fireEvent.contextMenu(h);
     expect(screen.queryByRole('menu')).toBeNull();
   });
 
@@ -659,8 +661,10 @@ describe('Kokpit', () => {
     fireEvent.doubleClick(document.querySelector<HTMLElement>('[data-is="3.10"]')!);
     expect(document.querySelector('[data-tasinan]')).not.toBeNull();
     fireEvent.click(olcek('Ay'));
-    fireEvent.click(document.querySelector<HTMLElement>('[data-is="3.10"]')!);
+    // Ay'da satır doluluk hücresidir (dilim 3c); tutulan iş hücreye bırakılmaz.
+    fireEvent.click(document.querySelector<HTMLElement>('[data-hucre]:not([disabled])')!);
     expect(screen.getAllByText('Bırakmak için yakınlaşın').length).toBeGreaterThan(0);
+    expect(document.querySelector('[data-hucre-paneli]')).toBeNull();
   });
 
   // Yıl ölçeği Tahta'dan erken döner; sonra hook kalırsa ölçek değişince sayfa çöker (React #300).
@@ -761,6 +765,66 @@ describe('Kokpit', () => {
       HTMLElement.prototype.scrollTo = eski;
       localStorage.removeItem('coremes.kokpit-genel-bakis');
     }
+  });
+
+  // Dilim 3c (G): Tezgâh gözünde Hafta ve Ay'da satır tezgâh x gün doluluk hücresidir; hücre basılınca o gün yan panelde açılır, işe basmak emri seçer,
+  // Esc kapatır ve odak hücreye döner. Gün ve 3 gün'de adım kutuları kalır.
+  it('tezgâh doluluk hücresi o günü yan panelde açar; Esc kapatır, odak hücreye döner', async () => {
+    const { sec } = ac();
+    fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: 'Tezgâh' }));
+    const olcek = (ad: string) => within(screen.getByRole('group', { name: 'Ölçek' })).getByRole('button', { name: ad });
+    const tahta = (): HTMLElement => document.querySelector<HTMLElement>('.tc-pyq-tahta')!;
+    fireEvent.click(olcek('Hafta'));
+    const hucreler = [...tahta().querySelectorAll<HTMLButtonElement>('[data-hucre]')];
+    expect(hucreler.length).toBeGreaterThan(0);
+    const dolu = hucreler.find((h) => !h.disabled && /\d+ iş/.test(h.getAttribute('aria-label') ?? ''))!;
+    expect(dolu.getAttribute('aria-label')).toMatch(/^.+ \d\d\.\d\d: doluluk %\d+ \(\d+ \/ \d+ sa\), \d+ iş/);
+    expect(dolu.getAttribute('aria-expanded')).toBe('false');
+    dolu.focus();
+    fireEvent.click(dolu);
+    const panel = document.querySelector<HTMLElement>('[data-hucre-paneli]')!;
+    expect(panel.getAttribute('aria-labelledby')).toBe('tc-pyq-hpanel-baslik');
+    expect(panel.getAttribute('data-hucre-paneli')).toBe(dolu.getAttribute('data-hucre'));
+    expect(dolu.getAttribute('aria-expanded')).toBe('true');
+    expect(document.activeElement?.id).toBe('tc-pyq-hpanel-baslik');
+    expect(dolu.getAttribute('aria-controls')).toBe(panel.id);
+    // Z6: özet açık saati ve kapalı saatin yüke sayılmadığını yazar; Z1: çubuktaki saat tam (SS:DD).
+    expect(panel.querySelector('[data-panel-ozet]')?.textContent).toMatch(/^Doluluk %\d+ \(\d+ \/ \d+ sa\).*Açık saat \d\d:\d\d–\d\d:\d\d/);
+    for (const c of panel.querySelectorAll('.tc-pyq-hpanel-is')) if (c.textContent) expect(c.textContent).toMatch(/^\d\d:\d\d$/);
+    for (const k of panel.querySelectorAll('[data-durus] small')) expect(k.textContent).toMatch(/^\d\d\.\d\d \S+ \d\d:\d\d – \d\d\.\d\d \S+ \d\d:\d\d$/);
+    const is = (): HTMLElement => panel.querySelector<HTMLElement>('[data-panel-is]')!;
+    expect(is().getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(is());
+    const [emirId, adimId] = (is().getAttribute('data-panel-is') ?? '').split('.');
+    expect(sec).toHaveBeenLastCalledWith({ siparis: emirId, adim: `${emirId ?? ''}.${adimId ?? ''}` });
+    fireEvent.keyDown(panel, { key: 'Escape' });
+    expect(document.querySelector('[data-hucre-paneli]')).toBeNull();
+    await waitFor(() => { expect(document.activeElement?.getAttribute('data-hucre')).toBe(dolu.getAttribute('data-hucre')); });
+    // Z3: hücre ağı tek Tab durağı; oklar gün ve tezgâh arasında gezer, Home satır başına.
+    const duraklar = (): HTMLButtonElement[] => [...tahta().querySelectorAll<HTMLButtonElement>('[data-hucre]')].filter((h) => h.tabIndex === 0);
+    expect(duraklar()).toHaveLength(1);
+    expect(duraklar()[0]?.getAttribute('data-hucre')).toBe(dolu.getAttribute('data-hucre'));
+    const [satir, gunNo] = (dolu.getAttribute('data-hucre') ?? '').split('|');
+    const etkin = (t: string) => [...tahta().querySelectorAll<HTMLButtonElement>('[data-hucre]')].filter((h) => !h.disabled && h.getAttribute('data-hucre')?.startsWith(`${t}|`));
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' });
+    const sag = etkin(satir ?? '').find((h) => Number(h.getAttribute('data-hucre')?.split('|')[1]) > Number(gunNo));
+    if (sag) expect(document.activeElement).toBe(sag);
+    expect(duraklar()).toHaveLength(1);
+    expect(duraklar()[0]).toBe(document.activeElement);
+    fireEvent.keyDown(document.activeElement!, { key: 'Home' });
+    expect(document.activeElement).toBe(etkin(satir ?? '')[0]);
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
+    expect(document.activeElement?.getAttribute('data-hucre')?.split('|')[0]).not.toBe(satir);
+    expect(duraklar()).toHaveLength(1);
+    // Z4: hücre kipinde lejant; 3 gün'de yok.
+    expect(document.querySelector('[data-hucre-lejant]')?.textContent).toMatch(/günlük doluluk %.*termini kaçan/);
+    // Ay'da da hücre; 3 gün'de adım kutuları.
+    fireEvent.click(olcek('Ay'));
+    expect(tahta().querySelectorAll('[data-hucre]').length).toBeGreaterThan(0);
+    fireEvent.click(olcek('3 gün'));
+    expect(tahta().querySelectorAll('[data-hucre]').length).toBe(0);
+    expect(tahta().querySelectorAll('[data-is]').length).toBeGreaterThan(0);
+    expect(document.querySelector('[data-hucre-lejant]')).toBeNull();
   });
 
   // Gantt dilim 2 (T4): Sıkı satırlar Araçlar'dan açılır, kapanır ve bu tarayıcıda hatırlanır; sayfa yeniden açılınca Sıkı kalır.

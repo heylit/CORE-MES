@@ -23,7 +23,7 @@ import { useBitinceBildir } from './bitince-bildir.ts';
 import { emirYonu, planYonu } from '../ayarlar/alanlar.ts';
 import { TabloAraci, useTablo } from './Tablo.tsx';
 import { siralaGecikme, siralaPlan } from './tablo.ts';
-import { GENEL_ANAHTARI, SATIR_ANAHTARI, YOGUN_OK_ACIKLAMASI, YOGUN_SATIR, gorunenSatirSayisi, KADEME_YAZISI, inisGorunumu, kademe, pencereOlcegi, satirBoyuCoz, siparisGruplari, siparisOzeti, ufkaSigmaz, ufkaSigmayanSayisi, type SatirBoyu } from './yogunluk.ts';
+import { GENEL_ANAHTARI, HUCRE_ROZET_EN, SATIR_ANAHTARI, hucreKipi, YOGUN_OK_ACIKLAMASI, YOGUN_SATIR, gorunenSatirSayisi, KADEME_YAZISI, inisGorunumu, kademe, pencereOlcegi, satirBoyuCoz, siparisGruplari, siparisOzeti, ufkaSigmaz, ufkaSigmayanSayisi, type SatirBoyu } from './yogunluk.ts';
 import { Kapasite } from './Kapasite.tsx';
 import { Engeller } from './Engeller.tsx';
 import { engelOzeti, engeller } from './engeller.ts';
@@ -39,6 +39,7 @@ import {
 import { Matris, darEkran, type MatrisDuzeni } from './Matris.tsx';
 import { GenelBakis } from './GenelBakis.tsx';
 import { pencereDeposuKur } from './pencereDeposu.ts';
+import { HucrePaneli } from './HucrePaneli.tsx';
 import { ODAK_PAYI, Tahta, type CanliYer, type OkKipi } from './Tahta.tsx';
 import { GuncellemeSonucu } from './GuncellemeSonucu.tsx';
 import { Liste } from './Liste.tsx';
@@ -506,6 +507,61 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     const r = pencereOlcegi(S, C, gorunen > 0 ? gorunen : SIGDIRMA_ENI);
     setOlcek(r.olcek); setSaatEni(r.saatEni); setOdak(S + ODAK_PAYI / r.saatEni);
   }, []);
+  // Dilim 3c (G): açık doluluk hücresi (tezgâh, gün başı); kapanınca odak açan hücreye döner.
+  const [hucre, setHucre] = useState<{ tezgah: string; a: number } | null>(null);
+  const hucreAcan = useRef<HTMLElement | null>(null);
+  const hucreAc = useCallback((tezgah: string, a: number, el: HTMLElement) => {
+    hucreAcan.current = el;
+    setHucre((h) => (h && h.tezgah === tezgah && h.a === a ? null : { tezgah, a }));
+  }, []);
+  const hucreKapat = useCallback(() => {
+    const h = hucre;
+    setHucre(null);
+    const el = hucreAcan.current;
+    requestAnimationFrame(() => {
+      const hedef = el?.isConnected ? el : h ? document.querySelector<HTMLElement>(`[data-hucre^="${h.tezgah}|"][aria-expanded]`) : null;
+      hedef?.focus();
+    });
+  }, [hucre]);
+  // Panel tahtayı daraltır: açan hücre görünür kalsın.
+  useEffect(() => {
+    const el = hucreAcan.current;
+    const k = el?.closest<HTMLElement>('.tc-pyq-tahta');
+    if (!hucre || !el || !k) return;
+    // Yalnız yatay: dar ekranda panel altta açılır ve odak ondadır; sayfa dikeyde kaymaz.
+    requestAnimationFrame(() => {
+      const r = el.getBoundingClientRect(), kr = k.getBoundingClientRect(), ad = k.querySelector<HTMLElement>('.tc-pyq-bas')?.getBoundingClientRect().right ?? kr.left;
+      // Test 3c G1: genişte panel tahtanın sağ kenarını örter; hücre panelin solunda kalsın.
+      const pr = document.getElementById('tc-pyq-hpanel')?.getBoundingClientRect();
+      const sag = pr && pr.left > ad && pr.left < kr.right && pr.top < kr.bottom ? pr.left - ODAK_PAYI : kr.right;
+      if (r.right > sag) k.scrollLeft += r.right - sag + ODAK_PAYI; else if (r.left < ad) k.scrollLeft -= ad - r.left + ODAK_PAYI;
+    });
+  }, [hucre]);
+  const emirNumarasi = useMemo(() => new Map(m.emirler.map((e) => [e.id, e.no])), [m.emirler]);
+  // Arayüz 3c Z4: hücre kipinde rakamın ve işaretlerin anlamı tek satır (dokunmatikte ipucu yok).
+  const panelli = (tahta: ReactNode, g: string) => (
+    <>
+      {hucreKipi(g, olcek, uzakMi(olcek) ? SAAT_ENI[olcek] : saatEni ?? SAAT_ENI[olcek]) && (
+        <p className="tc-pyq-genel-lejant tc-pyq-hucre-lejant" data-hucre-lejant="">
+          <span>Hücre: günlük doluluk %</span>{24 * (uzakMi(olcek) ? SAAT_ENI[olcek] : saatEni ?? SAAT_ENI[olcek]) < HUCRE_ROZET_EN
+            ? <span data-lej="gec-cizgi">kırmızı çizgi: termini kaçan iş var (sayı ipucunda)</span>
+            : <span data-lej="gec">termini kaçan emrin iş sayısı</span>}<span data-lej="tarali">planlı duruş</span>
+          <span>Hücreye basınca gün açılır; işi taşımak için Gün görünümüne geçin</span>
+        </p>
+      )}
+      <div className="tc-pyq-panelli" data-panel-acik={hucre ? '' : undefined}>
+      {tahta}
+      {hucre && (
+        <div className="tc-pyq-hpanel-yer">
+        <HucrePaneli
+          m={m} cx={cx} tezgah={hucre.tezgah} a={hucre.a} zaman={zaman} emirNo={(id) => emirNumarasi.get(id) ?? id} secIs={secIs}
+          sec={sec} kapat={hucreKapat}
+        />
+        </div>
+      )}
+      </div>
+    </>
+  );
   const genelSerit = (
     <div className="tc-pyq-genel-kap" data-genel-kap="" data-acik={genelAcik ? '' : undefined}>
       <button type="button" className="tc-pyq-ok tc-pyq-genel-ac" aria-expanded={genelAcik} title={genelAcik ? 'Genel bakışı kapat' : 'Bütün planın genel bakışını aç'} onClick={() => { genelSec(!genelAcik); }}>
@@ -826,13 +882,13 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     <>
       {sonucCubugu}
       {genelSerit}
-      <Tahta
-        pencereDeposu={pencereDeposu} ufukSonu={ufukSonu} satirBoyu={satirBoyu} kumeAc={(S) => { olcekSec('G', S); }} m={m} cx={cx} goz="T" olcek={olcek} emirler={gorunen} tablo={tezgahTablosu ? tablo : null} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
+      {panelli(<Tahta
+        hucreAc={tur ? null : hucreAc} hucreSecili={hucre} pencereDeposu={pencereDeposu} ufukSonu={ufukSonu} satirBoyu={satirBoyu} kumeAc={(S) => { olcekSec('G', S); }} m={m} cx={cx} goz="T" olcek={olcek} emirler={gorunen} tablo={tezgahTablosu ? tablo : null} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
         tasi={yazabilir && !tur ? tasiDene : null} planaAl={yazabilir && !tur ? planaAlDene : null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
         yerlestirme={tur ? null : yerHedefi} yanan={tur ? null : yananTahta} secimiKaldir={gelenYanan ? () => { setGelenYanan(null); } : listedeSecimKalir}
         sorunBildir={null} onizle={tur ? null : onizle} okKipi={tur ? 'yok' : okKipi}
         coklu={coklu.size > 1 ? coklu : undefined} saatEni={saatEni} cokluSec={yazabilir && !tur ? cokluSec : null} grupKaydir={yazabilir && !tur ? grupKaydir : null} malzeme={malzeme} {...gelenOz}
-      />
+      />, 'T')}
       <Liste m={m} cx={cx} goz="T" emirler={gorunen} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} yanan={tur ? null : yananTahta} sorunBildir={null} {...gelenListe} />
     </>
   );
@@ -1129,13 +1185,13 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
                 {sonucCubugu}
                 {goz !== 'T' && yolIzi}
                 {genelSerit}
-                <Tahta
-                  siparisler={siparisler} kademeZorla={eKademe} kademeIn={tur ? null : kademeIn} pencereDeposu={pencereDeposu} ufukSonu={ufukSonu} satirBoyu={satirBoyu} kumeAc={(S) => { olcekSec('G', S); }} m={m} cx={cx} goz={goz} olcek={olcek} emirler={emirSirali} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
+                {panelli(<Tahta
+                  siparisler={siparisler} kademeZorla={eKademe} kademeIn={tur ? null : kademeIn} hucreAc={tur ? null : hucreAc} hucreSecili={hucre} pencereDeposu={pencereDeposu} ufukSonu={ufukSonu} satirBoyu={satirBoyu} kumeAc={(S) => { olcekSec('G', S); }} m={m} cx={cx} goz={goz} olcek={olcek} emirler={emirSirali} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
                   tasi={yazabilir && !tur ? tasiDene : null} planaAl={yazabilir && !tur ? planaAlDene : null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
                   yerlestirme={tur ? null : yerHedefi} yanan={tur ? null : yananTahta} secimiKaldir={secimiKaldir}
                   sorunBildir={sorunBildir} onizle={tur ? null : onizle} okKipi={tur ? 'yok' : okKipi}
                   coklu={coklu.size > 1 ? coklu : undefined} saatEni={saatEni} cokluSec={yazabilir && !tur ? cokluSec : null} grupKaydir={yazabilir && !tur ? grupKaydir : null} malzeme={malzeme} {...gelenOz}
-                />
+                />, goz)}
                 <Liste m={m} cx={cx} goz={goz} emirler={emirSirali} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} yanan={tur ? null : yananTahta} sorunBildir={sorunBildir} {...gelenListe} />
                 <ul className="tc-pyq-aciklama" aria-label="Renk açıklaması">
                   <li><i />Planlı iş</li><li><i data-t="gec" />Geç emrin işi</li><li><i data-t="ilk" />En erken boş yer (basın)</li><li><i data-t="bos" />Boş yer (basın)</li><li><i data-t="kapali" />Kapalı saat, duruş</li><li data-aciklama="malzeme"><i data-t="malzeme" />Malzeme bekleniyor</li>

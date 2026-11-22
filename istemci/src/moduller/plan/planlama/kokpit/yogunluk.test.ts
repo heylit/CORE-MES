@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { KokpitEmri } from './kurallar.ts';
-import { ETIKET_HARF, ETIKET_PAYI, KUME_BOSLUK, KUME_DAR, YOGUN_SATIR, etiketEni, kumele, kumeYazisi, okunurGenislik, satirBoyuCoz, etiketYeri, bitenAdim, emirAraligi, gecKumele, pencereAdimi, pencereDegeri, gecOzeti, pencereSonu, pencereYazisi, seritOzeti, gunlukDoluluk, inisGorunumu, pencereBasi, pencereOlcegi, seritSaati, seritX, kademe, siparisCubukYazisi, siparisGruplari, siparisOzeti, gorunenSatirSayisi, okKumesi, ufkaSigmayanSayisi, ufkaSigmaz, ufukCizgisi, ufukYazisi } from './yogunluk.ts';
+import { ETIKET_HARF, ETIKET_PAYI, KUME_BOSLUK, KUME_DAR, YOGUN_SATIR, etiketEni, kumele, kumeYazisi, okunurGenislik, satirBoyuCoz, etiketYeri, bitenAdim, emirAraligi, gecKumele, gunCizelgesi, hucreAdi, hucreOzeti, hucreKipi, acikDilimler, acikYazisi, saatMetni, tarihMetni, tezgahGunleri, pencereAdimi, pencereDegeri, gecOzeti, pencereSonu, pencereYazisi, seritOzeti, gunlukDoluluk, inisGorunumu, pencereBasi, pencereOlcegi, seritSaati, seritX, kademe, siparisCubukYazisi, siparisGruplari, siparisOzeti, gorunenSatirSayisi, okKumesi, ufkaSigmayanSayisi, ufkaSigmaz, ufukCizgisi, ufukYazisi } from './yogunluk.ts';
 
 // Uydurma örnek (ORN-). Saatler planın saat ekseninde.
 const zaman = (t: number): string => `${String(Math.floor(t / 24) + 1).padStart(2, '0')}.12.2026 ${String(t % 24).padStart(2, '0')}:00`;
@@ -202,5 +202,52 @@ describe('yoğunluk dilim 3b: F genel bakış şeridi', () => {
     expect(gecKumele(g, 11, 18)).toEqual([{ bas: 1, son: 2, sayi: 3 }, { bas: 3, son: 3, sayi: 1 }, { bas: 6, son: 6, sayi: 4 }]);
     expect(gecKumele(g, 20, 18).length).toBe(4);
     expect(gecKumele(g, 3, 18)).toEqual([{ bas: 1, son: 6, sayi: 8 }]);
+  });
+});
+
+describe('yoğunluk dilim 3c: G tezgâh doluluk hücreleri', () => {
+  const pen = (g: number): [number, number][] => Array.from({ length: g }, (_, d) => [d * 24 + 8, d * 24 + 16]);
+  const cx = { M: { T1: { id: 'T1', grup: '', op: 1, sw: pen(2), rw: pen(2) } } } as never;
+  const is = (id: string, job: string, S: number, C: number) => ({ id, job, m: 'T1', S, C, fason: false, ad: 'Torna' }) as never;
+  const m = {
+    bas: 0, son: 48,
+    isler: { a: is('a', 'E1', 10, 12), b: is('b', 'E2', 14, 24 + 10), c: { ...(is('c', 'E3', 9, 11) as object), m: 'T2' } as never },
+    durus: { T1: [{ a: 30, b: 34, ariza: false, neden: 'bakım' as const }] },
+  };
+  it('hücre kipi yalnız Tezgâh gözünde Ay, Hafta ve Hafta\'dan dar saat eninde', () => {
+    expect(hucreKipi('T', 'H', 6.5)).toBe(true);
+    expect(hucreKipi('T', 'A', 1.5)).toBe(true);
+    expect(hucreKipi('T', 'Y', 0.14)).toBe(false);
+    expect(hucreKipi('T', '3', 15)).toBe(false);
+    expect(hucreKipi('S', 'H', 6.5)).toBe(false);
+  });
+  it('tezgâh günleri: açık ve plan saati, iş sayısı, geç emrin işi, güne değen duruş', () => {
+    const g = tezgahGunleri(cx, m, 'T1', new Set(['E2']));
+    expect(g.map((x) => [x.gun, x.acik, x.plan, x.yuzde, x.isSay, x.gec, x.duruslar.length])).toEqual([[0, 8, 4, 50, 2, 1, 0], [1, 8, 2, 25, 1, 1, 1]]);
+  });
+  it('hücre adı doluluk, iş, geç iş ve duruşu söyler; kapalı gün', () => {
+    const [, ikinci] = tezgahGunleri(cx, m, 'T1', new Set(['E2']));
+    expect(hucreAdi('ORN-T01', '02.12', ikinci!)).toBe('ORN-T01 02.12: doluluk %25 (2 / 8 sa), 1 iş, 1 geç iş, bakım duruşu');
+    expect(hucreAdi('ORN-T01', '03.12', { yuzde: null, acik: 0, plan: 0, gec: 0, isSay: 0, duruslar: [] })).toBe('ORN-T01 03.12: kapalı');
+  });
+  it('gün çizelgesi: güne değen işler başlangıç sırasıyla, gün dışı kısım kesilir', () => {
+    const l = gunCizelgesi([m.isler.b, m.isler.a], 24, 48);
+    expect(l.map((x) => [x.is.id, Math.round(x.sol), Math.round(x.en)])).toEqual([['b', 0, 42]]);
+    expect(gunCizelgesi([m.isler.b, m.isler.a], 0, 24).map((x) => x.is.id)).toEqual(['a', 'b']);
+  });
+  it('Arayüz 3c Z1: panel saati ve tarihi saatYaz yazısından kesilmeden alınır; N3 özet adla aynı', () => {
+    expect(saatMetni('26.11 Per 00:00')).toBe('00:00');
+    expect(saatMetni('26.11 Per 08:30')).toBe('08:30');
+    expect(tarihMetni('26.11 Per 08:30')).toBe('26.11 Per');
+    const [, ikinci] = tezgahGunleri(cx, m, 'T1', new Set(['E2']));
+    expect(hucreOzeti(ikinci!)).toBe('doluluk %25 (2 / 8 sa), 1 iş, 1 geç iş, bakım duruşu');
+    expect(hucreAdi('ORN-T01', '02.12', ikinci!)).toBe(`ORN-T01 02.12: ${hucreOzeti(ikinci!)}`);
+  });
+  it('Arayüz 3c Z6: açık saat dilimleri gün yüzdesiyle; özet aynı pencereyi yazar', () => {
+    const d = acikDilimler(pen(2), 24, 48);
+    expect(d).toEqual([{ sol: (8 / 24) * 100, en: (8 / 24) * 100, s: 8, c: 16 }]);
+    expect(acikYazisi(d)).toBe('08:00–16:00');
+    expect(acikYazisi(acikDilimler([[0, 8.5], [16, 30]], 0, 24))).toBe('00:00–08:30, 16:00–24:00');
+    expect(acikYazisi([])).toBe('kapalı');
   });
 });
