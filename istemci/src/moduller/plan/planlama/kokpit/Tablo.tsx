@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent as TusOlayi, type PointerEvent as ImlecOlayi } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState, type KeyboardEvent as TusOlayi, type PointerEvent as ImlecOlayi } from 'react';
 import { Simge } from '../../../../ortak/arayuz/index.ts';
 import {
-  EN_ENAZ, SIRALAMA_ADI, SUTUNLAR, ayarOku, ayarYaz, bolmeSinirla, ilerlemeYazisi, sutunlariDuzenle, varsayilanSutunlar,
+  EN_ENAZ, SIRALAMA_ADI, SUTUNLAR, ayarOku, ayarYaz, bolmeSinirla, farkParcalari, ilerlemeYazisi, sutunlariDuzenle, varsayilanSutunlar,
   type Fark, type Ilerleme, type Siralama, type SutunKimligi, type TabloAyari,
 } from './tablo.ts';
 
@@ -107,9 +107,10 @@ export function Halka({ i, kucuk = false }: { i: Ilerleme; kucuk?: boolean }) {
 export function Bos({ ad }: { ad: string }) {
   return <span className="tc-pyq-bos" title={ad}><span aria-hidden="true">—</span><span className="tc-gizli-etiket">{ad}</span></span>;
 }
+// Yazı kesilmez: dar sütunda rozet satır kırar, ama "4 gün" gibi sayı ve birim ayrılmaz (her parça kırılmaz bir kutu).
 export function FarkRozeti({ f, ipucu }: { f: Fark | null; ipucu?: string }) {
   if (f === null) return <Bos ad="Fark yok: termin ya da plan yok" />;
-  return <span className="tc-pyq-fark" data-ton={f.ton} title={ipucu}>{f.yazi}</span>;
+  return <span className="tc-pyq-fark" data-ton={f.ton} title={ipucu}>{farkParcalari(f.yazi).map((p, i) => <Fragment key={i}>{i > 0 ? ' ' : ''}<span>{p}</span></Fragment>)}</span>;
 }
 
 // Tablo ile gantt arasındaki ayraç: sürüklenir, ok tuşlarıyla oynar, çift tıkta doğal ene döner. Satırlardaki kopyalar yalnız fare tutamağıdır

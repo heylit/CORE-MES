@@ -6,13 +6,14 @@ import { sureYaz, type KokpitEmri, type KokpitIsi } from './kurallar.ts';
 export type SutunKimligi = 'emir' | 'urun' | 'adet' | 'termin' | 'bitis' | 'fark' | 'ilerleme';
 // en: sütunun px cinsinden ağırlığı (ızgarada fr olarak kullanılır, bölme daralınca oranla küçülür); adimAdi: açık emrin adım satırında aynı yerin başlığı.
 export interface SutunTanimi { id: SutunKimligi; ad: string; en: number; sayi: boolean; adimAdi: string }
+// Fark en uzun yazıyı ("4 gün 17 sa 45 dk erken") en çok iki satırda kesmeden taşıyacak ende; ürün adı uzunsa üç noktayla kısalır, tamamı ipucundadır.
 export const SUTUNLAR: readonly SutunTanimi[] = [
   { id: 'emir', ad: 'Emir', en: 140, sayi: false, adimAdi: 'Adım' },
-  { id: 'urun', ad: 'Ürün', en: 140, sayi: false, adimAdi: 'Tezgâh' },
+  { id: 'urun', ad: 'Ürün', en: 112, sayi: false, adimAdi: 'Tezgâh' },
   { id: 'adet', ad: 'Adet', en: 52, sayi: true, adimAdi: '' },
   { id: 'termin', ad: 'Termin', en: 100, sayi: false, adimAdi: 'Başlangıç' },
   { id: 'bitis', ad: 'Plan bitiş', en: 100, sayi: false, adimAdi: 'Süre' },
-  { id: 'fark', ad: 'Fark', en: 112, sayi: true, adimAdi: '' },
+  { id: 'fark', ad: 'Fark', en: 140, sayi: true, adimAdi: '' },
   { id: 'ilerleme', ad: 'İlerleme', en: 76, sayi: true, adimAdi: 'Durum' },
 ];
 export const SUTUN_ADI: Readonly<Record<SutunKimligi, SutunTanimi>> = Object.fromEntries(SUTUNLAR.map((s) => [s.id, s])) as Record<SutunKimligi, SutunTanimi>;
@@ -66,6 +67,9 @@ export function farkOlustur(e: Pick<KokpitEmri, 'gecikme'>): Fark | null {
   if (g > 0.01) return { ton: 'gec', yazi: `${sureYaz(g)} geç` };
   return Math.abs(g) <= 0.01 ? { ton: 'zaman', yazi: 'tam zamanında' } : { ton: 'zaman', yazi: `${sureYaz(-g)} erken` };
 }
+
+// Fark yazısının kırılmaz parçaları: sayı birimiyle ("4 gün", "17 sa"), sonra "geç" ya da "erken"; "tam zamanında" tek parça.
+export const farkParcalari = (yazi: string): string[] => yazi.match(/\d+ \S+|\S+( zamanında)?/g) ?? [yazi];
 
 // Termine göre gecikme: en çok gecikecek emir üstte (eşitlikte termini yakın olan, sonra plan sırası); terminsiz ve plansız emirler plan
 // sırasıyla ortada kalır; bitmiş emirler (hiçbir eylem kalmadı) en altta, plan sırasıyla (Arayüz K7). Girdi sırası plan sırasıdır.

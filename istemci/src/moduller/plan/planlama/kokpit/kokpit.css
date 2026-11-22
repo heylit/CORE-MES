@@ -1018,9 +1018,12 @@
 .tc-pyq-bos { color: var(--faint); }
 /* Fark rozeti iki tonludur: geç ve zamanında. Yazı hep --ink'tir (kontrast); renk zeminde ve kenardadır. */
 .tc-pyq-fark {
-  display: inline-block; max-width: 100%; padding: var(--pay-ince) var(--b-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  display: inline-block; max-width: 100%; padding: var(--pay-ince) var(--b-2); overflow: hidden; white-space: normal; line-height: 1.2;
   border: var(--cizgi-ince) solid; border-radius: var(--yari-1); color: var(--ink); font-family: var(--font-mono); font-size: var(--yazi-xs); font-weight: 500;
 }
+/* Dar sütunda rozet kesilmez, parça parça satır kırar; sayı ve birimi aynı satırda kalır. */
+.tc-pyq-h > .tc-pyq-fark { text-overflow: clip; }
+.tc-pyq-fark > span { white-space: nowrap; }
 .tc-pyq-fark[data-ton="gec"] { border-color: var(--d-gec); background: color-mix(in oklab, var(--d-gec) 16%, transparent); }
 .tc-pyq-fark[data-ton="zaman"] { border-color: color-mix(in oklab, var(--d-sur) 55%, transparent); background: color-mix(in oklab, var(--d-sur) 12%, transparent); }
 /* Tamamlanma dairesi: dolu kısım biten adım / toplam adım. Küçük halkada (telefon kartı) yazı yoktur; ipucu ve ekran okuyucu söyler. */
