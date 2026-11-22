@@ -14,7 +14,7 @@ import { bitenler, derle, girdiKur, planOku, plandanBitenler, saatYaz } from '..
 import { useAn } from '../motor/saat.ts';
 import { SeritYuvasi } from '../motor/ust/yuva.ts';
 import { girdiSaati, girdidenSaat } from '../ic/veri/kurallar.ts';
-import { useEmirNo } from '../ortak/emir-no.ts';
+import { emirKuyrugu, useEmirNo } from '../ortak/emir-no.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import { AdimSorunu } from './AdimSorunu.tsx';
 import { ElleBol } from './ElleBol.tsx';
@@ -23,7 +23,7 @@ import { useBitinceBildir } from './bitince-bildir.ts';
 import { emirYonu, planYonu } from './ayarlar.ts';
 import { TabloAraci, useTablo } from './Tablo.tsx';
 import { siralaGecikme, siralaPlan } from './tablo.ts';
-import { SATIR_ANAHTARI, YOGUN_OK_ACIKLAMASI, YOGUN_SATIR, gorunenSatirSayisi, satirBoyuCoz, ufkaSigmaz, ufkaSigmayanSayisi, type SatirBoyu } from './yogunluk.ts';
+import { SATIR_ANAHTARI, YOGUN_OK_ACIKLAMASI, YOGUN_SATIR, gorunenSatirSayisi, KADEME_YAZISI, inisGorunumu, kademe, satirBoyuCoz, siparisGruplari, siparisOzeti, ufkaSigmaz, ufkaSigmayanSayisi, type SatirBoyu } from './yogunluk.ts';
 import { Kapasite } from './Kapasite.tsx';
 import { Engeller } from './Engeller.tsx';
 import { engelOzeti, engeller } from './engeller.ts';
@@ -175,6 +175,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const [suz, setSuz] = useState<Exclude<EmirDurumu, 'iyi'> | null>(null);
   // Gantt dilim 1 (T1): "Ufka sığmayan" rozetine basınca yalnız ufku aşan emirler görünür.
   const [ufukSuz, setUfukSuz] = useState(false);
+  // Dilim 3 (E): kademe çubuğuna basınca inilen sipariş ve emir; yol izi buradan çizilir ve geri döner.
+  const [eOdak, setEOdak] = useState<{ siparis: string | null; emir: string | null }>({ siparis: null, emir: null });
   // Dilim 2 (T4): satır boyu; dokunmatikte hep Rahat. Seçim bu tarayıcıda saklanır (okunamazsa Rahat).
   const dokunmatik = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
   const [satirBoyu, setSatirBoyu] = useState<SatirBoyu>(() => { try { return satirBoyuCoz(localStorage.getItem(SATIR_ANAHTARI), dokunmatik); } catch { return 'rahat'; } });
@@ -291,7 +293,10 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   // Sipariş bağı (3297-5 a): kartlar siparişe göre toplanır; arama sipariş no ve müşteriyle de bulur. Dilim okunamadıysa kart kök emirdir.
   const bag = o.depo.durum?.siparisBaglari ?? null;
   const kokBul = useMemo(() => kokCozucu(m.emirler), [m.emirler]);
-  const gorunen = useMemo(() => m.emirler.filter((e) => (suz === null || e.durum === suz) && (!ufukSuz || ufkaSigmaz(e)) && (aramaUyar(e, m, ara) || siparisAramasi(e.id, bag, ara))), [m, suz, ufukSuz, ara, bag]);
+  const kartlar = useMemo(() => siraKartlari(m, bag), [m, bag]);
+  const odakKarti = eOdak.siparis === null ? null : kartlar.find((k) => k.kok === eOdak.siparis) ?? null;
+  const odakKumesi = useMemo(() => (eOdak.emir !== null ? new Set([eOdak.emir]) : odakKarti ? new Set(odakKarti.emirler.map((e) => e.id)) : null), [eOdak.emir, odakKarti]);
+  const gorunen = useMemo(() => m.emirler.filter((e) => (odakKumesi === null || odakKumesi.has(e.id)) && (suz === null || e.durum === suz) && (!ufukSuz || ufkaSigmaz(e)) && (aramaUyar(e, m, ara) || siparisAramasi(e.id, bag, ara))), [m, suz, ufukSuz, ara, bag, odakKumesi]);
   const ufukDisiSay = useMemo(() => ufkaSigmayanSayisi(m.emirler), [m]);
   const gorunenKume = useMemo(() => new Set(gorunen.map((e) => e.id)), [gorunen]);
   // 3533: Emirler gözünün tablosu. Sıralama yalnız görünümü değiştirir; plan sırasına ve önceliğe yazılmaz (Risk B2).
@@ -299,6 +304,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   // T2: tahta, tablo ve liste aynı sırada; Plan sırası ilk adımın başlangıcıdır (şelale), Termine göre gecikme eşitlikte bu sırayı izler.
   const emirSirali = useMemo(() => { const p0 = siralaPlan(gorunen, m.isler); return tablo.sira === 'gecikme' ? siralaGecikme(p0, m.isler) : p0; }, [tablo.sira, gorunen, m.isler]);
   const uyar = useCallback((job: string) => gorunenKume.has(job), [gorunenKume]);
+  const siparisler = useMemo(() => siparisGruplari(kartlar, emirSirali), [kartlar, emirSirali]);
 
   // --- yazma ---
   // Önizlemeler ortak çalışmanın sürümüyle sunucuda hesaplanır; komut taslağa yazılır, plan taslağın görünümünde yeniden dizilir.
@@ -436,6 +442,57 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
 
   // --- ölçek ---
   const olcekSec = useCallback((x: KokpitOlcegi, saat: number | null = null) => { setOlcek(x); setOdak(saat); setSaatEni(null); }, []);
+  // Sipariş çubuğu Hafta'da o siparişin emirlerine, emir çubuğu Gün'de o emrin adımlarına iner (E kademeleri).
+  // Kademeye inerken aralık görünen saat alanına sığar (Arayüz Z1); odak yeni kademenin yol izine geçer (Z4).
+  const odakIste = useRef<string | null>(null);
+  useEffect(() => {
+    const q = odakIste.current;
+    if (!q) return;
+    odakIste.current = null;
+    (document.querySelector<HTMLElement>(q) ?? document.querySelector<HTMLElement>('[data-yol-izi] [aria-current]'))?.focus();
+  });
+  const inisSigdir = useCallback((a: { S: number; C: number }) => {
+    const k = document.querySelector<HTMLElement>('.tc-pyq-tahta'), ad = k?.querySelector<HTMLElement>('.tc-pyq-bas')?.offsetWidth ?? 0;
+    const gorunen = (k?.clientWidth ?? 0) - ad - ODAK_PAYI;
+    const r = inisGorunumu(a, gorunen > 0 ? gorunen : SIGDIRMA_ENI);
+    setOlcek(r.olcek); setSaatEni(r.saatEni); setOdak(r.odak);
+  }, []);
+  const kademeIn = useCallback((tur: 'siparis' | 'emir', id: string, S: number, C: number) => {
+    odakIste.current = '[data-yol-izi] [aria-current]';
+    if (tur === 'siparis') { setEOdak({ siparis: id, emir: null }); inisSigdir({ S, C }); return; }
+    setEOdak((o) => ({ siparis: o.siparis ?? kartAnahtari(id, bag, kokBul), emir: id })); inisSigdir({ S, C }); sec(id, null);
+  }, [inisSigdir, sec, bag, kokBul]);
+  const odakEmri = eOdak.emir === null ? null : m.emirler.find((e) => e.id === eOdak.emir) ?? null;
+  const spAdi = odakKarti ? odakKarti.siparis?.no ?? emirKuyrugu(odakKarti.emirler[0]?.no ?? odakKarti.kok) : null;
+  const eKademe = eOdak.emir !== null ? 'adim' as const : eOdak.siparis !== null ? 'emir' as const : null;
+  const tumPlan = (): void => {
+    const kok = eOdak.siparis;
+    odakIste.current = kok ? `[data-kademe-id="${kok}"], [data-siparis="${kok}"]` : null;
+    setEOdak({ siparis: null, emir: null }); olcekSec('A');
+  };
+  const sipariseDon = (): void => {
+    const a = odakKarti ? siparisOzeti(odakKarti.emirler, m.isler).aralik : null;
+    odakIste.current = eOdak.emir ? `[data-kademe-id="${eOdak.emir}"]` : null;
+    setEOdak((o) => ({ ...o, emir: null }));
+    if (a) inisSigdir(a); else olcekSec('H');
+  };
+  const odakVar = eOdak.siparis !== null || eOdak.emir !== null;
+  const yolIzi = (
+    <nav className="tc-pyq-yolizi" aria-label="Yol izi" data-yol-izi="" data-odak={odakVar ? '' : undefined}>
+      <ol>
+        <li>{odakVar
+          ? <button type="button" className="tc-pyq-ok" title="Bütün siparişlere çık" onClick={tumPlan}><Simge ad="zout" boyut="k" />Tüm plan</button>
+          : <b aria-current="page" tabIndex={-1}>Tüm plan</b>}</li>
+        {spAdi !== null && (
+          <li><span aria-hidden="true">›</span>{eOdak.emir === null
+            ? <b aria-current="page" tabIndex={-1}>{spAdi}</b>
+            : <button type="button" className="tc-pyq-ok" title="Siparişin emirlerine çık" onClick={sipariseDon}>{spAdi}</button>}</li>
+        )}
+        {odakEmri && <li><span aria-hidden="true">›</span><b aria-current="page" tabIndex={-1}>{emirKuyrugu(odakEmri.no)}</b></li>}
+      </ol>
+      <small className="tc-pyq-yolizi-kademe" role="status">{KADEME_YAZISI[eKademe ?? kademe(olcek)]}</small>
+    </nav>
+  );
   const simdikiEn = uzakMi(olcek) ? SAAT_ENI[olcek] : saatEni ?? SAAT_ENI[olcek];
   // Yakınlaşırken görünümün ortasındaki saat yerinde kalır (tahta kaydırması ölçekle yeniden hesaplanır).
   const yakinlas = useCallback((px: number) => {
@@ -477,7 +534,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     if (!idler.length) { bildir('bilgi', 'Geç, riskli ya da plansız emir yok.'); return; }
     if (tahtasiz(goz)) setGoz('T');
     if (uzakMi(olcek)) olcekSec('3');
-    setSuz(null); setUfukSuz(false); setAra(''); setOnceAcik(false);
+    setSuz(null); setUfukSuz(false); setEOdak({ siparis: null, emir: null }); setAra(''); setOnceAcik(false);
     setTur({ idler, i: 0, gecmis: [], ileri: [] });
   };
   const turBitti = tur !== null && tur.i >= tur.idler.length;
@@ -665,7 +722,6 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   );
 
   const arizali = useMemo(() => m.tezgahlar.filter((t) => !t.fason && suAndakiDurus(m, t.id) !== null).length, [m]);
-  const kartlar = useMemo(() => siraKartlari(m, bag), [m, bag]);
   const seciliKart = kartlar.find((k) => k.kok === kart) ?? kartlar.find((k) => k.kok === ilkKart(kartlar)) ?? null;
   useEffect(() => { if (secEmir !== null) { setKart(kartAnahtari(secEmir, bag, kokBul)); setVurgu(true); } }, [secEmir]);
   // 3330: kart açıkça seçildiyse (ilk kart kendiliğinden gösterilirken değil) tahtada o siparişin emirleri yanar, ötekiler solar. Hiçbir adımı
@@ -979,8 +1035,9 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
             <section className="tc-pyq-bolum tc-pyq-bolum-plan tc-pyq-agac-bolum" aria-label="Emirler">
               {sonucCubugu}
               <TabloAraci tablo={tablo} />
+              {yolIzi}
               <Tahta
-                ufukSonu={ufukSonu} satirBoyu={satirBoyu} kumeAc={(S) => { olcekSec('G', S); }} m={m} cx={cx} goz="S" olcek={olcek} emirler={emirSirali} tablo={tablo} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
+                siparisler={siparisler} kademeZorla={eKademe} kademeIn={tur ? null : kademeIn} ufukSonu={ufukSonu} satirBoyu={satirBoyu} kumeAc={(S) => { olcekSec('G', S); }} m={m} cx={cx} goz="S" olcek={olcek} emirler={emirSirali} tablo={tablo} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
                 tasi={yazabilir && !tur ? tasiDene : null} planaAl={null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
                 yerlestirme={null} yanan={tur ? null : gelenYanan?.k ?? null} sorunBildir={null} onizle={tur ? null : onizle} okKipi={tur ? 'yok' : okKipi}
                 saatEni={saatEni} malzeme={malzeme} agac={{ acik: agacAcik, ac: agacAc, notlar: agacNotu }} {...gelenOz}
@@ -1047,8 +1104,9 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
             ) : (
               <>
                 {sonucCubugu}
+                {goz !== 'T' && yolIzi}
                 <Tahta
-                  ufukSonu={ufukSonu} satirBoyu={satirBoyu} kumeAc={(S) => { olcekSec('G', S); }} m={m} cx={cx} goz={goz} olcek={olcek} emirler={emirSirali} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
+                  siparisler={siparisler} kademeZorla={eKademe} kademeIn={tur ? null : kademeIn} ufukSonu={ufukSonu} satirBoyu={satirBoyu} kumeAc={(S) => { olcekSec('G', S); }} m={m} cx={cx} goz={goz} olcek={olcek} emirler={emirSirali} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
                   tasi={yazabilir && !tur ? tasiDene : null} planaAl={yazabilir && !tur ? planaAlDene : null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
                   yerlestirme={tur ? null : yerHedefi} yanan={tur ? null : yananTahta} secimiKaldir={secimiKaldir}
                   sorunBildir={sorunBildir} onizle={tur ? null : onizle} okKipi={tur ? 'yok' : okKipi}

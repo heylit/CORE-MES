@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ETIKET_HARF, ETIKET_PAYI, KUME_BOSLUK, KUME_DAR, YOGUN_SATIR, etiketEni, kumele, kumeYazisi, okunurGenislik, satirBoyuCoz, etiketYeri, gorunenSatirSayisi, okKumesi, ufkaSigmayanSayisi, ufkaSigmaz, ufukCizgisi, ufukYazisi } from './yogunluk.ts';
+import type { KokpitEmri } from './kurallar.ts';
+import { ETIKET_HARF, ETIKET_PAYI, KUME_BOSLUK, KUME_DAR, YOGUN_SATIR, etiketEni, kumele, kumeYazisi, okunurGenislik, satirBoyuCoz, etiketYeri, bitenAdim, emirAraligi, inisGorunumu, kademe, siparisCubukYazisi, siparisGruplari, siparisOzeti, gorunenSatirSayisi, okKumesi, ufkaSigmayanSayisi, ufkaSigmaz, ufukCizgisi, ufukYazisi } from './yogunluk.ts';
 
 // Uydurma örnek (ORN-). Saatler planın saat ekseninde.
 const zaman = (t: number): string => `${String(Math.floor(t / 24) + 1).padStart(2, '0')}.12.2026 ${String(t % 24).padStart(2, '0')}:00`;
@@ -91,5 +92,44 @@ describe('yoğunluk T4: satır boyu', () => {
     expect(satirBoyuCoz('siki', true)).toBe('rahat');
     expect(satirBoyuCoz(null, false)).toBe('rahat');
     expect(satirBoyuCoz('baska', false)).toBe('rahat');
+  });
+});
+
+describe('yoğunluk dilim 3: E kademeleri (S2 a)', () => {
+  const emir = (id: string, durum: KokpitEmri['durum'], adimlar: string[], gecikme: number | null = null): KokpitEmri =>
+    ({ id, no: `ORN-UE-${id}`, durum, gecikme, bitis: gecikme === null ? null : 100 + gecikme, adimlar: adimlar.map((a) => ({ id: a })) }) as unknown as KokpitEmri;
+  const isler = { a1: { S: 10, C: 14, bitti: true }, a2: { S: 20, C: 30, bitti: false }, b1: { S: 5, C: 8, bitti: false } };
+  it('ölçeğe göre kademe: Yıl ve Ay sipariş, Hafta emir, yakın ölçekler adım', () => {
+    expect((['Y', 'A', 'H', '3', 'G'] as const).map(kademe)).toEqual(['siparis', 'siparis', 'emir', 'adim', 'adim']);
+  });
+  it('emir aralığı planlı adımların birleşimi; planda adım yoksa null; biten adım sayılır', () => {
+    expect(emirAraligi(emir('1', 'iyi', ['a1', 'a2', 'yok']), isler)).toEqual({ S: 10, C: 30 });
+    expect(emirAraligi(emir('2', 'plansiz', ['yok']), isler)).toBeNull();
+    expect(bitenAdim([emir('1', 'iyi', ['a1', 'a2']), emir('3', 'iyi', ['b1'])], isler)).toEqual({ biten: 1, toplam: 3 });
+    expect(bitenAdim([emir('4', 'iyi', [])], isler)).toBeNull();
+  });
+  it('sipariş grupları görünen sırayı izler, görünmeyen emir ve emirsiz sipariş satır olmaz', () => {
+    const e1 = emir('1', 'iyi', ['a1']), e2 = emir('2', 'gec', ['a2']), e3 = emir('3', 'risk', ['b1']);
+    const kartlar = [{ kok: 'k1', siparis: { no: 'ORN-SIP-1' }, emirler: [e1, e2], termin: 50 }, { kok: 'k3', siparis: null, emirler: [e3], termin: null }];
+    const g = siparisGruplari(kartlar, [e3, e2]);
+    expect(g.map((x) => [x.kok, x.no, x.emirler.map((e) => e.id)])).toEqual([['k3', 'ORN-UE-3', ['3']], ['k1', 'ORN-SIP-1', ['2']]]);
+  });
+  it('sipariş özeti: aralık, durum sayıları, en kötü durum ve en büyük gecikme; yazı', () => {
+    const o = siparisOzeti([emir('1', 'iyi', ['a1'], -5), emir('2', 'gec', ['a2'], 12), emir('3', 'risk', ['b1']), emir('4', 'plansiz', [])], isler);
+    expect(o).toEqual({ aralik: { S: 5, C: 30 }, gec: 1, risk: 1, plansiz: 1, durum: 'gec', gecikme: 12, bitis: 112 });
+    expect(siparisCubukYazisi(4, o)).toBe('4 emir · 1 geç · 1 riskli');
+    expect(siparisCubukYazisi(2, { gec: 0, risk: 0 })).toBe('2 emir');
+  });
+  it('kademeye inerken aralık görünüme sığar: kısa aralık yakın ölçek, uzun aralık dar saat eniyle', () => {
+    const kisa = inisGorunumu({ S: 10, C: 40 }, 900);
+    expect(kisa.saatEni).not.toBeNull();
+    expect(kisa.odak).toBeLessThan(10);
+    expect((40 - kisa.odak) * (kisa.saatEni ?? 0)).toBeLessThanOrEqual(900);
+    for (const gun of [20, 90]) {
+      const u = inisGorunumu({ S: 0, C: gun * 24 }, 900);
+      expect(u.olcek).toBe('H');
+      expect((gun * 24 - u.odak) * u.saatEni).toBeLessThanOrEqual(900);
+      expect(-u.odak * u.saatEni).toBeLessThan(900 * 0.1);
+    }
   });
 });
