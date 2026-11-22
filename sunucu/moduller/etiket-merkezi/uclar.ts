@@ -3,7 +3,7 @@ import {
   atlaCevabi, atlaGovdesi, basCevabi, basGovdesi, baskilarCevabi, bekleyenlerCevabi, ciktiCevabi, ciktiSorgusu, etiketlerCevabi, indirCevabi, indirGovdesi, kayitCiktiCevabi, kayitCiktiSorgusu, raflarCevabi, sablonListesiOgesi, sablonOlcusuGovdesi, sablonParametresi, sablonlarCevabi,
   yaziciAcGovdesi, yaziciGuncelleGovdesi, yaziciParametresi, yaziciSemasi, yazicilarCevabi, yazdirCevabi, yazdirGovdesi,
 } from '#paylasilan/sozlesme/etiket-merkezi.ts';
-import { atla, bas, baskilar, bekleyenler, etiketler, indir, kayitCiktisi, ornekCikti, rafSecenekleri, sablonlar, sablonOlcusuYaz, yaziciAc, yaziciDuzenle, yazicilar, yazdir } from './servis.ts';
+import { atla, bas, varsayilanYap, baskilar, bekleyenler, etiketler, indir, kayitCiktisi, ornekCikti, rafSecenekleri, sablonlar, sablonOlcusuYaz, yaziciAc, yaziciDuzenle, yazicilar, yazdir } from './servis.ts';
 
 // Örnek değerli önizleme sayfayı görene açıktır; gerçek kayıt, yazıcı ve baskı kaydı ayrı işlemler ister (99 evet).
 const OKUMA = { biri: ['sayfa.etiket-merkezi'] } as const;
@@ -21,6 +21,16 @@ export const uclar = [
     govde: sablonOlcusuGovdesi,
     cevap: sablonListesiOgesi,
     isle: ({ db, kullanici, parametre, govde }) => sablonOlcusuYaz(db, kullanici, parametre.anahtar, govde.olcu),
+  }),
+  // 3544: türün varsayılan yerleşimi bütün cihazlar için; ölçü komutuyla aynı işlem. Yineleme yeni satır açmaz (aynı istek kimliği ilk cevabı döner).
+  uc({
+    yontem: 'POST',
+    yol: '/etiket-merkezi/sablonlar/:anahtar/varsayilan',
+    yetki: 'etiket-merkezi.sablon-yaz',
+    tekrarKorumali: true,
+    parametre: sablonParametresi,
+    cevap: sablonListesiOgesi,
+    isle: ({ db, kullanici, parametre }) => varsayilanYap(db, kullanici, parametre.anahtar),
   }),
   // Etiket listesi katalogdur, kayıt taşımaz: şablon listesi gibi sayfayı görene açık.
   uc({ yontem: 'GET', yol: '/etiket-merkezi/etiketler', yetki: OKUMA, cevap: etiketlerCevabi, isle: ({ db }) => etiketler(db) }),

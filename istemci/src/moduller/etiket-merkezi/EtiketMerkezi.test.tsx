@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
@@ -21,11 +21,11 @@ const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govd
 
 const SABLONLAR: SablonlarCevabi = {
   sablonlar: [
-    { anahtar: 'lot-100x50', ad: 'Lot 100x50', tur: 'lot', genislik: 100, yukseklik: 50, ogeler: [], tasarim: { genislik: 100, yukseklik: 50 }, degisiklik: null },
-    { anahtar: 'konum-50x25', ad: 'Konum 50x25', tur: 'konum', genislik: 50, yukseklik: 25, ogeler: [], tasarim: { genislik: 50, yukseklik: 25 }, degisiklik: null },
-    { anahtar: 'deneme-50x25', ad: 'Yazıcı denemesi 50x25', tur: 'deneme', genislik: 50, yukseklik: 25, ogeler: [], tasarim: { genislik: 50, yukseklik: 25 }, degisiklik: null },
-    { anahtar: 'refakat-100x150', ad: 'Refakat kartı 100x150', tur: 'refakat', genislik: 100, yukseklik: 150, ogeler: [], tasarim: { genislik: 100, yukseklik: 150 }, degisiklik: null },
-    { anahtar: 'sevk-koli-100x75', ad: 'Sevk kolisi 100x75', tur: 'sevk-koli', genislik: 100, yukseklik: 75, ogeler: [], tasarim: { genislik: 100, yukseklik: 75 }, degisiklik: null },
+    { anahtar: 'lot-100x50', ad: 'Lot 100x50', tur: 'lot', genislik: 100, yukseklik: 50, ogeler: [], tasarim: { genislik: 100, yukseklik: 50 }, degisiklik: null, yerlesim: 'serit', taban: 'lot-100x50', varsayilan: false },
+    { anahtar: 'konum-50x25', ad: 'Konum 50x25', tur: 'konum', genislik: 50, yukseklik: 25, ogeler: [], tasarim: { genislik: 50, yukseklik: 25 }, degisiklik: null, yerlesim: 'serit', taban: 'konum-50x25', varsayilan: false },
+    { anahtar: 'deneme-50x25', ad: 'Yazıcı denemesi 50x25', tur: 'deneme', genislik: 50, yukseklik: 25, ogeler: [], tasarim: { genislik: 50, yukseklik: 25 }, degisiklik: null, yerlesim: 'serit', taban: 'deneme-50x25', varsayilan: false },
+    { anahtar: 'refakat-100x150', ad: 'Refakat kartı 100x150', tur: 'refakat', genislik: 100, yukseklik: 150, ogeler: [], tasarim: { genislik: 100, yukseklik: 150 }, degisiklik: null, yerlesim: 'serit', taban: 'refakat-100x150', varsayilan: false },
+    { anahtar: 'sevk-koli-100x75', ad: 'Sevk kolisi 100x75', tur: 'sevk-koli', genislik: 100, yukseklik: 75, ogeler: [], tasarim: { genislik: 100, yukseklik: 75 }, degisiklik: null, yerlesim: 'serit', taban: 'sevk-koli-100x75', varsayilan: false },
   ],
   alanlar: {},
   secenekler: {
@@ -36,6 +36,8 @@ const SABLONLAR: SablonlarCevabi = {
   },
 };
 
+// Yerleşim testleri: kodda sığmayan alan (Z2).
+let kodEksikOrnegi: string | null = null;
 const cikti = (anahtar: string, sorgu: URLSearchParams): CiktiCevabi => {
   const dil = sorgu.get('dil') === 'pplb' ? 'pplb' : 'zpl';
   const s = SABLONLAR.sablonlar.find((x) => x.anahtar === anahtar) ?? SABLONLAR.sablonlar[0]!;
@@ -50,9 +52,10 @@ const cikti = (anahtar: string, sorgu: URLSearchParams): CiktiCevabi => {
       tasarim: { genislik: s.genislik, yukseklik: s.yukseklik }, olcek: Math.min(en / s.genislik, boy / s.yukseklik),
       uyarilar: en < 50 ? ['En küçük yazı 1,2 mm: yakından okunur.'] : [], enKucuk: { genislik: 54, yukseklik: 27 },
     },
+    kodEksik: kodEksikOrnegi,
     onizleme: [
       { tur: 'metin', x: 1, y: 1, genislik: 40, yaziMm: 4, kalin: true, satirlar: ['LT-000123'] },
-      { tur: 'qr', x: 50, y: 1, boyut: 20, veri: 'LOT:LT-000123', kareler: [[true, false], [false, true]] },
+      { tur: 'kod', x: 50, y: 1, boyut: 20, veri: 'LOT:LT-000123', simge: 'dm', kareler: [[true, false], [false, true]] },
       { tur: 'kutu', x: 0, y: 30, genislik: 60, yukseklik: 8, kalinlik: 8 },
       { tur: 'metin', x: 2, y: 31, genislik: 56, yaziMm: 5, kalin: true, satirlar: ['ÖRNEK BAŞLIK'], ters: true },
       { tur: 'simge', x: 80, y: 1, boyut: 12, ad: 'lot', karo: 'cizgili' },
@@ -231,7 +234,7 @@ describe('EtiketMerkezi', () => {
     ac(<SablonKatalogu />);
     expect(await screen.findByText('LT-000123')).toBeTruthy();
     expect(screen.getByRole('img', { name: 'Lot 100x50 önizleme' })).toBeTruthy();
-    expect(screen.getByLabelText('QR: LOT:LT-000123')).toBeTruthy();
+    expect(screen.getByLabelText('Kod: LOT:LT-000123')).toBeTruthy();
     // EM-25, EM-26: ters yazı kâğıt rengiyle, piktogram sunucunun verdiği yer ve boyutta, çizgili karo kırpılmış şeritle çizilir.
     expect(screen.getByText('ÖRNEK BAŞLIK').getAttribute('class')).toContain('tc-etk-ters');
     const simge = document.querySelector('.tc-etk-onizleme g[transform="translate(80 1) scale(0.25)"]');
@@ -336,7 +339,11 @@ describe('EtiketMerkezi', () => {
     expect(((await yaziciAlani()) as HTMLSelectElement).value).toBe('ag:1');
     fireEvent.change(adetAlani(), { target: { value: '2' } });
     fireEvent.click(screen.getByRole('button', { name: 'Bas · 2 etiket' }));
-    expect(await screen.findByText(/Gönderildi\. Etiketin çıktığını/)).toBeTruthy();
+    const gonderildi = await screen.findByText(/Gönderildi\. Etiketin çıktığını/);
+    // Z1 (Arayüz): sonuç iletisi yapışık Bas şeridinin içindedir; şerit "ne basılacak" özetini taşır.
+    const serit = gonderildi.closest('.tc-etk-bas-cubuk');
+    expect(serit).not.toBeNull();
+    expect(within(serit as HTMLElement).getByLabelText('Basılacak ölçü ve yerleşim').textContent).toMatch(/mm · Şerit/);
     const [g] = istekler.gonderilenler;
     expect(g?.yol).toBe('/etiket-merkezi/sablonlar/deneme-50x25/bas');
     expect(g?.govde).toEqual({ yaziciId: 1, adet: 2 });
@@ -709,7 +716,7 @@ describe('EtiketMerkezi vektörel yazdırma', () => {
       expect(svg?.getAttribute('height')).toBe('25mm');
       expect(svg?.getAttribute('viewBox')).toBe('0 0 50 25');
       // QR kareleri yol olarak çizilir; görüntü ya da tuval yoktur.
-      expect(svg?.querySelector('path[aria-label="QR: LOT:LT-000123"]')?.getAttribute('d')).toMatch(/^M[\d.]+ [\d.]+h/);
+      expect(svg?.querySelector('path[aria-label="Kod: LOT:LT-000123"]')?.getAttribute('d')).toMatch(/^M[\d.]+ [\d.]+h/);
       expect(sayfa.querySelector('image, canvas, img')).toBeNull();
     }
     fireEvent(window, new Event('afterprint'));
@@ -1109,7 +1116,7 @@ describe('Etiket Merkezi yeni düzen (3025)', () => {
   it('3306 a (Test T3): açılan satırda türün ölçüsü seçilir ve bu cihazda kendiliğinden kaydedilir', async () => {
     const IKI_OLCU: SablonlarCevabi = {
       ...SABLONLAR,
-      sablonlar: [...SABLONLAR.sablonlar, { anahtar: 'malzeme-etiketi-100x50', ad: 'Malzeme etiketi 100x50', tur: 'lot', genislik: 100, yukseklik: 50, ogeler: [], tasarim: { genislik: 100, yukseklik: 50 }, degisiklik: null }],
+      sablonlar: [...SABLONLAR.sablonlar, { anahtar: 'malzeme-etiketi-100x50', ad: 'Malzeme etiketi 100x50', tur: 'lot', genislik: 100, yukseklik: 50, ogeler: [], tasarim: { genislik: 100, yukseklik: 50 }, degisiklik: null, yerlesim: 'serit', taban: 'malzeme-etiketi-100x50', varsayilan: false }],
     };
     cihazYazicisiKaydet('lot', ZEBRA_LOT);
     const IKI_AG: YazicilarCevabi = { ...YAZICILAR, yazicilar: [...YAZICILAR.yazicilar, { id: 3, ad: 'Zebra kabul', dil: 'zpl', dpi: 203, baglanti: 'ag', adres: '10.0.5.21', sade: false, aktif: true, surum: 1 }] };
@@ -1286,5 +1293,77 @@ describe('Standart dışı ölçü (3011)', () => {
     fireEvent.change(await yaziciAlani(), { target: { value: 'ag:1' } });
     fireEvent.click(await screen.findByRole('button', { name: 'Bas · 1 etiket' }));
     await waitFor(() => expect(istekler.gonderilenler.find((x) => x.yol.endsWith('/bas'))?.govde).toMatchObject({ yaziciId: 1, olcu: { genislik: 40, yukseklik: 20 } }));
+  });
+});
+
+describe('Yerleşim seçimi ve varsayılan (3544)', () => {
+  const OKUR: Islem[] = ['sayfa.etiket-merkezi', 'etiket-merkezi.oku', 'etiket-merkezi.bas'];
+  const ogeSablon = (anahtar: string, ad: string, g: number, y: number, yerlesim: 'serit' | 'tam' | 'buyuk', taban: string, ek: { uyari?: string; varsayilan?: boolean } = {}) =>
+    ({ anahtar, ad, tur: 'konum' as const, genislik: g, yukseklik: y, ogeler: [], tasarim: { genislik: g, yukseklik: y }, degisiklik: null, yerlesim, taban, varsayilan: ek.varsayilan ?? false, ...(ek.uyari ? { uyari: ek.uyari } : {}) });
+  const LISTE: SablonlarCevabi = {
+    ...SABLONLAR,
+    sablonlar: [
+      ogeSablon('konum-50x25', 'Yer 50x25', 50, 25, 'serit', 'konum-50x25', { varsayilan: true }),
+      ogeSablon('konum-50x25-buyuk', 'Yer 50x25 · Büyük kod + az yazı', 50, 25, 'buyuk', 'konum-50x25', { uyari: 'Satır düşer: YER' }),
+      ogeSablon('konum-100x50', 'Yer 100x50', 100, 50, 'serit', 'konum-100x50'),
+      ogeSablon('konum-100x50-tam', 'Yer 100x50 · Tam bilgi', 100, 50, 'tam', 'konum-100x50'),
+    ],
+  };
+  afterEach(() => { kodEksikOrnegi = null; localStorage.clear(); });
+
+  it('Z1: her yerleşim durum rozetiyle gelir; kırpılan "Satır düşer" der, sığmayan başka ölçüde sunulur diye pasif görünür', async () => {
+    sunucuKur({ islemler: OKUR, sablonlar: LISTE });
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11');
+    const grup = await screen.findByRole('group', { name: 'Yerleşim' });
+    expect(within(grup).getByRole('radio', { name: /^Şerit/ })).toHaveProperty('checked', true);
+    expect(within(grup).getByText('Satır düşer: YER')).toBeTruthy();
+    const tam = within(grup).getByRole('radio', { name: /^Tam bilgi/ }) as HTMLInputElement;
+    expect(tam.disabled).toBe(true);
+    expect(within(grup).getByText('Sunulmaz')).toBeTruthy();
+    expect(within(grup).getByText(/sığmaz; başka ölçüde sunulur/)).toBeTruthy();
+  });
+
+  it('Z2: kodda alan düşerse kırmızı bant veri kaybını adıyla söyler; düşmezse çıkmaz', async () => {
+    kodEksikOrnegi = 'YER KPY';
+    sunucuKur({ islemler: OKUR, sablonlar: LISTE });
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11');
+    expect(await screen.findByText('Kod alanı düşer')).toBeTruthy();
+    expect(screen.getByText(/veri kaybı\): YER KPY/)).toBeTruthy();
+  });
+
+  it('Z3: ölçü değişince yerleşim yoksa Şerit seçilir ve bu bir durum satırıyla söylenir', async () => {
+    sunucuKur({ islemler: OKUR, sablonlar: LISTE });
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11');
+    fireEvent.click(await screen.findByRole('radio', { name: '100x50 mm' }));
+    const tam = (await screen.findByRole('radio', { name: /^Tam bilgi/ })) as HTMLInputElement;
+    fireEvent.click(tam);
+    expect(tam.checked).toBe(true);
+    fireEvent.click(screen.getByRole('radio', { name: '50x25 mm' }));
+    expect(await screen.findByText(/Tam bilgi 50x25 mm etikette yok; Şerit seçildi/)).toBeTruthy();
+    expect((screen.getByRole('radio', { name: /^Şerit/ }) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it('Z5: türün varsayılanı cihazdaki eski eşlemeden önce gelir', async () => {
+    cihazYazicisiKaydet('konum', { yaziciId: 1, yaziciAd: 'Zebra depo', sablonAnahtar: 'konum-100x50', sablonAd: 'Yer 100x50', baglanti: 'ag' });
+    sunucuKur({ islemler: OKUR, sablonlar: LISTE });
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11');
+    expect(((await screen.findByRole('radio', { name: /^Şerit/ })) as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByRole('radio', { name: '50x25 mm' }).getAttribute('aria-checked')).toBe('true');
+  });
+  it('Z7 (3): varsayılan olan yerleşim baskı ekranını o şablonla açar; Varsayılan rozeti oradadır', async () => {
+    const YENI: SablonlarCevabi = { ...LISTE, sablonlar: LISTE.sablonlar.map((x) => ({ ...x, varsayilan: x.anahtar === 'konum-50x25-buyuk' || x.anahtar === 'konum-100x50' })) };
+    sunucuKur({ islemler: OKUR, sablonlar: YENI });
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11');
+    const buyuk = (await screen.findByRole('radio', { name: /^Büyük kod/ })) as HTMLInputElement;
+    expect(buyuk.checked).toBe(true);
+    expect(within(buyuk.closest('label')!).getByText('Varsayılan')).toBeTruthy();
+  });
+  it('R1: cihaz 100x50 eşlemişse 50x25 için başka yerleşim varsayılan olsa da 100x50 (kendi varsayılanı) açılır', async () => {
+    const YALNIZ_KUCUK: SablonlarCevabi = { ...LISTE, sablonlar: LISTE.sablonlar.map((x) => ({ ...x, varsayilan: x.anahtar === 'konum-50x25-buyuk' || x.anahtar === 'konum-100x50' })) };
+    cihazYazicisiKaydet('konum', { yaziciId: 1, yaziciAd: 'Zebra depo', sablonAnahtar: 'konum-100x50', sablonAd: 'Yer 100x50', baglanti: 'ag' });
+    sunucuKur({ islemler: OKUR, sablonlar: YALNIZ_KUCUK });
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11');
+    expect((await screen.findByRole('radio', { name: '100x50 mm' })).getAttribute('aria-checked')).toBe('true');
+    expect((screen.getByRole('radio', { name: /^Şerit/ }) as HTMLInputElement).checked).toBe(true);
   });
 });

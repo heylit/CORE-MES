@@ -20,11 +20,11 @@ import { emirNolari, hataliKaydi, hataliKayitlari, refakatKarti, uretimEmriOzeti
 import { yaziciAgiOku } from './ag.ts';
 import { tcpGonder, type Gonderici } from './gonderici.ts';
 import {
-  BEKLEYEN_GUN, baskiEngeli, enKucukOlcu, okunurluk, olcekle, bekleyenBaslangici, bekleyenSirasi, dogrudanBaskiDurumu, hataliBekleyenleri, kaliteBekleyenleri, malKabulBekleyenleri, refakatBekleyenleri, hataliParcaDegerleri, kaliteDurumDegerleri, koliHatasi, kopyaDegerleri, olculuAd, olcusuDegisirMi, sevkKoliDegerleri, indirmeEngeli, istasyonDegerleri, kayitSablonTuru, kayitUyumHatasi, konumDegerleri, lotDegerleri, malzemeDegerleri, malzemeEtiketiDegerleri, rafDegerleri, refakatPartisiDegerleri, sablonHatalari, toplamEtiketHatasi, yaziciAdresHatasi, yerlesim, type AlanDegerleri, type MalzemeGirisOzeti,
+  BEKLEYEN_GUN, kodHazirla, baskiEngeli, enKucukOlcu, okunurluk, olcekle, bekleyenBaslangici, bekleyenSirasi, dogrudanBaskiDurumu, hataliBekleyenleri, kaliteBekleyenleri, malKabulBekleyenleri, refakatBekleyenleri, hataliParcaDegerleri, kaliteDurumDegerleri, koliHatasi, kopyaDegerleri, olculuAd, olcusuDegisirMi, sevkKoliDegerleri, indirmeEngeli, istasyonDegerleri, kayitSablonTuru, kayitUyumHatasi, konumDegerleri, lotDegerleri, malzemeDegerleri, malzemeEtiketiDegerleri, rafDegerleri, refakatPartisiDegerleri, sablonHatalari, toplamEtiketHatasi, yaziciAdresHatasi, yerlesim, type AlanDegerleri, type MalzemeGirisOzeti,
 } from './kurallar.ts';
 import { ALANLAR, HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
 import {
-  atlamaEkle, baskiEkle, etiketTurleriOku, sablonOlculeriOku, sablonOlcusuEkle, sonAtlamalar, sonBaskilar, sonBasimlar, yaziciEkle, yaziciGuncelle, yaziciOku, yaziciVarMi, yazicilariOku, type YaziciYazimi,
+  atlamaEkle, baskiEkle, varsayilanSablonEkle, varsayilanSablonlariOku, etiketTurleriOku, sablonOlculeriOku, sablonOlcusuEkle, sonAtlamalar, sonBaskilar, sonBasimlar, yaziciEkle, yaziciGuncelle, yaziciOku, yaziciVarMi, yazicilariOku, type YaziciYazimi,
 } from './sorgular.ts';
 import { KOMUT_URETICILERI, pplbDenemesi, zplDenemesi } from './yazici-dili.ts';
 
@@ -46,15 +46,34 @@ async function etkinSecenek<T extends { olcu?: OzelOlcu }>(db: Db, sablon: Sablo
 async function sablonListesi(db: Db, anahtar?: string): Promise<SablonListesiOgesi[]> {
   const olculer = await etkinOlculer(db, anahtar);
   const adlar = await kisiAdlari(db, [...olculer.values()].map((o) => o.kisiId));
+  const varsayilanlar = await varsayilanSablonlariOku(db);
   return HAZIR_SABLONLAR.filter((s) => anahtar === undefined || s.anahtar === anahtar).map((s) => {
     const kayit = olculer.get(s.anahtar);
     const tasarim = { genislik: s.genislik, yukseklik: s.yukseklik };
     const etkin = kayit?.olcu ?? tasarim;
     return {
       ...s, ...etkin, ad: kayit?.olcu ? olculuAd(s.ad, tasarim, etkin) : s.ad, tasarim,
+      yerlesim: s.yerlesim ?? 'serit', taban: s.taban ?? s.anahtar, varsayilan: etkinVarsayilan(s.taban ?? s.anahtar, varsayilanlar) === s.anahtar,
       degisiklik: kayit ? { kisi: adlar.get(kayit.kisiId) ?? null, zaman: kayit.zaman } : null,
     };
   });
+}
+
+// Tür ve boyun (taban) varsayılanı: kayıtlı anahtar hâlâ o tabanın yerleşimiyse o, yoksa şeridin kendisi.
+function etkinVarsayilan(taban: string, kayitlar: ReadonlyMap<string, string>): string {
+  const kayitli = kayitlar.get(taban);
+  if (kayitli !== undefined && HAZIR_SABLONLAR.some((s) => s.anahtar === kayitli && (s.taban ?? s.anahtar) === taban)) return kayitli;
+  return taban;
+}
+
+// 3544: Etiket Merkezi > Şablonlar > Varsayılan yap. Yazıcı denemesinin yerleşimi yoktur. Sablon yazma işlemi (sablon-yaz) gerekir.
+export async function varsayilanYap(db: Db, kullanici: Kullanici, anahtar: string): Promise<SablonListesiOgesi> {
+  const sablon = sablonBul(anahtar);
+  if (sablon.tur === 'deneme') throw dogrulama('Yazıcı denemesinin varsayılan yerleşimi olmaz.');
+  await varsayilanSablonEkle(db, sablon.taban ?? sablon.anahtar, anahtar, kullanici.id);
+  const [oge] = await sablonListesi(db, anahtar);
+  if (!oge) throw new Error('Şablon okunamadı.');
+  return oge;
 }
 
 export const sablonlar = async (db: Db): Promise<SablonlarCevabi> => ({
@@ -77,7 +96,7 @@ export async function sablonOlcusuYaz(db: Db, kullanici: Kullanici, anahtar: str
   if (yeni !== null) {
     const olcekli = olcekliSablon(sablon, yeni);
     const degerler = ORNEK_DEGERLER[sablon.tur];
-    if (olcekli !== null) ozelOlcuBilgisiUret(sablon, olcekli, [yerlesim(olcekli.sablon, degerler, false)], degerler);
+    if (olcekli !== null) ozelOlcuBilgisiUret(sablon, olcekli, [yerlesim(olcekli.sablon, degerler, false, sablon)], degerler);
   }
   await sablonOlcusuEkle(db, anahtar, yeni, kullanici.id);
   const [oge] = await sablonListesi(db, anahtar);
@@ -119,7 +138,7 @@ function cikti(tasarim: Sablon, degerlerListesi: readonly AlanDegerleri[], secen
   const uret = KOMUT_URETICILERI[secenek.dil];
   const olcekli = olcekliSablon(tasarim, secenek.olcu);
   const sablon = olcekli?.sablon ?? tasarim;
-  const yerlesimler = degerlerListesi.map((d) => yerlesim(sablon, d, secenek.sade));
+  const yerlesimler = degerlerListesi.map((d) => yerlesim(sablon, d, secenek.sade, tasarim));
   const ozelOlcu = olcekli === null ? null : ozelOlcuBilgisiUret(tasarim, olcekli, yerlesimler, degerlerListesi[0] ?? {});
   const komut = yerlesimler
     .map((ogeler) => uret({ genislik: sablon.genislik, yukseklik: sablon.yukseklik, ogeler, dpi: secenek.dpi, adet: secenek.adet }))
@@ -130,6 +149,7 @@ function cikti(tasarim: Sablon, degerlerListesi: readonly AlanDegerleri[], secen
     dil: secenek.dil, dpi: secenek.dpi, adet: secenek.adet,
     dosyaAdi: `${sablon.anahtar}${olcuEki}-${secenek.dpi}.${DOSYA_UZANTILARI[secenek.dil]}`,
     komut, onizleme: yerlesimler[0] ?? [], ozelOlcu,
+    kodEksik: degerlerListesi[0] === undefined ? null : kodHazirla(tasarim.tur, tasarim, degerlerListesi[0])['kodEksik'] ?? null,
   };
 }
 
@@ -162,14 +182,14 @@ const tekli = (m: Map<number, KayitDegeri>): Map<number, KayitDegeri[]> => new M
 async function kaynaktanOku(db: Db, k: KayitSecimi, anahtar: string): Promise<Map<number, KayitDegeri[]>> {
   if (k.tur === 'konum') {
     const kodlar = await konumAdlari(db, k.idler);
-    return tekli(new Map([...kodlar].map(([id, kod]) => [id, { id, baslik: kod, degerler: konumDegerleri(kod) }])));
+    return tekli(new Map([...kodlar].map(([id, kod]) => [id, { id, baslik: kod, degerler: konumDegerleri(kod, new Date()) }])));
   }
   if (k.tur === 'raf') return tekli(await rafKayitlari(db, k.idler));
   if (k.tur === 'istasyon') {
     // Konumu açılmamış istasyonun teslim kodu yoktur; boş QR basılmaz, eksik sayılır.
     const konumlar = await istasyonKonumlari(db, k.idler);
     const adlar = await istasyonAdlari(db, [...konumlar.keys()]);
-    return tekli(new Map([...konumlar].map(([id, { kod }]) => [id, { id, baslik: kod, degerler: istasyonDegerleri(kod, adlar.get(id) ?? null) }])));
+    return tekli(new Map([...konumlar].map(([id, { kod }]) => [id, { id, baslik: kod, degerler: istasyonDegerleri(kod, adlar.get(id) ?? null, new Date()) }])));
   }
   if (k.tur === 'kalite-durum') {
     // Kimlik bakiye satırıdır; boş, lotsuz ya da olmayan satır eksik sayılır. Deftere de bakiye satırı yazılır.
@@ -177,7 +197,7 @@ async function kaynaktanOku(db: Db, k: KayitSecimi, anahtar: string): Promise<Ma
     const satirlar = await malzemeEtiketiDegerleriOku(db, { bakiyeIdler: k.idler });
     return tekli(new Map(satirlar.flatMap(({ e, degerler }) => (e.bakiyeId === null || e.konumKod === null || e.miktar === null || e.kaliteDurumu === null ? [] : [[e.bakiyeId, {
       id: e.bakiyeId, baslik: `${e.lotNo} ${e.konumKod}`,
-      degerler: { ...kaliteDurumDegerleri({ ...e, konumKod: e.konumKod, miktar: e.miktar, kaliteDurumu: e.kaliteDurumu }), ...degerler },
+      degerler: { ...kaliteDurumDegerleri({ ...e, konumKod: e.konumKod, miktar: e.miktar, kaliteDurumu: e.kaliteDurumu }, new Date()), ...degerler },
     }] as const]))));
   }
   if (k.tur === 'sevk-koli') {
@@ -192,13 +212,13 @@ async function kaynaktanOku(db: Db, k: KayitSecimi, anahtar: string): Promise<Ma
       const m = x.malzemeNo === null ? null : malzemeler.get(x.malzemeNo) ?? null;
       const baslik = [x.firmaAdi, emirNo ?? x.belgeNo].filter(Boolean).join(' ') || `Kalem ${x.kalemId}`;
       return [x.kalemId, Array.from({ length: toplam }, (_, i) => ({
-        id: x.kalemId, baslik, degerler: sevkKoliDegerleri(x, emirNo, m, i + 1, toplam, k.koli?.ici ?? null),
+        id: x.kalemId, baslik, degerler: sevkKoliDegerleri(x, emirNo, m, i + 1, toplam, k.koli?.ici ?? null, new Date()),
       }))];
     }));
   }
   if (k.tur === 'malzeme') {
     const ozetler = await malzemeOzetleri(db, k.idler);
-    return tekli(new Map([...ozetler].map(([id, o]) => [id, { id, baslik: o.kod, degerler: malzemeDegerleri(o) }])));
+    return tekli(new Map([...ozetler].map(([id, o]) => [id, { id, baslik: o.kod, degerler: malzemeDegerleri(o, new Date()) }])));
   }
   // Lot, mal kabul ve refakat kartı tek kayıt okur; sorgular sırayla gider (aynı istemciye eşzamanlı sorgu verilmez).
   const sonuc = new Map<number, KayitDegeri[]>();
@@ -218,7 +238,7 @@ async function kaynaktanOku(db: Db, k: KayitSecimi, anahtar: string): Promise<Ma
     // Başlık parçanın emri ve işlemidir; deftere hatalı kaydın kimliği yazılır.
     for (const id of k.idler) {
       const h = await hataliKaydi(db, id);
-      if (h) sonuc.set(id, [{ id, baslik: `${h.uretimEmri.emirNo} OP ${h.isEmri.opNo}`, degerler: hataliParcaDegerleri(h) }]);
+      if (h) sonuc.set(id, [{ id, baslik: `${h.uretimEmri.emirNo} OP ${h.isEmri.opNo}`, degerler: hataliParcaDegerleri(h, new Date()) }]);
     }
     return sonuc;
   }
@@ -233,7 +253,7 @@ async function kaynaktanOku(db: Db, k: KayitSecimi, anahtar: string): Promise<Ma
       continue;
     }
     const lotlar = await lotEtiketleri(db, a);
-    sonuc.set(id, lotlar.map((e) => ({ id: e.partiId, baslik: e.lotNo, degerler: lotDegerleri(e) })));
+    sonuc.set(id, lotlar.map((e) => ({ id: e.partiId, baslik: e.lotNo, degerler: lotDegerleri(e, new Date()) })));
   }
   return sonuc;
 }
@@ -292,7 +312,7 @@ async function rafKayitlari(db: Db, idler: readonly number[]): Promise<Map<numbe
   const secili = await kullanimdakiRaflar(db, new Set(idler));
   return new Map(secili.map((r) => {
     const o = r.olcu;
-    return [r.id, { id: r.id, baslik: r.kod, degerler: rafDegerleri({ kod: r.kod, ad: r.ad, salonKodu: o?.salonKodu ?? null, bolmeSayisi: o?.bolme ?? 0, katSayisi: o?.kat ?? 0 }) }];
+    return [r.id, { id: r.id, baslik: r.kod, degerler: rafDegerleri({ kod: r.kod, ad: r.ad, salonKodu: o?.salonKodu ?? null, bolmeSayisi: o?.bolme ?? 0, katSayisi: o?.kat ?? 0 }, new Date()) }];
   }));
 }
 
@@ -421,7 +441,7 @@ export async function yazdir(db: Db, kullanici: Kullanici, anahtar: string, iste
   // Okunurluk deftere yazmadan önce denetlenir: okunmayacak ölçüde yazdırma penceresi açılmaz.
   const olcekli = olcekliSablon(sablon, g.olcu);
   const basilan = olcekli?.sablon ?? sablon;
-  const sayfalar = degerler.map((d) => yerlesim(basilan, d, false));
+  const sayfalar = degerler.map((d) => yerlesim(basilan, d, false, sablon));
   if (olcekli !== null) ozelOlcuBilgisiUret(sablon, olcekli, sayfalar, degerler[0] ?? {});
   const baskiId = await baskiEkle(db, {
     yaziciId: null, sablonAnahtar: anahtar, adet: g.adet, kisiId: kullanici.id, sonuc: 'yazdirildi', hata: null, kayit: basilanKayitlar(g, { kayitlar }),

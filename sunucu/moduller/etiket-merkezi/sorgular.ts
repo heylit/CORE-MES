@@ -133,3 +133,15 @@ export async function sablonOlcusuEkle(db: Db, anahtar: string, olcu: { genislik
     [anahtar, olcu?.genislik ?? null, olcu?.yukseklik ?? null, kisiId],
   );
 }
+
+// Tür ve boyun (taban) varsayılan yerleşimi (3544, 3561 b): tabanın en son satırı etkindir.
+export const varsayilanSablonlariOku = async (db: Db): Promise<Map<string, string>> => {
+  const satirlar = await db.sorgu<{ tur: string; anahtar: string }>(
+    'SELECT DISTINCT ON (sablon_taban) sablon_taban AS tur, sablon_anahtar AS anahtar FROM etiket_merkezi_varsayilan_sablon ORDER BY sablon_taban, id DESC',
+  );
+  return new Map(satirlar.map((s) => [s.tur, s.anahtar]));
+};
+
+export async function varsayilanSablonEkle(db: Db, taban: string, anahtar: string, kisiId: number): Promise<void> {
+  await db.sorgu('INSERT INTO etiket_merkezi_varsayilan_sablon (sablon_taban, sablon_anahtar, kisi_id) VALUES ($1, $2, $3)', [taban, anahtar, kisiId]);
+}

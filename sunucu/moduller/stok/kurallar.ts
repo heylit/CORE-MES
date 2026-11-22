@@ -1,6 +1,7 @@
 // Stok iş kuralları: saf fonksiyon ve sabitler; veritabanı ve saat yok. Kural numaraları ON-PAKET-stok (DEP-).
 import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
 import { ACIK_EMIR_DURUMLARI, type KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { cm1Coz, kimlikKodu } from '#paylasilan/etiket-kodu.ts';
 import { kodTuru, okutmaDuzelt } from '#paylasilan/kod-sozlugu.ts';
 import { ELLE_KONUM_TURLERI, EMIR_FIS_KARTLARI, HAREKET_YAZANLARI, type EmirFisKarti, type EmirFisKartiCevabi, type HareketYazani, type FisGonderimSekli, type LogoFisDurumu, type MalzemeFisiTuru, type KaliteDurumu, type KoduDegisenKonum, type KonumTuru, type MalzemeIstegiDurumu, type TeslimDurumu } from '#paylasilan/sozlesme/stok.ts';
 import { FABRIKA_GENELI_ALAN_TURLERI, HARITA_ALAN_TURLERI, type HaritaAlanTuru } from '#paylasilan/sozlesme/stok-harita-sabitleri.ts';
@@ -1674,6 +1675,8 @@ export function eksikGirdiEngeli(g: { ilkAdim: boolean; kod: string; eksik: bigi
 // tanınmayan kod sayılmaz (adet boş). Komut barkodu listeye girmez: ekrandaki düğmedir.
 export interface SeriEklemesi { sonAdet: string | null; yeni: { kod: string; adet: string | null }[]; atlanan: number }
 const sayilanMi = (kod: string): boolean => { const t = kodTuru(kod).tur; return t === 'lot' || t === 'malzeme'; };
+// Özet kod (CM1) aynı lotta farklı yazılabilir (yeniden basımın basım tarihi, düşen alanlar): satır birleşmesi ilk alan olan kimliğe bakar (3542 dilim 2, Risk B1).
+const kodKimligi = (kod: string): string => { const o = cm1Coz(kod); return o === null ? kod : kimlikKodu(o); };
 export function seriEklemeleri(son: { kod: string; adet: string | null } | null, kodlar: readonly string[]): SeriEklemesi {
   const eski = son ? { ...son } : null;
   let sonAdet: string | null = null;
@@ -1684,7 +1687,7 @@ export function seriEklemeleri(son: { kod: string; adet: string | null } | null,
     if (kod === '' || kodTuru(kod).tur === 'komut') { atlanan += 1; continue; }
     const onceki = yeni.at(-1) ?? eski;
     const sayilir = sayilanMi(kod);
-    if (sayilir && onceki && onceki.kod === kod && onceki.adet !== null) {
+    if (sayilir && onceki && kodKimligi(onceki.kod) === kodKimligi(kod) && onceki.adet !== null) {
       onceki.adet = bindenMetin(binde(onceki.adet) + 1000n);
       if (onceki === eski) sonAdet = onceki.adet;
       continue;

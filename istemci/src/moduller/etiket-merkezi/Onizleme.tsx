@@ -1,11 +1,11 @@
 import { useId } from 'react';
 import { KUTU, simgeCizimi, type KaroTuru, type PiktogramAdi, type Sekil } from '#paylasilan/etiket-piktogramlari.ts';
-import type { CiktiCevabi, OnizlemeOgesi, QR_KENAR_MODUL as QrKenar, SATIR_ARALIGI as SatirAraligi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
+import type { CiktiCevabi, OnizlemeOgesi, KOD_KENAR_MODUL as QrKenar, SATIR_ARALIGI as SatirAraligi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { mmOzniteligi } from './gercek-boyut.ts';
 
 // Sözleşmeden değer ithal edilmez; değer değişirse tip uyuşmaz ve derleme durur.
 const SATIR_ARALIGI: typeof SatirAraligi = 1.2;
-const QR_KENAR_MODUL: typeof QrKenar = 2;
+const KOD_KENAR_MODUL: typeof QrKenar = 2;
 
 const noktalar = (n: readonly (readonly [number, number])[]): string => n.map(([x, y]) => `${x},${y}`).join(' ');
 
@@ -53,12 +53,12 @@ function Oge({ o }: { o: OnizlemeOgesi }) {
       ? <rect className="tc-etk-dolu" x={o.x} y={o.y} width={Math.max(o.genislik, t)} height={Math.max(o.yukseklik, t)} />
       : <rect className="tc-etk-cizgi" x={o.x + t / 2} y={o.y + t / 2} width={o.genislik - t} height={o.yukseklik - t} strokeWidth={t} />;
   }
-  if (o.tur === 'qr') {
+  if (o.tur === 'kod') {
     const n = o.kareler.length;
-    const m = o.boyut / (n + 2 * QR_KENAR_MODUL);
+    const m = o.boyut / (n + 2 * KOD_KENAR_MODUL);
     let d = '';
-    o.kareler.forEach((satir, y) => satir.forEach((koyu, x) => { if (koyu) d += `M${o.x + (x + QR_KENAR_MODUL) * m} ${o.y + (y + QR_KENAR_MODUL) * m}h${m}v${m}h${-m}z`; }));
-    return <path className="tc-etk-dolu" d={d} shapeRendering="crispEdges" aria-label={`QR: ${o.veri}`} />;
+    o.kareler.forEach((satir, y) => satir.forEach((koyu, x) => { if (koyu) d += `M${o.x + (x + KOD_KENAR_MODUL) * m} ${o.y + (y + KOD_KENAR_MODUL) * m}h${m}v${m}h${-m}z`; }));
+    return <path className="tc-etk-dolu" d={d} shapeRendering="crispEdges" aria-label={`${o.simge === 'qr' ? 'QR' : 'Kod'}: ${o.veri}`} />;
   }
   if (o.tur === 'simge') return <Simge ad={o.ad} karo={o.karo} x={o.x} y={o.y} boyut={o.boyut} />;
   const sinif = ['tc-etk-yazi', o.kalin && 'tc-etk-kalin', o.ters === true && 'tc-etk-ters'].filter(Boolean).join(' ');

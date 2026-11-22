@@ -1,3 +1,4 @@
+import { YERLESIMLER, YERLESIM_ADLARI, type Yerlesim } from '../etiket-sabitleri.ts';
 import { z } from 'zod';
 import { KARO_TURLERI, PIKTOGRAM_ADLARI } from '../etiket-piktogramlari.ts';
 import { OZEL_OLCU_SINIRI } from '../etiket-sabitleri.ts';
@@ -42,9 +43,9 @@ export const kayitSecimiSemasi = z.object({
 });
 export type KayitSecimi = z.infer<typeof kayitSecimiSemasi>;
 
-// Yerleşimin iki tarafta aynı olması gereken ölçüleri: satır aralığı yazı yüksekliğine oran, QR kenar boşluğu modül sayısı.
+// Yerleşimin iki tarafta aynı olması gereken ölçüleri: satır aralığı yazı yüksekliğine oran, kod kenar boşluğu modül sayısı.
 export const SATIR_ARALIGI = 1.2 as const;
-export const QR_KENAR_MODUL = 2 as const;
+export const KOD_KENAR_MODUL = 2 as const;
 
 // Ölçüler milimetredir; yazıcı noktasına sunucu çevirir.
 // kosul: verilirse öğe yalnız o alanın değeri varken basılır (alan başlığı değeri olmayan satırda kalmaz; red çerçevesi yalnız redde).
@@ -55,12 +56,18 @@ const metinOgesi = z.object({
   tur: z.literal('metin'), x: mm, y: mm, genislik: mm, yukseklik: mm,
   yaziMm: z.number().positive(), kalin: z.boolean(), alan: z.string(), ters: z.boolean().optional(), kosul,
 });
-const qrOgesi = z.object({ tur: z.literal('qr'), x: mm, y: mm, boyut: mm, alan: z.string() });
+// Kod simgesi varsayılan DataMatrix'tir; QR yalnız açıkça istenirse (yazıcı denemesi) çizilir.
+export const KOD_SIMGELERI = ['dm', 'qr'] as const;
+export type KodSimgesi = (typeof KOD_SIMGELERI)[number];
+const kodOgesi = z.object({ tur: z.literal('kod'), x: mm, y: mm, boyut: mm, alan: z.string(), simge: z.enum(KOD_SIMGELERI).optional() });
 const kutuOgesi = z.object({ tur: z.literal('kutu'), x: mm, y: mm, genislik: mm, yukseklik: mm, kalinlik: mm, kosul });
 const simgeOgesi = z.object({ tur: z.literal('simge'), x: mm, y: mm, boyut: mm, alan: z.string(), kosul });
-export const sablonOgesiSemasi = z.discriminatedUnion('tur', [metinOgesi, qrOgesi, kutuOgesi, simgeOgesi]);
+export const sablonOgesiSemasi = z.discriminatedUnion('tur', [metinOgesi, kodOgesi, kutuOgesi, simgeOgesi]);
 export type SablonOgesi = z.infer<typeof sablonOgesiSemasi>;
 
+// KURGU 3.8: bir etiket türünün birden çok yerleşimi olur. Şerit hazır şablonun kendisidir (anahtarı değişmez); öteki yerleşimler
+// `<şerit anahtarı>-<yerleşim>` anahtarıyla gelir. Kodun içeriği hepsinde aynıdır, yalnız basılı yazı ve kodun yeri değişir.
+export { YERLESIMLER, YERLESIM_ADLARI, type Yerlesim };
 export const sablonSemasi = z.object({
   anahtar: z.string(),
   ad: z.string(),
@@ -68,12 +75,20 @@ export const sablonSemasi = z.object({
   genislik: mm,
   yukseklik: mm,
   ogeler: z.array(sablonOgesiSemasi),
+  // Yoksa şeritdir. `taban` aynı tasarımın şerit anahtarıdır (yerleşim seçicisi bununla gruplar); `uyari` bu yerleşimde yazıdan düşen satırları söyler.
+  yerlesim: z.enum(YERLESIMLER).optional(),
+  taban: z.string().optional(),
+  uyari: z.string().optional(),
 });
 export type Sablon = z.infer<typeof sablonSemasi>;
 
 // 3306 a: listede genislik ve yukseklik etkin (varsayılan) ölçüdür, ad da o ölçüyü yazar; tasarım kodun ölçüsüdür. Değişmemiş
 // şablonda ikisi aynıdır ve degisiklik null'dır.
 export const sablonListesiOgesi = sablonSemasi.extend({
+  yerlesim: z.enum(YERLESIMLER),
+  taban: z.string(),
+  // Etiket türünün varsayılan yerleşimi bu şablonsa true (Etiket Merkezi > Şablonlar > Varsayılan yap; yoksa şerit).
+  varsayilan: z.boolean(),
   tasarim: z.object({ genislik: mm, yukseklik: mm }),
   degisiklik: z.object({ kisi: z.string().nullable(), zaman: z.string() }).nullable(),
 });
@@ -153,10 +168,10 @@ export const raflarCevabi = z.object({
 });
 export type RaflarCevabi = z.infer<typeof raflarCevabi>;
 
-// Önizleme, yazıcıya gidenle aynı yerleşimden çıkar: metin satırlara bölünmüş, QR kare matrisiyle gelir.
+// Önizleme, yazıcıya gidenle aynı yerleşimden çıkar: metin satırlara bölünmüş, kod kare matrisiyle gelir.
 export const onizlemeOgesiSemasi = z.discriminatedUnion('tur', [
   z.object({ tur: z.literal('metin'), x: mm, y: mm, genislik: mm, yaziMm: z.number(), kalin: z.boolean(), satirlar: z.array(z.string()), ters: z.boolean().optional() }),
-  z.object({ tur: z.literal('qr'), x: mm, y: mm, boyut: mm, veri: z.string(), kareler: z.array(z.array(z.boolean())) }),
+  z.object({ tur: z.literal('kod'), x: mm, y: mm, boyut: mm, veri: z.string(), simge: z.enum(KOD_SIMGELERI), kareler: z.array(z.array(z.boolean())) }),
   z.object({ tur: z.literal('kutu'), x: mm, y: mm, genislik: mm, yukseklik: mm, kalinlik: mm }),
   z.object({ tur: z.literal('simge'), x: mm, y: mm, boyut: mm, ad: z.enum(PIKTOGRAM_ADLARI), karo: z.enum(KARO_TURLERI) }),
 ]);
@@ -180,6 +195,8 @@ export const ciktiCevabi = z.object({
   komut: z.string(),
   onizleme: z.array(onizlemeOgesiSemasi),
   ozelOlcu: ozelOlcuBilgisi.nullable(),
+  // İlk etiketin kodunda boyuna sığmadığı için yazılamayan alanlar ("YER KPY"); veri kaybıdır, basım ekranı kırmızı bantla söyler. Yoksa null.
+  kodEksik: z.string().nullable().optional(),
 });
 export type CiktiCevabi = z.infer<typeof ciktiCevabi>;
 

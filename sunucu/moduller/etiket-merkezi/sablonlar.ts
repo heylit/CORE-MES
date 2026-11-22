@@ -1,5 +1,7 @@
 import { KOD_ONEKI } from '#paylasilan/kod-sozlugu.ts';
 import type { Sablon, SablonTuru } from '#paylasilan/sozlesme/etiket-merkezi.ts';
+import { cm1Yaz } from './kod-yaz.ts';
+import { yerlesimleriUret } from './yerlesimler.ts';
 import { REFAKAT_ADIM_SAYISI, SATIR_BASI, refakatAdimlari, type AlanDegerleri } from './kurallar.ts';
 
 // Hazır şablonlar kodda durur: kullanıcı şablonu gelince bunlar kopyalanıp değiştirilecek. Ölçüler mm.
@@ -7,12 +9,16 @@ import { REFAKAT_ADIM_SAYISI, SATIR_BASI, refakatAdimlari, type AlanDegerleri } 
 // Alan "=" ile başlarsa sabit metindir. Konum kodu 20 karaktere kadar kesilmeden sığar (stok_konum_kod_bicimi, EM-13). Raf etiketi Fabrika Haritası rafından (#116). Bugünkü baskılarla aynı içerik: konum ve malzeme (stok/Etiketler.tsx),
 // lot (stok/LotEtiketi.tsx), refakat kartı (stok/RefakatKarti.tsx).
 
-export const ALANLAR: Record<SablonTuru, { anahtar: string; ad: string }[]> = {
-  konum: [{ anahtar: 'qr', ad: 'QR (LOC)' }, { anahtar: 'kod', ad: 'Konum kodu' }, { anahtar: 'ad', ad: 'Konum adı' }, { anahtar: 'yer', ad: 'Salon ve kutu türü' }],
-  raf: [{ anahtar: 'qr', ad: 'QR (RAF)' }, { anahtar: 'kod', ad: 'Raf kodu' }, { anahtar: 'ad', ad: 'Raf adı' }, { anahtar: 'yer', ad: 'Bölüm, bölme ve kat' }],
-  malzeme: [{ anahtar: 'qr', ad: 'QR (MLZ)' }, { anahtar: 'ad', ad: 'Malzeme adı' }, { anahtar: 'kod', ad: 'Stok kodu' }, { anahtar: 'kart', ad: 'Kart no' }],
+const KOD_ALANLARI = [
+  { anahtar: 'kodBaslik', ad: 'Kod başlığı (tür ve etiketi tanıtan değer)' }, { anahtar: 'kodBilgi', ad: 'Kod bilgi yazısı (tür, alanlar, basım)' },
+  { anahtar: 'kodBilgiKisa', ad: 'Kod bilgi yazısı, kısa (tür ve basım)' },
+];
+const ALANLAR_TEMEL: Record<SablonTuru, { anahtar: string; ad: string }[]> = {
+  konum: [{ anahtar: 'qr', ad: 'Kod (LOC)' }, { anahtar: 'kod', ad: 'Konum kodu' }, { anahtar: 'ad', ad: 'Konum adı' }, { anahtar: 'yer', ad: 'Salon ve kutu türü' }],
+  raf: [{ anahtar: 'qr', ad: 'Kod (RAF)' }, { anahtar: 'kod', ad: 'Raf kodu' }, { anahtar: 'ad', ad: 'Raf adı' }, { anahtar: 'yer', ad: 'Bölüm, bölme ve kat' }],
+  malzeme: [{ anahtar: 'qr', ad: 'Kod (MLZ)' }, { anahtar: 'ad', ad: 'Malzeme adı' }, { anahtar: 'kod', ad: 'Stok kodu' }, { anahtar: 'kart', ad: 'Kart no' }],
   lot: [
-    { anahtar: 'qr', ad: 'QR (LOT)' }, { anahtar: 'lotNo', ad: 'Lot no' }, { anahtar: 'malzeme', ad: 'Malzeme' }, { anahtar: 'kart', ad: 'Kart ve tür' },
+    { anahtar: 'qr', ad: 'Kod (LOT)' }, { anahtar: 'lotNo', ad: 'Lot no' }, { anahtar: 'malzeme', ad: 'Malzeme' }, { anahtar: 'kart', ad: 'Kart ve tür' },
     { anahtar: 'parti', ad: 'Parti, döküm, sertifika' }, { anahtar: 'giris', ad: 'Giriş, miktar, belge' },
     { anahtar: 'durumBant', ad: 'Durum (Mal kabul, Serbest, Hatalı, Şartlı kabul, Red)' }, { anahtar: 'durumAlt', ad: 'Durum açıklaması' }, { anahtar: 'bantSimge', ad: 'Durum piktogramı' },
     { anahtar: 'bakiye', ad: 'Bu etiketin miktarı ve konumu' }, { anahtar: 'basimZamani', ad: 'Basım zamanı' }, { anahtar: 'tur', ad: 'Malzeme türü' },
@@ -20,15 +26,15 @@ export const ALANLAR: Record<SablonTuru, { anahtar: string; ad: string }[]> = {
     { anahtar: 'tedarikci', ad: 'Tedarikçi' }, { anahtar: 'sertifika', ad: 'Sertifika, döküm, parti' }, { anahtar: 'girisSatiri', ad: 'Giriş, miktar, mal kabul' }, { anahtar: 'gkk', ad: 'GKK no ve sonucu' },
   ],
   refakat: [
-    { anahtar: 'qr', ad: 'QR (UE ya da RP)' }, { anahtar: 'emirNo', ad: 'Emir no' }, { anahtar: 'urunAd', ad: 'Ürün adı' }, { anahtar: 'urunKod', ad: 'Parça no' }, { anahtar: 'revizyon', ad: 'Revizyon kodu (Rev …)' },
+    { anahtar: 'qr', ad: 'Kod (UE ya da RP)' }, { anahtar: 'emirNo', ad: 'Emir no' }, { anahtar: 'urunAd', ad: 'Ürün adı' }, { anahtar: 'urunKod', ad: 'Parça no' }, { anahtar: 'revizyon', ad: 'Revizyon kodu (Rev …)' },
     { anahtar: 'adetTermin', ad: 'Adet ve termin' }, { anahtar: 'parti', ad: 'Parti' }, { anahtar: 'basim', ad: 'Basım tarihi' },
     { anahtar: 'adimlar', ad: 'İşlem sırası' }, { anahtar: 'rota', ad: 'Rota (adım başına satır)' }, { anahtar: 'lot', ad: 'Lot, parti, döküm, sertifika' },
     { anahtar: 'adet', ad: 'Adet' }, { anahtar: 'termin', ad: 'Termin' }, { anahtar: 'adim1Ad', ad: 'İşlem satırları (no, ad, yer, piktogram)' },
     { anahtar: 'lotNo', ad: 'Lot no' }, { anahtar: 'lotEk', ad: 'Döküm, sertifika, tedarikçi partisi' }, { anahtar: 'kopya', ad: 'Kopya sırası (n/N)' },
   ],
-  istasyon: [{ anahtar: 'qr', ad: 'QR (LOC)' }, { anahtar: 'kod', ad: 'İstasyon kodu' }, { anahtar: 'ad', ad: 'İstasyon adı' }],
+  istasyon: [{ anahtar: 'qr', ad: 'Kod (LOC)' }, { anahtar: 'kod', ad: 'İstasyon kodu' }, { anahtar: 'ad', ad: 'İstasyon adı' }],
   'kalite-durum': [
-    { anahtar: 'qr', ad: 'QR (LOT)' }, { anahtar: 'durum', ad: 'Kalite durumu' }, { anahtar: 'lotNo', ad: 'Lot no' }, { anahtar: 'malzeme', ad: 'Malzeme adı ve kodu' },
+    { anahtar: 'qr', ad: 'Kod (LOT)' }, { anahtar: 'durum', ad: 'Kalite durumu' }, { anahtar: 'lotNo', ad: 'Lot no' }, { anahtar: 'malzeme', ad: 'Malzeme adı ve kodu' },
     { anahtar: 'miktar', ad: 'Miktar, birim ve konum' }, { anahtar: 'kararSimge', ad: 'Karar piktogramı' },
     { anahtar: 'kart', ad: 'Kart ve tür' }, { anahtar: 'parti', ad: 'Parti, döküm, sertifika' }, { anahtar: 'giris', ad: 'Giriş, miktar, belge' },
     { anahtar: 'durumBant', ad: 'Durum (Mal kabul, Serbest, Hatalı, Şartlı kabul, Red)' }, { anahtar: 'durumAlt', ad: 'Durum açıklaması' }, { anahtar: 'bantSimge', ad: 'Durum piktogramı' },
@@ -37,19 +43,23 @@ export const ALANLAR: Record<SablonTuru, { anahtar: string; ad: string }[]> = {
     { anahtar: 'tedarikci', ad: 'Tedarikçi' }, { anahtar: 'sertifika', ad: 'Sertifika, döküm, parti' }, { anahtar: 'girisSatiri', ad: 'Giriş, miktar, mal kabul' }, { anahtar: 'gkk', ad: 'GKK no ve sonucu' },
   ],
   'hatali-parca': [
-    { anahtar: 'qr', ad: 'QR (UE, parçanın emri)' }, { anahtar: 'durum', ad: 'Durum (karar)' }, { anahtar: 'emirNo', ad: 'Emir no' }, { anahtar: 'parca', ad: 'Parça no ve adı' },
+    { anahtar: 'qr', ad: 'Kod (UE, parçanın emri)' }, { anahtar: 'durum', ad: 'Durum (karar)' }, { anahtar: 'emirNo', ad: 'Emir no' }, { anahtar: 'parca', ad: 'Parça no ve adı' },
     { anahtar: 'islem', ad: 'İşlem no ve adı' }, { anahtar: 'adetNeden', ad: 'Adet ve hurda nedeni' }, { anahtar: 'ayiran', ad: 'Ayıran ve zaman' },
     { anahtar: 'karar', ad: 'Karar veren, zaman, NCR no, not' }, { anahtar: 'kararSimge', ad: 'Karar piktogramı' },
   ],
   'sevk-koli': [
-    { anahtar: 'qr', ad: 'QR (UE, kalemin emri)' }, { anahtar: 'musteri', ad: 'Müşteri' }, { anahtar: 'parca', ad: 'Parça no ve adı' },
+    { anahtar: 'qr', ad: 'Kod (UE, kalemin emri)' }, { anahtar: 'musteri', ad: 'Müşteri' }, { anahtar: 'parca', ad: 'Parça no ve adı' },
     { anahtar: 'adet', ad: 'Koli içi adet' }, { anahtar: 'koli', ad: 'Koli sırası (n/N)' }, { anahtar: 'koliSira', ad: 'Koli sırası, kısa' }, { anahtar: 'adetSayi', ad: 'Koli içi adet, sayı' }, { anahtar: 'adetBaslik', ad: 'Adet başlığı (koli içi ya da kalem toplamı)' }, { anahtar: 'emirNo', ad: 'Emir no' }, { anahtar: 'sevk', ad: 'Sevk tarihi ve belge no' },
   ],
-  deneme: [{ anahtar: 'qr', ad: 'QR' }, { anahtar: 'yazici', ad: 'Dil ve çözünürlük' }],
+  deneme: [{ anahtar: 'qr', ad: 'Kod (DataMatrix)' }, { anahtar: 'kimlik', ad: 'Kod (QR, yalnız kimlik)' }, { anahtar: 'yazici', ad: 'Dil ve çözünürlük' }],
 };
+export const ALANLAR: Record<SablonTuru, { anahtar: string; ad: string }[]> = Object.fromEntries(
+  Object.entries(ALANLAR_TEMEL).map(([tur, liste]) => [tur, tur === 'deneme' ? liste : [...liste, ...KOD_ALANLARI]]),
+) as Record<SablonTuru, { anahtar: string; ad: string }[]>;
 
 type Ek = { ters?: boolean; kosul?: string };
-const qr = (x: number, y: number, boyut: number) => ({ tur: 'qr' as const, x, y, boyut, alan: 'qr' });
+// Kod yeri: DataMatrix (varsayılan) ya da QR; alan özet kodu (CM1) taşır, yazıcı denemesinde ikinci kod yalnız kimliği.
+const kodOge = (x: number, y: number, boyut: number, alan = 'qr', simge?: 'dm' | 'qr') => ({ tur: 'kod' as const, x, y, boyut, alan, ...(simge === undefined ? {} : { simge }) });
 const metin = (x: number, y: number, genislik: number, yukseklik: number, yaziMm: number, alan: string, kalin = false, ek: Ek = {}) =>
   ({ tur: 'metin' as const, x, y, genislik, yukseklik, yaziMm, kalin, alan, ...ek });
 const kutu = (x: number, y: number, genislik: number, yukseklik: number, kalinlik = 0.3, kosul?: string) =>
@@ -62,15 +72,15 @@ const baslik = (x: number, y: number, genislik: number, metni: string, kosul?: s
 // Kart 2168 (2168-1 a, 2168-2 b, 2168-3 a): sağ üstte siyah karo ve türün piktogramı; karonun solunda tür adı ve küçük alt başlık;
 // altında tek büyük değer ve başlıklı satırlar. QR bugünkü boyutundadır.
 const buyukUst = (piktogram: string, ad: string, alt: string) => [
-  qr(2, 2, 46), simge(79, 2, 19, `=siyah:${piktogram}`), metin(50, 2.5, 28, 6.6, 6, `=${ad}`, true), metin(50, 9.8, 28, 2.6, 2, alt), kutu(50, 13.6, 27, 0.5, 0.5),
+  kodOge(2, 2, 46), simge(79, 2, 19, `=siyah:${piktogram}`), metin(50, 2.5, 28, 6.6, 6, `=${ad}`, true), metin(50, 9.8, 28, 2.6, 2, alt), kutu(50, 13.6, 27, 0.5, 0.5),
 ];
 const kucukUst = (piktogram: string, ad: string, alt: string) => [
-  qr(0.5, 1, 23), simge(39.5, 1, 9.5, `=siyah:${piktogram}`), metin(24.5, 1.4, 14.5, 3.8, 3.2, `=${ad}`, true), metin(24.5, 5.6, 14.5, 2.2, 1.7, alt),
+  kodOge(0.5, 1, 23), simge(39.5, 1, 9.5, `=siyah:${piktogram}`), metin(24.5, 1.4, 14.5, 3.8, 3.2, `=${ad}`, true), metin(24.5, 5.6, 14.5, 2.2, 1.7, alt),
 ];
 // Durum etiketleri: karar en üstte ve büyük, sağ üst karo kararın piktogramı; red etiketin tamamı kalın çerçeve alır.
 const durumUst = (piktogram: string, ad: string) => [
   simge(77, 2, 21, 'kararSimge'), metin(3, 2.4, 72, 8.6, 8, 'durum', true), kutu(3, 11.4, 72, 0.6, 0.6),
-  simge(39, 13.2, 4.2, `=yok:${piktogram}`), metin(44.6, 13.8, 30, 2.6, 2.1, `=${ad}`), qr(3, 13.2, 34), kutu(0, 0, 100, 50, 2.4, 'redCerceve'),
+  simge(39, 13.2, 4.2, `=yok:${piktogram}`), metin(44.6, 13.8, 30, 2.6, 2.1, `=${ad}`), kodOge(3, 13.2, 34), kutu(0, 0, 100, 50, 2.4, 'redCerceve'),
 ];
 // Refakat kartında işlem satırı (EM-27, 2907): no, ad, yer ve işaret (fason ya da çıkış); satır altında ince çizgi. İmza kutusu yok
 // (2907-1 a), elle kayıt kutusu da yok (2932: kullanıcı kaldırdı). Satır aralığı 7 mm: on satır işlem başlığından alt çizgiye yayılır.
@@ -97,7 +107,7 @@ const malzemeSatiri = (y: number, ad: string, alan: string, x = 33, genislik = 6
 ];
 const MALZEME_SATIR = 3.5, MALZEME_Y = 23.4;
 const malzemeOgeleri = [
-  ...malzemeUstBandi, qr(3, 13.4, 28), metin(33, 13.4, 64, 5.6, 5, 'lotNo', true), metin(33, 19.4, 64, 3.2, 2.9, 'malzeme', true),
+  ...malzemeUstBandi, kodOge(3, 13.4, 28), metin(33, 13.4, 64, 5.6, 5, 'lotNo', true), metin(33, 19.4, 64, 3.2, 2.9, 'malzeme', true),
   ...malzemeSatiri(MALZEME_Y, 'ÖLÇÜ', 'olcu'),
   ...malzemeSatiri(MALZEME_Y + MALZEME_SATIR, 'KALİTE', 'kalite', 33, 38), ...malzemeSatiri(MALZEME_Y + MALZEME_SATIR, 'DURUM', 'temper', 72, 25, 9),
   ...malzemeSatiri(MALZEME_Y + 2 * MALZEME_SATIR, 'İŞLEM', 'islem'),
@@ -107,7 +117,7 @@ const malzemeOgeleri = [
   ...malzemeSatiri(MALZEME_Y + 6 * MALZEME_SATIR, 'GKK', 'gkk'),
 ];
 
-export const HAZIR_SABLONLAR: readonly Sablon[] = [
+const SERIT_SABLONLARI: readonly Sablon[] = [
   { anahtar: 'konum-50x25', ad: 'Yer 50x25', tur: 'konum', genislik: 50, yukseklik: 25, ogeler: [
     ...kucukUst('konum', 'KONUM', '=LOC'), metin(24.5, 10.8, 24.5, 9.8, 4, 'kod', true), metin(24.5, 21, 24.5, 3.6, 2.2, 'yer'),
   ] },
@@ -119,7 +129,7 @@ export const HAZIR_SABLONLAR: readonly Sablon[] = [
   // QR ile yazı arasında kendi iki modülüne ek 3 mm boşluk kalır (#707). Raf türünde ilk sıradadır (varsayılan).
   { anahtar: 'raf-100x100', ad: 'Raf 100x100', tur: 'raf', genislik: 100, yukseklik: 100, ogeler: [
     simge(88, 2, 10, '=siyah:raf'), metin(3, 2.4, 83, 10, 9.5, 'kod', true),
-    qr(14, 15.4, 72),
+    kodOge(14, 15.4, 72),
     metin(3, 90.4, 94, 4.4, 3.8, 'ad', true), metin(3, 95.2, 94, 4, 3.2, 'yer'),
   ] },
   { anahtar: 'raf-100x50', ad: 'Raf 100x50', tur: 'raf', genislik: 100, yukseklik: 50, ogeler: [
@@ -144,7 +154,7 @@ export const HAZIR_SABLONLAR: readonly Sablon[] = [
   // sırası adım başına tek satır, on satır; elle kayıt kutusu yok (2932).
   { anahtar: 'refakat-100x150', ad: 'Refakat kartı 100x150', tur: 'refakat', genislik: 100, yukseklik: 150, ogeler: [
     // Sağ üst karo bütün hazır şablonlardadır (2168-1 a); burada küçüktür, yer kart no ve QR'ındır.
-    qr(3.5, 3.5, 37.5), simge(87, 2.5, 10.5, '=siyah:refakat'), metin(45, 3.4, 40, 3.6, 3, '=REFAKAT KARTI', true), metin(45, 7.6, 40, 2.4, 1.9, '=HER İŞLEMDE OKUTUN'),
+    kodOge(3.5, 3.5, 37.5), simge(87, 2.5, 10.5, '=siyah:refakat'), metin(45, 3.4, 40, 3.6, 3, '=REFAKAT KARTI', true), metin(45, 7.6, 40, 2.4, 1.9, '=HER İŞLEMDE OKUTUN'),
     // 2929 a: kopya sırası başlığın altında; tek kopyada değer yoktur, yazı basılmaz.
     // 2907 D4: revizyon kodu kopya sırasının sağında, aynı satırda; parça no satırı tam genişlikte kalır (uzun parça no kısalmasın).
     metin(45, 10.6, 18, 2.6, 2.2, 'kopya', true), metin(64, 10.6, 22, 2.6, 2.2, 'revizyon', true),
@@ -170,7 +180,7 @@ export const HAZIR_SABLONLAR: readonly Sablon[] = [
   ] },
   // Müşteri ve koli sırası uzaktan okunur; koli içi adet çerçevede, koli sırası siyah kutuda.
   { anahtar: 'sevk-koli-100x75', ad: 'Sevk kolisi 100x75', tur: 'sevk-koli', genislik: 100, yukseklik: 75, ogeler: [
-    qr(2, 2, 44), simge(77, 2, 21, '=siyah:koli'), metin(49, 2.4, 27, 5.6, 4, '=SEVK KOLİSİ', true), baslik(49, 8.6, 27, 'MÜŞTERİ', 'musteri'),
+    kodOge(2, 2, 44), simge(77, 2, 21, '=siyah:koli'), metin(49, 2.4, 27, 5.6, 4, '=SEVK KOLİSİ', true), baslik(49, 8.6, 27, 'MÜŞTERİ', 'musteri'),
     metin(49, 10.8, 27, 8.8, 3.6, 'musteri', true), kutu(49, 20.4, 26, 0.5, 0.5), baslik(49, 24.6, 49, 'PARÇA', 'parca'), metin(49, 26.8, 49, 8.4, 3.4, 'parca', true),
     kutu(49, 36.5, 23, 20, 0.6), metin(51, 38, 20, 2.2, 1.9, 'adetBaslik', false, { kosul: 'adetSayi' }), metin(51, 40.6, 20, 9, 8, 'adetSayi', true), metin(51, 51.6, 20, 3, 2.4, '=adet', false, { kosul: 'adetSayi' }),
     kutu(74.5, 36.5, 23.5, 20, 20), metin(76.5, 38, 20, 2.2, 1.9, '=KOLİ', false, { ters: true }), metin(76.5, 41, 20, 10, 9, 'koliSira', true, { ters: true }),
@@ -185,18 +195,28 @@ export const HAZIR_SABLONLAR: readonly Sablon[] = [
   ] },
   // Yazıcı denemesi: Türkçe harf, ters yazı ve piktogramlar; yazıcının bunları basabildiği burada görülür.
   { anahtar: 'deneme-100x50', ad: 'Yazıcı denemesi 100x50', tur: 'deneme', genislik: 100, yukseklik: 50, ogeler: [
-    kutu(0.5, 0.5, 99, 49, 0.4), qr(3, 3, 28), simge(78, 3, 19, '=siyah:yazici'), metin(34, 3.4, 42, 5.4, 4.2, '=YAZICI DENEMESİ', true),
+    kutu(0.5, 0.5, 99, 49, 0.4), kodOge(3, 3, 28), kodOge(80, 23, 9.5, 'kimlik', 'qr'), simge(78, 3, 19, '=siyah:yazici'), metin(34, 3.4, 42, 5.4, 4.2, '=YAZICI DENEMESİ', true),
     metin(34, 9.4, 42, 3.6, 3, '=ÇĞİÖŞÜ çğıöşü', true), metin(34, 13.6, 42, 2.6, 2, '=Yazı 2 mm: 0123456789'),
     kutu(34, 17.2, 42, 4.6, 4.6), metin(35.4, 17.9, 40, 3.2, 2.6, '=TERS YAZI', true, { ters: true }), metin(34, 23, 42, 7, 2.6, 'yazici'),
     ...DENEME_SIMGELERI.map((p, i) => simge(3 + i * 9.5, 33.4, 8.4, `=siyah:${p}`)), metin(3, 44, 94, 3, 2.2, '=Piktogram 8,4 mm · karo 19 mm'),
   ] },
   { anahtar: 'deneme-50x25', ad: 'Yazıcı denemesi 50x25', tur: 'deneme', genislik: 50, yukseklik: 25, ogeler: [
-    kutu(0.5, 0.5, 49, 24, 0.4), qr(1.5, 1.5, 21), simge(40, 1.5, 8.5, '=siyah:yazici'), metin(24, 2, 15, 3.6, 3, '=ÇĞİÖŞÜ', true), metin(24, 6, 15, 3, 2.4, '=çğıöşü'),
+    kutu(0.5, 0.5, 49, 24, 0.4), kodOge(1.5, 1.5, 21), simge(40, 1.5, 8.5, '=siyah:yazici'), metin(24, 2, 15, 3.6, 3, '=ÇĞİÖŞÜ', true), metin(24, 6, 15, 3, 2.4, '=çğıöşü'),
     simge(24, 10.6, 5, '=siyah:lot'), simge(30, 10.6, 5, '=beyaz:onay'), simge(36, 10.6, 5, '=cizgili:bekliyor'), simge(42, 10.6, 5, '=siyah:red'),
     metin(24, 16.6, 25, 7, 2.2, 'yazici'),
   ] },
 ];
 
+// Şerit hazır şablonun kendisidir; öteki yerleşimler sonda gelir, böylece türün ilk şablonu (varsayılan seçim) değişmez.
+export const HAZIR_SABLONLAR: readonly Sablon[] = [
+  ...SERIT_SABLONLARI.map((s): Sablon => ({ ...s, yerlesim: 'serit', taban: s.anahtar })),
+  ...yerlesimleriUret(SERIT_SABLONLARI),
+];
+
+const ozetOrnegi = (kimlik: string, alanlar: Record<string, string>, sira?: readonly string[]): string => {
+  const i = kimlik.indexOf(':');
+  return cm1Yaz({ anahtar: kimlik.slice(0, i), deger: kimlik.slice(i + 1) }, alanlar, new Date('2026-11-22T09:00:00Z'), sira);
+};
 const MALZEME_ORNEGI = {
   durumBant: 'MAL KABUL', durumAlt: 'GKK bekliyor · kullanılamaz', bantSimge: 'cizgili:bekliyor', cerceve: null, bakiye: '120 kg · ORN-KRN-01', basimZamani: '18.10.2026 09:15',
   tur: 'HAMMADDE', olcu: 'Ø50×3000 mm', kalite: '42CrMo4', temper: 'Islah (+QT)', islem: 'Gerilim giderme', tedarikci: 'Örnek Çelik A.Ş.',
@@ -204,15 +224,15 @@ const MALZEME_ORNEGI = {
 };
 // Önizleme ve deneme için uydurma örnek değerler; gerçek kayıt değildir.
 export const ORNEK_DEGERLER: Record<SablonTuru, AlanDegerleri> = {
-  konum: { qr: `${KOD_ONEKI.konum}:A01-02-3`, kod: 'A01-02-3', ad: 'Örnek raf gözü', yer: 'Salon 1 · Raf gözü' },
-  raf: { qr: `${KOD_ONEKI.raf}:A12`, kod: 'A12', ad: 'Örnek palet rafı', yer: 'SALON1 · 6 bölme × 4 kat' },
-  malzeme: { qr: `${KOD_ONEKI.malzeme}:1001`, ad: 'Örnek çelik mil Ø20', kod: 'ORN-0001', kart: 'Kart 1001' },
+  konum: { qr: ozetOrnegi('LOC:A01-02-3', { AD: 'Örnek raf gözü' }), kod: 'A01-02-3', ad: 'Örnek raf gözü', yer: 'Salon 1 · Raf gözü' },
+  raf: { qr: ozetOrnegi('RAF:A12', { AD: 'Örnek palet rafı', YER: 'SALON1 6x4' }), kod: 'A12', ad: 'Örnek palet rafı', yer: 'SALON1 · 6 bölme × 4 kat' },
+  malzeme: { qr: ozetOrnegi('MLZ:1001', { SK: 'ORN-0001' }), ad: 'Örnek çelik mil Ø20', kod: 'ORN-0001', kart: 'Kart 1001' },
   lot: {
-    qr: `${KOD_ONEKI.lot}:LT-000123`, lotNo: 'LT-000123', malzeme: 'Örnek çelik mil Ø20 · ORN-0001', kart: 'Kart 1001 · Hammadde',
+    qr: ozetOrnegi('LOT:LT-000123', { TPN: 'ORN-P-01', DKM: 'ORN-D-01', SRT: 'ORN-S-01', MK: 'MK-000045', GT: '261018' }), lotNo: 'LT-000123', malzeme: 'Örnek çelik mil Ø20 · ORN-0001', kart: 'Kart 1001 · Hammadde',
     parti: 'Parti P-01 · Döküm D-01', giris: '18.10.2026 · 12 adet · MK-000045', ...MALZEME_ORNEGI,
   },
   refakat: {
-    qr: `${KOD_ONEKI['uretim-emri']}:4512`, emirNo: 'UE-004512', urunAd: 'Örnek flanş', urunKod: 'Parça no: ORN-FL-01', revizyon: 'Rev C',
+    qr: ozetOrnegi('UE:4512', { PRC: 'ORN-FL-01', REV: 'C', ADT: '40', TRM: '301026', OPS: '10+20+30' }), emirNo: 'UE-004512', urunAd: 'Örnek flanş', urunKod: 'Parça no: ORN-FL-01', revizyon: 'Rev C',
     adetTermin: 'Adet 40 · Termin 30.10.2026', parti: null, basim: 'Basım 18.10.2026',
     adimlar: '10 Torna (Örnek tezgâh) · 20 Kaplama (Örnek fason, fason) · 30 Son kontrol',
     rota: ['10 Torna (Örnek tezgâh)', '20 Kaplama (Örnek fason, fason)', '30 Son kontrol'].join(SATIR_BASI), lot: 'Lot LT-000123 · Döküm D-01 · Sertifika S-01',
@@ -220,20 +240,24 @@ export const ORNEK_DEGERLER: Record<SablonTuru, AlanDegerleri> = {
     adet: '40', termin: '30.10.2026', kopya: 'Kopya 1/2',
     ...refakatAdimlari([{ opNo: 10, ad: 'Torna', yer: 'Örnek tezgâh', fason: false }, { opNo: 20, ad: 'Kaplama', yer: 'Örnek fason', fason: true }, { opNo: 30, ad: 'Son kontrol', yer: null, fason: false }]),
   },
-  istasyon: { qr: `${KOD_ONEKI.konum}:IST-CNC-01`, kod: 'IST-CNC-01', ad: 'Örnek CNC tezgâhı' },
+  istasyon: { qr: ozetOrnegi('LOC:IST-CNC-01', { AD: 'Örnek CNC tezgâhı' }), kod: 'IST-CNC-01', ad: 'Örnek CNC tezgâhı' },
   'kalite-durum': {
-    qr: `${KOD_ONEKI.lot}:LT-000123`, durum: 'KARAR BEKLİYOR', lotNo: 'LT-000123', malzeme: 'Örnek çubuk Ø40 · ORN-HM-01', miktar: '120 kg · Konum ORN-A01',
+    qr: ozetOrnegi('LOT:LT-000123', { DRM: 'KBK' }), durum: 'KARAR BEKLİYOR', lotNo: 'LT-000123', malzeme: 'Örnek çubuk Ø40 · ORN-HM-01', miktar: '120 kg · Konum ORN-A01',
     kararSimge: 'cizgili:bekliyor', redCerceve: null, kart: 'Kart 1001 · Hammadde', parti: 'Parti P-01 · Döküm D-01', giris: '18.10.2026 · 120 kg · MK-000045',
     ...MALZEME_ORNEGI,
   },
   'sevk-koli': {
-    qr: `${KOD_ONEKI['uretim-emri']}:4512`, musteri: 'Örnek Müşteri', parca: 'ORN-FL-01 · Örnek flanş', adet: 'Koli içi 50 adet', koli: 'Koli 1/4', koliSira: '1/4', adetSayi: '50', adetBaslik: 'KOLİ İÇİ',
+    qr: ozetOrnegi('UE:4512', { NN: '1-4', SVK: 'ORN-1', PRC: 'ORN-FL-01', ADT: '50' }, ['UE', 'NN', 'SVK', 'PRC', 'ADT', 'BT']), musteri: 'Örnek Müşteri', parca: 'ORN-FL-01 · Örnek flanş', adet: 'Koli içi 50 adet', koli: 'Koli 1/4', koliSira: '1/4', adetSayi: '50', adetBaslik: 'KOLİ İÇİ',
     emirNo: 'UE-004512', sevk: '30.10.2026 · Belge ORN-1',
   },
   'hatali-parca': {
-    qr: `${KOD_ONEKI['uretim-emri']}:4513`, durum: 'KARAR BEKLİYOR', emirNo: 'UE-004512 · kol UE-004513', parca: 'ORN-FL-01 · Örnek flanş', islem: 'OP 20 Örnek frezeleme',
+    qr: ozetOrnegi('UE:4513', { HP: '7', OP: '20', ADT: '2', KRR: 'BEKLIYOR' }, ['UE', 'HP', 'OP', 'ADT', 'KRR', 'BT']), durum: 'KARAR BEKLİYOR', emirNo: 'UE-004512 · kol UE-004513', parca: 'ORN-FL-01 · Örnek flanş', islem: 'OP 20 Örnek frezeleme',
     adetNeden: '2 adet · Örnek ölçü dışı', ayiran: 'Ayıran Örnek Operatör · 18.10.2026 10:42', karar: null,
     kararSimge: 'cizgili:bekliyor', redCerceve: null,
   },
-  deneme: { qr: `${KOD_ONEKI.konum}:DENEME`, yazici: null },
+  // Deneme kodu genişletilmiş setin en uzunu kadardır (ORN- veri): yazıcı ve okuyucu en kötü durumda sınanır; ikinci kod eski QR'dır.
+  deneme: {
+    qr: ozetOrnegi('LOT:ORN-LT-2041', { TPN: 'ORN-TPN-77812', DKM: 'ORN-DKM-5531', SRT: 'ORN-SRT-310', SKT: '270526', MK: 'ORN-MK-0045', GT: '261118', TDR: 'ORN-TD-07', DRM: 'SRB' }),
+    kimlik: `${KOD_ONEKI.konum}:DENEME`, yazici: null,
+  },
 };

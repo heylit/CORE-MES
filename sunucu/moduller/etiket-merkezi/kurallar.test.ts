@@ -1,12 +1,14 @@
+import { kodMatrisi } from './kod-matrisi.ts';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { agAraliklariniCoz } from '#paylasilan/ag-araligi.ts';
+import { cm1Coz, kimlikKodu } from '#paylasilan/etiket-kodu.ts';
 import { kodTuru } from '#paylasilan/kod-sozlugu.ts';
-import { QR_KENAR_MODUL, SATIR_ARALIGI, type Sablon } from '#paylasilan/sozlesme/etiket-merkezi.ts';
+import { KOD_KENAR_MODUL, SATIR_ARALIGI, type Sablon } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { yaziciAgiOku } from './ag.ts';
-import { QR_ALTI_EN_KUCUK_YAZI, QR_KARE_EN_AZ_MM, YAZI_EN_AZ_MM, enKucukOlcu, kopyaDegerleri, okunurluk, olcekle, qrAltiYeri, qrKaresi } from './kurallar.ts';
+import { KOD_ALTI_EN_KUCUK_YAZI, KOD_MODUL_EN_AZ_MM, YAZI_EN_AZ_MM, enKucukOlcu, kopyaDegerleri, okunurluk, olcekle, kodAltiYeri, kodModulu } from './kurallar.ts';
 import { BEKLEYEN_GUN, HATALI_KARAR_SIMGESI, KALITE_KARAR_SIMGESI, REFAKAT_ADIM_SAYISI, REFAKAT_CIKIS_SATIRI, bekleyenBaslangici, bekleyenSirasi, kaliteBekleyenleri, kaliteDurumDegerleri, hataliBekleyenleri, malKabulBekleyenleri, refakatBekleyenleri } from './kurallar.ts';
-import { alanDegeri, baskiEngeli, dogrudanBaskiDurumu, indirmeEngeli, istasyonDegerleri, kayitUyumHatasi, konumDegerleri, lotDegerleri, kayitSablonTuru, malzemeDegerleri, metinGenisligi, noktaya, rafDegerleri, refakatDegerleri, refakatPartisiDegerleri, toplamEtiketHatasi, yaziciAdresHatasi, qrDikdortgenleri, qrMatrisi, sablonHatalari, sadelestir, SATIR_BASI, satirlaraBol, sigdirilmisYazi, yerlesim } from './kurallar.ts';
+import { alanDegeri, baskiEngeli, dogrudanBaskiDurumu, indirmeEngeli, istasyonDegerleri, kayitUyumHatasi, konumDegerleri, lotDegerleri, kayitSablonTuru, malzemeDegerleri, metinGenisligi, noktaya, rafDegerleri, refakatDegerleri, refakatPartisiDegerleri, toplamEtiketHatasi, yaziciAdresHatasi, kodDikdortgenleri, sablonHatalari, sadelestir, SATIR_BASI, satirlaraBol, sigdirilmisYazi, yerlesim } from './kurallar.ts';
 import { ALANLAR, HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
 import { gkkSonucu, malzemeBandi, malzemeEtiketiDegerleri, type MalzemeEtiketiGirdisi, type MalzemeGirisOzeti } from './kurallar.ts';
 import { DENEME_KOD_SAYFALARI, DENEME_TURKCE, kodSayfasinda, pplb, pplbDenemesi, pplbKacir, pplbYaziSecimi, zpl, zplKacir } from './yazici-dili.ts';
@@ -16,23 +18,28 @@ const MALZEME_ETIKETLERI = ['malzeme-etiketi-100x50', 'malzeme-durum-100x50'];
 const sablon = (ogeler: Sablon['ogeler'], genislik = 50, yukseklik = 25): Sablon => ({ anahtar: 't', ad: 'T', tur: 'malzeme', genislik, yukseklik, ogeler });
 const metin = (alan: string, x = 1, y = 1, genislik = 40, yukseklik = 5, yaziMm = 3) => ({ tur: 'metin' as const, x, y, genislik, yukseklik, yaziMm, kalin: false, alan });
 
+// Sabit basım günü (tesis günü 19.10.2026): kodlardaki BT alanı 261019 olur.
+const B = new Date('2026-10-18T22:30:00.000Z');
+// Özet kodun (CM1) ilk alanı eskiden basılan önekli kimliktir.
+const kimlik = (veri: string): string => { const o = cm1Coz(veri); return o === null ? veri : kimlikKodu(o); };
+
 describe('etiket-merkezi kuralları', () => {
   test('EM-1: hazır şablonların hepsi etiketin içinde kalır; taşan öğe ve kutusundan büyük yazı reddedilir', () => {
     for (const s of HAZIR_SABLONLAR) assert.deepEqual(sablonHatalari(s), [], s.anahtar);
     assert.deepEqual(sablonHatalari(sablon([metin('ad', 20, 1, 31)])), ['1. öğe etiketin dışına taşıyor.']);
-    assert.deepEqual(sablonHatalari(sablon([{ tur: 'qr', x: 10, y: 5, boyut: 21, alan: 'qr' }])), ['1. öğe etiketin dışına taşıyor.']);
+    assert.deepEqual(sablonHatalari(sablon([{ tur: 'kod', x: 10, y: 5, boyut: 21, alan: 'qr' }])), ['1. öğe etiketin dışına taşıyor.']);
     assert.deepEqual(sablonHatalari(sablon([metin('ad', 1, 1, 40, 2, 3)])), ['1. öğenin yazısı kutusundan büyük.']);
   });
 
   test('EM-37: özel ölçüde tasarım orantılı ölçeklenir ve ortalanır; QR kare kalır, öğeler etiketin içinde kalır, dolu kutu dolu kalır', () => {
-    const t = sablon([{ tur: 'qr', x: 0, y: 0, boyut: 25, alan: 'qr' }, metin('ad', 25, 0, 25, 5, 4), { tur: 'kutu', x: 25, y: 10, genislik: 25, yukseklik: 5, kalinlik: 5 }], 50, 25);
+    const t = sablon([{ tur: 'kod', x: 0, y: 0, boyut: 25, alan: 'qr' }, metin('ad', 25, 0, 25, 5, 4), { tur: 'kutu', x: 25, y: 10, genislik: 25, yukseklik: 5, kalinlik: 5 }], 50, 25);
     const { sablon: o, olcek } = olcekle(t, { genislik: 60, yukseklik: 40 });
     assert.equal(olcek, 1.2);
     assert.equal(o.genislik, 60);
     assert.equal(o.yukseklik, 40);
     const [q, m, k] = o.ogeler;
     // 50x25 tasarım 1,2 ile 60x30 olur; dikeyde 5 mm boşluk iki yana: y = 5.
-    assert.ok(q?.tur === 'qr' && q.x === 0 && q.y === 5 && q.boyut === 30);
+    assert.ok(q?.tur === 'kod' && q.x === 0 && q.y === 5 && q.boyut === 30);
     assert.ok(m?.tur === 'metin' && m.x === 30 && m.yaziMm === 4.8 && m.genislik === 30);
     assert.ok(k?.tur === 'kutu' && k.kalinlik === k.yukseklik);
     for (const h of HAZIR_SABLONLAR) {
@@ -62,47 +69,47 @@ describe('etiket-merkezi kuralları', () => {
     assert.equal(u.engel, null);
     assert.ok(u.uyarilar.some((x) => x.startsWith('En küçük yazı')));
     // QR karesi: boyut / (modül + iki kenar).
-    const q = yerlesim(sablon([{ tur: 'qr', x: 0, y: 0, boyut: 10, alan: '=A' }]), {}, false)[0];
-    assert.ok(q?.tur === 'qr' && Math.abs(qrKaresi(q) - 10 / (q.kareler.length + 2 * QR_KENAR_MODUL)) < 1e-9);
-    assert.ok(QR_KARE_EN_AZ_MM > 0 && YAZI_EN_AZ_MM > 0);
+    const q = yerlesim(sablon([{ tur: 'kod', x: 0, y: 0, boyut: 10, alan: '=A' }]), {}, false)[0];
+    assert.ok(q?.tur === 'kod' && Math.abs(kodModulu(q) - 10 / (q.kareler.length + 2 * KOD_KENAR_MODUL)) < 1e-9);
+    assert.ok(KOD_MODUL_EN_AZ_MM > 0 && YAZI_EN_AZ_MM > 0);
   });
 
   test('EM-34 (2885-1 a): QR\'ın metni QR\'ın altına basılır ve elle girişte aynı kod çözülür; yer varsa QR küçülmez, yoksa kendi kutusunda küçülür', () => {
-    const qr = { tur: 'qr' as const, x: 2, y: 2, boyut: 20, alan: 'qr' };
+    const qr = { tur: 'kod' as const, x: 2, y: 2, boyut: 20, alan: 'qr' };
     const [q, yazi] = yerlesim(sablon([qr], 50, 25), { qr: 'LOC:A01-02-3' }, false);
-    assert.ok(q?.tur === 'qr' && q.boyut === 20 && q.x === 2);
+    assert.ok(q?.tur === 'kod' && q.boyut === 20 && q.x === 2);
     assert.ok(yazi?.tur === 'metin');
     assert.deepEqual(yazi.satirlar, ['LOC:A01-02-3']);
-    assert.ok(yazi.y >= 22 && yazi.y + yazi.yaziMm <= 25 && yazi.yaziMm >= QR_ALTI_EN_KUCUK_YAZI);
+    assert.ok(yazi.y >= 22 && yazi.y + yazi.yaziMm <= 25 && yazi.yaziMm >= KOD_ALTI_EN_KUCUK_YAZI);
     assert.deepEqual(kodTuru(yazi.satirlar.join('')), { tur: 'konum', deger: 'A01-02-3' });
     // Altında başka öğe varsa yazı ona binmez: QR kutusunun içinde küçülür, yazı kutunun içinde kalır.
     const dolu = yerlesim(sablon([qr, metin('ad', 2, 22.2, 20, 2, 1.8)], 50, 25), { qr: 'LOC:A01-02-3', ad: 'x' }, false);
     const [q2, y2] = dolu;
-    assert.ok(q2?.tur === 'qr' && q2.boyut < 20 && q2.boyut >= 20 - 2.5 && q2.y === 2);
+    assert.ok(q2?.tur === 'kod' && q2.boyut < 20 && q2.boyut >= 20 - 2.5 && q2.y === 2);
     assert.ok(y2?.tur === 'metin' && y2.satirlar.join('') === 'LOC:A01-02-3' && y2.y + y2.yaziMm <= 22 + 1e-9);
     // Yasak: QR'sız (boş değer) etikete kod yazılmaz.
     assert.equal(yerlesim(sablon([qr], 50, 25), { qr: null }, false).length, 0);
     // Bütün hazır şablonlarda kod QR'ın altında, etiketin ve QR kutusunun ya da altındaki boş yerin içinde.
     for (const s of HAZIR_SABLONLAR) {
-      const kutu = s.ogeler.find((o) => o.tur === 'qr');
-      assert.ok(kutu?.tur === 'qr', s.anahtar);
+      const kutu = s.ogeler.find((o) => o.tur === 'kod');
+      assert.ok(kutu?.tur === 'kod', s.anahtar);
       const y = yerlesim(s, ORNEK_DEGERLER[s.tur], false);
-      const i = y.findIndex((o) => o.tur === 'qr');
+      const i = y.findIndex((o) => o.tur === 'kod');
       const k = y[i];
       const alt = y[i + 1];
-      assert.ok(k?.tur === 'qr' && alt?.tur === 'metin' && alt.satirlar.join('') === k.veri, s.anahtar);
-      assert.ok(alt.y >= k.y + k.boyut && alt.y + alt.yaziMm <= kutu.y + kutu.boyut + Math.max(0, qrAltiYeri(s, kutu)) + 0.15 + 1e-9, s.anahtar);
+      assert.ok(k?.tur === 'kod' && alt?.tur === 'metin' && alt.satirlar.join('') === kimlik(k.veri), s.anahtar);
+      assert.ok(alt.y >= k.y + k.boyut && alt.y + alt.yaziMm <= kutu.y + kutu.boyut + Math.max(0, kodAltiYeri(s, kutu)) + 0.15 + 1e-9, s.anahtar);
       assert.ok(k.boyut >= kutu.boyut - 2.5, s.anahtar);
     }
   });
 
   test('2922 a: istasyon etiketi yer etiketinin teslim yeri boyudur; anahtar, tür ve QR (LOC) değişmez', () => {
-    const yer = HAZIR_SABLONLAR.filter((s) => s.tur === 'konum' || s.tur === 'istasyon').map((s) => [s.anahtar, s.ad, s.tur]);
+    const yer = HAZIR_SABLONLAR.filter((s) => (s.tur === 'konum' || s.tur === 'istasyon') && s.yerlesim === 'serit').map((s) => [s.anahtar, s.ad, s.tur]);
     assert.deepEqual(yer, [['konum-50x25', 'Yer 50x25', 'konum'], ['konum-100x50', 'Yer 100x50', 'konum'], ['istasyon-100x50', 'Yer 100x50 · Teslim yeri', 'istasyon']]);
     const istasyon = HAZIR_SABLONLAR.find((s) => s.anahtar === 'istasyon-100x50')!;
     const metinler = istasyon.ogeler.flatMap((o) => (o.tur === 'metin' && o.alan.startsWith('=') ? [o.alan.slice(1)] : []));
     assert.ok(metinler.includes('TESLİM') && metinler.includes('TESLİM YERİ · İSTASYON'), metinler.join(', '));
-    assert.ok(istasyon.ogeler.some((o) => o.tur === 'qr' && o.alan === 'qr'));
+    assert.ok(istasyon.ogeler.some((o) => o.tur === 'kod' && o.alan === 'qr'));
   });
 
   test('2922 a: yer etiketlerinin sabit yazıları örnek değerlerle kesilmeden basılır', () => {
@@ -121,9 +128,9 @@ describe('etiket-merkezi kuralları', () => {
 
   test('EM-3: sadeleştirme yalnız Türkçe harfleri çevirir, QR içeriğine dokunmaz', () => {
     assert.equal(sadelestir('Çağ İş Öğün şüphe ı'), 'Cag Is Ogun suphe i');
-    const [yazi, qr] = yerlesim(sablon([metin('ad'), { tur: 'qr', x: 25, y: 1, boyut: 23, alan: 'qr' }]), { ad: 'Şaft', qr: 'MLZ:7' }, true);
+    const [yazi, qr] = yerlesim(sablon([metin('ad'), { tur: 'kod', x: 25, y: 1, boyut: 23, alan: 'qr' }]), { ad: 'Şaft', qr: 'MLZ:7' }, true);
     assert.equal(yazi?.tur === 'metin' && yazi.satirlar[0], 'Saft');
-    assert.equal(qr?.tur === 'qr' && qr.veri, 'MLZ:7');
+    assert.equal(qr?.tur === 'kod' && qr.veri, 'MLZ:7');
   });
 
   test('EM-4: değeri olmayan alan basılmaz; "=" ile başlayan alan sabit metindir', () => {
@@ -151,16 +158,16 @@ describe('etiket-merkezi kuralları', () => {
   });
 
   test('EM-7: örnek QR içerikleri kod sözlüğünde şablon türünün kaydına çözülür', () => {
-    const beklenen = { konum: 'konum', raf: 'raf', malzeme: 'malzeme', lot: 'lot', refakat: 'uretim-emri', istasyon: 'konum', 'kalite-durum': 'lot', 'hatali-parca': 'uretim-emri', 'sevk-koli': 'uretim-emri', deneme: 'konum' } as const;
+    const beklenen = { konum: 'konum', raf: 'raf', malzeme: 'malzeme', lot: 'lot', refakat: 'uretim-emri', istasyon: 'konum', 'kalite-durum': 'lot', 'hatali-parca': 'uretim-emri', 'sevk-koli': 'uretim-emri', deneme: 'lot' } as const;
     for (const [tur, degerler] of Object.entries(ORNEK_DEGERLER)) {
       assert.equal(kodTuru(degerler.qr ?? '').tur, beklenen[tur as keyof typeof beklenen], tur);
     }
   });
 
   test('QR kutuları matrisin koyu modüllerini birebir kaplar', () => {
-    const kareler = qrMatrisi('LOC:A01-02-3');
+    const kareler = kodMatrisi('LOC:A01-02-3');
     const geri = kareler.map((s) => s.map(() => false));
-    for (const d of qrDikdortgenleri(kareler, 0, 0, 1)) {
+    for (const d of kodDikdortgenleri(kareler, 0, 0, 1)) {
       for (let x = d.x; x < d.x + d.genislik; x++) { const satir = geri[d.y - 2]; if (satir) satir[x - 2] = true; }
     }
     assert.deepEqual(geri, kareler);
@@ -228,16 +235,16 @@ describe('etiket-merkezi kuralları', () => {
     assert.equal(raf?.anahtar, 'raf-100x100');
     assert.ok(raf);
     const ogeler = yerlesim(raf, ORNEK_DEGERLER.raf, false);
-    const kare = ogeler.find((o) => o.tur === 'qr');
-    assert.ok(kare?.tur === 'qr' && kare.boyut >= raf.genislik * 0.7);
+    const kare = ogeler.find((o) => o.tur === 'kod');
+    assert.ok(kare?.tur === 'kod' && kare.boyut >= raf.genislik * 0.7);
     const yazi = (deger: string) => ogeler.find((o) => o.tur === 'metin' && o.satirlar.join(' ') === deger);
-    assert.ok(kare.tur === 'qr' && (yazi('A12')?.y ?? Infinity) < kare.y);
-    assert.ok(kare.tur === 'qr' && (yazi('Örnek palet rafı')?.y ?? 0) > kare.y + kare.boyut);
+    assert.ok(kare.tur === 'kod' && (yazi('A12')?.y ?? Infinity) < kare.y);
+    assert.ok(kare.tur === 'kod' && (yazi('Örnek palet rafı')?.y ?? 0) > kare.y + kare.boyut);
     // #707: QR'ın kendi iki modülüne ek, üstteki kod ve alttaki ad kutusuyla arasında en az 3 mm boşluk.
-    const qrOgesi = raf.ogeler.find((o) => o.tur === 'qr');
+    const qrOgesi = raf.ogeler.find((o) => o.tur === 'kod');
     const kutuOf = (alan: string) => raf.ogeler.find((o) => o.tur === 'metin' && o.alan === alan);
     const kod = kutuOf('kod'), ad = kutuOf('ad');
-    assert.ok(qrOgesi?.tur === 'qr' && kod?.tur === 'metin' && ad?.tur === 'metin');
+    assert.ok(qrOgesi?.tur === 'kod' && kod?.tur === 'metin' && ad?.tur === 'metin');
     assert.ok(qrOgesi.y - (kod.y + kod.yukseklik) >= 3 - 1e-9, 'kod ile QR arası');
     assert.ok(ad.y - (qrOgesi.y + qrOgesi.boyut) >= 3 - 1e-9, 'QR ile ad arası');
   });
@@ -246,11 +253,11 @@ describe('etiket-merkezi kuralları', () => {
     const uzun = (alan: string) => `ORN-${'ÖRNEK UZUN DEĞER WM '.repeat(4)}${alan}`;
     for (const s of HAZIR_SABLONLAR) {
       const ornek = ORNEK_DEGERLER[s.tur] ?? {};
-      const kimlik = new Set(s.ogeler.flatMap((o) => (o.tur === 'qr' || o.tur === 'simge' ? [o.alan] : [])));
+      const kimlik = new Set(s.ogeler.flatMap((o) => (o.tur === 'kod' || o.tur === 'simge' ? [o.alan] : [])));
       const uzunDegerler = Object.fromEntries(Object.entries(ornek).map(([k, v]) => [k, kimlik.has(k) || v === null ? v : uzun(k)]));
       for (const sablon of [s, olcekle(s, { genislik: 100, yukseklik: 100 }).sablon]) for (const veri of [ORNEK_DEGERLER[s.tur] ?? {}, uzunDegerler]) {
         const ogeler = yerlesim(sablon, veri, false);
-        const engeller = ogeler.filter((o) => o.tur === 'simge' || o.tur === 'qr');
+        const engeller = ogeler.filter((o) => o.tur === 'simge' || o.tur === 'kod');
         for (const o of ogeler) {
           if (o.tur !== 'metin') continue;
           for (const [i, satir] of o.satirlar.entries()) {
@@ -260,7 +267,7 @@ describe('etiket-merkezi kuralları', () => {
             const ust = o.y + i * o.yaziMm * SATIR_ARALIGI;
             const alt = ust + o.yaziMm;
             for (const e of engeller) {
-              const ex = e.tur === 'simge' || e.tur === 'qr' ? e.boyut : 0;
+              const ex = e.tur === 'simge' || e.tur === 'kod' ? e.boyut : 0;
               const cakisir = o.x < e.x + ex - 1e-6 && sag > e.x + 1e-6 && ust < e.y + ex - 1e-6 && alt > e.y + 1e-6;
               assert.ok(!cakisir, `${s.anahtar}: "${satir}" ${e.tur} ile çakışıyor`);
             }
@@ -386,18 +393,18 @@ describe('etiket-merkezi kuralları', () => {
   });
 
   test('EM-13: konum etiketi stok konum kodunu ve LOC önekli QR\'ı basar; stokta olmayan alan boş kalır', () => {
-    const d = konumDegerleri('R1-02-3-1');
-    assert.deepEqual(d, { qr: 'LOC:R1-02-3-1', kod: 'R1-02-3-1', ad: null, yer: null });
+    const d = konumDegerleri('R1-02-3-1', B);
+    assert.deepEqual(d, { qr: 'CM1/LOC:R1-02-3-1/BT:261019', kod: 'R1-02-3-1', ad: null, yer: null });
     const sablon = HAZIR_SABLONLAR.find((s) => s.anahtar === 'konum-100x50');
     assert.ok(sablon);
     const ogeler = yerlesim(sablon, d, false);
     // Sabit tür adı ve alt başlık basılır; değeri olmayan ad ve yer de başlıkları da basılmaz (EM-4, EM-26).
     assert.deepEqual(ogeler.filter((o) => o.tur === 'metin').map((o) => o.satirlar), [['LOC:R1-02-3-1'], ['KONUM'], ['STOK KONUMU'], ['R1-02-3-1']]);
-    assert.equal(ogeler.find((o) => o.tur === 'qr')?.veri, 'LOC:R1-02-3-1');
+    assert.equal(ogeler.find((o) => o.tur === 'kod')?.veri, 'CM1/LOC:R1-02-3-1/BT:261019');
     // Stoktaki en uzun kod (20 karakter) konum ve istasyon şablonlarında kesilmez.
     const uzun = 'ABCDEFGHIJ-123456789';
-    for (const s of HAZIR_SABLONLAR.filter((x) => x.tur === 'konum' || x.tur === 'istasyon')) {
-      const kodOgesi = yerlesim(s, { ...konumDegerleri(uzun), ad: null }, false).find((o) => o.tur === 'metin' && o.satirlar.join('').startsWith('ABC'));
+    for (const s of HAZIR_SABLONLAR.filter((x) => (x.tur === 'konum' || x.tur === 'istasyon') && x.yerlesim === 'serit')) {
+      const kodOgesi = yerlesim(s, { ...konumDegerleri(uzun, B), ad: null }, false).find((o) => o.tur === 'metin' && o.satirlar.join('').startsWith('ABC'));
       assert.equal(kodOgesi?.tur === 'metin' ? kodOgesi.satirlar.join('') : null, uzun, s.anahtar);
     }
   });
@@ -417,27 +424,27 @@ describe('etiket-merkezi kuralları', () => {
       lotNo: 'LT-000777', malzemeId: 1001, malzemeAd: 'Örnek mil', malzemeKod: 'ORN-0001', malzemeTuru: 'yarimamul' as const, tedarikciPartiNo: 'P-9', dokumNo: null, sertifikaNo: 'S-1',
       giris: '2026-10-18T22:30:00.000Z', miktar: '12.5000', birim: 'kg', belgeNo: 'MK-000045',
     };
-    assert.deepEqual(lotDegerleri(e), {
-      qr: 'LOT:LT-000777', lotNo: 'LT-000777', malzeme: 'Örnek mil · ORN-0001', kart: 'Kart 1001 · Yarı mamul',
+    assert.deepEqual(lotDegerleri(e, B), {
+      qr: 'CM1/LOT:LT-000777/TPN:P-9/SRT:S-1/MK:MK-000045/GT:261019/BT:261019', lotNo: 'LT-000777', malzeme: 'Örnek mil · ORN-0001', kart: 'Kart 1001 · Yarı mamul',
       parti: 'Parti P-9 · Sertifika S-1', giris: '19.10.2026 · 12,5 kg · MK-000045',
     });
-    const yalin = lotDegerleri({ ...e, malzemeAd: null, malzemeKod: null, malzemeTuru: null, tedarikciPartiNo: null, sertifikaNo: null, miktar: null, birim: null, belgeNo: null });
+    const yalin = lotDegerleri({ ...e, malzemeAd: null, malzemeKod: null, malzemeTuru: null, tedarikciPartiNo: null, sertifikaNo: null, miktar: null, birim: null, belgeNo: null }, B);
     assert.equal(yalin['malzeme'], null);
     assert.equal(yalin['parti'], null);
     assert.equal(yalin['kart'], 'Kart 1001', 'türü bilinmeyen kartta tür adı basılmaz (271 a)');
     assert.equal(yalin['giris'], '19.10.2026');
-    assert.equal(lotDegerleri({ ...e, miktar: '40.0000', birim: null })['giris'], '19.10.2026 · 40 · MK-000045');
+    assert.equal(lotDegerleri({ ...e, miktar: '40.0000', birim: null }, B)['giris'], '19.10.2026 · 40 · MK-000045');
   });
 
   test('EM-16: istasyon etiketi istasyonun stok konum kodunu LOC önekiyle ve istasyon adını basar', () => {
-    assert.deepEqual(istasyonDegerleri('IST-CNC-01', 'Deneme tezgâhı'), { qr: 'LOC:IST-CNC-01', kod: 'IST-CNC-01', ad: 'Deneme tezgâhı' });
-    assert.equal(istasyonDegerleri('IST-CNC-01', null)['ad'], null);
+    assert.deepEqual(istasyonDegerleri('IST-CNC-01', 'Deneme tezgâhı', B), { qr: 'CM1/LOC:IST-CNC-01/AD:DENEME TEZGAHI/BT:261019', kod: 'IST-CNC-01', ad: 'Deneme tezgâhı' });
+    assert.equal(istasyonDegerleri('IST-CNC-01', null, B)['ad'], null);
   });
 
   test('EM-20: raf etiketi raf kodunu RAF önekiyle basar; kodla aynı ad ve bilinmeyen ölçü basılmaz (#116)', () => {
-    assert.deepEqual(rafDegerleri({ kod: 'A12', ad: 'Palet rafı', salonKodu: 'SALON1', bolmeSayisi: 6, katSayisi: 4 }),
-      { qr: 'RAF:A12', kod: 'A12', ad: 'Palet rafı', yer: 'SALON1 · 6 bölme × 4 kat' });
-    assert.deepEqual(rafDegerleri({ kod: 'A12', ad: 'A12', salonKodu: null, bolmeSayisi: 0, katSayisi: 0 }), { qr: 'RAF:A12', kod: 'A12', ad: null, yer: null });
+    assert.deepEqual(rafDegerleri({ kod: 'A12', ad: 'Palet rafı', salonKodu: 'SALON1', bolmeSayisi: 6, katSayisi: 4 }, B),
+      { qr: 'CM1/RAF:A12/AD:PALET RAFI/YER:SALON1 6X4/BT:261019', kod: 'A12', ad: 'Palet rafı', yer: 'SALON1 · 6 bölme × 4 kat' });
+    assert.deepEqual(rafDegerleri({ kod: 'A12', ad: 'A12', salonKodu: null, bolmeSayisi: 0, katSayisi: 0 }, B), { qr: 'CM1/RAF:A12/BT:261019', kod: 'A12', ad: null, yer: null });
   });
 
   test('EM-17: refakat kartı etiketi üretim emrinin refakat kartı içeriğini basar; QR emir kimliğidir, termin yoksa "yok", basım tesis günüdür', () => {
@@ -448,7 +455,7 @@ describe('etiket-merkezi kuralları', () => {
     };
     const tam = refakatDegerleri(k, new Date('2026-10-18T22:30:00.000Z'));
     assert.deepEqual(Object.fromEntries(Object.entries(tam).filter(([a]) => !/^adim\d/.test(a) && a !== 'adet' && a !== 'termin')), {
-      qr: 'UE:4512', emirNo: 'UE-004512', urunAd: 'Örnek flanş', urunKod: 'Parça no: ORN-FL-01', adetTermin: 'Adet 40 · Termin 30.10.2026',
+      qr: 'CM1/UE:4512/PRC:ORN-FL-01/ADT:40/TRM:261030/OPS:10+20+30/BT:261019', emirNo: 'UE-004512', urunAd: 'Örnek flanş', urunKod: 'Parça no: ORN-FL-01', adetTermin: 'Adet 40 · Termin 30.10.2026',
       parti: null, basim: 'Basım 19.10.2026', adimlar: '10 Torna (Deneme tezgâhı) · 20 Kaplama (Deneme Fason, fason) · 30 Kontrol',
       rota: ['10 Torna (Deneme tezgâhı)', '20 Kaplama (Deneme Fason, fason)', '30 Kontrol'].join(SATIR_BASI), lot: null, lotNo: null, lotEk: null, revizyon: null,
     });
@@ -474,7 +481,7 @@ describe('etiket-merkezi kuralları', () => {
     assert.equal(refakatDegerleri({ ...k, parti: { ustEmirNo: 'UE-004500', bolunmeSira: null } }, new Date())['parti'], 'Alt parti · üst UE-004500');
     // EM-20 (kart #127): refakat partisinin kartı aynı emir satırlarını, partinin QR'ını ve etiketini, lot satırını basar.
     const rp = refakatPartisiDegerleri(k, { qr: 'RP:7', etiket: 'UE-004512-P2' }, { lotNo: 'LT-000123', tedarikciPartiNo: null, dokumNo: 'D-01', sertifikaNo: 'S-01' }, new Date('2026-10-18T22:30:00.000Z'));
-    assert.deepEqual([rp['qr'], rp['emirNo'], rp['lot'], rp['urunAd'], rp['adimlar']], ['RP:7', 'UE-004512-P2', 'Lot LT-000123 · Döküm D-01 · Sertifika S-01', 'Örnek flanş', refakatDegerleri(k, new Date())['adimlar']]);
+    assert.deepEqual([rp['qr'], rp['emirNo'], rp['lot'], rp['urunAd'], rp['adimlar']], ['CM1/RP:7/PRC:ORN-FL-01/LOT:LT-000123/ADT:40/TRM:261030/OPS:10+20+30/BT:261019', 'UE-004512-P2', 'Lot LT-000123 · Döküm D-01 · Sertifika S-01', 'Örnek flanş', refakatDegerleri(k, new Date())['adimlar']]);
     assert.deepEqual([rp['lotNo'], rp['lotEk']], ['LT-000123', 'Döküm D-01 · Sertifika S-01']);
     const p9 = refakatPartisiDegerleri(k, { qr: 'RP:7', etiket: 'x' }, { lotNo: 'LT-1', tedarikciPartiNo: 'P-9', dokumNo: null, sertifikaNo: null }, new Date());
     assert.deepEqual([p9['lot'], p9['lotNo'], p9['lotEk']], ['Lot LT-1 · Parti P-9', 'LT-1', 'Tedarikçi partisi P-9']);
@@ -483,7 +490,7 @@ describe('etiket-merkezi kuralları', () => {
     assert.equal(kayitUyumHatasi('refakat', 'refakat-partisi'), null, 'refakat partisi refakat şablonuyla basılır');
   });
 
-  test('Kart #707, EM-27, 2907: refakat şablonu her işlemi kendi satırında basar, boş satır basılmaz, adım başına imza yok; QR çevresinde dört modülden az boşluk kalmaz', () => {
+  test('Kart #707, EM-27, 2907: refakat şablonu her işlemi kendi satırında basar, boş satır basılmaz, adım başına imza yok; kodun çevresinde iki modülden az boşluk kalmaz (DataMatrix sessiz alanı en az bir modüldür, iki modül payla)', () => {
     const s = HAZIR_SABLONLAR.find((x) => x.anahtar === 'refakat-100x150')!;
     const ogeler = yerlesim(s, ORNEK_DEGERLER.refakat, false);
     const metinler = ogeler.flatMap((o) => (o.tur === 'metin' ? [o.satirlar.join(' ')] : []));
@@ -500,7 +507,7 @@ describe('etiket-merkezi kuralları', () => {
     assert.equal(REFAKAT_ADIM_SAYISI, 10);
     const satirAd = s.ogeler.find((o) => o.tur === 'metin' && o.alan === `adim${REFAKAT_ADIM_SAYISI}Ad`);
     assert.ok(satirAd?.tur === 'metin' && satirAd.y + 5.4 < 137.4);
-    assert.equal(ogeler.find((o) => o.tur === 'qr')?.boyut, 37.5);
+    assert.equal(ogeler.find((o) => o.tur === 'kod')?.boyut, 37.5);
     // İşaret yalnız fason satırında ve çıkış satırında; boş satırın çizgisi basılmaz.
     assert.deepEqual(ogeler.filter((o) => o.tur === 'simge').map((o) => o.tur === 'simge' && `${o.karo}:${o.ad}`), ['siyah:refakat', 'siyah:fason', 'siyah:bayrak']);
     assert.equal(ogeler.filter((o) => o.tur === 'kutu' && o.yukseklik === 0.2).length, 4, 'dolu üç işlem ve çıkış satırının çizgisi');
@@ -508,22 +515,22 @@ describe('etiket-merkezi kuralları', () => {
     const lotsuz = yerlesim(s, { ...ORNEK_DEGERLER.refakat, lotNo: null, lotEk: null }, false);
     assert.equal(lotsuz.filter((o) => o.tur === 'kutu' && o.genislik === 100).length, 0);
     assert.ok(!lotsuz.some((o) => o.tur === 'metin' && o.satirlar.join(' ') === 'LOT'));
-    const qr = ogeler.find((o) => o.tur === 'qr');
-    assert.ok(qr?.tur === 'qr');
-    const modul = qr.boyut / (qr.kareler.length + 2 * QR_KENAR_MODUL);
-    const kenar = QR_KENAR_MODUL * modul;
-    const kutular = s.ogeler.filter((o) => o.tur !== 'qr').map((o) => (o.tur === 'simge' ? { x: o.x, y: o.y, g: o.boyut, h: o.boyut } : { x: o.x, y: o.y, g: o.genislik, h: o.yukseklik }));
+    const qr = ogeler.find((o) => o.tur === 'kod');
+    assert.ok(qr?.tur === 'kod');
+    const modul = qr.boyut / (qr.kareler.length + 2 * KOD_KENAR_MODUL);
+    const kenar = KOD_KENAR_MODUL * modul;
+    const kutular = s.ogeler.filter((o) => o.tur !== 'kod').map((o) => (o.tur === 'simge' ? { x: o.x, y: o.y, g: o.boyut, h: o.boyut } : { x: o.x, y: o.y, g: o.genislik, h: o.yukseklik }));
     const bosluk = Math.min(qr.x, qr.y, s.genislik - qr.x - qr.boyut, s.yukseklik - qr.y - qr.boyut, ...kutular.map((k) => {
       const dx = Math.max(k.x - (qr.x + qr.boyut), qr.x - (k.x + k.g), 0);
       const dy = Math.max(k.y - (qr.y + qr.boyut), qr.y - (k.y + k.h), 0);
       return Math.max(dx, dy);
     }));
-    assert.ok(kenar + bosluk >= 4 * modul, `sessiz bölge ${((kenar + bosluk) / modul).toFixed(1)} modül`);
+    assert.ok(kenar + bosluk >= 2 * modul && bosluk >= 3 - 1e-9, `sessiz bölge ${((kenar + bosluk) / modul).toFixed(1)} modül`);
   });
 
   test('EM-18: malzeme etiketi kartın adını, stok kodunu ve MLZ önekli kart no QR kodunu basar (stok/Etiketler.tsx ile aynı)', () => {
-    assert.deepEqual(malzemeDegerleri({ id: 1001, kod: 'ORN-0001', ad: 'Örnek mil' }), { qr: 'MLZ:1001', ad: 'Örnek mil', kod: 'ORN-0001', kart: 'Kart 1001' });
-    assert.equal(malzemeDegerleri({ id: 1001, kod: 'ORN-0001', ad: null })['ad'], null);
+    assert.deepEqual(malzemeDegerleri({ id: 1001, kod: 'ORN-0001', ad: 'Örnek mil' }, B), { qr: 'CM1/MLZ:1001/SK:ORN-0001/BT:261019', ad: 'Örnek mil', kod: 'ORN-0001', kart: 'Kart 1001' });
+    assert.equal(malzemeDegerleri({ id: 1001, kod: 'ORN-0001', ad: null }, B)['ad'], null);
   });
 
   test('EM-26: koşullu öğe yalnız koşul alanı doluyken basılır; simge değeri tanınmazsa basılmaz', () => {
@@ -559,19 +566,19 @@ describe('etiket-merkezi kuralları', () => {
     assert.deepEqual(HATALI_KARAR_SIMGESI, { bekliyor: 'cizgili:bekliyor', kabul: 'beyaz:onay', sartli_kabul: 'siyah:uyari', rework: 'beyaz:rework', hurda: 'siyah:hurda', red: 'siyah:red' });
     const e = { lotNo: 'LT-1', malzemeId: 1, malzemeAd: 'Örnek', malzemeKod: 'ORN', birim: 'kg', konumKod: 'A1', miktar: '5.0000' };
     const s = HAZIR_SABLONLAR.find((x) => x.anahtar === 'kalite-durum-100x50')!;
-    const red = yerlesim(s, kaliteDurumDegerleri({ ...e, kaliteDurumu: 'red' }), false);
-    const serbest = yerlesim(s, kaliteDurumDegerleri({ ...e, kaliteDurumu: 'serbest' }), false);
+    const red = yerlesim(s, kaliteDurumDegerleri({ ...e, kaliteDurumu: 'red' }, B), false);
+    const serbest = yerlesim(s, kaliteDurumDegerleri({ ...e, kaliteDurumu: 'serbest' }, B), false);
     const cerceve = (o: (typeof red)[number]) => o.tur === 'kutu' && o.genislik === 100 && o.yukseklik === 50;
     assert.equal(red.filter(cerceve).length, 1);
     assert.equal(serbest.filter(cerceve).length, 0);
     assert.deepEqual(serbest.filter((o) => o.tur === 'simge').map((o) => o.tur === 'simge' && `${o.karo}:${o.ad}`), ['beyaz:onay', 'yok:kalite']);
     // QR kutusu 34 mm (2168-2 b); altındaki kod satırı kadar küçülür (2885-1 a).
-    assert.equal(serbest.find((o) => o.tur === 'qr')?.tur === 'qr' && (serbest.find((o) => o.tur === 'qr') as { boyut: number }).boyut, 31.65);
+    assert.equal(serbest.find((o) => o.tur === 'kod')?.tur === 'kod' && (serbest.find((o) => o.tur === 'kod') as { boyut: number }).boyut, 31.65);
   });
 
   test('2168: her hazır şablonun sağ üst köşesinde piktogram var ve örnek değerle basılır (malzeme etiketi hariç: 3124 a)', () => {
     // 3124 a: kullanıcı ön izlemede durum piktogramı sol üstte, sağ üstte miktar ve konum olan düzeni seçti (2168-1 a'nın yerine).
-    for (const s of HAZIR_SABLONLAR.filter((x) => !MALZEME_ETIKETLERI.includes(x.anahtar))) {
+    for (const s of HAZIR_SABLONLAR.filter((x) => x.yerlesim === 'serit' && !MALZEME_ETIKETLERI.includes(x.anahtar))) {
       const ogeler = yerlesim(s, ORNEK_DEGERLER[s.tur], false);
       const sag = ogeler.filter((o) => o.tur === 'simge' && o.x + o.boyut >= s.genislik - 3 && o.y <= 3 && o.karo !== 'yok');
       assert.equal(sag.length, 1, s.anahtar);
@@ -718,7 +725,7 @@ describe('EM-41 (3124 a): malzeme etiketi', () => {
 
   test('değerler: üst bant, bu etiketin miktarı ve konumu, kart özellikleri, tedarikçi, sertifika, giriş ve GKK; eski lot alanları da dolar', () => {
     const d = malzemeEtiketiDegerleri(girdi(), basim);
-    assert.equal(d.qr, 'LOT:LT-000123');
+    assert.equal(d.qr, 'CM1/LOT:LT-000123/TPN:P-01/DKM:D-01/SRT:S-01/MK:MK-000045/GT:261112/DRM:KBK/BT:261112');
     assert.equal(d.durumBant, 'MAL KABUL');
     assert.equal(d.cerceve, null);
     assert.equal(d.bakiye, '120 kg · ORN-KRN-01');

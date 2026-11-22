@@ -27,6 +27,12 @@ describe('seri liste kurali (saf)', () => {
     assert.deepEqual(seriEklemeleri({ kod: 'LOT:LT-1', adet: '2.000' }, ['LOT:LT-1', 'LOT:LT-1']), { sonAdet: '4', yeni: [], atlanan: 0 });
     assert.deepEqual(seriEklemeleri({ kod: 'LOT:LT-1', adet: '2' }, ['MLZ:9', 'LOT:LT-1']), { sonAdet: null, yeni: [{ kod: 'MLZ:9', adet: '1' }, { kod: 'LOT:LT-1', adet: '1' }], atlanan: 0 });
   });
+  // 3542 dilim 2 (Risk B1): aynı lotun yeniden basımı farklı özet koddur (basım tarihi, düşen alan); satır kimlikle birleşir.
+  test('ayni lotun eski QR, eski ozet kod ve yeniden basilan ozet kodu tek satirda toplanir; baska lot ayri satir', () => {
+    const e = seriEklemeleri(null, ['LOT:LT-1', 'CM1/LOT:LT-1/TPN:P-9/BT:261101', 'CM1/LOT:LT-1/TPN:P-9/BT:261122', 'CM1/LOT:LT-1/BT:261122/+3', 'CM1/LOT:LT-2/BT:261122']);
+    assert.deepEqual(e, { sonAdet: null, atlanan: 0, yeni: [{ kod: 'LOT:LT-1', adet: '4' }, { kod: 'CM1/LOT:LT-2/BT:261122', adet: '1' }] });
+    assert.deepEqual(seriEklemeleri({ kod: 'CM1/LOT:LT-1/BT:261101', adet: '2' }, ['CM1/LOT:LT-1/BT:261122']), { sonAdet: '3', yeni: [], atlanan: 0 });
+  });
 });
 
 // Seri liste (1915, 1914 teyit): kişinin taslağı; stok yazılmaz, liste yalnız sahibine görünür.

@@ -4,10 +4,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { PiktogramAdi } from '#paylasilan/etiket-piktogramlari.ts';
 import { TUM_SAYFALAR } from '#paylasilan/sayfalar.ts';
 import type {
-  BasCevabi, BekleyenlerCevabi, CiktiCevabi, IndirCevabi, KayitCiktiCevabi, KayitSecimi, KayitTuru, OzelOlcu, Sablon, SablonlarCevabi, Yazici, YaziciDili,
+  BasCevabi, BekleyenlerCevabi, CiktiCevabi, IndirCevabi, KayitCiktiCevabi, KayitSecimi, KayitTuru, OzelOlcu, Sablon, SablonlarCevabi, SablonListesiOgesi, Yazici, YaziciDili,
   YazicilarCevabi,
 } from '#paylasilan/sozlesme/etiket-merkezi.ts';
-import { REFAKAT_KOPYA_SAYISI, komutBaytlari } from '#paylasilan/etiket-sabitleri.ts';
+import { REFAKAT_KOPYA_SAYISI, YERLESIMLER, YERLESIM_ADLARI, komutBaytlari } from '#paylasilan/etiket-sabitleri.ts';
 import { Dugme, DurumKutusu, IsaretKutusu, Kart, Rozet, Secim, Girdi, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, ApiHatasi, hataIletisi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
@@ -21,6 +21,7 @@ import { KayitSecici } from './KayitSecici.tsx';
 import { Onizleme, Simge } from './Onizleme.tsx';
 import { OzelOlcuAyari } from './OzelOlcu.tsx';
 import { VarsayilanOlcu } from './VarsayilanOlcu.tsx';
+import { VarsayilanYerlesim } from './VarsayilanYerlesim.tsx';
 import { olcuCoz, olcuYazisi, ozelOlcuOku, ozelOlcuYaz } from './ozel-olcu.ts';
 import { VektorelYazdir } from './Yazdir.tsx';
 import { eslesmeKaldirilabilir, eslesmeyiKaldir, eslesmisYazici, usbDestekli, usbHatasi, usbyeGonder, yaziciDegistir, yaziciEsle, type UsbAygit } from './web-usb.ts';
@@ -89,7 +90,8 @@ function useUsb(acik: boolean) {
 }
 
 // Bas düğmesi seçili yola göre tek işlem yapar; yetki, adet sınırı ve defter her yolda sunucudadır.
-function BaskiDugmesi({ sablon, yol, govde, etiketSayisi, kayit, olcu, adet }: {
+function BaskiDugmesi({ sablon, yol, govde, etiketSayisi, kayit, olcu, adet, ozet }: {
+  ozet: ReactNode;
   sablon: Sablon; yol: YaziciYolu; govde: BaskiGovdesi | null; etiketSayisi: number; kayit: KayitSecimi | null; olcu: OzelOlcu | null; adet: number | null;
 }) {
   const istemci = useQueryClient();
@@ -177,7 +179,11 @@ function BaskiDugmesi({ sablon, yol, govde, etiketSayisi, kayit, olcu, adet }: {
   }
   return (
     <div className="tc-etk-gonder">
-      <div className="tc-etk-bas-cubuk">{dugme}</div>
+      <div className="tc-etk-bas-cubuk">
+        <p className="tc-etk-not tc-etk-bas-ozet" aria-label="Basılacak ölçü ve yerleşim">{ozet}</p>
+        {sonuc && <p className={sonuc.ton === 'hata' ? 'tc-etk-hata' : 'tc-etk-not'} role={sonuc.ton === 'hata' ? 'alert' : 'status'}>{sonuc.metin}</p>}
+        {dugme}
+      </div>
       {yol.tur === 'usb' && usb && (
         <div className="tc-etk-dugmeler">
           <p className="tc-etk-not">USB: {usb.productName ?? 'yazıcı'} bu bilgisayarda bağlı.</p>
@@ -188,7 +194,6 @@ function BaskiDugmesi({ sablon, yol, govde, etiketSayisi, kayit, olcu, adet }: {
         </div>
       )}
       {yol.tur === 'dosya' && <p className="tc-etk-not">Komut dosyası iner; yazıcının kendi aracıyla gönderin.</p>}
-      {sonuc && <p className={sonuc.ton === 'hata' ? 'tc-etk-hata' : 'tc-etk-not'} role={sonuc.ton === 'hata' ? 'alert' : 'status'}>{sonuc.metin}</p>}
     </div>
   );
 }
@@ -234,12 +239,22 @@ function AdetSecici({ etiket, deger, degistir, hata, enCok }: { etiket: string; 
 }
 
 // Baskı paneli: önizleme, ölçü, adet, yazıcı ve tek Bas düğmesi. Dil, çözünürlük, komut ve gerçek boyut Gelişmiş'tedir.
+// Cihaz bir ölçü eşlemişse o ölçünün (taban) varsayılan yerleşimi açılır; eşleme yoksa ya da o ölçünün varsayılanı yoksa ilk varsayılan, o da yoksa cihazın şablonu.
+export function varsayilanSablon(sablonlar: readonly SablonListesiOgesi[], cihazAnahtari: string | undefined): SablonListesiOgesi | undefined {
+  const cihaz = cihazAnahtari === undefined ? undefined : sablonlar.find((x) => x.anahtar === cihazAnahtari);
+  return (cihaz && sablonlar.find((x) => x.taban === cihaz.taban && x.varsayilan)) ?? sablonlar.find((x) => x.varsayilan) ?? cihaz;
+}
+
 function BaskiPaneli({ sablonlar, secili, sec, secenekler, basabilir, kayit, kayitCikar }: {
-  sablonlar: Sablon[]; secili: Sablon; sec: (anahtar: string) => void; secenekler: Secenekler; basabilir: boolean; kayit: KayitSecimi | null;
+  sablonlar: SablonListesiOgesi[]; secili: SablonListesiOgesi; sec: (anahtar: string) => void; secenekler: Secenekler; basabilir: boolean; kayit: KayitSecimi | null;
   kayitCikar: (id: number) => void;
 }) {
   const sablon = secili;
+  // Ölçü seçenekleri tasarımlardır (şerit); yerleşimler seçili tasarımın varyantlarıdır.
+  const tabanlar = sablonlar.filter((x) => x.yerlesim === 'serit');
+  const yerlesimler = sablonlar.filter((x) => x.taban === sablon.taban);
   const enCokAdet = secenekler.enCokAdet;
+  const [yerlesimNotu, setYerlesimNotu] = useState<string | null>(null);
   const [dil, setDil] = useState<YaziciDili>('zpl');
   const [dpi, setDpi] = useState<string>('203');
   // 2929 a: refakat kartı varsayılan iki kopya basılır (her biri Kopya n/N); kişi adedi değiştirir.
@@ -344,6 +359,50 @@ function BaskiPaneli({ sablonlar, secili, sec, secenekler, basabilir, kayit, kay
         <p className="tc-etk-not" role="status"><Rozet ton="uyari">{kayitlar.eksikler.length} kayıt bulunamadı</Rozet> Silinmiş ya da kimliği yanlış; basılmaz.</p>
       )}
 
+      {/* 3564: önizlemenin hemen altında önce Ölçü, sonra Yerleşim; Adet ve Yazıcı bunların altındadır. */}
+      <section className="tc-etk-bolum" aria-label="Ölçü">
+        <h4 className="tc-etk-bolum-baslik">Ölçü</h4>
+        <div className="tc-etk-olculer" role="radiogroup" aria-label="Ölçüler">
+          {tabanlar.map((s) => (
+            <button key={s.anahtar} type="button" role="radio" aria-checked={s.anahtar === sablon.taban} className="tc-etk-olcu" onClick={() => {
+              const ayni = sablonlar.find((x) => x.taban === s.anahtar && x.yerlesim === sablon.yerlesim);
+              const hedef = ayni ?? sablonlar.find((x) => x.taban === s.anahtar && x.varsayilan) ?? s;
+              setYerlesimNotu(ayni || sablon.yerlesim === 'serit' ? null : `${YERLESIM_ADLARI[sablon.yerlesim]} ${olcuYazisi(s)} etikette yok; ${YERLESIM_ADLARI[hedef.yerlesim]} seçildi.`);
+              sec(hedef.anahtar);
+            }} title={s.ad}>
+              {olcuYazisi(s)}
+            </button>
+          ))}
+        </div>
+        <OzelOlcuAyari sablon={sablon} acik={ozel.acik} en={ozel.en} boy={ozel.boy} enHatasi={ozel.acik ? olcuCozumu.enHatasi : undefined}
+          boyHatasi={ozel.acik ? olcuCozumu.boyHatasi : undefined} bilgi={olcu && c.data ? c.data.ozelOlcu : null} degistir={olcuDegistir} />
+      </section>
+      <fieldset className="tc-etk-bolum tc-etk-yerlesim" aria-label="Yerleşim">
+        <legend className="tc-etk-bolum-baslik">Yerleşim</legend>
+        {yerlesimNotu && <p className="tc-etk-not" role="status"><Rozet ton="uyari">Yerleşim değişti</Rozet> {yerlesimNotu}</p>}
+        <div className="tc-etk-yerlesim-kartlar">
+          {YERLESIMLER.map((y) => {
+            const s = yerlesimler.find((x) => x.yerlesim === y);
+            const baskaOlcude = s === undefined && sablonlar.some((x) => x.yerlesim === y);
+            if (s === undefined && !baskaOlcude) return null;
+            const durum = s === undefined ? <Rozet ton="pasif">Sunulmaz</Rozet> : s.uyari ? <Rozet ton="uyari">Satır düşer</Rozet> : <Rozet ton="tamam">Sığar</Rozet>;
+            return (
+              <label key={y} className={`tc-etk-yerlesim-kart${s?.anahtar === sablon.anahtar ? ' tc-etk-yerlesim-secili' : ''}`}>
+                <input type="radio" name="yerlesim" checked={s?.anahtar === sablon.anahtar} disabled={s === undefined} onChange={() => { if (s) { setYerlesimNotu(null); sec(s.anahtar); } }} />
+                <span className="tc-etk-yerlesim-ad">{YERLESIM_ADLARI[y]} {s?.varsayilan && <Rozet ton="bilgi">Varsayılan</Rozet>} {durum}</span>
+                {s?.uyari && <span className="tc-etk-yerlesim-not">{s.uyari}</span>}
+                {s === undefined && <span className="tc-etk-yerlesim-not">{olcuYazisi(sablon)} etikette sığmaz; başka ölçüde sunulur.</span>}
+              </label>
+            );
+          })}
+        </div>
+        {yerlesimler.length === 1 && <p className="tc-etk-not">Bu etikette başka yerleşim yok.</p>}
+        {c.data?.kodEksik && (
+          <p className="tc-etk-not tc-etk-kod-uyari" role="status"><Rozet ton="hata">Kod alanı düşer</Rozet> Kodda bir alan eksik olur (veri kaybı): {c.data.kodEksik}. Yine de basılabilir; küçük etikette kod bütün alanı taşımaz.</p>
+        )}
+        <p className="tc-etk-not">Kodun içeriği her yerleşimde aynıdır; yalnız basılı yazı ve kodun yeri değişir. Seçim baskı kaydına yazılır; yeniden basımda aynı yerleşim gelir.</p>
+      </fieldset>
+
       {(koliMi || !basabilir) && (
       <section className="tc-etk-bolum" aria-label="Adet">
         {koliMi && (
@@ -371,7 +430,6 @@ function BaskiPaneli({ sablonlar, secili, sec, secenekler, basabilir, kayit, kay
                 <Secim etiket="Yazıcı" value={yol.deger} onChange={(e) => { setYolDegeri(e.target.value); sonYaziciYaz(sablon.tur, e.target.value); }}
                   secenekler={yollar.map((y) => ({ deger: y.deger, baslik: y.baslik }))} />
               </div>
-              <BaskiDugmesi sablon={sablon} yol={yol} govde={yol.tur === 'tarayici' ? null : govde} etiketSayisi={toplamEtiket} kayit={secim} olcu={olcu} adet={basilacakAdet} />
               {kayit && <CihazVarsayilani key={`${yol.deger}-${sablon.anahtar}`} sablon={sablon} yol={yol} olcu={olcu} />}
             </>
           )}
@@ -379,18 +437,6 @@ function BaskiPaneli({ sablonlar, secili, sec, secenekler, basabilir, kayit, kay
       )}
       {!basabilir && kayit === null && <p className="tc-etk-not">Basmak için soldan kayıt seçin.</p>}
 
-      <section className="tc-etk-bolum" aria-label="Ölçü">
-        <h4 className="tc-etk-bolum-baslik">Ölçü</h4>
-        <div className="tc-etk-olculer" role="radiogroup" aria-label="Ölçüler">
-          {sablonlar.map((s) => (
-            <button key={s.anahtar} type="button" role="radio" aria-checked={s.anahtar === sablon.anahtar} className="tc-etk-olcu" onClick={() => sec(s.anahtar)} title={s.ad}>
-              {olcuYazisi(s)}
-            </button>
-          ))}
-        </div>
-        <OzelOlcuAyari sablon={sablon} acik={ozel.acik} en={ozel.en} boy={ozel.boy} enHatasi={ozel.acik ? olcuCozumu.enHatasi : undefined}
-          boyHatasi={ozel.acik ? olcuCozumu.boyHatasi : undefined} bilgi={olcu && c.data ? c.data.ozelOlcu : null} degistir={olcuDegistir} />
-      </section>
 
       {/* 2223-3 a: yazıcı seçilince dil ve çözünürlük yazıcıdan gelir; buradaki seçim yalnız önizleme komutu ve deftere yazılmayan indirme içindir. */}
       <details className="tc-etk-gelismis">
@@ -422,6 +468,10 @@ function BaskiPaneli({ sablonlar, secili, sec, secenekler, basabilir, kayit, kay
           </>
         )}
       </details>
+      {basabilir && yol && (
+        <BaskiDugmesi sablon={sablon} yol={yol} govde={yol.tur === 'tarayici' ? null : govde} etiketSayisi={toplamEtiket} kayit={secim} olcu={olcu} adet={basilacakAdet}
+          ozet={<>{olcuYazisi(c.data?.sablon ?? sablon)} · {YERLESIM_ADLARI[sablon.yerlesim]}{sablon.uyari ? <> <Rozet ton="uyari">Satır düşer</Rozet></> : null}</>} />
+      )}
     </div>
   );
 }
@@ -481,7 +531,7 @@ export function EtiketBas() {
   if (liste.isError) return <Kart baslik="Etiket bas"><DurumKutusu durum="hata" yenile={() => { void liste.refetch(); }} /></Kart>;
   const sablonlar = tur === null ? [] : liste.data.sablonlar.filter((s) => s.tur === kayitSablonTuru(tur));
   const cihazdaki = tur === null ? null : cihazYazicilari()[kayitSablonTuru(tur)] ?? null;
-  const sablon = sablonlar.find((s) => s.anahtar === secili) ?? sablonlar.find((s) => s.anahtar === cihazdaki?.sablonAnahtar) ?? sablonlar[0];
+  const sablon = sablonlar.find((s) => s.anahtar === secili) ?? varsayilanSablon(sablonlar, cihazdaki?.sablonAnahtar) ?? sablonlar[0];
   const kaynak = tur === null ? null : KAYIT_KAYNAKLARI[tur];
   const bekleyenSayisi = (t: KayitTuru) => (bekleyen.data?.bekleyenler ?? []).filter((b) => b.tur === t).length;
   return (
@@ -565,7 +615,7 @@ function Katalog({ deneme }: { deneme: boolean }) {
     <Kart baslik={baslik}>
       <p className="tc-etk-not">
         {deneme
-          ? 'Deneme etiketi Türkçe harfleri, iki yazı boyunu, çerçeveyi ve QR\'ı basar. Harfler eksik çıkarsa yazıcı ayarında "sadeleştir"i açın; QR\'ı telefonla okutun.'
+          ? 'Deneme etiketi Türkçe harfleri, iki yazı boyunu, çerçeveyi ve DataMatrix kodu basar. Harfler eksik çıkarsa yazıcı ayarında "sadeleştir"i açın; kodu okuyucuyla ya da kamerayla okutun.'
           : olcuYazar ? 'Bütün etiket ölçüleri örnek değerlerle. Varsayılan ölçüyü değiştirmek için şablonu seçin.' : 'Bütün etiket ölçüleri örnek değerlerle. Basmak için Etiket bas sayfasını kullanın.'}
       </p>
       <div className="tc-etk-duzen">
@@ -576,6 +626,7 @@ function Katalog({ deneme }: { deneme: boolean }) {
                 <strong>{s.ad}</strong>
                 <span className="tc-etk-satir-alt">
                   <Rozet ton="bilgi">{liste.data.secenekler.turAdlari[s.tur] ?? s.tur}</Rozet>{olcuYazisi(s)}
+                  {s.varsayilan && <Rozet ton="bilgi">Varsayılan</Rozet>}
                   {(s.genislik !== s.tasarim.genislik || s.yukseklik !== s.tasarim.yukseklik) && <Rozet ton="bilgi">{`Değişti · tasarım ${olcuYazisi(s.tasarim)}`}</Rozet>}
                 </span>
               </button>
@@ -585,6 +636,7 @@ function Katalog({ deneme }: { deneme: boolean }) {
         {sablon ? (
           <div className="tc-etk-katalog-ayrinti" ref={ayrinti} tabIndex={-1} aria-label={`${sablon.ad} ayrıntısı`}>
             {/* 3306 a: ölçü yazan Şablonlar'da baskı denetimlerini görmez; tek önizleme Varsayılan ölçü bölümündedir. */}
+            {olcuYazar && !deneme && <VarsayilanYerlesim key={`yerlesim-${sablon.anahtar}`} sablon={sablon} />}
             {olcuYazar ? <VarsayilanOlcu key={`olcu-${sablon.anahtar}-${olcuYazisi(sablon)}`} sablon={sablon} yazar />
               : (
                 <>
