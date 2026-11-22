@@ -255,11 +255,11 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, taslak, Geri ve Canlıya al, Mat
     await page.keyboard.press('Escape');
     await expect(tahta.getByText(/Bırakmak için tıklayın/)).toBeHidden();
 
-    // Ölçek (gantt dilim 2, T7): Ay'da tezgâh satırlarında işler gerçek boyunda ince çubuklardır; yük hücreleri yalnız Yıl'da, hücre haftasına (Ay) iner.
+    // Ölçek (dilim 3c, G): Ay'da tezgâh satırı gün gün doluluk hücresidir, iş kutusu yok; Yıl'da haftalık yük hücreleri, hücre haftasına (Ay) iner.
     const olcek = kokpit.getByRole('group', { name: 'Ölçek' });
     await olcek.getByRole('button', { name: 'Ay' }).click();
-    await expect(tahta.locator('.tc-pyq-hucre')).toHaveCount(0);
-    await expect(tahta.locator('[data-satir="M1"] .tc-pyq-is, [data-satir="M1"] .tc-pyq-kume').first()).toBeVisible();
+    await expect(tahta.locator('[data-satir="M1"] .tc-pyq-gunhucre').first()).toBeVisible();
+    await expect(tahta.locator('[data-satir="M1"] .tc-pyq-is')).toHaveCount(0);
     await tasma();
     await olcek.getByRole('button', { name: 'Yıl' }).click();
     await expect(tahta.locator('.tc-pyq-hucre').first()).toBeVisible();
@@ -2885,5 +2885,88 @@ test('Kokpit 3551 F: genel bakış şeridi bütün planı gösterir; pencere kla
   await bolum.getByRole('button', { name: 'Genel bakış' }).click();
   await expect(serit).toHaveCount(0);
   await tasma();
+  expect(ag.hatalar).toEqual([]);
+});
+
+test('Kokpit 3551 G: Tezgâhlarda Hafta ve Ay doluluk hücresi; hücre günü yan panelde açar (genişte yanda, 768 altta); Esc odağı hücreye döndürür; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  await taslakSunucusu(page);
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const karsilama = page.getByRole('button', { name: 'Başlayalım' });
+  if (await karsilama.isVisible()) await karsilama.click();
+  const tasma = async () => { expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0); };
+  const cek = async (ad: string) => { await page.waitForTimeout(800); await page.screenshot({ path: `/tmp/tmiv2-ekran/3551g-${ad}-${bilgi.project.name}.png` }); };
+  await kokpit.getByRole('group', { name: 'Görünüm' }).getByRole('button', { name: 'Tezgâhlar' }).click();
+  const bolum = kokpit.getByRole('region', { name: 'Tezgâhlar' });
+  if (bilgi.project.name === 'g360') {
+    await expect(bolum.locator('.tc-pyq-tahta')).toBeHidden();
+    await tasma();
+    await cek('0-telefon');
+    expect(ag.hatalar).toEqual([]);
+    return;
+  }
+  const tahta = bolum.locator('.tc-pyq-tahta');
+  await expect(tahta).toBeVisible();
+  // Hafta: Ctrl+tekerlekle uzaklaşılır (sade düzende ölçek düğmesi yok); satır tezgâh x gün hücresi, iş kutusu yok.
+  const k = await tahta.boundingBox();
+  if (!k) throw new Error('tahta yok');
+  await page.mouse.move(k.x + k.width * 0.7, k.y + 60);
+  await page.keyboard.down('Control');
+  for (let i = 0; i < 8 && (await tahta.getAttribute('data-olcek')) !== 'H'; i++) { await page.mouse.wheel(0, 300); await page.waitForTimeout(150); }
+  await page.keyboard.up('Control');
+  await expect(tahta).toHaveAttribute('data-olcek', 'H');
+  const hucre = tahta.locator('[data-hucre]:not([disabled])').filter({ has: page.locator('.tc-pyq-gunhucre-sayi') }).first();
+  await expect(hucre).toBeVisible();
+  await expect(hucre).toHaveAttribute('aria-label', /: doluluk %\d+ \(\d+ \/ \d+ sa\)/);
+  await tasma();
+  await cek('1-hafta');
+  const kimlik = await hucre.getAttribute('data-hucre');
+  await hucre.click();
+  const panel = bolum.locator('[data-hucre-paneli]');
+  await expect(panel).toBeVisible();
+  await expect(panel).toHaveAttribute('data-hucre-paneli', kimlik ?? '');
+  await expect(page.locator('#tc-pyq-hpanel-baslik')).toBeFocused();
+  // Arayüz 3c Y1 ve Test G1: kap 1200 px ve genişse tahta daralmaz, panel sağ kenarını örter ve seçili hücre panelin solunda tam görünür;
+  // daha darda (768, sol menü açık 1280) panel tahtanın altında.
+  const p = await panel.boundingBox(), t = await tahta.boundingBox();
+  if (!p || !t) throw new Error('kutu yok');
+  const kap = await bolum.locator('.tc-pyq-panelli').evaluate((el) => el.getBoundingClientRect().width);
+  if (bilgi.project.name === 'g768') expect(kap).toBeLessThan(1200);
+  if (kap >= 1200) {
+    expect(t.width).toBeGreaterThanOrEqual(k.width - 1);
+    await expect.poll(async () => { const h = await tahta.locator(`[data-hucre="${kimlik ?? ''}"]`).boundingBox(); return h ? h.x + h.width <= p.x : false; }).toBe(true);
+  } else expect(p.y).toBeGreaterThanOrEqual(t.y + t.height - 1);
+  await tasma();
+  await cek('2-panel');
+  await page.keyboard.press('Escape');
+  await expect(panel).toHaveCount(0);
+  await expect(tahta.locator(`[data-hucre="${kimlik ?? ''}"]`)).toBeFocused();
+  // Arayüz 3c Z3: hücre ağı tek Tab durağı; sağ ok odağı aynı satırda ileri taşır, durak odakla gider.
+  expect(await tahta.locator('[data-hucre][tabindex="0"]').count()).toBe(1);
+  await page.keyboard.press('ArrowRight');
+  const odakta = await page.evaluate(() => document.activeElement?.getAttribute('data-hucre') ?? '');
+  expect(odakta.split('|')[0]).toBe((kimlik ?? '').split('|')[0]);
+  expect(Number(odakta.split('|')[1])).toBeGreaterThan(Number((kimlik ?? '').split('|')[1]));
+  await expect(tahta.locator('[data-hucre][tabindex="0"]')).toHaveAttribute('data-hucre', odakta);
+  // Ay'da da hücre; Gün'e dönünce adım kutuları.
+  await page.mouse.move(k.x + k.width * 0.7, k.y + 60);
+  await page.keyboard.down('Control');
+  for (let i = 0; i < 6 && (await tahta.getAttribute('data-olcek')) !== 'A'; i++) { await page.mouse.wheel(0, 300); await page.waitForTimeout(150); }
+  await page.keyboard.up('Control');
+  await expect(tahta).toHaveAttribute('data-olcek', 'A');
+  expect(await tahta.locator('[data-hucre]').count()).toBeGreaterThan(0);
+  // Z2: Ay'da geç işareti yüzde rakamını örtmez; Z4: hücre lejantı görünür.
+  const kesisen = await tahta.evaluate((el) => [...el.querySelectorAll('.tc-pyq-gunhucre')].filter((h) => {
+    const s = h.querySelector('.tc-pyq-gunhucre-sayi'), g = h.querySelector('.tc-pyq-gunhucre-gec');
+    if (!s || !g) return false;
+    const r = document.createRange(); r.selectNodeContents(s); const a = r.getBoundingClientRect(), b = g.getBoundingClientRect();
+    return a.width > 0 && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+  }).length);
+  expect(kesisen).toBe(0);
+  await expect(bolum.locator('[data-hucre-lejant]')).toBeVisible();
+  await tasma();
+  await cek('3-ay');
   expect(ag.hatalar).toEqual([]);
 });

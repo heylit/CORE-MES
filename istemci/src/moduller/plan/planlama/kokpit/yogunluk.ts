@@ -1,5 +1,5 @@
 import { acikSaat, type Derleme } from '../motor/kurallar.ts';
-import { SAAT_ENI, sigdirma, yakinOlcegi, YAKIN_EN_AZ, YAKIN_EN_COK, type KokpitEmri, type KokpitIsi, type KokpitModeli, type KokpitOlcegi } from './kurallar.ts';
+import { SAAT_ENI, aralikYuku, durusAdi, sigdirma, yakinOlcegi, yukYuzdesi, YAKIN_EN_AZ, YAKIN_EN_COK, type KokpitDurusu, type KokpitEmri, type KokpitIsi, type KokpitModeli, type KokpitOlcegi } from './kurallar.ts';
 
 // Kokpit gantt yoğun veride okunurluk, dilim 1 (KURGU T1 ufuk, T5 etiket, T6 oklar). Saf; ekran Tahta.tsx ve Kokpit.tsx.
 
@@ -207,4 +207,46 @@ export const pencereBasi = (S: number, en: number, bas: number, son: number): nu
 export function pencereOlcegi(S: number, C: number, gorunen: number): { olcek: KokpitOlcegi; saatEni: number } {
   const px = Math.min(YAKIN_EN_COK, Math.max(SAAT_ENI.Y, gorunen / Math.max(PENCERE_EN_AZ, C - S)));
   return { olcek: px >= YAKIN_EN_AZ ? yakinOlcegi(px) : 'H', saatEni: px };
+}
+
+// Arayüz 3c Z2: hücre bu genişlikten (px) darsa geç sayısı rozet değil alt kenarda kırmızı çizgi olur; yüzde rakamı örtülmez (sayı ad ve ipucunda).
+export const HUCRE_ROZET_EN = 48;
+// Dilim 3c (G): Tezgâh gözünde Ay ve Hafta ölçeğinde tezgâh x gün doluluk hücresi; basınca o günün işleri yan panelde.
+export const hucreKipi = (goz: string, olcek: KokpitOlcegi, px: number): boolean => goz === 'T' && olcek !== 'Y' && (olcek === 'A' || olcek === 'H' || px < YAKIN_EN_AZ);
+export interface TezgahGunu { gun: number; a: number; b: number; acik: number; plan: number; yuzde: number | null; gec: number; isSay: number; duruslar: KokpitDurusu[] }
+// Tezgâhın plan günleri: açık ve plandaki saat, o güne değen iş sayısı, geç emirlerin iş sayısı, güne değen duruşlar.
+export function tezgahGunleri(
+  cx: Parameters<typeof aralikYuku>[0], m: Pick<KokpitModeli, 'isler' | 'bas' | 'son' | 'durus'>, tezgah: string, gecEmirler: ReadonlySet<string>,
+): TezgahGunu[] {
+  const isler = Object.values(m.isler).filter((x) => x.m === tezgah), dl = m.durus[tezgah] ?? [];
+  const gunSay = Math.max(0, Math.ceil((m.son - m.bas) / 24));
+  return Array.from({ length: gunSay }, (_, gun) => {
+    const a = m.bas + gun * 24, b = a + 24, y = aralikYuku(cx, isler, tezgah, a, b), deg = isler.filter((x) => x.S < b && x.C > a);
+    return { gun, a, b, acik: y.acik, plan: y.plan, yuzde: yukYuzdesi(y), gec: deg.filter((x) => gecEmirler.has(x.job)).length, isSay: deg.length, duruslar: dl.filter((d) => d.a < b && d.b > a) };
+  });
+}
+// Hücrenin ve panelin özeti: "doluluk %100 (16 / 16 sa), 1 geç iş, bakım duruşu" (ad bunun önüne "kod tarih: " ekler).
+export function hucreOzeti(g: Pick<TezgahGunu, 'yuzde' | 'acik' | 'plan' | 'gec' | 'isSay' | 'duruslar'>): string {
+  const p = [g.yuzde === null ? 'kapalı' : `doluluk %${String(g.yuzde)} (${String(Math.round(g.plan))} / ${String(Math.round(g.acik))} sa)`];
+  if (g.isSay > 0) p.push(`${String(g.isSay)} iş`);
+  if (g.gec > 0) p.push(`${String(g.gec)} geç iş`);
+  for (const d of g.duruslar) { const ad = durusAdi(d.neden, d.baslik); p.push(ad === 'Bakım' ? 'bakım duruşu' : ad.charAt(0).toLocaleLowerCase('tr') + ad.slice(1)); }
+  return [...new Set(p)].join(', ');
+}
+export const hucreAdi = (kod: string, tarih: string, g: Parameters<typeof hucreOzeti>[0]): string => `${kod} ${tarih}: ${hucreOzeti(g)}`;
+// saatYaz "GG.AA Gün SS:DD" yazar; panel saati ve tarihi ayrı ister.
+export const saatMetni = (y: string): string => y.slice(-5);
+export const tarihMetni = (y: string): string => y.slice(0, -6);
+// Tezgâhın [a, b) içindeki açık saat dilimleri, gün yüzdesiyle (yük bu dilimlerde sayılır); "08:00–24:00" yazısı için saat de döner.
+export function acikDilimler(W: readonly (readonly [number, number])[], a: number, b: number): { sol: number; en: number; s: number; c: number }[] {
+  const g = Math.max(1, b - a);
+  return W.filter((w) => w[1] > a && w[0] < b).map((w) => { const s = Math.max(a, w[0]), c = Math.min(b, w[1]); return { sol: ((s - a) / g) * 100, en: ((c - s) / g) * 100, s: s - a, c: c - a }; });
+}
+const ss = (h: number): string => { const d = Math.round(h * 60); return `${String(Math.floor(d / 60)).padStart(2, '0')}:${String(d % 60).padStart(2, '0')}`; };
+export const acikYazisi = (d: readonly { s: number; c: number }[]): string => (d.length === 0 ? 'kapalı' : d.map((x) => `${ss(x.s)}–${ss(x.c)}`).join(', '));
+// Paneldeki gün çizelgesi: güne değen işler başlangıç sırasıyla; günün dışına taşan kısım kesilir (yüzde 0-100).
+export function gunCizelgesi(isler: readonly KokpitIsi[], a: number, b: number): { is: KokpitIsi; sol: number; en: number }[] {
+  const g = Math.max(1, b - a);
+  return isler.filter((x) => x.S < b && x.C > a).sort((p, q) => p.S - q.S || p.id.localeCompare(q.id))
+    .map((x) => { const s = Math.max(a, x.S), c = Math.min(b, x.C); return { is: x, sol: ((s - a) / g) * 100, en: Math.max(0, ((c - s) / g) * 100) }; });
 }
