@@ -199,7 +199,7 @@ describe('EmirAyrintisi', () => {
     expect(within(asamalar[0]!).getByText(new Date(PLANLI.acilma).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' }))).toBeTruthy();
     expect(screen.queryByText(/Emir adedinden/)).toBeNull();
     expect(screen.getByText('Henüz kayıt yok')).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Adımlar' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: 'Adımlar ve hazırlık' }).getAttribute('aria-selected')).toBe('true');
   });
 
   it('3039: ayrıntıda iptal düğmesi yok; Reçete ve Rota bağlantısı "Bağlantılar" menüsünde, sayfa yetkisine bağlı', async () => {

@@ -17,9 +17,9 @@ export function degisimEngeli(a: Pick<IsEmri, 'durum' | 'fason'>): string | null
 }
 
 // 1208: fasonun arkasına sunucunun koyduğu GKK ek adımı; sunucu ek açıklamayı bu metinle yazar.
-const otomatikGkkMi = (a: Pick<IsEmri, 'tur' | 'ekAciklama'>): boolean => a.tur === 'ek' && a.ekAciklama === 'Otomatik GKK';
+export const otomatikGkkMi = (a: Pick<IsEmri, 'tur' | 'ekAciklama'>): boolean => a.tur === 'ek' && a.ekAciklama === 'Otomatik GKK';
 
-const dalMetni = (d: NonNullable<IsEmri['dal']>): string => `${d.malzeme.kod ?? d.malzeme.ad} · rotada OP ${String(d.kaynakOpNo)}`;
+export const dalMetni = (d: NonNullable<IsEmri['dal']>): string => `${d.malzeme.kod ?? d.malzeme.ad} · rotada OP ${String(d.kaynakOpNo)}`;
 
 // Sağlam yoksa "yok"; ilk parça kararı bekleyen sayım sağlama girmez, yanında ayrı yazılır (sıfır uydurulmaz).
 export function saglamMetni(a: Pick<IsEmri, 'saglamAdet' | 'kararBekliyor'>): string {

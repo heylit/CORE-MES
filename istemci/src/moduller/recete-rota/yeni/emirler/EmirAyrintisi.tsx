@@ -22,6 +22,7 @@ import type { IhtiyacSatinAlma, MalzemeIhtiyaciCevabi, MalzemeIhtiyaciSatiri } f
 import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
 import { planMetni, tamponRozeti, turAdi, type TamponRozeti } from './gorunum.ts';
 import { seriRotasiNotu } from './kurallar.ts';
+import type { AdimTablosuYuvasi, TabloSatiri } from '../../../uretim-emirleri/disari.ts';
 
 const KANBAN_YOLU = '/recete-rota/kanban';
 // Kapanış onayları emrin ana yerindedir (3003 a).
@@ -516,7 +517,7 @@ export const EMRIN_BASI = 0;
 
 function PlanBolumu({ durum: d, emir: o, adimlar, yetki, komut, goster = 'hepsi', araya, satirEki }: {
   durum: RrDurumu; emir: Emir; adimlar: EmirAdimi[]; yetki: EkranOzellikleri['yetki']; komut: ReturnType<typeof useEmirKomutu>;
-  goster?: 'hepsi' | 'adimlar' | 'malzeme'; araya?: Araya; satirEki?: (opNo: number, yedek: ReactNode) => ReactNode;
+  goster?: 'hepsi' | 'adimlar' | 'malzeme'; araya?: Araya; satirEki?: AdimTablosuYuvasi;
 }) {
   const [kaldir, setKaldir] = useState<number | null>(null);
   const yonlen = useNavigate();
@@ -616,6 +617,33 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki, komut, goster = 'hepsi'
     ...(R?.uyarilar ?? []),
   ];
   const yanUrun = R?.yanUrun ?? [];
+  // Adım tablosunun satırları (3581): ek adım yeri, başlamamış adımın önündeki tek giriştir (sahibin kuralı); tablo "Adım ekle" kipinde gösterir.
+  const tabloSatirlari: TabloSatiri[] = ops.map((s, i) => {
+    const onceki = ops[i - 1];
+    const yer = onceki === undefined ? EMRIN_BASI : onceki.adim.opNo;
+    const ekleyebilir = araya !== undefined && s.durum === 'bekliyor' && (yer === EMRIN_BASI || araya.yerler.has(yer));
+    const g = adimDugumu(o, s.adim.opNo);
+    const ad = d.opdefs?.find((x) => x.id === s.adim.opId)?.abbr ?? s.adim.ad;
+    const istasyon = d.stations?.find((x) => x.id === s.adim.stationId)?.name ?? null;
+    return {
+      opNo: s.adim.opNo, adMetni: ad, fason: false,
+      ad: (
+        <span className="tc-rr3-adim-dal">
+          {g && <DalRozeti dal={g.dal} />}{ad}
+          {g && <small>{` ${kart(g.itemId)?.code ?? g.itemId} · rotada OP ${String(g.kaynakOpNo)}`}</small>}
+        </span>
+      ),
+      ekEtiketi: s.ek ? `${EK_TURLERI.find((t) => t.deger === s.ek)?.baslik ?? 'Ek'} · rotada yok` : null,
+      yer: [istasyon, s.makine].filter((x) => x !== null).join(' · ') || null,
+      baslangic: s.baslangic ? `${s.oneri ? 'öneri' : 'plan'} ${zaman(s.baslangic)}` : null,
+      yedek: <Rozet ton={IS_EMRI_DURUMU[s.durum].ton}>{IS_EMRI_DURUMU[s.durum].etiket}</Rozet>,
+      ekle: ekleyebilir ? { yer, baslik: yer === EMRIN_BASI ? 'emrin başına (ek adım, rework ya da tamir)' : `OP ${String(yer)} ile OP ${String(s.adim.opNo)} arasına` } : null,
+      kaldir: s.ek && kaldirilir && s.durum === 'bekliyor' ? (
+        <Dugme simge="trash" aria-label={`OP ${String(s.adim.opNo)} ek adımını kaldır`} title="Başlamamış ek adımı emirden kaldır" onClick={() => { setKaldir(s.adim.opNo); }} />
+      ) : undefined,
+      alt: s.durum !== 'bekliyor' && sureler?.get(s.adim.opNo) ? <SureOzetiSatiri o={sureler.get(s.adim.opNo)!} /> : undefined,
+    };
+  });
 
   return (
     <section className="tc-rr3-plan" aria-label={`${o.no} planı`}>
@@ -634,53 +662,55 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki, komut, goster = 'hepsi'
       )}
       {adimGoster && (<>
       {goster === 'hepsi' && <h4>Adımlar</h4>}
-      <ol className="tc-rr3-adimlar" aria-label={`${o.no} operasyonları`}>
-        {ops.map((s, i) => {
-          // Ek adım ancak başlamamış adımın önüne girer (sahibin kuralı): yer, başlamamış her adımın üstünde tek girişle sunulur.
-          const onceki = ops[i - 1];
-          const yer = onceki === undefined ? EMRIN_BASI : onceki.adim.opNo;
-          const arayaYer = araya !== undefined && s.durum === 'bekliyor' && (yer === EMRIN_BASI || araya.yerler.has(yer));
-          // 1476-F C (1553 a): çok katmanlı emirde alt parça adımı dal etiketi, parça kodu ve rotadaki op numarasıyla gösterilir.
-          const g = adimDugumu(o, s.adim.opNo);
-          const rozet = <Rozet ton={IS_EMRI_DURUMU[s.durum].ton}>{IS_EMRI_DURUMU[s.durum].etiket}</Rozet>;
-          return (
-          <Fragment key={s.adim.opNo}>
-          {araya && arayaYer && araya.acik !== yer && (
-            <li className="tc-rr3-araya-yer">
-              <Dugme className="tc-rr3-araya" simge="plus" onClick={() => { araya.ac(yer); }}
-                title={yer === EMRIN_BASI ? 'Emrin başına ek adım, rework ya da tamir' : `OP ${String(yer)} ile OP ${String(s.adim.opNo)} arasına`}>
-                Buraya adım ekle
-              </Dugme>
+      {satirEki ? satirEki({ satirlar: tabloSatirlari, ekleme: araya === undefined ? undefined : { acik: araya.acik, ac: araya.ac, panel: araya.panel } }) : (
+        <ol className="tc-rr3-adimlar" aria-label={`${o.no} operasyonları`}>
+          {ops.map((s, i) => {
+            // Ek adım ancak başlamamış adımın önüne girer (sahibin kuralı): yer, başlamamış her adımın üstünde tek girişle sunulur.
+            const onceki = ops[i - 1];
+            const yer = onceki === undefined ? EMRIN_BASI : onceki.adim.opNo;
+            const arayaYer = araya !== undefined && s.durum === 'bekliyor' && (yer === EMRIN_BASI || araya.yerler.has(yer));
+            // 1476-F C (1553 a): çok katmanlı emirde alt parça adımı dal etiketi, parça kodu ve rotadaki op numarasıyla gösterilir.
+            const g = adimDugumu(o, s.adim.opNo);
+            const rozet = <Rozet ton={IS_EMRI_DURUMU[s.durum].ton}>{IS_EMRI_DURUMU[s.durum].etiket}</Rozet>;
+            return (
+            <Fragment key={s.adim.opNo}>
+            {araya && arayaYer && araya.acik !== yer && (
+              <li className="tc-rr3-araya-yer">
+                <Dugme className="tc-rr3-araya" simge="plus" onClick={() => { araya.ac(yer); }}
+                  title={yer === EMRIN_BASI ? 'Emrin başına ek adım, rework ya da tamir' : `OP ${String(yer)} ile OP ${String(s.adim.opNo)} arasına`}>
+                  Buraya adım ekle
+                </Dugme>
+              </li>
+            )}
+            {araya && araya.acik === yer && arayaYer && <li className="tc-rr3-araya-panel">{araya.panel}</li>}
+            <li>
+              <span className="tc-rr3-op">{s.adim.opNo}</span>
+              <span className="tc-rr3-adim-ad">
+                <span className="tc-rr3-adim-dal">{g && <DalRozeti dal={g.dal} />}{d.opdefs?.find((x) => x.id === s.adim.opId)?.abbr ?? s.adim.ad}</span>
+                <small>
+                  {s.ek ? `${EK_TURLERI.find((t) => t.deger === s.ek)?.baslik ?? ''} · rotada yok · ` : ''}
+                  {g ? `${kart(g.itemId)?.code ?? g.itemId} · rotada OP ${String(g.kaynakOpNo)} · ` : ''}{adimYeri(s)}
+                </small>
+              </span>
+              <span className="tc-rr3-adim-saglam"><small>Sağlam</small><b>{sayi(s.saglam)}</b></span>
+              {/* Kaldır rozetle aynı hücrede: satırın ızgarası dört sütundur, dar panelde üçe iner; ayrı öğe yeni satıra düşerdi. */}
+              <span className="tc-rr3-eylemler">
+                {rozet}
+                {s.ek && kaldirilir && s.durum === 'bekliyor' && (
+                  <Dugme
+                    simge="trash" aria-label={`OP ${String(s.adim.opNo)} ek adımını kaldır`} title="Başlamamış ek adımı emirden kaldır"
+                    onClick={() => { setKaldir(s.adim.opNo); }}
+                  />
+                )}
+              </span>
+              {s.durum !== 'bekliyor' && sureler?.get(s.adim.opNo) && <SureOzetiSatiri o={sureler.get(s.adim.opNo)!} />}
             </li>
-          )}
-          {araya && araya.acik === yer && arayaYer && <li className="tc-rr3-araya-panel">{araya.panel}</li>}
-          <li>
-            <span className="tc-rr3-op">{s.adim.opNo}</span>
-            <span className="tc-rr3-adim-ad">
-              <span className="tc-rr3-adim-dal">{g && <DalRozeti dal={g.dal} />}{d.opdefs?.find((x) => x.id === s.adim.opId)?.abbr ?? s.adim.ad}</span>
-              <small>
-                {s.ek ? `${EK_TURLERI.find((t) => t.deger === s.ek)?.baslik ?? ''} · rotada yok · ` : ''}
-                {g ? `${kart(g.itemId)?.code ?? g.itemId} · rotada OP ${String(g.kaynakOpNo)} · ` : ''}{adimYeri(s)}
-              </small>
-            </span>
-            <span className="tc-rr3-adim-saglam"><small>Sağlam</small><b>{sayi(s.saglam)}</b></span>
-            {/* Kaldır rozetle aynı hücrede: satırın ızgarası dört sütundur, dar panelde üçe iner; ayrı öğe yeni satıra düşerdi. */}
-            <span className="tc-rr3-eylemler">
-              {satirEki ? satirEki(s.adim.opNo, rozet) : rozet}
-              {s.ek && kaldirilir && s.durum === 'bekliyor' && (
-                <Dugme
-                  simge="trash" aria-label={`OP ${String(s.adim.opNo)} ek adımını kaldır`} title="Başlamamış ek adımı emirden kaldır"
-                  onClick={() => { setKaldir(s.adim.opNo); }}
-                />
-              )}
-            </span>
-            {s.durum !== 'bekliyor' && sureler?.get(s.adim.opNo) && <SureOzetiSatiri o={sureler.get(s.adim.opNo)!} />}
-          </li>
-          </Fragment>
-          );
-        })}
-        {ops.length === 0 && <li className="tc-rr3-adim-bos">Adım yok.</li>}
-      </ol>
+            </Fragment>
+            );
+          })}
+          {ops.length === 0 && <li className="tc-rr3-adim-bos">Adım yok.</li>}
+        </ol>
+      )}
       <OnayPenceresi
         acik={kaldir !== null} baslik={`OP ${String(kaldir ?? '')} kaldırılsın mı?`} onayMetni="Kaldır" tehlikeli yukleniyor={komut.mesgul}
         vazgec={() => { setKaldir(null); }}
@@ -788,7 +818,7 @@ export function EmirIslemDugmeleri({ durum: d, emir: o, yetki, git, komut, emirA
 }
 
 // "Adımlar" sekmesi: uyarılar, emrin yapısı (alt emir, bölme, katılma), tek adım listesi ve adımların arasına ek adım.
-export function EmirAdimBolumu({ durum: d, emir: o, yetki, komut, satirEki }: ParcaOzellikleri & { satirEki?: (opNo: number, yedek: ReactNode) => ReactNode }) {
+export function EmirAdimBolumu({ durum: d, emir: o, yetki, komut, satirEki }: ParcaOzellikleri & { satirEki?: AdimTablosuYuvasi }) {
   const isl = useEmirIslemi();
   const adimlar = emirAdimlari(d, o);
   const ekAcik = acikMi(o) && yetki.emirAdimYaz && !o.rotasiz && adimlar.length > 0;

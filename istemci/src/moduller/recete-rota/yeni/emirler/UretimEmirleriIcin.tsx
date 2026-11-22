@@ -7,6 +7,7 @@ import { RrSaglayici } from '../ReceteRotaYeni.tsx';
 import { SEKMELER, type SekmeAnahtari } from '../sekmeler.ts';
 import { anahtarlar, useRrVerisi, type RrVerisi } from '../veri.ts';
 import { useRrYetkisi } from '../yetki.ts';
+import type { AdimTablosuYuvasi } from '../../../uretim-emirleri/disari.ts';
 import { EmirAdimBolumu, EmirIslemDugmeleri, EmirMalzemeBolumu } from './EmirAyrintisi.tsx';
 import { EmirExcelMenusu, ExcelMenusu, type ExcelPenceresiTuru } from './ExcelGirisi.tsx';
 import { useEmirKomutu } from './komut.ts';
@@ -97,8 +98,8 @@ export function EmirExcelDugmesi() {
 
 // Emir sayfasının (Üretim Emirleri) parçaları (3039): başlıktaki işlemler, "Adımlar" ve "Malzeme" sekmeleri. Hepsi aynı köprüyle çalışır.
 export type EmirParcasiTuru = 'islemler' | 'adimlar' | 'malzeme';
-// Adım satırının sağı Üretim Emirleri'nden gelir (statü, iç/fason); verilmezse satır kendi durum rozetini gösterir.
-export type SatirEki = (opNo: number, yedek: ReactNode) => ReactNode;
+// Adım tablosunu Üretim Emirleri çizer (3581: statü, hazırlık, ayrıntı); bu modül satırları verir. Verilmezse eski adım listesi çizilir.
+export type SatirEki = AdimTablosuYuvasi;
 
 // ekOgeler: Üretim Emirleri'nin kendi işlemleri (3050 a "Beklet"); "İşlemler" menüsüne girer.
 export function EmirParcasi({ kayitNo, parca, satirEki, ekOgeler }: { kayitNo: number; parca: EmirParcasiTuru; satirEki?: SatirEki; ekOgeler?: readonly MenuOgesi[] }) {
