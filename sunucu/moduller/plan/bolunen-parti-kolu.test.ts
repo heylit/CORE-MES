@@ -4,6 +4,8 @@ import { degerlendirmeSonucu } from '#paylasilan/sozlesme/planlama.ts';
 import { degerlendirmeYap } from './degerlendirme.ts';
 import { planGirdisi } from './plan-girdisi.ts';
 import { motorYukle } from './plan-motoru.ts';
+import { olayEkle, type KomutSonucu } from './atolye-komutlari-kurallar.ts';
+import { durusUygula, yenidenPlanlaUygula } from './taslak-kurallar.ts';
 import { kolYerleri } from '../../../istemci/src/moduller/plan/planlama/tipler.ts';
 
 // 3512: adım ortasından bölünen parti (kol) rotanın yalnız kendi adımlarını işler; ayrıldığı yerden önceki adımı üst emir partinin adediyle
@@ -620,5 +622,57 @@ describe('"Değişikliği uygula" planın bilmediği duruşu plana göre süren 
     const ops = await uygula(once, once, ['4'], '2026-10-19T08:00:00Z', ek, ariza(14, 15));
     assert.deepEqual(yer(ops, '2.10'), ['200', 8, 14, 6]);
     assert.ok(ops['4.10']!.S >= 15 - 1e-9, `donuk iş arızadan sonra: ${String(ops['4.10']!.S)}`);
+  });
+});
+
+describe('Duruş yalnız durduğu tezgâhın işlerini yeniden dizdirir; plana göre süren adım şimdiye dizilmez (3539)', () => {
+  // Plan 6 adetle kuruldu: 10. adım freze F1'de 08:00-14:00, 20. adım tornada. Saat 09:00'da (06:00Z) duruş girilir, bekleyen uygulanır.
+  const AN = '2026-10-19T06:00:00Z', KISI = { kim: 'ORN-Planci', sayfa: 'kokpit', t: Date.parse(AN) };
+  const yer = (ops: Record<string, Is>, id: string): (string | number)[] => { const r = ops[id]; return r ? [r.m, r.S, r.C, r.run] : []; };
+  type Komut = (c: Record<string, unknown>) => KomutSonucu;
+  const ariza = (m: string, bas: number, saat: number): Komut => (c) => olayEkle(c, { tip: 'ariza', m, bas, saat }, KISI);
+  // Ekranın "Değişikliği uygula"sı gibi: bekleyen satırların işleri birleşir, biri '*' ise hepsi.
+  async function uygulaKomutla(once: Emir[], komutlar: Komut[], ek: Ek = {}): Promise<{ ops: Record<string, Is>; once: Record<string, Is> }> {
+    const onceki = kur(once, ek);
+    let c: Record<string, unknown> = { ...onceki.S, plan: onceki.plan };
+    for (const k of komutlar) { const r = k(c); assert.ok('deger' in r, JSON.stringify(r)); c = r.deger; }
+    const l = (c['bekleyen'] as { isler: string[] }[]).flatMap((b) => b.isler);
+    const isler = l.length === 0 || l.includes('*') ? ['*'] : [...new Set(l)];
+    const d = await degerlendirmeYap({ calisma: c, kayit: ek.kayit ?? kayit(), kaynak: kaynak(once, ek), bugun: '2026-10-19', istek: { tur: 'plan-uygula', isler } }, Date.parse(AN));
+    assert.ok(d && !('hata' in d), JSON.stringify(d));
+    const s = degerlendirmeSonucu.parse(d.sonuc);
+    if (s.tur !== 'plan-uygula') return assert.fail(JSON.stringify(s));
+    return { ops: s.plan['ops'] as Record<string, Is>, once: onceki.ops };
+  }
+
+  test('DT-01: durduğu tezgâhta plana göre süren adım duruş kadar uzar, şimdiden yeniden dizilmez', async () => {
+    const { ops, once } = await uygulaKomutla([emir('2', 6)], [ariza('200', 10, 1)]);
+    assert.deepEqual(yer(once, '2.10'), ['200', 8, 14, 6], 'örnek plan');
+    assert.deepEqual(yer(ops, '2.10'), ['200', 8, 15, 6]);
+  });
+
+  test('DT-02: başka tezgâha girilen duruş plana göre süren adımı yerinden oynatmaz', async () => {
+    const { ops } = await uygulaKomutla([emir('2', 6)], [ariza('100', 10, 1)]);
+    assert.deepEqual(yer(ops, '2.10'), ['200', 8, 14, 6]);
+  });
+
+  test('DT-03: taslağın duruş komutu öteki tezgâhın işini yerinde tutar; satır yalnız o tezgâhın siparişlerini işaretler', async () => {
+    // İkinci ürün yalnız tornada işlenir: emir 5 tornada 08:00-11:00 plana göre sürer, freze duruşundan etkilenmez.
+    const k = kayit(); k.items.push({ id: '52', code: 'MM-3', name: 'Ornek pim', type: 'mamul' }); (k.routes as Record<string, unknown>)['52'] = { base: null, steps: [adim(10, '10', 60, 0)] };
+    const once = [emir('2', 6), { ...emir('5', 3), itemId: '52' }];
+    const durus: Komut = (c) => durusUygula(c, { tezgah: '200', bas: 10, bit: 11, neden: 'arıza' }, KISI);
+    const { ops, once: o } = await uygulaKomutla(once, [durus], { kayit: k });
+    assert.deepEqual(yer(o, '5.10'), ['100', 8, 11, 3], 'örnek plan');
+    assert.deepEqual(yer(ops, '5.10'), ['100', 8, 11, 3]);
+    assert.deepEqual(yer(ops, '2.10'), ['200', 8, 15, 6]);
+    const p = kur(once, { kayit: k }), r = durus({ ...p.S, plan: p.plan });
+    assert.ok('deger' in r);
+    assert.deepEqual((r.deger['bekleyen'] as { isler: string[] }[]).map((b) => b.isler), [['2']]);
+  });
+
+  test('DT-04: aynı emir açıkça yeniden planlanırsa süren adım duruşla birlikte şimdiden sonraya dizilir (3335-2b)', async () => {
+    const yeniden: Komut = (c) => yenidenPlanlaUygula(c, ['2'], KISI);
+    const { ops } = await uygulaKomutla([emir('2', 6)], [ariza('200', 10, 1), yeniden]);
+    assert.deepEqual(yer(ops, '2.10'), ['200', 9, 16, 6]);
   });
 });
