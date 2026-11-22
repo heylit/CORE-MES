@@ -209,4 +209,11 @@ describe('Planlama ayarları sayfası (3561)', () => {
     const { SISTEM_UYARILARI } = await import('./bolumler.ts');
     for (const u of Object.values(SISTEM_UYARILARI)) expect(u).toBe('Değişiklik sonraki Planı güncelle ile plana girer.');
   });
+
+  it('listeye dönüşte odak önceki gruba gider (R1)', async () => {
+    kur(PLAN_YAZAR, 'motor');
+    await screen.findByLabelText('Sıralama kuralı');
+    fireEvent.click(screen.getByRole('link', { name: /Gruplar/ }));
+    await vi.waitFor(() => { expect(document.activeElement?.getAttribute('href')).toMatch(/bolum=motor$/); });
+  });
 });

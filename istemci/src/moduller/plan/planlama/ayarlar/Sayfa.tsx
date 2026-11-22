@@ -67,9 +67,12 @@ export function AyarlarGovdesi({ o, ortak, c, taslak }: { o: PlanlamaEkranOzelli
   // Telefonda grup değişince bakılan öğe DOM'dan kalkar: odak yeni ayrıntı başlığına, listeye dönüşte seçili gruba gider.
   const kap = useRef<HTMLDivElement>(null);
   const ilk = useRef(true);
+  const sonGrup = useRef<string | null>(bolumParam);
   useEffect(() => {
+    const onceki = sonGrup.current;
+    if (bolumParam !== null) sonGrup.current = bolumParam;
     if (ilk.current) { ilk.current = false; return; }
-    const hedef = bolumParam === null ? kap.current?.querySelector<HTMLElement>('.tc-pya-liste a[aria-current="page"]') : kap.current?.querySelector<HTMLElement>('.tc-pya-ayrinti h3');
+    const hedef = bolumParam === null ? kap.current?.querySelector<HTMLElement>(`.tc-pya-liste a[href$="?bolum=${onceki ?? 'kontrol'}"]`) : kap.current?.querySelector<HTMLElement>('.tc-pya-ayrinti h3');
     hedef?.focus();
   }, [bolumParam]);
   const calismaYok = ortak === null || c === null;
