@@ -1,4 +1,5 @@
-import { SAAT_ENI, sigdirma, yakinOlcegi, YAKIN_EN_AZ, type KokpitEmri, type KokpitIsi, type KokpitModeli, type KokpitOlcegi } from './kurallar.ts';
+import { acikSaat, type Derleme } from '../motor/kurallar.ts';
+import { SAAT_ENI, sigdirma, yakinOlcegi, YAKIN_EN_AZ, YAKIN_EN_COK, type KokpitEmri, type KokpitIsi, type KokpitModeli, type KokpitOlcegi } from './kurallar.ts';
 
 // Kokpit gantt yoğun veride okunurluk, dilim 1 (KURGU T1 ufuk, T5 etiket, T6 oklar). Saf; ekran Tahta.tsx ve Kokpit.tsx.
 
@@ -63,6 +64,7 @@ export const kumeYazisi = (n: number): string => `${String(n)} iş`;
 // T4: satır boyu. Rahat bugünkü (dokunma boyu), Sıkı daha alçak; dokunmatik ekranda Sıkı kapalıdır (dokunma hedefi). Tarayıcıda hatırlanır (V6).
 export type SatirBoyu = 'rahat' | 'siki';
 export const SATIR_ANAHTARI = 'coremes.kokpit-satir-boyu';
+export const GENEL_ANAHTARI = 'coremes.kokpit-genel-bakis';
 export const satirBoyuCoz = (ham: string | null | undefined, dokunmatik: boolean): SatirBoyu => (!dokunmatik && ham === 'siki' ? 'siki' : 'rahat');
 
 // Dilim 3 (E, S2 a: 3553): ölçeğe bağlı kademe. Yıl ve Ay'da sipariş başına tek çubuk, Hafta'da emir çubuğu, Gün ve 3 gün'de adımlar.
@@ -117,3 +119,92 @@ export function siparisOzeti(emirler: readonly KokpitEmri[], isler: Readonly<Rec
 }
 export const siparisCubukYazisi = (n: number, o: Pick<SiparisOzeti, 'gec' | 'risk'>): string =>
   [`${String(n)} emir`, o.gec ? `${String(o.gec)} geç` : '', o.risk ? `${String(o.risk)} riskli` : ''].filter(Boolean).join(' · ');
+
+// Dilim 3b (F): genel bakış şeridi. Bütün plan bir şeritte: günlük doluluk, plan ufku, termini kaçan günler, planlı duruşlar ve görünen pencere.
+export interface GenelGun { gun: number; acik: number; plan: number }
+// Fason olmayan bütün tezgâhların günlük açık ve plandaki saati (aralikYuku'nun toplamı; iş başına bir geçiş).
+export function gunlukDoluluk(cx: Pick<Derleme, 'M'>, m: Pick<KokpitModeli, 'tezgahlar' | 'isler' | 'bas' | 'son'>): GenelGun[] {
+  const gunSay = Math.max(0, Math.ceil((m.son - m.bas) / 24)), acik = new Array<number>(gunSay).fill(0), plan = new Array<number>(gunSay).fill(0);
+  for (const t of m.tezgahlar) {
+    const M = cx.M[t.id];
+    if (t.fason || !M) continue;
+    for (let g = 0; g < gunSay; g++) acik[g]! += acikSaat(M.rw, m.bas + g * 24, m.bas + g * 24 + 24);
+  }
+  for (const x of Object.values(m.isler)) {
+    const M = cx.M[x.m];
+    if (x.fason || !M) continue;
+    for (let g = Math.max(0, Math.floor((x.S - m.bas) / 24)); g < gunSay && m.bas + g * 24 < x.C; g++) {
+      const a = m.bas + g * 24;
+      plan[g]! += acikSaat(M.rw, Math.max(a, x.S), Math.min(a + 24, x.C));
+    }
+  }
+  return acik.map((a, g) => ({ gun: g, acik: a, plan: plan[g] ?? 0 }));
+}
+// Termini kaçan (geç) emirler termin gününe göre: gün başına emir sayısı (sıralı). Termini plan başından önce, planın sonunda ya da sonrasında
+// olan ya da termini olmayan geç emir şeritte çizilmez; sayısı "şeridin dışında" diye yazılır (Arayüz 3b Z4).
+export interface GecGunu { gun: number; sayi: number }
+export function gecOzeti(emirler: readonly Pick<KokpitEmri, 'durum' | 'termin'>[], bas: number, son: number): { gunler: GecGunu[]; disarida: number; toplam: number } {
+  const say = new Map<number, number>();
+  let disarida = 0, toplam = 0;
+  for (const e of emirler) {
+    if (e.durum !== 'gec') continue;
+    toplam++;
+    if (e.termin === null || e.termin < bas || e.termin >= son) { disarida++; continue; }
+    const g = Math.floor((e.termin - bas) / 24);
+    say.set(g, (say.get(g) ?? 0) + 1);
+  }
+  return { gunler: [...say].map(([gun, sayi]) => ({ gun, sayi })).sort((a, b) => a.gun - b.gun), disarida, toplam };
+}
+// Şeridin ekran okuyucu özeti: en yoğun gün, aşım günleri, geç emirlerin günleri, plan ufku.
+export function seritOzeti(gunler: readonly GenelGun[], gec: { gunler: readonly GecGunu[]; disarida: number; toplam: number }, tarih: (gun: number) => string, ufuk: string | null): string {
+  const acik = gunler.filter((g) => g.acik > 0);
+  const p: string[] = [];
+  if (acik.length > 0) {
+    const en = acik.reduce((a, b) => (b.plan / b.acik > a.plan / a.acik ? b : a));
+    p.push(`En yoğun gün ${tarih(en.gun)} %${String(Math.round((en.plan / en.acik) * 100))}`);
+    const asim = acik.filter((g) => g.plan > g.acik).length;
+    if (asim > 0) p.push(`${String(asim)} gün aşım`);
+  } else p.push('Planda açık gün yok');
+  if (gec.toplam > 0) p.push(`termini kaçan ${String(gec.toplam)} emir${gec.gunler.length > 0 ? `, ${String(gec.gunler.length)} günde` : ''}${gec.disarida > 0 ? `, ${String(gec.disarida)} tanesi şeridin dışında` : ''}`);
+  if (ufuk) p.push(ufuk);
+  return `${p.join('; ')}.`;
+}
+// Dar şeritte (Test 3b B2: 768'de gün 11 px) yan yana geç noktaları üst üste biner: aralarında en az enAz piksel olmayanlar tek noktada
+// toplanır (ilk ve son gün, toplam sayı).
+export interface GecKumesi { bas: number; son: number; sayi: number }
+export function gecKumele(gunler: readonly GecGunu[], gunEni: number, enAz: number): GecKumesi[] {
+  const l: GecKumesi[] = [];
+  for (const g of gunler) {
+    const k = l.at(-1);
+    if (k && (g.gun - k.bas) * gunEni < enAz) { k.son = g.gun; k.sayi += g.sayi; } else l.push({ bas: g.gun, son: g.gun, sayi: g.sayi });
+  }
+  return l;
+}
+// Şerit ile saat arasındaki dönüşüm: şerit eni W bütün planı (bas..son) taşır.
+export const seritX = (t: number, bas: number, son: number, W: number): number => ((t - bas) / Math.max(1, son - bas)) * W;
+export const seritSaati = (x: number, bas: number, son: number, W: number): number => bas + (Math.min(W, Math.max(0, x)) / Math.max(1, W)) * (son - bas);
+export const PENCERE_EN_AZ = 6;
+// Pencere kenarı ya da Shift ile istenen son: en az PENCERE_EN_AZ saat, en çok plan sonu.
+export const pencereSonu = (S: number, C: number, son: number): number => Math.min(son, Math.max(S + PENCERE_EN_AZ, C));
+// Kaydırıcının değer yazısı: görünen aralık; bütün plan görünüyorsa söylenir.
+export const pencereYazisi = (p: { S: number; C: number }, bas: number, son: number, tarih: (t: number) => string): string =>
+  `${tarih(p.S)} – ${tarih(Math.min(p.C, son))}${p.S <= bas && p.C >= son ? ', tüm plan görünüyor' : ''}`;
+// Kaydırıcı değeri (gün): tahta, ad sütunu ve kenar payı yüzünden plan sonunun ötesine de kayabilir (Test 3b B3); değer en çoğu aşmaz.
+export function pencereDegeri(p: { S: number; C: number } | null, bas: number, son: number): { simdi: number; max: number } {
+  if (!p) return { simdi: 0, max: 0 };
+  const max = Math.max(0, Math.round((son - bas - (p.C - p.S)) / 24));
+  return { simdi: Math.min(max, Math.max(0, Math.round((p.S - bas) / 24))), max };
+}
+// Klavye adımı: sınıra kenetlenir ama ileri tuş pencereyi geri çekmez, geri tuş ileri itmez.
+export function pencereAdimi(S: number, hedef: number, en: number, bas: number, son: number): number {
+  const h = Math.max(bas, Math.min(son - en, hedef));
+  return hedef > S ? Math.max(S, h) : hedef < S ? Math.min(S, h) : S;
+}
+// Pencereyi sürükleyince görünen başlangıç: pencere şeridin içinde kalır.
+export const pencereBasi = (S: number, en: number, bas: number, son: number): number => Math.max(bas, Math.min(son - en, S));
+// Pencere kenarından genişletme: istenen aralık görünen ene sığacak saat eni ve basılı görünecek ölçek. Hafta'dan dar en "uzak"tır (taşıma yok),
+// inisGorunumu gibi ölçek 'H' kalır; en geniş Gün'ün iki katı. Pencere en az PENCERE_EN_AZ saattir.
+export function pencereOlcegi(S: number, C: number, gorunen: number): { olcek: KokpitOlcegi; saatEni: number } {
+  const px = Math.min(YAKIN_EN_COK, Math.max(SAAT_ENI.Y, gorunen / Math.max(PENCERE_EN_AZ, C - S)));
+  return { olcek: px >= YAKIN_EN_AZ ? yakinOlcegi(px) : 'H', saatEni: px };
+}

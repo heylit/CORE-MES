@@ -15,6 +15,7 @@ import { BASLIK_ADI, GELEN_SIMGESI, type Degisiklik, type Gelenler } from './deg
 import { MalzemeSeridi, malzemeCubuklari } from './MalzemeCubugu.tsx';
 import type { EmirMalzemeleri } from './malzeme.ts';
 import type { YerlestirmeHedefi } from './Yerlestirme.tsx';
+import type { PencereDeposu } from './pencereDeposu.ts';
 import { Ayrac, Bos, FarkRozeti, Halka, type TabloDurumu } from './Tablo.tsx';
 import {
   ADIM_DURUMU_ADI, SUTUN_ADI, SU_AN_ADI, TEZGAH_SUTUNLARI, adimDurumu, bolmeEni, farkOlustur, ilerleme, sablon, suAn, sutunToplamEni, tarihSaat, tezgahToplamEni,
@@ -95,6 +96,8 @@ export interface TahtaOzellikleri {
   siparisler?: readonly SiparisGrubu[] | null;
   // Kademeye inilince (yol izi odağı) kademe ölçekten değil odaktan gelir: sipariş odağında emir, emir odağında adım (Arayüz Z1).
   kademeZorla?: Kademe | null;
+  // Dilim 3b (F): görünen aralık genel bakış şeridine bildirilir; şerit pencereyi sürükleyince tahta o saate kayar (n her istekte artar).
+  pencereDeposu?: PencereDeposu | null;
   kademeIn?: ((tur: 'siparis' | 'emir', id: string, S: number, C: number) => void) | null;
 }
 export type OkKipi = 'is' | 'siparis' | 'yok';
@@ -450,6 +453,30 @@ export function Tahta(o: TahtaOzellikleri) {
   };
   const gelenYazisi = (l: readonly Degisiklik[]): string => l.map((d) => `${BASLIK_ADI[d.baslik]}: ${d.ne}`).join(' · ');
 
+  // Görünen aralık: kaydırma sol kenarı bas saatidir (yapışık ad sütunu hariç; açılıştaki kaydırmayla aynı hesap).
+  const pencereDeposu = o.pencereDeposu ?? null;
+  const bildirSira = useRef(0);
+  const pencereyiBildir = useCallback((): void => {
+    const k = kap.current; if (!k || !pencereDeposu) return;
+    cancelAnimationFrame(bildirSira.current);
+    bildirSira.current = requestAnimationFrame(() => {
+      const ad = k.querySelector<HTMLElement>('.tc-pyq-bas')?.offsetWidth ?? 0, S = m.bas + k.scrollLeft / px;
+      pencereDeposu.yaz(S, S + Math.max(0, k.clientWidth - ad) / px);
+    });
+  }, [pencereDeposu, m.bas, px]);
+  useEffect(() => {
+    pencereyiBildir();
+    const k = kap.current;
+    if (!k || !pencereDeposu) return undefined;
+    // Şerit tahtayı doğrudan kaydırır (durum yok, Kokpit yeniden çizilmez); kaydırma olayı pencereyi geri bildirir.
+    pencereDeposu.kaydiriciKur((S) => {
+      const left = Math.max(0, (S - m.bas) * px);
+      if (typeof k.scrollTo === 'function') k.scrollTo({ left }); else k.scrollLeft = left;
+    });
+    const izleyen = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => { pencereyiBildir(); });
+    izleyen?.observe(k);
+    return () => { izleyen?.disconnect(); cancelAnimationFrame(bildirSira.current); pencereDeposu.kaydiriciKur(null); };
+  }, [pencereyiBildir, pencereDeposu, olcek, m.bas, px]);
   // Açılışta şimdi görünür; istenen iş görünüme gelir.
   useEffect(() => {
     const k = kap.current; if (!k || typeof k.scrollTo !== 'function') return;
@@ -544,7 +571,7 @@ export function Tahta(o: TahtaOzellikleri) {
     const adim = 7, isler = Object.values(m.isler);
     const hucreler = gunler.filter((g) => g % adim === 0);
     return (
-      <div className="tc-pyq-tahta" data-olcek={olcek} ref={kap}>
+      <div className="tc-pyq-tahta" data-olcek={olcek} ref={kap} onScroll={pencereyiBildir}>
         <div className="tc-pyq-ic" ref={(el) => { el?.style.setProperty('--en', `${String(en)}px`); }}>
           {eksen}
           {m.tezgahlar.map((t) => (
@@ -843,7 +870,7 @@ export function Tahta(o: TahtaOzellikleri) {
 
   return (
     <div
-      className="tc-pyq-tahta" data-olcek={olcek} data-tasima={tasinan ? '' : undefined} ref={kap}
+      className="tc-pyq-tahta" data-olcek={olcek} data-tasima={tasinan ? '' : undefined} ref={kap} onScroll={pencereyiBildir}
       onPointerMove={izle} onClickCapture={(ev) => { if (balon && !(ev.target as Element).closest('.tc-pyq-balon, .tc-pyq-gelen')) setBalon(null); if (tasinan && !onay) { ev.preventDefault(); ev.stopPropagation(); birak(); } else if (menu && !(ev.target as Element).closest('.tc-pyq-menu')) setMenu(null); }}
     >
       <div className="tc-pyq-ic" role={tabloKipi ? 'table' : undefined} aria-label={tabloKipi ? goz === 'T' ? 'Tezgâhlar' : 'Emirler' : undefined} ref={(el) => { ic.current = el; el?.style.setProperty('--en', `${String(en)}px`); el?.style.setProperty('--gun', `${String(24 * px)}px`); }}>

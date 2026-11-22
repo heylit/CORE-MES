@@ -23,7 +23,7 @@ import { useBitinceBildir } from './bitince-bildir.ts';
 import { emirYonu, planYonu } from '../ayarlar/alanlar.ts';
 import { TabloAraci, useTablo } from './Tablo.tsx';
 import { siralaGecikme, siralaPlan } from './tablo.ts';
-import { SATIR_ANAHTARI, YOGUN_OK_ACIKLAMASI, YOGUN_SATIR, gorunenSatirSayisi, KADEME_YAZISI, inisGorunumu, kademe, satirBoyuCoz, siparisGruplari, siparisOzeti, ufkaSigmaz, ufkaSigmayanSayisi, type SatirBoyu } from './yogunluk.ts';
+import { GENEL_ANAHTARI, SATIR_ANAHTARI, YOGUN_OK_ACIKLAMASI, YOGUN_SATIR, gorunenSatirSayisi, KADEME_YAZISI, inisGorunumu, kademe, pencereOlcegi, satirBoyuCoz, siparisGruplari, siparisOzeti, ufkaSigmaz, ufkaSigmayanSayisi, type SatirBoyu } from './yogunluk.ts';
 import { Kapasite } from './Kapasite.tsx';
 import { Engeller } from './Engeller.tsx';
 import { engelOzeti, engeller } from './engeller.ts';
@@ -37,6 +37,8 @@ import {
   type EmirDurumu, type KokpitEmri, type KokpitModeli, type KokpitOlcegi, type TurAdayi,
 } from './kurallar.ts';
 import { Matris, darEkran, type MatrisDuzeni } from './Matris.tsx';
+import { GenelBakis } from './GenelBakis.tsx';
+import { pencereDeposuKur } from './pencereDeposu.ts';
 import { ODAK_PAYI, Tahta, type CanliYer, type OkKipi } from './Tahta.tsx';
 import { GuncellemeSonucu } from './GuncellemeSonucu.tsx';
 import { Liste } from './Liste.tsx';
@@ -180,6 +182,10 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   // Dilim 2 (T4): satır boyu; dokunmatikte hep Rahat. Seçim bu tarayıcıda saklanır (okunamazsa Rahat).
   const dokunmatik = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
   const [satirBoyu, setSatirBoyu] = useState<SatirBoyu>(() => { try { return satirBoyuCoz(localStorage.getItem(SATIR_ANAHTARI), dokunmatik); } catch { return 'rahat'; } });
+  // Dilim 3b (F): genel bakış şeridi açık mı (tarayıcıda hatırlanır, Arayüz Z5); tahtanın görünen aralığı ve şeritten istenen kaydırma.
+  const [genelAcik, setGenelAcik] = useState<boolean>(() => { try { return localStorage.getItem(GENEL_ANAHTARI) !== 'kapali'; } catch { return true; } });
+  const genelSec = (a: boolean): void => { setGenelAcik(a); try { localStorage.setItem(GENEL_ANAHTARI, a ? 'acik' : 'kapali'); } catch { /* saklanamazsa yalnız bu oturumda */ } };
+  const [pencereDeposu] = useState(pencereDeposuKur);
   const satirBoyuSec = (b: SatirBoyu): void => { setSatirBoyu(b); try { localStorage.setItem(SATIR_ANAHTARI, b); } catch { /* saklanamazsa yalnız bu oturumda */ } };
   const [onceAcik, setOnceAcik] = useState(false);
   const [goster, setGoster] = useState<string | null>(null);
@@ -493,6 +499,21 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
       <small className="tc-pyq-yolizi-kademe" role="status">{KADEME_YAZISI[eKademe ?? kademe(olcek)]}</small>
     </nav>
   );
+  // Pencere kenarı: aralık görünen ene sığar, başı yerinde kalır (tahta odağı kaydırır: sol kenar = odak - pay).
+  const pencereGenislet = useCallback((S: number, C: number) => {
+    const k = document.querySelector<HTMLElement>('.tc-pyq-tahta'), ad = k?.querySelector<HTMLElement>('.tc-pyq-bas')?.offsetWidth ?? 0;
+    const gorunen = (k?.clientWidth ?? 0) - ad;
+    const r = pencereOlcegi(S, C, gorunen > 0 ? gorunen : SIGDIRMA_ENI);
+    setOlcek(r.olcek); setSaatEni(r.saatEni); setOdak(S + ODAK_PAYI / r.saatEni);
+  }, []);
+  const genelSerit = (
+    <div className="tc-pyq-genel-kap" data-genel-kap="" data-acik={genelAcik ? '' : undefined}>
+      <button type="button" className="tc-pyq-ok tc-pyq-genel-ac" aria-expanded={genelAcik} title={genelAcik ? 'Genel bakışı kapat' : 'Bütün planın genel bakışını aç'} onClick={() => { genelSec(!genelAcik); }}>
+        <Simge ad="chev-right" boyut="k" />Genel bakış
+      </button>
+      {genelAcik && <GenelBakis m={m} cx={cx} ufukSonu={ufukSonu} zaman={zaman} depo={pencereDeposu} genislet={pencereGenislet} />}
+    </div>
+  );
   const simdikiEn = uzakMi(olcek) ? SAAT_ENI[olcek] : saatEni ?? SAAT_ENI[olcek];
   // Yakınlaşırken görünümün ortasındaki saat yerinde kalır (tahta kaydırması ölçekle yeniden hesaplanır).
   const yakinlas = useCallback((px: number) => {
@@ -804,8 +825,9 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const listeTahtasiYap = (tezgahTablosu: boolean) => (
     <>
       {sonucCubugu}
+      {genelSerit}
       <Tahta
-        ufukSonu={ufukSonu} satirBoyu={satirBoyu} kumeAc={(S) => { olcekSec('G', S); }} m={m} cx={cx} goz="T" olcek={olcek} emirler={gorunen} tablo={tezgahTablosu ? tablo : null} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
+        pencereDeposu={pencereDeposu} ufukSonu={ufukSonu} satirBoyu={satirBoyu} kumeAc={(S) => { olcekSec('G', S); }} m={m} cx={cx} goz="T" olcek={olcek} emirler={gorunen} tablo={tezgahTablosu ? tablo : null} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
         tasi={yazabilir && !tur ? tasiDene : null} planaAl={yazabilir && !tur ? planaAlDene : null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
         yerlestirme={tur ? null : yerHedefi} yanan={tur ? null : yananTahta} secimiKaldir={gelenYanan ? () => { setGelenYanan(null); } : listedeSecimKalir}
         sorunBildir={null} onizle={tur ? null : onizle} okKipi={tur ? 'yok' : okKipi}
@@ -1036,8 +1058,9 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
               {sonucCubugu}
               <TabloAraci tablo={tablo} />
               {yolIzi}
+              {genelSerit}
               <Tahta
-                siparisler={siparisler} kademeZorla={eKademe} kademeIn={tur ? null : kademeIn} ufukSonu={ufukSonu} satirBoyu={satirBoyu} kumeAc={(S) => { olcekSec('G', S); }} m={m} cx={cx} goz="S" olcek={olcek} emirler={emirSirali} tablo={tablo} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
+                siparisler={siparisler} kademeZorla={eKademe} kademeIn={tur ? null : kademeIn} pencereDeposu={pencereDeposu} ufukSonu={ufukSonu} satirBoyu={satirBoyu} kumeAc={(S) => { olcekSec('G', S); }} m={m} cx={cx} goz="S" olcek={olcek} emirler={emirSirali} tablo={tablo} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
                 tasi={yazabilir && !tur ? tasiDene : null} planaAl={null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
                 yerlestirme={null} yanan={tur ? null : gelenYanan?.k ?? null} sorunBildir={null} onizle={tur ? null : onizle} okKipi={tur ? 'yok' : okKipi}
                 saatEni={saatEni} malzeme={malzeme} agac={{ acik: agacAcik, ac: agacAc, notlar: agacNotu }} {...gelenOz}
@@ -1105,8 +1128,9 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
               <>
                 {sonucCubugu}
                 {goz !== 'T' && yolIzi}
+                {genelSerit}
                 <Tahta
-                  siparisler={siparisler} kademeZorla={eKademe} kademeIn={tur ? null : kademeIn} ufukSonu={ufukSonu} satirBoyu={satirBoyu} kumeAc={(S) => { olcekSec('G', S); }} m={m} cx={cx} goz={goz} olcek={olcek} emirler={emirSirali} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
+                  siparisler={siparisler} kademeZorla={eKademe} kademeIn={tur ? null : kademeIn} pencereDeposu={pencereDeposu} ufukSonu={ufukSonu} satirBoyu={satirBoyu} kumeAc={(S) => { olcekSec('G', S); }} m={m} cx={cx} goz={goz} olcek={olcek} emirler={emirSirali} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
                   tasi={yazabilir && !tur ? tasiDene : null} planaAl={yazabilir && !tur ? planaAlDene : null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
                   yerlestirme={tur ? null : yerHedefi} yanan={tur ? null : yananTahta} secimiKaldir={secimiKaldir}
                   sorunBildir={sorunBildir} onizle={tur ? null : onizle} okKipi={tur ? 'yok' : okKipi}

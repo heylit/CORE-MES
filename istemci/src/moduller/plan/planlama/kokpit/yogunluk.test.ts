@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { KokpitEmri } from './kurallar.ts';
-import { ETIKET_HARF, ETIKET_PAYI, KUME_BOSLUK, KUME_DAR, YOGUN_SATIR, etiketEni, kumele, kumeYazisi, okunurGenislik, satirBoyuCoz, etiketYeri, bitenAdim, emirAraligi, inisGorunumu, kademe, siparisCubukYazisi, siparisGruplari, siparisOzeti, gorunenSatirSayisi, okKumesi, ufkaSigmayanSayisi, ufkaSigmaz, ufukCizgisi, ufukYazisi } from './yogunluk.ts';
+import { ETIKET_HARF, ETIKET_PAYI, KUME_BOSLUK, KUME_DAR, YOGUN_SATIR, etiketEni, kumele, kumeYazisi, okunurGenislik, satirBoyuCoz, etiketYeri, bitenAdim, emirAraligi, gecKumele, pencereAdimi, pencereDegeri, gecOzeti, pencereSonu, pencereYazisi, seritOzeti, gunlukDoluluk, inisGorunumu, pencereBasi, pencereOlcegi, seritSaati, seritX, kademe, siparisCubukYazisi, siparisGruplari, siparisOzeti, gorunenSatirSayisi, okKumesi, ufkaSigmayanSayisi, ufkaSigmaz, ufukCizgisi, ufukYazisi } from './yogunluk.ts';
 
 // Uydurma örnek (ORN-). Saatler planın saat ekseninde.
 const zaman = (t: number): string => `${String(Math.floor(t / 24) + 1).padStart(2, '0')}.12.2026 ${String(t % 24).padStart(2, '0')}:00`;
@@ -131,5 +131,76 @@ describe('yoğunluk dilim 3: E kademeleri (S2 a)', () => {
       expect((gun * 24 - u.odak) * u.saatEni).toBeLessThanOrEqual(900);
       expect(-u.odak * u.saatEni).toBeLessThan(900 * 0.1);
     }
+  });
+});
+
+describe('yoğunluk dilim 3b: F genel bakış şeridi', () => {
+  // İki tezgâh günde 8 saat açık (08-16); fason sayılmaz. İş tezgâhın açık saatinde sayılır, gece kısmı düşer.
+  const pen = (g: number): [number, number][] => Array.from({ length: g }, (_, d) => [d * 24 + 8, d * 24 + 16]);
+  const cx = { M: { T1: { id: 'T1', grup: '', op: 1, sw: pen(3), rw: pen(3) }, T2: { id: 'T2', grup: '', op: 1, sw: pen(3), rw: pen(3) }, F: { id: 'F', grup: '', op: 1, sw: pen(3), rw: pen(3) } } };
+  const is = (id: string, m: string, S: number, C: number, fason = false) => ({ id, m, S, C, fason }) as never;
+  const m = {
+    bas: 0, son: 3 * 24,
+    tezgahlar: [{ id: 'T1', fason: false }, { id: 'T2', fason: false }, { id: 'F', fason: true }] as never,
+    isler: { a: is('a', 'T1', 10, 14), b: is('b', 'T2', 12, 24 + 12), c: is('c', 'F', 8, 16, true) },
+  };
+  it('günlük doluluk: açık saat fason dışı tezgâhların toplamı, plan iş başına açık saatte', () => {
+    expect(gunlukDoluluk(cx, m)).toEqual([{ gun: 0, acik: 16, plan: 8 }, { gun: 1, acik: 16, plan: 4 }, { gun: 2, acik: 16, plan: 0 }]);
+  });
+  it('geç emirler termin gününe göre sayılır; plan dışı ya da terminsiz olan şeridin dışındadır', () => {
+    const e = (durum: string, termin: number | null) => ({ durum, termin }) as never;
+    expect(gecOzeti([e('gec', 50), e('gec', 30), e('gec', 40), e('gec', 30), e('risk', 10), e('gec', null), e('gec', -5), e('gec', 72)], 0, 72))
+      .toEqual({ gunler: [{ gun: 1, sayi: 3 }, { gun: 2, sayi: 1 }], disarida: 3, toplam: 7 });
+  });
+  it('şerit özeti: en yoğun gün, aşım, geç emirler ve ufuk', () => {
+    const g = [{ gun: 0, acik: 16, plan: 8 }, { gun: 1, acik: 16, plan: 20 }, { gun: 2, acik: 0, plan: 0 }];
+    expect(seritOzeti(g, { gunler: [{ gun: 1, sayi: 3 }], disarida: 1, toplam: 4 }, (d) => `0${String(d + 1)}.12`, 'Plan ufku · 03.12'))
+      .toBe('En yoğun gün 02.12 %125; 1 gün aşım; termini kaçan 4 emir, 1 günde, 1 tanesi şeridin dışında; Plan ufku · 03.12.');
+    expect(seritOzeti([], { gunler: [], disarida: 0, toplam: 0 }, String, null)).toBe('Planda açık gün yok.');
+  });
+  it('şerit ve saat dönüşümü birbirinin tersi; şerit dışı sınırda kalır', () => {
+    expect(seritX(36, 0, 72, 720)).toBe(360);
+    expect(seritSaati(360, 0, 72, 720)).toBe(36);
+    expect(seritSaati(-10, 0, 72, 720)).toBe(0);
+    expect(seritSaati(900, 0, 72, 720)).toBe(72);
+  });
+  it('pencere başı planın içinde kalır; plandan geniş pencere başta durur', () => {
+    expect(pencereBasi(30, 24, 0, 72)).toBe(30);
+    expect(pencereBasi(-5, 24, 0, 72)).toBe(0);
+    expect(pencereBasi(60, 24, 0, 72)).toBe(48);
+    expect(pencereBasi(10, 100, 0, 72)).toBe(0);
+  });
+  it('pencere kenarı: aralık görünen ene sığar; Hafta\'dan dar uzak sayılır (ölçek H), en dar 6 saat', () => {
+    expect(pencereOlcegi(0, 72, 1080)).toEqual({ olcek: '3', saatEni: 15 });
+    const uzak = pencereOlcegi(0, 40 * 24, 960);
+    expect(uzak.olcek).toBe('H');
+    expect(uzak.saatEni).toBeCloseTo(1);
+    expect(pencereOlcegi(0, 1, 1000).saatEni).toBe(88);
+    // En dar pencere 6 saat: 300 px'e 1 saat değil 6 saat sığar.
+    expect(pencereOlcegi(0, 1, 300).saatEni).toBe(50);
+  });
+  it('pencere sonu en az 6 saat, en çok plan sonu; yazı bütün plan görünürken söyler', () => {
+    expect(pencereSonu(10, 12, 72)).toBe(16);
+    expect(pencereSonu(10, 40, 72)).toBe(40);
+    expect(pencereSonu(10, 90, 72)).toBe(72);
+    const t = (h: number): string => `${String(h)}s`;
+    expect(pencereYazisi({ S: 0, C: 30 }, 0, 72, t)).toBe('0s – 30s');
+    expect(pencereYazisi({ S: 0, C: 100 }, 0, 72, t)).toBe('0s – 72s, tüm plan görünüyor');
+  });
+  it('pano planın ötesine kaymışken değer en çoğu aşmaz, ileri tuş pencereyi geri çekmez (Test B3)', () => {
+    // Plan 0-240 sa, pencere 100 sa geniş; tahta sona kaymış ve başı 150'de (son - en = 140'tan ileride).
+    expect(pencereDegeri({ S: 150, C: 250 }, 0, 240)).toEqual({ simdi: 6, max: 6 });
+    expect(pencereDegeri(null, 0, 240)).toEqual({ simdi: 0, max: 0 });
+    expect(pencereAdimi(150, 174, 100, 0, 240)).toBe(150);
+    expect(pencereAdimi(150, 126, 100, 0, 240)).toBe(126);
+    expect(pencereAdimi(30, 54, 100, 0, 240)).toBe(54);
+    expect(pencereAdimi(130, 154, 100, 0, 240)).toBe(140);
+    expect(pencereAdimi(10, -14, 100, 0, 240)).toBe(0);
+  });
+  it('dar şeritte yan yana geç noktaları birleşir; genişte ayrı kalır', () => {
+    const g = [{ gun: 1, sayi: 2 }, { gun: 2, sayi: 1 }, { gun: 3, sayi: 1 }, { gun: 6, sayi: 4 }];
+    expect(gecKumele(g, 11, 18)).toEqual([{ bas: 1, son: 2, sayi: 3 }, { bas: 3, son: 3, sayi: 1 }, { bas: 6, son: 6, sayi: 4 }]);
+    expect(gecKumele(g, 20, 18).length).toBe(4);
+    expect(gecKumele(g, 3, 18)).toEqual([{ bas: 1, son: 6, sayi: 8 }]);
   });
 });
