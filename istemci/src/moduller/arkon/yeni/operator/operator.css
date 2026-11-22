@@ -488,6 +488,7 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
   border: 0; border-radius: var(--yari-2); background: none; color: var(--muted); font: inherit; font-size: var(--yazi-xs); cursor: pointer;
 }
 .tc-ay1-alt-gezinme button[aria-current="page"] { color: var(--ink); background: var(--panel2); font-weight: 700; }
+.tc-ay1-alt-gezinme[data-sik] button[aria-current="page"] { flex-grow: 3; }
 .tc-ay1-alt-simge { position: relative; display: inline-grid; place-items: center; }
 .tc-ay1-alt-simge em {
   position: absolute; inset-block-start: calc(var(--b-1) * -1); inset-inline-end: calc(var(--b-2) * -1); min-inline-size: var(--b-4); padding: 0 var(--b-1);
