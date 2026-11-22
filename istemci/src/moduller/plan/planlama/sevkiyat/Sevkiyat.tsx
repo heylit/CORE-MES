@@ -6,7 +6,7 @@ import type { IsiUstDurumu } from '../ortak/isi/kurallar.ts';
 import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import { useEmirNo, type EmirNo } from '../ortak/emir-no.ts';
 import {
-  AKIS_SINIRI, DONEMLER, bitisAkisi, donemOzetleri, farkYaz, sayiYaz, SEVK_LEJANTI, sevkAcilimi, sevkIsisi, sevkListesi, simdi, tarihSaatYaz, type AkisSatiri,
+  AKIS_SINIRI, DONEMLER, bitisAkisi, donemOzetleri, farkYaz, sayiYaz, SEVK_LEJANTI, sevkAcilimi, sevkIsisi, sevkListesi, sevkSayilari, simdi, tarihSaatYaz, type AkisSatiri,
   type Donem, type DonemOzeti, type Olcu, type SevkIsiSatiri, type SevkSatiri,
 } from './kurallar.ts';
 import { sevkListeSatirlari } from './liste.ts';
@@ -133,7 +133,7 @@ export function Sevkiyat({ calisma, sec, git, depo }: PlanlamaEkranOzellikleri) 
     <div className="tc-pyv">
       <Baslik ust={isi.durum} />
       {etkin === 'liste' && (
-        <SevkListesi satirlar={satirlar} taban={liste.taban} emirNo={emirNo} donemSecici={donemSecici} donem={donem} gorunum={gorunumSecici} dar={dar} yerSutunu={!orta} goster={goster} />
+        <SevkListesi satirlar={satirlar} taban={liste.taban} emirNo={emirNo} donemSecici={donemSecici} donem={donem} ertelenen={sevkSayilari(liste.satirlar).ertelenen} gorunum={gorunumSecici} dar={dar} yerSutunu={!orta} goster={goster} />
       )}
       {etkin === 'takvim' && (
         <>

@@ -19,6 +19,8 @@ export interface SevkListesiOzellikleri {
   taban: number;
   emirNo: EmirNo;
   donem: Donem;
+  // Ilk planina gore ertelenen siparis sayisi (aciklama notunda).
+  ertelenen: number;
   // Dönem seçici ve görünüm seçici sayfadandır; şeridin başında durur.
   donemSecici: ReactNode;
   gorunum: ReactNode;
@@ -88,9 +90,9 @@ export function SevkListesi(o: SevkListesiOzellikleri) {
                             <span className="tc-pyv-l-kim"><b className="mono">{no}</b><small>{`${x.ad ?? '—'}${x.musteri === '—' ? '' : ` · ${x.musteri}`}`}</small></span>
                           </button>
                         </td>
-                        <td data-baslik="Adet" data-kart-gizli="" className="tc-pyv-num">{x.adet === null ? '—' : x.adet.toLocaleString('tr-TR')}</td>
+                        <td data-baslik="Adet" className="tc-pyv-num">{x.adet === null ? '—' : x.adet.toLocaleString('tr-TR')}</td>
                         <td data-baslik="Plan bitişi">{tarih(x.C)}</td>
-                        <td data-baslik="Termin" data-kart-gizli="">{tarih(x.termin)}</td>
+                        <td data-baslik="Termin">{tarih(x.termin)}</td>
                         <td data-baslik="Fark" className="tc-pyv-num">{fark(s)}</td>
                         {yerSutunu && <td data-baslik="Yer" data-kart-gizli="">{yerYaz(x)}</td>}
                         <td data-baslik="" data-kart-gizli="" className="tc-pyv-l-eylem">
@@ -110,6 +112,10 @@ export function SevkListesi(o: SevkListesiOzellikleri) {
           </tbody>
         </table>
       </div>
+      <p className="tc-pyv-not">
+        Sipariş, son adımının plana göre bittiği döneme düşer; sevkiyat o günden itibaren yapılabilir. Plan değiştikçe eski bitiş silinmez: satırı açınca ilk plan ve
+        her ertelenmiş ya da öne çekilmiş plan görünür. {o.ertelenen} sipariş ilk planına göre ertelendi.
+      </p>
     </>
   );
 }
@@ -134,13 +140,6 @@ function Acilim({ s, taban, no, dar, goster }: { s: SevkListeSatiri; taban: numb
       <div>
         <h4 className="tc-pyv-alt"><Simge ad="target" boyut="k" />Son adım</h4>
         <p className="tc-pyv-l-satir">{yerYaz(x)}</p>
-        {dar && (
-          <dl className="tc-pyv-l-bilgi">
-            <dt>Müşteri</dt><dd>{x.musteri}</dd>
-            <dt>Adet</dt><dd className="mono">{x.adet === null ? '—' : x.adet.toLocaleString('tr-TR')}</dd>
-            <dt>Termin</dt><dd className="mono">{tarihSaatYaz(taban, x.termin)}</dd>
-          </dl>
-        )}
         {dar && <Dugme simge="target" onClick={goster}>Kokpit'te gör</Dugme>}
       </div>
     </section>

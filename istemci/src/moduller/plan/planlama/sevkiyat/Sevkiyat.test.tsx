@@ -55,6 +55,7 @@ describe('P6 Sevk takvimi', () => {
     expect(screen.getByText(/Süzgece uyan sipariş yok/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Süzgeci temizle' }));
     expect(within(tablo).getAllByRole('button', { name: /ayrıntısı/ })).toHaveLength(2);
+    expect(screen.getByText(/1 sipariş ilk planına göre ertelendi/)).toBeTruthy();
     // Görünüm salt okunur: sevk tarihi girdisi yok, yazma isteği yok.
     expect(document.querySelector('input[type="date"]')).toBeNull();
     expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
@@ -152,6 +153,9 @@ describe('P6 Sevk takvimi', () => {
     expect(tablo.closest('.tc-tablo-kap')?.getAttribute('data-kip')).toBe('kart');
     expect(within(screen.getByRole('group', { name: 'Görünüm' })).queryByRole('button', { name: 'Takvim' })).toBeNull();
     expect(screen.queryByRole('button', { name: "S2 Kokpit'te gör" })).toBeNull();
+    // Kartta Adet ve Termin satırda görünür (CSS ile gizlenmez): Fark termin olmadan okunmaz.
+    expect(tablo.querySelectorAll('td[data-kart-gizli]').length).toBeGreaterThan(0);
+    expect([...tablo.querySelectorAll('td[data-kart-gizli]')].some((td) => ['Adet', 'Termin'].includes(td.getAttribute('data-baslik') ?? ''))).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: /^S2 ayrıntısı$/ }));
     expect(within(screen.getByRole('region', { name: /^S2 · Geç/ })).getByRole('button', { name: "Kokpit'te gör" })).toBeTruthy();
   }, 20000);
