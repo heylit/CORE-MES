@@ -253,6 +253,8 @@ export interface SimScenario {
 export interface PurchaseRequest {
   id: string;
   no: string;
+  /** 3571: talebin çizim sayısı (ilk tabloda ataç); yalnız okunur. */
+  cizimSayisi?: number;
   title: string;
   department: string;
   requester: string;

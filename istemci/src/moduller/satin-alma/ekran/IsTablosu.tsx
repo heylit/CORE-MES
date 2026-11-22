@@ -1,11 +1,11 @@
 import { useSyncExternalStore } from 'react';
 import { Rozet, Tablo, type RozetTonu, type Sutun } from '../../../ortak/arayuz/index.ts';
 import { PRIO } from '../merkez/constants.ts';
-import { AlternatifOzeti } from './AlternatifOzeti.tsx';
 import { IS_ADI, isSatirlari, kalemSatirlari, teslimatOf, termineGore, type IsSatiri, type IsTuru, type KalemSatiri } from '../merkez/is-tablosu.ts';
 import { gelisGunu } from '../merkez/kimlik.ts';
 import { go } from '../merkez/ui.ts';
 import { dayDiff, fmtDate, nf0, nfx, todayStr } from '../merkez/util.ts';
+import { CizimSayisi, KalemOzeti } from './KalemOzeti.tsx';
 
 const TUR_TONU: Record<IsTuru, RozetTonu> = { order: 'uyari', decide: 'uyari', draft: 'bilgi', quotes: 'pasif', delivery: 'bilgi', approval: 'pasif' };
 const SEKME: Record<IsTuru, string> = { order: 'order', decide: 'compare', draft: 'quotes', quotes: 'quotes', delivery: 'delivery', approval: 'approval' };
@@ -51,12 +51,14 @@ function Is({ s }: { s: IsSatiri }) {
     </span>
   );
 }
-// 3442-1 b (kullanıcı 19.11): her kalem ayrı satır, miktarıyla; talebin no ve adı malzemenin altında, kartlı kalemde alternatif sınırı (3572-0).
+// 3442-1 b (kullanıcı 19.11): her kalem ayrı satır, miktarıyla; talebin no ve adı malzemenin altında. 3571: kalemin alt satırları
+// (kart, talep notu, alternatif sınırı 3572-0) tek bileşende; talebin çizim sayısı numaranın yanında.
 const Malzeme = ({ s }: { s: KalemSatiri }) => (
   <span className="sa-ekran-govde">
     <b>{s.r.priority === 'urgent' && <Rozet ton="hata">{PRIO.urgent}</Rozet>} {s.kalem.name}</b>
-    <small className="sa-is-malzeme" title={`${s.r.no} ${s.r.title}`}><span className="sa-ekran-kimlik-no">{s.r.no}</span> {s.r.title}</small>
-    {s.kalem.materialId && <AlternatifOzeti talepId={s.r.id} kalemId={s.kalem.id} />}
+    <KalemOzeti kalem={s.kalem} talepId={s.r.id} />
+    <small className="sa-is-malzeme" title={`${s.r.no} ${s.r.title}`}><span className="sa-ekran-kimlik-no">{s.r.no}</span>
+      <CizimSayisi sayi={s.r.cizimSayisi} /> {s.r.title}</small>
   </span>
 );
 // 3442-1: kullanıcı ilk sayfayı tablo olarak istedi; tablet ve masaüstünde sütun sığmasa da tablo kalır (yatay kayar, talep sütunu

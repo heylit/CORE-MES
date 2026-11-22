@@ -109,7 +109,7 @@ export function talepEkrana(t: Talep): PurchaseRequest {
     } : {}),
   };
   return {
-    id: t.id, no: t.no, title: t.baslik, department: t.birim ?? '', requester: t.talepEdenAdi ?? '', priority: ONCELIK_T[t.oncelik],
+    id: t.id, no: t.no, ...(t.cizimSayisi ? { cizimSayisi: t.cizimSayisi } : {}), title: t.baslik, department: t.birim ?? '', requester: t.talepEdenAdi ?? '', priority: ONCELIK_T[t.oncelik],
     needDate: t.ihtiyacTarihi ?? '', notes: t.notlar, status: DURUM_T[t.durum], ...(t.iptalNedeni ? { cancelReason: t.iptalNedeni } : {}), teslimYontemi: t.teslimYontemi,
     uretimEmriId: t.uretimEmriId, uretimEmriNo: t.uretimEmriNo,
     // 3279-2 a: teklifte projenin müşterisinin onayı (emirli talepte proje emirdedir; burada gelmez).
