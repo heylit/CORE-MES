@@ -89,7 +89,7 @@ describe('Adım Durumu (2893, 3581): tek tablo', () => {
     const bolge = await screen.findByRole('region', { name: /OP 20 CNC freze ayrıntısı/ });
     expect(within(bolge).getByText(/CNC kurulumu \(NC\) eksik/)).toBeTruthy();
     expect(within(bolge).getByText(/Sipariş SP-2099-001 bekleniyor/)).toBeTruthy();
-    expect(within(bolge).queryByRole('button', { name: 'Elle değiştir…' })).toBeNull();
+    expect(within(bolge).queryByRole('button', { name: /^Elle değiştir…/ })).toBeNull();
     expect(within(bolge).queryByRole('button', { name: 'Yaz' })).toBeNull();
   });
 
@@ -98,7 +98,7 @@ describe('Adım Durumu (2893, 3581): tek tablo', () => {
     ac(ekran, '/adim-durumu?emir=5');
     fireEvent.click(await screen.findByRole('button', { name: /OP 20 CNC kurulumu.*Ayrıntıyı aç/ }));
     const bolge = await screen.findByRole('region', { name: /OP 20 CNC freze ayrıntısı/ });
-    fireEvent.click(within(bolge).getAllByRole('button', { name: 'Elle değiştir…' })[0]!);
+    fireEvent.click(within(bolge).getAllByRole('button', { name: /^Elle değiştir…/ })[0]!);
     const kutu = await within(bolge).findByRole('group', { name: /elle değiştir/ });
     const dugme = within(kutu).getByRole('button', { name: 'Elle hazır yap' });
     expect((dugme as HTMLButtonElement).disabled).toBe(true);
@@ -120,7 +120,7 @@ describe('Adım Durumu (2893, 3581): tek tablo', () => {
     ac(ekran, '/adim-durumu?emir=5');
     fireEvent.click(await screen.findByRole('button', { name: /OP 20 Malzeme.*Ayrıntıyı aç/ }));
     const bolge = await screen.findByRole('region', { name: /OP 20 CNC freze ayrıntısı/ });
-    const elleDugmeleri = within(bolge).getAllByRole('button', { name: 'Elle değiştir…' });
+    const elleDugmeleri = within(bolge).getAllByRole('button', { name: /^Elle değiştir…/ });
     fireEvent.click(elleDugmeleri[0]!);
     const kutu = await within(bolge).findByRole('group', { name: /elle değiştir/ });
     fireEvent.click(within(kutu).getByRole('button', { name: 'Otomatiğe dön' }));
@@ -133,6 +133,20 @@ describe('Adım Durumu (2893, 3581): tek tablo', () => {
     const geri = istekler.filter((i) => i.yontem === 'POST')[1];
     expect(geri?.yol.endsWith('/hazirlik-onayla')).toBe(true);
     expect(geri?.govde).toEqual({ madde: 'malzeme', gerekce: null, sistemHali: 'eksik' });
+  });
+
+  it('elle değiştir: düğme adı maddeyi söyler ve kutuyu bağlar; açılınca gerekçeye odaklanır, Vazgeç düğmeye döner', async () => {
+    sunucuKur(YAZAR, yollar);
+    ac(ekran, '/adim-durumu?emir=5');
+    fireEvent.click(await screen.findByRole('button', { name: /OP 20 CNC kurulumu.*Ayrıntıyı aç/ }));
+    const bolge = await screen.findByRole('region', { name: /OP 20 CNC freze ayrıntısı/ });
+    const dugme = within(bolge).getAllByRole('button', { name: /^Elle değiştir… .+/ })[0]!;
+    fireEvent.click(dugme);
+    const kutu = await within(bolge).findByRole('group', { name: /elle değiştir$/ });
+    expect(dugme.getAttribute('aria-controls')).toBe(kutu.id);
+    await waitFor(() => expect(document.activeElement).toBe(within(kutu).getByLabelText('Gerekçe')));
+    fireEvent.click(within(kutu).getByRole('button', { name: 'Vazgeç' }));
+    await waitFor(() => expect(document.activeElement).toBe(dugme));
   });
 
   it('statüyü elle yazma ve otomatiğe dönme alt satırdadır', async () => {

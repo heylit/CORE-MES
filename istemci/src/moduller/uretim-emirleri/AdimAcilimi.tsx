@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useId, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import type { AdimDurumuCevabi, AdimStatusu, HazirlikMaddesi, HazirlikMuafiyetiGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -83,6 +83,9 @@ function MaddeSatiri({ g, m, odak }: { g: AcilimGirdisi; m: AdimMaddesi; odak: b
   const yonlendir = useNavigate();
   const [elle, elleYaz] = useState(false);
   const [muaf, muafYaz] = useState(false);
+  const kimlik = useId();
+  const elleDugme = useRef<HTMLSpanElement>(null);
+  const muafDugme = useRef<HTMLSpanElement>(null);
   const { adim, v, mg } = g;
   const md = MADDE[m.madde];
   const gv = maddeGorunumu(adim, m);
@@ -119,19 +122,19 @@ function MaddeSatiri({ g, m, odak }: { g: AcilimGirdisi; m: AdimMaddesi; odak: b
       </span>
       {m.ham !== 'gerekmez' && (g.yazilir || (g.muafVerir && muafTutulur && m.hal === 'eksik')) && (
         <span className="tc-at-madde-eylem">
-          {g.yazilir && <Dugme aria-expanded={elle} onClick={() => elleYaz(!elle)}>Elle değiştir…</Dugme>}
-          {g.muafVerir && muafTutulur && m.hal === 'eksik' && <Dugme simge="lock" onClick={() => muafYaz(true)}>Gerekçeyle muaf tut</Dugme>}
+          {g.yazilir && <span ref={elleDugme} className="tc-at-sar"><Dugme aria-expanded={elle} aria-controls={`${kimlik}-elle`} aria-label={`Elle değiştir… ${mg.ad(m.madde, md.ad)}`} onClick={() => elleYaz(!elle)}>Elle değiştir…</Dugme></span>}
+          {g.muafVerir && muafTutulur && m.hal === 'eksik' && <span ref={muafDugme} className="tc-at-sar"><Dugme simge="lock" aria-haspopup="dialog" aria-label={`Gerekçeyle muaf tut ${mg.ad(m.madde, md.ad)}`} onClick={() => muafYaz(true)}>Gerekçeyle muaf tut</Dugme></span>}
         </span>
       )}
-      {elle && g.yazilir && <ElleDegistir emirId={g.emirId} adim={adim} m={m} kapat={() => elleYaz(false)} />}
-      {muaf && <MuafPenceresi emirId={g.emirId} v={v.hazirlik} madde={m.madde} isEmriId={adim.isEmriId} kapat={() => muafYaz(false)} />}
+      {elle && g.yazilir && <ElleDegistir kimlik={`${kimlik}-elle`} emirId={g.emirId} adim={adim} m={m} kapat={() => { elleYaz(false); requestAnimationFrame(() => { elleDugme.current?.querySelector('button')?.focus(); }); }} />}
+      {muaf && <MuafPenceresi emirId={g.emirId} v={v.hazirlik} madde={m.madde} isEmriId={adim.isEmriId} kapat={() => { muafYaz(false); requestAnimationFrame(() => { muafDugme.current?.querySelector('button')?.focus(); }); }} />}
     </li>
   );
 }
 
 // Elle değiştirme (3322, 3581): tek düğme maddeyi karşı hâle çevirir ve gerekçe ister; kim, ne zaman ve neden satırda kalır, "Otomatiğe dön"
 // elle değeri kaldırır. Hedef maddenin otomatik hâliyse elle değer kalkar (gerekçe gerekmez). Terminale gönderme Arkon'da denetlenir.
-function ElleDegistir({ emirId, adim, m, kapat }: { emirId: number; adim: Adim; m: AdimMaddesi; kapat: () => void }) {
+function ElleDegistir({ kimlik, emirId, adim, m, kapat }: { kimlik: string; emirId: number; adim: Adim; m: AdimMaddesi; kapat: () => void }) {
   const [gerekce, gerekceYaz] = useState('');
   const { mesgul, yap } = useAdimKomutu(emirId, adim.isEmriId, kapat);
   const tanim = MADDE[m.madde];
@@ -142,16 +145,16 @@ function ElleDegistir({ emirId, adim, m, kapat }: { emirId: number; adim: Adim; 
   const yeterli = !gerekceGerekli || (temiz !== null && temiz.length >= GEREKCE_EN_AZ);
   const e = elleDegeri(adim, m.madde);
   return (
-    <div className="tc-at-elle-kutu" role="group" aria-label={`${tanim.ad}: elle değiştir`}>
+    <div id={kimlik} className="tc-at-elle-kutu" role="group" aria-label={`${tanim.ad}: elle değiştir`}>
       <p className="tc-emir-not">
         {hedef === 'hazir' ? `${tanim.ad} elle hazır sayılacak; bu adım başlatılabilir.` : `${tanim.ad} elle hazır değil sayılacak; bu adımda iş başlamaz.`}
         {m.madde === 'yayin' ? ' Terminale gönderme Arkon\'da denetlenir: elle hazır değil yalnız bu ekranda görünür, elle hazır terminalde başlatmaya izin verir.' : ''}
       </p>
       {gerekceGerekli && (
-        <CokSatir etiket="Gerekçe" placeholder={`Zorunlu, en az ${String(GEREKCE_EN_AZ)} karakter`} rows={2} value={gerekce} onChange={(o) => gerekceYaz(o.target.value)} />
+        <CokSatir etiket="Gerekçe" placeholder={`Zorunlu, en az ${String(GEREKCE_EN_AZ)} karakter`} rows={2} value={gerekce} autoFocus onChange={(o) => gerekceYaz(o.target.value)} />
       )}
       <div className="tc-emir-ust">
-        <Dugme tur="birincil" simge={gerekceGerekli ? (hedef === 'hazir' ? 'check' : 'x') : 'rotate'} disabled={!yeterli || mesgul}
+        <Dugme tur="birincil" autoFocus={!gerekceGerekli} simge={gerekceGerekli ? (hedef === 'hazir' ? 'check' : 'x') : 'rotate'} disabled={!yeterli || mesgul}
           onClick={() => yap({ ...ileri, mesaj: gerekceGerekli ? hedefMesaji(m, hedef) : `${tanim.ad}: otomatiğe döndü`, geri: geriKomutu(adim, m, ileri) })}>
           {!gerekceGerekli ? 'Otomatiğe dön' : hedef === 'hazir' ? 'Elle hazır yap' : 'Elle hazır değil yap'}
         </Dugme>
@@ -280,7 +283,7 @@ function MuafPenceresi({ emirId, v, madde, isEmriId, kapat }: { emirId: number; 
       </>
     )}>
       <div className="tc-emir-form">
-        <Secim etiket="İş emri" value={kapsam} onChange={(o) => kapsamYaz(o.target.value)}
+        <Secim etiket="İş emri" autoFocus value={kapsam} onChange={(o) => kapsamYaz(o.target.value)}
           secenekler={[...(satir ? [{ deger: String(satir.isEmriId), baslik: `OP ${String(satir.opNo)} · ${satir.ad}` }] : []), { deger: '', baslik: 'Bütün iş emirleri' }]} />
         <CokSatir etiket="Gerekçe" required rows={2} maxLength={500} value={gerekce} onChange={(o) => gerekceYaz(o.target.value)}
           ipucu="Neden muaf tutuluyor? En çok 500 karakter." />
