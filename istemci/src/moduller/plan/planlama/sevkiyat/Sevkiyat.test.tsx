@@ -22,43 +22,84 @@ const calisma = {
 };
 const kayitlar = (deger: unknown) => [{ anahtar: PLANLAMA_ANAHTARI, bicim: 'json' as const, deger, surum: 4 }];
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); try { localStorage.clear(); } catch { /* depo yok */ } });
 
-describe('P6 Sevkiyat', () => {
-  it('plana göre bitmesi gereken işler, sayılar, dönem özeti ve bitiş akışı çizilir; yalnız okur (izinli)', async () => {
+const gorunum = (ad: string): void => { fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: ad })); };
+
+describe('P6 Sevk takvimi', () => {
+  it('Liste açılır: sipariş başına tek satır, geç satır üstte ve işaretli, sevk edilen en altta; çipler süzer, arama müşteride de arar; yalnız okur (izinli)', async () => {
     const istekler = sunucuKur(YONETICI, kayitlar(calisma) as never);
     ac('/plan/sevkiyat');
-    expect(await screen.findByRole('heading', { name: 'Plana göre bitmesi gereken işler' }, { timeout: 10000 })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Sevkiyat özeti' })).toBeTruthy();
-    expect(screen.getByRole('img', { name: 'Dönem başına sevkiyat' })).toBeTruthy();
-    expect(screen.getAllByText('S1').length).toBeGreaterThan(0);
-    expect(screen.getByText('6 sa geç')).toBeTruthy();
-    expect(screen.getByText('son gün')).toBeTruthy();
-    expect(screen.getByText('sevk edildi 04.03')).toBeTruthy();
-    expect(screen.getAllByText('Ertelenmiş plan 1')).toHaveLength(2);
-    // Geç satır bugünkü sayfadaki gibi işaretlidir; tablo hücreleri dar ekran kartı için başlığını taşır.
-    const gecSatir = screen.getByText('6 sa geç').closest('tr');
+    const tablo = await screen.findByRole('table', { name: 'Siparişler' }, { timeout: 10000 });
+    expect(screen.getByRole('heading', { name: 'Sevk takvimi', level: 2 })).toBeTruthy();
+    expect(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: 'Liste' }).getAttribute('aria-pressed')).toBe('true');
+    // Geç satır "Geç kalanlar" grubunda üstte, sevk edilen en altta; tablo hücreleri dar ekran kartı için başlığını taşır.
+    const satirlar = within(tablo).getAllByRole('row').map((r) => r.textContent ?? '');
+    expect(satirlar.findIndex((t) => t.startsWith('Geç kalanlar'))).toBeLessThan(satirlar.findIndex((t) => t.startsWith('Sevk edildi')));
+    const gecSatir = screen.getByText('+6 sa').closest('tr');
     expect(gecSatir?.getAttribute('data-ton')).toBe('hata');
-    expect(gecSatir?.querySelector('td')?.getAttribute('data-baslik')).toBe('Sipariş ve müşteri');
+    expect(gecSatir?.textContent).toContain('S2');
+    expect(gecSatir?.querySelector('td')?.getAttribute('data-baslik')).toBe('Durum');
+    expect(within(gecSatir as HTMLElement).getByText('Geç')).toBeTruthy();
+    // Çipler sayı taşır; basınca listeyi süzer, tekrar basınca kalkar.
+    const cipler = screen.getByRole('group', { name: 'Durum süzgeci' });
+    expect(within(cipler).getAllByRole('button').map((b) => b.textContent)).toEqual(['1Geç', '1Sevk edildi']);
+    fireEvent.click(within(cipler).getByRole('button', { name: /Sevk edildi/ }));
+    expect(screen.queryByText('+6 sa')).toBeNull();
+    expect(within(tablo).getAllByRole('button', { name: /ayrıntısı/ })).toHaveLength(1);
+    fireEvent.click(within(cipler).getByRole('button', { name: /Sevk edildi/ }));
+    // Arama müşteri adında da arar; uyan yoksa süzgeci temizleme yolu çıkar.
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Ara' }), { target: { value: 'deneme musteri' } });
+    expect(within(tablo).getAllByRole('button', { name: /ayrıntısı/ })).toHaveLength(1);
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Ara' }), { target: { value: 'yok boyle' } });
+    expect(screen.getByText(/Süzgece uyan sipariş yok/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Süzgeci temizle' }));
+    expect(within(tablo).getAllByRole('button', { name: /ayrıntısı/ })).toHaveLength(2);
     // Görünüm salt okunur: sevk tarihi girdisi yok, yazma isteği yok.
     expect(document.querySelector('input[type="date"]')).toBeNull();
     expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
   }, 20000);
 
-  it('üstte ısı haritası: durum satırı, sipariş × gün ızgarası; hücre açılımı neden ve bilgiyle açılır (kilit metni yok), Esc kapatır; Kokpit seçeneği siparişi seçip Kokpit sayfasını açar (3537 a)', async () => {
+  it('satır açılımı: bitiş akışı (plan geçmişi), sevk kaydı ve son adım; ikinci basış kapatır; "Kokpit\'te gör" siparişi seçip Kokpit sayfasını açar (3537 a)', async () => {
     const istekler = sunucuKur(YONETICI, kayitlar(calisma) as never);
     ac('/plan/sevkiyat');
-    const izgara = await screen.findByRole('group', { name: 'Sipariş × gün, termine kalan süre' }, { timeout: 10000 });
-    expect(screen.getByRole('heading', { name: /^Sevkiyat Sipariş × gün/, level: 2 })).toBeTruthy();
-    expect(document.querySelector('.tc-isi-durum')?.textContent).toContain('En sıcak satır S2');
-    // Asıl içerik "Tüm satırlar" altında, kapalı gelir.
-    expect(screen.getByText('Tüm satırlar').closest('details')?.open).toBe(false);
+    await screen.findByRole('table', { name: 'Siparişler' }, { timeout: 10000 });
+    const s1 = screen.getByRole('button', { name: /^S1 ayrıntısı$/ });
+    fireEvent.click(s1);
+    expect(s1.getAttribute('aria-expanded')).toBe('true');
+    const ac1 = screen.getByRole('region', { name: /^S1 · Sevk edildi/ });
+    expect(within(ac1).getByText('Ertelenmiş plan 1')).toBeTruthy();
+    expect(within(ac1).getByText('sevk edildi 04.03')).toBeTruthy();
+    expect(within(ac1).getByText(/1 .* plan|2 plan/)).toBeTruthy();
+    expect(within(ac1).getByText(/Son adım/)).toBeTruthy();
+    // Planı değişmemiş sipariş bunu yazar.
+    fireEvent.click(screen.getByRole('button', { name: /^S2 ayrıntısı$/ }));
+    expect(within(screen.getByRole('region', { name: /^S2 · Geç/ })).getByText('Plan bu siparişte değişmedi.')).toBeTruthy();
+    expect(within(screen.getByRole('region', { name: /^S2 · Geç/ })).getByText('Sevk kaydı yok.')).toBeTruthy();
+    fireEvent.click(s1);
+    expect(screen.getByRole('region', { name: /^S1 · Sevk edildi/ })).toBeTruthy();
+    fireEvent.click(s1);
+    expect(screen.queryByRole('region', { name: /^S1 · / })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: "S2 Kokpit'te gör" }));
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/plan'); }, { timeout: 10000 });
+    expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
+  }, 20000);
+
+  it('Takvim görünümü bugünkü ısı haritasıdır: durum satırı, sipariş × gün ızgarası; hücre açılımı neden ve bilgiyle açılır (kilit metni yok), Esc kapatır; Kokpit seçeneği Kokpit\'i açar', async () => {
+    const istekler = sunucuKur(YONETICI, kayitlar(calisma) as never);
+    ac('/plan/sevkiyat');
+    await screen.findByRole('table', { name: 'Siparişler' }, { timeout: 10000 });
+    gorunum('Takvim');
+    expect(localStorage.getItem('tmi.sevkiyat.gorunum')).toBe('takvim');
+    const izgara = screen.getByRole('group', { name: 'Sipariş × gün, termine kalan süre' });
+    expect(document.querySelector('.tc-pyv-nabiz')?.textContent).toContain('En sıcak satır S2');
+    // "Tüm satırlar" katı kalktı: liste ve özet burada yok.
+    expect(screen.queryByText('Tüm satırlar')).toBeNull();
+    expect(screen.queryByRole('table', { name: 'Siparişler' })).toBeNull();
     const hucre = within(izgara).getByRole('button', { name: /^S2, 03\.03 Sal: .*6 sa geç/ });
     fireEvent.click(hucre);
     const acilim = screen.getByRole('region', { name: 'S2 · —' });
     expect(within(acilim).getByText('S2 termini 02.03 Pzt, plan 03.03 Sal sevke hazır diyor: 6 sa geç.')).toBeTruthy();
-    expect((within(acilim).getByRole('button', { name: /S2 Kokpit'te/ }) as HTMLButtonElement).disabled).toBe(false);
-    // Sevk formu sevkiyat modülünündür; burada kilit metni gösterilmez.
     expect(within(acilim).queryByText(/yetkiniz yok/)).toBeNull();
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByRole('region', { name: 'S2 · —' })).toBeNull();
@@ -68,22 +109,60 @@ describe('P6 Sevkiyat', () => {
     expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
   }, 20000);
 
-  it('dönem, ölçü ve görünüm seçimi özeti değiştirir', async () => {
+  it('Grafik görünümü dönem özeti ve bitiş akışıdır; dönem, ölçü ve gösterim seçimi özeti değiştirir; son görünüm hatırlanır', async () => {
     sunucuKur(YONETICI, kayitlar(calisma) as never);
     ac('/plan/sevkiyat');
-    const olcu = await screen.findByRole('group', { name: 'Ölçü' }, { timeout: 10000 });
-    fireEvent.click(within(olcu).getByRole('button', { name: 'Adet' }));
+    await screen.findByRole('table', { name: 'Siparişler' }, { timeout: 10000 });
+    gorunum('Grafik');
+    expect(screen.getByRole('heading', { name: 'Sevkiyat özeti' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Bitiş tarihi akışı' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Dönem başına sevkiyat' })).toBeTruthy();
+    expect(screen.getAllByText('Ertelenmiş plan 1').length).toBeGreaterThan(0);
+    fireEvent.click(within(screen.getByRole('group', { name: 'Ölçü' })).getByRole('button', { name: 'Adet' }));
     expect(screen.getByText(/Birim: adet\./)).toBeTruthy();
-    fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: 'Tablo' }));
+    fireEvent.click(within(screen.getByRole('group', { name: 'Gösterim' })).getByRole('button', { name: 'Tablo' }));
     expect(screen.queryByRole('img', { name: 'Dönem başına sevkiyat' })).toBeNull();
-    fireEvent.click(within(screen.getAllByRole('group', { name: 'Dönem' })[0]!).getByRole('button', { name: 'Ay' }));
+    fireEvent.click(within(screen.getByRole('group', { name: 'Dönem' })).getByRole('button', { name: 'Ay' }));
     expect(screen.getAllByText('Mart 2026').length).toBeGreaterThan(0);
+    expect(localStorage.getItem('tmi.sevkiyat.gorunum')).toBe('grafik');
+    expect(localStorage.getItem('tmi.sevkiyat.donem')).toBe('ay');
+    // Yeniden açılışta son görünüm ve dönem gelir.
+    cleanup();
+    ac('/plan/sevkiyat');
+    expect(await screen.findByRole('heading', { name: 'Sevkiyat özeti' }, { timeout: 10000 })).toBeTruthy();
+    expect(within(screen.getByRole('group', { name: 'Dönem' })).getByRole('button', { name: 'Ay' }).getAttribute('aria-pressed')).toBe('true');
   }, 20000);
 
-  it('plan kurulmamışsa ya da çalışma yoksa yalnız uyarı çıkar', async () => {
+  it('dönem seçici liste başlıklarını belirler', async () => {
+    sunucuKur(YONETICI, kayitlar(calisma) as never);
+    ac('/plan/sevkiyat');
+    await screen.findByRole('table', { name: 'Siparişler' }, { timeout: 10000 });
+    fireEvent.click(within(screen.getByRole('group', { name: 'Dönem' })).getByRole('button', { name: 'Ay' }));
+    expect(screen.getByText('Sevk edildi', { selector: 'b' })).toBeTruthy();
+    fireEvent.click(within(screen.getByRole('group', { name: 'Dönem' })).getByRole('button', { name: 'Gün' }));
+    expect(screen.getByRole('table', { name: 'Siparişler' })).toBeTruthy();
+  }, 20000);
+
+  it('telefonda Takvim yoktur: kayıtlı görünüm takvimse Liste açılır, satır kart kipindedir ve Kokpit düğmesi açılımdadır', async () => {
+    localStorage.setItem('tmi.sevkiyat.gorunum', 'takvim');
+    vi.stubGlobal('matchMedia', (q: string) => ({ matches: q.includes('767') || q.includes('1023'), media: q, addEventListener: () => undefined, removeEventListener: () => undefined }));
+    sunucuKur(YONETICI, kayitlar(calisma) as never);
+    ac('/plan/sevkiyat');
+    const tablo = await screen.findByRole('table', { name: 'Siparişler' }, { timeout: 10000 });
+    expect(tablo.closest('.tc-tablo-kap')?.getAttribute('data-kip')).toBe('kart');
+    expect(within(screen.getByRole('group', { name: 'Görünüm' })).queryByRole('button', { name: 'Takvim' })).toBeNull();
+    expect(screen.queryByRole('button', { name: "S2 Kokpit'te gör" })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /^S2 ayrıntısı$/ }));
+    expect(within(screen.getByRole('region', { name: /^S2 · Geç/ })).getByRole('button', { name: "Kokpit'te gör" })).toBeTruthy();
+  }, 20000);
+
+  it('plan kurulmamışsa ya da çalışma yoksa yalnız uyarı çıkar; çip, arama ve görünüm seçici çizilmez', async () => {
     sunucuKur(MALIYETSIZ, kayitlar({ ...calisma, plan: null }) as never);
     ac('/plan/sevkiyat');
     expect(await screen.findByText('Önce plan kurulmalı.', {}, { timeout: 10000 })).toBeTruthy();
+    expect(screen.queryByRole('group', { name: 'Durum süzgeci' })).toBeNull();
+    expect(screen.queryByRole('searchbox', { name: 'Ara' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Görünüm' })).toBeNull();
     cleanup(); vi.unstubAllGlobals();
     sunucuKur(YONETICI);
     ac('/plan/sevkiyat');

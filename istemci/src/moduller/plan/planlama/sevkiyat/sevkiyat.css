@@ -47,3 +47,74 @@
 @media (max-width: 767px) {
   .tc-pyv { padding: var(--b-2); }
 }
+
+/* 3537 a: Sevk takvimi (Kokpit dili). Başlık, nabız, şerit ve liste malzeme planının listesiyle aynı kalıptır (tc-pyz-); burada kendi önekiyle. */
+.tc-pyv-bas { display: grid; gap: var(--b-1); }
+.tc-pyv-bas h2 { display: flex; align-items: center; gap: var(--b-2); margin: 0; font-size: var(--yazi-l); }
+.tc-pyv-nabiz { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); margin: 0; color: var(--muted); font-size: var(--yazi-s); }
+.tc-pyv-nabiz[data-ton="hata"] > svg { color: var(--stop); }
+.tc-pyv-nabiz[data-ton="uyari"] > svg { color: var(--hold); }
+.tc-pyv-nabiz[data-ton="tamam"] > svg { color: var(--done); }
+.tc-pyv-nabiz > span { flex: 1 1 calc(var(--b-6) * 8); min-width: 0; }
+.tc-pyv-yok { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); padding: var(--b-4); border: var(--cizgi-ince) dashed var(--edge2); border-radius: var(--yari-2); color: var(--muted); }
+.tc-pyv-yok > span { flex: 1 1 calc(var(--b-6) * 8); min-width: 0; }
+.tc-pyv-bos { color: var(--faint); }
+.tc-pyv-serit { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); min-width: 0; }
+.tc-pyv-suzgec { display: inline-flex; flex-wrap: wrap; gap: var(--pay-ince); padding: var(--pay-ince); border-radius: var(--yari-2); background: var(--panel2); min-width: 0; }
+.tc-pyv-suzgec button {
+  display: inline-flex; align-items: center; gap: var(--b-1); min-height: var(--dokunma); padding: 0 var(--b-3); border: 0; border-radius: var(--yari-1);
+  background: transparent; color: var(--muted); font: inherit; font-size: var(--yazi-s); font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.tc-pyv-suzgec button:hover:not([aria-pressed="true"]) { color: var(--ink); }
+.tc-pyv-suzgec button[aria-pressed="true"] { background: var(--secili-zemin); color: var(--secili-yazi); }
+.tc-pyv-suzgec button b { font-family: var(--font-mono); color: var(--ink); }
+.tc-pyv-suzgec button[aria-pressed="true"] b { color: inherit; }
+.tc-pyv-suzgec button::before { content: ""; width: var(--b-2); height: var(--b-2); border-radius: var(--yari-tam); background: var(--run); }
+.tc-pyv-suzgec button[data-ton="hata"]::before { background: var(--stop); }
+.tc-pyv-suzgec button[data-ton="uyari"]::before { background: var(--hold); }
+.tc-pyv-suzgec button[data-ton="bilgi"]::before { background: var(--done); }
+.tc-pyv-ara {
+  display: inline-flex; align-items: center; gap: var(--b-1); flex: 1 1 calc(var(--b-6) * 4); min-width: calc(var(--b-6) * 4); max-width: var(--arama-genis);
+  min-height: var(--dokunma); padding: 0 var(--b-2); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); color: var(--muted);
+}
+.tc-pyv-ara input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: var(--yazi-s); outline: none; }
+.tc-pyv-ara:focus-within { border-color: var(--ink); }
+
+.tc-pyv-l td { vertical-align: top; }
+.tc-pyv-l td .mono { white-space: nowrap; }
+.tc-tablo td.tc-pyv-num, .tc-tablo th.tc-pyv-num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tc-pyv-l tr[data-ton="hata"] td:first-child { box-shadow: inset calc(var(--pay-ince) + var(--cizgi-ince)) 0 0 var(--stop); }
+.tc-pyv-l [data-ton="hata"] { color: var(--stop); }
+.tc-pyv-l .tc-rozet { white-space: nowrap; }
+.tc-pyv-l tr.tc-pyv-l-grup > td { padding-block: var(--b-1); background: var(--panel2); color: var(--muted); font-size: var(--yazi-s); border-bottom: var(--cizgi-ince) solid var(--edge2); }
+.tc-pyv-l tr.tc-pyv-l-grup b { color: var(--ink); }
+.tc-pyv-l-ac {
+  display: inline-flex; align-items: flex-start; gap: var(--b-1); min-height: var(--dokunma); padding: 0; border: 0; background: none; color: inherit;
+  font: inherit; text-align: left; cursor: pointer;
+}
+.tc-pyv-l-ac > svg { flex: none; margin-top: var(--pay-ince); transition: transform var(--sure-kisa); }
+.tc-pyv-l-ac[aria-expanded="true"] > svg { transform: rotate(90deg); }
+.tc-pyv-l-kim { display: flex; flex-direction: column; align-items: flex-start; gap: var(--pay-ince); min-width: 0; }
+.tc-pyv-l-kim small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pyv-l td.tc-pyv-l-eylem { text-align: right; white-space: nowrap; }
+.tc-pyv-l-temizle { min-height: var(--dokunma); padding: 0 var(--b-2); border: 0; background: none; color: var(--ink); font: inherit; text-decoration: underline; cursor: pointer; }
+.tc-pyv-l tr[data-acik] > td { background: var(--panel2); }
+.tc-pyv-l tr.tc-pyv-l-acilim > td { background: var(--panel2); }
+.tc-pyv-l-ic { display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(var(--b-6) * 6), 1fr)); gap: var(--b-3); min-width: 0; padding: var(--b-2) 0; }
+.tc-pyv-alt { display: flex; align-items: center; gap: var(--b-1); margin: 0 0 var(--b-1); font-size: var(--yazi-s); }
+.tc-pyv-l-satir { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); margin: 0; font-size: var(--yazi-s); }
+.tc-pyv-l-bilgi { display: grid; grid-template-columns: auto 1fr; gap: var(--pay-ince) var(--b-3); margin: var(--b-2) 0; font-size: var(--yazi-s); }
+.tc-pyv-l-bilgi dt { color: var(--muted); } .tc-pyv-l-bilgi dd { margin: 0; }
+td.tc-pyv-not { color: var(--muted); font-size: var(--yazi-s); }
+.tc-pyv-l-ic .tc-pyv-not { margin: 0; }
+
+@media (max-width: 767px) {
+  .tc-pyv-ara { flex: 1 1 100%; max-width: none; order: -1; }
+  .tc-pyv-suzgec { width: 100%; }
+  .tc-pyv-l td.tc-pyv-l-eylem { text-align: left; }
+  [data-kip="kart"] .tc-tablo.tc-pyv-l td.tc-pyv-l-ad::before, [data-kip="kart"] .tc-tablo.tc-pyv-l tr.tc-pyv-l-acilim td::before,
+  [data-kip="kart"] .tc-tablo.tc-pyv-l tr.tc-pyv-l-grup td::before { content: none; }
+}
+[data-kip="kart"] .tc-tablo.tc-pyv-l td[data-kart-gizli] { display: none; }
+[data-kip="kart"] .tc-tablo.tc-pyv-l tr.tc-pyv-l-acilim td { padding: var(--b-2) var(--b-3); }
+[data-kip="kart"] .tc-tablo.tc-pyv-l tr.tc-pyv-l-grup { padding: var(--b-1) var(--b-3); background: var(--panel2); }

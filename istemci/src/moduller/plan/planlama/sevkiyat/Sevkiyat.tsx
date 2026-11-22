@@ -1,45 +1,65 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { Kart, Rozet, SayiKarti, Simge } from '../../../../ortak/arayuz/index.ts';
+import { Kart, Rozet, Simge } from '../../../../ortak/arayuz/index.ts';
 import '../../../../ortak/arayuz/tablo.css';
-import { planGuncel } from '../durum.ts';
-import { Acilim, BosHarita, IsiIzgarasi, IsiSayfasi, Lejant, type IsiSecimi } from '../ortak/isi/index.ts';
+import { Acilim, IsiIzgarasi, Lejant, type IsiSecimi } from '../ortak/isi/index.ts';
+import type { IsiUstDurumu } from '../ortak/isi/kurallar.ts';
 import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import { useEmirNo, type EmirNo } from '../ortak/emir-no.ts';
 import {
-  ACIK_GRUP, AKIS_SINIRI, AYNI_BITIS, DONEMLER, bitisAkisi, donemOzetleri, farkYaz, gecMi, ilkPlanaGore, oncekineGore, planAdi, sayiYaz, sevkDurumu,
-  SEVK_LEJANTI, sevkAcilimi, sevkGruplari, sevkGunuYaz, sevkIsisi, sevkListesi, sevkSayilari, simdi, tarihSaatYaz, type AkisSatiri, type BitisKaydi, type Donem, type DonemOzeti, type Olcu,
-  type SevkIsiSatiri, type SevkSatiri,
+  AKIS_SINIRI, DONEMLER, bitisAkisi, donemOzetleri, farkYaz, sayiYaz, SEVK_LEJANTI, sevkAcilimi, sevkIsisi, sevkListesi, simdi, tarihSaatYaz, type AkisSatiri,
+  type Donem, type DonemOzeti, type Olcu, type SevkIsiSatiri, type SevkSatiri,
 } from './kurallar.ts';
+import { sevkListeSatirlari } from './liste.ts';
+import { SevkListesi, zamanYaz } from './SevkListesi.tsx';
 import './sevkiyat.css';
 
-// Sevkiyat: plana göre bitmesi gereken işler (bugünkü sayfa zx-sevkiyat.betik, üst katman zz30-isi ISI.sevkiyat). Üstte ısı haritası
-// (sipariş × gün, ortak bileşen) ve durum satırı; "Tüm satırlar"da dönem özeti, dönem dönem sipariş listesi ve bitiş tarihi akışı.
+// Sevk takvimi (3537 a, Kokpit dili; malzeme satın alma planının ikizi): üç görünüm. Liste sipariş başına tek satırdır (asıl görünüm);
+// Takvim bugünkü ısı haritasıdır (telefonda yer yok, Liste açılır); Grafik dönem özeti ve bitiş akışıdır. Son seçilen görünüm ve dönem
+// tarayıcıda hatırlanır. Plan durumu (yok, eski) plan şeridindedir (KOKPITE_GIDEN); sayfa yinelemez.
 // Görünüm yalnız okur (455/1 a: sevk sevkiyat modülünden okunacak; 455/2 a: bitiş akışını sunucu yazar).
-// Düzen bugünkü sayfanındır (tasarım koruma): bölümlü seçici, sayfanın kendi tablosu (dar ekranda satır karta döner, geç satır işaretli),
-// karta yayılan grafik.
 
-type Gorunum = 'ikisi' | 'grafik' | 'tablo';
+type Gosterim = 'ikisi' | 'grafik' | 'tablo';
+type Gorunum = 'liste' | 'takvim' | 'grafik';
 const OLCULER: readonly { deger: Olcu; baslik: string }[] = [{ deger: 'siparis', baslik: 'Sipariş' }, { deger: 'adet', baslik: 'Adet' }];
-const GORUNUMLER: readonly { deger: Gorunum; baslik: string }[] = [
+const GOSTERIMLER: readonly { deger: Gosterim; baslik: string }[] = [
   { deger: 'ikisi', baslik: 'Grafik ve tablo' }, { deger: 'grafik', baslik: 'Grafik' }, { deger: 'tablo', baslik: 'Tablo' },
 ];
 const SERILER = [
   { alan: 'plan', ad: 'Plana göre bitmesi gereken' }, { alan: 'termin', ad: 'Termini gelen' }, { alan: 'sevk', ad: 'Sevk edilen' },
 ] as const;
-const zamanYaz = (ms: number): string => new Date(ms).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
-// Bugünkü sayfanın dar ekran eşiği (00-baslangic.betik dar): altında tablolar karta döner.
+// Bugünkü sayfanın dar ekran eşiği (00-baslangic.betik dar): altında tablolar karta döner. Orta ekranda (1024 altı) listenin yer sütunu açılıma iner.
 const DAR = '(max-width: 767px)';
-function useDar(): boolean {
-  const [dar, darYaz] = useState(() => typeof window !== 'undefined' && window.matchMedia?.(DAR).matches === true);
+const ORTA = '(max-width: 1023px)';
+function useEkran(sorgu: string): boolean {
+  const [eslesti, eslestiYaz] = useState(() => typeof window !== 'undefined' && window.matchMedia?.(sorgu).matches === true);
   useEffect(() => {
-    const m = window.matchMedia?.(DAR);
+    const m = window.matchMedia?.(sorgu);
     if (!m) return undefined;
-    const izle = (): void => { darYaz(m.matches); };
+    const izle = (): void => { eslestiYaz(m.matches); };
     m.addEventListener('change', izle);
     return () => { m.removeEventListener('change', izle); };
-  }, []);
-  return dar;
+  }, [sorgu]);
+  return eslesti;
+}
+
+const GORUNUMLER: readonly { deger: Gorunum; baslik: string }[] = [{ deger: 'liste', baslik: 'Liste' }, { deger: 'takvim', baslik: 'Takvim' }, { deger: 'grafik', baslik: 'Grafik' }];
+const GORUNUM_ANAHTARI = 'tmi.sevkiyat.gorunum';
+const DONEM_ANAHTARI = 'tmi.sevkiyat.donem';
+function gorunumOku(): Gorunum {
+  try {
+    const g = localStorage.getItem(GORUNUM_ANAHTARI);
+    return g === 'takvim' || g === 'grafik' ? g : 'liste';
+  } catch { return 'liste'; }
+}
+function donemOku(): Donem {
+  try {
+    const d = localStorage.getItem(DONEM_ANAHTARI);
+    return d === 'gun' || d === 'ay' || d === 'yil' ? d : 'hafta';
+  } catch { return 'hafta'; }
+}
+function sakla(anahtar: string, deger: string): void {
+  try { localStorage.setItem(anahtar, deger); } catch { /* depo kapalı: yalnız bu açılışta geçerli */ }
 }
 
 function Secici<T extends string>({ etiket, secenekler, secili, sec }: {
@@ -59,7 +79,7 @@ interface Sutun<S> { anahtar: string; baslik: string; hucre: (s: S) => ReactNode
 function SevkTablosu<S>({ etiket, sutunlar, satirlar, anahtar, ton, sinif }: {
   etiket: string; sutunlar: readonly Sutun<S>[]; satirlar: readonly S[]; anahtar: (s: S) => string; ton?: (s: S) => string | undefined; sinif?: string;
 }) {
-  const dar = useDar();
+  const dar = useEkran(DAR);
   return (
     <div className="tc-tablo-kap" data-kip={dar ? 'kart' : undefined}>
       <table className={`tc-tablo tc-pyv-tablo${sinif ? ` ${sinif}` : ''}`} aria-label={etiket}>
@@ -78,42 +98,72 @@ function SevkTablosu<S>({ etiket, sutunlar, satirlar, anahtar, ton, sinif }: {
 
 export function Sevkiyat({ calisma, sec, git, depo }: PlanlamaEkranOzellikleri) {
   const emirNo = useEmirNo(depo.receteRotaKaydi, depo.durum?.emirler);
-  const [donem, donemYaz] = useState<Donem>('gun');
+  const dar = useEkran(DAR);
+  const orta = useEkran(ORTA);
+  const [donem, donemYaz] = useState<Donem>(donemOku);
   const [olcu, olcuYaz] = useState<Olcu>('siparis');
-  const [gor, gorYaz] = useState<Gorunum>('ikisi');
-  const liste = useMemo(() => (calisma ? sevkListesi(calisma) : null), [calisma]);
-
-  const isi = useMemo(() => (calisma && liste ? sevkIsisi(liste.satirlar, liste.taban, simdi(calisma), emirNo) : null), [calisma, liste, emirNo]);
+  const [gosterim, gosterimYaz] = useState<Gosterim>('ikisi');
+  const [gorunum, gorunumYaz] = useState<Gorunum>(gorunumOku);
   const [secim, secimYaz] = useState<IsiSecimi | null>(null);
+  const liste = useMemo(() => (calisma ? sevkListesi(calisma) : null), [calisma]);
+  const isi = useMemo(() => (calisma && liste ? sevkIsisi(liste.satirlar, liste.taban, simdi(calisma), emirNo) : null), [calisma, liste, emirNo]);
+  const satirlar = useMemo(() => (calisma && liste ? sevkListeSatirlari(liste.satirlar, liste.taban, simdi(calisma)) : []), [calisma, liste]);
 
-  const donemSecici = <Secici etiket="Dönem" secenekler={DONEMLER} secili={donem} sec={donemYaz} />;
-  // "Tüm satırlar": bugünkü sayfanın asıl içeriği (özet, iş listesi, bitiş akışı).
-  const tum = !calisma || !liste
-    ? <Kart baslik="Plana göre bitmesi gereken işler"><p className="tc-pyv-not">Önce plan kurulmalı.</p></Kart>
-    : (
-      <>
-        <Ozet satirlar={liste.satirlar} taban={liste.taban} donem={donem} olcu={olcu} gor={gor} donemSecici={donemSecici} olcuYaz={olcuYaz} gorYaz={gorYaz} />
-        <Isler satirlar={liste.satirlar} taban={liste.taban} donem={donem} guncel={planGuncel(calisma)} donemSecici={donemSecici} emirNo={emirNo} />
-        <Akis satirlar={liste.satirlar} taban={liste.taban} emirNo={emirNo} />
-      </>
+  const takvimVar = !dar;
+  const etkin: Gorunum = gorunum === 'takvim' && !takvimVar ? 'liste' : gorunum;
+  const gorunumSec = (g: Gorunum): void => { gorunumYaz(g); sakla(GORUNUM_ANAHTARI, g); };
+  const donemSec = (d: Donem): void => { donemYaz(d); sakla(DONEM_ANAHTARI, d); };
+  const gorunumSecici = <Secici etiket="Görünüm" secenekler={takvimVar ? GORUNUMLER : GORUNUMLER.filter((g) => g.deger !== 'takvim')} secili={etkin} sec={gorunumSec} />;
+  const donemSecici = <Secici etiket="Dönem" secenekler={DONEMLER} secili={donem} sec={donemSec} />;
+  const goster = (id: string): void => { sec({ siparis: id, adim: null, tezgah: null }); git('kokpit'); };
+
+  // Plan yokken de sayfa başlığıyla çizilir; plan Kokpit'te kurulur (3282-1 a), bağlantısı plan şeridindedir.
+  if (!calisma || !liste || !isi) {
+    return (
+      <div className="tc-pyv">
+        <Baslik ust={null} />
+        <div className="tc-pyv-yok">
+          <Simge ad="grid" boyut="k" />
+          <span><b>Önce plan kurulmalı.</b> Plan kurulunca siparişlerin ne zaman bittiği ve hangisinin termine yetişmediği burada görünür.</span>
+        </div>
+      </div>
     );
+  }
   return (
     <div className="tc-pyv">
-      <IsiSayfasi simge="truck" baslik="Sevkiyat" alt={isi ? 'Sipariş × gün, termine kalan süre' : undefined} ust={isi?.durum} tum={tum}>
-        {isi && liste
-          ? (
-            <>
-              <Lejant ogeler={SEVK_LEJANTI.ogeler} simgeler={SEVK_LEJANTI.simgeler} />
-              <IsiIzgarasi
-                etiket="Sipariş × gün, termine kalan süre" satirAd="Sipariş" genis="gun" sutunlar={isi.sutunlar} satirlar={isi.satirlar}
-                secim={secim} sec={secimYaz} gizliAd="termine üç günden çok pay"
-                acilim={(r, _sutun, kapat) => <SevkAcilimKarti r={r} taban={liste.taban} emirNo={emirNo} kapat={kapat} goster={() => { sec({ siparis: r.x.id, adim: null, tezgah: null }); git('kokpit'); }} />}
-              />
-            </>
-          )
-          : <BosHarita metin="Plan kurulunca siparişlerin sevk günleri burada görünür." />}
-      </IsiSayfasi>
+      <Baslik ust={isi.durum} />
+      {etkin === 'liste' && (
+        <SevkListesi satirlar={satirlar} taban={liste.taban} emirNo={emirNo} donemSecici={donemSecici} donem={donem} gorunum={gorunumSecici} dar={dar} yerSutunu={!orta} goster={goster} />
+      )}
+      {etkin === 'takvim' && (
+        <>
+          <div className="tc-pyv-serit">{gorunumSecici}</div>
+          <Lejant ogeler={SEVK_LEJANTI.ogeler} simgeler={SEVK_LEJANTI.simgeler} />
+          <IsiIzgarasi
+            etiket="Sipariş × gün, termine kalan süre" satirAd="Sipariş" genis="gun" sutunlar={isi.sutunlar} satirlar={isi.satirlar}
+            secim={secim} sec={secimYaz} gizliAd="termine üç günden çok pay"
+            acilim={(r, _sutun, kapat) => <SevkAcilimKarti r={r} taban={liste.taban} emirNo={emirNo} kapat={kapat} goster={() => { goster(r.x.id); }} />}
+          />
+        </>
+      )}
+      {etkin === 'grafik' && (
+        <>
+          <div className="tc-pyv-serit">{gorunumSecici}</div>
+          <Ozet satirlar={liste.satirlar} taban={liste.taban} donem={donem} olcu={olcu} gor={gosterim} donemSecici={donemSecici} olcuYaz={olcuYaz} gorYaz={gosterimYaz} />
+          <Akis satirlar={liste.satirlar} taban={liste.taban} emirNo={emirNo} />
+        </>
+      )}
     </div>
+  );
+}
+
+// Sayfa başlığı ve nabız (Kokpit'in durum satırı gibi): en sıcak satır. Plan durumu (yok, eski) plan şeridindedir; sayfa yinelemez.
+function Baslik({ ust }: { ust: IsiUstDurumu | null }) {
+  return (
+    <header className="tc-pyv-bas">
+      <h2><Simge ad="truck" boyut="k" />Sevk takvimi</h2>
+      {ust && <p className="tc-pyv-nabiz" data-ton={ust.ton} role="status"><Simge ad={ust.simge} boyut="k" /><span>{ust.metin}</span></p>}
+    </header>
   );
 }
 
@@ -130,8 +180,8 @@ function SevkAcilimKarti({ r, taban, emirNo, kapat, goster }: { r: SevkIsiSatiri
 }
 
 function Ozet({ satirlar, taban, donem, olcu, gor, donemSecici, olcuYaz, gorYaz }: {
-  satirlar: readonly SevkSatiri[]; taban: number; donem: Donem; olcu: Olcu; gor: Gorunum; donemSecici: ReactNode;
-  olcuYaz: (o: Olcu) => void; gorYaz: (g: Gorunum) => void;
+  satirlar: readonly SevkSatiri[]; taban: number; donem: Donem; olcu: Olcu; gor: Gosterim; donemSecici: ReactNode;
+  olcuYaz: (o: Olcu) => void; gorYaz: (g: Gosterim) => void;
 }) {
   const l = donemOzetleri(satirlar, taban, donem, olcu);
   const birim = olcu === 'adet' ? 'adet' : 'sipariş';
@@ -156,7 +206,7 @@ function Ozet({ satirlar, taban, donem, olcu, gor, donemSecici, olcuYaz, gorYaz 
         <div className="tc-pyv-araclar">
           {donemSecici}
           <Secici etiket="Ölçü" secenekler={OLCULER} secili={olcu} sec={olcuYaz} />
-          <Secici etiket="Görünüm" secenekler={GORUNUMLER} secili={gor} sec={gorYaz} />
+          <Secici etiket="Gösterim" secenekler={GOSTERIMLER} secili={gor} sec={gorYaz} />
         </div>
         {gor !== 'tablo' && <Grafik l={l} birim={birim} />}
         {gor !== 'grafik' && (
@@ -235,126 +285,6 @@ function Grafik({ l, birim }: { l: readonly DonemOzeti[]; birim: string }) {
         </svg>
       </div>
     </>
-  );
-}
-
-function DurumRozeti({ x }: { x: SevkSatiri }) {
-  const d = sevkDurumu(x);
-  if (d === 'gec') return <Rozet ton="hata">{`${sayiYaz(x.T ?? 0, 1)} sa geç`}</Rozet>;
-  return d === 'son-gun' ? <Rozet ton="uyari">son gün</Rozet> : <Rozet ton="tamam">zamanında</Rozet>;
-}
-
-function PlanGecmisi({ x, taban }: { x: SevkSatiri; taban: number }) {
-  const l = x.gecmis;
-  const sira = l.map((k, i) => ({ k, i })).reverse();
-  const ciz = (x: { k: BitisKaydi; i: number }) => satir(x.k, x.i);
-  const satir = (k: BitisKaydi, i: number) => {
-    const f = oncekineGore(l, i);
-    return (
-      <li key={i} data-son={i === l.length - 1 ? '' : undefined}>
-        <b>{planAdi(l, i)}</b> <span className="mono">{tarihSaatYaz(taban, k.C)}</span>
-        {f !== null && <span className="mono" data-ton={f > 0 ? 'hata' : 'tamam'}> {farkYaz(f)}</span>}
-        <small>{`${k.kaynak} · ${k.kim} · ${zamanYaz(k.t)}`}</small>
-      </li>
-    );
-  };
-  return (
-    <>
-      <ol className="tc-pyv-iz">{sira.slice(0, 3).map(ciz)}</ol>
-      {sira.length > 3 && (
-        <details className="tc-pyv-daha">
-          <summary>{`${String(sira.length - 3)} eski plan daha`}</summary>
-          <ol className="tc-pyv-iz">{sira.slice(3).map(ciz)}</ol>
-        </details>
-      )}
-    </>
-  );
-}
-
-function PlanHucresi({ x, taban }: { x: SevkSatiri; taban: number }) {
-  const f = ilkPlanaGore(x.gecmis);
-  return (
-    <span className="tc-pyv-hucre">
-      <span className="mono tc-pyv-kirilmaz">{tarihSaatYaz(taban, x.C)}</span>
-      <small>{`${x.adim ?? 'son adım'}${x.yer ? ` · ${x.yer}` : ''}`}</small>
-      {f !== null && (
-        <details className="tc-pyv-daha">
-          <summary>
-            <Simge ad={f > AYNI_BITIS ? 'clock' : 'check'} boyut="k" />
-            {`${String(x.gecmis.length)} plan`}
-            {Math.abs(f) > AYNI_BITIS ? ` · ilk plana göre ${sayiYaz(Math.abs(f), 1)} sa ${f > 0 ? 'geç' : 'erken'}` : ' · ilk planla aynı'}
-          </summary>
-          <PlanGecmisi x={x} taban={taban} />
-        </details>
-      )}
-    </span>
-  );
-}
-
-function SevkHucresi({ x, taban }: { x: SevkSatiri; taban: number }) {
-  return (
-    <span className="tc-pyv-hucre">
-      {x.sevk ? <Rozet ton="tamam">{`sevk edildi ${sevkGunuYaz(x.sevk.t)}`}</Rozet> : x.gercekBitis !== null ? <Rozet ton="bilgi">üretim bitti</Rozet> : null}
-      <span className="mono">{x.sevk ? x.sevk.t : '—'}</span>
-      {x.gercekBitis !== null && <small>{`üretim bitişi ${tarihSaatYaz(taban, x.gercekBitis)}`}</small>}
-    </span>
-  );
-}
-
-function Isler({ satirlar, taban, donem, guncel, donemSecici, emirNo }: {
-  satirlar: readonly SevkSatiri[]; taban: number; donem: Donem; guncel: boolean; donemSecici: ReactNode; emirNo: EmirNo;
-}) {
-  const sayilar = sevkSayilari(satirlar);
-  const gruplar = sevkGruplari(satirlar, taban, donem);
-  const sutunlar: Sutun<SevkSatiri>[] = [
-    {
-      anahtar: 'siparis', baslik: 'Sipariş ve müşteri',
-      hucre: (x) => <span className="tc-pyv-hucre"><b className="mono">{emirNo(x.id)}</b><small>{`${x.ad ?? ''} · ${x.musteri}`}</small></span>,
-    },
-    { anahtar: 'adet', baslik: 'Adet', sag: true, hucre: (x) => (x.adet === null ? '—' : sayiYaz(x.adet)) },
-    { anahtar: 'bitis', baslik: 'Plana göre bitiş', hucre: (x) => <PlanHucresi x={x} taban={taban} /> },
-    {
-      anahtar: 'termin', baslik: 'Termin ve durum',
-      hucre: (x) => (
-        <span className="tc-pyv-hucre">
-          {x.termin === null ? <span>termin yok</span> : <span className="mono tc-pyv-kirilmaz">{tarihSaatYaz(taban, x.termin)}</span>}
-          <DurumRozeti x={x} />
-        </span>
-      ),
-    },
-    { anahtar: 'sevk', baslik: 'Sevk', hucre: (x) => <SevkHucresi x={x} taban={taban} /> },
-  ];
-  return (
-    <Kart baslik="Plana göre bitmesi gereken işler" baslikEki={<Simge ad="truck" boyut="k" />}>
-      <div className="tc-pyv-govde">
-        <div className="tc-pyv-araclar">{donemSecici}</div>
-        <div className="tc-pyv-sayilar">
-          <SayiKarti baslik="Bitmesi gereken" simge="truck" sayi={sayilar.bitecek} altMetin="plandaki sipariş" />
-          <SayiKarti baslik="Termini geçecek" simge="alert" sayi={sayilar.gec} altMetin={sayilar.gec ? 'müşteriye haber' : 'yok'} ton="hata" />
-          <SayiKarti baslik="Son gün bitecek" simge="clock" sayi={sayilar.sonGun} altMetin="termine 24 saatten az" ton="uyari" />
-        </div>
-        {gruplar.length === 0 && <p className="tc-pyv-not">Planda bitecek iş yok.</p>}
-        {gruplar.map((g, i) => (
-          <details key={g.anahtar} className="tc-pyv-grup" open={i < ACIK_GRUP}>
-            <summary>
-              <Simge ad="flag" boyut="k" />
-              <b>{g.ad}</b>
-              <span className="tc-pyv-say"><span className="mono">{g.satirlar.length}</span> sipariş · <span className="mono">{sayiYaz(g.adet)}</span> adet</span>
-              {g.gec ? <Rozet ton="hata">{`${String(g.gec)} geç`}</Rozet> : <Rozet ton="tamam">hepsi zamanında</Rozet>}
-            </summary>
-            <SevkTablosu<SevkSatiri>
-              etiket={`${g.ad} siparişleri`} sutunlar={sutunlar} satirlar={g.satirlar} anahtar={(x) => x.id} sinif="tc-pyv-is"
-              ton={(x) => (gecMi(x) ? 'hata' : undefined)}
-            />
-          </details>
-        ))}
-        <p className="tc-pyv-not">
-          Sipariş, son adımının (genelde son ölçüm) plana göre bittiği döneme düşer; sevkiyat o günden itibaren yapılabilir. Plan değiştikçe eski
-          bitiş silinmez: bitiş hücresindeki satırı açınca ilk plan ve her ertelenmiş ya da öne çekilmiş plan görünür. {sayilar.ertelenen} sipariş
-          ilk planına göre ertelendi.{guncel ? '' : ' Veri plandan sonra değişti; plan yeniden çözülünce güncellenir.'}
-        </p>
-      </div>
-    </Kart>
   );
 }
 
