@@ -12,7 +12,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 // 3463-1: kart föyündeki Alternatifler bölümü (ORN- örnek veri).
 const kart = (no: number, kod: string): KatalogKarti => ({
-  kimlik: `k${no}`, no, surum: 1, kayit: { id: `k${no}`, tur: 'hammadde', com: { kod, ad: `ORN çubuk ${kod}`, birim: 'm' } },
+  kimlik: `k${no}`, no, surum: 1, kayit: { id: `k${no}`, tur: 'hammadde', form: 'cubuk', com: { kod, ad: `ORN çubuk ${kod}`, birim: 'm' } },
 } as unknown as KatalogKarti);
 const ANA = kart(1, 'ORN-HM-0142');
 const KOPYA = kart(2, 'ORN-HM-0988');
@@ -36,8 +36,23 @@ const BOLUM: KartAlternatifleriCevabi = {
     { id: 11, kapsamTuru: 'kart', kapsam: '1', nitelik: 'kalite', degerler: [{ deger: 'C45', tur: 'tam' }, { deger: '42CrMo4', tur: 'ust' }], alt: null, ust: null, surum: 1 },
     { id: 12, kapsamTuru: 'kart', kapsam: '1', nitelik: 'd', degerler: null, alt: 50, ust: 55, surum: 3 },
   ],
-  esdegerler: [],
+  esdegerler: [], setler: [], secili: [], genisEsik: 50, hesap: '2026-11-22T18:00:00Z',
 };
+// 3572-1: bir set (iki uyan kart, biri tekil satırlı), bir elle kart, bir önerilmeyen.
+const SET: KartAlternatifleriCevabi['setler'][number] = {
+  id: 7, ad: 'ORN Kalın çubuk', tur: 'tam', sira: 0, kullanimYerleri: ['talep', 'satin_alma', 'uretim'], notu: 'ORN fazla talaş', genisOnay: false,
+  nitelikler: [{ nitelik: 'form', degerler: ['cubuk'], alt: null, ust: null }, { nitelik: 'd', degerler: null, alt: 50, ust: 56 }],
+  uyanSayisi: 2, surum: 2, guncelleme: '2026-11-22T18:00:00Z',
+  uyanlar: [
+    { no: 3, kod: 'ORN-HM-0130', ad: 'ORN aday 3', neden: 'd 52', yeni: true, durum: 'gecer' },
+    { no: 4, kod: 'ORN-HM-0140', ad: 'ORN aday 4', neden: 'd 52', yeni: false, durum: 'tekil' },
+  ],
+};
+const SECILI: KartAlternatifleriCevabi['secili'] = [
+  { alternatifNo: 4, kod: 'ORN-HM-0140', ad: 'ORN aday 4', iptal: false, onerilmez: false, tur: 'ust', sira: 1, kullanimYerleri: ['talep'], notu: null, setler: [7], kuraldan: true, surum: 1 },
+  { alternatifNo: 5, kod: 'ORN-HM-0150', ad: 'ORN aday 5', iptal: false, onerilmez: true, tur: null, sira: null, kullanimYerleri: null, notu: 'ORN sertlik tutmadı', setler: [], kuraldan: true, surum: 2 },
+];
+const DOLU: KartAlternatifleriCevabi = { ...BOLUM, setler: [SET], secili: SECILI, esdegerler: [{ no: 9, kod: 'ORN-HM-0990', ad: 'ORN kopya' }] };
 const yollar = (ek = {}) => ({
   'GET /malzeme-alternatifleri/zarf/1': () => json(200, ZARF),
   'GET /malzeme-alternatifleri/kart/1': () => json(200, BOLUM),
@@ -50,8 +65,10 @@ const ac = (yetki: MalzemeYetkisi) => render(
 );
 const TANIM: MalzemeYetkisi = { ...YETKISIZ, oku: true, yaz: true, tanimYaz: true };
 
-describe('Kart föyünde alternatifler (3463-1)', () => {
-  test('okuyan sınırları kaynağıyla ve ilk dört uyan kartı görür; düzenleme düğmesi yok', async () => {
+const satirKodlari = () => screen.getAllByRole('row').slice(1).map((r) => within(r).queryAllByText(/^ORN-HM-|^ORN Kalın/)[0]?.textContent ?? '');
+
+describe('Kart föyünde alternatifler (3463-1, 3572-1)', () => {
+  test('okuyan Ana seti kaynağıyla ve kuraldan gelenleri tek tabloda görür; düzenleme düğmesi yok', async () => {
     sunucuKur(YONETICI, yollar());
     ac({ ...YETKISIZ, oku: true });
     // Kalite kodu harf büyüklüğüyle düz yazılır, tür ayrı rozette.
@@ -59,19 +76,96 @@ describe('Kart föyünde alternatifler (3463-1)', () => {
     expect(screen.getByText('üst muadil')).toBeTruthy();
     expect(screen.getByText('50 – 55')).toBeTruthy();
     expect(screen.getAllByText('Kartın kuralı').length).toBeGreaterThan(0);
-    expect(screen.getByText('Uyan kartlar (5)')).toBeTruthy();
-    expect(screen.queryByText('ORN-HM-0170')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'İlk 4 · Hepsini göster (5)' }));
-    expect(screen.getByText('ORN-HM-0170')).toBeTruthy();
+    expect(screen.getByText('Alternatifler (5)')).toBeTruthy();
+    expect(screen.getAllByText('Kuraldan')).toHaveLength(5);
     expect(screen.queryByRole('button', { name: /sınırını düzenle/ })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Kart bağla' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Set ekle' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Önerilmesin' })).toBeNull();
   });
 
-  test('eşdeğer bağlı kart uyan kartlarda tekrar gösterilmez', async () => {
-    sunucuKur(YONETICI, yollar({ 'GET /malzeme-alternatifleri/kart/1': () => json(200, { ...BOLUM, esdegerler: [{ no: 3, kod: 'ORN-HM-0130', ad: 'ORN aday 3' }] }) }));
+  test('K4 sırası: set ve elle kart kullanıcının sırasıyla, kuraldan gelen sete uyanı ve elle ekleneni tekrar etmez, önerilmeyen ve eşdeğer altta', async () => {
+    sunucuKur(YONETICI, yollar({ 'GET /malzeme-alternatifleri/kart/1': () => json(200, DOLU) }));
     ac({ ...YETKISIZ, oku: true });
-    expect(await screen.findByText('Uyan kartlar (4)')).toBeTruthy();
-    expect(screen.getAllByText('ORN-HM-0130')).toHaveLength(1);
+    expect(await screen.findByText('Alternatifler (6)')).toBeTruthy();
+    expect(satirKodlari()).toEqual(['ORN Kalın çubuk', 'ORN-HM-0140', 'ORN-HM-0160', 'ORN-HM-0170', 'ORN-HM-0150', 'ORN-HM-0990']);
+    expect(screen.getByText('ORN Kalın çubuk setine de uyar; bu satır geçer')).toBeTruthy();
+    expect(screen.getByText('Neden: ORN sertlik tutmadı')).toBeTruthy();
+    expect(screen.getByText('Hiçbir yerde')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '2 kart uyuyor · 1 yeni' }));
+    expect(screen.getByText('tekil satır geçer')).toBeTruthy();
+  });
+
+  test('tanım yazan kuraldan geleni nedenle önerilmesin diye işaretler ve önerilmeyeni sürümüyle geri alır', async () => {
+    const istekler = sunucuKur(YONETICI, yollar({
+      'GET /malzeme-alternatifleri/kart/1': () => json(200, DOLU),
+      'POST /malzeme-alternatifleri/secili/onerilmesin': () => json(200, { tamam: true }),
+      'POST /malzeme-alternatifleri/secili/kaldir': () => json(200, { tamam: true }),
+    }));
+    ac(TANIM);
+    expect(await screen.findByText('Alternatifler (6)')).toBeTruthy();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Önerilmesin' })[0]!);
+    const pencere = await screen.findByRole('dialog');
+    fireEvent.change(within(pencere).getByLabelText('Neden'), { target: { value: 'ORN çapak' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Önerilmesin' }));
+    await waitFor(() => expect(istekler.find((i) => i.yol === '/malzeme-alternatifleri/secili/onerilmesin')?.govde).toEqual({ anaNo: 1, alternatifNo: 6, neden: 'ORN çapak' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Geri al' }));
+    await waitFor(() => expect(istekler.find((i) => i.yol === '/malzeme-alternatifleri/secili/kaldir')?.govde).toEqual({ anaNo: 1, alternatifNo: 5, surum: 2 }));
+  });
+
+  test('sıra okları bütün sırayı gönderir; elle kart yukarı alınınca setin önüne geçer', async () => {
+    const istekler = sunucuKur(YONETICI, yollar({
+      'GET /malzeme-alternatifleri/kart/1': () => json(200, DOLU), 'POST /malzeme-alternatifleri/sira': () => json(200, { tamam: true }),
+    }));
+    ac(TANIM);
+    fireEvent.click(await screen.findByRole('button', { name: 'ORN-HM-0140 yukarı' }));
+    await waitFor(() => expect(istekler.find((i) => i.yol === '/malzeme-alternatifleri/sira')?.govde).toEqual({
+      anaNo: 1, ogeler: [{ tur: 'kart', no: 4 }, { tur: 'set', no: 7 }],
+    }));
+  });
+
+  test('set penceresi canlı sayar, eşik üstünde işaret ister ve seti gövdesiyle kaydeder', async () => {
+    const istekler = sunucuKur(YONETICI, yollar({
+      'GET /malzeme-alternatifleri/kart/1/set-onizleme': () => json(200, { uyanSayisi: 60, uyanlar: [], sartli: false, hesap: '2026-11-22T18:00:00Z' }),
+      'POST /malzeme-alternatifleri/setler/kaydet': () => json(200, { id: 8, tur: 'tam', uyanSayisi: 60 }),
+    }));
+    ac(TANIM);
+    fireEvent.click(await screen.findByRole('button', { name: 'Set ekle' }));
+    const pencere = await screen.findByRole('dialog');
+    fireEvent.change(within(pencere).getByLabelText('Ad'), { target: { value: 'ORN Geniş' } });
+    fireEvent.change(within(pencere).getByLabelText('d en az (mm)'), { target: { value: '50' } });
+    expect(await within(pencere).findByText('Bu sete uyan: 60')).toBeTruthy();
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    expect(await within(pencere).findByText('Geniş set için işaret gerekir.')).toBeTruthy();
+    expect(istekler.some((i) => i.yol === '/malzeme-alternatifleri/setler/kaydet')).toBe(false);
+    fireEvent.click(within(pencere).getByLabelText('Bu kadar geniş olduğunu biliyorum'));
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Üretim' }));
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => expect(istekler.find((i) => i.yol === '/malzeme-alternatifleri/setler/kaydet')?.govde).toEqual({
+      anaNo: 1, ad: 'ORN Geniş', tur: 'tam', kullanimYerleri: ['talep', 'satin_alma'], notu: null, genisOnay: true,
+      nitelikler: [{ nitelik: 'd', degerler: null, alt: 50, ust: null }],
+    }));
+  });
+
+  test('hammadde dışı kartta Set ekle kapalı ve nedenli; Kart ekle sınır dışı kartı uyarıyla ekler', async () => {
+    const sarf = { ...ANA, kayit: { ...ANA.kayit, tur: 'sarf' } } as unknown as KatalogKarti;
+    const istekler = sunucuKur(YONETICI, yollar({ 'POST /malzeme-alternatifleri/secili/kaydet': () => json(200, { tamam: true }) }));
+    render(
+      <QueryClientProvider client={yeniIstemci()}><BildirimSaglayici>
+        <KartAlternatifleri kart={sarf} kartlar={[sarf, KOPYA]} yetki={TANIM} ac={vi.fn()} />
+      </BildirimSaglayici></QueryClientProvider>,
+    );
+    expect(((await screen.findByRole('button', { name: 'Set ekle' })) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/set kurulamaz/)).toBeTruthy();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Kart ekle' })[0]!);
+    const pencere = await screen.findByRole('dialog');
+    fireEvent.click(within(pencere).getByRole('button', { name: /ORN-HM-0988/ }));
+    expect(within(pencere).getByText(/kabul sınırının dışında/)).toBeTruthy();
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Şartlı' }));
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Ekle' }));
+    await waitFor(() => expect(istekler.find((i) => i.yol === '/malzeme-alternatifleri/secili/kaydet')?.govde).toEqual({
+      anaNo: 1, alternatifNo: 2, tur: 'sartli', kullanimYerleri: ['talep', 'satin_alma', 'uretim'], notu: null,
+    }));
   });
 
   test('tanım yazan ölçü aralığını sürümüyle kaydeder', async () => {
@@ -94,7 +188,7 @@ describe('Kart föyünde alternatifler (3463-1)', () => {
     }));
     ac(TANIM);
     expect(await screen.findByText(/Alternatif kapalı/)).toBeTruthy();
-    expect(screen.getByText('Şartlı')).toBeTruthy();
+    expect(screen.getAllByText('Şartlı').length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: 'd (mm) sınırını düzenle' }));
     const pencere = await screen.findByRole('dialog');
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kartın sınırını kaldır' }));
@@ -104,8 +198,7 @@ describe('Kart föyünde alternatifler (3463-1)', () => {
   test('eşdeğer kart onay penceresiyle bağlanır', async () => {
     const istekler = sunucuKur(YONETICI, yollar({ 'POST /malzeme-alternatifleri/esdeger/bagla': () => json(200, { tamam: true }) }));
     ac(TANIM);
-    expect(await screen.findByText('Eşdeğer kart bağlı değil.')).toBeTruthy();
-    fireEvent.change(screen.getByLabelText('Eşdeğer kartın kodu'), { target: { value: 'ORN-HM-0988' } });
+    fireEvent.change(await screen.findByLabelText('Eşdeğer kartın kodu (aynı malzeme, farklı kart)'), { target: { value: 'ORN-HM-0988' } });
     fireEvent.click(screen.getByRole('button', { name: 'Kart bağla' }));
     const pencere = await screen.findByRole('dialog');
     expect(within(pencere).getByText(/birbirinin yerine sınırsız kabul edilir/)).toBeTruthy();

@@ -411,7 +411,7 @@ export interface KatalogSatinAlmaSatiri {
   standartlar: string[]; tolerans: string | null; durum: string | null; yuzey: string | null; sertifikalar: string[];
   ureticiUrunKodu: string | null; mensei: string | null; gtip: string | null; enAzSiparis: string | null; tercihTedarikci: string | null; not: string | null;
 }
-const KATALOG_DIZI = (yol: string): string => `ARRAY(SELECT btrim(e) FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(k.kayit #> '{${yol}}') = 'array'
+export const KATALOG_DIZI = (yol: string): string => `ARRAY(SELECT btrim(e) FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(k.kayit #> '{${yol}}') = 'array'
   THEN k.kayit #> '{${yol}}' ELSE '[]'::jsonb END) e WHERE btrim(e) <> '')`;
 export function katalogSatinAlmaSatirlari(db: Db, nolar: number[]): Promise<KatalogSatinAlmaSatiri[]> {
   return db.sorgu<KatalogSatinAlmaSatiri>(

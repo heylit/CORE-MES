@@ -1,5 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  AlternatifSetiKaydetGovdesi, AlternatifSirasiGovdesi, OnerilmesinGovdesi, SeciliAlternatifKaydetGovdesi, SetNiteligiYazimi, SetOnizlemeCevabi,
   AlternatifKuraliKaydetGovdesi, AlternatifTanimlariCevabi, GrupSinirlariCevabi, KabulSiniriKaydetGovdesi, KartAlternatifleriCevabi, KartZarfiCevabi, MuadilTuru,
 } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 import { api } from '../../../../ortak/veri/api.ts';
@@ -87,4 +88,44 @@ export function useEsdegerIslemi() {
         : api.post('/malzeme-alternatifleri/esdeger/kaldir', { kartNo: g.kartNo }),
     onSettled: tazele,
   });
+}
+
+// 3572 a: alternatif setleri ve tek tek seçilen kartlar. Her yazım bütün alternatif okumalarını tazeler.
+export function useSetOnizleme(anaNo: number, nitelikler: readonly SetNiteligiYazimi[], acik: boolean) {
+  const metin = JSON.stringify(nitelikler);
+  return useQuery({
+    queryKey: [...ANAHTAR, 'set-onizleme', anaNo, metin] as const, enabled: acik && nitelikler.length > 0, placeholderData: keepPreviousData,
+    queryFn: () => api.get<SetOnizlemeCevabi>(`/malzeme-alternatifleri/kart/${String(anaNo)}/set-onizleme?nitelikler=${encodeURIComponent(metin)}`),
+  });
+}
+
+export function useSetKaydet() {
+  const tazele = useAlternatifTazele();
+  return useMutation({
+    mutationFn: (g: AlternatifSetiKaydetGovdesi) => api.post<{ id: number; tur: string; uyanSayisi: number }>('/malzeme-alternatifleri/setler/kaydet', g),
+    onSettled: tazele,
+  });
+}
+
+export function useSetKaldir() {
+  const tazele = useAlternatifTazele();
+  return useMutation({ mutationFn: (g: { id: number; surum: number }) => api.post(`/malzeme-alternatifleri/setler/${String(g.id)}/kaldir`, { surum: g.surum }), onSettled: tazele });
+}
+
+export type SeciliIslemi =
+  | ({ islem: 'kaydet' } & SeciliAlternatifKaydetGovdesi)
+  | ({ islem: 'onerilmesin' } & OnerilmesinGovdesi)
+  | { islem: 'kaldir'; anaNo: number; alternatifNo: number; surum: number };
+
+export function useSeciliIslemi() {
+  const tazele = useAlternatifTazele();
+  return useMutation({
+    mutationFn: ({ islem, ...g }: SeciliIslemi) => api.post(`/malzeme-alternatifleri/secili/${islem}`, g),
+    onSettled: tazele,
+  });
+}
+
+export function useSiraKaydet() {
+  const tazele = useAlternatifTazele();
+  return useMutation({ mutationFn: (g: AlternatifSirasiGovdesi) => api.post('/malzeme-alternatifleri/sira', g), onSettled: tazele });
 }

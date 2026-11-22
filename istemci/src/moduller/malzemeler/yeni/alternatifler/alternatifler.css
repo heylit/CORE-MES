@@ -65,3 +65,24 @@
 }
 .tc-kalt-sag { display: flex; gap: var(--b-2); margin-left: auto; }
 .tc-kalt-aralik > * { flex: 1 1 10rem; }
+
+/* 3572: tek Alternatifler tablosu, set ve kart pencereleri. Çipler aç-kapa düğmesidir (aria-pressed). */
+.tc-kalt-baslik { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-kalt-hucre { display: grid; gap: var(--b-1); min-width: 0; overflow-wrap: anywhere; }
+.tc-kalt-sira, .tc-kalt-eylem { display: inline-flex; flex-wrap: wrap; gap: var(--b-1); }
+.tc-kalt-not { color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
+.tc-kalt-cizili { text-decoration: line-through; }
+.tc-kalt-hata { margin: 0; color: var(--stop); font-size: var(--yazi-s); }
+.tc-kalt-cipler { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); min-width: 0; margin: 0; padding: 0; border: 0; }
+.tc-kalt-cipler > legend { float: left; width: 9rem; padding: 0; font-weight: 600; }
+.tc-kalt-cip {
+  min-height: var(--isaret-boy); padding: 0 var(--b-3); border: 1px solid var(--edge2); border-radius: var(--yari-1);
+  background: var(--panel); color: inherit; cursor: pointer;
+}
+.tc-kalt-cip[aria-pressed='true'] { border-color: var(--bp); background: var(--secili-zemin); color: var(--secili-yazi); }
+.tc-kalt-cip:disabled { cursor: not-allowed; opacity: 0.5; }
+.tc-kalt-cip:focus-visible { outline: 2px solid var(--bp); outline-offset: 1px; }
+.tc-kalt-uyan { padding: var(--b-3); border: 1px solid var(--edge2); border-radius: var(--yari-1); background: var(--panel2); }
+@media (max-width: 767px) {
+  .tc-kalt-cipler > legend { float: none; width: 100%; }
+}
