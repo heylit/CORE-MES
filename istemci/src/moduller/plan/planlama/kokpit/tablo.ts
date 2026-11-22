@@ -70,6 +70,8 @@ export function farkOlustur(e: Pick<KokpitEmri, 'gecikme'>): Fark | null {
 
 // Fark yazısının kırılmaz parçaları: sayı birimiyle ("4 gün", "17 sa"), sonra "geç" ya da "erken"; "tam zamanında" tek parça.
 export const farkParcalari = (yazi: string): string[] => yazi.match(/\d+ \S+|\S+( zamanında)?/g) ?? [yazi];
+// Sıkı satırda rozet tek satırdır ve dar sütuna sığar: yalnız en büyük birim kalır ("4 gün geç"); tam yazı ipucunda ve ekran okuyucuda.
+export const farkKisaParcalari = (yazi: string): string[] => { const p = farkParcalari(yazi); return p.length > 2 ? [p[0] ?? '', p[p.length - 1] ?? ''] : p; };
 
 // Termine göre gecikme: en çok gecikecek emir üstte (eşitlikte termini yakın olan, sonra plan sırası); terminsiz ve plansız emirler plan
 // sırasıyla ortada kalır; bitmiş emirler (hiçbir eylem kalmadı) en altta, plan sırasıyla (Arayüz K7). Girdi sırası plan sırasıdır.

@@ -1,4 +1,4 @@
-import type { KokpitEmri, KokpitModeli } from './kurallar.ts';
+import type { KokpitEmri, KokpitModeli, KokpitOlcegi } from './kurallar.ts';
 
 // Kokpit gantt yoğun veride okunurluk, dilim 1 (KURGU T1 ufuk, T5 etiket, T6 oklar). Saf; ekran Tahta.tsx ve Kokpit.tsx.
 
@@ -38,3 +38,29 @@ export function okKumesi(yanan: ReadonlySet<string> | null, odakEmir: string | n
   if (satirSayisi > YOGUN_SATIR) { const e = secEmir ?? odakEmir; return e ? new Set([e]) : null; }
   return yanan ?? (odakEmir ? new Set([odakEmir]) : null);
 }
+
+// Dilim 2. T3: Hafta ve üstünde iş gerçek boyunda çizilir; okunur genişlik (3365 a) yalnız Gün ve 3 gün'dedir (S1 a, 3552).
+export const okunurGenislik = (olcek: KokpitOlcegi): boolean => olcek === 'G' || olcek === '3';
+// Dar yan yana işler bir "N iş" kümesi olur (V4): iki iş arası boşluk KUME_BOSLUK px'ten az ve ikisi de KUME_DAR px'ten darsa birleşir.
+export const KUME_BOSLUK = 4, KUME_DAR = 12;
+export interface KumeGirdisi { id: string; sol: number; en: number }
+export interface Birim { idler: string[]; sol: number; en: number }
+export function kumele(l: readonly KumeGirdisi[]): Birim[] {
+  const sirali = [...l].sort((a, b) => a.sol - b.sol), out: Birim[] = [];
+  let son: (Birim & { sonEn: number }) | null = null;
+  for (const x of sirali) {
+    if (son && x.en < KUME_DAR && son.sonEn < KUME_DAR && x.sol - (son.sol + son.en) < KUME_BOSLUK) {
+      son.idler.push(x.id); son.en = Math.max(son.en, x.sol + x.en - son.sol); son.sonEn = x.en;
+      continue;
+    }
+    son = { idler: [x.id], sol: x.sol, en: x.en, sonEn: x.en };
+    out.push(son);
+  }
+  return out.map(({ idler, sol, en }) => ({ idler, sol, en }));
+}
+export const kumeYazisi = (n: number): string => `${String(n)} iş`;
+
+// T4: satır boyu. Rahat bugünkü (dokunma boyu), Sıkı daha alçak; dokunmatik ekranda Sıkı kapalıdır (dokunma hedefi). Tarayıcıda hatırlanır (V6).
+export type SatirBoyu = 'rahat' | 'siki';
+export const SATIR_ANAHTARI = 'coremes.kokpit-satir-boyu';
+export const satirBoyuCoz = (ham: string | null | undefined, dokunmatik: boolean): SatirBoyu => (!dokunmatik && ham === 'siki' ? 'siki' : 'rahat');

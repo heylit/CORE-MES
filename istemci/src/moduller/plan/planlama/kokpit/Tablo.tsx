@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type KeyboardEvent as TusOlayi, type PointerEvent as ImlecOlayi } from 'react';
 import { Simge } from '../../../../ortak/arayuz/index.ts';
 import {
-  EN_ENAZ, SIRALAMA_ADI, SUTUNLAR, ayarOku, ayarYaz, bolmeSinirla, farkParcalari, ilerlemeYazisi, sutunlariDuzenle, varsayilanSutunlar,
+  EN_ENAZ, SIRALAMA_ADI, SUTUNLAR, ayarOku, ayarYaz, bolmeSinirla, farkKisaParcalari, farkParcalari, ilerlemeYazisi, sutunlariDuzenle, varsayilanSutunlar,
   type Fark, type Ilerleme, type Siralama, type SutunKimligi, type TabloAyari,
 } from './tablo.ts';
 
@@ -108,9 +108,11 @@ export function Bos({ ad }: { ad: string }) {
   return <span className="tc-pyq-bos" title={ad}><span aria-hidden="true">—</span><span className="tc-gizli-etiket">{ad}</span></span>;
 }
 // Yazı kesilmez: dar sütunda rozet satır kırar, ama "4 gün" gibi sayı ve birim ayrılmaz (her parça kırılmaz bir kutu).
-export function FarkRozeti({ f, ipucu }: { f: Fark | null; ipucu?: string }) {
+export function FarkRozeti({ f, ipucu, kisa = false }: { f: Fark | null; ipucu?: string; kisa?: boolean }) {
   if (f === null) return <Bos ad="Fark yok: termin ya da plan yok" />;
-  return <span className="tc-pyq-fark" data-ton={f.ton} title={ipucu}>{farkParcalari(f.yazi).map((p, i) => <Fragment key={i}>{i > 0 ? ' ' : ''}<span>{p}</span></Fragment>)}</span>;
+  const p = (kisa ? farkKisaParcalari : farkParcalari)(f.yazi), parcalar = p.map((x, i) => <Fragment key={i}>{i > 0 ? ' ' : ''}<span>{x}</span></Fragment>);
+  if (!kisa || p.join(' ') === f.yazi) return <span className="tc-pyq-fark" data-ton={f.ton} data-kisa={kisa ? '' : undefined} title={ipucu}>{parcalar}</span>;
+  return <span className="tc-pyq-fark" data-ton={f.ton} data-kisa="" title={ipucu}><span aria-hidden="true">{parcalar}</span><span className="tc-gizli-etiket">{f.yazi}</span></span>;
 }
 
 // Tablo ile gantt arasındaki ayraç: sürüklenir, ok tuşlarıyla oynar, çift tıkta doğal ene döner. Satırlardaki kopyalar yalnız fare tutamağıdır

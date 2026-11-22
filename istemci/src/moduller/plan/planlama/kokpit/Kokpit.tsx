@@ -23,7 +23,7 @@ import { useBitinceBildir } from './bitince-bildir.ts';
 import { emirYonu, planYonu } from './ayarlar.ts';
 import { TabloAraci, useTablo } from './Tablo.tsx';
 import { siralaGecikme, siralaPlan } from './tablo.ts';
-import { YOGUN_OK_ACIKLAMASI, YOGUN_SATIR, gorunenSatirSayisi, ufkaSigmaz, ufkaSigmayanSayisi } from './yogunluk.ts';
+import { SATIR_ANAHTARI, YOGUN_OK_ACIKLAMASI, YOGUN_SATIR, gorunenSatirSayisi, satirBoyuCoz, ufkaSigmaz, ufkaSigmayanSayisi, type SatirBoyu } from './yogunluk.ts';
 import { Kapasite } from './Kapasite.tsx';
 import { Engeller } from './Engeller.tsx';
 import { engelOzeti, engeller } from './engeller.ts';
@@ -175,6 +175,10 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const [suz, setSuz] = useState<Exclude<EmirDurumu, 'iyi'> | null>(null);
   // Gantt dilim 1 (T1): "Ufka sığmayan" rozetine basınca yalnız ufku aşan emirler görünür.
   const [ufukSuz, setUfukSuz] = useState(false);
+  // Dilim 2 (T4): satır boyu; dokunmatikte hep Rahat. Seçim bu tarayıcıda saklanır (okunamazsa Rahat).
+  const dokunmatik = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+  const [satirBoyu, setSatirBoyu] = useState<SatirBoyu>(() => { try { return satirBoyuCoz(localStorage.getItem(SATIR_ANAHTARI), dokunmatik); } catch { return 'rahat'; } });
+  const satirBoyuSec = (b: SatirBoyu): void => { setSatirBoyu(b); try { localStorage.setItem(SATIR_ANAHTARI, b); } catch { /* saklanamazsa yalnız bu oturumda */ } };
   const [onceAcik, setOnceAcik] = useState(false);
   const [goster, setGoster] = useState<string | null>(null);
   const [tur, setTur] = useState<TurDurumu | null>(null);
@@ -745,7 +749,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     <>
       {sonucCubugu}
       <Tahta
-        ufukSonu={ufukSonu} m={m} cx={cx} goz="T" olcek={olcek} emirler={gorunen} tablo={tezgahTablosu ? tablo : null} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
+        ufukSonu={ufukSonu} satirBoyu={satirBoyu} kumeAc={(S) => { olcekSec('G', S); }} m={m} cx={cx} goz="T" olcek={olcek} emirler={gorunen} tablo={tezgahTablosu ? tablo : null} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
         tasi={yazabilir && !tur ? tasiDene : null} planaAl={yazabilir && !tur ? planaAlDene : null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
         yerlestirme={tur ? null : yerHedefi} yanan={tur ? null : yananTahta} secimiKaldir={gelenYanan ? () => { setGelenYanan(null); } : listedeSecimKalir}
         sorunBildir={null} onizle={tur ? null : onizle} okKipi={tur ? 'yok' : okKipi}
@@ -811,7 +815,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     );
   };
   return (
-    <div className="tc-pyq" data-goz={goz} data-duzen={klasik ? 'klasik' : 'liste'} data-sayfa={onayAcik ? 'onay' : undefined} ref={kok}>
+    <div className="tc-pyq" data-satir-boyu={satirBoyu} data-goz={goz} data-duzen={klasik ? 'klasik' : 'liste'} data-sayfa={onayAcik ? 'onay' : undefined} ref={kok}>
       {!onayAcik && !klasik && (
         <div className="tc-pyq-ust tc-pyq-ust-sade">
           {tahtasiz(goz) && <button type="button" className="tc-pyq-ok" title="Sipariş listesine dön" onClick={() => { setGoz('T'); }}><Simge ad="chev-left" boyut="k" /><span>Listeye dön</span></button>}
@@ -843,6 +847,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
             {(kapat) => (
               <>
                 <button type="button" role="menuitemcheckbox" aria-checked={butunTezgahlar} onClick={() => { kapat(); setButunTezgahlar(!butunTezgahlar); }}><Simge ad="layers" boyut="k" /><span>Bütün tezgâhları göster</span></button>
+                <button type="button" role="menuitemcheckbox" aria-checked={satirBoyu === 'siki'} disabled={dokunmatik} onClick={() => { kapat(); satirBoyuSec(satirBoyu === 'siki' ? 'rahat' : 'siki'); }}><Simge ad="layers" boyut="k" /><span>Sıkı satırlar<small>{dokunmatik ? 'Dokunmatik ekranda kapalı' : 'Daha çok satır; çubuk yazısı yanında ya da ipucunda'}</small></span></button>
                 <button type="button" role="menuitem" onClick={() => { kapat(); setGoz('M'); }}><Simge ad="layers" boyut="k" /><span>Matris</span></button>
                 <button type="button" role="menuitem" onClick={() => { kapat(); setGoz('B'); }}><Simge ad="layers" boyut="k" /><span>3B</span></button>
                 <button type="button" role="menuitemcheckbox" aria-checked={onceAcik} onClick={() => { kapat(); setGoz('T'); setOnceAcik(!onceAcik); }}><Simge ad="layers" boyut="k" /><span>Önce / sonra<small>Tezgâhlarda onaylı planla karşılaştır</small></span></button>
@@ -916,6 +921,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
               {([['is', 'Oklar: seçili iş', 'Üstüne gelinen ya da seçili işin önceki ve sonraki adımı'], ['siparis', 'Oklar: seçili sipariş', 'Seçili siparişin bütün adımları'], ['yok', 'Oklar kapalı', 'Bağ oku çizilmez']] as const).map(([k, ad, aciklama]) => (
                 <button type="button" key={k} role="menuitemradio" aria-checked={okKipi === k} onClick={() => { kapat(); setOkKipi(k); }}><Simge ad="route" boyut="k" /><span>{ad}<small>{k === 'siparis' && okYogun ? YOGUN_OK_ACIKLAMASI : aciklama}</small></span></button>
               ))}
+              <button type="button" role="menuitemcheckbox" aria-checked={satirBoyu === 'siki'} disabled={dokunmatik} onClick={() => { kapat(); satirBoyuSec(satirBoyu === 'siki' ? 'rahat' : 'siki'); }}><Simge ad="layers" boyut="k" /><span>Sıkı satırlar<small>{dokunmatik ? 'Dokunmatik ekranda kapalı' : 'Daha çok satır; çubuk yazısı yanında ya da ipucunda'}</small></span></button>
               <button type="button" role="menuitemcheckbox" aria-checked={kapasiteAcik} title="Tezgâhın arıza, bakım ve ek mesaisi" disabled={tur !== null || onayAcik}
                 onClick={() => { kapat(); if (!kapasiteAcik) sec(null, null); setAyarAcik(false); setSorunTezgahi(null); setSorunAdimi(null); setEngelAcik(false); setKapasiteAcik(!kapasiteAcik); }}><Simge ad="wrench" boyut="k" /><span>Duruş ve mesai</span></button>
               <button type="button" role="menuitemcheckbox" aria-checked={ayarAcik} title="Plan ayarları" disabled={tur !== null || onayAcik}
@@ -974,7 +980,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
               {sonucCubugu}
               <TabloAraci tablo={tablo} />
               <Tahta
-                ufukSonu={ufukSonu} m={m} cx={cx} goz="S" olcek={olcek} emirler={emirSirali} tablo={tablo} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
+                ufukSonu={ufukSonu} satirBoyu={satirBoyu} kumeAc={(S) => { olcekSec('G', S); }} m={m} cx={cx} goz="S" olcek={olcek} emirler={emirSirali} tablo={tablo} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
                 tasi={yazabilir && !tur ? tasiDene : null} planaAl={null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
                 yerlestirme={null} yanan={tur ? null : gelenYanan?.k ?? null} sorunBildir={null} onizle={tur ? null : onizle} okKipi={tur ? 'yok' : okKipi}
                 saatEni={saatEni} malzeme={malzeme} agac={{ acik: agacAcik, ac: agacAc, notlar: agacNotu }} {...gelenOz}
@@ -1042,7 +1048,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
               <>
                 {sonucCubugu}
                 <Tahta
-                  ufukSonu={ufukSonu} m={m} cx={cx} goz={goz} olcek={olcek} emirler={emirSirali} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
+                  ufukSonu={ufukSonu} satirBoyu={satirBoyu} kumeAc={(S) => { olcekSec('G', S); }} m={m} cx={cx} goz={goz} olcek={olcek} emirler={emirSirali} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
                   tasi={yazabilir && !tur ? tasiDene : null} planaAl={yazabilir && !tur ? planaAlDene : null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
                   yerlestirme={tur ? null : yerHedefi} yanan={tur ? null : yananTahta} secimiKaldir={secimiKaldir}
                   sorunBildir={sorunBildir} onizle={tur ? null : onizle} okKipi={tur ? 'yok' : okKipi}

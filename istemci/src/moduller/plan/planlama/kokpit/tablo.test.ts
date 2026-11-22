@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { KokpitEmri, KokpitIsi } from './kurallar.ts';
 import {
-  AYAR_ANAHTARI, DAR_SUTUNLAR, EN_ENAZ, adimDurumu, ayarCoz, bolmeEni, bolmeSinirla, farkOlustur, ilerleme, ilerlemeYazisi, sablon, siralaGecikme, siralaPlan, sutunlariDuzenle, suAn, tarihSaat,
+  AYAR_ANAHTARI, DAR_SUTUNLAR, EN_ENAZ, adimDurumu, ayarCoz, bolmeEni, bolmeSinirla, farkKisaParcalari, farkOlustur, ilerleme, ilerlemeYazisi, sablon, siralaGecikme, siralaPlan, sutunlariDuzenle, suAn, tarihSaat,
   varsayilanSutunlar,
 } from './tablo.ts';
 
@@ -122,5 +122,14 @@ describe('tablo: plan sırası (gantt dilim 1, T2)', () => {
     };
     expect(siralaPlan(l, isler).map((e) => e.id)).toEqual(['e', 'b', 'a', 'c', 'd']);
     expect(l.map((e) => e.id)).toEqual(['a', 'b', 'c', 'd', 'e']);
+  });
+});
+
+describe('tablo: Sıkı satırda kısa fark', () => {
+  it('yalnız en büyük birim kalır; tek birim ve tam zamanında aynı kalır', () => {
+    expect(farkKisaParcalari('4 gün 17 sa 30 dk geç')).toEqual(['4 gün', 'geç']);
+    expect(farkKisaParcalari('2 sa 15 dk erken')).toEqual(['2 sa', 'erken']);
+    expect(farkKisaParcalari('45 dk geç')).toEqual(['45 dk', 'geç']);
+    expect(farkKisaParcalari('tam zamanında')).toEqual(['tam zamanında']);
   });
 });

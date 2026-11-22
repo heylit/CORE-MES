@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ETIKET_HARF, ETIKET_PAYI, YOGUN_SATIR, etiketEni, etiketYeri, gorunenSatirSayisi, okKumesi, ufkaSigmayanSayisi, ufkaSigmaz, ufukCizgisi, ufukYazisi } from './yogunluk.ts';
+import { ETIKET_HARF, ETIKET_PAYI, KUME_BOSLUK, KUME_DAR, YOGUN_SATIR, etiketEni, kumele, kumeYazisi, okunurGenislik, satirBoyuCoz, etiketYeri, gorunenSatirSayisi, okKumesi, ufkaSigmayanSayisi, ufkaSigmaz, ufukCizgisi, ufukYazisi } from './yogunluk.ts';
 
 // Uydurma örnek (ORN-). Saatler planın saat ekseninde.
 const zaman = (t: number): string => `${String(Math.floor(t / 24) + 1).padStart(2, '0')}.12.2026 ${String(t % 24).padStart(2, '0')}:00`;
@@ -56,5 +56,40 @@ describe('yoğunluk T6: görünen satır', () => {
     expect(gorunenSatirSayisi('T', 24, [e('a', 3)], null)).toBe(24);
     expect(gorunenSatirSayisi('S', 24, [e('a', 3), e('b', 5)], null)).toBe(2);
     expect(gorunenSatirSayisi('S', 24, [e('a', 3), e('b', 5)], new Set(['b']))).toBe(7);
+  });
+});
+
+describe('yoğunluk T3: gerçek uzunluk ve küme (S1 a)', () => {
+  it('okunur genişlik yalnız Gün ve 3 gün', () => {
+    expect(okunurGenislik('G')).toBe(true);
+    expect(okunurGenislik('3')).toBe(true);
+    for (const o of ['H', 'A', 'Y'] as const) expect(okunurGenislik(o)).toBe(false);
+  });
+  it('dar ve yakın komşular tek küme; geniş iş ve uzak iş ayrı kalır; sıra sola göre', () => {
+    const d = KUME_DAR - 2, b = KUME_BOSLUK - 1;
+    const l = [
+      { id: 'c', sol: 2 * (d + b), en: d }, { id: 'a', sol: 0, en: d }, { id: 'b', sol: d + b, en: d },
+      { id: 'uzak', sol: 200, en: d }, { id: 'genis', sol: 200 + d + 1, en: 40 }, { id: 'son', sol: 241 + d + 1, en: d },
+    ];
+    expect(kumele(l)).toEqual([
+      { idler: ['a', 'b', 'c'], sol: 0, en: 3 * d + 2 * b },
+      { idler: ['uzak'], sol: 200, en: d },
+      { idler: ['genis'], sol: 200 + d + 1, en: 40 },
+      { idler: ['son'], sol: 241 + d + 1, en: d },
+    ]);
+  });
+  it('eşik: boşluk tam eşikte ya da iş tam darlık sınırındaysa birleşmez', () => {
+    expect(kumele([{ id: 'a', sol: 0, en: 5 }, { id: 'b', sol: 5 + KUME_BOSLUK, en: 5 }])).toHaveLength(2);
+    expect(kumele([{ id: 'a', sol: 0, en: KUME_DAR }, { id: 'b', sol: KUME_DAR + 1, en: 5 }])).toHaveLength(2);
+  });
+  it('küme yazısı', () => { expect(kumeYazisi(5)).toBe('5 iş'); });
+});
+
+describe('yoğunluk T4: satır boyu', () => {
+  it('saklı Sıkı yalnız dokunmatik değilse; bilinmeyen değer Rahat', () => {
+    expect(satirBoyuCoz('siki', false)).toBe('siki');
+    expect(satirBoyuCoz('siki', true)).toBe('rahat');
+    expect(satirBoyuCoz(null, false)).toBe('rahat');
+    expect(satirBoyuCoz('baska', false)).toBe('rahat');
   });
 });
