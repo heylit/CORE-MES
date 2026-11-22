@@ -46,7 +46,7 @@ import { AnlikDurum, DurumSeridi, durumOzeti } from './DurumGostergesi.tsx';
 import { hazirlikSatirlari, useHazirlik } from './HazirlikListesi.tsx';
 import { TalimatListesi, acikGrup, useTalimatlar, zorunluEksikler } from './Talimatlar.tsx';
 import { bip } from '../cekirdek/ses.ts';
-import { istasyonBul, istasyonListesi, makineBul, tabletIstasyonu } from '../cekirdek/tesis.ts';
+import { istasyonBul, istasyonListesi, kayitGecerli, makineBul, tabletIstasyonu } from '../cekirdek/tesis.ts';
 import type { Perm } from '../cekirdek/tipler.ts';
 import { isMerkezinde } from '../cekirdek/yetki.ts';
 import { anlikVardiya, durusPencereleri, siradakiDurus, suankiDurus } from '../cekirdek/vardiya.ts';
@@ -158,7 +158,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const POLICY = ayarlar.kurallar;
   const ME = kisi?.name ?? '';
   // 2001 b: istasyonu belli olmayan kişide boştur; üst şerit "İstasyon seçilmedi" yazar, seçici açılır. Önizleme ilk istasyonla açılır.
-  const MACHINE = pv ? (yerel.oku<string>('pvStation') || tabletIstasyonu(tesis, yerel.oku<string>('station'), kisi) || (istasyonListesi(tesis)[0]?.id ?? '')) : tabletIstasyonu(tesis, yerel.oku<string>('station'), kisi);
+  const MACHINE = pv ? (yerel.oku<string>('pvStation') || tabletIstasyonu(tesis, yerel.oku<string>('station'), kisi) || (istasyonListesi(tesis)[0]?.id ?? '')) : tabletIstasyonu(tesis, yerel.oku<string>('station'), kisi, yetkiVar('prod.station'));
   const ist = istasyonBul(tesis, MACHINE);
   // 3392 a: cihazın bağlı makinesi; her işte seçimin kaynağıdır. Bağlı değilse (sabit değil) bugünkü gibi plan ya da seçim.
   const cihazMakinesi = pv ? null : bagliMakine(yerel.oku<string>('machine'), ist.mcs);
@@ -263,6 +263,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     if (pv || !istasyonListesi(tesis).length) return;
     const k = MACHINE === '' && yetkiVar('prod.run') ? 'sor' : ilkAcilis(yerel.oku<string>('station'), kisi?.st, MACHINE, yetkiVar('prod.run'));
     if (k === 'kaydet') yerel.yaz('station', MACHINE);
+    // 3568: yönetimsiz kişide geçersiz sayılan cihaz kaydı açılan istasyonla değiştirilir; kayıt, olay ve sayım cihaz istasyonuna gider.
+    else if (MACHINE && yetkiVar('prod.run') && !kayitGecerli(yerel.oku<string>('station'), kisi, yetkiVar('prod.station'))) yerel.yaz('station', MACHINE);
     // Bağlama yetkisi olan kişi ilk açılışta cihazı yere bağlar (3392 a madde 1); istasyon tek başına seçilmez.
     else if (k === 'sor') ovYaz(yetkiVar('prod.station') ? 'yer' : 'station');
   }, []); // eslint olmayan bağımlılık: yalnız ilk açılışta

@@ -267,6 +267,40 @@ describe('A1 Üretim Terminali', () => {
     expect(within(ust).queryByText('İstasyon seçilmedi')).toBeNull();
     expect(screen.queryByRole('dialog', { name: 'Hangi istasyonda?' })).toBeNull();
   }, 40000);
+
+  // 3568: talaşlı istasyonda kullanılmış cihazda depo operatörü kendi istasyonunda ve depo sekmeleriyle açılır; kayıt düzelir.
+  const IKI_YER = {
+    wcs: [{ id: 'ORN-TAL', name: 'ORN talaşlı' }, { id: 'ORN-DEP', name: 'ORN depo' }],
+    sts: [{ id: 'ORN-TAL-1', name: 'ORN tezgah', wc: 'ORN-TAL', t: 'cnc' }, { id: 'ORN-DEPO-1', name: 'ORN depo yeri', wc: 'ORN-DEP', t: 'depo' }], mcs: [],
+  };
+  const ikiYer = () => ({ belgeler: { pkgs: [], kv: [{ kimlik: 'plant', surum: 3568, govde: { v: IKI_YER } }] } });
+
+  it('3568: cihazda başka istasyon kayıtlıyken depo operatörü kendi istasyonunda ve depo sekmeleriyle açılır, kayıt güncellenir', async () => {
+    // Depo sekmeleri stok.giris ya da stok.cikis olana görünür (3388 a).
+    const depocu = { ...OPERATOR, istasyon: 'ORN-DEPO-1', kullanici: { ...OPERATOR.kullanici, islemler: [...OPERATOR.kullanici.islemler, 'stok.giris', 'stok.cikis'] } } as Deneme;
+    sunucuKur(depocu, ikiYer());
+    window.localStorage.setItem('arkon:station', JSON.stringify('ORN-TAL-1'));
+    arkonAc('/uretim-terminali');
+    expect(await screen.findByRole('tab', { name: /Toplama listesi/ }, { timeout: 10000 })).toBeTruthy();
+    const ust = document.querySelector('.tc-ay1-ust') as HTMLElement;
+    expect(within(ust).getByText('ORN-DEPO-1')).toBeTruthy();
+    expect(within(ust).queryByText('ORN-TAL-1')).toBeNull();
+    expect(screen.getByRole('tab', { name: /Mal kabul/ })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /Yükle/ })).toBeTruthy();
+    await waitFor(() => { expect(JSON.parse(window.localStorage.getItem('arkon:station') ?? 'null')).toBe('ORN-DEPO-1'); });
+  }, 40000);
+
+  it('3568: istasyon yönetimi olan kişide cihaz kaydı bugünkü gibi önce gelir, kayıt değişmez', async () => {
+    sunucuKur({ ...YONETICI, istasyon: 'ORN-DEPO-1' }, ikiYer());
+    window.localStorage.setItem('arkon:station', JSON.stringify('ORN-TAL-1'));
+    arkonAc('/uretim-terminali');
+    await ekran();
+    const ust = document.querySelector('.tc-ay1-ust') as HTMLElement;
+    expect(within(ust).getByText('ORN-TAL-1')).toBeTruthy();
+    expect(screen.queryByRole('tab', { name: /Toplama listesi/ })).toBeNull();
+    await new Promise((r) => setTimeout(r, 300));
+    expect(JSON.parse(window.localStorage.getItem('arkon:station') ?? 'null')).toBe('ORN-TAL-1');
+  }, 40000);
 });
 
 describe('A1 Üretim Terminali telefonda (618, 615-1 b)', () => {

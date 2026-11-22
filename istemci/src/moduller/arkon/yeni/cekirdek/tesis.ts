@@ -31,9 +31,19 @@ export function istasyonBul(tesis: Plant, id: string): IstasyonSatiri {
 
 // Bu tabletin istasyonu: cihazda seçilen, yoksa kişinin TMI'de atandığı, yoksa ilk yetkili. 2001 b: hiçbiri yoksa boş döner; listedeki
 // ilk istasyon seçilmiş gibi gösterilmez (seçici "atanmış istasyon yok" derken üst şerit başka istasyon yazıyordu).
-export function tabletIstasyonu(tesis: Plant, kayitli: string | null, kisi: Pick<User, 'st' | 'sts'> | null): string {
+// İstasyon yönetimi (prod.station) olmayan kişi istasyonu değiştiremez (3392 a V2); cihazdaki kayıt kişinin istasyonlarından biri
+// değilse kişi başkasının istasyonunda kalırdı. Bu kişide kayıt yalnız kendi istasyonuysa geçerlidir. Hiç istasyonu olmayan
+// kişide kayıt geçerli kalır: ortak tableti yönetici bağlamıştır, boş açmak işi durdurur.
+export function kayitGecerli(kayitli: string | null, kisi: Pick<User, 'st' | 'sts'> | null, istasyonYonetimi: boolean): boolean {
+  if (!kayitli || istasyonYonetimi || !kisi) return true;
+  const kendi = [kisi.st, ...(kisi.sts ?? [])].filter((x): x is string => !!x);
+  return !kendi.length || kendi.includes(kayitli);
+}
+
+export function tabletIstasyonu(tesis: Plant, kayitli: string | null, kisi: Pick<User, 'st' | 'sts'> | null, istasyonYonetimi = true): string {
   const liste = istasyonListesi(tesis).map((x) => x.id);
   const yetkili = kisi?.sts ?? [];
-  const bulunan = (kayitli && liste.includes(kayitli)) || (kisi?.st && liste.includes(kisi.st)) || liste.some((x) => yetkili.includes(x));
-  return bulunan ? istasyonSec(kayitli, kisi?.st, liste, yetkili) : '';
+  const kayit = kayitGecerli(kayitli, kisi, istasyonYonetimi) ? kayitli : null;
+  const bulunan = (kayit && liste.includes(kayit)) || (kisi?.st && liste.includes(kisi.st)) || liste.some((x) => yetkili.includes(x));
+  return bulunan ? istasyonSec(kayit, kisi?.st, liste, yetkili) : '';
 }
