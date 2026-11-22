@@ -175,7 +175,7 @@ p.tc-pyz-kucuk[data-ton="uyari"] { color: var(--hold); }
 .tc-pyz-l-ac[aria-expanded="true"] > svg { transform: rotate(90deg); }
 .tc-pyz-l-kim { display: flex; flex-direction: column; align-items: flex-start; gap: var(--b-1); min-width: 0; }
 .tc-pyz-l b[data-ton="hata"] { color: var(--stop); }
-.tc-pyz-l small[data-ton="hata"] { color: var(--stop); font-weight: 700; }
+.tc-pyz-l small[data-ton="hata"] { color: var(--stop); font-weight: 700; white-space: nowrap; }
 .tc-pyz-l td.tc-pyz-l-eylem { text-align: right; white-space: nowrap; }
 .tc-pyz-l-bag {
   display: inline-flex; align-items: center; gap: var(--b-1); min-height: var(--dokunma); padding: 0 var(--b-2); border: 0; background: none;

@@ -56,6 +56,14 @@ describe('malzemeListesi', () => {
     expect(gerekenGun(l[0]!)).toBe(120);
   });
 
+  it('aynı malzemede iki verilecek sipariş: eksik ve talep miktarı toplanır, en geç sipariş en erkeni alır', () => {
+    const [x] = malzemeListesi([alim({ kod: '11', miktar: 7, siparisGun: 90 }), alim({ kod: '11', miktar: 5, siparisGun: 70 })], [], SIMDI);
+    expect(x!.eksik).toBe(12);
+    expect(x!.enGecSiparis).toBe(70);
+    expect(talepEksigi(x!, 0)).toBe(12);
+    expect(talepEksigi(x!, 4)).toBe(8);
+  });
+
   it('arama kod, ad, emir numarası ve tedarikçide, Türkçe küçük harfle', () => {
     const [x] = malzemeListesi([alim({ kod: '11', isler: ['E-1'] })], [], SIMDI);
     const ad = (): string => 'ORN Çubuk';
