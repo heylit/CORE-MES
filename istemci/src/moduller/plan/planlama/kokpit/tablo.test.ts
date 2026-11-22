@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { KokpitEmri, KokpitIsi } from './kurallar.ts';
 import {
-  AYAR_ANAHTARI, DAR_SUTUNLAR, EN_ENAZ, adimDurumu, ayarCoz, bolmeEni, bolmeSinirla, farkKisaParcalari, farkOlustur, ilerleme, ilerlemeYazisi, sablon, siralaGecikme, siralaPlan, sutunlariDuzenle, suAn, tarihSaat,
+  AYAR_ANAHTARI, DAR_SUTUNLAR, EN_ENAZ, adimDurumu, ayarCoz, bolmeEni, bolmeSinirla, farkEnAz, farkKisaParcalari, farkOlustur, ilerleme, ilerlemeYazisi, olcumBirlestir, olcuSablonu, sablon, siralaGecikme, siralaPlan, sutunlariDuzenle, suAn, tarihSaat,
   varsayilanSutunlar,
 } from './tablo.ts';
+import { olcuAdaylari } from './Tablo.tsx';
 
 // Uydurma örnek (ORN-): emir kimliği adım kimliklerinin önekidir.
 const is = (id: string, ek: Partial<KokpitIsi> = {}): KokpitIsi => ({ id, job: id.split('.')[0] ?? '', ad: `Adım ${id}`, m: 'T1', S: 0, C: 4, basladi: false, fason: false, kilitli: false, sira: 0, ...ek });
@@ -131,5 +132,50 @@ describe('tablo: Sıkı satırda kısa fark', () => {
     expect(farkKisaParcalari('2 sa 15 dk erken')).toEqual(['2 sa', 'erken']);
     expect(farkKisaParcalari('45 dk geç')).toEqual(['45 dk', 'geç']);
     expect(farkKisaParcalari('tam zamanında')).toEqual(['tam zamanında']);
+  });
+});
+
+describe('tablo: ölçülen sütun enleri (3570)', () => {
+  const l = [{ id: 'emir' }, { id: 'urun' }, { id: 'termin' }, { id: 'fark' }];
+  const olcum = { en: { emir: 130.2, urun: 400, termin: 96, fark: 200 }, baslik: { emir: 40, urun: 38, termin: 60, fark: 36 }, fark: 120 };
+  it('sütun içerik enindedir; Emir ve Ürün tavanda kalır, tarih sabit, Ürün iki satıra (enin yüzde altmışı, en az başlığın iki katı), Fark iki satıra kadar kısalır', () => {
+    expect(olcuSablonu(l, olcum)).toEqual({ sablon: '131px minmax(144px, 240fr) 96px minmax(120px, 200px)', dogal: 131 + 240 + 96 + 200 });
+  });
+  it('kısa adda Ürün en az başlığın iki katıdır', () => {
+    expect(olcuSablonu([{ id: 'urun' }], { en: { urun: 100 }, baslik: { urun: 60 }, fark: null })?.sablon).toBe('minmax(100px, 100fr)');
+    expect(olcuSablonu([{ id: 'urun' }], { en: { urun: 300 }, baslik: { urun: 60 }, fark: null })?.sablon).toBe('minmax(144px, 240fr)');
+  });
+  it('ölçüm yoksa ya da bir sütun ölçülmediyse (test ortamı, ilk kare) sabit ağırlıklara düşülür', () => {
+    expect(olcuSablonu(l, null)).toBeNull();
+    expect(olcuSablonu(l, { ...olcum, en: { ...olcum.en, termin: 0 } })).toBeNull();
+  });
+  it('yeni satırların ölçüsü öncekiyle birleşir: sütun yalnız genişler', () => {
+    expect(olcumBirlestir({ en: { emir: 100, urun: 200 }, baslik: { emir: 40 }, fark: null }, { en: { emir: 120, urun: 150 }, baslik: { emir: 40 }, fark: 90 }))
+      .toEqual({ en: { emir: 120, urun: 200 }, baslik: { emir: 40 }, fark: 90 });
+  });
+  it('fark rozetinin en dar hali: yan yana en geniş iki parça ve kenar payı; tek parçada parçanın kendisi', () => {
+    expect(farkEnAz([40, 36, 36, 40], 6, 34)).toBe(40 + 6 + 36 + 34);
+    expect(farkEnAz([90], 6, 34)).toBe(124);
+    expect(farkEnAz([], 6, 34)).toBe(34);
+  });
+});
+
+describe('ölçülecek satırların seçimi (3570)', () => {
+  // Her sütunda yazısı en uzun görünen satırlar seçilir; ölçüm yalnız onları dizer.
+  const satir = (h: Record<string, string>): HTMLElement => {
+    const s = document.createElement('div'), b = document.createElement('div'), z = document.createElement('div');
+    s.className = 'tc-pyq-satir'; b.className = 'tc-pyq-bas'; z.className = 'tc-pyq-tablo-satir';
+    for (const [id, t] of Object.entries(h)) { const c = document.createElement('div'); c.className = 'tc-pyq-h'; c.dataset['sutun'] = id; c.innerHTML = `<span>${t}</span>`; z.appendChild(c); }
+    b.appendChild(z); s.appendChild(b);
+    return s;
+  };
+  it('sütun başına en uzun yazılı satırları seçer, sırayı korur', () => {
+    const l = Array.from({ length: 10 }, (_, i) => satir({ emir: `ORN-${'9'.repeat(i === 7 ? 9 : 2)}`, urun: i === 2 ? 'ORN uzun ürün adı' : 'ORN Mil' }));
+    const a = olcuAdaylari(l, 1);
+    expect(a).toEqual([l[2], l[7]]);
+  });
+  it('az satırda hepsini döndürür', () => {
+    const l = [satir({ emir: 'ORN-1' }), satir({ emir: 'ORN-22' })];
+    expect(olcuAdaylari(l, 3)).toEqual(l);
   });
 });

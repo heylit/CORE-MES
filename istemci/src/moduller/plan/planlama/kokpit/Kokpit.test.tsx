@@ -715,6 +715,25 @@ describe('Kokpit', () => {
     expect(tahta().querySelectorAll('[data-kademe="siparis"]').length).toBe(sp.length);
   });
 
+  // 3570: Hafta'da emir satırı tek çubuktur; emrin adımları zamanda üst üste binse de satır adımların şerit sayısıyla uzamaz.
+  it('emir kademesinde satır adım şeritleriyle uzamaz', () => {
+    const c = ornekCalisma();
+    type Op = { S: number; C: number; m: string; Su: number; lot1: number; job: string };
+    const ops = structuredClone((c.plan as unknown as { ops: Record<string, Op> }).ops);
+    const adimlar = Object.entries(ops).filter(([, x]) => x.job === '2' && !x.m.startsWith('@'));
+    const [a, b] = adimlar.map(([, x]) => x);
+    expect(a && b).toBeTruthy();
+    Object.assign(b!, { S: a!.S, Su: a!.S, C: a!.S + 30, lot1: a!.S + 30 });
+    ac({ calisma: { ...c, plan: { ...c.plan, ops } } as typeof c });
+    fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: 'Sipariş' }));
+    const olcek = (ad: string) => within(screen.getByRole('group', { name: 'Ölçek' })).getByRole('button', { name: ad });
+    fireEvent.click(olcek('Ay'));
+    fireEvent.click([...document.querySelectorAll<HTMLElement>('.tc-pyq-tahta [data-kademe="siparis"]')].find((x) => x.getAttribute('data-kademe-id') === '2')!);
+    const satir = document.querySelector<HTMLElement>('.tc-pyq-tahta [data-kademe="emir"]')!.closest<HTMLElement>('[data-satir]')!;
+    expect(satir.hasAttribute('data-seritli')).toBe(false);
+    expect(satir.style.getPropertyValue('--seritler')).toBe('1');
+  });
+
   // Dilim 3b (F): genel bakış şeridi tahtanın görünen aralığını pencere olarak çizer; pencere klavyeyle kayınca tahta o saate kayar. Şerit kapanır ve kapalı kalır.
   it('genel bakış penceresi tahtayı kaydırır; şerit kapanır ve tarayıcıda hatırlanır', async () => {
     localStorage.removeItem('coremes.kokpit-genel-bakis');

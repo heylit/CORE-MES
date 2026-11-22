@@ -41,6 +41,51 @@ export const tezgahToplamEni = (): number => kok(TEZGAH_SUTUNLARI);
 // Izgara şablonu: sütunlar bölmenin eniyle orantılı küçülür, taşmaz (minmax(0, …)).
 export const sablon = (l: readonly { en: number }[]): string => l.map((s) => `minmax(0, ${String(s.en)}fr)`).join(' ');
 
+// Ölçülen sütunlar: sabit px ağırlık, yazı büyüdüğünde (tarayıcı yakınlaştırması dışında yazı boyu ayarı, yedek yazı tipi) içeriği keser.
+// Tahta her sütunun içerik enini ölçer (tek satır, kesilmeden); sütun o kadar açılır. Uzun ad sütunları (Ürün, Ad) ve Emir tavanla
+// sınırlıdır, tamamı ipucundadır. Yer daralınca Ürün ve Ad iki satıra kırılır (en dar hali içeriğin yarısı ya da başlığın iki katı), Fark
+// rozeti iki satıra kırılır; Emir, tarih ve sayı sütunları kısalmaz. Bölme elle bundan da dar çekilirse sağdaki sütunlar kenarda kırpılır.
+export interface SutunOlcumu {
+  // Sütunun en geniş hücresi (başlık dahil), px.
+  en: Readonly<Record<string, number>>;
+  // Sütun başlığının eni (esnek sütunun en dar hali en az bunun iki katı).
+  baslik: Readonly<Record<string, number>>;
+  // Fark rozetinin iki satıra sığdığı en dar hücre eni (bkz. farkEnAz); rozet yoksa null.
+  fark: number | null;
+}
+export const SUTUN_TAVANI: Readonly<Record<string, number>> = { emir: 240, urun: 240, ad: 240 };
+const ESNEK = new Set(['urun', 'ad']);
+// İki satıra kırılan adın en dar hali: tek satır eninin bu oranı (sözcük sınırında kırıldığı için yarıdan biraz geniş).
+const IKI_SATIR = 0.6;
+export function olcuSablonu(l: readonly { id: string }[], o: SutunOlcumu | null): { sablon: string; dogal: number } | null {
+  if (o === null || l.length === 0 || l.some((s) => !((o.en[s.id] ?? 0) > 0))) return null;
+  const parca = l.map((s) => {
+    const en = Math.ceil(Math.min(o.en[s.id] ?? 0, SUTUN_TAVANI[s.id] ?? Infinity));
+    if (s.id === 'fark') return { en, yazi: `minmax(${String(Math.ceil(Math.min(en, o.fark ?? en)))}px, ${String(en)}px)` };
+    if (!ESNEK.has(s.id)) return { en, yazi: `${String(en)}px` };
+    return { en, yazi: `minmax(${String(Math.ceil(Math.min(en, Math.max((o.baslik[s.id] ?? 0) * 2, en * IKI_SATIR))))}px, ${String(en)}fr)` };
+  });
+  return { sablon: parca.map((p) => p.yazi).join(' '), dogal: parca.reduce((t, p) => t + p.en, 0) };
+}
+// Aynı satır kümesine yeni satırlar gelince (sipariş odağı, açılan emir) yeni ölçü öncekiyle birleşir: sütun yalnız genişler, arama ya
+// da sıralamayla gidip gelirken zıplamaz.
+export function olcumBirlestir(a: SutunOlcumu, b: SutunOlcumu): SutunOlcumu {
+  const enBuyuk = (x: Readonly<Record<string, number>>, y: Readonly<Record<string, number>>): Record<string, number> => {
+    const z: Record<string, number> = { ...x };
+    for (const [k, v] of Object.entries(y)) z[k] = Math.max(z[k] ?? 0, v);
+    return z;
+  };
+  return { en: enBuyuk(a.en, b.en), baslik: enBuyuk(a.baslik, b.baslik), fark: a.fark === null ? b.fark : b.fark === null ? a.fark : Math.max(a.fark, b.fark) };
+}
+// Fark rozeti en çok iki satır olsun: yan yana iki kırılmaz parça ("17 sa 45 dk") sığmalı. parcalar: parçaların eni (rozet sırasıyla),
+// bosluk: parça arası boşluk, kenar: rozetin ve hücrenin iç payı ile çerçevesi.
+export function farkEnAz(parcalar: readonly number[], bosluk: number, kenar: number): number {
+  if (parcalar.length === 0) return kenar;
+  let en = Math.max(...parcalar);
+  for (let i = 0; i + 1 < parcalar.length; i++) en = Math.max(en, (parcalar[i] ?? 0) + bosluk + (parcalar[i + 1] ?? 0));
+  return Math.ceil(en + kenar);
+}
+
 // Bölme eni: ayarlanmamışsa sütunların doğal eni; hep görünen alanın oranıyla sınırlı (gantt sıkışıp kaybolmasın).
 export const EN_ENAZ = 200, EN_ENCOK_ORAN = 70, OTOMATIK_ORAN = 65, EN_PAYI = 160;
 export const bolmeEni = (dogal: number, ayar: number | null): string => (ayar === null ? `min(${String(dogal)}px, ${String(OTOMATIK_ORAN)}cqw)` : `min(${String(Math.round(ayar))}px, ${String(EN_ENCOK_ORAN)}cqw)`);
