@@ -24,6 +24,7 @@ import { grupMetni, ikinciAlimUyarisi } from "./guncelleme-grubu.ts";
 import { rehberRozetleri } from "./onayli-ekran.ts";
 import { getRole, onaylayabilir, viewApproval, viewApprovals, viewRequesterHome, viewRequestRequester } from "./roles.ts";
 import { secilemezAlternatif, sonucRozeti } from "./alternatif.ts";
+import { alternatifOzetleriniDoldur } from "./alternatif-ozeti.ts";
 import { kalemKalemHTML, siparisKalemleriHTML } from "./kalem-kalem.ts";
 /* ================= render çekirdeği ================= */
 // Ortak parçalarla çizilen ekranlar (iş kutusu, Talepler, talep ayrıntısı; 2412-2) merkezin durumunu her çizimde yeniden okur.
@@ -81,6 +82,7 @@ const AFTER: (() => void)[] = [];
 export function onAfterRender(fn: () => void): void { AFTER.push(fn); }
 function afterRender(): void {
   labelTables($("#main"));
+  alternatifOzetleriniDoldur($("#main"));
   drawCharts();
   AFTER.forEach(fn => fn());
   if ($("#split-sum")) updateSplitSum();
@@ -544,7 +546,7 @@ export function tabItems(r: PurchaseRequest, simple = false): string {
     if (last) est += last.unitTRY * (parseNum(it.qty) || 0);
     if (st) st.suppliers.forEach(s => { prevSup[s.supplierId] = prevSup[s.supplierId] || { id: s.supplierId, name: s.name, items: new Set(), wins: 0 }; prevSup[s.supplierId]!.items.add(it.name); prevSup[s.supplierId]!.wins += s.wins; });
     if (mid) Object.values(S.requests).forEach(o => { if (o.id !== r.id && o.award && o.award.lessons && (o.items || []).some(x => matOf(x) === mid)) lessons.push({ r: o, t: o.award.lessons! }); });
-    return `<tr><td class="lead"><b>${m ? matLink(mid, it.name) : esc(it.name)}</b>${m ? `<span class="sub">${esc(m.code || "")}${m.category ? ", " + esc(m.category) : ""}</span>` : '<span class="sub">katalogda yok</span>'}${it.spec ? `<span class="sub">${esc(it.spec)}</span>` : ""}${kalemBagMetinleri(it).map(t => `<span class="sub" data-sa-kalem-bagi="">${esc(t)}</span>`).join("")}${ozellikAlti(it.malzeme)}</td>${ozellikHucreleri(it.malzeme)}
+    return `<tr><td class="lead"><b>${m ? matLink(mid, it.name) : esc(it.name)}</b>${m ? `<span class="sub">${esc(m.code || "")}${m.category ? ", " + esc(m.category) : ""}</span>` : '<span class="sub">katalogda yok</span>'}${it.spec ? `<span class="sub">${esc(it.spec)}</span>` : ""}${kalemBagMetinleri(it).map(t => `<span class="sub" data-sa-kalem-bagi="">${esc(t)}</span>`).join("")}${ozellikAlti(it.malzeme)}${!simple && it.materialId ? `<span class="sub" data-sa-alt-ozet="${esc(it.id)}" data-sa-alt-talep="${esc(r.id)}">Alternatif: –</span>` : ""}</td>${ozellikHucreleri(it.malzeme)}
       <td class="r num">${numIn(parseNum(it.qty))} ${esc(it.unit)}${karsilikAlti(it)}</td>
       ${kilit ? "" : `<td class="r num">${last ? `${money(last.unitTRY)}<span class="sub">${esc(last.supplier)}, ${fmtDate(last.date)}</span>` : '<span class="faint">ilk alım</span>'}</td>
       <td class="r num">${st && isNum(st.avgTRY) ? money(st.avgTRY) : "–"}${st && st.quotes ? `<span class="sub">${st.quotes} teklif kaydı</span>` : ""}</td>
