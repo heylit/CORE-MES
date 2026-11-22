@@ -5,7 +5,7 @@ import {
   kabulZarfiCevabi, kalemZarflariCevabi, kabulZarfiParametresi,
   acilisCevabi, disOperasyonlarCevabi, disOperasyonAyrintisiCevabi, disOperasyonParametresi, fasonSureleriCevabi, fasonSureleriSorgusu, ayarlarKaydetGovdesi, onayKisileriCevabi, hizliAcGovdesi, talebimiDuzenleGovdesi, talebimGuncellemeGovdesi, alternatifIzniGovdesi, talebimSemasi, taleplerimCevabi, taleplerimSorgusu, ayarlarSemasi, firmaParametresi, firmaSecenekleriCevabi, firmaSecenekleriSorgusu, katalogKaydetGovdesi, malzemeSecenekleriCevabi, malzemeSecenekleriSorgusu, katalogSemasi, katalogSilGovdesi, talepGovdesi, acikEmirlerCevabi, projeSecenekleriCevabi, onTalepleriCevabi, onTalepYoksayGovdesi, onTalepGeriAlGovdesi,
   iptaliGeriAlCevabi, iptaliGeriAlGovdesi, talepAyirGovdesi, talepBirlestirGovdesi, satinAlmaOzetiCevabi, degerlendirmeCevabi, kartAyrintilariCevabi, stokYokIstekleriCevabi, odemePlaniGovdesi, siparisTakibiCevabi, siparisBelgeleriCevabi, siparisBelgesiGovdesi, siparisBelgesiParametresi, siparisSatiriParametresi, siparisFaturalariCevabi, siparisFaturalariSorgusu, siparisFaturasiGovdesi, siparisKalemiDegistirGovdesi, siparisKapatGovdesi, siparisLogoBekletGovdesi, teslimYontemiGovdesi, talepKaydetGovdesi, talepParametresi, talepSemasi, talepSilGovdesi, tamamCevabi, tedarikciKaydetGovdesi, tedarikciSemasi,
-  tedarikTerminiKaydetGovdesi, tedarikTerminiKaydetCevabi, tedarikTerminleriCevabi,
+  tedarikTerminiKaydetGovdesi, tedarikTerminiKaydetCevabi, tedarikTerminleriCevabi, siparisVerGovdesi, siparisOnerisiKararGovdesi,
   butceKullanimiCevabi, butceKullanimiSorgusu, kgFiyatiEkleGovdesi, kgFiyatiIptalGovdesi, kgFiyatiParametresi, kgFiyatiGecmisiCevabi, kgFiyatiGecmisiSorgusu, kgFiyatlariCevabi, malzemeKgFiyatlariCevabi, malzemeKgFiyatlariSorgusu,
   faturaEslemesiCevabi, faturaEslemesiKaydetGovdesi, faturaEslemesiParametresi, onayliListeCevabi,
   talepCizimiDosyaParametresi, talepCizimiGovdesi, talepCizimiSecGovdesi, talepCizimleriCevabi, cizimSeciciCevabi, cizimSeciciSorgusu, seciciDosyalariCevabi, seciciDosyalariSorgusu, seciciKlasorParametresi, seciciKlasorlerCevabi, teklifEkiDosyaParametresi, teklifEkiGovdesi, teklifEkiParametresi, teklifEkleriCevabi,
@@ -147,9 +147,22 @@ export const uclar = [
     yontem: 'POST', yol: '/satin-alma-talepleri/:id/sil', yetki: 'satin-alma.talep-ac', parametre: talepParametresi, govde: talepSilGovdesi,
     cevap: tamamCevabi, isle: ({ db, kullanici, parametre, govde }) => servis.talepSil(db, kullanici, parametre.id, govde.surum),
   }),
-  // Borç 36: siparişteki kalem onay yetkisiyle, gerekçeyle değişir; sürüm tekrarı önler (aynı sürümle ikinci gönderim 409 alır).
+  // 3574-1, S2 a: siparişi satın almayı yazan verir; onaya düşen sipariş öneri olarak bekler. Gövde fiyat taşır: denetime gövdesiz.
   uc({
-    yontem: 'POST', yol: '/satin-alma-talepleri/:id/siparis-kalemi-degistir', yetki: 'satin-alma.onayla', parametre: talepParametresi,
+    yontem: 'POST', yol: '/satin-alma-talepleri/:id/siparis-ver', yetki: 'satin-alma.yaz', parametre: talepParametresi,
+    govde: siparisVerGovdesi, cevap: talepSemasi, denetim: 'govdesiz',
+    isle: ({ db, kullanici, parametre, govde, denetimEki }) => servis.siparisVer(db, kullanici, parametre.id, govde, denetimEki),
+  }),
+  // S2 a, R5: onaya düşen siparişi onay yetkilisi onaylar ya da reddeder; dört göz ve onay kademesi servisde.
+  uc({
+    yontem: 'POST', yol: '/satin-alma-talepleri/:id/siparis-onerisi-karari', yetki: 'satin-alma.onayla', parametre: talepParametresi,
+    govde: siparisOnerisiKararGovdesi, cevap: talepSemasi, denetim: 'govdesiz',
+    isle: ({ db, kullanici, parametre, govde, denetimEki }) => servis.siparisOnerisiKarari(db, kullanici, parametre.id, govde, denetimEki),
+  }),
+  // Borç 36: siparişteki kalem gerekçeyle değişir; sürüm tekrarı önler (aynı sürümle ikinci gönderim 409 alır).
+  // S2 a (3574-1): miktarı düşüren değişikliği satın almayı yazan yapar; artış ve birim değişikliği onay yetkisi ister (servis).
+  uc({
+    yontem: 'POST', yol: '/satin-alma-talepleri/:id/siparis-kalemi-degistir', yetki: { biri: ['satin-alma.yaz', 'satin-alma.onayla'] }, parametre: talepParametresi,
     govde: siparisKalemiDegistirGovdesi, cevap: talepSemasi,
     isle: ({ db, kullanici, parametre, govde }) => servis.siparisKalemiDegistir(db, kullanici, parametre.id, govde),
   }),

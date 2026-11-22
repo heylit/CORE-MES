@@ -514,3 +514,12 @@ Kullanıcı: "yaz" (13.10.2026). Finans ve stok tarafı aynı dalda (yalnız yen
   bu ağırlıkla çarpıyordu; stok değeri, plan birim fiyatı ve proje maliyeti yanlış olabiliyordu. Artık tek kural `stokBirimiBasinaKg` (kurallar.ts,
   disari.ts ile dışarı verilir): kg 1; stok birimi boş ya da OLCULU_STOK_BIRIMLERI ise boş; öteki birim parça ağırlığı. birimFiyati, birimKarsiligi (SAT-78, davranış aynı) ve
   proje-maliyet bileşeninin kg başına değeri bunu kullanır. Boş birim fiyat fiyatsız sayılır (sıfır uydurulmaz). Kayıtlı veri, göç, uç, yetki değişmedi.
+
+# FARK: satin-alma, sipariş satırları (kart 3574-1; 22.11.2026)
+
+- Sipariş adımı "Sipariş satırları" tablosudur (Kurgu A): kalem başına bir ya da birden çok pay (firma, miktar, birim fiyat, satır termini, not), firma başına sipariş başlığı (Logo/tedarikçi no, sipariş tarihi, beklenen teslim, teslim yeri, tedarikçiye not, iç not). Kayıt tek komut `siparis-ver`; eski "Siparişi verildi olarak işaretle" düğmesi sipariş verilmeden önce görünmez (verilmiş siparişte bilgi güncelleme aynen).
+- Pay yeni kalem satırıdır (3442-5 modeli); ilk pay kalemin kimliğini korur. Teklifi olmayan firma `kaynak = 'siparis'` teklifiyle açılır; karşılaştırma, teklif sayısı, analiz ve hatırlatmaya girmez (R2).
+- Onaylı tutarı aşan ya da onaylı kararda olmayan firmaya giden sipariş `satin_alma_siparis_onerisi` tablosunda bekler; onayla uygulanır, retle silinir (S1 a, R4, R5). Tutarı düşüren, termin ve not onaysızdır.
+- Siparişteki kalemin miktarını düşürmek `satin-alma.yaz` ile yapılır (S2 a); artış onay yetkisinde kalır.
+- Plan gelişi ve mal kabul satırın kendi terminini, yoksa siparişin beklenen teslimini okur. Sipariş metnine satır termini, teslim yeri ve tedarikçiye not girer; iç not ve satır notu girmez.
+- Göç yalnız ekler: `satin_alma_teklif.kaynak` (varsayılan 'teklif' + CHECK), sipariş başlığı ve satır alanları (boş varsayılan), yeni öneri tablosu.

@@ -16,6 +16,7 @@ import { onayUyarilari, simge, teklifKartlariHTML } from "./onay-karsilastirma.t
 import { nameOf } from "./store.ts";
 import { geriDugmesiHTML } from "./ui.ts";
 import { gelisGunu, kalemOzeti } from "./kimlik.ts";
+import { siparisOnerisiHTML } from "./siparis-satirlari.ts";
 
 export type Role = "buyer" | "requester" | "approver";
 export const ROLES: Record<Role, string> = { buyer: "Satın alma", requester: "Talep eden", approver: "Onaylayan" };
@@ -176,7 +177,7 @@ export function viewRequestRequester(r: PurchaseRequest): string {
 function pendingApprovals(): PurchaseRequest[] {
   // Önce acil, sonra ihtiyaç tarihi (tarihsiz sonda).
   const acil = (r: PurchaseRequest) => (r.priority === "urgent" ? 0 : 1);
-  return Object.values(S.requests).filter(r => r.status === "approval" && approvalState(r).state === "pending")
+  return Object.values(S.requests).filter(r => r.status === "approval" && (approvalState(r).state === "pending" || !!r.siparisOnerisi))
     .sort((a, b) => acil(a) - acil(b) || (a.needDate || "9999").localeCompare(b.needDate || "9999"));
 }
 export const pendingApprovalCount = (): number => pendingApprovals().length;
@@ -204,6 +205,11 @@ export function onayDikkatleri(r: PurchaseRequest): string[] {
   if (bu && bu.budget && bu.used + tt.totalTRY > bu.budget) fl.push(`<span class="flag bad">${simge("lira")} bütçe aşılır</span>`);
   return fl;
 }
+// 3574-1: onay listesinde sipariş onayı karar onayından ayrı sayılır.
+function siparisSayisiMetni(list: readonly PurchaseRequest[]): string {
+  const siparis = list.filter((r) => r.siparisOnerisi).length, karar = list.length - siparis;
+  return [karar ? `${karar} karar` : "", siparis ? `${siparis} sipariş` : ""].filter(Boolean).join(" ve ");
+}
 export function viewApprovals(): string {
   const list = pendingApprovals();
   // "Son kararlarınız" yalnız bu kişinin onay ve retleridir; başkasının kararı listeye girmez.
@@ -223,7 +229,7 @@ export function viewApprovals(): string {
     const i = tt.ev.ranking.findIndex(x => x.q.id === r.award?.quoteId);
     return `${tt.x ? esc(supName(tt.x.q)) : "–"}<span class="sub">${i === 0 ? "önerilen" : i > 0 ? `${i + 1}. sıradaki teklif` : ""}</span>`;
   };
-  return `<div class="phead"><div><h1>Onay bekleyenler</h1><p class="lead">${list.length ? `${list.length} karar onayınızı bekliyor. Toplam ${money(toplam, "TRY", 0)} (KDV hariç).` : "Onay bekleyen karar yok."}</p></div></div>
+  return `<div class="phead"><div><h1>Onay bekleyenler</h1><p class="lead">${list.length ? `${siparisSayisiMetni(list)} onayınızı bekliyor. Toplam ${money(toplam, "TRY", 0)} (KDV hariç).` : "Onay bekleyen karar yok."}</p></div></div>
   <div class="sa-oy-ozetler">
     ${ozet("clock", "Bekleyen", String(list.length), enEski !== null ? `en eskisi ${beklemeMetni(enEski)}` : "–")}
     ${ozet("lira", "Toplam tutar", money(toplam, "TRY", 0), "KDV hariç")}
@@ -233,7 +239,7 @@ export function viewApprovals(): string {
   <div class="inbox">
     <section class="panel jobs"><div class="panel-h"><h2>Bekleyenler</h2><span class="cnt">${list.length}</span></div>
     ${list.length ? `<div class="tw"><table class="rt sa-oy-liste"><thead><tr><th>Talep</th><th>Karar</th><th class="r">Tutar</th><th>Gereken onay</th><th>İhtiyaç</th><th>Bekliyor</th><th>Dikkat</th><th><span class="sr-only">Aç</span></th></tr></thead><tbody>
-    ${satirlar.map(({ r, tt, an, dikkat }) => { const req = tt ? requiredApprover(tt.totalTRY) : null; return `<tr class="click" data-act="open" data-id="${r.id}"><td class="lead"><span class="no num">${esc(r.no)}</span> ${prioDot(r.priority)}<b>${esc(r.title)}</b><span class="sub">${esc([r.department, `${(r.items || []).length} kalem`, `${(r.quotes || []).length} teklif`].filter(Boolean).join(", "))}${tt ? `, ${esc(tt.x ? supName(tt.x.q) : "kalem bazlı")}` : ""}${req ? `, ${esc(req.role)} onayı` : ""}</span></td>
+    ${satirlar.map(({ r, tt, an, dikkat }) => { const req = tt ? requiredApprover(tt.totalTRY) : null; return `<tr class="click" data-act="open" data-id="${r.id}"><td class="lead"><span class="no num">${esc(r.no)}</span> ${prioDot(r.priority)}<b>${esc(r.title)}</b>${r.siparisOnerisi ? ' <span class="flag info">Sipariş onayı</span>' : ""}<span class="sub">${esc([r.department, `${(r.items || []).length} kalem`, `${(r.quotes || []).length} teklif`].filter(Boolean).join(", "))}${tt ? `, ${esc(tt.x ? supName(tt.x.q) : "kalem bazlı")}` : ""}${req ? `, ${esc(req.role)} onayı` : ""}</span></td>
       <td data-l="Karar">${karar(r, tt)}</td><td class="r num" data-l="Tutar"><b>${tt ? money(tt.totalTRY, "TRY", 0) : "–"}</b></td><td data-l="Gereken onay">${esc(req?.role || "–")}</td><td class="num" data-l="İhtiyaç">${r.needDate ? fmtDate(r.needDate) : "–"}</td><td class="num sa-oy-nowrap" data-l="Bekliyor">${beklemeMetni(an)}</td>
       <td data-l="Dikkat">${dikkat.length ? `<div class="flags">${dikkat.join("")}</div>` : ""}</td><td class="acts"><span class="btn sm primary">İncele</span></td></tr>`; }).join("")}
     </tbody></table></div>` : `<div class="panel-b muted">Şu an bekleyen bir karar yok.</div>`}</section>
@@ -282,7 +288,9 @@ export function viewApproval(r: PurchaseRequest): string {
     <div class="row sa-oy-dugmeler" data-sa-y="14"><button class="btn good" id="ap-onayla" data-act="approve" data-onay-eylemi="onayla">${simge("check")} Onayla</button><button class="btn bad" data-act="reject">Reddet</button></div>` : ""}
   </div></section></aside>`;
   const alt = bekliyor ? `<div class="sa-oy-alt" role="group" aria-label="Onay"><button class="btn good" data-act="approve">${simge("check")} Onayla</button><button class="btn bad" data-act="ret-penceresi">Reddet</button></div>` : "";
-  return back + head + status + yeniden + (uyarilar.length ? `<div class="flags sa-oy-uyari" role="note">${uyarilar.join("")}</div>` : "") + `
+  // 3574-1: onaya düşen sipariş (onaylı kararı aşan ya da yeni firmalı) aynı sayfada onaylanır.
+  const oneri = r.siparisOnerisi ? siparisOnerisiHTML(r, onaylayabilir(), r.siparisOnerisi.onerenId === S.me?.id) : "";
+  return back + head + oneri + status + yeniden + (uyarilar.length ? `<div class="flags sa-oy-uyari" role="note">${uyarilar.join("")}</div>` : "") + `
   <div class="sa-oy">
     <div class="stack sa-oy-ana">
       <section class="panel appr-main"><div class="panel-b">

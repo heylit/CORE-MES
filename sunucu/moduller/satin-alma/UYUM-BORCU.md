@@ -188,3 +188,11 @@ Aşama 1, 1. tur (kart #162, dal `162-satin-alma-uyum`, kullanıcı kararları S
     - Talep iptal edilince ya da fason kalemi talepten çıkarılınca parti belgesi açık kalır; iptali stoktan (p3) ya da ekrandan (p4) gelir. Bağlamada kapanacak.
     - Sipariş satırına DIE sütunu yok: satırın belgesi `kalem_id` üzerinden kalemden okunur; emre bağlı satırın maliyet yolu (`siparis_satiri.is_emri_id`) aynen.
     - Dış operasyonlar ekranı (istemci) yeni alanları (dieNo, durum, partiOperasyonlari) p4'te gösterir; Taleplerim'de "Fason" türü düğmesi p4'te.
+
+3574-1 (22.11.2026, sipariş satırları):
+52. [3574-2 ile kapanacak] Siparişten sonra kalem artışı `siparis-kalemi-degistir` ile onay yetkilisinde doğrudan yapılır; öneri ve dört göz yoktur. 3574-2 "Siparişi değiştir" penceresi aynı öneri kaydını kullanacak.
+53. [3574-2 ile kapanacak] Başlıkta ödeme şartı tekliften okunur, siparişte değiştirilmez; KDV alanı yok. Yeni firmada vade gün ve para birimi girilir.
+54. VARSAYIM: onaya düşen siparişin sonucu önerene bildirimle gitmez (mevcut onay ve ret bildirim türleri talep edene ve /taleplerim yoluna bağlı); sonuç talep geçmişinde. Yeni tür çekirdek işidir. Geri alma ucuz.
+55. KAPANDI (3574-1 Risk L1): Logo'ya gitmiş talep satırı (logo_satir_ref dolu) bölünmez; payların aynı Logo satırını karşılaması ayrı kart (Logo modülü).
+56. VARSAYIM: satır notu iç nottur, sipariş metnine girmez; tedarikçiye giden not başlıktadır. Geri alma ucuz.
+57. [Arayüz Z1, açık] Sipariş satırları taslağı yalnız bellektedir; talep sürümü değişince (başkasının kaydı) haber verilmeden yeniden kurulur. En az "talep değişti" uyarısı ve girilenleri koruma sonraki dilimde.

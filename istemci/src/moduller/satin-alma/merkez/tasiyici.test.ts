@@ -68,6 +68,7 @@ describe('TMI taşıyıcısı', () => {
     expect(r.award?.mode).toBe('split');
     expect(r.award?.orders?.[QA]).toEqual({
       orderNo: 'SP-2026-001', poNo: 'SA-1', orderDate: '2026-10-07', expectedDate: '2026-10-14', vadeBaslangici: 'teslim', deliveredDate: '2026-10-13', quality: 'partial', excess: [],
+      teslimYeri: '', tedarikciNotu: '', icNot: '',
       logo: { durum: 'gonderildi', kayitNo: '4711', hata: null, iptalDurumu: null, iptalHata: null, guncellemeDurumu: null, guncellemeHata: null, kapatmaDurumu: null, kapatmaHata: null, bekletmeIstegi: null, bekletmeDurumu: null, bekletmeHata: null },
     });
     const tek = talepEkrana({ ...TALEP, karar: { ...TALEP.karar!, mod: 'tek', teklifId: QA, bolunme: [], siparisler: [TALEP.karar!.siparisler[0]!] } });

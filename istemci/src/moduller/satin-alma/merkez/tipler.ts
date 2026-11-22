@@ -173,6 +173,8 @@ export interface Quote {
   firstTotal?: number;
   revisions?: number;
   createdAt?: number;
+  /** 3574-1 (R2): siparişte eklenen firmanın kaydı; teklif sayısına, karşılaştırmaya ve analize girmez. Yalnız okunur. */
+  source?: "siparis";
 }
 
 export interface Approval {
@@ -198,6 +200,10 @@ export interface AwardOrder {
   excess?: ExcessLine[];
   /** Siparişin Logo durumu (#205 karar 1); sunucu yazar, Logo'ya sıraya girmemiş siparişte yok. */
   logo?: SiparisLogo | null;
+  /** 3574-1: firma başlığı; tedarikçiye not sipariş metnine girer, iç not girmez. */
+  teslimYeri?: string;
+  tedarikciNotu?: string;
+  icNot?: string;
 }
 
 /** Kalanı aşan teslim reddedilmez; sipariş satırında "fazla teslim" olarak görünür. */
@@ -221,6 +227,10 @@ export interface Award {
   quality?: Quality;
   excess?: ExcessLine[];
   logo?: SiparisLogo | null;
+  /** 3574-1: tek siparişin firma başlığı (bölünmüş kararda orders içinde). */
+  teslimYeri?: string;
+  tedarikciNotu?: string;
+  icNot?: string;
   lessons?: string;
   /** Sipariş anında sabitlenen kurlar (para birimi → TL). Açık taleplerde güncel kur kullanılır. */
   fx?: Record<string, number>;
@@ -236,7 +246,9 @@ export interface Award {
 
 /** Sipariş satırı; miktar ve stokta kabul edilen miktar Siparişler sayfası (2430) içindir, sunucuya geri gitmez. */
 /** parcaRevizyonu: sipariş anında sabitlenen parça revizyonu (2881); yalnız okunur. */
-export interface OrderLine { id: number; itemId: string; quoteId: string; qty?: number; unit?: string; received?: number | null; parcaRevizyonu?: string | null; malzeme?: MalzemeOzelligi }
+export interface OrderLine { id: number; itemId: string; quoteId: string; qty?: number; unit?: string; received?: number | null; parcaRevizyonu?: string | null; malzeme?: MalzemeOzelligi;
+  /** 3574-1: satırın kendi termini (boşsa siparişin) ve notu; yalnız okunur. */
+  expectedDate?: string | null; note?: string }
 
 export interface LogEntry { id: string; at: number; by: string; t: string }
 
@@ -279,10 +291,19 @@ export interface PurchaseRequest {
   log: LogEntry[];
   /** dağıtım denemesi senaryoları (kararı etkilemez) */
   scenarios?: SimScenario[];
+  /** 3574-1 (S1 a): onay bekleyen sipariş; yalnız okunur. */
+  siparisOnerisi?: SiparisOnerisiEkrani | null;
   sample?: boolean;
   createdAt: number;
   updatedAt?: number;
   version?: number;
+}
+
+export interface SiparisOnerisiEkrani {
+  onayliTutar: number | null; yeniTutar: number | null; yeniFirmalar: string[]; gerekce: string; onerenId: string; onerenAdi: string; zaman: number;
+  /** Onaylanacak siparişin kendisi (yalnız okunur): pay ve firma başlıkları. */
+  paylar: { itemId: string; quoteId: string; qty: number; price: number; exp: string; note: string }[];
+  basliklar: { quoteId: string; yeniFirmaId: string | null; currency: Currency | null; poNo: string; orderDate: string; expectedDate: string; teslimYeri: string; tedarikciNotu: string; icNot: string }[];
 }
 
 export interface AppUser { id: string; email: string; name: string }

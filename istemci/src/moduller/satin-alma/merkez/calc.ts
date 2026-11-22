@@ -346,15 +346,15 @@ export function supplierStats(): Record<string, SupplierStat> {
     const g = (id: string) => (st[id] ??= emptyStat());
     for (const r of Object.values(S.requests)) {
       const nItems = (r.items ?? []).length;
-      const full = (r.quotes ?? []).filter((q) => q.compliant !== false).map((q) => ({ q, c: quoteCalc(r, q, set) })).filter((x) => nItems && x.c.covered === nItems);
+      const full = (r.quotes ?? []).filter((q) => q.compliant !== false && q.source !== "siparis").map((q) => ({ q, c: quoteCalc(r, q, set) })).filter((x) => nItems && x.c.covered === nItems);
       const bestPV = full.length ? Math.min(...full.map((x) => x.c.pvTRY)) : null;
       for (const x of r.rfqs ?? []) {
         const s = g(x.supplierId); s.asked++;
-        const q = (r.quotes ?? []).find((q) => q.supplierId === x.supplierId);
+        const q = (r.quotes ?? []).find((q) => q.supplierId === x.supplierId && q.source !== "siparis");
         if (q) { s.answered++; if (x.sentAt && q.date) s.respDays.push(Math.max(0, dayDiff(x.sentAt, q.date))); }
       }
       for (const q of r.quotes ?? []) {
-        if (!q.supplierId) continue;
+        if (!q.supplierId || q.source === "siparis") continue;
         const s = g(q.supplierId); s.quotes++;
         if (!s.lastQuote || (q.date || "") > s.lastQuote) s.lastQuote = q.date;
         const ld = parseNum(q.leadDays); if (ld !== null) s.leads.push(ld);
@@ -547,7 +547,8 @@ export function evaluate(req: PurchaseRequest, wOverride?: Weights | null): Eval
   const run = (): Evaluation => {
     const set = esitVadeAyari(req, settings()), items = req.items ?? [];
     const all: EvalRow[] = (req.quotes ?? []).map((q) => ({ q, c: quoteCalc(req, q, set), sup: S.suppliers[q.supplierId], fill: 0, scorePV: 0, s: zero(), parts: zero(), score: 0, late: null, suspended: false }));
-    const elig = all.filter((x) => x.q.compliant !== false && x.c.covered > 0);
+    // 3574-1 R2: siparişte eklenen firma (teklifsiz) karşılaştırmaya girmez; all içinde kalır, karar tutarı ondan hesaplanır.
+    const elig = all.filter((x) => x.q.compliant !== false && x.c.covered > 0 && x.q.source !== "siparis");
     const maxUnit: Record<string, number> = {}, bestUnit: Evaluation["bestUnit"] = {};
     for (const it of items) for (const x of elig) {
       const l = x.c.lines[it.id];

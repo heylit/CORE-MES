@@ -7,7 +7,7 @@
 import type { AppUser, ExportFile, LogEntry, MalzemeSecenegi, Material, SiparisFaturasi, PurchaseRequest, RequestStatus, Settings, Supplier } from "./tipler.ts";
 import type { KalemZarflariCevabi, SiparisBelgesi, SiparisBelgesiYazimi, TeklifEki, TeklifEkiYazimi, TeklifIstekFormuCevabi } from "#paylasilan/sozlesme/satin-alma.ts";
 import type { SiparisIrsaliyesi, SonParti } from "#paylasilan/sozlesme/stok.ts";
-import type { OdemePlaniSatiri, SiparisTakibiCevabi } from "#paylasilan/sozlesme/satin-alma.ts";
+import type { OdemePlaniSatiri, SiparisTakibiCevabi, SiparisVerGovdesi } from "#paylasilan/sozlesme/satin-alma.ts";
 import { DEFAULT_SETTINGS } from "./constants.ts";
 import { clone, uid } from "./util.ts";
 import { transport } from "./tasiyici.ts";
@@ -181,6 +181,11 @@ export interface Backend {
   firmaEkle(kimlik: string, g: { ad: string; vergiNo: string; il: string; telefon: string; ePosta: string }): Promise<{ id: string; ad: string }>;
   /** SA2: katalog kalemi eklerken malzeme kartı adla ya da kodla aranır (kart "Malzeme Kartları"nda açılır) */
   malzemeAra(metin: string): Promise<MalzemeSecenegi[]>;
+  /** 3574-1: sipariş satırları (pay, firma, fiyat, satır termini, başlık) tek komutla gider. 'onayda': onaylı tutarı aşan ya da yeni
+   *  firmaya giden sipariş onaya düştü (S1 a). Başarısızsa ileti gösterilir, null döner. */
+  siparisVer(talepId: string, govde: Omit<SiparisVerGovdesi, 'surum'>): Promise<'verildi' | 'onayda' | null>;
+  /** 3574-1: onaya düşen siparişin onayı ya da reddi (onay yetkilisi; dört göz sunucuda). */
+  siparisOnerisiKarari(talepId: string, sonuc: 'onay' | 'ret', notlar: string): Promise<boolean>;
   /** Borç 36: siparişteki kalem onay yetkisiyle, gerekçeyle değişir; sunucu hareket yazar. Başarısızsa ileti gösterilir, false döner. */
   siparisKalemiDegistir(talepId: string, kalemId: string, miktar: number, birim: string, gerekce: string): Promise<boolean>;
   /** #205 S2 b: Logo'daki siparişin kalanı gerekçeyle kapatılır; sunucu hareket yazar. Başarısızsa ileti gösterilir, false döner. */

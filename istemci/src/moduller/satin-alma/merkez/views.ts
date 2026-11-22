@@ -26,6 +26,7 @@ import { getRole, onaylayabilir, viewApproval, viewApprovals, viewRequesterHome,
 import { secilemezAlternatif, sonucRozeti } from "./alternatif.ts";
 import { alternatifOzetleriniDoldur } from "./alternatif-ozeti.ts";
 import { kalemKalemHTML, siparisKalemleriHTML } from "./kalem-kalem.ts";
+import { siparisOnerisiHTML, siparisOzeti, siparisSatirlariHTML, taslak } from "./siparis-satirlari.ts";
 /* ================= render çekirdeği ================= */
 // Ortak parçalarla çizilen ekranlar (iş kutusu, Talepler, talep ayrıntısı; 2412-2) merkezin durumunu her çizimde yeniden okur.
 let cizimSurumu = 0;
@@ -792,7 +793,7 @@ export function tabDecision(r: PurchaseRequest, part: "select" | "split" | "appr
       <td class="num">${isNum(gm) ? gm + " ay" : "–"}</td><td class="r num"><b>${nf0.format(x.score)}</b></td>
       <td class="r"><button class="btn sm ghost" data-act="calc" data-qid="${x.q.id}">Hesap</button></td></tr>`;
   };
-  const disarida = ev.all.filter(x => !ev.elig.includes(x));
+  const disarida = ev.all.filter(x => !ev.elig.includes(x) && x.q.source !== "siparis");
   const neden = verdictReasons(r, ev);
   const tekGerekce = !isSplit && sel !== top.q.id;
   const p1 = `<section class="panel sa-karar" data-top="${top.q.id}">
@@ -830,7 +831,10 @@ export function tabDecision(r: PurchaseRequest, part: "select" | "split" | "appr
     <p class="small muted">Tutarlar KDV hariç. ${OPEN.includes(r.status) ? "Kur güncel kurdur; karar onaya gönderildiğinde sabitlenen kur ayrıca yazılır." : "Kur sipariş günü sabitlenen kurdur."} Ödeme günleri tahminidir: avans sipariş günü, vadeli kısım ${a.vadeBaslangici === "siparis" ? "siparişten" : "beklenen teslimden"} sayılır.${isSplit ? " Kalem bazlı kararda sütunlar tekliflerin tamamıdır; siparişlere düşen tutar Onay formundadır." : ""}</p>
   </div></section>` : "";
   const p3 = `${panel(3, isSplit ? `Siparişler (${orders.length} tedarikçi)` : "Sipariş", ordered ? '<span class="flag good">sipariş verildi</span>' : '<span class="flag mute">onaydan sonra</span>', `
-    ${approved || ordered ? `${isSplit ? ordersFormHTML(r, orders) : singleOrderHTML(r, a)}
+    ${r.siparisOnerisi ? siparisOnerisiHTML(r, onaylayabilir(), r.siparisOnerisi.onerenId === S.me?.id) : approved && !ordered ? `${siparisSatirlariHTML(r, taslak(r))}
+    <div class="row"><button class="btn primary" data-act="sp-siparis-ver">${siparisOzeti(r, taslak(r)).onayGerekir ? "Onaya gönder" : "Siparişi ver"}</button></div>
+    ${teslimYontemiHTML(r)}` : approved || ordered ? `${isSplit ? ordersFormHTML(r, orders) : singleOrderHTML(r, a)}
+    ${siparisBasligiHTML(r, orders)}
     ${siparisKalemleriHTML(r)}
     <div class="row"><button class="btn primary" data-act="place-order">${ordered ? "Sipariş bilgisini güncelle" : isSplit ? "Siparişleri verildi olarak işaretle" : "Siparişi verildi olarak işaretle"}</button>${ordered ? '<button class="btn" data-act="order-item-change">Kalemi değiştir</button><button class="btn" data-act="order-close">Kalanı kapat</button>' + logoBekletDugmeleri(orders) + '<button class="btn" data-act="order-invoices">Faturalar</button><button class="btn" data-act="order-certs">Sertifikalar</button>' : ""}</div>
     ${teslimYontemiHTML(r)}` : '<p class="small muted">Sipariş, karar onaylandıktan sonra verilir.</p>'}`, decided)}`;
@@ -889,6 +893,21 @@ export function logoBekletDugmeleri(orders: readonly Pick<OrderInfo, "logo">[]):
 function teslimYontemiHTML(r: PurchaseRequest): string {
   const dugme = (v: string, l: string) => `<button data-act="teslim-yontemi" data-v="${v}" aria-pressed="${r.teslimYontemi === v}">${l}</button>`;
   return `<div class="row" data-sa-teslim-yontemi><span class="small">Teslim</span><div class="seg" role="group" aria-label="Teslim yöntemi">${dugme("firma_getirir", "Tedarikçi getirir")}${dugme("biz_alacagiz", "Biz alacağız")}</div><span class="small muted">${r.teslimYontemi === "biz_alacagiz" ? "Sipariş sevkiyatta tedarikçiden alım olarak bekler." : "Biz alacaksak sipariş sevkiyatta alım olarak bekler."}</span></div>`;
+}
+/* 3574-1: verilmiş siparişin firma başlığı ve satır termini, notu (yalnız okunur; değişiklik 3574-2 penceresinde). */
+function siparisBasligiHTML(r: PurchaseRequest, orders: OrderInfo[]): string {
+  const a = r.award;
+  if (!a) return "";
+  const satirlar = orders.flatMap(o => {
+    const h = a.mode === "split" ? a.orders?.[o.qid] : a;
+    const parca = [h?.teslimYeri ? `Teslim yeri: ${esc(h.teslimYeri)}` : "", h?.tedarikciNotu ? `Tedarikçiye not: ${esc(h.tedarikciNotu)}` : "", h?.icNot ? `İç not: ${esc(h.icNot)}` : ""].filter(Boolean);
+    const kalem = (a.lines ?? []).filter(l => l.quoteId === o.qid && (l.expectedDate || l.note)).map(l => {
+      const it = r.items.find(x => x.id === l.itemId);
+      return `${esc(it?.name ?? "")}: ${[l.expectedDate ? `termin ${fmtDate(l.expectedDate)}` : "", l.note ? esc(l.note) : ""].filter(Boolean).join(", ")}`;
+    });
+    return parca.length || kalem.length ? [`<li><b>${esc(supName(o.q))}</b> ${[...parca, ...kalem].join("; ")}</li>`] : [];
+  });
+  return satirlar.length ? `<ul class="small" data-sa-siparis-basligi>${satirlar.join("")}</ul>` : "";
 }
 export function singleOrderHTML(r: PurchaseRequest, a: Partial<Award>): string {
   const selQ = (r.quotes || []).find(q => q.id === a.quoteId);

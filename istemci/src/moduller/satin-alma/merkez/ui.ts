@@ -26,6 +26,7 @@ import { ODEME_SEKLI, siparisTakibi, takibiUnut, takipGuncelle } from "./takip.t
 import { approvalFormHTML, printDoc, siparisMetniGovdesi } from "./docs.ts";
 import { antetBosMu, istekFormuHTML, kagidiOlcekle } from "./istek-formu.ts";
 import { onaylayabilir, setRole, type Role } from "./roles.ts";
+import { firmaSec, payEkle, paySil, siparisGovdesi, siparisOzeti, taslagiBirak, taslagiOku, taslak } from "./siparis-satirlari.ts";
 import type { OdemePlaniSatiri, SiparisBelgesi, TeklifIstekFormuIcerigi } from "#paylasilan/sozlesme/satin-alma.ts";
 import { DosyaHatasi, dosyaYukle } from "../../belge-merkezi/disari.ts";
 import { pdfOkuAc, type PdfAktarimi } from "../pdf-teklif/ekran.ts";
@@ -1628,13 +1629,61 @@ ACTIONS["teslim-yontemi"] = (el, r) => {
   void backend.teslimYontemi(r.id, yeni).then(ok => { if (ok) toast(yeni === "biz_alacagiz" ? "Sipariş verilince sevkiyatta alım olarak bekler" : "Teslim yöntemi kaydedildi"); });
 };
 // Borç 36 (kullanıcı kararı): siparişteki kalem kaydetle değişmez; onay yetkilisi gerekçeyle değiştirir, sunucu geçmişe yazar.
+/* 3574-1: sipariş satırları (Kurgu A). Girilen değer her eylemden önce taslağa okunur; kayıt tek komut, onay kararı sunucuda. */
+const spKoku = (): HTMLElement | null => document.querySelector<HTMLElement>("[data-sa-siparis-satirlari]");
+function spTaslak(r: PurchaseRequest): ReturnType<typeof taslak> | null {
+  const kok = spKoku();
+  if (!kok) return null;
+  const t = taslak(r);
+  taslagiOku(t, kok);
+  return t;
+}
+ACTIONS["sp-pay-ekle"] = (el, r) => {
+  if (!r || !canWrite()) return; const t = spTaslak(r); if (!t) return;
+  if (!payEkle(r, t, el.dataset.item ?? "")) { toast("Bu kalem için seçilebilecek başka firma yok; payın firmasını listeden \"Başka firma\" ile seçin."); return; }
+  render();
+};
+ACTIONS["sp-pay-sil"] = (el, r) => { if (!r || !canWrite()) return; const t = spTaslak(r); if (!t) return; paySil(r, t, el.dataset.pay ?? ""); render(); };
+ACTIONS["sp-siparis-ver"] = (el, r) => {
+  if (!r || !canWrite()) return;
+  const t = spTaslak(r); if (!t) return;
+  const oz = siparisOzeti(r, t);
+  if (oz.hatalar.length) { t.duyur = true; render(); t.duyur = false; const ilk = oz.hataAlanlari[0]; if (ilk) document.getElementById(ilk)?.focus(); return; }
+  if (oz.onayGerekir && !t.gerekce.trim()) { toast("Onaya giden siparişte gerekçe yazın."); $("#sp-gerekce")?.focus(); return; }
+  (el as HTMLButtonElement).disabled = true;
+  void backend.siparisVer(r.id, siparisGovdesi(r, t)).then(sonuc => {
+    (el as HTMLButtonElement).disabled = false;
+    if (!sonuc) return;
+    taslagiBirak(r.id);
+    toast(sonuc === "onayda" ? "Sipariş onaya gönderildi" : "Sipariş verildi");
+  });
+};
+const spOneriKarari = (sonuc: "onay" | "ret") => (_el: HTMLElement, r: PurchaseRequest | null) => {
+  if (!r || !r.siparisOnerisi || !onaylayabilir()) return;
+  const not = document.querySelector<HTMLInputElement>("#sp-oneri-not")?.value.trim() ?? "";
+  if (sonuc === "ret" && !not) { toast("Ret nedenini Not alanına yazın; öneren geçmişte görür."); document.querySelector<HTMLInputElement>("#sp-oneri-not")?.focus(); return; }
+  void backend.siparisOnerisiKarari(r.id, sonuc, not).then(ok => { if (ok) { taslagiBirak(r.id); toast(sonuc === "onay" ? "Onaylandı, sipariş verildi" : "Sipariş önerisi reddedildi"); } });
+};
+ACTIONS["sp-oneri-onayla"] = spOneriKarari("onay");
+ACTIONS["sp-oneri-reddet"] = spOneriKarari("ret");
+document.addEventListener("change", (e) => {
+  if (!kokIcinde(e)) return;
+  const el = e.target as HTMLElement;
+  const r = V.page === "request" && V.id ? S.requests[V.id] ?? null : null;
+  if (!r || !el.closest("[data-sa-siparis-satirlari]")) return;
+  const t = spTaslak(r); if (!t) return;
+  if (el.dataset.spSec) { firmaSec(r, t, el.dataset.spSec, (el as HTMLSelectElement).value); setTimeout(render, 0); return; }
+  // Tutar ve onay rozeti miktar, fiyat ve para biriminden çıkar; çizim odak yeni alana geçtikten sonra (odak kimlikle korunur).
+  const alan = el.dataset.spAlan;
+  if (alan === "qty" || alan === "price" || alan === "currency") setTimeout(render, 0);
+});
 ACTIONS["order-item-change"] = (_el, r) => {
   if (!r || !canWrite()) return;
   const items = awardOrders(r).flatMap(o => o.items);
   if (!items.length) { toast("Siparişte kalem yok."); return; }
   // 3442-5: sipariş adımının kalem tablosundaki "Değiştir" o kalemle açılır.
   const secili = items.find(it => it.id === _el.dataset.item) ?? items[0]!;
-  openModal(`<div class="mh"><h2>Siparişteki kalemi değiştir</h2></div><div class="mb"><p class="small muted">Değişiklik onay yetkisi ister ve gerekçesiyle geçmişe yazılır. Miktar teslim alınandan aşağı inmez; teslim alınmış kalemin birimi değişmez.</p>
+  openModal(`<div class="mh"><h2>Siparişteki kalemi değiştir</h2></div><div class="mb"><p class="small muted">Miktarı düşüren değişiklik satın almada, artış ya da birim değişikliği onay yetkisi ister; gerekçesiyle geçmişe yazılır. Miktar teslim alınandan aşağı inmez; teslim alınmış kalemin birimi değişmez.</p>
     <div class="grid g2"><label class="f"><span>Kalem</span><select id="oc-item">${items.map(it => `<option value="${it.id}"${it.id === secili.id ? " selected" : ""}>${esc(it.name)}</option>`).join("")}</select></label>
     <label class="f"><span>Yeni miktar</span><input type="text" inputmode="decimal" id="oc-qty" value="${miktarIn(secili.qty)}"></label>
     <label class="f"><span>Birim</span><input type="text" list="dl-units" id="oc-unit" value="${esc(secili.unit)}"></label>

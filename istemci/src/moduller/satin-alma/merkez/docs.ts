@@ -93,6 +93,8 @@ export function poText(r: PurchaseRequest, o: OrderInfo): string {
     // 2875: fason firması hangi parçaya hangi işlemi yapacağını siparişte de görür; teklif isteme metniyle aynı satırlar.
     const satir = (r.award?.lines ?? []).find((l) => l.itemId === it.id && l.quoteId === o.qid);
     for (const t of teklifMetniSatirlari(it, satir?.parcaRevizyonu ?? null)) L.push(`   ${t}`);
+    // 3574-1: satırın kendi termini (siparişinkinden ayrıysa) tedarikçiye yazılır; satır notu iç nottur, yazılmaz.
+    if (satir?.expectedDate) L.push(`   Termin: ${fmtDate(satir.expectedDate)}`);
   });
   const disc = (parseNum(o.q.discountPct) || 0) / 100;
   if (disc) { L.push(`İskonto %${numIn(disc * 100)}: −${money(total * disc, o.q.currency)}`); total *= 1 - disc; }
@@ -109,7 +111,10 @@ export function poText(r: PurchaseRequest, o: OrderInfo): string {
   for (const sart of rehber?.musteri?.sartlar ?? []) L.push(`${rehber?.musteri?.ad ?? 'Müşteri'} şartı: ${sart}`);
   const due = orderDue(o);
   if (due) L.push(`Beklenen teslim tarihi: ${fmtDate(due)}`);
-  // Teslimat adresi kayıtta tutulmuyor; uydurma yer tutucu yerine satır yazılmaz (kural: veri yoksa yazılmaz).
+  // 3574-1: teslim yeri ve tedarikçiye not firma başlığından; boşsa satır yazılmaz (veri yoksa yazılmaz). İç not yazılmaz.
+  const baslik = r.award?.mode === "split" ? r.award.orders?.[o.qid] : r.award;
+  if (baslik?.teslimYeri) L.push(`Teslim yeri: ${baslik.teslimYeri}`);
+  if (baslik?.tedarikciNotu) L.push(`Not: ${baslik.tedarikciNotu}`);
   L.push("");
   L.push("Siparişi teyit etmenizi ve sevkiyat bilgisini paylaşmanızı rica ederiz.");
   L.push("");
