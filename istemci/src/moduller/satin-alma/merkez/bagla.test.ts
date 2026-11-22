@@ -46,6 +46,17 @@ describe('Merkez bağlama', () => {
     kapat();
   });
 
+  // 3573: yapışkan öğe yalnız akıştaki yerinden sonra yapışır; ekranın altındaki şerit uzun ayrıntıda içeriğin ortasında çiziliyordu.
+  it('kimlik şeridi üst çubuğun hemen altında, ekranın önündedir', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json(200, acilis([talep(ILK, 'ST-2026-001')]))));
+    const kok = document.createElement('div');
+    document.body.append(kok);
+    const kapat = merkeziBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {} });
+    await vi.waitFor(() => expect(Object.keys(S.requests)).toEqual([ILK]));
+    const sira = [...kok.querySelector('.mainwrap')!.children].map((e) => e.id || e.className);
+    expect(sira.slice(0, 3)).toEqual(['topbar', 'sa-serit', 'sa-ekran']);
+    kapat();
+  });
   it('ekran yeniden açılınca başka sayfada açılan talep sunucudan alınır; yenileme düşerse eldeki talepler kalır', async () => {
     const cevaplar = [() => json(200, acilis([talep(ILK, 'ST-2026-001')])), () => json(200, acilis([talep(ILK, 'ST-2026-001'), talep(YENI, 'ST-2026-002')])),
       () => json(500, { hata: { kod: 'SUNUCU', ileti: 'x' } })];

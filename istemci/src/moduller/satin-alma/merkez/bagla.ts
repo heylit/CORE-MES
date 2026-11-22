@@ -17,6 +17,8 @@ import { adrestekiOnayEylemi, ONAY_EYLEMI_PARAMETRESI, type OnayEylemi } from "#
 // Prototipin sayfa iskeleti (index.html gövdesi) kendi menüsü olmadan; bildirim ve geri al ortak bildirimdedir.
 // Pencere kökü ortak pencere gibi sayfanın gövdesine konur: kabuğun üst çubuğu ve şeritleri perdenin altında kalır. Kök
 // prototipin stil kökünü (sa-kok) ve merkez işaretini taşır; içerideki tıklama ve tuşlar merkezin olay yollarından geçer.
+// Kimlik şeridi (#sa-serit) üst çubuğun hemen altındadır: yapışkan öğe yalnız kendi akış yerinden sonra yapışır; ekranın (#sa-ekran)
+// altında dururken uzun ayrıntıda ekranın sonunda, içeriğin ortasında çiziliyordu.
 const ISKELET = `<div class="app">
   <div class="mainwrap">
     <div class="topbar">
@@ -29,8 +31,8 @@ const ISKELET = `<div class="app">
       <span class="spacer"></span>
       <span class="flag warn" id="kayit-uyari" role="status" hidden></span>
     </div>
-    <div id="sa-ekran"></div>
     <div id="sa-serit"></div>
+    <div id="sa-ekran"></div>
     <div id="main" class="sa-icerik"><p class="loading">Veriler yükleniyor…</p></div>
   </div>
 </div>`;
