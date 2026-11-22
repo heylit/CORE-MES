@@ -16,7 +16,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { ayarDegistiBildir } from './ayar-olaylari.ts';
 import { beklenenTutarMi, degeriDogrula, gecerliDeger, listeDegeri, oncekiDeger } from './kurallar.ts';
 import {
-  ayarDegeriniOku, ayarDegeriniSil, ayarDegeriniYaz, ayarDegerleriniOku, ayarKilitle, firmaKoduEkle as firmaKoduSatiriEkle, firmaKoduGuncelle,
+  ayarDegeriniOku, ayarDegeriniSil, ayarDegeriniYaz, ayarDegerleriniOku, ayarGuncellemeleriniOku, ayarKilitle, firmaKoduEkle as firmaKoduSatiriEkle, firmaKoduGuncelle,
   firmaKoduIdIleOku, firmaKoduOku, firmaKodlariniKilitle, firmaKodlariniOku, sayacArtir, simdikiYilAy, varsayilanFirmaKoduOku, varsayilaniBirak,
 } from './sorgular.ts';
 
@@ -86,6 +86,18 @@ export async function ayarlariListele(db: Db): Promise<AyarlarCevabi> {
       return ayarGorunumu(anahtar, deger, gecersiz);
     }),
   };
+}
+
+// Seçilen ayarların görünümü ve son değiştireni: ayarı gösteren modülün kendi ekranı için (yetkiyi çağıran modül uçta denetler).
+export interface AyarSonu { ayar: Ayar; guncelleyenKisiId: number | null; zaman: string | null }
+export async function ayarSonlari(db: Db, anahtarlar: readonly AyarAnahtari[]): Promise<AyarSonu[]> {
+  const saklananlar = await ayarDegerleriniOku(db);
+  const sonlar = await ayarGuncellemeleriniOku(db, anahtarlar);
+  return anahtarlar.map((anahtar) => {
+    const { deger, gecersiz } = listeDegeri(anahtar, saklananlar.find((s) => s.anahtar === anahtar) ?? null);
+    const son = sonlar.find((x) => x.anahtar === anahtar);
+    return { ayar: ayarGorunumu(anahtar, deger, gecersiz), guncelleyenKisiId: son?.kisiId ?? null, zaman: son?.zaman ?? null };
+  });
 }
 
 // Kabuğun her oturumda okuduğu karşılama ayarları; liste ucunun yazma yetkisini istemeden yalnız bunlar verilir.

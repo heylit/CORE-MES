@@ -2,7 +2,7 @@ import { kisitBul, kisitDegistir, parametreDegeri, parametreYaz, type ParametreY
 import { MALZEME_KURALLARI } from '../ic/veri/kurallar.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 
-// Kokpit ayarlar paneli (3282 1b): Kokpit'in motorunun okuduğu çalışma ayarları tek yerde. Kural, amaç, bölme ve acil pay motor ayarındadır
+// Planlama ayarları (3282 1b, 3561): Kokpit'in motorunun okuduğu çalışma ayarları tek yerde; Planlama ayarları sayfası ve Kokpit'in yön seçicisi kullanır. Kural, amaç, bölme ve acil pay motor ayarındadır
 // (sunucu calismayaMotorAyari çalışmanınkini ezer); panel onları yalnız gösterir. Saf.
 
 export type AyarAlani =
@@ -45,7 +45,8 @@ export const panelKisitAdi = (k: (typeof PANEL_KISITLARI)[number]): string => ki
 
 export type AyarDegeri = string | number | boolean | null;
 export interface AyarTaslagi { alan: Record<string, AyarDegeri>; acik: Record<string, boolean> }
-const anahtar = (a: AyarAlani): string => `${a.yer}.${a.k}`;
+export const alanAnahtari = (a: AyarAlani): string => `${a.yer}.${a.k}`;
+const anahtar = alanAnahtari;
 
 function deger(c: PlanlamaCalismasi, a: AyarAlani): AyarDegeri {
   const v = parametreDegeri(c, a.yer, a.k);
@@ -70,7 +71,7 @@ export function sayiOku(a: Extract<AyarAlani, { tur: 'sayi' }>, girdi: string): 
   return { deger: v };
 }
 
-const yazi = (a: AyarAlani, v: AyarDegeri): string => {
+export const alanYazisi = (a: AyarAlani, v: AyarDegeri): string => {
   if (v === null) return '—';
   if (a.tur === 'acik') return v ? 'açık' : 'kapalı';
   if (a.tur === 'sec') return a.secenekler.find(([d]) => d === v)?.[1] ?? String(v);
@@ -80,7 +81,7 @@ const yazi = (a: AyarAlani, v: AyarDegeri): string => {
 export function farklar(c: PlanlamaCalismasi, t: AyarTaslagi): string[] {
   const simdi = ayarTaslagi(c);
   const alan = AYAR_ALANLARI.filter((a) => alanDegeri(simdi, a) !== alanDegeri(t, a))
-    .map((a) => `${a.etiket}: ${yazi(a, alanDegeri(simdi, a))} → ${yazi(a, alanDegeri(t, a))}`);
+    .map((a) => `${a.etiket}: ${alanYazisi(a, alanDegeri(simdi, a))} → ${alanYazisi(a, alanDegeri(t, a))}`);
   const kisit = PANEL_KISITLARI.filter((k) => simdi.acik[k] !== t.acik[k])
     .map((k) => `${panelKisitAdi(k)}: ${t.acik[k] ? 'kapalı → açık' : 'açık → kapalı'}`);
   return [...alan, ...kisit];

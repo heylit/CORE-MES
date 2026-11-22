@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ornekCalisma } from '../motor/ornek.ts';
-import { AYAR_ALANLARI, alanYaz, ayarTaslagi, ayarlariYaz, emirYonu, emirYonuYaz, etkiSatirlari, farklar, kisitYaz, ozetOku, planYonu, sayiOku } from './ayarlar.ts';
+import { AYAR_ALANLARI, alanYaz, ayarTaslagi, ayarlariYaz, emirYonu, emirYonuYaz, etkiSatirlari, farklar, kisitYaz, ozetOku, planYonu, sayiOku } from './alanlar.ts';
 
 const alan = (k: string) => {
   const a = AYAR_ALANLARI.find((x) => x.k === k);

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { PLAN_ISLEMLERI } from '../islemler/plan.ts';
+import { ayarSemasi } from './ayarlar.ts';
 import { IS_EMRI_TURLERI } from './uretim-emirleri.ts';
 import { DUZELTME_YERLERI, KONTROL_DURUMLARI, PLANLANAMAMA_NEDENLERI } from './planlanamama-sabitleri.ts';
 
@@ -530,6 +531,22 @@ export const motorAyarlariCevabi = z.object({
 });
 // 776 b, 830 a: Planlama atölyesinde taslağa özel kural; boş verilirse motor ayarı sürümündeki kurala döner.
 export const motorKuraliGovdesi = z.object({ surum: KIMLIK, kural: z.enum(MOTOR_KURALLARI).nullable() });
+
+// 3557 c, 3560: Planlama ayarları sayfasının sistem bölümü yalnız bu beş plan. ayarını okur ve yazar (ayarlar modülünün kayıtları, plan modülünün
+// kapısı). Ufuk ve dilimi plan.sistem-ayari değiştirir; dördüncü göz, tipli girdi ve bakım girdisi ayarlar.yaz'da kalır.
+export const PLAN_SISTEM_AYARLARI = ['plan.dort-goz', 'plan.motor-ufuk-gun', 'plan.motor-dilim-dk', 'plan.tipli-girdi', 'plan.bakim-girdisi'] as const;
+export type PlanSistemAyari = (typeof PLAN_SISTEM_AYARLARI)[number];
+export const PLAN_SISTEM_AYARI_KAPISI: Record<PlanSistemAyari, 'plan.sistem-ayari' | 'ayarlar.yaz'> = {
+  'plan.dort-goz': 'ayarlar.yaz', 'plan.motor-ufuk-gun': 'plan.sistem-ayari', 'plan.motor-dilim-dk': 'plan.sistem-ayari',
+  'plan.tipli-girdi': 'ayarlar.yaz', 'plan.bakim-girdisi': 'ayarlar.yaz',
+};
+export const planSistemAyariParametresi = z.object({ anahtar: z.enum(PLAN_SISTEM_AYARLARI) });
+// Ekranın gördüğü değer `beklenen`dir: arada başkası değiştirdiyse 409 (ayarlar modülünün aynı kuralı).
+export const planSistemAyariGovdesi = z.object({ deger: z.union([z.boolean(), z.number().finite(), z.string().max(40)]), beklenen: z.union([z.boolean(), z.number().finite(), z.string().max(40)]) });
+export const planSistemAyariSatiri = z.object({ ayar: ayarSemasi, guncelleyen: z.string().nullable(), zaman: zaman.nullable() });
+export const planSistemAyarlariCevabi = z.object({ ayarlar: z.array(planSistemAyariSatiri) });
+export type PlanSistemAyariSatiri = z.output<typeof planSistemAyariSatiri>;
+export type PlanSistemAyarlariCevabi = z.output<typeof planSistemAyarlariCevabi>;
 
 export const siparisParametresi = z.object({ id: z.coerce.number<number>().int().positive().max(2_147_483_647) });
 // 148 a: bedel ayarı taslağa yazılır; taslak null ise kişiye yeni taslak açılır (taslakGovdesi gibi). Alanı göndermeyen

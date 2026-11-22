@@ -1782,9 +1782,9 @@ test('Kokpit 3B: tezgâh çoksa yalnız yükü olan tezgâhlar çizilir, düğme
   expect(ag.yazmalar).toEqual([]);
 });
 
-// 3282 1b: Ayarlar paneli seçili emrin yerinde (telefonda alttan) açılır; değişiklik önce etkisiyle gösterilir (değerlendirme ucu, plan-uygula),
-// Uygula planı alır. Sunucu cevapları uydurmadır.
-test('Kokpit 3282 1b: Ayarlar paneli açılır, dondurma değişir, etkisi önce ve sonra görünür, Uygula; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+// 3282 1b, 3561: Ayarlar artık Planlama ayarları sayfasıdır; değişiklik önce etkisiyle gösterilir (değerlendirme ucu, plan-uygula),
+// Uygula planı taslağa alır. Kokpit'in Araçlar menüsündeki Ayarlar bu sayfaya gider. Sunucu cevapları uydurmadır.
+test('Kokpit 3282 1b: Araçlar > Ayarlar sayfaya gider; dondurma değişir, etkisi önce ve sonra görünür, Uygula; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
   const t = await taslakSunucusu(page);
   await page.route('**/api/plan/motor-ayarlari', (r) => json(r, {
     guncel: { surumId: null, degerler: { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali', acilPay: 0.05, bolmeKip: 'otomatik', bolmeMaks: 3 }, yazan: null, zaman: null }, taslak: null,
@@ -1795,35 +1795,71 @@ test('Kokpit 3282 1b: Ayarlar paneli açılır, dondurma değişir, etkisi önce
   await expect(kokpit).toBeVisible({ timeout: 20_000 });
   await gorunumAc(kokpit);
   await arac(kokpit, 'Ayarlar');
-  const panel = kokpit.getByRole('complementary', { name: 'Plan ayarları' });
-  await expect(panel).toBeVisible();
-  // 3487: yönetici motor ayarını panelde değiştirebilir; kural salt metin değil, seçili seçenektir.
-  await expect(panel.getByRole('combobox', { name: 'Sıralama kuralı' }).locator('option:checked')).toHaveText('ATCS (öncelik, termin ve süre birlikte)');
-  const dondurma = panel.getByLabel(/Dondurulmuş bölge/);
+  await expect(page).toHaveURL(/\/plan\/ayarlar/);
+  await page.goto('/plan/ayarlar?bolum=zaman');
+  const sayfa = page.locator('.tc-pya');
+  await expect(sayfa).toBeVisible({ timeout: 20_000 });
+  const dondurma = sayfa.getByLabel(/Dondurulmuş bölge/);
   await dondurma.fill('8');
   await dondurma.blur();
-  await expect(panel.getByText('Dondurulmuş bölge: 4 sa → 8 sa')).toBeVisible();
+  await expect(sayfa.getByText('Dondurulmuş bölge: 4 sa → 8 sa')).toBeVisible();
   expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
   await page.screenshot({ path: `/tmp/tmiv2-ekran/3282-ayarlar-${bilgi.project.name}.png` });
-  await panel.getByRole('button', { name: 'Etkisini gör' }).click();
-  const etki = panel.getByRole('region', { name: 'Ayarın etkisi' });
+  await sayfa.getByRole('button', { name: 'Etkisini gör' }).click();
+  const etki = sayfa.getByRole('region', { name: 'Ayarın etkisi' });
   await expect(etki.getByText('1 → 0')).toBeVisible({ timeout: 10_000 });
   // Ayar taslağa yazılır, etkisi taslağın görünümünde hesaplanır; ortak çalışma değişmez.
   expect(t.s.komutlar).toEqual([{ tur: 'ayar', ayar: { w: { dondurma: 8 }, param: {}, ac: [], kapat: [] }, ayrinti: expect.any(String) as unknown }]);
   expect(t.s.degerlendirme).toEqual([{ taslakSurumu: 1, istek: { tur: 'plan-uygula', isler: ['*'] } }]);
   expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
-  // Değişiklik bildirimi (Geri al) panelin altını örter; görüntü için kapatılır.
   for (const k of await page.getByRole('button', { name: 'Bildirimi kapat' }).all()) await k.click();
   await etki.scrollIntoViewIfNeeded();
   await page.screenshot({ path: `/tmp/tmiv2-ekran/3282-ayar-etki-${bilgi.project.name}.png` });
   await etki.getByRole('button', { name: 'Uygula' }).click();
-  await expect(panel).toHaveCount(0);
-  // Uygula hesaplanan planı taslağa yazar; taslak çubuğu bir değişiklik gösterir.
+  await expect(etki).toHaveCount(0);
+  // Uygula hesaplanan planı taslağa yazar.
   expect(t.s.satirlar.map((x) => x.komut.tur)).toEqual(['ayar', 'diz']);
-  await expect(kokpit.getByRole('region', { name: 'Değişiklikleriniz' }).getByText('1 değişiklik · canlıya alınmadı')).toBeVisible();
   expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
-  await page.screenshot({ path: `/tmp/tmiv2-ekran/3282-taslak-${bilgi.project.name}.png` });
   expect(ag.hatalar).toEqual([]);
+});
+
+// 3561 Z4: çalışma açıkken Planlama ayarları: Kontrol (farklı satırlı), Zaman (yapışık çubuk), Kısıtlar, Öncelik ve bedel; her genişlikte taşma yok.
+test('Planlama ayarları 3561: çalışma açıkken Kontrol, Zaman çubuğu, Kısıtlar ve Öncelik görünür; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  await taslakSunucusu(page);
+  await page.route('**/api/plan/motor-ayarlari', (r) => json(r, {
+    guncel: { surumId: null, degerler: { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali', acilPay: 0.05, bolmeKip: 'otomatik', bolmeMaks: 3 }, yazan: null, zaman: null }, taslak: null,
+  }));
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/ayarlar?bolum=zaman');
+  const sayfa = page.locator('.tc-pya');
+  await expect(sayfa).toBeVisible({ timeout: 20_000 });
+  const ad = bilgi.project.name;
+  const basla = page.getByRole('button', { name: 'Başlayalım' });
+  if (await basla.isVisible()) await basla.click();
+  const cek = async (n: string): Promise<void> => {
+    expect((await tasmaOlc(page)).belge, n).toBeLessThanOrEqual(0);
+    await page.screenshot({ path: `/tmp/tmiv2-ekran/3561-calisma-${n}-${ad}.png` });
+  };
+  const dondurma = sayfa.getByLabel(/Dondurulmuş bölge/);
+  await dondurma.fill('8');
+  await dondurma.blur();
+  await expect(sayfa.getByText('Dondurulmuş bölge: 4 sa → 8 sa')).toBeVisible();
+  await cek('zaman-cubuk');
+  const gec = async (adi: RegExp, bolum: string): Promise<void> => {
+    if (!(await page.getByRole('navigation', { name: 'Ayar grupları' }).isVisible())) await page.getByRole('link', { name: /Gruplar/ }).first().click();
+    await page.getByRole('navigation', { name: 'Ayar grupları' }).getByRole('link', { name: adi }).first().click();
+    await expect(page).toHaveURL(new RegExp(`bolum=${bolum}`));
+  };
+  await gec(/Kontrol/, 'kontrol');
+  await expect(sayfa.getByRole('table')).toBeVisible();
+  await expect(sayfa.getByText('Dondurulmuş bölge').first()).toBeVisible();
+  await cek('kontrol');
+  await gec(/Kısıtlar/, 'kisitlar');
+  await expect(sayfa.getByRole('heading', { name: 'Açılıp kapanan kısıtlar' })).toBeVisible();
+  await cek('kisitlar');
+  await gec(/Öncelik ve bedel/, 'oncelik');
+  await expect(sayfa.getByRole('heading', { name: /Öncelik ve bedel/ })).toBeVisible();
+  await cek('oncelik');
 });
 
 // Kart 3304 a: planın yönü yalnız üst şeritteki Yön düğmesindedir (her genişlikte); emrin yönü emrin satırında tek satırdır.
@@ -1882,11 +1918,6 @@ test('Kokpit 3282 1c: plan yönü üst şeritte, emrin yönü emir satırında; 
   await taslakCubugu.getByRole('button', { name: 'Geri al' }).click();
   await expect.poll(() => t.s.satirlar.length).toBe(0);
   t.s.komutlar.length = 0;
-  await arac(kokpit, 'Ayarlar');
-  const ayarlar = kokpit.getByRole('complementary', { name: 'Plan ayarları' });
-  await expect(ayarlar.getByLabel(/Geri planlama tamponu/)).toBeVisible();
-  await expect(ayarlar.getByLabel('Planlama yönü')).toHaveCount(0);
-  await ayarlar.getByRole('button', { name: 'Ayarları kapat' }).click();
 
   // Emrin yönü emrin satırında tek satırdır; Değiştir seçenekleri açar, seçim etkisiyle uygulanır.
   await kokpit.locator('[data-kart="S4"]').click();
@@ -2313,18 +2344,14 @@ test('Kokpit 3414 b: liste düzeni; plansız sipariş satırdan planlanır, sonu
   await adim.click();
   await expect(adim).toHaveAttribute('aria-pressed', 'false');
 
-  // Tek görünüm: ayrıntılı Kokpit'e geçiş yoktur; Ayarlar ile Duruş ve mesai bu düzende panel olarak açılır.
+  // Tek görünüm: ayrıntılı Kokpit'e geçiş yoktur; Duruş ve mesai bu düzende panel olarak açılır; Ayarlar sayfaya gider.
   await kokpit.getByRole('button', { name: 'Diğer' }).click();
   const diger = kokpit.getByRole('menu', { name: 'Diğer' });
   await expect(diger.getByRole('menuitem', { name: /Ayrıntılı Kokpit/ })).toHaveCount(0);
-  await diger.getByRole('menuitem', { name: 'Ayarlar' }).click();
-  await expect(kokpit.getByRole('complementary', { name: 'Plan ayarları' })).toBeVisible();
+  await expect(diger.getByRole('menuitem', { name: 'Ayarlar' })).toBeVisible();
   await expect(kokpit).toHaveAttribute('data-duzen', 'liste');
   await tasma();
-  await cek('5-ayarlar');
-  await kokpit.getByRole('button', { name: 'Ayarları kapat' }).click();
-  await kokpit.getByRole('button', { name: 'Diğer' }).click();
-  await kokpit.getByRole('menu', { name: 'Diğer' }).getByRole('menuitem', { name: 'Matris' }).click();
+  await diger.getByRole('menuitem', { name: 'Matris' }).click();
   await expect(kokpit.getByRole('region', { name: 'Matris', exact: true })).toBeVisible();
   await tasma();
   await kokpit.getByRole('button', { name: 'Listeye dön' }).click();

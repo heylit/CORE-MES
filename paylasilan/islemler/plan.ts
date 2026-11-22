@@ -4,5 +4,7 @@
 // değiştiremez (soru 210). Siparişe elle verilen çarpan bu işlemi istemez.
 // Plan motoru ayarları (amaç, eksik stok, sıralama kuralı) sonraki bütün planları değiştirir; plan.motor-ayari ister, yönetici, müdür ve
 // planlamadadır (775 b).
+// Plan motorunun ufku ve zaman dilimi (plan.motor-ufuk-gun, plan.motor-dilim-dk) Planlama ayarları sayfasından plan.sistem-ayari ile değişir;
+// planlama müdürü ve yönetici taşır (3557 c, 3560). Dört göz, tipli girdi ve bakım girdisi ayarlar.yaz'da (yönetici) kalır.
 // Planlama sayfalarını (motor, atölye, planlama görünümleri) görmek plan.planlama-oku; yönetici, müdür ve planlamadadır (195 a, 663 a).
-export const PLAN_ISLEMLERI = ['plan.planlama-oku', 'plan.oku', 'plan.yaz', 'plan.kilitle', 'plan.studyo', 'plan.canliya-al', 'plan.bedel-ayari', 'plan.motor-ayari'] as const;
+export const PLAN_ISLEMLERI = ['plan.planlama-oku', 'plan.oku', 'plan.yaz', 'plan.kilitle', 'plan.studyo', 'plan.canliya-al', 'plan.bedel-ayari', 'plan.motor-ayari', 'plan.sistem-ayari'] as const;

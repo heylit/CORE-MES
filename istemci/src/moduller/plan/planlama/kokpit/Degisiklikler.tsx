@@ -1,6 +1,6 @@
 import { Dugme, Rozet, Simge } from '../../../../ortak/arayuz/index.ts';
 import './kokpit.css';
-import { etkiSatirlari } from './ayarlar.ts';
+import { etkiSatirlari } from '../ayarlar/alanlar.ts';
 import { BASLIK_ADI, BASLIK_NOTU, BASLIKLAR, degisiklikDokumu, type Degisiklik } from './degisiklikler.ts';
 import type { SatirEtkisiYuzu } from './satir-etkisi.ts';
 

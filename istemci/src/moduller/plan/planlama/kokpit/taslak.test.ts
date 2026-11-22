@@ -3,7 +3,7 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { DegerlendirmeCevabi, TaslakCevabi, TaslakKomutu } from '#paylasilan/sozlesme/planlama.ts';
 import { ornekCalisma } from '../motor/ornek.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
-import { ayarTaslagi, alanYaz, AYAR_ALANLARI, kisitYaz } from './ayarlar.ts';
+import { ayarTaslagi, alanYaz, AYAR_ALANLARI, kisitYaz } from '../ayarlar/alanlar.ts';
 import { ayarKomutu, dizmeIsleri, sonDegisiklikleriGeriAl, taslakOzeti, useTaslak, type TaslakSatiri, type TaslakUcu } from './taslak.ts';
 
 // Taslak uydurmadır; sunucu sahte uçla taklit edilir (komut sona eklenir, geri-al sondan siler, sürüm her yazışta artar).

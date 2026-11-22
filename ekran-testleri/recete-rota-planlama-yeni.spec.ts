@@ -7,7 +7,7 @@ test.use({ hesap: 'ornek.yonetici' });
 // Şeridin son beş maddesi görünüm değil, ayrı sayfalardır: salt okunur raporlar (782, 1478, 2151, 1560) ve motor ayarları (811), menünün ikinci grubu.
 const GORUNUMLER = ['Kokpit', 'Motor', 'Veri', 'Siparişler', 'Maliyetler', 'Genel gider', 'Kapasite',
   'Malzeme satın alma planı', 'Terminler', 'Termin ve kâr', 'Sevk takvimi', 'Veri sağlığı', 'Plan sağlığı', 'Planlama analizi', 'Malzeme ihtiyacı',
-  'Motor ayarları'];
+  'Planlama ayarları'];
 
 test.describe('iskelet', () => {
   test('görünüm şeridi tam, her görünüm adresiyle açılır, sayfa yatay taşmaz', async ({ page, ac }) => {

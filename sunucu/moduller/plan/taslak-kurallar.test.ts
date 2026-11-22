@@ -71,6 +71,18 @@ describe('3282 1d: ayar ve yön komutu', () => {
     assert.ok(!('hata' in ayni) && !ayni.degisti);
   });
 
+  test('3561 D3: Veri sayfasından doğrudan değişen başka alan ve kısıt, eski taslağın ayar komutu oynatılınca geri dönmez; başkası ayarı değiştirdiyse Uygula çatışma sorar', () => {
+    // Taslak yalnız dondurmayı 8 yapar. Taslak açıldıktan sonra ortak çalışmada başkası mat'ı değiştirdi ve personel kısıtını kapattı.
+    const dogrudan = calisma({ w: { dondurma: 4, mat: 'sert' }, kapali: ['personel'] });
+    const r = ayarUygula(dogrudan, { w: { dondurma: 8 }, param: {}, ac: [], kapat: [] }, '', k);
+    assert.ok(!('hata' in r) && r.degisti);
+    const d = r.deger as { w: Record<string, unknown>; kapali: string[] };
+    assert.deepEqual([d.w['dondurma'], d.w['mat'], d.kapali], [8, 'sert', ['personel']]);
+    // Taslağın açıldığı hal ile ortak çalışma ayrıldıysa Uygula bunu sessizce geçmez: ayar her komutla çatışır ('*').
+    const taban = imza(calisma());
+    assert.deepEqual(catismalar(taban, imza(dogrudan), [satir(ayar, 'ayar')]).map((c) => c.anahtar), ['*']);
+  });
+
   test('3414: ayar komutu süre ayarını (D.ayarlar), aile katsayısını ve saati geçmiş iş seçeneğini yazar; geri yaması iç içe yolu taşır', () => {
     const r = ayarUygula(calisma(), { w: { famK: 0.5, gerideTasinir: true }, param: { chgTL: 80 }, ayarlar: { tasimaSaat: 1.5 }, ac: [], kapat: [] }, '', k);
     assert.ok(!('hata' in r) && r.degisti);

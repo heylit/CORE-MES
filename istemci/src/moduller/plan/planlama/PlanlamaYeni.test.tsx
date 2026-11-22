@@ -17,7 +17,7 @@ describe('PlanlamaYeni', () => {
     ac('/plan/plan');
     await waitFor(() => { expect(kap()?.getAttribute('data-gorunum')).toBe('plan'); }, { timeout: 10000 });
     expect(screen.getByTestId('adres').textContent).toBe('/plan/plan');
-    expect(GORUNUM_KAYITLARI.map((k) => k.baslik)).toEqual(MENU.map((m) => m.baslik));
+    expect(GORUNUM_KAYITLARI.map((k) => k.baslik)).toEqual([...MENU.map((m) => m.baslik), 'Planlama ayarları']);
     expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
     expect(istekler).toEqual(expect.arrayContaining(['GET /recete-rota/ben', 'GET /recete-rota/kayitlar', 'GET /plan/planlama-kaynagi', 'GET /plan/senaryolar']));
   }, 20000);
