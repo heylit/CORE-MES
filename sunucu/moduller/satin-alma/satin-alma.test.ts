@@ -8,6 +8,7 @@ import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import type {
   AcilisCevabi, Ayarlar, DegerlendirmeCevabi, KartAyrintilariCevabi, FirmaSecenekleriCevabi, KatalogKaydi, Talebim, TaleplerimCevabi, Talep, TalepGovdesi, Tedarikci,
 } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { CizimSeciciCevabi, SeciciDosyalariCevabi, SeciciKlasorlerCevabi, TalepCizimi, TalepCizimleriCevabi } from '#paylasilan/sozlesme/satin-alma.ts';
 import type { ButceKullanimiCevabi, FaturaEslemesiCevabi, KgFiyatiGecmisiCevabi, KgFiyatlariCevabi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisBelgeleriCevabi, SiparisFaturalariCevabi, SiparisTakibiCevabi, TeklifEkleriCevabi } from '#paylasilan/sozlesme/satin-alma.ts';
 import type { BeklenenOdemelerCevabi, TedarikciAlacagi, TedarikciAlacaklariCevabi } from '#paylasilan/sozlesme/finans.ts';
 import { SIPARIS_ODEME_YONTEMLERI } from '#paylasilan/sozlesme/finans.ts';
@@ -3847,9 +3848,10 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     const baska = tamam<Talep>(await istek(c.talep, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
     assert.equal((await istek(c.talep, 'GET', `/satin-alma-talepleri/${baska.id}/cizimler/${ozet}/dosya`)).statusCode, 404);
 
-    // Kaldırılan çizim düşer; ikinci kaldırma 404.
-    const kaldir = () => istek(c.sa, 'POST', `${yol}/cizimler/${ozet}/kaldir`);
-    assert.deepEqual(tamam<Cizimler>(await kaldir()).cizimler.map((x) => x.ozet), [ozet3]);
+    // 3571 K-c: teklif isteğinden sonra talep edenin çizimi kaldırılmaz; satın almanın eklediği kaldırılır, ikinci kaldırma 404.
+    assert.equal((await istek(c.sa, 'POST', `${yol}/cizimler/${ozet}/kaldir`)).statusCode, 422);
+    const kaldir = () => istek(c.sa, 'POST', `${yol}/cizimler/${ozet3}/kaldir`);
+    assert.deepEqual(tamam<Cizimler>(await kaldir()).cizimler.map((x) => x.ozet), [ozet]);
     assert.equal((await kaldir()).statusCode, 404);
   });
 
@@ -3866,6 +3868,114 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     await ortam!.sahip.sorgu("UPDATE satin_alma_talep SET durum = 'taslak' WHERE id = $1", [t.id]);
     tamam(await istek(c.sa, 'POST', `/satin-alma-talepleri/${t.id}/sil`, { surum: deg.surum }));
     assert.equal((await baglar()).length, 0);
+  });
+
+  test('3571: Çizim Merkezi ve Ortak Dosyalar\'dan seçim; özet istemciden gelmez, görmediği kayıt 404; klasör yolu yalnız ekleyene; teklif sonrası talepten gelen kaldırılmaz, güncelleme eskisini bırakır', async () => {
+    type Liste = TalepCizimleriCevabi;
+    type Belge = { id: number; surum: number; revizyonlar: { id: number; durum: string }[] };
+    const merkezBelgesi = async (ad: string): Promise<Belge> => {
+      const b = tamam<Belge>(await istek(c.yonetici, 'POST', '/cizimler', { ad, tur: 'teknik-resim', ozet: (await belgeYukle(c.yonetici)).ozet, dosyaAdi: 'orn.pdf' }));
+      return tamam<Belge>(await istek(c.yonetici, 'POST', `/cizimler/${b.id}/revizyonlar/${b.revizyonlar[0]!.id}/yayinla`, { surum: b.surum }));
+    };
+    const b1 = await merkezBelgesi('ORN-CZ-3571 Flans');
+    const taslak = tamam<Belge>(await istek(c.yonetici, 'POST', '/cizimler', { ad: 'ORN-CZ-3571 Taslak', tur: 'teknik-resim', ozet: (await belgeYukle(c.yonetici)).ozet, dosyaAdi: 'orn.pdf' }));
+    // Ortak Dosyalar: kalite rolü (talep eden) görür; gizli klasörü yalnız yönetici görür.
+    const kok = tamam<{ id: number }>(await istek(c.yonetici, 'POST', '/ortak-dosyalar/klasorler', { ustId: null, ad: 'ORN-Ortak 3571' }));
+    const gizli = tamam<{ id: number }>(await istek(c.yonetici, 'POST', '/ortak-dosyalar/klasorler', { ustId: null, ad: 'ORN-Gizli 3571' }));
+    const kaliteRol = (await vt().tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'kalite'"))!.id;
+    const yetki = tamam<{ surum: number }>(await istek(c.yonetici, 'GET', `/ortak-dosyalar/klasorler/${kok.id}/yetki`));
+    tamam(await istek(c.yonetici, 'POST', `/ortak-dosyalar/klasorler/${kok.id}/yetki`, { surum: yetki.surum, ozelYetki: true, satirlar: [{ rolId: kaliteRol, duzey: 'gorur' }] }));
+    const yukleOrtak = async (klasorId: number, ad: string) =>
+      tamam<{ id: number }>(await istek(c.yonetici, 'POST', `/ortak-dosyalar/klasorler/${klasorId}/yukle`, { ad, ozet: (await belgeYukle(c.yonetici)).ozet }));
+    const od = await yukleOrtak(kok.id, 'ORN-detay-3571.pdf');
+    const odGizli = await yukleOrtak(gizli.id, 'ORN-gizli-3571.pdf');
+
+    const t = tamam<Talep>(await istek(c.talep, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
+    const yol = `/satin-alma-talepleri/${t.id}`;
+    const sec = (cerez: string, govde: object) => istek(cerez, 'POST', `${yol}/cizim-sec`, govde);
+    // Seçici: talep eden yayındakini bulur, taslağı bulmaz; çizim okuma işlemi olmayan satın alma rolü 404 alır (yetki modeli değişmez).
+    const bulunan = tamam<CizimSeciciCevabi>(await istek(c.talep, 'GET', '/satin-alma-cizim-secici/cizimler?ara=ORN-CZ-3571')).bulunan;
+    assert.deepEqual(bulunan.map((x) => [x.belgeId, x.pdf]), [[b1.id, true]]);
+    assert.equal((await istek(c.sa, 'GET', '/satin-alma-cizim-secici/cizimler')).statusCode, 404);
+    assert.equal((await istek(c.operator, 'GET', '/satin-alma-cizim-secici/cizimler')).statusCode, 403, 'çizim yazamayan');
+    const klasorler = tamam<SeciciKlasorlerCevabi>(await istek(c.talep, 'GET', '/satin-alma-cizim-secici/klasorler')).klasorler;
+    assert.deepEqual(klasorler.filter((k) => k.ad.endsWith('3571')).map((k) => [k.ad, k.dar]), [['ORN-Ortak 3571', true]]);
+    assert.equal((await istek(c.talep, 'GET', `/satin-alma-cizim-secici/klasorler/${gizli.id}/dosyalar`)).statusCode, 404);
+    assert.deepEqual(tamam<SeciciDosyalariCevabi>(await istek(c.talep, 'GET', `/satin-alma-cizim-secici/klasorler/${kok.id}/dosyalar`)).dosyalar.map((d) => [d.ad, d.pdf]), [['ORN-detay-3571.pdf', true]]);
+
+    // Seçim: özet gönderilirse şema reddeder; taslak revizyon, görülmeyen klasör, sayfasız kişi 404.
+    const rev1 = b1.revizyonlar.find((r) => r.durum === 'yayinda')!.id;
+    assert.equal((await sec(c.talep, { kaynak: 'cizim-merkezi', belgeId: b1.id, revizyonId: rev1, ozet: 'a'.repeat(64) })).statusCode, 400);
+    assert.equal((await sec(c.talep, { kaynak: 'cizim-merkezi', belgeId: taslak.id, revizyonId: taslak.revizyonlar[0]!.id })).statusCode, 404);
+    assert.equal((await sec(c.talep, { kaynak: 'ortak-dosyalar', dosyaId: odGizli.id, surumSirasi: 1 })).statusCode, 404);
+    assert.equal((await sec(c.talep2, { kaynak: 'cizim-merkezi', belgeId: b1.id, revizyonId: rev1 })).statusCode, 403, 'başkasının talebi');
+    tamam<Liste>(await sec(c.talep, { kaynak: 'cizim-merkezi', belgeId: b1.id, revizyonId: rev1 }));
+    const l1 = tamam<Liste>(await sec(c.talep, { kaynak: 'ortak-dosyalar', dosyaId: od.id, surumSirasi: 1 }));
+    assert.deepEqual(l1.cizimler.map((x) => [x.ad, x.kaynak.tur, x.talepten, x.kaldirmaReddi]),
+      [['ORN-CZ-3571 Flans.pdf', 'cizim-merkezi', true, null], ['ORN-detay-3571.pdf', 'ortak-dosyalar', true, null]]);
+    const odSatiriOzet = (l: Liste) => l.cizimler.find((x) => x.kaynak.tur === 'ortak-dosyalar')!.ozet;
+    const odSatiri = (l: Liste) => l.cizimler.find((x) => x.kaynak.tur === 'ortak-dosyalar')!.kaynak;
+    assert.deepEqual(odSatiri(l1), { tur: 'ortak-dosyalar', klasorYolu: ['ORN-Ortak 3571'] });
+    assert.deepEqual(odSatiri(tamam<Liste>(await istek(c.sa, 'GET', `${yol}/cizimler`))), { tur: 'ortak-dosyalar', klasorYolu: null }, 'K-b');
+    // İlk tablodaki ataç: satın almanın açılış okumasında talebin çizim sayısı.
+    const acilis = tamam<AcilisCevabi>(await istek(c.sa, 'GET', '/satin-alma-acilis')).talepler;
+    assert.equal(acilis.find((x) => x.id === t.id)?.cizimSayisi, 2);
+
+    // Yeni revizyon yayınlanınca talebin çizimlerini gören herkes görür: satın alma rolü Çizim Merkezi'ni okumaz ama belge bu talebe
+    // bağlıdır (karar 3571 a); seçicide merkez yine kapalıdır.
+    const yb = tamam<Belge>(await istek(c.yonetici, 'POST', `/cizimler/${b1.id}/revizyon-ekle`, { ozet: (await belgeYukle(c.yonetici)).ozet, dosyaAdi: 'orn-b.pdf', surum: (tamam<Belge>(await istek(c.yonetici, 'GET', `/cizimler/${b1.id}`))).surum }));
+    const rev2 = yb.revizyonlar.find((r) => r.durum === 'taslak')!.id;
+    tamam(await istek(c.yonetici, 'POST', `/cizimler/${b1.id}/revizyonlar/${rev2}/yayinla`, { surum: yb.surum }));
+    const merkezSatiri = (l: Liste) => l.cizimler.find((x) => x.kaynak.tur === 'cizim-merkezi')!.kaynak as Extract<TalepCizimi['kaynak'], { tur: 'cizim-merkezi' }>;
+    assert.equal(merkezSatiri(tamam<Liste>(await istek(c.talep, 'GET', `${yol}/cizimler`))).yeniRevizyon?.revizyonId, rev2);
+    assert.equal(merkezSatiri(tamam<Liste>(await istek(c.sa, 'GET', `${yol}/cizimler`))).yeniRevizyon?.revizyonId, rev2);
+    assert.equal((await istek(c.sa, 'GET', '/satin-alma-cizim-secici/cizimler?ara=ORN-CZ-3571')).statusCode, 404, 'rol değişmedi');
+    assert.equal((await istek(c.sa, 'POST', `${yol}/cizim-sec`, { kaynak: 'cizim-merkezi', belgeId: b1.id, revizyonId: rev2 })).statusCode, 404, 'bağlı olmayan revizyonu seçemez');
+
+    // K-c: teklif isteğinden sonra talepten gelen çizim kaldırılmaz; güncelleme yenisini ekler, eskisini bırakır.
+    await teklifIste(t);
+    const ozetCm = l1.cizimler.find((x) => x.kaynak.tur === 'cizim-merkezi')!.ozet;
+    const kaldirma = await istek(c.yonetici, 'POST', `${yol}/cizimler/${ozetCm}/kaldir`);
+    assert.equal(kaldirma.statusCode, 422, kaldirma.body);
+    // Güncellemeyi Çizim Merkezi'ni okumayan satın alma yapar (karar 3571 a).
+    const g = tamam<Liste>(await istek(c.sa, 'POST', `${yol}/cizimler/${ozetCm}/guncelle`));
+    assert.deepEqual(g.cizimler.filter((x) => x.kaynak.tur === 'cizim-merkezi').map((x) => [(x.kaynak as { revizyonId: number }).revizyonId, x.talepten, x.kaldirmaReddi !== null]),
+      [[rev1, true, true], [rev2, false, false]]);
+    assert.equal(g.cizimler.every((x) => x.kaynak.tur !== 'cizim-merkezi' || x.kaynak.yeniRevizyon === null), true);
+    assert.equal((await istek(c.sa, 'POST', `${yol}/cizimler/${ozetCm}/guncelle`)).statusCode, 409, 'zaten güncel');
+    assert.equal((await istek(c.sa, 'POST', `${yol}/cizimler/${odSatiriOzet(g)}/guncelle`)).statusCode, 422, 'yalnız Çizim Merkezi çizimi');
+
+    // Teklif öncesi: satın alma talep edenin çizimini kaldırabilir; talep eden notu görür; kaynak satırı da kalkar (K3).
+    const t2 = tamam<Talep>(await istek(c.talep, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
+    const { ozet: o2 } = await belgeYukle(c.talep);
+    tamam(await istek(c.talep, 'POST', `/satin-alma-talepleri/${t2.id}/cizim-bagla`, { ozet: o2, dosyaAdi: 'ORN-yuklenen.pdf' }));
+    tamam(await istek(c.talep, 'POST', `/satin-alma-talepleri/${t2.id}/cizim-sec`, { kaynak: 'ortak-dosyalar', dosyaId: od.id, surumSirasi: 1 }));
+    const k2 = tamam<Liste>(await istek(c.sa, 'POST', `/satin-alma-talepleri/${t2.id}/cizimler/${l1.cizimler.find((x) => x.kaynak.tur === 'ortak-dosyalar')!.ozet}/kaldir`));
+    assert.deepEqual(k2.cizimler.map((x) => x.ad), ['ORN-yuklenen.pdf']);
+    const not = tamam<Liste>(await istek(c.talep, 'GET', `/satin-alma-talepleri/${t2.id}/cizimler`)).kaldirilanlar;
+    assert.deepEqual(not.map((x) => x.ad), ['ORN-detay-3571.pdf']);
+    assert.equal((await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM satin_alma_talep_cizim_kaynagi WHERE talep_id = $1', [t2.id]))?.n, 0);
+
+    // Birleşme (K1): bilgisayardan yüklenen çizimler de kaynak talep numarasıyla birleşik talebe geçer; ayrılınca düşer.
+    const t3 = tamam<Talep>(await istek(c.talep2, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
+    const { ozet: o3 } = await belgeYukle(c.talep2);
+    tamam(await istek(c.talep2, 'POST', `/satin-alma-talepleri/${t3.id}/cizim-bagla`, { ozet: o3, dosyaAdi: 'ORN-ikinci.pdf' }));
+    const m = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/birlestir', { id: randomUUID(), talepIdleri: [t2.id, t3.id] }));
+    const ml = tamam<Liste>(await istek(c.sa, 'GET', `/satin-alma-talepleri/${m.id}/cizimler`));
+    assert.deepEqual(ml.cizimler.map((x) => [x.ad, x.kaynakTalepNo, x.talepten]).sort(), [['ORN-ikinci.pdf', t3.no, true], ['ORN-yuklenen.pdf', t2.no, true]]);
+    tamam(await istek(c.sa, 'POST', `/satin-alma-talepleri/${m.id}/ayir`, { surum: m.surum, talepIdleri: [t3.id] }));
+    assert.deepEqual(tamam<Liste>(await istek(c.sa, 'GET', `/satin-alma-talepleri/${m.id}/cizimler`)).cizimler.map((x) => x.ad), ['ORN-yuklenen.pdf']);
+    assert.deepEqual(tamam<Liste>(await istek(c.talep2, 'GET', `/satin-alma-talepleri/${t3.id}/cizimler`)).cizimler.map((x) => x.ad), ['ORN-ikinci.pdf'], 'kaynakta kalır');
+  });
+
+  test('3571 K1: güncelleme talebi eski talebin çizimlerini (bilgisayardan yüklenen dahil) kopyasız alır; kaynak talep numarası yazılmaz', async () => {
+    const t = tamam<Talep>(await istek(c.talep, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
+    const { ozet } = await belgeYukle(c.talep);
+    tamam(await istek(c.talep, 'POST', `/satin-alma-talepleri/${t.id}/cizim-bagla`, { ozet, dosyaAdi: 'ORN-eski.pdf' }));
+    const g = tamam<Talebim>(await guncellemeAc(c.talep, await teklifIste(t)));
+    const l = tamam<TalepCizimleriCevabi>(await istek(c.talep, 'GET', `/satin-alma-talepleri/${g.id}/cizimler`));
+    assert.deepEqual(l.cizimler.map((x) => [x.ozet, x.ad, x.kaynak.tur, x.kaynakTalepNo, x.talepten, x.kaldirmaReddi]), [[ozet, 'ORN-eski.pdf', 'yuklendi', null, true, null]]);
+    assert.equal((await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM dosya WHERE ozet = $1', [ozet]))?.n, 1);
   });
 
   test('3442-2: çizimli taslak silinir, çizim bağı kalmaz', async () => {

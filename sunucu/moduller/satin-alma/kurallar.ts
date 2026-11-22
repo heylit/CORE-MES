@@ -123,6 +123,10 @@ export const ILETILER = {
   cizimGoremez: 'Bu talebin çizimini göremezsiniz.',
   cizimEklenemez: 'Çizim yalnız taslaktaki kendi talebinize eklenir; sonrasında satın alma ekler.',
   cizimYok: 'Dosya bu talebe bağlı değil.',
+  cizimTeklifteKaldirilamaz: 'Teklif isteğiyle tedarikçiye gönderildi; kaldırılamaz.',
+  cizimKaynakYok: 'Seçilen çizim ya da dosya bulunamadı ya da görme yetkiniz yok.',
+  cizimGuncel: 'Çizim Merkezi\'ndeki yayındaki revizyon zaten bağlı.',
+  cizimGuncellenmez: 'Yalnız Çizim Merkezi\'nden eklenen çizim güncellenir.',
   istekFormuYok: 'Teklif isteme formu kurulumda yok; göçleri uygulayın.',
   talebimDuzenlenmez: 'Talep teklif istendikten sonra düzenlenemez; teklif toplanırken güncelleme talebi açın, sonrasında değişikliği satın almaya iletin.',
   guncellemeAsamasi: 'Güncelleme talebi yalnız teklif toplanırken (teklif isteniyor ya da değerlendirmede) açılır; taslağı düzenleyin, sonrası için satın almaya iletin.',
@@ -1282,6 +1286,20 @@ export function cizimIzni(islemler: readonly string[], sahip: boolean, duzenleni
   if (istenen === 'oku' && (islemler.includes(ISLEM.oku) || islemler.includes(ISLEM.onayla))) return true;
   if (!sahip || !islemler.includes(ISLEM.talepAc)) return false;
   return istenen === 'oku' || duzenlenir;
+}
+// 3571: talepten gelen çizim, talep edenin (açan ya da adına açılan) eklediği ya da birleşen kaynak talepten taşınan çizimdir; geri
+// kalanı satın almanın ekledigidir.
+export const talepCizimiTaleptenMi = (ekleyenId: number, t: Pick<Talep, 'acanKisiId' | 'talepEdenKisiId'>, kaynakTalepVar: boolean): boolean =>
+  kaynakTalepVar || ekleyenId === t.acanKisiId || ekleyenId === t.talepEdenKisiId;
+// SAT-81 (3571 K-c): teklif isteği gönderildikten sonra talepten gelen çizim kaldırılamaz (tedarikçiye gitti); satın almanın eklediği
+// çizim her adımda kaldırılır. Güncelleme de bu durumda eskisini bırakır, yenisini ekler.
+export function talepCizimiKaldirmaReddi(t: Pick<Talep, 'durum' | 'teklifIstekleri'>, talepten: boolean): string | null {
+  return talepten && (t.durum !== 'taslak' || t.teklifIstekleri.length > 0) ? ILETILER.cizimTeklifteKaldirilamaz : null;
+}
+// Çizim Merkezi belgesinin adı indirilen dosyanın adı olur; uzantısı yoksa eklenir (bağ adı en çok 120 karakter).
+export function merkezCizimiAdi(ad: string): string {
+  const temiz = ad.trim();
+  return (/\.pdf$/i.test(temiz) ? temiz : `${temiz.slice(0, 116)}.pdf`).slice(-120);
 }
 export const CIZIM_OKUYAN_ISLEMLER = [ISLEM.oku, ISLEM.yaz, ISLEM.onayla, ISLEM.talepAc] as const;
 export const CIZIM_YAZAN_ISLEMLER = [ISLEM.yaz, ISLEM.talepAc] as const;
