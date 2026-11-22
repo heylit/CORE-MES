@@ -1,6 +1,6 @@
 import { cm1Coz, TUR_SIRASI } from '#paylasilan/etiket-kodu.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
-import type { KodSimgesi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
+import { KOD_KENAR_MODUL, type KodSimgesi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { kodMatrisi } from './kod-matrisi.ts';
 
 // Özet kodun (CM1) yazılışı: biçim ve alan sırası paylasilan/etiket-kodu.ts'in okuduğu biçimdir (KURGU 3.1, 3.4). Saf kural.
@@ -13,6 +13,12 @@ export function kodUstSiniri(genislik: number, yukseklik: number): number {
   if (yukseklik <= 75) return 48;
   return 52;
 }
+
+// Kart 3562 (şerit): kod şeridin ortasında, kodun en büyük hali (üst sınırdaki matris, 0,375 mm modül 50x25'te, 0,5 mm öbür boylarda) şeride sığar.
+// Şerit eni boya göre sabittir; sığmayan kod küçültülmez, alanı kırpılır (cm1Sigdir). Daha küçük matris aynı kutuda biraz büyük modülle basılır.
+export const seritEni = (genislik: number, yukseklik: number): number => (genislik < 75 ? 21 : yukseklik >= 150 ? 36 : 30);
+export const seritModulu = (genislik: number): number => (genislik < 75 ? 0.375 : 0.5);
+export const seritKodKenari = (genislik: number, yukseklik: number): number => (kodUstSiniri(genislik, yukseklik) + 2 * KOD_KENAR_MODUL) * seritModulu(genislik);
 
 // El okuyucu klavyeyle yazar ve kod büyük harf okunur (kod-sozlugu.ts): Türkçe harf ASCII'ye, büyük harfe çevrilir; "/" ve ":" ayraçtır.
 export function kodMetni(deger: string): string {

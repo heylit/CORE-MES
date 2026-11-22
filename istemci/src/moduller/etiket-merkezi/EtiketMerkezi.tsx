@@ -28,6 +28,9 @@ import { eslesmeKaldirilabilir, eslesmeyiKaldir, eslesmisYazici, usbDestekli, us
 import './etiket-merkezi.css';
 
 // Basılı etiketin sağ üst karosundaki piktogram; tür kartında ilk bakışta tanınır.
+// Raf etiketinin 'serit' tabanı büyük kodlu (72 mm) düzendir; adı 'Şerit' kalırsa 'Kod şeridi' ile karışır.
+const yerlesimAdi = (y: keyof typeof YERLESIM_ADLARI, tur: string) => (tur === 'raf' && y === 'serit' ? 'Büyük kod (72 mm)' : YERLESIM_ADLARI[y]);
+
 export const KAYIT_SIMGESI: Record<KayitTuru, PiktogramAdi> = {
   konum: 'konum', raf: 'raf', lot: 'lot', istasyon: 'tezgah', 'refakat-partisi': 'refakat', malzeme: 'malzeme', 'mal-kabul': 'lot',
   'kalite-durum': 'kalite', 'hatali-parca': 'hatali', 'sevk-koli': 'koli',
@@ -367,7 +370,7 @@ function BaskiPaneli({ sablonlar, secili, sec, secenekler, basabilir, kayit, kay
             <button key={s.anahtar} type="button" role="radio" aria-checked={s.anahtar === sablon.taban} className="tc-etk-olcu" onClick={() => {
               const ayni = sablonlar.find((x) => x.taban === s.anahtar && x.yerlesim === sablon.yerlesim);
               const hedef = ayni ?? sablonlar.find((x) => x.taban === s.anahtar && x.varsayilan) ?? s;
-              setYerlesimNotu(ayni || sablon.yerlesim === 'serit' ? null : `${YERLESIM_ADLARI[sablon.yerlesim]} ${olcuYazisi(s)} etikette yok; ${YERLESIM_ADLARI[hedef.yerlesim]} seçildi.`);
+              setYerlesimNotu(ayni || sablon.yerlesim === 'serit' ? null : `${yerlesimAdi(sablon.yerlesim, sablon.tur)} ${olcuYazisi(s)} etikette yok; ${YERLESIM_ADLARI[hedef.yerlesim]} seçildi.`);
               sec(hedef.anahtar);
             }} title={s.ad}>
               {olcuYazisi(s)}
@@ -389,7 +392,7 @@ function BaskiPaneli({ sablonlar, secili, sec, secenekler, basabilir, kayit, kay
             return (
               <label key={y} className={`tc-etk-yerlesim-kart${s?.anahtar === sablon.anahtar ? ' tc-etk-yerlesim-secili' : ''}`}>
                 <input type="radio" name="yerlesim" checked={s?.anahtar === sablon.anahtar} disabled={s === undefined} onChange={() => { if (s) { setYerlesimNotu(null); sec(s.anahtar); } }} />
-                <span className="tc-etk-yerlesim-ad">{YERLESIM_ADLARI[y]} {s?.varsayilan && <Rozet ton="bilgi">Varsayılan</Rozet>} {durum}</span>
+                <span className="tc-etk-yerlesim-ad">{yerlesimAdi(y, sablon.tur)} {s?.varsayilan && <Rozet ton="bilgi">Varsayılan</Rozet>} {durum}</span>
                 {s?.uyari && <span className="tc-etk-yerlesim-not">{s.uyari}</span>}
                 {s === undefined && <span className="tc-etk-yerlesim-not">{olcuYazisi(sablon)} etikette sığmaz; başka ölçüde sunulur.</span>}
               </label>
@@ -470,7 +473,7 @@ function BaskiPaneli({ sablonlar, secili, sec, secenekler, basabilir, kayit, kay
       </details>
       {basabilir && yol && (
         <BaskiDugmesi sablon={sablon} yol={yol} govde={yol.tur === 'tarayici' ? null : govde} etiketSayisi={toplamEtiket} kayit={secim} olcu={olcu} adet={basilacakAdet}
-          ozet={<>{olcuYazisi(c.data?.sablon ?? sablon)} · {YERLESIM_ADLARI[sablon.yerlesim]}{sablon.uyari ? <> <Rozet ton="uyari">Satır düşer</Rozet></> : null}</>} />
+          ozet={<>{olcuYazisi(c.data?.sablon ?? sablon)} · {yerlesimAdi(sablon.yerlesim, sablon.tur)}{sablon.uyari ? <> <Rozet ton="uyari">Satır düşer</Rozet></> : null}</>} />
       )}
     </div>
   );

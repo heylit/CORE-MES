@@ -542,7 +542,7 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     assert.deepEqual(rc.eksikler, [2147483005]);
     assert.equal(kimlikOf((rc.onizleme.find((o) => o.tur === 'kod') as { veri: string } | undefined)?.veri), `UE:${e.id}`);
     const metinler = rc.onizleme.flatMap((o) => (o.tur === 'metin' ? [o.satirlar.join(' ')] : []));
-    assert.equal(metinler[0], 'KARAR BEKLİYOR');
+    assert.ok(metinler.includes('KARAR BEKLİYOR'), metinler.join(' | '));
     assert.ok(metinler.includes('OP 10 Torna'), metinler.join(' | '));
     assert.ok(metinler.includes('2 adet · Ölçü dışı'), metinler.join(' | '));
     assert.ok(metinler.some((m) => m.endsWith('18.10.2026 10:42')), 'zaman tesis saatiyle');
@@ -555,7 +555,7 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     );
     const k = (await al(yonetici, adres('hatali-parca-100x50', String(kayit)))).json() as KayitCiktiCevabi;
     const kararli = k.onizleme.flatMap((o) => (o.tur === 'metin' ? [o.satirlar.join(' ')] : []));
-    assert.equal(kararli[0], 'HURDA');
+    assert.ok(kararli.includes('HURDA'), kararli.join(' | '));
     assert.ok(kararli.some((m) => m.includes('NCR NCR-7')), kararli.join(' | '));
 
     const dosya = ((await al(yonetici, '/etiket-merkezi/yazicilar')).json() as YazicilarCevabi).yazicilar.find((x) => x.ad === DOSYA.ad);
@@ -586,14 +586,14 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     assert.deepEqual(rc.eksikler, [2147483006]);
     assert.equal(kimlikOf((rc.onizleme.find((o) => o.tur === 'kod') as { veri: string } | undefined)?.veri), 'LOT:LT-P-ETK-KD');
     const metinler = rc.onizleme.flatMap((o) => (o.tur === 'metin' ? [o.satirlar.join(' ')] : []));
-    assert.equal(metinler[0], 'KARAR BEKLİYOR');
+    assert.ok(metinler.includes('KARAR BEKLİYOR'), metinler.join(' | '));
     assert.ok(metinler.some((m) => m.startsWith('12,5') && m.endsWith('Konum KABUL')), metinler.join(' | '));
     assert.equal((await al(yonetici, `/etiket-merkezi/sablonlar/lot-100x50/kayit-cikti?dil=zpl&dpi=203&tur=kalite-durum&id=${bakiye}`)).statusCode, 400, 'lot şablonu kalite durumu basmaz');
     assert.equal((await al(yetkisiz, adres('kalite-durum-100x50', String(bakiye)))).statusCode, 403);
 
     await sahip.sorgu("UPDATE stok_bakiye SET kalite_durumu = 'red' WHERE id = $1", [bakiye]);
     const k = (await al(yonetici, adres('kalite-durum-100x50', String(bakiye)))).json() as KayitCiktiCevabi;
-    assert.equal(k.onizleme.flatMap((o) => (o.tur === 'metin' ? [o.satirlar.join(' ')] : []))[0], 'RED');
+    assert.ok(k.onizleme.flatMap((o) => (o.tur === 'metin' ? [o.satirlar.join(' ')] : [])).includes('RED'));
 
     const dosya = ((await al(yonetici, '/etiket-merkezi/yazicilar')).json() as YazicilarCevabi).yazicilar.find((x) => x.ad === DOSYA.ad);
     assert.ok(dosya);

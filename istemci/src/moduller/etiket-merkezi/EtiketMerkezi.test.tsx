@@ -1298,8 +1298,8 @@ describe('Standart dışı ölçü (3011)', () => {
 
 describe('Yerleşim seçimi ve varsayılan (3544)', () => {
   const OKUR: Islem[] = ['sayfa.etiket-merkezi', 'etiket-merkezi.oku', 'etiket-merkezi.bas'];
-  const ogeSablon = (anahtar: string, ad: string, g: number, y: number, yerlesim: 'serit' | 'tam' | 'buyuk', taban: string, ek: { uyari?: string; varsayilan?: boolean } = {}) =>
-    ({ anahtar, ad, tur: 'konum' as const, genislik: g, yukseklik: y, ogeler: [], tasarim: { genislik: g, yukseklik: y }, degisiklik: null, yerlesim, taban, varsayilan: ek.varsayilan ?? false, ...(ek.uyari ? { uyari: ek.uyari } : {}) });
+  const ogeSablon = (anahtar: string, ad: string, g: number, y: number, yerlesim: 'serit' | 'tam' | 'buyuk' | 'kod-seridi', taban: string, ek: { uyari?: string; varsayilan?: boolean; tur?: 'raf' } = {}) =>
+    ({ anahtar, ad, tur: ek.tur ?? ('konum' as const), genislik: g, yukseklik: y, ogeler: [], tasarim: { genislik: g, yukseklik: y }, degisiklik: null, yerlesim, taban, varsayilan: ek.varsayilan ?? false, ...(ek.uyari ? { uyari: ek.uyari } : {}) });
   const LISTE: SablonlarCevabi = {
     ...SABLONLAR,
     sablonlar: [
@@ -1321,6 +1321,21 @@ describe('Yerleşim seçimi ve varsayılan (3544)', () => {
     expect(tam.disabled).toBe(true);
     expect(within(grup).getByText('Sunulmaz')).toBeTruthy();
     expect(within(grup).getByText(/sığmaz; başka ölçüde sunulur/)).toBeTruthy();
+  });
+
+  it('Raf 100x100: büyük kodlu taban "Büyük kod (72 mm)" adıyla gelir, "Şerit" adı çıkmaz; kod şeridi ayrı seçenektir', async () => {
+    sunucuKur({ islemler: OKUR, sablonlar: {
+      ...SABLONLAR,
+      sablonlar: [
+        ogeSablon('raf-100x100', 'Raf 100x100', 100, 100, 'serit', 'raf-100x100', { varsayilan: true, tur: 'raf' }),
+        ogeSablon('raf-100x100-kod-seridi', 'Raf 100x100 · Kod şeridi', 100, 100, 'kod-seridi', 'raf-100x100', { tur: 'raf' }),
+      ],
+    } });
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=raf&id=11');
+    const grup = await screen.findByRole('group', { name: 'Yerleşim' });
+    expect((within(grup).getByRole('radio', { name: /^Büyük kod \(72 mm\)/ }) as HTMLInputElement).checked).toBe(true);
+    expect(within(grup).getByRole('radio', { name: /^Kod şeridi/ })).toBeTruthy();
+    expect(within(grup).queryByRole('radio', { name: /^Şerit/ })).toBeNull();
   });
 
   it('Z2: kodda alan düşerse kırmızı bant veri kaybını adıyla söyler; düşmezse çıkmaz', async () => {
