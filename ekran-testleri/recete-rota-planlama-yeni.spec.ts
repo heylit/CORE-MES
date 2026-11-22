@@ -6,7 +6,7 @@ test.use({ hesap: 'ornek.yonetici' });
 
 // Şeridin son beş maddesi görünüm değil, ayrı sayfalardır: salt okunur raporlar (782, 1478, 2151, 1560) ve motor ayarları (811), menünün ikinci grubu.
 const GORUNUMLER = ['Kokpit', 'Motor', 'Veri', 'Siparişler', 'Maliyetler', 'Genel gider', 'Kapasite',
-  'Malzeme satın alma planı', 'Terminler', 'Termin ve kâr', 'Sevkiyat', 'Veri sağlığı', 'Plan sağlığı', 'Planlama analizi', 'Malzeme ihtiyacı',
+  'Malzeme satın alma planı', 'Terminler', 'Termin ve kâr', 'Sevk takvimi', 'Veri sağlığı', 'Plan sağlığı', 'Planlama analizi', 'Malzeme ihtiyacı',
   'Motor ayarları'];
 
 test.describe('iskelet', () => {
@@ -15,7 +15,7 @@ test.describe('iskelet', () => {
     await expect(page).toHaveURL(/\/plan$/);
     const serit = page.getByRole('navigation', { name: 'Planlama menüsü' });
     await expect(serit.getByRole('link')).toHaveText(GORUNUMLER.map((g) => new RegExp(`^${g}`)));
-    await serit.getByRole('link', { name: /^Sevkiyat/ }).click();
+    await serit.getByRole('link', { name: /^Sevk takvimi/ }).click();
     await expect(page).toHaveURL(/\/plan\/sevkiyat$/);
     await expect(page.locator('[data-gorunum="sevkiyat"]')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);

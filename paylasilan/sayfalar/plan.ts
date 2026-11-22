@@ -25,7 +25,7 @@ export const PLAN_IKINCI_MENU = {
       { anahtar: 'malzplan', baslik: 'Malzeme satın alma planı', yol: '/plan/malzplan', simge: 'box', islem: 'plan.planlama-oku' },
       { anahtar: 'terminler', baslik: 'Terminler', yol: '/plan/terminler', simge: 'flag', islem: 'plan.planlama-oku' },
       { anahtar: 'denge', baslik: 'Termin ve kâr', yol: '/plan/denge', simge: 'gauge', islem: 'finans.maliyet-oku' },
-      { anahtar: 'sevkiyat', baslik: 'Sevkiyat', yol: '/plan/sevkiyat', simge: 'truck', islem: 'plan.planlama-oku' },
+      { anahtar: 'sevkiyat', baslik: 'Sevk takvimi', yol: '/plan/sevkiyat', simge: 'truck', islem: 'plan.planlama-oku' },
     ] },
     // Planlama sayfasının görünümü değil, ayrı sayfalar: salt okunur raporlar (782, 1560) ve motor ayarları (811); ilk grup görünüm kaydıdır
     // (planlama/gorunumler.ts).
