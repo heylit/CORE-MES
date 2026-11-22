@@ -458,6 +458,15 @@ export function Tahta(o: TahtaOzellikleri) {
     if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
   }, [bosYerAnahtari, olcek]);
 
+  // Hook erken dönüşten (Yıl ölçeği) önce durur; sonra olursa ölçek değişince sayfa çöker.
+  // Kümeye basınca küme düğmesi kalkar; odak aralığın ilk işine geçer (klavye kullanıcısı sayfa başına düşmesin).
+  const kumedenOdak = useRef<string | null>(null);
+  useEffect(() => {
+    const id = kumedenOdak.current;
+    if (!id) return;
+    const el = kap.current?.querySelector<HTMLButtonElement>(`[data-is="${tirnakIci(id)}"]`);
+    if (el) { kumedenOdak.current = null; el.focus({ preventScroll: true }); }
+  });
   // Tezgâhın kapalı saatleri (açık pencerelerin tümleyeni) taralı çizilir; penceresi bilinmeyen tezgâh ve fason satırı çizilmez.
   const kapali = useMemo(() => {
     const k = new Map<string, [number, number][]>();
@@ -651,14 +660,6 @@ export function Tahta(o: TahtaOzellikleri) {
       </Fragment>
     );
   };
-  // Kümeye basınca küme düğmesi kalkar; odak aralığın ilk işine geçer (klavye kullanıcısı sayfa başına düşmesin).
-  const kumedenOdak = useRef<string | null>(null);
-  useEffect(() => {
-    const id = kumedenOdak.current;
-    if (!id) return;
-    const el = kap.current?.querySelector<HTMLButtonElement>(`[data-is="${tirnakIci(id)}"]`);
-    if (el) { kumedenOdak.current = null; el.focus({ preventScroll: true }); }
-  });
   // T3: "N iş" kümesi. Rengi en kötü emir durumu; seçili ya da yanan iş içindeyse öyle görünür. Basınca o aralık Gün ölçeğinde açılır (taşıma orada).
   const DURUM_AGIRLIGI: Readonly<Record<string, number>> = { gec: 3, risk: 2, plansiz: 1, iyi: 0 };
   const kumeDugmesi = (id: string) => {

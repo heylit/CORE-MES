@@ -643,6 +643,17 @@ describe('Kokpit', () => {
     expect(screen.queryByRole('menu')).toBeNull();
   });
 
+  // Yıl ölçeği Tahta'dan erken döner; sonra hook kalırsa ölçek değişince sayfa çöker (React #300).
+  it('Ay, Yıl ve 3 gün ölçekleri arasında gidip gelmek sayfayı çökertmez', () => {
+    ac();
+    const olcek = (ad: string) => within(screen.getByRole('group', { name: 'Ölçek' })).getByRole('button', { name: ad });
+    fireEvent.click(olcek('Ay'));
+    fireEvent.click(olcek('Yıl'));
+    expect(document.querySelectorAll('.tc-pyq-hucre').length).toBeGreaterThan(0);
+    fireEvent.click(olcek('3 gün'));
+    expect(document.querySelectorAll('.tc-pyq-is').length).toBeGreaterThan(0);
+  });
+
   // Gantt dilim 2 (T4): Sıkı satırlar Araçlar'dan açılır, kapanır ve bu tarayıcıda hatırlanır; sayfa yeniden açılınca Sıkı kalır.
   it('Sıkı satırlar seçilir, kök satır boyunu taşır ve tarayıcıda saklanır', () => {
     localStorage.removeItem('coremes.kokpit-satir-boyu');
