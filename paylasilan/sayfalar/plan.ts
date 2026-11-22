@@ -27,14 +27,14 @@ export const PLAN_IKINCI_MENU = {
       { anahtar: 'denge', baslik: 'Termin ve kâr', yol: '/plan/denge', simge: 'gauge', islem: 'finans.maliyet-oku' },
       { anahtar: 'sevkiyat', baslik: 'Sevk takvimi', yol: '/plan/sevkiyat', simge: 'truck', islem: 'plan.planlama-oku' },
     ] },
-    // Planlama sayfasının görünümü değil, ayrı sayfalar: salt okunur raporlar (782, 1560) ve motor ayarları (811); ilk grup görünüm kaydıdır
+    // Planlama sayfasının görünümü değil, ayrı sayfalar: salt okunur raporlar (782, 1560) ve Planlama ayarları (3561; motor ayarları 811 onun bölümüdür); ilk grup görünüm kaydıdır
     // (planlama/gorunumler.ts).
     { baslik: 'Veri', maddeler: [
       { anahtar: 'veri-sagligi', baslik: 'Veri sağlığı', yol: '/plan/veri-sagligi', simge: 'alert', islem: 'plan.planlama-oku' },
       { anahtar: 'plan-sagligi', baslik: 'Plan sağlığı', yol: '/plan/plan-sagligi', simge: 'gauge', islem: 'plan.planlama-oku' },
       { anahtar: 'analiz', baslik: 'Planlama analizi', yol: '/plan/analiz', simge: 'chart', islem: 'plan.planlama-oku' },
       { anahtar: 'mrp', baslik: 'Malzeme ihtiyacı', yol: '/plan/mrp', simge: 'box', islem: 'plan.planlama-oku' },
-      { anahtar: 'motor-ayarlari', baslik: 'Motor ayarları', yol: '/plan/motor-ayarlari', simge: 'gear', islem: 'plan.planlama-oku' },
+      { anahtar: 'ayarlar', baslik: 'Planlama ayarları', yol: '/plan/ayarlar', simge: 'gear', islem: 'plan.planlama-oku' },
     ] },
   ],
 } as const satisfies IkinciMenuTanimi;

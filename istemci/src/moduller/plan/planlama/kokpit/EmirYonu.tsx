@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Rozet, Simge } from '../../../../ortak/arayuz/index.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
-import { emirYonu, planYonu, type EmirYonu as Yon } from './ayarlar.ts';
+import { emirYonu, planYonu, type EmirYonu as Yon } from '../ayarlar/alanlar.ts';
 import { EtkiBolumu, useEtki } from './etki.tsx';
 import type { TaslakYazici } from './taslak.ts';
 

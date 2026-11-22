@@ -4,7 +4,7 @@ import { Dugme } from '../../../../ortak/arayuz/index.ts';
 import { bekleyenListesi } from '../kayit.ts';
 import { degerlendirmeHatasi } from '../siparis/degerlendirme.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
-import { etkiSatirlari, ozetOku, type PlanOzeti } from './ayarlar.ts';
+import { etkiSatirlari, ozetOku, type PlanOzeti } from '../ayarlar/alanlar.ts';
 import type { TaslakYazici } from './taslak.ts';
 
 // Ayar ya da emrin yönü gibi planı yeniden dizen değişiklik önce etkisiyle gösterilir (3282 1b, 1c, 1d-2b): değişiklik kişinin taslağına

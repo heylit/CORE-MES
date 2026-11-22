@@ -20,6 +20,12 @@ export function ayarDegerleriniOku(db: Db): Promise<(SaklananDeger & { anahtar: 
   return db.sorgu<SaklananDeger & { anahtar: string }>('SELECT anahtar, deger FROM ayar');
 }
 
+// Seçilen ayarların son değiştireni ve zamanı (Planlama ayarları sayfasının kontrol tablosu); hiç yazılmamış ayarın satırı yoktur.
+export function ayarGuncellemeleriniOku(db: Db, anahtarlar: readonly string[]): Promise<{ anahtar: string; kisiId: number; zaman: string }[]> {
+  return db.sorgu<{ anahtar: string; kisiId: number; zaman: string }>(
+    `SELECT anahtar, guncelleyen_kisi_id AS "kisiId", ${zamanMetni('guncelleme')} AS zaman FROM ayar WHERE anahtar = ANY($1::text[])`, [anahtarlar]);
+}
+
 export async function ayarDegeriniYaz(db: Db, anahtar: string, deger: unknown, kisiId: number): Promise<void> {
   await db.sorgu(
     `INSERT INTO ayar (anahtar, deger, guncelleyen_kisi_id) VALUES ($1, $2::jsonb, $3)

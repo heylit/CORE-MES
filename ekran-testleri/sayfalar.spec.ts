@@ -73,7 +73,7 @@ const SAYFALAR: Sayfa[] = [
   ...ISTASYONLAR_BOLUMLERI.map((yol): Sayfa => ({ modul: 'istasyonlar', yol, hesap: 'ornek.planlama', baslik: 'İstasyonlar' })),
   ...VARDIYA_BOLUMLERI.map(([yol, baslik]): Sayfa => ({ modul: 'vardiya', yol, hesap: 'ornek.planlama', baslik })),
   ...PLAN_VERI_SAYFALARI.flatMap(([yol, baslik]): Sayfa[] => (['ornek.yonetici', 'ornek.planlama'] as const).map((hesap) => ({ modul: 'plan', yol, hesap, baslik }))),
-  { modul: 'plan', yol: '/plan/motor-ayarlari', hesap: 'ornek.yonetici', baslik: 'Motor ayarları' },
+  { modul: 'plan', yol: '/plan/ayarlar', hesap: 'ornek.yonetici', baslik: 'Planlama ayarları' },
 ];
 
 for (const s of SAYFALAR) {

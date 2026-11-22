@@ -61,6 +61,8 @@ const BEKLENEN: BeklenenYetkiler = {
   'POST /plan/bedel-ayari': 'plan.bedel-ayari',
   'GET /plan/motor-ayarlari': { biri: ['plan.oku', 'plan.yaz', 'plan.planlama-oku', 'plan.motor-ayari'] } as const,
   'POST /plan/motor-ayarlari': 'plan.motor-ayari',
+  'GET /plan/sistem-ayarlari': 'plan.planlama-oku',
+  'POST /plan/sistem-ayarlari/:anahtar/degistir': { biri: ['plan.sistem-ayari', 'ayarlar.yaz'] } as const,
   'POST /plan/senaryolar/:id/motor-ayari-guncelle': 'plan.yaz',
   'POST /plan/senaryolar/:id/motor-kurali': 'plan.yaz',
   'GET /plan/siparisler/:id/carpan': PLAN_BEDELI_OKUR,

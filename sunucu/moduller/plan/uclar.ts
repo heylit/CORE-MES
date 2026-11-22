@@ -3,7 +3,7 @@ import { islemVarMi } from '#cekirdek/yetki.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
   ayarGovdesi, bedelAyariCevabi, canliyaAlmaGecmisiCevabi, ekMesaiGovdesi, bedelAyariTaslakGovdesi, geriGonderGovdesi, onayaGonderGovdesi, onaydanCekGovdesi, canliYerlesimCevabi, canliYerlesimSorgusu, canliyaAlCevabi, canliyaAlGovdesi, musteriSecenekleriCevabi, musteriSecenekleriSorgusu, degisiklikParametresi, hizliGovdesi, isEmriParametresi, kuyrukGovdesi, motorUyarilariCevabi, motorYerlesimiCevabi, kuyrukYazCevabi, kuyrukYazGovdesi, onizleSorgusu, onizlemeCevabi, projePlaniCevabi, projePlaniParametresi,
-  motorAyariGovdesi, motorAyarlariCevabi, motorKuraliGovdesi, planCevabi, planSorgusu, planSurumCevabi,
+  motorAyariGovdesi, motorAyarlariCevabi, motorKuraliGovdesi, planCevabi, planSistemAyariGovdesi, planSistemAyariParametresi, planSistemAyariSatiri, planSistemAyarlariCevabi, planSorgusu, planSurumCevabi,
   senaryoBilgiGovdesi, senaryoGovdesi, senaryoParametresi, senaryoSurumGovdesi, senaryolarCevabi, siparisCarpaniCevabi, siparisParametresi,
   siralaGovdesi, taslakGovdesi, grupSaatMaliyetleriCevabi, mesaiMaliyetiCevabi, mesaiMaliyetiSorgusu, mesaiSaatDegerleriCevabi, mesaiSaatDegerleriSorgusu, mesaiGrupSirasiCevabi, mesaiGrupSirasiSorgusu, tasiGovdesi, PLAN_ONAY_KOMUTLARI, mrpIhtiyaciCevabi, planSagligiCevabi, veriSagligiCevabi,
   yerlestirGovdesi, planlanabilirlikCevabi, rotaPlanlanabilirlikCevabi,
@@ -31,6 +31,7 @@ import { taslagim, taslagiUygula, taslakDegerlendirmesi, taslakDiz, taslakGeriAl
 import { grupSaatMaliyetleri } from './grup-saat-maliyeti.ts';
 import { mesaiGrupSirasi, mesaiMaliyeti, mesaiSaatDegerleri } from './mesai-maliyeti.ts';
 import { motorAyarlari, motorAyariYaz } from './motor-ayari.ts';
+import { sistemAyariniDegistir, sistemAyarlari } from './sistem-ayari.ts';
 import { emrinMrpIhtiyaci, mrpIhtiyaci } from './mrp.ts';
 import * as planlama from './planlama-servis.ts';
 import { takimKalanlari } from './girdi/ikincil.ts';
@@ -148,6 +149,12 @@ export const uclar = [
     cevap: motorAyarlariCevabi, isle: ({ db, sorgu }) => motorAyarlari(db, sorgu.taslak) }),
   uc({ yontem: 'POST', yol: '/plan/motor-ayarlari', yetki: 'plan.motor-ayari', tekrarKorumali: true, govde: motorAyariGovdesi, cevap: motorAyarlariCevabi,
     isle: ({ db, kullanici, govde }) => motorAyariYaz(db, kullanici, govde) }),
+  // Planlama ayarları sayfasının sistem bölümü (3561; 3557 c, 3560): yalnız plan. ayarları. Okuma sayfayı görene açıktır; ufuk ve dilim
+  // plan.sistem-ayari, öteki üç ayar ayarlar.yaz ister (anahtar başına kapıyı işlev denetler). Değiştirme ayarlar modülünün sürüm korumasıyla yazar.
+  uc({ yontem: 'GET', yol: '/plan/sistem-ayarlari', yetki: PLANLAMA_OKUR, cevap: planSistemAyarlariCevabi, isle: ({ db }) => sistemAyarlari(db) }),
+  uc({ yontem: 'POST', yol: '/plan/sistem-ayarlari/:anahtar/degistir', yetki: { biri: ['plan.sistem-ayari', 'ayarlar.yaz'] }, parametre: planSistemAyariParametresi,
+    govde: planSistemAyariGovdesi, cevap: planSistemAyariSatiri,
+    isle: ({ db, kullanici, parametre, govde }) => sistemAyariniDegistir(db, kullanici, parametre.anahtar, govde.deger, govde.beklenen) }),
   uc({ yontem: 'POST', yol: '/plan/senaryolar/:id/motor-ayari-guncelle', yetki: 'plan.yaz', tekrarKorumali: true, parametre: senaryoParametresi,
     govde: senaryoSurumGovdesi, cevap: planCevabi, isle: ({ db, kullanici, parametre, govde }) => servis.motorAyariGuncelle(db, kullanici, parametre.id, govde.surum) }),
   // 830 a: taslağa özel kural; taslağın sahibi yazar (motor-ayari-guncelle gibi plan.yaz).

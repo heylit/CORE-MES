@@ -8,7 +8,7 @@ import { calismaOku } from '../durum.ts';
 import { bekleyenListesi } from '../kayit.ts';
 import { degerlendirmeBekle } from '../siparis/degerlendirme.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
-import { AYAR_ALANLARI, PANEL_KISITLARI, alanDegeri, ayarTaslagi, type AyarTaslagi } from './ayarlar.ts';
+import { AYAR_ALANLARI, PANEL_KISITLARI, alanDegeri, ayarTaslagi, type AyarTaslagi } from '../ayarlar/alanlar.ts';
 
 // Kişinin taslağı (3282 1d-2b). Kokpit'te planlayanın kararları (taşı, plana al, ayar, emrin yönü) sunucudaki taslağa komut olarak yazılır;
 // ortak çalışma "Plana yaz"a kadar değişmez, başkasının yazması taslağı bozmaz. Komuttan sonra plan taslağın görünümünde yeniden dizilir

@@ -11,7 +11,10 @@ import type { PlanlamaYetkisi } from './yetki.ts';
 export const KOK = '/plan';
 
 const PLANLAMA_GRUBU = ONERILEN_IKINCI_MENU.gruplar[0].maddeler;
-type MenuGorunumu = (typeof PLANLAMA_GRUBU)[number]['anahtar'];
+// Planlama ayarları (3561) Veri grubunda durur ama planın çalışmasını ve taslağını kullandığı için bu iskeletin görünümüdür.
+const AYARLAR_MADDESI = ONERILEN_IKINCI_MENU.gruplar[1].maddeler.find((m) => m.anahtar === 'ayarlar');
+if (AYARLAR_MADDESI === undefined) throw new Error('Planlama ikinci menüsünde Planlama ayarları maddesi yok (paylasilan/sayfalar/plan.ts).');
+type MenuGorunumu = (typeof PLANLAMA_GRUBU)[number]['anahtar'] | 'ayarlar';
 // Kapasite sayfasının bölümleri (3038): menüde tek "Kapasite" maddesi, bölüm adresin sorgusundadır (`kapasite?bolum=mesaiplan`). Bölüm
 // anahtarları eski sayfaların anahtarıdır: eski adresler (`/plan/mesaiplan`) ve `git('mesaiplan')` aynı bölümü açar.
 export const KAPASITE_BOLUMLERI = [['ufuk', 'Yük haritası', 'gauge'], ['mesaiplan', 'Ek mesai', 'clock'], ['fasonplan', 'Fason', 'truck'], ['yillik', 'Yıllık plan', 'chart']] as const;
@@ -91,7 +94,7 @@ export interface GorunumKaydi {
   anahtar: MenuGorunumu;
   baslik: string;
   simge: SimgeAdi;
-  parca: 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | 'P6' | 'P7';
+  parca: 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | 'P6' | 'P7' | 'P8';
   bilesen: LazyExoticComponent<ComponentType<PlanlamaEkranOzellikleri>>;
 }
 
@@ -115,11 +118,13 @@ const BILESENLER: Record<MenuGorunumu, Pick<GorunumKaydi, 'parca' | 'bilesen'>> 
   kapasite: { parca: 'P5', bilesen: parca(() => import('./ufuk/index.tsx'), 'Kapasite') },
   malzplan: { parca: 'P4', bilesen: parca(() => import('./malzeme/index.tsx'), 'MalzemePlani') },
   sevkiyat: { parca: 'P6', bilesen: parca(() => import('./sevkiyat/index.tsx'), 'Sevkiyat') },
+  ayarlar: { parca: 'P8', bilesen: parca(() => import('./ayarlar/Sayfa.tsx'), 'PlanlamaAyarlari') },
 };
 
-export const GORUNUM_KAYITLARI: readonly GorunumKaydi[] = PLANLAMA_GRUBU.map((m) => ({
-  anahtar: m.anahtar, baslik: m.baslik, simge: m.simge, ...BILESENLER[m.anahtar],
-}));
+export const GORUNUM_KAYITLARI: readonly GorunumKaydi[] = [
+  ...PLANLAMA_GRUBU.map((m) => ({ anahtar: m.anahtar, baslik: m.baslik, simge: m.simge, ...BILESENLER[m.anahtar] })),
+  { anahtar: 'ayarlar', baslik: AYARLAR_MADDESI.baslik, simge: AYARLAR_MADDESI.simge, ...BILESENLER.ayarlar },
+];
 
 export function gorunumOku(parca: string | undefined): PlanlamaGorunumu | null {
   if (kapasiteBolumuMu(parca)) return parca;

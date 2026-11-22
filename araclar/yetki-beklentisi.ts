@@ -252,7 +252,7 @@ export const ROL_MATRISI = {
       'etiket-merkezi.oku', 'geometri.oku', 'idari-isler.arac-talebi-ac', 'idari-isler.talep-ac', 'ik.bordro-gordum', 'ik.devam-onay',
       'ik.izin-onay', 'ik.izin-talep', 'ik.pozisyon-onay', 'kisiler.oku', 'malzemeler.tanim-yaz', 'malzemeler.yaz', 'mesaj.oku',
       'mesaj.yaz', 'musteri-tedarikci.oku', 'musteri-tedarikci.yaz', 'oee.oku', 'plan.canliya-al', 'plan.kilitle',
-      'plan.motor-ayari', 'plan.oku', 'plan.planlama-oku', 'plan.studyo', 'plan.yaz', 'portal.oku', 'projeler.gorev-yaz', 'projeler.oku',
+      'plan.motor-ayari', 'plan.oku', 'plan.planlama-oku', 'plan.sistem-ayari', 'plan.studyo', 'plan.yaz', 'portal.oku', 'projeler.gorev-yaz', 'projeler.oku',
       'projeler.statu-yaz', 'projeler.yaz', 'recete-rota.oku', 'recete-rota.yaz', 'rota.emre-kopyala', 'rota.onayla', 'rota.sartname-yayinla', 'rota.sartname-yaz', 'rota.talimat-yaz',
       'rota.yaz', 'saat.uyari-ustlen', 'satin-alma.oku', 'satin-alma.talep-ac', 'sayfa.adim-durumu', 'sayfa.akis', 'sayfa.arkon', 'sayfa.atolye',
       // 3165 a: rota.yaz beş eyleme bölündü; eski işlem ayrı kartla kalkana dek satırda kalır.

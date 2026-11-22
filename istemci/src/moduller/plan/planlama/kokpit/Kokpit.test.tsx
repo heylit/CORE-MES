@@ -59,15 +59,16 @@ function Yuvali({ children, dis = null }: { children: ReactNode; dis?: BekleyenD
 }
 function ac(oz: Partial<PlanlamaEkranOzellikleri> = {}, yaz = true, dis: BekleyenDegisiklik | null = null) {
   const sec = vi.fn();
+  const git = vi.fn();
   render(
     <MemoryRouter initialEntries={['/?duzen=klasik']}><BildirimSaglayici><Yuvali dis={dis}>
       <Kokpit
-        depo={DEPO} calisma={ornekCalisma()} komut={yaz ? komutKur(0) : null} git={vi.fn()} yenile={vi.fn()} yetki={yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz'] : [])])}
+        depo={DEPO} calisma={ornekCalisma()} komut={yaz ? komutKur(0) : null} git={git} yenile={vi.fn()} yetki={yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz'] : [])])}
         olcek={ACILIS_OLCEGI} olcekSec={vi.fn()} kaydir={vi.fn()} secim={BOS_SECIM} sec={sec} {...oz}
       />
     </Yuvali></BildirimSaglayici></MemoryRouter>,
   );
-  return { sec };
+  return { sec, git };
 }
 
 // Seçimi tutan sarmal: tıklama seçimi gerçekten değiştirir (çoklu seçim seçili işe bakar).
@@ -605,8 +606,8 @@ describe('Kokpit', () => {
     if (!screen.queryByRole('menu', { name: 'Araçlar' })) fireEvent.click(screen.getByRole('button', { name: 'Araçlar' }));
     return within(screen.getByRole('menu', { name: 'Araçlar' })).getByText(ad).closest('button')!;
   };
-  it('Araçlar menüsü: Duruş ve mesai açılır ve kapanır; Ayarlar onu kapatır; menü seçimle kapanır', () => {
-    ac();
+  it('Araçlar menüsü: Duruş ve mesai açılır ve kapanır; Ayarlar sayfaya gider; menü seçimle kapanır', () => {
+    const { git } = ac();
     expect(within(screen.getByRole('button', { name: 'Araçlar' })).queryByText('Araçlar')).not.toBeNull();
     expect(arac('Duruş ve mesai').getAttribute('aria-checked')).toBe('false');
     arac('Ayarlar');
@@ -620,11 +621,10 @@ describe('Kokpit', () => {
     expect(screen.getByRole('complementary', { name: 'Duruş ve mesai' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Araçlar' }).hasAttribute('data-etkin')).toBe(true);
     expect(arac('Duruş ve mesai').getAttribute('aria-checked')).toBe('true');
+    // Ayarlar panel değil sayfadır: seçilince Planlama ayarları sayfasına gider, Kokpit'te panel açmaz.
     fireEvent.click(arac('Ayarlar'));
-    expect(screen.queryByRole('complementary', { name: 'Duruş ve mesai' })).toBeNull();
-    expect(screen.getByRole('complementary', { name: 'Plan ayarları' })).toBeTruthy();
-    fireEvent.click(arac('Duruş ve mesai'));
-    expect(screen.getByRole('complementary', { name: 'Duruş ve mesai' })).toBeTruthy();
+    expect(git).toHaveBeenCalledWith('ayarlar');
+    expect(screen.queryByRole('complementary', { name: 'Plan ayarları' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Duruş ve mesaiyi kapat' }));
     expect(screen.queryByRole('complementary', { name: 'Duruş ve mesai' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Araçlar' }).hasAttribute('data-etkin')).toBe(false);
@@ -1139,21 +1139,17 @@ describe('Kokpit', () => {
     expect(screen.queryByRole('complementary', { name: 'Plan ayarları' })).toBeNull();
   });
 
-  // 3282 1b: Ayarlar paneli seçili emrin yerinde açılır; panel açıkken sayfanın birincili üst düğme değildir. Onay sayfası açılınca üst çubuk yoktur.
-  it('Ayarlar paneli seçimi kaldırıp açılır, düğme basılı görünür; onay sayfası açılınca üst çubuk ve Ayarlar yoktur', async () => {
+  // 3282 1b, 3561: Ayarlar artık sayfadır (panel yok); Canlıya al düğmesi birincil kalır. Onay sayfası açılınca üst çubuk yoktur.
+  it('Ayarlar menü öğesi sayfaya gider, panel açmaz; onay sayfası açılınca üst çubuk yoktur', async () => {
     vi.spyOn(api, 'get').mockImplementation((() => Promise.reject(new Error('yok'))) as never);
     const c = ornekCalisma();
-    const { sec } = ac({ calisma: { ...c, dataVer: c.plan?.dataVer ?? c.dataVer }, yetki: yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz', 'plan.canliya-al']) });
+    const { git } = ac({ calisma: { ...c, dataVer: c.plan?.dataVer ?? c.dataVer }, yetki: yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz', 'plan.canliya-al']) });
     const ust = (): HTMLElement => screen.getByRole('button', { name: /^Canlıya al/ });
     expect(ust().className).toContain('tc-dugme-birincil');
     fireEvent.click(arac('Ayarlar'));
-    expect(arac('Ayarlar').getAttribute('aria-checked')).toBe('true');
-    fireEvent.keyDown(document, { key: 'Escape' });
-    expect(sec).toHaveBeenCalledWith({ siparis: null, adim: null });
-    expect(screen.getByRole('complementary', { name: 'Plan ayarları' })).toBeTruthy();
-    expect(ust().className).not.toContain('tc-dugme-birincil');
-    fireEvent.click(screen.getByRole('button', { name: 'Ayarları kapat' }));
+    expect(git).toHaveBeenCalledWith('ayarlar');
     expect(screen.queryByRole('complementary', { name: 'Plan ayarları' })).toBeNull();
+    expect(ust().className).toContain('tc-dugme-birincil');
     fireEvent.click(ust());
     expect(await screen.findByText(/O zamana kadar atölye eski planı görür/, {}, { timeout: 5000 })).toBeTruthy();
     expect(document.querySelector('.tc-pyq-ust')).toBeNull();
@@ -2120,11 +2116,12 @@ describe('Kokpit fason adımında firma tarihi (3330-3c)', () => {
 
 // Kokpit tek görünümdür: ayrıntılı düzene geçiş yoktur; araçları liste düzeninin "Diğer" menüsünden, liste düzeninin içinde açılır.
 describe('Kokpit tek görünüm', () => {
+  const gitSade = vi.fn();
   function SadeKokpit() {
     const [secim, kur] = useState<PlanlamaSecimi>(BOS_SECIM);
     return (
       <Kokpit
-        depo={DEPO} calisma={ornekCalisma()} komut={komutKur(0)} git={vi.fn()} yenile={vi.fn()} yetki={yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz'])}
+        depo={DEPO} calisma={ornekCalisma()} komut={komutKur(0)} git={gitSade} yenile={vi.fn()} yetki={yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz'])}
         olcek={ACILIS_OLCEGI} olcekSec={vi.fn()} kaydir={vi.fn()} secim={secim} sec={(x) => { kur((y) => ({ ...y, ...x })); }}
       />
     );
@@ -2139,17 +2136,17 @@ describe('Kokpit tek görünüm', () => {
     return within(screen.getByRole('menu', { name: 'Diğer' })).getByText(ad).closest('button')!;
   };
 
-  it('"Diğer" menüsünde ayrıntılı Kokpit yoktur; Ayarlar ile Duruş ve mesai liste düzeninde panel olarak açılır, biri ötekini kapatır', () => {
+  it('"Diğer" menüsünde ayrıntılı Kokpit yoktur; Ayarlar sayfaya gider, Duruş ve mesai liste düzeninde panel olarak açılır', () => {
     sadeAc();
     fireEvent.click(screen.getByRole('button', { name: 'Diğer' }));
     expect(screen.getByRole('menu', { name: 'Diğer' }).textContent).not.toContain('Ayrıntılı Kokpit');
     fireEvent.click(diger('Ayarlar'));
-    expect(screen.getByRole('complementary', { name: 'Plan ayarları' })).toBeTruthy();
+    expect(gitSade).toHaveBeenCalledWith('ayarlar');
+    expect(screen.queryByRole('complementary', { name: 'Plan ayarları' })).toBeNull();
     expect(screen.getByRole('table', { name: 'Siparişler' })).toBeTruthy();
     expect(document.querySelector('.tc-pyq')?.getAttribute('data-duzen')).toBe('liste');
     fireEvent.click(diger('Duruş ve mesai'));
     expect(screen.getByRole('complementary', { name: 'Duruş ve mesai' })).toBeTruthy();
-    expect(screen.queryByRole('complementary', { name: 'Plan ayarları' })).toBeNull();
     expect(document.querySelector('.tc-pyq')?.getAttribute('data-duzen')).toBe('liste');
   });
 
@@ -2197,10 +2194,10 @@ describe('Kokpit tek görünüm', () => {
     expect(document.querySelectorAll('.tc-pyq-ld-adimlar button[aria-pressed="true"]').length).toBe(0);
     // Satır açık kalır: adımı bırakmak siparişi kapatmaz.
     expect(document.querySelector('.tc-pyq-ld-adimlar')).not.toBeNull();
-    // Ayarlar açıkken operasyona basmak paneli kapatmaz (yazılmakta olan ayar düşmez).
-    fireEvent.click(diger('Ayarlar'));
+    // Duruş ve mesai açıkken operasyona basmak paneli kapatmaz (yazılmakta olan giriş düşmez).
+    fireEvent.click(diger('Duruş ve mesai'));
     fireEvent.click(document.querySelector<HTMLButtonElement>('.tc-pyq-ld-adimlar button[data-adim]')!);
-    expect(screen.getByRole('complementary', { name: 'Plan ayarları' })).toBeTruthy();
+    expect(screen.getByRole('complementary', { name: 'Duruş ve mesai' })).toBeTruthy();
     vi.unstubAllGlobals();
   });
 });

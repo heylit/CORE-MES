@@ -14,6 +14,7 @@ Seridin sirasi, basligi ve simgesi ikinci menunun Planlama grubundan gelir (`ONE
 | P5 | ufuk/ | `YillikPlan`, `Ufuk` | yillik, ufuk | tc-pyu- |
 | P6 | sevkiyat/ | `Sevkiyat` | sevkiyat | tc-pyv- |
 | P7 | kokpit/ | `Kokpit` | kokpit | tc-pyq- |
+| P8 | ayarlar/ | `PlanlamaAyarlari` | ayarlar | tc-pya- |
 
 P1'in ic sayfalari (`motor/`, `ic/`) kendi oneklerini kullanir (tc-pym-, tc-pyi-, tc-pyh-, tc-pyo-, tc-pyt- tahta kartlari, tc-pyr- tezgah sirasi); P2-P6 oneki
 yalniz kendi klasorunun css'inde ve iskelette yazilir: butun planlama css'i ayni sayfada yuklu kalir, baska parcanin onekiyle yazilan kural o
