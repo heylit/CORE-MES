@@ -481,7 +481,8 @@
   .tc-pyq-govde:has(> .tc-pyq-ayrinti) { --panel-payi: calc(var(--kuyruk-genis) + var(--b-4)); }
   .tc-pyq-govde:has(> .tc-pyq-ayrinti) .tc-pyq-tahta { scroll-padding-inline-end: var(--panel-payi); }
   .tc-pyq-govde:has(> .tc-pyq-ayrinti) :is(.tc-pyq-sira, .tc-pyq-emirler, .tc-pyq-ld) { padding-right: var(--panel-payi); }
-  .tc-pyq-govde:has(> .tc-pyq-ayrinti) .tc-pyq-bolum-plan > :not(h2, .tc-pyq-tahta) { margin-right: var(--panel-payi); }
+  /* Pay değişkenden okunur: :has'ın konusu evrensel seçici olursa sayfaya her simge eklenişinde bütün tahtanın biçimi yeniden hesaplanır. */
+  .tc-pyq-bolum-plan > :not(h2, .tc-pyq-tahta) { margin-right: var(--panel-payi, var(--b-2)); }
 }
 .tc-pyq-ayrinti header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--b-2); }
 .tc-pyq-ayrinti header div { display: flex; flex-direction: column; min-width: 0; }
@@ -1214,3 +1215,12 @@
 .tc-pyq-hpanel-bos { color: var(--muted); font-size: var(--yazi-xs); }
 .tc-pyq-hucre-lejant { margin: var(--b-1) 0; }
 .tc-pyq-genel-lejant [data-lej="gec-cizgi"]::before { height: var(--kayma); background: var(--d-gec); }
+/* 3570: sütun ölçümü (Tahta, boyamadan önce bir an): her hücre kendi içerik eninde tek satır; okunan en sütunun enidir. */
+.tc-pyq-tahta[data-olcum] > .tc-pyq-ic { display: none; }
+.tc-pyq-olcu { position: absolute; top: 0; left: 0; width: 0; height: 0; overflow: hidden; visibility: hidden; pointer-events: none; contain: strict; }
+.tc-pyq-olcu .tc-pyq-bas { position: static; width: max-content; }
+.tc-pyq-olcu .tc-pyq-tablo-satir { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: max-content; }
+/* Bölme elle çok daraltılırsa sabit sütunlar tahtanın üstüne taşmasın (ayraç ızgaranın dışında, tutamağı kırpılmaz). */
+.tc-pyq-tablo-satir { overflow: hidden; }
+/* 3570 Z2: Ürün ve Ad dar sütunda iki satıra kırılır (satır boyu iki satırı taşır), üçüncü satır yerine "…"; tamamı ipucunda. */
+.tc-pyq-h:is([data-sutun="urun"], [data-sutun="ad"]) > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; white-space: normal; line-height: 1.2; overflow-wrap: anywhere; }

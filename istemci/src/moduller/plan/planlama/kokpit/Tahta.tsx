@@ -17,10 +17,10 @@ import { MalzemeSeridi, malzemeCubuklari } from './MalzemeCubugu.tsx';
 import type { EmirMalzemeleri } from './malzeme.ts';
 import type { YerlestirmeHedefi } from './Yerlestirme.tsx';
 import type { PencereDeposu } from './pencereDeposu.ts';
-import { Ayrac, Bos, FarkRozeti, Halka, type TabloDurumu } from './Tablo.tsx';
+import { Ayrac, Bos, FarkRozeti, Halka, olcuAdaylari, sutunlariOlc, type TabloDurumu } from './Tablo.tsx';
 import {
-  ADIM_DURUMU_ADI, SUTUN_ADI, SU_AN_ADI, TEZGAH_SUTUNLARI, adimDurumu, bolmeEni, farkOlustur, ilerleme, sablon, suAn, sutunToplamEni, tarihSaat, tezgahToplamEni,
-  type AdimDurumu, type SutunKimligi,
+  ADIM_DURUMU_ADI, SUTUN_ADI, SU_AN_ADI, TEZGAH_SUTUNLARI, adimDurumu, bolmeEni, farkOlustur, ilerleme, olcumBirlestir, olcuSablonu, sablon, suAn, sutunToplamEni, tarihSaat, tezgahToplamEni,
+  type AdimDurumu, type SutunKimligi, type SutunOlcumu,
 } from './tablo.ts';
 
 // Kokpit tahtası: tezgâh ya da emir başına bir satır, satırda saat eksenli işler. İş bir düğmedir; yeri CSS değişkeniyle verilir
@@ -124,6 +124,7 @@ const FIS = 'fis:';
 const YAKINLASIN = 'Taşımak için yakınlaşın';
 // Sürükleme bu kadar px kıpırdayınca başlar; altında basış tıktır.
 const SURUKLE_ESIGI = 4;
+// 3570: boyamadan önce ölçülen satır sayısı (ilk ekran ve biraz fazlası) ve boşta ölçülen parça.
 // İmleç bu kadar ms durunca sürüklenen yerin etkisi sorulur.
 const ETKI_BEKLE = 150;
 // Bu genişlikten (px) dar iş okunur genişlikte çizilir; satır en çok bu kadar şeride açılır.
@@ -181,8 +182,13 @@ export function Tahta(o: TahtaOzellikleri) {
   const isi = olcek === 'Y' && kad === 'adim';
   const tabloKipi = tablo !== null && !isi && (goz === 'T' || (o.agac ?? null) !== null);
   const kolonlar: readonly { id: string; ad: string; en: number; sayi: boolean }[] = tablo === null ? [] : goz === 'T' ? TEZGAH_SUTUNLARI : tablo.sutunlar.map((x) => SUTUN_ADI[x]);
-  const sutunSablonu = tabloKipi ? sablon(kolonlar) : '';
-  const bolmeGenisligi = tabloKipi && tablo ? bolmeEni(goz === 'T' ? tezgahToplamEni() : sutunToplamEni(tablo.sutunlar), tablo.en) : '';
+  // 3570: sütunlar içeriğin ölçülen enine göre açılır (yazı boyu büyükse kesilmesin); ölçüm yokken (ilk kare, test ortamı) sabit ağırlıklar.
+  // Ölçü durumda değil: değişince yalnız tahtanın CSS değişkeni yazılır, satırlar yeniden çizilmez (800 emirde tam çizim pahalı).
+  const olcum = useRef<SutunOlcumu | null>(null);
+  const olcuDuzeni = tabloKipi ? olcuSablonu(kolonlar, olcum.current) : null;
+  const sutunSablonu = tabloKipi ? olcuDuzeni?.sablon ?? sablon(kolonlar) : '';
+  const dogalEn = olcuDuzeni?.dogal ?? (tablo === null ? 0 : goz === 'T' ? tezgahToplamEni() : sutunToplamEni(tablo.sutunlar));
+  const bolmeGenisligi = tabloKipi && tablo ? bolmeEni(dogalEn, tablo.en) : '';
   // Açık balon: işaretin işi ve tahta içindeki yeri (px).
   const [balon, setBalon] = useState<{ id: string; x: number; y: number; alt: number; satir?: true } | null>(null);
   const fasonlar = useMemo(() => new Set(m.tezgahlar.filter((t) => t.fason).map((t) => t.id)), [m.tezgahlar]);
@@ -289,6 +295,68 @@ export function Tahta(o: TahtaOzellikleri) {
     if (sutunSablonu) { k.style.setProperty('--sutunlar', sutunSablonu); k.style.setProperty('--bas-en', bolmeGenisligi); }
     else { k.style.removeProperty('--sutunlar'); k.style.removeProperty('--bas-en'); }
   });
+  // Yalnız daha önce ölçülmemiş emir ve sipariş satırları ölçülür (sütun kümesi, kademe, satır boyu, yazı tipi ya da plan değişince hepsi
+  // yeniden), boyamadan önce; her sütunda yazısı en uzun görünen birkaç satır düzenle ölçülür (olcuAdaylari). Açılan emrin adım satırları ölçülmez
+  // (kendi sütunlarına sığmayan adım adı eskisi gibi "…" ile kısalır); arama, sıralama, seçim ve kaydırma ölçmez. Enler yalnız büyür;
+  // değişince sütun şablonu doğrudan tahtanın değişkenine yazılır (satırlar yeniden çizilmez).
+  const olcuAnahtari = tabloKipi ? `${kolonlar.map((x) => x.id).join(',')}|${kad}|${o.satirBoyu ?? ''}` : '';
+  const olculen = useRef<{ anahtar: string; m: unknown; satirlar: Set<string> } | null>(null);
+  const duzenYaz = useRef<() => void>(() => undefined);
+  duzenYaz.current = () => {
+    const k = kap.current, d = tabloKipi && tablo ? olcuSablonu(kolonlar, olcum.current) : null;
+    if (!k || !d || !tablo) return;
+    k.style.setProperty('--sutunlar', d.sablon); k.style.setProperty('--bas-en', bolmeEni(d.dogal, tablo.en));
+    if (tablo.en === null) k.querySelector('.tc-pyq-eksen [role="separator"]')?.setAttribute('aria-valuenow', String(Math.round(d.dogal)));
+  };
+  const olcCalis = useRef<(yaziDegisti: boolean) => void>(() => undefined);
+  olcCalis.current = (yaziDegisti) => {
+    const k = kap.current;
+    if (!k || !olcuAnahtari) return;
+    const once = olculen.current;
+    const yeniAnahtar = yaziDegisti || once === null || once.anahtar !== olcuAnahtari || once.m !== m;
+    const kayit = yeniAnahtar ? { anahtar: olcuAnahtari, m, satirlar: new Set<string>() } : once;
+    olculen.current = kayit;
+    const yeni = [...k.querySelectorAll<HTMLElement>('.tc-pyq-satir[data-satir]:not([data-agac-adim], [data-agac-ara], [data-agac-not])')].filter((x) => !kayit.satirlar.has(x.dataset['satir'] ?? ''));
+    const baslik = yeniAnahtar ? [...k.querySelectorAll<HTMLElement>('.tc-pyq-satir.tc-pyq-eksen')] : [];
+    if (yeni.length === 0 && baslik.length === 0) return;
+    // Tahta baştan dizilecekse (ilk açılış, sütun kümesi, kademe ya da satır boyu değişince) satırlar ölçüm süresince gizlenir:
+    // ölçüm yalnız kopyaları dizer, satırlar yeni şablonla bir kez dizilir (iki kez değil). Odak satırlardaysa gizlenmez (odak düşmesin).
+    const ic = k.querySelector<HTMLElement>(':scope > .tc-pyq-ic');
+    const gizle = (once === null || once.anahtar !== olcuAnahtari) && ic !== null && !ic.contains(document.activeElement);
+    // Yeni tahtada kaydırma sıfırdır; okumak satırları gizlemeden önce dizdirirdi.
+    const ust = gizle && once !== null ? k.scrollTop : 0, sol = gizle && once !== null ? k.scrollLeft : 0;
+    if (gizle) k.setAttribute('data-olcum', '');
+    try {
+      const y = sutunlariOlc(k, [...baslik, ...olcuAdaylari(yeni)]);
+      for (const x of yeni) kayit.satirlar.add(x.dataset['satir'] ?? '');
+      if (!y) return;
+      const onceki = yeniAnahtar ? null : olcum.current, z = onceki ? olcumBirlestir(onceki, y) : y;
+      if (olcum.current && JSON.stringify(olcum.current) === JSON.stringify(z)) return;
+      olcum.current = z;
+      duzenYaz.current();
+    } finally {
+      if (gizle) { k.removeAttribute('data-olcum'); if (ust || sol) { k.scrollTop = ust; k.scrollLeft = sol; } }
+    }
+  };
+  useLayoutEffect(() => { olcCalis.current(false); }, [olcuAnahtari, m, emirler, o.siparisler, o.agac?.acik]);
+  // Yazı tipi geç yüklenirse ölçü yeniden alınır (tahta yeniden çizilmez; yalnız en değişirse şablon yazılır).
+  useEffect(() => {
+    const f = typeof document === 'undefined' ? undefined : document.fonts as FontFaceSet | undefined;
+    if (!f || typeof f.addEventListener !== 'function') return undefined;
+    // Tarayıcı yeni yazıyla bir kez dizdikten sonra ölçülür (ölçüm ayrıca dizdirmesin).
+    let kare: number | null = null, sure: number | null = null;
+    const birak = (): void => {
+      if (kare !== null) window.cancelAnimationFrame(kare);
+      if (sure !== null) window.clearTimeout(sure);
+      kare = null; sure = null;
+    };
+    const yuklendi = (): void => {
+      birak();
+      kare = window.requestAnimationFrame(() => { kare = null; sure = window.setTimeout(() => { sure = null; olcCalis.current(true); }, 0); });
+    };
+    f.addEventListener('loadingdone', yuklendi);
+    return () => { birak(); f.removeEventListener('loadingdone', yuklendi); };
+  }, []);
 
   // Onay açıkken bırakılan taşıma bekler: başka işi tutmak onu sessizce başka işe çevirmesin.
   const tut = useCallback((id: string, tutma = 0): void => {
@@ -613,9 +681,9 @@ export function Tahta(o: TahtaOzellikleri) {
         ? (
           <div className="tc-pyq-bas" data-tablo="">
             <div className="tc-pyq-tablo-satir" role="row">
-              {kolonlar.map((k) => <div key={k.id} className="tc-pyq-h" role="columnheader" data-sayi={k.sayi ? '' : undefined}>{kad === 'siparis' && k.id === 'emir' ? 'Sipariş' : kad === 'siparis' && k.id === 'urun' ? 'Emirler' : kad === 'siparis' && k.id === 'fark' ? 'En kötü fark' : k.ad}</div>)}
+              {kolonlar.map((k) => <div key={k.id} className="tc-pyq-h" role="columnheader" data-sutun={k.id} data-sayi={k.sayi ? '' : undefined}>{kad === 'siparis' && k.id === 'emir' ? 'Sipariş' : kad === 'siparis' && k.id === 'urun' ? 'Emirler' : kad === 'siparis' && k.id === 'fark' ? 'En kötü fark' : k.ad}</div>)}
             </div>
-            <Ayrac tablo={tablo} erisilir deger={Math.round(tablo.en ?? (goz === 'T' ? tezgahToplamEni() : sutunToplamEni(tablo.sutunlar)))} />
+            <Ayrac tablo={tablo} erisilir deger={Math.round(tablo.en ?? dogalEn)} />
           </div>
         )
         : <div className="tc-pyq-bas">{goz === 'T' || isi ? 'Tezgâh' : kad === 'siparis' ? 'Sipariş' : 'Emir'}</div>}
@@ -697,6 +765,8 @@ export function Tahta(o: TahtaOzellikleri) {
   });
   const hucreSirasi = hucreGunleri ? satirlar.filter((r) => hucreGunleri.has(r.kimlik)).map((r) => r.kimlik) : [];
   const hucreDurakAnahtari = hucreGunleri ? hucreDurak(hucreSirasi) : null;
+  // Tek çubuklu satır (sipariş ve emir kademesi, adım, özet, ara başlık, gün hücreleri) adımların şerit sayısıyla uzamaz.
+  const tekSeritli = (r: Satir): boolean => Boolean(r.adim || r.ozet || r.ara || r.siparis || r.emirCubugu || hucreGunleri?.has(r.kimlik));
   const plansiz = agac !== null ? [] : emirler.filter((e) => e.durum === 'plansiz');
   const cubuklar = once ? [] : malzemeCubuklari(o.malzeme, { simdi: m.simdi, bas: m.bas, emirler }, zaman);
   const tasinanIs = tasinan ? m.isler[tasinan.id] : undefined;
@@ -913,7 +983,7 @@ export function Tahta(o: TahtaOzellikleri) {
       <>
         <div className="tc-pyq-tablo-satir" role="row" data-secilebilir={emirSatiri ? '' : undefined} onClick={emirSatiri ? (ev) => { if (!(ev.target as Element).closest('button')) satirSec(r.emirKaydi!); } : undefined}>
           {r.notlar ? null : kolonlar.map((k) => (
-            <div key={k.id} className="tc-pyq-h" role={r.ara ? 'columnheader' : 'cell'} data-sayi={k.sayi ? '' : undefined}>
+            <div key={k.id} className="tc-pyq-h" role={r.ara ? 'columnheader' : 'cell'} data-sutun={k.id} data-sayi={k.sayi ? '' : undefined}>
               {r.ara ? SUTUN_ADI[k.id as SutunKimligi].adimAdi : goz === 'T' ? tezgahHucresi(r, k.id) : r.siparis ? siparisHucresi(r, k.id as SutunKimligi) : r.adim ? adimHucresi(r, k.id as SutunKimligi) : r.emirKaydi ? emirHucresi(r.emirKaydi, r, k.id as SutunKimligi) : null}
             </div>
           ))}
@@ -972,10 +1042,10 @@ export function Tahta(o: TahtaOzellikleri) {
         <MalzemeSeridi cubuklar={cubuklar} bas={m.bas} px={px} zaman={zaman} secEmir={secEmir} sec={(e) => { if (!tasinan) sec(e, null); }} yanan={yanan} uyar={uyar} />
         {satirlar.map((r) => (
           <div
-            className="tc-pyq-satir" key={r.kimlik} data-satir={r.kimlik} data-d={r.durum} data-seritli={!r.adim && !r.ozet && !hucreGunleri?.has(r.kimlik) && (yerlesim.satir.get(r.kimlik) ?? 1) > 1 ? '' : undefined}
+            className="tc-pyq-satir" key={r.kimlik} data-satir={r.kimlik} data-d={r.durum} data-seritli={!tekSeritli(r) && (yerlesim.satir.get(r.kimlik) ?? 1) > 1 ? '' : undefined}
             data-agac-adim={r.adim ? '' : undefined} data-agac-not={r.notlar ? '' : undefined} data-agac-ara={r.ara ? '' : undefined}
             data-secili={tabloKipi && goz === 'S' && r.emirKaydi !== undefined && !r.adim && !r.ara && !r.notlar && secEmir === r.kimlik ? '' : undefined}
-            ref={(el) => { el?.style.setProperty('--seritler', String(r.adim || r.ozet || r.ara || hucreGunleri?.has(r.kimlik) ? 1 : yerlesim.satir.get(r.kimlik) ?? 1)); }}
+            ref={(el) => { el?.style.setProperty('--seritler', String(tekSeritli(r) ? 1 : yerlesim.satir.get(r.kimlik) ?? 1)); }}
             data-aday={adaySatirlari ? (adaySatirlari.has(r.kimlik) ? 'evet' : 'hayir') : undefined}
           >
             <div className="tc-pyq-bas" data-tablo={tabloKipi ? '' : undefined} data-durus={r.durus ? '' : undefined} title={tabloKipi || r.notlar ? undefined : `${r.tam ?? r.bas} · ${r.durus ?? r.alt}${yuk.get(r.kimlik)?.yazi ?? ''}`}>

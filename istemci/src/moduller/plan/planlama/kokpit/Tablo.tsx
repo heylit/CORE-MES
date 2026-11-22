@@ -1,8 +1,8 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type KeyboardEvent as TusOlayi, type PointerEvent as ImlecOlayi } from 'react';
 import { Simge } from '../../../../ortak/arayuz/index.ts';
 import {
-  EN_ENAZ, SIRALAMA_ADI, SUTUNLAR, ayarOku, ayarYaz, bolmeSinirla, farkKisaParcalari, farkParcalari, ilerlemeYazisi, sutunlariDuzenle, varsayilanSutunlar,
-  type Fark, type Ilerleme, type Siralama, type SutunKimligi, type TabloAyari,
+  EN_ENAZ, SIRALAMA_ADI, SUTUNLAR, ayarOku, ayarYaz, bolmeSinirla, farkEnAz, farkKisaParcalari, farkParcalari, ilerlemeYazisi, sutunlariDuzenle, varsayilanSutunlar,
+  type Fark, type Ilerleme, type Siralama, type SutunKimligi, type SutunOlcumu, type TabloAyari,
 } from './tablo.ts';
 
 // 3533: Kokpit tablosunun durumu (sıralama, sütunlar, bölme eni), tablo başındaki araçlar, tamamlanma dairesi ve fark rozeti.
@@ -146,4 +146,76 @@ export function Ayrac({ tablo, erisilir = false, deger }: { tablo: Pick<TabloDur
   return erisilir
     ? <span {...ortak} role="separator" aria-orientation="vertical" aria-valuenow={deger} aria-valuemin={EN_ENAZ} aria-label="Tablo genişliği" title="Sürükleyin ya da ok tuşlarını kullanın; çift tık varsayılan genişlik" tabIndex={0} onKeyDown={tus} />
     : <span {...ortak} aria-hidden="true" />;
+}
+
+// 3570: sütunların içerik eni. Verilen satırların tablo hücreleri tahtanın içinde gizli, kendi düzeni kapalı (contain) bir ölçü kabına
+// kopyalanır; orada her hücre kendi içerik enindedir (tek satır; CSS .tc-pyq-olcu). Enler okunur, kap kalkar. Asıl tablo ölçüm için
+// yeniden dizilmez (800 emirde bütün tabloyu yeniden dizmek tıklamayı dondurur). Fark rozetinin en dar hali: yan yana iki parça ve
+// çerçeve. Ölçülecek bir şey yoksa null.
+// Her sütunda yazısı en uzun görünen birkaç satır seçilir; yalnız onlar düzenle ölçülür. Metin eni tuvalle (düzen hesabı yapmadan)
+// sütunun yazı tipiyle kestirilir; tuval yoksa (test ortamı) harf sayısı kullanılır. Hücrenin yazı dışı payı (ikon, boşluk) sütunda sabittir.
+export function olcuAdaylari(satirlar: readonly HTMLElement[], adet = 3): HTMLElement[] {
+  if (satirlar.length <= adet) return [...satirlar];
+  const tuval = typeof OffscreenCanvas === 'function' ? new OffscreenCanvas(1, 1).getContext('2d') : null;
+  const yazi = new Map<string, string>(), enIyi = new Map<string, { s: HTMLElement; p: number }[]>();
+  let sonYazi = '';
+  const cocuk = (e: Element | null | undefined, sinif: string): Element | undefined => (e ? [...e.children].find((x) => x.classList.contains(sinif)) : undefined);
+  for (const s of satirlar) {
+    const izgara = cocuk(cocuk(s, 'tc-pyq-bas'), 'tc-pyq-tablo-satir');
+    if (!izgara) continue;
+    for (const h of izgara.children) {
+      if (!(h instanceof HTMLElement)) continue;
+      const id = h.dataset['sutun'];
+      if (id === undefined) continue;
+      const t = h.textContent ?? '';
+      let p = t.length;
+      if (tuval) {
+        let f = yazi.get(id);
+        if (f === undefined) { f = getComputedStyle(h.firstElementChild ?? h).font; yazi.set(id, f); }
+        if (f !== sonYazi) { tuval.font = f; sonYazi = f; }
+        p = tuval.measureText(t).width;
+      }
+      const l = enIyi.get(id) ?? [];
+      if (l.length < adet || p > (l[l.length - 1]?.p ?? 0)) {
+        l.push({ s, p }); l.sort((x, y) => y.p - x.p); if (l.length > adet) l.pop();
+        enIyi.set(id, l);
+      }
+    }
+  }
+  const secilen = new Set<HTMLElement>();
+  for (const l of enIyi.values()) for (const x of l) secilen.add(x.s);
+  return satirlar.filter((s) => secilen.has(s));
+}
+
+export function sutunlariOlc(kap: HTMLElement, satirlar: readonly HTMLElement[]): SutunOlcumu | null {
+  const en: Record<string, number> = {}, baslik: Record<string, number> = {};
+  let fark: number | null = null;
+  const olcu = document.createElement('div');
+  olcu.className = 'tc-pyq-olcu';
+  olcu.setAttribute('aria-hidden', 'true');
+  // Satır ve bölmenin kendisi boş kopyalanır (seçiciler aynı tutsun), yalnız hücre ızgarası içeriğiyle.
+  for (const s of satirlar) {
+    const izgara = s.querySelector(':scope > .tc-pyq-bas > .tc-pyq-tablo-satir'), bas = izgara?.parentElement;
+    if (!izgara || !bas) continue;
+    const s2 = s.cloneNode(false) as HTMLElement, b2 = bas.cloneNode(false);
+    s2.removeAttribute('data-satir');
+    b2.appendChild(izgara.cloneNode(true));
+    s2.appendChild(b2);
+    olcu.appendChild(s2);
+  }
+  kap.appendChild(olcu);
+  try {
+    for (const h of olcu.querySelectorAll<HTMLElement>('.tc-pyq-tablo-satir > .tc-pyq-h[data-sutun]')) {
+      const id = h.dataset['sutun'] ?? '', k = h.getBoundingClientRect(), w = Math.ceil(k.width);
+      en[id] = Math.max(en[id] ?? 0, w);
+      if (h.getAttribute('role') === 'columnheader') baslik[id] = Math.max(baslik[id] ?? 0, w);
+      const r = id === 'fark' ? h.querySelector<HTMLElement>('.tc-pyq-fark') : null;
+      if (!r) continue;
+      const p = r.hasAttribute('data-kisa') ? [] : [...r.children].filter((x): x is HTMLElement => x instanceof HTMLElement && x.tagName === 'SPAN').map((x) => x.getBoundingClientRect());
+      const ilk = p[0], son = p[p.length - 1], ikinci = p[1];
+      const aday = ilk && son ? farkEnAz(p.map((x) => x.width), ikinci ? ikinci.left - ilk.right : 0, k.width - (son.right - ilk.left)) : w;
+      fark = Math.max(fark ?? 0, aday);
+    }
+  } finally { olcu.remove(); }
+  return Object.values(en).some((x) => x > 0) ? { en, baslik, fark } : null;
 }

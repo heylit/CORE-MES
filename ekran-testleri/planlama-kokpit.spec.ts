@@ -2827,6 +2827,74 @@ test('Kokpit 3551 E: sipariş, emir ve adım kademeleri; aralık görünüme sı
   expect(ag.hatalar).toEqual([]);
 });
 
+// 3570: sol tablo içeriğe göre açılır; yazı büyüse de emir no, adet ve tarihler kesilmez, Fark en çok iki satır; Hafta'da emir satırı tek satır boyundadır.
+test('Kokpit 3570: sol tablo kesilmeden okunur (büyük yazıda da); emir kademesinde satır tek satır boyunda; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  await taslakSunucusu(page);
+  await page.route('**/api/plan/planlama-kaynagi', async (r) => {
+    const cevap = await r.fetch();
+    const a = { siparis: '901', no: 'ORN-SP-101', musteri: 'Deneme Müşteri A' };
+    await r.fulfill({ response: cevap, json: { ...(await cevap.json()) as object, siparisBaglari: { S1: { ...a, kalem: 1 }, S2: { ...a, kalem: 2 } } } });
+  });
+  const buyuk = bilgi.project.name !== 'g360';
+  // Yazı boyu ayarı büyük kullanıcı: yazı değişkenleri büyür, px ölçüler aynı kalır (ekranda görülen kesilmenin ortamı).
+  if (buyuk) await page.addInitScript(() => { document.addEventListener('DOMContentLoaded', () => { const st = document.createElement('style'); st.textContent = ':root{--yazi-xs:17px;--yazi-s:19px;--yazi-m:21px}'; document.head.append(st); }); });
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const karsilama = page.getByRole('button', { name: 'Başlayalım' });
+  if (await karsilama.isVisible()) await karsilama.click();
+  const tasma = async () => { expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0); };
+  const cek = async (ad: string) => { await page.waitForTimeout(800); await page.screenshot({ path: `/tmp/tmiv2-ekran/3570-${ad}-${bilgi.project.name}.png` }); };
+  const bolum = kokpit.getByRole('region', { name: 'Emirler' });
+  if (bilgi.project.name === 'g360') {
+    await expect(bolum.locator('.tc-pyq-tahta')).toBeHidden();
+    await tasma();
+    await cek('0-telefon');
+    expect(ag.hatalar).toEqual([]);
+    return;
+  }
+  const tahta = bolum.locator('.tc-pyq-tahta');
+  await expect(tahta.locator('.tc-pyq-tablo-satir [data-sutun="termin"]').first()).toBeVisible();
+  // Emir no, Adet, Termin, Plan bitiş ve başlıklar kesilmez; Fark rozeti en çok iki satır.
+  const kesilen = async () => tahta.evaluate((t) => {
+    const l: string[] = [];
+    for (const h of t.querySelectorAll<HTMLElement>('.tc-pyq-h[data-sutun]')) {
+      const id = h.dataset['sutun'] ?? '';
+      if (id === 'urun' || id === 'ilerleme') continue;
+      if (id === 'fark') {
+        const r = h.querySelector<HTMLElement>('.tc-pyq-fark');
+        if (r && r.getBoundingClientRect().height > parseFloat(getComputedStyle(r).lineHeight) * 2 + 12) l.push(`fark: ${r.textContent ?? ''}`);
+        continue;
+      }
+      const ic = h.getAttribute('role') === 'columnheader' ? h : h.querySelector<HTMLElement>('b, .tc-pyq-h-veri') ?? h;
+      if (ic.scrollWidth > ic.clientWidth + 1) l.push(`${id}: ${ic.textContent ?? ''}`);
+    }
+    return l;
+  });
+  expect(await kesilen()).toEqual([]);
+  await tasma();
+  await cek('1-tablo');
+  // Ay'a uzaklaş, siparişe in: Hafta'da emir satırları tek satır boyunda (adımların şerit sayısıyla uzamaz).
+  const k = await tahta.boundingBox();
+  if (!k) throw new Error('tahta yok');
+  await page.mouse.move(k.x + k.width * 0.7, k.y + 60);
+  await page.keyboard.down('Control');
+  for (let i = 0; i < 8 && (await tahta.getAttribute('data-olcek')) !== 'A'; i++) { await page.mouse.wheel(0, 300); await page.waitForTimeout(150); }
+  await page.keyboard.up('Control');
+  await tahta.locator('[data-kademe="siparis"]').filter({ hasText: 'ORN-SP-101' }).dispatchEvent('click');
+  await expect(tahta.locator('[data-kademe="emir"]')).toHaveCount(2);
+  for (const s of await tahta.locator('[data-kademe="emir"]').all()) {
+    const satir = s.locator('xpath=ancestor::*[@data-satir][1]');
+    await expect(satir).not.toHaveAttribute('data-seritli', '');
+    expect(await satir.evaluate((x) => getComputedStyle(x).getPropertyValue('--seritler').trim())).toBe('1');
+  }
+  expect(await kesilen()).toEqual([]);
+  await tasma();
+  await cek('2-emir');
+  expect(ag.hatalar).toEqual([]);
+});
+
 test('Kokpit 3551 F: genel bakış şeridi bütün planı gösterir; pencere klavyeyle ve basarak tahtayı kaydırır, Shift ile genişler; kapanır; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
   await taslakSunucusu(page);
   await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
