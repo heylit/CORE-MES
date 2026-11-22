@@ -68,3 +68,25 @@ test('kod sözlüğü: komut kartı (1909) sabit komut, miktar ve modu tanır; b
   assert.deepEqual(kodTuru('CMDŞGERI*AL'), { tur: 'komut', komut: { ad: 'GERI-AL' } });
   for (const k of [{ ad: 'KAYDET' }, { ad: 'MIKTAR', miktar: 25 }, { ad: 'MOD', mod: 'TASI' }] as const) assert.deepEqual(kodTuru(komutKodu(k)), { tur: 'komut', komut: k });
 });
+
+test('kod sözlüğü: CM1 özet kodu ilk alanıyla çözülür, eski biçimler aynen sürer', () => {
+  assert.deepEqual(kodTuru('CM1/LOT:ORN-LT-2041/TPN:ORN-TPN-77812/BT:261122'), { tur: 'lot', deger: 'ORN-LT-2041' });
+  assert.deepEqual(kodTuru('CM1/UE:142/PRC:ORN-PRC-001/REV:B/BT:261122'), { tur: 'uretim-emri', deger: '142', bicim: 'kimlik' });
+  assert.deepEqual(kodTuru('CM1/RP:37/PRC:X/BT:261122'), { tur: 'refakat-partisi', deger: '37' });
+  assert.deepEqual(kodTuru('CM1/LOC:ORN-A01-02-3/AD:ORN RAF GOZU A01/BT:261122'), { tur: 'konum', deger: 'ORN-A01-02-3' });
+  assert.deepEqual(kodTuru('cm1/mlz:1002/sk:orn-0002/bt:261122'), { tur: 'malzeme', deger: '1002' });
+  assert.deepEqual(kodTuru('CM2/UE:142/YENI:X'), { tur: 'uretim-emri', deger: '142', bicim: 'kimlik' });
+  assert.deepEqual(kodTuru('LOT:LT-000123'), { tur: 'lot', deger: 'LT-000123' });
+});
+
+test('kod sözlüğü: CM1 ilk alanı sözlükte yoksa bilinmiyor (koli, hatalı parça)', () => {
+  assert.equal(kodTuru('CM1/KOL:ORN-KL-0091-1/NN:1-4/BT:261122').tur, 'bilinmiyor');
+  assert.equal(kodTuru('CM1/UE:ABC/BT:261122').tur, 'bilinmiyor');
+});
+
+test('kod sözlüğü: CM1 ABD klavyesi kaymasında da çözülür', () => {
+  const duz = 'CM1/LOT:ORN-LT-2041/TPN:ORN-TPN-77812/BT:261122';
+  const bozuk = duz.replaceAll(':', 'Ş').replaceAll('-', '*');
+  assert.equal(okutmaDuzelt(bozuk), duz);
+  assert.deepEqual(kodTuru(bozuk), { tur: 'lot', deger: 'ORN-LT-2041' });
+});
