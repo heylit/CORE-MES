@@ -37,10 +37,12 @@ describe('yetki satırı ekleyen göç, ekrandan önceden verilmiş yetkide durm
     await ortam?.kaldir();
   });
 
+  // Depo rolü tek Arkon işlemi (operator) taşır; 20261122090000 göçü başka arkon.* satırında bilerek durur, burada o satırlar verilmez.
   const butunYetkileriVer = async (): Promise<void> => {
     await acik().sahip.sorgu(
       `INSERT INTO rol_islemi (rol_id, islem)
        SELECT r.id, i.islem FROM rol r CROSS JOIN unnest($1::text[]) AS i (islem) WHERE NOT r.yonetici
+          AND NOT (r.kod = 'depo' AND i.islem LIKE 'arkon.%' AND i.islem <> 'arkon.operator')
        ON CONFLICT DO NOTHING`,
       [[...ISLEMLER]],
     );

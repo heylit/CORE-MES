@@ -713,3 +713,52 @@ for (const goc of SATIR_GOCLERI) {
     });
   });
 }
+
+describe('depo Arkon operatör göçü: kişiye ek Arkon işlemi taşıyan depo kişisi göçü durdurur (kart 3549, gerçek PostgreSQL)', () => {
+  let ortam: TestVeritabani | undefined;
+  let oncesi = '';
+  let dahil = '';
+  const DOSYA_SONU = '_kisiler_depo_arkon_operator.sql';
+
+  before(async () => {
+    ortam = await testSemasiAc('gocdo');
+    oncesi = await mkdtemp(join(tmpdir(), 'tmiv2-gocdo-'));
+    dahil = await mkdtemp(join(tmpdir(), 'tmiv2-gocdod-'));
+  });
+
+  after(async () => {
+    for (const klasor of [oncesi, dahil]) if (klasor) await rm(klasor, { recursive: true, force: true });
+    await ortam?.kaldir();
+  });
+
+  test('temiz veride depoya arkon.operator eklenir; depo kişisinde ek arkon.amir varsa göç sayıyla durur ve hiçbir satır eklemez; satır kalkınca geçer', async () => {
+    if (!ortam) throw new Error('Test veritabanı açılamadı (TMIV2_PG_* ve TMIV2_PG_TEST_DATABASE ayarlarını denetleyin).');
+    const { ayar, sema, vt } = ortam;
+    const hepsi = (await readdir(GERCEK_KLASOR)).filter((ad) => ad.endsWith('.sql')).sort();
+    const sira = hepsi.findIndex((ad) => ad.endsWith(DOSYA_SONU));
+    assert.equal(sira > 0, true);
+    for (const ad of hepsi.slice(0, sira)) await copyFile(join(GERCEK_KLASOR, ad), join(oncesi, ad));
+    for (const ad of hepsi.slice(0, sira + 1)) await copyFile(join(GERCEK_KLASOR, ad), join(dahil, ad));
+    await gocleriUygula(ayar, oncesi, { sema });
+
+    const depoIslemleri = async (): Promise<string[]> =>
+      (await vt.sorgu<{ islem: string }>("SELECT ri.islem FROM rol_islemi ri JOIN rol r ON r.id = ri.rol_id WHERE r.kod = 'depo' AND ri.islem LIKE 'arkon.%'")).map((s) => s.islem);
+    assert.deepEqual(await depoIslemleri(), []);
+
+    const kisi = (await vt.tek<{ id: number }>(
+      `WITH yeni AS (INSERT INTO kisi (ad, kullanici_adi, parola_ozeti) VALUES ('ORN Depocu', 'orn-depocu', 'x') RETURNING id),
+            atama AS (INSERT INTO kisi_rolu (kisi_id, rol_id) SELECT yeni.id, rol.id FROM yeni, rol WHERE rol.kod = 'depo')
+       SELECT id FROM yeni`))?.id;
+    assert.equal(typeof kisi, 'number');
+    await vt.sorgu("INSERT INTO kisi_islemi (kisi_id, islem, veren_id) VALUES ($1, 'arkon.amir', $1)", [kisi]);
+    await assert.rejects(gocleriUygula(ayar, dahil, { sema }), /Depo rolü taşıyan 1 kişide kişiye ek verilmiş başka Arkon işlemi var/);
+    assert.deepEqual(await depoIslemleri(), []);
+
+    // Aynı işlem (arkon.operator) ek verilmişse durdurmaz; farklı olan durdurur, kaldırılınca geçer.
+    await vt.sorgu("DELETE FROM kisi_islemi WHERE kisi_id = $1", [kisi]);
+    await vt.sorgu("INSERT INTO kisi_islemi (kisi_id, islem, veren_id) VALUES ($1, 'arkon.operator', $1)", [kisi]);
+    assert.deepEqual(await gocleriUygula(ayar, dahil, { sema }), [hepsi[sira]]);
+    assert.deepEqual(await depoIslemleri(), ['arkon.operator']);
+    assert.equal((await vt.sorgu("SELECT 1 FROM rol_islemi ri JOIN rol r ON r.id = ri.rol_id WHERE r.kod = 'depo' AND ri.islem = 'terminal.uret'")).length, 1);
+  });
+});
