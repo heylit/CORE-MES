@@ -22,7 +22,8 @@ import { Ayarlar } from './Ayarlar.tsx';
 import { useBitinceBildir } from './bitince-bildir.ts';
 import { emirYonu, planYonu } from './ayarlar.ts';
 import { TabloAraci, useTablo } from './Tablo.tsx';
-import { siralaGecikme } from './tablo.ts';
+import { siralaGecikme, siralaPlan } from './tablo.ts';
+import { YOGUN_OK_ACIKLAMASI, YOGUN_SATIR, gorunenSatirSayisi, ufkaSigmaz, ufkaSigmayanSayisi } from './yogunluk.ts';
 import { Kapasite } from './Kapasite.tsx';
 import { Engeller } from './Engeller.tsx';
 import { engelOzeti, engeller } from './engeller.ts';
@@ -172,6 +173,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const [duzen, setDuzen] = useState<MatrisDuzeni>(() => (darEkran() ? 'Y' : 'A'));
   const [ara, setAra] = useState('');
   const [suz, setSuz] = useState<Exclude<EmirDurumu, 'iyi'> | null>(null);
+  // Gantt dilim 1 (T1): "Ufka sığmayan" rozetine basınca yalnız ufku aşan emirler görünür.
+  const [ufukSuz, setUfukSuz] = useState(false);
   const [onceAcik, setOnceAcik] = useState(false);
   const [goster, setGoster] = useState<string | null>(null);
   const [tur, setTur] = useState<TurDurumu | null>(null);
@@ -284,11 +287,13 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   // Sipariş bağı (3297-5 a): kartlar siparişe göre toplanır; arama sipariş no ve müşteriyle de bulur. Dilim okunamadıysa kart kök emirdir.
   const bag = o.depo.durum?.siparisBaglari ?? null;
   const kokBul = useMemo(() => kokCozucu(m.emirler), [m.emirler]);
-  const gorunen = useMemo(() => m.emirler.filter((e) => (suz === null || e.durum === suz) && (aramaUyar(e, m, ara) || siparisAramasi(e.id, bag, ara))), [m, suz, ara, bag]);
+  const gorunen = useMemo(() => m.emirler.filter((e) => (suz === null || e.durum === suz) && (!ufukSuz || ufkaSigmaz(e)) && (aramaUyar(e, m, ara) || siparisAramasi(e.id, bag, ara))), [m, suz, ufukSuz, ara, bag]);
+  const ufukDisiSay = useMemo(() => ufkaSigmayanSayisi(m.emirler), [m]);
   const gorunenKume = useMemo(() => new Set(gorunen.map((e) => e.id)), [gorunen]);
   // 3533: Emirler gözünün tablosu. Sıralama yalnız görünümü değiştirir; plan sırasına ve önceliğe yazılmaz (Risk B2).
   const tablo = useTablo();
-  const emirSirali = useMemo(() => (tablo.sira === 'gecikme' ? siralaGecikme(gorunen, m.isler) : gorunen), [tablo.sira, gorunen, m.isler]);
+  // T2: tahta, tablo ve liste aynı sırada; Plan sırası ilk adımın başlangıcıdır (şelale), Termine göre gecikme eşitlikte bu sırayı izler.
+  const emirSirali = useMemo(() => { const p0 = siralaPlan(gorunen, m.isler); return tablo.sira === 'gecikme' ? siralaGecikme(p0, m.isler) : p0; }, [tablo.sira, gorunen, m.isler]);
   const uyar = useCallback((job: string) => gorunenKume.has(job), [gorunenKume]);
 
   // --- yazma ---
@@ -468,7 +473,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     if (!idler.length) { bildir('bilgi', 'Geç, riskli ya da plansız emir yok.'); return; }
     if (tahtasiz(goz)) setGoz('T');
     if (uzakMi(olcek)) olcekSec('3');
-    setSuz(null); setAra(''); setOnceAcik(false);
+    setSuz(null); setUfukSuz(false); setAra(''); setOnceAcik(false);
     setTur({ idler, i: 0, gecmis: [], ileri: [] });
   };
   const turBitti = tur !== null && tur.i >= tur.idler.length;
@@ -665,6 +670,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const yananTahta = gelenYanan?.k ?? yanan;
   const gelenOz = tur ? {} : { gelen, gelenBas, eskiYer }, gelenListe = tur ? {} : { gelen, eskiYer };
   // Okların açıklaması tahtada ok olabilecekken görünür: seçili iş (Seçili iş) ya da seçili sipariş veya iş (Seçili sipariş).
+  // T6: kalabalık tahtada "Oklar: seçili sipariş" yalnız seçili emri çizer; menü açıklaması bunu söyler (klasik tahta: Tezgâh ya da Sipariş gözü).
+  const okYogun = gorunenSatirSayisi(goz === 'T' ? 'T' : 'S', m.tezgahlar.length, emirSirali, null) > YOGUN_SATIR;
   const okAcik = !tur && okKipi !== 'yok' && (okKipi === 'is' ? secIs !== null : yanan !== null || secIs !== null);
   // Seçileni sığdır (F): çoklu seçim, seçili iş, seçili sipariş ya da yanan kartın planlı işleri görünür genişliğe sığar.
   const sigdir = useCallback((): void => {
@@ -738,7 +745,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     <>
       {sonucCubugu}
       <Tahta
-        m={m} cx={cx} goz="T" olcek={olcek} emirler={gorunen} tablo={tezgahTablosu ? tablo : null} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
+        ufukSonu={ufukSonu} m={m} cx={cx} goz="T" olcek={olcek} emirler={gorunen} tablo={tezgahTablosu ? tablo : null} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
         tasi={yazabilir && !tur ? tasiDene : null} planaAl={yazabilir && !tur ? planaAlDene : null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
         yerlestirme={tur ? null : yerHedefi} yanan={tur ? null : yananTahta} secimiKaldir={gelenYanan ? () => { setGelenYanan(null); } : listedeSecimKalir}
         sorunBildir={null} onizle={tur ? null : onizle} okKipi={tur ? 'yok' : okKipi}
@@ -820,6 +827,11 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
               <button type="button" key={d} data-d={d} aria-pressed={suz === d} onClick={() => { setSuz(suz === d ? null : d); }}><b>{say[d]}</b>{DURUM_ADI[d]}</button>
             ))}
           </span>
+          {ufukDisiSay > 0 && (
+            <button type="button" className="tc-pyq-ok tc-pyq-ufuk-rozet" aria-pressed={ufukSuz} aria-label={`${String(ufukDisiSay)} Ufka sığmayan emir`} data-ufuk-rozet="" disabled={tur !== null || onayAcik} title={`Planlama ufkundan sonra biten emirler (ufuk ${zaman(ufukSonu).slice(0, 5)}); basınca yalnız bunlar görünür`} onClick={() => { setUfukSuz(!ufukSuz); }}>
+              <Simge ad="clock" boyut="k" /><b>{ufukDisiSay}</b><span>Ufka sığmayan</span>
+            </button>
+          )}
           <button type="button" className="tc-pyq-ok tc-pyq-engel-dugme" aria-pressed={engelAcik} data-engel-var={engelOzet.toplam > 0 ? '' : undefined}
             title="Son planda plana girmeyen adımlar ve uyarılar; nedeni ve ne yapılacağı" disabled={tur !== null || onayAcik} onClick={engelAc}>
             <Simge ad="alert" boyut="k" /><b>{engelOzet.toplam}</b><span>Engeller</span>
@@ -857,6 +869,11 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
             <button type="button" key={d} data-d={d} aria-pressed={suz === d} onClick={() => { setSuz(suz === d ? null : d); }}><b>{say[d]}</b>{DURUM_ADI[d]}{fark(d)}</button>
           ))}
         </span>
+        {ufukDisiSay > 0 && (
+          <button type="button" className="tc-pyq-ok tc-pyq-ufuk-rozet" aria-pressed={ufukSuz} aria-label={`${String(ufukDisiSay)} Ufka sığmayan emir`} data-ufuk-rozet="" disabled={tur !== null || onayAcik} title={`Planlama ufkundan sonra biten emirler (ufuk ${zaman(ufukSonu).slice(0, 5)}); basınca yalnız bunlar görünür`} onClick={() => { setUfukSuz(!ufukSuz); }}>
+            <Simge ad="clock" boyut="k" /><b>{ufukDisiSay}</b><span>Ufka sığmayan</span>
+          </button>
+        )}
         {arizali > 0 && (
           <button type="button" className="tc-pyq-ok tc-pyq-ariza" aria-pressed={kapasiteAcik} title="Şu anda arızada ya da bakımda olan tezgâhlar; Duruş ve mesai açılır" disabled={tur !== null || onayAcik}
             onClick={() => { if (!kapasiteAcik) sec(null, null); setAyarAcik(false); setSorunTezgahi(null); setSorunAdimi(null); setEngelAcik(false); setKapasiteAcik(!kapasiteAcik); }}>
@@ -897,7 +914,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
             <>
               <button type="button" role="menuitemcheckbox" aria-checked={onceAcik} title="Onaylı planla karşılaştır (B)" onClick={() => { kapat(); setOnceAcik(!onceAcik); }}><Simge ad="layers" boyut="k" /><span>Önce / sonra</span></button>
               {([['is', 'Oklar: seçili iş', 'Üstüne gelinen ya da seçili işin önceki ve sonraki adımı'], ['siparis', 'Oklar: seçili sipariş', 'Seçili siparişin bütün adımları'], ['yok', 'Oklar kapalı', 'Bağ oku çizilmez']] as const).map(([k, ad, aciklama]) => (
-                <button type="button" key={k} role="menuitemradio" aria-checked={okKipi === k} onClick={() => { kapat(); setOkKipi(k); }}><Simge ad="route" boyut="k" /><span>{ad}<small>{aciklama}</small></span></button>
+                <button type="button" key={k} role="menuitemradio" aria-checked={okKipi === k} onClick={() => { kapat(); setOkKipi(k); }}><Simge ad="route" boyut="k" /><span>{ad}<small>{k === 'siparis' && okYogun ? YOGUN_OK_ACIKLAMASI : aciklama}</small></span></button>
               ))}
               <button type="button" role="menuitemcheckbox" aria-checked={kapasiteAcik} title="Tezgâhın arıza, bakım ve ek mesaisi" disabled={tur !== null || onayAcik}
                 onClick={() => { kapat(); if (!kapasiteAcik) sec(null, null); setAyarAcik(false); setSorunTezgahi(null); setSorunAdimi(null); setEngelAcik(false); setKapasiteAcik(!kapasiteAcik); }}><Simge ad="wrench" boyut="k" /><span>Duruş ve mesai</span></button>
@@ -957,7 +974,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
               {sonucCubugu}
               <TabloAraci tablo={tablo} />
               <Tahta
-                m={m} cx={cx} goz="S" olcek={olcek} emirler={emirSirali} tablo={tablo} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
+                ufukSonu={ufukSonu} m={m} cx={cx} goz="S" olcek={olcek} emirler={emirSirali} tablo={tablo} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
                 tasi={yazabilir && !tur ? tasiDene : null} planaAl={null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
                 yerlestirme={null} yanan={tur ? null : gelenYanan?.k ?? null} sorunBildir={null} onizle={tur ? null : onizle} okKipi={tur ? 'yok' : okKipi}
                 saatEni={saatEni} malzeme={malzeme} agac={{ acik: agacAcik, ac: agacAc, notlar: agacNotu }} {...gelenOz}
@@ -1025,13 +1042,13 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
               <>
                 {sonucCubugu}
                 <Tahta
-                  m={m} cx={cx} goz={goz} olcek={olcek} emirler={gorunen} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
+                  ufukSonu={ufukSonu} m={m} cx={cx} goz={goz} olcek={olcek} emirler={emirSirali} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
                   tasi={yazabilir && !tur ? tasiDene : null} planaAl={yazabilir && !tur ? planaAlDene : null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
                   yerlestirme={tur ? null : yerHedefi} yanan={tur ? null : yananTahta} secimiKaldir={secimiKaldir}
                   sorunBildir={sorunBildir} onizle={tur ? null : onizle} okKipi={tur ? 'yok' : okKipi}
                   coklu={coklu.size > 1 ? coklu : undefined} saatEni={saatEni} cokluSec={yazabilir && !tur ? cokluSec : null} grupKaydir={yazabilir && !tur ? grupKaydir : null} malzeme={malzeme} {...gelenOz}
                 />
-                <Liste m={m} cx={cx} goz={goz} emirler={gorunen} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} yanan={tur ? null : yananTahta} sorunBildir={sorunBildir} {...gelenListe} />
+                <Liste m={m} cx={cx} goz={goz} emirler={emirSirali} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} yanan={tur ? null : yananTahta} sorunBildir={sorunBildir} {...gelenListe} />
                 <ul className="tc-pyq-aciklama" aria-label="Renk açıklaması">
                   <li><i />Planlı iş</li><li><i data-t="gec" />Geç emrin işi</li><li><i data-t="ilk" />En erken boş yer (basın)</li><li><i data-t="bos" />Boş yer (basın)</li><li><i data-t="kapali" />Kapalı saat, duruş</li><li data-aciklama="malzeme"><i data-t="malzeme" />Malzeme bekleniyor</li>
                   {okAcik && <><li data-ok-aciklama=""><i data-t="ok-b" />Önceki adım bitince başlar</li><li data-ok-aciklama=""><i data-t="ok-o" />Örtüşmeli: önceki bitmeden başlayabilir</li></>}

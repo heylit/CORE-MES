@@ -80,6 +80,13 @@ export function siralaGecikme(emirler: readonly KokpitEmri[], isler: Readonly<Re
   }).map((x) => x.e);
 }
 
+// Plan sırası (gantt dilim 1, T2): emir ilk planlı adımının başlangıcına göre dizilir; tahta "şelale" olur. Eşitlikte girdi sırası; hiç adımı
+// planda olmayan emir girdi sırasıyla en altta. Tablo, tahta ve telefon listesi aynı sırayı okur.
+export function siralaPlan(emirler: readonly KokpitEmri[], isler: Readonly<Record<string, KokpitIsi>>): KokpitEmri[] {
+  const ilk = (e: KokpitEmri): number => e.adimlar.reduce((en, a) => Math.min(en, isler[a.id]?.S ?? Infinity), Infinity);
+  return emirler.map((e, i) => ({ e, i, s: ilk(e) })).sort((a, b) => (a.s === b.s ? a.i - b.i : a.s - b.s)).map((x) => x.e);
+}
+
 // Adım satırının durumu: bitti > süren > kilitli > bekliyor; planda yeri olmayan adımın durumu bilinmez (null).
 export type AdimDurumu = 'bitti' | 'suruyor' | 'kilitli' | 'bekliyor';
 export const ADIM_DURUMU_ADI: Readonly<Record<AdimDurumu, string>> = { bitti: 'Bitti', suruyor: 'Sürüyor', kilitli: 'Kilitli', bekliyor: 'Bekliyor' };

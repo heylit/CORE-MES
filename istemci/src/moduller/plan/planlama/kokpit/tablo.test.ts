@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { KokpitEmri, KokpitIsi } from './kurallar.ts';
 import {
-  AYAR_ANAHTARI, DAR_SUTUNLAR, EN_ENAZ, adimDurumu, ayarCoz, bolmeEni, bolmeSinirla, farkOlustur, ilerleme, ilerlemeYazisi, sablon, siralaGecikme, sutunlariDuzenle, suAn, tarihSaat,
+  AYAR_ANAHTARI, DAR_SUTUNLAR, EN_ENAZ, adimDurumu, ayarCoz, bolmeEni, bolmeSinirla, farkOlustur, ilerleme, ilerlemeYazisi, sablon, siralaGecikme, siralaPlan, sutunlariDuzenle, suAn, tarihSaat,
   varsayilanSutunlar,
 } from './tablo.ts';
 
@@ -109,4 +109,18 @@ describe('tablo: adım durumu ve tezgâh şu an', () => {
     expect(suAn(l, 'T2', false)).toBe('calisiyor');
   });
   it('tarih ve saat tek parça', () => { expect(tarihSaat(() => '23.11 Pzt 08:30', 0)).toBe('23.11 08:30'); });
+});
+
+describe('tablo: plan sırası (gantt dilim 1, T2)', () => {
+  it('ilk planlı adımın başlangıcına göre; eşitlikte girdi sırası; planda adımı olmayan en altta', () => {
+    const l = [emir('a'), emir('b'), emir('c'), emir('d'), emir('e')];
+    const isler: Record<string, KokpitIsi> = {
+      'a.1': is('a.1', { S: 30 }), 'a.2': is('a.2', { S: 40 }),
+      'b.2': is('b.2', { S: 10 }),
+      'c.1': is('c.1', { S: 30 }),
+      'e.1': is('e.1', { S: 5 }),
+    };
+    expect(siralaPlan(l, isler).map((e) => e.id)).toEqual(['e', 'b', 'a', 'c', 'd']);
+    expect(l.map((e) => e.id)).toEqual(['a', 'b', 'c', 'd', 'e']);
+  });
 });
