@@ -1,4 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
+import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { ZarfSonucu } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 import type { SiparisOdemeYontemi as OdemeYontemi } from '#paylasilan/sozlesme/finans.ts';
 import { islemKilidiAl } from '#cekirdek/kilit.ts';
@@ -2174,5 +2175,51 @@ export function teklifIstekFormuGuncelle(db: Db, icerik: object, surum: number, 
     `UPDATE satin_alma_teklif_istek_formu SET icerik = $1::jsonb, guncelleyen_id = $3, guncelleme = now(), surum = surum + 1
       WHERE tek AND surum = $2 RETURNING surum`,
     [JSON.stringify(icerik), surum, kisiId],
+  );
+}
+
+// 3571: talep çiziminin kaynağı ve satın almanın kaldırdığı talep çizimi notu.
+export interface CizimKaynagiSatiri {
+  ozet: string;
+  kaynakTur: 'yuklendi' | 'cizim-merkezi' | 'ortak-dosyalar';
+  belgeId: number | null;
+  revizyonId: number | null;
+  dosyaId: number | null;
+  surumSirasi: number | null;
+  klasorYolu: string[] | null;
+  kaynakTalepId: string | null;
+  kaynakTalepNo: string | null;
+  ekleyenId: number;
+}
+export function cizimKaynaklari(db: Db, talepId: string): Promise<CizimKaynagiSatiri[]> {
+  return db.sorgu(
+    `SELECT k.ozet, k.kaynak_tur AS "kaynakTur", k.belge_id AS "belgeId", k.revizyon_id AS "revizyonId", k.dosya_id AS "dosyaId",
+            k.surum_sirasi AS "surumSirasi", k.klasor_yolu AS "klasorYolu", k.kaynak_talep_id AS "kaynakTalepId", t.no AS "kaynakTalepNo",
+            k.ekleyen_id AS "ekleyenId"
+       FROM satin_alma_talep_cizim_kaynagi k LEFT JOIN satin_alma_talep t ON t.id = k.kaynak_talep_id
+      WHERE k.talep_id = $1 ORDER BY k.zaman, k.ozet`,
+    [talepId],
+  );
+}
+export async function cizimKaynagiYaz(db: Db, talepId: string, k: Omit<CizimKaynagiSatiri, 'kaynakTalepNo'>): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO satin_alma_talep_cizim_kaynagi (talep_id, ozet, kaynak_tur, belge_id, revizyon_id, dosya_id, surum_sirasi, klasor_yolu, kaynak_talep_id, ekleyen_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+     ON CONFLICT (talep_id, ozet) DO UPDATE SET kaynak_tur = EXCLUDED.kaynak_tur, belge_id = EXCLUDED.belge_id, revizyon_id = EXCLUDED.revizyon_id,
+       dosya_id = EXCLUDED.dosya_id, surum_sirasi = EXCLUDED.surum_sirasi, klasor_yolu = EXCLUDED.klasor_yolu, kaynak_talep_id = EXCLUDED.kaynak_talep_id,
+       ekleyen_id = EXCLUDED.ekleyen_id, zaman = now()`,
+    [talepId, k.ozet, k.kaynakTur, k.belgeId, k.revizyonId, k.dosyaId, k.surumSirasi, k.klasorYolu, k.kaynakTalepId, k.ekleyenId],
+  );
+}
+export async function cizimKaynagiSil(db: Db, talepId: string, ozet: string): Promise<void> {
+  await db.sorgu('DELETE FROM satin_alma_talep_cizim_kaynagi WHERE talep_id = $1 AND ozet = $2', [talepId, ozet]);
+}
+export async function cizimKaldirmaYaz(db: Db, talepId: string, ad: string, kisiId: number): Promise<void> {
+  await db.sorgu('INSERT INTO satin_alma_talep_cizim_kaldirma (talep_id, ad, kaldiran_id) VALUES ($1, $2, $3)', [talepId, ad.slice(0, 200), kisiId]);
+}
+export function cizimKaldirmalari(db: Db, talepId: string): Promise<{ ad: string; kaldiranId: number; zaman: string }[]> {
+  return db.sorgu(
+    `SELECT ad, kaldiran_id AS "kaldiranId", ${zamanMetni('zaman')} AS zaman FROM satin_alma_talep_cizim_kaldirma WHERE talep_id = $1 ORDER BY zaman, id`,
+    [talepId],
   );
 }

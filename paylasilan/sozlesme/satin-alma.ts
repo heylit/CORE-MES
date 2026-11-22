@@ -346,6 +346,8 @@ export type TalepKaynagi = z.output<typeof talepKaynagiSemasi>;
 export const talepSemasi = z.object({
   ...talepAlanlari,
   teklifler: z.array(teklifCikisSemasi).max(30),
+  // 3571: talebin çizim sayısı (ilk tabloda talep numarasının yanında ataç).
+  cizimSayisi: z.number().int().nonnegative().optional(),
   birlesme: birlesmeSemasi.nullable().optional(),
   kaynaklar: z.array(talepKaynagiSemasi).optional(),
   guncellemeGrubu: guncellemeGrubuSemasi.optional(),
@@ -602,8 +604,57 @@ export type TeklifEkiYazimi = z.output<typeof teklifEkiGovdesi>;
 export const TALEP_CIZIMI_AZAMI_BAYT = 20 * 1024 * 1024;
 export const talepCizimiDosyaParametresi = z.object({ id: uuid, ozet: dosyaOzeti });
 export const talepCizimiGovdesi = teklifEkiGovdesi;
-export const talepCizimleriCevabi = z.object({ cizimler: z.array(teklifEkiSemasi) });
+// 3571: çizimin kaynağı. Çizim Merkezi'nden gelende bağlanan revizyon dondurulur; şimdi yayında başka revizyon varsa `yeniRevizyon`
+// (yalnız merkezi okuyabilene). Ortak Dosyalar klasör yolu yalnız ekleyen kişiye döner (K-b); başkasına null.
+const kimlik = z.number().int().positive();
+export const TALEP_CIZIMI_KAYNAKLARI = ['yuklendi', 'cizim-merkezi', 'ortak-dosyalar'] as const;
+export const talepCizimiKaynagiSemasi = z.discriminatedUnion('tur', [
+  z.object({ tur: z.literal('yuklendi') }),
+  z.object({
+    tur: z.literal('cizim-merkezi'), belgeId: kimlik, revizyonId: kimlik, revKodu: z.string().nullable(),
+    yeniRevizyon: z.object({ revizyonId: kimlik, revKodu: z.string().nullable() }).nullable(),
+  }),
+  z.object({ tur: z.literal('ortak-dosyalar'), klasorYolu: z.array(z.string()).nullable() }),
+]);
+// `talepten`: talep edenin eklediği ya da birleşen kaynak talepten gelen çizim; `kaldirmaReddi` doluysa kaldırma kapalıdır (K-c).
+export const talepCizimiSemasi = teklifEkiSemasi.extend({
+  kaynak: talepCizimiKaynagiSemasi,
+  talepten: z.boolean(),
+  kaynakTalepNo: z.string().nullable(),
+  ekleyenAd: z.string().nullable(),
+  kaldirmaReddi: z.string().nullable(),
+});
+export const talepCizimiKaldirmasiSemasi = z.object({ ad: z.string(), kaldiranAd: z.string().nullable(), zaman: zamanSemasi });
+export const talepCizimleriCevabi = z.object({ cizimler: z.array(talepCizimiSemasi), kaldirilanlar: z.array(talepCizimiKaldirmasiSemasi) });
+export type TalepCizimi = z.output<typeof talepCizimiSemasi>;
 export type TalepCizimleriCevabi = z.output<typeof talepCizimleriCevabi>;
+// Seçim kaynağın kimliğiyle gelir; özet istemciden gelmez (gövdede fazladan alan reddedilir).
+export const talepCizimiSecGovdesi = z.discriminatedUnion('kaynak', [
+  z.object({ kaynak: z.literal('cizim-merkezi'), belgeId: kimlik, revizyonId: kimlik }).strict(),
+  z.object({ kaynak: z.literal('ortak-dosyalar'), dosyaId: kimlik, surumSirasi: kimlik }).strict(),
+]);
+export type TalepCizimiSecimi = z.output<typeof talepCizimiSecGovdesi>;
+const nolarMetni = z.string().regex(/^\d{1,9}(,\d{1,9}){0,49}$/, 'Malzeme numaraları virgülle ayrılır.');
+export const cizimSeciciSorgusu = z.object({
+  ara: z.string().trim().max(80).optional(), malzeme: nolarMetni.optional(), talep: uuid.optional(),
+});
+export const seciciCizimiSemasi = z.object({
+  belgeId: kimlik, revizyonId: kimlik, ad: z.string(), revKodu: z.string().nullable(), pdf: z.boolean(),
+  malzemeNo: z.number().int().nullable(), kullanim: z.string().nullable(),
+});
+export const cizimSeciciCevabi = z.object({ oneriler: z.array(seciciCizimiSemasi), bulunan: z.array(seciciCizimiSemasi) });
+export const seciciKlasorlerCevabi = z.object({
+  klasorler: z.array(z.object({ id: kimlik, ustId: kimlik.nullable(), ad: z.string(), dar: z.boolean() })),
+});
+export const seciciKlasorParametresi = z.object({ klasorId: z.coerce.number().int().positive() });
+export const seciciDosyalariSorgusu = z.object({ ara: z.string().trim().max(80).optional() });
+export const seciciDosyalariCevabi = z.object({
+  dosyalar: z.array(z.object({ dosyaId: kimlik, ad: z.string(), surumSirasi: kimlik, boyut: z.number().nonnegative(), pdf: z.boolean(), dar: z.boolean() })),
+});
+export type SeciciCizimi = z.output<typeof seciciCizimiSemasi>;
+export type CizimSeciciCevabi = z.output<typeof cizimSeciciCevabi>;
+export type SeciciKlasorlerCevabi = z.output<typeof seciciKlasorlerCevabi>;
+export type SeciciDosyalariCevabi = z.output<typeof seciciDosyalariCevabi>;
 export type TeklifEkleriCevabi = z.output<typeof teklifEkleriCevabi>;
 // Talep türü (#1192): malzeme talebi fiziksel kartları, hizmet talebi yalnız alınan hizmet kartlarını seçer. Fason talebi (2428) de
 // alınan hizmet kartını (işlem) seçer; her kalemi emrin fason adımına ya da stoktaki partiye bağlanır ve dış işlem emri açar.
@@ -886,6 +937,11 @@ export interface SatinAlmaUclari {
   'GET /satin-alma-talepleri/:id/cizimler': { cevap: TalepCizimleriCevabi };
   'POST /satin-alma-talepleri/:id/cizim-bagla': { govde: z.input<typeof talepCizimiGovdesi>; cevap: TalepCizimleriCevabi };
   'POST /satin-alma-talepleri/:id/cizimler/:ozet/kaldir': { cevap: TalepCizimleriCevabi };
+  'POST /satin-alma-talepleri/:id/cizim-sec': { govde: z.input<typeof talepCizimiSecGovdesi>; cevap: TalepCizimleriCevabi };
+  'POST /satin-alma-talepleri/:id/cizimler/:ozet/guncelle': { cevap: TalepCizimleriCevabi };
+  'GET /satin-alma-cizim-secici/cizimler': { sorgu: z.input<typeof cizimSeciciSorgusu>; cevap: CizimSeciciCevabi };
+  'GET /satin-alma-cizim-secici/klasorler': { cevap: SeciciKlasorlerCevabi };
+  'GET /satin-alma-cizim-secici/klasorler/:klasorId/dosyalar': { sorgu: z.input<typeof seciciDosyalariSorgusu>; cevap: SeciciDosyalariCevabi };
   'GET /satin-alma-teklif-istek-formu': { cevap: TeklifIstekFormuCevabi };
   'POST /satin-alma-teklif-istek-formu/kaydet': { govde: z.input<typeof teklifIstekFormuKaydetGovdesi>; cevap: TeklifIstekFormuCevabi };
   'GET /satin-alma-siparis-faturalari': { sorgu: z.input<typeof siparisFaturalariSorgusu>; cevap: SiparisFaturalariCevabi };
