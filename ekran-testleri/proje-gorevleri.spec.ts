@@ -66,11 +66,12 @@ test.describe('yönetici', () => {
     await expect(page).toHaveURL(/\/proje-gorevlerim\/\d+$/);
     const panel = page.getByRole('region', { name: 'Görev bilgisi' });
     await expect(panel.getByText('Örnek Kaliteci')).toBeVisible();
-    // 3303-1 c: görev silinmez; İptal et onay sorar, Vazgeç yazmaz.
+    // 3303-1 c: görev silinmez; İptal et gerekçe penceresi açar (3580), Vazgeç yazmaz.
     await panel.getByRole('button', { name: 'İptal et' }).click();
-    await expect(panel.getByRole('group', { name: 'Görevi iptal et' })).toBeVisible();
+    const iptalPenceresi = page.getByRole('dialog', { name: 'Görevi iptal et' });
+    await expect(iptalPenceresi).toBeVisible();
     expect(await tasmaOlc(page)).toMatchObject({ belge: 0 });
-    await panel.getByRole('group', { name: 'Görevi iptal et' }).getByRole('button', { name: 'Vazgeç' }).click();
+    await iptalPenceresi.getByRole('button', { name: 'Vazgeç' }).click();
     await panel.getByRole('button', { name: 'Düzenle' }).click();
     const form = page.getByRole('dialog');
     await expect(form.getByLabel(/^Kontrol eden/)).toBeEnabled();

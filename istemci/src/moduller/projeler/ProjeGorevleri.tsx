@@ -3,7 +3,7 @@ import type {
   Gorev, GorevDurumu, GorevEkleGovdesi, GorevGuncelleGovdesi, ProjeYonetimiCevabi,
 } from '#paylasilan/sozlesme/projeler.ts';
 import { useNavigate } from 'react-router-dom';
-import { CokSatir, Dugme, Girdi, IsaretKutusu, Kart, Menu, Pencere, Rozet, Secim, Tablo, type MenuOgesi, type Sutun } from '../../ortak/arayuz/index.ts';
+import { AcKapa, CokSatir, Dugme, Girdi, IsaretKutusu, Kart, Menu, Pencere, Rozet, Secim, Tablo, type MenuOgesi, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import {
   GOREV_DURUMLARI, GOREV_DURUM_METNI, GOREV_DURUM_TONU, GOREV_ISLEMI, atamaMetni, bugun, gorevDurumMetni, gunFarki, sapmaMetni, tarihMetni,
@@ -11,6 +11,7 @@ import {
 import { AtamaSecimi, YAPAN_IPUCU, atamaCoz, atamaDegeri, useAtamaSecenekleri } from './Atama.tsx';
 import { bosIseNull, sayiYaDaNull, useIslemVar, useYonetimKomutu } from './komut.ts';
 import { ProjeHazirlik } from './ProjeHazirlik.tsx';
+import { useTopluIptal } from './GorevIptalPenceresi.tsx';
 
 // Bitiş sapması: biten görevde gerçek bitiş, açık görevde bugün plan bitişini geçtiyse bugün; iptal edilen görevde yoktur.
 // CSV'de tür ayrı sütun değil, adın önekidir: ekrandaki rozetle aynı ayrım.
@@ -63,6 +64,15 @@ export function ProjeGorevleri({ projeId, yonetim, acik, emirleriGorur }: {
   const [secilenGorunum, gorunumYaz] = useState<Gorunum>('tablo');
   const gorunum = secilenGorunum === 'matris' && !emirleriGorur ? 'tablo' : secilenGorunum;
   const [form, formYaz] = useState<Gorev | 'yeni' | null>(null);
+  // 3580: iptal edilen görev silinmez; liste kalabalık olmasın diye varsayılan gizlidir, anahtarın yanında sayısı yazar.
+  const [iptalGoster, iptalGosterYaz] = useState(false);
+  const iptalSayisi = yonetim.gorevler.filter((g) => g.durum === 'iptal').length;
+  const gorunenler = iptalGoster ? yonetim.gorevler : yonetim.gorevler.filter((g) => g.durum !== 'iptal');
+  const { toplu, pencere: iptalPenceresi } = useTopluIptal(
+    yonetim.gorevler,
+    (g) => ({ id: g.id, ad: g.ad, durum: g.durum, surum: g.surum, projeKod: null, hazirlik: g.hazirlikMaddesi !== null }),
+    yazabilir,
+  );
   const yonlendir = useNavigate();
   // Görevsiz projede şerit dağıt düğmesini taşır; araç çubuğunda ikincisi çıkmaz.
   const seritVar = yazabilir && yonetim.gorevler.length === 0;
@@ -116,6 +126,12 @@ export function ProjeGorevleri({ projeId, yonetim, acik, emirleriGorur }: {
           <Dugme simge="gantt" aria-pressed={gorunum === 'pano'} onClick={() => { gorunumYaz('pano'); }}>Pano</Dugme>
         </div>
         <div className="tc-prj-eylemler">
+          {gorunum === 'tablo' && iptalSayisi > 0 && (
+            <label className="tc-prj-iptal-anahtar">
+              <AcKapa etiket={`İptalleri göster (${String(iptalSayisi)})`} acik={iptalGoster} degistir={iptalGosterYaz} />
+              <span>İptalleri göster ({iptalSayisi})</span>
+            </label>
+          )}
           {yazabilir && !seritVar && <span className="tc-prj-genis"><Dugme simge="users" onClick={dagitaGit}>Görevleri dağıt</Dugme></span>}
           {digerleri.length > 0 && <span className="tc-prj-dar"><Menu etiket="Diğer görev işlemleri" metin="Diğer" ogeler={digerleri} /></span>}
           {yazabilir && <Dugme simge="plus" onClick={() => { formYaz('yeni'); }}>Görev ekle</Dugme>}
@@ -128,13 +144,16 @@ export function ProjeGorevleri({ projeId, yonetim, acik, emirleriGorur }: {
             etiket="Projenin görevleri"
             {...(genis ? { kip: 'kaydir' as const } : {})}
             sutunlar={sutunlar}
-            satirlar={yonetim.gorevler}
+            satirlar={gorunenler}
             satirAnahtari={(g) => g.id}
             satirSec={sec}
-            bosMesaj="Bu projede görev yok"
+            {...(toplu === undefined ? {} : { toplu })}
+            bosMesaj={yonetim.gorevler.length > 0 ? 'Tüm görevler iptal edilmiş; “İptalleri göster” ile görün.' : 'Bu projede görev yok'}
           />
         )
         : <GorevPanosu gorevler={yonetim.gorevler} gun={gun} sec={sec} />}
+      {yazabilir && gorunum !== 'tablo' && yonetim.gorevler.length > 0 && <p className="tc-prj-soluk">Toplu işlem için Liste görünümüne geçin.</p>}
+      {iptalPenceresi}
       {form !== null && (
         <GorevFormu projeId={projeId} yonetim={yonetim} gorev={form === 'yeni' ? null : form} kapat={() => { formYaz(null); }} />
       )}

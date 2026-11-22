@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import type {
-  AdimEkleGovdesi, AdimIsaretleGovdesi, GeriCevirGovdesi, GeriGonderGovdesi, GorevAyrintisiCevabi, GorevKaniti, GorevKomutuGovdesi, GorevOlayi, KanitBaglaGovdesi,
+  AdimEkleGovdesi, AdimIsaretleGovdesi, GeriCevirGovdesi, GeriGonderGovdesi, GorevAyrintisiCevabi, GorevIptalGovdesi, GorevKaniti, GorevKomutuGovdesi, GorevOlayi, KanitBaglaGovdesi,
   NotEkleGovdesi, ProjeYonetimiCevabi,
 } from '#paylasilan/sozlesme/projeler.ts';
 import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Rozet, Simge } from '../../ortak/arayuz/index.ts';
@@ -11,18 +11,19 @@ import { DosyaHatasi, dosyaYukle } from '../belge-merkezi/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { GOREV_DURUM_TONU, GOREV_ISLEMI, atamaMetni, gorevDurumMetni, tarihMetni } from './gosterim.ts';
 import { useIslemVar, useIstekKimligi } from './komut.ts';
+import { GorevIptalPenceresi } from './GorevIptalPenceresi.tsx';
 import { GorevFormu, Ilerleme } from './ProjeGorevleri.tsx';
 import './projeler.css';
 
 const OLAY_METNI: Record<GorevOlayi['olay'], string> = {
   ustlen: 'üstlendi', basla: 'başladı', bitti: 'bitirdi', onay: 'onayladı', geri: 'geri gönderdi',
-  cevir: 'geri çevirdi',
+  cevir: 'geri çevirdi', iptal: 'iptal etti',
 };
 const anMetni = (an: string): string => `${tarihMetni(an.slice(0, 10))} ${an.slice(11, 16)}`;
 const KANIT_TURU = 'image/jpeg,image/png,image/webp,application/pdf';
 const KANIT_AZAMI = 20 * 1024 * 1024;
 
-type Komut = 'ustlen' | 'basla' | 'bitir' | 'onayla' | 'geri-gonder' | 'geri-cevir' | 'iptal';
+type Komut = 'ustlen' | 'basla' | 'bitir' | 'onayla' | 'geri-gonder' | 'geri-cevir';
 type Istek =
   | { ad: Komut; govde: GorevKomutuGovdesi | GeriGonderGovdesi | GeriCevirGovdesi }
   | { ad: 'adim'; govde: AdimEkleGovdesi }
@@ -41,7 +42,7 @@ function istekYolu(gorevId: number, i: Istek): { yol: string; govde: unknown; ko
     case 'not': return { yol: `${kok}/notlar`, govde: i.govde, korumali: true };
     case 'kanit': return { yol: `${kok}/kanitlar`, govde: i.govde, korumali: true };
     case 'kanit-kaldir': return { yol: `${kok}/kanitlar/${i.ozet}/kaldir`, govde: {}, korumali: false };
-    case 'ustlen': case 'basla': case 'bitir': case 'onayla': case 'geri-gonder': case 'geri-cevir': case 'iptal':
+    case 'ustlen': case 'basla': case 'bitir': case 'onayla': case 'geri-gonder': case 'geri-cevir':
       return { yol: `${kok}/${i.ad}`, govde: i.govde, korumali: false };
   }
 }
@@ -219,13 +220,17 @@ export function GorevSayfasi() {
         </div>
       )}
       {iptalAcik && iptalSor && (
-        <div className="tc-prj-icerik" role="group" aria-label="Görevi iptal et">
-          <p>Görev iptal edilsin mi? Görev silinmez; listede İptal olarak kalır ve proje ilerlemesine sayılmaz.</p>
-          <div className="tc-prj-gorunum">
-            <Dugme onClick={() => { iptalSorYaz(false); }} disabled={komut.isPending}>Vazgeç</Dugme>
-            <Dugme tur="tehlike" simge="x" yukleniyor={komut.isPending} onClick={() => { komut.mutate({ ad: 'iptal', govde: surum }); }}>Görevi iptal et</Dugme>
-          </div>
-        </div>
+        <GorevIptalPenceresi
+          adaylar={[{ id: g.id, ad: g.ad, durum: g.durum, surum: g.surum, projeKod: proje.kod, hazirlik: g.hazirlikMaddesi !== null }]}
+          kapat={() => { iptalSorYaz(false); }}
+          gonder={async (gorevler, gerekce) => {
+            const govde: GorevIptalGovdesi = { gerekce, surum: gorevler[0]?.surum ?? g.surum };
+            const cevap = await api.post<GorevAyrintisiCevabi>(`/projeler/gorevler/${String(gorevId)}/iptal`, govde);
+            istemci.setQueryData(anahtarlar.gorevAyrinti(gorevId), cevap);
+            await istemci.invalidateQueries({ queryKey: anahtarlar.kok, predicate: (q) => q.queryKey[1] !== 'gorev' });
+            return [{ id: gorevId, tamam: true, ileti: null, yenidenDenenir: false }];
+          }}
+        />
       )}
       {komut.isError && <p className="tc-prj-hata" role="alert">{hataIletisi(komut.error, 'Görev işlenemedi')}</p>}
     </section>

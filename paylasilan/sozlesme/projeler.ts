@@ -377,7 +377,28 @@ export const geriCevirGovdesi = z.object({
   ...beklenenSurum,
 });
 export type GeriCevirGovdesi = z.input<typeof geriCevirGovdesi>;
-export const GOREV_OLAYLARI = ['ustlen', 'basla', 'bitti', 'onay', 'geri', 'cevir'] as const;
+// 3580: iptal gerekçeli bir olaydır; tekli ve toplu iptal aynı gerekçe kuralını kullanır (3-500 karakter).
+export const GOREV_OLAYLARI = ['ustlen', 'basla', 'bitti', 'onay', 'geri', 'cevir', 'iptal'] as const;
+export const IPTAL_GEREKCE_EN_AZ = 3;
+export const IPTAL_GEREKCE_EN_COK = 500;
+export const TOPLU_IPTAL_EN_COK = 200;
+const iptalGerekcesi = z.string({ error: 'Gerekçe gerekli; eski sayfa açık olabilir, sayfayı yenileyin.' }).trim()
+  .min(IPTAL_GEREKCE_EN_AZ, `Gerekçe en az ${IPTAL_GEREKCE_EN_AZ} karakter olmalı.`)
+  .max(IPTAL_GEREKCE_EN_COK, `En çok ${IPTAL_GEREKCE_EN_COK} karakter.`);
+export const gorevIptalGovdesi = z.object({ gerekce: iptalGerekcesi, ...beklenenSurum });
+export type GorevIptalGovdesi = z.input<typeof gorevIptalGovdesi>;
+// Her görev kendi sürümüyle gelir; biri reddedilirse ötekiler yazılır (sonuçlar görev başınadır).
+export const topluGorevIptalGovdesi = z.object({
+  gorevler: z.array(z.object({ id: z.number().int().positive().max(2147483647), ...beklenenSurum })).min(1).max(TOPLU_IPTAL_EN_COK)
+    .refine((l) => new Set(l.map((g) => g.id)).size === l.length, { message: 'Aynı görev iki kez seçilemez.' }),
+  gerekce: iptalGerekcesi,
+});
+export type TopluGorevIptalGovdesi = z.input<typeof topluGorevIptalGovdesi>;
+export const topluGorevIptalCevabi = z.object({
+  // yenidenDenenir: sürüm çakışması (409); öteki ret (bitmiş, kapalı proje) yeniden denemekle geçmez.
+  sonuclar: z.array(z.object({ id: z.number().int(), tamam: z.boolean(), ileti: z.string().nullable(), yenidenDenenir: z.boolean() })),
+});
+export type TopluGorevIptalCevabi = z.output<typeof topluGorevIptalCevabi>;
 export const gorevOlayiSemasi = z.object({
   olay: z.enum(GOREV_OLAYLARI), kisiAd: z.string().nullable(), gerekce: z.string().nullable(), an: zamanSemasi,
 });

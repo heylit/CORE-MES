@@ -388,12 +388,12 @@ describe('3269 görev akışı ve şablon (gerçek PostgreSQL, gerçek giriş)',
   test('iptal (3303-1 c): görev silinmez, görev yazan iptal eder; bitmiş ve iptal görev iptal edilmez; kontrol bildirimi kapanır', async () => {
     const p = await projeAc();
     const a = await gorevAc(p, { sorumluKisiId: kalite1.id });
-    assert.equal((await komut(kalite1, a.id, 'iptal')).statusCode, 403, 'görev işleyen iptal edemez');
-    const eski = await gonder(planlama, `/projeler/gorevler/${a.id}/iptal`, { surum: a.surum + 1 });
+    assert.equal((await komut(kalite1, a.id, 'iptal', { gerekce: 'Plan değişti' })).statusCode, 403, 'görev işleyen iptal edemez');
+    const eski = await gonder(planlama, `/projeler/gorevler/${a.id}/iptal`, { surum: a.surum + 1, gerekce: 'Plan değişti' });
     assert.equal(eski.statusCode, 409, `eski sürümle iptal: ${eski.body}`);
-    const iptal = await basarili(planlama, a.id, 'iptal');
+    const iptal = await basarili(planlama, a.id, 'iptal', { gerekce: 'Plan değişti' });
     assert.equal(iptal.gorev.durum, 'iptal');
-    assert.equal((await komut(planlama, a.id, 'iptal')).statusCode, 400, 'iptal görev yeniden iptal edilmez');
+    assert.equal((await komut(planlama, a.id, 'iptal', { gerekce: 'Plan değişti' })).statusCode, 400, 'iptal görev yeniden iptal edilmez');
     assert.equal((await komut(kalite1, a.id, 'basla')).statusCode, 400, 'iptal görev işlenmez');
     const y = (await oku(planlama, `/projeler/${p}/yonetim`)).json<ProjeYonetimiCevabi>();
     assert.ok(y.gorevler.some((g) => g.id === a.id && g.durum === 'iptal'), 'görev listede kalır');
@@ -405,14 +405,87 @@ describe('3269 görev akışı ve şablon (gerçek PostgreSQL, gerçek giriş)',
     const bekleyen = await okunmamis(kalite2.id, 'projeler.gorev-kontrol-bekliyor');
     assert.ok(bekleyen >= 1);
     assert.equal(await okunmamis(baskaKontrolcu.id, 'projeler.gorev-kontrol-bekliyor'), 0, 'kontrol bildirimi yalnız kayıttaki kontrol edene');
-    await basarili(planlama, k.id, 'iptal');
+    await basarili(planlama, k.id, 'iptal', { gerekce: 'Plan değişti' });
     assert.equal(await okunmamis(kalite2.id, 'projeler.gorev-kontrol-bekliyor'), bekleyen - 1, 'kontrol bildirimi kapandı');
     assert.equal((await komut(kalite2, k.id, 'onayla')).statusCode, 400, 'iptal görev onaylanmaz');
     // Bitmiş görev iptal edilmez.
     const b = await gorevAc(p, { sorumluKisiId: kalite1.id });
     await basarili(kalite1, b.id, 'basla');
     await basarili(kalite1, b.id, 'bitir');
-    assert.equal((await komut(planlama, b.id, 'iptal')).statusCode, 400);
+    assert.equal((await komut(planlama, b.id, 'iptal', { gerekce: 'Plan değişti' })).statusCode, 400);
+  });
+
+  test('iptal gerekçesi (3580): gerekçe zorunlu (3-500), görev geçmişine kim, ne zaman, neden ile yazılır', async () => {
+    const p = await projeAc();
+    const a = await gorevAc(p, { sorumluKisiId: kalite1.id });
+    const gerekcesiz = await komut(planlama, a.id, 'iptal');
+    assert.equal(gerekcesiz.statusCode, 400, 'gerekçesiz iptal');
+    assert.match(gerekcesiz.body, /sayfayı yenileyin/);
+    assert.equal((await komut(planlama, a.id, 'iptal', { gerekce: 'ab' })).statusCode, 400, 'çok kısa gerekçe');
+    assert.equal((await komut(planlama, a.id, 'iptal', { gerekce: 'x'.repeat(501) })).statusCode, 400, 'çok uzun gerekçe');
+    const c = await basarili(planlama, a.id, 'iptal', { gerekce: '  Proje kapsamı daraldı  ' });
+    const o = c.olaylar.find((x) => x.olay === 'iptal');
+    assert.equal(o?.gerekce, 'Proje kapsamı daraldı');
+    assert.ok(o?.kisiAd !== null && o?.an !== undefined);
+    assert.deepEqual(await olaylar(a.id), ['iptal']);
+  });
+
+  test('toplu iptal (3580): her görev kendi ara kaydında; bitmiş, eski sürüm ve kapalı proje ötekileri durdurmaz; yetki, sınır ve tekrar', async () => {
+    const p = await projeAc();
+    const a = await gorevAc(p, { sorumluKisiId: kalite1.id });
+    const b = await gorevAc(p, { sorumluKisiId: kalite1.id });
+    const k = await gorevAc(p, { sorumluKisiId: kalite1.id, kontrolKisiId: kalite2.id });
+    await basarili(kalite1, k.id, 'basla');
+    await basarili(kalite1, k.id, 'bitir');
+    const bitmis = await gorevAc(p, { sorumluKisiId: kalite1.id });
+    await basarili(kalite1, bitmis.id, 'basla');
+    await basarili(kalite1, bitmis.id, 'bitir');
+    const eskiSurum = await gorevAc(p, { sorumluKisiId: kalite1.id });
+    const kontrolBekleyen = await okunmamis(kalite2.id, 'projeler.gorev-kontrol-bekliyor');
+    assert.ok(kontrolBekleyen >= 1);
+    const surum = async (id: number): Promise<number> => (await vt().tek<{ surum: number }>('SELECT surum FROM projeler_gorev WHERE id = $1', [id]))?.surum ?? 0;
+    const govde = async () => ({
+      gorevler: [
+        { id: a.id, surum: await surum(a.id) }, { id: bitmis.id, surum: await surum(bitmis.id) },
+        { id: eskiSurum.id, surum: (await surum(eskiSurum.id)) + 5 }, { id: k.id, surum: await surum(k.id) },
+      ],
+      gerekce: 'Plan değişti',
+    });
+    assert.equal((await gonder(kalite1, '/projeler/gorevler/toplu-iptal', await govde())).statusCode, 403, 'görev işleyen toplu iptal edemez');
+    const c = await gonder(planlama, '/projeler/gorevler/toplu-iptal', await govde());
+    assert.equal(c.statusCode, 200, c.body);
+    const sonuclar = c.json<{ sonuclar: { id: number; tamam: boolean; ileti: string | null; yenidenDenenir: boolean }[] }>().sonuclar;
+    const sonuc = (id: number) => sonuclar.find((s) => s.id === id);
+    assert.equal(sonuc(a.id)?.tamam, true);
+    assert.equal(sonuc(k.id)?.tamam, true, 'kontrolde bekleyen de iptal edilir');
+    assert.equal(sonuc(bitmis.id)?.tamam, false, 'bitmiş atlanır');
+    assert.ok((sonuc(bitmis.id)?.ileti ?? '').length > 0);
+    assert.equal(sonuc(eskiSurum.id)?.tamam, false, 'eski sürüm atlanır');
+    assert.equal(sonuc(eskiSurum.id)?.yenidenDenenir, true, 'sürüm çakışması yeniden denenir');
+    assert.equal(sonuc(bitmis.id)?.yenidenDenenir, false, 'bitmiş yeniden denenmez');
+    assert.equal(sonuc(b.id), undefined, 'seçilmeyen görev sonuçta yok');
+    const durum = async (id: number) => (await vt().tek<{ durum: string }>('SELECT durum FROM projeler_gorev WHERE id = $1', [id]))?.durum;
+    assert.equal(await durum(a.id), 'iptal');
+    assert.equal(await durum(k.id), 'iptal');
+    assert.equal(await durum(bitmis.id), 'bitti');
+    assert.equal(await durum(eskiSurum.id), 'yapilacak');
+    assert.equal(await durum(b.id), 'yapilacak');
+    assert.deepEqual(await olaylar(a.id), ['iptal'], 'olay ve gerekçe yazıldı');
+    assert.equal((await vt().tek<{ gerekce: string }>("SELECT gerekce FROM projeler_gorev_olayi WHERE gorev_id = $1 AND olay = 'iptal'", [a.id]))?.gerekce, 'Plan değişti');
+    assert.ok(!(await olaylar(bitmis.id)).includes('iptal'), 'atlanan göreve olay yazılmaz');
+    assert.equal(await okunmamis(kalite2.id, 'projeler.gorev-kontrol-bekliyor'), kontrolBekleyen - 1, 'kontrol bildirimi kapandı');
+    // Yalnız atlananlar yeniden denenir: kalan sürümle geçer.
+    const yeniden = await gonder(planlama, '/projeler/gorevler/toplu-iptal', {
+      gorevler: [{ id: eskiSurum.id, surum: await surum(eskiSurum.id) }], gerekce: 'Plan değişti',
+    });
+    assert.equal(yeniden.json<{ sonuclar: { tamam: boolean }[] }>().sonuclar[0]?.tamam, true);
+    // Sınırlar: boş liste, 201 kayıt, aynı görev iki kez, kısa gerekçe.
+    assert.equal((await gonder(planlama, '/projeler/gorevler/toplu-iptal', { gorevler: [], gerekce: 'Plan değişti' })).statusCode, 400);
+    const cok = Array.from({ length: 201 }, (_, i) => ({ id: i + 1, surum: 1 }));
+    assert.equal((await gonder(planlama, '/projeler/gorevler/toplu-iptal', { gorevler: cok, gerekce: 'Plan değişti' })).statusCode, 400, '201 kayıt');
+    assert.equal((await gonder(planlama, '/projeler/gorevler/toplu-iptal', { gorevler: [{ id: b.id, surum: 1 }, { id: b.id, surum: 1 }], gerekce: 'Plan değişti' })).statusCode, 400, 'tekil');
+    assert.equal((await gonder(planlama, '/projeler/gorevler/toplu-iptal', { gorevler: [{ id: b.id, surum: await surum(b.id) }], gerekce: 'ab' })).statusCode, 400);
+    assert.equal(await durum(b.id), 'yapilacak');
   });
 
   test('geri çevir (3458-4 a): atanan gerekçeyle geri çevirir; kişi görevi atanmamış, üstlenilen rol görevi role döner; yazana zil', async () => {
@@ -471,7 +544,7 @@ describe('3269 görev akışı ve şablon (gerçek PostgreSQL, gerçek giriş)',
     await basarili(kalite2, k.id, 'onayla');
     assert.equal((await komut(kalite1, k.id, 'geri-cevir', { gerekce: 'Geç kaldım' })).statusCode, 400, 'bitti');
     const i = await gorevAc(p, { sorumluKisiId: kalite1.id });
-    await basarili(planlama, i.id, 'iptal');
+    await basarili(planlama, i.id, 'iptal', { gerekce: 'Plan değişti' });
     assert.equal((await komut(kalite1, i.id, 'geri-cevir', { gerekce: 'Gerek yok' })).statusCode, 400, 'iptal');
 
     // Kısıt: üstlenilen rol yalnız kişili ve rolsüz satırda durur; cevir olayı gerekçesiz yazılmaz.
@@ -499,7 +572,7 @@ describe('3269 görev akışı ve şablon (gerçek PostgreSQL, gerçek giriş)',
     const b = await gorevAc(p, { sorumluKisiId: kisi.id });
     await gorevAc(p, { sorumluKisiId: kisi.id });
     assert.equal(await okunmamis(kisi.id, 'projeler.gorev-atandi'), 3, 'üç görev üç bildirim');
-    await basarili(planlama, a.id, 'iptal');
+    await basarili(planlama, a.id, 'iptal', { gerekce: 'Plan değişti' });
     assert.equal(await okunmamis(kisi.id, 'projeler.gorev-atandi'), 2, 'iptal komutuyla kapanan görevin bildirimi kapandı, ötekiler kaldı');
     // Düzenleme ekranından durum iptal yapılınca da o görevin atama bildirimi kapanır.
     const surum = (await vt().tek<{ surum: number }>('SELECT surum FROM projeler_gorev WHERE id = $1', [b.id]))?.surum ?? 0;

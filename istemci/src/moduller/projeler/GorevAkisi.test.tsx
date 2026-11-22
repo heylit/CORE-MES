@@ -88,17 +88,21 @@ function ac(adres: string) {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('3303 görev iptali ve üretim ilerlemesi', () => {
-  it('İptal et onay sorar; Vazgeç yazmaz; onaylanınca sürümle iptal gider ve düğme kalkar', async () => {
+  it('İptal et gerekçeli pencere açar; Vazgeç yazmaz; gerekçesiz düğme pasif; onaylanınca gerekçe ve sürümle iptal gider', async () => {
     const cagrilar = sunucuKur(YAZAN);
     ac('/proje-gorevlerim/7');
     fireEvent.click(await screen.findByRole('button', { name: 'İptal et' }));
-    const soru = screen.getByRole('group', { name: 'Görevi iptal et' });
+    const soru = await screen.findByRole('dialog', { name: 'Görevi iptal et' });
     expect(within(soru).getByText(/silinmez/)).toBeDefined();
     fireEvent.click(within(soru).getByRole('button', { name: 'Vazgeç' }));
     expect(cagrilar.filter((c) => c.yontem === 'POST')).toEqual([]);
     fireEvent.click(screen.getByRole('button', { name: 'İptal et' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Görevi iptal et' }));
-    await waitFor(() => { expect(cagrilar.find((c) => c.yol === '/projeler/gorevler/7/iptal')?.govde).toEqual({ surum: 4 }); });
+    const pencere = await screen.findByRole('dialog', { name: 'Görevi iptal et' });
+    const onay = within(pencere).getByRole('button', { name: 'Görevi iptal et' });
+    expect((onay as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(within(pencere).getByLabelText(/Gerekçe/), { target: { value: 'Gerek kalmadı' } });
+    fireEvent.click(onay);
+    await waitFor(() => { expect(cagrilar.find((c) => c.yol === '/projeler/gorevler/7/iptal')?.govde).toEqual({ gerekce: 'Gerek kalmadı', surum: 4 }); });
     await waitFor(() => { expect(screen.queryByRole('button', { name: 'İptal et' })).toBeNull(); });
   });
 
