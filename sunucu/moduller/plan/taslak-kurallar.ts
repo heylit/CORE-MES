@@ -1,5 +1,5 @@
 import type { TaslakAyarlari, TaslakCatismasi, TaslakKomutu } from '#paylasilan/sozlesme/planlama.ts';
-import { IZ_SINIRI, isTasi, isle, planaAl, simdiSaati, type GeriYama, type KomutKisisi, type KomutSonucu } from './atolye-komutlari-kurallar.ts';
+import { IZ_SINIRI, isTasi, isle, planaAl, simdiSaati, durusunIsleri, type GeriYama, type KomutKisisi, type KomutSonucu } from './atolye-komutlari-kurallar.ts';
 
 // 3282 1d: kişinin taslağının saf kuralları. Taslak komut listesidir; görünüm ve Uygula komutları güncel ortak çalışmaya sırayla yeniden
 // oynatır (Risk K1: bekleyen satırı yalnız geri yama taşır, ileri farkı yoktur). Çatışma, taslak açıldığında alınan imzayla bugünkü
@@ -257,7 +257,8 @@ export function yenidenPlanlaUygula(deger: unknown, isler: readonly string[], k:
 }
 
 // Duruş (3282 2a-1): elle girilen arıza ya da bakım. Aynı tezgâh ve aralık ikinci kez eklenmez; tezgâh çalışmada olmalı; aralık ufukta ve
-// şimdiden sonra bitmeli (Risk 2a S1, S6). Silme tek satırı siler; eşleşen elle satır yoksa komut uygulanamaz.
+// şimdiden sonra bitmeli (Risk 2a S1, S6). Silme tek satırı siler; eşleşen elle satır yoksa komut uygulanamaz. Bekleyen satırı yalnız o
+// tezgâhta işi olan siparişleri işaretler (3539): öteki tezgâhların işleri uygulamada yerinde kalır.
 const ufukSaati = (c: Nesne): number => {
   const u = nesne(c.w) ? Math.round(Number(c.w.ufukGun)) : NaN;
   return (u >= 28 && u <= 182 ? u : 120) * 24;
@@ -431,7 +432,7 @@ export function durusUygula(deger: unknown, k: { tezgah: string; bas: number; bi
   const yeni = kopya(deger);
   yeni.down = [...kopya(eski), { m: k.tezgah, from: k.bas, to: k.bit, neden: k.neden }].sort((a, b) => Number((a as Nesne).from) - Number((b as Nesne).from));
   const ne = k.neden === 'bakım' ? 'Bakım eklendi' : 'Arıza eklendi';
-  return { deger: isle(deger, yeni, { ne, ayrinti: durusAyrintisi(k.tezgah, k.bas, k.bit), isler: ['*'], geri: [{ yol: ['down'], once: eski }] }, kisi), degisti: true };
+  return { deger: isle(deger, yeni, { ne, ayrinti: durusAyrintisi(k.tezgah, k.bas, k.bit), isler: durusunIsleri(deger, k.tezgah), geri: [{ yol: ['down'], once: eski }] }, kisi), degisti: true };
 }
 export function durusSilUygula(deger: unknown, k: { tezgah: string; bas: number; bit: number }, kisi: KomutKisisi): KomutSonucu {
   if (!nesne(deger)) return { hata: { tur: 'cakisma', ileti: 'Çalışma kaydı okunamadı; sayfayı yenileyin.' } };
@@ -444,7 +445,7 @@ export function durusSilUygula(deger: unknown, k: { tezgah: string; bas: number;
   }
   const yeni = kopya(deger);
   yeni.down = kopya(eski).filter((_, j) => j !== i);
-  return { deger: isle(deger, yeni, { ne: 'Duruş silindi', ayrinti: durusAyrintisi(k.tezgah, k.bas, k.bit), isler: ['*'], geri: [{ yol: ['down'], once: eski }] }, kisi), degisti: true };
+  return { deger: isle(deger, yeni, { ne: 'Duruş silindi', ayrinti: durusAyrintisi(k.tezgah, k.bas, k.bit), isler: durusunIsleri(deger, k.tezgah), geri: [{ yol: ['down'], once: eski }] }, kisi), degisti: true };
 }
 
 // Ek mesai (3282 2a-2, 3282-7 b): tezgâha gün ve vardiya açılır, operatör seçilir. Denetim ortak çalışmanın verisiyle, uygulama anında

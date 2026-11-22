@@ -195,8 +195,21 @@ function olayDenetimi(D: Nesne, o: AtolyeOlayi, simdi: number): KomutSonucu | nu
   }
 }
 
-// Olay çalışmanın olay listesine eklenir; motor planı kurarken uygular (girdi.betik stKur). Etkilenen işler motorda hesaplanır: bekleyen
-// satırı bütün işleri işaretler (istemci etkilenenIsler olaylar için de '*').
+// Planda o tezgâhta işi olan siparişler (istemci etkilenenIsler'in duruş ve ek mesai kuralı).
+function tezgahtakiIsler(deger: Nesne, m: string): string[] {
+  const plan = planOf(deger);
+  const ops = plan !== null && nesne(plan.ops) ? Object.values(plan.ops) : [];
+  return [...new Set(ops.flatMap((r) => (nesne(r) && String(r.m) === m && typeof r.job === 'string' ? [r.job] : [])))].sort();
+}
+// Duruşun bekleyen satırı (3539): o tezgâhta işi olan siparişler. Tezgâhta iş yoksa '*': boş satır taslakta dizmeyi atlatır, plan bayat kalırdı.
+// Motor bu satırla plana göre süren adımı şimdiye dizmez (degerlendir.js acikIstek).
+export function durusunIsleri(deger: Nesne, m: string): string[] {
+  const l = tezgahtakiIsler(deger, m);
+  return l.length > 0 ? l : ['*'];
+}
+
+// Olay çalışmanın olay listesine eklenir; motor planı kurarken uygular (girdi.betik stKur). Arızanın bekleyen satırı yalnız o tezgâhta işi
+// olan siparişleri işaretler: öteki tezgâhların işleri uygulamada yerinde kalır. Öteki olayların etkisi tek tezgâha inmez, satır '*' yazar.
 export function olayEkle(deger: unknown, olay: AtolyeOlayi, k: KomutKisisi): KomutSonucu {
   if (!nesne(deger)) return cakisma('Çalışma kaydı okunamadı; sayfayı yenileyin.');
   const simdi = simdiSaati(deger, k.t);
@@ -206,7 +219,8 @@ export function olayEkle(deger: unknown, olay: AtolyeOlayi, k: KomutKisisi): Kom
   const olaylar = dizi(deger.olaylar);
   const yeni = kopya(deger);
   yeni.olaylar = [...olaylar, olay];
-  return { deger: isle(deger, yeni, { ne: OLAY_ADI[olay.tip], ayrinti: olay.tip, isler: ['*'], geri: [{ yol: ['olaylar'], once: olaylar }] }, k), degisti: true };
+  const isler = olay.tip === 'ariza' ? durusunIsleri(deger, olay.m) : ['*'];
+  return { deger: isle(deger, yeni, { ne: OLAY_ADI[olay.tip], ayrinti: olay.tip, isler, geri: [{ yol: ['olaylar'], once: olaylar }] }, k), degisti: true };
 }
 
 // Ek mesai (2053): tezgâha gün ve vardiya eklenir; motor o vardiyayı tezgâhın açık saatine katar (girdi.betik ekMesai). Geçmiş gün ve aynı
@@ -224,8 +238,6 @@ export function ekMesaiEkle(deger: unknown, g: Omit<EkMesaiEkleGovdesi, 'calisma
   if (eski.some((x) => nesne(x) && String(x.m) === g.tezgah && x.gun === g.gun && String(x.vardiya) === g.vardiya)) return { deger, degisti: false };
   const yeni = kopya(deger);
   yeni.ekMesai = [...eski, satir];
-  const plan = planOf(deger);
-  const ops = plan !== null && nesne(plan.ops) ? Object.values(plan.ops) : [];
-  const isler = [...new Set(ops.flatMap((r) => (nesne(r) && String(r.m) === g.tezgah && typeof r.job === 'string' ? [r.job] : [])))].sort();
+  const isler = tezgahtakiIsler(deger, g.tezgah);
   return { deger: isle(deger, yeni, { ne: 'Ek mesai eklendi', ayrinti: `${g.tezgah} · ${String(g.gun)}. gün · ${g.vardiya}`, isler, geri: [{ yol: ['ekMesai'], once: eski }] }, k), degisti: true };
 }

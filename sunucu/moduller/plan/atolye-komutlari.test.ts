@@ -139,13 +139,17 @@ describe('atölye komutlarının kuralı', () => {
     assert.ok('deger' in isTasi(planli(), { isId: 'J1.10', tezgah: 'T2', baslangic: 10 }, KISI, yalniz));
   });
 
-  test('olay ekle: olay listeye girer, bütün işler etkilenir, ret eski listeye döner; gösterdiği kayıt çalışmada olmalıdır', () => {
+  test('olay ekle: olay listeye girer, arıza yalnız o tezgâhın işlerini işaretler (3539), ret eski listeye döner; gösterdiği kayıt çalışmada olmalıdır', () => {
     const c = planli({ olaylar: [{ tip: 'fason', f: 'F1', gun: 1 }] });
     const y = deger(olayEkle(c, { tip: 'ariza', m: 'T1', bas: 12, saat: 4 }, KISI));
     assert.deepEqual(y.olaylar, [{ tip: 'fason', f: 'F1', gun: 1 }, { tip: 'ariza', m: 'T1', bas: 12, saat: 4 }]);
     assert.deepEqual((y.bekleyen as { isler: unknown; geri: unknown }[])[0], {
-      id: `${String(KISI.t)}-3`, ne: 'Arıza olayı eklendi', ayrinti: 'ariza', kim: KISI.kim, t: KISI.t, isler: ['*'], geri: [{ yol: ['olaylar'], once: [{ tip: 'fason', f: 'F1', gun: 1 }] }],
+      id: `${String(KISI.t)}-3`, ne: 'Arıza olayı eklendi', ayrinti: 'ariza', kim: KISI.kim, t: KISI.t, isler: ['J1'], geri: [{ yol: ['olaylar'], once: [{ tip: 'fason', f: 'F1', gun: 1 }] }],
     });
+    // Planda işi olmayan tezgâhın arızası ve tezgâha inmeyen olay bütün işleri işaretler.
+    const bos = (o: Parameters<typeof olayEkle>[1]) => (deger(olayEkle(planli(), o, KISI)).bekleyen as { isler: unknown }[])[0]?.isler;
+    assert.deepEqual(bos({ tip: 'ariza', m: 'T2', bas: 12, saat: 4 }), ['*']);
+    assert.deepEqual(bos({ tip: 'malzeme', kod: 'M1', gun: 3 }), ['*']);
     for (const o of [
       { tip: 'acil', urun: 'U1', adet: 5, termin: '2026-10-25 17:00' }, { tip: 'malzeme', kod: 'M1', gun: 3 },
       { tip: 'eksik', gun: 1, vardiya: 'V1', grup: 'TOR', n: 1 }, { tip: 'eksik', gun: 1, vardiya: 'V1', grup: 'ayar', n: 1 }, { tip: 'fason', f: 'F1', gun: 2 },

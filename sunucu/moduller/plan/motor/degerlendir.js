@@ -564,15 +564,26 @@ function tutulamayaniOnar(p, st, cx, free = false) {
    plandaki yerinde geçici kilitlenir; yalnız etkilenen siparişlerin işleri yeniden dizilir ('*': hepsi). Kilitli ve donuk işler yerinde.
    Yerinde tutulamayan iş (öncülü o saatte bitmiyor ya da tezgâhında başka iş sürüyor) etkilenmeyen emirde de yeniden dizilir
    (yerindeTutarakCoz); plan sıraya aykırı ve çakışan iş taşımaz. */
+/* 3539: tezgâhın takvimini ya da atölye olayını değiştiren bekleyen satırı (olay, duruş, ek mesai) emri yeniden planlama isteği değildir;
+   plana göre süren adımı şimdiye dizdirmez, adım yerinde kalıp duruş kadar uzar (3534). Açık istek öteki satırlardır (yeniden planla,
+   sipariş, kilit; geri farkı olmayan eski satır). Çalışmada bekleyen satırı yoksa istenen her emir açık istektir. */
+const ISTEK_DISI_YOL = new Set(['olaylar', 'down', 'ekMesai']);
+function acikIstek(isler) {
+  const l = Array.isArray(S.bekleyen) ? S.bekleyen.filter(b => b && Array.isArray(b.isler)) : [];
+  if (!l.length) return new Set(isler);
+  const istekDisi = b => Array.isArray(b.geri) && b.geri.length > 0 && b.geri.every(g => g && Array.isArray(g.yol) && ISTEK_DISI_YOL.has(g.yol[0]));
+  return new Set(l.filter(b => !istekDisi(b)).flatMap(b => b.isler));
+}
 function planUygula(isler) {
   const hepsi = isler.includes('*'), etk = new Set(isler);
+  const acik = acikIstek(isler), acikHepsi = acik.has('*');
   const st = stHazirla(dengeKilit(stOf())); const var_ = new Set(st.D.siparisler.map(s => s.id));
   if (!hepsi) for (const r of Object.values(S.plan.ops)) if (!etk.has(r.job) && var_.has(r.job) && !st.locks[r.id] && !r.fas && !r.done && isFinite(r.S)) st.locks[r.id] = { m: r.m, S: r.S, gecici: 1 };
   /* 3335-2b: istenen emirlerin geride kalan işleri (başlaması geçmiş, başlamamış, bitmemiş, fason ve elle kilitli olmayan) şimdiden sonraya
      yeniden dizilir. Motor böyle işi kendiliğinden yerinde tutar (çalışıyor sayar); yeniden planlama kişinin açık isteğidir. Başvuru
      planından da çıkar: değişiklik bütçesi işi eski yerine geri çekmesin. İstenmeyen emirlerin geride işleri yerinde kalır. */
   const geride = {}; const g = st.gercek || {};
-  for (const r of Object.values(S.plan.ops)) if ((hepsi || etk.has(r.job)) && var_.has(r.job) && !st.locks[r.id] && !r.fas && !r.done && !r.act && !(g[r.id] && g[r.id].S != null) && isFinite(r.S) && r.S < st.now - 1e-9 && r.C > st.now + 1e-9) geride[r.id] = 1;
+  for (const r of Object.values(S.plan.ops)) if ((hepsi || etk.has(r.job)) && (acikHepsi || acik.has(r.job)) && var_.has(r.job) && !st.locks[r.id] && !r.fas && !r.done && !r.act && !(g[r.id] && g[r.id].S != null) && isFinite(r.S) && r.S < st.now - 1e-9 && r.C > st.now + 1e-9) geride[r.id] = 1;
   const gerideVar = Object.keys(geride).length > 0; if (gerideVar) st.geride = geride;
   /* Geride işi olan emrin öteki işleri denge ufku için geçici kilitlenmiş olabilir; kilitli ardıl eski saatinde kalır ve ileri kayan
      öncülünden önce başlardı. O emrin geçici kilitleri kalkar (elle kilit durur). */
