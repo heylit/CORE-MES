@@ -364,8 +364,8 @@ export const ROL_MATRISI = {
     islemler: [
       'idari-isler.arac-talebi-ac', 'idari-isler.talep-ac', 'ik.bordro-gordum', 'ik.izin-talep', 'mesaj.oku', 'mesaj.yaz',
       'musteri-tedarikci.oku', 'portal.oku', 'portal.yaz', 'projeler.oku', 'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.mesaj',
-      'sayfa.ortak-dosyalar', 'sayfa.portal', 'sayfa.profil', 'sayfa.bildirim-merkezi', 'sayfa.sevkiyat', 'sayfa.siparisler', 'sayfa.stok', 'sevkiyat.is-yaz',
-      'sevkiyat.oku', 'sevkiyat.onayla', 'sevkiyat.plan-yaz', 'sevkiyat.tanim-yaz', 'siparisler.oku', 'stok.istek',
+      'sayfa.ortak-dosyalar', 'sayfa.portal', 'sayfa.profil', 'sayfa.bildirim-merkezi', 'sayfa.sevkiyat', 'sayfa.siparisler', 'sayfa.stok', 'sayfa.uretim-terminali', 'sevkiyat.is-yaz',
+      'sevkiyat.oku', 'sevkiyat.onayla', 'sevkiyat.plan-yaz', 'sevkiyat.tanim-yaz', 'siparisler.oku', 'stok.cikis', 'stok.istek',
       'projeler.gorev-isle', 'sayfa.proje-gorevlerim',
       'logo.irsaliye-oku', 'sayfa.logo-irsaliyeleri',
     ],

@@ -15,6 +15,7 @@ import { EMIR_PARAMETRESI, KART_PARAMETRESI, TMI_HEDEFLERI, emirParametresiOku, 
 import { MakineDevralPenceresi, devralMetni } from '../MakineDevralPenceresi.tsx';
 import { CagriBandi } from './ayarlar/index.tsx';
 import { MalKabulPaneli } from './hazirlik/MalKabulPaneli.tsx';
+import { YuklePaneli } from './hazirlik/YuklePaneli.tsx';
 import { ArkonCizimOrtami } from './cizim/ortam.tsx';
 import { ayarlariOku, ILK_AYARLAR, type ArkonAyarlari } from './cekirdek/ayarlar.ts';
 import { olcekHesapla, TASARIM_GENISLIGI, TASARIM_YUKSEKLIGI } from './cekirdek/olcek.ts';
@@ -41,6 +42,9 @@ export function ArkonAyriSayfa({ sayfa }: { sayfa: TasinanSayfa }) {
   if (sayfa === 'operator' && islemler !== undefined && yalnizMalKabul(islemler)) {
     return <section className="tc-ay-icerik" aria-label="Mal kabul" data-sayfa="mal-kabul"><MalKabulPaneli /></section>;
   }
+  if (sayfa === 'operator' && islemler !== undefined && yalnizYukle(islemler)) {
+    return <section className="tc-ay-icerik" aria-label="Yükleme" data-sayfa="yukle"><YuklePaneli /></section>;
+  }
   return <ArkonYeniEkrani sabitSayfa={sayfa} />;
 }
 
@@ -49,6 +53,9 @@ export function ArkonAyriSayfa({ sayfa }: { sayfa: TasinanSayfa }) {
 const ARKON_ROL_ISLEMLERI: readonly string[] = ['arkon.yonetici', 'arkon.planlama', 'arkon.hazirlik', 'arkon.kalite', 'arkon.bakim', 'arkon.amir', 'arkon.operator'];
 export const yalnizMalKabul = (islemler: readonly string[]): boolean =>
   islemler.includes('stok.giris') && !islemler.some((i) => ARKON_ROL_ISLEMLERI.includes(i));
+// Sevkiyat çalışanı (22.11.2026): Arkon rolü ve mal kabul yetkisi yok, stok çıkışı var; terminalde yalnız Yükle bölümünü görür.
+export const yalnizYukle = (islemler: readonly string[]): boolean =>
+  islemler.includes('stok.cikis') && !islemler.includes('stok.giris') && !islemler.some((i) => ARKON_ROL_ISLEMLERI.includes(i));
 
 // Sistem Ayarları'ndaki Arkon bölümü: Üretim Hazırlık > Ayarlar'ın kendisi, aynı görünürlük ve aynı kayıt. Adres Sistem Ayarları'nındır;
 // sayfa açık değilse giriş sayfasına götürülmez, yerinde "açık değil" yazar.

@@ -187,6 +187,18 @@ describe('rol dağılımı: Arkon rolleri, bakım rolü ve malzeme tanım yetkis
     assert.equal(matris.belge?.govde?.v?.['plan']?.includes('prod.run'), false);
   });
 
+  // Kullanıcı kararı 22.11.2026: sevkiyat terminalden yalnız yükler. Terminal sayfası ve stok.cikis alır; Arkon rolü, üretim yazımı, mal kabul ve toplama almaz.
+  test('sevkiyat terminal sayfasını ve stok.cikis alır, depo çıkışı yazabilir; Arkon rolü, terminal.uret, mal kabul ve toplama almaz', async () => {
+    const o = await girisYap('sevkiyat');
+    for (const islem of ['sayfa.uretim-terminali', 'stok.cikis', 'sevkiyat.oku', 'sevkiyat.is-yaz']) assert.equal(o.islemler.includes(islem), true, islem);
+    for (const islem of ['stok.giris', 'stok.toplama', 'terminal.uret', 'sayfa.arkon', 'stok.transfer', 'stok.geri-al']) assert.equal(o.islemler.includes(islem), false, islem);
+    assert.equal(o.islemler.some((i) => i.startsWith('arkon.')), false);
+    assert.notEqual((await gonder(o, '/stok/depo-sevk/999999999/cikis', {})).statusCode, 403);
+    assert.equal((await gonder(o, '/stok/mal-kabul', {})).statusCode, 403);
+    assert.equal((await gonder(o, '/stok/toplamalar', {})).statusCode, 403);
+    assert.equal((await gonder(o, '/arkon/kayitlar/counts/ekle', { satirlar: [{ cid: 'rol-sevk-1', at: Date.parse('2001-10-07T08:00:00Z'), machine: 'TZG-04', wc: 'TAL', orderNo: 'UE-1', kind: 'good', delta: 1 }], kaynak: 'c1' })).statusCode, 403);
+  });
+
   // Görmediği: işlem ve sayfa düzeyinde. Sayfası olmayan rolün oturumla açık okuma uçlarını okuyabilmesi ayrı karttadır (#247).
   test('bakım rolü Arkon bakım kaydını yazar, Arkon dışında stok sayfasını ve satın alma talebini taşır, işlem isteyen uçlarda 403 alır; operatör ve satın alma bakım kaydı yazamaz', async () => {
     const bakim = await girisYap('bakim');
@@ -238,6 +250,8 @@ describe('rol dağılımı: Arkon rolleri, bakım rolü ve malzeme tanım yetkis
       mudur: tum,
       depo: { ...tum, geriAl: false },
       planlama_proje: { ...salt, toplama: true },
+      // Kullanıcı kararı 22.11.2026: sevkiyat terminalden yükler; stok.cikis Stok Merkezi'nin çıkış uçlarını da açar.
+      sevkiyat: { ...salt, cikis: true },
       bakim: salt,
       kalite: salt,
       operator: { ...salt, okuma: false },
