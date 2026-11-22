@@ -17,14 +17,17 @@ test('ikinci menü içeriğin üstünde, içerik genişliğinde şerittir', asyn
       if (k === null) throw new Error(`${yol}: ${s} görünmüyor`);
       return k;
     };
-    const menu = await kutu('.tc-ikinci-kap');
-    const icerik = await kutu('main.tc-kabuk-icerik');
-    const ust = await kutu('.tc-kabuk-ust');
-    expect(Math.round(menu.y), `${yol}: menü üst çubuğun altında`).toBe(Math.round(ust.y + ust.height));
-    expect(menu.y + menu.height, `${yol}: menü içeriğin üstünde`).toBeLessThanOrEqual(icerik.y + 1);
-    expect(Math.round(menu.x), `${yol}: menü içerikle aynı yerden başlar`).toBe(Math.round(icerik.x));
-    expect(Math.round(menu.width), `${yol}: menü içerik genişliğinde`).toBe(Math.round(icerik.width));
-    expect((await tasmaOlc(page)).belge, `${yol}: yatay taşma`).toBeLessThanOrEqual(0);
+    // Yerleşim (kur satırı, ikinci menü öğeleri, yazı tipi) geç oturabilir; eşitlik yine kesin, yalnız oturması beklenir.
+    await expect(async () => {
+      const menu = await kutu('.tc-ikinci-kap');
+      const icerik = await kutu('main.tc-kabuk-icerik');
+      const ust = await kutu('.tc-kabuk-ust');
+      expect(Math.round(menu.y), `${yol}: menü üst çubuğun altında`).toBe(Math.round(ust.y + ust.height));
+      expect(menu.y + menu.height, `${yol}: menü içeriğin üstünde`).toBeLessThanOrEqual(icerik.y + 1);
+      expect(Math.round(menu.x), `${yol}: menü içerikle aynı yerden başlar`).toBe(Math.round(icerik.x));
+      expect(Math.round(menu.width), `${yol}: menü içerik genişliğinde`).toBe(Math.round(icerik.width));
+      expect((await tasmaOlc(page)).belge, `${yol}: yatay taşma`).toBeLessThanOrEqual(0);
+    }).toPass({ timeout: 5000 });
   }
   expect(ag.hatalar).toEqual([]);
 });
