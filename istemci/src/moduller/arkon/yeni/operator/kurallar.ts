@@ -382,17 +382,19 @@ export function isSekmeleri(
   l.push({ id: 'ana', l: 'Analiz', simge: 'chart' });
   return l;
 }
+// 3550 D: telefonun alt gezinmesi her istasyon türünde aynı sıradadır: Özetim · Üretim · İşler · [tür paneli] · Ölçüler · Talimat · Adımlar · Analiz.
+// Olmayan görünüm gizlenir, kalanların sırası kaymaz; İşler tür paneli olsun olmasın üretimin yanında kalır. Analiz her türde Bilgi gezinmesindedir.
 export function mobilGorunumler(
   o: Is, ozetVar: boolean, panelVar: boolean, panelKisa: string, panelSimgesi: SimgeAdi, D: KontrolTakvimi, yeniSayisi: number, telefon = false,
 ): EkranSekmesi[] {
   const l: EkranSekmesi[] = [];
   if (ozetVar) l.push({ id: 'ozet', l: 'Özetim', simge: 'user' });
   l.push({ id: 'prod', l: 'Üretim', simge: 'gauge' });
+  l.push({ id: 'queue', l: 'İşler', simge: 'list', n: yeniSayisi || null });
   if (panelVar) l.push({ id: 'st', l: panelKisa, simge: panelSimgesi });
   if (resimSekmesiVar(o, panelVar, telefon)) l.push({ id: 'draw', l: telefon ? 'Ölçüler' : 'Resim', simge: 'ruler', n: D.due.length || null });
-  l.push({ id: 'queue', l: 'İşler', simge: 'list', n: yeniSayisi || null });
   l.push({ id: 'steps', l: 'Adımlar', simge: 'check' });
-  if (!panelVar) l.push({ id: 'ana', l: 'Analiz', simge: 'chart' });
+  l.push({ id: 'ana', l: 'Analiz', simge: 'chart' });
   return l;
 }
 
