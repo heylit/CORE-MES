@@ -691,19 +691,31 @@ describe('A1 Üretim Terminali üst düzen (3338-6 a)', () => {
     expect(within(serit).getByText('Sıradaki')).toBeTruthy();
   }, 40000);
 
-  it('işsiz istasyonda şerit yok, "İşler" düğmesi var', async () => {
+  it('işsiz istasyonda sıra şeridi yerinde ("Sırada iş yok"), "İşler" düğmesi var (3583)', async () => {
     sunucuKur(ISTASYONLU, { belgeler: { pkgs: [], kv: [{ kimlik: 'plant', surum: 12, govde: { v: TESIS } }] } });
     arkonAc('/uretim-terminali');
     expect(await screen.findByRole('button', { name: /^İşler · 0/ }, { timeout: 10000 })).toBeTruthy();
-    expect(screen.queryByRole('region', { name: 'Sıradaki işler' })).toBeNull();
+    const serit = screen.getByRole('region', { name: 'Sıradaki işler' });
+    expect(serit.hasAttribute('data-bos')).toBe(true);
+    expect(within(serit).getByText('Sırada iş yok')).toBeTruthy();
+    expect(within(serit).queryAllByRole('listitem')).toHaveLength(0);
+    // Öteki bölgeler de iş yokken yerinde: durum şeridi ("İş yok"), uyarı ve Şimdi yuvası (boş), üç sabit eylem yuvası (pasif).
+    expect(document.querySelector('.tc-ay1-ds')?.textContent).toContain('İş yok');
+    expect(document.querySelector('.tc-ay1-uyari-seridi')?.hasAttribute('data-bos')).toBe(true);
+    expect(document.querySelector('.tc-ay1-simdi')).toBeTruthy();
+    const yuvalar = within(screen.getByRole('group', { name: 'İş durumu' })).getAllByRole('button') as HTMLButtonElement[];
+    expect(yuvalar).toHaveLength(3);
+    expect(yuvalar.every((b) => b.disabled)).toBe(true);
   }, 40000);
 
-  it('telefonda tek işte şerit yok; iş satırı Bilgiler\'i açar; üst kutuda istasyonun altında makine kodu', async () => {
+  it('telefonda tek işte de sıra şeridi yerinde (tek kart); iş satırı Bilgiler\'i açar; üst kutuda istasyonun altında makine kodu (3583)', async () => {
     telefon();
     sunucuKur(ISTASYONLU, { belgeler: { pkgs: [{ kimlik: PAKET.id, surum: 1, govde: PAKET }], kv: [{ kimlik: 'plant', surum: 13, govde: { v: { ...TESIS, mcs: [{ id: 'MK-7', name: 'Deneme makine 7', st: 'IST-1' }] } } }] } });
     arkonAc('/uretim-terminali');
     const satir = await screen.findByRole('button', { name: /^Aktif iş: / }, { timeout: 10000 });
-    expect(screen.queryByRole('region', { name: 'Sıradaki işler' })).toBeNull();
+    const serit = screen.getByRole('region', { name: 'Sıradaki işler' });
+    expect(serit.hasAttribute('data-bos')).toBe(false);
+    expect(within(serit).getAllByRole('listitem')).toHaveLength(1);
     await waitFor(() => { expect(document.querySelector('.tc-ay1-mobil-ust .tc-ay1-istasyon-makine')?.textContent).toBe('MK-7'); }, { timeout: 10000 });
     fireEvent.click(satir);
     expect(await screen.findByRole('dialog', { name: 'Bilgiler' })).toBeTruthy();

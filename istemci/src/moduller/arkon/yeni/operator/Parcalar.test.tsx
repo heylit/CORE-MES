@@ -80,13 +80,18 @@ describe('Sayaç kadranı kalan ve boş istasyon', () => {
     fireEvent.click(b!);
     expect(eylemler.length).toBe(1);
   });
-  it('1999 a: genişte Resim gizlenir; 2000 b: çalışırken Durdur dokunuşla, Duraklat basılı tutularak', () => {
-    const tam = render(<DurumDugmeleri durum="queued" eylem={() => {}} erken={() => {}} />);
-    expect(tam.queryByRole('button', { name: /Resim/ })).toBeTruthy();
+  it('3583: üç sabit yuva her durumda çizilir; olmayan düğme pasif ve yerinde kalır; Resim bu satırda yok', () => {
+    const adlar = (durum: string) => { const r = render(<DurumDugmeleri durum={durum} eylem={() => {}} erken={() => {}} />); const l = r.getAllByRole('button').map((x) => `${x.querySelector('.tc-orb-etiket')?.textContent ?? ''}${(x as HTMLButtonElement).disabled ? '*' : ''}`); cleanup(); return l; };
+    expect(adlar('queued')).toEqual(['İşi Başlat', 'Hazırlık', 'Bitir*']);
+    expect(adlar('running')).toEqual(['Durdur', 'Duraklat', 'Bitir']);
+    expect(adlar('paused')).toEqual(['Devam Et', 'Durdur', 'Bitir']);
+    expect(adlar('stopped')).toEqual(['Yeniden Başlat', 'Duraklat*', 'Bitir']);
+    expect(adlar('done')).toEqual(['Sıradaki İş', 'Duraklat*', 'Bitir*']);
+    const yalniz = render(<DurumDugmeleri durum="running" yuvalar={['bitir']} eylem={() => {}} erken={() => {}} />);
+    expect(yalniz.getAllByRole('button')).toHaveLength(1);
     cleanup();
-    const genis = render(<DurumDugmeleri durum="queued" gizle={['drawing']} eylem={() => {}} erken={() => {}} />);
-    expect(genis.queryByRole('button', { name: /Resim/ })).toBeNull();
-    cleanup();
+  });
+  it('2000 b: çalışırken Durdur dokunuşla, Duraklat basılı tutularak', () => {
     const eylemler: string[] = [];
     const calisan = render(<DurumDugmeleri durum="running" eylem={(d) => eylemler.push(d.eylem)} erken={() => {}} />);
     fireEvent.click(calisan.getByRole('button', { name: /^Durdur/ }), { detail: 1 });

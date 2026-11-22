@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { AnlikVardiya } from '../cekirdek/vardiya.ts';
 import {
   bekletmeGorevi, bitirmeEksigi, bitisOzeti, siradakiGorev, tmiIlkParcaGerekli,
-  cagriTonu, cubukDugmeleri, durumDugmeleri, numuneAraligi, durusOnerileri, hurdaUyarisi, kalanSure, kaliteIstasyonuNumuneleri, kontrolTakvimi, lotKarariEksigi, lotKarariOku, lotSayisi, tonDurumu, vardiyaHesabi, vardiyaOzeti, type VardiyaOzetGirdisi,
+  cagriTonu, cubukDugmeleri, durumDugmeleri, sabitDugmeler, numuneAraligi, durusOnerileri, hurdaUyarisi, kalanSure, kaliteIstasyonuNumuneleri, kontrolTakvimi, lotKarariEksigi, lotKarariOku, lotSayisi, tonDurumu, vardiyaHesabi, vardiyaOzeti, type VardiyaOzetGirdisi,
   uzakKendiligindenAcilir,
 } from './kurallar.ts';
 import type { Is, KontrolTakvimi } from './tipler.ts';
@@ -96,16 +96,22 @@ describe('600 a: kalite istasyonu', () => {
   });
 });
 
-describe('telefon eylem çubuğu (618)', () => {
-  it('her durumda ana eylem ve varsa Durdur; Bitir, Hazırlık ve Resim çubukta yok; hiçbiri basılı tutma istemez', () => {
+describe('telefon eylem çubuğu (618, 3583)', () => {
+  it('ilk iki yuva her durumda vardır: ana eylem ve Duraklat, Durdur ya da Hazırlık; Bitir çubukta yok; hiçbiri basılı tutma istemez', () => {
     const etiketler = (d: string) => cubukDugmeleri(d).map((x) => x.etiket);
-    expect(etiketler('queued')).toEqual(['İşi Başlat']);
-    expect(etiketler('setup')).toEqual(['Üretime Geç']);
+    expect(etiketler('queued')).toEqual(['İşi Başlat', 'Hazırlık']);
+    expect(etiketler('setup')).toEqual(['Üretime Geç', 'Duraklat']);
     expect(etiketler('running')).toEqual(['Durdur', 'Duraklat']);
-    expect(etiketler('paused')).toEqual(['Durdur', 'Devam Et']);
-    expect(etiketler('stopped')).toEqual(['Yeniden Başlat']);
-    expect(etiketler('done')).toEqual(['Sıradaki İş']);
+    expect(etiketler('paused')).toEqual(['Devam Et', 'Durdur']);
+    expect(etiketler('stopped')).toEqual(['Yeniden Başlat', 'Duraklat']);
+    expect(etiketler('done')).toEqual(['Sıradaki İş', 'Duraklat']);
     for (const d of ['queued', 'setup', 'running', 'paused', 'stopped', 'done']) expect(cubukDugmeleri(d).every((x) => !x.tut && x.eylem !== 'finish')).toBe(true);
+  });
+  it('3583: sabit yuvalar hep üç tanedir, sırası ana, ara, bitir; durumun düğmesi olmayan yuva kapalıdır', () => {
+    for (const d of ['queued', 'setup', 'running', 'paused', 'stopped', 'done']) expect(sabitDugmeler(d).map((x) => x.yuva)).toEqual(['ana', 'ara', 'bitir']);
+    expect(sabitDugmeler('running').some((x) => x.kapali)).toBe(false);
+    expect(sabitDugmeler('queued').map((x) => !!x.kapali)).toEqual([false, false, true]);
+    expect(sabitDugmeler('done').map((x) => !!x.kapali)).toEqual([false, true, true]);
   });
 });
 

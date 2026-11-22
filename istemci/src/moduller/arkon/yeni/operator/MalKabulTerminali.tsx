@@ -1,5 +1,4 @@
 import { FasonKabulOnayi, SatinAlmaKabulu, kabulKalani, useKabulIsleri, type KabulIsi } from '../../../stok/disari.ts';
-import { Dugme } from '../../../../ortak/arayuz/index.ts';
 import { DepoTerminali, sayimEklenir, type DepoIsi, type DepoMetinleri } from './DepoTerminali.tsx';
 
 // 3388 a: mal kabul standart terminal düzeninde. Fason dönüşü Kabul +1 ile sayılır (en çok firmada kalan), Bitir'de dönen kart
@@ -62,9 +61,11 @@ export function MalKabulTerminali({ dar }: { dar: boolean }) {
         if (k.tur === 'satin-alma') { b.bitti(true); return; }
         b.ac('Fason dönüşünü bitir', <FasonKabulOnayi is={k} kabul={b.sayim.sayilan} vazgec={b.kapat} yazildi={(m) => { b.bitti(k.hedef !== null && b.sayim.sayilan < k.hedef); b.bildir(m); }} />);
       }}
-      sahneEk={(b) => (kaynak(b.is.anahtar)?.tur === 'satin-alma' && b.sayim.durum === 'running'
-        ? <Dugme tur="birincil" simge="scan" onClick={() => b.ac('Okut ve kabul et', <SatinAlmaKabulu />)}>Okut ve kabul et</Dugme>
-        : null)}
+      yuvalar={(b) => {
+        // 3583 Y3: iki sabit yuva; ikincisi (Etiket bas) etiket adımı gelince doldurulur, o zamana dek yer tutar (3584).
+        const satinAlma = kaynak(b.is.anahtar)?.tur === 'satin-alma';
+        return [satinAlma ? { etiket: 'Okut ve kabul et', simge: 'scan', tikla: b.sayim.durum === 'running' ? () => b.ac('Okut ve kabul et', <SatinAlmaKabulu />) : null, birincil: true } : null, null];
+      }}
       sekmeler={() => []} />
   );
 }
