@@ -42,7 +42,9 @@ export function SevkListesi(o: SevkListesiOzellikleri) {
   // Orta ekranda (tablet) tablo kabına sığsın diye Yer ve Adet açılıma iner, satır eylemi simge düğme olur (Arayüz B3 kararı); Termin ve Fark satırda kalır.
   const adetSutunu = yerSutunu || dar;
   const eylemSimge = !yerSutunu && !dar;
-  const sutunSayisi = 6 + (yerSutunu ? 1 : 0) + (adetSutunu ? 1 : 0);
+  // Tabletta Termin ayrı sütun değil, Plan bitişinin altında küçük satırdır (kap genişliği; Test 768 ölçümü).
+  const terminSutunu = !eylemSimge;
+  const sutunSayisi = 5 + (terminSutunu ? 1 : 0) + (yerSutunu ? 1 : 0) + (adetSutunu ? 1 : 0);
 
   const tarih = (t: number | null): ReactNode => (t === null ? <span className="tc-pyv-bos">—</span> : <span className="mono">{tarihSaatYaz(taban, t)}</span>);
   const fark = (s: SevkListeSatiri): ReactNode => (s.durum === 'sevk' || s.fark === null
@@ -62,9 +64,9 @@ export function SevkListesi(o: SevkListesiOzellikleri) {
         {o.donemSecici}
       </div>
       <div className="tc-tablo-kap" data-kip={dar ? 'kart' : undefined} {...(eylemSimge ? { role: 'region', tabIndex: 0, 'aria-label': 'Siparişler, yana kaydırılabilir' } : {})}>
-        <table className="tc-tablo tc-pyv-l" aria-label="Siparişler">
+        <table className={`tc-tablo tc-pyv-l${eylemSimge ? ' tc-pyv-l-orta' : ''}`} aria-label="Siparişler">
           <thead><tr>
-            <th scope="col">Durum</th><th scope="col">Sipariş</th>{adetSutunu && <th scope="col" className="tc-tablo-sag">Adet</th>}<th scope="col">Plan bitişi</th><th scope="col">Termin</th>
+            <th scope="col">Durum</th><th scope="col">Sipariş</th>{adetSutunu && <th scope="col" className="tc-tablo-sag">Adet</th>}<th scope="col">{terminSutunu ? 'Plan bitişi' : 'Plan bitişi ve termin'}</th>{terminSutunu && <th scope="col">Termin</th>}
             <th scope="col" className="tc-tablo-sag">Fark</th>{yerSutunu && <th scope="col">Yer (son adım)</th>}<th scope="col"><span className="tc-gizli-etiket">Eylem</span></th>
           </tr></thead>
           <tbody>
@@ -94,8 +96,8 @@ export function SevkListesi(o: SevkListesiOzellikleri) {
                           </button>
                         </td>
                         {adetSutunu && <td data-baslik="Adet" className="tc-pyv-num">{x.adet === null ? '—' : x.adet.toLocaleString('tr-TR')}</td>}
-                        <td data-baslik="Plan bitişi">{tarih(x.C)}</td>
-                        <td data-baslik="Termin">{tarih(x.termin)}</td>
+                        <td data-baslik="Plan bitişi">{tarih(x.C)}{!terminSutunu && <small className="tc-pyv-l-alt">{x.termin === null ? 'termin yok' : `termin ${tarihSaatYaz(taban, x.termin)}`}</small>}</td>
+                        {terminSutunu && <td data-baslik="Termin">{tarih(x.termin)}</td>}
                         <td data-baslik="Fark" className="tc-pyv-num">{fark(s)}</td>
                         {yerSutunu && <td data-baslik="Yer" data-kart-gizli="">{yerYaz(x)}</td>}
                         <td data-baslik="" data-kart-gizli="" className="tc-pyv-l-eylem">

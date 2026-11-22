@@ -160,13 +160,15 @@ describe('P6 Sevk takvimi', () => {
     expect(within(screen.getByRole('region', { name: /^S2 · Geç/ })).getByRole('button', { name: "Kokpit'te gör" })).toBeTruthy();
   }, 20000);
 
-  it('tablette (1024 altı, 768 üstü) Yer ve Adet açılıma iner, satır eylemi simge düğmedir ve kap odaklanabilir bölgedir; Termin ve Fark satırda kalır', async () => {
+  it('tablette (1024 altı, 768 üstü) Yer ve Adet açılıma iner, satır eylemi simge düğmedir ve kap odaklanabilir bölgedir; Termin Plan bitişinin altında, Fark satırda kalır', async () => {
     vi.stubGlobal('matchMedia', (q: string) => ({ matches: q.includes('1023'), media: q, addEventListener: () => undefined, removeEventListener: () => undefined }));
     sunucuKur(YONETICI, kayitlar(calisma) as never);
     ac('/plan/sevkiyat');
     const tablo = await screen.findByRole('table', { name: 'Siparişler' }, { timeout: 10000 });
     const basliklar = [...tablo.querySelectorAll('th')].map((th) => th.textContent);
-    expect(basliklar).toContain('Termin');
+    expect(basliklar).not.toContain('Termin');
+    expect(basliklar).toContain('Plan bitişi ve termin');
+    expect(screen.getByText(/^termin 02\.03 Pzt 20:00$/)).toBeTruthy();
     expect(basliklar).toContain('Fark');
     expect(basliklar).not.toContain('Adet');
     expect(basliklar).not.toContain('Yer (son adım)');

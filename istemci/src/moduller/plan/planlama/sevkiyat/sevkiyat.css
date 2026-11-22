@@ -120,3 +120,8 @@ td.tc-pyv-not { color: var(--muted); font-size: var(--yazi-s); }
 [data-kip="kart"] .tc-tablo.tc-pyv-l tr[data-ton="hata"] > td { background: none; }
 [data-kip="kart"] .tc-tablo.tc-pyv-l tr.tc-pyv-l-acilim td { padding: var(--b-2) var(--b-3); }
 [data-kip="kart"] .tc-tablo.tc-pyv-l tr.tc-pyv-l-grup { padding: var(--b-1) var(--b-3); background: var(--panel2); }
+
+/* Tablet (768-1023): kap dar, hücre yatay boşluğu küçülür; Termin Plan bitişinin altında küçük satırdır. */
+.tc-pyv-l-alt { display: block; color: var(--muted); font-family: var(--font-mono); font-size: var(--yazi-xs); white-space: nowrap; }
+.tc-pyv-l-orta th, .tc-pyv-l-orta td { padding-inline: var(--b-2); }
+.tc-pyv-l-orta .tc-pyv-l-kim small { max-width: calc(var(--b-6) * 4); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
