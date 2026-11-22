@@ -160,6 +160,23 @@ describe('P6 Sevk takvimi', () => {
     expect(within(screen.getByRole('region', { name: /^S2 · Geç/ })).getByRole('button', { name: "Kokpit'te gör" })).toBeTruthy();
   }, 20000);
 
+  it('tablette (1024 altı, 768 üstü) Yer ve Adet açılıma iner, satır eylemi simge düğmedir ve kap odaklanabilir bölgedir; Termin ve Fark satırda kalır', async () => {
+    vi.stubGlobal('matchMedia', (q: string) => ({ matches: q.includes('1023'), media: q, addEventListener: () => undefined, removeEventListener: () => undefined }));
+    sunucuKur(YONETICI, kayitlar(calisma) as never);
+    ac('/plan/sevkiyat');
+    const tablo = await screen.findByRole('table', { name: 'Siparişler' }, { timeout: 10000 });
+    const basliklar = [...tablo.querySelectorAll('th')].map((th) => th.textContent);
+    expect(basliklar).toContain('Termin');
+    expect(basliklar).toContain('Fark');
+    expect(basliklar).not.toContain('Adet');
+    expect(basliklar).not.toContain('Yer (son adım)');
+    const eylem = screen.getByRole('button', { name: "S2 Kokpit'te gör" });
+    expect(eylem.textContent).toBe('');
+    expect(screen.getByRole('region', { name: 'Siparişler, yana kaydırılabilir' }).getAttribute('tabindex')).toBe('0');
+    fireEvent.click(screen.getByRole('button', { name: /^S2 ayrıntısı$/ }));
+    expect(within(screen.getByRole('region', { name: /^S2 · Geç/ })).getByText('Adet: 5')).toBeTruthy();
+  }, 20000);
+
   it('plan kurulmamışsa ya da çalışma yoksa yalnız uyarı çıkar; çip, arama ve görünüm seçici çizilmez', async () => {
     sunucuKur(MALIYETSIZ, kayitlar({ ...calisma, plan: null }) as never);
     ac('/plan/sevkiyat');

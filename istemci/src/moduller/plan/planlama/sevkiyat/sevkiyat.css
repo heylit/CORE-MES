@@ -98,6 +98,7 @@
 .tc-pyv-l-kim { display: flex; flex-direction: column; align-items: flex-start; gap: var(--pay-ince); min-width: 0; }
 .tc-pyv-l-kim small { color: var(--muted); font-size: var(--yazi-xs); }
 .tc-pyv-l td.tc-pyv-l-eylem { text-align: right; white-space: nowrap; }
+.tc-pyv-l .tc-pyv-l-simge { min-width: var(--dokunma); min-height: var(--dokunma); padding: 0; justify-content: center; }
 .tc-pyv-l-temizle { min-height: var(--dokunma); padding: 0 var(--b-2); border: 0; background: none; color: var(--ink); font: inherit; text-decoration: underline; cursor: pointer; }
 .tc-pyv-l tr[data-acik] > td { background: var(--panel2); }
 .tc-pyv-l tr.tc-pyv-l-acilim > td { background: var(--panel2); }

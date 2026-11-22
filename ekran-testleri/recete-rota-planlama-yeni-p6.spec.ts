@@ -84,7 +84,8 @@ test.describe('P6 Sevk takvimi', () => {
     // "Kokpit'te gör" siparişi seçip Kokpit'i açar (3537 a): Liste'ye dönüp satır eylemini (ya da telefonda açılımdakini) kullanır.
     await kap.getByRole('group', { name: 'Görünüm' }).getByRole('button', { name: 'Liste', exact: true }).click();
     const doganEylem = kap.getByRole('button', { name: "ORN-S2 Kokpit'te gör" });
-    if (await doganEylem.count()) await doganEylem.click();
+    // 768'de satır eylemi kaydırmadan görünür (Arayüz B3).
+    if (await doganEylem.count()) { await expect(doganEylem).toBeInViewport(); await doganEylem.click(); }
     else {
       await kap.getByRole('button', { name: /^ORN-S2 ayrıntısı$/ }).click();
       await kap.getByRole('region', { name: /^ORN-S2 · / }).getByRole('button', { name: "Kokpit'te gör" }).click();
