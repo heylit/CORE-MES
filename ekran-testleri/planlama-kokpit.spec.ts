@@ -2455,3 +2455,144 @@ test('Kokpit 3493 b: emir satırlı Gantt; emir açılır kapanır, adımlar alt
   await cek('3-siparisler');
   expect(ag.hatalar).toEqual([]);
 });
+
+// 3532 b: gelen değişikliğin çubuktaki işareti gerçek düğmedir (en az 32 px); basınca balon işaretin üstünde açılır ve tahtanın görünen alanından
+// taşmaz (sağ kenara yakın işaret de, 768'de Test bulgusu B1). Esc kapatır. Telefonda listede ikon; satıra basınca cümle satırın altında açılır.
+// Bekleyen değişiklik uydurmadır (S2'yi etkiler); "Planı güncelle"nin sunucu yolu burada denenmez.
+test('Kokpit 3532: gelen değişiklik işareti ve balonu ekranın içinde; telefonda satır altı cümle; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  const gelen = [{ id: 'ORN-g', ne: 'Rota değişti ORN-R1', ayrinti: 'ORN-ayrinti', kim: '', t: 0, isler: ['S2', 'S3'], geri: null }];
+  await taslakSunucusu(page, (d) => ({ ...calismaKur(d), dataVer: 4, bekleyen: gelen }));
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/kokpit?duzen=klasik');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const tasma = async () => { expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0); };
+
+  if (bilgi.project.name === 'g360') {
+    const liste = kokpit.getByRole('group', { name: 'Tezgâhlar ve işler' });
+    const satir = liste.locator('button[data-gelen]').first();
+    await expect(satir).toBeVisible();
+    await expect(satir.locator('.tc-pyq-liste-gelen[data-tur="veri"]')).toBeVisible();
+    expect((await satir.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+    await satir.click();
+    const cumle = liste.locator('[data-liste-cumle]');
+    await expect(cumle).toContainText('Veri değişti: Rota değişti ORN-R1');
+    await tasma();
+    await page.keyboard.press('Escape');
+    await expect(cumle).toHaveCount(0);
+    expect(ag.hatalar).toEqual([]);
+    return;
+  }
+
+  const tahta = kokpit.locator('.tc-pyq-tahta');
+  const isaret = tahta.locator('[data-gelen-is="S2.a1"]');
+  await expect(isaret).toBeVisible();
+  const kutu = await isaret.boundingBox();
+  expect(kutu?.width ?? 0).toBeGreaterThanOrEqual(32);
+  expect(kutu?.height ?? 0).toBeGreaterThanOrEqual(32);
+  // İşaret görünen alanın sağ kenarına gelecek kadar kaydırılır; balon yine tahtanın ve ekranın içinde açılır.
+  await tahta.evaluate((k, id) => {
+    const el = k.querySelector<HTMLElement>(`[data-gelen-is="${id}"]`), ic = k.querySelector<HTMLElement>('.tc-pyq-ic');
+    if (!el || !ic) return;
+    const x = el.getBoundingClientRect().right - ic.getBoundingClientRect().left;
+    k.scrollLeft = Math.max(0, x - k.clientWidth + 4);
+  }, 'S2.a1');
+  for (const kenar of ['sag', 'sol'] as const) {
+    if (kenar === 'sol') {
+      await tahta.evaluate((k, id) => {
+        const el = k.querySelector<HTMLElement>(`[data-gelen-is="${id}"]`), ic = k.querySelector<HTMLElement>('.tc-pyq-ic');
+        if (!el || !ic) return;
+        const bas = k.querySelector<HTMLElement>('.tc-pyq-bas')?.offsetWidth ?? 0;
+        k.scrollLeft = Math.max(0, el.getBoundingClientRect().left - ic.getBoundingClientRect().left - bas - 4);
+      }, 'S2.a1');
+    }
+    await isaret.click();
+    const balon = tahta.locator('[data-balon]');
+    await expect(balon).toContainText('Veri değişti: Rota değişti ORN-R1');
+    const b = await balon.boundingBox(), t = await tahta.boundingBox(), i = await isaret.boundingBox();
+    const en = page.viewportSize()?.width ?? 0;
+    expect(b && t && i).toBeTruthy();
+    if (b && t && i) {
+      expect(b.x).toBeGreaterThanOrEqual(t.x);
+      expect(b.x + b.width).toBeLessThanOrEqual(Math.min(t.x + t.width, en) + 0.5);
+      // Balon işaretin üstündedir: işareti ve çubuğu örtmez.
+      expect(b.y + b.height).toBeLessThanOrEqual(i.y + i.height / 2 + 0.5);
+    }
+    // Yazı kesilmez: balonun içeriği kendi genişliğine sığar.
+    expect(await balon.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+    await tasma();
+    await page.keyboard.press('Escape');
+    await expect(balon).toHaveCount(0);
+  }
+  // İlk satırdaki işaret (S3, T-01): üstte saat ekseni var, balon aşağı açılır; işareti örtmez, eksenin altında kalır (Arayüz Z3).
+  await tahta.evaluate((k) => { k.scrollTop = 0; });
+  const ilk = tahta.locator('[data-gelen-is="S3.a1"]');
+  await ilk.scrollIntoViewIfNeeded();
+  await tahta.evaluate((k) => { k.scrollTop = 0; });
+  await ilk.click();
+  const asagi = tahta.locator('[data-balon]');
+  await expect(asagi).toHaveAttribute('data-asagi', '');
+  const ab = await asagi.boundingBox(), ib = await ilk.boundingBox(), eb = await tahta.locator('.tc-pyq-eksen').boundingBox();
+  expect(ab && ib && eb).toBeTruthy();
+  if (ab && ib && eb) { expect(ab.y).toBeGreaterThanOrEqual(ib.y + ib.height / 2 - 0.5); expect(ab.y).toBeGreaterThanOrEqual(eb.y + eb.height - 0.5); }
+  await page.keyboard.press('Escape');
+  await expect(asagi).toHaveCount(0);
+  // Şeritteki "iş etkilendi" etkilenen emri yakar, ötekini soldurur.
+  const etkilenen = page.locator('[data-etkilenen]');
+  await expect(etkilenen).toContainText('iş etkilendi');
+  await etkilenen.click();
+  await expect(tahta.locator('[data-is="S2.a1"]')).toHaveAttribute('data-yanan', '');
+  await expect(tahta.locator('[data-is="S1.a1"]')).toHaveAttribute('data-sonuk', '');
+  await tasma();
+  expect(ag.hatalar).toEqual([]);
+});
+
+// 3532 b (Arayüz Z4): "Planı güncelle" ortak çalışmaya yazar (gerçek istemci yolu: kayıt, değerlendirme); sonra tahtanın üstünde sonuç çubuğu
+// (Geri al, Kapat), kayan işin eski yeri hayalet ve çubukta "+3 sa"; telefonda satırda "3 sa ileri". Değerlendirme uydurmadır: S2'nin adımı
+// üç saat kayar. Yatay taşma yok.
+test('Kokpit 3532: Planı güncelle sonrası sonuç çubuğu, hayalet ve ileri/geri yazısı; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  const gelen = [{ id: 'ORN-g', ne: 'Rota değişti ORN-R1', ayrinti: 'ORN-ayrinti', kim: '', t: 0, isler: ['S2'], geri: [] }];
+  const ortak = { ...calisma({ ...ILK }, {}), dataVer: 4, bekleyen: gelen };
+  const YENI = plan({ ...ILK, 'S2.a1': { job: 'S2', m: 'M2', S: 35, C: 43 } });
+  let surum = 1;
+  await page.route('**/api/plan/planlama-calismasi', (r) => json(r, { calisma: ortak, surum: 1 }));
+  await page.route('**/api/plan/taslagim', (r) => json(r, { taslak: null, calisma: ortak, surum: 1 }));
+  await page.route('**/api/plan/planlama-kayitlari/yaz', (r) => { surum += 1; return json(r, { kayit: { anahtar: 'ORN-calisma', bicim: 'json', deger: null, surum } }); });
+  await page.route('**/api/plan/planlama-degerlendirmesi', (r) => json(r, { is: IS }));
+  await page.route(`**/api/plan/planlama-degerlendirmesi/${IS}`, (r) => json(r, {
+    durum: 'bitti', cevap: { calismaSurumu: surum, dataVer: 4, baslangic: '2026-10-19', simdi: 7, maliyetGorunur: false, sonuc: { tur: 'plan-uygula', plan: YENI } },
+  }));
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/kokpit?duzen=klasik');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const tasma = async () => { expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0); };
+  const menu = kokpit.getByRole('button', { name: 'Plan', exact: true });
+  await expect(menu).toBeEnabled();
+  await menu.click();
+  await page.getByRole('menuitem', { name: /^Planı güncelle \(1\)/ }).click();
+  const sonuc = kokpit.getByRole('group', { name: 'Güncellemenin sonucu' });
+  await expect(sonuc).toBeVisible({ timeout: 10_000 });
+  await expect(sonuc).toContainText('1 iş kaydı');
+  await expect(sonuc).toContainText('+3 sa');
+  await expect(sonuc).toContainText('ortak çalışma planına yazıldı, canlıya değil');
+  for (const ad of ['Geri al', 'Kapat']) {
+    const d = sonuc.getByRole('button', { name: ad });
+    await expect(d).toBeVisible();
+    const k = await d.boundingBox();
+    expect((k?.x ?? 0) + (k?.width ?? 0)).toBeLessThanOrEqual((page.viewportSize()?.width ?? 0) + 0.5);
+  }
+  if (bilgi.project.name === 'g360') {
+    await expect(kokpit.getByRole('group', { name: 'Tezgâhlar ve işler' })).toContainText('3 sa ileri');
+  } else {
+    const tahta = kokpit.locator('.tc-pyq-tahta');
+    await expect(tahta.locator('[data-eski-is="S2.a1"]')).toContainText('eski');
+    await expect(tahta.locator('[data-is="S2.a1"]')).toContainText('+3 sa');
+    await expect(tahta.locator('[data-is="S2.a1"]')).toHaveAttribute('data-kaydi', '');
+  }
+  await tasma();
+  await sonuc.getByRole('button', { name: 'Kapat' }).click();
+  await expect(sonuc).toHaveCount(0);
+  await expect(kokpit.locator('[data-eski-is]')).toHaveCount(0);
+  expect(ag.hatalar).toEqual([]);
+});

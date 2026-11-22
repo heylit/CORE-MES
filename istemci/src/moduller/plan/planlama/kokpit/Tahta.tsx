@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as FareOlayi, type PointerEvent as ImlecOlayi } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as FareOlayi, type PointerEvent as ImlecOlayi } from 'react';
 import { Dugme, Simge } from '../../../../ortak/arayuz/index.ts';
 import { emirKuyrugu } from '../ortak/emir-no.ts';
 import type { Derleme } from '../motor/kurallar.ts';
@@ -7,6 +7,7 @@ import {
   SAAT_ENI, adimBaglari, agacAdimBasligi, aralikYuku, durumYazisi, DURDURMA_BEKLIYOR, durusYazisi, ekMesaiYazisi, okUcu, okYolu, planliDurusYazisi, satirKimligi, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, uzakMi, yukSinifi, yukYuzdesi,
   type AdimBagi, type KokpitEmri, type KokpitIsi, type KokpitModeli, type KokpitOlcegi, type TurAdayi,
 } from './kurallar.ts';
+import { BASLIK_ADI, GELEN_SIMGESI, type Degisiklik, type Gelenler } from './degisiklikler.ts';
 import { MalzemeSeridi, malzemeCubuklari } from './MalzemeCubugu.tsx';
 import type { EmirMalzemeleri } from './malzeme.ts';
 import type { YerlestirmeHedefi } from './Yerlestirme.tsx';
@@ -66,6 +67,12 @@ export interface TahtaOzellikleri {
   // satır açılır, adımları alt satır olur: emrin satırında özet çubuğu kalır, adımın çubuğu kendi satırındadır.
   // notlar: açık emrin adım satırlarının üstündeki not satırının yazıları (kurallar.ts agacNotlari); boşsa satır çizilmez.
   agac?: { acik: ReadonlySet<string>; ac: (emirId: string) => void; notlar?: (e: KokpitEmri) => readonly string[] } | null;
+  // 3532: gelen değişiklikler. Değişiklik gelen işin çubuğunun köşesinde türünün işareti (düğme) durur; basınca tek cümlelik balon açılır ve
+  // gelenBas o işin değişikliklerinin emirlerini yakar. Emre bağlanamayan saha olayı yalnız tezgâh satırının başındadır.
+  gelen?: Gelenler | null;
+  gelenBas?: ((isId: string) => void) | null;
+  // "Planı güncelle"den hemen önceki iş yerleri (3532, Risk R2): verilince iş yeni yerinde çizilir, eski yeri kesik hayalettir, çubukta kayma yazar.
+  eskiYer?: Readonly<Record<string, CanliYer>> | null;
 }
 export type OkKipi = 'is' | 'siparis' | 'yok';
 // Odaklanan saat görünümün sol kenarından bu kadar içeride durur (px).
@@ -133,6 +140,9 @@ export function Tahta(o: TahtaOzellikleri) {
   const yerlestirme = o.goz === 'T' ? o.yerlestirme ?? null : null;
   const yanan = o.yanan ?? null, secimiKaldir = o.secimiKaldir, onizle = o.onizle ?? null, okKipi = o.okKipi ?? 'is';
   const sorunBildir = goz === 'T' ? o.sorunBildir ?? null : null;
+  const gelen = o.gelen ?? null, gelenBas = o.gelenBas ?? null, eskiYer = once ? null : o.eskiYer ?? null;
+  // Açık balon: işaretin işi ve tahta içindeki yeri (px).
+  const [balon, setBalon] = useState<{ id: string; x: number; y: number; alt: number; satir?: true } | null>(null);
   const fasonlar = useMemo(() => new Set(m.tezgahlar.filter((t) => t.fason).map((t) => t.id)), [m.tezgahlar]);
   const coklu = o.coklu ?? BOS_KUME, cokluSec = o.cokluSec ?? null, grupKaydir = o.grupKaydir ?? null;
   const px = !uzakMi(olcek) && o.saatEni != null ? o.saatEni : SAAT_ENI[olcek];
@@ -329,6 +339,7 @@ export function Tahta(o: TahtaOzellikleri) {
 
   useEffect(() => {
     const tus = (ev: KeyboardEvent): void => {
+      if (ev.key === 'Escape' && balon && !tasinan && !menu) { ev.stopPropagation(); setBalon(null); return; }
       if (ev.key === 'Escape' && (tasinan || menu)) { ev.stopPropagation(); surukleniyor.current = false; setOnay(false); setTasinan(null); setHedef(null); setMenu(null); return; }
       if (onay) return;
       if (yazimda() || ev.ctrlKey || ev.metaKey || ev.altKey) return;
@@ -344,7 +355,37 @@ export function Tahta(o: TahtaOzellikleri) {
     };
     document.addEventListener('keydown', tus, true);
     return () => { document.removeEventListener('keydown', tus, true); };
-  }, [tasinan, menu, onay, tut, tutFis, birak, secIs, secEmir, emir, planaAl, m, olcek]);
+  }, [tasinan, menu, onay, balon, tut, tutFis, birak, secIs, secEmir, emir, planaAl, m, olcek]);
+
+  // Balon dışına basınca kapanır (tahtanın dışı da; içerideki basış tahtanın tık yakalayıcısındadır).
+  useEffect(() => {
+    if (!balon) return undefined;
+    const bas = (ev: PointerEvent): void => { if (!(ev.target as Element | null)?.closest?.('.tc-pyq-tahta')) setBalon(null); };
+    document.addEventListener('pointerdown', bas, true);
+    return () => { document.removeEventListener('pointerdown', bas, true); };
+  }, [balon]);
+  useEffect(() => { if (balon && !balon.satir && !m.isler[balon.id]) setBalon(null); }, [balon, m]);
+  const balonAc = (id: string, el: HTMLElement, satir?: true): void => {
+    if (balon?.id === id) { setBalon(null); return; }
+    const k = ic.current?.getBoundingClientRect(), b = el.getBoundingClientRect();
+    setBalon({ id, x: b.left + b.width / 2 - (k?.left ?? 0), y: b.top - (k?.top ?? 0), alt: b.bottom - (k?.top ?? 0), ...(satir ? { satir } : {}) });
+  };
+  // Balon işarete ortalanır, ama tahtanın görünen genişliğinden taşmaz (768'de sağ kenardaki işaret): sol kenar görünen alana sıkıştırılır, ok
+  // işaretin altında kalır. Üstte yer yoksa (ilk satır; yapışık saat ekseni dahil) balon işaretin altında açılır, ok yukarı bakar.
+  const balonYerlestir = (el: HTMLElement, x: number, ust: number, alt: number): void => {
+    const k = kap.current, pay = 8;
+    if (k) el.style.setProperty('--balon-en', `${String(Math.max(0, k.clientWidth - 2 * pay))}px`);
+    const en = el.offsetWidth;
+    const sol0 = k ? k.scrollLeft + pay : -Infinity, sag0 = k ? k.scrollLeft + k.clientWidth - pay : Infinity;
+    const sol = Math.max(sol0, Math.min(x - en / 2, sag0 - en));
+    el.style.setProperty('--x', `${String(Math.round(sol))}px`);
+    const eksen = k?.querySelector<HTMLElement>('.tc-pyq-eksen')?.offsetHeight ?? 0;
+    const asagi = k !== null && ust - el.offsetHeight - pay < k.scrollTop + eksen;
+    el.toggleAttribute('data-asagi', asagi);
+    el.style.setProperty('--y', `${String(Math.round(asagi ? alt : ust))}px`);
+    el.style.setProperty('--ok', `${String(Math.round(Math.max(pay, Math.min(en - pay, x - sol))))}px`);
+  };
+  const gelenYazisi = (l: readonly Degisiklik[]): string => l.map((d) => `${BASLIK_ADI[d.baslik]}: ${d.ne}`).join(' · ');
 
   // Açılışta şimdi görünür; istenen iş görünüme gelir.
   useEffect(() => {
@@ -429,12 +470,14 @@ export function Tahta(o: TahtaOzellikleri) {
               <div className="tc-pyq-alan">
                 {t.fason ? <span className="tc-pyq-not">fason · dış atölye, kapasite izlenmez</span> : hucreler.map((g) => {
                   const y = aralikYuku(cx, isler, t.id, m.bas + g * 24, m.bas + (g + adim) * 24), yuzde = yukYuzdesi(y);
-                  const ad = `${t.kod} · ${zaman(m.bas + g * 24).slice(0, 9)}${adim > 1 ? ' haftası' : ''} · ${yuzde === null ? 'kapalı' : `%${String(yuzde)} dolu (${String(Math.round(y.plan))} / ${String(Math.round(y.acik))} sa)`}`;
+                  const a = m.bas + g * 24, b = a + adim * 24;
+                  const gelenSay = gelen ? isler.filter((x) => x.m === t.id && x.S < b && x.C > a && gelen.isler.has(x.id)).length : 0;
+                  const ad = `${t.kod} · ${zaman(m.bas + g * 24).slice(0, 9)}${adim > 1 ? ' haftası' : ''} · ${yuzde === null ? 'kapalı' : `%${String(yuzde)} dolu (${String(Math.round(y.plan))} / ${String(Math.round(y.acik))} sa)`}${gelenSay > 0 ? ` · ${String(gelenSay)} işe değişiklik geldi` : ''}`;
                   return (
                     <button
                       type="button" key={g} className="tc-pyq-hucre" data-yuk={yukSinifi(y)} disabled={yuzde === null} title={ad} aria-label={ad}
                       ref={(el) => { yerYaz(el, g * 24 * px + 1, adim * 24 * px - 2); }} onClick={() => { gunAc(g); }}
-                    ><i ref={(el) => { el?.style.setProperty('--oran', String(Math.min(1, yuzde === null ? 0 : yuzde / 100))); }} /></button>
+                    ><i ref={(el) => { el?.style.setProperty('--oran', String(Math.min(1, yuzde === null ? 0 : yuzde / 100))); }} />{gelenSay > 0 && <small className="tc-pyq-hucre-gelen" data-hucre-gelen="">{gelenSay}</small>}</button>
                   );
                 })}
               </div>
@@ -484,12 +527,16 @@ export function Tahta(o: TahtaOzellikleri) {
     // 3531: itilen iş önizlemedeki yerine akar (geçiş CSS'te); bırakınca ya da vazgeçince plandaki yerine döner.
     const cizS = itilen !== undefined ? etkiNe?.yeni[x.id]?.S ?? S : S;
     const gecikir = etkiNe?.geciken.isler.has(x.id) === true;
+    // 3532: güncellemeden önceki yerine göre kayma (iş yeni yerindedir; eski yeri satırda hayalettir).
+    const eski = eskiYer?.[x.id], gKayma = eski ? x.S - eski.S : 0, gKaydi = eski !== undefined && (Math.abs(gKayma) > 0.01 || eski.m !== x.m);
+    const gelenler = gelen?.isler.get(x.id), gelenTur = gelenler?.[0]?.baslik;
     const ad = `${e?.no ?? x.job} · ${x.ad} · ${zaman(x.S)} – ${zaman(x.C).slice(-5)}${e ? ` · ${durumYazisi(e)}` : ''}${x.basladi && !x.bitti && tasi ? ' · sürüyor, taşınırsa durdurulur' : ''}${x.durdurmaBekliyor ? ` · ${DURDURMA_BEKLIYOR}` : ''}`;
     return (
+      <Fragment key={x.id}>
       <button
-        type="button" key={x.id} className="tc-pyq-is" data-is={x.id} data-d={e?.durum ?? 'iyi'} title={ad} aria-label={ad}
+        type="button" className="tc-pyq-is" data-is={x.id} data-d={e?.durum ?? 'iyi'} title={ad} aria-label={ad}
         aria-pressed={secIs === x.id} data-suruyor={x.basladi ? '' : undefined} data-emir-secili={secEmir === x.job ? '' : undefined} data-yanan={yanan?.has(x.job) ? '' : undefined} data-sonuk={uyar(x.job) && (!yanan || yanan.has(x.job)) ? undefined : ''}
-        data-sabit={neden ? '' : undefined} data-durdurma-bekliyor={x.durdurmaBekliyor ? '' : undefined} data-tasinan={tasinan?.id === x.id ? '' : undefined} data-kaydi={(canli && Math.abs(kayma) > 0.25) || itilen !== undefined ? '' : undefined}
+        data-sabit={neden ? '' : undefined} data-durdurma-bekliyor={x.durdurmaBekliyor ? '' : undefined} data-tasinan={tasinan?.id === x.id ? '' : undefined} data-kaydi={(canli && Math.abs(kayma) > 0.25) || itilen !== undefined || gKaydi ? '' : undefined}
         data-kisa={kisa ? '' : undefined} data-gecikir={gecikir ? '' : undefined}
         ref={(el) => {
           yerYaz(el, (cizS - m.bas) * px, cizim?.en ?? gercek);
@@ -513,21 +560,46 @@ export function Tahta(o: TahtaOzellikleri) {
           const k = kap.current?.getBoundingClientRect();
           setMenu({ id: x.id, x: ev.clientX - (k?.left ?? 0) + (kap.current?.scrollLeft ?? 0), y: ev.clientY - (k?.top ?? 0) + (kap.current?.scrollTop ?? 0), tut: (ev.clientX - ev.currentTarget.getBoundingClientRect().left) / px });
         }}
-        onPointerEnter={() => { imlecteki.current = x.id; if (okKipi !== 'yok') setUstteki(x.id); }}
+        onPointerEnter={() => { imlecteki.current = x.id; if (okKipi !== 'yok' || eskiYer) setUstteki(x.id); }}
         onPointerLeave={() => { if (imlecteki.current === x.id) imlecteki.current = null; setUstteki((u) => (u === x.id ? null : u)); }}
       >
         {x.kilitli && <Simge ad="lock" boyut="k" />}
         <b>{goz === 'T' ? emirKuyrugu(e?.no ?? x.job) : tezgahKodu.get(x.m) ?? x.m}</b>
-        <span>{itilen !== undefined ? `${gecikir ? 'gecikir · ' : ''}${itilen > 0 ? '+' : '−'}${sureYaz(itilen)}` : canli && Math.abs(kayma) > 0.25 ? `${kayma > 0 ? '+' : '−'}${sureYaz(kayma)}` : kisa ? sureYaz(C - S) : goz === 'T' ? e?.urun ?? x.ad : x.ad}</span>
+        <span>{itilen !== undefined ? `${gecikir ? 'gecikir · ' : ''}${itilen > 0 ? '+' : '−'}${sureYaz(itilen)}` : gKaydi ? (Math.abs(gKayma) > 0.01 ? `${gKayma > 0 ? '+' : '−'}${sureYaz(gKayma)}` : 'yeni tezgâh') : canli && Math.abs(kayma) > 0.25 ? `${kayma > 0 ? '+' : '−'}${sureYaz(kayma)}` : kisa ? sureYaz(C - S) : goz === 'T' ? e?.urun ?? x.ad : x.ad}</span>
         {x.basladi && <i className="tc-pyq-ilerleme" ref={(el) => { el?.style.setProperty('--oran', String(Math.min(1, Math.max(0, (m.simdi - S) / Math.max(0.01, C - S))))); }} />}
       </button>
+      {gelenler && gelenTur && (
+        <button
+          type="button" className="tc-pyq-gelen" data-gelen-is={x.id} data-tur={gelenTur} aria-expanded={balon?.id === x.id}
+          aria-label={`${emirKuyrugu(e?.no ?? x.job)}: ${gelenYazisi(gelenler)}`}
+          ref={(el) => { yerYaz(el, (cizS - m.bas) * px + (cizim?.en ?? gercek)); el?.style.setProperty('--serit', String(tek ? 0 : cizim?.serit ?? 0)); }}
+          onClick={(ev) => { if (tasinan) return; balonAc(x.id, ev.currentTarget); gelenBas?.(x.id); }}
+        ><Simge ad={GELEN_SIMGESI[gelenTur]} boyut="k" />{gelenler.length > 1 && <small>{gelenler.length}</small>}</button>
+      )}
+      </Fragment>
     );
+  };
+  // Güncellemeyle kayan işin eski yeri (3532): kesik hayalet, emrin kuyruğu ve "eski"; çubuğunun üstüne gelinince ya da seçilince vurgulanır.
+  const hayaletler = (r: { kimlik: string; isler: readonly KokpitIsi[] }) => {
+    if (!eskiYer) return null;
+    const l = goz === 'T' ? Object.values(m.isler).filter((x) => { const y = eskiYer[x.id]; return y !== undefined && satirKimligi({ ...x, m: y.m }) === r.kimlik; }) : r.isler;
+    return l.flatMap((x) => {
+      const y = eskiYer[x.id];
+      if (!y || (Math.abs(x.S - y.S) <= 0.01 && y.m === x.m)) return [];
+      const no = emirKuyrugu(emir.get(x.job)?.no ?? x.job);
+      return [(
+        <span
+          className="tc-pyq-hayalet tc-pyq-eski" key={`eski-${x.id}`} data-eski-is={x.id} data-vurgu={ustteki === x.id || secIs === x.id ? '' : undefined}
+          title={`${no} · güncellemeden önceki yeri ${zaman(y.S)}`} ref={(el) => { yerYaz(el, (y.S - m.bas) * px, Math.max((y.C - y.S) * px, OKUNUR_EN)); }}
+        >{no} eski</span>
+      )];
+    });
   };
 
   return (
     <div
       className="tc-pyq-tahta" data-olcek={olcek} data-tasima={tasinan ? '' : undefined} ref={kap}
-      onPointerMove={izle} onClickCapture={(ev) => { if (tasinan && !onay) { ev.preventDefault(); ev.stopPropagation(); birak(); } else if (menu && !(ev.target as Element).closest('.tc-pyq-menu')) setMenu(null); }}
+      onPointerMove={izle} onClickCapture={(ev) => { if (balon && !(ev.target as Element).closest('.tc-pyq-balon, .tc-pyq-gelen')) setBalon(null); if (tasinan && !onay) { ev.preventDefault(); ev.stopPropagation(); birak(); } else if (menu && !(ev.target as Element).closest('.tc-pyq-menu')) setMenu(null); }}
     >
       <div className="tc-pyq-ic" ref={(el) => { ic.current = el; el?.style.setProperty('--en', `${String(en)}px`); el?.style.setProperty('--gun', `${String(24 * px)}px`); }}>
         {eksen}
@@ -568,6 +640,12 @@ export function Tahta(o: TahtaOzellikleri) {
                 : sorunBildir && !fasonlar.has(r.kimlik)
                 ? <button type="button" className="tc-pyq-sorun" data-sorun-bildir={r.kimlik} aria-label={`${r.bas} için sorun bildir`} title={`${r.bas} · sorun bildir: arıza ya da bakım`} onClick={() => { sorunBildir(r.kimlik); }}><b>{r.bas}<Simge ad="wrench" boyut="k" /></b><small>{r.durus ?? r.alt}</small></button>
                 : <><b>{r.bas}</b><small>{r.durus ?? r.alt}</small></>}
+              {goz === 'T' && gelen?.satirlar.get(r.kimlik) && (
+                <button
+                  type="button" className="tc-pyq-gelen tc-pyq-gelen-satir" data-gelen-satir={r.kimlik} data-tur="saha" aria-expanded={balon?.id === r.kimlik}
+                  aria-label={`${r.bas}: ${gelenYazisi(gelen.satirlar.get(r.kimlik)!)}`} onClick={(ev) => { if (!tasinan) balonAc(r.kimlik, ev.currentTarget, true); }}
+                ><Simge ad={GELEN_SIMGESI.saha} boyut="k" /></button>
+              )}
               {goz === 'T' && m.mesai?.[r.kimlik]?.length ? <i className="tc-pyq-mesai-isaret" title={ekMesaiYazisi(m.mesai[r.kimlik]!, zaman)}>+ ek mesai</i> : null}
               {yuk.has(r.kimlik) && <i className="tc-pyq-yukcubuk" data-yuk={yuk.get(r.kimlik)!.sinif} ref={(el) => { el?.style.setProperty('--oran', String(yuk.get(r.kimlik)!.oran)); }} />}
             </div>
@@ -578,6 +656,7 @@ export function Tahta(o: TahtaOzellikleri) {
               {r.ozet && <span className="tc-pyq-ozet-cubuk" data-ozet={r.agacEmir} title={`${r.tam ?? r.bas} · adımlar ${zaman(r.ozet[0])} – ${zaman(r.ozet[1])}`} ref={(el) => { yerYaz(el, (r.ozet![0] - m.bas) * px, (r.ozet![1] - r.ozet![0]) * px); }} />}
               {r.agacEmir !== undefined && !r.ozet && r.isler.length === 0 && <span className="tc-pyq-agac-bos" data-agac-bos>planda yeri yok</span>}
               {r.notlar?.map((y) => <p className="tc-pyq-not" key={y}>{y}</p>)}
+              {hayaletler(r)}
               {r.isler.map((x) => isDugmesi(x, r.adim))}
               {oneriIsi && oneri && !tasinanIs && (goz === 'T' ? oneri.tezgah : oneriIsi.job) === r.kimlik && (
                 <span className="tc-pyq-hayalet" data-oneri="" ref={(el) => { yerYaz(el, (oneri.baslangic - m.bas) * px, (oneriIsi.C - oneriIsi.S) * px); }}>
@@ -620,6 +699,14 @@ export function Tahta(o: TahtaOzellikleri) {
         {secili && secili.termin !== null && goz === 'T' && (
           <div className="tc-pyq-termin" ref={(el) => { yerYaz(el, (secili.termin! - m.bas) * px); }}><span>Termin {secili.no} · {zaman(secili.termin).slice(6)}</span></div>
         )}
+        {balon && (() => {
+          const l = (balon.satir ? gelen?.satirlar.get(balon.id) : gelen?.isler.get(balon.id)) ?? [];
+          return l.length > 0 && (
+            <div className="tc-pyq-balon" role="status" data-balon={balon.id} ref={(el) => { if (el) balonYerlestir(el, balon.x, balon.y, balon.alt); }}>
+              {l.map((d) => <p key={d.anahtar} data-tur={d.baslik}><Simge ad={GELEN_SIMGESI[d.baslik]} boyut="k" /><span><b>{BASLIK_ADI[d.baslik]}:</b> {d.ne}{d.alt ? <small>{d.alt}</small> : null}</span></p>)}
+            </div>
+          );
+        })()}
         {menu && (
           <div className="tc-pyq-menu" role="menu" aria-label={emir.get(menu.fis ? menu.id : m.isler[menu.id]?.job ?? '')?.no ?? 'İş'} ref={(el) => { el?.style.setProperty('--x', `${String(menu.x)}px`); el?.style.setProperty('--y', `${String(menu.y)}px`); el?.querySelector('button')?.focus(); }}>
             <button type="button" role="menuitem" onClick={() => { const x = m.isler[menu.id]; setMenu(null); if (menu.fis) sec(menu.id, null); else if (x) sec(x.job, x.id); }}><Simge ad="list" boyut="k" /><span>Ayrıntı</span></button>

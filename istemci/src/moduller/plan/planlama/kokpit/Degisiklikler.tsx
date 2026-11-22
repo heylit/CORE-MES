@@ -9,11 +9,17 @@ import type { SatirEtkisiYuzu } from './satir-etkisi.ts';
 // ile tek tek kişinin taslağına uygulanır (2. adım); "Plan geride" satırında aynı düğme o emri yeniden dizer (3. adım); "Sahada oldu" yalnız gösterir.
 // salt: sayfa listeyi yalnız gösterir (Motor, 3317-1b); uygulama Kokpit'tedir. Düğmeler ne yaptığını adıyla söyler: "Aç" listeyi açar,
 // "Emre git" siparişi seçer, "Etkisini gör" hesaplar, "Bu değişikliği uygula" ve "Bu emri yeniden diz" taslağa yazar.
-export function DegisiklikOzeti({ l, acik, ac }: { l: readonly Degisiklik[]; acik: boolean; ac: (a: boolean) => void; salt?: boolean }) {
+// etkilenen (3532): tahtada işareti olan iş sayısı; basınca o işlerin emirleri tahtada yanar, yeniden basınca söner. Tahtası olmayan görünümde null.
+export function DegisiklikOzeti({ l, acik, ac, etkilenen = null }: { l: readonly Degisiklik[]; acik: boolean; ac: (a: boolean) => void; salt?: boolean; etkilenen?: { say: number; yanik: boolean; yak: () => void } | null }) {
   if (l.length === 0) return <span className="tc-pyq-dg-ozet" data-degisiklik-ozeti=""><Rozet ton="tamam">Plan güncel</Rozet></span>;
   return (
     <span className="tc-pyq-dg-ozet" data-degisiklik-ozeti="">
       <b>{l.length} değişiklik</b>
+      {etkilenen && etkilenen.say > 0 && (
+        <button type="button" className="tc-pyq-dg-etkilenen" data-etkilenen="" aria-pressed={etkilenen.yanik} title={etkilenen.yanik ? 'Tahtada vurguyu kaldır' : 'Etkilenen işleri tahtada göster'} onClick={etkilenen.yak}>
+          · {etkilenen.say} iş etkilendi
+        </button>
+      )}
       <span className="tc-pyq-dg-dokum">{degisiklikDokumu(l)}</span>
       <button type="button" className="tc-dugme tc-pym-kucuk" aria-label={acik ? 'Değişiklikleri kapat' : 'Değişiklikleri aç'} aria-expanded={acik} aria-controls="tc-pyq-dg-liste" onClick={() => { ac(!acik); }}>
         <span>{acik ? 'Kapat' : 'Aç'}</span><Simge ad={acik ? 'up' : 'down'} boyut="k" />

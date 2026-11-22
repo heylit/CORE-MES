@@ -90,6 +90,9 @@
 /* Planı etkileyen değişiklikler (3317 a): özet plan şeridinin satırındaki yuvada, liste şeridin altındaki yuvada çizilir (ikisi de şeridin
    içindedir; Kokpit'in gövdesinde yer tutmaz). */
 .tc-pyq-dg-ozet { display: inline-flex; align-items: center; gap: var(--b-2); min-width: 0; white-space: nowrap; }
+.tc-pyq-dg-etkilenen { min-height: var(--dokunma-yogun); margin-left: calc(var(--b-2) * -1); padding: 0 var(--b-1); border: 0; border-radius: var(--yari-1); background: transparent; color: var(--ink); font: inherit; font-weight: 700; text-decoration: underline dotted; text-underline-offset: var(--kayma); cursor: pointer; }
+.tc-pyq-dg-etkilenen[aria-pressed="true"] { background: var(--panel2); text-decoration: none; }
+@media (pointer: coarse) { .tc-pyq-dg-etkilenen { min-height: var(--dokunma); } }
 .tc-pyq-dg-dokum { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-size: var(--yazi-s); }
 .tc-pyq-dg {
   display: flex; flex-direction: column; gap: var(--b-2); margin: 0 var(--b-2) var(--b-2); padding: var(--b-2) var(--b-3) var(--b-3);
@@ -176,6 +179,17 @@
 .tc-pyq-liste button[aria-current="true"] { border-color: var(--ink); }
 .tc-pyq-liste span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
 .tc-pyq-liste small { grid-column: 1 / -1; color: var(--muted); font-size: var(--yazi-xs); }
+/* 3532: gelen değişiklik işareti satırın solunda; işaretsiz satırda yeri boş kalır (hizalar kaymasın). */
+.tc-pyq-liste[data-isaretli] button { grid-template-columns: var(--b-4) auto minmax(0, 1fr); }
+.tc-pyq-liste[data-isaretli] button > small { grid-column: 2 / -1; }
+.tc-pyq-liste-gelen { display: inline-grid; place-items: center; align-self: center; color: var(--muted); font-style: normal; }
+.tc-pyq-liste-gelen[data-tur="veri"] { color: var(--done); }
+.tc-pyq-liste-gelen[data-tur="saha"] { color: var(--d-risk); }
+.tc-pyq-liste-gelen[data-tur="geride"] { color: var(--d-gec); }
+.tc-pyq-liste small em[data-kayma] { color: var(--ink); font-style: normal; font-weight: 700; }
+.tc-pyq-liste-cumle { margin: var(--b-1) 0 0 var(--b-4); padding: var(--b-2); border-left: var(--cizgi) solid var(--edge2); background: var(--panel2); border-radius: var(--yari-1); font-size: var(--yazi-xs); }
+.tc-pyq-liste-cumle p { margin: 0; }
+.tc-pyq-liste-cumle small { display: block; }
 
 /* --- tahta --- */
 .tc-pyq-ana { container-type: inline-size; }
@@ -316,6 +330,47 @@
 .tc-pyq-aciklama i[data-t="kapali"] { background: repeating-linear-gradient(135deg, var(--edge) 0 var(--pay-ince), transparent var(--pay-ince) var(--b-1)); }
 .tc-pyq-bosyer:hover, .tc-pyq-bosyer:focus-visible { outline: var(--cizgi) solid var(--ink); outline-offset: var(--pay-ince); }
 .tc-pyq-hayalet[data-gecersiz] { border-color: var(--stop); background: color-mix(in oklab, var(--stop) 25%, transparent); }
+/* 3532: gelen değişikliğin işareti. Görünen 18 px, basılan alan 32 px (dokunmatikte 44 px); çubuğun sağ üst köşesinde, çubuğu örtmeden dışına taşar. */
+.tc-pyq-gelen {
+  --isaret: calc(var(--b-4) + var(--pay-ince)); --alan: var(--dokunma-yogun);
+  position: absolute; z-index: 3; width: var(--alan); height: var(--alan);
+  left: calc(var(--x) - var(--isaret) / 2 - var(--alan) / 2); top: calc(var(--b-1) + var(--serit, 0) * var(--satir) - var(--alan) / 2);
+  display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--ink); cursor: pointer;
+}
+.tc-pyq-gelen::before {
+  content: ""; position: absolute; inset: calc((var(--alan) - var(--isaret)) / 2); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-tam);
+  background: var(--panel-solid); box-shadow: var(--shadow);
+}
+.tc-pyq-gelen > * { position: relative; }
+.tc-pyq-gelen > small { position: absolute; top: 0; right: 0; min-width: var(--b-3); border-radius: var(--yari-tam); background: var(--ink); color: var(--panel-solid); font-size: var(--yazi-xs); line-height: 1; padding: 1px var(--pay-ince); }
+.tc-pyq-gelen[data-tur="veri"]::before { border-color: var(--done); }
+.tc-pyq-gelen[data-tur="saha"]::before { border-color: var(--d-risk); }
+.tc-pyq-gelen[data-tur="geride"]::before { border-color: var(--d-gec); }
+.tc-pyq-gelen:focus-visible { outline: none; }
+.tc-pyq-gelen:focus-visible::before, .tc-pyq-gelen[aria-expanded="true"]::before { outline: var(--cizgi) solid var(--ink); outline-offset: var(--pay-ince); }
+/* Dokunmatikte alan yalnız dikeyde 44 px: yatayda bitişik çubuğun ucunu kapatmasın. */
+@media (pointer: coarse) { .tc-pyq-gelen { height: var(--dokunma); top: calc(var(--b-1) + var(--serit, 0) * var(--satir) - var(--dokunma) / 2); } .tc-pyq-gelen::before { inset: calc((var(--dokunma) - var(--isaret)) / 2) calc((var(--alan) - var(--isaret)) / 2); } }
+/* Satır başındaki işaret (emre bağlanamayan saha olayı) akışta durur. */
+.tc-pyq-gelen-satir { position: relative; top: auto; left: auto; flex: none; }
+/* Balon işaretin üstünde, okla ona bağlı; çubuğu ve alttaki satırı örtmez. */
+.tc-pyq-balon {
+  position: absolute; left: var(--x); top: var(--y); z-index: 8; translate: 0 calc(-100% - var(--b-2));
+  display: flex; flex-direction: column; gap: var(--b-1); width: max-content; max-width: min(calc(var(--b-6) * 10), var(--balon-en, 80vw)); padding: var(--b-2);
+  border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); background: var(--panel-solid); color: var(--ink); box-shadow: var(--shadow); font-size: var(--yazi-xs);
+}
+.tc-pyq-balon::after {
+  content: ""; position: absolute; left: var(--ok, 50%); bottom: calc(var(--b-1) / -1 - var(--cizgi-ince)); width: var(--b-2); height: var(--b-2);
+  border: solid var(--edge2); border-width: 0 var(--cizgi-ince) var(--cizgi-ince) 0; background: var(--panel-solid); transform: translateX(-50%) rotate(45deg);
+}
+.tc-pyq-balon[data-asagi] { translate: 0 var(--b-2); }
+.tc-pyq-balon[data-asagi]::after { bottom: auto; top: calc(var(--b-1) / -1 - var(--cizgi-ince)); border-width: var(--cizgi-ince) 0 0 var(--cizgi-ince); }
+.tc-pyq-balon p { display: flex; gap: var(--b-1); margin: 0; white-space: normal; }
+.tc-pyq-balon small { display: block; color: var(--muted); }
+/* Güncellemeyle kayan işin eski yeri: kesik, soluk; çubuğu seçilince ya da üstüne gelinince vurgulu. */
+.tc-pyq-eski { z-index: 0; border-color: var(--muted); background: transparent; color: var(--muted); font-weight: 400; }
+.tc-pyq-eski[data-vurgu] { z-index: 2; border-color: var(--hazard); background: color-mix(in oklab, var(--hazard) 20%, transparent); color: var(--ink); font-weight: 700; }
+.tc-pyq-satir[data-seritli] .tc-pyq-eski { top: var(--b-1); bottom: auto; height: calc(var(--satir) - var(--b-1) * 2); }
+.tc-pyq-hucre-gelen { position: absolute; top: var(--pay-ince); right: var(--pay-ince); padding: 0 var(--pay-ince); border-radius: var(--yari-tam); background: var(--ink); color: var(--panel-solid); font-size: var(--yazi-xs); line-height: 1.2; }
 
 /* Malzeme satırı (3369): gelişi beklenen malzeme şimdiden geliş anına kesik çerçeveli çubuk; bekleyen emirler alt alta dizilir. */
 .tc-pyq-malsatir { min-height: calc(var(--satir) * var(--seritler, 1)); background: var(--panel2); }
@@ -367,6 +422,10 @@
   border: var(--cizgi-ince) solid var(--edge2); background: var(--panel-solid); color: var(--ink); box-shadow: var(--shadow);
 }
 .tc-pyq-tasima-onayi > span { flex: 1 1 calc(var(--b-6) * 6); min-width: 0; }
+/* 3532: güncelleme sonucu tahtanın üstünde, akışta durur (tahtanın içindeki yapışık ipucu değil). */
+.tc-pyq-guncelleme { position: static; display: flex; margin: 0 0 var(--b-2); padding: var(--b-1) var(--b-2); max-width: none; font-size: var(--yazi-s); font-weight: 400; }
+.tc-pyq-guncelleme > span .tc-simge { vertical-align: middle; margin-right: var(--b-1); }
+.tc-pyq-guncelleme-gec { color: var(--d-gec); font-weight: 700; }
 
 /* Sağ tık menüsü. */
 .tc-pyq-menu {
