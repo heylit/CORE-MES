@@ -286,9 +286,17 @@ describe('stok ürün sevki (gerçek PostgreSQL)', () => {
     const ilk: UrunSevkSatiri = { isId: ++isNo, uretimEmriId: id, adet: '1', firmaId: null };
     const ikinci: UrunSevkSatiri = { isId: ++isNo, uretimEmriId: id, adet: '2', firmaId: null };
     let birak!: () => void;
+    let kilitteCoz!: () => void;
     const tutuluyor = new Promise<void>((r) => { birak = r; });
-    const ilkIs = o().vt.tx(async (db) => { await urunSevkiYansit(db, { satirlar: [ilk], onceki: 'yolda', yeni: 'tamamlandi', kisiId: yoneticiId }); await tutuluyor; });
-    await new Promise((r) => setTimeout(r, 50));
+    const kilitte = new Promise<void>((r) => { kilitteCoz = r; });
+    const ilkIs = o().vt.tx(async (db) => {
+      await urunSevkiYansit(db, { satirlar: [ilk], onceki: 'yolda', yeni: 'tamamlandi', kisiId: yoneticiId });
+      kilitteCoz();
+      await tutuluyor;
+    });
+    // Ret, döngü bitene kadar işlenmemiş kalıp unhandledRejection olmasın; ilk işlem kilidi alamazsa beklenti okunur hatayla düşer.
+    const ilkSonuc = ilkIs.then(() => null, (h: unknown) => h);
+    await Promise.race([kilitte, ilkSonuc]);
     const ikinciIs = gecis(ikinci, 'yolda', 'tamamlandi');
     let bekledi = false;
     for (let i = 0; i < 100 && !bekledi; i += 1) {
@@ -297,7 +305,7 @@ describe('stok ürün sevki (gerçek PostgreSQL)', () => {
       if (!bekledi) await new Promise((r) => setTimeout(r, 20));
     }
     birak();
-    await ilkIs;
+    assert.equal(await ilkSonuc, null, 'ilk sevk kilidi alıp tamamlanmalıydı');
     assert.ok(bekledi, 'ikinci sevk bakiye kilidinde beklemedi');
     assert.deepEqual(await ikinciIs, [`Emir ${await emirNumarasi(id)}: 1 adet stokta yoktu, eksiye düştü; sonraki giriş tamamlar.`]);
     assert.deepEqual([await bakiye('k.tur', 'istasyon', id), await sevkCikisi(id)], [-1, 3]);
