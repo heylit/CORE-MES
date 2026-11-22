@@ -1,12 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { matrisOku } from './matris-okuyucu.ts';
 
-// Kamera ile kod okuma: tarayıcının BarcodeDetector'ü varsa o (QR ve barkod), yoksa jsqr (yalnız QR).
-// Aynı kod 2 saniye içinde ikinci kez bildirilmez.
+// Kamera ile kod okuma: tarayıcının BarcodeDetector'ü QR ve DataMatrix'i birlikte okuyorsa o (Android), yoksa zxing-wasm (Windows dahil;
+// matris-okuyucu.ts). zxing yüklenemezse eski jsqr yalnız QR için son yedektir. Aynı kod 2 saniye içinde ikinci kez bildirilmez.
 interface Algilayici { detect(kaynak: CanvasImageSource): Promise<{ rawValue: string }[]> }
-type AlgilayiciSinifi = new (s: { formats: string[] }) => Algilayici;
-function yerelAlgilayici(): Algilayici | null {
-  const S = (globalThis as { BarcodeDetector?: AlgilayiciSinifi }).BarcodeDetector;
-  return S ? new S({ formats: ['qr_code', 'code_128', 'ean_13', 'ean_8', 'code_39', 'data_matrix'] }) : null;
+type AlgilayiciSinifi = (new (s: { formats: string[] }) => Algilayici) & { getSupportedFormats?: () => Promise<string[]> };
+const YEREL_BICIMLER = ['qr_code', 'code_128', 'ean_13', 'ean_8', 'code_39', 'data_matrix'];
+let yerel: Promise<Algilayici | null> | null = null;
+// Yalnız iki 2B simgeyi de okuduğu doğrulanan tarayıcı yerel okuyucuyu kullanır: DataMatrix'siz yerel okuyucu kodsuz kare döndürüp
+// asıl okuyucuyu hiç çalıştırmazdı.
+function yerelAlgilayici(): Promise<Algilayici | null> {
+  yerel ??= (async () => {
+    const S = (globalThis as { BarcodeDetector?: AlgilayiciSinifi }).BarcodeDetector;
+    if (!S?.getSupportedFormats) return null;
+    try {
+      const var_ = await S.getSupportedFormats();
+      return var_.includes('qr_code') && var_.includes('data_matrix') ? new S({ formats: YEREL_BICIMLER.filter((b) => var_.includes(b)) }) : null;
+    } catch { return null; }
+  })();
+  return yerel;
 }
 async function jsqrIleOku(tuval: HTMLCanvasElement): Promise<string | null> {
   const ctx = tuval.getContext('2d', { willReadFrequently: true });
@@ -15,16 +27,27 @@ async function jsqrIleOku(tuval: HTMLCanvasElement): Promise<string | null> {
   const { default: jsQR } = await import('jsqr');
   return jsQR(veri.data, veri.width, veri.height)?.data ?? null;
 }
+// Motor düşerse 10 saniye yedekle gidilir, sonra yeniden denenir: geçici bir yükleme hatası okumayı sayfa yenilenene kadar kısmasın.
+const YEDEK_SURESI_MS = 10_000;
+let motorDustu = 0;
+async function tuvaldenOku(tuval: HTMLCanvasElement): Promise<string | null> {
+  if (Date.now() - motorDustu >= YEDEK_SURESI_MS) {
+    const ctx = tuval.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return null;
+    try { return await matrisOku(ctx.getImageData(0, 0, tuval.width, tuval.height)); } catch { motorDustu = Date.now(); }
+  }
+  return jsqrIleOku(tuval);
+}
 export async function goruntudenOku(kaynak: ImageBitmap | HTMLVideoElement, tuval: HTMLCanvasElement): Promise<string | null> {
   const g = kaynak instanceof HTMLVideoElement ? kaynak.videoWidth : kaynak.width;
   const y = kaynak instanceof HTMLVideoElement ? kaynak.videoHeight : kaynak.height;
   if (!g || !y) return null;
-  const a = yerelAlgilayici();
-  if (a) { try { return (await a.detect(kaynak))[0]?.rawValue ?? null; } catch { /* jsqr'a düş */ } }
+  const a = await yerelAlgilayici();
+  if (a) { try { return (await a.detect(kaynak))[0]?.rawValue ?? null; } catch { /* zxing'e düş */ } }
   const olcek = Math.min(1, 960 / Math.max(g, y));
   tuval.width = Math.round(g * olcek); tuval.height = Math.round(y * olcek);
   tuval.getContext('2d')?.drawImage(kaynak, 0, 0, tuval.width, tuval.height);
-  return jsqrIleOku(tuval);
+  return tuvaldenOku(tuval);
 }
 
 export function useKamera(okundu: (kod: string) => void) {

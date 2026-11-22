@@ -26,6 +26,7 @@ export { CokSatir, Girdi, IsaretKutusu, Secim, type Secenek } from './Alan.tsx';
 export { AcKapa } from './AcKapa.tsx';
 export { Pencere } from './Pencere.tsx';
 export { KodOkuyucu } from './KodOkuyucu.tsx';
+export { EtiketBilgisi, type EtiketDurumu } from './EtiketBilgisi.tsx';
 export { useOkutmaGecmisi, okutmaSesi, type OkutmaGecmisi, type OkutmaKaydi, type OkutmaTonu } from './okutma-geribildirimi.ts';
 export { KOMUT_YOK, TUS_ARASI_MS, useOkuyucuKomutu, type KomutIsleyici, type KomutSonucu } from './okuyucu-komutu.ts';
 export { ParolaPenceresi } from './ParolaPenceresi.tsx';

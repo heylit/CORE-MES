@@ -1,0 +1,19 @@
+.tc-etiket { display: grid; gap: var(--b-2); min-inline-size: 0; container-type: inline-size; }
+.tc-etiket-satir { display: flex; align-items: center; gap: var(--b-2); margin: 0; color: var(--muted); font-size: var(--yazi-s); }
+.tc-etiket-satir[data-ton="tamam"] { color: var(--run); }
+.tc-etiket-bant { --c: var(--hold); display: flex; align-items: flex-start; gap: var(--b-3); padding: var(--b-3); border: thin solid var(--c); border-radius: var(--yari-2);
+  background: color-mix(in srgb, var(--c) 10%, transparent); min-inline-size: 0; }
+.tc-etiket-bant > span { display: grid; gap: var(--b-1); min-inline-size: 0; overflow-wrap: anywhere; font-size: var(--yazi-s); }
+.tc-etiket-bant b { font-weight: 700; }
+.tc-etiket-bant .tc-simge { flex: none; color: var(--c); }
+.tc-etiket-bant[data-ton="dur"], .tc-etiket-bant[data-ton="hata"] { --c: var(--stop); }
+.tc-etiket-bant[data-ton="cevrimdisi"] { --c: var(--muted); border-style: dashed; }
+.tc-etiket-alanlar { display: grid; gap: var(--b-2); margin: 0; }
+.tc-etiket-alanlar > div { display: grid; grid-template-columns: minmax(7rem, 11rem) minmax(0, 1fr); gap: var(--b-1) var(--b-3); align-items: baseline; }
+.tc-etiket-alanlar dt { color: var(--muted); font-size: var(--yazi-s); }
+.tc-etiket-alanlar dd { margin: 0; min-inline-size: 0; overflow-wrap: anywhere; font-size: var(--yazi-s); }
+.tc-etiket-alanlar > div[data-soluk] dd { color: var(--muted); }
+.tc-etiket-eylem { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-etiket-not { margin: 0; color: var(--muted); font-size: var(--yazi-xs); }
+/* Bileşen dar yerde (360 ekran, yan panel) ad üstte, değer altta: iki sütun değeri sıkıştırırdı. */
+@container (max-width: 26rem) { .tc-etiket-alanlar > div { grid-template-columns: minmax(0, 1fr); } }

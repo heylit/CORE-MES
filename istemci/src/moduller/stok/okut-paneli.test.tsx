@@ -453,3 +453,25 @@ describe('Okutarak say adresi (2022 b)', () => {
     expect(within(modlar).queryByRole('radio', { name: 'Say' })).toBeNull();
   });
 });
+
+describe('Özet kod (CM1, DataMatrix geçişi)', () => {
+  it('sunucuya ulaşılamayınca etiketin kendi bilgisi "Çevrimdışı bilgi" başlığıyla, doğrulanamayan alanlar işaretli görünür', async () => {
+    ciz(DEPO, { 'GET /stok/teslim-kutusu/kod-coz': () => { throw new TypeError('Failed to fetch'); } });
+    const kap = await panelAc();
+    await okut(kap, 'CM1/LOT:ORN-LT-2041/TPN:ORN-TPN-77812/SKT:270527/DRM:KBK/BT:261122');
+    expect(await within(kap).findByText(/Çevrimdışı bilgi · basım 22\.11\.2026 · güncel olmayabilir/)).toBeTruthy();
+    expect(within(kap).getByText('Tedarikçi lotu')).toBeTruthy();
+    expect(within(kap).getByText('ORN-TPN-77812')).toBeTruthy();
+    expect(within(kap).getByText('27.05.2027')).toBeTruthy();
+    expect(within(kap).getByText('Karar bekliyor')).toBeTruthy();
+    expect(within(kap).getByText('doğrulanmadı')).toBeTruthy();
+  });
+
+  it('sunucu cevap verirken özet kod eski QR gibi çalışır: ilk alanı çözülür, çevrimdışı başlık çıkmaz', async () => {
+    const istekler = ciz(DEPO, { 'GET /stok/teslim-kutusu/kod-coz': panelKodu({ 'LOT:ORN-LT-2041': PANEL_MLZ('hammadde') }) });
+    const kap = await panelAc();
+    await okut(kap, 'CM1/LOT:ORN-LT-2041/TPN:ORN-TPN-77812/BT:261122');
+    await waitFor(() => expect(istekler.some((i) => i.yol.startsWith('/stok/teslim-kutusu/kod-coz'))).toBe(true));
+    expect(within(kap).queryByText(/Çevrimdışı bilgi/)).toBeNull();
+  });
+});

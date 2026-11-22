@@ -2,9 +2,10 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { HareketCevabi, OkutCozCevabi, OkutYeri, SepetCevabi, SonIslem, TeslimCevabi, TeslimKutusuCevabi } from '#paylasilan/sozlesme/stok.ts';
-import { DurumKutusu, Dugme, Girdi, KodOkuyucu, Rozet, useOkutmaGecmisi, type KomutIsleyici } from '../../ortak/arayuz/index.ts';
+import { DurumKutusu, Dugme, EtiketBilgisi, Girdi, KodOkuyucu, Rozet, useOkutmaGecmisi, type KomutIsleyici } from '../../ortak/arayuz/index.ts';
 import { AdimSeridi, HedefListesi, SonucKarti, titret, type AkisAdimi, type IslemSonucu } from './OkutDuzeni.tsx';
-import { api } from '../../ortak/veri/api.ts';
+import { cm1Coz } from '#paylasilan/etiket-kodu.ts';
+import { AgHatasi, api } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { KONUM_ETIKETI, miktarGirdisi, miktarMetni } from './gorunum.ts';
 import {
@@ -145,6 +146,8 @@ export function OkutAlani({ teslimEteGec, okundu, sifir = 0, sonuc: sonucKarti, 
       if (p.tur === 'teslim-et') { setDurum(OKUT_BASI); teslimEteGec(p.hedef); } else setDurum(p.durum);
     },
   });
+  // Son okutulan kod özet kodsa (CM1) sunucuya ulaşılamayınca etiketin kendi bilgisi gösterilir; sunucu varken kayıt zaten ekrandadır.
+  const etiketOzeti = coz.variables === undefined ? null : cm1Coz(coz.variables);
   const birakmaKomutu: KomutIsleyici = (k) => {
     if (birakHedefi && k.ad === 'KAYDET') { setBirakGonder((n) => n + 1); return { ton: 'tamam', metin: 'Bırakılıyor' }; }
     if (birakHedefi && (k.ad === 'VAZGEC' || k.ad === 'GERI-AL')) { birakAc(null); return { ton: 'tamam', metin: 'Bırakma kapandı' }; }
@@ -237,6 +240,7 @@ export function OkutAlani({ teslimEteGec, okundu, sifir = 0, sonuc: sonucKarti, 
           ? <KodOkuyucu kendiliginden dokunmatikteOdakYok okundu={okut} bekliyor={coz.isPending} {...(okuttu && !birakHedefi ? {} : { ipucu })} geribildirim={gecmis} {...(komut || birakHedefi ? { komut: birakmaKomutu } : {})} />
           : <KodOkuyucu sik okundu={okut} bekliyor={coz.isPending} {...(okuttu && !birakHedefi ? {} : { ipucu })} geribildirim={gecmis} {...(komut || birakHedefi ? { komut: birakmaKomutu } : {})} />)}</div>}
         {coz.isError && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{hataMetni(coz.error)}</p>}
+        {etiketOzeti && coz.isError && coz.error instanceof AgHatasi && <EtiketBilgisi ozet={etiketOzeti} durum="cevrimdisi" />}
         {'ileti' in durum && durum.ileti && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{durum.ileti}</p>}
         {raf && raf.gozler.length > 0 && (sepetli
           ? <RafIcerigi raf={raf} goz={gozOkutuldu} gozSec={(kod) => coz.mutate(`LOC:${kod}`)} bekliyor={coz.isPending} at={at}

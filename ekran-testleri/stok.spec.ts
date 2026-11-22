@@ -72,6 +72,30 @@ test('Okut paneli: kamera önce, kutucuklar görünür ve ekranlarını açar', 
   expect(ag.yazmalar, 'paneli açmak ve sekme değiştirmek yazmaz').toEqual([]);
 });
 
+// DataMatrix geçişi (dilim 1): özet kod (CM1) okutulup sunucuya ulaşılamazsa etiketin kendi bilgisi Türkçe alan adlarıyla, "Çevrimdışı bilgi"
+// başlığıyla görünür; üç genişlikte taşmaz. Ağ kesintisi isteği düşürerek benzetilir.
+test('Okut paneli: özet kodda sunucuya ulaşılamazsa çevrimdışı bilgi okunur ve taşmaz', async ({ page, ac }) => {
+  await page.route('**/api/stok/teslim-kutusu/kod-coz**', (r) => r.abort('failed'));
+  await ac('/stok');
+  await page.getByRole('button', { name: /^Okut(, \d+ gelen teslim)?$/ }).filter({ visible: true }).first().click();
+  const panel = page.getByRole('dialog', { name: 'Okut' });
+  await expect(panel).toBeVisible();
+  await panel.getByRole('textbox', { name: /Kod/ }).first().fill('CM1/LOT:ORN-LT-2041/TPN:ORN-TPN-77812/DKM:ORN-DKM-5531/SRT:ORN-SRT-310/SKT:270527/MK:ORN-MK-0045/GT:261118/TDR:ORN-TD-07/DRM:KBK/BT:261122');
+  await panel.getByRole('button', { name: 'Bul' }).first().click();
+  const bant = panel.getByText(/Çevrimdışı bilgi · basım 22\.11\.2026 · güncel olmayabilir/);
+  await expect(bant).toBeVisible();
+  for (const ad of ['Tedarikçi lotu', 'Döküm no', 'Sertifika no', 'Son kullanma', 'Mal kabul no', 'Giriş tarihi', 'Tedarikçi', 'Durum']) await expect(panel.getByText(ad, { exact: true })).toBeVisible();
+  await expect(panel.getByText('Karar bekliyor')).toBeVisible();
+  await expect(panel.getByText('doğrulanmadı')).toBeVisible();
+  await expect(panel.getByText('27.05.2027')).toBeVisible();
+  const genislik = page.viewportSize()?.width ?? 0;
+  for (const kutu of [await bant.boundingBox(), await panel.getByText('ORN-TPN-77812', { exact: true }).boundingBox()]) {
+    expect(kutu, 'çevrimdışı bilgi çizilmedi').not.toBeNull();
+    if (kutu !== null) { expect(kutu.x).toBeGreaterThanOrEqual(0); expect(kutu.x + kutu.width).toBeLessThanOrEqual(genislik); }
+  }
+  expect(await panel.evaluate((e) => e.scrollWidth - e.clientWidth), 'panel yana taşmaz').toBeLessThanOrEqual(0);
+});
+
 // 3089: alttaki Okut / Transfer / Malzeme istekleri çubuğu kalktı; Transfer ve Malzeme istekleri ikinci menüde, Okut üst çubukta.
 test('Alt kısayol çubuğu yok; Transfer ve Malzeme istekleri ikinci menüde, sayfa yana taşmaz', async ({ page, ag, ac }) => {
   await ac('/stok/malzemeler');

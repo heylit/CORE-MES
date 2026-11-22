@@ -1,3 +1,5 @@
+import { cm1Coz, kimlikKodu } from './etiket-kodu.ts';
+
 // Okutulan kodun ne olduğunu tek yer söyler; her modül kendi çözücüsünü yazarsa önekler ayrışır.
 // Sonuç yalnız yönlendirir: kaydın varlığını sahibi modül kendi tablosundan doğrular.
 
@@ -51,7 +53,14 @@ export function kodTuru(ham: string): KodTuru {
 }
 
 // Okuyucu ve elle giriş boşluk ve küçük harf katabilir; kodların hiçbiri boşluk taşımaz, harfleri büyüktür.
+// Özet kod (`CM1/UE:142/...`) ilk alanıyla çözülür: kod neyi gösteriyorsa onu gösterir, ek alanlar okuyan ekranındır (etiket-kodu.ts).
+// İlk alan sözlüğün bilmediği bir önekse (koli, hatalı parça) sonuç bilinmiyor kalır.
 function cozumle(ham: string): KodTuru {
+  const ozet = cm1Coz(ham);
+  if (ozet !== null) {
+    const t = cozumle(kimlikKodu(ozet));
+    return t.tur === 'bilinmiyor' ? { tur: 'bilinmiyor', deger: ham.trim() } : t;
+  }
   const kod = ham.replace(/\s+/g, '').toUpperCase();
   const ayrac = kod.indexOf(':');
   const onek = ayrac < 0 ? null : kod.slice(0, ayrac);
