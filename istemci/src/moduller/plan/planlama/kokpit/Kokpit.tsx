@@ -21,6 +21,8 @@ import { ElleBol } from './ElleBol.tsx';
 import { Ayarlar } from './Ayarlar.tsx';
 import { useBitinceBildir } from './bitince-bildir.ts';
 import { emirYonu, planYonu } from './ayarlar.ts';
+import { TabloAraci, useTablo } from './Tablo.tsx';
+import { siralaGecikme } from './tablo.ts';
 import { Kapasite } from './Kapasite.tsx';
 import { Engeller } from './Engeller.tsx';
 import { engelOzeti, engeller } from './engeller.ts';
@@ -284,6 +286,9 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const kokBul = useMemo(() => kokCozucu(m.emirler), [m.emirler]);
   const gorunen = useMemo(() => m.emirler.filter((e) => (suz === null || e.durum === suz) && (aramaUyar(e, m, ara) || siparisAramasi(e.id, bag, ara))), [m, suz, ara, bag]);
   const gorunenKume = useMemo(() => new Set(gorunen.map((e) => e.id)), [gorunen]);
+  // 3533: Emirler gözünün tablosu. Sıralama yalnız görünümü değiştirir; plan sırasına ve önceliğe yazılmaz (Risk B2).
+  const tablo = useTablo();
+  const emirSirali = useMemo(() => (tablo.sira === 'gecikme' ? siralaGecikme(gorunen, m.isler) : gorunen), [tablo.sira, gorunen, m.isler]);
   const uyar = useCallback((job: string) => gorunenKume.has(job), [gorunenKume]);
 
   // --- yazma ---
@@ -729,11 +734,11 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     sec(emirId, isId); setGoster(isId);
   }, [sec, secIs]);
   // Liste düzeninde boş tahta alanına basmak açık satırı kapatmaz; tezgâha sorun bildirme ayrıntılı Kokpit'tedir.
-  const listeTahtasi = (
+  const listeTahtasiYap = (tezgahTablosu: boolean) => (
     <>
       {sonucCubugu}
       <Tahta
-        m={m} cx={cx} goz="T" olcek={olcek} emirler={gorunen} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
+        m={m} cx={cx} goz="T" olcek={olcek} emirler={gorunen} tablo={tezgahTablosu ? tablo : null} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
         tasi={yazabilir && !tur ? tasiDene : null} planaAl={yazabilir && !tur ? planaAlDene : null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
         yerlestirme={tur ? null : yerHedefi} yanan={tur ? null : yananTahta} secimiKaldir={gelenYanan ? () => { setGelenYanan(null); } : listedeSecimKalir}
         sorunBildir={null} onizle={tur ? null : onizle} okKipi={tur ? 'yok' : okKipi}
@@ -742,6 +747,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
       <Liste m={m} cx={cx} goz="T" emirler={gorunen} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} yanan={tur ? null : yananTahta} sorunBildir={null} {...gelenListe} />
     </>
   );
+  const listeTahtasi = listeTahtasiYap(false);
   // Plan menüsü (3504 b): sade ve ayrıntılı Kokpit'te aynıdır. Üç fiil: Planı güncelle (sıra korunur), Baştan kur (sıra da değişir), Yerleştir
   // (yeri olmayan işe yer). İlk bakışta üç satır (3414); kısmi baştan kurma, seçili siparişi yerleştirme ve yön ayarı Diğer seçeneklerdedir.
   const planMenusu = (kapat: () => void): ReactNode => {
@@ -949,17 +955,18 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
           ) : ldGorunum === 'emir' ? (
             <section className="tc-pyq-bolum tc-pyq-bolum-plan tc-pyq-agac-bolum" aria-label="Emirler">
               {sonucCubugu}
+              <TabloAraci tablo={tablo} />
               <Tahta
-                m={m} cx={cx} goz="S" olcek={olcek} emirler={gorunen} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
+                m={m} cx={cx} goz="S" olcek={olcek} emirler={emirSirali} tablo={tablo} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
                 tasi={yazabilir && !tur ? tasiDene : null} planaAl={null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
                 yerlestirme={null} yanan={tur ? null : gelenYanan?.k ?? null} sorunBildir={null} onizle={tur ? null : onizle} okKipi={tur ? 'yok' : okKipi}
                 saatEni={saatEni} malzeme={malzeme} agac={{ acik: agacAcik, ac: agacAc, notlar: agacNotu }} {...gelenOz}
                 {...(gelenYanan ? { secimiKaldir: () => { setGelenYanan(null); } } : {})}
               />
-              <Liste m={m} cx={cx} goz="S" emirler={gorunen} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} sorunBildir={null} emirNotu={emirNotu} yanan={tur ? null : gelenYanan?.k ?? null} {...gelenListe} />
+              <Liste m={m} cx={cx} goz="S" emirler={emirSirali} sira={tablo.sira} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} sorunBildir={null} emirNotu={emirNotu} yanan={tur ? null : gelenYanan?.k ?? null} {...gelenListe} />
             </section>
           ) : ldGorunum === 'tezgah' ? (
-            <section className="tc-pyq-bolum tc-pyq-bolum-plan tc-pyq-agac-bolum" aria-label="Tezgâhlar">{listeTahtasi}</section>
+            <section className="tc-pyq-bolum tc-pyq-bolum-plan tc-pyq-agac-bolum" aria-label="Tezgâhlar">{listeTahtasiYap(true)}</section>
           ) : (
             <>
           <ListeDuzeni

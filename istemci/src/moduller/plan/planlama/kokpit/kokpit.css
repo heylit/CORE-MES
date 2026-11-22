@@ -950,3 +950,96 @@
 }
 .tc-pyq-agac-bos { position: sticky; left: var(--bas-en); display: inline-flex; align-items: center; height: 100%; padding: 0 var(--b-2); color: var(--muted); font-size: var(--yazi-xs); font-style: italic; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .tc-pyq-agac-ac .tc-simge { transition: none; } }
+
+/* 3533: Emirler ve Tezgâhlar gözünün sol bölmesi sütunlu tablodur. Bölme eni (--bas-en) ve sütun şablonu (--sutunlar) tahtanın değişkenidir. */
+.tc-pyq-tablo-arac { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-pyq-siralama { display: inline-flex; align-items: center; gap: var(--b-1); color: var(--muted); font-size: var(--yazi-s); }
+.tc-pyq-siralama select {
+  min-height: var(--dokunma); padding: 0 var(--b-2); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); background: var(--panel-solid); color: var(--ink);
+  font: inherit; font-size: var(--yazi-s); cursor: pointer;
+}
+.tc-pyq-siralama select:focus-visible, .tc-pyq-sutun-kap > .tc-pyq-ok:focus-visible { outline: var(--cizgi) solid var(--hazard); outline-offset: var(--pay-ince); }
+.tc-pyq-sutun-kap { position: relative; display: inline-flex; }
+.tc-pyq-sutun-kap > .tc-pyq-ok { border: var(--cizgi-ince) solid var(--edge2); }
+.tc-pyq-sutun-kap > .tc-pyq-ok b { color: var(--ink); font-family: var(--font-mono); font-size: var(--yazi-xs); }
+.tc-pyq-sutun-menu {
+  position: absolute; top: 100%; left: 0; z-index: var(--z-katman); display: grid; gap: var(--pay-ince); min-width: var(--acilir-enaz); max-width: min(var(--acilir-encok), 90vw); margin-top: var(--b-1); padding: var(--b-1);
+  border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); background: var(--panel-solid); box-shadow: var(--shadow);
+}
+.tc-pyq-sutun-menu label { display: flex; align-items: center; gap: var(--b-2); min-height: var(--dokunma); padding: 0 var(--b-2); border-radius: var(--yari-1); font-size: var(--yazi-s); cursor: pointer; }
+.tc-pyq-sutun-menu label:hover { background: var(--panel2); }
+.tc-pyq-sutun-menu label small { margin-left: var(--b-1); color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pyq-sutun-menu input { width: var(--b-4); height: var(--b-4); accent-color: var(--ink); }
+.tc-pyq-sutun-menu p { margin: 0; padding: var(--b-1) var(--b-2) 0; color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pyq-sutun-menu .tc-pyq-ok { justify-content: center; margin-top: var(--b-1); border: var(--cizgi-ince) solid var(--edge2); white-space: normal; text-align: center; }
+@media (max-width: 767px) {
+  .tc-pyq-siralama { flex: 1 1 auto; }
+  .tc-pyq-siralama select { flex: 1 1 auto; min-width: 0; }
+  .tc-pyq-sutun-kap { display: none; }
+}
+
+.tc-pyq-satir > .tc-pyq-bas[data-tablo] { flex-direction: row; align-items: stretch; padding: 0; }
+.tc-pyq-tablo-satir { display: grid; grid-template-columns: var(--sutunlar); align-items: center; flex: 1 1 auto; min-width: 0; min-height: var(--satir); }
+.tc-pyq-tablo-satir[data-secilebilir] { cursor: pointer; }
+.tc-pyq-h { display: flex; align-items: center; gap: var(--b-1); min-width: 0; padding: 0 var(--b-2); overflow: hidden; white-space: nowrap; font-size: var(--yazi-s); }
+.tc-pyq-h[data-sayi] { justify-content: flex-end; text-align: right; }
+.tc-pyq-h > span, .tc-pyq-h > b { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tc-pyq-h-veri { font-family: var(--font-mono); font-size: var(--yazi-xs); font-variant-numeric: tabular-nums; }
+.tc-pyq-eksen .tc-pyq-h { min-height: var(--dokunma-yogun); color: var(--muted); font-size: var(--yazi-xs); font-weight: 600; letter-spacing: var(--harf-aralik-02); }
+.tc-pyq-h .tc-pyq-agac-ac { min-width: 0; }
+.tc-pyq-h .tc-pyq-agac-ac b { font-family: var(--font-mono); font-weight: 500; }
+.tc-pyq-h .tc-pyq-sorun { margin: 0; padding: 0; }
+.tc-pyq-satir[data-agac-adim] > .tc-pyq-bas[data-tablo] .tc-pyq-h:first-child, .tc-pyq-satir[data-agac-ara] > .tc-pyq-bas[data-tablo] .tc-pyq-h:first-child { padding-left: calc(var(--b-4) + var(--b-2)); }
+.tc-pyq-satir[data-agac-adim] > .tc-pyq-bas[data-tablo] .tc-pyq-h { color: var(--muted); }
+.tc-pyq-satir[data-agac-ara] { --satir: var(--dokunma-yogun); background: var(--panel2); }
+.tc-pyq-satir[data-agac-ara] > .tc-pyq-bas { background: linear-gradient(var(--panel2), var(--panel2)), var(--panel-solid); }
+.tc-pyq-satir[data-agac-ara] .tc-pyq-h { color: var(--faint); font-size: var(--yazi-xs); font-weight: 600; letter-spacing: var(--harf-aralik-06); }
+.tc-pyq-satir[data-secili] { background: color-mix(in oklab, var(--hazard) 10%, transparent); }
+.tc-pyq-satir[data-secili] > .tc-pyq-bas { background: linear-gradient(color-mix(in oklab, var(--hazard) 10%, transparent), color-mix(in oklab, var(--hazard) 10%, transparent)), var(--panel-solid); }
+.tc-pyq-bos { color: var(--faint); }
+/* Fark rozeti iki tonludur: geç ve zamanında. Yazı hep --ink'tir (kontrast); renk zeminde ve kenardadır. */
+.tc-pyq-fark {
+  display: inline-block; max-width: 100%; padding: var(--pay-ince) var(--b-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  border: var(--cizgi-ince) solid; border-radius: var(--yari-1); color: var(--ink); font-family: var(--font-mono); font-size: var(--yazi-xs); font-weight: 500;
+}
+.tc-pyq-fark[data-ton="gec"] { border-color: var(--d-gec); background: color-mix(in oklab, var(--d-gec) 16%, transparent); }
+.tc-pyq-fark[data-ton="zaman"] { border-color: color-mix(in oklab, var(--d-sur) 55%, transparent); background: color-mix(in oklab, var(--d-sur) 12%, transparent); }
+/* Tamamlanma dairesi: dolu kısım biten adım / toplam adım. Küçük halkada (telefon kartı) yazı yoktur; ipucu ve ekran okuyucu söyler. */
+.tc-pyq-halka { flex: none; width: var(--b-6); height: var(--b-6); overflow: visible; }
+.tc-pyq-halka[data-kucuk] { width: var(--b-5); height: var(--b-5); }
+.tc-pyq-halka[data-kucuk] text { display: none; }
+.tc-pyq-halka circle { fill: none; stroke-width: var(--cizgi-kalin); }
+.tc-pyq-halka-z { stroke: var(--edge2); }
+.tc-pyq-halka-d { stroke: var(--d-sur); stroke-linecap: round; transform: rotate(-90deg); transform-origin: 50% 50%; }
+.tc-pyq-halka text { fill: var(--ink); font-family: var(--font-mono); font-weight: 600; }
+.tc-pyq-halka[data-tam] .tc-pyq-halka-d, .tc-pyq-halka[data-tam] .tc-pyq-halka-z { stroke: var(--d-iyi); }
+.tc-pyq-halka-onay { fill: none; stroke: var(--d-iyi); stroke-width: var(--cizgi-kalin); stroke-linecap: round; stroke-linejoin: round; }
+.tc-pyq-durum { display: inline-flex; align-items: center; gap: var(--b-1); min-width: 0; overflow: hidden; font-size: var(--yazi-xs); white-space: nowrap; text-overflow: ellipsis; }
+.tc-pyq-durum i { flex: none; width: var(--nokta); height: var(--nokta); border-radius: var(--yari-tam); background: var(--idle); }
+.tc-pyq-durum[data-durum="bitti"] i { background: var(--d-iyi); }
+.tc-pyq-durum[data-durum="suruyor"] i, .tc-pyq-durum[data-durum="calisiyor"] i { background: var(--d-sur); }
+.tc-pyq-durum[data-durum="kilitli"] i { background: var(--d-risk); }
+.tc-pyq-durum[data-durum="durus"] i { background: var(--d-gec); }
+.tc-pyq-durum[data-durum="yok"] { color: var(--muted); }
+.tc-pyq-yuk { display: inline-flex; align-items: center; gap: var(--b-2); font-family: var(--font-mono); font-size: var(--yazi-xs); }
+.tc-pyq-yuk i { --renk: var(--muted); flex: none; display: block; width: calc(var(--b-6) * 1.25); height: var(--kayma); border-radius: var(--yari-tam); background: linear-gradient(90deg, var(--renk) calc(var(--oran, 0) * 100%), var(--edge) 0); }
+.tc-pyq-yuk i[data-yuk="asim"] { --renk: var(--d-gec); }
+/* Ayraç: tablo ile gantt arasındaki çizgi. Gerçek ayraç başlıktadır; satırlardakiler yalnız fare tutamağıdır. */
+.tc-pyq-ayrac { position: absolute; top: 0; bottom: 0; right: 0; z-index: 1; width: var(--b-2); cursor: col-resize; touch-action: none; }
+.tc-pyq-ayrac::before { content: ""; position: absolute; inset: 0 calc(var(--b-1) * -1); }
+.tc-pyq-ayrac::after { content: ""; position: absolute; top: 0; bottom: 0; right: 0; width: var(--cizgi); background: transparent; }
+.tc-pyq-ayrac:hover::after, .tc-pyq-ayrac[data-surukle]::after, .tc-pyq-ayrac:focus-visible::after { background: var(--hazard); }
+.tc-pyq-ayrac:focus-visible { outline: var(--cizgi) solid var(--hazard); outline-offset: calc(var(--cizgi) * -1); }
+@media (pointer: coarse) { .tc-pyq-ayrac::before { inset: 0 calc(var(--b-2) * -1); } }
+/* 3533: telefondaki emir kartı: üstte emir no, sağda fark rozeti ve tamamlanma dairesi; altta ürün (tek kısalan), adet ve termin. */
+.tc-pyq-liste .tc-pyq-kart { display: grid; gap: var(--pay-ince); grid-column: 1 / -1; min-width: 0; }
+.tc-pyq-liste[data-isaretli] .tc-pyq-kart { grid-column: 2 / -1; }
+.tc-pyq-kart-ust { display: flex; align-items: center; justify-content: space-between; gap: var(--b-2); min-width: 0; }
+.tc-pyq-kart-ust b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-weight: 500; }
+.tc-pyq-kart-sag { display: inline-flex; flex: none; align-items: center; gap: var(--b-2); overflow: visible; }
+.tc-pyq-kart-alt { display: flex; align-items: baseline; gap: var(--b-2); min-width: 0; font-size: var(--yazi-xs); }
+.tc-pyq-kart-alt > span { flex: 1 1 auto; min-width: 0; color: var(--ink); }
+.tc-pyq-kart-alt > em { flex: none; color: var(--muted); font-style: normal; white-space: nowrap; }
+.tc-pyq-liste .tc-pyq-fark { color: var(--ink); }
+.tc-pyq-h .tc-pyq-agac-ac { grid-template-rows: auto; }
+.tc-pyq-h .tc-pyq-agac-ac .tc-simge { grid-row: auto; }

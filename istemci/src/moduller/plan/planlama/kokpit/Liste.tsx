@@ -4,6 +4,8 @@ import { emirKuyrugu } from '../ortak/emir-no.ts';
 import { BASLIK_ADI, GELEN_SIMGESI, gelenSirasi, type Degisiklik, type Gelenler } from './degisiklikler.ts';
 import type { CanliYer } from './Tahta.tsx';
 import type { Derleme } from '../motor/kurallar.ts';
+import { Bos, FarkRozeti, Halka } from './Tablo.tsx';
+import { farkOlustur, ilerleme, siralaGecikme, tarihSaat, type Siralama } from './tablo.ts';
 import { aralikYuku, bagimlilik, durumYazisi, sureYaz, durusYazisi, ekMesaiYazisi, matrisSirasi, satirKimligi, suAndakiDurus, yukYuzdesi, type KokpitEmri, type KokpitIsi, type KokpitModeli } from './kurallar.ts';
 
 // Telefonda tahtanın yerini tutan liste. Tezgâh gözü: önce plana alınacak emirler, sonra tezgâh tezgâh sıradaki işler (ilk üçü, gerisi
@@ -27,9 +29,11 @@ export interface ListeOzellikleri {
   // dışına basınca ya da Esc ile kapanır. eskiYer: "Planı güncelle"den önceki yerler; satırda "N sa ileri/geri" yazar. Hayalet yoktur.
   gelen?: Gelenler | null;
   eskiYer?: Readonly<Record<string, CanliYer>> | null;
+  // 3533: Emirler gözünün sıralaması (tablo başındaki seçici; telefonda da aynı). Plan sırası bugünkü matris sırasıdır; yalnız görünümü değiştirir.
+  sira?: Siralama;
 }
 
-export function Liste({ m, cx, goz, emirler, secEmir, secIs, zaman, sec, yanan = null, sorunBildir = null, emirNotu = null, gelen = null, eskiYer = null }: ListeOzellikleri) {
+export function Liste({ m, cx, goz, emirler, secEmir, secIs, zaman, sec, yanan = null, sorunBildir = null, emirNotu = null, gelen = null, eskiYer = null, sira = 'plan' }: ListeOzellikleri) {
   const isaret = (job: string) => ({ 'data-yanan': yanan?.has(job) ? '' : undefined, 'data-sonuk': yanan && !yanan.has(job) ? '' : undefined });
   const [acik, setAcik] = useState<ReadonlySet<string>>(new Set());
   const [cumle, setCumle] = useState<string | null>(null);
@@ -67,7 +71,18 @@ export function Liste({ m, cx, goz, emirler, secEmir, secIs, zaman, sec, yanan =
     return (
     <li key={e.id} data-liste-satir={e.id}>
       <button type="button" data-d={e.durum} aria-current={secEmir === e.id} {...isaret(e.id)} data-gelen={l.length > 0 ? '' : undefined} onClick={() => { sec(e.id, null); setCumle(l.length > 0 ? e.id : null); }}>
-        {simge(l)}<b>{e.no}</b><span>{e.urun}</span><small>{durumYazisi(e)}{e.bitis === null ? (e.termin === null ? '' : ` · termin ${zaman(e.termin).slice(0, 9)}`) : ` · biter ${zaman(e.bitis).slice(0, 9)}`}</small>
+        {simge(l)}
+        <div className="tc-pyq-kart">
+          <div className="tc-pyq-kart-ust">
+            <b>{e.no}</b>
+            <span className="tc-pyq-kart-sag"><FarkRozeti f={farkOlustur(e)} />{(() => { const i = ilerleme(e, m.isler); return i ? <Halka i={i} kucuk /> : null; })()}</span>
+          </div>
+          <div className="tc-pyq-kart-alt">
+            <span title={e.urun}>{e.urun}</span>
+            <em>{`${String(e.adet)} adet`}</em>
+            <em>{e.termin === null ? <>Termin <Bos ad="yok" /></> : `Termin ${tarihSaat(zaman, e.termin)}`}</em>
+          </div>
+        </div>
         {emirNotu?.(e).map((y) => <small data-emir-not={e.id} key={y}>{y}</small>)}
       </button>
       {cumleSatiri(e.id, l)}
@@ -95,7 +110,7 @@ export function Liste({ m, cx, goz, emirler, secEmir, secIs, zaman, sec, yanan =
   if (goz === 'S') {
     return (
       <ul className="tc-pyq-liste" aria-label="Emirler" data-isaretli={isaretVar ? '' : undefined}>
-        {matrisSirasi(emirler).map(emirSatiri)}
+        {(sira === 'gecikme' ? siralaGecikme(emirler, m.isler) : matrisSirasi(emirler)).map(emirSatiri)}
         {!emirler.length && <li className="tc-pyq-not">Süzgece uyan emir yok.</li>}
       </ul>
     );

@@ -2433,7 +2433,8 @@ test('Kokpit 3493 b: emir satırlı Gantt; emir açılır kapanır, adımlar alt
     await expect(s1).toHaveAttribute('aria-expanded', 'true');
     await expect(bolum.locator('[data-agac-adim][data-satir^="S1>"]')).toHaveCount(2);
     await expect(bolum.locator('[data-satir="S1>S1.a1"] .tc-pyq-bas b')).toHaveText('1. Torna');
-    await expect(bolum.locator('[data-satir="S1>S1.a2"] .tc-pyq-bas small')).toContainText('F-01');
+    // Tezgâh sütunu geniş ekranda açıktır; tablette Sütunlar menüsünden açılır (3533).
+    if (bilgi.project.name === 'g1280') await expect(bolum.locator('[data-satir="S1>S1.a2"] .tc-pyq-bas')).toContainText('F-01');
     await expect(bolum.locator('[data-satir="S1"] [data-ozet="S1"]')).toBeVisible();
     await expect(bolum.locator('[data-satir="S1"] [data-is]')).toHaveCount(0);
     await tasma();
@@ -2456,6 +2457,131 @@ test('Kokpit 3493 b: emir satırlı Gantt; emir açılır kapanır, adımlar alt
   expect(ag.hatalar).toEqual([]);
 });
 
+// 3533: sol bölme sütunlu tablo. Emirler gözünde Emir, Ürün, Adet, Termin, Plan bitiş, Fark, İlerleme (tablette Emir, Termin, Fark, İlerleme: tamamlanma
+// dairesi her genişlikte varsayılandır); tek Sıralama seçici (Plan sırası, Termine göre gecikme); Sütunlar menüsü; sürüklenen ayraç; açık emrin adımları aynı
+// tabloda; Tezgâhlar gözü aynı dilde; telefonda emir kartında Fark rozeti ve daire. Sıralama yalnız görünümdür: hiçbir komut yazılmaz. Yatay taşma yok.
+test('Kokpit 3533: sol bölme sütunlu tablo; Sıralama, Sütunlar ve ayraç; adımlar aynı tabloda; Tezgâhlar gözü; telefonda kart; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  const yazilan: string[] = [];
+  page.on('request', (r) => { if (r.method() !== 'GET' && r.url().includes('/api/')) yazilan.push(`${r.method()} ${r.url()}`); });
+  await taslakSunucusu(page, (d) => calismaKur(d));
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const karsilama = page.getByRole('button', { name: 'Başlayalım' });
+  if (await karsilama.isVisible()) await karsilama.click();
+  const tasma = async () => { expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0); };
+  const cek = async (ad: string) => { await page.waitForTimeout(800); await page.screenshot({ path: `/tmp/tmiv2-ekran/3533-${ad}-${bilgi.project.name}.png` }); };
+  const bolum = kokpit.getByRole('region', { name: 'Emirler' });
+  const secici = bolum.getByRole('combobox', { name: 'Sıralama' });
+  await expect(secici).toBeVisible();
+  await expect(secici.locator('option')).toHaveText(['Plan sırası', 'Termine göre gecikme']);
+  // Seçici yeniden kurulmaz (odak ve açık liste yerinde kalır): işaret sıralamadan sonra da durur.
+  await secici.evaluate((el) => { el.setAttribute('data-izleme', '1'); });
+  if (bilgi.project.name === 'g360') {
+    // Telefon: tahta yok; seçici kartların üstünde, Sütunlar menüsü yok; kartta fark rozeti ve küçük daire; plansız emirde daire yok.
+    await expect(bolum.locator('.tc-pyq-tahta')).toBeHidden();
+    await expect(bolum.getByRole('button', { name: /^Sütunlar \d+$/ })).toBeHidden();
+    const kart = (id: string) => bolum.locator(`li[data-liste-satir="${id}"]`);
+    await expect(kart('S1').locator('.tc-pyq-fark[data-ton="gec"]')).toContainText('geç');
+    await expect(kart('S1').locator('svg.tc-pyq-halka[data-kucuk]')).toHaveAttribute('aria-label', '0/2 adım bitti');
+    await expect(kart('S1')).toContainText('adet');
+    await expect(kart('S1')).toContainText('Termin');
+    await expect(kart('S4').locator('svg.tc-pyq-halka')).toHaveCount(0);
+    await tasma();
+    await cek('0-telefon');
+    await secici.selectOption('gecikme');
+    await expect(bolum.locator('li[data-liste-satir]')).toHaveCount(4);
+    expect(await bolum.locator('li[data-liste-satir]').evaluateAll((l) => l.map((x) => x.getAttribute('data-liste-satir')))).toEqual(['S1', 'S3', 'S2', 'S4']);
+    await expect(secici).toHaveAttribute('data-izleme', '1');
+    await tasma();
+    await cek('1-telefon-gecikme');
+  } else {
+    const genis = bilgi.project.name === 'g1280';
+    const tahta = bolum.locator('.tc-pyq-tahta');
+    await expect(tahta).toBeVisible();
+    const basliklar = bolum.getByRole('columnheader');
+    await expect(basliklar).toHaveText(genis ? ['Emir', 'Ürün', 'Adet', 'Termin', 'Plan bitiş', 'Fark', 'İlerleme'] : ['Emir', 'Termin', 'Fark', 'İlerleme']);
+    const s1 = bolum.locator('[data-satir="S1"]');
+    await expect(s1.locator('.tc-pyq-fark[data-ton="gec"]')).toContainText('geç');
+    // Tamamlanma dairesi her genişlikte: S1 iki adımdan hiçbiri bitmedi; plansız S4'te daire yok.
+    await expect(s1.locator('svg.tc-pyq-halka')).toHaveAttribute('aria-label', '0/2 adım bitti');
+    await expect(bolum.locator('[data-satir="S4"] svg.tc-pyq-halka')).toHaveCount(0);
+    await expect(bolum.locator('[data-satir="S4"] .tc-pyq-fark')).toHaveCount(0);
+    // Tablo, gantt'ı ezmez: bölme görünen alanın en çok %70'idir; çizelge alanı genişliğini korur.
+    const olc = async () => tahta.evaluate((el) => { const b = el.querySelector<HTMLElement>('.tc-pyq-satir:not(.tc-pyq-eksen) .tc-pyq-bas')!, a = el.querySelector<HTMLElement>('.tc-pyq-satir:not(.tc-pyq-eksen) .tc-pyq-alan')!; return { bas: b.getBoundingClientRect().width, alanGen: a.getBoundingClientRect().width, kap: el.clientWidth }; });
+    const o0 = await olc();
+    expect(o0.bas).toBeLessThanOrEqual(o0.kap * 0.75);
+    expect(o0.alanGen).toBeGreaterThan(o0.kap * 0.3);
+    await tasma();
+    await cek('0-varsayilan');
+    // Sıralama: en gecikecek üstte; terminsiz ve plansız en altta; seçici odakta kalır; hiçbir yazım yok.
+    const siralar = () => bolum.locator('button[data-agac]').evaluateAll((l) => l.map((x) => x.getAttribute('data-agac')));
+    const plan0 = await siralar();
+    await secici.selectOption('gecikme');
+    expect(await siralar()).toEqual(['S1', 'S3', 'S2', 'S4']);
+    await expect(secici).toHaveAttribute('data-izleme', '1');
+    await tasma();
+    await cek('1-gecikme');
+    await secici.selectOption('plan');
+    expect(await siralar()).toEqual(plan0);
+    // Sütunlar menüsü: dugmenin altında açılır, ekranın içindedir, Emir hep açık; kapatınca başlık azalır; Esc düğmeye odak verir.
+    const sutunDugme = bolum.getByRole('button', { name: /^Sütunlar \d+$/ });
+    await sutunDugme.click();
+    const menu = bolum.getByRole('group', { name: 'Sütunlar' });
+    await expect(menu).toBeVisible();
+    await expect(menu.getByRole('checkbox', { name: /Emir/ })).toBeDisabled();
+    const mk = (await menu.boundingBox())!, dk = (await sutunDugme.boundingBox())!;
+    expect(mk.x).toBeGreaterThanOrEqual(0);
+    expect(mk.x + mk.width).toBeLessThanOrEqual(bilgi.project.use.viewport!.width);
+    expect(mk.y).toBeGreaterThanOrEqual(dk.y + dk.height - 1);
+    await cek('2-sutunlar');
+    await menu.getByRole('checkbox', { name: 'Fark' }).uncheck();
+    await expect(basliklar).toHaveCount(genis ? 6 : 3);
+    await menu.getByRole('checkbox', { name: 'Fark' }).check();
+    await expect(basliklar).toHaveCount(genis ? 7 : 4);
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeHidden();
+    await expect(sutunDugme).toBeFocused();
+    // Ayraç: ok tuşuyla genişler, çift tık doğal ene döner; gantt hâlâ yanında.
+    const ayrac = bolum.getByRole('separator', { name: 'Tablo genişliği' });
+    await ayrac.focus();
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowRight');
+    const o1 = await olc();
+    expect(o1.bas).toBeGreaterThan(o0.bas + 20);
+    expect(o1.bas).toBeLessThanOrEqual(o1.kap * 0.75);
+    await tasma();
+    await cek('3-ayrac');
+    await ayrac.dblclick();
+    expect(Math.abs((await olc()).bas - o0.bas)).toBeLessThan(2);
+    // Açık emrin adımları aynı tabloda: ara başlık ve Adım, Tezgâh, Başlangıç, Süre, Durum hücreleri.
+    await s1.locator('button[data-agac]').click();
+    await expect(bolum.locator('[data-agac-ara][data-satir="S1>ust"]')).toBeVisible();
+    const adim = bolum.locator('[data-satir="S1>S1.a2"]');
+    await expect(adim.getByRole('cell').first()).toHaveText('2. Freze');
+    await expect(adim.getByRole('cell').last()).toHaveText('Bekliyor');
+    if (genis) await expect(adim.getByRole('cell').nth(1)).toHaveText('F-01');
+    await tasma();
+    await cek('4-adimlar');
+    await s1.locator('button[data-agac]').click();
+    // Emir satırının boş hücresine basmak emri seçer; yanan satır sütunlarıyla işaretlenir.
+    await s1.locator('.tc-pyq-h').nth(1).click();
+    await expect(s1).toHaveAttribute('data-secili', '');
+    // Tezgâhlar gözü: aynı tablo dili, Sıralama ve Sütunlar yok.
+    await kokpit.getByRole('group', { name: 'Görünüm' }).getByRole('button', { name: 'Tezgâhlar' }).click();
+    const tez = kokpit.getByRole('region', { name: 'Tezgâhlar' });
+    await expect(tez.getByRole('columnheader')).toHaveText(['Tezgâh', 'Ad', 'Yük', 'Şu an']);
+    await expect(tez.getByRole('combobox', { name: 'Sıralama' })).toHaveCount(0);
+    await expect(tez.locator('.tc-pyq-satir[data-satir="M1"] .tc-pyq-yuk')).toContainText('%');
+    await expect(tez.locator('.tc-pyq-satir[data-satir="M1"] .tc-pyq-durum')).toBeVisible();
+    await tasma();
+    await cek('5-tezgahlar');
+  }
+  // Tablo yalnız görünümdür: sıralama, sütun, ayraç ve seçim sunucuya yazmaz.
+  expect(yazilan).toEqual([]);
+  expect(ag.hatalar).toEqual([]);
+});
 // 3532 b: gelen değişikliğin çubuktaki işareti gerçek düğmedir (en az 32 px); basınca balon işaretin üstünde açılır ve tahtanın görünen alanından
 // taşmaz (sağ kenara yakın işaret de, 768'de Test bulgusu B1). Esc kapatır. Telefonda listede ikon; satıra basınca cümle satırın altında açılır.
 // Bekleyen değişiklik uydurmadır (S2'yi etkiler); "Planı güncelle"nin sunucu yolu burada denenmez.
