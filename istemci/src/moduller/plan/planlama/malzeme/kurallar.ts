@@ -367,7 +367,9 @@ export function dagilim(h: MalzemePlaniHesabi, k: Kovalar, gor: GrafikTuru, tur:
 
 // ---- Özet -------------------------------------------------------------------------------------------------------
 export interface OzetKutusu { kalem: number; tutar: number | null }
-export interface MalzemeOzeti { toplam: OzetKutusu; stok: OzetKutusu; acik: OzetKutusu; yeni: OzetKutusu; gecikenMalzeme: number }
+// Toplam ihtiyaç = stok + açık + yeni (hepsi işe bağlı satır). Açık siparişin işe bağlanmayan kalanı (stoğa) ayrı kutudadır: ödenecek
+// paradır, bütçe grafiği sayar, ama ihtiyaç değildir (3537-2 Arayüz: sayaçlar toplanınca tutmalı).
+export interface MalzemeOzeti { toplam: OzetKutusu; stok: OzetKutusu; acik: OzetKutusu; stoga: OzetKutusu; yeni: OzetKutusu; gecikenMalzeme: number }
 
 export function ozet(h: MalzemePlaniHesabi): MalzemeOzeti {
   const kutu = (f: (s: PlanSatiri) => boolean): OzetKutusu => {
@@ -376,7 +378,8 @@ export function ozet(h: MalzemePlaniHesabi): MalzemeOzeti {
     return { kalem: new Set(l.map((s) => `${s.kod}\u0000${s.j ?? ''}`)).size, tutar: l.some((s) => s.tutar === null) ? null : l.reduce((a, s) => a + (s.tutar ?? 0), 0) };
   };
   return {
-    toplam: kutu((s) => s.j !== null), stok: kutu((s) => s.tur === 'stok'), acik: kutu((s) => s.tur === 'acik'), yeni: kutu((s) => s.tur === 'yeni'),
+    toplam: kutu((s) => s.j !== null), stok: kutu((s) => s.tur === 'stok'), acik: kutu((s) => s.tur === 'acik' && s.j !== null),
+    stoga: kutu((s) => s.tur === 'acik' && s.j === null), yeni: kutu((s) => s.tur === 'yeni'),
     gecikenMalzeme: new Set(h.satirlar.filter((s) => s.gecikti).map((s) => s.kod)).size,
   };
 }

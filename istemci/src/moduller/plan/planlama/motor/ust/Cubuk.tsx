@@ -28,6 +28,9 @@ interface Ozellikler {
   // Sayfa şeridi kendi çiziyorsa (Motor, 3317-1b) aynı iki yere doğrudan verdiği içerik: satırda plan durumu rozetinin yerine özet, şeridin
   // altında liste. Toplu düğme birincil kalır (sayfanın tek birincili odur).
   ek?: { satir: ReactNode; alt: ReactNode } | null;
+  // Planı kurmayan sayfa (3537 a: Malzeme satın alma planı, Sevk takvimi): plan Kokpit'te kurulur ve güncellenir (3282-1 a). Şerit birincil
+  // taşımaz; Planı kur ya da güncelle yerine Kokpit'e götüren ikincil düğme çizer (sayfanın tek birincili kendi işidir).
+  kokpiteGit?: (() => void) | null;
 }
 
 // Durum ışığı: geciken yoksa yeşil; bir iki geciken ya da darboğaz %95 üstündeyse sarı; daha çok gecikende kırmızı.
@@ -48,9 +51,10 @@ const KISA: [NabizGostergesi, string, boolean][] = [['late', '', false], ['wT', 
 export function Cubuk(o: Ozellikler) {
   const n = o.nabiz;
   const olaylar = o.olaylar ?? [];
-  const isik = isikOf(n); const kur = !o.plan ? o.planKur ?? null : null; const uyg = o.plan && !o.guncel ? o.bekleyenUygula ?? null : null;
+  const kokpit = o.kokpiteGit ?? null;
+  const isik = isikOf(n); const kur = !o.plan && !kokpit ? o.planKur ?? null : null; const uyg = o.plan && !o.guncel && !kokpit ? o.bekleyenUygula ?? null : null;
   // Düğme pasifse nedeni: plan yokken çalışma açılmamıştır (Planı kur çalışmayla açılır).
-  const pasifNot = o.planYaz && !uyg && !kur && !o.plan ? 'Çalışma açılınca' : null;
+  const pasifNot = o.planYaz && !kokpit && !uyg && !kur && !o.plan ? 'Çalışma açılınca' : null;
   return (
     <div className="tc-pym-sb-kap">
       <div className="tc-pym-sb" role="toolbar" aria-label="Plan çubuğu">
@@ -87,7 +91,12 @@ export function Cubuk(o: Ozellikler) {
           {/* Motor sunucuda açıktır (576): düğme ancak çalışma yokken pasiftir; nedeni yalnız ipucunda kalınca kullanıcı düğmeyi bozuk sanıyor. */}
           {pasifNot !== null && <small className="tc-pym-sb-not">{pasifNot}</small>}
           {o.planYaz && <HesapSuresi className="tc-pym-sb-sure" suruyor={uyg?.suruyor === true || kur?.suruyor === true} />}
-          {o.planYaz && uyg ? (
+          {o.planYaz && kokpit && (!o.plan || !o.guncel) ? (
+            <button type="button" className="tc-dugme tc-dugme-ikincil tc-pym-kucuk tc-pym-sb-iyi" onClick={kokpit}
+              title="Plan Kokpit'te kurulur ve güncellenir; bu sayfa son plana göre okur.">
+              <Simge ad="target" boyut="k" /><span>{o.plan ? "Kokpit'te planı güncelle" : "Kokpit'te planı kur"}</span>
+            </button>
+          ) : o.planYaz && uyg ? (
             <button type="button" className={`tc-dugme tc-pym-kucuk tc-pym-sb-iyi${o.yuva ? '' : ' tc-dugme-birincil'}`} disabled={uyg.suruyor} aria-busy={uyg.suruyor || undefined}
               title={uyg.suruyor ? KURULUYOR : `Başka sayfalarda yapılan ${String(uyg.say)} değişiklik plana işlenir. Sıra korunur, saatler yeniden hesaplanır; başlamış ve elle kilitli iş yerinde kalır.`}
               aria-label="Planı güncelle" onClick={() => { uyg.uygula(); }}>

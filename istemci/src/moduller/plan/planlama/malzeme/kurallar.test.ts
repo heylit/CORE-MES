@@ -111,6 +111,9 @@ describe('malzeme planı (zt mpVeri)', () => {
     expect(o.toplam.kalem).toBe(2);
     expect(o.acik.kalem).toBe(2);
     expect(o.stok.kalem).toBe(1);
+    // Sayaçlar toplanınca tutar (3537-2 Arayüz): toplam = stok + açık (işe bağlı) + yeni; stoğa giden kalan ayrı.
+    const t = (k: { tutar: number | null }): number => k.tutar ?? NaN;
+    expect(t(o.toplam)).toBeCloseTo(t(o.stok) + t(o.acik) + t(o.yeni));
   });
 
   it('ihtiyaç günü şimdiden sonra başlayan ilk işlemdir; başlamış işlem saymaz, plana alınmamış sayısı değişmez (453/7)', () => {

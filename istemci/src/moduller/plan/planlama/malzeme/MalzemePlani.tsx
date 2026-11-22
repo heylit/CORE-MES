@@ -1,33 +1,44 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { DurumKutusu, Kart, Rozet, Simge } from '../../../../ortak/arayuz/index.ts';
+import { DurumKutusu, Kart, Simge } from '../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import { kaynakKur, stokOku, type StokKaynagi } from './kaynak.ts';
 import {
-  BAGSIZ, DURUM_ADI, DURUM_TONU, KAYNAKLAR, TEDARIKCISIZ, alimPlani, alimSayaclari, alimTablolari, bitenler, calismaSimdisi, dagilim,
+  BAGSIZ, KAYNAKLAR, TEDARIKCISIZ, alimPlani, bitenler, calismaSimdisi, dagilim,
   grafikKaynaklari, grafikSutunlari, gunYaz, kovaAdi, kovala, malzemePlani, motorGirdisi, ozet, planIslemleri, sayiYaz, tabanMs, tahsisEt,
   malzemeIsisi, tedarikciAdi, tlKisa, tlYaz,
-  type AlimPlaniSatiri, type DagilimHucresi, type DagilimTuru, type GrafikTuru, type Kirilim,
+  type DagilimHucresi, type DagilimTuru, type GrafikTuru, type Kirilim,
 } from './kurallar.ts';
-import { Acilim, BosHarita, IsiIzgarasi, IsiSayfasi, Lejant, type IsiSecimi, type LejantOgesi } from '../ortak/isi/index.ts';
+import { Acilim, IsiIzgarasi, Lejant, type IsiSecimi, type LejantOgesi } from '../ortak/isi/index.ts';
+import type { IsiUstDurumu } from '../ortak/isi/kurallar.ts';
+import { malzemeListesi } from './liste.ts';
+import { MalzemeListesi } from './MalzemeListesi.tsx';
 import { OneCekme } from './OneCekme.tsx';
 import { useEmirNo, type EmirNo } from '../ortak/emir-no.ts';
-import { TedarikTerminiKarti } from './TedarikTermini.tsx';
-import { TopluPlan } from './TopluPlan.tsx';
+import { TopluPlan, useAcikTalepler } from './TopluPlan.tsx';
 import { useYetki } from '../../../../ortak/veri/yetki.ts';
 import './malzeme.css';
 
-// Malzeme satın alma planı (P4, malzplan). Düzen, araçlar ve akış bugünkü eski sayfanındır (TASARIM KORUMA): başta satın alma planı
-// (zv-termin), sonra malzeme planı ve dağılım (zt-malzeme-plan), sonra öne çekme (zz7-malzeme-one); renk, yazı, düğme ve kart görünüşü
-// ortaktır. Yeni sipariş satın almanındır (222 a); malzeme başına tedarik termini burada da girilir, kayıt Satın Alma'nındır (533 a, 534 1 a).
-// Tutarı finans.maliyet-oku olan görür (223 a).
+// Malzeme satın alma planı (P4, malzplan), Kokpit dilinde (3537 a): üç görünüm. Liste malzeme başına tek satırdır (asıl görünüm); Takvim
+// bugünkü ısı haritasıdır (telefonda yer yok, Liste açılır); Bütçe sayaçlar, grafik, dağılım, günlük tüketim ve öne çekmedir. Son seçilen
+// görünüm tarayıcıda hatırlanır. Yeni sipariş satın almanındır (222 a); malzeme başına tedarik termini satır açılımında da girilir, kayıt
+// Satın Alma'nındır (533 a, 534 1 a). Tutarı finans.maliyet-oku olan görür (223 a).
 
 // Eski ekranın ortak dönem düğmesi (zq-olcek OLCEK). Bütün görünümlerde ortak olması iskelet isteğidir; o gelene kadar görünüme özgü.
 const OLCEK: readonly [Kirilim, string, string][] = [['gun', 'Gün', 'Günlük'], ['hafta', 'Hafta', 'Haftalık'], ['ay', 'Ay', 'Aylık'], ['yil', 'Yıl', 'Yıllık']];
 const GRAFIKLER: readonly [GrafikTuru, string][] = [['butce', 'Alım bütçesi'], ['ihtiyac', 'İhtiyaç']];
 const DAGILIMLAR: readonly [DagilimTuru, string][] = [['malzeme', 'Malzeme'], ['siparis', 'Sipariş'], ['tedarikci', 'Tedarikçi']];
-// Isı haritası katmanı (zz30-isi ISI.malzplan; başlık zz25-sade-plan SADE.malzplan).
+type Gorunum = 'liste' | 'takvim' | 'butce';
+const GORUNUMLER: readonly [Gorunum, string][] = [['liste', 'Liste'], ['takvim', 'Takvim'], ['butce', 'Bütçe']];
+const GORUNUM_ANAHTARI = 'tmi.malzplan.gorunum';
+function gorunumOku(): Gorunum {
+  try {
+    const g = localStorage.getItem(GORUNUM_ANAHTARI);
+    return g === 'takvim' || g === 'butce' ? g : 'liste';
+  } catch { return 'liste'; }
+}
+// Isı haritası (zz30-isi ISI.malzplan) artık Takvim görünümüdür (3537 a).
 const SAYFA_ADI = 'Malzeme satın alma planı';
 const ISI_ADI = 'Malzeme × gün, stok yetiyor mu';
 const LEJANT: readonly LejantOgesi[] = [
@@ -35,15 +46,15 @@ const LEJANT: readonly LejantOgesi[] = [
   { tur: 'iyi', ad: 'Zamanında geliş' }, { tur: 'is', ad: 'Yolda' }, { tur: 'tahmin', ad: 'Tahmini geliş' }, { tur: 'bayrak', ad: 'Plan istiyor (miktar)' },
 ];
 
-// Eski ekranın tablo kipi (00-baslangic kip): 768 altında tablo kart kipindedir.
-function useDar(): boolean {
-  const olc = (): boolean => typeof window !== 'undefined' && window.innerWidth < 768;
+// Eski ekranın tablo kipi (00-baslangic kip): 768 altında tablo kart kipindedir. Malzeme listesi yedi sütundur, 1024 altında kart kipine geçer.
+function useDar(esik = 768): boolean {
+  const olc = (): boolean => typeof window !== 'undefined' && window.innerWidth < esik;
   const [dar, darYaz] = useState(olc);
   useEffect(() => {
     const d = (): void => { darYaz(olc()); };
     window.addEventListener('resize', d);
     return () => { window.removeEventListener('resize', d); };
-  }, []);
+  }, [esik]);
   return dar;
 }
 
@@ -68,19 +79,27 @@ export function MalzemePlani({ depo, calisma, yetki, yenile, sec, git }: Planlam
 }
 
 // Satın Alma'nın sayfası (546 a) aynı görünümü daraltılmış çalışmayla çizer: emirler çalışmayla gelir, tutar ve öne çekme yoktur.
-// goster yoksa (Satın Alma) "Kokpit'te" pasif kalır: orada Kokpit yoktur. Plan Kokpit'te kurulur (3282-1 a), emir orada seçilir (3537 a).
-export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSurumu, terminYazar, yenile, goster, emirNo = (j) => j }: {
+// goster yoksa (Satın Alma) Kokpit düğmeleri çizilmez: orada Kokpit yoktur. Plan Kokpit'te kurulur (3282-1 a), emir orada seçilir (3537 a).
+export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSurumu, terminYazar, yenile, goster, emirNo = (j) => j, talepler: verilen }: {
   calisma: PlanlamaCalismasi | null; emirler: unknown; maliyetOku: boolean; calismaSurumu: number | null; terminYazar: boolean; yenile: () => void;
   goster?: (siparis: string) => void; emirNo?: EmirNo;
+  // Testler için: açık talepler. Verilmezse satın almanın termin takibinden okunur.
+  talepler?: ReadonlyMap<string, number> | null;
 }) {
   const [stok, stokYaz] = useState<StokKaynagi | null | undefined>(undefined);
   const [kirilim, kirilimYaz] = useState<Kirilim>('gun');
   const [gor, gorYaz] = useState<GrafikTuru>('butce');
   const [dag, dagYaz] = useState<DagilimTuru>('malzeme');
   const [secim, secYaz] = useState<IsiSecimi | null>(null);
+  const [gorunum, gorunumYaz] = useState<Gorunum>(gorunumOku);
+  const gorunumSec = (g: Gorunum): void => {
+    gorunumYaz(g);
+    try { localStorage.setItem(GORUNUM_ANAHTARI, g); } catch { /* depo kapalı: yalnız bu açılışta geçerli */ }
+  };
+  const talepler = useAcikTalepler(verilen);
   const dar = useDar();
+  const listeKart = useDar(1024);
   const talepAcar = useYetki().herhangi('satin-alma.talep-ac');
-  const cizelge = (j: string): { yap: () => void } | { pasif: true } => (goster ? { yap: () => { goster(j); } } : { pasif: true });
   useEffect(() => {
     let bitti = false;
     void stokOku().then((s) => { if (!bitti) stokYaz(s); });
@@ -100,12 +119,14 @@ export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSuru
     return { g, k, plan: malzemePlani(g, taban, t), alim: alimPlani(g, taban, t) };
   }, [calisma, D, taban, stok, emirler]);
 
-  // Çalışma kaydı hiç yokken de eski sayfa plansız halini çizer (başlık, boş harita, tüm satırlar); diğer görünümler de öyle.
+  // Çalışma kaydı ya da plan yokken de sayfa başlığıyla çizilir; plan Kokpit'te kurulur (3282-1 a), bağlantısı plan şeridindedir.
   const planYok = (
     <div className="tc-pyz">
-      <IsiSayfasi simge="box" baslik={SAYFA_ADI} tum={<Kart baslikEki={<Baslik simge="box" ad="Malzeme planı" />}><p className="tc-pyz-kucuk">Önce plan kurulmalı.</p></Kart>}>
-        <BosHarita metin="Plan kurulunca malzemenin ne zaman gerektiği ve ne zaman sipariş verilmesi gerektiği burada görünür." />
-      </IsiSayfasi>
+      <Basliklik ust={null} />
+      <div className="tc-pyz-yok">
+        <Simge ad="grid" boyut="k" />
+        <span><b>Önce plan kurulmalı.</b> Plan kurulunca malzemenin ne zaman gerektiği ve ne zaman sipariş verilmesi gerektiği burada görünür.</span>
+      </div>
     </div>
   );
   if (!calisma || !D || planIslemleri(calisma.plan).length === 0) return planYok;
@@ -137,7 +158,7 @@ export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSuru
   const kpi: [SimgeAdi, string, string, string, string?][] = [
     ['box', 'Toplam ihtiyaç', kutu(oz.toplam), 'planlı siparişlerin malzemesi'],
     ['check', 'Stoktan', kutu(oz.stok), 'eldeki stok'],
-    ['truck', 'Açık siparişler', kutu(oz.acik), 'verilmiş satın alma; işe bağlanmayan kısım stoğa'],
+    ['truck', 'Açık siparişler', kutu(oz.acik), oz.stoga.kalem ? `işe bağlı kısım; ayrıca stoğa ${kutu(oz.stoga)}` : 'verilmiş satın alma, işe bağlı'],
     ['lira', 'Yeni alım', kutu(oz.yeni), 'verilmesi gereken sipariş', 'uyari'],
     ['alert', 'Geciken alım', String(oz.gecikenMalzeme), 'en geç sipariş günü geçmiş malzeme', oz.gecikenMalzeme ? 'hata' : 'tamam'],
   ];
@@ -147,13 +168,15 @@ export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSuru
   // Stok sahibi okunamadıysa ya da kartı yoksa (kartsiz) stok bilinmiyor; sıfır uydurulmaz.
   const stokMiktari = (kod: string): number | null => (k.nereden === 'sahip' && !k.kartsiz.includes(kod) ? (mats.get(kod)?.stok ?? null) : null);
   const isi = malzemeIsisi(alim, taban, g.simdi, miktar, malzemeAdi, fg ? fiyat : undefined);
-  const tum = (
+  const malzemeTedarikcisi = (kod: string): string | null => { const t = mats.get(kod)?.tedarikci; return typeof t === 'string' && t !== '' ? tedarikciAdi(D, t) : null; };
+  const liste = malzemeListesi(alim, plan.satirlar, g.simdi);
+  const takvimVar = !dar;
+  const etkin: Gorunum = gorunum === 'takvim' && !takvimVar ? 'liste' : gorunum;
+  const secici = <Segment etiket="Görünüm" secenekler={takvimVar ? GORUNUMLER : GORUNUMLER.filter(([k]) => k !== 'takvim')} secili={etkin} sec={gorunumSec} />;
+  const butce = (
     <div className="tc-pyz-kartlar">
-      <TedarikTerminiKarti D={D} l={alim} taban={taban} yazar={terminYazar} yenile={yenile} />
-      <AlimPlani l={alim} fg={fg} dar={dar} taban={taban} simdi={g.simdi} fiyat={fiyat} malzemeAdi={(kod) => mats.get(kod)?.ad ?? ''}
-        malzemeTedarikcisi={(kod) => { const t = mats.get(kod)?.tedarikci; return typeof t === 'string' && t !== '' ? tedarikciAdi(D, t) : null; }}
-        miktar={miktar} tedarikci={(t) => tedarikciAdi(D, t)} emirNo={emirNo} />
-      <Kart baslikEki={<Baslik simge="box" ad="Malzeme planı" ek="plandan; alım ve bütçe için" />}>
+      <div className="tc-pyz-serit">{secici}</div>
+      <Kart baslikEki={<Baslik simge="box" ad="Alım bütçesi ve ihtiyaç" ek="plandan" />}>
         <div className="tc-pyz-ust">
           <span className="tc-pyz-kucuk">Kırılım: <b>{kirilimAdi}</b></span>
           <Segment etiket="Kırılım" secenekler={OLCEK} secili={kirilim} sec={kirilimYaz} sinif="tc-pyz-olcek" />
@@ -166,40 +189,58 @@ export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSuru
         </div>
         <Grafik sutunlar={grafikSutunlari(plan, kov, gor, fg)} kaynaklar={grafikKaynaklari(gor)} ad={(kv, uzun) => kovaAdi(taban, kirilim, kv, uzun)}
           bicim={fg ? tlKisa : (n) => sayiYaz(n, 0)} etiket={`${gor === 'butce' ? 'Alım bütçesi' : 'Malzeme ihtiyacı'}, ${kirilimAdi.toLocaleLowerCase('tr-TR')}`} />
-        <p className="tc-pyz-kucuk">
-          {k.nereden === 'belge' && <span data-ton="uyari">Stok ya da açık satın alma siparişleri okunamadı (yetki yok ya da uç yanıt vermedi); planın kendi kopyası kullanılıyor. </span>}
-          {notlar}
-        </p>
+        <p className="tc-pyz-kucuk">{notlar}</p>
       </Kart>
       <Kart baslikEki={<Baslik simge="grid" ad="Dağılım ve toplam" />}>
         <DagilimTablosu d={dagilim(plan, kov, gor, dag, fg)} tur={dag} sec={dagYaz} fg={fg} dar={dar}
-          ad={(i) => kovaAdi(taban, kirilim, kov.basi[i] ?? 0, true)} malzemeAdi={(kod) => mats.get(kod)?.ad ?? ''}
+          ad={(i) => kovaAdi(taban, kirilim, kov.basi[i] ?? 0, true)} malzemeAdi={malzemeAdi}
           tedarikci={(t) => tedarikciAdi(D, t)} miktar={miktar} emirNo={emirNo} />
       </Kart>
       <TopluPlan satirlar={plan.satirlar} taban={taban} simdi={g.simdi} dar={dar} stok={stokMiktari} malzemeAdi={malzemeAdi}
-        birim={(kod) => mats.get(kod)?.birim ?? ''} kart={(kod) => stok?.kartlar?.get(kod) ?? null} emirNo={emirNo} talepAcar={talepAcar} />
+        birim={(kod) => mats.get(kod)?.birim ?? ''} kart={(kod) => stok?.kartlar?.get(kod) ?? null} emirNo={emirNo} talepAcar={talepAcar} talepler={talepler} />
       <OneCekme surum={calismaSurumu} malzemeAdi={malzemeAdi} dar={dar} />
     </div>
   );
+  const takvim = (
+    <>
+      <div className="tc-pyz-serit">{secici}</div>
+      <Lejant ogeler={LEJANT} />
+      <IsiIzgarasi etiket={ISI_ADI} satirAd="Malzeme" genis="gun" sutunlar={isi.sutunlar} satirlar={isi.satirlar} secim={secim} sec={secYaz} gizliAd="karşılananlar"
+        acilim={(x, _s, kapat) => {
+          const r = x.r;
+          const neden = r.src === null
+            ? `${r.kod} için sipariş verilmedi; plan ${gunYaz(taban, r.gerekli)} günü ${miktar(Math.ceil(r.miktar), r.kod)} istiyor.${r.siparisGun !== null ? ` Zamanında gelmesi için en geç ${gunYaz(taban, r.siparisGun)} sipariş verilmeli.` : ''}`
+            : `${r.kod} ${x.d.toLocaleLowerCase('tr-TR')}: plan ${gunYaz(taban, r.gerekli)} istiyor, geliş ${gunYaz(taban, r.etkin)}${r.tb ? ' (Satın Alma termini bekleniyor, olması gereken tarihte gelmiş sayıldı)' : ''}.`;
+          return (
+            <Acilim baslik={`${r.kod} · ${x.d}`} simge="box" ton={x.ton === 'tamam' ? '' : x.ton} neden={neden} kapat={kapat}
+              bilgi={[['Gerekli', gunYaz(taban, r.gerekli)], ['Geliş', gunYaz(taban, r.etkin)], ['Miktar', miktar(Math.ceil(r.miktar), r.kod)], ['Bağlı siparişler', r.isler.map(emirNo).join(', ')]]}
+              // Sipariş ve geliş tarihi formu satın almanındır (222 a); burada form yoktur, kilit metni de gösterilmez (3537 a).
+              secenekler={r.isler[0] && goster ? [{ ad: `Kokpit'te aç · ${emirNo(r.isler[0])}`, etki: 'Bu malzemeyi bekleyen emri Kokpit\'te seçer.', simge: 'target', yap: () => { goster(r.isler[0]!); } }] : []} />
+          );
+        }} />
+    </>
+  );
   return (
     <div className="tc-pyz">
-      <IsiSayfasi simge="box" baslik={SAYFA_ADI} alt={ISI_ADI} ust={isi.ust} tum={tum}>
-        <Lejant ogeler={LEJANT} />
-        <IsiIzgarasi etiket={ISI_ADI} satirAd="Malzeme" genis="gun" sutunlar={isi.sutunlar} satirlar={isi.satirlar} secim={secim} sec={secYaz} gizliAd="karşılananlar"
-          acilim={(x, _s, kapat) => {
-            const r = x.r;
-            const neden = r.src === null
-              ? `${r.kod} için sipariş verilmedi; plan ${gunYaz(taban, r.gerekli)} günü ${miktar(Math.ceil(r.miktar), r.kod)} istiyor.${r.siparisGun !== null ? ` Zamanında gelmesi için en geç ${gunYaz(taban, r.siparisGun)} sipariş verilmeli.` : ''}`
-              : `${r.kod} ${x.d.toLocaleLowerCase('tr-TR')}: plan ${gunYaz(taban, r.gerekli)} istiyor, geliş ${gunYaz(taban, r.etkin)}${r.tb ? ' (Satın Alma termini bekleniyor, olması gereken tarihte gelmiş sayıldı)' : ''}.`;
-            return (
-              <Acilim baslik={`${r.kod} · ${x.d}`} simge="box" ton={x.ton === 'tamam' ? '' : x.ton} neden={neden} kapat={kapat}
-                bilgi={[['Gerekli', gunYaz(taban, r.gerekli)], ['Geliş', gunYaz(taban, r.etkin)], ['Miktar', miktar(Math.ceil(r.miktar), r.kod)], ['Bağlı siparişler', r.isler.map(emirNo).join(', ')]]}
-                // Sipariş ve geliş tarihi formu satın almanındır (222 a); burada form yoktur, kilit metni de gösterilmez (3537 a).
-                secenekler={r.isler[0] ? [{ ad: `${emirNo(r.isler[0])} Kokpit'te`, etki: 'Bu malzemeyi bekleyen emri Kokpit\'te seçer.', simge: 'target', ...cizelge(r.isler[0]) }] : []} />
-            );
-          }} />
-      </IsiSayfasi>
+      <Basliklik ust={isi.ust} />
+      {k.nereden === 'belge' && <p className="tc-pyz-kucuk" data-ton="uyari">Stok ya da açık satın alma siparişleri okunamadı (yetki yok ya da uç yanıt vermedi); planın kendi kopyası kullanılıyor.</p>}
+      {etkin === 'butce' ? butce : etkin === 'takvim' ? takvim : (
+        <MalzemeListesi satirlar={liste} plan={plan.satirlar} D={D} taban={taban} simdi={g.simdi} dar={listeKart} fg={fg} malzemeAdi={malzemeAdi}
+          birim={(kod) => mats.get(kod)?.birim ?? ''} kartKodu={(kod) => stok?.kartlar?.get(kod)?.kod ?? null} malzemeTedarikcisi={malzemeTedarikcisi}
+          tedarikci={(t) => tedarikciAdi(D, t)} fiyat={fiyat} stok={stokMiktari} emirNo={emirNo} talepler={talepler} talepAcar={talepAcar}
+          terminYazar={terminYazar} yenile={yenile} goster={goster} gorunum={secici} />
+      )}
     </div>
+  );
+}
+
+// Sayfa başlığı ve nabız (Kokpit'in durum satırı gibi): en sıcak satır. Plan durumu (yok, eski) plan şeridindedir; sayfa yinelemez.
+function Basliklik({ ust }: { ust: IsiUstDurumu | null }) {
+  return (
+    <header className="tc-pyz-bas">
+      <h2><Simge ad="box" boyut="k" />{SAYFA_ADI}</h2>
+      {ust && <p className="tc-pyz-nabiz" data-ton={ust.ton} role="status"><Simge ad={ust.simge} boyut="k" /><span>{ust.metin}</span></p>}
+    </header>
   );
 }
 
@@ -311,116 +352,5 @@ function DagilimTablosu({ d, tur, sec, fg, dar, ad, malzemeAdi, tedarikci, mikta
         </table>
       </div>
     </>
-  );
-}
-
-interface AlimPlaniOzellikleri {
-  l: AlimPlaniSatiri[];
-  fg: boolean;
-  dar: boolean;
-  taban: number;
-  simdi: number;
-  fiyat: (kod: string, q: number) => number | null;
-  malzemeAdi: (kod: string) => string;
-  malzemeTedarikcisi: (kod: string) => string | null;
-  miktar: (q: number, kod: string) => string;
-  tedarikci: (t: string) => string;
-  emirNo: EmirNo;
-}
-
-// Bugünkü eski sayfanın satın alma planı (zv-termin mpSatinalmaPlani): dört sayaç, verilecek siparişler ve açık siparişler. Seçim, tedarikçi
-// seçimi ve "Sipariş ver" yoktur (222 a): satın almada girilir. Tedarik termini üstteki karttadır (533 a).
-function AlimPlani({ l, fg, dar, taban, simdi, fiyat, malzemeAdi, malzemeTedarikcisi, miktar, tedarikci, emirNo }: AlimPlaniOzellikleri) {
-  const { yeni, acik } = alimTablolari(l);
-  const say = alimSayaclari(l, simdi);
-  const tarih = (t: number | null): ReactNode => (t === null || !Number.isFinite(t) ? '—' : <span className="mono">{gunYaz(taban, t)}</span>);
-  const malzeme = (kod: string): ReactNode => <><b className="mono">{kod}</b> <span className="tc-pyz-kucuk">{malzemeAdi(kod)}</span></>;
-  const durum = (r: AlimPlaniSatiri): ReactNode => <Rozet ton={DURUM_TONU[r.durum]}>{DURUM_ADI[r.durum]}</Rozet>;
-  const satirTonu = (r: AlimPlaniSatiri): 'hata' | undefined => (DURUM_TONU[r.durum] === 'hata' ? 'hata' : undefined);
-  const kpi: [SimgeAdi, string, string, string, string?][] = [
-    ['lira', 'Sipariş verilmeli', String(say.verilmeli), `${say.gunuGecti} tanesinin günü geçti`, say.verilmeli ? 'uyari' : 'tamam'],
-    ['clock', 'Termin bekleniyor', String(say.bekleniyor), 'olması gereken tarihte gelmiş sayıldı', say.bekleniyor ? 'uyari' : undefined],
-    ['alert', 'Siparişi geciktirir', String(say.geciktirir), 'termin en geç günden sonra', say.geciktirir ? 'hata' : 'tamam'],
-    ['check', 'Karşılıyor', String(say.karsiliyor), 'termin planı tutuyor'],
-  ];
-  const sutunY = fg ? 9 : 8;
-  const sutunA = fg ? 10 : 9;
-  return (
-    <Kart baslikEki={<Baslik simge="truck" ad="Satın alma planı" ek="üretim planına göre" />}>
-      <div className="tc-pyz-kpi">
-        {kpi.map(([sm, ad, d, alt, ton]) => (
-          <div key={ad} data-ton={ton}><small><Simge ad={sm} boyut="k" />{ad}</small><b className="mono">{d}</b><span>{alt}</span></div>
-        ))}
-      </div>
-      <h3 className="tc-pyz-alt"><Simge ad="lira" boyut="k" />Verilecek siparişler</h3>
-      <div className="tc-tablo-kap" data-kip={dar ? 'kart' : undefined}>
-        <table className="tc-tablo tc-pyz-sa" aria-label="Verilecek siparişler">
-          <thead><tr>
-            <th>Malzeme</th><th>Durum</th><th className="tc-pyz-num">Miktar</th>{fg && <th className="tc-pyz-num">Tutar</th>}
-            <th>En geç sipariş</th><th>Gerekli geliş</th><th>Tedarik termini</th><th>Tedarikçi</th><th>Siparişler</th>
-          </tr></thead>
-          <tbody>
-            {yeni.length === 0 && <tr><td colSpan={sutunY} className="tc-pyz-kucuk">Verilecek sipariş yok: ihtiyaç stoktan ve açık siparişlerden karşılanıyor.</td></tr>}
-            {yeni.map((r) => {
-              const q = Math.ceil(r.miktar);
-              const t = r.tedarikci === null ? malzemeTedarikcisi(r.kod) : tedarikci(r.tedarikci);
-              return (
-                <tr key={`y-${r.kod}-${r.isler.join('-')}`} data-ton={satirTonu(r)}>
-                  <Td b="Malzeme">{malzeme(r.kod)}</Td>
-                  <Td b="Durum">{durum(r)}</Td>
-                  <Td b="Miktar" sinif="tc-pyz-num">{miktar(q, r.kod)}</Td>
-                  {fg && <Td b="Tutar" sinif="tc-pyz-num">{tlYaz(fiyat(r.kod, q))}</Td>}
-                  <Td b="En geç sipariş">
-                    {r.siparisGun === null ? '—' : <>{tarih(r.siparisGun)}{r.siparisGun < simdi && <small className="tc-pyz-not">geçti</small>}</>}
-                  </Td>
-                  <Td b="Gerekli geliş">{tarih(r.gerekli)}</Td>
-                  <Td b="Tedarik termini">{r.tb ? <span className="tc-pyz-kucuk">bekleniyor</span> : tarih(r.soz)}</Td>
-                  <Td b="Tedarikçi">{t ?? '—'}</Td>
-                  <Td b="Siparişler"><span className="mono">{r.isler.map(emirNo).join(', ')}</span></Td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      <h3 className="tc-pyz-alt"><Simge ad="truck" boyut="k" />Açık siparişler</h3>
-      <div className="tc-tablo-kap" data-kip={dar ? 'kart' : undefined}>
-        <table className="tc-tablo tc-pyz-sa" aria-label="Açık siparişler">
-          <thead><tr>
-            <th>Malzeme</th><th>Durum</th><th>Sipariş</th><th className="tc-pyz-num">Miktar</th>{fg && <th className="tc-pyz-num">Tutar</th>}
-            <th>Gerekli geliş</th><th>En geç</th><th>Termin</th><th>Planda geliş</th><th>Siparişler</th>
-          </tr></thead>
-          <tbody>
-            {acik.length === 0 && <tr><td colSpan={sutunA} className="tc-pyz-kucuk">Açık satın alma siparişi yok.</td></tr>}
-            {acik.map((r) => (
-              <tr key={`a-${String(r.src)}`} data-ton={satirTonu(r)}>
-                <Td b="Malzeme">{malzeme(r.kod)}</Td>
-                <Td b="Durum">{durum(r)}</Td>
-                <Td b="Sipariş">
-                  <span className="mono">{r.no ?? '—'}</span>
-                  <small className="tc-pyz-not">{[r.tedarikci === null ? '' : tedarikci(r.tedarikci), r.verildi === null ? '' : gunYaz(taban, r.verildi)].filter(Boolean).join(' · ')}</small>
-                </Td>
-                <Td b="Miktar" sinif="tc-pyz-num">{miktar(r.miktar, r.kod)}</Td>
-                {fg && <Td b="Tutar" sinif="tc-pyz-num">{tlYaz(fiyat(r.kod, r.miktar))}</Td>}
-                <Td b="Gerekli geliş">{tarih(r.gerekli)}</Td>
-                <Td b="En geç">{tarih(r.enGec)}</Td>
-                <Td b="Termin">
-                  {r.tb ? <span className="tc-pyz-kucuk">bekleniyor</span> : tarih(r.soz)}
-                  {r.ref !== null && <small className="tc-pyz-not">{`referans ${gunYaz(taban, r.ref)}`}</small>}
-                </Td>
-                <Td b="Planda geliş">
-                  {tarih(r.etkin)}<small className="tc-pyz-not">{r.tb ? 'olması gereken tarih' : r.tm === 'sa-termin' ? 'Satın Alma termini' : 'termin + tedarikçi gecikmesi'}</small>
-                </Td>
-                <Td b="Siparişler"><span className="mono">{r.isler.map(emirNo).join(', ')}</span></Td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="tc-pyz-kucuk">
-        Termini girilmemiş malzeme olması gereken tarihte gelmiş sayılır, plan işi kaydırmaz; termin girilince plan o günü kullanır, geç kalırsa katı kipte iş
-        bekler. En geç sipariş: siparişin terminini kaçırmadan verilebileceği son gün (tedarik süresi düşülmüş).
-      </p>
-    </Kart>
   );
 }

@@ -92,14 +92,18 @@ describe('Satın Alma menüsünün plan sayfaları (546 a)', () => {
     const istekler = sunucu(malzemeCalismasi);
     ciz(<SatinAlmaMalzemePlani />);
     expect(await screen.findByText(/planın kendi kopyası kullanılıyor/, {}, BEKLE)).toBeTruthy();
-    const plan = screen.getByRole('table', { name: 'Verilecek siparişler' });
-    expect(within(plan).getAllByRole('columnheader').map((h) => h.textContent)).not.toContain('Tutar');
-    expect(within(plan).getByText('Termin bekleniyor')).toBeTruthy();
-    expect(within(plan).getByText('DN-0002-26-01-002')).toBeTruthy();
-    expect(within(screen.getByRole('table', { name: 'Tedarik terminleri' })).getByText('M-1')).toBeTruthy();
+    // 3537 a: aynı görünümün Listesi; Satın Alma'da Kokpit yoktur, emir düğmesi çizilmez; termin yazmayan kişide termin kutusu yoktur.
+    const tablo = screen.getByRole('table', { name: 'Malzemeler' });
+    expect(within(tablo).getByText('M-1')).toBeTruthy();
+    expect(within(tablo).getAllByRole('columnheader').map((h) => h.textContent)).not.toContain('Tutar');
+    fireEvent.click(within(tablo).getByRole('button', { name: /^M-1/ }));
+    expect(screen.getAllByText('DN-0002-26-01-002', { exact: false }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: /Kokpit'te aç/ })).toBeNull();
     expect(screen.queryByLabelText('M-1 tedarik termini')).toBeNull();
     expect(screen.queryByText(/ TL$/)).toBeNull();
+    fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: 'Bütçe' }));
     expect((screen.getByRole('button', { name: 'Hesapla' }) as HTMLButtonElement).disabled).toBe(true);
+    localStorage.removeItem('tmi.malzplan.gorunum');
     expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
   }, 30000);
 
