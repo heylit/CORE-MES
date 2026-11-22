@@ -127,6 +127,20 @@ describe('satin-alma fason talebi ve dış işlem emri (2428, gerçek PostgreSQL
     assert.equal((await istek(cerezOkur, 'POST', '/satin-alma-talepleri/hizli-ac', fasonTalebi([partiKalemi()]))).statusCode, 403);
   });
 
+  // 3579: sıradaki adımı fason olan emrin istasyonu boştur. Talep formu emri açık emir listesinden seçer; liste bu emri vermezse
+  // üretim emrinden açılan talebin bağı formda düşer ve talep emirsiz açılır.
+  test('3579: sıradaki adımı fason (istasyonsuz) emir talep formunun emir listesinde gelir ve talebe bağlanır', async () => {
+    const { emirId } = await fasonIsEmri();
+    await ortam!.sahip.sorgu('UPDATE uretim_emri SET istasyon_id = NULL WHERE id = $1', [emirId]);
+    const r = await istek(cerezTalep, 'GET', '/satin-alma-acik-emirler');
+    assert.equal(r.statusCode, 200, r.body);
+    assert.ok((r.json() as { emirler: { id: number }[] }).emirler.some((e) => e.id === emirId));
+    const talep = await istek(cerezTalep, 'POST', '/satin-alma-talepleri/hizli-ac', {
+      id: crypto.randomUUID(), tur: 'malzeme', ihtiyacTarihi: null, aciklama: '', uretimEmriId: emirId, kalemler: [{ ad: 'Deneme serbest', birim: 'adet', miktar: '1', aciklama: '' }] });
+    assert.equal(talep.statusCode, 200, talep.body);
+    assert.match((talep.json() as Talebim).uretimEmriNo ?? '', /^UE-\d+$/);
+  });
+
   test('emrin fason adımında var olan belge bağlanır, ikincisi açılmaz; partide talepten yeni belge açılır', async () => {
     const { isEmriId } = await fasonIsEmri();
     const plandan = (await ortam!.sahip.tek<{ id: number; acilis: string }>(

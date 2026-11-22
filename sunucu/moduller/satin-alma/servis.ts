@@ -27,7 +27,7 @@ import { dosyaTutamagi } from '../dosya/disari.ts';
 import { teklifIstekFormu } from './teklif-istek-formu.ts';
 import { belgeAcVeBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, type BagliBelge } from '../belge-merkezi/disari.ts';
 import {
-  acikEmirler, dieAc, dieListesi, dieOku, emirDurumlari, emirlerinProjeleri, emirNolari, fasonFirmasiniSiparistenYaz, fasonGecmisi, fasonGonderimleri, fasonIsEmirleri, isEmriOzetleri,
+  talepEmirSecenekleri, dieAc, dieListesi, dieOku, emirDurumlari, emirlerinProjeleri, emirNolari, fasonFirmasiniSiparistenYaz, fasonGecmisi, fasonGonderimleri, fasonIsEmirleri, isEmriOzetleri,
   bilesenIkamesiGeriAl, bilesenIkamesiYap, emirMalzemeIhtiyaci, ikameIcinEmriKilitle,
 } from '../uretim-emirleri/disari.ts';
 import { operasyonTipleri } from '../istasyonlar/disari.ts';
@@ -360,7 +360,7 @@ async function emriDenetle(db: Db, emirId: number | null, eskiEmirId: number | n
 }
 
 export async function acikEmirSecenekleri(db: Db): Promise<AcikEmirlerCevabi> {
-  return { emirler: (await acikEmirler(db)).map((e) => ({ id: e.id, emirNo: e.emirNo, parcaNo: e.parcaNo, parcaAd: e.parcaAd })) };
+  return { emirler: await talepEmirSecenekleri(db) };
 }
 
 async function talepEdeniDenetle(db: Db, k: Kullanici, id: number | null): Promise<number> {
