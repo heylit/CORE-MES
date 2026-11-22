@@ -1,4 +1,4 @@
-import type { KokpitEmri, KokpitModeli, KokpitOlcegi } from './kurallar.ts';
+import { SAAT_ENI, sigdirma, yakinOlcegi, YAKIN_EN_AZ, type KokpitEmri, type KokpitIsi, type KokpitModeli, type KokpitOlcegi } from './kurallar.ts';
 
 // Kokpit gantt yoğun veride okunurluk, dilim 1 (KURGU T1 ufuk, T5 etiket, T6 oklar). Saf; ekran Tahta.tsx ve Kokpit.tsx.
 
@@ -64,3 +64,56 @@ export const kumeYazisi = (n: number): string => `${String(n)} iş`;
 export type SatirBoyu = 'rahat' | 'siki';
 export const SATIR_ANAHTARI = 'coremes.kokpit-satir-boyu';
 export const satirBoyuCoz = (ham: string | null | undefined, dokunmatik: boolean): SatirBoyu => (!dokunmatik && ham === 'siki' ? 'siki' : 'rahat');
+
+// Dilim 3 (E, S2 a: 3553): ölçeğe bağlı kademe. Yıl ve Ay'da sipariş başına tek çubuk, Hafta'da emir çubuğu, Gün ve 3 gün'de adımlar.
+export type Kademe = 'siparis' | 'emir' | 'adim';
+export const kademe = (olcek: KokpitOlcegi): Kademe => (olcek === 'Y' || olcek === 'A' ? 'siparis' : olcek === 'H' ? 'emir' : 'adim');
+export const KADEME_YAZISI: Readonly<Record<Kademe, string>> = { siparis: 'Yıl ve Ay: sipariş çubukları', emir: 'Hafta: emir çubukları', adim: 'Gün ve 3 gün: adımlar' };
+
+export interface Aralik { S: number; C: number }
+// Kademeye inerken aralık görünüme sığar (Arayüz Z1): saat eni aralığa göre sürekli seçilir; yakın ölçeklerin altına inerse tahta uzak sayılır
+// (taşıma yok, gün yazısı haftalık). Kademe ölçekten değil odaktan geldiği için dar ende de emir ya da adım çubukları çizilir.
+export function inisGorunumu(a: Aralik, genislik: number): { olcek: KokpitOlcegi; saatEni: number; odak: number } {
+  const r = sigdirma(a.S, a.C, genislik), sure = Math.max(0.5, a.C - a.S), px = Math.max(SAAT_ENI.Y, genislik / (sure * 1.15));
+  return px >= YAKIN_EN_AZ ? { olcek: yakinOlcegi(r.px), saatEni: r.px, odak: r.odak } : { olcek: 'H', saatEni: px, odak: a.S - sure * 0.075 };
+}
+// Emrin planlı adımlarının birleşik aralığı; planda adımı yoksa null.
+export function emirAraligi(e: Pick<KokpitEmri, 'adimlar'>, isler: Readonly<Record<string, Pick<KokpitIsi, 'S' | 'C'>>>): Aralik | null {
+  let S = Infinity, C = -Infinity;
+  for (const a of e.adimlar) { const x = isler[a.id]; if (x) { S = Math.min(S, x.S); C = Math.max(C, x.C); } }
+  return S <= C ? { S, C } : null;
+}
+// Biten ve toplam adım (emir ya da sipariş); toplam sıfırsa null.
+export function bitenAdim(l: readonly Pick<KokpitEmri, 'adimlar'>[], isler: Readonly<Record<string, Pick<KokpitIsi, 'bitti'>>>): { biten: number; toplam: number } | null {
+  let biten = 0, toplam = 0;
+  for (const e of l) for (const a of e.adimlar) { toplam++; if (isler[a.id]?.bitti) biten++; }
+  return toplam > 0 ? { biten, toplam } : null;
+}
+
+// Sipariş grubu: kartın (siparisKartlari) görünen emirleri, görünen sıradaki ilk emrinin yerinde. Görünen emri olmayan sipariş satır olmaz.
+export interface SiparisGrubu { kok: string; no: string; emirler: KokpitEmri[]; termin: number | null }
+export function siparisGruplari(kartlar: readonly { kok: string; siparis: { no: string | null } | null; emirler: readonly KokpitEmri[]; termin: number | null }[], gorunen: readonly KokpitEmri[]): SiparisGrubu[] {
+  const kartOf = new Map<string, number>();
+  kartlar.forEach((k, i) => { for (const e of k.emirler) kartOf.set(e.id, i); });
+  const gruplar = new Map<number, KokpitEmri[]>();
+  for (const e of gorunen) { const i = kartOf.get(e.id); if (i === undefined) continue; const l = gruplar.get(i); if (l) l.push(e); else gruplar.set(i, [e]); }
+  return [...gruplar].map(([i, emirler]) => { const k = kartlar[i]!; return { kok: k.kok, no: k.siparis?.no ?? k.emirler[0]?.no ?? k.kok, emirler, termin: k.termin }; });
+}
+// Sipariş satırının özeti: aralık, durum sayıları, en kötü durum, en büyük gecikme (plansız emir ya da terminsizlerde null kalır).
+export interface SiparisOzeti { aralik: Aralik | null; gec: number; risk: number; plansiz: number; durum: KokpitEmri['durum']; gecikme: number | null; bitis: number | null }
+const AGIR: Readonly<Record<KokpitEmri['durum'], number>> = { gec: 3, risk: 2, plansiz: 1, iyi: 0 };
+export function siparisOzeti(emirler: readonly KokpitEmri[], isler: Readonly<Record<string, Pick<KokpitIsi, 'S' | 'C'>>>): SiparisOzeti {
+  let S = Infinity, C = -Infinity, gecikme: number | null = null, bitis: number | null = null, durum: KokpitEmri['durum'] = 'iyi';
+  const say = { gec: 0, risk: 0, plansiz: 0 };
+  for (const e of emirler) {
+    const a = emirAraligi(e, isler);
+    if (a) { S = Math.min(S, a.S); C = Math.max(C, a.C); }
+    if (e.durum !== 'iyi') say[e.durum]++;
+    if (AGIR[e.durum] > AGIR[durum]) durum = e.durum;
+    if (e.gecikme !== null) gecikme = gecikme === null ? e.gecikme : Math.max(gecikme, e.gecikme);
+    if (e.bitis !== null) bitis = bitis === null ? e.bitis : Math.max(bitis, e.bitis);
+  }
+  return { aralik: S <= C ? { S, C } : null, ...say, durum, gecikme, bitis };
+}
+export const siparisCubukYazisi = (n: number, o: Pick<SiparisOzeti, 'gec' | 'risk'>): string =>
+  [`${String(n)} emir`, o.gec ? `${String(o.gec)} geç` : '', o.risk ? `${String(o.risk)} riskli` : ''].filter(Boolean).join(' · ');

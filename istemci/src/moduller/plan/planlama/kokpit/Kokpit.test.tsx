@@ -674,6 +674,43 @@ describe('Kokpit', () => {
     expect(document.querySelectorAll('.tc-pyq-is').length).toBeGreaterThan(0);
   });
 
+  // Dilim 3 (E, S2 a): Ay'da sipariş başına tek çubuk; basınca Hafta'da o siparişin emirleri, emre basınca Gün'de adımları; yol izi geri döner.
+  it('kademe çubukları siparişten emre, emirden adıma iner; yol izi Tüm plan\'a döner', () => {
+    ac();
+    fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: 'Sipariş' }));
+    const olcek = (ad: string) => within(screen.getByRole('group', { name: 'Ölçek' })).getByRole('button', { name: ad });
+    const tahta = () => document.querySelector('.tc-pyq-tahta') as HTMLElement;
+    fireEvent.click(olcek('Ay'));
+    const sp = [...tahta().querySelectorAll<HTMLElement>('[data-kademe="siparis"]')];
+    expect(sp.length).toBeGreaterThan(0);
+    expect(tahta().querySelector('[data-is]')).toBeNull();
+    expect(document.querySelector('[data-yol-izi] [aria-current]')?.textContent).toBe('Tüm plan');
+    const ikinci = sp.find((b) => b.getAttribute('data-kademe-id') === '2')!;
+    fireEvent.click(ikinci);
+    // Z1: ölçek siparişin aralığına sığar; kademe odaktan gelir (emir). Z4: odak yol izinin yeni halkasındadır.
+    expect(document.activeElement?.getAttribute('aria-current')).toBe('page');
+    const yol = () => document.querySelector<HTMLElement>('[data-yol-izi]');
+    expect(yol()?.textContent).toContain('Tüm plan');
+    const em = [...tahta().querySelectorAll<HTMLElement>('[data-kademe="emir"]')];
+    expect(em.map((b) => b.getAttribute('data-kademe-id'))).toEqual(['2']);
+    fireEvent.click(em[0]!);
+    expect(document.activeElement?.closest('[data-yol-izi]')).not.toBeNull();
+    expect(tahta().querySelectorAll('[data-is]').length).toBeGreaterThan(0);
+    expect([...tahta().querySelectorAll('[data-is]')].every((b) => b.getAttribute('data-is')?.startsWith('2.'))).toBe(true);
+    fireEvent.click(within(yol()!).getByRole('button', { name: /Tüm plan/ }));
+    expect(yol()?.querySelector('[aria-current]')?.textContent).toBe('Tüm plan');
+    expect(tahta().dataset.olcek).toBe('A');
+    expect(tahta().querySelectorAll('[data-kademe="siparis"]').length).toBe(sp.length);
+    // Yıl'da da sipariş kademesi; Yıl ve 3 gün arasında gidip gelmek çökertmez (kanca sırası).
+    fireEvent.click(olcek('Yıl'));
+    expect(tahta().querySelectorAll('[data-kademe="siparis"]').length).toBe(sp.length);
+    fireEvent.click(olcek('3 gün'));
+    expect(tahta().querySelectorAll('[data-is]').length).toBeGreaterThan(0);
+    fireEvent.click(olcek('Yıl'));
+    fireEvent.click(olcek('Ay'));
+    expect(tahta().querySelectorAll('[data-kademe="siparis"]').length).toBe(sp.length);
+  });
+
   // Gantt dilim 2 (T4): Sıkı satırlar Araçlar'dan açılır, kapanır ve bu tarayıcıda hatırlanır; sayfa yeniden açılınca Sıkı kalır.
   it('Sıkı satırlar seçilir, kök satır boyunu taşır ve tarayıcıda saklanır', () => {
     localStorage.removeItem('coremes.kokpit-satir-boyu');

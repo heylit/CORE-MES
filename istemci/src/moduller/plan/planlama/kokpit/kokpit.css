@@ -301,7 +301,7 @@
 .tc-pyq-liste button[data-yanan] { border-color: var(--ink); }
 .tc-pyq-is[data-sabit] { background: repeating-linear-gradient(135deg, var(--panel-solid) 0 var(--b-2), var(--panel2) var(--b-2) var(--b-4)); }
 .tc-pyq-is[data-emir-secili] { box-shadow: inset var(--kayma) 0 0 var(--renk), 0 0 0 var(--cizgi) var(--ink); z-index: 1; }
-.tc-pyq-is[aria-pressed="true"], .tc-pyq-kume[data-secili], .tc-pyq-is[data-coklu] { box-shadow: inset var(--kayma) 0 0 var(--renk), 0 0 0 var(--cizgi-kalin) var(--hazard); z-index: 1; }
+.tc-pyq-is[aria-pressed="true"], .tc-pyq-is[data-secili], .tc-pyq-is[data-coklu] { box-shadow: inset var(--kayma) 0 0 var(--renk), 0 0 0 var(--cizgi-kalin) var(--hazard); z-index: 1; }
 .tc-pyq-is[data-tasinan] { opacity: var(--saydam-45); }
 .tc-pyq-is[data-kaydi] { outline: var(--cizgi) dashed var(--hazard); outline-offset: var(--pay-ince); }
 /* 3531: önizlemede yeni bitişi emrin terminini aşan iş. */
@@ -1077,3 +1077,10 @@
 .tc-pyq-liste .tc-pyq-fark { color: var(--ink); }
 .tc-pyq-h .tc-pyq-agac-ac { grid-template-rows: auto; }
 .tc-pyq-h .tc-pyq-agac-ac .tc-simge { grid-row: auto; }
+/* Dilim 3 (E): kademe yolu. Tüm plan > sipariş > emir; son halka bulunulan yerdir, öncekiler geri döner. */
+.tc-pyq-yolizi { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); padding: var(--b-1) var(--b-2); font-size: var(--yazi-s); color: var(--muted); }
+.tc-pyq-yolizi b { color: var(--ink); font-family: var(--font-mono); }
+.tc-pyq-yolizi ol, .tc-pyq-yolizi li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); margin: 0; padding: 0; list-style: none; }
+/* Telefonda tahta yok: yol izi yalnız bir siparişe inilmişken görünür (süzgeç olduğu belli olsun, Tüm plan geri döner). */
+@media (max-width: 767px) { .tc-pyq-yolizi:not([data-odak]) { display: none; } }
+.tc-pyq-yolizi-kademe { margin-left: auto; color: var(--faint); font-size: var(--yazi-xs); }

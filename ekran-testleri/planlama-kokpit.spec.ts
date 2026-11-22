@@ -2725,3 +2725,77 @@ test('Kokpit 3532: Planı güncelle sonrası sonuç çubuğu, hayalet ve ileri/g
   await expect(kokpit.locator('[data-eski-is]')).toHaveCount(0);
   expect(ag.hatalar).toEqual([]);
 });
+
+// 3551 dilim 3 (E, S2 a): Emirler gözünde kademe ölçeğe bağlıdır. Ay'da sipariş başına tek çubuk; çubuğa basınca o siparişin emirleri, emre basınca
+// adımları açılır, aralık görünüme sığar (her çubuk görünür); odak yol izinin yeni halkasına geçer; Tüm plan geri döner. Telefonda tahta ve yol izi yok.
+test('Kokpit 3551 E: sipariş, emir ve adım kademeleri; aralık görünüme sığar; yol izi geri döner; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  await taslakSunucusu(page);
+  await page.route('**/api/plan/planlama-kaynagi', async (r) => {
+    const cevap = await r.fetch();
+    const a = { siparis: '901', no: 'ORN-SP-101', musteri: 'Deneme Müşteri A' }, b = { siparis: '902', no: 'ORN-SP-102', musteri: 'Deneme Müşteri B' };
+    await r.fulfill({ response: cevap, json: { ...(await cevap.json()) as object, siparisBaglari: { S1: { ...a, kalem: 1 }, S2: { ...a, kalem: 2 }, S4: { ...b, kalem: 1 } } } });
+  });
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const karsilama = page.getByRole('button', { name: 'Başlayalım' });
+  if (await karsilama.isVisible()) await karsilama.click();
+  const tasma = async () => { expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0); };
+  const cek = async (ad: string) => { await page.waitForTimeout(800); await page.screenshot({ path: `/tmp/tmiv2-ekran/3551e-${ad}-${bilgi.project.name}.png` }); };
+  const bolum = kokpit.getByRole('region', { name: 'Emirler' });
+  const yol = bolum.locator('[data-yol-izi]');
+  if (bilgi.project.name === 'g360') {
+    await expect(bolum.locator('.tc-pyq-tahta')).toBeHidden();
+    await expect(yol).toBeHidden();
+    await tasma();
+    await cek('0-telefon');
+    expect(ag.hatalar).toEqual([]);
+    return;
+  }
+  const tahta = bolum.locator('.tc-pyq-tahta');
+  await expect(yol.locator('[aria-current="page"]')).toHaveText('Tüm plan');
+  // Ay: Ctrl+tekerlekle uzaklaşılır (sade düzende ölçek düğmesi yok).
+  const k = await tahta.boundingBox();
+  if (!k) throw new Error('tahta yok');
+  await page.mouse.move(k.x + k.width * 0.7, k.y + 60);
+  await page.keyboard.down('Control');
+  for (let i = 0; i < 8 && (await tahta.getAttribute('data-olcek')) !== 'A'; i++) { await page.mouse.wheel(0, 300); await page.waitForTimeout(150); }
+  await page.keyboard.up('Control');
+  await expect(tahta).toHaveAttribute('data-olcek', 'A');
+  const siparisler = tahta.locator('[data-kademe="siparis"]');
+  // İki siparişin çubuğu; planda yeri olmayan siparişte (S4) soluk not, siparişsiz S3 kendi satırında.
+  await expect(siparisler).toHaveCount(2);
+  await expect(tahta.locator('[data-agac-bos]')).toHaveCount(1);
+  await expect(tahta.locator('[data-is]')).toHaveCount(0);
+  await expect(yol).toContainText('Yıl ve Ay: sipariş çubukları');
+  await tasma();
+  await cek('1-siparis');
+  // Siparişe in: iki emri de görünen saat alanının içinde (Arayüz Z1); odak yol izinde (Z4).
+  const gorunur = async (sec: string) => tahta.evaluate((t, s) => {
+    const r = t.getBoundingClientRect(), bas = t.querySelector('.tc-pyq-bas')?.getBoundingClientRect().right ?? r.left;
+    return [...t.querySelectorAll(s)].every((x) => { const q = x.getBoundingClientRect(); return q.right > bas && q.left < r.right; });
+  }, sec);
+  await siparisler.filter({ hasText: 'ORN-SP-101' }).dispatchEvent('click');
+  await expect(yol.locator('[aria-current="page"]')).toHaveText('ORN-SP-101');
+  await expect(yol.locator('[aria-current="page"]')).toBeFocused();
+  await expect(tahta.locator('[data-kademe="emir"]')).toHaveCount(2);
+  expect(await gorunur('[data-kademe="emir"]')).toBe(true);
+  await tasma();
+  await cek('2-emir');
+  // Emre in: adımları görünür; yol izi üç halka; emir seçili.
+  await tahta.locator('[data-kademe="emir"][data-kademe-id="S1"]').dispatchEvent('click');
+  await expect(yol.locator('li')).toHaveCount(3);
+  await expect(tahta.locator('[data-is^="S1."]').first()).toBeVisible();
+  expect(await gorunur('[data-is^="S1."]')).toBe(true);
+  await expect(yol).toContainText('Gün ve 3 gün: adımlar');
+  await tasma();
+  await cek('3-adim');
+  // Tüm plan: sipariş kademesine döner, odak inilen siparişe.
+  await yol.getByRole('button', { name: /Tüm plan/ }).click();
+  await expect(yol.locator('[aria-current="page"]')).toHaveText('Tüm plan');
+  await expect(tahta.locator('[data-kademe="siparis"]')).toHaveCount(2);
+  expect(await page.evaluate(() => { const a = document.activeElement; return a?.getAttribute('data-siparis') ?? a?.getAttribute('data-kademe-id'); })).toBe('sp:901');
+  await tasma();
+  expect(ag.hatalar).toEqual([]);
+});

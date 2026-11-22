@@ -4,10 +4,13 @@ import { emirKuyrugu } from '../ortak/emir-no.ts';
 import type { Derleme } from '../motor/kurallar.ts';
 import type { IsTasiOnizlemesi } from '../motor/atolye/gonder.ts';
 import {
-  SAAT_ENI, adimBaglari, agacAdimBasligi, aralikYuku, durumYazisi, DURDURMA_BEKLIYOR, durusYazisi, ekMesaiYazisi, okUcu, okYolu, planliDurusYazisi, satirKimligi, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, uzakMi, yukSinifi, yukYuzdesi,
+  SAAT_ENI, YAKIN_EN_AZ, adimBaglari, agacAdimBasligi, aralikYuku, durumYazisi, DURDURMA_BEKLIYOR, durusYazisi, ekMesaiYazisi, okUcu, okYolu, planliDurusYazisi, satirKimligi, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, uzakMi, yukSinifi, yukYuzdesi,
   type AdimBagi, type KokpitEmri, type KokpitIsi, type KokpitModeli, type KokpitOlcegi, type TurAdayi,
 } from './kurallar.ts';
-import { etiketYeri, gorunenSatirSayisi, kumele, kumeYazisi, okKumesi, okunurGenislik, ufukCizgisi, ufukYazisi, type EtiketYeri, type SatirBoyu } from './yogunluk.ts';
+import {
+  bitenAdim, emirAraligi, etiketYeri, gorunenSatirSayisi, kademe, kumele, kumeYazisi, okKumesi, okunurGenislik, siparisCubukYazisi, siparisOzeti, ufukCizgisi, ufukYazisi,
+  type EtiketYeri, type Kademe, type SatirBoyu, type SiparisGrubu, type SiparisOzeti,
+} from './yogunluk.ts';
 import { BASLIK_ADI, GELEN_SIMGESI, type Degisiklik, type Gelenler } from './degisiklikler.ts';
 import { MalzemeSeridi, malzemeCubuklari } from './MalzemeCubugu.tsx';
 import type { EmirMalzemeleri } from './malzeme.ts';
@@ -87,6 +90,12 @@ export interface TahtaOzellikleri {
   kumeAc?: ((S: number, C: number) => void) | null;
   // T4: Sıkı satırda çubuk içine yazı yazılmaz (yeri varsa yanında, yoksa ipucunda).
   satirBoyu?: SatirBoyu;
+  // Dilim 3 (E, 3553 a): verilince Sipariş gözünde satır ve çubuk ölçeğe bağlı kademededir: Yıl ve Ay'da sipariş, Hafta'da emir, Gün ve 3 gün'de adım.
+  // Çubuğa basınca kademeIn o sipariş ya da emre iner (Kokpit ölçeği ve süzgeci değiştirir).
+  siparisler?: readonly SiparisGrubu[] | null;
+  // Kademeye inilince (yol izi odağı) kademe ölçekten değil odaktan gelir: sipariş odağında emir, emir odağında adım (Arayüz Z1).
+  kademeZorla?: Kademe | null;
+  kademeIn?: ((tur: 'siparis' | 'emir', id: string, S: number, C: number) => void) | null;
 }
 export type OkKipi = 'is' | 'siparis' | 'yok';
 // Odaklanan saat görünümün sol kenarından bu kadar içeride durur (px).
@@ -159,7 +168,10 @@ export function Tahta(o: TahtaOzellikleri) {
   const gelen = o.gelen ?? null, gelenBas = o.gelenBas ?? null, eskiYer = once ? null : o.eskiYer ?? null;
   // 3533: tablo kipi. Emirler gözünde (agac) emir sütunları, Tezgâhlar gözünde tezgâh sütunları; Ay ve Yıl ölçeğinde bugünkü satır başı kalır.
   const tablo = o.tablo ?? null;
-  const tabloKipi = tablo !== null && olcek !== 'Y' && (goz === 'T' || (o.agac ?? null) !== null);
+  const kad = goz !== 'T' && o.siparisler ? o.kademeZorla ?? kademe(olcek) : 'adim';
+  // Yük hücreleri yalnız Tezgâh gözünün (ya da kademesiz tahtanın) Yıl ölçeğinde.
+  const isi = olcek === 'Y' && kad === 'adim';
+  const tabloKipi = tablo !== null && !isi && (goz === 'T' || (o.agac ?? null) !== null);
   const kolonlar: readonly { id: string; ad: string; en: number; sayi: boolean }[] = tablo === null ? [] : goz === 'T' ? TEZGAH_SUTUNLARI : tablo.sutunlar.map((x) => SUTUN_ADI[x]);
   const sutunSablonu = tabloKipi ? sablon(kolonlar) : '';
   const bolmeGenisligi = tabloKipi && tablo ? bolmeEni(goz === 'T' ? tezgahToplamEni() : sutunToplamEni(tablo.sutunlar), tablo.en) : '';
@@ -168,6 +180,8 @@ export function Tahta(o: TahtaOzellikleri) {
   const fasonlar = useMemo(() => new Set(m.tezgahlar.filter((t) => t.fason).map((t) => t.id)), [m.tezgahlar]);
   const coklu = o.coklu ?? BOS_KUME, cokluSec = o.cokluSec ?? null, grupKaydir = o.grupKaydir ?? null;
   const px = !uzakMi(olcek) && o.saatEni != null ? o.saatEni : SAAT_ENI[olcek];
+  // Uzak: saatte 1,5 px ya da daha dar (Ay, Yıl ya da kademeye inerken sığdırılan dar saat eni). Uzakta taşıma yoktur, gün yazısı haftalıktır.
+  const uzak = uzakMi(olcek) || px < YAKIN_EN_AZ;
   const en = (m.son - m.bas) * px;
   const ufuk = ufukCizgisi(m, o.ufukSonu);
   const ufukDisi = ufuk === null ? null : <span className="tc-pyq-ufuk-disi" aria-hidden="true" ref={(el) => { yerYaz(el, (ufuk - m.bas) * px, (m.son - ufuk) * px); }} />;
@@ -191,7 +205,7 @@ export function Tahta(o: TahtaOzellikleri) {
   const odakIs = tasinan ? null : ustteki ?? secIs;
   const gorunenSatir = gorunenSatirSayisi(goz, m.tezgahlar.length, emirler, goz !== 'T' ? o.agac?.acik ?? null : null);
   const baglar = useMemo((): AdimBagi[] => {
-    if (once || uzakMi(olcek) || okKipi === 'yok') return [];
+    if (once || uzak || okKipi === 'yok' || kad !== 'adim') return [];
     const x = odakIs ? m.isler[odakIs] : undefined;
     if (okKipi === 'is') {
       const e = x ? m.emirler.find((y) => y.id === x.job) : undefined;
@@ -199,7 +213,7 @@ export function Tahta(o: TahtaOzellikleri) {
     }
     const kume = okKumesi(yanan, x?.job ?? null, secEmir, gorunenSatir);
     return kume ? adimBaglari(m.emirler.filter((e) => kume.has(e.id)), m.isler) : [];
-  }, [yanan, once, olcek, m, okKipi, odakIs, secEmir, gorunenSatir]);
+  }, [yanan, once, olcek, m, okKipi, odakIs, secEmir, gorunenSatir, kad]);
   // Kısa işin çizim genişliği ve şeridi; satırın şerit sayısı. Fason satırı (sınırsız kapasite) şeride açılmaz.
   // sag: aynı şeritte sağdaki işe (yoksa tahtanın sonuna) kadar boş yer; çubuk yazısı içine sığmazsa orada durur (T5).
   const yerlesim = useMemo(() => {
@@ -207,7 +221,7 @@ export function Tahta(o: TahtaOzellikleri) {
     // T3: kümedeki işin kimliği küme kimliğine (ilk işin kimliği) gider; kümenin yeri ve şeridi kumeler'dedir.
     const kumeOf = new Map<string, string>(), kumeler = new Map<string, { idler: string[]; S: number; C: number; en: number; serit: number; sag: number }>();
     const alanEni = (m.son - m.bas) * px, okunur = okunurGenislik(olcek), acikAgac = goz !== 'T' ? o.agac?.acik ?? null : null;
-    if (olcek === 'Y') return { is, satir, kumeOf, kumeler };
+    if (isi) return { is, satir, kumeOf, kumeler };
     const gruplar = new Map<string, KokpitIsi[]>();
     for (const x of Object.values(m.isler)) { const k = goz === 'T' ? satirKimligi(x) : x.job; gruplar.set(k, [...(gruplar.get(k) ?? []), x]); }
     for (const [k, l] of gruplar) {
@@ -232,7 +246,7 @@ export function Tahta(o: TahtaOzellikleri) {
       satir.set(k, Math.max(1, sonlar.length));
     }
     return { is, satir, kumeOf, kumeler };
-  }, [m, goz, olcek, px, once, fasonlar, o.agac?.acik]);
+  }, [m, goz, olcek, px, once, fasonlar, o.agac?.acik, isi]);
   // Yatay yer modelden (iş yeni yerine akarken ok hedefte durur), satırın yeri ekrandan okunur.
   useLayoutEffect(() => {
     const kok = ic.current;
@@ -272,7 +286,7 @@ export function Tahta(o: TahtaOzellikleri) {
   const tut = useCallback((id: string, tutma = 0): void => {
     const x = m.isler[id];
     if (onay || !x || !tasi) return;
-    if (uzakMi(olcek)) { uyari(YAKINLASIN); return; }
+    if (uzak) { uyari(YAKINLASIN); return; }
     const neden = tasinabilir(x);
     if (neden) { uyari(neden); return; }
     setMenu(null); setTasinan({ id, tut: tutma }); setHedef({ satir: goz === 'T' ? satirKimligi(x) : x.job, S: x.S, gecerli: true });
@@ -282,7 +296,7 @@ export function Tahta(o: TahtaOzellikleri) {
     const e = emir.get(emirId), ilk = e?.adimlar[0];
     if (onay || !e || !ilk || !planaAl) return;
     if (goz !== 'T') { uyari('Planlamak için Tezgâh görünümüne geçin'); return; }
-    if (uzakMi(olcek)) { uyari('Planlamak için yakınlaşın'); return; }
+    if (uzak) { uyari('Planlamak için yakınlaşın'); return; }
     if (e.adimlar.some((a) => m.isler[a.id])) { uyari('Bu emrin bir adımı planda; öteki adımları planlanınca yerleşir'); return; }
     if (!fisAdaylari(emirId).length) { uyari('Bu emrin ilk adımı tezgâhta yapılmıyor'); return; }
     setMenu(null); setTasinan({ id: ilk.id, tut: 0, fis: emirId }); setHedef(null);
@@ -291,7 +305,7 @@ export function Tahta(o: TahtaOzellikleri) {
   const birak = useCallback((vazgecer = false): void => {
     if (onay) return;
     const birakma = (ileti: string): void => { uyari(ileti); if (vazgecer) { setTasinan(null); setHedef(null); } };
-    if (tasinan && uzakMi(olcek)) { birakma('Bırakmak için yakınlaşın'); return; }
+    if (tasinan && uzak) { birakma('Bırakmak için yakınlaşın'); return; }
     if (tasinan?.fis !== undefined) {
       if (!hedef) { birakma('Emri bir tezgâh satırına bırakın'); return; }
       if (!hedef.gecerli) { birakma('Bu emrin ilk adımı bu tezgâhta yapılamaz'); return; }
@@ -392,7 +406,7 @@ export function Tahta(o: TahtaOzellikleri) {
       if (ev.key === 'Escape' && (tasinan || menu)) { ev.stopPropagation(); surukleniyor.current = false; setOnay(false); setTasinan(null); setHedef(null); setMenu(null); return; }
       if (onay) return;
       if (yazimda() || ev.ctrlKey || ev.metaKey || ev.altKey) return;
-      if (ev.key !== ' ' || uzakMi(olcek)) return;
+      if (ev.key !== ' ' || uzak) return;
       if (tasinan) { ev.preventDefault(); birak(); return; }
       // Odak başka bir düğmedeyken Space o düğmenindir; imleç bir işin üstündeyse iş tutulur.
       const odakDugme = /^(BUTTON|A|SUMMARY)$/.test(document.activeElement?.tagName ?? '') && !document.activeElement?.closest('.tc-pyq-is, .tc-pyq-fis');
@@ -470,7 +484,7 @@ export function Tahta(o: TahtaOzellikleri) {
   // Tezgâhın kapalı saatleri (açık pencerelerin tümleyeni) taralı çizilir; penceresi bilinmeyen tezgâh ve fason satırı çizilmez.
   const kapali = useMemo(() => {
     const k = new Map<string, [number, number][]>();
-    if (goz !== 'T' || uzakMi(olcek)) return k;
+    if (goz !== 'T' || uzak) return k;
     for (const t of m.tezgahlar) {
       const acik = m.acik[t.id];
       if (t.fason || !acik || acik.length === 0) continue;
@@ -495,7 +509,7 @@ export function Tahta(o: TahtaOzellikleri) {
   }, [m, cx, goz, olcek]);
   const gunSayisi = Math.round((m.son - m.bas) / 24);
   // Saat çizgileri yalnız yazısı sığan ölçekte: Gün'de dört saatte bir, 3 gün'de sekiz saatte bir.
-  const saatAdimi = uzakMi(olcek) ? 0 : px * 4 >= SAAT_YAZISI ? 4 : px * 8 >= SAAT_YAZISI ? 8 : 0;
+  const saatAdimi = uzak ? 0 : px * 4 >= SAAT_YAZISI ? 4 : px * 8 >= SAAT_YAZISI ? 8 : 0;
   const gunler = Array.from({ length: gunSayisi }, (_, g) => g);
   const eksen = (
     <div className="tc-pyq-satir tc-pyq-eksen" data-saatli={saatAdimi > 0 ? '' : undefined}>
@@ -503,17 +517,17 @@ export function Tahta(o: TahtaOzellikleri) {
         ? (
           <div className="tc-pyq-bas" data-tablo="">
             <div className="tc-pyq-tablo-satir" role="row">
-              {kolonlar.map((k) => <div key={k.id} className="tc-pyq-h" role="columnheader" data-sayi={k.sayi ? '' : undefined}>{k.ad}</div>)}
+              {kolonlar.map((k) => <div key={k.id} className="tc-pyq-h" role="columnheader" data-sayi={k.sayi ? '' : undefined}>{kad === 'siparis' && k.id === 'emir' ? 'Sipariş' : kad === 'siparis' && k.id === 'urun' ? 'Emirler' : kad === 'siparis' && k.id === 'fark' ? 'En kötü fark' : k.ad}</div>)}
             </div>
             <Ayrac tablo={tablo} erisilir deger={Math.round(tablo.en ?? (goz === 'T' ? tezgahToplamEni() : sutunToplamEni(tablo.sutunlar)))} />
           </div>
         )
-        : <div className="tc-pyq-bas">{goz === 'T' || olcek === 'Y' ? 'Tezgâh' : 'Emir'}</div>}
+        : <div className="tc-pyq-bas">{goz === 'T' || isi ? 'Tezgâh' : kad === 'siparis' ? 'Sipariş' : 'Emir'}</div>}
       <div className="tc-pyq-alan" role={tabloKipi ? 'presentation' : undefined}>
-        {gunler.filter((g) => olcek !== 'Y' || g % 7 === 0).filter((g) => olcek !== 'A' || g % 7 === 0).map((g) => (
+        {gunler.filter((g) => !uzak || g % 7 === 0).map((g) => (
           <button
-            type="button" key={g} className="tc-pyq-gun" ref={(el) => { yerYaz(el, g * 24 * px, (uzakMi(olcek) ? 7 : 1) * 24 * px); }}
-            title="Bu güne yakınlaş" onDoubleClick={() => { gunAc(g); }} onClick={() => { if (uzakMi(olcek)) gunAc(g); }}
+            type="button" key={g} className="tc-pyq-gun" ref={(el) => { yerYaz(el, g * 24 * px, (uzak ? 7 : 1) * 24 * px); }}
+            title="Bu güne yakınlaş" onDoubleClick={() => { gunAc(g); }} onClick={() => { if (uzak) gunAc(g); }}
           >{zaman(m.bas + g * 24).slice(0, olcek === 'G' || olcek === '3' ? 9 : 5)}</button>
         ))}
         {saatAdimi > 0 && gunler.flatMap((g) => SAATLER.filter((h) => h % saatAdimi === 0).map((h) => (
@@ -526,7 +540,7 @@ export function Tahta(o: TahtaOzellikleri) {
   );
 
   // T7: Ay'da satırlar emir ve tezgâh satırıdır, işler gün boyu ince çubuklar; yük hücreleri yalnız Yıl'da kalır.
-  if (olcek === 'Y') {
+  if (isi) {
     const adim = 7, isler = Object.values(m.isler);
     const hucreler = gunler.filter((g) => g % adim === 0);
     return (
@@ -561,17 +575,21 @@ export function Tahta(o: TahtaOzellikleri) {
 
   const tezgahKodu = new Map(m.tezgahlar.map((t) => [t.id, t.kod]));
   // emirKaydi: emir ve adım satırının emri; adimSira: adım satırının rotadaki sırası; ara: açık emrin adım sütun başlığı (3533).
-  type Satir = { kimlik: string; bas: string; alt: string; isler: KokpitIsi[]; durum?: string; tam?: string; termin?: number | null; durus?: string; agacEmir?: string; acik?: boolean; adim?: true; ozet?: [number, number]; notlar?: readonly string[]; emirKaydi?: KokpitEmri; adimSira?: number; ara?: true };
+  type Satir = { kimlik: string; bas: string; alt: string; isler: KokpitIsi[]; durum?: string; tam?: string; termin?: number | null; durus?: string; agacEmir?: string; acik?: boolean; adim?: true; ozet?: [number, number]; notlar?: readonly string[]; emirKaydi?: KokpitEmri; adimSira?: number; ara?: true; siparis?: SiparisGrubu; spOzet?: SiparisOzeti; emirCubugu?: true };
   const agac = goz !== 'T' ? o.agac ?? null : null;
   const satirlar0: Satir[] = goz === 'T'
     ? m.tezgahlar.map((t) => ({ kimlik: t.id, bas: t.kod, alt: t.ad, ...(suAndakiDurus(m, t.id) ? { durus: durusYazisi(suAndakiDurus(m, t.id)!, zaman) } : {}), isler: Object.values(m.isler).filter((x) => satirKimligi(x) === t.id) }))
+    : kad === 'siparis' ? (o.siparisler ?? []).map((g): Satir => {
+      const oz = siparisOzeti(g.emirler, m.isler);
+      return { kimlik: `sp:${g.kok}`, bas: g.no, alt: siparisCubukYazisi(g.emirler.length, oz), tam: g.no, termin: g.termin, isler: [], durum: oz.durum, siparis: g, spOzet: oz };
+    })
     : emirler.filter((e) => agac !== null || e.durum !== 'plansiz').map((e) => ({ kimlik: e.id, bas: `${emirKuyrugu(e.no)} · ${e.urun}`, alt: `${String(e.adet)} adet · ${durumYazisi(e)}`, tam: e.no, termin: e.termin, isler: e.adimlar.flatMap((a) => m.isler[a.id] ?? []), durum: e.durum, emirKaydi: e }));
   // Ağaçta açık emrin çubukları adım satırlarına iner; emrin satırında ilk başlangıçtan son bitişe özet çubuğu kalır.
-  const satirlar: Satir[] = agac === null ? satirlar0 : satirlar0.flatMap((r): Satir[] => {
+  const satirlar: Satir[] = agac === null ? (kad === 'emir' ? satirlar0.map((r) => ({ ...r, emirCubugu: true as const })) : satirlar0) : satirlar0.flatMap((r): Satir[] => {
     const e = emir.get(r.kimlik);
     if (!e) return [r];
     const acik = agac.acik.has(e.id);
-    const ana: Satir = { ...r, agacEmir: e.id, acik };
+    const ana: Satir = { ...r, agacEmir: e.id, acik, ...(kad === 'emir' && !acik ? { emirCubugu: true as const } : {}) };
     if (!acik) return [ana];
     const yer = r.isler.map((x) => once?.[x.id] ?? x);
     const ozet: [number, number] | undefined = yer.length > 0 ? [Math.min(...yer.map((x) => x.S)), Math.max(...yer.map((x) => x.C))] : undefined;
@@ -621,7 +639,7 @@ export function Tahta(o: TahtaOzellikleri) {
           if (kisa) el?.style.setProperty('--gercek', `${String(Math.max(2, Math.round(gercek)))}px`);
         }}
         onPointerDown={(ev) => {
-          if (ev.button > 0 || ev.pointerType === 'touch' || !tasi || tasinan || uzakMi(olcek)) return;
+          if (ev.button > 0 || ev.pointerType === 'touch' || !tasi || tasinan || uzak) return;
           basilan.current = { id: x.id, x: ev.clientX, y: ev.clientY, tut: (ev.clientX - ev.currentTarget.getBoundingClientRect().left) / px };
         }}
         data-coklu={coklu.has(x.id) ? '' : undefined}
@@ -634,7 +652,7 @@ export function Tahta(o: TahtaOzellikleri) {
         onContextMenu={(ev: FareOlayi<HTMLButtonElement>) => {
           if (!tasi || tasinan) return;
           ev.preventDefault();
-          if (uzakMi(olcek)) { uyari(YAKINLASIN); return; }
+          if (uzak) { uyari(YAKINLASIN); return; }
           const k = kap.current?.getBoundingClientRect();
           setMenu({ id: x.id, x: ev.clientX - (k?.left ?? 0) + (kap.current?.scrollLeft ?? 0), y: ev.clientY - (k?.top ?? 0) + (kap.current?.scrollTop ?? 0), tut: (ev.clientX - ev.currentTarget.getBoundingClientRect().left) / px });
         }}
@@ -659,6 +677,48 @@ export function Tahta(o: TahtaOzellikleri) {
       )}
       </Fragment>
     );
+  };
+  // Dilim 3 (E): sipariş ya da emir kademesinin tek çubuğu. Sipariş: ilk başlangıçtan son bitişe, en kötü emir rengi, içinde emir ve durum sayısı.
+  // Emir: adımlarının birleşik aralığı, biten adım dolgusu ve "biten/toplam adım". Basınca bir alt kademeye o aralıkla iner.
+  const kademeCubugu = (r: Satir) => {
+    const g = r.siparis, e = r.emirKaydi;
+    const aralik = g ? r.spOzet?.aralik ?? null : e ? emirAraligi(e, m.isler) : null;
+    if (!aralik) return r.siparis ? <span className="tc-pyq-agac-bos" data-agac-bos>planda yeri yok</span> : null;
+    const sayim = bitenAdim(g ? g.emirler : e ? [e] : [], m.isler);
+    const kod = g ? g.no : emirKuyrugu(e?.no ?? r.kimlik), ek = g ? r.alt : sayim ? `${String(sayim.biten)}/${String(sayim.toplam)} adım` : '';
+    const x = (aralik.S - m.bas) * px, w = Math.max(6, (aralik.C - aralik.S) * px);
+    const etiket = etiketYeri(o.satirBoyu === 'siki' ? 0 : w, en - (x + w), kod, ek);
+    const tur = g ? 'siparis' as const : 'emir' as const, id = g ? g.kok : e?.id ?? r.kimlik;
+    const ad = `${g ? `Sipariş ${g.no}` : e?.no ?? ''} · ${zaman(aralik.S)} – ${zaman(aralik.C)} · ${g ? r.alt : e ? durumYazisi(e) : ''}${sayim ? ` · ${String(sayim.biten)}/${String(sayim.toplam)} adım bitti` : ''}${o.kademeIn ? ` · basınca ${g ? 'emirlerine' : 'adımlarına'} iner` : ''}`;
+    return (
+      <Fragment key={`kademe-${id}`}>
+        <button
+          type="button" className="tc-pyq-is tc-pyq-kademe" data-kademe={tur} data-kademe-id={id} data-d={r.durum ?? 'iyi'} data-etiket={etiket} title={ad} aria-label={ad}
+          data-secili={!g && secEmir === id ? '' : undefined} aria-current={!g && secEmir === id ? true : undefined} data-sonuk={g ? (g.emirler.some((y) => uyar(y.id)) ? undefined : '') : uyar(id) ? undefined : ''}
+          ref={(el) => { yerYaz(el, x, w); el?.style.setProperty('--serit', '0'); }}
+          onClick={() => { if (!tasinan) o.kademeIn?.(tur, id, aralik.S, aralik.C); }}
+        >
+          <b>{kod}</b><span>{ek}</span>
+          {sayim && sayim.biten > 0 && <i className="tc-pyq-ilerleme" ref={(el) => { el?.style.setProperty('--oran', String(sayim.biten / sayim.toplam)); }} />}
+        </button>
+        {etiket === 'dis' && <span className="tc-pyq-is-etiket" aria-hidden="true" ref={(el) => { yerYaz(el, x + w); el?.style.setProperty('--serit', '0'); }}><b>{kod}</b> <span>{ek}</span></span>}
+      </Fragment>
+    );
+  };
+  const siparisHucresi = (r: Satir, id: SutunKimligi): ReactNode => {
+    const g = r.siparis, oz = r.spOzet;
+    if (!g || !oz) return null;
+    switch (id) {
+      case 'emir': return o.kademeIn && oz.aralik
+        ? <button type="button" className="tc-pyq-agac-ac" data-siparis={g.kok} aria-label={`Sipariş ${g.no}: emirlerine in`} title={`Sipariş ${g.no} · ${r.alt} · emirlerine iner`} onClick={() => { if (oz.aralik) o.kademeIn?.('siparis', g.kok, oz.aralik.S, oz.aralik.C); }}><Simge ad="zin" boyut="k" /><b>{emirKuyrugu(g.no)}</b></button>
+        : <b title={g.no}>{emirKuyrugu(g.no)}</b>;
+      case 'urun': return <span title={r.alt}>{r.alt}</span>;
+      case 'adet': { const t = g.emirler.reduce((a, e) => a + e.adet, 0); return <span className="tc-pyq-h-veri" title="Emirlerin toplam adedi">{t}</span>; }
+      case 'termin': return g.termin === null ? <Bos ad="Termin yok" /> : <span className="tc-pyq-h-veri" title={`En erken termin ${zaman(g.termin)}`}>{tarihSaat(zaman, g.termin)}</span>;
+      case 'bitis': return oz.bitis === null ? <Bos ad="Plan bitişi yok" /> : <span className="tc-pyq-h-veri" title={`Son plan bitişi ${zaman(oz.bitis)}`}>{tarihSaat(zaman, oz.bitis)}</span>;
+      case 'fark': return <FarkRozeti f={farkOlustur({ gecikme: oz.gecikme })} ipucu="En çok gecikecek emrin farkı" kisa={o.satirBoyu === 'siki'} />;
+      case 'ilerleme': { const s = bitenAdim(g.emirler, m.isler); return s ? <Halka i={{ biten: s.biten, toplam: s.toplam, oran: s.biten / s.toplam, tam: s.biten === s.toplam }} /> : null; }
+    }
   };
   // T3: "N iş" kümesi. Rengi en kötü emir durumu; seçili ya da yanan iş içindeyse öyle görünür. Basınca o aralık Gün ölçeğinde açılır (taşıma orada).
   const DURUM_AGIRLIGI: Readonly<Record<string, number>> = { gec: 3, risk: 2, plansiz: 1, iyi: 0 };
@@ -756,7 +816,7 @@ export function Tahta(o: TahtaOzellikleri) {
         <div className="tc-pyq-tablo-satir" role="row" data-secilebilir={emirSatiri ? '' : undefined} onClick={emirSatiri ? (ev) => { if (!(ev.target as Element).closest('button')) satirSec(r.emirKaydi!); } : undefined}>
           {r.notlar ? null : kolonlar.map((k) => (
             <div key={k.id} className="tc-pyq-h" role={r.ara ? 'columnheader' : 'cell'} data-sayi={k.sayi ? '' : undefined}>
-              {r.ara ? SUTUN_ADI[k.id as SutunKimligi].adimAdi : goz === 'T' ? tezgahHucresi(r, k.id) : r.adim ? adimHucresi(r, k.id as SutunKimligi) : r.emirKaydi ? emirHucresi(r.emirKaydi, r, k.id as SutunKimligi) : null}
+              {r.ara ? SUTUN_ADI[k.id as SutunKimligi].adimAdi : goz === 'T' ? tezgahHucresi(r, k.id) : r.siparis ? siparisHucresi(r, k.id as SutunKimligi) : r.adim ? adimHucresi(r, k.id as SutunKimligi) : r.emirKaydi ? emirHucresi(r.emirKaydi, r, k.id as SutunKimligi) : null}
             </div>
           ))}
         </div>
@@ -796,7 +856,7 @@ export function Tahta(o: TahtaOzellikleri) {
                 <button
                   type="button" key={e.id} className="tc-pyq-fis" data-fis={e.id} aria-pressed={secEmir === e.id} data-tasinan={tasinan?.fis === e.id ? '' : undefined}
                   onClick={() => { if (!tasinan) sec(e.id, null); }} onDoubleClick={(ev) => { ev.preventDefault(); tutFis(e.id); }}
-                  onPointerDown={(ev) => { if (ev.button > 0 || ev.pointerType === 'touch' || !planaAl || tasinan || goz !== 'T' || uzakMi(olcek)) return; basilan.current = { id: FIS + e.id, x: ev.clientX, y: ev.clientY, tut: 0 }; }}
+                  onPointerDown={(ev) => { if (ev.button > 0 || ev.pointerType === 'touch' || !planaAl || tasinan || goz !== 'T' || uzak) return; basilan.current = { id: FIS + e.id, x: ev.clientX, y: ev.clientY, tut: 0 }; }}
                   onContextMenu={(ev: FareOlayi<HTMLButtonElement>) => {
                     if (!planaAl || tasinan || goz !== 'T') return;
                     ev.preventDefault();
@@ -848,7 +908,8 @@ export function Tahta(o: TahtaOzellikleri) {
               {r.agacEmir !== undefined && !r.ozet && r.isler.length === 0 && <span className="tc-pyq-agac-bos" data-agac-bos>planda yeri yok</span>}
               {r.notlar?.map((y) => <p className="tc-pyq-not" key={y}>{y}</p>)}
               {hayaletler(r)}
-              {r.isler.map((x) => {
+              {(r.siparis || r.emirCubugu) && kademeCubugu(r)}
+              {!r.siparis && !r.emirCubugu && r.isler.map((x) => {
                 const k = r.adim ? undefined : yerlesim.kumeOf.get(x.id);
                 if (k === undefined) return isDugmesi(x, r.adim);
                 return k === x.id ? kumeDugmesi(k) : null;
