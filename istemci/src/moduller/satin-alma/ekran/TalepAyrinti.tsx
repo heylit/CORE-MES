@@ -133,7 +133,7 @@ export function TalepAyrinti() {
           )}
         </div>
       )}
-      <div className="sa-ekran-cizim"><TalepCizimleri talepId={r.id} yazabilir={yazar && r.status !== 'cancelled'} bosGizle /></div>
+      <div className="sa-ekran-cizim"><TalepCizimleri talepId={r.id} yazabilir={yazar && r.status !== 'cancelled'} bosGizle gorunum="satin-alma" /></div>
       <Sekmeler etiket="Talebin adımları" secili={sec} sec={(k) => { V.tab = k; render(); }} sekmeler={sekmeler} />
       {bilgi[sec] && <p className="sa-ekran-adim-ozet">{sekmeler.find((s) => s.anahtar === sec)?.baslik}: {bilgi[sec]}</p>}
     </div>

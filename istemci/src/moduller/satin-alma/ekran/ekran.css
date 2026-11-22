@@ -116,6 +116,18 @@
 .sa-is-tablosu .tc-tablo-kap[data-kaydir] .sa-ekran-govde { align-items: flex-start; }
 .sa-is-tablosu .tc-tablo-kap[data-kaydir] td[data-baslik="Malzeme"] { white-space: normal; min-width: 12rem; max-width: 17rem; }
 .sa-is-malzeme { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+/* 3571: kalemin kart, talep notu ve kart ayrıntısı satırları; talebin çizim sayısı numaranın yanında. */
+.sa-kalem-ozeti { display: flex; flex-direction: column; gap: var(--cizgi-kalin); min-width: 0; max-width: 100%; }
+.sa-kalem-ozeti-satir { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: var(--yazi-xs); }
+.sa-kalem-ozeti-satir > span { color: var(--ink); }
+.sa-kalem-ozeti > [data-sa-alt-satir] { color: var(--muted); font-size: var(--yazi-xs); overflow-wrap: anywhere; }
+.sa-kalem-ozeti-ayrinti { font-size: var(--yazi-xs); }
+.sa-kalem-ozeti-ayrinti summary { display: inline-flex; align-items: center; gap: var(--b-1); min-height: var(--dokunma-yogun); color: var(--muted); cursor: pointer; }
+.sa-kalem-ozeti-ayrinti dl { display: grid; grid-template-columns: max-content 1fr; gap: 0 var(--b-2); margin: var(--b-1) 0 0; }
+.sa-kalem-ozeti-ayrinti dl > div { display: contents; }
+.sa-kalem-ozeti-ayrinti dt { color: var(--muted); }
+.sa-kalem-ozeti-ayrinti dd { margin: 0; overflow-wrap: anywhere; }
+.sa-is-cizim { display: inline-flex; align-items: center; gap: var(--cizgi-kalin); margin: 0 var(--b-1); padding: 0 var(--b-1); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); vertical-align: middle; line-height: 1.4; color: var(--muted); font-family: var(--font-ana); font-size: var(--yazi-xs); }
 
 /* 3466-3 (H1): talebin bilgileri eşit kutularda; satır kalabalığı yerine ad, değer ve kısa açıklama */
 .sa-ekran-bilgi {

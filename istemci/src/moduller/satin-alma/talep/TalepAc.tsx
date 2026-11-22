@@ -552,7 +552,7 @@ export function TalepAc({ taslak = null, taslakEmri = null, taslakBitti, duzenle
         <CokSatir etiket="Açıklama" value={aciklama} onChange={(e) => aciklamaYaz(e.target.value)} maxLength={4000} rows={2} placeholder="Nerede, ne için kullanılacak" />
         {duzenlenen !== null && !guncelleme
           ? <TalepCizimleri talepId={duzenlenen.id} yazabilir={duzenlenen.duzenlenebilir === true} />
-          : <CizimSecici secilen={cizimler} degistir={cizimlerYaz} />}
+          : <CizimSecici secilen={cizimler} degistir={cizimlerYaz} malzemeNolari={kalemler.flatMap((k) => (k.kart !== null ? [k.kart.no] : k.malzemeNo !== null ? [k.malzemeNo] : []))} />}
         {hata && <p className="sa-talep-hata" role="alert">{hata}</p>}
         {bolunenKalem !== null && (
           <TeslimiBol key={bolunenKalem.anahtar} ad={bolunenKalem.kart?.ad ?? bolunenKalem.ad} birim={bolunenKalem.kart?.birim ?? bolunenKalem.birim}

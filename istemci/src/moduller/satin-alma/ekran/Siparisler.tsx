@@ -7,6 +7,7 @@ import { useYetki } from '../../../ortak/veri/yetki.ts';
 import { siparisListesi, siparisEtiketi, type SiparisSatiri } from '../merkez/calc.ts';
 import { faturaOzeti, iptalFaturaOzeti, irsaliyeOzeti, logoOzetleriniOku, type LogoOzetiOkumasi } from '../merkez/logo-ozeti.ts';
 import { go } from '../merkez/ui.ts';
+import { CizimSayisi } from './KalemOzeti.tsx';
 import { fiyatKilitli, fmtDate, money, norm, todayStr } from '../merkez/util.ts';
 
 // Siparişler (2430): tedarikçiye verilen her sipariş bir satır; satıra basınca talebin Sipariş adımı açılır, geri tuşu buraya döner.
@@ -119,7 +120,8 @@ export function Siparisler() {
     },
     { anahtar: 'ted', baslik: 'Tedarikçi', sirala: true, hucre: (s) => <b>{s.tedarikci}</b>, csv: (s) => s.tedarikci },
     {
-      anahtar: 'talep', baslik: 'Talep', hucre: (s) => <span className="sa-ekran-govde"><span>{s.talepAdi}</span><small className="sa-sp-nowrap">{s.talepNo}</small></span>,
+      anahtar: 'talep', baslik: 'Talep', hucre: (s) => <span className="sa-ekran-govde"><span>{s.talepAdi}</span><small className="sa-sp-nowrap">{s.talepNo}
+        <CizimSayisi sayi={s.cizimSayisi} /></small></span>,
       csv: (s) => `${s.talepNo} ${s.talepAdi}`,
     },
     { anahtar: 'tutar', baslik: 'Tutar', hizala: 'sag', kirilmaz: true, sirala: true, hucre: (s) => money(s.tutar, 'TRY', 0), csv: (s) => s.tutar ?? '' },
