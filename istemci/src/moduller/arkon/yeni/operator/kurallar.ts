@@ -6,6 +6,7 @@ import { TEKRAR_OLCUM } from '../../../../../../arkon/web/src/data/otomatik-numu
 import { anlikPencereler } from '../../../../../../arkon/web/src/data/vardiya-gunu.ts';
 import { yuzdeMetni } from '../../../../../../arkon/web/src/data/yuzde.ts';
 import type { MakineDurumu } from '../../../../ortak/arayuz/index.ts';
+import type { OpType } from '../hazirlik/tipler.ts';
 import { oeeHesapla, type DurumOlayi, type OeeOrtami, type OeeSonucu, type SayimKaydi } from '../cekirdek/oee.ts';
 import type { AnlikVardiya } from '../cekirdek/vardiya.ts';
 import { istasyonPaketleri, planOnce } from '../../../../../../arkon/web/src/data/tmi-plan.ts';
@@ -547,4 +548,11 @@ export function lotKarariOku(sonuc: unknown): LotKarari | null {
 export function bitirmeEksigi(o: Pick<Is, 'target' | 'good' | 'pkg'>, hatali: number | null | undefined): number {
   if (!o.pkg || isTuru(o.pkg) !== 'cnc') return 0;
   return Math.max(0, kalanAdet(o.target, o.good) - (hatali ?? 0));
+}
+
+// Uzak mod üretilen adedi uzaktan okutur; kalite ve depo istasyonunda ekranın işi muayene, toplama, mal kabul ve yüklemedir, dev
+// sayaç o işi kapatır. Kendiliğinden açılma yalnız üretim istasyonunda ve yalnız operatörde (2031 a); elle düğme her yerde kalır.
+const UZAK_MODSUZ_TURLER: ReadonlySet<OpType> = new Set<OpType>(['kalite', 'depo']);
+export function uzakKendiligindenAcilir(d: { onizleme: boolean; rol: string | null | undefined; istasyonTuru: OpType }): boolean {
+  return !d.onizleme && d.rol === 'operator' && !UZAK_MODSUZ_TURLER.has(d.istasyonTuru);
 }

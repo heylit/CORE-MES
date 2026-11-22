@@ -69,7 +69,7 @@ import { KART_DEGIL_ILETISI, KART_YOK_ILETISI, terminalOkutmasi, useElOkuyucu } 
 import { kartNumarasiGibi } from '../../../../ortak/veri/kart-degistir.ts';
 import {
   DURUM_ILETISI, DURUM_SIMGESI, EYLEM_DURUMU, URETIM_EYLEMLERI, baslangicUyarilari, bosIs, durusOnerileri, eksikTakimTabanlari, hazirlikSayisi,
-  ilkParcaKalemleri, ilkParcaKapisi, isSekmeleri, kararOzeti, kontrolTakvimi, mobilGorunumler, numuneAraligi, etkinIsSirasi, paketleriBirlestir, siradakiGorev, simgeSec, bekletmeGorevi, BEKLEMEDE_KAPALI,
+  ilkParcaKalemleri, ilkParcaKapisi, uzakKendiligindenAcilir, isSekmeleri, kararOzeti, kontrolTakvimi, mobilGorunumler, numuneAraligi, etkinIsSirasi, paketleriBirlestir, siradakiGorev, simgeSec, bekletmeGorevi, BEKLEMEDE_KAPALI,
   sonucBelgesi, takimUyarilari, tonAdi, uyariAnahtari, vardiyaHesabi, vardiyaOzeti, zamaniGelenUyarilar, hurdaUyarisi, bitisOzeti, bitirmeEksigi, tmiIlkParcaGerekli,
   type EkranSekmesi,
   hataliNedenleri, hataliUstSiniri, cubukDugmeleri,
@@ -1009,8 +1009,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   }, []);
   const dakika = Math.floor(shiftNow);
   useEffect(() => { segsYaz((s) => { const L = s[s.length - 1]; if (!L) return s; return s.map((x, i) => (i === s.length - 1 ? { ...x, t: Math.max(x.t, shiftNow) } : x)); }); }, [dakika]);
-  /* uzak mod: 45 sn dokunulmazsa; 2031 a: kendiliğinden yalnız operatörde açılır, elle düğme her rolde kalır */
-  const kendiligindenUzak = !pv && kisi?.role === 'operator';
+  /* uzak mod: 45 sn dokunulmazsa; 2031 a: kendiliğinden yalnız operatörde ve üretim istasyonunda açılır, elle düğme her yerde kalır */
+  const kendiligindenUzak = uzakKendiligindenAcilir({ onizleme: pv, rol: kisi?.role, istasyonTuru: ist.t });
   useEffect(() => {
     const f = () => { lastAct.current = Date.now(); };
     window.addEventListener('pointerdown', f, true);

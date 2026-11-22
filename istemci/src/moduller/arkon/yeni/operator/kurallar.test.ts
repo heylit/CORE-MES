@@ -3,6 +3,7 @@ import type { AnlikVardiya } from '../cekirdek/vardiya.ts';
 import {
   bekletmeGorevi, bitirmeEksigi, bitisOzeti, siradakiGorev, tmiIlkParcaGerekli,
   cagriTonu, cubukDugmeleri, durumDugmeleri, numuneAraligi, durusOnerileri, hurdaUyarisi, kalanSure, kaliteIstasyonuNumuneleri, kontrolTakvimi, lotKarariEksigi, lotKarariOku, lotSayisi, tonDurumu, vardiyaHesabi, vardiyaOzeti, type VardiyaOzetGirdisi,
+  uzakKendiligindenAcilir,
 } from './kurallar.ts';
 import type { Is, KontrolTakvimi } from './tipler.ts';
 
@@ -214,5 +215,15 @@ describe('3050 a: beklemedeki emir terminalde', () => {
     expect(bekletmeGorevi(devam, 'Diğer')?.act).toBeNull();
     const calisan = siradakiGorev(is({ state: 'running' }), BOS, null, undefined, 0);
     expect(bekletmeGorevi(calisan, 'Diğer')).toBe(calisan);
+  });
+});
+
+describe('uzakKendiligindenAcilir (3575)', () => {
+  it('yalnız operatörde, önizleme dışında ve üretim istasyonunda açılır', () => {
+    for (const t of ['cnc', 'tesviye', 'montaj', 'mark', 'boya'] as const) expect(uzakKendiligindenAcilir({ onizleme: false, rol: 'operator', istasyonTuru: t })).toBe(true);
+    for (const t of ['kalite', 'depo'] as const) expect(uzakKendiligindenAcilir({ onizleme: false, rol: 'operator', istasyonTuru: t })).toBe(false);
+    expect(uzakKendiligindenAcilir({ onizleme: true, rol: 'operator', istasyonTuru: 'cnc' })).toBe(false);
+    expect(uzakKendiligindenAcilir({ onizleme: false, rol: 'admin', istasyonTuru: 'cnc' })).toBe(false);
+    expect(uzakKendiligindenAcilir({ onizleme: false, rol: null, istasyonTuru: 'cnc' })).toBe(false);
   });
 });
