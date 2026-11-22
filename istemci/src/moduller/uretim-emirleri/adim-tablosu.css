@@ -61,7 +61,8 @@
 
 /* Sabit yuvalar: kaldır, menü ve aç her satırda aynı yerdedir; yoksa boş yer tutar. */
 .tc-at-yuva { width: 1%; white-space: nowrap; }
-.tc-at-yuvalar { display: inline-grid; grid-template-columns: repeat(3, var(--dokunma)); align-items: center; justify-items: center; }
+.tc-at-yuvalar { display: inline-grid; grid-auto-flow: column; grid-auto-columns: var(--dokunma); align-items: center; justify-items: center; }
+.tc-at-yuva-kaldir:empty, .tc-at-yuva-menu:empty, .tc-at-yuva-ac:empty { display: none; }
 .tc-at-yuvalar > span { display: inline-flex; min-height: var(--dokunma); align-items: center; justify-content: center; }
 
 .tc-at-ekle > td { padding: var(--b-1) var(--b-3); border-top: thin dashed var(--done); background: var(--panel2); }
@@ -119,8 +120,6 @@
   .tc-at-satir .tc-at-yuva { grid-column: 3; grid-row: 1; width: auto; }
   .tc-at-satir .tc-at-durum { grid-column: 1 / -1; grid-row: 2; white-space: normal; }
   .tc-at-satir .tc-at-hazirlik { grid-column: 1 / -1; grid-row: 3; }
-  .tc-at-yuvalar { grid-template-columns: repeat(2, var(--dokunma)); }
-  .tc-at-yuva-kaldir:empty { display: none; }
   .tc-at-tablo tr.tc-at-ekle, .tc-at-tablo tr.tc-at-ekle-panel, .tc-at-tablo tr.tc-at-acilim { display: block; border-top: thin solid var(--edge); }
   .tc-at-tablo tr.tc-at-ekle > td, .tc-at-tablo tr.tc-at-ekle-panel > td, .tc-at-tablo tr.tc-at-acilim > td { display: block; }
   .tc-at-madde { grid-template-columns: minmax(0, 1fr); }
@@ -133,4 +132,5 @@
 }
 @media (max-width: 1023px) {
   .tc-at-yuvalar .tc-dugme { min-height: var(--dokunma); min-width: var(--dokunma); }
+  .tc-at-cip { min-height: var(--dokunma); }
 }

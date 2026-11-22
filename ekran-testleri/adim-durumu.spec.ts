@@ -20,9 +20,18 @@ test('emir seçilir, adımlar ve sayaç görünür, adım ayrıntısı satırın
   else await expect(ilk).toHaveAttribute('aria-current', 'true');
 
   const ac1 = tablo.getByRole('button', { name: /^OP \d+ .* ayrıntısı$/ }).first();
+  // 3581 Test B1: tablo kapsayıcısından geniş olmaz (kapalı ve açık satırda), açma düğmesi kesilmez.
+  const tasmaz = async (): Promise<void> => {
+    const t = await page.evaluate(() => { const k = document.querySelector('.tc-at-kap'); const tb = k?.querySelector('table'); return { kap: k?.clientWidth ?? 0, tablo: tb?.scrollWidth ?? 0 }; });
+    expect(t.tablo, 'tablo kapsayıcıdan geniş olmaz').toBeLessThanOrEqual(t.kap);
+  };
+  await tasmaz();
   await ac1.click();
   await expect(ac1).toHaveAttribute('aria-expanded', 'true');
   await expect(page.getByRole('region', { name: /^OP \d+ .* ayrıntısı$/ })).toBeVisible();
+  await tasmaz();
+  // Test B2: dar ekranda madde çipi parmak boyunda.
+  if ((page.viewportSize()?.width ?? 0) < 1024) expect((await tablo.getByRole('button', { name: /Ayrıntıyı aç$/ }).first().boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
   await expect(page.getByRole('region', { name: /^OP \d+ durum$/ })).toBeVisible();
   await ac1.click();
   await expect(ac1).toHaveAttribute('aria-expanded', 'false');
