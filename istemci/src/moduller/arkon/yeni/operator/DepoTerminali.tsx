@@ -81,10 +81,11 @@ const DURUM_RENGI: Record<DepoDurumu, MakineDurumu> = { queued: 'sirada', runnin
 const durumKelimesi = (d: DepoDurumu, m: DepoMetinleri): string =>
   ({ queued: 'Başlamadı', running: m.calisiyor, paused: 'Duraklatıldı', stopped: 'Duruş', done: 'Tamamlandı' })[d];
 const DURUM_SIMGESI: Record<DepoDurumu, SimgeAdi> = { queued: 'clock', running: 'play', paused: 'pause', stopped: 'stop', done: 'check' };
-// Kadran, üretimdeki İş biçimini okur (iyi, yan, hedef, durum); döngü halkası çizilmez.
+// Kadran, üretimdeki İş biçimini okur (iyi, yan, hedef, durum); döngü halkası çizilmez. Hedef bilinmiyorsa (satın alma kabulü) kadran
+// "—" gösterir; 0 yazmak "/ 0 adet" diye yanlış sayı olurdu.
 const CEVRIMSIZ: CevrimOlcer = { gecen: () => 0, son: () => 0, sayac: () => 0 };
 export const kadranIsi = (is: DepoIsi, sayilan: number, yan: number, durum: DepoDurumu): Is =>
-  ({ no: is.no, part: is.ad, op: is.tur, target: is.hedef ?? 0, good: sayilan, scrap: yan, state: durum, cycle: 0 }) as unknown as Is;
+  ({ no: is.no, part: is.ad, op: is.tur, target: is.hedef ?? 0, good: sayilan, scrap: yan, state: durum, cycle: 0, empty: is.hedef === null }) as unknown as Is;
 
 // Sayım, sayılabilecek en çok adedi aşmaz (hedef bilinmiyorsa sınır yok).
 export const sayimEklenir = (sayilan: number, hedef: number | null, n = 1): boolean => n > 0 && (hedef === null || sayilan + n <= hedef);

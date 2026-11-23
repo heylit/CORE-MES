@@ -14,6 +14,13 @@ export const KABUL_METINLERI: DepoMetinleri = {
 // 3584: satın alma kabulü ekrandaki sipariş satırıyla açılır; okutma isteğe bağlıdır (gelen malın üstünde bizim kodumuz yok).
 const OKUTMA_NEDENI = 'Satın alma "Kabul et" ile: sipariş satırı seçili gelir, okutma isteğe bağlı.';
 
+// Satın almada kadranın hedefi siparişin kalanıdır (iş satırındaki "Beklenen" ile aynı sayı); yalnız adet birimli ve tam sayıysa,
+// başka birimde (kg, m) adet kadranına yazılmaz, kadran "—" gösterir.
+export const adetKalani = (kalan: string, birim: string): number | null => {
+  const n = Number(kalan);
+  return birim.trim().toLocaleLowerCase('tr') === 'adet' && Number.isInteger(n) && n >= 0 ? n : null;
+};
+
 export function kabulDepoIsi(k: KabulIsi): DepoIsi {
   const x = k.satir;
   const fason = k.tur === 'fason';
@@ -23,7 +30,7 @@ export function kabulDepoIsi(k: KabulIsi): DepoIsi {
     no: (fason ? x.emirNo : null) || x.siparisNo || x.talepNo,
     ad: x.kalemAdi,
     tur: fason ? 'Fason dönüşü' : 'Satın alma',
-    hedef: k.hedef,
+    hedef: fason ? k.hedef : adetKalani(x.kalanMiktar, x.birim),
     sunucuSayisi: null,
     alanlar: fason ? [
       { etiket: 'İş emri', deger: x.emirNo ?? null, mono: true },
