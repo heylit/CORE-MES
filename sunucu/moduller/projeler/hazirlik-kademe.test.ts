@@ -13,7 +13,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { kapananEmirlerinGorevleri, kapaliEmirCozucusuKaydet } from './hazirlik-kademe.ts';
+import { kapananEmirlerinGorevleri, kapaliEmirCozucusuKaydet, projeBitisKademeKayitlari } from './hazirlik-kademe.ts';
 import { butunOlaylariVeEskiKademeleriAc } from '../bildirim/disari.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -289,5 +289,23 @@ describe('projeler hazırlık kademesi (3396, 3405 ortak motor, gerçek PostgreS
     for (const s of ['planlama_muduru projeler.hazirlik-dagit', 'planlama_proje projeler.hazirlik-dagit', 'uretim_muduru projeler.hazirlik-dagit',
       'uretim_muduru uretim-emirleri.hazirlik-ayar', 'uretim_muduru projeler.oku', 'uretim_muduru sayfa.projeler', 'proses_muhendisi projeler.hazirlik-dagit',
       'proses_muhendisi projeler.oku', 'proses_muhendisi sayfa.projeler']) assert.ok(var_.has(s), s);
+  });
+
+  test('3588: proje bitişi kaynağı yalnız bitişi olan aktif projeyi verir; açan kişi sahiptir; gecikince takibe girer', async () => {
+    const ac = async (kod: string, bitis: string | null, durum = 'aktif') => (await ortam!.sahip.tek<{ id: number }>(
+      `INSERT INTO projeler_proje (kod, ad, olusturan_id, bitis, durum) VALUES ($1, 'Bitiş deneme', $2, ${bitis === null ? 'NULL' : `current_date + ${bitis}`}, $3) RETURNING id`,
+      [kod, yoneticiId, durum]))!.id;
+    const gecmis = await ac('PB.GEC', '-10');
+    await ac('PB.TARIHSIZ', null);
+    await ac('PB.BITTI', '-10', 'tamamlandi');
+    const kayitlar = (await vt().tx((db) => projeBitisKademeKayitlari(db))).filter((k) => k.no.startsWith('PB.'));
+    assert.deepEqual(kayitlar.map((k) => [k.no, k.sahip, k.yol]), [['PB.GEC', yoneticiId, `/projeler/${String(gecmis)}`]], 'tarihsiz ve kapanmış proje takipte değil');
+    await ortam!.sahip.sorgu(
+      `INSERT INTO bildirim_kademe_ayari (kaynak, acik, k2_gun, k3_gun, k4_gun, k5_gun, eposta_kademe, serit, kapatilamaz, k3_birim, surum)
+       VALUES ('projeler.proje-bitis', true, 1, NULL, 1, 3, 3, true, true, 'gun', 2) ON CONFLICT (kaynak) DO UPDATE SET acik = true`);
+    await vt().tx((db) => kademeleriIlerlet(db));
+    const takip = await vt().sorgu<{ kayit: string; kademe: number }>("SELECT kayit, kademe FROM bildirim_kademe_takip WHERE kaynak = 'projeler.proje-bitis' AND kayit LIKE $1", [`${String(gecmis)}:%`]);
+    assert.equal(takip.length, 1);
+    assert.ok((takip[0]?.kademe ?? 0) >= 3, 'bitişi geçmiş proje geciken kademededir');
   });
 });

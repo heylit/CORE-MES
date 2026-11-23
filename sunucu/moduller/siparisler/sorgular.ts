@@ -977,10 +977,16 @@ export async function logoSirasiniGeriAl(db: Db, tur: 'teklif' | 'siparis', id: 
 // Takvim (891, 1162 b): termini aralıkta olan, iptal edilmemiş siparişler.
 export interface TakvimSiparisSatiri { id: number; no: string; durum: SiparisDurumu; firma_id: number; termin: string }
 // 3478: onay bekleyen (taslak) sipariş; kademeli uyarı açılıştan sayar.
-export function onayBekleyenSiparisler(db: Db): Promise<{ id: number; no: string; olusturma: Date }[]> {
-  return db.sorgu<{ id: number; no: string; olusturma: Date }>(
-    `SELECT id, no, olusturma FROM siparisler_siparis WHERE durum = 'taslak' ORDER BY id`,
+export function onayBekleyenSiparisler(db: Db): Promise<{ id: number; no: string; olusturma: Date; olusturan_id: number }[]> {
+  return db.sorgu<{ id: number; no: string; olusturma: Date; olusturan_id: number }>(
+    `SELECT id, no, olusturma, olusturan_id FROM siparisler_siparis WHERE durum = 'taslak' ORDER BY id`,
   );
+}
+// 3588: kademeli uyarı K2-K3 alıcısı siparişi açan kişidir.
+export async function siparisAcanlari(db: Db, idler: readonly number[]): Promise<Map<number, number>> {
+  if (idler.length === 0) return new Map();
+  const l = await db.sorgu<{ id: number; olusturan_id: number }>('SELECT id, olusturan_id FROM siparisler_siparis WHERE id = ANY($1::int[])', [[...idler]]);
+  return new Map(l.map((r) => [r.id, r.olusturan_id]));
 }
 
 export function takvimSiparisleri(db: Db, baslangic: string, bitis: string): Promise<TakvimSiparisSatiri[]> {

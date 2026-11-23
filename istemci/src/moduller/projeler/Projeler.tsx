@@ -3,7 +3,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import type { Proje, ProjeDurumu, ProjeListesiCevabi, ProjeListesiSorgusu, StatuListesiCevabi } from '#paylasilan/sozlesme/projeler.ts';
 import {
-  Dugme, DurumKutusu, LogoBelgeAramasi, Girdi, Kart, LOGO_DURUM_ADI, LogoRozeti, Rozet, Secim, Tablo, useLogoRozetleri, type Sutun,
+  Dugme, DurumKutusu, KademeRozeti, LogoBelgeAramasi, Girdi, Kart, LOGO_DURUM_ADI, LogoRozeti, Rozet, Secim, Tablo, useLogoRozetleri, type Sutun,
 } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
@@ -21,7 +21,11 @@ const SUTUNLAR: Sutun<Proje>[] = [
   { anahtar: 'firma', baslik: 'Müşteri', hucre: (p) => p.firmaAd ?? '—' },
   { anahtar: 'firmaKodu', baslik: 'Firma kodu', hucre: (p) => p.firmaKodu ?? '—' },
   { anahtar: 'baslangic', baslik: 'Başlangıç', sirala: true, mono: true, kirilmaz: true, hucre: (p) => tarihMetni(p.baslangic) },
-  { anahtar: 'bitis', baslik: 'Bitiş', mono: true, kirilmaz: true, hucre: (p) => tarihMetni(p.bitis) },
+  {
+    // 3588: bitişi yaklaşan ya da geçen proje, bildirimle aynı rozeti taşır (ortak parça).
+    anahtar: 'bitis', baslik: 'Bitiş', mono: true, kirilmaz: true, csv: (p) => p.bitis ?? '',
+    hucre: (p) => (p.kademe == null ? tarihMetni(p.bitis) : <span className="tc-prj-bitis-hucre">{tarihMetni(p.bitis)}<KademeRozeti kademe={p.kademe} /></span>),
+  },
   { anahtar: 'statu', baslik: 'Statü', hucre: (p) => <StatuCipi statu={p.statu} />, csv: (p) => p.statu?.ad ?? '' },
   { anahtar: 'ilerleme', baslik: 'Görev ilerlemesi', hucre: (p) => <Ilerleme deger={p.ilerleme} />, csv: (p) => p.ilerleme },
   { anahtar: 'durum', baslik: 'Durum', hucre: (p) => <Rozet ton={DURUM_TONU[p.durum]}>{DURUM_METNI[p.durum]}</Rozet> },

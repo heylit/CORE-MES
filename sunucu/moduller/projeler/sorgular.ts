@@ -733,6 +733,13 @@ export function takipProjeGorevleri(db: Db): Promise<TakipGorevi[]> {
       ORDER BY g.id`,
   );
 }
+// 3588: kademeli uyarının "Proje bitişi" kaynağı: bitişi olan aktif projeler. Proje sorumlusu alanı yoktur; projeyi açan kişi kayıt sahibidir.
+export interface TakipProjesi { id: number; kod: string; ad: string; bitis: string; olusturan_id: number }
+export function takipProjeleri(db: Db): Promise<TakipProjesi[]> {
+  return db.sorgu<TakipProjesi>(
+    `SELECT id, kod, ad, bitis::text AS bitis, olusturan_id FROM projeler_proje WHERE durum = 'aktif' AND bitis IS NOT NULL ORDER BY id`,
+  );
+}
 export function takipGorevleri(db: Db): Promise<TakipGorevi[]> {
   return db.sorgu<TakipGorevi>(
     `SELECT g.id, g.proje_id, g.ad, g.plan_bitis::text AS plan_bitis, g.sorumlu_kisi_id, g.yapan_rol_id, g.kontrol_kisi_id, g.kontrol_rol_id,

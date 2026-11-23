@@ -7,7 +7,7 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ALICI_AYARLI_TURLER, BILDIRIM_TURLERI, KADEME_TURLERI } from '#paylasilan/sozlesme/bildirim.ts';
 import type { BildirimTuruTanimi } from '#paylasilan/sozlesme/bildirim.ts';
-import { KADEME_KAYNAKLARI, KADEME_KAYNAK_ANAHTARLARI, kademeTuru, type AcikTakiplerCevabi, type GecikenlerimCevabi, type KademeAyarlariCevabi, type KademeKaynagi } from '#paylasilan/sozlesme/bildirim-kademe.ts';
+import { KADEME_KAYNAKLARI, KADEME_KAYNAK_ANAHTARLARI, MERDIVEN, kademeTuru, varsayilandanFarkli, type AcikTakiplerCevabi, type GecikenlerimCevabi, type KademeAyarlariCevabi, type KademeKaynagi } from '#paylasilan/sozlesme/bildirim-kademe.ts';
 import { tesisGunBasi } from '#paylasilan/tesis-zamani.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -15,7 +15,7 @@ import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { kademeKaynagiKaydet, kademeleriIlerlet, type KademeKaydi } from './kademe.ts';
 import { bildirimGonder } from './servis.ts';
-import { bildirilecekKademe, gerekenKademeler, isGunuFarki, isSaatiFarki, kademeAyarHatasi } from './kurallar.ts';
+import { bildirilecekKademe, gerekenKademeler, isGunuFarki, isSaatiFarki, kademeAliciKumeleri, kademeAyarHatasi, kademeBildirimMetni } from './kurallar.ts';
 import { butunOlaylariVeEskiKademeleriAc } from './olay-anahtari.ts';
 
 const BOS = new Set<string>();
@@ -128,6 +128,62 @@ describe('kademeli uyarı kuralı (3405)', () => {
     }
     // Risk K1: Bildirim yönetimindeki alıcı seçimi kademe türüne yazılamaz (okuma işlemi kuralının yerine geçmesin).
     assert.deepEqual(KADEME_TURLERI.filter((x) => (ALICI_AYARLI_TURLER as readonly string[]).includes(x)), []);
+  });
+
+  test('3588 tek merdiven: sipariş, satın alma, proje görevi, proje bitişi ve hazırlık görevi aynı varsayılan tabloyu kullanır; e-posta eşiği tek (para kaynağında e-posta türü kapalı gelir)', () => {
+    const sonGun = ['projeler.hazirlik', 'projeler.gorev', 'projeler.proje-bitis', 'siparisler.termin', 'siparisler.plan-riski', 'satin-alma.teslim'] as const;
+    const bekleme = ['satin-alma.talep-onay', 'satin-alma.siparis-verilmedi', 'satin-alma.teklif-cevapsiz', 'siparisler.onay'] as const;
+    for (const k of sonGun) {
+      const v = KADEME_KAYNAKLARI[k].varsayilan;
+      assert.deepEqual([v.k2Gun, v.k3Gun, v.k4Gun, v.k5Gun], [MERDIVEN.sonGun.k2, null, MERDIVEN.sonGun.k4, MERDIVEN.sonGun.k5], k);
+      assert.equal(v.epostaKademe, MERDIVEN.epostaKademe, k);
+    }
+    for (const k of bekleme) {
+      const v = KADEME_KAYNAKLARI[k].varsayilan;
+      assert.deepEqual([v.k2Gun, v.k3Gun, v.k4Gun, v.k5Gun], [null, MERDIVEN.bekleme.k3, MERDIVEN.bekleme.k4, MERDIVEN.bekleme.k5], k);
+      assert.equal(v.epostaKademe, MERDIVEN.epostaKademe, k);
+    }
+  });
+
+  test('3588 para işareti: satın alma onay, sipariş verilmedi, teslim ve satış siparişi onayı para taşır; tür e-postası varsayılan kapalı', () => {
+    for (const k of ['satin-alma.talep-onay', 'satin-alma.siparis-verilmedi', 'satin-alma.teslim', 'siparisler.onay'] as const) {
+      assert.ok('para' in KADEME_KAYNAKLARI[k], k);
+      for (const n of [3, 4, 5] as const) assert.equal((BILDIRIM_TURLERI[kademeTuru(k, n) as keyof typeof BILDIRIM_TURLERI] as BildirimTuruTanimi).varsayilan.eposta, false, `${k} K${String(n)}`);
+    }
+  });
+
+  test('3588 yeni kaynak proje bitişinin e-postası varsayılan kapalıdır (kişisel kapatma yok); hazırlık görevinin 3396 e-postası açık kalır', () => {
+    for (const n of [3, 4, 5] as const) assert.equal((BILDIRIM_TURLERI[kademeTuru('projeler.proje-bitis', n) as keyof typeof BILDIRIM_TURLERI] as BildirimTuruTanimi).varsayilan.eposta, false);
+    assert.equal((BILDIRIM_TURLERI['projeler.hazirlik-gecikti'] as BildirimTuruTanimi).varsayilan.eposta, true);
+  });
+
+  test('3588 alıcı kümeleri: K2-K3 sahip, yapan, üst, yedek sırasıyla; K4 üst, devralan, yedek; K5 üst ve devralan birlikte', () => {
+    const a = { sahip: 1, yapanlar: [2], ustler: [3], devralanlar: [4], yedekler: [5] };
+    assert.deepEqual(kademeAliciKumeleri(3, a).map((k) => k.map((x) => x.tur)), [['sahip'], ['yapan'], ['ust'], ['yedek']]);
+    assert.deepEqual(kademeAliciKumeleri(3, { ...a, sahip: null }).map((k) => k.map((x) => x.tur)), [['yapan'], ['ust'], ['yedek']]);
+    assert.deepEqual(kademeAliciKumeleri(4, a).map((k) => k.map((x) => x.tur)), [['ust'], ['devralan'], ['yedek']]);
+    assert.deepEqual(kademeAliciKumeleri(5, a).map((k) => k.map((x) => x.tur)), [['ust', 'devralan'], ['yedek']]);
+  });
+
+  test('3588 bildirim metni alıcı bakışıyla: başlıkta sistem sözcüğü ve kişi adı yok; metinde neden ve (üstte) kayıt sahibi var', () => {
+    const g = { no: 'ORN-1', kaynakAdi: 'Satış siparişi termini', baslik: 'Sipariş', gecikmeGun: 2, sahipAdi: 'Deneme Kişi' } as const;
+    const yapan = kademeBildirimMetni({ ...g, kademe: 3, alici: 'yapan' });
+    assert.equal(yapan.baslik, 'ORN-1: Satış siparişi termini 2 iş günü gecikti');
+    assert.equal(kademeBildirimMetni({ ...g, kademe: 2, alici: 'sahip', gecikmeGun: null }).baslik, 'ORN-1: Satış siparişi termini yaklaşıyor');
+    const ust = kademeBildirimMetni({ ...g, kademe: 4, alici: 'ust' });
+    assert.equal(ust.metin, 'Kayıt sahibi: Deneme Kişi. Sipariş · Neden aldın: Yönetici olarak izlediğin için.');
+    assert.equal(kademeBildirimMetni({ ...g, kademe: 5, alici: 'devralan' }).baslik, 'ORN-1: Satış siparişi termini, devralman gerekiyor');
+    for (const m of [yapan, ust]) assert.doesNotMatch(m.baslik, /Yöneticide|Devret|Deneme Kişi/);
+  });
+
+  test('3588 varsayılandan farklı: katalog değerleri farklı sayılmaz; tek gün değişince farklı; rol eklenince farklı; açık/kapalı karşılaştırmaya girmez', () => {
+    const k = 'siparisler.termin' as const;
+    const v = KADEME_KAYNAKLARI[k].varsayilan;
+    const ayar = { k2Gun: v.k2Gun, k3Gun: v.k3Gun, k3Birim: v.k3Birim, k4Gun: v.k4Gun, k5Gun: v.k5Gun, epostaKademe: v.epostaKademe, serit: v.serit, kapatilamaz: v.kapatilamaz, yoneticiRolId: null };
+    assert.equal(varsayilandanFarkli(k, ayar), false);
+    assert.equal(varsayilandanFarkli(k, { ...ayar, k4Gun: 2 }), true);
+    assert.equal(varsayilandanFarkli(k, { ...ayar, yoneticiRolId: 5 }), true);
+    assert.equal(varsayilandanFarkli(k, { ...ayar, epostaKademe: 5 }), true);
   });
 
 });
@@ -387,5 +443,85 @@ describe('kademeli uyarı motoru (3405, gerçek PostgreSQL)', () => {
     assert.deepEqual(await kademeler(), ['1', '3', '4'], 'bir iş günü sonra Yöneticide');
     await ortam!.sahip.sorgu('UPDATE bildirim_kademe_ayari SET k3_birim = NULL WHERE kaynak = $1', [KAYNAK]);
     assert.equal((await ayar()).k3Birim, 'gun', 'göçten önceki satır gün sayılır');
+  });
+
+  test('3588 "önceki hale dön" elle değiştirilmiş satırın değerlerine dokunmaz, yalnız açık/kapalıyı geri alır', async () => {
+    assert.equal((await ayarla({ acik: true, k3Gun: 3, k4Gun: 4, k5Gun: 6, epostaKademe: 5 })).statusCode, 200);
+    await vt().tx((db) => butunOlaylariVeEskiKademeleriAc(db, null));
+    const a = await ayar();
+    assert.deepEqual([a.k3Gun, a.k4Gun, a.k5Gun, a.epostaKademe], [3, 4, 6, 5]);
+  });
+
+  // 3588: sahip alıcı, boş hedefte üst kademe, ulaşmayan bildirim, alıcı bakışlı metin.
+  describe('sahip alıcı ve boş hedef (3588)', () => {
+    const KOS = { acik: true, k3Gun: 1, k3Birim: 'gun', k4Gun: 2, k5Gun: null } as const;
+    const yeniKayit = (kayit: string, ek: Partial<KademeKaydi>): KademeKaydi =>
+      ({ kayit, no: `ORN-MK-${kayit}`, baslik: 'Kart onayı', yol: '/malzemeler', baslangic: '2030-01-04', yapanlar: [], yoneticiler: [], ...ek });
+    const bildirim = async (k: Kisi, kayit: string, kademe: number) => vt().tek<{ baslik: string; metin: string | null }>(
+      'SELECT baslik, metin FROM bildirim_kaydi WHERE kisi_id = $1 AND tekil_anahtar LIKE $2', [k.id, `%:${kayit}:k${String(kademe)}`]);
+    const defterSatiri = (kayit: string, kademe: number) => vt().tek<{ bildirildi: boolean; alici_sayisi: number }>(
+      'SELECT bildirildi, alici_sayisi FROM bildirim_kademe_defteri WHERE kaynak = $1 AND kayit = $2 AND kademe = $3', [KAYNAK, kayit, kademe]);
+
+    test('K3 kaydı açan kişiye gider, yapana gitmez; neden metinde yazılır; başlıkta kişi adı yoktur', async () => {
+      assert.equal((await ayarla(KOS)).statusCode, 200);
+      const sahip = await kisi('kalite', 'malzemeler.onayla');
+      const yapan = await kisi('cam', 'malzemeler.onayla');
+      kayitlar = [yeniKayit('sahipli', { sahip: sahip.id, yapanlar: [yapan.id] })];
+      await ilerlet();
+      assert.deepEqual([await zil(sahip, 'sahipli', 3), await zil(yapan, 'sahipli', 3)], [1, 0]);
+      const b = await bildirim(sahip, 'sahipli', 3);
+      assert.match(b?.metin ?? '', /Neden aldın: Kaydı sen açtığın için/);
+      assert.match(b?.baslik ?? '', /^ORN-MK-sahipli: .* gecikti$/);
+      assert.ok(!(b?.baslik ?? '').includes('Deneme'), 'başlığa kişi adı girmez (e-postaya da gider)');
+      assert.deepEqual(await defterSatiri('sahipli', 3), { bildirildi: true, alici_sayisi: 1 });
+    });
+
+    test('sahibin kaynağı okuma yetkisi yoksa K3 bugünkü işlem sahiplerine düşer; sahibe gitmez', async () => {
+      const okumayanSahip = await kisi('depo');
+      const yapan = await kisi('cam', 'malzemeler.onayla');
+      kayitlar = [yeniKayit('yetkisiz', { sahip: okumayanSahip.id, yapanlar: [yapan.id] })];
+      await ilerlet();
+      assert.deepEqual([await zil(okumayanSahip, 'yetkisiz', 3), await zil(yapan, 'yetkisiz', 3)], [0, 1]);
+      assert.match((await bildirim(yapan, 'yetkisiz', 3))?.metin ?? '', /Neden aldın: Bu işi yapma yetkin olduğu için/);
+    });
+
+    test('sahip yoksa (null) bugünkü davranış: yapanlar alır', async () => {
+      const yapan = await kisi('cam', 'malzemeler.onayla');
+      kayitlar = [yeniKayit('sahipsiz-k3', { sahip: null, yapanlar: [yapan.id] })];
+      await ilerlet();
+      assert.equal(await zil(yapan, 'sahipsiz-k3', 3), 1);
+    });
+
+    test('K4 hedefi kaynağı okuyamıyorsa bildirim kademe yöneticisine düşer ve neden yazılır (Risk G1)', async () => {
+      const okumayanUst = await kisi('depo');
+      const yedek = await kisi('kalite', 'malzemeler.onayla');
+      await ortam!.sahip.sorgu('INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, $2) ON CONFLICT DO NOTHING', [rol.get('kalite') ?? 0, 'bildirim.kademe-yonet']);
+      kayitlar = [yeniKayit('ust-yok', { yoneticiler: [okumayanUst.id], yedekler: [yedek.id] })];
+      await ilerlet('2030-01-08');
+      assert.deepEqual([await zil(okumayanUst, 'ust-yok', 4), await zil(yedek, 'ust-yok', 4)], [0, 1]);
+      assert.match((await bildirim(yedek, 'ust-yok', 4))?.metin ?? '', /Neden aldın: Kayda bağlı kimse olmadığı için/);
+    });
+
+    test('hiç etkin alıcı bulunamazsa defter "bildirildi" yazmaz; alıcı sayısı 0 (ulaşmadı)', async () => {
+      const okumayan = await kisi('depo');
+      kayitlar = [yeniKayit('ulasmadi', { yapanlar: [okumayan.id], yoneticiler: [okumayan.id], yedekler: [okumayan.id] })];
+      const r = await ilerlet('2030-01-08');
+      assert.equal(r.bildirilen, 0);
+      assert.deepEqual(await defterSatiri('ulasmadi', 4), { bildirildi: false, alici_sayisi: 0 });
+      assert.equal(await zil(okumayan, 'ulasmadi', 4), 0);
+    });
+
+    test('sahip kimse yokken K4 sahibe gitmez (yalnız K2-K3 sahibe gider); K4 başlığı alıcı bakışıyla yazılır', async () => {
+      const sahip = await kisi('kalite', 'malzemeler.onayla');
+      const ust = await kisi('proses_muhendisi', 'malzemeler.onayla');
+      kayitlar = [yeniKayit('k4-sahip', { sahip: sahip.id, yapanlar: [sahip.id], yoneticiler: [ust.id] })];
+      await ilerlet('2030-01-08');
+      assert.deepEqual([await zil(sahip, 'k4-sahip', 4), await zil(ust, 'k4-sahip', 4)], [0, 1]);
+      const b = await bildirim(ust, 'k4-sahip', 4);
+      assert.doesNotMatch(b?.baslik ?? '', /Yöneticide|Devret/);
+      assert.match(b?.metin ?? '', /Kayıt sahibi: Deneme .*Neden aldın: Yönetici olarak izlediğin için/);
+      kayitlar = [];
+      await ilerlet('2030-01-08');
+    });
   });
 });
