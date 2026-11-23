@@ -74,10 +74,10 @@ const YAZICILAR: YazicilarCevabi = {
 
 const BASKILAR: BaskilarCevabi = {
   baskilar: [
-    { id: 7, zaman: '2026-10-18T17:30:00.000Z', yazici: 'Zebra depo', sablonAnahtar: 'deneme-50x25', adet: 2, kisi: 'Örnek Kişi', sonuc: 'gonderildi', hata: null, kayitSayisi: 3 },
-    { id: 8, zaman: '2026-10-18T17:40:00.000Z', yazici: 'Argox masa', sablonAnahtar: 'deneme-50x25', adet: 1, kisi: 'Örnek Kişi', sonuc: 'indirildi', hata: null, kayitSayisi: 0 },
-    { id: 5, zaman: '2026-10-18T17:10:00.000Z', yazici: null, sablonAnahtar: 'konum-50x25', adet: 1, kisi: 'Örnek Kişi', sonuc: 'yazdirildi', hata: null, kayitSayisi: 1 },
-    { id: 6, zaman: '2026-10-18T17:20:00.000Z', yazici: 'Zebra depo', sablonAnahtar: 'deneme-50x25', adet: 1, kisi: null, sonuc: 'hata', hata: 'Yazıcıya ulaşılamadı.', kayitSayisi: 0 },
+    { id: 7, zaman: '2026-10-18T17:30:00.000Z', yazici: 'Zebra depo', sablonAnahtar: 'deneme-50x25', adet: 2, kisi: 'Örnek Kişi', sonuc: 'gonderildi', hata: null, kayitSayisi: 3, dusum: null, kayitTuru: 'konum', kayitIdler: [11, 12, 13], isaretlenebilir: true },
+    { id: 8, zaman: '2026-10-18T17:40:00.000Z', yazici: 'Argox masa', sablonAnahtar: 'deneme-50x25', adet: 1, kisi: 'Örnek Kişi', sonuc: 'indirildi', hata: null, kayitSayisi: 0, dusum: null, kayitTuru: null, kayitIdler: [], isaretlenebilir: false },
+    { id: 5, zaman: '2026-10-18T17:10:00.000Z', yazici: null, sablonAnahtar: 'konum-50x25', adet: 1, kisi: 'Örnek Kişi', sonuc: 'yazdirildi', hata: null, kayitSayisi: 1, dusum: null, kayitTuru: 'konum', kayitIdler: [11], isaretlenebilir: true },
+    { id: 6, zaman: '2026-10-18T17:20:00.000Z', yazici: 'Zebra depo', sablonAnahtar: 'deneme-50x25', adet: 1, kisi: null, sonuc: 'hata', hata: 'Yazıcıya ulaşılamadı.', kayitSayisi: 0, dusum: null, kayitTuru: null, kayitIdler: [], isaretlenebilir: false },
   ],
 };
 
@@ -113,7 +113,7 @@ interface Gonderilen { yol: string; govde: unknown; kimlik: string | null }
 const INDIRILEN_KOMUT = '\nN\nA0,0,0,1,1,1,N,"Ş"\nP1\nI8,E,001\nA0,0,0,1,1,1,N,"\u00de"\nP1\nI8,0,001\n';
 const INDIRILEN_BAYTLAR = [...new TextEncoder().encode('\nN\nA0,0,0,1,1,1,N,"Ş"\nP1\n'), ...Array.from('I8,E,001\nA0,0,0,1,1,1,N,"\u00de"\nP1\nI8,0,001\n', (h) => h.charCodeAt(0))];
 
-function sunucuKur(secenek: { islemler?: Islem[]; yazicilar?: YazicilarCevabi; bekleyenler?: BekleyenlerCevabi; etiketler?: EtiketlerCevabi; sablonlar?: SablonlarCevabi } = {}) {
+function sunucuKur(secenek: { islemler?: Islem[]; yazicilar?: YazicilarCevabi; bekleyenler?: BekleyenlerCevabi; etiketler?: EtiketlerCevabi; sablonlar?: SablonlarCevabi; baskilar?: BaskilarCevabi } = {}) {
   const istekler: string[] = [];
   const gonderilenler: Gonderilen[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, init?: RequestInit) => {
@@ -124,6 +124,8 @@ function sunucuKur(secenek: { islemler?: Islem[]; yazicilar?: YazicilarCevabi; b
       const basliklar = (init.headers ?? {}) as Record<string, string>;
       gonderilenler.push({ yol, govde: JSON.parse(String(init.body)), kimlik: basliklar[ISTEK_KIMLIGI_BASLIGI] ?? null });
       if (yol.endsWith('/atla')) return json(200, { atlanan: 1 });
+      const cikmadiEslesme = /^\/etiket-merkezi\/baskilar\/(\d+)\/cikmadi$/.exec(yol);
+      if (cikmadiEslesme?.[1]) return json(200, { baskiId: Number(cikmadiEslesme[1]), dusum: (JSON.parse(String(init.body)) as { neden: string }).neden, kayitSayisi: 3 });
       const olcuEslesme = /^\/etiket-merkezi\/sablonlar\/([a-z0-9-]+)\/olcu$/.exec(yol);
       if (olcuEslesme?.[1]) {
         const s = (secenek.sablonlar ?? SABLONLAR).sablonlar.find((x) => x.anahtar === olcuEslesme[1])!;
@@ -149,7 +151,7 @@ function sunucuKur(secenek: { islemler?: Islem[]; yazicilar?: YazicilarCevabi; b
     if (yol === '/oturum') return json(200, { kullanici: { id: 1, ad: 'Örnek', islemler: secenek.islemler ?? [] } });
     if (yol === '/etiket-merkezi/sablonlar') return json(200, secenek.sablonlar ?? SABLONLAR);
     if (yol === '/etiket-merkezi/yazicilar') return json(200, secenek.yazicilar ?? YAZICILAR);
-    if (yol === '/etiket-merkezi/baskilar') return json(200, BASKILAR);
+    if (yol === '/etiket-merkezi/baskilar') return json(200, secenek.baskilar ?? BASKILAR);
     if (yol === '/etiket-merkezi/etiketler') return json(200, secenek.etiketler ?? ETIKETLER);
     if (yol === '/etiket-merkezi/bekleyenler') return json(200, secenek.bekleyenler ?? BEKLEYENLER);
     if (yol === '/etiket-merkezi/raflar') {
@@ -1182,6 +1184,56 @@ describe('Etiket Merkezi yeni düzen (3025)', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Tümü (4)' }));
     expect(await screen.findByText('İndirildi')).toBeTruthy();
     expect(screen.getByTestId('adres').textContent).toBe('');
+  });
+
+  it('3598: baskı geçmişinde basma yetkisi olan her satırdan yeniden basar ve "Çıkmadı" işaretler; deneme ve eski satırın nedeni görünür; işaret işlemi yalnız bir kez gider', async () => {
+    const istekler = sunucuKur({ islemler: [...OKUR, 'etiket-merkezi.bas'] });
+    ac(<Baskilar />);
+    const baglantilar = await screen.findAllByRole('link', { name: /Yeniden bas$/ });
+    expect(baglantilar).toHaveLength(2);
+    expect(baglantilar[0]?.getAttribute('href')).toBe('/etiket-merkezi/bas?tur=konum&id=11%2C12%2C13&adet=2');
+    // Deneme satırı (kayıt yok): düğme pasif ve nedeni görünür metindir.
+    expect(screen.getAllByText('Deneme etiketi: yeniden basılamaz').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: /Çıkmadı: 3 kayıt/ }));
+    await waitFor(() => expect(istekler.gonderilenler).toHaveLength(1));
+    expect(istekler.gonderilenler[0]).toMatchObject({ yol: '/etiket-merkezi/baskilar/7/cikmadi', govde: { neden: 'cikmadi' } });
+    expect(istekKimligiMi(istekler.gonderilenler[0]?.kimlik)).toBe(true);
+  });
+
+  it('3598: "Çıkmadı" işaretli satır rozetle görünür ve Hatalı sekmesinde sayılır; kayıtsız eski satırda yeniden basma yoktur', async () => {
+    const baskilar: BaskilarCevabi = { baskilar: [
+      { id: 21, zaman: '2026-11-22T08:00:00.000Z', yazici: 'USB yazıcı', sablonAnahtar: 'lot-100x50', adet: 1, kisi: 'Örnek Kişi', sonuc: 'indirildi', hata: null, kayitSayisi: 2, dusum: 'usb-hatasi', kayitTuru: 'lot', kayitIdler: [5, 6], isaretlenebilir: false },
+      { id: 22, zaman: '2026-11-22T07:00:00.000Z', yazici: 'Zebra depo', sablonAnahtar: 'refakat-100x150', adet: 1, kisi: 'Örnek Kişi', sonuc: 'gonderildi', hata: null, kayitSayisi: 1, dusum: null, kayitTuru: null, kayitIdler: [9], isaretlenebilir: true },
+      { id: 23, zaman: '2026-11-22T06:00:00.000Z', yazici: 'Zebra depo', sablonAnahtar: 'lot-100x50', adet: 1, kisi: null, sonuc: 'gonderildi', hata: null, kayitSayisi: 1, dusum: null, kayitTuru: 'lot', kayitIdler: [4], isaretlenebilir: false },
+    ] };
+    sunucuKur({ islemler: [...OKUR, 'etiket-merkezi.bas'], baskilar });
+    ac(<Baskilar />);
+    expect(await screen.findByText('Çıkmadı (USB hatası)')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Hatalı (1)' })).toBeTruthy();
+    expect(screen.getByText('Eski kayıt (emir düzeyi): yeniden basılamaz')).toBeTruthy();
+    expect(screen.getByText(/Basılacaklar penceresinden eski/)).toBeTruthy();
+    // İşaretli ve pencere dışı satırda "Çıkmadı" düğmesi yoktur; yalnız işaretlenebilir satırda vardır.
+    expect(screen.queryAllByRole('button', { name: /Çıkmadı: / })).toHaveLength(1);
+  });
+
+  it('3598: basma yetkisi olmayan geçmişte düğme yoktur ve neden yazılıdır', async () => {
+    sunucuKur({ islemler: OKUR });
+    ac(<Baskilar />);
+    expect(await screen.findByText(/İşaretlemek ve yeniden basmak için basma yetkisi gerekir/)).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /Yeniden bas$/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Çıkmadı/ })).toBeNull();
+  });
+
+  it('3598: ağ yazıcısından sonra sonuç iletisinde "Çıkmadı" kayıt sayısıyla işaretler; "Basıldı" iletiyi kapatır; deneme baskısında düğme çıkmaz', async () => {
+    const istekler = sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku', 'etiket-merkezi.bas'] });
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11,12');
+    fireEvent.change(await yaziciAlani(), { target: { value: 'ag:1' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Bas · 2 etiket' }));
+    await screen.findByText(/Gönderildi\. Etiketin çıktığını/);
+    fireEvent.click(await screen.findByRole('button', { name: /^Çıkmadı: 2 kayıt/ }));
+    expect(await screen.findByText(/olarak işaretlendi\. 2 kayıt Basılacaklar listesine döndü/)).toBeTruthy();
+    const cikmadi = istekler.gonderilenler.find((g) => g.yol.endsWith('/cikmadi'));
+    expect(cikmadi).toMatchObject({ yol: '/etiket-merkezi/baskilar/9/cikmadi', govde: { neden: 'cikmadi' } });
   });
 
   it('Yazıcılar notu USB açıkken takılı yazıcının USB ile basıp tek dokunuşa atanabildiğini, kapalıyken Windows yazdırmanın atanamadığını söyler', async () => {

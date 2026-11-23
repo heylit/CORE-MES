@@ -8,7 +8,7 @@ import { KOD_KENAR_MODUL, SATIR_ARALIGI, type Sablon } from '#paylasilan/sozlesm
 import { yaziciAgiOku } from './ag.ts';
 import { seritEni } from './kod-yaz.ts';
 import { KOD_ALTI_EN_KUCUK_YAZI, KOD_MODUL_EN_AZ_MM, YAZI_EN_AZ_MM, enKucukOlcu, kopyaDegerleri, okunurluk, olcekle, kodAltiYeri, kodModulu } from './kurallar.ts';
-import { BEKLEYEN_GUN, HATALI_KARAR_SIMGESI, KALITE_KARAR_SIMGESI, REFAKAT_ADIM_SAYISI, REFAKAT_CIKIS_SATIRI, bekleyenBaslangici, bekleyenSirasi, kaliteBekleyenleri, kaliteDurumDegerleri, hataliBekleyenleri, malKabulBekleyenleri, refakatBekleyenleri } from './kurallar.ts';
+import { BEKLEYEN_GUN, HATALI_KARAR_SIMGESI, KALITE_KARAR_SIMGESI, REFAKAT_ADIM_SAYISI, REFAKAT_CIKIS_SATIRI, bekleyenBaslangici, bekleyenSirasi, kaliteBekleyenleri, kaliteDurumDegerleri, hataliBekleyenleri, malKabulBekleyenleri, refakatBekleyenleri, cikmadiIsaretlenebilir, defterKayitTuru, defterTuru } from './kurallar.ts';
 import { alanDegeri, baskiEngeli, dogrudanBaskiDurumu, indirmeEngeli, istasyonDegerleri, kayitUyumHatasi, konumDegerleri, lotDegerleri, kayitSablonTuru, malzemeDegerleri, metinGenisligi, noktaya, rafDegerleri, refakatDegerleri, refakatPartisiDegerleri, toplamEtiketHatasi, yaziciAdresHatasi, kodDikdortgenleri, sablonHatalari, sadelestir, SATIR_BASI, satirlaraBol, sigdirilmisYazi, yerlesim } from './kurallar.ts';
 import { ALANLAR, HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
 import { gkkSonucu, malzemeBandi, malzemeEtiketiDegerleri, type MalzemeEtiketiGirdisi, type MalzemeGirisOzeti } from './kurallar.ts';
@@ -632,6 +632,32 @@ describe('EM-30 (2223-1 a): bekleyen etiketler', () => {
     assert.equal(refakatBekleyenleri([v], new Map([[5, '2026-11-07T10:00:01.000Z']])).length, 1, 'basım emir kimliğiyle aranır');
     assert.deepEqual(refakatBekleyenleri([v], new Map(), new Map([[5, '2026-11-07T10:00:01.000Z']])), []);
     assert.equal(refakatBekleyenleri([{ ...v, emirNo: null, malzemeAd: null }], new Map())[0]?.baslik, 'Emir #120-P2');
+  });
+
+  test('EM-42 (3598 D4): parti düzeyli basım yalnız o partiyi kapatır; eski emir düzeyli satır verilişten sonra yazıldıysa partiyi kapatmaya devam eder', () => {
+    const p1 = { refakatPartisiId: 5, uretimEmriId: 120, sira: 1, lotNo: 'LT-9', malzemeAd: null, emirNo: 'UE-000120', verilis: '2026-11-07T10:00:00.000Z' };
+    const p2 = { ...p1, refakatPartisiId: 6, sira: 2 };
+    const sonraki = '2026-11-07T10:00:01.000Z';
+    const bekleyen = refakatBekleyenleri([p1, p2], new Map(), new Map(), new Map([[5, sonraki]])).map((b) => b.id);
+    assert.deepEqual(bekleyen, [6], 'ilk partinin basımı ikincisini düşürmez');
+    assert.deepEqual(refakatBekleyenleri([p1, p2], new Map([[120, sonraki]]), new Map(), new Map()), [], 'eski emir satırı iki partiyi de kapatır');
+    assert.equal(refakatBekleyenleri([p1], new Map(), new Map(), new Map([[5, '2026-11-07T09:59:59.000Z']])).length, 1, 'verilişten önceki basım sayılmaz');
+  });
+
+  test('EM-43 (3598): defter türü yeni refakat basımında parti, yeniden basma türü yalnız kayıt kimliği taşıyan satırda; çıkmadı yalnız pencerede ve başarılı sayılan baskıda', () => {
+    assert.equal(defterTuru('refakat-partisi'), 'refakat-partisi');
+    assert.equal(defterTuru('mal-kabul'), 'lot');
+    assert.equal(defterKayitTuru('refakat'), null, 'eski emir düzeyli satır yeniden basılamaz');
+    assert.equal(defterKayitTuru(null), null);
+    assert.equal(defterKayitTuru('lot'), 'lot');
+    assert.equal(defterKayitTuru('refakat-partisi'), 'refakat-partisi');
+    const b = { sonuc: 'gonderildi', kayitSayisi: 2, pencerede: true, dusum: null };
+    assert.equal(cikmadiIsaretlenebilir(b), true);
+    for (const sonuc of ['indirildi', 'yazdirildi']) assert.equal(cikmadiIsaretlenebilir({ ...b, sonuc }), true);
+    assert.equal(cikmadiIsaretlenebilir({ ...b, sonuc: 'hata' }), false);
+    assert.equal(cikmadiIsaretlenebilir({ ...b, kayitSayisi: 0 }), false, 'deneme baskısı');
+    assert.equal(cikmadiIsaretlenebilir({ ...b, pencerede: false }), false);
+    assert.equal(cikmadiIsaretlenebilir({ ...b, dusum: 'cikmadi' }), false);
   });
 
   test('EM-33 (2223-2 a): hatalı parça ayrılınca ve rework/hurda/red kararıyla bekler; kabul beklemez; aralık dışı olay sayılmaz', () => {

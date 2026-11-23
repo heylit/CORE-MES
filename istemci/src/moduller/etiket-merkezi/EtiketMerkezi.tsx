@@ -17,6 +17,7 @@ import { cihazYazicilari, cihazYazicisiKaydet, sonYaziciOku, sonYaziciYaz, type 
 import { KAYIT_BASLIKLARI, KAYIT_NOTLARI, KAYIT_TURLERI, kayitSablonTuru, kayitSecimiOku, kayitSecimiYaz, secimSiniri } from './kayit-secimi.ts';
 import { gercekBoyutOku, gercekBoyutYaz, olcekOku, olcekYaz } from './gercek-boyut.ts';
 import { Kalibrasyon } from './Kalibrasyon.tsx';
+import { CikmadiEylemi, useCikmadi } from './cikmadi.tsx';
 import { KayitSecici } from './KayitSecici.tsx';
 import { Onizleme, Simge } from './Onizleme.tsx';
 import { OzelOlcuAyari } from './OzelOlcu.tsx';
@@ -59,7 +60,8 @@ function komutuIndir(c: Pick<CiktiCevabi, 'komut' | 'dosyaAdi'>) {
 
 type Secenekler = SablonlarCevabi['secenekler'];
 type BaskiGovdesi = { yaziciId: number; adet: number; kayit?: KayitSecimi; olcu?: OzelOlcu };
-type Sonuc = { ton: 'tamam' | 'hata'; metin: string } | null;
+// baskiId: defterde basılmış sayılan baskı; çıkmadıysa "Çıkmadı" ile işaretlenir (3598).
+type Sonuc = { ton: 'tamam' | 'hata'; metin: string; baskiId?: number } | null;
 
 // Tek yazıcı listesi: ağ yazıcısı (sunucu gönderir), bu bilgisayardaki USB yazıcı (2953 c), komut dosyası ve Windows yazdırma (2904).
 // Değer "ag:<id>", "usb:<id>", "dosya:<id>" ya da "tarayici"dır; son seçim bu cihazda tür başına kalır.
@@ -99,6 +101,7 @@ function BaskiDugmesi({ sablon, yol, govde, etiketSayisi, kayit, olcu, adet, oze
 }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
+  const { isaretle } = useCikmadi();
   // Kimlik başarıya ya da seçim değişene kadar korunur: elle yeniden gönderilen baskı ikinci kez basılmaz.
   const [kimlik, setKimlik] = useState(yeniIstekKimligi);
   const [sonuc, setSonuc] = useState<Sonuc>(null);
@@ -117,7 +120,7 @@ function BaskiDugmesi({ sablon, yol, govde, etiketSayisi, kayit, olcu, adet, oze
       bitti();
       if (c.sonuc === 'gonderildi') {
         bildir('tamam', 'Etiket yazıcıya gönderildi.');
-        setSonuc({ ton: 'tamam', metin: 'Gönderildi. Etiketin çıktığını yazıcının başında kontrol edin.' });
+        setSonuc({ ton: 'tamam', metin: 'Gönderildi. Etiketin çıktığını yazıcının başında kontrol edin.', baskiId: c.baskiId });
       } else setSonuc({ ton: 'hata', metin: c.ileti ?? 'Yazıcıya ulaşılamadı.' });
     },
     onError: hataGoster,
@@ -127,7 +130,7 @@ function BaskiDugmesi({ sablon, yol, govde, etiketSayisi, kayit, olcu, adet, oze
     onSuccess: (c) => {
       bitti();
       komutuIndir(c);
-      setSonuc({ ton: 'tamam', metin: `İndirildi ve deftere yazıldı (${c.dosyaAdi}). Dosyayı yazıcının kendi aracıyla gönderin.` });
+      setSonuc({ ton: 'tamam', metin: `İndirildi ve deftere yazıldı (${c.dosyaAdi}). Dosyayı yazıcıya gönderip bastıktan sonra "Basıldı"ya basın; basılmadıysa "Çıkmadı"ya basın.`, baskiId: c.baskiId });
     },
     onError: hataGoster,
   });
@@ -136,17 +139,22 @@ function BaskiDugmesi({ sablon, yol, govde, etiketSayisi, kayit, olcu, adet, oze
     mutationFn: async (g: BaskiGovdesi) => {
       const c = await api.post<IndirCevabi>(`${yolu}/indir`, g, { istekKimligi: kimlik });
       bitti();
-      if (!usb) return { c, hata: 'USB yazıcı eşleşmesi kalktı.' };
-      try { await usbyeGonder(usb, c.komut); return { c, hata: null }; } catch (h) { return { c, hata: usbHatasi(h).message }; }
+      const hata = !usb ? 'USB yazıcı eşleşmesi kalktı.' : await usbyeGonder(usb, c.komut).then(() => null, (h: unknown) => usbHatasi(h).message);
+      // D2: USB'ye gidemeyen komutun defter satırı "indirildi" kalırdı ve kayıt Basılacaklar'dan düşerdi; kendiliğinden "Çıkmadı" olur.
+      const isaretli = hata === null ? null : await isaretle(c.baskiId, 'usb-hatasi').then(() => true, () => false);
+      return { c, hata, isaretli };
     },
-    onSuccess: ({ c, hata }) => {
+    onSuccess: ({ c, hata, isaretli }) => {
       if (hata === null) {
         bildir('tamam', 'Etiket USB yazıcıya aktarıldı.');
-        setSonuc({ ton: 'tamam', metin: 'USB yazıcıya aktarıldı ve deftere yazıldı. Etiketin çıktığını yazıcının başında kontrol edin.' });
+        setSonuc({ ton: 'tamam', metin: 'USB yazıcıya aktarıldı ve deftere yazıldı. Etiketin çıktığını yazıcının başında kontrol edin.', baskiId: c.baskiId });
         return;
       }
       komutuIndir(c);
-      setSonuc({ ton: 'hata', metin: `USB yazıcıya aktarılamadı: ${hata} Komut dosyası indirildi (${c.dosyaAdi}).` });
+      const sonrasi = isaretli === true
+        ? ` Kayıtlar "Çıkmadı (USB hatası)" olarak işaretlendi; Basılacaklar'da bekliyor.`
+        : ` İşaretlenemedi; Baskı geçmişinde "Çıkmadı"ya basın.`;
+      setSonuc({ ton: 'hata', metin: `USB yazıcıya aktarılamadı: ${hata} Komut dosyası indirildi (${c.dosyaAdi}).${sonrasi}` });
     },
     onError: hataGoster,
   });
@@ -185,6 +193,7 @@ function BaskiDugmesi({ sablon, yol, govde, etiketSayisi, kayit, olcu, adet, oze
       <div className="tc-etk-bas-cubuk">
         <p className="tc-etk-not tc-etk-bas-ozet" aria-label="Basılacak ölçü ve yerleşim">{ozet}</p>
         {sonuc && <p className={sonuc.ton === 'hata' ? 'tc-etk-hata' : 'tc-etk-not'} role={sonuc.ton === 'hata' ? 'alert' : 'status'}>{sonuc.metin}</p>}
+        {sonuc?.baskiId !== undefined && kayit !== null && <CikmadiEylemi key={sonuc.baskiId} baskiId={sonuc.baskiId} kayitSayisi={kayit?.idler.length ?? 0} kapat={() => setSonuc(null)} />}
         {dugme}
       </div>
       {yol.tur === 'usb' && usb && (
@@ -261,7 +270,9 @@ function BaskiPaneli({ sablonlar, secili, sec, secenekler, basabilir, kayit, kay
   const [dil, setDil] = useState<YaziciDili>('zpl');
   const [dpi, setDpi] = useState<string>('203');
   // 2929 a: refakat kartı varsayılan iki kopya basılır (her biri Kopya n/N); kişi adedi değiştirir.
-  const [adet, setAdet] = useState(() => (kayit?.tur === 'refakat-partisi' ? String(REFAKAT_KOPYA_SAYISI) : '1'));
+  // Yeniden basma (3598) önceki baskının adedini adresle getirir (?adet=2); geçersiz değer yok sayılır, sunucu ayrıca denetler.
+  const adresAdedi = new URLSearchParams(useLocation().search).get('adet') ?? '';
+  const [adet, setAdet] = useState(() => (kayit?.tur === 'refakat-partisi' ? String(REFAKAT_KOPYA_SAYISI) : /^[1-9][0-9]{0,2}$/.test(adresAdedi) ? adresAdedi : '1'));
   const [sade, setSade] = useState(false);
   const [gercek, setGercek] = useState(gercekBoyutOku);
   const [olcek, setOlcek] = useState(olcekOku);

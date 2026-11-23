@@ -281,6 +281,9 @@ export const yazdirCevabi = z.object({
 });
 export type YazdirCevabi = z.infer<typeof yazdirCevabi>;
 
+export const BASKI_DUSUM_NEDENLERI = ['usb-hatasi', 'cikmadi'] as const;
+export type BaskiDusumNedeni = (typeof BASKI_DUSUM_NEDENLERI)[number];
+
 export const BASKI_SONUCLARI = ['gonderildi', 'hata', 'indirildi', 'yazdirildi'] as const;
 export type BaskiSonucu = (typeof BASKI_SONUCLARI)[number];
 
@@ -296,7 +299,21 @@ export const baskiSemasi = z.object({
   hata: z.string().nullable(),
   // Deneme etiketinde 0; gerçek kayıttan basılan etikette kayıt sayısı.
   kayitSayisi: z.number().int(),
+  // "Çıkmadı" işareti (3598): baskı basılmış sayılmaz, kayıt Basılacaklar'a döner. Neden: 'usb-hatasi' kendiliğinden, 'cikmadi' kişi.
+  dusum: z.enum(BASKI_DUSUM_NEDENLERI).nullable(),
+  // Yeniden basma adresi için kayıt türü ve kimlikleri; deneme ve eski emir düzeyli refakat satırında tür null'dır.
+  kayitTuru: z.enum(KAYIT_TURLERI).nullable(),
+  kayitIdler: z.array(z.number().int()),
+  // "Çıkmadı" yalnız başarılı sayılan, kayıtlı ve Basılacaklar penceresindeki (BEKLEYEN_GUN) baskıda işaretlenebilir.
+  isaretlenebilir: z.boolean(),
 });
+// "Çıkmadı" işareti basma kararıdır (2223-4 a): basan işaretler. Yineleme ikinci satır açmaz.
+export const cikmadiGovdesi = z.object({ neden: z.enum(BASKI_DUSUM_NEDENLERI) }).strict();
+export const cikmadiCevabi = z.object({ baskiId: z.number().int(), dusum: z.enum(BASKI_DUSUM_NEDENLERI), kayitSayisi: z.number().int() });
+export const baskiParametresi = z.object({ id: z.coerce.number<number>().int().positive().max(2147483647) });
+export type CikmadiGovdesi = z.infer<typeof cikmadiGovdesi>;
+export type CikmadiCevabi = z.infer<typeof cikmadiCevabi>;
+
 export const baskilarCevabi = z.object({ baskilar: z.array(baskiSemasi) });
 export type BaskilarCevabi = z.infer<typeof baskilarCevabi>;
 

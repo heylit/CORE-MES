@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
-import type { BaskiSonucu, Yazici } from '#paylasilan/sozlesme/etiket-merkezi.ts';
+import type { BaskiDusumNedeni, BaskiSonucu, Yazici } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 
 const YAZICI_SUTUNLARI = 'id, ad, dil, dpi, baglanti, host(adres) AS adres, sade, aktif, surum';
 
@@ -57,18 +57,42 @@ export async function baskiEkle(db: Db, b: BaskiYazimi): Promise<number> {
 
 export interface BaskiSatiri {
   id: number; zaman: string; yazici: string | null; sablonAnahtar: string; adet: number; kisiId: number; sonuc: BaskiSonucu; hata: string | null;
-  kayitSayisi: number;
+  kayitSayisi: number; dusum: BaskiDusumNedeni | null; kayitTuru: string | null; kayitIdler: number[]; pencerede: boolean;
 }
 
-export const sonBaskilar = (db: Db, sinir: number): Promise<BaskiSatiri[]> =>
+// $2: "Çıkmadı" penceresinin başı (BEKLEYEN_GUN geriye). Defter tür adı kayıt türünden ayrıdır; çeviri servistedir.
+export const sonBaskilar = (db: Db, sinir: number, pencereBasi: string): Promise<BaskiSatiri[]> =>
   db.sorgu<BaskiSatiri>(
     `SELECT b.id, ${zamanMetni('b.zaman')} AS zaman, y.ad AS yazici, b.sablon_anahtar AS "sablonAnahtar", b.adet,
             b.kisi_id AS "kisiId", b.sonuc, b.hata,
-            (SELECT count(*)::int FROM etiket_merkezi_baski_kaydi k WHERE k.baski_id = b.id) AS "kayitSayisi"
+            (SELECT count(*)::int FROM etiket_merkezi_baski_kaydi k WHERE k.baski_id = b.id) AS "kayitSayisi",
+            d.neden AS dusum,
+            (SELECT min(k.kaynak_tur) FROM etiket_merkezi_baski_kaydi k WHERE k.baski_id = b.id) AS "kayitTuru",
+            COALESCE((SELECT array_agg(k.kaynak_id ORDER BY k.kaynak_id) FROM etiket_merkezi_baski_kaydi k WHERE k.baski_id = b.id), '{}') AS "kayitIdler",
+            b.zaman >= $2::timestamptz AS pencerede
        FROM etiket_merkezi_baski b LEFT JOIN etiket_merkezi_yazici y ON y.id = b.yazici_id
+       LEFT JOIN etiket_merkezi_baski_dusumu d ON d.baski_id = b.id
       ORDER BY b.zaman DESC, b.id DESC LIMIT $1`,
-    [sinir],
+    [sinir, pencereBasi],
   );
+
+export interface DusumBaskisi { id: number; sonuc: BaskiSonucu; kayitSayisi: number; pencerede: boolean; dusum: BaskiDusumNedeni | null }
+
+export const dusumBaskisiOku = (db: Db, id: number, pencereBasi: string): Promise<DusumBaskisi | null> =>
+  db.tek<DusumBaskisi>(
+    `SELECT b.id, b.sonuc, b.zaman >= $2::timestamptz AS pencerede, d.neden AS dusum,
+            (SELECT count(*)::int FROM etiket_merkezi_baski_kaydi k WHERE k.baski_id = b.id) AS "kayitSayisi"
+       FROM etiket_merkezi_baski b LEFT JOIN etiket_merkezi_baski_dusumu d ON d.baski_id = b.id WHERE b.id = $1`,
+    [id, pencereBasi],
+  );
+
+// Aynı baskı bir kez düşer (yineleme ya da yarışan iki istek ikinci satır açmaz); ilk işaret geçerlidir.
+export async function dusumEkle(db: Db, baskiId: number, neden: BaskiDusumNedeni, kisiId: number): Promise<void> {
+  await db.sorgu(
+    'INSERT INTO etiket_merkezi_baski_dusumu (baski_id, neden, kisi_id) VALUES ($1, $2, $3) ON CONFLICT (baski_id) DO NOTHING',
+    [baskiId, neden, kisiId],
+  );
+}
 
 export interface EtiketTuruSatiri {
   kod: string; ad: string; sahipModul: string; tetik: string; alanlar: string; sablonTuru: string | null; kayitTurleri: string[];
@@ -83,12 +107,14 @@ export const etiketTurleriOku = (db: Db): Promise<EtiketTuruSatiri[]> =>
   );
 
 // Kaydın son başarılı basımı (gönderildi, deftere yazılan indirme ya da tarayıcıdan yazdırma); hiç basılmamış kayıt haritada yoktur.
+// "Çıkmadı" işaretli baskı (3598) basılmış sayılmaz.
 export async function sonBasimlar(db: Db, kaynakTur: string, idler: readonly number[]): Promise<Map<number, string>> {
   if (idler.length === 0) return new Map();
   const satirlar = await db.sorgu<{ id: number; zaman: string }>(
     `SELECT k.kaynak_id AS id, ${zamanMetni('max(b.zaman)')} AS zaman
        FROM etiket_merkezi_baski_kaydi k JOIN etiket_merkezi_baski b ON b.id = k.baski_id
       WHERE k.kaynak_tur = $1 AND k.kaynak_id = ANY($2::int[]) AND b.sonuc IN ('gonderildi', 'indirildi', 'yazdirildi')
+        AND NOT EXISTS (SELECT 1 FROM etiket_merkezi_baski_dusumu d WHERE d.baski_id = b.id)
       GROUP BY k.kaynak_id`,
     [kaynakTur, idler],
   );

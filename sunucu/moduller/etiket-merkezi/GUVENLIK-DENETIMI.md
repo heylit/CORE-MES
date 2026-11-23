@@ -15,6 +15,7 @@ Testler `etiket-merkezi.test.ts` (gerçek PostgreSQL, gerçek giriş). Oturumsuz
 | `POST /etiket-merkezi/sablonlar/:anahtar/yazdir` | `etiket-merkezi.bas` ("Yazıcı için indir" ile aynı), tekrar korumalı | kart 2904: sunucu yazıcıya ve ağa bağlanmaz, yalnız yerleşim döner; EM-11, EM-12, EM-24 indirmeyle aynı; deftere yazıcısız `yazdirildi` satırı ve kayıt bağları | EM-U24, EM-U25 | EM-U24 (oku yetkisi 403, yetkisiz 403, örnek değerli gerçek şablon 400, tür uyuşmazlığı 400, 500 sınırı 400), EM-U25 (kısıt: yazıcısız satır yalnız `yazdirildi`) |
 | `GET /etiket-merkezi/bekleyenler` | `etiket-merkezi.oku` | salt okuma; stok ve üretim emirleri `disari.ts` okumaları, 30 gün ve kaynak başına en çok 500 satır | EM-U21, EM-U23 | EM-U21 (403) |
 | `POST /etiket-merkezi/bekleyenler/atla` | `etiket-merkezi.bas` | yalnız ekleme defteri; tür listesi sözleşmede, en çok seçim sınırı kadar kimlik; tekrar korumalı | EM-U22 | EM-U22 (403, 400) |
+| `POST /etiket-merkezi/baskilar/:id/cikmadi` | `etiket-merkezi.bas`, tekrar korumalı | basma kararı basanındır (2223-4 a); yalnız ekleme defteri, baskı başına tek satır; hatalı, kayıtsız ve pencere dışı baskı 400; yeni işlem yok | EM-U44 | EM-U44 (403, 400, 404) |
 | `GET /etiket-merkezi/baskilar` | `etiket-merkezi.oku` | defter yalnız eklenir (tetikleyici) | EM-U8 | EM-U8 (403, DELETE reddi) |
 
 Denetim kaydı: yazıcı tanımı `degistiren_kisi_id` ve sürümle, her baskı defterde (kişi, zaman, sonuç) tutulur.
