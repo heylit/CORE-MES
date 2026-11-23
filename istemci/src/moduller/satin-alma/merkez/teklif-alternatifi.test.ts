@@ -123,6 +123,58 @@ describe('3437-3a: teklif formunda alternatif', () => {
   });
 });
 
+// 3593 (KURGU 3.6, Y8): kalemde işaretli alternatif kartından teklif; sınır dışı değer kırmızı satır, nedeni role=alert, Kaydet pasif.
+describe('3593: teklif girişinde alternatif kartı', () => {
+  const KART = {
+    setId: 31, ad: 'ORN AK-1', tur: 'tam' as const, ozet: '6082 ya da 6061 · Ø 50–55 (−0/+5) · boy birebir 3000', degisti: false,
+    sinir: [
+      { nitelik: 'kalite' as const, birebir: false, degerler: ['6082', '6061'], alt: null, ust: null },
+      { nitelik: 'd' as const, birebir: false, degerler: null, alt: 50, ust: 55 },
+      { nitelik: 'l' as const, birebir: true, degerler: null, alt: 3000, ust: 3000 },
+    ],
+  };
+  const DEGISEN = { ...KART, setId: 32, ad: 'ORN AK-2', degisti: true };
+  it('kart seçilir, birebir boy salt okunur; sınır dışı Ø kırmızı ve Kaydet pasif; düzeltilince gövdeye kartId gider', async () => {
+    const k0 = ZARFLAR.kalemler[0]!;
+    ZARFLAR.kalemler[0] = { ...k0, islem: [], alternatifKartlari: [KART, DEGISEN] };
+    try {
+      const kapat = await ac([]);
+      quoteModal(S.requests[talep.id]!);
+      await vi.waitFor(() => expect(q(`[data-alt-ac="${K1}"]`)).not.toBeNull());
+      q(`[data-alt-ac="${K1}"]`)!.click();
+      await vi.waitFor(() => expect(q(`[data-alt-kart="${K1}"]`)).not.toBeNull());
+      const sec = q<HTMLSelectElement>(`[data-alt-kart="${K1}"]`)!;
+      expect([...sec.options].map((o) => [o.textContent, o.disabled])).toEqual([
+        ['Kabul sınırı (ana malzeme)', false], ['ORN AK-1 · tam', false], ['ORN AK-2 · tam (değişti; talep eden güncellemeli)', true]]);
+      sec.value = '31';
+      sec.dispatchEvent(new Event('change', { bubbles: true }));
+      await vi.waitFor(() => expect(q('[data-alt-birebir="l"]')).not.toBeNull());
+      expect(q('[data-alt-birebir="l"]')!.textContent).toBe('3.000 (birebir)');
+      expect(q(`[data-alt="${K1}"][data-alt-olcu="l"]`)).toBeNull();
+      expect(q('[data-alt-kart-ozet]')!.textContent).toBe(`ORN AK-1: ${KART.ozet}`);
+      yaz(q(`[data-alt="${K1}"][data-alt-olcu="d"]`)!, '56');
+      const kaydet = q<HTMLElement>('[data-act="save-quote"]')!;
+      expect(q(`[data-alt-hata="${K1}"] [role="alert"]`)!.textContent).toBe('Ø 56 mm (sınır 50–55), ORN AK-1 sınırı dışında; kaydedilmez. Değeri düzeltin ya da başka kart seçin.');
+      expect([kaydet.getAttribute('aria-disabled'), kaydet.getAttribute('aria-describedby'), q(`[data-alt="${K1}"][data-alt-olcu="d"]`)!.getAttribute('aria-invalid')]).toEqual(['true', `alt-hata-${K1}`, 'true']);
+      const tedarikci = q<HTMLSelectElement>('#q-sup')!;
+      tedarikci.value = '41';
+      tedarikci.dispatchEvent(new Event('change', { bubbles: true }));
+      yaz(q(`[data-price="${K1}"]`)!, '10');
+      kaydet.click();
+      expect(govdeler.length).toBe(0);
+      yaz(q(`[data-alt="${K1}"][data-alt-olcu="d"]`)!, '52');
+      yaz(q(`[data-alt="${K1}"][data-alt-f="islem"]`)!, 'eloksal, boya');
+      expect([q(`[data-alt-hata="${K1}"]`)!.textContent, kaydet.getAttribute('aria-disabled')]).toEqual(['', null]);
+      kaydet.click();
+      await vi.waitFor(() => expect(govdeler.length).toBeGreaterThan(0));
+      expect(fiyatlar()[0]!.alternatif).toEqual({ kalite: null, durum: null, yuzey: null, olcu: { d: 52 }, kartId: 31, islem: ['eloksal', 'boya'] });
+      kapat();
+    } finally {
+      ZARFLAR.kalemler[0] = k0;
+    }
+  });
+});
+
 // T2 (3437-3a Test bakışı): dört sonuç ve şartlının dört izin durumu ayrı rozetle; ret seçilemez gibi okunur.
 describe('3437-3b-1: alternatif sonuç rozeti', () => {
   it('her sonuç ve izin kendi metni ve tonuyla', () => {

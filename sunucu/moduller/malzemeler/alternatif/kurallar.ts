@@ -283,11 +283,11 @@ export const KAPSAM_DOGRULAMA = {
 };
 
 // 3437 a (dilim 3b-2): onaylanan alternatifin kartı.
-export interface AlternatifNitelikleri { kalite: string | null; durum: string | null; yuzey: string | null; olcu: Record<string, number> }
+export interface AlternatifNitelikleri { kalite: string | null; durum: string | null; yuzey: string | null; islem?: readonly string[] | null | undefined; olcu: Record<string, number> }
 const sayi = (v: number): string => v.toLocaleString('tr-TR');
 // Ailede alternatifin etiketi: istenenden farklı nitelikler ("6262 T651 d 52 mm"); ölçü biçimi Taleplerim'deki şartlı alternatifle aynı.
 export const alternatifEtiketi = (a: AlternatifNitelikleri): string =>
-  [a.kalite, a.durum, a.yuzey, ...Object.entries(a.olcu).sort(([x], [y]) => (x < y ? -1 : 1)).map(([k, v]) => `${k} ${sayi(v)} mm`)]
+  [a.kalite, a.durum, a.yuzey, ...(a.islem ? [a.islem.length ? a.islem.join('+') : 'işlemsiz'] : []), ...Object.entries(a.olcu).sort(([x], [y]) => (x < y ? -1 : 1)).map(([k, v]) => `${k} ${sayi(v)} mm`)]
     .filter((x): x is string => !!x).join(' ').slice(0, 60) || 'alternatif';
 const AD_EN_COK = 200;
 // Ad sınırında ana ad kesilmez, etiket kısalır (ana ad tek başına sınırı aşıyorsa yalnız o kalır).
@@ -470,4 +470,30 @@ export function kopyaAralikHatasi(n: readonly SetNiteligiSatiri[], hedefOlcu: Re
     }
   }
   return null;
+}
+
+// 3593 (Risk S3, S5): teklif satırına dondurulan alternatif kartı sınırı: setin nitelikleri ve ana kartın o anki değerleri. Birebir ve Pay
+// bu ana değerlerle çözülür; set ya da ana kart sonra değişse de teklif ve onaydaki kart açma bu sınırla denetlenir.
+export interface DondurulmusSinir { nitelikler: readonly SetNiteligiSatiri[]; ana: SetKarti }
+export const dondurulmusUyum = (d: DondurulmusSinir, aday: SetKarti): { uyar: boolean; neden: string } => setUyumu(d.nitelikler, aday, d.ana);
+// Teklif edilen alternatifin aday kartı: boş nitelik ve gelmeyen işlem ana kartınkidir (S7); ölçü ana ölçünün üstüne yazılır.
+export interface TeklifNitelikleri { kalite: string | null; durum: string | null; yuzey: string | null; islem?: readonly string[] | null | undefined; olcu: Readonly<Record<string, number>> }
+export const teklifAdayi = (ana: SetKarti, a: TeklifNitelikleri): SetKarti => ({
+  ...ana, kalite: a.kalite ?? ana.kalite, durum: a.durum ?? ana.durum, yuzey: a.yuzey ?? ana.yuzey,
+  islemler: a.islem ?? ana.islemler, olcu: { ...ana.olcu, ...a.olcu },
+});
+export const islemFarkliMi = (a: readonly string[], b: readonly string[]): boolean => !ayniKume(a, b);
+// Ekranın ön denetimi için çözülmüş sınır: listede izinli değerler (birebirde ana kartın değerleri), ölçüde en az ve en çok. Ana kartta
+// olmayan ölçünün satırı gelmez (sunucu o setle teklifi reddeder).
+export interface CozulmusSinir { nitelik: SetNiteligi; birebir: boolean; degerler: string[] | null; alt: number | null; ust: number | null }
+export function sinirCoz(d: DondurulmusSinir): CozulmusSinir[] {
+  return d.nitelikler.flatMap((x): CozulmusSinir[] => {
+    const birebir = (x.kip ?? null) === 'birebir';
+    if (SET_LISTESI.has(x.nitelik)) {
+      const ad = x.nitelik as (typeof SET_LISTE_NITELIKLERI)[number];
+      return [{ nitelik: x.nitelik, birebir, degerler: [...(birebir ? LISTE_DEGERI[ad](d.ana) : x.degerler ?? [])], alt: null, ust: null }];
+    }
+    const s = olcuSiniri(x, d.ana);
+    return s === null ? [] : [{ nitelik: x.nitelik, birebir, degerler: null, alt: s.alt, ust: s.ust }];
+  });
 }

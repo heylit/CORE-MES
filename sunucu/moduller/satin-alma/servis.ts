@@ -21,14 +21,14 @@ import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { firmaAdlari, karneOlayiKaldir, karneOlayiYaz, karneOzetleri } from '../musteri-tedarikci/disari.ts';
-import type { KalemAlternatifKarti, KalemBagiCikisi, OnayliListeCevabi, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { AlternatifSonucu, KalemAlternatifKarti, TeklifAlternatifi, KalemBagiCikisi, OnayliListeCevabi, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
 import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { kisiAdlari, kisilerinIslemleri, kisiVarMi, kisininRolleri, rolSecenekleri } from '../kisiler/disari.ts';
 import { alacakliSiparisler, alisBelgeleri, belgelerinSiparisleri, alisBelgesiEslesmeTutari, belgeSiparisBagla, siparisAvansAlacagiYaz, kdvSecenekleri, kurCiftiGetir, kurCiftleri, oranlar, siparisOdemePlaniKaldir, siparisOdemePlaniYaz, siparisOtomatikPlaniVarMi, siparisPlanlari } from '../finans/disari.ts';
 import type { AvansAlacagiSonucu, FaizTuru } from '../finans/disari.ts';
 import { ORAN_KULLANIMLARI, yillikFaizdenAylik } from '#paylasilan/sozlesme/finans.ts';
 import { firmaAra, firmaOzeti, firmaOzetleri, tedarikciOlabilirMi, tumFirmalar, type FirmaOzeti } from '../musteri-tedarikci/disari.ts';
-import { alternatifKartiAc, alternatifKartiSecenekleri, alternatifZarfiOku, zarfDegerlendir, kategoriAgaci, kullanilanKaliteler, malzemeAra, malzemeKategorileri, malzemeMaliyetBilgileri, malzemeOzetleri, malzemeSatinAlmaAyrintilari } from '../malzemeler/disari.ts';
+import { alternatifKartiAc, alternatifKartiSecenekleri, alternatifKartiSinirlari, anaKartNitelikleri, dondurulmusUyum, sinirCoz, teklifAdayi, alternatifZarfiOku, zarfDegerlendir, kategoriAgaci, kullanilanKaliteler, malzemeAra, malzemeKategorileri, malzemeMaliyetBilgileri, malzemeOzetleri, malzemeSatinAlmaAyrintilari } from '../malzemeler/disari.ts';
 import { dosyaTutamagi } from '../dosya/disari.ts';
 import { teklifIstekFormu } from './teklif-istek-formu.ts';
 import {
@@ -56,7 +56,7 @@ import {
 } from './kurallar.ts';
 import type { BirimKarsiligi, FiyatIzi, KalemKabulu, KalemOzelligi } from './kurallar.ts';
 import { kalemTerminEmriTuret, satisBagReddi } from './kurallar.ts';
-import { alternatifIzniReddi, cizimIzni, merkezCizimiAdi, talepCizimiKaldirmaReddi, talepCizimiTaleptenMi, alternatifKararReddi, alternatifSiparisReddi, kartBekleyenAlternatifler, alternatifOlcuReddi, alternatifSonucuHesapla, sartliAlternatifler, kabulReddi, kabulYazimi, kabulZarfi as daraltilmisZarf, emirSatinAlmaDurumlari, fasonSiparisTarihiSec, kopyaOzelligi, tedarikAsamasi } from './kurallar.ts';
+import { alternatifIzniReddi, cizimIzni, merkezCizimiAdi, talepCizimiKaldirmaReddi, talepCizimiTaleptenMi, alternatifKararReddi, alternatifSiparisReddi, kartBekleyenAlternatifler, alternatifOlcuReddi, alternatifSonucuHesapla, dondurulmusKart, kartliAlternatifSonucu, sartliAlternatifler, kabulReddi, kabulYazimi, kabulZarfi as daraltilmisZarf, emirSatinAlmaDurumlari, fasonSiparisTarihiSec, kopyaOzelligi, tedarikAsamasi } from './kurallar.ts';
 import type { EmirSatinAlmaDurumu, FasonSiparisTarihi } from './kurallar.ts';
 import { SIPARIS_ILETILERI, oneriHareketi, siparisDuzeniKur, siparisHareketi, siparisOnayiGerekirMi, type SiparisDuzeni } from './siparis-kurallar.ts';
 import { DEGISIKLIK_ILETILERI, degisiklikHareketi, degisiklikOnayNedenleri, siparisDegisikligiKur, type DegisecekSiparis, type SiparisDegisikligiPlani } from './siparis-kurallar.ts';
@@ -215,9 +215,12 @@ async function talepleriYalinKur(db: Db, satirlar: s.TalepSatiri[]): Promise<Tal
           kalemId: f.kalemId, birimFiyat: sade(f.birimFiyat), iskontoYuzdesi: sade(f.iskontoYuzdesi), terminGun: f.terminGun, enAzMiktar: sade(f.enAzMiktar),
           basamaklar: a.basamaklar.filter((b) => b.talepId === t.id && b.teklifId === q.id && b.kalemId === f.kalemId)
             .map((b) => ({ esik: sade(b.esik), birimFiyat: sade(b.birimFiyat) })),
-          alternatif: f.alternatif, alternatifSonucu: f.alternatifSonuc === null ? null : {
+          // 3593: dayanılan alternatif kartı sütundadır (set silinince boş); dondurulan sınır sonuçla gelir.
+          alternatif: f.alternatif === null ? null : { ...f.alternatif, ...(f.alternatifSiniri === null ? {} : { kartId: f.alternatifSetiId }) },
+          alternatifSonucu: f.alternatifSonuc === null ? null : {
             sonuc: f.alternatifSonuc, nedenler: f.alternatifNedenler ?? [], izin: f.alternatifIzin,
             izinKisiId: f.alternatifIzinKisiId, izinZaman: f.alternatifIzinZaman, izinNotu: f.alternatifIzinNotu, kartNo: f.alternatifKartNo,
+            ...(f.alternatifSiniri === null ? {} : { kart: { ...f.alternatifSiniri, setId: f.alternatifSetiId } }),
           },
         })),
       })),
@@ -767,7 +770,18 @@ export async function kalemZarflari(db: Db, id: string): Promise<KalemZarflariCe
     const kk = kabuller.get(x.id);
     if (kk === undefined) continue;
     const zarf = await alternatifZarfiOku(db, kk.malzemeNo);
-    if (zarf !== null) kalemler.push({ kalemId: x.id, malzemeNo: kk.malzemeNo, kabul: kk.kabul, zarf: daraltilmisZarf(zarf, kk.kabul) });
+    if (zarf === null) continue;
+    // 3593: işaretli alternatif kartlarının bugünkü çözülmüş sınırı; işaretlendiğinden beri değişen kart "degisti" ile gelir.
+    const isaretli = kk.alternatifKartlari.filter((a) => a.setId !== null);
+    const sinirlar = await alternatifKartiSinirlari(db, kk.malzemeNo, isaretli.map((a) => a.setId!));
+    const ana = await anaKartNitelikleri(db, kk.malzemeNo);
+    kalemler.push({
+      kalemId: x.id, malzemeNo: kk.malzemeNo, kabul: kk.kabul, zarf: daraltilmisZarf(zarf, kk.kabul), ...(ana === null ? {} : { islem: [...ana.islemler] }),
+      alternatifKartlari: isaretli.flatMap((a) => {
+        const g = sinirlar.get(a.setId!);
+        return g === undefined ? [] : [{ setId: g.setId, ad: a.ad, tur: a.tur, ozet: a.ozet, degisti: g.ozet !== a.ozet, sinir: sinirCoz(g) }];
+      }),
+    });
   }
   return { kalemler };
 }
@@ -778,6 +792,9 @@ async function alternatifleriHesapla(db: Db, t: TalepYazimi, eski: Talep): Promi
   }
   const kabuller = await kalemKabulleri(db, [t]);
   const zarflar = new Map<number, Awaited<ReturnType<typeof alternatifZarfiOku>>>();
+  const isaretler = await kalemAlternatifKartlari(db, [eski.id]);
+  const anaIslemleri = new Map<number, readonly string[] | null>();
+  const uyum = (k: NonNullable<AlternatifSonucu['kart']>, a: TeklifAlternatifi) => dondurulmusUyum(k, teklifAdayi(k.ana, a));
   const teklifler: TalepYazimi['teklifler'] = [];
   for (const [i, q] of t.teklifler.entries()) {
     const fiyatlar: typeof q.fiyatlar = [];
@@ -793,7 +810,24 @@ async function alternatifleriHesapla(db: Db, t: TalepYazimi, eski: Talep): Promi
       if (red !== null) throw dogrulama(red, alan);
       const o = eski.teklifler.find((x) => x.id === q.id)?.fiyatlar.find((x) => x.kalemId === f.kalemId);
       const onceki = o === undefined ? null : { alternatif: o.alternatif ?? null, alternatifSonucu: o.alternatifSonucu ?? null };
-      fiyatlar.push({ ...f, alternatifSonucu: alternatifSonucuHesapla(zarf, kk!.kabul, f.alternatif, zarfDegerlendir, onceki) });
+      // 3593: alternatif kartıyla gelen satır (S3, S6): aynı alternatifte dondurulan sınır kalır; yeni seçimde kart kalemde işaretli ve
+      // işaretlendiğinden beri değişmemiş olmalı, bugünkü sınırı satıra dondurulur.
+      let kart = dondurulmusKart(f.alternatif, onceki);
+      if (kart === null && f.alternatif.kartId != null) {
+        const isaret = (isaretler.get(f.kalemId) ?? []).find((x) => x.setId === f.alternatif!.kartId);
+        const g = isaret === undefined ? undefined : (await alternatifKartiSinirlari(db, kk!.malzemeNo, [isaret.setId!])).get(isaret.setId!);
+        if (isaret === undefined || g === undefined) throw dogrulama(ILETILER.alternatifKartiIsaretsiz(ad), alan);
+        if (g.ozet !== isaret.ozet) throw dogrulama(ILETILER.alternatifKartiDegisti(ad, isaret.ad), alan);
+        kart = { setId: g.setId, ad: g.ad, tur: g.tur, ozet: g.ozet, nitelikler: g.nitelikler, ana: { ...g.ana, standartlar: [...g.ana.standartlar], islemler: [...g.ana.islemler], olcu: { ...g.ana.olcu } } };
+      }
+      if (kart !== null) {
+        const r = kartliAlternatifSonucu(kart, f.alternatif, ad, uyum, onceki);
+        if (typeof r === 'string') throw dogrulama(r, alan);
+        fiyatlar.push({ ...f, alternatifSonucu: r });
+        continue;
+      }
+      if (f.alternatif.islem != null && !anaIslemleri.has(kk!.malzemeNo)) anaIslemleri.set(kk!.malzemeNo, (await anaKartNitelikleri(db, kk!.malzemeNo))?.islemler ?? null);
+      fiyatlar.push({ ...f, alternatifSonucu: alternatifSonucuHesapla(zarf, kk!.kabul, f.alternatif, zarfDegerlendir, onceki, anaIslemleri.get(kk!.malzemeNo) ?? null) });
     }
     teklifler.push({ ...q, fiyatlar });
   }
@@ -832,7 +866,7 @@ async function alternatifKartlariniAc(db: Db, k: Kullanici, id: string, t: Talep
     const kk = kabuller.get(b.kalemId);
     const ad = t.kalemler.find((x) => x.id === b.kalemId)?.ad ?? '';
     if (kk === undefined) throw gecersiz(ILETILER.alternatifZarfsiz(ad));
-    const r = await alternatifKartiAc(db, k, kk.malzemeNo, b.alternatif);
+    const r = await alternatifKartiAc(db, k, kk.malzemeNo, b.alternatif, b.kart ?? null);
     kartlar.set(`${b.teklifId}/${b.kalemId}`, r.no);
     const kod = (await malzemeOzetleri(db, [r.no])).get(r.no)?.kod ?? String(r.no);
     await s.hareketEkle(db, id, randomUUID(), r.yeni ? `${ad}: alternatif malzeme kartı açıldı, malzeme onayı bekliyor: ${kod}` : `${ad}: var olan alternatif kart kullanıldı: ${kod}`, k.id);

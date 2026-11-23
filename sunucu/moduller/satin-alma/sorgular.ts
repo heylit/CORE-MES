@@ -3,7 +3,7 @@ import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { ZarfSonucu } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 import type { SiparisOdemeYontemi as OdemeYontemi } from '#paylasilan/sozlesme/finans.ts';
 import { islemKilidiAl } from '#cekirdek/kilit.ts';
-import type { AlternatifIzni, KabulSiniri, TalepDurumu, TeklifAlternatifi,
+import type { AlternatifIzni, KabulSiniri, TalepDurumu, TeklifAlternatifi, TeklifAlternatifKarti,
   Ayarlar, AyarlarKaydetYazimi, Hareket, KatalogKaydetYazimi, KatalogKaydi, Onay, Talep, TalepYazimi, Teklif,
   TedarikciKaydetYazimi,
 } from '#paylasilan/sozlesme/satin-alma.ts';
@@ -69,6 +69,8 @@ export async function butceTalepIdleri(db: Db, yil: number): Promise<string[]> {
 }
 
 // Sonradan verilen izinde (soru, ret) kim, ne zaman ve not yazılır; talepteki işarette (talep) yazılmaz (kısıt).
+// 3593: alternatifin dayandığı kart ayrı sütundadır (set silinince boşalır); jsonb yalnız nitelikleri taşır, izin karşılaştırması da öyle.
+const alternatifJsonu = ({ kartId: _k, ...a }: TeklifAlternatifi): string => JSON.stringify(a);
 const sonradanIzin = (f: { alternatif?: TeklifAlternatifi | null; alternatifSonucu?: { izin: AlternatifIzni | null } | null }): boolean =>
   !!f.alternatif && (f.alternatifSonucu?.izin === 'soru' || f.alternatifSonucu?.izin === 'ret');
 // 3437 a (dilim 3b-1): talep edenin şartlı alternatif izni. Teklif satırının o anki alternatifine bağlıdır: alternatif değiştiyse satır
@@ -80,7 +82,7 @@ export async function alternatifIzniYaz(
     `UPDATE satin_alma_teklif_satiri SET alternatif_izin = $5, alternatif_izin_kisi_id = $6, alternatif_izin_zaman = now(), alternatif_izin_notu = $7
       WHERE talep_id = $1 AND teklif_id = $2 AND kalem_id = $3 AND alternatif = $4::jsonb AND alternatif_sonuc = 'sartli'
         AND alternatif_izin IS DISTINCT FROM 'talep' RETURNING kalem_id`,
-    [talepId, teklifId, kalemId, JSON.stringify(alternatif), izin, kisiId, notu === '' ? null : notu],
+    [talepId, teklifId, kalemId, alternatifJsonu(alternatif), izin, kisiId, notu === '' ? null : notu],
   )).length;
 }
 
@@ -92,6 +94,7 @@ export interface AltKayitlar {
     talepId: string; teklifId: string; kalemId: string; birimFiyat: string; iskontoYuzdesi: string | null; terminGun: number | null; enAzMiktar: string | null;
     alternatif: TeklifAlternatifi | null; alternatifSonuc: ZarfSonucu | null; alternatifNedenler: string[] | null; alternatifIzin: AlternatifIzni | null;
     alternatifIzinKisiId: number | null; alternatifIzinZaman: string | null; alternatifIzinNotu: string | null; alternatifKartNo: number | null;
+    alternatifSetiId: number | null; alternatifSiniri: Omit<TeklifAlternatifKarti, 'setId'> | null;
   }[];
   basamaklar: { talepId: string; teklifId: string; kalemId: string; esik: string; birimFiyat: string }[];
   kararlar: { talepId: string; mod: 'tek' | 'bolunmus'; teklifId: string | null; gerekce: string; kararVerenKisiId: number | null; kararTarihi: string; ogrenilenler: string; kurKilidi: string | null }[];
@@ -136,7 +139,7 @@ export async function altKayitlariOku(db: Db, idler: readonly string[]): Promise
       s.iskonto_yuzdesi AS "iskontoYuzdesi", s.termin_gun AS "terminGun", s.en_az_miktar AS "enAzMiktar",
       s.alternatif, s.alternatif_sonuc AS "alternatifSonuc", s.alternatif_nedenler AS "alternatifNedenler", s.alternatif_izin AS "alternatifIzin",
       s.alternatif_izin_kisi_id AS "alternatifIzinKisiId", ${ISO('s.alternatif_izin_zaman')} AS "alternatifIzinZaman", s.alternatif_izin_notu AS "alternatifIzinNotu",
-      s.alternatif_kart_no AS "alternatifKartNo"
+      s.alternatif_kart_no AS "alternatifKartNo", s.alternatif_seti_id AS "alternatifSetiId", s.alternatif_siniri AS "alternatifSiniri"
       FROM satin_alma_teklif_satiri s JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
       WHERE s.talep_id = ANY($1::uuid[]) ORDER BY s.talep_id, s.teklif_id, k.sira`),
     basamaklar: await q(`SELECT talep_id AS "talepId", teklif_id AS "teklifId", kalem_id AS "kalemId", esik, birim_fiyat AS "birimFiyat"
@@ -393,19 +396,22 @@ export async function altKayitlariYaz(db: Db, t: TalepYazimi, yeniSiparisNo: () 
     await db.sorgu('DELETE FROM satin_alma_teklif_satiri WHERE talep_id = $1 AND teklif_id = $2', [id, q.id]);
     await db.sorgu(
       `INSERT INTO satin_alma_teklif_satiri (talep_id, teklif_id, kalem_id, birim_fiyat, iskonto_yuzdesi, termin_gun, en_az_miktar,
-         alternatif, alternatif_sonuc, alternatif_nedenler, alternatif_izin, alternatif_izin_kisi_id, alternatif_izin_zaman, alternatif_izin_notu, alternatif_kart_no)
+         alternatif, alternatif_sonuc, alternatif_nedenler, alternatif_izin, alternatif_izin_kisi_id, alternatif_izin_zaman, alternatif_izin_notu, alternatif_kart_no,
+         alternatif_seti_id, alternatif_siniri)
        SELECT $1, $2, u.k, u.f, u.i, u.t, u.e, u.a, u.s, CASE WHEN u.s IS NULL THEN NULL ELSE ARRAY(SELECT jsonb_array_elements_text(u.n)) END, u.z,
-           u.ik, u.iz, u.inot, u.kn
+           u.ik, u.iz, u.inot, u.kn, u.si, u.sn
          FROM unnest($3::uuid[], $4::numeric[], $5::numeric[], $6::int[], $7::numeric[], $8::jsonb[], $9::text[], $10::jsonb[], $11::text[],
-           $12::int[], $13::timestamptz[], $14::text[], $15::int[])
-           AS u(k, f, i, t, e, a, s, n, z, ik, iz, inot, kn)`,
+           $12::int[], $13::timestamptz[], $14::text[], $15::int[], $16::int[], $17::jsonb[])
+           AS u(k, f, i, t, e, a, s, n, z, ik, iz, inot, kn, si, sn)`,
       [id, q.id, q.fiyatlar.map((f) => f.kalemId), q.fiyatlar.map((f) => f.birimFiyat), q.fiyatlar.map((f) => f.iskontoYuzdesi ?? null),
         q.fiyatlar.map((f) => f.terminGun ?? null), q.fiyatlar.map((f) => f.enAzMiktar ?? null),
-        q.fiyatlar.map((f) => (f.alternatif ? JSON.stringify(f.alternatif) : null)), q.fiyatlar.map((f) => (f.alternatif ? f.alternatifSonucu?.sonuc ?? null : null)),
+        q.fiyatlar.map((f) => (f.alternatif ? alternatifJsonu(f.alternatif) : null)), q.fiyatlar.map((f) => (f.alternatif ? f.alternatifSonucu?.sonuc ?? null : null)),
         q.fiyatlar.map((f) => (f.alternatif && f.alternatifSonucu ? JSON.stringify(f.alternatifSonucu.nedenler) : null)),
         q.fiyatlar.map((f) => (f.alternatif ? f.alternatifSonucu?.izin ?? null : null)),
         ...(['izinKisiId', 'izinZaman', 'izinNotu'] as const).map((a) => q.fiyatlar.map((f) => (sonradanIzin(f) ? f.alternatifSonucu?.[a] ?? null : null))),
-        q.fiyatlar.map((f) => (f.alternatif ? f.alternatifSonucu?.kartNo ?? null : null))]);
+        q.fiyatlar.map((f) => (f.alternatif ? f.alternatifSonucu?.kartNo ?? null : null)),
+        q.fiyatlar.map((f) => (f.alternatif && f.alternatifSonucu?.kart ? f.alternatifSonucu.kart.setId : null)),
+        q.fiyatlar.map((f) => (f.alternatif && f.alternatifSonucu?.kart ? JSON.stringify((({ setId: _s, ...x }) => x)(f.alternatifSonucu.kart)) : null))]);
     // Basamaklar satırla birlikte silinir (yabancı anahtar, CASCADE) ve yeniden yazılır.
     const basamaklar = q.fiyatlar.flatMap((f) => (f.basamaklar ?? []).map((b) => ({ kalemId: f.kalemId, ...b })));
     if (basamaklar.length > 0) {

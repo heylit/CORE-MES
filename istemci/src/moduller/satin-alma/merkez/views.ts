@@ -37,7 +37,8 @@ export function alternatifRozeti(q: Pick<Quote, "alternatives" | "altResults">, 
   const a = q.alternatives?.[it.id];
   const s = q.altResults?.[it.id];
   if (!a || !s || s.sonuc === "ayni") return "";
-  const nit = [a.kalite, a.durum, a.yuzey, ...Object.entries(a.olcu).map(([k, v]) => `${k} ${numIn(v)}`)].filter(Boolean).join(" ");
+  // 3593: alternatif kartına dayanan teklifte kartın adı (dondurulan sınırdan) ve işlem de yazılır.
+  const nit = [s.kart?.ad, a.kalite, a.durum, a.yuzey, a.islem ? `işlem ${a.islem.join(" + ") || "yok"}` : null, ...Object.entries(a.olcu).map(([k, v]) => `${k} ${numIn(v)}`)].filter(Boolean).join(" ");
   return `<span class="sub">Alternatif ${esc(nit)}: ${sonucRozeti(s)}</span>`;
 }
 /** Kademeli fiyat (2975): basamaklı hücrede rozet; liste üzerine gelince görünür, ekran okuyucuya görünmez metinle okunur. */

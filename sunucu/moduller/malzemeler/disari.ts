@@ -123,6 +123,10 @@ export { kartinAlternatifKartlari } from './alternatif/servis.ts';
 export { alternatifKartiSecenekleri } from './alternatif/servis.ts';
 export type { AlternatifKartiSecenegi } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 // 3463-1b: kartın eşdeğer grubu (kart dahil); plan ve stok grubun stoğunu birlikte sayar.
+// 3593 (Risk S3-S7): teklifte seçilen alternatif kartının bugünkü sınırı, ana kartın nitelikleri ve saf denetimleri (dondurulmuş sınıra
+// uyum, teklif adayı, işlem farkı, ekran için çözülmüş sınır). Yetki denetlemez.
+export { alternatifKartiSinirlari, anaKartNitelikleri, type AlternatifKartiSiniri } from './alternatif/servis.ts';
+export { dondurulmusUyum, islemFarkliMi, sinirCoz, teklifAdayi, type CozulmusSinir, type DondurulmusSinir, type SetKarti, type TeklifNitelikleri } from './alternatif/kurallar.ts';
 export { esdegerGruplari } from './alternatif/servis.ts';
 export type { AlternatifBaglami, AlternatifKarti, KullanimYeri } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 // Saf: aday nitelikleri daraltılmış bir zarfa göre değerlendirmek için (satın alma teklifindeki alternatif).

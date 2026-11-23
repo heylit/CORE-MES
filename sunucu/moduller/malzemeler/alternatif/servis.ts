@@ -14,7 +14,7 @@ import { FORM_ADLARI } from '#paylasilan/sozlesme/stok-kontrol-sabitleri.ts';
 import { kisiAdlari } from '../../kisiler/disari.ts';
 import {
   KAPSAM_DOGRULAMA, alternatifOnceligi, kopyaAralikHatasi, setHatasi, setTuru, setUyumu, sinirHatasi, uyanSinir, zarfaGirenler, zarfDegerlendir, zarfHesapla,
-  type SetKarti, type SetNiteligiSatiri, type ZarfKarti,
+  type DondurulmusSinir, type SetKarti, type SetNiteligiSatiri, type ZarfKarti,
 } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
@@ -148,6 +148,23 @@ export async function alternatifKartiSecenekleri(db: Db, no: number, kullanimYer
     id: t.id, ad: t.ad, tur: t.tur, uyanSayisi: t.uyanSayi,
     ozet: alternatifOzeti(t.nitelikler, ana === null ? null : ana, formAdi).join(' · '),
   }));
+}
+
+// 3593 (Risk S3, S6): kartın istenen alternatif kartlarının bugünkü sınırı (özet, nitelikler, ana kartın değerleri). Kartın olmayan set ve
+// hammadde dışı kart gelmez. Satın alma teklife bunu dondurur. Yetki denetlemez.
+export interface AlternatifKartiSiniri extends DondurulmusSinir { setId: number; ad: string; tur: MuadilTuru; ozet: string; nitelikler: s.SetNiteligiKaydi[] }
+export async function alternatifKartiSinirlari(db: Db, anaNo: number, setIdleri: readonly number[]): Promise<Map<number, AlternatifKartiSiniri>> {
+  if (setIdleri.length === 0) return new Map();
+  const ana = (await anaSetKartlari(db, [anaNo])).get(anaNo);
+  if (ana === undefined) return new Map();
+  const formAdi = (f: string): string => (FORM_ADLARI as Readonly<Record<string, string>>)[f] ?? f;
+  return new Map((await s.setler(db, anaNo)).filter((t) => setIdleri.includes(t.id)).map((t) => [t.id, {
+    setId: t.id, ad: t.ad, tur: t.tur, ozet: alternatifOzeti(t.nitelikler, ana, formAdi).join(' · '), nitelikler: t.nitelikler, ana,
+  }]));
+}
+// 3593 (Risk S7): ana kartın set niteliklerindeki değerleri (işlem dahil); hammadde dışı kartta null.
+export async function anaKartNitelikleri(db: Db, no: number): Promise<SetKarti | null> {
+  return (await anaSetKartlari(db, [no])).get(no) ?? null;
 }
 
 async function kuraldanGelenler(db: Db, r: s.ZarfKartSatiri, disarida: ReadonlySet<number>) {

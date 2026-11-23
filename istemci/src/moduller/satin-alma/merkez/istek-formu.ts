@@ -3,7 +3,7 @@
  * pencerede basmadan önce değiştirilir, değişiklik saklanmaz. Değeri olmayan alanın geçtiği satır basılmaz (veri uydurulmaz).
  */
 import type { TeklifIstekFormuCevabi, TeklifIstekFormuIcerigi } from "#paylasilan/sozlesme/satin-alma.ts";
-import type { PurchaseRequest, Supplier } from "./tipler.ts";
+import type { PurchaseRequest, RequestItem, Supplier } from "./tipler.ts";
 import { teklifMetniSatirlari } from "./kalem-bagi.ts";
 import { esc, fmtDate, numIn, parseNum } from "./util.ts";
 
@@ -35,17 +35,42 @@ export function istekDegerleri(r: PurchaseRequest, s: Supplier | undefined, sonT
 
 const satirlar = (metin: string) => metin.split("\n").map((x) => esc(x)).join("<br>");
 
+// 3593 (KURGU 3.5, Risk S9): kalem altında malzeme özellikleri ve talep edenin kabul ettiği alternatif kartları; fiyat, firma ve kişi yok.
+// Şartlı kart talep edenin onayı gerektirdiği için varsayılan yazılmaz.
+export interface AlternatifYazimi { yaz: boolean; sartli: boolean }
+export const VARSAYILAN_ALTERNATIF_YAZIMI: AlternatifYazimi = { yaz: true, sartli: false };
+const TUR_ADI = { tam: "tam", ust: "üst", sartli: "şartlı" } as const;
+export function malzemeOzelligiMetni(it: Pick<RequestItem, "malzeme">): string {
+  const m = it.malzeme;
+  if (!m) return "";
+  const ana = [m.kalite, m.durum, m.islem ? `işlem ${m.islem}` : null, m.olcu].filter((x): x is string => !!x);
+  const adlar = new Set(["kalite", "durum", "işlem", "islem", "ölçü", "olcu"]);
+  return [...ana, ...m.ayrinti.filter((x) => !adlar.has(x.ad.toLocaleLowerCase("tr-TR"))).map((x) => `${x.ad}: ${x.deger}`)].join(" · ");
+}
+export function yazilanAlternatifler(it: Pick<RequestItem, "alternatifler">, a: AlternatifYazimi): NonNullable<RequestItem["alternatifler"]> {
+  return a.yaz ? (it.alternatifler ?? []).filter((x) => a.sartli || x.tur !== "sartli") : [];
+}
+function kalemMalzemesi(it: RequestItem, a: AlternatifYazimi): string {
+  if (!it.malzeme && !it.alternatifler?.length) return "";
+  const oz = malzemeOzelligiMetni(it);
+  const ak = yazilanAlternatifler(it, a);
+  const akMetni = !a.yaz ? "Yazılmıyor." : ak.length === 0 ? "Yok; yalnız bu malzeme." : "";
+  return `<dl class="doc-kalem-oz">${oz ? `<dt>Malzeme özellikleri</dt><dd>${esc(oz)}</dd>` : ""}<dt>Kabul edilen alternatifler</dt><dd>${akMetni ? esc(akMetni) : ak.map((x) => `<span class="doc-ak">${esc(`${x.ad} · ${TUR_ADI[x.tur]} · ${x.ozet}`)}</span>`).join("")}${ak.length ? '<small class="doc-ak-not">Alternatif teklif ederseniz teklifte gerçek değeri yazın.</small>' : ""}</dd></dl>`;
+}
+const ALTERNATIF_DIPNOTU = "Ø: çap, boy: uzunluk, ölçüler mm. \"Birebir\": ana malzemeyle aynı değer. Aralıklar uçlar dahildir. Alternatif teklifler yukarıdaki sınırlar içinde değerlendirilir; sınır dışı teklif kabul edilmez.";
+
 /** Formun kağıdı: antet, tedarikçi ve talep kutusu, kalemler, istenen bilgiler, kapanış ve imzalar. Fiyat yoktur. */
-export function istekFormuHTML(r: PurchaseRequest, s: Supplier | undefined, sonTarih: string, icerik: TeklifIstekFormuIcerigi, kurum: Kurum, firma: string, bugun: string, logo: string | null = null): string {
+export function istekFormuHTML(r: PurchaseRequest, s: Supplier | undefined, sonTarih: string, icerik: TeklifIstekFormuIcerigi, kurum: Kurum, firma: string, bugun: string, logo: string | null = null, alternatif: AlternatifYazimi = VARSAYILAN_ALTERNATIF_YAZIMI): string {
   const d = istekDegerleri(r, s, sonTarih, kurum.unvan || firma);
   const giris = istekMetniDoldur(icerik.giris, d), kapanis = istekMetniDoldur(icerik.kapanis, d), alt = istekMetniDoldur(icerik.alt, d);
   const antet = [kurum.adres, [kurum.telefon, kurum.eposta].filter(Boolean).join(" · "), kurum.vergi].filter(Boolean);
   const kalemler = (r.items || []).map((it, i) => {
     const ek = teklifMetniSatirlari(it).map((t) => `<br><small>${esc(t)}</small>`).join("");
     const miktar = parseNum(it.qty);
-    return `<tr><td class="r">${String(i + 1)}</td><td>${esc(it.name)}${it.spec ? `<br><small>${esc(it.spec)}</small>` : ""}${ek}</td><td class="r">${miktar === null ? "–" : `${numIn(miktar)} ${esc(it.unit)}`}</td><td class="doc-bos"></td><td class="doc-bos"></td></tr>`;
+    return `<tr><td class="r">${String(i + 1)}</td><td>${esc(it.name)}${it.spec ? `<br><small>${esc(it.spec)}</small>` : ""}${ek}${kalemMalzemesi(it, alternatif)}</td><td class="r">${miktar === null ? "–" : `${numIn(miktar)} ${esc(it.unit)}`}</td><td class="doc-bos"></td><td class="doc-bos"></td></tr>`;
   }).join("");
   const imzalar = [icerik.imza1, icerik.imza2].filter((x) => x.trim() !== "");
+  const dipnot = (r.items || []).some((it) => yazilanAlternatifler(it, alternatif).length > 0);
   return `<div class="doc doc-istek">
     <div class="doc-h"><div class="doc-h-sol">${logo ? `<img class="doc-logo" src="${esc(logo)}" alt="">` : ""}<div><div class="doc-co">${esc(kurum.unvan || firma || "")}</div>${antet.map((x) => `<div class="doc-antet">${esc(x)}</div>`).join("")}<h2>${esc(icerik.baslik)}</h2></div></div>
       <table class="doc-meta"><tr><th>Talep no</th><td>${esc(r.no)}</td></tr><tr><th>Tarih</th><td>${fmtDate(bugun)}</td></tr>${sonTarih ? `<tr><th>Son cevap</th><td>${fmtDate(sonTarih)}</td></tr>` : ""}</table></div>
@@ -54,6 +79,7 @@ export function istekFormuHTML(r: PurchaseRequest, s: Supplier | undefined, sonT
     ${giris ? `<p class="doc-metin">${satirlar(giris)}</p>` : ""}
     <h3>Teklif istenen kalemler</h3>
     <table class="doc-t"><thead><tr><th class="r">#</th><th>Kalem</th><th class="r">Miktar</th><th>Birim fiyat</th><th>Termin (gün)</th></tr></thead><tbody>${kalemler}</tbody></table>
+    ${dipnot ? `<p class="doc-note doc-ak-dipnot">${esc(ALTERNATIF_DIPNOTU)}</p>` : ""}
     ${icerik.istenenler.length ? `<h3>Teklifte belirtilmesini istediklerimiz</h3><ul class="doc-liste">${icerik.istenenler.map((x) => `<li>${esc(istekMetniDoldur(x, d))}</li>`).join("")}</ul>` : ""}
     ${kapanis ? `<p class="doc-metin">${satirlar(kapanis)}</p>` : ""}
     ${imzalar.length ? `<div class="sigs">${imzalar.map((t) => `<div class="sig"><div class="sig-t">${esc(t)}</div><div class="sig-l">İmza / tarih</div></div>`).join("")}</div>` : ""}

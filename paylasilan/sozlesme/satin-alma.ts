@@ -6,7 +6,7 @@ import { dosyaOzeti } from './dosya.ts';
 import { SIPARIS_ODEME_YONTEMLERI } from './finans.ts';
 import { KM_TEDARIKCI_DURUMLARI } from './kalite-merkezi.ts';
 import { kmOnayliListeSatiri } from './kalite-merkezi-kategori-onayi.ts';
-import { MUADIL_TURLERI, ZARF_SONUCLARI, alternatifKartiSecenegi, alternatifZarfi } from './malzeme-alternatifleri.ts';
+import { MUADIL_TURLERI, SET_KIPLERI, SET_NITELIKLERI, ZARF_SONUCLARI, alternatifKartiSecenegi, alternatifZarfi } from './malzeme-alternatifleri.ts';
 import { DIS_ISLEM_EMRI_DURUMLARI, disIslemEmriSemasi } from './uretim-emirleri.ts';
 
 // Satın alma (sürüm 6): Satın Alma Merkezi'nin veri modelinin Türkçe karşılığı. Talep bütün olarak, sürümle kaydedilir;
@@ -53,19 +53,39 @@ export const teklifIstegiSemasi = z.object({ firmaId: firmaKimligi, gonderim: ta
 // 3437 a (dilim 3a): teklif satırında istenenin yerine teklif edilen nitelikler; boş alan istenenle aynıdır. Ölçü anahtarı kartın
 // ölçüsüdür (d, a, b, l ...). Sonucu sunucu kalemin kabul sınırıyla hesaplar ve yazar; gelen sonuç yok sayılır.
 const alternatifNiteligi = z.string().trim().min(1).max(60).nullable();
+// 3593: kartId, teklifin dayandığı alternatif kartı (kalemde işaretli set); boşsa kalemin kabul sınırı. islem gelmezse ana kartın işlemi.
 export const teklifAlternatifi = z.object({
   kalite: alternatifNiteligi, durum: alternatifNiteligi, yuzey: alternatifNiteligi,
+  islem: z.array(z.string().trim().min(1).max(60)).max(10).refine((l) => new Set(l).size === l.length, 'Aynı işlem iki kez yazılmış.').nullable().optional(),
+  kartId: z.number().int().positive().max(2147483647).nullable().optional(),
   olcu: z.record(z.string().regex(/^[a-z][a-z0-9]{0,9}$/), z.number().positive().max(100000)).refine((o) => Object.keys(o).length <= 10, 'En çok on ölçü.'),
 }).strict();
 export type TeklifAlternatifi = z.output<typeof teklifAlternatifi>;
 // 'talep': talepte şartlı kabul işareti; 'soru': talep eden sonradan onayladı; 'ret': talep eden reddetti (kim, ne zaman, not ile).
 export const ALTERNATIF_IZINLERI = ['talep', 'soru', 'ret'] as const;
 export type AlternatifIzni = (typeof ALTERNATIF_IZINLERI)[number];
+// 3593 (Risk S3): teklif satırına kayıt anında dondurulan alternatif kartı sınırı (setin nitelikleri ve ana kartın o anki değerleri).
+// Set ya da ana kart sonra değişse de teklif ve onaydaki kart açma bununla denetlenir. setId set silinince boşalır; sınır kalır.
+const sinirAnaKarti = z.object({
+  form: z.string().nullable(), kalite: z.string().nullable(), durum: z.string().nullable(), yuzey: z.string().nullable(),
+  standartlar: z.array(z.string()), islemler: z.array(z.string()), olcu: z.record(z.string(), z.number()),
+});
+export const teklifAlternatifKarti = z.object({
+  setId: z.number().int().nullable(), ad: z.string(), tur: z.enum(MUADIL_TURLERI), ozet: z.string(),
+  nitelikler: z.array(z.object({
+    nitelik: z.enum(SET_NITELIKLERI), kip: z.enum(SET_KIPLERI).nullable(), degerler: z.array(z.string()).nullable(),
+    alt: z.number().nullable(), ust: z.number().nullable(), payAlt: z.number().nullable(), payUst: z.number().nullable(),
+  })).max(20),
+  ana: sinirAnaKarti,
+});
+export type TeklifAlternatifKarti = z.output<typeof teklifAlternatifKarti>;
 export const alternatifSonucu = z.object({
   sonuc: z.enum(ZARF_SONUCLARI), nedenler: z.array(z.string()).max(20), izin: z.enum(ALTERNATIF_IZINLERI).nullable(),
   izinKisiId: z.number().int().nullable().optional(), izinZaman: z.string().nullable().optional(), izinNotu: z.string().nullable().optional(),
   // 3437 a (dilim 3b-2): karar onaylanınca açılan (ya da bulunan) alternatif kartın numarası; yalnız sunucu yazar.
   kartNo: z.number().int().nullable().optional(),
+  // 3593: alternatif kartıyla gelen teklifte dondurulan sınır; yalnız sunucu yazar.
+  kart: teklifAlternatifKarti.nullable().optional(),
 });
 export type AlternatifSonucu = z.output<typeof alternatifSonucu>;
 
@@ -849,7 +869,16 @@ export const kabulZarfiCevabi = z.object({ zarf: alternatifZarfi.nullable(), alt
 export type KabulZarfiCevabi = z.output<typeof kabulZarfiCevabi>;
 // 3437 a (dilim 3a): satın almanın teklif formu kalem başına daraltılmış zarfı okur (alternatif satırı ve sonuç rozeti için).
 export const kalemZarflariCevabi = z.object({
-  kalemler: z.array(z.object({ kalemId: uuid, malzemeNo: z.number().int(), kabul: kabulSiniriSemasi.nullable(), zarf: alternatifZarfi })),
+  kalemler: z.array(z.object({
+    kalemId: uuid, malzemeNo: z.number().int(), kabul: kabulSiniriSemasi.nullable(), zarf: alternatifZarfi,
+    // 3593: ana kartın işlemleri ve kalemde işaretli alternatif kartlarının bugünkü sınırı (ekranın ön denetimi; sunucu yeniden denetler).
+    // degisti: kart işaretlendikten sonra değişti; talep eden güncellemeden bu kartla teklif kaydedilmez.
+    islem: z.array(z.string()).optional(),
+    alternatifKartlari: z.array(z.object({
+      setId: z.number().int(), ad: z.string(), tur: z.enum(MUADIL_TURLERI), ozet: z.string(), degisti: z.boolean(),
+      sinir: z.array(z.object({ nitelik: z.enum(SET_NITELIKLERI), birebir: z.boolean(), degerler: z.array(z.string()).nullable(), alt: z.number().nullable(), ust: z.number().nullable() })),
+    })).optional(),
+  })),
 });
 export type KalemZarflariCevabi = z.output<typeof kalemZarflariCevabi>;
 // 3437 a (dilim 3b-1): talep eden şartlı alternatifi onaylar ya da reddeder. Gördüğü alternatif gönderilir: teklif o arada değiştiyse izin yazılmaz.

@@ -637,6 +637,15 @@
 .sa-kok .sa-rfq-taslak select{ flex:1 1 14rem; max-width:24rem; font-weight:400; }
 .sa-kok .sa-rfq-bekleyen{ opacity:.7; }
 .sa-kok .doc-istek .doc-h h2{ margin-top:var(--b-3); }
+/* 3593: teklif isteme formunda kalem altında malzeme özellikleri ve kabul edilen alternatifler; anahtarlar formun solunda. */
+.sa-kok .doc-kalem-oz{ display:grid; grid-template-columns:auto minmax(0, 1fr); gap:0 var(--b-2); margin:var(--b-1) 0 0; font-size:var(--yazi-xs); }
+.sa-kok .doc-kalem-oz dt{ font-weight:600; }
+.sa-kok .doc-kalem-oz dd{ margin:0; }
+.sa-kok .doc-ak{ display:block; }
+.sa-kok .doc-ak-not{ display:block; color:dimgray; }
+.sa-kok .sa-istek-ak{ display:grid; gap:var(--b-1); border:1px solid var(--sa-line); border-radius:var(--sa-radius); padding:var(--b-2) var(--b-3); margin:0; }
+.sa-kok .sa-istek-ak .chk{ min-height:var(--dokunma); }
+.sa-kok .sa-istek-ak .chk.pasif{ opacity:.55; }
 .sa-kok .sa-rfq-kv{ display:grid; grid-template-columns:auto minmax(0, 1fr); gap:var(--b-1) var(--b-3); margin:0; font-size:var(--yazi-s); }
 .sa-kok .sa-rfq-kv dt{ color:var(--sa-muted); }
 .sa-kok .sa-rfq-kv dd{ margin:0; overflow-wrap:anywhere; }
@@ -889,6 +898,13 @@
 .sa-kok .alt-kutu{ display:grid; gap:var(--b-2); padding:var(--b-2) 0 var(--b-3); }
 .sa-kok .alt-alanlar{ display:grid; gap:var(--b-2); grid-template-columns:repeat(auto-fill, minmax(min(100%, 9rem), 1fr)); }
 .sa-kok .alt-sonuc{ display:flex; flex-wrap:wrap; align-items:center; gap:var(--b-1); }
+/* 3593: alternatif kartı sınırı dışındaki teklif satırı; neden role=alert ile, Kaydet pasif (aria-disabled). */
+.sa-kok .alt-satir.alt-hatali > td{ background:var(--sa-bad-soft); }
+.sa-kok .alt-hata:empty{ display:none; }
+.sa-kok .alt-hata{ color:var(--sa-bad); font-size:var(--yazi-s); }
+.sa-kok [aria-invalid="true"]{ border-color:var(--sa-bad); }
+.sa-kok .btn[aria-disabled="true"]{ opacity:.55; cursor:not-allowed; }
+.sa-kok .alt-kart select{ min-height:var(--dokunma); }
 /* 3442-7b: onay basamağına yazılı kişi */
 .sa-kok .chip.sa-onay-kisi{ display:inline-flex; align-items:center; gap:var(--pay-ince); cursor:default; font-size:var(--yazi-s); }
 .sa-kok .sa-onay-kisi-cikar{ border:0; background:none; padding:0; display:inline-flex; color:var(--sa-muted); cursor:pointer; }
