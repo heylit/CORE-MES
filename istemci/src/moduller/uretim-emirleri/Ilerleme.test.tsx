@@ -32,12 +32,19 @@ const yollar = (ilerleme: EmirIlerlemesi | null) => ({
   'GET /stok/uretim-emirleri/4/refakat-partileri': () => json(200, { partiler: [] }),
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+// Not kod parçalarına bölünür (kodlar ayrı öğede); metin bütün olarak aranır.
+const notu = (metin: string) => (_: string, el: Element | null) => el?.classList.contains('tc-emir-ikame') === true && el.textContent === metin;
 
 describe('receteIlerlemesi (1944)', () => {
   it('bileşen başına verilen / brüt, aşağı yuvarlanır ve 100 ile sınırlı; emrin yüzdesi ortalama; hizmet ve sıfır ihtiyaç sayılmaz', () => {
     const r = receteIlerlemesi({ bilesenler: [...TAMAMLAMA.bilesenler, { ...TAMAMLAMA.bilesenler[0]!, malzemeId: 604, brut: '2', verilen: '3' }, { ...TAMAMLAMA.bilesenler[0]!, malzemeId: 605, brut: '0' }] });
     expect(r.bilesenler.map((b) => [b.malzemeId, b.yuzde])).toEqual([[601, 75], [602, 25], [604, 100]]);
     expect(r.yuzde).toBe(66);
+  });
+
+  it('3437: ikame edilen bileşen ikameyi taşır, ikamesiz ve eski (alansız) cevapta null', () => {
+    const r = receteIlerlemesi({ bilesenler: [{ ...TAMAMLAMA.bilesenler[0]!, ikame: { kod: 'ORN-HM-001-A1', istenenKod: 'ORN-HM-001' } }, { ...TAMAMLAMA.bilesenler[1]!, ikame: null }, TAMAMLAMA.bilesenler[0]!] });
+    expect(r.bilesenler.map((b) => b.ikame)).toEqual([{ kod: 'ORN-HM-001-A1', istenenKod: 'ORN-HM-001' }, null, null]);
   });
 
   it('sayılacak bileşen yoksa yüzde yoktur (sıfır uydurulmaz)', () => {
@@ -58,6 +65,16 @@ describe('Emir ayrıntısında ilerleme (1944)', () => {
     expect(within(adimlar).getByText('(K1)')).toBeTruthy();
     expect(within(bolum).getByText(/adım yüzdelerinin ortalaması/)).toBeTruthy();
     expect(within(within(bolum).getByRole('table', { name: 'Reçete ilerlemesi' })).queryByText('Deneme kaplama')).toBeNull();
+  });
+
+  it('3437: reçete ilerlemesinde alternatifle ikame edilen malzemenin notu görünür', async () => {
+    const ikameli = { ...TAMAMLAMA, bilesenler: [{ ...TAMAMLAMA.bilesenler[0]!, ikame: { kod: 'ORN-HM-001-A1', istenenKod: 'ORN-HM-001' } }, TAMAMLAMA.bilesenler[1]!] };
+    sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.stok'] }, { ...yollar(ILERLEME), 'GET /stok/uretim-emirleri/4/tamamlama': () => json(200, ikameli) });
+    ac(ekran, '/uretim-emirleri/4');
+    const tablo = await screen.findByRole('table', { name: 'Reçete ilerlemesi' });
+    expect(within(tablo).getByText(notu('Alternatif: ORN-HM-001-A1 (istenen ORN-HM-001)'))).toBeTruthy();
+    expect(tablo.querySelectorAll('.tc-emir-ikame')).toHaveLength(1);
+    expect(tablo.querySelectorAll('.tc-emir-ikame-kod')).toHaveLength(2);
   });
 
   it('stok okuması olmayana reçete satırı çizilmez ve stok ucu sorulmaz; adımsız emirde bölüm yoktur', async () => {

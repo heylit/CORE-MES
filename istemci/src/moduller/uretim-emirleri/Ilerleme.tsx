@@ -5,6 +5,7 @@ import { Rozet, Simge, Tablo, type RozetTonu, type Sutun } from '../../ortak/ara
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { ILERLEME_ESASI_METNI, receteIlerlemesi, type ReceteIlerlemesi } from './gorunum.ts';
+import { IkameNotu } from './IkameNotu.tsx';
 import { stokOkur } from './refakat.ts';
 import './uretim-emirleri.css';
 
@@ -32,7 +33,7 @@ const ADIM_SUTUNLARI: Sutun<Adim>[] = [
   { anahtar: 'yuzde', baslik: 'İlerleme', hucre: (a) => <Cubuk yuzde={a.yuzde} etiket={`OP ${String(a.opNo)}`} /> },
 ];
 const BILESEN_SUTUNLARI: Sutun<Bilesen>[] = [
-  { anahtar: 'malzeme', baslik: 'Malzeme', hucre: (b) => b.ad },
+  { anahtar: 'malzeme', baslik: 'Malzeme', kartTamSatir: true, hucre: (b) => <>{b.ad}<IkameNotu ikame={b.ikame} /></> },
   { anahtar: 'miktar', baslik: 'Verilen / brüt', hizala: 'sag', kirilmaz: true, hucre: (b) => `${miktar(b.verilen)} / ${miktar(b.brut)}` },
   { anahtar: 'yuzde', baslik: 'İlerleme', hucre: (b) => <Cubuk yuzde={b.yuzde} etiket={b.ad} /> },
 ];

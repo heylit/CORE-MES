@@ -802,6 +802,8 @@ export const emirTamamlamaCevabi = z.object({
   bilesenler: z.array(z.object({
     malzemeId: z.number().int(), malzemeAd: z.string().nullable(), hizmet: z.boolean(),
     brut: z.string(), verilen: z.string(), kalan: z.string(), mevcut: z.string(), eksik: z.string(),
+    // 3437: bileşen alternatif kartla ikame edildiyse alınan ve istenen kartın kodu; ikame yoksa null. İsteğe bağlı: sunucu her zaman yazar.
+    ikame: z.object({ kod: z.string(), istenenKod: z.string() }).nullable().optional(),
   })),
   engel: z.string().nullable(),
 });

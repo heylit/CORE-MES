@@ -24,6 +24,9 @@
 .tc-emir-adim { display: grid; gap: var(--b-2); padding-bottom: var(--b-3); border-bottom: thin solid var(--edge); }
 .tc-emir-adim-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); justify-content: flex-end; }
 .tc-emir-not { color: var(--muted); font-size: var(--yazi-s); margin: 0; }
+/* 3437: ikame notu adın altında ayrı satır; kod bölünmez. */
+.tc-emir-ikame { display: block; }
+.tc-emir-ikame-kod { white-space: nowrap; }
 .tc-emir-hurda { color: var(--muted); font-size: var(--yazi-s); }
 .tc-emir-bolum-adim { margin: 0 0 var(--b-4); }
 .tc-emir-ikon { min-width: var(--dokunma); }

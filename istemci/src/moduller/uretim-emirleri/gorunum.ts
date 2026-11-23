@@ -65,7 +65,7 @@ export const ILERLEME_ESASI_METNI: Record<IlerlemeEsasi, string> = {
 
 export interface ReceteIlerlemesi {
   yuzde: number | null;
-  bilesenler: { malzemeId: number; ad: string; verilen: string; brut: string; yuzde: number }[];
+  bilesenler: { malzemeId: number; ad: string; verilen: string; brut: string; yuzde: number; ikame: EmirTamamlamaCevabi['bilesenler'][number]['ikame'] }[];
 }
 // Reçete ilerlemesi: bileşen başına emre verilen (net sarf) / brüt ihtiyaç; hizmet ve ihtiyacı sıfır olan bileşen sayılmaz. Birimler
 // (kg, adet, metre) toplanamadığı için emrin yüzdesi bileşen yüzdelerinin ortalamasıdır. Sayılacak bileşen yoksa yüzde yoktur (null).
@@ -74,7 +74,7 @@ export function receteIlerlemesi(c: Pick<EmirTamamlamaCevabi, 'bilesenler'>): Re
     const brut = Number(b.brut);
     if (b.hizmet || !(brut > 0)) return [];
     const yuzde = Math.min(100, Math.max(0, Math.floor((Number(b.verilen) / brut) * 100 + 1e-9)));
-    return [{ malzemeId: b.malzemeId, ad: b.malzemeAd ?? `#${String(b.malzemeId)}`, verilen: b.verilen, brut: b.brut, yuzde }];
+    return [{ malzemeId: b.malzemeId, ad: b.malzemeAd ?? `#${String(b.malzemeId)}`, verilen: b.verilen, brut: b.brut, yuzde, ikame: b.ikame ?? null }];
   });
   const yuzde = bilesenler.length === 0 ? null : Math.floor(bilesenler.reduce((t, b) => t + b.yuzde, 0) / bilesenler.length);
   return { yuzde, bilesenler };
