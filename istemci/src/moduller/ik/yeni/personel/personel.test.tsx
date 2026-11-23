@@ -70,11 +70,17 @@ describe('P1 personel listesi', () => {
     roller: [{ id: 5, kod: 'kalite', ad: 'Kalite' }, { id: 7, kod: 'operator', ad: 'Operatör' }],
     istasyonlar: [{ id: 11, ad: 'Deneme Torna', isMerkeziId: 1 }, { id: 12, ad: 'Uzak Freze', isMerkeziId: 2 }],
   };
+  // 3610: dept_d doğrudan işçilik evet, dept_h hayır, dept_u (örnek veri) boş.
+  const iscilikVeri = () => {
+    const v = ornekVeri({ secenekler: { kisiler: [], isMerkezleri: [{ id: 1, kod: 'M1', ad: 'Merkez' }] } });
+    const dept = (id: string, ad: string, dogrudanIscilik: boolean) => ({ kimlik: id, tur: 'dept' as const, surum: 1, govde: { id, kind: 'dept', ad, dogrudanIscilik } });
+    return { ...v, kayitlar: [...v.kayitlar, dept('dept_d', 'Talaşlı imalat', true), dept('dept_h', 'Ofis', false)] };
+  };
   const iseAlimFormu = (islemler: typeof IK_YONETICI.islemler) => {
     const gonderilen: unknown[] = [];
     ikAc('/ik/personel', {
       kullanici: { ...IK_YONETICI, islemler },
-      veri: ornekVeri({ secenekler: { kisiler: [], isMerkezleri: [{ id: 1, kod: 'M1', ad: 'Merkez' }] } }),
+      veri: iscilikVeri(),
       okumalar: { '/ik/hesap-rolleri': () => ROLLER },
     });
     const onceki = globalThis.fetch;
@@ -136,6 +142,7 @@ describe('P1 personel listesi', () => {
   it('1928 a: ilk istasyon yalnız seçilen iş merkezinden; seçilen istasyon işe alma ile gider', async () => {
     const gonderilen = iseAlimFormu([...IK_YONETICI.islemler, 'ik.hesap-ac']);
     const pencere = await doldur();
+    fireEvent.change(within(pencere).getByLabelText(/^Departman/), { target: { value: 'dept_d' } });
     const istasyon = within(pencere).getByLabelText(/^İlk istasyon/) as HTMLSelectElement;
     await waitFor(() => { expect(within(istasyon).queryByRole('option', { name: 'Deneme Torna' })).toBeTruthy(); });
     expect(within(istasyon).queryByRole('option', { name: 'Uzak Freze' })).toBeNull();
@@ -143,6 +150,37 @@ describe('P1 personel listesi', () => {
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
     await screen.findByRole('dialog', { name: 'Giriş hesabı açıldı' });
     expect(gonderilen[0]).toMatchObject({ istasyonId: 11 });
+  });
+
+  it('3610: doğrudan işçilik hayır ya da boş departmanda ilk istasyon sorulmaz ve gönderilmez', async () => {
+    const gonderilen = iseAlimFormu([...IK_YONETICI.islemler, 'ik.hesap-ac']);
+    const pencere = await doldur();
+    expect(within(pencere).queryByLabelText(/^İlk istasyon/)).toBeNull();
+    fireEvent.change(within(pencere).getByLabelText(/^Departman/), { target: { value: 'dept_h' } });
+    expect(within(pencere).queryByLabelText(/^İlk istasyon/)).toBeNull();
+    const rol = within(pencere).getByLabelText(/^Rol( \*)?$/) as HTMLSelectElement;
+    await waitFor(() => { expect(rol.value).toBe('7'); });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    await screen.findByRole('dialog', { name: 'Giriş hesabı açıldı' });
+    expect(gonderilen[0]).not.toHaveProperty('istasyonId');
+  });
+
+  it('3610: departman evet iken seçilen istasyon, departman hayıra çevrilince düşer ve geri evete dönünce de dönmez', async () => {
+    const gonderilen = iseAlimFormu([...IK_YONETICI.islemler, 'ik.hesap-ac']);
+    const pencere = await doldur();
+    const departman = within(pencere).getByLabelText(/^Departman/);
+    fireEvent.change(departman, { target: { value: 'dept_d' } });
+    const istasyon = within(pencere).getByLabelText(/^İlk istasyon/) as HTMLSelectElement;
+    await waitFor(() => { expect(within(istasyon).queryByRole('option', { name: 'Deneme Torna' })).toBeTruthy(); });
+    fireEvent.change(istasyon, { target: { value: '11' } });
+    fireEvent.change(departman, { target: { value: 'dept_h' } });
+    expect(within(pencere).queryByLabelText(/^İlk istasyon/)).toBeNull();
+    fireEvent.change(departman, { target: { value: 'dept_d' } });
+    expect((within(pencere).getByLabelText(/^İlk istasyon/) as HTMLSelectElement).value).toBe('');
+    fireEvent.change(departman, { target: { value: 'dept_h' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    await screen.findByRole('dialog', { name: 'Giriş hesabı açıldı' });
+    expect(gonderilen[0]).not.toHaveProperty('istasyonId');
   });
 
   it('1925 a reddedilen: hesap açamayan İK formda giriş hesabı bölümünü görmez', async () => {
