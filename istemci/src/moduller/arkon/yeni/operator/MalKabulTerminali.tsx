@@ -6,12 +6,13 @@ import { DepoTerminali, sayimEklenir, type DepoIsi, type DepoMetinleri } from '.
 import { YAZICI_NEDENI, etiketBekliyor, etiketYuvasi, kabulIletisi, kabulKartSatiri, type KabulEtiketi } from './kabul-etiketi.ts';
 
 // 3388 a: mal kabul standart terminal düzeninde. Fason dönüşü Kabul +1 ile sayılır (en çok firmada kalan), Bitir'de dönen kart
-// karantinaya tek kayıtla yazılır. Ret yoktur: uygunsuzluk GKK'nin kararıdır, mal kabul yalnız sayar. Satın alma kabulü okutmayla yapılır (sipariş, parti, raf Stok'un hızlı kabulünde); sayım tuşu kapalıdır.
+// karantinaya tek kayıtla yazılır. Ret yoktur: uygunsuzluk GKK'nin kararıdır, mal kabul yalnız sayar. Satın alma kabulü "Kabul et" ile ekrandaki sipariş satırından açılır, okutma isteğe bağlıdır (parti, raf Stok'un hızlı kabulünde); sayım tuşu kapalıdır.
 export const KABUL_METINLERI: DepoMetinleri = {
   serit: 'Bekleyen kabuller', birim: 'kabul', olcu: 'adet', calisiyor: 'Kabulde', sayac: 'Kabul', arti: 'Kabul +1', basla: 'Kabulü başlat',
   bos: 'Bekleyen kabul yok; siparişsiz mal diğer giriş olarak alınır.',
 };
-const OKUTMA_NEDENI = 'Satın alma kabulü okutmayla: "Okut ve kabul et".';
+// 3584: satın alma kabulü ekrandaki sipariş satırıyla açılır; okutma isteğe bağlıdır (gelen malın üstünde bizim kodumuz yok).
+const OKUTMA_NEDENI = 'Satın alma "Kabul et" ile: sipariş satırı seçili gelir, okutma isteğe bağlı.';
 
 export function kabulDepoIsi(k: KabulIsi): DepoIsi {
   const x = k.satir;
@@ -45,7 +46,7 @@ export function kabulDepoIsi(k: KabulIsi): DepoIsi {
       { t: 'Karantina rafına koy', d: 'Kabulden sonra GKK kuyruğuna düşer', r: false },
     ] : [
       { t: 'İrsaliyeyi siparişle karşılaştır', d: `${x.siparisNo || x.talepNo} · kalan ${kabulKalani(k)}`, r: true },
-      { t: 'Malzemeyi okut ve say', d: 'Okut ve kabul et; parti ve ambalaj kabul formunda', r: true },
+      { t: 'Malzemeyi say ve kabul et', d: 'Kabul et; okutma isteğe bağlı, parti ve ambalaj kabul formunda', r: true },
       { t: 'Rafa koy', d: "Etiketi lota yapıştır, rafı okut; raf okutulmazsa mal kabul alanına girer", r: false },
     ],
   };
@@ -91,7 +92,7 @@ export function MalKabulTerminali({ dar }: { dar: boolean }) {
       }}
       rozet={(is) => (kaynak(is.anahtar)?.tur === 'satin-alma' && bekleyenler.length > 0 ? { metin: 'Etiket bekliyor', simge: 'tag' } : null)}
       yuvalar={(b) => {
-        // 3583 Y3, 3584 Y1: iki sabit yuva [Okut ve kabul et] [Etiket bas]; ikisi de hep yerinde, durum gereği pasif. Etiket bas bu cihazın
+        // 3583 Y3, 3584 Y1: iki sabit yuva [Kabul et] [Etiket bas]; ikisi de hep yerinde, durum gereği pasif. Etiket bas bu cihazın
         // bekleyen bütün lot etiketlerini tek dokunuşla basar (K2); yazıcı yoksa pasif ve nedeni ileti satırında (K1). Fasonda yuvalar ayrılmış, boş.
         if (kaynak(b.is.anahtar)?.tur !== 'satin-alma') return [null, null];
         const kabulEdildi = (k: YazilanKabul) => { et.ekle(k); b.kapat(); b.bildir(kabulIletisi(basim.eksik)); };
@@ -99,7 +100,7 @@ export function MalKabulTerminali({ dar }: { dar: boolean }) {
           if (gitti) { et.birak(idler); b.bildir('Etiket yazıcıya gönderildi'); } else b.bildir('Etiket basılamadı; kabul geçerli, etiket bekliyor', 'kotu');
         });
         return [
-          { etiket: 'Okut ve kabul et', simge: 'scan', tikla: b.sayim.durum === 'running' ? () => b.ac('Okut ve kabul et', <SatinAlmaKabulu kabulEdildi={kabulEdildi} />) : null, birincil: true },
+          { etiket: 'Kabul et', simge: 'check', tikla: b.sayim.durum === 'running' ? () => b.ac('Mal kabul', <SatinAlmaKabulu kabulEdildi={kabulEdildi} satir={kaynak(b.is.anahtar)!.satir} />) : null, birincil: true },
           {
             etiket: yuva.etiket, alt: yuva.alt, ad: yuva.ad, simge: 'printer', yukleniyor: basim.basiyor,
             tikla: bekleyenler.length > 0 && basim.yazici !== null && !basim.basiyor ? bas : null,

@@ -47,7 +47,7 @@ export interface DepoBaglami {
   bitti: (acikKalir?: boolean) => void;
 }
 export interface DepoSekmesi { anahtar: string; baslik: string; simge: SimgeAdi; icerik: ReactNode }
-// 3583 Y3: sayacın altında iki sabit düğme yuvası (örn. Okut ve kabul et, Etiket bas). null: yuva ayrılmış ama bu işte yok (görünmez, yer tutar);
+// 3583 Y3: sayacın altında iki sabit düğme yuvası (örn. Kabul et, Etiket bas). null: yuva ayrılmış ama bu işte yok (görünmez, yer tutar);
 // tikla null: yuva görünür ve pasif; birincil: sıradaki eylem dolu çizilir.
 // 3584: alt, düğmenin ikinci satırıdır (örn. bekleyen sayısı ve lot kodu; yuva boyu değişmez); ad, erişilebilir ad (görünen adı içerir);
 // neden, yuvanın işi yapamama nedenidir ve ileti satırında kapalı nedeninden önce gelir.

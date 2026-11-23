@@ -93,15 +93,15 @@ describe('mal kabul terminali (3388 a)', () => {
     expect(await screen.findByRole('status', { name: /Kabulde.*1 \/ 3/ })).toBeTruthy();
   });
 
-  it('satın alma satırında sayım tuşu kapalı; "Okut ve kabul et" Stok\'un okutmalı kabulünü açar', async () => {
+  it('satın alma satırında sayım tuşu kapalı; "Kabul et" Stok\'un kabulünü açar, okutma isteğe bağlı', async () => {
     ac();
     const serit = await seritHazir('Bekleyen kabuller');
     fireEvent.click(within(serit).getByRole('button', { name: /ORN-S-31/ }));
     fireEvent.click(within(durum()).getByRole('button', { name: /Kabulü başlat/ }));
     expect(tus('Kabul +1').disabled).toBe(true);
-    expect(document.querySelector('.tc-ay1-depo-ileti')?.textContent).toContain('okutmayla');
-    fireEvent.click(screen.getByRole('button', { name: /Okut ve kabul et/ }));
-    const p = await screen.findByRole('dialog', { name: 'Okut ve kabul et' });
+    expect(document.querySelector('.tc-ay1-depo-ileti')?.textContent).toContain('okutma isteğe bağlı');
+    fireEvent.click(screen.getByRole('button', { name: 'Kabul et' }));
+    const p = await screen.findByRole('dialog', { name: 'Mal kabul' });
     expect(within(p).getAllByLabelText(/^Kod/).length).toBeGreaterThan(0);
   });
 
@@ -139,24 +139,24 @@ describe('mal kabul terminali (3388 a)', () => {
     expect((within(durum()).getAllByRole('button') as HTMLButtonElement[]).map((b) => b.disabled)).toEqual([false, false, false]);
   });
 
-  it('3583, 3584 Y1: satın alma satırında iki yuva hep yerinde: "Okut ve kabul et" başlamadan pasif, Kabulde açılır; Etiket bas bekleyen yokken pasif', async () => {
+  it('3583, 3584 Y1: satın alma satırında iki yuva hep yerinde: "Kabul et" başlamadan pasif, Kabulde açılır; Etiket bas bekleyen yokken pasif', async () => {
     ac();
     const serit = await seritHazir('Bekleyen kabuller');
     fireEvent.click(within(serit).getByRole('button', { name: /ORN-S-31/ }));
-    const okut = screen.getByRole('button', { name: /Okut ve kabul et/ }) as HTMLButtonElement;
+    const okut = screen.getByRole('button', { name: 'Kabul et' }) as HTMLButtonElement;
     expect(okut.disabled).toBe(true);
     const yuvalar = okut.closest('.tc-ay1-yuvalar')!;
     expect(yuvalar.children).toHaveLength(2);
     expect((screen.getByRole('button', { name: 'Etiket bas · bekleyen etiket yok' }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(within(durum()).getByRole('button', { name: /Kabulü başlat/ }));
-    expect((screen.getByRole('button', { name: /Okut ve kabul et/ }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole('button', { name: 'Kabul et' }) as HTMLButtonElement).disabled).toBe(false);
     expect(yuvalar.children).toHaveLength(2);
   });
 
   it('3583: fason satırında düğme yuvaları ayrılmıştır ama görünmez; ileti satırı hep vardır', async () => {
     ac();
     await seritHazir('Bekleyen kabuller');
-    expect(screen.queryByRole('button', { name: /Okut ve kabul et/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Kabul et' })).toBeNull();
     const yuvalar = document.querySelector('.tc-ay1-yuvalar')!;
     expect(yuvalar.children).toHaveLength(2);
     expect([...yuvalar.children].every((c) => c.getAttribute('aria-hidden') === 'true')).toBe(true);
@@ -191,19 +191,18 @@ describe('mal kabulde etiket kapısı (3584)', () => {
     const serit = await seritHazir('Bekleyen kabuller');
     fireEvent.click(within(serit).getByRole('button', { name: /ORN-S-31/ }));
     fireEvent.click(within(durum()).getByRole('button', { name: /Kabulü başlat/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Okut ve kabul et/ }));
-    const p = await screen.findByRole('dialog', { name: 'Okut ve kabul et' });
-    fireEvent.change(within(p).getAllByLabelText(/^Kod/)[0]!, { target: { value: 'ORN-HM-31' } });
-    fireEvent.click(within(p).getAllByRole('button', { name: 'Bul' })[0]!);
+    fireEvent.click(screen.getByRole('button', { name: 'Kabul et' }));
+    const p = await screen.findByRole('dialog', { name: 'Mal kabul' });
+    // Okutma yok: ekrandaki sipariş satırının malzemesi kimlikle açılır, satır seçili gelir.
     fireEvent.change(await within(p).findByLabelText(/^Sayılan miktar/), { target: { value: '3' } });
     const gonder = within(p).getByRole('button', { name: 'Mal kabul alanına teslim al' }) as HTMLButtonElement;
     await waitFor(() => expect(gonder.disabled).toBe(false));
     fireEvent.click(gonder);
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Okut ve kabul et' })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Mal kabul' })).toBeNull());
   };
   const ileti = () => document.querySelector('.tc-ay1-depo-ileti')?.textContent ?? '';
   const etiketYuvasi = () => screen.getByRole('button', { name: /^Etiket bas/ }) as HTMLButtonElement;
-  const kodCoz: Isleyici = (yol) => (yol.startsWith('/stok/kod-coz') ? json({ tur: 'malzeme', ozet: OZET, toplam: '0', bakiyeler: [] }) : null);
+  const kodCoz: Isleyici = (yol) => (yol === '/stok/malzemeler/31/ozet' ? json({ ozet: OZET }) : null);
 
   it('yazıcı yokken: kabulden sonra pencere kapanır, ileti nedeni öne alır (K1), yuva pasif ve bekleyen sayısı ile lot kodunu taşır (K2), rozet çıkar', async () => {
     ac(false, ['stok.giris'], (yol, g) => kodCoz(yol, g) ?? (yol.startsWith('/stok/mal-kabul-satirlari') ? json(kabulSatiri([{ konumId: 1 }])) : null));
@@ -213,7 +212,7 @@ describe('mal kabulde etiket kapısı (3584)', () => {
     expect(etiketYuvasi().disabled).toBe(true);
     expect(screen.getByRole('status', { name: /Kabulde/ }).textContent).toContain('Etiket bekliyor');
     // Başka dokunuş iletiyi silse de neden ileti satırında kalır (kapalı nedeninden önce).
-    fireEvent.click(screen.getByRole('button', { name: /Okut ve kabul et/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kabul et' }));
     fireEvent.click(within(await screen.findByRole('dialog')).getAllByRole('button').find((b) => /Kapat/.test(b.getAttribute('aria-label') ?? b.textContent ?? ''))!);
     expect(ileti()).toBe("Etiket basma yetkisi yok; etiket Basılacaklar'da bekler");
   });
@@ -226,6 +225,9 @@ describe('mal kabulde etiket kapısı (3584)', () => {
       ?? (yol === '/etiket-merkezi/sablonlar/lot-100x50/bas' ? json({ baskiId: 5, sonuc, ileti: sonuc === 'hata' ? 'Kâğıt bitti' : null }) : null));
     await kabulEt();
     expect(ileti()).toBe("Kabul edildi · Etiket bas'a dokunun");
+    const kabul = istekler.find((i) => i.yontem === 'POST' && i.yol === '/stok/mal-kabul')!.govde as { satirlar: { malzemeId: number; siparisSatirId: number }[] };
+    expect(kabul.satirlar[0]).toMatchObject({ malzemeId: 31, siparisSatirId: 31, miktar: '3' });
+    expect(istekler.some((i) => i.yol.startsWith('/stok/kod-coz'))).toBe(false);
     await waitFor(() => expect(etiketYuvasi().disabled).toBe(false));
     fireEvent.click(etiketYuvasi());
     await waitFor(() => expect(ileti()).toBe('Etiket basılamadı; kabul geçerli, etiket bekliyor'));
