@@ -33,6 +33,8 @@ export interface DepoIsi {
   // Sunucuya göre iş bitti (örn. durağın bütün kalemleri çıktı, irsaliye yazıldı); terminalin durumundan önce gelir.
   bitti?: boolean;
   adimlar: readonly DepoAdimi[];
+  // Şeritteki iş kartının alt satırı (örn. termin ve kalan); yoksa çizilmez.
+  kartSatiri?: string | null;
 }
 export interface DepoMetinleri {
   // birim: şeritteki iş birimi (kabul, durak); olcu: sayılanın birimi (adet, kalem).
@@ -45,9 +47,14 @@ export interface DepoBaglami {
   bitti: (acikKalir?: boolean) => void;
 }
 export interface DepoSekmesi { anahtar: string; baslik: string; simge: SimgeAdi; icerik: ReactNode }
-// 3583 Y3: sayacın altında iki sabit düğme yuvası (örn. Okut ve kabul et, Etiket bas). null: yuva ayrılmış ama bu işte yok (görünmez, yer tutar);
+// 3583 Y3: sayacın altında iki sabit düğme yuvası (örn. Kabul et, Etiket bas). null: yuva ayrılmış ama bu işte yok (görünmez, yer tutar);
 // tikla null: yuva görünür ve pasif; birincil: sıradaki eylem dolu çizilir.
-export interface DepoYuvasi { etiket: string; simge: SimgeAdi; tikla: (() => void) | null; birincil?: boolean }
+// 3584: alt, düğmenin ikinci satırıdır (örn. bekleyen sayısı ve lot kodu; yuva boyu değişmez); ad, erişilebilir ad (görünen adı içerir);
+// neden, yuvanın işi yapamama nedenidir ve ileti satırında kapalı nedeninden önce gelir.
+export interface DepoYuvasi {
+  etiket: string; simge: SimgeAdi; tikla: (() => void) | null; birincil?: boolean;
+  alt?: string | null; ad?: string; neden?: string | null; yukleniyor?: boolean;
+}
 
 // Durum düğmeleri üretimdekinin aynısıdır; Duraklat ve Bitir basılı tutulur (2000 b). Durdur depo işinde neden sormaz (VARSAYIM).
 interface DepoDugmesi { eylem: 'start' | 'stop' | 'pause' | 'resume' | 'finish'; simge: SimgeAdi; etiket: string; ton: MakineDurumu; ana?: boolean; tut?: boolean; kapali?: true }
@@ -95,12 +102,14 @@ function useDepoSayimlari(kip: string) {
   return { hepsi, guncelle, temizle };
 }
 
-export function DepoTerminali({ kip, dar, metin, isler, yukleniyor, hata, yenile, arti, yanArti, bitir, artiKapali, toplu, sekmeler, yuvalar }: {
+export function DepoTerminali({ kip, dar, metin, isler, yukleniyor, hata, yenile, arti, yanArti, bitir, artiKapali, toplu, sekmeler, yuvalar, rozet }: {
   kip: string; dar: boolean; metin: DepoMetinleri; isler: readonly DepoIsi[] | null; yukleniyor: boolean; hata: string | null; yenile: () => void;
   arti: (b: DepoBaglami) => void; yanArti?: (b: DepoBaglami) => void; bitir: (b: DepoBaglami) => void;
   // Sayım tuşu kapalıysa nedeni (örn. okutmayla kabul edilen satın alma).
   artiKapali?: (is: DepoIsi) => string | null; toplu?: boolean;
   sekmeler: (b: DepoBaglami) => DepoSekmesi[]; yuvalar?: (b: DepoBaglami) => readonly [DepoYuvasi | null, DepoYuvasi | null];
+  // Durum şeridindeki rozet (3584 Y3: örn. "Etiket bekliyor"); metin ve simge, yalnız renk değil.
+  rozet?: (is: DepoIsi) => { metin: string; simge: SimgeAdi } | null;
 }) {
   const s = useDepoSayimlari(kip);
   const [secili, seciliYaz] = useState<string | null>(null);
@@ -172,6 +181,8 @@ export function DepoTerminali({ kip, dar, metin, isler, yukleniyor, hata, yenile
                     </span>
                     <b className="tc-ay1-mono">{x.no}</b>
                     <span className="tc-ay1-tcark-ad">{x.ad}</span>
+                    {/* 3584: termin satırı addan hemen sonra; kart kısa pencerede kesilirse önce alttaki tür ve adet gider. */}
+                    {x.kartSatiri ? <span className="tc-ay1-tcark-satir">{x.kartSatiri}</span> : null}
                     <small>{x.tur}</small>
                     {x.hedef !== null ? <progress className="tc-ay1-tcark-ilerleme" max={1} value={x.hedef > 0 ? Math.min(1, n / x.hedef) : 0} aria-label="İlerleme" /> : null}
                     <small className="tc-ay1-mono">{x.hedef === null ? x.tur : `${sayi(n)} / ${sayi(x.hedef)} ${metin.olcu}`}</small>
@@ -199,6 +210,7 @@ export function DepoTerminali({ kip, dar, metin, isler, yukleniyor, hata, yenile
       </div>
     </section>
   );
+  const durumRozeti = bos || !rozet ? null : rozet(is);
   const kelime = bos ? (bekliyor ? 'Yükleniyor' : hata ? 'Okunamadı' : 'İş yok') : durumKelimesi(sayim.durum, metin);
   const durumSeridi = (
     <div className="tc-ay1-ds" data-durum={bos ? 'sirada' : DURUM_RENGI[sayim.durum]} role="status" aria-label={[kelime, is.tur, is.hedef === null ? null : `${sayi(sayilan)} / ${sayi(is.hedef)}`].filter(Boolean).join(' · ')}>
@@ -207,24 +219,30 @@ export function DepoTerminali({ kip, dar, metin, isler, yukleniyor, hata, yenile
         <span className="tc-ay1-ds-alt">
           {bos ? null : sayim.durum === 'queued' ? <small>sırada</small> : <GecenSure since={sayim.since} />}
           <span className="tc-ay1-ds-adim"><span data-uzun="">{is.tur}</span><span data-kisa="">{is.tur}</span></span>
+          {durumRozeti ? <span className="tc-ay1-etiket tc-ay1-ds-rozet"><Simge ad={durumRozeti.simge} boyut="k" />{durumRozeti.metin}</span> : null}
         </span>
       </span>
       {is.hedef === null ? null : <span className="tc-ay1-ds-adet"><b>{sayi(sayilan)} / {sayi(is.hedef)}</b><small>{sayi(Math.max(0, is.hedef - sayilan))} kaldı{yan > 0 && metin.yan ? ` · ${sayi(yan)} ${metin.yan.toLocaleLowerCase('tr')}` : ''}</small></span>}
     </div>
   );
-  // 3583 Y3: ileti bölgesi tek satır ve yalnız metindir (öncelik: bu işin iletisi, yükleniyor ya da hata, kapalı nedeni); hep vardır, yükseklik sabittir.
-  const iletiMetni = ileti ? ileti.metin : bekliyor ? null : hata ? hata : kapaliNeden && sayim.durum !== 'done' ? kapaliNeden : null;
-  const iletiSimgesi: SimgeAdi | null = ileti ? (ileti.ton === 'iyi' ? 'check' : 'alert') : bekliyor ? null : hata ? 'alert' : kapaliNeden && sayim.durum !== 'done' ? 'scan' : null;
+  const yuvaDizisi = bos || !yuvalar ? (yuvalar ? ([null, null] as const) : null) : yuvalar(b);
+  const yuvaNedeni = yuvaDizisi?.find((y) => y?.neden)?.neden ?? null;
+  // 3583 Y3: ileti bölgesi tek satır ve yalnız metindir (öncelik: bu işin iletisi, yükleniyor ya da hata, yuvanın nedeni (3584 K1), kapalı
+  // nedeni); hep vardır, yükseklik sabittir.
+  const iletiMetni = ileti ? ileti.metin : bekliyor ? null : hata ? hata : yuvaNedeni ? yuvaNedeni : kapaliNeden && sayim.durum !== 'done' ? kapaliNeden : null;
+  const iletiSimgesi: SimgeAdi | null = ileti ? (ileti.ton === 'iyi' ? 'check' : 'alert') : bekliyor ? null : hata ? 'alert' : yuvaNedeni ? 'printer' : kapaliNeden && sayim.durum !== 'done' ? 'scan' : null;
   const iletiSatiri = (
     <div className="tc-ay1-depo-ileti" data-ton={ileti?.ton} data-bos={iletiMetni === null ? '' : undefined} role="status">
       {iletiSimgesi ? <Simge ad={iletiSimgesi} /> : null}<span role={ileti?.ton === 'kotu' ? 'alert' : undefined}>{iletiMetni}</span>
     </div>
   );
-  const yuvaDizisi = bos || !yuvalar ? (yuvalar ? ([null, null] as const) : null) : yuvalar(b);
   const yuvaSatiri = yuvaDizisi ? (
     <div className="tc-ay1-yuvalar" role="group" aria-label="İş adımları">
       {yuvaDizisi.map((y, i) => (y
-        ? <Dugme key={y.etiket} tur={y.birincil ? 'birincil' : 'ikincil'} simge={y.simge} disabled={y.tikla === null} onClick={() => { iletiYaz(null); y.tikla?.(); }}>{y.etiket}</Dugme>
+        ? <Dugme key={i} tur={y.birincil ? 'birincil' : 'ikincil'} simge={y.simge} disabled={y.tikla === null} yukleniyor={!!y.yukleniyor} aria-label={y.ad ?? y.etiket}
+            onClick={() => { iletiYaz(null); y.tikla?.(); }}>
+            {y.alt ? <span className="tc-ay1-yuva-yazi"><span>{y.etiket}</span><small className="tc-ay1-mono">{y.alt}</small></span> : y.etiket}
+          </Dugme>
         : <span key={i} className="tc-ay1-yuva-bos" aria-hidden="true" />))}
     </div>
   ) : null;

@@ -1,6 +1,6 @@
 import { Suspense, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { GozOnerisiCevabi, KodCozCevabi, MalKabulCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { GozOnerisiCevabi, KodCozCevabi, MalKabulCevabi, MalzemeOzetiCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, DurumKutusu, KodOkuyucu, Pencere, useOkutmaGecmisi } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { MalzemeKesiti } from '../malzemeler/disari.ts';
@@ -12,11 +12,18 @@ import { useStokKodCoz } from './OkutmaSonucu.tsx';
 import { hataMetni, korumaliPost } from './ortak.tsx';
 
 // Teslim al altındaki Mal kabul (soru 89, stok.giris): okutulan malzeme eski Okut sayfasındaki hızlı kabulle alınır. Raf okutulmazsa
-// mal kabul alanına girer; "Rafı okut" girişi bekletir, okutulan ya da önerilen göze yazar.
-export function PanelMalKabul({ kod }: { kod: string }) {
-  const stok = useStokKodCoz(kod);
+// mal kabul alanına girer; "Rafı okut" girişi bekletir, okutulan ya da önerilen göze yazar. 3584 a: terminal kabulü `kabulEdildi` ile
+// alır ve lot etiketini kendi yuvasından basar; o zaman panel kendi "Etiket bas"ını göstermez.
+export interface YazilanKabul { belgeId: number; belgeNo: string }
+// 3584: kod yerine malzemeId verilirse (terminalde seçili sipariş satırı) okutma gerekmez; kart özeti kimlikle okunur, satır seçili gelir.
+export function PanelMalKabul({ kod, kabulEdildi, satir }: { kod: string; kabulEdildi?: (k: YazilanKabul) => void; satir?: { malzemeId: number; siparisSatirId: number } }) {
+  const stok = useKabulMalzemesi(kod, satir?.malzemeId ?? null);
   const [bekleyen, setBekleyen] = useState<BekleyenGiris | null>(null);
-  const [son, setSon] = useState<{ belgeId: number; kopya: number; metin: string } | null>(null);
+  const [son, sonYaz] = useState<{ belgeId: number; kopya: number; metin: string } | null>(null);
+  const setSon = (k: { belgeId: number; belgeNo: string; kopya: number; metin: string }) => {
+    if (kabulEdildi) { kabulEdildi({ belgeId: k.belgeId, belgeNo: k.belgeNo }); return; }
+    sonYaz(k);
+  };
   return (
     <>
       <h3 className="tc-stok-teslim-baslik">Mal kabul</h3>
@@ -27,24 +34,38 @@ export function PanelMalKabul({ kod }: { kod: string }) {
       )}
       {stok.isPending ? <DurumKutusu durum="yukleniyor" />
         : stok.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(stok.error)} yenile={() => { void stok.refetch(); }} />
-        : stok.data.tur !== 'malzeme' ? <p className="tc-stok-not">Mal kabul için malzemenin kodunu okutun; lot etiketi stoktaki partiyi gösterir.</p>
+        : stok.data?.tur !== 'malzeme' ? <p className="tc-stok-not">Mal kabul için malzemenin kodunu okutun; lot etiketi stoktaki partiyi gösterir.</p>
         : (
           <>
             {/* Kabul eden gelen malı kartın ölçüsüyle karşılaştırır; kesit yalnız hammaddede ve ölçü tamken gelir. */}
             {stok.data.kesit && <Suspense fallback={null}><MalzemeKesiti form={stok.data.kesit.form} olcu={stok.data.kesit.olcu} kod={stok.data.ozet.kod} /></Suspense>}
-            <Kabul ozet={stok.data.ozet} bekleyenAc={setBekleyen} bitti={(belgeId, kopya, metin) => setSon({ belgeId, kopya, metin })} />
+            <Kabul ozet={stok.data.ozet} {...(satir ? { siparisSatirId: satir.siparisSatirId } : {})} bekleyenAc={setBekleyen} bitti={(belgeId, kopya, metin, belgeNo) => setSon({ belgeId, belgeNo, kopya, metin })} />
           </>
         )}
-      {bekleyen && <RafOkut b={bekleyen} kapat={() => setBekleyen(null)} bitti={(belgeId, metin) => { setBekleyen(null); setSon({ belgeId, kopya: kopyaSayisi(bekleyen.ambalajSayisi), metin }); }} />}
+      {bekleyen && <RafOkut b={bekleyen} kapat={() => setBekleyen(null)} bitti={(belgeId, belgeNo, metin) => { setBekleyen(null); setSon({ belgeId, belgeNo, kopya: kopyaSayisi(bekleyen.ambalajSayisi), metin }); }} />}
     </>
   );
 }
 
-function Kabul({ ozet, bekleyenAc, bitti }: { ozet: Extract<KodCozCevabi, { tur: 'malzeme' }>['ozet']; bekleyenAc: (b: BekleyenGiris) => void; bitti: (belgeId: number, kopya: number, metin: string) => void }) {
-  return <HizliMalKabul key={ozet.id} malzeme={ozet} konumId={null} bekleyenAc={bekleyenAc} bitti={(belgeId, kopya) => bitti(belgeId, kopya, `${ozet.ad ?? ozet.kod} teslim alındı.`)} />;
+function Kabul({ ozet, siparisSatirId, bekleyenAc, bitti }: { ozet: Extract<KodCozCevabi, { tur: 'malzeme' }>['ozet']; siparisSatirId?: number; bekleyenAc: (b: BekleyenGiris) => void; bitti: (belgeId: number, kopya: number, metin: string, belgeNo: string) => void }) {
+  return <HizliMalKabul key={ozet.id} malzeme={ozet} konumId={null} {...(siparisSatirId === undefined ? {} : { siparisSatirId })} bekleyenAc={bekleyenAc} bitti={(belgeId, kopya, belgeNo) => bitti(belgeId, kopya, `${ozet.ad ?? ozet.kod} teslim alındı.`, belgeNo)} />;
 }
 
-function RafOkut({ b, kapat, bitti }: { b: BekleyenGiris; kapat: () => void; bitti: (belgeId: number, metin: string) => void }) {
+// Okutulan kodun çözümü ya da (malzemeId verildiyse) kart özeti; ikisi de panelin okuduğu biçimdedir (tur, ozet, kesit).
+type KabulMalzemesi = { tur: 'malzeme'; ozet: Extract<KodCozCevabi, { tur: 'malzeme' }>['ozet']; kesit: Extract<KodCozCevabi, { tur: 'malzeme' }>['kesit'] } | { tur: 'baska' };
+function useKabulMalzemesi(kod: string, malzemeId: number | null): { isPending: boolean; isError: boolean; error: unknown; refetch: () => unknown; data: KabulMalzemesi | undefined } {
+  const okut = useStokKodCoz(malzemeId === null ? kod : null);
+  const ozet = useQuery({
+    queryKey: anahtarlar.malzemeOzeti(malzemeId ?? 0),
+    queryFn: () => api.get<MalzemeOzetiCevabi>(`/stok/malzemeler/${String(malzemeId)}/ozet`),
+    enabled: malzemeId !== null, retry: false,
+  });
+  if (malzemeId !== null) return { isPending: ozet.isPending, isError: ozet.isError, error: ozet.error, refetch: ozet.refetch, data: ozet.data ? { tur: 'malzeme', ozet: ozet.data.ozet, kesit: null } : undefined };
+  const d = okut.data;
+  return { isPending: okut.isPending, isError: okut.isError, error: okut.error, refetch: okut.refetch, data: d === undefined ? undefined : d.tur === 'malzeme' ? { tur: 'malzeme', ozet: d.ozet, kesit: d.kesit } : { tur: 'baska' } };
+}
+
+function RafOkut({ b, kapat, bitti }: { b: BekleyenGiris; kapat: () => void; bitti: (belgeId: number, belgeNo: string, metin: string) => void }) {
   const istemci = useQueryClient();
   const [ileti, setIleti] = useState<string | null>(null);
   const oneri = useQuery({ queryKey: [...anahtarlar.hepsi, 'goz-onerisi', b.malzemeId], queryFn: () => api.get<GozOnerisiCevabi>(`/stok/malzemeler/${b.malzemeId}/goz-onerisi`) });
@@ -53,7 +74,7 @@ function RafOkut({ b, kapat, bitti }: { b: BekleyenGiris; kapat: () => void; bit
       const govde = kabulGovdesi(b, konumId);
       return belirsizMiktarVar(govde) ? Promise.reject(new BelirsizMiktarHatasi()) : korumaliPost<MalKabulCevabi>('/stok/mal-kabul', govde);
     },
-    onSuccess: (c) => { void istemci.invalidateQueries({ queryKey: anahtarlar.hepsi }); bitti(c.belge.id, `${b.ad} × ${b.miktar} rafa girdi (${c.belge.no}).`); },
+    onSuccess: (c) => { void istemci.invalidateQueries({ queryKey: anahtarlar.hepsi }); bitti(c.belge.id, c.belge.no, `${b.ad} × ${b.miktar} rafa girdi (${c.belge.no}).`); },
   });
   const gecmis = useOkutmaGecmisi();
   const coz = useMutation({

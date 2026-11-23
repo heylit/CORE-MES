@@ -101,4 +101,5 @@ export function useTerminalKartOkutmasi(istasyonKodu: string | null): TerminalKa
   return { yetkili, isGirdileri, kartiAl };
 }
 export { BEKLEYEN_SAYFA_BOYU, TerminalMalKabul, useBekleyenKabulSayisi } from './TerminalMalKabul.tsx';
-export { FasonKabulOnayi, SatinAlmaKabulu, kabulKalani, useKabulIsleri, type KabulIsi } from './TerminalKabul.tsx';
+export { FasonKabulOnayi, SatinAlmaKabulu, kabulKalani, useKabulIsleri, useKabulLotlari, type KabulIsi, type KabulLotu } from './TerminalKabul.tsx';
+export type { YazilanKabul } from './PanelMalKabul.tsx';

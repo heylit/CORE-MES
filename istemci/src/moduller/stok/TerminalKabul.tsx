@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { MalKabulSatirlariCevabi } from '#paylasilan/sozlesme/stok-mal-kabul-satirlari.ts';
 import type { AcikSiparisSatiri, AcikSiparisSatirlariCevabi, FasonIsleriCevabi, KonumlarCevabi, MalKabulCevabi, MalKabulGovdesi } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, KodOkuyucu, Simge } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
@@ -8,7 +9,7 @@ import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { birimliMiktar } from './gorunum.ts';
 import { hataMetni, korumaliPost } from './ortak.tsx';
-import { PanelMalKabul } from './PanelMalKabul.tsx';
+import { PanelMalKabul, type YazilanKabul } from './PanelMalKabul.tsx';
 import { fasonDonusGovdesi, firmadaKalan, type FasonIsi } from './TerminalFasonDonusu.tsx';
 import { bekleyenKabuller, fasonSatiriMi } from './TerminalMalKabul.tsx';
 
@@ -99,13 +100,40 @@ export function FasonKabulOnayi({ is, kabul, vazgec, yazildi }: { is: KabulIsi; 
   );
 }
 
-// Satın alma kabulü okutmayla: malzemenin kodu okutulur, Stok'un hızlı kabulü açılır (sipariş eşleşmesi, parti, ambalaj, raf).
-export function SatinAlmaKabulu() {
+// Satın alma kabulü: malzemenin kodu okutulur ya da (terminalde) ekrandaki sipariş satırıyla açılır; Stok'un hızlı kabulü (sipariş eşleşmesi, parti, ambalaj, raf).
+// 3584 a: kabulEdildi verilirse kabul terminale döner (lot etiketi terminalin yuvasından basılır). satir verilirse (ekrandaki sipariş
+// satırı) kabul okutmadan o satırla açılır: gelen malın üstünde bizim kodumuz yoktur. Okutma isteğe bağlıdır; okutulan kod başka malzemeyi açar.
+export function SatinAlmaKabulu({ kabulEdildi, satir }: { kabulEdildi?: (k: YazilanKabul) => void; satir?: AcikSiparisSatiri } = {}) {
   const [kod, kodYaz] = useState<string | null>(null);
+  const satirdan = satir && satir.malzemeId !== null ? { malzemeId: satir.malzemeId, siparisSatirId: satir.id } : null;
   return (
     <div className="tc-stok-form">
-      <KodOkuyucu okundu={(k) => kodYaz(k.trim() || null)} sik ipucu="Malzemenin ya da kolinin kodunu okutun." />
-      {kod ? <PanelMalKabul key={kod} kod={kod} /> : null}
+      <KodOkuyucu okundu={(k) => kodYaz(k.trim() || null)} sik
+        ipucu={satirdan ? 'İsteğe bağlı: tedarikçi barkodu ya da malzeme kodu okutulursa o malzeme açılır.'
+          : satir ? 'Bu satırın malzemesi tanımlı değil: malzemenin kodunu okutun.' : 'Malzemenin ya da kolinin kodunu okutun.'} />
+      {kod ? <PanelMalKabul key={kod} kod={kod} {...(kabulEdildi ? { kabulEdildi } : {})} />
+        : satirdan && kod === null ? <PanelMalKabul key={`satir:${String(satirdan.siparisSatirId)}`} kod="" satir={satirdan} {...(kabulEdildi ? { kabulEdildi } : {})} /> : null}
     </div>
   );
+}
+
+// 3584 R1: terminalin kabul ettiği belgelerin lot kodları ve lotun bugün stokta olup olmadığı (Mal kabulü yapılanlar listesi, belge noyla
+// aranır; yeni uç yok). Belge bulunamazsa ya da okunamazsa o belge haritada yoktur: "bilinmiyor" sayılır, stokta değil denmez.
+export interface KabulLotu { lotlar: string[]; stokta: boolean }
+export function useKabulLotlari(belgeler: readonly YazilanKabul[]): ReadonlyMap<number, KabulLotu> {
+  const sorgular = useQueries({
+    queries: belgeler.map((b) => ({
+      queryKey: anahtarlar.liste('mal-kabul-satirlari', { metin: b.belgeNo }),
+      queryFn: () => api.get<MalKabulSatirlariCevabi>(`/stok/mal-kabul-satirlari?metin=${encodeURIComponent(b.belgeNo)}&sayfaBoyu=100`),
+      refetchInterval: 60_000,
+      retry: false,
+    })),
+  });
+  const harita = new Map<number, KabulLotu>();
+  belgeler.forEach((b, i) => {
+    const satirlar = (sorgular[i]?.data?.satirlar ?? []).filter((x) => x.malKabulId === b.belgeId && x.partiId !== null);
+    if (satirlar.length === 0) return;
+    harita.set(b.belgeId, { lotlar: satirlar.flatMap((x) => (x.lotNo === null ? [] : [x.lotNo])), stokta: satirlar.some((x) => x.yerler.length > 0) });
+  });
+  return harita;
 }
