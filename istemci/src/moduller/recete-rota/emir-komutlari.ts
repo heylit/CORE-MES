@@ -183,7 +183,10 @@ export const EMIR_KOMUTLARI: Readonly<Record<string, EmirKomutu>> = {
   'emir-iptal': {
     hazirla: async (girdi) => {
       const id = kimlik(girdi['id'], 'emir');
-      return { yol: `/adimli-emirler/${String(id)}/iptal`, govde: { surum: ekranSurumu(girdi) } };
+      // 3576: alt emirleriyle iptal; pencerenin gördüğü alt emirler gider, sunucudaki ağaç farklıysa iptal olmaz.
+      const alt = girdi['altlariyla'] === true;
+      const idler = alt && Array.isArray(girdi['altEmirIdleri']) ? (girdi['altEmirIdleri'] as unknown[]).map((x) => kimlik(x, 'alt emir')) : [];
+      return { yol: `/adimli-emirler/${String(id)}/iptal`, govde: { surum: ekranSurumu(girdi), ...(alt ? { altlariyla: true, altEmirIdleri: idler } : {}) } };
     },
   },
   // 2721: başlamış emir silinmez; sahibi durdurur, iptal durumuna alır ve kapanışı açık bırakır. Onay ekrandaki uyarı penceresindedir.

@@ -11,6 +11,7 @@ import { EkAdimPaneli, type EkYeri } from './EkAdim.tsx';
 import { EmirTuruPaneli } from './EmirTuru.tsx';
 import { ReworkSatirlari } from './ReworkAdimi.tsx';
 import { ArsivPenceresi, useArsivKapanisi } from './ArsiveAl.tsx';
+import { IptalPenceresi } from './IptalPenceresi.tsx';
 import { DalRozeti } from '../rotalar/PatlamisRota.tsx';
 import { IS_EMRI_DURUMU } from '#paylasilan/sozlesme/emir-durumu.ts';
 import {
@@ -160,12 +161,7 @@ export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc, ka
         )}
       </div>
 
-      <OnayPenceresi
-        acik={iptal} baslik={`${o.no} iptal edilsin mi?`} onayMetni="İptal et" tehlikeli yukleniyor={komut.mesgul} vazgec={() => { setIptal(false); }}
-        onayla={() => { setIptal(false); void komut.calistir('emir-iptal', { id: o.id, ...surum }, 'Emir iptal edildi.'); }}
-      >
-        <p>Emir iptal edilir; plandan ve terminalden kalkar.</p>
-      </OnayPenceresi>
+      <IptalPenceresi emir={o} acik={iptal} kapat={() => { setIptal(false); }} komut={komut} />
       <ArsivPenceresi emir={o} acik={arsiv} kapat={() => { setArsiv(false); }} komut={komut} />
     </section>
   );
@@ -806,12 +802,7 @@ export function EmirIslemDugmeleri({ durum: d, emir: o, yetki, git, komut, emirA
         <Dugme tur="birincil" simge="clipboard-check" onClick={() => { void yonlen(`${KAPANIS_EVI}?emir=${String(o.kayitNo)}`); }}>Kapanış onayları</Dugme>
       )}
       <Menu etiket={`${o.no} işlemleri`} metin="İşlemler" ogeler={ogeler} />
-      <OnayPenceresi
-        acik={iptal} baslik={`${o.no} iptal edilsin mi?`} onayMetni="İptal et" tehlikeli yukleniyor={komut.mesgul} vazgec={() => { setIptal(false); }}
-        onayla={() => { setIptal(false); void komut.calistir('emir-iptal', { id: o.id, surum: o.surum }, 'Emir iptal edildi.'); }}
-      >
-        <p>Emir iptal edilir; plandan ve terminalden kalkar.</p>
-      </OnayPenceresi>
+      <IptalPenceresi emir={o} acik={iptal} kapat={() => { setIptal(false); }} komut={komut} />
       <ArsivPenceresi emir={o} acik={arsiv} kapat={() => { setArsiv(false); }} komut={komut} />
     </>
   );

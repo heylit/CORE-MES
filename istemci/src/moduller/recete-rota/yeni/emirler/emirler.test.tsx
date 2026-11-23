@@ -308,20 +308,92 @@ describe('R3 Üretim emirleri: komutlar', () => {
     expect(screen.queryByRole('menuitem', { name: 'İptal et' })).toBeNull();
   });
 
+  const ONIZLEME_BOS = { surum: 1, altEmirler: [], hazirlikGorevi: 0, satinAlmaTalepleri: [], engel: null };
+  const altEmir = (id: number, no: string, ek: Record<string, unknown> = {}) => ({
+    id, emirNo: no, ustEmirNo: null, tur: 'parti', baslangicOpNo: 10, birlesmeOpNo: null, adet: 40, durum: 'planli', baslamis: false, ...ek,
+  });
+  const iptalPenceresiAc = async (onizleme: unknown, ek: Record<string, () => Response> = {}) => {
+    const istekler = sunucuKur(YONETICI, { yazmalar: { 'GET /adimli-emirler/61/iptal-onizleme': () => json(200, onizleme), ...ek } });
+    const b = await sayfa();
+    fireEvent.click(within(b).getByRole('button', { name: 'UE-0001 işlemleri' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'İptal et' }));
+    return { istekler, kutu: await screen.findByRole('dialog', { name: /UE-0001 iptal/ }) };
+  };
+
+  it('3576: alt emirli emir alt emirleriyle iptal edilir; pencere listeyi, kapanacak görevleri ve satın alma uyarısını gösterir, komut görülen listeyi taşır', async () => {
+    const { istekler, kutu } = await iptalPenceresiAc(
+      { ...ONIZLEME_BOS, altEmirler: [altEmir(62, 'UE-0001-1'), altEmir(63, 'UE-0001-1-1', { ustEmirNo: 'UE-0001-1', adet: 10 }), altEmir(64, 'UE-0001-2', { tur: 'kol', baslangicOpNo: 20, birlesmeOpNo: 40, durum: 'taslak' })], hazirlikGorevi: 2, satinAlmaTalepleri: ['ST-0001', 'ST-0002', 'ST-0003', 'ST-0004'].map((no, i) => ({ id: i === 3 ? null : `kimlik-${String(i)}`, no })) },
+      { 'POST /adimli-emirler/61/iptal': () => json(200, {}) },
+    );
+    await within(kutu).findByText(/3 alt emri/);
+    expect(within(kutu).getByRole('region', { name: 'Alt emirler' })).toBeTruthy();
+    expect(within(kutu).getByText('Kol (OP 20→40)')).toBeTruthy();
+    expect(within(kutu).getByText(/UE-0001-1 altında/)).toBeTruthy();
+    expect(within(kutu).getByText('Bu emirlerin 2 hazırlık görevi kapanır.')).toBeTruthy();
+    expect(within(kutu).getByText(/4 açık satın alma talebi var/)).toBeTruthy();
+    expect(within(kutu).getByRole('link', { name: 'ST-0002' }).getAttribute('href')).toBe('/satin-alma/talepler?talep=kimlik-1');
+    expect(within(kutu).getByRole('link', { name: 'ST-0002' }).getAttribute('target')).toBe('_blank');
+    expect(document.activeElement).toBe(within(kutu).getByRole('button', { name: 'Vazgeç' }));
+    fireEvent.click(within(kutu).getByRole('button', { name: 'Alt emirleriyle iptal et (4 emir)' }));
+    await waitFor(() => expect(istekler.find((i) => i.yol === '/adimli-emirler/61/iptal')?.govde).toEqual({ surum: 1, altlariyla: true, altEmirIdleri: [62, 63, 64] }));
+    await screen.findByText('4 emir iptal edildi: UE-0001 ve 3 alt emri.');
+  });
+
+  it('3576: alt emir başlamışsa pencere iptal edilemez der, engel metnini yazar, düğme erişilebilir biçimde pasiftir ve komut gitmez', async () => {
+    const engel = '2 alt emir başlamış: UE-0001-1, UE-0001-2. Her birini bitirin ya da arşive alın.';
+    const { istekler, kutu } = await iptalPenceresiAc({ ...ONIZLEME_BOS, altEmirler: [altEmir(62, 'UE-0001-1', { baslamis: true, durum: 'basladi' }), altEmir(64, 'UE-0001-2', { baslamis: true, durum: 'basladi' })], engel });
+    await within(kutu).findByText(engel);
+    expect(screen.getByRole('dialog', { name: 'UE-0001 iptal edilemez' })).toBeTruthy();
+    expect(within(kutu).getAllByText('Engel: başlamış')).toHaveLength(2);
+    const dugme = within(kutu).getByRole('button', { name: 'Alt emirleriyle iptal et (3 emir)' });
+    expect(dugme.getAttribute('aria-disabled')).toBe('true');
+    expect(dugme.getAttribute('aria-describedby')).toBe(within(kutu).getByText(engel).closest('p')?.id);
+    expect(document.activeElement?.textContent).toBe('Kapat');
+    fireEvent.click(dugme);
+    expect(istekler.some((i) => i.yol === '/adimli-emirler/61/iptal')).toBe(false);
+  });
+
+  it('3576: sunucu reddederse pencere kapanmaz, neden pencerede görünür, liste yenilenir', async () => {
+    let okuma = 0;
+    const { istekler, kutu } = await iptalPenceresiAc({}, {
+      'POST /adimli-emirler/61/iptal': () => json(409, { kod: 'CAKISMA', mesaj: 'Alt emir listesi değişti; pencereyi yenileyip yeniden deneyin.' }),
+      'GET /adimli-emirler/61/iptal-onizleme': () => { okuma += 1; return json(200, { ...ONIZLEME_BOS, surum: 1 + okuma, altEmirler: okuma === 1 ? [altEmir(62, 'UE-0001-1')] : [altEmir(62, 'UE-0001-1'), altEmir(65, 'UE-0001-3')] }); },
+    });
+    fireEvent.click(await within(kutu).findByRole('button', { name: 'Alt emirleriyle iptal et (2 emir)' }));
+    const uyari = await within(kutu).findByRole('alert');
+    expect(uyari.textContent).toContain('İptal edilmedi: Alt emir listesi değişti');
+    expect(screen.getByRole('dialog', { name: 'UE-0001 iptal edilsin mi?' })).toBeTruthy();
+    await within(kutu).findByRole('button', { name: 'Alt emirleriyle iptal et (3 emir)' });
+    expect(istekler.filter((i) => i.yol.endsWith('/iptal-onizleme')).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('3576: alt emirler okunamazsa iptal verilemez', async () => {
+    const istekler = sunucuKur(YONETICI, { yazmalar: { 'GET /adimli-emirler/61/iptal-onizleme': () => json(500, { kod: 'SUNUCU', mesaj: 'Sunucu hatası.' }) } });
+    const b = await sayfa();
+    fireEvent.click(within(b).getByRole('button', { name: 'UE-0001 işlemleri' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'İptal et' }));
+    const kutu = await screen.findByRole('dialog', { name: 'UE-0001 iptal edilsin mi?' });
+    await within(kutu).findByText(/Alt emirler okunamadı/);
+    const dugme = within(kutu).getByRole('button', { name: 'İptal et' });
+    expect((dugme as HTMLButtonElement).disabled).toBe(true);
+    expect(istekler.some((i) => i.yol === '/adimli-emirler/61/iptal')).toBe(false);
+  });
+
   it('iptal onay penceresinden sonra gider', async () => {
-    const istekler = sunucuKur(YONETICI, { yazmalar: { 'POST /adimli-emirler/61/iptal': () => json(200, {}) } });
+    const istekler = sunucuKur(YONETICI, { yazmalar: { 'POST /adimli-emirler/61/iptal': () => json(200, {}), 'GET /adimli-emirler/61/iptal-onizleme': () => json(200, ONIZLEME_BOS) } });
     const b = await sayfa();
     expect(within(b).queryByRole('button', { name: 'İptal et' })).toBeNull();
     fireEvent.click(within(b).getByRole('button', { name: 'UE-0001 işlemleri' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'İptal et' }));
     const pencere = await screen.findByRole('dialog', { name: 'UE-0001 iptal edilsin mi?' });
     expect(yazmalar(istekler).some((i) => i.yol.endsWith('/iptal'))).toBe(false);
+    await waitFor(() => expect((within(pencere).getByRole('button', { name: 'İptal et' }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(within(pencere).getByRole('button', { name: 'İptal et' }));
     await waitFor(() => expect(istekler.find((i) => i.yol === '/adimli-emirler/61/iptal')?.govde).toEqual({ surum: 1 }));
   });
 
   it("iptalden sonra Üretim Emirleri'nin listesi ve ayrıntısı yeniden okunur; iptal edilen emir sayfa yenilenmeden listeden kalkar", async () => {
-    sunucuKur(YONETICI, { yazmalar: { 'POST /adimli-emirler/61/iptal': () => json(200, {}) } });
+    sunucuKur(YONETICI, { yazmalar: { 'POST /adimli-emirler/61/iptal': () => json(200, {}), 'GET /adimli-emirler/61/iptal-onizleme': () => json(200, ONIZLEME_BOS) } });
     const istemci = emirSayfasiAc();
     const liste = ['uretim-emirleri', 'liste', ''] as const;
     const ayrinti = ['uretim-emirleri', 'ayrinti', 61] as const;
@@ -330,7 +402,9 @@ describe('R3 Üretim emirleri: komutlar', () => {
     const b = await screen.findByRole('region', { name: 'Emir sayfası' });
     fireEvent.click(await within(b).findByRole('button', { name: 'UE-0001 işlemleri' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'İptal et' }));
-    fireEvent.click(within(await screen.findByRole('dialog', { name: 'UE-0001 iptal edilsin mi?' })).getByRole('button', { name: 'İptal et' }));
+    const kutu = await screen.findByRole('dialog', { name: 'UE-0001 iptal edilsin mi?' });
+    await waitFor(() => expect((within(kutu).getByRole('button', { name: 'İptal et' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(within(kutu).getByRole('button', { name: 'İptal et' }));
     await screen.findByText('Emir iptal edildi.');
     expect(istemci.getQueryState(liste)?.isInvalidated).toBe(true);
     expect(istemci.getQueryState(ayrinti)?.isInvalidated).toBe(true);

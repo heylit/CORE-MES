@@ -294,3 +294,7 @@ small.tc-rr3-plan-alt[data-ton="uyari"] { color: var(--hold); }
   .tc-rr3-sayfa-adim .tc-rr3-adimlar .tc-rr3-eylemler { grid-column: 2 / -1; justify-content: flex-start; }
   .tc-rr3-sayfa-adim .tc-rr3-adimlar .tc-rr3-eylemler > * { justify-content: flex-start; }
 }
+/* 3576: iptal penceresinin alt emir listesi; uzun listede kendi içinde kayar, düğme şeridi pencerede sabit kalır. */
+.tc-rr3-iptal-liste { max-height: calc(var(--dokunma) * 6); overflow: auto; border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); min-width: 0; }
+.tc-rr3-iptal-ust { color: var(--faint); font-size: var(--yazi-xs); }
+.tc-rr3-uyari-kutu[data-ton="uyari"] { border-color: var(--hazard); }

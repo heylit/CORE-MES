@@ -38,6 +38,13 @@ describe('Bölme komutu sahibinin adımına çevrilir; uygunluğa Üretim Emirle
   };
   const hazirla = (ad: string, girdi: Record<string, unknown>) => EMIR_KOMUTLARI[ad]!.hazirla(girdi);
 
+  it('3576: iptal gövdesi bayraksız yalnız sürümdür; alt emirleriyle iptalde pencerenin gördüğü alt emirler gider', async () => {
+    expect(await hazirla('emir-iptal', { id: 1, surum: 3 })).toEqual({ yol: '/adimli-emirler/1/iptal', govde: { surum: 3 } });
+    expect((await hazirla('emir-iptal', { id: 1, surum: 3, altlariyla: true, altEmirIdleri: [4, 5] })).govde).toEqual({ surum: 3, altlariyla: true, altEmirIdleri: [4, 5] });
+    await expect(hazirla('emir-iptal', { id: 1, surum: 3, altlariyla: true, altEmirIdleri: [0] })).rejects.toThrow('Geçersiz alt emir.');
+  });
+
+
   it('kolsuz parti bitmemiş ilk adımdan ayrılır; sonraki adım başlamış olsa da istek gider, karar sahibinindir', async () => {
     oku([kur(['tamam', 'calisiyor', 'calisiyor'])]);
     expect((await hazirla('emir-bol', { id: 1, adet: 2, surum: 3 })).govde).toEqual({ adimSira: 2, adet: 2, surum: 3, birlesmeOpNo: null });
