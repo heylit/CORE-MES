@@ -16,7 +16,7 @@ import { DalRozeti } from '../rotalar/PatlamisRota.tsx';
 import { IS_EMRI_DURUMU } from '#paylasilan/sozlesme/emir-durumu.ts';
 import {
   acikMi, adimDugumu, adimDurumu, altDugumAdimlari, adimPlani, canliAdimPlani, durumAdi, durumGosterimi, emirAdimlari, emirAraligi, ilerleme, planOzeti, planSirasi, plandaMi, rotaFarki, sureMetni, sureOzetiNedenleri, type AdimSureOzeti,
-  ONCELIK_ADI, emirTalepTaslagi, talepGunu, yeniOpNo, yururluktekiRevizyon, anaRotaMetni, anaRotasi, bolmeTurRotasi, tekRotaMetni, type AdimPlani, type EmirAdimi, type Emir,
+  ONCELIK_ADI, emirTalepTaslagi, talepKapsadiMi, talepGunu, yeniOpNo, yururluktekiRevizyon, anaRotaMetni, anaRotasi, bolmeTurRotasi, tekRotaMetni, type AdimPlani, type EmirAdimi, type Emir,
 } from './kurallar.ts';
 import type { UrunRevizyonlariCevabi } from '#paylasilan/sozlesme/rota.ts';
 import type { IhtiyacSatinAlma, MalzemeIhtiyaciCevabi, MalzemeIhtiyaciSatiri } from '#paylasilan/sozlesme/recete-rota.ts';
@@ -43,6 +43,9 @@ function satinAlmaHucresi(e: MalzemeIhtiyaciSatiri): ReactNode {
   if (s.asama === 'talep') return <Rozet ton="bilgi" gorunum="cizgi">Talep {s.no}{s.talepDurumu ? ` · ${TALEP_DURUMU[s.talepDurumu]}` : ''}</Rozet>;
   return <Rozet ton="tamam" gorunum="cizgi">Sipariş {s.no ?? ''}{s.termin ? ` · geliş ${tarih(s.termin)}` : ''}</Rozet>;
 }
+
+// Banner için kısa metin: "Talep SA-1" ya da "Sipariş SP-1".
+const satinAlmaHucreMetni = (e: MalzemeIhtiyaciSatiri): string => `${e.satinAlma?.asama === 'siparis' ? 'sipariş' : 'talep'} ${e.satinAlma?.no ?? ''}`.trim();
 
 interface Ozellikler {
   durum: RrDurumu;
@@ -544,6 +547,8 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki, komut, goster = 'hepsi'
   const ihtiyac = useQuery({
     queryKey: [...RR_ANAHTARI, 'malzeme-ihtiyaci', o.kayitNo, o.surum] as const,
     enabled: planda,
+    // Talep başka ekranda açılır; emre dönüşte eski cevap "talep yok" göstermesin.
+    refetchOnMount: 'always',
     queryFn: () => api.get<MalzemeIhtiyaciCevabi>(`/recete-rota/malzeme-ihtiyaci?emir=${String(o.kayitNo)}`),
   });
   const R = ihtiyac.data?.emirler.find((e) => e.emirId === o.kayitNo) ?? null;
@@ -663,18 +668,31 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki, komut, goster = 'hepsi'
   return (
     <section className="tc-rr3-plan" aria-label={`${o.no} planı`}>
       {adimGoster && ipuclari.length > 0 && <ul className="tc-rr3-mesajlar">{ipuclari.map((t) => <li key={t}>{t}</li>)}</ul>}
-      {malzemeGoster && R && R.eksikler.length > 0 && (
-        <div className="tc-rr3-uyari-kutu" role="status">
-          <Simge ad="box" />
-          <span>
-            {R.eksikler.length} kalem eksik: {R.eksikler.map((e) => `${kod(e)} ${miktar(Number(e.alinacak), e.birim)}`).join(', ')}.
-            Stok, plan sırasında önceki emirlere ayrıldıktan sonra kalan miktara göre hesaplanır.
-          </span>
-          {yetki.talepAc && <Dugme simge="cart" onClick={() => {
-            void yonlen(TALEP_YOLU, { state: { taslak: emirTalepTaslagi(o.no, R.eksikler, talepGunu(plan.tur === 'plan' ? plan.ilk : null, o.due)), uretimEmriId: o.kayitNo } });
-          }}>Satın alma talebi aç</Dugme>}
-        </div>
-      )}
+      {malzemeGoster && R && R.eksikler.length > 0 && (() => {
+        // Her eksik kalemin talebi ya da siparişi açıksa banner bilgidir, düğme yoktur; kısmen kapsanmışta düğme kalır (taslak yalnız kapsanmayanı taşır).
+        const kalan = R.eksikler.filter((e) => !talepKapsadiMi(e));
+        if (kalan.length === 0) {
+          return (
+            <div className="tc-rr3-uyari-kutu" role="status">
+              <Simge ad="box" />
+              <span>Talep açıldı: {R.eksikler.map((e) => `${kod(e)} ${satinAlmaHucreMetni(e)}`).join(', ')}. Durum Satın alma sütunundadır.</span>
+            </div>
+          );
+        }
+        return (
+          <div className="tc-rr3-uyari-kutu" role="status">
+            <Simge ad="box" />
+            <span>
+              {R.eksikler.length} kalem eksik: {R.eksikler.map((e) => `${kod(e)} ${miktar(Number(e.alinacak), e.birim)}`).join(', ')}.
+              {kalan.length < R.eksikler.length ? ` ${R.eksikler.length - kalan.length} kalem için talep açıldı.` : ''}
+              {' '}Stok, plan sırasında önceki emirlere ayrıldıktan sonra kalan miktara göre hesaplanır.
+            </span>
+            {yetki.talepAc && <Dugme simge="cart" onClick={() => {
+              void yonlen(TALEP_YOLU, { state: { taslak: emirTalepTaslagi(o.no, R.eksikler, talepGunu(plan.tur === 'plan' ? plan.ilk : null, o.due)), uretimEmriId: o.kayitNo } });
+            }}>Satın alma talebi aç</Dugme>}
+          </div>
+        );
+      })()}
       {adimGoster && (<>
       {goster === 'hepsi' && <h4>Adımlar</h4>}
       {satirEki ? satirEki({ satirlar: tabloSatirlari, ekleme: araya === undefined ? undefined : { acik: araya.acik, ac: araya.ac, panel: araya.panel } }) : (
