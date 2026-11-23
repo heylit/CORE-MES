@@ -2,7 +2,7 @@ import { useDeferredValue, useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import type {
-  BagGovdesi, BelgeAyrintisi, BelgeGuncelleGovdesi, BelgeListesiCevabi, BelgeOlusturGovdesi, BelgeTuru, Kullanim, MalzemeSecimiCevabi, Revizyon,
+  BagGovdesi, BelgeAyrintisi, BelgeGuncelleGovdesi, BelgeListesiCevabi, BelgeOlusturGovdesi, BelgeSatiri, BelgeTuru, Kullanim, MalzemeSecimiCevabi, Revizyon,
   RevizyonEkleGovdesi, TurevBagGovdesi,
 } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import { CokSatir, Dugme, Girdi, Pencere, Secim } from '../../ortak/arayuz/index.ts';
@@ -13,6 +13,7 @@ import { anahtarlar } from './anahtarlar.ts';
 import { AyniDosyaPenceresi } from './AyniDosya.tsx';
 import { useDosyaliKomut, useKomut } from './komut.ts';
 import { revKoduMetni } from './revizyon-kodu.ts';
+import { KaynakSecimi, PdfDegilSebebi, TurevAdayiSecici, type TurevKaynagiSecenegi } from './TurevKaynaklari.tsx';
 import { KISA_AD_ZORUNLU, KullanimSecimi, kisaAdGerekli, turevAdi } from './Turev.tsx';
 import { BELGE_TURLERI, IZINLI_DOSYA_TURLERI, TUR_ADI, boyutMetni, dosyaTuruBul, izinliMetni, kabulMetni } from './gosterim.ts';
 
@@ -213,16 +214,19 @@ export function IstasyonaBagla({ belge, kapat }: { belge: BelgeAyrintisi; kapat:
   );
 }
 
-// 3468-2 "Türev ekle": bilgisayardan yüklenen dosya orijinalin bu revizyonunun türevi olarak açılır (PDF düzenleyicinin kaydet
-// penceresiyle aynı alanlar). Revizyon kodu kaynağınkiyle başlar.
+// 3468-2 "Türev ekle", 3609: orijinalin bu revizyonundan türev üç kaynaktan açılır (ortak alan Kullanım): bilgisayardan yüklenen
+// dosya, bu revizyonun PDF düzenleyicide düzenlenmesi ya da Çizim Merkezi'nde daha önce kaydedilmiş bir PDF'in türev olarak
+// bağlanması. Hangisi seçilirse seçilsin türev ayrı belgedir; orijinal değişmez.
 export function TurevEkle({ kaynak, revizyon, ilkKullanim, kapat }: {
   kaynak: BelgeAyrintisi; revizyon: Revizyon; ilkKullanim: Kullanim | null; kapat: () => void;
 }) {
   const yonlendir = useNavigate();
+  const [sekme, sekmeYaz] = useState<TurevKaynagiSecenegi>('yukle');
   const [kullanim, kullanimYaz] = useState<Kullanim | null>(ilkKullanim);
   const [kisaAd, kisaAdYaz] = useState('');
   const [not, notYaz] = useState('');
   const [dosya, dosyaYaz] = useState<File | null>(null);
+  const [aday, adayYaz] = useState<BelgeSatiri | null>(null);
   const ad = kullanim === null ? '' : turevAdi(kaynak.ad, kullanim, kisaAd);
   const komut = useDosyaliKomut(
     '/cizimler',
@@ -234,25 +238,75 @@ export function TurevEkle({ kaynak, revizyon, ilkKullanim, kapat }: {
     'Türev açılamadı',
     true,
   );
+  const baglama = useKomut(
+    `/cizimler/${String(aday?.id ?? 0)}/turev-bagla`,
+    (c) => { kapat(); void yonlendir(`/cizimler/belge/${String(c.id)}`); },
+    'Türev bağlanamadı',
+  );
   const red = dosyaReddi(dosya, kaynak.tur);
-  const kisaGerekli = kullanim !== null && kisaAdGerekli(kaynak.turevler ?? [], kullanim);
+  const pdfMi = revizyon.dosyaTuru === 'pdf';
+  const pdfKapali = sekme === 'duzenle' && !pdfMi;
+  // Bağlanan belgenin adı değişmez; kısa ad yalnız ad üreten iki yolda (yükleme, düzenleyici) sorulur.
+  const kisaGerekli = sekme !== 'kayitli' && kullanim !== null && kisaAdGerekli(kaynak.turevler ?? [], kullanim);
   const eksik = kullanim === null ? 'Kullanım seçin.' : kisaGerekli && kisaAd.trim() === '' ? KISA_AD_ZORUNLU : null;
+  const duzenleyiciyiAc = () => {
+    if (kullanim === null) return;
+    void yonlendir(`/cizimler/belge/${String(kaynak.id)}/duzenle/${String(revizyon.id)}`, { state: { turev: { kullanim, kisaAd } } });
+  };
+  const baglaGonder = () => {
+    if (aday === null || kullanim === null) return;
+    const govde: TurevBagGovdesi = { kaynakBelgeId: kaynak.id, kaynakRevizyonId: revizyon.id, kullanim, surum: aday.surum };
+    baglama.gonder(govde);
+  };
+  // Kapalı düğmenin görünür sebebi: düğme aria-describedby ile ona bağlanır.
+  const eksikMetni = eksik === KISA_AD_ZORUNLU ? 'Kısa ad girin.' : eksik;
+  const kapaliSebep: string | null = pdfKapali ? null
+    : sekme === 'yukle' ? (!dosya ? 'Dosya seçin.' : red ?? eksikMetni)
+      : sekme === 'duzenle' ? eksikMetni
+        : aday === null ? 'Bir PDF seçin.' : kullanim === null ? 'Kullanım seçin.' : null;
+  const sebepKimligi = 'turev-kapali-sebep';
+  const bagli = kapaliSebep === null ? undefined : sebepKimligi;
+  const alt = pdfKapali
+    ? <Dugme tur="birincil" simge="upload" onClick={() => { sekmeYaz('yukle'); }}>Yükle'ye geç</Dugme>
+    : sekme === 'yukle'
+      ? <Dugme tur="birincil" simge="upload" yukleniyor={komut.yukleniyor} disabled={kapaliSebep !== null} aria-describedby={bagli} onClick={() => { if (dosya) komut.gonder(dosya); }}>Yükle</Dugme>
+      : sekme === 'duzenle'
+        ? <Dugme tur="birincil" simge="edit" disabled={kapaliSebep !== null} aria-describedby={bagli} onClick={duzenleyiciyiAc}>PDF düzenleyiciyi aç</Dugme>
+        : <Dugme tur="birincil" simge="layers" yukleniyor={baglama.yukleniyor} disabled={kapaliSebep !== null} aria-describedby={bagli} onClick={baglaGonder}>Bağla</Dugme>;
   return (
     <Pencere
       acik
       tur="yan"
       kapat={kapat}
       baslik={`${kaynak.ad} · Rev ${revKoduMetni(revizyon.revKodu)} · türev ekle`}
-      alt={<Dugme tur="birincil" simge="upload" yukleniyor={komut.yukleniyor} disabled={!dosya || red !== null || eksik !== null} onClick={() => { if (dosya) komut.gonder(dosya); }}>Yükle</Dugme>}
+      alt={<>{kapaliSebep !== null && <span id={sebepKimligi} className="tc-cz-kapali-sebep" role="status">{kapaliSebep}</span>}{alt}</>}
     >
       <div className="tc-cz-form">
-        <KullanimSecimi deger={kullanim} sec={kullanimYaz} />
-        <TurevAdAlani kisaAd={kisaAd} yaz={kisaAdYaz} gerekli={kisaGerekli} ad={ad} />
-        <DosyaAlani tur={kaynak.tur} dosya={dosya} sec={dosyaYaz} hata={red} />
-        <Girdi etiket="Revizyon notu" value={not} maxLength={300} onChange={(e) => { notYaz(e.target.value); }} ipucu="Türev ayrı belgedir; ilk revizyonu taslak açılır. Orijinal değişmez." />
-        {eksik !== null && eksik !== KISA_AD_ZORUNLU && dosya !== null && <p className="tc-cz-ipucu" role="status">{eksik}</p>}
-        <Ilerleme oran={komut.ilerleme} />
-        {komut.hata !== null && <p className="tc-cz-hata" role="alert">{komut.hata}</p>}
+        <KaynakSecimi secili={sekme} sec={sekmeYaz} duzenleKapali={!pdfMi} />
+        {pdfKapali && <PdfDegilSebebi yukleyeGec={() => { sekmeYaz('yukle'); }} />}
+        {!pdfKapali && <KullanimSecimi deger={kullanim} sec={kullanimYaz} />}
+        {sekme === 'yukle' && (
+          <>
+            <TurevAdAlani kisaAd={kisaAd} yaz={kisaAdYaz} gerekli={kisaGerekli} ad={ad} />
+            <DosyaAlani tur={kaynak.tur} dosya={dosya} sec={dosyaYaz} hata={red} />
+            <Girdi etiket="Revizyon notu" value={not} maxLength={300} onChange={(e) => { notYaz(e.target.value); }} ipucu="Türev ayrı belgedir; ilk revizyonu taslak açılır. Orijinal değişmez." />
+            <Ilerleme oran={komut.ilerleme} />
+            {komut.hata !== null && <p className="tc-cz-hata" role="alert">{komut.hata}</p>}
+          </>
+        )}
+        {sekme === 'duzenle' && pdfMi && (
+          <>
+            <TurevAdAlani kisaAd={kisaAd} yaz={kisaAdYaz} gerekli={kisaGerekli} ad={ad} />
+            <p className="tc-cz-ipucu">Bu revizyonun PDF'i düzenleyicide açılır. Kaydedince türev olarak ayrı belge açılır; kullanım ve kısa ad Kaydet penceresine hazır gelir. Orijinal değişmez.</p>
+          </>
+        )}
+        {sekme === 'kayitli' && (
+          <>
+            <p className="tc-cz-ipucu">Çizim Merkezi'nde daha önce düzenlenip kaydedilmiş bir PDF bu revizyonun türevi olarak bağlanır. Dosyası, adı ve revizyonları değişmez.</p>
+            <TurevAdayiSecici kaynakId={kaynak.id} tur={kaynak.tur} secili={aday} sec={adayYaz} />
+            {baglama.hata !== null && <p className="tc-cz-hata" role="alert">{baglama.hata}</p>}
+          </>
+        )}
       </div>
       {komut.ayni !== null && <AyniDosyaPenceresi {...komut.ayni} devamMetni="Yine de türev aç" />}
     </Pencere>

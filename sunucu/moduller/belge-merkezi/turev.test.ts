@@ -140,6 +140,17 @@ describe('çizim türevleri (3468-2, gerçek PostgreSQL)', () => {
     assert.equal(c.statusCode, 400, c.body);
     assert.match(c.body, new RegExp(ILETILER.turevKendisi));
 
+    // 3609: farklı türdeki belge türev yapılamaz (bağlama ve açılış).
+    const rapor = await gonder(yonetici, '/cizimler', { ad: 'ORN-Rapor', tur: 'rapor', ozet: await yukle(pdf()), dosyaAdi: 'orn-rapor.pdf' });
+    assert.equal(rapor.statusCode, 200, rapor.body);
+    const raporBelge = rapor.json<BelgeAyrintisi>();
+    c = await gonder(yonetici, `/cizimler/${raporBelge.id}/turev-bagla`, { kaynakBelgeId: b.id, kaynakRevizyonId: b.revizyonlar[0]!.id, kullanim: 'diger', surum: raporBelge.surum });
+    assert.equal(c.statusCode, 400, c.body);
+    assert.match(c.body, new RegExp(ILETILER.turevTuruFarkli));
+    c = await gonder(yonetici, '/cizimler', { ad: 'ORN-Rapor türevi', tur: 'rapor', ozet: await yukle(pdf()), dosyaAdi: 'orn.pdf', turev: { kaynakBelgeId: b.id, kaynakRevizyonId: b.revizyonlar[0]!.id, kullanim: 'diger' } });
+    assert.equal(c.statusCode, 400, c.body);
+    assert.match(c.body, new RegExp(ILETILER.turevTuruFarkli));
+
     c = await ac('ORN-x', { kaynakBelgeId: 999999, kaynakRevizyonId: b.revizyonlar[0]!.id, kullanim: 'kalite' });
     assert.equal(c.statusCode, 400, c.body);
     assert.match(c.body, new RegExp(ILETILER.turevKaynakYok));

@@ -178,3 +178,31 @@
 .tc-cz-liste-turev-alt { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); font-size: var(--yazi-xs); color: var(--muted); }
 .tc-cz-suzgecler { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-3); }
 @media (min-width: 768px) { .tc-cz-suzgecler { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); } }
+/* 3609 Türev ekle > Çizim Merkezi'nden seç */
+.tc-cz-aday-kutu { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; }
+.tc-cz-aday-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--b-2); }
+.tc-cz-aday {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--b-3); row-gap: var(--b-1); align-items: center;
+  min-height: var(--dokunma); padding: var(--b-2) var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-1); background: var(--panel); cursor: pointer;
+}
+.tc-cz-aday input { margin: 0; }
+.tc-cz-aday-secili { border-color: var(--hazard); background: var(--panel2); }
+.tc-cz-aday:focus-within { outline: 2px solid var(--hazard); outline-offset: 1px; }
+.tc-cz-aday-ad { font-weight: 600; overflow-wrap: anywhere; min-width: 0; color: var(--ink); }
+.tc-cz-aday-alt { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); font-size: var(--yazi-xs); color: var(--muted); }
+/* 3609 kaynak seçimi: üç eşit sütun; dar ekranda ikon üstte, etiket altta */
+.tc-cz-kaynaklar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--b-2); margin: 0; padding: 0; border: 0; min-width: 0; }
+.tc-cz-kaynak {
+  position: relative; display: flex; align-items: center; justify-content: center; gap: var(--b-2); min-height: var(--dokunma); padding: var(--b-2);
+  border: 1px solid var(--edge); border-radius: var(--yari-1); background: var(--panel); font-weight: 700; text-align: center; cursor: pointer; min-width: 0;
+}
+.tc-cz-kaynak input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.tc-cz-kaynak-secili { border-color: var(--hazard); background: var(--panel2); }
+.tc-cz-kaynak-soluk { opacity: 0.55; }
+.tc-cz-kaynak:focus-within { outline: 2px solid var(--hazard); outline-offset: 1px; }
+@media (max-width: 767px) { .tc-cz-kaynak { flex-direction: column; gap: var(--b-1); font-size: var(--yazi-s); } }
+.tc-cz-sebep { display: flex; flex-direction: column; align-items: flex-start; gap: var(--b-3); padding: var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-1); background: var(--panel2); }
+.tc-cz-sebep p { margin: 0; }
+.tc-cz-kapali-sebep { margin-right: auto; font-size: var(--yazi-xs); color: var(--muted); }
+.tc-cz-kaynak-tik { position: absolute; top: var(--b-1); right: var(--b-1); display: inline-flex; }
+.tc-cz-aday-secili-satir { margin: 0; overflow-wrap: anywhere; }
