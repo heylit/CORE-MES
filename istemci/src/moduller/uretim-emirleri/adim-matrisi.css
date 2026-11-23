@@ -39,7 +39,11 @@
 .tc-am-tablo { border-collapse: separate; border-spacing: 0; inline-size: 100%; font-size: var(--yazi-s); }
 .tc-am-tablo th, .tc-am-tablo td { padding: 0; border-bottom: thin solid var(--edge); border-right: thin solid var(--edge); background: var(--panel-solid); text-align: left; vertical-align: middle; }
 .tc-am-tablo thead th { position: sticky; top: 0; z-index: 2; background: linear-gradient(var(--panel2), var(--panel2)), var(--panel-solid); }
-.tc-am-tablo .tc-am-sabit { position: sticky; left: 0; z-index: 1; min-inline-size: calc(var(--b-6) * 4.5); max-inline-size: calc(var(--b-6) * 6); background: var(--panel-solid); }
+.tc-am-tablo .tc-am-sabit { position: sticky; left: 0; z-index: 1; min-inline-size: calc(var(--b-6) * 4.5); max-inline-size: calc(var(--b-6) * 6); background: var(--panel-solid);
+  inline-size: calc(var(--b-6) * 6); overflow: hidden; }
+/* Uzun emir no ve ürün adı satır başlığını taşırıp yandaki hücrenin tıklamasını yakalamasın: tek sütun, sarar. */
+.tc-am-sabit .tc-am-baslik, .tc-am-sabit .tc-am-satir { grid-template-columns: minmax(0, 1fr); }
+.tc-am-sabit .tc-emir-kod, .tc-am-sabit .tc-am-urun { min-inline-size: 0; overflow-wrap: anywhere; white-space: normal; }
 .tc-am-tablo thead .tc-am-sabit { z-index: 3; background: linear-gradient(var(--panel2), var(--panel2)), var(--panel-solid); padding: var(--b-2) var(--b-3); }
 .tc-am-baslik {
   display: grid; gap: 0; inline-size: 100%; min-block-size: var(--dokunma); padding: var(--b-1) var(--b-2); text-align: left;
