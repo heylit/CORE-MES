@@ -8,7 +8,7 @@ import { Dugme, DurumKutusu, Girdi, Pencere } from '../../ortak/arayuz/index.ts'
 import { api } from '../../ortak/veri/api.ts';
 import { useDogrudanBasim } from '../etiket-merkezi/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { EmirSecici } from './EmirSecici.tsx';
+import { EmirOkutSecici, EmirSecici } from './EmirSecici.tsx';
 import { birimliMiktar, zamanMetni } from './gorunum.ts';
 import { hataMetni, korumaliPost, useIslem, useStokKomutu } from './ortak.tsx';
 import './stok.css';
@@ -181,6 +181,7 @@ export function RefakatAcPenceresi({ kaynak, ad, kapat }: { kaynak: { lotKodu: s
   const [emir, setEmir] = useState('');
   const [adet, setAdet] = useState('');
   const [kart, setKart] = useState<number | null>(null);
+  const [adetAcik, setAdetAcik] = useState(false);
   const adetGecerli = adet === '' || /^[1-9]\d{0,5}$/.test(adet);
   const sepetten = 'sepetSatirId' in kaynak;
   const basim = useDogrudanBasim('refakat-partisi');
@@ -193,18 +194,24 @@ export function RefakatAcPenceresi({ kaynak, ad, kapat }: { kaynak: { lotKodu: s
   if (kart !== null) return <RefakatKartPenceresi id={kart} kapat={kapat} />;
   return (
     <Pencere acik kapat={kapat} baslik={sepetten ? 'Refakat kartına dönüştür' : 'Refakat kartına geç'} tur="yan"
-      alt={<Dugme tur="birincil" simge={sepetten ? 'printer' : 'tag'} disabled={emir === '' || !adetGecerli} yukleniyor={ac.komut.isPending}
-        onClick={() => ac.komut.mutate({ uretimEmriId: Number(emir), ...kaynak, ...(adet === '' ? {} : { adet: Number(adet) }) })}>{sepetten ? 'Dönüştür ve bas' : 'Kartı aç'}</Dugme>}>
+      alt={<Dugme tur="birincil" simge={sepetten ? 'printer' : 'tag'} disabled={emir === '' || (adetAcik && !adetGecerli)} yukleniyor={ac.komut.isPending}
+        onClick={() => ac.komut.mutate({ uretimEmriId: Number(emir), ...kaynak, ...(!adetAcik || adet === '' ? {} : { adet: Number(adet) }) })}>{sepetten ? 'Dönüştür ve bas' : 'Kartı aç'}</Dugme>}>
       <div className="tc-stok-form">
         <p className="tc-stok-not">{ad}. {sepetten
           ? 'Lot bu emrin refakat kartına dönüşür; satır sepette kalır ve kartla teslim edilir. Lot etiketi depoda kalır.'
           : 'Lot bu emre bağlanır; bundan sonra malzeme refakat kartıyla teslim edilir.'}</p>
-        <EmirSecici deger={emir} degistir={setEmir} zorunlu />
-        {/* 3337-3 a: kart adedi açılışta bir kez yazılır, sonra değişmez; boşsa sunucu lot miktarından ve emrin kalanından önerir. */}
-        <Girdi etiket="Karttaki parça adedi" inputMode="numeric" value={adet} onChange={(o) => setAdet(o.target.value.trim())}
-          ipucu={sepetten
-            ? 'Kart bu kadar parça taşır, sonra değişmez. Boşsa satırdaki miktar reçetede parça başına düşen malzemeye bölünür; emrin kartsız kalanını geçmez.'
-            : 'Kart bu kadar parça taşır, sonra değişmez. Boşsa emrin kartsız kalan parça adedi yazılır.'} {...(adetGecerli ? {} : { hata: 'Pozitif tam sayı yazın.' })} />
+        <EmirOkutSecici deger={emir} degistir={setEmir} />
+        {/* 3337-3 a: kart adedi açılışta bir kez yazılır, sonra değişmez; varsayılan otomatiktir, sunucu lot miktarından ve emrin kalanından önerir. */}
+        {adetAcik
+          ? <Girdi etiket="Karttaki parça adedi" inputMode="numeric" value={adet} onChange={(o) => setAdet(o.target.value.trim())}
+            ipucu="Kart bu kadar parça taşır, sonra değişmez. Boş bırakırsanız otomatik yazılır." {...(adetGecerli ? {} : { hata: 'Pozitif tam sayı yazın.' })} />
+          : <p className="tc-stok-not"><strong>Karta yazılacak: otomatik.</strong> {sepetten
+            ? 'Satırdaki miktar reçetede parça başına düşen malzemeye bölünür; emrin kartsız kalanını geçmez.'
+            : 'Emrin kartsız kalan parça adedi yazılır.'}</p>}
+        <div className="tc-stok-dugmeler">
+          <Dugme tur="ikincil" simge={adetAcik ? 'x' : 'edit'} aria-expanded={adetAcik}
+            onClick={() => { if (adetAcik) setAdet(''); setAdetAcik(!adetAcik); }}>{adetAcik ? 'Otomatiğe dön' : 'Adedi elle değiştir'}</Dugme>
+        </div>
         {ac.komut.isError && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{hataMetni(ac.komut.error)}</p>}
       </div>
     </Pencere>

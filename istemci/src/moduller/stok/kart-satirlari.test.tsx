@@ -26,6 +26,11 @@ const satir = (x: Partial<RefakatKartSatiri>): RefakatKartSatiri => ({
 });
 const KUTU = { gelenler: [], gonderdiklerim: [], isteklerim: [], istasyonlar: [{ id: 4, kod: 'F2', ad: 'Freze 2' }], hedefIstasyonlar: [], depoKonumlari: [], araAlanlar: [], buradakiIstasyonId: 4, harita: null, zemin: null } satisfies TeslimKutusuCevabi;
 
+function emirOkut(kap: HTMLElement, kod: string) {
+  const alan = within(kap).getByRole('textbox', { name: 'Kod' });
+  fireEvent.change(alan, { target: { value: kod } });
+  fireEvent.submit(alan.closest('form')!);
+}
 function Adres() { const l = useLocation(); return <p>Adres {l.pathname}{l.search}</p>; }
 function ciz(icerik: React.ReactNode) {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -151,12 +156,227 @@ describe('Sepetim (Soru 133)', () => {
     const pencere = await screen.findByRole('dialog', { name: 'Refakat kartına dönüştür' });
     await within(pencere).findByRole('option', { name: /UE-7/ });
     fireEvent.change(within(pencere).getByRole('combobox', { name: /Üretim emri/ }), { target: { value: '7' } });
+    expect(within(pencere).queryByRole('textbox', { name: /Karttaki parça adedi/ })).toBeNull();
+    expect(within(pencere).getByText(/Karta yazılacak: otomatik/)).toBeTruthy();
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Adedi elle değiştir' }));
     const adet = within(pencere).getByRole('textbox', { name: /Karttaki parça adedi/ });
     fireEvent.change(adet, { target: { value: '0' } });
     expect(within(pencere).getByRole('button', { name: 'Dönüştür ve bas' })).toHaveProperty('disabled', true);
     fireEvent.change(adet, { target: { value: '4' } });
     fireEvent.click(within(pencere).getByRole('button', { name: 'Dönüştür ve bas' }));
     await waitFor(() => expect(istekler.find((i) => i.yol === '/stok/refakat-partileri/ac')?.govde).toEqual({ uretimEmriId: 7, sepetSatirId: 4, adet: 4 }));
+  });
+
+  it('3620-2: adet alanı kapalıyken gövdeye adet girmez; elle açılıp geri kapatılırsa yazılan adet atılır', async () => {
+    const istekler = sunucuKur({ ...OPERATOR, islemler: ['stok.istek', 'stok.transfer'] }, {
+      'GET /stok/sepet': () => json(200, { satirlar: [{ ...SATIR, id: 4, refakat: null }] }),
+      'GET /uretim-emirleri': () => json(200, { emirler: [{ id: 7, emirNo: 'UE-7', parcaNo: 'P-1', parcaAd: 'Deneme', durum: 'planli', adet: 10 }] }),
+      'POST /stok/refakat-partileri/ac': () => json(409, { kod: 'CAKISMA', mesaj: 'Deneme' }),
+    });
+    ciz(<DepoSepeti />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Refakat kartına dönüştür' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Refakat kartına dönüştür' });
+    await within(pencere).findByRole('option', { name: /UE-7/ });
+    fireEvent.change(within(pencere).getByRole('combobox', { name: /Üretim emri/ }), { target: { value: '7' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Adedi elle değiştir' }));
+    fireEvent.change(within(pencere).getByRole('textbox', { name: /Karttaki parça adedi/ }), { target: { value: '4' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Otomatiğe dön' }));
+    expect(within(pencere).queryByRole('textbox', { name: /Karttaki parça adedi/ })).toBeNull();
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Dönüştür ve bas' }));
+    await waitFor(() => expect(istekler.find((i) => i.yol === '/stok/refakat-partileri/ac')?.govde).toEqual({ uretimEmriId: 7, sepetSatirId: 4 }));
+  });
+
+  it('3620-2: emir etiketi okutulunca emir seçilir (kimlik ve numara biçimi); tanınmayan kod uyarır, liste yedek kalır', async () => {
+    sunucuKur({ ...OPERATOR, islemler: ['stok.istek', 'stok.transfer'] }, {
+      'GET /stok/sepet': () => json(200, { satirlar: [{ ...SATIR, id: 4, refakat: null }] }),
+      'GET /uretim-emirleri': () => json(200, { emirler: [
+        { id: 7, emirNo: 'UE-7', parcaNo: 'P-1', parcaAd: 'Deneme', durum: 'planli', adet: 10 },
+        { id: 8, emirNo: 'UE-8', parcaNo: 'P-2', parcaAd: 'Öteki', durum: 'planli', adet: 5 },
+        { id: 9, emirNo: 'UE-9', parcaNo: 'P-3', parcaAd: 'Kapalı', durum: 'tamamlandi', adet: 5 },
+      ] }),
+    });
+    ciz(<DepoSepeti />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Refakat kartına dönüştür' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Refakat kartına dönüştür' });
+    await within(pencere).findByRole('option', { name: /UE-7/ });
+    const emir = within(pencere).getByRole('combobox', { name: /Üretim emri/ });
+    emirOkut(pencere, 'UE:8');
+    await waitFor(() => expect((emir as HTMLSelectElement).value).toBe('8'));
+    expect(within(pencere).getByText('Emir seçildi: UE-8')).toBeTruthy();
+    emirOkut(pencere, 'UE-7');
+    await waitFor(() => expect((emir as HTMLSelectElement).value).toBe('7'));
+    expect(within(pencere).getByText('Emir seçildi: UE-7')).toBeTruthy();
+    fireEvent.change(emir, { target: { value: '8' } });
+    expect(within(pencere).queryByText(/Emir seçildi/)).toBeNull();
+    fireEvent.change(emir, { target: { value: '' } });
+    expect(within(pencere).queryByText(/Emir seçildi/)).toBeNull();
+    emirOkut(pencere, 'UE:9');
+    expect(await within(pencere).findByText(/açık emirler arasında yok/)).toBeTruthy();
+    expect((emir as HTMLSelectElement).value).toBe('');
+    emirOkut(pencere, 'LOT:5');
+    expect(await within(pencere).findByText(/üretim emri etiketi değil/)).toBeTruthy();
+    // ABD klavyesinin Türkçe düzende bozduğu ayraç (":" yerine "Ş") ortak okuyucu düzeltmesiyle çözülür.
+    emirOkut(pencere, 'UEŞ8');
+    await waitFor(() => expect((emir as HTMLSelectElement).value).toBe('8'));
+  });
+
+  describe('3620-2: sepette çok lot', () => {
+    const KARTSIZ_A = { ...SATIR, id: 4, refakat: null, partiId: 41, partiEtiketi: 'LT-A' };
+    const KARTSIZ_B = { ...SATIR, id: 5, refakat: null, partiId: 42, partiEtiketi: 'LT-B' };
+    const ACIK_YOK = { kartlar: [], sinirda: false };
+    const ACIK_KART = (partiId: number, etiket: string) => ({ refakat: { ...KART, id: 60 + partiId, uretimEmriId: 7, partiId, etiket } });
+    const EMIRLER = { emirler: [{ id: 7, emirNo: 'UE-7', parcaNo: 'P-1', parcaAd: 'Deneme', durum: 'planli', adet: 10 }] };
+    const DEPO: Kullanici = { ...OPERATOR, islemler: ['stok.istek', 'stok.transfer', 'etiket-merkezi.bas'] };
+
+    it('tek dokunuş her kartsız lota bir kart açar, açık kartı olan lot atlanır, kartlar tek baskıya gider', async () => {
+      cihazYazicisiKaydet('refakat', { yaziciId: 3, yaziciAd: 'Depo yazıcısı', sablonAnahtar: 'refakat-100x150', sablonAd: 'Refakat kartı 100x150' });
+      let sayac = 30;
+      const istekler = sunucuKur(DEPO, {
+        'GET /stok/sepet': () => json(200, { satirlar: [SATIR, KARTSIZ_A, KARTSIZ_B] }),
+        'GET /uretim-emirleri': () => json(200, EMIRLER),
+        'GET /stok/refakat-kartlari': () => json(200, ACIK_YOK),
+        'POST /stok/refakat-partileri/ac': () => json(200, { refakat: { ...KART, id: sayac++ } }),
+        'POST /etiket-merkezi/sablonlar/refakat-100x150/bas': () => json(200, { baskiId: 1, sonuc: 'gonderildi', ileti: null }),
+      });
+      ciz(<DepoSepeti />);
+      const dugme = await screen.findByRole('button', { name: '2 lot için kart aç ve bas' });
+      expect(screen.getByText(/Önce emri okutun ya da listeden seçin/)).toBeTruthy();
+      expect(screen.getByText(/Kartı olan 1 lot atlanır/)).toBeTruthy();
+      expect(dugme).toHaveProperty('disabled', true);
+      await screen.findByRole('option', { name: /UE-7/ });
+      emirOkut(document.body, 'UE:7');
+      await waitFor(() => expect(dugme).toHaveProperty('disabled', false));
+      fireEvent.click(dugme);
+      await waitFor(() => expect(istekler.filter((i) => i.yol === '/stok/refakat-partileri/ac').map((i) => i.govde)).toEqual([{ uretimEmriId: 7, sepetSatirId: 4 }, { uretimEmriId: 7, sepetSatirId: 5 }]));
+      await waitFor(() => expect(istekler.filter((i) => i.yol.startsWith('/etiket-merkezi/'))).toHaveLength(1));
+      expect(istekler.find((i) => i.yol.startsWith('/etiket-merkezi/'))?.govde).toMatchObject({ kayit: { tur: 'refakat-partisi', idler: [30, 31] } });
+    });
+
+    it('bir lot reddedilirse öteki yine açılır; hata sepet yenilense de görünür kalır, yalnız açılan basılır', async () => {
+      cihazYazicisiKaydet('refakat', { yaziciId: 3, yaziciAd: 'Depo yazıcısı', sablonAnahtar: 'refakat-100x150', sablonAd: 'Refakat kartı 100x150' });
+      let acildi = false;
+      const istekler = sunucuKur(DEPO, {
+        'GET /stok/sepet': () => json(200, { satirlar: [KARTSIZ_A, acildi ? { ...KARTSIZ_B, refakat: { id: 41, etiket: 'UE-7-P2' } } : KARTSIZ_B] }),
+        'GET /uretim-emirleri': () => json(200, EMIRLER),
+        'GET /stok/refakat-kartlari': () => json(200, ACIK_YOK),
+        'POST /stok/refakat-partileri/ac': (g) => {
+          if ((g as { sepetSatirId: number }).sepetSatirId === 4) return json(409, { kod: 'CAKISMA', mesaj: 'Emrin kartsız kalanı yetmiyor.' });
+          acildi = true;
+          return json(200, { refakat: { ...KART, id: 41 } });
+        },
+        'POST /etiket-merkezi/sablonlar/refakat-100x150/bas': () => json(200, { baskiId: 1, sonuc: 'gonderildi', ileti: null }),
+      });
+      ciz(<DepoSepeti />);
+      await screen.findByRole('option', { name: /UE-7/ });
+      fireEvent.change(screen.getByRole('combobox', { name: /Üretim emri/ }), { target: { value: '7' } });
+      fireEvent.click(screen.getByRole('button', { name: '2 lot için kart aç ve bas' }));
+      const uyari = await screen.findByRole('alert', { name: 'Açılamayan kartlar' });
+      expect(within(uyari).getAllByRole('listitem')).toHaveLength(1);
+      expect(uyari.textContent).toMatch(/LT-A.*Emrin kartsız kalanı yetmiyor/);
+      expect(istekler.filter((i) => i.yol === '/stok/refakat-partileri/ac')).toHaveLength(2);
+      await waitFor(() => expect(istekler.find((i) => i.yol.startsWith('/etiket-merkezi/'))?.govde).toMatchObject({ kayit: { idler: [41] } }));
+      // Sepet yenilendi: B kartlı, geriye tek kartsız lot kaldı (toplu panelin eşiği altında); hata yine de ekranda.
+      await waitFor(() => expect(screen.getByText(/kart UE-7-P2/)).toBeTruthy());
+      expect(screen.getByRole('alert', { name: 'Açılamayan kartlar' }).textContent).toMatch(/LT-A.*Emrin kartsız kalanı yetmiyor/);
+    });
+
+    it('emirde zaten açık kartı olan lot için kart açılmaz ve basılmaz; yalnız yeni kart basılır', async () => {
+      cihazYazicisiKaydet('refakat', { yaziciId: 3, yaziciAd: 'Depo yazıcısı', sablonAnahtar: 'refakat-100x150', sablonAd: 'Refakat kartı 100x150' });
+      const istekler = sunucuKur(DEPO, {
+        'GET /stok/sepet': () => json(200, { satirlar: [KARTSIZ_A, KARTSIZ_B] }),
+        'GET /uretim-emirleri': () => json(200, EMIRLER),
+        'GET /stok/refakat-kartlari': () => json(200, { kartlar: [ACIK_KART(41, 'UE-7-P1')], sinirda: false }),
+        'POST /stok/refakat-partileri/ac': () => json(200, { refakat: { ...KART, id: 77 } }),
+        'POST /etiket-merkezi/sablonlar/refakat-100x150/bas': () => json(200, { baskiId: 1, sonuc: 'gonderildi', ileti: null }),
+      });
+      ciz(<DepoSepeti />);
+      await screen.findByRole('option', { name: /UE-7/ });
+      fireEvent.change(screen.getByRole('combobox', { name: /Üretim emri/ }), { target: { value: '7' } });
+      fireEvent.click(screen.getByRole('button', { name: '2 lot için kart aç ve bas' }));
+      const atlanan = await screen.findByRole('list', { name: 'Atlanan lotlar' });
+      expect(atlanan.textContent).toMatch(/LT-A.*zaten açık kartı var \(UE-7-P1\).*basılmadı/);
+      await waitFor(() => expect(istekler.find((i) => i.yol.startsWith('/etiket-merkezi/'))?.govde).toMatchObject({ kayit: { idler: [77] } }));
+      expect(istekler.filter((i) => i.yol === '/stok/refakat-partileri/ac').map((i) => i.govde)).toEqual([{ uretimEmriId: 7, sepetSatirId: 5 }]);
+      expect(istekler.filter((i) => i.yol.startsWith('/etiket-merkezi/'))).toHaveLength(1);
+    });
+
+    it('açık kart listesi okunamaz ya da sınıra dayanırsa kart açılır ama hiçbiri yazıcıya gönderilmez', async () => {
+      cihazYazicisiKaydet('refakat', { yaziciId: 3, yaziciAd: 'Depo yazıcısı', sablonAnahtar: 'refakat-100x150', sablonAd: 'Refakat kartı 100x150' });
+      const istekler = sunucuKur(DEPO, {
+        'GET /stok/sepet': () => json(200, { satirlar: [KARTSIZ_A, KARTSIZ_B] }),
+        'GET /uretim-emirleri': () => json(200, EMIRLER),
+        'GET /stok/refakat-kartlari': () => json(200, { kartlar: [], sinirda: true }),
+        'POST /stok/refakat-partileri/ac': () => json(200, { refakat: { ...KART, id: 77 } }),
+        'POST /etiket-merkezi/sablonlar/refakat-100x150/bas': () => json(200, { baskiId: 1, sonuc: 'gonderildi', ileti: null }),
+      });
+      ciz(<DepoSepeti />);
+      await screen.findByRole('option', { name: /UE-7/ });
+      fireEvent.change(screen.getByRole('combobox', { name: /Üretim emri/ }), { target: { value: '7' } });
+      fireEvent.click(screen.getByRole('button', { name: '2 lot için kart aç ve bas' }));
+      await waitFor(() => expect(istekler.filter((i) => i.yol === '/stok/refakat-partileri/ac')).toHaveLength(2));
+      expect(await screen.findByText(/ayırt edilemediği için yazıcıya gönderilmedi/)).toBeTruthy();
+      expect(istekler.some((i) => i.yol.startsWith('/etiket-merkezi/'))).toBe(false);
+    });
+
+    it('"Sadece seçili lot" yalnız işaretlenen lota kart açar; seçim yokken düğme kapalı', async () => {
+      const istekler = sunucuKur(DEPO, {
+        'GET /stok/sepet': () => json(200, { satirlar: [KARTSIZ_A, KARTSIZ_B] }),
+        'GET /uretim-emirleri': () => json(200, EMIRLER),
+        'GET /stok/refakat-kartlari': () => json(200, ACIK_YOK),
+        'POST /stok/refakat-partileri/ac': () => json(200, { refakat: { ...KART, id: 51 } }),
+      });
+      ciz(<DepoSepeti />);
+      await screen.findByRole('option', { name: /UE-7/ });
+      fireEvent.change(screen.getByRole('combobox', { name: /Üretim emri/ }), { target: { value: '7' } });
+      const secili = screen.getByRole('button', { name: /^Sadece seçili lot/ });
+      expect(secili).toHaveProperty('disabled', true);
+      expect(screen.getByText(/önce satırlarda en az bir lotu işaretleyin/)).toBeTruthy();
+      const [, ikinci] = within(screen.getByRole('list', { name: 'Sepetim' })).getAllByRole('listitem');
+      fireEvent.click(within(ikinci!).getByRole('checkbox', { name: 'Seç' }));
+      await waitFor(() => expect(secili).toHaveProperty('disabled', false));
+      expect(secili.textContent).toBe('Sadece seçili lot (1)');
+      fireEvent.click(secili);
+      await waitFor(() => expect(istekler.filter((i) => i.yol === '/stok/refakat-partileri/ac').map((i) => i.govde)).toEqual([{ uretimEmriId: 7, sepetSatirId: 5 }]));
+    });
+
+    it('kısmi hatadan sonra tek kartsız lot kalınca seçim kutusu ve "Sadece seçili lot" çalışır', async () => {
+      let acildi = false;
+      const istekler = sunucuKur(DEPO, {
+        'GET /stok/sepet': () => json(200, { satirlar: [KARTSIZ_A, acildi ? { ...KARTSIZ_B, refakat: { id: 41, etiket: 'UE-7-P2' } } : KARTSIZ_B] }),
+        'GET /uretim-emirleri': () => json(200, EMIRLER),
+        'GET /stok/refakat-kartlari': () => json(200, ACIK_YOK),
+        'POST /stok/refakat-partileri/ac': (g) => {
+          if ((g as { sepetSatirId: number }).sepetSatirId === 4 && !acildi) { return json(409, { kod: 'CAKISMA', mesaj: 'Emrin kartsız kalanı yetmiyor.' }); }
+          acildi = true;
+          return json(200, { refakat: { ...KART, id: 41 } });
+        },
+      });
+      ciz(<DepoSepeti />);
+      await screen.findByRole('option', { name: /UE-7/ });
+      fireEvent.change(screen.getByRole('combobox', { name: /Üretim emri/ }), { target: { value: '7' } });
+      fireEvent.click(screen.getByRole('button', { name: '2 lot için kart aç ve bas' }));
+      await screen.findByRole('alert', { name: 'Açılamayan kartlar' });
+      await waitFor(() => expect(screen.getByText(/kart UE-7-P2/)).toBeTruthy());
+      const kutu = await screen.findByRole('checkbox', { name: 'Seç' });
+      const secili = screen.getByRole('button', { name: /^Sadece seçili lot/ });
+      expect(secili).toHaveProperty('disabled', true);
+      fireEvent.click(kutu);
+      await waitFor(() => expect(secili).toHaveProperty('disabled', false));
+      fireEvent.click(secili);
+      await waitFor(() => expect(istekler.filter((i) => i.yol === '/stok/refakat-partileri/ac').map((i) => i.govde).at(-1)).toEqual({ uretimEmriId: 7, sepetSatirId: 4 }));
+    });
+
+    it('tek kartsız lotta toplu düğme yok; depo yetkisi yoksa panel yok', async () => {
+      sunucuKur(DEPO, { 'GET /stok/sepet': () => json(200, { satirlar: [KARTSIZ_A, SATIR] }) });
+      ciz(<DepoSepeti />);
+      await screen.findByRole('list', { name: 'Sepetim' });
+      expect(screen.queryByRole('button', { name: /lot için kart aç ve bas/ })).toBeNull();
+      cleanup();
+      sunucuKur(OPERATOR, { 'GET /stok/sepet': () => json(200, { satirlar: [KARTSIZ_A, KARTSIZ_B] }) });
+      ciz(<DepoSepeti />);
+      await screen.findByRole('list', { name: 'Sepetim' });
+      expect(screen.queryByRole('button', { name: /lot için kart aç ve bas/ })).toBeNull();
+    });
   });
 
   it('Lot izi okutulan kartın lotunun izini açar; stok okuması olmayan görmez', async () => {
