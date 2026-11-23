@@ -38,9 +38,7 @@ export function BildirimSatiri({ b, kisa = false, acildi, arsivle, secim }: {
   };
   return (
     <li className={`tc-bildirim-satir${yeni ? ' tc-bildirim-yeni' : ''}`} data-onay-bekliyor={onayBekliyor ? '' : undefined} data-secili={secim?.secili ? '' : undefined}>
-      {secim && (
-        <input type="checkbox" className="tc-bildirim-sec" checked={secim.secili} onChange={(o) => secim.degistir(o.target.checked)} aria-label={`Seç: ${b.baslik}`} />
-      )}
+      {secim && <SecimKutusu etiket={`Seç: ${b.baslik}`} durum={secim.secili ? 'hepsi' : 'yok'} degistir={secim.degistir} />}
       <button type="button" className="tc-bildirim-ac" onClick={ac} aria-label={`${b.baslik}${yeni ? ', okunmamış' : ''}`}>
         <span className="tc-bildirim-nokta" aria-hidden="true" />
         <span className={`tc-bildirim-simge tc-bildirim-${b.onem}`} title={ONEM_ADI[b.onem]}><Simge ad={satirSimgesi(b)} /></span>
@@ -68,6 +66,18 @@ export function BildirimSatiri({ b, kisa = false, acildi, arsivle, secim }: {
         </button>
       )}
     </li>
+  );
+}
+
+// Kutucuk dokunma alanı içinde durur (360'ta da en az --dokunma); kısmi durum yalnız DOM özelliğiyle verilir.
+export function SecimKutusu({ etiket, durum, degistir, disabled }: {
+  etiket: string; durum: 'hepsi' | 'kismen' | 'yok'; degistir: (secili: boolean) => void; disabled?: boolean;
+}) {
+  return (
+    <label className="tc-bildirim-sec-alan">
+      <input type="checkbox" className="tc-bildirim-sec" checked={durum === 'hepsi'} disabled={disabled} aria-label={etiket}
+        ref={(o) => { if (o) o.indeterminate = durum === 'kismen'; }} onChange={(o) => degistir(o.target.checked)} />
+    </label>
   );
 }
 

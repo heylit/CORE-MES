@@ -166,8 +166,15 @@
 .tc-bildirim-cip-sayi { font-weight: 400; }
 .tc-bildirim-suzgec .tc-alan { min-inline-size: calc(var(--dokunma) * 4); }
 .tc-bildirim-gun { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; }
-.tc-bildirim-gun-baslik { margin: 0; color: var(--muted); font-size: var(--yazi-xs); font-weight: 600; text-transform: uppercase; }
-.tc-bildirim-sec { flex: none; align-self: center; inline-size: var(--b-5); block-size: var(--b-5); margin-inline-start: var(--b-3); accent-color: var(--hazard); }
+.tc-bildirim-gun-baslik { display: flex; align-items: center; margin: 0; color: var(--muted); font-size: var(--yazi-xs); font-weight: 600; text-transform: uppercase; }
+/* 3595: kutucuk dokunma alanının ortasında; satır, gün başlığı ve toplu çubukta aynı hizada. */
+.tc-bildirim-sec-alan {
+  flex: none; display: grid; place-items: center; align-self: center; inline-size: var(--dokunma); min-block-size: var(--dokunma);
+  margin-inline-start: var(--b-1); cursor: pointer;
+}
+.tc-bildirim-toplu .tc-bildirim-sec-alan { margin-inline-start: calc(var(--b-2) * -1); }
+.tc-bildirim-sec { inline-size: var(--b-5); block-size: var(--b-5); margin: 0; accent-color: var(--hazard); cursor: inherit; }
+.tc-bildirim-sec:disabled { cursor: not-allowed; }
 .tc-bildirim-satir[data-secili] { background: var(--panel2); }
 .tc-bildirim-toplu {
   position: sticky; inset-block-start: 0; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2);

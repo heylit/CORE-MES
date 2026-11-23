@@ -10,7 +10,7 @@ import { DurumKutusu, Dugme, Pencere, Sayfalama, Secim, Simge, useBildirim } fro
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { Hazirla } from './Hazirla.tsx';
-import { BildirimSatiri, BosListe, useBildirimKomutlari } from './ortak.tsx';
+import { BildirimSatiri, BosListe, SecimKutusu, useBildirimKomutlari } from './ortak.tsx';
 import { Yayinlar } from './Yayinlar.tsx';
 import './bildirim.css';
 
@@ -74,12 +74,19 @@ function Liste({ durum }: { durum: BildirimListeDurumu }) {
   const v = liste.data;
   if (v.satirlar.length === 0) return <BosListe metin={BOS_METIN[durum] ?? 'Bildirim yok.'} />;
 
-  const degistir = (id: number, acik: boolean) => {
+  const degistir = (idler: readonly number[], acik: boolean) => {
     const yeni = new Set(secili);
-    if (acik) yeni.add(id); else yeni.delete(id);
+    for (const id of idler) { if (acik) yeni.add(id); else yeni.delete(id); }
     seciliYaz(yeni);
     sonucYaz(null);
   };
+  // Seçim yalnız bu sayfadaki satırları sayar; yenilemede düşen satır sayılmaz.
+  const durumu = (grup: readonly Bildirim[]): 'hepsi' | 'kismen' | 'yok' => {
+    const n = grup.filter((b) => secili.has(b.id)).length;
+    return n === 0 ? 'yok' : n === grup.length ? 'hepsi' : 'kismen';
+  };
+  const seciliSayisi = v.satirlar.filter((b) => secili.has(b.id)).length;
+  const bos = seciliSayisi === 0;
   // Toplu iş tek tek uca gider (toplu uç yok); onay bekleyen arşive kaldırılmaz, sayısı ve nedeni sonuçta yazılır.
   const toplu = async (is: 'okundu' | 'arsivle') => {
     const satirlar = v.satirlar.filter((b) => secili.has(b.id));
@@ -107,24 +114,27 @@ function Liste({ durum }: { durum: BildirimListeDurumu }) {
   return (
     <>
       {sonuc !== null && <p className="tc-bildirim-not" role="status">{sonuc}</p>}
-      {secili.size > 0 && (
-        <div className="tc-bildirim-toplu" role="toolbar" aria-label="Seçili bildirimler">
-          <span>{`${String(secili.size)} seçili`}</span>
-          <Dugme simge="check" onClick={() => { void toplu('okundu'); }} yukleniyor={calisiyor}>Okundu yap</Dugme>
-          {!arsivde && <Dugme simge="layers" onClick={() => { void toplu('arsivle'); }} disabled={calisiyor}>Arşive kaldır</Dugme>}
-          <Dugme simge="x" onClick={() => seciliYaz(new Set())} disabled={calisiyor}>Seçimi bırak</Dugme>
-        </div>
-      )}
+      <div className="tc-bildirim-toplu" role="toolbar" aria-label="Seçili bildirimler">
+        <SecimKutusu etiket="Bu sayfadakilerin tümünü seç" durum={durumu(v.satirlar)} disabled={calisiyor}
+          degistir={(a) => degistir(v.satirlar.map((b) => b.id), a)} />
+        <span>{`${String(seciliSayisi)} seçili`}</span>
+        <Dugme simge="check" onClick={() => { void toplu('okundu'); }} yukleniyor={calisiyor} disabled={bos}>Okundu yap</Dugme>
+        {!arsivde && <Dugme simge="layers" onClick={() => { void toplu('arsivle'); }} disabled={bos || calisiyor}>Arşive kaldır</Dugme>}
+        <Dugme simge="x" onClick={() => seciliYaz(new Set())} disabled={bos || calisiyor}>Seçimi bırak</Dugme>
+      </div>
       {GUNLER.map((g) => {
         const grup = v.satirlar.filter((b) => gunBasligi(b.olusturuldu, simdi) === g);
         if (grup.length === 0) return null;
         return (
           <section key={g} className="tc-bildirim-gun" aria-label={g}>
-            <h3 className="tc-bildirim-gun-baslik">{g}</h3>
+            <h3 className="tc-bildirim-gun-baslik">
+              <SecimKutusu etiket={`${g}: tümünü seç`} durum={durumu(grup)} disabled={calisiyor} degistir={(a) => degistir(grup.map((b) => b.id), a)} />
+              {g}
+            </h3>
             <ul className="tc-bildirim-liste tc-bildirim-kutu">
               {grup.map((b) => (
                 <BildirimSatiri key={b.id} b={b} arsivle={arsivde ? undefined : () => arsivle.mutate(b.id)}
-                  secim={{ secili: secili.has(b.id), degistir: (a) => degistir(b.id, a) }} />
+                  secim={{ secili: secili.has(b.id), degistir: (a) => degistir([b.id], a) }} />
               ))}
             </ul>
           </section>
