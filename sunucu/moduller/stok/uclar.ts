@@ -3,7 +3,7 @@ import { rafKodGecisiListesiCevabi, rafKodlamaDurumuCevabi } from '#paylasilan/s
 import { baslangicDenetleCevabi, baslangicDenetleGovdesi, baslangicGeriAlmaDurumu, baslangicYukleCevabi, baslangicYukleGovdesi } from '#paylasilan/sozlesme/stok.ts';
 import {
   acikSiparisSatirlariCevabi, fasonIsleriCevabi, fasonIsleriSorgusu, cikisGovdesi, cikisOnerisiCevabi, emirTamamlaGovdesi, emirTamamlamaCevabi, cikisOnerisiSorgusu, depolarCevabi, geriAlGovdesi, topluGeriAlGovdesi, hareketCevabi, hareketlerCevabi, hareketlerSorgusu, isKutusuCevabi,
-  depoRaflariGovdesi, gozOnerisiCevabi, haritaEslemeCevabi, haritaOzetiCevabi, topluBolumDeposuCevabi, zeminCevabi, bolumDeposuGovdesi, gozStoklariSorgusu, gozStoklariCevabi, gozOzetleriCevabi, kimlikParametresi, konumAcGovdesi, panelCevabi, aylikStokDegeriCevabi, aylikStokDegeriSorgusu, stokDegeriCevabi, stokDegeriSorgusu, konumAyrintiCevabi, konumCevabi, konumDuzenleCevabi, konumDuzenleGovdesi, konumlarCevabi, konumlarSorgusu, konumMalzemeleriCevabi, konumMalzemeleriSorgusu, malKabulAyrintiCevabi,
+  depoRaflariGovdesi, gozOnerisiCevabi, haritaEslemeCevabi, haritaOzetiCevabi, topluBolumDeposuCevabi, zeminCevabi, bolumDeposuGovdesi, gozStoklariSorgusu, gozStoklariCevabi, gozOzetleriCevabi, kimlikParametresi, konumAcGovdesi, panelCevabi, aylikStokDegeriCevabi, aylikStokDegeriSorgusu, stokDegeriCevabi, stokDegeriSorgusu, konumAyrintiCevabi, konumCevabi, konumDuzenleCevabi, konumDuzenleGovdesi, konumlarCevabi, konumlarSorgusu, konumMalzemeleriCevabi, konumMalzemeleriSorgusu, malzemeMiktarlariCevabi, malzemeMiktarlariSorgusu, malKabulAyrintiCevabi,
   malKabulCevabi, malKabulDuzeltGovdesi, malKabulGovdesi, malKabullerCevabi, malKabullerSorgusu, malzemeAyarGovdesi, malzemeAyrintiCevabi, malzemeKartBilgileriCevabi, partiBelgeParametresi, siparisIrsaliyeleriCevabi, siparisIrsaliyeleriSorgusu, sonPartilerCevabi, sonPartilerSorgusu,
   malzemelerCevabi, malzemelerSorgusu, malzemeOzetiCevabi, sayfaSorgusu, partiIziCevabi, partilerCevabi, partilerSorgusu, rafAcGovdesi,
   rafCevabi, rafDuzenleCevabi, rafDuzenleGovdesi, raflarCevabi, raflarSorgusu, rafMatrisiCevabi, sayimCevabi, sayimEsigiGovdesi, sayimFarkiOnayGovdesi, sayimFarkiRedGovdesi, sayimFarklariCevabi, sayimGovdesi, surumGovdesi, statuDegistirGovdesi, tasimaGovdesi, uretimGirisiGovdesi,
@@ -67,6 +67,8 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/stok/depolar', yetki: OKUMA, cevap: depolarCevabi, isle: ({ db }) => s.depoListesi(db) }),
 
   uc({ yontem: 'GET', yol: '/stok/konumlar', yetki: OKUMA, sorgu: konumlarSorgusu, cevap: konumlarCevabi, isle: ({ db, sorgu }) => s.konumListesi(db, sorgu) }),
+  // 3582: alternatif kartların stok miktarı; yeni işlem yok, stok okuma kümesi.
+  uc({ yontem: 'GET', yol: '/stok/malzeme-miktarlari', yetki: OKUMA, sorgu: malzemeMiktarlariSorgusu, cevap: malzemeMiktarlariCevabi, isle: ({ db, sorgu }) => s.malzemeMiktarlari(db, sorgu.idler) }),
   uc({ yontem: 'GET', yol: '/stok/konum-malzemeleri', yetki: OKUMA, sorgu: konumMalzemeleriSorgusu, cevap: konumMalzemeleriCevabi, isle: ({ db, sorgu }) => s.konumMalzemeleri(db, sorgu) }),
   uc({ yontem: 'GET', yol: '/stok/konumlar/:id', yetki: OKUMA, parametre: kimlikParametresi, cevap: konumAyrintiCevabi, isle: ({ db, parametre }) => s.konumAyrintisi(db, parametre.id) }),
   uc({ yontem: 'POST', yol: '/stok/konumlar', yetki: 'stok.konum-yaz', govde: konumAcGovdesi, cevap: konumCevabi, isle: ({ db, govde }) => s.konumAc(db, govde) }),

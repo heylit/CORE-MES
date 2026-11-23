@@ -1,0 +1,7 @@
+/* 3582: kart ekranlarında stok miktarı. Sayı sağa yaslanır, rakamlar eş genişlikte; "stok yok" en kritik cevap olduğu için soluk değildir. */
+.tc-stokm { display: inline-grid; justify-items: end; gap: var(--b-1); min-width: 0; font-variant-numeric: tabular-nums; text-align: right; }
+.tc-stokm-deger { display: inline-flex; align-items: center; gap: var(--b-1); font-weight: 600; white-space: nowrap; }
+.tc-stokm-yok { color: var(--ink); font-weight: 500; white-space: nowrap; }
+.tc-stokm-soluk, .tc-stokm-statu { color: var(--muted); font-size: var(--yazi-s); }
+.tc-stokm-bilgi { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin: 0; color: var(--muted); font-size: var(--yazi-s); }
+.tc-stokm-hata { color: var(--stop); font-weight: 600; }
