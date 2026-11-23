@@ -137,7 +137,7 @@ export function ProjeHazirlik({ projeId }: { projeId: number }) {
             </div>
             <ul className="tc-prj-hz-liste" aria-label="Emir görevleri">
               {v.gorevler.filter(gorunur).map((g) => (
-                <li key={g.id} data-gecikmis={gecikmis(g) || undefined} data-celiski={celiskili(g) || undefined}>
+                <li key={`${String(g.id)}:${String(g.isEmriId ?? 0)}`} data-gecikmis={gecikmis(g) || undefined} data-celiski={celiskili(g) || undefined}>
                   <button type="button" className="tc-prj-hz-kart" aria-pressed={secili === g.id} onClick={() => { seciliYaz((o) => (o === g.id ? null : g.id)); }}>
                     <b>{`${emirAdi(g.emriId)} ${opAdi(g)} · ${maddeAdi(g.madde)}`}</b>
                     <span className="tc-prj-bag">
