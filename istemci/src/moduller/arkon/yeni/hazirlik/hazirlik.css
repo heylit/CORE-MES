@@ -625,3 +625,20 @@ span.tc-ay2-mt-h { cursor: default; }
   .tc-ay2-mt-tablo th:first-child { min-inline-size: calc(var(--dokunma) * 3); max-inline-size: calc(var(--dokunma) * 3); }
   .tc-ay2-mt-sarmal { box-shadow: inset calc(var(--b-3) * -1) 0 var(--b-3) calc(var(--b-2) * -1) color-mix(in srgb, var(--ink) 18%, transparent); }
 }
+
+/* 3614 Talimatlar sekmesi: terminaldeki üç grup, salt okunur. */
+.tc-ay2-talimat { gap: var(--b-3); }
+.tc-ay2-talimat-grup { display: grid; gap: var(--b-2); }
+.tc-ay2-talimat-grup h3 { margin: 0; display: flex; align-items: baseline; gap: var(--b-2); font-size: var(--yazi-m); }
+.tc-ay2-talimat-grup h3 small { color: var(--muted); font-size: var(--yazi-xs); font-weight: 600; }
+.tc-ay2-talimat-grup h3 .tc-ay2-mono { margin-inline-start: auto; color: var(--muted); }
+.tc-ay2-talimat-baslik { display: block; margin-bottom: var(--b-2); }
+.tc-ay2-talimat-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--b-1); }
+.tc-ay2-talimat-liste > li { display: flex; align-items: flex-start; gap: var(--b-3); padding: var(--b-2) var(--b-3); border-radius: var(--yari-2); background: var(--panel2); min-width: 0; }
+.tc-ay2-talimat-no { flex: none; min-width: 1.5em; color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 700; }
+.tc-ay2-talimat-metin { flex: 1; min-width: 0; display: grid; gap: var(--b-1); }
+.tc-ay2-talimat-ad { font-weight: 600; overflow-wrap: anywhere; }
+.tc-ay2-talimat-liste small { color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
+.tc-ay2-talimat-etiket { display: flex; flex-wrap: wrap; gap: var(--b-1); }
+.tc-ay2-talimat-liste em { font-style: normal; display: inline-flex; align-items: center; gap: var(--b-1); font-size: var(--yazi-s); font-weight: 700; padding: 0 var(--b-2); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); }
+.tc-ay2-talimat-liste em[data-zorunlu] { border-color: var(--hold); color: var(--hold); }

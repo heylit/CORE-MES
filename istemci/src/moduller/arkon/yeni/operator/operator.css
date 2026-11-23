@@ -1547,3 +1547,6 @@ button.tc-ay1-yer { font: inherit; color: inherit; text-align: start; cursor: po
   .tc-ay1-genis .tc-ay1-sira .tc-ay1-tcark-kart { padding-block: var(--b-1); }
   .tc-ay1-genis .tc-ay1-sira .tc-ay1-tcark-etiketler { margin-block-end: 0; }
 }
+.tc-ay1-tl-onizleme { display: flex; align-items: center; gap: var(--b-2); margin: 0 0 var(--b-2); color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; }
+.tc-ay1-talimatlar[data-onizleme] .tc-ay1-tl-madde { opacity: .72; }
+.tc-ay1-talimatlar[data-onizleme] .tc-ay1-tl-kutu { border-style: dashed; cursor: not-allowed; }

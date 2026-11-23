@@ -44,6 +44,7 @@ import { GUN_ADLARI, iki, sayi } from '../cekirdek/bicim.ts';
 import { CAGRI_EKIPLERI, YETKI_ADLARI } from '../cekirdek/sabitler.ts';
 import { AnlikDurum, DurumSeridi, durumOzeti } from './DurumGostergesi.tsx';
 import { hazirlikSatirlari, useHazirlik } from './HazirlikListesi.tsx';
+import { ONIZLEME_SEKME_OLAYI } from './onizleme-olay.ts';
 import { TalimatListesi, acikGrup, useTalimatlar, zorunluEksikler } from './Talimatlar.tsx';
 import { bip } from '../cekirdek/ses.ts';
 import { istasyonBul, istasyonListesi, kayitGecerli, makineBul, tabletIstasyonu } from '../cekirdek/tesis.ts';
@@ -140,14 +141,16 @@ const YAZAN: ReadonlySet<GorevEylemi> = new Set<GorevEylemi>(['start', 'resume',
 
 export function Operator(_o: ArkonEkranOzellikleri) { return <IstasyonluEkran onizleme={null} />; }
 export function Onizleme({ kimlik }: ArkonEkranOzellikleri) { return <IstasyonluEkran onizleme={kimlik ?? ''} />; }
+// 3614: önizleme penceresinde yan yana çizilen operasyon çerçevesi; istasyon cihazda hatırlanan değil çerçevenin kendisidir.
+export function OnizlemeCercevesi({ kimlik, istasyon }: { kimlik: string; istasyon: string }) { return <IstasyonluEkran onizleme={kimlik} onizlemeIstasyonu={istasyon} />; }
 
 // İstasyon değişince ekran baştan kurulur (eski ekran sayfayı yeniden yüklüyordu).
-function IstasyonluEkran({ onizleme }: { onizleme: string | null }) {
+function IstasyonluEkran({ onizleme, onizlemeIstasyonu = null }: { onizleme: string | null; onizlemeIstasyonu?: string | null }) {
   const [surum, surumYaz] = useState(0);
-  return <OperatorEkrani key={surum} onizleme={onizleme} yenidenKur={() => surumYaz((s) => s + 1)} />;
+  return <OperatorEkrani key={surum} onizleme={onizleme} onizlemeIstasyonu={onizlemeIstasyonu} yenidenKur={() => surumYaz((s) => s + 1)} />;
 }
 
-function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yenidenKur: () => void }) {
+function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme: string | null; onizlemeIstasyonu: string | null; yenidenKur: () => void }) {
   const { depo, kisi, ayarlar, yetkiVar, tmiRetiniUstlen } = useArkon();
   // 1339 a, 1354 a (kart #1358): Telefon profilinde sunucu çizim dosyası vermez; dosya indirilmez, resim yerine ölçü listesi açılır.
   const telefon = useOturum().data?.cihazProfili === 'telefon';
@@ -158,7 +161,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const POLICY = ayarlar.kurallar;
   const ME = kisi?.name ?? '';
   // 2001 b: istasyonu belli olmayan kişide boştur; üst şerit "İstasyon seçilmedi" yazar, seçici açılır. Önizleme ilk istasyonla açılır.
-  const MACHINE = pv ? (yerel.oku<string>('pvStation') || tabletIstasyonu(tesis, yerel.oku<string>('station'), kisi) || (istasyonListesi(tesis)[0]?.id ?? '')) : tabletIstasyonu(tesis, yerel.oku<string>('station'), kisi, yetkiVar('prod.station'));
+  const MACHINE = pv ? (onizlemeIstasyonu || yerel.oku<string>('pvStation') || tabletIstasyonu(tesis, yerel.oku<string>('station'), kisi) || (istasyonListesi(tesis)[0]?.id ?? '')) : tabletIstasyonu(tesis, yerel.oku<string>('station'), kisi, yetkiVar('prod.station'));
   const ist = istasyonBul(tesis, MACHINE);
   // 3392 a: cihazın bağlı makinesi; her işte seçimin kaynağıdır. Bağlı değilse (sabit değil) bugünkü gibi plan ya da seçim.
   const cihazMakinesi = pv ? null : bagliMakine(yerel.oku<string>('machine'), ist.mcs);
@@ -199,6 +202,15 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     return l && typeof l.at === 'number' && (l.anahtar ?? l.no) === siraAnahtari(o) && l.state === o.state ? l.at : null;
   });
   const [tab, tabYaz] = useState<Gorunum>('draw');
+  useEffect(() => {
+    if (!pv) return undefined;
+    const f = (e: Event) => {
+      const id = (e as CustomEvent<string>).detail as Gorunum;
+      if (dar) mvYaz(id === 'draw' ? 'prod' : id); else tabYaz(id);
+    };
+    window.addEventListener(ONIZLEME_SEKME_OLAYI, f);
+    return () => window.removeEventListener(ONIZLEME_SEKME_OLAYI, f);
+  }, [pv, dar]);
   const [depoSekme, depoSekmeYaz] = useState<DepoSekmesi>('toplama');
   const [odak, odakYaz] = useState<{ id: number; n: number } | null>(null);
   const [odakKipi, odakKipiYaz] = useState(false);
@@ -811,7 +823,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   // 3050 a: beklemedeki emirde başlatan görev ve düğmeler kapalıdır; çalışan adım sürer.
   const bekletme = emrinAdimlari?.bekletme ?? null;
   // 3338-4 a: operatör talimatları; zorunlu eksik "Başlamadan önce" maddesi Başlat'ta, "Bitince" maddesi Bitir'de sorulur.
-  const tl = useTalimatlar(pv ? null : tmiEmirId(o.pkg), pv);
+  const tl = useTalimatlar(tmiEmirId(o.pkg), pv);
   const tlListe = tl.liste ?? [];
   const tlEksik = { once: zorunluEksikler(tlListe, 'once'), son: zorunluEksikler(tlListe, 'son') };
   const [talimatSoru, talimatSoruYaz] = useState<{ eylem: 'start' | 'finish'; eksik: { id: number; ad: string }[] } | null>(null);
@@ -1349,7 +1361,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const talimatlaraGit = () => { ovYaz(null); if (dar) mvYaz('tl'); else tabYaz('tl'); };
   const talimatlar = b
     ? <YerelAdimlar key={'oniz:' + siraAnahtari(b)} adimlar={b.pkg && b.pkg.steps} />
-    : <TalimatListesi key={siraAnahtari(o)} t={tl} durum={o.state} kapali={!uretir} adimlar={o.pkg && o.pkg.steps} isEmriId={tmiIsEmriId(o.pkg)} />;
+    : <TalimatListesi key={siraAnahtari(o)} t={tl} durum={o.state} kapali={!uretir} adimlar={o.pkg && o.pkg.steps} isEmriId={tmiIsEmriId(o.pkg)} onizleme={pv} />;
   const tlSayisi = zorunluEksikler(tlListe, acikGrup(o.state)).length;
   const sekmeler = isSekmeleri(o, !!Panel, OT.tab || OT.short, panelSimgesi, D, telefon, isler.filter((x) => !x.empty && x.state !== 'done').length);
   sekmeler.splice(Math.max(0, sekmeler.findIndex((x) => x.id === 'steps')), 0, { id: 'tl', l: tlSayisi ? `Talimatlar · ${String(tlSayisi)} eksik` : 'Talimatlar', simge: 'flag' });

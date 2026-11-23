@@ -39,6 +39,7 @@ import { HazirlikListesi } from '../operator/HazirlikListesi.tsx';
 import { EkHazirlikMaddeleri } from './EkHazirlikMaddeleri.tsx';
 import { MatrisGorunumu } from './MatrisGorunumu.tsx';
 import { HazirlikPaketCipi, paketHazirligi, paketIsEmriId, useHazirlikOzeti } from './HazirlikTakibi.tsx';
+import { TalimatSekmesi, talimatSayisi, useTalimatOkuma } from './TalimatSekmesi.tsx';
 import { NumuneSekmesi } from './NumuneSekmesi.tsx';
 import { PlanCipi } from './PlanCipi.tsx';
 import { GeriCekPenceresi, TakipTablosu } from './TakipTablosu.tsx';
@@ -69,7 +70,7 @@ const MerkezDurumu = lazy(async () => {
 // Üretim Terminali Hazırlık (hazirlik.ts PrepApp). Paket TMI'de emir açılınca oluşur; burada resim, kontrol planı, adım, kural ve
 // istasyon ayarı hazırlanır ve operatöre yayınlanır. Değişiklik yarım saniye sonra cihaza ve sunucuya yazılır (eskisi gibi).
 
-type Sekme = 'info' | 'docs' | 'st' | 'plan' | 'samp' | 'steps' | 'rules' | 'pub';
+type Sekme = 'info' | 'tl' | 'docs' | 'st' | 'plan' | 'samp' | 'steps' | 'rules' | 'pub';
 // 3111: aynı paketler iki görünümde: kart listesi ve ayrıntı (bugünkü) ya da emir ve adım sırasıyla takip tablosu.
 type Gorunum = 'paket' | 'tablo' | 'matris';
 const GORUNUMLER: readonly (readonly [Gorunum, string, SimgeAdi])[] = [['paket', 'Kartlar', 'list'], ['tablo', 'Liste', 'grid'], ['matris', 'Matris', 'clipboard-check']];
@@ -560,8 +561,10 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
   const v = p ? paketDenetimi(p, tesis) : [];
   const tamam = (k: string) => v.filter((x) => x.k === k).every((x) => x.ok || x.soft);
   const tur = p ? isTuru(p) : 'cnc';
+  const talimat = useTalimatOkuma(p);
+  const talimatN = talimatSayisi(talimat);
   const SEKMELER = ([
-    { id: 'info', l: 'Bilgiler' }, { id: 'docs', l: 'Dokümanlar' },
+    { id: 'info', l: 'Bilgiler' }, { id: 'tl', l: 'Talimatlar' }, { id: 'docs', l: 'Dokümanlar' },
     p && tur !== 'cnc' ? { id: 'st', l: IS_TURLERI[tur].tab || IS_TURLERI[tur].l } : null,
     { id: 'plan', l: 'Kontrol planı' }, p && tur === 'cnc' ? { id: 'samp', l: 'Numune' } : null,
     { id: 'steps', l: 'Adımlar' }, { id: 'rules', l: 'Kurallar' }, { id: 'pub', l: 'Terminale gönder' },
@@ -678,7 +681,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
             </div>
           ) : null}
           {gorunum === 'matris' ? (
-            <MatrisGorunumu paketler={liste} hazirlik={hz.harita} seciliId={duzenAcik && p ? p.id : null} ac={(x, hucre, el) => { sonTik.current = el; void sec(x, hucre ? 'pub' : 'info'); }} />
+            <MatrisGorunumu paketler={liste} hazirlik={hz.harita} seciliId={duzenAcik && p ? p.id : null} ac={(x, hucre, el, madde) => { sonTik.current = el; void sec(x, hucre ? (madde === 'talimat' ? 'tl' : 'pub') : 'info'); }} />
           ) : gorunum === 'tablo' ? (
             <TakipTablosu
               paketler={liste} sonuclar={sonuclar} hazirlik={hz.harita} suz={takipSuz} suzYaz={takipSuzSec} yayinlar={yayinlar}
@@ -724,18 +727,18 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
             </div>
             <ol className="tc-ay2-adimlar" aria-label="Hazırlık adımları">
               {SEKMELER.map((t, i) => {
-                const ok = t.id !== 'pub' && tamam(t.id);
+                const ok = t.id !== 'pub' && t.id !== 'tl' && tamam(t.id);
                 return (
                   <li key={t.id}>
                     <button type="button" aria-current={sekme === t.id ? 'step' : undefined} data-tamam={ok ? '' : undefined} onClick={() => sekmeYaz(t.id)}>
-                      <span className="tc-ay2-adim-no">{ok ? <Simge ad="check" boyut="k" /> : i + 1}</span>{t.l}
+                      <span className="tc-ay2-adim-no">{ok ? <Simge ad="check" boyut="k" /> : i + 1}</span>{t.l}{t.id === 'tl' && talimatN !== null ? <em className="tc-ay2-rozet-sayi">{talimatN}</em> : null}
                     </button>
                   </li>
                 );
               })}
             </ol>
-            <fieldset className="tc-ay2-sekme" disabled={!duzenler && sekme !== 'pub'}>
-              {!duzenler && sekme !== 'pub' ? <p className="tc-ay2-bilgi"><Simge ad="lock" /><span>Paketi düzenleme yetkin yok; yalnız görüntülenir.</span></p> : null}
+            <fieldset className="tc-ay2-sekme" disabled={!duzenler && sekme !== 'pub' && sekme !== 'tl'}>
+              {!duzenler && sekme !== 'pub' && sekme !== 'tl' ? <p className="tc-ay2-bilgi"><Simge ad="lock" /><span>Paketi düzenleme yetkin yok; yalnız görüntülenir.</span></p> : null}
               {sekme === 'info' && seritAday ? (
                 <div className="tc-ay2-benzer-serit" role="note">
                   <Simge ad="layers" />
@@ -784,6 +787,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                   </Alan>
                 </div>
               ) : null}
+              {sekme === 'tl' ? <TalimatSekmesi paket={p} d={talimat} /> : null}
               {sekme === 'docs' ? (
                 <div className="tc-ay2-kurallar">
                   {kmPaket && typeof p.malzemeNo === 'number' ? (
