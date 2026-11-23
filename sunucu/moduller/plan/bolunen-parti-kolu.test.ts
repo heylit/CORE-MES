@@ -140,29 +140,29 @@ describe('adım ortasından bölünen parti (3512)', () => {
   });
 
   test('KL-06: bağ yalnız ayrılma ve katılma adımındadır: parti üst emrin aynı sıradaki adımını, üst emrin ara adımı da partiyi beklemez', () => {
-    // Üst emrin 20. adımı 100. saate kilitli: parti onu beklemeden, 10. adım biter bitmez başlar.
-    const gecUst = kur([ust, emir('3', 3, '2', { n: 1, m: 4 })], { ...ADET, locks: { '2.20': { m: '100', S: 100 } } });
-    assert.equal(gecUst.ops['2.20']!.S, 100);
-    assert.ok(gecUst.ops['3.20']!.S >= gecUst.ops['2.10']!.C - 1e-9 && gecUst.ops['3.20']!.C <= 100, `parti 20. adımı beklemez: ${String(gecUst.ops['3.20']!.S)}`);
-    // Partinin 20. adımı 100. saate kilitli: üst emrin 20. adımı onu beklemez, katılma adımı (30) bekler.
-    const gecParti = kur([ust, emir('3', 3, '2', { n: 1, m: 3 })], { adimAdetleri: { 'E-2|10': 9, 'E-2|30': 9 }, locks: { '3.20': { m: '100', S: 100 } } });
-    assert.equal(gecParti.ops['3.20']!.S, 100);
-    assert.ok(gecParti.ops['2.20']!.C <= 100, `üst emrin 20. adımı partiyi beklemez: ${String(gecParti.ops['2.20']!.S)}`);
+    // Üst emrin 20. adımı 104. saate (08:00, vardiya içi) kilitli: parti onu beklemeden, 10. adım biter bitmez başlar.
+    const gecUst = kur([ust, emir('3', 3, '2', { n: 1, m: 4 })], { ...ADET, locks: { '2.20': { m: '100', S: 104 } } });
+    assert.equal(gecUst.ops['2.20']!.S, 104);
+    assert.ok(gecUst.ops['3.20']!.S >= gecUst.ops['2.10']!.C - 1e-9 && gecUst.ops['3.20']!.C <= 104, `parti 20. adımı beklemez: ${String(gecUst.ops['3.20']!.S)}`);
+    // Partinin 20. adımı 104. saate (08:00, vardiya içi) kilitli: üst emrin 20. adımı onu beklemez, katılma adımı (30) bekler.
+    const gecParti = kur([ust, emir('3', 3, '2', { n: 1, m: 3 })], { adimAdetleri: { 'E-2|10': 9, 'E-2|30': 9 }, locks: { '3.20': { m: '100', S: 104 } } });
+    assert.equal(gecParti.ops['3.20']!.S, 104);
+    assert.ok(gecParti.ops['2.20']!.C <= 104, `üst emrin 20. adımı partiyi beklemez: ${String(gecParti.ops['2.20']!.S)}`);
     assert.ok(gecParti.ops['2.30']!.S >= gecParti.ops['3.20']!.C - 1e-9, 'katılma adımı bekler');
   });
 
   test('KZ-05 (3502): kilitli adımın öncülünü bölünen parti de bekliyorsa öncül kilide yaslanmaz, en erken yere konur; başka bekleyeni yoksa kilide yaslanır', () => {
-    const kilit = { locks: { '2.20': { m: '100', S: 100 } } };
+    const kilit = { locks: { '2.20': { m: '100', S: 104 } } };
     // Parti (20. adımdan ayrılan kol) üst emrin 10. adımını bekler: o adım geç yapılırsa parti kilide kadar boşuna bekler.
     const partili = kur([ust, emir('3', 3, '2', { n: 1, m: 4 })], { ...ADET, ...kilit }).ops;
-    assert.equal(partili['2.20']!.S, 100);
+    assert.equal(partili['2.20']!.S, 104);
     assert.deepEqual([partili['2.10']!.S, partili['2.10']!.C], [8, 33], 'öncül planın başında');
     assert.equal(partili['3.20']!.S, partili['2.10']!.C, 'parti öncül biter bitmez başlar');
     const neden = (r: Is | undefined): string => JSON.stringify((r as unknown as { why?: unknown }).why);
     assert.equal(neden(partili['2.10']), JSON.stringify({ t: 'kilit-oncul', r: '2.20', o: 1 }), 'öne çekilen öncülün nedeni ayrı');
     // Aynı emir partisiz: öncülü yalnız kilitli adım bekler. Kilitten önceki son iş gününe (80.-88. saat) yaslanır.
     const yalin = kur([ust], kilit).ops;
-    assert.equal(yalin['2.20']!.S, 100);
+    assert.equal(yalin['2.20']!.S, 104);
     assert.ok(yalin['2.10']!.S >= 80 && yalin['2.10']!.C <= 88 + 1e-9, `öncül kilide yaslanır: ${String(yalin['2.10']!.S)}-${String(yalin['2.10']!.C)}`);
     assert.equal(neden(yalin['2.10']), JSON.stringify({ t: 'kilit-oncul', r: '2.20' }));
   });
@@ -551,9 +551,10 @@ describe('plana göre süren adım yerinde kalır, süresi yeni adetle yenilenir
     // Süren adım uzamadıysa kilitler yerinde kalır.
     const ayni = tekGecis(once, kilit, kayit(), once, 11);
     assert.deepEqual([yer(ayni, '4.10').slice(0, 2), nedeni(ayni, '4.10').t], [['200', 14], 'kilit']);
-    // Uzayan süren adım yalnız üstüne bindiği kilidi kaydırır: 16:00'daki kilit 15:00'e uzayan adımdan sonradır, yerinde kalır.
-    const uzak = tekGecis([emir('2', 7), emir('4', 1)], { locks: { '4.10': { m: '200', S: 16 } } }, kayit(), [emir('2', 6), emir('4', 1)], 11);
-    assert.deepEqual([yer(uzak, '4.10').slice(0, 2), nedeni(uzak, '4.10').t], [['200', 16], 'kilit']);
+    // Uzayan süren adım yalnız üstüne bindiği kilidi kaydırır: 15:00'teki kilit 15:00'e uzayan adımın bitişindedir (üstüne binmez), yerinde kalır.
+    // (Kilit 16:00 olamaz: vardiya dışı kilit ilk açık ana, ertesi sabaha yerleşir; 3601.)
+    const uzak = tekGecis([emir('2', 7), emir('4', 1)], { locks: { '4.10': { m: '200', S: 15 } } }, kayit(), [emir('2', 6), emir('4', 1)], 11);
+    assert.deepEqual([yer(uzak, '4.10').slice(0, 2), nedeni(uzak, '4.10').t], [['200', 15], 'kilit']);
   });
 
   test('SU-11: başlamış (gerçekleşen kaydı olan) adımın kalanı elle kilitli işin üstüne uzarsa kilitli iş kayar (3538 b)', () => {

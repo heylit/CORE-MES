@@ -114,9 +114,9 @@ describe('bölünen partinin adım beklemesi (3511)', () => {
     assert.deepEqual(kilitli.st.beklemeKilit, ['3.20']);
     assert.equal(kilitli.st.locks?.['3.20'], undefined);
     assert.ok(kilitli.ops['3.20']!.S >= KADAR, String(kilitli.ops['3.20']!.S));
-    const sonraki = kur(BOLUNMUS, { ...bekle({ '2.20': KADAR }), locks: { '3.20': { m: '100', S: 240 } } });
+    const sonraki = kur(BOLUNMUS, { ...bekle({ '2.20': KADAR }), locks: { '3.20': { m: '100', S: 248 } } });
     assert.equal(sonraki.st.beklemeKilit, undefined, 'beklemeden sonraki kilit durur');
-    assert.equal(sonraki.ops['3.20']!.S, 240);
+    assert.equal(sonraki.ops['3.20']!.S, 248, 'kilit vardiya içindedir (08:00); vardiya dışı kilit ilk açık ana kayar, 3601');
   });
 
   test('BP-06: ek süre bildirildiği emirde kalır, partiye geçmez', () => {

@@ -90,11 +90,14 @@ describe('plan motoru: tek vardiyalı kişi (3601)', () => {
   test('KV-03: kilit saati kişinin vardiyası dışına düşerse plan kilitli işi ilk açık ana yerleştirir (sunucu sabit işi vardiya dışında kabul etmez)', () => {
     const g = girdi(['40'], ['personel'], undefined, ['7']);
     (g.st as unknown as { locks: Record<string, unknown> }).locks = { 'O1.10': { m: 'kisi-7', S: 20 } };
-    const p = motorYukle().schedule(g.st, 'yeni', null) as { ops: Record<string, { m: string; S: number; C: number }> };
+    const m = motorYukle();
+    const p = m.schedule(g.st, 'yeni', null) as { ops: Record<string, { m: string; S: number; C: number }> };
     const o1 = p.ops['O1.10']!;
     assert.equal(o1.m, 'kisi-7');
     assert.equal(o1.S, 32, 'kilit 20:00 (vardiya dışı): iş ertesi sabah 08:00\'e yerleşir');
     assert.ok(gunSaat(o1.S) >= 8 && gunSaat(o1.S) < 16, 'başlangıç kişinin vardiyasında');
     assert.ok(p.ops['O2.10']!.S >= o1.C - 1e-9, 'ardıl işin başlangıcı öncülün bitişinden önce olamaz');
+    const uyarilar = (m as unknown as { evaluate: (p: unknown, st: unknown, ref: unknown, fast: boolean) => { warn: { t: string; id?: string; txt: string }[] } }).evaluate(p, g.st, null, false).warn;
+    assert.match(uyarilar.find((w) => w.id === 'O1.10' && w.t === 'kilit')?.txt ?? '', /kaynağın çalışma saati dışında/, 'kayma Kokpit uyarısında söylenir');
   });
 });
