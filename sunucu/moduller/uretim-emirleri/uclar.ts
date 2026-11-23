@@ -9,12 +9,12 @@ import {
   birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMaddeleriCevabi, hazirlikMaddeParametresi, hazirlikMaddesiDegistirGovdesi, hazirlikMaddesiEkleGovdesi, hazirlikProjesiCevabi, hazirlikProjesiGovdesi, hazirlikProjesiSecenekleri, hazirlikMatrisiSorgusu, hazirlikMatrisiCevabi, hazirlikDagitGovdesi, hazirlikDagitCevabi, hazirlikMuafiyetiGovdesi, hazirlikOzetiCevabi, hazirlikOzetiSorgusu, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, makineEkleGovdesi, adimPaylariCevabi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
   hataliCevabi, hataliGovdesi, hataliListeCevabi, hataliListeSorgusu, reworkAdimiGovdesi,
   disIslemEmriAcGovdesi, disIslemEmriCevabi, disIslemEmriIptalGovdesi, disIslemEmriParametresi,
-  adimDurumuCevabi, adimDurumuTerminalCevabi, elleStatuGovdesi, elleStatuKaldirGovdesi, hazirlikElleEksikGovdesi, hazirlikOnayiGovdesi, hazirlikOnayiKaldirGovdesi, listeEkleGovdesi, listeKaldirGovdesi, listeFotografiParametresi, listeIsaretleGovdesi,
+  adimDurumuCevabi, adimDurumuTerminalCevabi, adimMatrisiCevabi, adimMatrisiSorgusu, statuTopluCevabi, statuTopluGovdesi, elleStatuGovdesi, elleStatuKaldirGovdesi, hazirlikElleEksikGovdesi, hazirlikOnayiGovdesi, hazirlikOnayiKaldirGovdesi, listeEkleGovdesi, listeKaldirGovdesi, listeFotografiParametresi, listeIsaretleGovdesi,
   arsivOnizlemeCevabi, arsiveAlCevabi, arsiveAlGovdesi, emirKapatGovdesi, kapanisCevabi, kapanisGeriAcGovdesi, kapanisListeCevabi, kapanislarSorgusu, kapanisMuafGovdesi, kapanisOnayGovdesi, kapanisRetGovdesi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { ADIM_DURUMU_OKUMA_ISLEMLERI } from './kurallar.ts';
 import { emrinTerminOnerisi, siparisinTerminOnerileri, terminKarariVer } from './termin-onerisi.ts';
-import { adimDurumu, adimDurumuTerminal, elleStatuKaldir, elleStatuYaz, hazirlikElleEksik, hazirlikOnayKaldir, hazirlikOnayla, listeFotografi, listeIsaretle, listeMaddesiEkle, listeMaddesiKaldir } from './adim-durumu.ts';
+import { adimDurumu, adimDurumuTerminal, adimMatrisi, statuTopluYaz, elleStatuKaldir, elleStatuYaz, hazirlikElleEksik, hazirlikOnayKaldir, hazirlikOnayla, listeFotografi, listeIsaretle, listeMaddesiEkle, listeMaddesiKaldir } from './adim-durumu.ts';
 import { aramaUclari } from './arama/uclar.ts';
 import { gecmisGeriAl, gecmisGir } from './gecmis-giris.ts';
 import { gecmisGeriAlGovdesi, gecmisGirisCevabi, gecmisGirisGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -264,6 +264,24 @@ const adimliUclar = [
     sorgu: hazirlikOzetiSorgusu,
     cevap: hazirlikOzetiCevabi,
     isle: async ({ db, sorgu }) => ({ emirler: [...(await hazirliklar(db, sorgu.emirler))].map(([emirId, hazirlik]) => ({ emirId, hazirlik })) }),
+  }),
+  // Adım Durumu matrisi (3604): okuma sayfayı görene, toplu yazma tek adımdakiyle aynı yetkiye. Sabit yollar `:id` yolundan önce durur.
+  uc({
+    yontem: 'GET',
+    yol: '/adimli-emirler/adim-matrisi',
+    yetki: ADIM_DURUMU_OKUMA,
+    sorgu: adimMatrisiSorgusu,
+    cevap: adimMatrisiCevabi,
+    isle: ({ db, kullanici, sorgu }) => adimMatrisi(db, kullanici, sorgu.biten),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/statu-toplu',
+    yetki: 'uretim-emirleri.adim-durumu-yaz',
+    govde: statuTopluGovdesi,
+    cevap: statuTopluCevabi,
+    tekrarKorumali: true,
+    isle: ({ db, kullanici, govde, denetimEki }) => statuTopluYaz(db, kullanici, govde, denetimEki),
   }),
   uc({
     yontem: 'GET',

@@ -1956,6 +1956,7 @@ export const GEREKCE_GEREK = 'Bu madde eksikken iş emrini durdurur; elle onay i
 export const ONAY_GEREKSIZ = 'Madde tamam, muaf ya da gerekmiyor; onaya gerek yok.';
 export const ONAY_YOK = 'Bu maddede elle verilmiş değer yok.';
 export const ELLE_STATU_YOK = 'Bu adımda elle yazılmış statü yok.';
+export const ADIM_BITTI_STATU = 'Adım bitti; bitmiş adıma elle statü yazılmaz. Daha önce yazılmış elle statüyü Otomatiğe dön ile kaldırabilirsiniz.';
 export const ADIM_KAPALI_EMIR = 'Biten ya da iptal edilen emirde adım durumu yazılmaz.';
 export const IS_EMRI_EMIRDE_YOK = 'İş emri bu emirde yok.';
 // 3249 b: Adım Durumu'ndan hazırlık listesi. Biten adımın listesi değişmez; aynı hâle ikinci kez geçilmez (iki sekmeden aynı tık ya da

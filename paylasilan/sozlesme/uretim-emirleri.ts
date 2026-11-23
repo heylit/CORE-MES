@@ -6,6 +6,7 @@ import { surumSemasi } from '../surum.ts';
 import { TOPLU_EN_COK_SATIR } from '../toplu.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 import { TALIMAT_ASAMALARI } from './talimat-asamasi.ts';
+import { TOPLU_EN_COK_KALEM } from './adim-matrisi-kurali.ts';
 import { KOD_DESENI as NEDEN_KODU } from './durus-nedenleri.ts';
 import { EMIR_TURLERI, EMIR_TURU_ADLARI } from './emir-turleri.ts';
 
@@ -1405,6 +1406,57 @@ export const adimDurumuTerminalCevabi = z.object({
   // 3050 a: emir beklemedeyse nedenin adı; terminal adım başlatmayı ve devamı kapatır. İsteğe bağlı: eski istemci verisi geçerli kalır.
   bekletme: z.string().nullable().optional(),
 });
+// Adım Durumu matrisi (3604): açık emirlerin adımları tek okumada, hafif (hazırlık ayrıntısı ve liste yok). Elle statü ve yazılabilirlik adım başınadır;
+// "yazilabilir" yalnız göstergedir, yazımda karar sunucudadır (kalem başına, adim-matrisi-kurali.ts).
+export const adimMatrisiSorgusu = z.object({
+  // '1': son biten emirler de gelir (kilitli satır); ekranda "Biteni göster".
+  biten: z.enum(['0', '1']).optional().transform((b) => b === '1'),
+});
+export const adimMatrisiCevabi = z.object({
+  emirler: z.array(z.object({
+    emirId: KIMLIK,
+    emirNo: z.string(),
+    urun: z.object({ kod: z.string(), ad: z.string() }),
+    durum: emirDurumu,
+    teslim: tarihSemasi.nullable(),
+    adimlar: z.array(z.object({
+      isEmriId: KIMLIK,
+      opNo: z.number().int(),
+      ad: z.string(),
+      durum: isEmriDurumu,
+      hedef: z.number().int().nonnegative(),
+      yapilan: z.number().int().nonnegative(),
+      yuzde: yuzdeSemasi,
+      sistemStatusu: adimStatusu,
+      elle: z.object({ statu: adimStatusu, not: z.string().nullable(), kisiAdi: z.string().nullable(), zaman: zamanSemasi }).nullable(),
+    })),
+  })),
+  // Okuyanın yazma yetkisi (ekran seçimi kapatır; yazma ucu aynı yetkiyi sunucuda arar).
+  yazabilir: z.boolean(),
+});
+// Toplu elle statü: kalem başına bağımsız işlem (bayat kalem ötekileri bozmaz). statu null = otomatiğe dön.
+export const statuTopluGovdesi = z.object({
+  kalemler: z.array(z.object({
+    emirId: KIMLIK,
+    isEmriId: KIMLIK,
+    statu: z.enum(ELLE_YAZILAN_STATULER).nullable(),
+    not: kisaNot,
+    // İstemcinin gördüğü sistem statüsü; sunucudakiyle aynı değilse kalem yazılmaz ('eski').
+    sistemStatusu: adimStatusu,
+  }).strict()).min(1, 'En az bir adım seçin.').max(TOPLU_EN_COK_KALEM, `Tek seferde en çok ${String(TOPLU_EN_COK_KALEM)} adım yazılır.`),
+  // Tek hücreden uyarıyla yazım: sistem statüsü Üretimde, Duraklatıldı ya da Durdu olan adım yalnız bu açıkken yazılır.
+  calisanOnay: z.boolean().prefault(false),
+}).strict();
+export const STATU_TOPLU_SONUCLARI = ['yazildi', 'kaldirildi', 'atlandi', 'eski', 'ret'] as const;
+export const statuTopluCevabi = z.object({
+  kalemler: z.array(z.object({
+    emirId: KIMLIK,
+    isEmriId: KIMLIK,
+    sonuc: z.enum(STATU_TOPLU_SONUCLARI),
+    // atlandi, eski ve ret'te sebebin düz metni; başarıda null.
+    neden: z.string().nullable(),
+  })),
+});
 export type AdimTedariki = z.output<typeof adimTedarikSemasi>;
 export type AdimStatusu = z.output<typeof adimStatusu>;
 export type ElleYazilanStatu = (typeof ELLE_YAZILAN_STATULER)[number];
@@ -1421,3 +1473,7 @@ export type HazirlikOnayiKaldirGovdesi = z.output<typeof hazirlikOnayiKaldirGovd
 export type HazirlikElleEksikGovdesi = z.output<typeof hazirlikElleEksikGovdesi>;
 export type AdimDurumuCevabi = z.output<typeof adimDurumuCevabi>;
 export type AdimDurumuTerminalCevabi = z.output<typeof adimDurumuTerminalCevabi>;
+export type AdimMatrisiCevabi = z.output<typeof adimMatrisiCevabi>;
+export type StatuTopluGovdesi = z.input<typeof statuTopluGovdesi>;
+export type StatuTopluCevabi = z.output<typeof statuTopluCevabi>;
+export type StatuTopluSonucu = (typeof STATU_TOPLU_SONUCLARI)[number];
