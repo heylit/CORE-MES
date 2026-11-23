@@ -105,9 +105,16 @@ test('Çoklu seçimde panel kapanır; seçili şerit ve sonuç şeridi aynı yer
     const g = r.request().postDataJSON() as { kalemler: { emirId: number; isEmriId: number; statu: string | null }[] };
     await r.fulfill({ json: { kalemler: g.kalemler.map((k) => ({ emirId: k.emirId, isEmriId: k.isEmriId, sonuc: k.statu === null ? 'kaldirildi' : 'yazildi', neden: null })) } });
   });
+  // Seçim sayısı ortak veritabanına bağlı olmasın: yalnız ilk iki emir gösterilir; Tümünü seç 100 kalem sınırını aşmaz.
+  await page.route('**/api/adimli-emirler/adim-matrisi*', async (r) => {
+    const res = await r.fetch();
+    const j = await res.json() as { emirler: unknown[] };
+    j.emirler = j.emirler.slice(0, 2);
+    await r.fulfill({ response: res, json: j });
+  });
   await ac('/adim-durumu?gorunum=matris');
   const telefon = genislik < 768;
-  const hucre = telefon ? page.getByRole('list', { name: 'Emirler' }).getByRole('button', { name: /OP 30/ }).first() : page.getByRole('table').getByRole('button', { name: /^\S+, OP 30/ }).first();
+  const hucre = telefon ? page.getByRole('list', { name: 'Emirler' }).getByRole('button', { name: /OP \d+/ }).first() : page.getByRole('table').getByRole('button', { name: /^\S+, OP \d+/ }).first();
   await hucre.click();
   const panel = page.getByRole('complementary', { name: 'Adım ayrıntısı' });
   await expect(panel).toBeVisible();
@@ -134,6 +141,8 @@ test('Çoklu seçimde panel kapanır; seçili şerit ve sonuç şeridi aynı yer
   await expect(kap.getByRole('button', { name: 'Geri al' })).toBeVisible();
   await resim('3-yazma-sonucu-serit');
   await sayfaTasmaz(page);
+  // Yazımdan sonraki liste yenilemesi test bitince yarım kalmasın.
+  await page.unrouteAll({ behavior: 'wait' });
 });
 
 test('Tablo: onay kutusu parmak boyunda, ilk sütunlar sabit, sayfa kaymaz', async ({ page, ac }) => {
