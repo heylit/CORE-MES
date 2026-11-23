@@ -1778,6 +1778,7 @@ export const KUR_KILIDI_UYARI_GUNU = 2;
 
 export interface HatirlatmaTalebi {
   talepId: string;
+  talepEdenId: number | null;
   no: string;
   durum: TalepDurumu;
   ihtiyacTarihi: string | null;

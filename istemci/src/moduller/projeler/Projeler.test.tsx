@@ -94,6 +94,15 @@ describe('Projeler', () => {
     expect(screen.queryByRole('button', { name: /Düzenle/ })).toBeNull();
   });
 
+  it('3588: bitişi geçen projede bitiş tarihinin altında ortak kademe rozeti çıkar; kademesiz projede çıkmaz', async () => {
+    const liste = { satirlar: [{ ...P1, kademe: 3 }, P2], toplam: 2, sayfa: 1, sayfaBoyu: 50 } satisfies ProjeListesiCevabi;
+    sunucuKur(OKUR, undefined, liste);
+    ac();
+    await screen.findByText('PRJ.01');
+    expect(screen.getAllByText('K3 Gecikti')).toHaveLength(1);
+    expect(screen.getByText('31.12.2026').parentElement?.textContent).toContain('K3 Gecikti');
+  });
+
   it('boş listede başlangıç süzgeci (Aktif) dolu olsa da yazan ilk projeyi oradan açar; süzgeç temizlenince ileti değişir', async () => {
     const cagrilar = sunucuKur(YAZAR, undefined, { satirlar: [], toplam: 0, sayfa: 1, sayfaBoyu: 50 });
     ac();

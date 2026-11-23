@@ -53,6 +53,33 @@ describe('Kademeli uyarı (3405)', () => {
     });
   });
 
+  it('3588: elle değişen merdiven "Varsayılandan farklı" işaretlenir; katalog değerinde olan ve satırsız kaynak işaretlenmez', async () => {
+    const farkli: KademeAyarSatiri = { ...SATIR, kaynak: 'kalibrasyon.vade', varsayilan: false, k4Gun: 9 };
+    const ayniDeger: KademeAyarSatiri = { ...SATIR, kaynak: 'arkon.bakim-vade', ad: 'Bakım vadesi', varsayilan: false, k2Gun: 5, k4Gun: 2, k5Gun: 5, epostaKademe: 3 };
+    const satirsiz: KademeAyarSatiri = { ...SATIR, kaynak: 'kalite-merkezi.dof', ad: 'DÖF termini', varsayilan: true, k4Gun: 9 };
+    kur(<KademeliUyari />, () => json(200, { ...AYARLAR, kaynaklar: [farkli, ayniDeger, satirsiz] }));
+    const satir = (ad: string) => screen.getByText(ad).closest('tr') as HTMLElement;
+    await screen.findByText('Kalibrasyon vadesi');
+    expect(within(satir('Kalibrasyon vadesi')).getByText('Varsayılandan farklı')).toBeTruthy();
+    expect(within(satir('Bakım vadesi')).queryByText('Varsayılandan farklı')).toBeNull();
+    expect(within(satir('DÖF termini')).queryByText('Varsayılandan farklı')).toBeNull();
+  });
+
+  it('3588: "Varsayılana dön" formu katalog merdivenine getirir; açık/kapalı kalır, kayıt Kaydet ile gider', async () => {
+    const farkli: KademeAyarSatiri = { ...SATIR, varsayilan: false, k2Gun: 4, k4Gun: 9, k5Gun: 20, epostaKademe: 5, serit: false };
+    const c = kur(<KademeliUyari />, (yol, yontem, govde) => (yontem === 'POST' ? json(200, { ...AYARLAR, kaynaklar: [{ ...farkli, ...(govde as object), surum: 2 }] })
+      : yol === '/bildirim-kademe/kaynaklar' ? json(200, { ...AYARLAR, kaynaklar: [farkli] }) : json(404, {})));
+    fireEvent.click(await screen.findByText('Kalibrasyon vadesi'));
+    const pencere = await screen.findByRole('dialog');
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Varsayılana dön' }));
+    expect(within(pencere).queryByRole('button', { name: 'Varsayılana dön' })).toBeNull();
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(c.some((x) => x.yontem === 'POST')).toBe(true); });
+    expect(c.find((x) => x.yontem === 'POST')?.govde).toEqual({
+      acik: true, k2Gun: 10, k3Gun: null, k3Birim: 'gun', k4Gun: 3, k5Gun: 7, epostaKademe: 2, serit: true, kapatilamaz: true, yoneticiRolId: null, surum: 1,
+    });
+  });
+
   it('3456: takip anahtarı pencere açmadan bütün ayarla ve sürümle yazar; Geri al yeni sürümle geri açar', async () => {
     const c = kur(<KademeliUyari />, (yol, yontem, govde) => {
       if (yol === '/bildirim-kademe/kaynaklar') return json(200, AYARLAR);

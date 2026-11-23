@@ -2,10 +2,10 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import type { GorevlerimCevabi, GorevlerimSatiri, GorevlerimTuru } from '#paylasilan/sozlesme/projeler.ts';
-import { DurumKutusu, Kart, Rozet, SayiKarti, Sekmeler, Tablo, type Sekme, type Sutun } from '../../ortak/arayuz/index.ts';
+import { DurumKutusu, KademeRozeti, Kart, Rozet, SayiKarti, Sekmeler, Tablo, kademeMetni, type Sekme, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { GOREV_DURUM_TONU, KADEME_TONU, atamaMetni, bugun, gorevDurumMetni, kademeMetni, tarihMetni } from './gosterim.ts';
+import { GOREV_DURUM_TONU, atamaMetni, bugun, gorevDurumMetni, tarihMetni } from './gosterim.ts';
 import { useTopluIptal } from './GorevIptalPenceresi.tsx';
 import { GorevIlerlemesi, YapanMetni, gorevGecikiyor } from './ProjeGorevleri.tsx';
 import { useIslemVar } from './komut.ts';
@@ -57,7 +57,7 @@ export function ProjeGorevlerim() {
     { anahtar: 'durum', baslik: 'Durum', hucre: (g) => <Rozet ton={GOREV_DURUM_TONU[g.durum]}>{gorevDurumMetni(g)}</Rozet>, csv: gorevDurumMetni },
     ...(hepsi.some((g) => g.kademe !== null) ? [{
       anahtar: 'kademe', baslik: 'Kademe', kirilmaz: true,
-      hucre: (g: GorevlerimSatiri) => (g.kademe === null ? null : <Rozet ton={KADEME_TONU[g.kademe] ?? 'bilgi'}>{kademeMetni(g.kademe)}</Rozet>),
+      hucre: (g: GorevlerimSatiri) => (g.kademe === null ? null : <KademeRozeti kademe={g.kademe} />),
       csv: (g: GorevlerimSatiri) => kademeMetni(g.kademe),
     } satisfies Sutun<GorevlerimSatiri>] : []),
   ];

@@ -204,3 +204,6 @@ button.tc-prj-pano-kart { cursor: pointer; }
 /* 3580: iptal penceresi ve "İptalleri göster" anahtarı */
 .tc-prj-iptal-anahtar { display: inline-flex; align-items: center; gap: var(--b-2); }
 .tc-prj-iptal-liste { display: grid; gap: var(--b-2); margin: 0; padding: 0; list-style: none; max-block-size: 40vh; overflow-y: auto; }
+
+/* 3588: bitiş tarihi ve altındaki kademe rozeti; dar sütunda rozet tarihin altına iner. */
+.tc-prj-bitis-hucre { display: inline-flex; flex-direction: column; align-items: flex-start; gap: var(--b-1); }

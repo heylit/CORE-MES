@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { Proje, ProjeYonetimiCevabi } from '#paylasilan/sozlesme/projeler.ts';
-import { Dugme, DurumKutusu, Kart, KlasorBaglantisi, Rozet, Sekmeler, type Sekme, LogoBagi, LogoRozeti, useLogoRozetleri } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, KademeRozeti, Kart, KlasorBaglantisi, Rozet, Sekmeler, type Sekme, LogoBagi, LogoRozeti, useLogoRozetleri } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { ProjePlani } from '../plan/disari.ts';
@@ -72,6 +72,7 @@ export function ProjeAyrinti() {
         <Dugme simge="back" onClick={() => { void yonlendir('/projeler'); }}>Projeler</Dugme>
         <h1 className="tc-prj-baslik">{p.kod} · {p.ad}</h1>
         <Rozet ton={DURUM_TONU[p.durum]}>{DURUM_METNI[p.durum]}</Rozet>
+        {p.kademe != null && <KademeRozeti kademe={p.kademe} />}
         <LogoRozeti bilgi={logo.durum(p.id)} hata={logo.hata} baslik /><LogoBagi tur="proje" id={p.id} bilgi={logo.durum(p.id)} />
         <StatuCipi statu={y?.statu ?? p.statu} {...(statuYazabilir && y ? { tikla: () => { statuAcikYaz(true); } } : {})} />
         <div className="tc-prj-bas-sag">

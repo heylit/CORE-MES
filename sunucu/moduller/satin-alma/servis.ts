@@ -2979,7 +2979,7 @@ const tasinanTurMu = (tur: string): boolean => TASINAN_HATIRLATMALAR.has(tur.rep
 
 async function hatirlatmaTalepleri(db: Db): Promise<HatirlatmaTalebi[]> {
   return (await s.hatirlatmaTalepleriOku(db)).map((r) => ({
-    talepId: r.talepId, no: r.no, durum: r.durum, ihtiyacTarihi: r.ihtiyacTarihi, durumAni: r.durumZamani.toISOString(), durumGunu: tesisGunu(r.durumZamani),
+    talepId: r.talepId, talepEdenId: r.talepEdenId, no: r.no, durum: r.durum, ihtiyacTarihi: r.ihtiyacTarihi, durumAni: r.durumZamani.toISOString(), durumGunu: tesisGunu(r.durumZamani),
     teklifIstegiVar: r.teklifIstegiVar, kararVar: r.kararVar, kararOnayli: r.kararVar && r.sonOnay?.sonuc === 'onay',
     sonOnay: r.sonOnay === null ? null : { id: r.sonOnay.id, gun: tesisGunu(new Date(r.sonOnay.zaman)) },
     kurKilidiBitisi: r.kurKilidi === null ? null : tesisGunu(new Date(r.kurKilidi.getTime() + KUR_KILIDI.gun * 86_400_000)),
@@ -3034,18 +3034,18 @@ export function satinAlmaKademeOkuyucusu(kaynak: SatinAlmaKademeKaynagi): (db: D
     const l: KademeKaydi[] = [];
     for (const t of talepler) {
       if (kaynak === 'satin-alma.talep-onay' && t.durum === 'onayda' && !t.kararOnayli) {
-        l.push({ kayit: `${t.talepId}:${t.durumAni}`, no: t.no, baslik: `${t.no}: onay bekliyor`, yol: '/satin-alma/onaylar', baslangic: t.durumGunu,
+        l.push({ kayit: `${t.talepId}:${t.durumAni}`, no: t.no, baslik: `${t.no}: onay bekliyor`, yol: '/satin-alma/onaylar', baslangic: t.durumGunu, sahip: t.talepEdenId,
           yapanlar: sahip('satin-alma.onayla'), yoneticiler: yonetici });
       }
       if (kaynak === 'satin-alma.siparis-verilmedi' && t.durum === 'onayda' && t.kararOnayli && t.sonOnay !== null) {
         l.push({ kayit: `${t.talepId}:${t.sonOnay.id}`, no: t.no, baslik: `${t.no}: onaylandı, sipariş verilmedi`, yol: '/satin-alma/talepler',
-          baslangic: t.sonOnay.gun, yapanlar: yazan, yoneticiler: yonetici });
+          baslangic: t.sonOnay.gun, sahip: t.talepEdenId, yapanlar: yazan, yoneticiler: yonetici });
       }
       if (kaynak === 'satin-alma.teklif-cevapsiz' && (t.durum === 'teklif_isteniyor' || t.durum === 'degerlendirme')) {
         for (const r of t.istekler) {
           if (r.teklifVar) continue;
           l.push({ kayit: `${t.talepId}:${String(r.firmaId)}:${r.gonderim}`, no: t.no, baslik: `${t.no}: teklif isteği cevapsız`, yol: '/satin-alma/talepler',
-            baslangic: r.gonderim, yapanlar: yazan, yoneticiler: yonetici });
+            baslangic: r.gonderim, sahip: t.talepEdenId, yapanlar: yazan, yoneticiler: yonetici });
         }
       }
       if (kaynak === 'satin-alma.teslim' && t.durum === 'siparis_verildi') {
@@ -3053,7 +3053,7 @@ export function satinAlmaKademeOkuyucusu(kaynak: SatinAlmaKademeKaynagi): (db: D
           if (p.beklenenTeslim === null) continue;
           const no = p.siparisNo ?? t.no;
           l.push({ kayit: `${t.talepId}:${p.teklifId}:${p.beklenenTeslim}`, no, baslik: `${no}: teslim bekleniyor`, yol: '/satin-alma/talepler',
-            sonGun: p.beklenenTeslim, yapanlar: yazan, yoneticiler: yonetici });
+            sonGun: p.beklenenTeslim, sahip: t.talepEdenId, yapanlar: yazan, yoneticiler: yonetici });
         }
       }
     }

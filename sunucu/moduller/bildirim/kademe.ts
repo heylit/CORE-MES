@@ -5,14 +5,14 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { BildirimTuru } from '#paylasilan/sozlesme/bildirim.ts';
 import {
-  ACIK_TAKIP_EN_COK, KADEME_ADLARI, KADEME_KAYNAKLARI, KADEME_KAYNAK_ANAHTARLARI, kademeTuru, kaynakKademeleri,
+  ACIK_TAKIP_EN_COK, KADEME_KAYNAKLARI, KADEME_KAYNAK_ANAHTARLARI, kademeTuru, kaynakKademeleri,
   type AcikTakiplerCevabi, type GecikenlerimCevabi, type KademeAyarDegistirGovdesi, type KademeAyarlariCevabi, type KademeKaynagi, type KademeKaynagiTanimi,
   type KademeTakipSatiri,
 } from '#paylasilan/sozlesme/bildirim-kademe.ts';
 import { tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import { kisiAdlari, kisilerinIslemleri, rolSecenekleri, rollerdekiKisiler } from '../kisiler/disari.ts';
-import { bildirilecekKademe, gerekenKademeler, kademeAyarHatasi, type KademeKurali } from './kurallar.ts';
-import { bildirimGonder, bildirimKapat } from './servis.ts';
+import { bildirilecekKademe, gerekenKademeler, kademeAliciKumeleri, kademeAyarHatasi, kademeBildirimMetni, type KademeAliciTuru, type KademeKurali } from './kurallar.ts';
+import { bildirimGonder, bildirimKapat, yalnizKisilerAlicilari } from './servis.ts';
 import * as sk from './sorgular/kademe/sorgular.ts';
 import { gecerliAyarlar, type GecerliAyar } from './kademe-ayar.ts';
 
@@ -35,6 +35,8 @@ export interface KademeKaydi {
   baslangic?: string | null;
   // 3418 a: beklemenin başladığı an (ISO). Saat birimli ayar bunu sayar; vermeyen kaynakta başlangıç gününün başı sayılır.
   baslangicAni?: string | null;
+  // 3588: kaydı açan ya da sorumlu kişi. K2-K3 önce ona gider; kişi yoksa, yetkisizse ya da kaynağı okuyamıyorsa yapanlara düşer.
+  sahip?: number | null;
   // K2-K3 alıcıları (işi yapacak kişiler). Boşsa kayıt K1-K3'e girmez, gecikince yine yukarı çıkar.
   yapanlar: readonly number[];
   // K4 alıcıları (kontrol eden, sorumlu rol); K5'te devralanlarla birlikte.
@@ -125,20 +127,34 @@ export async function kademeleriIlerlet(db: Db, simdi: Date = new Date()): Promi
       const ustler = tekil([r.yoneticiler, rolKisileri]);
       for (const k of yeni.sort((a, b) => a - b)) {
         const bildir = !ilk && k === bildirilecek && bildirenKademeler.includes(k);
-        let hedef: number[] = [];
-        if (bildir) {
-          hedef = k <= 3 ? [...r.yapanlar] : k === 4 ? ustler : tekil([ustler, r.devralanlar ?? []]);
-          if (hedef.length === 0) hedef = [...(r.yedekler ?? await yedekler())];
-        }
-        if (!(await sk.defterYaz(db, kaynak, r.kayit, k, bildir && hedef.length > 0, hedef.length))) continue;
-        sonuc.yazilan += 1;
-        if (!bildir || hedef.length === 0) continue;
         const kademe = k as 2 | 3 | 4 | 5;
-        await bildirimGonder(db, {
-          tur: kademeTuru(kaynak, kademe), baslik: `${r.no}: ${KADEME_KAYNAKLARI[kaynak].ad} · ${KADEME_ADLARI[kademe]}`, metin: r.baslik, yol: r.yol,
-          kaynakKimlik: `${r.kayit}:k${String(k)}`, kisiler: hedef, yalnizKisiler: true, eposta: gecikme === null ? { kayitNo: r.no } : { kayitNo: r.no, gecikmeGunu: gecikme },
-          epostaYok: k < ayar.epostaKademe,
-        });
+        const tur = kademeTuru(kaynak, kademe);
+        // Aday kümeleri sırayla denenir; etkin alıcısı (türü alan) olan ilk küme kazanır, hiçbirinde yoksa defter "ulaşmadı" yazar (Risk G1).
+        const gruplar: { alici: KademeAliciTuru; kisiler: number[] }[] = [];
+        if (bildir) {
+          const adaylar = { sahip: r.sahip ?? null, yapanlar: r.yapanlar, ustler, devralanlar: r.devralanlar ?? [], yedekler: r.yedekler ?? await yedekler() };
+          for (const kume of kademeAliciKumeleri(k, adaylar)) {
+            const secilen = new Set<number>();
+            for (const a of kume) {
+              const etkin = (await yalnizKisilerAlicilari(db, tur, a.kisiler)).filter((id) => !secilen.has(id));
+              etkin.forEach((id) => secilen.add(id));
+              if (etkin.length > 0) gruplar.push({ alici: a.tur, kisiler: etkin });
+            }
+            if (gruplar.length > 0) break;
+          }
+        }
+        const alici = gruplar.reduce((t, g) => t + g.kisiler.length, 0);
+        if (!(await sk.defterYaz(db, kaynak, r.kayit, k, bildir && alici > 0, alici))) continue;
+        sonuc.yazilan += 1;
+        if (!bildir || alici === 0) continue;
+        const sahipAdi = r.sahip === null || r.sahip === undefined ? null : (await kisiAdlari(db, [r.sahip])).get(r.sahip) ?? null;
+        for (const g of gruplar) {
+          const m = kademeBildirimMetni({ kademe, alici: g.alici, no: r.no, kaynakAdi: KADEME_KAYNAKLARI[kaynak].ad, baslik: r.baslik, gecikmeGun: gecikme, sahipAdi });
+          await bildirimGonder(db, {
+            tur, baslik: m.baslik, metin: m.metin, yol: r.yol, kaynakKimlik: `${r.kayit}:k${String(k)}`, kisiler: g.kisiler, yalnizKisiler: true,
+            eposta: gecikme === null ? { kayitNo: r.no } : { kayitNo: r.no, gecikmeGunu: gecikme }, epostaYok: k < ayar.epostaKademe,
+          });
+        }
         sonuc.bildirilen += 1;
       }
       // Takip yalnız yaklaşan ve geciken kayıttır; süresi uzayan kayıt takipten düşer, açık kademe bildirimleri kapanır.

@@ -60,41 +60,53 @@ export interface KademeKaynagiTanimi {
   yol: `/${string}`;
   // Para taşıyan kaynakta e-posta varsayılan kapalıdır (Risk K3).
   para?: true;
+  // 3588: kişisel e-posta kapatma yoktur (eposta.ts); yeni kaynağın e-postası bu işaretle varsayılan kapalı başlar, yönetici açar.
+  epostaKapali?: true;
   varsayilan: KademeVarsayilani;
 }
 
+// 3588: tek merdiven. Son gün sayacında K2 son günden 1 iş günü önce, K4 gecikmenin 1., K5 3. iş günü; bekleme sayacında K3 1 iş günü
+// bekleyince, K4 2., K5 4. iş gün. E-posta K3'ten. Sipariş, satın alma, proje ve hazırlık görevi değerleri buradan okur: değer tek yerde.
+export const MERDIVEN = {
+  sonGun: { k2: 1, k4: 1, k5: 3 },
+  bekleme: { k3: 1, k4: 2, k5: 4 },
+  epostaKademe: 3,
+} as const;
 const sonGun = (k2: number, k4: number, k5: number | null, ek: Partial<KademeVarsayilani> = {}): KademeVarsayilani => ({
   acik: false, k2Gun: k2, k3Gun: null, k3Birim: 'gun', k4Gun: k4, k5Gun: k5, epostaKademe: 3, serit: true, kapatilamaz: true, ...ek,
 });
 const bekleme = (k3: number, k4: number, k5: number | null, ek: Partial<KademeVarsayilani> = {}): KademeVarsayilani => ({
   acik: false, k2Gun: null, k3Gun: k3, k3Birim: 'gun', k4Gun: k4, k5Gun: k5, epostaKademe: 3, serit: true, kapatilamaz: true, ...ek,
 });
+const tekSonGun = (ek: Partial<KademeVarsayilani> = {}): KademeVarsayilani => sonGun(MERDIVEN.sonGun.k2, MERDIVEN.sonGun.k4, MERDIVEN.sonGun.k5, { epostaKademe: MERDIVEN.epostaKademe, ...ek });
+const tekBekleme = (ek: Partial<KademeVarsayilani> = {}): KademeVarsayilani => bekleme(MERDIVEN.bekleme.k3, MERDIVEN.bekleme.k4, MERDIVEN.bekleme.k5, { epostaKademe: MERDIVEN.epostaKademe, ...ek });
+
 
 // Anahtar `<modül>.<kaynak>`; bildirim türleri bu anahtardan türetilir (kademeTuru). Hazırlık görevi 3396'nın türlerini korur.
 export const KADEME_KAYNAKLARI = {
   'projeler.hazirlik': {
     ad: 'Hazırlık görevi', grup: 'Projeler', sayac: 'son-gun', asama: 1, okumaIslemleri: ['projeler.gorev-isle', 'projeler.gorev-kontrol', 'projeler.hazirlik-dagit', 'projeler.oku'],
-    yol: '/proje-gorevlerim', varsayilan: sonGun(1, 1, 2, { epostaKademe: 2 }),
+    yol: '/proje-gorevlerim', varsayilan: tekSonGun(),
   },
   'projeler.gorev': {
     ad: 'Proje görevi', grup: 'Projeler', sayac: 'son-gun', asama: 1, okumaIslemleri: ['projeler.gorev-isle', 'projeler.gorev-kontrol', 'projeler.oku'],
-    yol: '/proje-gorevlerim', varsayilan: sonGun(1, 3, 5),
+    yol: '/proje-gorevlerim', varsayilan: tekSonGun(),
   },
   'satin-alma.talep-onay': {
-    ad: 'Satın alma talebi onay bekliyor', grup: 'Satın alma', sayac: 'bekleme', asama: 1, okumaIslemleri: ['satin-alma.onayla'],
-    yol: '/satin-alma/onaylar', varsayilan: bekleme(2, 2, 5),
+    ad: 'Satın alma talebi onay bekliyor', grup: 'Satın alma', sayac: 'bekleme', asama: 1, okumaIslemleri: ['satin-alma.onayla'], para: true,
+    yol: '/satin-alma/onaylar', varsayilan: tekBekleme(),
   },
   'satin-alma.siparis-verilmedi': {
-    ad: 'Onaylı talebe sipariş verilmedi', grup: 'Satın alma', sayac: 'bekleme', asama: 1, okumaIslemleri: ['satin-alma.yaz', 'satin-alma.ayar'],
-    yol: '/satin-alma/talepler', varsayilan: bekleme(1, 2, 5),
+    ad: 'Onaylı talebe sipariş verilmedi', grup: 'Satın alma', sayac: 'bekleme', asama: 1, okumaIslemleri: ['satin-alma.yaz', 'satin-alma.ayar'], para: true,
+    yol: '/satin-alma/talepler', varsayilan: tekBekleme(),
   },
   'satin-alma.teklif-cevapsiz': {
     ad: 'Teklif isteği cevapsız', grup: 'Satın alma', sayac: 'bekleme', asama: 1, okumaIslemleri: ['satin-alma.yaz', 'satin-alma.ayar'],
-    yol: '/satin-alma/talepler', varsayilan: bekleme(3, 3, null, { serit: false, kapatilamaz: false }),
+    yol: '/satin-alma/talepler', varsayilan: tekBekleme({ serit: false, kapatilamaz: false }),
   },
   'satin-alma.teslim': {
-    ad: 'Satın alma siparişi teslimi', grup: 'Satın alma', sayac: 'son-gun', asama: 1, okumaIslemleri: ['satin-alma.yaz', 'satin-alma.ayar'],
-    yol: '/satin-alma/talepler', varsayilan: sonGun(3, 3, 5),
+    ad: 'Satın alma siparişi teslimi', grup: 'Satın alma', sayac: 'son-gun', asama: 1, okumaIslemleri: ['satin-alma.yaz', 'satin-alma.ayar'], para: true,
+    yol: '/satin-alma/talepler', varsayilan: tekSonGun(),
   },
   'kalibrasyon.vade': {
     ad: 'Kalibrasyon vadesi', grup: 'Kalibrasyon', sayac: 'son-gun', asama: 1, okumaIslemleri: ['kalibrasyon.oku', 'kalibrasyon.yaz'],
@@ -113,18 +125,24 @@ export const KADEME_KAYNAKLARI = {
     yol: '/kalite-merkezi/uygunsuzluklar', varsayilan: bekleme(1, 1, 3),
   },
   'siparisler.onay': {
-    ad: 'Satış siparişi onay bekliyor', grup: 'Satış', sayac: 'bekleme', asama: 1, okumaIslemleri: ['siparisler.onayla'],
-    yol: '/siparisler', varsayilan: bekleme(1, 2, 4),
+    ad: 'Satış siparişi onay bekliyor', grup: 'Satış', sayac: 'bekleme', asama: 1, okumaIslemleri: ['siparisler.onayla'], para: true,
+    yol: '/siparisler', varsayilan: tekBekleme(),
   },
   'siparisler.termin': {
     ad: 'Satış siparişi termini', grup: 'Satış', sayac: 'son-gun', asama: 1, okumaIslemleri: ['siparisler.oku', 'siparisler.yaz'],
-    yol: '/siparisler', varsayilan: sonGun(3, 1, 3),
+    yol: '/siparisler', varsayilan: tekSonGun(),
   },
   // 3429-2 D: planlanan bitiş kalem termininden sonra (Kokpit'teki canlı plan). Kayıt yalnız risk sürdükçe açıktır; son gün riskli kalemin
   // terminidir. Plan düzelince ya da teslim tamamlanınca kayıt kendiliğinden kapanır.
   'siparisler.plan-riski': {
     ad: 'Satış siparişi termin riski (plan terminden sonra)', grup: 'Satış', sayac: 'son-gun', asama: 1, okumaIslemleri: ['siparisler.oku', 'siparisler.yaz'],
-    yol: '/siparisler', varsayilan: sonGun(5, 1, 3),
+    yol: '/siparisler', varsayilan: tekSonGun(),
+  },
+  // 3588: proje düzeyi. Açık (aktif) projenin planlanan bitişi; bitişi olmayan proje takipte değildir (tarih uydurulmaz). Proje sorumlusu
+  // alanı yoktur: K2-K3 projeyi açan kişiye, yoksa projeyi yazanlara; K4 proje durumunu ayarlayanlara gider.
+  'projeler.proje-bitis': {
+    ad: 'Proje bitişi', grup: 'Projeler', sayac: 'son-gun', asama: 1, okumaIslemleri: ['projeler.oku', 'projeler.yaz'], epostaKapali: true,
+    yol: '/projeler', varsayilan: tekSonGun(),
   },
   // 3416-1 a: bekletilen üretim emri, neden başına (İş Akışı v4.7 bekleme tablosu). K3 ilk sınır, K4 ikinci sınır: gecikmenin
   // k4'üncü günü ikinci sınırın günüdür (malzeme 2 / 5 iş günü: k3 2, k4 4). Motor iş günü sayar; saatli sınır en yakın iş gününe iner.
@@ -210,3 +228,12 @@ export function kademeTuru(kaynak: KademeKaynagi, kademe: 2 | 3 | 4 | 5): Kademe
 
 // Gün sınırları (ayar ekranı ve sunucu aynı sınırı kullanır).
 export const KADEME_GUN_EN_COK = 60;
+
+// 3588: "varsayılandan farklı" işareti ve "varsayılana dön". Açık/kapalı takip bir tercihtir, merdiven değildir: karşılaştırmaya girmez.
+// Ayar satırı olmayan kaynak katalog varsayılanını kullanır, yani farklı sayılmaz.
+type MerdivenAyari = Pick<KademeVarsayilani, 'k2Gun' | 'k3Gun' | 'k3Birim' | 'k4Gun' | 'k5Gun' | 'serit' | 'kapatilamaz'> & { epostaKademe: number; yoneticiRolId: number | null };
+export function varsayilandanFarkli(kaynak: KademeKaynagi, a: MerdivenAyari): boolean {
+  const v: KademeVarsayilani = KADEME_KAYNAKLARI[kaynak].varsayilan;
+  return a.k2Gun !== v.k2Gun || a.k3Gun !== v.k3Gun || a.k3Birim !== v.k3Birim || a.k4Gun !== v.k4Gun || a.k5Gun !== v.k5Gun
+    || a.epostaKademe !== v.epostaKademe || a.serit !== v.serit || a.kapatilamaz !== v.kapatilamaz || a.yoneticiRolId !== null;
+}
