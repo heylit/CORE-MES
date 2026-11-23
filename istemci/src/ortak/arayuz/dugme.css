@@ -7,6 +7,9 @@
 }
 .tc-dugme:active { transform: scale(var(--hareket-kucul)); }
 .tc-dugme:disabled { opacity: .4; cursor: not-allowed; }
+/* Engel nedeni okunsun diye odak alan pasif düğme `disabled` yerine aria-disabled taşır (neden aria-describedby ile bağlanır); görünüşü aynıdır. */
+.tc-dugme[aria-disabled="true"] { opacity: .4; cursor: not-allowed; }
+.tc-dugme[aria-disabled="true"]:active { transform: none; }
 .tc-dugme-ana { min-height: var(--dokunma-ana); font-size: var(--yazi-l); }
 .tc-dugme-birincil { background: var(--hazard); color: var(--on-hazard); border-color: transparent; }
 .tc-dugme-tehlike { background: var(--stop); color: var(--on-sig); border-color: transparent; }
