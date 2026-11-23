@@ -9,6 +9,7 @@ import type {
 } from '#paylasilan/sozlesme/plan.ts';
 import { CANLI_DEGISTI, DORT_SAAT_RED_NEDENI, PLAN_ONAY_KOMUTLARI, SONRADAN_BASLAYAN, type CanliDegistiAyrintisi, type SonradanBaslayanAyrintisi } from '#paylasilan/sozlesme/plan.ts';
 import { tesisGunBasi, tesisGunu, tesisSaati } from '#paylasilan/zaman.ts';
+import { devirPartisi } from '#paylasilan/devir-kurali.ts';
 import {
   aktifIstasyonlar, isMerkezleri, istasyonAdlari, istasyondakiMakineler, kapasiteKaynaklari, istasyonKisileri, istasyonlar as istasyonListesi, istasyonYetkinlikleri, kisininIzinliIsMerkezleri, makineDurumlari, makineDurumuYaz, makineGetir, makineler as makineListesi, makineYetkinlikleri, operasyonTipleri, planAyarlari,
 } from '../istasyonlar/disari.ts';
@@ -323,16 +324,16 @@ function devirleriKur(isler: Map<number, Is>): void {
   for (const i of isler.values()) {
     const devir = (o: IcOncul): Pick<MotorOnculu, 'devirDk' | 'devirAyarDk'> => {
       const ob = sayi(o.is.birimSureDk);
-      return o.devirAdedi === null || ob === null ? { devirDk: null, devirAyarDk: null }
-        : { devirDk: (sayi(o.is.ayarSuresiDk) ?? 0) + Math.min(o.devirAdedi, o.is.adimAdedi ?? o.is.adet) * ob, devirAyarDk: sayi(o.is.ayarSuresiDk) };
+      return ob === null ? { devirDk: null, devirAyarDk: null }
+        : { devirDk: (sayi(o.is.ayarSuresiDk) ?? 0) + devirPartisi(o.devirAdedi, o.is.adimAdedi ?? o.is.adet) * ob, devirAyarDk: sayi(o.is.ayarSuresiDk) };
     };
     const l = icOnculler(isler, i);
     i.motorOnculleri = l.map((o) => ({ id: o.is.id, tur: o.tur, ...(o.tur === 'akisli' ? devir(o) : {}) }));
-    const akisli = l.filter((o) => o.tur === 'akisli' && o.devirAdedi !== null);
+    const akisli = l.filter((o) => o.tur === 'akisli');
     if (akisli.length === 0) continue;
     const b = sayi(i.birimSureDk);
     Object.assign(i, devir(akisli[0]!));
-    i.devirSonDk = b === null ? null : Math.min(Math.max(...akisli.map((o) => o.devirAdedi!)), i.adimAdedi ?? i.adet) * b;
+    i.devirSonDk = b === null ? null : Math.max(...akisli.map((o) => devirPartisi(o.devirAdedi, i.adimAdedi ?? i.adet))) * b;
   }
 }
 
