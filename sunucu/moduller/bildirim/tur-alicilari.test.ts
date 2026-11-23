@@ -179,4 +179,32 @@ describe('bildirim alıcıları (760 c, 761 b, gerçek PostgreSQL)', () => {
     await gonder({ tur: 'satin-alma.talep-onay-bekliyor', baslik: 'Talep', kaynakKimlik: 't-1' });
     assert.deepEqual(await alanlar('satin-alma.talep-onay-bekliyor'), [yoneticiId]);
   });
+
+  test('3597 a: kayda bağlı türde seçim ek alıcıdır; kayıttaki kişi kalır, seçilen yalnız kaydı görebiliyorsa alır', async () => {
+    const s = await satir('siparisler.siparis-onaylandi');
+    assert.equal(s.kip, 'ek');
+    assert.equal(s.gormeIslemi, 'siparisler.oku');
+    assert.deepEqual(s.varsayilanIslemler, []);
+    assert.equal((await satir('istasyonlar.makine-durdu')).kip, 'yerine');
+    await bosalt();
+    await gonder({ tur: 'siparisler.siparis-onaylandi', baslik: 'Onaylandı', yol: '/siparisler/1', kaynakKimlik: 's-1', kisiler: [kim('operator')] });
+    assert.deepEqual(await alanlar('siparisler.siparis-onaylandi'), [kim('operator')]);
+    await ayarla('siparisler.siparis-onaylandi', [], [kim('mudur'), kim('bakim')]);
+    await bosalt();
+    await gonder({ tur: 'siparisler.siparis-onaylandi', baslik: 'Onaylandı', yol: '/siparisler/1', kaynakKimlik: 's-2', kisiler: [kim('operator')] });
+    assert.deepEqual(await alanlar('siparisler.siparis-onaylandi'), sirala([kim('operator'), kim('mudur')]));
+    await bosalt();
+    await gonder({ tur: 'siparisler.siparis-onaylandi', baslik: 'Onaylandı', yol: '/siparisler/1', kaynakKimlik: 's-3', kisiler: [kim('operator')], haric: kim('mudur') });
+    assert.deepEqual(await alanlar('siparisler.siparis-onaylandi'), [kim('operator')]);
+    await ayarla('siparisler.siparis-onaylandi', [], []);
+  });
+
+  test('3597 a: yalnız kişilere giden kayda bağlı türde (proje görevi) seçim atananı susturmaz', async () => {
+    await ayarla('projeler.gorev-atandi', [], [yoneticiId]);
+    await bosalt();
+    await gonder({ tur: 'projeler.gorev-atandi', baslik: 'Görev', yol: '/proje-gorevlerim', kisiler: [yoneticiId, kim('kalite')], yalnizKisiler: true });
+    const al = await alanlar('projeler.gorev-atandi');
+    assert.ok(al.includes(yoneticiId));
+    await ayarla('projeler.gorev-atandi', [], []);
+  });
 });

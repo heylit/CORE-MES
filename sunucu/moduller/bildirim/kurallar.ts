@@ -56,6 +56,20 @@ export function alicilariSec(
   return secilen.sort((a, b) => a - b);
 }
 
+// 3597 a: kayda bağlı türde seçim ek alıcıdır. Asıl alıcılar (kayıttaki kişi) olduğu gibi kalır; seçilen kişi yalnız kaydı
+// görme işlemini taşıyorsa, olayı başlatan değilse ve etkin girişliyse (işlem haritasında varsa) eklenir.
+export function ekAlicilariEkle(
+  asil: readonly number[], secilen: readonly number[], kisiIslemleri: ReadonlyMap<number, readonly Islem[]>, gormeIslemi: Islem,
+  haric: number | null | undefined,
+): number[] {
+  const sonuc = new Set(asil);
+  for (const kisiId of secilen) {
+    if (kisiId === haric) continue;
+    if (kisiIslemleri.get(kisiId)?.includes(gormeIslemi) === true) sonuc.add(kisiId);
+  }
+  return [...sonuc].sort((a, b) => a - b);
+}
+
 // BIL-4: tekil anahtar tür ve kaynak kimliğinden kurulur; kimlik yoksa her olay ayrı satırdır.
 export const tekilAnahtar = (tur: BildirimTuru, kaynakKimlik: string | null | undefined): string | null =>
   kaynakKimlik === null || kaynakKimlik === undefined || kaynakKimlik === '' ? null : `${tur}:${kaynakKimlik}`;

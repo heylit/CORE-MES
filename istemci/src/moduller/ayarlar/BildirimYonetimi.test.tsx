@@ -29,17 +29,21 @@ const BASLANGIC: CagriYonlendirmeCevabi = {
 const ALICILAR: BildirimAlicilariCevabi = {
   satirlar: [
     {
-      tur: 'istasyonlar.makine-durdu', baslik: 'Makine durdu', onem: 'acil', kaynakModul: 'istasyonlar', varsayilanIslemler: ['arkon.bakim'],
+      tur: 'istasyonlar.makine-durdu', baslik: 'Makine durdu', onem: 'acil', kaynakModul: 'istasyonlar', varsayilanIslemler: ['arkon.bakim'], kip: 'yerine', gormeIslemi: null,
       rolIdleri: [], kisiIdleri: [], surum: null, degistiren: null, degistirildi: null,
     },
     {
       tur: 'satin-alma.talep-onay-bekliyor', baslik: 'Satın alma talebi onay bekliyor', onem: 'uyari', kaynakModul: 'satin-alma',
-      varsayilanIslemler: ['satin-alma.onayla'], rolIdleri: [2], kisiIdleri: [7], surum: 3,
+      varsayilanIslemler: ['satin-alma.onayla'], kip: 'yerine', gormeIslemi: null, rolIdleri: [2], kisiIdleri: [7], surum: 3,
       degistiren: { id: 9, ad: 'Deneme Sorumlu' }, degistirildi: '2026-10-21T09:00:00Z',
     },
     {
-      tur: 'stok.birakildi', baslik: 'Malzeme bırakıldı', onem: 'bilgi', kaynakModul: 'stok', varsayilanIslemler: [],
+      tur: 'stok.birakildi', baslik: 'Malzeme bırakıldı', onem: 'bilgi', kaynakModul: 'stok', varsayilanIslemler: [], kip: 'yerine', gormeIslemi: null,
       rolIdleri: [], kisiIdleri: [], surum: null, degistiren: null, degistirildi: null,
+    },
+    {
+      tur: 'siparisler.siparis-onaylandi', baslik: 'Açtığın sipariş onaylandı', onem: 'bilgi', kaynakModul: 'siparisler', varsayilanIslemler: [],
+      kip: 'ek', gormeIslemi: 'siparisler.oku', rolIdleri: [], kisiIdleri: [], surum: null, degistiren: null, degistirildi: null,
     },
   ],
   roller: [{ id: 1, kod: 'bakim', ad: 'Bakım' }, { id: 2, kod: 'mudur', ad: 'Müdür' }],
@@ -146,7 +150,10 @@ const SABLONLAR = {
 
 // 3478-1 a: olayın ana anahtarı ve kademe kaynağı satırı. Varsayılan sınama bütün olaylar açık; kapalı başlama ayrıca sınanır.
 const olayCevabi = (acik: boolean): BildirimOlayAciklariCevabi => ({
-  satirlar: GOSTERIM.satirlar.map((s) => ({ tur: s.tur, baslik: s.baslik, onem: s.onem, kaynakModul: s.kaynakModul, acik, surum: acik ? 1 : null })),
+  satirlar: [
+    ...GOSTERIM.satirlar.map((s) => ({ tur: s.tur, baslik: s.baslik, onem: s.onem, kaynakModul: s.kaynakModul, acik, surum: acik ? 1 : null })),
+    { tur: 'siparisler.siparis-onaylandi', baslik: 'Açtığın sipariş onaylandı', onem: 'bilgi', kaynakModul: 'siparisler', acik, surum: acik ? 1 : null },
+  ],
   oncekiHal: { alindi: '2026-11-20T08:00:00.000Z', donuldu: null },
 });
 const KAYNAK: KademeAyarSatiri = {
@@ -630,5 +637,20 @@ describe('bildirim alıcı seçimi (3594)', () => {
     await waitFor(() => { expect(yazilanlar).toHaveLength(1); });
     expect(await within(tablo).findByText(/Müdür eklendi\. .* yetkisi olanlar bu bildirimi artık almaz\./)).toBeTruthy();
     expect(document.activeElement).toBe(within(tablo).getByRole('checkbox', { name: 'Makine durdu: Müdür' }));
+  });
+
+  it('kayda bağlı olayda seçim ek alıcıdır: kayıttaki kişi kalır, görme yetkisi yazılır, uyarı çıkmaz (3597)', async () => {
+    const { yazilanlar } = matrisSunucusu();
+    ac();
+    fireEvent.click(await screen.findByRole('button', { name: /^Açtığın sipariş onaylandı: alıcıları değiştir \(Kayda bağlı kişi \(varsayılan\)\)/ }));
+    const panel = await screen.findByRole('dialog', { name: 'Açtığın sipariş onaylandı' });
+    expect(within(panel).getByText(/Kayıttaki kişi .* her zaman alır; seçtikleriniz ona eklenir/)).toBeTruthy();
+    fireEvent.click(within(panel).getByRole('checkbox', { name: 'Müdür' }));
+    expect(within(panel).getByRole('status').textContent).toBe('');
+    expect(within(panel).getByText(/Kayıttaki kişi ve Müdür rolündekiler \(yalnız/)).toBeTruthy();
+    fireEvent.click(within(panel).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(yazilanlar).toHaveLength(1); });
+    expect(yazilanlar[0]).toEqual({ yol: '/bildirimler/alicilar/siparisler.siparis-onaylandi/degistir', govde: { rolIdleri: [2], kisiIdleri: [], surum: null } });
+    expect(await screen.findByRole('button', { name: /^Açtığın sipariş onaylandı: alıcıları değiştir \(Kayda bağlı kişi \+ Müdür\)/ })).toBeTruthy();
   });
 });

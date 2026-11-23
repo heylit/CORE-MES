@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import type { Islem } from '#paylasilan/islemler.ts';
 import { BILDIRIM_BASLIK_EN_COK, BILDIRIM_METIN_EN_COK, BILDIRIM_TUR_ANAHTARLARI } from '#paylasilan/sozlesme/bildirim.ts';
 import {
-  alicilariSec, epostaSecilebilir, hemenMi, kaynakModulu, metniHazirla, olmayanKimlikler, otomatikGosterim, otomatikOrtadaMi, varsayilanMi, tekilAnahtar, YAYIN_ONEMI,
+  alicilariSec, ekAlicilariEkle, epostaSecilebilir, hemenMi, kaynakModulu, metniHazirla, olmayanKimlikler, otomatikGosterim, otomatikOrtadaMi, varsayilanMi, tekilAnahtar, YAYIN_ONEMI,
   yayinAlicilari, yayiniGorurMu, yayinZamaniHatasi, yolTureUyar,
 } from './kurallar.ts';
 
@@ -161,4 +161,13 @@ test('BIL-17: türün gösterim ayarı varsayılanın yerine geçer; varsayılan
   assert.equal(varsayilanMi({ onem: 'bilgi' }, { ortada: false, onayIstenir: true }), false);
   assert.deepEqual(otomatikGosterim({ onem: 'bilgi', onayIstenir: true }, null), { ortada: false, onayIstenir: true });
   assert.equal(varsayilanMi({ onem: 'bilgi', onayIstenir: true }, { ortada: false, onayIstenir: true }), true);
+});
+
+describe('ek alıcı (3597 a)', () => {
+  const islemler = new Map<number, Islem[]>([[1, ['siparisler.oku']], [2, []], [3, ['siparisler.oku']]]);
+  test('asıl alıcılar kalır; seçilen yalnız görme işlemiyle ve tetikleyen değilse eklenir', () => {
+    assert.deepEqual(ekAlicilariEkle([5], [1, 2, 3, 9], islemler, 'siparisler.oku', 3), [1, 5]);
+    assert.deepEqual(ekAlicilariEkle([], [], islemler, 'siparisler.oku', null), []);
+    assert.deepEqual(ekAlicilariEkle([1], [1], islemler, 'siparisler.oku', undefined), [1]);
+  });
 });

@@ -356,26 +356,25 @@ describe('3269 görev akışı ve şablon (gerçek PostgreSQL, gerçek giriş)',
     assert.equal((await komut(kalite2, g.id, 'onayla')).statusCode, 403, 'yeni yapan da onaylayamaz');
   });
 
-  test('bildirim (3303): alıcısı kayda bağlıdır, Bildirim yönetimi alıcı seçmez, gösterimi ayarlar', async () => {
-    const ayar = await gonder(yonetici, '/bildirimler/alicilar/projeler.gorev-atandi/degistir', { rolIdleri: [rolId('kalite')], kisiIdleri: [], surum: null });
-    assert.equal(ayar.statusCode, 400, 'kayda bağlı türün alıcısı seçilmez');
-    const alicilar = (await oku(yonetici, '/bildirimler/alicilar')).json<{ satirlar: { tur: string }[] }>().satirlar.map((t) => t.tur);
-    assert.ok(!alicilar.some((t) => t.startsWith('projeler.gorev')), 'alıcı listesinde yok');
+  test('bildirim (3303, 3597 a): alıcısı kayda bağlıdır; Bildirim yönetimi yalnız ek alıcı seçer, atananı susturmaz', async () => {
+    const satirlar = (await oku(yonetici, '/bildirimler/alicilar')).json<{ satirlar: { tur: string; kip: string }[] }>().satirlar;
+    assert.equal(satirlar.find((t) => t.tur === 'projeler.gorev-atandi')?.kip, 'ek', 'ek alıcı olarak listede');
     const gosterim = (await oku(yonetici, '/bildirimler/gosterim')).json<{ satirlar: { tur: string }[] }>().satirlar.map((t) => t.tur);
     assert.ok(gosterim.includes('projeler.gorev-atandi'), 'gösterimi (onay istenir) ayarlanır');
     const p = await projeAc();
     const once = await okunmamis(kalite2.id, 'projeler.gorev-atandi');
     await gorevAc(p, { sorumluKisiId: kalite1.id });
-    assert.equal(await okunmamis(kalite2.id, 'projeler.gorev-atandi'), once, 'yalnız atanana gider');
+    assert.equal(await okunmamis(kalite2.id, 'projeler.gorev-atandi'), once, 'seçim yokken yalnız atanana gider');
     assert.ok(await okunmamis(kalite1.id, 'projeler.gorev-atandi') >= 1, 'atanan kişiye gider');
-    // Tür eskiden alıcı ayarlıydı: kalmış bir kayıtlı seçim (yalnız kalite2) atananı susturmaz.
-    await vt().sorgu("INSERT INTO bildirim_tur_ayari (tur) VALUES ('projeler.gorev-atandi')");
-    await vt().sorgu("INSERT INTO bildirim_tur_kisisi (tur, kisi_id) VALUES ('projeler.gorev-atandi', $1)", [kalite2.id]);
+    // Seçim atananın yerine geçmez; seçilen kişi projeleri görebildiği (kalite: projeler.oku) için ek alıcı olarak alır.
+    const ayar = await gonder(yonetici, '/bildirimler/alicilar/projeler.gorev-atandi/degistir', { rolIdleri: [], kisiIdleri: [kalite2.id], surum: null });
+    assert.equal(ayar.statusCode, 200, ayar.body);
     const p2 = await projeAc();
     const kalite1Once = await okunmamis(kalite1.id, 'projeler.gorev-atandi');
     await gorevAc(p2, { sorumluKisiId: kalite1.id });
-    assert.equal(await okunmamis(kalite1.id, 'projeler.gorev-atandi'), kalite1Once + 1, 'eski alıcı kaydı okunmaz');
-    assert.equal(await okunmamis(kalite2.id, 'projeler.gorev-atandi'), once, 'kayıttaki kişiye gitmez');
+    assert.equal(await okunmamis(kalite1.id, 'projeler.gorev-atandi'), kalite1Once + 1, 'atanan yine alır');
+    assert.equal(await okunmamis(kalite2.id, 'projeler.gorev-atandi'), once + 1, 'ek alıcı alır');
+    await vt().sorgu("DELETE FROM bildirim_tur_ayari WHERE tur = 'projeler.gorev-atandi'");
     // 3303-2 a: atama bildirimi "Okudum, anladım" denene kadar kalır; onaysız arşive kaldırılamaz.
     const satir = await vt().tek<{ id: number; onay: boolean }>(
       "SELECT id, onay_istenir AS onay FROM bildirim_kaydi WHERE kisi_id = $1 AND tur = 'projeler.gorev-atandi' ORDER BY id DESC LIMIT 1", [kalite1.id],

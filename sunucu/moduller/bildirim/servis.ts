@@ -6,14 +6,14 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { kayitYoluMu } from '#paylasilan/sayfa-tanimi.ts';
 import type { CagriEkibi } from '#paylasilan/sozlesme/durus-nedenleri.ts';
 import {
-  ALICI_AYARLI_TURLER, BILDIRIM_TUR_ANAHTARLARI, BILDIRIM_TURLERI, CAGRI_EKIP_ADLARI, type Bildirim, type BildirimAliciDegistirGovdesi, type BildirimAlicilariCevabi, type BildirimGosterimDegistirGovdesi, type BildirimGosterimleriCevabi, type CagriEkiplerimCevabi, type CagriYonlendirmeCevabi, type CagriYonlendirmeDegistirGovdesi, type BildirimListeDurumu, type BildirimSayacCevabi,
+  ALICI_AYARLI_TURLER, BILDIRIM_TUR_ANAHTARLARI, EK_ALICI_GORME_ISLEMLERI, ekAliciTuruMu, BILDIRIM_TURLERI, CAGRI_EKIP_ADLARI, type Bildirim, type BildirimAliciDegistirGovdesi, type BildirimAlicilariCevabi, type BildirimGosterimDegistirGovdesi, type BildirimGosterimleriCevabi, type CagriEkiplerimCevabi, type CagriYonlendirmeCevabi, type CagriYonlendirmeDegistirGovdesi, type BildirimListeDurumu, type BildirimSayacCevabi,
   type BildirimTuru, type BildirimTuruTanimi, type TumunuOkunduCevabi, type YayinSimgesi, type YayinTuru, anahtarliTurMu, turSinifi,
   type BildirimPushAbonelikGovdesi,  type BildirimPushDurumuCevabi, type BildirimPushTurDegistirGovdesi, type BildirimPushTurleriCevabi, turPushVarsayilani,
 } from '#paylasilan/sozlesme/bildirim.ts';
 import { kuralliTurMu } from '#paylasilan/sozlesme/bildirim-kural.ts';
 import { kisiAdlari, kisiSecenekleri, kisilerinIslemleri, rolSecenekleri, rollerdekiKisiler } from '../kisiler/disari.ts';
 import {
-  ONAY_ILETILERI, alicilariSec, kaynakModulu, kuralDegerleriniAyikla, metniHazirla, olayYazimi, olmayanKimlikler, otomatikGosterim, tekilAnahtar, varsayilanGosterim, varsayilanMi, yolTureUyar,
+  ONAY_ILETILERI, alicilariSec, ekAlicilariEkle, kaynakModulu, kuralDegerleriniAyikla, metniHazirla, olayYazimi, olmayanKimlikler, otomatikGosterim, tekilAnahtar, varsayilanGosterim, varsayilanMi, yolTureUyar,
 } from './kurallar.ts';
 import { epostaKuyrugaAl, kuralEpostasiKuyrugaAl, type EpostaEki } from './eposta.ts';
 import { kurallariUygula } from './kural.ts';
@@ -50,6 +50,7 @@ export type BildirimOlayi =
 // Çağıranın transaction'ında yazar (ADR 0006): olayı doğuran yazma geri alınırsa bildirim de kalmaz. Yazılan alıcı sayısını döner.
 // BIL-10: türde alıcı seçimi varsa seçilen rollerdeki etkin girişli kişiler ve seçilen kişiler; seçim yoksa null (işlem kuralı).
 // Kayda bağlı türde (alıcı listesi dışı) eski bir kayıtlı seçim okunmaz: alıcıyı çağıran verir, ekrandan düzeltilemeyen kayıt onu susturmaz.
+// 3597 a: ek alıcılı türde seçim kayıttaki kişinin yerine geçmez; `ekAlicilariEkle` ona ekler.
 async function ayarliAlicilar(db: Db, tur: BildirimTuru): Promise<number[] | null> {
   if (!(ALICI_AYARLI_TURLER as readonly string[]).includes(tur)) return null;
   const ayar = await s.turAyari(db, tur);
@@ -66,9 +67,13 @@ export async function bildirimGonder(db: Db, olay: BildirimOlayi): Promise<numbe
   if (yazim === 'yok') return 0;
   const { baslik, metin } = metniHazirla(olay.baslik, olay.metin);
   const islemler = await kisilerinIslemleri(db);
-  const alicilar = alicilariSec(olay.tur, islemler, {
-    kisiler: olay.kisiler, haric: olay.haric, ayarli: await ayarliAlicilar(db, olay.tur), yalnizKisiler: olay.yalnizKisiler,
+  const ayarli = await ayarliAlicilar(db, olay.tur);
+  const tur = olay.tur;
+  const gorme = ekAliciTuruMu(tur) ? EK_ALICI_GORME_ISLEMLERI[tur] : null;
+  const asil = alicilariSec(olay.tur, islemler, {
+    kisiler: olay.kisiler, haric: olay.haric, ayarli: gorme === null ? ayarli : null, yalnizKisiler: olay.yalnizKisiler,
   });
+  const alicilar = gorme !== null && ayarli !== null ? ekAlicilariEkle(asil, ayarli, islemler, gorme, olay.haric) : asil;
   const anahtar = tekilAnahtar(olay.tur, olay.kaynakKimlik);
   const gosterim = otomatikGosterim(tanim, alicilar.length === 0 ? null : await s.turGosterimi(db, olay.tur));
   const yazilan: { kisiId: number; id: number; yeni: boolean }[] = [];
@@ -204,7 +209,10 @@ export async function bildirimAlicilari(db: Db): Promise<BildirimAlicilariCevabi
       const t = BILDIRIM_TURLERI[tur];
       const a = ayarlar.get(tur);
       return {
-        tur, baslik: t.baslik, onem: t.onem, kaynakModul: kaynakModulu(tur), varsayilanIslemler: [...t.alanIslemler],
+        tur, baslik: t.baslik, onem: t.onem, kaynakModul: kaynakModulu(tur),
+        // Ek alıcılı türde seçimsiz hâl yalnız kayıttaki kişidir; türün alan işlemi (proje görevinde) yalnız daraltır, alıcı seçmez.
+        varsayilanIslemler: ekAliciTuruMu(tur) ? [] : [...t.alanIslemler],
+        kip: ekAliciTuruMu(tur) ? 'ek' as const : 'yerine' as const, gormeIslemi: ekAliciTuruMu(tur) ? EK_ALICI_GORME_ISLEMLERI[tur] : null,
         rolIdleri: a?.rolIdleri ?? [], kisiIdleri: a?.kisiIdleri ?? [], surum: a?.surum ?? null,
         degistiren: a === undefined || a.degistirenKisiId === null ? null : { id: a.degistirenKisiId, ad: adlar.get(a.degistirenKisiId) ?? null },
         degistirildi: a?.degistirildi ?? null,
