@@ -669,6 +669,7 @@ describe('R3 Üretim emirleri: Diğer menüsü ve stok (1102 a, 1106 a)', () => 
     expect(ana.getAttribute('aria-disabled')).toBe('true');
     expect(ana.getAttribute('aria-describedby')).not.toBeNull();
     expect(document.getElementById(ana.getAttribute('aria-describedby')!)?.textContent).toBe('Parti 1 yeni emir olarak açılmalı');
+    expect(within(ayrinti).getByText(/^Önce Parti 1'i yeni emir olarak açın; kalan partiler sonra bugünkü gibi bölünür\./)).toBeTruthy();
     fireEvent.click(ana);
     expect(within(ayrinti).getByRole('button', { name: "Parti 1'i yeni emir olarak aç" })).toBeTruthy();
     expect(within(ayrinti).queryByRole('table', { name: 'Bölme önizlemesi' })).toBeNull();

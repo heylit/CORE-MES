@@ -194,7 +194,7 @@ export function BolmePaneli({
                   {rota !== undefined && rota.durum === 'okunamadi' && (
                     <>
                       <Secim etiket="Parti rotası" disabled value="" bosSecenek="Türün rotası" secenekler={[]} hata="Rotalar okunamadı; parti türün rotasıyla bölünür." />
-                      <Dugme simge="rotate" onClick={rota.yenile}>Yenile</Dugme>
+                      {i === 0 && <Dugme simge="rotate" onClick={rota.yenile}>Yenile</Dugme>}
                     </>
                   )}
                   {rota !== undefined && rota.durum === 'hazir' && rota.tekRota !== null && (
@@ -244,7 +244,7 @@ export function BolmePaneli({
           </div>
           <div aria-live="polite">
             {ayrilamaz ? (
-              <p className="tc-rr3-ipucu">Rotası emrinkinden farklı parti yeni emir olarak açılır; rotası aynı olan partiler bugünkü gibi ayrılır.</p>
+              <p className="tc-rr3-ipucu">{`Önce ${partiBelirtme((ilkFarkli ?? 0) + 1)} yeni emir olarak açın; kalan partiler sonra bugünkü gibi bölünür. Yeni emir sayfası açılınca bu paneldeki adetler kalmaz, kalan partileri yeniden girin.`}</p>
             ) : farkliPartiler.length > 0 ? (
               <p className="tc-rr3-ipucu">
                 {`${farkliPartiler.map((i) => `Parti ${String(i + 1)}`).join(', ')}: rotası ana emrinkinden farklı; parti kendi rotasıyla ayrı emir olarak açılır, ana emre geri birleştirilmez. Ana emirde hiçbir adım başlamadığı için ayrılabilir.`}
