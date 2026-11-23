@@ -146,6 +146,23 @@ function mask(W){const m=new Uint8Array(NS);for(const [a,b] of W){const k0=Math.
     @property {Record<string, any>} succ
     @property {{ res: Record<string, any>, summ: Record<string, any>, po: any[] }} mat
     @property {any} progRel */
+/* 3603: devir kuralı sunucuyla aynıdır (paylasilan/devir-kurali.ts devirPartisi; motor modül ithal edemediği için burada, plan/devir-kurali.test.ts
+   ikisini birlikte sınar). Devir adedi ARDILIN bağındadır: ardıl öncülden o kadar adet gelince başlar, son partisi o kadardır. Öncülün ilk partisi
+   (lot1) bu yüzden ardılların devir adedinden kurulur (ilkRun); işin kendi devir adedi (tbRun) yalnız onun son partisini belirler (lastLot).
+   Boş devir adedi adedin dörtte biridir (transferOran). */
+/** @param {any} [devirAdedi] @param {number} [adet] @param {any} [yedekOran] @returns {number} */
+function devirPartisi(devirAdedi,adet,yedekOran){
+  if(!(adet>0))return 0;
+  const istenen=devirAdedi!=null&&isFinite(+devirAdedi)&&+devirAdedi>0?+devirAdedi:Math.ceil(adet*(yedekOran||.25));
+  return Math.min(adet,Math.max(1,istenen));}
+/* Öncülün ilk devir partisinin süresi: akışlı ('o') ardılların en büyük devir partisi; akışlı ardılı yoksa kendi devir adedi (lot1'i kimse okumaz,
+   plan kaydında eski değer kalır). Ardıl bağları derlemeden sonra kancalarca (ortusUygula, kolBagiUygula) değişebildiğinden ilk kullanımda okunur. */
+/** @param {any} [o] @param {any} [c] @param {Derleme} [cx] */
+function ilkRun(o,c,cx){
+  if(o.ilkAdet===undefined){let q=null;
+    for(const [sid,t] of (cx.succ&&cx.succ[o.id])||[]){if(t!=='o')continue;const s=cx.byId[sid];if(!s)continue;const v=devirPartisi(s.devirAdedi,o.adet,cx.A.transferOran);if(q==null||v>q)q=v;}
+    o.ilkAdet=q==null?devirPartisi(o.devirAdedi,o.adet,cx.A.transferOran):q;}
+  return o.ilkAdet*c.cyc;}
 /** @param {MotorDurumu} st @returns {Derleme} */
 function compile(st){olcekKur(st.w);
   const D=st.D,A=D.ayarlar;
@@ -259,7 +276,7 @@ function compile(st){olcekKur(st.w);
       if(N>1)bolunen[id]=[];
       for(let p=0;p<N;p++){
       const pid=p===0?id:id+'~'+(p+1),ad=eb?eb[p].adet:N>1?Math.floor(ad0/N)+(p<ad0%N?1:0):ad0;
-      const tb=Math.max(1,Math.min(ad,o.transfer||Math.ceil(ad*(A.transferOran||.25))));
+      const tb=devirPartisi(o.transfer,ad,A.transferOran);
       const c=[];
       if(o.fason){const f=fasonFirmasi(o,id);c.push(f===FASON_BELIRSIZ&&+o.fasonGun>0?{m:'@'+f,fas:1,gun:+o.fasonGun}:{m:'@'+f,fas:1});}
       else for(const t of eb?adaylar.filter(t=>t.id===eb[p].m):adaylar){const mm=M[t.id];const cyc=(+t.cevrim||0)/60*x/(1-mm.pay);
@@ -269,7 +286,7 @@ function compile(st){olcekKur(st.w);
       const pr=(o.bag||[]).map(([k,t])=>[j.id+'.'+k,t]),prK=pr.filter(([p])=>!bitti[p]&&!kolDisi[p]);
       const ik=D.opKaynak&&Array.isArray(D.opKaynak[id])&&D.opKaynak[id].length?D.opKaynak[id]:null;
       const op={id:pid,job:j.id,k:o.k,ad:o.ad,c,sig,pr:prK,aile:o.aile||'',aparat:o.aparat||null,ik,
-        program:o.program!==false,fai:!!o.fai,adet:ad,x,matYok:prK.length<pr.length,ayarsiz:o.ayarci===false,ayarSaat:o.ayarDk!=null&&isFinite(+o.ayarDk)?Math.max(0,+o.ayarDk)/60:null,...(N>1?{parca:p+1,parcaAdedi:N,asil:id,...(eb?{elle:1}:{})}:{})};
+        program:o.program!==false,fai:!!o.fai,adet:ad,devirAdedi:+o.transfer>0?+o.transfer:null,x,matYok:prK.length<pr.length,ayarsiz:o.ayarci===false,ayarSaat:o.ayarDk!=null&&isFinite(+o.ayarDk)?Math.max(0,+o.ayarDk)/60:null,...(N>1?{parca:p+1,parcaAdedi:N,asil:id,...(eb?{elle:1}:{})}:{})};
       if(N>1)bolunen[id].push(pid);
       ops.push(op);jobs[j.id].ops.push(op);}}
   }
@@ -387,7 +404,7 @@ const tezgahDuruslari=(st,m)=>durusDizini(st).m[m]||[];
 function kilitYeri(o,lk,cx){if(!lk||lk.S==null||!isFinite(+lk.S)||+lk.S<cx.st.now-1e-9)return null;const c=o.c.find(x=>x.m===lk.m&&!x.fas),M=c&&cx.M[c.m];if(!M)return null;
   const S=+lk.S,su=c.su+(o.fai?c.cyc+(+cx.A.faiSaat||0):0),run=o.fai?Math.max(0,c.run-c.cyc):c.run;const Su=adv(M.sw,S,su),C=adv(M.rw,Su,run);if(!isFinite(C))return null;
   const downHit=tezgahDuruslari(cx.st,c.m).some(d=>d.from<C-1e-9&&d.to>S+1e-9);
-  return {id:o.id,job:o.job,m:c.m,S,Su,C,lot1:adv(M.rw,Su,Math.min(run,c.tbRun)),su,run,pin:1,kilit:1,why:{t:'kilit'},downHit,pay:c.pay||0};}
+  return {id:o.id,job:o.job,m:c.m,S,Su,C,lot1:adv(M.rw,Su,Math.min(run,ilkRun(o,c,cx))),su,run,pin:1,kilit:1,why:{t:'kilit'},downHit,pay:c.pay||0};}
 /* Kilitli iş tezgâhın boş anını ilerletmez: önüne sığan iş kilitten önce yapılır, sığmayan kilitten sonra başlar (tMach). */
 /** @param {Derleme} [cx] @param {any} [ctx] @param {any} [r] */
 function kilitKoy(cx,ctx,r){ctx.P[r.id]=r;(ctx.kilit[r.m]=ctx.kilit[r.m]||[]).push([r.S,r.C,r.id]);addUse(cx,ctx.u,cx.M[r.m],r,cx.byId[r.id].aparat);}
@@ -537,7 +554,7 @@ function tMach(o,c,cx,ctx,b,fast){
       if(bad.kalici&&bad.kisi){while(k<NS&&!M.kav[k])k++;}
       else if(bad.kalici){const cap=bad.t==='ayarci'?cx.capAyar:bad.t==='personel'?cx.capTot:cx.capG[M.grup];const need=bad.t==='ayarci'?1:M.opOran;while(k<NS&&cap[k]<need-1e-6)k++;}
       s=Math.max(s+1e-6,k*SL);why={t:bad.t};continue;}
-    const lot1=Math.min(C,adv(M.rw,Su,Math.min(run,c.tbRun)));
+    const lot1=Math.min(C,adv(M.rw,Su,Math.min(run,ilkRun(o,c,cx))));
     const cost=M.ucret==null?null:(run*(1-M.pay)*M.ucret+su*(M.ucret+(+cx.A.ayarciUcret||0)));
     const dl=tezgahDuruslari(st,c.m);
     const downHit=dl.some(d=>d.from<C-1e-9&&d.to>s+1e-9)||dl.some(d=>d.from<=s_in+1e-9&&d.to>=s-1e-9&&s>s_in+1e-9);
@@ -785,7 +802,7 @@ function schedule(st,mode,base,opt={}){
       const run=c?(o.fai?Math.max(0,c.run-c.cyc):c.run):b.run,yeni=Math.abs(run-b.run)>1e-6;
       if(M&&(hit||yeni||uzar)){const Su=adv(M.sw,b.S,b.su),C=adv(M.rw,Su,run);
         if(yeni&&!(C>now+1e-9)){gecmis.add(o.id);continue;}
-        const r={...b,run,Su,C,lot1:yeni?Math.min(C,adv(M.rw,Su,Math.min(run,c.tbRun))):Math.min(C,b.lot1),pin:1};
+        const r={...b,run,Su,C,lot1:yeni?Math.min(C,adv(M.rw,Su,Math.min(run,ilkRun(o,c,cx)))):Math.min(C,b.lot1),pin:1};
         if(hit||(uzar&&!yeni))r.kesik=1;
         surenBitis[b.m]=Math.max(surenBitis[b.m]||0,C);surenKoy(r);
         pins.push(r);}
@@ -1028,7 +1045,7 @@ function lowerBound(st,cx){
       // başlamış işlemin yalnız kalan süresi sayılır
       if(M){const kb=kalanBitis(M,a);if(kb!=null)best=kb;else{const rem=Math.max(0,c.run-workIn(M.rw,a.S,st.now));best=adv(M.rw,st.now,rem);}l1=best;}else{best=st.now;l1=best;}}
     else for(const c of o.c){if(c.fas){const f=cx.FS[c.m.slice(1)];if(f){const v=fasonEarliest(cx,f,s,c.gun);if(v<best){best=v;l1=v;}}continue;}
-      const M=cx.M[c.m],sm=suMin(o,c,cx);const a=openAt(sm>0?M.sw:M.rw,s);const su=adv(M.sw,a,sm);const e=adv(M.rw,su,c.run);if(e<best){best=e;l1=adv(M.rw,su,Math.min(c.run,c.tbRun));}}
+      const M=cx.M[c.m],sm=suMin(o,c,cx);const a=openAt(sm>0?M.sw:M.rw,s);const su=adv(M.sw,a,sm);const e=adv(M.rw,su,c.run);if(e<best){best=e;l1=adv(M.rw,su,Math.min(c.run,ilkRun(o,c,cx)));}}
     done[o.id]={f:best,l1};const jl=LB[o.job]||0;LB[o.job]=Math.max(jl,best);}
   let wT=0;for(const jid in cx.jobs){const j=cx.jobs[jid];if(j.due!=null&&isFinite(LB[jid]))wT+=Math.max(0,LB[jid]-j.due)*isAgirligi(j);}
   return {C:LB,wT};
@@ -1209,7 +1226,7 @@ function lbHeadsTails(st,cx){
     else if(g[o.id]&&g[o.id].S!=null){const a=g[o.id],c=o.c.find(x=>x.m===a.m)||o.c.find(x=>!x.fas);const M=c&&cx.M[c.m];
       if(M){const kb=kalanBitis(M,a);if(kb!=null)best=b1=kb;else{const rem=Math.max(0,c.run-workIn(M.rw,a.S,st.now));best=b1=adv(M.rw,st.now,rem);}}else best=b1=st.now;}
     else for(const c of o.c){if(c.fas){const f=cx.FS[c.m.slice(1)];if(f){const v=fasonEarliest(cx,f,s,c.gun);if(v<best){best=b1=v;}}continue;}
-      const M=cx.M[c.m],sm=suMin(o,c,cx);const a=openAt(sm>0?M.sw:M.rw,s);const su=adv(M.sw,a,sm);const e=adv(M.rw,su,c.run);if(e<best){best=e;b1=adv(M.rw,su,Math.min(c.run,c.tbRun));}}
+      const M=cx.M[c.m],sm=suMin(o,c,cx);const a=openAt(sm>0?M.sw:M.rw,s);const su=adv(M.sw,a,sm);const e=adv(M.rw,su,c.run);if(e<best){best=e;b1=adv(M.rw,su,Math.min(c.run,ilkRun(o,c,cx)));}}
     fin[o.id]=best;l1[o.id]=b1;}
   const tail={};
   for(let i=order.length-1;i>=0;i--){const o=order[i];let q=0;
