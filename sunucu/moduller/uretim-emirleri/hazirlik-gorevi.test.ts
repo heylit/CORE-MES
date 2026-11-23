@@ -456,4 +456,25 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
     assert.match(eski[0]!.ad, / · .+ \/ 40$/);
     assert.equal((await gorevler(e.uretimEmriId)).find((g) => g.madde === 'cnc' && g.isEmriId === null)?.adimlar.length, 3, 'kontroldeki görevin adımı değişmez');
   });
+
+  // 3611 Risk S1: kontrollü yeni biçim görev bitirilince adımlar işaretlenir ama hücre "kontrolde" kalır; kontrol onaylayınca "bitti" olur.
+  test('3611 S1: kontrolde yeni biçim görevin matris hücreleri kontrolde kalır; adım işareti açık görevde hücreyi bitirir', async () => {
+    const proje = await yeniProje('UE.HZK2');
+    await kisiEkle('yapici', 'planlama_proje', 'projeler.gorev-isle');
+    const e = await emirAc(proje);
+    assert.equal((await projeDagit(proje, sablonId)).durum, 200);
+    const cnc = (await gorevler(e.uretimEmriId)).find((g) => g.madde === 'cnc')!;
+    await o().sahip.sorgu('UPDATE projeler_gorev SET kontrol_kisi_id = $2, sorumlu_kisi_id = $3, yapan_rol_id = NULL WHERE id = $1', [cnc.id, yoneticiId, kim('yapici').id]);
+    const hucreler = async () => {
+      const m = await app.inject({ method: 'GET', url: `/api/hazirlik-matrisi?projeId=${String(proje)}`, headers: { cookie: cerezler.get('dagitici') ?? '' } });
+      return m.json<{ gorevler: { madde: string; durum: string }[] }>().gorevler.filter((g) => g.madde === 'cnc').map((g) => g.durum);
+    };
+    assert.deepEqual(await hucreler(), ['yapilacak', 'yapilacak']);
+    await o().sahip.sorgu('UPDATE projeler_gorev_adimi SET yapildi = true, yapan_id = $2, an = now() WHERE gorev_id = $1 AND hazirlik_is_emri_id = (SELECT min(hazirlik_is_emri_id) FROM projeler_gorev_adimi WHERE gorev_id = $1)', [cnc.id, yoneticiId]);
+    assert.deepEqual(await hucreler(), ['bitti', 'yapilacak'], 'açık görevde adım işareti o iş emrinin hücresini bitirir');
+    const b = await istek<{ durum?: string }>('yapici', `/projeler/gorevler/${String(cnc.id)}/bitir`, { surum: cnc.surum });
+    assert.equal(b.durum, 200, JSON.stringify(b.govde));
+    assert.equal((await o().sahip.tek<{ durum: string }>('SELECT durum FROM projeler_gorev WHERE id = $1', [cnc.id]))?.durum, 'kontrolde', 'kontrollü görev bitirilince kontrole gider');
+    assert.deepEqual(await hucreler(), ['kontrolde', 'kontrolde'], 'bütün adımlar işaretli olsa da hücreler kontrol onaylanana kadar kontrolde kalır');
+  });
 });

@@ -19,6 +19,8 @@ import * as s from './sorgular.ts';
 // 3396 a: emrin hazırlık görevleri projede açılır. Proje emrin projesi olabileceği gibi başka bir aktif proje de olabilir (emrin
 // numarasına giren proje değişmez); görev emre ve iş emrine bağlıdır. Kapalı madde görev doğurmaz.
 const EMIR_YOK = 'Üretim emri bulunamadı.';
+// Adım işareti hücreyi yalnız görev açıkken bitirir: kontrol bekleyen görev bitirilirken adımlar işaretlenir ama hücre "kontrolde" kalır (Risk S1).
+const ACIK_GOREV = new Set(['yapilacak', 'suruyor', 'bekliyor']);
 
 async function acikMaddeler(db: Db): Promise<Map<string, HazirlikMaddeBilgisi>> {
   return new Map((await hazirlikMaddeTanimlari(db)).filter((m) => m.acik || m.durduran).map((m) => [m.kod, { ad: m.ad, isEmriDuzeyi: m.isEmriDuzeyi }]));
@@ -120,7 +122,7 @@ export async function hazirlikMatrisi(db: Db, kullanici: Kullanici, projeId: num
     // 3611: yeni biçimli görevde (iş emirleri adım) her iş emri kendi hücresini alır; hücrenin durumu adımın işaretinden gelir, kapanmış görevde
     // görevin durumundandır. Eski biçimli görev (iş emri başına) olduğu gibi gelir; iki biçim birlikte okunur.
     gorevler: gorevler.flatMap((g) => (g.adimlar.length === 0 ? [{ ...g, isEmriId: g.isEmriId, adimIsareti: null as boolean | null }] : g.adimlar.map((a) => ({ ...g, isEmriId: a.isEmriId, adimIsareti: a.yapildi })))).map((g) => ({
-      id: g.id, madde: g.madde, emriId: g.emriId, isEmriId: g.isEmriId, ad: g.ad, durum: g.adimIsareti === true && g.durum !== 'bitti' ? 'bitti' : g.durum,
+      id: g.id, madde: g.madde, emriId: g.emriId, isEmriId: g.isEmriId, ad: g.ad, durum: g.adimIsareti === true && ACIK_GOREV.has(g.durum) ? 'bitti' : g.durum,
       onaylandi: g.onaylandi, planBitis: g.planBitis,
       gecikmeGun: g.adimIsareti === true ? null : g.gecikmeGun, yapan: atanan(g.sorumluKisiId, g.yapanRolId), kontrol: atanan(g.kontrolKisiId, g.kontrolRolId), surum: g.surum, kademe: g.kademe,
       sistem: gorevinSistemHali(sistem.get(g.emriId), g.madde, g.isEmriId),
