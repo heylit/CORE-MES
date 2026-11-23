@@ -378,6 +378,38 @@ describe('planlama değerlendirmesi: arama (457 1-3 b)', () => {
     assert.equal((k.plan['ops'] as Record<string, Is>)[hedef]?.S, eski[hedef]!.S);
   });
 
+  // 3600 R1: aynı tezgâh kuralı (st.pref). İstasyonda ikinci tezgâh boşken kilitsiz yeniden dizilen durdurulan iş eski tezgâhında kalır;
+  // eski tezgâh dolu olsa da boş olana geçmez (işlem değil ayar yeri o tezgâhtadır).
+  test('PD-20h (3600 R1): durdurulan iş aynı istasyonda boş tezgâh varken de eski tezgâhında kalır', async () => {
+    type Is = { job: string; m: string; S: number; C: number; act?: number };
+    const kayit = { ...BUYUK_KAYIT, orders: BUYUK_KAYIT.orders.slice(0, 1), machines: [...BUYUK_KAYIT.machines, { id: '201', code: 'F2', name: 'Freze 2', stationId: '20', plan: tezgah('201', '20', 900) }] };
+    const kaynak = { ...BUYUK_KAYNAK, durum: { ...BUYUK_KAYNAK.durum, machines: [...BUYUK_KAYNAK.durum.machines, { id: '201', code: 'F2', name: 'Freze 2', stationId: '20', status: 'aktif', aktif: true }] } };
+    const c = calismaKur();
+    const g = planGirdisi({ calisma: c, kayit, kaynak, bugun: '2026-10-19' }); assert.ok(g);
+    const m = motorYukle(); const p = m.schedule(g.st, 'dagit', null);
+    const calisma = { ...c, plan: { ops: p.ops, fail: [], J: {}, dataVer: 1 } } as Record<string, unknown>;
+    const eski = p.ops as Record<string, Is>;
+    const freze = (x: Is) => x.m === '200' || x.m === '201';
+    // Ardılı olmayan, freze tezgâhında iş: ortası şimdi olur, bitmeden öteki tezgâh boşalmış olur.
+    const hedef = Object.keys(eski).find((id) => freze(eski[id]!) && eski[id]!.C - eski[id]!.S > 1)!;
+    assert.ok(hedef, 'freze işi var');
+    const oteki = eski[hedef]!.m === '200' ? '201' : '200';
+    const simdi = (eski[hedef]!.S + eski[hedef]!.C) / 2;
+    const orderId = eski[hedef]!.job;
+    const adet = kayit.orders.find((x) => x.id === orderId)!.qty;
+    // Eski tezgâh şimdiden sonra uzun süre arızalı: tercih yokken kilitsiz motor boş tezgâhı seçer, tercihli iş eski tezgâhta bekler.
+    const ariza = [{ id: 'ariza-r1', m: eski[hedef]!.m, from: simdi, to: simdi + 200, neden: 'ariza' }];
+    const an = Date.parse('2026-10-18T21:00:00Z') + simdi * 3_600_000;
+    const w = calisma['w'] as Record<string, unknown>;
+    const girdi = { ...calisma, down: ariza, w: { ...w, durdurulan: { [hedef]: 1 } }, gercek: { [hedef]: { m: eski[hedef]!.m, S: eski[hedef]!.S, n: Math.floor(adet / 2), A: adet } },
+      plan: { ...(calisma['plan'] as object), ops: { ...eski, [hedef]: { ...eski[hedef], act: 1, pin: 1 } } },
+      bekleyen: [{ id: 'ORN-b', ne: 'Yeniden planlama istendi', ayrinti: '', kim: '', t: 1, isler: [orderId], geri: [] }] };
+    const r = sonuc(await degerlendirmeYap({ calisma: girdi, kayit, kaynak, bugun: '2026-10-19', istek: { tur: 'plan-uygula', isler: [orderId] } }, an));
+    if (r.tur !== 'plan-uygula') return assert.fail(r.tur);
+    const yeni = r.plan['ops'] as Record<string, Is>;
+    assert.equal(yeni[hedef]!.m, eski[hedef]!.m, `eski tezgâh ${eski[hedef]!.m}, öteki ${oteki}`);
+  });
+
   // Yarım planlı emir: bir işi planda, öteki dışarıda (plan kurulduktan sonra gelen adım ya da motorun yerleştiremediği iş).
   test('PD-20d: yarım planlı emrin eksik işi, emir yeniden planlanınca öncülünün arkasına yerleşir; öteki emirlerin işleri yerinde kalır', async () => {
     type Is = { job: string; m: string; S: number; C: number };

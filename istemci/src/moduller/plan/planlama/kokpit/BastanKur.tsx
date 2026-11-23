@@ -168,7 +168,7 @@ export function BastanKur({ m, kartlar, planYok, kilitYetkisi, baslamisYetkisi, 
           </p>
           <ul className="tc-pyq-bk-liste" aria-label="Başlamış işler">
             {baslamisIsleri.slice(0, BASLAMIS_SATIRI_EN_COK).map((b) => (
-              <li key={b.id}>
+              <li key={b.id} className="tc-pyq-bk-satir">
                 <span className="tc-pyq-bk-no">{b.emirNo} · {b.ad}</span>
                 <span className="tc-pyq-bk-urun">{m.tezgahlar?.find((t) => t.id === b.tezgah)?.kod ?? b.tezgah}</span>
                 <span className="tc-pyq-bk-rozetler">

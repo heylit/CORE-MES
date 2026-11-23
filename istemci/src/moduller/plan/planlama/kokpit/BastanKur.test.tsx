@@ -117,6 +117,9 @@ describe('BastanKur penceresi (3600)', () => {
     const ikinci = screen.getByRole('dialog', { name: 'Başlamış işler de dizilsin mi?' });
     expect(ikinci.textContent).toContain('ORN-UE-1 · Adım 1.20');
     expect(ikinci.textContent).toContain('yapılan 3 / kalan 7');
+    const satir = within(ikinci).getAllByRole('listitem')[0]!;
+    expect(satir.className).toBe('tc-pyq-bk-satir');
+    expect(satir.querySelectorAll('span').length).toBeGreaterThanOrEqual(3);
     expect(ikinci.textContent).toContain('terminalde çalışıyor');
     expect(document.activeElement).toBe(within(ikinci).getByRole('button', { name: 'Vazgeç' }));
     fireEvent.keyDown(ikinci, { key: 'Escape' });

@@ -1265,11 +1265,13 @@
 .tc-pyq-bk-ara:focus-within { outline: var(--cizgi-kalin) solid var(--isaret); outline-offset: var(--cizgi-ince); }
 .tc-pyq-bk-liste { margin: 0; padding: 0; list-style: none; border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); }
 .tc-pyq-bk-liste li + li { border-top: var(--cizgi-ince) solid var(--edge2); }
-.tc-pyq-bk-liste label { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); min-height: var(--dokunma); padding: var(--b-1) var(--b-2); cursor: pointer; }
+.tc-pyq-bk-liste label, .tc-pyq-bk-satir { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); min-height: var(--dokunma); padding: var(--b-1) var(--b-2); cursor: pointer; }
 .tc-pyq-bk-liste label:hover { background: var(--panel2); }
+.tc-pyq-bk-satir { cursor: default; }
 .tc-pyq-bk-no { font-family: var(--font-mono); font-size: var(--yazi-s); white-space: nowrap; }
 .tc-pyq-bk-urun { flex: 1 1 var(--bas-en); min-width: 0; color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
-.tc-pyq-bk-rozetler { display: inline-flex; flex-wrap: wrap; gap: var(--b-2); font-size: var(--yazi-xs); }
+.tc-pyq-bk-rozetler { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); font-size: var(--yazi-xs); }
+.tc-pyq-bk-rozetler > span { display: inline-flex; align-items: center; gap: var(--b-1); white-space: nowrap; }
 .tc-pyq-bk-rozetler [data-gec] { color: var(--d-gec); font-weight: 700; }
 .tc-pyq-bk-bos { padding: var(--b-3); color: var(--muted); text-align: center; }
 .tc-pyq-bk-baglanti { padding: 0; border: 0; background: none; color: var(--isaret); font: inherit; text-decoration: underline; cursor: pointer; }
