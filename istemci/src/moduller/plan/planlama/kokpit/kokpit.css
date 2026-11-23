@@ -268,6 +268,18 @@
 }
 .tc-pyq-simdi, .tc-pyq-termin { position: absolute; top: 0; bottom: 0; left: calc(var(--bas-en) + var(--x)); width: var(--cizgi); z-index: 2; pointer-events: none; }
 .tc-pyq-simdi { background: var(--stop); }
+/* 3602: sürüklerken öteki adımların hizası. Kesikli çizgi yakın olduğunu, düz çizgi ve "hizalı" yakalandığını söyler; çizgi tıklamayı tutmaz. */
+.tc-pyq-hiza {
+  position: absolute; top: 0; bottom: 0; left: calc(var(--bas-en) + var(--x)); width: 0; z-index: 4; pointer-events: none;
+  border-left: var(--cizgi) dashed var(--ink);
+}
+.tc-pyq-hiza[data-hizali] { border-left-style: solid; }
+.tc-pyq-hiza span {
+  position: sticky; top: var(--satir); display: inline-block; max-width: calc(var(--b-6) * 6); margin-left: var(--b-1); padding: 0 var(--b-1); overflow: hidden;
+  border-radius: var(--yari-1); background: var(--ink); color: var(--panel-solid); font-size: var(--yazi-xs); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; vertical-align: top;
+}
+.tc-pyq-hiza[data-kenar="bit"] span { float: right; margin-right: var(--b-1); margin-left: 0; }
+.tc-pyq-hiza[data-kenar="bit"] { display: flow-root; }
 .tc-pyq-termin { background: var(--hazard); }
 .tc-pyq-termin span {
   position: sticky; top: var(--satir); display: inline-block; margin-left: var(--b-1); padding: 0 var(--b-1); border-radius: var(--yari-1);
