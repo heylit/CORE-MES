@@ -158,3 +158,20 @@
   .tc-kural-kosul > :nth-child(1), .tc-kural-kosul > :nth-child(2), .tc-kural-kosul > :nth-child(3) { grid-column: 1 / -1; }
   .tc-kural-kosul > :last-child { grid-column: 2; justify-self: end; }
 }
+
+/* 3594: alıcı hücresi paneli açar; olay altında "ne zaman" satırı; panelde seçim sonucu, ilk seçim uyarısı ve kayıt hatası. */
+.tc-alici-hucre {
+  display: inline-flex; align-items: center; gap: var(--b-2); min-height: var(--dokunma); max-width: 100%; padding: var(--b-1) var(--b-2);
+  border: 1px dashed var(--edge2); border-radius: var(--yari-1); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.tc-alici-hucre:hover, .tc-alici-hucre:focus-visible { border-style: solid; border-color: var(--ink); }
+.tc-alici-hucre > .tc-simge { flex-shrink: 0; color: var(--muted); }
+.tc-matris-ne-zaman { display: inline-flex; align-items: center; gap: var(--b-1); margin: 0; }
+.tc-alici-uyari, .tc-alici-hata, .tc-alici-sonuc { margin: 0; padding: var(--b-2) var(--b-3); border-radius: var(--yari-1); font-size: var(--yazi-s); }
+.tc-alici-uyari { border: 1px solid var(--hold); background: var(--panel2); }
+.tc-alici-hata { border: 1px solid var(--stop); background: var(--panel2); }
+.tc-alici-sonuc { background: var(--panel2); }
+.tc-alici-kisiler .tc-dugme { min-height: var(--dokunma); }
+.tc-kim-alir-kisiler { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); }
+.tc-kim-alir-son { display: flex; align-items: center; gap: var(--b-2); color: var(--muted); font-size: var(--yazi-xs); }
+.tc-alici-alt-baslik { margin: 0; color: var(--muted); font-size: var(--yazi-xs); font-weight: 600; text-transform: uppercase; letter-spacing: var(--harf-aralik-14); }

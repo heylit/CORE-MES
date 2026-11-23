@@ -12,7 +12,7 @@ import type {
 } from '#paylasilan/sozlesme/bildirim-eposta.ts';
 import type { KademeAyarSatiri, KademeAyarlariCevabi } from '#paylasilan/sozlesme/bildirim-kademe.ts';
 import {
-  AcKapa, Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, OnayPenceresi, Pencere, Rozet, Secim, Simge, Tablo, useBildirim, type RozetTonu, type Sutun,
+  AcKapa, AramaliSecim, Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, OnayPenceresi, Pencere, Rozet, Secim, Simge, Tablo, useBildirim, type RozetTonu, type Sutun,
 } from '../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
@@ -20,6 +20,7 @@ import { useYetki } from '../../ortak/veri/yetki.ts';
 import { KADEME_AYAR_ANAHTARI, KademeAyarPenceresi, kademeGovdesi, MiniMerdiven, modulAdi } from '../bildirim/disari.ts';
 import { KuralBolumu, useKurallar } from './BildirimKurallari.tsx';
 import { kuralliTurMu } from '#paylasilan/sozlesme/bildirim-kural-sabitleri.ts';
+import { BASLATAN_ALMAZ, NE_ZAMAN } from './bildirim-ne-zaman.ts';
 import './eposta.css';
 
 // 3435-3 a: olay başına bütün kanallar tek tabloda (satır olay, sütun kanal); satıra basınca tek panel, tek Kaydet. Yetki modeli
@@ -107,6 +108,15 @@ export function aliciOzeti(m: MatrisSatiri, rolAdi: ReadonlyMap<number, string>)
   if (a.surum === null) return a.varsayilanIslemler.length === 0 ? 'Kayda bağlı kişi' : `Yetkisi olanlar (${a.varsayilanIslemler.map(islemAdi).join(', ')})`;
   const roller = a.rolIdleri.map((id) => rolAdi.get(id) ?? `Rol ${String(id)}`);
   return [...roller, ...(a.kisiIdleri.length > 0 ? [`${String(a.kisiIdleri.length)} kişi`] : [])].join(', ') || 'Kimse';
+}
+
+// 3594: tablo hücresinde uzun alıcı listesi tek satırda kalır; ilk iki rol adıyla, kalanı sayıyla. Tam liste paneldedir.
+export function aliciKisaOzeti(m: MatrisSatiri, rolAdi: ReadonlyMap<number, string>): string {
+  const a = m.alici;
+  if (a === null || a.surum === null || a.rolIdleri.length + a.kisiIdleri.length === 0) return aliciOzeti(m, rolAdi);
+  const roller = a.rolIdleri.map((id) => rolAdi.get(id) ?? `Rol ${String(id)}`);
+  const kalan = roller.length - 2;
+  return [...roller.slice(0, 2), ...(kalan > 0 ? [`+${String(kalan)} rol`] : []), ...(a.kisiIdleri.length > 0 ? [`${String(a.kisiIdleri.length)} kişi`] : [])].join(', ');
 }
 
 function kademeMetni(m: MatrisSatiri): string | null {
@@ -442,6 +452,9 @@ export function BildirimMatrisi() {
             <span className={`tc-matris-onem tc-matris-onem-${m.onem}`} title={ONEM_ADI[m.onem]}><Simge ad={ONEM_SIMGESI[m.onem]} boyut="k" /></span>
             <span className="tc-matris-olay">
               <span>{m.baslik}</span>
+              {NE_ZAMAN[m.tur] !== undefined && (
+                <span className="tc-matris-alt tc-matris-ne-zaman"><Simge ad="clock" boyut="k" />{NE_ZAMAN[m.tur]}</span>
+              )}
               {km !== null && <span className="tc-matris-alt">{km}</span>}
               {m.kaynak && <MiniMerdiven ayar={m.kaynak} etiket={m.baslik} />}
             </span>
@@ -455,7 +468,21 @@ export function BildirimMatrisi() {
     ...(kanallar.length > 0 ? [{ anahtar: 'nasil', baslik: 'Nasıl', csv: nasilCsv, hucre: nasilHucresi }] satisfies Sutun<MatrisSatiri>[] : []),
     ...(ayar ? [{
       anahtar: 'alicilar', baslik: 'Alıcılar', kartTamSatir: true, csv: (m: MatrisSatiri) => aliciOzeti(m, rolAdi),
-      hucre: (m: MatrisSatiri) => (aliciVarsayilanMi(m) ? <span className="tc-matris-varsayilan">{`${aliciOzeti(m, rolAdi)} (varsayılan)`}</span> : aliciOzeti(m, rolAdi)),
+      // 3594: alıcı seçimi kalem arkasında bulunmuyordu; hücre aynı paneli açar.
+      hucre: (m: MatrisSatiri) => {
+        const varsayilan = aliciVarsayilanMi(m);
+        const metin = varsayilan ? `${aliciOzeti(m, rolAdi)} (varsayılan)` : aliciKisaOzeti(m, rolAdi);
+        if (m.alici === null) return <span className="tc-matris-varsayilan">{metin}</span>;
+        return (
+          <button
+            type="button" className={`tc-alici-hucre${varsayilan ? ' tc-matris-varsayilan' : ''}`} aria-label={`${m.baslik}: alıcıları değiştir (${metin})`}
+            onClick={() => { setAcik(m.tur); }}
+          >
+            <span>{metin}</span>
+            <Simge ad="edit" boyut="k" />
+          </button>
+        );
+      },
     }] satisfies Sutun<MatrisSatiri>[] : []),
     {
       anahtar: 'ayrinti', baslik: 'Ayrıntı', csv: false,
@@ -477,7 +504,7 @@ export function BildirimMatrisi() {
     <Kart baslik="Olaylar ve kanallar">
       <p className="tc-ayar-aciklama">
         Anahtar basınca hemen kaydedilir; birkaç saniye Geri al çıkar. Modül başlığındaki anahtar o modülün görünen bütün olaylarını değiştirir.
-        Alıcılar, e-posta şablonu, tekrar ve üst kademe kalem düğmesiyle açılan paneldedir. Kademeli uyarı kaynağı tek satırdır; merdiveni
+        Alıcıyı değiştirmek için Alıcılar hücresine basın; e-posta şablonu, tekrar ve üst kademe kalem düğmesiyle açılan paneldedir. Kademeli uyarı kaynağı tek satırdır; merdiveni
         iş yapılmazsa sırayla çıkan basamaklardır (yaklaşıyor, gecikti, yöneticide, devret).
       </p>
       <div className="tc-matris-uyari" role="note">
@@ -623,7 +650,11 @@ function OlayPaneli({ satir, roller, kisiler, epostaRolleri, epostaKisileri, sab
   const [yKisiIdleri, setYKisiIdleri] = useState(e?.yukseltKisiIdleri ?? []);
   const [kaydediliyor, setKaydediliyor] = useState(false);
   const [kuralFormu, setKuralFormu] = useState(false);
+  const [kapatSor, setKapatSor] = useState(false);
+  const [kayitHatasi, setKayitHatasi] = useState<string | null>(null);
   const kisiAdi = new Map([...kisiler, ...epostaKisileri].map((k) => [k.id, k.ad]));
+  const rolAdlari = new Map(roller.map((r) => [r.id, r.ad]));
+  const rolAdiAl = (id: number) => rolAdlari.get(id) ?? `Rol ${String(id)}`;
 
   const gunHatasi = (m: string, enCok: number): string | undefined => {
     const n = sayiMi(m);
@@ -667,28 +698,58 @@ function OlayPaneli({ satir, roller, kisiler, epostaRolleri, epostaKisileri, sab
     }
     void istemci.invalidateQueries({ queryKey: MATRIS_ANAHTARI.sablonlar });
     setKaydediliyor(false);
-    if (kalan.length === 0) { bildir('tamam', `${satir.baslik}: kaydedildi.`); kapat(); return; }
-    bildir('hata', `${kalan.join(', ')} kaydedilemedi: ${hataIletisi(ilkHata, 'bilinmeyen hata')}`);
+    if (kalan.length === 0) { setKayitHatasi(null); bildir('tamam', `${satir.baslik}: kaydedildi.`); kapat(); return; }
+    // Panel açık kalır: seçim kaybolmaz, neden panelde de yazar.
+    const neden = `${kalan.join(', ')} kaydedilemedi: ${hataIletisi(ilkHata, 'bilinmeyen hata')}`;
+    setKayitHatasi(neden);
+    bildir('hata', neden);
   };
+  // Kaydedilmemiş seçim sessizce kaybolmasın: çarpı, Esc ve pencere dışı önce sorar; Vazgeç açık seçimdir, sormaz.
+  const kapatIstegi = () => { if (degisti) setKapatSor(true); else kapat(); };
 
-  const eklenebilir = kisiler.filter((k) => !kisiIdleri.includes(k.id));
+  // 3594 (Arayüz Y1): seçim varsayılanın yerine geçer; kaydetmeden kimin alacağı yazılır.
+  const varsayilanMetni = a === null ? '' : a.varsayilanIslemler.length === 0 ? 'yalnız kayda bağlı kişi alır' : `${a.varsayilanIslemler.map(islemAdi).join(', ')} yetkisi olanlar alır`;
+  const secimVar = rolIdleri.length + kisiIdleri.length > 0;
+  const ilkSecim = a !== null && a.varsayilanIslemler.length > 0 && a.rolIdleri.length + a.kisiIdleri.length === 0 && secimVar;
+  const alacaklar = (() => {
+    if (a === null || !degisim.alici) return null;
+    if (!secimVar) return `Seçim kalkar: ${varsayilanMetni}.`;
+    const roller = rolIdleri.map((id) => rolAdiAl(id));
+    const kisilerAd = kisiIdleri.map((id) => kisiAdi.get(id) ?? `Kişi ${String(id)}`);
+    const parca = [...(roller.length > 0 ? [`${roller.join(', ')} rolündekiler`] : []), ...kisilerAd].join(', ');
+    return a.varsayilanIslemler.length > 0 ? `${parca}. Bunların dışında kalan ${a.varsayilanIslemler.map(islemAdi).join(', ')} yetkisi olanlar almaz.` : `${parca}.`;
+  })();
+
+  const eklenebilir = kisiler.filter((x) => !kisiIdleri.includes(x.id));
   const yEklenebilir = epostaKisileri.filter((k) => !yKisiIdleri.includes(k.id));
   const k = satir.kademe;
   return (
+    <>
     <Pencere
       acik
-      kapat={kapat}
+      kapat={kapatIstegi}
       baslik={satir.baslik}
       tur="yan"
       alt={kuralFormu ? undefined : (
         <div className="tc-eposta-eylemler">
+          {!degisti && <span className="tc-ayar-aciklama" id={`${satir.tur}-kaydet-neden`}>Değişiklik yok</span>}
           <Dugme onClick={kapat}>Vazgeç</Dugme>
-          <Dugme tur="birincil" simge="check" disabled={!degisti || !gecerli} yukleniyor={kaydediliyor} onClick={() => { void kaydet(); }}>Kaydet</Dugme>
+          <Dugme
+            // Pasifken de odakta kalır, neden okunur (disabled odak almaz).
+            tur="birincil" simge="check" aria-disabled={!degisti || !gecerli} yukleniyor={kaydediliyor}
+            onClick={() => { if (degisti && gecerli) void kaydet(); }}
+            aria-describedby={degisti ? undefined : `${satir.tur}-kaydet-neden`}
+          >
+            Kaydet
+          </Dugme>
         </div>
       )}
     >
       <div className="tc-eposta-form">
-        <p className="tc-ayar-aciklama">Kanallar tablodan anında kaydedilir; burada alıcı ve e-posta ayrıntısı değişir.</p>
+        {NE_ZAMAN[satir.tur] !== undefined && (
+          <p className="tc-matris-ne-zaman tc-ayar-aciklama"><Simge ad="clock" boyut="k" />{NE_ZAMAN[satir.tur]}</p>
+        )}
+        {kayitHatasi !== null && <p className="tc-alici-hata" role="alert">{kayitHatasi}</p>}
         <p className="tc-eposta-olay">
           <Rozet ton={ONEM_TONU[satir.onem]}>{ONEM_ADI[satir.onem]}</Rozet>
           <Rozet ton="pasif">{modulAdi(satir.kaynakModul)}</Rozet>
@@ -698,25 +759,38 @@ function OlayPaneli({ satir, roller, kisiler, epostaRolleri, epostaKisileri, sab
           <fieldset className="tc-eposta-grup">
             <legend>Alıcılar</legend>
             {a === null ? (
-              <p className="tc-ayar-aciklama">Bu olay kayda bağlı kişiye gider (ör. görevi atanan); alıcı seçilmez.</p>
+              <p className="tc-ayar-aciklama">Kayıttaki kişi her zaman alır (ör. siparişi açan, görevi atanan).</p>
             ) : (
               <>
-                <p className="tc-ayar-aciklama">
-                  {rolIdleri.length + kisiIdleri.length === 0
-                    ? (a.varsayilanIslemler.length === 0 ? 'Seçim yok: yalnız kayda bağlı kişi alır.' : `Seçim yok: ${a.varsayilanIslemler.map(islemAdi).join(', ')} yetkisi olanlar alır.`)
-                    : 'Yalnız seçilenler alır; kayda bağlı kişi her durumda alır. Seçim yetki vermez.'}
-                </p>
+                {BASLATAN_ALMAZ.has(satir.tur) && (
+                  <p className="tc-ayar-aciklama">Olayı başlatan kişi (ör. siparişi açan) kendi işlemi için bu bildirimi almaz.</p>
+                )}
+                <p className="tc-ayar-aciklama">{`Yalnız seçilenler alır. Hiç seçim yoksa ${varsayilanMetni}. Seçmek yetki vermez; kayda bağlı kişi her durumda alır.`}</p>
+                {/* Canlı bölgeler her zaman çizilir, yalnız içerik değişir: sonradan eklenen bölgeyi ekran okuyucu okumayabilir. */}
+                <div role="status" className="tc-alici-canli">
+                  {ilkSecim && (
+                    <p className="tc-alici-uyari">
+                      {`Seçim yapınca ${a.varsayilanIslemler.map(islemAdi).join(', ')} yetkisi olanlara bu bildirim artık gitmez. Onlar da alsın istiyorsanız rollerini de seçin ya da varsayılana dönün.`}
+                    </p>
+                  )}
+                </div>
+                <div aria-live="polite" className="tc-alici-canli">
+                  {alacaklar !== null && <p className="tc-alici-sonuc"><strong>Kaydedince alacaklar: </strong>{alacaklar}</p>}
+                </div>
+                <p className="tc-alici-alt-baslik">Roller</p>
                 <div className="tc-cagri-rolleri" role="group" aria-label="Alıcı rolleri">
-                  {roller.map((r) => (
+                  {roller.map((r, sira) => (
                     <IsaretKutusu
                       key={r.id}
                       etiket={r.ad}
+                      data-ilk-odak={sira === 0 ? true : undefined}
                       checked={rolIdleri.includes(r.id)}
                       onChange={(o) => { setRolIdleri(o.target.checked ? [...rolIdleri, r.id].sort((x, y) => x - y) : rolIdleri.filter((x) => x !== r.id)); }}
                     />
                   ))}
                 </div>
-                <ul className="tc-alici-kisiler" aria-label="Alıcı kişiler">
+                <p className="tc-alici-alt-baslik">Kişiler</p>
+                <ul className="tc-alici-kisiler" aria-label="Alıcı kişiler" aria-live="polite">
                   {kisiIdleri.map((id) => (
                     <li key={id}>
                       <Dugme simge="x" aria-label={`${kisiAdi.get(id) ?? `Kişi ${String(id)}`} çıkar`} onClick={() => { setKisiIdleri(kisiIdleri.filter((x) => x !== id)); }}>
@@ -725,14 +799,17 @@ function OlayPaneli({ satir, roller, kisiler, epostaRolleri, epostaKisileri, sab
                     </li>
                   ))}
                 </ul>
-                <Secim
+                <AramaliSecim
                   etiket="Kişi ekle"
-                  value=""
-                  bosSecenek="Kişi seçin"
+                  deger=""
+                  yerTutucu={kisiler.length === 0 ? 'Seçilebilir kişi yok' : eklenebilir.length === 0 ? 'Bütün kişiler eklendi' : 'Kişi ara ve ekle'}
                   disabled={eklenebilir.length === 0}
                   secenekler={eklenebilir.map((x) => ({ deger: String(x.id), baslik: x.ad }))}
-                  onChange={(o) => { const id = Number(o.target.value); if (id > 0) setKisiIdleri([...kisiIdleri, id].sort((x, y) => x - y)); }}
+                  sec={(d) => { const id = Number(d); if (id > 0) setKisiIdleri([...kisiIdleri, id].sort((x, y) => x - y)); }}
                 />
+                {secimVar && (
+                  <Dugme simge="rotate" onClick={() => { setRolIdleri([]); setKisiIdleri([]); }}>Varsayılana dön</Dugme>
+                )}
               </>
             )}
           </fieldset>
@@ -811,5 +888,20 @@ function OlayPaneli({ satir, roller, kisiler, epostaRolleri, epostaKisileri, sab
         )}
       </div>
     </Pencere>
+    <Pencere
+      acik={kapatSor}
+      kapat={() => { setKapatSor(false); }}
+      baslik="Kaydedilmemiş değişiklik var"
+      alt={(
+        <div className="tc-eposta-eylemler">
+          <Dugme data-ilk-odak onClick={() => { setKapatSor(false); }}>Devam et</Dugme>
+          <Dugme onClick={() => { setKapatSor(false); kapat(); }}>Kaydetmeden kapat</Dugme>
+          <Dugme tur="birincil" simge="check" disabled={!gecerli} onClick={() => { setKapatSor(false); void kaydet(); }}>Kaydet</Dugme>
+        </div>
+      )}
+    >
+      <p>{`${satir.baslik}: değişiklikler kaydedilmedi.`}</p>
+    </Pencere>
+    </>
   );
 }
