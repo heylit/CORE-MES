@@ -78,6 +78,7 @@ VARSAYIM: yoksayma ve geri alma sürümsüzdür (kayıt yalnız eklenir ya da si
 
 
 3574-1 (22.11.2026, sipariş satırları; yeni işlem yok, S2 a):
+- Denetim (kart #212, 23.11): `siparis-ver` ve `siparis-onerisi-karari` gövdesiyle (birim fiyat dahil) denetim defterine girer; gövdesiz listede değil.
 - `POST /satin-alma-talepleri/:id/siparis-ver` `satin-alma.yaz`, tekrar korumalı, sürümlü: yalnız onaylı kararlı, onaydaki talep (422). Pay başına firma, miktar, birim fiyat, satır termini, not; firma başına başlık. Kural ihlali (kapsam dışı, paysız kalem, aynı firmaya iki pay, başlıksız pay, teklifli firma yeni başlık, sabitlenmemiş para birimi, bağlı ya da kademeli kalem bölme) 422, hiçbir şey yazılmaz. "Başka firma" yalnız tedarikçi olabilen ve Kalite'de askıda olmayan firma. Onaylı tutarı aşan ya da onaylı kararda olmayan firmaya giden sipariş uygulanmaz, gerekçeyle (boşsa 400) öneri olarak bekler (S1 a, R4); talep başına tek öneri (422/409). Bekleyen öneri varken kaydetle sipariş verilmez (422).
 - `POST /satin-alma-talepleri/:id/siparis-onerisi-karari` `satin-alma.onayla`, tekrar korumalı, sürümlü: ret öneriyi siler; onayda öneri yeniden doğrulanır ve bütünüyle uygulanır, tutar öneridekini aşarsa 422. Öneren onaylayamaz (dört göz, R5), açan ve talep eden onaylayamaz; onay kademesi açıksa yeni tutarla bakılır.
 - `POST /satin-alma-talepleri/:id/siparis-kalemi-degistir` işlem `satin-alma.yaz` ya da `satin-alma.onayla`: miktarı düşüren (birim aynı) değişiklik `yaz` ile; artış ve birim değişikliği `onayla` ister (403).

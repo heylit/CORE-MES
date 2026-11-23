@@ -147,16 +147,16 @@ export const uclar = [
     yontem: 'POST', yol: '/satin-alma-talepleri/:id/sil', yetki: 'satin-alma.talep-ac', parametre: talepParametresi, govde: talepSilGovdesi,
     cevap: tamamCevabi, isle: ({ db, kullanici, parametre, govde }) => servis.talepSil(db, kullanici, parametre.id, govde.surum),
   }),
-  // 3574-1, S2 a: siparişi satın almayı yazan verir; onaya düşen sipariş öneri olarak bekler. Gövde fiyat taşır: denetime gövdesiz.
+  // 3574-1, S2 a: siparişi satın almayı yazan verir; onaya düşen sipariş öneri olarak bekler. Para kararıdır: gövde fiyatla denetime girer (kart #212).
   uc({
     yontem: 'POST', yol: '/satin-alma-talepleri/:id/siparis-ver', yetki: 'satin-alma.yaz', parametre: talepParametresi,
-    govde: siparisVerGovdesi, cevap: talepSemasi, denetim: 'govdesiz',
+    govde: siparisVerGovdesi, cevap: talepSemasi,
     isle: ({ db, kullanici, parametre, govde, denetimEki }) => servis.siparisVer(db, kullanici, parametre.id, govde, denetimEki),
   }),
   // S2 a, R5: onaya düşen siparişi onay yetkilisi onaylar ya da reddeder; dört göz ve onay kademesi servisde.
   uc({
     yontem: 'POST', yol: '/satin-alma-talepleri/:id/siparis-onerisi-karari', yetki: 'satin-alma.onayla', parametre: talepParametresi,
-    govde: siparisOnerisiKararGovdesi, cevap: talepSemasi, denetim: 'govdesiz',
+    govde: siparisOnerisiKararGovdesi, cevap: talepSemasi,
     isle: ({ db, kullanici, parametre, govde, denetimEki }) => servis.siparisOnerisiKarari(db, kullanici, parametre.id, govde, denetimEki),
   }),
   // Borç 36: siparişteki kalem gerekçeyle değişir; sürüm tekrarı önler (aynı sürümle ikinci gönderim 409 alır).
