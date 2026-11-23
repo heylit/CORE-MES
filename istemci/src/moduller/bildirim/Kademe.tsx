@@ -8,7 +8,7 @@ import type {
 } from '#paylasilan/sozlesme/bildirim-kademe.ts';
 import { KADEME_ADLARI, KADEME_GUN_EN_COK, KADEME_KAYNAKLARI, type Kademe } from '#paylasilan/sozlesme/kademe-sabitleri.ts';
 import {
-  AcKapa, Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Pencere, Rozet, Secim, Simge, Tablo, useBildirim, type RozetTonu, type Sutun,
+  AcKapa, Dugme, DurumKutusu, Girdi, IsaretKutusu, KademeRozeti, Kart, Pencere, Rozet, Secim, Simge, Tablo, useBildirim, type RozetTonu, type Sutun,
 } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { tarihMetni } from '../../ortak/veri/zaman-metni.ts';
@@ -21,7 +21,6 @@ import './bildirim.css';
 
 const KADEME_TONU: Record<Kademe, RozetTonu> = { 1: 'pasif', 2: 'bilgi', 3: 'uyari', 4: 'hata', 5: 'hata' };
 const kademeAdi = (k: number): string => KADEME_ADLARI[k as Kademe] ?? `K${String(k)}`;
-const KademeRozeti = ({ k }: { k: number }) => <Rozet ton={KADEME_TONU[k as Kademe] ?? 'pasif'}>{`K${String(k)} ${kademeAdi(k)}`}</Rozet>;
 const kaynakAdi = (kaynak: string): string => (KADEME_KAYNAKLARI as Record<string, { ad: string }>)[kaynak]?.ad ?? kaynak;
 const gunMetni = (g: number | null): string => (g === null ? 'kapalı' : `${String(g)} iş günü`);
 
@@ -179,7 +178,7 @@ export function KademeAyarPenceresi({ satir, roller, kapat }: { satir: KademeAya
 
 function takipSutunlari(kaynakla: boolean): Sutun<KademeTakipSatiri>[] {
   const sutunlar: Sutun<KademeTakipSatiri>[] = [
-    { anahtar: 'kademe', baslik: 'Kademe', hucre: (s) => <KademeRozeti k={s.kademe} />, csv: (s) => kademeAdi(s.kademe), kirilmaz: true },
+    { anahtar: 'kademe', baslik: 'Kademe', hucre: (s) => <KademeRozeti kademe={s.kademe} />, csv: (s) => kademeAdi(s.kademe), kirilmaz: true },
     { anahtar: 'no', baslik: 'Kayıt', mono: true, kirilmaz: true, hucre: (s) => <Link to={s.yol}>{s.no}</Link>, csv: (s) => s.no },
     { anahtar: 'baslik', baslik: 'İş', hucre: (s) => s.baslik, kartTamSatir: true },
     { anahtar: 'sonGun', baslik: 'Son gün', kirilmaz: true, hucre: (s) => (s.sonGun === null ? null : tarihMetni(s.sonGun)), csv: (s) => s.sonGun ?? '' },

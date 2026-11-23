@@ -3,6 +3,7 @@ export { Dugme } from './Dugme.tsx';
 export { Kopyala, panoyaYaz } from './Kopyala.tsx';
 export { KodDegisimPenceresi, kodDegisimMetni, type KoduDegisenYer } from './KodDegisimPenceresi.tsx';
 export { Rozet, type RozetTonu } from './Rozet.tsx';
+export { KademeRozeti, kademeMetni } from './KademeRozeti.tsx';
 export { Qr } from './Qr.tsx';
 export { QR_SESSIZ_PAY, qrKareleri, qrSvgMetni } from './qr.ts';
 export { Kart } from './Kart.tsx';

@@ -1,0 +1,12 @@
+.tc-kademe-rozeti {
+  --c: var(--idle);
+  display: inline-flex; align-items: center; gap: var(--b-2);
+  padding: var(--b-1) var(--b-3); border-radius: var(--yari-tam);
+  font-size: var(--yazi-xs); font-weight: 800; white-space: nowrap; min-width: 0;
+  color: var(--ink); background: color-mix(in srgb, var(--c) 18%, var(--bg2)); border: 1px solid var(--c);
+}
+.tc-kademe-rozeti i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--c); }
+.tc-kademe-rozeti[data-kademe="1"] { --c: var(--idle); }
+.tc-kademe-rozeti[data-kademe="2"] { --c: var(--done); }
+.tc-kademe-rozeti[data-kademe="3"] { --c: var(--hold); }
+.tc-kademe-rozeti[data-kademe="4"], .tc-kademe-rozeti[data-kademe="5"] { --c: var(--stop); }
