@@ -8,6 +8,7 @@ import {
 import { hataIletisi } from '../../../../ortak/veri/api.ts';
 import type { KatalogKarti } from '../tipler.ts';
 import type { MalzemeYetkisi } from '../yetki.ts';
+import { STOK_METNI, StokMiktari, StokOkumaBilgisi, stokVarMi, useStokMiktarlari, type StokMiktarlari } from '../stok-miktari.tsx';
 import { kaynakMetni } from './index.tsx';
 import { SetPenceresi } from './SetPenceresi.tsx';
 import { KartEklePenceresi, OnerilmesinPenceresi } from './secili-pencereler.tsx';
@@ -121,6 +122,8 @@ function AlternatifTablosu({ kart, kartlar, bolum, kuraldan, yaz, ac }: {
   const esdeger = useEsdegerIslemi();
   const { bildir } = useBildirim();
   const satirlar = tabloSatirlari(bolum, kuraldan);
+  // 3582 B: tablodaki kartlar ve setlere uyan kartlar tek okumada; önerilmeyen kartın stoğu gösterilmez.
+  const stok = useStokMiktarlari(satirlar.flatMap(stokNolari));
   const setAdi = new Map(bolum.setler.map((t) => [t.id, t.ad]));
   const kimlikNodan = (no: number) => kartlar.find((k) => k.no === no)?.kimlik;
   const kodBagi = (k: { no: number; kod: string | null }, cizili = false) => {
@@ -158,9 +161,12 @@ function AlternatifTablosu({ kart, kartlar, bolum, kuraldan, yaz, ac }: {
               <div className="tc-kalt-hucre">
                 <b>{s.set.ad}</b>
                 <span className="tc-alt-soluk">{setOzeti(s.set.nitelikler)}</span>
-                <button type="button" className="tc-mk-bag" aria-expanded={acikSet === s.set.id} onClick={() => acikSetYaz(acikSet === s.set.id ? null : s.set.id)}>
-                  {`${String(s.set.uyanSayisi)} kart uyuyor${yeni > 0 ? ` · ${String(yeni)} yeni` : ''}`}
-                </button>
+                <span>
+                  <button type="button" className="tc-mk-bag" aria-expanded={acikSet === s.set.id} onClick={() => acikSetYaz(acikSet === s.set.id ? null : s.set.id)}>
+                    {`${String(s.set.uyanSayisi)} kart uyuyor${yeni > 0 ? ` · ${String(yeni)} yeni` : ''}`}
+                  </button>
+                  {stok.durum === 'hazir' && s.set.uyanlar.length > 0 && <span className="tc-alt-soluk">{` · ${setStokOzeti(stok, s.set).ozet}`}</span>}
+                </span>
                 {acikSet === s.set.id && (
                   <ul className="tc-kalt-liste">
                     {s.set.uyanlar.map((u) => (
@@ -170,6 +176,7 @@ function AlternatifTablosu({ kart, kartlar, bolum, kuraldan, yaz, ac }: {
                         {u.yeni && <Rozet ton="bilgi">yeni</Rozet>}
                         {u.durum === 'tekil' && <Rozet ton="pasif">tekil satır geçer</Rozet>}
                         {u.durum === 'onerilmez' && <Rozet ton="hata">Önerilmiyor</Rozet>}
+                        {u.durum !== 'onerilmez' && stok.okur && <span className="tc-kalt-stok"><StokMiktari stok={stok} no={u.no} ayrintili /></span>}
                       </li>
                     ))}
                     {s.set.uyanSayisi > s.set.uyanlar.length && <li className="tc-alt-soluk">{`İlk ${String(s.set.uyanlar.length)} kart gösterilir.`}</li>}
@@ -207,6 +214,17 @@ function AlternatifTablosu({ kart, kartlar, bolum, kuraldan, yaz, ac }: {
         return <span className="tc-alt-soluk">—</span>;
       },
     },
+    ...(stok.okur ? [{
+      anahtar: 'stok', baslik: 'Stok', hizala: 'sag' as const, hucre: (s: TabloSatiri) => {
+        if (s.tur === 'onerilmez') return <span className="tc-alt-soluk">—</span>;
+        if (s.tur !== 'set') return <StokMiktari stok={stok} no={stokNolari(s)[0]!} />;
+        if (s.set.uyanlar.length === 0) return <span className="tc-alt-soluk">—</span>;
+        if (stok.durum !== 'hazir') return <StokMiktari stok={stok} no={s.set.uyanlar[0]!.no} />;
+        const o = setStokOzeti(stok, s.set);
+        return <span>{o.ozet}<span className="tc-alt-soluk">{` · ${o.kapsam}`}</span></span>;
+      },
+      csv: (s: TabloSatiri) => (s.tur === 'set' || s.tur === 'onerilmez' ? '' : stok.miktar(stokNolari(s)[0]!)?.kullanilabilir ?? ''),
+    } satisfies Sutun<TabloSatiri>] : []),
     {
       anahtar: 'nerede', baslik: 'Nerede', hucre: (s) => (s.tur === 'set' ? yerMetni(s.set.kullanimYerleri) : s.tur === 'elle' ? yerMetni(s.secili.kullanimYerleri)
         : s.tur === 'onerilmez' ? 'Hiçbir yerde' : 'Hepsi'),
@@ -241,7 +259,7 @@ function AlternatifTablosu({ kart, kartlar, bolum, kuraldan, yaz, ac }: {
   }
   const disarida = new Set([...bolum.secili.map((x) => x.alternatifNo), ...bolum.esdegerler.map((e) => e.no)]);
   return (
-    <section className="tc-alt-bolum" aria-label="Alternatifler tablosu">
+    <section className="tc-alt-bolum" aria-label="Alternatifler tablosu" aria-busy={stok.okur && stok.durum === 'yukleniyor' && satirlar.length > 0}>
       <div className="tc-kalt-baslik">
         <h4 className="tc-alt-alt-baslik">{`Alternatifler (${String(satirlar.length)})`}</h4>
         {yaz && (
@@ -253,6 +271,7 @@ function AlternatifTablosu({ kart, kartlar, bolum, kuraldan, yaz, ac }: {
           </span>
         )}
       </div>
+      {satirlar.some((x) => stokNolari(x).length > 0) && <StokOkumaBilgisi stok={stok} />}
       {yaz && !hammadde && <p className="tc-alt-soluk">Bu kart türünde ölçü, kalite, durum ve standart alanı yok; set kurulamaz. Alternatifi Kart ekle ile seçin.</p>}
       <Tablo
         etiket="Alternatifler"
@@ -301,6 +320,21 @@ function AlternatifTablosu({ kart, kartlar, bolum, kuraldan, yaz, ac }: {
       </OnayPenceresi>
     </section>
   );
+}
+
+function stokNolari(s: TabloSatiri): number[] {
+  switch (s.tur) {
+    case 'set': return s.set.uyanlar.filter((u) => u.durum !== 'onerilmez').map((u) => u.no);
+    case 'elle': return [s.secili.alternatifNo];
+    case 'kural': case 'esdeger': return [s.kart.no];
+    case 'onerilmez': return [];
+  }
+}
+// Setin stok özeti: yalnız sayı, toplam yok (kartların birimi farklı olabilir). Uyan listesi kısaltılmışsa kapsam bunu söyler.
+function setStokOzeti(stok: StokMiktarlari, set: AlternatifSeti): { ozet: string; kapsam: string } {
+  const nolar = set.uyanlar.filter((u) => u.durum !== 'onerilmez').map((u) => u.no);
+  const ozet = STOK_METNI.kartSayisi(nolar.filter((no) => stokVarMi(stok.miktar(no))).length);
+  return { ozet, kapsam: set.uyanSayisi > set.uyanlar.length ? `ilk ${String(set.uyanlar.length)} karttan` : `${String(nolar.length)} karttan` };
 }
 
 // Eşdeğer satırları tablodadır; burada yalnız yeni bağ kurulur.

@@ -86,3 +86,5 @@
 @media (max-width: 767px) {
   .tc-kalt-cipler > legend { float: none; width: 100%; }
 }
+/* 3582: uyan kart listesinde stok miktarı satırın sağında; dar ekranda alt satıra kayar, yine sağa yaslıdır. */
+.tc-kalt-stok { margin-left: auto; }
