@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { BildirimSaglayici } from '../../../../ortak/arayuz/index.ts';
 import { cihazYazicisiKaydet } from '../../../etiket-merkezi/disari.ts';
 import { depoDugmeleri, sabitDepoDugmeleri, sayimEklenir } from './DepoTerminali.tsx';
-import { MalKabulTerminali } from './MalKabulTerminali.tsx';
+import { MalKabulTerminali, adetKalani } from './MalKabulTerminali.tsx';
 
 // 3388 a: mal kabul üretim terminalinin düzeninde; Kabul +1 en çok firmada kalan kadar, Bitir'de tek kayıt. Değerler uydurmadır.
 beforeEach(() => { localStorage.clear(); });
@@ -48,6 +48,13 @@ const seritHazir = async (ad: string) => {
 const tus = (ad: string) => screen.getByRole('button', { name: ad }) as HTMLButtonElement;
 
 describe('mal kabul terminali (3388 a)', () => {
+  it('satın almada kadran hedefi yalnız adet birimli tam sayı kalandır; başka birimde "—"', () => {
+    expect(adetKalani('5.000', 'adet')).toBe(5);
+    expect(adetKalani('5', 'Adet')).toBe(5);
+    expect(adetKalani('2.500', 'kg')).toBeNull();
+    expect(adetKalani('2.500', 'adet')).toBeNull();
+  });
+
   it('kurallar: düğmeler üretimdeki sırada, sayım hedefi aşmaz', () => {
     expect(depoDugmeleri('queued', 'Kabulü başlat').map((d) => d.etiket)).toEqual(['Kabulü başlat']);
     expect(depoDugmeleri('running', 'x').map((d) => d.etiket)).toEqual(['Durdur', 'Duraklat', 'Bitir']);
@@ -100,6 +107,8 @@ describe('mal kabul terminali (3388 a)', () => {
     fireEvent.click(within(durum()).getByRole('button', { name: /Kabulü başlat/ }));
     expect(tus('Kabul +1').disabled).toBe(true);
     expect(document.querySelector('.tc-ay1-depo-ileti')?.textContent).toContain('okutma isteğe bağlı');
+    // Satın almada kadranın hedefi siparişin kalanıdır (Beklenen ile aynı sayı).
+    expect(document.querySelector('.tc-ay1-kadran-hedef')?.textContent).toBe('/ 3 adet');
     fireEvent.click(screen.getByRole('button', { name: 'Kabul et' }));
     const p = await screen.findByRole('dialog', { name: 'Mal kabul' });
     expect(within(p).getAllByLabelText(/^Kod/).length).toBeGreaterThan(0);
