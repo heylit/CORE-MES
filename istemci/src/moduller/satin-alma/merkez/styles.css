@@ -320,6 +320,8 @@
 .sa-kok .sa-pencere-genis{ --pencere-genis:1280px; }
 .sa-kok .mh .tc-pencere-kapat{ margin-left:auto; }
 .sa-kok .mh > .num{ white-space:nowrap; }
+/* Dar ekranda başlığın yanındaki talep adı alt satıra iner; başlık daralıp harf ortasından bölünmez. */
+@media (max-width:767px){ .sa-kok .mh{ flex-wrap:wrap; } .sa-kok .mh > .muted{ order:1; flex:1 1 100%; min-width:0; overflow-wrap:anywhere; } }
 .sa-kok .fs{ border:0; padding:0; margin:0; display:flex; flex-direction:column; gap:var(--b-2); min-width:0; }
 .sa-kok .fs legend{ font-family:var(--sa-cond); font-weight:600; font-size:var(--yazi-m); padding:0; margin-bottom:var(--b-2); }
 .sa-kok .live{ display:flex; gap:var(--b-5); flex-wrap:wrap; font-size:var(--yazi-s); }
@@ -390,9 +392,9 @@
   .sa-kok table.rt.rt-wide td:empty{ display:none; }
   .sa-kok table.rt.rt-wide tr.click:hover td{ background:none; }
   .sa-kok table.rt.rt-wide tr.click:hover{ background:var(--sa-surface-2); }
-  .sa-kok table.itbl.rt tr{ grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); }
+  .sa-kok table.itbl.rt.rt-wide tr{ grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); }
   .sa-kok table.rt.rt-wide td .qacts{ justify-content:flex-start; }
-  .sa-kok table.itbl.rt td{ padding:0; }
+  .sa-kok table.itbl.rt.rt-wide td{ padding:0; }
 }
 .sa-kok .sumstrip{ display:flex; flex-wrap:wrap; background:var(--sa-surface); border:1px solid var(--sa-line); border-radius:var(--sa-radius); overflow:hidden; margin-bottom:var(--b-4); }
 .sa-kok .sumstrip > div{ flex:1 1 170px; padding:var(--b-2) var(--b-3); min-width:0; border-left:1px solid var(--sa-line-2); margin-left:-1px; border-top:1px solid var(--sa-line-2); margin-top:-1px; }
