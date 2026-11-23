@@ -139,9 +139,9 @@ export const KADEME_KAYNAKLARI = {
     yol: '/siparisler', varsayilan: tekSonGun(),
   },
   // 3588: proje düzeyi. Açık (aktif) projenin planlanan bitişi; bitişi olmayan proje takipte değildir (tarih uydurulmaz). Proje sorumlusu
-  // alanı yoktur: K2-K3 projeyi açan kişiye, yoksa projeyi yazanlara; K4 proje durumunu ayarlayanlara gider.
+  // alanı yoktur; alıcı yalnız Projeler sayfasını açabilen roldür (bildirim yolu /projeler). K2-K3 projeyi açan kişiye, yoksa projeyi yazanlara; K4 proje durumunu ayarlayanlara gider.
   'projeler.proje-bitis': {
-    ad: 'Proje bitişi', grup: 'Projeler', sayac: 'son-gun', asama: 1, okumaIslemleri: ['projeler.oku', 'projeler.yaz'], epostaKapali: true,
+    ad: 'Proje bitişi', grup: 'Projeler', sayac: 'son-gun', asama: 1, okumaIslemleri: ['sayfa.projeler'], epostaKapali: true,
     yol: '/projeler', varsayilan: tekSonGun(),
   },
   // 3416-1 a: bekletilen üretim emri, neden başına (İş Akışı v4.7 bekleme tablosu). K3 ilk sınır, K4 ikinci sınır: gecikmenin
