@@ -22,7 +22,7 @@ import type { IsEmriGirdisi } from '../uretim-emirleri/disari.ts';
 import { adimCiktisiCozucusuKaydet, adimStatusuCozucusuKaydet, bakiyeDegistir, cikisYap, hareket, istasyonKonumuBul, rezerveDegistir, uretimPartisi, emirTamamlamaOku, geriAl, hurdaSayimiYansit, istasyondanTeslimEdilen, kaliteKarariYansit, kisiKodu, konumAc, statuDegistir, suresiDolanTeslimleriIptal, uretimGirdiUyarisi, uretimSayimiYansit } from './servis.ts';
 import { emirlerinNetSarfi, emirMalzemeFisleri, emrinRefakatKartlari, istasyonKonumlari, istasyonLotKarari, malzemeStokDurumlari, numuneKarariYansit, numuneTeslimi } from './disari.ts';
 import * as sorgular from './sorgular.ts';
-import { BASLATMA_KARTI_BASKA, BASLATMA_KARTI_YOK, KARTSIZ_BASLATMA, bindenMetin } from './kurallar.ts';
+import { BASLATMA_KARTI_BASKA, BASLATMA_KARTI_YOK, KARTSIZ_ALMA, KARTSIZ_BASLATMA, bindenMetin } from './kurallar.ts';
 import { butunOlaylariVeEskiKademeleriAc } from '../bildirim/disari.ts';
 
 // Malzeme · Teslim (kart #1208): STK-T1 (stok yok), STK-T2 (yalnız yoldayken kapanır), STK-T3 (iptal gönderenin),
@@ -3285,6 +3285,103 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     const emirsiz = await gonder('depo', { malzemeId: hm, miktar: '1', partiId: l1!.id, kaynak: { konumId: kabul }, hedef: { istasyonId: a.id } });
     assert.equal(emirsiz.durum, 200, JSON.stringify(emirsiz.govde));
     assert.equal((await o().vt.tek<{ n: number }>('SELECT count(*)::int AS n FROM stok_refakat_partisi WHERE malzeme_id = $1 AND uretim_emri_id <> $2', [hm, e]))!.n, 0);
+  });
+  test('3620: refakat kartı kapısı dört teslim yolunda: istek teslimi kartı açar ve söyler; okutarak alma ve istasyon isteği kabulü kartsızı reddeder, kart açmaz; emirsiz ve hammadde dışı değişmez', async () => {
+    const [ym, hm, hm2, hm3, sarf] = [await kart('yarimamul'), await kart('hammadde', 'kg'), await kart('hammadde', 'kg'), await kart('hammadde', 'kg'), await kart('sarf')];
+    const [a, b] = [await istasyon(), await istasyon()];
+    const tip = (await o().sahip.tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ($1, 'Deneme tipi', 'TAL') RETURNING id", [`TK-${sira}`]))!.id;
+    const makine = (await o().sahip.tek<{ id: number }>('INSERT INTO makine (kod, ad, istasyon_id) VALUES ($1, $2, $3) RETURNING id', [`TKM-${a.id}`, 'Tezgah', a.id]))!.id;
+    if (!kisiler.has('planlama_proje')) await kisiEkle('planlama_proje', 'planlama_proje');
+    const planlamaci = (await o().vt.tx((db) => kullaniciYukle(db, kisiler.get('planlama_proje')!)))!;
+    const { uretimEmriId: e } = await o().vt.tx(async (db) => uretimEmriAc(db, planlamaci, { projeId: denemeProjeId, malzemeNo: ym, adet: 10, teslim: null, kaynakRotaRevizyonId: await revizyon(ym), isEmirleri: [{
+      sira: 1, opNo: 10, ad: 'Adım 1', operasyonTipiId: tip, kaynak: { tur: 'makine', id: makine }, ayarSuresiDk: '10', birimSureDk: '1',
+      terminGun: null, bagimlilik: 'bekleyen', devirAdedi: null, talimatSurumu: null, kontrolListesi: [],
+      bilesenler: [hm, hm2, hm3].map((malzemeNo) => ({ malzemeNo, miktar: '2' })),
+    }] }));
+    const kabul = await kabulKonumu();
+    await istasyonluOperator('op_3620a', a.isMerkeziId);
+    await istasyonluOperator('op_3620b', b.isMerkeziId);
+    await kisiEkle('op_3620i', 'operator');
+    await o().sahip.sorgu('INSERT INTO kisi_is_merkezi (kisi_id, is_merkezi_id) VALUES ($1, $2)', [kisiler.get('op_3620i'), a.isMerkeziId]);
+    const lotu = async (malzemeId: number): Promise<number> => (await o().vt.tek<{ id: number }>('SELECT id FROM stok_parti WHERE malzeme_id = $1 ORDER BY id LIMIT 1', [malzemeId]))!.id;
+    const kartSayisi = async (malzemeId: number): Promise<number> =>
+      (await o().vt.tek<{ n: number }>('SELECT count(*)::int AS n FROM stok_refakat_partisi WHERE uretim_emri_id = $1 AND malzeme_id = $2', [e, malzemeId]))!.n;
+    const teslimSayisi = async (malzemeId: number): Promise<number> =>
+      (await o().vt.tek<{ n: number }>('SELECT count(*)::int AS n FROM stok_teslim WHERE uretim_emri_id = $1 AND malzeme_id = $2', [e, malzemeId]))!.n;
+    const yerKodu = async (istasyonId: number): Promise<string> =>
+      (await o().vt.tek<{ kod: string }>('SELECT kod FROM stok_konum WHERE id = $1', [(await istasyonKonumu(istasyonId))!]))!.kod;
+
+    // Yol 3, okutarakAl: kart yoksa reddedilir ve açılmaz; depo kartı açınca geçer; emirsiz ve hammadde dışı kartsız geçer.
+    await istasyonaKoy(hm2, a.id, '10');
+    await istasyonaKoy(sarf, a.id, '10');
+    const kod = await yerKodu(a.id);
+    const al = (malzemeId: number, g: Record<string, unknown>) => istek<TeslimCevabi & Hata>('op_3620b', 'POST', '/stok/teslim-kutusu/okutarak-al',
+      { kod: String(malzemeId), yerKodu: kod, istasyonId: b.id, partiId: null, statuId: null, miktar: '1', kaynakKimligi: randomUUID(), ...g });
+    const lot2 = await lotu(hm2);
+    const kartsizAl = await al(hm2, { partiId: lot2, uretimEmriId: e });
+    assert.deepEqual([kartsizAl.durum, kartsizAl.govde.alan, kartsizAl.govde.mesaj], [400, 'kod', KARTSIZ_ALMA], JSON.stringify(kartsizAl.govde));
+    assert.deepEqual([await kartSayisi(hm2), await teslimSayisi(hm2)], [0, 0], 'kart açılmaz, teslim yazılmaz');
+    const emirsizAl = await al(hm2, { partiId: lot2 });
+    assert.equal(emirsizAl.durum, 200, JSON.stringify(emirsizAl.govde));
+    const sarfAl = await al(sarf, { partiId: await lotu(sarf), uretimEmriId: e });
+    assert.equal(sarfAl.durum, 200, JSON.stringify(sarfAl.govde));
+    assert.equal(await kartSayisi(sarf), 0);
+    const kart2 = await kartAc(e, hm2);
+    const kartliAl = await al(hm2, { partiId: lot2, uretimEmriId: e });
+    assert.equal(kartliAl.durum, 200, JSON.stringify(kartliAl.govde));
+    assert.deepEqual([kartliAl.govde.teslim.uretimEmriId, kartliAl.govde.acilanKartlar, await kartSayisi(hm2)], [e, undefined, 1]);
+
+    // Yol 4, istekKabulEt: aynı kapı; emirsiz istek kartsız kabul edilir.
+    await istasyonaKoy(hm3, a.id, '10');
+    const lot3 = await lotu(hm3);
+    const istekAc = async (g: Record<string, unknown>) => {
+      const c = await istek<MalzemeIstegiCevabi & Hata>('op_3620b', 'POST', '/stok/malzeme-istekleri/ac',
+        { malzemeId: hm3, miktar: '2', istasyonId: b.id, kaynakIstasyonId: a.id, not: null, kaynakKimligi: randomUUID(), ...g });
+      assert.equal(c.durum, 200, JSON.stringify(c.govde));
+      return c.govde.istek;
+    };
+    const kabulEt = (i: MalzemeIstegiCevabi['istek']) => istek<MalzemeIstegiCevabi & Hata>('op_3620a', 'POST', `/stok/malzeme-istekleri/${i.id}/kabul-et`,
+      { surum: i.surum, miktar: '2', partiId: lot3, kaynakKimligi: randomUUID() });
+    const emirli = await istekAc({ uretimEmriId: e });
+    const kartsizKabul = await kabulEt(emirli);
+    assert.deepEqual([kartsizKabul.durum, kartsizKabul.govde.alan, kartsizKabul.govde.mesaj], [400, 'partiId', KARTSIZ_ALMA], JSON.stringify(kartsizKabul.govde));
+    assert.deepEqual([await kartSayisi(hm3), await teslimSayisi(hm3)], [0, 0], 'kart açılmaz, teslim yazılmaz');
+    const emirsizKabul = await kabulEt(await istekAc({ uretimEmriId: null }));
+    assert.equal(emirsizKabul.durum, 200, JSON.stringify(emirsizKabul.govde));
+    await kartAc(e, hm3);
+    const kartliKabul = await kabulEt(emirli);
+    assert.equal(kartliKabul.durum, 200, JSON.stringify(kartliKabul.govde));
+    assert.equal(await teslimSayisi(hm3), 1);
+
+    // Yol 2, istekTeslimEt: kart yoksa aynı işlemde açılır ve cevapta söylenir; varsa yeniden açılmaz; başka malzemenin kartı uyumsuz sayılır.
+    await malKabul(hm, '30');
+    const lot1 = await lotu(hm);
+    const iste = async (g: Record<string, unknown>): Promise<MalzemeIstegiCevabi['istek']> => {
+      const c = await istek<MalzemeIstegiCevabi & Hata>('op_3620i', 'POST', '/stok/malzeme-istekleri/ac',
+        { malzemeId: hm, miktar: '3', istasyonId: null, not: null, kaynakKimligi: randomUUID(), ...g });
+      assert.equal(c.durum, 200, JSON.stringify(c.govde));
+      return c.govde.istek;
+    };
+    const teslimEt = (i: MalzemeIstegiCevabi['istek'], g: Record<string, unknown> = {}) => istek<MalzemeIstegiCevabi & Hata>('depo', 'POST', `/stok/malzeme-istekleri/${i.id}/teslim-et`,
+      { surum: i.surum, karsilanan: '3', kaynakKonumId: kabul, partiId: lot1, istasyonId: a.id, ...g });
+    const uyumsuz = await teslimEt(await iste({ uretimEmriId: e }), { partiId: lot2 });
+    assert.deepEqual([uyumsuz.durum, uyumsuz.govde.alan], [400, 'partiId'], JSON.stringify(uyumsuz.govde));
+    assert.equal(await kartSayisi(hm), 0, 'uyumsuz teslimde kart açılmaz');
+    const ilk = await teslimEt(await iste({ uretimEmriId: e }));
+    assert.equal(ilk.durum, 200, JSON.stringify(ilk.govde));
+    assert.equal(ilk.govde.istek.durum, 'teslim');
+    const acilan = malzemeIstegiCevabi.parse(ilk.govde).acilanKartlar;
+    assert.equal(acilan?.length, 1, JSON.stringify(ilk.govde));
+    const acilmis = await o().vt.tek<{ id: number; parti_id: number }>('SELECT id, parti_id FROM stok_refakat_partisi WHERE uretim_emri_id = $1 AND malzeme_id = $2', [e, hm]);
+    assert.deepEqual([acilan![0]!.id, acilmis!.parti_id, await kartSayisi(hm)], [acilmis!.id, lot1, 1]);
+    assert.match(acilan![0]!.etiket, /-P\d+$/);
+    const ikinci = await teslimEt(await iste({ uretimEmriId: e }));
+    assert.equal(ikinci.durum, 200, JSON.stringify(ikinci.govde));
+    assert.deepEqual([ikinci.govde.acilanKartlar, await kartSayisi(hm)], [undefined, 1], 'açık kart varsa yenisi açılmaz ve söylenmez');
+    const emirsizIstek = await teslimEt(await iste({ uretimEmriId: null }));
+    assert.equal(emirsizIstek.durum, 200, JSON.stringify(emirsizIstek.govde));
+    assert.deepEqual([emirsizIstek.govde.acilanKartlar, await kartSayisi(hm)], [undefined, 1], 'emirsiz istek kart açmaz');
+    assert.ok(kart2 > 0);
   });
   test('633 b, 2931 a: emre bağlı lotsuz teslim pencere sormaz; lot bekleyen istisna kartı açılır, ikinci kez aynı kart', async () => {
     const [ym, hm] = [await kart('yarimamul'), await kart('hammadde', 'kg')];

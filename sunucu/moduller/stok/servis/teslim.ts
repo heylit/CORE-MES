@@ -13,7 +13,7 @@ import type {
   KaliteDurumu, FisAyrintiCevabi, FislerListesi, FisOzeti, MalzemeFisiAyrintiCevabi, KodCozCevabi, SepetCevabi, SepetEkleKomutu, SepetTeslimCevabi, SepetTeslimEtCevabi, SepetTeslimEtKomutu,
   StoktanDusKomutu, TeslimKomutu, MalzemeIstegi, MalzemeIstegiAcGirdisi, MalzemeIstegiCevabi, MalzemeIstegiDurumu, MalzemeIstekleriListesi, IstekAcGovdesi, IstekMalzemeleriCevabi, Teslim,
   TeslimCevabi, TeslimKutusuCevabi, SonIslemlerimCevabi, TeslimYeri, YerdekiStokCevabi, OkutCozCevabi, IstekKabulGovdesi, IstekReddetGovdesi, MalzemeYerleriCevabi, OkutarakAlCevabi, OkutarakAlGovdesi, ItirazGovdesi,
-  OkutYeri, KisiKoduCevabi, IstasyonSepetiCevabi, GelecekSepetCevabi, IstasyonSepetleriCevabi, SepettenCekGovdesi,
+  OkutYeri, KisiKoduCevabi, IstasyonSepetiCevabi, GelecekSepetCevabi, IstasyonSepetleriCevabi, SepettenCekGovdesi, AcilanKart,
 } from '#paylasilan/sozlesme/stok.ts';
 import { malzemeIstegiAcGirdisi, type IstekTeslimGovdesi, type KartlaAlGovdesi, type RefakatKartSatiri, type RefakatPartisiCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { kodTuru, type KodTuru } from '#paylasilan/kod-sozlugu.ts';
@@ -39,7 +39,7 @@ import { kaynakPartisi, sevkCikisiniDenetle, eksiKaliteDenetle } from './hareket
 import { STOKLANIR_TURLER } from './malzeme.ts';
 import { belgeNo, korumali, adlar, emirNoDe, emirNoHaritasi, bakiyeSatiri, hareketleriCevir, aktifKonum, varsayilanKonum, bakiyeDegistir, siraliKilitle, hareket, teslimYaz, sktBugun } from './ortak.ts';
 import { refakatPartileriCevir, refakatPartisiAc } from './refakat.ts';
-import { sarfEmriDenetle, emreKartiSagla, teslimGonder, kartaBagliLotuReddet, teslimAlabilir, teslimiKapat, istegiYenidenDene, adimStatusu, rezerveyiAsmasin, rezerveDegistir } from './uretim.ts';
+import { sarfEmriDenetle, emreKartiSagla, kartsizAlmaEngeli, teslimGonder, kartaBagliLotuReddet, teslimAlabilir, teslimiKapat, istegiYenidenDene, adimStatusu, rezerveyiAsmasin, rezerveDegistir } from './uretim.ts';
 
 // ---- Sepet (DEP-54: kişiye özel) ------------------------------------------------------------------------------------------
 const KULLANILABILIR = new Set(['raf_gozu', 'kabul', 'depo_zemini']);
@@ -445,6 +445,7 @@ export async function istekTeslimEt(db: Db, k: Kullanici, id: number, g: IstekTe
   if (i?.kaynakIstasyonId != null) throw cakisma(ISTASYON_ISTEGI);
   const listede = i ? istekListeEngeli(i) : null;
   if (listede) throw cakisma(listede);
+  let acilan = null as AcilanKart | null;
   if (i && i.istasyonId === null) {
     const engel = istekGecisEngeli(i.durum, 'teslim');
     if (engel) throw cakisma(engel);
@@ -467,12 +468,16 @@ export async function istekTeslimEt(db: Db, k: Kullanici, id: number, g: IstekTe
       partiId = p.partiId;
     }
     const miktar = bindenMetin(binde(g.karsilanan));
+    // Emre ve lota açık kart varsa kart bu teslimin malzemesi ve lotuyla uyumlu olmalı; yoksa aşağıda aynı işlemde açılır (depocu etiketi görür).
+    const kart = i.uretimEmriId === null || partiId === null ? null : await sorgular.acikRefakatPartisi(db, i.uretimEmriId, partiId);
+    const kartEngeli = kart === null ? null : refakatTeslimEngeli(kart, { malzemeId: i.malzemeId, partiId, uretimEmriId: i.uretimEmriId });
+    if (kartEngeli) throw dogrulama(kartEngeli, 'partiId');
     await korumali(async () => {
       await siraliKilitle(db, { malzemeId: i.malzemeId, konumId: kaynak.id, partiId, statuId }, { malzemeId: i.malzemeId, konumId: hedef, partiId, statuId });
       const b = await sorgular.bakiyeKilitle(db, i.malzemeId, kaynak.id, partiId, statuId);
       if (binde(b?.miktar ?? '0') < binde(miktar)) throw dogrulama(`Konumda yeterli stok yok (mevcut ${bindenMetin(binde(b?.miktar ?? '0'))}).`, 'karsilanan');
       if (i.uretimEmriId !== null) await rezerveyiAsmasin(db, i.malzemeId, statuId, i.uretimEmriId, binde(miktar));
-      await emreKartiSagla(db, k.id, { uretimEmriId: i.uretimEmriId, partiId, malzemeId: i.malzemeId });
+      acilan = await emreKartiSagla(db, k.id, { uretimEmriId: i.uretimEmriId, partiId, malzemeId: i.malzemeId });
       await sorgular.hareketYaz(db, hareket({
         tur: 'transfer', malzemeId: i.malzemeId, miktar, kisiId: k.id, partiId, partiSecimi: partiId === null ? null : 'kisi', kaynakKonumId: kaynak.id, hedefKonumId: hedef,
         onayliEksi: false, uretimEmriId: i.uretimEmriId, kaynakStatuId: statuId, hedefStatuId: statuId,
@@ -482,7 +487,8 @@ export async function istekTeslimEt(db: Db, k: Kullanici, id: number, g: IstekTe
       await bakiyeDegistir(db, { malzemeId: i.malzemeId, konumId: hedef, partiId, statuId, fark: binde(miktar), ilkGiris: b?.ilkGiris ?? null });
     });
   }
-  return malzemeIstegiGecir(db, k, id, 'teslim', g);
+  const cevap = await malzemeIstegiGecir(db, k, id, 'teslim', g);
+  return acilan === null ? cevap : { ...cevap, acilanKartlar: [acilan] };
 }
 
 // Biten ya da iptal edilen emre istek açılmaz (kart #1413): kapanınca açık istekleri de iptal olur.
@@ -1061,6 +1067,8 @@ export async function istekKabulEt(db: Db, k: Kullanici, id: number, g: IstekKab
   // K2: başka emrin partisi bu isteğe gönderilmez.
   const partiEmri = partiId === null ? null : (await sorgular.partiBul(db, partiId))?.uretimEmriId ?? null;
   if (partiEmri !== null && partiEmri !== i.uretimEmriId) throw dogrulama('Bu parti başka bir emrin; isteğe gönderilmez.', 'partiId');
+  const kartsiz = await kartsizAlmaEngeli(db, { uretimEmriId: i.uretimEmriId, partiId, statuId, malzemeId: i.malzemeId });
+  if (kartsiz) throw dogrulama(kartsiz, 'partiId');
   const miktar = bindenMetin(binde(g.miktar));
   await surumluGuncelle({
     guncelle: () => sorgular.istekGecir(db, id, g.surum, { kaynaklar: ISTEK_GECIS_KAYNAKLARI.hazirla, durum: 'hazirlaniyor', karsilanan: null, kapatanKisiId: null }),
@@ -1155,8 +1163,10 @@ export async function okutarakAl(db: Db, k: Kullanici, g: OkutarakAlGovdesi): Pr
   if (uretimEmriId !== null && uretimEmriId !== partiEmriId) await istenebilirEmir(db, uretimEmriId);
   const engel = okutarakAlmaEngeli({ kalite: 'serbest', partiEmriId, uretimEmriId, kaynakIstasyonId: yer.istasyonId, hedefIstasyonId: hedefIstasyon.id });
   if (engel) throw dogrulama(engel, 'kod');
-  const hedef = await istasyonKonumuBul(db, hedefIstasyon.id, 'istasyonId');
   const statuId = g.statuId === null ? null : Number(g.statuId);
+  const kartsiz = await kartsizAlmaEngeli(db, { uretimEmriId, partiId, statuId, malzemeId: m.malzemeId });
+  if (kartsiz) throw dogrulama(kartsiz, 'kod');
+  const hedef = await istasyonKonumuBul(db, hedefIstasyon.id, 'istasyonId');
   const miktar = bindenMetin(binde(g.miktar));
   const sure = await itirazSuresi(db, yer.istasyonId);
   const id = await korumali(async () => {

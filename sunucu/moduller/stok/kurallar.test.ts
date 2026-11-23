@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import { irsaliyeBelgeAdi } from './kurallar.ts';
 import {
   fisNoKimligi, hareketinFisBagi, malzemeFisiGonderilebilir, malzemeFisiNo,
-  refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru, refakatAnaEylemi, kartsizLotTeslimEngeli, KARTSIZ_TESLIM, baslatmaKartiEngeli, kartAdediOnerisi, kartAdediEngeli, KART_ADEDI_FAZLA, KARTSIZ_BASLATMA, BASLATMA_KARTI_YOK, BASLATMA_KARTI_KAPALI, BASLATMA_KARTI_BASKA,
+  refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartGerekir, refakatAnaEylemi, baslatmaKartiEngeli, kartAdediOnerisi, kartAdediEngeli, KART_ADEDI_FAZLA, KARTSIZ_BASLATMA, BASLATMA_KARTI_YOK, BASLATMA_KARTI_KAPALI, BASLATMA_KARTI_BASKA,
   sonrakiIstasyon, statuAramasi, statuKodlari, stoksuzStatuler,
   baslatmaEksikleri, buradakiIstasyon, eksikGirdiEngeli, geriCevirmeKaliteleri, istekGecisEngeli, enKotuKalite, girdiSec, sayimArtisPlani, sayimAzalisPlani, istekAcilisDurumu, istekKapsamindanMuafMi, istekliTeslimEngeli, teslimAlimMiktariEngeli, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu, kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN,
   binde, bindenMetin, bolmeNo, cikisOnerisi, teslimLotlari, duzeltmeEngeli, dusumKarari, geriAlmaEngeli, gozKodu, ilkGirisBirlesik, kalanAmbalajAdedi, logoAmbari,
@@ -938,22 +938,39 @@ describe('malzeme fişi kuralları (kart #492)', () => {
   });
 });
 
-describe('stok kuralları: emre giden malzeme kart onayı ister (615-2 a, 632 a, 633 b)', () => {
-  test('izinli: açık emre lotlu teslim lot kartı, lotsuz teslim istisna kartı ister', () => {
-    for (const durum of ['planli', 'basladi']) {
-      assert.equal(kartOnayiTuru({ uretimEmriId: 1, partiId: 2 }, { uretimEmriId: null }, durum), 'lot', durum);
-      assert.equal(kartOnayiTuru({ uretimEmriId: 1, partiId: null }, null, durum), 'istisna', durum);
+describe('stok kuralları: emre giden malzeme kart ister (615-2 a, 633 b, 3337, 3620)', () => {
+  const g = { uretimEmriId: 1, partiId: 2 as number | null, statuId: null as number | null, malzemeTuru: 'hammadde' as string | null, kalite: 'serbest', emirDurumu: 'basladi' as string | null, lot: { uretimEmriId: null } as { uretimEmriId: number | null } | null };
+  test('tur: açık emre lotlu teslim lot kartı, lotsuz teslim istisna kartı ister', () => {
+    for (const emirDurumu of ['planli', 'basladi']) {
+      assert.equal(kartGerekir({ ...g, emirDurumu }).tur, 'lot', emirDurumu);
+      assert.equal(kartGerekir({ ...g, emirDurumu, partiId: null, lot: null }).tur, 'istisna', emirDurumu);
     }
   });
-  test('reddedilen: emirsiz, üretim lotu, bilinmeyen lot, kapalı ya da bilinmeyen emir kart istemez', () => {
-    assert.equal(kartOnayiTuru({ uretimEmriId: null, partiId: 2 }, { uretimEmriId: null }, 'basladi'), null);
-    assert.equal(kartOnayiTuru({ uretimEmriId: null, partiId: null }, null, 'basladi'), null);
-    assert.equal(kartOnayiTuru({ uretimEmriId: 1, partiId: 2 }, { uretimEmriId: 9 }, 'basladi'), null);
-    assert.equal(kartOnayiTuru({ uretimEmriId: 1, partiId: 2 }, null, 'basladi'), null);
-    for (const durum of ['bitti', 'iptal', null]) {
-      assert.equal(kartOnayiTuru({ uretimEmriId: 1, partiId: 2 }, { uretimEmriId: null }, durum), null, String(durum));
-      assert.equal(kartOnayiTuru({ uretimEmriId: 1, partiId: null }, null, durum), null, String(durum));
+  test('tur yok: emirsiz, üretim lotu, bilinmeyen lot, kapalı ya da bilinmeyen emir kart açmaz', () => {
+    assert.equal(kartGerekir({ ...g, uretimEmriId: null }).tur, null);
+    assert.equal(kartGerekir({ ...g, uretimEmriId: null, partiId: null, lot: null }).tur, null);
+    assert.equal(kartGerekir({ ...g, lot: { uretimEmriId: 9 } }).tur, null);
+    assert.equal(kartGerekir({ ...g, lot: null }).tur, null);
+    for (const emirDurumu of ['bitti', 'iptal', null]) {
+      assert.equal(kartGerekir({ ...g, emirDurumu }).tur, null, String(emirDurumu));
+      assert.equal(kartGerekir({ ...g, emirDurumu, partiId: null, lot: null }).tur, null, String(emirDurumu));
     }
+  });
+  test('zorunlu: emre giden lotlu, statüsüz, serbest hammadde; lotsuz, statülü, başka tür, kalitesiz ve emirsiz teslim serbest', () => {
+    assert.equal(kartGerekir(g).zorunlu, true);
+    assert.equal(kartGerekir({ ...g, emirDurumu: null, lot: null }).zorunlu, true, 'emir durumundan bağımsız (teslimGonder bilgisiz çağırır)');
+    assert.equal(kartGerekir({ ...g, partiId: null }).zorunlu, false, 'lotsuz: istisna kartı yolu');
+    assert.equal(kartGerekir({ ...g, statuId: 3 }).zorunlu, false, 'adım statüsündeki parça');
+    assert.equal(kartGerekir({ ...g, malzemeTuru: 'sarf' }).zorunlu, false);
+    assert.equal(kartGerekir({ ...g, malzemeTuru: null }).zorunlu, false);
+    assert.equal(kartGerekir({ ...g, kalite: 'karantina' }).zorunlu, false);
+    assert.equal(kartGerekir({ ...g, uretimEmriId: null }).zorunlu, false, 'emirsiz taşıma');
+  });
+  test('acikEmirdeZorunlu: zorunlu ve kart açılabilir; kapalı emir ve üretim lotu alımı kilitlemez', () => {
+    assert.equal(kartGerekir(g).acikEmirdeZorunlu, true);
+    assert.equal(kartGerekir({ ...g, emirDurumu: 'bitti' }).acikEmirdeZorunlu, false);
+    assert.equal(kartGerekir({ ...g, lot: { uretimEmriId: 9 } }).acikEmirdeZorunlu, false);
+    assert.equal(kartGerekir({ ...g, statuId: 3 }).acikEmirdeZorunlu, false);
   });
 });
 
@@ -1070,16 +1087,6 @@ describe('3094 a istek kapsamı', () => {
     assert.equal(istekKapsamindanMuafMi(['stok.toplama', 'sayfa.stok']), false);
     assert.equal(istekKapsamindanMuafMi(['stok.istek']), false);
     assert.equal(istekKapsamindanMuafMi([]), false);
-  });
-  test('3337 (3337-2 a): emre giden lotlu hammadde kartsız gitmez; kartlı, lotsuz, statülü, başka tür ve emirsiz teslim serbest', () => {
-    const g = { kartVar: false, partiId: 5, statuId: null, malzemeTuru: 'hammadde', emreGider: true };
-    assert.equal(kartsizLotTeslimEngeli(g), KARTSIZ_TESLIM);
-    assert.equal(kartsizLotTeslimEngeli({ ...g, kartVar: true }), null);
-    assert.equal(kartsizLotTeslimEngeli({ ...g, partiId: null }), null, 'lotsuz: istisna kartı yolu');
-    assert.equal(kartsizLotTeslimEngeli({ ...g, statuId: 3 }), null, 'adım statüsündeki parça');
-    assert.equal(kartsizLotTeslimEngeli({ ...g, malzemeTuru: 'sarf' }), null);
-    assert.equal(kartsizLotTeslimEngeli({ ...g, malzemeTuru: null }), null);
-    assert.equal(kartsizLotTeslimEngeli({ ...g, emreGider: false }), null, 'emirsiz taşıma');
   });
 });
 
