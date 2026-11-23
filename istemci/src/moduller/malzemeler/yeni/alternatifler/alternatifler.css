@@ -63,7 +63,7 @@
   display: inline-flex; align-items: center; justify-content: center; min-width: var(--isaret-boy); min-height: var(--isaret-boy);
   padding: 0; border: 1px solid var(--edge2); border-radius: var(--yari-1); background: none; color: inherit; cursor: pointer;
 }
-.tc-kalt-sag { display: flex; gap: var(--b-2); margin-left: auto; }
+.tc-kalt-sag { display: flex; flex-wrap: wrap; gap: var(--b-2); min-width: 0; max-width: 100%; margin-left: auto; }
 .tc-kalt-aralik > * { flex: 1 1 10rem; }
 
 /* 3572: tek Alternatifler tablosu, set ve kart pencereleri. Çipler aç-kapa düğmesidir (aria-pressed). */
@@ -88,3 +88,19 @@
 }
 /* 3582: uyan kart listesinde stok miktarı satırın sağında; dar ekranda alt satıra kayar, yine sağa yaslıdır. */
 .tc-kalt-stok { margin-left: auto; }
+
+/* 3593: alternatif kartı penceresinde alan başına kip seçimi; özet cümlesi. Dar ekranda kip düğmeleri tam genişlik. */
+.tc-kalt-nit { display: grid; gap: var(--b-2); padding-bottom: var(--b-3); border-bottom: 1px solid var(--edge2); min-width: 0; }
+.tc-kalt-nit-bas { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--b-2); }
+.tc-kalt-kip { display: inline-flex; flex-wrap: wrap; justify-self: start; border: 1px solid var(--edge2); border-radius: var(--yari-1); overflow: hidden; }
+.tc-kalt-kip > button {
+  min-height: var(--dokunma); padding: 0 var(--b-3); border: 0; border-right: 1px solid var(--edge2); background: var(--panel); color: inherit; cursor: pointer;
+}
+.tc-kalt-kip > button:last-child { border-right: 0; }
+.tc-kalt-kip > button[aria-checked='true'] { background: var(--secili-zemin); color: var(--secili-yazi); font-weight: 600; }
+.tc-kalt-kip > button:focus-visible { outline: 2px solid var(--bp); outline-offset: -2px; }
+.tc-kalt-ozet { margin: 0; padding: var(--b-2) var(--b-3); border: 1px dashed var(--bp); border-radius: var(--yari-1); background: var(--secili-zemin); color: var(--secili-yazi); overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+  .tc-kalt-kip { display: flex; justify-self: stretch; }
+  .tc-kalt-kip > button { flex: 1 1 0; }
+}

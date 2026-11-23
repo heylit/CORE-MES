@@ -223,4 +223,63 @@ describe('Malzemeler alternatif seti ve seçili kartlar (3572-1)', () => {
     await assert.rejects(ortam!.sahip.sorgu(`INSERT INTO malzeme_alternatif_seti (ana_no, ad, tur, sira, kullanim_yerleri, guncelleyen_kisi_id)
       VALUES ($1, 'ORN', 'tam', 0, ARRAY['depo'], $2)`, [ana, yoneticiId]), /malzeme_alternatif_seti_yerler/);
   });
+  test('ALS-3593: Birebir ve Pay ana kartı izler, işlem birebir; eski biçim geçer, bozuk kip reddedilir; kopya aynı form ve ailede', async () => {
+    const ana = await kartAc(cubuk('6082', 120));
+    const uyan = await kartAc(cubuk('6082', 122));
+    await kartAc(cubuk('6082', 123, { opts: { durum: 'T6', yuzey: 'Ham', islem: ['Eloksal'] } }));
+    await kartAc(cubuk('6061', 121));
+    const birebir = (nitelik: string) => ({ nitelik, kip: 'birebir', degerler: null, alt: null, ust: null, payAlt: null, payUst: null });
+    const govde = setGovdesi(ana, { ad: 'ORN AK-1', nitelikler: [
+      birebir('kalite'), birebir('islem'), { nitelik: 'd', kip: 'pay', degerler: null, alt: null, ust: null, payAlt: 0, payUst: 5 },
+    ] });
+    const k = await tamam<{ id: number; uyanSayisi: number }>(yonetici, 'POST', '/malzeme-alternatifleri/setler/kaydet', govde);
+    assert.equal(k.uyanSayisi, 1);
+    let b = await bolum(ana);
+    assert.deepEqual(b.setler[0]!.uyanlar.map((u) => u.no), [uyan]);
+    assert.deepEqual(b.setler[0]!.nitelikler.map((n) => [n.nitelik, n.kip, n.payAlt, n.payUst]), [['kalite', 'birebir', null, null], ['islem', 'birebir', null, null], ['d', 'pay', 0, 5]]);
+    // Ana kartın çapı değişince Pay yeni çapa göre çözülür (124-129): eloksallı 123 de, 122 de dışarıda kalır.
+    await ortam!.sahip.sorgu(`UPDATE malzeme_katalog_karti SET kayit = jsonb_set(kayit, '{dims,d}', '124') WHERE no = $1`, [ana]);
+    b = await bolum(ana);
+    assert.equal(b.setler[0]!.uyanSayisi, 0);
+    // Göç yalnız genişletir: kipsiz eski satır geçer; birebir satırda değer, payda eksik uç reddedilir.
+    await ortam!.sahip.sorgu(`INSERT INTO malzeme_alternatif_seti_niteligi (set_id, ana_no, nitelik, degerler) VALUES ($1, $2, 'yuzey', ARRAY['Ham'])`, [k.id, ana]);
+    await assert.rejects(ortam!.sahip.sorgu(`INSERT INTO malzeme_alternatif_seti_niteligi (set_id, ana_no, nitelik, kip, degerler) VALUES ($1, $2, 'durum', 'birebir', ARRAY['T6'])`, [k.id, ana]),
+      /malzeme_alternatif_seti_niteligi_bicim/);
+    await assert.rejects(ortam!.sahip.sorgu(`INSERT INTO malzeme_alternatif_seti_niteligi (set_id, ana_no, nitelik, kip, pay_alt) VALUES ($1, $2, 'l', 'pay', 1)`, [k.id, ana]),
+      /malzeme_alternatif_seti_niteligi_bicim/);
+    const bozuk = setGovdesi(ana, { nitelikler: [{ nitelik: 'kalite', kip: 'birebir', degerler: ['6082'], alt: null, ust: null }] });
+    assert.equal((await ret(400, 'DOGRULAMA', yonetici, 'POST', '/malzeme-alternatifleri/setler/kaydet', bozuk)).alan, 'nitelikler.kalite');
+    // Kopya: aynı form ve ailedeki karta açılır, Pay hedefin çapını izler; başka formdaki kart reddedilir, okuyan kopyalayamaz.
+    const hedef = await kartAc(cubuk('6082', 140));
+    const hedefUyan = await kartAc(cubuk('6082', 143));
+    const lama = await kartAc({ grade: '6082', form: 'lama', dims: { a: 20, b: 60, l: 3000 }, opts: { durum: 'T6' } });
+    const yol = `/malzeme-alternatifleri/setler/${String(k.id)}/kopyala`;
+    const surum = (await bolum(ana)).setler[0]!.surum;
+    const h = (no: number, s = 1) => ({ no, surum: s });
+    await ret(403, 'YETKI_YOK', okuyucu, 'POST', yol, { surum, hedefler: [h(hedef)], genisOnay: false });
+    assert.equal((await ret(400, 'DOGRULAMA', yonetici, 'POST', yol, { surum, hedefler: [h(hedef), h(lama)], genisOnay: false })).alan, 'hedefler');
+    // Kaynak ya da hedef kart okunduktan sonra değiştiyse hiçbir şey yazılmaz (S8).
+    await ret(409, 'CAKISMA', yonetici, 'POST', yol, { surum: surum + 1, hedefler: [h(hedef)], genisOnay: false });
+    await ret(409, 'CAKISMA', yonetici, 'POST', yol, { surum, hedefler: [h(hedefUyan), h(hedef, 9)], genisOnay: false });
+    assert.deepEqual((await bolum(hedef)).setler, []);
+    assert.deepEqual((await bolum(hedefUyan)).setler, []);
+    const c = await tamam<{ kopyalar: { hedefNo: number; uyanSayisi: number }[] }>(yonetici, 'POST', yol, { surum, hedefler: [h(hedef)], genisOnay: false });
+    assert.deepEqual(c.kopyalar.map((x) => [x.hedefNo, x.uyanSayisi]), [[hedef, 1]]);
+    const hb = await bolum(hedef);
+    assert.deepEqual([hb.setler[0]!.ad, hb.setler[0]!.uyanlar.map((u) => u.no)], ['ORN AK-1', [hedefUyan]]);
+    // Risk K1: Aralık mutlak mm taşır; hedefin çapı aralık dışındaysa kopya reddedilir. K2: tür hedefin kabul sınırına göre yeniden belirlenir.
+    await tamam(yonetici, 'POST', '/malzeme-alternatifleri/siniri/kaydet',
+      { kapsamTuru: 'kart', kapsam: String(uyan), nitelik: 'kalite', degerler: [{ deger: 'ORN-6007', tur: 'sartli' }], alt: null, ust: null });
+    const ak2 = await tamam<{ id: number; tur: string }>(yonetici, 'POST', '/malzeme-alternatifleri/setler/kaydet', setGovdesi(ana, { ad: 'ORN AK-2', nitelikler: [
+      { nitelik: 'kalite', degerler: ['ORN-6007'], alt: null, ust: null }, { nitelik: 'd', kip: 'aralik', degerler: null, alt: 120, ust: 126 },
+    ] }));
+    assert.equal(ak2.tur, 'tam');
+    const s2 = (await bolum(ana)).setler.find((x) => x.id === ak2.id)!.surum;
+    const y2 = `/malzeme-alternatifleri/setler/${String(ak2.id)}/kopyala`;
+    const disinda = await ret(400, 'DOGRULAMA', yonetici, 'POST', y2, { surum: s2, hedefler: [h(uyan), h(hedefUyan)], genisOnay: false }) as { mesaj?: string };
+    assert.match(disinda.mesaj ?? '', /Ø 143 aralığın \(120–126\) dışında/);
+    assert.deepEqual((await bolum(uyan)).setler, []);
+    await tamam(yonetici, 'POST', y2, { surum: s2, hedefler: [h(uyan)], genisOnay: false });
+    assert.equal((await bolum(uyan)).setler.find((x) => x.ad === 'ORN AK-2')!.tur, 'sartli');
+  });
 });

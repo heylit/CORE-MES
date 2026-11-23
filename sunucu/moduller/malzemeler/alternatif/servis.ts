@@ -3,15 +3,16 @@ import { bulunamadi, dogrulama, eskiSurum } from '#cekirdek/hata.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type {
-  AlternatifBaglami, AlternatifKarti, AlternatifKuraliKaydetGovdesi, AlternatifSeti, AlternatifSetiKaydetGovdesi, AlternatifSirasiGovdesi,
+  AlternatifBaglami, AlternatifKarti, AlternatifKuraliKaydetGovdesi, AlternatifSeti, AlternatifSetiKaydetGovdesi, AlternatifSetiKopyalaCevabi,
+  AlternatifSetiKopyalaGovdesi, AlternatifSirasiGovdesi,
   AlternatifTanimlariCevabi, AlternatifZarfi, KabulSiniriKaydetGovdesi, GrupSinirlariCevabi, KartAlternatifleriCevabi, KartZarfiCevabi,
   MuadilTuru, OnerilmesinGovdesi, SeciliAlternatif, SeciliAlternatifKaydetGovdesi, SetNiteligiYazimi, SetOnizlemeCevabi, SetUyanKarti,
 } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 import { GENIS_SET_ESIGI, SINIR_NITELIKLERI } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 import { kisiAdlari } from '../../kisiler/disari.ts';
 import {
-  KAPSAM_DOGRULAMA, alternatifOnceligi, setHatasi, setTuru, setUyumu, sinirHatasi, uyanSinir, zarfaGirenler, zarfDegerlendir, zarfHesapla,
-  type SetNiteligiSatiri, type ZarfKarti,
+  KAPSAM_DOGRULAMA, alternatifOnceligi, kopyaAralikHatasi, setHatasi, setTuru, setUyumu, sinirHatasi, uyanSinir, zarfaGirenler, zarfDegerlendir, zarfHesapla,
+  type SetKarti, type SetNiteligiSatiri, type ZarfKarti,
 } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
@@ -142,11 +143,16 @@ async function kuraldanGelenler(db: Db, r: s.ZarfKartSatiri, disarida: ReadonlyS
   }]));
 }
 
-const setKartina = (a: s.SetAdaySatiri) => ({ ...zarfKartina(a), standartlar: a.standartlar });
-const setUyanlari = (n: readonly SetNiteligiSatiri[], anaNo: number, adaylar: readonly s.SetAdaySatiri[]) =>
+const setKartina = (a: s.SetAdaySatiri): SetKarti => ({ ...zarfKartina(a), standartlar: a.standartlar, islemler: a.islemler });
+// 3593: Birebir ve Pay ana kartın bugünkü değerine göre çözülür.
+async function anaSetKartlari(db: Db, nolar: readonly number[]): Promise<Map<number, SetKarti>> {
+  if (nolar.length === 0) return new Map();
+  return new Map((await s.setAnaKartlari(db, [...new Set(nolar)])).map((a) => [a.no, setKartina(a)]));
+}
+const setUyanlari = (n: readonly SetNiteligiSatiri[], anaNo: number, adaylar: readonly s.SetAdaySatiri[], ana: SetKarti | null) =>
   adaylar.flatMap((a) => {
     if (a.no === anaNo) return [];
-    const u = setUyumu(n, setKartina(a));
+    const u = setUyumu(n, setKartina(a), ana);
     return u.uyar ? [{ no: a.no, kod: a.kod, ad: a.ad, neden: u.neden, yeni: a.yeni }] : [];
   });
 
@@ -155,7 +161,8 @@ async function alternatifGirdisi(db: Db, r: s.ZarfKartSatiri) {
   const secili = await s.secililer(db, r.no);
   const setKayitlari = r.tur === 'hammadde' ? await s.setler(db, r.no) : [];
   const adaylar = setKayitlari.length > 0 ? await s.setAdaylari(db) : [];
-  const setler = setKayitlari.map((t) => ({ ...t, uyanlar: setUyanlari(t.nitelikler, r.no, adaylar) }));
+  const ana = setKayitlari.length > 0 ? (await anaSetKartlari(db, [r.no])).get(r.no) ?? null : null;
+  const setler = setKayitlari.map((t) => ({ ...t, uyanlar: setUyanlari(t.nitelikler, r.no, adaylar, ana) }));
   const kuraldan = await kuraldanGelenler(db, r, new Set(esdeger.map((e) => e.no)));
   return { esdeger, secili, setler, kuraldan };
 }
@@ -200,7 +207,7 @@ export async function setOnizleme(db: Db, anaNo: number, nitelikler: readonly Se
   const r = await setAnaKarti(db, anaNo);
   const hata = nitelikler.length === 0 ? null : setHatasi(nitelikler);
   if (hata) throw dogrulama(hata.ileti, hata.alan);
-  const uyanlar = nitelikler.length === 0 ? [] : setUyanlari(nitelikler, anaNo, await s.setAdaylari(db));
+  const uyanlar = nitelikler.length === 0 ? [] : setUyanlari(nitelikler, anaNo, await s.setAdaylari(db), (await anaSetKartlari(db, [anaNo])).get(anaNo) ?? null);
   const secili = await s.secililer(db, anaNo);
   const durumlu = uyanDurumlari(uyanlar, new Set(secili.filter((x) => !x.onerilmez).map((x) => x.no)), new Set(secili.filter((x) => x.onerilmez).map((x) => x.no)));
   return {
@@ -223,7 +230,7 @@ export async function setKaydet(db: Db, k: Kullanici, g: AlternatifSetiKaydetGov
   const r = await setAnaKarti(db, g.anaNo);
   const hata = setHatasi(g.nitelikler);
   if (hata) throw dogrulama(hata.ileti, hata.alan === 'nitelikler' ? 'nitelikler' : `nitelikler.${hata.alan}`);
-  const uyanSayi = setUyanlari(g.nitelikler, g.anaNo, await s.setAdaylari(db)).length;
+  const uyanSayi = setUyanlari(g.nitelikler, g.anaNo, await s.setAdaylari(db), (await anaSetKartlari(db, [g.anaNo])).get(g.anaNo) ?? null).length;
   if (uyanSayi > GENIS_SET_ESIGI && !g.genisOnay) {
     throw dogrulama(`Bu set ${String(uyanSayi)} kartı kabul eder; kaydetmek için "Bu kadar geniş olduğunu biliyorum" işaretleyin.`, 'genisOnay');
   }
@@ -326,7 +333,54 @@ export async function setSayilariniTazele(db: Db): Promise<void> {
   const setler = await s.butunSetler(db);
   if (setler.length === 0) return;
   const adaylar = await s.setAdaylari(db);
-  for (const t of setler) await s.setUyanSayisiYaz(db, t.id, setUyanlari(t.nitelikler, t.anaNo, adaylar).length);
+  const analar = await anaSetKartlari(db, setler.map((t) => t.anaNo));
+  for (const t of setler) await s.setUyanSayisiYaz(db, t.id, setUyanlari(t.nitelikler, t.anaNo, adaylar, analar.get(t.anaNo) ?? null).length);
+}
+
+// 3593 (S8): alternatif kartını aynı form ve ailedeki kartlara kopyalar; her hedefte yeni kart (aynı ad, tür, yer, not, nitelikler) açılır.
+// Birebir ve Pay hedefin kendi değerini izler; Aralık mutlak kalır. Uyan sayımı ve geniş eşik hedef başına; biri tutmazsa hiçbiri yazılmaz
+// (uç tek işlemdedir). Kaynak kart ve hedefler sürüm denetimi gerektirmez: hedefte yalnız yeni satır açılır.
+export async function setKopyala(db: Db, k: Kullanici, id: number, g: AlternatifSetiKopyalaGovdesi): Promise<AlternatifSetiKopyalaCevabi> {
+  const kaynakSatiri = await s.setGetir(db, id);
+  if (!kaynakSatiri) throw bulunamadi('Alternatif kartı bulunamadı.');
+  const kaynak = (await s.setler(db, kaynakSatiri.anaNo)).find((t) => t.id === id)!;
+  if (kaynak.surum !== g.surum) throw eskiSurum();
+  const anaSatiri = await setAnaKarti(db, kaynak.anaNo);
+  const okunan = new Map(g.hedefler.map((h) => [h.no, h.surum]));
+  const hedefler = [...okunan.keys()].sort((a, b) => a - b);
+  if (hedefler.includes(kaynak.anaNo)) throw dogrulama('Alternatif kartı kendi malzemesine kopyalanmaz.', 'hedefler');
+  for (const no of hedefler) await s.anaKilidi(db, no);
+  for (const no of hedefler) {
+    const surum = await s.kartSurumu(db, no);
+    if (surum !== null && surum !== okunan.get(no)) throw eskiSurum();
+  }
+  const adaylar = await s.setAdaylari(db);
+  const analar = await anaSetKartlari(db, hedefler);
+  const kopyalar: AlternatifSetiKopyalaCevabi['kopyalar'] = [];
+  for (const no of hedefler) {
+    const h = await s.zarfKarti(db, no);
+    if (!h || h.tur !== 'hammadde') throw dogrulama(`#${String(no)} hammadde kartı değil ya da bulunamadı.`, 'hedefler');
+    if (h.form !== anaSatiri.form || h.aile !== anaSatiri.aile) {
+      throw dogrulama(`${h.kod ?? `#${String(no)}`} aynı form ve ailede değil; yalnız aynı form ve aile kartlarına kopyalanır.`, 'hedefler');
+    }
+    const aralik = kopyaAralikHatasi(kaynak.nitelikler, analar.get(no)?.olcu ?? {});
+    if (aralik !== null) throw dogrulama(`${h.kod ?? `#${String(no)}`}: ${aralik}.`, 'hedefler');
+    const uyanSayi = setUyanlari(kaynak.nitelikler, no, adaylar, analar.get(no) ?? null).length;
+    if (uyanSayi > GENIS_SET_ESIGI && !g.genisOnay) {
+      throw dogrulama(`${h.kod ?? `#${String(no)}`} için ${String(uyanSayi)} kart uyar; kopyalamak için "Bu kadar geniş olduğunu biliyorum" işaretleyin.`, 'genisOnay');
+    }
+    const yazim: s.SetYazimi = {
+      // Risk K2: tür hedefin kendi kabul sınırına göre yeniden belirlenir (hedefte şartlı olan değer "tam" yazılmaz).
+      anaNo: no, ad: kaynak.ad, tur: setTuru(kaynak.tur, kaynak.nitelikler, await zarfOku(db, h)), kullanimYerleri: kaynak.kullanimYerleri, notu: kaynak.notu, uyanSayi, genisOnay: uyanSayi > GENIS_SET_ESIGI,
+    };
+    const yeniId = await kisitKorumali(SET_KISITLARI, async () => {
+      const i = await s.setEkle(db, yazim, await s.sonrakiSira(db, no), k.id);
+      await s.setNitelikleriYaz(db, no, i, kaynak.nitelikler);
+      return i;
+    });
+    kopyalar.push({ hedefNo: no, id: yeniId, uyanSayisi: uyanSayi });
+  }
+  return { kopyalar };
 }
 
 export async function kabulSiniriKaydet(db: Db, k: Kullanici, g: KabulSiniriKaydetGovdesi): Promise<{ tamam: true }> {

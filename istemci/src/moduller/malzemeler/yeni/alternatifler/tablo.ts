@@ -2,6 +2,8 @@ import type {
   AlternatifSeti, KartAlternatifleriCevabi, KullanimYeri, MuadilTuru, SeciliAlternatif, ZarfKarti,
 } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 import { FORM_ADLARI } from '#paylasilan/sozlesme/stok-kontrol-sabitleri.ts';
+import { alternatifOzeti, type OzetAnaKarti } from '#paylasilan/malzeme-alternatif-ozeti.ts';
+import type { KatalogKarti } from '../tipler.ts';
 
 // 3572 a: kartın tek Alternatifler tablosu. Sıralı setler ve elle eklenen kartlar kullanıcının sırasıyla; sonra kuraldan gelenler
 // (eşdeğer, elle eklenen, önerilmeyen ve bir sete uyan kart kuraldan tekrar edilmez: K4), sonra önerilmeyenler, en altta eşdeğerler.
@@ -47,12 +49,25 @@ export const yerMetni = (l: readonly KullanimYeri[] | null): string =>
   l === null ? 'Hiçbir yerde' : l.length === YERLER.length ? 'Hepsi' : YERLER.filter((y) => l.includes(y)).map((y) => YER_ADI[y]).join(' · ');
 
 export const formAdi = (f: string): string => (FORM_ADLARI as Readonly<Record<string, string>>)[f] ?? f;
-const sayi = (v: number) => v.toLocaleString('tr-TR', { maximumFractionDigits: 3 });
 
-// Setin tek satırlık özeti: "Çubuk · d 40–46 · 6082, 6061 · T6".
-export function setOzeti(n: AlternatifSeti['nitelikler']): string {
-  return n.map((x) => {
-    if (x.degerler !== null) return x.nitelik === 'form' ? x.degerler.map(formAdi).join(', ') : x.degerler.join(', ');
-    return `${x.nitelik} ${x.alt === null ? '…' : sayi(x.alt)}–${x.ust === null ? '…' : sayi(x.ust)}`;
-  }).join(' · ');
+// 3593: alternatif kartının özeti paylaşılan kuraldan; ana kartın değerleri katalog kaydından.
+export const islemleri = (k: KatalogKarti): string[] => {
+  const v = (k.kayit.opts as Record<string, unknown> | undefined)?.['islem'];
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x.trim() !== '').map((x) => x.trim()) : [];
+};
+export function anaOzetKarti(k: KatalogKarti): OzetAnaKarti {
+  const secenek = (ad: string) => { const v = (k.kayit.opts as Record<string, unknown> | undefined)?.[ad]; return typeof v === 'string' && v.trim() !== '' ? v.trim() : null; };
+  const olcu = Object.fromEntries(Object.entries(k.kayit.dims ?? {}).flatMap(([a, v]) => {
+    const n = typeof v === 'number' ? v : Number(String(v).replace(',', '.'));
+    return String(v).trim() !== '' && Number.isFinite(n) ? [[a, n]] : [];
+  }));
+  return {
+    form: k.kayit.form, kalite: k.kayit.grade, durum: secenek('durum'), yuzey: secenek('yuzey'),
+    standartlar: [...new Set(k.kayit.stds ?? [])].sort(), islemler: islemleri(k), olcu,
+  };
 }
+export function anaListeMetni(a: OzetAnaKarti, alan: 'form' | 'kalite' | 'durum' | 'islem' | 'standart' | 'yuzey'): string {
+  const l = alan === 'standart' ? a.standartlar : alan === 'islem' ? a.islemler : a[alan] === null ? [] : [a[alan]!];
+  return l.length === 0 ? 'yok' : l.map((x) => (alan === 'form' ? formAdi(x) : x)).join(alan === 'islem' ? ' + ' : ', ');
+}
+export const setOzetMetni = (set: AlternatifSeti, ana: OzetAnaKarti): string => alternatifOzeti(set.nitelikler, ana, formAdi).join(' · ');

@@ -2,9 +2,10 @@
 // aday kart zarfa göre "ayni", "icinde", "sartli" (izin ister) ya da "disi" çıkar. Kesit ölçüsü istenenden küçük olamaz, en çok pay kadar
 // büyük olabilir; lama ve blokta ölçüler sıralanıp eşlenir, boruda iç çap istenenden büyük olamaz (3398 stok kontrolüyle aynı kural).
 import type {
-  AlternatifKarti, AlternatifZarfi, DurumMuadili, KaliteMuadili, KapsamTuru, KullanimYeri, MuadilTuru, SetNiteligi, SinirDegeri, SinirNiteligi, ZarfSonucu,
+  AlternatifKarti, AlternatifZarfi, DurumMuadili, KaliteMuadili, KapsamTuru, KullanimYeri, MuadilTuru, SetKipi, SetNiteligi, SinirDegeri, SinirNiteligi, ZarfSonucu,
 } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 import { SET_LISTE_NITELIKLERI } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
+import { olcuEtiketi } from '#paylasilan/malzeme-alternatif-ozeti.ts';
 import { FORM_OLCULERI, OLCULU_FORMLAR, VARSAYILAN_PAY, type OlculuForm, type PayTuru } from '#paylasilan/sozlesme/stok-kontrol-sabitleri.ts';
 
 export interface ZarfKarti {
@@ -298,23 +299,45 @@ export const alternatifKartAdi = (anaAd: string, etiket: string): string => {
 
 // 3572 a: alternatif seti. Satırı olan nitelik dolu sayılır; dolu niteliklerin hepsi tutmalı, listede değerlerden biri yeter.
 // Ölçüde boş uç sınırsızdır; kartta o ölçü yoksa uymaz. Standartta kartın standartlarından biri listede olmalı.
-export interface SetNiteligiSatiri { nitelik: SetNiteligi; degerler: readonly string[] | null; alt: number | null; ust: number | null }
+// 3593: kip 'birebir' ana kartın değerini, 'pay' ana ölçünün altını ve üstünü izler; ana kart değişirse set de değişir. Kip boşsa bugünkü
+// anlam. İşlem: istenen işlemlerin hepsi kartta olmalı (yanlış kabul pahalı); birebirde kartın işlemleri ana kartınkilerle aynı olmalı.
+export interface SetNiteligiSatiri {
+  nitelik: SetNiteligi; kip?: SetKipi | null; degerler: readonly string[] | null; alt: number | null; ust: number | null;
+  payAlt?: number | null; payUst?: number | null;
+}
 export interface SetKarti {
   form: string | null; kalite: string | null; durum: string | null; yuzey: string | null; standartlar: readonly string[];
-  olcu: Readonly<Record<string, number>>;
+  islemler: readonly string[]; olcu: Readonly<Record<string, number>>;
 }
 const SET_LISTESI = new Set<string>(SET_LISTE_NITELIKLERI);
-const SET_ADI: Record<string, string> = { form: 'form', kalite: 'kalite', durum: 'durum', standart: 'standart', yuzey: 'yüzey' };
+const SET_ADI: Record<string, string> = { form: 'form', kalite: 'kalite', durum: 'durum', standart: 'standart', yuzey: 'yüzey', islem: 'işlem' };
 
 export function setHatasi(n: readonly SetNiteligiSatiri[]): { ileti: string; alan: string } | null {
   if (n.length === 0) return { ileti: 'Sette en az bir alan doldurun.', alan: 'nitelikler' };
   if (new Set(n.map((x) => x.nitelik)).size !== n.length) return { ileti: 'Aynı alan iki kez girilmiş.', alan: 'nitelikler' };
   for (const x of n) {
+    const kip = x.kip ?? null, payVar = (x.payAlt ?? null) !== null || (x.payUst ?? null) !== null;
     if (SET_LISTESI.has(x.nitelik)) {
-      if (x.degerler === null || x.degerler.length === 0 || x.alt !== null || x.ust !== null) return { ileti: `${SET_ADI[x.nitelik]} için değer seçin.`, alan: x.nitelik };
+      if (kip === 'pay' || kip === 'aralik') return { ileti: `${SET_ADI[x.nitelik]} için pay ya da aralık girilmez.`, alan: x.nitelik };
+      if (x.alt !== null || x.ust !== null || payVar) return { ileti: `${SET_ADI[x.nitelik]} için değer seçin.`, alan: x.nitelik };
+      if (kip === 'birebir') {
+        if (x.degerler !== null) return { ileti: `${SET_ADI[x.nitelik]} birebirse değer seçilmez; ana kartın değeri geçer.`, alan: x.nitelik };
+        continue;
+      }
+      if (x.degerler === null || x.degerler.length === 0) return { ileti: `${SET_ADI[x.nitelik]} için değer seçin.`, alan: x.nitelik };
       if (new Set(x.degerler).size !== x.degerler.length) return { ileti: 'Aynı değer iki kez seçilmiş.', alan: x.nitelik };
     } else {
       if (x.degerler !== null) return { ileti: 'Ölçüye değer listesi değil, en az ve en çok girilir.', alan: x.nitelik };
+      if (kip === 'birebir') {
+        if (x.alt !== null || x.ust !== null || payVar) return { ileti: 'Birebir ölçüde sayı girilmez; ana kartın ölçüsü geçer.', alan: x.nitelik };
+        continue;
+      }
+      if (kip === 'pay') {
+        if (x.alt !== null || x.ust !== null) return { ileti: 'Payda en az ve en çok değil, aşağı ve yukarı pay girilir.', alan: x.nitelik };
+        if ((x.payAlt ?? null) === null || (x.payUst ?? null) === null) return { ileti: 'Aşağı ve yukarı payı girin (0 olabilir).', alan: x.nitelik };
+        continue;
+      }
+      if (payVar) return { ileti: 'Aralıkta pay girilmez.', alan: x.nitelik };
       if (x.alt === null && x.ust === null) return { ileti: 'En az ya da en çoktan birini girin.', alan: x.nitelik };
       if (x.alt !== null && x.ust !== null && x.alt > x.ust) return { ileti: 'En az en çoktan büyük olamaz.', alan: x.nitelik };
     }
@@ -325,22 +348,49 @@ export function setHatasi(n: readonly SetNiteligiSatiri[]): { ileti: string; ala
 const tek = (v: string | null): readonly string[] => (v === null ? [] : [v]);
 const LISTE_DEGERI: Record<(typeof SET_LISTE_NITELIKLERI)[number], (k: SetKarti) => readonly string[]> = {
   form: (k) => tek(k.form), kalite: (k) => tek(k.kalite), durum: (k) => tek(k.durum), yuzey: (k) => tek(k.yuzey), standart: (k) => k.standartlar,
+  islem: (k) => k.islemler,
 };
+const ayniKume = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x) => b.includes(x)) && b.every((x) => a.includes(x));
+
+// Birebir ve Pay ana kartın bugünkü değeriyle çözülür. Ana kartta değer yoksa: birebir listede "yok" ister, ölçüde set uymaz.
+function olcuSiniri(x: SetNiteligiSatiri, ana: SetKarti | null): { alt: number | null; ust: number | null } | null {
+  const kip = x.kip ?? null;
+  if (kip !== 'birebir' && kip !== 'pay') return { alt: x.alt, ust: x.ust };
+  const a = ana?.olcu[x.nitelik];
+  if (a === undefined) return null;
+  return kip === 'birebir' ? { alt: a, ust: a } : { alt: a - (x.payAlt ?? 0), ust: a + (x.payUst ?? 0) };
+}
 
 // Uyuyorsa neden, uyan alanların kart değerleridir ("d 42 · kalite 6082"); uymuyorsa ilk tutmayan alan.
-export function setUyumu(n: readonly SetNiteligiSatiri[], k: SetKarti): { uyar: boolean; neden: string } {
+export function setUyumu(n: readonly SetNiteligiSatiri[], k: SetKarti, ana: SetKarti | null = null): { uyar: boolean; neden: string } {
   if (n.length === 0) return { uyar: false, neden: 'Boş set' };
   const parca: string[] = [];
   for (const x of n) {
     if (SET_LISTESI.has(x.nitelik)) {
-      const v = LISTE_DEGERI[x.nitelik as (typeof SET_LISTE_NITELIKLERI)[number]](k);
-      const tutan = v.find((d) => x.degerler!.includes(d));
-      if (tutan === undefined) return { uyar: false, neden: `${SET_ADI[x.nitelik]} ${v.join(', ') || 'yok'}` };
-      if (x.nitelik !== 'form') parca.push(`${SET_ADI[x.nitelik]} ${tutan}`);
+      const ad = x.nitelik as (typeof SET_LISTE_NITELIKLERI)[number];
+      const v = LISTE_DEGERI[ad](k);
+      const birebir = (x.kip ?? null) === 'birebir';
+      if (birebir && ana === null) return { uyar: false, neden: 'Ana kart okunamadı' };
+      const istenen = birebir ? LISTE_DEGERI[ad](ana!) : x.degerler!;
+      if (ad === 'islem') {
+        const tutar = birebir ? ayniKume(v, istenen) : istenen.every((d) => v.includes(d));
+        if (!tutar) return { uyar: false, neden: `işlem ${v.join(' + ') || 'yok'}` };
+        if (v.length > 0) parca.push(`işlem ${v.join(' + ')}`);
+        continue;
+      }
+      if (birebir && istenen.length === 0) {
+        if (v.length > 0) return { uyar: false, neden: `${SET_ADI[ad]} ${v.join(', ')}` };
+        continue;
+      }
+      const tutan = v.find((d) => istenen.includes(d));
+      if (tutan === undefined) return { uyar: false, neden: `${SET_ADI[ad]} ${v.join(', ') || 'yok'}` };
+      if (ad !== 'form') parca.push(`${SET_ADI[ad]} ${tutan}`);
     } else {
+      const sinir = olcuSiniri(x, ana);
+      if (sinir === null) return { uyar: false, neden: `ana kartta ${x.nitelik} yok` };
       const v = k.olcu[x.nitelik];
       if (v === undefined) return { uyar: false, neden: `${x.nitelik} yok` };
-      if ((x.alt !== null && v + AYNI < x.alt) || (x.ust !== null && v > x.ust + AYNI)) return { uyar: false, neden: `${x.nitelik} ${sayi(v)}` };
+      if ((sinir.alt !== null && v + AYNI < sinir.alt) || (sinir.ust !== null && v > sinir.ust + AYNI)) return { uyar: false, neden: `${x.nitelik} ${sayi(v)}` };
       parca.unshift(`${x.nitelik} ${sayi(v)}`);
     }
   }
@@ -402,4 +452,22 @@ export function alternatifOnceligi(g: OncelikGirdisi): AlternatifKarti[] {
     cikti.push({ ...k, tur: 'alternatif', muadilTuru: null, setId: null });
   }
   return cikti;
+}
+
+// 3593 (Risk K1): Aralık (ve kipi boş eski satır) mutlak mm taşır; başka karta kopyalanınca hedefin kendi ölçüsü aralığın içinde değilse
+// kopya o karta yanlış sınır yazar. Hedefte ölçü yoksa ya da aralık dışındaysa kopya reddedilir; Birebir ve Pay hedefin ölçüsünü izler.
+export function kopyaAralikHatasi(n: readonly SetNiteligiSatiri[], hedefOlcu: Readonly<Record<string, number>>): string | null {
+  const sayi = (v: number) => v.toLocaleString('tr-TR', { maximumFractionDigits: 3 });
+  for (const x of n) {
+    if (SET_LISTE_NITELIKLERI.includes(x.nitelik as (typeof SET_LISTE_NITELIKLERI)[number])) continue;
+    if (x.kip === 'birebir' || x.kip === 'pay') continue;
+    const e = olcuEtiketi(x.nitelik);
+    const v = hedefOlcu[x.nitelik];
+    if (v === undefined) return `kartta ${e} yok; ${e} için Aralık kopyalanmaz, Pay ya da Birebir kullanın`;
+    if ((x.alt !== null && v < x.alt) || (x.ust !== null && v > x.ust)) {
+      const ara = x.alt !== null && x.ust !== null ? `${sayi(x.alt)}–${sayi(x.ust)}` : x.alt !== null ? `en az ${sayi(x.alt)}` : `en çok ${sayi(x.ust!)}`;
+      return `${e} ${sayi(v)} aralığın (${ara}) dışında; bu ölçü için Pay ya da Birebir kullanın`;
+    }
+  }
+  return null;
 }

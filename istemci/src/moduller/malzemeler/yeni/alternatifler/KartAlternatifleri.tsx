@@ -10,9 +10,10 @@ import type { KatalogKarti } from '../tipler.ts';
 import type { MalzemeYetkisi } from '../yetki.ts';
 import { STOK_METNI, StokMiktari, StokOkumaBilgisi, stokVarMi, useStokMiktarlari, type StokMiktarlari } from '../stok-miktari.tsx';
 import { kaynakMetni } from './index.tsx';
+import { KopyaPenceresi } from './KopyaPenceresi.tsx';
 import { SetPenceresi } from './SetPenceresi.tsx';
 import { KartEklePenceresi, OnerilmesinPenceresi } from './secili-pencereler.tsx';
-import { TUR_ADI, setOzeti, siraDegisimi, tabloSatirlari, yerMetni, type TabloSatiri } from './tablo.ts';
+import { TUR_ADI, anaOzetKarti, setOzetMetni, siraDegisimi, tabloSatirlari, yerMetni, type TabloSatiri } from './tablo.ts';
 import { useEsdegerIslemi, useKartAlternatifleri, useKartZarfi, useSeciliIslemi, useSinirKaldir, useSinirKaydet, useSiraKaydet } from './veri.ts';
 
 // 3463 C, 3572 a: kartın föyünde Ana set (bugünkü kabul sınırları) ve tek Alternatifler tablosu: alternatif setleri, elle eklenen
@@ -105,7 +106,8 @@ const SONUC_ADI = { ayni: 'Aynı nitelik', icinde: 'Sınır içinde', sartli: '�
 const SONUC_TONU = { ayni: 'tamam', icinde: 'bilgi', sartli: 'uyari' } as const;
 const kartKodu = (k: { no: number; kod: string | null }) => k.kod ?? `#${String(k.no)}`;
 type Pencereler =
-  | { tur: 'set'; kayit: AlternatifSeti | null }
+  | { tur: 'set'; kayit: AlternatifSeti | null; anadan?: boolean }
+  | { tur: 'kopya'; kayit: AlternatifSeti }
   | { tur: 'kart'; kayit: SeciliAlternatif | null }
   | { tur: 'onerilmesin'; kart: { no: number; kod: string | null }; kayit: SeciliAlternatif | null }
   | { tur: 'kaldir'; secili: SeciliAlternatif }
@@ -125,6 +127,7 @@ function AlternatifTablosu({ kart, kartlar, bolum, kuraldan, yaz, ac }: {
   // 3582 B: tablodaki kartlar ve setlere uyan kartlar tek okumada; önerilmeyen kartın stoğu gösterilmez.
   const stok = useStokMiktarlari(satirlar.flatMap(stokNolari));
   const setAdi = new Map(bolum.setler.map((t) => [t.id, t.ad]));
+  const anaOzet = anaOzetKarti(kart);
   const kimlikNodan = (no: number) => kartlar.find((k) => k.no === no)?.kimlik;
   const kodBagi = (k: { no: number; kod: string | null }, cizili = false) => {
     const kimlik = kimlikNodan(k.no);
@@ -160,13 +163,15 @@ function AlternatifTablosu({ kart, kartlar, bolum, kuraldan, yaz, ac }: {
             return (
               <div className="tc-kalt-hucre">
                 <b>{s.set.ad}</b>
-                <span className="tc-alt-soluk">{setOzeti(s.set.nitelikler)}</span>
-                <span>
-                  <button type="button" className="tc-mk-bag" aria-expanded={acikSet === s.set.id} onClick={() => acikSetYaz(acikSet === s.set.id ? null : s.set.id)}>
-                    {`${String(s.set.uyanSayisi)} kart uyuyor${yeni > 0 ? ` · ${String(yeni)} yeni` : ''}`}
-                  </button>
-                  {stok.durum === 'hazir' && s.set.uyanlar.length > 0 && <span className="tc-alt-soluk">{` · ${setStokOzeti(stok, s.set).ozet}`}</span>}
-                </span>
+                <span className="tc-alt-soluk">{setOzetMetni(s.set, anaOzet)}</span>
+                {s.set.uyanSayisi === 0 ? <span className="tc-alt-soluk">Uyan kart yok; teklif ve siparişe sınır olarak gider.</span> : (
+                  <span>
+                    <button type="button" className="tc-mk-bag" aria-expanded={acikSet === s.set.id} onClick={() => acikSetYaz(acikSet === s.set.id ? null : s.set.id)}>
+                      {`${String(s.set.uyanSayisi)} kart uyuyor${yeni > 0 ? ` · ${String(yeni)} yeni` : ''}`}
+                    </button>
+                    {stok.durum === 'hazir' && s.set.uyanlar.length > 0 && <span className="tc-alt-soluk">{` · ${setStokOzeti(stok, s.set).ozet}`}</span>}
+                  </span>
+                )}
                 {acikSet === s.set.id && (
                   <ul className="tc-kalt-liste">
                     {s.set.uyanlar.map((u) => (
@@ -241,7 +246,12 @@ function AlternatifTablosu({ kart, kartlar, bolum, kuraldan, yaz, ac }: {
     sutunlar.push({
       anahtar: 'islem', baslik: 'İşlem', csv: false, hucre: (s) => {
         switch (s.tur) {
-          case 'set': return <Dugme simge="edit" onClick={() => pencereYaz({ tur: 'set', kayit: s.set })}>Düzenle</Dugme>;
+          case 'set': return (
+            <span className="tc-kalt-eylem">
+              <Dugme simge="edit" onClick={() => pencereYaz({ tur: 'set', kayit: s.set })} aria-label={`${s.set.ad} düzenle`}>Düzenle</Dugme>
+              <Dugme simge="layers" onClick={() => pencereYaz({ tur: 'kopya', kayit: s.set })} aria-label={`${s.set.ad} başka malzemelere kopyala`}>Kopyala</Dugme>
+            </span>
+          );
           case 'elle': return (
             <span className="tc-kalt-eylem">
               <Dugme simge="edit" onClick={() => pencereYaz({ tur: 'kart', kayit: s.secili })} aria-label={`${kartKodu({ no: s.secili.alternatifNo, kod: s.secili.kod })} düzenle`}>Düzenle</Dugme>
@@ -264,15 +274,16 @@ function AlternatifTablosu({ kart, kartlar, bolum, kuraldan, yaz, ac }: {
         <h4 className="tc-alt-alt-baslik">{`Alternatifler (${String(satirlar.length)})`}</h4>
         {yaz && (
           <span className="tc-kalt-sag">
-            <span title={hammadde ? undefined : 'Bu kart türünde set tanımlanamaz; alternatifi Kart ekle ile seçin.'}>
-              <Dugme simge="plus" tur="birincil" disabled={!hammadde} onClick={() => pencereYaz({ tur: 'set', kayit: null })}>Set ekle</Dugme>
+            <span title={hammadde ? undefined : 'Bu kart türünde alternatif kartı tanımlanamaz; alternatifi Kart ekle ile seçin.'}>
+              <Dugme simge="plus" tur="birincil" disabled={!hammadde} onClick={() => pencereYaz({ tur: 'set', kayit: null, anadan: true })}>Ana karttan başlat</Dugme>
             </span>
+            <Dugme simge="plus" disabled={!hammadde} onClick={() => pencereYaz({ tur: 'set', kayit: null })}>Boş alternatif kartı</Dugme>
             <Dugme simge="plus" onClick={() => pencereYaz({ tur: 'kart', kayit: null })}>Kart ekle</Dugme>
           </span>
         )}
       </div>
       {satirlar.some((x) => stokNolari(x).length > 0) && <StokOkumaBilgisi stok={stok} />}
-      {yaz && !hammadde && <p className="tc-alt-soluk">Bu kart türünde ölçü, kalite, durum ve standart alanı yok; set kurulamaz. Alternatifi Kart ekle ile seçin.</p>}
+      {yaz && !hammadde && <p className="tc-alt-soluk">Bu kart türünde ölçü, kalite, durum ve standart alanı yok; alternatif kartı kurulamaz. Alternatifi Kart ekle ile seçin.</p>}
       <Tablo
         etiket="Alternatifler"
         sutunlar={sutunlar}
@@ -283,11 +294,14 @@ function AlternatifTablosu({ kart, kartlar, bolum, kuraldan, yaz, ac }: {
       />
       {satirlar.length > 0 && (
         <p className="tc-alt-soluk">
-          Öncelik: &quot;Önerilmesin&quot; her şeyden ağırdır; tekil kart satırı, uyduğu setin türünü ve yerini ezer; set, kuraldan geleni ezer.
-          Sette dolu alanların hepsi tutmalı, setler arasında herhangi biri yeter. Sıra, talepte ve üretimde listenin sırasıdır.
+          Öncelik: &quot;Önerilmesin&quot; her şeyden ağırdır; tekil kart satırı, uyduğu alternatif kartının türünü ve yerini ezer; alternatif kartı, kuraldan geleni ezer.
+          Alternatif kartında dolu alanların hepsi tutmalı, kartlar arasında herhangi biri yeter. Sıra, talepte ve üretimde listenin sırasıdır.
         </p>
       )}
-      {pencere?.tur === 'set' && <SetPenceresi ana={kart} kartlar={kartlar} kayit={pencere.kayit} esik={bolum.genisEsik} kapat={() => pencereYaz(null)} />}
+      {pencere?.tur === 'set' && (
+        <SetPenceresi ana={kart} kartlar={kartlar} kayit={pencere.kayit} anadan={pencere.anadan === true} esik={bolum.genisEsik} kapat={() => pencereYaz(null)} />
+      )}
+      {pencere?.tur === 'kopya' && <KopyaPenceresi ana={kart} kartlar={kartlar} kayit={pencere.kayit} kapat={() => pencereYaz(null)} />}
       {pencere?.tur === 'kart' && (
         <KartEklePenceresi ana={kart} kartlar={kartlar} kuraldan={kuraldan} disarida={disarida} kayit={pencere.kayit} kapat={() => pencereYaz(null)} />
       )}

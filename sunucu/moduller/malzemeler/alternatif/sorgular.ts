@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
-import type { DurumMuadili, KaliteMuadili, KapsamTuru, KullanimYeri, MuadilTuru, SetNiteligi, SinirDegeri, SinirNiteligi } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
+import type { DurumMuadili, KaliteMuadili, KapsamTuru, KullanimYeri, MuadilTuru, SetKipi, SetNiteligi, SinirDegeri, SinirNiteligi } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 import type { PayTuru } from '#paylasilan/sozlesme/stok-kontrol-sabitleri.ts';
 import { KATALOG_AD, KATALOG_DIZI, KATALOG_KALITE, KATALOG_METIN } from '../sorgular.ts';
 import type { KuralSatiri, SinirSatiri } from './kurallar.ts';
@@ -117,6 +117,10 @@ export function zarfKarti(db: Db, no: number): Promise<ZarfKartSatiri | null> {
   return db.tek<ZarfKartSatiri>(`SELECT ${KART_SUTUNLARI} FROM malzeme_katalog_karti k WHERE k.no = $1 AND k.onay_durumu <> 'iptal'`, [no]);
 }
 
+export async function kartSurumu(db: Db, no: number): Promise<number | null> {
+  return (await db.tek<{ surum: number }>('SELECT surum FROM malzeme_katalog_karti WHERE no = $1', [no]))?.surum ?? null;
+}
+
 // Aynı formdaki aktif hammadde kartları (adaylar).
 export function zarfAdaylari(db: Db, form: string): Promise<ZarfKartSatiri[]> {
   return db.sorgu<ZarfKartSatiri>(
@@ -217,12 +221,16 @@ export const anaKilidi = (db: Db, anaNo: number): Promise<unknown> =>
 export interface SetKaydi {
   id: number; anaNo: number; ad: string; tur: MuadilTuru; sira: number; kullanimYerleri: KullanimYeri[]; notu: string | null; uyanSayi: number;
   genisOnay: boolean; surum: number; guncelleme: string;
-  nitelikler: { nitelik: SetNiteligi; degerler: string[] | null; alt: number | null; ust: number | null }[];
+  nitelikler: SetNiteligiKaydi[];
+}
+export interface SetNiteligiKaydi {
+  nitelik: SetNiteligi; kip: SetKipi | null; degerler: string[] | null; alt: number | null; ust: number | null; payAlt: number | null; payUst: number | null;
 }
 const SET_SUTUNLARI = `t.id, t.ana_no AS "anaNo", t.ad, t.tur, t.sira, t.kullanim_yerleri AS "kullanimYerleri", t.notu, t.uyan_sayi AS "uyanSayi",
   t.genis_onay AS "genisOnay", t.surum, ${zamanMetni('t.guncelleme')} AS guncelleme,
-  COALESCE((SELECT json_agg(json_build_object('nitelik', n.nitelik, 'degerler', n.degerler, 'alt', n.alt::float8, 'ust', n.ust::float8)
-     ORDER BY array_position(ARRAY['form', 'kalite', 'durum', 'standart', 'yuzey', 'd', 's', 'a', 'b', 't', 'D', 'h', 'l'], n.nitelik))
+  COALESCE((SELECT json_agg(json_build_object('nitelik', n.nitelik, 'kip', n.kip, 'degerler', n.degerler, 'alt', n.alt::float8, 'ust', n.ust::float8,
+       'payAlt', n.pay_alt::float8, 'payUst', n.pay_ust::float8)
+     ORDER BY array_position(ARRAY['form', 'kalite', 'durum', 'standart', 'yuzey', 'islem', 'd', 's', 'a', 'b', 't', 'D', 'h', 'l'], n.nitelik))
      FROM malzeme_alternatif_seti_niteligi n WHERE n.set_id = t.id), '[]') AS nitelikler`;
 
 export function setler(db: Db, anaNo: number): Promise<SetKaydi[]> {
@@ -258,14 +266,20 @@ export async function setGuncelle(db: Db, id: number, s: SetYazimi, surum: numbe
 }
 
 // Değişmeyen nitelik satırına dokunulmaz (Geçmiş yalnız değişeni gösterir).
-export async function setNitelikleriYaz(db: Db, anaNo: number, id: number, n: readonly { nitelik: SetNiteligi; degerler: readonly string[] | null; alt: number | null; ust: number | null }[]): Promise<void> {
+export interface SetNiteligiYazimi {
+  nitelik: SetNiteligi; kip?: SetKipi | null; degerler: readonly string[] | null; alt: number | null; ust: number | null; payAlt?: number | null; payUst?: number | null;
+}
+export async function setNitelikleriYaz(db: Db, anaNo: number, id: number, n: readonly SetNiteligiYazimi[]): Promise<void> {
   await db.sorgu(`DELETE FROM malzeme_alternatif_seti_niteligi WHERE set_id = $1 AND NOT (nitelik = ANY($2::text[]))`, [id, n.map((x) => x.nitelik)]);
   for (const x of n) {
-    await db.sorgu(`INSERT INTO malzeme_alternatif_seti_niteligi (set_id, nitelik, degerler, alt, ust, ana_no) VALUES ($1, $2, $3, $4, $5, $6)
-      ON CONFLICT (set_id, nitelik) DO UPDATE SET degerler = EXCLUDED.degerler, alt = EXCLUDED.alt, ust = EXCLUDED.ust
-      WHERE (malzeme_alternatif_seti_niteligi.degerler, malzeme_alternatif_seti_niteligi.alt, malzeme_alternatif_seti_niteligi.ust)
-        IS DISTINCT FROM (EXCLUDED.degerler, EXCLUDED.alt, EXCLUDED.ust)`,
-    [id, x.nitelik, x.degerler === null ? null : [...x.degerler], x.alt, x.ust, anaNo]);
+    await db.sorgu(`INSERT INTO malzeme_alternatif_seti_niteligi (set_id, nitelik, kip, degerler, alt, ust, pay_alt, pay_ust, ana_no)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      ON CONFLICT (set_id, nitelik) DO UPDATE SET kip = EXCLUDED.kip, degerler = EXCLUDED.degerler, alt = EXCLUDED.alt, ust = EXCLUDED.ust,
+        pay_alt = EXCLUDED.pay_alt, pay_ust = EXCLUDED.pay_ust
+      WHERE (malzeme_alternatif_seti_niteligi.kip, malzeme_alternatif_seti_niteligi.degerler, malzeme_alternatif_seti_niteligi.alt,
+          malzeme_alternatif_seti_niteligi.ust, malzeme_alternatif_seti_niteligi.pay_alt, malzeme_alternatif_seti_niteligi.pay_ust)
+        IS DISTINCT FROM (EXCLUDED.kip, EXCLUDED.degerler, EXCLUDED.alt, EXCLUDED.ust, EXCLUDED.pay_alt, EXCLUDED.pay_ust)`,
+    [id, x.nitelik, x.kip ?? null, x.degerler === null ? null : [...x.degerler], x.alt, x.ust, x.payAlt ?? null, x.payUst ?? null, anaNo]);
   }
 }
 
@@ -319,12 +333,18 @@ export async function siraYaz(db: Db, anaNo: number, tur: 'set' | 'kart', no: nu
 }
 
 // Sete aday kartlar: aktif hammadde, standartları ve son 7 günde onaylanıp onaylanmadığıyla.
-export interface SetAdaySatiri extends ZarfKartSatiri { standartlar: string[]; yeni: boolean }
+// 3593: işlemler kartın opts.islem dizisidir (ısıl işlem, kaplama).
+export interface SetAdaySatiri extends ZarfKartSatiri { standartlar: string[]; islemler: string[]; yeni: boolean }
+const SET_KART_SUTUNLARI = `${KART_SUTUNLARI},
+  ARRAY(SELECT DISTINCT x FROM unnest(${KATALOG_DIZI('stds')} || ARRAY[${KATALOG_METIN('com,std')}]) x WHERE x IS NOT NULL ORDER BY x) AS standartlar,
+  ARRAY(SELECT DISTINCT x FROM unnest(${KATALOG_DIZI('opts,islem')}) x ORDER BY x) AS islemler,
+  COALESCE(k.onaylama > now() - interval '7 days', false) AS yeni`;
 export function setAdaylari(db: Db): Promise<SetAdaySatiri[]> {
-  return db.sorgu<SetAdaySatiri>(`SELECT ${KART_SUTUNLARI},
-      ARRAY(SELECT DISTINCT x FROM unnest(${KATALOG_DIZI('stds')} || ARRAY[${KATALOG_METIN('com,std')}]) x WHERE x IS NOT NULL ORDER BY x) AS standartlar,
-      COALESCE(k.onaylama > now() - interval '7 days', false) AS yeni
-    FROM malzeme_katalog_karti k WHERE k.onay_durumu = 'aktif' AND k.tur = 'hammadde' ORDER BY k.no`);
+  return db.sorgu<SetAdaySatiri>(`SELECT ${SET_KART_SUTUNLARI} FROM malzeme_katalog_karti k WHERE k.onay_durumu = 'aktif' AND k.tur = 'hammadde' ORDER BY k.no`);
+}
+// Birebir ve Pay'ın izlediği ana kartlar (onayda olan da; iptal dışı).
+export function setAnaKartlari(db: Db, nolar: readonly number[]): Promise<SetAdaySatiri[]> {
+  return db.sorgu<SetAdaySatiri>(`SELECT ${SET_KART_SUTUNLARI} FROM malzeme_katalog_karti k WHERE k.no = ANY($1::int[]) AND k.onay_durumu <> 'iptal'`, [[...nolar]]);
 }
 
 // Seçili kart için: var mı, aktif mi, eşdeğer grubunda mı (ana kartla).

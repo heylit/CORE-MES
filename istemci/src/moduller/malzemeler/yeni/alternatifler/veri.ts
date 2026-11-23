@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
-  AlternatifSetiKaydetGovdesi, AlternatifSirasiGovdesi, OnerilmesinGovdesi, SeciliAlternatifKaydetGovdesi, SetNiteligiYazimi, SetOnizlemeCevabi,
+  AlternatifSetiKaydetGovdesi, AlternatifSetiKopyalaCevabi, AlternatifSetiKopyalaGovdesi, AlternatifSirasiGovdesi, OnerilmesinGovdesi, SeciliAlternatifKaydetGovdesi, SetNiteligiYazimi, SetOnizlemeCevabi,
   AlternatifKuraliKaydetGovdesi, AlternatifTanimlariCevabi, GrupSinirlariCevabi, KabulSiniriKaydetGovdesi, KartAlternatifleriCevabi, KartZarfiCevabi, MuadilTuru,
 } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 import { api } from '../../../../ortak/veri/api.ts';
@@ -128,4 +128,13 @@ export function useSeciliIslemi() {
 export function useSiraKaydet() {
   const tazele = useAlternatifTazele();
   return useMutation({ mutationFn: (g: AlternatifSirasiGovdesi) => api.post('/malzeme-alternatifleri/sira', g), onSettled: tazele });
+}
+
+// 3593: alternatif kartını aynı form ve ailedeki kartlara kopyala.
+export function useSetKopyala() {
+  const tazele = useAlternatifTazele();
+  return useMutation({
+    mutationFn: ({ id, ...g }: AlternatifSetiKopyalaGovdesi & { id: number }) => api.post<AlternatifSetiKopyalaCevabi>(`/malzeme-alternatifleri/setler/${String(id)}/kopyala`, g),
+    onSettled: tazele,
+  });
 }
