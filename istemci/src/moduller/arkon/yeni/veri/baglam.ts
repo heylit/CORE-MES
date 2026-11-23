@@ -7,7 +7,7 @@ import type { ArkonDeposu, ArkonDurumu, Ileti } from './depo.ts';
 // Yeni ekranın ortak durumu: veri katmanı, oturumdaki Arkon kişisi, ayarlar, yetki ve gezinme. Kök (ArkonYeni.tsx) kurar;
 // parçalar yalnız bu kancalarla okur, modül değişkeni tutmaz (eski ekrandaki PLANT, SHIFTS, POLICY gibi değişkenlerin yerine).
 
-export type TmiHedefi = 'emir-ac' | 'plan' | 'istasyonlar';
+export type TmiHedefi = 'emir-ac' | 'recete-rota' | 'plan' | 'istasyonlar';
 
 export interface ArkonBaglami {
   depo: ArkonDeposu;

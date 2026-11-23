@@ -1,10 +1,10 @@
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { maddeGorunurMu } from '#paylasilan/sayfalar.ts';
 import type { ArkonBenCevabi, ArkonRolu, CalismaDevralGovdesi, MakineDevralGovdesi } from '#paylasilan/sozlesme/arkon.ts';
 import { bekleyenKayitIletisi } from '../../../../../arkon/web/src/data/bekleyen-kayit.ts';
-import { Dugme, DurumKutusu, Pencere, useBildirim } from '../../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Pencere, Simge, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { useCerceveSayacYazici } from '../../../ortak/rota/cerceve-sayaclari.ts';
 import { useEkranGorunur } from '../../../ortak/rota/kalici.tsx';
 import { api, hataIletisi } from '../../../ortak/veri/api.ts';
@@ -21,6 +21,8 @@ import { ayarlariOku, ILK_AYARLAR, type ArkonAyarlari } from './cekirdek/ayarlar
 import { olcekHesapla, TASARIM_GENISLIGI, TASARIM_YUKSEKLIGI } from './cekirdek/olcek.ts';
 import type { Perm } from './cekirdek/tipler.ts';
 import { yerel } from './cekirdek/yerel.ts';
+import { IS_TURLERI } from './hazirlik/kurallar.ts';
+import { ONIZLEME_SEKME_OLAYI } from './operator/onizleme-olay.ts';
 import { sayfaGorunur, yetkiVar } from './cekirdek/yetki.ts';
 import { ArkonBaglamiKaynagi, ArkonDarAlanKaynagi, useCakismaUyarisi, type ArkonBaglami, type TmiHedefi } from './veri/baglam.ts';
 import { depoyuBaslat, type ArkonDeposu, type ArkonDurumu } from './veri/depo.ts';
@@ -382,43 +384,124 @@ function useNumuneSayisi(depo: ArkonDeposu): number {
 }
 
 // "Operatör gözüyle" önizleme (operator-parcalar.ts PreviewOv): operatör ekranı 1600x900 cihaz alanında, pencereye sığacak
-// ölçekte çizilir. Pencerenin içi salt okunurdur; istasyon cihazda hatırlanan önizleme istasyonudur (pvStation).
+// ölçekte çizilir. Pencerenin içi salt okunurdur. 3614: aynı emrin öteki operasyonları şeritten seçilir; geniş pencerede
+// en çok iki operasyon yan yana çizilir (her çerçeve kendi istasyonuyla), dar pencerede tek çerçeve ve tür seçici kalır.
+const OnizlemeCercevesi = lazy(async () => ({ default: (await import('./operator/index.tsx')).OnizlemeCercevesi }));
+// Pencere genişliği: ikiliden geniş yan yana ölçekli çerçeveler; altı tek çerçeve, ölçeksiz, pencere genişliğinde (telefon ve tablet düzeni).
+const IKILI_EN = 1000;
+const ORTAK_SEKMELER: readonly (readonly [string, string])[] = [['draw', 'Resim'], ['tl', 'Talimatlar'], ['steps', 'Adımlar']];
+const IKILI_TASARIM = { en: 1100, boy: 800 };
+interface OnizlemePaketi { id: string; no: string; op: string; machine: string; tur: string }
 function OnizlemePenceresi({ paketId, baglam, kapat }: { paketId: string; baglam: ArkonBaglami; kapat: () => void }) {
   const [sahne, sahneYaz] = useState<HTMLDivElement | null>(null);
   const [cihaz, cihazYaz] = useState<HTMLDivElement | null>(null);
+  const [adaylar, adaylarYaz] = useState<OnizlemePaketi[]>([]);
+  const [secili, seciliYaz] = useState<string[]>([paketId]);
+  const [kip, kipYaz] = useState<'iki' | 'dar'>('iki');
+  const [buyuk, buyukYaz] = useState<string | null>(null);
+  const dar = kip === 'dar';
+  useEffect(() => {
+    let canli = true;
+    void baglam.depo.DB.all('pkgs').then((l) => {
+      if (!canli) return;
+      adaylarYaz((l as { id: string; no?: string; op?: string; machine?: string; opType?: string }[]).map((x) => ({
+        id: x.id, no: x.no ?? '', op: x.op ?? '', machine: x.machine ?? '', tur: x.opType ?? 'cnc',
+      })));
+    }, () => undefined);
+    return () => { canli = false; };
+  }, [baglam.depo]);
+  const kare = buyuk !== null && secili.includes(buyuk) ? [buyuk] : kip === 'iki' ? secili.slice(0, 2) : secili.slice(0, 1);
   useEffect(() => {
     if (!sahne || !cihaz) return undefined;
     const uygula = () => {
-      const k = Math.max(0.1, Math.min((sahne.clientWidth - 40) / TASARIM_GENISLIGI, (sahne.clientHeight - 40) / TASARIM_YUKSEKLIGI));
+      const w = sahne.clientWidth;
+      const yeniKip = w >= IKILI_EN ? 'iki' : 'dar';
+      kipYaz(yeniKip);
+      const n = yeniKip === 'iki' && buyuk === null ? Math.min(2, Math.max(1, secili.length)) : 1;
+      // Dar pencerede ekran ölçeklenmez: pencere genişliğinde, operatör ekranının kendi dar düzeniyle çizilir.
+      const tw = n === 2 ? IKILI_TASARIM.en : TASARIM_GENISLIGI;
+      const th = n === 2 ? IKILI_TASARIM.boy : TASARIM_YUKSEKLIGI;
+      const k = yeniKip !== 'dar' ? Math.max(0.1, Math.min((w - 40 - (n - 1) * 12) / (n * tw), (sahne.clientHeight - 80) / th)) : 1;
+      const en = yeniKip !== 'dar' ? tw : Math.max(280, w - 8);
+      const boy = yeniKip !== 'dar' ? th : Math.max(320, sahne.clientHeight - 8);
       cihaz.style.setProperty('--tc-ay-onizleme-olcek', String(k));
-      cihaz.style.setProperty('--tc-ay-onizleme-en', `${TASARIM_GENISLIGI}px`);
-      cihaz.style.setProperty('--tc-ay-onizleme-boy', `${TASARIM_YUKSEKLIGI}px`);
-      cihaz.style.setProperty('--tc-ay-vh', `${TASARIM_YUKSEKLIGI}px`);
+      cihaz.style.setProperty('--tc-ay-onizleme-en', `${en}px`);
+      cihaz.style.setProperty('--tc-ay-onizleme-boy', `${boy}px`);
+      cihaz.style.setProperty('--tc-ay-vh', `${boy}px`);
     };
     uygula();
     const izleyici = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(uygula);
     izleyici?.observe(sahne);
     window.addEventListener('resize', uygula);
     return () => { izleyici?.disconnect(); window.removeEventListener('resize', uygula); };
-  }, [sahne, cihaz]);
+  }, [sahne, cihaz, secili.length, buyuk]);
   const salt = useMemo((): ArkonBaglami => ({ ...baglam, saltOkunur: true }), [baglam]);
-  const Ekran = SAYFALAR.onizle.ekran;
-  const istasyon = yerel.oku<string>('pvStation') ?? '';
+  const bul = (id: string) => adaylar.find((x) => x.id === id) ?? null;
+  const ilk = bul(paketId);
+  const kardesler = adaylar.filter((x) => ilk !== null && x.no === ilk.no);
+  const digerleri = adaylar.filter((x) => !kardesler.some((k) => k.id === x.id));
+  const turAdi = (x: OnizlemePaketi) => (IS_TURLERI[x.tur as keyof typeof IS_TURLERI] ?? IS_TURLERI.cnc).l;
+  const [ortakSekme, ortakSekmeYaz] = useState<string | null>(null);
+  const sekmeGit = (id: string) => window.dispatchEvent(new CustomEvent(ONIZLEME_SEKME_OLAYI, { detail: id }));
+  const degistir = (id: string) => seciliYaz((s) => {
+    buyukYaz(null);
+    if (kip !== 'iki') return [id];
+    if (s.includes(id)) return s.length > 1 ? s.filter((x) => x !== id) : s;
+    return s.length >= 2 ? [s[1] ?? id, id] : [...s, id];
+  });
   const ust = (
     <header className="tc-ay-onizleme-ust">
-      <span className="tc-ay-onizleme-baslik">Operatör gözüyle önizleme{istasyon ? ` · ${istasyon} ekranı` : ''} · kayıt yapılmaz</span>
+      <span className="tc-ay-onizleme-baslik">Operatör gözüyle önizleme{kare.length > 1 ? ` · ${String(kare.length)} operasyon yan yana` : (bul(kare[0] ?? '')?.machine ?? yerel.oku<string>('pvStation') ?? '') ? ` · ${bul(kare[0] ?? '')?.machine ?? yerel.oku<string>('pvStation') ?? ''} ekranı` : ''} · kayıt yapılmaz</span>
       <Dugme simge="x" onClick={kapat}>Kapat</Dugme>
     </header>
   );
+  const chip = (x: OnizlemePaketi) => (
+    <button key={x.id} type="button" className="tc-ay-onizleme-sec" aria-pressed={kare.includes(x.id)} onClick={() => degistir(x.id)} title={`${x.no} · ${x.op}`}>
+      <Simge ad={kare.includes(x.id) ? 'check' : (IS_TURLERI[x.tur as keyof typeof IS_TURLERI]?.simge ?? 'gauge')} boyut="k" /><span>{x.op || x.no}</span><small>{turAdi(x)}</small>
+    </button>
+  );
   return (
     <Pencere acik kapat={kapat} baslik="Operatör gözüyle önizleme" tur="tam" ust={ust}>
-      <div ref={sahneYaz} className="tc-ay-onizleme-sahne">
-        <div ref={cihazYaz} className="tc-ay-onizleme-cihaz">
-          <div className="tc-ay-onizleme-ekran">
+      <div className="tc-ay-onizleme-govde">
+        <div className="tc-ay-onizleme-seritlar">
+        {kardesler.length + digerleri.length > 1 ? (
+          <div className="tc-ay-onizleme-serit" role="group" aria-label="Operasyonlar">
+            <span className="tc-ay-onizleme-etiket">{kip === 'iki' ? 'Yan yana (en çok 2)' : 'Operasyon'}</span>
+            <span className="tc-ay-onizleme-cipler">{kardesler.map(chip)}</span>
+            {digerleri.length > 0 ? (
+              <select className="tc-ay-onizleme-baska" aria-label="Başka paket ekle" value="" onChange={(e) => { if (e.target.value) degistir(e.target.value); }}>
+                <option value="">Başka paket…</option>
+                {digerleri.map((x) => <option key={x.id} value={x.id}>{x.no} · {x.op}</option>)}
+              </select>
+            ) : null}
+          </div>
+        ) : null}
+        {kare.length > 1 ? <div className="tc-ay-onizleme-serit" role="group" aria-label="Ortak sekme">
+          <span className="tc-ay-onizleme-etiket">Çerçevelerde sekme</span>
+          {ORTAK_SEKMELER.map(([id, ad]) => <button key={id} type="button" className="tc-ay-onizleme-sec" aria-pressed={ortakSekme === id} onClick={() => { ortakSekmeYaz(id); sekmeGit(id); }}>{ad}</button>)}
+        </div> : null}
+        </div>
+        <div ref={sahneYaz} className="tc-ay-onizleme-sahne">
+          <div ref={cihazYaz} className="tc-ay-onizleme-cihaz" data-adet={kare.length} data-dar={dar ? '' : undefined}>
             <ArkonBaglamiKaynagi.Provider value={salt}>
-              <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
-                <Ekran sayfa="onizle" kimlik={paketId} />
-              </Suspense>
+              {kare.map((id) => {
+                const x = bul(id);
+                return (
+                  <figure key={id} className="tc-ay-onizleme-kare" aria-label={x ? `${x.op} · ${turAdi(x)}` : 'Operasyon'}>
+                    {kare.length > 1 || buyuk !== null ? (
+                      <figcaption>
+                        <b>{x?.op || x?.no}</b>{x ? <small>{turAdi(x)} · {x.machine}</small> : null}
+                        {secili.length > 1 && kip === 'iki' ? <button type="button" className="tc-ay-onizleme-sec" onClick={() => buyukYaz(buyuk === null ? id : null)}><Simge ad={buyuk === null ? 'expand' : 'down'} boyut="k" />{buyuk === null ? 'Büyüt' : 'Yan yana dön'}</button> : null}
+                      </figcaption>
+                    ) : null}
+                    <div className="tc-ay-onizleme-ekran">
+                      <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
+                        <OnizlemeCercevesi kimlik={id} istasyon={x?.machine ?? (yerel.oku<string>('pvStation') ?? '')} />
+                      </Suspense>
+                    </div>
+                  </figure>
+                );
+              })}
             </ArkonBaglamiKaynagi.Provider>
           </div>
         </div>

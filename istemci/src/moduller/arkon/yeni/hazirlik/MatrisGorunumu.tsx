@@ -25,7 +25,7 @@ interface Ozellikler {
   hazirlik: ReadonlyMap<number, HazirlikCevabi>;
   seciliId: string | null;
   // Hücre paketin Terminale gönder sekmesini (hazırlık maddeleri orada), iş adı Bilgiler'i açar.
-  ac: (p: Pkg, hucre: boolean, tiklanan: HTMLElement) => void;
+  ac: (p: Pkg, hucre: boolean, tiklanan: HTMLElement, madde?: string) => void;
 }
 
 export function MatrisGorunumu({ paketler, hazirlik, seciliId, ac }: Ozellikler) {
@@ -112,7 +112,7 @@ export function MatrisGorunumu({ paketler, hazirlik, seciliId, ac }: Ozellikler)
                       return (
                         <td key={m}>
                           {p ? (
-                            <button type="button" className="tc-ay2-mt-h" data-ton={g.ton} onClick={(e) => ac(p, true, e.currentTarget)} aria-label={`${s.emirNo} ${s.ad} ${HAZIRLIK_MADDE_BILGISI[m].ad}: ${g.ad}`}>
+                            <button type="button" className="tc-ay2-mt-h" data-ton={g.ton} onClick={(e) => ac(p, true, e.currentTarget, m)} aria-label={`${s.emirNo} ${s.ad} ${HAZIRLIK_MADDE_BILGISI[m].ad}: ${g.ad}`}>
                               <Simge ad={g.simge} boyut="k" />
                             </button>
                           ) : (

@@ -22,7 +22,7 @@ export const grubu = (a: Pick<TmiAdim, 'asama'>): TalimatGrubu =>
 export const acikGrup = (durum: string): TalimatGrubu => (durum === 'queued' || durum === 'setup' ? 'once' : durum === 'done' ? 'son' : 'sira');
 export const zorunluEksikler = (liste: readonly TmiAdim[], g: TalimatGrubu): TmiAdim[] => liste.filter((a) => a.zorunlu === true && !a.tamam && grubu(a) === g);
 
-const TUR: Readonly<Record<TmiKontrol['tur'], { ad: string; simge: SimgeAdi }>> = {
+export const TUR: Readonly<Record<TmiKontrol['tur'], { ad: string; simge: SimgeAdi }>> = {
   onay: { ad: 'Onay', simge: 'check' }, olcum: { ad: 'Ölçüm', simge: 'ruler' }, foto: { ad: 'Fotoğraf', simge: 'camera' }, secim: { ad: 'Seçim', simge: 'list' },
 };
 const sayiOku = (t: string): number | null => {
@@ -36,7 +36,7 @@ const kanitMetni = (a: TmiAdim): string | null => {
   if (k.olcum !== null) return `${sayiMetni(k.olcum)}${a.kontrol?.birim ? ` ${a.kontrol.birim}` : ''}`;
   return k.secim;
 };
-const sinirMetni = (k: TmiKontrol): string | null => {
+export const sinirMetni = (k: TmiKontrol): string | null => {
   const b = k.birim ? ` ${k.birim}` : '';
   if (k.alt != null && k.ust != null) return `${sayiMetni(k.alt)}–${sayiMetni(k.ust)}${b}`;
   if (k.alt != null) return `en az ${sayiMetni(k.alt)}${b}`;
@@ -44,22 +44,24 @@ const sinirMetni = (k: TmiKontrol): string | null => {
   return null;
 };
 
-// Liste Operator'da okunur: Başlat ve Bitir zorunlu eksikleri buradan sayar. Önizlemede ve yerel pakette sunucuya gidilmez.
+// Liste Operator'da okunur: Başlat ve Bitir zorunlu eksikleri buradan sayar. Önizlemede liste yalnız okunur (işaret yazılmaz);
+// yerel pakette sunucuya gidilmez.
 export interface Talimatlar { liste: TmiAdim[] | null; hata: string | null; isaretle: (id: number, tamam: boolean, kanit?: TmiKanit) => void }
 export function useTalimatlar(emirId: number | null, onizleme: boolean): Talimatlar {
   const { depo } = useArkon();
   const durum = useArkonDurumu();
-  const sunucu = emirId !== null && !onizleme && durum.mode === 'server';
+  const okunur = emirId !== null && durum.mode === 'server';
+  const sunucu = okunur && !onizleme;
   const [liste, listeYaz] = useState<TmiAdim[] | null>(null);
   const [hata, hataYaz] = useState<string | null>(null);
   const suruyor = useRef(new Set<number>());
   useEffect(() => {
     listeYaz(null); hataYaz(null);
-    if (!sunucu || emirId === null) return;
+    if (!okunur || emirId === null) return;
     let canli = true;
     depo.Server.tmiAdimlari(emirId).then((l) => { if (canli) listeYaz(l); }, () => { if (canli) { listeYaz([]); hataYaz('Talimatlar alınamadı'); } });
     return () => { canli = false; };
-  }, [depo, emirId, sunucu]);
+  }, [depo, emirId, okunur]);
   const isaretle = (id: number, tamam: boolean, kanit?: TmiKanit) => {
     if (!sunucu || emirId === null || suruyor.current.has(id)) return;
     suruyor.current.add(id);
@@ -73,7 +75,7 @@ export function useTalimatlar(emirId: number | null, onizleme: boolean): Talimat
       })
       .finally(() => { suruyor.current.delete(id); });
   };
-  return { liste: sunucu ? liste : null, hata, isaretle };
+  return { liste: okunur ? liste : null, hata, isaretle };
 }
 
 // Ölçüm ve seçim maddesi kutuya dokununca değer ister; fotoğraf terminalde çekilmez, madde onay gibi işaretlenir.
@@ -123,8 +125,8 @@ function Madde({ a, kapali, isaretle }: { a: TmiAdim; kapali: boolean; isaretle:
   );
 }
 
-export function TalimatListesi({ t, durum, kapali, adimlar, isEmriId }: {
-  t: Talimatlar; durum: string; kapali: boolean; adimlar: Pkg['steps'] | undefined; isEmriId: number | null;
+export function TalimatListesi({ t, durum, kapali, adimlar, isEmriId, onizleme = false }: {
+  t: Talimatlar; durum: string; kapali: boolean; adimlar: Pkg['steps'] | undefined; isEmriId: number | null; onizleme?: boolean;
 }) {
   const [secili, seciliYaz] = useState<Partial<Record<TalimatGrubu, boolean>>>({});
   const acilan = acikGrup(durum);
@@ -132,7 +134,8 @@ export function TalimatListesi({ t, durum, kapali, adimlar, isEmriId }: {
   if (t.liste === null && t.hata === null) return adimlar ? <YerelAdimlar adimlar={adimlar} /> : <DurumKutusu durum="yukleniyor" mesaj="Talimatlar yükleniyor" />;
   const liste = t.liste ?? [];
   return (
-    <div className="tc-ay1-talimatlar">
+    <div className="tc-ay1-talimatlar" data-onizleme={onizleme ? '' : undefined}>
+      {onizleme ? <p className="tc-ay1-tl-onizleme" role="note"><Simge ad="eye" boyut="k" />Önizleme: maddeler işaretlenmez</p> : null}
       {t.hata ? <p className="tc-ay1-hata" role="alert">{t.hata}</p> : null}
       {isEmriId !== null && liste.length > 0 ? <MontajSahnesi isEmriId={isEmriId} adimlar={liste} /> : null}
       {liste.length === 0 && !t.hata ? <p className="tc-ay1-soluk">Bu işin talimatı yok</p> : null}

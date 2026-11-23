@@ -91,3 +91,31 @@ html.tc-ay-tv .tc-ay > .tc-sekmeler, html.tc-ay-tv .tc-ay-baglanti, html.tc-ay-t
 @media (max-width: 767px) {
   .tc-ay { padding: var(--b-3); }
 }
+
+/* 3614: önizlemede operasyon şeridi ve yan yana çerçeveler. */
+.tc-ay-onizleme-govde { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100%; min-height: 0; }
+.tc-ay-onizleme-serit { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); padding: var(--b-2) var(--b-5); border-bottom: 1px solid var(--edge); }
+.tc-ay-onizleme-etiket { color: var(--muted); font-size: var(--yazi-xs); font-weight: 800; letter-spacing: var(--harf-aralik-06); text-transform: uppercase; }
+.tc-ay-onizleme-sec, .tc-ay-onizleme-baska {
+  display: inline-flex; align-items: center; gap: var(--b-2); min-height: var(--dokunma); padding: 0 var(--b-3);
+  border: 1px solid var(--edge); border-radius: var(--yari-2); background: var(--panel); color: var(--ink); font: inherit; font-weight: 700; cursor: pointer;
+}
+.tc-ay-onizleme-sec small { color: var(--muted); font-weight: 600; }
+.tc-ay-onizleme-sec[aria-pressed="true"] { border-color: var(--hazard); background: var(--panel2); }
+.tc-ay-onizleme-cihaz { display: flex; align-items: flex-start; gap: var(--b-3); }
+.tc-ay-onizleme-kare { margin: 0; display: grid; gap: var(--b-1); min-width: 0; }
+.tc-ay-onizleme-kare figcaption { display: flex; align-items: baseline; gap: var(--b-2); font-size: var(--yazi-s); }
+.tc-ay-onizleme-kare figcaption small { color: var(--muted); }
+.tc-ay-onizleme-cihaz[data-dar] { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.tc-ay-onizleme-cipler { display: contents; }
+.tc-ay-onizleme-kare figcaption .tc-ay-onizleme-sec { margin-inline-start: auto; min-height: var(--dokunma); }
+@media (max-width: 767px) {
+  .tc-ay-onizleme-ust { padding: var(--b-2) var(--b-3); }
+  .tc-ay-onizleme-serit { padding: var(--b-2) var(--b-3); }
+  .tc-ay-onizleme-etiket { flex: 1 0 100%; }
+  .tc-ay-onizleme-serit:has(.tc-ay-onizleme-cipler) { display: grid; grid-template-columns: 1fr 1fr; }
+  .tc-ay-onizleme-serit:has(.tc-ay-onizleme-cipler) .tc-ay-onizleme-etiket, .tc-ay-onizleme-baska { grid-column: 1 / -1; }
+  .tc-ay-onizleme-cipler .tc-ay-onizleme-sec { min-width: 0; }
+  .tc-ay-onizleme-cipler .tc-ay-onizleme-sec { flex-wrap: wrap; padding-block: var(--b-1); }
+  .tc-ay-onizleme-cipler .tc-ay-onizleme-sec span { min-width: 0; overflow-wrap: anywhere; text-align: start; }
+}
