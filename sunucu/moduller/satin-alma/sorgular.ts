@@ -104,8 +104,12 @@ export interface AltKayitlar {
     logoGuncellemeDurumu: 'bekliyor' | 'gonderildi' | 'hata' | null; logoGuncellemeHata: string | null;
     logoKapatmaDurumu: 'bekliyor' | 'gonderildi' | 'hata' | null; logoKapatmaHata: string | null;
     logoBekletmeIstegi: 'beklet' | 'serbest' | null; logoBekletmeDurumu: 'bekliyor' | 'gonderildi' | 'hata' | null; logoBekletmeHata: string | null;
+    teslimYeri: string; tedarikciNotu: string; icNot: string;
   }[];
-  siparisSatirlari: { talepId: string; teklifId: string; id: number; kalemId: string; miktar: string; birim: string; parcaRevizyonu: string | null }[];
+  siparisSatirlari: {
+    talepId: string; teklifId: string; id: number; kalemId: string; miktar: string; birim: string; parcaRevizyonu: string | null;
+    beklenenTeslim: string | null; notlar: string;
+  }[];
   onaylar: (Omit<Onay, 'kisiAdi'> & { talepId: string })[];
   hareketler: (Omit<Hareket, 'kisiAdi'> & { talepId: string })[];
   senaryolar: { talepId: string; id: string; ad: string; kisiId: number | null; olusturma: string }[];
@@ -124,7 +128,8 @@ export async function altKayitlariOku(db: Db, idler: readonly string[]): Promise
     teklifler: await q(`SELECT talep_id AS "talepId", id, firma_id AS "firmaId", tedarikci_adi AS "tedarikciAdi", teklif_tarihi AS "teklifTarihi",
       gecerlilik, para_birimi AS "paraBirimi", kur, iskonto_yuzdesi AS "iskontoYuzdesi", nakliye, diger_masraf AS "digerMasraf",
       teslim_sekli AS "teslimSekli", nakliye_dahil AS "nakliyeDahil", termin_gun AS "terminGun", vade_gun AS "vadeGun",
-      avans_yuzdesi AS "avansYuzdesi", odeme_yontemi AS "odemeYontemi", garanti_ay AS "garantiAy", teknik_uygun AS "teknikUygun", notlar, ilk_toplam AS "ilkToplam", revizyon
+      avans_yuzdesi AS "avansYuzdesi", odeme_yontemi AS "odemeYontemi", garanti_ay AS "garantiAy", teknik_uygun AS "teknikUygun", notlar, ilk_toplam AS "ilkToplam", revizyon,
+      kaynak
       FROM satin_alma_teklif WHERE talep_id = ANY($1::uuid[]) ORDER BY talep_id, sira, id`),
     // Satırlar silinip yeniden yazıldığı için sıra veritabanına bırakılmaz: kalemin sırası esastır.
     fiyatlar: await q(`SELECT s.talep_id AS "talepId", s.teklif_id AS "teklifId", s.kalem_id AS "kalemId", s.birim_fiyat AS "birimFiyat",
@@ -148,10 +153,11 @@ export async function altKayitlariOku(db: Db, idler: readonly string[]): Promise
       logo_iptal_durumu AS "logoIptalDurumu", logo_iptal_hata AS "logoIptalHata",
       logo_guncelleme_durumu AS "logoGuncellemeDurumu", logo_guncelleme_hata AS "logoGuncellemeHata",
       logo_kapatma_durumu AS "logoKapatmaDurumu", logo_kapatma_hata AS "logoKapatmaHata",
-      logo_bekletme_istegi AS "logoBekletmeIstegi", logo_bekletme_durumu AS "logoBekletmeDurumu", logo_bekletme_hata AS "logoBekletmeHata"
+      logo_bekletme_istegi AS "logoBekletmeIstegi", logo_bekletme_durumu AS "logoBekletmeDurumu", logo_bekletme_hata AS "logoBekletmeHata",
+      teslim_yeri AS "teslimYeri", tedarikci_notu AS "tedarikciNotu", ic_not AS "icNot"
       FROM satin_alma_siparis WHERE talep_id = ANY($1::uuid[]) ORDER BY talep_id, id`),
     siparisSatirlari: await q(`SELECT s.talep_id AS "talepId", s.teklif_id AS "teklifId", s.id, s.kalem_id AS "kalemId", s.miktar, s.birim,
-        s.parca_revizyonu AS "parcaRevizyonu"
+        s.parca_revizyonu AS "parcaRevizyonu", s.beklenen_teslim::text AS "beklenenTeslim", s.notlar
       FROM satin_alma_siparis_satiri s JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
       WHERE s.talep_id = ANY($1::uuid[]) ORDER BY s.talep_id, s.teklif_id, k.sira`),
     onaylar: await q(`SELECT talep_id AS "talepId", id, ${ISO('zaman')} AS zaman, kisi_id AS "kisiId", sonuc, dort_gozsuz AS "dortGozsuz", notlar
@@ -438,10 +444,14 @@ export async function altKayitlariYaz(db: Db, t: TalepYazimi, yeniSiparisNo: () 
       const mevcut = await db.tek('SELECT 1 FROM satin_alma_siparis WHERE talep_id = $1 AND teklif_id = $2', [id, s.teklifId]);
       const no = mevcut ? null : await yeniSiparisNo();
       await db.sorgu(
-        `INSERT INTO satin_alma_siparis (talep_id, teklif_id, no, siparis_no, siparis_tarihi, beklenen_teslim, vade_baslangici) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        // 3574-1: başlık ayrıntısını bilmeyen ekran (gönderilmeyen alan) kaydedince saklanan değer korunur.
+        `INSERT INTO satin_alma_siparis (talep_id, teklif_id, no, siparis_no, siparis_tarihi, beklenen_teslim, vade_baslangici, teslim_yeri, tedarikci_notu, ic_not)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, coalesce($8, ''), coalesce($9, ''), coalesce($10, ''))
          ON CONFLICT (talep_id, teklif_id) DO UPDATE SET siparis_no = EXCLUDED.siparis_no, siparis_tarihi = EXCLUDED.siparis_tarihi,
-           beklenen_teslim = EXCLUDED.beklenen_teslim, vade_baslangici = EXCLUDED.vade_baslangici`,
-        [id, s.teklifId, no, s.siparisNo, s.siparisTarihi, s.beklenenTeslim, s.vadeBaslangici],
+           beklenen_teslim = EXCLUDED.beklenen_teslim, vade_baslangici = EXCLUDED.vade_baslangici,
+           teslim_yeri = coalesce($8, satin_alma_siparis.teslim_yeri), tedarikci_notu = coalesce($9, satin_alma_siparis.tedarikci_notu),
+           ic_not = coalesce($10, satin_alma_siparis.ic_not)`,
+        [id, s.teklifId, no, s.siparisNo, s.siparisTarihi, s.beklenenTeslim, s.vadeBaslangici, s.teslimYeri ?? null, s.tedarikciNotu ?? null, s.icNot ?? null],
       );
       // Sipariş satırları: tek kararda teklifin fiyat verdiği kalemler, kalem bazlı kararda o teklife atananlar. Kimlik korunur
       // (stokun mal kabulü ve GKK buna bağlanır); kapsamdan çıkan satır silinir, miktarı boş kalem satır olmaz.
@@ -899,7 +909,7 @@ export function siparisSatirlariOku(db: Db, idler: readonly number[] | null): Pr
   return db.sorgu<SiparisSatiriOkuma>(
     `SELECT s.id, s.talep_id AS "talepId", t.no AS "talepNo", coalesce(p.no, p.siparis_no) AS "siparisNo", q.firma_id AS "firmaId", q.tedarikci_adi AS "tedarikciAdi",
         ${ALTERNATIF_KARTI('s')} AS "malzemeNo", k.ad AS "kalemAdi", s.miktar, greatest(s.miktar - coalesce(m.toplam, 0), 0)::text AS "kalanMiktar", s.birim,
-        p.beklenen_teslim AS "beklenenTeslim", s.is_emri_id AS "isEmriId", s.parca_revizyonu AS "parcaRevizyonu",
+        coalesce(s.beklenen_teslim, p.beklenen_teslim) AS "beklenenTeslim", s.is_emri_id AS "isEmriId", s.parca_revizyonu AS "parcaRevizyonu",
         coalesce(k.uygulanan_malzeme_no, ${ALTERNATIF_KARTI('s')}) AS "revizyonMalzemeNo"
        FROM satin_alma_siparis_satiri s
        JOIN satin_alma_siparis p ON p.talep_id = s.talep_id AND p.teklif_id = s.teklif_id
@@ -910,7 +920,7 @@ export function siparisSatirlariOku(db: Db, idler: readonly number[] | null): Pr
        LEFT JOIN LATERAL (SELECT sum(x.miktar) AS toplam FROM satin_alma_teslim x WHERE x.siparis_satiri_id = s.id) m ON true
       WHERE ($1::int[] IS NULL AND t.durum = 'siparis_verildi' AND p.logo_kapatma_durumu IS NULL AND coalesce(m.toplam, 0) < s.miktar)
          OR s.id = ANY($1::int[])
-      ORDER BY p.beklenen_teslim NULLS LAST, t.yil, t.sira, k.sira`,
+      ORDER BY coalesce(s.beklenen_teslim, p.beklenen_teslim) NULLS LAST, t.yil, t.sira, k.sira`,
     [idler],
   );
 }
@@ -943,7 +953,7 @@ export function alternatifSiparisSatirlari(db: Db, talepId: string): Promise<Alt
 export interface MalzemeGelisiOkuma { malzemeNo: number; tarih: string | null; miktar: string; birim: string; siparisNo: string; satirId: number; tedarikciAdi: string | null }
 export function malzemeGelisleriOku(db: Db, malzemeNolar: readonly number[]): Promise<MalzemeGelisiOkuma[]> {
   return db.sorgu<MalzemeGelisiOkuma>(
-    `SELECT ${ALTERNATIF_KARTI('s')} AS "malzemeNo", p.beklenen_teslim AS tarih, (s.miktar - coalesce(m.toplam, 0))::text AS miktar, s.birim,
+    `SELECT ${ALTERNATIF_KARTI('s')} AS "malzemeNo", coalesce(s.beklenen_teslim, p.beklenen_teslim) AS tarih, (s.miktar - coalesce(m.toplam, 0))::text AS miktar, s.birim,
         coalesce(p.no, p.siparis_no) AS "siparisNo", s.id AS "satirId", nullif(q.tedarikci_adi, '') AS "tedarikciAdi"
        FROM satin_alma_siparis_satiri s
        JOIN satin_alma_siparis p ON p.talep_id = s.talep_id AND p.teklif_id = s.teklif_id
@@ -954,7 +964,7 @@ export function malzemeGelisleriOku(db: Db, malzemeNolar: readonly number[]): Pr
        LEFT JOIN LATERAL (SELECT sum(x.miktar) AS toplam FROM satin_alma_teslim x WHERE x.siparis_satiri_id = s.id) m ON true
       WHERE ${ALTERNATIF_KARTI('s')} = ANY($1::int[]) AND t.durum = 'siparis_verildi' AND p.logo_kapatma_durumu IS NULL AND coalesce(m.toplam, 0) < s.miktar
         AND k.satis_siparis_satiri_id IS NULL
-      ORDER BY ${ALTERNATIF_KARTI('s')}, p.beklenen_teslim NULLS LAST, t.yil, t.sira, k.sira`,
+      ORDER BY ${ALTERNATIF_KARTI('s')}, coalesce(s.beklenen_teslim, p.beklenen_teslim) NULLS LAST, t.yil, t.sira, k.sira`,
     [[...malzemeNolar]],
   );
 }
@@ -976,7 +986,7 @@ const ONAYLI_TALEP_KALEMI = `FROM satin_alma_talep t
 export interface TalepGelisiOkuma { malzemeNo: number; tarih: string | null; miktar: string; satirId: number }
 export function talepGelisleriOku(db: Db, talepId: string): Promise<TalepGelisiOkuma[]> {
   return db.sorgu<TalepGelisiOkuma>(
-    `SELECT ${ALTERNATIF_KARTI('s')} AS "malzemeNo", p.beklenen_teslim AS tarih, (s.miktar - coalesce(m.toplam, 0))::text AS miktar, s.id AS "satirId"
+    `SELECT ${ALTERNATIF_KARTI('s')} AS "malzemeNo", coalesce(s.beklenen_teslim, p.beklenen_teslim) AS tarih, (s.miktar - coalesce(m.toplam, 0))::text AS miktar, s.id AS "satirId"
        FROM satin_alma_siparis_satiri s
        JOIN satin_alma_siparis p ON p.talep_id = s.talep_id AND p.teklif_id = s.teklif_id
        JOIN satin_alma_talep t ON t.id = s.talep_id
@@ -1777,7 +1787,7 @@ export function analizTalepAsamalari(db: Db, basTarih: string, saatDilimi: strin
   return db.sorgu<TalepAsamaOkuma>(
     `SELECT t.id AS "talepId", ((t.olusturma AT TIME ZONE $2)::date)::text AS acilis,
             (SELECT min(i.gonderim) FROM satin_alma_teklif_istegi i WHERE i.talep_id = t.id)::text AS "ilkIstek",
-            (SELECT max(q.teklif_tarihi) FROM satin_alma_teklif q WHERE q.talep_id = t.id)::text AS "sonTeklif",
+            (SELECT max(q.teklif_tarihi) FROM satin_alma_teklif q WHERE q.talep_id = t.id AND q.kaynak = 'teklif')::text AS "sonTeklif",
             kr.karar_tarihi::text AS karar, kr.karar_veren_kisi_id AS "kararVeren",
             (SELECT ((max(o.zaman) AT TIME ZONE $2)::date)::text FROM satin_alma_onay o WHERE o.talep_id = t.id AND o.sonuc = 'onay') AS "sonOnay",
             (SELECT min(sp.siparis_tarihi) FROM satin_alma_siparis sp WHERE sp.talep_id = t.id)::text AS siparis,
@@ -1802,7 +1812,7 @@ export function analizSiparisBaglari(db: Db, basTarih: string, saatDilimi: strin
   return db.sorgu(
     `SELECT r.id, r.talep_id AS "talepId", r.teklif_id AS "teklifId", r.kalem_id AS "kalemId",
             ((tl.olusturma AT TIME ZONE $2)::date)::text AS "talepAcilis",
-            (SELECT count(*)::int FROM satin_alma_teklif q WHERE q.talep_id = r.talep_id) AS "teklifSayisi"
+            (SELECT count(*)::int FROM satin_alma_teklif q WHERE q.talep_id = r.talep_id AND q.kaynak = 'teklif') AS "teklifSayisi"
        FROM satin_alma_siparis_satiri r
        JOIN satin_alma_siparis s ON s.talep_id = r.talep_id AND s.teklif_id = r.teklif_id
        JOIN satin_alma_talep tl ON tl.id = r.talep_id AND tl.durum <> 'iptal'
@@ -1823,7 +1833,7 @@ export function analizTeklifFiyatlari(db: Db, talepIdler: readonly string[]): Pr
             q.teknik_uygun AS "teknikUygun"
        FROM satin_alma_teklif_satiri f JOIN satin_alma_teklif q ON q.talep_id = f.talep_id AND q.id = f.teklif_id
        JOIN satin_alma_talep_kalemi k ON k.talep_id = f.talep_id AND k.id = f.kalem_id
-      WHERE f.talep_id = ANY($1::uuid[])`,
+      WHERE f.talep_id = ANY($1::uuid[]) AND q.kaynak = 'teklif'`,
     [talepIdler],
   );
 }
@@ -1907,7 +1917,7 @@ export function hatirlatmaTalepleriOku(db: Db): Promise<HatirlatmaTalebiOkuma[]>
           LEFT JOIN LATERAL (SELECT q.id, q.tedarikci_adi FROM satin_alma_teklif q WHERE q.talep_id = r.talep_id AND q.firma_id = r.firma_id LIMIT 1) q1 ON true
           WHERE r.talep_id = t.id), '[]') AS istekler,
         coalesce((SELECT json_agg(json_build_object('teklifId', q.id, 'tedarikci', q.tedarikci_adi, 'gecerlilik', to_char(q.gecerlilik, 'YYYY-MM-DD')) ORDER BY q.sira, q.id)
-          FROM satin_alma_teklif q WHERE q.talep_id = t.id), '[]') AS teklifler,
+          FROM satin_alma_teklif q WHERE q.talep_id = t.id AND q.kaynak = 'teklif'), '[]') AS teklifler,
         coalesce((SELECT json_agg(json_build_object('teklifId', p.teklif_id, 'siparisNo', coalesce(p.no, p.siparis_no), 'beklenenTeslim', to_char(p.beklenen_teslim, 'YYYY-MM-DD'))
             ORDER BY p.teklif_id)
           FROM satin_alma_siparis p
@@ -2222,4 +2232,57 @@ export function cizimKaldirmalari(db: Db, talepId: string): Promise<{ ad: string
     `SELECT ad, kaldiran_id AS "kaldiranId", ${zamanMetni('zaman')} AS zaman FROM satin_alma_talep_cizim_kaldirma WHERE talep_id = $1 ORDER BY zaman, id`,
     [talepId],
   );
+}
+// ---- 3574-1: sipariş satırları (pay, satır termini, firma başlığı) ve onay bekleyen sipariş.
+// Siparişte açılan firmanın kaydı (R2); var olan kaydın kaynağı değişmez.
+export async function teklifKaynaginiYaz(db: Db, talepId: string, teklifIdleri: readonly string[]): Promise<void> {
+  if (teklifIdleri.length === 0) return;
+  await db.sorgu("UPDATE satin_alma_teklif SET kaynak = 'siparis' WHERE talep_id = $1 AND id = ANY($2::uuid[])", [talepId, [...teklifIdleri]]);
+}
+// Bölünen kalemin yeni payı kaynağın kalem başına alanlarını (kalem termini ve emri) taşır; kimlik ve sıra kendisinindir.
+export async function kalemAyrintisiniKopyala(db: Db, talepId: string, kopyalar: readonly { kaynak: string; yeni: string }[]): Promise<void> {
+  if (kopyalar.length === 0) return;
+  await db.sorgu(
+    `UPDATE satin_alma_talep_kalemi n SET ihtiyac_tarihi = o.ihtiyac_tarihi, uretim_emri_id = o.uretim_emri_id
+       FROM unnest($2::uuid[], $3::uuid[]) AS c(kaynak, yeni)
+       JOIN satin_alma_talep_kalemi o ON o.talep_id = $1 AND o.id = c.kaynak
+      WHERE n.talep_id = $1 AND n.id = c.yeni`,
+    [talepId, kopyalar.map((x) => x.kaynak), kopyalar.map((x) => x.yeni)]);
+}
+export async function siparisSatirBilgileriYaz(
+  db: Db, talepId: string, satirlar: readonly { teklifId: string; kalemId: string; beklenenTeslim: string | null; notlar: string }[],
+): Promise<void> {
+  if (satirlar.length === 0) return;
+  await db.sorgu(
+    `UPDATE satin_alma_siparis_satiri s SET beklenen_teslim = b.termin, notlar = b.notlar
+       FROM unnest($2::uuid[], $3::uuid[], $4::date[], $5::text[]) AS b(teklif, kalem, termin, notlar)
+      WHERE s.talep_id = $1 AND s.teklif_id = b.teklif AND s.kalem_id = b.kalem`,
+    [talepId, satirlar.map((x) => x.teklifId), satirlar.map((x) => x.kalemId), satirlar.map((x) => x.beklenenTeslim), satirlar.map((x) => x.notlar)]);
+}
+export interface SiparisOnerisiOkuma {
+  talepId: string; govde: unknown; onayliTutar: string | null; yeniTutar: string | null; yeniFirmalar: string[]; gerekce: string;
+  onerenKisiId: number; zaman: string;
+}
+export function siparisOnerileriOku(db: Db, talepIdleri: readonly string[]): Promise<SiparisOnerisiOkuma[]> {
+  if (talepIdleri.length === 0) return Promise.resolve([]);
+  return db.sorgu<SiparisOnerisiOkuma>(
+    `SELECT talep_id AS "talepId", govde, onayli_tutar::text AS "onayliTutar", yeni_tutar::text AS "yeniTutar", yeni_firmalar AS "yeniFirmalar",
+            gerekce, oneren_kisi_id AS "onerenKisiId", ${ISO('olusturma')} AS zaman
+       FROM satin_alma_siparis_onerisi WHERE talep_id = ANY($1::uuid[])`,
+    [[...talepIdleri]]);
+}
+// Talep başına tek bekleyen (birincil anahtar): ikinci öneri çakışır, sessizce üstüne yazılmaz.
+export async function siparisOnerisiEkle(db: Db, o: Omit<SiparisOnerisiOkuma, 'zaman'>): Promise<boolean> {
+  const r = await db.sorgu(
+    `INSERT INTO satin_alma_siparis_onerisi (talep_id, govde, onayli_tutar, yeni_tutar, yeni_firmalar, gerekce, oneren_kisi_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (talep_id) DO NOTHING RETURNING talep_id`,
+    [o.talepId, JSON.stringify(o.govde), o.onayliTutar, o.yeniTutar, o.yeniFirmalar, o.gerekce, o.onerenKisiId]);
+  return r.length > 0;
+}
+// 3574-1 Risk L1: Logo'ya gitmiş talep kalemi (talep satırı Logo'da); bölünürse yeni pay Logo karşılaması göndermez, bölünmez.
+export async function logoyaGitmisKalemler(db: Db, talepId: string): Promise<string[]> {
+  return (await db.sorgu<{ id: string }>('SELECT id FROM satin_alma_talep_kalemi WHERE talep_id = $1 AND logo_satir_ref IS NOT NULL', [talepId])).map((x) => x.id);
+}
+export async function siparisOnerisiSil(db: Db, talepId: string): Promise<void> {
+  await db.sorgu('DELETE FROM satin_alma_siparis_onerisi WHERE talep_id = $1', [talepId]);
 }

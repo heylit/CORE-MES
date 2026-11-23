@@ -24,6 +24,8 @@ const RESTRICT_ANAHTARLARI = [
   'satin_alma_onay_limiti.rol_id -> rol',
   // 3442-7b a: onay basamağına yazılı kişi silinmez; silinse basamak sessizce gevşerdi.
   'satin_alma_onay_limiti_kisi.kisi_id -> kisi',
+  // 3574-1: bekleyen sipariş önerisini yazan kişi silinmez; silinse onay bekleyen para kararı sahipsiz kalır ve dört göz denetimi (öneren onaylayamaz) boşalırdı.
+  'satin_alma_siparis_onerisi.oneren_kisi_id -> kisi',
   // 2414 a: birleşmiş kaynak ve kalemi kaynakta olan talep silinmez; silinse birleşik talep kaynağını, kalem geri döneceği yeri yitirirdi.
   'satin_alma_talep.birlesen_talep_id -> satin_alma_talep',
   // 2876: güncellemesi olan kök talep silinmez; silinse güncelleme talebi grubunu ve otomatik iptalin bağını yitirirdi (servis önce 409 ile reddeder).
@@ -123,6 +125,25 @@ describe('RESTRICT yabancı anahtar (bütün göçler, gerçek PostgreSQL)', () 
     assert.ok(['23503', '23001'].includes(String(ihlal?.iz.pgKodu)));
     await uygulama.tx((db) => db.sorgu('DELETE FROM kisi WHERE id = $1', [bos]));
     assert.equal((await s.tek<{ n: number }>('SELECT count(*)::int AS n FROM kisi WHERE id = ANY($1)', [[yazili, bos]]))?.n, 1);
+  });
+
+  test('3574-1: bekleyen sipariş önerisini yazan kişinin silinmesi 409 BAGIMLI_KAYIT; önerisiz kişi silinir', async () => {
+    const { vt: uygulama, sahip: s } = acik();
+    const kisi = async (ad: string): Promise<number> => (await s.tek<{ id: number }>('INSERT INTO kisi (ad) VALUES ($1) RETURNING id', [ad]))!.id;
+    const oneren = await kisi('Deneme Öneren Kişi');
+    const bos = await kisi('Deneme Önerisiz Kişi');
+    const talep = (await s.tek<{ id: string }>(
+      "INSERT INTO satin_alma_talep (id, no, acan_kisi_id, baslik, talep_eden_kisi_id) VALUES (gen_random_uuid(), 'RT-ONERI', $1, 'Deneme', $1) RETURNING id", [bos]))!.id;
+    await s.sorgu("INSERT INTO satin_alma_siparis_onerisi (talep_id, govde, gerekce, oneren_kisi_id) VALUES ($1, '{}'::jsonb, 'Deneme gerekçe', $2)", [talep, oneren]);
+    const ham = await uygulama.tx((db) => db.sorgu('DELETE FROM kisi WHERE id = $1', [oneren])).catch((h: unknown) => h);
+    const ihlal = kisitIhlali(ham);
+    assert.equal(ihlal?.hata.kod, 'BAGIMLI_KAYIT');
+    assert.equal(ihlal?.iz.kisit, 'satin_alma_siparis_onerisi_oneren');
+    assert.ok(['23503', '23001'].includes(String(ihlal?.iz.pgKodu)));
+    await s.sorgu('DELETE FROM satin_alma_siparis_onerisi WHERE talep_id = $1', [talep]);
+    await s.sorgu('DELETE FROM satin_alma_talep WHERE id = $1', [talep]);
+    await uygulama.tx((db) => db.sorgu('DELETE FROM kisi WHERE id = $1', [bos]));
+    assert.equal((await s.tek<{ n: number }>('SELECT count(*)::int AS n FROM kisi WHERE id = ANY($1)', [[oneren, bos]]))?.n, 1);
   });
 
   test('2414 a: birleşik talebi ya da kalemi birleşikte olan kaynak talebi silmek 409 BAGIMLI_KAYIT; bağsız talep silinir', async () => {
