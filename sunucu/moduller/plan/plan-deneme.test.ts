@@ -228,6 +228,34 @@ describe('plan (gerçek PostgreSQL): denemeler, sayaçlar ve sorgu sayısı', ()
     assert.ok(yb.uyarilar.some((u) => /rotadaki/.test(u)), JSON.stringify(yb.uyarilar));
   });
 
+  // 3600 (R2): kalanı baştan kurda dizilen başlamış işin yeni yeri öncülden sonra gelir, ardılı yerinde kalır: ardılın emri 308 b'ye girer.
+  test('308 b / 3600 R2: başlamış işin taslakta ileri kayan yeri, ardılı yerinde kalırsa canlıya alınmaz', async () => {
+    const [a1, a2] = await isEmirleriAc([yeniAdim(), yeniAdim()]);
+    let p = await taslaktaOner();
+    const s1 = await gonder(p.taslak!.id, p.taslak!.surum);
+    const ilk = await istek(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: s1, cakismalariKabul: true });
+    assert.equal(ilk.statusCode, 200, ilk.body);
+    await isEmriDurumu(a1!, 'calisiyor');
+    const canliArdil = (await planOku()).yerlesimler.find((x) => x.isEmriId === a2)!;
+    p = await taslaktaOner();
+    // Ardıl canlıdaki yerinde kalır (yalnız başlamış iş kayar): ardılın kendisi taslakta değişmiş sayılmaz.
+    await ortam!.sahip.sorgu(
+      'UPDATE plan_senaryo_yerlesimi SET baslangic = $3, bitis = $4 WHERE senaryo_id = $1 AND is_emri_id = $2',
+      [p.taslak!.id, a2!, canliArdil.baslangic, canliArdil.bitis]);
+    const ardil = Date.parse(canliArdil.baslangic);
+    await ortam!.sahip.sorgu(
+      'UPDATE plan_senaryo_yerlesimi SET baslangic = $3, bitis = $3::timestamptz + interval \'10 minutes\' WHERE senaryo_id = $1 AND is_emri_id = $2',
+      [p.taslak!.id, a1!, new Date(ardil + 3600_000).toISOString()]);
+    p = await planOku(p.taslak!.id);
+    assert.equal(yer(p, a2!).baslangic, canliArdil.baslangic);
+    const s2 = await gonder(p.taslak!.id, p.taslak!.surum);
+    const al = await istek(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: s2, cakismalariKabul: true });
+    assert.equal(al.statusCode, 409, al.body);
+    assert.match(al.body, /sıraya aykırı/);
+    await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: await cek(p.taslak!.id, s2) });
+    await isEmriDurumu(a1!, 'bekliyor');
+  });
+
   test('H2: fasona alınan adımın eski yerleşimi kuyruğu ve taşımayı tıkamaz', async () => {
     const [a] = await isEmirleriAc([yeniAdim()]);
     const [b] = await isEmirleriAc([yeniAdim()]);

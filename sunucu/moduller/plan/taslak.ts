@@ -27,8 +27,13 @@ const HESAPLAR: TaslakHesaplari = { tasima: tasimaHesabi, planaAlma: planaAlmaHe
 export const KILIT_KALDIRMA_ISLEMI = 'plan.kilitle' as const;
 const KILIT_KALDIRMA_YETKISIZ = 'Kilitleri kaldırarak baştan kurmak plan kilitleme yetkisi ister.';
 const kilitKaldirir = (k: SatirKomutu): boolean => k.tur === 'yeniden-planla' && k.kilitKaldir === true;
+// 3600 (Risk R7): başlamış işin kalanını dizmek yalnız yöneticidedir (plan.baslamis-diz; hiçbir role verilmez). Tek sabit, iki denetim yeri.
+export const BASLAMIS_DIZME_ISLEMI = 'plan.baslamis-diz' as const;
+const BASLAMIS_DIZME_YETKISIZ = 'Başlamış işlerin kalanını dizmek yönetici yetkisi ister (plan.baslamis-diz).';
+const baslamisDizer = (k: SatirKomutu): boolean => k.tur === 'yeniden-planla' && k.baslamisDiz === true;
 const kilitYetkisiDenetle = (kullanici: Kullanici, komutlar: readonly SatirKomutu[]): void => {
   if (komutlar.some(kilitKaldirir) && !islemVarMi(kullanici, KILIT_KALDIRMA_ISLEMI)) throw yetkiYok(KILIT_KALDIRMA_YETKISIZ);
+  if (komutlar.some(baslamisDizer) && !islemVarMi(kullanici, BASLAMIS_DIZME_ISLEMI)) throw yetkiYok(BASLAMIS_DIZME_YETKISIZ);
 };
 const kisiOf = (kullanici: Kullanici, simdi: number) => ({ kim: kullanici.ad, sayfa: SAYFA, t: simdi });
 

@@ -591,7 +591,11 @@ function planUygula(isler) {
      yeniden dizilir. Motor böyle işi kendiliğinden yerinde tutar (çalışıyor sayar); yeniden planlama kişinin açık isteğidir. Başvuru
      planından da çıkar: değişiklik bütçesi işi eski yerine geri çekmesin. İstenmeyen emirlerin geride işleri yerinde kalır. */
   const geride = {}; const g = st.gercek || {};
-  for (const r of Object.values(S.plan.ops)) if ((hepsi || etk.has(r.job)) && (acikHepsi || acik.has(r.job)) && var_.has(r.job) && !st.locks[r.id] && !r.fas && !r.done && !r.act && !(g[r.id] && g[r.id].S != null) && isFinite(r.S) && r.S < st.now - 1e-9 && r.C > st.now + 1e-9) geride[r.id] = 1;
+  /* 3600: durdurulan (başlamış, kalanı dizilecek) iş de geride işi gibi şimdiden sonraya dizilir; yapılan kısım geçmişte kalır, kalan adet motora girdide verilir. */
+  const dur = S.w && S.w.durdurulan && typeof S.w.durdurulan === 'object' ? S.w.durdurulan : {};
+  for (const r of Object.values(S.plan.ops)) if ((hepsi || etk.has(r.job)) && (acikHepsi || acik.has(r.job)) && var_.has(r.job) && !st.locks[r.id] && !r.fas && !r.done && (!r.act || dur[r.id]) && !(g[r.id] && g[r.id].S != null) && isFinite(r.S) && r.S < st.now - 1e-9 && r.C > st.now + 1e-9) geride[r.id] = 1;
+  /* R1: başlamış işin kalanı aynı tezgâhta kalır (terminaldeki kişi ve makine plandan ayrışmasın); yalnız zaman ve sıra değişir. */
+  for (const id of Object.keys(geride)) if (dur[id] && !st.locks[id] && S.plan.ops[id].m) st.pref[id] = S.plan.ops[id].m;
   const gerideVar = Object.keys(geride).length > 0; if (gerideVar) st.geride = geride;
   /* Geride işi olan emrin öteki işleri denge ufku için geçici kilitlenmiş olabilir; kilitli ardıl eski saatinde kalır ve ileri kayan
      öncülünden önce başlardı. O emrin geçici kilitleri kalkar (elle kilit durur). */

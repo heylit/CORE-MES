@@ -6,5 +6,6 @@
 // planlamadadır (775 b).
 // Plan motorunun ufku ve zaman dilimi (plan.motor-ufuk-gun, plan.motor-dilim-dk) Planlama ayarları sayfasından plan.sistem-ayari ile değişir;
 // planlama müdürü ve yönetici taşır (3557 c, 3560). Dört göz, tipli girdi ve bakım girdisi ayarlar.yaz'da (yönetici) kalır.
+// Baştan kurda başlamış işin kalan kısmını da dizmek plan.baslamis-diz ister (3600); yalnız bayraklı yönetici taşır, hiçbir role verilmez; canlıya alma yetkisine bağlı değildir.
 // Planlama sayfalarını (motor, atölye, planlama görünümleri) görmek plan.planlama-oku; yönetici, müdür ve planlamadadır (195 a, 663 a).
-export const PLAN_ISLEMLERI = ['plan.planlama-oku', 'plan.oku', 'plan.yaz', 'plan.kilitle', 'plan.studyo', 'plan.canliya-al', 'plan.bedel-ayari', 'plan.motor-ayari', 'plan.sistem-ayari'] as const;
+export const PLAN_ISLEMLERI = ['plan.planlama-oku', 'plan.oku', 'plan.yaz', 'plan.kilitle', 'plan.studyo', 'plan.canliya-al', 'plan.bedel-ayari', 'plan.motor-ayari', 'plan.sistem-ayari', 'plan.baslamis-diz'] as const;

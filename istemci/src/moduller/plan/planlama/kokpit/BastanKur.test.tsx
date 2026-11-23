@@ -15,7 +15,7 @@ function ciz(ek: Partial<BastanKurOzellikleri> = {}, kartSayisi = 3) {
   emirler.forEach((e, i) => { isler[`${e.id}.10`] = is(`${e.id}.10`, 20 + i, i === 0 ? { kilitli: true } : {}); });
   isler['1.20'] = is('1.20', 4, { basladi: true });
   const vazgec = vi.fn(), onayla = vi.fn();
-  render(<BastanKur m={{ simdi: 10, emirler, isler }} kartlar={emirler.map(kart)} planYok={false} kilitYetkisi ilkKapsam="tum" ilkSecili={[]} vazgec={vazgec} onayla={onayla} {...ek} />);
+  render(<BastanKur m={{ simdi: 10, emirler, isler }} kartlar={emirler.map(kart)} planYok={false} kilitYetkisi baslamisYetkisi={false} gercek={null} ilkKapsam="tum" ilkSecili={[]} vazgec={vazgec} onayla={onayla} {...ek} />);
   return { vazgec, onayla, pencere: screen.getByRole('dialog', { name: 'Planı baştan kur' }) };
 }
 
@@ -28,7 +28,7 @@ describe('BastanKur penceresi (3600)', () => {
     expect(pencere.textContent).toContain('Onayda 1 elle kilit kalkar; Geri al ile döner.');
     expect(pencere.textContent).toContain('1 başlamış iş yerinde kalır');
     fireEvent.click(within(pencere).getByRole('button', { name: 'Bütün planı baştan kur' }));
-    expect(onayla).toHaveBeenCalledWith({ isler: ['*'], kilitKaldir: true, ileti: 'Plan baştan kuruldu; 1 kilit kalktı.' });
+    expect(onayla).toHaveBeenCalledWith({ isler: ['*'], kilitKaldir: true, baslamisDiz: false, ileti: 'Plan baştan kuruldu; 1 kilit kalktı.' });
   });
 
   it('kilit anahtarı kapatılınca kilit kalkmaz ve komut kilitKaldir taşımaz', () => {
@@ -36,7 +36,7 @@ describe('BastanKur penceresi (3600)', () => {
     fireEvent.click(within(pencere).getByRole('switch', { name: 'Kilitli işleri de diz' }));
     expect(pencere.textContent).toContain('1 kilitli iş yerinde kalır.');
     fireEvent.click(within(pencere).getByRole('button', { name: 'Bütün planı baştan kur' }));
-    expect(onayla).toHaveBeenCalledWith({ isler: ['*'], kilitKaldir: false, ileti: 'Plan baştan kuruldu.' });
+    expect(onayla).toHaveBeenCalledWith({ isler: ['*'], kilitKaldir: false, baslamisDiz: false, ileti: 'Plan baştan kuruldu.' });
   });
 
   it('kilitleme yetkisi yoksa anahtar pasif ve kapalıdır, nedeni yazar; komut kilit kaldırmaz', () => {
@@ -58,14 +58,14 @@ describe('BastanKur penceresi (3600)', () => {
     expect(dugme('1 siparişi baştan kur').disabled).toBe(false);
     // Kilitli iş seçilmedi: kalkacak kilit yok.
     fireEvent.click(dugme('1 siparişi baştan kur'));
-    expect(onayla).toHaveBeenCalledWith({ isler: ['2'], kilitKaldir: false, ileti: '1 sipariş baştan kuruldu.' });
+    expect(onayla).toHaveBeenCalledWith({ isler: ['2'], kilitKaldir: false, baslamisDiz: false, ileti: '1 sipariş baştan kuruldu.' });
   });
 
   it('menüden seçili sipariş işaretli açılır; kilitli siparişte kilit sayısı onay metnine girer', () => {
     const { pencere, onayla } = ciz({ ilkKapsam: 'secili', ilkSecili: ['1'] });
     expect((within(pencere).getByRole('checkbox', { name: /ORN-UE-1/ }) as HTMLInputElement).checked).toBe(true);
     fireEvent.click(within(pencere).getByRole('button', { name: '1 siparişi baştan kur' }));
-    expect(onayla).toHaveBeenCalledWith({ isler: ['1'], kilitKaldir: true, ileti: '1 sipariş baştan kuruldu; 1 kilit kalktı.' });
+    expect(onayla).toHaveBeenCalledWith({ isler: ['1'], kilitKaldir: true, baslamisDiz: false, ileti: '1 sipariş baştan kuruldu; 1 kilit kalktı.' });
   });
 
   it('arama listeyi daraltır; çok sipariş varsa ilk altısı gösterilir ve aramayı daraltmak söylenir; görünmeyen seçim çıkarılabilir', () => {
@@ -92,5 +92,39 @@ describe('BastanKur penceresi (3600)', () => {
     fireEvent.click(within(pencere).getByRole('button', { name: 'Vazgeç' }));
     expect(vazgec).toHaveBeenCalled();
     expect(onayla).not.toHaveBeenCalled();
+  });
+
+  it('başlamış iş anahtarı yetkisizde pasif ve nedenini yazar; yetkilide varsayılan kapalıdır ve başlamış iş yerinde kalır', () => {
+    const { pencere, onayla } = ciz();
+    const anahtar = within(pencere).getByRole('switch', { name: 'Başlamış işlerin kalanını da diz' });
+    expect((anahtar as HTMLButtonElement).disabled).toBe(true);
+    expect(pencere.textContent).toContain('Kalanını dizmek yönetici yetkisi ister (plan.baslamis-diz).');
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Bütün planı baştan kur' }));
+    expect(onayla.mock.calls[0]![0]).toMatchObject({ baslamisDiz: false });
+    cleanup();
+    const { pencere: y } = ciz({ baslamisYetkisi: true });
+    expect(within(y).getByRole('switch', { name: 'Başlamış işlerin kalanını da diz' }).getAttribute('aria-checked')).toBe('false');
+    expect(y.textContent).toContain('1 başlamış iş yerinde kalır');
+  });
+
+  it('başlamış anahtarı açılınca düğme Devam olur; ikinci pencere etkilenen işi yazar, odak Vazgeç\'te, Esc yalnız onu kapatır; onay komuta baslamisDiz taşır', () => {
+    const { pencere, onayla } = ciz({ baslamisYetkisi: true, gercek: { '1.20': { S: 4, n: 3, A: 10 } } });
+    fireEvent.click(within(pencere).getByRole('switch', { name: 'Başlamış işlerin kalanını da diz' }));
+    expect(pencere.textContent).toContain('Başlamış işlerin kalanı dizilir');
+    expect(pencere.textContent).toMatch(/Yeniden dizilir4 iş/);
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Devam' }));
+    expect(onayla).not.toHaveBeenCalled();
+    const ikinci = screen.getByRole('dialog', { name: 'Başlamış işler de dizilsin mi?' });
+    expect(ikinci.textContent).toContain('ORN-UE-1 · Adım 1.20');
+    expect(ikinci.textContent).toContain('yapılan 3 / kalan 7');
+    expect(ikinci.textContent).toContain('terminalde çalışıyor');
+    expect(document.activeElement).toBe(within(ikinci).getByRole('button', { name: 'Vazgeç' }));
+    fireEvent.keyDown(ikinci, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Başlamış işler de dizilsin mi?' })).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Planı baştan kur' })).toBeTruthy();
+    expect(onayla).not.toHaveBeenCalled();
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Planı baştan kur' })).getByRole('button', { name: 'Devam' }));
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Başlamış işler de dizilsin mi?' })).getByRole('button', { name: 'Başlamış işlerle birlikte diz' }));
+    expect(onayla).toHaveBeenCalledWith({ isler: ['*'], kilitKaldir: true, baslamisDiz: true, ileti: 'Plan baştan kuruldu; 1 kilit kalktı; 1 başlamış işin kalanı dizildi.' });
   });
 });

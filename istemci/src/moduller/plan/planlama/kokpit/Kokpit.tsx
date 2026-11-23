@@ -54,7 +54,9 @@ import { Tur, type TurDurumu } from './Tur.tsx';
 import { Yol } from './Yol.tsx';
 import { eksikPlanlanacaklar, yenidenPlanlanacaklar } from './yol.ts';
 import { BastanKur } from './BastanKur.tsx';
-import { ilkSecim, type BastanKurKapsami } from './bastan-kur.ts';
+import { BastanKurSonucu } from './BastanKurSonucu.tsx';
+import { ilkSecim, kilitIhlaliAyir, type BastanKurKapsami } from './bastan-kur.ts';
+import { KilitIhlali } from './KilitIhlali.tsx';
 import './kokpit.css';
 
 // Kokpit (kart 3151, 3282, 3297): planın tek yeri. Gövde yukarıdan aşağı akar (3297 a): 1 sipariş kartları sırasıyla (3297-5 a), 2 seçilen kartın emirleri
@@ -249,6 +251,9 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const [planlaDurumu, setPlanlaDurumu] = useState<PlanlaDurumu | null>(null);
   const [digerAcik, setDigerAcik] = useState(false);
   // 3600: Baştan kur penceresi; açılış kapsamı menüden gelir (Seçili siparişi baştan kur: o sipariş işaretli).
+  // Son baştan kurun kalıcı Geri al satırı (Arayüz Y9): sonraki plan değişikliğine ya da Kapat'a dek durur; kısa ömürlü bildirim yetmez.
+  const [sonBastanKur, setSonBastanKur] = useState<{ ileti: string; onceki: number; genis: boolean } | null>(null);
+  const [kilitIhlaliKapali, setKilitIhlaliKapali] = useState(false);
   const [bastanKur, setBastanKur] = useState<{ kapsam: BastanKurKapsami; secili: string[] } | null>(null);
   // Görünüm ve ölçek seçenekleri bir düğmenin ardındadır (3414); tahta dışı bir görünüm seçiliyken açık durur.
   const [gorunumAcik, setGorunumAcik] = useState(false);
@@ -337,10 +342,12 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     return tamam;
   }, [taslak, yazabilir, bildir, c, m.isler]);
   // Yeniden planlama isteği taslağa kendi satırıyla yazılır (Geri onu ve dizmesini birlikte alır); plan taslağın görünümünde yeniden dizilir.
-  const yenidenPlanla = useCallback(async (isler: readonly string[], ileti: string, kilitKaldir = false): Promise<void> => {
-    if (!taslak || !yazabilir || isler.length === 0) return;
+  const yenidenPlanla = useCallback(async (isler: readonly string[], ileti: string, kilitKaldir = false, baslamisDiz = false): Promise<boolean> => {
+    if (!taslak || !yazabilir || isler.length === 0) return false;
     // Sonuç dizme bitince söylenir: komut yazıldığında plan henüz yeniden dizilmemiştir (kişi düğmenin işe yaradığını bitişte görür).
-    if (await taslak.yaz({ tur: 'yeniden-planla', isler: [...isler], ...(kilitKaldir ? { kilitKaldir: true } : {}) })) planlaIletisi(`${ileti} Geri al ile alınır.`);
+    const tamam = await taslak.yaz({ tur: 'yeniden-planla', isler: [...isler], ...(kilitKaldir ? { kilitKaldir: true } : {}), ...(baslamisDiz ? { baslamisDiz: true } : {}) });
+    if (tamam) planlaIletisi(`${ileti} Geri al ile alınır.`);
+    return tamam;
   }, [taslak, yazabilir, planlaIletisi]);
   const planlaIste = useCallback((t: PlanlaIstegi['tur']) => { setPlanla((p) => ({ n: (p?.n ?? 0) + 1, tur: t })); }, []);
 
@@ -447,7 +454,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   // 3B'nin Yük ve gecikme ile Önce / sonra bakışları da onaylı planı okur (kart 3208 a).
   const canli = useCanliPlan(onceAcik || goz === 'B', c, p, o.depo.planSurumu?.planSurumu ?? null);
   const canliHata = canli.tur === 'hata' ? canli.ileti : null;
-  useEffect(() => { if (canliHata !== null) { bildir('hata', canliHata); setOnceAcik(false); } }, [canliHata, bildir]);
+  useEffect(() => { if (canliHata !== null) { bildir('hata', canliHata); setOnceAcik(false); setKilitIhlaliKapali(false); } }, [canliHata, bildir]);
   const once = onceAcik && canli.tur === 'tamam' ? canli.canli : null;
 
   // --- ölçek ---
@@ -797,9 +804,19 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     if (!komut.geriAl()) { bildir('hata', 'Geri alınamadı; başka biri planı değiştirdi.'); return; }
     setGuncelleme(null);
   }, [komut, bildir]);
-  const sonucCubugu = guncellemeSonucu && !tur && (
+  const kilitIhlali = canliHata !== null && !kilitIhlaliKapali ? kilitIhlaliAyir(canliHata) : null;
+  const ihlalEmri = kilitIhlali === null ? undefined : m.emirler.find((e) => e.no === kilitIhlali.emirNo);
+  const bastanKurSonucu = sonBastanKur !== null && tOzet.n === sonBastanKur.onceki + 1 && !tur;
+  const sonucCubugu = (guncellemeSonucu && !tur && (
     <GuncellemeSonucu e={guncellemeSonucu} m={m} zaman={zaman} geriAl={komut ? guncellemeyiGeriAl : null} kapat={() => { setGuncelleme(null); }} />
-  );
+  )) || (kilitIhlali !== null && canliHata !== null && !tur && (
+    <KilitIhlali
+      ileti={canliHata} emirNo={kilitIhlali.emirNo} kilitYetkisi={yetki.islemVar('plan.kilitle')} kapat={() => { setKilitIhlaliKapali(true); }}
+      diz={ihlalEmri && yazabilir ? () => { setKilitIhlaliKapali(true); void yenidenPlanla([ihlalEmri.id], `${ihlalEmri.no}: kilit kaldırılıp yeniden dizildi.`, true); } : null}
+    />
+  )) || (bastanKurSonucu && sonBastanKur !== null && (
+    <BastanKurSonucu ileti={sonBastanKur.ileti} geriAl={mesgul ? null : geri} kapat={() => { setSonBastanKur(null); }} />
+  ));
 
   const arizali = useMemo(() => m.tezgahlar.filter((t) => !t.fason && suAndakiDurus(m, t.id) !== null).length, [m]);
   const seciliKart = kartlar.find((k) => k.kok === kart) ?? kartlar.find((k) => k.kok === ilkKart(kartlar)) ?? null;
@@ -1235,9 +1252,14 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
       {bastanKur !== null && (
         <BastanKur
           m={m} kartlar={kartlar} planYok={c.plan === null} kilitYetkisi={yetki.islemVar('plan.kilitle')}
+          baslamisYetkisi={yetki.islemVar('plan.baslamis-diz')} gercek={(c['gercek'] ?? null) as Record<string, unknown> | null}
           ilkKapsam={bastanKur.kapsam} ilkSecili={bastanKur.secili}
           vazgec={() => { setBastanKur(null); }}
-          onayla={(x) => { setBastanKur(null); void yenidenPlanla(x.isler, x.ileti, x.kilitKaldir); }}
+          onayla={(x) => {
+            setBastanKur(null);
+            const onceki = tOzet.n;
+            void yenidenPlanla(x.isler, x.ileti, x.kilitKaldir, x.baslamisDiz).then((tamam) => { if (tamam) setSonBastanKur({ ileti: x.ileti, onceki, genis: x.baslamisDiz || x.kilitKaldir }); });
+          }}
         />
       )}
       <OnayPenceresi

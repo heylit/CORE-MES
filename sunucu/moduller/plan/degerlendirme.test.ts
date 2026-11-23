@@ -352,6 +352,32 @@ describe('planlama değerlendirmesi: arama (457 1-3 b)', () => {
     assert.equal((k.plan['ops'] as Record<string, Is>)[hedef]?.S, eski[hedef]!.S);
   });
 
+  // 3600: baştan kurda başlamış işin kalanı kilitsiz dizilir: yapılan sayı yerinde (kalan adet kadar iş), makine aynı kalır, iş sürüyor sayılmaz.
+  test('PD-20g (3600): durdurulan süren iş kilitsiz yeniden dizilir: aynı tezgâhta, kalan adediyle, şimdiden sonra; işaret yokken yerinde kalır', async () => {
+    type Is = { job: string; m: string; S: number; C: number; act?: number };
+    const { calisma } = buyukPlanli();
+    const eski = (calisma['plan'] as { ops: Record<string, Is> }).ops;
+    const simdi = 20, hedef = 'O6.10';
+    assert.ok(eski[hedef]!.S < simdi && eski[hedef]!.C > simdi, 'iş sürüyor olmalı');
+    const adet = BUYUK_KAYIT.orders.find((x) => x.id === 'O6')!.qty;
+    const suren = (ek: Record<string, unknown>) => ({
+      ...calisma, gercek: { [hedef]: { m: eski[hedef]!.m, S: eski[hedef]!.S, n: Math.floor(adet / 2), A: adet } },
+      plan: { ...(calisma['plan'] as object), ops: { ...eski, [hedef]: { ...eski[hedef], act: 1, pin: 1 } } }, ...ek,
+    });
+    const an = Date.parse('2026-10-18T21:00:00Z') + simdi * 3_600_000;
+    const uygula = (c: unknown) => degerlendirmeYap({ calisma: c, kayit: BUYUK_KAYIT, kaynak: BUYUK_KAYNAK, bugun: '2026-10-19', istek: { tur: 'plan-uygula', isler: ['O6'] } }, an);
+    const w = calisma['w'] as Record<string, unknown>;
+    const r = sonuc(await uygula(suren({ w: { ...w, durdurulan: { [hedef]: 1 } }, bekleyen: [{ id: 'ORN-b', ne: 'Yeniden planlama istendi', ayrinti: '', kim: '', t: 1, isler: ['O6'], geri: [] }] })));
+    if (r.tur !== 'plan-uygula') return assert.fail(r.tur);
+    const yeni = r.plan['ops'] as Record<string, Is>;
+    assert.ok(!yeni[hedef]!.act, 'kalan sürüyor sayılmaz');
+    assert.equal(yeni[hedef]!.m, eski[hedef]!.m, 'makine sabit (R1)');
+    assert.ok(yeni[hedef]!.S >= simdi - 1e-6, `kalan şimdiden sonra: ${String(yeni[hedef]!.S)}`);
+    assert.ok(Math.abs((yeni[hedef] as unknown as { run: number }).run - (eski[hedef] as unknown as { run: number }).run / 2) < 1e-6, 'kalan adet (yarısı) kadar işleme süresi');
+    const k = sonuc(await uygula(suren({}))); if (k.tur !== 'plan-uygula') return assert.fail(k.tur);
+    assert.equal((k.plan['ops'] as Record<string, Is>)[hedef]?.S, eski[hedef]!.S);
+  });
+
   // Yarım planlı emir: bir işi planda, öteki dışarıda (plan kurulduktan sonra gelen adım ya da motorun yerleştiremediği iş).
   test('PD-20d: yarım planlı emrin eksik işi, emir yeniden planlanınca öncülünün arkasına yerleşir; öteki emirlerin işleri yerinde kalır', async () => {
     type Is = { job: string; m: string; S: number; C: number };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bastanKurDugmesi, bastanKurNedeni, bastanKurOzeti, gerideKartlari, ilkSecim, kartAdi, kartAra } from './bastan-kur.ts';
+import { baslamisListesi, bastanKurDugmesi, bastanKurNedeni, bastanKurOzeti, gerideKartlari, ilkSecim, kartAdi, kartAra } from './bastan-kur.ts';
 import type { KokpitEmri, KokpitIsi, KokpitModeli } from './kurallar.ts';
 import type { SiraKarti } from './yerlestirme.ts';
 
@@ -28,6 +28,16 @@ describe('Baştan kur kuralları (3600)', () => {
     const o = bastanKurOzeti(m, kartlar, { kapsam: 'tum', secili: [], kilitDiz: true });
     expect(o.isler).toEqual(['*']);
     expect(o).toMatchObject({ siparis: 3, diz: 4, kilitli: 1, kalkacakKilit: 1, baslamis: 1 });
+  });
+
+  it('başlamış iş anahtarı açılınca başlamış iş de dizilir; liste yapılan ve kalanı gercek kayıttan okur, bilinmeyen sayı uydurulmaz', () => {
+    const o = bastanKurOzeti(m, kartlar, { kapsam: 'tum', secili: [], kilitDiz: true, baslamisDiz: true });
+    expect(o).toMatchObject({ diz: 5, kilitli: 1, kalkacakKilit: 1, baslamis: 1 });
+    const l = baslamisListesi(m, kartlar, { kapsam: 'tum', secili: [], kilitDiz: true, baslamisDiz: true }, { '1.20': { S: 4, n: 3, A: 10 } });
+    expect(l).toEqual([{ id: '1.20', emirNo: 'ORN-UE-1', ad: 'Adım 1.20', tezgah: 'T1', yapilan: 3, kalan: 7, calisiyor: true }]);
+    expect(baslamisListesi(m, kartlar, { kapsam: 'tum', secili: [], kilitDiz: true }, null)[0]).toMatchObject({ yapilan: null, kalan: null, calisiyor: false });
+    expect(baslamisListesi(m, kartlar, { kapsam: 'secili', secili: ['2'], kilitDiz: true }, null)).toEqual([]);
+    expect(bastanKurDugmesi('tum', 3, true)).toBe('Devam');
   });
 
   it('kilitler korunursa kilitli iş dizilmez ve kilit kalkmaz', () => {

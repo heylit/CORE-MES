@@ -2955,7 +2955,13 @@ export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: nu
     const c = canliYeri.get(y.isEmriId);
     return degisebilir(y.isEmriId) && (!c || !ayniKaynak(c.kaynak, y.kaynak) || c.baslangic.getTime() !== y.baslangic.getTime());
   });
-  const sira = siraIhlali(b, taslak.map((y) => yerOf(b, y)), new Set(degisen.map((y) => b.isler.get(y.isEmriId)?.uretimEmriId ?? 0)));
+  // 3600 (R2): baştan kurda kalanı dizilen başlamış işin yeni yeri taslakta öncülden sonra gelir; ardılı yerinde kaldıysa o emir de denetlenir.
+  // Başlamış iş canlıda yerinde kalsa da (çalışan iş canlıya geçmez) ardılın sıraya aykırı canlıya geçmesi engellenir.
+  const baslamisKayan = taslak.filter((y) => {
+    const c = canliYeri.get(y.isEmriId);
+    return b.isler.get(y.isEmriId)?.durum === 'basladi' && c !== undefined && (!ayniKaynak(c.kaynak, y.kaynak) || c.baslangic.getTime() !== y.baslangic.getTime());
+  });
+  const sira = siraIhlali(b, taslak.map((y) => yerOf(b, y)), new Set([...degisen, ...baslamisKayan].map((y) => b.isler.get(y.isEmriId)?.uretimEmriId ?? 0)));
   if (sira !== null) throw cakisma(`Taslakta sıraya aykırı adım var: ${sira} Düzeltmeden canlıya alınmaz.`);
   // 762 b: canlıya alma yeniden dizmez; onaylanan taslağın saatleri aynen yayınlanır. Geçmişte kalan başlangıç terminalde gerçek saatle
   // kaydedilir. 168 b: sunucu motoru kayıtlıyken vardiyası tanımsız tezgâhtaki taslak yeri canlıya geçmez; canlıdaki hâli kalır.

@@ -466,8 +466,9 @@ export const taslakKomutu = z.discriminatedUnion('tur', [
   z.object({ tur: z.literal('ayar'), ayar: taslakAyarlari, ayrinti: z.string().trim().max(500) }).strict(),
   z.object({ tur: z.literal('yon'), emirId: taslakKimlik, yon: z.enum(['plan', 'ileri', 'geri']) }).strict(),
   // 3335-2: kişinin yeniden planlama isteği. isler emir kimlikleridir; tek başına '*' bütün plandır. Veri değişmez, dizme işleri yeniden dizer.
+  // baslamisDiz (3600): başlamış işlerin kalanı da dizilir; yalnız plan.baslamis-diz taşıyan yazabilir (komut yazılırken ve Uygula'da denetlenir).
   // kilitKaldir (3600): istenen emirlerin başlamamış işlerindeki elle kilitler kalkar ve dizme geçici (denge) kilidi tutmaz; Geri al kilitleri getirir.
-  z.object({ tur: z.literal('yeniden-planla'), isler: z.array(taslakKimlik).min(1).max(5000).refine((l) => !l.includes('*') || l.length === 1, { message: "'*' tek başına verilir." }), kilitKaldir: z.boolean().optional() }).strict(),
+  z.object({ tur: z.literal('yeniden-planla'), isler: z.array(taslakKimlik).min(1).max(5000).refine((l) => !l.includes('*') || l.length === 1, { message: "'*' tek başına verilir." }), kilitKaldir: z.boolean().optional(), baslamisDiz: z.boolean().optional() }).strict(),
   // 3282 2a-1: tezgâhın elle girilen arıza ya da bakım duruşu (çalışmanın down satırı). bas ve bit planın ekseninde saattir (başlangıç
   // gününün 00:00'ı 0), çeyrek saat adımlı. Silme satırı değeriyle bulur; otomatik (arızadan ya da bakım planından gelen) satır silinmez.
   z.object({ tur: z.literal('durus'), tezgah: taslakKimlik, bas: durusSaati, bit: durusSaati, neden: z.enum(['arıza', 'bakım']) }).strict(),

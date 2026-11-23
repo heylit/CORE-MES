@@ -4,7 +4,7 @@ import type { TaslakKomutu } from '#paylasilan/sozlesme/planlama.ts';
 import type { PlanaAlSonucu } from './plana-al-kurallar.ts';
 import { planAni } from './planlama-kurallar.ts';
 import {
-  DIZ_BAYAT, DIZ_ESKI_VERI, EKSEN_DEGISTI, digerDegisiklikleri, elleBolSilUygula, elleBolUygula, adimBeklerSilUygula, adimBeklerUygula, adimUzadiSilUygula, adimUzadiUygula, ayarUygula, ekMesaiSilUygula, ekMesaiUygula, operatorSorunu, catismalar, dizImzasi, dizUygula, durusSilUygula, durusUygula, emirOf, imza, kilitKaydi, kilitKaydiniAl, komutAnahtarlari, komutAdi, oynat, secimeGore, uygulaKarari, yenidenPlanlaUygula, yonUygula, kalkacakKilitler, komutUygula,
+  DIZ_BAYAT, DIZ_ESKI_VERI, EKSEN_DEGISTI, digerDegisiklikleri, elleBolSilUygula, elleBolUygula, adimBeklerSilUygula, adimBeklerUygula, adimUzadiSilUygula, adimUzadiUygula, ayarUygula, ekMesaiSilUygula, ekMesaiUygula, operatorSorunu, catismalar, dizImzasi, dizUygula, durusSilUygula, durusUygula, emirOf, imza, kilitKaydi, kilitKaydiniAl, komutAnahtarlari, komutAdi, oynat, secimeGore, uygulaKarari, yenidenPlanlaUygula, yonUygula, kalkacakKilitler, komutUygula, baslamisIsler,
   type DizKomutu, type TaslakHesaplari, type TaslakSatiri,
 } from './taslak-kurallar.ts';
 
@@ -123,6 +123,35 @@ describe('3282 1d: ayar ve yön komutu', () => {
     assert.deepEqual(komutAnahtarlari({ tur: 'yeniden-planla', isler: ['*'] }, imza(c)), ['*']);
     assert.equal(komutAdi({ tur: 'yeniden-planla', isler: ['S1'] }), 'S1 yeniden planlanacak');
   });
+  test('3600: baslamisDiz istenen emirlerin başlamış, bitmemiş, fason olmayan işlerini w.durdurulan\'a yazar; yoksa dokunmaz; Geri al yaması işareti geri alır', () => {
+    const c = calisma({
+      locks: { 'S1.10': { m: 'T1', S: 8 } },
+      w: { durdurulan: { 'X.1': 1 } },
+      plan: { dataVer: 3, ops: { 'S1.10': { m: 'T1', S: 8, job: 'S1', act: 1 }, 'S1.20': { m: 'T2', S: 12, job: 'S1' }, 'S2.10': { m: 'T2', S: 30, job: 'S2', act: 1 }, 'S3.10': { m: 'T1', S: 50, job: 'S3', act: 1, done: 1 }, 'S3.20': { m: '@F', S: 60, job: 'S3', act: 1, fas: 1 } } },
+    });
+    assert.deepEqual(baslamisIsler(c, ['S1']), ['S1.10']);
+    assert.deepEqual(baslamisIsler(c, ['*']).sort(), ['S1.10', 'S2.10']);
+    const r = yenidenPlanlaUygula(c, ['S1'], k, false, true);
+    assert.ok(!('hata' in r) && r.degisti);
+    const d = r.deger as typeof c & { bekleyen: { ayrinti: string; kilitsiz?: boolean; geri: unknown[] }[] };
+    assert.deepEqual((d.w as Record<string, unknown>).durdurulan, { 'X.1': 1, 'S1.10': 1 });
+    assert.deepEqual(d.bekleyen[0]!.geri, [{ yol: ['w'], id: 'durdurulan', once: { 'X.1': 1 } }]);
+    assert.equal(d.bekleyen[0]!.kilitsiz, true);
+    assert.equal(d.bekleyen[0]!.ayrinti, 'S1 yeniden planlanacak; başlamış işler dahil');
+    // Başlamış iş kilitliyse kilit de kalkar (kilit anahtarı açıkken); kilitsiz istekte act işin kilidi yerinde kalır.
+    const k2 = (yenidenPlanlaUygula(c, ['S1'], k, true, true) as unknown as { deger: typeof c }).deger;
+    assert.ok(!('S1.10' in k2.locks));
+    assert.ok('S1.10' in (yenidenPlanlaUygula(c, ['S1'], k, true) as unknown as { deger: typeof c }).deger.locks);
+    // Bayrak yokken işaret yazılmaz.
+    const yok = yenidenPlanlaUygula(c, ['S1'], k);
+    assert.ok(!('hata' in yok));
+    assert.deepEqual((yok.deger as typeof c).w, c.w);
+    assert.equal(komutAdi({ tur: 'yeniden-planla', isler: ['*'], baslamisDiz: true }), 'Bütün plan baştan kurulacak; başlamış işler dahil');
+    // Hiç başlamış iş yoksa işaret yazılmaz, satır kilitsiz değildir.
+    const bosluk = yenidenPlanlaUygula(c, ['S1x'], k, false, true);
+    assert.ok('hata' in bosluk);
+  });
+
   test('3600: kilitKaldir istenen emirlerin başlamamış işlerindeki elle kilidi kaldırır, satırı kilitsiz işaretler; Geri al yaması kilidi getirir', () => {
     const c = calisma({
       locks: { 'S1.10': { m: 'T1', S: 8 }, 'S1.20': { m: 'T2', S: 12 }, 'S2.10': { m: 'T2', S: 30 }, 'S3.10': { m: 'T1', S: 50 } },
