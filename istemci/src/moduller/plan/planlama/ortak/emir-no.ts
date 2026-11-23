@@ -39,3 +39,12 @@ export function emirKuyrugu(no: string): string {
   const p = no.split('-');
   return p.length > 2 ? `…${p.slice(-2).join('-')}` : no;
 }
+
+// Emir no baş ve kuyruk olarak ikiye ayrılır (baş + kuyruk = no): kuyruk emirleri ayırt eden son dört parçadır (sıra, yıl, ay, no:
+// 00001-26-11-030); ortak ön ek baştadır ve yer yoksa gider. Dört parçası olmayan no tek parçadır.
+export function emirNoParcalari(no: string): [string, string] {
+  const p = no.split('-');
+  if (p.length <= 4) return [no, ''];
+  const kuyruk = p.slice(-4).join('-');
+  return [no.slice(0, no.length - kuyruk.length), kuyruk];
+}

@@ -139,7 +139,11 @@ describe('tablo: ölçülen sütun enleri (3570)', () => {
   const l = [{ id: 'emir' }, { id: 'urun' }, { id: 'termin' }, { id: 'fark' }];
   const olcum = { en: { emir: 130.2, urun: 400, termin: 96, fark: 200 }, baslik: { emir: 40, urun: 38, termin: 60, fark: 36 }, fark: 120 };
   it('sütun içerik enindedir; Emir ve Ürün tavanda kalır, tarih sabit, Ürün iki satıra (enin yüzde altmışı, en az başlığın iki katı), Fark iki satıra kadar kısalır', () => {
-    expect(olcuSablonu(l, olcum)).toEqual({ sablon: '131px minmax(144px, 240fr) 96px minmax(120px, 200px)', dogal: 131 + 240 + 96 + 200 });
+    expect(olcuSablonu(l, olcum)).toEqual({ sablon: 'minmax(130px, 131px) minmax(144px, 240fr) 96px minmax(120px, 200px)', dogal: 131 + 240 + 96 + 200 });
+  });
+  it('Emir tam numarayı taşıyacak kadar açılır (tavan 360), ötesinde kısalır', () => {
+    expect(olcuSablonu([{ id: 'emir' }], { en: { emir: 330 }, baslik: { emir: 40 }, fark: null })?.sablon).toBe('minmax(130px, 330px)');
+    expect(olcuSablonu([{ id: 'emir' }], { en: { emir: 500 }, baslik: { emir: 40 }, fark: null })?.sablon).toBe('minmax(130px, 360px)');
   });
   it('kısa adda Ürün en az başlığın iki katıdır', () => {
     expect(olcuSablonu([{ id: 'urun' }], { en: { urun: 100 }, baslik: { urun: 60 }, fark: null })?.sablon).toBe('minmax(100px, 100fr)');

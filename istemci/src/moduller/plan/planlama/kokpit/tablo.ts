@@ -53,17 +53,22 @@ export interface SutunOlcumu {
   // Fark rozetinin iki satıra sığdığı en dar hücre eni (bkz. farkEnAz); rozet yoksa null.
   fark: number | null;
 }
-export const SUTUN_TAVANI: Readonly<Record<string, number>> = { emir: 240, urun: 240, ad: 240 };
+export const SUTUN_TAVANI: Readonly<Record<string, number>> = { emir: 360, urun: 240, ad: 240 };
 const ESNEK = new Set(['urun', 'ad']);
+// Emir sütunu tam numara için açılır (tavan SUTUN_TAVANI), ama bölme dar kalırsa yanındaki sütunları ezmesin: bu eninin altına inmez,
+// ötesi boş yer kadar açılır (numara kısalır: ön ek, sonra sıra parçası gider; en az "26-11-030" kalır).
+export const EMIR_EN_AZ = 130;
 // İki satıra kırılan adın en dar hali: tek satır eninin bu oranı (sözcük sınırında kırıldığı için yarıdan biraz geniş).
 const IKI_SATIR = 0.6;
 export function olcuSablonu(l: readonly { id: string }[], o: SutunOlcumu | null): { sablon: string; dogal: number } | null {
   if (o === null || l.length === 0 || l.some((s) => !((o.en[s.id] ?? 0) > 0))) return null;
   const parca = l.map((s) => {
     const en = Math.ceil(Math.min(o.en[s.id] ?? 0, SUTUN_TAVANI[s.id] ?? Infinity));
-    if (s.id === 'fark') return { en, yazi: `minmax(${String(Math.ceil(Math.min(en, o.fark ?? en)))}px, ${String(en)}px)` };
-    if (!ESNEK.has(s.id)) return { en, yazi: `${String(en)}px` };
-    return { en, yazi: `minmax(${String(Math.ceil(Math.min(en, Math.max((o.baslik[s.id] ?? 0) * 2, en * IKI_SATIR))))}px, ${String(en)}fr)` };
+    if (s.id === 'fark') { const az = Math.ceil(Math.min(en, o.fark ?? en)); return { en, az, yazi: `minmax(${String(az)}px, ${String(en)}px)` }; }
+    if (s.id === 'emir' && en > EMIR_EN_AZ) return { en, az: EMIR_EN_AZ, yazi: `minmax(${String(EMIR_EN_AZ)}px, ${String(en)}px)` };
+    if (!ESNEK.has(s.id)) return { en, az: en, yazi: `${String(en)}px` };
+    const az = Math.ceil(Math.min(en, Math.max((o.baslik[s.id] ?? 0) * 2, en * IKI_SATIR)));
+    return { en, az, yazi: `minmax(${String(az)}px, ${String(en)}fr)` };
   });
   return { sablon: parca.map((p) => p.yazi).join(' '), dogal: parca.reduce((t, p) => t + p.en, 0) };
 }

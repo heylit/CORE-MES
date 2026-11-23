@@ -54,6 +54,18 @@ describe('Kokpit sol tablo (3533)', () => {
     expect(halka?.getAttribute('aria-label')).toMatch(/^\d+\/\d+ adım bitti$/);
   });
 
+  it('emir hücresi emir numarasını kısaltmadan yazar (baştaki üç nokta yok)', () => {
+    const id = ac().querySelector<HTMLButtonElement>('button[data-agac]')!.getAttribute('data-agac')!;
+    cleanup();
+    const no = 'ORN-2026-003-MM-ORN-00001-26-11-030';
+    Object.assign(DEPO, { receteRotaKaydi: { orders: [{ id, no }] } });
+    try {
+      const b = ac().querySelector<HTMLButtonElement>(`button[data-agac="${id}"]`)!;
+      expect(b.querySelector('b')?.textContent).toBe(no);
+      expect(b.getAttribute('aria-label')).toBe(`${no} adımlarını aç`);
+      expect(b.getAttribute('title')).toMatch(new RegExp(`^${no} · `));
+    } finally { Object.assign(DEPO, { receteRotaKaydi: null }); }
+  });
   it('tek Sıralama seçici iki seçenek taşır; Termine göre gecikme en gecikmeliyi üste alır, Plan sırası geri getirir; hiçbir yazım yapılmaz (Risk B2)', () => {
     const bolum = ac();
     const secici = within(bolum).getByRole('combobox', { name: 'Sıralama' });

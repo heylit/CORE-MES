@@ -3113,3 +3113,69 @@ test('Kokpit 3602: sürüklerken hiza çizgisi ve yumuşak yakalama; Alt ile kap
   expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
   expect(ag.hatalar).toEqual([]);
 });
+
+test('Kokpit 3618: Emir sütunu uzun emir numarasını taşır, yer yoksa ortadan kısaltıp kuyruğu korur, yanındaki sütunları örtmez; yatay taşma yok', async ({ page, ac }, bilgi) => {
+  await taslakSunucusu(page, (d) => calismaKur(d));
+  const UZUN = 'ORN-2026-003-MM-ORN-00001-26-11-030', COK_UZUN = 'ORN-2026-003-MM-ORN-ARALIK-AYLIK-DENEME-00002-26-11-031';
+  const NO: Record<string, string> = { S1: UZUN, S2: COK_UZUN, S3: 'ORN-7', S4: 'ORN-2026-003-MM-ORN-00004-26-11-033' };
+  await page.route('**/api/plan/planlama-kaynagi', async (r) => {
+    const cevap = await r.fetch(), j = await cevap.json() as Record<string, unknown>;
+    const em = (j['emirler'] ?? {}) as Record<string, unknown>;
+    await r.fulfill({ response: cevap, json: { ...j, emirler: { opStatus: {}, opProg: {}, opYer: {}, ...em, orders: Object.entries(NO).map(([id, no]) => ({ id, no })) } } });
+  });
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  const g = bilgi.project.name;
+  const ac2 = async () => {
+    await ac('/plan/kokpit');
+    const kokpit = page.locator('.tc-pyq');
+    await expect(kokpit).toBeVisible({ timeout: 20_000 });
+    const karsilama = page.getByRole('button', { name: 'Başlayalım' });
+    if (await karsilama.isVisible()) await karsilama.click();
+    return kokpit.getByRole('region', { name: 'Emirler' });
+  };
+  let bolum = await ac2();
+  if (g === 'g360') { expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0); return; }
+  // Numara metni: parçalardan biri gizli ya da ilk parça kendi eninden dar gösteriliyorsa kısalmıştır; son parça ("26-11-030") kutunun içinde
+  // görünmelidir.
+  const olc = (id: string) => bolum.locator(`button[data-agac="${id}"] b.tc-pyq-emir-no`).evaluate((b) => {
+    const p = [...b.children] as HTMLElement[], son = p[p.length - 1], ilk = p[0];
+    const gizli = p.some((x) => getComputedStyle(x).display === 'none');
+    return { metin: b.textContent ?? '', kisaldi: gizli || (ilk !== undefined && ilk.scrollWidth > ilk.clientWidth + 1), kuyrukGorunur: son !== undefined && son.getBoundingClientRect().right <= b.getBoundingClientRect().right + 1 && son.getBoundingClientRect().width > 0, sonYazi: son?.textContent ?? '' };
+  });
+  // Emir sütunu açılınca yanındaki sütunlar Gantt'ın ya da ayracın altına girmemeli: her hücre bölme satırının sağ kenarında biter (kırpılmaz),
+  // ortasındaki nokta hücrenin kendisine aittir (başka öğe örtmüyor) ve tarih ile süre yazısı kesik değildir (adım Durum yazısı ölçülmez: adım satırları sütun ölçümüne girmez, 3570). Emir satırında ve açılan emrin adım satırlarında ölçülür.
+  const hucreler = () => page.evaluate(() => [...document.querySelectorAll<HTMLElement>('.tc-pyq-tablo-satir > .tc-pyq-h[data-sutun]')].filter((h) => h.getAttribute('role') === 'cell' && h.firstElementChild !== null).map((h) => {
+    const r = h.getBoundingClientRect(), y = r.top + r.height / 2, gorunur = y > 60 && y < innerHeight - 60, adim = h.closest('.tc-pyq-satir')?.hasAttribute('data-agac-adim') === true;
+    const ic = h.querySelector<HTMLElement>('span.tc-pyq-h-veri'), son = (ic ?? h.firstElementChild ?? h).getBoundingClientRect();
+    const ust = (x: number) => document.elementFromPoint(x, y)?.closest('.tc-pyq-h') === h;
+    return { sutun: h.dataset['sutun'] ?? '', adim, gorunur, sag: Math.max(son.right, r.right) <= (h.parentElement?.getBoundingClientRect().right ?? 0) + 0.5, orta: ust(r.left + r.width / 2), kesik: ic !== null && ic.scrollWidth > ic.clientWidth + 1 };
+  }));
+  const kontrol = async (tamNo: boolean) => {
+    for (const id of ['S1', 'S2', 'S3', 'S4']) {
+      const o = await olc(id);
+      expect(o.metin).toBe(NO[id]);
+      expect(o.kuyrukGorunur, `${id} kuyruk`).toBe(true);
+      if (id !== 'S3') expect(o.sonYazi, `${id} son parça`).toBe(NO[id]!.split('-').slice(-3).join('-'));
+      if (tamNo && id !== 'S2') expect(o.kisaldi, `${id} kısaldı`).toBe(false);
+    }
+    await bolum.locator('button[data-agac="S1"]').click();
+    await expect(bolum.locator('[data-agac-adim]').first()).toBeVisible();
+    await bolum.locator('button[data-agac="S1"]').scrollIntoViewIfNeeded();
+    const l = await hucreler();
+    expect(l.some((x) => x.adim)).toBe(true);
+    for (const x of l.filter((y) => y.gorunur)) {
+      expect(x.sag, `${x.sutun}${x.adim ? ' (adım)' : ''} içeriği bölmeden taşıyor`).toBe(true);
+      expect(x.orta, `${x.sutun}${x.adim ? ' (adım)' : ''} ortası örtülü`).toBe(true);
+      expect(x.kesik, `${x.sutun}${x.adim ? ' (adım)' : ''} yazısı kesik`).toBe(false);
+    }
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  };
+  // Varsayılan sütunlar: bölme dar kalabilir, numara ortadan kısalır ama komşu sütunlar sağlam kalır.
+  await kontrol(false);
+  if (g === 'g1280') {
+    // Dört sütun (Emir, Termin, Fark, İlerleme) bölmeye sığar: numara tam yazılır.
+    await page.evaluate(() => { localStorage.setItem('coremes.kokpit-tablo', JSON.stringify({ sutunlar: ['emir', 'termin', 'fark', 'ilerleme'], en: null })); });
+    bolum = await ac2();
+    await kontrol(true);
+  }
+});
