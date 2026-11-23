@@ -25,21 +25,13 @@ describe('plan (gerçek PostgreSQL): kişi istasyonu geri doldurma göçü (3607
     assert.ok(goc, 'geri doldurma göçü bulunamadı');
     if (klasor === '') {
       klasor = await mkdtemp(join(tmpdir(), 'tmiv2-kistas-'));
-      for (const ad of hepsi.filter((a) => a <= goc)) await copyFile(join(GOC_KLASORU, ad), join(klasor, ad));
+      for (const ad of hepsi) await copyFile(join(GOC_KLASORU, ad), join(klasor, ad));
     }
     // Canlıda göç rolünün geçici tablo hakkı yoktur: haklar aynen kaldırılır, göç geçici tabloya dayanırsa kırılır.
     await sahip.sorgu(`DO $$ BEGIN EXECUTE format('REVOKE TEMPORARY ON DATABASE %I FROM PUBLIC', current_database()); END $$`);
     await sahip.sorgu(`DO $$ BEGIN EXECUTE format('REVOKE TEMPORARY ON DATABASE %I FROM %I', current_database(), (SELECT current_user)); END $$`).catch(() => undefined);
-    // Göçten sonra damgalı göçler de kurulu olabilir: damga sırası bozulmasın diye kayıtları geçici alınır, klasörde yalnız göce kadar olanlar durur.
-    await sahip.sorgu('CREATE TABLE goc_kaydi_yedek AS SELECT * FROM goc_kaydi WHERE ad >= $1', [goc]);
-    await sahip.sorgu('DELETE FROM goc_kaydi WHERE ad >= $1', [goc]);
-    try {
-      assert.deepEqual(await gocleriUygula(ayar, klasor, { sema }), [goc]);
-    } finally {
-      await sahip.sorgu('DELETE FROM goc_kaydi WHERE ad = $1', [goc]);
-      await sahip.sorgu('INSERT INTO goc_kaydi SELECT * FROM goc_kaydi_yedek');
-      await sahip.sorgu('DROP TABLE goc_kaydi_yedek');
-    }
+    await sahip.sorgu('DELETE FROM goc_kaydi WHERE ad = $1', [goc]);
+    assert.deepEqual(await gocleriUygula(ayar, klasor, { sema }), [goc]);
   }
   const defterSayisi = async () => Number((await vt().tx((db) => db.tek<{ n: string }>(
     "SELECT count(*)::text AS n FROM denetim_degisiklik WHERE tablo IN ('uretim_emirleri_is_emri', 'uretim_emri')")))!.n);
