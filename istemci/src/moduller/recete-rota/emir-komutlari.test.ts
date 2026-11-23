@@ -65,6 +65,10 @@ describe('Bölme komutu sahibinin adımına çevrilir; uygunluğa Üretim Emirle
     expect((await hazirla('emir-bol', { id: 1, adet: 2, surum: 3, emirTuru: 'numune' })).govde).toMatchObject({ adimSira: 1, emirTuru: 'numune' });
     expect((await hazirla('emir-bol', { id: 1, adet: 2, surum: 3, kolN: 1, kolM: 3, emirTuru: 'fai' })).govde).toMatchObject({ birlesmeOpNo: 30, emirTuru: 'fai' });
     expect((await hazirla('emir-bol', { id: 1, adet: 2, surum: 3, emirTuru: '' })).govde).not.toHaveProperty('emirTuru');
+    // 3578: elle seçilen parti rotası gövdeye girer; kolda rota yoktur, geçersiz değer gönderilmez.
+    expect((await hazirla('emir-bol', { id: 1, adet: 2, surum: 3, rotaId: 7 })).govde).toMatchObject({ adimSira: 1, rotaId: 7 });
+    expect((await hazirla('emir-bol', { id: 1, adet: 2, surum: 3, kolN: 1, kolM: 3, rotaId: 7 })).govde).not.toHaveProperty('rotaId');
+    for (const rotaId of [undefined, 0, -1, 1.5, '7']) expect((await hazirla('emir-bol', { id: 1, adet: 2, surum: 3, rotaId })).govde).not.toHaveProperty('rotaId');
   });
 
   it('3099: alt emrin türü değişim komutu tür ve sürümle gider; tür seçilmeden gitmez', async () => {

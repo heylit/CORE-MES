@@ -5,7 +5,7 @@ import type { StokOkumasi } from '../../kopru.ts';
 import { planMetni } from './gorunum.ts';
 import {
   adimDurumu, aramaUyar, DURUM_SUZGECLERI, durumUyar, adimPlani, bolmeHesapla, emirAdimlari, emirAgaci, esitBol, ilerleme, isGunuEkle, kolAdimiSec,
-  emirRotasi, emirTalepTaslagi, seriRotasiNotu, turRotasi, miktarOku, planOzeti, planSirasi, rotaFarki, sahipsizEkle, statuluSatirlar, stokSurecSirala, seritNo, stokSatirlari, stokVeSurec, surectekiMalzeme, talepGunu, tamponDurumu, yeniOpNo, type Emir, sureOzetiNedenleri,
+  emirRotasi, partiRotaSecimi, yeniEmirAnaRotasi, emirTalepTaslagi, seriRotasiNotu, turRotasi, miktarOku, planOzeti, planSirasi, rotaFarki, sahipsizEkle, statuluSatirlar, stokSurecSirala, seritNo, stokSatirlari, stokVeSurec, surectekiMalzeme, talepGunu, tamponDurumu, yeniOpNo, type Emir, sureOzetiNedenleri,
 } from './kurallar.ts';
 
 // Uydurma veri: bir mamul (üç adımlı rota), bir yarı mamul (tek adımlı rota), bir hammadde ve bir hurda kartı.
@@ -441,6 +441,38 @@ describe('3247 a: emir formunda rota', () => {
     expect(emirRotasi(c, 'seri', 'Seri', '')!.seriyeDusus).toBeNull();
     expect(turRotasi(c, 'numune')).toMatchObject({ rota: { id: 1 }, seriyeDustu: true, turunRotasi: { id: 3 } });
     expect(turRotasi(c, 'fai')).toMatchObject({ rota: { id: 2 }, seriyeDustu: false, turunRotasi: null });
+  });
+  // 3578: parti rotası. Ana emir eski revizyonda (Rev B), yürürlükte Rev C.
+  it('3578 Y2: boş seçenek gerçek sonucu yazar; ana emrin rotası eski revizyonuyla kalır ve listede tekrar etmez', () => {
+    const ana = { rotaId: 1, harf: 'B' };
+    const ayni = partiRotaSecimi(c, ana, 'seri', 'seri', '')!;
+    expect(ayni.bosBaslik).toBe('Ana emirle aynı (Seri · Rev B)');
+    expect(ayni.secenekler.map((s) => s.baslik)).toEqual(['FAI · Rev A']);
+    expect(ayni).toMatchObject({ rotaId: 1, harf: 'B', farkli: false, secilenId: null });
+    const fai = partiRotaSecimi(c, ana, 'seri', 'fai', '')!;
+    expect(fai.bosBaslik).toBe('Türün rotası (FAI · Rev A)');
+    expect(fai.secenekler.map((s) => s.baslik)).toEqual(['Seri · Rev B']);
+    expect(fai).toMatchObject({ rotaId: 2, harf: 'A', farkli: true });
+    // Türün rotası ana emrinkiyse tür farklı olsa da ana emirle aynıdır.
+    expect(partiRotaSecimi(c, { rotaId: 2, harf: 'A' }, 'fai', 'fai', '')!.bosBaslik).toBe('Ana emirle aynı (FAI · Rev A)');
+    expect(partiRotaSecimi(c, { rotaId: 1, harf: 'B' }, 'seri', 'numune', '')!.bosBaslik).toBe('Ana emirle aynı (Seri · Rev B)');
+  });
+  it('3578: elle seçim yalnız listedeki yürürlükte rotadır; geçersiz seçim türün rotasına düşer; farkli ana emrin rotasına göre', () => {
+    const ana = { rotaId: 1, harf: 'B' };
+    expect(partiRotaSecimi(c, ana, 'seri', 'seri', '2')).toMatchObject({ rotaId: 2, farkli: true, secilenId: 2, harf: 'A' });
+    expect(partiRotaSecimi(c, ana, 'seri', 'seri', '3')).toMatchObject({ rotaId: 1, farkli: false, secilenId: null });
+    expect(partiRotaSecimi(c, ana, 'seri', 'seri', '99')).toMatchObject({ rotaId: 1, secilenId: null });
+    // Türün rotası FAI iken ana emrin rotasını elle seçmek ana emirle aynıdır (kol), revizyon ana emrinkidir.
+    expect(partiRotaSecimi(c, ana, 'seri', 'fai', '1')).toMatchObject({ rotaId: 1, harf: 'B', farkli: false, secilenId: 1 });
+    // Ana emrin rotası bilinmiyorsa farkli sunucuya bırakılır.
+    expect(partiRotaSecimi(c, null, 'seri', 'fai', '')).toMatchObject({ bosBaslik: 'Türün rotası (FAI · Rev A)', farkli: false });
+    expect(partiRotaSecimi(undefined, ana, 'seri', 'seri', '')).toBeNull();
+  });
+  it('3578: yeni emir formunda ana rota Rota alanındaki seçim ya da türün rotasıdır', () => {
+    expect(yeniEmirAnaRotasi(c, 'seri', '')).toEqual({ rotaId: 1, harf: 'C' });
+    expect(yeniEmirAnaRotasi(c, 'fai', '')).toEqual({ rotaId: 2, harf: 'A' });
+    expect(yeniEmirAnaRotasi(c, 'fai', '1')).toEqual({ rotaId: 1, harf: 'C' });
+    expect(yeniEmirAnaRotasi({ rotalar: [c.rotalar[0]!], revizyonlar: [c.revizyonlar[0]!] }, 'fai', '')).toEqual({ rotaId: 1, harf: 'C' });
   });
   it('3411 a: Seri dışı türdeki emir Seri revizyonundan açıldıysa ayrıntıda not kalır', () => {
     const d = { routeRevs: [{ id: '10', no: 'C', rotaStandart: true }, { id: '11', no: 'A', rotaStandart: false }] } as unknown as Parameters<typeof seriRotasiNotu>[0];

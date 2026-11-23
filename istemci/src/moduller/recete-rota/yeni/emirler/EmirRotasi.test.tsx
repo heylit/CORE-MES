@@ -97,6 +97,42 @@ describe('3296-1 emir açılışında rota ve tür', () => {
     expect(kopya(istekler)?.govde).toMatchObject({ emirTuru: 'numune' });
   });
 
+  // 3578: açılan emrin bölünmesi ana emrin rotasından ve parti rotasından ayrı seçilir; Rota alanı ana emri, Parti rotası alt emri belirler.
+  it('3578: yeni emir formunda Parti rotası seçilir; emir açılınca bölme gövdesine rotaId girer, boş seçimde girmez', async () => {
+    const durum = rotaDurumu();
+    const ornek = durum.emirler!.orders[0]!;
+    durum.emirler = { ...durum.emirler!, orders: [...durum.emirler!.orders, { ...ornek, id: '62', kayitNo: 62, no: 'UE-0062', surum: 4 }] };
+    const emir62 = { id: 62, parti: { ustEmirId: null, bolunmeSira: null, altEmirIdleri: [], birlestigiEmirId: null, birlesmeOpNo: null }, isEmirleri: [{ id: 701, opNo: 10, sira: 1, durum: 'bekliyor' }], surum: 4 };
+    const istekler = sunucuKur(kisi, {
+      durum,
+      yazmalar: {
+        'GET /rota/urunler/11': () => json(200, ROTALAR),
+        'GET /rota/revizyonlar/71/patlatma-onizleme': () => json(200, onizlemeOrnegi({ dugumler: onizlemeOrnegi().dugumler.slice(0, 1) })),
+        'GET /adimli-emirler/acilis-secenekleri': () => json(200, { projeZorunlu: false, rotasizAcik: false, projeler: [] }),
+        'GET /adimli-emirler/62': () => json(200, { emir: emir62 }),
+        [`POST ${STANDART}`]: () => json(200, { uretimEmriId: 62, isEmriIdleri: [1] }),
+        'POST /adimli-emirler/62/bol': () => json(200, { emir: emir62, altEmirId: 63, ayriEmir: true }),
+      },
+    });
+    yeniEmirAc();
+    const form = await formAc();
+    fireEvent.click(within(form).getByRole('button', { name: 'Partilere böl' }));
+    const p1 = within(form).getByRole('group', { name: 'Parti 1 adet, tür ve rota' });
+    const p2 = within(form).getByRole('group', { name: 'Parti 2 adet, tür ve rota' });
+    fireEvent.change(within(p1).getByLabelText('Parti 1', { selector: 'input' }), { target: { value: '10' } });
+    fireEvent.change(within(p2).getByLabelText('Parti 2', { selector: 'input' }), { target: { value: '5' } });
+    await waitFor(() => { expect((within(p1).getByRole('combobox', { name: 'Parti rotası' }) as HTMLSelectElement).disabled).toBe(false); });
+    const alan = within(p1).getByRole('combobox', { name: 'Parti rotası' }) as HTMLSelectElement;
+    expect(within(alan).getAllByRole('option').map((o) => o.textContent)).toEqual(['Ana emirle aynı (Standart · Rev A)', 'ORN FAI · Rev A']);
+    fireEvent.change(alan, { target: { value: '2' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Emri oluştur' }));
+    await waitFor(() => expect(istekler.filter((i) => i.yol === '/adimli-emirler/62/bol')).toHaveLength(2));
+    const [ilk, ikinci] = istekler.filter((i) => i.yol === '/adimli-emirler/62/bol');
+    expect(ilk?.govde).toMatchObject({ adet: 10, rotaId: 2 });
+    expect(ikinci?.govde).toMatchObject({ adet: 5 });
+    expect(ikinci?.govde).not.toHaveProperty('rotaId');
+  });
+
   it('tek rotalı üründe Rota satırı salt okunur görünür', async () => {
     sunucuKur(kisi, {
       durum: rotaDurumu(),

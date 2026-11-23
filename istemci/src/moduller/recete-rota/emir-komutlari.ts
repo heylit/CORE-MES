@@ -278,9 +278,11 @@ export const EMIR_KOMUTLARI: Readonly<Record<string, EmirKomutu>> = {
       const ekAdimlar = kolaEkAdimlar(girdi['ekAdimlar'], d, adimSira, birlesmeOpNo);
       // Tür verilmezse alt emir üstün türünü alır (sahibinin kuralı); değerin geçerliliğine sahibinin şeması karar verir.
       const emirTuru = typeof girdi['emirTuru'] === 'string' && girdi['emirTuru'] !== '' ? girdi['emirTuru'] : undefined;
+      // 3578: kolda rota seçimi yoktur (kol ana emrin rotasında kalır); parti elle rota seçtiyse sahibi geçerliliğine karar verir (422).
+      const rotaId = !kol && typeof girdi['rotaId'] === 'number' && Number.isInteger(girdi['rotaId']) && girdi['rotaId'] > 0 ? girdi['rotaId'] : undefined;
       return {
         yol: `/adimli-emirler/${String(id)}/bol`,
-        govde: { adimSira, adet, surum: ekranSurumu(girdi), birlesmeOpNo, ...(ekAdimlar.length ? { ekAdimlar } : {}), ...(emirTuru === undefined ? {} : { emirTuru }) },
+        govde: { adimSira, adet, surum: ekranSurumu(girdi), birlesmeOpNo, ...(ekAdimlar.length ? { ekAdimlar } : {}), ...(emirTuru === undefined ? {} : { emirTuru }), ...(rotaId === undefined ? {} : { rotaId }) },
         tekrarKorumali: true,
       };
     },

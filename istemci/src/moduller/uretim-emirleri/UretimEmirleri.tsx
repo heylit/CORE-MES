@@ -80,7 +80,7 @@ const BITEN_CIPLER: readonly { deger: '' | 'bitti' | 'iptal'; baslik: string }[]
 // verir (`emirAcma`). Düğme yalnız açabilene görünür. `?yeni=1` (Ctrl K, Reçete ve Rota) pencereyi açar, `urun=` ürünü seçili getirir,
 // `tur=` ve `adet=` formu doldurur (3296: başlamış emirden ayrılamayan parti için "FAI için yeni emir aç");
 // istek bir kez karşılanır ve adresten düşer.
-export interface YeniEmirIstegi { urun: string | null; tur?: string | null; adet?: string | null }
+export interface YeniEmirIstegi { urun: string | null; tur?: string | null; adet?: string | null; rota?: string | null }
 export interface EmirAcmaYuvasi {
   acabilir: boolean;
   // Başlıktaki ek düğmeler (Excel) ve açma penceresi; `yeni` null ise pencere kapalıdır.
@@ -94,8 +94,8 @@ export function UretimEmirleri({ emirAcma }: { emirAcma?: EmirAcmaYuvasi }) {
   const [yeni, setYeni] = useState<YeniEmirIstegi | null>(null);
   useEffect(() => {
     if (!adres.has('yeni')) return;
-    if (adres.get('yeni') === '1' && acabilir) setYeni({ urun: adres.get('urun'), tur: adres.get('tur'), adet: adres.get('adet') });
-    adresYaz((a) => { const y = new URLSearchParams(a); for (const k of ['yeni', 'urun', 'tur', 'adet']) y.delete(k); return y; }, { replace: true });
+    if (adres.get('yeni') === '1' && acabilir) setYeni({ urun: adres.get('urun'), tur: adres.get('tur'), adet: adres.get('adet'), rota: adres.get('rota') });
+    adresYaz((a) => { const y = new URLSearchParams(a); for (const k of ['yeni', 'urun', 'tur', 'adet', 'rota']) y.delete(k); return y; }, { replace: true });
   }, [adres, acabilir]);
   const gorunum: Gorunum = adres.get('gorunum') === 'bitenler' ? 'bitenler' : 'acik';
   const [durum, setDurum] = useState<EmirDurumu | ''>('');

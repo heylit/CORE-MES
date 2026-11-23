@@ -582,16 +582,63 @@ export function tekRotaMetni(c: Pick<UrunRevizyonlariCevabi, 'rotalar' | 'revizy
   return `${r.ad} · ${y === undefined ? 'yürürlükte değil' : `Rev ${y.harf}`}`;
 }
 
-// 3296-2 a: bölmede partinin türünün rotası. farkli: emrin açıldığı rotadan başka; o zaman parti o rotanın yürürlükteki revizyonundan ayrı
-// emir olur (sunucunun kuralı). Ürünün rotaları okunamadıysa null.
-export interface BolmeTurRotasi { ad: string; harf: string | null; farkli: boolean; adimlar: EmirAdimi[] }
-export function bolmeTurRotasi(d: Durum, c: Pick<UrunRevizyonlariCevabi, 'rotalar' | 'revizyonlar'> | undefined, o: Emir, tur: string): BolmeTurRotasi | null {
+// 3578: bölmede partinin rotası. Parti rotası boşsa sunucunun kuralıyla aynı çözülür: tür ana emirle aynıysa (ya da türün rotası ana emrinkiyse)
+// ana emrin rotası ve revizyonu kalır, değilse türün rotasının yürürlükteki revizyonu. Elle seçilen rota yalnız yürürlükte revizyonu olan
+// ve boş seçeneğin rotasından başka bir rotadır. farkli: rota ana emrinkinden başka; parti o rotanın yürürlükteki revizyonundan ayrı emir olur
+// (3296-2 a). Ana emrin rotası bilinmiyorsa (revizyon listede yok) farkli false kalır, karar sunucuda.
+export interface AnaRota { rotaId: number; harf: string | null }
+export interface PartiRotaSecimi {
+  bosBaslik: string;
+  secenekler: { deger: string; baslik: string }[];
+  // Sonuçta kullanılacak rota; elle seçim (gönderilecek rotaId) yalnız secilenId doluyken vardır.
+  rotaId: number; ad: string; harf: string | null; farkli: boolean; secilenId: number | null;
+}
+export function partiRotaSecimi(c: UrunRotalari | undefined, ana: AnaRota | null, anaTur: string, tur: string, secilen: string): PartiRotaSecimi | null {
   if (c === undefined || c.rotalar.length === 0) return null;
-  const rota = turRotasi(c, tur)!.rota;
-  const y = c.revizyonlar.find((r) => r.rotaId === rota.id && r.durum === 'yururlukte') ?? null;
-  const emirRev = o.rev === null ? undefined : c.revizyonlar.find((r) => String(r.id) === o.rev);
-  const farkli = emirRev !== undefined && emirRev.rotaId !== rota.id;
-  return { ad: rota.ad, harf: y?.harf ?? null, farkli, adimlar: y === null ? [] : emirAdimlari(d, { ...o, rev: String(y.id), rotasiz: false }) };
+  const yururlukte = (id: number) => c.revizyonlar.find((r) => r.rotaId === id && r.durum === 'yururlukte') ?? null;
+  const turun = turRotasi(c, tur)!.rota;
+  const anaGibi = ana !== null && (tur === anaTur || ana.rotaId === turun.id);
+  const bosRota = anaGibi ? c.rotalar.find((r) => r.id === ana.rotaId) ?? turun : turun;
+  const bosHarf = anaGibi ? ana.harf : yururlukte(turun.id)?.harf ?? null;
+  const metin = (ad: string, harf: string | null) => `${ad} · ${harf === null ? 'yürürlükte değil' : `Rev ${harf}`}`;
+  const harfi = (id: number) => (ana !== null && id === ana.rotaId ? ana.harf : yururlukte(id)?.harf ?? null);
+  const secenekler = c.rotalar.filter((r) => r.id !== bosRota.id && (yururlukte(r.id) !== null || r.id === ana?.rotaId))
+    .map((r) => ({ deger: String(r.id), baslik: metin(r.ad, harfi(r.id)) }));
+  const elle = secilen === '' ? undefined : c.rotalar.find((r) => String(r.id) === secilen && r.id !== bosRota.id && secenekler.some((s) => s.deger === secilen));
+  const rota = elle ?? bosRota;
+  const harf = elle === undefined ? bosHarf : harfi(elle.id);
+  return {
+    bosBaslik: `${anaGibi ? 'Ana emirle aynı' : 'Türün rotası'} (${metin(bosRota.ad, bosHarf)})`,
+    secenekler, rotaId: rota.id, ad: rota.ad, harf, farkli: ana !== null && rota.id !== ana.rotaId, secilenId: elle?.id ?? null,
+  };
+}
+
+// Bölmede partinin rotası ve (farklıysa) ayrı emrin adımları; ürünün rotaları okunamadıysa null. ana: emrin açıldığı rota (bilinmiyorsa null).
+export interface BolmeTurRotasi extends PartiRotaSecimi { adimlar: EmirAdimi[] }
+export function bolmeTurRotasi(
+  d: Durum, c: UrunRotalari | undefined, o: Emir, ana: AnaRota | null, tur: string, secilen = '',
+): BolmeTurRotasi | null {
+  const s = partiRotaSecimi(c, ana, o.tur, tur, secilen);
+  if (s === null || c === undefined) return null;
+  const y = c.revizyonlar.find((r) => r.rotaId === s.rotaId && r.durum === 'yururlukte') ?? null;
+  return { ...s, adimlar: y === null || !s.farkli ? [] : emirAdimlari(d, { ...o, rev: String(y.id), rotasiz: false }) };
+}
+
+// Emir ayrıntısında emrin açıldığı rota ve revizyonu (emrin revizyonundan); revizyon listede yoksa null.
+export function anaRotasi(c: UrunRotalari | undefined, o: Pick<Emir, 'rev'>): AnaRota | null {
+  const r = c === undefined || o.rev === null ? undefined : c.revizyonlar.find((x) => String(x.id) === o.rev);
+  return r === undefined ? null : { rotaId: r.rotaId, harf: r.harf };
+}
+// Yeni emir formunda emrin açılacağı rota (Rota alanındaki seçim ya da türün rotası) ve yürürlükteki revizyonu.
+export function yeniEmirAnaRotasi(c: UrunRotalari | undefined, tur: string, secilen: string): AnaRota | null {
+  if (c === undefined || c.rotalar.length === 0) return null;
+  const rotaId = c.rotalar.length < 2 ? c.rotalar[0]!.id : Number(emirRotasi(c, tur, tur, secilen)!.secili);
+  return { rotaId, harf: c.revizyonlar.find((r) => r.rotaId === rotaId && r.durum === 'yururlukte')?.harf ?? null };
+}
+// Sonuç tablosunun ana emir satırı: "Rota · Rev X".
+export function anaRotaMetni(c: UrunRotalari | undefined, ana: AnaRota | null): string | null {
+  const r = ana === null ? undefined : c?.rotalar.find((x) => x.id === ana.rotaId);
+  return ana === null || r === undefined ? null : `${r.ad} · ${ana.harf === null ? 'yürürlükte değil' : `Rev ${ana.harf}`}`;
 }
 
 export function yururlukteRevizyonId(d: Pick<DurumCevabi, 'routeRevs'>, urunId: string): number | null {

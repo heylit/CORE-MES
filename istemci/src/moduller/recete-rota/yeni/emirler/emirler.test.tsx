@@ -1,3 +1,4 @@
+import { PARTI_ROTASI_GECERSIZ } from '#paylasilan/sozlesme/emir-turleri.ts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
@@ -603,27 +604,142 @@ describe('R3 Üretim emirleri: Diğer menüsü ve stok (1102 a, 1106 a)', () => 
     return { istekler, ayrinti };
   };
 
-  it('3296-2 a: farklı rotalı türe parti satırı türün rotasını yazar; "Bölünce ne olacak" yeni emri kendi adımlarıyla gösterir', async () => {
+  const parti1 = (ayrinti: HTMLElement) => within(ayrinti).getByRole('group', { name: 'Parti 1 adet, tür ve rota' });
+  // Rotalar yüklenene kadar alan pasiftir (ayrı öğe); hazır olan alanı döner.
+  const rotaHazir = async (grup: HTMLElement) => {
+    await waitFor(() => { expect((within(grup).getByRole('combobox', { name: 'Parti rotası' }) as HTMLSelectElement).disabled).toBe(false); });
+    return within(grup).getByRole('combobox', { name: 'Parti rotası' }) as HTMLSelectElement;
+  };
+
+  it('3296-2 a: farklı rotalı türe boş Parti rotası türün rotasını yazar; "Bölünce ne olacak" yeni emri kendi adımlarıyla gösterir', async () => {
     const { istekler, ayrinti } = await bolAc(false);
-    const rota = await within(ayrinti).findByRole('textbox', { name: 'Parti 1 rota' }) as HTMLInputElement;
-    await waitFor(() => { expect(rota.value).toBe('ORN FAI · Rev A'); });
-    expect(within(ayrinti).getByText(/FAI türünün rotası ana emrinkinden farklı: parti kendi rotasıyla ayrı emir olarak açılır/)).toBeTruthy();
+    const rota = await rotaHazir(parti1(ayrinti));
+    expect(within(rota).getByRole('option', { name: 'Türün rotası (ORN FAI · Rev A)' })).toBeTruthy();
+    expect(rota.value).toBe('');
+    expect(within(ayrinti).getByText(/Parti 1: rotası ana emrinkinden farklı; parti kendi rotasıyla ayrı emir olarak açılır/)).toBeTruthy();
     const tablo = within(ayrinti).getByRole('table', { name: 'Bölme önizlemesi' });
     expect(within(tablo).getByRole('rowheader', { name: /Yeni emir/ })).toBeTruthy();
     expect(tablo.textContent).toContain('ORN FAI · Rev A, ayrı emir');
     expect(within(ayrinti).getByText(/^Yeni emir \(FAI, .* adet\): ORN FAI · Rev A: 10 T · 20 T · 25 T$/)).toBeTruthy();
+    const sonuc = within(ayrinti).getByRole('table', { name: 'Bölme sonucu' });
+    expect(within(sonuc).getByRole('rowheader', { name: 'Parti 1' }).closest('tr')?.textContent).toContain('Ayrı emir; ana emre birleşmez');
+    expect(within(sonuc).getByRole('rowheader', { name: 'UE-0001' }).closest('tr')?.textContent).toContain('Standart · Rev F');
     fireEvent.click(within(ayrinti).getByRole('button', { name: 'Partilere böl ve onaya gönder' }));
     await waitFor(() => { expect(yazmalar(istekler).some((i) => i.yol === '/adimli-emirler/61/bol')).toBe(true); });
+    expect(yazmalar(istekler).find((i) => i.yol === '/adimli-emirler/61/bol')?.govde).not.toHaveProperty('rotaId');
   });
 
-  it('3296-2 a: adımı başlamış emirde farklı rotalı parti satır içinde uyarı verir, bölme kapanır, "FAI için yeni emir aç" görünür', async () => {
+  it('3578 Y2: boş seçenek gerçek sonucu yazar (ana emirle aynı rota ana emrin revizyonuyla), bu rota listede tekrar etmez; elle seçilen rota gövdeye girer', async () => {
+    const { istekler, ayrinti } = await bolAc(false);
+    const grup = parti1(ayrinti);
+    const rota = await rotaHazir(grup);
+    // Tür boşa dönünce parti ana emrin rotasında kalır; liste yalnız öteki rotayı sunar.
+    fireEvent.change(within(grup).getByRole('combobox', { name: 'Parti 1 emir türü' }), { target: { value: '' } });
+    await waitFor(() => { expect(within(grup).getByRole('option', { name: 'Ana emirle aynı (Standart · Rev F)' })).toBeTruthy(); });
+    expect(within(rota).getAllByRole('option').map((o) => o.textContent)).toEqual(['Ana emirle aynı (Standart · Rev F)', 'ORN FAI · Rev A']);
+    fireEvent.change(rota, { target: { value: '2' } });
+    expect(within(ayrinti).getByRole('table', { name: 'Bölme sonucu' }).textContent).toContain('ORN FAI · Rev A');
+    fireEvent.click(within(ayrinti).getByRole('button', { name: 'Partilere böl ve onaya gönder' }));
+    await waitFor(() => { expect(yazmalar(istekler).some((i) => i.yol === '/adimli-emirler/61/bol')).toBe(true); });
+    expect(yazmalar(istekler).find((i) => i.yol === '/adimli-emirler/61/bol')?.govde).toMatchObject({ adet: 3, rotaId: 2 });
+    expect(yazmalar(istekler).find((i) => i.yol === '/adimli-emirler/61/bol')?.govde).not.toHaveProperty('emirTuru');
+  });
+
+  it('3578 Y5: emir türü değişince elle seçilen rota boşa döner ve satırda canlı not çıkar', async () => {
+    const { ayrinti } = await bolAc(false);
+    const grup = parti1(ayrinti);
+    const rota = await rotaHazir(grup);
+    fireEvent.change(within(grup).getByRole('combobox', { name: 'Parti 1 emir türü' }), { target: { value: '' } });
+    fireEvent.change(rota, { target: { value: '2' } });
+    expect(rota.value).toBe('2');
+    fireEvent.change(within(grup).getByRole('combobox', { name: 'Parti 1 emir türü' }), { target: { value: 'numune' } });
+    expect((within(grup).getByRole('combobox', { name: 'Parti rotası' }) as HTMLSelectElement).value).toBe('');
+    const not = within(grup).getByText('Emir türü değişti; parti rotası türün rotasına döndü.');
+    expect(not.getAttribute('aria-live')).toBe('polite');
+  });
+
+  it('3296-2 a, 3578 Y3: adımı başlamış emirde farklı rotalı parti kendi satırında engel olur; ana düğme aria-disabled ve nedenli, "Parti 1\'i yeni emir olarak aç" rotayı taşır', async () => {
     const { istekler, ayrinti } = await bolAc(true);
-    const uyari = await within(ayrinti).findByText(/FAI türünün rotası farklı ve bu emirde adım başladı; FAI partisini yeni emir olarak açın/);
-    expect(uyari.closest('[role="alert"]')).not.toBeNull();
-    expect((within(ayrinti).getByRole('button', { name: 'Partilere böl ve onaya gönder' }) as HTMLButtonElement).disabled).toBe(true);
-    expect(within(ayrinti).getByRole('button', { name: 'FAI için yeni emir aç' })).toBeTruthy();
+    const grup = parti1(ayrinti);
+    const rota = await rotaHazir(grup);
+    const engel = await within(grup).findByText(/Parti 1: ORN FAI rotası bu emrinkinden farklı ve bu emirde adım başladı; parti yeni emir olarak açılmalı/);
+    expect(engel.closest('[role="alert"]')).not.toBeNull();
+    expect(rota.getAttribute('aria-describedby')).toBe(engel.id);
+    const ana = within(ayrinti).getByRole('button', { name: 'Partilere böl ve onaya gönder' });
+    expect(ana.getAttribute('aria-disabled')).toBe('true');
+    expect(ana.getAttribute('aria-describedby')).not.toBeNull();
+    expect(document.getElementById(ana.getAttribute('aria-describedby')!)?.textContent).toBe('Parti 1 yeni emir olarak açılmalı');
+    fireEvent.click(ana);
+    expect(within(ayrinti).getByRole('button', { name: "Parti 1'i yeni emir olarak aç" })).toBeTruthy();
     expect(within(ayrinti).queryByRole('table', { name: 'Bölme önizlemesi' })).toBeNull();
+    expect(within(ayrinti).queryByRole('table', { name: 'Bölme sonucu' })).toBeNull();
     expect(yazmalar(istekler).some((i) => i.yol === '/adimli-emirler/61/bol')).toBe(false);
+  });
+
+  it('3578 Y6: sunucu 422 verirse ileti Parti rotası alanının altında kalır, adetler korunur, "Türün rotasına dön" seçimi boşaltır', async () => {
+    const istekler = sunucuKur(YONETICI, {
+      durum: ikiRotali(false),
+      yazmalar: {
+        'GET /adimli-emirler/61': () => json(200, { emir: emir61 }), 'GET /rota/urunler/11': () => json(200, ROTALAR),
+        'POST /adimli-emirler/61/bol': () => json(422, { kod: 'GECERSIZ', mesaj: PARTI_ROTASI_GECERSIZ }),
+      },
+    });
+    const ayrinti = await sayfa();
+    fireEvent.click(within(ayrinti).getByRole('button', { name: 'UE-0001 işlemleri' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Böl (parti ya da kol)' }));
+    fireEvent.click(within(ayrinti).getByRole('button', { name: 'Partilere böl' }));
+    const grup = parti1(ayrinti);
+    fireEvent.change(within(grup).getByLabelText('Parti 1'), { target: { value: '3' } });
+    fireEvent.change(await rotaHazir(grup), { target: { value: '2' } });
+    fireEvent.click(within(ayrinti).getByRole('button', { name: 'Partilere böl ve onaya gönder' }));
+    await waitFor(() => { expect(within(grup).getAllByRole('alert').some((a) => a.textContent === PARTI_ROTASI_GECERSIZ)).toBe(true); });
+    expect((within(grup).getByLabelText('Parti 1') as HTMLInputElement).value).toBe('3');
+    expect(istekler.filter((i) => i.yol === '/rota/urunler/11').length).toBeGreaterThan(1);
+    fireEvent.click(within(grup).getByRole('button', { name: 'Türün rotasına dön' }));
+    expect((within(grup).getByRole('combobox', { name: 'Parti rotası' }) as HTMLSelectElement).value).toBe('');
+    expect(within(grup).queryByRole('button', { name: 'Türün rotasına dön' })).toBeNull();
+  });
+
+  it('3578 Y6: rotalar okunamazsa alan pasif, Yenile yanında; parti türün rotasıyla bölünür (gövdede rotaId yok)', async () => {
+    const istekler = sunucuKur(YONETICI, {
+      durum: ikiRotali(false),
+      yazmalar: { 'GET /adimli-emirler/61': () => json(200, { emir: emir61 }), 'GET /rota/urunler/11': () => json(500, { kod: 'SUNUCU', mesaj: 'Okunamadı.' }), 'POST /adimli-emirler/61/bol': () => json(200, { emir: emir61, altEmirId: 63 }) },
+    });
+    const ayrinti = await sayfa();
+    fireEvent.click(within(ayrinti).getByRole('button', { name: 'UE-0001 işlemleri' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Böl (parti ya da kol)' }));
+    fireEvent.click(within(ayrinti).getByRole('button', { name: 'Partilere böl' }));
+    const grup = parti1(ayrinti);
+    const alan = await within(grup).findByRole('combobox', { name: 'Parti rotası' }) as HTMLSelectElement;
+    expect(alan.disabled).toBe(true);
+    expect(await within(grup).findByText('Rotalar okunamadı; parti türün rotasıyla bölünür.')).toBeTruthy();
+    expect(within(grup).getByRole('button', { name: 'Yenile' })).toBeTruthy();
+    fireEvent.change(within(grup).getByLabelText('Parti 1'), { target: { value: '3' } });
+    fireEvent.click(within(ayrinti).getByRole('button', { name: 'Partilere böl ve onaya gönder' }));
+    await waitFor(() => { expect(yazmalar(istekler).some((i) => i.yol === '/adimli-emirler/61/bol')).toBe(true); });
+    expect(yazmalar(istekler).find((i) => i.yol === '/adimli-emirler/61/bol')?.govde).not.toHaveProperty('rotaId');
+  });
+
+  it('3578 Y6: ürünün tek rotası varsa Parti rotası salt okunur; kol ayırmada rota alanı yoktur ve not yazar', async () => {
+    const durum = ikiRotali(false);
+    const adim = (opNo: number, seq: number) => ({ ...adimOrnegi(), id: `s${String(opNo)}`, seq, opNo, name: `Adım ${String(opNo)}` });
+    durum.routeRevs = [{ ...revizyonOrnegi('71', 'F', 'yururlukte', 1, [adim(10, 1), adim(20, 2), adim(30, 3)]), rotaId: '1', rotaStandart: true }] as typeof durum.routeRevs;
+    sunucuKur(YONETICI, {
+      durum,
+      yazmalar: {
+        'GET /adimli-emirler/61': () => json(200, { emir: emir61 }),
+        'GET /rota/urunler/11': () => json(200, { ...ROTALAR, rotalar: ROTALAR.rotalar.slice(0, 1), revizyonlar: ROTALAR.revizyonlar.slice(0, 1) }),
+      },
+    });
+    const ayrinti = await sayfa();
+    fireEvent.click(within(ayrinti).getByRole('button', { name: 'UE-0001 işlemleri' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Böl (parti ya da kol)' }));
+    fireEvent.click(within(ayrinti).getByRole('button', { name: 'Partilere böl' }));
+    const alan = await within(parti1(ayrinti)).findByRole('textbox', { name: 'Parti rotası' }) as HTMLInputElement;
+    expect([alan.value, alan.readOnly]).toEqual(['Standart · Rev F', true]);
+    fireEvent.click(within(ayrinti).getByRole('button', { name: 'Kol ayır' }));
+    expect(within(ayrinti).queryByRole('combobox', { name: 'Parti rotası' })).toBeNull();
+    expect(within(ayrinti).getByText(/Kolda rota seçimi yoktur/)).toBeTruthy();
   });
 
   it('3099: partilere bölerken her partinin türü seçilir; seçilen tür bölme isteğine girer, seçilmeyen parti türsüz gider (ana emrinki)', async () => {
@@ -639,8 +755,8 @@ describe('R3 Üretim emirleri: Diğer menüsü ve stok (1102 a, 1106 a)', () => 
     fireEvent.click(within(ayrinti).getByRole('button', { name: 'UE-0001 işlemleri' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Böl (parti ya da kol)' }));
     fireEvent.click(within(ayrinti).getByRole('button', { name: 'Partilere böl' }));
-    const p1 = within(ayrinti).getByRole('group', { name: 'Parti 1 ve türü' });
-    const p2 = within(ayrinti).getByRole('group', { name: 'Parti 2 ve türü' });
+    const p1 = within(ayrinti).getByRole('group', { name: 'Parti 1 adet, tür ve rota' });
+    const p2 = within(ayrinti).getByRole('group', { name: 'Parti 2 adet, tür ve rota' });
     const tur1 = within(p1).getByRole('combobox', { name: 'Parti 1 emir türü' });
     expect((tur1 as HTMLSelectElement).value).toBe('');
     expect(within(p1).getByRole('option', { name: 'Ana emirle aynı (Seri)' })).toBeTruthy();

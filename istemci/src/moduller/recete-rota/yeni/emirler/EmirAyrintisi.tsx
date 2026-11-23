@@ -5,7 +5,7 @@ import { Dugme, Girdi, Menu, OnayPenceresi, Rozet, Secim, Simge, Tablo, type Men
 import { miktar, sayi, tarih, YOK, zaman } from '../bicim.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
 import { RR_ANAHTARI, useRrBaglami, type RrDurumu } from '../veri.ts';
-import { AdimSeridi, altEmirTurleri, BolmePaneli, bolmeSonucu, bosBolme, EK_TURLERI, type BolmeDurumu } from './Bolme.tsx';
+import { AdimSeridi, altEmirRotalari, altEmirTurleri, BolmePaneli, bolmeSonucu, bosBolme, EK_TURLERI, partiRotasiReddi, type BolmeDurumu, type PartiRotaKaynagi } from './Bolme.tsx';
 import { guncelSurum, type useEmirKomutu } from './komut.ts';
 import { EkAdimPaneli, type EkYeri } from './EkAdim.tsx';
 import { EmirTuruPaneli } from './EmirTuru.tsx';
@@ -16,7 +16,7 @@ import { DalRozeti } from '../rotalar/PatlamisRota.tsx';
 import { IS_EMRI_DURUMU } from '#paylasilan/sozlesme/emir-durumu.ts';
 import {
   acikMi, adimDugumu, adimDurumu, altDugumAdimlari, adimPlani, canliAdimPlani, durumAdi, durumGosterimi, emirAdimlari, emirAraligi, ilerleme, planOzeti, planSirasi, plandaMi, rotaFarki, sureMetni, sureOzetiNedenleri, type AdimSureOzeti,
-  ONCELIK_ADI, emirTalepTaslagi, talepGunu, yeniOpNo, yururluktekiRevizyon, bolmeTurRotasi, type AdimPlani, type EmirAdimi, type Emir,
+  ONCELIK_ADI, emirTalepTaslagi, talepGunu, yeniOpNo, yururluktekiRevizyon, anaRotaMetni, anaRotasi, bolmeTurRotasi, tekRotaMetni, type AdimPlani, type EmirAdimi, type Emir,
 } from './kurallar.ts';
 import type { UrunRevizyonlariCevabi } from '#paylasilan/sozlesme/rota.ts';
 import type { IhtiyacSatinAlma, MalzemeIhtiyaciCevabi, MalzemeIhtiyaciSatiri } from '#paylasilan/sozlesme/recete-rota.ts';
@@ -257,6 +257,14 @@ function EmirYapisi({ durum: d, emir: o, adimlar, yetki, komut, islem, islemKapa
     queryFn: () => api.get<UrunRevizyonlariCevabi>(`/rota/urunler/${String(urunNo)}`),
     retry: false,
   });
+  // 3578: Parti rotası alanının kaynağı; rotasız emirde alan yoktur.
+  const anaRota = anaRotasi(urunRotalari.data, o);
+  const rotaKaynagi: PartiRotaKaynagi | undefined = o.rotasiz ? undefined : {
+    durum: urunRotalari.isError ? 'okunamadi' : urunRotalari.data === undefined ? 'yukleniyor' : 'hazir',
+    yenile: () => { void urunRotalari.refetch(); },
+    tekRota: tekRotaMetni(urunRotalari.data), ana: anaRotaMetni(urunRotalari.data, anaRota),
+    coz: (tur, secilen) => bolmeTurRotasi(d, urunRotalari.data, o, anaRota, tur, secilen),
+  };
   const emirler = d.emirler?.orders ?? [];
   const ana = o.parentId === null ? null : emirler.find((x) => x.id === o.parentId) ?? null;
   const altlar = emirler.filter((x) => x.parentId === o.id);
@@ -286,6 +294,7 @@ function EmirYapisi({ durum: d, emir: o, adimlar, yetki, komut, islem, islemKapa
       ayarSuresiDk: sureMetni(e.ayar), birimSureDk: sureMetni(e.birim), aciklama: e.aciklama.trim(),
     }));
     const turler = altEmirTurleri(bolme, r.siralar, o.tur);
+    const rotalar = altEmirRotalari(bolme, r.siralar);
     const turu = (i: number) => { const t = turler[i]; return t === undefined ? {} : { emirTuru: t }; };
     if (bolme.tur === 'kol') {
       const c = await komut.calistir('emir-bol', { id: o.id, adet: r.partiler[0], kolN: bolme.n, kolM: bolme.m, surum: o.surum, ekAdimlar, ...turu(0) },
@@ -296,11 +305,21 @@ function EmirYapisi({ durum: d, emir: o, adimlar, yetki, komut, islem, islemKapa
     if (ekAdimlar.length && r.partiler.length !== 1) { komut.bildir('hata', 'Rework, tamir ya da ek adım yalnız tek parti ayrılırken eklenir; partileri tek tek ayırın.'); return; }
     let surum: number | null = o.surum;
     for (const [i, q] of r.partiler.entries()) {
-      const c = await komut.calistir('emir-bol', { id: o.id, adet: q, surum, ...(ekAdimlar.length ? { ekAdimlar } : {}), ...turu(i) });
+      const rotaId = rotalar[i];
+      const c = await komut.calistir('emir-bol', { id: o.id, adet: q, surum, ...(ekAdimlar.length ? { ekAdimlar } : {}), ...turu(i), ...(rotaId === undefined ? {} : { rotaId }) });
       if (!c.tamam) {
         // Açılan partiler formdan düşer; "Böl" yeniden basılınca yalnız açılmayanlar gider, açılan parti ikinci kez açılmaz.
+        // 3578: sunucu rotayı yürürlükte bulmadıysa (başkası yürürlükten kaldırmış olabilir) ileti Parti rotası alanının altında kalır,
+        // rota listesi yenilenir; form kapanmaz ve adetler korunur.
         const acilan = new Set(r.siralar.slice(0, i));
-        if (acilan.size > 0) setBolme({ ...bolme, partiler: bolme.partiler.map((p, k) => (acilan.has(k) ? '' : p)), turler: bolme.turler.map((t, k) => (acilan.has(k) ? '' : t)) });
+        const reddedilen = c.hata !== undefined && partiRotasiReddi(c.hata) ? { parti: r.siralar[i]!, ileti: c.hata } : null;
+        if (reddedilen !== null) void urunRotalari.refetch();
+        if (acilan.size > 0 || reddedilen !== null) {
+          setBolme({
+            ...bolme, rotaHatasi: reddedilen,
+            partiler: bolme.partiler.map((p, k) => (acilan.has(k) ? '' : p)), turler: bolme.turler.map((t, k) => (acilan.has(k) ? '' : t)), rotalar: bolme.rotalar.map((x, k) => (acilan.has(k) ? '' : x)),
+          });
+        }
         return;
       }
       surum = guncelSurum(c.durum, o.id);
@@ -373,8 +392,8 @@ function EmirYapisi({ durum: d, emir: o, adimlar, yetki, komut, islem, islemKapa
           <BolmePaneli
             yeni={false} anaTur={o.tur} girdi={girdi} adimlar={adimlar} baslamis={baslamis} opdefs={d.opdefs} istasyonlar={d.stations} deger={bolme} degistir={setBolme}
             gonder={() => { void bol(); }} vazgec={() => { setBolme(bosBolme(false)); islemKapat(); }} mesgul={komut.mesgul}
-            turRotasi={(t) => bolmeTurRotasi(d, urunRotalari.data, o, t)}
-            yeniEmirAc={(t, adet) => { void yonlen(`/uretim-emirleri?${new URLSearchParams({ yeni: '1', urun: o.itemId, tur: t, adet }).toString()}`); }}
+            rota={rotaKaynagi}
+            yeniEmirAc={(t, adet, rotaId) => { void yonlen(`/uretim-emirleri?${new URLSearchParams({ yeni: '1', urun: o.itemId, tur: t, adet, ...(rotaId === null ? {} : { rota: String(rotaId) }) }).toString()}`); }}
           />
         </div>
       )}
