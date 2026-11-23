@@ -23,7 +23,7 @@ describe('3131 Hazırlık bekleme işareti', () => {
     const cip = await screen.findByTitle('Operatörde gizli; emir devam edince görünür.', {}, { timeout: 10000 });
     expect(cip.textContent).toBe('Beklemede · Malzeme bekleniyor');
     expect(screen.getAllByTitle('Operatörde gizli; emir devam edince görünür.')).toHaveLength(1);
-    fireEvent.click(screen.getByRole('button', { name: 'Tablo' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Liste' }));
     const tablo = await screen.findByRole('table', { name: 'Hazırlık takip tablosu' }, { timeout: 10000 });
     const bekleyen = within(tablo).getByText('ORN-UE-BK1').closest('tr')!;
     expect(within(bekleyen).getByText('Beklemede · Malzeme bekleniyor')).toBeTruthy();

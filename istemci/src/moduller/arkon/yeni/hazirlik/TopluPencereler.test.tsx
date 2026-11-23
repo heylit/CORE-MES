@@ -30,7 +30,7 @@ function kur(d: Deneme, paketler: Pkg[], belgeler: { kimlik: string; surum: numb
 }
 const yazim = (l: Istek[], id: string) => l.filter((i) => i.yol === `/arkon/belgeler/pkgs/${id}/yaz`).map((i) => (i.govde as { govde: Pkg }).govde);
 const tablo = async () => {
-  fireEvent.click(await screen.findByRole('button', { name: 'Tablo' }, { timeout: 10000 }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Liste' }, { timeout: 10000 }));
   return screen.findByRole('table', { name: 'Hazırlık takip tablosu' }, { timeout: 10000 });
 };
 

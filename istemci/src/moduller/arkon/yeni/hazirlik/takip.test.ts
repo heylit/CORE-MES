@@ -42,6 +42,13 @@ describe('3111 takip tablosu', () => {
     expect(takipSuzgeciOku('bozuk')).toBe('acik');
   });
 
+  it('3606 "Paket yok" süzgeci yalnız paketsiz açık adımları listeler; biten adım ve paketli adım girmez', () => {
+    const [e] = takipEmirleri(gruplar, sonuclar, new Map([[7, ADIMLAR]]), 'paketsiz');
+    expect(e!.satirlar.map((s) => [s.opNo, s.paket])).toEqual([[40, null]]);
+    expect(takipEmirleri(gruplar, sonuclar, new Map(), 'paketsiz')).toEqual([]);
+    expect(takipSuzgeciOku('paketsiz')).toBe('paketsiz');
+  });
+
   it('geri çekme: taslak dışı her paket tek tek; toplu yalnız yayında ve başlamamış', () => {
     expect(geriCekilebilir({ status: 'draft' })).toBe(false);
     expect(geriCekilebilir({ status: 'review' })).toBe(true);

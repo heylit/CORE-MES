@@ -366,11 +366,11 @@ export interface TakipSatiri {
 }
 // bekletme: emir beklemedeyse nedenin adı (3131); paketlerden okunur.
 export interface TakipEmri { anahtar: string; no: string; urun: string; dilimler: AdimDilimi[]; biten: number; satirlar: TakipSatiri[]; bekletme: string | null }
-export type TakipSuzgeci = 'acik' | 'yayinda' | 'uretimde' | 'taslak' | 'beklemede' | 'bitti' | 'hepsi';
+export type TakipSuzgeci = 'acik' | 'yayinda' | 'uretimde' | 'taslak' | 'beklemede' | 'paketsiz' | 'bitti' | 'hepsi';
 export const TAKIP_SUZGECLERI: readonly (readonly [TakipSuzgeci, string])[] = [
-  ['acik', 'Açık işler'], ['yayinda', 'Terminalde'], ['uretimde', 'Üretimde'], ['taslak', 'Taslak ve onayda'], ['beklemede', 'Beklemede'], ['bitti', 'Bitenler'], ['hepsi', 'Hepsi'],
+  ['acik', 'Açık işler'], ['yayinda', 'Terminalde'], ['uretimde', 'Üretimde'], ['taslak', 'Taslak ve onayda'], ['beklemede', 'Beklemede'], ['paketsiz', 'Paket yok'], ['bitti', 'Bitenler'], ['hepsi', 'Hepsi'],
 ];
-const SUZGEC_DURUMLARI: Readonly<Record<Exclude<TakipSuzgeci, 'hepsi'>, readonly PaketDurumu[]>> = {
+const SUZGEC_DURUMLARI: Readonly<Record<Exclude<TakipSuzgeci, 'hepsi' | 'paketsiz'>, readonly PaketDurumu[]>> = {
   acik: ['draft', 'review', 'published', 'production'], yayinda: ['published'], uretimde: ['production'], taslak: ['draft', 'review'],
   beklemede: ['draft', 'review', 'published', 'production'], bitti: ['done'],
 };
@@ -418,8 +418,9 @@ export function takipEmirleri(
     const bekletme = g.paketler.map((p) => tmiBekletme(p)).find((b) => b !== null) ?? null;
     // "Beklemede" süzgeci emrin işaretidir: beklemedeki emrin açık işleri ve paketsiz adımları "Açık işler" gibi.
     if (suz === 'beklemede' && bekletme === null) continue;
-    const satir = satirlar.filter((s) => (suz === 'hepsi' ? true : s.paket ? SUZGEC_DURUMLARI[suz].includes(s.durum) : (suz === 'acik' || suz === 'beklemede') && !s.bitti));
-    if (!satir.some((s) => s.paket)) continue;
+    // 3606: "Paket yok" süzgeci yalnız paketsiz açık adımları listeler (paketi olan başka adımı yoksa da emir görünür).
+    const satir = satirlar.filter((s) => (suz === 'hepsi' ? true : s.paket ? suz !== 'paketsiz' && SUZGEC_DURUMLARI[suz].includes(s.durum) : (suz === 'acik' || suz === 'beklemede' || suz === 'paketsiz') && !s.bitti));
+    if (suz === 'paketsiz' ? satir.length === 0 : !satir.some((s) => s.paket)) continue;
     l.push({
       anahtar: g.anahtar, no: ilk.no, urun: [ilk.part || 'Adsız parça', ilk.partNo].filter(Boolean).join(' · '),
       dilimler, biten: dilimler.filter((d) => d === 'bitti').length, satirlar: satir, bekletme,
