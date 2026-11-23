@@ -181,3 +181,20 @@ test('Matris: tam hücrede "…" düğmesi hücreyi itmez, hücre en az 7 rem', 
   expect((m?.x ?? 0) + (m?.width ?? 0), 'düğme hücrenin içinde').toBeLessThanOrEqual((sonra?.x ?? 0) + (sonra?.width ?? 0) + 1);
   expect(m?.x ?? 0, 'düğme hücreye biner, yan hücreye taşmaz').toBeGreaterThanOrEqual(sonra?.x ?? 0);
 });
+
+// Gerçek veride emir no uzundur (örn. sipariş öneki + emir no); sabit satır başlığı taşıp yandaki hücrenin tıklamasını yakalamamalı.
+test('Matris: uzun emir no sabit başlığı taşırmaz, ilk hücre tıklanır', async ({ page, ac }) => {
+  test.skip((page.viewportSize()?.width ?? 0) < 768, 'telefonda emir kartları');
+  await page.route('**/api/adimli-emirler/adim-matrisi*', async (r) => {
+    const res = await r.fetch();
+    const j = await res.json() as { emirler: { emirNo: string }[] };
+    j.emirler.forEach((e, i) => { e.emirNo = `SS_2026_003-MM-ORN-0000${String(i)}-26-11-006`; });
+    await r.fulfill({ response: res, json: j });
+  });
+  await ac('/adim-durumu?gorunum=matris');
+  const hucre = page.getByRole('table').getByRole('button', { name: /^\S+, OP \d+/ }).first();
+  await expect(hucre).toBeVisible();
+  await hucre.click({ timeout: 5000 });
+  await expect(page.getByText(/^1 seçili$/)).toBeVisible();
+  await sayfaTasmaz(page);
+});
