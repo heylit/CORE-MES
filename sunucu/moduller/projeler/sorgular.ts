@@ -438,6 +438,14 @@ export function emreBagliAcikHazirliklar(db: Db): Promise<{ id: number; hazirlik
       WHERE hazirlik_maddesi IS NOT NULL AND hazirlik_emri_id IS NOT NULL AND durum IN ('yapilacak', 'suruyor', 'bekliyor', 'kontrolde') ORDER BY id`,
   );
 }
+// 3576: iptal edilen emirlerin açık hazırlık görevleri (kontroldekiler dahil); ekran sayıyı gösterir, iptal olayı kapatır.
+export function emirlerinAcikHazirliklari(db: Db, emirIdleri: readonly number[]): Promise<{ id: number }[]> {
+  return db.sorgu(
+    `SELECT id FROM projeler_gorev
+      WHERE hazirlik_maddesi IS NOT NULL AND hazirlik_emri_id = ANY($1::int[]) AND durum IN ('yapilacak', 'suruyor', 'bekliyor', 'kontrolde') ORDER BY id`,
+    [[...emirIdleri]],
+  );
+}
 export function hazirlikGoreviniKapat(db: Db, id: number): Promise<{ id: number } | null> {
   return db.tek<{ id: number }>(
     `UPDATE projeler_gorev SET durum = 'iptal', guncelleyen_id = NULL, guncelleme = now(), surum = surum + 1

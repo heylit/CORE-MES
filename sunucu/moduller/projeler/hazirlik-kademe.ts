@@ -42,6 +42,19 @@ export async function kapananEmirlerinGorevleri(db: Db): Promise<number> {
   return kapanan;
 }
 
+// 3576: emir iptal olayıyla, aynı işlemde: iptal edilen emrin açık hazırlık görevleri hemen kapanır (15 dakikalık iş yedek kalır).
+// Kapanış davranışı yukarıdakiyle aynıdır; hata iptali geri alır.
+export async function emirIptalHazirlikKapat(db: Db, olay: { uretimEmriId: number }): Promise<void> {
+  for (const g of await sorgular.emirlerinAcikHazirliklari(db, [olay.uretimEmriId])) {
+    if ((await sorgular.hazirlikGoreviniKapat(db, g.id)) === null) continue;
+    await bildirimKapat(db, { tur: 'projeler.gorev-kontrol-bekliyor', kaynakKimlik: String(g.id) });
+    await kademeBildirimleriniKapat(db, g.id);
+  }
+}
+export async function emirlerinAcikHazirlikSayisi(db: Db, emirIdleri: readonly number[]): Promise<number> {
+  return emirIdleri.length === 0 ? 0 : (await sorgular.emirlerinAcikHazirliklari(db, emirIdleri)).length;
+}
+
 // Kayıt no e-postaya girer: görev adı serbest metindir, girmez (Risk K3); ad yalnız uygulama içi metindedir.
 // Kademe alıcıları: K2-K3 yapan (kişi ya da rol), K4 kontrol eden ve ayardaki rol (motor ekler), K5 yedek kontrol eden de.
 // Kayda bağlı alıcı yoksa görev dağıtanlar alır: gecikme kimsesiz kalmasın (Risk K-B).

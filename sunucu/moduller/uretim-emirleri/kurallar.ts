@@ -379,6 +379,22 @@ export function adimliIptalIhlali(durum: EmirDurumu, arsiv: boolean, baslamisIsE
   return acikKolVar ? ADIMLI_IPTAL_KOLLU : null;
 }
 
+// 3576: alt emirleriyle tek seferde iptal. Ağaçtaki her açık düğüm (kök ve bütün alt emirler) bugünkü iptal kuralından geçer, açık kol
+// engel sayılmaz (hepsi birlikte iptal olur); biri geçmezse hiçbiri iptal olmaz. Ret metni başlamış alt emirlerin tamamını adlandırır.
+export const ZINCIR_LISTE_DEGISTI = 'Alt emir listesi değişti; pencereyi yenileyip yeniden deneyin.';
+export interface ZincirDugumu { id: number; emirNo: string; durum: EmirDurumu; arsiv: boolean; baslamis: boolean }
+export function zincirIptalIhlali(kok: ZincirDugumu, altlar: readonly ZincirDugumu[]): string | null {
+  const kokIhlali = adimliIptalIhlali(kok.durum, kok.arsiv, kok.baslamis, false);
+  if (kokIhlali !== null) return kokIhlali;
+  const engeller = altlar.filter((a) => adimliIptalIhlali(a.durum, a.arsiv, a.baslamis, false) !== null);
+  if (engeller.length === 0) return null;
+  return `${String(engeller.length)} alt emir başlamış: ${engeller.map((a) => a.emirNo).join(', ')}. `
+    + 'Her birini bitirin ya da emir ayrıntısında "Diğer > Durdur ve arşive al" ile arşive alın, sonra yeniden deneyin. Başlamış alt emir üst emre geri katılamaz.';
+}
+// Pencerede görülen liste ile sunucudaki açık ağaç aynı kümedir (sıra önemsiz); kullanıcının görmediği alt emir iptal edilmez.
+export const zincirListesiAyni = (gorulen: readonly number[], sunucu: readonly number[]): boolean =>
+  gorulen.length === sunucu.length && new Set(gorulen).size === gorulen.length && sunucu.every((id) => gorulen.includes(id));
+
 // 2721: başlamış emir silinmez, arşive alınır: çalışan iş durur, sayılanlar ve tüketim kalır, emir iptal olur ve kapanışı açık kalır.
 // Hiç başlamamış emir için iptal yeter; açık kolu olan emir iptal gibi reddedilir. Fasondaki parça engel değil, uyarıdır (2721 2/3 b).
 export const ARSIV_DURUMU = 'Yalnız açık (taslak, planlı, başlamış) emir arşive alınır.';

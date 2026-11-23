@@ -24,7 +24,7 @@ import { emrinIlerlemesi } from './servis.ts';
 // 2893 D2: açık tedarik satın almadan okunur (satın alma bu modülün üstündedir; kablolama bağlar). Bağlı değilse tedarik boştur ve
 // malzeme eksiği "malzeme" görünür.
 export interface EmirTedarikSatiri {
-  uretimEmriId: number | null; isEmriId: number | null; malzemeNo: number | null; asama: 'talep' | 'siparis'; talepNo: string; siparisNo: string | null; termin: string | null;
+  uretimEmriId: number | null; isEmriId: number | null; malzemeNo: number | null; asama: 'talep' | 'siparis'; talepId?: string; talepNo: string; siparisNo: string | null; termin: string | null;
 }
 export type TedarikCozucusu = (db: Db, uretimEmriIdleri: readonly number[], isEmriIdleri: readonly number[]) => Promise<readonly EmirTedarikSatiri[]>;
 let tedarikCozucusu: TedarikCozucusu | null = null;
@@ -32,6 +32,18 @@ export function tedarikCozucusuKaydet(c: TedarikCozucusu | null): TedarikCozucus
   const onceki = tedarikCozucusu;
   tedarikCozucusu = c;
   return onceki;
+}
+// 3576: iptal penceresinin uyarısı. Emre (ya da fason iş emrine) bağlı açık, siparişe dönmemiş talepler; bağlı değilse boş.
+export async function acikTalepler(db: Db, emirIdleri: readonly number[], isEmriIdleri: readonly number[]): Promise<{ id: string | null; no: string }[]> {
+  if (tedarikCozucusu === null || (emirIdleri.length === 0 && isEmriIdleri.length === 0)) return [];
+  const emirler = new Set(emirIdleri);
+  const isEmirleri = new Set(isEmriIdleri);
+  const satirlar = await tedarikCozucusu(db, emirIdleri, isEmriIdleri);
+  const talepler = new Map<string, string | null>();
+  for (const r of satirlar) {
+    if (r.asama === 'talep' && ((r.uretimEmriId !== null && emirler.has(r.uretimEmriId)) || (r.isEmriId !== null && isEmirleri.has(r.isEmriId)))) talepler.set(r.talepNo, r.talepId ?? null);
+  }
+  return [...talepler].map(([no, id]) => ({ id, no })).sort((x, y) => x.no.localeCompare(y.no));
 }
 // Hammadde talebi adımın girdisine (emir bağı + malzeme no) eşlenir; emre bağlanmamış ya da katalogsuz kalem eşlenmez. Fason satırı iş emrine.
 async function adimTedarikleri(db: Db, emirId: number, idler: readonly number[]): Promise<Map<number, AdimTedariki[]>> {

@@ -544,6 +544,8 @@ export function sunucununBaglari(): Bag[] {
     bag('sipariş onaylandı -> proje bitişi', siparisOnaylandiDinle, projeler.projeBitisiniSiparisTermineKaydir),
     // 3396 Risk K-A: biten, iptal edilen ya da silinen emrin açık hazırlık görevi kademe döngüsünde iptal olur.
     bag('emir durumu -> projeler hazırlık kademesi', projeler.kapaliEmirCozucusuKaydet, uretimEmirleri.hazirligiKapananEmirler),
+    // 3576: iptal olayı aynı işlemde emrin açık hazırlık görevlerini kapatır; 15 dakikalık iş yedek kalır.
+    bag('emir iptal -> projeler hazırlık görevleri', uretimEmirleri.emirIptalDinle, projeler.emirIptalHazirlikKapat),
     // 3458 (dilim 2): Görevleri dağıt projeye bağlı açık emirlere hazırlık görevi açar.
     bag('proje emirleri -> projeler görev dağıtımı', projeler.hazirlikHedefCozucusuKaydet, uretimEmirleri.projeninHazirlikHedefleri),
     // 3405 a: kademeli uyarı kaynakları açık kayıtlarını ortak motora verir; iş günü İK resmi tatilini düşer.

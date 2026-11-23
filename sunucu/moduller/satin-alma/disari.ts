@@ -154,7 +154,7 @@ export type { EmirSatinAlmaAsamasi, EmirSatinAlmaDurumu } from './kurallar.ts';
 // 2893 D2: Adım Durumu'nun okuduğu açık tedarik: emre ya da fason iş emrine bağlı, beklenen (talep ya da sipariş aşamasındaki) kalemler.
 // Yalnız numara, aşama ve beklenen teslim döner; fiyat ve tedarikçi dönmez (operatör terminali de okur, 2893-3 b).
 export interface EmirTedariki {
-  uretimEmriId: number | null; isEmriId: number | null; malzemeNo: number | null; asama: TedarikAsamasi; talepNo: string; siparisNo: string | null; termin: string | null;
+  uretimEmriId: number | null; isEmriId: number | null; malzemeNo: number | null; asama: TedarikAsamasi; talepId: string; talepNo: string; siparisNo: string | null; termin: string | null;
   // 3355: siparişin firması; yalnız sipariş aşamasında, yoksa null.
   firmaId: number | null;
 }
@@ -163,7 +163,7 @@ export async function emirTedarikDurumlari(db: Db, uretimEmriIdleri: readonly nu
   return (await sorgu.emirTedarikDurumlariOku(db, uretimEmriIdleri, isEmriIdleri)).flatMap((s) => {
     const asama = tedarikAsamasi(s);
     return asama === null ? [] : [{
-      uretimEmriId: s.uretimEmriId, isEmriId: s.isEmriId, malzemeNo: s.malzemeNo, asama, talepNo: s.talepNo, siparisNo: asama === 'siparis' ? s.siparisNo : null,
+      uretimEmriId: s.uretimEmriId, isEmriId: s.isEmriId, malzemeNo: s.malzemeNo, asama, talepId: s.talepId, talepNo: s.talepNo, siparisNo: asama === 'siparis' ? s.siparisNo : null,
       termin: asama === 'siparis' ? s.beklenenTeslim : null, firmaId: asama === 'siparis' ? s.firmaId : null,
     }];
   });
