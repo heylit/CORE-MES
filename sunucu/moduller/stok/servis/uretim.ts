@@ -12,7 +12,8 @@ import type {
 } from '#paylasilan/sozlesme/stok.ts';
 import type { StatulerCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { istasyonGetir, istasyondakiKisiler, kisininIzinliIsMerkezleri } from '../../istasyonlar/disari.ts';
-import { bildirimGonder } from '../../bildirim/disari.ts';
+import { bildirimGonder, bildirimKapat } from '../../bildirim/disari.ts';
+import { kisiAdlari, kisilerinIslemleri } from '../../kisiler/disari.ts';
 import { malzemeOzeti, malzemeOzetleri } from '../../malzemeler/disari.ts';
 import {
   adimUretimBilgisi, adimliEmirAyrintisi, baslatmaDenetle, emirDilimi, emirDurumlari, emirMalzemeIhtiyaci, emirOzeti, isEmriOzeti, uretimEmriOzeti, emirDugumleri, emirNolari, kapanisSonuclari, emirMalzemeleri,
@@ -633,9 +634,30 @@ export async function teslimGonder(db: Db, k: Kullanici, g: TeslimGonderGovdesi,
   if ((await sorgular.konumBul(db, hedef))?.tur === 'ara_alan') {
     const t = (await sorgular.teslimBul(db, id, true))!;
     await teslimiKapat(db, k.id, t, bindenMetin(binde(t.miktar)), t.surum, 'miktar');
-  }
+  } else await teslimYoldaBildir(db, k.id, id);
   return kartliCevap(await teslimOku(db, id), acilan);
 }
+// 3619: yoldaki teslimi alacak taraf, teslim kutusunun gösterdiğiyle aynı: alıcı kişi belliyse yalnız o; hedef istasyonsa ona bugün
+// atananlar; hedef depoysa depo işlemini (`stok.transfer`) taşıyanlar. Görevdir: teslim kapanınca (`yoldaGoreviniKapat`) yapıldı olur.
+async function yoldaAlicilari(db: Db, t: TeslimHam): Promise<number[]> {
+  if (t.aliciKisiId !== null) return [t.aliciKisiId];
+  const istasyonId = (await sorgular.teslimUclari(db, [t.hedefKonumId]))[0]?.istasyonId ?? null;
+  if (istasyonId !== null) return (await istasyondakiKisiler(db, istasyonId)).map((x) => x.kisiId);
+  return [...(await kisilerinIslemleri(db))].filter(([, islemler]) => islemler.includes('stok.transfer')).map(([kisiId]) => kisiId);
+}
+const malzemeAdi = (o: KatalogMalzemeOzeti | null): string => o?.ad ?? o?.kod ?? 'malzeme';
+const miktarMetni = (miktar: string, o: KatalogMalzemeOzeti | null): string => `${bindenMetin(binde(miktar))}${o?.birim ? ` ${o.birim}` : ''}`;
+export async function teslimYoldaBildir(db: Db, gonderenKisiId: number, teslimId: number): Promise<void> {
+  const t = await sorgular.teslimBul(db, teslimId);
+  if (t === null || t.durum !== 'yolda') return;
+  const o = await malzemeOzeti(db, t.malzemeId);
+  await bildirimGonder(db, {
+    tur: 'stok.teslim-yolda', baslik: `${t.no}: ${malzemeAdi(o)} yolda`.slice(0, 200),
+    metin: `${miktarMetni(t.miktar, o)} yolda (${t.no}). Teslim kutusundan alın ya da gerekçeyle reddedin.`,
+    kisiler: await yoldaAlicilari(db, t), haric: gonderenKisiId, kaynakKimlik: t.no,
+  });
+}
+export const yoldaGoreviniKapat = (db: Db, t: TeslimHam): Promise<number> => bildirimKapat(db, { tur: 'stok.teslim-yolda', kaynakKimlik: t.no });
 const kartliCevap = (c: TeslimCevabi, acilan: AcilanKart | null): TeslimCevabi => (acilan === null ? c : { ...c, acilanKartlar: [acilan] });
 // Bölünen teslimin her parçası kendi partisiyle ayrı kayıttır; kaynak kimliği parça sırasıyla türetilir, aynı istek ikinci kez gelirse
 // ilk parçadan tanınır ve aynı kayıtlar döner.
@@ -693,7 +715,15 @@ async function yoldakiTeslim(db: Db, id: number): Promise<TeslimHam> {
 export async function teslimAl(db: Db, k: Kullanici, id: number, g: TeslimAlGovdesi): Promise<TeslimCevabi> {
   const t = await yoldakiTeslim(db, id);
   await teslimAlaniDenetle(db, k, t);
-  await teslimiKapat(db, k.id, t, bindenMetin(binde(g.alinan)), g.surum, 'alinan');
+  const alinan = bindenMetin(binde(g.alinan));
+  await teslimiKapat(db, k.id, t, alinan, g.surum, 'alinan');
+  const o = await malzemeOzeti(db, t.malzemeId);
+  const alan = (await kisiAdlari(db, [k.id])).get(k.id) ?? null;
+  await bildirimGonder(db, {
+    tur: 'stok.teslim-alindi', baslik: `${t.no}: ${malzemeAdi(o)} teslim alındı`.slice(0, 200),
+    metin: `${miktarMetni(alinan, o)} alındı${binde(alinan) === binde(t.miktar) ? '' : ` (gönderilen ${bindenMetin(binde(t.miktar))})`}${alan ? `, alan ${alan}` : ''}.`,
+    kisiler: [t.gonderenKisiId], haric: k.id, kaynakKimlik: t.no,
+  });
   return teslimOku(db, id);
 }
 export async function teslimiKapat(db: Db, kisiId: number, t: TeslimHam, miktar: string, surum: number, alan: string): Promise<void> {
@@ -720,6 +750,7 @@ export async function teslimiKapat(db: Db, kisiId: number, t: TeslimHam, miktar:
     });
     if (istek) await istegiTeslimlerleKapat(db, kisiId, istek);
   });
+  await yoldaGoreviniKapat(db, t);
 }
 // İstek, teslimlerinin sonuncusu kapanınca alınanların toplamıyla kapanır; kalanı yeni istek olur. Tek teslimde bu o teslimin alınanıdır;
 // bölünen teslimde (1229 a) parçalar ayrı alınır, yolda parça kaldıkça istek açık kalır. Hiçbir parça alınmadıysa istek açık kalır
@@ -744,6 +775,13 @@ export async function teslimReddet(db: Db, k: Kullanici, id: number, g: TeslimRe
     varMi: () => sorgular.teslimVarMi(db, id), bulunamadiIletisi: 'Teslim bulunamadı.',
   });
   await istegiYenidenDene(db, k.id, t.istekId);
+  await yoldaGoreviniKapat(db, t);
+  const o = await malzemeOzeti(db, t.malzemeId);
+  await bildirimGonder(db, {
+    tur: 'stok.teslim-reddedildi', baslik: `${t.no}: ${malzemeAdi(o)} reddedildi`.slice(0, 200),
+    metin: `${miktarMetni(t.miktar, o)} alınmadı, malzeme kaynakta kalır. Neden: ${g.neden}`,
+    kisiler: [t.gonderenKisiId], haric: k.id, kaynakKimlik: t.no,
+  });
   return teslimOku(db, id);
 }
 export async function teslimIptal(db: Db, k: Kullanici, id: number, g: { surum: number }): Promise<TeslimCevabi> {
@@ -754,6 +792,7 @@ export async function teslimIptal(db: Db, k: Kullanici, id: number, g: { surum: 
     varMi: () => sorgular.teslimVarMi(db, id), bulunamadiIletisi: 'Teslim bulunamadı.',
   });
   await istegiYenidenDene(db, k.id, t.istekId);
+  await yoldaGoreviniKapat(db, t);
   return teslimOku(db, id);
 }
 

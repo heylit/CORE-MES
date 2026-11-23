@@ -113,6 +113,26 @@ const ELLE_TANIMLI_TURLER = {
   'stok.teslim-suresi-doldu': {
     baslik: 'Teslimin yolda süresi doldu', onem: 'uyari', alanIslemler: [], yol: '/stok', varsayilan: { mesaj: false, eposta: false },
   },
+  // 3619: teslimin iki ucu (varsayılan kapalı, 3478-2 a; alıcı kayda bağlı, alan işlemi yok). Yolda görevdir: alacak taraf hedef
+  // istasyona bugün atananlar, hedef depoysa `stok.transfer` taşıyanlar; alınınca, reddedilince, iptal olunca ya da süresi dolunca
+  // stok kapatır. Alındı ve reddedildi gönderene gider; yapan kendisi almaz.
+  'stok.teslim-yolda': {
+    baslik: 'Teslim yolda', onem: 'bilgi', sinif: 'gorev', alanIslemler: [], yol: '/stok', varsayilan: { mesaj: false, eposta: false },
+  },
+  'stok.teslim-alindi': {
+    baslik: 'Teslim alındı', onem: 'bilgi', alanIslemler: [], yol: '/stok', varsayilan: { mesaj: false, eposta: false },
+  },
+  'stok.teslim-reddedildi': {
+    baslik: 'Teslim reddedildi', onem: 'uyari', alanIslemler: [], yol: '/stok', varsayilan: { mesaj: false, eposta: false },
+  },
+  // 3619: malzeme isteğini açan kişiye; hazırlanmaya başlayınca ve doğrudan teslimle kapanınca (yolda teslimle kapanan istek
+  // "teslim yolda" ile duyurulur, ikinci kez söylenmez).
+  'stok.istek-hazir': {
+    baslik: 'Malzeme isteği hazırlanıyor', onem: 'bilgi', alanIslemler: [], yol: '/stok', varsayilan: { mesaj: false, eposta: false },
+  },
+  'stok.istek-teslim-edildi': {
+    baslik: 'Malzeme isteği teslim edildi', onem: 'bilgi', alanIslemler: [], yol: '/stok', varsayilan: { mesaj: false, eposta: false },
+  },
   // 3596: gerçekleşen iş olayları (varsayılan kapalı, 3478-2 a). Mal kabul belge başına bir kez satın almaya; yapan kendisi almaz.
   'stok.mal-kabul-yapildi': {
     baslik: 'Mal kabul yapıldı', onem: 'bilgi', alanIslemler: ['satin-alma.yaz'], yol: '/satin-alma/talepler', varsayilan: { mesaj: false, eposta: false },
