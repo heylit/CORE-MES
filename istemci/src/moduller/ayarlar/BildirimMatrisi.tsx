@@ -107,7 +107,10 @@ export function aliciOzeti(m: MatrisSatiri, rolAdi: ReadonlyMap<number, string>)
   if (a === null) return 'Kayda bağlı kişi';
   if (a.surum === null) return a.varsayilanIslemler.length === 0 ? 'Kayda bağlı kişi' : `Yetkisi olanlar (${a.varsayilanIslemler.map(islemAdi).join(', ')})`;
   const roller = a.rolIdleri.map((id) => rolAdi.get(id) ?? `Rol ${String(id)}`);
-  return [...roller, ...(a.kisiIdleri.length > 0 ? [`${String(a.kisiIdleri.length)} kişi`] : [])].join(', ') || 'Kimse';
+  const secim = [...roller, ...(a.kisiIdleri.length > 0 ? [`${String(a.kisiIdleri.length)} kişi`] : [])].join(', ');
+  // 3597 a: ek alıcılı türde kayıttaki kişi her durumda alır; seçim ona eklenir.
+  if (a.kip === 'ek') return secim === '' ? 'Kayda bağlı kişi' : `Kayda bağlı kişi + ${secim}`;
+  return secim || 'Kimse';
 }
 
 // 3594: tablo hücresinde uzun alıcı listesi tek satırda kalır; ilk iki rol adıyla, kalanı sayıyla. Tam liste paneldedir.
@@ -116,7 +119,7 @@ export function aliciKisaOzeti(m: MatrisSatiri, rolAdi: ReadonlyMap<number, stri
   if (a === null || a.surum === null || a.rolIdleri.length + a.kisiIdleri.length === 0) return aliciOzeti(m, rolAdi);
   const roller = a.rolIdleri.map((id) => rolAdi.get(id) ?? `Rol ${String(id)}`);
   const kalan = roller.length - 2;
-  return [...roller.slice(0, 2), ...(kalan > 0 ? [`+${String(kalan)} rol`] : []), ...(a.kisiIdleri.length > 0 ? [`${String(a.kisiIdleri.length)} kişi`] : [])].join(', ');
+  return (a.kip === 'ek' ? 'Kayda bağlı kişi + ' : '') + [...roller.slice(0, 2), ...(kalan > 0 ? [`+${String(kalan)} rol`] : []), ...(a.kisiIdleri.length > 0 ? [`${String(a.kisiIdleri.length)} kişi`] : [])].join(', ');
 }
 
 function kademeMetni(m: MatrisSatiri): string | null {
@@ -709,14 +712,17 @@ function OlayPaneli({ satir, roller, kisiler, epostaRolleri, epostaKisileri, sab
 
   // 3594 (Arayüz Y1): seçim varsayılanın yerine geçer; kaydetmeden kimin alacağı yazılır.
   const varsayilanMetni = a === null ? '' : a.varsayilanIslemler.length === 0 ? 'yalnız kayda bağlı kişi alır' : `${a.varsayilanIslemler.map(islemAdi).join(', ')} yetkisi olanlar alır`;
+  const ek = a?.kip === 'ek';
+  const gorme = a?.gormeIslemi == null ? '' : islemAdi(a.gormeIslemi);
   const secimVar = rolIdleri.length + kisiIdleri.length > 0;
   const ilkSecim = a !== null && a.varsayilanIslemler.length > 0 && a.rolIdleri.length + a.kisiIdleri.length === 0 && secimVar;
   const alacaklar = (() => {
     if (a === null || !degisim.alici) return null;
-    if (!secimVar) return `Seçim kalkar: ${varsayilanMetni}.`;
+    if (!secimVar) return ek ? 'Ek alıcı kalmaz: yalnız kayıttaki kişi alır.' : `Seçim kalkar: ${varsayilanMetni}.`;
     const roller = rolIdleri.map((id) => rolAdiAl(id));
     const kisilerAd = kisiIdleri.map((id) => kisiAdi.get(id) ?? `Kişi ${String(id)}`);
     const parca = [...(roller.length > 0 ? [`${roller.join(', ')} rolündekiler`] : []), ...kisilerAd].join(', ');
+    if (ek) return `Kayıttaki kişi ve ${parca} (yalnız ${gorme} yetkisi olanlar).`;
     return a.varsayilanIslemler.length > 0 ? `${parca}. Bunların dışında kalan ${a.varsayilanIslemler.map(islemAdi).join(', ')} yetkisi olanlar almaz.` : `${parca}.`;
   })();
 
@@ -765,7 +771,11 @@ function OlayPaneli({ satir, roller, kisiler, epostaRolleri, epostaKisileri, sab
                 {BASLATAN_ALMAZ.has(satir.tur) && (
                   <p className="tc-ayar-aciklama">Olayı başlatan kişi (ör. siparişi açan) kendi işlemi için bu bildirimi almaz.</p>
                 )}
-                <p className="tc-ayar-aciklama">{`Yalnız seçilenler alır. Hiç seçim yoksa ${varsayilanMetni}. Seçmek yetki vermez; kayda bağlı kişi her durumda alır.`}</p>
+                <p className="tc-ayar-aciklama">
+                  {ek
+                    ? `Kayıttaki kişi (ör. siparişi açan, görevi atanan) her zaman alır; seçtikleriniz ona eklenir. Seçilen kişi yalnız ${gorme} yetkisi varsa alır. Seçmek yetki vermez.`
+                    : `Yalnız seçilenler alır. Hiç seçim yoksa ${varsayilanMetni}. Seçmek yetki vermez; kayda bağlı kişi her durumda alır.`}
+                </p>
                 {/* Canlı bölgeler her zaman çizilir, yalnız içerik değişir: sonradan eklenen bölgeyi ekran okuyucu okumayabilir. */}
                 <div role="status" className="tc-alici-canli">
                   {ilkSecim && (
@@ -808,7 +818,7 @@ function OlayPaneli({ satir, roller, kisiler, epostaRolleri, epostaKisileri, sab
                   sec={(d) => { const id = Number(d); if (id > 0) setKisiIdleri([...kisiIdleri, id].sort((x, y) => x - y)); }}
                 />
                 {secimVar && (
-                  <Dugme simge="rotate" onClick={() => { setRolIdleri([]); setKisiIdleri([]); }}>Varsayılana dön</Dugme>
+                  <Dugme simge="rotate" onClick={() => { setRolIdleri([]); setKisiIdleri([]); }}>{ek ? 'Ek alıcıları temizle' : 'Varsayılana dön'}</Dugme>
                 )}
               </>
             )}

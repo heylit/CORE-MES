@@ -336,15 +336,31 @@ export const cagriYonlendirmeDegistirGovdesi = z.object({
 // Bildirim alıcıları (760 c, 761 b): tür başına alıcı roller ve kişiler. Seçim yapılmış türde alıcı yalnız seçilenlerdir (yönetici
 // dahil: seçilmediyse almaz); seçimsiz türde türün işlem kuralı geçer. Kayda bağlı kişi (talebi açan, istasyona atanmış) iki
 // durumda da alır. Ekip çağrısı kendi yönlendirmesiyle seçildiği için bu ayarda yoktur. Okuma ve yazma `ayarlar.yaz` ister.
-// Alıcısı kayda bağlı türler (proje görevinin atananı, kontrol edeni) alıcı seçimine girmez: seçim ya başka projelerin görevini
-// yayar ya da atananı susturur (3303). Gösterimleri (ortada, onay istenir) Bildirim yönetimi'nde yine ayarlanır.
+// Alıcısı kayda bağlı türlerde (proje görevinin atananı, kontrol edeni) seçim kişinin yerine geçemez: ya başka projelerin görevini
+// yayar ya da atananı susturur (3303). Bu yüzden ya hiç seçilmez ya da yalnız ek alıcıdır (3597 a, aşağıda). Gösterimleri
+// (ortada, onay istenir) Bildirim yönetimi'nde yine ayarlanır.
 const KAYDA_BAGLI_TURLER: readonly string[] = [
   'arkon.ekip-cagrisi', 'projeler.gorev-atandi', 'projeler.gorev-kontrol-bekliyor', 'projeler.gorev-geri-cevrildi', 'projeler.gorev-onaylandi',
   'malzemeler.kart-onaylandi', 'siparisler.siparis-onaylandi', 'siparisler.siparis-iptal-edildi', 'siparisler.iskonto-onaylandi', 'siparisler.termin-onaylandi',
   'ik.izin-onaylandi', 'ik.izin-reddedildi',
   'projeler.hazirlik-hatirlatma', 'projeler.hazirlik-gecikti', 'projeler.hazirlik-yoneticiye', 'projeler.hazirlik-devret', ...KADEME_TURLERI,
 ];
-export const ALICI_AYARLI_TURLER = BILDIRIM_TUR_ANAHTARLARI.filter((t) => !KAYDA_BAGLI_TURLER.includes(t)) as [BildirimTuru, ...BildirimTuru[]];
+// 3597 a: kayda bağlı türlerin çoğuna ek alıcı seçilir. Kayıttaki kişi (siparişi açan, görevi atanan) her durumda alır; seçim onun
+// yerine geçmez, ona eklenir. Seçilen kişi yalnız kaydı görebiliyorsa, yani buradaki işlemi taşıyorsa alır: ek alıcı başka
+// projelerin görevini ya da görmediği siparişi yaymaz (3303'teki kaygı). Ekip çağrısı kendi yönlendirmesiyle, kademe basamakları
+// kaynağın ayarıyla seçildiği için bu listede yoktur.
+export const EK_ALICI_GORME_ISLEMLERI = {
+  'projeler.gorev-atandi': 'projeler.oku', 'projeler.gorev-kontrol-bekliyor': 'projeler.oku', 'projeler.gorev-geri-cevrildi': 'projeler.oku',
+  'projeler.gorev-onaylandi': 'projeler.oku',
+  'malzemeler.kart-onaylandi': 'sayfa.malzemeler',
+  'siparisler.siparis-onaylandi': 'siparisler.oku', 'siparisler.siparis-iptal-edildi': 'siparisler.oku', 'siparisler.iskonto-onaylandi': 'siparisler.oku',
+  'siparisler.termin-onaylandi': 'siparisler.oku',
+  'ik.izin-onaylandi': 'ik.izin-oku', 'ik.izin-reddedildi': 'ik.izin-oku',
+} as const satisfies Partial<Record<BildirimTuru, Islem>>;
+export type EkAliciTuru = keyof typeof EK_ALICI_GORME_ISLEMLERI;
+export const ekAliciTuruMu = (tur: string): tur is EkAliciTuru => Object.hasOwn(EK_ALICI_GORME_ISLEMLERI, tur);
+export const ALICI_AYARLI_TURLER = BILDIRIM_TUR_ANAHTARLARI
+  .filter((t) => !KAYDA_BAGLI_TURLER.includes(t) || ekAliciTuruMu(t)) as [BildirimTuru, ...BildirimTuru[]];
 export const ALICI_ROL_EN_COK = 20;
 export const ALICI_KISI_EN_COK = 50;
 
@@ -356,6 +372,10 @@ export const bildirimAliciSatiri = z.object({
   kaynakModul: z.string(),
   // Seçim yokken alıcıyı seçen işlemler; boşsa tür yalnız kayda bağlı kişiye gider.
   varsayilanIslemler: z.array(z.string()),
+  // 3597 a: yerine, seçim varsayılanın yerine geçer (BIL-10); ek, kayıttaki kişi her durumda alır ve seçilenler ona eklenir,
+  // seçilen yalnız `gormeIslemi`ni taşıyorsa alır.
+  kip: z.enum(['yerine', 'ek']),
+  gormeIslemi: z.string().nullable(),
   rolIdleri: z.array(z.number().int()),
   kisiIdleri: z.array(z.number().int()),
   // Tür hiç ayarlanmadıysa null; ilk yazım sürümsüz gelir.
