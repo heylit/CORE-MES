@@ -11,7 +11,7 @@ const BITMIS = {
   acilma: '2026-10-06T08:00:00+00:00', baslama: '2026-10-06T09:00:00+00:00', bitis: '2026-10-06T11:00:00+00:00', iptal: null, saglamAdet: 8, malzemeNo: 501,
 } satisfies IzlemeEmri;
 const SARF = { malzemeId: 601, malzemeAd: 'Deneme çubuk', hizmet: false, brut: '5', verilen: '2', kalan: '3', mevcut: '9', eksik: '0' };
-const tamamlama = (kalan: string, bilesenler = [SARF]): EmirTamamlamaCevabi => ({
+const tamamlama = (kalan: string, bilesenler: EmirTamamlamaCevabi['bilesenler'] = [SARF]): EmirTamamlamaCevabi => ({
   emir: { id: 3, emirNo: 'EM-3', durum: 'bitti', adet: 10, malzemeId: 501, malzemeAd: null }, cikti: { girilen: '1', kalan }, bilesenler, engel: null,
 });
 const ekran = [{ yol: '/uretim-emirleri/:id', ekran: EmirAyrintisi }];
@@ -22,6 +22,8 @@ const yollar = {
   'GET /stok/uretim-emirleri/3/tamamlama': () => json(200, tamamlama('3')),
 };
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+// Not kod parçalarına bölünür (kodlar ayrı öğede); metin bütün olarak aranır.
+const notu = (metin: string) => (_: string, el: Element | null) => el?.classList.contains('tc-emir-ikame') === true && el.textContent === metin;
 
 describe('Stoka tamamla', () => {
   it('stok giriş ve çıkış yetkisi olana bitmiş emrin evinde düğme çıkar', async () => {
@@ -38,6 +40,16 @@ describe('Stoka tamamla', () => {
     const dugme = await screen.findByRole('button', { name: 'Stoka tamamla' });
     expect(dugme.classList.contains('tc-dugme-ikincil')).toBe(true);
     expect(screen.getByText(/İstasyon atanmamış/)).toBeTruthy();
+  });
+
+  it('3437: alternatifle ikame edilen bileşende "Alternatif: <kod> (istenen <kod>)" notu çıkar; ikamesiz bileşende not yok', async () => {
+    const ikameli = { ...SARF, malzemeId: 602, malzemeAd: 'Deneme alternatif çubuk', ikame: { kod: 'ORN-HM-002-A1', istenenKod: 'ORN-HM-002' } };
+    sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'stok.giris', 'stok.cikis'] }, {
+      ...yollar, 'GET /stok/uretim-emirleri/3/tamamlama': () => json(200, tamamlama('3', [{ ...SARF, ikame: null }, ikameli])),
+    });
+    ac(ev, '/ev/3');
+    expect(await screen.findByText(notu('Alternatif: ORN-HM-002-A1 (istenen ORN-HM-002)'))).toBeTruthy();
+    expect(document.querySelectorAll('.tc-emir-ikame')).toHaveLength(1);
   });
 
   it('yetkisiz kullanıcıda düğme yok ve stok ucu çağrılmaz; yalnız giriş yetkisi yetmez', async () => {

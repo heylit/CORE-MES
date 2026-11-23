@@ -16,7 +16,7 @@ import { bildirimGonder } from '../../bildirim/disari.ts';
 import { malzemeOzeti, malzemeOzetleri } from '../../malzemeler/disari.ts';
 import {
   adimUretimBilgisi, adimliEmirAyrintisi, baslatmaDenetle, emirDilimi, emirDurumlari, emirMalzemeIhtiyaci, emirOzeti, isEmriOzeti, uretimEmriOzeti, emirDugumleri, emirNolari, kapanisSonuclari, emirMalzemeleri,
-  aralikAdetleri, adimKararSayaclari, adimUretimBilgileri, emirlerinDugumleri, emirlerinIsEmriIdleri,
+  aralikAdetleri, adimKararSayaclari, bilesenIkameleri, adimUretimBilgileri, emirlerinDugumleri, emirlerinIsEmriIdleri,
 } from '../../uretim-emirleri/disari.ts';
 import {
   binde, bindenMetin, cikisOnerisi, stoklanirMi, partiSec, ihtiyacToplami, kalanSarf, tamamlamaEngeli, ISTEK_GECIS_KAYNAKLARI, istekGecisEngeli, istekAcilisDurumu, sayimArtisPlani, sayimAzalisPlani,
@@ -134,8 +134,18 @@ async function tamamlamaPlani(db: Db, emirId: number, ciktiMiktari?: string, onb
     },
   };
 }
+// 3437: alternatifle ikame edilen bileşen ekranda "Alternatif: <kod> (istenen <kod>)" notuyla görünür; istenen kart yalnız ikame kaydındadır.
 export async function emirTamamlamaOku(db: Db, emirId: number): Promise<EmirTamamlamaCevabi> {
-  return (await tamamlamaPlani(db, emirId)).cevap;
+  const cevap = (await tamamlamaPlani(db, emirId)).cevap;
+  const ikameler = await bilesenIkameleri(db, [emirId]);
+  const ozet = ikameler.length === 0 ? new Map<number, KatalogMalzemeOzeti>() : await malzemeOzetleri(db, ikameler.flatMap((k) => [k.anaMalzemeNo, k.alternatifMalzemeNo]));
+  const bilesenler = cevap.bilesenler.map((b) => {
+    const k = ikameler.find((x) => x.alternatifMalzemeNo === b.malzemeId);
+    const alinan = k === undefined ? undefined : ozet.get(k.alternatifMalzemeNo);
+    const istenen = k === undefined ? undefined : ozet.get(k.anaMalzemeNo);
+    return { ...b, ikame: alinan === undefined || istenen === undefined ? null : { kod: alinan.kod, istenenKod: istenen.kod } };
+  });
+  return { ...cevap, bilesenler };
 }
 // Uç giriş işlemiyle açılır; çıkış işlemi de istenir (yetki K-1 a öncesiyle aynı kalır, genişletilmez). K-1 a: tamamlama sarf yazmaz,
 // yalnız sağlam adedin girilmemiş kısmını girer. Hesap emir kilidi alındıktan sonra yeniden yapılır.

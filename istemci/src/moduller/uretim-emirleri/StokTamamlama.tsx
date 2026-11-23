@@ -7,6 +7,7 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { IkameNotu } from './IkameNotu.tsx';
 import './uretim-emirleri.css';
 
 export type TamamlamaKomutu = { tur: 'gonder'; girecek: string } | { tur: 'yapilacak-yok' };
@@ -22,7 +23,7 @@ const sayiMetni = (m: string | null): string => (m === null ? 'yok' : m.replace(
 type Bilesen = EmirTamamlamaCevabi['bilesenler'][number];
 
 const SUTUNLAR: Sutun<Bilesen>[] = [
-  { anahtar: 'malzeme', baslik: 'Malzeme', hucre: (b) => <>{b.malzemeAd ?? '–'}{b.hizmet && <> <small>(hizmet)</small></>}</> },
+  { anahtar: 'malzeme', baslik: 'Malzeme', kartTamSatir: true, hucre: (b) => <>{b.malzemeAd ?? '–'}{b.hizmet && <> <small>(hizmet)</small></>}<IkameNotu ikame={b.ikame} /></> },
   { anahtar: 'brut', baslik: 'Brüt', hizala: 'sag', hucre: (b) => sayiMetni(b.brut) },
   { anahtar: 'verilen', baslik: 'Verilen', hizala: 'sag', hucre: (b) => sayiMetni(b.verilen) },
   { anahtar: 'kalan', baslik: 'Kalan', hizala: 'sag', hucre: (b) => (b.hizmet ? '–' : sayiMetni(b.kalan)) },

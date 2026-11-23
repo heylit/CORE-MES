@@ -17,7 +17,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { adimliEmirAyrintisi, emirBaslat, emirBitir, emirIptalEt, emirSayim, kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
+import { adimliEmirAyrintisi, bilesenIkamesiYap, emirBaslat, emirBitir, emirIptalEt, emirSayim, kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import type { IsEmriGirdisi } from '../uretim-emirleri/disari.ts';
 import { adimCiktisiCozucusuKaydet, adimStatusuCozucusuKaydet, bakiyeDegistir, cikisYap, hareket, istasyonKonumuBul, rezerveDegistir, uretimPartisi, emirTamamlamaOku, geriAl, hurdaSayimiYansit, istasyondanTeslimEdilen, kaliteKarariYansit, kisiKodu, konumAc, statuDegistir, suresiDolanTeslimleriIptal, uretimGirdiUyarisi, uretimSayimiYansit } from './servis.ts';
 import { emirlerinNetSarfi, emirMalzemeFisleri, emrinRefakatKartlari, istasyonKonumlari, istasyonLotKarari, malzemeStokDurumlari, numuneKarariYansit, numuneTeslimi } from './disari.ts';
@@ -1112,6 +1112,29 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     const hmSatiri = (await o().vt.tx((db) => emirTamamlamaOku(db, e))).bilesenler.find((b) => b.malzemeId === hm);
     assert.deepEqual([Number(hmSatiri?.brut), Number(hmSatiri?.verilen), Number(hmSatiri?.kalan)], [25, 7.5, 0], 'tamamlama verileni net sarfla aynı');
     adimStatusuCozucusuKaydet(async () => null);
+  });
+
+  test('3437: tamamlama okumasında alternatifle ikame edilen bileşen alınan ve istenen kartın kodunu taşır; ikamesiz bileşende ve emirde null', async () => {
+    const [ym, hm, alt, diger] = [await kart('yarimamul', 'ADET'), await kart('hammadde', 'KG'), await kart('hammadde', 'KG'), await kart('hammadde', 'KG')];
+    const a = await istasyon();
+    const tip = (await o().sahip.tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ($1, 'Deneme tipi', 'TAL') RETURNING id", [`TIK-${sira}`]))!.id;
+    const makine = (await o().sahip.tek<{ id: number }>('INSERT INTO makine (kod, ad, istasyon_id) VALUES ($1, $2, $3) RETURNING id', [`TIKM-${a.id}`, 'Tezgah', a.id]))!.id;
+    const adim = (bilesenler: { malzemeNo: number; miktar: string }[]): IsEmriGirdisi => ({
+      sira: 1, opNo: 10, ad: 'Adım 1', operasyonTipiId: tip, kaynak: { tur: 'makine', id: makine }, ayarSuresiDk: '10', birimSureDk: '1',
+      terminGun: null, bagimlilik: 'bekleyen', devirAdedi: null, talimatSurumu: null, kontrolListesi: [], bilesenler,
+    });
+    if (!kisiler.has('planlama_proje')) await kisiEkle('planlama_proje', 'planlama_proje');
+    const planlamaci = (await o().vt.tx((db) => kullaniciYukle(db, kisiler.get('planlama_proje')!)))!;
+    const ac = async () => (await o().vt.tx(async (db) => uretimEmriAc(db, planlamaci, {
+      projeId: denemeProjeId, malzemeNo: ym, adet: 2, teslim: null, kaynakRotaRevizyonId: await revizyon(ym),
+      isEmirleri: [adim([{ malzemeNo: hm, miktar: '2' }, { malzemeNo: diger, miktar: '1' }])],
+    }))).uretimEmriId;
+    const [e, ikamesiz] = [await ac(), await ac()];
+    await o().vt.tx((db) => bilesenIkamesiYap(db, kisiler.get('yonetici')!, { uretimEmriId: e, anaNo: hm, alternatifNo: alt, kaynak: 'Satın alma ST-DENEME' }));
+    const kodlar = new Map((await o().vt.sorgu<{ no: number; kod: string }>('SELECT no, stok_kodu AS kod FROM malzeme_katalog_karti WHERE no = ANY($1::int[])', [[hm, alt]])).map((x) => [x.no, x.kod]));
+    const ikameler = async (emirId: number) => (await o().vt.tx((db) => emirTamamlamaOku(db, emirId))).bilesenler.map((b) => [b.malzemeId, b.ikame ?? null]);
+    assert.deepEqual(await ikameler(e), [[alt, { kod: kodlar.get(alt), istenenKod: kodlar.get(hm) }], [diger, null]], 'ikameli bileşen alınan ve istenen kodla');
+    assert.deepEqual(await ikameler(ikamesiz), [[hm, null], [diger, null]], 'başka emrin ikamesi bu emre geçmez');
   });
 
   test('kart #1289 girdi uyarısı: girdisiz rotada başlatmada söylenir; girdi hiçbir yerde serbest değilse stokta yok; stok gelince ve sonraki adımda yok', async () => {
