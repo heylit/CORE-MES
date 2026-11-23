@@ -4,7 +4,7 @@ import type { PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts'
 import type { CalismaGonderCevabi, DegerlendirmeDurumuCevabi, DegisiklikDefteriCevabi, PlanlamaCalismasiCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { randomUUID } from 'node:crypto';
 import { kullaniciYukle } from '../kisiler/disari.ts';
-import { emirBaslat } from '../uretim-emirleri/disari.ts';
+import { emirBaslat, emirDurdur } from '../uretim-emirleri/disari.ts';
 import { canliyaAlSecenekleri } from './calisma-plani.ts';
 import { PLANLAMA_ANAHTARI } from './disari.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
@@ -191,6 +191,74 @@ describe('plan (gerçek PostgreSQL): çalışma planı tek komutla onaya ve canl
     const sonra = await yerOf(isler[0]);
     assert.ok(Date.parse(sonra.baslangic) > Date.parse(once.baslangic) + 20 * 3_600_000, `durdurulan iş yeni yerinde: ${once.baslangic} -> ${sonra.baslangic}`);
   });
+
+  // 3600 (R3, R4): baştan kurda başlamış işin kalanı dizilir ama iş terminalde hâlâ sürüyor. Ardılı kilitsizdir; süren işin canlıdaki yerinde kalır,
+  // ardıl onun bitişinden önceye yazılmaz (308 b), canlıya alma 200 olur ve iş adıyla söylenir. `kalan`: kalanın çalışmadaki yeni süresi (kısalır ya da gün sonraya gider).
+  const surenBastanKur = async (ayri: boolean, kalan: 'yarim' | 'gun' | 'motor') => {
+    const { surum, isler } = await planliCalisma(ayri);
+    // Önceki testlerin emirleri planda kalır; yeni emrin adımı onların önüne düşerse 4 saat kuralı sorar. Bu test o kuralı ölçmez: gerekçe
+    // yazılır, test tek başına da sırayla da aynı sonucu verir.
+    await tamam<CalismaGonderCevabi>(c.planlama, 'POST', '/plan/planlama-calismasi/canliya-al', { ad: 'Süren ilk', calismaSurumu: surum, dortSaatGerekcesi: 'Deneme gerekçesi: ilk plan' });
+    const { istasyonA, operatorId } = durum();
+    await vt().tx((db) => db.sorgu('INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [operatorId, istasyonA]));
+    const op = (await vt().tx((db) => kullaniciYukle(db, operatorId)))!;
+    const emir = (await vt().tx((db) => db.tek<{ u: number }>('SELECT uretim_emri_id AS u FROM uretim_emirleri_is_emri WHERE id = $1', [isler[0]])))!.u;
+    // Önceki testlerin terminalde açık bıraktığı iş makineyi tutmasın.
+    for (const a of await vt().tx((db) => db.sorgu<{ id: number }>("SELECT id FROM uretim_emri WHERE durum = 'basladi'", []))) await vt().tx((db) => emirDurdur(db, op, a.id, durusNedeniId)).catch(() => undefined);
+    await vt().tx((db) => emirBaslat(db, op, emir));
+    try {
+      const yerOf = async (id: number) => (await tamam<PlanCevabi>(c.planlama, 'GET', '/plan')).yerlesimler.find((x) => x.isEmriId === id)!;
+      const once = await yerOf(isler[0]);
+      const { calisma, surum: s1 } = await calismaOku();
+      const plan = calisma.plan!;
+      const ops = plan.ops as Record<string, { m: string; S: number; C: number; job?: string }>;
+      const son = Object.values(ops).map((o) => String(o.job)).sort().at(-1);
+      const [p, q] = Object.keys(ops).filter((x) => String(ops[x]!.job) === son).sort((a, b) => ops[a]!.S - ops[b]!.S) as [string, string];
+      if (kalan === 'motor') {
+        // Gerçek akış: çalışmaya süren iş (gercek) ve durdurulan işareti yazılır, motor planı yeniden dizer (plan-uygula), sonuç canlıya alınır.
+        const w0 = { ...(calisma['w'] as Record<string, unknown>), durdurulan: { [p]: 1 } };
+        const bekleyen = [{ id: 'ORN-b', ne: 'Yeniden planlama istendi', ayrinti: '', kim: '', t: 1, isler: ['*'], geri: [], kilitsiz: true }];
+        const sM = await calismaKaydet({ ...calisma, plan: { ...plan, ops: { ...ops, [p]: { ...ops[p]!, act: 1, pin: 1 } } } as Calisma['plan'], locks: {}, w: w0, gercek: { [p]: { m: ops[p]!.m, S: ops[p]!.S } }, bekleyen } as Calisma, s1);
+        const { is } = await tamam<{ is: string }>(c.planlama, 'POST', '/plan/planlama-degerlendirmesi', { surum: sM, istek: { tur: 'plan-uygula', isler: ['*'] } });
+        let yeniPlan: Calisma['plan'] = null;
+        for (let i = 0; i < 600 && yeniPlan === null; i++) {
+          const d = await tamam<DegerlendirmeDurumuCevabi>(c.planlama, 'GET', `/plan/planlama-degerlendirmesi/${is}`);
+          if (d.durum === 'bitti') { assert.equal(d.cevap.sonuc.tur, 'plan-uygula'); yeniPlan = (d.cevap.sonuc as unknown as { plan: Calisma['plan'] }).plan; }
+          else { assert.notEqual(d.durum, 'hata', JSON.stringify(d)); await new Promise((t) => { setTimeout(t, 100); }); }
+        }
+        const { calisma: c2, surum: s3 } = await calismaOku();
+        const s4 = await calismaKaydet({ ...c2, plan: { ...yeniPlan, dataVer: c2.dataVer } as Calisma['plan'], locks: {}, w: w0, gercek: { [p]: { m: ops[p]!.m, S: ops[p]!.S } }, bekleyen: [] } as Calisma, s3);
+        const r = await istek(c.planlama, 'POST', '/plan/planlama-calismasi/canliya-al', { ad: 'Süren baştan kur motor', calismaSurumu: s4, dortSaatGerekcesi: 'Deneme gerekçesi: süren iş taşındı' });
+        assert.equal(r.statusCode, 200, r.body);
+        const y1 = await yerOf(isler[0]), y2 = await yerOf(isler[1]);
+        assert.equal(y1.baslangic, once.baslangic, 'süren iş canlıda yerinden oynamaz');
+        assert.ok(Date.parse(y2.baslangic) >= Date.parse(y1.bitis) - 1000, `ardıl süren işin bitişinden önce başlamaz: ${y1.bitis} / ${y2.baslangic}`);
+        return;
+      }
+      const yeniS = kalan === 'gun' ? Math.ceil(ops[q]!.C) + 24 : ops[p]!.S;
+      const pBitis = yeniS + (ops[p]!.C - ops[p]!.S) / (kalan === 'gun' ? 1 : 2);
+      const yeniOps = { ...ops, [p]: { ...ops[p]!, S: yeniS, C: pBitis }, [q]: { ...ops[q]!, S: pBitis, C: pBitis + ops[q]!.C - ops[q]!.S } };
+      const w = { ...(calisma['w'] as Record<string, unknown>), durdurulan: { [p]: 1 } };
+      const s2 = await calismaKaydet({ ...calisma, plan: { ...plan, ops: yeniOps } as Calisma['plan'], locks: {}, w }, s1);
+      const r = await istek(c.planlama, 'POST', '/plan/planlama-calismasi/canliya-al', { ad: 'Süren baştan kur', calismaSurumu: s2, dortSaatGerekcesi: 'Deneme gerekçesi: süren iş taşındı' });
+      assert.equal(r.statusCode, 200, r.body);
+      assert.match(r.json<CalismaGonderCevabi>().uyarilar?.join(' ') ?? '', / OP \d+ terminalde durdurulmayı bekliyor: canlıda eski yerinde kaldı/);
+      const y1 = await yerOf(isler[0]), y2 = await yerOf(isler[1]);
+      assert.equal(y1.baslangic, once.baslangic, 'süren iş canlıda yerinden oynamaz');
+      assert.ok(Date.parse(y2.baslangic) >= Date.parse(y1.bitis) - 1000, `ardıl süren işin bitişinden önce başlamaz: ${y1.bitis} / ${y2.baslangic}`);
+    } finally {
+      await vt().tx((db) => emirDurdur(db, op, emir, durusNedeniId)).catch(() => undefined);
+    }
+  };
+  let durusNedeniId = 0;
+  for (const ayri of [false, true]) {
+    for (const kalan of ['gun', 'yarim', 'motor'] as const) {
+      test(`TK-09 (3600): süren işin kalanı baştan kurda dizilince (${kalan === 'gun' ? 'gün sonraya' : kalan === 'yarim' ? 'kısalarak' : 'motor plan-uygula'}) kilitsiz ardıl süren işten önce başlamaz; canlıya alma 200, uyarı çıkar (${ayri ? 'ayrı' : 'aynı'} tezgâh)`, async () => {
+        durusNedeniId = (await vt().tek<{ id: number }>("INSERT INTO durus_nedeni (kod, ad, kategori, sira) VALUES ($1, 'Deneme duruşu', 'plansiz', 901) ON CONFLICT (kod) DO UPDATE SET ad = excluded.ad RETURNING id", [`TK9${ayri ? 'A' : 'B'}${kalan === 'gun' ? 'G' : kalan === 'yarim' ? 'Y' : 'M'}`]))!.id;
+        await surenBastanKur(ayri, kalan);
+      });
+    }
+  }
 
   // Risk K1: çalışma belgesi sayfadan yazılır; ayarsız işlemden kısa süre kabul edilmez, sabit iş tam süreyle yazılır.
   test('TK-07: sabit işin çalışmadaki süresi ayarsız işlemden kısaysa tam süreyle yazılır (reddedilen süre)', async () => {
