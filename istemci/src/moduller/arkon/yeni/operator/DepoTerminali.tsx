@@ -181,10 +181,11 @@ export function DepoTerminali({ kip, dar, metin, isler, yukleniyor, hata, yenile
                     </span>
                     <b className="tc-ay1-mono">{x.no}</b>
                     <span className="tc-ay1-tcark-ad">{x.ad}</span>
+                    {/* 3584: termin satırı addan hemen sonra; kart kısa pencerede kesilirse önce alttaki tür ve adet gider. */}
+                    {x.kartSatiri ? <span className="tc-ay1-tcark-satir">{x.kartSatiri}</span> : null}
                     <small>{x.tur}</small>
                     {x.hedef !== null ? <progress className="tc-ay1-tcark-ilerleme" max={1} value={x.hedef > 0 ? Math.min(1, n / x.hedef) : 0} aria-label="İlerleme" /> : null}
                     <small className="tc-ay1-mono">{x.hedef === null ? x.tur : `${sayi(n)} / ${sayi(x.hedef)} ${metin.olcu}`}</small>
-                    {x.kartSatiri ? <small className="tc-ay1-tcark-satir">{x.kartSatiri}</small> : null}
                   </article>
                 </button>
               </li>

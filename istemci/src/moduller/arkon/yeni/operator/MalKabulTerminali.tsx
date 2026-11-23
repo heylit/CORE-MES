@@ -3,7 +3,7 @@ import { useBekleyenEtiketler, useDogrudanBasim } from '../../../etiket-merkezi/
 import { FasonKabulOnayi, SatinAlmaKabulu, kabulKalani, useKabulIsleri, useKabulLotlari, type KabulIsi, type YazilanKabul } from '../../../stok/disari.ts';
 import { yerel } from '../cekirdek/yerel.ts';
 import { DepoTerminali, sayimEklenir, type DepoIsi, type DepoMetinleri } from './DepoTerminali.tsx';
-import { YAZICI_NEDENI, etiketBekliyor, etiketYuvasi, kabulIletisi, kabulKartSatiri, type KabulEtiketi } from './kabul-etiketi.ts';
+import { YAZICI_NEDENI, etiketBekliyor, tarihYazisi, etiketYuvasi, kabulIletisi, kabulKartSatiri, type KabulEtiketi } from './kabul-etiketi.ts';
 
 // 3388 a: mal kabul standart terminal düzeninde. Fason dönüşü Kabul +1 ile sayılır (en çok firmada kalan), Bitir'de dönen kart
 // karantinaya tek kayıtla yazılır. Ret yoktur: uygunsuzluk GKK'nin kararıdır, mal kabul yalnız sayar. Satın alma kabulü "Kabul et" ile ekrandaki sipariş satırından açılır, okutma isteğe bağlıdır (parti, raf Stok'un hızlı kabulünde); sayım tuşu kapalıdır.
@@ -37,7 +37,7 @@ export function kabulDepoIsi(k: KabulIsi): DepoIsi {
       { etiket: 'Malzeme', deger: x.kalemAdi },
       { etiket: 'Tedarikçi', deger: x.tedarikciAdi },
       { etiket: 'Beklenen', deger: kabulKalani(k), mono: true },
-      { etiket: 'Termin', deger: x.beklenenTeslim, mono: true },
+      { etiket: 'Termin', deger: x.beklenenTeslim === null ? null : tarihYazisi(x.beklenenTeslim), mono: true },
     ],
     kartSatiri: kabulKartSatiri(fason, x.beklenenTeslim, fason ? (k.hedef === null ? null : `${String(k.hedef)} adet`) : kabulKalani(k)),
     adimlar: fason ? [

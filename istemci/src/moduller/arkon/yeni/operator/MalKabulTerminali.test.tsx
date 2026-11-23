@@ -242,6 +242,17 @@ describe('mal kabulde etiket kapısı (3584)', () => {
     expect(screen.getByRole('status', { name: /Kabulde/ }).textContent).not.toContain('Etiket bekliyor');
   });
 
+  it('Y4: malzemesi tanımlı olmayan satırda pencere okutmayı zorunlu söyler; tanımlıda okutma isteğe bağlı', async () => {
+    ac(false, ['stok.giris'], (yol, g) => kodCoz(yol, g) ?? (yol.startsWith('/stok/acik-siparis-satirlari') ? json({ satirlar: [satir(31, 'ORN Çubuk', 'hammadde'), satir(32, 'ORN Kalem', 'hammadde', { malzemeId: null })] }) : null));
+    const serit = await seritHazir('Bekleyen kabuller');
+    fireEvent.click(within(serit).getByRole('button', { name: /ORN-S-32/ }));
+    fireEvent.click(within(durum()).getByRole('button', { name: /Kabulü başlat/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kabul et' }));
+    const p = await screen.findByRole('dialog', { name: 'Mal kabul' });
+    expect(p.textContent).toContain('Bu satırın malzemesi tanımlı değil: malzemenin kodunu okutun.');
+    expect(within(p).queryByLabelText(/^Sayılan miktar/)).toBeNull();
+  });
+
   it('R1: kayıt cihazda kalır; lot stoktan çıkınca rozet söner, 31 günlük kabul Basılacaklar listesinde olmasa da bekler', async () => {
     const yaz = (gunOnce: number) => localStorage.setItem('arkon:depo:kabul-etiketleri', JSON.stringify([{ belgeId: 12, belgeNo: 'MK-000012', zaman: Date.now() - gunOnce * 86_400_000 }]));
     const bekleyenler = () => json({ gun: 30, bekleyenler: [] });

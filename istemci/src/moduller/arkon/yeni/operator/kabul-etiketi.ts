@@ -47,14 +47,15 @@ export function etiketYuvasi(bekleyenler: readonly KabulEtiketi[], lotu: (belgeI
 export const kabulIletisi = (eksik: YaziciEksigi): string =>
   eksik === null ? "Kabul edildi · Etiket bas'a dokunun" : `Kabul edildi · ${YAZICI_NEDENI[eksik]}`;
 
+// 'YYYY-MM-DD' -> 'GG.AA.YYYY'; başka biçim olduğu gibi kalır.
+export const tarihYazisi = (t: string): string => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(t);
+  return m ? `${m[3]!}.${m[2]!}.${m[1]!}` : t;
+};
+
 // Is kartı satırı (kullanıcı 3584): satın almada termin ve kalan, fasonda firmadaki adet; şerit termine göre sıralıdır.
 export function kabulKartSatiri(fason: boolean, termin: string | null, kalanYazisi: string | null): string {
   const t = `Termin ${termin === null ? '—' : tarihYazisi(termin)}`;
   const kalan = fason ? (kalanYazisi === null ? 'firmada —' : `firmada ${kalanYazisi}`) : `kalan ${kalanYazisi ?? '—'}`;
   return `${t} · ${kalan} · sıra termine göre`;
 }
-// 'YYYY-MM-DD' -> 'GG.AA.YYYY'; başka biçim olduğu gibi kalır.
-const tarihYazisi = (t: string): string => {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(t);
-  return m ? `${m[3]!}.${m[2]!}.${m[1]!}` : t;
-};
