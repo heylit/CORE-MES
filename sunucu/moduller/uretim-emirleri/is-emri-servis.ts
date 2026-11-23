@@ -168,7 +168,8 @@ async function yaziyaCevir(db: Db, g: IsEmriGirdisi, sira: number, tipler: Set<n
   const k = await kaynakCoz(db, g.kaynak);
   return {
     sira, opNo: g.opNo, operasyonTipiId: g.operasyonTipiId, ad: g.ad, ...k, fasonFirmasiz: g.fasonFirmasiz === true,
-    istasyonId: g.fasonFirmasiz === true ? null : (k.istasyonId ?? g.istasyonId ?? null), ayarSuresiDk: g.ayarSuresiDk, birimSureDk: g.birimSureDk,
+    // 3607: kişi kaynağında rotadaki istasyon önce gelir (kaynagiYaz ile aynı kural); makinede makinenin istasyonu.
+    istasyonId: g.fasonFirmasiz === true ? null : g.kaynak?.tur === 'kisi' ? (g.istasyonId ?? k.istasyonId ?? null) : (k.istasyonId ?? g.istasyonId ?? null), ayarSuresiDk: g.ayarSuresiDk, birimSureDk: g.birimSureDk,
     terminGun: g.terminGun, bagimlilik: g.bagimlilik, devirAdedi: g.devirAdedi, firePayiYuzde: g.firePayiYuzde ?? '0',
     makineKullanimi: g.makineKullanimi ?? 'tek', enKucukParca: g.enKucukParca ?? null, yenidenAyar: g.yenidenAyar ?? true,
     talimatSurumu: g.talimatSurumu, dugum: g.dugum ?? null, operasyonId: g.operasyonId ?? null,

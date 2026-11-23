@@ -306,5 +306,6 @@ export function planTestOrtami() {
 
   // İlkel değerler before'dan sonra dolar: test dosyası kendi before'unda okur.
   const durum = () => ({ ortam, app, yoneticiId, denemeProjeId, istasyonA, istasyonB, makineA, makineB, operatorId, merkezId, tamGun });
-  return { c, vt, girisCerezi, istek, tamam, motorAyariYaz, kisiEkle, kartAc, mamulAc, hammaddeAc, tip, yeniAdim, govdeye, ayrinti, taslakAc, kaydet, komut, yururlugeAlinmisRota, isEmirleriAc, isEmriDurumu, isEmriMakinesi, girdiyiIstasyonaKoy, planOku, yer, tg, taslaktaOner, isEmriKomutu, taslagaYaz, tamGunVer, tamGunMerkezi, durum };
+  const ortamAl = (): TestVeritabani => { if (!ortam) throw new Error('Test veritabanı açılamadı.'); return ortam; };
+  return { ortamAl, c, vt, girisCerezi, istek, tamam, motorAyariYaz, kisiEkle, kartAc, mamulAc, hammaddeAc, tip, yeniAdim, govdeye, ayrinti, taslakAc, kaydet, komut, yururlugeAlinmisRota, isEmirleriAc, isEmriDurumu, isEmriMakinesi, girdiyiIstasyonaKoy, planOku, yer, tg, taslaktaOner, isEmriKomutu, taslagaYaz, tamGunVer, tamGunMerkezi, durum };
 }

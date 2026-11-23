@@ -11,8 +11,7 @@ WITH hedef AS (
     LEFT JOIN makine m ON m.id = ra.makine_id
     LEFT JOIN istasyonlar_operasyon_tipi t ON t.id = i.operasyon_tipi_id
    WHERE i.durum = 'bekliyor' AND i.kisi_id IS NOT NULL AND i.istasyon_id IS NULL
-     AND i.fason_firma_id IS NULL AND NOT i.fason_firmasiz AND NOT e.arsiv
-     AND e.durum IN ('taslak', 'planli', 'basladi')
+     AND i.fason_firma_id IS NULL AND NOT i.fason_firmasiz AND e.durum IN ('taslak', 'planli', 'basladi')
 )
 UPDATE uretim_emirleri_is_emri i SET istasyon_id = h.istasyon_id, surum = i.surum + 1
   FROM hedef h WHERE i.id = h.is_emri_id AND h.istasyon_id IS NOT NULL;
@@ -22,5 +21,4 @@ UPDATE uretim_emri e SET istasyon_id = sirada.istasyon_id, surum = e.surum + 1
     SELECT DISTINCT ON (i.uretim_emri_id) i.uretim_emri_id, i.istasyon_id
       FROM uretim_emirleri_is_emri i WHERE i.durum <> 'tamam' ORDER BY i.uretim_emri_id, i.sira
   ) sirada
- WHERE e.id = sirada.uretim_emri_id AND e.istasyon_id IS NULL AND sirada.istasyon_id IS NOT NULL
-   AND NOT e.arsiv AND e.durum IN ('taslak', 'planli', 'basladi');
+ WHERE e.id = sirada.uretim_emri_id AND e.istasyon_id IS NULL AND sirada.istasyon_id IS NOT NULL AND e.durum IN ('taslak', 'planli', 'basladi');
