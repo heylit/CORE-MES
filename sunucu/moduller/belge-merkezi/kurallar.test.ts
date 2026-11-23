@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import { BELGE_TURLERI } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import type { AdayBelge, AdayRevizyon } from './kurallar.ts';
 import {
-  ILETILER, IZINLI_DOSYA_TURLERI, anahtarMetni, kartRevizyonu, kucukResimSec, malzemeBelgesiResimNo, malzemedenYayinda, merkezAcmaReddi, merkezBagKaldirmaReddi, merkezBagReddi, onizlemeBoyutReddi, onizlemeKareReddi, onizlemeRevizyonReddi, revizyonHarfi, revizyonKodu, silmeReddi, yayinReddi,
+  ILETILER, IZINLI_DOSYA_TURLERI, anahtarMetni, kartRevizyonu, kucukResimSec, malzemeBelgesiResimNo, malzemedenYayinda, merkezAcmaReddi, merkezBagKaldirmaReddi, merkezBagReddi, onizlemeBoyutReddi, onizlemeKareReddi, onizlemeRevizyonReddi, revizyonHarfi, revizyonKodu, silmeReddi, turevReddi, yayinReddi,
 } from './kurallar.ts';
 
 test('CZ-04 revizyon harfi sıradan türer: A..Z, sonra AA, AB; sıfır ve eksi reddedilir', () => {
@@ -197,4 +197,11 @@ describe('2138-2 gösterilen revizyon kodu', () => {
     assert.equal(kartRevizyonu([null, '  ']), null);
     assert.equal(kartRevizyonu([]), null);
   });
+});
+
+test('3609 türev kaynağıyla aynı belge türünde olmalı; farklı tür reddedilir, aynı tür geçer', () => {
+  const kaynak = { id: 1, tur: 'teknik-resim', aktif: true, turevMi: false } as const;
+  const girdi = { hedefId: 2, hedefTur: 'teknik-resim', hedefTurevSayisi: 0, kaynak, revizyonDurumu: 'yayinda' } as const;
+  assert.equal(turevReddi(girdi), null);
+  assert.equal(turevReddi({ ...girdi, hedefTur: 'rapor' }), 'turevTuruFarkli');
 });

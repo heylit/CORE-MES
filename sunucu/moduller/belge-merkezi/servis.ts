@@ -90,12 +90,12 @@ const TUREV_ISLETILERI = {
   belge_merkezi_belge_kaynak_fk: { ileti: ILETILER.turevRevizyonYok, alan: 'kaynakRevizyonId' },
 } as const;
 
-async function turevDenetle(db: Db, hedefId: number | null, t: TurevGirdisi): Promise<void> {
+async function turevDenetle(db: Db, hedefId: number | null, hedefTur: BelgeTuru, t: TurevGirdisi): Promise<void> {
   const k = await sorgular.belgeKilitle(db, t.kaynakBelgeId);
   const r = k === null ? null : await sorgular.revizyon(db, k.id, t.kaynakRevizyonId);
   const ret = turevReddi({
-    hedefId, hedefTurevSayisi: hedefId === null ? 0 : await sorgular.turevSayisi(db, hedefId),
-    kaynak: k === null ? null : { id: k.id, aktif: k.aktif, turevMi: k.kaynakBelgeId !== null }, revizyonDurumu: r?.durum ?? null,
+    hedefId, hedefTur, hedefTurevSayisi: hedefId === null ? 0 : await sorgular.turevSayisi(db, hedefId),
+    kaynak: k === null ? null : { id: k.id, tur: k.tur, aktif: k.aktif, turevMi: k.kaynakBelgeId !== null }, revizyonDurumu: r?.durum ?? null,
   });
   if (ret !== null) throw dogrulama(ILETILER[ret], ret === 'turevRevizyonYok' || ret === 'turevRevizyonTaslak' ? 'kaynakRevizyonId' : 'kaynakBelgeId');
 }
@@ -104,7 +104,7 @@ export async function belgeOlustur(db: Db, kullanici: Kullanici, g: BelgeOlustur
   const red = merkezAcmaReddi(g.tur);
   if (red !== null) throw dogrulama(red, 'tur');
   const turev = g.turev ?? null;
-  if (turev !== null) await turevDenetle(db, null, turev);
+  if (turev !== null) await turevDenetle(db, null, g.tur, turev);
   const id = await kisitKorumali(TUREV_ISLETILERI, () => sorgular.belgeEkle(db, {
     ad: g.ad.trim(), tur: g.tur, aciklama: g.aciklama ?? null, resimNo: g.resimNo ?? null, kisiId: kullanici.id, turev,
   }));
@@ -116,9 +116,10 @@ export async function belgeOlustur(db: Db, kullanici: Kullanici, g: BelgeOlustur
 // İki satır kimlik sırasıyla kilitlenir: karşılıklı bağ denemesi kilitlenmeye düşmez.
 export async function turevBagla(db: Db, id: number, g: TurevBagGovdesi): Promise<BelgeAyrintisi> {
   for (const k of [id, g.kaynakBelgeId].sort((a, b) => a - b)) await sorgular.belgeKilitle(db, k);
-  etkinOlmali(await kilitliBelge(db, id));
+  const hedef = await kilitliBelge(db, id);
+  etkinOlmali(hedef);
   const turev = { kaynakBelgeId: g.kaynakBelgeId, kaynakRevizyonId: g.kaynakRevizyonId, kullanim: g.kullanim };
-  await turevDenetle(db, id, turev);
+  await turevDenetle(db, id, hedef.tur, turev);
   await surumuIlerlet(db, id, g.surum);
   await kisitKorumali(TUREV_ISLETILERI, () => sorgular.turevYaz(db, id, turev));
   return belgeAyrintisi(db, id);

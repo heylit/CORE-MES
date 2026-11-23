@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { PDFDocumentProxy } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import type { BelgeAyrintisi, BelgeOlusturGovdesi, Kullanim, Revizyon, TurevGirdisi } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import { CokSatir, Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Pencere, Rozet, Secim, Simge } from '../../../ortak/arayuz/index.ts';
@@ -23,6 +23,7 @@ import {
 import type { DuzenlemeSonucu, ResimliOge, Silinen } from './pdf-yaz.ts';
 import { revKoduMetni, revizyonAdi } from '../revizyon-kodu.ts';
 import { KISA_AD_ZORUNLU, KullanimSecimi, kisaAdGerekli, turevAdi } from '../Turev.tsx';
+import { duzenleyiciTurevi, type DuzenleyiciTurevi } from '../turev-adaylari.ts';
 import { TurevAdAlani } from '../formlar.tsx';
 
 // Çizim Merkezi PDF düzenleyicisi (kart 2123; kararlar 2123-1 b pdf-lib, 2123-2 b ayrı yeni belge, 2123-3 b belge-merkezi.yaz,
@@ -50,8 +51,8 @@ interface Tasima { tur: 'tasi'; px: number; py: number; ilk: Oge; simdi: Oge }
 const dosyaAdiYap = (ad: string): string => `${ad.replace(/\.pdf$/i, '')}-duzenlenmis.pdf`.slice(-120);
 const belgeAdiYap = (ad: string): string => `${ad.slice(0, 104)} (düzenlenmiş)`;
 
-function KaydetPenceresi({ belge, revizyon, dolguVar, olustur, kapat }: {
-  belge: BelgeAyrintisi; revizyon: Revizyon; dolguVar: boolean; olustur: (ayikla: boolean) => Promise<DuzenlemeSonucu>; kapat: () => void;
+function KaydetPenceresi({ belge, revizyon, dolguVar, ilkTurev, olustur, kapat }: {
+  belge: BelgeAyrintisi; revizyon: Revizyon; dolguVar: boolean; ilkTurev: DuzenleyiciTurevi | null; olustur: (ayikla: boolean) => Promise<DuzenlemeSonucu>; kapat: () => void;
 }) {
   const yonlendir = useNavigate();
   // 3468-2: düzenlenen dosya orijinalin bu revizyonunun türevi olur; türev düzenlenirse yenisi aynı orijinalin türevidir (tek seviye).
@@ -59,8 +60,9 @@ function KaydetPenceresi({ belge, revizyon, dolguVar, olustur, kapat }: {
   const kaynak: { belgeId: number; ad: string; revizyonId: number } | null = belge.kaynak
     ? { belgeId: belge.kaynak.belgeId, ad: belge.kaynak.ad, revizyonId: belge.kaynak.revizyonId }
     : revizyon.durum === 'taslak' ? null : { belgeId: belge.id, ad: belge.ad, revizyonId: revizyon.id };
-  const [kullanim, kullanimYaz] = useState<Kullanim | null>(belge.kaynak?.kullanim ?? null);
-  const [kisaAd, kisaAdYaz] = useState('');
+  const [kullanim, kullanimYaz] = useState<Kullanim | null>(belge.kaynak?.kullanim ?? ilkTurev?.kullanim ?? null);
+  // 3609: "Türev ekle > PDF düzenle" yolundan gelen kullanım ve kısa ad hazır gelir; türevin kendisi düzenlenirken kısa ad sorulmaz.
+  const [kisaAd, kisaAdYaz] = useState(belge.kaynak ? '' : ilkTurev?.kisaAd ?? '');
   const [serbestAd, adYaz] = useState(belgeAdiYap(belge.ad));
   const ad = kaynak === null ? serbestAd : kullanim === null ? '' : turevAdi(kaynak.ad, kullanim, kisaAd);
   const kisaGerekli = kaynak !== null && kullanim !== null && !belge.kaynak && kisaAdGerekli(belge.turevler ?? [], kullanim);
@@ -204,6 +206,7 @@ export function PdfDuzenleyici() {
   const revizyonId = Number(hamRev);
   const gecerli = Number.isSafeInteger(id) && id > 0 && Number.isSafeInteger(revizyonId) && revizyonId > 0;
   const yonlendir = useNavigate();
+  const ilkTurev = duzenleyiciTurevi(useLocation().state);
   const { yazar } = useYetki();
   const sorgu = useQuery({ queryKey: anahtarlar.ayrinti(id), queryFn: () => api.get<BelgeAyrintisi>(`/cizimler/${String(id)}`), enabled: gecerli });
   const dosya = useQuery({
@@ -587,7 +590,7 @@ export function PdfDuzenleyici() {
 
       {kaydetAcik && (
         <KaydetPenceresi
-          belge={belge} revizyon={revizyon} dolguVar={gecmis.simdi.some((l) => l.some((o) => o.tur === 'dolgu'))}
+          belge={belge} revizyon={revizyon} dolguVar={gecmis.simdi.some((l) => l.some((o) => o.tur === 'dolgu'))} ilkTurev={ilkTurev}
           olustur={olustur} kapat={() => { kaydetAcikYaz(false); }}
         />
       )}
