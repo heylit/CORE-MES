@@ -207,3 +207,47 @@ test('Matris: uzun emir no sabit başlığı taşırmaz, ilk hücre tıklanır',
   await expect(page.getByText(/^1 seçili$/)).toBeVisible();
   await sayfaTasmaz(page);
 });
+
+// 50'den çok adımda ek onay kutusu zorunlu: yazma düğmesi kutu işaretlenene kadar pasif kalır, sonra tek toplu istek gider (100 sınırı altında).
+test('Matris: 60 üstü adımda ek onay kutusu işaretlenmeden yazılmaz, işaretlenince tek istekle yazılır', async ({ page, ac }) => {
+  const govdeler: { kalemler: { emirId: number; isEmriId: number; statu: string | null }[] }[] = [];
+  await page.route('**/api/adimli-emirler/adim-matrisi*', async (r) => {
+    const res = await r.fetch();
+    const j = await res.json() as { emirler: { emirId: number; emirNo: string; durum: string; adimlar: { isEmriId: number; sistemStatusu: string; elle: unknown }[] }[] };
+    const kalip = j.emirler.find((e) => e.adimlar.length > 0 && e.durum !== 'bitti' && e.durum !== 'iptal');
+    if (kalip === undefined) { await r.fulfill({ response: res, json: j }); return; }
+    // Sentetik emirler: her adım yazılabilir (baslayabilir, elle yok); toplam 66 adım, ek onay eşiği 50 ve toplu sınır 100 arasında.
+    const adet = Math.ceil(66 / kalip.adimlar.length);
+    j.emirler = Array.from({ length: adet }, (_, i) => ({
+      ...kalip, emirId: 900000 + i, emirNo: `ORN-EKONAY-${String(i)}`,
+      adimlar: kalip.adimlar.map((a, k) => ({ ...a, isEmriId: 900000 + i * 100 + k, sistemStatusu: 'baslayabilir', elle: null })),
+    }));
+    await r.fulfill({ response: res, json: j });
+  });
+  await page.route('**/api/adimli-emirler/statu-toplu', async (r) => {
+    const g = r.request().postDataJSON() as (typeof govdeler)[number];
+    govdeler.push(g);
+    await r.fulfill({ json: { kalemler: g.kalemler.map((k) => ({ emirId: k.emirId, isEmriId: k.isEmriId, sonuc: 'yazildi', neden: null })) } });
+  });
+  await ac('/adim-durumu?gorunum=tablo');
+  await expect(page.getByRole('checkbox', { name: /ORN-EKONAY-0 OP \d+ seç$/ }).first()).toBeVisible();
+  await page.getByRole('button', { name: 'Tümünü seç' }).click();
+  await expect(page.getByText(/^\d+ seçili$/)).toBeVisible();
+  const sayi = Number((await page.getByText(/^\d+ seçili$/).textContent())?.match(/\d+/)?.[0] ?? 0);
+  expect(sayi).toBeGreaterThan(50);
+  expect(sayi).toBeLessThanOrEqual(100);
+  await page.getByLabel('Elle statü').selectOption('cizim');
+  await page.getByRole('button', { name: /adıma Çizim revizyonu bekleniyor yaz$/ }).click();
+  const onay = page.getByRole('region', { name: 'Yazma onayı' });
+  const yaz = onay.getByRole('button', { name: /^\d+ adıma yaz$/ });
+  await expect(onay.getByRole('checkbox', { name: /bu 50 adımdan çok/ })).not.toBeChecked();
+  await expect(yaz, 'ek onay işaretlenmeden pasif').toBeDisabled();
+  await onay.getByRole('checkbox', { name: /bu 50 adımdan çok/ }).check();
+  await expect(yaz).toBeEnabled();
+  await yaz.click();
+  await expect(page.getByText(/^Son yazım: \d+ adım yazıldı/)).toBeVisible();
+  expect(govdeler, 'tek toplu istek').toHaveLength(1);
+  expect(govdeler[0]?.kalemler.length).toBe(sayi);
+  expect(govdeler[0]?.kalemler.every((k) => k.statu === 'cizim')).toBe(true);
+  await page.unrouteAll({ behavior: 'wait' });
+});
