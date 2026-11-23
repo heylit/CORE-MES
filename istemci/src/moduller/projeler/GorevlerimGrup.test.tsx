@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import type { GorevlerimCevabi, GorevlerimSatiri } from '#paylasilan/sozlesme/projeler.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
-import { hazirlikEmriNo } from './gosterim.ts';
+import { GOREVLERIM_CSV_BASLIKLARI, gorevlerimCsvSatiri, hazirlikEmriNo } from './gosterim.ts';
 import { ProjeGorevlerim } from './ProjeGorevlerim.tsx';
 
 const satir = (id: number, ad: string, ek: Partial<GorevlerimSatiri> = {}): GorevlerimSatiri => ({
@@ -37,6 +37,16 @@ describe('hazirlikEmriNo (3611)', () => {
   });
 });
 
+describe('Görevlerim dışa aktarım (3611)', () => {
+  it('ekrandaki sade düzenden bağımsız tam sütun: proje, yapan ve kontrol eden ayrı', () => {
+    const s = satir(1, 'Malzeme · ORN-EMIR-001', { kontrolRolAd: 'ORN-Rol-Kalite' });
+    const v = gorevlerimCsvSatiri(s);
+    expect(v).toHaveLength(GOREVLERIM_CSV_BASLIKLARI.length);
+    expect([v[1], v[2], v[3]]).toEqual(['ORN-PRJ-1', 'Rol: ORN-Rol-Depo', 'Rol: ORN-Rol-Kalite']);
+    expect(gorevlerimCsvSatiri(satir(2, 'X · ORN-EMIR-001'))[3]).toBe('');
+  });
+});
+
 describe('Görevlerim emre göre gruplama (3611)', () => {
   const liste = () => [
     satir(1, 'Malzeme · ORN-EMIR-001'), satir(2, 'Aparat · ORN-EMIR-001', { planBitis: '2020-01-01' }),
@@ -55,6 +65,14 @@ describe('Görevlerim emre göre gruplama (3611)', () => {
     expect(screen.queryByRole('columnheader', { name: 'Proje' })).toBeNull();
     expect(screen.getByText(/Proje toplantısı/).textContent).toContain('ORN-PRJ-1');
     expect(screen.getAllByText('Yapan · kontrol').length).toBeGreaterThan(0);
+  });
+
+  it('sade düzen sekme süzgecine göre değil kişinin tüm listesine göre açılır: hazırlık dışı sekmede de sütunlar aynı kalır', async () => {
+    ac([...liste(), satir(9, 'Başka görev', { hazirlikMaddesi: null, adimToplam: 0, tur: 'bana' })]);
+    await screen.findAllByText('Yapan · kontrol');
+    fireEvent.click(screen.getByRole('tab', { name: /Bana atanan/ }));
+    expect(screen.getAllByText('Yapan · kontrol').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('columnheader', { name: 'Proje' })).toBeNull();
   });
 
   it('bütün adımları işaretli görev "Adımlar tamam" rozetini alır', async () => {

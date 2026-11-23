@@ -55,9 +55,9 @@ export function ProjeGorevlerim() {
   // 3611: hazırlık görevleri emre göre tek başlık altında toplanır; seçim yalnız birden çok emir varken sorulur.
   const emirler = new Set(hepsi.flatMap((g) => hazirlikEmriNo(g) ?? []));
   const grupluMu = emreGore || emirler.size < 2;
-  // Sütun kümesi liste içeriğine göre oynamaz: gruplu görünümde en az bir hazırlık görevi varsa sade düzen açıktır; hazırlık dışı görevde proje kodu
+  // Sütun kümesi süzgece ve sekmeye göre oynamaz: gruplu görünümde kişinin listesinde en az bir hazırlık görevi varsa sade düzen açıktır; hazırlık dışı görevde proje kodu
   // Görev hücresinde soluk metindir.
-  const sade = grupluMu && satirlar.some((g) => hazirlikEmriNo(g) !== null);
+  const sade = grupluMu && hepsi.some((g) => hazirlikEmriNo(g) !== null);
   const sutunlar: Sutun<GorevlerimSatiri>[] = [
     { anahtar: 'ad', baslik: 'Görev', hucre: (g) => (
       <span>{g.ad}{sade && hazirlikEmriNo(g) === null && <span className="tc-prj-soluk"> · {g.projeKod}</span>}<span className="tc-prj-soluk"> · {TUR_METNI[g.tur]}</span></span>

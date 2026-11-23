@@ -85,3 +85,11 @@ export function hazirlikEmriNo(g: { hazirlikMaddesi: string | null; ad: string }
   const no = g.ad.slice(i + 3).split(' / ')[0]?.trim() ?? '';
   return no === '' ? null : no;
 }
+
+// 3611: Görevlerim dışa aktarımı ekrandaki sade düzenden bağımsız, her zaman tam sütunludur (proje, yapan ve kontrol eden ayrı sütun).
+export const GOREVLERIM_CSV_BASLIKLARI = ['Görev', 'Proje', 'Yapan', 'Kontrol eden', 'Bitiş', 'İlerleme', 'Durum'] as const;
+export function gorevlerimCsvSatiri(g: Gorev & { projeKod: string }): string[] {
+  return [
+    g.ad, g.projeKod, atamaMetni(g.sorumluAd, g.yapanRolAd), atamaMetni(g.kontrolKisiAd, g.kontrolRolAd, ''), g.planBitis, String(g.ilerleme), gorevDurumMetni(g),
+  ];
+}
