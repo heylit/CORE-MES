@@ -17,7 +17,7 @@ import { anaDepo } from './depo.ts';
 import { kaliteDegistir, tersCevir } from './hareket.ts';
 import { belgeNo, korumali, bakiyeDegistir, siraliKilitle, kilitliEksik, kilitliOlan, hareket, teslimYaz } from './ortak.ts';
 import { istasyonKonumuBul } from './teslim.ts';
-import { teslimiKapat, kartOnce, adimStatusu, adimCiktisi, adimBilgisi, adimTasinani, dalliTasima, adimPlaniKur, uretimAdiminiYaz, rezerveDegistir } from './uretim.ts';
+import { teslimiKapat, yoldaGoreviniKapat, kartOnce, adimStatusu, adimCiktisi, adimBilgisi, adimTasinani, dalliTasima, adimPlaniKur, uretimAdiminiYaz, rezerveDegistir } from './uretim.ts';
 
 // ---- Numune teslimi (karar 115 a, 125 a) -----------------------------------------------------------------------------------------
 // Operatörün kaliteye gönderdiği numune, adımın bir adetlik parçasıdır: ara adımda taşınan malzeme adım statüsüyle, son adımda ya da
@@ -145,6 +145,7 @@ export async function numuneKarariYansit(db: Db, g: NumuneKarariYansimasi): Prom
   if (t.durum === 'yolda' && g.karar !== 'ret') {
     const kapanan = await sorgular.teslimKapat(db, t.id, t.surum, { durum: 'iptal', alinan: null, redNedeni: null, hareketId: null, kisiId: g.kisiId });
     if (kapanan === null) throw cakisma('Numunenin teslimi bu arada değişti; yeniden deneyin.');
+    await yoldaGoreviniKapat(db, t);
     await sorgular.teslimeNotYaz(db, t.id, 'Numune onaylandı; parça istasyonda kaldı');
     return { iptal: { id: t.id, no: t.no } };
   }

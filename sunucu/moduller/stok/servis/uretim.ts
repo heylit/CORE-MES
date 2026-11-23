@@ -4,6 +4,7 @@ import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { kapsamDisiysaReddet, kapsamdaMi, kapsamSuzgeci, kisininKapsami } from '#cekirdek/kapsam.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
+import type { Islem } from '#paylasilan/islemler.ts';
 import { type KatalogMalzemeOzeti } from '#paylasilan/sozlesme/malzemeler.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
@@ -13,7 +14,7 @@ import type {
 import type { StatulerCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { istasyonGetir, istasyondakiKisiler, kisininIzinliIsMerkezleri } from '../../istasyonlar/disari.ts';
 import { bildirimGonder, bildirimKapat } from '../../bildirim/disari.ts';
-import { kisiAdlari, kisilerinIslemleri } from '../../kisiler/disari.ts';
+import { kisiAdlari, kisilerinIslemleri, rollerdekiKisiler, rollerVeBayraklari } from '../../kisiler/disari.ts';
 import { malzemeOzeti, malzemeOzetleri } from '../../malzemeler/disari.ts';
 import {
   adimUretimBilgisi, adimliEmirAyrintisi, baslatmaDenetle, emirDilimi, emirDurumlari, emirMalzemeIhtiyaci, emirOzeti, isEmriOzeti, uretimEmriOzeti, emirDugumleri, emirNolari, kapanisSonuclari, emirMalzemeleri,
@@ -637,13 +638,26 @@ export async function teslimGonder(db: Db, k: Kullanici, g: TeslimGonderGovdesi,
   } else await teslimYoldaBildir(db, k.id, id);
   return kartliCevap(await teslimOku(db, id), acilan);
 }
-// 3619: yoldaki teslimi alacak taraf, teslim kutusunun gösterdiğiyle aynı: alıcı kişi belliyse yalnız o; hedef istasyonsa ona bugün
-// atananlar; hedef depoysa depo işlemini (`stok.transfer`) taşıyanlar. Görevdir: teslim kapanınca (`yoldaGoreviniKapat`) yapıldı olur.
+// 3619: yoldaki teslimi alacak taraf, teslimi gerçekten alabilenlerdir (teslim-al ucu stok.istek, teslimAlaniDenetle kapsam ya da
+// stok.transfer ister): alıcı kişi belliyse yalnız o; hedef istasyonsa ona bugün atanmış, iş merkezi kapsamı tutan ve stok.istek taşıyanlar;
+// hedef depoysa stok.istek ve stok.transfer taşıyanlar. Depo dalında yönetici rolünü taşıyan alınmaz: yönetici bütün işlemleri taşıdığı
+// için her depo teslimi ona da görev açardı (olay kapalıyken bile Gelenler'e); isteyen yönetici Bildirim yönetimi'nden ek alıcı seçilir.
 async function yoldaAlicilari(db: Db, t: TeslimHam): Promise<number[]> {
-  if (t.aliciKisiId !== null) return [t.aliciKisiId];
+  const islemler = await kisilerinIslemleri(db);
+  const tasir = (kisiId: number, gereken: readonly Islem[]): boolean => gereken.every((i) => islemler.get(kisiId)?.includes(i) === true);
+  if (t.aliciKisiId !== null) return tasir(t.aliciKisiId, ['stok.istek']) ? [t.aliciKisiId] : [];
   const istasyonId = (await sorgular.teslimUclari(db, [t.hedefKonumId]))[0]?.istasyonId ?? null;
-  if (istasyonId !== null) return (await istasyondakiKisiler(db, istasyonId)).map((x) => x.kisiId);
-  return [...(await kisilerinIslemleri(db))].filter(([, islemler]) => islemler.includes('stok.transfer')).map(([kisiId]) => kisiId);
+  if (istasyonId !== null) {
+    const isMerkeziId = (await istasyonGetir(db, istasyonId))?.isMerkeziId ?? null;
+    const sonuc: number[] = [];
+    for (const { kisiId } of await istasyondakiKisiler(db, istasyonId)) {
+      if (tasir(kisiId, ['stok.istek']) && kapsamdaMi(await kapsamOku(db, kisiId), isMerkeziId)) sonuc.push(kisiId);
+    }
+    return sonuc;
+  }
+  const yoneticiRolleri = (await rollerVeBayraklari(db)).filter((r) => r.yonetici).map((r) => r.id);
+  const yoneticiler = new Set(await rollerdekiKisiler(db, yoneticiRolleri));
+  return [...islemler.keys()].filter((kisiId) => !yoneticiler.has(kisiId) && tasir(kisiId, ['stok.istek', 'stok.transfer']));
 }
 const malzemeAdi = (o: KatalogMalzemeOzeti | null): string => o?.ad ?? o?.kod ?? 'malzeme';
 const miktarMetni = (miktar: string, o: KatalogMalzemeOzeti | null): string => `${bindenMetin(binde(miktar))}${o?.birim ? ` ${o.birim}` : ''}`;

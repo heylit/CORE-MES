@@ -93,46 +93,84 @@ describe('stok: teslim ve istek bildirimleri (gerçek PostgreSQL)', () => {
     return c.govde.teslim;
   };
 
+  const istekAc = async (kim: string, malzemeId: number, istasyonId: number | null = null): Promise<MalzemeIstegiCevabi['istek']> => {
+    const c = await istek<MalzemeIstegiCevabi>(kim, 'POST', '/stok/malzeme-istekleri/ac', { malzemeId, miktar: '4', istasyonId, not: null, kaynakKimligi: randomUUID() });
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    return c.govde.istek;
+  };
+  const hazirla = async (i: MalzemeIstegiCevabi['istek']): Promise<MalzemeIstegiCevabi['istek']> => {
+    const c = await istek<MalzemeIstegiCevabi>('depo', 'POST', `/stok/malzeme-istekleri/${i.id}/hazirla`, { surum: i.surum });
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    return c.govde.istek;
+  };
+  const dogrudanTeslim = async (i: MalzemeIstegiCevabi['istek'], istasyonId: number): Promise<void> => {
+    const c = await istek<MalzemeIstegiCevabi>('depo', 'POST', `/stok/malzeme-istekleri/${i.id}/teslim-et`,
+      { surum: i.surum, karsilanan: '3', kaynakKonumId: await kabulKonumu(), istasyonId });
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+  };
+  const reddet = async (t: TeslimCevabi['teslim']): Promise<void> => {
+    const r = await istek<TeslimCevabi>('op_a', 'POST', `/stok/teslimler/${t.id}/reddet`, { surum: t.surum, neden: 'ORN yanlış malzeme' });
+    assert.equal(r.durum, 200, JSON.stringify(r.govde));
+  };
+  const BES_TUR = ['stok.teslim-yolda', 'stok.teslim-alindi', 'stok.teslim-reddedildi', 'stok.istek-hazir', 'stok.istek-teslim-edildi'] as const;
+
   before(async () => {
     ortam = await testVeritabaniKur('stok_teslim_bildirimi');
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     yonetici = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'ORN Yonetici', kullaniciAdi: 'yonetici', parola: PAROLA }));
+    kisiler.set('yonetici', yonetici);
+    const g = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi: 'yonetici', parola: PAROLA } });
+    cerezler.set('yonetici', String(g.headers['set-cookie']).split(';')[0] ?? '');
     for (const [rol, islemler] of [['depo', ['stok.giris', 'stok.transfer', 'stok.istek']], ['operator', ['stok.istek']], ['kalite', ['stok.istek']]] as const) {
       for (const i of islemler) await ortam.vt.sorgu('INSERT INTO rol_islemi (rol_id, islem) SELECT id, $2 FROM rol WHERE kod = $1 ON CONFLICT DO NOTHING', [rol, i]);
     }
-    for (const [ad, rol] of [['depo', 'depo'], ['depo2', 'depo'], ['op_a', 'operator'], ['op_b', 'operator'], ['op_c', 'operator'], ['kalite', 'kalite']] as const) await kisiEkle(ad, rol);
+    // Teslimi alamayanlar: stok.istek taşımayan istasyon kişisi ve yalnız stok.transfer taşıyan depo kişisi.
+    for (const [kod, islem] of [['tb_istasyon_istsiz', null], ['tb_yalniz_transfer', 'stok.transfer']] as const) {
+      const r = (await ortam.sahip.tek<{ id: number }>("INSERT INTO rol (kod, ad) VALUES ($1, 'ORN rol') RETURNING id", [kod]))!.id;
+      await ortam.sahip.sorgu("DELETE FROM rol_islemi WHERE rol_id = $1 AND islem = 'stok.istek'", [r]);
+      if (islem !== null) await ortam.sahip.sorgu('INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, $2)', [r, islem]);
+    }
+    for (const [ad, rol] of [['depo', 'depo'], ['depo2', 'depo'], ['op_a', 'operator'], ['op_b', 'operator'], ['op_c', 'operator'], ['op_kapsamsiz', 'operator'],
+      ['kalite', 'kalite'], ['istsiz', 'tb_istasyon_istsiz'], ['transferci', 'tb_yalniz_transfer']] as const) await kisiEkle(ad, rol);
+    // Kapsamı başka iş merkezine kısıtlı operatör: istasyona atanmış olsa da teslimi alamaz.
+    const im = (await ortam.sahip.tek<{ id: number }>("INSERT INTO is_merkezi (kod, ad) VALUES ('TBM-K', 'ORN Merkez K') RETURNING id"))!.id;
+    await ortam.sahip.sorgu('INSERT INTO kisi_is_merkezi (kisi_id, is_merkezi_id) VALUES ($1, $2)', [id('op_kapsamsiz'), im]);
   });
   after(async () => { await ortam?.kaldir(); });
 
-  test('kapalıyken yolda görevi yalnız Gelenler\'e düşer ve alınınca kapanır; bilgi türleri hiç yazılmaz (3478-2 a, Risk K1)', async () => {
+  test('kapalıyken beş türden yalnız yolda görevi Gelenler\'e düşer ve kapanır; dört bilgi türü hiç yazılmaz (3478-2 a, Risk K1)', async () => {
     await tabanAl();
     const a = await istasyon(['op_a']);
-    const { t } = await depodanIstasyona(a);
+    const { h, t } = await depodanIstasyona(a);
     const yolda = await satirlar('stok.teslim-yolda', t.no);
     assert.deepEqual(yolda.map((x) => [x.kisiId, x.sinif, x.ortada, x.yapildi]), [[id('op_a'), 'gorev', false, null]]);
     await al('op_a', t, '2');
     assert.notEqual((await satirlar('stok.teslim-yolda', t.no))[0]!.yapildi, null, 'alınınca görev yapıldı olur');
-    assert.deepEqual(await satirlar('stok.teslim-alindi'), []);
+    await reddet(await gonder('depo', { malzemeId: h, miktar: '1', kaynak: { konumId: await kabulKonumu() }, hedef: { istasyonId: a } }));
+    await dogrudanTeslim(await hazirla(await istekAc('kalite', h)), a);
+    for (const tur of BES_TUR.slice(1)) assert.deepEqual(await satirlar(tur), [], `${tur} kapalıyken yazılmaz`);
+    assert.equal((await satirlar('stok.teslim-yolda')).length, 2, 'olaylar gerçekten oldu: iki yolda görevi açıldı');
   });
 
   describe('olaylar açık', () => {
     before(async () => { await o().vt.tx((db) => butunOlaylariVeEskiKademeleriAc(db, yonetici)); });
 
-    test('yolda: hedef istasyona bugün atananlar alır, gönderen almaz; alınınca görev kapanır ve gönderene "alındı" gider', async () => {
+    test('yolda: hedef istasyonda teslimi alabilenler alır; stok.istek taşımayan, kapsamı tutmayan ve gönderen almaz; alınınca "alındı" gönderene', async () => {
       await tabanAl();
-      const a = await istasyon(['op_a', 'op_b']);
+      const a = await istasyon(['op_a', 'op_b', 'istsiz', 'op_kapsamsiz']);
       const b = await istasyon(['op_c']);
       const { h, t } = await depodanIstasyona(a, '3');
-      assert.deepEqual(await alicilar('stok.teslim-yolda', t.no), sirali([id('op_a'), id('op_b')]), 'yalnız hedef istasyonun atananları; depo ve başka istasyon almaz');
+      assert.deepEqual(await alicilar('stok.teslim-yolda', t.no), sirali([id('op_a'), id('op_b')]), 'depo, başka istasyon, işlemsiz ve kapsamsız almaz');
       const s = (await satirlar('stok.teslim-yolda', t.no))[0]!;
-      assert.match(s.baslik, /^TS-\d{6}: ORN-Malzeme \d+ yolda$/);
-      assert.match(s.metin ?? '', /^3 adet yolda \(TS-\d{6}\)\./);
+      const sira = (await o().vt.tek<{ s: number }>('SELECT sira_no AS s FROM malzeme_katalog_karti WHERE no = $1', [h]))!.s;
+      assert.equal(s.baslik, `${t.no}: ORN-Malzeme ${sira} yolda`);
+      assert.equal(s.metin, `3 adet yolda (${t.no}). Teslim kutusundan alın ya da gerekçeyle reddedin.`);
 
       await al('op_a', t, '2');
       assert.ok((await satirlar('stok.teslim-yolda', t.no)).every((x) => x.yapildi !== null), 'alınınca bütün alıcılarda yapıldı');
       const alindi = await satirlar('stok.teslim-alindi', t.no);
       assert.deepEqual(alindi.map((x) => x.kisiId), [id('depo')], 'yalnız gönderen; alan almaz');
-      assert.match(alindi[0]!.metin ?? '', /^2 adet alındı \(gönderilen 3\), alan ORN op_a\.$/);
+      assert.equal(alindi[0]!.metin, '2 adet alındı (gönderilen 3), alan ORN op_a.');
 
       // Gönderen hedef istasyona da atanmışsa kendi teslimi için görev almaz.
       await tabanAl();
@@ -141,23 +179,52 @@ describe('stok: teslim ve istek bildirimleri (gerçek PostgreSQL)', () => {
       assert.deepEqual(await alicilar('stok.teslim-yolda', t2.no), [id('op_c')]);
     });
 
-    test('yolda: hedef depoysa depo işlemini (stok.transfer) taşıyanlar alır; istasyondakiler almaz', async () => {
+    test('yolda: bölünen teslimin her parçası kendi görevini açar', async () => {
+      await tabanAl();
+      const a = await istasyon(['op_a']);
+      const h = await kart();
+      await malKabul(h, '4');
+      await malKabul(h, '5');
+      const c = await istek<TeslimCevabi>('depo', 'POST', '/stok/teslimler/gonder',
+        { statuId: null, not: null, kaynakKimligi: randomUUID(), malzemeId: h, miktar: '6', kaynak: { konumId: await kabulKonumu() }, hedef: { istasyonId: a } });
+      assert.equal(c.durum, 200, JSON.stringify(c.govde));
+      const parcalar = [c.govde.teslim, ...(c.govde.ekTeslimler ?? [])];
+      assert.equal(parcalar.length, 2, 'iki lota bölündü');
+      for (const p of parcalar) assert.deepEqual(await alicilar('stok.teslim-yolda', p.no), [id('op_a')], p.no);
+    });
+
+    test('yolda: hedef depoysa stok.istek ve stok.transfer taşıyanlar alır; yönetici rolü ve yalnız transfer taşıyan almaz', async () => {
       const a = await istasyon(['op_a']);
       const { t } = await depodanIstasyona(a);
       await al('op_a', t, '2');
       await tabanAl();
       const geri = await gonder('op_a', { malzemeId: t.malzemeId, miktar: '2', kaynak: { istasyonId: a }, hedef: { konumId: await kabulKonumu() } });
-      assert.deepEqual(await alicilar('stok.teslim-yolda', geri.no), sirali([yonetici, id('depo'), id('depo2')]));
+      assert.deepEqual(await alicilar('stok.teslim-yolda', geri.no), sirali([id('depo'), id('depo2')]));
       await al('depo2', geri, '2');
       assert.deepEqual(await alicilar('stok.teslim-alindi', geri.no), [id('op_a')]);
+    });
+
+    test('alıcı seçimi yalnız ek alıcıdır: kayıttaki gönderen yine alır, seçilen kişi stok.istek taşıyorsa eklenir', async () => {
+      const ayar = await istek('yonetici', 'POST', '/bildirimler/alicilar/stok.teslim-alindi/degistir', { rolIdleri: [], kisiIdleri: [id('kalite'), id('istsiz')], surum: null });
+      assert.equal(ayar.durum, 200, JSON.stringify(ayar.govde));
+      try {
+        await tabanAl();
+        const a = await istasyon(['op_a']);
+        const { t } = await depodanIstasyona(a);
+        await al('op_a', t, '2');
+        assert.deepEqual(await alicilar('stok.teslim-alindi', t.no), sirali([id('depo'), id('kalite')]), 'stok.istek taşımayan seçilen almaz');
+      } finally {
+        const g = await istek<{ satirlar: { tur: string; surum: number | null }[] }>('yonetici', 'GET', '/bildirimler/alicilar');
+        const surum = g.govde.satirlar.find((x) => x.tur === 'stok.teslim-alindi')?.surum ?? null;
+        await istek('yonetici', 'POST', '/bildirimler/alicilar/stok.teslim-alindi/degistir', { rolIdleri: [], kisiIdleri: [], surum });
+      }
     });
 
     test('red: görev kapanır, gönderene nedeniyle "reddedildi" gider; iptal yalnız görevi kapatır', async () => {
       await tabanAl();
       const a = await istasyon(['op_a']);
       const { t } = await depodanIstasyona(a);
-      const r = await istek<TeslimCevabi>('op_a', 'POST', `/stok/teslimler/${t.id}/reddet`, { surum: t.surum, neden: 'ORN yanlış malzeme' });
-      assert.equal(r.durum, 200, JSON.stringify(r.govde));
+      await reddet(t);
       assert.notEqual((await satirlar('stok.teslim-yolda', t.no))[0]!.yapildi, null);
       const red = await satirlar('stok.teslim-reddedildi', t.no);
       assert.deepEqual(red.map((x) => x.kisiId), [id('depo')]);
@@ -184,30 +251,23 @@ describe('stok: teslim ve istek bildirimleri (gerçek PostgreSQL)', () => {
       assert.notEqual((await satirlar('stok.teslim-yolda', t.no))[0]!.yapildi, null);
     });
 
-    test('istek: hazırlanınca ve doğrudan teslim edilince isteyene gider; kendi isteğini hazırlayan almaz', async () => {
+    test('istek: hazırlanınca ve doğrudan teslim edilince isteyene gider; kendi isteğini hazırlayan ve teslim eden almaz', async () => {
       await tabanAl();
       const h = await kart();
       await malKabul(h, '10');
       const a = await istasyon([]);
-      const ac = async (kim: string): Promise<MalzemeIstegiCevabi['istek']> => {
-        const c = await istek<MalzemeIstegiCevabi>(kim, 'POST', '/stok/malzeme-istekleri/ac', { malzemeId: h, miktar: '4', istasyonId: null, not: null, kaynakKimligi: randomUUID() });
-        assert.equal(c.durum, 200, JSON.stringify(c.govde));
-        return c.govde.istek;
-      };
-      const i = await ac('kalite');
-      const hz = await istek<MalzemeIstegiCevabi>('depo', 'POST', `/stok/malzeme-istekleri/${i.id}/hazirla`, { surum: i.surum });
-      assert.equal(hz.durum, 200, JSON.stringify(hz.govde));
+      const i = await istekAc('kalite', h);
+      const hz = await hazirla(i);
       assert.deepEqual(await alicilar('stok.istek-hazir', i.no), [id('kalite')]);
-      const te = await istek<MalzemeIstegiCevabi>('depo', 'POST', `/stok/malzeme-istekleri/${i.id}/teslim-et`,
-        { surum: hz.govde.istek.surum, karsilanan: '3', kaynakKonumId: await kabulKonumu(), istasyonId: a });
-      assert.equal(te.durum, 200, JSON.stringify(te.govde));
+      await dogrudanTeslim(hz, a);
       const ted = await satirlar('stok.istek-teslim-edildi', i.no);
       assert.deepEqual(ted.map((x) => x.kisiId), [id('kalite')]);
-      assert.match(ted[0]!.metin ?? '', /^3 adet teslim edildi \(istenen 4 adet\); istek kapandı\.$/);
+      assert.equal(ted[0]!.metin, '3 adet teslim edildi (istenen 4 adet); istek kapandı.');
 
-      const kendi = await ac('depo');
-      assert.equal((await istek('depo', 'POST', `/stok/malzeme-istekleri/${kendi.id}/hazirla`, { surum: kendi.surum })).durum, 200);
-      assert.deepEqual(await alicilar('stok.istek-hazir', kendi.no), [], 'yapan kendisi almaz');
+      const kendi = await istekAc('depo', h);
+      await dogrudanTeslim(await hazirla(kendi), a);
+      assert.equal((await o().vt.tek<{ durum: string }>('SELECT durum FROM stok_malzeme_istegi WHERE id = $1', [kendi.id]))!.durum, 'teslim');
+      assert.deepEqual([await alicilar('stok.istek-hazir', kendi.no), await alicilar('stok.istek-teslim-edildi', kendi.no)], [[], []], 'yapan kendisi almaz');
     });
 
     test('istasyondan istek: kabul "hazır" ve "yolda" yayar; yolda teslimle kapanan istek "teslim edildi" yaymaz', async () => {

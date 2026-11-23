@@ -113,9 +113,10 @@ const ELLE_TANIMLI_TURLER = {
   'stok.teslim-suresi-doldu': {
     baslik: 'Teslimin yolda süresi doldu', onem: 'uyari', alanIslemler: [], yol: '/stok', varsayilan: { mesaj: false, eposta: false },
   },
-  // 3619: teslimin iki ucu (varsayılan kapalı, 3478-2 a; alıcı kayda bağlı, alan işlemi yok). Yolda görevdir: alacak taraf hedef
-  // istasyona bugün atananlar, hedef depoysa `stok.transfer` taşıyanlar; alınınca, reddedilince, iptal olunca ya da süresi dolunca
-  // stok kapatır. Alındı ve reddedildi gönderene gider; yapan kendisi almaz.
+  // 3619: teslimin iki ucu (varsayılan kapalı, 3478-2 a; alıcı kayda bağlı, alan işlemi yok; seçim yalnız ek alıcıdır, 3597 a). Yolda
+  // görevdir: alacak taraf teslimi alabilenlerdir (hedef istasyona bugün atanmış, kapsamı tutan ve stok.istek taşıyan; hedef depoysa
+  // stok.istek ve stok.transfer taşıyan, yönetici rolü hariç); alınınca, reddedilince, iptal olunca ya da süresi dolunca stok kapatır.
+  // Alındı ve reddedildi gönderene gider; yapan kendisi almaz.
   'stok.teslim-yolda': {
     baslik: 'Teslim yolda', onem: 'bilgi', sinif: 'gorev', alanIslemler: [], yol: '/stok', varsayilan: { mesaj: false, eposta: false },
   },
@@ -380,6 +381,7 @@ const KAYDA_BAGLI_TURLER: readonly string[] = [
   'arkon.ekip-cagrisi', 'projeler.gorev-atandi', 'projeler.gorev-kontrol-bekliyor', 'projeler.gorev-geri-cevrildi', 'projeler.gorev-onaylandi',
   'malzemeler.kart-onaylandi', 'siparisler.siparis-onaylandi', 'siparisler.siparis-iptal-edildi', 'siparisler.iskonto-onaylandi', 'siparisler.termin-onaylandi',
   'ik.izin-onaylandi', 'ik.izin-reddedildi',
+  'stok.teslim-yolda', 'stok.teslim-alindi', 'stok.teslim-reddedildi', 'stok.istek-hazir', 'stok.istek-teslim-edildi',
   'projeler.hazirlik-hatirlatma', 'projeler.hazirlik-gecikti', 'projeler.hazirlik-yoneticiye', 'projeler.hazirlik-devret', ...KADEME_TURLERI,
 ];
 // 3597 a: kayda bağlı türlerin çoğuna ek alıcı seçilir. Kayıttaki kişi (siparişi açan, görevi atanan) her durumda alır; seçim onun
@@ -393,6 +395,9 @@ export const EK_ALICI_GORME_ISLEMLERI = {
   'siparisler.siparis-onaylandi': 'siparisler.oku', 'siparisler.siparis-iptal-edildi': 'siparisler.oku', 'siparisler.iskonto-onaylandi': 'siparisler.oku',
   'siparisler.termin-onaylandi': 'siparisler.oku',
   'ik.izin-onaylandi': 'ik.izin-oku', 'ik.izin-reddedildi': 'ik.izin-oku',
+  // 3619: teslim ve istek kaydını teslim kutusu gösterir; kutuyu stok.istek açar.
+  'stok.teslim-yolda': 'stok.istek', 'stok.teslim-alindi': 'stok.istek', 'stok.teslim-reddedildi': 'stok.istek', 'stok.istek-hazir': 'stok.istek',
+  'stok.istek-teslim-edildi': 'stok.istek',
 } as const satisfies Partial<Record<BildirimTuru, Islem>>;
 export type EkAliciTuru = keyof typeof EK_ALICI_GORME_ISLEMLERI;
 export const ekAliciTuruMu = (tur: string): tur is EkAliciTuru => Object.hasOwn(EK_ALICI_GORME_ISLEMLERI, tur);
