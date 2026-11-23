@@ -86,4 +86,15 @@ describe('plan motoru: tek vardiyalı kişi (3601)', () => {
     const q = motorYukle().schedule(bos.st, 'yeni', null) as { ops: Record<string, { m: string; S: number; C: number }> };
     assert.equal(q.ops['O1.10'], undefined, 'vardiyası olmayan kişiye iş yerleşmez');
   });
+
+  test('KV-03: kilit saati kişinin vardiyası dışına düşerse plan kilitli işi ilk açık ana yerleştirir (sunucu sabit işi vardiya dışında kabul etmez)', () => {
+    const g = girdi(['40'], ['personel'], undefined, ['7']);
+    (g.st as unknown as { locks: Record<string, unknown> }).locks = { 'O1.10': { m: 'kisi-7', S: 20 } };
+    const p = motorYukle().schedule(g.st, 'yeni', null) as { ops: Record<string, { m: string; S: number; C: number }> };
+    const o1 = p.ops['O1.10']!;
+    assert.equal(o1.m, 'kisi-7');
+    assert.equal(o1.S, 32, 'kilit 20:00 (vardiya dışı): iş ertesi sabah 08:00\'e yerleşir');
+    assert.ok(gunSaat(o1.S) >= 8 && gunSaat(o1.S) < 16, 'başlangıç kişinin vardiyasında');
+    assert.ok(p.ops['O2.10']!.S >= o1.C - 1e-9, 'ardıl işin başlangıcı öncülün bitişinden önce olamaz');
+  });
 });

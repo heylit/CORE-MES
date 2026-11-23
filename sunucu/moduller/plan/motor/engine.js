@@ -403,7 +403,8 @@ const tezgahDuruslari=(st,m)=>durusDizini(st).m[m]||[];
    etrafına dizilir. Saatte arıza ya da bakım varsa iş arıza süresince durur, uyarı çıkar. Saati geçmiş kilit yalnız tezgâhı bağlar. */
 /** @param {any} [o] @param {any} [lk] @param {Derleme} [cx] */
 function kilitYeri(o,lk,cx){if(!lk||lk.S==null||!isFinite(+lk.S)||+lk.S<cx.st.now-1e-9)return null;const c=o.c.find(x=>x.m===lk.m&&!x.fas),M=c&&cx.M[c.m];if(!M)return null;
-  const S=+lk.S,su=c.su+(o.fai?c.cyc+(+cx.A.faiSaat||0):0),run=o.fai?Math.max(0,c.run-c.cyc):c.run;const Su=adv(M.sw,S,su),C=adv(M.rw,Su,run);if(!isFinite(C))return null;
+  /* 3601: kilit saati kaynağın çalışmadığı bir ana (vardiya dışı, mola, kapalı gün) düşerse iş ilk açık ana yerleşir; sunucu sabit işi kaynağın takvimi dışında kabul etmez (servis sabitYeri). Kilit kaydı değişmez, plandaki yer değişir. */
+  const su=c.su+(o.fai?c.cyc+(+cx.A.faiSaat||0):0),run=o.fai?Math.max(0,c.run-c.cyc):c.run;const S=openAt(su>0?M.sw:M.rw,+lk.S);if(!isFinite(S))return null;const Su=adv(M.sw,S,su),C=adv(M.rw,Su,run);if(!isFinite(C))return null;
   const downHit=tezgahDuruslari(cx.st,c.m).some(d=>d.from<C-1e-9&&d.to>S+1e-9);
   return {id:o.id,job:o.job,m:c.m,S,Su,C,lot1:adv(M.rw,Su,Math.min(run,ilkRun(o,c,cx))),su,run,pin:1,kilit:1,why:{t:'kilit'},downHit,pay:c.pay||0};}
 /* Kilitli iş tezgâhın boş anını ilerletmez: önüne sığan iş kilitten önce yapılır, sığmayan kilitten sonra başlar (tMach). */
