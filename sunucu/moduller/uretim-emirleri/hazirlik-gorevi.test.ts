@@ -457,6 +457,42 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
     assert.equal((await gorevler(e.uretimEmriId)).find((g) => g.madde === 'cnc' && g.isEmriId === null)?.adimlar.length, 3, 'kontroldeki görevin adımı değişmez');
   });
 
+  // 3611 Risk K3: iş emri adımı hazırlık görevinin parçasıdır; adım silme ucu 400 verir, adım ve işareti yerinde kalır.
+  test('3611 iş emri adımı silinemez: 400 ve adım yerinde; elle eklenen adım silinebilir', async () => {
+    const proje = await yeniProje('UE.HZX1');
+    const e = await emirAc(proje);
+    assert.equal((await projeDagit(proje, sablonId)).durum, 200);
+    const cnc = (await gorevler(e.uretimEmriId)).find((g) => g.madde === 'cnc')!;
+    const adimlar = await o().sahip.sorgu<{ id: number }>('SELECT id FROM projeler_gorev_adimi WHERE gorev_id = $1 AND hazirlik_is_emri_id IS NOT NULL ORDER BY sira', [cnc.id]);
+    assert.equal(adimlar.length, 2);
+    const sil = await istek('mudur', `/projeler/gorevler/${String(cnc.id)}/adimlar/${String(adimlar[1]?.id)}/sil`, {});
+    assert.equal(sil.durum, 400, JSON.stringify(sil.govde));
+    assert.equal((await o().sahip.tek<{ n: number }>('SELECT count(*) AS n FROM projeler_gorev_adimi WHERE gorev_id = $1', [cnc.id]))?.n, 2, 'adım silinmedi');
+  });
+
+  // 3611 Risk K3: sonradan eklenen iş emri ilerlemeyi adım payına göre yeniden hesaplar; adım sınırı dolu görevde eski biçim tek görev açılır.
+  test('3611 sonradan eklenen iş emri: ilerleme adım payıyla yeniden hesaplanır; adım sınırı (50) dolunca eski biçim tek görev', async () => {
+    const proje = await yeniProje('UE.HZX2');
+    const e = await emirAc(proje);
+    assert.equal((await projeDagit(proje, sablonId)).durum, 200);
+    const cnc = (await gorevler(e.uretimEmriId)).find((g) => g.madde === 'cnc')!;
+    assert.equal(cnc.adimlar.length, 2);
+    await o().sahip.sorgu('UPDATE projeler_gorev_adimi SET yapildi = true, yapan_id = $2, an = now() WHERE id = (SELECT id FROM projeler_gorev_adimi WHERE gorev_id = $1 ORDER BY sira LIMIT 1)', [cnc.id, yoneticiId]);
+    await o().sahip.sorgu('UPDATE projeler_gorev SET ilerleme = 50 WHERE id = $1', [cnc.id]);
+    assert.ok(await o().vt.tx((db) => isEmriHazirligiEkle(db, yoneticiId, e.uretimEmriId, 990201, 30)) >= 1);
+    const sonra = (await gorevler(e.uretimEmriId)).find((g) => g.id === cnc.id)!;
+    assert.equal(sonra.adimlar.length, 3);
+    assert.equal(sonra.ilerleme, 33, '1 / 3 adım yapıldı');
+    // Adım sayısını sınıra tamamla: yeni iş emri artık adım olmaz, eski biçim tek görev açılır ve mevcut görev değişmez.
+    await o().sahip.sorgu(
+      "INSERT INTO projeler_gorev_adimi (gorev_id, sira, ad) SELECT $1, 100 + n, 'Ek ' || n FROM generate_series(1, 50 - (SELECT count(*) FROM projeler_gorev_adimi WHERE gorev_id = $1)::int) n", [cnc.id]);
+    assert.equal((await o().sahip.tek<{ n: number }>('SELECT count(*) AS n FROM projeler_gorev_adimi WHERE gorev_id = $1', [cnc.id]))?.n, 50);
+    await o().vt.tx((db) => isEmriHazirligiEkle(db, yoneticiId, e.uretimEmriId, 990202, 40));
+    const g = await gorevler(e.uretimEmriId);
+    assert.equal((await o().sahip.tek<{ n: number }>('SELECT count(*) AS n FROM projeler_gorev_adimi WHERE gorev_id = $1', [cnc.id]))?.n, 50, 'sınır dolu görev adım almaz');
+    assert.equal(g.filter((x) => x.madde === 'cnc' && x.isEmriId === 990202).length, 1, 'eski biçim tek görev');
+  });
+
   // 3611 Risk S1: kontrollü yeni biçim görev bitirilince adımlar işaretlenir ama hücre "kontrolde" kalır; kontrol onaylayınca "bitti" olur.
   test('3611 S1: kontrolde yeni biçim görevin matris hücreleri kontrolde kalır; adım işareti açık görevde hücreyi bitirir', async () => {
     const proje = await yeniProje('UE.HZK2');
