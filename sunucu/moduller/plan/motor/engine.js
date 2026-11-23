@@ -140,6 +140,7 @@ function mask(W){const m=new Uint8Array(NS);for(const [a,b] of W){const k0=Math.
     @property {Record<string, any>} AP
     @property {Record<string, any>} [IK]
     @property {Record<string, string>} [IKK]
+    @property {Map<string, { eski: number, yeni: number }>} [kilitKaymalari]
     @property {any[]} ops
     @property {any} byId
     @property {Record<string, any>} jobs
@@ -181,14 +182,15 @@ function compile(st){olcekKur(st.w);
   const ek=st.ekMesai||[];
   const M={};
   for(const m of D.tezgahlar){
-    const own=m.vardiyalar&&m.vardiyalar.length?new Set(m.vardiyalar):null;
+    /* 3601: kişinin el tezgâhı (kisi-) yalnız kendi vardiyasında çalışır; listesi boşsa tesisin bütün vardiyalarına düşmez (sunucu da vardiyasız kişiyi yerleştirmez). Kimlikler metne çevrilip karşılaştırılır (sayı ve metin aynı vardiyadır). */
+    const own=m.vardiyalar&&m.vardiyalar.length?new Set(m.vardiyalar.map(String)):String(m.id).startsWith('kisi-')?new Set():null;
     /* 650 a: haftası olan tezgâh kendi iş merkezinin gün vardiyalarıyla çalışır; tatil yine kapalıdır */
     const gunu=d=>m.hafta?(gun(d).tatil?[]:(m.hafta[gun(d).wd]||[])):gun(d).vard;
-    let sw=[];for(let d=-1;d<HDAYS;d++)for(const sid of gunu(d))if(!own||own.has(sid)){const w=inst(d,sid);if(w)sw.push(...subtract([w],molalar(d,sid)));}
+    let sw=[];for(let d=-1;d<HDAYS;d++)for(const sid of gunu(d))if(!own||own.has(String(sid))){const w=inst(d,sid);if(w)sw.push(...subtract([w],molalar(d,sid)));}
     for(const e of ek)if(e.m===m.id){const w=inst(e.gun,e.vardiya);if(w)sw.push(...subtract([w],molalar(e.gun,e.vardiya)));}
     sw=merge(sw);
     /* 2785 b: hazırlık tek parçadır; tezgâhın kesintisiz çalıştığı blok vardiyaların molasız birleşimidir (mola hazırlığı bölmez). */
-    let sb=[];for(let d=-1;d<HDAYS;d++)for(const sid of gunu(d))if(!own||own.has(sid)){const w=inst(d,sid);if(w)sb.push(w);}
+    let sb=[];for(let d=-1;d<HDAYS;d++)for(const sid of gunu(d))if(!own||own.has(String(sid))){const w=inst(d,sid);if(w)sb.push(w);}
     for(const e of ek)if(e.m===m.id){const w=inst(e.gun,e.vardiya);if(w)sb.push(w);}
     let rw=sw;
     if(m.isiksiz){rw=[];for(let d=0;d<HDAYS;d++)if(gunu(d).length)rw.push([d*24,d*24+24]);rw=merge(rw.concat(sw));}
@@ -402,7 +404,8 @@ const tezgahDuruslari=(st,m)=>durusDizini(st).m[m]||[];
    etrafına dizilir. Saatte arıza ya da bakım varsa iş arıza süresince durur, uyarı çıkar. Saati geçmiş kilit yalnız tezgâhı bağlar. */
 /** @param {any} [o] @param {any} [lk] @param {Derleme} [cx] */
 function kilitYeri(o,lk,cx){if(!lk||lk.S==null||!isFinite(+lk.S)||+lk.S<cx.st.now-1e-9)return null;const c=o.c.find(x=>x.m===lk.m&&!x.fas),M=c&&cx.M[c.m];if(!M)return null;
-  const S=+lk.S,su=c.su+(o.fai?c.cyc+(+cx.A.faiSaat||0):0),run=o.fai?Math.max(0,c.run-c.cyc):c.run;const Su=adv(M.sw,S,su),C=adv(M.rw,Su,run);if(!isFinite(C))return null;
+  /* 3601: kilit saati kaynağın çalışmadığı bir ana (vardiya dışı, mola, kapalı gün) düşerse iş ilk açık ana yerleşir; sunucu sabit işi kaynağın takvimi dışında kabul etmez (servis sabitYeri). Kilit kaydı değişmez, plandaki yer değişir. */
+  const su=c.su+(o.fai?c.cyc+(+cx.A.faiSaat||0):0),run=o.fai?Math.max(0,c.run-c.cyc):c.run;const S=openAt(su>0?M.sw:M.rw,+lk.S);if(!isFinite(S))return null;if(S>+lk.S+1e-9)(cx.kilitKaymalari=cx.kilitKaymalari||new Map()).set(o.id,{eski:+lk.S,yeni:S});const Su=adv(M.sw,S,su),C=adv(M.rw,Su,run);if(!isFinite(C))return null;
   const downHit=tezgahDuruslari(cx.st,c.m).some(d=>d.from<C-1e-9&&d.to>S+1e-9);
   return {id:o.id,job:o.job,m:c.m,S,Su,C,lot1:adv(M.rw,Su,Math.min(run,ilkRun(o,c,cx))),su,run,pin:1,kilit:1,why:{t:'kilit'},downHit,pay:c.pay||0};}
 /* Kilitli iş tezgâhın boş anını ilerletmez: önüne sığan iş kilitten önce yapılır, sığmayan kilitten sonra başlar (tMach). */
@@ -998,6 +1001,8 @@ function evaluate(plan,st,ref,fast){
       if(t==null||t>r.S+1e-6)warn.push({t:'kilit',j:r.job,id:r.id,oncul:pid,txt:t==null?`${r.id}: kilitli iş ${fmtDT(cx.D,r.S)} başlıyor; öncülü ${pid} planda yerleşmedi, rota sırası bozuluyor`:`${r.id}: kilitli iş ${fmtDT(cx.D,r.S)} başlıyor; öncülü ${pid} ${fmtDT(cx.D,t)} hazır, rota sırası bozuluyor`});}}}
   /* 3538 b: kilidi süren işin arkasına kayan iş söylenir; eski saat kilidin kayıttaki saatidir */
   for(const r of Object.values(plan.ops))if(r.why&&r.why.t==='kilit-kaydi')warn.push({t:'kilit',j:r.job,id:r.id,txt:`${r.id}: tezgâhta süren ${r.why.r} uzadı; kilit ${fmtDT(cx.D,r.why.o)} yerine ${fmtDT(cx.D,r.S)} saatine kaydı`});
+  /* 3601: kilit saati kaynağın çalışmadığı bir ana düştüyse iş ilk açık ana kaydı; kilit kaydı değişmez, plandaki yer değişir */
+  for(const r of Object.values(plan.ops)){const k=r.kilit&&cx.kilitKaymalari&&cx.kilitKaymalari.get(r.id);if(k&&Math.abs(k.yeni-r.S)<1e-6)warn.push({t:'kilit',j:r.job,id:r.id,txt:`${r.id}: kilit saati ${fmtDT(cx.D,k.eski)} kaynağın çalışma saati dışında; iş ${fmtDT(cx.D,r.S)} saatine yerleşti`});}
   for(const r of Object.values(plan.ops))if(r.kilit&&r.downHit)warn.push({t:'kilit',j:r.job,txt:`${r.id}: kilitli saatte tezgâhta arıza ya da bakım var; iş ${fmtDT(cx.D,r.S)} kilidinde başlıyor, arıza süresince duruyor`});
   /* 1459 a: stoku bilinmeyen malzeme dağıtımda 0 sayılır; plana gerçekten girdiyse söylenir */
   if(!fast)for(const m of cx.D.malzemeler||[])if(m.stok==null&&cx.mat.summ[m.kod])warn.push({t:'malzeme',txt:`${m.kod}: stok bilinmiyor; 0 sayıldı`});

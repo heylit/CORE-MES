@@ -696,10 +696,10 @@ describe('planlama değerlendirmesi: çıkış denetimi (3499)', () => {
     assert.deepEqual(planBozuklari(yeni), []);
     // Bölünmüş payın kilidi de ilk partinin payında kalır: sahipsiz kalmaz, pay kilit saatinde durur.
     const k = eski['O2.20~2']!;
-    const kilitli = sonuc(await degerlendirmeYap({ calisma: { ...calisma, locks: { 'O2.20~2': { m: k.m, S: k.S + 30 } } }, kayit, kaynak, bugun: '2026-10-19', istek: { tur: 'parti-bolme', siparisId: 'O2', dagitim: 'ayni', adetler: [6, 3] } }, AN));
+    const kilitli = sonuc(await degerlendirmeYap({ calisma: { ...calisma, locks: { 'O2.20~2': { m: k.m, S: k.S + 2 } } }, kayit, kaynak, bugun: '2026-10-19', istek: { tur: 'parti-bolme', siparisId: 'O2', dagitim: 'ayni', adetler: [6, 3] } }, AN));
     if (kilitli.tur !== 'parti-bolme' || !kilitli.sonuc) return assert.fail(kilitli.tur);
     const kp = planOps(kilitli.sonuc.plan);
-    assert.deepEqual([kp['O2/1.20~2']?.m, kp['O2/1.20~2']?.S], [k.m, k.S + 30], 'payın kilidi ilk partide');
+    assert.deepEqual([kp['O2/1.20~2']?.m, kp['O2/1.20~2']?.S], [k.m, k.S + 2], 'payın kilidi ilk partide (vardiya içinde: vardiya dışı kilit ilk açık ana kayar, 3601)');
     assert.deepEqual(planBozuklari(kp), []);
   });
   test('CD-10: parti böl: adıma bildirilen bekleme her partide geçerlidir, ek süre ilk partide kalır', async () => {
@@ -728,14 +728,14 @@ describe('planlama değerlendirmesi: çıkış denetimi (3499)', () => {
   });
 
   test('CD-05: kişinin kilidi süren işle üst üste geliyorsa süren iş yerinde kalır, kilitli iş onun arkasına kayar ve uyarıda söylenir (3538 b)', async () => {
-    const { calisma, eski } = suren({ locks: { 'O4.10': { m: '200', S: 40 } } });
+    const { calisma, eski } = suren({ locks: { 'O4.10': { m: '200', S: 39 } } });
     assert.equal(eski['O4.10']!.m, '200');
     const s = sonuc(await iste(calisma, { tur: 'plan-uygula', isler: ['O7'] })); if (s.tur !== 'plan-uygula') return assert.fail(s.tur);
     const yeni = planOps(s.plan);
-    assert.ok(yeni['O6.10']!.C > 40, 'süren iş kilit saatinden sonra bitiyor');
+    assert.ok(yeni['O6.10']!.C > 39, 'süren iş kilit saatinden sonra bitiyor');
     assert.equal(yeni['O6.10']!.S, 34, 'süren iş yerinde');
     assert.ok(Math.abs(yeni['O4.10']!.S - yeni['O6.10']!.C) < 1e-6, `kilitli iş süren işin bitişinde: ${String(yeni['O4.10']!.S)}`);
-    assert.deepEqual(JSON.parse(JSON.stringify((yeni['O4.10'] as unknown as { why: unknown }).why)), { t: 'kilit-kaydi', r: 'O6.10', o: 40 });
+    assert.deepEqual(JSON.parse(JSON.stringify((yeni['O4.10'] as unknown as { why: unknown }).why)), { t: 'kilit-kaydi', r: 'O6.10', o: 39 });
     const uyari = s.plan['warn'] as { t: string; id?: string; txt: string }[];
     assert.deepEqual(uyari.filter((w) => w.t === 'cakisma'), [], 'çakışma kalmadı');
     assert.deepEqual(uyari.filter((w) => w.id === 'O4.10').map((w) => w.t), ['kilit']);

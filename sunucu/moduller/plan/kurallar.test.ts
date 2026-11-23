@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   araliklaraEkle, araliktanCikar, arkaArkaya, ayarVeGecikme, ekMesaiButcesi, haftaBasi, vardiyaSaati, bosluk, calisilanParcalar, calismaBitisi, dondurulacaklar, enErkenBaslangic, gostergeler, isSuresi, kesisimDk,
-  adetPayi, bolmeAdetleri, kapasiteBollugu, kapasiteKesri, onayGecisiReddi, onayGecisleri, emirTutari, gecikmeMaliyeti, katkiPaylari, motorUyarilari, PERSONEL_TANIMSIZ, oncelikCarpani, oncelikSinifi, planMaliyeti, personelYuku, sinirliGunSayisi, takvimliBosluk, uyarilar, yukYuzdesi,
+  adetPayi, bolmeAdetleri, kapasiteBollugu, kapasiteKesri, onayGecisiReddi, onayGecisleri, sabitYeri, emirTutari, gecikmeMaliyeti, katkiPaylari, motorUyarilari, PERSONEL_TANIMSIZ, oncelikCarpani, oncelikSinifi, planMaliyeti, personelYuku, sinirliGunSayisi, takvimliBosluk, uyarilar, yukYuzdesi,
 } from './kurallar.ts';
 import type { MaliyetSatiri, PersonelMerkezi } from './kurallar.ts';
 
@@ -331,5 +331,39 @@ describe('plan kuralları: 507 1 a ayar saati ve öncelik ağırlıklı gecikme'
     assert.deepEqual(araliklaraEkle(takvim, [{ baslangic: 60, bitis: 120 }]), takvim, 'içte kalan değiştirmez');
     assert.deepEqual(araliklaraEkle([], []), []);
     assert.deepEqual(takvim, [{ baslangic: 0, bitis: 240 }, { baslangic: 1440, bitis: 1680 }], 'girdi değişmez');
+  });
+  // 3601: Kokpit'te itilen adım öncülünün bittiği anda başlar. Öncülün bitişi hesaptan (bas + süre), adımın başlangıcı ms'e yuvarlı
+  // ISO'dan gelir; kayan nokta farkı (burada 1e-14 dk) eşitliği bozar, kesin karşılaştırma işi "vardiya dışı ya da üst üste" diye reddederdi.
+  describe('3601: sabit işin yeri', () => {
+    const GUNDUZ = [{ baslangic: -87, bitis: 153 }, { baslangic: 213, bitis: 453 }];
+    test('bitişik iş kayan nokta farkıyla örtüşmüş sayılmaz; iş önizlemedeki saatinde yerleşir', () => {
+      const bas = 38.16493333333333;
+      const oncul = { baslangic: -11.835066666666666, bitis: 38.16493333333334 };
+      assert.ok(oncul.bitis > bas, 'öncülün bitişi ile başlangıç arasında kayan nokta farkı var');
+      const r = sabitYeri([oncul], GUNDUZ, bas, 50);
+      assert.equal(r.tur, 'yer');
+      if (r.tur === 'yer') assert.ok(Math.abs(r.yer.baslangic - bas) < 1e-9 && Math.abs(r.yer.bitis - (bas + 50)) < 1e-9);
+    });
+
+    test('ardıl işe bitişik bitiş de kayan nokta farkıyla örtüşmüş sayılmaz', () => {
+      const r = sabitYeri([{ baslangic: 88.16493333333332, bitis: 140 }], GUNDUZ, 38.16493333333334, 50);
+      assert.equal(r.tur, 'yer');
+    });
+
+    test('gerçek örtüşme üst üste, çalışma aralığı dışı vardiya dışı diye reddedilir (308 b gevşemez)', () => {
+      assert.equal(sabitYeri([{ baslangic: 0, bitis: 40 }], GUNDUZ, 30, 50).tur, 'ust-uste');
+      assert.equal(sabitYeri([{ baslangic: 60, bitis: 100 }], GUNDUZ, 40, 50).tur, 'ust-uste', 'sonradan başlayan iş süreyi böler');
+      assert.equal(sabitYeri([], GUNDUZ, 160, 50).tur, 'vardiya-disi', 'iki vardiya arası');
+      assert.equal(sabitYeri([], GUNDUZ, 153, 50).tur, 'vardiya-disi', 'vardiya bitişi çalışma anı değildir');
+    });
+
+    test('vardiya başlangıcının hemen altında kalan başlangıç kayan nokta farkıdır, vardiyada başlar; payı aşan sapma vardiya dışıdır', () => {
+      assert.equal(sabitYeri([], GUNDUZ, 213 - 1e-14, 50).tur, 'yer');
+      assert.equal(sabitYeri([], GUNDUZ, 212, 50).tur, 'vardiya-disi');
+    });
+
+    test('takvimsiz kaynak sürekli çalışır', () => {
+      assert.equal(sabitYeri([], null, 500, 50).tur, 'yer');
+    });
   });
 });

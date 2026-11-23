@@ -155,6 +155,25 @@ export function uzayanBosluk(dolu: readonly Aralik[], takvim: Takvim, enErken: n
   }
 }
 
+// 3601: sabit işin önizlemedeki saati (ms'e yuvarlı ISO) sunucu ekseninde dakikaya çevrilince kayan noktayla bir önceki işin hesaplanmış
+// bitişinden ~1e-14 dk önce kalabilir; kesin eşitlik bunu "üst üste" sayıp işi ileri iterdi ve yazım yanlış nedenle dururdu. Bu pay bir
+// milisaniyenin altındadır (1 ms = 1,7e-5 dk): gerçek örtüşme ve vardiya dışı yine reddedilir.
+export const SABIT_PAYI_DK = 1e-4;
+
+export type SabitYeri = { tur: 'yer'; yer: Aralik } | { tur: 'vardiya-disi' } | { tur: 'ust-uste' };
+
+// B-2500-1 (308 b'yi gevşetmez): çalışmada sabitlenen iş, önizlemedeki saatte (bas) başlayabiliyorsa o saatte yerleşir; başlayamıyorsa
+// neden döner: bas kaynağın çalışma aralığında değil (mola, vardiya sonu, kapalı gün) ya da dolu aralıkla gerçekten örtüşüyor.
+export function sabitYeri(dolu: readonly Aralik[], takvim: Takvim, bas: number, sure: number): SabitYeri {
+  const acik = calismaBasi(takvim, bas);
+  if (acik === null || acik - bas > SABIT_PAYI_DK) return { tur: 'vardiya-disi' };
+  // Dolu aralıklar payla daraltılır: bitişik iş (itilen adım öncülünün bittiği anda başlar) kayan nokta farkıyla örtüşmüş sayılmaz.
+  const daralmis = dolu.flatMap((d) => (d.bitis - d.baslangic > 2 * SABIT_PAYI_DK ? [{ baslangic: d.baslangic + SABIT_PAYI_DK, bitis: d.bitis - SABIT_PAYI_DK }] : [d]));
+  const yer = uzayanBosluk(daralmis, takvim, bas, sure, Number.NEGATIVE_INFINITY);
+  if (yer === null || Math.abs(yer.baslangic - bas) > SABIT_PAYI_DK) return { tur: 'ust-uste' };
+  return { tur: 'yer', yer };
+}
+
 // Kaynakta en erken boşluk: dolu aralıklara değmeyen, en erken başlangıçtan sonraki ilk yer (PL-01: kaynak aynı anda tek iş).
 export function bosluk(dolu: readonly Aralik[], enErken: number, sure: number): number {
   let t = enErken;
