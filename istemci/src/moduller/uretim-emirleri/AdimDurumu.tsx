@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import type { AdimDurumuCevabi, AdimliListeCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Simge } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Sekmeler, Simge, type Sekme } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { tarihMetni } from '../../ortak/veri/zaman-metni.ts';
 import { adimDurumuUcu } from './adim-durumu.ts';
 import { ACIK, gecikti } from './adim-tablosu.ts';
 import { AdimTablosu } from './AdimTablosu.tsx';
+import { AdimMatrisi } from './AdimMatrisi.tsx';
+import { gorunumOku, type Gorunum } from './adim-matrisi.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { DURUM_ETIKETI } from './gorunum.ts';
 import './uretim-emirleri.css';
@@ -26,7 +28,27 @@ function Cubuk({ yuzde, etiket }: { yuzde: number; etiket: string }) {
 
 // Adım Durumu (2893, tasarım 2955, 3581): solda açık emirler, sağda seçili emrin tek tablosu (adım, durum, hazırlık, ayrıntı). Emir sayfasındaki
 // "Adımlar ve hazırlık" sekmesiyle aynı bileşendir; statüyü sunucu türetir, elle işlemler ayrıntıda ve yetkilidir.
+// 3604: görünüm anahtarı. Emir bugünkü sayfadır; Matris ve Tablo bütün açık emirlerin adımlarını tek ekranda gösterir. Görünüm adreste (`?gorunum=`).
+const GORUNUM_SEKMELERI: readonly Sekme<Gorunum>[] = [
+  { anahtar: 'emir', baslik: 'Emir', simge: 'list' },
+  { anahtar: 'matris', baslik: 'Matris', simge: 'grid' },
+  { anahtar: 'tablo', baslik: 'Tablo', simge: 'kanban' },
+];
 export function AdimDurumu() {
+  const [adres, adresYaz] = useSearchParams();
+  const gorunum = gorunumOku(adres.get('gorunum'));
+  const gorunumSec = (g: Gorunum) => {
+    adresYaz((a) => { const y = new URLSearchParams(a); if (g === 'emir') y.delete('gorunum'); else y.set('gorunum', g); return y; }, { replace: true });
+  };
+  return (
+    <div className="tc-ad-kok">
+      <Sekmeler etiket="Adım Durumu görünümü" sekmeler={GORUNUM_SEKMELERI} secili={gorunum} sec={gorunumSec} />
+      {gorunum === 'emir' ? <EmirGorunumu /> : <AdimMatrisi gorunum={gorunum} />}
+    </div>
+  );
+}
+
+function EmirGorunumu() {
   const [adres, adresYaz] = useSearchParams();
   const secili = Number(adres.get('emir')) || null;
   const [arama, aramaYaz] = useState('');
