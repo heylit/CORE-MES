@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
-import { bulunamadi, cakisma, cokBuyuk, dogrulama, eskiSurum } from '#cekirdek/hata.ts';
-import type { Kullanici } from '#cekirdek/yetki.ts';
+import { bulunamadi, cakisma, cokBuyuk, dogrulama, eskiSurum, yetkiYok } from '#cekirdek/hata.ts';
+import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import {
   TASLAK_KOMUTU_EN_COK, taslakKomutu, type DegerlendirmeIstegi, type TaslakCevabi, type TaslakKomutu, type TaslakSatirKomutu, type TaslakUygulaCevabi,
 } from '#paylasilan/sozlesme/planlama.ts';
@@ -22,6 +22,19 @@ const ESKI = 'Taslağınız başka bir sekmede değişti; sayfayı yenileyin.';
 const BUYUK = 'Taslak çok büyüdü; bir kısmını uygulayıp yeniden deneyin.';
 
 const HESAPLAR: TaslakHesaplari = { tasima: tasimaHesabi, planaAlma: planaAlmaHesabi };
+// 3600: kilitleri kaldıran baştan kurma kilitleme yetkisi ister (plan.kilitle). Komut yazılırken ve Uygula'da denetlenir: yetki arada
+// alınmış olabilir, istemcinin anahtarı yetmez.
+export const KILIT_KALDIRMA_ISLEMI = 'plan.kilitle' as const;
+const KILIT_KALDIRMA_YETKISIZ = 'Kilitleri kaldırarak baştan kurmak plan kilitleme yetkisi ister.';
+const kilitKaldirir = (k: SatirKomutu): boolean => k.tur === 'yeniden-planla' && k.kilitKaldir === true;
+// 3600 (Risk R7): başlamış işin kalanını dizmek yalnız yöneticidedir (plan.baslamis-diz; hiçbir role verilmez). Tek sabit, iki denetim yeri.
+export const BASLAMIS_DIZME_ISLEMI = 'plan.baslamis-diz' as const;
+const BASLAMIS_DIZME_YETKISIZ = 'Başlamış işlerin kalanını dizmek yönetici yetkisi ister (plan.baslamis-diz).';
+const baslamisDizer = (k: SatirKomutu): boolean => k.tur === 'yeniden-planla' && k.baslamisDiz === true;
+const kilitYetkisiDenetle = (kullanici: Kullanici, komutlar: readonly SatirKomutu[]): void => {
+  if (komutlar.some(kilitKaldirir) && !islemVarMi(kullanici, KILIT_KALDIRMA_ISLEMI)) throw yetkiYok(KILIT_KALDIRMA_YETKISIZ);
+  if (komutlar.some(baslamisDizer) && !islemVarMi(kullanici, BASLAMIS_DIZME_ISLEMI)) throw yetkiYok(BASLAMIS_DIZME_YETKISIZ);
+};
 const kisiOf = (kullanici: Kullanici, simdi: number) => ({ kim: kullanici.ad, sayfa: SAYFA, t: simdi });
 
 // Satırları bu modül yazar; okurken yine de sözleşmeden geçer (dizme satırı kendi biçimiyle), bozuk satır oynatılmaz.
@@ -73,6 +86,7 @@ const surumDenetle = (t: sorgular.TaslakSatiri | null, beklenen: number | null):
 // Komut güncel ortak çalışmaya, taslağın önceki komutlarından sonra uygulanabiliyorsa eklenir; uygulanamıyorsa yazılmaz, nedeni döner.
 export async function taslakKomutuEkle(db: Db, kullanici: Kullanici, g: { taslakSurumu: number | null; komut: TaslakKomutu }, simdi: number = Date.now()): Promise<TaslakCevabi> {
   planlamaYazmaDenetimi(kullanici, PLANLAMA_ANAHTARI);
+  kilitYetkisiDenetle(kullanici, [g.komut]);
   const t = await sorgular.taslakOku(db, kullanici.id, true);
   surumDenetle(t, g.taslakSurumu);
   const c = await planlamaCalismasi(db, kullanici, simdi);
@@ -120,6 +134,7 @@ export async function taslagiUygula(db: Db, kullanici: Kullanici, g: { taslakSur
   const surum = await sorgular.planlamaSurumKilitle(db, PLANLAMA_ANAHTARI);
   const c = await planlamaCalismasi(db, kullanici, simdi);
   if (surum === null || c.calisma === null || c.surum !== surum) throw eskiSurum();
+  kilitYetkisiDenetle(kullanici, satirlar(t!.komutlar).map((x) => x.komut));
   const k = uygulaKarari(c.calisma, t!.tabanImzasi as TaslakImzasi, satirlar(t!.komutlar), g.secimler ?? {}, kisiOf(kullanici, simdi), HESAPLAR);
   if (k.durum === 'secim') return k;
   if (k.durum === 'bozuk') throw cakisma(k.ileti);

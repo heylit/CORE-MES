@@ -418,7 +418,7 @@ export type RolKodu = keyof typeof ROL_MATRISI | typeof YONETICI_ROLU.kod;
 // Hiçbir role verilmez; yalnız bayraklı yönetici yapar.
 export const YALNIZ_YONETICIDE: readonly Islem[] = [
   'arkon.yonetici', 'denetim.govde-oku', 'guvenlik.oku', 'guvenlik.yonet', 'kisiler.parola-degistir', 'kisiler.rol-yonet',
-  'logo.birim-seti-yaz', 'mesaj.yonet', 'oturum.ortak-cihaz', 'saglik.ayrinti-oku', 'sayfa.guvenlik', 'sayfa.tezgah-baglantisi', 'smartes.esleme-yaz',
+  'logo.birim-seti-yaz', 'mesaj.yonet', 'oturum.ortak-cihaz', 'plan.baslamis-diz', 'saglik.ayrinti-oku', 'sayfa.guvenlik', 'sayfa.tezgah-baglantisi', 'smartes.esleme-yaz',
 ];
 
 export const ROL_KODLARI: readonly RolKodu[] = [YONETICI_ROLU.kod, ...(Object.keys(ROL_MATRISI) as (keyof typeof ROL_MATRISI)[])];

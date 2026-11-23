@@ -145,6 +145,7 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'plan.bedel-ayari': 'Plan öncelik ayarlarını (taban bedel, oranlar, eşikler) değiştirme',
   'plan.motor-ayari': 'Plan motoru ayarlarını (amaç, eksik stok, sıralama kuralı) değiştirme',
   'plan.sistem-ayari': 'Plan motorunun ufkunu ve zaman dilimini değiştirme',
+  'plan.baslamis-diz': 'Baştan kurda başlamış işlerin kalan kısmını da dizme',
   'projeler.oku': 'Projeleri görme',
   'projeler.yaz': 'Proje açma ve düzenleme',
   'projeler.gorev-yaz': 'Proje görevlerini ve kilometre taşlarını yazma',

@@ -244,8 +244,26 @@ export function yonUygula(deger: unknown, emirId: string, yon: 'plan' | 'ileri' 
 
 // Yeniden planlama isteği (3335-2): veri değişmez; istek bekleyen değişiklik olarak yazılır, dizme o emirlerin işlerini yeniden dizer
 // ('*': bütün plan). Planda yeri olmayan emirlere her dizmede yer bulunur. Emirler çalışmada olmalı; plan kurulmuş olmalı.
-const yenidenPlanlaAdi = (isler: readonly string[]): string => (isler.includes('*') ? 'Bütün plan baştan kurulacak' : isler.length === 1 ? `${isler[0]!} yeniden planlanacak` : `${String(isler.length)} emir yeniden planlanacak`);
-export function yenidenPlanlaUygula(deger: unknown, isler: readonly string[], k: KomutKisisi): KomutSonucu {
+// kilitKaldir (3600): istenen emirlerin başlamamış işlerindeki elle kilitler çalışmadan kalkar (Geri al her birini getirir) ve satır
+// `kilitsiz` işaretlenir; motor o emirlerde geçici (denge) kilidi de tutmaz. Başlamış ve biten işin kilidi, istenmeyen emirler ve fason dokunulmaz.
+const yenidenPlanlaAdi = (isler: readonly string[], kilitKaldir = false, baslamis = false): string => `${isler.includes('*') ? 'Bütün plan baştan kurulacak' : isler.length === 1 ? `${isler[0]!} yeniden planlanacak` : `${String(isler.length)} emir yeniden planlanacak`}${kilitKaldir ? '; kilitler kalkar' : ''}${baslamis ? '; başlamış işler dahil' : ''}`;
+// baslamisDiz (3600, yalnız plan.baslamis-diz): istenen emirlerin başlamış (bitmemiş, fason olmayan) işleri w.durdurulan'a yazılır; motor yapılan
+// kısmı geçmişte bırakır, kalan adedi aynı tezgâhta şimdiden sonraya dizer (3414-6 a). Biten ve fason iş dokunulmaz; Geri al işareti geri alır.
+export function baslamisIsler(deger: unknown, isler: readonly string[]): string[] {
+  if (!nesne(deger) || !nesne(deger.plan) || !nesne(deger.plan.ops)) return [];
+  const hepsi = isler.includes('*'), secili = new Set(isler);
+  return Object.entries(deger.plan.ops).filter(([, r]) => nesne(r) && !!r.act && !r.done && !r.fas && (hepsi || secili.has(String(r.job)))).map(([id]) => id);
+}
+export function kalkacakKilitler(deger: unknown, isler: readonly string[], baslamisDahil = false): string[] {
+  if (!nesne(deger) || !nesne(deger.locks)) return [];
+  const ops = nesne(deger.plan) && nesne(deger.plan.ops) ? deger.plan.ops : {};
+  const hepsi = isler.includes('*'), secili = new Set(isler);
+  return Object.keys(deger.locks).filter((id) => {
+    const r = ops[id];
+    return nesne(r) && (baslamisDahil || !r.act) && !r.done && !r.fas && (hepsi || secili.has(String(r.job)));
+  });
+}
+export function yenidenPlanlaUygula(deger: unknown, isler: readonly string[], k: KomutKisisi, kilitKaldir = false, baslamisDiz = false): KomutSonucu {
   if (!nesne(deger)) return { hata: { tur: 'cakisma', ileti: 'Çalışma kaydı okunamadı; sayfayı yenileyin.' } };
   if (!nesne(deger.plan)) return { hata: { tur: 'cakisma', ileti: 'Henüz plan yok; önce planı kurun.' } };
   const hepsi = isler.includes('*');
@@ -253,7 +271,21 @@ export function yenidenPlanlaUygula(deger: unknown, isler: readonly string[], k:
   const var_ = new Set(Array.isArray(D.siparisler) ? D.siparisler.flatMap((s) => (nesne(s) ? [String(s.id)] : [])) : []);
   const tekil = hepsi ? ['*'] : [...new Set(isler)];
   if (!hepsi && tekil.some((id) => !var_.has(id))) return { hata: { tur: 'dogrulama', ileti: 'Emir çalışmada yok.', alan: 'isler' } };
-  return { deger: isle(deger, kopya(deger), { ne: 'Yeniden planlama istendi', ayrinti: yenidenPlanlaAdi(tekil), isler: tekil, geri: [] }, k), degisti: true };
+  const yeni = kopya(deger);
+  const geri: GeriYama[] = [];
+  if (kilitKaldir && nesne(yeni.locks)) {
+    for (const id of kalkacakKilitler(deger, tekil, baslamisDiz)) {
+      geri.push({ yol: ['locks'], id, once: (deger.locks as Nesne)[id] });
+      delete (yeni.locks as Nesne)[id];
+    }
+  }
+  const baslamis = baslamisDiz ? baslamisIsler(deger, tekil) : [];
+  if (baslamis.length > 0) {
+    const w = nesne(deger.w) ? deger.w : {};
+    yeni.w = { ...w, durdurulan: { ...(nesne(w.durdurulan) ? w.durdurulan : {}), ...Object.fromEntries(baslamis.map((id) => [id, 1])) } };
+    geri.push(w.durdurulan === undefined ? { yol: ['w'], id: 'durdurulan' } : { yol: ['w'], id: 'durdurulan', once: w.durdurulan });
+  }
+  return { deger: isle(deger, yeni, { ne: 'Yeniden planlama istendi', ayrinti: yenidenPlanlaAdi(tekil, kilitKaldir, baslamis.length > 0), isler: tekil, geri, ...(kilitKaldir || baslamis.length > 0 ? { kilitsiz: true as const } : {}) }, k), degisti: true };
 }
 
 // Duruş (3282 2a-1): elle girilen arıza ya da bakım. Aynı tezgâh ve aralık ikinci kez eklenmez; tezgâh çalışmada olmalı; aralık ufukta ve
@@ -573,7 +605,7 @@ export function komutAdi(k: SatirKomutu): string {
     case 'tasi': return `${k.isId} → ${k.tezgah}`;
     case 'plana-al': return `${k.emirId} plana alındı (${k.tezgah})`;
     case 'yon': return `${k.emirId} yönü: ${k.yon === 'plan' ? 'planınki' : k.yon === 'geri' ? 'teslimden geriye' : 'ileriye'}`;
-    case 'yeniden-planla': return yenidenPlanlaAdi([...new Set(k.isler)]);
+    case 'yeniden-planla': return yenidenPlanlaAdi([...new Set(k.isler)], k.kilitKaldir === true, k.baslamisDiz === true);
     case 'ayar': return k.ayrinti === '' ? 'Plan ayarı' : `Plan ayarı: ${k.ayrinti}`;
     case 'durus': return `${k.tezgah} ${k.neden === 'bakım' ? 'bakım' : 'arıza'}: ${saatYazisi(k.bas)} → ${saatYazisi(k.bit)}`;
     case 'durus-sil': return `${k.tezgah} duruşu silindi: ${saatYazisi(k.bas)} → ${saatYazisi(k.bit)}`;
@@ -602,7 +634,7 @@ export function komutUygula(deger: unknown, k: TaslakKomutu, kisi: KomutKisisi, 
     case 'plana-al': { const { tur: _, ...g } = k; return planaAl(deger, g, kisi, h.planaAlma); }
     case 'ayar': return ayarUygula(deger, k.ayar, k.ayrinti, kisi);
     case 'yon': return yonUygula(deger, k.emirId, k.yon, kisi);
-    case 'yeniden-planla': return yenidenPlanlaUygula(deger, k.isler, kisi);
+    case 'yeniden-planla': return yenidenPlanlaUygula(deger, k.isler, kisi, k.kilitKaldir === true, k.baslamisDiz === true);
     case 'durus': return durusUygula(deger, k, kisi);
     case 'durus-sil': return durusSilUygula(deger, k, kisi);
     case 'ek-mesai': return ekMesaiUygula(deger, k, kisi);
