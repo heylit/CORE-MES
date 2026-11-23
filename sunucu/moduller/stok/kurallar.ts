@@ -1448,15 +1448,6 @@ export function refakatAnaEylemi(k: { gelenSayisi: number; kartAcik: boolean; sa
 export function refakatLotEngeli(lot: { uretimEmriId: number | null }): string | null {
   return lot.uretimEmriId !== null ? 'Bu lot bir üretim emrinin çıktısı; refakat kartı depodan verilen lotla açılır.' : null;
 }
-// Emre giden malzeme kartla gider (615-2 a, 632 a, 633 b): lotlu teslim lotun kartını, lotsuz teslim emrin o malzemedeki lot bekleyen
-// (istisna) kartını ister. Kart sessizce açılmaz; depocu tek adımda onaylar. Üretim çıktısı partisi kendi kartını taşır; kapalı emre kart açılmaz.
-export type KartOnayiTuru = 'lot' | 'istisna';
-export function kartOnayiTuru(g: { uretimEmriId: number | null; partiId: number | null }, lot: { uretimEmriId: number | null } | null, emirDurumu: string | null): KartOnayiTuru | null {
-  if (g.uretimEmriId === null || emirDurumu === null || emirDurumu === 'bitti' || emirDurumu === 'iptal') return null;
-  if (g.partiId === null) return 'istisna';
-  if (lot === null || refakatLotEngeli(lot) !== null) return null;
-  return 'lot';
-}
 // Hiç teslimi ve sayımı olmayan parti iptal edilir; teslim ya da üretim varsa iz bozulmasın diye kalır.
 export function refakatIptalEngeli(r: { durum: 'acik' | 'iptal'; verilen: string }, uretildi = false): string | null {
   if (r.durum === 'iptal') return 'Refakat kartı zaten iptal.';
@@ -1515,9 +1506,25 @@ export function baslatmaKartiEngeli(g: {
 }
 
 export const KARTSIZ_TESLIM = 'Lot etiketiyle emre teslim edilmez. Malzemeyi sepete alın, "Refakat kartına dönüştür" deyin ve kartla teslim edin.';
-export function kartsizLotTeslimEngeli(g: { kartVar: boolean; partiId: number | null; statuId: number | null; malzemeTuru: string | null; emreGider: boolean }): string | null {
-  if (g.kartVar || g.partiId === null || g.statuId !== null || g.malzemeTuru !== 'hammadde' || !g.emreGider) return null;
-  return KARTSIZ_TESLIM;
+export const KARTSIZ_ALMA = 'Bu lotun bu emre refakat kartı yok; depo kartı açsın.';
+// Emre giden malzeme kartla gider (615-2 a, 633 b, 3337): tek kural, iki soru.
+// tur: kart açılacaksa hangisi (lotlu teslimde lot kartı, lotsuzda emrin lot bekleyen istisna kartı); emir yok ya da kapalıysa, ya da lot
+// bir üretim emrinin çıktısıysa null. Emir durumu ve lot verilmezse tur null olur.
+// zorunlu: kartsız gidemez (lotlu, statüsüz, hammadde, kalitesi serbest, emre giden); emir durumundan bağımsızdır.
+// acikEmirdeZorunlu: zorunlu ve kart açılabilir (tur var); kartı depo açar, açamayan yol kartsız alıma izin vermez.
+export type KartOnayiTuru = 'lot' | 'istisna';
+export interface KartGerekirGirdisi {
+  uretimEmriId: number | null; partiId: number | null; statuId: number | null; malzemeTuru: string | null; kalite: string;
+  emirDurumu: string | null; lot: { uretimEmriId: number | null } | null;
+}
+export function kartGerekir(g: KartGerekirGirdisi): { tur: KartOnayiTuru | null; zorunlu: boolean; acikEmirdeZorunlu: boolean } {
+  const zorunlu = g.uretimEmriId !== null && g.kalite === 'serbest' && g.partiId !== null && g.statuId === null && g.malzemeTuru === 'hammadde';
+  let tur: KartOnayiTuru | null = null;
+  if (g.uretimEmriId !== null && g.emirDurumu !== null && g.emirDurumu !== 'bitti' && g.emirDurumu !== 'iptal') {
+    if (g.partiId === null) tur = 'istisna';
+    else if (g.lot !== null && refakatLotEngeli(g.lot) === null) tur = 'lot';
+  }
+  return { tur, zorunlu, acikEmirdeZorunlu: zorunlu && tur !== null };
 }
 
 // İstisna kartı (Soru 129, 131 a): yalnız açık, birleşmemiş, lotsuz kart bağlanır; lot mal kabulle girmiş ve kartın malzemesinden olmalı.

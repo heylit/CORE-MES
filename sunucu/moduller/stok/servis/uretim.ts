@@ -22,7 +22,7 @@ import {
   binde, bindenMetin, cikisOnerisi, stoklanirMi, partiSec, ihtiyacToplami, kalanSarf, tamamlamaEngeli, ISTEK_GECIS_KAYNAKLARI, istekGecisEngeli, istekAcilisDurumu, sayimArtisPlani, sayimAzalisPlani,
   istekliTeslimEngeli, istekListeEngeli, teslimAlimMiktariEngeli, istenenFazlaNotu, teslimAlmaEngeli, teslimKapanisEngeli, kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, birikimliMiktar,
   kalanAdimAdedi, tasimaKaynagi, type TasimaKaynagi, gelenOrani, oranliAdet, type GelenOrani, type ReceteGirdisi, type UretimAdimPlani, baslatmaEksikleri, adimKalanIhtiyaci, tasinanMahsubu, adetMiktari, type BaslatmaEksigi,
-  rezerveSiniri, enKotuKalite, girdiSec, eksikGirdiEngeli, geriCevirmeKaliteleri, teslimBolmesi, elleSarfMahsubu, araCevirmeMahsubu, sarfKapanisEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru, kartsizLotTeslimEngeli, baslatmaKartiEngeli,
+  rezerveSiniri, enKotuKalite, girdiSec, eksikGirdiEngeli, geriCevirmeKaliteleri, teslimBolmesi, elleSarfMahsubu, araCevirmeMahsubu, sarfKapanisEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartGerekir, KARTSIZ_ALMA, KARTSIZ_TESLIM, baslatmaKartiEngeli,
   sahipsizStatuluHesapla, refakatEtiketi,
 } from '../kurallar.ts';
 import * as sorgular from '../sorgular.ts';
@@ -509,14 +509,14 @@ export async function gelenTeslimSayisi(db: Db, k: Kullanici): Promise<number> {
   return (await sorgular.yoldakiGelenler(db, sinirsiz ? null : istasyonlar.map((i) => i.id), islemVarMi(k, 'stok.transfer'))).filter((t) => banaGelen(t, k.id)).length;
 }
 
-// Emre giden malzeme kartla gider (615-2 a, 633 b). 2931 a (632 a'nın yerine): pencere sorulmaz; emir ve lotun açık kartı yoksa
-// kart açılır (lotsuzda istisna kartı), kâğıt Etiket Merkezi bekleyenlerine düşer. Kart çoğunlukla hazırlıkta lot seçilince açılmıştır.
-// Açılan kart döner (yalnız kimlik ve etiket): gönderen kullanıcıya söylenir; var olan kart dönmez.
+// Emre giden malzeme kartla gider (615-2 a, 633 b). Bu yol kartı kendisi açar: emir ve lotun açık kartı yoksa kart açılır (lotsuzda
+// istisna kartı), kâğıt Etiket Merkezi bekleyenlerine düşer; kartsız gönderim engeli (3337) `teslimGonder`dedir, kartsız alma engeli
+// `kartsizAlmaEngeli`dedir. Kart çoğunlukla hazırlıkta lot seçilince açılmıştır. Açılan kart döner (yalnız kimlik ve etiket): gönderen kullanıcıya söylenir; var olan kart dönmez.
 export async function emreKartiSagla(db: Db, kisiId: number, t: { uretimEmriId: number | null; partiId: number | null; malzemeId: number }): Promise<AcilanKart | null> {
   if (t.uretimEmriId === null) return null;
   const emir = await uretimEmriOzeti(db, t.uretimEmriId);
   const lot = t.partiId === null ? null : await sorgular.partiBul(db, t.partiId);
-  const tur = kartOnayiTuru(t, lot, emir?.durum ?? null);
+  const { tur } = kartGerekir({ ...t, statuId: null, malzemeTuru: null, kalite: 'serbest', emirDurumu: emir?.durum ?? null, lot });
   if (tur === null) return null;
   const acik = tur === 'lot' ? await sorgular.acikRefakatPartisi(db, t.uretimEmriId, t.partiId!) : await sorgular.acikIstisnaKarti(db, t.uretimEmriId, t.malzemeId);
   if (acik) return null;
@@ -525,6 +525,16 @@ export async function emreKartiSagla(db: Db, kisiId: number, t: { uretimEmriId: 
     : await sorgular.istisnaKartiAc(db, { uretimEmriId: t.uretimEmriId, malzemeId: t.malzemeId, kisiId, adet });
   const kart = id === null ? null : await sorgular.refakatPartisiBul(db, id);
   return kart === null ? null : { id: kart.id, etiket: refakatEtiketi(emir?.emirNo ?? null, kart.uretimEmriId, kart.sira) };
+}
+// Kartı açmayan alma yolları (okutarak al, istasyon isteğini kabul): kart gerekiyor ve emir + lot için açık kart yoksa ileti döner; kart açılmaz (depo işi).
+export async function kartsizAlmaEngeli(db: Db, t: { uretimEmriId: number | null; partiId: number | null; statuId: number | null; malzemeId: number }): Promise<string | null> {
+  if (t.uretimEmriId === null || t.partiId === null) return null;
+  const emir = await uretimEmriOzeti(db, t.uretimEmriId);
+  const lot = await sorgular.partiBul(db, t.partiId);
+  const malzemeTuru = (await malzemeOzeti(db, t.malzemeId))?.tur ?? null;
+  const karar = kartGerekir({ uretimEmriId: t.uretimEmriId, partiId: t.partiId, statuId: t.statuId, malzemeTuru, kalite: 'serbest', emirDurumu: emir?.durum ?? null, lot });
+  if (!karar.acikEmirdeZorunlu) return null;
+  return (await sorgular.acikRefakatPartisi(db, t.uretimEmriId, t.partiId)) === null ? KARTSIZ_ALMA : null;
 }
 // Teslim et: stok yazılmaz, kayıt "yolda" açılır; parça olduğu statü ve partiyle gider. Aynı kaynak kimliği ikinci teslim açmaz.
 // bolunenParca: bölünen teslimin ilkinden sonraki parçası; isteğin yoldaki teslimi o bölmenin önceki parçasıdır, yeni teslimi engellemez.
@@ -588,12 +598,11 @@ export async function teslimGonder(db: Db, k: Kullanici, g: TeslimGonderGovdesi,
   }
   // 3337: emre giden lotlu hammadde kartsız gitmez; kart sepette "Refakat kartına dönüştür" ile açılır ve okutulur. Emirsiz istasyon
   // stoğu serbest kalır; iş o stokla da kart okutmadan başlamaz (başlatma denetimi).
-  const kartsiz = kartsizLotTeslimEngeli({
-    kartVar: refakat !== null, partiId, statuId, malzemeTuru: (await malzemeOzeti(db, malzemeId))?.tur ?? null,
-    emreGider: uretimEmriId !== null && kalite === 'serbest',
-  });
+  const kartsiz = refakat === null && kartGerekir({
+    uretimEmriId, partiId, statuId, malzemeTuru: (await malzemeOzeti(db, malzemeId))?.tur ?? null, kalite, emirDurumu: null, lot: null,
+  }).zorunlu;
   // Ayrıntı istemcinin "Refakat kartına dönüştür" penceresini doldurur: kart bu emir ve lotla açılır, gönderim kartla yinelenir.
-  if (kartsiz) throw dogrulama(kartsiz, 'refakatPartisiId', { kartsiz: { uretimEmriId, partiId, malzemeId } });
+  if (kartsiz) throw dogrulama(KARTSIZ_TESLIM, 'refakatPartisiId', { kartsiz: { uretimEmriId, partiId, malzemeId } });
   let acilan = null as AcilanKart | null;
   const id = await korumali(async () => {
     await serbestDenetle(db, malzemeId, kaynak, partiId, statuId, bindenMetin(binde(g.miktar)), 'gönderilemez', kalite);
