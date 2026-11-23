@@ -1458,6 +1458,10 @@ describe('Kokpit', () => {
     fireEvent.pointerUp(document, { pointerType: 'mouse' });
     const onayGrubu = screen.getByRole('group', { name: 'Taşımayı onayla' });
     expect(onayGrubu.textContent).toContain('gecikir');
+    // 3605: onay, tahtanın içinde değil gövdede sabit durur; tahtanın altında boşluk kalır.
+    expect(onayGrubu.parentElement).toBe(document.body);
+    expect(onayGrubu.classList.contains('tc-pyq-alt-panel')).toBe(true);
+    expect(document.querySelector('.tc-pyq-alt-bosluk')).not.toBeNull();
     expect(onayGrubu.textContent).toMatch(/^\S+ · .+, .+ \(\d.* (erken|geç)\)/);
     expect(is(komsu!).hasAttribute('data-kaydi')).toBe(true);
     // Onay beklerken imleç hedefi değiştirmez.

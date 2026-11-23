@@ -1236,3 +1236,14 @@
 .tc-pyq-tablo-satir { overflow: hidden; }
 /* 3570 Z2: Ürün ve Ad dar sütunda iki satıra kırılır (satır boyu iki satırı taşır), üçüncü satır yerine "…"; tamamı ipucunda. */
 .tc-pyq-h:is([data-sutun="urun"], [data-sutun="ad"]) > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; white-space: normal; line-height: 1.2; overflow-wrap: anywhere; }
+
+/* 3605: taşıma onayı ekranın altında, içeriğin önünde sabit durur (tahta uzun olsa da Uygula ve Vazgeç görünür). Gövdeye taşınır; .tc-pyq-ana kap olduğundan fixed oraya bağlanırdı. Boşluk öğesi son satırların altta kalmasını sağlar. */
+.tc-pyq-alt-panel {
+  position: fixed; left: 50%; bottom: var(--b-4); z-index: var(--z-katman); translate: -50% 0; margin: 0;
+  width: max-content; max-width: calc(100vw - var(--b-5)); max-height: var(--ekran-boy-60); overflow-y: auto;
+}
+.tc-pyq-alt-bosluk { height: calc(var(--b-6) * 3); }
+@media (max-width: 767px) {
+  .tc-pyq-alt-bosluk { height: calc(var(--b-6) * 4); }
+  .tc-pyq-alt-panel { bottom: var(--b-2); }
+}

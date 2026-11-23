@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as FareOlayi, type PointerEvent as ImlecOlayi, type ReactNode, type KeyboardEvent as TusOlayi } from 'react';
 import { Dugme, Simge } from '../../../../ortak/arayuz/index.ts';
 import { hizaCizgileri, hizaNoktalari, hizalaYakala, type HizaCizgisi, type Yakalanan } from './hiza.ts';
@@ -1163,7 +1164,10 @@ export function Tahta(o: TahtaOzellikleri) {
         )}
       </div>
       {onay && tasinanIs && hedef && (
-        <div className="tc-pyq-ipucu tc-pyq-tasima-onayi" role="group" aria-label="Taşımayı onayla">
+        <>
+        <div className="tc-pyq-alt-bosluk" aria-hidden="true" />
+        {createPortal(
+        <div className="tc-pyq-ipucu tc-pyq-tasima-onayi tc-pyq-alt-panel" role="group" aria-label="Taşımayı onayla">
           <span role="status">{`${onayCumlesi(
             emirKuyrugu(emir.get(tasinanIs.job)?.no ?? tasinanIs.job),
             goz !== 'T' || hedef.satir === satirKimligi(tasinanIs) ? (tasinanIs.fason ? 'Fason' : tezgahKodu.get(tasinanIs.m) ?? tasinanIs.m) : tezgahKodu.get(hedef.satir) ?? hedef.satir,
@@ -1171,7 +1175,10 @@ export function Tahta(o: TahtaOzellikleri) {
           )}${etkiNe?.gecerli !== false ? etkiCumlesi(etkiNe, zaman, m.simdi) : ''}`}</span>
           <Dugme onClick={vazgec}>Vazgeç</Dugme>
           <Dugme tur="birincil" simge="check" disabled={etkiNe?.gecerli === false} onClick={uygula} autoFocus>Uygula</Dugme>
-        </div>
+        </div>,
+        document.body,
+        )}
+        </>
       )}
       {tasinan && !onay && <p className="tc-pyq-ipucu" role="status">{tasinan.suruk ? 'Bırakın: iş taşınır' : 'Bırakmak için tıklayın ya da Space'}{grupKaydir && coklu.size > 1 && coklu.has(tasinan.id) ? ` · seçili ${String(coklu.size)} iş aynı süre kayar` : ''}{etkiNe?.gecerli === false && etkiNe.ileti ? ` · ${etkiNe.ileti}` : ''}{etkiNe?.gecerli !== false ? etkiCumlesi(etkiNe, zaman, m.simdi) : ''}{hiza.filter((c) => c.hizali).map((c) => ` · Hizalı: ${c.ad} ${zaman(c.saat).slice(-5)}`).join('')} · Esc vazgeçer</p>}
       {once && <p className="tc-pyq-ipucu" role="status">Onaylı plan gösteriliyor · işlerin üzerinde sizin değişikliğinizle ne kadar kaydığı yazar</p>}
