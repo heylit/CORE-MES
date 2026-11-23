@@ -207,3 +207,8 @@ button.tc-prj-pano-kart { cursor: pointer; }
 
 /* 3588: bitiş tarihi ve altındaki kademe rozeti; dar sütunda rozet tarihin altına iner. */
 .tc-prj-bitis-hucre { display: inline-flex; flex-direction: column; align-items: flex-start; gap: var(--b-1); }
+
+/* 3611: gruplu Görevlerim'de başlıktaki etiketli metin sayıyı taşır; Tablo'nun sondaki yalın sayısı gizlenir. */
+.tc-prj-gruplu .tc-tablo-grup-sayi { display: none; }
+.tc-prj-grup-secim { display: inline-flex; align-items: center; gap: var(--b-2); min-height: 44px; }
+.tc-prj-gruplu .tc-tablo-grup-dugme { min-height: 44px; }

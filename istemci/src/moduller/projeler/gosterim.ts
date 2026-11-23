@@ -75,3 +75,21 @@ export const HAZIRLIK_METNI: Record<(typeof HAZIRLIK_MADDELERI)[number], string>
   'ek-madde': 'Ek hazırlık maddesi', aparat: 'Aparat', 'olcu-aleti': 'Ölçü aleti (kalibrasyon)',
 };
 
+
+// 3611: hazırlık görevinin emri. Görev adı sistem tarafından `<kalem> · <emir no>` ya da (eski biçim) `<kalem> · <emir no> / <op no>` yazılır;
+// emir numarası ayrı sütunda taşınmadığı için addan okunur. Hazırlık görevi olmayan ve adı bu biçimde olmayan görev grupsuz kalır (null).
+export function hazirlikEmriNo(g: { hazirlikMaddesi: string | null; ad: string }): string | null {
+  if (g.hazirlikMaddesi === null) return null;
+  const i = g.ad.lastIndexOf(' · ');
+  if (i < 0) return null;
+  const no = g.ad.slice(i + 3).split(' / ')[0]?.trim() ?? '';
+  return no === '' ? null : no;
+}
+
+// 3611: Görevlerim dışa aktarımı ekrandaki sade düzenden bağımsız, her zaman tam sütunludur (proje, yapan ve kontrol eden ayrı sütun).
+export const GOREVLERIM_CSV_BASLIKLARI = ['Görev', 'Proje', 'Yapan', 'Kontrol eden', 'Bitiş', 'İlerleme', 'Durum'] as const;
+export function gorevlerimCsvSatiri(g: Gorev & { projeKod: string }): string[] {
+  return [
+    g.ad, g.projeKod, atamaMetni(g.sorumluAd, g.yapanRolAd), atamaMetni(g.kontrolKisiAd, g.kontrolRolAd, ''), g.planBitis, String(g.ilerleme), gorevDurumMetni(g),
+  ];
+}

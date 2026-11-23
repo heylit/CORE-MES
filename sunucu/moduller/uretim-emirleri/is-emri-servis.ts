@@ -25,7 +25,7 @@ import { denemeIsaretliKimlikler, numaraAl, sistemAyariOku } from '../ayarlar/di
 import { kayitlarinKucukResimleri } from '../belge-merkezi/disari.ts';
 import { malzemeOzeti, malzemeOzetleri, malzemeResimAnahtarlari, revizyonBilgileri } from '../malzemeler/disari.ts';
 import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
-import { emrinHazirlikGorevleriniAc } from './hazirlik-gorevi.ts';
+import { emrinHazirlikGorevleriniAc, isEmriHazirligiEkle } from './hazirlik-gorevi.ts';
 import { siparisAyrintisi, siparisinSatirOzetleri, siparisKilitliAyrinti, siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import {
   EMIR_YOK, IKAME_BASKA, IKAME_BILESEN_YOK, IKAME_CAKISMA, IS_EMRI_YOK, KAYNAK_YOK, acikEmirIhlali, arsivdeFasonDonusuAcik, adimliOzetSay, adimliIptalIhlali, hataliDurduMu, kaynakSuresi, fasonDonusIhlali, fasonGidisIhlali, fasonTamamIhlali,
@@ -488,6 +488,7 @@ export async function isEmirleriniYenile(
     } else if (plan.ekle.includes(op) && ie !== undefined) {
       const yeni = await s.isEmriEkle(db, uretimEmriId, await yaziyaCevir(db, ie, i + 1, tipler));
       await eklerYaz(db, uretimEmriId, yeni, ie);
+      await isEmriHazirligiEkle(db, kisiId, uretimEmriId, yeni, op);
       degisenler.push(`OP ${op} eklendi`);
       degisti = true;
     }
@@ -1421,6 +1422,7 @@ export async function adimlariKoy(db: Db, kisiId: number, emirId: number, onceki
       return { ...(await yaziyaCevir(db, girdi, sira, tipler)), tur: a.tur, ekAciklama: a.ekAciklama };
     });
     idler.push(yeniId);
+    await isEmriHazirligiEkle(db, kisiId, emirId, yeniId, a.opNo);
     if (a.kopya !== undefined) kopyalar.push({ kaynak: a.kopya, yeniId });
     onceki = a.opNo;
   }
@@ -1639,6 +1641,7 @@ export async function rotasizAdimEkle(db: Db, kullanici: Kullanici, id: number, 
   await bilesenleriDenetle(db, g.bilesenler ?? []);
   const isEmriId = await adimiYerineKoy(db, id, kendi, g.oncekiOpNo, (sira) => rotasizAdimYazisi(db, g, sira, g.aciklama));
   await bilesenleriYaz(db, isEmriId, g.bilesenler ?? []);
+  await isEmriHazirligiEkle(db, kisiId, id, isEmriId, g.opNo);
   await rotasizBitir(db, e, kisiId);
 }
 

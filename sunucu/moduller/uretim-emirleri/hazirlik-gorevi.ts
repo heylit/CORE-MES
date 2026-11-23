@@ -8,7 +8,7 @@ import type {
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { kisiAdlari, rolSecenekleri, rollerdekiKisiler } from '../kisiler/disari.ts';
 import {
-  hazirlikGorevleri, hazirlikGorevleriAc, hazirlikSablonlari, projeGetir, projeninHazirlikGorevleri, projeSecenekleri,
+  ADIM_EN_COK, hazirlikGorevleri, hazirlikGorevleriAc, hazirlikIsEmriEklendi, hazirlikSablonlari, projeGetir, projeninHazirlikGorevleri, projeSecenekleri,
 } from '../projeler/disari.ts';
 import type { HazirlikHedefleri, HazirlikMaddeBilgisi, HazirlikPlani } from '../projeler/disari.ts';
 import { hazirliklar } from './hazirlik.ts';
@@ -19,6 +19,8 @@ import * as s from './sorgular.ts';
 // 3396 a: emrin hazırlık görevleri projede açılır. Proje emrin projesi olabileceği gibi başka bir aktif proje de olabilir (emrin
 // numarasına giren proje değişmez); görev emre ve iş emrine bağlıdır. Kapalı madde görev doğurmaz.
 const EMIR_YOK = 'Üretim emri bulunamadı.';
+// Adım işareti hücreyi yalnız görev açıkken bitirir: kontrol bekleyen görev bitirilirken adımlar işaretlenir ama hücre "kontrolde" kalır (Risk S1).
+const ACIK_GOREV = new Set(['yapilacak', 'suruyor', 'bekliyor']);
 
 async function acikMaddeler(db: Db): Promise<Map<string, HazirlikMaddeBilgisi>> {
   return new Map((await hazirlikMaddeTanimlari(db)).filter((m) => m.acik || m.durduran).map((m) => [m.kod, { ad: m.ad, isEmriDuzeyi: m.isEmriDuzeyi }]));
@@ -37,6 +39,13 @@ export async function emrinHazirlikGorevleriniAc(db: Db, kisiId: number, emirId:
   return r.eklenen;
 }
 
+// 3611: emre sonradan eklenen iş emri, emrin yeni biçimli açık hazırlık görevlerine adım olur (kontrolde ya da bitmiş görevde eski biçim tek görev).
+export async function isEmriHazirligiEkle(db: Db, kisiId: number, emirId: number, isEmriId: number, opNo: number): Promise<number> {
+  const e = await s.ustEmirBul(db, emirId, false);
+  if (e === null) return 0;
+  return hazirlikIsEmriEklendi(db, kisiId, { emriId: emirId, emirNo: e.emirNo, isEmriId, opNo });
+}
+
 export async function hazirlikProjesiKur(db: Db, kullanici: Kullanici, emirId: number, g: HazirlikProjesiGovdesi): Promise<HazirlikProjesiCevabi> {
   return { eklenen: await emrinHazirlikGorevleriniAc(db, kullanici.id, emirId, g.projeId, g.sablonId) };
 }
@@ -51,10 +60,10 @@ export async function hazirlikProjesiSecenekleri(db: Db, emirId: number): Promis
     const tek = acik.filter((m) => !m.isEmriDuzeyi || isEmriSayisi === 0);
     const ie = acik.filter((m) => m.isEmriDuzeyi && isEmriSayisi > 0);
     const parcalar = [
-      ...(ie.length > 0 ? [`${String(isEmriSayisi)} iş emri × (${ie.map((m) => m.ad).join(', ')})`] : []),
+      ...(ie.length > 0 ? [`${ie.map((m) => m.ad).join(', ')} (emir başına tek görev, ${String(isEmriSayisi)} iş emri adım)`] : []),
       ...(tek.length > 0 ? [`emir başına ${tek.map((m) => m.ad).join(', ')}`] : []),
     ];
-    return { id: x.id, ad: x.ad, varsayilan: x.varsayilan, dogacak: tek.length + ie.length * isEmriSayisi, ozet: parcalar.join(' ve ') };
+    return { id: x.id, ad: x.ad, varsayilan: x.varsayilan, dogacak: tek.length + ie.length * (isEmriSayisi <= ADIM_EN_COK ? 1 : isEmriSayisi), ozet: parcalar.join(' ve ') };
   });
   return {
     emirNo: e.emirNo, emirProjeId: e.projeId, baslangic: e.baslangic, teslim: e.teslim,
@@ -110,9 +119,12 @@ export async function hazirlikMatrisi(db: Db, kullanici: Kullanici, projeId: num
       id: e.id, emirNo: e.emirNo, parcaNo: e.parcaNo, adet: e.adet, acik: acikEmirIhlali(e.durum, e.arsiv) === null,
       isEmirleri: isEmirleri.filter((i) => i.uretimEmriId === e.id).map((i) => ({ id: i.id, opNo: i.opNo, ad: i.ad })),
     })),
-    gorevler: gorevler.map((g) => ({
-      id: g.id, madde: g.madde, emriId: g.emriId, isEmriId: g.isEmriId, ad: g.ad, durum: g.durum, onaylandi: g.onaylandi, planBitis: g.planBitis,
-      gecikmeGun: g.gecikmeGun, yapan: atanan(g.sorumluKisiId, g.yapanRolId), kontrol: atanan(g.kontrolKisiId, g.kontrolRolId), surum: g.surum, kademe: g.kademe,
+    // 3611: yeni biçimli görevde (iş emirleri adım) her iş emri kendi hücresini alır; hücrenin durumu adımın işaretinden gelir, kapanmış görevde
+    // görevin durumundandır. Eski biçimli görev (iş emri başına) olduğu gibi gelir; iki biçim birlikte okunur.
+    gorevler: gorevler.flatMap((g) => (g.adimlar.length === 0 ? [{ ...g, isEmriId: g.isEmriId, adimIsareti: null as boolean | null }] : g.adimlar.map((a) => ({ ...g, isEmriId: a.isEmriId, adimIsareti: a.yapildi })))).map((g) => ({
+      id: g.id, madde: g.madde, emriId: g.emriId, isEmriId: g.isEmriId, ad: g.ad, durum: g.adimIsareti === true && ACIK_GOREV.has(g.durum) ? 'bitti' : g.durum,
+      onaylandi: g.onaylandi, planBitis: g.planBitis,
+      gecikmeGun: g.adimIsareti === true ? null : g.gecikmeGun, yapan: atanan(g.sorumluKisiId, g.yapanRolId), kontrol: atanan(g.kontrolKisiId, g.kontrolRolId), surum: g.surum, kademe: g.kademe,
       sistem: gorevinSistemHali(sistem.get(g.emriId), g.madde, g.isEmriId),
     })),
   };

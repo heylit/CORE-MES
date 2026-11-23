@@ -8,7 +8,8 @@ export type { ProjeAyrintiOzeti, ProjeOzeti } from './servis.ts';
 export { projeAcildiDinle, projeDegistiDinle } from './proje-olaylari.ts';
 export type { ProjeOlayi, ProjeOlayiDinleyicisi } from './proje-olaylari.ts';
 export type { SiparistenProjeVerisi } from '#paylasilan/sozlesme/projeler.ts';
-export { hazirlikGorevleri, hazirlikGorevleriAc, hazirlikSablonlari, projeninHazirlikGorevleri } from './hazirlik-gorevleri.ts';
+export { ADIM_EN_COK } from './kurallar.ts';
+export { hazirlikGorevleri, hazirlikGorevleriAc, hazirlikIsEmriEklendi, hazirlikSablonlari, projeninHazirlikGorevleri } from './hazirlik-gorevleri.ts';
 export type { HazirlikGorevi, HazirlikGorevleriAcVerisi, HazirlikHedefi, HazirlikMaddeBilgisi, HazirlikPlani } from './hazirlik-gorevleri.ts';
 // 3458: Görevleri dağıt ekranı projeye bağlı açık emirleri Üretim Emirleri'nden alır; bağ kablolamadadır.
 export { hazirlikHedefCozucusuKaydet } from './dagitim.ts';

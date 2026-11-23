@@ -2,7 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, dogrulama } from '#cekirdek/hata.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
 import type { DagitCevabi, DagitilmamisCevabi, DagitimCevabi, DagitimSatiri, DagitVerisi } from '#paylasilan/sozlesme/projeler.ts';
-import { hazirlikGorevleriAc } from './hazirlik-gorevleri.ts';
+import { acilacakYerler, hazirlikGorevleriAc } from './hazirlik-gorevleri.ts';
 import type { HazirlikHedefi, HazirlikMaddeBilgisi } from './hazirlik-gorevleri.ts';
 import { PROJE_YOK, sablonTarihleri } from './kurallar.ts';
 import { YONETIM_KISITLARI, atamaBildir, projeKilitle, sablonUygula, secilenSablon } from './servis.ts';
@@ -26,14 +26,11 @@ export const SABLON_DAGITILDI = 'Bu şablon bu projede zaten dağıtıldı.';
 export const SATIR_SABLONDA_YOK = 'Satır seçilen şablonda yok; sayfayı yenile.';
 
 // Hazırlık kaleminde kaç görev doğacağı: açık her emir için emir başına, iş emri düzeyindeki maddede iş emri başına; açık olan sayılmaz.
-async function dogacakSayisi(db: Db, madde: string, h: HazirlikHedefleri): Promise<number> {
+async function dogacakSayisi(db: Db, madde: string, h: HazirlikHedefleri, kalemAdimli: boolean): Promise<number> {
   const bilgi = h.maddeler.get(madde);
   if (bilgi === undefined) return 0;
   let sayi = 0;
-  for (const { hedef } of h.hedefler) {
-    const yerler = bilgi.isEmriDuzeyi && hedef.isEmirleri.length > 0 ? hedef.isEmirleri.map((i) => i.id) : [null];
-    for (const ie of yerler) if (!(await sorgular.hazirlikGoreviVarMi(db, hedef.emriId, ie, madde))) sayi += 1;
-  }
+  for (const { hedef } of h.hedefler) sayi += (await acilacakYerler(db, hedef, bilgi, madde, kalemAdimli)).length;
   return sayi;
 }
 
@@ -56,7 +53,7 @@ export async function dagitimOnizleme(db: Db, projeId: number, sablonId: number 
       hazirlikAd: madde === null ? null : hedefler?.maddeler.get(madde)?.ad ?? madde,
       yapanKisiId: k.yapan_kisi_id, yapanRolId: k.yapan_rol_id, kontrolKisiId: k.kontrol_kisi_id, kontrolRolId: k.kontrol_rol_id,
       planBaslangic: t.planBaslangic, planBitis: t.planBitis, kanitZorunlu: k.kanit_zorunlu, adimlar: k.adimlar,
-      dogacak: madde === null ? 1 : hedefler === null ? null : await dogacakSayisi(db, madde, hedefler),
+      dogacak: madde === null ? 1 : hedefler === null ? null : await dogacakSayisi(db, madde, hedefler, k.adimlar.length > 0),
     });
   }
   return {
