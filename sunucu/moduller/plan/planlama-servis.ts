@@ -33,13 +33,13 @@ import { brutAlanlariniCikar, calismayaMotorAyari, mesaiSaatiniCikar, saklanmaya
 import { sureOgrenmesi } from './ogrenme.ts';
 import { planGirdisi, yeniCalisma, type KaynakOkumasi } from './plan-girdisi.ts';
 import {
-  acikSiparisSatirlari, type AcikSiparisGelisi, ayarCevir, gelisleriBirlestir, bitisAkisiEkle, calisanAdimlariCevir, durusOkumaSonuYaz, gerekenTarihler, planAni, planGunu,
+  acikSiparisSatirlari, adimAdetleriMotora, motorAnahtarlari, type AcikSiparisGelisi, ayarCevir, gelisleriBirlestir, bitisAkisiEkle, calisanAdimlariCevir, durusOkumaSonuYaz, gerekenTarihler, planAni, planGunu,
   planSaati,
 } from './planlama-kurallar.ts';
 import { type Gorunum, maliyetiGeriKoy, maliyetsizCalisma } from './maliyet-gizleme.ts';
 import { satinAlmaCalismasi } from './satin-alma-gorunumu.ts';
 import { emirTutari, satirKuru } from './kurallar.ts';
-import { calisanAdimlar, canliOzeti, okumaBellegiyle, planFinansmanOrani, planGenelGiderSaatBasi, planlanacakIsler, TAKVIM_GUN, type PlanGenelGideri } from './servis.ts';
+import { calisanAdimlar, canliOzeti, okumaBellegiyle, motorNumaralariOku, planFinansmanOrani, planGenelGiderSaatBasi, planlanacakIsler, TAKVIM_GUN, type PlanGenelGideri } from './servis.ts';
 import * as sorgular from './sorgular.ts';
 import { teklifDenemesi, type DenemeSonucu, type TeklifTaslagi } from './teklif-denemesi.ts';
 
@@ -315,11 +315,17 @@ async function kaynakOkuKur(db: Db, kullanici: Kullanici): Promise<KaynakOkumasi
   }
   // 3199 (A + D): aparat ve özel takım ikincil kaynaktır; tanımı İstasyonlar'da, adımın isteği iş emrinin ekipman listesinde.
   const emirOkur = yetkiliMi(kullanici, KAYNAK_OKUMA.emir);
+  // 3615: adım adedi ve ikincil kaynak isteği emrin numarasıyla gelir; motor adımı rotanın numarasıyla tanır, anahtar sınırda çevrilir.
+  const acik = emirOkur ? await planlanacakIsler(db, { taslakDahil: true }) : [];
+  const motorNo = await motorNumaralariOku(db, acik);
+  const esle = motorAnahtarlari(acik, motorNo);
   const ikincil = await ikincilEkiOku(db, { istasyon: yetkiliMi(kullanici, ISTASYON_OKUMA), emir: emirOkur, alet: true },
-    emirOkur ? await planlanacakIsler(db, { taslakDahil: true }) : []);
+    acik.map((i) => ({ id: i.id, emirNo: i.emirNo, opNo: motorNo.get(i.id) ?? i.opNo })));
   // 1329: fiyat alanı birleştirmede hep bulunur (malzemeyi okuyamayanda null): girdi.betik önceki kayıttaki fiyatı taşımaz.
   return {
-    durum: d,
+    // Ekrana giden okuma (planlamaKaynagi) emrin numarasını korur; yalnız motora giden kopya rotanın numarasına çevrilir.
+    durum: { ...d, ...(d.adimAdetleri == null ? {} : { adimAdetleri: adimAdetleriMotora(d.adimAdetleri, esle) }),
+      ...(d.calisanAdimlar == null ? {} : { calisanAdimlar: d.calisanAdimlar.map((c) => ({ ...c, anahtar: esle.get(c.anahtar) ?? c.anahtar })) }) },
     ek: { takvim: null, makineNotu, kisiGorevi: gorev, insanliIstasyonlar, ekipUyeleri: ekipUyeleriEki, kapasite: await kapasite(db, kullanici), malzemeFiyatlari: null, ...sa, siparisBedelleri: await siparisBedelleri(db, kullanici), bakimlar, planliDuruslar, planliDurusSonu, ikincil },
   };
 }

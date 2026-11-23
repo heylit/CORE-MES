@@ -5,11 +5,11 @@ import type { CalismaCanliyaAlGovdesi, CalismaGeriAlCevabi, CalismaGonderCevabi,
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import { emirDilimi, isEmriPlanBilgileri } from '../uretim-emirleri/disari.ts';
 import { calismaTaslagiYaz, canliSira, tabanPlani, taslakYerlesimleriOku } from './disari.ts';
-import { calismaDurdurulanlari, calismaEkMesaisi, calismaElleBolmeleri, calismaFarki, calismaIsleri, calismaKilitleri, calismaKuyruklari, durdurmaBekleyenler, taslaktanCalismaya as kuralTaslaktanCalismaya, type TaslakYeri } from './planlama-kurallar.ts';
+import { calismaDurdurulanlari, calismaEkMesaisi, calismaElleBolmeleri, calismaFarki, calismaIsleri, calismaKilitleri, calismaKuyruklari, durdurmaBekleyenler, kimlikEmireCevir, motorAnahtarlari, taslaktanCalismaya as kuralTaslaktanCalismaya, type TaslakYeri } from './planlama-kurallar.ts';
 import { saklanmayanKayitDegeri } from './motor-ayari-kurallar.ts';
 import { calismaPlani, type CalismaPlani } from './plan-girdisi.ts';
 import { PLANLAMA_ANAHTARI, planlamaGirdisi, planlamaYaz, planlamaYazmaDenetimi } from './planlama-servis.ts';
-import { canliyaAl, onayaGonder, planlanacakIsler } from './servis.ts';
+import { canliyaAl, motorNumaralariOku, onayaGonder, planlanacakIsler } from './servis.ts';
 import * as sorgular from './sorgular.ts';
 import type { YerlesimSatiri } from './sorgular.ts';
 
@@ -18,8 +18,15 @@ import type { YerlesimSatiri } from './sorgular.ts';
 
 async function calismaOku(db: Db, kullanici: Kullanici, simdi: number): Promise<{ surum: number | null; plan: CalismaPlani | null; kilitler: Set<string>; elleBol: ReturnType<typeof calismaElleBolmeleri>; durdurulan: string[] }> {
   const k = await planlamaGirdisi(db, kullanici);
+  const motorPlani = k.girdi === null ? null : calismaPlani({ ...k.girdi, bugun: tesisGunu(simdi) }, simdi);
+  // 3615: motorun kimliği rotanın numarasıyla gelir; plan modülü ve ekran işi emrin numarasıyla bilir.
+  let plan = motorPlani;
+  if (motorPlani !== null && Object.keys(motorPlani.kimlik).length > 0) {
+    const acik = await planlanacakIsler(db, { taslakDahil: true });
+    plan = { ...motorPlani, kimlik: kimlikEmireCevir(motorPlani.kimlik, motorAnahtarlari(acik, await motorNumaralariOku(db, acik))) };
+  }
   return {
-    surum: k.surum, plan: k.girdi === null ? null : calismaPlani({ ...k.girdi, bugun: tesisGunu(simdi) }, simdi),
+    surum: k.surum, plan,
     kilitler: calismaKilitleri(k.girdi?.calisma ?? null),
     elleBol: calismaElleBolmeleri(k.girdi?.calisma ?? null),
     durdurulan: calismaDurdurulanlari(k.girdi?.calisma ?? null),

@@ -556,10 +556,21 @@ async function baglamKur(db: Db, kullanici: Kullanici | null, hedef: Hedef, orta
   return b;
 }
 
+type MotorNoIsleri = ReadonlyMap<number, Pick<PlanIsEmri, 'id' | 'tur' | 'operasyonId' | 'malzemeNo' | 'opNo' | 'uretimEmriId' | 'kaynakRotaRevizyonId'>>;
+
+// 3615: motora giden (adım adedi, ikincil kaynak isteği) ve motordan dönen (çalışma planının kimliği) emir anahtarı, motorun tanıdığı
+// numarayla çevrilir; çözücü yolu (baglamKur) ile aynı kural. Dönen: iş emri kimliği -> motorun numarası, yalnız farklı olanlar.
+export async function motorNumaralariOku(db: Db, isler: readonly PlanIsEmri[]): Promise<ReadonlyMap<number, number>> {
+  if (isler.length === 0) return new Map();
+  const harita: MotorNoIsleri = new Map(isler.map((i) => [i.id, i]));
+  const rotalar: RotaOnbellek = new Map();
+  return motorNumaralari(db, harita, rotalar, await eskiRotaliEmirler(db, harita, rotalar));
+}
+
 // Açık emir numarasını korur (3250 b); motor ise emri ürünün yürürlükteki rotasıyla, rotanın numarasıyla dizer. Rota adımı (tek katman)
 // kimlikle bulunur; bulunamayan adım eski revizyondan açılmış emirde (983 b) rotada yoktur, çok katmanlı emrin düğüm adımı numarasıyla kalır.
 async function motorNumaralari(
-  db: Db, isler: Baglam['isler'], rotalar: RotaOnbellek, eskiRota: Baglam['eskiRota'], ortak?: BaglamOrtak,
+  db: Db, isler: MotorNoIsleri, rotalar: RotaOnbellek, eskiRota: Baglam['eskiRota'], ortak?: BaglamOrtak,
 ): Promise<Baglam['motorNo']> {
   const h: Baglam['motorNo'] = new Map();
   if (planMotoru === null) return h;
@@ -591,7 +602,7 @@ const eskiRotadaVar = (b: Baglam, i: { uretimEmriId: number; opNo: number; opera
 const rotaAdimiMi = (a: { opNo: number; operasyonId: number }, i: { opNo: number; operasyonId?: number | null }): boolean =>
   (i.operasyonId == null ? a.opNo === i.opNo : a.operasyonId === i.operasyonId);
 
-async function eskiRotaliEmirler(db: Db, isler: Baglam['isler'], rotalar: RotaOnbellek, ortak?: BaglamOrtak): Promise<Baglam['eskiRota']> {
+async function eskiRotaliEmirler(db: Db, isler: MotorNoIsleri, rotalar: RotaOnbellek, ortak?: BaglamOrtak): Promise<Baglam['eskiRota']> {
   const h: Baglam['eskiRota'] = new Map();
   if (planMotoru === null) return h;
   const nolar = [...new Set([...isler.values()].map((i) => i.malzemeNo))];
