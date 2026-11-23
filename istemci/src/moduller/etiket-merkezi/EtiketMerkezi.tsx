@@ -270,7 +270,9 @@ function BaskiPaneli({ sablonlar, secili, sec, secenekler, basabilir, kayit, kay
   const [dil, setDil] = useState<YaziciDili>('zpl');
   const [dpi, setDpi] = useState<string>('203');
   // 2929 a: refakat kartı varsayılan iki kopya basılır (her biri Kopya n/N); kişi adedi değiştirir.
-  const [adet, setAdet] = useState(() => (kayit?.tur === 'refakat-partisi' ? String(REFAKAT_KOPYA_SAYISI) : '1'));
+  // Yeniden basma (3598) önceki baskının adedini adresle getirir (?adet=2); geçersiz değer yok sayılır, sunucu ayrıca denetler.
+  const adresAdedi = new URLSearchParams(useLocation().search).get('adet') ?? '';
+  const [adet, setAdet] = useState(() => (kayit?.tur === 'refakat-partisi' ? String(REFAKAT_KOPYA_SAYISI) : /^[1-9][0-9]{0,2}$/.test(adresAdedi) ? adresAdedi : '1'));
   const [sade, setSade] = useState(false);
   const [gercek, setGercek] = useState(gercekBoyutOku);
   const [olcek, setOlcek] = useState(olcekOku);

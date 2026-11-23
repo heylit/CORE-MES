@@ -1186,6 +1186,44 @@ describe('Etiket Merkezi yeni düzen (3025)', () => {
     expect(screen.getByTestId('adres').textContent).toBe('');
   });
 
+  it('3598: baskı geçmişinde basma yetkisi olan her satırdan yeniden basar ve "Çıkmadı" işaretler; deneme ve eski satırın nedeni görünür; işaret işlemi yalnız bir kez gider', async () => {
+    const istekler = sunucuKur({ islemler: [...OKUR, 'etiket-merkezi.bas'] });
+    ac(<Baskilar />);
+    const baglantilar = await screen.findAllByRole('link', { name: /Yeniden bas$/ });
+    expect(baglantilar).toHaveLength(2);
+    expect(baglantilar[0]?.getAttribute('href')).toBe('/etiket-merkezi/bas?tur=konum&id=11%2C12%2C13&adet=2');
+    // Deneme satırı (kayıt yok): düğme pasif ve nedeni görünür metindir.
+    expect(screen.getAllByText('Deneme etiketi: yeniden basılamaz').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: /Çıkmadı: 3 kayıt/ }));
+    await waitFor(() => expect(istekler.gonderilenler).toHaveLength(1));
+    expect(istekler.gonderilenler[0]).toMatchObject({ yol: '/etiket-merkezi/baskilar/7/cikmadi', govde: { neden: 'cikmadi' } });
+    expect(istekKimligiMi(istekler.gonderilenler[0]?.kimlik)).toBe(true);
+  });
+
+  it('3598: "Çıkmadı" işaretli satır rozetle görünür ve Hatalı sekmesinde sayılır; kayıtsız eski satırda yeniden basma yoktur', async () => {
+    const baskilar: BaskilarCevabi = { baskilar: [
+      { id: 21, zaman: '2026-11-22T08:00:00.000Z', yazici: 'USB yazıcı', sablonAnahtar: 'lot-100x50', adet: 1, kisi: 'Örnek Kişi', sonuc: 'indirildi', hata: null, kayitSayisi: 2, dusum: 'usb-hatasi', kayitTuru: 'lot', kayitIdler: [5, 6], isaretlenebilir: false },
+      { id: 22, zaman: '2026-11-22T07:00:00.000Z', yazici: 'Zebra depo', sablonAnahtar: 'refakat-100x150', adet: 1, kisi: 'Örnek Kişi', sonuc: 'gonderildi', hata: null, kayitSayisi: 1, dusum: null, kayitTuru: null, kayitIdler: [9], isaretlenebilir: true },
+      { id: 23, zaman: '2026-11-22T06:00:00.000Z', yazici: 'Zebra depo', sablonAnahtar: 'lot-100x50', adet: 1, kisi: null, sonuc: 'gonderildi', hata: null, kayitSayisi: 1, dusum: null, kayitTuru: 'lot', kayitIdler: [4], isaretlenebilir: false },
+    ] };
+    sunucuKur({ islemler: [...OKUR, 'etiket-merkezi.bas'], baskilar });
+    ac(<Baskilar />);
+    expect(await screen.findByText('Çıkmadı (USB hatası)')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Hatalı (1)' })).toBeTruthy();
+    expect(screen.getByText('Eski kayıt (emir düzeyi): yeniden basılamaz')).toBeTruthy();
+    expect(screen.getByText(/Basılacaklar penceresinden eski/)).toBeTruthy();
+    // İşaretli ve pencere dışı satırda "Çıkmadı" düğmesi yoktur; yalnız işaretlenebilir satırda vardır.
+    expect(screen.queryAllByRole('button', { name: /Çıkmadı: / })).toHaveLength(1);
+  });
+
+  it('3598: basma yetkisi olmayan geçmişte düğme yoktur ve neden yazılıdır', async () => {
+    sunucuKur({ islemler: OKUR });
+    ac(<Baskilar />);
+    expect(await screen.findByText(/İşaretlemek ve yeniden basmak için basma yetkisi gerekir/)).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /Yeniden bas$/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Çıkmadı/ })).toBeNull();
+  });
+
   it('3598: ağ yazıcısından sonra sonuç iletisinde "Çıkmadı" kayıt sayısıyla işaretler; "Basıldı" iletiyi kapatır; deneme baskısında düğme çıkmaz', async () => {
     const istekler = sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku', 'etiket-merkezi.bas'] });
     ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11,12');

@@ -120,10 +120,10 @@ Değişen onaylı karar: QR teslim kurgusundaki varsayım 5 ("yazıcıya doğrud
 - Göç yok, yeni işlem ve yetki yok (`etiket-merkezi.oku` / `.bas`).
 
 
-## 3598: yanlış "basıldı" ve yeniden basma (dilim 1)
+## 3598: yanlış "basıldı" ve yeniden basma (dilim 1 ve 2)
 - Göç `20261123070000_etiket_merkezi_baski_dusumu`: yeni yalnız eklenen `etiket_merkezi_baski_dusumu` (baskı başına bir satır; neden usb-hatasi ya da cikmadi, kişi, zaman) ve `etiket_merkezi_baski_kaydi_tur` CHECK'ine `refakat-partisi`. Veri silmez, dönüştürmez.
 - `POST /etiket-merkezi/baskilar/:id/cikmadi` (`etiket-merkezi.bas`, tekrar korumalı; yeni işlem yok): baskı Basılacaklar hesabından düşer (`sonBasimlar`), baskı satırı değişmez. Yineleme ilk işareti korur. Hatalı, kayıtsız (deneme) ve Basılacaklar penceresinden (30 gün) eski baskı reddedilir (400).
 - `GET /etiket-merkezi/baskilar` cevabı genişledi: `dusum`, `kayitTuru` (eski emir düzeyli refakat ve denemede null), `kayitIdler`, `isaretlenebilir`. Uyumlu genişleme.
 - Refakat kartı yeni basımlarda deftere parti kimliğiyle `refakat-partisi` yazılır; bekleyen refakat partiyi kendi basımıyla ya da verilişten sonra yazılmış eski emir satırıyla kapatır. Eski satırlar yeniden yazılmaz.
-- İstemci (dilim 1): sonuç iletisinde "Çıkmadı" ve "Basıldı"; USB gönderimi patlarsa baskı kendiliğinden "Çıkmadı (USB hatası)" olur (Etiket bas ve HizliBas).
+- İstemci: baskı geçmişinde "Yeniden bas" (Etiket bas ekranını `?tur=&id=&adet=` ile açar; kayıt orada daraltılır, yazıcıyı kişi seçer) ve "Çıkmadı (N)"; sonuç iletisinde "Çıkmadı" ve "Basıldı"; USB gönderimi patlarsa baskı kendiliğinden "Çıkmadı (USB hatası)" olur (Etiket bas ve HizliBas).
 - Yapılmadı: ağ yazıcısının durumu okunmaz (98 evet, ADR 0014); kayıt düzeyinde "Çıkmadı" yok (baskı düzeyi); terminalde (3584) basıldı iletisi için ayrı karar.
