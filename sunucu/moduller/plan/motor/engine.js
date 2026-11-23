@@ -181,14 +181,15 @@ function compile(st){olcekKur(st.w);
   const ek=st.ekMesai||[];
   const M={};
   for(const m of D.tezgahlar){
-    const own=m.vardiyalar&&m.vardiyalar.length?new Set(m.vardiyalar):null;
+    /* 3601: kişinin el tezgâhı (kisi-) yalnız kendi vardiyasında çalışır; listesi boşsa tesisin bütün vardiyalarına düşmez (sunucu da vardiyasız kişiyi yerleştirmez). Kimlikler metne çevrilip karşılaştırılır (sayı ve metin aynı vardiyadır). */
+    const own=m.vardiyalar&&m.vardiyalar.length?new Set(m.vardiyalar.map(String)):String(m.id).startsWith('kisi-')?new Set():null;
     /* 650 a: haftası olan tezgâh kendi iş merkezinin gün vardiyalarıyla çalışır; tatil yine kapalıdır */
     const gunu=d=>m.hafta?(gun(d).tatil?[]:(m.hafta[gun(d).wd]||[])):gun(d).vard;
-    let sw=[];for(let d=-1;d<HDAYS;d++)for(const sid of gunu(d))if(!own||own.has(sid)){const w=inst(d,sid);if(w)sw.push(...subtract([w],molalar(d,sid)));}
+    let sw=[];for(let d=-1;d<HDAYS;d++)for(const sid of gunu(d))if(!own||own.has(String(sid))){const w=inst(d,sid);if(w)sw.push(...subtract([w],molalar(d,sid)));}
     for(const e of ek)if(e.m===m.id){const w=inst(e.gun,e.vardiya);if(w)sw.push(...subtract([w],molalar(e.gun,e.vardiya)));}
     sw=merge(sw);
     /* 2785 b: hazırlık tek parçadır; tezgâhın kesintisiz çalıştığı blok vardiyaların molasız birleşimidir (mola hazırlığı bölmez). */
-    let sb=[];for(let d=-1;d<HDAYS;d++)for(const sid of gunu(d))if(!own||own.has(sid)){const w=inst(d,sid);if(w)sb.push(w);}
+    let sb=[];for(let d=-1;d<HDAYS;d++)for(const sid of gunu(d))if(!own||own.has(String(sid))){const w=inst(d,sid);if(w)sb.push(w);}
     for(const e of ek)if(e.m===m.id){const w=inst(e.gun,e.vardiya);if(w)sb.push(w);}
     let rw=sw;
     if(m.isiksiz){rw=[];for(let d=0;d<HDAYS;d++)if(gunu(d).length)rw.push([d*24,d*24+24]);rw=merge(rw.concat(sw));}

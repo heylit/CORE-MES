@@ -74,4 +74,16 @@ describe('plan motoru: tek vardiyalı kişi (3601)', () => {
     assert.ok(Math.abs(o1.C - (24 + 10 + 40 / 60)) < 1e-6, 'ilk iş ertesi gün 10:40 biter (iki gün x gündüz vardiyası)');
     assert.ok(o2.S >= o1.C - 1e-9, 'ikinci iş ilkinin ardından');
   });
+
+  test('KV-02: kişi tezgâhının vardiya listesi sayı kimlikle ya da boş olabilir; sayı aynı vardiyadır, boş liste tesisin bütün vardiyalarına düşmez', () => {
+    const sayiyla = girdi(['40'], ['personel'], undefined, ['7']);
+    D(sayiyla.st).tezgahlar.find((x) => x.id === 'kisi-7')!.vardiyalar = [3] as unknown as string[];
+    const p = motorYukle().schedule(sayiyla.st, 'yeni', null) as { ops: Record<string, { m: string; S: number; C: number }> };
+    assert.ok(Math.abs(p.ops['O1.10']!.C - (24 + 10 + 40 / 60)) < 1e-6, 'sayı kimlik kişinin vardiyasıdır');
+
+    const bos = girdi(['40'], ['personel'], undefined, ['7']);
+    D(bos.st).tezgahlar.find((x) => x.id === 'kisi-7')!.vardiyalar = [];
+    const q = motorYukle().schedule(bos.st, 'yeni', null) as { ops: Record<string, { m: string; S: number; C: number }> };
+    assert.equal(q.ops['O1.10'], undefined, 'vardiyası olmayan kişiye iş yerleşmez');
+  });
 });
