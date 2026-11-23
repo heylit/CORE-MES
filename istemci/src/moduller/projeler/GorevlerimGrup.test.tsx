@@ -51,6 +51,15 @@ describe('Görevlerim emre göre gruplama (3611)', () => {
     expect(screen.queryByText(/0 geciken/)).toBeNull();
     expect(screen.getAllByRole('button', { expanded: true }).length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText(/Proje toplantısı/)).toBeTruthy();
+    // Karışık listede sade düzen korunur: sütun kümesi değişmez, hazırlık dışı görevde proje kodu görev hücresindedir.
+    expect(screen.queryByRole('columnheader', { name: 'Proje' })).toBeNull();
+    expect(screen.getByText(/Proje toplantısı/).textContent).toContain('ORN-PRJ-1');
+    expect(screen.getAllByText('Yapan · kontrol').length).toBeGreaterThan(0);
+  });
+
+  it('bütün adımları işaretli görev "Adımlar tamam" rozetini alır', async () => {
+    ac([satir(1, 'Malzeme · ORN-EMIR-001', { adimYapilan: 5, ilerleme: 100, durum: 'suruyor' })]);
+    expect(await screen.findByText('Adımlar tamam')).toBeTruthy();
   });
 
   it('birden çok emir varken seçim çıkar, kapatınca başlık kalkar ve seçim hatırlanır; tek emirde seçim yok', async () => {

@@ -53,19 +53,20 @@ export function ProjeGorevlerim() {
     yazar,
   );
   // 3611: hazırlık görevleri emre göre tek başlık altında toplanır; seçim yalnız birden çok emir varken sorulur.
-  const emirler = new Set(satirlar.flatMap((g) => hazirlikEmriNo(g) ?? []));
+  const emirler = new Set(hepsi.flatMap((g) => hazirlikEmriNo(g) ?? []));
   const grupluMu = emreGore || emirler.size < 2;
-  const emirliSatirlar = satirlar.length > 0 && satirlar.every((g) => hazirlikEmriNo(g) !== null);
-  const sade = grupluMu && emirliSatirlar;
+  // Sütun kümesi liste içeriğine göre oynamaz: gruplu görünümde en az bir hazırlık görevi varsa sade düzen açıktır; hazırlık dışı görevde proje kodu
+  // Görev hücresinde soluk metindir.
+  const sade = grupluMu && satirlar.some((g) => hazirlikEmriNo(g) !== null);
   const sutunlar: Sutun<GorevlerimSatiri>[] = [
     { anahtar: 'ad', baslik: 'Görev', hucre: (g) => (
-      <span>{g.ad}<span className="tc-prj-soluk"> · {TUR_METNI[g.tur]}</span></span>
+      <span>{g.ad}{sade && hazirlikEmriNo(g) === null && <span className="tc-prj-soluk"> · {g.projeKod}</span>}<span className="tc-prj-soluk"> · {TUR_METNI[g.tur]}</span></span>
     ), csv: (g) => g.ad },
     // Emre göre gruplu hazırlık listesinde proje başlıkta, yapan ve kontrol tek sütundadır: dar ekranda kart kısalır.
     ...(sade ? [] : [{ anahtar: 'proje', baslik: 'Proje', mono: true, kirilmaz: true, hucre: (g: GorevlerimSatiri) => <Link to={`/projeler/${g.projeId}`}>{g.projeKod}</Link>, csv: (g: GorevlerimSatiri) => g.projeKod } satisfies Sutun<GorevlerimSatiri>]),
     ...(sade
       ? [{ anahtar: 'yapan', baslik: 'Yapan · kontrol', hucre: (g: GorevlerimSatiri) => (
-        <span><YapanMetni g={g} /><span className="tc-prj-soluk"> · kontrol {atamaMetni(g.kontrolKisiAd, g.kontrolRolAd, 'yok')}</span></span>
+        <span><YapanMetni g={g} />{(g.kontrolKisiAd !== null || g.kontrolRolAd !== null) && <span className="tc-prj-soluk"> · kontrol {atamaMetni(g.kontrolKisiAd, g.kontrolRolAd)}</span>}</span>
       ), csv: (g: GorevlerimSatiri) => atamaMetni(g.sorumluAd, g.yapanRolAd) } satisfies Sutun<GorevlerimSatiri>]
       : [
         { anahtar: 'yapan', baslik: 'Yapan', hucre: (g: GorevlerimSatiri) => <YapanMetni g={g} />, csv: (g: GorevlerimSatiri) => atamaMetni(g.sorumluAd, g.yapanRolAd) } satisfies Sutun<GorevlerimSatiri>,
@@ -75,7 +76,9 @@ export function ProjeGorevlerim() {
       <span className={gorevGecikiyor(g, gun) ? 'tc-prj-gec' : undefined}>{tarihMetni(g.planBitis)}</span>
     ), csv: (g) => g.planBitis },
     { anahtar: 'ilerleme', baslik: 'İlerleme', hucre: (g) => <GorevIlerlemesi g={g} />, csv: (g) => String(g.ilerleme) },
-    { anahtar: 'durum', baslik: 'Durum', hucre: (g) => <Rozet ton={GOREV_DURUM_TONU[g.durum]}>{gorevDurumMetni(g)}</Rozet>, csv: gorevDurumMetni },
+    { anahtar: 'durum', baslik: 'Durum', hucre: (g) => (g.adimToplam > 0 && g.adimYapilan === g.adimToplam && (g.durum === 'yapilacak' || g.durum === 'suruyor')
+      ? <Rozet ton="bilgi">Adımlar tamam</Rozet>
+      : <Rozet ton={GOREV_DURUM_TONU[g.durum]}>{gorevDurumMetni(g)}</Rozet>), csv: gorevDurumMetni },
     ...(hepsi.some((g) => g.kademe !== null) ? [{
       anahtar: 'kademe', baslik: 'Kademe', kirilmaz: true,
       hucre: (g: GorevlerimSatiri) => (g.kademe === null ? null : <KademeRozeti kademe={g.kademe} />),
