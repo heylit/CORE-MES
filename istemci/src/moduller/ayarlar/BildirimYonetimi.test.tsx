@@ -315,8 +315,8 @@ describe('bildirim ve uyarı yönetimi: olaylar (3435-3, 3456)', () => {
     ac();
     const panel = await ayrintiAc('Satın alma talebi onay bekliyor');
     expect(within(panel).queryByRole('switch')).toBeNull();
-    const kaydet = within(panel).getByRole('button', { name: 'Kaydet' }) as HTMLButtonElement;
-    expect(kaydet.disabled).toBe(true);
+    const kaydet = within(panel).getByRole('button', { name: 'Kaydet' });
+    expect(kaydet.getAttribute('aria-disabled')).toBe('true');
     fireEvent.click(within(within(panel).getByRole('group', { name: 'Alıcı rolleri' })).getByRole('checkbox', { name: 'Bakım' }));
     fireEvent.change(within(panel).getByLabelText('E-posta şablonu'), { target: { value: '' } });
     fireEvent.click(kaydet);
@@ -346,8 +346,8 @@ describe('bildirim ve uyarı yönetimi: olaylar (3435-3, 3456)', () => {
     fireEvent.click(within(panel).getByLabelText('İş açık kaldıkça tekrarla'));
     fireEvent.change(within(panel).getByLabelText('Kaç günde bir'), { target: { value: '2' } });
     fireEvent.click(within(panel).getByLabelText('İş açık kalırsa üst kademeye de e-posta gönder'));
-    const kaydet = within(panel).getByRole('button', { name: 'Kaydet' }) as HTMLButtonElement;
-    expect(kaydet.disabled).toBe(true);
+    const kaydet = within(panel).getByRole('button', { name: 'Kaydet' });
+    expect(kaydet.getAttribute('aria-disabled')).toBe('true');
     expect(within(panel).getByText('En az bir rol ya da kişi seçin.')).toBeTruthy();
     fireEvent.click(within(within(panel).getByRole('group', { name: 'Üst kademe rolleri' })).getByRole('checkbox', { name: 'Müdür' }));
     fireEvent.click(kaydet);
@@ -398,7 +398,7 @@ describe('bildirim ve uyarı yönetimi: olaylar (3435-3, 3456)', () => {
     fireEvent.click(within(tablo).getByRole('checkbox', { name: 'Satın alma talebi onay bekliyor: Bakım' }));
     await waitFor(() => { expect(yazilanlar).toHaveLength(1); });
     expect(yazilanlar[0]).toEqual({ yol: '/bildirimler/alicilar/satin-alma.talep-onay-bekliyor/degistir', govde: { rolIdleri: [1, 2], kisiIdleri: [7], surum: 3 } });
-    expect(await screen.findByText('Satın alma talebi onay bekliyor: Bakım eklendi.')).toBeTruthy();
+    expect(await screen.findByText('Bakım eklendi.')).toBeTruthy();
     expect(within(tablo).getByText('Malzeme bırakıldı').closest('tr')?.textContent).toMatch(/Kayda bağlı kişi \(varsayılan\)/);
     fireEvent.click(screen.getByRole('button', { name: 'Geri al' }));
     await waitFor(() => { expect(yazilanlar).toHaveLength(2); });
@@ -541,5 +541,94 @@ describe('3478-3 olay kuralları', () => {
       tur: 'istasyonlar.makine-durdu', ad: 'M-2 durunca', acik: true, kosullar: [{ alan: 'makine', karsilastirma: '=', deger: 'M-3' }],
       rolIdleri: [], kisiIdleri: [7], ortada: false, eposta: false, telefon: false, sablonBaslik: '{olay}', sablonMetin: null,
     });
+  });
+});
+
+describe('bildirim alıcı seçimi (3594)', () => {
+  it('Alıcılar hücresi paneli açar, odak ilk role gelir; olay altında ne zaman gittiği yazar', async () => {
+    matrisSunucusu();
+    ac();
+    const tablo = await screen.findByRole('table', { name: 'Bildirim olayları' });
+    expect(within(tablo).getByText('Satın alma talebi onaya gönderilince')).toBeTruthy();
+    fireEvent.click(within(tablo).getByRole('button', { name: /^Satın alma talebi onay bekliyor: alıcıları değiştir/ }));
+    const panel = await screen.findByRole('dialog', { name: 'Satın alma talebi onay bekliyor' });
+    await waitFor(() => { expect(document.activeElement).toBe(within(panel).getByRole('checkbox', { name: 'Bakım' })); });
+    expect(within(panel).getByText(/Olayı başlatan kişi/)).toBeTruthy();
+    expect(within(panel).getByText(/Yalnız seçilenler alır\. Hiç seçim yoksa/)).toBeTruthy();
+    expect(within(panel).getByText('Değişiklik yok')).toBeTruthy();
+  });
+
+  it('varsayılan alıcılı olayda ilk seçim uyarır, kimin alacağını yazar; Varsayılana dön seçimi temizler', async () => {
+    const { yazilanlar } = matrisSunucusu();
+    ac();
+    fireEvent.click(await screen.findByRole('button', { name: /^Makine durdu: alıcıları değiştir/ }));
+    const panel = await screen.findByRole('dialog', { name: 'Makine durdu' });
+    expect(within(panel).getByRole('status').textContent).toBe('');
+    fireEvent.click(within(panel).getByRole('checkbox', { name: 'Müdür' }));
+    expect(within(panel).getByRole('status').textContent).toMatch(/yetkisi olanlara bu bildirim artık gitmez/);
+    expect(within(panel).getByText(/Müdür rolündekiler\. Bunların dışında kalan/)).toBeTruthy();
+    fireEvent.click(within(panel).getByRole('button', { name: 'Varsayılana dön' }));
+    expect((within(panel).getByRole('checkbox', { name: 'Müdür' }) as HTMLInputElement).checked).toBe(false);
+    expect(within(panel).getByRole('status').textContent).toBe('');
+    expect(yazilanlar).toHaveLength(0);
+  });
+
+  it('kişi arayarak eklenir; kaydedilmemiş seçimle Esc önce sorar, Kaydetmeden kapat yazmaz', async () => {
+    const { yazilanlar } = matrisSunucusu();
+    ac();
+    const panel = await ayrintiAc('Satın alma talebi onay bekliyor');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Kişi ekle' }));
+    const ara = await screen.findByRole('combobox', { name: 'Kişi ekle ara' });
+    fireEvent.change(ara, { target: { value: 'plan' } });
+    fireEvent.keyDown(ara, { key: 'Enter' });
+    expect(within(panel).getByRole('button', { name: 'Deneme Planlama çıkar' })).toBeTruthy();
+    fireEvent.keyDown(panel, { key: 'Escape' });
+    const sor = await screen.findByRole('dialog', { name: 'Kaydedilmemiş değişiklik var' });
+    fireEvent.click(within(sor).getByRole('button', { name: 'Kaydetmeden kapat' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Satın alma talebi onay bekliyor' })).toBeNull(); });
+    expect(yazilanlar).toHaveLength(0);
+  });
+
+  it('kayıt hatasında panel açık kalır ve nedeni panelde yazar', async () => {
+    matrisSunucusu('/bildirimler/alicilar/satin-alma.talep-onay-bekliyor/degistir');
+    ac();
+    const panel = await ayrintiAc('Satın alma talebi onay bekliyor');
+    fireEvent.click(within(within(panel).getByRole('group', { name: 'Alıcı rolleri' })).getByRole('checkbox', { name: 'Bakım' }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Kaydet' }));
+    expect((await within(panel).findByRole('alert')).textContent).toMatch(/Alıcılar kaydedilemedi/);
+    expect(screen.getByRole('dialog', { name: 'Satın alma talebi onay bekliyor' })).toBeTruthy();
+  });
+
+  it('Kim alır: kişi anında eklenir ve çıkarılır, satırdaki Geri al eski kişileri yazar', async () => {
+    const { yazilanlar } = matrisSunucusu();
+    ac(HEPSI, '/bildirim-merkezi/yonetim?sekme=kim-alir');
+    const tablo = await screen.findByRole('table', { name: 'Kim alır' });
+    fireEvent.click(within(tablo).getByRole('button', { name: 'Satın alma talebi onay bekliyor: kişi ekle' }));
+    const ara = await screen.findByRole('combobox', { name: 'Satın alma talebi onay bekliyor: kişi ekle ara' });
+    fireEvent.change(ara, { target: { value: 'plan' } });
+    fireEvent.keyDown(ara, { key: 'Enter' });
+    await waitFor(() => { expect(yazilanlar).toHaveLength(1); });
+    expect(yazilanlar[0]).toEqual({ yol: '/bildirimler/alicilar/satin-alma.talep-onay-bekliyor/degistir', govde: { rolIdleri: [2], kisiIdleri: [7, 8], surum: 3 } });
+    expect(await within(tablo).findByText('Deneme Planlama eklendi.')).toBeTruthy();
+    fireEvent.click(within(tablo).getByRole('button', { name: 'Geri al' }));
+    await waitFor(() => { expect(yazilanlar).toHaveLength(2); });
+    expect(yazilanlar[1]).toEqual({ yol: '/bildirimler/alicilar/satin-alma.talep-onay-bekliyor/degistir', govde: { rolIdleri: [2], kisiIdleri: [7], surum: 4 } });
+    const cip = await within(tablo).findByRole('button', { name: 'Satın alma talebi onay bekliyor: Deneme Kalite çıkar' });
+    cip.focus();
+    fireEvent.click(cip);
+    await waitFor(() => { expect(yazilanlar).toHaveLength(3); });
+    expect(yazilanlar[2]).toEqual({ yol: '/bildirimler/alicilar/satin-alma.talep-onay-bekliyor/degistir', govde: { rolIdleri: [2], kisiIdleri: [], surum: 5 } });
+  });
+
+  it('Kim alır: varsayılan alıcılı satırda ilk seçim, varsayılanın artık almadığını satırda söyler; odak kutuda kalır', async () => {
+    const { yazilanlar } = matrisSunucusu();
+    ac(HEPSI, '/bildirim-merkezi/yonetim?sekme=kim-alir');
+    const tablo = await screen.findByRole('table', { name: 'Kim alır' });
+    const kutu = within(tablo).getByRole('checkbox', { name: 'Makine durdu: Müdür' });
+    kutu.focus();
+    fireEvent.click(kutu);
+    await waitFor(() => { expect(yazilanlar).toHaveLength(1); });
+    expect(await within(tablo).findByText(/Müdür eklendi\. .* yetkisi olanlar bu bildirimi artık almaz\./)).toBeTruthy();
+    expect(document.activeElement).toBe(within(tablo).getByRole('checkbox', { name: 'Makine durdu: Müdür' }));
   });
 });
