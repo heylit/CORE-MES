@@ -1482,6 +1482,9 @@ button.tc-ay1-yer { font: inherit; color: inherit; text-align: start; cursor: po
 .tc-ay1-yuvalar > .tc-dugme { white-space: normal; text-wrap: balance; }
 .tc-ay1-yuvalar > .tc-dugme:disabled { opacity: var(--saydam-50); }
 .tc-ay1-yuvalar > .tc-ay1-yuva-bos { visibility: hidden; }
+.tc-ay1-yuva-yazi { display: inline-flex; flex-direction: column; align-items: center; min-width: 0; line-height: 1.15; }
+.tc-ay1-yuva-yazi > small { font-size: var(--yazi-xs); font-weight: 600; max-inline-size: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-ay1-ds-rozet { --sig: var(--hazard); flex: 0 0 auto; white-space: nowrap; }
 .tc-ay1-genis .tc-ay1-sahne .tc-orb-ana .tc-orb-etiket { white-space: normal; text-wrap: balance; line-height: 1.15; }
 /* R1: pasif tuş şeklini ve çerçevesini korur, yalnız solar (çerçevesiz düz yazıya dönmez). */
 .tc-ay1-tus:disabled, .tc-ay1-cubuk-dugme:disabled { opacity: var(--saydam-70); }

@@ -1,6 +1,6 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { REFAKAT_KOPYA_SAYISI } from '#paylasilan/etiket-sabitleri.ts';
-import type { BasCevabi, IndirCevabi, KayitTuru } from '#paylasilan/sozlesme/etiket-merkezi.ts';
+import type { BasCevabi, Bekleyen, BekleyenlerCevabi, IndirCevabi, KayitTuru } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
@@ -18,16 +18,19 @@ const MERKEZDEN = "Etiket Merkezi'nden basın.";
 // Yazıcı cevap verdiyse sorun çoğu kez yazıcıdadır (kâğıt, şerit, kapalı): Merkez'de aynı yazıcı da basamaz.
 const YAZICI_HATASI = "Yazıcıyı kontrol edin ya da Etiket Merkezi'nden başka yazıcıya basın.";
 
+// eksik (3584): yazici null ise nedeni; 'yetki' basma işlemi yok, 'yazici' bu cihazda bu türün varsayılanı yok. bas'ın sonuc geri
+// çağrısı her parçanın sonucunu verir (true: yazıcıya gitti); çağıran ekran kendi durumunu (örn. bekleyen sayısı) buna göre düşürür.
 export function useDogrudanBasim(kayitTuru: KayitTuru): {
-  yazici: CihazYazicisi | null; bas: (idler: readonly number[]) => void; basiyor: boolean;
+  yazici: CihazYazicisi | null; eksik: 'yetki' | 'yazici' | null; bas: (idler: readonly number[], sonuc?: (gitti: boolean, idler: number[]) => void) => void; basiyor: boolean;
 } {
   const izin = (useOturum().data?.islemler ?? []).includes(BAS_ISLEMI);
   const yazici = izin ? kayitYazicisi(kayitTuru) : null;
   const { bildir } = useBildirim();
   const istemci = useQueryClient();
+  const bildirHata = (h: unknown) => bildir('hata', `${hataIletisi(h, 'Etiket basılamadı.')} ${MERKEZDEN}`);
   // USB varsayılanı (2953 c) indirme ucundan komutu alır (yetki, defter sunucuda) ve bu bilgisayarda eşleşmiş aygıta aktarır.
   const m = useMutation({
-    mutationFn: async ({ y, idler }: { y: CihazYazicisi; idler: number[] }): Promise<Pick<BasCevabi, 'sonuc' | 'ileti'>> => {
+    mutationFn: async ({ y, idler }: { y: CihazYazicisi; idler: number[]; sonuc?: ((gitti: boolean, idler: number[]) => void) | undefined }): Promise<Pick<BasCevabi, 'sonuc' | 'ileti'>> => {
       const govde = { yaziciId: y.yaziciId, adet: kayitTuru === 'refakat-partisi' ? REFAKAT_KOPYA_SAYISI : 1, kayit: { tur: kayitTuru, idler }, ...(y.olcu ? { olcu: y.olcu } : {}) };
       const yol = `/etiket-merkezi/sablonlar/${encodeURIComponent(y.sablonAnahtar)}`;
       if (y.baglanti !== 'usb') return api.post<BasCevabi>(`${yol}/bas`, govde, { istekKimligi: yeniIstekKimligi(), zamanAsimiMs: 15000 });
@@ -36,22 +39,33 @@ export function useDogrudanBasim(kayitTuru: KayitTuru): {
       const c = await api.post<IndirCevabi>(`${yol}/indir`, govde, { istekKimligi: yeniIstekKimligi() });
       try { await usbyeGonder(aygit, c.komut); return { sonuc: 'gonderildi', ileti: null }; } catch (h) { return { sonuc: 'hata', ileti: usbHatasi(h).message }; }
     },
-    onSuccess: (c, { y }) => {
+    onSuccess: (c, { y, idler, sonuc }) => {
+      sonuc?.(c.sonuc !== 'hata', idler);
       if (c.sonuc === 'hata') bildir('hata', `${c.ileti ?? 'Yazıcı hata verdi.'} ${YAZICI_HATASI}`);
       else bildir('tamam', `Etiketler gönderildi: ${y.yaziciAd}.`);
       void istemci.invalidateQueries({ queryKey: anahtarlar.baskilar });
       void istemci.invalidateQueries({ queryKey: anahtarlar.bekleyenler });
     },
-    onError: (h) => bildir('hata', `${hataIletisi(h, 'Etiket basılamadı.')} ${MERKEZDEN}`),
+    onError: (h, { idler, sonuc }) => { sonuc?.(false, idler); bildirHata(h); },
   });
   return {
     yazici,
-    bas: (idler) => {
+    eksik: !izin ? 'yetki' : yazici === null ? 'yazici' : null,
+    bas: (idler, sonuc) => {
       const tekil = [...new Set(idler)];
       if (yazici === null || tekil.length === 0) return;
       // Etiket Merkezi'nin tek baskıda aldığı en çok kayıt; kalanı ayrı baskıyla gider.
-      for (let i = 0; i < tekil.length; i += secimSiniri) m.mutate({ y: yazici, idler: tekil.slice(i, i + secimSiniri) });
+      for (let i = 0; i < tekil.length; i += secimSiniri) m.mutate({ y: yazici, idler: tekil.slice(i, i + secimSiniri), sonuc });
     },
     basiyor: m.isPending,
   };
+}
+
+// 3584 R1: Basılacaklar listesinin bir türdeki kimlikleri, listenin kaç gün geriye baktığı ve okunduğu an. Etiket Merkezi'ni okuyamayan
+// kullanıcıda istek gitmez ve null döner (liste bilinmiyor; "basıldı" sayılmaz). Pano ile aynı sorgu anahtarı: ikinci istek gitmez.
+export function useBekleyenEtiketler(tur: Bekleyen['tur']): { gun: number; idler: ReadonlySet<number>; okunma: number } | null {
+  const okur = (useOturum().data?.islemler ?? []).includes('etiket-merkezi.oku');
+  const q = useQuery({ queryKey: anahtarlar.bekleyenler, queryFn: () => api.get<BekleyenlerCevabi>('/etiket-merkezi/bekleyenler'), enabled: okur, refetchInterval: 60_000, retry: false });
+  if (!okur || !q.data) return null;
+  return { gun: q.data.gun, idler: new Set(q.data.bekleyenler.filter((b) => b.tur === tur).map((b) => b.id)), okunma: q.dataUpdatedAt };
 }

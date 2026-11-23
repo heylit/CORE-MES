@@ -1,5 +1,9 @@
-import { FasonKabulOnayi, SatinAlmaKabulu, kabulKalani, useKabulIsleri, type KabulIsi } from '../../../stok/disari.ts';
+import { useEffect, useState } from 'react';
+import { useBekleyenEtiketler, useDogrudanBasim } from '../../../etiket-merkezi/disari.ts';
+import { FasonKabulOnayi, SatinAlmaKabulu, kabulKalani, useKabulIsleri, useKabulLotlari, type KabulIsi, type YazilanKabul } from '../../../stok/disari.ts';
+import { yerel } from '../cekirdek/yerel.ts';
 import { DepoTerminali, sayimEklenir, type DepoIsi, type DepoMetinleri } from './DepoTerminali.tsx';
+import { YAZICI_NEDENI, etiketBekliyor, etiketYuvasi, kabulIletisi, kabulKartSatiri, type KabulEtiketi } from './kabul-etiketi.ts';
 
 // 3388 a: mal kabul standart terminal düzeninde. Fason dönüşü Kabul +1 ile sayılır (en çok firmada kalan), Bitir'de dönen kart
 // karantinaya tek kayıtla yazılır. Ret yoktur: uygunsuzluk GKK'nin kararıdır, mal kabul yalnız sayar. Satın alma kabulü okutmayla yapılır (sipariş, parti, raf Stok'un hızlı kabulünde); sayım tuşu kapalıdır.
@@ -34,6 +38,7 @@ export function kabulDepoIsi(k: KabulIsi): DepoIsi {
       { etiket: 'Beklenen', deger: kabulKalani(k), mono: true },
       { etiket: 'Termin', deger: x.beklenenTeslim, mono: true },
     ],
+    kartSatiri: kabulKartSatiri(fason, x.beklenenTeslim, fason ? (k.hedef === null ? null : `${String(k.hedef)} adet`) : kabulKalani(k)),
     adimlar: fason ? [
       { t: 'Dönen malzemeyi doğrula', d: `${donen ?? 'Dönen kart'} · ${x.tedarikciAdi}`, r: true },
       { t: 'Adedi say', d: k.hedef === null ? 'Firmadaki adet bilinmiyor' : `Firmada ${String(k.hedef)} adet var; fazlası girilmez`, r: true },
@@ -41,13 +46,36 @@ export function kabulDepoIsi(k: KabulIsi): DepoIsi {
     ] : [
       { t: 'İrsaliyeyi siparişle karşılaştır', d: `${x.siparisNo || x.talepNo} · kalan ${kabulKalani(k)}`, r: true },
       { t: 'Malzemeyi okut ve say', d: 'Okut ve kabul et; parti ve ambalaj kabul formunda', r: true },
-      { t: 'Rafa koy', d: 'Raf okutulmazsa mal kabul alanına girer', r: false },
+      { t: 'Rafa koy', d: "Etiketi lota yapıştır, rafı okut; raf okutulmazsa mal kabul alanına girer", r: false },
     ],
+  };
+}
+
+// 3584: bu cihazda kabul edilen ve etiketi henüz basılmamış belgeler (lot etiketi belge kimliğiyle basılır). Kayıt, kural (kabul-etiketi.ts)
+// "artık beklemiyor" deyince ya da yuvadan basılınca silinir; iş listeden düşse de kalır.
+const ETIKET_ANAHTARI = 'depo:kabul-etiketleri';
+function useKabulEtiketleri() {
+  const [kayitlar, kayitlarYaz] = useState<KabulEtiketi[]>(() => yerel.oku<KabulEtiketi[]>(ETIKET_ANAHTARI) ?? []);
+  useEffect(() => { yerel.yaz(ETIKET_ANAHTARI, kayitlar.length ? kayitlar : null); }, [kayitlar]);
+  return {
+    kayitlar,
+    ekle: (k: YazilanKabul) => kayitlarYaz((l) => [...l.filter((x) => x.belgeId !== k.belgeId), { ...k, zaman: Date.now() }]),
+    birak: (idler: readonly number[]) => kayitlarYaz((l) => (l.some((x) => idler.includes(x.belgeId)) ? l.filter((x) => !idler.includes(x.belgeId)) : l)),
   };
 }
 
 export function MalKabulTerminali({ dar }: { dar: boolean }) {
   const v = useKabulIsleri();
+  const et = useKabulEtiketleri();
+  const lotlar = useKabulLotlari(et.kayitlar);
+  const liste = useBekleyenEtiketler('mal-kabul');
+  const basim = useDogrudanBasim('mal-kabul');
+  const simdi = Date.now();
+  const lotu = (id: number) => lotlar.get(id) ?? null;
+  const bekleyenler = et.kayitlar.filter((k) => etiketBekliyor(k, lotu(k.belgeId), liste, simdi));
+  const dusen = et.kayitlar.filter((k) => !bekleyenler.includes(k)).map((k) => k.belgeId);
+  useEffect(() => { if (dusen.length) et.birak(dusen); }, [dusen.join(',')]);
+  const yuva = etiketYuvasi(bekleyenler, lotu);
   const kabuller = v.isler ?? [];
   const isler = v.isler ? kabuller.map(kabulDepoIsi) : null;
   const kaynak = (anahtar: string) => kabuller.find((k) => `kabul:${String(k.satir.id)}` === anahtar) ?? null;
@@ -61,10 +89,23 @@ export function MalKabulTerminali({ dar }: { dar: boolean }) {
         if (k.tur === 'satin-alma') { b.bitti(true); return; }
         b.ac('Fason dönüşünü bitir', <FasonKabulOnayi is={k} kabul={b.sayim.sayilan} vazgec={b.kapat} yazildi={(m) => { b.bitti(k.hedef !== null && b.sayim.sayilan < k.hedef); b.bildir(m); }} />);
       }}
+      rozet={(is) => (kaynak(is.anahtar)?.tur === 'satin-alma' && bekleyenler.length > 0 ? { metin: 'Etiket bekliyor', simge: 'tag' } : null)}
       yuvalar={(b) => {
-        // 3583 Y3: iki sabit yuva; ikincisi (Etiket bas) etiket adımı gelince doldurulur, o zamana dek yer tutar (3584).
-        const satinAlma = kaynak(b.is.anahtar)?.tur === 'satin-alma';
-        return [satinAlma ? { etiket: 'Okut ve kabul et', simge: 'scan', tikla: b.sayim.durum === 'running' ? () => b.ac('Okut ve kabul et', <SatinAlmaKabulu />) : null, birincil: true } : null, null];
+        // 3583 Y3, 3584 Y1: iki sabit yuva [Okut ve kabul et] [Etiket bas]; ikisi de hep yerinde, durum gereği pasif. Etiket bas bu cihazın
+        // bekleyen bütün lot etiketlerini tek dokunuşla basar (K2); yazıcı yoksa pasif ve nedeni ileti satırında (K1). Fasonda yuvalar ayrılmış, boş.
+        if (kaynak(b.is.anahtar)?.tur !== 'satin-alma') return [null, null];
+        const kabulEdildi = (k: YazilanKabul) => { et.ekle(k); b.kapat(); b.bildir(kabulIletisi(basim.eksik)); };
+        const bas = () => basim.bas(bekleyenler.map((k) => k.belgeId), (gitti, idler) => {
+          if (gitti) { et.birak(idler); b.bildir('Etiket yazıcıya gönderildi'); } else b.bildir('Etiket basılamadı; kabul geçerli, etiket bekliyor', 'kotu');
+        });
+        return [
+          { etiket: 'Okut ve kabul et', simge: 'scan', tikla: b.sayim.durum === 'running' ? () => b.ac('Okut ve kabul et', <SatinAlmaKabulu kabulEdildi={kabulEdildi} />) : null, birincil: true },
+          {
+            etiket: yuva.etiket, alt: yuva.alt, ad: yuva.ad, simge: 'printer', yukleniyor: basim.basiyor,
+            tikla: bekleyenler.length > 0 && basim.yazici !== null && !basim.basiyor ? bas : null,
+            neden: bekleyenler.length > 0 && basim.eksik !== null ? YAZICI_NEDENI[basim.eksik] : null,
+          },
+        ];
       }}
       sekmeler={() => []} />
   );

@@ -62,7 +62,7 @@ function SiparisSecimi({ malzemeId, secim, sec }: { malzemeId: number; secim: st
   );
 }
 
-export function HizliMalKabul({ malzeme, konumId, bekleyenAc, bitti }: { malzeme: OkunanMalzeme; konumId: number | null; bekleyenAc: (b: BekleyenGiris) => void; bitti: (belgeId: number, ambalajSayisi: number) => void }) {
+export function HizliMalKabul({ malzeme, konumId, bekleyenAc, bitti }: { malzeme: OkunanMalzeme; konumId: number | null; bekleyenAc: (b: BekleyenGiris) => void; bitti: (belgeId: number, ambalajSayisi: number, belgeNo: string) => void }) {
   const [miktar, setMiktar] = useState('');
   const [siparisMiktari, setSiparisMiktari] = useState('');
   const [parti, setParti] = useState('');
@@ -70,7 +70,7 @@ export function HizliMalKabul({ malzeme, konumId, bekleyenAc, bitti }: { malzeme
   const [sayi, setSayi] = useState('');
   const [siparis, setSiparis] = useState('');
   const ad = malzeme.ad ?? malzeme.kod;
-  const { komut, onayPenceresi } = useStokKomutu((g: MalKabulGovdesi) => korumaliPost<MalKabulCevabi>('/stok/mal-kabul', g).then((c) => { bitti(c.belge.id, kopyaSayisi(sayi)); return c; }), `Mal kabul edildi: ${ad}`);
+  const { komut, onayPenceresi } = useStokKomutu((g: MalKabulGovdesi) => korumaliPost<MalKabulCevabi>('/stok/mal-kabul', g).then((c) => { bitti(c.belge.id, kopyaSayisi(sayi), c.belge.no); return c; }), `Mal kabul edildi: ${ad}`);
   // Çift tık tek istek ve tek bildirim (STK-7).
   const kilitli = useGonderimKilidi();
   const giris = (): BekleyenGiris => ({ malzemeId: malzeme.id, ad, miktar, parti, ambalaj, ambalajSayisi: sayi, siparisSatirId: siparis === SIPARISSIZ ? null : Number(siparis), ...(siparisMiktari ? { siparisMiktari } : {}) });
