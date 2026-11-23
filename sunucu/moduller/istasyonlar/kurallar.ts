@@ -185,6 +185,18 @@ export const gecmisTarihliMi = (baslangic: string, bugun: string): boolean => ba
 // yetkinlik listede kalır, iş başlatmaz, plan kapasitesine ve iş merkezi kapsamına girmez.
 export const yetkinlikGecerliMi = (gecerlilikBitis: string | null, gun: string): boolean => gecerlilikBitis === null || gecerlilikBitis >= gun;
 
+// 3616: istasyon ve makine ataması atamanın başlangıç gününde geçerli yetkinlik ister (ekip ataması hariç). Makine kuralı plan ve terminalle aynıdır
+// (563 c, 2046 a): makinenin istasyonunda geçerli yetkinlik şarttır; makinede geçerli yetkinlik kaydı olan kişi varsa yalnız kaydı olan kişi atanır,
+// kayıtsız makine istasyon yetkinliğiyle açıktır.
+export const ATAMA_ISTASYON_YETKINLIGI_YOK = 'Kişinin bu istasyonda atama tarihinde geçerli yetkinliği yok. Önce İstasyonlar > Personel sekmesinden yetkinlik verin.';
+export const ATAMA_MAKINE_YETKINLIGI_YOK = 'Kişinin bu makinede atama tarihinde geçerli yetkinliği yok. Önce İstasyonlar > Personel sekmesinden makine yetkinliği verin.';
+export function atamaYetkinlikReddi(tur: AtamaTuru, d: { istasyonYetkin: boolean; makineKayitli: boolean; makineYetkin: boolean }): string | null {
+  if (tur === 'ekip') return null;
+  if (!d.istasyonYetkin) return tur === 'istasyon' ? ATAMA_ISTASYON_YETKINLIGI_YOK : ATAMA_MAKINE_YETKINLIGI_YOK;
+  if (tur === 'makine' && d.makineKayitli && !d.makineYetkin) return ATAMA_MAKINE_YETKINLIGI_YOK;
+  return null;
+}
+
 // IS29: liste yazımı yalnız farkı uygular; kalan yetkinliğin veren, verilme, bitiş ve dayanağı korunur.
 export function yetkinlikFarki(mevcut: readonly number[], istenen: readonly number[]): { eklenen: number[]; kaldirilan: number[] } {
   return { eklenen: istenen.filter((i) => !mevcut.includes(i)), kaldirilan: mevcut.filter((i) => !istenen.includes(i)) };

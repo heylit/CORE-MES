@@ -68,7 +68,6 @@ describe('P1 personel listesi', () => {
   // 1925 a: hesap açabilen İK yeni personeli tek adımda işe alır; rol listesi ve işe alma cevabı sunucudan gelir.
   const ROLLER = {
     roller: [{ id: 5, kod: 'kalite', ad: 'Kalite' }, { id: 7, kod: 'operator', ad: 'Operatör' }],
-    istasyonlar: [{ id: 11, ad: 'Deneme Torna', isMerkeziId: 1 }, { id: 12, ad: 'Uzak Freze', isMerkeziId: 2 }],
   };
   const iseAlimFormu = (islemler: typeof IK_YONETICI.islemler) => {
     const gonderilen: unknown[] = [];
@@ -133,16 +132,30 @@ describe('P1 personel listesi', () => {
     expect(gonderilen[0]).not.toHaveProperty('kartNo');
   });
 
-  it('1928 a: ilk istasyon yalnız seçilen iş merkezinden; seçilen istasyon işe alma ile gider', async () => {
+  // 3616: yeni personel formunda istasyon alanı yoktur; kayıttan sonra pencere yetkinlik ekleme yolunu verir.
+  it('3616: formda ilk istasyon alanı yok ve işe alım gövdesinde istasyonId gitmez', async () => {
     const gonderilen = iseAlimFormu([...IK_YONETICI.islemler, 'ik.hesap-ac']);
     const pencere = await doldur();
-    const istasyon = within(pencere).getByLabelText(/^İlk istasyon/) as HTMLSelectElement;
-    await waitFor(() => { expect(within(istasyon).queryByRole('option', { name: 'Deneme Torna' })).toBeTruthy(); });
-    expect(within(istasyon).queryByRole('option', { name: 'Uzak Freze' })).toBeNull();
-    fireEvent.change(istasyon, { target: { value: '11' } });
+    expect(within(pencere).queryByLabelText(/^İlk istasyon/)).toBeNull();
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
     await screen.findByRole('dialog', { name: 'Giriş hesabı açıldı' });
-    expect(gonderilen[0]).toMatchObject({ istasyonId: 11 });
+    expect(gonderilen[0]).not.toHaveProperty('istasyonId');
+  });
+
+  it('3616: yetkinlik yazma yetkisi olan sonuç penceresinde Yetkinlik ekle düğmesini görür; olmayan açıklamayı görür', async () => {
+    iseAlimFormu([...IK_YONETICI.islemler, 'ik.hesap-ac', 'istasyonlar.yetkinlik-yaz']);
+    let pencere = await doldur();
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    const sonuc = await screen.findByRole('dialog', { name: 'Giriş hesabı açıldı' });
+    expect(within(sonuc).getByRole('button', { name: 'Yetkinlik ekle' })).toBeTruthy();
+    expect(within(sonuc).queryByText(/Yetkinliği Personel yöneticisi verir/)).toBeNull();
+    cleanup();
+    iseAlimFormu([...IK_YONETICI.islemler.filter((i) => i !== 'istasyonlar.yetkinlik-yaz'), 'ik.hesap-ac']);
+    pencere = await doldur();
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    const yetkisiz = await screen.findByRole('dialog', { name: 'Giriş hesabı açıldı' });
+    expect(within(yetkisiz).queryByRole('button', { name: 'Yetkinlik ekle' })).toBeNull();
+    expect(within(yetkisiz).getByText(/Yetkinliği Personel yöneticisi verir/)).toBeTruthy();
   });
 
   it('1925 a reddedilen: hesap açamayan İK formda giriş hesabı bölümünü görmez', async () => {

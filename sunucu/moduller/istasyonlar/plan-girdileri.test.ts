@@ -262,8 +262,10 @@ describe('istasyonlar T2: plan ayarı, makine durumu, yetkinlik, kişinin istasy
       await istasyonKur(im), await istasyonKur(im), await istasyonKur(im, 'PG-EA'), await istasyonKur(im, 'PG-EB'), await istasyonKur(im, kodPasif),
     ];
     const [birinci, ikinci, ucuncu] = [await kisiEkle('Birinci'), await kisiEkle('İkinci'), await kisiEkle('Üçüncü')];
-    const ata = async (istasyon: number, kisiId: number, yuzde: string, baslangic?: string) =>
+    const ata = async (istasyon: number, kisiId: number, yuzde: string, baslangic?: string) => {
+      await vt().sorgu('INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) SELECT k.id, i.id FROM kisi k, istasyon i WHERE k.id = $1 AND i.id = $2 ON CONFLICT DO NOTHING', [kisiId, istasyon]);
       assert.equal((await yaz(`/istasyonlar/${istasyon}/kisiler/ata`, { kisiId, yuzde, ...(baslangic ? { baslangic } : {}) })).durum, 200);
+    };
     await ata(kucuk, birinci, '30');
     await ata(buyuk, birinci, '50');
     await ata(esitB, ikinci, '40');
@@ -311,6 +313,7 @@ describe('istasyonlar T2: plan ayarı, makine durumu, yetkinlik, kişinin istasy
 
     const insanli = await kimlik('/istasyonlar', { kod: yeniKod('PG-IS'), ad: 'Deneme Montaj', isMerkeziId: merkez, kapasiteKaynagi: 'insan' });
     const [k1, k2, k3] = [await kisiEkle('Deneme Bir'), await kisiEkle('Deneme İki'), await kisiEkle('Deneme Üç')];
+    await vt().sorgu('INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) SELECT k.id, i.id FROM kisi k, istasyon i WHERE k.id = $1 AND i.id = $2 ON CONFLICT DO NOTHING', [k1, insanli]);
     assert.equal((await yaz(`/istasyonlar/${insanli}/kisiler/ata`, { kisiId: k1, yuzde: '100' })).durum, 200);
     const ekip = await kimlik('/ekipler', { kod: yeniKod('PG-EK'), ad: 'Deneme Ekibi', istasyonId: insanli });
     assert.equal((await yaz(`/ekipler/${ekip}/uyeler/ata`, { kisiId: k2, yuzde: '50' })).durum, 200);

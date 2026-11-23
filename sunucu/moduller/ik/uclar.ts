@@ -106,7 +106,7 @@ export const uclar: Uc[] = [
   // 1925 a: yeni personelin tek adımda işe alınması (kart, kişi, PIN'li hesap, giriş kartı). Rol sınırı Kişiler'de, sunucuda.
   uc({
     yontem: 'POST', yol: '/ik/personel/:kimlik/ise-al', yetki: 'ik.hesap-ac', parametre: ikKimlikParametresi, govde: ikIseAlGovdesi, cevap: ikIseAlCevabi,
-    isle: ({ db, kullanici, parametre, govde }) => servis.iseAl(db, kullanici, parametre.kimlik, govde.govde, govde.rolId, govde.kartNo, govde.istasyonId),
+    isle: ({ db, kullanici, parametre, govde }) => servis.iseAl(db, kullanici, parametre.kimlik, govde.govde, govde.rolId, govde.kartNo),
   }),
   uc({ yontem: 'GET', yol: '/ik/hesap-rolleri', yetki: 'ik.hesap-ac', cevap: ikHesapRolleriCevabi, isle: ({ db }) => servis.hesapRolleri(db) }),
   uc({

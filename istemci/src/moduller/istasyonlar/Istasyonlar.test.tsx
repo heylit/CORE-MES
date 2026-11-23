@@ -1225,7 +1225,7 @@ describe('personel bölümü (#1109, IS25)', () => {
     const kisit = within(usta).getByRole('group', { name: 'Deneme Usta iş merkezi kısıtı' });
     expect(within(kisit).queryByRole('button', { name: 'ESKI Eski Hat' })).toBeNull();
     await seciciSec('Deneme Usta için atanacak yer', /Makine M-02/, usta);
-    fireEvent.change(within(usta).getByLabelText('Deneme Usta atama yüzdesi'), { target: { value: '30' } });
+    fireEvent.change(within(usta).getByLabelText('Deneme Usta iş payı (%)'), { target: { value: '30' } });
     fireEvent.click(within(usta).getByRole('button', { name: 'Ata' }));
     await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(1); });
     expect(POSTLAR(cagrilar)[0]).toEqual({ yontem: 'POST', yol: '/makineler/21/kisiler/ata', govde: { kisiId: 5, yuzde: '30' } });
@@ -1245,6 +1245,38 @@ describe('personel bölümü (#1109, IS25)', () => {
     await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(4); });
     expect(POSTLAR(cagrilar)[3]).toEqual({ yontem: 'POST', yol: '/istasyonlar/10/kisiler/5/cikar', govde: {} });
     expect(cagrilar.some((c) => c.yol === '/atama-iptalleri?tur=istasyon&hedefId=10&kisiId=5')).toBe(true);
+  });
+
+  // 3616: atama listesi yalnız kişinin geçerli yetkinliği olan istasyon ve makineleri sunar; yetkinlik yoksa yönlendirme yazar.
+  it('3616: atama seçicisi yalnız yetkin istasyon ve makineyi listeler; yetkinliksiz ve istasyonsuz makine yok', async () => {
+    sunucuKur(YONETICI, kisitlar);
+    goster(<Istasyonlar />, '/istasyonlar/personel');
+    const usta = await kart('Deneme Usta');
+    await waitFor(() => { expect(within(usta).getByRole('button', { name: 'Deneme Usta: T-01 yetkinliğini kaldır' })).toBeTruthy(); });
+    fireEvent.click(within(usta).getByRole('button', { name: 'Deneme Usta için atanacak yer' }));
+    const secenekler = (await screen.findAllByRole('option')).map((o) => o.textContent ?? '');
+    expect(secenekler.some((t) => /İstasyon T-01/.test(t))).toBe(true);
+    expect(secenekler.some((t) => /Makine M-02/.test(t))).toBe(true);
+    expect(secenekler.some((t) => /^Makine M-01/.test(t))).toBe(false);
+    expect(secenekler.some((t) => /^İstasyon K-01/.test(t))).toBe(false);
+  });
+
+  it('3616: yetkinliği süresi dolmuş ya da hiç olmayan kişiye istasyon ve makine sunulmaz, önce yetkinlik ekleyin denir', async () => {
+    const dolmus = { yetkinlikler: [{ ...YETKINLIKLER.yetkinlikler[0]!, ayrintilar: [{ ...YETKINLIKLER.yetkinlikler[0]!.ayrintilar[0]!, gecerlilikBitis: '2020-01-31', gecerli: false, surum: 3 }] }] };
+    sunucuKur(YONETICI, { ...kisitlar, ...{ '/kisi-yetkinlikleri': dolmus } });
+    goster(<Istasyonlar />, '/istasyonlar/personel');
+    const usta = await kart('Deneme Usta');
+    expect(await within(usta).findByText(/Atamak için önce yetkinlik ekleyin/)).toBeTruthy();
+    fireEvent.click(within(usta).getByRole('button', { name: 'Deneme Usta için atanacak yer' }));
+    const secenekler = (await screen.findAllByRole('option')).map((o) => o.textContent ?? '');
+    expect(secenekler.some((t) => /İstasyon T-01|Makine M-02/.test(t))).toBe(false);
+  });
+
+  it('3616: ?kisi=<id> adresi Personel bölümünü o kişiyle açar', async () => {
+    sunucuKur(YONETICI, kisitlar);
+    goster(<Istasyonlar />, '/istasyonlar/personel?kisi=5');
+    expect(await screen.findByRole('article', { name: 'Deneme Usta' })).toBeTruthy();
+    expect((screen.getByLabelText('Kişi ara') as HTMLInputElement).value).toBe('Deneme Usta');
   });
 
   it('563 c, 563 2 a: yetkin olunan istasyonun makinesi karttan eklenir ve kaldırılır; aynı anda en çok tezgâh seçilir', async () => {

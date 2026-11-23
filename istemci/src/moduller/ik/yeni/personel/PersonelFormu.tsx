@@ -56,19 +56,16 @@ export function PersonelFormPenceresi({ acik, depo, motor, kayit, bolum, onDolu 
   // geçici PIN sunucudan gelir; rol yalnız sunucunun verdiği (yetki dağıtmayan) rollerden, giriş kartı isteğe bağlı.
   const sorgu = useQueryClient();
   const hesapAcar = !kayit && yetki.var('ik.hesap-ac');
+  const yetkinlikVerebilir = yetki.var('istasyonlar.yetkinlik-yaz');
   const roller = useQuery({
     queryKey: ['ik', 'yeni', 'hesap-rolleri'], queryFn: () => api.get<IkHesapRolleriCevabi>('/ik/hesap-rolleri'), enabled: hesapAcar && acik,
   });
   const [rolSecimi, rolSecimiYaz] = useState<number | null>(null);
   const [kartNo, kartNoYaz] = useState('');
-  const [istasyonId, istasyonIdYaz] = useState<number | null>(null);
   const iseAlim = useRef<IkIseAlCevabi | null>(null);
   const [sonuc, sonucYaz] = useState<{ p: Personel; c: IkIseAlCevabi } | null>(null);
   const varsayilanRol = roller.data?.roller.find((r) => r.kod === 'operator')?.id ?? roller.data?.roller[0]?.id ?? null;
   const rolId = rolSecimi ?? varsayilanRol;
-  // 1928 a: ilk istasyon yalnız seçilen iş merkezinin aktif istasyonlarından; iş merkezi değişince eski seçim düşer.
-  const merkezIstasyonlari = (merkez: unknown) => (roller.data?.istasyonlar ?? []).filter((i) => i.isMerkeziId === (Number(merkez) || null));
-  const gecerliIstasyon = (merkez: unknown) => (merkezIstasyonlari(merkez).some((i) => i.id === istasyonId) ? istasyonId : null);
   const bolumler = bolum ? [bolum] : YENI_PERSONEL_BOLUMLERI;
   const alanlar = useMemo(() => bolumAlanlari(bolumler), [bolum]);
   const personeller = depo.tur('emp');
@@ -90,10 +87,7 @@ export function PersonelFormPenceresi({ acik, depo, motor, kayit, bolum, onDolu 
       iseAlim.current = null;
       if (hesapAcar) {
         if (rolId === null) throw new Error('Giriş hesabı için rol seçin.');
-        const ilkIstasyon = gecerliIstasyon(yeni.isMerkeziId);
-        const govde: IkIseAlGovdesi = {
-          govde: yeni, rolId, ...(kartNo.trim() === '' ? {} : { kartNo }), ...(ilkIstasyon === null ? {} : { istasyonId: ilkIstasyon }),
-        };
+        const govde: IkIseAlGovdesi = { govde: yeni, rolId, ...(kartNo.trim() === '' ? {} : { kartNo }) };
         const c = await api.post<IkIseAlCevabi>(`/ik/personel/${encodeURIComponent(yeni.id)}/ise-al`, govde);
         await sorgu.invalidateQueries({ queryKey: ikAnahtarlari.veri });
         if (c.uyari !== undefined) bildir('bilgi', c.uyari);
@@ -110,7 +104,7 @@ export function PersonelFormPenceresi({ acik, depo, motor, kayit, bolum, onDolu 
       kapat();
       const c = iseAlim.current;
       if (c !== null) {
-        kartNoYaz(''); istasyonIdYaz(null);
+        kartNoYaz('');
         if (c.hesap !== null) { sonucYaz({ p, c }); return; }
         bildir('tamam', 'Kaydedildi.');
         kaydedildi?.(p);
@@ -158,9 +152,6 @@ export function PersonelFormPenceresi({ acik, depo, motor, kayit, bolum, onDolu 
   };
 
   const gruplar = bolumler.map((b) => ({ b, alanlar: alanlar.filter((f) => f.bolum === b) }));
-  const formMerkezi = Number(form.degerler['isMerkeziId']) || null;
-  const istasyonSecenekleri = merkezIstasyonlari(formMerkezi);
-  const secilenIstasyon = gecerliIstasyon(formMerkezi);
   const ad = kayit ? adSoyadMetni(kayit) : '';
   return (
     <>
@@ -193,13 +184,6 @@ export function PersonelFormPenceresi({ acik, depo, motor, kayit, bolum, onDolu 
               onChange={(o) => { rolSecimiYaz(o.target.value === '' ? null : Number(o.target.value)); }}
               ipucu="Hesap kayıtla açılır; kullanıcı adı ve geçici PIN sistemce verilir. Yetki dağıtan roller burada yoktur. Sistem Yöneticisi rolü Kişiler > Personel > Roller'den, yalnız Sistem Yöneticisi tarafından verilir."
             />
-            <Secim
-              etiket="İlk istasyon" value={secilenIstasyon === null ? '' : String(secilenIstasyon)}
-              bosSecenek={formMerkezi === null ? 'Önce iş merkezi seçin' : 'Atama yok'} disabled={formMerkezi === null}
-              secenekler={istasyonSecenekleri.map((i) => ({ deger: String(i.id), baslik: i.ad }))}
-              onChange={(o) => { istasyonIdYaz(o.target.value === '' ? null : Number(o.target.value)); }}
-              ipucu="İsteğe bağlı: tam (%100) atama işe giriş gününden başlar. Sonraki atamalar İstasyonlar'dadır."
-            />
             <Girdi
               etiket="Giriş kartı" maxLength={64} autoComplete="off" value={kartNo} onChange={(o) => { kartNoYaz(o.target.value); }}
               // Okuyucu klavye gibi yazıp Enter'a basar: Enter formu göndermesin, kart alanda kalsın.
@@ -221,6 +205,10 @@ export function PersonelFormPenceresi({ acik, depo, motor, kayit, bolum, onDolu 
           { etiket: 'Giriş kartı', deger: sonuc.c.kart ? `••••${sonuc.c.kart.kartSon4}` : 'Verilmedi' },
         ]} />
         <Not>PIN yalnız şimdi gösterilir; çalışana iletin. Çalışan ilk girişte kendi PIN'ini belirler.</Not>
+        <Not>İstasyon ve makine ataması için önce yetkinlik verilmelidir.</Not>
+        {yetkinlikVerebilir
+          ? <Dugme simge="plus" onClick={() => { const id = sonuc.c.hesap?.kisiId; const p = sonuc.p; sonucYaz(null); kaydedildi?.(p); void git(`/istasyonlar/personel?kisi=${id}`); }}>Yetkinlik ekle</Dugme>
+          : <Not>Yetkinliği Personel yöneticisi verir.</Not>}
       </Pencere>
     )}
     </>

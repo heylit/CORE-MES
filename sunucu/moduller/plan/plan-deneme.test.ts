@@ -10,6 +10,11 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { KISI_YETKINLIGI_YOK } from './kurallar.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
+// 3616: istasyon ve makine ataması yetkinlik ister; bu test atamanın kuralını değil okuduğu sonucu sınar, atamayı doğrudan yazar.
+async function atamaYaz(db: { sorgu: (sql: string, p?: unknown[]) => Promise<unknown> }, tur: 'istasyon' | 'makine', hedefId: number | string, kisiId: number, yuzde: string): Promise<void> {
+  await db.sorgu(`INSERT INTO ${tur}_kisi (${tur}_id, kisi_id, baslangic, yuzde) VALUES ($1, $2, CURRENT_DATE, $3)`, [Number(hedefId), kisiId, yuzde]);
+}
+
 describe('plan (gerçek PostgreSQL): denemeler, sayaçlar ve sorgu sayısı', () => {
   const { c, vt, istek, tamam, mamulAc, yeniAdim, yururlugeAlinmisRota, isEmirleriAc, isEmriDurumu, planOku, yer, tg, taslaktaOner, isEmriKomutu, taslagaYaz, durum } = planTestOrtami();
   // PL-ONAY: canlıya yalnız onaydaki taslak alınır; sahibi (varsayılan planlamacı) gönderir, onaydaki sürüm döner. Zaten onaydaysa yeniden
@@ -63,7 +68,7 @@ describe('plan (gerçek PostgreSQL): denemeler, sayaçlar ve sorgu sayısı', ()
     // adımın istasyonunda yetkin kişi almaz.
     // 2511 a: vardiyası seçilmemiş ya da iş merkezine bağlanmamış kişiye iş yerleşmez; uyarı denemesi için operatör istasyona atanır ve
     // vardiyası seçilir (atama yetkinlik değildir).
-    await tamam(c.yonetici, 'POST', `/istasyonlar/${String(istasyonA)}/kisiler/ata`, { kisiId: operatorId, yuzde: '100.00' });
+    await atamaYaz(ortam!.sahip, 'istasyon', istasyonA, operatorId, '100.00');
     await tamam(c.yonetici, 'POST', `/kisi-vardiyalari/${String(operatorId)}/belirle`, { vardiyaId: durum().tamGun[0] });
     const [k1] = await isEmirleriAc([yeniAdim({ adaylar: [{ kaynak: { tur: 'kisi', id: operatorId }, ayarSuresiDk: 30, birimSureDk: 2 }] })]);
     p = await taslaktaOner(c.planlama, p);

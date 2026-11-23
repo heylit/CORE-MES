@@ -23,6 +23,11 @@ const PAROLA = 'dogru-parola-1';
 
 interface Rol { id: number; ad: string }
 
+// 3616: istasyon ve makine ataması yetkinlik ister; bu test atamanın kuralını değil okuduğu sonucu sınar, atamayı doğrudan yazar.
+async function atamaYaz(db: { sorgu: (sql: string, p?: unknown[]) => Promise<unknown> }, tur: 'istasyon' | 'makine', hedefId: number | string, kisiId: number, yuzde: string): Promise<void> {
+  await db.sorgu(`INSERT INTO ${tur}_kisi (${tur}_id, kisi_id, baslangic, yuzde) VALUES ($1, $2, CURRENT_DATE, $3)`, [Number(hedefId), kisiId, yuzde]);
+}
+
 describe('Reçete ve Rota canlıya al akışı (gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
   let app: FastifyInstance;
@@ -684,7 +689,7 @@ describe('Reçete ve Rota canlıya al akışı (gerçek PostgreSQL)', () => {
   test('CA-11b: çalışmanın sabit işi saatini ve kilidini korur; kişi adımı plana geçer', async () => {
     const kisi = await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme kontrolcu', kullaniciAdi: 'kontrolcu', parola: PAROLA }));
     const gunduz = (await ortam!.sahip.tek<{ id: number }>("SELECT id FROM vardiya WHERE ad = 'CA gunduz'"))!.id;
-    await tamam(c.yonetici, 'POST', `/istasyonlar/${String(istasyonA)}/kisiler/ata`, { kisiId: kisi, yuzde: '100.00' });
+    await atamaYaz(vt(), 'istasyon', istasyonA, kisi, '100.00');
     await tamam(c.yonetici, 'POST', `/kisi-vardiyalari/${String(kisi)}/belirle`, { vardiyaId: gunduz });
     // Önceki testlerin canlı işleri makine A'da: sabit iş onlarla çakışmasın diye ayrı makine.
     const makineB = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'CA-MB', ad: 'Deneme makine B', istasyonId: istasyonA })).id;

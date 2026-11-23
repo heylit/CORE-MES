@@ -28,6 +28,11 @@ const SONRA = Date.parse('2100-01-01T00:00:00Z');
 interface Rol { id: number; ad: string }
 interface Cevap<T> { durum: number; govde: T }
 
+// 3616: istasyon ve makine ataması yetkinlik ister; bu test atamanın kuralını değil okuduğu sonucu sınar, atamayı doğrudan yazar.
+async function atamaYaz(db: { sorgu: (sql: string, p?: unknown[]) => Promise<unknown> }, tur: 'istasyon' | 'makine', hedefId: number | string, kisiId: number, yuzde: string): Promise<void> {
+  await db.sorgu(`INSERT INTO ${tur}_kisi (${tur}_id, kisi_id, baslangic, yuzde) VALUES ($1, $2, CURRENT_DATE, $3)`, [Number(hedefId), kisiId, yuzde]);
+}
+
 describe('oee (gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
   let app: FastifyInstance;
@@ -96,8 +101,8 @@ describe('oee (gerçek PostgreSQL)', () => {
     const vardiya = t.vardiyalar.find((v) => v.ad === 'OE-Gündüz')!.id;
     await tamam(c.yonetici, 'POST', '/vardiya-matrisi/degistir', { isMerkeziId: merkezA, gun: 1, vardiyaId: vardiya, acik: true });
     // Personel istasyon A'da çalışır ve üç makineye eşit bakar (1 kişi 3 makine).
-    await tamam(c.yonetici, 'POST', `/istasyonlar/${istasyonA}/kisiler/ata`, { kisiId: kisiler['personel']!, yuzde: '10.00' });
-    for (const m of makineler) await tamam(c.yonetici, 'POST', `/makineler/${m}/kisiler/ata`, { kisiId: kisiler['personel']!, yuzde: '30.00' });
+    await atamaYaz(vt(), 'istasyon', istasyonA, kisiler['personel']!, '10.00');
+    for (const m of makineler) await atamaYaz(vt(), 'makine', m, kisiler['personel']!, '30.00');
     await tamam(c.yonetici, 'POST', '/finans/maliyetler/istasyon/yaz', { anahtar: istasyonA, birimMaliyet: 600, surum: null });
     await tamam(c.yonetici, 'POST', '/finans/maliyetler/kisi/yaz', { anahtar: kisiler['personel']!, birimMaliyet: 300, surum: null });
   });

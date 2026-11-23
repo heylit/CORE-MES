@@ -14,6 +14,11 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 const PAROLA = 'dogru-parola-1';
 
 // Kart 1325: Kaynak 360 uçları yalnız okur; sayfa işlemiyle açılır, her bölüm sahibinin okuma işlemini ister (1322 a).
+// 3616: istasyon ve makine ataması yetkinlik ister; bu test atamanın kuralını değil okuduğu sonucu sınar, atamayı doğrudan yazar.
+async function atamaYaz(db: { sorgu: (sql: string, p?: unknown[]) => Promise<unknown> }, tur: 'istasyon' | 'makine', hedefId: number | string, kisiId: number, yuzde: string): Promise<void> {
+  await db.sorgu(`INSERT INTO ${tur}_kisi (${tur}_id, kisi_id, baslangic, yuzde) VALUES ($1, $2, CURRENT_DATE, $3)`, [Number(hedefId), kisiId, yuzde]);
+}
+
 describe('kaynak-izi uçları (gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
   let app: FastifyInstance;
@@ -70,7 +75,7 @@ describe('kaynak-izi uçları (gerçek PostgreSQL)', () => {
     istasyonId = ((await yaz('/istasyonlar', { kod: 'KIZ-IS', ad: 'Deneme Torna', isMerkeziId: im.id })) as { id: number }).id;
     makineId = ((await yaz('/makineler', { kod: 'KIZ-MK', ad: 'Deneme Tezgah', istasyonId })) as { id: number }).id;
     kisiId = ((await yaz('/kisiler', { ad: 'Deneme Işıl Usta', sicilNo: 'KIZ-SC1' })) as { id: number }).id;
-    await yaz(`/istasyonlar/${String(istasyonId)}/kisiler/ata`, { kisiId, yuzde: '60' });
+    await atamaYaz(ortam!.vt, 'istasyon', istasyonId, kisiId, '60');
     await yaz(`/kisi-yetkinlikleri/${String(kisiId)}/belirle`, { istasyonIdleri: [istasyonId] });
     await yaz(`/kisi-yetkinlikleri/${String(kisiId)}/makineler/belirle`, { makineIdleri: [makineId] });
     await yaz(`/makineler/${String(makineId)}/durum`, { durum: 'ariza', aciklama: 'Deneme arıza' });
