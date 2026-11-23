@@ -286,3 +286,12 @@
   .sa-talep-bol-satir { grid-template-columns: minmax(0, 1fr) auto; }
   .sa-talep-bol-satir > input[type="date"] { grid-column: 1 / -1; }
 }
+/* 3593: kalemde işaretlenen alternatif kartları (talep formu, şerit ve ayrıntı aynı özet satırını kullanır). */
+.sa-ak { display: grid; gap: var(--b-1); border: 0; border-top: 1px solid var(--edge); margin: 0; padding: var(--b-3) 0 0; min-width: 0; }
+.sa-ak > legend { padding: 0; }
+.sa-ak-satir { align-items: flex-start; min-height: 44px; }
+.sa-ak-satir > span { min-width: 0; overflow-wrap: anywhere; }
+.sa-ak-ozet { display: inline; overflow-wrap: anywhere; }
+.sa-ak-degisti { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); padding: var(--b-2); border: 1px solid var(--hold); border-radius: var(--yari-1); }
+.sa-ak-degisti > span:first-child { min-width: 0; flex: 1 1 20ch; overflow-wrap: anywhere; }
+.sa-ak-degisti-eylem { display: inline-flex; flex-wrap: wrap; gap: var(--b-1); }

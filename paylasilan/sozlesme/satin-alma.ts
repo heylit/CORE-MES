@@ -6,7 +6,7 @@ import { dosyaOzeti } from './dosya.ts';
 import { SIPARIS_ODEME_YONTEMLERI } from './finans.ts';
 import { KM_TEDARIKCI_DURUMLARI } from './kalite-merkezi.ts';
 import { kmOnayliListeSatiri } from './kalite-merkezi-kategori-onayi.ts';
-import { ZARF_SONUCLARI, alternatifZarfi } from './malzeme-alternatifleri.ts';
+import { MUADIL_TURLERI, ZARF_SONUCLARI, alternatifKartiSecenegi, alternatifZarfi } from './malzeme-alternatifleri.ts';
 import { DIS_ISLEM_EMRI_DURUMLARI, disIslemEmriSemasi } from './uretim-emirleri.ts';
 
 // Satın alma (sürüm 6): Satın Alma Merkezi'nin veri modelinin Türkçe karşılığı. Talep bütün olarak, sürümle kaydedilir;
@@ -475,6 +475,14 @@ export type KalemBagiCikisi = z.output<typeof kalemBagiCikisSemasi>;
 export const birlesmeSemasi = z.object({ talepId: uuid, no: z.string(), durum: z.enum(TALEP_DURUMLARI) });
 // 2876 (2871-1 b): güncelleme grubu: kök talep ve ona bağlı güncelleme talepleri (kök önce, açılış sırasıyla). Yalnız çıkışta, grup varsa.
 // 3121: satın alma tablolarında ayrı sütun olan kart alanları; boş alan null.
+// 3593: talep kaleminde işaretli alternatif kartı. Ad, tür ve özet işaretlendiği andaki hâlidir; kart sonra değişse de talep böyle kalır
+// (kaldırılan kartta setId boştur).
+export const kalemAlternatifKartiSemasi = z.object({
+  setId: z.number().int().nullable(), ad: z.string(), tur: z.enum(MUADIL_TURLERI), ozet: z.string(),
+});
+export type KalemAlternatifKarti = z.output<typeof kalemAlternatifKartiSemasi>;
+const alternatifKartiNolari = z.array(z.number().int().positive().max(2147483647)).max(20)
+  .refine((l) => new Set(l).size === l.length, 'Aynı alternatif kartı iki kez işaretlenmiş.');
 const malzemeOzelligiAlanlari = {
   kalite: z.string().nullable(), durum: z.string().nullable(), islem: z.string().nullable(), olcu: z.string().nullable(),
   // 3133: kartın açıklaması ve föydeki ayrıntılar (boş alan yazılmaz).
@@ -502,6 +510,8 @@ export const talepSemasi = z.object({
   kalemKarsiliklari: z.array(z.object({ kalemId: uuid, miktar: z.string(), birim: z.string() })).optional(),
   // 3121: kalemin kartından kalite, durum, işlem ve ölçü (ayrı sütunlar); kartsız kalem listede yoktur. Yalnız çıkışta.
   kalemOzellikleri: z.array(z.object({ kalemId: uuid, ...malzemeOzelligiAlanlari })).optional(),
+  // 3593: kalemde talep edenin işaretlediği alternatif kartları (işaretlendiği hâliyle); işaretsiz kalem listede yoktur. Yalnız çıkışta.
+  kalemAlternatifleri: z.array(z.object({ kalemId: uuid, kartlar: z.array(kalemAlternatifKartiSemasi) })).optional(),
   // 3121 (1105 a): sipariş satırında değerler siparişteki kart kopyasındandır; eski kopyada işlem ve ölçü kaydedilmemişse `kayitsiz`.
   siparisOzellikleri: z.array(z.object({ kalemId: uuid, teklifId: uuid, ...malzemeOzelligiAlanlari, kayitsiz: z.boolean() })).optional(),
   // Yalnız talep edenin görünümünde (SAT-53 b): kararın seçtiği tedarikçiler; karar yoksa boş. Teklif ve fiyat taşımaz.
@@ -834,7 +844,8 @@ export const kabulSiniriSemasi = z.object({
 export type KabulSiniri = z.output<typeof kabulSiniriSemasi>;
 export const kabulZarfiParametresi = z.object({ no: z.coerce.number<number>().int().positive().max(2147483647) });
 // Hammadde dışı ya da kalitesiz kartta zarf yoktur (kalem yalnız aynı malzemeyle karşılanır).
-export const kabulZarfiCevabi = z.object({ zarf: alternatifZarfi.nullable() });
+// 3593: kalemde işaretlenebilen alternatif kartları (kullanım yeri talep); hammadde dışı kartta boş.
+export const kabulZarfiCevabi = z.object({ zarf: alternatifZarfi.nullable(), alternatifKartlari: z.array(alternatifKartiSecenegi).optional() });
 export type KabulZarfiCevabi = z.output<typeof kabulZarfiCevabi>;
 // 3437 a (dilim 3a): satın almanın teklif formu kalem başına daraltılmış zarfı okur (alternatif satırı ve sonuç rozeti için).
 export const kalemZarflariCevabi = z.object({
@@ -865,6 +876,10 @@ export const hizliKalemSemasi = z.object({
   satisSiparisSatiriId: z.number().int().positive().max(2147483647).nullable().optional(),
   // 3437: yalnız kartlı kalemde; gelmezse (ya da null) zarfın tamamı. Düzenlemede gelmeyen var olan kalemin sınırı korunur.
   kabul: kabulSiniriSemasi.nullable().optional(),
+  // 3593: kalemde işaretlenen alternatif kartları (kartın talepte kullanılan kartları); gelmezse var olan kalemin işaretleri korunur.
+  alternatifKartlari: alternatifKartiNolari.optional(),
+  // Daha önce işaretli kart işaretlendiği hâliyle kalır; burada adı geçen kart bugünkü özetiyle yeniden yazılır ("yeni sınırla güncelle").
+  alternatifKartlariYenile: alternatifKartiNolari.optional(),
   // 3462 a: kalemin termini ve üretim emri; gelmezse talebin (formun varsayılanı). Talebin termini kalemlerin en erkeni, emri yalnız ortaksa doludur.
   ihtiyacTarihi: tarih.nullable().optional(),
   uretimEmriId: z.number().int().positive().max(2147483647).nullable().optional(),
@@ -908,6 +923,8 @@ export const talebimSemasi = z.object({
     // 3437: kalemin kartı ve kabul sınırı (düzenleme formu zarfı karttan okur); kartsız kalemde gelmez, varsayılan sınırda kabul null.
     malzemeNo: z.number().int().optional(),
     kabul: kabulSiniriSemasi.nullable().optional(),
+    // 3593: işaretli alternatif kartları (işaretlendiği hâliyle); kartsız kalemde gelmez.
+    alternatifKartlari: z.array(kalemAlternatifKartiSemasi).optional(),
     // 3437 a (dilim 3b-1): kalem için teklif edilen şartlı alternatifler ve talep edenin izni (fiyat ve tedarikçi yok).
     sartliAlternatifler: z.array(z.object({
       teklifId: uuid, alternatif: teklifAlternatifi, nedenler: z.array(z.string()), izin: z.enum(ALTERNATIF_IZINLERI).nullable(),
@@ -920,7 +937,7 @@ export const talebimSemasi = z.object({
 export const talebimiDuzenleGovdesi = z.object({
   ihtiyacTarihi: tarih.nullable().prefault(null),
   aciklama: metin(4000),
-  kalemler: z.array(hizliKalemSemasi.pick({ malzemeNo: true, ad: true, birim: true, miktar: true, aciklama: true, kabul: true, ihtiyacTarihi: true })
+  kalemler: z.array(hizliKalemSemasi.pick({ malzemeNo: true, ad: true, birim: true, miktar: true, aciklama: true, kabul: true, alternatifKartlari: true, alternatifKartlariYenile: true, ihtiyacTarihi: true })
     .extend({ id: uuid.nullable().prefault(null) })).min(1, 'En az bir kalem girin.').max(50),
   ...beklenenSurum,
 });

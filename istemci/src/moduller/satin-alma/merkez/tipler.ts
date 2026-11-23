@@ -125,6 +125,8 @@ export interface RequestItem {
   karsilik?: string | null;
   /** 3121: kartın kalite, durum, işlem ve ölçüsü (bugünkü hâli); kartsız kalemde yok. Yalnız okunur. */
   malzeme?: MalzemeOzelligi;
+  /** 3593: talep edenin işaretlediği alternatif kartları (işaretlendiği hâliyle: ad, tür, özet). Yalnız okunur, kayıtta gönderilmez. */
+  alternatifler?: { setId: number | null; ad: string; tur: 'tam' | 'ust' | 'sartli'; ozet: string }[];
   /** 3442-5: kimliği değişmemesi gereken kalem (parça, fason, die ya da satış siparişi bağı; birleşik talebin kaynak kalemi). Yalnız okunur. */
   sabit?: "bag" | "kaynak";
 }

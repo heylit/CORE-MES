@@ -6,9 +6,11 @@ import type {
   AlternatifBaglami, AlternatifKarti, AlternatifKuraliKaydetGovdesi, AlternatifSeti, AlternatifSetiKaydetGovdesi, AlternatifSetiKopyalaCevabi,
   AlternatifSetiKopyalaGovdesi, AlternatifSirasiGovdesi,
   AlternatifTanimlariCevabi, AlternatifZarfi, KabulSiniriKaydetGovdesi, GrupSinirlariCevabi, KartAlternatifleriCevabi, KartZarfiCevabi,
-  MuadilTuru, OnerilmesinGovdesi, SeciliAlternatif, SeciliAlternatifKaydetGovdesi, SetNiteligiYazimi, SetOnizlemeCevabi, SetUyanKarti,
+  KullanimYeri, MuadilTuru, OnerilmesinGovdesi, SeciliAlternatif, SeciliAlternatifKaydetGovdesi, SetNiteligiYazimi, SetOnizlemeCevabi, SetUyanKarti,
 } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
-import { GENIS_SET_ESIGI, SINIR_NITELIKLERI } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
+import { GENIS_SET_ESIGI, SINIR_NITELIKLERI, type AlternatifKartiSecenegi } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
+import { alternatifOzeti } from '#paylasilan/malzeme-alternatif-ozeti.ts';
+import { FORM_ADLARI } from '#paylasilan/sozlesme/stok-kontrol-sabitleri.ts';
 import { kisiAdlari } from '../../kisiler/disari.ts';
 import {
   KAPSAM_DOGRULAMA, alternatifOnceligi, kopyaAralikHatasi, setHatasi, setTuru, setUyumu, sinirHatasi, uyanSinir, zarfaGirenler, zarfDegerlendir, zarfHesapla,
@@ -132,6 +134,20 @@ export async function kartinAlternatifKartlari(db: Db, no: number, baglam: Alter
   if (!r) return [];
   const g = await alternatifGirdisi(db, r);
   return alternatifOnceligi({ ...g, kullanimYeri: baglam.kullanimYeri });
+}
+
+// 3593: kartın kullanım yerinde seçilebilen alternatif kartları ve tek satır özeti (Birebir ve Pay kartın bugünkü değeriyle yazılır).
+export async function alternatifKartiSecenekleri(db: Db, no: number, kullanimYeri: KullanimYeri): Promise<AlternatifKartiSecenegi[]> {
+  const r = await s.zarfKarti(db, no);
+  if (!r || r.tur !== 'hammadde') return [];
+  const setler = (await s.setler(db, no)).filter((t) => t.kullanimYerleri.includes(kullanimYeri));
+  if (setler.length === 0) return [];
+  const ana = (await anaSetKartlari(db, [no])).get(no) ?? null;
+  const formAdi = (f: string): string => (FORM_ADLARI as Readonly<Record<string, string>>)[f] ?? f;
+  return setler.map((t) => ({
+    id: t.id, ad: t.ad, tur: t.tur, uyanSayisi: t.uyanSayi,
+    ozet: alternatifOzeti(t.nitelikler, ana === null ? null : ana, formAdi).join(' · '),
+  }));
 }
 
 async function kuraldanGelenler(db: Db, r: s.ZarfKartSatiri, disarida: ReadonlySet<number>) {

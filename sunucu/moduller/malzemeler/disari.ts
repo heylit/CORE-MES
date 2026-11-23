@@ -119,6 +119,9 @@ export { kartIzleriCozucusuKaydet as kartIzleriCozucusu } from './servis.ts';
 export { alternatifZarfiOku, alternatifDegerlendir } from './alternatif/servis.ts';
 // 3463: kartın yerine kabul edilen kartlar (eşdeğer ve sınır içindeki alternatifler); talep ve satın alma seçicileri yalnız bunu okur.
 export { kartinAlternatifKartlari } from './alternatif/servis.ts';
+// 3593: talep ve satın almada işaretlenebilen alternatif kartları (kullanım yerine göre) ve tek satır özetleri. Yetki denetlemez.
+export { alternatifKartiSecenekleri } from './alternatif/servis.ts';
+export type { AlternatifKartiSecenegi } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 // 3463-1b: kartın eşdeğer grubu (kart dahil); plan ve stok grubun stoğunu birlikte sayar.
 export { esdegerGruplari } from './alternatif/servis.ts';
 export type { AlternatifBaglami, AlternatifKarti, KullanimYeri } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';

@@ -292,6 +292,11 @@ export const alternatifSetiKopyalaCevabi = z.object({
   kopyalar: z.array(z.object({ hedefNo: z.number().int(), id: z.number().int(), uyanSayisi: z.number().int() })),
 });
 export type AlternatifSetiKopyalaCevabi = z.output<typeof alternatifSetiKopyalaCevabi>;
+// 3593: talep ve satın almada seçilebilen alternatif kartı (kullanım yerine göre); özet malzeme kartındaki tek satırla aynıdır.
+export const alternatifKartiSecenegi = z.object({
+  id: z.number().int(), ad: z.string(), tur: z.enum(MUADIL_TURLERI), ozet: z.string(), uyanSayisi: z.number().int(),
+});
+export type AlternatifKartiSecenegi = z.output<typeof alternatifKartiSecenegi>;
 export const alternatifSetiKaydetCevabi = z.object({ id: z.number().int(), tur: z.enum(MUADIL_TURLERI), uyanSayisi: z.number().int() });
 
 export const seciliAlternatifKaydetGovdesi = z.object({

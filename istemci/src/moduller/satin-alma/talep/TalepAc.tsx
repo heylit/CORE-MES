@@ -1,12 +1,13 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { HizliAcGovdesi, KabulSiniri, MalzemeSecenekleriCevabi, OnTalep, Talebim, TalebimGuncellemeYazimi, TalebimiDuzenleYazimi, TalepTuru } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { HizliAcGovdesi, KabulSiniri, KalemAlternatifKarti, MalzemeSecenekleriCevabi, OnTalep, Talebim, TalebimGuncellemeYazimi, TalebimiDuzenleYazimi, TalepTuru } from '#paylasilan/sozlesme/satin-alma.ts';
 import { CokSatir, Dugme, Girdi, Kart, Rozet, useAcilirKonum, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { ApiHatasi } from '../../../ortak/veri/api.ts';
 import { BELIRSIZ_MIKTAR, belirsizMiktarVar, miktarGirdisi } from '../../../ortak/veri/miktar.ts';
 import { tekrarKorumaliGonder, yeniIstekKimligi } from '../../../ortak/veri/istek-kimligi.ts';
 import { CizimSecici, TalepCizimleri, cizimBagla, type SecilenCizim } from './Cizimler.tsx';
+import { AlternatifKartlari, useVarsayilanIsaretler } from './AlternatifKartlari.tsx';
 import { KabulSinirlari, kapaliZarfNotu, useKabulZarfi } from './KabulSinirlari.tsx';
 import { KART_SAYFASI, SURE, adettenKg, anahtarlar, cagri, kartKarsiligi, karsilikYaz, parcaKg } from './ortak.ts';
 import { TeslimiBol, TeslimleriTopla, type BolunenSatir } from './TeslimAraclari.tsx';
@@ -29,6 +30,8 @@ interface KalemTaslagi {
   adet: string; parcaKg: number | null;
   // 3437-2: kabul sınırı (null: kartın zarfının tamamı). zarfNo: sınırın okunduğu kart; düzenlenen kalemde kartı hammadde olan kalemin kartı.
   kabul: KabulSiniri | null; zarfNo: number | null; kabulHatali: boolean;
+  // 3593: işaretli alternatif kartları (null: dokunulmadı; var olan kalemde gönderilmez, eski işaretler kalır). onceki: işaretlendiği hâliyle.
+  alternatifKartlari: number[] | null; alternatifOnceki: readonly KalemAlternatifKarti[]; alternatifYenile: number[];
   // 3462 a: kalemin termini ve üretim emri ('' boş; yeni kalem formun varsayılanını alır). emirNo: düzenlenen kalemin emri listede yoksa.
   // foy: düzenlenen kalemin kart föyü (yeni kalemde kartın ayrıntısı okunur).
   termin: string; emirId: string; emirNo: string | null; foy: readonly { ad: string; deger: string }[];
@@ -37,7 +40,7 @@ interface KalemTaslagi {
 }
 const TUR_ADI: Record<TalepTuru, string> = { malzeme: 'Malzeme', hizmet: 'Hizmet', fason: 'Fason' };
 const bosKalem = (v: { termin: string; emirId: string } = { termin: '', emirId: '' }): KalemTaslagi => ({
-  anahtar: yeniIstekKimligi(), kart: null, serbest: false, ad: '', birim: '', miktar: '', aciklama: '', uygulanan: null, isEmriId: null, kaynak: null, satisSatiriId: null, mevcut: null, adet: '', parcaKg: null, kabul: null, zarfNo: null, kabulHatali: false,
+  anahtar: yeniIstekKimligi(), kart: null, serbest: false, ad: '', birim: '', miktar: '', aciklama: '', uygulanan: null, isEmriId: null, kaynak: null, satisSatiriId: null, mevcut: null, adet: '', parcaKg: null, kabul: null, zarfNo: null, kabulHatali: false, alternatifKartlari: null, alternatifOnceki: [], alternatifYenile: [],
   termin: v.termin, emirId: v.emirId, emirNo: null, foy: [], malzemeNo: null,
 });
 const mevcutKalem = (x: Talebim['kalemler'][number]): KalemTaslagi => ({
@@ -45,6 +48,7 @@ const mevcutKalem = (x: Talebim['kalemler'][number]): KalemTaslagi => ({
   mevcut: { id: x.id!, bagli: x.uygulanan !== null || x.fasonAdim !== null },
   termin: x.ihtiyacTarihi?.slice(0, 10) ?? '', emirId: x.uretimEmriId == null ? '' : String(x.uretimEmriId), emirNo: x.uretimEmriNo ?? null, foy: x.malzeme?.ayrinti ?? [],
   kabul: x.kabul ?? null, zarfNo: x.malzemeNo !== undefined && x.malzeme?.kalite != null ? x.malzemeNo : null,
+  alternatifOnceki: x.alternatifKartlari ?? [],
   malzemeNo: x.malzemeNo ?? null,
   parcaKg: x.karsilik?.birim === 'adet' && x.miktar !== null && Number(x.karsilik.miktar) > 0 ? Number(x.miktar) / Number(x.karsilik.miktar) : null,
 });
@@ -68,6 +72,11 @@ const ontalepKalemi = (o: OnTalep): KalemTaslagi => (o.kaynak === 'siparis'
 // 3437-2: sınır yalnız kartlı malzeme kaleminde gider; düzenlemede sınırı gösterilen kalem her zaman gönderir (null: sınır kaldırıldı).
 const kabulAlani = (tur: TalepTuru, k: KalemTaslagi): { kabul?: KabulSiniri | null } =>
   (tur !== 'malzeme' ? {} : k.mevcut !== null ? (k.zarfNo === null ? {} : { kabul: k.kabul }) : k.kart === null || k.kabul === null ? {} : { kabul: k.kabul });
+
+// 3593: işaretler yalnız kartlı malzeme kaleminde ve dokunulduysa gider (yeni kalemde varsayılanlar yazıldığında dokunulmuş sayılır).
+const alternatifAlani = (tur: TalepTuru, k: KalemTaslagi): { alternatifKartlari?: number[]; alternatifKartlariYenile?: number[] } =>
+  (tur !== 'malzeme' || k.alternatifKartlari === null ? {}
+    : { alternatifKartlari: k.alternatifKartlari, ...(k.alternatifYenile.length > 0 ? { alternatifKartlariYenile: k.alternatifYenile } : {}) });
 
 // Denetim #37: miktar ortak ayrıştırıcıdan okunur ("12.5" = "12,5", virgül varsa nokta binliktir). Virgülsüz "1.250" belirsizdir,
 // okunamayan miktar gibi gönderilmez (Y2: noktayı binlik sayıp silmek "12.5"i 125 yapıyordu).
@@ -225,10 +234,15 @@ export const kabulOzeti = (k: KabulSiniri | null): string => (k === null ? 'Kart
 const zarfKarti = (tur: TalepTuru, k: KalemTaslagi): number | null =>
   (tur !== 'malzeme' ? null : k.mevcut !== null ? k.zarfNo : k.kart?.hammadde === true ? k.kart.no : null);
 
-function AlternatifOzeti({ no, sira, kabul, ac }: { no: number; sira: number; kabul: KabulSiniri | null; ac: () => void }) {
+function AlternatifOzeti({ no, sira, kabul, isaretSayisi, ac }: { no: number; sira: number; kabul: KabulSiniri | null; isaretSayisi: number | null; ac: () => void }) {
   const z = useKabulZarfi(no).data?.zarf;
   if (z?.kapali) return <span className="sa-talep-not">{kapaliZarfNotu(z.gerekce)}</span>;
-  return <span className="sa-talep-alternatif-ozet">{kabulOzeti(kabul)} <Dugme simge="edit" onClick={ac} aria-label={`Kalem ${String(sira)}: alternatif sınırını değiştir`}>Değiştir</Dugme></span>;
+  return (
+    <span className="sa-talep-alternatif-ozet">
+      {kabulOzeti(kabul)}{isaretSayisi !== null && isaretSayisi > 0 && ` · ${String(isaretSayisi)} alternatif kartı`}
+      {' '}<Dugme simge="edit" onClick={ac} aria-label={`Kalem ${String(sira)}: alternatif sınırını değiştir`}>Değiştir</Dugme>
+    </span>
+  );
 }
 
 // 3462 a: her kalem tek satır; ayrıntı (ön talep kaynağı, uygulanacak parça, kabul sınırı, adet yardımcısı) satırın altında açılır.
@@ -244,6 +258,8 @@ function KalemSatiri({ tur, sira, k, foySutunlari: sutunlar, emirSecenekleri, em
   const foy = new Map(foyu(k).map((x) => [x.ad, x.deger]));
   const ad = k.mevcut?.id ?? k.anahtar;
   const sutunSayisi = 9 + sutunlar.length + (tur === 'malzeme' ? 1 : 0);
+  const alternatifDegistir = useCallback((l: number[]) => degistir({ alternatifKartlari: l }), [degistir]);
+  useVarsayilanIsaretler(zarf, k.mevcut === null, k.alternatifKartlari, alternatifDegistir);
   return (
     <>
       <tr data-kalem={sira} aria-invalid={k.kabulHatali || undefined}>
@@ -254,7 +270,7 @@ function KalemSatiri({ tur, sira, k, foySutunlari: sutunlar, emirSecenekleri, em
           ) : k.kart !== null ? (
             <span className="sa-talep-secili-ad">
               <b>{k.kart.ad}</b> <span className="sa-talep-no">{k.kart.kod}</span>
-              {k.satisSatiriId === null && <Dugme simge="edit" onClick={() => degistir({ kart: null, kabul: null, kabulHatali: false })}>Değiştir</Dugme>}
+              {k.satisSatiriId === null && <Dugme simge="edit" onClick={() => degistir({ kart: null, kabul: null, kabulHatali: false, alternatifKartlari: null })}>Değiştir</Dugme>}
             </span>
           ) : k.serbest ? (
             <span className="sa-talep-serbest">
@@ -269,7 +285,8 @@ function KalemSatiri({ tur, sira, k, foySutunlari: sutunlar, emirSecenekleri, em
         {sutunlar.map((s) => <td key={s} data-sutun={s} data-etiket={FOY_BASLIGI[s] ?? s}><FoyHucresi ad={s} deger={foy.get(s)} /></td>)}
         {tur === 'malzeme' && (
           <td className="sa-talep-alternatif" data-etiket="Alternatif">
-            {zarf === null ? <span className="sa-talep-not">Yalnız aynı malzeme</span> : <AlternatifOzeti no={zarf} sira={sira} kabul={k.kabul} ac={() => acikYaz(true)} />}
+            {zarf === null ? <span className="sa-talep-not">Yalnız aynı malzeme</span> : <AlternatifOzeti no={zarf} sira={sira} kabul={k.kabul} ac={() => acikYaz(true)}
+              isaretSayisi={k.alternatifKartlari?.length ?? (k.mevcut === null ? null : k.alternatifOnceki.length)} />}
           </td>
         )}
         <td className="sa-talep-miktar-hucre" data-etiket="Miktar">
@@ -319,6 +336,10 @@ function KalemSatiri({ tur, sira, k, foySutunlari: sutunlar, emirSecenekleri, em
                 <KartArama tur="malzeme" etiket="Uygulanacak malzeme / parça" sec={(x) => degistir({ uygulanan: { no: x.no, kod: x.kod, ad: x.ad } })}
                   ipucu="İsteğe bağlı. Hizmet hangi parça ya da malzeme üzerinde yapılacak; satın alma teklif isterken bu bilgiyle gider." />
               ))}
+              {zarf !== null && (
+                <AlternatifKartlari no={zarf} sira={sira} secili={k.alternatifKartlari} onceki={k.alternatifOnceki} yeni={k.mevcut === null} degistir={alternatifDegistir}
+                  yenile={k.alternatifYenile} yenileDegistir={(l) => degistir({ alternatifYenile: l })} />
+              )}
               {zarf !== null && <KabulSinirlari no={zarf} kabul={k.kabul} degistir={(kabul, kabulHatali) => degistir({ kabul, kabulHatali })} />}
             </div>
           </td>
@@ -476,7 +497,7 @@ export function TalepAc({ taslak = null, taslakEmri = null, taslakBitti, duzenle
         surum: duzenlenen.surum!, ihtiyacTarihi: tarih === '' ? null : tarih, aciklama: aciklama.trim(),
         kalemler: kalemler.map((k) => ({
           id: k.mevcut?.id ?? null, malzemeNo: k.kart?.no ?? null, ad: k.kart || k.mevcut ? '' : k.ad.trim(), birim: k.kart || k.mevcut ? '' : k.birim.trim(),
-          miktar: miktarOku(k.miktar)!, aciklama: k.aciklama.trim(), ...kabulAlani(tur, k), ihtiyacTarihi: k.termin === '' ? null : k.termin,
+          miktar: miktarOku(k.miktar)!, aciklama: k.aciklama.trim(), ...kabulAlani(tur, k), ...alternatifAlani(tur, k), ihtiyacTarihi: k.termin === '' ? null : k.termin,
         })),
       } });
       return;
@@ -485,7 +506,7 @@ export function TalepAc({ taslak = null, taslakEmri = null, taslakBitti, duzenle
       id: kimlik, tur, ihtiyacTarihi: tarih === '' ? null : tarih, aciklama: aciklama.trim(), uretimEmriId: emirId === '' ? null : Number(emirId),
       kalemler: kalemler.map((k) => ({
         malzemeNo: k.kart?.no ?? null, ad: k.kart ? '' : k.ad.trim(), birim: k.kart ? '' : k.birim.trim(), miktar: miktarOku(k.miktar)!, aciklama: k.aciklama.trim(),
-        uygulananMalzemeNo: tur === 'hizmet' ? (k.uygulanan?.no ?? null) : null, isEmriId: tur === 'hizmet' ? k.isEmriId : null, ...kabulAlani(tur, k),
+        uygulananMalzemeNo: tur === 'hizmet' ? (k.uygulanan?.no ?? null) : null, isEmriId: tur === 'hizmet' ? k.isEmriId : null, ...kabulAlani(tur, k), ...alternatifAlani(tur, k),
         // Formun varsayılanıyla aynı değer gönderilmez: sunucu talebinkini uygular.
         ...(k.termin === tarih ? {} : { ihtiyacTarihi: k.termin === '' ? null : k.termin }),
         ...(k.emirId === emirId ? {} : { uretimEmriId: k.emirId === '' ? null : Number(k.emirId) }),

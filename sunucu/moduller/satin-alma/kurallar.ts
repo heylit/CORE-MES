@@ -6,7 +6,7 @@ import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { FasonIsEmri } from '../uretim-emirleri/disari.ts';
 import type { AlimTasimasi } from './alim-olayi.ts';
 import type { AlternatifZarfi, ZarfSonucu } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
-import type { AlternatifSonucu, HizliKalem, KabulSiniri, TeklifAlternatifi, KartAyrintisi, Kalite, Karar, Onay, Talebim, Talep as TalepCikisi, TalepKaydi as Talep, TalepDurumu, TalepTuru, TalepYazimi, TedarikTermini, TerminDurumu, TerminTakipSatiri, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { AlternatifSonucu, HizliKalem, KalemAlternatifKarti, KabulSiniri, TeklifAlternatifi, KartAyrintisi, Kalite, Karar, Onay, Talebim, Talep as TalepCikisi, TalepKaydi as Talep, TalepDurumu, TalepTuru, TalepYazimi, TedarikTermini, TerminDurumu, TerminTakipSatiri, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
 import { MALZEMELER_SAYFALARI } from '#paylasilan/sayfalar/malzemeler.ts';
 import { gerceklesenPay, gerceklesenSiparisDegeri } from './hesap-kurallar.ts';
 
@@ -227,6 +227,8 @@ export const ILETILER = {
   kabulZarfsiz: 'Bu kartta alternatif zarfı yok; kabul sınırı yalnız "Yalnız aynı malzeme" olabilir.',
   kabulKapali: 'Bu kartta alternatif kapalı; kalem yalnız aynı malzemeyle karşılanır.',
   kabulKartsiz: 'Kabul sınırı yalnız kartı seçilmiş kalemde girilir.',
+  alternatifKartiKartsiz: 'Alternatif kartı yalnız kartı seçilmiş kalemde işaretlenir.',
+  alternatifKartiListeDisi: 'Bu alternatif kartı bu malzemenin talepte kullanılan kartları arasında değil; listeyi yenileyip yeniden seçin.',
   kabulDisi: (ad: string, l: readonly string[]) => `${ad} kartın kabul sınırında yok: ${l.join(', ')}. Talepte sınır yalnız daraltılır.`,
   kabulPaysiz: 'Bu kartta kesit ölçüsü yok; ölçü payı girilmez.',
   kabulPayGenis: (enCok: number) => `Ölçü payı kartın sınırından geniş olamaz (en çok +${enCok.toLocaleString('tr-TR')} mm).`,
@@ -2112,7 +2114,8 @@ export function onayliTalepGelisi(bugun: string, terminGun: number | null): stri
 // 3437 a (dilim 2): talep kaleminin kabul sınırı. Kartın zarfı (3437-1 motoru) talep edenin daraltmasıyla kesişir; daraltma yalnız daraltır:
 // liste zarfın muadilleriyle kesişir, pay zarfınkinden büyük olamaz, "yalnız aynı" zarfı kapatır. Şartlı kabul, şartlı muadili talep edenin
 // baştan onayıdır (satın almada ayrıca sorulmaz). Sınır yoksa (null) zarfın kendisi.
-export interface KalemKabulu { malzemeNo: number; kabul: KabulSiniri | null }
+// 3593: alternatifKartlari kalemde işaretli alternatif kartlarıdır (işaretlendiği hâliyle; boş liste işaretsiz).
+export interface KalemKabulu { malzemeNo: number; kabul: KabulSiniri | null; alternatifKartlari: KalemAlternatifKarti[] }
 export const VARSAYILAN_KABUL: KabulSiniri = { yalnizAyni: false, sartliKabul: false, kaliteler: null, durumlar: null, payMm: null };
 const varsayilanMi = (k: KabulSiniri): boolean =>
   !k.yalnizAyni && !k.sartliKabul && k.kaliteler === null && k.durumlar === null && k.payMm === null;

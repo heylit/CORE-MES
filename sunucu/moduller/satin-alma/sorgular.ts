@@ -1520,6 +1520,29 @@ export function kalemKabulleriOku(db: Db, talepIdleri: readonly string[]): Promi
     [talepIdleri],
   );
 }
+// 3593: kalemde işaretli alternatif kartları, işaretlendiği hâliyle (ad, tür, özet); sıra işaretleme sırasıdır.
+export interface KalemAlternatifKartiSatiri { talepId: string; kalemId: string; setId: number | null; ad: string; tur: 'tam' | 'ust' | 'sartli'; ozet: string }
+export function kalemAlternatifKartlariOku(db: Db, talepIdleri: readonly string[]): Promise<KalemAlternatifKartiSatiri[]> {
+  return db.sorgu(
+    `SELECT talep_id AS "talepId", kalem_id AS "kalemId", set_id AS "setId", ad, tur, ozet
+       FROM satin_alma_talep_kalemi_alternatif_karti WHERE talep_id = ANY($1::uuid[]) ORDER BY talep_id, kalem_id, sira`,
+    [talepIdleri],
+  );
+}
+// Gönderilen kalemlerin işaretleri baştan yazılır (boş liste işaretleri kaldırır); listede olmayan kalem değişmez.
+export async function kalemAlternatifKartlariYaz(
+  db: Db, talepId: string, kalemler: readonly { kalemId: string; kartlar: readonly { setId: number | null; ad: string; tur: string; ozet: string }[] }[],
+): Promise<void> {
+  if (kalemler.length === 0) return;
+  await db.sorgu('DELETE FROM satin_alma_talep_kalemi_alternatif_karti WHERE talep_id = $1 AND kalem_id = ANY($2::uuid[])', [talepId, kalemler.map((x) => x.kalemId)]);
+  const satirlar = kalemler.flatMap((x) => x.kartlar.map((k, i) => ({ kalemId: x.kalemId, sira: i + 1, ...k })));
+  if (satirlar.length === 0) return;
+  await db.sorgu(
+    `INSERT INTO satin_alma_talep_kalemi_alternatif_karti (talep_id, kalem_id, sira, set_id, ad, tur, ozet)
+     SELECT $1, b.kalem, b.sira, b.set_id, b.ad, b.tur, b.ozet FROM unnest($2::uuid[], $3::int[], $4::int[], $5::text[], $6::text[], $7::text[]) AS b(kalem, sira, set_id, ad, tur, ozet)`,
+    [talepId, satirlar.map((x) => x.kalemId), satirlar.map((x) => x.sira), satirlar.map((x) => x.setId), satirlar.map((x) => x.ad), satirlar.map((x) => x.tur), satirlar.map((x) => x.ozet)],
+  );
+}
 // Talepteki kalem sırasıyla: sıra burada verilir, PostgreSQL ORDER BY olmadan sıra garantisi vermez (kalem bağları ekranda bu sırayla).
 export function kalemBaglariOku(db: Db, talepIdleri: readonly string[]): Promise<(KalemBagSatiri & { talepId: string })[]> {
   return db.sorgu(
@@ -1966,7 +1989,7 @@ export async function talepleriKilitle(db: Db, idler: readonly string[]): Promis
   return (await db.sorgu<{ id: string }>('SELECT id FROM satin_alma_talep WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE', [idler])).map((r) => r.id);
 }
 // Kalemler kaynak sırası ve kendi sırasıyla birleşen talebe taşınır; anahtar (talep, kalem) değişir. Teklif satırı, karar, senaryo ve
-// sipariş satırı yokken çağrılır (2414 V2 a): kalem yabancı anahtarlarında ON UPDATE yoktur.
+// sipariş satırı yokken çağrılır (2414 V2 a): kalem yabancı anahtarlarında ON UPDATE yoktur; yalnız alternatif kartı işareti kalemle taşınır (ON UPDATE CASCADE).
 export async function kalemleriBirlesenTalebeTasi(db: Db, birlesenId: string, kaynakIdleri: readonly string[]): Promise<void> {
   await db.sorgu(
     `WITH sirali AS (
