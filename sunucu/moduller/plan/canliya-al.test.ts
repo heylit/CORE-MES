@@ -734,6 +734,31 @@ describe('Reçete ve Rota canlıya al akışı (gerçek PostgreSQL)', () => {
     assert.match(ust.body, /sabitlendiği saatte/);
   });
 
+  // 3607: kişiye planlanan adımın istasyonu canlıya almada boşalmaz; emir istasyonlu açık emir listesinde (Hazırlık, Atölye, terminal) kalır.
+  test('CA-11c (3607): kişiye planlanan adım canlıya alınınca rotadaki istasyonu korur; emir açık emir listesinde kalır', async () => {
+    const kisi = await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme atamasiz kisi', kullaniciAdi: 'atamasiz', parola: PAROLA }));
+    const gunduz = (await ortam!.sahip.tek<{ id: number }>("SELECT id FROM vardiya WHERE ad = 'CA gunduz'"))!.id;
+    await tamam(c.yonetici, 'POST', `/kisi-vardiyalari/${String(kisi)}/belirle`, { vardiyaId: gunduz });
+    // Kişi istasyonda yetkin ama istasyon ataması yok: atamadan türetilen istasyon boştur.
+    await vt().tx((db) => db.sorgu('INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [kisi, istasyonA]));
+    const e = await emirAc([yeniAdim()]);
+    const [isEmri] = e.isEmriIdleri as [number];
+    const istasyonOnce = await vt().tx((db) => db.tek<{ i: number | null }>('SELECT istasyon_id AS i FROM uretim_emirleri_is_emri WHERE id = $1', [isEmri]));
+    assert.equal(istasyonOnce!.i, istasyonA, 'rotadaki adımın istasyonu');
+    const yaz = await istek(c.planlama, 'POST', '/plan/kuyruklari-yaz', {
+      kuyruklar: [{ kaynak: { tur: 'kisi', id: kisi }, baslangic: new Date(Date.now() + 3600_000).toISOString(), isler: [{ ...(await emirOp(isEmri)), dondurulmus: false }] }],
+    });
+    assert.equal(yaz.statusCode, 200, yaz.body);
+    await canliyaYaz(yaz.json<KuyrukYazCevabi>().taslak);
+    const sonra = (await vt().tx((db) => db.tek<{ kisi: number | null; ist: number | null; emirIst: number | null }>(
+      `SELECT i.kisi_id AS kisi, i.istasyon_id AS ist, e.istasyon_id AS "emirIst" FROM uretim_emirleri_is_emri i JOIN uretim_emri e ON e.id = i.uretim_emri_id WHERE i.id = $1`, [isEmri])))!;
+    assert.deepEqual(sonra, { kisi, ist: istasyonA, emirIst: istasyonA }, 'kaynak kişi, adım ve emir istasyonu rotadaki');
+    const liste = await tamam<{ emirler: { id: number }[] }>(c.yonetici, 'GET', '/uretim-emirleri');
+    assert.ok(liste.emirler.some((x) => x.id === e.uretimEmriId), 'açık emir listesinde');
+    const hazirlik = await tamam<{ emirler: { emirId: number }[] }>(c.yonetici, 'GET', `/adimli-emirler/hazirlik-ozeti?emirler=${String(e.uretimEmriId)}`);
+    assert.deepEqual(hazirlik.emirler.map((x) => x.emirId), [e.uretimEmriId], 'Hazırlık okuması emri paketleriyle verir');
+  });
+
   test('CA-12 (898 a): canlıya alma, canlı planın malzeme eksiğini aynı işlemde satın almaya yazar; taslağa yazmak yazmaz', async () => {
     const ham = await kartAc('hammadde');
     const e = await emirAc([yeniAdim({ bilesenler: [{ malzemeId: ham, miktar: 2, fireYuzde: 0 }] })]);
