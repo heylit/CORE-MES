@@ -17,6 +17,7 @@ import { nameOf } from "./store.ts";
 import { geriDugmesiHTML } from "./ui.ts";
 import { gelisGunu, kalemOzeti } from "./kimlik.ts";
 import { siparisOnerisiHTML } from "./siparis-satirlari.ts";
+import { degisiklikOnerisiHTML } from "./siparis-degistir.ts";
 
 export type Role = "buyer" | "requester" | "approver";
 export const ROLES: Record<Role, string> = { buyer: "Satın alma", requester: "Talep eden", approver: "Onaylayan" };
@@ -177,7 +178,7 @@ export function viewRequestRequester(r: PurchaseRequest): string {
 function pendingApprovals(): PurchaseRequest[] {
   // Önce acil, sonra ihtiyaç tarihi (tarihsiz sonda).
   const acil = (r: PurchaseRequest) => (r.priority === "urgent" ? 0 : 1);
-  return Object.values(S.requests).filter(r => r.status === "approval" && (approvalState(r).state === "pending" || !!r.siparisOnerisi))
+  return Object.values(S.requests).filter(r => (r.status === "approval" && (approvalState(r).state === "pending" || !!r.siparisOnerisi)) || r.siparisOnerisi?.tur === "siparis-degistir")
     .sort((a, b) => acil(a) - acil(b) || (a.needDate || "9999").localeCompare(b.needDate || "9999"));
 }
 export const pendingApprovalCount = (): number => pendingApprovals().length;
@@ -239,7 +240,7 @@ export function viewApprovals(): string {
   <div class="inbox">
     <section class="panel jobs"><div class="panel-h"><h2>Bekleyenler</h2><span class="cnt">${list.length}</span></div>
     ${list.length ? `<div class="tw"><table class="rt sa-oy-liste"><thead><tr><th>Talep</th><th>Karar</th><th class="r">Tutar</th><th>Gereken onay</th><th>İhtiyaç</th><th>Bekliyor</th><th>Dikkat</th><th><span class="sr-only">Aç</span></th></tr></thead><tbody>
-    ${satirlar.map(({ r, tt, an, dikkat }) => { const req = tt ? requiredApprover(tt.totalTRY) : null; return `<tr class="click" data-act="open" data-id="${r.id}"><td class="lead"><span class="no num">${esc(r.no)}</span> ${prioDot(r.priority)}<b>${esc(r.title)}</b>${r.siparisOnerisi ? ' <span class="flag info">Sipariş onayı</span>' : ""}<span class="sub">${esc([r.department, `${(r.items || []).length} kalem`, `${(r.quotes || []).length} teklif`].filter(Boolean).join(", "))}${tt ? `, ${esc(tt.x ? supName(tt.x.q) : "kalem bazlı")}` : ""}${req ? `, ${esc(req.role)} onayı` : ""}</span></td>
+    ${satirlar.map(({ r, tt, an, dikkat }) => { const req = tt ? requiredApprover(tt.totalTRY) : null; return `<tr class="click" data-act="open" data-id="${r.id}"><td class="lead"><span class="no num">${esc(r.no)}</span> ${prioDot(r.priority)}<b>${esc(r.title)}</b>${r.siparisOnerisi ? ` <span class="flag info">${r.siparisOnerisi.tur === "siparis-degistir" ? "Sipariş değişikliği" : "Sipariş onayı"}</span>` : ""}<span class="sub">${esc([r.department, `${(r.items || []).length} kalem`, `${(r.quotes || []).length} teklif`].filter(Boolean).join(", "))}${tt ? `, ${esc(tt.x ? supName(tt.x.q) : "kalem bazlı")}` : ""}${req ? `, ${esc(req.role)} onayı` : ""}</span></td>
       <td data-l="Karar">${karar(r, tt)}</td><td class="r num" data-l="Tutar"><b>${tt ? money(tt.totalTRY, "TRY", 0) : "–"}</b></td><td data-l="Gereken onay">${esc(req?.role || "–")}</td><td class="num" data-l="İhtiyaç">${r.needDate ? fmtDate(r.needDate) : "–"}</td><td class="num sa-oy-nowrap" data-l="Bekliyor">${beklemeMetni(an)}</td>
       <td data-l="Dikkat">${dikkat.length ? `<div class="flags">${dikkat.join("")}</div>` : ""}</td><td class="acts"><span class="btn sm primary">İncele</span></td></tr>`; }).join("")}
     </tbody></table></div>` : `<div class="panel-b muted">Şu an bekleyen bir karar yok.</div>`}</section>
@@ -254,7 +255,7 @@ export function viewApproval(r: PurchaseRequest): string {
   const gelis = gelisGunu(r);
   const head = `<div class="rhead sa-onay-kimlik"><div class="ttl"><div class="row" data-sa-y="19"><span class="sa-kimlik-no">${esc(r.no)}</span><h1>${esc(r.title)}</h1>${reqChip(r)}</div>
     <p class="rmeta">${gelis ? `<span>Geliş ${fmtDate(gelis)}</span>` : ""}<span>İhtiyaç ${fmtDate(r.needDate)}</span><span>${esc(kalemOzeti(r))}</span>${r.department ? `<span>${esc(r.department)}</span>` : ""}${r.requester ? `<span>Talep eden ${esc(r.requester)}</span>` : ""}${headerFacts(r).map(f => `<span class="fact">${f}</span>`).join("")}</p></div>
-    <div class="ract">${COMMITTED.includes(r.status) && r.award ? '<button class="btn" data-act="order-item-change">Siparişteki kalemi değiştir</button>' : ""}<button class="btn" data-act="approval-form">Onay formu</button></div></div>`;
+    <div class="ract">${COMMITTED.includes(r.status) && r.award ? '<button class="btn" data-act="order-change">Siparişi değiştir</button>' : ""}<button class="btn" data-act="approval-form">Onay formu</button></div></div>`;
   if (!r.award || !tt) return back + head + `<div class="panel">${empty("Bu talepte henüz karar yok", "Satın alma karar verip onaya gönderdiğinde burada görünür.")}</div>`;
   const ev = tt.ev, top = ev.ranking[0];
   const req = requiredApprover(tt.totalTRY);
@@ -289,7 +290,8 @@ export function viewApproval(r: PurchaseRequest): string {
   </div></section></aside>`;
   const alt = bekliyor ? `<div class="sa-oy-alt" role="group" aria-label="Onay"><button class="btn good" data-act="approve">${simge("check")} Onayla</button><button class="btn bad" data-act="ret-penceresi">Reddet</button></div>` : "";
   // 3574-1: onaya düşen sipariş (onaylı kararı aşan ya da yeni firmalı) aynı sayfada onaylanır.
-  const oneri = r.siparisOnerisi ? siparisOnerisiHTML(r, onaylayabilir(), r.siparisOnerisi.onerenId === S.me?.id) : "";
+  const oneri = !r.siparisOnerisi ? "" : r.siparisOnerisi.tur === "siparis-degistir" ? degisiklikOnerisiHTML(r, onaylayabilir(), r.siparisOnerisi.onerenId === S.me?.id)
+    : siparisOnerisiHTML(r, onaylayabilir(), r.siparisOnerisi.onerenId === S.me?.id);
   return back + head + oneri + status + yeniden + (uyarilar.length ? `<div class="flags sa-oy-uyari" role="note">${uyarilar.join("")}</div>` : "") + `
   <div class="sa-oy">
     <div class="stack sa-oy-ana">

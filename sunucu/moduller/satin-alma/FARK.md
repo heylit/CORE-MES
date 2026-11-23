@@ -1,3 +1,12 @@
+# FARK: satin-alma, siparişi değiştir (kart 3574-2a; 23.11.2026)
+
+- Sipariş panelinde "Kalemi değiştir" yerine "Siparişi değiştir" penceresi: satır başına miktar, birim fiyat, termin, not ve satır iptali; başlıkta ödeme şartı (vade gün), KDV oranı, teslim yeri, tedarikçiye not, iç not. Gerekçe zorunlu, tedarikçi teyidi isteğe bağlı. Kalem tablosundaki "Değiştir" aynı pencereyi o satırla açar.
+- Yeni uçlar `POST .../siparis-degistir` ve `POST .../siparis-onerisi-geri-al`; işlem ve rol x işlem değişmedi. Eski `siparis-kalemi-degistir` aynı yoldan geçer.
+- Sınıflama (S1 a, S2 a): miktar artışı, birim, vade ya da tutar artışı onaya düşer (öneri, sipariş eski hâliyle geçerli); gerisi onaysız ve izli. Dört göz açıkken onay yetkilisinin kendi artışı da ikinci kişiye gider; kapalıyken doğrudan uygulanır, geçmişe "dört gözsüz" yazılır.
+- Uygulanan her değişiklik siparişe R1, R2 numarası verir (`satin_alma_siparis.degisiklik_no`); geçmiş `satin_alma_siparis_degisikligi` tablosunda (uygulanan, reddedilen, geri alınan; satır sonradan değişmez). Sipariş sayfasında sipariş başına değişiklik geçmişi; Onaylar'da "Sipariş değişikliği" rozeti ve önce/sonra tablosu.
+- Logo'daki siparişte değişiklik düzenleme kuyruğuna girer; irsaliyeli siparişte yalnız notlar ve teslim yeri. Sipariş metni revizyon numarasıyla, değişen satırlar işaretli.
+- Göç yalnız ekler: öneri türü (`tur`, varsayılan 'siparis-ver'), sipariş değişiklik numarası (varsayılan 0, R0), geçmiş tablosu. Veri dönüşmez.
+
 # FARK: satin-alma, talepte kg ile stok birimi karşılığı (SAT-78, kart 2871; 11.11.2026)
 
 - Taleplerim cevabında her kalem `karsilik` taşır (boş olabilir): kartın birim ağırlığıyla (malzemeler `malzemeMaliyetBilgileri.birimKg`,

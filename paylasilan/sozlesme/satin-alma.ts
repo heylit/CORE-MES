@@ -173,6 +173,41 @@ export const siparisLogoSemasi = z.object({
   bekletmeDurumu: z.enum(LOGO_DURUMLARI).nullable(),
   bekletmeHata: z.string().nullable(),
 });
+// 3574-2a: sipariş değişikliği geçmişi (değişiklik öğesi ve satırı).
+export const SIPARIS_DEGISIKLIGI_ALANLARI = ['miktar', 'birim', 'birimFiyat', 'termin', 'not', 'iptal', 'vadeGun', 'kdvOrani', 'teslimYeri', 'tedarikciNotu', 'icNot'] as const;
+export type SiparisDegisikligiAlani = (typeof SIPARIS_DEGISIKLIGI_ALANLARI)[number];
+// Değişikliğin bir alanı: önce ve sonra metin olarak (tarih ISO, sayı ondalık metin); kalem alanı satırın, başlık alanı siparişin.
+// `onayaDusurur`: bu alan değişikliği tek başına onay ister (S1 a, S2 a).
+export const siparisDegisikligiOgesi = z.object({
+  alan: z.enum(SIPARIS_DEGISIKLIGI_ALANLARI),
+  kalemId: uuid.nullable(),
+  kalemAdi: z.string().nullable(),
+  once: z.string().nullable(),
+  sonra: z.string().nullable(),
+  onayaDusurur: z.boolean(),
+});
+export type SiparisDegisikligiOgesi = z.output<typeof siparisDegisikligiOgesi>;
+export const SIPARIS_DEGISIKLIGI_SONUCLARI = ['onaysiz', 'onaylandi', 'reddedildi', 'geri-alindi'] as const;
+// Sipariş değişikliği geçmişinin bir satırı (yalnız çıkışta). Numara yalnız uygulanan değişikliğindir. Tutarlar TL, KDV hariç.
+export const siparisDegisikligiSemasi = z.object({
+  id: uuid,
+  degisiklikNo: z.number().int().nullable(),
+  sonuc: z.enum(SIPARIS_DEGISIKLIGI_SONUCLARI),
+  ozet: z.array(siparisDegisikligiOgesi),
+  onceTutar: ondalikMetinSemasi.nullable(),
+  sonraTutar: ondalikMetinSemasi.nullable(),
+  gerekce: z.string(),
+  teyitKisi: z.string(),
+  teyitTarihi: z.string().nullable(),
+  yapanKisiId: z.number().int(),
+  yapanAdi: z.string().nullable(),
+  onaylayanKisiId: z.number().int().nullable(),
+  onaylayanAdi: z.string().nullable(),
+  kararNotu: z.string(),
+  dortGozsuz: z.boolean(),
+  zaman: z.string(),
+});
+export type SiparisDegisikligi = z.output<typeof siparisDegisikligiSemasi>;
 export const siparisCikisSemasi = siparisSemasi.extend({
   // TMI'nin verdiği sipariş numarası (Sistem ayarlarındaki numara kuralı; kart #544); `siparisNo` Logo / tedarikçi numarasıdır. Sunucu yazar.
   no: z.string().nullable(),
@@ -181,6 +216,11 @@ export const siparisCikisSemasi = siparisSemasi.extend({
   // GKK sonucunun satın almadaki karşılığı; GKK kalite modülüyle gelecek (SH2 b), o zamana kadar boş.
   kalite: z.enum(KALITELER).nullable(),
   logo: siparisLogoSemasi.nullable(),
+  // 3574-2a: siparişin değişiklik numarası (0: R0, ilk hâl), KDV oranı (boş: finansın genel oranı) ve değişiklik geçmişi
+  // (en yeni önce). Geçmiş fiyat taşır: fiyat görmeyen okuyucuya gelmez (S5).
+  degisiklikNo: z.number().int().optional(),
+  kdvOrani: z.string().nullable().optional(),
+  degisiklikler: z.array(siparisDegisikligiSemasi).optional(),
 });
 
 export const kararSemasi = z.object({
@@ -312,8 +352,39 @@ export const siparisOnerisiKararGovdesi = z.object({
   notlar: z.string().trim().max(500).prefault(''),
   ...beklenenSurum,
 });
+// 3574-2a: verilmiş siparişin değişikliği. Gövde siparişin bütün satırlarını istenen son hâliyle taşır (eksik satır kabul edilmez);
+// sunucu eskiyle kıyaslar, sınıflar (onaysız / onaya düşer) ve kilitleri denetler. Gerekçe her değişiklikte zorunlu.
+export const KDV_ORANI_DESENI = /^\d{1,3}(\.\d{1,2})?$/;
+export const siparisDegistirGovdesi = z.object({
+  teklifId: uuid,
+  satirlar: z.array(z.object({
+    kalemId: uuid,
+    miktar: pozitifMiktar,
+    birim: z.string().trim().min(1, 'Birim yazın.').max(20),
+    birimFiyat: eksiOlmayan,
+    beklenenTeslim: tarih.nullable().prefault(null),
+    notlar: metin(500),
+    // Satırı iptal et: teslimi olmayan satır siparişten çıkar, teslimi olan teslim alınana iner (kalan kapanır).
+    iptal: z.boolean().prefault(false),
+  })).min(1).max(500),
+  baslik: z.object({
+    vadeGun: z.number().int().min(0).max(3650),
+    kdvOrani: z.string().regex(KDV_ORANI_DESENI, 'KDV oranı geçersiz.').nullable(),
+    teslimYeri: metin(200),
+    tedarikciNotu: metin(2000),
+    icNot: metin(2000),
+  }),
+  gerekce: z.string().trim().min(1, 'Gerekçe zorunlu.').max(500),
+  // Tedarikçi teyidi (kim, nasıl) ve tarihi isteğe bağlı.
+  teyitKisi: metin(200),
+  teyitTarihi: tarih.nullable().prefault(null),
+  ...beklenenSurum,
+});
+export const SIPARIS_ONERISI_TURLERI = ['siparis-ver', 'siparis-degistir'] as const;
 // Onay bekleyen sipariş önerisi (yalnız çıkışta). Tutarlar TL, KDV hariç; hesaplanamayan boş.
+// 3574-2a: öneri sipariş verme (`govde`) ya da sipariş değişikliğidir (`degisiklik`); ikisinden yalnız biri dolu.
 export const siparisOnerisiSemasi = z.object({
+  tur: z.enum(SIPARIS_ONERISI_TURLERI).prefault('siparis-ver'),
   onayliTutar: ondalikMetinSemasi.nullable(),
   yeniTutar: ondalikMetinSemasi.nullable(),
   yeniFirmalar: z.array(z.string()),
@@ -321,8 +392,20 @@ export const siparisOnerisiSemasi = z.object({
   onerenKisiId: z.number().int(),
   onerenAdi: z.string().nullable(),
   zaman: z.string(),
-  govde: siparisVerGovdesi.omit({ surum: true }),
+  govde: siparisVerGovdesi.omit({ surum: true }).nullable(),
+  degisiklik: z.object({
+    teklifId: uuid,
+    // Bekleyen paketteki her değişiklik (onaya düşüren de, izli olan da): onaylayan bilmediği değişikliği onaylamaz (Arayüz Y3).
+    ozet: z.array(siparisDegisikligiOgesi),
+    onayNedenleri: z.array(z.string()),
+    teyitKisi: z.string(),
+    teyitTarihi: z.string().nullable(),
+    // Önerinin uygulanırsa alacağı numara (gösterim; numara onayda verilir).
+    degisiklikNo: z.number().int(),
+  }).nullable().prefault(null),
 });
+// Bekleyen sipariş değişikliğini yalnız öneren geri çeker (S8).
+export const siparisOnerisiGeriAlGovdesi = z.object({ ...beklenenSurum });
 // Logo'ya gitmiş siparişin kalanı satın almacının komutuyla, gerekçeyle kapatılır; gerekçe talebin hareketine yazılır.
 // "Biz alacağız" seçilen talebin siparişi sevkiyat bekleme listesine alım olarak düşer (kart #1310).
 export const teslimYontemiGovdesi = z.object({ teslimYontemi: z.enum(TESLIM_YONTEMLERI).nullable(), ...beklenenSurum });
@@ -927,6 +1010,9 @@ export type SiparisVerYazimi = z.output<typeof siparisVerGovdesi>;
 export type SiparisVerGovdesi = z.input<typeof siparisVerGovdesi>;
 export type SiparisOnerisiKararYazimi = z.output<typeof siparisOnerisiKararGovdesi>;
 export type SiparisOnerisi = z.output<typeof siparisOnerisiSemasi>;
+export type SiparisDegistirYazimi = z.output<typeof siparisDegistirGovdesi>;
+export type SiparisDegistirGovdesi = z.input<typeof siparisDegistirGovdesi>;
+export type SiparisOnerisiGeriAlYazimi = z.output<typeof siparisOnerisiGeriAlGovdesi>;
 export type SiparisLogoBekletYazimi = z.output<typeof siparisLogoBekletGovdesi>;
 export type TeslimYontemiYazimi = z.output<typeof teslimYontemiGovdesi>;
 export type TeslimYontemi = (typeof TESLIM_YONTEMLERI)[number];
@@ -991,6 +1077,8 @@ export interface SatinAlmaUclari {
   'POST /satin-alma-talepleri/:id/siparis-kalemi-degistir': { govde: z.input<typeof siparisKalemiDegistirGovdesi>; cevap: Talep };
   'POST /satin-alma-talepleri/:id/siparis-ver': { govde: z.input<typeof siparisVerGovdesi>; cevap: Talep };
   'POST /satin-alma-talepleri/:id/siparis-onerisi-karari': { govde: z.input<typeof siparisOnerisiKararGovdesi>; cevap: Talep };
+  'POST /satin-alma-talepleri/:id/siparis-degistir': { govde: z.input<typeof siparisDegistirGovdesi>; cevap: Talep };
+  'POST /satin-alma-talepleri/:id/siparis-onerisi-geri-al': { govde: z.input<typeof siparisOnerisiGeriAlGovdesi>; cevap: Talep };
   'POST /satin-alma-talepleri/:id/siparis-kapat': { govde: z.input<typeof siparisKapatGovdesi>; cevap: Talep };
   'POST /satin-alma-talepleri/:id/siparis-logo-beklet': { govde: z.input<typeof siparisLogoBekletGovdesi>; cevap: Talep };
   'POST /satin-alma-talepleri/:id/teslim-yontemi': { govde: z.input<typeof teslimYontemiGovdesi>; cevap: Talep };

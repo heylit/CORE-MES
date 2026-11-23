@@ -190,9 +190,18 @@ Aşama 1, 1. tur (kart #162, dal `162-satin-alma-uyum`, kullanıcı kararları S
     - Dış operasyonlar ekranı (istemci) yeni alanları (dieNo, durum, partiOperasyonlari) p4'te gösterir; Taleplerim'de "Fason" türü düğmesi p4'te.
 
 3574-1 (22.11.2026, sipariş satırları):
-52. [3574-2 ile kapanacak] Siparişten sonra kalem artışı `siparis-kalemi-degistir` ile onay yetkilisinde doğrudan yapılır; öneri ve dört göz yoktur. 3574-2 "Siparişi değiştir" penceresi aynı öneri kaydını kullanacak.
-53. [3574-2 ile kapanacak] Başlıkta ödeme şartı tekliften okunur, siparişte değiştirilmez; KDV alanı yok. Yeni firmada vade gün ve para birimi girilir.
+52. KAPANDI (3574-2a): kalem artışı her uçtan öneri olur; dört göz açıkken onay yetkilisinin kendi artışı da ikinci kişiye gider. `siparis-kalemi-degistir` aynı yoldan (`siparisDegistir`) geçer.
+53. KAPANDI (3574-2a): "Siparişi değiştir" penceresinde ödeme şartı (vade gün, onaya düşer) ve KDV oranı (onaysız) değişir. Yeni firma 3574-2b.
 54. VARSAYIM: onaya düşen siparişin sonucu önerene bildirimle gitmez (mevcut onay ve ret bildirim türleri talep edene ve /taleplerim yoluna bağlı); sonuç talep geçmişinde. Yeni tür çekirdek işidir. Geri alma ucuz.
 55. KAPANDI (3574-1 Risk L1): Logo'ya gitmiş talep satırı (logo_satir_ref dolu) bölünmez; payların aynı Logo satırını karşılaması ayrı kart (Logo modülü).
 56. VARSAYIM: satır notu iç nottur, sipariş metnine girmez; tedarikçiye giden not başlıktadır. Geri alma ucuz.
 57. [Arayüz Z1, açık] Sipariş satırları taslağı yalnız bellektedir; talep sürümü değişince (başkasının kaydı) haber verilmeden yeniden kurulur. En az "talep değişti" uyarısı ve girilenleri koruma sonraki dilimde.
+
+3574-2a (23.11.2026, siparişi değiştir):
+58. VARSAYIM: tutar tabanı bütün kararın TL toplamıdır (KDV hariç, `kararTutariHesapla`); fark yalnız değişen siparişten gelir, onay kademesi bu toplamla bakar. Geri alma ucuz.
+59. VARSAYIM: onayda "arada teslim girdi mi" yalnız teslim alınan miktarla bakılır; bekleyen (onaylanmamış) mal kabul bu modülde görünmez. Geri alma ucuz.
+60. VARSAYIM: onaylanan değişiklik talebin onaylar listesine eklenmez; onaylayan ve dört göz izi değişiklik geçmişi satırındadır. Geri alma ucuz.
+61. VARSAYIM: teslimsiz satırın iptali talep kalemini siler (sipariş satırı ve pay onunla gider); teslimli satır iptalde teslim alınana iner. Geri alma orta (silinen kalem geri gelmez; geçmişte özet kalır).
+62. VARSAYIM: eski `siparis-kalemi-degistir` ucunda satın almanın artışı 403 yerine öneri olur (S1 a ile uyumlu). Eski uç ve onun eski penceresi istemciden kalktı; uç ekran testleri için kalır. Geri alma ucuz.
+63. Açık (3574-2b): kalanı başka firmaya taşıma, yeni satır, yeni firma ve yeni Logo siparişi bu dilimde yok.
+64. Açık (Arayüz): Onaylar sayfasındaki sayaç "sipariş" içinde sipariş değişikliğini de sayar; ayrı sayaç sonraki dilimde.

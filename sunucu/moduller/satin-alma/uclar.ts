@@ -5,7 +5,7 @@ import {
   kabulZarfiCevabi, kalemZarflariCevabi, kabulZarfiParametresi,
   acilisCevabi, disOperasyonlarCevabi, disOperasyonAyrintisiCevabi, disOperasyonParametresi, fasonSureleriCevabi, fasonSureleriSorgusu, ayarlarKaydetGovdesi, onayKisileriCevabi, hizliAcGovdesi, talebimiDuzenleGovdesi, talebimGuncellemeGovdesi, alternatifIzniGovdesi, talebimSemasi, taleplerimCevabi, taleplerimSorgusu, ayarlarSemasi, firmaParametresi, firmaSecenekleriCevabi, firmaSecenekleriSorgusu, katalogKaydetGovdesi, malzemeSecenekleriCevabi, malzemeSecenekleriSorgusu, katalogSemasi, katalogSilGovdesi, talepGovdesi, acikEmirlerCevabi, projeSecenekleriCevabi, onTalepleriCevabi, onTalepYoksayGovdesi, onTalepGeriAlGovdesi,
   iptaliGeriAlCevabi, iptaliGeriAlGovdesi, talepAyirGovdesi, talepBirlestirGovdesi, satinAlmaOzetiCevabi, degerlendirmeCevabi, kartAyrintilariCevabi, stokYokIstekleriCevabi, odemePlaniGovdesi, siparisTakibiCevabi, siparisBelgeleriCevabi, siparisBelgesiGovdesi, siparisBelgesiParametresi, siparisSatiriParametresi, siparisFaturalariCevabi, siparisFaturalariSorgusu, siparisFaturasiGovdesi, siparisKalemiDegistirGovdesi, siparisKapatGovdesi, siparisLogoBekletGovdesi, teslimYontemiGovdesi, talepKaydetGovdesi, talepParametresi, talepSemasi, talepSilGovdesi, tamamCevabi, tedarikciKaydetGovdesi, tedarikciSemasi,
-  tedarikTerminiKaydetGovdesi, tedarikTerminiKaydetCevabi, tedarikTerminleriCevabi, siparisVerGovdesi, siparisOnerisiKararGovdesi,
+  tedarikTerminiKaydetGovdesi, tedarikTerminiKaydetCevabi, tedarikTerminleriCevabi, siparisVerGovdesi, siparisOnerisiKararGovdesi, siparisDegistirGovdesi, siparisOnerisiGeriAlGovdesi,
   butceKullanimiCevabi, butceKullanimiSorgusu, kgFiyatiEkleGovdesi, kgFiyatiIptalGovdesi, kgFiyatiParametresi, kgFiyatiGecmisiCevabi, kgFiyatiGecmisiSorgusu, kgFiyatlariCevabi, malzemeKgFiyatlariCevabi, malzemeKgFiyatlariSorgusu,
   faturaEslemesiCevabi, faturaEslemesiKaydetGovdesi, faturaEslemesiParametresi, onayliListeCevabi,
   talepCizimiDosyaParametresi, talepCizimiGovdesi, talepCizimiSecGovdesi, talepCizimleriCevabi, cizimSeciciCevabi, cizimSeciciSorgusu, seciciDosyalariCevabi, seciciDosyalariSorgusu, seciciKlasorParametresi, seciciKlasorlerCevabi, teklifEkiDosyaParametresi, teklifEkiGovdesi, teklifEkiParametresi, teklifEkleriCevabi,
@@ -159,7 +159,21 @@ export const uclar = [
     govde: siparisOnerisiKararGovdesi, cevap: talepSemasi,
     isle: ({ db, kullanici, parametre, govde, denetimEki }) => servis.siparisOnerisiKarari(db, kullanici, parametre.id, govde, denetimEki),
   }),
+  // 3574-2a: siparişi değiştir. Onaysız sınıfı satın almayı yazan uygular; onaya düşen öneri olur (onay `siparis-onerisi-karari`).
+  // Para kararıdır: gövde fiyatla denetime girer (kart #212).
+  uc({
+    yontem: 'POST', yol: '/satin-alma-talepleri/:id/siparis-degistir', yetki: { biri: ['satin-alma.yaz', 'satin-alma.onayla'] }, parametre: talepParametresi,
+    govde: siparisDegistirGovdesi, cevap: talepSemasi,
+    isle: ({ db, kullanici, parametre, govde, denetimEki }) => servis.siparisDegistir(db, kullanici, parametre.id, govde, denetimEki),
+  }),
+  // S8: bekleyen sipariş değişikliğini öneren geri çeker (öneren olmayan servisde reddedilir).
+  uc({
+    yontem: 'POST', yol: '/satin-alma-talepleri/:id/siparis-onerisi-geri-al', yetki: { biri: ['satin-alma.yaz', 'satin-alma.onayla'] }, parametre: talepParametresi,
+    govde: siparisOnerisiGeriAlGovdesi, cevap: talepSemasi,
+    isle: ({ db, kullanici, parametre, govde }) => servis.siparisOnerisiGeriAl(db, kullanici, parametre.id, govde),
+  }),
   // Borç 36: siparişteki kalem gerekçeyle değişir; sürüm tekrarı önler (aynı sürümle ikinci gönderim 409 alır).
+  // 3574-2a (S3): "Siparişi değiştir" servisinin dar hâli; artış ve birim değişikliği öneri olur.
   // S2 a (3574-1): miktarı düşüren değişikliği satın almayı yazan yapar; artış ve birim değişikliği onay yetkisi ister (servis).
   uc({
     yontem: 'POST', yol: '/satin-alma-talepleri/:id/siparis-kalemi-degistir', yetki: { biri: ['satin-alma.yaz', 'satin-alma.onayla'] }, parametre: talepParametresi,

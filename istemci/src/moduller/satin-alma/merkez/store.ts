@@ -7,7 +7,7 @@
 import type { AppUser, ExportFile, LogEntry, MalzemeSecenegi, Material, SiparisFaturasi, PurchaseRequest, RequestStatus, Settings, Supplier } from "./tipler.ts";
 import type { KalemZarflariCevabi, SiparisBelgesi, SiparisBelgesiYazimi, TeklifEki, TeklifEkiYazimi, TeklifIstekFormuCevabi } from "#paylasilan/sozlesme/satin-alma.ts";
 import type { SiparisIrsaliyesi, SonParti } from "#paylasilan/sozlesme/stok.ts";
-import type { OdemePlaniSatiri, SiparisTakibiCevabi, SiparisVerGovdesi } from "#paylasilan/sozlesme/satin-alma.ts";
+import type { OdemePlaniSatiri, SiparisTakibiCevabi, SiparisDegistirGovdesi, SiparisVerGovdesi } from "#paylasilan/sozlesme/satin-alma.ts";
 import { DEFAULT_SETTINGS } from "./constants.ts";
 import { clone, uid } from "./util.ts";
 import { transport } from "./tasiyici.ts";
@@ -186,8 +186,11 @@ export interface Backend {
   siparisVer(talepId: string, govde: Omit<SiparisVerGovdesi, 'surum'>): Promise<'verildi' | 'onayda' | null>;
   /** 3574-1: onaya düşen siparişin onayı ya da reddi (onay yetkilisi; dört göz sunucuda). */
   siparisOnerisiKarari(talepId: string, sonuc: 'onay' | 'ret', notlar: string): Promise<boolean>;
-  /** Borç 36: siparişteki kalem onay yetkisiyle, gerekçeyle değişir; sunucu hareket yazar. Başarısızsa ileti gösterilir, false döner. */
-  siparisKalemiDegistir(talepId: string, kalemId: string, miktar: number, birim: string, gerekce: string): Promise<boolean>;
+  /** 3574-2a: verilmiş siparişin değişikliği (bütün satırlar son hâliyle). 'onayda': değişiklik onaya düştü, sipariş eski hâliyle sürer.
+   *  Başarısızsa ileti gösterilir, null döner. */
+  siparisDegistir(talepId: string, govde: Omit<SiparisDegistirGovdesi, 'surum'>): Promise<'uygulandi' | 'onayda' | null>;
+  /** 3574-2a: bekleyen sipariş değişikliğini öneren geri alır. */
+  siparisOnerisiGeriAl(talepId: string): Promise<boolean>;
   /** #205 S2 b: Logo'daki siparişin kalanı gerekçeyle kapatılır; sunucu hareket yazar. Başarısızsa ileti gösterilir, false döner. */
   siparisKapat(talepId: string, teklifId: string, gerekce: string): Promise<boolean>;
   siparisLogoBeklet(talepId: string, teklifId: string, istek: 'beklet' | 'serbest'): Promise<boolean>;

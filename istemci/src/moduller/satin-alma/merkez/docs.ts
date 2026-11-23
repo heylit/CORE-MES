@@ -80,16 +80,20 @@ export function poText(r: PurchaseRequest, o: OrderInfo): string {
   const set = settings(), s = S.suppliers[o.supplierId];
   const L: string[] = [];
   // Sipariş numarası sipariş verilince oluşur; öncesinde talep numarası sipariş numarası sanılmasın diye ayrı yazılır.
-  L.push(`Konu: ${siparisEtiketi(o) ? `Sipariş ${siparisEtiketi(o)}` : `Sipariş (talep ${r.no})`}, ${r.title}`);
+  // 3574-2a: değişmiş sipariş revizyon numarasıyla gider; son uygulanan değişikliğin satırları işaretlenir.
+  const gecmis = r.siparisGecmisi?.[o.qid];
+  const rev = gecmis && gecmis.no > 0 ? gecmis.no : 0;
+  const degisen = new Set((gecmis?.degisiklikler ?? []).find((d) => d.degisiklikNo === rev)?.ozet.flatMap((x) => (x.kalemId ? [x.kalemId] : [])) ?? []);
+  L.push(`Konu: ${siparisEtiketi(o) ? `Sipariş ${siparisEtiketi(o)}` : `Sipariş (talep ${r.no})`}${rev ? ` R${rev} (değişiklik)` : ""}, ${r.title}`);
   L.push("");
   L.push(s?.contact ? `Sayın ${s.contact},` : `${supName(o.q)} yetkilisine,`);
   L.push("");
-  L.push(`${fmtDate(o.q.date)} tarihli teklifinize istinaden aşağıdaki kalemleri sipariş ediyoruz.`);
+  L.push(rev ? `Siparişimizde aşağıdaki değişiklik yapılmıştır; geçerli hâli R${rev}'dir. İşaretli satırlar değişmiştir.` : `${fmtDate(o.q.date)} tarihli teklifinize istinaden aşağıdaki kalemleri sipariş ediyoruz.`);
   L.push("");
   let total = 0;
   o.items.forEach((it, i) => {
     const p = o.q.prices[it.id] ?? 0, qty = parseNum(it.qty) || 0; total += p * qty;
-    L.push(`${i + 1}. ${it.name}${it.spec ? ` (${it.spec})` : ""}: ${numIn(qty)} ${it.unit} × ${money(p, o.q.currency)} = ${money(p * qty, o.q.currency)}`);
+    L.push(`${i + 1}. ${it.name}${it.spec ? ` (${it.spec})` : ""}: ${numIn(qty)} ${it.unit} × ${money(p, o.q.currency)} = ${money(p * qty, o.q.currency)}${degisen.has(it.id) ? ` [R${rev} değişti]` : ""}`);
     // 2875: fason firması hangi parçaya hangi işlemi yapacağını siparişte de görür; teklif isteme metniyle aynı satırlar.
     const satir = (r.award?.lines ?? []).find((l) => l.itemId === it.id && l.quoteId === o.qid);
     for (const t of teklifMetniSatirlari(it, satir?.parcaRevizyonu ?? null)) L.push(`   ${t}`);

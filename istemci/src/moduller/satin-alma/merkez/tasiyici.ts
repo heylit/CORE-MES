@@ -143,12 +143,14 @@ export function talepEkrana(t: Talep): PurchaseRequest {
       compliant: q.teknikUygun, note: q.notlar, ...(q.ilkToplam !== null ? { firstTotal: Number(q.ilkToplam) } : {}), revisions: q.revizyon,
       ...(q.kaynak === 'siparis' ? { source: 'siparis' as const } : {}),
     })),
+    ...(k ? { siparisGecmisi: Object.fromEntries(k.siparisler.map((s) => [s.teklifId, { no: s.degisiklikNo ?? 0, kdvOrani: s.kdvOrani ?? null, degisiklikler: s.degisiklikler ?? null }])) } : {}),
     siparisOnerisi: t.siparisOnerisi == null ? null : {
+      tur: t.siparisOnerisi.tur, degisiklik: t.siparisOnerisi.degisiklik ?? null,
       onayliTutar: sayi(t.siparisOnerisi.onayliTutar), yeniTutar: sayi(t.siparisOnerisi.yeniTutar), yeniFirmalar: t.siparisOnerisi.yeniFirmalar,
       gerekce: t.siparisOnerisi.gerekce, onerenId: kullaniciEkle(t.siparisOnerisi.onerenKisiId, t.siparisOnerisi.onerenAdi),
       onerenAdi: t.siparisOnerisi.onerenAdi ?? '', zaman: ms(t.siparisOnerisi.zaman),
-      paylar: t.siparisOnerisi.govde.paylar.map((p) => ({ itemId: p.kalemId, quoteId: p.teklifId, qty: Number(p.miktar), price: Number(p.birimFiyat), exp: p.beklenenTeslim ?? '', note: p.notlar })),
-      basliklar: t.siparisOnerisi.govde.siparisler.map((h) => ({
+      paylar: (t.siparisOnerisi.govde?.paylar ?? []).map((p) => ({ itemId: p.kalemId, quoteId: p.teklifId, qty: Number(p.miktar), price: Number(p.birimFiyat), exp: p.beklenenTeslim ?? '', note: p.notlar })),
+      basliklar: (t.siparisOnerisi.govde?.siparisler ?? []).map((h) => ({
         quoteId: h.teklifId, yeniFirmaId: h.yeniFirma ? String(h.yeniFirma.firmaId) : null, currency: h.yeniFirma ? h.yeniFirma.paraBirimi as Currency : null, poNo: h.siparisNo,
         orderDate: h.siparisTarihi, expectedDate: h.beklenenTeslim, teslimYeri: h.teslimYeri, tedarikciNotu: h.tedarikciNotu, icNot: h.icNot,
       })),
@@ -206,7 +208,7 @@ function ayarEkrana(a: Ayarlar): Settings {
     validityDays: a.gecerlilikGun, minQuotes: a.enAzTeklif, priceAlertPct: Number(a.fiyatUyariYuzdesi), ratesDate: a.kurTarihi ?? '',
     categories: a.kategoriler, departments: a.birimler.map((b) => ({ name: b.ad, budget: Number(b.yillikButce) })),
     approvalLimits: onayLimitleriEkrana(a.onayLimitleri),
-    ...(a.onayKademesi === undefined ? {} : { onayKademesi: a.onayKademesi }), version: a.surum,
+    ...(a.onayKademesi === undefined ? {} : { onayKademesi: a.onayKademesi }), dortGoz: a.dortGoz, version: a.surum,
   };
 }
 
@@ -497,11 +499,23 @@ const backend: Backend = {
       return false;
     }
   },
-  async siparisKalemiDegistir(id, kalemId, miktar, birim, gerekce) {
+  async siparisDegistir(id, govde) {
+    const sun = talepSunucu.get(id);
+    if (sun === undefined) return null;
+    try {
+      const t = await uc.post('/satin-alma-talepleri/:id/siparis-degistir', { parametre: { id }, govde: { ...govde, surum: sun.surum }, ...sure });
+      applyLocal('requests', id, talepEkrana(t));
+      return t.siparisOnerisi ? 'onayda' : 'uygulandi';
+    } catch (h) {
+      await hata(h);
+      return null;
+    }
+  },
+  async siparisOnerisiGeriAl(id) {
     const sun = talepSunucu.get(id);
     if (sun === undefined) return false;
     try {
-      const t = await uc.post('/satin-alma-talepleri/:id/siparis-kalemi-degistir', { parametre: { id }, govde: { kalemId, miktar: ond(miktar), birim, gerekce, surum: sun.surum }, ...sure });
+      const t = await uc.post('/satin-alma-talepleri/:id/siparis-onerisi-geri-al', { parametre: { id }, govde: { surum: sun.surum }, ...sure });
       applyLocal('requests', id, talepEkrana(t));
       return true;
     } catch (h) {
