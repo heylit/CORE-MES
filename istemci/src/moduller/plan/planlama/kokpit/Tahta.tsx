@@ -2,7 +2,7 @@ import { createPortal } from 'react-dom';
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as FareOlayi, type PointerEvent as ImlecOlayi, type ReactNode, type KeyboardEvent as TusOlayi } from 'react';
 import { Dugme, Simge } from '../../../../ortak/arayuz/index.ts';
 import { hizaCizgileri, hizaNoktalari, hizalaYakala, type HizaCizgisi, type Yakalanan } from './hiza.ts';
-import { emirKuyrugu } from '../ortak/emir-no.ts';
+import { emirKuyrugu, emirNoParcalari } from '../ortak/emir-no.ts';
 import type { Derleme } from '../motor/kurallar.ts';
 import type { IsTasiOnizlemesi } from '../motor/atolye/gonder.ts';
 import {
@@ -171,6 +171,12 @@ const BOS_KUME: ReadonlySet<string> = new Set();
 // işler ve emir numaraları (3531).
 interface Etki { anahtar: string; gecerli: boolean; ileti: string | null; kayan: Record<string, number>; yeni: Record<string, { S: number; C: number }>; geciken: { isler: ReadonlySet<string>; emirler: readonly { no: string; termin: number }[] } }
 
+// Yer daralınca emir no kademeli kısalır (kokpit.css .tc-pyq-emir-no): önce ortak ön ek "…" ile, sonra sıra parçası gider; ayırt eden son
+// üç parça ("26-11-030") en sona kalır. Tam numara düğmenin ipucundadır.
+function EmirNo({ no }: { no: string }): ReactNode {
+  const [bas, kuyruk] = emirNoParcalari(no), i = kuyruk.indexOf('-') + 1;
+  return <b className="tc-pyq-emir-no">{kuyruk === '' ? <span>{no}</span> : <><span>{bas}</span><span>{kuyruk.slice(0, i)}</span><span>{kuyruk.slice(i)}</span></>}</b>;
+}
 export function Tahta(o: TahtaOzellikleri) {
   const { m, cx, goz, olcek, emirler, uyar, secEmir, secIs, sec, zaman, tasi, planaAl, once, gunAc, uyari, goster, odak, oneri } = o;
   const yerlestirme = o.goz === 'T' ? o.yerlestirme ?? null : null;
@@ -945,7 +951,7 @@ export function Tahta(o: TahtaOzellikleri) {
         <button
           type="button" className="tc-pyq-agac-ac" data-agac={e.id} aria-expanded={r.acik} aria-label={`${e.no} ${r.acik ? 'adımlarını gizle' : 'adımlarını aç'}`}
           title={`${e.no} · ${durumYazisi(e)} · ${r.acik ? 'adımları gizle' : 'adımları göster'}`} onClick={() => { agac?.ac(e.id); }}
-        ><Simge ad="chev-right" boyut="k" /><b>{emirKuyrugu(e.no)}</b></button>
+        ><Simge ad="chev-right" boyut="k" /><EmirNo no={e.no} /></button>
       );
       case 'urun': return <span title={e.urun}>{e.urun}</span>;
       case 'adet': return <span className="tc-pyq-h-veri">{String(e.adet)}</span>;

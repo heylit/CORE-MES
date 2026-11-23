@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { kayitliPlan, siparisIsisi } from '../siparis/kurallar.ts';
 import { calismaKur } from '../siparis/test-veri.ts';
-import { emirNoOkuyucu, isAdi } from './emir-no.ts';
+import { emirNoOkuyucu, emirNoParcalari, isAdi } from './emir-no.ts';
 
 describe('emir no gösterimi (2693 a)', () => {
   const no = emirNoOkuyucu({ orders: [{ id: 'S1', no: 'MM-ORN-00001-26-11-001' }] });
@@ -25,5 +25,14 @@ describe('emir no gösterimi (2693 a)', () => {
     expect(okuyucu('5/2')).toBe('ORN-0005/2');
     expect(okuyucu('S1')).toBe('YENI-1');
     expect(emirNoOkuyucu(null, null)('11')).toBe('11');
+  });
+});
+
+describe('emir no baş ve kuyruk (3618)', () => {
+  it('baş + kuyruk numaranın kendisidir; kuyruk son dört parçadır; kısa numara tek parçadır', () => {
+    expect(emirNoParcalari('ORN-2026-003-MM-ORN-00001-26-11-030')).toEqual(['ORN-2026-003-MM-ORN-', '00001-26-11-030']);
+    expect(emirNoParcalari('MM-ORN-00001-26-11-030')).toEqual(['MM-ORN-', '00001-26-11-030']);
+    expect(emirNoParcalari('ORN-7')).toEqual(['ORN-7', '']);
+    expect(emirNoParcalari('S1')).toEqual(['S1', '']);
   });
 });

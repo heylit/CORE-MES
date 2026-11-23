@@ -971,6 +971,14 @@
 .tc-pyq-agac-ac[aria-expanded="true"] .tc-simge { transform: rotate(90deg); }
 .tc-pyq-agac-ac b, .tc-pyq-agac-ac small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tc-pyq-agac-ac small { color: var(--muted); font-size: var(--yazi-xs); }
+/* Emir no kademeli kısalır: yer daralınca önce ortak ön ek ("…" ile), sonra sıra parçası gider; son üç parça kalır. Eşikler yazı eninden (ch) okunur;
+   ölçü kabında (.tc-pyq-olcu) kap kapalıdır ki sütun tam numara eninde ölçülsün. */
+.tc-pyq-agac-ac b.tc-pyq-emir-no { display: flex; min-width: 0; overflow: hidden; container-type: inline-size; text-overflow: clip; }
+.tc-pyq-olcu .tc-pyq-agac-ac b.tc-pyq-emir-no { container-type: normal; }
+.tc-pyq-emir-no > span { flex: none; }
+.tc-pyq-emir-no > span:first-child:not(:nth-last-child(-n+2)) { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+@container (max-width: 22ch) { .tc-pyq-emir-no > span:first-child:not(:nth-last-child(-n+2)) { display: none; } }
+@container (max-width: 15ch) { .tc-pyq-emir-no > span:nth-last-child(2) { display: none; } }
 .tc-pyq-agac-ac:hover b { color: var(--ink); text-decoration: underline; }
 .tc-pyq-agac-ac:focus-visible { outline: var(--cizgi) solid var(--run); outline-offset: calc(var(--cizgi) * -1); }
 .tc-pyq-satir[data-agac-adim] { background: var(--panel2); }
