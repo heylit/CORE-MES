@@ -1031,12 +1031,33 @@ function onculSinirlari(b: Baglam, isEmriId: number, yerler: readonly Yer[], kay
 
 // 308 b: planlanacak adım, emirdeki önceki adımın izin verdiği en erken andan önce başlayamaz. Verilen emirlerin bütün yerleşik
 // planlı adımlarına bakılır (taşınan adım sonrakini de aykırı bırakabilir); ilk aykırı adımın metni döner.
+// 3600: ileti hangi adımın, kilitliyse kilit saatinin ve sınırı koyan öncülün bitişinin söyler ("kilidi kaldır ve yeniden diz" kararı bundan verilir).
+function sinirlayanOncul(b: Baglam, y: Yer, yerler: readonly Yer[]): { is: Is; bitis: number } | null {
+  const is = b.isler.get(y.isEmriId);
+  if (!is) return null;
+  const t = takvim(b);
+  let en: { is: Is; bitis: number; bas: number } | null = null;
+  for (const o of icOnculler(b.isler, is)) {
+    const oy = yerler.find((z) => z.isEmriId === o.is.id);
+    if (!oy) continue;
+    const bas = enErkenBaslangic(onculeGore(is, o), oy, Number.NEGATIVE_INFINITY, t(oy.kaynak), verimi(b)(oy.kaynak));
+    if (en === null || bas > en.bas) en = { is: o.is, bitis: oy.bitis, bas };
+  }
+  return en;
+}
 function siraIhlali(b: Baglam, yerler: readonly Yer[], uretimEmriIdleri: ReadonlySet<number>): string | null {
   for (const y of yerler) {
     const is = b.isler.get(y.isEmriId);
     if (!is || is.durum !== 'planli' || !uretimEmriIdleri.has(is.uretimEmriId)) continue;
     const { enErken } = onculSinirlari(b, y.isEmriId, yerler, y.kaynak);
-    if (enErken !== null && y.baslangic < enErken - 0.01) return `${is.emirNo} OP ${is.opNo} önceki adımı bitmeden başlıyor (sıraya aykırı).`;
+    if (enErken === null || y.baslangic >= enErken - 0.01) continue;
+    const kilitli = 'kilitli' in y && y.kilitli === true;
+    const ad = `${is.emirNo} OP ${is.opNo}`;
+    const o = sinirlayanOncul(b, y, yerler);
+    const oncul = o === null ? '' : ` Öncül ${o.is.emirNo} OP ${o.is.opNo} ${zamanMetni(b, o.bitis)}'de bitiyor.`;
+    return kilitli
+      ? `${ad} elle kilitli (${zamanMetni(b, y.baslangic)}) ve önceki adımı bitmeden başlıyor (sıraya aykırı).${oncul} Kilitli adım öncülden önce başlayamaz.`
+      : `${ad} önceki adımı bitmeden başlıyor (sıraya aykırı); ${zamanMetni(b, y.baslangic)}'de başlıyor.${oncul}`;
   }
   return null;
 }

@@ -21,7 +21,8 @@ export type KomutHatasi = { tur: 'dogrulama'; ileti: string; alan: string } | { 
 export type KomutSonucu = { deger: Nesne; degisti: boolean } | { hata: KomutHatasi };
 
 export interface GeriYama { yol: string[]; id?: string; once?: unknown }
-interface Bekleyen { id: string; ne: string; ayrinti: string; kim: string; t: number; isler: string[]; geri: GeriYama[] | null }
+// kilitsiz (3600): satırın emirlerinde dizme elle ve geçici kilitleri tutmaz (motor planUygula).
+interface Bekleyen { id: string; ne: string; ayrinti: string; kim: string; t: number; isler: string[]; geri: GeriYama[] | null; kilitsiz?: true }
 
 const ESKI_DEGISIKLIK = 'eski';
 const bekleyenMi = (x: unknown): x is Bekleyen =>
@@ -45,7 +46,7 @@ const kimligiVar = (l: unknown, alan: 'id' | 'kod', deger: string): boolean => d
 
 // Değişikliği çalışmanın yeni hâline işler: plan varken bekleyen satırı (plan bu özellikten önce bayatladıysa önce eski satır, 787 a),
 // veri sürümü ve iz. `yeni` önceden kopyalanmış ve değiştirilmiştir.
-export function isle(once: Nesne, yeni: Nesne, s: { ne: string; ayrinti: string; isler: string[]; geri: GeriYama[] }, k: KomutKisisi): Nesne {
+export function isle(once: Nesne, yeni: Nesne, s: { ne: string; ayrinti: string; isler: string[]; geri: GeriYama[]; kilitsiz?: true }, k: KomutKisisi): Nesne {
   const dataVer = typeof once.dataVer === 'number' ? once.dataVer : 0;
   const plan = planOf(once);
   if (plan !== null) {
@@ -54,7 +55,7 @@ export function isle(once: Nesne, yeni: Nesne, s: { ne: string; ayrinti: string;
       l.push({ id: ESKI_DEGISIKLIK, ne: 'Kaydı olmayan önceki değişiklikler', ayrinti: 'Ayrıntısı tutulmadı; yalnız uygulanabilir.', kim: '',
         t: typeof plan.zaman === 'number' ? plan.zaman : 0, isler: ['*'], geri: null });
     }
-    l.push({ id: `${String(k.t)}-${String(dataVer)}`, ne: s.ne, ayrinti: s.ayrinti, kim: k.kim, t: k.t, isler: s.isler, geri: s.geri });
+    l.push({ id: `${String(k.t)}-${String(dataVer)}`, ne: s.ne, ayrinti: s.ayrinti, kim: k.kim, t: k.t, isler: s.isler, geri: s.geri, ...(s.kilitsiz ? { kilitsiz: true as const } : {}) });
     yeni.bekleyen = l;
   }
   yeni.dataVer = dataVer + 1;

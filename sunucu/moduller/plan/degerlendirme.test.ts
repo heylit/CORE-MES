@@ -401,6 +401,33 @@ describe('planlama değerlendirmesi: arama (457 1-3 b)', () => {
   });
 
   // 3335-2b: başlaması geçmiş, başlamamış iş motor için "çalışıyor" gibidir ve yerinde kalır; kişi o emri yeniden planlarsa şimdiden sonraya dizilir.
+  // 3600: kilitsiz işaretli bekleyen satır denge bölgesinin geçici kilidini düşürür (elle kilit komut anında çalışmadan kalkmıştır).
+  test('PD-20f (3600): kilitsiz satırın emrinde denge geçici kilidi tutulmaz; başka emrin satırı ötekilere işlemez', async () => {
+    type Is = { job: string; m: string; S: number; C: number };
+    const { calisma } = buyukPlanli();
+    const eski = (calisma['plan'] as { ops: Record<string, Is> }).ops;
+    const simdi = 20;
+    Object.assign(calisma, { gercek: { 'O0.10': { m: eski['O0.10']!.m, S: eski['O0.10']!.S, C: eski['O0.10']!.C } } });
+    const an = Date.parse('2026-10-18T21:00:00Z') + simdi * 3_600_000;
+    // Karşılaştırma aynı satırla yapılır (açık istek bekleyen satırlardan okunur); fark yalnız kilitsiz işaretindedir.
+    const satir = (isler: string[], kilitsiz: boolean) => ({ id: 'ORN-k', ne: 'Yeniden planlama istendi', ayrinti: '', kim: '', t: 1, isler, geri: [], ...(kilitsiz ? { kilitsiz: true } : {}) });
+    const uygula = async (bekleyen: unknown) => {
+      const r = sonuc(await degerlendirmeYap({ calisma: { ...calisma, bekleyen }, kayit: BUYUK_KAYIT, kaynak: BUYUK_KAYNAK, bugun: '2026-10-19', istek: { tur: 'plan-uygula', isler: ['*'] } }, an));
+      if (r.tur !== 'plan-uygula') return assert.fail(r.tur);
+      return r.plan['ops'] as Record<string, Is>;
+    };
+    const yer = (o: Record<string, Is>, id: string) => [o[id]?.m, o[id]?.S];
+    const tutulan = await uygula([satir(['*'], false)]);
+    for (const id of ['O4.10', 'O2.10']) assert.deepEqual(yer(tutulan, id), yer(eski, id), id);
+    const kilitsiz = await uygula([satir(['*'], true)]);
+    for (const x of Object.values(kilitsiz)) assert.ok(Number.isFinite(x.S) && x.C >= x.S, JSON.stringify(x));
+    const degisen = Object.keys(tutulan).filter((id) => JSON.stringify(yer(kilitsiz, id)) !== JSON.stringify(yer(tutulan, id)));
+    assert.ok(degisen.length > 0, 'kilitsiz satır denge kilidini düşürmedi: hiçbir işin yeri değişmedi');
+    // Başka emrin kilitsiz satırı o emir dışına işlemez: O4 ve O2 denge kilidiyle yerinde kalır.
+    const baska = await uygula([satir(['*'], false), satir(['O6'], true)]);
+    for (const id of ['O4.10', 'O2.10']) assert.deepEqual(yer(baska, id), yer(eski, id), `${id} (başka emrin satırı)`);
+  });
+
   test('PD-20b (3335-2b): yeniden planlanan emrin geride kalan işi şimdiden sonraya taşınır, ardılı ondan sonra başlar; istenmeyen emrin geride işi, elle kilitli ve başlamış iş yerinde kalır', async () => {
     type Is = { job: string; m: string; S: number; C: number };
     const { calisma } = buyukPlanli();

@@ -204,6 +204,8 @@ describe('plan (gerçek PostgreSQL): denemeler, sayaçlar ve sorgu sayısı', ()
     const r = await isEmriKomutu(p, a2!, 'tasi', { kaynak: { tur: 'makine', id: makineB }, baslangic: (once.getTime() > Date.now() ? once : new Date(Date.now() + 60_000)).toISOString() });
     assert.equal(r.statusCode, 409, r.body);
     assert.match(r.body, /sıraya aykırı/);
+    // 3600: ileti adımın başlangıcını ve sınırı koyan öncülün bitişini söyler.
+    assert.match(r.body, /'de başlıyor\. Öncül \S+ OP \d+ .+'de bitiyor\./);
     // Eski kayıt ya da dışarıdan yazılmış aykırılık canlıya geçmez.
     await ortam!.sahip.sorgu(
       'UPDATE plan_senaryo_yerlesimi SET baslangic = $3, bitis = $3::timestamptz + interval \'10 minutes\' WHERE senaryo_id = $1 AND is_emri_id = $2',

@@ -53,6 +53,8 @@ import { ilkKart, kartAnahtari, kokCozucu, siparisAramasi, siraKartlari } from '
 import { Tur, type TurDurumu } from './Tur.tsx';
 import { Yol } from './Yol.tsx';
 import { eksikPlanlanacaklar, yenidenPlanlanacaklar } from './yol.ts';
+import { BastanKur } from './BastanKur.tsx';
+import { ilkSecim, type BastanKurKapsami } from './bastan-kur.ts';
 import './kokpit.css';
 
 // Kokpit (kart 3151, 3282, 3297): planın tek yeri. Gövde yukarıdan aşağı akar (3297 a): 1 sipariş kartları sırasıyla (3297-5 a), 2 seçilen kartın emirleri
@@ -246,7 +248,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const [planla, setPlanla] = useState<PlanlaIstegi | null>(null);
   const [planlaDurumu, setPlanlaDurumu] = useState<PlanlaDurumu | null>(null);
   const [digerAcik, setDigerAcik] = useState(false);
-  const [bastanKur, setBastanKur] = useState(false);
+  // 3600: Baştan kur penceresi; açılış kapsamı menüden gelir (Seçili siparişi baştan kur: o sipariş işaretli).
+  const [bastanKur, setBastanKur] = useState<{ kapsam: BastanKurKapsami; secili: string[] } | null>(null);
   // Görünüm ve ölçek seçenekleri bir düğmenin ardındadır (3414); tahta dışı bir görünüm seçiliyken açık durur.
   const [gorunumAcik, setGorunumAcik] = useState(false);
   useEffect(() => { onayIstegiAl(); if (onayIstendi.current) setOnayAcik(true); }, [setOnayAcik]);
@@ -334,10 +337,10 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     return tamam;
   }, [taslak, yazabilir, bildir, c, m.isler]);
   // Yeniden planlama isteği taslağa kendi satırıyla yazılır (Geri onu ve dizmesini birlikte alır); plan taslağın görünümünde yeniden dizilir.
-  const yenidenPlanla = useCallback(async (isler: readonly string[], ileti: string): Promise<void> => {
+  const yenidenPlanla = useCallback(async (isler: readonly string[], ileti: string, kilitKaldir = false): Promise<void> => {
     if (!taslak || !yazabilir || isler.length === 0) return;
     // Sonuç dizme bitince söylenir: komut yazıldığında plan henüz yeniden dizilmemiştir (kişi düğmenin işe yaradığını bitişte görür).
-    if (await taslak.yaz({ tur: 'yeniden-planla', isler: [...isler] })) planlaIletisi(`${ileti} Geri al ile alınır.`);
+    if (await taslak.yaz({ tur: 'yeniden-planla', isler: [...isler], ...(kilitKaldir ? { kilitKaldir: true } : {}) })) planlaIletisi(`${ileti} Geri al ile alınır.`);
   }, [taslak, yazabilir, planlaIletisi]);
   const planlaIste = useCallback((t: PlanlaIstegi['tur']) => { setPlanla((p) => ({ n: (p?.n ?? 0) + 1, tur: t })); }, []);
 
@@ -900,7 +903,6 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     // Kısmen planlı emir de baştan kurulur (yerleştirilemez); eksik adımları böyle yerleşir.
     const planli = seciliKart ? yenidenPlanlanacaklar(m, seciliKart) : [];
     const kismiVar = seciliKart !== null && seciliKart.emirler.some((e) => kismiPlanli(m, e));
-    const kartAdi = seciliKart ? seciliKart.siparis?.no ?? seciliKart.emirler[0]?.no ?? '' : '';
     // Baştan kurma kurulmuş planın üstünde çalışır; plan yokken satırlar pasiftir ve nedenini yazar.
     const planYok = c.plan === null, PLAN_YOK = 'Henüz plan yok; önce planı kurun';
     const guncelle = bekleyenUygulayici;
@@ -912,16 +914,16 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         <button type="button" role="menuitem" disabled={planYok || plansizlar.length === 0} onClick={() => { kapat(); void yenidenPlanla(plansizlar, `${String(plansizlar.length)} plansız emir yerleştirildi.`); }}>
           <span>Plansızları yerleştir ({plansizlar.length})<small>{plansizlar.length === 0 ? 'Yeri olmayan emir yok' : planYok ? PLAN_YOK : 'Yeri olmayan emirler boşluklara yerleşir; öteki işler yerinde kalır'}</small></span>
         </button>
-        <button type="button" role="menuitem" disabled={planYok} onClick={() => { kapat(); setBastanKur(true); }}>
-          <span>Baştan kur…<small>{planYok ? PLAN_YOK : 'Sıra da yeniden dizilir; plansız emirler de yerleşir. Başlamış ve elle kilitli iş yerinde kalır.'}</small></span>
+        <button type="button" role="menuitem" disabled={planYok} onClick={() => { kapat(); setBastanKur(ilkSecim('tum', null)); }}>
+          <span>Baştan kur…<small>{planYok ? PLAN_YOK : 'Sıra da yeniden dizilir; plansız emirler de yerleşir. Kapsamı ve kilitleri pencerede seçersiniz; başlamış iş yerinde kalır.'}</small></span>
         </button>
         {/* Seyrek kullanılanlar bir basışla açılır (3414): menü ilk bakışta üç iş gösterir. */}
         <button type="button" className="tc-pyq-menu-diger-dugme" aria-expanded={digerAcik} onClick={() => { setDigerAcik(!digerAcik); }}>
           <Simge ad={digerAcik ? 'down' : 'chev-right'} boyut="k" /><span>Diğer seçenekler</span>
         </button>
         <div className="tc-pyq-menu-diger" data-kapali={digerAcik ? undefined : ''}>
-          <button type="button" role="menuitem" disabled={planYok || planli.length === 0} onClick={() => { kapat(); void yenidenPlanla(planli, `${kartAdi} baştan kuruldu${plansizlar.length > 0 ? `; plansız ${String(plansizlar.length)} emir de yerleştirildi` : ''}.`); }}>
-            <span>Seçili siparişi baştan kur<small>{planYok ? PLAN_YOK : planli.length === 0 ? (seciliKart ? 'Seçili siparişin planda yeri yok; önce yerleştirin' : 'Önce sıradan bir sipariş seçin') : `Bu siparişin işleri yeniden dizilir; başlamış ve elle kilitli iş yerinde kalır.${plansizlar.length > 0 ? ` Plansız ${String(plansizlar.length)} emir de yerleşir.` : ''}`}</small></span>
+          <button type="button" role="menuitem" disabled={planYok || planli.length === 0} onClick={() => { kapat(); setBastanKur(ilkSecim('secili', seciliKart)); }}>
+            <span>Seçili siparişi baştan kur<small>{planYok ? PLAN_YOK : planli.length === 0 ? (seciliKart ? 'Seçili siparişin planda yeri yok; önce yerleştirin' : 'Önce sıradan bir sipariş seçin') : `Bu siparişin işleri yeniden dizilir; kilitleri pencerede seçersiniz, başlamış iş yerinde kalır.${plansizlar.length > 0 ? ` Plansız ${String(plansizlar.length)} emir de yerleşir.` : ''}`}</small></span>
           </button>
           <button type="button" role="menuitem" data-geride="" disabled={planYok || geride.emirler.length === 0} onClick={() => { kapat(); void yenidenPlanla(geride.emirler, `Geride kalan ${String(geride.emirler.length)} emir baştan kuruldu.`); }}>
             <span>Geride kalanları baştan kur ({geride.emirler.length})<small>{planYok ? PLAN_YOK : geride.emirler.length === 0 ? (geride.kilitli > 0 ? `Geride kalan ${String(geride.kilitli)} iş elle kilitli; kilidi kaldırmadan taşınmaz` : 'Geride kalan iş yok') : `Başlaması gereken saati geçmiş, başlamamış işler şimdiden sonraya dizilir; sonraki adımları da kayar.${geride.kilitli > 0 ? ` Elle kilitli ${String(geride.kilitli)} iş yerinde kalır.` : ''}`}</small></span>
@@ -1230,11 +1232,14 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
           toplu={yetki.planYaz && komut !== null && ortakBekleyen.length > 0 ? ortakBekleyen.length : null}
           etki={satirEtkisi} taslakta={ortakBekleyen.length - bekleyenDegisiklikler.length}
         />, yuva.alt)}
-      <OnayPenceresi
-        acik={bastanKur} baslik="Plan baştan kurulsun mu?" onayMetni="Baştan kur"
-        vazgec={() => { setBastanKur(false); }}
-        onayla={() => { setBastanKur(false); void yenidenPlanla(['*'], 'Plan baştan kuruldu.'); }}
-      >Bütün işlerin sırası yeniden dizilir; plansız emirler de yerleşir. Başlamış ve elle kilitli işler yerinde kalır. Değişiklikleriniz arasına yazılır, Geri al ile alınır.</OnayPenceresi>
+      {bastanKur !== null && (
+        <BastanKur
+          m={m} kartlar={kartlar} planYok={c.plan === null} kilitYetkisi={yetki.islemVar('plan.kilitle')}
+          ilkKapsam={bastanKur.kapsam} ilkSecili={bastanKur.secili}
+          vazgec={() => { setBastanKur(null); }}
+          onayla={(x) => { setBastanKur(null); void yenidenPlanla(x.isler, x.ileti, x.kilitKaldir); }}
+        />
+      )}
       <OnayPenceresi
         acik={onay !== null} baslik={onay?.baslik ?? ''} onayMetni={onay?.dugme ?? ''}
         vazgec={() => { setOnay(null); }}

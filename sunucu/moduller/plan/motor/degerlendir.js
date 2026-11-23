@@ -574,10 +574,18 @@ function acikIstek(isler) {
   const istekDisi = b => Array.isArray(b.geri) && b.geri.length > 0 && b.geri.every(g => g && Array.isArray(g.yol) && ISTEK_DISI_YOL.has(g.yol[0]));
   return new Set(l.filter(b => !istekDisi(b)).flatMap(b => b.isler));
 }
+/* 3600: "kilitsiz" işaretli bekleyen satırın emirlerinde (ya da '*') dizme denge bölgesinin geçici kilidini tutmaz; elle kilit komut anında
+   çalışmadan kalkmıştır, burada yalnız dengeKilit'in koyduğu geçici kilit düşer. Seçilmeyen emirler `!hepsi` kilidiyle yerinde kalır. */
+function kilitsizEmirler() {
+  const l = Array.isArray(S.bekleyen) ? S.bekleyen.filter(b => b && b.kilitsiz === true && Array.isArray(b.isler)) : [];
+  return new Set(l.flatMap(b => b.isler));
+}
 function planUygula(isler) {
   const hepsi = isler.includes('*'), etk = new Set(isler);
   const acik = acikIstek(isler), acikHepsi = acik.has('*');
   const st = stHazirla(dengeKilit(stOf())); const var_ = new Set(st.D.siparisler.map(s => s.id));
+  const ks = kilitsizEmirler();
+  if (ks.size) for (const r of Object.values(S.plan.ops)) if ((ks.has('*') || ks.has(r.job)) && st.locks[r.id] && st.locks[r.id].gecici) delete st.locks[r.id];
   if (!hepsi) for (const r of Object.values(S.plan.ops)) if (!etk.has(r.job) && var_.has(r.job) && !st.locks[r.id] && !r.fas && !r.done && isFinite(r.S)) st.locks[r.id] = { m: r.m, S: r.S, gecici: 1 };
   /* 3335-2b: istenen emirlerin geride kalan işleri (başlaması geçmiş, başlamamış, bitmemiş, fason ve elle kilitli olmayan) şimdiden sonraya
      yeniden dizilir. Motor böyle işi kendiliğinden yerinde tutar (çalışıyor sayar); yeniden planlama kişinin açık isteğidir. Başvuru
