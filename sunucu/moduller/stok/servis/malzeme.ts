@@ -6,7 +6,7 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { KATALOG_TURLERI, type KatalogMalzemeOzeti } from '#paylasilan/sozlesme/malzemeler.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
-  KaliteDurumu, CikisOnerisiCevabi, MalzemeAyarKomutu, MalzemeAyrintiCevabi, MalzemeKartBilgileriCevabi, MalzemelerListesi, MalzemeOzetiCevabi, MalzemeStokSatiri, Parti, PartiIziCevabi,
+  KaliteDurumu, CikisOnerisiCevabi, MalzemeAyarKomutu, MalzemeAyrintiCevabi, MalzemeMiktarlariCevabi, MalzemeKartBilgileriCevabi, MalzemelerListesi, MalzemeOzetiCevabi, MalzemeStokSatiri, Parti, PartiIziCevabi,
   PartilerListesi, GozOnerisiCevabi, PanelCevabi, LotEtiketi, SktDuzeltCevabi, SktDuzeltGovdesi, StokTurListesi, TurListesiCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
 import { STOK_TUR_LISTELERI } from '#paylasilan/sozlesme/stok.ts';
@@ -38,6 +38,26 @@ function malzemeSatiri(h: sorgular.MalzemeStokHam, o: KatalogMalzemeOzeti | unde
     rezerve: bindenMetin(rezerve),
     konumlar: h.konumlar.map((k) => ({ ...k, miktar: bindenMetin(binde(k.miktar)) })),
     kategoriAdi: o?.kategoriAdi ?? null, kartDurumu: o?.onayDurumu ?? null, varsayilanKonum: h.varsayilanKonum, sonHareket: h.sonHareket,
+  };
+}
+// 3582: alternatif kartların toplu stok miktarı, istenen sırayla. Stoklanmayan türde ve bulunmayan kartta bakiye okunmaz, miktar null;
+// stoklanan kartta bakiye yoksa "0". Statü adları Reçete ve Rota'dan, yalnız statülü bakiye varsa okunur.
+export async function malzemeMiktarlari(db: Db, idler: number[]): Promise<MalzemeMiktarlariCevabi> {
+  const kartlar = await malzemeOzetleri(db, idler);
+  const stoklu = idler.filter((id) => { const k = kartlar.get(id); return k !== undefined && stoklanirMi(k.tur); });
+  const stok = await sorgular.istekStoklari(db, stoklu);
+  const statuAdlari = stok.some((r) => r.statuId !== null) ? new Map((await statuler(db)).statuler.map((t) => [t.id, t.ad])) : new Map<number, string>();
+  return {
+    satirlar: idler.map((id) => {
+      const k = kartlar.get(id);
+      if (!k || !stoklanirMi(k.tur)) return { malzemeId: id, birim: k?.birim ?? null, kullanilabilir: null, statuler: [] };
+      const satirlar = stok.filter((r) => r.malzemeId === id);
+      return {
+        malzemeId: id, birim: k.birim,
+        kullanilabilir: satirlar.find((r) => r.statuId === null)?.miktar ?? '0',
+        statuler: satirlar.flatMap((r) => (r.statuId === null ? [] : [{ statuId: r.statuId, ad: statuAdlari.get(r.statuId) ?? null, miktar: r.miktar }])),
+      };
+    }),
   };
 }
 // Kart tablosu malzemelerindir: "bütün kartlar" sayfası malzemeAra ile gelir, stok sayıları o sayfanın kartları için okunur.

@@ -1506,6 +1506,22 @@ export const istekMalzemeleriCevabi = z.object({
   })),
 });
 export type IstekMalzemeleriCevabi = z.output<typeof istekMalzemeleriCevabi>;
+// 3582: alternatif kartların toplu stok miktarı (kart föyü, sonra talep ve üretim seçicileri). Miktar istek seçicisiyle aynı tanımdır:
+// depo konumlarındaki (raf, kabul, zemin) serbest ve şartlı bakiye; statüsüz olan kullanılabilir, statülü olan adıyla ayrı. Açık emre
+// ayrılan (rezerve) düşülmez. Stok takibinde olmayan ya da bulunmayan kartta kullanilabilir null (sıfır uydurulmaz).
+export const MALZEME_MIKTARLARI_EN_COK = 50 as const;
+export const malzemeMiktarlariSorgusu = z.object({
+  idler: z.string().regex(/^[1-9]\d{0,9}(,[1-9]\d{0,9}){0,49}$/, 'idler en çok 50 kart numarasının virgüllü listesi olmalı.')
+    .transform((m) => [...new Set(m.split(',').map(Number))]),
+});
+export const malzemeMiktarlariCevabi = z.object({
+  satirlar: z.array(z.object({
+    malzemeId: z.number().int(), birim: z.string().nullable(), kullanilabilir: ondalikMetinSemasi.nullable(),
+    statuler: z.array(z.object({ statuId: z.number().int(), ad: z.string().nullable(), miktar: ondalikMetinSemasi })),
+  })),
+});
+export type MalzemeMiktarlariCevabi = z.output<typeof malzemeMiktarlariCevabi>;
+export type MalzemeMiktari = MalzemeMiktarlariCevabi['satirlar'][number];
 // Teslim et: seçilen yerdeki stok (malzeme, parti, statü); yalnız kişinin gönderebildiği yer okunur.
 export const yerdekiStokSorgusu = z.object({ istasyonId: kimlik.optional(), konumId: kimlik.optional() })
   .refine((v) => (v.istasyonId === undefined) !== (v.konumId === undefined), 'İstasyon ya da konum verin.');
