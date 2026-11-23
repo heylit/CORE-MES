@@ -83,9 +83,9 @@ describe('satin-alma emir tedarik okuması (2893 D2, gerçek PostgreSQL)', () =>
 
     const r = await ortam.vt.okumaTx((db) => emirTedarikDurumlari(db, [e1], [ie]));
     assert.deepEqual(r, [
-      { uretimEmriId: e1, isEmriId: null, malzemeNo: m1, asama: 'talep', talepNo: acik.no, siparisNo: null, termin: null, firmaId: null },
-      { uretimEmriId: e1, isEmriId: null, malzemeNo: m2, asama: 'siparis', talepNo: sip.no, siparisNo: 'SP-2099-001', termin: '2099-03-01', firmaId: ted },
-      { uretimEmriId: null, isEmriId: ie, malzemeNo: null, asama: 'talep', talepNo: fason.no, siparisNo: null, termin: null, firmaId: null },
+      { uretimEmriId: e1, isEmriId: null, malzemeNo: m1, asama: 'talep', talepId: acik.id, talepNo: acik.no, siparisNo: null, termin: null, firmaId: null },
+      { uretimEmriId: e1, isEmriId: null, malzemeNo: m2, asama: 'siparis', talepId: sip.id, talepNo: sip.no, siparisNo: 'SP-2099-001', termin: '2099-03-01', firmaId: ted },
+      { uretimEmriId: null, isEmriId: ie, malzemeNo: null, asama: 'talep', talepId: fason.id, talepNo: fason.no, siparisNo: null, termin: null, firmaId: null },
     ]);
     assert.deepEqual(await ortam.vt.okumaTx((db) => emirTedarikDurumlari(db, [], [])), []);
 
@@ -95,8 +95,8 @@ describe('satin-alma emir tedarik okuması (2893 D2, gerçek PostgreSQL)', () =>
     await s.sorgu('DELETE FROM satin_alma_talep_kalemi WHERE talep_id = $1', [birlesik.id]);
     await ortam.vt.tx((db) => kalemleriBirlesenTalebeTasi(db, birlesik.id, [kaynak2.id]));
     assert.deepEqual(await ortam.vt.okumaTx((db) => emirTedarikDurumlari(db, [e2], [])), [
-      { uretimEmriId: e2, isEmriId: null, malzemeNo: m1, asama: 'talep', talepNo: baska.no, siparisNo: null, termin: null, firmaId: null },
-      { uretimEmriId: e2, isEmriId: null, malzemeNo: m2, asama: 'talep', talepNo: birlesik.no, siparisNo: null, termin: null, firmaId: null },
+      { uretimEmriId: e2, isEmriId: null, malzemeNo: m1, asama: 'talep', talepId: baska.id, talepNo: baska.no, siparisNo: null, termin: null, firmaId: null },
+      { uretimEmriId: e2, isEmriId: null, malzemeNo: m2, asama: 'talep', talepId: birlesik.id, talepNo: birlesik.no, siparisNo: null, termin: null, firmaId: null },
     ]);
   });
 });

@@ -22,7 +22,7 @@ export function UretimEmirleriSayfasi() {
         <Suspense fallback={null}>
           <EmirAlani>
             <EmirExcelDugmesi />
-            <YeniEmirPenceresi acik={yeni !== null} kapat={kapat} ilkUrun={yeni?.urun ?? null} ilkTur={yeni?.tur ?? null} ilkAdet={yeni?.adet ?? null} />
+            <YeniEmirPenceresi acik={yeni !== null} kapat={kapat} ilkUrun={yeni?.urun ?? null} ilkTur={yeni?.tur ?? null} ilkAdet={yeni?.adet ?? null} ilkRota={yeni?.rota ?? null} />
           </EmirAlani>
         </Suspense>
       ),

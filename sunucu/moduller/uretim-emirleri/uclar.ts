@@ -4,7 +4,7 @@ import {
   ADIMLI_OKUMA_ISLEMLERI, adimCevabi, bekletGovdesi, adimNotuGovdesi, talimatAtlamaGovdesi, talimatAtlamaCevabi, adimParametresi, adimTamamlaGovdesi, emirAyrintiCevabi, emirCevabi,
   emirParametresi, izlemeListeCevabi, bitenEmirlerCevabi, bitenEmirlerSorgusu, adimliBitenlerCevabi, adimliBitenlerSorgusu,
   emirlerSorgusu, emirTopluGuncelleCevabi, emirTopluGuncelleGovdesi,
-  adimKaynagiGovdesi, uretimYeriGovdesi, fasonFirmalariCevabi, adimliEmirCevabi, adimliIptalGovdesi, adimliListeCevabi, adimliListeSorgusu, adimliOzetCevabi, fasonGidisGovdesi, siradakiFasonCevabi,
+  adimKaynagiGovdesi, uretimYeriGovdesi, fasonFirmalariCevabi, adimliEmirCevabi, adimliIptalGovdesi, iptalOnizlemeCevabi, adimliListeCevabi, adimliListeSorgusu, adimliOzetCevabi, fasonGidisGovdesi, siradakiFasonCevabi,
   asimlarCevabi, emirTuruGovdesi, teslimBaglaGovdesi, terminOnerisiCevabi, terminOnerileriSorgusu, terminOnerileriCevabi, terminKarariGovdesi, fasonHareketiCevabi, isEmriParametresi, oncelikGovdesi, ozetCevabi, partiBirlestirGovdesi, partiBolCevabi, partiBolGovdesi, planaAlGovdesi,
   birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMaddeleriCevabi, hazirlikMaddeParametresi, hazirlikMaddesiDegistirGovdesi, hazirlikMaddesiEkleGovdesi, hazirlikProjesiCevabi, hazirlikProjesiGovdesi, hazirlikProjesiSecenekleri, hazirlikMatrisiSorgusu, hazirlikMatrisiCevabi, hazirlikDagitGovdesi, hazirlikDagitCevabi, hazirlikMuafiyetiGovdesi, hazirlikOzetiCevabi, hazirlikOzetiSorgusu, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, makineEkleGovdesi, adimPaylariCevabi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
   hataliCevabi, hataliGovdesi, hataliListeCevabi, hataliListeSorgusu, reworkAdimiGovdesi,
@@ -24,6 +24,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import * as isEmri from './is-emri-servis.ts';
 import { emirleriTopluGuncelle } from './toplu-guncelle.ts';
 import { ARSIV_YETKISI, arsiveAl, arsivOnizleme } from './arsiv.ts';
+import { altlariylaIptal, iptalOnizleme } from './zincir-iptal.ts';
 import { dieAc, dieIptal, dieOku } from './dis-islem-emri.ts';
 import { hataliKaydet, hataliKayitlari } from './hatali-parca.ts';
 import { hazirlik, hazirliklar, muafiyetVer } from './hazirlik.ts';
@@ -501,9 +502,19 @@ const adimliUclar = [
     govde: adimliIptalGovdesi,
     cevap: adimliEmirCevabi,
     isle: async ({ db, kullanici, parametre, govde }) => {
-      await isEmri.adimliIptal(db, kullanici, parametre.id, govde.surum);
+      if (govde.altlariyla === true) await altlariylaIptal(db, kullanici, parametre.id, { surum: govde.surum, altEmirIdleri: govde.altEmirIdleri ?? [] });
+      else await isEmri.adimliIptal(db, kullanici, parametre.id, govde.surum);
       return { emir: await isEmri.adimliAyrinti(db, parametre.id) };
     },
+  }),
+  // 3576: iptal penceresi alt emirleri, kapanacak hazırlık görevlerini ve uyarı talepleri okur; yetki iptalin kendisidir.
+  uc({
+    yontem: 'GET',
+    yol: '/adimli-emirler/:id/iptal-onizleme',
+    yetki: 'uretim-emirleri.iptal',
+    parametre: emirParametresi,
+    cevap: iptalOnizlemeCevabi,
+    isle: ({ db, parametre }) => iptalOnizleme(db, parametre.id),
   }),
   // 2721: başlamış emir arşive alınır; önizleme ve komut aynı yetkiyle (2721 3/3), engel ikisinde de aynı kuraldan.
   uc({

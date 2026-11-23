@@ -9,13 +9,13 @@ import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Pencere, Secim, Simge } from '
 import { sayi, tarih } from '../bicim.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
 import { RR_ANAHTARI, usePatlatmaOnizlemesi, type RrDurumu } from '../veri.ts';
-import { altEmirTurleri, BolmePaneli, bolmeSonucu, bosBolme, type BolmeDurumu } from './Bolme.tsx';
+import { altEmirRotalari, altEmirTurleri, BolmePaneli, bolmeSonucu, bosBolme, type BolmeDurumu, type PartiRotaKaynagi } from './Bolme.tsx';
 import { bosCokKatman, CokKatmanPaneli, type CokKatmanSecimi } from './CokKatman.tsx';
 import { EmirAyrintisi, PlanHucresi } from './EmirAyrintisi.tsx';
 import { planMetni, tamponRozeti, turAdi } from './gorunum.ts';
 import { acilanEmir, guncelSurum, useEmirKomutu } from './komut.ts';
 import {
-  aramaUyar, bugun, DURUM_ADI, DURUM_SUZGECLERI, durumAdi, durumGosterimi, durumUyar, emirAdimlari, emirAgaci, ilerleme, isGunuEkle, miktarOku, ONCELIK_ADI, planOzeti, planSirasi, seritNo, uretilirMi, cokKatmanOzeti, yururlukteRevizyonId, emirRotasi, tekRotaMetni,
+  aramaUyar, bugun, DURUM_ADI, DURUM_SUZGECLERI, durumAdi, durumGosterimi, durumUyar, emirAdimlari, emirAgaci, ilerleme, isGunuEkle, miktarOku, ONCELIK_ADI, planOzeti, planSirasi, seritNo, uretilirMi, cokKatmanOzeti, yururlukteRevizyonId, emirRotasi, tekRotaMetni, bolmeTurRotasi, yeniEmirAnaRotasi, anaRotaMetni,
   type DurumSuzgeci, type Emir,
 } from './kurallar.ts';
 
@@ -192,9 +192,9 @@ export const eskiRevizyonUyarisi = (kod: string | null, r: EmirRevizyonu): strin
 
 interface YeniFormDurumu { urun: string; miktar: string; baslangic: string; teslim: string; oncelik: string; durum: 'serbest' | 'taslak'; tur: string; not: string; rezerve: boolean; rota: string; revizyonGerekcesi: string }
 
-export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun, ilkTur = null, ilkAdet = null }: {
+export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun, ilkTur = null, ilkAdet = null, ilkRota = null }: {
   durum: RrDurumu; yetki: EkranOzellikleri['yetki']; komut: ReturnType<typeof useEmirKomutu>; acildi: (id: string) => void; git: EkranOzellikleri['git'];
-  ilkUrun: string | null; ilkTur?: string | null; ilkAdet?: string | null;
+  ilkUrun: string | null; ilkTur?: string | null; ilkAdet?: string | null; ilkRota?: string | null;
 }) {
   // Emir yalnız mamul ya da yarı mamule açılır; rotası olan emre kopyalanır (rota.emre-kopyala), rotası olmayan rotasız açılır
   // (uretim-emirleri.rotasiz-ac). İşlemi olmayan yolun ürünü listede yoktur.
@@ -206,7 +206,7 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun, il
   const ilk = isGunuEkle(bugun(), 0, tatiller);
   const [f, setF] = useState<YeniFormDurumu>({
     urun: (ilkUrun !== null && urunler.some((u) => u.id === ilkUrun) ? ilkUrun : urunler[0]?.id) ?? '', miktar: ilkAdet !== null && /^\d+$/.test(ilkAdet) ? ilkAdet : '100', baslangic: ilk, teslim: isGunuEkle(ilk, 9, tatiller), oncelik: '3', durum: 'serbest',
-    tur: ilkTur !== null && ilkTur in EMIR_TURU_ADLARI ? ilkTur : 'seri', not: '', rezerve: true, rota: '', revizyonGerekcesi: '',
+    tur: ilkTur !== null && ilkTur in EMIR_TURU_ADLARI ? ilkTur : 'seri', not: '', rezerve: true, rota: ilkRota !== null && /^\d+$/.test(ilkRota) ? ilkRota : '', revizyonGerekcesi: '',
   });
   const [bolme, setBolme] = useState<BolmeDurumu>(bosBolme(true));
   const [cok, setCok] = useState<CokKatmanSecimi>(bosCokKatman);
@@ -253,6 +253,14 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun, il
     priority: Number(f.oncelik), note: null, rev: null, status: f.durum, created: 0, doneAt: null, tur: f.tur, parentId: null, kol: null, birlestigiId: null, surum: 1,
   };
   const adimlar = emirAdimlari(d, sanal);
+  // 3578: Parti rotası alanının kaynağı; açılacak emrin rotası formdaki Rota seçimi (ya da türün rotası), partininki ayrıca seçilir.
+  const anaRota = yeniEmirAnaRotasi(rotalar.data, f.tur, f.rota);
+  const rotaKaynagi: PartiRotaKaynagi = {
+    durum: rotalar.isError ? 'okunamadi' : rotalar.data === undefined ? 'yukleniyor' : 'hazir',
+    yenile: () => { void rotalar.refetch(); },
+    tekRota: tekRotaMetni(rotalar.data), ana: anaRotaMetni(rotalar.data, anaRota),
+    coz: (tur, secilen) => bolmeTurRotasi(d, rotalar.data, sanal, anaRota, tur, secilen),
+  };
   const girdi = { anaAd: 'Ana emir', miktar: sanal.qty, adimSayisi: adimlar.length, aralik: { ilk: 1, son: adimlar.length }, mevcutKollar: [], bitti: () => false };
 
   const gecmis = gecmisTeslimMi(f.teslim, bugun());
@@ -286,10 +294,12 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun, il
     let tamam = true;
     // Bölme açılıştan sonra sahibinin bölme ucuyla yapılır; reddedilirse emir bölünmemiş kalır, iletisi uyarı satırındadır.
     const turler = b ? altEmirTurleri(bolme, b.siralar, f.tur) : [];
+    const rotaIdleri = b ? altEmirRotalari(bolme, b.siralar) : [];
     if (b && bolme.tur === 'parti') {
       for (const [i, q] of b.partiler.entries()) {
         const tur = turler[i];
-        const r = await komut.calistir('emir-bol', { id, adet: q, surum: guncelSurum(durum, id), ...(tur === undefined ? {} : { emirTuru: tur }) });
+        const rotaId = rotaIdleri[i];
+        const r = await komut.calistir('emir-bol', { id, adet: q, surum: guncelSurum(durum, id), ...(tur === undefined ? {} : { emirTuru: tur }), ...(rotaId === undefined ? {} : { rotaId }) });
         if (!r.tamam) { tamam = false; break; }
         durum = r.durum;
       }
@@ -362,6 +372,7 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun, il
       {rotali && !cokAcik && (
         <BolmePaneli
           yeni anaTur={f.tur} girdi={girdi} adimlar={adimlar} baslamis={[]} opdefs={d.opdefs} istasyonlar={d.stations} deger={bolme} degistir={setBolme}
+          rota={rotaKaynagi}
         />
       )}
       {rotasizKapali && (

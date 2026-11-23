@@ -183,7 +183,10 @@ export const EMIR_KOMUTLARI: Readonly<Record<string, EmirKomutu>> = {
   'emir-iptal': {
     hazirla: async (girdi) => {
       const id = kimlik(girdi['id'], 'emir');
-      return { yol: `/adimli-emirler/${String(id)}/iptal`, govde: { surum: ekranSurumu(girdi) } };
+      // 3576: alt emirleriyle iptal; pencerenin gördüğü alt emirler gider, sunucudaki ağaç farklıysa iptal olmaz.
+      const alt = girdi['altlariyla'] === true;
+      const idler = alt && Array.isArray(girdi['altEmirIdleri']) ? (girdi['altEmirIdleri'] as unknown[]).map((x) => kimlik(x, 'alt emir')) : [];
+      return { yol: `/adimli-emirler/${String(id)}/iptal`, govde: { surum: ekranSurumu(girdi), ...(alt ? { altlariyla: true, altEmirIdleri: idler } : {}) } };
     },
   },
   // 2721: başlamış emir silinmez; sahibi durdurur, iptal durumuna alır ve kapanışı açık bırakır. Onay ekrandaki uyarı penceresindedir.
@@ -275,9 +278,11 @@ export const EMIR_KOMUTLARI: Readonly<Record<string, EmirKomutu>> = {
       const ekAdimlar = kolaEkAdimlar(girdi['ekAdimlar'], d, adimSira, birlesmeOpNo);
       // Tür verilmezse alt emir üstün türünü alır (sahibinin kuralı); değerin geçerliliğine sahibinin şeması karar verir.
       const emirTuru = typeof girdi['emirTuru'] === 'string' && girdi['emirTuru'] !== '' ? girdi['emirTuru'] : undefined;
+      // 3578: kolda rota seçimi yoktur (kol ana emrin rotasında kalır); parti elle rota seçtiyse sahibi geçerliliğine karar verir (422).
+      const rotaId = !kol && typeof girdi['rotaId'] === 'number' && Number.isInteger(girdi['rotaId']) && girdi['rotaId'] > 0 ? girdi['rotaId'] : undefined;
       return {
         yol: `/adimli-emirler/${String(id)}/bol`,
-        govde: { adimSira, adet, surum: ekranSurumu(girdi), birlesmeOpNo, ...(ekAdimlar.length ? { ekAdimlar } : {}), ...(emirTuru === undefined ? {} : { emirTuru }) },
+        govde: { adimSira, adet, surum: ekranSurumu(girdi), birlesmeOpNo, ...(ekAdimlar.length ? { ekAdimlar } : {}), ...(emirTuru === undefined ? {} : { emirTuru }), ...(rotaId === undefined ? {} : { rotaId }) },
         tekrarKorumali: true,
       };
     },

@@ -4,7 +4,7 @@ import { RrHatasi, useRrKomutu, type KomutGovdesi, type RrDurumu } from '../veri
 
 // R3 komutları: köprünün komutu sırayla gider; başarıda iletisi bildirilir. Hata sahibinin iletisidir ve uyarı satırında kalır (bugünkü
 // ekran gibi); eski sürümde veri kendiliğinden yeniden okunur, kullanıcı işlemi yeniden yapar.
-export interface KomutCevabi { tamam: boolean; sonuc: unknown; durum: RrDurumu | null }
+export interface KomutCevabi { tamam: boolean; sonuc: unknown; durum: RrDurumu | null; hata?: string }
 export interface EmirUyarisi { metin: string; eskiSurum: boolean }
 
 export function useEmirKomutu() {
@@ -26,7 +26,7 @@ export function useEmirKomutu() {
       const r = h instanceof RrHatasi ? h : new RrHatasi(h);
       setUyari({ metin: r.message, eskiSurum: r.eskiSurum });
       bildir('hata', r.message);
-      return { tamam: false, sonuc: null, durum: null };
+      return { tamam: false, sonuc: null, durum: null, hata: r.message };
     } finally {
       suruyor.current = false;
     }

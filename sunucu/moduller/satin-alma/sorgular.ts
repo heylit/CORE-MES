@@ -2004,7 +2004,7 @@ export async function kalemsizTalebiIptalEt(db: Db, id: string, neden: string): 
 // sipariş satırı varsa sipariş no, beklenen teslim ve net teslim. Fiyat ve tedarikçi okunmaz. İptal talep ve birleşmiş kaynak gelmez
 // (kalemi birleşik taleptedir).
 export interface EmirTedarikSatiri {
-  uretimEmriId: number | null; isEmriId: number | null; malzemeNo: number | null; talepNo: string; talepDurumu: string;
+  uretimEmriId: number | null; isEmriId: number | null; malzemeNo: number | null; talepId: string; talepNo: string; talepDurumu: string;
   siparisNo: string | null; beklenenTeslim: string | null; miktar: string | null; teslim: string; kapali: boolean;
   // 3355: siparişin firması (kazanan teklifin firması); sipariş yoksa null.
   firmaId: number | null;
@@ -2012,7 +2012,7 @@ export interface EmirTedarikSatiri {
 export function emirTedarikDurumlariOku(db: Db, uretimEmriIdleri: readonly number[], isEmriIdleri: readonly number[]): Promise<EmirTedarikSatiri[]> {
   return db.sorgu<EmirTedarikSatiri>(
     `SELECT ${KALEM_EMRI} AS "uretimEmriId", coalesce(s.is_emri_id, k.is_emri_id) AS "isEmriId", ${ALTERNATIF_KARTI('s')} AS "malzemeNo",
-            t.no AS "talepNo", t.durum AS "talepDurumu", coalesce(p.no, nullif(p.siparis_no, '')) AS "siparisNo", p.beklenen_teslim::text AS "beklenenTeslim",
+            t.id AS "talepId", t.no AS "talepNo", t.durum AS "talepDurumu", coalesce(p.no, nullif(p.siparis_no, '')) AS "siparisNo", p.beklenen_teslim::text AS "beklenenTeslim",
             s.miktar::text AS miktar, coalesce(m.toplam, 0)::text AS teslim, (p.logo_kapatma_durumu IS NOT NULL) AS kapali,
             tk.firma_id AS "firmaId"
        FROM satin_alma_talep_kalemi k

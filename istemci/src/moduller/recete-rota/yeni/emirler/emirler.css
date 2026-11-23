@@ -194,6 +194,32 @@ small.tc-rr3-plan-alt[data-ton="uyari"] { color: var(--hold); }
 .tc-rr3-bar[data-tur="parti"] { background: color-mix(in srgb, var(--hold) 18%, transparent); }
 .tc-rr3-bar[data-tur="bos"] { background: none; color: var(--muted); }
 
+/* 3578: Parti rotası ve sonuç tablosu. Dar ekranda sonuç satırı karta döner (yatay kayma yok); başlıklar hücrelerin önünde yazılı. */
+.tc-rr3-parti > .tc-alan { flex: 1 1 calc(var(--b-6) * 5); min-width: 0; }
+.tc-rr3-parti[data-engel] { padding: var(--b-2); border: var(--cizgi-ince) solid var(--stop); border-radius: var(--yari-1); }
+.tc-rr3-parti-not { flex: 1 1 100%; margin: 0; color: var(--muted); font-size: var(--yazi-s); }
+.tc-rr3-parti-not:empty { display: none; }
+.tc-rr3-neden { color: var(--stop); font-size: var(--yazi-s); }
+.tc-rr3-sonuc-kap { min-width: 0; }
+.tc-rr3-sonuc { width: 100%; border-collapse: collapse; font-size: var(--yazi-s); }
+.tc-rr3-sonuc caption { text-align: left; font-weight: 600; padding-bottom: var(--b-1); }
+.tc-rr3-sonuc th, .tc-rr3-sonuc td { padding: var(--b-1) var(--b-2); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.tc-rr3-sonuc thead th { color: var(--muted); font-weight: 400; white-space: nowrap; }
+.tc-rr3-sonuc tbody tr { border-top: var(--cizgi-ince) solid var(--edge); }
+.tc-rr3-sonuc tr[data-soluk] { color: var(--muted); }
+.tc-rr3-sonuc-adet { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tc-rr3-sonuc td[data-tur="ayri"] { color: var(--done); font-weight: 600; }
+.tc-rr3-sonuc td[data-tur="alt"] { color: var(--run); }
+@media (max-width: 767px) {
+  .tc-rr3-sonuc thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .tc-rr3-sonuc, .tc-rr3-sonuc tbody, .tc-rr3-sonuc tr, .tc-rr3-sonuc th, .tc-rr3-sonuc td { display: block; }
+  .tc-rr3-sonuc tr { padding: var(--b-2) 0; }
+  .tc-rr3-sonuc th, .tc-rr3-sonuc td { padding: var(--b-1) 0; }
+  .tc-rr3-sonuc tbody th { font-weight: 600; }
+  .tc-rr3-sonuc td[data-l]::before { content: attr(data-l) ": "; color: var(--muted); font-size: var(--yazi-xs); }
+  .tc-rr3-sonuc-adet { text-align: left; }
+}
+
 /* 1100 B: liste ve ayrıntı yan yana; alan darsa (kabuk menüsü açık dar ekran, telefon) ya liste ya ayrıntı görünür, ayrıntıda geri düğmesi çıkar. */
 .tc-rr3-ipucu-simge { display: flex; align-items: center; gap: var(--b-2); }
 .tc-rr3-suzgec { align-items: flex-end; }
@@ -294,3 +320,7 @@ small.tc-rr3-plan-alt[data-ton="uyari"] { color: var(--hold); }
   .tc-rr3-sayfa-adim .tc-rr3-adimlar .tc-rr3-eylemler { grid-column: 2 / -1; justify-content: flex-start; }
   .tc-rr3-sayfa-adim .tc-rr3-adimlar .tc-rr3-eylemler > * { justify-content: flex-start; }
 }
+/* 3576: iptal penceresinin alt emir listesi; uzun listede kendi içinde kayar, düğme şeridi pencerede sabit kalır. */
+.tc-rr3-iptal-liste { max-height: calc(var(--dokunma) * 6); overflow: auto; border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); min-width: 0; }
+.tc-rr3-iptal-ust { color: var(--faint); font-size: var(--yazi-xs); }
+.tc-rr3-uyari-kutu[data-ton="uyari"] { border-color: var(--hazard); }

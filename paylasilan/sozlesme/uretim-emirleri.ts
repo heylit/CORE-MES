@@ -461,7 +461,34 @@ export const fasonHareketiCevabi = z.object({ emir: z.lazy(() => adimliEmirAyrin
 export const partiBolCevabi = z.object({ emir: z.lazy(() => adimliEmirAyrintisi), altEmirId: KIMLIK, ayriEmir: z.boolean() });
 
 export const planaAlGovdesi = z.object({ surum: surumSemasi }).strict();
-export const adimliIptalGovdesi = z.object({ surum: surumSemasi }).strict();
+// 3576: `altlariyla` alt emirleriyle tek seferde iptaldir. Pencerede görülen açık alt emirler (`altEmirIdleri`, bütün ağaç) sunucudaki
+// ağaçla eşit olmalıdır; bayraksız çağrı bugünkü gibidir (açık kollu emir reddedilir).
+export const adimliIptalGovdesi = z.object({
+  surum: surumSemasi,
+  altlariyla: z.literal(true).optional(),
+  altEmirIdleri: z.array(KIMLIK).max(500).optional(),
+}).strict().superRefine((g, ctx) => {
+  if (g.altlariyla === true && g.altEmirIdleri === undefined) ctx.addIssue({ code: 'custom', path: ['altEmirIdleri'], message: 'Alt emirleriyle iptalde pencerede görülen alt emirler gönderilir.' });
+  if (g.altlariyla === undefined && g.altEmirIdleri !== undefined) ctx.addIssue({ code: 'custom', path: ['altlariyla'], message: 'Alt emir listesi yalnız alt emirleriyle iptalde gönderilir.' });
+});
+export const iptalOnizlemeCevabi = z.object({
+  surum: surumSemasi,
+  // Açık alt emirler (torunlar dahil, kimlik sırasıyla). `ustEmirNo` kökün doğrudan alt emirinde null.
+  altEmirler: z.array(z.object({
+    id: KIMLIK, emirNo: z.string(), ustEmirNo: z.string().nullable(), tur: z.enum(['parti', 'kol']),
+    baslangicOpNo: z.number().int().nullable(), birlesmeOpNo: z.number().int().nullable(), adet: z.number().int().nonnegative(),
+    durum: z.enum(['taslak', 'planli', 'basladi']), baslamis: z.boolean(),
+  })),
+  // Kapanacak açık hazırlık görevleri (kök ve alt emirler).
+  hazirlikGorevi: z.number().int().nonnegative(),
+  // Emre bağlı açık, siparişe dönmemiş satın alma talepleri; yalnız uyarı, iptal edilmez.
+  // `id` satın alma talebinin kimliği (ekran bağlantı kurar); çözücü vermediyse null.
+  satinAlmaTalepleri: z.array(z.object({ id: z.string().nullable(), no: z.string() })),
+  // Dolu ise iptal verilemez; metin komutun reddiyle aynı kuraldan.
+  engel: z.string().nullable(),
+});
+export type IptalOnizlemeCevabi = z.output<typeof iptalOnizlemeCevabi>;
+export type AdimliIptalGovdesi = z.input<typeof adimliIptalGovdesi>;
 // 3099: bölünmüş alt emrin (parti ya da kol) türü sonradan değişir; ana emrin türü açılıştaki kalır.
 // 3244 b: teslim satırın güncel terminine yeniden bağlanır.
 export const teslimBaglaGovdesi = z.object({ surum: surumSemasi }).strict();
@@ -500,6 +527,9 @@ export const partiBolGovdesi = z.object({
   birlesmeOpNo: KIMLIK.nullable().optional(),
   // Verilmezse kol üstün türünü alır.
   emirTuru: z.enum(EMIR_TURLERI).optional(),
+  // 3578: partinin elle seçilen rotası (ürünün, yürürlükte revizyonu olan). Verilmezse parti türün rotasını alır; rotası emrinkinden
+  // farklıysa ayrı emir olarak açılır.
+  rotaId: KIMLIK.optional(),
   ekAdimlar: z.array(ekAdimSemasi).max(AZAMI_ADIM, `Bir kola en çok ${AZAMI_ADIM} adım eklenir.`).optional(),
 }).strict();
 export const ekAdimGovdesi = ekAdimSemasi.extend({ surum: surumSemasi }).strict();

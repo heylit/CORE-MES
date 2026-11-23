@@ -38,6 +38,13 @@ describe('Bölme komutu sahibinin adımına çevrilir; uygunluğa Üretim Emirle
   };
   const hazirla = (ad: string, girdi: Record<string, unknown>) => EMIR_KOMUTLARI[ad]!.hazirla(girdi);
 
+  it('3576: iptal gövdesi bayraksız yalnız sürümdür; alt emirleriyle iptalde pencerenin gördüğü alt emirler gider', async () => {
+    expect(await hazirla('emir-iptal', { id: 1, surum: 3 })).toEqual({ yol: '/adimli-emirler/1/iptal', govde: { surum: 3 } });
+    expect((await hazirla('emir-iptal', { id: 1, surum: 3, altlariyla: true, altEmirIdleri: [4, 5] })).govde).toEqual({ surum: 3, altlariyla: true, altEmirIdleri: [4, 5] });
+    await expect(hazirla('emir-iptal', { id: 1, surum: 3, altlariyla: true, altEmirIdleri: [0] })).rejects.toThrow('Geçersiz alt emir.');
+  });
+
+
   it('kolsuz parti bitmemiş ilk adımdan ayrılır; sonraki adım başlamış olsa da istek gider, karar sahibinindir', async () => {
     oku([kur(['tamam', 'calisiyor', 'calisiyor'])]);
     expect((await hazirla('emir-bol', { id: 1, adet: 2, surum: 3 })).govde).toEqual({ adimSira: 2, adet: 2, surum: 3, birlesmeOpNo: null });
@@ -58,6 +65,10 @@ describe('Bölme komutu sahibinin adımına çevrilir; uygunluğa Üretim Emirle
     expect((await hazirla('emir-bol', { id: 1, adet: 2, surum: 3, emirTuru: 'numune' })).govde).toMatchObject({ adimSira: 1, emirTuru: 'numune' });
     expect((await hazirla('emir-bol', { id: 1, adet: 2, surum: 3, kolN: 1, kolM: 3, emirTuru: 'fai' })).govde).toMatchObject({ birlesmeOpNo: 30, emirTuru: 'fai' });
     expect((await hazirla('emir-bol', { id: 1, adet: 2, surum: 3, emirTuru: '' })).govde).not.toHaveProperty('emirTuru');
+    // 3578: elle seçilen parti rotası gövdeye girer; kolda rota yoktur, geçersiz değer gönderilmez.
+    expect((await hazirla('emir-bol', { id: 1, adet: 2, surum: 3, rotaId: 7 })).govde).toMatchObject({ adimSira: 1, rotaId: 7 });
+    expect((await hazirla('emir-bol', { id: 1, adet: 2, surum: 3, kolN: 1, kolM: 3, rotaId: 7 })).govde).not.toHaveProperty('rotaId');
+    for (const rotaId of [undefined, 0, -1, 1.5, '7']) expect((await hazirla('emir-bol', { id: 1, adet: 2, surum: 3, rotaId })).govde).not.toHaveProperty('rotaId');
   });
 
   it('3099: alt emrin türü değişim komutu tür ve sürümle gider; tür seçilmeden gitmez', async () => {

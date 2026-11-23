@@ -12,6 +12,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
+import { PARTI_ROTASI_GECERSIZ } from '#paylasilan/sozlesme/emir-turleri.ts';
 import { turunRotasiDegilIletisi } from './kurallar.ts';
 
 const BOLME_ADET_RE = /Bölünen adet 1 ile elde kalan adedin bir eksiği arasında olmalı/;
@@ -72,14 +73,14 @@ describe('emir türü rotası: parti ve bölme (gerçek PostgreSQL)', () => {
   }
   // Standart rota iki adımlı, FAI rotası üç adımlı: hangi revizyonun emre girdiği adım sayısından da okunur. Rota ilk türüyle açılır
   // (3411 a; adı türün adı), öteki türler eşleme ucuyla bağlanır.
-  async function ikiRotaliUrun(turler: readonly string[] = ['fai']): Promise<{ urun: number; standart: number; fai: number; faiRota: number }> {
+  async function ikiRotaliUrun(turler: readonly string[] = ['fai']): Promise<{ urun: number; standart: number; fai: number; faiRota: number; standartRota: number }> {
     const urun = await kart('mamul');
     const standart = await yururlugeAl(urun, 2);
     const r = await tamam<Rotalar>(c.yazan, 'POST', `/rota/urunler/${urun}/rotalar`, { emirTuru: turler[0] });
     const faiRota = r.rotalar.find((x) => !x.standart)!;
     if (turler.length > 1) await tamam(c.onayci, 'POST', `/rota/urunler/${urun}/rotalar/${faiRota.id}/turler`, { emirTurleri: turler, surum: faiRota.surum });
     const fai = await yururlugeAl(urun, 3, faiRota.id);
-    return { urun, standart, fai, faiRota: faiRota.id };
+    return { urun, standart, fai, faiRota: faiRota.id, standartRota: r.rotalar.find((x) => x.standart)!.id };
   }
   const siparisOnayla = async (malzemeNo: number, partiler: readonly { tur: string; adet: number; rotaId?: number }[]): Promise<number> => {
     sayac += 1;
@@ -100,7 +101,7 @@ describe('emir türü rotası: parti ve bölme (gerçek PostgreSQL)', () => {
   const emirler = async (satir: number): Promise<Emir[]> =>
     o().sahip.sorgu<Emir>(`${SECIM} WHERE e.siparis_satiri_id = $1 ORDER BY e.id`, [satir]);
   const emir = async (id: number): Promise<Emir> => (await o().sahip.tek<Emir>(`${SECIM} WHERE e.id = $1`, [id]))!;
-  const bol = (id: number, g: { adet: number; emirTuru: string; surum: number; birlesmeOpNo?: number }) =>
+  const bol = (id: number, g: { adet: number; emirTuru?: string; surum: number; birlesmeOpNo?: number; rotaId?: number }) =>
     istek(c.yazan, 'POST', `/adimli-emirler/${id}/bol`, { adimSira: 1, ...g });
 
   before(async () => {
@@ -254,5 +255,115 @@ describe('emir türü rotası: parti ve bölme (gerçek PostgreSQL)', () => {
     await tamam(c.yazan, 'POST', `/rota/revizyonlar/${fai}/emre-kopyala`, govde);
     const seri = await istek(c.yazan, 'POST', `/rota/revizyonlar/${fai}/emre-kopyala`, { adet: 2, teslim: null });
     assert.equal(seri.statusCode, 409, seri.body);
+  });
+
+  // 3578: partiye elle rota. Veriler uydurmadır (ORN- kodlu); tür aynı olsa da elle rota emrinkinden farklıysa ayrı emir açılır.
+  describe('3578: parti rotası (rotaId)', () => {
+    test('farklı rota seçilen Seri parti, o rotanın yürürlükteki revizyonundan ayrı emir olur; ana emrin adedi düşer', async () => {
+      const { urun, fai, faiRota } = await ikiRotaliUrun();
+      const satir = await siparisOnayla(urun, [{ tur: 'seri', adet: 10 }]);
+      const ana = (await emirler(satir))[0]!;
+      const r = await bol(ana.id, { adet: 4, emirTuru: 'seri', rotaId: faiRota, surum: ana.surum });
+      assert.equal(r.statusCode, 200, r.body);
+      const yeni = await emir(r.json<{ altEmirId: number }>().altEmirId);
+      assert.equal(r.json<{ ayriEmir: boolean }>().ayriEmir, true);
+      assert.deepEqual([yeni.tur, yeni.adet, yeni.kaynak, yeni.ust, yeni.satir], ['seri', 4, fai, null, satir]);
+      assert.equal((await emir(ana.id)).adet, 6);
+    });
+
+    test('tür verilmeden yalnız rotaId verilirse emrin türü kullanılır', async () => {
+      const { urun, fai, faiRota } = await ikiRotaliUrun();
+      const satir = await siparisOnayla(urun, [{ tur: 'seri', adet: 10 }]);
+      const ana = (await emirler(satir))[0]!;
+      const r = await bol(ana.id, { adet: 4, rotaId: faiRota, surum: ana.surum });
+      assert.equal(r.statusCode, 200, r.body);
+      assert.deepEqual([(await emir(r.json<{ altEmirId: number }>().altEmirId)).kaynak, (await emir(ana.id)).adet], [fai, 6]);
+    });
+
+    test('emrin kendi rotası seçilirse parti bugünkü gibi kol olur (ana emrin revizyonundan), tür aynı ya da farklı', async () => {
+      const { urun, standart, standartRota } = await ikiRotaliUrun();
+      const satir = await siparisOnayla(urun, [{ tur: 'seri', adet: 10 }]);
+      const ana = (await emirler(satir))[0]!;
+      const a = await bol(ana.id, { adet: 2, emirTuru: 'seri', rotaId: standartRota, surum: ana.surum });
+      assert.equal(a.statusCode, 200, a.body);
+      const kol = await emir(a.json<{ altEmirId: number }>().altEmirId);
+      assert.deepEqual([a.json<{ ayriEmir: boolean }>().ayriEmir, kol.kaynak, kol.ust], [false, standart, ana.id]);
+      const b = await bol(ana.id, { adet: 2, emirTuru: 'numune', rotaId: standartRota, surum: (await emir(ana.id)).surum });
+      assert.equal(b.statusCode, 200, b.body);
+      assert.equal(b.json<{ ayriEmir: boolean }>().ayriEmir, false);
+    });
+
+    test('Risk S1: başka ürünün rotası, yürürlükte revizyonu olmayan rota ve olmayan kimlik 422 döner; parti türün rotasına düşmez, adet değişmez', async () => {
+      const { urun, faiRota } = await ikiRotaliUrun();
+      const baska = await ikiRotaliUrun();
+      const taslak = (await tamam<Rotalar>(c.yazan, 'POST', `/rota/urunler/${urun}/rotalar`, { emirTuru: 'numune' })).rotalar.find((x) => x.ad === 'Numune')!;
+      const satir = await siparisOnayla(urun, [{ tur: 'seri', adet: 10 }]);
+      const ana = (await emirler(satir))[0]!;
+      for (const rotaId of [baska.faiRota, taslak.id, 2_000_000_000]) {
+        const r = await bol(ana.id, { adet: 3, emirTuru: 'fai', rotaId, surum: ana.surum });
+        assert.equal(r.statusCode, 422, `${rotaId}: ${r.body}`);
+        assert.equal(r.json<Hata>().mesaj, PARTI_ROTASI_GECERSIZ);
+      }
+      const dogru = await bol(ana.id, { adet: 3, emirTuru: 'fai', rotaId: faiRota, surum: ana.surum });
+      assert.equal(dogru.statusCode, 200, dogru.body);
+      assert.deepEqual([(await emir(ana.id)).adet, (await emirler(satir)).length], [7, 2]);
+    });
+
+    test('Risk S3: adımı başlamış emirde elle farklı rota reddedilir; rezerveli emirde de; adet ve emir sayısı değişmez', async () => {
+      const { urun, faiRota } = await ikiRotaliUrun();
+      const satir = await siparisOnayla(urun, [{ tur: 'seri', adet: 10 }]);
+      const ana = (await emirler(satir))[0]!;
+      await o().sahip.sorgu('INSERT INTO stok_rezerve (malzeme_id, uretim_emri_id, miktar) VALUES ($1, $2, 10)', [hammadde, ana.id]);
+      const rez = await bol(ana.id, { adet: 3, emirTuru: 'seri', rotaId: faiRota, surum: ana.surum });
+      assert.equal(rez.statusCode, 409, rez.body);
+      assert.match(rez.json<Hata>().mesaj, /Bu emre stoktan malzeme ayrılmış/);
+      await o().sahip.sorgu('DELETE FROM stok_rezerve WHERE uretim_emri_id = $1', [ana.id]);
+      await o().sahip.sorgu(
+        `UPDATE uretim_emirleri_is_emri SET durum = 'calisiyor', baslama = now()
+          WHERE id = (SELECT id FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 ORDER BY sira DESC LIMIT 1)`, [ana.id]);
+      const basladi = await bol(ana.id, { adet: 3, emirTuru: 'seri', rotaId: faiRota, surum: ana.surum });
+      assert.equal(basladi.statusCode, 409, basladi.body);
+      assert.match(basladi.json<Hata>().mesaj, /bu emirde adım başladı; .* yeni emir olarak açın/);
+      assert.deepEqual([(await emir(ana.id)).adet, (await emirler(satir)).length], [10, 1]);
+    });
+
+    test('Risk S3: elle farklı rota kol ile reddedilir; aynı rota ile kol kabul edilir', async () => {
+      const { urun, faiRota, standartRota } = await ikiRotaliUrun();
+      const satir = await siparisOnayla(urun, [{ tur: 'seri', adet: 10 }]);
+      const ana = (await emirler(satir))[0]!;
+      const red = await bol(ana.id, { adet: 3, emirTuru: 'seri', rotaId: faiRota, surum: ana.surum, birlesmeOpNo: 20 });
+      assert.equal(red.statusCode, 409, red.body);
+      assert.match(red.json<Hata>().mesaj, /kol ya da ek adımla ayrılmaz/);
+      const kabul = await bol(ana.id, { adet: 3, emirTuru: 'seri', rotaId: standartRota, surum: ana.surum, birlesmeOpNo: 20 });
+      assert.equal(kabul.statusCode, 200, kabul.body);
+      assert.equal(kabul.json<{ ayriEmir: boolean }>().ayriEmir, false);
+      assert.deepEqual([(await emir(ana.id)).adet, (await emirler(satir)).length], [7, 2]);
+    });
+
+    test('Risk S2: ayrı emir açılıp adet düşürülemezse yeni emir kalmaz (tek işlem)', async () => {
+      const { urun, faiRota } = await ikiRotaliUrun();
+      const satir = await siparisOnayla(urun, [{ tur: 'seri', adet: 10 }]);
+      const ana = (await emirler(satir))[0]!;
+      await o().sahip.sorgu(`
+        CREATE OR REPLACE FUNCTION public.tr_bolme_adet_engel() RETURNS trigger LANGUAGE plpgsql AS
+        $$ BEGIN IF OLD.id = ${ana.id} AND NEW.adet < OLD.adet THEN RAISE EXCEPTION 'adet dusmedi'; END IF; RETURN NEW; END $$`);
+      await o().sahip.sorgu('CREATE TRIGGER tr_bolme_adet_engel BEFORE UPDATE OF adet ON uretim_emri FOR EACH ROW EXECUTE FUNCTION public.tr_bolme_adet_engel()');
+      try {
+        const r = await bol(ana.id, { adet: 4, emirTuru: 'seri', rotaId: faiRota, surum: ana.surum });
+        assert.notEqual(r.statusCode, 200, r.body);
+      } finally {
+        await o().sahip.sorgu('DROP TRIGGER tr_bolme_adet_engel ON uretim_emri');
+      }
+      assert.deepEqual([(await emir(ana.id)).adet, (await emirler(satir)).length], [10, 1]);
+    });
+
+    test('rota seçilmeyen bölme (rotaId yok) önceki davranışta kalır: Seri partisi kol açar', async () => {
+      const { urun, standart } = await ikiRotaliUrun();
+      const satir = await siparisOnayla(urun, [{ tur: 'seri', adet: 10 }]);
+      const ana = (await emirler(satir))[0]!;
+      const r = await bol(ana.id, { adet: 2, emirTuru: 'seri', surum: ana.surum });
+      assert.equal(r.statusCode, 200, r.body);
+      assert.deepEqual([r.json<{ ayriEmir: boolean }>().ayriEmir, (await emir(r.json<{ altEmirId: number }>().altEmirId)).kaynak], [false, standart]);
+    });
   });
 });
