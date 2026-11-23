@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as FareOlayi, type PointerEvent as ImlecOlayi, type ReactNode, type KeyboardEvent as TusOlayi } from 'react';
 import { Dugme, Simge } from '../../../../ortak/arayuz/index.ts';
+import { hizaCizgileri, hizaNoktalari, hizalaYakala, type HizaCizgisi, type Yakalanan } from './hiza.ts';
 import { emirKuyrugu } from '../ortak/emir-no.ts';
 import type { Derleme } from '../motor/kurallar.ts';
 import type { IsTasiOnizlemesi } from '../motor/atolye/gonder.ts';
@@ -214,6 +215,9 @@ export function Tahta(o: TahtaOzellikleri) {
   // Fareyle basılan iş: kıpırdayınca sürükleme başlar; sürükleyerek tutulanı bırakmak imleci kaldırmaktır.
   const basilan = useRef<{ id: string; x: number; y: number; tut: number } | null>(null);
   const surukleniyor = useRef(false);
+  // 3602: sürüklerken çizilen hiza çizgileri ve son yakalanan referans (histerezis için); yalnız çıkan saati etkiler.
+  const [hiza, setHiza] = useState<HizaCizgisi[]>([]);
+  const yakalanan = useRef<{ satir: string; y: Yakalanan } | null>(null);
   // Bağlar saatli ölçekte çizilir; onaylı plan gösterilirken (önce / sonra) çizilmez. Varsayılan yalnız odaktaki işin (üstüne gelinen, yoksa
   // seçili) bir önceki ve bir sonraki adımıdır (3365): bütün siparişin okları birden örgü olur.
   const odakIs = tasinan ? null : ustteki ?? secIs;
@@ -435,12 +439,26 @@ export function Tahta(o: TahtaOzellikleri) {
     }
     if (!x || !satir || !alan) return;
     const kimlik = satir.dataset.satir ?? '';
-    const S = tasimaSaati(m.bas + (ev.clientX - alan.getBoundingClientRect().left) / px - tasinan.tut, m.simdi);
+    const ham = m.bas + (ev.clientX - alan.getBoundingClientRect().left) / px - tasinan.tut;
     const adimSatiri = `${x.job}>${x.id}`;
     const gecerli = goz === 'T' ? adaylar(x).includes(kimlik) : kimlik === x.job || kimlik === adimSatiri;
-    setHedef({ satir: goz === 'T' || kimlik === adimSatiri ? kimlik : x.job, S, gecerli });
+    const hedefSatir = goz === 'T' || kimlik === adimSatiri ? kimlik : x.job;
+    // 3602: Alt basılıyken ya da onaylı plan gösterilirken yakalama ve çizgi yok. Yakalama yalnız ham saati değiştirir; geçerlilik ve komut aynı.
+    let S = tasimaSaati(ham, m.simdi);
+    if (ev.altKey || once) { yakalanan.current = null; setHiza((h) => (h.length === 0 ? h : [])); } else {
+      const noktalar = hizaNoktalari(m, x.id, hedefSatir, goz === 'T', coklu.size > 1 && coklu.has(x.id) ? coklu : undefined);
+      const onceki = yakalanan.current?.satir === hedefSatir ? yakalanan.current.y : null;
+      const r = hizalaYakala(ham, x.C - x.S, noktalar, px, onceki);
+      yakalanan.current = r.yakalanan ? { satir: hedefSatir, y: r.yakalanan } : null;
+      S = tasimaSaati(r.S, m.simdi);
+      const c = hizaCizgileri(S, x.C - x.S, noktalar, px);
+      const anahtar = (l: HizaCizgisi[]): string => l.map((q) => `${q.kenar}${String(q.saat)}${q.hizali ? '!' : ''}`).join('|');
+      setHiza((h) => (anahtar(h) === anahtar(c) ? h : c));
+    }
+    setHedef({ satir: hedefSatir, S, gecerli });
   };
 
+  useEffect(() => { if (!tasinan) { yakalanan.current = null; setHiza((h) => (h.length === 0 ? h : [])); } }, [tasinan]);
   const birakSon = useRef(birak);
   useEffect(() => { birakSon.current = birak; });
   useEffect(() => {
@@ -1121,6 +1139,11 @@ export function Tahta(o: TahtaOzellikleri) {
           </svg>
         )}
         <div className="tc-pyq-simdi" ref={(el) => { yerYaz(el, (m.simdi - m.bas) * px); }} />
+        {tasinanIs && tasinan?.fis === undefined && hiza.map((c) => (
+          <div className="tc-pyq-hiza" key={c.kenar} data-kenar={c.kenar} data-hizali={c.hizali ? '' : undefined} aria-hidden="true" ref={(el) => { yerYaz(el, (c.saat - m.bas) * px); }}>
+            <span>{c.ad} · {zaman(c.saat).slice(-5)}{c.hizali ? ' · hizalı' : ''}</span>
+          </div>
+        ))}
         {ufukCizgi}
         {secili && secili.termin !== null && goz === 'T' && (
           <div className="tc-pyq-termin" ref={(el) => { yerYaz(el, (secili.termin! - m.bas) * px); }}><span>Termin {secili.no} · {zaman(secili.termin).slice(6)}</span></div>
@@ -1150,7 +1173,7 @@ export function Tahta(o: TahtaOzellikleri) {
           <Dugme tur="birincil" simge="check" disabled={etkiNe?.gecerli === false} onClick={uygula} autoFocus>Uygula</Dugme>
         </div>
       )}
-      {tasinan && !onay && <p className="tc-pyq-ipucu" role="status">{tasinan.suruk ? 'Bırakın: iş taşınır' : 'Bırakmak için tıklayın ya da Space'}{grupKaydir && coklu.size > 1 && coklu.has(tasinan.id) ? ` · seçili ${String(coklu.size)} iş aynı süre kayar` : ''}{etkiNe?.gecerli === false && etkiNe.ileti ? ` · ${etkiNe.ileti}` : ''}{etkiNe?.gecerli !== false ? etkiCumlesi(etkiNe, zaman, m.simdi) : ''} · Esc vazgeçer</p>}
+      {tasinan && !onay && <p className="tc-pyq-ipucu" role="status">{tasinan.suruk ? 'Bırakın: iş taşınır' : 'Bırakmak için tıklayın ya da Space'}{grupKaydir && coklu.size > 1 && coklu.has(tasinan.id) ? ` · seçili ${String(coklu.size)} iş aynı süre kayar` : ''}{etkiNe?.gecerli === false && etkiNe.ileti ? ` · ${etkiNe.ileti}` : ''}{etkiNe?.gecerli !== false ? etkiCumlesi(etkiNe, zaman, m.simdi) : ''}{hiza.filter((c) => c.hizali).map((c) => ` · Hizalı: ${c.ad} ${zaman(c.saat).slice(-5)}`).join('')} · Esc vazgeçer</p>}
       {once && <p className="tc-pyq-ipucu" role="status">Onaylı plan gösteriliyor · işlerin üzerinde sizin değişikliğinizle ne kadar kaydığı yazar</p>}
     </div>
   );

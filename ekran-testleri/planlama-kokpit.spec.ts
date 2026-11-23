@@ -3038,3 +3038,67 @@ test('Kokpit 3551 G: Tezgâhlarda Hafta ve Ay doluluk hücresi; hücre günü ya
   await cek('3-ay');
   expect(ag.hatalar).toEqual([]);
 });
+
+// 3602: sürüklerken öteki adımların hizası kesikli çizgiyle görünür, yakına gelince hafifçe yakalanır (düz çizgi, "hizalı"); Alt bunu kapatır;
+// yakalama kilit ya da başka komut doğurmaz, bırakınca düz taşıma komutu gider. Telefonda tahta yok, sürükleme yok.
+test('Kokpit 3602: sürüklerken hiza çizgisi ve yumuşak yakalama; Alt ile kapanır; taşıma komutu değişmez; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  const t = await taslakSunucusu(page);
+  await page.route('**/api/plan/planlama-calismasi/is-tasi-onizlemesi?*', (r) => {
+    const q = new URL(r.request().url()).searchParams;
+    const id = q.get('isId') ?? '', S = Number(q.get('baslangic')), x = t.gorunum().ops[id];
+    return json(r, { calismaSurumu: t.s.surum, gecerli: true, ileti: null, isler: x ? [{ isId: id, tezgah: q.get('tezgah'), S, C: S + (x.C - x.S), eskiTezgah: x.m, eskiS: x.S, tur: 'tasinan' }] : [] });
+  });
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/kokpit?duzen=klasik');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const karsilama = page.getByRole('button', { name: 'Başlayalım' });
+  if (await karsilama.isVisible()) await karsilama.click();
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  if (bilgi.project.name === 'g360') { expect(ag.hatalar).toEqual([]); return; }
+
+  const tahta = kokpit.locator('.tc-pyq-tahta');
+  await tahta.evaluate((el) => { el.scrollTo({ left: 0 }); });
+  // S3.a1 (M1, 32-38) başlangıcı S1.a1'in bitişine (16) sürüklenir; aynı tezgâhta ikisi de var.
+  const is = tahta.locator('[data-is="S3.a1"]');
+  await expect(is).toBeVisible();
+  await is.scrollIntoViewIfNeeded();
+  const kutu = await is.boundingBox();
+  if (!kutu) throw new Error('iş görünmüyor');
+  const px = kutu.width / 6, y = kutu.y + kutu.height / 2, x0 = kutu.x + 6;
+  const git = async (saat: number, adim = 8) => { await page.mouse.move(x0 + (saat - 32) * px, y, { steps: adim }); };
+  await page.mouse.move(x0, y);
+  await page.mouse.down();
+  // Uzakta çizgi yok.
+  await git(24);
+  await expect(tahta.locator('.tc-pyq-hiza')).toHaveCount(0);
+  // Yaklaşınca (yaklaşık 15 px) kesikli çizgi: yakalama yok, hizalı yazmaz.
+  await git(16 + 14 / px);
+  const cizgi = tahta.locator('.tc-pyq-hiza[data-kenar="bas"]');
+  await expect(cizgi).toBeVisible();
+  await expect(cizgi).not.toHaveAttribute('data-hizali', '');
+  const resim = async (ad: string): Promise<void> => { const klasor = process.env['TMIV2_EKRAN_GORUNTU']?.trim(); if (klasor) await tahta.screenshot({ path: `${klasor}/hiza-${ad}-${bilgi.project.name}.png` }); };
+  await resim('kesikli');
+  // 5 px içinde yakalar: düz çizgi ve "hizalı".
+  await git(16 + 5 / px, 4);
+  await expect(cizgi).toHaveAttribute('data-hizali', '');
+  await expect(cizgi).toContainText('hizalı');
+  await expect(tahta.getByText(/Hizalı: /)).toBeVisible();
+  await resim('hizali');
+  // Alt basılıyken yakalama ve çizgi kapanır.
+  await page.keyboard.down('Alt');
+  await page.mouse.move(x0 + (16 + 5 / px - 32) * px + 1, y);
+  await expect(tahta.locator('.tc-pyq-hiza')).toHaveCount(0);
+  await page.keyboard.up('Alt');
+  await git(16 + 5 / px, 4);
+  await expect(cizgi).toHaveAttribute('data-hizali', '');
+  await page.mouse.up();
+  await kokpit.getByRole('group', { name: 'Taşımayı onayla' }).getByRole('button', { name: 'Uygula' }).click();
+  await expect.poll(() => t.tasinan().length).toBe(1);
+  expect(t.tasinan()[0]).toMatchObject({ isId: 'S3.a1', tezgah: 'M1', baslangic: 16 });
+  // Yakalama başka komut ya da kilit yazmaz: taslakta yalnız taşıma ve diz var.
+  await expect.poll(() => t.s.satirlar.map((x) => x.komut.tur)).toEqual(['tasi', 'diz']);
+  expect(t.s.komutlar.filter((k) => k.tur !== 'tasi')).toEqual([]);
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  expect(ag.hatalar).toEqual([]);
+});
