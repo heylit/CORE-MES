@@ -168,7 +168,8 @@ async function yaziyaCevir(db: Db, g: IsEmriGirdisi, sira: number, tipler: Set<n
   const k = await kaynakCoz(db, g.kaynak);
   return {
     sira, opNo: g.opNo, operasyonTipiId: g.operasyonTipiId, ad: g.ad, ...k, fasonFirmasiz: g.fasonFirmasiz === true,
-    istasyonId: g.fasonFirmasiz === true ? null : (k.istasyonId ?? g.istasyonId ?? null), ayarSuresiDk: g.ayarSuresiDk, birimSureDk: g.birimSureDk,
+    // 3607: kişi kaynağında rotadaki istasyon önce gelir (kaynagiYaz ile aynı kural); makinede makinenin istasyonu.
+    istasyonId: g.fasonFirmasiz === true ? null : g.kaynak?.tur === 'kisi' ? (g.istasyonId ?? k.istasyonId ?? null) : (k.istasyonId ?? g.istasyonId ?? null), ayarSuresiDk: g.ayarSuresiDk, birimSureDk: g.birimSureDk,
     terminGun: g.terminGun, bagimlilik: g.bagimlilik, devirAdedi: g.devirAdedi, firePayiYuzde: g.firePayiYuzde ?? '0',
     makineKullanimi: g.makineKullanimi ?? 'tek', enKucukParca: g.enKucukParca ?? null, yenidenAyar: g.yenidenAyar ?? true,
     talimatSurumu: g.talimatSurumu, dugum: g.dugum ?? null, operasyonId: g.operasyonId ?? null,
@@ -933,7 +934,10 @@ async function kaynagiYaz(db: Db, e: UstEmirSatiri, isEmri: IsEmriSatiri, kaynak
   if (acik !== null) throw cakisma(acik);
   const ihlal = kaynakDegisimIhlali({ durum: isEmri.durum, kaynakTuru: kaynakTuru(isEmri) });
   if (ihlal !== null) throw cakisma(ihlal);
-  const k = await kaynakCoz(db, kaynak);
+  // 3607: kişi kaynağında rotadaki istasyon korunur; kişinin atamasından türetme yalnız adımın istasyonu yoksa yapılır. Boş istasyonlu emir
+  // açık emir listesine (Hazırlık, Atölye, terminal) girmez.
+  const cozulen = await kaynakCoz(db, kaynak);
+  const k = kaynak?.tur === 'kisi' ? { ...cozulen, istasyonId: isEmri.istasyonId ?? cozulen.istasyonId } : cozulen;
   const takas = kaynakSuresi(isEmri, k, await s.adaylariGetir(db, [isEmri.id]));
   if ((await s.isEmriKaynagiYaz(db, isEmri.id, k, null, takas?.sure ?? null)) === null) throw cakisma(ihlal ?? 'Yalnız bekleyen iş emrinin kaynağı değişir.');
   if (takas !== null) {
