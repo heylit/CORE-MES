@@ -458,7 +458,7 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     assert.deepEqual(await ortam!.vt.tek<{ n: number }>('SELECT count(*)::int AS n FROM etiket_merkezi_baski_kaydi'), once);
   });
 
-  test('EM-U16 (kart #127): refakat partisinin kartı emrin kartı, partinin QR ve etiketi, lot satırıyla basılır; iptal kart eksikte kalır; deftere emrin kartı yazılır', async () => {
+  test('EM-U16 (kart #127): refakat partisinin kartı, partinin QR ve etiketi, lot satırıyla basılır; iptal kart eksikte kalır; deftere partinin kartı yazılır (3598)', async () => {
     const e = await emirAc();
     const sahip = ortam!.sahip;
     // Kart ve lot stoğun tablolarıdır; test kendi kayıtlarını doğrudan açar.
@@ -474,7 +474,7 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     const r = await al(yonetici, adres(`${acik},${iptal},2147483004`));
     assert.equal(r.statusCode, 200, r.body);
     const rc = r.json() as KayitCiktiCevabi;
-    assert.deepEqual(rc.kayitlar, [{ id: e.id, baslik: `${e.emirNo}-P1` }]);
+    assert.deepEqual(rc.kayitlar, [{ id: acik, baslik: `${e.emirNo}-P1` }]);
     assert.deepEqual(rc.eksikler, [iptal, 2147483004]);
     assert.equal(kimlikOf((rc.onizleme.find((o) => o.tur === 'kod') as { veri: string } | undefined)?.veri), `RP:${acik}`);
     // 2907: lot no siyah bantta büyük ve ters; döküm, sertifika ve tedarikçi partisi yanında, aynı kutuda.
@@ -495,7 +495,7 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     const kayitlar = await ortam!.vt.sorgu<{ kaynak_tur: string; kaynak_id: number }>(
       'SELECT kaynak_tur, kaynak_id FROM etiket_merkezi_baski_kaydi WHERE baski_id = $1', [(c.json() as IndirCevabi).baskiId],
     );
-    assert.deepEqual(kayitlar, [{ kaynak_tur: 'refakat', kaynak_id: e.id }]);
+    assert.deepEqual(kayitlar, [{ kaynak_tur: 'refakat-partisi', kaynak_id: acik }]);
     assert.doesNotMatch((c.json() as IndirCevabi).komut, /Kopya/, 'tek kopyada kopya yazısı yok');
 
     // 2929 a: adet 2 aynı kartın iki ayrı etiketidir; her biri "Kopya n/N" taşır, QR aynı, yazıcıya çoğaltma (PQ2) gitmez; defter tek satır.
@@ -515,7 +515,7 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     assert.doesNotMatch(komut, /^P2$/m);
     assert.match(komut, /Kopya 1\/2[\s\S]*Kopya 2\/2/);
     const ikiKayit = await ortam!.vt.sorgu<{ kaynak_id: number }>('SELECT kaynak_id FROM etiket_merkezi_baski_kaydi WHERE baski_id = $1', [(iki.json() as IndirCevabi).baskiId]);
-    assert.deepEqual(ikiKayit, [{ kaynak_id: e.id }]);
+    assert.deepEqual(ikiKayit, [{ kaynak_id: acik }]);
     // Tarayıcıdan yazdırmada da kopyalar ayrı sayfadır, sayfa başına adet 1.
     const y = await yaz(yonetici, '/etiket-merkezi/sablonlar/refakat-100x150/yazdir', { adet: 2, kayit: { tur: 'refakat-partisi', idler: [acik] } });
     assert.equal(y.statusCode, 200, y.body);
@@ -1042,6 +1042,95 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     const defter = await ortam!.vt.sorgu<{ tur: string; kisi_id: number }>("SELECT tur, kisi_id FROM etiket_merkezi_atlanan WHERE tur = 'mal-kabul' AND kaynak_id = $1", [mkId]);
     assert.deepEqual(defter, [{ tur: 'mal-kabul', kisi_id: yoneticiId }]);
     await assert.rejects(ortam!.sahip.sorgu("DELETE FROM etiket_merkezi_atlanan WHERE tur = 'mal-kabul' AND kaynak_id = $1", [mkId]), 'defter yalnız ekleme');
+  });
+
+  test('EM-U44 (3598): "çıkmadı" işareti basılmış sayılan baskıyı düşürür ve kayıt Basılacaklar\'a döner; baskı satırı değişmez; yineleme, yetki ve pencere denetlenir', async () => {
+    const parti = await partiAc('P-ETK-CK');
+    const kart = (await ortam!.sahip.tek<{ m: number }>('SELECT malzeme_id::int AS m FROM stok_parti WHERE id = $1', [parti]))!.m;
+    const bekleyen = async () => ((await al(yonetici, '/etiket-merkezi/bekleyenler')).json() as BekleyenlerCevabi).bekleyenler;
+    const baskilar = async () => ((await al(yonetici, '/etiket-merkezi/baskilar')).json() as BaskilarCevabi).baskilar;
+    const kabul = await yaz(yonetici, '/stok/mal-kabul', { tur: 'diger', satirlar: [{ malzemeId: kart, miktar: '3', parti: { tedarikciPartiNo: 'CK-A' } }] });
+    assert.equal(kabul.statusCode, 200, kabul.body);
+    const mkId = (kabul.json() as { belge: { id: number } }).belge.id;
+    const dosya = ((await al(yonetici, '/etiket-merkezi/yazicilar')).json() as YazicilarCevabi).yazicilar.find((x) => x.ad === DOSYA.ad);
+    assert.ok(dosya);
+    const indir = await yaz(yonetici, '/etiket-merkezi/sablonlar/lot-100x50/indir', { yaziciId: dosya.id, adet: 1, kayit: { tur: 'mal-kabul', idler: [mkId] } });
+    assert.equal(indir.statusCode, 200, indir.body);
+    const baskiId = (indir.json() as IndirCevabi).baskiId;
+    assert.equal((await bekleyen()).some((b) => b.tur === 'mal-kabul' && b.id === mkId), false, 'indirilen basılmış sayılır');
+    const once = (await baskilar()).find((b) => b.id === baskiId);
+    assert.ok(once);
+    assert.equal(once.isaretlenebilir, true);
+    assert.equal(once.dusum, null);
+    assert.equal(once.kayitTuru, 'lot', 'yeniden basma lot kimlikleriyle açılır');
+    assert.equal(once.kayitIdler.length, 1);
+
+    const url = `/etiket-merkezi/baskilar/${String(baskiId)}/cikmadi`;
+    const okuyan = await tekIslemliKisi('cikmadiokur', ['etiket-merkezi.oku']);
+    assert.equal((await yaz(okuyan, url, { neden: 'cikmadi' })).statusCode, 403, 'oku yetmez');
+    assert.equal((await yaz(yonetici, url, { neden: 'baska' })).statusCode, 400, 'neden listesi');
+    assert.equal((await yaz(yonetici, '/etiket-merkezi/baskilar/2147483000/cikmadi', { neden: 'cikmadi' })).statusCode, 404);
+    assert.equal((await bekleyen()).some((b) => b.tur === 'mal-kabul' && b.id === mkId), false, 'reddedilen istek listeyi değiştirmez');
+
+    const r = await yaz(yonetici, url, { neden: 'cikmadi' });
+    assert.equal(r.statusCode, 200, r.body);
+    assert.deepEqual(r.json(), { baskiId, dusum: 'cikmadi', kayitSayisi: 1 });
+    assert.equal((await bekleyen()).some((b) => b.tur === 'mal-kabul' && b.id === mkId), true, 'çıkmadı işaretli baskı basılmış sayılmaz');
+    const sonra = (await baskilar()).find((b) => b.id === baskiId);
+    assert.equal(sonra?.dusum, 'cikmadi');
+    assert.equal(sonra?.isaretlenebilir, false);
+    assert.equal(sonra?.sonuc, 'indirildi', 'defter satırı değişmez');
+    // Yineleme (başka istek kimliği) ikinci satır açmaz ve ilk nedeni korur.
+    const tekrar = await yaz(yonetici, url, { neden: 'usb-hatasi' });
+    assert.equal(tekrar.statusCode, 200, tekrar.body);
+    assert.equal((tekrar.json() as { dusum: string }).dusum, 'cikmadi');
+    assert.equal((await ortam!.vt.sorgu('SELECT 1 FROM etiket_merkezi_baski_dusumu WHERE baski_id = $1', [baskiId])).length, 1);
+    await assert.rejects(ortam!.sahip.sorgu('DELETE FROM etiket_merkezi_baski_dusumu WHERE baski_id = $1', [baskiId]), 'defter yalnız ekleme');
+    // Yeniden basılınca kayıt yine düşer; çıkmadı işareti yalnız o baskıya aittir.
+    assert.equal((await yaz(yonetici, '/etiket-merkezi/sablonlar/lot-100x50/indir', { yaziciId: dosya.id, adet: 1, kayit: { tur: 'mal-kabul', idler: [mkId] } })).statusCode, 200);
+    assert.equal((await bekleyen()).some((b) => b.tur === 'mal-kabul' && b.id === mkId), false);
+
+    // Hatalı baskı zaten sayılmaz; deneme baskısının kaydı yoktur; pencereden eski baskı geri dönmez.
+    const hata = await ortam!.vt.tek<{ id: number }>(
+      "INSERT INTO etiket_merkezi_baski (yazici_id, sablon_anahtar, adet, kisi_id, sonuc, hata) VALUES ($1, 'lot-100x50', 1, $2, 'hata', 'ulasilamadi') RETURNING id", [dosya.id, yoneticiId]);
+    assert.equal((await yaz(yonetici, `/etiket-merkezi/baskilar/${String(hata?.id)}/cikmadi`, { neden: 'cikmadi' })).statusCode, 400);
+    const deneme = await yaz(yonetici, '/etiket-merkezi/sablonlar/yazici-denemesi/indir', { yaziciId: dosya.id, adet: 1 });
+    if (deneme.statusCode === 200) assert.equal((await yaz(yonetici, `/etiket-merkezi/baskilar/${String((deneme.json() as IndirCevabi).baskiId)}/cikmadi`, { neden: 'cikmadi' })).statusCode, 400);
+    const eski = await ortam!.vt.tek<{ id: number }>(
+      "INSERT INTO etiket_merkezi_baski (yazici_id, sablon_anahtar, adet, kisi_id, sonuc, zaman) VALUES ($1, 'lot-100x50', 1, $2, 'indirildi', now() - interval '31 days') RETURNING id", [dosya.id, yoneticiId]);
+    await ortam!.vt.sorgu('INSERT INTO etiket_merkezi_baski_kaydi (baski_id, kaynak_tur, kaynak_id) VALUES ($1, $2, $3)', [eski?.id, 'lot', parti]);
+    assert.equal((await baskilar()).find((b) => b.id === eski?.id)?.isaretlenebilir, false);
+    assert.equal((await yaz(yonetici, `/etiket-merkezi/baskilar/${String(eski?.id)}/cikmadi`, { neden: 'cikmadi' })).statusCode, 400);
+  });
+
+  test('EM-U45 (3598 D4): refakat kartı parti kimliğiyle deftere yazılır; bir partinin basımı aynı emrin ötekini düşürmez; eski emir satırı eski partiyi düşürmeye devam eder', async () => {
+    const e = await emirAc();
+    const sahip = ortam!.sahip;
+    const lotAc = async (n: number) => (await sahip.tek<{ id: number }>(
+      "INSERT INTO stok_parti (malzeme_id, tedarikci_parti_no, acan_kisi_id, lot_no) VALUES ($1, $4, $2, $3) RETURNING id", [e.malzemeNo, yoneticiId, `LT-RP${String(n)}-${String(e.id)}`, `P-RP${String(n)}`]))!.id;
+    const kart = async (sira: number) => (await sahip.tek<{ id: number }>(
+      'INSERT INTO stok_refakat_partisi (uretim_emri_id, sira, malzeme_id, parti_id, acan_kisi_id) VALUES ($1, $2, $3, $4, $5) RETURNING id', [e.id, sira, e.malzemeNo, await lotAc(sira), yoneticiId]))!.id;
+    const [p1, p2] = [await kart(1), await kart(2)];
+    const bekleyen = async () => ((await al(yonetici, '/etiket-merkezi/bekleyenler')).json() as BekleyenlerCevabi).bekleyenler.filter((b) => b.tur === 'refakat-partisi' && (b.id === p1 || b.id === p2)).map((b) => b.id);
+    assert.deepEqual((await bekleyen()).sort(), [p1, p2].sort());
+    const dosya = ((await al(yonetici, '/etiket-merkezi/yazicilar')).json() as YazicilarCevabi).yazicilar.find((x) => x.ad === DOSYA.ad);
+    assert.ok(dosya);
+    const indir = await yaz(yonetici, '/etiket-merkezi/sablonlar/refakat-100x150/indir', { yaziciId: dosya.id, adet: 1, kayit: { tur: 'refakat-partisi', idler: [p1] } });
+    assert.equal(indir.statusCode, 200, indir.body);
+    assert.deepEqual(await bekleyen(), [p2], 'yalnız basılan parti düşer');
+    // Çıkmadı: ilk parti geri gelir.
+    assert.equal((await yaz(yonetici, `/etiket-merkezi/baskilar/${String((indir.json() as IndirCevabi).baskiId)}/cikmadi`, { neden: 'cikmadi' })).statusCode, 200);
+    assert.deepEqual((await bekleyen()).sort(), [p1, p2].sort());
+    const gecmis = ((await al(yonetici, '/etiket-merkezi/baskilar')).json() as BaskilarCevabi).baskilar.find((b) => b.id === (indir.json() as IndirCevabi).baskiId);
+    assert.equal(gecmis?.kayitTuru, 'refakat-partisi');
+    assert.deepEqual(gecmis?.kayitIdler, [p1]);
+    // Eski emir düzeyli satır (göçten önce yazılmış): emrin kartı partiden sonra basıldıysa o partiyi düşürür; yeni partiyi düşürmez.
+    const eskiBaski = await ortam!.vt.tek<{ id: number }>(
+      "INSERT INTO etiket_merkezi_baski (yazici_id, sablon_anahtar, adet, kisi_id, sonuc, zaman) VALUES ($1, 'refakat-100x150', 1, $2, 'indirildi', now() + interval '1 minute') RETURNING id", [dosya.id, yoneticiId]);
+    await ortam!.vt.sorgu("INSERT INTO etiket_merkezi_baski_kaydi (baski_id, kaynak_tur, kaynak_id) VALUES ($1, 'refakat', $2)", [eskiBaski?.id, e.id]);
+    assert.deepEqual(await bekleyen(), [], 'eski emir satırı verilişten sonra yazıldıysa partileri düşürür');
+    const eskiBaskilar = ((await al(yonetici, '/etiket-merkezi/baskilar')).json() as BaskilarCevabi).baskilar.find((b) => b.id === eskiBaski?.id);
+    assert.equal(eskiBaskilar?.kayitTuru, null, 'emir düzeyli satır yeniden basılamaz');
   });
 
   test('EM-U15: raf etiketi Fabrika Haritası rafından RAF önekiyle çıkar; bölüm ve bölme/kat gözlerden gelir; pasif ve olmayan raf eksikte kalır; deftere raf olarak bağlanır (#116)', async () => {

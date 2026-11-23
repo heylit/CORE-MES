@@ -74,10 +74,10 @@ const YAZICILAR: YazicilarCevabi = {
 
 const BASKILAR: BaskilarCevabi = {
   baskilar: [
-    { id: 7, zaman: '2026-10-18T17:30:00.000Z', yazici: 'Zebra depo', sablonAnahtar: 'deneme-50x25', adet: 2, kisi: 'Örnek Kişi', sonuc: 'gonderildi', hata: null, kayitSayisi: 3 },
-    { id: 8, zaman: '2026-10-18T17:40:00.000Z', yazici: 'Argox masa', sablonAnahtar: 'deneme-50x25', adet: 1, kisi: 'Örnek Kişi', sonuc: 'indirildi', hata: null, kayitSayisi: 0 },
-    { id: 5, zaman: '2026-10-18T17:10:00.000Z', yazici: null, sablonAnahtar: 'konum-50x25', adet: 1, kisi: 'Örnek Kişi', sonuc: 'yazdirildi', hata: null, kayitSayisi: 1 },
-    { id: 6, zaman: '2026-10-18T17:20:00.000Z', yazici: 'Zebra depo', sablonAnahtar: 'deneme-50x25', adet: 1, kisi: null, sonuc: 'hata', hata: 'Yazıcıya ulaşılamadı.', kayitSayisi: 0 },
+    { id: 7, zaman: '2026-10-18T17:30:00.000Z', yazici: 'Zebra depo', sablonAnahtar: 'deneme-50x25', adet: 2, kisi: 'Örnek Kişi', sonuc: 'gonderildi', hata: null, kayitSayisi: 3, dusum: null, kayitTuru: 'konum', kayitIdler: [11, 12, 13], isaretlenebilir: true },
+    { id: 8, zaman: '2026-10-18T17:40:00.000Z', yazici: 'Argox masa', sablonAnahtar: 'deneme-50x25', adet: 1, kisi: 'Örnek Kişi', sonuc: 'indirildi', hata: null, kayitSayisi: 0, dusum: null, kayitTuru: null, kayitIdler: [], isaretlenebilir: false },
+    { id: 5, zaman: '2026-10-18T17:10:00.000Z', yazici: null, sablonAnahtar: 'konum-50x25', adet: 1, kisi: 'Örnek Kişi', sonuc: 'yazdirildi', hata: null, kayitSayisi: 1, dusum: null, kayitTuru: 'konum', kayitIdler: [11], isaretlenebilir: true },
+    { id: 6, zaman: '2026-10-18T17:20:00.000Z', yazici: 'Zebra depo', sablonAnahtar: 'deneme-50x25', adet: 1, kisi: null, sonuc: 'hata', hata: 'Yazıcıya ulaşılamadı.', kayitSayisi: 0, dusum: null, kayitTuru: null, kayitIdler: [], isaretlenebilir: false },
   ],
 };
 
@@ -113,7 +113,7 @@ interface Gonderilen { yol: string; govde: unknown; kimlik: string | null }
 const INDIRILEN_KOMUT = '\nN\nA0,0,0,1,1,1,N,"Ş"\nP1\nI8,E,001\nA0,0,0,1,1,1,N,"\u00de"\nP1\nI8,0,001\n';
 const INDIRILEN_BAYTLAR = [...new TextEncoder().encode('\nN\nA0,0,0,1,1,1,N,"Ş"\nP1\n'), ...Array.from('I8,E,001\nA0,0,0,1,1,1,N,"\u00de"\nP1\nI8,0,001\n', (h) => h.charCodeAt(0))];
 
-function sunucuKur(secenek: { islemler?: Islem[]; yazicilar?: YazicilarCevabi; bekleyenler?: BekleyenlerCevabi; etiketler?: EtiketlerCevabi; sablonlar?: SablonlarCevabi } = {}) {
+function sunucuKur(secenek: { islemler?: Islem[]; yazicilar?: YazicilarCevabi; bekleyenler?: BekleyenlerCevabi; etiketler?: EtiketlerCevabi; sablonlar?: SablonlarCevabi; baskilar?: BaskilarCevabi } = {}) {
   const istekler: string[] = [];
   const gonderilenler: Gonderilen[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, init?: RequestInit) => {
@@ -124,6 +124,8 @@ function sunucuKur(secenek: { islemler?: Islem[]; yazicilar?: YazicilarCevabi; b
       const basliklar = (init.headers ?? {}) as Record<string, string>;
       gonderilenler.push({ yol, govde: JSON.parse(String(init.body)), kimlik: basliklar[ISTEK_KIMLIGI_BASLIGI] ?? null });
       if (yol.endsWith('/atla')) return json(200, { atlanan: 1 });
+      const cikmadiEslesme = /^\/etiket-merkezi\/baskilar\/(\d+)\/cikmadi$/.exec(yol);
+      if (cikmadiEslesme?.[1]) return json(200, { baskiId: Number(cikmadiEslesme[1]), dusum: (JSON.parse(String(init.body)) as { neden: string }).neden, kayitSayisi: 3 });
       const olcuEslesme = /^\/etiket-merkezi\/sablonlar\/([a-z0-9-]+)\/olcu$/.exec(yol);
       if (olcuEslesme?.[1]) {
         const s = (secenek.sablonlar ?? SABLONLAR).sablonlar.find((x) => x.anahtar === olcuEslesme[1])!;
@@ -149,7 +151,7 @@ function sunucuKur(secenek: { islemler?: Islem[]; yazicilar?: YazicilarCevabi; b
     if (yol === '/oturum') return json(200, { kullanici: { id: 1, ad: 'Örnek', islemler: secenek.islemler ?? [] } });
     if (yol === '/etiket-merkezi/sablonlar') return json(200, secenek.sablonlar ?? SABLONLAR);
     if (yol === '/etiket-merkezi/yazicilar') return json(200, secenek.yazicilar ?? YAZICILAR);
-    if (yol === '/etiket-merkezi/baskilar') return json(200, BASKILAR);
+    if (yol === '/etiket-merkezi/baskilar') return json(200, secenek.baskilar ?? BASKILAR);
     if (yol === '/etiket-merkezi/etiketler') return json(200, secenek.etiketler ?? ETIKETLER);
     if (yol === '/etiket-merkezi/bekleyenler') return json(200, secenek.bekleyenler ?? BEKLEYENLER);
     if (yol === '/etiket-merkezi/raflar') {
@@ -1182,6 +1184,18 @@ describe('Etiket Merkezi yeni düzen (3025)', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Tümü (4)' }));
     expect(await screen.findByText('İndirildi')).toBeTruthy();
     expect(screen.getByTestId('adres').textContent).toBe('');
+  });
+
+  it('3598: ağ yazıcısından sonra sonuç iletisinde "Çıkmadı" kayıt sayısıyla işaretler; "Basıldı" iletiyi kapatır; deneme baskısında düğme çıkmaz', async () => {
+    const istekler = sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku', 'etiket-merkezi.bas'] });
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11,12');
+    fireEvent.change(await yaziciAlani(), { target: { value: 'ag:1' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Bas · 2 etiket' }));
+    await screen.findByText(/Gönderildi\. Etiketin çıktığını/);
+    fireEvent.click(await screen.findByRole('button', { name: /^Çıkmadı: 2 kayıt/ }));
+    expect(await screen.findByText(/olarak işaretlendi\. 2 kayıt Basılacaklar listesine döndü/)).toBeTruthy();
+    const cikmadi = istekler.gonderilenler.find((g) => g.yol.endsWith('/cikmadi'));
+    expect(cikmadi).toMatchObject({ yol: '/etiket-merkezi/baskilar/9/cikmadi', govde: { neden: 'cikmadi' } });
   });
 
   it('Yazıcılar notu USB açıkken takılı yazıcının USB ile basıp tek dokunuşa atanabildiğini, kapalıyken Windows yazdırmanın atanamadığını söyler', async () => {

@@ -1,9 +1,9 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
-  atlaCevabi, atlaGovdesi, basCevabi, basGovdesi, baskilarCevabi, bekleyenlerCevabi, ciktiCevabi, ciktiSorgusu, etiketlerCevabi, indirCevabi, indirGovdesi, kayitCiktiCevabi, kayitCiktiSorgusu, raflarCevabi, sablonListesiOgesi, sablonOlcusuGovdesi, sablonParametresi, sablonlarCevabi,
+  atlaCevabi, atlaGovdesi, baskiParametresi, basCevabi, basGovdesi, baskilarCevabi, bekleyenlerCevabi, cikmadiCevabi, cikmadiGovdesi, ciktiCevabi, ciktiSorgusu, etiketlerCevabi, indirCevabi, indirGovdesi, kayitCiktiCevabi, kayitCiktiSorgusu, raflarCevabi, sablonListesiOgesi, sablonOlcusuGovdesi, sablonParametresi, sablonlarCevabi,
   yaziciAcGovdesi, yaziciGuncelleGovdesi, yaziciParametresi, yaziciSemasi, yazicilarCevabi, yazdirCevabi, yazdirGovdesi,
 } from '#paylasilan/sozlesme/etiket-merkezi.ts';
-import { atla, bas, varsayilanYap, baskilar, bekleyenler, etiketler, indir, kayitCiktisi, ornekCikti, rafSecenekleri, sablonlar, sablonOlcusuYaz, yaziciAc, yaziciDuzenle, yazicilar, yazdir } from './servis.ts';
+import { atla, bas, cikmadi, varsayilanYap, baskilar, bekleyenler, etiketler, indir, kayitCiktisi, ornekCikti, rafSecenekleri, sablonlar, sablonOlcusuYaz, yaziciAc, yaziciDuzenle, yazicilar, yazdir } from './servis.ts';
 
 // Örnek değerli önizleme sayfayı görene açıktır; gerçek kayıt, yazıcı ve baskı kaydı ayrı işlemler ister (99 evet).
 const OKUMA = { biri: ['sayfa.etiket-merkezi'] } as const;
@@ -117,6 +117,17 @@ export const uclar = [
     govde: atlaGovdesi,
     cevap: atlaCevabi,
     isle: ({ db, kullanici, govde }) => atla(db, kullanici, govde),
+  }),
+  // "Çıkmadı" işareti de basma kararıdır (3598): yeni işlem açılmadı. Yineleme ikinci satır açmaz.
+  uc({
+    yontem: 'POST',
+    yol: '/etiket-merkezi/baskilar/:id/cikmadi',
+    yetki: 'etiket-merkezi.bas',
+    tekrarKorumali: true,
+    parametre: baskiParametresi,
+    govde: cikmadiGovdesi,
+    cevap: cikmadiCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => cikmadi(db, kullanici, parametre.id, govde),
   }),
   uc({ yontem: 'GET', yol: '/etiket-merkezi/baskilar', yetki: 'etiket-merkezi.oku', cevap: baskilarCevabi, isle: ({ db }) => baskilar(db) }),
 ];

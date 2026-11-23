@@ -37,7 +37,11 @@ export function useDogrudanBasim(kayitTuru: KayitTuru): {
       const aygit = await eslesmisYazici();
       if (aygit === null) return { sonuc: 'hata', ileti: 'Bu bilgisayarda eşleşmiş USB yazıcı yok.' };
       const c = await api.post<IndirCevabi>(`${yol}/indir`, govde, { istekKimligi: yeniIstekKimligi() });
-      try { await usbyeGonder(aygit, c.komut); return { sonuc: 'gonderildi', ileti: null }; } catch (h) { return { sonuc: 'hata', ileti: usbHatasi(h).message }; }
+      try { await usbyeGonder(aygit, c.komut); return { sonuc: 'gonderildi', ileti: null }; } catch (h) {
+        // D2 (3598): USB'ye gidemeyen komutun satırı "indirildi" kalır ve kayıt Basılacaklar'dan düşerdi; kendiliğinden "Çıkmadı" olur (en iyi çaba).
+        await api.post(`/etiket-merkezi/baskilar/${String(c.baskiId)}/cikmadi`, { neden: 'usb-hatasi' }, { istekKimligi: yeniIstekKimligi() }).catch(() => undefined);
+        return { sonuc: 'hata', ileti: usbHatasi(h).message };
+      }
     },
     onSuccess: (c, { y, idler, sonuc }) => {
       sonuc?.(c.sonuc !== 'hata', idler);

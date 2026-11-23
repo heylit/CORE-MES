@@ -390,6 +390,18 @@ export function kayitSablonTuru(kayitTuru: KayitTuru): SablonTuru {
   return kayitTuru === 'refakat-partisi' ? 'refakat' : kayitTuru;
 }
 
+// 3598 (D4): defter türü şablon türünden ayrıdır. Refakat kartı yeni basımlarda parti kimliğiyle 'refakat-partisi' yazılır (bir partinin
+// basımı aynı emrin ötekilerini düşürmesin); eski satırlar emir kimliğiyle 'refakat' kalır.
+export const defterTuru = (kayitTuru: KayitTuru): string => (kayitTuru === 'refakat-partisi' ? 'refakat-partisi' : kayitSablonTuru(kayitTuru));
+
+// Defterdeki tür, baskı geçmişinden yeniden basmanın kayıt türüdür; eski emir düzeyli refakat satırında kimlik parti değil emirdir (null).
+const DEFTER_KAYIT_TURLERI: ReadonlySet<string> = new Set(['konum', 'raf', 'lot', 'istasyon', 'refakat-partisi', 'malzeme', 'kalite-durum', 'hatali-parca', 'sevk-koli']);
+export const defterKayitTuru = (defter: string | null): KayitTuru | null => (defter !== null && DEFTER_KAYIT_TURLERI.has(defter) ? defter as KayitTuru : null);
+
+// "Çıkmadı" yalnız başarılı sayılan, kayıtlı ve Basılacaklar penceresindeki baskıda ve henüz işaretlenmemişse anlamlıdır (3598).
+export const cikmadiIsaretlenebilir = (b: { sonuc: string; kayitSayisi: number; pencerede: boolean; dusum: string | null }): boolean =>
+  b.dusum === null && b.pencerede && b.kayitSayisi > 0 && (b.sonuc === 'gonderildi' || b.sonuc === 'indirildi' || b.sonuc === 'yazdirildi');
+
 // EM-12: bir baskıda kayıt sayısı x adet en çok EN_COK_ADET etikettir (yanlışlıkla rulo bitirilmesin).
 // EM-24: koli sayısı ve koli içi adet yalnız sevk kolisinde girilir.
 export const koliHatasi = (kayitTuru: KayitTuru, koli: Koli | undefined): string | null =>
@@ -717,14 +729,16 @@ export function kaliteBekleyenleri(
   }]));
 }
 
-// EM-32 (2223-2 a): depodan emre verilen lotun refakat kartı. Basım deftere emrin refakat kartı olarak yazılır (kaynak 'refakat',
-// kimlik emir); emrin kartı verilişten sonra basıldıysa kart basılmış sayılır.
+// EM-32 (2223-2 a): depodan emre verilen lotun refakat kartı. Yeni basım deftere partinin kartı olarak yazılır ('refakat-partisi', kimlik
+// parti, 3598); eski basım emrin kartıdır ('refakat', kimlik emir) ve verilişten sonra yazıldıysa partiyi basılmış sayar.
 export function refakatBekleyenleri(
   verilisler: readonly { refakatPartisiId: number; uretimEmriId: number; sira: number; lotNo: string; malzemeAd: string | null; emirNo: string | null; verilis: string }[],
   emirBasimlari: ReadonlyMap<number, string>,
   atlamalar: ReadonlyMap<number, string> = new Map(),
+  partiBasimlari: ReadonlyMap<number, string> = new Map(),
 ): Bekleyen[] {
-  return verilisler.flatMap((v) => (sonra(emirBasimlari.get(v.uretimEmriId), v.verilis) || sonra(atlamalar.get(v.refakatPartisiId), v.verilis) ? [] : [{
+  // Parti düzeyli basım o partiyi kapatır. Yeni basım emir satırı yazmaz; eski emir satırı yalnız kendinden önce verilen partileri kapatabilir.
+  return verilisler.flatMap((v) => (sonra(partiBasimlari.get(v.refakatPartisiId), v.verilis) || sonra(emirBasimlari.get(v.uretimEmriId), v.verilis) || sonra(atlamalar.get(v.refakatPartisiId), v.verilis) ? [] : [{
     tur: 'refakat-partisi' as const, id: v.refakatPartisiId, baslik: `${v.emirNo ?? `Emir #${String(v.uretimEmriId)}`}-P${String(v.sira)}`,
     ayrinti: [`Lot ${v.lotNo}`, v.malzemeAd].filter(Boolean).join(' · '), zaman: v.verilis, etiketSayisi: REFAKAT_KOPYA_SAYISI,
   }]));

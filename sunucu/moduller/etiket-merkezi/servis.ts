@@ -4,7 +4,7 @@ import { kisitKorumali } from '#cekirdek/kisit.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import {
-  COZUNURLUKLER, DOSYA_UZANTILARI, EN_COK_ADET, SABLON_TURU_ADLARI, YAZICI_DILLERI, YAZICI_DILI_ADLARI, type BasCevabi, type BasGovdesi, type BaskilarCevabi, type AtlaCevabi, type AtlaGovdesi, type BekleyenlerCevabi, type CiktiCevabi, type EtiketlerCevabi, type CiktiSecenekleri, type DogrudanBaski, type IndirCevabi, type YazdirCevabi, type YazdirGovdesi,
+  COZUNURLUKLER, DOSYA_UZANTILARI, EN_COK_ADET, SABLON_TURU_ADLARI, YAZICI_DILLERI, YAZICI_DILI_ADLARI, type BasCevabi, type BasGovdesi, type BaskilarCevabi, type AtlaCevabi, type AtlaGovdesi, type CikmadiCevabi, type CikmadiGovdesi, type BekleyenlerCevabi, type CiktiCevabi, type EtiketlerCevabi, type CiktiSecenekleri, type DogrudanBaski, type IndirCevabi, type YazdirCevabi, type YazdirGovdesi,
   type KayitCiktiCevabi, type KayitSecimi, type RaflarCevabi,
   type OnizlemeOgesi, type OzelOlcu, type OzelOlcuBilgisi, type Sablon, type SablonListesiOgesi, type SablonlarCevabi, type Yazici, type YaziciAcGovdesi, type YaziciGuncelleGovdesi, type YazicilarCevabi,
 } from '#paylasilan/sozlesme/etiket-merkezi.ts';
@@ -20,11 +20,11 @@ import { emirNolari, hataliKaydi, hataliKayitlari, refakatKarti, uretimEmriOzeti
 import { yaziciAgiOku } from './ag.ts';
 import { tcpGonder, type Gonderici } from './gonderici.ts';
 import {
-  BEKLEYEN_GUN, kodHazirla, baskiEngeli, enKucukOlcu, okunurluk, olcekle, bekleyenBaslangici, bekleyenSirasi, dogrudanBaskiDurumu, hataliBekleyenleri, kaliteBekleyenleri, malKabulBekleyenleri, refakatBekleyenleri, hataliParcaDegerleri, kaliteDurumDegerleri, koliHatasi, kopyaDegerleri, olculuAd, olcusuDegisirMi, sevkKoliDegerleri, indirmeEngeli, istasyonDegerleri, kayitSablonTuru, kayitUyumHatasi, konumDegerleri, lotDegerleri, malzemeDegerleri, malzemeEtiketiDegerleri, rafDegerleri, refakatPartisiDegerleri, sablonHatalari, toplamEtiketHatasi, yaziciAdresHatasi, yerlesim, type AlanDegerleri, type MalzemeGirisOzeti,
+  BEKLEYEN_GUN, cikmadiIsaretlenebilir, defterKayitTuru, defterTuru, kodHazirla, baskiEngeli, enKucukOlcu, okunurluk, olcekle, bekleyenBaslangici, bekleyenSirasi, dogrudanBaskiDurumu, hataliBekleyenleri, kaliteBekleyenleri, malKabulBekleyenleri, refakatBekleyenleri, hataliParcaDegerleri, kaliteDurumDegerleri, koliHatasi, kopyaDegerleri, olculuAd, olcusuDegisirMi, sevkKoliDegerleri, indirmeEngeli, istasyonDegerleri, kayitUyumHatasi, konumDegerleri, lotDegerleri, malzemeDegerleri, malzemeEtiketiDegerleri, rafDegerleri, refakatPartisiDegerleri, sablonHatalari, toplamEtiketHatasi, yaziciAdresHatasi, yerlesim, type AlanDegerleri, type MalzemeGirisOzeti,
 } from './kurallar.ts';
 import { ALANLAR, HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
 import {
-  atlamaEkle, baskiEkle, varsayilanSablonEkle, varsayilanSablonlariOku, etiketTurleriOku, sablonOlculeriOku, sablonOlcusuEkle, sonAtlamalar, sonBaskilar, sonBasimlar, yaziciEkle, yaziciGuncelle, yaziciOku, yaziciVarMi, yazicilariOku, type YaziciYazimi,
+  atlamaEkle, baskiEkle, dusumBaskisiOku, dusumEkle, varsayilanSablonEkle, varsayilanSablonlariOku, etiketTurleriOku, sablonOlculeriOku, sablonOlcusuEkle, sonAtlamalar, sonBaskilar, sonBasimlar, yaziciEkle, yaziciGuncelle, yaziciOku, yaziciVarMi, yazicilariOku, type YaziciYazimi,
 } from './sorgular.ts';
 import { KOMUT_URETICILERI, pplbDenemesi, zplDenemesi } from './yazici-dili.ts';
 
@@ -224,13 +224,13 @@ async function kaynaktanOku(db: Db, k: KayitSecimi, anahtar: string): Promise<Ma
   const sonuc = new Map<number, KayitDegeri[]>();
   if (k.tur === 'refakat-partisi') {
     // İptal kart ve olmayan kart basılmaz (eksik); kartın emri iptalse emrin kuralı (409) bütün baskıyı durdurur. Deftere emrin
-    // refakat kartı yazılır: `id` kartın emri, başlık partinin etiketi (emir no-P sıra).
+    // refakat kartı yazılır (3598): `id` partinin kimliği (basım partiye yazılır), başlık partinin etiketi (emir no-P sıra).
     const basim = new Date();
     for (const id of k.idler) {
       const r = await refakatPartisi(db, id);
       if (r === null || r.durum === 'iptal') continue;
       const kart = await refakatKarti(db, r.uretimEmriId).catch((h: unknown) => { if (h instanceof UygulamaHatasi && h.kod === 'BULUNAMADI') return null; throw h; });
-      if (kart) sonuc.set(id, [{ id: r.uretimEmriId, baslik: r.etiket, degerler: refakatPartisiDegerleri(kart, r, r, basim) }]);
+      if (kart) sonuc.set(id, [{ id, baslik: r.etiket, degerler: refakatPartisiDegerleri(kart, r, r, basim) }]);
     }
     return sonuc;
   }
@@ -465,13 +465,30 @@ function baskiCiktisi(db: Db, anahtar: string, yazici: Yazici, g: BasGovdesi): P
 
 // Defterde yalnız gerçekten komuta giren (bulunan) kayıtlar yer alır; koliler gibi bir kaydın birden çok etiketi tek satırdır.
 function basilanKayitlar(g: Pick<BasGovdesi, 'kayit'>, hazir: { kayitlar: KayitCiktiCevabi['kayitlar'] | null }): { tur: string; idler: number[] } | null {
-  return g.kayit && hazir.kayitlar ? { tur: kayitSablonTuru(g.kayit.tur), idler: [...new Set(hazir.kayitlar.map((k) => k.id))] } : null;
+  return g.kayit && hazir.kayitlar ? { tur: defterTuru(g.kayit.tur), idler: [...new Set(hazir.kayitlar.map((k) => k.id))] } : null;
 }
 
-export async function baskilar(db: Db): Promise<BaskilarCevabi> {
-  const satirlar = await sonBaskilar(db, 100);
+export async function baskilar(db: Db, simdi: Date = new Date()): Promise<BaskilarCevabi> {
+  const satirlar = await sonBaskilar(db, 100, bekleyenBaslangici(simdi));
   const adlar = await kisiAdlari(db, [...new Set(satirlar.map((s) => s.kisiId))]);
-  return { baskilar: satirlar.map(({ kisiId, ...s }) => ({ ...s, kisi: adlar.get(kisiId) ?? null })) };
+  return {
+    baskilar: satirlar.map(({ kisiId, kayitTuru, pencerede, ...s }) => ({
+      ...s, kisi: adlar.get(kisiId) ?? null, kayitTuru: defterKayitTuru(kayitTuru), isaretlenebilir: cikmadiIsaretlenebilir({ ...s, pencerede }),
+    })),
+  };
+}
+
+// 3598: basılmış sayılan baskı çıkmadıysa işaretlenir; kayıt Basılacaklar'a döner (baskı satırı değişmez). Basma kararı basanındır:
+// yeni işlem açılmadı (2223-4 a). Aynı baskıya yineleme ilk işareti korur ve aynı cevabı döner.
+export async function cikmadi(db: Db, kullanici: Kullanici, baskiId: number, g: CikmadiGovdesi, simdi: Date = new Date()): Promise<CikmadiCevabi> {
+  const b = await dusumBaskisiOku(db, baskiId, bekleyenBaslangici(simdi));
+  if (!b) throw bulunamadi('Baskı bulunamadı.');
+  if (b.dusum !== null) return { baskiId, dusum: b.dusum, kayitSayisi: b.kayitSayisi };
+  if (b.kayitSayisi === 0) throw dogrulama('Deneme baskısı basılacaklar listesinde değildir; çıkmadı diye işaretlenmez.');
+  if (b.sonuc === 'hata') throw dogrulama('Hatalı baskı zaten basılmış sayılmaz.');
+  if (!b.pencerede) throw dogrulama(`${String(BEKLEYEN_GUN)} günden eski baskı Basılacaklar listesine dönmez.`);
+  await dusumEkle(db, baskiId, g.neden, kullanici.id);
+  return { baskiId, dusum: g.neden, kayitSayisi: b.kayitSayisi };
 }
 
 // Tür adları tablodan metin gelir; uç cevabı şemayla denetler, koddaki listelerle eşleşmeyi modül testi bekler.
@@ -499,6 +516,7 @@ export async function bekleyenler(db: Db, simdi: Date = new Date()): Promise<Bek
   const verilisler = await etiketRefakatVerilisleri(db, baslangic);
   const emirIdler = [...new Set(verilisler.map((v) => v.uretimEmriId))];
   const refakatBasimlari = await sonBasimlar(db, 'refakat', emirIdler);
+  const refakatPartiBasimlari = await sonBasimlar(db, 'refakat-partisi', verilisler.map((v) => v.refakatPartisiId));
   const nolar = await emirNolari(db, emirIdler);
   const adlar = await malzemeOzetleri(db, [...new Set([...degisimler.map((d) => d.malzemeId), ...verilisler.map((v) => v.malzemeId)])]);
   const hatalilar = await hataliKayitlari(db, { acik: false, emirId: null });
@@ -513,7 +531,7 @@ export async function bekleyenler(db: Db, simdi: Date = new Date()): Promise<Bek
       ...malKabulBekleyenleri(kabuller, lotBasimlari, kabulAtlamalari),
       ...kaliteBekleyenleri(degisimler.map((d) => ({ ...d, malzemeAd: adlar.get(d.malzemeId)?.ad ?? null })), kaliteBasimlari, kaliteAtlamalari),
       ...refakatBekleyenleri(
-        verilisler.map((v) => ({ ...v, malzemeAd: adlar.get(v.malzemeId)?.ad ?? null, emirNo: nolar.get(v.uretimEmriId) ?? null })), refakatBasimlari, refakatAtlamalari,
+        verilisler.map((v) => ({ ...v, malzemeAd: adlar.get(v.malzemeId)?.ad ?? null, emirNo: nolar.get(v.uretimEmriId) ?? null })), refakatBasimlari, refakatAtlamalari, refakatPartiBasimlari,
       ),
       ...hataliBekleyenleri(hatalilar, baslangic, hataliBasimlari, hataliAtlamalari),
     ].sort(bekleyenSirasi),

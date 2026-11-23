@@ -6,6 +6,7 @@ import { Dugme } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { CikmadiEylemi } from './cikmadi.tsx';
 import { EtiketCizimi } from './Onizleme.tsx';
 
 // Kart 2904: bu bilgisayara takılı etiket yazıcısına tarayıcıdan, Windows sürücüsüyle vektörel baskı. Yazıcı seçimi Windows'tadır.
@@ -44,7 +45,7 @@ export function VektorelYazdir({ sablon, adet, kayit, olcu = null, dugmeMetni = 
   const istemci = useQueryClient();
   const [kimlik, setKimlik] = useState(yeniIstekKimligi);
   const [baski, setBaski] = useState<YazdirCevabi | null>(null);
-  const [sonuc, setSonuc] = useState<{ ton: 'tamam' | 'hata'; metin: string } | null>(null);
+  const [sonuc, setSonuc] = useState<{ ton: 'tamam' | 'hata'; metin: string; baskiId?: number } | null>(null);
   const yazdir = useMutation({
     mutationFn: (g: { adet: number; kayit?: KayitSecimi; olcu?: OzelOlcu }) =>
       api.post<YazdirCevabi>(`/etiket-merkezi/sablonlar/${sablon.anahtar}/yazdir`, g, { istekKimligi: kimlik }),
@@ -53,7 +54,7 @@ export function VektorelYazdir({ sablon, adet, kayit, olcu = null, dugmeMetni = 
       void istemci.invalidateQueries({ queryKey: anahtarlar.baskilar });
       void istemci.invalidateQueries({ queryKey: anahtarlar.bekleyenler });
       setBaski(c);
-      setSonuc({ ton: 'tamam', metin: 'Yazdırma penceresi açıldı ve deftere yazıldı. Etiketin çıktığını yazıcının başında kontrol edin.' });
+      setSonuc({ ton: 'tamam', metin: 'Yazdırma penceresi açıldı ve deftere yazıldı. Yazdırmayı iptal ettiyseniz ya da etiket çıkmadıysa "Çıkmadı"ya basın.', baskiId: c.baskiId });
     },
     onError: (h) => setSonuc({ ton: 'hata', metin: hataIletisi(h, 'Yazdırma hazırlanamadı; yeniden deneyin.') }),
   });
@@ -85,6 +86,7 @@ export function VektorelYazdir({ sablon, adet, kayit, olcu = null, dugmeMetni = 
       </div>
       {!birincil && <p className="tc-etk-not">Bu bilgisayara takılı yazıcıya Windows sürücüsüyle basar; yazıcıyı yazdırma penceresinde seçin.</p>}
       {sonuc && <p className={sonuc.ton === 'hata' ? 'tc-etk-hata' : 'tc-etk-not'} role={sonuc.ton === 'hata' ? 'alert' : 'status'}>{sonuc.metin}</p>}
+      {sonuc?.baskiId !== undefined && kayit !== null && <CikmadiEylemi key={sonuc.baskiId} baskiId={sonuc.baskiId} kayitSayisi={kayit.idler.length} kapat={() => setSonuc(null)} />}
       {baski && createPortal(<BaskiSayfalari baski={baski} />, document.body)}
     </div>
   );
