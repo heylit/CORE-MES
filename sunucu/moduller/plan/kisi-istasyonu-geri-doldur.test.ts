@@ -27,6 +27,9 @@ describe('plan (gerçek PostgreSQL): kişi istasyonu geri doldurma göçü (3607
       klasor = await mkdtemp(join(tmpdir(), 'tmiv2-kistas-'));
       for (const ad of hepsi) await copyFile(join(GOC_KLASORU, ad), join(klasor, ad));
     }
+    // Canlıda göç rolünün geçici tablo hakkı yoktur: haklar aynen kaldırılır, göç geçici tabloya dayanırsa kırılır.
+    await sahip.sorgu(`DO $$ BEGIN EXECUTE format('REVOKE TEMPORARY ON DATABASE %I FROM PUBLIC', current_database()); END $$`);
+    await sahip.sorgu(`DO $$ BEGIN EXECUTE format('REVOKE TEMPORARY ON DATABASE %I FROM %I', current_database(), (SELECT current_user)); END $$`).catch(() => undefined);
     await sahip.sorgu('DELETE FROM goc_kaydi WHERE ad = $1', [goc]);
     assert.deepEqual(await gocleriUygula(ayar, klasor, { sema }), [goc]);
   }
