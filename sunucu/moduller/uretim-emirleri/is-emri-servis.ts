@@ -1,7 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
-import { bulunamadi, cakisma, dogrulama, eskiSurum, yetkiYok } from '#cekirdek/hata.ts';
+import { bulunamadi, cakisma, dogrulama, eskiSurum, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
@@ -19,7 +19,7 @@ import type {
 import { SABIT_HURDA_KODLARI, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import { firmaAra, firmaOzetleri, karneOlayiYaz } from '../musteri-tedarikci/disari.ts';
 import { aktifIstasyonlar, istasyonAdlari, istasyonKisiAtamalari, istasyonlar, makineGetir, operasyonTipleri } from '../istasyonlar/disari.ts';
-import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
+import { EMIR_TURU_ADLARI, PARTI_ROTASI_GECERSIZ } from '#paylasilan/sozlesme/emir-turleri.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { denemeIsaretliKimlikler, numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { kayitlarinKucukResimleri } from '../belge-merkezi/disari.ts';
@@ -1291,7 +1291,7 @@ async function adimiYerineKoy(
 // adımına kadar olan iş emirlerini taşır, ek adımlar kola konur. Üstün adedi düşer.
 // 3296-2 a: partinin türünün rotası (rota modülünden, kablolama.ts çözücüsüyle). Verilmezse bölme bugünkü gibi rotaya bakmaz.
 export interface BolmeRotasi {
-  turunRotasi: (db: Db, malzemeNo: number, emirTuru: EmirTuru) => Promise<{ rotaId: number; ad: string; revizyonId: number | null } | null>;
+  turunRotasi: (db: Db, malzemeNo: number, emirTuru: EmirTuru, secilenRotaId?: number | null) => Promise<{ rotaId: number; ad: string; revizyonId: number | null; elle: boolean } | null>;
   revizyonunRotasi: (db: Db, revizyonId: number) => Promise<number | null>;
   emreKopyala: (db: Db, kullanici: Kullanici, revizyonId: number, g: {
     adet: number; teslim: string | null; baslangic?: string | null; oncelik: number; taslak: boolean; projeId: number | null; siparisSatiriId: number | null;
@@ -1304,6 +1304,7 @@ export async function partiyiBol(
   db: Db, kullanici: Kullanici, id: number,
   g: {
     adimSira: number; adet: number; surum: number; birlesmeOpNo?: number | null | undefined; emirTuru?: EmirTuru | undefined; ekAdimlar?: EkAdim[] | undefined;
+    rotaId?: number | undefined;
   },
   rota?: BolmeRotasi,
 ): Promise<{ altEmirId: number; ayriEmir?: boolean }> {
@@ -1313,10 +1314,14 @@ export async function partiyiBol(
   await cokKatmanliDegil(db, id, COK_KATMANLI_DEGISMEZ);
   // 3099 (224): projesiz emirden proje isteyen türde parti açılmaz; türsüz bölme üstün türünü alır, denetim gerekmez.
   if (g.emirTuru !== undefined && e.projeId === null && projeZorunluMu(g.emirTuru)) throw cakisma(TUR_PROJESIZ);
-  if (rota !== undefined && g.emirTuru !== undefined && g.emirTuru !== e.emirTuru && e.malzemeNo !== null && e.kaynakRotaRevizyonId !== null) {
-    const hedef = await rota.turunRotasi(db, e.malzemeNo, g.emirTuru);
+  // 3578: elle rota verildiyse tür aynı olsa da karşılaştırılır; geçersiz rota sessizce türün rotasına düşmez.
+  const turFarkli = g.emirTuru !== undefined && g.emirTuru !== e.emirTuru;
+  if (g.rotaId !== undefined && rota === undefined) throw gecersiz(PARTI_ROTASI_GECERSIZ);
+  if (rota !== undefined && (turFarkli || g.rotaId !== undefined) && e.malzemeNo !== null && e.kaynakRotaRevizyonId !== null) {
+    const hedef = await rota.turunRotasi(db, e.malzemeNo, g.emirTuru ?? e.emirTuru, g.rotaId ?? null);
+    if (g.rotaId !== undefined && (hedef === null || !hedef.elle || hedef.rotaId !== g.rotaId)) throw gecersiz(PARTI_ROTASI_GECERSIZ);
     if (hedef !== null && hedef.rotaId !== await rota.revizyonunRotasi(db, e.kaynakRotaRevizyonId)) {
-      return { altEmirId: await ayriEmirOlarakBol(db, kullanici, e, { adet: g.adet, emirTuru: g.emirTuru, kolVeyaEk: (g.birlesmeOpNo ?? null) !== null || (g.ekAdimlar ?? []).length > 0 }, hedef, rota), ayriEmir: true };
+      return { altEmirId: await ayriEmirOlarakBol(db, kullanici, e, { adet: g.adet, emirTuru: g.emirTuru ?? e.emirTuru, kolVeyaEk: (g.birlesmeOpNo ?? null) !== null || (g.ekAdimlar ?? []).length > 0 }, hedef, rota), ayriEmir: true };
     }
   }
   const altEmirId = await kilitliEmriBol(db, acanId, e, g);

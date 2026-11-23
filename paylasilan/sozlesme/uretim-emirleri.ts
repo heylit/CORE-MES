@@ -527,6 +527,9 @@ export const partiBolGovdesi = z.object({
   birlesmeOpNo: KIMLIK.nullable().optional(),
   // Verilmezse kol üstün türünü alır.
   emirTuru: z.enum(EMIR_TURLERI).optional(),
+  // 3578: partinin elle seçilen rotası (ürünün, yürürlükte revizyonu olan). Verilmezse parti türün rotasını alır; rotası emrinkinden
+  // farklıysa ayrı emir olarak açılır.
+  rotaId: KIMLIK.optional(),
   ekAdimlar: z.array(ekAdimSemasi).max(AZAMI_ADIM, `Bir kola en çok ${AZAMI_ADIM} adım eklenir.`).optional(),
 }).strict();
 export const ekAdimGovdesi = ekAdimSemasi.extend({ surum: surumSemasi }).strict();

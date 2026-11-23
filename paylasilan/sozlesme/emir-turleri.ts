@@ -6,3 +6,5 @@ export const EMIR_TURU_ADLARI: Record<(typeof EMIR_TURLERI)[number], string> = {
 };
 // 3411 a: ürüne türüyle açılabilen rotalar; Seri'nin rotası ürünün Standart rotasıdır, ayrıca açılmaz.
 export const ROTA_ACILABILEN_TURLER = EMIR_TURLERI.filter((t) => t !== 'seri');
+// 3578: bölmede partiye elle seçilen rota ürünün yürürlükteki rotası değilse sunucunun 422 iletisi; istemci bunu Parti rotası alanının altında gösterir.
+export const PARTI_ROTASI_GECERSIZ = 'Seçilen rota bu ürünün yürürlükteki rotası değil.';
