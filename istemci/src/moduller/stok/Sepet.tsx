@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import type { FisCevabi, FislerCevabi, Hareket, HareketlerCevabi, MalzemeAyrintiCevabi, SepetCevabi, SepetSatiri, SepetTeslimCevabi, SepetTeslimEtCevabi, SepetTeslimEtGovdesi, StoktanDusGovdesi, TeslimGovdesi } from '#paylasilan/sozlesme/stok.ts';
-import { Dugme, DurumKutusu, Girdi, Kart, Pencere, Rozet, Secim, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Pencere, Rozet, Secim, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { anahtarlar } from './anahtarlar.ts';
@@ -14,6 +14,7 @@ import { AkisSeridi, type AkisAdimi } from './Hazirlik.tsx';
 import { hataMetni, korumaliPost, SayfaBasi, useIslem, useStokKomutu } from './ortak.tsx';
 import { SepeteEklePenceresi } from './SepeteEkle.tsx';
 import { RefakatAcPenceresi } from './RefakatKarti.tsx';
+import { TopluKartAc, type SatirSonucu } from './TopluKart.tsx';
 import './stok.css';
 import { paneliAc } from './panel-olayi.ts';
 
@@ -73,11 +74,18 @@ export function DepoSepeti() {
   const [sonuc, setSonuc] = useState<SepetTeslimEtCevabi | null>(null);
   const [hepsi, setHepsi] = useState<KonumSecimi | null>(null);
   const [karta, setKarta] = useState<SepetSatiri | null>(null);
+  const [topluSonuc, setTopluSonuc] = useState<SatirSonucu[] | null>(null);
+  const [secilenler, setSecilenler] = useState<ReadonlySet<number>>(new Set());
   const s = useQuery({ queryKey: [...anahtarlar.hepsi, 'sepet'], queryFn: () => api.get<SepetCevabi>('/stok/sepet') });
   const sil = useStokKomutu((g: { id: number }) => api.post<SepetCevabi>(`/stok/sepet/satirlar/${g.id}/sil`, {}), 'Satır kaldırıldı.');
   const tasi = useStokKomutu((g: TeslimGovdesi) => korumaliPost<SepetTeslimCevabi>('/stok/sepet/teslim-et', g), 'Taşındı; fiş yazıldı.', () => setHepsi(null));
   const gonder = useStokKomutu((g: SepetTeslimEtGovdesi) => korumaliPost<SepetTeslimEtCevabi>('/stok/sepet/gonder', g).then((c) => { setSonuc(c); setKimlik(yeniIstekKimligi()); return c; }), 'Teslim edildi; satırlar yolda.');
   const satirlar = s.data?.satirlar ?? [];
+  const kartsizlar = satirlar.filter((x) => x.partiId !== null && !x.refakat);
+  const topluAcik = depocu && kartsizlar.length >= 2;
+  const topluGorunur = depocu && (topluAcik || (topluSonuc ?? []).some((x) => x.hata !== null || x.atlandi !== null));
+  const secilenSatirlar = kartsizlar.filter((x) => secilenler.has(x.id));
+  const sec = (id: number) => setSecilenler((o) => { const y = new Set(o); if (!y.delete(id)) y.add(id); return y; });
   if (s.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (s.isError) return <DurumKutusu durum="hata" mesaj={hataMetni(s.error)} yenile={() => void s.refetch()} />;
   return (
@@ -95,6 +103,7 @@ export function DepoSepeti() {
                 <span>{x.hedef ? `Hedef: ${x.hedef.ad ?? x.hedef.kod}` : 'Hedef yok; Teslim et bu satırı göndermez'}</span>
                 {Number(x.miktar) > Number(x.mevcut) && <Rozet ton="hata">Yetersiz stok</Rozet>}
                 {x.partiId !== null && !x.refakat && <Rozet ton="uyari">Kartsız</Rozet>}
+                {topluGorunur && x.partiId !== null && !x.refakat && <IsaretKutusu etiket="Seç" checked={secilenler.has(x.id)} onChange={() => sec(x.id)} />}
                 {x.partiId !== null && !x.refakat && <span>{depocu ? 'Kartsız satır emre teslim edilemez. Önce karta dönüştürün.' : 'Kartsız satır emre teslim edilemez; depocu karta dönüştürür.'}</span>}
               </div>
               <div className="tc-stok-eylem">
@@ -107,6 +116,7 @@ export function DepoSepeti() {
       )}
       {/* Emre ayırma (kart #123; 3337-2 a): lot okutularak eklenen satır karta dönüşür, sepette kalır; malzeme kartla teslim edilir. */}
       {karta && <RefakatAcPenceresi kaynak={{ sepetSatirId: karta.id }} ad={`${karta.malzemeAd ?? `Kart ${karta.malzemeId}`} · ${karta.partiEtiketi ?? ''}`} kapat={() => setKarta(null)} />}
+      {topluGorunur && <TopluKartAc satirlar={kartsizlar} secili={secilenSatirlar} sonuc={topluSonuc} sonucYaz={setTopluSonuc} kartliSayisi={satirlar.filter((x) => x.partiId !== null && x.refakat).length} />}
       {satirlar.length > 0 && (
         <div className="tc-stok-eylem">
           <Dugme tur="birincil" simge="upload" disabled={!satirlar.some((x) => x.hedef)} yukleniyor={gonder.komut.isPending}
