@@ -348,10 +348,11 @@ function rfqSuggestions(r: PurchaseRequest): Suggestion[] {
 }
 // Teklif al adımının "Teklif iste" bölümü (3467): pencere değil, adımın içinde. Seçim, son tarih ve önizlenen tedarikçi çizimler
 // arasında korunur (adım her kayıtta yeniden çizilir); talep değişince sıfırlanır.
-interface RfqTaslagi { rid: string; secilen: string[] | null; sonTarih: string; onizleme: string }
+// onizleme null: kullanıcı taslağın tedarikçisini seçmedi, taslak ilk işaretli tedarikçiyi gösterir; "" elle seçilen Genel'dir.
+interface RfqTaslagi { rid: string; secilen: string[] | null; sonTarih: string; onizleme: string | null }
 let RFQ_TASLAK: RfqTaslagi | null = null;
 function rfqTaslagi(r: PurchaseRequest): RfqTaslagi {
-  if (!RFQ_TASLAK || RFQ_TASLAK.rid !== r.id) RFQ_TASLAK = { rid: r.id, secilen: null, sonTarih: addDays(todayStr(), 3), onizleme: "" };
+  if (!RFQ_TASLAK || RFQ_TASLAK.rid !== r.id) RFQ_TASLAK = { rid: r.id, secilen: null, sonTarih: addDays(todayStr(), 3), onizleme: null };
   return RFQ_TASLAK;
 }
 export function rfqPanelHTML(r: PurchaseRequest): string {
@@ -429,14 +430,17 @@ function istekFormuOku(): void {
   $("#ifo-kagit").innerHTML = istekKagidi(r, t);
   kagidiOlcekle($("#ifo-kagit"));
 }
-function syncRfqPreview(): void {
+function syncRfqPreview(elle = false): void {
   const r = S.requests[V.id ?? ""]; if (!r || !$("#rfq-prev")) return;
   const t = rfqTaslagi(r);
   const sel = $$("[data-rfq]").filter(i => i.checked).map(i => i.dataset.rfq!);
-  const p = $("#rfq-prev"); const cur = p.value || t.onizleme;
+  const p = $("#rfq-prev");
+  const secim = elle ? p.value : t.onizleme;
+  const gecerli = secim !== null && (secim === "" || sel.includes(secim));
+  const cur = gecerli ? secim : (sel[0] ?? "");
   p.innerHTML = `<option value="">Genel (tedarikçisiz)</option>${sel.map(id => `<option value="${esc(id)}" ${cur === id ? "selected" : ""}>${esc(S.suppliers[id]?.name)}</option>`).join("")}`;
-  p.value = sel.includes(cur) ? cur : "";
-  t.secilen = sel; t.sonTarih = $("#rfq-due").value || addDays(todayStr(), 3); t.onizleme = p.value;
+  p.value = cur;
+  t.secilen = sel; t.sonTarih = $("#rfq-due").value || addDays(todayStr(), 3); t.onizleme = gecerli ? secim : null;
   const e = rfqEposta(r, p.value, t.sonTarih);
   $("#rfq-out").textContent = e.govde;
   $("#rfq-konu").textContent = e.konu;
@@ -942,7 +946,7 @@ function receiveSplitOrders(r: PurchaseRequest): void {
 }
 
 /** Modüller yüklendikten sonra main.ts çağırır (döngüsel içe aktarmada sıralama sorununu önler) */
-export function registerUIHooks(): void { onAfterRender(() => { if (BULK && $("#bulk")) bulkLive(); }); onAfterRender(syncRfqPreview); }
+export function registerUIHooks(): void { onAfterRender(() => { if (BULK && $("#bulk")) bulkLive(); }); onAfterRender(() => { syncRfqPreview(); }); }
 
 /* ================= hesap dökümü ================= */
 function calcModal(r: PurchaseRequest, qid: string | undefined): void {
@@ -1574,7 +1578,7 @@ document.addEventListener("change", (e) => {
   if (t.id === "calc-q") { const r = S.requests[V.id ?? ""]; if (r) calcModal(r, t.value); return; }
   if (t.closest("#qform") && t.dataset.altAc) { const r = S.requests[V.id ?? ""]; if (draftQ) alternatifDegisti(draftQ, t.dataset.altAc); readQuoteForm(); if (r) $("#q-items").innerHTML = fiyatSatirlari(r, draftQ); updateQuoteLive(); return; }
   if (t.closest("#qform")) { readQuoteForm(); updateQuoteLive(); if (t.id === "q-sup" && t.value === "__new") $("#q-newsup").focus(); return; }
-  if (t.dataset.rfq !== undefined || t.id === "rfq-due" || t.id === "rfq-prev") { syncRfqPreview(); return; }
+  if (t.dataset.rfq !== undefined || t.id === "rfq-due" || t.id === "rfq-prev") { syncRfqPreview(t.id === "rfq-prev"); return; }
   if (t.closest("#ifo")) { istekFormuOku(); return; }
   if (t.dataset.w && UI.wDraft) { const r = S.requests[V.id ?? ""]; if (r && canWrite()) { const n = clone(r); n.weights = Object.assign({}, UI.wDraft.w); saveRequest(n); } }
 });
