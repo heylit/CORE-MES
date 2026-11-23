@@ -212,3 +212,5 @@ button.tc-prj-pano-kart { cursor: pointer; }
 .tc-prj-gruplu .tc-tablo-grup-sayi { display: none; }
 .tc-prj-grup-secim { display: inline-flex; align-items: center; gap: var(--b-2); min-height: 44px; }
 .tc-prj-gruplu .tc-tablo-grup-dugme { min-height: 44px; }
+.tc-prj-suzgec { display: grid; gap: var(--b-1); min-width: 0; margin: 0; padding: 0; border: 0; }
+.tc-prj-suzgec > legend { padding: 0; font-weight: 600; }

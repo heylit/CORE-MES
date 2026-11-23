@@ -481,6 +481,9 @@ export const sablonKalemiGovdesi = z.object({
   // 3458: kalemden açılan görevin yapılacak adımları ve kanıt zorunluluğu.
   adimlar: z.array(zorunluMetin(200, 'Adım adı boş olamaz.')).max(SABLON_ADIM_EN_COK, `Bir görevde en çok ${SABLON_ADIM_EN_COK} adım olur.`).default([]),
   kanitZorunlu: z.boolean().default(false),
+  // 3611-1: boş dizi hepsi demektir. Emir türü emrin türüne, operasyon tipi iş emrinin tipine bakar (yalnız iş emri düzeyindeki maddede etkilidir).
+  emirTurleri: z.array(z.enum(EMIR_TURLERI)).max(EMIR_TURLERI.length).default([]),
+  operasyonTipleri: z.array(z.number().int().positive()).max(50).default([]),
 })
   .refine((k) => k.yapanKisiId === null || k.yapanRolId === null, { message: TEK_YAPAN.message, path: ['yapanRolId'] })
   .refine((k) => tekKontrol(k), TEK_KONTROL).refine((k) => tekYedek(k), TEK_YEDEK).refine((k) => yedekKontrollu(k), YEDEK_KONTROLLU);
@@ -511,6 +514,8 @@ export const sablonKalemiSemasi = z.object({
   kontrolKosulu: z.enum(KONTROL_KOSULLARI),
   adimlar: z.array(z.string()),
   kanitZorunlu: z.boolean(),
+  emirTurleri: z.array(z.enum(EMIR_TURLERI)),
+  operasyonTipleri: z.array(z.number().int()),
 });
 export const sablonSemasi = z.object({
   id: z.number().int(), ad: z.string(), varsayilan: z.boolean(), etkin: z.boolean(),

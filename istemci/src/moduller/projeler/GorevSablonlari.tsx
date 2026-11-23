@@ -6,6 +6,7 @@ import type {
 import { CokSatir, Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Pencere, Rozet, Secim, Tablo, type Secenek, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { HazirlikAdimlari } from './HazirlikAdimlari.tsx';
+import { SuzgecAlanlari, suzgecOzeti, useOperasyonTipleri } from './Suzgec.tsx';
 import { anahtarlar } from './anahtarlar.ts';
 import { AtamaSecimi, YAPAN_IPUCU, atamaCoz, atamaDegeri, useAtamaSecenekleri } from './Atama.tsx';
 import { SIKLIK_METNI, siklik, useHazirlikMaddeleri } from './hazirlik-maddeleri.ts';
@@ -98,6 +99,8 @@ interface KalemTaslagi {
   yapan: string; kontrol: string; yedek: string; onceki: number | null; hazirlik: string; kosul: KontrolKosulu;
   // 3458 dilim 2: yapılacaklar her satırda bir adım; görev dağıtılınca adımlarıyla ve kanıt kuralıyla açılır.
   adimlar: string; kanitZorunlu: boolean;
+  // 3611-1: boş = hepsi.
+  emirTurleri: readonly string[]; operasyonTipleri: readonly number[];
   adlar: { yapan: string | null; kontrol: string | null; yedek: string | null };
 }
 
@@ -111,6 +114,7 @@ function taslaklar(sablon: Sablon | null, yeniAnahtar: () => number): KalemTasla
     yedek: atamaDegeri({ kisiId: k.yedekKontrolKisiId, rolId: k.yedekKontrolRolId }),
     onceki: k.oncekiSira === null ? null : anahtarlar[k.oncekiSira] ?? null,
     hazirlik: k.hazirlikMaddesi ?? '', kosul: k.kontrolKosulu, adimlar: k.adimlar.join('\n'), kanitZorunlu: k.kanitZorunlu,
+    emirTurleri: k.emirTurleri, operasyonTipleri: k.operasyonTipleri,
     adlar: {
       yapan: atamaMetni(k.yapanKisiAd, k.yapanRolAd), kontrol: atamaMetni(k.kontrolKisiAd, k.kontrolRolAd),
       yedek: atamaMetni(k.yedekKontrolKisiAd, k.yedekKontrolRolAd),
@@ -122,7 +126,7 @@ function taslaklar(sablon: Sablon | null, yeniAnahtar: () => number): KalemTasla
 const ADIM_EN_COK = 50;
 const adimSatirlari = (metin: string): string[] => metin.split('\n').map((x) => x.trim()).filter((x) => x !== '');
 
-function govdeKalemi(k: KalemTaslagi, sira: Map<number, number>): SablonKalemiGovdesi {
+function govdeKalemi(k: KalemTaslagi, sira: Map<number, number>, emirDuzeyi: boolean): SablonKalemiGovdesi {
   const y = atamaCoz(k.yapan);
   const c = atamaCoz(k.kontrol);
   const yd = c.kisiId === null && c.rolId === null ? atamaCoz('') : atamaCoz(k.yedek);
@@ -132,6 +136,10 @@ function govdeKalemi(k: KalemTaslagi, sira: Map<number, number>): SablonKalemiGo
     oncekiSira: k.onceki === null ? null : sira.get(k.onceki) ?? null,
     hazirlikMaddesi: k.hazirlik === '' ? null : k.hazirlik as SablonKalemiGovdesi['hazirlikMaddesi'],
     kontrolKosulu: k.kosul, adimlar: adimSatirlari(k.adimlar), kanitZorunlu: k.kanitZorunlu,
+    // Madde seçilmemişse (proje başına görev) süzgeç anlamsızdır; boş gider.
+    emirTurleri: k.hazirlik === '' ? [] : k.emirTurleri as SablonKalemiGovdesi['emirTurleri'],
+    // Emir düzeyindeki maddede operasyon seçimi görünmez; gizli kalan seçim kaydedilmez.
+    operasyonTipleri: k.hazirlik === '' || emirDuzeyi ? [] : [...k.operasyonTipleri],
   };
 }
 
@@ -185,7 +193,7 @@ function SablonFormu({ sablon, kapat }: { sablon: Sablon | null; kapat: () => vo
     acikYaz((a) => new Set(a).add(anahtar));
     kalemlerYaz((l) => [...l, {
       anahtar, ad: '', aciklama: '', asama: '', dayanak: 'baslangic', gun: '0', sureGun: '1', yapan: '', kontrol: '', yedek: '',
-      onceki: null, hazirlik: '', kosul: 'her-zaman', adimlar: '', kanitZorunlu: false, adlar: { yapan: null, kontrol: null, yedek: null },
+      onceki: null, hazirlik: '', kosul: 'her-zaman', adimlar: '', kanitZorunlu: false, emirTurleri: [], operasyonTipleri: [], adlar: { yapan: null, kontrol: null, yedek: null },
     }]);
   };
   // Örnek yalnız boş yeni şablonu doldurur; açık olmayan madde proje başına satıra döner.
@@ -199,6 +207,8 @@ function SablonFormu({ sablon, kapat }: { sablon: Sablon | null; kapat: () => vo
     if (k.hazirlik === '') return 'Projeyle bir kez açılır.';
     return `${m?.ad ?? k.hazirlik}: ${m?.isEmriDuzeyi === true ? 'her operasyon' : 'her üretim emri'} için ayrı görev açılır.`;
   };
+  const tipAdlari = new Map((useOperasyonTipleri().data?.operasyonTipleri ?? []).map((t) => [t.id, t.ad]));
+  const maddeIsEmriDuzeyi = (kod: string): boolean => maddeListesi?.find((x) => x.kod === kod)?.isEmriDuzeyi === true;
   const acikMaddeler = new Set((maddeListesi ?? []).filter((m) => m.acik).map((m) => m.kod));
   const ornekleDoldur = () => {
     const anahtarlar = ORNEK_SABLON.map(() => yeniAnahtar());
@@ -207,7 +217,7 @@ function SablonFormu({ sablon, kapat }: { sablon: Sablon | null; kapat: () => vo
       anahtar: anahtarlar[i] ?? 0, ad: o.ad, aciklama: '', asama: o.asama, dayanak: o.dayanak, gun: String(o.gun), sureGun: String(o.sureGun),
       yapan: '', kontrol: '', yedek: '', onceki: o.onceki === null ? null : anahtarlar[o.onceki] ?? null,
       hazirlik: o.madde !== null && acikMaddeler.has(o.madde) ? o.madde : '', kosul: 'her-zaman', adimlar: o.adimlar.join('\n'),
-      kanitZorunlu: o.kanitZorunlu, adlar: { yapan: null, kontrol: null, yedek: null },
+      kanitZorunlu: o.kanitZorunlu, emirTurleri: [], operasyonTipleri: [], adlar: { yapan: null, kontrol: null, yedek: null },
     })));
   };
   const ilet = (o: FormEvent) => {
@@ -216,7 +226,7 @@ function SablonFormu({ sablon, kapat }: { sablon: Sablon | null; kapat: () => vo
     const geri = kalemler.findIndex((k, i) => k.onceki !== null && (sira.get(k.onceki) ?? i) >= i);
     if (geri >= 0) { hataYaz(`${geri + 1}. görev: önceki görev listede bu görevden önce olmalı.`); return; }
     hataYaz(null);
-    komut.mutate({ ad: ad.trim(), varsayilan, etkin: varsayilan || etkin, kalemler: kalemler.map((k) => govdeKalemi(k, sira)) });
+    komut.mutate({ ad: ad.trim(), varsayilan, etkin: varsayilan || etkin, kalemler: kalemler.map((k) => govdeKalemi(k, sira, maddeListesi?.find((m) => m.kod === k.hazirlik)?.isEmriDuzeyi === false)) });
   };
 
   return (
@@ -253,6 +263,7 @@ function SablonFormu({ sablon, kapat }: { sablon: Sablon | null; kapat: () => vo
             <legend>{`${String(i + 1)}. ${k.ad.trim() || 'Adsız görev'}`}</legend>
             <div className="tc-prj-bag">
               <Rozet ton={k.hazirlik === '' ? 'pasif' : 'bilgi'}>{SIKLIK_METNI[siklik(k.hazirlik, maddeListesi)]}</Rozet>
+              {k.hazirlik !== '' && suzgecOzeti(k, tipAdlari, maddeIsEmriDuzeyi(k.hazirlik)).map((o) => <Rozet key={o} ton="bilgi">{o}</Rozet>)}
               {yapanAdi(k) === null ? <Rozet ton="uyari">Yapan yok</Rozet> : <span className="tc-prj-soluk">{yapanAdi(k)}</span>}
               {adimSatirlari(k.adimlar).length > 0 && <span className="tc-prj-soluk">{`${String(adimSatirlari(k.adimlar).length)} adım`}</span>}
               <Dugme simge={aciklar.has(k.anahtar) ? 'up' : 'edit'} aria-expanded={aciklar.has(k.anahtar)} onClick={() => { katla(k.anahtar); }}>
@@ -284,6 +295,12 @@ function SablonFormu({ sablon, kapat }: { sablon: Sablon | null; kapat: () => vo
                   <Dugme simge="plus" onClick={() => { yeniSutunYaz(k); }}>Yeni sütun</Dugme>
                 )}
               </div>
+              {k.hazirlik !== '' && (
+                <SuzgecAlanlari
+                  deger={k} isEmriDuzeyi={maddeIsEmriDuzeyi(k.hazirlik)}
+                  degisti={(d) => { degistir(k.anahtar, { emirTurleri: d.emirTurleri, operasyonTipleri: d.operasyonTipleri }); }}
+                />
+              )}
               <AtamaSecimi
                 etiket="Yapan" deger={k.yapan} ad={k.adlar.yapan} secenekler={atamalar.secenekler} hata={atamalar.hata} bos="Atanmadı" ipucu={YAPAN_IPUCU}
                 degistir={(d) => { degistir(k.anahtar, { yapan: d }); }}

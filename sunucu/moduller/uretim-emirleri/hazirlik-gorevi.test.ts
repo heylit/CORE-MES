@@ -192,6 +192,34 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
     assert.ok(v.projeler.some((x) => x.id === projeId));
   });
 
+  // 3611-1: pencerenin "kaç görev doğacak" sayısı ve özeti kalemin emir türü ve operasyon süzgecine uyar (süzgeçsiz hesap bu testi kırar).
+  test('3611-1 pencere seçenekleri: emir türü uymayan ve operasyonu uymayan kalem sayılmaz', async () => {
+    const { uretimEmriId } = await emirAc(null);
+    const sablon = async (ad: string, kalemler: { madde: string; turler?: string[]; tipler?: number[] }[]) => {
+      const id = (await o().sahip.tek<{ id: number }>('INSERT INTO projeler_gorev_sablonu (ad, olusturan_id) VALUES ($1, $2) RETURNING id', [ad, yoneticiId]))!.id;
+      let sira = 0;
+      for (const k of kalemler) {
+        await o().sahip.sorgu(
+          `INSERT INTO projeler_gorev_sablon_kalemi (sablon_id, sira, ad, dayanak, gun, sure_gun, yapan_rol_id, hazirlik_maddesi, emir_turleri, operasyon_tipleri)
+           VALUES ($1, $2, $3, 'baslangic', 0, 2, $4, $5, $6::text[], $7::int[])`, [id, (sira += 1), k.madde, planlamaRolId, k.madde, k.turler ?? [], k.tipler ?? []]);
+      }
+      return id;
+    };
+    const turde = await sablon('SZG tür', [{ madde: 'cnc', turler: ['fai'] }, { madde: 'cizim' }]);
+    const uyan = await sablon('SZG uyan', [{ madde: 'cnc', turler: ['seri'], tipler: [tipId] }]);
+    const uymayan = await sablon('SZG op', [{ madde: 'cnc', tipler: [tipId + 100000] }, { madde: 'cizim', turler: ['seri'] }]);
+    const c = await app.inject({ method: 'GET', url: `/api/adimli-emirler/${String(uretimEmriId)}/hazirlik-projesi`, headers: { cookie: cerezler.get('dagitici') ?? '' } });
+    assert.equal(c.statusCode, 200, c.body);
+    const v = c.json<{ sablonlar: { id: number; dogacak: number; ozet: string }[] }>().sablonlar;
+    const al = (id: number) => v.find((x) => x.id === id);
+    assert.equal(al(turde)?.dogacak, 1, 'seri emirde yalnız FAI olan CNC kalemi sayılmaz');
+    assert.doesNotMatch(al(turde)?.ozet ?? '', /CNC/);
+    assert.equal(al(uyan)?.dogacak, 1);
+    assert.match(al(uyan)?.ozet ?? '', /CNC kurulumu \(emir başına tek görev, 2 iş emri adım\)/);
+    assert.equal(al(uymayan)?.dogacak, 1, 'operasyonu uymayan CNC sayılmaz, çizim sayılır');
+    assert.doesNotMatch(al(uymayan)?.ozet ?? '', /CNC/);
+  });
+
   test('Proje > Hazırlık: deneme hiçbir şey yazmaz ve alıcıyı rol üye sayısıyla verir; dağıt aynı sayıda görev açar; matris hücreleri görevden', async () => {
     const dagitProjesi = (await o().sahip.tek<{ id: number }>("INSERT INTO projeler_proje (kod, ad, olusturan_id) VALUES ('UE.HZD', 'Dağıt', $1) RETURNING id", [yoneticiId]))!.id;
     const a = await emirAc(dagitProjesi);
