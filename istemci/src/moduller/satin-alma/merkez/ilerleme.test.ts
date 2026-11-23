@@ -92,10 +92,8 @@ describe('talebin yedi adımı (kart #939, 3467 Teklif al)', () => {
     expect(kutucuk().checked).toBe(false);
     kutucuk().click();
     kutucuk().dispatchEvent(new Event('change', { bubbles: true }));
-    await vi.waitFor(() => expect(kok.querySelector<HTMLSelectElement>('#rfq-prev')!.value).toBe(''));
-    const prev = kok.querySelector<HTMLSelectElement>('#rfq-prev')!;
-    prev.value = String(TED.firmaId);
-    prev.dispatchEvent(new Event('change', { bubbles: true }));
+    // 3589: işaretlenen tedarikçi taslağa kendiliğinden gelir; ayrıca seçmek gerekmez.
+    await vi.waitFor(() => expect(kok.querySelector<HTMLSelectElement>('#rfq-prev')!.value).toBe(String(TED.firmaId)));
     expect(kok.querySelector('#rfq-alici')?.textContent).toBe('orn@ornek.invalid');
     expect(kok.querySelector('#rfq-konu')?.textContent).toBe('Fiyat teklifi talebi, ST-2026-001 Deneme talep');
     expect(kok.querySelector('#rfq-out')?.textContent).toContain('Sayın ORN- Yetkili,');

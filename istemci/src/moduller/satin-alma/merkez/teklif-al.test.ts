@@ -91,7 +91,18 @@ describe('3467 Teklif al ekranı', () => {
     // E-postası olmayan tedarikçi: alıcı yazılmaz, programda açma düğmesi gizli.
     kutu(42).click(); degistir(kutu(42));
     const sec = kok.querySelector<HTMLSelectElement>('#rfq-prev')!;
-    sec.value = '42'; degistir(sec);
+    // 3589: işaretlenen tedarikçi taslağa kendiliğinden gelir.
+    expect(sec.value).toBe('42');
+    expect(alici()).toBe('e-posta adresi kayıtlı değil');
+    // Elle seçilen Genel, başka tedarikçi işaretlenince korunur; işaret kalkınca seçim kalanlara döner.
+    sec.value = ''; degistir(sec);
+    kutu(41).click(); degistir(kutu(41));
+    expect(sec.value).toBe('');
+    expect(alici()).toBe('tedarikçi seçin');
+    sec.value = '41'; degistir(sec);
+    expect(alici()).toBe('orn@ornek.invalid');
+    kutu(41).click(); degistir(kutu(41));
+    expect(sec.value).toBe('42');
     expect(alici()).toBe('e-posta adresi kayıtlı değil');
     expect(posta().hidden).toBe(true);
     expect(posta().getAttribute('href')).toBeNull();
