@@ -140,6 +140,7 @@ function mask(W){const m=new Uint8Array(NS);for(const [a,b] of W){const k0=Math.
     @property {Record<string, any>} AP
     @property {Record<string, any>} [IK]
     @property {Record<string, string>} [IKK]
+    @property {Map<string, { eski: number, yeni: number }>} [kilitKaymalari]
     @property {any[]} ops
     @property {any} byId
     @property {Record<string, any>} jobs
