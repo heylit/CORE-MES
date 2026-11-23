@@ -187,7 +187,43 @@ describe('Bildirimler sayfası (Bildirim Merkezi)', () => {
     fireEvent.click(within(cubuk).getByRole('button', { name: 'Arşive kaldır' }));
     expect(await screen.findByText(/2 bildirim arşive kaldırıldı\. 1 bildirim onay beklediği için kaldırılmadı/)).toBeTruthy();
     expect(istekler.filter((i) => i.yontem === 'POST').map((i) => i.yol)).toEqual(['/bildirimler/1/arsivle', '/bildirimler/2/arsivle']);
-    expect(screen.queryByRole('toolbar', { name: 'Seçili bildirimler' })).toBeNull();
+    expect(within(cubuk).getByText('0 seçili')).toBeTruthy();
+    expect((within(cubuk).getByRole('button', { name: 'Arşive kaldır' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('3595: çubuk seçim yokken de durur; tümünü seç sayfadakileri, gün kutusu o günü seçer ve kısmi durum gösterilir', async () => {
+    const bugun = new Date();
+    const dun = new Date(bugun.getFullYear(), bugun.getMonth(), bugun.getDate() - 1, 10).toISOString();
+    const istekler = sunucuKur({
+      'GET /bildirimler': () => json(200, liste([
+        B({ id: 1, baslik: 'Bir', olusturuldu: bugun.toISOString() }), B({ id: 2, baslik: 'İki', olusturuldu: bugun.toISOString() }),
+        B({ id: 3, baslik: 'Üç', olusturuldu: dun }),
+      ])),
+      'POST /bildirimler/1/okundu': () => json(200, B({ id: 1 })),
+      'POST /bildirimler/2/okundu': () => json(200, B({ id: 2 })),
+      'POST /bildirimler/3/okundu': () => json(200, B({ id: 3 })),
+    });
+    ac('/bildirim-merkezi');
+    const cubuk = await screen.findByRole('toolbar', { name: 'Seçili bildirimler' });
+    expect(within(cubuk).getByText('0 seçili')).toBeTruthy();
+    for (const ad of ['Okundu yap', 'Arşive kaldır', 'Seçimi bırak']) expect((within(cubuk).getByRole('button', { name: ad }) as HTMLButtonElement).disabled).toBe(true);
+    const tumu = within(cubuk).getByRole('checkbox', { name: 'Bu sayfadakilerin tümünü seç' }) as HTMLInputElement;
+    const dunKutusu = screen.getByRole('checkbox', { name: 'Dün: tümünü seç' }) as HTMLInputElement;
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Bugün: tümünü seç' }));
+    expect(within(cubuk).getByText('2 seçili')).toBeTruthy();
+    expect(tumu.indeterminate).toBe(true);
+    expect(dunKutusu.checked).toBe(false);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Seç: Bir' }));
+    expect((screen.getByRole('checkbox', { name: 'Bugün: tümünü seç' }) as HTMLInputElement).indeterminate).toBe(true);
+    fireEvent.click(tumu);
+    expect(within(cubuk).getByText('3 seçili')).toBeTruthy();
+    expect(tumu.checked && dunKutusu.checked).toBe(true);
+    fireEvent.click(within(cubuk).getByRole('button', { name: 'Okundu yap' }));
+    expect(await screen.findByText('3 bildirim okundu yapıldı.')).toBeTruthy();
+    expect(istekler.filter((i) => i.yontem === 'POST').map((i) => i.yol)).toEqual(['/bildirimler/1/okundu', '/bildirimler/2/okundu', '/bildirimler/3/okundu']);
+    fireEvent.click(tumu);
+    fireEvent.click(tumu);
+    expect(within(cubuk).getByText('0 seçili')).toBeTruthy();
   });
 
   it('3435-1: tercih ve Bu cihaz sayfası yoktur; eski adresler Profilim\'e gider', async () => {
