@@ -1157,9 +1157,11 @@ export const refakatKartlariCevabi = z.object({
 });
 export type RefakatKartlariCevabi = z.output<typeof refakatKartlariCevabi>;
 export type RefakatKartlariSatiri = RefakatKartlariCevabi['kartlar'][number];
+// Okutulan kodun üst sınırı: refakat kartı gibi özet kodlar (CM1: kimlik, parça, işlemler, lot, termin, basım) 80 karakteri aşar.
+export const OKUTULAN_KOD_EN_FAZLA = 300;
 // Lota bağlama: okutulan lot etiketi ya da (eksik malzeme başka kartın malzemesiyse) o refakat kartı. Lot yetmezse yeten düşümler
 // bağlanır, kalan bekler; hepsi bağlanınca kart o lotu alır ya da emrin aynı lotlu kartına birleşir.
-export const refakatLotaBaglaGovdesi = z.object({ kod: z.string().trim().min(1).max(120), surum: surumSemasi });
+export const refakatLotaBaglaGovdesi = z.object({ kod: z.string().trim().min(1).max(OKUTULAN_KOD_EN_FAZLA), surum: surumSemasi });
 export type RefakatLotaBaglaGovdesi = z.input<typeof refakatLotaBaglaGovdesi>;
 export const refakatLotaBaglaCevabi = z.object({ refakat: refakatPartisi, baglanan: ondalikMetinSemasi, bekleyen: ondalikMetinSemasi });
 export type RefakatLotaBaglaCevabi = z.output<typeof refakatLotaBaglaCevabi>;
@@ -1187,7 +1189,7 @@ export const refakatPartisiKartiCevabi = z.object({ refakat: refakatPartisi, kar
 export type RefakatPartisiKartiCevabi = z.output<typeof refakatPartisiKartiCevabi>;
 
 // ---- Kod çözümleme (Okut): konum kodu, "LOC:" önekli konum, kart numarası ya da "MLZ:" önekli kart numarası (DEP-55) --------
-export const kodCozSorgusu = z.object({ kod: z.string().trim().min(1).max(80) });
+export const kodCozSorgusu = z.object({ kod: z.string().trim().min(1).max(OKUTULAN_KOD_EN_FAZLA) });
 // 3215 c: hammaddede kesit çizimi için biçim ve ölçüler (mm); başka kart alanı taşınmaz. Hammadde değilse ya da ölçü yoksa null.
 export const malzemeKesiti = z.object({ form: z.string().min(1).max(40), olcu: z.record(z.string().max(10), z.number().positive()) }).strict();
 export const kodCozCevabi = z.discriminatedUnion('tur', [
@@ -1355,7 +1357,7 @@ export const malzemeYerleriCevabi = z.object({
 });
 export type MalzemeYerleriCevabi = z.output<typeof malzemeYerleriCevabi>;
 // Okutarak al (soru 96 b): alan kişi malzemeyi (ya da lotu) ve aldığı yerin etiketini okutur; sunucu iki kodu yeniden çözer.
-export const okutarakAlSorgusu = z.object({ kod: z.string().trim().min(1).max(120), yerKodu: z.string().trim().min(1).max(120) });
+export const okutarakAlSorgusu = z.object({ kod: z.string().trim().min(1).max(OKUTULAN_KOD_EN_FAZLA), yerKodu: z.string().trim().min(1).max(120) });
 export const okutarakAlCevabi = z.object({
   malzeme: z.object({ id: z.number().int(), kod: z.string().nullable(), ad: z.string().nullable(), birim: z.string().nullable() }),
   yer: z.object({ konumId: z.number().int(), istasyonId: z.number().int(), kod: z.string(), ad: z.string() }),
@@ -1365,7 +1367,7 @@ export const okutarakAlCevabi = z.object({
 });
 export type OkutarakAlCevabi = z.output<typeof okutarakAlCevabi>;
 export const okutarakAlGovdesi = z.object({
-  kod: z.string().trim().min(1).max(120), yerKodu: z.string().trim().min(1).max(120), istasyonId: kimlik,
+  kod: z.string().trim().min(1).max(OKUTULAN_KOD_EN_FAZLA), yerKodu: z.string().trim().min(1).max(120), istasyonId: kimlik,
   partiId: buyukKimlik.nullable(), statuId: kimlik.nullable(), miktar: miktarSemasi, uretimEmriId: kimlik.nullable().optional(),
   kaynakKimligi: z.string().trim().min(3).max(120),
 });
