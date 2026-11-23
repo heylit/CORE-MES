@@ -8,7 +8,7 @@ import type {
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { kisiAdlari, rolSecenekleri, rollerdekiKisiler } from '../kisiler/disari.ts';
 import {
-  ADIM_EN_COK, hazirlikGorevleri, hazirlikGorevleriAc, hazirlikIsEmriEklendi, hazirlikSablonlari, projeGetir, projeninHazirlikGorevleri, projeSecenekleri,
+  hedefYerleri, hazirlikGorevleri, hazirlikGorevleriAc, hazirlikIsEmriEklendi, hazirlikSablonlari, projeGetir, projeninHazirlikGorevleri, projeSecenekleri,
 } from '../projeler/disari.ts';
 import type { HazirlikHedefleri, HazirlikMaddeBilgisi, HazirlikPlani } from '../projeler/disari.ts';
 import { hazirliklar } from './hazirlik.ts';
@@ -31,9 +31,9 @@ export async function emrinHazirlikGorevleriniAc(db: Db, kisiId: number, emirId:
   if (e === null) throw bulunamadi(EMIR_YOK);
   const ihlal = acikEmirIhlali(e.durum, e.arsiv);
   if (ihlal !== null) throw cakisma(ihlal);
-  const isEmirleri = (await s.isEmirleriGetir(db, [emirId])).map((i) => ({ id: i.id, opNo: i.opNo }));
+  const isEmirleri = (await s.isEmirleriGetir(db, [emirId])).map((i) => ({ id: i.id, opNo: i.opNo, operasyonTipiId: i.operasyonTipiId }));
   const r = await hazirlikGorevleriAc(db, kisiId, {
-    projeId, sablonId, hedefler: [{ emriId: emirId, emirNo: e.emirNo, isEmirleri }], maddeler: await acikMaddeler(db),
+    projeId, sablonId, hedefler: [{ emriId: emirId, emirNo: e.emirNo, emirTuru: e.emirTuru, isEmirleri }], maddeler: await acikMaddeler(db),
     tarih: { baslangic: e.baslangic, bitis: e.teslim },
   });
   return r.eklenen;
@@ -43,7 +43,8 @@ export async function emrinHazirlikGorevleriniAc(db: Db, kisiId: number, emirId:
 export async function isEmriHazirligiEkle(db: Db, kisiId: number, emirId: number, isEmriId: number, opNo: number): Promise<number> {
   const e = await s.ustEmirBul(db, emirId, false);
   if (e === null) return 0;
-  return hazirlikIsEmriEklendi(db, kisiId, { emriId: emirId, emirNo: e.emirNo, isEmriId, opNo });
+  const ie = await s.isEmriBul(db, isEmriId);
+  return hazirlikIsEmriEklendi(db, kisiId, { emriId: emirId, emirNo: e.emirNo, isEmriId, opNo, operasyonTipiId: ie?.operasyonTipiId });
 }
 
 export async function hazirlikProjesiKur(db: Db, kullanici: Kullanici, emirId: number, g: HazirlikProjesiGovdesi): Promise<HazirlikProjesiCevabi> {
@@ -53,17 +54,26 @@ export async function hazirlikProjesiKur(db: Db, kullanici: Kullanici, emirId: n
 export async function hazirlikProjesiSecenekleri(db: Db, emirId: number): Promise<HazirlikProjesiSecenekleri> {
   const e = await s.ustEmirBul(db, emirId, false);
   if (e === null) throw bulunamadi(EMIR_YOK);
-  const isEmriSayisi = (await s.isEmirleriGetir(db, [emirId])).length;
+  const isEmirleri = (await s.isEmirleriGetir(db, [emirId])).map((i) => ({ id: i.id, opNo: i.opNo, operasyonTipiId: i.operasyonTipiId }));
   const maddeler = await acikMaddeler(db);
   const sablonlar = (await hazirlikSablonlari(db)).map((x) => {
-    const acik = x.maddeler.flatMap((m) => { const b = maddeler.get(m); return b === undefined ? [] : [{ kod: m, ...b }]; });
-    const tek = acik.filter((m) => !m.isEmriDuzeyi || isEmriSayisi === 0);
-    const ie = acik.filter((m) => m.isEmriDuzeyi && isEmriSayisi > 0);
+    // 3611-1: kalemin emir türü ve operasyon süzgeci emre uymuyorsa o kalem görev doğurmaz; sayı ve özet süzülmüş hâlden gelir.
+    const acik = x.kalemler.flatMap((k) => {
+      const b = maddeler.get(k.madde);
+      if (b === undefined) return [];
+      const yer = hedefYerleri({ emirNo: e.emirNo, emirTuru: e.emirTuru, isEmirleri }, b.isEmriDuzeyi, false, k);
+      return yer.length === 0 ? [] : [{ ...b, yer: yer.length, adim: yer.reduce((t, y) => t + y.adimlar.length, 0) }];
+    });
+    const tek = acik.filter((m) => !m.isEmriDuzeyi || isEmirleri.length === 0);
+    const ie = acik.filter((m) => m.isEmriDuzeyi && isEmirleri.length > 0);
+    const adimli = ie.filter((m) => m.adim > 0);
+    const ayri = ie.filter((m) => m.adim === 0);
     const parcalar = [
-      ...(ie.length > 0 ? [`${ie.map((m) => m.ad).join(', ')} (emir başına tek görev, ${String(isEmriSayisi)} iş emri adım)`] : []),
+      ...(adimli.length > 0 ? [`${adimli.map((m) => m.ad).join(', ')} (emir başına tek görev, ${String(Math.max(...adimli.map((m) => m.adim)))} iş emri adım)`] : []),
+      ...(ayri.length > 0 ? [`${ayri.map((m) => m.ad).join(', ')} (iş emri başına görev)`] : []),
       ...(tek.length > 0 ? [`emir başına ${tek.map((m) => m.ad).join(', ')}`] : []),
     ];
-    return { id: x.id, ad: x.ad, varsayilan: x.varsayilan, dogacak: tek.length + ie.length * (isEmriSayisi <= ADIM_EN_COK ? 1 : isEmriSayisi), ozet: parcalar.join(' ve ') };
+    return { id: x.id, ad: x.ad, varsayilan: x.varsayilan, dogacak: acik.reduce((t, m) => t + m.yer, 0), ozet: parcalar.join(' ve ') };
   });
   return {
     emirNo: e.emirNo, emirProjeId: e.projeId, baslangic: e.baslangic, teslim: e.teslim,
@@ -138,7 +148,7 @@ export async function projeninHazirlikHedefleri(db: Db, projeId: number): Promis
   return {
     maddeler: await acikMaddeler(db),
     hedefler: emirler.map((e) => ({
-      hedef: { emriId: e.id, emirNo: e.emirNo, isEmirleri: isEmirleri.filter((i) => i.uretimEmriId === e.id).map((i) => ({ id: i.id, opNo: i.opNo })) },
+      hedef: { emriId: e.id, emirNo: e.emirNo, emirTuru: e.emirTuru, isEmirleri: isEmirleri.filter((i) => i.uretimEmriId === e.id).map((i) => ({ id: i.id, opNo: i.opNo, operasyonTipiId: i.operasyonTipiId })) },
       tarih: { baslangic: e.baslangic, bitis: e.teslim },
     })),
   };
@@ -156,7 +166,7 @@ export async function hazirlikDagit(db: Db, kullanici: Kullanici, g: HazirlikDag
   for (const e of emirler) {
     const r = await hazirlikGorevleriAc(db, kullanici.id, {
       projeId: g.projeId, sablonId: g.sablonId, maddeler, tarih: { baslangic: e.baslangic, bitis: e.teslim },
-      hedefler: [{ emriId: e.id, emirNo: e.emirNo, isEmirleri: isEmirleri.filter((i) => i.uretimEmriId === e.id).map((i) => ({ id: i.id, opNo: i.opNo })) }],
+      hedefler: [{ emriId: e.id, emirNo: e.emirNo, emirTuru: e.emirTuru, isEmirleri: isEmirleri.filter((i) => i.uretimEmriId === e.id).map((i) => ({ id: i.id, opNo: i.opNo, operasyonTipiId: i.operasyonTipiId })) }],
     }, g.deneme);
     plan.push(...r.plan);
     eklenen += r.eklenen;

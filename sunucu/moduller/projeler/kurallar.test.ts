@@ -137,4 +137,17 @@ describe('hedefYerleri (3611)', () => {
     assert.equal(hedefYerleri(emir(ADIM_EN_COK), true, false).length, 1);
     assert.equal(hedefYerleri(emir(ADIM_EN_COK + 1), true, false).length, ADIM_EN_COK + 1);
   });
+  // 3611-1: kalemin emir türü ve operasyon süzgeci; boş liste hepsi demektir.
+  test('süzgeç: emir türü uymazsa yer yok; operasyon süzgeci iş emirlerini daraltır, hiçbiri uymazsa yer yok', () => {
+    const e = { emirNo: 'ORN-E-1', emirTuru: 'seri', isEmirleri: [{ id: 1, opNo: 10, operasyonTipiId: 7 }, { id: 2, opNo: 20, operasyonTipiId: 8 }, { id: 3, opNo: 30, operasyonTipiId: 7 }] };
+    assert.equal(hedefYerleri(e, true, false, { emirTurleri: [], operasyonTipleri: [] })[0]?.adimlar.length, 3);
+    assert.deepEqual(hedefYerleri(e, true, false, { emirTurleri: ['fai', 'numune'] }), []);
+    assert.equal(hedefYerleri(e, false, false, { emirTurleri: ['seri'] }).length, 1);
+    assert.deepEqual(hedefYerleri(e, true, false, { operasyonTipleri: [7] })[0]?.adimlar.map((x) => x.isEmriId), [1, 3]);
+    assert.deepEqual(hedefYerleri(e, true, true, { operasyonTipleri: [8] }).map((x) => x.isEmriId), [2]);
+    assert.deepEqual(hedefYerleri(e, true, false, { operasyonTipleri: [99] }), []);
+    // Emir düzeyindeki maddede operasyon süzgeci işlemez; iş emri tipi bilinmiyorsa süzgeç o iş emrini almaz.
+    assert.equal(hedefYerleri(e, false, false, { operasyonTipleri: [99] }).length, 1);
+    assert.deepEqual(hedefYerleri({ emirNo: 'X', isEmirleri: [{ id: 5, opNo: 10 }] }, true, false, { operasyonTipleri: [7] }), []);
+  });
 });

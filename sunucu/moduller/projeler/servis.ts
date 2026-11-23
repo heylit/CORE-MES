@@ -826,7 +826,7 @@ async function sablonlariCevir(db: Db, satirlar: readonly SablonSatiri[]): Promi
         yedekKontrolRolId: k.yedek_kontrol_rol_id, yedekKontrolRolAd: ad(roller, k.yedek_kontrol_rol_id),
         oncekiSira: k.onceki_kalem_id === null ? null : sira.get(k.onceki_kalem_id) ?? null,
         hazirlikMaddesi: k.hazirlik_maddesi as Sablon['kalemler'][number]['hazirlikMaddesi'], kontrolKosulu: k.kontrol_kosulu,
-        adimlar: k.adimlar, kanitZorunlu: k.kanit_zorunlu,
+        adimlar: k.adimlar, kanitZorunlu: k.kanit_zorunlu, emirTurleri: k.emir_turleri as Sablon['kalemler'][number]['emirTurleri'], operasyonTipleri: k.operasyon_tipleri,
       })),
     };
   });
@@ -937,6 +937,7 @@ const kalemDonmus = (k: SablonKalemiSatiri): Record<string, unknown> => ({
   yapanKisiId: k.yapan_kisi_id, yapanRolId: k.yapan_rol_id, kontrolKisiId: k.kontrol_kisi_id, kontrolRolId: k.kontrol_rol_id,
   yedekKontrolKisiId: k.yedek_kontrol_kisi_id, yedekKontrolRolId: k.yedek_kontrol_rol_id, oncekiKalemId: k.onceki_kalem_id,
   hazirlikMaddesi: k.hazirlik_maddesi, kontrolKosulu: k.kontrol_kosulu, adimlar: k.adimlar, kanitZorunlu: k.kanit_zorunlu,
+  emirTurleri: k.emir_turleri, operasyonTipleri: k.operasyon_tipleri,
 });
 
 export async function secilenSablon(db: Db, sablonId: number): Promise<SablonSatiri> {

@@ -546,13 +546,13 @@ export interface SablonKalemiSatiri {
   id: number; sablon_id: number; sira: number; ad: string; aciklama: string | null; asama: string | null; dayanak: 'baslangic' | 'termin'; gun: number;
   sure_gun: number; yapan_rol_id: number | null; yapan_kisi_id: number | null; kontrol_rol_id: number | null; kontrol_kisi_id: number | null;
   yedek_kontrol_rol_id: number | null; yedek_kontrol_kisi_id: number | null; onceki_kalem_id: number | null; hazirlik_maddesi: string | null;
-  kontrol_kosulu: 'her-zaman' | 'yeni-revize'; adimlar: string[]; kanit_zorunlu: boolean;
+  kontrol_kosulu: 'her-zaman' | 'yeni-revize'; adimlar: string[]; kanit_zorunlu: boolean; emir_turleri: string[]; operasyon_tipleri: number[];
 }
 export function sablonKalemleri(db: Db, sablonIdleri: readonly number[]): Promise<SablonKalemiSatiri[]> {
   if (sablonIdleri.length === 0) return Promise.resolve([]);
   return db.sorgu<SablonKalemiSatiri>(
     `SELECT id, sablon_id, sira, ad, aciklama, asama, dayanak, gun, sure_gun, yapan_rol_id, yapan_kisi_id, kontrol_rol_id, kontrol_kisi_id,
-            yedek_kontrol_rol_id, yedek_kontrol_kisi_id, onceki_kalem_id, hazirlik_maddesi, kontrol_kosulu, adimlar, kanit_zorunlu
+            yedek_kontrol_rol_id, yedek_kontrol_kisi_id, onceki_kalem_id, hazirlik_maddesi, kontrol_kosulu, adimlar, kanit_zorunlu, emir_turleri, operasyon_tipleri
        FROM projeler_gorev_sablon_kalemi WHERE sablon_id = ANY($1::int[]) ORDER BY sablon_id, sira, id`,
     [sablonIdleri],
   );
@@ -589,15 +589,16 @@ export interface KalemAlanlari {
   ad: string; aciklama: string | null; asama: string | null; dayanak: string; gun: number; sureGun: number; yapanRolId: number | null;
   yapanKisiId: number | null; kontrolRolId: number | null; kontrolKisiId: number | null; yedekKontrolRolId: number | null;
   yedekKontrolKisiId: number | null; hazirlikMaddesi: string | null; kontrolKosulu: string; adimlar: readonly string[]; kanitZorunlu: boolean;
+  emirTurleri: readonly string[]; operasyonTipleri: readonly number[];
 }
 export async function sablonKalemiEkle(db: Db, sablonId: number, sira: number, k: KalemAlanlari, oncekiId: number | null): Promise<number> {
   const s = await db.tek<{ id: number }>(
     `INSERT INTO projeler_gorev_sablon_kalemi (sablon_id, sira, ad, aciklama, asama, dayanak, gun, sure_gun, yapan_rol_id, yapan_kisi_id, kontrol_rol_id,
                                                kontrol_kisi_id, yedek_kontrol_rol_id, yedek_kontrol_kisi_id, onceki_kalem_id, hazirlik_maddesi, kontrol_kosulu,
-                                               adimlar, kanit_zorunlu)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18::text[], $19) RETURNING id`,
+                                               adimlar, kanit_zorunlu, emir_turleri, operasyon_tipleri)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18::text[], $19, $20::text[], $21::int[]) RETURNING id`,
     [sablonId, sira, k.ad, k.aciklama, k.asama, k.dayanak, k.gun, k.sureGun, k.yapanRolId, k.yapanKisiId, k.kontrolRolId, k.kontrolKisiId,
-      k.yedekKontrolRolId, k.yedekKontrolKisiId, oncekiId, k.hazirlikMaddesi, k.kontrolKosulu, k.adimlar, k.kanitZorunlu],
+      k.yedekKontrolRolId, k.yedekKontrolKisiId, oncekiId, k.hazirlikMaddesi, k.kontrolKosulu, k.adimlar, k.kanitZorunlu, k.emirTurleri, k.operasyonTipleri],
   );
   if (s === null) throw new Error('Şablon kalemi eklenemedi');
   return s.id;

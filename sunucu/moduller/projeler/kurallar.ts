@@ -318,11 +318,21 @@ export const kanitReddi = (zorunlu: boolean, kanitSayisi: number): string | null
 // sınırını aşmıyorsa emir başına TEK görev olur ve iş emirleri onun adımıdır; aksi hâlde (adımlı kalem, çok iş emri) eski biçim sürer:
 // iş emri başına görev. Hedef iş emirleri tek bu yerde hesaplanır; sonraki süzgeçler (şablon koşulu, kalemde operasyon süzgeci) buradan geçer.
 export interface HedefYeri { isEmriId: number | null; ek: string; adimlar: readonly { isEmriId: number; ad: string }[] }
+// 3611-1: kalemin süzgeci. Boş ya da verilmemiş liste "hepsi" demektir (var olan kalemler böyledir).
+export interface KalemSuzgeci { emirTurleri?: readonly string[] | undefined; operasyonTipleri?: readonly number[] | undefined }
+export const emirTuruUyar = (s: KalemSuzgeci | undefined, emirTuru: string | undefined): boolean =>
+  s?.emirTurleri === undefined || s.emirTurleri.length === 0 || emirTuru === undefined || s.emirTurleri.includes(emirTuru);
+export const operasyonTipiUyar = (s: KalemSuzgeci | undefined, tip: number | undefined): boolean =>
+  s?.operasyonTipleri === undefined || s.operasyonTipleri.length === 0 || (tip !== undefined && s.operasyonTipleri.includes(tip));
+export interface HedefIsEmri { id: number; opNo: number; operasyonTipiId?: number | undefined }
 export function hedefYerleri(
-  h: { emirNo: string; isEmirleri: readonly { id: number; opNo: number }[] }, isEmriDuzeyi: boolean, kalemAdimli: boolean,
+  h: { emirNo: string; emirTuru?: string | undefined; isEmirleri: readonly HedefIsEmri[] }, isEmriDuzeyi: boolean, kalemAdimli: boolean, suzgec?: KalemSuzgeci,
 ): HedefYeri[] {
+  if (!emirTuruUyar(suzgec, h.emirTuru)) return [];
   if (!isEmriDuzeyi || h.isEmirleri.length === 0) return [{ isEmriId: null, ek: h.emirNo, adimlar: [] }];
+  const kalan = h.isEmirleri.filter((ie) => operasyonTipiUyar(suzgec, ie.operasyonTipiId));
+  if (kalan.length === 0) return [];
   const adlandir = (ie: { id: number; opNo: number }) => ({ isEmriId: ie.id, ad: `${h.emirNo} / ${String(ie.opNo)}` });
-  if (!kalemAdimli && h.isEmirleri.length <= ADIM_EN_COK) return [{ isEmriId: null, ek: h.emirNo, adimlar: h.isEmirleri.map(adlandir) }];
-  return h.isEmirleri.map((ie) => ({ isEmriId: ie.id, ek: adlandir(ie).ad, adimlar: [] }));
+  if (!kalemAdimli && kalan.length <= ADIM_EN_COK) return [{ isEmriId: null, ek: h.emirNo, adimlar: kalan.map(adlandir) }];
+  return kalan.map((ie) => ({ isEmriId: ie.id, ek: adlandir(ie).ad, adimlar: [] }));
 }
