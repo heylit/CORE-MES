@@ -6,7 +6,7 @@ import type { cihazDurumuCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type {
   AcikTakiplerCevabi, GecikenlerimCevabi, KademeAyarDegistirGovdesi, KademeAyarlariCevabi, KademeAyarSatiri, KademeTakipSatiri,
 } from '#paylasilan/sozlesme/bildirim-kademe.ts';
-import { KADEME_ADLARI, KADEME_GUN_EN_COK, KADEME_KAYNAKLARI, type Kademe } from '#paylasilan/sozlesme/kademe-sabitleri.ts';
+import { KADEME_ADLARI, KADEME_GUN_EN_COK, KADEME_KAYNAKLARI, varsayilandanFarkli, type Kademe } from '#paylasilan/sozlesme/kademe-sabitleri.ts';
 import {
   AcKapa, Dugme, DurumKutusu, Girdi, IsaretKutusu, KademeRozeti, Kart, Pencere, Rozet, Secim, Simge, Tablo, useBildirim, type RozetTonu, type Sutun,
 } from '../../ortak/arayuz/index.ts';
@@ -65,7 +65,8 @@ export function KademeliUyari() {
         <span className="tc-bildirim-kaynak-ad">
           <b>{s.ad}</b>
           {s.asama === 2 && <Rozet ton="pasif" gorunum="cizgi">Sonraki aşama</Rozet>}
-          {s.varsayilan && <span className="tc-bildirim-kaynak">varsayılan</span>}
+          {s.varsayilan ? <span className="tc-bildirim-kaynak">varsayılan</span>
+            : varsayilandanFarkli(s.kaynak, s) && <Rozet ton="uyari" gorunum="cizgi">Varsayılandan farklı</Rozet>}
         </span>
       ),
     },
@@ -122,6 +123,12 @@ export function KademeAyarPenceresi({ satir, roller, kapat }: { satir: KademeAya
     },
   });
   const degistir = (ek: Partial<typeof g>) => gYaz((o) => ({ ...o, ...ek }));
+  // 3588: "Varsayılana dön" formu katalog merdivenine getirir (açık/kapalı kalır); kayıt Kaydet ile yazılır, başka kaynağa dokunulmaz.
+  const farkli = varsayilandanFarkli(satir.kaynak, g);
+  const varsayilanaDon = () => {
+    const v = KADEME_KAYNAKLARI[satir.kaynak].varsayilan;
+    degistir({ k2Gun: v.k2Gun, k3Gun: v.k3Gun, k3Birim: v.k3Birim, k4Gun: v.k4Gun, k5Gun: v.k5Gun, epostaKademe: v.epostaKademe, serit: v.serit, kapatilamaz: v.kapatilamaz, yoneticiRolId: null });
+  };
   const gunAlani = (etiket: string, deger: number | null, alan: 'k2Gun' | 'k3Gun' | 'k4Gun' | 'k5Gun', ipucu: string) => (
     <Girdi
       etiket={etiket} ipucu={ipucu} type="number" inputMode="numeric" min={0} max={KADEME_GUN_EN_COK} value={deger ?? ''}
@@ -142,6 +149,11 @@ export function KademeAyarPenceresi({ satir, roller, kapat }: { satir: KademeAya
       <div className="tc-bildirim-kademe-form">
         {satir.para && <p className="tc-bildirim-serit"><Simge ad="alert" boyut="k" />Bu kaynak para taşır: e-postaya yalnız kayıt numarası yazılır.</p>}
         <AcKapa etiket={`${satir.ad}: Açık`} acik={g.acik} degistir={(acik) => { degistir({ acik }); }} />
+        {farkli && (
+          <p className="tc-bildirim-not">
+            Bu kaynağın merdiveni varsayılandan farklı. <Dugme onClick={varsayilanaDon}>Varsayılana dön</Dugme>
+          </p>
+        )}
         <DikeyMerdiven ayar={{ ...g, sayac: satir.sayac }} />
         {satir.sayac === 'son-gun'
           ? gunAlani('K2 Yaklaşıyor: son günden kaç iş günü önce', g.k2Gun, 'k2Gun', 'Boş bırakılırsa hatırlatma gitmez.')

@@ -130,6 +130,8 @@ export const projeSemasi = z.object({
   statu: z.lazy(() => guncelStatuSemasi).nullable(),
   // PRJ-14: iptal dışındaki görevlerin plan süresiyle ağırlıklı ilerlemesi, yüzde; görev yoksa null (sıfır uydurulmaz).
   ilerleme: z.number().int().min(0).max(100).nullable(),
+  // 3588: aktif projenin bitiş kademesi (kademeli uyarı defterindeki en yüksek, 1-5); bitişi olmayan, kapanmış ya da kademesiz projede null.
+  kademe: z.number().int().min(1).max(5).nullable().optional(),
 });
 
 export const projeListesiCevabi = listeCevapSemasi(projeSemasi);

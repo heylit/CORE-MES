@@ -88,6 +88,21 @@ export async function projeGoreviKademeKayitlari(db: Db): Promise<KademeKaydi[]>
   return l;
 }
 
+// 3588: proje düzeyi kademe. Kayıt bitişi taşır: bitiş uzatılınca yeni dönem başlar, eski kademe bildirimleri kapanır. Kayıt no proje kodudur.
+// Sorumlu alanı olmadığından K2-K3 projeyi açana, yoksa projeyi yazanlara gider; K4 proje durumunu ayarlayanlara.
+export async function projeBitisKademeKayitlari(db: Db): Promise<KademeKaydi[]> {
+  const projeler = await sorgular.takipProjeleri(db);
+  if (projeler.length === 0) return [];
+  const islemler = [...await kisilerinIslemleri(db)];
+  const sahipler = (islem: string) => islemler.filter(([, i]) => i.includes(islem as never)).map(([k]) => k);
+  const yazanlar = sahipler('projeler.yaz');
+  const ustler = sahipler('projeler.statu-ayar');
+  return projeler.map((p) => ({
+    kayit: `${String(p.id)}:${p.bitis}`, no: p.kod, baslik: `${p.kod} · ${p.ad} · bitiş ${tarihMetni(p.bitis)}`, yol: `/projeler/${String(p.id)}` as const, sonGun: p.bitis,
+    sahip: p.olusturan_id, yapanlar: yazanlar, yoneticiler: ustler, yedekler: yazanlar,
+  }));
+}
+
 // Görev bitince, kontrole düşünce ya da iptal edilince açık kademe bildirimleri hemen kapanır (motor bir sonraki turda takibi siler).
 export async function kademeBildirimleriniKapat(db: Db, gorevId: number): Promise<void> {
   for (const [i, tur] of KADEME_TURLERI.entries()) await bildirimKapat(db, { tur, kaynakKimlik: `${String(gorevId)}:k${String(i + 2)}` });

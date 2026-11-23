@@ -478,9 +478,11 @@ export const terminDagilimi = async (db: Db): Promise<TerminDagilimiCevabi> => (
 
 // Takvim (891): termini [baslangic, bitis] içindeki siparişler, firma adıyla. Yetki denetlemez; çağıran siparisler.oku'yu denetler.
 // 3478: kademeli uyarı kaynağı (siparisler.onay). VARSAYIM: bekleme açılıştan sayılır; geri alınan onay sayacı baştan başlatmaz.
-export async function onayBekleyenSiparisler(db: Db): Promise<{ id: number; no: string; beklemeAni: string }[]> {
-  return (await sorgular.onayBekleyenSiparisler(db)).map((s) => ({ id: s.id, no: s.no, beklemeAni: s.olusturma.toISOString() }));
+export async function onayBekleyenSiparisler(db: Db): Promise<{ id: number; no: string; beklemeAni: string; acanId: number }[]> {
+  return (await sorgular.onayBekleyenSiparisler(db)).map((s) => ({ id: s.id, no: s.no, beklemeAni: s.olusturma.toISOString(), acanId: s.olusturan_id }));
 }
+// 3588: kademeli uyarının kayıt sahibi (siparişi açan kişi).
+export const siparisAcanlari = sorgular.siparisAcanlari;
 
 export async function takvimKayitlari(db: Db, baslangic: string, bitis: string): Promise<TakvimKaydi[]> {
   const satirlar = await sorgular.takvimSiparisleri(db, baslangic, bitis);

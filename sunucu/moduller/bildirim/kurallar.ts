@@ -480,6 +480,47 @@ export function bildirilecekKademe(gereken: readonly number[], yazilmis: Readonl
   return { yeni, bildirilecek: en === null || en === 1 ? null : en };
 }
 
+// 3588: kademe alıcıları. Aday kümeleri sırayla denenir; etkin alıcısı (türü alan, kaynağı okuyabilen) olan ilk küme kazanır: kayıt
+// sahibi kaynağı okuyamıyorsa ya da kimse yoksa bildirim bir üst kademeye, o da boşsa kademe yöneticilerine düşer.
+export type KademeAliciTuru = 'sahip' | 'yapan' | 'ust' | 'devralan' | 'yedek';
+export interface KademeAdaylari {
+  sahip: number | null; yapanlar: readonly number[]; ustler: readonly number[]; devralanlar: readonly number[]; yedekler: readonly number[];
+}
+export interface AliciAdayi { tur: KademeAliciTuru; kisiler: readonly number[] }
+export function kademeAliciKumeleri(kademe: number, a: KademeAdaylari): AliciAdayi[][] {
+  const sahip: AliciAdayi[] = a.sahip === null ? [] : [{ tur: 'sahip', kisiler: [a.sahip] }];
+  const yedek: AliciAdayi[] = [{ tur: 'yedek', kisiler: a.yedekler }];
+  if (kademe <= 3) {
+    const kumeler: AliciAdayi[][] = [sahip, [{ tur: 'yapan', kisiler: a.yapanlar }], [{ tur: 'ust', kisiler: a.ustler }], yedek];
+    return kumeler.filter((k) => k.length > 0);
+  }
+  if (kademe === 4) return [[{ tur: 'ust', kisiler: a.ustler }], [{ tur: 'devralan', kisiler: a.devralanlar }], yedek];
+  return [[{ tur: 'ust', kisiler: a.ustler }, { tur: 'devralan', kisiler: a.devralanlar }], yedek];
+}
+
+// Alıcıya "neden bu uyarı bana geldi" etiketi (bildirimin uygulama içi metninde; e-postaya girmez).
+export const KADEME_NEDENLERI: Record<KademeAliciTuru, string> = {
+  sahip: 'Kaydı sen açtığın için',
+  yapan: 'Bu işi yapma yetkin olduğu için',
+  ust: 'Yönetici olarak izlediğin için',
+  devralan: 'İşi devralman gerektiği için',
+  yedek: 'Kayda bağlı kimse olmadığı için, kademe yöneticisi olarak',
+};
+
+// Başlık alıcı bakışıyla yazılır; sistem sözcüğü (Yöneticide, Devret) başlığa girmez. Kişi adı yalnız uygulama içi metindedir:
+// başlık e-postaya da gider, e-postaya yalnız kayıt numarası girer (Risk K3).
+export function kademeBildirimMetni(g: {
+  kademe: 2 | 3 | 4 | 5; alici: KademeAliciTuru; no: string; kaynakAdi: string; baslik: string; gecikmeGun: number | null; sahipAdi: string | null;
+}): { baslik: string; metin: string } {
+  const gun = g.gecikmeGun === null || g.gecikmeGun < 1 ? '' : ` ${String(g.gecikmeGun)} iş günü`;
+  let baslik: string;
+  if (g.alici === 'devralan') baslik = `${g.no}: ${g.kaynakAdi}, devralman gerekiyor`;
+  else if (g.alici === 'ust' || g.alici === 'yedek') baslik = `${g.no}: ${g.kaynakAdi}${gun === '' ? ' gecikti' : `${gun} gecikti`}`;
+  else baslik = g.kademe === 2 ? `${g.no}: ${g.kaynakAdi} yaklaşıyor` : `${g.no}: ${g.kaynakAdi}${gun === '' ? ' gecikti' : `${gun} gecikti`}`;
+  const kimde = (g.alici === 'ust' || g.alici === 'yedek' || g.alici === 'devralan') && g.sahipAdi !== null ? `Kayıt sahibi: ${g.sahipAdi}. ` : '';
+  return { baslik, metin: `${kimde}${g.baslik} · Neden aldın: ${KADEME_NEDENLERI[g.alici]}.` };
+}
+
 // Ayar yazımı: günlerin anlamı sayaca göre değişir. Sırası bozuk gün (K5, K4'ten önce) reddedilir; ekran da aynı denetimi yapar.
 export function kademeAyarHatasi(
   sayac: KademeSayaci, g: { acik: boolean; k2Gun: number | null; k3Gun: number | null; k4Gun: number | null; k5Gun: number | null; k3Birim?: KademeBirimi },

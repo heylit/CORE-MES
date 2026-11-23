@@ -44,9 +44,9 @@ test('satış siparişi termin riski: kayıt sipariş ve riskli termin dönemind
 });
 
 test('satış siparişi onayı: kayıt sipariş ve açılış anıyla; bekleme açılış gününden; yapan onaylayan (3478)', () => {
-  const l = siparisOnayKademeKayitlari([{ id: 5, no: 'ORN-SS-5', beklemeAni: '2030-01-14T21:30:00.000Z' }], sahip);
-  assert.deepEqual(l.map((k) => [k.kayit, k.no, k.yol, k.baslangic, k.baslangicAni, k.yapanlar, k.yoneticiler]), [
-    ['5:2030-01-14T21:30:00.000Z', 'ORN-SS-5', '/siparisler/5', '2030-01-15', '2030-01-14T21:30:00.000Z', [32], []],
+  const l = siparisOnayKademeKayitlari([{ id: 5, no: 'ORN-SS-5', beklemeAni: '2030-01-14T21:30:00.000Z', acanId: 40 }], sahip);
+  assert.deepEqual(l.map((k) => [k.kayit, k.no, k.yol, k.baslangic, k.baslangicAni, k.yapanlar, k.yoneticiler, k.sahip]), [
+    ['5:2030-01-14T21:30:00.000Z', 'ORN-SS-5', '/siparisler/5', '2030-01-15', '2030-01-14T21:30:00.000Z', [32], [], 40],
   ]);
 });
 

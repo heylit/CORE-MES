@@ -1893,6 +1893,7 @@ export function terminKalemleriOku(db: Db): Promise<TerminKalemiOkuma[]> {
 // (termin takibiyle aynı koşul: Logo'da kapatılmamış ve teslimi tamamlanmamış satırı olan).
 export interface HatirlatmaTalebiOkuma {
   talepId: string;
+  talepEdenId: number | null;
   no: string;
   durum: TalepDurumu;
   ihtiyacTarihi: string | null;
@@ -1908,6 +1909,7 @@ export interface HatirlatmaTalebiOkuma {
 export function hatirlatmaTalepleriOku(db: Db): Promise<HatirlatmaTalebiOkuma[]> {
   return db.sorgu<HatirlatmaTalebiOkuma>(
     `SELECT t.id AS "talepId", t.no, t.durum, to_char(t.ihtiyac_tarihi, 'YYYY-MM-DD') AS "ihtiyacTarihi", t.durum_zamani AS "durumZamani",
+        t.talep_eden_kisi_id AS "talepEdenId",
         EXISTS (SELECT 1 FROM satin_alma_teklif_istegi r WHERE r.talep_id = t.id) AS "teklifIstegiVar",
         (k.talep_id IS NOT NULL) AS "kararVar", k.kur_kilidi AS "kurKilidi",
         (SELECT json_build_object('id', o.id, 'sonuc', o.sonuc, 'zaman', o.zaman) FROM satin_alma_onay o WHERE o.talep_id = t.id ORDER BY o.zaman DESC, o.id DESC LIMIT 1) AS "sonOnay",

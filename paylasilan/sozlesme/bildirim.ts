@@ -230,7 +230,7 @@ function kademeTurTanimi(kaynak: KademeKaynagi, k: 2 | 3 | 4 | 5): BildirimTuruT
   const t: KademeKaynagiTanimi = KADEME_KAYNAKLARI[kaynak];
   return {
     baslik: `${t.ad}: ${KADEME_ADLARI[k]}`, onem: k === 2 ? 'uyari' : 'acil', sinif: k === 2 ? 'hatirlatma' : 'gorev', alanIslemler: t.okumaIslemleri, yol: t.yol,
-    varsayilan: { mesaj: false, eposta: t.para !== true && k >= t.varsayilan.epostaKademe },
+    varsayilan: { mesaj: false, eposta: t.para !== true && t.epostaKapali !== true && k >= t.varsayilan.epostaKademe },
   };
 }
 const KADEME_BILDIRIM_TURLERI = Object.fromEntries(KADEME_KAYNAK_ANAHTARLARI.filter((k) => k !== 'projeler.hazirlik')

@@ -14,7 +14,7 @@ export type { HazirlikGorevi, HazirlikGorevleriAcVerisi, HazirlikHedefi, Hazirli
 export { hazirlikHedefCozucusuKaydet } from './dagitim.ts';
 export type { HazirlikHedefCozucusu, HazirlikHedefleri } from './dagitim.ts';
 // 3405: kademeli uyarı kaynakları (hazırlık görevi ve proje görevi); bağ kablolamadadır.
-export { emirIptalHazirlikKapat, emirlerinAcikHazirlikSayisi, hazirlikKademeKayitlari, kapaliEmirCozucusuKaydet, projeGoreviKademeKayitlari } from './hazirlik-kademe.ts';
+export { emirIptalHazirlikKapat, emirlerinAcikHazirlikSayisi, hazirlikKademeKayitlari, kapaliEmirCozucusuKaydet, projeBitisKademeKayitlari, projeGoreviKademeKayitlari } from './hazirlik-kademe.ts';
 export type { KapaliEmirCozucusu } from './hazirlik-kademe.ts';
 // 3448: projeli toplantının aksiyonu göreve çevrilir; Görevler ekranı görevi her zamanki gibi gösterir.
 export { toplantiAksiyonundanGorevAc, toplantiAksiyonGorevleri } from './toplanti-gorevleri.ts';

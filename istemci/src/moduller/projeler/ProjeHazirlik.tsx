@@ -2,12 +2,11 @@ import { Fragment, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { HazirlikAtaGovdesi, KademeGecmisiCevabi, KisiSecenekleriCevabi, RolSecenekleriCevabi } from '#paylasilan/sozlesme/projeler.ts';
 import type { HazirlikDagitCevabi, HazirlikDagitGovdesi, HazirlikMatrisiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { Dugme, DurumKutusu, Rozet, Secim, Sekmeler, Simge, useBildirim, type RozetTonu, type Sekme } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, KademeRozeti, Rozet, Secim, Sekmeler, Simge, useBildirim, type RozetTonu, type Sekme } from '../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { tarihMetni, zamanMetni } from '../../ortak/veri/zaman-metni.ts';
-import { KADEME_TONU, kademeMetni } from './gosterim.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { useIstekKimligi } from './komut.ts';
 import './projeler.css';
@@ -210,7 +209,7 @@ function KademeGecmisi({ gorevId }: { gorevId: number }) {
     <ol className="tc-prj-hz-kademe" aria-label="Kademe geçmişi">
       {d.data.kademeler.map((k) => (
         <li key={k.kademe}>
-          <Rozet ton={KADEME_TONU[k.kademe] ?? 'bilgi'}>{kademeMetni(k.kademe)}</Rozet>
+          <KademeRozeti kademe={k.kademe} />
           <span className="tc-prj-tarih">{zamanMetni(k.an)}</span>
           <span className="tc-prj-soluk">{k.bildirildi ? `${String(k.aliciSayisi)} kişiye bildirildi` : 'Atlandı, üst kademe bildirildi'}</span>
         </li>

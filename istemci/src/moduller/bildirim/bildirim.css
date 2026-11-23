@@ -187,10 +187,10 @@
   .tc-bildirim-dugme-yazi { display: inline; font-size: var(--yazi-s); }
 }
 .tc-bildirim-kademe-cip { gap: var(--b-2); }
-.tc-bildirim-kademe-cip[data-ton="bilgi"] b { color: var(--done); }
-.tc-bildirim-kademe-cip[data-ton="uyari"] b { color: var(--hold); }
+/* 3588: çip sayısı ve adı koyu yazı kalır (rozetle aynı kontrast); kademe rengi yalnız kenarda. */
+.tc-bildirim-kademe-cip[data-ton="bilgi"] { border-color: var(--done); }
+.tc-bildirim-kademe-cip[data-ton="uyari"] { border-color: var(--hold); }
 .tc-bildirim-kademe-cip[data-ton="hata"] { border-color: var(--stop); }
-.tc-bildirim-kademe-cip[data-ton="hata"] b { color: var(--stop); }
 .tc-bildirim-kademe-cip[data-ton="pasif"] { color: var(--faint); cursor: default; }
 
 /* 3456-2 a: Duyurular tablosu; okunma çubuğu ve sayı yan yana. */

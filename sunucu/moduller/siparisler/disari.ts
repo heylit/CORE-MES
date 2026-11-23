@@ -10,7 +10,7 @@ export { siparisKilitliAyrinti } from './servis.ts';
 // Takvim (891): termini aralıktaki siparişler; yetki denetlemez, çağıran siparisler.oku'yu denetler.
 export { takvimKayitlari } from './servis.ts';
 // 3478: onay bekleyen siparişler (kademeli uyarı kaynağı); yetki denetlemez.
-export { onayBekleyenSiparisler } from './servis.ts';
+export { onayBekleyenSiparisler, siparisAcanlari } from './servis.ts';
 // Genel arama kaynağı (1242): çekirdek ad kuralıyla bulur, siparisler.oku olana çağırır.
 export { kayitAramaKaynaklari } from './arama.ts';
 // Plan stüdyosundan acil sipariş (287 b): yalnız müşteri, termin ve kalemle fiyatsız taslak; yetki çağıranın ucunda.

@@ -100,6 +100,13 @@ export async function bildirimGonder(db: Db, olay: BildirimOlayi): Promise<numbe
   return alicilar.length;
 }
 
+// 3588: bu türü gerçekten alacak kişiler (verilen listeyle türü alanların kesişimi). Kademe motoru alıcı kümesini göndermeden önce bununla süzer:
+// kaynağı okuyamayan alıcı bildirim almaz, boş kalan küme bir üst kademeye düşer.
+export async function yalnizKisilerAlicilari(db: Db, tur: BildirimTuru, kisiler: readonly number[]): Promise<number[]> {
+  if (kisiler.length === 0) return [];
+  return alicilariSec(tur, await kisilerinIslemleri(db), { kisiler, ayarli: await ayarliAlicilar(db, tur), yalnizKisiler: true });
+}
+
 export interface BildirimKapanisi {
   tur: BildirimTuru;
   // `bildirimGonder`'e verilen kaynak kimliğinin aynısı; kimliksiz açılan bildirim kaynağa bağlanamaz, kapatılamaz.

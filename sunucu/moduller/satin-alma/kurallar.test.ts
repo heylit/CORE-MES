@@ -724,7 +724,7 @@ const H_AYAR: HatirlatmaAyarlari = {
   'siparis-bekliyor': 1, 'teslim-yaklasiyor': 3, 'teslim-gecikti': 0, 'teslim-gecikti-yonetici': 3,
 };
 const hTalep = (x: Partial<HatirlatmaTalebi>): HatirlatmaTalebi => ({
-  talepId: 't1', no: 'ST-1', durum: 'taslak', ihtiyacTarihi: null, durumAni: '2026-11-02T08:00:00.000Z', durumGunu: '2026-11-02',
+  talepId: 't1', talepEdenId: null, no: 'ST-1', durum: 'taslak', ihtiyacTarihi: null, durumAni: '2026-11-02T08:00:00.000Z', durumGunu: '2026-11-02',
   teklifIstegiVar: false, kararVar: false, kararOnayli: false, sonOnay: null, kurKilidiBitisi: null, istekler: [], teklifler: [], siparisler: [], ...x,
 });
 // 2026-11-09 Pazartesi.

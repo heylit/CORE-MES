@@ -47,6 +47,9 @@ const KISITLAR = {
 } as const;
 
 // Bütçe alanı yalnız maliyet görene konur (180); görmeyene alan hiç gitmez, "girilmemiş" ile karışmaz.
+// K1 (Atandı) her kayıtta vardır ve uyarı değildir: rozet yalnız yaklaşan ve geciken projede çıkar.
+const uyarKademesi = (k: number | undefined): number | null => (k !== undefined && k >= 2 ? k : null);
+
 async function cevir(db: Db, satirlar: ProjeSatiri[], maliyetGorur: boolean): Promise<Proje[]> {
   const adlar = await firmaAdlari(db, satirlar.flatMap((s) => (s.firma_id === null ? [] : [s.firma_id])));
   const idler = satirlar.map((s) => s.id);
@@ -57,12 +60,15 @@ async function cevir(db: Db, satirlar: ProjeSatiri[], maliyetGorur: boolean): Pr
     l.push({ durum: g.durum, ilerleme: g.ilerleme, planBaslangic: g.plan_baslangic, planBitis: g.plan_bitis });
     gorevleri.set(g.proje_id, l);
   }
+  const bitisKayitlari = satirlar.flatMap((s) => (s.durum === 'aktif' && s.bitis !== null ? [`${String(s.id)}:${s.bitis}`] : []));
+  const kademeler = await enYuksekKademeler(db, 'projeler.proje-bitis', bitisKayitlari);
   return satirlar.map((s) => ({
     id: s.id, kod: s.kod, ad: s.ad, durum: s.durum, firmaId: s.firma_id, firmaKodu: s.firma_kodu,
     firmaAd: s.firma_id === null ? null : adlar.get(s.firma_id) ?? null, siparisId: s.siparis_id,
     ...(maliyetGorur ? { butceTutari: s.butce_tutari, butceParaBirimi: s.butce_para_birimi } : {}),
     baslangic: s.baslangic, bitis: s.bitis, bitisBagli: s.bitis_bagli, aciklama: s.aciklama, olusturma: s.olusturma, guncelleme: s.guncelleme, surum: s.surum,
     statu: statuler.get(s.id) ?? null, ilerleme: projeIlerlemesi(gorevleri.get(s.id) ?? []),
+    kademe: s.durum === 'aktif' && s.bitis !== null ? uyarKademesi(kademeler.get(`${String(s.id)}:${s.bitis}`)) : null,
   }));
 }
 

@@ -41,7 +41,7 @@ import { araHalCozucusuKaydet as rotaAraHalCozucusu, opNumaralariDizildiDinle as
 import { talasliAdimCozucusu, yuzeyAdimlariCozucusu } from './moduller/geometri/disari.ts';
 import * as sevkiyat from './moduller/sevkiyat/disari.ts';
 import { bagliTalepCozucusu, satinAlinacakKalemler } from './moduller/siparisler/disari.ts';
-import { bagliEmirCozucusu, kalemEmirCozucusu, kapanisEksigiCozucusu, malzemeKartiIzleri as siparisKartIzleri, siparisAyrintisi, siparisDegistiDinle, siparisIptalEdildiDinle, siparisListesi, onayBekleyenSiparisler, siparisSatiriOzetleri, siparisOnayiGeriAlindiDinle, siparisOnaylandiDinle, siparisRevizeEdildiDinle, takvimKayitlari as siparisTakvimi, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
+import { bagliEmirCozucusu, kalemEmirCozucusu, kapanisEksigiCozucusu, malzemeKartiIzleri as siparisKartIzleri, siparisAyrintisi, siparisDegistiDinle, siparisIptalEdildiDinle, siparisListesi, onayBekleyenSiparisler, siparisAcanlari, siparisSatiriOzetleri, siparisOnayiGeriAlindiDinle, siparisOnaylandiDinle, siparisRevizeEdildiDinle, takvimKayitlari as siparisTakvimi, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
 import { siparisListesiSorgusu } from '#paylasilan/sozlesme/siparisler.ts';
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
@@ -109,11 +109,12 @@ export const bakimKademeKayitlari = (planlar: Awaited<ReturnType<typeof arkon.pe
       sonGun: vade, yapanlar: yapan, yoneticiler: amir }];
   });
 };
-export const siparisTerminKademeKayitlari = (kayitlar: Awaited<ReturnType<typeof siparisTakvimi>>, sahip: Sahip): bildirim.KademeKaydi[] => {
+export const siparisTerminKademeKayitlari = (kayitlar: Awaited<ReturnType<typeof siparisTakvimi>>, sahip: Sahip, acanlar: ReadonlyMap<number, number> = new Map()): bildirim.KademeKaydi[] => {
   const yazan = sahip('siparisler.yaz');
   const onaylayan = sahip('siparisler.onayla');
   return kayitlar.flatMap((k) => (k.bitti ? [] : [{
-    kayit: `${k.kimlik}:${k.tarih}`, no: k.no ?? k.kimlik, baslik: k.baslik, yol: '/siparisler' as const, sonGun: k.tarih, yapanlar: yazan, yoneticiler: onaylayan,
+    kayit: `${k.kimlik}:${k.tarih}`, no: k.no ?? k.kimlik, baslik: k.baslik, yol: '/siparisler' as const, sonGun: k.tarih, sahip: acanlar.get(Number(k.kimlik)) ?? null,
+    yapanlar: yazan, yoneticiler: onaylayan,
   }]));
 };
 // 3478: onay bekleyen satış siparişi; işi onaylayanlar yapar, yönetici ayardaki rol ya da kademe yöneticileridir. Kayıt açılış anını taşır.
@@ -121,7 +122,7 @@ export const siparisOnayKademeKayitlari = (siparisler: Awaited<ReturnType<typeof
   const onaylayan = sahip('siparisler.onayla');
   return siparisler.map((s) => ({
     kayit: `${String(s.id)}:${s.beklemeAni}`, no: s.no, baslik: `${s.no}: onay bekliyor`, yol: `/siparisler/${String(s.id)}` as const,
-    baslangic: tesisGunu(new Date(s.beklemeAni)), baslangicAni: s.beklemeAni, yapanlar: onaylayan, yoneticiler: [],
+    baslangic: tesisGunu(new Date(s.beklemeAni)), baslangicAni: s.beklemeAni, sahip: s.acanId, yapanlar: onaylayan, yoneticiler: [],
   }));
 };
 // 3478: açık DÖF termini kaliteyi yazana, MRB kararı bekleyen uygunsuzluk kararı verene (onaylayan) gider; yönetici ayardaki rol.
@@ -137,7 +138,7 @@ export const hataliParcaKademeKayitlari = (ncrler: Awaited<ReturnType<typeof kal
 };
 // 3429-2 D: termin riskli onaylı sipariş; işi satış yazanlar yapar, onaylayanlar yönetir (siparisler.termin ile aynı alıcılar).
 export const siparisTerminRiskiKademeKayitlari = (
-  riskler: readonly akis.SiparisTerminRiski[], numaralar: ReadonlyMap<number, string>, sahip: Sahip,
+  riskler: readonly akis.SiparisTerminRiski[], numaralar: ReadonlyMap<number, string>, sahip: Sahip, acanlar: ReadonlyMap<number, number> = new Map(),
 ): bildirim.KademeKaydi[] => {
   const yazan = sahip('siparisler.yaz');
   const onaylayan = sahip('siparisler.onayla');
@@ -145,7 +146,7 @@ export const siparisTerminRiskiKademeKayitlari = (
     const no = numaralar.get(r.siparisId) ?? String(r.siparisId);
     return {
       kayit: `${String(r.siparisId)}:${r.termin}`, no, baslik: `Sipariş ${no}: plan termini ${String(r.gun)} gün aşıyor`, yol: `/siparisler/${String(r.siparisId)}` as const,
-      sonGun: r.termin, yapanlar: yazan, yoneticiler: onaylayan,
+      sonGun: r.termin, sahip: acanlar.get(r.siparisId) ?? null, yapanlar: yazan, yoneticiler: onaylayan,
     };
   });
 };
@@ -153,7 +154,8 @@ const kalibrasyonVadeleri = async (db: Db) => kalibrasyonKademeKayitlari(await k
 const bakimVadeleri = async (db: Db) => bakimKademeKayitlari(await arkon.periyodikBakimlar(db), await islemSahipleri(db));
 const siparisTerminleri = async (db: Db) => {
   const bugun = tesisGunu(new Date());
-  return siparisTerminKademeKayitlari(await siparisTakvimi(db, gunEkle(bugun, -400), gunEkle(bugun, 60)), await islemSahipleri(db));
+  const kayitlar = await siparisTakvimi(db, gunEkle(bugun, -400), gunEkle(bugun, 60));
+  return siparisTerminKademeKayitlari(kayitlar, await islemSahipleri(db), await siparisAcanlari(db, kayitlar.map((k) => Number(k.kimlik))));
 };
 // Açık (bitmemiş) siparişler termin takviminden; risk yalnız onaylıda hesaplanır (akış). VARSAYIM: termini 60 günden uzak sipariş
 // henüz izlenmez (takvim penceresi siparisler.termin ile aynı).
@@ -164,7 +166,7 @@ const siparisTerminRiskleriOku = async (db: Db) => {
   const bugun = tesisGunu(new Date());
   const acik = (await siparisTakvimi(db, gunEkle(bugun, -400), gunEkle(bugun, 60))).filter((k) => !k.bitti);
   const numaralar = new Map(acik.map((k) => [Number(k.kimlik), k.no ?? k.kimlik]));
-  return siparisTerminRiskiKademeKayitlari(await akis.siparisTerminRiskleri(db, [...numaralar.keys()]), numaralar, await islemSahipleri(db));
+  return siparisTerminRiskiKademeKayitlari(await akis.siparisTerminRiskleri(db, [...numaralar.keys()]), numaralar, await islemSahipleri(db), await siparisAcanlari(db, [...numaralar.keys()]));
 };
 
 // 3272-3 a: emri siparişe kilitleyen bağ: satın alma siparişi aşamasındaki tedarik ya da stok fişi. Talep kilitlemez, uyarır (3272-2).
@@ -554,6 +556,7 @@ export function sunucununBaglari(): Bag[] {
     ...(['satin-alma.talep-onay', 'satin-alma.siparis-verilmedi', 'satin-alma.teklif-cevapsiz', 'satin-alma.teslim'] as const).map((k) =>
       bag(`satın alma ${k} -> kademeli uyarı`, (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet(k, o); }, typeof satinAlmaKademeOkuyucusu === 'function' ? satinAlmaKademeOkuyucusu(k) : undefined)),
     bag('projeler proje görevi -> kademeli uyarı', (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet('projeler.gorev', o); }, projeler.projeGoreviKademeKayitlari),
+    bag('projeler proje bitişi -> kademeli uyarı', (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet('projeler.proje-bitis', o); }, projeler.projeBitisKademeKayitlari),
     bag('kalibrasyon vadesi -> kademeli uyarı', (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet('kalibrasyon.vade', o); }, typeof kalibrasyonAletleri === 'function' ? kalibrasyonVadeleri : undefined),
     bag('arkon bakım vadesi -> kademeli uyarı', (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet('arkon.bakim-vade', o); }, typeof arkon.periyodikBakimlar === 'function' ? bakimVadeleri : undefined),
     bag('satış siparişi termini -> kademeli uyarı', (o: bildirim.KademeOkuyucusu) => { bildirim.kademeKaynagiKaydet('siparisler.termin', o); }, typeof siparisTakvimi === 'function' ? siparisTerminleri : undefined),

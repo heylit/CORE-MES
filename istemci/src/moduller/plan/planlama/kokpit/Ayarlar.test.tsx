@@ -30,7 +30,8 @@ describe('Kokpit yön paneli (3304 a)', () => {
     expect(yazilan).toEqual([{ tur: 'ayar', ayar: { w: { yon: 'geri' }, param: {}, ac: [], kapat: [] }, ayrinti: 'Planlama yönü: İleri: hemen başla → Geri: teslimden geriye' }]);
     expect(t.yaz).toHaveBeenCalledTimes(1);
     // Etki ekrandayken sayfaya haber verilir (taslak çubuğundaki birincil kapanır), Vazgeç'ten sonra kalkar.
-    expect(bekliyor).toHaveBeenLastCalledWith(true);
+    // Bildirim etkinin çizilmesinden bir efekt sonra gelir: bölge görününce henüz gitmemiş olabilir, beklenir.
+    await waitFor(() => { expect(bekliyor).toHaveBeenLastCalledWith(true); });
     fireEvent.click(within(etki).getByRole('button', { name: 'Vazgeç' }));
     await waitFor(() => { expect(t.geriAl).toHaveBeenCalledWith(false, false); });
     await waitFor(() => { expect(bekliyor).toHaveBeenLastCalledWith(false); });
