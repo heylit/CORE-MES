@@ -44,14 +44,26 @@ describe('plan (gerçek PostgreSQL): kişi istasyonu geri doldurma göçü (3607
     const rotasiz = (await isEmirleriAc([yeniAdim({ kaynak: null })]))[0]!;
     const calisan = (await isEmirleriAc([yeniAdim()]))[0]!;
     const iptalli = (await isEmirleriAc([yeniAdim()]))[0]!;
+    const yenidenDizilmis = (await isEmirleriAc([yeniAdim()]))[0]!;
+    const reworkAdimi = (await isEmirleriAc([yeniAdim()]))[0]!;
     // Canlıdaki bozuk hâl: adım kişiye atanmış, istasyon boş (emrin istasyonu da).
     await vt().tx(async (db) => {
-      for (const id of [bozuk, emirDolu, rotasiz, calisan, iptalli]) {
+      for (const id of [bozuk, emirDolu, rotasiz, calisan, iptalli, yenidenDizilmis, reworkAdimi]) {
         await db.sorgu('UPDATE uretim_emirleri_is_emri SET makine_id = NULL, kisi_id = $2, istasyon_id = NULL WHERE id = $1', [id, kisi]);
         await db.sorgu('UPDATE uretim_emri SET istasyon_id = NULL WHERE id = $1', [await emirOf(id)]);
       }
       // Emrin istasyonu doluysa (başka istasyon) göç ona dokunmaz.
       await db.sorgu('UPDATE uretim_emri SET istasyon_id = $2 WHERE id = $1', [await emirOf(emirDolu), istasyonB]);
+      // Revizyonda yeniden dizilen OP numarası: emirdeki op_no rota satırının numarasıyla artık tutmaz, operasyon kimliği tutar (3250-2).
+      // (op_no ya da tur değişince tetikleyici kimliği yeniden hesaplar; kimlik canlıdaki gibi geri konur.)
+      const kimlik = async (id: number) => (await db.tek<{ k: number }>('SELECT operasyon_id AS k FROM uretim_emirleri_is_emri WHERE id = $1', [id]))!.k;
+      const dizilmisKimlik = await kimlik(yenidenDizilmis);
+      const reworkKimlik = await kimlik(reworkAdimi);
+      await db.sorgu('UPDATE uretim_emirleri_is_emri SET op_no = 9990 WHERE id = $1', [yenidenDizilmis]);
+      await db.sorgu('UPDATE uretim_emirleri_is_emri SET operasyon_id = $2 WHERE id = $1', [yenidenDizilmis, dizilmisKimlik]);
+      // Rework adımı rotadan gelmez; rota satırı olsa da göç dokunmaz.
+      await db.sorgu("UPDATE uretim_emirleri_is_emri SET tur = 'rework' WHERE id = $1", [reworkAdimi]);
+      await db.sorgu('UPDATE uretim_emirleri_is_emri SET operasyon_id = $2 WHERE id = $1', [reworkAdimi, reworkKimlik]);
       await db.sorgu("UPDATE uretim_emri SET durum = 'iptal', iptal = now() WHERE id = $1", [await emirOf(iptalli)]);
       await db.sorgu("UPDATE uretim_emirleri_is_emri SET durum = 'calisiyor', baslama = now() WHERE id = $1", [calisan]);
     });
@@ -64,12 +76,14 @@ describe('plan (gerçek PostgreSQL): kişi istasyonu geri doldurma göçü (3607
     assert.deepEqual(await oku(bozuk), { ist: istasyonA, emirIst: istasyonA, kisi }, 'adım ve emir istasyonu rotadan');
     assert.deepEqual(await oku(emirDolu), { ist: istasyonA, emirIst: istasyonB, kisi }, 'dolu emir istasyonu değişmez');
     assert.equal((await oku(rotasiz)).ist, null, 'rotadan istasyon çıkmayan adım boş kalır, uydurulmaz');
+    assert.deepEqual(await oku(yenidenDizilmis), { ist: istasyonA, emirIst: istasyonA, kisi }, 'op_no değişse de operasyon kimliğiyle eşlenir');
+    assert.equal((await oku(reworkAdimi)).ist, null, 'rework adımı rotadan sayılmaz');
     assert.equal(await surumu(rotasiz), rotasizSurum, 'rotasız adıma yazılmadı (sürüm de artmadı)');
     assert.equal((await oku(iptalli)).ist, null, 'iptal emrin adımı değişmez');
     assert.equal((await oku(calisan)).ist, null, 'çalışan adım değişmez');
     const sonra = await defterSayisi();
-    // Değişen satırlar: bozuk adım + bozuk emir + dolu emrin adımı. Rotasız, çalışan ve dolu emir istasyonu deftere girmez.
-    assert.equal(sonra - once, 3, 'defter yalnız değişen satırlar için yazıldı');
+    // Değişen satırlar: bozuk adım + emri, dolu emrin adımı, yeniden dizilmiş adım + emri. Rotasız, çalışan ve dolu emir istasyonu deftere girmez.
+    assert.equal(sonra - once, 5, 'defter yalnız değişen satırlar için yazıldı');
     await gocuYenidenUygula();
     assert.equal(await defterSayisi(), sonra, 'ikinci koşu hiçbir şey değiştirmez');
   });
