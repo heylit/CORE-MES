@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { alternatifOnceligi, setHatasi, setUyumu, type OncelikGirdisi, type SetKarti, type SetNiteligiSatiri } from './alternatif/kurallar.ts';
+import { alternatifOnceligi, kopyaAralikHatasi, setHatasi, setUyumu, type OncelikGirdisi, type SetKarti, type SetNiteligiSatiri } from './alternatif/kurallar.ts';
 
 // 3572 a: alternatif setinin saf eşleme kuralı ve K4 önceliği (ORN- örnek veri).
-const kart = (ek: Partial<SetKarti> = {}): SetKarti => ({ form: 'cubuk', kalite: '6082', durum: 'T6', yuzey: 'Ham', standartlar: [], olcu: { d: 42, l: 3000 }, ...ek });
+const kart = (ek: Partial<SetKarti> = {}): SetKarti => ({ form: 'cubuk', kalite: '6082', durum: 'T6', yuzey: 'Ham', standartlar: [], islemler: [], olcu: { d: 42, l: 3000 }, ...ek });
 const liste = (nitelik: SetNiteligiSatiri['nitelik'], degerler: string[]): SetNiteligiSatiri => ({ nitelik, degerler, alt: null, ust: null });
 const olcu = (nitelik: SetNiteligiSatiri['nitelik'], alt: number | null, ust: number | null): SetNiteligiSatiri => ({ nitelik, degerler: null, alt, ust });
 
@@ -52,5 +52,72 @@ describe('Alternatif seti kuralı (3572-1)', () => {
       [1, 'esdeger', 'ayni', null], [4, 'set', 'icinde', 9], [5, 'alternatif', 'sartli', null],
     ]);
     assert.deepEqual(alternatifOnceligi({ ...g, kullanimYeri: 'talep' }).map((x) => [x.no, x.tur]), [[1, 'esdeger'], [2, 'secili'], [5, 'alternatif']]);
+  });
+});
+
+// 3593: kip (birebir, pay, aralık) ve işlem; ana kart ORN-HM 6082 T6 d 40 boy 3000, işlemsiz.
+describe('Alternatif kartı kipleri (3593)', () => {
+  const ana = kart({ olcu: { d: 40, l: 3000 } });
+  const kip = (nitelik: SetNiteligiSatiri['nitelik'], k: SetNiteligiSatiri['kip'], ek: Partial<SetNiteligiSatiri> = {}): SetNiteligiSatiri =>
+    ({ nitelik, kip: k, degerler: null, alt: null, ust: null, payAlt: null, payUst: null, ...ek });
+
+  test('birebir liste ve ölçü ana kartı izler; ana değişince sonuç da değişir', () => {
+    const set = [kip('kalite', 'birebir'), kip('d', 'birebir')];
+    assert.equal(setUyumu(set, kart({ olcu: { d: 40 } }), ana).uyar, true);
+    assert.equal(setUyumu(set, kart({ olcu: { d: 42 } }), ana).uyar, false);
+    assert.equal(setUyumu(set, kart({ kalite: '6061', olcu: { d: 40 } }), ana).uyar, false);
+    assert.equal(setUyumu(set, kart({ olcu: { d: 42 } }), kart({ olcu: { d: 42 } })).uyar, true);
+    assert.deepEqual(setUyumu(set, kart(), null), { uyar: false, neden: 'Ana kart okunamadı' });
+  });
+
+  test('pay ana ölçünün altı ve üstü; ana kartta ölçü yoksa set uymaz', () => {
+    const set = [kip('d', 'pay', { payAlt: 0, payUst: 5 })];
+    assert.equal(setUyumu(set, kart({ olcu: { d: 45 } }), ana).uyar, true);
+    assert.equal(setUyumu(set, kart({ olcu: { d: 39.9 } }), ana).uyar, false);
+    assert.equal(setUyumu(set, kart({ olcu: { d: 45.1 } }), ana).uyar, false);
+    assert.deepEqual(setUyumu(set, kart(), kart({ olcu: { a: 20 } })), { uyar: false, neden: 'ana kartta d yok' });
+  });
+
+  test('işlem: istenenlerin hepsi kartta olmalı; birebirde işlemler aynı küme; eski kartta işlem satırı yoksa serbest', () => {
+    const iki = [liste('islem', ['T6', 'eloksal'])];
+    assert.equal(setUyumu(iki, kart({ islemler: ['eloksal', 'T6', 'kumlama'] })).uyar, true);
+    assert.equal(setUyumu(iki, kart({ islemler: ['T6'] })).uyar, false);
+    const birebir = [kip('islem', 'birebir')];
+    assert.equal(setUyumu(birebir, kart(), ana).uyar, true);
+    assert.deepEqual(setUyumu(birebir, kart({ islemler: ['eloksal'] }), ana), { uyar: false, neden: 'işlem eloksal' });
+    assert.equal(setUyumu(birebir, kart({ islemler: ['eloksal'] }), kart({ islemler: ['eloksal'] })).uyar, true);
+    assert.equal(setUyumu([liste('kalite', ['6082'])], kart({ islemler: ['eloksal'] })).uyar, true);
+  });
+
+  test('birebir listede ana değeri yoksa kartta da olmamalı', () => {
+    const set = [kip('yuzey', 'birebir')];
+    assert.equal(setUyumu(set, kart({ yuzey: null }), kart({ yuzey: null })).uyar, true);
+    assert.equal(setUyumu(set, kart({ yuzey: 'Taşlanmış' }), kart({ yuzey: null })).uyar, false);
+  });
+
+  test('kip biçim hataları', () => {
+    assert.equal(setHatasi([kip('kalite', 'birebir')]), null);
+    assert.equal(setHatasi([kip('d', 'birebir')]), null);
+    assert.equal(setHatasi([kip('d', 'pay', { payAlt: 0, payUst: 0 })]), null);
+    assert.equal(setHatasi([kip('kalite', 'birebir', { degerler: ['6082'] })])?.alan, 'kalite');
+    assert.equal(setHatasi([kip('kalite', 'pay', { payAlt: 1, payUst: 1 })])?.alan, 'kalite');
+    assert.equal(setHatasi([kip('d', 'pay', { payAlt: 1 })])?.ileti, 'Aşağı ve yukarı payı girin (0 olabilir).');
+    assert.equal(setHatasi([kip('d', 'pay', { payAlt: 1, payUst: 1, alt: 40 })])?.alan, 'd');
+    assert.equal(setHatasi([kip('d', 'birebir', { alt: 40 })])?.alan, 'd');
+    assert.equal(setHatasi([kip('d', 'aralik', { payAlt: 1, alt: 40 })])?.alan, 'd');
+    assert.equal(setHatasi([kip('d', 'aralik', { alt: 48, ust: 45 })])?.ileti, 'En az en çoktan büyük olamaz.');
+    assert.equal(setHatasi([kip('d', 'aralik', { alt: 40 })]), null);
+  });
+});
+
+describe('Kopyada Aralık (3593, Risk K1)', () => {
+  const d = (alt: number | null, ust: number | null, kip: SetNiteligiSatiri['kip'] = 'aralik'): SetNiteligiSatiri => ({ nitelik: 'd', kip, degerler: null, alt, ust });
+  test('hedefin ölçüsü aralıkta ise geçer; dışında, ölçüsüz ya da tek uçlu sınırı aşan reddedilir; Birebir ve Pay bakılmaz', () => {
+    assert.equal(kopyaAralikHatasi([d(40, 45)], { d: 42 }), null);
+    assert.equal(kopyaAralikHatasi([d(40, 45, null)], { d: 45 }), null);
+    assert.match(kopyaAralikHatasi([d(40, 45)], { d: 60 })!, /Ø 60 aralığın \(40–45\) dışında/);
+    assert.match(kopyaAralikHatasi([d(null, 45)], { d: 50 })!, /en çok 45/);
+    assert.match(kopyaAralikHatasi([d(40, 45)], {})!, /kartta Ø yok/);
+    assert.equal(kopyaAralikHatasi([{ nitelik: 'd', kip: 'pay', degerler: null, alt: null, ust: null, payAlt: 0, payUst: 5 }, { nitelik: 'kalite', degerler: ['6082'], alt: null, ust: null }], {}), null);
   });
 });

@@ -12,7 +12,7 @@ import {
   alternatifKomutCevabi, alternatifKuraliKaldirGovdesi, alternatifKuraliKaydetGovdesi, alternatifKuraliParametresi, alternatifTanimlariCevabi,
   durumMuadiliKaldirGovdesi, durumMuadiliKaydetGovdesi, esdegerBaglaGovdesi, esdegerKaldirGovdesi, kabulSiniriKaldirGovdesi, kabulSiniriKaydetGovdesi,
   kabulSiniriParametresi, kaliteMuadiliKaldirGovdesi, kaliteMuadiliKaydetGovdesi, grupSinirlariCevabi, kartAlternatifleriCevabi, kartZarfiCevabi, kartZarfiParametresi,
-  alternatifSetiKaldirGovdesi, alternatifSetiKaydetCevabi, alternatifSetiKaydetGovdesi, alternatifSetiParametresi, alternatifSirasiGovdesi, onerilmesinGovdesi,
+  alternatifSetiKaldirGovdesi, alternatifSetiKopyalaCevabi, alternatifSetiKopyalaGovdesi, alternatifSetiKaydetCevabi, alternatifSetiKaydetGovdesi, alternatifSetiParametresi, alternatifSirasiGovdesi, onerilmesinGovdesi,
   seciliAlternatifKaldirGovdesi, seciliAlternatifKaydetGovdesi, setOnizlemeCevabi, setOnizlemeSorgusu,
 } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 import * as alternatif from './alternatif/servis.ts';
@@ -229,6 +229,12 @@ export const uclar = [
   uc({
     yontem: 'POST', yol: '/malzeme-alternatifleri/setler/:id/kaldir', yetki: 'malzemeler.tanim-yaz', parametre: alternatifSetiParametresi,
     govde: alternatifSetiKaldirGovdesi, cevap: alternatifKomutCevabi, isle: ({ db, parametre, govde }) => alternatif.setKaldir(db, parametre.id, govde.surum),
+  }),
+  // 3593 (S8): alternatif kartını aynı form ve ailedeki kartlara kopyala; yazım aynı tanım yetkisiyle, tek işlemde.
+  uc({
+    yontem: 'POST', yol: '/malzeme-alternatifleri/setler/:id/kopyala', yetki: 'malzemeler.tanim-yaz', parametre: alternatifSetiParametresi,
+    govde: alternatifSetiKopyalaGovdesi, cevap: alternatifSetiKopyalaCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => alternatif.setKopyala(db, kullanici, parametre.id, govde),
   }),
   uc({
     yontem: 'POST', yol: '/malzeme-alternatifleri/secili/kaydet', yetki: 'malzemeler.tanim-yaz', govde: seciliAlternatifKaydetGovdesi, cevap: alternatifKomutCevabi,

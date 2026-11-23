@@ -6,6 +6,7 @@ import { kalemOzeti } from '../merkez/kimlik.ts';
 import type { PurchaseRequest } from '../merkez/tipler.ts';
 import { dayDiff, fmtDate, todayStr } from '../merkez/util.ts';
 import { gecikmisMi } from '../merkez/views.ts';
+import { kalemKisaOzeti } from './MalzemeSeridi.tsx';
 
 export function durumTonu(r: PurchaseRequest, bugun: string) {
   return r.status === 'cancelled' ? 'pasif' : gecikmisMi(r, bugun) ? 'hata' : r.status === 'received' ? 'tamam' : 'uyari';
@@ -44,6 +45,10 @@ export function KimlikSeridi({ r, adim, baslik }: { r: PurchaseRequest; adim: st
     return () => { kutu.removeEventListener('scroll', bak); window.removeEventListener('resize', bak); gorunurYaz(false); };
   }, [r.id, baslik]);
   const bugun = todayStr();
+  // 3593: ilk kalemin malzemesi (kalite, durum, ölçü) ve kalemlerde işaretli alternatif kartı sayısı.
+  const ilk = r.items?.[0];
+  const malzeme = ilk ? kalemKisaOzeti(ilk) : '';
+  const akSayisi = (r.items ?? []).reduce((n, k) => n + (k.alternatifler?.length ?? 0), 0);
   return yer && createPortal(
         <div className="sa-serit" data-gorunur={gorunur ? '' : undefined} aria-hidden={!gorunur} role="region" aria-label="Talebin kimliği">
           <span className="sa-serit-no">{r.no}</span>
@@ -51,6 +56,8 @@ export function KimlikSeridi({ r, adim, baslik }: { r: PurchaseRequest; adim: st
           <Rozet ton={durumTonu(r, bugun)}>{durumEtiketi(r)}</Rozet>
           {r.needDate && <span className="sa-serit-bilgi sa-serit-ihtiyac"><Simge ad="calendar" boyut="k" />{ihtiyacMetni(r, bugun)}</span>}
           {r.needDate && <span className="sa-serit-bilgi sa-serit-kisa" title={ihtiyacMetni(r, bugun)}><Simge ad="calendar" boyut="k" />{fmtDate(r.needDate)}</span>}
+          {malzeme && <span className="sa-serit-bilgi sa-serit-malzeme" title={malzeme}><Simge ad="box" boyut="k" />{malzeme}</span>}
+          {akSayisi > 0 && <Rozet ton="bilgi" gorunum="cizgi">{`${String(akSayisi)} alternatif`}</Rozet>}
           <span className="sa-serit-bilgi sa-serit-kalem"><Simge ad="list" boyut="k" />{kalemOzeti(r, 1)}</span>
           {adim && <span className="sa-serit-bilgi sa-serit-adim">{adim}</span>}
         </div>,

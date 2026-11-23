@@ -6,7 +6,7 @@ import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { FasonIsEmri } from '../uretim-emirleri/disari.ts';
 import type { AlimTasimasi } from './alim-olayi.ts';
 import type { AlternatifZarfi, ZarfSonucu } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
-import type { AlternatifSonucu, HizliKalem, KabulSiniri, TeklifAlternatifi, KartAyrintisi, Kalite, Karar, Onay, Talebim, Talep as TalepCikisi, TalepKaydi as Talep, TalepDurumu, TalepTuru, TalepYazimi, TedarikTermini, TerminDurumu, TerminTakipSatiri, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { AlternatifSonucu, HizliKalem, KalemAlternatifKarti, KabulSiniri, TeklifAlternatifi, KartAyrintisi, Kalite, Karar, Onay, Talebim, Talep as TalepCikisi, TalepKaydi as Talep, TalepDurumu, TalepTuru, TalepYazimi, TedarikTermini, TerminDurumu, TerminTakipSatiri, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
 import { MALZEMELER_SAYFALARI } from '#paylasilan/sayfalar/malzemeler.ts';
 import { gerceklesenPay, gerceklesenSiparisDegeri } from './hesap-kurallar.ts';
 
@@ -227,6 +227,12 @@ export const ILETILER = {
   kabulZarfsiz: 'Bu kartta alternatif zarfı yok; kabul sınırı yalnız "Yalnız aynı malzeme" olabilir.',
   kabulKapali: 'Bu kartta alternatif kapalı; kalem yalnız aynı malzemeyle karşılanır.',
   kabulKartsiz: 'Kabul sınırı yalnız kartı seçilmiş kalemde girilir.',
+  alternatifKartiKartsiz: 'Alternatif kartı yalnız kartı seçilmiş kalemde işaretlenir.',
+  alternatifKartiIsaretsiz: (ad: string) => `${ad}: bu alternatif kartı kalemde işaretli değil; satın alma yalnız talep edenin işaretlediği kartla teklif alır.`,
+  alternatifKartiDegisti: (ad: string, kart: string) => `${ad}: ${kart} talepte işaretlendikten sonra değişti; talep eden kalemi yeni sınırla güncellemeden bu kartla teklif kaydedilmez.`,
+  alternatifKartiDisi: (ad: string, kart: string, neden: string) => `${ad}: ${neden}, ${kart} sınırı dışında; kaydedilmez. Değeri düzeltin ya da başka kart seçin.`,
+  alternatifIslemFarki: (islem: string) => `işlem ${islem || 'yok'}: işlem farkı yalnız alternatif kartıyla kabul edilir`,
+  alternatifKartiListeDisi: 'Bu alternatif kartı bu malzemenin talepte kullanılan kartları arasında değil; listeyi yenileyip yeniden seçin.',
   kabulDisi: (ad: string, l: readonly string[]) => `${ad} kartın kabul sınırında yok: ${l.join(', ')}. Talepte sınır yalnız daraltılır.`,
   kabulPaysiz: 'Bu kartta kesit ölçüsü yok; ölçü payı girilmez.',
   kabulPayGenis: (enCok: number) => `Ölçü payı kartın sınırından geniş olamaz (en çok +${enCok.toLocaleString('tr-TR')} mm).`,
@@ -796,13 +802,41 @@ export type ZarfDegerlendirici = (z: AlternatifZarfi, aday: ReturnType<typeof al
 // iznin talepte mi (işaret) yoksa sonradan mı verildiği ayrılır.
 // 3437 a (dilim 3b-1, Risk B8): talep edenin sonradan verdiği izin (soru, ret) yalnız aynı alternatif yeniden kaydedilirse korunur;
 // alternatif değişince izin düşer ve yeniden sorulur.
+// 3593 (Risk S7): teklif işlem yazmadıysa ana kartın işlemi sayılır; ana karttan farklı işlem kabul sınırıyla geçmez (sınır dışı).
+type OncekiAlternatif = { alternatif: TeklifAlternatifi | null; alternatifSonucu: AlternatifSonucu | null } | null;
 export function alternatifSonucuHesapla(
   zarf: AlternatifZarfi, k: KabulSiniri | null, a: TeklifAlternatifi, degerlendir: ZarfDegerlendirici,
-  onceki: { alternatif: TeklifAlternatifi | null; alternatifSonucu: AlternatifSonucu | null } | null = null,
+  onceki: OncekiAlternatif = null, anaIslemler: readonly string[] | null = null,
 ): AlternatifSonucu {
   const y = kabulYazimi(k);
   const r = degerlendir(kabulZarfi(zarf, y === null ? null : { ...y, sartliKabul: false }), alternatifAdayi(zarf, a));
-  const sonuc: AlternatifSonucu = { sonuc: r.sonuc, nedenler: r.nedenler.slice(0, 20), izin: r.sonuc === 'sartli' && y?.sartliKabul === true ? 'talep' : null };
+  const islemFarki = a.islem != null && anaIslemler !== null && !ayniIslem(a.islem, anaIslemler);
+  const sonuc: AlternatifSonucu = islemFarki
+    ? { sonuc: 'disi', nedenler: [ILETILER.alternatifIslemFarki(a.islem!.join(' + ')), ...r.nedenler].slice(0, 20), izin: null }
+    : { sonuc: r.sonuc, nedenler: r.nedenler.slice(0, 20), izin: r.sonuc === 'sartli' && y?.sartliKabul === true ? 'talep' : null };
+  return oncekiniKoru(sonuc, a, onceki);
+}
+const ayniIslem = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x) => b.includes(x));
+// 3593 (Risk S3, S5, S6): alternatif kartıyla gelen teklif. Kart kalemde işaretli olmalı; sınır kayıt anında dondurulur (yeni kart ya da
+// değişen alternatif) ya da önceki satırdan aynen alınır. Sınır dışı değer kaydedilmez (red iletisi döner). İşaretli şartlı kart talep
+// edenin kabulüdür (izin 'talep'). Uyum denetimi malzemelerin saf kuralıdır (uyum).
+export function kartliAlternatifSonucu(
+  kart: NonNullable<AlternatifSonucu['kart']>, a: TeklifAlternatifi, ad: string,
+  uyum: (k: NonNullable<AlternatifSonucu['kart']>, a: TeklifAlternatifi) => { uyar: boolean; neden: string },
+  onceki: OncekiAlternatif = null,
+): AlternatifSonucu | string {
+  const u = uyum(kart, a);
+  if (!u.uyar) return ILETILER.alternatifKartiDisi(ad, kart.ad, u.neden);
+  const sartli = kart.tur === 'sartli';
+  const sonuc: AlternatifSonucu = { sonuc: sartli ? 'sartli' : 'icinde', nedenler: [`${kart.ad}: ${u.neden}`.slice(0, 300)], izin: sartli ? 'talep' : null, kart };
+  return oncekiniKoru(sonuc, a, onceki);
+}
+// Önceki satırın dondurulan sınırı aynı alternatifte (nitelikler, işlem ve kart aynı) kullanılır; set silinip kartId boşalmışsa da.
+export function dondurulmusKart(a: TeklifAlternatifi, onceki: OncekiAlternatif): NonNullable<AlternatifSonucu['kart']> | null {
+  const k = onceki?.alternatifSonucu?.kart;
+  return k && onceki.alternatif && alternatifIzi(onceki.alternatif) === alternatifIzi(a) ? k : null;
+}
+function oncekiniKoru(sonuc: AlternatifSonucu, a: TeklifAlternatifi, onceki: OncekiAlternatif): AlternatifSonucu {
   const o = onceki?.alternatifSonucu;
   if (!o || !onceki.alternatif || alternatifIzi(onceki.alternatif) !== alternatifIzi(a)) return sonuc;
   // 3b-2: açılan kart aynı alternatifte kalır; alternatif değişince düşer.
@@ -812,7 +846,8 @@ export function alternatifSonucuHesapla(
 }
 // Alternatifin anahtar sırasından bağımsız izi (boş nitelik ile null aynıdır).
 export const alternatifIzi = (a: TeklifAlternatifi): string =>
-  JSON.stringify([a.kalite ?? null, a.durum ?? null, a.yuzey ?? null, Object.entries(a.olcu).sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0))]);
+  JSON.stringify([a.kalite ?? null, a.durum ?? null, a.yuzey ?? null, Object.entries(a.olcu).sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)),
+    a.islem == null ? null : [...a.islem].sort(), a.kartId ?? null]);
 // Teklifte bilinmeyen ölçü anahtarı yazılmaz (motor tanımadığı anahtarı karşılaştırmaz, sonuç yanlış "aynı" çıkardı).
 export function alternatifOlcuReddi(zarf: AlternatifZarfi, a: TeklifAlternatifi, ad: string): string | null {
   const bilinen = new Set([...zarf.olcu.map((o) => o.anahtar), ...(zarf.boy ? [zarf.boy.anahtar] : [])]);
@@ -894,10 +929,10 @@ export function alternatifSiparisReddi(g: {
 // 3b-3b (Risk N1): kartı malzemelerde iptal edilmiş satır da yeniden kart bekler (iptaller).
 export function kartBekleyenAlternatifler(
   t: Pick<TalepYazimi, 'teklifler' | 'karar'>, iptaller: ReadonlySet<number> = new Set(),
-): { teklifId: string; kalemId: string; alternatif: TeklifAlternatifi }[] {
+): { teklifId: string; kalemId: string; alternatif: TeklifAlternatifi; kart: AlternatifSonucu['kart'] }[] {
   return secilenSatirlar(t).flatMap((f) => (f.alternatif && f.alternatifSonucu && f.alternatifSonucu.sonuc !== 'ayni'
     && (f.alternatifSonucu.kartNo == null || iptaller.has(f.alternatifSonucu.kartNo))
-    ? [{ teklifId: f.teklifId, kalemId: f.kalemId, alternatif: f.alternatif }] : []));
+    ? [{ teklifId: f.teklifId, kalemId: f.kalemId, alternatif: f.alternatif, kart: f.alternatifSonucu.kart ?? null }] : []));
 }
 type LogoKiyas = Pick<TalepYazimi, 'kalemler' | 'teklifler' | 'karar'>;
 const sadeOndalik = (x: string | null | undefined): string | null => (x === null || x === undefined ? null : x.includes('.') ? x.replace(/0+$/, '').replace(/\.$/, '') : x);
@@ -2112,7 +2147,8 @@ export function onayliTalepGelisi(bugun: string, terminGun: number | null): stri
 // 3437 a (dilim 2): talep kaleminin kabul sınırı. Kartın zarfı (3437-1 motoru) talep edenin daraltmasıyla kesişir; daraltma yalnız daraltır:
 // liste zarfın muadilleriyle kesişir, pay zarfınkinden büyük olamaz, "yalnız aynı" zarfı kapatır. Şartlı kabul, şartlı muadili talep edenin
 // baştan onayıdır (satın almada ayrıca sorulmaz). Sınır yoksa (null) zarfın kendisi.
-export interface KalemKabulu { malzemeNo: number; kabul: KabulSiniri | null }
+// 3593: alternatifKartlari kalemde işaretli alternatif kartlarıdır (işaretlendiği hâliyle; boş liste işaretsiz).
+export interface KalemKabulu { malzemeNo: number; kabul: KabulSiniri | null; alternatifKartlari: KalemAlternatifKarti[] }
 export const VARSAYILAN_KABUL: KabulSiniri = { yalnizAyni: false, sartliKabul: false, kaliteler: null, durumlar: null, payMm: null };
 const varsayilanMi = (k: KabulSiniri): boolean =>
   !k.yalnizAyni && !k.sartliKabul && k.kaliteler === null && k.durumlar === null && k.payMm === null;

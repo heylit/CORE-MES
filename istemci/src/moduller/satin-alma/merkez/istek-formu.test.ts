@@ -60,3 +60,34 @@ describe('teklif isteme formu (3442-4)', () => {
     expect(d.querySelector('img')?.getAttribute('onerror')).toBeNull();
   });
 });
+
+describe('3593: teklif isteme formunda malzeme özellikleri ve kabul edilen alternatifler (KURGU 3.5, S9)', () => {
+  const ITEM = {
+    id: 'k1', name: 'ORN- çubuk Ø40', spec: '', qty: 12, unit: 'boy',
+    malzeme: { kalite: 'EN AW-6082', durum: 'T6', islem: null, olcu: 'Ø40 × 3000', aciklama: null, ayrinti: [{ ad: 'Standart', deger: 'EN 754-2' }] },
+    alternatifler: [
+      { setId: 1, ad: 'ORN AK-1', tur: 'tam' as const, ozet: '6082 ya da 6061 · Ø 40–45 (−0/+5) · boy birebir 3000' },
+      { setId: 2, ad: 'ORN AK-2', tur: 'sartli' as const, ozet: '7075 · Ø 40–50' },
+    ],
+  };
+  const kagit = (a?: { yaz: boolean; sartli: boolean }, items: unknown[] = [ITEM]) => {
+    const d = document.createElement('div');
+    d.innerHTML = istekFormuHTML({ ...R, items } as unknown as PurchaseRequest, T, '', ICERIK, KURUM, '', '2026-11-23', null, a);
+    return d;
+  };
+  it('varsayılan: özellikler ve yalnız şartlı olmayan kartlar yazılır, dipnot var; fiyat, firma ve kişi yok', () => {
+    const d = kagit();
+    const dd = [...d.querySelectorAll('.doc-kalem-oz dd')].map((x) => x.textContent);
+    expect(dd[0]).toBe('EN AW-6082 · T6 · Ø40 × 3000 · Standart: EN 754-2');
+    expect([...d.querySelectorAll('.doc-ak')].map((x) => x.textContent)).toEqual(['ORN AK-1 · tam · 6082 ya da 6061 · Ø 40–45 (−0/+5) · boy birebir 3000']);
+    expect(d.querySelector('.doc-ak-dipnot')?.textContent).toContain('sınır dışı teklif kabul edilmez');
+  });
+  it('şartlılar açılınca şartlı kart da yazılır; alternatifler kapalıysa "Yazılmıyor", dipnot yok; kartsız kalemde blok yok', () => {
+    expect(kagit({ yaz: true, sartli: true }).querySelectorAll('.doc-ak')).toHaveLength(2);
+    const kapali = kagit({ yaz: false, sartli: true });
+    expect([kapali.querySelectorAll('.doc-ak').length, kapali.querySelector('.doc-ak-dipnot'), [...kapali.querySelectorAll('.doc-kalem-oz dd')].at(-1)?.textContent]).toEqual([0, null, 'Yazılmıyor.']);
+    const yok = kagit(undefined, [{ ...ITEM, alternatifler: [] }]);
+    expect([...yok.querySelectorAll('.doc-kalem-oz dd')].at(-1)?.textContent).toBe('Yok; yalnız bu malzeme.');
+    expect(kagit(undefined, [{ id: 'k2', name: 'ORN- vida', spec: '', qty: 3, unit: 'adet' }]).querySelector('.doc-kalem-oz')).toBeNull();
+  });
+});

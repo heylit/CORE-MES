@@ -144,3 +144,30 @@
 .sa-ekran-bilgi-alt { font-size: var(--yazi-xs); color: var(--muted); }
 .sa-ekran-bilgi-gec .sa-ekran-bilgi-alt { color: var(--stop); font-weight: 600; }
 @media (max-width: 560px) { .sa-ekran-bilgi { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* 3593: kalemin malzemesi ve alternatifleri talebin başında (bilgi kutularının altında); dar ekranda ilk dört özellik, kalanı "Tümü". */
+.sa-mal-serit {
+  display: grid; gap: var(--b-2); min-width: 0; padding: var(--b-2) var(--b-3);
+  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel);
+}
+.sa-mal-serit-ust { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); min-width: 0; }
+.sa-mal-serit-kalem { display: inline-flex; align-items: center; gap: var(--b-1); max-width: 100%; }
+.sa-mal-serit-kalem select { min-height: var(--dokunma); max-width: 100%; }
+.sa-mal-serit-kod { font-family: var(--font-mono); font-weight: 600; color: var(--ink); }
+.sa-mal-serit-ad { min-width: 0; overflow-wrap: anywhere; }
+.sa-mal-serit-miktar, .sa-mal-serit-diger, .sa-mal-serit-not { font-size: var(--yazi-s); color: var(--muted); }
+.sa-mal-serit-diger { margin-inline-start: auto; }
+.sa-mal-serit-oz { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-3); margin: 0; }
+.sa-mal-serit-oz > div { display: grid; min-width: 0; }
+.sa-mal-serit-oz dt { font-size: var(--yazi-xs); color: var(--muted); }
+.sa-mal-serit-oz dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.sa-mal-serit-tumu { display: none; }
+.sa-mal-serit-ak { display: grid; gap: var(--b-1); border-top: var(--cizgi-ince) solid var(--edge); padding-top: var(--b-2); min-width: 0; }
+.sa-mal-serit-baslik { display: inline-flex; align-items: center; gap: var(--b-1); font-size: var(--yazi-xs); color: var(--muted); font-weight: 600; }
+.sa-mal-serit-ak-satir { overflow-wrap: anywhere; }
+.sa-serit-malzeme { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 28ch; }
+@media (max-width: 560px) {
+  .sa-mal-serit-diger { margin-inline-start: 0; }
+  .sa-mal-serit-oz:not([data-tumu]) .sa-mal-serit-fazla { display: none; }
+  .sa-mal-serit-tumu { display: block; }
+}

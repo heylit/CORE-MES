@@ -37,7 +37,7 @@ const ZARF: KartZarfiCevabi = {
 const uyan = (no: number) => ({ no, kod: `ORN-HM-${String(no)}`, ad: `ORN aday ${String(no)}`, neden: 'd 52', yeni: false, durum: 'gecer' as const });
 const SET: KartAlternatifleriCevabi['setler'][number] = {
   id: 7, ad: 'ORN Kalın çubuk', tur: 'tam', sira: 0, kullanimYerleri: ['talep', 'satin_alma', 'uretim'], notu: null, genisOnay: false,
-  nitelikler: [{ nitelik: 'form', degerler: ['cubuk'], alt: null, ust: null }], uyanSayisi: 2, surum: 1, guncelleme: '2026-11-22T18:00:00Z',
+  nitelikler: [{ nitelik: 'form', degerler: ['cubuk'], kip: null, alt: null, ust: null, payAlt: null, payUst: null }], uyanSayisi: 2, surum: 1, guncelleme: '2026-11-22T18:00:00Z',
   uyanlar: [uyan(3), uyan(4)],
 };
 const BOLUM: KartAlternatifleriCevabi = {

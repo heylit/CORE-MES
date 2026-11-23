@@ -14,6 +14,7 @@ import { gelisGunu, kalemOzeti } from '../merkez/kimlik.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
 import { TalepCizimleri } from '../talep/Cizimler.tsx';
 import { KimlikSeridi, durumTonu } from './KimlikSeridi.tsx';
+import { MalzemeSeridi } from './MalzemeSeridi.tsx';
 
 // Talep ayrıntısı (2412-2): yedi adım tek sekme şeridinde (biten adım onay işaretli), altında "Şimdi yapılacak" ve tek ana düğme
 // başlıkta. Seçili adımın içeriği merkezin gövdesindedir (#main); düğmeler merkezin işlemlerini adıyla çağırır.
@@ -118,6 +119,7 @@ export function TalepAyrinti() {
         {...(bant ? {} : { eylemler, ...(ana ? { birincil: { etiket: ana[1], yap: () => { calistir(ana); } } } : {}) })}
       />
       <Bilgiler r={r} />
+      <MalzemeSeridi r={r} />
       {bant && (
         <div className={`sa-ekran-simdi${n.cls ? ` sa-ekran-simdi-${n.cls}` : ''}`} role="status">
           <Simge ad={n.cls === 'bad' ? 'alert' : n.cls === 'done' ? 'check' : 'flag'} />

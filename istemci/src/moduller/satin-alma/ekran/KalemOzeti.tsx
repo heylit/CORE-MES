@@ -12,11 +12,12 @@ export function KalemOzeti({ kalem, talepId }: { kalem: RequestItem; talepId: st
   const kart = m ? KART_ALANLARI.flatMap((k) => (m[k] ? [m[k]] : [])).join(' · ') : '';
   const not = kalem.spec.trim();
   const satir = (ad: string, deger: string) => <small key={ad} className="sa-kalem-ozeti-satir" title={deger}><span>{ad}:</span> {deger}</small>;
-  if (!kart && !not && !m?.ayrinti.length && !kalem.materialId) return null;
+  if (!kart && !not && !m?.ayrinti.length && !kalem.materialId && !kalem.alternatifler?.length) return null;
   return (
     <span className="sa-kalem-ozeti">
       {kart && satir('Kart', kart)}
       {kalem.materialId && <AlternatifOzeti talepId={talepId} kalemId={kalem.id} />}
+      {kalem.alternatifler?.map((a) => satir(`${a.ad}${a.tur === 'sartli' ? ' (şartlı)' : ''}`, a.ozet))}
       {not && satir('Talep notu', not)}
       {m?.ayrinti.length ? (
         // Satıra basınca talep açılır; ayrıntıyı açmak satırı seçmesin.

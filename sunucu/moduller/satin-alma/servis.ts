@@ -21,14 +21,14 @@ import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { firmaAdlari, karneOlayiKaldir, karneOlayiYaz, karneOzetleri } from '../musteri-tedarikci/disari.ts';
-import type { KalemBagiCikisi, OnayliListeCevabi, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { AlternatifSonucu, KalemAlternatifKarti, TeklifAlternatifi, KalemBagiCikisi, OnayliListeCevabi, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
 import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { kisiAdlari, kisilerinIslemleri, kisiVarMi, kisininRolleri, rolSecenekleri } from '../kisiler/disari.ts';
 import { alacakliSiparisler, alisBelgeleri, belgelerinSiparisleri, alisBelgesiEslesmeTutari, belgeSiparisBagla, siparisAvansAlacagiYaz, kdvSecenekleri, kurCiftiGetir, kurCiftleri, oranlar, siparisOdemePlaniKaldir, siparisOdemePlaniYaz, siparisOtomatikPlaniVarMi, siparisPlanlari } from '../finans/disari.ts';
 import type { AvansAlacagiSonucu, FaizTuru } from '../finans/disari.ts';
 import { ORAN_KULLANIMLARI, yillikFaizdenAylik } from '#paylasilan/sozlesme/finans.ts';
 import { firmaAra, firmaOzeti, firmaOzetleri, tedarikciOlabilirMi, tumFirmalar, type FirmaOzeti } from '../musteri-tedarikci/disari.ts';
-import { alternatifKartiAc, alternatifZarfiOku, zarfDegerlendir, kategoriAgaci, kullanilanKaliteler, malzemeAra, malzemeKategorileri, malzemeMaliyetBilgileri, malzemeOzetleri, malzemeSatinAlmaAyrintilari } from '../malzemeler/disari.ts';
+import { alternatifKartiAc, alternatifKartiSecenekleri, alternatifKartiSinirlari, anaKartNitelikleri, dondurulmusUyum, sinirCoz, teklifAdayi, alternatifZarfiOku, zarfDegerlendir, kategoriAgaci, kullanilanKaliteler, malzemeAra, malzemeKategorileri, malzemeMaliyetBilgileri, malzemeOzetleri, malzemeSatinAlmaAyrintilari } from '../malzemeler/disari.ts';
 import { dosyaTutamagi } from '../dosya/disari.ts';
 import { teklifIstekFormu } from './teklif-istek-formu.ts';
 import {
@@ -56,7 +56,7 @@ import {
 } from './kurallar.ts';
 import type { BirimKarsiligi, FiyatIzi, KalemKabulu, KalemOzelligi } from './kurallar.ts';
 import { kalemTerminEmriTuret, satisBagReddi } from './kurallar.ts';
-import { alternatifIzniReddi, cizimIzni, merkezCizimiAdi, talepCizimiKaldirmaReddi, talepCizimiTaleptenMi, alternatifKararReddi, alternatifSiparisReddi, kartBekleyenAlternatifler, alternatifOlcuReddi, alternatifSonucuHesapla, sartliAlternatifler, kabulReddi, kabulYazimi, kabulZarfi as daraltilmisZarf, emirSatinAlmaDurumlari, fasonSiparisTarihiSec, kopyaOzelligi, tedarikAsamasi } from './kurallar.ts';
+import { alternatifIzniReddi, cizimIzni, merkezCizimiAdi, talepCizimiKaldirmaReddi, talepCizimiTaleptenMi, alternatifKararReddi, alternatifSiparisReddi, kartBekleyenAlternatifler, alternatifOlcuReddi, alternatifSonucuHesapla, dondurulmusKart, kartliAlternatifSonucu, sartliAlternatifler, kabulReddi, kabulYazimi, kabulZarfi as daraltilmisZarf, emirSatinAlmaDurumlari, fasonSiparisTarihiSec, kopyaOzelligi, tedarikAsamasi } from './kurallar.ts';
 import type { EmirSatinAlmaDurumu, FasonSiparisTarihi } from './kurallar.ts';
 import { SIPARIS_ILETILERI, oneriHareketi, siparisDuzeniKur, siparisHareketi, siparisOnayiGerekirMi, type SiparisDuzeni } from './siparis-kurallar.ts';
 import { DEGISIKLIK_ILETILERI, degisiklikHareketi, degisiklikOnayNedenleri, siparisDegisikligiKur, type DegisecekSiparis, type SiparisDegisikligiPlani } from './siparis-kurallar.ts';
@@ -185,6 +185,7 @@ async function talepleriYalinKur(db: Db, satirlar: s.TalepSatiri[]): Promise<Tal
   const baglar = await kalemBaglariKur(db, satirlar.map((t) => t.id));
   const karsiliklar = await kalemKarsiliklari(db, [{ kalemler: a.kalemler.map((k) => ({ ...k, miktar: sade(k.miktar) })) }]);
   const ozellikler = await kalemOzellikleri(db, [{ kalemler: a.kalemler }]);
+  const isaretler = await kalemAlternatifKartlari(db, satirlar.map((t) => t.id));
   const kopyalar = satirlar.length === 0 ? [] : await s.kartKopyalariToplu(db, satirlar.map((t) => t.id));
   const cizimSayilari = await teklifTutamagi.bagSayilari(db, satirlar.map((t) => talepCizimiKaydi(t.id)));
   return satirlar.map((t) => {
@@ -204,6 +205,7 @@ async function talepleriYalinKur(db: Db, satirlar: s.TalepSatiri[]): Promise<Tal
       kalemBaglari: baglar.get(t.id) ?? [],
       kalemKarsiliklari: grup(a.kalemler, t.id).flatMap((k) => { const c = karsiliklar.get(k.id); return c === undefined ? [] : [{ kalemId: k.id, ...c }]; }),
       kalemOzellikleri: grup(a.kalemler, t.id).flatMap((k) => { const o = ozellikler.get(k.id); return o === undefined ? [] : [{ kalemId: k.id, ...o }]; }),
+      kalemAlternatifleri: grup(a.kalemler, t.id).flatMap((k) => { const l = isaretler.get(k.id); return l === undefined ? [] : [{ kalemId: k.id, kartlar: l }]; }),
       siparisOzellikleri: kopyalar.filter((c) => c.talepId === t.id).map((c) => ({ kalemId: c.kalemId, teklifId: c.teklifId, ...kopyaOzelligi(c.ayrinti) })),
       teklifIstekleri: grup(a.istekler, t.id).map(at),
       teklifler: grup(a.teklifler, t.id).map((q) => ({
@@ -213,9 +215,12 @@ async function talepleriYalinKur(db: Db, satirlar: s.TalepSatiri[]): Promise<Tal
           kalemId: f.kalemId, birimFiyat: sade(f.birimFiyat), iskontoYuzdesi: sade(f.iskontoYuzdesi), terminGun: f.terminGun, enAzMiktar: sade(f.enAzMiktar),
           basamaklar: a.basamaklar.filter((b) => b.talepId === t.id && b.teklifId === q.id && b.kalemId === f.kalemId)
             .map((b) => ({ esik: sade(b.esik), birimFiyat: sade(b.birimFiyat) })),
-          alternatif: f.alternatif, alternatifSonucu: f.alternatifSonuc === null ? null : {
+          // 3593: dayanılan alternatif kartı sütundadır (set silinince boş); dondurulan sınır sonuçla gelir.
+          alternatif: f.alternatif === null ? null : { ...f.alternatif, ...(f.alternatifSiniri === null ? {} : { kartId: f.alternatifSetiId }) },
+          alternatifSonucu: f.alternatifSonuc === null ? null : {
             sonuc: f.alternatifSonuc, nedenler: f.alternatifNedenler ?? [], izin: f.alternatifIzin,
             izinKisiId: f.alternatifIzinKisiId, izinZaman: f.alternatifIzinZaman, izinNotu: f.alternatifIzinNotu, kartNo: f.alternatifKartNo,
+            ...(f.alternatifSiniri === null ? {} : { kart: { ...f.alternatifSiniri, setId: f.alternatifSetiId } }),
           },
         })),
       })),
@@ -563,12 +568,14 @@ export async function talebimiDuzenle(db: Db, k: Kullanici, id: string, g: Taleb
   if (kalemRed !== null) throw gecersiz(kalemRed);
   const kalemler = await talebimKalemleri(db, k, eski, g.kalemler, false);
   const kabuller = await gelenKabuller(db, eski, g.kalemler, kalemler, false);
+  const alternatifler = await gelenAlternatifler(db, eski, g.kalemler, kalemler, false);
   const baslik = talebimBasligi(eski, kalemler);
   const taban = tamGorurMu(k.islemler) ? eski : talepEdenGorunumu(eski, k.id);
   const turev = await duzenlemeTerminEmri(db, eski, g.kalemler, g.ihtiyacTarihi);
   await talepKaydet(db, k, id, { ...taban, baslik, ihtiyacTarihi: turev.talep.ihtiyacTarihi, uretimEmriId: turev.talep.uretimEmriId, notlar: g.aciklama, kalemler, surum: g.surum }, izYaz);
   await kalemTerminEmriYaz(db, id, kalemler.map((x) => x.id), turev.kalemler);
   await s.kalemKabulleriYaz(db, id, kabuller);
+  await s.kalemAlternatifKartlariYaz(db, id, alternatifler);
   const son = (await talepOku(db, id))!;
   return talebim(gorunen(k, son), await kalemBagGorunumu(db, [id]), await kalemKarsiliklari(db, [son]), await kalemOzellikleri(db, [son]), await kalemKabulleri(db, [son]), sartliAlternatifler(son));
 }
@@ -643,6 +650,7 @@ export async function guncellemeAc(db: Db, k: Kullanici, id: string, g: TalebimG
   if (kalemRed !== null) throw gecersiz(kalemRed);
   const kalemler = await talebimKalemleri(db, k, eski, g.kalemler, true);
   const kabuller = await gelenKabuller(db, eski, g.kalemler, kalemler, true);
+  const alternatifler = await gelenAlternatifler(db, eski, g.kalemler, kalemler, true);
   const turev = await duzenlemeTerminEmri(db, eski, g.kalemler, g.ihtiyacTarihi);
   const t: TalepYazimi = {
     id: g.id, baslik: talebimBasligi(eski, kalemler), birim: eski.birim, talepEdenKisiId: eski.talepEdenKisiId, oncelik: eski.oncelik,
@@ -652,6 +660,7 @@ export async function guncellemeAc(db: Db, k: Kullanici, id: string, g: TalebimG
   const acilan = await talepAc(db, k, t, izYaz);
   await kalemTerminEmriYaz(db, g.id, kalemler.map((x) => x.id), turev.kalemler);
   await s.kalemKabulleriYaz(db, g.id, kabuller);
+  await s.kalemAlternatifKartlariYaz(db, g.id, alternatifler);
   const kok = (await s.talepSatirlariIdlerle(db, [id]))[0]!.guncellenenTalepId ?? id;
   await s.guncellenenTalepYaz(db, g.id, kok);
   await cizimleriTasi(db, id, g.id, false);
@@ -663,20 +672,22 @@ export async function guncellemeAc(db: Db, k: Kullanici, id: string, g: TalebimG
 
 // 3437 a (dilim 2): talep eden kartın alternatif zarfını kabul sınırı olarak görür ve yalnız daraltır.
 export async function kabulZarfi(db: Db, no: number): Promise<KabulZarfiCevabi> {
-  return { zarf: await alternatifZarfiOku(db, no) };
+  return { zarf: await alternatifZarfiOku(db, no), alternatifKartlari: await alternatifKartiSecenekleri(db, no, 'talep') };
 }
 // Kalemlerin kartı ve kabul sınırı (kartlı kalemde); varsayılan sınır null.
 async function kalemKabulleri(db: Db, talepler: readonly { id: string; kalemler: readonly { id: string; katalogId: string | null }[] }[]): Promise<Map<string, KalemKabulu>> {
   const kalemler = talepler.flatMap((t) => t.kalemler).filter((x) => x.katalogId !== null);
   if (kalemler.length === 0) return new Map();
   const nolar = new Map((await s.katalogMalzemeNolari(db, [...new Set(kalemler.map((x) => x.katalogId!))])).map((r) => [r.id, r.no]));
-  const sinirlar = new Map((await s.kalemKabulleriOku(db, [...new Set(talepler.map((t) => t.id))])).map((r) => [r.kalemId, r]));
+  const idler = [...new Set(talepler.map((t) => t.id))];
+  const sinirlar = new Map((await s.kalemKabulleriOku(db, idler)).map((r) => [r.kalemId, r]));
+  const isaretler = await kalemAlternatifKartlari(db, idler);
   return new Map(kalemler.flatMap((x) => {
     const no = nolar.get(x.katalogId!);
     if (no == null) return [];
     const r = sinirlar.get(x.id);
     const kabul = r === undefined ? null : kabulYazimi({ yalnizAyni: r.yalnizAyni, sartliKabul: r.sartliKabul, kaliteler: r.kaliteler, durumlar: r.durumlar, payMm: r.payMm });
-    return [[x.id, { malzemeNo: no, kabul }] as const];
+    return [[x.id, { malzemeNo: no, kabul, alternatifKartlari: isaretler.get(x.id) ?? [] }] as const];
   }));
 }
 // Gelen kalemlerin yazılacak sınırları; zarfa göre denetlenir (talep eden yalnız daraltır). Kimlikli kalemde sınır gelmezse var olan korunur
@@ -707,6 +718,48 @@ async function gelenKabuller(
   return satirlar.filter((x) => x.gonderildi || (kopya && x.kabul !== null)).map((x) => ({ kalemId: x.kalemId, kabul: kabulYazimi(x.kabul) }));
 }
 
+// 3593: kalem başına işaretli alternatif kartları (işaretlendiği hâliyle).
+async function kalemAlternatifKartlari(db: Db, talepIdleri: readonly string[]): Promise<Map<string, KalemAlternatifKarti[]>> {
+  const m = new Map<string, KalemAlternatifKarti[]>();
+  if (talepIdleri.length === 0) return m;
+  for (const r of await s.kalemAlternatifKartlariOku(db, talepIdleri)) {
+    m.set(r.kalemId, [...(m.get(r.kalemId) ?? []), { setId: r.setId, ad: r.ad, tur: r.tur, ozet: r.ozet }]);
+  }
+  return m;
+}
+// 3593 (3572 a dilim 2): talep eden yalnız kartın talepte kullanılan alternatif kartlarını işaretler; liste dışı kart reddedilir. Yazılan
+// ad, tür ve özet kayıt anındaki hâlidir. Gelmeyen alan var olan kalemde eski işaretleri korur (güncelleme talebinde yeni kaleme kopyalanır).
+async function gelenAlternatifler(
+  db: Db, eski: Talep | null, gelen: readonly { id?: string | null; alternatifKartlari?: readonly number[] | undefined; alternatifKartlariYenile?: readonly number[] | undefined }[], kalemler: TalepYazimi['kalemler'], kopya: boolean,
+): Promise<{ kalemId: string; kartlar: KalemAlternatifKarti[] }[]> {
+  const eskiler = eski === null ? new Map<string, KalemAlternatifKarti[]>() : await kalemAlternatifKartlari(db, [eski.id]);
+  const nolar = new Map((await s.katalogMalzemeNolari(db, [...new Set(kalemler.flatMap((x) => (x.katalogId === null ? [] : [x.katalogId])))])).map((r) => [r.id, r.no]));
+  const secenekler = new Map<number, Awaited<ReturnType<typeof alternatifKartiSecenekleri>>>();
+  const sonuc: { kalemId: string; kartlar: KalemAlternatifKarti[] }[] = [];
+  for (const [i, x] of gelen.entries()) {
+    const kalem = kalemler[i]!;
+    const varOlan = x.id == null ? undefined : eskiler.get(x.id);
+    if (x.alternatifKartlari === undefined) {
+      if (kopya && varOlan !== undefined && varOlan.length > 0) sonuc.push({ kalemId: kalem.id, kartlar: varOlan });
+      continue;
+    }
+    const malzemeNo = kalem.katalogId === null ? null : (nolar.get(kalem.katalogId) ?? null);
+    if (x.alternatifKartlari.length > 0 && malzemeNo === null) throw dogrulama(ILETILER.alternatifKartiKartsiz, `kalemler.${i}.alternatifKartlari`);
+    if (malzemeNo !== null && !secenekler.has(malzemeNo)) secenekler.set(malzemeNo, await alternatifKartiSecenekleri(db, malzemeNo, 'talep'));
+    const liste = malzemeNo === null ? [] : secenekler.get(malzemeNo)!;
+    const kartlar = x.alternatifKartlari.map((id) => {
+      const s_ = liste.find((o) => o.id === id);
+      // Daha önce işaretli kart işaretlendiği hâliyle kalır (kart sonra değişse, talepten çıkarılsa da); yalnız "yenile" bugünkü özeti yazar.
+      const onceki = varOlan?.find((o) => o.setId === id);
+      if (onceki !== undefined && (s_ === undefined || !(x.alternatifKartlariYenile ?? []).includes(id))) return onceki;
+      if (s_ === undefined) throw dogrulama(ILETILER.alternatifKartiListeDisi, `kalemler.${i}.alternatifKartlari`);
+      return { setId: s_.id, ad: s_.ad, tur: s_.tur, ozet: s_.ozet };
+    });
+    sonuc.push({ kalemId: kalem.id, kartlar });
+  }
+  return sonuc;
+}
+
 // 3437 a (dilim 3a): teklif formu kalemlerin daraltılmış zarfını okur; zarfsız (hammadde dışı ya da kalitesiz) kalem listede yoktur.
 export async function kalemZarflari(db: Db, id: string): Promise<KalemZarflariCevabi> {
   const t = await talepOku(db, id);
@@ -717,7 +770,18 @@ export async function kalemZarflari(db: Db, id: string): Promise<KalemZarflariCe
     const kk = kabuller.get(x.id);
     if (kk === undefined) continue;
     const zarf = await alternatifZarfiOku(db, kk.malzemeNo);
-    if (zarf !== null) kalemler.push({ kalemId: x.id, malzemeNo: kk.malzemeNo, kabul: kk.kabul, zarf: daraltilmisZarf(zarf, kk.kabul) });
+    if (zarf === null) continue;
+    // 3593: işaretli alternatif kartlarının bugünkü çözülmüş sınırı; işaretlendiğinden beri değişen kart "degisti" ile gelir.
+    const isaretli = kk.alternatifKartlari.filter((a) => a.setId !== null);
+    const sinirlar = await alternatifKartiSinirlari(db, kk.malzemeNo, isaretli.map((a) => a.setId!));
+    const ana = await anaKartNitelikleri(db, kk.malzemeNo);
+    kalemler.push({
+      kalemId: x.id, malzemeNo: kk.malzemeNo, kabul: kk.kabul, zarf: daraltilmisZarf(zarf, kk.kabul), ...(ana === null ? {} : { islem: [...ana.islemler] }),
+      alternatifKartlari: isaretli.flatMap((a) => {
+        const g = sinirlar.get(a.setId!);
+        return g === undefined ? [] : [{ setId: g.setId, ad: a.ad, tur: a.tur, ozet: a.ozet, degisti: g.ozet !== a.ozet, sinir: sinirCoz(g) }];
+      }),
+    });
   }
   return { kalemler };
 }
@@ -728,6 +792,9 @@ async function alternatifleriHesapla(db: Db, t: TalepYazimi, eski: Talep): Promi
   }
   const kabuller = await kalemKabulleri(db, [t]);
   const zarflar = new Map<number, Awaited<ReturnType<typeof alternatifZarfiOku>>>();
+  const isaretler = await kalemAlternatifKartlari(db, [eski.id]);
+  const anaIslemleri = new Map<number, readonly string[] | null>();
+  const uyum = (k: NonNullable<AlternatifSonucu['kart']>, a: TeklifAlternatifi) => dondurulmusUyum(k, teklifAdayi(k.ana, a));
   const teklifler: TalepYazimi['teklifler'] = [];
   for (const [i, q] of t.teklifler.entries()) {
     const fiyatlar: typeof q.fiyatlar = [];
@@ -743,7 +810,24 @@ async function alternatifleriHesapla(db: Db, t: TalepYazimi, eski: Talep): Promi
       if (red !== null) throw dogrulama(red, alan);
       const o = eski.teklifler.find((x) => x.id === q.id)?.fiyatlar.find((x) => x.kalemId === f.kalemId);
       const onceki = o === undefined ? null : { alternatif: o.alternatif ?? null, alternatifSonucu: o.alternatifSonucu ?? null };
-      fiyatlar.push({ ...f, alternatifSonucu: alternatifSonucuHesapla(zarf, kk!.kabul, f.alternatif, zarfDegerlendir, onceki) });
+      // 3593: alternatif kartıyla gelen satır (S3, S6): aynı alternatifte dondurulan sınır kalır; yeni seçimde kart kalemde işaretli ve
+      // işaretlendiğinden beri değişmemiş olmalı, bugünkü sınırı satıra dondurulur.
+      let kart = dondurulmusKart(f.alternatif, onceki);
+      if (kart === null && f.alternatif.kartId != null) {
+        const isaret = (isaretler.get(f.kalemId) ?? []).find((x) => x.setId === f.alternatif!.kartId);
+        const g = isaret === undefined ? undefined : (await alternatifKartiSinirlari(db, kk!.malzemeNo, [isaret.setId!])).get(isaret.setId!);
+        if (isaret === undefined || g === undefined) throw dogrulama(ILETILER.alternatifKartiIsaretsiz(ad), alan);
+        if (g.ozet !== isaret.ozet) throw dogrulama(ILETILER.alternatifKartiDegisti(ad, isaret.ad), alan);
+        kart = { setId: g.setId, ad: g.ad, tur: g.tur, ozet: g.ozet, nitelikler: g.nitelikler, ana: { ...g.ana, standartlar: [...g.ana.standartlar], islemler: [...g.ana.islemler], olcu: { ...g.ana.olcu } } };
+      }
+      if (kart !== null) {
+        const r = kartliAlternatifSonucu(kart, f.alternatif, ad, uyum, onceki);
+        if (typeof r === 'string') throw dogrulama(r, alan);
+        fiyatlar.push({ ...f, alternatifSonucu: r });
+        continue;
+      }
+      if (f.alternatif.islem != null && !anaIslemleri.has(kk!.malzemeNo)) anaIslemleri.set(kk!.malzemeNo, (await anaKartNitelikleri(db, kk!.malzemeNo))?.islemler ?? null);
+      fiyatlar.push({ ...f, alternatifSonucu: alternatifSonucuHesapla(zarf, kk!.kabul, f.alternatif, zarfDegerlendir, onceki, anaIslemleri.get(kk!.malzemeNo) ?? null) });
     }
     teklifler.push({ ...q, fiyatlar });
   }
@@ -782,7 +866,7 @@ async function alternatifKartlariniAc(db: Db, k: Kullanici, id: string, t: Talep
     const kk = kabuller.get(b.kalemId);
     const ad = t.kalemler.find((x) => x.id === b.kalemId)?.ad ?? '';
     if (kk === undefined) throw gecersiz(ILETILER.alternatifZarfsiz(ad));
-    const r = await alternatifKartiAc(db, k, kk.malzemeNo, b.alternatif);
+    const r = await alternatifKartiAc(db, k, kk.malzemeNo, b.alternatif, b.kart ?? null);
     kartlar.set(`${b.teklifId}/${b.kalemId}`, r.no);
     const kod = (await malzemeOzetleri(db, [r.no])).get(r.no)?.kod ?? String(r.no);
     await s.hareketEkle(db, id, randomUUID(), r.yeni ? `${ad}: alternatif malzeme kartı açıldı, malzeme onayı bekliyor: ${kod}` : `${ad}: var olan alternatif kart kullanıldı: ${kod}`, k.id);
@@ -1181,7 +1265,9 @@ export async function hizliAc(db: Db, k: Kullanici, g: HizliAcYazimi, izYaz: Fiy
     onaylar: [], hareketler: [], senaryolar: [], uretimEmriId: turev.talep.uretimEmriId, projeId: null,
   };
   await kabulleriDenetle(db, g.kalemler.map((x, i) => ({ sira: i, malzemeNo: x.malzemeNo, kabul: x.kabul ?? null })));
+  const alternatifler = await gelenAlternatifler(db, null, g.kalemler, kalemler, false);
   const acilan = await talepAc(db, k, t, izYaz);
+  await s.kalemAlternatifKartlariYaz(db, t.id, alternatifler);
   await kalemTerminEmriYaz(db, t.id, kalemler.map((x) => x.id), turev.kalemler);
   await s.kalemKabulleriYaz(db, t.id, g.kalemler.flatMap((x, i) => {
     const kabul = kabulYazimi(x.kabul ?? null);

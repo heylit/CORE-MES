@@ -187,17 +187,25 @@ export type GrupSinirlariCevabi = z.output<typeof grupSinirlariCevabi>;
 
 // 3572 a: alternatif seti. Dolu alanların hepsi tutmalı (ve), alanda değerlerden biri yeter (veya); satırı olmayan alan serbest.
 // Setler ve kartlar arasında herhangi biri yeter. Sete sonradan açılan uyan kart kendiliğinden girer (K5).
-export const SET_LISTE_NITELIKLERI = ['form', 'kalite', 'durum', 'standart', 'yuzey'] as const;
+// 3593: işlem (ısıl işlem, kaplama) liste niteliğidir; kartın işlemleri bir dizidir, istenen işlemlerin hepsi kartta olmalı.
+export const SET_LISTE_NITELIKLERI = ['form', 'kalite', 'durum', 'standart', 'yuzey', 'islem'] as const;
 export const SET_NITELIKLERI = [...SET_LISTE_NITELIKLERI, ...OLCU_NITELIKLERI] as const;
 export type SetNiteligi = (typeof SET_NITELIKLERI)[number];
 // K5: bu kadar karttan genişi kayıtta "bu kadar geniş olduğunu biliyorum" işareti ister.
 export const GENIS_SET_ESIGI = 50;
 
+// 3593 kipleri: boş = bugünkü anlam (listede değerlerden biri, ölçüde en az ve en çok). 'birebir' ana kartın değerini izler (ana değişirse
+// set de değişir); 'pay' yalnız ölçüde, ana ölçünün altına ve üstüne mm; 'aralik' ölçüde en az ve en çok (boş ile aynı).
+export const SET_KIPLERI = ['birebir', 'pay', 'aralik'] as const;
+export type SetKipi = (typeof SET_KIPLERI)[number];
 export const setNiteligi = z.object({
   nitelik: z.enum(SET_NITELIKLERI),
+  kip: z.enum(SET_KIPLERI).nullable().default(null),
   degerler: z.array(z.string().trim().min(1).max(60)).min(1).max(40).nullable(),
   alt: mm,
   ust: mm,
+  payAlt: mm.default(null),
+  payUst: mm.default(null),
 }).strict();
 export type SetNiteligiYazimi = z.output<typeof setNiteligi>;
 
@@ -220,7 +228,10 @@ export const alternatifSeti = z.object({
   sira: z.number().int(),
   kullanimYerleri: z.array(z.enum(KULLANIM_YERLERI)),
   notu: z.string().nullable(),
-  nitelikler: z.array(z.object({ nitelik: z.enum(SET_NITELIKLERI), degerler: z.array(z.string()).nullable(), alt: z.number().nullable(), ust: z.number().nullable() })),
+  nitelikler: z.array(z.object({
+    nitelik: z.enum(SET_NITELIKLERI), kip: z.enum(SET_KIPLERI).nullable(), degerler: z.array(z.string()).nullable(),
+    alt: z.number().nullable(), ust: z.number().nullable(), payAlt: z.number().nullable(), payUst: z.number().nullable(),
+  })),
   genisOnay: z.boolean(),
   // Şimdi hesaplanan uyan kart sayısı ve ilk kartlar (en çok 50).
   uyanSayisi: z.number().int(),
@@ -267,6 +278,25 @@ export const alternatifSetiKaydetGovdesi = z.object({
 export type AlternatifSetiKaydetGovdesi = z.input<typeof alternatifSetiKaydetGovdesi>;
 export const alternatifSetiParametresi = z.object({ id: z.coerce.number<number>().int().positive() });
 export const alternatifSetiKaldirGovdesi = z.object({ ...beklenenSurum }).strict();
+// 3593: alternatif kartını aynı form ve ailedeki başka kartlara kopyalar; her hedefte yeni kart açılır (Birebir ve Pay hedefin kendi
+// değerini izler). Geniş eşik hedef başına uygulanır.
+// Kaynak alternatif kartının ve her hedef malzeme kartının okunan sürümü gelir; biri değiştiyse hiçbiri yazılmaz (3593 S8).
+export const alternatifSetiKopyalaGovdesi = z.object({
+  surum: surumSemasi,
+  hedefler: z.array(z.object({ no: kartNo, surum: surumSemasi }).strict()).min(1).max(200)
+    .refine((l) => new Set(l.map((h) => h.no)).size === l.length, 'Aynı kart iki kez seçilmiş.'),
+  genisOnay: z.boolean(),
+}).strict();
+export type AlternatifSetiKopyalaGovdesi = z.input<typeof alternatifSetiKopyalaGovdesi>;
+export const alternatifSetiKopyalaCevabi = z.object({
+  kopyalar: z.array(z.object({ hedefNo: z.number().int(), id: z.number().int(), uyanSayisi: z.number().int() })),
+});
+export type AlternatifSetiKopyalaCevabi = z.output<typeof alternatifSetiKopyalaCevabi>;
+// 3593: talep ve satın almada seçilebilen alternatif kartı (kullanım yerine göre); özet malzeme kartındaki tek satırla aynıdır.
+export const alternatifKartiSecenegi = z.object({
+  id: z.number().int(), ad: z.string(), tur: z.enum(MUADIL_TURLERI), ozet: z.string(), uyanSayisi: z.number().int(),
+});
+export type AlternatifKartiSecenegi = z.output<typeof alternatifKartiSecenegi>;
 export const alternatifSetiKaydetCevabi = z.object({ id: z.number().int(), tur: z.enum(MUADIL_TURLERI), uyanSayisi: z.number().int() });
 
 export const seciliAlternatifKaydetGovdesi = z.object({

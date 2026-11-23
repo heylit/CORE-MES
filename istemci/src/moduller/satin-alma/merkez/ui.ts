@@ -24,7 +24,7 @@ import { kategoriNotu, rehberRozetleri, talepRehberi } from "./onayli-ekran.ts";
 import { rehberSirasi } from "./onayli.ts";
 import { ODEME_SEKLI, siparisTakibi, takibiUnut, takipGuncelle } from "./takip.ts";
 import { approvalFormHTML, printDoc, siparisMetniGovdesi } from "./docs.ts";
-import { antetBosMu, istekFormuHTML, kagidiOlcekle } from "./istek-formu.ts";
+import { VARSAYILAN_ALTERNATIF_YAZIMI, antetBosMu, istekFormuHTML, kagidiOlcekle, type AlternatifYazimi } from "./istek-formu.ts";
 import { onaylayabilir, setRole, type Role } from "./roles.ts";
 import { firmaSec, payEkle, paySil, siparisGovdesi, siparisOzeti, taslagiBirak, taslagiOku, taslak } from "./siparis-satirlari.ts";
 import {
@@ -36,7 +36,7 @@ import { pdfOkuAc, type PdfAktarimi } from "../pdf-teklif/ekran.ts";
 import { api } from "../../../ortak/veri/api.ts";
 import type { KurumLogosuCevabi } from "#paylasilan/sozlesme/ayarlar.ts";
 import { BELIRSIZ_MIKTAR } from "../../../ortak/veri/miktar.ts";
-import { alternatifDegisti, alternatifSatiri, alternatifleriOku, type KalemZarfi } from "./alternatif.ts";
+import { alternatifDegisti, alternatifHatalariniGoster, alternatifSatiri, alternatifleriOku, type KalemZarfi } from "./alternatif.ts";
 import { SIMGELER } from "../../../ortak/tasarim/simgeler.ts";
 import "../../../ortak/arayuz/pencere.css";
 import "../../../ortak/arayuz/simge.css";
@@ -219,7 +219,13 @@ async function kalemZarflariniYukle(r: PurchaseRequest): Promise<void> {
   const l = await backend.kalemZarflari(r.id);
   kalemZarflari = { talepId: r.id, kalemler: new Map((l ?? []).map((x) => [x.kalemId, x])) };
   if (!kalemZarflari.kalemler.size || !$("#q-items") || !draftQ) return;
-  readQuoteForm(); $("#q-items").innerHTML = fiyatSatirlari(r, draftQ); updateQuoteLive();
+  readQuoteForm(); $("#q-items").innerHTML = fiyatSatirlari(r, draftQ); updateQuoteLive(); altOnDenetim();
+}
+/** 3593: alternatif kartıyla teklifin ön denetimi (sınır dışı satır kırmızı, Kaydet pasif); sunucu yeniden denetler. */
+function altOnDenetim(): string | null {
+  const r = S.requests[V.id ?? ""];
+  if (!draftQ || !r || kalemZarflari?.talepId !== r.id) return null;
+  return alternatifHatalariniGoster(draftQ, kalemZarflari.kalemler, $("#qform") ?? document);
 }
 /** 3404: teklifin PDF ekleri; uç yalnız fiyat görebilene açılır, açamayan için liste boş kalır. */
 async function teklifEkleriniGoster(talepId: string, teklifId: string): Promise<void> {
@@ -396,7 +402,7 @@ const SIMGE_EPOSTA = kutuSimgesi("mail");
 const SIMGE_FORM = kutuSimgesi("file");
 // teklif isteme formu. Seçilen tedarikçiler ve son tarih teklif iste penceresinden gelir; geri dönünce korunur.
 // Metin şablondan dolar, burada değiştirilir ve basılır; değişiklik saklanmaz (şablon Sistem Ayarları > Formlar'da).
-interface IstekFormuTaslagi { secilen: string[]; sonTarih: string; tedarikci: string; icerik: TeklifIstekFormuIcerigi }
+interface IstekFormuTaslagi { secilen: string[]; sonTarih: string; tedarikci: string; icerik: TeklifIstekFormuIcerigi; alternatif?: AlternatifYazimi }
 let ISTEK_FORMU: IstekFormuTaslagi | null = null;
 // Kurum logosu Sistem Ayarları > Genel'dedir (herkes okur); form ilk açılışta bir kez okur. Okunamazsa logosuz basılır.
 let KURUM_LOGOSU: string | null | undefined;
@@ -406,7 +412,17 @@ async function kurumLogosu(): Promise<string | null> {
   return KURUM_LOGOSU;
 }
 function istekKagidi(r: PurchaseRequest, t: IstekFormuTaslagi): string {
-  return istekFormuHTML(r, S.suppliers[t.tedarikci], t.sonTarih, t.icerik, S.istekFormu!.kurum, settings().company, todayStr(), KURUM_LOGOSU ?? null);
+  return istekFormuHTML(r, S.suppliers[t.tedarikci], t.sonTarih, t.icerik, S.istekFormu!.kurum, settings().company, todayStr(), KURUM_LOGOSU ?? null, t.alternatif ?? VARSAYILAN_ALTERNATIF_YAZIMI);
+}
+/** 3593 (KURGU 3.5, Y7): "Alternatifleri yaz" açık, "Şartlı alternatifleri de yaz" kapalı başlar; ilki kapalıyken ikincisi pasif ve nedenli. */
+function alternatifAnahtarlari(r: PurchaseRequest, a: AlternatifYazimi): string {
+  if (!(r.items || []).some(it => it.alternatifler?.length)) return "";
+  const pasif = !a.yaz;
+  return `<fieldset class="sa-istek-ak"><legend>Alternatifler</legend>
+    <label class="chk"><input type="checkbox" data-if="alt-yaz" ${a.yaz ? "checked" : ""}> Alternatifleri yaz</label>
+    <label class="chk${pasif ? " pasif" : ""}"><input type="checkbox" data-if="alt-sartli" ${a.sartli && !pasif ? "checked" : ""} ${pasif ? 'aria-disabled="true" aria-describedby="ifo-sartli-neden"' : ""}> Şartlı alternatifleri de yaz</label>
+    <small class="muted" id="ifo-sartli-neden">${pasif ? "Önce \"Alternatifleri yaz\"ı açın." : "Şartlı kart talep edenin onayını gerektirir."}</small>
+  </fieldset>`;
 }
 function istekFormuPenceresi(r: PurchaseRequest, t: IstekFormuTaslagi): void {
   const alan = (ad: "baslik" | "giris" | "kapanis", etiket: string, satir = 0) => satir
@@ -419,6 +435,7 @@ function istekFormuPenceresi(r: PurchaseRequest, t: IstekFormuTaslagi): void {
       ${alan("baslik", "Başlık")}${alan("giris", "Giriş", 3)}
       <label class="f"><span>İstenen bilgiler <small>— her satır bir madde</small></span><textarea data-if="istenenler" rows="6">${esc(t.icerik.istenenler.join("\n"))}</textarea></label>
       ${alan("kapanis", "Kapanış", 3)}
+      <div id="ifo-ak">${alternatifAnahtarlari(r, t.alternatif ?? VARSAYILAN_ALTERNATIF_YAZIMI)}</div>
       <p class="small muted">Kalemler talepten gelir. Buradaki değişiklik yalnız bu baskı içindir; kalıcı metin Sistem Ayarları &gt; Formlar &gt; Teklif isteme formu'ndadır.</p>
     </div>
     <div>${antetBosMu(S.istekFormu!.kurum) ? '<p class="sa-istek-uyari" role="note">Antet boş: firma adı ve adresi Sistem Ayarları &gt; Formlar &gt; Teklif formu\'nda girilir; boşken basılmaz.</p>' : ""}${KURUM_LOGOSU ? "" : '<p class="sa-istek-uyari" role="note">Kurum logosu yüklü değil: Sistem Ayarları &gt; Genel\'den yükleyin; yüklenince formun sol üstüne basılır.</p>'}<div class="doc-wrap" id="ifo-kagit" aria-label="Formun ön izlemesi">${istekKagidi(r, t)}</div></div>
@@ -431,6 +448,14 @@ function istekFormuOku(): void {
   const v = (ad: string) => $(`[data-if="${ad}"]`)?.value ?? "";
   t.tedarikci = v("tedarikci");
   t.icerik = { ...t.icerik, baslik: v("baslik"), giris: v("giris"), kapanis: v("kapanis"), istenenler: v("istenenler").split("\n").map(x => x.trim()).filter(Boolean) };
+  const yaz = $<HTMLInputElement>('[data-if="alt-yaz"]'), sartli = $<HTMLInputElement>('[data-if="alt-sartli"]');
+  if (yaz && sartli) {
+    const onceki = t.alternatif ?? VARSAYILAN_ALTERNATIF_YAZIMI;
+    // Pasif anahtar (aria-disabled) tıklanınca da değişmez.
+    t.alternatif = { yaz: yaz.checked, sartli: yaz.checked && onceki.yaz ? sartli.checked : false };
+    if (onceki.yaz !== t.alternatif.yaz) { $("#ifo-ak").innerHTML = alternatifAnahtarlari(r, t.alternatif); $<HTMLInputElement>('[data-if="alt-yaz"]')?.focus(); }
+    else if (!t.alternatif.yaz) sartli.checked = false;
+  }
   $("#ifo-kagit").innerHTML = istekKagidi(r, t);
   kagidiOlcekle($("#ifo-kagit"));
 }
@@ -1195,6 +1220,8 @@ const ACTIONS: Record<string, Action> = {
   },
   "save-quote": (_el, r) => {
     if (!r) return; readQuoteForm(); const n = clone(r);
+    const altHata = altOnDenetim();
+    if (altHata) { toast(altHata); return; }
     if (terminOnceVar([$<HTMLInputElement>("#q-lead-date")])) return;
     if (eksiAlanVar([...$$<HTMLInputElement>("#qform [data-price], #qform [data-tmin0], #qform [data-tmin], #qform [data-tprice]"), ...EKSI_OLAMAZ.map(id => $<HTMLInputElement>("#" + id))])) return;
     if (draftQ.supplierId === "__new") {
@@ -1549,7 +1576,7 @@ document.addEventListener("input", (e) => {
   if (sk) { V[sk] = t.value; render(); return; }
   if (t.closest("#bulk")) { terminEsle(t); BULK!.dirty = true; BULK!.confirmClose = false; bulkRead(); bulkLive(); return; }
   if (t.closest("#qform") && t.dataset.alt && draftQ) alternatifDegisti(draftQ, t.dataset.alt);
-  if (t.closest("#qform")) { terminEsle(t); readQuoteForm(); updateQuoteLive(); return; }
+  if (t.closest("#qform")) { terminEsle(t); readQuoteForm(); updateQuoteLive(); if (t.dataset.alt) altOnDenetim(); return; }
   if (t.closest("#ifo")) { istekFormuOku(); return; }
   if (t.closest("#items-box") && t.dataset.it === "name") {
     syncItems(); const tr = t.closest<HTMLElement>("tr")!; const i = +tr.dataset.i!; const it = draftReq.items[i]; if (!it) return;
@@ -1580,7 +1607,10 @@ document.addEventListener("change", (e) => {
   if (t.name === "d-sec") { teklifSec(t.value); return; }
   if (t.dataset.split) { updateSplitSum(); return; }
   if (t.id === "calc-q") { const r = S.requests[V.id ?? ""]; if (r) calcModal(r, t.value); return; }
-  if (t.closest("#qform") && t.dataset.altAc) { const r = S.requests[V.id ?? ""]; if (draftQ) alternatifDegisti(draftQ, t.dataset.altAc); readQuoteForm(); if (r) $("#q-items").innerHTML = fiyatSatirlari(r, draftQ); updateQuoteLive(); return; }
+  if (t.closest("#qform") && (t.dataset.altAc || t.dataset.altKart)) {
+    const r = S.requests[V.id ?? ""]; const id = t.dataset.altAc ?? t.dataset.altKart!;
+    if (draftQ) alternatifDegisti(draftQ, id); readQuoteForm(); if (r) $("#q-items").innerHTML = fiyatSatirlari(r, draftQ); updateQuoteLive(); altOnDenetim(); return;
+  }
   if (t.closest("#qform")) { readQuoteForm(); updateQuoteLive(); if (t.id === "q-sup" && t.value === "__new") $("#q-newsup").focus(); return; }
   if (t.dataset.rfq !== undefined || t.id === "rfq-due" || t.id === "rfq-prev") { syncRfqPreview(t.id === "rfq-prev"); return; }
   if (t.closest("#ifo")) { istekFormuOku(); return; }
