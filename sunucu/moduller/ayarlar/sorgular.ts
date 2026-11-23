@@ -1,4 +1,4 @@
-import type { Db } from '#cekirdek/db.ts';
+import { sorguSuresiniUzat, type Db } from '#cekirdek/db.ts';
 import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 
@@ -239,7 +239,10 @@ export async function sifirlamaSayilariniOku(db: Db, k: SifirlamaKapsamSatiri): 
   return satir?.sayilar ?? {};
 }
 
-export async function sifirdanBaslat(db: Db, k: SifirlamaKapsamSatiri): Promise<{ tablolar: Record<string, number>; cozulen: Record<string, number> }> {
+export async function sifirdanBaslat(
+  db: Db, k: SifirlamaKapsamSatiri, sureMs: number,
+): Promise<{ tablolar: Record<string, number>; cozulen: Record<string, number> }> {
+  await sorguSuresiniUzat(db, sureMs);
   const satir = await db.tek<{ sonuc: { tablolar: Record<string, number>; cozulen: Record<string, number> } }>(
     'SELECT ayarlar_sifirdan_basla($1::text[], $2::text[], $3, $4) AS sonuc', [k.kalan, k.kismi, k.kullanicilar, k.yoneticiId]);
   if (satir === null) throw new Error('Sıfırlama sonucu okunamadı');

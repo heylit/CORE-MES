@@ -603,6 +603,23 @@ export function sifirlamaOzetSatirlari(sayilar: Record<string, number>): { ad: s
 // Varsayılan kapalı: canlı pakette de açık gelmesin; sunucu ortamında TMIV2_SIFIRLAMA_ACIK=1 ile açılır (kullanıcı denemesinden sonra).
 export const sifirlamaAcikMi = (env: Readonly<Record<string, string | undefined>>): boolean => env['TMIV2_SIFIRLAMA_ACIK']?.trim() === '1';
 
+// Sıfırlama tek ifadededir ve süresi silinen satırla doğrusal büyür (deneme ölçümü ~0,1 ms/satır): uçların ortak 10 sn sınırı
+// ~100 bin satırda kesiyordu. Bu sınır yalnız sıfırlama transaction'ında geçerlidir; ~6 milyon satıra yeter.
+export const SIFIRLAMA_SURE_MS = 10 * 60_000;
+
+// Sıfırlamayı süre ya da kilit sınırı kestiğinde transaction bütünüyle geri dönmüştür; "meşgul, birkaç saniye sonra deneyin"
+// demek yanıltır: süre aşımında yeniden denemek aynı sonucu verir, kilitte ise bekleyen kullanıcı oturumu vardır.
+export function sifirlamaSureIletisi(kod: string, sureMs: number = SIFIRLAMA_SURE_MS): string | null {
+  if (kod === '57014') {
+    return `Sıfırlama ${String(Math.round(sureMs / 60_000))} dakika içinde bitmedi ve geri alındı; hiçbir veri silinmedi. `
+      + 'Yeniden denemek aynı sonucu verir; bilgi işleme haber verin.';
+  }
+  if (kod === '55P03') {
+    return 'Sıfırlama başlayamadı: bir tablo başka bir işlemde kullanılıyor; hiçbir veri silinmedi. Bütün kullanıcılar çıktıktan sonra yeniden deneyin.';
+  }
+  return null;
+}
+
 // Ekrandan yeniden başlatma: sunucunun üst süreç zinciri (ilk eleman sunucunun kendisi). Başlangıç aynı birimdedir (Windows'ta
 // milisaniye, Linux'ta açılıştan beri tık); bilinmiyorsa null.
 export interface SurecHalkasi {

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import { ondalikMetinSemasi } from '#paylasilan/ondalik.ts';
 import { TESIS_SAAT_DILIMI } from '#paylasilan/tesis-zamani.ts';
-import { uygulamaHavuzuAc, uygulamaKimliginiDogrula, veritabaniAc, vtSureDoldu } from './db.ts';
+import { SURE_UZATMA_TX_DISI, sorguSuresiniUzat, uygulamaHavuzuAc, uygulamaKimliginiDogrula, veritabaniAc, vtSureDoldu } from './db.ts';
 import type { Db, Veritabani } from './db.ts';
 import { testSemasiAc } from './test-vt.ts';
 import type { TestVeritabani } from './test-vt.ts';
@@ -147,6 +147,26 @@ describe('db (gerçek PostgreSQL)', () => {
       assert.equal((await ozel.tx((db) => db.tek<{ sure: string }>(sure)))?.sure, '54321ms');
       // SET LOCAL transaction'la biter: aynı bağlantıdaki sonraki iş genel sınırı görür.
       assert.equal((await ozel.tek<{ sure: string }>(sure))?.sure, '54321ms');
+    } finally {
+      await ozel.kapat();
+    }
+  });
+
+  test('süre sınırı yalnız uzatan yazma transaction\'ında uzar; istemci de beklemeyi kesmez; okuma ve tx dışı reddedilir', async () => {
+    const ozel = veritabaniAc({ pg: { ...ayar.pg, sorguSureMs: 300, baglantiSureMs: 300 } }, { sema });
+    const sure = "SELECT current_setting('statement_timeout') AS sure";
+    try {
+      const uzun = await ozel.tx(async (db) => {
+        await sorguSuresiniUzat(db, 5000);
+        await db.sorgu('SELECT pg_sleep(1)');
+        return (await db.tek<{ sure: string }>(sure))?.sure;
+      });
+      assert.equal(uzun, '5s');
+      assert.equal((await ozel.tx((db) => db.tek<{ sure: string }>(sure)))?.sure, '300ms');
+      await assert.rejects(ozel.tx((db) => db.sorgu('SELECT pg_sleep(1)')), (h: unknown) => vtSureDoldu(h));
+      await assert.rejects(ozel.okumaTx((db) => sorguSuresiniUzat(db, 5000)), new RegExp(SURE_UZATMA_TX_DISI.slice(0, 20)));
+      await assert.rejects(sorguSuresiniUzat(ozel, 5000), new RegExp(SURE_UZATMA_TX_DISI.slice(0, 20)));
+      await assert.rejects(ozel.tx((db) => sorguSuresiniUzat(db, 0)), RangeError);
     } finally {
       await ozel.kapat();
     }

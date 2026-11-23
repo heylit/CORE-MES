@@ -67,8 +67,22 @@ export const KAYIT_NOKTASI_TX_DISI = 'Kayıt noktası yalnız yazma transaction\
 export const KAYIT_NOKTASI_OKUMADA = 'Kayıt noktası okuma transaction\'ında açılamaz: orada geri alınacak yazı yoktur';
 
 // Tek bayrak: ara nokta adı sabittir (aynı adlı iç içe nokta en içtekini gösterir), transaction başına sayaç tutulmaz.
-const txler = new WeakMap<Db, { okuma: boolean }>();
+// sureMs: transaction'ın kendi ifade süre sınırı (sorguSuresiniUzat); null ise oturumun sınırı geçerlidir.
+const txler = new WeakMap<Db, { okuma: boolean; sureMs: number | null }>();
 const NOKTA = 'kayit_noktasi';
+
+export const SURE_UZATMA_TX_DISI = 'Süre sınırı yalnız yazma transaction\'ının db\'siyle uzatılır (tx ya da yazma ucunun verdiği db)';
+
+// Tek ifadesi oturumun süre sınırını aşması beklenen yazma işi (bütün veriyi silen sıfırlama) için: sınır yalnız bu
+// transaction'da değişir (SET LOCAL), bitince oturumun değeri döner. İstemcinin bekleme sınırı da birlikte uzar; uzamazsa
+// sunucunun izin verdiği sorguyu istemci keser ve bağlantıyı bozuk sayar. Öteki uçların sınırına dokunmaz.
+export async function sorguSuresiniUzat(db: Db, sureMs: number): Promise<void> {
+  const tx = txler.get(db);
+  if (tx === undefined || tx.okuma) throw new Error(SURE_UZATMA_TX_DISI);
+  if (!Number.isSafeInteger(sureMs) || sureMs < 1) throw new RangeError(`Geçersiz süre sınırı: ${sureMs}`);
+  await db.sorgu(`SET LOCAL statement_timeout = ${sureMs}`);
+  tx.sureMs = sureMs;
+}
 
 export type KayitNoktasiSonucu<T> =
   | { tamam: true; deger: T }
@@ -280,7 +294,8 @@ const tipler = {
   },
 } as unknown as pg.CustomTypesConfig;
 
-type Calistir = (sql: string, parametreler?: readonly unknown[]) => Promise<unknown>;
+// sureMs: sunucuda geçerli ifade süre sınırı; verilmezse oturumunki. İstemci sınırı bunun ağ payı kadar ötesindedir.
+type Calistir = (sql: string, parametreler?: readonly unknown[], sureMs?: number | null) => Promise<unknown>;
 
 function satirlar<T>(sonuc: unknown): T[] {
   // Parametresiz çok ifadeli metin (göç dosyası) sonuç dizisi döndürür; son ifadenin satırları geçerlidir.
@@ -488,7 +503,7 @@ function ac(pgAyari: PgAyari, kimlik: PgGocKimligi, secenek: VeritabaniSecenegi,
   // statement_timeout'u sunucu uygular; sunucu susarsa o da işlemez. İstemci sınırı ağ payı kadar
   // geç dolar ki yavaş sorguyu önce sunucu iptal etsin ve bağlantı kullanılır kalsın.
   // Göçte istemci sınırı da yoktur: sunucu sınırlamadığı sorguyu istemci kesmemeli.
-  const istemciSureMs = goc ? null : sorguSureMs + baglantiSureMs;
+  const istemciSuresi = (sureMs: number | null | undefined): number | null => (goc ? null : (sureMs ?? sorguSureMs) + baglantiSureMs);
 
   async function baglantida<T>(is: (calistir: Calistir, bozukSay: () => void) => Promise<T>): Promise<T> {
     await sira.al();
@@ -509,13 +524,14 @@ function ac(pgAyari: PgAyari, kimlik: PgGocKimligi, secenek: VeritabaniSecenegi,
     // havuz yalnız boştaki bağlantıyı dinler, dinleyicisiz kalan hata süreci düşürür.
     const koptu = (): void => { bozuk = true; ulasilamadi = true; };
     istemci.on('error', koptu);
-    const calistir: Calistir = async (sql, parametreler) => {
+    const calistir: Calistir = async (sql, parametreler, sureMs) => {
       if (bozuk) {
         const hata = new Error('Veritabanı bağlantısı kullanılamaz durumda');
         throw ulasilamadi ? ulasilamadiIsaretle(hata) : hata;
       }
       const sorgu = parametreler === undefined ? istemci.query(sql) : istemci.query(sql, [...parametreler]);
       try {
+        const istemciSureMs = istemciSuresi(sureMs);
         const sonuc = await (istemciSureMs === null ? sorgu : sureli(sorgu, istemciSureMs));
         sira.cevapGeldi();
         return sonuc;
@@ -552,9 +568,10 @@ function ac(pgAyari: PgAyari, kimlik: PgGocKimligi, secenek: VeritabaniSecenegi,
       // transaction'ında koşardı. Kapanış COMMIT gönderilmeden önce olur: araya giren sorgu COMMIT'in
       // ardına sıralanıp transaction dışında kalıcı olmasın.
       let kapali = false;
+      const bilgi = { okuma, sureMs: null as number | null };
       const ic = dbKur(async (sql, parametreler) => {
         if (kapali) throw new Error(TX_BITTI);
-        return calistir(sql, parametreler);
+        return calistir(sql, parametreler, bilgi.sureMs);
       });
       // İşleyicinin eline geçen sözün kendisi izlenir: yakalanmamış ret o söze bakılarak sayılır.
       const bekleyenler = new Set<Promise<unknown>>();
@@ -575,7 +592,7 @@ function ac(pgAyari: PgAyari, kimlik: PgGocKimligi, secenek: VeritabaniSecenegi,
         sorgu: <S>(sql: string, parametreler?: readonly unknown[]) => izle(() => ic.sorgu<S>(sql, parametreler)),
         tek: <S>(sql: string, parametreler?: readonly unknown[]) => izle(() => ic.tek<S>(sql, parametreler)),
       };
-      txler.set(db, { okuma });
+      txler.set(db, bilgi);
       try {
         await calistir(okuma ? okumaBaslangici : 'BEGIN');
         let sonuc: T;
@@ -589,7 +606,7 @@ function ac(pgAyari: PgAyari, kimlik: PgGocKimligi, secenek: VeritabaniSecenegi,
         // Beklenmemiş sorgu sürücü kuyruğunda COMMIT'in önündedir: sonucu görülmeden kalıcı olurdu.
         if (bekleyenler.size > 0) throw new Error(BEKLENMEMIS_SORGU);
         // İptal durumundaki transaction'da COMMIT hata vermez, geri alır; yalnız komut etiketi ele verir.
-        const bitis = await calistir('COMMIT');
+        const bitis = await calistir('COMMIT', undefined, bilgi.sureMs);
         if ((bitis as { command?: unknown }).command === 'ROLLBACK') throw new Error(TX_IPTAL);
         return sonuc;
       } catch (hata) {
