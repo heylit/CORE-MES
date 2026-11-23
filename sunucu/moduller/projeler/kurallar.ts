@@ -283,6 +283,7 @@ export function sablonTarihleri(
 export const ADIM_EN_COK = 50;
 export const ADIM_YOK = 'Adım bulunamadı.';
 export const ADIM_SINIRI = `Bir görevde en çok ${ADIM_EN_COK} adım olur.`;
+export const HAZIRLIK_ADIMI_SILINMEZ = 'İş emri adımı silinmez: görev emrin iş emirlerinden oluşur.';
 export const ADIM_ISARETLI_SILINMEZ = 'İşaretlenmiş adım silinmez; önce işareti kaldır.';
 export const ICERIK_KAPALI = 'Kontrolde, bitmiş ya da iptal edilmiş görevin adımı ve kanıtı değişmez.';
 export const KANIT_YOK = 'Kanıt bu göreve bağlı değil.';
@@ -312,3 +313,16 @@ export function adimIlerlemesi(toplam: number, yapilan: number, elle: number): n
 
 // Bitirme kanıt ister mi: zorunlu görevde en az bir kanıt bağlı olmalı (görev kilitliyken sayılır).
 export const kanitReddi = (zorunlu: boolean, kanitSayisi: number): string | null => (zorunlu && kanitSayisi === 0 ? KANIT_GEREKLI : null);
+
+// 3611: hazırlık kaleminin bir emirde nereye görev açacağı. İş emri düzeyindeki madde, kalemin kendi adımı yoksa ve iş emri sayısı adım
+// sınırını aşmıyorsa emir başına TEK görev olur ve iş emirleri onun adımıdır; aksi hâlde (adımlı kalem, çok iş emri) eski biçim sürer:
+// iş emri başına görev. Hedef iş emirleri tek bu yerde hesaplanır; sonraki süzgeçler (şablon koşulu, kalemde operasyon süzgeci) buradan geçer.
+export interface HedefYeri { isEmriId: number | null; ek: string; adimlar: readonly { isEmriId: number; ad: string }[] }
+export function hedefYerleri(
+  h: { emirNo: string; isEmirleri: readonly { id: number; opNo: number }[] }, isEmriDuzeyi: boolean, kalemAdimli: boolean,
+): HedefYeri[] {
+  if (!isEmriDuzeyi || h.isEmirleri.length === 0) return [{ isEmriId: null, ek: h.emirNo, adimlar: [] }];
+  const adlandir = (ie: { id: number; opNo: number }) => ({ isEmriId: ie.id, ad: `${h.emirNo} / ${String(ie.opNo)}` });
+  if (!kalemAdimli && h.isEmirleri.length <= ADIM_EN_COK) return [{ isEmriId: null, ek: h.emirNo, adimlar: h.isEmirleri.map(adlandir) }];
+  return h.isEmirleri.map((ie) => ({ isEmriId: ie.id, ek: adlandir(ie).ad, adimlar: [] }));
+}

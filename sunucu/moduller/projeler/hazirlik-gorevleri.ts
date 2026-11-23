@@ -3,7 +3,8 @@ import { bulunamadi, dogrulama, eskiSurum } from '#cekirdek/hata.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { HazirlikAtaGovdesi } from '#paylasilan/sozlesme/projeler.ts';
-import { sablonTarihleri } from './kurallar.ts';
+import { ADIM_EN_COK, adimIlerlemesi, hedefYerleri, sablonTarihleri } from './kurallar.ts';
+import type { HedefYeri } from './kurallar.ts';
 import { YONETIM_KISITLARI, atamaBildir, projeKilitle, secilenSablon } from './servis.ts';
 import * as sorgular from './sorgular.ts';
 import type { HazirlikGoreviSatiri } from './sorgular.ts';
@@ -48,12 +49,26 @@ const kalemdenDonmus = (k: sorgular.SablonKalemiSatiri): DonmusKalem => ({
   hazirlikMaddesi: k.hazirlik_maddesi, adimlar: k.adimlar, kanitZorunlu: k.kanit_zorunlu,
 });
 
+// Kalemin bir emirde açacağı yerler (var olan görev olan yer hariç). Yeni biçimde (iş emirleri adım) emirde maddenin herhangi bir görevi
+// varsa, eski biçim görevler dahil, yenisi açılmaz (3611 Risk K1); eski biçimde var olan yalnız aynı iş emrinin görevidir.
+export async function acilacakYerler(db: Db, hedef: HazirlikHedefi, madde: HazirlikMaddeBilgisi, maddeKodu: string, kalemAdimli: boolean): Promise<HedefYeri[]> {
+  const acilacak: HedefYeri[] = [];
+  for (const y of hedefYerleri(hedef, madde.isEmriDuzeyi, kalemAdimli)) {
+    const var_ = y.adimlar.length > 0
+      ? await sorgular.hazirlikMaddesiGoreviVarMi(db, hedef.emriId, maddeKodu)
+      : await sorgular.hazirlikGoreviVarMi(db, hedef.emriId, y.isEmriId, maddeKodu);
+    if (!var_) acilacak.push(y);
+  }
+  return acilacak;
+}
+
 export const SABLON_DAGITILMADI = 'Bu şablon projede dağıtılmadı: önce Projeler > Görevleri dağıt ekranında dağıt.';
 
 // Açılan hazırlık görevine kalemin adımları eklenir; tekil dizine takılıp açılmayan görev (null) atlanır.
-async function gorevVeAdimlar(db: Db, adimlar: readonly string[], id: number | null): Promise<boolean> {
+async function gorevVeAdimlar(db: Db, adimlar: readonly string[], isEmriAdimlari: HedefYeri['adimlar'], id: number | null): Promise<boolean> {
   if (id === null) return false;
   await sorgular.adimlariEkle(db, id, adimlar);
+  await sorgular.hazirlikAdimlariniEkle(db, id, isEmriAdimlari);
   return true;
 }
 
@@ -86,14 +101,12 @@ export async function hazirlikGorevleriAc(
     if (madde === undefined) continue;
     const t = sablonTarihleri({ dayanak: k.dayanak, gun: k.gun, sureGun: k.sureGun }, dayanak, bugun);
     for (const h of v.hedefler) {
-      const yerler = madde.isEmriDuzeyi && h.isEmirleri.length > 0
-        ? h.isEmirleri.map((ie) => ({ isEmriId: ie.id, ek: `${h.emirNo} / ${String(ie.opNo)}` }))
-        : [{ isEmriId: null, ek: h.emirNo }];
+      const yerler = await acilacakYerler(db, h, madde, k.hazirlikMaddesi, (k.adimlar?.length ?? 0) > 0);
       for (const y of yerler) {
         const anahtar = `${String(h.emriId)}:${String(y.isEmriId ?? 0)}:${k.hazirlikMaddesi}`;
         const acilir = deneme
-          ? !denenen.has(anahtar) && !(await sorgular.hazirlikGoreviVarMi(db, h.emriId, y.isEmriId, k.hazirlikMaddesi))
-          : await gorevVeAdimlar(db, k.adimlar ?? [], await kisitKorumali(HAZIRLIK_KISITLARI, () => sorgular.hazirlikGoreviEkle(db, v.projeId, {
+          ? !denenen.has(anahtar)
+          : await gorevVeAdimlar(db, k.adimlar ?? [], y.adimlar, await kisitKorumali(HAZIRLIK_KISITLARI, () => sorgular.hazirlikGoreviEkle(db, v.projeId, {
             kilometreTasiId: null, ad: `${k.ad} · ${y.ek}`.slice(0, 200).trimEnd(), aciklama: k.aciklama, sorumluKisiId: k.yapanKisiId,
             planBaslangic: t.planBaslangic, planBitis: t.planBitis, oncekiGorevId: null, asama: k.asama ?? madde.ad, yapanRolId: k.yapanRolId,
             kontrolKisiId: k.kontrolKisiId, kontrolRolId: k.kontrolRolId, yedekKontrolKisiId: k.yedekKontrolKisiId, yedekKontrolRolId: k.yedekKontrolRolId,
@@ -112,17 +125,23 @@ export interface HazirlikGorevi {
   id: number; projeId: number; ad: string; durum: string; madde: string; emriId: number; isEmriId: number | null;
   sorumluKisiId: number | null; yapanRolId: number | null; kontrolKisiId: number | null; kontrolRolId: number | null;
   planBitis: string; ilerleme: number; onaylandi: boolean; surum: number; gecikmeGun: number | null; kademe: number | null;
+  // 3611: yeni biçimde iş emirleri görevin adımıdır (isEmriId null); eski biçimde boş.
+  adimlar: { isEmriId: number; yapildi: boolean }[];
 }
 const gorev = (x: HazirlikGoreviSatiri): HazirlikGorevi => ({
   id: x.id, projeId: x.proje_id, ad: x.ad, durum: x.durum, madde: x.hazirlik_maddesi, emriId: x.hazirlik_emri_id, isEmriId: x.hazirlik_is_emri_id,
   sorumluKisiId: x.sorumlu_kisi_id, yapanRolId: x.yapan_rol_id, kontrolKisiId: x.kontrol_kisi_id, kontrolRolId: x.kontrol_rol_id,
-  planBitis: x.plan_bitis, ilerleme: x.ilerleme, onaylandi: x.onaylandi, surum: x.surum, gecikmeGun: x.gecikme_gun, kademe: x.kademe,
+  planBitis: x.plan_bitis, ilerleme: x.ilerleme, onaylandi: x.onaylandi, surum: x.surum, gecikmeGun: x.gecikme_gun, kademe: x.kademe, adimlar: [],
 });
+async function adimlariylaOku(db: Db, satirlar: HazirlikGoreviSatiri[]): Promise<HazirlikGorevi[]> {
+  const adimlar = await sorgular.hazirlikAdimlari(db, satirlar.map((x) => x.id));
+  return satirlar.map((x) => ({ ...gorev(x), adimlar: adimlar.filter((a) => a.gorev_id === x.id).map((a) => ({ isEmriId: a.is_emri_id, yapildi: a.yapildi })) }));
+}
 export async function hazirlikGorevleri(db: Db, emirIdleri: readonly number[]): Promise<HazirlikGorevi[]> {
-  return (await sorgular.hazirlikGorevleri(db, emirIdleri)).map(gorev);
+  return adimlariylaOku(db, await sorgular.hazirlikGorevleri(db, emirIdleri));
 }
 export async function projeninHazirlikGorevleri(db: Db, projeId: number): Promise<HazirlikGorevi[]> {
-  return (await sorgular.projeninHazirlikGorevleri(db, projeId)).map(gorev);
+  return adimlariylaOku(db, await sorgular.projeninHazirlikGorevleri(db, projeId));
 }
 
 // Etkin şablonlar ve her birinin hazırlık kalemlerinin maddeleri (emir penceresi kaç görev doğacağını hesaplar).
@@ -146,4 +165,31 @@ export async function hazirlikGoreviAta(db: Db, kullanici: Kullanici, gorevId: n
   if (s === null) throw eskiSurum();
   await atamaBildir(db, s.proje_id, [atama], kullanici.id, gorevId);
   return { id: s.id, surum: s.surum };
+}
+
+// 3611 Risk K3: emre sonradan iş emri eklenince yeni biçimli açık görev (yapılacak, sürüyor, bekliyor) onu adım olarak alır. Görev kontrolde ya da
+// bitmişse, ya da adım sınırı dolmuşsa o iş emri için eski biçim tek görev açılır (aynı kalemin alanlarıyla). Bildirim gitmez: görev atandığı kişiye
+// zaten düşmüştü. Dönen sayı adım olarak eklenen ve eski biçimde açılan görevlerin toplamıdır.
+const ACIK_DURUMLAR = new Set(['yapilacak', 'suruyor', 'bekliyor']);
+export async function hazirlikIsEmriEklendi(db: Db, kisiId: number, v: { emriId: number; emirNo: string; isEmriId: number; opNo: number }): Promise<number> {
+  const ad = `${v.emirNo} / ${String(v.opNo)}`;
+  let islenen = 0;
+  for (const g of await sorgular.yeniBicimGorevleri(db, v.emriId)) {
+    if (ACIK_DURUMLAR.has(g.durum) && g.adim_toplam < ADIM_EN_COK) {
+      if (!(await sorgular.hazirlikAdimiEkle(db, g.id, v.isEmriId, ad))) continue;
+      await sorgular.ilerlemeYaz(db, g.id, adimIlerlemesi(g.adim_toplam + 1, g.adim_yapilan, g.ilerleme), kisiId);
+      islenen += 1;
+      continue;
+    }
+    const sonek = ` · ${v.emirNo}`;
+    const kalemAdi = g.ad.endsWith(sonek) ? g.ad.slice(0, -sonek.length) : g.ad;
+    const yeni = await sorgular.hazirlikGoreviEkle(db, g.proje_id, {
+      kilometreTasiId: null, ad: `${kalemAdi} · ${ad}`.slice(0, 200).trimEnd(), aciklama: g.aciklama, sorumluKisiId: g.sorumlu_kisi_id,
+      planBaslangic: g.plan_baslangic, planBitis: g.plan_bitis, oncekiGorevId: null, asama: g.asama, yapanRolId: g.yapan_rol_id,
+      kontrolKisiId: g.kontrol_kisi_id, kontrolRolId: g.kontrol_rol_id, yedekKontrolKisiId: g.yedek_kontrol_kisi_id, yedekKontrolRolId: g.yedek_kontrol_rol_id,
+      hazirlikMaddesi: g.hazirlik_maddesi, emriId: v.emriId, isEmriId: v.isEmriId, kanitZorunlu: g.kanit_zorunlu,
+    }, kisiId);
+    if (yeni !== null) islenen += 1;
+  }
+  return islenen;
 }

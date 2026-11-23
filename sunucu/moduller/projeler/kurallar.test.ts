@@ -4,7 +4,7 @@ import { projeKoduSemasi, statuYazGovdesi } from '#paylasilan/sozlesme/projeler.
 import {
   BITTI_GERCEK_BITIS, FIRMA_PASIF, FIRMA_SIPARISTEN, FIRMA_YOK, GERCEK_BASLANGIC_GEREKLI, GERCEK_SIRASI, PROJE_KAPALI, SERBEST_STATU_KAPALI,
   BASLANGIC_TERMINDEN_SONRA, KAPALI_BAGLANMAZ, SIPARISSIZ_BAGLANMAZ, SIPARIS_ONAYSIZ, STATU_ETKIN_DEGIL, acilisBitisi, bitisBaglaReddi, STATU_YOK, TABAN_AYNI, aramaKalibi, butce, firmaReddi, gorevDurumuDuzelt, oncekiDonguVarMi,
-  projeAcikReddi, projeIlerlemesi, siparisFirmasiReddi, siparisReddi, statuReddi, tabanReddi, YENIDEN_ACMA_GEREKCESI, yenidenAcmaMi, yenidenAcmaReddi,
+  ADIM_EN_COK, hedefYerleri, projeAcikReddi, projeIlerlemesi, siparisFirmasiReddi, siparisReddi, statuReddi, tabanReddi, YENIDEN_ACMA_GEREKCESI, yenidenAcmaMi, yenidenAcmaReddi,
 } from './kurallar.ts';
 
 describe('projeler kuralları (saf)', () => {
@@ -121,4 +121,20 @@ test('PRJ-18 bağla: siparişsiz, kapanmış ve başlangıcı terminden sonra ol
   assert.equal(bitisBaglaReddi({ ...p, durum: 'tamamlandi' }, '2026-11-15'), KAPALI_BAGLANMAZ);
   assert.equal(bitisBaglaReddi({ ...p, baslangic: '2026-11-16' }, '2026-11-15'), BASLANGIC_TERMINDEN_SONRA);
   assert.equal(bitisBaglaReddi({ ...p, baslangic: '2026-11-15' }, '2026-11-15'), null);
+});
+
+// 3611: hedef iş emirleri tek yerde hesaplanır; iş emri maddesi emir başına tek görev, iş emirleri adım olur.
+describe('hedefYerleri (3611)', () => {
+  const emir = (n: number) => ({ emirNo: 'ORN-E-1', isEmirleri: Array.from({ length: n }, (_, i) => ({ id: 100 + i, opNo: (i + 1) * 10 })) });
+  test('iş emri maddesi: tek görev ve iş emri başına adım; emir düzeyi ve iş emrisiz emir: tek görev, adımsız', () => {
+    assert.deepEqual(hedefYerleri(emir(2), true, false), [{ isEmriId: null, ek: 'ORN-E-1', adimlar: [{ isEmriId: 100, ad: 'ORN-E-1 / 10' }, { isEmriId: 101, ad: 'ORN-E-1 / 20' }] }]);
+    assert.deepEqual(hedefYerleri(emir(2), false, false), [{ isEmriId: null, ek: 'ORN-E-1', adimlar: [] }]);
+    assert.deepEqual(hedefYerleri(emir(0), true, false), [{ isEmriId: null, ek: 'ORN-E-1', adimlar: [] }]);
+  });
+  test('kalemin kendi adımı varsa ya da iş emri adım sınırını aşarsa eski biçim: iş emri başına görev', () => {
+    const y = hedefYerleri(emir(2), true, true);
+    assert.deepEqual(y.map((x) => [x.isEmriId, x.adimlar.length]), [[100, 0], [101, 0]]);
+    assert.equal(hedefYerleri(emir(ADIM_EN_COK), true, false).length, 1);
+    assert.equal(hedefYerleri(emir(ADIM_EN_COK + 1), true, false).length, ADIM_EN_COK + 1);
+  });
 });

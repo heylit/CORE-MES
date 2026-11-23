@@ -14,6 +14,7 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import { hazirlikGorevleri, hazirlikGorevleriAc } from '../projeler/disari.ts';
 import { hazirligiKapananEmirler, uretimEmriAc } from './disari.ts';
 import { hazirlikCozucusuKaydet } from './hazirlik.ts';
+import { isEmriHazirligiEkle } from './hazirlik-gorevi.ts';
 import { gorevinSistemHali, hazirligiKapatanEmir } from './kurallar.ts';
 import { EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { IsEmriGirdisi } from './disari.ts';
@@ -139,7 +140,7 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
     assert.equal((await istek('yetkisiz', `/adimli-emirler/${String(uretimEmriId)}/hazirlik-projesi`, { projeId, sablonId })).durum, 403);
   });
 
-  test('şablonla kurulunca: CNC ve özel madde iş emri başına, çizim emir başına; kapalı malzeme yok; tekrarı çoğalmaz', async () => {
+  test('şablonla kurulunca: iş emri maddeleri emir başına tek görev (iş emirleri adım), çizim emir başına; kapalı malzeme yok; tekrarı çoğalmaz', async () => {
     const { uretimEmriId } = await emirAc(null);
     const yol = `/adimli-emirler/${String(uretimEmriId)}/hazirlik-projesi`;
     assert.equal((await istek('dagitici', yol, { projeId, sablonId })).durum, 400, 'dağıtılmamış şablon hazırlıktan uygulanmaz');
@@ -148,19 +149,22 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
     assert.deepEqual([pd.govde.projeGorevi, pd.govde.hazirlikGorevi], [1, 0], 'projeye bağlı emir yok; hazırlık görevi emir bağlanınca açılır');
     const c = await istek<{ eklenen: number }>('dagitici', yol, { projeId, sablonId });
     assert.equal(c.durum, 200, JSON.stringify(c.govde));
-    assert.equal(c.govde.eklenen, 5);
-    assert.deepEqual(await ozet(uretimEmriId), ['cizim:emir', 'cnc:ie', 'cnc:ie', 'ozel-a:ie', 'ozel-a:ie']);
+    assert.equal(c.govde.eklenen, 3);
+    assert.deepEqual(await ozet(uretimEmriId), ['cizim:emir', 'cnc:emir', 'ozel-a:emir']);
+    const cncGorevi = (await gorevler(uretimEmriId)).find((g) => g.madde === 'cnc');
+    assert.deepEqual(cncGorevi?.adimlar.map((a) => a.yapildi), [false, false], 'iki iş emri görevin iki adımı');
+    assert.equal((await o().sahip.sorgu('SELECT ad FROM projeler_gorev_adimi WHERE gorev_id = $1 ORDER BY sira', [cncGorevi?.id])).map((x) => (x as { ad: string }).ad).join('|').includes(' / 10|'), true, 'adım adı emir no / operasyon no');
     const normal = await o().sahip.sorgu<{ ad: string }>('SELECT ad FROM projeler_gorev WHERE proje_id = $1 AND hazirlik_maddesi IS NULL', [projeId]);
     assert.deepEqual(normal.map((x) => x.ad), ['Başlangıç toplantısı'], 'hazırlık dışı kalem bir kez proje görevi olur');
     const tekrar = await istek<{ eklenen: number }>('dagitici', yol, { projeId, sablonId });
     assert.equal(tekrar.govde.eklenen, 0);
-    assert.equal((await gorevler(uretimEmriId)).length, 5);
+    assert.equal((await gorevler(uretimEmriId)).length, 3);
     assert.equal((await o().sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM projeler_proje_sablonu WHERE proje_id = $1', [projeId]))?.n, 1);
   });
 
   test('iptal edilen görevin yerine yenisi açılabilir; emir açılınca projedeki şablonun görevleri kendiliğinden doğar', async () => {
     const { uretimEmriId } = await emirAc(projeId);
-    assert.deepEqual(await ozet(uretimEmriId), ['cizim:emir', 'cnc:ie', 'cnc:ie', 'ozel-a:ie', 'ozel-a:ie']);
+    assert.deepEqual(await ozet(uretimEmriId), ['cizim:emir', 'cnc:emir', 'ozel-a:emir']);
     const cizim = (await gorevler(uretimEmriId)).find((g) => g.madde === 'cizim');
     await o().sahip.sorgu("UPDATE projeler_gorev SET durum = 'iptal' WHERE id = $1", [cizim?.id]);
     const c = await istek<{ eklenen: number }>('dagitici', `/adimli-emirler/${String(uretimEmriId)}/hazirlik-projesi`, { projeId, sablonId: null });
@@ -183,8 +187,8 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
     assert.equal(v.emirProjeId, emirProjesi);
     assert.equal(v.acikGorev, 0);
     const sb = v.sablonlar.find((x) => x.id === sablonId);
-    assert.equal(sb?.dogacak, 5);
-    assert.match(sb?.ozet ?? '', /^2 iş emri × \(CNC kurulumu, Boya onayı\) ve emir başına Çizim/);
+    assert.equal(sb?.dogacak, 3);
+    assert.match(sb?.ozet ?? '', /^CNC kurulumu, Boya onayı \(emir başına tek görev, 2 iş emri adım\) ve emir başına Çizim/);
     assert.ok(v.projeler.some((x) => x.id === projeId));
   });
 
@@ -197,7 +201,7 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
     assert.equal((await istek('yetkisiz', '/hazirlik-matrisi/dagit', { projeId: dagitProjesi, sablonId, deneme: true })).durum, 403);
     const d = await dagit(true);
     assert.equal(d.durum, 200, JSON.stringify(d.govde));
-    assert.deepEqual([d.govde.eklenen, d.govde.gorevSayisi], [0, 10]);
+    assert.deepEqual([d.govde.eklenen, d.govde.gorevSayisi], [0, 6]);
     assert.equal(d.govde.alicilar.length, 1);
     assert.equal(d.govde.alicilar[0]?.tur, 'rol');
     assert.ok((d.govde.alicilar[0]?.kisiSayisi ?? 0) >= 1);
@@ -207,7 +211,7 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
     assert.equal((await dagit(false)).durum, 400, 'dağıtılmamış şablon hazırlıktan açılmaz');
     const g = await projeDagit(dagitProjesi, sablonId);
     assert.equal(g.durum, 200, JSON.stringify(g.govde));
-    assert.equal(g.govde.hazirlikGorevi, 10, 'Görevleri dağıt denemenin saydığı kadar hazırlık görevi açar');
+    assert.equal(g.govde.hazirlikGorevi, 6, 'Görevleri dağıt denemenin saydığı kadar hazırlık görevi açar');
     assert.equal((await dagit(false)).govde.eklenen, 0);
     assert.equal((await dagit(true)).govde.gorevSayisi, 0, 'dağıtılmış görev yeniden sayılmaz');
 
@@ -309,8 +313,8 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
     await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'iptal', iptal = now() WHERE id = $1", [kapali.uretimEmriId]);
     const d = await projeDagit(proje, sablonId);
     assert.equal(d.durum, 200, JSON.stringify(d.govde));
-    assert.equal(d.govde.hazirlikGorevi, 5, 'yalnız açık emir');
-    assert.equal((await gorevler(acik.uretimEmriId)).length, 5);
+    assert.equal(d.govde.hazirlikGorevi, 3, 'yalnız açık emir');
+    assert.equal((await gorevler(acik.uretimEmriId)).length, 3);
     assert.equal((await gorevler(kapali.uretimEmriId)).length, 0, 'kapalı emre görev açılmaz');
     assert.equal((await istek('dagitici', `/adimli-emirler/${String(kapali.uretimEmriId)}/hazirlik-projesi`, { projeId: proje, sablonId })).durum, 409);
     const matris = async () => (await app.inject({ method: 'GET', url: `/api/hazirlik-matrisi?projeId=${String(proje)}`, headers: { cookie: cerezler.get('dagitici') ?? '' } })).json<{ dagitir: boolean }>();
@@ -326,12 +330,12 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
     const sablon = await yeniSablon('Atanmamış', [{ madde: 'cnc' }, { madde: 'ozel-a', rol: false }, { madde: 'cizim', rol: false }]);
     const d = await dagitIstek(proje, sablon, true);
     assert.equal(d.durum, 200, JSON.stringify(d.govde));
-    assert.deepEqual([d.govde.gorevSayisi, d.govde.atanmamis], [5, 3], 'cnc 2 iş emri rolde; ozel-a 2 ve çizim 1 atanmamış');
+    assert.deepEqual([d.govde.gorevSayisi, d.govde.atanmamis], [3, 2], 'cnc rolde; ozel-a ve çizim atanmamış');
     assert.equal(d.govde.toplamKisi, 1, 'toplam kişi rolün tek üyesi; atanmamış görev kişi saymaz');
     await o().sahip.sorgu('ALTER TABLE uretim_emirleri_hazirlik_maddesi DROP CONSTRAINT uretim_emirleri_hazirlik_maddesi_durduran_kilit');
     try {
       await o().sahip.sorgu("UPDATE uretim_emirleri_hazirlik_maddesi SET acik = false WHERE kod = 'cnc'");
-      assert.equal((await dagitIstek(proje, sablon, true)).govde.gorevSayisi, 5, 'durduran madde kapatılamaz sayılır');
+      assert.equal((await dagitIstek(proje, sablon, true)).govde.gorevSayisi, 3, 'durduran madde kapatılamaz sayılır');
     } finally {
       await o().sahip.sorgu("UPDATE uretim_emirleri_hazirlik_maddesi SET acik = true WHERE kod = 'cnc'");
       await o().sahip.sorgu('ALTER TABLE uretim_emirleri_hazirlik_maddesi ADD CONSTRAINT uretim_emirleri_hazirlik_maddesi_durduran_kilit CHECK (NOT durduran OR acik)');
@@ -344,9 +348,9 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
     const sablon = await yeniSablon('Çift', [{ madde: 'cnc' }, { madde: 'cnc' }]);
     const uye = kim('planlama_proje').id;
     const d = await dagitIstek(proje, sablon, true);
-    assert.equal(d.govde.gorevSayisi, 2, 'iki CNC kalemi aynı iş emrinde bir kez sayılır');
+    assert.equal(d.govde.gorevSayisi, 1, 'iki CNC kalemi aynı emirde bir kez sayılır');
     assert.equal(await atamaZili(uye, proje), 0, 'deneme bildirim göndermez');
-    assert.equal((await projeDagit(proje, sablon)).govde.hazirlikGorevi, 2);
+    assert.equal((await projeDagit(proje, sablon)).govde.hazirlikGorevi, 1);
     assert.equal(await atamaZili(uye, proje), 1, 'dağıt atama zilini çalar');
 
     const termin = await yeniSablon('Termin', [{ madde: 'cnc', dayanak: 'termin', gun: -3 }]);
@@ -390,5 +394,66 @@ describe('uretim-emirleri hazırlık görevi (3396, gerçek PostgreSQL)', () => 
     assert.equal((await ata(ikinci!.id, ikinci!.surum)).durum, 400);
     const normal = (await o().sahip.tek<{ id: number; surum: number }>('SELECT id, surum FROM projeler_gorev WHERE proje_id = $1 AND hazirlik_maddesi IS NULL', [proje]))!;
     assert.equal((await ata(normal.id, normal.surum)).durum, 404);
+  });
+
+  // 3611 Risk K1-K3: iki biçim birlikte okunur; eski biçim görevi olan emirde yeni biçim ikinci görev açmaz; adımlı kalem eski biçimde kalır;
+  // iş emri adımı silinmez ve işareti matriste yalnız o iş emrinin hücresini bitirir.
+  test('3611: eski biçim görevi olan emirde yenisi açılmaz; adım silinmez; adım işareti matriste yalnız o iş emrini bitirir; adımlı kalem eski biçimde', async () => {
+    const proje = await yeniProje('UE.HZY');
+    const e = await emirAc(proje);
+    const [ie1, ie2] = e.isEmriIdleri;
+    // Eski biçim: iş emri başına CNC görevi (3396 öncesi açılmış).
+    for (const ie of [ie1, ie2]) {
+      await o().sahip.sorgu(
+        `INSERT INTO projeler_gorev (proje_id, ad, plan_baslangic, plan_bitis, olusturan_id, hazirlik_maddesi, hazirlik_emri_id, hazirlik_is_emri_id)
+         VALUES ($1, 'Eski CNC', current_date, current_date, $2, 'cnc', $3, $4)`, [proje, yoneticiId, e.uretimEmriId, ie]);
+    }
+    const d = await projeDagit(proje, sablonId);
+    assert.equal(d.durum, 200, JSON.stringify(d.govde));
+    assert.equal(d.govde.hazirlikGorevi, 2, 'cnc zaten görevli: yalnız çizim ve özel madde açılır');
+    assert.deepEqual(await ozet(e.uretimEmriId), ['cizim:emir', 'cnc:ie', 'cnc:ie', 'ozel-a:emir']);
+
+    const ozel = (await gorevler(e.uretimEmriId)).find((g) => g.madde === 'ozel-a')!;
+    assert.equal(ozel.adimlar.length, 2);
+    const adimlar = await o().sahip.sorgu<{ id: number; hazirlik_is_emri_id: number }>('SELECT id, hazirlik_is_emri_id FROM projeler_gorev_adimi WHERE gorev_id = $1 ORDER BY sira', [ozel.id]);
+    const sil = await istek('mudur', `/projeler/gorevler/${String(ozel.id)}/adimlar/${String(adimlar[0]?.id)}/sil`, {});
+    assert.equal(sil.durum, 400, JSON.stringify(sil.govde));
+    await assert.rejects(o().sahip.sorgu(
+      'INSERT INTO projeler_gorev_adimi (gorev_id, sira, ad, hazirlik_is_emri_id) VALUES ($1, 9, $2, $3)', [ozel.id, 'Çift', adimlar[0]?.hazirlik_is_emri_id]), /is_emri_tekil/);
+
+    await o().sahip.sorgu('UPDATE projeler_gorev_adimi SET yapildi = true, yapan_id = $2, an = now() WHERE id = $1', [adimlar[0]?.id, yoneticiId]);
+    const m = await app.inject({ method: 'GET', url: `/api/hazirlik-matrisi?projeId=${String(proje)}`, headers: { cookie: cerezler.get('dagitici') ?? '' } });
+    const v = m.json<{ gorevler: { madde: string; isEmriId: number | null; durum: string }[] }>();
+    const hucre = (ie: number | undefined) => v.gorevler.find((g) => g.madde === 'ozel-a' && g.isEmriId === ie)?.durum;
+    assert.deepEqual([hucre(ie1), hucre(ie2)], ['bitti', 'yapilacak'], 'adım işareti yalnız kendi iş emrinin hücresini bitirir');
+    assert.equal(v.gorevler.filter((g) => g.madde === 'cnc').length, 2, 'eski biçim görevleri olduğu gibi okunur');
+
+    const adimli = await yeniSablon('Adımlı', [{ madde: 'olcu-aleti' }]);
+    await o().sahip.sorgu("UPDATE projeler_gorev_sablon_kalemi SET adimlar = ARRAY['Kontrol et'] WHERE sablon_id = $1", [adimli]);
+    await o().sahip.sorgu("UPDATE uretim_emirleri_hazirlik_maddesi SET acik = true WHERE kod = 'olcu-aleti'");
+    const p2 = await yeniProje('UE.HZZ');
+    const e2 = await emirAc(p2);
+    assert.equal((await projeDagit(p2, adimli)).durum, 200);
+    const olcu = (await gorevler(e2.uretimEmriId)).filter((g) => g.madde === 'olcu-aleti');
+    assert.deepEqual([olcu.length, olcu.every((g) => g.isEmriId !== null && g.adimlar.length === 0)], [2, true], 'kalemin kendi adımı varsa iş emri başına görev (eski biçim)');
+  });
+
+  // 3611 Risk K3: emre sonradan eklenen iş emri açık görevde adım, kontroldeki ya da bitmiş görevde eski biçim tek görev olur; tekrarı çoğaltmaz.
+  test('3611 sonradan eklenen iş emri: açık görevde adım; kontrolde görevde eski biçim tek görev; aynı iş emri iki kez eklenmez', async () => {
+    const proje = await yeniProje('UE.HZN');
+    const e = await emirAc(proje);
+    assert.equal((await projeDagit(proje, sablonId)).durum, 200);
+    const yeniIe = 990101;
+    assert.equal(await o().vt.tx((db) => isEmriHazirligiEkle(db, yoneticiId, e.uretimEmriId, yeniIe, 30)), 2, 'cnc ve özel madde görevine adım (çizim emir düzeyinde adımsız)');
+    assert.equal(await o().vt.tx((db) => isEmriHazirligiEkle(db, yoneticiId, e.uretimEmriId, yeniIe, 30)), 0, 'tekrar adım eklemez');
+    const cnc = (await gorevler(e.uretimEmriId)).find((g) => g.madde === 'cnc')!;
+    assert.equal(cnc.adimlar.length, 3);
+    assert.equal(cnc.ilerleme, 0);
+    await o().sahip.sorgu("UPDATE projeler_gorev SET durum = 'kontrolde', kontrol_kisi_id = $2 WHERE id = $1", [cnc.id, yoneticiId]);
+    assert.equal(await o().vt.tx((db) => isEmriHazirligiEkle(db, yoneticiId, e.uretimEmriId, 990102, 40)), 2, 'cnc kontrolde: eski biçim tek görev; özel madde: adım');
+    const eski = (await gorevler(e.uretimEmriId)).filter((g) => g.madde === 'cnc' && g.isEmriId === 990102);
+    assert.equal(eski.length, 1);
+    assert.match(eski[0]!.ad, / · .+ \/ 40$/);
+    assert.equal((await gorevler(e.uretimEmriId)).find((g) => g.madde === 'cnc' && g.isEmriId === null)?.adimlar.length, 3, 'kontroldeki görevin adımı değişmez');
   });
 });

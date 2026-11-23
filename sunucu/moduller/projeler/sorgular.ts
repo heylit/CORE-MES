@@ -689,6 +689,63 @@ export async function hazirlikGoreviVarMi(db: Db, emriId: number, isEmriId: numb
     [emriId, isEmriId, madde],
   )) !== null;
 }
+// 3611: emirde maddenin iptal edilmemiş herhangi bir görevi (iş emri başına eski biçim dahil): yeni biçim bunun üstüne ikinci görev açmaz.
+export async function hazirlikMaddesiGoreviVarMi(db: Db, emriId: number, madde: string): Promise<boolean> {
+  return (await db.tek(
+    `SELECT 1 AS var FROM projeler_gorev WHERE hazirlik_emri_id = $1 AND hazirlik_maddesi = $2 AND durum <> 'iptal' LIMIT 1`, [emriId, madde],
+  )) !== null;
+}
+// Yeni biçimli görevin iş emri adımları: görevin başka adımı yoktur (adımlı kalem eski biçimde kalır), sıra iş emri sırasıdır.
+export async function hazirlikAdimlariniEkle(db: Db, gorevId: number, adimlar: readonly { isEmriId: number; ad: string }[]): Promise<void> {
+  if (adimlar.length === 0) return;
+  await db.sorgu(
+    `INSERT INTO projeler_gorev_adimi (gorev_id, sira, ad, hazirlik_is_emri_id)
+     SELECT $1, s.sira, s.ad, s.is_emri_id FROM unnest($2::text[], $3::int[]) WITH ORDINALITY AS s(ad, is_emri_id, sira)
+     ON CONFLICT (gorev_id, hazirlik_is_emri_id) WHERE hazirlik_is_emri_id IS NOT NULL DO NOTHING`,
+    [gorevId, adimlar.map((a) => a.ad), adimlar.map((a) => a.isEmriId)],
+  );
+}
+export interface HazirlikAdimSatiri { gorev_id: number; is_emri_id: number; yapildi: boolean }
+export function hazirlikAdimlari(db: Db, gorevIdleri: readonly number[]): Promise<HazirlikAdimSatiri[]> {
+  if (gorevIdleri.length === 0) return Promise.resolve([]);
+  return db.sorgu<HazirlikAdimSatiri>(
+    'SELECT gorev_id, hazirlik_is_emri_id AS is_emri_id, yapildi FROM projeler_gorev_adimi WHERE gorev_id = ANY($1::int[]) AND hazirlik_is_emri_id IS NOT NULL ORDER BY gorev_id, sira',
+    [gorevIdleri],
+  );
+}
+export async function hazirlikAdimiMi(db: Db, gorevId: number, adimId: number): Promise<boolean> {
+  return (await db.tek('SELECT 1 AS var FROM projeler_gorev_adimi WHERE id = $2 AND gorev_id = $1 AND hazirlik_is_emri_id IS NOT NULL', [gorevId, adimId])) !== null;
+}
+
+// 3611 Risk K3: yeni biçimli (iş emirleri adım) görevler; sonradan eklenen iş emri bunlara adım olur.
+export interface YeniBicimGorevi {
+  id: number; proje_id: number; ad: string; durum: string; aciklama: string | null; sorumlu_kisi_id: number | null; plan_baslangic: string; plan_bitis: string;
+  asama: string | null; yapan_rol_id: number | null; kontrol_kisi_id: number | null; kontrol_rol_id: number | null; yedek_kontrol_kisi_id: number | null;
+  yedek_kontrol_rol_id: number | null; hazirlik_maddesi: string; kanit_zorunlu: boolean; ilerleme: number; adim_toplam: number; adim_yapilan: number;
+}
+export function yeniBicimGorevleri(db: Db, emriId: number): Promise<YeniBicimGorevi[]> {
+  return db.sorgu<YeniBicimGorevi>(
+    `SELECT g.id, g.proje_id, g.ad, g.durum, g.aciklama, g.sorumlu_kisi_id, g.plan_baslangic::text AS plan_baslangic, g.plan_bitis::text AS plan_bitis, g.asama,
+            g.yapan_rol_id, g.kontrol_kisi_id, g.kontrol_rol_id, g.yedek_kontrol_kisi_id, g.yedek_kontrol_rol_id, g.hazirlik_maddesi, g.kanit_zorunlu, g.ilerleme,
+            (SELECT count(*)::int FROM projeler_gorev_adimi a WHERE a.gorev_id = g.id) AS adim_toplam,
+            (SELECT count(*) FILTER (WHERE a.yapildi)::int FROM projeler_gorev_adimi a WHERE a.gorev_id = g.id) AS adim_yapilan
+       FROM projeler_gorev g
+      WHERE g.hazirlik_emri_id = $1 AND g.hazirlik_is_emri_id IS NULL AND g.durum <> 'iptal'
+        AND EXISTS (SELECT 1 FROM projeler_gorev_adimi a WHERE a.gorev_id = g.id AND a.hazirlik_is_emri_id IS NOT NULL)
+      ORDER BY g.id`,
+    [emriId],
+  );
+}
+export async function hazirlikAdimiEkle(db: Db, gorevId: number, isEmriId: number, ad: string): Promise<boolean> {
+  const satir = await db.tek<{ id: number }>(
+    `INSERT INTO projeler_gorev_adimi (gorev_id, sira, ad, hazirlik_is_emri_id)
+     VALUES ($1, COALESCE((SELECT max(sira) FROM projeler_gorev_adimi WHERE gorev_id = $1), 0) + 1, $3, $2)
+     ON CONFLICT (gorev_id, hazirlik_is_emri_id) WHERE hazirlik_is_emri_id IS NOT NULL DO NOTHING RETURNING id`,
+    [gorevId, isEmriId, ad],
+  );
+  return satir !== null;
+}
+
 export function projeninHazirlikGorevleri(db: Db, projeId: number): Promise<HazirlikGoreviSatiri[]> {
   return db.sorgu<HazirlikGoreviSatiri>(
     `SELECT id, proje_id, ad, durum, hazirlik_maddesi, hazirlik_emri_id, hazirlik_is_emri_id, sorumlu_kisi_id, yapan_rol_id, kontrol_kisi_id, kontrol_rol_id,
@@ -825,7 +882,7 @@ export async function acikAdimlariIsaretle(db: Db, gorevId: number, kisiId: numb
 
 export function adimSil(db: Db, gorevId: number, adimId: number): Promise<{ yapildi: boolean } | null> {
   return db.tek<{ yapildi: boolean }>(
-    'DELETE FROM projeler_gorev_adimi WHERE id = $2 AND gorev_id = $1 AND NOT yapildi RETURNING yapildi',
+    'DELETE FROM projeler_gorev_adimi WHERE id = $2 AND gorev_id = $1 AND NOT yapildi AND hazirlik_is_emri_id IS NULL RETURNING yapildi',
     [gorevId, adimId],
   );
 }

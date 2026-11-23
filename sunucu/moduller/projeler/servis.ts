@@ -29,7 +29,7 @@ import {
   tabanReddi, yenidenAcmaMi, yenidenAcmaReddi,
   BASKASI_USTLENDI, KENDI_ISIN, KONTROLUN_DEGIL, SABLON_KAPALI, SABLON_YOK, SANA_ATANMADI, USTLENILEMEZ, baslaReddi, bitirSonucu, duzenlemeDurumReddi,
   cevirReddi, gorevIzinleri, gorevlerimTuru, iptalReddi, kontrolluMu, kontroldeAtamaReddi, kontrolReddi, sablonTarihleri, ustlenReddi,
-  ADIM_EN_COK, ADIM_ISARETLI_SILINMEZ, ADIM_SINIRI, ADIM_YOK, KANIT_AZAMI_BAYT, KANIT_TURLERI, KANIT_YOK, adimIlerlemesi, adimListesiReddi,
+  ADIM_EN_COK, ADIM_ISARETLI_SILINMEZ, HAZIRLIK_ADIMI_SILINMEZ, ADIM_SINIRI, ADIM_YOK, KANIT_AZAMI_BAYT, KANIT_TURLERI, KANIT_YOK, adimIlerlemesi, adimListesiReddi,
   icerikReddi, kanitKaydi, kanitReddi,
 } from './kurallar.ts';
 import type { GorevAtamasi, Isleyen } from './kurallar.ts';
@@ -696,6 +696,7 @@ export async function adimSil(db: Db, kullanici: Kullanici, gorevId: number, adi
   const { g, k } = await icerigeHazirla(db, kullanici, gorevId);
   const ret = adimListesiReddi(atamasi(g), k, gorevYazar(kullanici));
   if (ret !== null) throw reddet(ret);
+  if (await sorgular.hazirlikAdimiMi(db, gorevId, adimId)) throw dogrulama(HAZIRLIK_ADIMI_SILINMEZ);
   if ((await sorgular.adimSil(db, gorevId, adimId)) === null) {
     throw (await sorgular.adimVarMi(db, gorevId, adimId)) ? dogrulama(ADIM_ISARETLI_SILINMEZ) : bulunamadi(ADIM_YOK);
   }
