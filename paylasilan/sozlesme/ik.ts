@@ -216,15 +216,12 @@ export const ikIseAlGovdesi = z.object({
   govde: ikGovdesi,
   rolId: IK_KIMLIK,
   kartNo: gizli(z.string().trim().max(64, 'Kart numarası çok uzun.')).optional(),
-  // 1928 a: ilk istasyon; kaydın iş merkezindeki aktif istasyonlardan, işe giriş gününden başlayan tam atama.
-  istasyonId: IK_KIMLIK.optional(),
 }).strict();
 export const ikHesabiSemasi = z.object({ kisiId: IK_KIMLIK, kullaniciAdi: z.string(), pin: gizli(z.string()) });
 export const ikIseAlCevabi = ikYazCevabi.extend({ hesap: ikHesabiSemasi.nullable(), kart: girisKartiSemasi.nullable() });
-// İşe alma formunun seçenekleri: verilebilen roller ve ilk istasyon için aktif istasyonlar (iş merkezine göre süzülür).
+// İşe alma formunun seçenekleri: verilebilen roller. İstasyon ve makine ataması işe alımda değil, kişi kartında yetkinlikle yapılır (3616).
 export const ikHesapRolleriCevabi = z.object({
   roller: z.array(z.object({ id: IK_KIMLIK, kod: z.string(), ad: z.string() })),
-  istasyonlar: z.array(z.object({ id: IK_KIMLIK, ad: z.string(), isMerkeziId: IK_KIMLIK })),
 });
 // 1928 a: kişinin asıl istasyonu (en büyük yüzdeli aktif atama) İK kaydının iş merkezinde değilse uyarı satırı.
 export const ikIstasyonUyumsuzluklariCevabi = z.object({

@@ -219,13 +219,20 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
     const merkez2 = await isMerkeziKur();
     // Personel Vardiya > Personel ile aynı kaynaktan: bugün istasyona atanmış kişi; iş merkezi kısıtı ve ileri tarihli atama sayılmaz.
     const iki = await kisiEkle('Pano Kişi');
-    await yaz(`/istasyonlar/${(await istasyonKur(merkez1.id)).id}/kisiler/ata`, { kisiId: iki, yuzde: '30' });
-    await yaz(`/istasyonlar/${(await istasyonKur(merkez2.id)).id}/kisiler/ata`, { kisiId: iki, yuzde: '30' });
+    const yetkinlikVer = (istasyonId: number, kisiId: number) => vt().sorgu('INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) SELECT k.id, i.id FROM kisi k, istasyon i WHERE k.id = $1 AND i.id = $2 ON CONFLICT DO NOTHING', [kisiId, istasyonId]);
+    const panoIst1 = (await istasyonKur(merkez1.id)).id;
+    const panoIst2 = (await istasyonKur(merkez2.id)).id;
+    await yetkinlikVer(panoIst1, iki);
+    await yetkinlikVer(panoIst2, iki);
+    await yaz(`/istasyonlar/${panoIst1}/kisiler/ata`, { kisiId: iki, yuzde: '30' });
+    await yaz(`/istasyonlar/${panoIst2}/kisiler/ata`, { kisiId: iki, yuzde: '30' });
     const kisitli = await kisiEkle('Pano Kısıtlı');
     await yaz(`/kisi-is-merkezleri/${kisitli}/belirle`, { isMerkeziIdleri: [merkez1.id] });
     const ileri = await kisiEkle('Pano İleri');
     const yarin = (await vt().tek<{ g: string }>('SELECT (current_date + 1)::text AS g'))?.g;
-    await yaz(`/istasyonlar/${(await istasyonKur((await isMerkeziKur()).id)).id}/kisiler/ata`, { kisiId: ileri, yuzde: '30', baslangic: yarin });
+    const ileriIst = (await istasyonKur((await isMerkeziKur()).id)).id;
+    await yetkinlikVer(ileriIst, ileri);
+    await yaz(`/istasyonlar/${ileriIst}/kisiler/ata`, { kisiId: ileri, yuzde: '30', baslangic: yarin });
     const sonra = await ozet();
 
     assert.deepEqual(sonra.makine, {
@@ -243,7 +250,10 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
     const mk = await makineKur({ istasyonId: ist.id });
     const op = await yaz<{ id: number }>('/operasyon-tipleri', { kod: yeniKod('OP'), ad: 'Yetki Tipi', grup: 'TAL' });
     const atamaIst = await istasyonKur(digerMerkez.id);
-    const atamaMk = await makineKur();
+    const ekYetkinIst = await istasyonKur((await isMerkeziKur()).id);
+    const atamaMk = await makineKur({ istasyonId: atamaIst.id });
+    // 3616: atama yetkinlik ister; yetki matrisi yetkili rolün atamayı yapabildiğini sınar.
+    await vt().sorgu('INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) SELECT k.id, i.id FROM kisi k, istasyon i WHERE k.id = $1 AND i.id = $2 ON CONFLICT DO NOTHING', [operatorId, atamaIst.id]);
     const ekip = await yaz<{ id: number; kod: string }>('/ekipler', { kod: yeniKod('ET'), ad: 'Yetki Ekibi' });
     const [topluMk1, topluMk2, topluMk3] = [await makineKur(), await makineKur(), await makineKur()];
     const [topluIst1, topluIst2] = [await istasyonKur(digerMerkez.id), await istasyonKur(digerMerkez.id)];
@@ -295,7 +305,7 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
         govde: { istasyonId: null, adet: 3, surum: 1 }, basari: 200,
       },
       { uc: '/istasyonlar/aparat-kapasiteleri/:id/sil', yol: `/istasyonlar/aparat-kapasiteleri/${aparat.govde.id}/sil`, govde: { surum: 2 }, basari: 204 },
-      { uc: '/kisi-yetkinlikleri/:kisiId/belirle', yol: `/kisi-yetkinlikleri/${operatorId}/belirle`, govde: { istasyonIdleri: [atamaIst.id] }, basari: 200 },
+      { uc: '/kisi-yetkinlikleri/:kisiId/belirle', yol: `/kisi-yetkinlikleri/${operatorId}/belirle`, govde: { istasyonIdleri: [atamaIst.id, ekYetkinIst.id] }, basari: 200 },
       {
         uc: '/kisi-yetkinlikleri/toplu', yol: '/kisi-yetkinlikleri/toplu',
         govde: { degisiklikler: [{ kisiId: operatorId, istasyonId: ist.id, yetkin: true }] }, basari: 200,

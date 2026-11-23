@@ -19,7 +19,7 @@ import { tesisGunBasi, tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { bildirimGonder, bildirimKapat } from '../bildirim/disari.ts';
 import { olayAlanlari } from '#paylasilan/sozlesme/bildirim-kural-sabitleri.ts';
-import { aktifIstasyonlar, isMerkezleri, istasyonAtamasiAc, istasyonKisileri, kisininIzinliIsMerkezleri } from '../istasyonlar/disari.ts';
+import { aktifIstasyonlar, isMerkezleri, istasyonKisileri, kisininIzinliIsMerkezleri } from '../istasyonlar/disari.ts';
 import { etkinPersonelKartlari, kisininPersonelKarti as nizamiyePersonelKarti, personelKartiniKaldir, personelKartiVer } from '../nizamiye/disari.ts';
 import { ikHesabiAc, ikKisisiAc, ikRolSecenekleri, kisiAdlari, kisiKullaniciAdi, kisiSecenekleri, ozlukBaginiKaldir, ozluguIkdenYaz } from '../kisiler/disari.ts';
 import { ayarKur, ayarParcala } from './ayar-eslesme.ts';
@@ -31,7 +31,7 @@ import {
   bordroKaydi, bordroKimligi, bordroOnayDenetle, boyutDenetle, bugunIzindekiler, degisiklikler, devamGorunurMu, devamOnayDenetle, devamOnayiKur, ekipKimlikleri, enErkenDonemBaslangici, etiket, govdeKimligiDenetle, ikRolu,
   adayGecisiDenetle, GORUSMECI_ADAY_ALANLARI, GORUSMECI_POZISYON_ALANLARI, gorusmeAdayiDenetle, gorusmeciMi, iletisimDenetle, istemciAlanlariniAyikla, kimlikIbanDenetle, izinBakiyeUyarisi, izinCakismasiDenetle, izinGecisiDenetle, izinTarihiDenetle, izinGunuDenetle, izinIcerigiDegistiMi, izinIsGunu, katilimciIsMerkezleri, kayitIsMerkezi, kesinlestirmeDenetle, personelBul,
   besHareketDenetle, besIsareti, korunanBesIsareti, ozelVeriDenetle, ozelVeriyiAyikla, ozelVeriyiKoru, OZEL_VERI_ISLEMI, gecmisteGizliMi, pozisyonGecisiDenetle, turDenetle, ucretDenetle, yillikMesaiSiniri,
-  OZLUK_SON_YONETICI_UYARISI, YENI_KISI_SICIL_CAKISMASI, ilkAtamaGunu, ilkIstasyonHatasi, ozlukItmesi, yeniPersonelKisiAdi, calismaAraligi, calismaHesabi, cikisZimmetUyarisi, fazlaTuru, izinKarari, izinOnayBildirimi, izinOnayKapanirMi, haftalikVardiyaPlani, puantajGunuDenetle, puantajKilidiDenetle, puantajTarihiDenetle,
+  OZLUK_SON_YONETICI_UYARISI, YENI_KISI_SICIL_CAKISMASI, ozlukItmesi, yeniPersonelKisiAdi, calismaAraligi, calismaHesabi, cikisZimmetUyarisi, fazlaTuru, izinKarari, izinOnayBildirimi, izinOnayKapanirMi, haftalikVardiyaPlani, puantajGunuDenetle, puantajKilidiDenetle, puantajTarihiDenetle,
 } from './kurallar.ts';
 import type { GunPlani, VardiyaMatrisSatiri, VardiyaTanimi } from './kurallar.ts';
 import { gunMetni, motorGunu, motorKur } from '#paylasilan/ik-motor/arayuz.ts';
@@ -1021,14 +1021,10 @@ export const ISE_ALIM_KISISIZ = 'Çıkış tarihi geçmiş personele giriş hesa
 export const ISE_ALIM_HESAP_VAR = 'Seçilen kişinin giriş hesabı zaten vardı; yeni hesap açılmadı.';
 
 export async function iseAl(
-  db: Db, kullanici: Kullanici, kimlik: string, govde: Govde, rolId: number, kartNo: string | undefined, istasyonId?: number,
+  db: Db, kullanici: Kullanici, kimlik: string, govde: Govde, rolId: number, kartNo: string | undefined,
 ): Promise<IkIseAlCevabi> {
   if (!kullanici.islemler.includes('ik.personel-yaz')) throw yetkiYok(ISE_ALIM_PERSONEL_YETKISIZ);
   if (await s.varMi(db, 'emp', kimlik)) throw cakisma(ISE_ALIM_KAYIT_VAR);
-  if (istasyonId !== undefined) {
-    const hata = ilkIstasyonHatasi((await aktifIstasyonlar(db)).find((i) => i.id === istasyonId), kayitIsMerkezi('emp', govde, () => null));
-    if (hata !== null) throw dogrulama(hata, 'istasyonId');
-  }
   const d = await durumOku(db, kullanici);
   const r = await yaz(db, kullanici, { tur: 'emp', kimlik, govde, surum: null, uc: 'kaydet' }, d);
   const kisiId = typeof r.kayit.govde['kisiId'] === 'number' ? r.kayit.govde['kisiId'] : null;
@@ -1041,9 +1037,6 @@ export async function iseAl(
     else uyarilar.push(ISE_ALIM_HESAP_VAR);
     const no = kartNo?.trim() ?? '';
     if (no !== '') kart = (await girisKartiVer(db, kullanici, kisiId, no)).kart;
-    if (istasyonId !== undefined) {
-      await istasyonAtamasiAc(db, { istasyonId, kisiId, baslangic: ilkAtamaGunu(govde['iseGiris'], tesisGunu(new Date())) });
-    }
   }
   const uyari = uyarilar.filter((u) => u !== null).join(' ');
   return {
@@ -1052,8 +1045,7 @@ export async function iseAl(
 }
 
 export async function hesapRolleri(db: Db): Promise<IkHesapRolleriCevabi> {
-  const istasyonlar = (await aktifIstasyonlar(db)).map((i) => ({ id: i.id, ad: i.ad, isMerkeziId: i.isMerkeziId }));
-  return { roller: await ikRolSecenekleri(db), istasyonlar };
+  return { roller: await ikRolSecenekleri(db) };
 }
 
 // 1928 a: İK kaydının iş merkezi ile kişinin asıl istasyonunun iş merkezi ayrışırsa kişi kartı uyarır. Atama istasyonlardadır,

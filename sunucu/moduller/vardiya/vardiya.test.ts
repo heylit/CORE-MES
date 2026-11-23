@@ -27,6 +27,11 @@ const IK_TATILI = '2098-10-29';
 interface Rol { id: number; ad: string }
 interface Cevap<T> { durum: number; govde: T }
 
+// 3616: istasyon ve makine ataması yetkinlik ister; bu test atamanın kuralını değil okuduğu sonucu sınar, atamayı doğrudan yazar.
+async function atamaYaz(db: { sorgu: (sql: string, p?: unknown[]) => Promise<unknown> }, tur: 'istasyon' | 'makine', hedefId: number | string, kisiId: number, yuzde: string): Promise<void> {
+  await db.sorgu(`INSERT INTO ${tur}_kisi (${tur}_id, kisi_id, baslangic, yuzde) VALUES ($1, $2, CURRENT_DATE, $3)`, [Number(hedefId), kisiId, yuzde]);
+}
+
 describe('vardiya (gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
   let app: FastifyInstance;
@@ -95,8 +100,8 @@ describe('vardiya (gerçek PostgreSQL)', () => {
     makineBos = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'VR-MB', ad: 'Deneme makine boşta' })).id;
     // Kısıtlı planlamacı yalnız A merkezinde yazar; personel A'da %30, B'de %70 çalışır (iş merkezi B'dir).
     await tamam(c.yonetici, 'POST', `/kisi-is-merkezleri/${kisiler['kisitli']!}/belirle`, { isMerkeziIdleri: [merkezA] });
-    await tamam(c.yonetici, 'POST', `/istasyonlar/${istasyonA}/kisiler/ata`, { kisiId: kisiler['personel']!, yuzde: '30.00' });
-    await tamam(c.yonetici, 'POST', `/istasyonlar/${istasyonB}/kisiler/ata`, { kisiId: kisiler['personel']!, yuzde: '70.00' });
+    await atamaYaz(vt(), 'istasyon', istasyonA, kisiler['personel']!, '30.00');
+    await atamaYaz(vt(), 'istasyon', istasyonB, kisiler['personel']!, '70.00');
   });
   after(async () => { await ortam?.kaldir(); });
 
@@ -435,9 +440,9 @@ describe('vardiya (gerçek PostgreSQL)', () => {
     const kisi = async (ad: string) => vt().tx((db) => yoneticiOlustur(db, { ad: `Deneme ${ad}`, kullaniciAdi: ad, parola: PAROLA }));
     const [makineci, ekipci, karma] = [await kisi('vr-makineci'), await kisi('vr-ekipci'), await kisi('vr-karma')];
     const ekip = (await tamam<{ id: number }>(c.yonetici, 'POST', '/ekipler', { kod: 'VR-EK', ad: 'Deneme ekip', istasyonId: istasyonB })).id;
-    await tamam(c.yonetici, 'POST', `/makineler/${makineA}/kisiler/ata`, { kisiId: makineci, yuzde: '60.00' });
+    await atamaYaz(vt(), 'makine', makineA, makineci, '60.00');
     await tamam(c.yonetici, 'POST', `/ekipler/${ekip}/uyeler/ata`, { kisiId: ekipci, yuzde: '100.00' });
-    await tamam(c.yonetici, 'POST', `/istasyonlar/${istasyonA}/kisiler/ata`, { kisiId: karma, yuzde: '40.00' });
+    await atamaYaz(vt(), 'istasyon', istasyonA, karma, '40.00');
     await tamam(c.yonetici, 'POST', `/ekipler/${ekip}/uyeler/ata`, { kisiId: karma, yuzde: '60.00' });
 
     const harita = await vt().tx((db) => calismaTakvimleri(db, [makineci, ekipci, karma].map((id) => ({ tur: 'kisi' as const, id })),
@@ -875,7 +880,7 @@ describe('vardiya (gerçek PostgreSQL)', () => {
       const v = await vardiyaAc();
       for (const gun of [2, 3]) await tamam(c.planlama, 'POST', '/vardiya-matrisi/degistir', { isMerkeziId: merkezA, gun, vardiyaId: v.id, acik: true });
       const id = await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme ayrılan', kullaniciAdi: 'vr29-ayrilan', parola: PAROLA }));
-      await tamam(c.yonetici, 'POST', `/istasyonlar/${istasyonA}/kisiler/ata`, { kisiId: id, yuzde: '100.00' });
+      await atamaYaz(vt(), 'istasyon', istasyonA, id, '100.00');
       await tamam(c.yonetici, 'POST', '/ik/personel/emp_vr29/kaydet',
         { govde: { id: 'emp_vr29', kind: 'emp', ad: 'Deneme', soyad: 'Ayrılan', isMerkeziId: merkezA, kisiId: id, cikisTarihi: CIKIS }, surum: null });
       const kisiTakvimi = async (bas: string, bit: string) =>

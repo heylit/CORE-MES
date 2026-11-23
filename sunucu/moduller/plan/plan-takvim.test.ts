@@ -5,6 +5,11 @@ import type { PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts'
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { PAROLA, planTestOrtami } from './plan-ortak.test.ts';
 
+// 3616: istasyon ve makine ataması yetkinlik ister; bu test atamanın kuralını değil okuduğu sonucu sınar, atamayı doğrudan yazar.
+async function atamaYaz(db: { sorgu: (sql: string, p?: unknown[]) => Promise<unknown> }, tur: 'istasyon' | 'makine', hedefId: number | string, kisiId: number, yuzde: string): Promise<void> {
+  await db.sorgu(`INSERT INTO ${tur}_kisi (${tur}_id, kisi_id, baslangic, yuzde) VALUES ($1, $2, CURRENT_DATE, $3)`, [Number(hedefId), kisiId, yuzde]);
+}
+
 describe('plan (gerçek PostgreSQL): personel, vardiya ve takvim', () => {
   const { c, vt, istek, tamam, yeniAdim, isEmirleriAc, isEmriMakinesi, planOku, yer, tg, taslaktaOner, isEmriKomutu, taslagaYaz, tamGunMerkezi, durum } = planTestOrtami();
   // PL-ONAY: canlıya yalnız onaydaki taslak alınır; sahibi (varsayılan planlamacı) gönderir, onaydaki sürüm döner. Zaten onaydaysa yeniden
@@ -25,7 +30,7 @@ describe('plan (gerçek PostgreSQL): personel, vardiya ve takvim', () => {
     const m2 = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'RT-M282B', ad: 'Deneme 282 B', istasyonId: ist })).id;
     const kisi = await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme personelci', kullaniciAdi: 'personelci', parola: PAROLA }));
     // Kişi %10 atanır: günde 144 kişi-dakikası; ilk iş (30 + 10 × 2 = 50 dk, operatör 3) 150 ister ve günü doldurur.
-    await tamam(c.yonetici, 'POST', `/istasyonlar/${ist}/kisiler/ata`, { kisiId: kisi, yuzde: '10.00' });
+    await atamaYaz(vt(), 'istasyon', ist, kisi, '10.00');
     await tamam(c.yonetici, 'POST', `/istasyonlar/${ist}/plan-ayari`, { verimYuzde: 100, operatorIhtiyaci: 3, surum: 0 });
     const [i1] = await isEmirleriAc([yeniAdim({ kaynak: { tur: 'makine', id: m1 } })]);
     const [i2] = await isEmirleriAc([yeniAdim({ kaynak: { tur: 'makine', id: m2 } })]);
@@ -55,7 +60,7 @@ describe('plan (gerçek PostgreSQL): personel, vardiya ve takvim', () => {
     for (let gun = 1; gun <= 7; gun++) await tamam(c.yonetici, 'POST', '/vardiya-matrisi/degistir', { isMerkeziId: merkez.id, gun, vardiyaId: vardiya, acik: true });
     const kisi = await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme vardiyaci', kullaniciAdi: 'vardiyaci', parola: PAROLA }));
     // Kart #1324: kişi iş merkezinde istasyon atamasının yüzdesi kadar sayılır.
-    await tamam(c.yonetici, 'POST', `/istasyonlar/${ist}/kisiler/ata`, { kisiId: kisi, yuzde: '50.00' });
+    await atamaYaz(vt(), 'istasyon', ist, kisi, '50.00');
     // 2511 a: kapasiteye yalnız vardiyası seçilmiş kişi girer.
     await tamam(c.yonetici, 'POST', `/kisi-vardiyalari/${kisi}/belirle`, { vardiyaId: vardiya });
     await tamam(c.yonetici, 'POST', `/istasyonlar/${ist}/plan-ayari`, { verimYuzde: 100, operatorIhtiyaci: 10, surum: 0 });
@@ -95,11 +100,11 @@ describe('plan (gerçek PostgreSQL): personel, vardiya ve takvim', () => {
 
     // Tek tanım: makine ataması da kişi payıdır; %25 makineye atanan kişi kapasiteye 240 dakikanın çeyreğini ekler.
     const makineci = await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme makineci', kullaniciAdi: 'makineci', parola: PAROLA }));
-    await tamam(c.yonetici, 'POST', `/makineler/${makine}/kisiler/ata`, { kisiId: makineci, yuzde: '25.00' });
+    await atamaYaz(vt(), 'makine', makine, makineci, '25.00');
     await tamam(c.yonetici, 'POST', `/kisi-vardiyalari/${makineci}/belirle`, { vardiyaId: vardiya });
     // 2511 a: vardiyası seçilmemiş kişi iş merkezinin bütün vardiyalarıyla sayılmaz; kapasiteye girmez.
     const vardiyasiz = await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme vardiyasiz', kullaniciAdi: 'vardiyasiz', parola: PAROLA }));
-    await tamam(c.yonetici, 'POST', `/istasyonlar/${ist}/kisiler/ata`, { kisiId: vardiyasiz, yuzde: '50.00' });
+    await atamaYaz(vt(), 'istasyon', ist, vardiyasiz, '50.00');
     p = await taslaktaOner();
     assert.equal(Math.max(...p.personelYuku.find((x) => x.isMerkeziId === merkez.id)!.kapasite), 180);
     await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: p.taslak!.surum });

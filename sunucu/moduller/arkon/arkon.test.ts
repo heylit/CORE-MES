@@ -22,6 +22,12 @@ const PAROLA = 'dogru-parola-1';
 
 interface Cevap<T = unknown> { durum: number; govde: T }
 
+// 3616: istasyon ve makine ataması yetkinlik ister; bu test atamanın kuralını değil okuduğu sonucu sınar, atamayı doğrudan yazar.
+async function atamaYaz(db: { sorgu: (sql: string, p?: unknown[]) => Promise<unknown> }, tur: 'istasyon' | 'makine', hedefId: number | string, kisiId: number, yuzde: string): Promise<void> {
+  await db.sorgu(`DELETE FROM ${tur}_kisi WHERE ${tur}_id = $1 AND kisi_id = $2 AND baslangic = CURRENT_DATE`, [Number(hedefId), kisiId]);
+  await db.sorgu(`INSERT INTO ${tur}_kisi (${tur}_id, kisi_id, baslangic, yuzde) VALUES ($1, $2, CURRENT_DATE, $3)`, [Number(hedefId), kisiId, yuzde]);
+}
+
 describe('arkon (gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
   let app: FastifyInstance;
@@ -173,8 +179,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
     const az = await istasyonKur();
     const t = await istasyonKur();
     for (const [ist, yuzde] of [[az, '30'], [t, '70']] as const) {
-      const ata = await istek(yonetici, 'POST', `/istasyonlar/${ist.istasyonId}/kisiler/ata`, { kisiId: operatorId, yuzde });
-      assert.equal(ata.durum, 200, JSON.stringify(ata.govde));
+      await atamaYaz(vt(), 'istasyon', ist.istasyonId, operatorId, yuzde);
     }
     assert.equal((await istek<ArkonBenCevabi>(operator, 'GET', '/arkon/ben')).govde.kisi.istasyon, t.istasyon);
     const liste = (await istek<ArkonKisilerCevabi>(yonetici, 'GET', '/arkon/kisiler')).govde.kisiler;
@@ -191,7 +196,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
   test('Arkon kişisinin yetkili istasyonları atama ve yetkinlikten birlikte gelir; tek istasyon yalnız atamadan', async () => {
     const atanan = await istasyonKur();
     const yetkin = await istasyonKur();
-    assert.equal((await istek(yonetici, 'POST', `/istasyonlar/${atanan.istasyonId}/kisiler/ata`, { kisiId: operatorId, yuzde: '50' })).durum, 200);
+    await atamaYaz(vt(), 'istasyon', atanan.istasyonId, operatorId, '50');
     const yk = await istek(yonetici, 'POST', `/kisi-yetkinlikleri/${operatorId}/belirle`, { istasyonIdleri: [yetkin.istasyonId] });
     assert.equal(yk.durum, 200, JSON.stringify(yk.govde));
     const kisi = (await istek<ArkonBenCevabi>(operator, 'GET', '/arkon/ben')).govde.kisi;
@@ -207,15 +212,14 @@ describe('arkon (gerçek PostgreSQL)', () => {
   test('makineye atanan operatörün istasyonu makinenin istasyonudur; istasyon ataması öne geçer; atama kalkınca düşer', async () => {
     const makineli = await istasyonKur();
     const atanan = await istasyonKur();
-    const ata = await istek(yonetici, 'POST', `/makineler/${makineli.makineId}/kisiler/ata`, { kisiId: operatorId, yuzde: '100' });
-    assert.equal(ata.durum, 200, JSON.stringify(ata.govde));
+    await atamaYaz(vt(), 'makine', makineli.makineId, operatorId, '100');
     let kisi = (await istek<ArkonBenCevabi>(operator, 'GET', '/arkon/ben')).govde.kisi;
     assert.deepEqual([kisi.istasyon, kisi.istasyonlar], [makineli.istasyon, [makineli.istasyon]]);
     const liste = (await istek<ArkonKisilerCevabi>(yonetici, 'GET', '/arkon/kisiler')).govde.kisiler;
     assert.equal(liste.find((k) => k.kimlik === String(operatorId))?.istasyon, makineli.istasyon);
     assert.equal((await istek(yonetici, 'POST', `/makineler/${makineli.makineId}/kisiler/${operatorId}/cikar`, {})).durum, 200);
-    assert.equal((await istek(yonetici, 'POST', `/makineler/${makineli.makineId}/kisiler/ata`, { kisiId: operatorId, yuzde: '40' })).durum, 200);
-    assert.equal((await istek(yonetici, 'POST', `/istasyonlar/${atanan.istasyonId}/kisiler/ata`, { kisiId: operatorId, yuzde: '10' })).durum, 200);
+    await atamaYaz(vt(), 'makine', makineli.makineId, operatorId, '40');
+    await atamaYaz(vt(), 'istasyon', atanan.istasyonId, operatorId, '10');
     kisi = (await istek<ArkonBenCevabi>(operator, 'GET', '/arkon/ben')).govde.kisi;
     assert.deepEqual([kisi.istasyon, kisi.istasyonlar], [atanan.istasyon, [atanan.istasyon, makineli.istasyon].sort((a, b) => a.localeCompare(b))]);
     assert.equal((await istek(yonetici, 'POST', `/istasyonlar/${atanan.istasyonId}/kisiler/${operatorId}/cikar`, {})).durum, 200);

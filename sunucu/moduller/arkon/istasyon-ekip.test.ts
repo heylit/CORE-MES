@@ -18,6 +18,11 @@ interface Cevap<T = unknown> { durum: number; govde: T }
 
 // 2001 b: istasyona bağlı ekibe üye operatör terminalde istasyonsuz kalıyordu ("Size atanmış istasyon yok"). Ekibin istasyonu
 // kişinin yetkili istasyonudur; istasyon ataması yoksa açılış istasyonudur. İstasyonsuz ekip ve kalkan üyelik istasyon vermez.
+// 3616: istasyon ve makine ataması yetkinlik ister; bu test atamanın kuralını değil okuduğu sonucu sınar, atamayı doğrudan yazar.
+async function atamaYaz(db: { sorgu: (sql: string, p?: unknown[]) => Promise<unknown> }, tur: 'istasyon' | 'makine', hedefId: number | string, kisiId: number, yuzde: string): Promise<void> {
+  await db.sorgu(`INSERT INTO ${tur}_kisi (${tur}_id, kisi_id, baslangic, yuzde) VALUES ($1, $2, CURRENT_DATE, $3)`, [Number(hedefId), kisiId, yuzde]);
+}
+
 describe('arkon kişisi ekip istasyonu (gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
   let app: FastifyInstance;
@@ -114,7 +119,7 @@ describe('arkon kişisi ekip istasyonu (gerçek PostgreSQL)', () => {
     const atanan = await istasyonKur();
     const ekipIst = await istasyonKur();
     const ekipId = await ekipKur(ekipIst.id);
-    assert.equal((await istek(yonetici, 'POST', `/istasyonlar/${atanan.id}/kisiler/ata`, { kisiId: operatorId, yuzde: '50' })).durum, 200);
+    await atamaYaz(ortam!.vt, 'istasyon', atanan.id, operatorId, '50');
     await uyeYap(ekipId, '50');
     const kisi = await ben();
     assert.deepEqual([kisi.istasyon, kisi.istasyonlar], [atanan.kod, [atanan.kod, ekipIst.kod].sort((a, b) => a.localeCompare(b))]);

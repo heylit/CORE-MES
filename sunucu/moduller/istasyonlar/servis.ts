@@ -17,7 +17,7 @@ import { kisiAdlari, kisiBayrakliMi, kisileriListele, kisiVarMi } from '../kisil
 import type { AtamaTuru } from './kurallar.ts';
 import {
   AKTIF_ISTASYONU_VAR, KULLANIMDA_ILETISI, PASIF_IS_MERKEZI, PASIF_ISTASYON, YUZDE_TAVANI_SENT, pasifeAliniyorMu, ustDenetlenirMi, arizayaGectiMi, atamaReddi, ekipCakismasi, gecerliAtamalar, gecmisTarihliMi, gunBicimi, kalanYuk, eksikKayitIslemi, kendiKisitiniYazabilirMi, kisiteEklenemeyenler, kisitiOkuyabilirMi,
-  ayarListesi, ayarYetkinligiReddi, gelenAlanlar, topluSirasi, sablonPlani, istasyonuKalkanMakineler, kisiBasinaDegisiklik, makineYetkinligiReddi, secimGruplari, sentBicimi, tekrarsiz, yetkinlikDegisiklikleri, yetkinlikFarki, yetkinlikGecerliMi, yetkinlikUygula, yuzdeSente,
+  atamaYetkinlikReddi, ayarListesi, ayarYetkinligiReddi, gelenAlanlar, topluSirasi, sablonPlani, istasyonuKalkanMakineler, kisiBasinaDegisiklik, makineYetkinligiReddi, secimGruplari, sentBicimi, tekrarsiz, yetkinlikDegisiklikleri, yetkinlikFarki, yetkinlikGecerliMi, yetkinlikUygula, yuzdeSente,
 } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 import type { AyarYetkinligiSatiri, YetkinlikAyrintiSatiri } from './sorgular.ts';
@@ -544,6 +544,16 @@ async function yazmaTarihi(db: Db, baslangic: string | undefined): Promise<strin
 
 // Pasif kişiye atama yapılmaz; kişinin istasyon, makine ve ekip atamalarının toplamı hiçbir gün 100'ü geçmez (IK1).
 // Cevap, liste ucu gibi bugünün görünümüdür: ileri tarihli atama "başlayacak" diye döner (IST-5); yazılan tarihin görünümü değil.
+// 3616: yetkinlik atamanın başlangıç gününe göre aranır; yalnız yeni atama denetlenir, mevcut atamalar yerinde kalır.
+async function atamaYetkinliginiDenetle(db: Db, tur: AtamaTuru, hedefId: number, kisiId: number, tarih: string): Promise<void> {
+  if (tur === 'ekip') return;
+  const istasyonId = tur === 'istasyon' ? hedefId : (await sorgular.makineIstasyonlari(db, [hedefId]))[0]?.istasyonId ?? null;
+  const istasyonYetkin = istasyonId !== null && (await sorgular.yetkinlikSatirlari(db, kisiId, tarih)).some((y) => y.istasyonId === istasyonId);
+  const makineler = tur === 'makine' ? (await sorgular.gecerliMakineYetkinlikleri(db, null, tarih)).filter((y) => y.makineId === hedefId) : [];
+  const ret = atamaYetkinlikReddi(tur, { istasyonYetkin, makineKayitli: makineler.length > 0, makineYetkin: makineler.some((y) => y.kisiId === kisiId) });
+  if (ret !== null) throw dogrulama(ret, 'kisiId');
+}
+
 export async function atamaYap(
   db: Db,
   tur: AtamaTuru,
@@ -553,6 +563,7 @@ export async function atamaYap(
   const tarih = await yazmaTarihi(db, g.baslangic);
   if (!(await hedefVarMi(db, tur, hedefId))) throw bulunamadi(HEDEF_YOK[tur]);
   await atanacakKisiyiDogrula(db, g.kisiId, 'kisiId');
+  await atamaYetkinliginiDenetle(db, tur, hedefId, g.kisiId, tarih);
   await sorgular.kisiAtamaKilidi(db, g.kisiId);
   const satirlar = await sorgular.kisiAtamaSatirlari(db, g.kisiId);
   const sent = yuzdeSente(g.yuzde);

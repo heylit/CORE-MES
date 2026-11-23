@@ -10,25 +10,9 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { personelKartSahibi } from '../nizamiye/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { ilkAtamaGunu, ilkIstasyonHatasi } from './kurallar.ts';
 
 // 1925 a: İK yeni personeli tek adımda işe alır (kart, kişi, PIN'li hesap, giriş kartı); rol yetki dağıtmayan rollerden. Veriler uydurmadır.
 const PAROLA = 'dogru-parola-1';
-
-describe('1928 a ilk istasyon kuralları (saf)', () => {
-  test('istasyon yoksa ya da başka iş merkezindeyse hata; aynı iş merkezinde kabul', () => {
-    assert.match(ilkIstasyonHatasi(undefined, 1) ?? '', /bulunamadı/);
-    assert.match(ilkIstasyonHatasi({ isMerkeziId: 2 }, 1) ?? '', /iş merkezinde/);
-    assert.match(ilkIstasyonHatasi({ isMerkeziId: 2 }, null) ?? '', /iş merkezinde/);
-    assert.equal(ilkIstasyonHatasi({ isMerkeziId: 1 }, 1), null);
-  });
-  test('atama ileri işe giriş gününde başlar; bugün ya da geçmişte ise bugün (boş)', () => {
-    assert.equal(ilkAtamaGunu('2026-12-01', '2026-11-03'), '2026-12-01');
-    assert.equal(ilkAtamaGunu('2026-11-03', '2026-11-03'), undefined);
-    assert.equal(ilkAtamaGunu('2020-01-06', '2026-11-03'), undefined);
-    assert.equal(ilkAtamaGunu(undefined, '2026-11-03'), undefined);
-  });
-});
 
 describe('İK işe alma: personel, hesap ve kart tek adımda (gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
@@ -154,33 +138,27 @@ describe('İK işe alma: personel, hesap ve kart tek adımda (gerçek PostgreSQL
   const atamalari = (kisiId: number) => ortam!.sahip.sorgu<{ istasyon_id: number; baslangic: string; yuzde: string }>(
     "SELECT istasyon_id, to_char(baslangic, 'YYYY-MM-DD') AS baslangic, yuzde::text FROM istasyon_kisi WHERE kisi_id = $1 AND iptal_zamani IS NULL", [kisiId]);
 
-  test('1928 a izinli: ilk istasyon işe giriş gününden tam atanır; seçenekler aktif istasyonları iş merkeziyle verir', async () => {
+  // 3616: işe alımda istasyon seçilmez; atama kişi kartından, yetkinlikle yapılır. Yetkinliği olmayan yeni kişi her zaman işe alınır.
+  test('3616: işe alım gövdesinde istasyon kabul edilmez (400); personel, kişi ve atama yazılmaz', async () => {
     const ist = await istasyonAc('TIA1', im1);
-    const pasif = await istasyonAc('TIA0', im1, false);
-    const secenek = (await oku(ikci, '/ik/hesap-rolleri')).json<IkHesapRolleriCevabi>();
-    assert.ok(secenek.istasyonlar.some((i) => i.id === ist && i.isMerkeziId === im1));
-    assert.ok(!secenek.istasyonlar.some((i) => i.id === pasif));
+    const once = await sayilar();
     const cevap = await iseAl(ikci, 'emp_ia_7', { istasyonId: ist }, { ad: 'Ileri', iseGiris: '2099-01-02' });
-    assert.equal(cevap.statusCode, 200, cevap.body);
-    const kisiId = cevap.json<IkIseAlCevabi>().hesap!.kisiId;
-    assert.deepEqual(await atamalari(kisiId), [{ istasyon_id: ist, baslangic: '2099-01-02', yuzde: '100.00' }]);
+    assert.equal(cevap.statusCode, 400, cevap.body);
+    assert.deepEqual(await sayilar(), once);
   });
 
-  test('1928 a reddedilen: başka iş merkezinin ya da pasif istasyon 400; personel, kişi ve atama yazılmaz', async () => {
-    const uzak = await istasyonAc('TIA2', im2);
-    const pasif = (await ortam!.sahip.tek<{ id: number }>("SELECT id FROM istasyon WHERE kod = 'TIA0'"))!.id;
-    for (const istasyonId of [uzak, pasif]) {
-      const once = await sayilar();
-      const cevap = await iseAl(ikci, 'emp_ia_8', { istasyonId }, { ad: 'Yanlis' });
-      assert.equal(cevap.statusCode, 400, cevap.body);
-      assert.deepEqual(await sayilar(), once);
-    }
+  test('3616: yetkinliği olmayan yeni kişi işe alınır; ataması ve istasyon seçeneği yoktur', async () => {
+    const cevap = await iseAl(ikci, 'emp_ia_8', {}, { ad: 'Yetkinliksiz' });
+    assert.equal(cevap.statusCode, 200, cevap.body);
+    assert.deepEqual(await atamalari(cevap.json<IkIseAlCevabi>().hesap!.kisiId), []);
+    assert.ok(!('istasyonlar' in (await oku(ikci, '/ik/hesap-rolleri')).json<object>()));
   });
 
   test('1928 a: asıl istasyonu başka iş merkezine geçen personel uyarı listesinde; uyumlu olan yok', async () => {
     const ist = await istasyonAc('TIA3', im1);
-    const c = (await iseAl(ikci, 'emp_ia_9', { istasyonId: ist }, { ad: 'Kayan' })).json<IkIseAlCevabi>();
+    const c = (await iseAl(ikci, 'emp_ia_9', {}, { ad: 'Kayan' })).json<IkIseAlCevabi>();
     assert.ok(c.hesap);
+    await ortam!.sahip.sorgu("INSERT INTO istasyon_kisi (istasyon_id, kisi_id, baslangic, yuzde) VALUES ($1, $2, CURRENT_DATE, 100)", [ist, c.hesap.kisiId]);
     const liste = async () => (await oku(ikci, '/ik/istasyon-uyumsuzluklari')).json<IkIstasyonUyumsuzluklariCevabi>().uyumsuzluklar;
     assert.ok(!(await liste()).some((u) => u.personel === 'emp_ia_9'));
     await ortam!.sahip.sorgu('UPDATE istasyon SET is_merkezi_id = $1 WHERE id = $2', [im2, ist]);

@@ -91,7 +91,8 @@ describe('istasyonlar: ekip ve kapasite (gerçek PostgreSQL)', () => {
     return { ...c.govde, isMerkeziId };
   }
   async function makineKur(): Promise<number> {
-    const c = await yaz<{ id: number }>('/makineler', { kod: yeniKod('EK'), ad: 'Ekip Makinesi' });
+    // 3616: makine ataması makinenin istasyonunda yetkinlik ister; makine bir istasyona bağlı açılır.
+    const c = await yaz<{ id: number }>('/makineler', { kod: yeniKod('EK'), ad: 'Ekip Makinesi', istasyonId: (await istasyonKur()).id });
     assert.equal(c.durum, 200, JSON.stringify(c.govde));
     return c.govde.id;
   }
@@ -161,7 +162,17 @@ describe('istasyonlar: ekip ve kapasite (gerçek PostgreSQL)', () => {
   }
   const sqlGun = async (fark: number): Promise<string> =>
     (await vt().tek<{ g: string }>('SELECT (current_date + $1::int)::text AS g', [fark]))?.g ?? '';
-  const ata = (tur: Tur, hedefId: number, kisiId: number, yuzde: unknown, baslangic?: string) =>
+  // 3616: atama kuralı testleri dışında kişiye hedefin istasyonunda yetkinlik verilir (atama-kurallari yetkinlik kuralını ayrıca sınar).
+  const yetkinlikVer = async (tur: Tur, hedefId: number, kisiId: number): Promise<void> => {
+    if (tur === 'ekip') return;
+    const istasyonId = tur === 'istasyon' ? hedefId : (await vt().tek<{ i: number }>('SELECT istasyon_id AS i FROM makine WHERE id = $1', [hedefId]))?.i;
+    await vt().sorgu('INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) SELECT k.id, i.id FROM kisi k, istasyon i WHERE k.id = $1 AND i.id = $2 ON CONFLICT DO NOTHING', [kisiId, istasyonId]);
+  };
+  const ata = async (tur: Tur, hedefId: number, kisiId: number, yuzde: unknown, baslangic?: string) => {
+    await yetkinlikVer(tur, hedefId, kisiId);
+    return ataHam(tur, hedefId, kisiId, yuzde, baslangic);
+  };
+  const ataHam = (tur: Tur, hedefId: number, kisiId: number, yuzde: unknown, baslangic?: string) =>
     yaz<AtamaCevabi>(`/${YOLLAR[tur].yaz.replace('{id}', String(hedefId))}/ata`, { kisiId, yuzde, ...(baslangic === undefined ? {} : { baslangic }) });
   const cikar = (tur: Tur, hedefId: number, kisiId: number, baslangic?: string) =>
     yaz<AtamaCevabi>(`/${YOLLAR[tur].yaz.replace('{id}', String(hedefId))}/${kisiId}/cikar`, baslangic === undefined ? undefined : { baslangic });
@@ -182,6 +193,50 @@ describe('istasyonlar: ekip ve kapasite (gerçek PostgreSQL)', () => {
     makine2: await makineKur(),
     ekip: (await ekipKur()).id,
     ekip2: (await ekipKur()).id,
+  });
+
+  // 3616: istasyon ve makine ataması atamanın başlangıç gününde geçerli yetkinlik ister; ekip ataması istemez; mevcut atamalar yerinde kalır.
+  test('3616: yetkinliği olmayan kişi istasyona atanamaz (400); yetkinlik verilince atanır; ekip ataması yetkinlik istemez', async () => {
+    const h = await hedefKur();
+    const kisi = await kisiEkle('Deneme Yetkinliksiz');
+    const red = await ataHam('istasyon', h.istasyon, kisi, '10');
+    assert.deepEqual([red.durum, hataKodu(red)], [400, 'DOGRULAMA']);
+    assert.match((red.govde as { mesaj?: string }).mesaj ?? '', /yetkinliği yok/);
+    assert.deepEqual(await liste('istasyon', h.istasyon), []);
+    await yetkinlikVer('istasyon', h.istasyon, kisi);
+    assert.equal((await ataHam('istasyon', h.istasyon, kisi, '10')).durum, 200);
+    assert.equal((await ataHam('ekip', h.ekip, kisi, '10')).durum, 200);
+  });
+
+  test('3616: makine kuralı plan ve terminalle aynı: istasyon yetkinliği şart; kayıtlı makinede yalnız kaydı olan, kayıtsız makinede istasyon yetkinliği yeter', async () => {
+    const ist = await istasyonKur();
+    const kayitsiz = (await yaz<{ id: number }>('/makineler', { kod: yeniKod('EK'), ad: 'Kayıtsız', istasyonId: ist.id })).govde.id;
+    const kayitli = (await yaz<{ id: number }>('/makineler', { kod: yeniKod('EK'), ad: 'Kayıtlı', istasyonId: ist.id })).govde.id;
+    const istasyonsuz = (await yaz<{ id: number }>('/makineler', { kod: yeniKod('EK'), ad: 'İstasyonsuz' })).govde.id;
+    const [yetkinsiz, sadeceIstasyon, kayitliKisi] = [await kisiEkle('Deneme Makinesiz'), await kisiEkle('Deneme Sadece İstasyon'), await kisiEkle('Deneme Makineli')];
+    await yetkinlikVer('istasyon', ist.id, sadeceIstasyon);
+    await yetkinlikVer('istasyon', ist.id, kayitliKisi);
+    await vt().sorgu('INSERT INTO istasyonlar_makine_yetkinlik (kisi_id, makine_id, veren_kisi_id) VALUES ($1, $2, $3)', [kayitliKisi, kayitli, yoneticiId]);
+    assert.equal((await ataHam('makine', kayitsiz, yetkinsiz, '10')).durum, 400);
+    assert.equal((await ataHam('makine', kayitsiz, sadeceIstasyon, '10')).durum, 200);
+    assert.equal((await ataHam('makine', kayitli, sadeceIstasyon, '10')).durum, 400);
+    assert.equal((await ataHam('makine', kayitli, kayitliKisi, '10')).durum, 200);
+    await yetkinlikVer('istasyon', ist.id, yetkinsiz);
+    assert.equal((await ataHam('makine', istasyonsuz, yetkinsiz, '10')).durum, 400);
+  });
+
+  test('3616: yetkinlik atamanın başlangıç gününde aranır; mevcut atama yetkinlik bitince yerinde kalır', async () => {
+    const h = await hedefKur();
+    const kisi = await kisiEkle('Deneme Bitişli');
+    await yetkinlikVer('istasyon', h.istasyon, kisi);
+    await vt().sorgu("UPDATE istasyonlar_yetkinlik SET gecerlilik_bitis = current_date + 2 WHERE kisi_id = $1 AND istasyon_id = $2", [kisi, h.istasyon]);
+    const bitisSonrasi = await sqlGun(5);
+    const red = await ataHam('istasyon', h.istasyon, kisi, '10', bitisSonrasi);
+    assert.deepEqual([red.durum, hataKodu(red)], [400, 'DOGRULAMA']);
+    assert.equal((await ataHam('istasyon', h.istasyon, kisi, '10', await sqlGun(1))).durum, 200);
+    await vt().sorgu("UPDATE istasyonlar_yetkinlik SET gecerlilik_bitis = current_date - 1 WHERE kisi_id = $1 AND istasyon_id = $2", [kisi, h.istasyon]);
+    assert.deepEqual((await tumListe('istasyon', h.istasyon, await sqlGun(1))).map((k) => k.kisiId), [kisi]);
+    assert.equal((await ataHam('istasyon', h.istasyon, kisi, '20')).durum, 400);
   });
 
   test('IK1: kişi birden çok istasyona ve makineye yüzdeyle atanır; yüzdeler tek toplamdır, 100\'ü geçen atama reddedilir', async () => {
@@ -287,6 +342,8 @@ describe('istasyonlar: ekip ve kapasite (gerçek PostgreSQL)', () => {
   test('IK1: aynı kişiye iki işlemin ataması kişi kilidinde sıralanır; farklı türlerde toplam birlikte aşılamaz', async () => {
     const h = await hedefKur();
     const kisi = await kisiEkle('Deneme Yarış');
+    await yetkinlikVer('istasyon', h.istasyon, kisi);
+    await yetkinlikVer('makine', h.makine, kisi);
     const o = await kilitSinamasi(
       kisi,
       (db) => servis.atamaYap(db, 'istasyon', h.istasyon, { kisiId: kisi, yuzde: '60' }),

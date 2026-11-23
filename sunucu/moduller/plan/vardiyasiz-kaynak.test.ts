@@ -9,6 +9,11 @@ import { PAROLA, planTestOrtami } from './plan-ortak.test.ts';
 
 // B-2483-5, B-2483-6 (168 b): vardiyası tanımlanmamış makine sürekli çalışır sayılmaz; tanımlı ama ufukta 0 dakikalı kaynak tanımsız
 // sayılmaz, kapasitesi 0'dır. Veriler uydurmadır.
+// 3616: istasyon ve makine ataması yetkinlik ister; bu test atamanın kuralını değil okuduğu sonucu sınar, atamayı doğrudan yazar.
+async function atamaYaz(db: { sorgu: (sql: string, p?: unknown[]) => Promise<unknown> }, tur: 'istasyon' | 'makine', hedefId: number | string, kisiId: number, yuzde: string): Promise<void> {
+  await db.sorgu(`INSERT INTO ${tur}_kisi (${tur}_id, kisi_id, baslangic, yuzde) VALUES ($1, $2, CURRENT_DATE, $3)`, [Number(hedefId), kisiId, yuzde]);
+}
+
 describe('vardiyası tanımsız ve sıfır kapasiteli kaynak', () => {
   test('vardiyasiTanimsiz: takvim yok, matris boş tanımsız; tanımlı 0 dakika tanımlı; eski cevapta bütün günleri 0 olan tanımsız', () => {
     const gun = (dakika: number) => ({ dakika });
@@ -59,7 +64,7 @@ describe('vardiyası tanımsız ve sıfır kapasiteli kaynak', () => {
     test('vardiyası seçilmemiş kişiye elle yerleştirme 409; iş yerleşmemişte, nedeni "Kişinin vardiyası seçilmemiş."', async () => {
       const { istasyonA } = durum();
       const kisi = await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme vardiyasiz kisi', kullaniciAdi: 'vskisi', parola: PAROLA }));
-      await tamam(c.yonetici, 'POST', `/istasyonlar/${String(istasyonA)}/kisiler/ata`, { kisiId: kisi, yuzde: '100.00' });
+      await atamaYaz(vt(), 'istasyon', istasyonA, kisi, '100.00');
       const [is] = await isEmirleriAc([yeniAdim({ ad: 'Deneme el isi', kaynak: { tur: 'kisi', id: kisi } })]);
       let p: PlanCevabi = await planOku();
       const bas = new Date(tesisGunBasi(tesisGunu(Date.now())) + 2 * 86_400_000 + 10 * 3_600_000).toISOString();

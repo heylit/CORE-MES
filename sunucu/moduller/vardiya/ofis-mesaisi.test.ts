@@ -19,6 +19,11 @@ const PAROLA = 'dogru-parola-1';
 const HAFTA = { baslangic: '2099-10-05', bitis: '2099-10-11' };
 const PZT_CUM = ['2099-10-05', '2099-10-06', '2099-10-07', '2099-10-08', '2099-10-09'];
 
+// 3616: istasyon ve makine ataması yetkinlik ister; bu test atamanın kuralını değil okuduğu sonucu sınar, atamayı doğrudan yazar.
+async function atamaYaz(db: { sorgu: (sql: string, p?: unknown[]) => Promise<unknown> }, tur: 'istasyon' | 'makine', hedefId: number | string, kisiId: number, yuzde: string): Promise<void> {
+  await db.sorgu(`INSERT INTO ${tur}_kisi (${tur}_id, kisi_id, baslangic, yuzde) VALUES ($1, $2, CURRENT_DATE, $3)`, [Number(hedefId), kisiId, yuzde]);
+}
+
 describe('vardiya (gerçek PostgreSQL): ofis mesaisi ve iş günü (2452)', () => {
   let ortam: TestVeritabani | undefined;
   let app: FastifyInstance;
@@ -194,7 +199,7 @@ describe('vardiya (gerçek PostgreSQL): ofis mesaisi ve iş günü (2452)', () =
     await tamam(c.ikci, 'POST', `/departman-vardiyalari/${String(d)}/belirle`, { vardiyaId: ofis });
     const k = await kisi();
     await personel(k, d);
-    await tamam(c.yonetici, 'POST', `/istasyonlar/${String(istasyon)}/kisiler/ata`, { kisiId: k, yuzde: '100.00' });
+    await atamaYaz(ortam!.vt, 'istasyon', istasyon, k, '100.00');
     assert.deepEqual(await gunler(k), { gunler: ['2099-10-05', '2099-10-11'], izinliGunler: [], kaynak: 'is-merkezi', vardiyaId: null });
     assert.equal((await tamam<OfisMesaisiCevabi>(c.ikci, 'GET', '/vardiya-ofis')).personel.some((p) => p.kisiId === k), false);
   });

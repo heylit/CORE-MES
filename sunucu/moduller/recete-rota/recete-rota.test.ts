@@ -30,6 +30,11 @@ function dolu(c: DurumCevabi): Dolu {
 
 interface Kayit { anahtar: string; bicim: 'json' | 'metin'; deger: unknown; surum: number }
 
+// 3616: istasyon ve makine ataması yetkinlik ister; bu test atamanın kuralını değil okuduğu sonucu sınar, atamayı doğrudan yazar.
+async function atamaYaz(db: { sorgu: (sql: string, p?: unknown[]) => Promise<unknown> }, tur: 'istasyon' | 'makine', hedefId: number | string, kisiId: number, yuzde: string): Promise<void> {
+  await db.sorgu(`INSERT INTO ${tur}_kisi (${tur}_id, kisi_id, baslangic, yuzde) VALUES ($1, $2, CURRENT_DATE, $3)`, [Number(hedefId), kisiId, yuzde]);
+}
+
 describe('recete-rota kayıt deposu (gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
   let app: FastifyInstance;
@@ -468,7 +473,7 @@ describe('recete-rota kayıt deposu (gerçek PostgreSQL)', () => {
     const [a, b] = [await merkez('RRK-A'), await merkez('RRK-B')];
     const [a1, a2, b1] = [await istasyon('RRK-A1', a), await istasyon('RRK-A2', a), await istasyon('RRK-B1', b)];
     const kisi = await vt().tx((db) => yoneticiOlustur(db, { ad: 'RRK personel', kullaniciAdi: 'rrkpersonel', parola: PAROLA }));
-    for (const i of [a1, b1]) assert.equal((await istek(tam, 'POST', `/istasyonlar/${i}/kisiler/ata`, { kisiId: kisi, yuzde: '50.00' })).statusCode, 200);
+    for (const i of [a1, b1]) await atamaYaz(vt(), 'istasyon', i, kisi, '50.00');
     await komut('/fazla-mesai', { tarih: gun(2), baslangic: '18:00', bitis: '20:00', kapsam: 'istasyon', istasyonId: a2, kisiIdleri: [kisi] });
     await komut('/ik/personel/emp_rrk/kaydet', { govde: { id: 'emp_rrk', kind: 'emp', ad: 'RRK', soyad: 'Personel', isMerkeziId: a, kisiId: kisi }, surum: null });
     // Gün bugüne göredir ve hafta sonuna düşebilir: takvim günüyle sayılan izin türü (yıllık izin iş günüyle sınırlı, soru 55).
@@ -501,9 +506,9 @@ describe('recete-rota kayıt deposu (gerçek PostgreSQL)', () => {
       await vt().tx((db) => yoneticiOlustur(db, { ad: 'RRM makineci', kullaniciAdi: 'rrmmakineci', parola: PAROLA })),
       await vt().tx((db) => yoneticiOlustur(db, { ad: 'RRM iki atama', kullaniciAdi: 'rrmiki', parola: PAROLA })),
     ];
-    assert.equal((await istek(tam, 'POST', `/makineler/${mk}/kisiler/ata`, { kisiId: yalniz, yuzde: '60.00' })).statusCode, 200);
-    assert.equal((await istek(tam, 'POST', `/makineler/${mk}/kisiler/ata`, { kisiId: ikisi, yuzde: '40.00' })).statusCode, 200);
-    assert.equal((await istek(tam, 'POST', `/istasyonlar/${ist}/kisiler/ata`, { kisiId: ikisi, yuzde: '20.00' })).statusCode, 200);
+    await atamaYaz(vt(), 'makine', mk, yalniz, '60.00');
+    await atamaYaz(vt(), 'makine', mk, ikisi, '40.00');
+    await atamaYaz(vt(), 'istasyon', ist, ikisi, '20.00');
     const k = (await istek(tam, 'GET', '/plan/planlama-kapasitesi')).json() as KapasiteCevabi;
     assert.deepEqual(k.kisiler?.find((x) => x.id === String(yalniz))?.paylar, [{ wcId: String(m), pay: 0.6 }]);
     assert.deepEqual(k.kisiler?.find((x) => x.id === String(ikisi))?.paylar, [{ wcId: String(m), pay: 0.6 }]);
@@ -523,8 +528,8 @@ describe('recete-rota kayıt deposu (gerçek PostgreSQL)', () => {
     const makine = (await yaz('/makineler', { kod: 'RRW-M1', ad: 'RRW makine', istasyonId: ist }) as { id: number }).id;
     const kisi = async (ad: string) => vt().tx((db) => yoneticiOlustur(db, { ad: `RRW ${ad}`, kullaniciAdi: `rrw${ad}`, parola: PAROLA }));
     const [makineci, ayrilan, pasif] = [await kisi('makineci'), await kisi('ayrilan'), await kisi('pasif')];
-    await yaz(`/makineler/${makine}/kisiler/ata`, { kisiId: makineci, yuzde: '40.00' });
-    for (const k of [ayrilan, pasif]) await yaz(`/istasyonlar/${ist}/kisiler/ata`, { kisiId: k, yuzde: '100.00' });
+    await atamaYaz(vt(), 'makine', makine, makineci, '40.00');
+    for (const k of [ayrilan, pasif]) await atamaYaz(vt(), 'istasyon', ist, k, '100.00');
     await yaz('/ik/personel/emp_rrw/kaydet', { govde: { id: 'emp_rrw', kind: 'emp', ad: 'RRW', soyad: 'Ayrılan', isMerkeziId: m, kisiId: ayrilan, cikisTarihi: gun(5) }, surum: null });
     const kayit = ((await istek(tam, 'GET', '/kisiler')).json() as { kisiler: { id: number; surum: number }[] }).kisiler.find((k) => k.id === pasif)!;
     await yaz(`/kisiler/${pasif}/pasife-al`, { surum: kayit.surum });

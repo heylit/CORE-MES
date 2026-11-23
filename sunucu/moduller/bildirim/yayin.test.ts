@@ -11,7 +11,6 @@ import {
 } from '#paylasilan/sozlesme/bildirim.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
-import { istasyonAtamasiAc } from '../istasyonlar/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { bildirimGonder } from './disari.ts';
@@ -96,7 +95,7 @@ describe('elle bildirim, ekran ortası ve onay (gerçek PostgreSQL, gerçek giri
     await kisiEkle('mudur', 'mudur');
     const im = await ortam.sahip.tek<{ id: number }>("INSERT INTO is_merkezi (kod, ad) VALUES ('BYIM', 'Deneme Merkezi') RETURNING id");
     istasyonId = (await ortam.sahip.tek<{ id: number }>("INSERT INTO istasyon (kod, ad, is_merkezi_id, aktif) VALUES ('BYIS', 'Deneme torna', $1, true) RETURNING id", [im!.id]))!.id;
-    await ortam.vt.tx((db) => istasyonAtamasiAc(db, { istasyonId, kisiId: kim('operator2') }));
+    await ortam.sahip.sorgu('INSERT INTO istasyon_kisi (istasyon_id, kisi_id, baslangic, yuzde) VALUES ($1, $2, CURRENT_DATE, 100)', [istasyonId, kim('operator2')]);
   });
   after(async () => {
     await app?.close();

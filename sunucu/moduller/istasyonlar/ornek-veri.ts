@@ -88,12 +88,12 @@ export const ornekVeri = ornekVeriTanimi({
     const ekip = await servis.ekipEkle(db, { kod: EKIP.kod, ad: EKIP.ad, istasyonId: istasyonlar.get(EKIP.istasyon)!, aktif: true });
     hedefler.ekip.set(EKIP.kod, ekip.id);
 
-    for (const a of ATAMALAR) {
-      await servis.atamaYap(db, a.tur, hedefler[a.tur].get(a.hedef)!, { kisiId: await kisiNo(db, a.kullanici), yuzde: '100' });
-    }
-
     for (const y of YETKINLIKLER) {
       await servis.yetkinlikYaz(db, sorumlu, await kisiNo(db, y.kullanici), y.istasyonlar.map((kod) => istasyonlar.get(kod)!));
+    }
+
+    for (const a of ATAMALAR) {
+      await servis.atamaYap(db, a.tur, hedefler[a.tur].get(a.hedef)!, { kisiId: await kisiNo(db, a.kullanici), yuzde: '100' });
     }
   },
 });

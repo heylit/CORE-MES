@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import type { AtamaTuru, KisiIsMerkezleriCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type { TakvimCevabi } from '#paylasilan/sozlesme/vardiya.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
@@ -84,14 +84,20 @@ function PersonelKarti({ k, v, y, yazabilir, yetkinlikYazabilir, kisitYazabilir,
   };
   // Yüzlerce hedefte düz liste kaydırarak aranıyordu (kart #1296): seçici aranır, istasyonlar iş merkezine göre, makineler ve ekipler ayrı gruptadır.
   const istasyonlar = istasyonSecenekleri(v.merkezler, v.istasyonlar);
+  // 3616: istasyon ve makine yalnız kişinin yetkin olduğu hedeflerden seçilir (sunucu da reddeder). Yetkinliği süresi dolmuş istasyon listede
+  // yoktur. Makinede kayıt varsa (başka kişide de) yalnız kaydı olan kişi seçer; kayıtsız makine istasyon yetkinliğiyle açıktır (563 c).
+  const makineYetkin = yetkinlik?.makineIdleri ?? [];
+  const makineYetkinSet = new Set(makineYetkin);
+  const gecerliYetkin = new Set((yetkinlik?.ayrintilar ?? []).filter((a) => a.gecerli).map((a) => a.istasyonId));
+  const makineKayitli = new Set((v.yetkinlikler ?? []).flatMap((x) => x.makineIdleri));
   const hedefler = [
-    ...istasyonlar.map((i) => ({ ...i, deger: `istasyon:${i.deger}`, baslik: `İstasyon ${i.baslik}` })),
-    ...v.makineler.filter((m) => m.aktif).map((m) => ({ deger: `makine:${m.id}`, baslik: `Makine ${m.kod} ${m.ad}`, grup: 'Makineler' })),
+    ...istasyonlar.filter((i) => gecerliYetkin.has(Number(i.deger))).map((i) => ({ ...i, deger: `istasyon:${i.deger}`, baslik: `İstasyon ${i.baslik}` })),
+    ...v.makineler.filter((m) => m.aktif && m.istasyonId !== null && gecerliYetkin.has(m.istasyonId) && (!makineKayitli.has(m.id) || makineYetkinSet.has(m.id)))
+      .map((m) => ({ deger: `makine:${m.id}`, baslik: `Makine ${m.kod} ${m.ad}`, grup: 'Makineler' })),
     ...(v.ekipler ?? []).filter((e) => e.aktif).map((e) => ({ deger: `ekip:${e.id}`, baslik: `Ekip ${e.kod} ${e.ad}`, grup: 'Ekipler' })),
   ];
   const yetkinlikYaz = (idler: number[]) => y.gonder({ yol: `/kisi-yetkinlikleri/${k.id}/belirle`, govde: { istasyonIdleri: idler }, satir });
   // 563 c: kişinin baktığı makineler yalnız yetkin olduğu istasyonlardan seçilir; istasyon yetkinliği kalkınca sunucu bunları da kaldırır.
-  const makineYetkin = yetkinlik?.makineIdleri ?? [];
   const makineYaz = (idler: number[]) => y.gonder({ yol: `/kisi-yetkinlikleri/${k.id}/makineler/belirle`, govde: { makineIdleri: idler }, satir });
   const makineSecenekleri = v.makineler.filter((m) => m.aktif && m.istasyonId !== null && yetkin.includes(m.istasyonId) && !makineYetkin.includes(m.id))
     .map((m) => ({ deger: String(m.id), baslik: `${m.kod} ${m.ad}`, grup: v.istasyonlar.find((i) => i.id === m.istasyonId)?.kod ?? 'İstasyon' }));
@@ -160,12 +166,15 @@ function PersonelKarti({ k, v, y, yazabilir, yetkinlikYazabilir, kisitYazabilir,
                 )}
               </span>
             ))}
+            {yazabilir && v.yetkinlikler && gecerliYetkin.size === 0 && (
+              <small className="tc-ist-ipucu">Atamak için önce yetkinlik ekleyin: istasyon ve makine yalnız yetkin olunanlardan seçilir.</small>
+            )}
             {yazabilir && (
               <span className="tc-ist-ata-satir">
                 <AranabilirSecim etiket={`${k.ad} için atanacak yer`} tur="hedef" deger={hedef} yerTutucu="+ Ata…" secenekler={hedefler} sec={hedefYaz} disabled={kapali} />
                 {hedef !== '' && (
                   <>
-                    <input className="tc-alan-kutu tc-ist-hucre tc-ist-sayi" aria-label={`${k.ad} atama yüzdesi`} inputMode="decimal" value={yuzde} onChange={(o) => yuzdeYaz(o.target.value)} />
+                    <input className="tc-alan-kutu tc-ist-hucre tc-ist-sayi" aria-label={`${k.ad} iş payı (%)`} title="Kişinin toplam iş payı %100'ü geçemez." inputMode="decimal" value={yuzde} onChange={(o) => yuzdeYaz(o.target.value)} />
                     <Dugme simge="check" disabled={kapali} onClick={ata}>Ata</Dugme>
                   </>
                 )}
@@ -313,7 +322,11 @@ function PersonelKarti({ k, v, y, yazabilir, yetkinlikYazabilir, kisitYazabilir,
 export function PersonelSekmesi({ v, y, yazabilir, yetkinlikYazabilir, ekipYazabilir, kisitYazabilir, benId, kisiAcabilir, vardiyaYazabilir }: {
   v: TesisVerisi; y: TesisYaz; yazabilir: boolean; yetkinlikYazabilir: boolean; ekipYazabilir: boolean; kisitYazabilir: boolean; benId: number; kisiAcabilir: boolean; vardiyaYazabilir: boolean;
 }) {
-  const [ara, araYaz] = useState('');
+  // 3616: İK'dan "Yetkinlik ekle" bağlantısı kişi seçili açar (/istasyonlar/personel?kisi=<id>).
+  const [adres] = useSearchParams();
+  const adresKisi = Number(adres.get('kisi')) || null;
+  const [elleAra, araYaz] = useState<string | null>(null);
+  const ara = elleAra ?? v.kisiler?.find((x) => x.id === adresKisi)?.ad ?? '';
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   // 1951: seçilen kişilere tek komutla vardiya (vardiya modülünün toplu ucu); cevap takvimin tamamıdır.
