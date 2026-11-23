@@ -2018,16 +2018,22 @@ describe('Kokpit Plan menüsü (3335-2, 3504 b)', () => {
     expect((within(secili).getByRole('menuitem', { name: 'İleriye' }) as HTMLButtonElement).disabled).toBe(true);
     // Risk K1: dizme plansız emirlere de yer bulur; satır bunu açıkça yazar.
     expect(satir(m, /Seçili siparişi baştan kur/).textContent).toMatch(/Plansız \d+ emir de yerleşir\./);
+    // 3600: menüden seçili sipariş baştan kurma penceresini o sipariş işaretli açar; komut pencerede onaylanınca yazılır.
     fireEvent.click(satir(m, /Seçili siparişi baştan kur/));
+    const sp = await screen.findByRole('dialog', { name: 'Planı baştan kur' });
+    expect(within(sp).getByRole('radio', { name: /Seçili siparişler/ }).getAttribute('aria-checked')).toBe('true');
+    expect(within(sp).getAllByRole('checkbox').filter((x) => (x as HTMLInputElement).checked)).toHaveLength(1);
+    fireEvent.click(within(sp).getByRole('button', { name: '1 siparişi baştan kur' }));
     await waitFor(() => { expect(komutlar.at(-1)).toEqual({ tur: 'yeniden-planla', isler: ['3'] }); });
+    expect(screen.queryByRole('dialog', { name: 'Planı baştan kur' })).toBeNull();
     fireEvent.click(satir(await menu(), /Baştan kur…/));
     // Baştan kurma onay ister (3504 b): Vazgeç hiçbir komut yazmaz; onaylanınca bütün planı taşıyan komut yazılır.
-    fireEvent.click(within(screen.getByRole('dialog', { name: 'Plan baştan kurulsun mu?' })).getByRole('button', { name: 'Vazgeç' }));
-    expect(screen.queryByRole('dialog', { name: 'Plan baştan kurulsun mu?' })).toBeNull();
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Planı baştan kur' })).getByRole('button', { name: 'Vazgeç' }));
+    expect(screen.queryByRole('dialog', { name: 'Planı baştan kur' })).toBeNull();
     await new Promise((r) => { setTimeout(r, 0); });
     expect(komutlar).toHaveLength(2);
     fireEvent.click(satir(await menu(), /Baştan kur…/));
-    fireEvent.click(within(screen.getByRole('dialog', { name: 'Plan baştan kurulsun mu?' })).getByRole('button', { name: 'Baştan kur' }));
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Planı baştan kur' })).getByRole('button', { name: 'Bütün planı baştan kur' }));
     await waitFor(() => { expect(komutlar.at(-1)).toEqual({ tur: 'yeniden-planla', isler: ['*'] }); });
     expect(komutlar).toHaveLength(3);
   });
@@ -2069,6 +2075,8 @@ describe('Kokpit Plan menüsü (3335-2, 3504 b)', () => {
     const yeniden = satir(m, /Seçili siparişi baştan kur/);
     expect(yeniden.disabled).toBe(false);
     fireEvent.click(yeniden);
+    const pencere = await screen.findByRole('dialog', { name: 'Planı baştan kur' });
+    fireEvent.click(within(pencere).getByRole('button', { name: '1 siparişi baştan kur' }));
     await waitFor(() => { expect(komutlar).toHaveLength(2); });
     expect(komutlar[1]).toEqual({ tur: 'yeniden-planla', isler: ['3'] });
   });
@@ -2163,6 +2171,7 @@ describe('Kokpit Plan menüsü (3335-2, 3504 b)', () => {
     const m = await menu();
     await waitFor(() => { expect(satir(m, /Seçili siparişi baştan kur/).disabled).toBe(false); });
     fireEvent.click(satir(m, /Seçili siparişi baştan kur/));
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Planı baştan kur' })).getByRole('button', { name: '1 siparişi baştan kur' }));
     await waitFor(() => { expect(komutlar.at(-1)).toEqual({ tur: 'yeniden-planla', isler: ['3'] }); });
   });
 

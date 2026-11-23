@@ -236,6 +236,64 @@ describe('kişinin taslağı (gerçek PostgreSQL)', () => {
     assert.equal(g.taslak, null);
   });
 
+  test('TS-16 (3600): kilitleri kaldıran baştan kurma plan.kilitle ister (komutta ve Uygula\'da); kilit görünümde kalkar, Geri al getirir, ortak çalışma Uygula\'ya dek değişmez', async () => {
+    const kilitli = await islemliKisi('kilitleyen', ['plan.oku', 'plan.yaz', 'plan.kilitle']);
+    const kayit = { plan: { dataVer: 0, ops: { 'ORN-E.10': { m: 'T1', S: 8, job: 'ORN-E' }, 'ORN-E.20': { m: 'T1', S: 12, job: 'ORN-E', act: 1 } } }, locks: { 'ORN-E.10': { m: 'T1', S: 8 }, 'ORN-E.20': { m: 'T1', S: 12 } }, D: { ...calisma.D, siparisler: [{ id: 'ORN-E' }] } };
+    const eskiDeger = JSON.stringify(await ortak());
+    await vt().sorgu('DELETE FROM plan_taslagi', []);
+    await vt().sorgu(`UPDATE plan_planlama_kaydi SET deger = deger || $2::jsonb WHERE anahtar = $1`, [PLANLAMA_ANAHTARI, JSON.stringify(kayit)]);
+    try {
+      const komut = { tur: 'yeniden-planla', isler: ['*'], kilitKaldir: true };
+      // Yalnız plan.yaz olan kişi kilit kaldıramaz; kilitsiz baştan kurmayı yazabilir.
+      await istek(b, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut }, 403);
+      const duz = await istek<TaslakCevabi>(b, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut: { tur: 'yeniden-planla', isler: ['*'] } });
+      assert.deepEqual((duz.calisma?.['locks'] as Record<string, unknown>), kayit.locks);
+      await istek(b, 'POST', '/plan/taslagim/geri-al', { taslakSurumu: duz.taslak!.surum });
+      // plan.kilitle olan yazar; başlamış (act) işin kilidi kalkmaz.
+      const t = await istek<TaslakCevabi>(kilitli, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut });
+      assert.deepEqual(Object.keys(t.calisma?.['locks'] as object), ['ORN-E.20']);
+      assert.deepEqual(t.taslak?.satirlar.map((x) => [x.ne, x.hata]), [['Bütün plan baştan kurulacak; kilitler kalkar', null]]);
+      assert.equal((t.calisma?.['bekleyen'] as { kilitsiz?: boolean }[]).at(-1)?.kilitsiz, true);
+      assert.deepEqual(await ortak(), { ...JSON.parse(eskiDeger), ...kayit }, 'ortak çalışma değişmedi');
+      // Uygula'da yetki yeniden denetlenir: yetki arada alındıysa komut yazılmaz.
+      await vt().sorgu(`DELETE FROM rol_islemi WHERE islem = 'plan.kilitle' AND rol_id = (SELECT id FROM rol WHERE kod = 'test_kilitleyen')`, []);
+      await istek(kilitli, 'POST', '/plan/taslagim/uygula', { taslakSurumu: t.taslak!.surum }, 403);
+      await vt().sorgu(`INSERT INTO rol_islemi (rol_id, islem) SELECT id, 'plan.kilitle' FROM rol WHERE kod = 'test_kilitleyen'`, []);
+      const g = await istek<TaslakCevabi>(kilitli, 'POST', '/plan/taslagim/geri-al', { taslakSurumu: t.taslak!.surum });
+      assert.equal(g.taslak, null);
+    } finally {
+      await vt().sorgu('DELETE FROM plan_taslagi', []);
+      await vt().sorgu(`UPDATE plan_planlama_kaydi SET deger = $2::jsonb WHERE anahtar = $1`, [PLANLAMA_ANAHTARI, eskiDeger]);
+    }
+  });
+
+  test('TS-17 (3600): başlamış işi dizmek plan.baslamis-diz ister (plan.kilitle yetmez; komutta ve Uygula\'da); yönetici yazar, işaret görünümde, Geri al alır, ortak çalışma değişmez', async () => {
+    const kilitli = await islemliKisi('kilitleyen2', ['plan.oku', 'plan.yaz', 'plan.kilitle']);
+    const kayit = { plan: { dataVer: 0, ops: { 'ORN-E.10': { m: 'T1', S: 8, job: 'ORN-E' }, 'ORN-E.20': { m: 'T1', S: 12, job: 'ORN-E', act: 1 } } }, locks: {}, w: {}, D: { ...calisma.D, siparisler: [{ id: 'ORN-E' }] } };
+    const eskiDeger = JSON.stringify(await ortak());
+    await vt().sorgu('DELETE FROM plan_taslagi', []);
+    await vt().sorgu(`UPDATE plan_planlama_kaydi SET deger = deger || $2::jsonb WHERE anahtar = $1`, [PLANLAMA_ANAHTARI, JSON.stringify(kayit)]);
+    try {
+      const komut = { tur: 'yeniden-planla', isler: ['*'], baslamisDiz: true };
+      await istek(b, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut }, 403);
+      await istek(kilitli, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut: { ...komut, kilitKaldir: true } }, 403);
+      const t = await istek<TaslakCevabi>(a, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut });
+      assert.deepEqual((t.calisma?.['w'] as { durdurulan?: unknown }).durdurulan, { 'ORN-E.20': 1 });
+      assert.deepEqual(t.taslak?.satirlar.map((x) => [x.ne, x.hata]), [['Bütün plan baştan kurulacak; başlamış işler dahil', null]]);
+      assert.deepEqual(await ortak(), { ...JSON.parse(eskiDeger), ...kayit }, 'ortak çalışma değişmedi');
+      // Uygula'da yetki yeniden denetlenir: komutu yazan sonradan yetkisiz kalmışsa durur.
+      const oturum = await islemliKisi('baslamis_diz_gecici', ['plan.oku', 'plan.yaz', 'plan.baslamis-diz']);
+      const t2 = await istek<TaslakCevabi>(oturum, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut });
+      await vt().sorgu(`DELETE FROM rol_islemi WHERE islem = 'plan.baslamis-diz' AND rol_id = (SELECT id FROM rol WHERE kod = 'test_baslamis_diz_gecici')`, []);
+      await istek(oturum, 'POST', '/plan/taslagim/uygula', { taslakSurumu: t2.taslak!.surum }, 403);
+      const g = await istek<TaslakCevabi>(a, 'POST', '/plan/taslagim/geri-al', { taslakSurumu: t.taslak!.surum });
+      assert.equal(g.taslak, null);
+    } finally {
+      await vt().sorgu('DELETE FROM plan_taslagi', []);
+      await vt().sorgu(`UPDATE plan_planlama_kaydi SET deger = $2::jsonb WHERE anahtar = $1`, [PLANLAMA_ANAHTARI, eskiDeger]);
+    }
+  });
+
   test('TS-10: dizme sürerken taslak değiştiyse yazılmaz (409); başkası plan ayarını değiştirince dizme bayatlar, Uygula durur', async () => {
     const t = await istek<TaslakCevabi>(a, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut: ayar({ dondurma: 13 }) });
     // Hesap bitmeden yazılmaz.

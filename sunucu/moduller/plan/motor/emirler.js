@@ -27,6 +27,11 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
   tmiTabanKur(S0.D, bugun);
   baslangicTazele(S0, Date.parse(istek.simdi));
   Object.assign(S0, { locks: {}, olaylar: [], gercek: {}, rrSavedAt: -1 });
+  /* 3600: durdurulan (w) planlama ekranının varsayımıdır; terminalde süren iş sunucuda durmadı. İşaretin tamamı boşaltılır: kuyrukta olmayan
+     çalışan adım yerinde ve kalan süresiyle sabit kalır, ardılı bitişinden sonraya dizilir (işaret kalsa çalışan kaydı silinir, adım şimdi
+     bitmiş sayılır). Öteki durdurulanlarda işaretin etkisi zaten yoktur: kuyruktaki çalışan adımın kaydı motora gitmez, kalan adedi aşağıda
+     okunandan kurulur; artık sürmeyen adımın çalışan kaydı yoktur. */
+  if (S0.w && S0.w.durdurulan) S0.w = Object.assign({}, S0.w, { durdurulan: {} });
   const nolar = new Set();
   for (const a of [...istek.kuyruklar.flatMap(q => q.anahtarlar), ...(istek.kisiKuyruklari || []).flatMap(q => q.anahtarlar), ...istek.sabitler.map(x => x.anahtar),
     ...(istek.kisiSabitleri || []).map(x => x.anahtar), ...istek.calisanlar.map(x => x.anahtar)]) nolar.add(a.slice(0, a.lastIndexOf('|')));

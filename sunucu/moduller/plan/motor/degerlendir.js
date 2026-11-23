@@ -574,16 +574,28 @@ function acikIstek(isler) {
   const istekDisi = b => Array.isArray(b.geri) && b.geri.length > 0 && b.geri.every(g => g && Array.isArray(g.yol) && ISTEK_DISI_YOL.has(g.yol[0]));
   return new Set(l.filter(b => !istekDisi(b)).flatMap(b => b.isler));
 }
+/* 3600: "kilitsiz" işaretli bekleyen satırın emirlerinde (ya da '*') dizme denge bölgesinin geçici kilidini tutmaz; elle kilit komut anında
+   çalışmadan kalkmıştır, burada yalnız dengeKilit'in koyduğu geçici kilit düşer. Seçilmeyen emirler `!hepsi` kilidiyle yerinde kalır. */
+function kilitsizEmirler() {
+  const l = Array.isArray(S.bekleyen) ? S.bekleyen.filter(b => b && b.kilitsiz === true && Array.isArray(b.isler)) : [];
+  return new Set(l.flatMap(b => b.isler));
+}
 function planUygula(isler) {
   const hepsi = isler.includes('*'), etk = new Set(isler);
   const acik = acikIstek(isler), acikHepsi = acik.has('*');
   const st = stHazirla(dengeKilit(stOf())); const var_ = new Set(st.D.siparisler.map(s => s.id));
+  const ks = kilitsizEmirler();
+  if (ks.size) for (const r of Object.values(S.plan.ops)) if ((ks.has('*') || ks.has(r.job)) && st.locks[r.id] && st.locks[r.id].gecici) delete st.locks[r.id];
   if (!hepsi) for (const r of Object.values(S.plan.ops)) if (!etk.has(r.job) && var_.has(r.job) && !st.locks[r.id] && !r.fas && !r.done && isFinite(r.S)) st.locks[r.id] = { m: r.m, S: r.S, gecici: 1 };
   /* 3335-2b: istenen emirlerin geride kalan işleri (başlaması geçmiş, başlamamış, bitmemiş, fason ve elle kilitli olmayan) şimdiden sonraya
      yeniden dizilir. Motor böyle işi kendiliğinden yerinde tutar (çalışıyor sayar); yeniden planlama kişinin açık isteğidir. Başvuru
      planından da çıkar: değişiklik bütçesi işi eski yerine geri çekmesin. İstenmeyen emirlerin geride işleri yerinde kalır. */
   const geride = {}; const g = st.gercek || {};
-  for (const r of Object.values(S.plan.ops)) if ((hepsi || etk.has(r.job)) && (acikHepsi || acik.has(r.job)) && var_.has(r.job) && !st.locks[r.id] && !r.fas && !r.done && !r.act && !(g[r.id] && g[r.id].S != null) && isFinite(r.S) && r.S < st.now - 1e-9 && r.C > st.now + 1e-9) geride[r.id] = 1;
+  /* 3600: durdurulan (başlamış, kalanı dizilecek) iş de geride işi gibi şimdiden sonraya dizilir; yapılan kısım geçmişte kalır, kalan adet motora girdide verilir. */
+  const dur = S.w && S.w.durdurulan && typeof S.w.durdurulan === 'object' ? S.w.durdurulan : {};
+  for (const r of Object.values(S.plan.ops)) if ((hepsi || etk.has(r.job)) && (acikHepsi || acik.has(r.job)) && var_.has(r.job) && !st.locks[r.id] && !r.fas && !r.done && (!r.act || dur[r.id]) && !(g[r.id] && g[r.id].S != null) && isFinite(r.S) && r.S < st.now - 1e-9 && r.C > st.now + 1e-9) geride[r.id] = 1;
+  /* R1: başlamış işin kalanı aynı tezgâhta kalır (terminaldeki kişi ve makine plandan ayrışmasın); yalnız zaman ve sıra değişir. */
+  for (const id of Object.keys(geride)) if (dur[id] && !st.locks[id] && S.plan.ops[id].m) st.pref[id] = S.plan.ops[id].m;
   const gerideVar = Object.keys(geride).length > 0; if (gerideVar) st.geride = geride;
   /* Geride işi olan emrin öteki işleri denge ufku için geçici kilitlenmiş olabilir; kilitli ardıl eski saatinde kalır ve ileri kayan
      öncülünden önce başlardı. O emrin geçici kilitleri kalkar (elle kilit durur). */
