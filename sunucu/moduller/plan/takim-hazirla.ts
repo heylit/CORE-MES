@@ -2,7 +2,8 @@ import type { Db } from '#cekirdek/db.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import { calismaPlani, type CalismaPlani } from './plan-girdisi.ts';
 import { PLANLAMA_ANAHTARI, planCozumKaynagi } from './planlama-servis.ts';
-import { planlanacakIsler } from './servis.ts';
+import { kimlikEmireCevir, motorAnahtarlari } from './planlama-kurallar.ts';
+import { motorNumaralariOku, planlanacakIsler } from './servis.ts';
 import * as sorgular from './sorgular.ts';
 
 // 3199 (D): hazırlığın "Takım hazırla" maddesi. Motor özel takımın ömrü işe yetmezse işin içine değişim süresi koyar ve bunu kayıtlı
@@ -23,13 +24,17 @@ export function takimDegisimliIsler(plan: Pick<CalismaPlani, 'kimlik' | 'ops'> |
 
 // Çalışmayı okumak motor girdisini kurar (pahalı); kayıt sürümü ve tesis günü değişmedikçe sonuç aynıdır.
 let bellek: { surum: number; gun: string; isler: Set<string> } | null = null;
-async function degisimliIsler(db: Db, simdi: number): Promise<Set<string>> {
+// 3615: çalışma planının kimliği motorun numarasıyla gelir; iş emrinin numarasına çevrilir.
+export async function degisimliIsler(db: Db, simdi: number): Promise<Set<string>> {
   const satir = await sorgular.planlamaKaydi(db, PLANLAMA_ANAHTARI);
   if (satir === null) return new Set();
   const gun = tesisGunu(simdi);
   if (bellek?.surum !== satir.surum || bellek.gun !== gun) {
     const kaynak = await planCozumKaynagi(db, simdi);
-    bellek = { surum: satir.surum, gun, isler: takimDegisimliIsler(calismaPlani({ ...kaynak, bugun: gun }, simdi)) };
+    const plan = calismaPlani({ ...kaynak, bugun: gun }, simdi);
+    const acik = plan === null ? [] : await planlanacakIsler(db, { taslakDahil: true });
+    const esle = motorAnahtarlari(acik, await motorNumaralariOku(db, acik));
+    bellek = { surum: satir.surum, gun, isler: takimDegisimliIsler(plan === null ? null : { ...plan, kimlik: kimlikEmireCevir(plan.kimlik, esle) }) };
   }
   return bellek.isler;
 }

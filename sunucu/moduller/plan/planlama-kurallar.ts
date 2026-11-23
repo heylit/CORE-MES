@@ -425,3 +425,21 @@ export function gerekenTarihler(calisma: unknown): { kod: string; gerekenTarih: 
   }
   return [...gerek].map(([kod, t]) => ({ kod, gerekenTarih: new Date(taban + Math.floor(t / 24) * 86_400_000).toISOString().slice(0, 10) }));
 }
+
+// 3615: iş emrinin adımı rotadan numarayla değil kimlikle bulunur (3250 b); motor ise adımı rotanın numarasıyla tanır. Emir anahtarı
+// ("emir no|OP no") ile motor anahtarı farklı olabilir (emir başka revizyondan açılmış, rota yeniden dizilmiş). Bu çeviri sınırdadır:
+// motora giden anahtarlar motor numarasına, motordan dönen kimlik emir numarasına çevrilir. motorNo: iş emri kimliği -> motorun numarası.
+export function motorAnahtarlari(isler: readonly { id: number; emirNo: string; opNo: number }[], motorNo: ReadonlyMap<number, number>): Map<string, string> {
+  return new Map(isler.flatMap((i) => {
+    const n = motorNo.get(i.id);
+    return n === undefined || n === i.opNo ? [] : [[`${i.emirNo}|${String(i.opNo)}`, `${i.emirNo}|${String(n)}`] as const];
+  }));
+}
+export function adimAdetleriMotora<T>(adetler: Readonly<Record<string, T>> | null | undefined, esle: ReadonlyMap<string, string>): Record<string, T> | null | undefined {
+  if (adetler == null) return adetler;
+  return Object.fromEntries(Object.entries(adetler).map(([a, n]) => [esle.get(a) ?? a, n]));
+}
+export function kimlikEmireCevir(kimlik: Readonly<Record<string, string>>, esle: ReadonlyMap<string, string>): Record<string, string> {
+  const ters = new Map([...esle].map(([emir, motor]) => [motor, emir]));
+  return Object.fromEntries(Object.entries(kimlik).map(([id, a]) => [id, ters.get(a) ?? a]));
+}
