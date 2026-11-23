@@ -12,7 +12,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { sifirlamaKapsami, yedekAdi } from './kurallar.ts';
+import { SIFIRLAMA_SURE_MS, sifirlamaKapsami, yedekAdi } from './kurallar.ts';
 import { sifirdanBaslat } from './sorgular.ts';
 
 // Örnek veriyle sıfırlama (3433): ertelenmiş kısıtlı tablolar (rota adımı, iş emri sırası, stok defteri) doluyken
@@ -74,11 +74,20 @@ describe('sıfırdan başla örnek veriyle (gerçek PostgreSQL)', () => {
     const k = sifirlamaKapsami({ kullanicilar: true, tanimlar: true });
     let sonuc: Awaited<ReturnType<typeof sifirdanBaslat>> | null = null;
     await assert.rejects(o().vt.tx(async (db) => {
-      sonuc = await sifirdanBaslat(db, { kalan: k.kalan, kismi: k.kismi, kullanicilar: true, yoneticiId });
+      sonuc = await sifirdanBaslat(db, { kalan: k.kalan, kismi: k.kismi, kullanicilar: true, yoneticiId }, SIFIRLAMA_SURE_MS);
       throw new GeriAl();
     }), GeriAl);
     assert.ok(sonuc !== null && (sonuc as { tablolar: Record<string, number> }).tablolar['rota_adimi']! > 0, JSON.stringify(sonuc));
     assert.ok(await say('rota_adimi') > 0, 'geri alınan işlem bir şey silmez');
+  });
+
+  // Süre sınırı yalnız sıfırlama transaction'ında değişir; aşılınca sunucu ifadeyi keser, işlem bütünüyle geri döner.
+  test('sıfırlamanın kendi süre sınırı aşılırsa 57014 ile kesilir, hiçbir satır silinmez', async () => {
+    const once = await say('rota_adimi');
+    const k = sifirlamaKapsami({ kullanicilar: false, tanimlar: false });
+    await assert.rejects(o().vt.tx((db) => sifirdanBaslat(db, { kalan: k.kalan, kismi: k.kismi, kullanicilar: false, yoneticiId }, 1)),
+      (h: unknown) => (h as { code?: unknown }).code === '57014');
+    assert.equal(await say('rota_adimi'), once);
   });
 
   test('kullanıcılar kalmasın: silinen her satır bir kez ve doğru başlıkta sayılır (işlem geri alınır)', async () => {
@@ -87,7 +96,7 @@ describe('sıfırdan başla örnek veriyle (gerçek PostgreSQL)', () => {
     const k = sifirlamaKapsami({ kullanicilar: false, tanimlar: false });
     let sonuc: Awaited<ReturnType<typeof sifirdanBaslat>> | null = null;
     await assert.rejects(o().vt.tx(async (db) => {
-      sonuc = await sifirdanBaslat(db, { kalan: k.kalan, kismi: k.kismi, kullanicilar: false, yoneticiId });
+      sonuc = await sifirdanBaslat(db, { kalan: k.kalan, kismi: k.kismi, kullanicilar: false, yoneticiId }, SIFIRLAMA_SURE_MS);
       throw new GeriAl();
     }), GeriAl);
     const r = sonuc as unknown as { tablolar: Record<string, number>; cozulen: Record<string, number> };
@@ -122,7 +131,7 @@ describe('sıfırdan başla örnek veriyle (gerçek PostgreSQL)', () => {
         await db.sorgu(
           "INSERT INTO stok_parti (malzeme_id, uretim_emri_id, acan_kisi_id, lot_no, refakat_partisi_id) VALUES ($1, $2, $3, 'ORN-LOT-3464', $4)",
           [ilk.malzeme_id, ilk.uretim_emri_id, ilk.acan_kisi_id, r!.id]);
-        sonuc = await sifirdanBaslat(db, { kalan: k.kalan, kismi: k.kismi, kullanicilar, yoneticiId });
+        sonuc = await sifirdanBaslat(db, { kalan: k.kalan, kismi: k.kismi, kullanicilar, yoneticiId }, SIFIRLAMA_SURE_MS);
         kisiler = await db.sorgu(
           `SELECT id = $1 AS yonetici, kullanici_adi IS NOT NULL AS girisli, pin_ozeti IS NOT NULL AS pinli, pin_belirlenecek AS belirlenecek
              FROM kisi ORDER BY id`, [yoneticiId]);

@@ -1,10 +1,10 @@
-import type { Db } from '#cekirdek/db.ts';
+import { vtSureDoldu, type Db } from '#cekirdek/db.ts';
 import type { DenetimSecimi } from '#cekirdek/uc.ts';
 import { cakisma, dogrulama, yetkiYok } from '#cekirdek/hata.ts';
 import type { SifirlaCevabi, SifirlamaOzetiCevabi, TemizleCevabi, TemizlikAdaylariCevabi, TemizlikEtkisiCevabi, TemizlikKoku, TemizlikTarihi } from '#paylasilan/sozlesme/ayarlar.ts';
 import { TEMIZLIK_EN_COK_KOK, TEMIZLIK_TARIHLE_EN_COK_KOK, TEMIZLIK_YEDEK_EN_ESKI_DK, type TemizlikTuru } from '#paylasilan/veri-temizleme.ts';
 import { girisDogrula, kisiBayrakliMi, kisiKullaniciAdi, kisiSecenekleri } from '../kisiler/disari.ts';
-import { sifirlamaAcikMi, sifirlamaKapsami, sifirlamaOzetSatirlari, temizlikEkiSatirlari, temizlikYedegiUygunMu, type SifirlamaSecimi } from './kurallar.ts';
+import { SIFIRLAMA_SURE_MS, sifirlamaAcikMi, sifirlamaKapsami, sifirlamaSureIletisi, sifirlamaOzetSatirlari, temizlikEkiSatirlari, temizlikYedegiUygunMu, type SifirlamaSecimi } from './kurallar.ts';
 import {
   denemeIsaretiniKaldir, denemeIsaretiniKaldirTarihle, sifirdanBaslat, sifirlamaSayilariniOku, denemeIsaretle, denemeIsaretiKalkmaAniniOku, denemeIsaretliKimlikleriOku, denemeIsaretleTarihle, temizlikTarihSayisiniOku, temizlikAdaylariniOku, temizlikEtkisiniOku, veriyiTemizle, type TemizlikKapsamSatiri,
 } from './sorgular.ts';
@@ -22,6 +22,13 @@ function vtHatasiniCevir(hata: unknown): never {
   const kod = (hata as { code?: unknown } | null)?.code;
   if ((kod === 'P0001' || kod === '23514') && hata instanceof Error) throw cakisma(hata.message);
   throw hata;
+}
+
+// Süre ya da kilit sınırı öteki uçlarda yeniden denenebilir 503'tür; sıfırlamada yeniden denemek geçirmez, ileti ne olduğunu söyler.
+function sifirlamaHatasiniCevir(hata: unknown): never {
+  const ileti = vtSureDoldu(hata) ? sifirlamaSureIletisi(String((hata as { code?: unknown }).code)) : null;
+  if (ileti !== null) throw cakisma(ileti);
+  return vtHatasiniCevir(hata);
 }
 
 export async function temizlikAdaylari(
@@ -133,6 +140,6 @@ export async function sifirdanBasla(
   await bayrakliIste(db, kisiId);
   sifirlamaAcikIste();
   await parolaVeYedekIste(db, kisiId, istek, simdi);
-  const sonuc = await sifirdanBaslat(db, sifirlamaSatiri(kisiId, istek)).catch(vtHatasiniCevir);
+  const sonuc = await sifirdanBaslat(db, sifirlamaSatiri(kisiId, istek), SIFIRLAMA_SURE_MS).catch(sifirlamaHatasiniCevir);
   return { toplam: Object.values(sonuc.tablolar).reduce((t, n) => t + n, 0), yedekAdi: istek.yedekAdi };
 }

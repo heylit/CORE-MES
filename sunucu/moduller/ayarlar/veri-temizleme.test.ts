@@ -12,7 +12,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { TEMIZLIK_EKI_SATIR_BAYTI, temizlikEkiSatirlari, temizlikYedegiUygunMu, yedekAdi, yedekAdiniCoz } from './kurallar.ts';
+import { TEMIZLIK_EKI_SATIR_BAYTI, sifirlamaSureIletisi, temizlikEkiSatirlari, temizlikYedegiUygunMu, yedekAdi, yedekAdiniCoz } from './kurallar.ts';
 
 // Deneme verisi temizleme (3395 a): yalnız bayraklı yönetici, yalnız işaretli ve kilitsiz kök, bağlı kayıtlarıyla; parola ve
 // yakın tarihli yedek sunucuda istenir; değişmez defterin kilidi yalnız işlev içinde açılır. Veriler uydurmadır.
@@ -747,4 +747,13 @@ test('yedek uygunluğu: yoksa, boşsa, eskiyse ya da gelecekteyse uygun değil',
   const yedek = yedekAdiniCoz(yedekAdi('tmiv2', 'elle', an))!;
   assert.equal(temizlikYedegiUygunMu({ zaman: yedek.zaman.toISOString(), boyut: 10 }, an, 30), true);
   assert.equal(temizlikYedegiUygunMu({ zaman: yedek.zaman.toISOString(), boyut: 10 }, new Date(an.getTime() + 30 * 60_000), 30), false);
+});
+
+test('sıfırlama süre iletisi: süre aşımı ve kilit ayrı söylenir, "birkaç saniye sonra" demez; başka kod iletisizdir', () => {
+  const sure = sifirlamaSureIletisi('57014', 10 * 60_000)!;
+  assert.match(sure, /10 dakika/);
+  assert.match(sure, /hiçbir veri silinmedi/);
+  assert.match(sifirlamaSureIletisi('55P03')!, /kullanıcılar çıktıktan sonra/);
+  for (const ileti of [sure, sifirlamaSureIletisi('55P03')!]) assert.doesNotMatch(ileti, /birkaç saniye/);
+  assert.equal(sifirlamaSureIletisi('23505'), null);
 });
