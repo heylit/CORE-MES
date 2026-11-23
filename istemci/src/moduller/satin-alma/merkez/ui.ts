@@ -27,6 +27,9 @@ import { approvalFormHTML, printDoc, siparisMetniGovdesi } from "./docs.ts";
 import { antetBosMu, istekFormuHTML, kagidiOlcekle } from "./istek-formu.ts";
 import { onaylayabilir, setRole, type Role } from "./roles.ts";
 import { firmaSec, payEkle, paySil, siparisGovdesi, siparisOzeti, taslagiBirak, taslagiOku, taslak } from "./siparis-satirlari.ts";
+import {
+  degisecekSiparisler, degisiklikGovdesi, degisiklikHatalari, degisiklikSeridiHTML, degisiklikTahmini, degisiklikTaslagiKur, degisiklikTaslaginiOku, siparisDegistirHTML, type DTaslak,
+} from "./siparis-degistir.ts";
 import type { OdemePlaniSatiri, SiparisBelgesi, TeklifIstekFormuIcerigi } from "#paylasilan/sozlesme/satin-alma.ts";
 import { DosyaHatasi, dosyaYukle } from "../../belge-merkezi/disari.ts";
 import { pdfOkuAc, type PdfAktarimi } from "../pdf-teklif/ekran.ts";
@@ -1660,9 +1663,19 @@ ACTIONS["sp-siparis-ver"] = (el, r) => {
 };
 const spOneriKarari = (sonuc: "onay" | "ret") => (_el: HTMLElement, r: PurchaseRequest | null) => {
   if (!r || !r.siparisOnerisi || !onaylayabilir()) return;
-  const not = document.querySelector<HTMLInputElement>("#sp-oneri-not")?.value.trim() ?? "";
-  if (sonuc === "ret" && !not) { toast("Ret nedenini Not alanına yazın; öneren geçmişte görür."); document.querySelector<HTMLInputElement>("#sp-oneri-not")?.focus(); return; }
-  void backend.siparisOnerisiKarari(r.id, sonuc, not).then(ok => { if (ok) { taslagiBirak(r.id); toast(sonuc === "onay" ? "Onaylandı, sipariş verildi" : "Sipariş önerisi reddedildi"); } });
+  const degisiklik = r.siparisOnerisi.tur === "siparis-degistir";
+  const alan = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(degisiklik ? "#sd-oneri-not" : "#sp-oneri-not");
+  const not = alan?.value.trim() ?? "";
+  if (sonuc === "ret" && !not) {
+    toast("Ret nedenini Not alanına yazın; öneren geçmişte görür.");
+    if (alan && degisiklik) { alan.setAttribute("aria-invalid", "true"); const h = document.getElementById("sd-oneri-not-hata"); if (h) h.textContent = "Ret notu zorunlu."; }
+    alan?.focus(); return;
+  }
+  void backend.siparisOnerisiKarari(r.id, sonuc, not).then(ok => {
+    if (!ok) return;
+    if (!degisiklik) taslagiBirak(r.id);
+    toast(degisiklik ? (sonuc === "onay" ? "Değişiklik onaylandı, siparişe uygulandı" : "Değişiklik reddedildi") : sonuc === "onay" ? "Onaylandı, sipariş verildi" : "Sipariş önerisi reddedildi");
+  });
 };
 ACTIONS["sp-oneri-onayla"] = spOneriKarari("onay");
 ACTIONS["sp-oneri-reddet"] = spOneriKarari("ret");
@@ -1677,30 +1690,98 @@ document.addEventListener("change", (e) => {
   const alan = el.dataset.spAlan;
   if (alan === "qty" || alan === "price" || alan === "currency") setTimeout(render, 0);
 });
-ACTIONS["order-item-change"] = (_el, r) => {
+// 3574-2a: "Siparişi değiştir" penceresi siparişin bütün satırlarını ve başlığını birlikte değiştirir; kalem tablosundaki "Değiştir"
+// pencereyi o kalemin siparişiyle ve satırına odaklı açar (3442-5). Taslak pencere açıkken burada tutulur.
+let SD: { taslak: DTaslak; secenekler: ReturnType<typeof degisecekSiparisler> } | null = null;
+const sdOrtam = () => ({ onayli: onaylayabilir(), dortGoz: settings().dortGoz !== false });
+const sdKok = (): HTMLElement | null => document.querySelector<HTMLElement>("#modal-root [data-sa-siparis-degistir]");
+function sdCiz(odak?: string): void {
+  if (!SD) return;
+  const pencere = document.querySelector<HTMLElement>("#modal-root .tc-pencere");
+  if (!pencere) { openModal(siparisDegistirHTML(SD.taslak, SD.secenekler, sdOrtam()), "wide", true); }
+  else {
+    const gecici = document.createElement("div");
+    gecici.innerHTML = siparisDegistirHTML(SD.taslak, SD.secenekler, sdOrtam());
+    pencere.querySelector(":scope > .mb")!.replaceWith(gecici.querySelector(".mb")!);
+    pencere.querySelector(":scope > .mf")!.replaceWith(gecici.querySelector(".mf")!);
+    pencere.querySelector(":scope > .mb")!.classList.add("tc-pencere-govde");
+    pencere.querySelector(":scope > .mf")!.classList.add("tc-pencere-alt");
+    labelTables(pencere);
+  }
+  if (odak) document.getElementById(odak)?.focus();
+}
+function sdAc(r: PurchaseRequest, quoteId: string, odak?: string): void {
+  const t = degisiklikTaslagiKur(r, quoteId);
+  if (!t) { toast("Siparişte kalem yok."); return; }
+  SD = { taslak: t, secenekler: degisecekSiparisler(r) };
+  document.querySelector("#modal-root")!.innerHTML = "";
+  sdCiz(odak);
+}
+ACTIONS["order-change"] = (_el, r) => {
   if (!r || !canWrite()) return;
-  const items = awardOrders(r).flatMap(o => o.items);
-  if (!items.length) { toast("Siparişte kalem yok."); return; }
-  // 3442-5: sipariş adımının kalem tablosundaki "Değiştir" o kalemle açılır.
-  const secili = items.find(it => it.id === _el.dataset.item) ?? items[0]!;
-  openModal(`<div class="mh"><h2>Siparişteki kalemi değiştir</h2></div><div class="mb"><p class="small muted">Miktarı düşüren değişiklik satın almada, artış ya da birim değişikliği onay yetkisi ister; gerekçesiyle geçmişe yazılır. Miktar teslim alınandan aşağı inmez; teslim alınmış kalemin birimi değişmez.</p>
-    <div class="grid g2"><label class="f"><span>Kalem</span><select id="oc-item">${items.map(it => `<option value="${it.id}"${it.id === secili.id ? " selected" : ""}>${esc(it.name)}</option>`).join("")}</select></label>
-    <label class="f"><span>Yeni miktar</span><input type="text" inputmode="decimal" id="oc-qty" value="${miktarIn(secili.qty)}"></label>
-    <label class="f"><span>Birim</span><input type="text" list="dl-units" id="oc-unit" value="${esc(secili.unit)}"></label>
-    <label class="f"><span>Gerekçe</span><input type="text" id="oc-reason" maxlength="500" placeholder="Örn. ihtiyaç arttı, tedarikçi ile anlaşıldı"></label></div></div>
-    <div class="mf"><button class="btn primary" data-act="order-item-save">Değiştir</button><button class="btn ghost" data-act="close">Vazgeç</button></div>`, true, true);
+  if (r.siparisOnerisi) { toast("Önce bekleyen değişiklik sonuçlansın."); return; }
+  const ilk = degisecekSiparisler(r)[0];
+  if (!ilk) { toast("Siparişte kalem yok."); return; }
+  sdAc(r, _el.dataset.quote ?? ilk.quoteId);
 };
-ACTIONS["order-item-save"] = (_el, r) => {
+ACTIONS["order-item-change"] = (el, r) => {
   if (!r || !canWrite()) return;
-  const item = $("#oc-item").value, qtyGirdi = miktarSayisi($("#oc-qty").value), unit = $("#oc-unit").value.trim(), reason = $("#oc-reason").value.trim();
-  if (qtyGirdi === "belirsiz") { toast(BELIRSIZ_MIKTAR); $("#oc-qty").focus(); return; }
-  const qty = qtyGirdi;
-  if (!isNum(qty) || qty <= 0) { toast("Miktar sıfırdan büyük olmalı."); $("#oc-qty").focus(); return; }
-  if (!unit) { toast("Birim yazın."); $("#oc-unit").focus(); return; }
-  if (!reason) { toast("Gerekçe yazın."); $("#oc-reason").focus(); return; }
-  closeModal();
-  void backend.siparisKalemiDegistir(r.id, item, qty, unit, reason).then(ok => { if (ok) toast("Kalem değişti, geçmişe yazıldı"); });
+  if (r.siparisOnerisi) { toast("Önce bekleyen değişiklik sonuçlansın."); return; }
+  const satir = (r.award?.lines ?? []).find((l) => l.itemId === el.dataset.item) ?? (r.award?.lines ?? [])[0];
+  if (!satir) { toast("Siparişte kalem yok."); return; }
+  sdAc(r, satir.quoteId);
+  const i = SD?.taslak.satirlar.findIndex((x) => x.itemId === satir.itemId) ?? -1;
+  if (i >= 0) document.getElementById(`sd-m-${i}`)?.focus();
 };
+ACTIONS["sd-iptal"] = (el) => {
+  const kok = sdKok(); if (!SD || !kok) return;
+  degisiklikTaslaginiOku(SD.taslak, kok);
+  const i = Number(el.dataset.i);
+  const s = SD.taslak.satirlar[i]; if (!s) return;
+  s.iptal = !s.iptal;
+  if (!s.iptal) Object.assign(s, { qty: s.ilk.qty, price: s.ilk.price, exp: s.ilk.exp, note: s.ilk.note });
+  sdCiz(`sd-n-${i}`);
+  // İptal edilen satırda alanlar kapalıdır; odak satırın düğmesine döner.
+  document.querySelector<HTMLElement>(`#modal-root [data-act="sd-iptal"][data-i="${i}"]`)?.focus();
+};
+ACTIONS["sd-kaydet"] = (_el, r) => {
+  const kok = sdKok(); if (!SD || !kok || !r || !canWrite()) return;
+  const t = SD.taslak;
+  degisiklikTaslaginiOku(t, kok);
+  const hatalar = degisiklikHatalari(t);
+  if (degisiklikTahmini(t).ogeler.length === 0) { t.hata = "Değişiklik yok."; sdCiz(); return; }
+  if (hatalar.length) { t.hata = "Eksik ya da hatalı alanları düzeltin."; sdCiz(hatalar[0]!.alan); return; }
+  t.hata = ""; t.gonderiliyor = true; sdCiz();
+  void backend.siparisDegistir(r.id, degisiklikGovdesi(t)).then((sonuc) => {
+    if (!SD || SD.taslak !== t) return;
+    t.gonderiliyor = false;
+    if (!sonuc) { t.hata = "Bildirimdeki nedeni düzeltip yeniden deneyin."; sdCiz(); return; }
+    SD = null; closeModal();
+    toast(sonuc === "onayda" ? "Değişiklik onaya gönderildi; onaylanana kadar sipariş eski hâliyle geçerli" : `Değişiklik kaydedildi, sipariş R${t.no + 1} oldu`);
+  });
+};
+ACTIONS["sd-geri-al"] = (_el, r) => {
+  if (!r || !r.siparisOnerisi || r.siparisOnerisi.onerenId !== S.me?.id) return;
+  void backend.siparisOnerisiGeriAl(r.id).then((ok) => { if (ok) toast("Değişiklik önerisi geri alındı"); });
+};
+document.addEventListener("change", (e) => {
+  if (!kokIcinde(e) || !SD) return;
+  const el = e.target as HTMLElement;
+  if (el.id !== "sd-siparis") return;
+  const r = V.page === "request" && V.id ? S.requests[V.id] ?? null : null;
+  if (r) sdAc(r, (el as HTMLSelectElement).value, "sd-siparis");
+});
+document.addEventListener("input", (e) => {
+  if (!kokIcinde(e) || !SD) return;
+  const kok = sdKok();
+  if (!kok || !(e.target as HTMLElement).closest("[data-sa-siparis-degistir]")) return;
+  degisiklikTaslaginiOku(SD.taslak, kok);
+  // Yalnız şerit yeniden yazılır: alanlar yerinde kalır, odak ve imleç kaybolmaz.
+  const x = degisiklikTahmini(SD.taslak);
+  const yeni = document.createElement("div");
+  yeni.innerHTML = x.ogeler.length ? degisiklikSeridiHTML(SD.taslak, x, sdOrtam()) : '<p class="small muted" data-sa-sd-serit aria-live="polite">Henüz değişiklik yok.</p>';
+  kok.querySelector("[data-sa-sd-serit]")?.replaceWith(yeni.firstElementChild!);
+});
 // D6 b: fatura finansta girilir; burada siparişin tedarikçisinin alış faturası siparişe bağlanır. Tutar finansta kalır (FNS-48).
 let faturaSiparisi: { talepId: string; teklifId: string } | null = null;
 function faturaListesiHTML(liste: SiparisFaturasi[] | null): string {
@@ -1927,11 +2008,6 @@ document.addEventListener("change", (e) => {
   const exp = t.id === "o-date" ? $<HTMLInputElement>("#o-exp") : t.closest("tr")?.querySelector<HTMLInputElement>('[data-of="expectedDate"]');
   if (!exp || exp.dataset.termin === undefined || !t.value || exp.value !== (exp.dataset.oneri ?? "")) return;
   exp.value = exp.dataset.oneri = addDays(t.value, Number(exp.dataset.termin));
-});
-document.addEventListener("change", (e) => {
-  if (!kokIcinde(e) || (e.target as FormEl).id !== "oc-item") return;
-  const r = S.requests[V.id ?? ""], it = (r?.items || []).find(x => x.id === (e.target as FormEl).value);
-  if (it) { $("#oc-qty").value = miktarIn(it.qty); $("#oc-unit").value = it.unit; }
 });
 ACTIONS["uncancel-req"] = (el, r) => {
   if (!r) return;

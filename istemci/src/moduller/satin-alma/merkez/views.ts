@@ -27,6 +27,7 @@ import { secilemezAlternatif, sonucRozeti } from "./alternatif.ts";
 import { alternatifOzetleriniDoldur } from "./alternatif-ozeti.ts";
 import { kalemKalemHTML, siparisKalemleriHTML } from "./kalem-kalem.ts";
 import { siparisOnerisiHTML, siparisOzeti, siparisSatirlariHTML, taslak } from "./siparis-satirlari.ts";
+import { degisecekSiparisler, degisiklikGecmisiHTML, degisiklikOnerisiHTML, siparisDegistirDugmesi } from "./siparis-degistir.ts";
 /* ================= render çekirdeği ================= */
 // Ortak parçalarla çizilen ekranlar (iş kutusu, Talepler, talep ayrıntısı; 2412-2) merkezin durumunu her çizimde yeniden okur.
 let cizimSurumu = 0;
@@ -831,12 +832,14 @@ export function tabDecision(r: PurchaseRequest, part: "select" | "split" | "appr
     <p class="small muted">Tutarlar KDV hariç. ${OPEN.includes(r.status) ? "Kur güncel kurdur; karar onaya gönderildiğinde sabitlenen kur ayrıca yazılır." : "Kur sipariş günü sabitlenen kurdur."} Ödeme günleri tahminidir: avans sipariş günü, vadeli kısım ${a.vadeBaslangici === "siparis" ? "siparişten" : "beklenen teslimden"} sayılır.${isSplit ? " Kalem bazlı kararda sütunlar tekliflerin tamamıdır; siparişlere düşen tutar Onay formundadır." : ""}</p>
   </div></section>` : "";
   const p3 = `${panel(3, isSplit ? `Siparişler (${orders.length} tedarikçi)` : "Sipariş", ordered ? '<span class="flag good">sipariş verildi</span>' : '<span class="flag mute">onaydan sonra</span>', `
-    ${r.siparisOnerisi ? siparisOnerisiHTML(r, onaylayabilir(), r.siparisOnerisi.onerenId === S.me?.id) : approved && !ordered ? `${siparisSatirlariHTML(r, taslak(r))}
+    ${r.siparisOnerisi && r.siparisOnerisi.tur !== "siparis-degistir" ? siparisOnerisiHTML(r, onaylayabilir(), r.siparisOnerisi.onerenId === S.me?.id) : approved && !ordered ? `${siparisSatirlariHTML(r, taslak(r))}
     <div class="row"><button class="btn primary" data-act="sp-siparis-ver">${siparisOzeti(r, taslak(r)).onayGerekir ? "Onaya gönder" : "Siparişi ver"}</button></div>
     ${teslimYontemiHTML(r)}` : approved || ordered ? `${isSplit ? ordersFormHTML(r, orders) : singleOrderHTML(r, a)}
     ${siparisBasligiHTML(r, orders)}
     ${siparisKalemleriHTML(r)}
-    <div class="row"><button class="btn primary" data-act="place-order">${ordered ? "Sipariş bilgisini güncelle" : isSplit ? "Siparişleri verildi olarak işaretle" : "Siparişi verildi olarak işaretle"}</button>${ordered ? '<button class="btn" data-act="order-item-change">Kalemi değiştir</button><button class="btn" data-act="order-close">Kalanı kapat</button>' + logoBekletDugmeleri(orders) + '<button class="btn" data-act="order-invoices">Faturalar</button><button class="btn" data-act="order-certs">Sertifikalar</button>' : ""}</div>
+    ${ordered ? degisiklikOnerisiHTML(r, onaylayabilir(), r.siparisOnerisi?.onerenId === S.me?.id) : ""}
+    <div class="row"><button class="btn primary" data-act="place-order">${ordered ? "Sipariş bilgisini güncelle" : isSplit ? "Siparişleri verildi olarak işaretle" : "Siparişi verildi olarak işaretle"}</button>${ordered ? siparisDegistirDugmesi(r) + '<button class="btn" data-act="order-close">Kalanı kapat</button>' + logoBekletDugmeleri(orders) + '<button class="btn" data-act="order-invoices">Faturalar</button><button class="btn" data-act="order-certs">Sertifikalar</button>' : ""}</div>
+    ${ordered ? degisecekSiparisler(r).map((o) => degisiklikGecmisiHTML(r, o.quoteId)).join("") : ""}
     ${teslimYontemiHTML(r)}` : '<p class="small muted">Sipariş, karar onaylandıktan sonra verilir.</p>'}`, decided)}`;
   // Kart #1124: sipariş verilince üzerinde mal kabul ve finans takibi ile ödeme planı görünür.
   const pt = ordered ? `<section class="panel" data-sa-takip-paneli><div class="panel-h"><h2>Sipariş takibi</h2><span class="sub">mal kabul, fatura ve ödeme planı</span></div><div class="panel-b">${siparisTakibiHTML(r, orders)}</div></section>` : "";

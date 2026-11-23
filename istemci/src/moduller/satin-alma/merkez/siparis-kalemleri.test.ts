@@ -41,13 +41,16 @@ describe('3442-5 sipariş adımında kalem kalem tablo', () => {
     expect([...kutu.querySelectorAll<HTMLElement>('[data-act="order-item-change"]')].map((b) => b.dataset.item)).toEqual(['k1', 'k2']);
   });
 
-  it('satırdaki Değiştir pencereyi o kalemle açar', () => {
+  it('satırdaki Değiştir siparişi değiştir penceresini o kalemle açar', () => {
     const r = talep();
     S.requests[r.id] = r; S.ready = true; V.page = 'request'; V.id = r.id;
     setOnaylayabilir(true);
     document.body.innerHTML = `<div data-sa-merkez><div id="gres">${siparisKalemleriHTML(r)}</div><div id="modal-root"></div></div>`;
     document.querySelector<HTMLElement>('[data-act="order-item-change"][data-item="k2"]')!.click();
-    expect(document.querySelector<HTMLSelectElement>('#oc-item')!.value).toBe('k2');
-    expect(document.querySelector<HTMLInputElement>('#oc-qty')!.value).toBe('4');
+    // 3574-2a: satırdaki "Değiştir" o kalemin siparişini "Siparişi değiştir" penceresinde açar, odak o satırın miktarındadır.
+    const odak = document.activeElement as HTMLInputElement;
+    expect(document.querySelector<HTMLElement>('[data-sa-siparis-degistir]')!.dataset.quote).toBe('qb');
+    expect(odak.id).toMatch(/^sd-m-\d+$/);
+    expect(odak.value).toBe('4');
   });
 });

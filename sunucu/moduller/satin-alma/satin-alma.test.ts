@@ -94,6 +94,13 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
   };
   // Gövde serbest nesnedir: sunucunun cevabındaki ek alanlar (sipariş satırları, teslim durumu) şemada atılır.
   const kaydet = (cerez: string, t: Record<string, unknown> & { id: string }) => istek(cerez, 'POST', `/satin-alma-talepleri/${t.id}/kaydet`, t);
+  // 3574-2a: miktar artışı öneri olur (S1 a); ikinci onay yetkilisi (yönetici) onaylayınca uygulanır.
+  const onayliKalemDegisikligi = async (id: string, g: Record<string, unknown>): Promise<Talep> => {
+    const t = await acilistaki(id);
+    const o = tamam<Talep>(await istek(c.mudur, 'POST', `/satin-alma-talepleri/${id}/siparis-kalemi-degistir`, { birim: 'adet', gerekce: 'Deneme', ...g, surum: t.surum }));
+    if (o.siparisOnerisi?.tur !== 'siparis-degistir') return o;
+    return tamam<Talep>(await istek(c.yonetici, 'POST', `/satin-alma-talepleri/${id}/siparis-onerisi-karari`, { sonuc: 'onay', notlar: '', surum: o.surum }));
+  };
   // 2413 a: iptalden dönüş yalnız gerekçeli komutla.
   const iptalGeriAl = (cerez: string, t: Talep, gerekce = 'Yanlışlıkla iptal') => istek(cerez, 'POST', `/satin-alma-talepleri/${t.id}/iptali-geri-al`, { gerekce, surum: t.surum });
   // Kataloğa bağlanacak kart satın almanın arama ucundan bulunur; aktif olmayan kart aramada yoktur, sayı kimliği veritabanından okunur.
@@ -1752,15 +1759,17 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     const degistir = (kim: string, t: Talep, g: Record<string, unknown>) =>
       istek(kim, 'POST', `/satin-alma-talepleri/${t.id}/siparis-kalemi-degistir`, { kalemId: k2, miktar: '6', birim: 'adet', gerekce: 'Müşteri adedi arttı', surum: t.surum, ...g });
     const satir = siparisi(s, a).satirlar[0]!;
-    assert.equal((await degistir(c.sa, s, {})).statusCode, 403);
-    assert.equal((await degistir(c.mudur, s, { gerekce: '  ' })).statusCode, 400);
-    const r = tamam<Talep>(await degistir(c.mudur, s, {}));
+    // 3574-2a S1 a: artış öneri olur, sipariş eski hâliyle kalır; öneren geri alır.
+    const oneri = tamam<Talep>(await degistir(c.sa, s, {}));
+    assert.equal(oneri.siparisOnerisi?.tur, 'siparis-degistir');
+    assert.notEqual(oneri.kalemler.find((k) => k.id === k2)!.miktar, '6');
+    tamam<Talep>(await istek(c.sa, 'POST', `/satin-alma-talepleri/${s.id}/siparis-onerisi-geri-al`, { surum: oneri.surum }));
+    assert.equal((await degistir(c.mudur, await acilistaki(s.id), { gerekce: '  ' })).statusCode, 400);
+    const r = await onayliKalemDegisikligi(s.id, { kalemId: k2, miktar: '6', gerekce: 'Müşteri adedi arttı' });
     assert.equal(r.kalemler.find((k) => k.id === k2)!.miktar, '6');
     const sonra = siparisi(await acilistaki(s.id), a).satirlar[0]!;
     assert.deepEqual([sonra.id, sonra.miktar], [satir.id, '6']);
-    const h = r.hareketler.at(-1)!;
-    assert.equal(h.kisiId, kisi.mudur);
-    assert.match(h.metin, /^Sipariş değişikliği: .* yerine 6 adet\. Gerekçe: Müşteri adedi arttı$/);
+    assert.match(r.hareketler.at(-1)!.metin, /R1 oldu \(onaylandı\): .*Gerekçe: Müşteri adedi arttı$/);
     // Aynı sürümle ikinci gönderim yazılmaz.
     assert.equal((await degistir(c.mudur, s, { miktar: '7' })).statusCode, 409);
     await teslimEt(satir.id, '4', 7402);
@@ -1777,7 +1786,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     const kutu = await degistir(c.mudur, t3, { kalemId: k1, miktar: '2', birim: 'kutu' });
     assert.equal(kutu.statusCode, 422);
     assert.match(kutu.body, /kartının birimiyle girilir \(adet\)/);
-    const b = tamam<Talep>(await degistir(c.mudur, t3, { kalemId: k1, miktar: '2', birim: 'adet' }));
+    const b = await onayliKalemDegisikligi(s.id, { kalemId: k1, miktar: '2' });
     assert.equal(b.kalemler.find((k) => k.id === k1)!.miktar, '2');
     const taslak = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
     const dis = await istek(c.mudur, 'POST', `/satin-alma-talepleri/${taslak.id}/siparis-kalemi-degistir`, { kalemId: taslak.kalemler[0]!.id, miktar: '2', birim: 'adet', gerekce: 'x', surum: taslak.surum });
@@ -3336,14 +3345,14 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.equal((await guncellemeKuyrugu([ia]))[0]?.durum, 'hata');
     await assert.rejects(guncellemeSonucu(ia, { satirlar: [{ satirId: siparisi(s, b).satirlar[0]!.id, logoSatirRef: '1' }] }));
     const once = await acilistaki(s.id);
-    const kalem = tamam<Talep>(await istek(c.mudur, 'POST', `/satin-alma-talepleri/${s.id}/siparis-kalemi-degistir`, { kalemId: k2, miktar: '6', birim: 'adet', gerekce: 'Deneme', surum: once.surum }));
+    const kalem = await onayliKalemDegisikligi(once.id, { kalemId: k2, miktar: '6' });
     assert.deepEqual([siparisi(kalem, a).logo?.guncellemeDurumu, siparisi(kalem, a).logo?.guncellemeHata], ['bekliyor', null]);
     assert.equal((await guncellemeKuyrugu([ia]))[0]?.satirlar[0]?.miktar, '6');
     await guncellemeSonucu(ia, { satirlar: [] });
     const termin = tamam<Talep>(await kaydet(c.sa, { ...govde(await acilistaki(s.id)), karar: { ...kalem.karar!, siparisler: kalem.karar!.siparisler.map((x) => (x.teklifId === a ? { ...x, beklenenTeslim: '2026-10-20' } : x)) } }));
     assert.deepEqual([siparisi(termin, a).beklenenTeslim, siparisi(termin, a).logo?.guncellemeDurumu], ['2026-10-20', 'bekliyor']);
     // Gitmemiş sipariş değişir, düzenleme kuyruğuna girmez.
-    const bDegisti = tamam<Talep>(await istek(c.mudur, 'POST', `/satin-alma-talepleri/${s.id}/siparis-kalemi-degistir`, { kalemId: k1, miktar: '11', birim: 'adet', gerekce: 'Deneme', surum: termin.surum }));
+    const bDegisti = await onayliKalemDegisikligi(s.id, { kalemId: k1, miktar: '11' });
     assert.deepEqual([siparisi(bDegisti, b).satirlar[0]!.miktar, siparisi(bDegisti, b).logo?.guncellemeDurumu], ['11', null]);
   });
 
@@ -3552,7 +3561,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     const kalem = await istek(c.mudur, 'POST', `/satin-alma-talepleri/${t.id}/siparis-kalemi-degistir`, { kalemId: k2, miktar: '6', birim: 'adet', gerekce: 'Deneme', surum: t.surum });
     assert.equal(kalem.statusCode, 422);
     assert.match(kalem.body, /irsaliyesi gelmiş/);
-    const bDegisti = tamam<Talep>(await istek(c.mudur, 'POST', `/satin-alma-talepleri/${t.id}/siparis-kalemi-degistir`, { kalemId: k1, miktar: '11', birim: 'adet', gerekce: 'Deneme', surum: t.surum }));
+    const bDegisti = await onayliKalemDegisikligi(t.id, { kalemId: k1, miktar: '11' });
     assert.equal(siparisi(bDegisti, b).satirlar[0]!.miktar, '11');
     assert.equal(siparisi(bDegisti, a).logo?.guncellemeDurumu, null);
   });
@@ -4650,8 +4659,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
       // Tamamı gelen satır beklenmez (teslim yolu bu olayı vermez); miktar artınca sipariş yeniden açıktır, tarih geri gelir.
       await teslimEt(satir, '4', 893491);
       assert.deepEqual(yayilan(), [], 'teslim bu olayı vermez');
-      tamam<Talep>(await istek(c.mudur, 'POST', `/satin-alma-talepleri/${s.id}/siparis-kalemi-degistir`,
-        { kalemId: k2, miktar: '6', birim: 'adet', gerekce: 'Deneme', surum: (await acilistaki(s.id)).surum }));
+      await onayliKalemDegisikligi(s.id, { kalemId: k2, miktar: '6' });
       assert.deepEqual(yayilan(), [[ie]], 'kalem miktarı siparişi yeniden açtı');
 
       // Sipariş silinince satırı da gider: iş emri yalnız önce okunanlarda vardır.

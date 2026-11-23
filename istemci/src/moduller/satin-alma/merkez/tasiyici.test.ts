@@ -95,18 +95,22 @@ describe('TMI taşıyıcısı', () => {
     expect(talepSunucuya(tek).karar?.siparisler).toEqual([{ teklifId: QA, siparisNo: 'SA-1', siparisTarihi: '2026-10-07', beklenenTeslim: '2026-10-14', vadeBaslangici: 'teslim' }]);
   });
 
-  it('Borç 36: siparişteki kalem değişikliği ayrı komutla, son sürüm ve gerekçeyle gider; sunucu reddederse false döner', async () => {
+  it('3574-2a: sipariş değişikliği ayrı komutla son sürümle gider; öneri dönerse "onayda", uygulanırsa "uygulandi"; sunucu reddederse null', async () => {
     const fetchSahte = vi.fn(async () => new Response(JSON.stringify(TALEP), { status: 200, headers: { 'content-type': 'application/json' } }));
     vi.stubGlobal('fetch', fetchSahte);
+    const govde = {
+      teklifId: QA, satirlar: [{ kalemId: K1, miktar: '42.5', birim: 'adet', birimFiyat: '10', beklenenTeslim: null, notlar: '', iptal: false }],
+      baslik: { vadeGun: 30, kdvOrani: null, teslimYeri: '', tedarikciNotu: '', icNot: '' }, gerekce: 'İhtiyaç arttı', teyitKisi: '', teyitTarihi: null,
+    };
     try {
       talepEkrana(TALEP);
-      expect(await backend.siparisKalemiDegistir(TALEP.id, K1, 42.5, 'adet', 'İhtiyaç arttı')).toBe(true);
+      expect(await backend.siparisDegistir(TALEP.id, govde)).toBe('uygulandi');
       const [url, istek] = fetchSahte.mock.calls[0] as unknown as [string, RequestInit];
-      expect(url).toBe(`/api/satin-alma-talepleri/${TALEP.id}/siparis-kalemi-degistir`);
-      expect(JSON.parse(String(istek.body))).toEqual({ kalemId: K1, miktar: '42.5', birim: 'adet', gerekce: 'İhtiyaç arttı', surum: 4 });
+      expect(url).toBe(`/api/satin-alma-talepleri/${TALEP.id}/siparis-degistir`);
+      expect(JSON.parse(String(istek.body))).toEqual({ ...govde, surum: 4 });
       fetchSahte.mockImplementation(async () => new Response(JSON.stringify({ hata: { kod: 'YETKI_YOK', ileti: 'Yetkiniz yok.' } }), { status: 403, headers: { 'content-type': 'application/json' } }));
-      expect(await backend.siparisKalemiDegistir(TALEP.id, K1, 1, 'adet', 'x')).toBe(false);
-      expect(await backend.siparisKalemiDegistir('00000000-0000-4000-8000-000000000999', K1, 1, 'adet', 'x')).toBe(false);
+      expect(await backend.siparisDegistir(TALEP.id, govde)).toBeNull();
+      expect(await backend.siparisDegistir('00000000-0000-4000-8000-000000000999', govde)).toBeNull();
     } finally {
       vi.unstubAllGlobals();
     }

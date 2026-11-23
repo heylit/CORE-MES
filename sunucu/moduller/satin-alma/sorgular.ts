@@ -104,7 +104,7 @@ export interface AltKayitlar {
     logoGuncellemeDurumu: 'bekliyor' | 'gonderildi' | 'hata' | null; logoGuncellemeHata: string | null;
     logoKapatmaDurumu: 'bekliyor' | 'gonderildi' | 'hata' | null; logoKapatmaHata: string | null;
     logoBekletmeIstegi: 'beklet' | 'serbest' | null; logoBekletmeDurumu: 'bekliyor' | 'gonderildi' | 'hata' | null; logoBekletmeHata: string | null;
-    teslimYeri: string; tedarikciNotu: string; icNot: string;
+    teslimYeri: string; tedarikciNotu: string; icNot: string; degisiklikNo: number; kdvOrani: string | null;
   }[];
   siparisSatirlari: {
     talepId: string; teklifId: string; id: number; kalemId: string; miktar: string; birim: string; parcaRevizyonu: string | null;
@@ -154,7 +154,7 @@ export async function altKayitlariOku(db: Db, idler: readonly string[]): Promise
       logo_guncelleme_durumu AS "logoGuncellemeDurumu", logo_guncelleme_hata AS "logoGuncellemeHata",
       logo_kapatma_durumu AS "logoKapatmaDurumu", logo_kapatma_hata AS "logoKapatmaHata",
       logo_bekletme_istegi AS "logoBekletmeIstegi", logo_bekletme_durumu AS "logoBekletmeDurumu", logo_bekletme_hata AS "logoBekletmeHata",
-      teslim_yeri AS "teslimYeri", tedarikci_notu AS "tedarikciNotu", ic_not AS "icNot"
+      teslim_yeri AS "teslimYeri", tedarikci_notu AS "tedarikciNotu", ic_not AS "icNot", degisiklik_no AS "degisiklikNo", kdv_orani::text AS "kdvOrani"
       FROM satin_alma_siparis WHERE talep_id = ANY($1::uuid[]) ORDER BY talep_id, id`),
     siparisSatirlari: await q(`SELECT s.talep_id AS "talepId", s.teklif_id AS "teklifId", s.id, s.kalem_id AS "kalemId", s.miktar, s.birim,
         s.parca_revizyonu AS "parcaRevizyonu", s.beklenen_teslim::text AS "beklenenTeslim", s.notlar
@@ -2262,13 +2262,13 @@ export async function siparisSatirBilgileriYaz(
     [talepId, satirlar.map((x) => x.teklifId), satirlar.map((x) => x.kalemId), satirlar.map((x) => x.beklenenTeslim), satirlar.map((x) => x.notlar)]);
 }
 export interface SiparisOnerisiOkuma {
-  talepId: string; govde: unknown; onayliTutar: string | null; yeniTutar: string | null; yeniFirmalar: string[]; gerekce: string;
+  talepId: string; tur: 'siparis-ver' | 'siparis-degistir'; govde: unknown; onayliTutar: string | null; yeniTutar: string | null; yeniFirmalar: string[]; gerekce: string;
   onerenKisiId: number; zaman: string;
 }
 export function siparisOnerileriOku(db: Db, talepIdleri: readonly string[]): Promise<SiparisOnerisiOkuma[]> {
   if (talepIdleri.length === 0) return Promise.resolve([]);
   return db.sorgu<SiparisOnerisiOkuma>(
-    `SELECT talep_id AS "talepId", govde, onayli_tutar::text AS "onayliTutar", yeni_tutar::text AS "yeniTutar", yeni_firmalar AS "yeniFirmalar",
+    `SELECT talep_id AS "talepId", tur, govde, onayli_tutar::text AS "onayliTutar", yeni_tutar::text AS "yeniTutar", yeni_firmalar AS "yeniFirmalar",
             gerekce, oneren_kisi_id AS "onerenKisiId", ${ISO('olusturma')} AS zaman
        FROM satin_alma_siparis_onerisi WHERE talep_id = ANY($1::uuid[])`,
     [[...talepIdleri]]);
@@ -2276,9 +2276,9 @@ export function siparisOnerileriOku(db: Db, talepIdleri: readonly string[]): Pro
 // Talep başına tek bekleyen (birincil anahtar): ikinci öneri çakışır, sessizce üstüne yazılmaz.
 export async function siparisOnerisiEkle(db: Db, o: Omit<SiparisOnerisiOkuma, 'zaman'>): Promise<boolean> {
   const r = await db.sorgu(
-    `INSERT INTO satin_alma_siparis_onerisi (talep_id, govde, onayli_tutar, yeni_tutar, yeni_firmalar, gerekce, oneren_kisi_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (talep_id) DO NOTHING RETURNING talep_id`,
-    [o.talepId, JSON.stringify(o.govde), o.onayliTutar, o.yeniTutar, o.yeniFirmalar, o.gerekce, o.onerenKisiId]);
+    `INSERT INTO satin_alma_siparis_onerisi (talep_id, tur, govde, onayli_tutar, yeni_tutar, yeni_firmalar, gerekce, oneren_kisi_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (talep_id) DO NOTHING RETURNING talep_id`,
+    [o.talepId, o.tur, JSON.stringify(o.govde), o.onayliTutar, o.yeniTutar, o.yeniFirmalar, o.gerekce, o.onerenKisiId]);
   return r.length > 0;
 }
 // 3574-1 Risk L1: Logo'ya gitmiş talep kalemi (talep satırı Logo'da); bölünürse yeni pay Logo karşılaması göndermez, bölünmez.
@@ -2287,4 +2287,60 @@ export async function logoyaGitmisKalemler(db: Db, talepId: string): Promise<str
 }
 export async function siparisOnerisiSil(db: Db, talepId: string): Promise<void> {
   await db.sorgu('DELETE FROM satin_alma_siparis_onerisi WHERE talep_id = $1', [talepId]);
+}
+
+// ---- 3574-2a: sipariş değişikliği. Yazımlar yalnız değişikliğin dokunduğu alanlardır; talep kaydının bütününü yeniden yazmaz.
+// Faturaya eşlenmiş (kaldırılmış eşleme dahil) sipariş satırlarının kalemleri: fiyatı değişmez, satır iptal edilmez.
+export async function faturaliSiparisKalemleri(db: Db, talepId: string, teklifId: string): Promise<Set<string>> {
+  const r = await db.sorgu<{ kalemId: string }>(
+    `SELECT DISTINCT s.kalem_id AS "kalemId" FROM satin_alma_fatura_eslemesi e JOIN satin_alma_siparis_satiri s ON s.id = e.siparis_satiri_id
+      WHERE s.talep_id = $1 AND s.teklif_id = $2`, [talepId, teklifId]);
+  return new Set(r.map((x) => x.kalemId));
+}
+export async function teklifFiyatlariYaz(db: Db, talepId: string, teklifId: string, fiyatlar: readonly { kalemId: string; birimFiyat: string }[]): Promise<void> {
+  if (fiyatlar.length === 0) return;
+  await db.sorgu(
+    `UPDATE satin_alma_teklif_satiri s SET birim_fiyat = f.fiyat FROM unnest($3::uuid[], $4::numeric[]) AS f(kalem, fiyat)
+      WHERE s.talep_id = $1 AND s.teklif_id = $2 AND s.kalem_id = f.kalem`,
+    [talepId, teklifId, fiyatlar.map((x) => x.kalemId), fiyatlar.map((x) => x.birimFiyat)]);
+}
+export async function teklifVadesiYaz(db: Db, talepId: string, teklifId: string, vadeGun: number): Promise<void> {
+  await db.sorgu('UPDATE satin_alma_teklif SET vade_gun = $3 WHERE talep_id = $1 AND id = $2', [talepId, teklifId, vadeGun]);
+}
+// Başlık alanları yazılır ve değişiklik numarası bir artar; yeni numara döner.
+export async function siparisBasligiYaz(db: Db, talepId: string, teklifId: string,
+  b: { kdvOrani: string | null; teslimYeri: string; tedarikciNotu: string; icNot: string }): Promise<number> {
+  const [r] = await db.sorgu<{ no: number }>(
+    `UPDATE satin_alma_siparis SET kdv_orani = $3, teslim_yeri = $4, tedarikci_notu = $5, ic_not = $6, degisiklik_no = degisiklik_no + 1
+      WHERE talep_id = $1 AND teklif_id = $2 RETURNING degisiklik_no AS no`,
+    [talepId, teklifId, b.kdvOrani, b.teslimYeri, b.tedarikciNotu, b.icNot]);
+  if (r === undefined) throw new Error('Sipariş bulunamadı.');
+  return r.no;
+}
+// Teslimi olmayan iptal satırı: talep kalemi silinir (sipariş satırı, teklif fiyatı ve karar bölünmesi onunla gider).
+export async function talepKalemleriniSil(db: Db, talepId: string, kalemIdleri: readonly string[]): Promise<void> {
+  if (kalemIdleri.length === 0) return;
+  await db.sorgu('DELETE FROM satin_alma_talep_kalemi WHERE talep_id = $1 AND id = ANY($2::uuid[])', [talepId, [...kalemIdleri]]);
+}
+export interface SiparisDegisikligiOkuma {
+  talepId: string; id: string; teklifId: string; degisiklikNo: number | null; sonuc: 'onaysiz' | 'onaylandi' | 'reddedildi' | 'geri-alindi';
+  ozet: unknown; onceTutar: string | null; sonraTutar: string | null; gerekce: string; teyitKisi: string; teyitTarihi: string | null;
+  yapanKisiId: number; onaylayanKisiId: number | null; kararNotu: string; dortGozsuz: boolean; zaman: string;
+}
+export function siparisDegisiklikleriOku(db: Db, talepIdleri: readonly string[]): Promise<SiparisDegisikligiOkuma[]> {
+  if (talepIdleri.length === 0) return Promise.resolve([]);
+  return db.sorgu<SiparisDegisikligiOkuma>(
+    `SELECT talep_id AS "talepId", id, teklif_id AS "teklifId", degisiklik_no AS "degisiklikNo", sonuc, ozet, once_tutar::text AS "onceTutar",
+            sonra_tutar::text AS "sonraTutar", gerekce, teyit_kisi AS "teyitKisi", teyit_tarihi::text AS "teyitTarihi", yapan_kisi_id AS "yapanKisiId",
+            onaylayan_kisi_id AS "onaylayanKisiId", karar_notu AS "kararNotu", dort_gozsuz AS "dortGozsuz", ${ISO('olusturma')} AS zaman
+       FROM satin_alma_siparis_degisikligi WHERE talep_id = ANY($1::uuid[]) ORDER BY olusturma DESC, id`,
+    [[...talepIdleri]]);
+}
+export async function siparisDegisikligiEkle(db: Db, d: Omit<SiparisDegisikligiOkuma, 'zaman' | 'talepId'> & { talepId: string; oneriZamani: string | null }): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO satin_alma_siparis_degisikligi (id, talep_id, teklif_id, degisiklik_no, sonuc, ozet, once_tutar, sonra_tutar, gerekce, teyit_kisi,
+       teyit_tarihi, yapan_kisi_id, onaylayan_kisi_id, karar_notu, dort_gozsuz, oneri_zamani)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+    [d.id, d.talepId, d.teklifId, d.degisiklikNo, d.sonuc, JSON.stringify(d.ozet), d.onceTutar, d.sonraTutar, d.gerekce, d.teyitKisi, d.teyitTarihi,
+      d.yapanKisiId, d.onaylayanKisiId, d.kararNotu, d.dortGozsuz, d.oneriZamani]);
 }

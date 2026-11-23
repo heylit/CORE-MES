@@ -5,7 +5,7 @@ import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import type { AcilisCevabi, DegerlendirmeCevabi, MalzemeSecenekleriCevabi, Talep, TalepGovdesi, Tedarikci } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { DegerlendirmeCevabi, MalzemeSecenekleriCevabi, Talep, TalepGovdesi, Tedarikci } from '#paylasilan/sozlesme/satin-alma.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -92,7 +92,6 @@ describe('satin-alma sipariş satırları 3574-1 (gerçek PostgreSQL)', () => {
     istek(kim, 'POST', `/satin-alma-talepleri/${t.id}/siparis-ver`, { siparisler, paylar, gerekce, surum: t.surum });
   const oneriKarari = (kim: string, t: Talep, sonuc: 'onay' | 'ret') =>
     istek(kim, 'POST', `/satin-alma-talepleri/${t.id}/siparis-onerisi-karari`, { sonuc, notlar: '', surum: t.surum });
-  const acilistaki = async (id: string) => tamam<AcilisCevabi>(await istek(c.sa, 'GET', '/satin-alma-acilis')).talepler.find((x) => x.id === id)!;
   const gelisToplami = async () => (await vt().tx((db) => malzemeGelisTarihleri(db, [MALZEME]))).get(MALZEME)?.reduce((a, x) => a + Number(x.miktar), 0) ?? 0;
 
   before(async () => {
@@ -206,15 +205,16 @@ describe('satin-alma sipariş satırları 3574-1 (gerçek PostgreSQL)', () => {
       [pay(m1, yeni2, '10', '8'), pay(m2, a2, '4', '5')], 'x')).statusCode, 422);
   });
 
-  test('SAT-3574-1 S2 a: satın alma siparişteki kalemi azaltır, artıramaz; artış onay yetkisindedir', async () => {
+  test('SAT-3574-1 S2 a, 3574-2a S1 a: satın alma siparişteki kalemi azaltır; artışı önerir, onay yetkilisi onaylar', async () => {
     const { t, k1, k2, a } = await onayli();
     const s = tamam<Talep>(await siparisVer(c.sa, t, [baslik(a)], [pay(k1, a, '10', '10'), pay(k2, a, '4', '5')]));
     const degistir = (kim: string, x: Talep, miktar: string) =>
       istek(kim, 'POST', `/satin-alma-talepleri/${x.id}/siparis-kalemi-degistir`, { kalemId: k2, miktar, birim: 'adet', gerekce: 'ORN deneme', surum: x.surum });
-    assert.equal((await degistir(c.sa, s, '6')).statusCode, 403);
     const az = tamam<Talep>(await degistir(c.sa, s, '3'));
     assert.equal(az.kalemler.find((x) => x.id === k2)!.miktar, '3');
-    const cok = tamam<Talep>(await degistir(c.mudur, await acilistaki(t.id), '5'));
+    const oneri = tamam<Talep>(await degistir(c.sa, az, '5'));
+    assert.deepEqual([oneri.siparisOnerisi?.tur, oneri.kalemler.find((x) => x.id === k2)!.miktar], ['siparis-degistir', '3']);
+    const cok = tamam<Talep>(await istek(c.mudur, 'POST', `/satin-alma-talepleri/${t.id}/siparis-onerisi-karari`, { sonuc: 'onay', notlar: '', surum: oneri.surum }));
     assert.equal(cok.kalemler.find((x) => x.id === k2)!.miktar, '5');
   });
 });

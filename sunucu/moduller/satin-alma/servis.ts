@@ -15,7 +15,9 @@ import {
   STOK_AYRI_GRUPLARI, TALEP_CIZIMI_AZAMI_BAYT, TEKLIF_EKI_AZAMI_BAYT, siparisVerGovdesi, type CizimSeciciCevabi, type SeciciDosyalariCevabi, type SeciciKlasorlerCevabi, type TalepCizimi,
   type TalepCizimiSecimi, type TalepCizimleriCevabi,
 } from '#paylasilan/sozlesme/satin-alma.ts';
-import type { SiparisOnerisi, SiparisOnerisiKararYazimi, SiparisVerYazimi } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { SiparisDegistirYazimi, SiparisOnerisi, SiparisOnerisiGeriAlYazimi, SiparisOnerisiKararYazimi, SiparisVerYazimi } from '#paylasilan/sozlesme/satin-alma.ts';
+import { siparisDegisikligiOgesi, siparisDegistirGovdesi } from '#paylasilan/sozlesme/satin-alma.ts';
+import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { firmaAdlari, karneOlayiKaldir, karneOlayiYaz, karneOzetleri } from '../musteri-tedarikci/disari.ts';
@@ -46,7 +48,7 @@ import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import {
   ILETILER, ISLEM, type KurKilidiIsi, emirAcikMi, kilitliDurum, basamakEsigiReddi, basamakKilidiReddi, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi, degisiklikReddi, gecikmeGunu, fasonKalani, sonDonusGecikmesi, agirlikliGecikme, degisiklikTuru, dortGozSonucu, onayKademesiReddi, onayKisisiIzleri, onayLimitRolleri, onayLimitleriDegistiMi, onayLimitiReddi, terminsizSiparisReddi, terminTakibi, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
-  KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisDegisikligiMetni, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, siparisBekletmeReddi, talebinAlimlari, ondalikKiyas, siparisReddi, talebim, kalemKarsiligi, talebimDuzenlenirMi, talebimKalemReddi, guncellemeReddi, guncellemeIptalleri, ikinciAlimRiski,
+  KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, siparisBekletmeReddi, talebinAlimlari, ondalikKiyas, siparisReddi, talebim, kalemKarsiligi, talebimDuzenlenirMi, talebimKalemReddi, guncellemeReddi, guncellemeIptalleri, ikinciAlimRiski,
   fasonKalemReddi, fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi, type KalemBagi,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGovdeDurumu, talepEdenGorunumu, avansAsimi, gerceklesenKosul, planGerceklesenFarki, talepKartiReddi, tamGorurMu, fiyatGorurMu, fiyatsizGorunum, talasFiyatiGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
   askidakiTedarikciReddi, birimFiyati, kaliteSiparisReddi, karneTeslimOlayi, stokTutari, uygulananKgFiyati, yeniSiparisFirmalari,
@@ -56,7 +58,8 @@ import type { BirimKarsiligi, FiyatIzi, KalemKabulu, KalemOzelligi } from './kur
 import { kalemTerminEmriTuret, satisBagReddi } from './kurallar.ts';
 import { alternatifIzniReddi, cizimIzni, merkezCizimiAdi, talepCizimiKaldirmaReddi, talepCizimiTaleptenMi, alternatifKararReddi, alternatifSiparisReddi, kartBekleyenAlternatifler, alternatifOlcuReddi, alternatifSonucuHesapla, sartliAlternatifler, kabulReddi, kabulYazimi, kabulZarfi as daraltilmisZarf, emirSatinAlmaDurumlari, fasonSiparisTarihiSec, kopyaOzelligi, tedarikAsamasi } from './kurallar.ts';
 import type { EmirSatinAlmaDurumu, FasonSiparisTarihi } from './kurallar.ts';
-import { SIPARIS_ILETILERI, kalemDegisikligiOnaysizMi, oneriHareketi, siparisDuzeniKur, siparisHareketi, siparisOnayiGerekirMi, type SiparisDuzeni } from './siparis-kurallar.ts';
+import { SIPARIS_ILETILERI, oneriHareketi, siparisDuzeniKur, siparisHareketi, siparisOnayiGerekirMi, type SiparisDuzeni } from './siparis-kurallar.ts';
+import { DEGISIKLIK_ILETILERI, degisiklikHareketi, degisiklikOnayNedenleri, siparisDegisikligiKur, type DegisecekSiparis, type SiparisDegisikligiPlani } from './siparis-kurallar.ts';
 import { butceKullanimi, butceSatirlari, degerlendir, esitVadeOrtami, gerekenBasamak, kalemHarcamalari, kararTutari, tedarikciBasarimi, teklifHesabi, type ButceSatiri } from './hesap-kurallar.ts';
 import * as s from './sorgular.ts';
 import { alimBildir } from './alim-olayi.ts';
@@ -139,8 +142,10 @@ async function talepleriYalinKur(db: Db, satirlar: s.TalepSatiri[]): Promise<Tal
   if (satirlar.length === 0) return [];
   const a = await s.altKayitlariOku(db, satirlar.map((t) => t.id));
   const oneriler = await s.siparisOnerileriOku(db, satirlar.map((t) => t.id));
+  const degisiklikler = await s.siparisDegisiklikleriOku(db, satirlar.map((t) => t.id));
   const kisiler = await kisiAdlari(db, [
     ...satirlar.map((t) => t.talepEdenKisiId), ...a.onaylar.map((o) => o.kisiId), ...a.hareketler.map((h) => h.kisiId), ...oneriler.map((o) => o.onerenKisiId),
+    ...degisiklikler.flatMap((d) => [d.yapanKisiId, d.onaylayanKisiId]),
     ...a.senaryolar.map((x) => x.kisiId), ...a.kararlar.map((k) => k.kararVerenKisiId),
   ].filter((x): x is number => x !== null));
   // SAT-37, SAT-38: teslim satın almanın kendi tablosundadır, stok mal kabulde yazar (SH1 a). GKK sonucu kalite modülü gelene
@@ -163,6 +168,11 @@ async function talepleriYalinKur(db: Db, satirlar: s.TalepSatiri[]): Promise<Tal
     return {
       teklifId: x.teklifId, no: x.no, siparisNo: x.siparisNo, siparisTarihi: x.siparisTarihi, beklenenTeslim: x.beklenenTeslim, vadeBaslangici: x.vadeBaslangici,
       teslimYeri: x.teslimYeri, tedarikciNotu: x.tedarikciNotu, icNot: x.icNot,
+      degisiklikNo: x.degisiklikNo, kdvOrani: x.kdvOrani === null ? null : sade(x.kdvOrani),
+      degisiklikler: degisiklikler.filter((d) => d.talepId === x.talepId && d.teklifId === x.teklifId).map(({ talepId: _t, teklifId: _q, ozet, ...d }) => ({
+        ...d, ozet: degisiklikOzeti(ozet), onceTutar: sade(d.onceTutar), sonraTutar: sade(d.sonraTutar),
+        yapanAdi: ad(kisiler, d.yapanKisiId), onaylayanAdi: d.onaylayanKisiId === null ? null : ad(kisiler, d.onaylayanKisiId),
+      })),
       // Kalanı kapatılmış sipariş tamamlanmış sayılır: talep, kalan beklenmeden teslim alındıya geçer.
       satirlar, teslimDurumu: x.logoKapatmaDurumu === null ? teslimDurumu(satirlar) : 'tamam', kalite: null,
       logo: x.logoDurumu === null ? null
@@ -217,8 +227,10 @@ async function talepleriYalinKur(db: Db, satirlar: s.TalepSatiri[]): Promise<Tal
         kurKilidi: k.kurKilidi,
       },
       siparisOnerisi: ((o) => (o === undefined ? null : {
-        onayliTutar: sade(o.onayliTutar), yeniTutar: sade(o.yeniTutar), yeniFirmalar: o.yeniFirmalar, gerekce: o.gerekce,
-        onerenKisiId: o.onerenKisiId, onerenAdi: ad(kisiler, o.onerenKisiId), zaman: o.zaman, govde: siparisOnerisiGovdesi(o.govde),
+        tur: o.tur, onayliTutar: sade(o.onayliTutar), yeniTutar: sade(o.yeniTutar), yeniFirmalar: o.yeniFirmalar, gerekce: o.gerekce,
+        onerenKisiId: o.onerenKisiId, onerenAdi: ad(kisiler, o.onerenKisiId), zaman: o.zaman,
+        govde: o.tur === 'siparis-ver' ? siparisOnerisiGovdesi(o.govde) : null,
+        degisiklik: o.tur === 'siparis-degistir' ? degisiklikOnerisiCikisi(o.govde) : null,
       }))(oneriler.find((o) => o.talepId === t.id)),
       onaylar: grup(a.onaylar, t.id).map((o) => ({ ...at(o), kisiAdi: ad(kisiler, o.kisiId) })),
       hareketler: grup(a.hareketler, t.id).map((h) => ({ ...at(h), kisiAdi: ad(kisiler, h.kisiId) })),
@@ -515,11 +527,14 @@ export async function talepAc(db: Db, k: Kullanici, gelen: TalepYazimi, izYaz: F
 // #375: talep edenin eline geçen her talep onun görünümüyle döner (teklif, fiyat, tedarikçi, karar yok).
 // 3401-1 a: tam gören ama fiyat görmeyen (planlama) fiyatsız görünümü alır.
 // 3574-1: onay bekleyen sipariş fiyat taşır; yalnız fiyat gören tam okuyucuya gelir.
+// 3574-2a (S5): sipariş değişikliği geçmişi fiyat ve tutar taşır; fiyat görmeyen okuyucuya gelmez.
+const gecmissiz = <T extends { karar: Talep['karar'] }>(t: T): T =>
+  (t.karar === null ? t : { ...t, karar: { ...t.karar, siparisler: t.karar.siparisler.map(({ degisiklikler: _d, ...x }) => x) } });
 const gorunen = (k: Kullanici, t: Talep): TalepCikisi =>
-  (tamGorurMu(k.islemler) ? (fiyatGorurMu(k.islemler) ? t : { ...fiyatsizGorunum(t, k.id), siparisOnerisi: null }) : { ...talepEdenGorunumu(t, k.id), siparisOnerisi: null });
+  (tamGorurMu(k.islemler) ? (fiyatGorurMu(k.islemler) ? t : gecmissiz({ ...fiyatsizGorunum(t, k.id), siparisOnerisi: null })) : gecmissiz({ ...talepEdenGorunumu(t, k.id), siparisOnerisi: null }));
 // 2414 a madde 6: birleştirilmiş kaynak talep, talep edene kendi kalemleriyle (birleşik talepten süzülmüş) görünür.
 const kaynakGorunumu = (t: Talep, kisiId: number, birlesenler: ReadonlyMap<string, Talep>): Talep =>
-  ({ ...talepEdenGorunumu(t, kisiId, t.birlesme == null ? undefined : birlesenler.get(t.birlesme.talepId)), siparisOnerisi: null });
+  gecmissiz({ ...talepEdenGorunumu(t, kisiId, t.birlesme == null ? undefined : birlesenler.get(t.birlesme.talepId)), siparisOnerisi: null });
 
 // #375: ana sayfadaki "Taleplerim": yalnız kişinin açtığı ya da adına açılan talepler, yeniden eskiye.
 export async function taleplerim(db: Db, k: Kullanici, sinir: number): Promise<TaleplerimCevabi> {
@@ -1408,28 +1423,225 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
   return gorunen(k, fiyatIziniYaz(izYaz, eski, (await talepOku(db, id))!));
 }
 
-// Borç 36: talep önce kilitlenip sürümü artar, sonra okunur; aradaki teslim kaydı denetimden kaçmaz.
+// Borç 36, 3574-2a (S3): siparişteki tek kalemin miktar ya da birim değişikliği "Siparişi değiştir" servisinin dar hâlidir; aynı sınıflama,
+// kilitler ve dört göz geçerlidir (artış ve birim değişikliği öneri olur). Uç eski istemci kırılmasın diye kalır.
 export async function siparisKalemiDegistir(db: Db, k: Kullanici, id: string, g: SiparisKalemiDegistirYazimi): Promise<TalepCikisi> {
-  await surumluGuncelle({ guncelle: () => s.talepSurumuArttir(db, id, g.surum), varMi: () => s.talepVarMi(db, id), bulunamadiIletisi: ILETILER.talepYok });
-  const eski = (await talepOku(db, id))!;
+  const eski = await talepOku(db, id);
+  if (eski === null) throw bulunamadi(ILETILER.talepYok);
   const red = siparisKalemiDegisikligiReddi(eski, g);
   if (red !== null) throw gecersiz(red);
-  const kalem = eski.kalemler.find((x) => x.id === g.kalemId)!;
-  // S2 a (3574-1): onaysız sınıf (miktar düşürme) satın almayı yazanındır; artış ve birim değişikliği onay yetkisinde kalır
-  // (onaya düşen değişiklik 3574-2'de öneri olacak).
-  if (!k.islemler.includes(ISLEM.onayla) && !kalemDegisikligiOnaysizMi(kalem, g)) throw yetkiYok(SIPARIS_ILETILERI.kalemArtisiOnayIster);
-  await kalemKartlariniDenetle(db, [{ ...kalem, birim: g.birim }], [kalem]);
+  const sip = eski.karar!.siparisler.find((x) => x.satirlar.some((r) => r.kalemId === g.kalemId))!;
+  const mevcut = await degisecekSiparis(db, eski, sip.teklifId);
+  return siparisDegistir(db, k, id, {
+    teklifId: sip.teklifId,
+    satirlar: mevcut.satirlar.map((r) => ({
+      kalemId: r.kalemId, miktar: r.kalemId === g.kalemId ? g.miktar : r.miktar, birim: r.kalemId === g.kalemId ? g.birim : r.birim,
+      birimFiyat: r.birimFiyat ?? '0', beklenenTeslim: r.beklenenTeslim, notlar: r.notlar, iptal: false,
+    })),
+    baslik: mevcut.baslik, gerekce: g.gerekce, teyitKisi: '', teyitTarihi: null, surum: g.surum,
+  }, () => {});
+}
+
+// ---- 3574-2a: siparişi değiştir. Değişiklik bütünüyle onaysız uygulanır ya da bütünüyle öneri olur (R4); öneri onaylanana kadar sipariş
+// eski hâliyle geçerlidir. Uygulanan her değişiklik siparişe numara (R1, R2) verir ve geçmişe yazılır.
+const degisiklikOgeleri = z.array(siparisDegisikligiOgesi);
+const degisiklikOzeti = (x: unknown) => degisiklikOgeleri.parse(x);
+// Öneri kaydı: istenen son hâl, öneri anındaki öğeler ve teslimler (onayda arada teslim girdiyse öneri olduğu gibi uygulanmaz, R4).
+const degisiklikOnerisiKaydi = z.object({
+  yazim: siparisDegistirGovdesi.omit({ surum: true }),
+  ozet: degisiklikOgeleri,
+  onayNedenleri: z.array(z.string()),
+  degisiklikNo: z.number().int(),
+  teslimler: z.record(z.string(), z.string().nullable()),
+});
+function degisiklikOnerisiCikisi(govde: unknown): NonNullable<SiparisOnerisi['degisiklik']> {
+  const g = degisiklikOnerisiKaydi.parse(govde);
+  return { teklifId: g.yazim.teklifId, ozet: g.ozet, onayNedenleri: g.onayNedenleri, teyitKisi: g.yazim.teyitKisi, teyitTarihi: g.yazim.teyitTarihi, degisiklikNo: g.degisiklikNo };
+}
+type DegistirGovdesi = Omit<SiparisDegistirYazimi, 'surum'>;
+
+async function degisecekSiparis(db: Db, t: Talep, teklifId: string): Promise<DegisecekSiparis> {
+  const sip = (t.karar?.siparisler ?? []).find((x) => x.teklifId === teklifId);
+  const q = t.teklifler.find((x) => x.id === teklifId);
+  if (sip === undefined || q === undefined) throw gecersiz(DEGISIKLIK_ILETILERI.siparisYok);
+  const faturali = await s.faturaliSiparisKalemleri(db, t.id, teklifId);
+  const baska = new Set((t.karar?.siparisler ?? []).filter((x) => x.teklifId !== teklifId).flatMap((x) => x.satirlar.map((r) => r.kalemId)));
+  return {
+    no: sip.no ?? sip.siparisNo, talepDurumu: t.durum, logo: sip.logo, baskaSiparisteKalemler: baska,
+    baslik: { vadeGun: q.vadeGun, kdvOrani: sip.kdvOrani ?? null, teslimYeri: sip.teslimYeri ?? '', tedarikciNotu: sip.tedarikciNotu ?? '', icNot: sip.icNot ?? '' },
+    satirlar: sip.satirlar.map((r) => {
+      const f = q.fiyatlar.find((x) => x.kalemId === r.kalemId);
+      return {
+        kalemId: r.kalemId, kalemAdi: t.kalemler.find((x) => x.id === r.kalemId)?.ad ?? r.kalemId, miktar: r.miktar, birim: r.birim,
+        birimFiyat: f?.birimFiyat ?? null, beklenenTeslim: r.beklenenTeslim ?? null, notlar: r.notlar ?? '', teslimAlinan: r.teslimAlinan,
+        faturali: faturali.has(r.kalemId), kademeli: (f?.basamaklar?.length ?? 0) > 0,
+      };
+    }),
+  };
+}
+// Tutar (TL, KDV hariç) kararın hesabıyla, değişiklikten önce ve sonra; taban siparişin geçerli hâlidir.
+async function degisiklikTutarlari(db: Db, eski: Talep, g: DegistirGovdesi, p: SiparisDegisikligiPlani): Promise<{ once: number | null; sonra: number | null }> {
+  const sil = new Set(p.silinecekKalemler);
+  const satir = new Map(p.satirlar.map((x) => [x.kalemId, x]));
+  const yeni: Talep = {
+    ...eski,
+    kalemler: eski.kalemler.filter((x) => !sil.has(x.id)).map((x) => { const y = satir.get(x.id); return y === undefined ? x : { ...x, miktar: y.miktar, birim: y.birim }; }),
+    teklifler: eski.teklifler.map((q) => (q.id !== g.teklifId ? q : {
+      ...q, vadeGun: g.baslik.vadeGun,
+      fiyatlar: q.fiyatlar.filter((f) => !sil.has(f.kalemId)).map((f) => { const y = satir.get(f.kalemId); return y === undefined ? f : { ...f, birimFiyat: y.birimFiyat }; }),
+    })),
+    karar: eski.karar === null ? null : { ...eski.karar, bolunme: eski.karar.bolunme.filter((b) => !sil.has(b.kalemId)) },
+  };
+  return { once: await kararTutariHesapla(db, eski), sonra: await kararTutariHesapla(db, yeni) };
+}
+const teslimAnlik = (d: DegisecekSiparis): Record<string, string | null> => Object.fromEntries(d.satirlar.map((r) => [r.kalemId, r.teslimAlinan]));
+
+interface DegisiklikUygulamasi {
+  sonuc: 'onaysiz' | 'onaylandi'; yapanKisiId: number; onaylayanKisiId: number | null; dortGozsuz: boolean; oneriZamani: string | null; kararNotu: string;
+}
+async function degisikligiUygula(db: Db, k: Kullanici, eski: Talep, g: DegistirGovdesi, p: SiparisDegisikligiPlani,
+  tutar: { once: number | null; sonra: number | null }, u: DegisiklikUygulamasi, izYaz: FiyatIziYazici): Promise<TalepCikisi> {
+  const id = eski.id;
   const gelislerOnce = await gelisOncesi(db, id);
-  await s.siparisKalemiYaz(db, id, g.kalemId, g.miktar, g.birim);
-  await gelisFarkiniBildir(db, id, gelislerOnce);
-  await s.siparisGuncellemesiniIsaretle(db, id, (eski.karar?.siparisler ?? []).filter((x) => x.satirlar.some((r) => r.kalemId === g.kalemId)).map((x) => x.teklifId));
-  await s.hareketEkle(db, id, randomUUID(), siparisDegisikligiMetni(eski.kalemler.find((x) => x.id === g.kalemId)!, g), k.id);
+  for (const r of p.satirlar) await s.siparisKalemiYaz(db, id, r.kalemId, r.miktar, r.birim);
+  await s.teklifFiyatlariYaz(db, id, g.teklifId, p.satirlar.map((r) => ({ kalemId: r.kalemId, birimFiyat: r.birimFiyat })));
+  await s.siparisSatirBilgileriYaz(db, id, p.satirlar.map((r) => ({ teklifId: g.teklifId, kalemId: r.kalemId, beklenenTeslim: r.beklenenTeslim, notlar: r.notlar })));
+  await kisitKorumali({ satin_alma_fatura_eslemesi_satir: ILETILER.eslemeliSatir }, () => s.talepKalemleriniSil(db, id, p.silinecekKalemler));
+  if (p.ozet.some((x) => x.alan === 'vadeGun')) await s.teklifVadesiYaz(db, id, g.teklifId, g.baslik.vadeGun);
+  const no = await s.siparisBasligiYaz(db, id, g.teklifId, g.baslik);
+  await s.siparisDegisikligiEkle(db, {
+    id: randomUUID(), talepId: id, teklifId: g.teklifId, degisiklikNo: no, sonuc: u.sonuc, ozet: p.ozet, onceTutar: tutarMetni(tutar.once), sonraTutar: tutarMetni(tutar.sonra),
+    gerekce: g.gerekce, teyitKisi: g.teyitKisi, teyitTarihi: g.teyitTarihi, yapanKisiId: u.yapanKisiId, onaylayanKisiId: u.onaylayanKisiId,
+    kararNotu: u.kararNotu, dortGozsuz: u.dortGozsuz, oneriZamani: u.oneriZamani,
+  });
+  // Yan etkiler yalnız uygulamada (S7): Logo düzenlemesi, planın gelişi, ödeme planı, alım satırları, fiyat izi.
+  if (p.logoIcerigiDegisti) await s.siparisGuncellemesiniIsaretle(db, id, [g.teklifId]);
+  if (p.gelisDegisti) await gelisFarkiniBildir(db, id, gelislerOnce);
+  await otomatikPlanlariYenile(db, k, id);
+  await alimlariBildir(db, k, id);
+  const sip = eski.karar!.siparisler.find((x) => x.teklifId === g.teklifId)!;
+  await s.hareketEkle(db, id, randomUUID(), degisiklikHareketi({ siparisNo: sip.no ?? sip.siparisNo, no, sonuc: u.sonuc, ozet: p.ozet, gerekce: g.gerekce }), k.id);
+  return gorunen(k, fiyatIziniYaz(izYaz, eski, (await talepOku(db, id))!));
+}
+
+// S1 a, S2 a: onaysız sınıfı satin-alma.yaz uygular; onaya düşeni öneri yapar. Dört göz kapalıyken onay yetkilisi (onay kademesi
+// tutarı karşılıyorsa) kendi değişikliğini doğrudan uygular, kayıt "dört gözsüz" işaretlidir.
+export async function siparisDegistir(db: Db, k: Kullanici, id: string, g: SiparisDegistirYazimi, izYaz: FiyatIziYazici): Promise<TalepCikisi> {
+  await surumluGuncelle({ guncelle: () => s.talepSurumuArttir(db, id, g.surum), varMi: () => s.talepVarMi(db, id), bulunamadiIletisi: ILETILER.talepYok });
+  const eski = (await talepOku(db, id))!;
+  birlesmisiReddet(eski);
+  if ((await s.siparisOnerileriOku(db, [id])).length > 0) throw gecersiz(DEGISIKLIK_ILETILERI.bekleyenVar);
+  const { surum: _surum, ...govde } = g;
+  const mevcut = await degisecekSiparis(db, eski, g.teklifId);
+  const plan = siparisDegisikligiKur(mevcut, govde);
+  if (typeof plan === 'string') throw gecersiz(plan);
+  // 257 a: birimi değişen kartlı kalem kartın birimiyle girilir.
+  const birimler = new Map(govde.satirlar.filter((r) => !r.iptal).map((r) => [r.kalemId, r.birim]));
+  const eskiKalemler = eski.kalemler.filter((x) => birimler.has(x.id));
+  await kalemKartlariniDenetle(db, eskiKalemler.map((x) => ({ ...x, birim: birimler.get(x.id)! })), eskiKalemler);
+  const tutar = await degisiklikTutarlari(db, eski, govde, plan);
+  const nedenler = degisiklikOnayNedenleri(plan, tutar.once, tutar.sonra);
+  const onayli = k.islemler.includes(ISLEM.onayla);
+  const dortGoz = await sistemAyariOku(db, 'satin-alma.dort-goz');
+  const kademeRed = !onayli || nedenler.length === 0 || !(await sistemAyariOku(db, 'satin-alma.onay-kademesi')) ? null
+    : onayKademesiReddi(true, 'onay', tutar.sonra, await s.onayLimitleri(db), await kisininRolleri(db, k.id), k.id);
+  if (nedenler.length === 0) {
+    return degisikligiUygula(db, k, eski, govde, plan, tutar, { sonuc: 'onaysiz', yapanKisiId: k.id, onaylayanKisiId: null, dortGozsuz: false, oneriZamani: null, kararNotu: '' }, izYaz);
+  }
+  if (onayli && !dortGoz && kademeRed === null) {
+    return degisikligiUygula(db, k, eski, govde, plan, tutar, { sonuc: 'onaylandi', yapanKisiId: k.id, onaylayanKisiId: k.id, dortGozsuz: true, oneriZamani: null, kararNotu: '' }, izYaz);
+  }
+  const sip = eski.karar!.siparisler.find((x) => x.teklifId === g.teklifId)!;
+  const oneri = {
+    talepId: id, tur: 'siparis-degistir' as const,
+    govde: { yazim: govde, ozet: plan.ozet, onayNedenleri: nedenler, degisiklikNo: (sip.degisiklikNo ?? 0) + 1, teslimler: teslimAnlik(mevcut) },
+    onayliTutar: tutarMetni(tutar.once), yeniTutar: tutarMetni(tutar.sonra), yeniFirmalar: [], gerekce: govde.gerekce, onerenKisiId: k.id,
+  };
+  if (!(await s.siparisOnerisiEkle(db, oneri))) throw cakisma(DEGISIKLIK_ILETILERI.bekleyenVar);
+  await s.hareketEkle(db, id, randomUUID(), degisiklikHareketi({ siparisNo: sip.no ?? sip.siparisNo, no: null, sonuc: 'oneri', ozet: plan.ozet, gerekce: govde.gerekce }), k.id);
+  await bildirimGonder(db, {
+    tur: 'satin-alma.talep-onay-bekliyor', baslik: `Onay bekleyen sipariş değişikliği: ${eski.no}`, metin: eski.baslik,
+    yol: `/satin-alma/onaylar?talep=${encodeURIComponent(id)}`, kaynakKimlik: `${id}:siparis-degisikligi`, haric: k.id,
+    alanlar: olayAlanlari('satin-alma.talep-onay-bekliyor', { oncelik: eski.oncelik, ihtiyaca_kalan_gun: kalanGun(eski.ihtiyacTarihi, Date.now()) }),
+  });
+  return gorunen(k, (await talepOku(db, id))!);
+}
+
+// R4, R5: onayda öneri yeniden kurulur ve bütünüyle uygulanır; arada teslim girdiyse ya da tutar öneridekini aşıyorsa reddedilir.
+// Retle öneri silinir, geçmişe numarasız "reddedildi" yazılır; ret notu zorunlu.
+// jsonb anahtar sırasını korumaz (kısa anahtar önce); öneri kaydı ile güncel plan sıradan bağımsız karşılaştırılır.
+function kanonik(x: unknown): string {
+  return JSON.stringify(x, (_k, v: unknown) => (v !== null && typeof v === 'object' && !Array.isArray(v)
+    ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) : v));
+}
+async function degisiklikOnerisiKarari(db: Db, k: Kullanici, eski: Talep, o: s.SiparisOnerisiOkuma, g: SiparisOnerisiKararYazimi, izYaz: FiyatIziYazici): Promise<TalepCikisi> {
+  const id = eski.id;
+  const kayit = degisiklikOnerisiKaydi.parse(o.govde);
+  const kapat = () => bildirimKapat(db, { tur: 'satin-alma.talep-onay-bekliyor', kaynakKimlik: `${id}:siparis-degisikligi` });
+  const sip = (eski.karar?.siparisler ?? []).find((x) => x.teklifId === kayit.yazim.teklifId);
+  const siparisNo = sip === undefined ? kayit.yazim.teklifId : sip.no ?? sip.siparisNo;
+  if (g.sonuc === 'ret') {
+    if (g.notlar === '') throw dogrulama('Ret notu zorunlu.', 'notlar');
+    await surumluGuncelle({ guncelle: () => s.talepSurumuArttir(db, id, g.surum), varMi: () => s.talepVarMi(db, id), bulunamadiIletisi: ILETILER.talepYok });
+    await s.siparisOnerisiSil(db, id);
+    await s.siparisDegisikligiEkle(db, {
+      id: randomUUID(), talepId: id, teklifId: kayit.yazim.teklifId, degisiklikNo: null, sonuc: 'reddedildi', ozet: kayit.ozet, onceTutar: o.onayliTutar, sonraTutar: o.yeniTutar,
+      gerekce: kayit.yazim.gerekce, teyitKisi: kayit.yazim.teyitKisi, teyitTarihi: kayit.yazim.teyitTarihi, yapanKisiId: o.onerenKisiId, onaylayanKisiId: k.id,
+      kararNotu: g.notlar, dortGozsuz: false, oneriZamani: o.zaman,
+    });
+    await s.hareketEkle(db, id, randomUUID(), degisiklikHareketi({ siparisNo, no: null, sonuc: 'reddedildi', ozet: kayit.ozet, gerekce: kayit.yazim.gerekce, not: g.notlar }), k.id);
+    await kapat();
+    return gorunen(k, (await talepOku(db, id))!);
+  }
+  const talepEdenler = [eski.acanKisiId, ...(eski.talepEdenKisiId === null ? [] : [eski.talepEdenKisiId]), ...(await s.talepEdenGecmisi(db, id))];
+  const sonuc = dortGozSonucu(k.id, o.onerenKisiId, await sistemAyariOku(db, 'satin-alma.dort-goz'), talepEdenler, 'onay');
+  if (sonuc === 'red') throw yetkiYok(ILETILER.dortGoz);
+  if (sonuc === 'talepEdenRed') throw yetkiYok(ILETILER.dortGozTalepEden);
+  await surumluGuncelle({ guncelle: () => s.talepSurumuArttir(db, id, g.surum), varMi: () => s.talepVarMi(db, id), bulunamadiIletisi: ILETILER.talepYok });
+  const guncel = (await talepOku(db, id))!;
+  const mevcut = await degisecekSiparis(db, guncel, kayit.yazim.teklifId);
+  const plan = siparisDegisikligiKur(mevcut, kayit.yazim);
+  if (typeof plan === 'string') throw gecersiz(`${DEGISIKLIK_ILETILERI.oneriDegisti} ${plan}`);
+  const ayni = kanonik(plan.ozet) === kanonik(kayit.ozet) && kanonik(teslimAnlik(mevcut)) === kanonik(kayit.teslimler);
+  if (!ayni) throw gecersiz(DEGISIKLIK_ILETILERI.oneriDegisti);
+  const tutar = await degisiklikTutarlari(db, guncel, kayit.yazim, plan);
+  if (o.yeniTutar !== null && (tutar.sonra === null || tutar.sonra > Number(o.yeniTutar) + 0.005)) throw gecersiz(DEGISIKLIK_ILETILERI.oneriTutarAsti);
+  if (await sistemAyariOku(db, 'satin-alma.onay-kademesi')) {
+    const kademe = onayKademesiReddi(true, 'onay', tutar.sonra, await s.onayLimitleri(db), await kisininRolleri(db, k.id), k.id);
+    if (kademe !== null) throw yetkiYok(kademe);
+  }
+  await s.siparisOnerisiSil(db, id);
+  const cikis = await degisikligiUygula(db, k, guncel, kayit.yazim, plan, tutar, {
+    sonuc: 'onaylandi', yapanKisiId: o.onerenKisiId, onaylayanKisiId: k.id, dortGozsuz: sonuc === 'dortGozsuz', oneriZamani: o.zaman, kararNotu: g.notlar,
+  }, izYaz);
+  await kapat();
+  return cikis;
+}
+
+// S8: bekleyen sipariş değişikliğini yalnız öneren geri çeker; geçmişe numarasız "geri alındı" yazılır, sipariş değişmez.
+export async function siparisOnerisiGeriAl(db: Db, k: Kullanici, id: string, g: SiparisOnerisiGeriAlYazimi): Promise<TalepCikisi> {
+  const eski = await talepOku(db, id);
+  if (eski === null) throw bulunamadi(ILETILER.talepYok);
+  const [o] = await s.siparisOnerileriOku(db, [id]);
+  if (o === undefined || o.tur !== 'siparis-degistir') throw bulunamadi(DEGISIKLIK_ILETILERI.degisiklikOnerisiYok);
+  if (o.onerenKisiId !== k.id) throw yetkiYok(DEGISIKLIK_ILETILERI.yalnizOneren);
+  const kayit = degisiklikOnerisiKaydi.parse(o.govde);
+  await surumluGuncelle({ guncelle: () => s.talepSurumuArttir(db, id, g.surum), varMi: () => s.talepVarMi(db, id), bulunamadiIletisi: ILETILER.talepYok });
+  await s.siparisOnerisiSil(db, id);
+  await s.siparisDegisikligiEkle(db, {
+    id: randomUUID(), talepId: id, teklifId: kayit.yazim.teklifId, degisiklikNo: null, sonuc: 'geri-alindi', ozet: kayit.ozet, onceTutar: o.onayliTutar, sonraTutar: o.yeniTutar,
+    gerekce: kayit.yazim.gerekce, teyitKisi: kayit.yazim.teyitKisi, teyitTarihi: kayit.yazim.teyitTarihi, yapanKisiId: k.id, onaylayanKisiId: null,
+    kararNotu: '', dortGozsuz: false, oneriZamani: o.zaman,
+  });
+  const sip = (eski.karar?.siparisler ?? []).find((x) => x.teklifId === kayit.yazim.teklifId);
+  await s.hareketEkle(db, id, randomUUID(), degisiklikHareketi({ siparisNo: sip === undefined ? '' : sip.no ?? sip.siparisNo, no: null, sonuc: 'geri-alindi', ozet: kayit.ozet, gerekce: kayit.yazim.gerekce }), k.id);
+  await bildirimKapat(db, { tur: 'satin-alma.talep-onay-bekliyor', kaynakKimlik: `${id}:siparis-degisikligi` });
   return gorunen(k, (await talepOku(db, id))!);
 }
 
 // ---- 3574-1: sipariş satırları. Sipariş verme tek komuttur: paylar, yeni firma, birim fiyat, satır termini ve firma başlığı birlikte
 // gelir (R1: tek işlem). S1 a: onaylı tutarı aşan ya da onaylı kararda olmayan firmaya giden sipariş uygulanmaz, onaya düşer (R4).
-function siparisOnerisiGovdesi(govde: unknown): SiparisOnerisi['govde'] {
+function siparisOnerisiGovdesi(govde: unknown): NonNullable<SiparisOnerisi['govde']> {
   return siparisVerGovdesi.omit({ surum: true }).parse(govde);
 }
 // Bağlı kalemler bölünmez (R1): fason, emir, satış siparişi bağı; birleşen talepten gelen kalem; kabul sınırı olan kalem.
@@ -1451,7 +1663,7 @@ async function kararTutariHesapla(db: Db, t: Talep): Promise<number | null> {
   const tutar = kararTutari(t.karar, t.kalemler, t.teklifler.map((q) => teklifHesabi(q, t.kalemler, esit)));
   return tutar === null || !Number.isFinite(tutar.tlToplam) ? null : Math.round(tutar.tlToplam * 100) / 100;
 }
-async function siparisDuzeniHazirla(db: Db, eski: Talep, govde: SiparisOnerisi['govde']) {
+async function siparisDuzeniHazirla(db: Db, eski: Talep, govde: NonNullable<SiparisOnerisi['govde']>) {
   const yeniFirmaIdleri = govde.siparisler.flatMap((x) => (x.yeniFirma === null ? [] : [x.yeniFirma.firmaId]));
   const firmalar = await firmaOzetleri(db, yeniFirmaIdleri);
   // R2: "başka firma" onaylı tedarikçi kuralından geçer (pasif ya da tedarikçi olamayan firma, Kalite Merkezi'nde aday ya da askıda).
@@ -1494,7 +1706,7 @@ export async function siparisVer(db: Db, k: Kullanici, id: string, g: SiparisVer
   if (gerekce === '') throw dogrulama(SIPARIS_ILETILERI.gerekceZorunlu, 'gerekce');
   // R4: öneri ayrı kayıttır; talep onaya kadar eski hâlinde kalır. Sürüm artar (aynı anda gelen kayıt eski sürümle reddedilir).
   await surumluGuncelle({ guncelle: () => s.talepSurumuArttir(db, id, surum), varMi: () => s.talepVarMi(db, id), bulunamadiIletisi: ILETILER.talepYok });
-  const oneri = { talepId: id, govde: { ...govde, gerekce }, onayliTutar: tutarMetni(onayliTutar), yeniTutar: tutarMetni(yeniTutar), yeniFirmalar: duzen.yeniFirmalar, gerekce, onerenKisiId: k.id };
+  const oneri = { talepId: id, tur: 'siparis-ver' as const, govde: { ...govde, gerekce }, onayliTutar: tutarMetni(onayliTutar), yeniTutar: tutarMetni(yeniTutar), yeniFirmalar: duzen.yeniFirmalar, gerekce, onerenKisiId: k.id };
   if (!(await s.siparisOnerisiEkle(db, oneri))) throw cakisma(SIPARIS_ILETILERI.bekleyenVar);
   await s.hareketEkle(db, id, randomUUID(), oneriHareketi(oneri), k.id);
   await bildirimGonder(db, {
@@ -1511,6 +1723,7 @@ export async function siparisOnerisiKarari(db: Db, k: Kullanici, id: string, g: 
   if (eski === null) throw bulunamadi(ILETILER.talepYok);
   const [o] = await s.siparisOnerileriOku(db, [id]);
   if (o === undefined) throw bulunamadi(SIPARIS_ILETILERI.oneriYok);
+  if (o.tur === 'siparis-degistir') return degisiklikOnerisiKarari(db, k, eski, o, g, izYaz);
   const oneren = (await kisiAdlari(db, [o.onerenKisiId])).get(o.onerenKisiId) ?? `#${o.onerenKisiId}`;
   const kapat = () => bildirimKapat(db, { tur: 'satin-alma.talep-onay-bekliyor', kaynakKimlik: `${id}:siparis` });
   if (g.sonuc === 'ret') {

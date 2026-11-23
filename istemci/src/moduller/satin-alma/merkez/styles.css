@@ -125,6 +125,8 @@
 .sa-kok .panel-b{ padding:var(--b-4); }
 .sa-kok .panel-f{ padding:var(--b-3) var(--b-4); border-top:1px solid var(--sa-line-2); display:flex; gap:var(--b-2); flex-wrap:wrap; align-items:center; }
 .sa-kok .stack{ display:flex; flex-direction:column; gap:var(--b-4); min-width:0; }
+/* Kayan pencere gövdesinde çocuk büzülmez: taşan içerik gövdeyle kayar. Büzülünce kaydırma kabındaki tablo (.tw) birkaç piksele iner, satırlar altındaki alanların arkasında kalır (3574-2a). */
+.sa-kok .tc-pencere-govde.stack > *{ flex-shrink:0; }
 .sa-kok .cols{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:var(--b-4); }
 .sa-kok .cols3{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:var(--b-4); }
 .sa-kok .detail{ display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:var(--b-5); align-items:start; }

@@ -1,4 +1,4 @@
-import type { AlternatifSonucu, SiparisLogo, TeklifAlternatifi, VadeBaslangici } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { SiparisDegisikligi, SiparisOnerisi, AlternatifSonucu, SiparisLogo, TeklifAlternatifi, VadeBaslangici } from '#paylasilan/sozlesme/satin-alma.ts';
 import type { SiparisOdemeYontemi } from '#paylasilan/sozlesme/finans.ts';
 /**
  * Sunucu ve arayüzün ortak veri tipleri.
@@ -50,6 +50,8 @@ export interface Settings {
   approvalLimits: ApprovalLimit[];
   // Basamak denetimi (sistem ayarı satin-alma.onay-kademesi); burada yalnız gösterilir.
   onayKademesi?: boolean;
+  // Dört göz (sistem ayarı satin-alma.dort-goz); sipariş değişikliği penceresinin tahmininde kullanılır, kesin karar sunucudadır.
+  dortGoz?: boolean;
   version?: number;
 }
 
@@ -293,13 +295,20 @@ export interface PurchaseRequest {
   scenarios?: SimScenario[];
   /** 3574-1 (S1 a): onay bekleyen sipariş; yalnız okunur. */
   siparisOnerisi?: SiparisOnerisiEkrani | null;
+  /** 3574-2a: teklif kimliği → siparişin değişiklik numarası, KDV oranı ve geçmişi (fiyat görmeyene gelmez). */
+  siparisGecmisi?: Record<string, SiparisGecmisiEkrani>;
   sample?: boolean;
   createdAt: number;
   updatedAt?: number;
   version?: number;
 }
 
+export interface SiparisGecmisiEkrani { no: number; kdvOrani: string | null; degisiklikler: SiparisDegisikligi[] | null }
+
 export interface SiparisOnerisiEkrani {
+  /** 3574-2a: öneri sipariş verme ya da verilmiş siparişin değişikliğidir; değişiklikte paylar ve başlıklar boş, `degisiklik` dolu. */
+  tur?: "siparis-ver" | "siparis-degistir";
+  degisiklik?: SiparisOnerisi["degisiklik"];
   onayliTutar: number | null; yeniTutar: number | null; yeniFirmalar: string[]; gerekce: string; onerenId: string; onerenAdi: string; zaman: number;
   /** Onaylanacak siparişin kendisi (yalnız okunur): pay ve firma başlıkları. */
   paylar: { itemId: string; quoteId: string; qty: number; price: number; exp: string; note: string }[];
