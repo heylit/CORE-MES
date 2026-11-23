@@ -8,6 +8,7 @@ import type {
   AcikSiparisSatirlariCevabi, KaliteDurumu, HareketCevabi, MalKabulAyrintiCevabi, MalKabulCevabi, MalKabulDuzeltKomutu, MalKabulKomutu, MalKabullerListesi, MalKabulOzeti, UretimGirisiKomutu,
 } from '#paylasilan/sozlesme/stok.ts';
 import { belgeAcVeBagla, kaydaBagla } from '../../belge-merkezi/disari.ts';
+import { bildirimGonder, bildirimKapat } from '../../bildirim/disari.ts';
 import { kisiAdlari } from '../../kisiler/disari.ts';
 import { gkkGerekenKartlar, malzemeBirimDonusumleri, malzemeKullanilabilirMi, malzemeMaliyetBilgileri, malzemeOzeti, malzemeOzetleri, sktTakipliKartlar } from '../../malzemeler/disari.ts';
 import { siparisSatirlari, siparisSatirlarininEmri, stokBirimiBasinaKg, teslimGeriAl, teslimIsle } from '../../satin-alma/disari.ts';
@@ -32,8 +33,10 @@ import { baslangicAyrintisi } from './baslangic.ts';
 // ---- Mal kabul (DEP-10, DEP-20, DEP-38, DEP-39) ---------------------------------------------------------------------------------
 // Denetim eki komutta bir kez yazılır: satırların sertifika bağları burada toplanır, komut sonunda tek ek olur.
 type DenetimDefteri = DenetimSecimi[];
+// 3596: stoğa giren satırın bildirim künyesi (mal kabul yapıldı, GKK bekliyor); yazım sonunda toplu gönderilir.
+interface GirenSatir { satirId: number; kod: string | null; ad: string | null; birim: string | null; miktar: string; gkk: boolean; tedarikci: string | null }
 async function malKabulSatirlariniYaz(
-  db: Db, malKabulId: number, tur: string, satirlar: MalKabulKomutu['satirlar'], k: Kullanici, eksiOnay: boolean, denetim: DenetimDefteri,
+  db: Db, malKabulId: number, tur: string, satirlar: MalKabulKomutu['satirlar'], k: Kullanici, eksiOnay: boolean, denetim: DenetimDefteri, girenler: GirenSatir[] = [],
 ): Promise<number[]> {
   const kisiId = k.id;
   const kabul = await varsayilanKonum(db, 'KABUL');
@@ -144,6 +147,7 @@ async function malKabulSatirlariniYaz(
     // SH1 a: teslim satın almaya aynı işlemde yazılır; kalanı aşan miktar reddedilmez, satın almada fazla teslim görünür.
     if (siparisSatirId !== null && teslim !== null) await teslimIsle(db, k, { siparisSatirId, ...teslim, malKabulSatirId: yazilan.satirId });
     await sevkKalemiKabulu(db, kisiId, s, alan, yazilan.satirId);
+    girenler.push({ satirId: yazilan.satirId, kod: o.kod ?? null, ad: o.ad ?? null, birim: o.birim ?? null, miktar, gkk, tedarikci: ss?.tedarikciAdi ?? null });
     idler.push(yazilan.id, ...(yazilan.fasonCikisHareketId === null ? [] : [yazilan.fasonCikisHareketId]));
   }
   return idler;
@@ -184,7 +188,8 @@ function denetimiYaz(denetim: DenetimDefteri, denetimEki: (s: readonly DenetimSe
 export async function malKabulYap(db: Db, k: Kullanici, g: MalKabulKomutu, denetimEki: (s: readonly DenetimSecimi[]) => void): Promise<MalKabulCevabi> {
   const id = await sorgular.malKabulAc(db, { no: await belgeNo(db, 'stok.mal-kabul-no', 'stok_mal_kabul'), tur: g.tur, irsaliyeNo: g.irsaliyeNo ?? null, irsaliyeTarihi: g.irsaliyeTarihi ?? null, duzeltilenId: null, kisiId: k.id });
   const denetim: DenetimDefteri = [];
-  const hareketIdler = await malKabulSatirlariniYaz(db, id, g.tur, g.satirlar, k, g.eksiOnay === true, denetim);
+  const girenler: GirenSatir[] = [];
+  const hareketIdler = await malKabulSatirlariniYaz(db, id, g.tur, g.satirlar, k, g.eksiOnay === true, denetim, girenler);
   // Gelen serbest malzeme bekleyen emirlere sırayla ayrılır (fason dönüşü emrin kendi parçasıdır, ayrılmaz); talepte seçilen emir öne geçer.
   const serbest = g.satirlar.filter((x) => x.fason === undefined && x.fasonIsi === undefined);
   const satirEmri = await siparisSatirlarininEmri(db, serbest.flatMap((x) => (x.siparisSatirId === undefined ? [] : [Number(x.siparisSatirId)])));
@@ -195,7 +200,38 @@ export async function malKabulYap(db: Db, k: Kullanici, g: MalKabulKomutu, denet
   }
   await bekleyenlereDagit(db, k.id, serbest.map((x) => Number(x.malzemeId)), onde);
   denetimiYaz(denetim, denetimEki);
-  return { belge: await malKabulOzetiCevir(db, (await sorgular.malKabulBul(db, id))!), hareketIdler };
+  const belge = (await sorgular.malKabulBul(db, id))!;
+  if (g.tur === 'satin_alma') await malKabulBildir(db, k.id, belge.no, girenler);
+  await gkkBekliyorBildir(db, k.id, belge.no, girenler);
+  return { belge: await malKabulOzetiCevir(db, belge), hareketIdler };
+}
+// 3596: tek malzemeli belgede kod ve ad; çok malzemede "n kalem". Tedarikçi tek ise yazılır (siparişsiz satırda yok).
+const tekDeger = <T>(l: readonly T[]): T | null => (new Set(l).size === 1 ? l[0] ?? null : null);
+const kalemMetni = (l: readonly GirenSatir[]): string => {
+  const tek = tekDeger(l.map((x) => x.kod));
+  const x = l[0];
+  return tek !== null && x !== undefined ? `${x.ad ?? x.kod}` : `${new Set(l.map((y) => y.kod)).size} kalem`;
+};
+const gkkKaynagi = (malKabulSatirId: number): string => `mal-kabul-satiri:${malKabulSatirId}`;
+async function malKabulBildir(db: Db, kisiId: number, no: string, girenler: readonly GirenSatir[]): Promise<void> {
+  if (girenler.length === 0) return;
+  const tedarikci = tekDeger(girenler.map((x) => x.tedarikci));
+  const gkkVar = girenler.some((x) => x.gkk);
+  await bildirimGonder(db, {
+    tur: 'stok.mal-kabul-yapildi', baslik: `Mal kabul ${no}: ${kalemMetni(girenler)}`.slice(0, 200),
+    metin: `${tedarikci === null ? '' : `${tedarikci}. `}${gkkVar ? 'Giriş kontrolü bekleyen kalem var.' : 'Kalemler kabul alanında.'}`,
+    haric: kisiId, kaynakKimlik: no,
+    alanlar: { tedarikci, malzeme_kodu: tekDeger(girenler.map((x) => x.kod)), gkk: gkkVar ? 'var' : 'yok' },
+  });
+}
+async function gkkBekliyorBildir(db: Db, kisiId: number, no: string, girenler: readonly GirenSatir[]): Promise<void> {
+  for (const x of girenler.filter((y) => y.gkk)) {
+    await bildirimGonder(db, {
+      tur: 'stok.gkk-bekliyor', baslik: `GKK bekliyor: ${x.ad ?? x.kod ?? 'malzeme'}`.slice(0, 200),
+      metin: `${x.miktar}${x.birim ? ` ${x.birim}` : ''} karantinada, ${no}${x.tedarikci ? ` (${x.tedarikci})` : ''}.`,
+      haric: kisiId, kaynakKimlik: gkkKaynagi(x.satirId), alanlar: { tedarikci: x.tedarikci, malzeme_kodu: x.kod },
+    });
+  }
 }
 // Düzeltme (DEP-53): eski belgenin her satırı aynı işlemde ters çevrilir, siparişe bağlı satırın teslimi geri alınır, doğru
 // satırlarla yeni belge açılır. Satırsız düzeltme belgeyi tamamen iptal eder: yeni belge satırsız kalır, iptalin kaydıdır.
@@ -223,11 +259,16 @@ export async function malKabulDuzelt(db: Db, k: Kullanici, id: number, g: MalKab
   }
   // B-4 (1405 a): satırın kabul ettiği sevkiyat kalemi kabulü geri alır; kalem depoda yeniden bekler, yeni satır ona yeniden bağlanabilir.
   await depoKabulunuGeriAl(db, kisiId, satirlar.map((s) => s.id));
+  // 3596: ters çevrilen GKK satırının görevi kalkar; doğru satır GKK isterse yeni görev açılır. Düzeltme "mal kabul yapıldı" yaymaz.
+  for (const satirId of gkkSatirlari) await bildirimKapat(db, { tur: 'stok.gkk-bekliyor', kaynakKimlik: gkkKaynagi(satirId) });
   const yeni = await korumali(async () => sorgular.malKabulAc(db, { no: await belgeNo(db, 'stok.mal-kabul-no', 'stok_mal_kabul'), tur: eski.tur, irsaliyeNo: eski.irsaliyeNo, irsaliyeTarihi: eski.irsaliyeTarihi, duzeltilenId: id, kisiId }));
   const denetim: DenetimDefteri = [];
-  hareketIdler.push(...(await malKabulSatirlariniYaz(db, yeni, eski.tur, g.satirlar, k, g.eksiOnay === true, denetim)));
+  const girenler: GirenSatir[] = [];
+  hareketIdler.push(...(await malKabulSatirlariniYaz(db, yeni, eski.tur, g.satirlar, k, g.eksiOnay === true, denetim, girenler)));
   denetimiYaz(denetim, denetimEki);
-  return { belge: await malKabulOzetiCevir(db, (await sorgular.malKabulBul(db, yeni))!), hareketIdler };
+  const belge = (await sorgular.malKabulBul(db, yeni))!;
+  await gkkBekliyorBildir(db, kisiId, belge.no, girenler);
+  return { belge: await malKabulOzetiCevir(db, belge), hareketIdler };
 }
 // Depocu tek kutudan malzeme, tedarikçi, emir ve projeyle arar. Emir talebin ya da kalemin kaynak talebinin emridir, fason
 // satırında iş emrinin emri. Satır sayısından bağımsız sabit sayıda toplu okuma (N+1 yok).
@@ -342,6 +383,8 @@ export type GirisKontroluSonucu = 'serbest' | 'sartli' | 'red' | 'iade';
 export async function girisKontroluUygula(db: Db, kisiId: number, g: {
   malKabulSatirId: number; partiId: number; kaynak: 'karar_bekliyor' | 'red'; miktar: string; sonuc: GirisKontroluSonucu; aciklama: string;
 }): Promise<number[]> {
+  // 3596: karar bekleyenden verilen giriş kontrolü (kabul ya da hatalı) lotun GKK görevini kapatır; red kaynaklı karar ikinci aşamadır.
+  if (g.kaynak === 'karar_bekliyor') await bildirimKapat(db, { tur: 'stok.gkk-bekliyor', kaynakKimlik: gkkKaynagi(g.malKabulSatirId) });
   if (g.sonuc === 'iade') {
     if (g.kaynak !== 'red') throw gecersiz('Tedarikçiye iade yalnız red kararından sonra yazılır.');
     return tedarikciyeIade(db, kisiId, { partiId: g.partiId, miktar: g.miktar, aciklama: g.aciklama });

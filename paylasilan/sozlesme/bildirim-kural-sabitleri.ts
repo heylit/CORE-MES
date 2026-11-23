@@ -19,6 +19,8 @@ const tutar: KuralAlani = { ad: 'tutar', etiket: 'Genel toplam', tip: 'sayi', pa
 const paraBirimi: KuralAlani = { ad: 'para_birimi', etiket: 'Para birimi', tip: 'metin' };
 const termineKalan: KuralAlani = { ad: 'termine_kalan_gun', etiket: 'Termine kalan gün', tip: 'sayi' };
 const proje: KuralAlani = { ad: 'proje', etiket: 'Proje kodu', tip: 'metin' };
+// 3596: belgede tek malzeme varsa onun kodu; birden çok malzemede değer yoktur (koşul tutmaz).
+const malzemeKodu: KuralAlani = { ad: 'malzeme_kodu', etiket: 'Malzeme kodu', tip: 'metin' };
 
 export const KURAL_ALANLARI = {
   'satin-alma.talep-onay-bekliyor': [
@@ -33,6 +35,12 @@ export const KURAL_ALANLARI = {
   'projeler.gorev-kontrol-bekliyor': [proje],
   'malzemeler.kart-onay-bekliyor': [{ ad: 'stok_kodu', etiket: 'Stok kodu', tip: 'metin' }],
   'ik.izin-onay-bekliyor': [{ ad: 'izin_turu', etiket: 'İzin türü', tip: 'metin' }, { ad: 'gun', etiket: 'Gün sayısı', tip: 'sayi' }],
+  'stok.mal-kabul-yapildi': [
+    { ad: 'tedarikci', etiket: 'Tedarikçi', tip: 'metin' }, malzemeKodu,
+    { ad: 'gkk', etiket: 'Giriş kontrolü', tip: 'secim', secenekler: [{ deger: 'var', etiket: 'Var' }, { deger: 'yok', etiket: 'Yok' }] },
+  ],
+  'stok.gkk-bekliyor': [{ ad: 'tedarikci', etiket: 'Tedarikçi', tip: 'metin' }, malzemeKodu],
+  'uretim-emirleri.emir-tamamlandi': [malzemeKodu, proje],
 } as const satisfies Partial<Record<BildirimTuru, readonly KuralAlani[]>>;
 export type KuralliTur = keyof typeof KURAL_ALANLARI;
 // Olayı yayan modül alanları bununla verir: alan adı yanlış yazılırsa derleme kırılır (değer sessizce boş kalmaz).

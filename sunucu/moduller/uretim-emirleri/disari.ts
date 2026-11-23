@@ -14,6 +14,8 @@ import { elleDurdurmaNedeni as elleDurdurma, elleOnaylar, hazirlikCozucusuKaydet
 import type { HazirlikCozucusu } from './hazirlik.ts';
 import { kapanisCozucusuKaydet } from './kapanis.ts';
 import type { KapanisCozucusu } from './kapanis.ts';
+// 3596: adım ve emir bitince Bildirim Merkezi'ne giden dinleyiciler kendini kaydeder (kapanış açılışı gibi).
+import './is-olayi-bildirimi.ts';
 import {
   adimGirdileriGetir, adimUretimSatiriGetir, emirAdimZinciriGetir, akisEmriGetir, akisFasonGetir, akisIsEmirleriGetir, akisOlaylariGetir, akisSayimlariGetir, aralikAdetleriGetir, gunlukAralikAdetleriGetir, kisininGunlukIsEmirleriGetir,
   tasinanGirdiGetir, dugumleriGetir, emirBul, emirleriGetir, emirDurumlariGetir, ustEmirlerBul, isEmirleriGetir, malzemelerinAcikEmirleriGetir, siparisSatiriEmirleriGetir, isEmriPlanBilgileriGetir, isEmriZamanlariGetir, katilimSureleriGetir, kisininAcikIstasyonu, kisininAcikIsleriGetir, kisininHurdalariGetir,

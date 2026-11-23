@@ -113,6 +113,23 @@ const ELLE_TANIMLI_TURLER = {
   'stok.teslim-suresi-doldu': {
     baslik: 'Teslimin yolda süresi doldu', onem: 'uyari', alanIslemler: [], yol: '/stok', varsayilan: { mesaj: false, eposta: false },
   },
+  // 3596: gerçekleşen iş olayları (varsayılan kapalı, 3478-2 a). Mal kabul belge başına bir kez satın almaya; yapan kendisi almaz.
+  'stok.mal-kabul-yapildi': {
+    baslik: 'Mal kabul yapıldı', onem: 'bilgi', alanIslemler: ['satin-alma.yaz'], yol: '/satin-alma/talepler', varsayilan: { mesaj: false, eposta: false },
+  },
+  // 3596: GKK isteyen lot karantinaya karar bekliyor girdi. Görevdir: giriş kontrolü verilince ya da mal kabul düzeltilince stok kapatır.
+  'stok.gkk-bekliyor': {
+    baslik: 'Giriş kontrolü bekliyor', onem: 'uyari', sinif: 'gorev', alanIslemler: ['kalite-merkezi.onayla'], yol: '/kalite-merkezi/giris-kontrolu',
+    varsayilan: { mesaj: false, eposta: false },
+  },
+  // 3596: adım bitti; alıcı sıradaki adımın istasyonuna bugün atanmış kişilerdir (kayda bağlı, alan işlemi yok) ve Bildirim yönetimi'nde
+  // seçilen rol ve kişiler. Operatör zili Üretim Terminali'nde görür.
+  'uretim-emirleri.adim-tamamlandi': {
+    baslik: 'Önceki adım tamamlandı', onem: 'bilgi', alanIslemler: [], yol: '/uretim-terminali', varsayilan: { mesaj: false, eposta: false },
+  },
+  'uretim-emirleri.emir-tamamlandi': {
+    baslik: 'Üretim emri tamamlandı', onem: 'bilgi', alanIslemler: ['uretim-emirleri.plana-al'], yol: '/uretim-emirleri', varsayilan: { mesaj: false, eposta: false },
+  },
   // Kart 764 (769 a): üretim anomalisinin zaman olayları, iş emri ve tür başına bir kez; alıcı bugünkü işlemlerdir, Bildirim yönetimi'nden
   // role ya da kişiye yönlendirilebilir (760 c). Gerçekleşmiş halde açılan gecikme sayfada kalır, bildirilmez.
   'arkon.gec-giris': {
