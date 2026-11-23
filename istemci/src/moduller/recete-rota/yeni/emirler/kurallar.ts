@@ -377,10 +377,13 @@ export const bugun = (simdi: Date = new Date()): string => isoGun(simdi);
 
 // Emrin eksiklerinden Taleplerim'in yeni talep taslağı (Termin takibinin "Talep aç"ı gibi). Talebi ya da siparişi olan kalem yeniden
 // istenmez; ön talepte kalan ya da hiç istenmemiş kalem eksik miktarla gelir. Gereken gün planın ilk başlangıcı, yoksa teslim, yoksa bugün.
+// Eksik kalemin talebi ya da siparişi açıksa kapsanmıştır; ön talep kapsamaz. Satın alma okuması yoksa sunucu durumu göndermez (null):
+// kapsandığı bilinemez, kalem kapsanmamış sayılır ve düğme eskisi gibi kalır.
+export const talepKapsadiMi = (e: Pick<MalzemeIhtiyaciSatiri, 'satinAlma'>): boolean => e.satinAlma?.asama === 'talep' || e.satinAlma?.asama === 'siparis';
 export function emirTalepTaslagi(emirNo: string, eksikler: readonly MalzemeIhtiyaciSatiri[], gerekenGun: string): PlanOnTalep[] {
   return eksikler.flatMap((e) => {
     const adet = Number(e.alinacak);
-    if (!(adet > EPS) || e.satinAlma?.asama === 'talep' || e.satinAlma?.asama === 'siparis') return [];
+    if (!(adet > EPS) || talepKapsadiMi(e)) return [];
     return [{
       kaynak: 'plan' as const, malzeme: { no: e.malzemeNo, kod: e.kod ?? '', ad: e.ad ?? '' }, miktar: adet, birim: e.birim ?? '', gerekenTarih: gerekenGun,
       emirler: [emirNo], stokBilinmiyor: false, hesap: { eksik: adet, siparis: 0, talep: 0, yoksayilan: 0 },

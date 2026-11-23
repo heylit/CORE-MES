@@ -957,6 +957,43 @@ describe('R3 Üretim emirleri: malzeme ihtiyacı sunucudan (B-2484-3, 461 b)', (
     expect(screen.getByText(new RegExp(`^Taslak HM-0001 100 \\d{4}-\\d{2}-\\d{2} ${ornekDurum().emirler!.orders[0]!.no}$`))).toBeTruthy();
   });
 
+  // 3599: açık talebi ya da siparişi olan eksik kalem için banner bilgidir; düğme yalnız kapsanmayan kalem varken kalır.
+  const talepliCevap = (ikinciTalepte: boolean, satinAlmaGorunur = true) => () => {
+    const talep = { asama: 'talep', no: 'SA-0001', talepDurumu: 'taslak', termin: null };
+    const a = satir('100', { satinAlma: satinAlmaGorunur ? talep : null });
+    const b = { ...satir('50', { satinAlma: ikinciTalepte && satinAlmaGorunur ? { ...talep, no: 'SA-0002' } : null }), malzemeNo: 13, kod: 'HM-0002' };
+    return json(200, { stokGorunur: true, satinAlmaGorunur, emirler: [{ emirId: ornekDurum().emirler!.orders[0]!.kayitNo, hammadde: [a, b], yanUrun: [], eksikler: [a, b], uyarilar: [] }] });
+  };
+  const talepAcan = { ...YONETICI, islemler: [...YONETICI.islemler, 'satin-alma.talep-ac' as const] };
+
+  it('her eksik kalemin talebi açıksa banner "Talep açıldı" der ve düğme çıkmaz (izinli)', async () => {
+    sunucuKur(talepAcan, { durum: planda(), yazmalar: { 'GET /recete-rota/malzeme-ihtiyaci': talepliCevap(true) } });
+    rrAc();
+    const b = await emirAc();
+    await within(b).findByText(/Talep açıldı: HM-0001 talep SA-0001, HM-0002 talep SA-0002/);
+    expect(within(b).queryByRole('button', { name: 'Satın alma talebi aç' })).toBeNull();
+    expect(within(b).queryByText(/kalem eksik/)).toBeNull();
+  });
+
+  it('kısmen kapsanmışta düğme kalır ve taslağa yalnız talebi olmayan kalem gelir (izinli)', async () => {
+    sunucuKur(talepAcan, { durum: planda(), yazmalar: { 'GET /recete-rota/malzeme-ihtiyaci': talepliCevap(false) } });
+    rrAc();
+    const b = await emirAc();
+    await within(b).findByText(/1 kalem için talep açıldı/);
+    fireEvent.click(within(b).getByRole('button', { name: 'Satın alma talebi aç' }));
+    expect(await screen.findByText(new RegExp(`^Taslak HM-0002 50 `))).toBeTruthy();
+    expect(screen.queryByText(/^Taslak HM-0001/)).toBeNull();
+  });
+
+  it('satın alma okuması yoksa talep bilinemez: banner ve düğme eskisi gibi kalır (reddedilen)', async () => {
+    sunucuKur(talepAcan, { durum: planda(), yazmalar: { 'GET /recete-rota/malzeme-ihtiyaci': talepliCevap(true, false) } });
+    rrAc();
+    const b = await emirAc();
+    await within(b).findByText(/2 kalem eksik/);
+    expect(within(b).getByRole('button', { name: 'Satın alma talebi aç' })).toBeTruthy();
+    expect(within(b).queryByText(/Talep açıldı/)).toBeNull();
+  });
+
   it('talep açma yetkisi olmayan düğmeyi görmez (reddedilen)', async () => {
     sunucuKur(YONETICI, { durum: planda(), yazmalar: { 'GET /recete-rota/malzeme-ihtiyaci': cevap(true, '100') } });
     rrAc();
