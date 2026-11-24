@@ -1,6 +1,6 @@
 import { expect, tasmaOlc, test } from './ortak.ts';
 
-// Planlama P4: Malzeme satın alma planı (/plan/malzplan). Ekran yalnız okur (222 a); örnek veride plan
+// Planlama P4: Malzeme ihtiyacı ve satın alma (/plan/malzplan). Ekran yalnız okur (222 a); örnek veride plan
 // kurulmamış olabilir, o zaman "Önce plan kurulmalı." ya da "Planlama çalışması yok." görünür. Üç genişlikte (360, 768, 1280) koşar.
 test.use({ hesap: 'ornek.yonetici' });
 
@@ -9,35 +9,31 @@ test.describe('P4 malzeme planı', () => {
     await ac('/plan/malzplan');
     await expect(page.locator('[data-gorunum="malzplan"]')).toBeVisible();
     const serit = page.getByRole('navigation', { name: 'Planlama menüsü' });
-    await expect(serit.getByRole('link', { name: /^Malzeme satın alma planı/ })).toHaveAttribute('aria-current', 'page');
-    // 3537 a: Kokpit dili. Liste başta (malzeme başına tek satır, süzgeç ve arama); Takvim ısı haritasıdır (telefonda yok); Bütçe sayaç,
-    // grafik, dağılım, günlük tüketim ve öne çekmedir. Plan yoksa "Önce plan kurulmalı." ve Kokpit bağlantısı.
-    const plan = page.getByRole('heading', { name: /Malzeme satın alma planı/ });
+    await expect(serit.getByRole('link', { name: /^Malzeme ihtiyacı ve satın alma/ })).toHaveAttribute('aria-current', 'page');
+    // 3666: Matris başta (satır malzeme, sütun gün, satırda durum, Stok yeter ve Talep; süzgeç, arama, talebi topla); Liste malzeme başına tek satır, açılımda neden ve
+    // termin; Bütçe sayaç, grafik, dağılım ve öne çekme. Plan yoksa "Önce plan kurulmalı." ve Kokpit bağlantısı.
+    const plan = page.getByRole('heading', { name: /Malzeme ihtiyacı ve satın alma/ });
     await expect(plan.or(page.getByText('Planlama çalışması yok.'))).toBeVisible();
     await expect(page.getByText('Tüm satırlar')).toHaveCount(0);
-    const liste = page.getByRole('table', { name: 'Malzemeler' });
-    await expect(liste.or(page.getByText('Önce plan kurulmalı.')).or(page.getByText('Planlama çalışması yok.'))).toBeVisible();
-    if (await liste.isVisible()) {
+    const matris = page.getByRole('table', { name: 'Günlük tüketim' });
+    await expect(matris.or(page.getByText('Önce plan kurulmalı.')).or(page.getByText('Planlama çalışması yok.'))).toBeVisible();
+    if (await matris.isVisible()) {
+      await expect(page.getByRole('searchbox', { name: 'Malzeme ara' })).toBeVisible();
+      await expect(page.getByRole('group', { name: 'Gün penceresi' })).toBeVisible();
+      // Sayfa yazmaz: toplama düğmesi seçilir, talep açılmaz.
+      const topla = page.getByRole('group', { name: 'Talebi topla' }).or(page.getByRole('combobox', { name: 'Talebi topla' }));
+      await expect(topla).toBeVisible();
+      expect((await tasmaOlc(page)).belge, 'yatay taşma (Matris)').toBeLessThanOrEqual(0);
+      const gorunum = page.getByRole('group', { name: 'Görünüm' });
+      await gorunum.getByRole('button', { name: 'Liste' }).click();
+      await expect(page.getByRole('table', { name: 'Malzemeler' })).toBeVisible();
       await expect(page.getByRole('searchbox', { name: 'Ara' })).toBeVisible();
       expect((await tasmaOlc(page)).belge, 'yatay taşma (Liste)').toBeLessThanOrEqual(0);
-      const gorunum = page.getByRole('group', { name: 'Görünüm' });
-      const genis = (page.viewportSize()?.width ?? 0) >= 768;
-      // Telefonda ısı haritasına yer yok: Takvim seçeneği yalnız 768 ve üstünde.
-      await expect(gorunum.getByRole('button', { name: 'Takvim' })).toHaveCount(genis ? 1 : 0);
-      if (genis) {
-        await gorunum.getByRole('button', { name: 'Takvim' }).click();
-        await expect(page.getByRole('group', { name: 'Malzeme × gün, stok yetiyor mu' }).or(page.getByText(/karşılananlar/))).toBeVisible();
-      }
-      await page.getByRole('group', { name: 'Görünüm' }).getByRole('button', { name: 'Bütçe' }).click();
+      await gorunum.getByRole('button', { name: 'Bütçe' }).click();
       const kirilim = page.getByRole('group', { name: 'Kırılım' });
       await kirilim.getByRole('button', { name: 'Hafta' }).click();
       await expect(kirilim.getByRole('button', { name: 'Hafta' })).toHaveAttribute('aria-pressed', 'true');
       await expect(page.getByRole('button', { name: 'Hesapla' })).toBeEnabled();
-    }
-    // 3485 a: günlük tüketim ve toplu plan kartı; toplama düğmesi seçilir, talep açılmaz (sayfa yazmaz).
-    if (await page.getByRole('table', { name: 'Günlük tüketim' }).isVisible()) {
-      const topla = page.getByRole('group', { name: 'Talebi topla' }).or(page.getByRole('combobox', { name: 'Talebi topla' }));
-      await expect(topla).toBeVisible();
     }
     expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
     // Stok uçlarının yetkisi olmayan hesapta 403 beklenir (ekran planın kopyasına döner); onun dışında hata yok.

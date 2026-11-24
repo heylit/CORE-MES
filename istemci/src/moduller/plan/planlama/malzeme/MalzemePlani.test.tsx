@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { PLANLAMA_ANAHTARI } from '../veri.ts';
 import { MALIYETSIZ, YONETICI, ac, sunucuKur } from '../test-ortak.tsx';
@@ -14,22 +14,22 @@ import { OneCekme, oneCekmeAdresi, SURUM_YOK } from './OneCekme.tsx';
 const bugun = new Date().toISOString().slice(0, 10);
 const G = 24;
 
-function calisma(plan: boolean) {
+function calisma(plan: boolean, geriGun = 0) {
   return {
     surum: 2, dataVer: 1, down: [], ekMesai: [], locks: {}, pref: {}, kapali: [], olaylar: [], senaryolar: [], canli: null, iz: [],
     D: {
-      meta: { baslangic: bugun },
+      meta: { baslangic: geriGun === 0 ? bugun : new Date(Date.now() - geriGun * 86400000).toISOString().slice(0, 10) },
       siparisler: [{ id: 'E-1', urun: 'U1', adet: 10, termin: null, malzeme: [{ kod: '11', miktar: 2 }] }],
       urunler: [{ id: 'U1' }], tezgahlar: [],
       malzemeler: [{ kod: '11', ad: 'Deneme cubuk', birim: 'kg', stok: 5, birimFiyat: 10, tedarikGun: 2, muayeneGun: 0 }],
       satinalma: [{ kod: '11', miktar: 3, gelis: '2099-01-01 08:00', tedarikci: 'T1' }],
       tedarikciler: [{ id: 'T1', ad: 'Deneme Tedarik' }],
     },
-    plan: plan ? { dataVer: 1, ops: { 'E-1.10': { job: 'E-1', S: 5 * G, C: 6 * G, done: 0 } } } : null,
+    plan: plan ? { dataVer: 1, ops: { 'E-1.10': { job: 'E-1', S: (geriGun + 5) * G, C: (geriGun + 6) * G, done: 0 } } } : null,
   };
 }
 
-const kayit = (plan = true) => [{ anahtar: PLANLAMA_ANAHTARI, bicim: 'json' as const, deger: calisma(plan), surum: 4 }];
+const kayit = (plan = true, geriGun = 0) => [{ anahtar: PLANLAMA_ANAHTARI, bicim: 'json' as const, deger: calisma(plan, geriGun), surum: 4 }];
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
 // Stok uçları: malzeme 11 (stok kodu M-1; planda kodu malzeme numarasıdır), serbest 6; açık sipariş satırı 4 kg.
@@ -59,9 +59,27 @@ function talepSun(talepte: number | null | 'bekle'): void {
     return once(adres, istek);
   }));
 }
+// Planda olmayan açık emirleri de sayan sunucu hesabı (3666): malzeme 11 için brüt 40, net 30.
+function mrpSun(): void {
+  const once = globalThis.fetch;
+  vi.stubGlobal('fetch', vi.fn(async (adres: string, istek?: RequestInit) => {
+    if (adres.replace(/^\/api/, '') === '/plan/mrp-ihtiyaci') {
+      return json(200, {
+        hesaplanan: '2099-01-01T00:00:00.000Z', stokGorunur: true, satinAlmaGorunur: true, urunsuzEmir: 0,
+        satirlar: [{
+          malzeme: { id: 11, kod: 'M-1', ad: 'Deneme cubuk', tur: null, birim: 'kg' }, brut: 40, serbest: 6, acikSiparis: 4, net: 30, emniyetPayi: null,
+          ihtiyacTarihi: null, eksikTarihi: null, emirler: ['E-1'], acilanlar: [], acildi: false,
+        }],
+      });
+    }
+    return once(adres, istek);
+  }));
+}
 const TALEPCI: Kullanici = { ...YONETICI, islemler: [...YONETICI.islemler, 'satin-alma.talep-ac'] };
 const GORUNUM_ANAHTARI = 'tmi.malzplan.gorunum';
 
+// Görünüm tercihi yokken sayfa Matris açılır (3666); Liste testleri tercihi kendisi koyar.
+beforeEach(() => { localStorage.setItem(GORUNUM_ANAHTARI, 'liste'); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); localStorage.removeItem(GORUNUM_ANAHTARI); });
 
 describe('Malzeme satın alma planı: Liste (3537 a)', () => {
@@ -198,7 +216,7 @@ describe('Malzeme satın alma planı: Kokpit seçimi', () => {
   }, 20000);
 });
 
-describe('Malzeme satın alma planı: Takvim ve Bütçe', () => {
+describe('Malzeme ihtiyacı ve satın alma: Matris ve Bütçe', () => {
   it('Bütçe: stok ve açık sipariş stoktan okunur; tutar maliyet görene çıkar; kırılım ve dağılım düğmeleri; görünüm hatırlanır', async () => {
     sunucuKur(YONETICI, kayit());
     stokSun();
@@ -213,7 +231,7 @@ describe('Malzeme satın alma planı: Takvim ve Bütçe', () => {
     expect(screen.getByText('Haftalık', { selector: 'b' })).toBeTruthy();
     fireEvent.click(within(screen.getByRole('group', { name: 'Dağılım' })).getByRole('button', { name: 'Tedarikçi' }));
     expect(within(screen.getByRole('table', { name: 'Malzeme dağılımı' })).getByText('Tedarikçi seçilmedi')).toBeTruthy();
-    expect(screen.getByText('Günlük tüketim ve toplu plan')).toBeTruthy();
+    expect(screen.queryByRole('table', { name: 'Günlük tüketim' })).toBeNull();
     cleanup();
     sunucuKur(YONETICI, kayit());
     stokSun();
@@ -231,24 +249,36 @@ describe('Malzeme satın alma planı: Takvim ve Bütçe', () => {
     expect(screen.getAllByText(/kalem$/).length).toBeGreaterThan(0);
   }, 20000);
 
-  it('Takvim: nabız, malzeme x gün ızgarası; hücre açılımı yazmaz, kilit metni yok, emir Kokpit\'te açılır (zz30-isi, 3537 a)', async () => {
+  it('Matris: nabız, malzeme x gün tablosu ve Stok yeter; kayıt yazmaz; eski Takvim tercihi Matris açar; Ayrıntı Liste açılımına gider (3666)', async () => {
     localStorage.setItem(GORUNUM_ANAHTARI, 'takvim');
     const istekler = sunucuKur(YONETICI, kayit());
     stokSun();
     talepSun(0);
+    mrpSun();
     ac('/plan/malzplan');
-    const durum = await screen.findByText(/^En sıcak satır/, { selector: '.tc-pyz-nabiz span' }, { timeout: 10000 });
-    expect(durum.textContent).toMatch(/^En sıcak satır 11: .*1 malzeme için sipariş verilmedi, 1 malzeme işi geciktirebilir; açık alım 40 TL\.$/);
-    const izgara = screen.getByRole('group', { name: 'Malzeme × gün, stok yetiyor mu' });
-    const son = within(izgara).getAllByRole('button').find((b) => /en geç sipariş günü/.test(b.getAttribute('aria-label') ?? ''));
-    expect(son?.textContent).toBe('son');
-    fireEvent.click(son as HTMLElement);
-    const acilim = screen.getByRole('region', { name: '11 · Termin bekleniyor' });
-    expect(within(acilim).getByText(/11 için sipariş verilmedi; plan .* günü 10 kg istiyor\./)).toBeTruthy();
-    expect(within(acilim).queryByText(/yetkiniz yok/)).toBeNull();
+    const tablo = await screen.findByRole('table', { name: 'Günlük tüketim' }, { timeout: 10000 });
+    expect(within(tablo).getByText('Deneme cubuk')).toBeTruthy();
+    expect(within(tablo).getByText(/Stok yeter:/)).toBeTruthy();
+    expect(screen.getByText(/1 malzemede stok plana yetmiyor, ilk eksik \d\d\.\d\d [A-ZÇĞİÖŞÜ][a-zçğıöşü]+\./)).toBeTruthy();
     expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
-    fireEvent.click(within(acilim).getByRole('button', { name: /Kokpit'te aç · E-1/ }));
-    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/plan'); }, { timeout: 10000 });
+    fireEvent.click(within(tablo).getByRole('button', { name: 'Ayrıntı' }));
+    expect(await screen.findByRole('region', { name: /^11 · / }, { timeout: 10000 })).toBeTruthy();
+    expect(screen.getByRole('table', { name: 'Malzemeler' })).toBeTruthy();
+    expect(await screen.findByText('Tüm açık emirler (sunucu)', {}, { timeout: 10000 })).toBeTruthy();
+    expect(screen.getByText(/tüm açık emirlerin net ihtiyacı 30 kg/)).toBeTruthy();
+  }, 20000);
+});
+
+describe('Matris bugünü gerçek saatten alır (3666 K1)', () => {
+  it('plan başlangıcı geçmişte ve çalışmada şimdi yokken de bugünden başlar; matris boş kalmaz', async () => {
+    localStorage.removeItem(GORUNUM_ANAHTARI);
+    sunucuKur(YONETICI, kayit(true, 20));
+    stokSun();
+    talepSun(0);
+    mrpSun();
+    ac('/plan/malzplan');
+    const tablo = await screen.findByRole('table', { name: 'Günlük tüketim' }, { timeout: 10000 });
+    expect(within(tablo).getByText('Deneme cubuk')).toBeTruthy();
   }, 20000);
 });
 

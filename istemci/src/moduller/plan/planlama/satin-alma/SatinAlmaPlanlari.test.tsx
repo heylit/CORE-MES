@@ -92,6 +92,11 @@ describe('Satın Alma menüsünün plan sayfaları (546 a)', () => {
     const istekler = sunucu(malzemeCalismasi);
     ciz(<SatinAlmaMalzemePlani />);
     expect(await screen.findByText(/planın kendi kopyası kullanılıyor/, {}, BEKLE)).toBeTruthy();
+    // 3666: sayfa Matris açılır (tutar yok); Satın Alma'da Kokpit yoktur.
+    const matris = screen.getByRole('table', { name: 'Günlük tüketim' });
+    expect(within(matris).getByText('Deneme cubuk')).toBeTruthy();
+    expect(within(matris).queryByText(/ TL$/)).toBeNull();
+    fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: 'Liste' }));
     // 3537 a: aynı görünümün Listesi; Satın Alma'da Kokpit yoktur, emir düğmesi çizilmez; termin yazmayan kişide termin kutusu yoktur.
     const tablo = screen.getByRole('table', { name: 'Malzemeler' });
     expect(within(tablo).getByText('M-1')).toBeTruthy();

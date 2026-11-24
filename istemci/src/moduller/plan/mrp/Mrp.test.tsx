@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import type { MrpIhtiyaciCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { ApiHatasi, api } from '../../../ortak/veri/api.ts';
-import { Mrp } from './Mrp.tsx';
+import { AcikEmirMalzemeleri } from './Mrp.tsx';
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
@@ -29,14 +29,17 @@ const gizle = (stok: boolean, sa: boolean): MrpIhtiyaciCevabi => ({ ...RAPOR, st
 
 function ciz(cevap: MrpIhtiyaciCevabi | Error) {
   const get = vi.spyOn(api, 'get').mockImplementation(() => (cevap instanceof Error ? Promise.reject(cevap) : Promise.resolve(cevap)) as never);
-  render(<MemoryRouter><QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><Mrp /></QueryClientProvider></MemoryRouter>);
+  render(<MemoryRouter><QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><AcikEmirMalzemeleri /></QueryClientProvider></MemoryRouter>);
   return get;
 }
+async function ac() { fireEvent.click(await screen.findByRole('button', { name: /Tüm açık emirler/ })); }
 const basliklar = () => within(screen.getByRole('table', { name: 'Malzeme ihtiyacı' })).getAllByRole('columnheader').map((h) => h.textContent);
 
 describe('malzeme ihtiyacı ekranı', () => {
   it('yalnız MRP ucunu okur; tam yetkide bütün sütunlar, sayı kartları, ağaç ve eksik işaretleri', async () => {
     const get = ciz(RAPOR);
+    expect(await screen.findByText(/1 açık emrin ürünü yok/)).toBeTruthy(); // katlı bölümde de görünür
+    await ac();
     expect(await screen.findByText('HM-1')).toBeTruthy();
     expect(get).toHaveBeenCalledWith('/plan/mrp-ihtiyaci');
     expect(basliklar()).toEqual(['Malzeme', 'Brüt', 'Serbest stok', 'Açık sipariş', 'Emniyet payı', 'Net ihtiyaç', 'İhtiyaç günü', 'Eksik günü', 'Emirler']);
@@ -53,6 +56,7 @@ describe('malzeme ihtiyacı ekranı', () => {
 
   it('süzgeç ve arama listeyi daraltır', async () => {
     ciz(RAPOR);
+    await ac();
     await screen.findByText('HM-1');
     fireEvent.click(screen.getByRole('button', { name: 'Eksik' }));
     expect(screen.queryByText('TM-1')).toBeNull();
@@ -66,6 +70,7 @@ describe('malzeme ihtiyacı ekranı', () => {
 
   it('1545 a: yalnız planlama okuyan net, stok ve sipariş sütunlarını görmez; kart "Veri yok", eksik süzgeci yok', async () => {
     ciz(gizle(false, false));
+    await ac();
     await screen.findByText('HM-1');
     expect(basliklar()).toEqual(['Malzeme', 'Brüt', 'İhtiyaç günü', 'Emirler']);
     expect(screen.getByText('Stok ve satın alma okuma yetkiniz yok.')).toBeTruthy();
@@ -75,6 +80,7 @@ describe('malzeme ihtiyacı ekranı', () => {
 
   it('1545 a: satın alma görünmeyince açık sipariş ve net çıkar, stok kalır', async () => {
     ciz(gizle(true, false));
+    await ac();
     await screen.findByText('HM-1');
     expect(basliklar()).toEqual(['Malzeme', 'Brüt', 'Serbest stok', 'Emniyet payı', 'İhtiyaç günü', 'Emirler']);
     expect(screen.getByText('Satın alma okuma yetkiniz yok.')).toBeTruthy();
@@ -82,11 +88,12 @@ describe('malzeme ihtiyacı ekranı', () => {
 
   it('boş rapor ve hata durumu', async () => {
     ciz({ ...RAPOR, urunsuzEmir: 0, satirlar: [] });
+    await ac();
     expect(await screen.findByText('Açık emirlerde malzeme ihtiyacı yok.')).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
     cleanup();
     ciz(new Error('ağ'));
-    expect(await screen.findByText('Malzeme ihtiyacı alınamadı')).toBeTruthy();
+    expect(await screen.findByText('Açık emirlerin malzeme ihtiyacı alınamadı')).toBeTruthy();
     cleanup();
     // B-2495-5: yetki reddi genel metinle değil sunucunun iletisiyle görünür; yeniden denemek aynı sonucu verir, düğme yok.
     ciz(new ApiHatasi(403, { kod: 'YETKI_YOK', mesaj: 'Bu işlem için yetkiniz yok.' }));

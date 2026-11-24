@@ -1,7 +1,10 @@
 import { Fragment, useMemo, useState, type ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
+import type { MrpIhtiyaciCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { PlanOnTalep } from '#paylasilan/sozlesme/satin-alma.ts';
 import { Dugme, Rozet, Simge } from '../../../../ortak/arayuz/index.ts';
+import { api } from '../../../../ortak/veri/api.ts';
 import type { PlanVerisi } from '../tipler.ts';
 import type { EmirNo } from '../ortak/emir-no.ts';
 import { DURUM_ADI, gunYaz, kovaBasi, sayiYaz, tedarikTerminiSatirlari, tlYaz, type PlanSatiri } from './kurallar.ts';
@@ -46,6 +49,8 @@ export interface MalzemeListesiOzellikleri {
   goster?: (j: string) => void;
   // Görünüm seçici: şeridin başında durur.
   gorunum: ReactNode;
+  // Matristeki Ayrıntı: bu malzemenin açılımı açık başlar.
+  ilkAcik?: string | null;
 }
 
 export function MalzemeListesi(o: MalzemeListesiOzellikleri) {
@@ -53,7 +58,7 @@ export function MalzemeListesi(o: MalzemeListesiOzellikleri) {
   const git = useNavigate();
   const [suz, suzYaz] = useState<ListeDurumu | null>(null);
   const [ara, araYaz] = useState('');
-  const [acik, acikYaz] = useState<string | null>(null);
+  const [acik, acikYaz] = useState<string | null>(o.ilkAcik ?? null);
   const talep = (kod: string): number => talepler?.get(kod) ?? 0;
   // Açık talepler okunurken talep açılmaz: taslak açık talep düşülmeden dolardı (3537-2 Risk).
   const okunuyor = talepler === undefined;
@@ -111,7 +116,7 @@ export function MalzemeListesi(o: MalzemeListesiOzellikleri) {
         )}
       </div>
       {talepler === null && <p className="tc-pyz-kucuk" data-ton="uyari">Açık talepler okunamadı (yetki yok ya da uç yanıt vermedi); eksikten düşülmedi.</p>}
-      {satirlar.length > 0 && acil.length === 0 && say.gecti + say.eksik === 0 && (
+      {satirlar.length > 0 && acil.length === 0 && say.gecti + say.eksik + say.verilmeli === 0 && (
         <p className="tc-pyz-l-iyi"><Simge ad="check" boyut="k" />Günü geçen ya da eksik malzeme yok.</p>
       )}
       <div className="tc-tablo-kap" data-kip={dar ? 'kart' : undefined}>
@@ -200,6 +205,10 @@ function Acilim({ x, o, miktar, talepte, kapat }: {
   const acik = x.alimlar.filter((r) => r.src !== null);
   const termin = o.terminYazar && talepEdilebilir(x.kod) ? tedarikTerminiSatirlari(o.D, x.alimlar)[0] ?? null : null;
   const tutar = o.fg && x.eksik > ESIK ? o.fiyat(x.kod, Math.ceil(x.eksik)) : null;
+  // 3666: planda olmayan açık emirleri de sayan sunucu hesabı (eski Malzeme ihtiyacı sayfası). Plan malzeme numarasını kod olarak taşır; yetki ya da uç
+  // yoksa bölüm çizilmez.
+  const mrp = useQuery({ queryKey: ['plan', 'mrp-ihtiyaci'], queryFn: () => api.get<MrpIhtiyaciCevabi>('/plan/mrp-ihtiyaci'), retry: false, staleTime: 60_000 });
+  const sunucu = mrp.data?.satirlar.find((r) => String(r.malzeme.id) === x.kod) ?? null;
   return (
     <section className="tc-pyz-l-ic" aria-label={`${x.kod} · ${LISTE_ADI[x.durum]}`}>
       <p className="tc-pyz-l-neden">{neden(x, o, miktar)}{tutar !== null && ` Eksiğin tutarı ${tlYaz(tutar)}.`}</p>
@@ -231,6 +240,18 @@ function Acilim({ x, o, miktar, talepte, kapat }: {
               </li>
             ))}
           </ul>
+        </div>
+      )}
+      {sunucu && (
+        <div>
+          <h4 className="tc-pyz-alt"><Simge ad="box" boyut="k" />Tüm açık emirler (sunucu)</h4>
+          <ul className="tc-pyz-l-gunler" aria-label={`${x.kod} tüm açık emirler`}>
+            <li><span>Brüt ihtiyaç</span><b className="mono">{miktar(sunucu.brut, x.kod)}</b></li>
+            <li><span>Net ihtiyaç</span><b className="mono">{sunucu.net === null ? '—' : miktar(sunucu.net, x.kod)}</b></li>
+          </ul>
+          <p className="tc-pyz-kucuk">
+            {`Plana göre eksik ${miktar(Math.ceil(x.eksik), x.kod)}${sunucu.net === null ? '' : `; tüm açık emirlerin net ihtiyacı ${miktar(sunucu.net, x.kod)}`}. Fark, plana girmemiş açık emirlerden ve emniyet payından gelebilir.`}
+          </p>
         </div>
       )}
       {termin && (

@@ -5,46 +5,43 @@ import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import { kaynakKur, stokOku, type StokKaynagi } from './kaynak.ts';
 import {
-  BAGSIZ, KAYNAKLAR, TEDARIKCISIZ, alimPlani, bitenler, calismaSimdisi, dagilim,
-  grafikKaynaklari, grafikSutunlari, gunYaz, kovaAdi, kovala, malzemePlani, motorGirdisi, ozet, planIslemleri, sayiYaz, tabanMs, tahsisEt,
-  malzemeIsisi, tedarikciAdi, tlKisa, tlYaz,
+  BAGSIZ, KAYNAKLAR, TEDARIKCISIZ, alimPlani, bitenler, dagilim,
+  grafikKaynaklari, grafikSutunlari, gunYaz, kovaAdi, kovaBasi, kovala, malzemePlani, motorGirdisi, ozet, planIslemleri, sayiYaz, tabanMs, tahsisEt,
+  tedarikciAdi, tlKisa, tlYaz,
   type DagilimHucresi, type DagilimTuru, type GrafikTuru, type Kirilim,
 } from './kurallar.ts';
-import { Acilim, IsiIzgarasi, Lejant, type IsiSecimi, type LejantOgesi } from '../ortak/isi/index.ts';
 import type { IsiUstDurumu } from '../ortak/isi/kurallar.ts';
 import { malzemeListesi } from './liste.ts';
+import { gelisGunleri, nabizMetni, ufukOzeti, STOK_UFKU } from './matris.ts';
+import { gunlukTuketim } from './toplu-talep.ts';
 import { MalzemeListesi } from './MalzemeListesi.tsx';
 import { OneCekme } from './OneCekme.tsx';
 import { useEmirNo, type EmirNo } from '../ortak/emir-no.ts';
 import { TopluPlan, useAcikTalepler } from './TopluPlan.tsx';
 import { useYetki } from '../../../../ortak/veri/yetki.ts';
+import { simdiSaati } from '../motor/kurallar.ts';
+import { AcikEmirMalzemeleri } from '../../mrp/Mrp.tsx';
 import './malzeme.css';
 
-// Malzeme satın alma planı (P4, malzplan), Kokpit dilinde (3537 a): üç görünüm. Liste malzeme başına tek satırdır (asıl görünüm); Takvim
-// bugünkü ısı haritasıdır (telefonda yer yok, Liste açılır); Bütçe sayaçlar, grafik, dağılım, günlük tüketim ve öne çekmedir. Son seçilen
-// görünüm tarayıcıda hatırlanır. Yeni sipariş satın almanındır (222 a); malzeme başına tedarik termini satır açılımında da girilir, kayıt
-// Satın Alma'nındır (533 a, 534 1 a). Tutarı finans.maliyet-oku olan görür (223 a).
+// Malzeme ihtiyacı ve satın alma (P4, malzplan), Kokpit dilinde (3537 a, 3666): üç görünüm. Matris asıl görünümdür: satır malzeme, sütun gün, plana göre
+// günlük tüketim; eksik gün ve sipariş gelen gün işaretlidir, satırdan talep açılır (TopluPlan.tsx). Liste malzeme başına tek satırdır, açılımında neden,
+// açık siparişler ve termin vardır; Bütçe sayaçlar, grafik, dağılım ve öne çekmedir. Son seçilen görünüm tarayıcıda hatırlanır. Yeni sipariş satın almanındır
+// (222 a); malzeme başına tedarik termini Liste açılımında girilir, kayıt Satın Alma'nındır (533 a, 534 1 a). Tutarı finans.maliyet-oku olan görür (223 a).
 
 // Eski ekranın ortak dönem düğmesi (zq-olcek OLCEK). Bütün görünümlerde ortak olması iskelet isteğidir; o gelene kadar görünüme özgü.
 const OLCEK: readonly [Kirilim, string, string][] = [['gun', 'Gün', 'Günlük'], ['hafta', 'Hafta', 'Haftalık'], ['ay', 'Ay', 'Aylık'], ['yil', 'Yıl', 'Yıllık']];
 const GRAFIKLER: readonly [GrafikTuru, string][] = [['butce', 'Alım bütçesi'], ['ihtiyac', 'İhtiyaç']];
 const DAGILIMLAR: readonly [DagilimTuru, string][] = [['malzeme', 'Malzeme'], ['siparis', 'Sipariş'], ['tedarikci', 'Tedarikçi']];
-type Gorunum = 'liste' | 'takvim' | 'butce';
-const GORUNUMLER: readonly [Gorunum, string][] = [['liste', 'Liste'], ['takvim', 'Takvim'], ['butce', 'Bütçe']];
+type Gorunum = 'matris' | 'liste' | 'butce';
+const GORUNUMLER: readonly [Gorunum, string][] = [['matris', 'Matris'], ['liste', 'Liste'], ['butce', 'Bütçe']];
 const GORUNUM_ANAHTARI = 'tmi.malzplan.gorunum';
 function gorunumOku(): Gorunum {
   try {
     const g = localStorage.getItem(GORUNUM_ANAHTARI);
-    return g === 'takvim' || g === 'butce' ? g : 'liste';
-  } catch { return 'liste'; }
+    return g === 'liste' || g === 'butce' ? g : 'matris';
+  } catch { return 'matris'; }
 }
-// Isı haritası (zz30-isi ISI.malzplan) artık Takvim görünümüdür (3537 a).
-const SAYFA_ADI = 'Malzeme satın alma planı';
-const ISI_ADI = 'Malzeme × gün, stok yetiyor mu';
-const LEJANT: readonly LejantOgesi[] = [
-  { tur: 'kd', kd: 1, ad: 'Son sipariş günü' }, { tur: 'kd', kd: 2, ad: 'Eksik' }, { tur: 'kd', kd: 4, ad: 'İşi geciktirir' },
-  { tur: 'iyi', ad: 'Zamanında geliş' }, { tur: 'is', ad: 'Yolda' }, { tur: 'tahmin', ad: 'Tahmini geliş' }, { tur: 'bayrak', ad: 'Plan istiyor (miktar)' },
-];
+const SAYFA_ADI = 'Malzeme ihtiyacı ve satın alma';
 
 // Eski ekranın tablo kipi (00-baslangic kip): 768 altında tablo kart kipindedir. Malzeme listesi yedi sütundur, 1024 altında kart kipine geçer.
 function useDar(esik = 768): boolean {
@@ -90,8 +87,10 @@ export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSuru
   const [kirilim, kirilimYaz] = useState<Kirilim>('gun');
   const [gor, gorYaz] = useState<GrafikTuru>('butce');
   const [dag, dagYaz] = useState<DagilimTuru>('malzeme');
-  const [secim, secYaz] = useState<IsiSecimi | null>(null);
+  const [ayrinti, ayrintiYaz] = useState<string | null>(null);
   const [gorunum, gorunumYaz] = useState<Gorunum>(gorunumOku);
+  // Matristeki satırın ayrıntısı Liste açılımındadır (neden, açık siparişler, termin, Kokpit'te aç).
+  const ayrintiAc = (kod: string): void => { gorunumSec('liste'); ayrintiYaz(kod); };
   const gorunumSec = (g: Gorunum): void => {
     gorunumYaz(g);
     try { localStorage.setItem(GORUNUM_ANAHTARI, g); } catch { /* depo kapalı: yalnız bu açılışta geçerli */ }
@@ -114,7 +113,7 @@ export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSuru
     if (calisma.plan === null || islemler.length === 0) return null;
     const k = kaynakKur(D, taban, stok);
     const biten = bitenler(emirler, D);
-    const g = motorGirdisi({ D, malzemeler: k.malzemeler, alimlar: k.alimlar, islemler, biten, simdi: calismaSimdisi(calisma), taban });
+    const g = motorGirdisi({ D, malzemeler: k.malzemeler, alimlar: k.alimlar, islemler, biten, simdi: simdiSaati(calisma, Date.now()), taban });
     const t = tahsisEt(g, taban);
     return { g, k, plan: malzemePlani(g, taban, t), alim: alimPlani(g, taban, t) };
   }, [calisma, D, taban, stok, emirler]);
@@ -167,12 +166,22 @@ export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSuru
   const malzemeAdi = (kod: string): string => mats.get(kod)?.ad ?? '';
   // Stok sahibi okunamadıysa ya da kartı yoksa (kartsiz) stok bilinmiyor; sıfır uydurulmaz.
   const stokMiktari = (kod: string): number | null => (k.nereden === 'sahip' && !k.kartsiz.includes(kod) ? (mats.get(kod)?.stok ?? null) : null);
-  const isi = malzemeIsisi(alim, taban, g.simdi, miktar, malzemeAdi, fg ? fiyat : undefined);
   const malzemeTedarikcisi = (kod: string): string | null => { const t = mats.get(kod)?.tedarikci; return typeof t === 'string' && t !== '' ? tedarikciAdi(D, t) : null; };
   const liste = malzemeListesi(alim, plan.satirlar, g.simdi);
-  const takvimVar = !dar;
-  const etkin: Gorunum = gorunum === 'takvim' && !takvimVar ? 'liste' : gorunum;
-  const secici = <Segment etiket="Görünüm" secenekler={takvimVar ? GORUNUMLER : GORUNUMLER.filter(([k]) => k !== 'takvim')} secili={etkin} sec={gorunumSec} />;
+  const bugunGunu = kovaBasi(taban, 'gun', g.simdi);
+  const ufuk = ufukOzeti(gunlukTuketim({
+    satirlar: plan.satirlar, taban, simdi: g.simdi, bas: bugunGunu, bit: bugunGunu + (STOK_UFKU - 1) * 24, stok: stokMiktari, talep: (kod) => talepler?.get(kod) ?? 0,
+  }).satirlar);
+  const gecen = liste.filter((x) => x.durum === 'gecti').length;
+  const ust: IsiUstDurumu = {
+    ton: ufuk.eksikMalzeme === 0 ? 'tamam' : gecen > 0 ? 'hata' : 'uyari', simge: ufuk.eksikMalzeme === 0 ? 'check' : 'alert',
+    metin: nabizMetni(ufuk.eksikMalzeme, ufuk.ilkEksikGunu === null ? null : gunYaz(taban, ufuk.ilkEksikGunu), gecen),
+  };
+  const alimlarKodla = new Map<string, typeof alim>();
+  for (const r of alim) alimlarKodla.set(r.kod, [...(alimlarKodla.get(r.kod) ?? []), r]);
+  const listeKodla = new Map(liste.map((x) => [x.kod, x]));
+  const etkin: Gorunum = gorunum;
+  const secici = <Segment etiket="Görünüm" secenekler={GORUNUMLER} secili={etkin} sec={gorunumSec} />;
   const butce = (
     <div className="tc-pyz-kartlar">
       <div className="tc-pyz-serit">{secici}</div>
@@ -196,39 +205,28 @@ export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSuru
           ad={(i) => kovaAdi(taban, kirilim, kov.basi[i] ?? 0, true)} malzemeAdi={malzemeAdi}
           tedarikci={(t) => tedarikciAdi(D, t)} miktar={miktar} emirNo={emirNo} />
       </Kart>
-      <TopluPlan satirlar={plan.satirlar} taban={taban} simdi={g.simdi} dar={dar} stok={stokMiktari} malzemeAdi={malzemeAdi}
-        birim={(kod) => mats.get(kod)?.birim ?? ''} kart={(kod) => stok?.kartlar?.get(kod) ?? null} emirNo={emirNo} talepAcar={talepAcar} talepler={talepler} />
       <OneCekme surum={calismaSurumu} malzemeAdi={malzemeAdi} dar={dar} />
     </div>
   );
-  const takvim = (
-    <>
+  const matris = (
+    <div className="tc-pyz-kartlar">
       <div className="tc-pyz-serit">{secici}</div>
-      <Lejant ogeler={LEJANT} />
-      <IsiIzgarasi etiket={ISI_ADI} satirAd="Malzeme" genis="gun" sutunlar={isi.sutunlar} satirlar={isi.satirlar} secim={secim} sec={secYaz} gizliAd="karşılananlar"
-        acilim={(x, _s, kapat) => {
-          const r = x.r;
-          const neden = r.src === null
-            ? `${r.kod} için sipariş verilmedi; plan ${gunYaz(taban, r.gerekli)} günü ${miktar(Math.ceil(r.miktar), r.kod)} istiyor.${r.siparisGun !== null ? ` Zamanında gelmesi için en geç ${gunYaz(taban, r.siparisGun)} sipariş verilmeli.` : ''}`
-            : `${r.kod} ${x.d.toLocaleLowerCase('tr-TR')}: plan ${gunYaz(taban, r.gerekli)} istiyor, geliş ${gunYaz(taban, r.etkin)}${r.tb ? ' (Satın Alma termini bekleniyor, olması gereken tarihte gelmiş sayıldı)' : ''}.`;
-          return (
-            <Acilim baslik={`${r.kod} · ${x.d}`} simge="box" ton={x.ton === 'tamam' ? '' : x.ton} neden={neden} kapat={kapat}
-              bilgi={[['Gerekli', gunYaz(taban, r.gerekli)], ['Geliş', gunYaz(taban, r.etkin)], ['Miktar', miktar(Math.ceil(r.miktar), r.kod)], ['Bağlı siparişler', r.isler.map(emirNo).join(', ')]]}
-              // Sipariş ve geliş tarihi formu satın almanındır (222 a); burada form yoktur, kilit metni de gösterilmez (3537 a).
-              secenekler={r.isler[0] && goster ? [{ ad: `Kokpit'te aç · ${emirNo(r.isler[0])}`, etki: 'Bu malzemeyi bekleyen emri Kokpit\'te seçer.', simge: 'target', yap: () => { goster(r.isler[0]!); } }] : []} />
-          );
-        }} />
-    </>
+      <TopluPlan satirlar={plan.satirlar} taban={taban} simdi={g.simdi} dar={dar} orta={listeKart} stok={stokMiktari} malzemeAdi={malzemeAdi}
+        birim={(kod) => mats.get(kod)?.birim ?? ''} kart={(kod) => stok?.kartlar?.get(kod) ?? null} emirNo={emirNo}
+        durum={(kod) => listeKodla.get(kod)?.durum ?? null} gelisler={(kod) => gelisGunleri(alimlarKodla.get(kod) ?? [], taban)}
+        siparisGunu={(kod) => listeKodla.get(kod)?.enGecSiparis ?? null} ayrinti={ayrintiAc} talepAcar={talepAcar} talepler={talepler} />
+      <AcikEmirMalzemeleri />
+    </div>
   );
   return (
     <div className="tc-pyz">
-      <Basliklik ust={isi.ust} />
+      <Basliklik ust={ust} />
       {k.nereden === 'belge' && <p className="tc-pyz-kucuk" data-ton="uyari">Stok ya da açık satın alma siparişleri okunamadı (yetki yok ya da uç yanıt vermedi); planın kendi kopyası kullanılıyor.</p>}
-      {etkin === 'butce' ? butce : etkin === 'takvim' ? takvim : (
+      {etkin === 'butce' ? butce : etkin === 'matris' ? matris : (
         <MalzemeListesi satirlar={liste} plan={plan.satirlar} D={D} taban={taban} simdi={g.simdi} dar={listeKart} fg={fg} malzemeAdi={malzemeAdi}
           birim={(kod) => mats.get(kod)?.birim ?? ''} kartKodu={(kod) => stok?.kartlar?.get(kod)?.kod ?? null} malzemeTedarikcisi={malzemeTedarikcisi}
           tedarikci={(t) => tedarikciAdi(D, t)} fiyat={fiyat} stok={stokMiktari} emirNo={emirNo} talepler={talepler} talepAcar={talepAcar}
-          terminYazar={terminYazar} yenile={yenile} goster={goster} gorunum={secici} />
+          terminYazar={terminYazar} yenile={yenile} goster={goster} gorunum={secici} ilkAcik={ayrinti} />
       )}
     </div>
   );
