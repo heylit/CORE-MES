@@ -45,14 +45,29 @@ describe('yerleşmeyen adımı elle yerleştirme (3488)', () => {
     return { x, oz, tasi, bol, hedef, secimiBirak };
   }
 
-  it('yalnız yerleşmeyen adımda Elle yerleştir ve Böl çıkar; yazamayan kişide çıkmaz; Böl paneli o adımla açar', () => {
+  it('Elle yerleştir yalnız yerleşmeyen adımda çıkar; Planda böl yerleşmiş ve başlamamış adımda da çıkar, başlamış adımda pasiftir ve nedenini yazar; yazamayan kişide çıkmaz', () => {
     const { x, bol } = elleKur();
     expect([...document.querySelectorAll('[data-elle-ac]')].map((b) => b.getAttribute('data-elle-ac'))).toEqual([x.eksik]);
     fireEvent.click(document.querySelector(`[data-bol-ac="${x.eksik}"]`)!);
     expect(bol).toHaveBeenCalledWith(x.eksik);
+    const yerlesmis = [...document.querySelectorAll('[data-bol-satir]')].map((s) => s.getAttribute('data-bol-satir')!);
+    expect(yerlesmis.length).toBeGreaterThan(0);
+    for (const id of yerlesmis) {
+      const d = document.querySelector<HTMLButtonElement>(`[data-bol-ac="${id}"]`)!;
+      const neden = document.querySelector(`[data-bol-neden="${id}"]`);
+      expect(d.disabled).toBe(neden !== null);
+      expect(d.textContent).toBe('Planda böl');
+    }
+    const acik = yerlesmis.find((id) => !document.querySelector<HTMLButtonElement>(`[data-bol-ac="${id}"]`)!.disabled);
+    if (acik !== undefined) {
+      fireEvent.click(document.querySelector(`[data-bol-ac="${acik}"]`)!);
+      expect(bol).toHaveBeenLastCalledWith(acik);
+    }
+    expect(document.querySelectorAll('[data-bol-neden]').length + document.querySelectorAll('[data-bol-satir] button:not(:disabled)').length).toBe(yerlesmis.length);
     cleanup();
     ciz(yarimKur({ kod: 'zaman' }), '3');
     expect(document.querySelector('[data-elle-ac]')).toBeNull();
+    expect(document.querySelector('[data-bol-ac]')).toBeNull();
   });
 
   it('Elle yerleştir uygun tezgâhlardaki yerleri sorar, tahtaya verir ve listeler; seçilen yerin sonucu yazar; Yerleştir ve kilitle taşıma komutunu verir', async () => {

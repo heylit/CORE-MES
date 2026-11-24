@@ -142,7 +142,7 @@
 }
 /* Telefonda tarih ve saat alanı yarım sütuna sığmaz (saat kesilir): başlangıç tam satırdır. */
 @media (max-width: 599px) {
-  .tc-pyq-optablo td[data-ad="Başlangıç"] { grid-column: 1 / -1; }
+  .tc-pyq-optablo td[data-ad="Başlangıç"], .tc-pyq-optablo td[data-ad="Tezgâh"] { grid-column: 1 / -1; }
 }
 
 /* Odaklı tezgâh paneli (3318 a): geniş ekranda tablonun altında boydan boya, dar ekranda seçili satırın altında. */

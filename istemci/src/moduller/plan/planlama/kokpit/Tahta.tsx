@@ -2,6 +2,7 @@ import { createPortal } from 'react-dom';
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as FareOlayi, type PointerEvent as ImlecOlayi, type ReactNode, type KeyboardEvent as TusOlayi } from 'react';
 import { Dugme, Simge } from '../../../../ortak/arayuz/index.ts';
 import { hizaCizgileri, hizaNoktalari, hizalaYakala, type HizaCizgisi, type Yakalanan } from './hiza.ts';
+import { bolunemezNedeni } from './ElleBol.tsx';
 import { emirKuyrugu, emirNoParcalari } from '../ortak/emir-no.ts';
 import type { Derleme } from '../motor/kurallar.ts';
 import type { IsTasiOnizlemesi } from '../motor/atolye/gonder.ts';
@@ -64,6 +65,8 @@ export interface TahtaOzellikleri {
   secimiKaldir?: () => void;
   // Tezgâhta sorun bildir (3335 a): tezgâh adına basınca o tezgâhın arıza ve bakım formu açılır; yalnız Tezgâh gözünde, fason satırında yok.
   sorunBildir?: ((tezgah: string) => void) | null;
+  // Planda böl (3661): işin menüsünde; yazamayan kişide ve turda null.
+  bol?: ((isId: string) => void) | null;
   // Sürüklerken taşımanın etkisi (3365); yazamayan kişide ya da önizleme yokken null.
   onizle?: ((isId: string, tezgah: string, S: number) => Promise<IsTasiOnizlemesi | null>) | null;
   // Bağ okları (3365): is = üstüne gelinen ya da seçili işin önceki ve sonraki adımı; siparis = seçili siparişin (yoksa işin emrinin) bütün bağları.
@@ -181,6 +184,7 @@ export function Tahta(o: TahtaOzellikleri) {
   const { m, cx, goz, olcek, emirler, uyar, secEmir, secIs, sec, zaman, tasi, planaAl, once, gunAc, uyari, goster, odak, oneri } = o;
   const yerlestirme = o.goz === 'T' ? o.yerlestirme ?? null : null;
   const yanan = o.yanan ?? null, secimiKaldir = o.secimiKaldir, onizle = o.onizle ?? null, okKipi = o.okKipi ?? 'is';
+  const bol = o.bol ?? null;
   const sorunBildir = goz === 'T' ? o.sorunBildir ?? null : null;
   const gelen = o.gelen ?? null, gelenBas = o.gelenBas ?? null, eskiYer = once ? null : o.eskiYer ?? null;
   // 3533: tablo kipi. Emirler gözünde (agac) emir sütunları, Tezgâhlar gözünde tezgâh sütunları; Ay ve Yıl ölçeğinde bugünkü satır başı kalır.
@@ -1165,8 +1169,17 @@ export function Tahta(o: TahtaOzellikleri) {
           );
         })()}
         {menu && (
-          <div className="tc-pyq-menu" role="menu" aria-label={emir.get(menu.fis ? menu.id : m.isler[menu.id]?.job ?? '')?.no ?? 'İş'} ref={(el) => { el?.style.setProperty('--x', `${String(menu.x)}px`); el?.style.setProperty('--y', `${String(menu.y)}px`); el?.querySelector('button')?.focus(); }}>
+          <div className="tc-pyq-menu" role="menu" aria-label={emir.get(menu.fis ? menu.id : m.isler[menu.id]?.job ?? '')?.no ?? 'İş'} ref={(el) => { if (!el) return; const k = kap.current; const alt = k ? k.scrollTop + k.clientHeight : Infinity; const y = menu.y + el.offsetHeight > alt && k ? Math.max(k.scrollTop, menu.y - el.offsetHeight) : menu.y; el.style.setProperty('--x', `${String(menu.x)}px`); el.style.setProperty('--y', `${String(y)}px`); el.querySelector('button')?.focus(); }}>
             <button type="button" role="menuitem" onClick={() => { const x = m.isler[menu.id]; setMenu(null); if (menu.fis) sec(menu.id, null); else if (x) sec(x.job, x.id); }}><Simge ad="list" boyut="k" /><span>Ayrıntı</span></button>
+            {bol && !menu.fis && m.isler[menu.id] && (() => {
+              const neden = bolunemezNedeni(m.isler[menu.id], emir.get(m.isler[menu.id]!.job)?.adet ?? 0);
+              return (
+                <>
+                  <button type="button" role="menuitem" data-bol-ac={menu.id} disabled={neden !== null} onClick={() => { const id = menu.id; setMenu(null); bol(id); }}><Simge ad="layers" boyut="k" /><span>Planda böl</span></button>
+                  {neden !== null && <small data-bol-neden={menu.id}>{neden}</small>}
+                </>
+              );
+            })()}
           </div>
         )}
       </div>
