@@ -189,7 +189,7 @@ export const sonPartiler = (db: Db, malzemeId: number, sinir = 10) => servis.son
 // CNC takım stoğu (153 a, 164 b): CNC kurulumu takım değişimini ve uç seti kullanımını kartın serbest bakiyesinden düşer
 // (ilk giren önce, eksiye inmez; yetmezse hiç düşmez). Çağıranın transaction'ında yürür; yetkiyi çağıran korur.
 export type { CncTakimCikisiSonucu } from './servis.ts';
-export const cncTakimCikisi = (db: Db, kisiId: number, g: { malzemeId: number; miktar: string; aciklama: string }): Promise<servis.CncTakimCikisiSonucu> =>
+export const cncTakimCikisi = (db: Db, kisiId: number, g: { malzemeId: number; miktar: string; aciklama: string; istasyonId?: number | null }): Promise<servis.CncTakimCikisiSonucu> =>
   akistan(db, 'cnc', () => servis.cncTakimCikisi(db, kisiId, g));
 // Kalıp: kisiAdlari. Boş dizide sorgu atılmaz; olmayan kimlik haritada yoktur; pasif konum da koduyla döner.
 export async function konumAdlari(db: Db, idler: number[]): Promise<Map<number, string>> {
@@ -461,3 +461,14 @@ export async function emrinPartiBelgeleri(db: Db, emirId: number): Promise<Sipar
 // (kablolama.ts). Sipariş verisini çağıran verir; yetkiyi siparişin komutu korur.
 export const siparisAyirmalariniEsitle = (db: Db, kisiId: number, g: servis.SiparisAyirmaGirdisi) => servis.siparisAyirmalariniEsitle(db, kisiId, g);
 export type { SiparisAyirmaGirdisi } from './servis.ts';
+
+// ---- Takımhane (kart 3613) -----------------------------------------------------------------------------------------------------
+// Takım bakiyesi Stok'tadır; Takımhane yalnız bu işlevlerle okur ve çıkış, iade yazar. Yetkiyi çağıran korur.
+export type { KonumTurToplami, AlandakiTakim } from './sorgular.ts';
+export const takimKonumTurToplamlari = (db: Db, malzemeIdler: readonly number[]) => sorgular.malzemeKonumTurToplamlari(db, malzemeIdler);
+export const alandakiTakimlar = (db: Db, malzemeIdler: readonly number[]) => sorgular.alandakiTakimlar(db, malzemeIdler);
+export const takimEsikleri = (db: Db, malzemeIdler: readonly number[]) => sorgular.takimEsikleri(db, malzemeIdler);
+export type { TakimCikisi, TakimIadesi } from './servis/takim.ts';
+export const takimCikisi = (db: Db, kullanici: Kullanici, g: servis.TakimCikisi) => servis.takimCikisi(db, kullanici, g);
+export const takimIadesi = (db: Db, kullanici: Kullanici, g: servis.TakimIadesi) => servis.takimIadesi(db, kullanici, g);
+export type { IadeDurumu } from './kurallar.ts';

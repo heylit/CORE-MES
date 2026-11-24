@@ -164,7 +164,8 @@ export const KULLANILABILIR_KONUM_TURLERI = ['raf_gozu', 'kabul', 'depo_zemini']
 export const DEGER_GRUPLARI = ['kullanilabilir', 'kalite', 'hurda', 'fason', 'yolda', 'diger'] as const;
 export type DegerGrubu = (typeof DEGER_GRUPLARI)[number];
 // Fason kutusu, üretim çıkışı, istasyon ve ayrılmış yerler öneriye kaynak olmaz; eksi bakiye öneri değildir.
-const ONERI_DISI = new Set<string>(['fason', 'uretim_cikisi', 'istasyon', ...AYRILMIS_KONUM_TURLERI] satisfies KonumTuru[]);
+// Kişi konumu (zimmet) başkasının elindeki takımdır: çıkış önerisi, toplama ve CNC takım düşümü oradan almaz (3613 K1).
+const ONERI_DISI = new Set<string>(['fason', 'uretim_cikisi', 'istasyon', 'kisi', ...AYRILMIS_KONUM_TURLERI] satisfies KonumTuru[]);
 // 2099-4 a: SKT'li lot önce bozulan önce çıkar (FEFO), SKT'siz lotlar ardından ilk giren önce; SKT'siz kartta sıra değişmez.
 // 2099-5 a: SKT'si geçmiş lot öneriye girmez (bugün tesis günüdür, sunucudan); son gün henüz geçmiş sayılmaz.
 // 3191 a: teslim penceresinde sıra seçilir. `fefo` bugünkü kuraldır (2099-4 a); `fifo` son kullanma tarihine bakmadan ilk giren,
@@ -804,12 +805,13 @@ export function teslimKapanisEngeli(durum: TeslimDurumu): string | null {
 }
 // STK-T3: teslimi yalnız gönderen iptal eder. STK-T4: istasyona geleni o istasyonun kapsamındaki kişi, istasyon olmayan konuma
 // (depo) geleni depo işlemi olan alır ya da reddeder; gönderen kendi gönderdiğini teslim almaz.
-export type TeslimAlani = { tur: 'istasyon'; kapsamda: boolean } | { tur: 'depo'; depoIslemi: boolean };
+export type TeslimAlani = { tur: 'istasyon'; kapsamda: boolean } | { tur: 'depo'; depoIslemi: boolean } | { tur: 'kisi'; benimMi: boolean };
 // STK-T8 (299 b): kişiye yazılan teslimi yalnız o kişi alır ya da reddeder.
 // Soru 133: kişiye teslim istasyona teslimdir; istasyonun kapsamındaki herkes alır (299 b'deki "yalnız o kişi" kalktı).
 // Kişisiz hedef (depo) kişiye bağlanmaz; baskasinaGeliyor yalnız istasyon dışı hedefte reddeder.
 export function teslimAlmaEngeli(gonderenBenMi: boolean, alan: TeslimAlani, baskasinaGeliyor = false): string | null {
   if (gonderenBenMi) return 'Kendi gönderdiğiniz teslimi alamazsınız; karşı taraf alır.';
+  if (alan.tur === 'kisi') return alan.benimMi ? null : 'Bu teslim başka bir kişiye geliyor.';
   if (baskasinaGeliyor && alan.tur !== 'istasyon') return 'Bu teslim başka bir kişiye geliyor.';
   if (alan.tur === 'istasyon' ? !alan.kapsamda : !alan.depoIslemi) return 'Bu teslim size gelmiyor.';
   return null;
@@ -1911,3 +1913,15 @@ export function sifirlamaKartEngeli(rezerveler: readonly { statuId: number | nul
   if (ayirmaIstekleri.length > 0) return `Bu kart için açık stoktan karşılama isteği var (${ayirmaIstekleri.map((a) => a.talepNo).join(', ')}); önce istek kapanır.`;
   return null;
 }
+
+// 3613: iade durumuna göre hedef konum türü. Sağlam takım rafa döner, aşınmış ara alanda karar bekler (bile, kullan, hurda), kırık hurdaya gider.
+// Durumu iade eden bildirir; depo alırken görür, uymuyorsa teslim reddedilir. CHECK ile yazılamaz (konumun türü başka satırda).
+export type IadeDurumu = 'saglam' | 'asinmis' | 'kirik';
+export const IADE_DURUMLARI: readonly IadeDurumu[] = ['saglam', 'asinmis', 'kirik'];
+export const iadeHedefTuru = (durum: IadeDurumu): KonumTuru => (durum === 'saglam' ? 'raf_gozu' : durum === 'asinmis' ? 'ara_alan' : 'hurda');
+// Kırık iade nedensiz olmaz (CHECK stok_teslim_kirik_nedeni ile aynı kural; ileti kullanıcıya erken gider).
+export const iadeEngeli = (durum: IadeDurumu, neden: string | null): string | null =>
+  durum === 'kirik' && (neden === null || neden.trim() === '') ? 'Kırık iade için neden yazılır.' : null;
+// İade edilen adet teslimdeki adedi aşamaz ve sıfırdan büyük olmalı.
+export const iadeAdediEngeli = (adet: number, eldeki: number): string | null =>
+  !Number.isInteger(adet) || adet < 1 ? 'İade adedi en az 1 olmalı.' : adet > eldeki ? `Elde ${String(eldeki)} adet var; fazlası iade edilemez.` : null;

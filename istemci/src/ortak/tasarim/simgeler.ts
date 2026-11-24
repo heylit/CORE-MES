@@ -85,6 +85,7 @@ export const SIMGELER = {
   "file": "M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5",
   "fire": "M12 3c1 3 5 5 5 10a5 5 0 0 1-10 0c0-3 2-4 2-6 1 1 2 2 3 2 0-2 0-4 0-6z",
   "helmet": "M4 16a8 8 0 0 1 16 0zM2 16h20v3H2zM12 8V5",
+  "takim": "M9 3h6v6H9zM9 9l-1 12h8l-1-12M9.5 13l5 2M9.5 17l5 2",
   "laptop": "M5 5h14v10H5zM2 19h20",
   "calendar": "M4 6h16v14H4zM4 10h16M8 3v5M16 3v5",
   "kanban": "M4 4h4v16H4zM10 4h4v10h-4zM16 4h4v13h-4z",

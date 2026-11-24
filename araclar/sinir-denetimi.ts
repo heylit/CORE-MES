@@ -410,7 +410,7 @@ export const KATMANLAR: Katmanlar = {
     /* 8 */ ['atolye', 'markalama', 'oee', 'rota', 'satin-alma', 'smartes'],
     /* 9 */ ['kaynak-izi', 'portal', 'sevkiyat', 'tezgah-baglantisi', 'toplantilar'],
     /* 10 */ ['stok', 'takvim'],
-    /* 11 */ ['cnc-kurulum', 'degisiklik-yonetimi', 'etiket-merkezi', 'kalite-merkezi', 'logo', 'recete-rota'],
+    /* 11 */ ['cnc-kurulum', 'degisiklik-yonetimi', 'etiket-merkezi', 'kalite-merkezi', 'logo', 'recete-rota', 'takimhane'],
     /* 12 */ ['guvenlik', 'malzeme-izi', 'plan', 'proses'],
     /* 13 */ ['akis', 'arkon', 'proje-maliyet'],
     /* 14 */ ['saat'],
@@ -419,7 +419,7 @@ export const KATMANLAR: Katmanlar = {
     /* 0 */ [
       'akis', 'atolye', 'bildirim', 'degisiklik-yonetimi', 'denetim', 'denetim-hazirlik', 'durus-nedenleri', 'etiket-merkezi',
       'finans', 'idari-isler', 'kalibrasyon', 'kalite-merkezi', 'kaynak-izi', 'logo', 'malzeme-izi', 'mesaj', 'nizamiye', 'oee',
-      'oturum', 'plan', 'portal', 'profil', 'proje-maliyet', 'proses', 'rota', 'sevkiyat', 'sistem', 'smartes', 'takvim', 'terminal',
+      'oturum', 'plan', 'portal', 'profil', 'proje-maliyet', 'proses', 'rota', 'sevkiyat', 'sistem', 'smartes', 'takvim', 'takimhane', 'terminal',
       'tezgah-baglantisi', 'toplantilar',
     ],
     /* 1 */ ['ayarlar', 'guvenlik', 'ik', 'istasyonlar', 'kisiler', 'musteri-tedarikci', 'siparisler'],

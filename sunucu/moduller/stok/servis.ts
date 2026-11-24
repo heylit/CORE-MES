@@ -6,6 +6,7 @@ export * from './servis/giris.ts';
 export * from './servis/hareket.ts';
 export * from './servis/teslim.ts';
 export * from './servis/teslim-penceresi.ts';
+export * from './servis/takim.ts';
 export * from './servis/toplama.ts';
 export * from './servis/uretim.ts';
 export * from './servis/dis-akis.ts';
