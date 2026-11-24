@@ -724,6 +724,13 @@
   .tc-rr1-seg[aria-label="Görünüm"] button:last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
 
+/* Ürün listesi telefonda: kodun ön eki türü zaten söyler, son değişiklik ayrıntıdır; ikisi gizlenince ad kelime kelime kırılmaz, rota durumu ve
+   adım kaydırmadan görünür. Tablet genişliğinde tam tablo sığar. */
+@media (max-width: 479px) {
+  .tc-rr1-ul-tur, .tc-rr1-ul-son { display: none; }
+  .tc-rr1-ul-tablo td:nth-child(2) { min-width: var(--menu-serit); }
+}
+
 /* Adımın şartnameleri ve talimatı (989 a, 1187 a) */
 .tc-rr1-sartnameler, .tc-rr1-talimat { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--b-2); }
 .tc-rr1-sartname { border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); padding: var(--b-2) var(--b-3); display: flex; flex-direction: column; gap: var(--b-2); }
