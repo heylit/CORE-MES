@@ -49,7 +49,7 @@ export function UrunListesi({ duzen, ac }: { duzen: RotaDuzeni; ac: (id: string)
         <div className="tc-rr1-tblkap">
           <table className="tc-rr1-rt tc-rr1-ul-tablo" aria-label="Ürünler ve rotaları">
             <thead>
-              <tr><th>Malzeme no</th><th>Ad</th><th>Tür</th><th>Rota durumu</th><th className="tc-rr1-sag">Adım</th><th>Son değişiklik</th></tr>
+              <tr><th>Malzeme no</th><th>Ad</th><th className="tc-rr1-ul-tur">Tür</th><th>Rota durumu</th><th className="tc-rr1-sag">Adım</th><th className="tc-rr1-ul-son">Son değişiklik</th></tr>
             </thead>
             <tbody>
               {gor.map((x) => {
@@ -59,13 +59,13 @@ export function UrunListesi({ duzen, ac }: { duzen: RotaDuzeni; ac: (id: string)
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ac(x.m.id); } }}>
                     <td className="tc-rr1-kirilmaz"><b>{x.m.code}</b></td>
                     <td>{x.m.name}</td>
-                    <td><span className={`tc-rr1-slot tc-rr1-slot-k tc-rr1-slot-${x.m.type}`}>{turKisa(x.m.type)}</span></td>
+                    <td className="tc-rr1-ul-tur"><span className={`tc-rr1-slot tc-rr1-slot-k tc-rr1-slot-${x.m.type}`}>{turKisa(x.m.type)}</span></td>
                     <td>
                       <span className={`tc-rr1-ul-durum tc-rr1-d-${x.durum}`}>{DURUM_ADI[x.durum]}</span>
                       {r && <span className={`tc-rr1-rvchip tc-rr1-rv-${r.status}`}>Rev {r.no}</span>}
                     </td>
                     <td className="tc-rr1-sag">{x.adim ? String(x.adim) : '–'}</td>
-                    <td className="tc-rr1-kirilmaz">{x.son ? tarih(x.son) : '–'}</td>
+                    <td className="tc-rr1-kirilmaz tc-rr1-ul-son">{x.son ? tarih(x.son) : '–'}</td>
                   </tr>
                 );
               })}
