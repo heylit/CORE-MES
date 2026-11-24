@@ -291,7 +291,7 @@ function Istekler() {
   const yerAdi = (i: MalzemeIstegi) => i.istasyonAd ?? `${i.kisiAd ?? '—'} (kişiye)`;
   // Seçim kutusu kendi ilk sütunundadır, yapışık değildir; yana kayınca İstek sütunu kabın solunda kalır.
   const sutunlar: Sutun<MalzemeIstegi>[] = [
-    ...(yazabilir ? [{ anahtar: 'sec', baslik: '', csv: false as const, hucre: (i: MalzemeIstegi) => (secilebilir(i)
+    ...(yazabilir ? [{ anahtar: 'sec', kartta: true, baslik: '', csv: false as const, hucre: (i: MalzemeIstegi) => (secilebilir(i)
       ? <input type="checkbox" aria-label={`${i.no} seç`} checked={secim[i.id] !== undefined} onChange={() => degistir(i)} /> : <span />) }] : []),
     // Teslim et istek no ile aynı yapışık hücrede: yana kaydırınca da satırın kimliğiyle birlikte görünür, sona gidilmez.
     { anahtar: 'no', baslik: 'İstek', kirilmaz: true, sabit: 'sol', csv: (i) => i.no, hucre: (i) => (
@@ -306,8 +306,8 @@ function Istekler() {
         )}
       </span>
     ) },
-    { anahtar: 'malzeme', baslik: 'Malzeme', kes: true, csv: malzemeAdi, hucre: (i) => <strong>{malzemeAdi(i)}</strong> },
-    { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', hucre: (i) => miktarMetni(i.miktar) },
+    { anahtar: 'malzeme', kartta: true, baslik: 'Malzeme', kes: true, csv: malzemeAdi, hucre: (i) => <strong>{malzemeAdi(i)}</strong> },
+    { anahtar: 'miktar', kartta: true, baslik: 'Miktar', hizala: 'sag', hucre: (i) => miktarMetni(i.miktar) },
     { anahtar: 'karsilanan', baslik: 'Karşılanan', hizala: 'sag', hucre: (i) => (i.karsilanan === null ? '—' : miktarMetni(i.karsilanan)) },
     { anahtar: 'durum', baslik: 'Durum', csv: (i) => istekDurumu(i).etiket, hucre: (i) => <Rozet ton={istekDurumu(i).ton}>{istekDurumu(i).etiket}</Rozet> },
     { anahtar: 'yer', baslik: 'Nereye', kes: true, hucre: yerAdi },
@@ -331,7 +331,7 @@ function Istekler() {
         )}
         {l.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(l.error)} yenile={() => void l.refetch()} />
           : l.isPending ? <DurumKutusu durum="yukleniyor" />
-          : <Tablo etiket="Malzeme istekleri" kip="kaydir" sutunlar={sutunlar} satirlar={l.data.satirlar} satirAnahtari={(i) => i.id} bosMesaj={durum === 'acik' ? 'Bekleyen malzeme isteği yok. İstekler üretimden, Okut panelindeki "Malzeme iste" ile gelir.' : 'Bu durumda istek yok.'} />}
+          : <Tablo etiket="Malzeme istekleri" kip="kayit" sutunlar={sutunlar} satirlar={l.data.satirlar} satirAnahtari={(i) => i.id} bosMesaj={durum === 'acik' ? 'Bekleyen malzeme isteği yok. İstekler üretimden, Okut panelindeki "Malzeme iste" ile gelir.' : 'Bu durumda istek yok.'} />}
         {l.data && l.data.satirlar.length > 0 && <Sayfalama sayfa={l.data.sayfa} sayfaBoyu={l.data.sayfaBoyu} toplam={l.data.toplam} degistir={setSayfa} satirSayisi={l.data.satirlar.length} />}
       </div>
       {liste && <ListeAcPenceresi istekler={secililer} kapat={() => { setListe(false); setSecim({}); }} />}
@@ -374,13 +374,13 @@ function Listeler() {
         <p className="tc-stok-not">Liste, seçilen malzemelerin raf sırasına dizilmiş toplama turudur; açık listeyi buradan sürdürün.</p>
         {yetkili && <div className="tc-stok-eylem"><Dugme tur="ikincil" simge="plus" onClick={() => setYeni(true)}>İsteksiz liste</Dugme></div>}
         {l.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(l.error)} /> : (
-          <Tablo etiket="Toplama listeleri" kip="kaydir" satirlar={l.data?.satirlar ?? []} satirAnahtari={(t) => t.id} mesgul={l.isPending} bosMesaj='Henüz liste yok. İstekleri seçip "Liste aç" deyin.'
+          <Tablo etiket="Toplama listeleri" kip="kayit" satirlar={l.data?.satirlar ?? []} satirAnahtari={(t) => t.id} mesgul={l.isPending} bosMesaj='Henüz liste yok. İstekleri seçip "Liste aç" deyin.'
             sutunlar={[
               { anahtar: 'no', baslik: 'Liste', mono: true, sabit: 'sol', csv: (t) => t.no, hucre: (t) => <Link to={`/stok/hazirlik/${t.id}`}>{t.no}</Link> },
-              { anahtar: 'ad', baslik: 'Ad', kes: true, hucre: (t) => t.ad },
+              { anahtar: 'ad', baslik: 'Ad', kartta: true, kes: true, hucre: (t) => t.ad },
               { anahtar: 'z', baslik: 'Açılış', hucre: (t) => zamanMetni(t.acilis) },
-              { anahtar: 'i', baslik: 'İlerleme', hizala: 'sag', hucre: (t) => `${t.toplanan}/${t.adimSayisi}` },
-              { anahtar: 'd', baslik: 'Durum', hucre: (t) => <><Rozet ton={LISTE_DURUMU[t.durum].ton}>{LISTE_DURUMU[t.durum].etiket}</Rozet>{t.eksikVar && <Rozet ton="uyari">Eksik</Rozet>}</> },
+              { anahtar: 'i', baslik: 'İlerleme', kartta: true, hizala: 'sag', hucre: (t) => `${t.toplanan}/${t.adimSayisi}` },
+              { anahtar: 'd', baslik: 'Durum', kartRozet: true, hucre: (t) => <><Rozet ton={LISTE_DURUMU[t.durum].ton}>{LISTE_DURUMU[t.durum].etiket}</Rozet>{t.eksikVar && <Rozet ton="uyari">Eksik</Rozet>}</> },
             ]} />
         )}
       </div>

@@ -1,0 +1,12 @@
+.tc-sabit-eylem { display: flex; justify-content: flex-end; }
+.tc-sabit-eylem-kutu { display: flex; align-items: center; gap: var(--b-3); }
+
+/* Telefon: kutu alt gezinmenin üstünde sabit. İçeriğin son satırı örtülmesin diye kabuk içeriğe alttan boşluk verir (kabuk.css). */
+@media (max-width: 767px) {
+  .tc-sabit-eylem[data-sabit] .tc-sabit-eylem-kutu {
+    position: fixed; z-index: var(--z-ust);
+    inset-inline: var(--b-3); inset-block-end: calc(var(--alt-cubuk) + env(safe-area-inset-bottom, 0px) + var(--b-3));
+  }
+  .tc-sabit-eylem[data-sabit] .tc-sabit-eylem-kutu > * { flex: 1; }
+  .tc-sabit-eylem[data-sabit] .tc-sabit-eylem-kutu :is(.tc-dugme, button) { min-block-size: var(--dokunma-ana); box-shadow: var(--shadow); }
+}

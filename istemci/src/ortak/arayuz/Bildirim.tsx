@@ -17,6 +17,8 @@ export interface BildirimEylemi {
 
 export interface BildirimSecenegi {
   eylem?: BildirimEylemi;
+  // Bildirimin ekranda kalma süresi (ms). Verilmezse eylemli bildirim 8 sn, eylemsiz 4 sn kalır.
+  sure?: number;
 }
 
 interface Kayit {
@@ -39,6 +41,8 @@ const SIMGE: Record<BildirimTonu, SimgeAdi> = { tamam: 'check', bilgi: 'bell', h
 export const BILDIRIM_SURESI_MS = 4000;
 // Eylemli bildirim daha uzun kalır: düğmeye yetişmek için iletiyi okumak gerekir.
 export const EYLEMLI_BILDIRIM_SURESI_MS = 8000;
+// Kayıt sonrası Geri al şeridi (kart 3676): kayıt hemen yapılır, kişi bu süre içinde vazgeçebilir.
+export const GERI_AL_SURESI_MS = 6000;
 
 export function BildirimSaglayici({ children }: { children: ReactNode }) {
   const [kayitlar, kayitYaz] = useState<Kayit[]>([]);
@@ -57,7 +61,7 @@ export function BildirimSaglayici({ children }: { children: ReactNode }) {
     const no = ++sayac.current;
     const eylem = secenek?.eylem;
     kayitYaz((onceki) => [...onceki, { no, ton, mesaj, eylem }]);
-    const sure = eylem ? EYLEMLI_BILDIRIM_SURESI_MS : BILDIRIM_SURESI_MS;
+    const sure = secenek?.sure ?? (eylem ? EYLEMLI_BILDIRIM_SURESI_MS : BILDIRIM_SURESI_MS);
     if (ton !== 'hata') zamanlayicilar.current.set(no, setTimeout(() => kaldir(no), sure));
     return no;
   }, [kaldir]);

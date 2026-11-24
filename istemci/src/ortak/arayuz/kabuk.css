@@ -357,3 +357,12 @@
   .tc-kabuk-tum-izgara > .tc-kabuk-bag { position: relative; }
   .tc-kabuk-tum-yok { grid-column: 1 / -1; color: var(--muted); padding: var(--b-3); }
 }
+
+/* Sayfada etkin sabit ana eylem varsa (SabitEylem, kart 3676): Kayıt gir dairesi düz simge olur, ekranda tek birincil eylem kalır;
+   içerik, sabit düğmenin son satırı örtmemesi için alttan boşluk bırakır. Öznitelik SabitEylem'den gelir (`:has` gerekmez). */
+@media (max-width: 767px) {
+  .tc-kabuk[data-sabit-eylem] .tc-kabuk-alt-kayit-daire {
+    margin-block-start: 0; inline-size: auto; block-size: auto; background: transparent; color: inherit; box-shadow: none;
+  }
+  .tc-kabuk[data-sabit-eylem] .tc-kabuk-icerik { padding-block-end: calc(var(--dokunma-ana) + var(--b-6)); }
+}

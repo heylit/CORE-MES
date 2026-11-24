@@ -4,7 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import type {
   AcikSiparisSatiri, AcikSiparisSatirlariCevabi, AmbalajTuru, DepoSevkSatiri, EmirTamamlamaCevabi, FasonIsleriCevabi, GozOnerisiCevabi, KonumAyrintiCevabi, KonumlarCevabi, MalKabulCevabi, MalKabulGovdesi, MalKabullerCevabi, MalKabulOzeti, MalzemeAyrintiCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
-import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Secim, Sekmeler, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Girdi, Kart, Rozet, SabitEylem, Secim, Sekmeler, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { useGonderimKilidi } from '../../ortak/veri/korumali-komut.ts';
 import { DosyaHatasi, dosyaYukle, KucukResimKutusu, useKucukResimler } from '../belge-merkezi/disari.ts';
@@ -374,20 +374,20 @@ function AcikSiparisler({ sec, ara, araYaz }: { sec: (x: AcikSiparisSatiri) => v
   const a = useQuery({ queryKey: anahtarlar.liste('acik-siparis-satirlari', {}), queryFn: () => api.get<AcikSiparisSatirlariCevabi>('/stok/acik-siparis-satirlari') });
   const sutunlar: Sutun<AcikSiparisSatiri>[] = [
     { anahtar: 'siparis', baslik: 'Sipariş', mono: true, sabit: 'sol', hucre: (x) => x.siparisNo || x.talepNo },
-    { anahtar: 'kalem', baslik: 'Malzeme', kes: true, hucre: (x) => x.kalemAdi },
+    { anahtar: 'kalem', kartta: true, baslik: 'Malzeme', kes: true, hucre: (x) => x.kalemAdi },
     { anahtar: 'hizmet', baslik: 'Hizmet', hucre: (x) => (x.malzemeTur === 'hizmet' ? hizmetRozeti(x) : null) },
     { anahtar: 'rev', baslik: 'Rev.', hucre: (x) => (x.parcaRevizyonu ? <>{x.parcaRevizyonu}{x.revizyonUyusmuyor === true && <> <Rozet ton="uyari">{`Yürürlükte ${x.yururlukRevizyonu ?? ''}`}</Rozet></>}</> : '—') },
     { anahtar: 'tedarikci', baslik: 'Tedarikçi', kes: true, hucre: (x) => x.tedarikciAdi },
     { anahtar: 'emir', baslik: 'Üretim emri', mono: true, hucre: (x) => x.emirNo ?? '—' },
     { anahtar: 'proje', baslik: 'Proje', kes: true, hucre: (x) => x.projeAdi ?? '—' },
     { anahtar: 'miktar', baslik: 'Sipariş miktarı', hizala: 'sag', hucre: (x) => birimliMiktar(x.miktar, x.birim) },
-    { anahtar: 'kalan', baslik: 'Kalan', hizala: 'sag', hucre: (x) => <KalanHucresi x={x} /> },
-    { anahtar: 'termin', baslik: 'Beklenen', hucre: (x) => x.beklenenTeslim ?? '—' },
+    { anahtar: 'kalan', kartta: true, baslik: 'Kalan', hizala: 'sag', hucre: (x) => <KalanHucresi x={x} /> },
+    { anahtar: 'termin', kartta: true, baslik: 'Beklenen', hucre: (x) => x.beklenenTeslim ?? '—' },
     { anahtar: 'sec', baslik: '', sabit: 'sag', hucre: (x) => <Dugme tur="ikincil" onClick={() => sec(x)}>Seç</Dugme> },
   ];
   if (a.isError) return <DurumKutusu durum="hata" mesaj={hataMetni(a.error)} yenile={() => void a.refetch()} />;
   return (
-    <Tablo etiket="Açık sipariş satırları" kip="kaydir" sutunlar={sutunlar} satirlar={acikSiparisAra(a.data?.satirlar ?? [], ara)} satirAnahtari={(x) => x.id} mesgul={a.isPending}
+    <Tablo etiket="Açık sipariş satırları" kip="kayit" sutunlar={sutunlar} satirlar={acikSiparisAra(a.data?.satirlar ?? [], ara)} satirAnahtari={(x) => x.id} mesgul={a.isPending}
       bosMesaj={ara.trim() ? 'Aramaya uyan açık sipariş satırı yok.' : 'Teslim bekleyen sipariş yok.'}
       arac={{ arama: { deger: ara, degistir: araYaz, etiket: 'Açık siparişlerde ara', yerTutucu: 'Malzeme, tedarikçi, emir no ya da proje' } }} />
   );
@@ -567,7 +567,7 @@ export function MalKabul() {
             {tur === 'satin_alma' && satirlar.some((s) => !bosMu(s) && !s.siparisSatirId) && (
               <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">Satın alma kabulünde her satır bir sipariş satırına bağlanır. Siparişi olmayan malı "Diğer" türüyle ve açıklamayla alın.</p>
             )}
-            <div className="tc-stok-sag">{taslak.durumYazisi}<Dugme tur="birincil" type="submit" yukleniyor={komut.isPending} disabled={satirlar.some((s) => s.sertifikaYukleniyor)}>Teslim al</Dugme></div>
+            <div className="tc-stok-sag">{taslak.durumYazisi}<SabitEylem><Dugme tur="birincil" boyut="ana" type="submit" yukleniyor={komut.isPending} disabled={satirlar.some((s) => s.sertifikaYukleniyor)}>Teslim al</Dugme></SabitEylem></div>
             {etiket && <p className="tc-stok-bilgi"><span>{etiket.no} kaydedildi.</span><EtiketMerkeziDugmesi tur="mal-kabul" idler={[etiket.id]}>Lot etiketlerini bas</EtiketMerkeziDugmesi></p>}
             {etiket && irsaliyeBekliyor && (
               <p className="tc-stok-bilgi" role="status"><span>İrsaliye bu cihazda bekliyor; bağlantı gelince {irsaliyeBekliyor} numaralı mal kabule eklenecek.</span></p>

@@ -1,7 +1,7 @@
 import { useQueries } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import type { SmartesEmirDurumlariCevabi, SmartesRozetDurumu } from '#paylasilan/sozlesme/smartes.ts';
-import { Rozet, Simge, type RozetTonu } from '../../ortak/arayuz/index.ts';
+import { Rozet, Simge, useTelefon, type RozetTonu } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 
@@ -61,6 +61,8 @@ export function SmartesRozeti({ durum, gonderilmez, ipucu, hata = false, baslik 
       <Rozet ton={SMARTES_DURUM_TONU[durum]}>
         {durum === 'gonderildi' && <Simge ad="check" boyut="k" />}
         {durum === 'durdu' && <Simge ad="alert" boyut="k" />}
+        {durum === 'yeniden-denenecek' && <Simge ad="rotate" boyut="k" />}
+        {durum === 'sirada' && <Simge ad="clock" boyut="k" />}
         {baslik && durum !== 'gonderildi' ? `SmartES: ${ad}` : ad}
       </Rozet>
     </span>
@@ -72,10 +74,12 @@ const onePlan = (d: SmartesRozetDurumu | null) => d === 'durdu' || d === 'yenide
 // Liste hücresi: emrin toplam rozeti; altında öne çıkan adım ("OP 20 Freze") ve kısa neden, ya da "2/2 adım" (dokunmatikte ipucu okunmaz).
 export function SmartesEmirHucresi({ bilgi, hata }: { bilgi: SmartesEmirBilgisi | null; hata: boolean }) {
   const t = bilgi?.toplam ?? null;
+  // Telefonda kartta sütun başlığı yoktur: rozet hangi sistemin durumu olduğunu kendisi söyler.
+  const telefon = useTelefon();
   const one = t && onePlan(t.durum) && t.opNo !== null ? bilgi!.adimlar.find((a) => a.opNo === t.opNo) ?? null : null;
   return (
     <span className="tc-smartes-hucre tc-smartes-liste">
-      <SmartesRozeti durum={t?.durum ?? null} gonderilmez={t?.gonderilmez ?? 'adim-disi'} hata={hata} ipucu={t?.neden} />
+      <SmartesRozeti durum={t?.durum ?? null} gonderilmez={t?.gonderilmez ?? 'adim-disi'} hata={hata} ipucu={t?.neden} baslik={telefon && t?.durum != null} />
       {!hata && t?.durum === 'gonderildi' && <small className="tc-smartes-alt">{t.gonderilen}/{t.toplam} adım</small>}
       {!hata && one && <small className="tc-smartes-alt"><span className="tc-smartes-op">OP {one.opNo} {one.ad}</span>{t?.neden && <> · {t.neden}</>}</small>}
     </span>

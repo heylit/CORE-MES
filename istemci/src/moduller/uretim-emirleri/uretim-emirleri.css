@@ -222,6 +222,10 @@
 /* Listede uzun neden sütunu genişletmez; alt satırlara sarılır. */
 .tc-smartes-liste { max-width: var(--menu-genis); white-space: normal; }
 .tc-smartes-rozet-yok { color: var(--muted); }
+/* Telefon kartında gönderilmeyen emrin "—" işareti yer kaplamaz; okunamadı uyarısı kalır. */
+[data-kip="kart"][data-kompakt] .tc-tablo td[data-kart-rozet]:has(.tc-smartes-rozet-yok[aria-label]) { display: none; }
+/* Kart kompakt kalır: SmartES rozetinin altındaki adım ve neden satırı ayrıntı sayfasında; ekran okuyucuda kalır. */
+[data-kip="kart"][data-kompakt] .tc-tablo .tc-smartes-alt { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .tc-smartes-izleme { font-size: var(--yazi-s); }
 .tc-emir-adim-statu .tc-smartes-adim { align-items: flex-end; }
 @media (max-width: 767px) { .tc-emir-adim-statu .tc-smartes-adim { align-items: flex-start; } }

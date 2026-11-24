@@ -67,13 +67,13 @@ export function malzemeSutunlari<S extends MalzemeStokSatiri>(secenek: { gizli: 
       <span className="tc-stok-ad"><strong>{m.ad ?? `Kart ${m.malzemeId}`}</strong>
         <span>Kart no {m.malzemeId}{m.konumSayisi > 0 ? ` · ${m.konumSayisi} konum` : ''}</span></span>
     ) },
-    { anahtar: 'serbest', gizlenir: 'serbest', baslik: 'Serbest', hizala: 'sag', sirala: true, csv: (m) => ondalik(m.serbest), hucre: (m) => (
+    { anahtar: 'serbest', gizlenir: 'serbest', kartta: true, baslik: 'Serbest', hizala: 'sag', sirala: true, csv: (m) => ondalik(m.serbest), hucre: (m) => (
       <strong className={`tc-stok-buyuk-miktar ${m.durum === 'eksi' ? 'tc-stok-eksi' : m.durum === 'kritik' ? 'tc-stok-uyari-yazi' : ''}`}>{birimliMiktar(m.serbest, m.birim)}</strong>
     ) },
     { anahtar: 'toplam', gizlenir: 'toplam', baslik: 'Toplam', hizala: 'sag', mono: true, sirala: true, csv: (m) => ondalik(m.toplam), hucre: (m) => miktarMetni(m.toplam) },
     { anahtar: 'birim', gizlenir: 'birim', baslik: 'Birim', hucre: (m) => m.birim },
     { anahtar: 'durum', gizlenir: 'durum', baslik: 'Durum', csv: (m) => DURUM_ETIKETI[m.durum].etiket, hucre: (m) => <Rozet ton={DURUM_ETIKETI[m.durum].ton}>{DURUM_ETIKETI[m.durum].etiket}</Rozet> },
-    { anahtar: 'konum', gizlenir: 'konum', baslik: 'Konumlar', csv: (m) => m.konumlar.map((k) => k.kod).join(' '), hucre: (m) => (m.konumlar.length === 0 ? null : (
+    { anahtar: 'konum', gizlenir: 'konum', kartta: true, baslik: 'Konumlar', csv: (m) => m.konumlar.map((k) => k.kod).join(' '), hucre: (m) => (m.konumlar.length === 0 ? null : (
       <span className="tc-stok-etiketler">
         {m.konumlar.map((k) => (
           <span key={k.kod} className="tc-stok-etiket">{k.katNo !== null && <span className={`tc-stok-kat tc-stok-kat-${((k.katNo - 1) % 6) + 1}`} />}{k.kod}</span>

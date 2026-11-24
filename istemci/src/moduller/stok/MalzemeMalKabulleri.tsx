@@ -14,9 +14,9 @@ const SON = 5;
 
 const SUTUNLAR: Sutun<MalKabulSatirOzeti>[] = [
   { anahtar: 'belge', baslik: 'Mal kabul', mono: true, sabit: 'sol', hucre: (s) => <Link to={`/stok/mal-kabul/${s.malKabulId}`}>{s.belgeNo}</Link>, csv: (s) => s.belgeNo },
-  { anahtar: 'zaman', baslik: 'Tarih', kirilmaz: true, hucre: (s) => zamanMetni(s.zaman) },
-  { anahtar: 'lot', baslik: 'Lot', mono: true, hucre: (s) => s.lotNo ?? '—' },
-  { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', hucre: (s) => birimliMiktar(s.sayilanMiktar, s.birim) },
+  { anahtar: 'zaman', kartta: true, baslik: 'Tarih', kirilmaz: true, hucre: (s) => zamanMetni(s.zaman) },
+  { anahtar: 'lot', kartta: true, baslik: 'Lot', mono: true, hucre: (s) => s.lotNo ?? '—' },
+  { anahtar: 'miktar', kartta: true, baslik: 'Miktar', hizala: 'sag', hucre: (s) => birimliMiktar(s.sayilanMiktar, s.birim) },
   { anahtar: 'tur', baslik: 'Tür', hucre: (s) => MAL_KABUL_TURU[s.tur] },
   { anahtar: 'siparis', baslik: 'Sipariş', mono: true, hucre: (s) => s.siparisNo ?? '—' },
   { anahtar: 'irsaliye', baslik: 'İrsaliye', mono: true, csv: (s) => s.irsaliyeNo ?? '', hucre: (s) => (
@@ -35,7 +35,7 @@ export function MalzemeMalKabulleri({ malzemeId }: { malzemeId: number }) {
   if (l.data && l.data.satirlar.length === 0) return null;
   return (
     <Kart baslik="Mal kabuller ve irsaliyeler" sag={<Link to="/stok/mal-kabul?sekme=yapilanlar">Tümü</Link>}>
-      <Tablo etiket="Mal kabuller ve irsaliyeler" kip="kaydir" sutunlar={SUTUNLAR} satirlar={l.data?.satirlar ?? []} satirAnahtari={(s) => s.id} mesgul={l.isPending} />
+      <Tablo etiket="Mal kabuller ve irsaliyeler" kip="kayit" sutunlar={SUTUNLAR} satirlar={l.data?.satirlar ?? []} satirAnahtari={(s) => s.id} mesgul={l.isPending} />
     </Kart>
   );
 }
