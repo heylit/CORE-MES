@@ -40,9 +40,8 @@ describe('dövizli kayıtta kur (gerçek PostgreSQL)', () => {
     cerez = String(g.headers['set-cookie']).split(';')[0] ?? '';
     firma = (await ortam.vt.tek<{ id: number }>("INSERT INTO musteri_tedarikci_firma (ad, tur, olusturan_id) VALUES ('Deneme Tedarikci', 'ikisi', $1) RETURNING id", [kisi]))?.id ?? 0;
     usdHesap = tamam(await yaz<{ hesap: { id: number } }>('/finans/hesaplar/ekle', { ad: 'Deneme USD', tur: 'banka', paraBirimi: 'USD', acilisTarihi: '2026-01-01' })).hesap.id;
-    // 2238-1 c: muhasebe kaydı alış kurunu alır; eski tek kur (EUR) okunmaz.
-    tamam(await yaz('/finans/kur-ciftleri/ekle', { paraBirimi: 'USD', tarih: '2026-10-01', alis: 34.25, satis: 34.4 }));
-    tamam(await yaz('/finans/kurlar/ekle', { paraBirimi: 'EUR', tarih: '2026-10-01', kur: 37 }));
+    // 2238-1 c: muhasebe kaydı alış kurunu alır; EUR için hiç kur girilmedi.
+    tamam(await yaz('/finans/kur-ciftleri/ekle', { paraBirimi: 'USD', tarih: '2026-10-08', alis: 34.25, satis: 34.4 }));
   });
   after(async () => { await app?.close(); await ortam?.kaldir(); });
 
@@ -55,11 +54,25 @@ describe('dövizli kayıtta kur (gerçek PostgreSQL)', () => {
     assert.equal(Number(tamam(await belge({ paraBirimi: 'USD', kur: 35 })).belge.kur), 35);
     assert.equal(Number(tamam(await belge({})).belge.kur), 1);
   });
-  test('alış kuru girilmemiş dövizde (eski tek kuru olsa da) ya da kurdan önceki tarihte belge reddedilir', async () => {
+  test('alış kuru girilmemiş dövizde ya da kurdan önceki tarihte belge reddedilir', async () => {
     const eur = await belge({ paraBirimi: 'EUR' });
     assert.equal(eur.durum, 400, JSON.stringify(eur.govde));
     assert.equal((eur.govde as { alan?: string }).alan, 'kur');
-    assert.equal((await belge({ paraBirimi: 'USD', belgeTarihi: '2026-09-30', vade: '2026-10-30' })).durum, 400);
+    assert.equal((await belge({ paraBirimi: 'USD', belgeTarihi: '2026-10-07', vade: '2026-10-30' })).durum, 400);
+  });
+  test('kur bir haftadan eskiyse kursuz kayıt reddedilir (kart 3671); kur elle verilirse ya da güncel kur girilince kaydedilir', async () => {
+    const eski = await belge({ paraBirimi: 'USD', belgeTarihi: '2026-10-20', vade: '2026-11-20' });
+    assert.equal(eski.durum, 400, JSON.stringify(eski.govde));
+    assert.equal((eski.govde as { alan?: string }).alan, 'kur');
+    assert.match(String((eski.govde as { mesaj?: string }).mesaj), /2026-10-08 tarihli/);
+    assert.equal(Number(tamam(await belge({ paraBirimi: 'USD', belgeTarihi: '2026-10-20', vade: '2026-11-20', kur: 35 })).belge.kur), 35);
+    tamam(await yaz('/finans/kur-ciftleri/ekle', { paraBirimi: 'USD', tarih: '2026-10-20', alis: 36, satis: 36.2 }));
+    assert.equal(Number(tamam(await belge({ paraBirimi: 'USD', belgeTarihi: '2026-10-20', vade: '2026-11-20' })).belge.kur), 36);
+  });
+  test('eski tek kur tablosuna yazılamaz: kurun tek kaynağı alış ve satış çiftidir (kart 3671)', async () => {
+    const kisit = await vt().sorgu("INSERT INTO finans_kur (para_birimi, tarih, kur, olusturan_id) VALUES ('USD', '2026-10-09', 34, 1)").then(() => null, (h: { constraint?: string }) => h.constraint);
+    assert.equal(kisit, 'finans_kur_eski_yazilmaz');
+    assert.equal((await yaz('/finans/kurlar/ekle', { paraBirimi: 'USD', tarih: '2026-10-09', kur: 34 })).durum, 404);
   });
   test('kursuz USD ödeme ve çek de günün kurunu alır', async () => {
     const o = tamam(await yaz<{ odeme: Odeme }>('/finans/odemeler/ekle',

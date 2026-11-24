@@ -561,8 +561,9 @@ describe('proje-maliyet (gerçek PostgreSQL, gerçek giriş)', () => {
     const onayli = await tamam<SiparisAyrintisi>(gonder(yonetici, `/siparisler/${taslak.id}/onayla`, { surum: taslak.surum }));
     const p = await tamam<Proje>(gonder(yonetici, `/projeler/siparisten/${onayli.id}/ac`, { kod: 'PM.7', ad: 'Döviz' }));
     await isEmriAc(p.id, { adet: 10, siparisSatiriId: onayli.satirlar[0]!.id });
+    // Alış satıştan 1 düşük: proje maliyeti satış kurunu okur (alış okunsa 34 x 1000 çıkardı).
     for (const [tarih, kur] of [['2026-10-05', '30'], ['2026-10-10', '32'], ['2026-10-19', '35']] as const) {
-      await ortam!.sahip.sorgu('INSERT INTO finans_kur (para_birimi, tarih, kur, olusturan_id) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING', ['EUR', tarih, kur, yoneticiId]);
+      await ortam!.sahip.sorgu('INSERT INTO finans_kur_cifti (para_birimi, tarih, alis, satis, olusturan_id) VALUES ($1, $2, $3 - 1, $3, $4) ON CONFLICT DO NOTHING', ['EUR', tarih, kur, yoneticiId]);
     }
     const ok = (islemler: string[]) => vt().tx((db) => projeMaliyeti(db, kullanici(islemler), p.id, SIMDI));
     const yetkili = ['finans.maliyet-oku', FIYAT_ISLEMI];

@@ -28,13 +28,13 @@ describe('plan (gerçek PostgreSQL): döviz siparişin bedeli plan gününün ku
       const kursuz = p.gostergeler.maliyetTl!;
       assert.equal(typeof kursuz, 'number');
       const kurYaz = (tarih: string, kur: number) => ortam!.sahip.tx((db) => db.sorgu(
-        'INSERT INTO finans_kur (para_birimi, tarih, kur, olusturan_id) VALUES ($1, $2::date, $3, $4)', ['EUR', tarih, kur, yoneticiId]));
+        'INSERT INTO finans_kur_cifti (para_birimi, tarih, alis, satis, olusturan_id) VALUES ($1, $2::date, $3 - 10, $3, $4)', ['EUR', tarih, kur, yoneticiId]));
       await kurYaz('2000-01-01', 40);
       const kur40 = (await planOku(p.taslak!.id, c.yonetici)).gostergeler;
       assert.equal(kur40.bedeliBilinmeyenEmir, 0, 'kur girilince bedel bilinir');
       assert.ok(kur40.maliyetTl! > kursuz, `${kur40.maliyetTl} > ${kursuz}: EUR emir artık bedava değil`);
-      // Daha yeni kur (bugünden önceki son kur geçerlidir) iki katı: ceza TL karşılığıyla iki katına çıkar.
-      await ortam!.sahip.tx((db) => db.sorgu("INSERT INTO finans_kur (para_birimi, tarih, kur, olusturan_id) VALUES ('EUR', current_date - 1, 80, $1)", [yoneticiId]));
+      // Çiftte alış satıştan 10 düşüktür: plan satış kurunu okur (alış okunsa 30 ve 70 oranı iki kat çıkmazdı). Daha yeni kur (bugünden önceki son kur geçerlidir) iki katı: ceza TL karşılığıyla iki katına çıkar.
+      await ortam!.sahip.tx((db) => db.sorgu("INSERT INTO finans_kur_cifti (para_birimi, tarih, alis, satis, olusturan_id) VALUES ('EUR', current_date - 1, 70, 80, $1)", [yoneticiId]));
       const kur80 = (await planOku(p.taslak!.id, c.yonetici)).gostergeler.maliyetTl!;
       assert.ok(Math.abs((kur80 - kursuz) - 2 * (kur40.maliyetTl! - kursuz)) <= 2, `${kur80} - ${kursuz} = 2 x (${kur40.maliyetTl} - ${kursuz})`);
     } finally {

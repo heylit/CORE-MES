@@ -243,10 +243,6 @@ export async function virmanEkle(db: Db, v: { kaynakHesapId: number; hedefHesapI
 }
 export const virmanIptal = (db: Db, id: number, surum: number, kisi: number) =>
   db.tek<{ id: number }>('UPDATE finans_virman SET iptal_eden_id = $3, iptal_zamani = now(), surum = surum + 1 WHERE id = $1 AND surum = $2 AND iptal_zamani IS NULL RETURNING id', [id, surum, kisi]);
-export const kurEkle = (db: Db, k: { paraBirimi: string; tarih: string; kur: string }, kisi: number) =>
-  db.tek<{ surum: number }>('INSERT INTO finans_kur (para_birimi, tarih, kur, olusturan_id) VALUES ($1, $2, $3, $4) RETURNING surum', [k.paraBirimi, k.tarih, k.kur, kisi]);
-export const kurGuncelle = (db: Db, k: { paraBirimi: string; tarih: string; kur: string; surum: number }, kisi: number) =>
-  db.tek<{ surum: number }>('UPDATE finans_kur SET kur = $3, surum = surum + 1, guncelleyen_id = $5, guncelleme = now() WHERE para_birimi = $1 AND tarih = $2 AND surum = $4 RETURNING surum', [k.paraBirimi, k.tarih, k.kur, k.surum, kisi]);
 // B-008, B-009: referans çapraz kur iki para biriminin o günkü TL kurunun oranıdır; pay finans ayarındadır (göç 20261008154024).
 const referansCevabi = (s: { k: string | null; pay: string } | null) => ({ referans: s?.k == null ? null : Number(s.k), payYuzde: Number(s?.pay ?? 20) });
 export async function caprazReferansKuru(db: Db, kaynak: { pb: string; kur: string }, hedef: { pb: string; kur: string }, tarih: string) {
@@ -263,14 +259,9 @@ export async function dagitimReferansKuru(db: Db, belgePb: string, belgeKur: str
 export interface KurSatiri { paraBirimi: string; kur: string; tarih: string }
 export const sonKurlar = (db: Db, paraBirimi: string | null, tarih: string) =>
   db.sorgu<KurSatiri>(
-    `SELECT DISTINCT ON (para_birimi) rtrim(para_birimi) AS "paraBirimi", kur::text AS kur, ${tarihMetni('tarih')} AS tarih
-       FROM finans_kur WHERE ($1::char(3) IS NULL OR para_birimi = $1) AND tarih <= $2::date
+    `SELECT DISTINCT ON (para_birimi) rtrim(para_birimi) AS "paraBirimi", satis::text AS kur, ${tarihMetni('tarih')} AS tarih
+       FROM finans_kur_cifti WHERE ($1::char(3) IS NULL OR para_birimi = $1) AND tarih <= $2::date
       ORDER BY para_birimi, tarih DESC`, [paraBirimi, tarih]);
-// Düzeltmede önceki değer deftere girer; kilit, okunan değerle yazılan arasına başka düzeltme girmesin diye.
-export const kurGetir = (db: Db, pb: string, tarih: string) =>
-  db.tek<{ paraBirimi: string; tarih: string; kur: string; surum: number }>(
-    `SELECT rtrim(para_birimi) AS "paraBirimi", ${tarihMetni('tarih')} AS tarih, kur::text AS kur, surum FROM finans_kur WHERE para_birimi = $1 AND tarih = $2 FOR UPDATE`, [pb, tarih]);
-export const kurVarMi = async (db: Db, pb: string, tarih: string) => (await db.tek('SELECT 1 FROM finans_kur WHERE para_birimi = $1 AND tarih = $2', [pb, tarih])) !== null;
 export const faizEkle = (db: Db, f: { paraBirimi: string; gecerlilikBaslangic: string; aylikYuzde: string }, kisi: number) =>
   db.tek<{ id: number }>('INSERT INTO finans_faiz (para_birimi, gecerlilik_baslangic, aylik_yuzde, olusturan_id) VALUES ($1, $2, $3, $4) RETURNING id',
     [f.paraBirimi, f.gecerlilikBaslangic, f.aylikYuzde, kisi]);
@@ -306,10 +297,10 @@ export const sonGenelGiderOrani = (db: Db, gun: string) =>
 // faizde bir önceki geçerlilik tarihli son oran, çünkü aynı güne sonra girilen öncekini düzeltir. Yoksa null.
 export interface KurOzetiSatiri { paraBirimi: string; tarih: string; kur: string; oncekiKur: string | null; girenId: number; giris: string; surum: number }
 export const kurOzeti = (db: Db, tarih: string) => db.sorgu<KurOzetiSatiri>(
-  `SELECT DISTINCT ON (k.para_birimi) rtrim(k.para_birimi) AS "paraBirimi", ${tarihMetni('k.tarih')} AS tarih, k.kur::text AS kur,
-          (SELECT o.kur::text FROM finans_kur o WHERE o.para_birimi = k.para_birimi AND o.tarih < k.tarih ORDER BY o.tarih DESC LIMIT 1) AS "oncekiKur",
+  `SELECT DISTINCT ON (k.para_birimi) rtrim(k.para_birimi) AS "paraBirimi", ${tarihMetni('k.tarih')} AS tarih, k.satis::text AS kur,
+          (SELECT o.satis::text FROM finans_kur_cifti o WHERE o.para_birimi = k.para_birimi AND o.tarih < k.tarih ORDER BY o.tarih DESC LIMIT 1) AS "oncekiKur",
           coalesce(k.guncelleyen_id, k.olusturan_id) AS "girenId", ${zamanMetni('coalesce(k.guncelleme, k.olusturma)')} AS giris, k.surum
-     FROM finans_kur k WHERE k.tarih <= $1::date ORDER BY k.para_birimi, k.tarih DESC`, [tarih]);
+     FROM finans_kur_cifti k WHERE k.tarih <= $1::date ORDER BY k.para_birimi, k.tarih DESC`, [tarih]);
 export interface FaizOzetiSatiri { paraBirimi: string; gecerlilikBaslangic: string; aylikYuzde: string; oncekiAylikYuzde: string | null; girenId: number; giris: string }
 export const faizOzeti = (db: Db, tarih: string) => db.sorgu<FaizOzetiSatiri>(
   `SELECT DISTINCT ON (f.para_birimi) rtrim(f.para_birimi) AS "paraBirimi", ${tarihMetni('f.gecerlilik_baslangic')} AS "gecerlilikBaslangic",
@@ -328,15 +319,16 @@ export const gunlukFaizOzeti = (db: Db, tarih: string) => db.sorgu<GunlukFaizOze
 export interface KurFaizGecmisSatiri { tur: 'kur' | 'faiz' | 'gunluk_faiz'; paraBirimi: string; deger: string; tarih: string; duzeltme: boolean; girenId: number; giris: string }
 export const kurFaizGecmisi = (db: Db, sinir: number) => db.sorgu<KurFaizGecmisSatiri>(
   `SELECT tur, "paraBirimi", deger, ${tarihMetni('gun')} AS tarih, duzeltme, "girenId", ${zamanMetni('an')} AS giris FROM (
-     SELECT 'kur' AS tur, rtrim(para_birimi) AS "paraBirimi", kur::text AS deger, tarih AS gun, guncelleme IS NOT NULL AS duzeltme,
-            coalesce(guncelleyen_id, olusturan_id) AS "girenId", coalesce(guncelleme, olusturma) AS an, 0 AS id FROM finans_kur
+     SELECT 'kur' AS tur, rtrim(para_birimi) AS "paraBirimi", satis::text AS deger, tarih AS gun, guncelleme IS NOT NULL AS duzeltme,
+            coalesce(guncelleyen_id, olusturan_id) AS "girenId", coalesce(guncelleme, olusturma) AS an, 0 AS id FROM finans_kur_cifti
      UNION ALL SELECT 'faiz', rtrim(para_birimi), aylik_yuzde::text, gecerlilik_baslangic, false, olusturan_id, olusturma, id FROM finans_faiz
      UNION ALL SELECT 'gunluk_faiz', rtrim(para_birimi), gunluk_yuzde::text, gecerlilik_baslangic, false, olusturan_id, olusturma, id FROM finans_gunluk_faiz) g
    ORDER BY an DESC, id DESC LIMIT $1`, [sinir]);
 // Toplu yükleme (1085 a): dosyadaki anahtarların kayıtlı değerleri. Faizde aynı güne sonra girilen geçerlidir.
+// Alış ve satışı ayrı girilmiş gün dosyadaki tek değerle eşleşmez (-1 hiçbir kurla eşit olmaz): "farklı" sayılır, kayıtlı çift değişmez.
 export const kayitliKurlar = (db: Db, anahtarlar: readonly { paraBirimi: string; tarih: string }[]) => db.sorgu<{ paraBirimi: string; tarih: string; kur: string }>(
-  `SELECT rtrim(k.para_birimi) AS "paraBirimi", ${tarihMetni('k.tarih')} AS tarih, k.kur::text AS kur
-     FROM finans_kur k JOIN unnest($1::text[], $2::date[]) AS a(pb, gun) ON k.para_birimi = a.pb AND k.tarih = a.gun`,
+  `SELECT rtrim(k.para_birimi) AS "paraBirimi", ${tarihMetni('k.tarih')} AS tarih, (CASE WHEN k.alis = k.satis THEN k.alis ELSE -1 END)::text AS kur
+     FROM finans_kur_cifti k JOIN unnest($1::text[], $2::date[]) AS a(pb, gun) ON k.para_birimi = a.pb AND k.tarih = a.gun`,
   [anahtarlar.map((a) => a.paraBirimi), anahtarlar.map((a) => a.tarih)]);
 export const kayitliFaizler = (db: Db, anahtarlar: readonly { paraBirimi: string; tarih: string }[]) => db.sorgu<{ paraBirimi: string; tarih: string; aylikYuzde: string }>(
   `SELECT DISTINCT ON (f.para_birimi, f.gecerlilik_baslangic) rtrim(f.para_birimi) AS "paraBirimi", ${tarihMetni('f.gecerlilik_baslangic')} AS tarih,
@@ -352,8 +344,8 @@ export const kayitliGunlukFaizler = (db: Db, anahtarlar: readonly { paraBirimi: 
   [anahtarlar.map((a) => a.paraBirimi), anahtarlar.map((a) => a.tarih)]);
 // Önizleme ve kur grafiği (1089 a): aralıktaki kurlar; faizde aralıktaki başlangıçlar ve aralıktan önce başlamış son oran.
 export const aralikKurlari = (db: Db, baslangic: string, bitis: string) => db.sorgu<{ paraBirimi: string; tarih: string; kur: string }>(
-  `SELECT rtrim(para_birimi) AS "paraBirimi", ${tarihMetni('tarih')} AS tarih, kur::text AS kur
-     FROM finans_kur WHERE tarih BETWEEN $1::date AND $2::date ORDER BY para_birimi, tarih`, [baslangic, bitis]);
+  `SELECT rtrim(para_birimi) AS "paraBirimi", ${tarihMetni('tarih')} AS tarih, satis::text AS kur
+     FROM finans_kur_cifti WHERE tarih BETWEEN $1::date AND $2::date ORDER BY para_birimi, tarih`, [baslangic, bitis]);
 export const aralikFaizleri = (db: Db, baslangic: string, bitis: string) => db.sorgu<{ paraBirimi: string; gecerlilikBaslangic: string; aylikYuzde: string }>(
   `SELECT "paraBirimi", ${tarihMetni('gun')} AS "gecerlilikBaslangic", "aylikYuzde" FROM (
      SELECT DISTINCT ON (para_birimi, gecerlilik_baslangic) rtrim(para_birimi) AS "paraBirimi", gecerlilik_baslangic AS gun, aylik_yuzde::text AS "aylikYuzde"
@@ -373,7 +365,7 @@ export const aralikGunlukFaizleri = (db: Db, baslangic: string, bitis: string) =
 // İleri tarihli giriş dahil en son yazılan kur ya da faiz.
 export const sonKurFaizGirisi = (db: Db) => db.tek<{ girenId: number; giris: string; tur: 'kur' | 'faiz' | 'gunluk_faiz' }>(
   `SELECT "girenId", ${zamanMetni('an')} AS giris, tur FROM (
-     SELECT coalesce(guncelleyen_id, olusturan_id) AS "girenId", coalesce(guncelleme, olusturma) AS an, 'kur' AS tur FROM finans_kur
+     SELECT coalesce(guncelleyen_id, olusturan_id) AS "girenId", coalesce(guncelleme, olusturma) AS an, 'kur' AS tur FROM finans_kur_cifti
      UNION ALL SELECT olusturan_id, olusturma, 'faiz' FROM finans_faiz
      UNION ALL SELECT olusturan_id, olusturma, 'gunluk_faiz' FROM finans_gunluk_faiz) g ORDER BY an DESC LIMIT 1`);
 

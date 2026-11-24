@@ -11,7 +11,7 @@ import { tesisGunu } from '#paylasilan/zaman.ts';
 import type { z } from 'zod';
 import { tedarikciAlacagiGecisHatasi } from './kurallar.ts';
 import type { TedarikciAlacagi, TedarikciAlacaklariCevabi, TedarikciAlacagiDurumYazimi } from '#paylasilan/sozlesme/finans.ts';
-import { beyanIsaretHatasi, cekVadeHatasi, faizSec, gunlukSkorHesapla, ileriTarihHatasi, ILERI_BELGE_GUNU, kasaBakiyesiHatasi, ileriTarihliKurSirasi, pasifeAlmaEngeli, topluKurCiftiKarari, topluKurFaizKarari, vergiTakvimi } from './kurallar.ts';
+import { beyanIsaretHatasi, cekVadeHatasi, faizSec, gunlukSkorHesapla, ileriTarihHatasi, ILERI_BELGE_GUNU, kasaBakiyesiHatasi, kurEskiHatasi, ileriTarihliKurSirasi, pasifeAlmaEngeli, topluKurCiftiKarari, topluKurFaizKarari, vergiTakvimi } from './kurallar.ts';
 import type { FinansHamVerisi, FirmaCekirdegi } from '#paylasilan/finans-motor/donustur.ts';
 import {
   amortismanCevabi, ayarCevabi, beklenenOdemelerCevabi, belgeListesiCevabi, butceListesiCevabi, cekListesiCevabi, dagilimListesiCevabi, duzenliOdemeListesiCevabi,
@@ -27,8 +27,8 @@ import { kisiAdlari } from '../kisiler/disari.ts';
 import { makineGetir, makineler } from '../istasyonlar/disari.ts';
 import type {
   belgeDuzeltGovdesi, belgeEkleGovdesi, butceGovdesi, cekDuzeltGovdesi, cekEkleGovdesi, dagitGovdesi,
-  duzenliOdemeGovdesi, duzenliOdendiGovdesi, esitleGovdesi, hesapEkleGovdesi, kapanisGovdesi, faizEkleGovdesi, genelGiderOraniEkleGovdesi, kdvOraniEkleGovdesi, kdvOraniKapatGovdesi, kurFaizTopluGovdesi, kurGovdesi,
-  kurGuncelleGovdesi, kurCiftiGovdesi, kurCiftiGuncelleGovdesi, oranEkleGovdesi, oranTopluGovdesi, maliyetYazGovdesi, mahsupEkleGovdesi, sabitKiymetEkleGovdesi, sabitKiymetGuncelleGovdesi, sabitKiymetPasifGovdesi, odemeEkleGovdesi, oneriDurumuGovdesi, topluAktarGovdesi, virmanEkleGovdesi,
+  duzenliOdemeGovdesi, duzenliOdendiGovdesi, esitleGovdesi, hesapEkleGovdesi, kapanisGovdesi, faizEkleGovdesi, genelGiderOraniEkleGovdesi, kdvOraniEkleGovdesi, kdvOraniKapatGovdesi, kurFaizTopluGovdesi,
+  kurCiftiGovdesi, kurCiftiGuncelleGovdesi, oranEkleGovdesi, oranTopluGovdesi, maliyetYazGovdesi, mahsupEkleGovdesi, sabitKiymetEkleGovdesi, sabitKiymetGuncelleGovdesi, sabitKiymetPasifGovdesi, odemeEkleGovdesi, oneriDurumuGovdesi, topluAktarGovdesi, virmanEkleGovdesi,
 } from '#paylasilan/sozlesme/finans.ts';
 import { cakisma } from '#cekirdek/hata.ts';
 import {
@@ -108,6 +108,8 @@ async function kayitKuru(db: Db, paraBirimi: string, kur: string | null, tarih: 
   // 2238-1 c: muhasebe kaydının kuru alış kurudur.
   const gecerli = await kurCiftiGetir(db, paraBirimi, tarih, 'alis');
   if (!gecerli) throw dogrulama(`${paraBirimi} için ${tarih} gününe kadar girilmiş alış kuru yok; kuru elle girin ya da önce alış ve satış kurunu kaydedin.`, 'kur');
+  const eski = kurEskiHatasi(paraBirimi, gecerli.tarih, tarih);
+  if (eski) throw dogrulama(eski, 'kur');
   return gecerli.kur;
 }
 
@@ -675,22 +677,6 @@ export function virmanIptal(db: Db, k: Kullanici, id: number, surum: number, ek:
 }
 
 // ---- Kur, KDV oranı, düzenli ödeme, bütçe, ayar ----
-export function kurEkle(db: Db, k: Kullanici, g: G<typeof kurGovdesi>) {
-  return korumali(async () => {
-    if (await sorgular.kurVarMi(db, g.paraBirimi, g.tarih)) throw cakisma('Bu para birimi için o güne kur zaten girilmiş; düzeltin.');
-    await sorgular.kurEkle(db, g, k.id);
-    return { paraBirimi: g.paraBirimi, tarih: g.tarih };
-  });
-}
-export function kurGuncelle(db: Db, k: Kullanici, g: G<typeof kurGuncelleGovdesi>, ek: DefterEki) {
-  return korumali(async () => {
-    const eski = await sorgular.kurGetir(db, g.paraBirimi, g.tarih);
-    if (!eski) throw bulunamadi('Kur bulunamadı.');
-    await kosulluYaz(() => sorgular.kurGuncelle(db, g, k.id));
-    farkYaz(ek, [`kur:${g.paraBirimi}:${g.tarih}`, eski, (await sorgular.kurGetir(db, g.paraBirimi, g.tarih)) ?? {}]);
-    return { paraBirimi: g.paraBirimi, tarih: g.tarih };
-  });
-}
 // Kur ve faiz şeridi (finans ve satın alma ekranlarının üstü): giren kişinin adı kisiler'den gelir.
 export async function kurFaizOzeti(db: Db, bugun: string): Promise<KurFaizOzeti> {
   const kurlar = await sorgular.kurOzeti(db, bugun);
@@ -729,7 +715,8 @@ export function kurFaizTopluYukle(db: Db, k: Kullanici, g: G<typeof kurFaizToplu
       const karar = topluKurFaizKarari(s.deger, kayitli[s.tur].get(anahtar(s.paraBirimi, s.tarih)));
       if (karar === 'ayni') { sayi.ayni += 1; continue; }
       if (karar === 'farkli') { sayi.farkli += 1; continue; }
-      if (s.tur === 'kur') await sorgular.kurEkle(db, { paraBirimi: s.paraBirimi, tarih: s.tarih, kur: s.deger }, k.id);
+      // Tek değerli kur satırı alış ve satış aynı değerle çifte yazılır (kart 3671: kurun tek kaynağı finans_kur_cifti).
+      if (s.tur === 'kur') await sorgular.kurCiftiEkle(db, { paraBirimi: s.paraBirimi, tarih: s.tarih, alis: s.deger, satis: s.deger }, k.id);
       else if (s.tur === 'gunluk_faiz') await sorgular.gunlukFaizEkle(db, { paraBirimi: s.paraBirimi, gecerlilikBaslangic: s.tarih, gunlukYuzde: s.deger }, k.id);
       else await sorgular.faizEkle(db, { paraBirimi: s.paraBirimi, gecerlilikBaslangic: s.tarih, aylikYuzde: s.deger }, k.id);
       sayi.eklenen += 1;
@@ -943,8 +930,13 @@ export function topluAktar(db: Db, k: Kullanici, g: G<typeof topluAktarGovdesi>)
     });
     const kurlar: (string | null)[] = [];
     for (const [i, s] of g.satirlar.entries()) {
-      const kur = s.kur ?? (s.paraBirimi === 'TRY' ? '1.000000' : (await kurCiftiGetir(db, s.paraBirimi, s.belgeTarihi, 'alis'))?.kur ?? null);
+      const gecerli = s.kur !== null || s.paraBirimi === 'TRY' ? null : await kurCiftiGetir(db, s.paraBirimi, s.belgeTarihi, 'alis');
+      const kur = s.kur ?? (s.paraBirimi === 'TRY' ? '1.000000' : gecerli?.kur ?? null);
       if (kur === null) hatalar.push({ satir: i + 1, ileti: `${s.paraBirimi} için belge tarihine kadar girilmiş alış kuru yok.` });
+      else if (gecerli !== null) {
+        const eski = kurEskiHatasi(s.paraBirimi, gecerli.tarih, s.belgeTarihi);
+        if (eski) hatalar.push({ satir: i + 1, ileti: eski });
+      }
       kurlar.push(kur);
     }
     const bugun = tesisGunu(new Date()), sinir = gunEkle(bugun, ILERI_BELGE_GUNU);

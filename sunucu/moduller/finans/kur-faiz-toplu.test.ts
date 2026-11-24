@@ -38,7 +38,7 @@ describe('kur ve faiz toplu yükleme (1083-1087, gerçek PostgreSQL)', () => {
   const yukle = (satirlar: unknown[], kim = 'yukleyen', istekKimligi: string = randomUUID()) => istek<{ eklenen: number; ayni: number; farkli: number }>(kim, 'POST', YOL, { satirlar }, istekKimligi);
   const tamam = <T>(c: Cevap<T>): T => { assert.ok(c.durum === 200, `${c.durum} ${JSON.stringify(c.govde)}`); return c.govde; };
   const aralik = (baslangic: string, bitis: string, kim = 'yukleyen') => istek<KurFaizAraligi>(kim, 'GET', `/finans/kur-faiz-araligi?baslangic=${baslangic}&bitis=${bitis}`);
-  const kurSayisi = async (pb: string): Promise<number> => Number((await vt().tek<{ n: string }>('SELECT count(*)::text AS n FROM finans_kur WHERE para_birimi = $1', [pb]))?.n);
+  const kurSayisi = async (pb: string): Promise<number> => Number((await vt().tek<{ n: string }>('SELECT count(*)::text AS n FROM finans_kur_cifti WHERE para_birimi = $1', [pb]))?.n);
 
   async function girisliKisi(kullaniciAdi: string, islemler: string[]): Promise<void> {
     const rol = await vt().tek<{ id: number }>('INSERT INTO rol (kod, ad) VALUES ($1, $1) RETURNING id', [`gecici_${kullaniciAdi}`]);
@@ -82,7 +82,7 @@ describe('kur ve faiz toplu yükleme (1083-1087, gerçek PostgreSQL)', () => {
     const a = tamam(await aralik('2026-03-01', '2026-03-31'));
     assert.deepEqual(a.kurlar.filter((k) => k.paraBirimi === 'CHF').map((k) => [k.tarih, Number(k.kur)]), [['2026-03-02', 38.1234], ['2026-03-03', 38.2]]);
     assert.deepEqual(a.faizler.filter((f) => f.paraBirimi === 'CHF').map((f) => [f.gecerlilikBaslangic, Number(f.aylikYuzde)]), [['2026-01-01', 1.5], ['2026-03-02', 1.75]]);
-    const giren = await vt().tek<{ ad: string }>("SELECT k.ad FROM finans_kur f JOIN kisi k ON k.id = f.olusturan_id WHERE f.para_birimi = 'CHF' AND f.tarih = '2026-03-02'");
+    const giren = await vt().tek<{ ad: string }>("SELECT k.ad FROM finans_kur_cifti f JOIN kisi k ON k.id = f.olusturan_id WHERE f.para_birimi = 'CHF' AND f.tarih = '2026-03-02'");
     assert.equal(giren?.ad, 'Deneme yukleyen', 'her satır yükleyen kişiyle yazılır');
   });
 

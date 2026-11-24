@@ -33,8 +33,6 @@ const KORUMASIZ_BORC: readonly string[] = [
   'POST /finans/kapanis/isaretle',
   'POST /finans/kdv-oranlari/ekle',
   'POST /finans/kdv-oranlari/kapat',
-  'POST /finans/kurlar/ekle',
-  'POST /finans/kurlar/guncelle',
   'POST /finans/mahsuplar/:id/iptal',
   'POST /finans/maliyetler/:tur/yaz',
   'POST /finans/odemeler/:id/iptal',
