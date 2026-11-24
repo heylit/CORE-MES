@@ -346,6 +346,29 @@ export async function islenenAdetleriGetir(db: Db, isEmriIdleri: readonly number
   return new Map(satirlar.map((r) => [r.id, { adet: r.adet, sonAn: new Date(r.sonAn).toISOString() }]));
 }
 
+// 3649: iş emri başına kurulumun yeniden başladığı olaylar: durdur, devam ve makine devri. Duraklatma sırasında (sonraki devama kadar) aynı makineyi
+// başka iş kullandıysa duraklatma 'devir' olarak gelir; öteki duraklatmalar kısa mola sayılır, gelmez. Sıra zaman, eşitse olay kimliğidir:
+// aynı anda yazılanlar kayıt sırasıyla gelir, kural bu sırayı korur. Liste boşken de koşar.
+export type KurulumOlaySatiri = { olay: 'durdur' | 'devir' | 'devam'; zaman: string };
+export async function kurulumOlaylariGetir(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, KurulumOlaySatiri[]>> {
+  const satirlar = await db.sorgu<{ id: number; olay: KurulumOlaySatiri['olay']; zaman: Date }>(
+    `SELECT o.is_emri_id AS id, CASE WHEN o.olay = 'duraklat' THEN 'devir' ELSE o.olay END AS olay, o.zaman
+       FROM uretim_olayi o
+      WHERE o.is_emri_id = ANY($1::int[])
+        AND (o.olay IN ('durdur', 'devam') OR (o.olay = 'duraklat' AND EXISTS (
+          SELECT 1 FROM uretim_emirleri_makine_kullanimi k
+            JOIN uretim_emirleri_makine_kullanimi d ON d.makine_id = k.makine_id AND d.baslama >= k.bitis
+                 AND (d.emir_id, d.is_emri_id) IS DISTINCT FROM (k.emir_id, k.is_emri_id)
+           WHERE k.is_emri_id = o.is_emri_id AND k.makine_id IS NOT NULL AND abs(extract(epoch FROM (k.bitis - o.zaman))) < 1
+             AND d.baslama < COALESCE((SELECT min(n.zaman) FROM uretim_olayi n WHERE n.is_emri_id = o.is_emri_id AND n.olay = 'devam' AND n.zaman >= o.zaman), 'infinity'::timestamptz))))
+      ORDER BY o.zaman, o.id`,
+    [[...isEmriIdleri]],
+  );
+  const h = new Map<number, KurulumOlaySatiri[]>();
+  for (const r of satirlar) h.set(r.id, [...(h.get(r.id) ?? []), { olay: r.olay, zaman: new Date(r.zaman).toISOString() }]);
+  return h;
+}
+
 // Emrin bütün iş emirlerindeki net hurda (düzeltme dahil); sağlamdan farklı olarak her adımın kaybı emrin kaybıdır.
 export function hurdaToplamlariGetir(db: Db, emirIdleri: readonly number[]): Promise<{ emirId: number; hurda: number }[]> {
   return db.sorgu<{ emirId: number; hurda: number }>(

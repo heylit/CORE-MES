@@ -40,6 +40,11 @@ const kur = (kullanici = YONETICI, rotalar: Rota[] = [rota(1, 'Seri', true), rot
         liste = liste.map((x) => (x.id === 3 ? { ...x, emirTurleri: t, surum: 2 } : x));
         return json(200, cevap(liste));
       },
+      'POST /rota/urunler/11/rotalar/1/ad': (g) => {
+        const { ad } = g as { ad: string };
+        liste = liste.map((x) => (x.id === 1 ? { ...x, ad, surum: 2 } : x));
+        return json(200, cevap(liste));
+      },
       'POST /rota/urunler/11/rotalar/4/ad': (g) => {
         const { ad } = g as { ad: string };
         liste = liste.map((x) => (x.id === 4 ? { ...x, ad, surum: 2 } : x));
@@ -95,7 +100,7 @@ describe('Rota sekmeleri (3247 a)', () => {
     fireEvent.click(within(bolge).getByRole('button', { name: /Rota$/, expanded: false }));
     expect((within(bolge).getByRole('textbox', { name: 'Yeni rotanın adı' }) as HTMLInputElement).value).toBe('');
     const turler = within(bolge).getByRole('group', { name: 'Yeni rotanın emir türü' });
-    expect(within(turler).queryByRole('button', { name: 'Seri' })).toBeNull();
+    expect((within(turler).getByRole('button', { name: 'Seri' }) as HTMLButtonElement).disabled).toBe(true);
     expect((within(turler).getByRole('button', { name: 'FAI (var)' }) as HTMLButtonElement).disabled).toBe(true);
     expect((within(bolge).getByRole('button', { name: 'Rotayı aç' }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(within(turler).getByRole('button', { name: 'Numune' }));
@@ -130,12 +135,39 @@ describe('Rota sekmeleri (3247 a)', () => {
     const bolge = screen.getByRole('region', { name: 'Ürün ve rotalar' });
     fireEvent.click(within(g).getByRole('button', { name: /Rota$/ }));
     const turler = within(bolge).getByRole('group', { name: 'Yeni rotanın emir türü' });
-    expect((within(turler).getByRole('button', { name: 'Seri · Seri' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((within(turler).getByRole('button', { name: 'Seri' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(within(bolge).getByText(/Seri, ürünün Standart rotasıdır ve hep vardır/)).toBeTruthy();
     fireEvent.click(within(turler).getByRole('button', { name: 'Numune' }));
     fireEvent.click(within(bolge).getByRole('checkbox', { name: /yürürlükteki revizyonundan başla/ }));
     fireEvent.click(within(bolge).getByRole('button', { name: 'Numune rotasını aç' }));
     await within(g).findByRole('button', { name: /^Numune/ });
     expect(istekler.some((i) => i.yol === '/rota/urunler/11/taslak-ac')).toBe(false);
+    // 3647: işaret kapalıysa rota boş açılır ve "Nasıl başlayalım?" ekranı gelir.
+    expect(await screen.findByText('Bu ürünün rotası yok. Nasıl başlayalım?')).toBeTruthy();
+  });
+
+  it.each(['hat', 'dikey'])('3647: kopya taslak açılırken "Nasıl başlayalım?" kartları görünmez (%s görünümü)', async (gorunum) => {
+    try { localStorage.setItem('tc-rr1-gorunum', gorunum); } catch { /* test ortamında depo yoksa */ }
+    kur();
+    const asil = globalThis.fetch;
+    let basladi = false;
+    let birak: () => void = () => undefined;
+    const kapi = new Promise<void>((coz) => { birak = coz; });
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
+      if (adres.endsWith('/taslak-ac')) { basladi = true; await kapi; }
+      return asil(adres, secenek);
+    }));
+    rrAc('/recete-rota/schema');
+    const g = await sekmeler();
+    const bolge = screen.getByRole('region', { name: 'Ürün ve rotalar' });
+    fireEvent.click(within(g).getByRole('button', { name: /Rota$/ }));
+    fireEvent.click(within(within(bolge).getByRole('group', { name: 'Yeni rotanın emir türü' })).getByRole('button', { name: 'Numune' }));
+    fireEvent.click(within(bolge).getByRole('button', { name: 'Numune rotasını aç' }));
+    const yeni = await within(g).findByRole('button', { name: /^Numune/ });
+    await waitFor(() => { expect(yeni.getAttribute('aria-pressed')).toBe('true'); });
+    await waitFor(() => { expect(basladi).toBe(true); });
+    expect(screen.queryByText('Bu ürünün rotası yok. Nasıl başlayalım?')).toBeNull();
+    birak();
   });
 
   it('3644: sunucu rota açmayı reddederse neden formda görünür, rota açılmaz ve ürün rotaları yeniden okunur', async () => {
@@ -181,6 +213,21 @@ describe('Rota sekmeleri (3247 a)', () => {
     fireEvent.click(within(bolge).getByRole('button', { name: 'Kaydet' }));
     await within(g).findByRole('button', { name: /^ORN Numune hattı/ });
     expect(istekler.find((i) => i.yol === '/rota/urunler/11/rotalar/4/ad')?.govde).toEqual({ ad: 'ORN Numune hattı', surum: 1 });
+    expect(istekler.some((i) => i.yol.endsWith('/turler'))).toBe(false);
+  });
+
+  it('3647 N1: Standart (Seri) rotanın adı "Rotanın adı" ile değişir, türü sorulmaz; yeni ad sekmede görünür', async () => {
+    const istekler = kur();
+    rrAc('/recete-rota/schema');
+    const g = await sekmeler();
+    const bolge = screen.getByRole('region', { name: 'Ürün ve rotalar' });
+    await within(g).findByRole('button', { name: /^Seri/ });
+    menudenSec(bolge, 'Rotanın adı ve emir türleri');
+    expect(within(bolge).queryByRole('group', { name: 'Bu rotayı kullanan emir türleri' })).toBeNull();
+    fireEvent.change(within(bolge).getByRole('textbox', { name: 'Rota adı' }), { target: { value: 'ORN Ana hat' } });
+    fireEvent.click(within(bolge).getByRole('button', { name: 'Kaydet' }));
+    await within(g).findByRole('button', { name: /^ORN Ana hat/ });
+    expect(istekler.find((i) => i.yol === '/rota/urunler/11/rotalar/1/ad')?.govde).toEqual({ ad: 'ORN Ana hat', surum: 1 });
     expect(istekler.some((i) => i.yol.endsWith('/turler'))).toBe(false);
   });
 

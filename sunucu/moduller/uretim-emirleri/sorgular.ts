@@ -4,7 +4,7 @@ export {
   type EmirSatiri, type KayitSatiri, birlesmeHedefleri, emirleriGetir, yeniKapananEmirleriGetir, type BitenSuzgeci, bitenEmirSay, bitenEmirleriGetir,
   emirBul, emirKilitle, emirEkle, baslamayiYaz, bitisiYaz, iptaliYaz, anAl, emrinSonAni, baslatmaKaydiVarMi, kayitEkle, type SayimYazisi, sayimEkle,
   ilkParcaOnaysiz, type KararGrubu, type KararBekleyenSatir, kararBekleyenSatirlari, kararSatirlariEkle, bitmisSaglamaEkle, kararSayaclariGetir,
-  adimKararSayaclariGetir, olayEkle, type SayacSatiri, type OlaySatiri, sayaclariGetir, islenenAdetleriGetir, hurdaToplamlariGetir, kartliEmirHurdalari,
+  adimKararSayaclariGetir, olayEkle, type SayacSatiri, type OlaySatiri, sayaclariGetir, islenenAdetleriGetir, kurulumOlaylariGetir, hurdaToplamlariGetir, kartliEmirHurdalari,
   sonHurdaNedeni, sonOlaylariGetir, ayarVarMi, type SureOlaySatiri, isEmriOlaylari, type SureSayimSatiri, isEmriSayimlari, kayitlariGetir,
   malzemeKartiIzleri,
 } from './sorgular/emir/sorgular.ts';
@@ -21,7 +21,7 @@ export {
   type DugumSatiri, dugumleriGetir, emrinPatlatmasi, emirNoVarMi, emirIdleri, kolSayisi, planaAlYaz, adetYaz, type AltPartiSatiri, altPartilerGetir,
   kontrolListesiGetir, ustIptalYaz, birlesenPartiyiKapat, kolKatildi, adetEkle, birlesmePlaniYaz, emirSurumunuArtir, surumArtir, type BirlesenKolSatiri,
   birlesenKollarGetir, ustEmirVarMi, planBilgisiYaz, teslimBagla, bagliTeslimleriKaydir, satirlarinEmirleri, terminKararlari, terminKarariYaz, teslimYaz, type SatirEmriSatiri, oncelikYaz, oncelikDegisimiEkle, emirTuruYaz, turDegisimiEkle, emirIstasyonuYaz, emirKaynakRevizyonuYaz, sonrakiIsEmrineGec,
-  fasonlaBitir, emirDurumlariGetir, siparisSatiriEmirleriGetir, emirNolariGetir, type EtkilenenEmirSatiri, malzemelerinAcikEmirleriGetir,
+  fasonlaBitir, emirDurumlariGetir, siparisSatiriEmirleriGetir, satirlarinAcikAdetleri, emirNolariGetir, type EtkilenenEmirSatiri, malzemelerinAcikEmirleriGetir,
 } from './sorgular/ust-emir/sorgular.ts';
 export {
   type IsEmriSatiri, isEmirleriGetir, isEmirleriBul, isEmriBul, isEmriAyrimBilgileri, isEmriVarliklari, type AcikIsEmri, acikIsEmirleri, acikIsEmri, type PlanEmriBilgisi,

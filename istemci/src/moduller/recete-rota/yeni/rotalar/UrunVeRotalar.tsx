@@ -22,7 +22,7 @@ import { RevizyonCubugu, revizyonAnaEylemiVar, type Duzenleme } from './Revizyon
 import { UrunListesi } from './UrunListesi.tsx';
 import { RotaExcelPenceresi } from './ExcelGirisi.tsx';
 import { useKalanBoy } from './kalanBoy.ts';
-import { SablonPenceresi, SablonSaklaPenceresi } from './SablonSecici.tsx';
+import { SablonPenceresi, SablonSaklaPenceresi, SablonSecici } from './SablonSecici.tsx';
 
 // Ürün ve rotalar: ürün listesi, akış şeması ya da akış tablosu, revizyon çubuğu ve düzenleme paneli. Açılışta yazma yoktur; rota
 // değişikliği ilk düzenlemede taslağa yazılır.
@@ -340,16 +340,18 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
         <span className="tc-rr1-grow" />
         {!liste && gorunum !== 'patlamis' && !hatli && !revSatiri && panelDugmesi}
         {/* Tam ekrandan çıkış kaydırmadan görünür kalır (B-2482-R3); girişi ⋯ menüsünde ve F tuşundadır. */}
-        {tamEkran && (
-          <Dugme className="tc-rr1-kd" simge="x" title="Tam ekrandan çık (Esc ya da F)" onClick={() => { setTamEkran(false); }}>Tam ekrandan çık</Dugme>
-        )}
-        {!liste && kokId && (o.yetki.emirRotasizAc || o.yetki.rotaEmreKopyala) && (
-          // Revizyon satırında ya da düzenleme çubuğunda sarı eylem varken bu düğme ikincildir (2155-9 a).
-          <Dugme className="tc-rr1-kd" simge="clipboard-check"
-            tur={(duzenKipi && duzenlemeAcar(o.yetki, taslakAcik)) || (revId !== null && revizyonAnaEylemiVar(r, revId)) ? 'ikincil' : 'birincil'}
-            onClick={() => { o.git('orders', `urun:${kokId}`); }}>Üretim emri oluştur</Dugme>
-        )}
-        <Menu etiket="Diğer rota işlemleri" ogeler={digerIslemler} />
+        <span className="tc-rr1-eylemgrup">
+          {tamEkran && (
+            <Dugme className="tc-rr1-kd" simge="x" title="Tam ekrandan çık (Esc ya da F)" onClick={() => { setTamEkran(false); }}>Tam ekrandan çık</Dugme>
+          )}
+          {!liste && kokId && (o.yetki.emirRotasizAc || o.yetki.rotaEmreKopyala) && (
+            // Revizyon satırında ya da düzenleme çubuğunda sarı eylem varken bu düğme ikincildir (2155-9 a).
+            <Dugme className="tc-rr1-kd" simge="clipboard-check"
+              tur={(duzenKipi && duzenlemeAcar(o.yetki, taslakAcik)) || (revId !== null && revizyonAnaEylemiVar(r, revId)) ? 'ikincil' : 'birincil'}
+              onClick={() => { o.git('orders', `urun:${kokId}`); }}>Üretim emri oluştur</Dugme>
+          )}
+          <Menu etiket="Diğer rota işlemleri" ogeler={digerIslemler} />
+        </span>
         {excelAcik && <RotaExcelPenceresi durum={o.veri.durum} kapat={() => { setExcelAcik(false); }} />}
         {revId && sablonPenceresi === 'ekle' && (
           <SablonPenceresi r={r} urunId={revId} acik kapat={() => { setSablonPenceresi(null); }}
@@ -389,7 +391,10 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
             {dugum ? (
               gorunum === 'tablo'
                 ? <AkisTablosu r={r} urunler={agac} miktar={miktar} cop={cop} />
-                : <AkisSemasi r={r} kok={dugum} cop={cop} />
+                // 3647: adımı olmayan tek ürünlük rotada Yatay hattaki "Nasıl başlayalım?" ekranı şemada da gelir (şablon, benzer ürün, boş).
+                : kokId && agac.length === 1 && !dugum.dongu && duzen.adimlar(kokId).length === 0 && !duzen.mesgul
+                  ? <SablonSecici r={r} urunId={kokId} />
+                  : <AkisSemasi r={r} kok={dugum} cop={cop} />
             ) : (
               <div className="tc-rr1-emptycv">
                 <h3>İlk rotanı kur</h3>

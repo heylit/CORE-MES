@@ -74,7 +74,7 @@ export function ReceteRotaYeni() {
   );
 }
 
-interface Secim { secenekler: AcilisSecenekleri; coz: (s: EmirSecimi | null) => void }
+interface Secim { secenekler: AcilisSecenekleri; onSatir?: number; coz: (s: EmirSecimi | null) => void }
 interface Bildirimler { motorOkunamadi: boolean; planVerisiEksik: boolean }
 
 // Köprü ekran başına bir kez kurulur: kaynak sürümleri onun içinde tutulur, komutlar sırayla gider. Proje seçimi (emir açılışı, 224)
@@ -92,7 +92,7 @@ export function RrSaglayici({ children }: { children: (b: Bildirimler) => ReactN
         ...(islemler ? { islemler } : {}),
         motorDurumu: setMotorOkunamadi,
         planVerisi: setPlanVerisiEksik,
-        emirSecimi: (secenekler) => new Promise<EmirSecimi | null>((coz) => { setSecim({ secenekler, coz }); }),
+        emirSecimi: (secenekler, onSatir) => new Promise<EmirSecimi | null>((coz) => { setSecim({ secenekler, ...(onSatir === undefined ? {} : { onSatir }), coz }); }),
       }),
     };
   });
@@ -100,7 +100,7 @@ export function RrSaglayici({ children }: { children: (b: Bildirimler) => ReactN
   return (
     <RrBaglamKaynagi.Provider value={baglam}>
       {children({ motorOkunamadi, planVerisiEksik })}
-      {secim && <EmirProjeSecimi secenekler={secim.secenekler} bitir={(s) => { setSecim(null); secim.coz(s); }} />}
+      {secim && <EmirProjeSecimi secenekler={secim.secenekler} onSatir={secim.onSatir} bitir={(s) => { setSecim(null); secim.coz(s); }} />}
     </RrBaglamKaynagi.Provider>
   );
 }

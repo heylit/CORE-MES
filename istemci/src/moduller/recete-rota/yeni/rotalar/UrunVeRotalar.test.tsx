@@ -395,7 +395,7 @@ describe('R1 Ürün ve rotalar: reddedilen', () => {
     fireEvent.click((await within(bolge).findAllByRole('button', { name: /MM-0001/ })).find((b) => b.classList.contains('tc-rr1-pick'))!);
     const turler = within(bolge).getByRole('group', { name: 'Yeni rotanın emir türü' });
     expect(within(turler).getByRole('button', { name: 'Seri' }).getAttribute('aria-pressed')).toBe('true');
-    expect(within(bolge).queryByRole('textbox', { name: 'Yeni rotanın adı' })).toBeNull();
+    expect((within(bolge).getByRole('textbox', { name: 'Yeni rotanın adı' }) as HTMLInputElement).placeholder).toBe('Boş kalırsa Seri');
     fireEvent.click(within(turler).getByRole('button', { name: 'Numune' }));
     expect(within(bolge).getByText(/Bu üründe henüz yürürlükte rota yok/)).toBeTruthy();
     await waitFor(() => { expect(document.activeElement).toBe(within(bolge).getByRole('textbox', { name: 'Yeni rotanın adı' })); });
@@ -403,6 +403,23 @@ describe('R1 Ürün ve rotalar: reddedilen', () => {
     fireEvent.click(within(bolge).getByRole('button', { name: 'Numune rotasını aç' }));
     await waitFor(() => { expect(istekler.some((i) => i.yol === '/rota/urunler/11/rotalar')).toBe(true); });
     expect(istekler.find((i) => i.yol === '/rota/urunler/11/rotalar')?.govde).toEqual({ emirTuru: 'numune', ad: 'ORN Numune hattı' });
+  }, 30000);
+
+  it('3647: ilk rotada Seri için ad yazılırsa sunucu Standart rotayı o adla açar', async () => {
+    const istekler = sunucuKur(YONETICI, {
+      durum: () => json(200, rotaDurumu([])),
+      yazmalar: { 'POST /rota/urunler/11/rotalar': () => json(200, { urun: { id: 11, kod: 'ORN-11', ad: 'Örnek mamul', tur: 'mamul' }, revizyonlar: [], rotalar: [
+        { id: 1, ad: 'ORN Ana rota', standart: true, surum: 1, emirTurleri: [], taslakAcilabilir: true }], taslakAcilabilir: true, kartOperasyonlari: null }) },
+    });
+    rrAc('/recete-rota/schema');
+    const bolge = await screen.findByRole('region', { name: 'Ürün ve rotalar' });
+    fireEvent.click(await within(bolge).findByRole('button', { name: 'Diğer rota işlemleri' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Yeni rota' }));
+    fireEvent.click((await within(bolge).findAllByRole('button', { name: /MM-0001/ })).find((b) => b.classList.contains('tc-rr1-pick'))!);
+    fireEvent.change(within(bolge).getByRole('textbox', { name: 'Yeni rotanın adı' }), { target: { value: ' ORN Ana rota ' } });
+    fireEvent.click(within(bolge).getByRole('button', { name: 'Adım eklemeye başla' }));
+    await waitFor(() => { expect(istekler.some((i) => i.yol === '/rota/urunler/11/rotalar')).toBe(true); });
+    expect(istekler.find((i) => i.yol === '/rota/urunler/11/rotalar')?.govde).toEqual({ emirTuru: 'seri', ad: 'ORN Ana rota' });
   }, 30000);
 
   it('onay işlemi olmayan onay bekleyen revizyonu onaylayamaz', async () => {

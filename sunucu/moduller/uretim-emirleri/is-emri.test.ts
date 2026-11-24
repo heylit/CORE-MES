@@ -255,6 +255,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.equal((await o().vt.tx((db) => isEmriKontrolListesi(db, []))).size, 0);
     const planSatirlari = (await o().vt.tx((db) => planlanacakIsEmirleri(db))).filter((i) => i.uretimEmriId === id);
     assert.deepEqual(planSatirlari.map((i) => [i.id, i.istasyonId]), [[ie1, ist1], [ie3, ist3]], 'fason plana girmez; makine adımı iş emrinin istasyonuyla');
+    assert.deepEqual(planSatirlari.map((i) => i.operasyonTipiId), [tipId, tipId], 'plan satırı iş emrinin operasyon tipini taşır (smartes operasyon kodu önekini bundan kurar)');
 
     assert.equal((await terminal(`/${id}/baslat`)).durum, 200);
     const ayr1 = await istek<{ adimlar: { ad: string; asama: string }[] }>('operator', 'GET', `/uretim-emirleri/${id}`);

@@ -70,6 +70,19 @@ export function isSuresi(ayarDk: number | null, birimDk: number | null, adet: nu
 }
 
 // Kaynaktaki süre: verim yalnız işlemeye uygulanır, ayar verimden bağımsızdır (prototip: ayar + işleme / verim).
+// 3649: çalışan adımda hazırlık kalandır: hiç parça sayılmadıysa ya da adım durdurulup dönüldüyse ve dönüşten sonra sayım yoksa.
+// Dönüşten sonra ilk parça sayılınca biter (ilk çalıştırmadaki kuralın aynısı).
+export function kurulumBekliyor(i: { islenenAdet?: number; sonSayimAni?: string | null; sonKurulumAni?: string | null }): boolean {
+  if ((i.islenenAdet ?? 0) === 0) return true;
+  if (!i.sonKurulumAni || !i.sonSayimAni) return false;
+  return Date.parse(i.sonSayimAni) < Date.parse(i.sonKurulumAni);
+}
+// Kalanın sayıldığı an: son sayım (yoksa adımın başı) ile son kurulum anından geç olanı; hiç parça sayılmamış adımda da dönüşten sayılır.
+export function kalanBaslangici(i: { adimBaslama?: string | null; sonSayimAni?: string | null; sonKurulumAni?: string | null }): string | null {
+  const sayim = i.sonSayimAni ?? i.adimBaslama ?? null;
+  if (!i.sonKurulumAni || sayim === null) return sayim;
+  return Date.parse(i.sonKurulumAni) > Date.parse(sayim) ? i.sonKurulumAni : sayim;
+}
 export const verimliSure = (sureDk: number, ayarDk: number | null | undefined, verim: number): number => (ayarDk ?? 0) + (sureDk - (ayarDk ?? 0)) / verim;
 
 const GUN_DK = 24 * 60;
@@ -396,6 +409,11 @@ export function planMaliyeti(
   return { tl: Math.round(toplam), bilinmeyen };
 }
 
+// Plan dakikaya yuvarlı yazılır (planAni) ve dakikayla gösterilir: sıra denetiminde sınır dakika çözünürlüğünde yarı açıktır. Öncül 12:15'te
+// bitip ardıl 12:15'te başlıyorsa (ya da fark yuvarlamadan doğan saniye payıysa) ihlal yoktur; ihlal ancak ardıl bir dakika erken başlarsa çıkar.
+// Değerler plan dakikasıdır (saat ekseni değil).
+export const sinirdanOnce = (deger: number, sinir: number): boolean => Math.round(deger) < Math.round(sinir);
+
 // Uyarılar (P5; kayıt geçer): teslim gecikmesi, sıraya aykırı başlangıç, akışlı işin öncülünden önce bitmesi, rotadaki kaynak ve adaylar
 // dışında kaynak. 308 b: elle taşıma ve yerleştirmede ve canlıya almada sıraya aykırı başlangıç reddedilir (servis); burada kalan uyarı
 // motorun ya da eski kaydın bıraktığı aykırılık içindir. Rota dışı kaynak uyarıyla geçer.
@@ -404,9 +422,9 @@ export function uyarilar(y: Aralik & { kaynak: Kaynak }, b: {
 }): string[] {
   const u: string[] = [];
   if (b.teslimDk !== null && y.bitis > b.teslimDk) u.push('Teslim tarihinden sonra bitiyor.');
-  if (b.enErken !== null && y.baslangic < b.enErken) u.push('Önceki iş emri bitmeden (sıraya aykırı) başlıyor.');
+  if (b.enErken !== null && sinirdanOnce(y.baslangic, b.enErken)) u.push('Önceki iş emri bitmeden (sıraya aykırı) başlıyor.');
   // Yerleşim tarihten (milisaniye) okunur; dakikanın yüzde biri tolerans.
-  else if (b.enErkenBitis != null && y.bitis < b.enErkenBitis - 0.01) u.push('Önceki iş emri bitmeden bitiyor (akışlı devir).');
+  else if (b.enErkenBitis != null && sinirdanOnce(y.bitis, b.enErkenBitis)) u.push('Önceki iş emri bitmeden bitiyor (akışlı devir).');
   if (b.rotaKaynaklari.length > 0 && !b.rotaKaynaklari.some((k) => ayniKaynak(k, y.kaynak))) u.push('Kaynak rotadaki makine, kişi ya da adaylar arasında değil.');
   return u;
 }

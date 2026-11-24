@@ -33,3 +33,22 @@ describe('Emir açarken parti seçimi (3244 b)', () => {
     expect(screen.queryByText('Üretim çeşidi')).toBeNull();
   });
 });
+
+describe('Formun önerdiği satır (3657)', () => {
+  it('iki projeli listede önerilen satırın projesi ve satırı önseçili gelir, Emri aç onu döndürür', () => {
+    const iki = {
+      ...SECENEK,
+      projeler: [
+        { id: 4, kod: 'ORN-PRJ-0', ad: 'Başka', satirlar: [{ id: 41, siparisNo: 'SS-2026-0009', satirNo: 1, adet: '5', termin: null, partiler: [] }] },
+        { id: 5, kod: 'ORN-PRJ-1', ad: 'Deneme', satirlar: [
+          { id: 51, siparisNo: 'SS-2026-0001', satirNo: 1, adet: '100', termin: '2030-02-01', partiler: [] },
+          { id: 52, siparisNo: 'SS-2026-0001', satirNo: 2, adet: '40', termin: '2030-03-01', partiler: [] },
+        ] },
+      ],
+    } satisfies AcilisSecenekleri;
+    const bitir = vi.fn();
+    render(<EmirProjeSecimi secenekler={iki} onSatir={52} bitir={bitir} />);
+    fireEvent.click(screen.getByRole('button', { name: /Emri aç/ }));
+    expect(bitir).toHaveBeenLastCalledWith({ projeId: 5, siparisSatiriId: 52 });
+  });
+});

@@ -423,6 +423,13 @@ describe('Kokpit bağ okları (3330)', () => {
     isler['1.20'] = is('1.20', 'T2', 4, 6);
     expect(adimBaglari([e], isler)[0]).toEqual({ kimden: '1.10', kime: '1.20', tur: 'b', ters: false });
   });
+  it('3662: öncül 12:15 biter, ardıl 12:15 başlar (aynı dakika) ters değildir; bir dakika erken başlarsa terstir', () => {
+    const e = emir('1', { adimlar: [{ id: '1.10', ad: '', adaylar: ['T1'] }, { id: '1.20', ad: '', adaylar: ['T2'], onculler: [['1.10', 'b']] }] });
+    const ters = (bas: number) => adimBaglari([e], Object.fromEntries([is('1.10', 'T1', 8, 12.25), is('1.20', 'T2', bas, bas + 1)].map((x) => [x.id, x])))[0]?.ters;
+    expect(ters(12.25)).toBe(false);
+    expect(ters(12.25 - 0.004)).toBe(false);
+    expect(ters(12.25 - 1 / 60)).toBe(true);
+  });
   it('ok yolu satır aralarından yürür: bitince öncülün sağından, örtüşmeli ardıla bakan kenarından çıkar; aradaki satırda işe denk gelen dikey geçiş işin sağına kayar; ardılın sol ortasına soldan girer', () => {
     const kutu = (x1: number, x2: number, y: number) => ({ x1, x2, y, h: 30, satir: 40 });
     const noktalar = (d: string) => d.match(/-?\d+(\.\d+)?,-?\d+(\.\d+)?/g)!.map((n) => n.split(',').map(Number));

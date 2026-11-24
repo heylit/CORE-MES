@@ -27,7 +27,9 @@
 /* 2558 b/4-7: tek satır: özet, sorunlar, kip metni. Kip metni renge değil yazıya dayanır. */
 .tc-rr1-ozet, .tc-rr1-sorunyok, .tc-rr1-kipmetni { display: inline-flex; align-items: center; gap: var(--b-1); font-size: var(--yazi-s); white-space: nowrap; }
 .tc-rr1-sorunyok { color: var(--muted); }
-.tc-rr1-ozetgrup { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-3); min-width: 0; }
+.tc-rr1-ozetgrup { display: inline-flex; flex: 1 1 calc(var(--b-6) * 5); flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-3); min-width: 0; }
+/* Sondaki eylemler tek öbek sayılır: dar satırda birlikte alt satıra iner, "⋯" tek başına kalmaz. */
+.tc-rr1-eylemgrup { display: inline-flex; flex-wrap: nowrap; align-items: center; gap: var(--b-2); }
 .tc-rr1-sorunlar b { color: var(--stop); font-variant-numeric: tabular-nums; }
 .tc-rr1-kipmetni { color: var(--muted); font-weight: 600; }
 .tc-rr1-secim:disabled, .tc-rr1-metin:disabled, .tc-rr1-sayi:disabled { color: var(--muted); background: var(--panel2); }
@@ -63,6 +65,14 @@
 .tc-rr1-has-open { border-left-color: var(--hazard); }
 .tc-rr1-rv-t { font-size: var(--yazi-m); }
 .tc-rr1-rv-list { display: inline-flex; flex-wrap: wrap; gap: var(--b-1); }
+/* Rota sekmeleri aynı tabanda büyür ve üst sınırda durur: bir satıra sığınca hepsi eşit genişlikte tek satırdır; "+ Rota" küçük kalır. */
+.tc-rr1-rotalar .tc-rr1-rv-list { display: flex; flex: 1 1 100%; flex-wrap: wrap; min-width: 0; }
+.tc-rr1-rotalar .tc-rr1-rotasekme:not(.tc-rr1-rotayeni) { flex: 1 1 calc(var(--b-6) * 5); max-width: calc(var(--b-6) * 8); min-width: 0; }
+.tc-rr1-rotalar .tc-rr1-rotayeni { flex: 0 0 auto; }
+@media (max-width: 767px) {
+  .tc-rr1-rotalar .tc-rr1-rotasekme:not(.tc-rr1-rotayeni) { max-width: none; flex-basis: 100%; }
+  .tc-rr1-rotalar .tc-rr1-rotayeni { flex: 1 1 100%; }
+}
 .tc-rr1-rvtab {
   display: inline-flex; flex-direction: column; align-items: flex-start; min-height: var(--dokunma); justify-content: center; font: inherit; line-height: 1.1;
   padding: 0 var(--b-2); background: var(--panel-solid); color: var(--ink); border: 1px solid var(--edge); border-radius: var(--yari-1); cursor: pointer;
@@ -105,6 +115,9 @@
 .tc-rr1-rv-status > .tc-simge { flex: none; margin-top: var(--pay-ince); }
 .tc-rr1-rv-status-ic { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); min-width: 0; }
 @media (max-width: 767px) {
+  /* Telefonda öbek iki satıra bölünür: Bitir ile "⋯" birlikte, sarı ana eylem altta tam genişlikte. */
+  .tc-rr1-duzencubugu > .tc-rr1-eylemgrup { flex-wrap: wrap; flex: 1 1 100%; }
+  .tc-rr1-eylemgrup > .tc-rr1-eylem-ana { order: 1; flex: 1 1 100%; justify-content: center; }
   .tc-rr1-duzencubugu > .tc-rr1-dc-ad { flex: 1 1 calc(100% - var(--dokunma)); }
   .tc-rr1-duzencubugu > .tc-rr1-grow { display: none; }
 }

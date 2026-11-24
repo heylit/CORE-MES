@@ -15,6 +15,7 @@ import { terminKarariAnahtari, terminOnerisiVarMi } from './kurallar.ts';
 import { DUGUM_GECERSIZ, dugumGirdisiIhlali, kaynakSuresi, kararBekleyenBitisIhlali, malzemeIhtiyaci } from './kurallar.ts';
 import { LISTE_ADIM_BITTI, LISTE_DOLU, LISTE_ZATEN, kanitMetni, listeEkleReddi, listeIsaretReddi, ATLAMA_TEK_IS_EMRI, atlamaIhlali } from './kurallar.ts';
 import type { SureGirdisi, SureSayimi } from './kurallar.ts';
+import { adimSonKurulumAni } from './kurallar.ts';
 import { KARTLA_GEREKCE_BIRDEN, KARTSIZ_GEREKCE_AZAMI, KARTSIZ_GEREKCE_UZUN, KARTSIZ_YETKI_YOK, kartsizBaslatmaIhlali } from './kurallar.ts';
 
 const digerleri = (haric: EmirDurumu): EmirDurumu[] => EMIR_DURUMLARI.filter((d) => d !== haric);
@@ -418,5 +419,32 @@ describe('3429-3 G: termin önerisi kuralı (UE-TB-6)', () => {
     assert.equal(terminOnerisiVarMi(e({ teslim: '2027-03-01' }), '2027-02-10', k), true);
     assert.equal(terminOnerisiVarMi(e(), '2027-02-11', k), true);
     assert.equal(terminOnerisiVarMi(e({ teslim: null }), '2027-02-10', new Set([terminKarariAnahtari('2027-02-10', null)])), false);
+  });
+});
+
+// 3649: adımın son kurulum anı; plan ve ilk parça kapısı aynı kuralı okur.
+describe('adimSonKurulumAni', () => {
+  const B = '2026-11-24T08:00:00.000Z';
+  const o = (olay: 'ayar' | 'duraklat' | 'durdur' | 'devir' | 'devam', zaman: string) => ({ olay, zaman });
+  test('başlamamış adımda yok', () => assert.equal(adimSonKurulumAni(null, []), null));
+  test('dönüş yoksa başlama anı', () => assert.equal(adimSonKurulumAni(B, [o('ayar', '2026-11-24T07:50:00.000Z')]), B));
+  test('duraklat ve devam dönüş sayılmaz', () => assert.equal(adimSonKurulumAni(B, [o('duraklat', '2026-11-24T09:00:00.000Z'), o('devam', '2026-11-24T09:10:00.000Z')]), B));
+  test('durdur sonrası devam dönüştür; çok dönüşte sonuncusu', () => {
+    const ev = [o('durdur', '2026-11-24T09:00:00.000Z'), o('devam', '2026-11-24T10:00:00.000Z'), o('durdur', '2026-11-24T11:00:00.000Z'), o('devam', '2026-11-24T12:00:00.000Z')];
+    assert.equal(adimSonKurulumAni(B, ev), '2026-11-24T12:00:00.000Z');
+    assert.equal(adimSonKurulumAni(B, ev.slice(0, 2)), '2026-11-24T10:00:00.000Z');
+  });
+  test('aynı anda kaydedilen durdur ve devam girdi sırasını (olay kimliği sırası) korur', () => {
+    const t = '2026-11-24T10:00:00.000Z';
+    assert.equal(adimSonKurulumAni(B, [o('durdur', t), o('devam', t)]), t);
+    assert.equal(adimSonKurulumAni(B, [o('devam', t), o('durdur', t)]), B);
+  });
+  test('makine devri duraklatması durdur gibi sayılır; sorgunun işaretlemediği duraklatma sayılmaz', () => {
+    assert.equal(adimSonKurulumAni(B, [o('devir', '2026-11-24T09:00:00.000Z'), o('devam', '2026-11-24T10:00:00.000Z')]), '2026-11-24T10:00:00.000Z');
+    assert.equal(adimSonKurulumAni(B, [o('devir', '2026-11-24T09:00:00.000Z')]), B);
+  });
+  test('dönülmemiş durdur kurulum anını değiştirmez; sıra zamana göre', () => {
+    assert.equal(adimSonKurulumAni(B, [o('durdur', '2026-11-24T09:00:00.000Z')]), B);
+    assert.equal(adimSonKurulumAni(B, [o('devam', '2026-11-24T10:00:00.000Z'), o('durdur', '2026-11-24T09:00:00.000Z')]), '2026-11-24T10:00:00.000Z');
   });
 });

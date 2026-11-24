@@ -372,6 +372,14 @@ export function siparisSatiriEmirleriGetir(db: Db, satirIdleri: readonly number[
        FROM uretim_emri WHERE siparis_satiri_id = ANY($1::int[]) GROUP BY siparis_satiri_id`, [[...satirIdleri]]);
 }
 
+// Açılış önerisi: satıra bağlı üst emirlerin adet toplamı (iptal hariç; bölünmüş parçalar üst emirde sayıldığı için ayrıca eklenmez).
+export function satirlarinAcikAdetleri(db: Db, satirIdleri: readonly number[]): Promise<{ satirId: number; adet: string }[]> {
+  return db.sorgu(
+    `SELECT siparis_satiri_id AS "satirId", sum(adet)::text AS adet FROM uretim_emri
+      WHERE siparis_satiri_id = ANY($1::int[]) AND ust_emir_id IS NULL AND durum <> 'iptal' GROUP BY siparis_satiri_id`,
+    [[...new Set(satirIdleri)]]);
+}
+
 export function emirNolariGetir(db: Db, idler: readonly number[]): Promise<{ id: number; emirNo: string }[]> {
   return db.sorgu(`SELECT id, emir_no AS "emirNo" FROM uretim_emri WHERE id = ANY($1::int[])`, [[...idler]]);
 }

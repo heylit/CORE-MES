@@ -577,6 +577,8 @@ export const acilisSecenekleriCevabi = z.object({
     id: KIMLIK, kod: z.string(), ad: z.string(),
     satirlar: z.array(z.object({
       id: KIMLIK, siparisNo: z.string(), satirNo: z.number().int(), adet: z.string(), termin: z.string().nullable(),
+      // Satır için açık (iptal olmayan) emirlerin adet toplamı; öneri kalan adedi bundan hesaplar. İsteğe bağlı: sunucu her zaman yazar.
+      acikEmirAdedi: z.string().optional(),
       // 3244 b: satırın üretim çeşidi partileri; boşsa satır tek seri partidir. İsteğe bağlı: sunucu her zaman yazar.
       partiler: z.array(z.object({ id: KIMLIK, emirTuru: z.enum(EMIR_TURLERI), adet: z.string() })).optional(),
     })),

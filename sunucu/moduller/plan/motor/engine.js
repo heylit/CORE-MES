@@ -41,6 +41,9 @@ function baseMs(D){const [y,m,d]=D.meta.baslangic.split('-').map(Number);return 
 function parseT(D,s){if(s==null||s==='')return null;if(typeof s==='number')return s;
   const m=String(s).trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2}))?$/);if(!m)return null;
   return (Date.UTC(+m[1],+m[2]-1,+m[3],m[4]?+m[4]:0,m[5]?+m[5]:0)-baseMs(D))/3600000;}
+/* Plan dakikaya yuvarlı yazılır (planAni) ve dakikayla gösterilir: sıra denetiminde bitiş ile başlangıç aynı dakikadaysa sınır eşittir, ihlal
+   sayılmaz (yarı açık aralık). Saniye farkı ve kayan nokta payı ihlal çıkarmaz. */
+function dkSayi(t){return Math.round(t*60);}
 function fmtDT(D,t){if(t==null||!isFinite(t))return '—';const dt=new Date(baseMs(D)+t*3600000);
   const p=n=>String(n).padStart(2,'0');return `${p(dt.getUTCDate())}.${p(dt.getUTCMonth()+1)} ${GUN_AD[GUN[(dt.getUTCDay()+6)%7]]} ${p(dt.getUTCHours())}:${p(dt.getUTCMinutes())}`;}
 function isoT(D,t){const dt=new Date(baseMs(D)+t*3600000);const p=n=>String(n).padStart(2,'0');return `${dt.getUTCFullYear()}-${p(dt.getUTCMonth()+1)}-${p(dt.getUTCDate())} ${p(dt.getUTCHours())}:${p(dt.getUTCMinutes())}`;}
@@ -998,7 +1001,7 @@ function evaluate(plan,st,ref,fast){
      rota sırası bozulur, uyarılır */
   if(!fast){const tas=+A.tasimaSaat||0;for(const r of Object.values(plan.ops)){if(!r.kilit||!r.why||(r.why.t!=='kilit'&&r.why.t!=='kilit-kaydi'))continue;const o=cx.byId[r.id];if(!o)continue;
     for(const [pid,ty] of o.pr){const q=plan.ops[pid];const t=!q||!isFinite(q.C)?null:(ty==='o'&&!q.fas?q.lot1:q.C)+(q.fas?0:tas);
-      if(t==null||t>r.S+1e-6)warn.push({t:'kilit',j:r.job,id:r.id,oncul:pid,txt:t==null?`${r.id}: kilitli iş ${fmtDT(cx.D,r.S)} başlıyor; öncülü ${pid} planda yerleşmedi, rota sırası bozuluyor`:`${r.id}: kilitli iş ${fmtDT(cx.D,r.S)} başlıyor; öncülü ${pid} ${fmtDT(cx.D,t)} hazır, rota sırası bozuluyor`});}}}
+      if(t==null||dkSayi(t)>dkSayi(r.S))warn.push({t:'kilit',j:r.job,id:r.id,oncul:pid,txt:t==null?`${r.id}: kilitli iş ${fmtDT(cx.D,r.S)} başlıyor; öncülü ${pid} planda yerleşmedi, rota sırası bozuluyor`:`${r.id}: kilitli iş ${fmtDT(cx.D,r.S)} başlıyor; öncülü ${pid} ${fmtDT(cx.D,t)} hazır, rota sırası bozuluyor`});}}}
   /* 3538 b: kilidi süren işin arkasına kayan iş söylenir; eski saat kilidin kayıttaki saatidir */
   for(const r of Object.values(plan.ops))if(r.why&&r.why.t==='kilit-kaydi')warn.push({t:'kilit',j:r.job,id:r.id,txt:`${r.id}: tezgâhta süren ${r.why.r} uzadı; kilit ${fmtDT(cx.D,r.why.o)} yerine ${fmtDT(cx.D,r.S)} saatine kaydı`});
   /* 3601: kilit saati kaynağın çalışmadığı bir ana düştüyse iş ilk açık ana kaydı; kilit kaydı değişmez, plandaki yer değişir */
@@ -1302,7 +1305,7 @@ function kilitliSiraIhlali(p, st, cx, idler) {
   let n = 0;
   for (const id of idler || Object.keys(st.locks)) {
     const r = p.ops[id], o = cx.byId[id]; if (!r || !o || st.locks[id].gecici) continue;
-    if (o.pr.some(([pid, ty]) => { const q = p.ops[pid]; return q && (ty === 'o' && !q.fas ? q.lot1 : q.C) > r.S + 1e-6; })) n++;
+    if (o.pr.some(([pid, ty]) => { const q = p.ops[pid]; return q && dkSayi(ty === 'o' && !q.fas ? q.lot1 : q.C) > dkSayi(r.S); })) n++;
   }
   return n;
 }

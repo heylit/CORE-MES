@@ -90,6 +90,17 @@ describe('2516: kilitli iş öncülü geç biterse uyarı (2507 a)', () => {
     const gec = durum(m, D, { locks: { 'S1.20': { m: 'T2', S: 14 } } });
     assert.equal(coz(m, gec).e.warn.filter((w) => w.t === 'kilit').length, 0);
   });
+
+  // Plan dakikaya yuvarlı yazılır ve gösterilir: öncül 12:15'te biten, kilitli ardıl 12:15'te başlayan çift aynı dakikadadır, ihlal sayılmaz.
+  test('öncül bitişi ile kilitli ardılın başlangıcı aynı dakikaya düşüyorsa uyarı yok; iki dakika önceyse uyarı var', () => {
+    const m = motor();
+    const D = { urunler: [{ id: 'U', rota: [adim('10', 'T1'), adim('20', 'T2', { bag: [['10', 'b']] })] }], siparisler: [{ id: 'S1', urun: 'U', adet: 4, termin: null }] };
+    const bitis = coz(m, durum(m, D, { locks: { 'S1.20': { m: 'T2', S: 100 } } })).p.ops['S1.10']!.C;
+    const kilitUyarisi = (S: number) => coz(m, durum(m, D, { locks: { 'S1.20': { m: 'T2', S } } })).e.warn.filter((w) => w.t === 'kilit').length;
+    assert.equal(kilitUyarisi(bitis), 0, 'tam eşit');
+    assert.equal(kilitUyarisi(bitis - 0.004), 0, 'aynı dakika (14 sn önce)');
+    assert.equal(kilitUyarisi(bitis - 2 / 60), 1, 'iki dakika önce gerçek ihlal');
+  });
 });
 
 describe('2516: ek mesai molası, çarpanı ve haftası (2510 a, B-2483-12)', () => {

@@ -38,13 +38,34 @@ export function YeniRotaFormu({ r, urunId, rotalar, kapat }: { r: RotaEkrani; ur
   const turSec = (t: EmirTuru) => { setTur(t); if (t !== 'seri') window.setTimeout(() => { adAlani.current?.focus(); }, 0); };
   const turVar = (t: EmirTuru): boolean => (t === 'seri' ? !ilk : rotalar.some((x) => x.emirTurleri.includes(t)));
   const tumTurler: readonly (EmirTuru)[] = ['seri', ...EMIR_TURLERI.filter((t) => t !== 'seri')];
-  const turAdi = (t: EmirTuru) => (t === 'seri' && !ilk ? `Seri · ${standart?.ad ?? 'Standart'}` : EMIR_TURU_ADLARI[t]);
+  // Standart rota adsız ya da "Seri" adlıysa düğme yalnız "Seri" yazar; başka adlıysa adı da gösterir.
+  const standartAdi = standart?.ad ?? 'Standart';
+  const turAdi = (t: EmirTuru) => (t === 'seri' && !ilk && standartAdi !== 'Standart' && standartAdi !== EMIR_TURU_ADLARI.seri ? `Seri · ${standartAdi}` : EMIR_TURU_ADLARI[t]);
   const adimEkle = () => { r.kokSec(urunId); r.sec({ tur: 'adimEkle', urunId, sonraId: null }); r.paletAc(); };
 
   const ac = async () => {
     if (tur === null) return;
-    // İlk rota Seri ise yeni sunucu kaydı yoktur: Standart rota ilk revizyonla birlikte açılır, adım eklemeye geçilir.
-    if (tur === 'seri') { kapat(); adimEkle(); return; }
+    // İlk rota Seri: ad verildiyse sunucu Standart rotayı o adla açar (3647); verilmediyse Standart rota ilk revizyonla "Standart" adıyla açılır ve "Seri" görünür.
+    if (tur === 'seri') {
+      if (ad.trim()) {
+        setMesgul(true);
+        setHata(null);
+        try {
+          const c = await api.post<UrunRevizyonlariCevabi>(`/rota/urunler/${encodeURIComponent(urunId)}/rotalar`, { emirTuru: 'seri', ad: ad.trim() }, { istekKimligi: yeniIstekKimligi() });
+          istemci.setQueryData(urunRotalariAnahtari(urunId), c);
+        } catch (h) {
+          const k = h instanceof RrHatasi ? h : new RrHatasi(h);
+          if (k.durum === 409) void istemci.invalidateQueries({ queryKey: urunRotalariAnahtari(urunId) });
+          setHata(k.message);
+          setMesgul(false);
+          return;
+        }
+        setMesgul(false);
+      }
+      kapat();
+      adimEkle();
+      return;
+    }
     const onceki = new Set(rotalar.map((x) => x.id));
     setMesgul(true);
     setHata(null);
@@ -57,7 +78,8 @@ export function YeniRotaFormu({ r, urunId, rotalar, kapat }: { r: RotaEkrani; ur
       kapat();
       const kaynak = yururlukteki(duzen.rotaRevleri(urunId, null));
       if (kopya && kaynak) await duzen.yeniTaslak(urunId, kaynak);
-      else adimEkle();
+      else r.kokSec(urunId);
+      // İşaret kapalı: rota açılır ve "Nasıl başlayalım?" ekranı gelir (şablon, benzer ürün, boş); kopyada taslak zaten açılmıştır.
     } catch (h) {
       const k = h instanceof RrHatasi ? h : new RrHatasi(h);
       // Başkası araya girdiyse (eski sürüm ya da aynı tür/ad) ürün rotaları yeniden okunur ki tür listesi bayat kalmasın.
@@ -80,11 +102,12 @@ export function YeniRotaFormu({ r, urunId, rotalar, kapat }: { r: RotaEkrani; ur
           );
         })}
       </span>
-      {tur !== 'seri' && (
+      {!ilk && <p className="tc-rr1-ipucu">Seri, ürünün Standart rotasıdır ve hep vardır; ayrıca açılmaz. Başka bir tür seç.</p>}
+      {(tur !== 'seri' || ilk) && (
         <label className="tc-rr1-alan">
           <span>Rotanın adı</span>
           <input ref={adAlani} className="tc-rr1-metin" value={ad} aria-label="Yeni rotanın adı" maxLength={ROTA_ADI_EN_COK}
-            placeholder={tur === null ? 'Boş kalırsa türün adı' : EMIR_TURU_ADLARI[tur]} onChange={(e) => { setAd(e.target.value); }} />
+            placeholder={tur === null ? 'Boş kalırsa türün adı' : tur === 'seri' ? 'Boş kalırsa Seri' : EMIR_TURU_ADLARI[tur]} onChange={(e) => { setAd(e.target.value); }} />
         </label>
       )}
       {tur !== null && tur !== 'seri' && standart !== null && kopyalanabilir && (

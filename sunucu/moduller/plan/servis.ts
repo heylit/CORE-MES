@@ -37,9 +37,9 @@ import { basladigiGunTakvimleri, calismaTakvimleri, gunYaz, isMerkeziKisiPaylari
 import type { BasladigiGun } from '../vardiya/disari.ts';
 import type { AdimDugumu, PlanIsEmri } from '../uretim-emirleri/disari.ts';
 import {
-  araliktanCikar, arkaArkaya, dortSaatGerekcesi, dortSaatIhlalleri, korunanIsler, kilitCakisani, emirTutari, katkiPaylari, calisilanParcalar, oncelikCarpani, oncelikSinifi, ayniKaynak, cakisirMi, dondurulacaklar, enErkenBaslangic, enErkenBitis, gostergeler, isSuresi, calismaBitisi,
+  araliktanCikar, arkaArkaya, dortSaatGerekcesi, dortSaatIhlalleri, korunanIsler, kilitCakisani, emirTutari, katkiPaylari, calisilanParcalar, oncelikCarpani, oncelikSinifi, ayniKaynak, cakisirMi, dondurulacaklar, enErkenBaslangic, enErkenBitis, sinirdanOnce, gostergeler, isSuresi, calismaBitisi,
   adetPayi, araliklaraEkle, ayarVeGecikme, bolmeAdetleri, EK_MESAI_HAFTA_SAAT, ekMesaiButcesi, vardiyaSaati, kapasiteBollugu, kapasiteKesri, kaynakAnahtari, kesisimDk, motorUyarilari, onayGecisiReddi, onayGecisleri, personelYuku, planMaliyeti, sabitYeri, sinirliGunSayisi, terminDakikasi, uyarilar, uzayanBosluk, verimliSure, kisiBaskaIstasyonda, yetkinlikUyarisi, yukYuzdesi,
-  vardiyasiTanimsiz,
+  vardiyasiTanimsiz, kurulumBekliyor, kalanBaslangici,
 } from './kurallar.ts';
 import type { OnayBaglami, PersonelMerkezi, YetkinlikVerisi } from './kurallar.ts';
 import type { Aralik, BedelSatiri, DortSaatNedeni, Kaynak, MotorIsi, MotorOnculu, PlanYeri, Sabit, Takvim, Yerlesim } from './kurallar.ts';
@@ -626,7 +626,7 @@ const fiiliKaynaklar = (acik: readonly PlanIsEmri[]): Baglam['fiili'] => new Map
 // ekranı ve ortak motor (calisanAdimlar) bunu kullanır; çalışmayan ya da süresiz adımda null.
 function calisanKalani(i: PlanIsEmri): { kalanDk: number; ayarDk: number } | null {
   if (i.durum !== 'basladi' || i.adimDurumu !== 'calisiyor' || i.islenenAdet === undefined) return null;
-  const ayarDk = i.islenenAdet > 0 || i.ayarSuresiDk === null ? 0 : Number(i.ayarSuresiDk);
+  const ayarDk = !kurulumBekliyor(i) || i.ayarSuresiDk === null ? 0 : Number(i.ayarSuresiDk);
   const kalanDk = isSuresi(ayarDk, i.birimSureDk === null ? null : Number(i.birimSureDk), Math.max((i.adimAdedi ?? i.adet) - i.islenenAdet, 0));
   return kalanDk === null ? null : { kalanDk, ayarDk };
 }
@@ -637,7 +637,7 @@ function gerceklesenler(simdi: number, acik: readonly PlanIsEmri[]): Baglam['ger
     const k = calisanKalani(i);
     if (k === null) continue;
     const an = (t: string | null | undefined) => (t ? dk({ simdi }, new Date(t)) : null);
-    h.set(i.id, { baslangic: an(i.adimBaslama), cikis: an(i.sonSayimAni ?? i.adimBaslama), ...k });
+    h.set(i.id, { baslangic: an(i.adimBaslama), cikis: an(kalanBaslangici(i)), ...k });
   }
   return h;
 }
@@ -660,7 +660,7 @@ export async function calisanAdimlar(db: Db): Promise<CalisanAdim[]> {
     const makineId = i.fiiliMakineId ?? (i.kaynak?.tur === 'makine' ? i.kaynak.id : null);
     const verim = makineId === null ? 1 : kaynaklar.get(kaynakAnahtari({ tur: 'makine', id: makineId }))?.verim ?? 1;
     return [{
-      anahtar: `${i.emirNo}|${i.opNo}`, makineId, baslangic: iso(i.adimBaslama), sayimAni: iso(i.sonSayimAni ?? i.adimBaslama),
+      anahtar: `${i.emirNo}|${i.opNo}`, makineId, baslangic: iso(i.adimBaslama), sayimAni: iso(kalanBaslangici(i)),
       kalanDk: k.kalanDk, kalanVerimliDk: verimliSure(k.kalanDk, k.ayarDk, verim),
     }];
   });
@@ -1064,7 +1064,7 @@ function siraIhlali(b: Baglam, yerler: readonly Yer[], uretimEmriIdleri: Readonl
     const is = b.isler.get(y.isEmriId);
     if (!is || is.durum !== 'planli' || !uretimEmriIdleri.has(is.uretimEmriId)) continue;
     const { enErken } = onculSinirlari(b, y.isEmriId, yerler, y.kaynak);
-    if (enErken === null || y.baslangic >= enErken - 0.01) continue;
+    if (enErken === null || !sinirdanOnce(y.baslangic, enErken)) continue;
     const kilitli = 'kilitli' in y && y.kilitli === true;
     const ad = `${is.emirNo} OP ${is.opNo}`;
     const o = sinirlayanOncul(b, y, yerler);
@@ -1158,7 +1158,7 @@ function gosterge(b: Baglam, yerler: readonly Yer[]) {
   for (const i of b.isler.values()) if (planlanacak(i) && !ilkIs.has(i.uretimEmriId)) ilkIs.set(i.uretimEmriId, i);
   const ek = ayarVeGecikme(isgal(yerler.filter((y) => b.isler.has(y.isEmriId))).map((y) => {
     const i = b.isler.get(y.isEmriId)!;
-    return { ...y, uretimEmriId: i.uretimEmriId, ayarDk: i.durum === 'planli' || (i.islenenAdet ?? 0) === 0 ? i.ayarDk : 0 };
+    return { ...y, uretimEmriId: i.uretimEmriId, ayarDk: i.durum === 'planli' || kurulumBekliyor(i) ? i.ayarDk : 0 };
   }), [...emirler.values()].map((e) => {
     const i = ilkIs.get(e.id)!;
     const satir = i.siparisSatiriId == null ? null : b.siparisSatirlari.get(i.siparisSatiriId) ?? null;
