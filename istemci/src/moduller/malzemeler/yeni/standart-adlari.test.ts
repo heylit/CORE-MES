@@ -4,7 +4,7 @@ import { FAMS } from './sabitler/index.ts';
 import { metinListesi } from './katalog/liste.ts';
 import { autoKod, finalAd, kuralBaglami, metinAyristir, newDraft } from './kurallar/index.ts';
 import {
-  STANDART_AD_SINIRI, TABAN_STANDART_ADLARI, aramaMetinleri, kartStandardi, ayardakiStandartAdlari, esliAdlariCoz, standartAdiYaz, standartAdlari, standartEtiketi, standartlaEslesir,
+  STANDART_AD_SINIRI, TABAN_STANDART_ADLARI, aramaMetinleri, kartStandardi, ayardakiStandartAdlari, esliAdlariCoz, standartAdiYaz, standartAdlari, secenekEtiketleri, standartEtiketi, standartlaEslesir,
 } from './standart-adlari.ts';
 import type { KartKaydi, KatalogKarti } from './tipler.ts';
 import { ortamKur } from './veri.ts';
@@ -25,9 +25,9 @@ describe('2117 standart adları', () => {
     }
   });
 
-  test('seçili standart önce, diğeri parantez içinde; tek ad o ad, hiç yoksa değerin kendisi', () => {
-    expect(standartEtiketi('Islah (+QT)', ADLAR, 'astm')).toBe('QT-A (QT-E)');
-    expect(standartEtiketi('Islah (+QT)', ADLAR, 'en')).toBe('QT-E (QT-A)');
+  test('yalnız seçili standardın adı; o taraf boşsa öteki ad, hiç yoksa değerin kendisi', () => {
+    expect(standartEtiketi('Islah (+QT)', ADLAR, 'astm')).toBe('QT-A');
+    expect(standartEtiketi('Islah (+QT)', ADLAR, 'en')).toBe('QT-E');
     expect(standartEtiketi('Yalnız ASTM', ADLAR, 'en')).toBe('X1');
     expect(standartEtiketi('Aynı ad', ADLAR, 'en')).toBe('T6');
     expect(standartEtiketi('Normalize (+N)', ADLAR, 'astm')).toBe('Normalize (+N)');
@@ -75,7 +75,7 @@ describe('2117 taban tablo ve listeler', () => {
       for (const st of ['astm', 'en'] as const) {
         const gor = new Map<string, string>();
         for (const v of l.map(String)) {
-          const e = standartEtiketi(v, TABAN_STANDART_ADLARI, st);
+          const e = secenekEtiketleri(l.map(String), TABAN_STANDART_ADLARI, st).get(v)!;
           if (gor.has(e)) cakisan.push(`${yer} ${st}: ${gor.get(e)!} / ${v}`);
           gor.set(e, v);
         }

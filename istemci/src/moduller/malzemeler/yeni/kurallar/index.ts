@@ -274,7 +274,7 @@ export function foyVerisi(d: KartKaydi, b: KuralBaglami, kisa = false): FoyVeris
   });
 }
 
-// 2763: föy, sihirbazdaki seçimle aynı adı yazar (seçili standardın adı önce, diğeri parantez içinde). Kart değeri, kod ve ad değişmez.
+// 2763: föy, sihirbazdaki seçimle aynı adı yazar (yalnız seçili standardın adı). Kart değeri, kod ve ad değişmez.
 // Eşli adlar yalnız durum ve işlem listelerindedir (DurumAdimi ile aynı süzgeç); hizmette seçimli alanlar ve öneri çipleri (GenelAlanlar ile aynı).
 function adlayici(d: KartKaydi, b: KuralBaglami): (x: unknown) => unknown {
   const adlar = standartAdlari(b.ortam.malzemeAyari);

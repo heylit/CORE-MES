@@ -7,7 +7,7 @@ import { useSihirbaz } from '../baglam.ts';
 import { aileler, formlar } from '../turler.ts';
 import type { AileSecenegi } from '../../kurallar/index.ts';
 import { KatalogSimgesi } from '../../ortak/KatalogSimgesi.tsx';
-import { kartStandardi, standartAdlari, standartEtiketi, standartlaEslesir } from '../../standart-adlari.ts';
+import { kartStandardi, secenekEtiketleri, standartAdlari, standartEtiketi, standartlaEslesir } from '../../standart-adlari.ts';
 import { BagDugmesi, Cip, CipGrubu, MetinAlani, SecenekGrubu, Uyari, type CipTonu } from '../parcalar.tsx';
 
 type Secenek = AileSecenegi;
@@ -104,7 +104,8 @@ export function DurumAdimi({ anahtarlar, bolumler, haric = [] }: DurumAdimiOzell
       // Arama değerin kendisinde, ASTM ve EN adında bakar; seçili değer süzülse de görünür kalır.
       // EN / ASTM adları yalnız durum ve işlem listelerindedir; öteki listelerde (yüzey, üretim...) aynı metin başka anlam taşır.
       const esli = o.k === 'durum' || o.k === 'islem' ? adlar : {};
-      const etiket = (x: string) => standartEtiketi(x, esli, standart);
+      const etiketler = secenekEtiketleri(l, esli, standart);
+      const etiket = (x: string) => etiketler.get(x) ?? standartEtiketi(x, esli, standart);
       const gorunen = uyanlar.filter((x) => cur.includes(x) || standartlaEslesir(x, esli, ara));
       if (!gorunen.length) return null;
       const mods = gorunen.filter((x) => S.MODS[x]);

@@ -207,7 +207,7 @@ function SihirbazKabugu(o: EkranOzellikleri & { kartlar: readonly KatalogKarti[]
                   {(['astm', 'en'] as const).map((x) => (
                     <button
                       key={x} type="button" aria-pressed={kartStandardi(d) === x} onClick={() => { degistir((t) => { t.standart = x; }); }}
-                      title={x === 'astm' ? 'ASTM adı önce, EN adı parantez içinde' : 'EN adı önce, ASTM adı parantez içinde'}
+                      title={x === 'astm' ? 'Durum ve işlem adları ASTM adıyla yazılır (seçimde, açıklamada, föyde)' : 'Durum ve işlem adları EN adıyla yazılır (seçimde, açıklamada, föyde)'}
                     >{x === 'astm' ? 'ASTM' : 'EN'}
                     </button>
                   ))}

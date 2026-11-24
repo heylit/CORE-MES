@@ -35,7 +35,17 @@ describe('3476-2 hammadde açıklama kalıbı', () => {
   test('kalıp kartın kendi alanlarını ve çoklu seçimin bütün değerlerini yazar', () => {
     const b = baglam(200, ['{kalite} {form} {olcu}', '{std}; {tol}', '{test}; {islem}']);
     const o = kartOzeti(kart(b), b);
-    expect([o.aciklama_1, o.aciklama_2, o.aciklama_3]).toEqual(['EN AW-7075 levha 20×1000×2000 mm', 'EN 573-3; EN 485-4', 'Sertlik, Çekme; Gerilim giderme']);
+    expect([o.aciklama_1, o.aciklama_2, o.aciklama_3]).toEqual(['EN AW-7075 levha 20×1000×2000 mm', 'EN 573-3; EN 485-4', 'Sertlik, Çekme; Stress relieving']);
+  });
+
+  test('3633: durum ve işlem açıklamaya kartın seçtiği standardın adıyla yazılır; kart değeri değişmez', () => {
+    const b = baglam(200, ['{durum}; {islem}', '', '']);
+    const k = kart(b);
+    k.opts = { ...k.opts, durum: 'Gerilim giderilmiş', islem: ['Islah (+QT)'] } as typeof k.opts;
+    expect(kartOzeti(k, b).aciklama_1).toBe('Stress relieved; Quenched and tempered');
+    const en = { ...k, standart: 'en' } as KartKaydi;
+    expect(kartOzeti(en, b).aciklama_1).toBe('+SR; +QT');
+    expect(en.opts).toEqual(k.opts);
   });
 
   test('kaydedilen otomatik satır sınırda kesilir; sığmayan seçim satıra girmez', () => {
