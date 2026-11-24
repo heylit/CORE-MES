@@ -9,6 +9,7 @@ import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Pencere, Secim, Simge } from '
 import { sayi, tarih } from '../bicim.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
 import { RR_ANAHTARI, usePatlatmaOnizlemesi, type RrDurumu } from '../veri.ts';
+import { oneriAdaylari, oneriDegerleri, teslimBagsizMi } from './oneri.ts';
 import { altEmirRotalari, altEmirTurleri, BolmePaneli, bolmeSonucu, bosBolme, type BolmeDurumu, type PartiRotaKaynagi } from './Bolme.tsx';
 import { bosCokKatman, CokKatmanPaneli, type CokKatmanSecimi } from './CokKatman.tsx';
 import { EmirAyrintisi, PlanHucresi } from './EmirAyrintisi.tsx';
@@ -208,6 +209,9 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun, il
     urun: (ilkUrun !== null && urunler.some((u) => u.id === ilkUrun) ? ilkUrun : urunler[0]?.id) ?? '', miktar: ilkAdet !== null && /^\d+$/.test(ilkAdet) ? ilkAdet : '100', baslangic: ilk, teslim: isGunuEkle(ilk, 9, tatiller), oncelik: '3', durum: 'serbest',
     tur: ilkTur !== null && ilkTur in EMIR_TURU_ADLARI ? ilkTur : 'seri', not: '', rezerve: true, rota: ilkRota !== null && /^\d+$/.test(ilkRota) ? ilkRota : '', revizyonGerekcesi: '',
   });
+  // 3657: miktar ve teslim önerisi; elle değiştirilen alan öneriyle ezilmez. Birden çok aday satırda kullanıcı seçene kadar öneri yoktur.
+  const [secilenSatir, setSecilenSatir] = useState<number | null>(null);
+  const [elle, setElle] = useState({ miktar: ilkAdet !== null && /^\d+$/.test(ilkAdet), teslim: false });
   const [bolme, setBolme] = useState<BolmeDurumu>(bosBolme(true));
   const [cok, setCok] = useState<CokKatmanSecimi>(bosCokKatman);
   const [hata, setHata] = useState<string | null>(null);
@@ -241,6 +245,22 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun, il
   // 3438 a: kart ailesinin yürürlükteki revizyonu değilse emir gerekçeyle açılır. Sipariş kalemi proje penceresinde seçildiği için
   // gerekçenin gerekip gerekmediğine sunucu karar verir; form yalnız uyarır ve alanı gösterir.
   const eskiRevizyon = acilis.data?.revizyon?.yururlukte === false ? acilis.data.revizyon : null;
+
+  const adaylar = useMemo(() => oneriAdaylari(acilis.data), [acilis.data]);
+  const tekAday = adaylar.length === 1 ? adaylar[0] ?? null : null;
+  const oneri = tekAday ?? adaylar.find((a) => a.satirId === secilenSatir) ?? null;
+  const adayAnahtari = adaylar.map((a) => String(a.satirId)).join(',');
+  const varsayilanTeslim = isGunuEkle(ilk, 9, tatiller);
+  useEffect(() => { setSecilenSatir(null); }, [adayAnahtari]);
+  useEffect(() => {
+    const deger = oneri === null ? null : oneriDegerleri(oneri);
+    setF((g) => ({
+      ...g,
+      ...(elle.miktar ? {} : { miktar: deger?.miktar ?? '100' }),
+      ...(elle.teslim ? {} : { teslim: deger?.teslim ?? varsayilanTeslim }),
+    }));
+  // Yalnız önerinin kaynağı (satır) ya da elle bayrakları değişince çalışır; kullanıcının yazdığı değer her çizimde ezilmez.
+  }, [oneri?.satirId, elle.miktar, elle.teslim]);
 
   if (urunler.length === 0) {
     return <DurumKutusu durum="bos" mesaj={'Emir açmak için mamul ya da yarı mamul gerekli. "Ürün ve rotalar"dan başlayın.'} />;
@@ -279,6 +299,8 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun, il
     if (b && !b.hazir) { setHata(b.ileti ?? b.ipucu ?? 'Bölmeyi tamamlayın.'); return; }
     const govde = {
       itemId: f.urun, qty: adet.deger, start: f.baslangic, due: f.teslim, priority: Number(f.oncelik), note: f.not.trim(), tur: f.tur, taslak: f.durum === 'taslak',
+      // Proje penceresi bu satırı önseçili açar (kopru.ts); sunucuya gitmez.
+      ...(oneri === null ? {} : { oneriSatiri: oneri.satirId }),
       ...(eskiRevizyon === null ? {} : { eskiRevizyonGerekcesi: f.revizyonGerekcesi.trim() }),
       ...(rotali ? { rezerve: f.rezerve } : { rotasiz: true }),
       // Rota yalnız elle seçildiyse gider; seçilmediyse sahibi emrin türünün rotasını bulur. Proje penceresinde sipariş partisi seçilince
@@ -319,13 +341,35 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun, il
     <section className="tc-rr3-panel" data-pencerede="" aria-label="Yeni üretim emri">
       <div className="tc-rr3-form">
         <Secim
-          etiket="Ürün" value={f.urun} onChange={(o) => { yaz({ urun: o.target.value, rota: '' }); setBolme(bosBolme(true)); setCok(bosCokKatman()); }}
+          etiket="Ürün" value={f.urun} onChange={(o) => { yaz({ urun: o.target.value, rota: '' }); setElle({ miktar: false, teslim: false }); setBolme(bosBolme(true)); setCok(bosCokKatman()); }}
           secenekler={urunler.map((u) => ({ deger: u.id, baslik: `${u.code} ${u.name}${uretilirMi(d, u.id) ? '' : ' (rotasız)'}` }))}
         />
-        <Girdi etiket="Miktar" inputMode="numeric" value={f.miktar} onChange={(o) => { yaz({ miktar: o.target.value }); }} />
+      </div>
+      {adaylar.length > 1 && (
+        <fieldset className="tc-rr-secenekler">
+          <legend>Öneri kaynağı (proje ve sipariş satırı)</legend>
+          {adaylar.map((a) => (
+            <label key={a.satirId} className="tc-rr-secenek">
+              <input type="radio" name="emir-oneri" checked={secilenSatir === a.satirId} onChange={() => { setSecilenSatir(a.satirId); setElle({ miktar: false, teslim: false }); }} />
+              <strong>{a.projeKod}</strong>
+              <span>{`${a.siparisNo} / satır ${String(a.satirNo)} · ${String(a.adet)} adet, açık emirlerde ${String(a.acik)} · termin ${a.termin === null ? '—' : tarih(a.termin)}`}</span>
+            </label>
+          ))}
+          <label className="tc-rr-secenek">
+            <input type="radio" name="emir-oneri" checked={secilenSatir === null} onChange={() => { setSecilenSatir(null); }} />
+            <strong>Seçmeden devam</strong>
+            <span>Miktar ve teslim elle girilir; proje, Emri oluştur sonrası sorulur</span>
+          </label>
+        </fieldset>
+      )}
+      <div className="tc-rr3-form">
+        <Girdi etiket="Miktar" inputMode="numeric" value={f.miktar} onChange={(o) => { setElle({ ...elle, miktar: true }); yaz({ miktar: o.target.value }); }}
+          ipucu={oneri === null ? undefined : oneri.kalan > 0
+            ? `Siparişten: kalan ${String(oneri.kalan)} (satır ${String(oneri.adet)}, açık emirlerde ${String(oneri.acik)})`
+            : `Satırın ${String(oneri.adet)} adedi için emir açılmış; miktar elle girilir`} />
         <Girdi etiket="Başlangıç" type="date" value={f.baslangic} onChange={(o) => { yaz({ baslangic: o.target.value }); }} />
-        <Girdi etiket="Teslim" type="date" value={f.teslim} onChange={(o) => { yaz({ teslim: o.target.value }); }}
-          ipucu={gecmis ? 'Teslim tarihi geçmişte: emir açılınca gecikmiş görünür.' : undefined} />
+        <Girdi etiket="Teslim" type="date" value={f.teslim} onChange={(o) => { setElle({ ...elle, teslim: true }); yaz({ teslim: o.target.value }); }}
+          ipucu={gecmis ? 'Teslim tarihi geçmişte: emir açılınca gecikmiş görünür.' : oneri?.termin == null ? undefined : `Siparişten: satır termini ${tarih(oneri.termin)}`} />
         <Secim
           etiket="Öncelik" value={f.oncelik} onChange={(o) => { yaz({ oncelik: o.target.value }); }}
           secenekler={[1, 2, 3, 4].map((n) => ({ deger: String(n), baslik: ONCELIK_ADI[n] ?? '' }))}
@@ -344,6 +388,14 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun, il
         )}
         <Girdi etiket="Not" placeholder="Müşteri, sipariş no…" value={f.not} onChange={(o) => { yaz({ not: o.target.value }); }} />
       </div>
+      {oneri !== null && (
+        <p className={teslimBagsizMi(f.teslim, oneri) ? 'tc-rr3-uyari-kutu' : 'tc-rr3-uyari'} data-bilgi={teslimBagsizMi(f.teslim, oneri) ? undefined : ''} role="status">
+          <Simge ad="alert" boyut="k" />
+          <span>{teslimBagsizMi(f.teslim, oneri)
+            ? `Teslim sipariş terminden (${tarih(oneri.termin ?? '')}) farklı: emir ${oneri.siparisNo} / satır ${String(oneri.satirNo)} satırına bağsız açılır.`
+            : `Öneri: ${oneri.projeKod} · ${oneri.siparisNo} / satır ${String(oneri.satirNo)}. Emir bu satıra bağlı açılır; proje penceresinde bu satır önseçili gelir.`}</span>
+        </p>
+      )}
       {eskiRevizyon !== null && (
         <>
           <p className="tc-rr3-uyari-kutu" role="status">

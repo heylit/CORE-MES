@@ -219,6 +219,19 @@ describe('UE-SS emir sipariş satırına (gerçek PostgreSQL)', () => {
     assert.equal(yetkisiz.statusCode, 401);
   });
 
+  test('3657: açılış seçenekleri satırın açık emir adedini taşır; iptal edilen emir sayılmaz', async () => {
+    const m = await malzeme();
+    const s = await siparis('onayli', m);
+    const p = await proje(s.siparisId);
+    const adetOku = async () => (await istek<AcilisSecenekleri>('GET', `/adimli-emirler/acilis-secenekleri?malzemeNo=${m}`)).govde.projeler.find((x) => x.id === p)?.satirlar[0]?.acikEmirAdedi;
+    assert.equal(await adetOku(), '0', 'emir yok');
+    const bir = (await ac(m, p, s.satirId)).govde.uretimEmriId;
+    await ac(m, p, s.satirId);
+    assert.equal(await adetOku(), '8', 'iki emir x 4 adet');
+    await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'iptal', iptal = now() WHERE id = $1", [bir]);
+    assert.equal(await adetOku(), '4', 'iptal sayılmaz');
+  });
+
   test('B-2500-6: açılış seçenekleri "Rotasız üretim emri" ayarını taşır; ayar kapanınca false olur', async () => {
     const m = await malzeme();
     const rotasiz = async () => (await istek<AcilisSecenekleri>('GET', `/adimli-emirler/acilis-secenekleri?malzemeNo=${m}`)).govde.rotasizAcik;

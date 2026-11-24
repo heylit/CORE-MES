@@ -5,7 +5,7 @@ import { Dugme, Pencere } from '../../ortak/arayuz/index.ts';
 import type { EmirSecimi } from './kopru.ts';
 import './recete-rota.css';
 
-interface Ozellikler { secenekler: AcilisSecenekleri; bitir: (secim: EmirSecimi | null) => void }
+interface Ozellikler { secenekler: AcilisSecenekleri; onSatir?: number | undefined; bitir: (secim: EmirSecimi | null) => void }
 
 const terminYazisi = (t: string | null): string => (t === null ? '—' : t.split('-').reverse().join('.'));
 const adetYazisi = (a: string): string => a.replace(/\.?0+$/, '').replace('.', ',');
@@ -13,9 +13,11 @@ const adetYazisi = (a: string): string => a.replace(/\.?0+$/, '').replace('.', '
 // Üretim emri bir projeyle açılır (224). Tek proje önceden seçili gelir; satır yalnız projenin birden çok uygun satırı varsa sorulur
 // (tek satırı sunucu bağlar). Satır listesi sunucunun bağlayacağı satırlardır, fiyat yoktur.
 // 3244 b: satırın üretim çeşidi partileri varsa emir bir partiden açılabilir (10 FAI, 90 Seri); seçilmezse partisiz açılır.
-export function EmirProjeSecimi({ secenekler, bitir }: Ozellikler) {
-  const [projeId, setProjeId] = useState<number | null>(secenekler.projeler.length === 1 ? secenekler.projeler[0]!.id : null);
-  const [satirId, setSatirId] = useState<number | null>(null);
+export function EmirProjeSecimi({ secenekler, onSatir, bitir }: Ozellikler) {
+  // 3657: formun önerdiği satır varsa proje ve satır önseçili gelir.
+  const onProje = onSatir === undefined ? undefined : secenekler.projeler.find((p) => p.satirlar.some((x) => x.id === onSatir));
+  const [projeId, setProjeId] = useState<number | null>(onProje?.id ?? (secenekler.projeler.length === 1 ? secenekler.projeler[0]!.id : null));
+  const [satirId, setSatirId] = useState<number | null>(onProje === undefined ? null : onSatir ?? null);
   const [partiId, setPartiId] = useState<number | null>(null);
   const proje = secenekler.projeler.find((p) => p.id === projeId);
   const satirSorulur = proje !== undefined && proje.satirlar.length > 1;

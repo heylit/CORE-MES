@@ -258,7 +258,8 @@ async function stokOku(girdi: Nesne, islemler: IslemListesi): Promise<StokOkumas
 // Emir açılışında seçilen proje ve sipariş satırı (224). satır null: proje tek satırlıdır ya da satır seçilmedi; sunucu bağlar.
 // 3244 b: parti seçilirse emrin türü partinin üretim çeşididir; formdaki tür onunla değiştirilir.
 export interface EmirSecimi { projeId: number; siparisSatiriId: number | null; parti?: { id: number; emirTuru: string } }
-export type EmirSecimiSor = (secenekler: AcilisSecenekleri) => Promise<EmirSecimi | null>;
+// onSatir (3657): formun önerdiği sipariş satırı; pencere onu önseçili açar, kullanıcı değiştirebilir.
+export type EmirSecimiSor = (secenekler: AcilisSecenekleri, onSatir?: number) => Promise<EmirSecimi | null>;
 
 // Prototip emir açarken proje sormaz (yalnız 220 a değişir): köprü komutu göndermeden önce seçenekleri okur, proje gereken türde
 // seçimi pencereye sorar ve gövdeye ekler. Proje gerekmeyen türde (stok, numune) gövde olduğu gibi gider.
@@ -271,7 +272,8 @@ async function emirAcilisi(girdi: Nesne, sor: EmirSecimiSor | undefined): Promis
   if (secenekler.projeler.length === 0) {
     throw new ApiHatasi(422, { kod: 'GECERSIZ', mesaj: 'Bu ürün için açık proje yok; üretim emri bir projeyle açılır.' });
   }
-  const secim = sor === undefined ? null : await sor(secenekler);
+  const onSatir = typeof girdi['oneriSatiri'] === 'number' ? girdi['oneriSatiri'] : undefined;
+  const secim = sor === undefined ? null : await (onSatir === undefined ? sor(secenekler) : sor(secenekler, onSatir));
   if (secim === null) throw new ApiHatasi(400, { kod: 'DOGRULAMA', mesaj: 'Proje seçilmedi; emir açılmadı.' });
   return {
     ...girdi, projeId: secim.projeId, ...(secim.siparisSatiriId === null ? {} : { siparisSatiriId: secim.siparisSatiriId }),

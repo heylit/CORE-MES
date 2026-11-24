@@ -399,6 +399,11 @@ export async function acilisSecenekleri(db: Db, kullanici: Kullanici, malzemeNo:
   const projeler = await projeSecenekleri(db);
   const siparisler = new Map<number, Awaited<ReturnType<typeof siparisAyrintisi>>>();
   for (const id of new Set(projeler.flatMap((p) => (p.siparisId === null ? [] : [p.siparisId])))) siparisler.set(id, await siparisAyrintisi(db, id));
+  const satirIdleri = projeler.flatMap((p) => {
+    const siparis = p.siparisId === null ? null : siparisler.get(p.siparisId) ?? null;
+    return adaySatirlar(siparis, malzemeNo).map((x) => x.id);
+  });
+  const acikAdet = new Map((satirIdleri.length === 0 ? [] : await s.satirlarinAcikAdetleri(db, satirIdleri)).map((x) => [x.satirId, x.adet]));
   return {
     projeZorunlu: projeZorunluMu(emirTuru),
     rotasizAcik: await sistemAyariOku(db, 'uretim-emirleri.rotasiz-emir'),
@@ -408,7 +413,7 @@ export async function acilisSecenekleri(db: Db, kullanici: Kullanici, malzemeNo:
       return {
         id: p.id, kod: p.kod, ad: p.ad,
         satirlar: adaySatirlar(siparis, malzemeNo).map((x) => ({
-          id: x.id, siparisNo: siparis!.no, satirNo: x.sira, adet: x.miktar, termin: x.termin ?? siparis!.termin, partiler: x.partiler,
+          id: x.id, siparisNo: siparis!.no, satirNo: x.sira, adet: x.miktar, termin: x.termin ?? siparis!.termin, acikEmirAdedi: acikAdet.get(x.id) ?? '0', partiler: x.partiler,
         })),
       };
     }),

@@ -409,6 +409,14 @@ describe('köprü: emir açılışında proje ve sipariş satırı (224)', () =>
     expect(yazmalar(istekler).map((i) => i.govde)).toEqual([{ malzemeNo: 7, adet: 5, teslim: '2030-01-09', baslangic: '2030-01-02', aciklama: null, oncelik: 2, emirTuru: 'seri', projeId: 5, siparisSatiriId: 52 }]);
   });
 
+  it('3657: formun önerdiği satır pencereye ikinci argüman olarak gider ve sunucuya yazılmaz', async () => {
+    const istekler = sunucu(SECENEK);
+    const emirSecimi = vi.fn(() => Promise.resolve({ projeId: 5, siparisSatiriId: 52 }));
+    await kopruKur([], { emirSecimi })('komut', { ad: 'emir-ac', govde: { ...EMIR, oneriSatiri: 52 } });
+    expect(emirSecimi).toHaveBeenCalledWith(SECENEK, 52);
+    expect(yazmalar(istekler)[0]?.govde).not.toHaveProperty('oneriSatiri');
+  });
+
   it('EP-3 (3244 b): parti seçilince parti ve satırı gövdeye girer, emir türü partiden gelir', async () => {
     const istekler = sunucu(SECENEK);
     await kopruKur([], { emirSecimi: () => Promise.resolve({ projeId: 5, siparisSatiriId: 51, parti: { id: 9, emirTuru: 'fai' } }) })('komut', { ad: 'emir-ac', govde: EMIR });
