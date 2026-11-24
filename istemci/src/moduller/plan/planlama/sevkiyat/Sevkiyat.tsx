@@ -10,16 +10,17 @@ import {
   type Donem, type DonemOzeti, type Olcu, type SevkIsiSatiri, type SevkSatiri,
 } from './kurallar.ts';
 import { sevkListeSatirlari } from './liste.ts';
+import { SevkDagilimi } from './SevkDagilimi.tsx';
 import { SevkListesi, zamanYaz } from './SevkListesi.tsx';
 import './sevkiyat.css';
 
 // Sevk takvimi (3537 a, Kokpit dili; malzeme satın alma planının ikizi): üç görünüm. Liste sipariş başına tek satırdır (asıl görünüm);
-// Takvim bugünkü ısı haritasıdır (telefonda yer yok, Liste açılır); Grafik dönem özeti ve bitiş akışıdır. Son seçilen görünüm ve dönem
+// "Sipariş × gün" bugünkü ısı haritasıdır (eski adı Takvim; 3667'de Dağılım > Takvim geldi) (telefonda yer yok, Liste açılır); Grafik dönem özeti ve bitiş akışıdır. Son seçilen görünüm ve dönem
 // tarayıcıda hatırlanır. Plan durumu (yok, eski) plan şeridindedir (KOKPITE_GIDEN); sayfa yinelemez.
 // Görünüm yalnız okur (455/1 a: sevk sevkiyat modülünden okunacak; 455/2 a: bitiş akışını sunucu yazar).
 
 type Gosterim = 'ikisi' | 'grafik' | 'tablo';
-type Gorunum = 'liste' | 'takvim' | 'grafik';
+type Gorunum = 'liste' | 'dagilim' | 'takvim' | 'grafik';
 const OLCULER: readonly { deger: Olcu; baslik: string }[] = [{ deger: 'siparis', baslik: 'Sipariş' }, { deger: 'adet', baslik: 'Adet' }];
 const GOSTERIMLER: readonly { deger: Gosterim; baslik: string }[] = [
   { deger: 'ikisi', baslik: 'Grafik ve tablo' }, { deger: 'grafik', baslik: 'Grafik' }, { deger: 'tablo', baslik: 'Tablo' },
@@ -43,13 +44,15 @@ function useEkran(sorgu: string): boolean {
   return eslesti;
 }
 
-const GORUNUMLER: readonly { deger: Gorunum; baslik: string }[] = [{ deger: 'liste', baslik: 'Liste' }, { deger: 'takvim', baslik: 'Takvim' }, { deger: 'grafik', baslik: 'Grafik' }];
+const GORUNUMLER: readonly { deger: Gorunum; baslik: string }[] = [
+  { deger: 'liste', baslik: 'Liste' }, { deger: 'dagilim', baslik: 'Dağılım' }, { deger: 'takvim', baslik: 'Sipariş × gün' }, { deger: 'grafik', baslik: 'Grafik' },
+];
 const GORUNUM_ANAHTARI = 'tmi.sevkiyat.gorunum';
 const DONEM_ANAHTARI = 'tmi.sevkiyat.donem';
 function gorunumOku(): Gorunum {
   try {
     const g = localStorage.getItem(GORUNUM_ANAHTARI);
-    return g === 'takvim' || g === 'grafik' ? g : 'liste';
+    return g === 'dagilim' || g === 'takvim' || g === 'grafik' ? g : 'liste';
   } catch { return 'liste'; }
 }
 function donemOku(): Donem {
@@ -105,9 +108,10 @@ export function Sevkiyat({ calisma, sec, git, depo }: PlanlamaEkranOzellikleri) 
   const [gosterim, gosterimYaz] = useState<Gosterim>('ikisi');
   const [gorunum, gorunumYaz] = useState<Gorunum>(gorunumOku);
   const [secim, secimYaz] = useState<IsiSecimi | null>(null);
+  const an = useMemo(() => Date.now(), [calisma]); // şimdi plan her yenilendiğinde okunur
   const liste = useMemo(() => (calisma ? sevkListesi(calisma) : null), [calisma]);
-  const isi = useMemo(() => (calisma && liste ? sevkIsisi(liste.satirlar, liste.taban, simdi(calisma), emirNo) : null), [calisma, liste, emirNo]);
-  const satirlar = useMemo(() => (calisma && liste ? sevkListeSatirlari(liste.satirlar, liste.taban, simdi(calisma)) : []), [calisma, liste]);
+  const isi = useMemo(() => (calisma && liste ? sevkIsisi(liste.satirlar, liste.taban, simdi(calisma, an), emirNo) : null), [calisma, liste, emirNo, an]);
+  const satirlar = useMemo(() => (calisma && liste ? sevkListeSatirlari(liste.satirlar, liste.taban, simdi(calisma, an)) : []), [calisma, liste, an]);
 
   const takvimVar = !dar;
   const etkin: Gorunum = gorunum === 'takvim' && !takvimVar ? 'liste' : gorunum;
@@ -134,6 +138,9 @@ export function Sevkiyat({ calisma, sec, git, depo }: PlanlamaEkranOzellikleri) 
       <Baslik ust={isi.durum} />
       {etkin === 'liste' && (
         <SevkListesi satirlar={satirlar} taban={liste.taban} emirNo={emirNo} donemSecici={donemSecici} donem={donem} ertelenen={sevkSayilari(liste.satirlar).ertelenen} gorunum={gorunumSecici} dar={dar} yerSutunu={!orta} goster={goster} />
+      )}
+      {etkin === 'dagilim' && (
+        <SevkDagilimi satirlar={liste.satirlar} taban={liste.taban} simdi={simdi(calisma, an)} emirNo={emirNo} dar={dar} gorunum={gorunumSecici} goster={goster} />
       )}
       {etkin === 'takvim' && (
         <>

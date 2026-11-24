@@ -2,6 +2,7 @@ import { hucreKoy, kisaSure, saatKademesi, type IsiHucresi, type IsiSatiri, type
 import type { ExtraAlanlar, PlanlamaCalismasi } from '../tipler.ts';
 import { planDisi } from '../tipler.ts';
 import type { EmirNo } from '../ortak/emir-no.ts';
+import { simdiSaati } from '../motor/kurallar.ts';
 
 // Sevkiyat hesapları (saf, 205 a): plana göre bitmesi gereken işler, dönem özeti ve bitiş tarihi akışı. Ölçüt bugünkü sayfadır
 // (cerceve/planlama/parca/zx-sevkiyat.betik). Sipariş, son adımının planlanan bitişine göre döneme düşer ve terminiyle karşılaştırılır;
@@ -263,9 +264,10 @@ export const IKI_HAFTA = 14 * 24;
 // Termine bu kadar saatten çok payı olan, gecikmeyen ve sevk edilmemiş satır "bakılması gerekmeyen"dir (gizli).
 export const GENIS_PAY = 72;
 
-// Sayfanın şimdisi (girdi.betik stKur now 7, simdiUygula): çalışmanın kaydettiği şimdi varsa o (741 a: 07:00'den önce de olur).
-export function simdi(c: PlanlamaCalismasi): number {
-  return sayiMi(c.simdi) && c.simdi >= 0 ? c.simdi : 7;
+// Sayfanın şimdisi gerçek saattir (2506 a): an verilirse tesis saati planın ekseninde okunur; canlı çalışmada kayıtlı `simdi` yoktur, bu yüzden
+// çağıran an verir. An yoksa kayıttaki `simdi`, o da yoksa başlangıç günü 07:00 (testler ve eski kayıtlar).
+export function simdi(c: PlanlamaCalismasi, an?: number): number {
+  return simdiSaati(c, an);
 }
 
 export const gunYaz = (taban: number, t: number | null): string => (t === null ? '—' : tarihSaatYaz(taban, t).slice(0, 9));

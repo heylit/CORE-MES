@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { MALIYETSIZ, PLANLAMASIZ, YONETICI, ac, sunucuKur } from '../test-ortak.tsx';
 import { PLANLAMA_ANAHTARI } from '../veri.ts';
+import { planAni, saatiSabitle } from '../test-saati.ts';
 
 // Veri ve kişi adları uydurmadır. Görünüm yalnız okur (soru 355 cevabına kadar): hiçbir yazma isteği gitmez.
 const calisma = {
@@ -27,6 +28,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); try { localStorage.clear(); 
 const gorunum = (ad: string): void => { fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: ad })); };
 
 describe('P6 Sevk takvimi', () => {
+  saatiSabitle(() => calisma);
   it('Liste açılır: sipariş başına tek satır, geç satır üstte ve işaretli, sevk edilen en altta; çipler süzer, arama müşteride de arar; yalnız okur (izinli)', async () => {
     const istekler = sunucuKur(YONETICI, kayitlar(calisma) as never);
     ac('/plan/sevkiyat');
@@ -86,11 +88,11 @@ describe('P6 Sevk takvimi', () => {
     expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
   }, 20000);
 
-  it('Takvim görünümü bugünkü ısı haritasıdır: durum satırı, sipariş × gün ızgarası; hücre açılımı neden ve bilgiyle açılır (kilit metni yok), Esc kapatır; Kokpit seçeneği Kokpit\'i açar', async () => {
+  it('Sipariş × gün görünümü bugünkü ısı haritasıdır: durum satırı, sipariş × gün ızgarası; hücre açılımı neden ve bilgiyle açılır (kilit metni yok), Esc kapatır; Kokpit seçeneği Kokpit\'i açar', async () => {
     const istekler = sunucuKur(YONETICI, kayitlar(calisma) as never);
     ac('/plan/sevkiyat');
     await screen.findByRole('table', { name: 'Siparişler' }, { timeout: 10000 });
-    gorunum('Takvim');
+    gorunum('Sipariş × gün');
     expect(localStorage.getItem('tmi.sevkiyat.gorunum')).toBe('takvim');
     const izgara = screen.getByRole('group', { name: 'Sipariş × gün, termine kalan süre' });
     expect(document.querySelector('.tc-pyv-nabiz')?.textContent).toContain('En sıcak satır S2');
@@ -151,7 +153,7 @@ describe('P6 Sevk takvimi', () => {
     ac('/plan/sevkiyat');
     const tablo = await screen.findByRole('table', { name: 'Siparişler' }, { timeout: 10000 });
     expect(tablo.closest('.tc-tablo-kap')?.getAttribute('data-kip')).toBe('kart');
-    expect(within(screen.getByRole('group', { name: 'Görünüm' })).queryByRole('button', { name: 'Takvim' })).toBeNull();
+    expect(within(screen.getByRole('group', { name: 'Görünüm' })).queryByRole('button', { name: 'Sipariş × gün' })).toBeNull();
     expect(screen.queryByRole('button', { name: "S2 Kokpit'te gör" })).toBeNull();
     // Kartta Adet ve Termin satırda görünür (CSS ile gizlenmez): Fark termin olmadan okunmaz.
     expect(tablo.querySelectorAll('td[data-kart-gizli]').length).toBeGreaterThan(0);
@@ -197,5 +199,54 @@ describe('P6 Sevk takvimi', () => {
     ac('/plan/sevkiyat');
     expect(await screen.findByText('Planlama sayfalarını görme yetkiniz yok.', {}, { timeout: 10000 })).toBeTruthy();
     expect(screen.queryByText('S1')).toBeNull();
+  }, 20000);
+
+  it('Dağılım görünümü: takvim günü ve matris hücresi siparişleri açar; termini o gün olan da listelenir; yalnız okur', async () => {
+    const istekler = sunucuKur(YONETICI, kayitlar(calisma) as never);
+    ac('/plan/sevkiyat');
+    await screen.findByRole('table', { name: 'Siparişler' }, { timeout: 10000 });
+    gorunum('Dağılım');
+    expect(localStorage.getItem('tmi.sevkiyat.gorunum')).toBe('dagilim');
+    expect(screen.getByRole('button', { name: /^Gecikmiş \(0\)$/ })).toBeTruthy();
+    const izgara = screen.getByRole('group', { name: 'Takvim' });
+    // 02.03: S2'nin termini bugün, bitişi ertesi gün: bitecek yok, termin var; seçilince termin listede çıkar.
+    fireEvent.click(within(izgara).getByRole('button', { name: /^02\.03 Pzt: 0 bitecek, 0 aşan, 1 termin, bugün$/ }));
+    const liste = screen.getByRole('region', { name: 'Seçilen günün siparişleri' });
+    expect(within(liste).getByText('02.03 Pzt 20:00')).toBeTruthy();
+    expect(within(liste).getByText('03.03 Sal 02:00')).toBeTruthy();
+    // Plan terminden sonra ve planın aşımı varsa "Aşıyor" işareti ve fark satırda görünür.
+    expect(within(liste).getByText(/Aşıyor \+6 sa/)).toBeTruthy();
+    expect(within(liste).getByText('6 sa geç')).toBeTruthy();
+    // Takvimde sipariş olmayan ve plandan sonraki günler ayrı söylenir.
+    expect(within(izgara).getAllByText('plan yok').length).toBeGreaterThan(0);
+    fireEvent.click(within(liste).getByRole('button', { name: 'Bitecek' }));
+    expect(within(liste).getByText('Bu seçim için sipariş yok.')).toBeTruthy();
+    // 03.03: S2 bitecek ve termini aştığı için aşan.
+    fireEvent.click(within(izgara).getByRole('button', { name: /^03\.03 Sal: 1 bitecek, 1 aşan, 0 termin$/ }));
+    expect(within(screen.getByRole('region', { name: 'Seçilen günün siparişleri' })).getByText(/Aşıyor \+6 sa/)).toBeTruthy();
+    // Matris: hücre seçilince liste müşteriye ve güne süzülür; süzgeç kaldırılır.
+    fireEvent.click(within(screen.getByRole('group', { name: 'Biçim' })).getByRole('button', { name: 'Matris' }));
+    expect(localStorage.getItem('tmi.sevkiyat.dagilim')).toBe('matris');
+    const tablo = screen.getByRole('table', { name: 'Müşteri ve gün matrisi' });
+    expect(within(tablo).getByRole('columnheader', { name: 'Gecikmiş' })).toBeTruthy();
+    fireEvent.click(within(tablo).getByRole('button', { name: /^—, 03\.03 Sal: 1 bitecek, 1 aşan$/ }));
+    expect(within(screen.getByRole('region', { name: 'Seçilen günün siparişleri' })).getByText('Süzgeci kaldır')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Süzgeci kaldır' }));
+    expect(screen.queryByRole('button', { name: 'Süzgeci kaldır' })).toBeNull();
+    expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
+  }, 20000);
+
+  it('Canlı çalışmada kayıtlı şimdi yoktur: Dağılım bugünü gerçek saatten alır, planın başlangıcından değil; gecikmiş sayısı buna göre', async () => {
+    // Plan başlangıcı 02.03; gerçek saat 05.03 08:00 (saat 80). S2'nin plan bitişi 03.03 (saat 26): bugünden önce, sevk yok -> gecikmiş.
+    vi.setSystemTime(planAni({ D: calisma.D, simdi: 80 }));
+    sunucuKur(YONETICI, kayitlar(calisma) as never);
+    ac('/plan/sevkiyat');
+    await screen.findByRole('table', { name: 'Siparişler' }, { timeout: 10000 });
+    gorunum('Dağılım');
+    expect(screen.getByRole('button', { name: /^Gecikmiş \(1\)$/ })).toBeTruthy();
+    const izgara = screen.getByRole('group', { name: 'Takvim' });
+    expect(within(izgara).getByRole('button', { name: /^05\.03 Per: .*bugün$/ }).getAttribute('aria-current')).toBe('date');
+    fireEvent.click(screen.getByRole('button', { name: /^Gecikmiş \(1\)$/ }));
+    expect(within(screen.getByRole('region', { name: 'Seçilen günün siparişleri' })).getByText('S2')).toBeTruthy();
   }, 20000);
 });

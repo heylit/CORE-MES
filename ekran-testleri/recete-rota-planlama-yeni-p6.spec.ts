@@ -31,6 +31,8 @@ test.describe('P6 Sevk takvimi', () => {
     await page.route('**/api/plan/planlama-calismasi', (r) => r.fulfill({
       status: 200, contentType: 'application/json', body: JSON.stringify({ calisma: CALISMA, surum: 1 }),
     }));
+    // Ekranın şimdisi gerçek saattir (2506 a); sentetik çalışma 2099-03-02 tabanlıdır, saat plan başlangıcının 07:00'sine sabitlenir.
+    await page.clock.setSystemTime(new Date('2099-03-02T07:00:00+03:00'));
     await ac('/plan/sevkiyat');
     const kap = page.locator('[data-gorunum="sevkiyat"]');
     // Asıl görünüm Liste: geç satır üstte, sevk edilen altta; "Tüm satırlar" katı yok.
@@ -53,8 +55,8 @@ test.describe('P6 Sevk takvimi', () => {
     await expect(acilim.getByText('Sevk kaydı', { exact: false }).first()).toBeVisible();
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
 
-    // Takvim (768 ve üstü): bugünkü ısı haritası, hücre açılımı, Esc kapatır.
-    const takvim = kap.getByRole('group', { name: 'Görünüm' }).getByRole('button', { name: 'Takvim', exact: true });
+    // Sipariş × gün (768 ve üstü): bugünkü ısı haritası, hücre açılımı, Esc kapatır.
+    const takvim = kap.getByRole('group', { name: 'Görünüm' }).getByRole('button', { name: 'Sipariş × gün', exact: true });
     if (await takvim.count()) {
       await takvim.click();
       const izgara = kap.getByRole('group', { name: 'Sipariş × gün, termine kalan süre' });
@@ -99,6 +101,8 @@ test.describe('P6 Sevk takvimi', () => {
     await page.route('**/api/plan/planlama-calismasi', (r) => r.fulfill({
       status: 200, contentType: 'application/json', body: JSON.stringify({ calisma: { ...CALISMA, plan: null }, surum: 1 }),
     }));
+    // Ekranın şimdisi gerçek saattir (2506 a); sentetik çalışma 2099-03-02 tabanlıdır, saat plan başlangıcının 07:00'sine sabitlenir.
+    await page.clock.setSystemTime(new Date('2099-03-02T07:00:00+03:00'));
     await ac('/plan/sevkiyat');
     await expect(page.getByText('Önce plan kurulmalı.')).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole('group', { name: 'Durum süzgeci' })).toHaveCount(0);
