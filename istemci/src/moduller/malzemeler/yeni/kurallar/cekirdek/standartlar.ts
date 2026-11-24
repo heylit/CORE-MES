@@ -1,28 +1,31 @@
 import { D, FAMS } from './durum.ts';
 import { kimyasalStandartlari, mekanikStandartlari, varsayilanStandart } from './metal-standartlari.ts';
 import { grade } from './taslak.ts';
+import { kaliteAdi, standartTercihi } from '../../standart-adlari.ts';
 import type { Taslak } from './tipler.ts';
 
 export function gradeLabel(d: Taslak = D): string {
     const g = grade(d);
     if (!g)
         return '';
+    // 3633: standardı seçilmiş kartta kalite adı seçili standarda göre (ASTM karşılığı varsa o); eski kartta kalitenin kendi adı.
+    const ad = kaliteAdi(g, standartTercihi(d as unknown as { readonly [k: string]: unknown }));
     const st = d.stds || [];
     if (!st.length)
-        return g.ad;
+        return ad;
     const en = st.some(x => /^EN\b/.test(x)), us = st.some(x => /^(ASTM|AMS|SAE|MIL)/.test(x));
     const k = g.eq && (g.eq['AISI/SAE'] ? 'AISI/SAE' : g.eq['AISI'] ? 'AISI' : null);
     if (!k)
-        return g.ad;
+        return ad;
     const v = String(g.eq[k]).replace(/^≈\s*/, '');
-    if (g.ad.includes(v))
-        return g.ad;
+    if (ad.includes(v))
+        return ad;
     const pre = k === 'AISI/SAE' ? 'SAE' : 'AISI';
     if (en && us)
-        return `${g.ad} / ${pre} ${v}`;
+        return `${ad} / ${pre} ${v}`;
     if (us && !en)
-        return `${pre} ${v} (${g.ad})`;
-    return g.ad;
+        return `${pre} ${v} (${ad})`;
+    return ad;
 }
 
 export interface StandartOncesi { cls: string | null; form: string | null; grade: string | null }

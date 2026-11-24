@@ -22,6 +22,8 @@ export function duzenlemeTaslagi(kart: KatalogKarti, b: KuralBaglami): Acilis {
   const talepli = K.talepVar(x, b);
   const kaynak = talepli && x.talep ? { ...x.talep.yeni, id: kart.kimlik, rev: x.rev, onay: x.onay } : { ...x, id: kart.kimlik };
   const d: Taslak = { ...K.newDraft(b), ...kopyala(kaynak) };
+  // Standardı hiç seçilmemiş eski kart öyle kalır (3633); yeni taslağın varsayılanı ona yazılmaz.
+  if (kart.kayit.standart === undefined && !(talepli && x.talep?.yeni.standart !== undefined)) delete d.standart;
   d.kodManual = true;
   d.adManual = x.adManual !== false && x.com.ad !== K.autoAd(d, b);
   const adim = K.isGen(d, b) ? K.turAdimlari(d, b).length : 6;
@@ -42,6 +44,7 @@ export function revizyonTaslagi(kaynak: KatalogKarti, ana: KatalogKarti, b: Kura
 // "Kopyasını oluştur" ve "Şablon yap": kimlik, revizyon, onay, mükerrer onayı ve türetilen kod alanları kopyaya geçmez.
 export function kopyaTaslagi(kart: KatalogKarti, b: KuralBaglami): Acilis {
   const d: Taslak = { ...K.newDraft(b), ...kopyala(kart.kayit) };
+  if (kart.kayit.standart === undefined) delete d.standart;
   delete d.id;
   delete d.updatedAt;
   delete d.rev;

@@ -7,7 +7,6 @@ import { kayitHatasi, useKartKaydet, useReceteRotaKopyasi, useRevizyonOlarakBagl
 import type { SihirbazAdimi } from './AdimCubugu.tsx';
 import type { Sihirbaz } from './baglam.ts';
 import { ALT_BAG, altBag, kopyala, RECETE_KAYNAGI, receteKaynagi, type Taslak } from './durum.ts';
-import { kartStandardi } from '../standart-adlari.ts';
 
 // Prototipteki yeni kimlik biçimi ('m' kart, 't' şablon): sunucu kendi kimliğini dönerse o geçerlidir.
 export function yeniKimlik(on: string, ek = ''): string {
@@ -134,7 +133,7 @@ export function useKaydet(s: Sihirbaz, adimlar: readonly SihirbazAdimi[]): Kayde
       // Sunucunun yazdığı kısa kart (Logo'dan alınan, dolgu) düzenleme taslağında varsayılan alanlarla açılır; karşılaştırma aynı biçimdeki tabanladır.
       const f = K.diffItems(onceki, item, b);
       // Yalnız kartın standardı (2117-1 b) değiştiyse de talep gider; föy farkı onu göstermez, sunucu farkı gösterir.
-      if (!f.length && !kartIcerigiDegistiMi(K.kodlariSabitle({ ...K.newDraft(b), ...kopyala(onceki) }, b), item) && !K.birimFarki(onceki, item, b) && !K.talepVar(onceki, b) && kartStandardi(onceki) === kartStandardi(item)) {
+      if (!f.length && !kartIcerigiDegistiMi(K.kodlariSabitle({ ...K.newDraft(b), ...kopyala(onceki) }, b), item) && !K.birimFarki(onceki, item, b) && !K.talepVar(onceki, b) && (onceki.standart ?? null) === (item.standart ?? null)) {
         bildir('Kartta değişiklik yok.');
         return;
       }

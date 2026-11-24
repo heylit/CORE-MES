@@ -11,7 +11,7 @@ import type { Nesne } from '../../tipler.ts';
 import { clsKeyFor } from './uyumluluk.ts';
 import { variantKod__0 } from './varyant.ts';
 import { cleanKod, esc, fmtD, isNum } from './yardimcilar.ts';
-import { kartStandardi, standartAdlari, standartEtiketi } from '../../standart-adlari.ts';
+import { standartAdlari, standartEtiketi, standartTercihi } from '../../standart-adlari.ts';
 
 // Türün malzeme ayarındaki kuralı: zorunlu alanlar, ad kalıbı, açıklama kalıpları (ac[0..2]).
 export interface TurKurali { zorunlu?: Sozluk<unknown>; ad?: string; ac?: string[]; [alan: string]: unknown }
@@ -167,7 +167,9 @@ export function musteriKoduAc(g: Nesne): string { const v = String(g.musteri || 
 function standartAdli(x: unknown, d: Taslak): unknown {
     if (Array.isArray(x))
         return x.map(y => standartAdli(y, d));
-    return typeof x === 'string' && x ? standartEtiketi(x, standartAdlari(MA.v as Nesne), kartStandardi(d as Nesne)) : x;
+    const tercih = standartTercihi(d as Nesne);
+    // Standardı seçilmemiş eski kartta açıklama kart değerini olduğu gibi yazar (Logo'ya giden metin değişmez).
+    return tercih !== null && typeof x === 'string' && x ? standartEtiketi(x, standartAdlari(MA.v as Nesne), tercih) : x;
 }
 const ESLI_ANAHTAR = new Set(['durum', 'islem']);
 // Kalıp uygulanmış, kısaltılmamış açıklama satırları.

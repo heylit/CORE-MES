@@ -218,6 +218,18 @@ export const TABAN_STANDART_ADLARI: StandartAdlari = {
 const AD_SINIRI = 40;
 
 // 2117-1 b: standart kartın kaydındadır (`kayit.standart`); alanı olmayan eski kartta ASTM önce gelir.
+// 3633: kartın standardı elle seçilmiş ya da yeni kartla birlikte yazılmış mı. Alanı olmayan eski kartta null: standarda bağlı yeni kurallar
+// (seçili ad, norm sırası, kalite adı) o kartta uygulanmaz, açıklama, Standart satırı ve Logo'ya giden metin bugünkü hâliyle kalır.
+export const standartTercihi = (x: { readonly [k: string]: unknown }): Standart | null => (x['standart'] === 'en' ? 'en' : x['standart'] === 'astm' ? 'astm' : null);
+
+// Kalitenin seçili standarttaki adı: ASTM seçiliyse ve kalitenin ASTM karşılığı varsa "ASTM A36" (yakın eşdeğer işareti ≈ düşer); karşılığı
+// olmayan kalitede ve EN seçiliyken kalitenin kendi adı. Kalite kimliği (kod) ve mükerrer anahtarı değişmez; yalnız görünen ve yazılan ad.
+export function kaliteAdi(g: { readonly ad: string; readonly eq?: Readonly<Record<string, string>> }, tercih: Standart | null): string {
+  if (tercih !== 'astm') return g.ad;
+  const k = (g.eq?.['ASTM'] ?? '').replace(/^≈\s*/, '').trim();
+  return k ? `ASTM ${k}` : g.ad;
+}
+
 export const kartStandardi = (x: { readonly [k: string]: unknown }): Standart => (x['standart'] === 'en' ? 'en' : 'astm');
 
 function temizAd(x: unknown): string | undefined {
@@ -244,17 +256,20 @@ export function standartAdlari(ayar: { [k: string]: unknown } | null | undefined
   return { ...TABAN_STANDART_ADLARI, ...ayardakiStandartAdlari(ayar) };
 }
 
-// 3633: yalnız seçili standardın adı görünür ("H1025"); seçili tarafın adı yoksa öteki ad, hiç yoksa değerin kendisi.
-export function standartEtiketi(deger: string, adlar: StandartAdlari, tercih: Standart): string {
+// 3633: standardı seçilmiş kartta yalnız seçili standardın adı görünür ("H1025"); seçili tarafın adı yoksa öteki ad, hiç yoksa değerin kendisi.
+// Standardı hiç seçilmemiş eski kartta (tercih null) önceki gösterim kalır: ASTM adı önce, EN adı parantez içinde ("H1025 (P1070)").
+export function standartEtiketi(deger: string, adlar: StandartAdlari, tercih: Standart | null): string {
   const a = adlar[deger];
   if (!a) return deger;
-  const birinci = tercih === 'astm' ? a.astm : a.en;
-  const ikinci = tercih === 'astm' ? a.en : a.astm;
-  return birinci ?? ikinci ?? deger;
+  if (tercih === null) {
+    if (a.astm && a.en) return a.astm === a.en ? a.astm : `${a.astm} (${a.en})`;
+    return a.astm ?? a.en ?? deger;
+  }
+  return (tercih === 'astm' ? a.astm : a.en) ?? (tercih === 'astm' ? a.en : a.astm) ?? deger;
 }
 
 // Seçim listesinde iki değer aynı adı alırsa (ör. iki değerin EN adı aynı) çip ayırt edilsin diye değerin kendisi eklenir.
-export function secenekEtiketleri(degerler: readonly string[], adlar: StandartAdlari, tercih: Standart): Map<string, string> {
+export function secenekEtiketleri(degerler: readonly string[], adlar: StandartAdlari, tercih: Standart | null): Map<string, string> {
   const ham = degerler.map((v) => [v, standartEtiketi(v, adlar, tercih)] as const);
   const sayim = new Map<string, number>();
   for (const [, e] of ham) sayim.set(e, (sayim.get(e) ?? 0) + 1);
@@ -270,16 +285,18 @@ export function standartTarafi(ad: string): Standart | null {
 }
 const TARAF_SIRASI = (t: Standart | null, tercih: Standart): number => (t === tercih ? 0 : t === null ? 1 : 2);
 // Seçili standardın tarafı önce, tarafsızlar sonra, öteki taraf en sonda; kendi içinde özgün sıra korunur. Hiçbir değer düşmez.
-export function tarafSirala<T>(liste: readonly T[], tercih: Standart, ad: (x: T) => string): T[] {
+export function tarafSirala<T>(liste: readonly T[], tercih: Standart | null, ad: (x: T) => string): T[] {
+  if (tercih === null) return [...liste];
   return liste.map((x, i) => [x, i] as const)
     .sort((a, b) => TARAF_SIRASI(standartTarafi(ad(a[0])), tercih) - TARAF_SIRASI(standartTarafi(ad(b[0])), tercih) || a[1] - b[1])
     .map(([x]) => x);
 }
 // Kalitenin ana normu: kart ASTM seçtiyse ve kalitenin norm listesinde ASTM tarafı varsa o, EN seçtiyse EN tarafı; yoksa kalitenin ana normu.
-export function anaNorm(g: { readonly std?: string; readonly stds?: readonly string[] }, tercih: Standart): string {
+export function anaNorm(g: { readonly std?: string; readonly stds?: readonly string[] }, tercih: Standart | null): string {
+  if (tercih === null) return g.std ?? '';
   return (g.stds ?? []).find((x) => standartTarafi(x) === tercih) ?? g.std ?? '';
 }
-export function esdegerSirala(eq: Readonly<Record<string, string>> | undefined, tercih: Standart): Record<string, string> {
+export function esdegerSirala(eq: Readonly<Record<string, string>> | undefined, tercih: Standart | null): Record<string, string> {
   return Object.fromEntries(tarafSirala(Object.entries(eq ?? {}), tercih, ([k]) => k));
 }
 

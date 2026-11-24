@@ -21,11 +21,17 @@ describe('2117 EN / ASTM adları: kart açan ekran', () => {
   test('kartın başındaki seçim hangi adın önce geldiğini belirler; seçim kartın kaydındadır (2117-1 b)', async () => {
     sunucuKur(YAZAN, ESLI);
     await durumAdiminiAc();
-    expect(screen.getByRole('radio', { name: 'QT-A' }).getAttribute('title')).toMatch(/^EN: QT-E · /);
+    // Standardı hiç seçilmemiş eski kartta önceki gösterim: ASTM adı önce, EN adı parantezde; iki düğme de basılı değil (3633).
+    expect(screen.getByRole('radio', { name: 'QT-A (QT-E)' })).toBeTruthy();
     // Taban tablodan: ayarda olmayan değer de eşli adla görünür.
-    expect(screen.getByRole('radio', { name: 'Normalized' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Normalized (+N)' })).toBeTruthy();
     const grup = screen.getByRole('group', { name: 'Bu kartta durum ve işlem adlarının standardı' });
-    expect(within(grup).getByRole('button', { name: 'ASTM' }).getAttribute('aria-pressed')).toBe('true');
+    expect(within(grup).getByRole('button', { name: 'ASTM' }).getAttribute('aria-pressed')).toBe('false');
+    expect(within(grup).getByRole('button', { name: 'EN' }).getAttribute('aria-pressed')).toBe('false');
+    // Seçilince yalnız seçili standardın adı görünür; öteki ad çipin ipucundadır.
+    fireEvent.click(within(grup).getByRole('button', { name: 'ASTM' }));
+    expect((await screen.findByRole('radio', { name: 'QT-A' })).getAttribute('title')).toMatch(/^EN: QT-E · /);
+    expect(screen.getByRole('radio', { name: 'Normalized' })).toBeTruthy();
     fireEvent.click(within(grup).getByRole('button', { name: 'EN' }));
     expect(await screen.findByRole('radio', { name: 'QT-E' })).toBeTruthy();
     expect(screen.getByRole('radio', { name: '+N' })).toBeTruthy();
@@ -48,10 +54,9 @@ describe('2117 EN / ASTM adları: kart açan ekran', () => {
     expect(govde.kayit.talep.yeni.com['kod']).toBe(govde.kayit.com['kod']);
   });
 
-  test('aynı standart yeniden seçilirse değişiklik yoktur, istek gitmez (reddedilen)', async () => {
+  test('standardı seçilmemiş eski kart olduğu gibi kaydedilirse değişiklik yoktur, istek gitmez, Logo kuyruğuna fark girmez (3633)', async () => {
     const istekler = sunucuKur(YAZAN, ESLI);
     await durumAdiminiAc();
-    fireEvent.click(within(screen.getByRole('group', { name: 'Bu kartta durum ve işlem adlarının standardı' })).getByRole('button', { name: 'ASTM' }));
     fireEvent.click(within(screen.getByRole('navigation', { name: 'Adımlar' })).getByRole('button', { name: /Özet/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Değişiklikleri kaydet' }));
     expect(await screen.findByText('Kartta değişiklik yok.')).toBeTruthy();
@@ -63,7 +68,7 @@ describe('2117 EN / ASTM adları: kart açan ekran', () => {
       ...ESLI, 'POST /malzeme-katalogu-kartlari/mornek1/kaydet': () => json(200, { id: 'mornek1', stok_kodu: 'HM-MET-C45-0001', surum: 2 }),
     });
     await durumAdiminiAc();
-    fireEvent.click(screen.getByRole('radio', { name: 'QT-A' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'QT-A (QT-E)' }));
     fireEvent.click(within(screen.getByRole('group', { name: 'Bu kartta durum ve işlem adlarının standardı' })).getByRole('button', { name: 'EN' }));
     expect(await screen.findByRole('radio', { name: 'QT-E' })).toBeTruthy();
     fireEvent.click(within(screen.getByRole('navigation', { name: 'Adımlar' })).getByRole('button', { name: /Özet/ }));
@@ -80,10 +85,10 @@ describe('2117 EN / ASTM adları: kart açan ekran', () => {
     sunucuKur(YAZAN, ESLI);
     const ara = await durumAdiminiAc();
     fireEvent.change(ara, { target: { value: 'qt-e' } });
-    expect(screen.getByRole('radio', { name: 'QT-A' })).toBeTruthy();
-    expect(screen.queryByRole('radio', { name: 'Normalized' })).toBeNull();
+    expect(screen.getByRole('radio', { name: 'QT-A (QT-E)' })).toBeTruthy();
+    expect(screen.queryByRole('radio', { name: 'Normalized (+N)' })).toBeNull();
     fireEvent.change(ara, { target: { value: 'cold drawn' } });
-    expect(screen.getByRole('radio', { name: 'Cold drawn' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Cold drawn (+C)' })).toBeTruthy();
     fireEvent.change(ara, { target: { value: 'yok-boyle-bir-ad' } });
     expect(screen.getByText('Aramaya uyan seçenek yok.')).toBeTruthy();
   });

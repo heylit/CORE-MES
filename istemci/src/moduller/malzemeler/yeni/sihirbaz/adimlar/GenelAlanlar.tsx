@@ -13,14 +13,14 @@ import { TurKartlari } from './Baslangic.tsx';
 import { AnalizAgirligi } from './AnalizAgirligi.tsx';
 import { useOlcuAletleri } from '../../veri.ts';
 import type { OlcuAleti } from '../../veri.ts';
-import { kartStandardi, standartAdlari, standartEtiketi } from '../../standart-adlari.ts';
+import { standartAdlari, standartEtiketi, standartTercihi } from '../../standart-adlari.ts';
 import type { KuralBaglami } from '../../kurallar/index.ts';
 
 // 2117: hizmette ısıl işlem ve yüzey seçimleri (ör. hedef temper) hammaddedeki durumla aynı ASTM / EN adlarıyla görünür.
 function hizmetEtiketi(d: Taslak, b: KuralBaglami): (x: string) => string {
   if (d.tur !== 'hizmet') return (x) => x;
   const adlar = standartAdlari(b.ortam.malzemeAyari);
-  const standart = kartStandardi(d);
+  const standart = standartTercihi(d);
   return (x) => standartEtiketi(x, adlar, standart);
 }
 

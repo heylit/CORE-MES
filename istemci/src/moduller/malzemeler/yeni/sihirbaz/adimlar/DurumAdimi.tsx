@@ -7,7 +7,7 @@ import { useSihirbaz } from '../baglam.ts';
 import { aileler, formlar } from '../turler.ts';
 import type { AileSecenegi } from '../../kurallar/index.ts';
 import { KatalogSimgesi } from '../../ortak/KatalogSimgesi.tsx';
-import { kartStandardi, secenekEtiketleri, standartAdlari, standartEtiketi, standartlaEslesir } from '../../standart-adlari.ts';
+import { secenekEtiketleri, standartTercihi, standartAdlari, standartEtiketi, standartlaEslesir } from '../../standart-adlari.ts';
 import { BagDugmesi, Cip, CipGrubu, MetinAlani, SecenekGrubu, Uyari, type CipTonu } from '../parcalar.tsx';
 
 type Secenek = AileSecenegi;
@@ -28,7 +28,7 @@ interface DurumAdimiOzellikleri {
 // Hammadde 4. adım (prototipte `s3`): seçenekler kalite ve forma göre süzülür; uyumsuz olanlar istenirse görünür.
 export function DurumAdimi({ anahtarlar, bolumler, haric = [] }: DurumAdimiOzellikleri = {}) {
   const { taslak: d, b, degistir, yenisiniKur, secim, secimYaz, bildir } = useSihirbaz();
-  const standart = kartStandardi(d);
+  const standart = standartTercihi(d);
   const [ara, araYaz] = useState('');
   const [stdAcik, stdAcikYaz] = useState(false);
   const adlar = useMemo(() => standartAdlari(b.ortam.malzemeAyari), [b.ortam.malzemeAyari]);
@@ -108,7 +108,7 @@ export function DurumAdimi({ anahtarlar, bolumler, haric = [] }: DurumAdimiOzell
       const etiket = (x: string) => etiketler.get(x) ?? standartEtiketi(x, esli, standart);
       // Seçilmeyen tarafın adı çipte yazmaz; fare ve ekran okuyucu için ipucunda durur (aramada neden eşleştiği de buradan okunur).
       const ipucuMetni = (x: string, bilgi?: string) => {
-        const diger = standart === 'astm' ? esli[x]?.en : esli[x]?.astm;
+        const diger = standart === null ? undefined : standart === 'astm' ? esli[x]?.en : esli[x]?.astm;
         if (diger) return `${standart === 'astm' ? 'EN' : 'ASTM'}: ${diger} · ${bilgi ?? x}`;
         return bilgi ?? (etiket(x) === x ? undefined : x);
       };

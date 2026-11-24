@@ -25,7 +25,7 @@ export function Baslangic() {
   const aileSec = (k: string) => {
     let y: Taslak = d;
     if (d.fam !== k) {
-      y = { ...K.newDraft(b), fam: k, id: d.id };
+      y = { ...K.newDraft(b), fam: k, id: d.id, standart: d.standart };
       y.com = { ...K.newDraft(b).com, ted: d.com.ted, tedId: d.com.tedId, not: d.com.not };
       y.cls = Object.keys(b.t.FAMS[k]?.classes ?? {})[0] ?? null;
       if (k === 'diger') y.grade = '__ozel';
@@ -69,7 +69,7 @@ export function TurKartlari() {
   const sec = (k: string) => {
     let y: Taslak = d;
     if (cur !== k) {
-      y = { ...K.newDraft(b), tur: k as Taslak['tur'] };
+      y = { ...K.newDraft(b), tur: k as Taslak['tur'], standart: d.standart };
       if (d.id) sifirla();
     }
     if (k === 'yarimamul' || k === 'mamul') kurVeGit(y, 1);
@@ -127,7 +127,7 @@ export function FavoriCipleri() {
         <Cip
           key={`${x.fam}|${x.kod}`} basili={false}
           tikla={() => {
-            if (x.fam !== d.fam) yenisiniKur({ ...K.newDraft(b), fam: x.fam });
+            if (x.fam !== d.fam) yenisiniKur({ ...K.newDraft(b), fam: x.fam, standart: d.standart });
             kaliteSec(x.fam, x.cls, x.kod, 2);
           }}
         >

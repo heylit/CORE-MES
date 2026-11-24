@@ -10,7 +10,7 @@ import type { KatalogKarti, Sablon } from '../tipler.ts';
 import { useOturum } from '../../../../ortak/veri/oturum.ts';
 import { useKartlar, useSablonlar } from '../veri.ts';
 import { AdimCubugu, adimlariKur } from './AdimCubugu.tsx';
-import { kartStandardi } from '../standart-adlari.ts';
+import { standartTercihi } from '../standart-adlari.ts';
 import { SihirbazBaglami, type EkranSecimi, type Sihirbaz } from './baglam.ts';
 import { kopyala, useSihirbazDurumu, type Degistirici, type Taslak } from './durum.ts';
 import { FoyGorunumu } from './FoyGorunumu.tsx';
@@ -136,7 +136,7 @@ function SihirbazKabugu(o: EkranOzellikleri & { kartlar: readonly KatalogKarti[]
     let y: Taslak = kopyala(d);
     if (fam !== y.fam) {
       const bos = K.newDraft(b);
-      y = { ...bos, fam, id: d.id };
+      y = { ...bos, fam, id: d.id, standart: d.standart };
       y.com = { ...bos.com, ted: d.com.ted, tedId: d.com.tedId, not: d.com.not };
       bildir(`Aile ${b.t.FAMS[fam]?.ad ?? fam} olarak değişti.`);
     }
@@ -206,7 +206,7 @@ function SihirbazKabugu(o: EkranOzellikleri & { kartlar: readonly KatalogKarti[]
                 <div className="tc-myeni-araclar" role="group" aria-label="Bu kartta durum ve işlem adlarının standardı">
                   {(['astm', 'en'] as const).map((x) => (
                     <button
-                      key={x} type="button" aria-pressed={kartStandardi(d) === x} onClick={() => { degistir((t) => { t.standart = x; }); }}
+                      key={x} type="button" aria-pressed={standartTercihi(d) === x} onClick={() => { degistir((t) => { t.standart = x; }); }}
                       title={x === 'astm' ? 'Durum ve işlem adları ASTM adıyla yazılır (seçimde, açıklamada, föyde)' : 'Durum ve işlem adları EN adıyla yazılır (seçimde, açıklamada, föyde)'}
                     >{x === 'astm' ? 'ASTM' : 'EN'}
                     </button>
