@@ -164,6 +164,22 @@ describe('Logo\'dan gelen kartlar: liste, alma, bağlama, Logo\'dakini alma (211
     const varsayilan = await istek('POST', '/malzeme-logo-kartlari/112/al', { tur: 'sarf', birim: 'kg', onek: null });
     assert.equal(varsayilan.statusCode, 200, varsayilan.body);
     assert.equal((varsayilan.json() as { stok_kodu: string }).stok_kodu, 'SF-GEN-00002');
+    // 3631 (Test B1): boş metin önek de varsayılan gruba düşer.
+    ayna.push(kart(113, '150.01.0005', { ad: null }));
+    const bos = await istek('POST', '/malzeme-logo-kartlari/113/al', { tur: 'sarf', birim: 'kg', onek: '' });
+    assert.equal(bos.statusCode, 200, bos.body);
+    assert.equal((bos.json() as { stok_kodu: string }).stok_kodu, 'SF-GEN-00003');
+    // 3631 (Risk S1): Logo'dan alınan taslak Katalog'da başka önek ya da türle kaydedilince kod değişmez (eşleme eski kodda kalmasın).
+    const kaydet = async (kayit: Record<string, unknown>) => {
+      const url = '/malzeme-katalogu-kartlari/logo-112/kaydet';
+      const sv = (await kartSatiri('logo-112'))!.surum;
+      return istek('POST', url, tamGovde(url, { kayit: { id: 'logo-112', com: { kod: 'SF-KAY-00001', ad: 'x', birim: 'kg' }, onay: { durum: 'taslak' }, ...kayit }, ozet: { benzersiz_anahtar: null, mukerrer_gerekcesi: null }, surum: sv }));
+    };
+    const onekDeg = await kaydet({ tur: 'sarf' });
+    assert.equal(onekDeg.statusCode, 200, onekDeg.body);
+    assert.equal((onekDeg.json() as { stok_kodu: string }).stok_kodu, 'SF-GEN-00002', 'önek değişse de kod kalır');
+    assert.equal((await kaydet({ tur: 'hammadde', fam: 'metal', com: { kod: 'HM-YAP-00001', ad: 'x', birim: 'kg' } })).statusCode, 422, 'Logo kartının türü değişmez');
+    assert.equal((await kartSatiri('logo-112'))?.kod, 'SF-GEN-00002');
     // Adı olmayan Logo kartı koduyla adlanır; liste eşleme üzerinden bağlı gösterir.
     assert.equal((await vt().tek<{ ad: string }>("SELECT kayit -> 'com' ->> 'ad' AS ad FROM malzeme_katalog_karti WHERE kimlik = 'logo-102'"))?.ad, '150.01.0003');
     assert.equal((await liste('?ara=150.01.0003')).kartlar[0]?.durum, 'bagli');
