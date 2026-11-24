@@ -581,6 +581,34 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await oku(operator, `/siparisler/${onayli.id}/surumler`)).statusCode, 403);
     assert.equal((await oku(yonetici, '/siparisler/999999/surumler')).statusCode, 404);
 
+    // 3401-2 a: ceza ve vade fiyat yetkisine bağlıdır; yeni kayıtta fiyat: true, eski kayıtta fiyat: false olsa da alan adıyla maskelenir.
+    const r3 = await yeniSurum(r2.json<SiparisAyrintisi>(), {
+      termin: '2026-11-25', cezaOraniGun: '0.5', cezaTavaniOrani: '10', odemeVadesiGun: 60,
+      satirlar: [{ ...kalem, birimFiyat: '13', aciklama: 'Kaplamalı' }], gerekce: 'Ceza ve vade eklendi',
+    });
+    assert.equal(r3.statusCode, 200, r3.body);
+    await o().sahip.sorgu(
+      `INSERT INTO siparisler_siparis_revizyonu (siparis_id, rev_no, gerekce, kisi_id, onceki, degisiklikler, logo_gitmisti)
+       VALUES ($1, 99, 'Eski kayıt', $2, '{}'::jsonb, $3::jsonb, false)`,
+      [onayli.id, yoneticiId, JSON.stringify([{ alan: 'odemeVadesiGun', kalemSira: null, eski: '30', yeni: '60', fiyat: false }])]);
+    await o().sahip.sorgu(
+      `INSERT INTO siparisler_siparis_revizyonu (siparis_id, rev_no, gerekce, kisi_id, onceki, degisiklikler, logo_gitmisti)
+       VALUES ($1, 100, 'KDV kaydı', $2, '{}'::jsonb, $3::jsonb, false)`,
+      [onayli.id, yoneticiId, JSON.stringify([{ alan: 'kdvOrani', kalemSira: null, eski: '20', yeni: '10', fiyat: false }])]);
+    const ticari = (r: SiparisRevizyonlariCevabi): unknown[] => r.revizyonlar.flatMap((x) => x.degisiklikler).filter((d) => d.alan === 'cezaOraniGun' || d.alan === 'cezaTavaniOrani' || d.alan === 'odemeVadesiGun');
+    const tam = (await oku(yonetici, `/siparisler/${onayli.id}/surumler`)).json<SiparisRevizyonlariCevabi>();
+    assert.deepEqual(ticari(tam), [
+      { alan: 'odemeVadesiGun', kalemSira: null, eski: '30', yeni: '60', fiyat: false },
+      { alan: 'cezaOraniGun', kalemSira: null, eski: null, yeni: '0.5', fiyat: true },
+      { alan: 'cezaTavaniOrani', kalemSira: null, eski: null, yeni: '10', fiyat: true },
+      { alan: 'odemeVadesiGun', kalemSira: null, eski: null, yeni: '60', fiyat: true },
+    ], 'fiyat yetkisi olan değeri tam görür');
+    const maskeli = (await oku(planlama, `/siparisler/${onayli.id}/surumler`)).json<SiparisRevizyonlariCevabi>();
+    assert.deepEqual(ticari(maskeli).map((d) => d as { eski: unknown; yeni: unknown; fiyat: unknown }).map((d) => [d.eski, d.yeni, d.fiyat]),
+      [[null, null, true], [null, null, true], [null, null, true], [null, null, true]], 'fiyat görmeyene ceza ve vade değeri gizli, eski kayıt dahil');
+    assert.deepEqual(maskeli.revizyonlar.flatMap((x) => x.degisiklikler).find((d) => d.alan === 'kdvOrani'), { alan: 'kdvOrani', kalemSira: null, eski: '20', yeni: '10', fiyat: false }, 'KDV oranı fiyat sayılmaz, görünür kalır');
+    assert.deepEqual(maskeli.revizyonlar.flatMap((x) => x.degisiklikler).find((d) => d.alan === 'termin' && d.kalemSira === null)?.yeni, '2026-11-25', 'başlık termini maskelenmez');
+
     await assert.rejects(o().sahip.sorgu('UPDATE siparisler_siparis_revizyonu SET gerekce = $2 WHERE siparis_id = $1', [onayli.id, 'Değişti']), 'sürüm kaydı yalnız eklenir');
   });
 
