@@ -97,3 +97,43 @@ export function hurdaNedeniniGuncelle(
 export async function hurdaNedeniVarMi(db: Db, id: number): Promise<boolean> {
   return (await db.tek('SELECT 1 AS var FROM hurda_nedeni WHERE id = $1', [id])) !== null;
 }
+
+// Toplu ekleme (disari.ts): çağıranın transaction'ında, var olan kodun satırına dokunmaz. Kilit tekil ekleme ile aynıdır; sıra
+// kilit altında en büyüğün bir fazlasıdır. Çağrı ekibi ve simge boş kalır.
+export async function durusKoduylaKimlikOku(db: Db, kod: string): Promise<number | null> {
+  return (await db.tek<{ id: number }>('SELECT id FROM durus_nedeni WHERE kod = $1', [kod]))?.id ?? null;
+}
+
+export async function durusNedeniTopluEkle(db: Db, kod: string, ad: string, kategori: string, aktif: boolean): Promise<number> {
+  const satir = await db.tek<{ id: number }>(
+    `INSERT INTO durus_nedeni (kod, ad, kategori, aktif, sira)
+     VALUES ($1, $2, $3, $4, (SELECT COALESCE(MAX(sira), 0) + 1 FROM durus_nedeni))
+     RETURNING id`,
+    [kod, ad, kategori, aktif],
+  );
+  if (satir === null) throw new Error('Duruş nedeni eklenemedi.');
+  return satir.id;
+}
+
+export async function durusTablosunuKilitle(db: Db): Promise<void> {
+  await db.sorgu('LOCK TABLE durus_nedeni IN SHARE ROW EXCLUSIVE MODE');
+}
+
+export async function hurdaKoduylaKimlikOku(db: Db, kod: string): Promise<number | null> {
+  return (await db.tek<{ id: number }>('SELECT id FROM hurda_nedeni WHERE kod = $1', [kod]))?.id ?? null;
+}
+
+export async function hurdaNedeniTopluEkle(db: Db, kod: string, ad: string, aktif: boolean): Promise<number> {
+  const satir = await db.tek<{ id: number }>(
+    `INSERT INTO hurda_nedeni (kod, ad, aktif, sira)
+     VALUES ($1, $2, $3, (SELECT COALESCE(MAX(sira), 0) + 1 FROM hurda_nedeni))
+     RETURNING id`,
+    [kod, ad, aktif],
+  );
+  if (satir === null) throw new Error('Hata nedeni eklenemedi.');
+  return satir.id;
+}
+
+export async function hurdaTablosunuKilitle(db: Db): Promise<void> {
+  await db.sorgu('LOCK TABLE hurda_nedeni IN SHARE ROW EXCLUSIVE MODE');
+}
