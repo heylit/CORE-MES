@@ -211,15 +211,17 @@ describe('şu an, yük ve dış bağlantı uçları (gerçek PostgreSQL)', () =>
     });
     await hazir;
     const bekleyen = vt.tx((db) => db.sorgu("UPDATE kilit_denemesi SET ad = 'c' WHERE id = 1"));
-    let o = await vtSuAnOku(vt);
-    for (let i = 0; i < 50 && (o?.kilitler.length ?? 0) === 0; i += 1) {
+    const kendi = async (): Promise<NonNullable<Awaited<ReturnType<typeof vtSuAnOku>>>['kilitler']> =>
+      ((await vtSuAnOku(vt))?.kilitler ?? []).filter((k) => (k.sorgu ?? '').includes('kilit_denemesi'));
+    let kilitler = await kendi();
+    for (let i = 0; i < 50 && kilitler.length === 0; i += 1) {
       await new Promise((coz) => setTimeout(coz, 100));
-      o = await vtSuAnOku(vt);
+      kilitler = await kendi();
     }
     birak();
     await Promise.all([tutan, bekleyen]);
-    assert.equal(o?.kilitler.length, 1);
-    assert.ok((o?.kilitler[0]?.bekletenIslem ?? 0) > 0);
-    assert.match(sorguMetniniTemizle(o?.kilitler[0]?.sorgu ?? ''), /^UPDATE kilit_denemesi SET ad = \$?\??\d*\s?\??/);
+    assert.equal(kilitler.length, 1);
+    assert.ok((kilitler[0]?.bekletenIslem ?? 0) > 0);
+    assert.match(sorguMetniniTemizle(kilitler[0]?.sorgu ?? ''), /^UPDATE kilit_denemesi SET ad = \$?\??\d*\s?\??/);
   });
 });
