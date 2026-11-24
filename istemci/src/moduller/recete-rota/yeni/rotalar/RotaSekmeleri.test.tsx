@@ -100,7 +100,7 @@ describe('Rota sekmeleri (3247 a)', () => {
     fireEvent.click(within(bolge).getByRole('button', { name: /Rota$/, expanded: false }));
     expect((within(bolge).getByRole('textbox', { name: 'Yeni rotanın adı' }) as HTMLInputElement).value).toBe('');
     const turler = within(bolge).getByRole('group', { name: 'Yeni rotanın emir türü' });
-    expect(within(turler).queryByRole('button', { name: 'Seri' })).toBeNull();
+    expect((within(turler).getByRole('button', { name: 'Seri' }) as HTMLButtonElement).disabled).toBe(true);
     expect((within(turler).getByRole('button', { name: 'FAI (var)' }) as HTMLButtonElement).disabled).toBe(true);
     expect((within(bolge).getByRole('button', { name: 'Rotayı aç' }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(within(turler).getByRole('button', { name: 'Numune' }));
@@ -135,7 +135,7 @@ describe('Rota sekmeleri (3247 a)', () => {
     const bolge = screen.getByRole('region', { name: 'Ürün ve rotalar' });
     fireEvent.click(within(g).getByRole('button', { name: /Rota$/ }));
     const turler = within(bolge).getByRole('group', { name: 'Yeni rotanın emir türü' });
-    expect((within(turler).getByRole('button', { name: 'Seri · Seri' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((within(turler).getByRole('button', { name: 'Seri' }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(within(turler).getByRole('button', { name: 'Numune' }));
     fireEvent.click(within(bolge).getByRole('checkbox', { name: /yürürlükteki revizyonundan başla/ }));
     fireEvent.click(within(bolge).getByRole('button', { name: 'Numune rotasını aç' }));

@@ -38,7 +38,9 @@ export function YeniRotaFormu({ r, urunId, rotalar, kapat }: { r: RotaEkrani; ur
   const turSec = (t: EmirTuru) => { setTur(t); if (t !== 'seri') window.setTimeout(() => { adAlani.current?.focus(); }, 0); };
   const turVar = (t: EmirTuru): boolean => (t === 'seri' ? !ilk : rotalar.some((x) => x.emirTurleri.includes(t)));
   const tumTurler: readonly (EmirTuru)[] = ['seri', ...EMIR_TURLERI.filter((t) => t !== 'seri')];
-  const turAdi = (t: EmirTuru) => (t === 'seri' && !ilk ? `Seri · ${standart?.ad ?? 'Standart'}` : EMIR_TURU_ADLARI[t]);
+  // Standart rota adsız ya da "Seri" adlıysa düğme yalnız "Seri" yazar; başka adlıysa adı da gösterir.
+  const standartAdi = standart?.ad ?? 'Standart';
+  const turAdi = (t: EmirTuru) => (t === 'seri' && !ilk && standartAdi !== 'Standart' && standartAdi !== EMIR_TURU_ADLARI.seri ? `Seri · ${standartAdi}` : EMIR_TURU_ADLARI[t]);
   const adimEkle = () => { r.kokSec(urunId); r.sec({ tur: 'adimEkle', urunId, sonraId: null }); r.paletAc(); };
 
   const ac = async () => {

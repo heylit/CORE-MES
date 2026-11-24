@@ -392,7 +392,7 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
               gorunum === 'tablo'
                 ? <AkisTablosu r={r} urunler={agac} miktar={miktar} cop={cop} />
                 // 3647: adımı olmayan tek ürünlük rotada Yatay hattaki "Nasıl başlayalım?" ekranı şemada da gelir (şablon, benzer ürün, boş).
-                : kokId && agac.length === 1 && !dugum.dongu && duzen.adimlar(kokId).length === 0
+                : kokId && agac.length === 1 && !dugum.dongu && duzen.adimlar(kokId).length === 0 && !duzen.mesgul
                   ? <SablonSecici r={r} urunId={kokId} />
                   : <AkisSemasi r={r} kok={dugum} cop={cop} />
             ) : (
