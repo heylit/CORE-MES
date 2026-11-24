@@ -13,7 +13,7 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import { tezgahIstemcisiKur } from './istemci.ts';
 import { sahteMtconnectAc } from './sahte-mtconnect.ts';
 import type { SahteMtconnect } from './sahte-mtconnect.ts';
-import { ayrinti, durum, okumaTuru, yeniTurBellegi } from './servis.ts';
+import { ayrinti, durum, okumaTuru, yeniTurBellegi, zamanlanmisTur } from './servis.ts';
 import type { TurBellegi } from './servis.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -40,6 +40,7 @@ describe('tezgah bağlantısı denemesi (kart 3373, gerçek PostgreSQL)', () => 
   const istemci = (sure = 2000) => tezgahIstemcisiKur(sahte.adres, { istekSuresiMs: sure });
   const tur = (i: ReturnType<typeof istemci> | null = istemci()) => okumaTuru(vt(), { istemci: i, saat: () => new Date(simdi), bellek });
   const pano = async () => tezgahBaglantisiDurumCevabi.parse(await vt().tx((db) => durum(db, istemci(), bellek, new Date(simdi))));
+  const ayrintiAl = async (cihaz: string) => tezgahAyrintisiCevabi.parse(await vt().tx((db) => ayrinti(db, cihaz, new Date(simdi), bellek)));
   const say = async (tablo: string) => (await vt().tek<{ n: number }>(`SELECT count(*)::int AS n FROM ${tablo}`))?.n;
   async function giris(kullaniciAdi: string): Promise<string> {
     const c = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi, parola: PAROLA } });
@@ -62,13 +63,13 @@ describe('tezgah bağlantısı denemesi (kart 3373, gerçek PostgreSQL)', () => 
   });
   after(async () => { await app?.close(); await ortam?.kaldir(); });
   beforeEach(async () => {
+    simdi += 3_600_000;
     sahte = await sahteMtconnectAc([
       { ad: 'ORN-T01', calisma: 'ACTIVE', mod: 'AUTOMATIC', program: 'O1001', sayac: '148', takim: '7', hiz: '2350', yuk: '42', ilerleme: '180' },
       { ad: 'ORN-T04', calisma: 'READY', mod: 'AUTOMATIC', program: 'O2002', sayac: '63', hiz: '0', yuk: '0' },
-    ]);
+    ], simdi);
     bellek = yeniTurBellegi();
-    simdi += 3_600_000;
-    for (const t of ['tezgah_okuma', 'tezgah_ornek', 'smartes_makine_durumu']) await vt().sorgu(`DELETE FROM ${t}`);
+    for (const t of ['tezgah_okuma', 'tezgah_ornek', 'tezgah_alan_tanimi', 'tezgah_deger_gecmisi', 'tezgah_varlik', 'tezgah_veri_boslugu', 'smartes_makine_durumu']) await vt().sorgu(`DELETE FROM ${t}`);
     await ayar(true);
   });
   afterEach(async () => { await sahte.kapat(); });
@@ -84,22 +85,229 @@ describe('tezgah bağlantısı denemesi (kart 3373, gerçek PostgreSQL)', () => 
     assert.equal((await pano()).tezgahlar.length, 0);
   });
 
-  test('yalnız GET /probe (süreçte bir kez) ve GET /current atılır; değerler saklanır, durum değişince örnek yazılır', async () => {
+  test('ilk tur /probe ve /current okur; sonraki turlar yalnız /sample ister; değerler saklanır, durum değişince örnek yazılır', async () => {
     assert.deepEqual(await tur(), { tur: 'okundu', tezgah: 2 });
-    simdi += 60_000;
+    simdi += 5000;
     assert.deepEqual(await tur(), { tur: 'okundu', tezgah: 2 });
-    assert.deepEqual(sahte.istekler, [{ yontem: 'GET', yol: '/probe' }, { yontem: 'GET', yol: '/current' }, { yontem: 'GET', yol: '/current' }]);
+    assert.ok(sahte.istekler.every((i) => i.yontem === 'GET'));
+    const yollar = sahte.istekler.map((i) => i.yol.split('?')[0]);
+    assert.deepEqual(yollar.filter((y) => y !== '/assets'), ['/probe', '/current', '/sample']);
+    const sample = sahte.istekler.find((i) => i.yol.startsWith('/sample'));
+    assert.ok(sample?.yol.endsWith('&count=1000') && /^\/sample\?from=\d+&/.test(sample.yol));
     assert.equal(await say('tezgah_okuma'), 2);
     assert.equal(await say('tezgah_ornek'), 2);
-    const birinci = sahte.tezgahlar[0];
-    if (birinci) birinci.calisma = 'STOPPED';
-    simdi += 60_000;
+    sahte.degistir(0, 'calisma', 'STOPPED');
+    simdi += 5000;
     await tur();
     assert.equal(await say('tezgah_ornek'), 3);
     const p = await pano();
     assert.equal(p.baglanti, 'acik');
+    assert.equal(p.aralikSaniye, 5);
     assert.equal(p.sonHata, null);
     assert.deepEqual(p.tezgahlar.map((t) => [t.cihazAdi, t.durum, t.sayac, t.eski, t.smartes]), [['ORN-T01', 'bekliyor', 148, false, null], ['ORN-T04', 'bekliyor', 63, false, null]]);
+  });
+
+  test('tur aralığı: varsayılan 5 saniyede bir; ayar 30 yapılınca 30 saniyede bir', async () => {
+    const say60 = async (): Promise<number> => {
+      bellek = yeniTurBellegi();
+      let okunan = 0;
+      for (let s = 0; s < 60; s += 1) {
+        simdi += 1000;
+        const r = await zamanlanmisTur(vt(), { istemci: istemci(), saat: () => new Date(simdi), bellek });
+        if (r.tur === 'okundu') okunan += 1;
+        else assert.equal(r.tur, 'erken');
+      }
+      return okunan;
+    };
+    assert.equal(await say60(), 12);
+    const ayarla = async (deger: number) => assert.equal((await istek('POST', '/ayarlar/tezgah-baglantisi.okuma-araligi/degistir', { deger })).statusCode, 200);
+    await ayarla(30);
+    assert.equal(await say60(), 2);
+    assert.equal((await pano()).aralikSaniye, 30);
+    assert.equal((await istek('POST', '/ayarlar/tezgah-baglantisi.okuma-araligi/degistir', { deger: 4 })).statusCode, 400);
+    assert.equal((await istek('POST', '/ayarlar/tezgah-baglantisi.okuma-araligi/degistir', { deger: 61 })).statusCode, 400);
+    await ayarla(5);
+  });
+
+  test('art arda hatada aralık 60 saniyeye kadar ikiye katlanır; başarılı turda 5 saniyeye döner', async () => {
+    await tur();
+    sahte.ozel['/sample'] = { durum: 500, govde: 'ORN hata' };
+    const simdi0 = simdi;
+    const baslar: number[] = [];
+    for (let s = 0; s < 200; s += 1) {
+      simdi += 1000;
+      const r = await zamanlanmisTur(vt(), { istemci: istemci(), saat: () => new Date(simdi), bellek });
+      if (r.tur !== 'erken') baslar.push(simdi);
+    }
+    const farklar = baslar.slice(1).map((b, i) => (b - (baslar[i] ?? 0)) / 1000);
+    assert.equal((baslar[0] ?? 0) - simdi0, 5000, 'ilk deneme 5 saniye sonra');
+    assert.deepEqual(farklar.slice(0, 5), [10, 20, 40, 60, 60]);
+    delete sahte.ozel['/sample'];
+    simdi += 60_000;
+    assert.equal((await zamanlanmisTur(vt(), { istemci: istemci(), saat: () => new Date(simdi), bellek })).tur, 'okundu');
+    assert.equal(bellek.ardisikHata, 0);
+    simdi += 5000;
+    assert.equal((await zamanlanmisTur(vt(), { istemci: istemci(), saat: () => new Date(simdi), bellek })).tur, 'okundu');
+  });
+
+  test('/sample son sıradan sürer: iki tur arasındaki üç değişikliğin üçü de geçmişte vardır', async () => {
+    await tur();
+    for (const sayac of ['149', '150', '151']) sahte.degistir(0, 'sayac', sayac);
+    simdi += 5000;
+    await tur();
+    const satirlar = await vt().sorgu<{ deger: string }>("SELECT deger FROM tezgah_deger_gecmisi WHERE cihaz_adi = 'ORN-T01' AND data_item_id = 'pc' ORDER BY sira");
+    assert.deepEqual(satirlar.map((r) => r.deger), ['148', '149', '150', '151']);
+    assert.equal(sahte.istekler.filter((i) => i.yol.startsWith('/current')).length, 1);
+    const p = await pano();
+    assert.equal(p.tezgahlar[0]?.sayac, 151);
+    // Aynı tur tekrar çalışırsa değişiklik yoksa çift satır yazılmaz.
+    simdi += 5000;
+    await tur();
+    assert.equal(await say('tezgah_deger_gecmisi WHERE data_item_id = \'pc\' AND cihaz_adi = \'ORN-T01\''), 4);
+  });
+
+  test('değeri gelmeyen alan geçmişe null yazılır, sıfır yazılmaz', async () => {
+    await tur();
+    sahte.degistir(0, 'sayac', 'UNAVAILABLE');
+    simdi += 5000;
+    await tur();
+    const son = await vt().tek<{ deger: string | null }>("SELECT deger FROM tezgah_deger_gecmisi WHERE cihaz_adi = 'ORN-T01' AND data_item_id = 'pc' ORDER BY sira DESC LIMIT 1");
+    assert.equal(son?.deger, null, 'UNAVAILABLE değer yok demektir');
+    sahte.degistir(0, 'sayac', undefined);
+    simdi += 5000;
+    await tur();
+    const yok = await vt().tek<{ deger: string | null }>("SELECT deger FROM tezgah_deger_gecmisi WHERE cihaz_adi = 'ORN-T01' AND data_item_id = 'pc' ORDER BY sira DESC LIMIT 1");
+    assert.equal(yok?.deger, null);
+  });
+
+  test('tampon taşınca boşluk kaydı yazılır ve okuma /current ile sürer', async () => {
+    await tur();
+    sahte.tamponBoyu = 3;
+    for (let i = 0; i < 10; i += 1) sahte.degistir(0, 'sayac', String(200 + i));
+    simdi += 5000;
+    assert.deepEqual(await tur(), { tur: 'okundu', tezgah: 2 });
+    const b = await vt().sorgu<{ neden: string }>('SELECT neden FROM tezgah_veri_boslugu');
+    assert.deepEqual(b.map((r) => r.neden), ['tampon-asildi']);
+    assert.ok(sahte.istekler.filter((i) => i.yol.startsWith('/current')).length >= 2);
+    assert.equal((await pano()).tezgahlar[0]?.sayac, 209);
+    simdi += 5000;
+    sahte.degistir(0, 'sayac', '210');
+    await tur();
+    assert.equal(await say('tezgah_veri_boslugu'), 1);
+    assert.equal((await pano()).tezgahlar[0]?.sayac, 210);
+    const a = await ayrintiAl('ORN-T01');
+    assert.deepEqual(a.bosluklar.map((x) => x.neden), ['tampon-asildi']);
+  });
+
+  test('servis OUT_OF_RANGE hatası verirse de boşluk yazılır ve okuma sürer', async () => {
+    await tur();
+    sahte.ozel['/sample'] = { durum: 404, govde: '<MTConnectError><Errors><Error errorCode="OUT_OF_RANGE">ORN</Error></Errors></MTConnectError>' };
+    simdi += 5000;
+    assert.equal((await tur()).tur, 'okundu');
+    assert.equal(await say('tezgah_veri_boslugu'), 1);
+    assert.equal(sahte.istekler.filter((i) => i.yol === '/current').length, 2);
+  });
+
+  test('instanceId değişince /probe yeniden okunur, alan tanımları güncellenir, boşluk yazılır', async () => {
+    await tur();
+    assert.equal(await say('tezgah_alan_tanimi'), 2 * 11);
+    sahte.tezgahlar.push({ ad: 'ORN-T07', calisma: 'READY' });
+    sahte.yenidenBasla();
+    simdi += 5000;
+    assert.deepEqual(await tur(), { tur: 'okundu', tezgah: 3 });
+    assert.equal(sahte.istekler.filter((i) => i.yol === '/probe').length, 2);
+    assert.equal(await say('tezgah_alan_tanimi'), 3 * 11);
+    assert.deepEqual((await vt().sorgu<{ neden: string }>('SELECT neden FROM tezgah_veri_boslugu')).map((r) => r.neden), ['servis-yeniden-basladi']);
+    simdi += 5000;
+    sahte.degistir(2, 'calisma', 'ACTIVE');
+    await tur();
+    assert.equal((await pano()).tezgahlar.find((t) => t.cihazAdi === 'ORN-T07')?.durum, 'calisiyor');
+  });
+
+  test('alan tanımı: bileşen, birim ve kategori /probe\'dan dolar', async () => {
+    await tur();
+    const t = await vt().tek<{ tur: string; bilesen: string; bilesen_adi: string; birim: string; kategori: string }>(
+      "SELECT tur, bilesen, bilesen_adi, birim, kategori FROM tezgah_alan_tanimi WHERE cihaz_adi = 'ORN-T01' AND data_item_id = 'sspeed'");
+    assert.deepEqual({ ...t }, { tur: 'SPINDLE_SPEED', bilesen: 'Rotary', bilesen_adi: 'S', birim: 'REVOLUTION/MINUTE', kategori: 'SAMPLE' });
+    const a = await ayrintiAl('ORN-T01');
+    const hiz = a.alanlar.find((x) => x.kimlik === 'sspeed');
+    assert.deepEqual([hiz?.birim, hiz?.kategori, hiz?.bilesen, hiz?.deger], ['REVOLUTION/MINUTE', 'SAMPLE', 'Rotary', '2350']);
+  });
+
+  test('ayrıntı: son saatin eğrisi geçmiş tablodan gelir; koşullar başlangıç ve bitişiyle; olmayan tezgah 404', async () => {
+    await tur();
+    for (const h of ['2400', '2500', '2600']) { sahte.degistir(0, 'hiz', h); simdi += 5000; await tur(); }
+    sahte.kosulYaz(0, [['MOTION_PROGRAM', 'Fault', 'ORN hata']]);
+    simdi += 5000;
+    await tur();
+    sahte.kosulYaz(0, [['MOTION_PROGRAM', 'Normal', '']]);
+    simdi += 5000;
+    await tur();
+    const a = await ayrintiAl('ORN-T01');
+    const egri = a.alanlar.find((x) => x.kimlik === 'sspeed')?.egri ?? [];
+    assert.ok(egri.length >= 1 && egri.every((p) => Number.isFinite(p.deger)));
+    assert.equal(a.alanlar.find((x) => x.kimlik === 'exec')?.egri.length, 0);
+    const f = a.kosullar.find((k) => k.hal === 'Fault');
+    assert.ok(f !== undefined && f.bitis !== null && f.ileti === 'ORN hata');
+    assert.equal(a.kosullar.find((k) => k.hal === 'Normal' && k.bitis === null)?.kimlik, 'k');
+    assert.ok(a.alanlar.every((x) => x.deger === null || !x.kimlik?.startsWith('k')));
+  });
+
+  test('/assets 60 saniyede bir okunur; takımlar ve ömür sınırları saklanır; servis /assets vermiyorsa tur hata vermez', async () => {
+    await tur();
+    assert.equal((await pano()).varlikDurumu, 'yok');
+    assert.equal(bellek.sonHata, null);
+    assert.equal((await ayrintiAl('ORN-T01')).varliklar.length, 0);
+    sahte.varliklar = [{ kimlik: 'ORN-A1', takimNo: '7', omurler: [['MINUTES', 85, 120, 10, 0]] }];
+    simdi += 5000;
+    await tur();
+    assert.equal(sahte.istekler.filter((i) => i.yol === '/assets').length, 1, '60 saniye dolmadan yeniden okunmaz');
+    simdi += 60_000;
+    assert.equal((await tur()).tur, 'okundu');
+    assert.equal(sahte.istekler.filter((i) => i.yol === '/assets').length, 2);
+    const a = await ayrintiAl('ORN-T01');
+    assert.deepEqual(a.varliklar.map((v) => [v.kimlik, v.takimNo, v.omurler[0]?.deger, v.omurler[0]?.sinir, v.omurler[0]?.baslangic]), [['ORN-A1', '7', 85, 0, 120]]);
+    assert.equal(a.varlikDurumu, 'okundu');
+    sahte.ozel['/assets'] = { durum: 500, govde: 'x' };
+    simdi += 60_000;
+    assert.equal((await tur()).tur, 'okundu');
+    assert.equal((await pano()).varlikDurumu, 'hata');
+  });
+
+  test('geçmiş yirmi dört saat saklanır ve saatte bir silinir; durum örnekleri otuz gün kalır', async () => {
+    await vt().sorgu(
+      `INSERT INTO tezgah_deger_gecmisi (cihaz_adi, data_item_id, sira, zaman, deger) VALUES ('ORN-T01', 'eski', 1, $1, '1'), ('ORN-T01', 'yeni', 2, $2, '2')`,
+      [new Date(simdi - 25 * 3_600_000), new Date(simdi - 23 * 3_600_000)]);
+    await vt().sorgu("INSERT INTO tezgah_veri_boslugu (zaman, neden) VALUES ($1, 'tampon-asildi'), ($2, 'tampon-asildi')", [new Date(simdi - 25 * 3_600_000), new Date(simdi - 23 * 3_600_000)]);
+    await vt().sorgu("INSERT INTO tezgah_ornek (cihaz_adi, zaman, durum) VALUES ('ORN-T01', $1, 'bekliyor'), ('ORN-T01', $2, 'bekliyor')", [new Date(simdi - 31 * 86_400_000), new Date(simdi - 20 * 86_400_000)]);
+    await tur();
+    const kal = async () => (await vt().sorgu<{ data_item_id: string }>("SELECT data_item_id FROM tezgah_deger_gecmisi WHERE data_item_id IN ('eski', 'yeni') ORDER BY 1")).map((r) => r.data_item_id);
+    assert.deepEqual(await kal(), ['yeni']);
+    assert.equal(await say('tezgah_veri_boslugu'), 1);
+    assert.equal((await vt().tek<{ n: number }>("SELECT count(*)::int AS n FROM tezgah_ornek WHERE zaman < $1", [new Date(simdi - 30 * 86_400_000)]))?.n, 0);
+    await vt().sorgu("INSERT INTO tezgah_deger_gecmisi (cihaz_adi, data_item_id, sira, zaman, deger) VALUES ('ORN-T01', 'eski', 3, $1, '1')", [new Date(simdi - 25 * 3_600_000)]);
+    simdi += 5000;
+    await tur();
+    assert.deepEqual(await kal(), ['eski', 'yeni'], 'saat dolmadan silinmez');
+    simdi += 3_600_000;
+    await tur();
+    assert.deepEqual(await kal(), []);
+  });
+
+  test('okunan değer sayım, duruş, stok ve plan dahil başka hiçbir tabloya satır yazmaz', async () => {
+    const say2 = () => vt().sorgu<{ tablo: string; n: number }>(
+      `SELECT table_name AS tablo, (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from %I', table_name), false, true, '')))[1]::text::int AS n
+       FROM information_schema.tables WHERE table_schema = current_schema() AND table_type = 'BASE TABLE' AND table_name NOT LIKE 'tezgah\\_%' ORDER BY 1`);
+    const once = await say2();
+    await tur();
+    sahte.degistir(0, 'sayac', '999');
+    sahte.degistir(0, 'calisma', 'STOPPED');
+    sahte.kosulYaz(0, [['MOTION_PROGRAM', 'Fault', 'ORN hata']]);
+    simdi += 5000;
+    await tur();
+    simdi += 60_000;
+    await tur();
+    assert.deepEqual(await say2(), once);
   });
 
   test('SmartES değeri aynı kodlu makineden gelir; fark alanları işaretlenir; SmartES verisi değişmez', async () => {
@@ -114,18 +322,18 @@ describe('tezgah bağlantısı denemesi (kart 3373, gerçek PostgreSQL)', () => 
 
   test('servis hata verirse eski okuma yerinde kalır, hata metni adres taşımaz, sonraki tur yeniden okur', async () => {
     await tur();
-    sahte.ozel['/current'] = { durum: 500, govde: 'ORN hata' };
+    sahte.ozel['/sample'] = { durum: 500, govde: 'ORN hata' };
     simdi += 180_000;
     const r = await tur();
     assert.equal(r.tur, 'hata');
     const p = await pano();
     assert.ok(p.sonHata !== null && !p.sonHata.includes('127.0.0.1') && !p.sonHata.includes('ORN hata'));
     assert.deepEqual(p.tezgahlar.map((t) => t.eski), [true, true]);
-    sahte.ozel['/current'] = { govde: '<html><body>ORN</body></html>' };
-    assert.deepEqual(await tur(), { tur: 'hata', ileti: 'Tezgah servisi MTConnect anlık değer cevabı döndürmedi.' });
-    sahte.ozel['/current'] = { govde: '<!DOCTYPE x [<!ENTITY a "b">]><MTConnectStreams/>' };
+    sahte.ozel['/sample'] = { govde: '<html><body>ORN</body></html>' };
+    assert.deepEqual(await tur(), { tur: 'hata', ileti: 'Tezgâh servisi MTConnect anlık değer cevabı döndürmedi.' });
+    sahte.ozel['/sample'] = { govde: '<!DOCTYPE x [<!ENTITY a "b">]><MTConnectStreams/>' };
     assert.equal((await tur()).tur, 'hata');
-    delete sahte.ozel['/current'];
+    delete sahte.ozel['/sample'];
     assert.deepEqual(await tur(), { tur: 'okundu', tezgah: 2 });
     assert.equal((await pano()).sonHata, null);
   });
@@ -133,18 +341,35 @@ describe('tezgah bağlantısı denemesi (kart 3373, gerçek PostgreSQL)', () => 
   test('cevap gecikirse beklenmez ve yinelenmez; yönlendirme izlenmez; önceki tur sürerken yenisi başlamaz', async () => {
     await tur();
     const once = sahte.istekler.length;
-    sahte.ozel['/current'] = { gecikmeMs: 400 };
+    sahte.ozel['/sample'] = { gecikmeMs: 400 };
     const yavas = tur(istemci(100));
     assert.deepEqual(await tur(), { tur: 'suruyor' });
-    assert.deepEqual(await yavas, { tur: 'hata', ileti: 'Tezgah servisi süresinde cevap vermedi.' });
+    assert.deepEqual(await yavas, { tur: 'hata', ileti: 'Tezgâh servisi süresinde cevap vermedi.' });
     assert.equal(sahte.istekler.length, once + 1);
-    sahte.ozel['/current'] = { durum: 302, govde: 'x', basliklar: { Location: `${sahte.adres}/probe` } };
+    sahte.ozel['/sample'] = { durum: 302, govde: 'x', basliklar: { Location: `${sahte.adres}/probe` } };
     assert.equal((await tur()).tur, 'hata');
     assert.equal(sahte.istekler.filter((i) => i.yol === '/probe').length, 1);
   });
 
-  test('istemci yalnız iki sabit yolu okur', async () => {
-    await assert.rejects(() => istemci().oku('/sample' as never), /yalnız \/probe ve \/current/);
+  test('istemci yalnız dört sabit yolu okur; sorgu yalnız /sample\'da ve yalnız from ile count olur; başka yol ve parametre reddedilir', async () => {
+    const i = istemci();
+    await assert.rejects(() => i.oku('/devices' as never), /yalnız \/probe, \/current, \/sample ve \/assets/);
+    await assert.rejects(() => i.oku('/sample'), /from ve count/);
+    await assert.rejects(() => i.oku('/current', { from: 1, count: 100 }), /yalnız \/sample/);
+    await assert.rejects(() => i.oku('/sample', { from: 1, count: 100, interval: 5 } as never), /yalnız from ve count/);
+    await assert.rejects(() => i.oku('/sample', { from: 1 } as never), /yalnız from ve count/);
+    await assert.rejects(() => i.oku('/sample', { from: 1.5, count: 100 }), /tam sayı/);
+    await assert.rejects(() => i.oku('/sample', { from: -1, count: 100 }), /tam sayı/);
+    await assert.rejects(() => i.oku('/sample', { from: 1, count: 7 as never }), /izin listesinde/);
+    assert.equal(sahte.istekler.length, 0, 'reddedilen istek hiç gitmez');
+    assert.equal((await i.oku('/sample', { from: 1, count: 100 })).tur, 'basarili');
+    assert.equal(sahte.istekler[0]?.yol, '/sample?from=1&count=100');
+  });
+
+  test('cevap boyu sınırı: sınırı aşan gövde okunmadan reddedilir (alan sayısı sınırı yoktur)', async () => {
+    sahte.ozel['/probe'] = { govde: `<MTConnectDevices>${'x'.repeat(9 * 1024 * 1024)}</MTConnectDevices>` };
+    const r = await istemci(5000).oku('/probe');
+    assert.deepEqual(r, { tur: 'bozuk', ileti: 'Tezgâh servisinin cevabı çok büyük.' });
   });
 
   test('uçlar: yalnız yönetici görür; ayrıntı tezgahın bütün öğelerini geldiği adla verir; olmayan tezgah 404', async () => {

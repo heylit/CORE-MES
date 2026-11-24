@@ -1,17 +1,26 @@
 import type { TezgahDurumu, TezgahKarsilastirmaAlani } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
 import type { XmlOgesi } from './xml.ts';
 
-// Okuma aralığı SmartES makine panosuyla aynıdır. Servis SmartES'in tezgahlarını da besler: dakikada tek istek, yineleme yok.
-export const OKUMA_ARALIGI_MS = 60_000;
+// Okuma aralığı Sistem Ayarları'ndadır (5-60 sn, varsayılan 5). Servis başka sistemleri de besleyebilir: yineleme yok, art arda
+// hatada aralık 60 saniyeye kadar ikiye katlanır.
+export const VARSAYILAN_ARALIK_SN = 5;
+export const EN_UZUN_ARALIK_MS = 60_000;
 export const ISTEK_SURESI_MS = 5_000;
-// Son okuma bu kadar eskiyse ekranda "eski okuma" yazar.
-export const ESKI_OKUMA_MS = 2 * OKUMA_ARALIGI_MS;
-// Durum örnekleri bu süreden sonra silinir.
+export const VARLIK_ARALIGI_MS = 60_000;
+export const TEMIZLIK_ARALIGI_MS = 3_600_000;
+// /sample tek istekte bu kadar kayıt ister; geride kalınmışsa bir turda en çok SAYFA kadar istek atılır.
+export const SAMPLE_SAYISI = 1000;
+export const AZAMI_SAMPLE_SAYFASI = 5;
+// Durum örnekleri bu süreden sonra silinir; değer geçmişi ve veri boşlukları 24 saat saklanır.
 export const ORNEK_SAKLAMA_GUNU = 30;
+export const GECMIS_SAKLAMA_MS = 24 * 3_600_000;
 export const AZAMI_TEZGAH = 64;
-export const AZAMI_OGE = 400;
 export const AZAMI_DEGER_UZUNLUGU = 200;
 export const OKUMA_AYARI = 'tezgah-baglantisi.okuma';
+export const ARALIK_AYARI = 'tezgah-baglantisi.okuma-araligi';
+
+// Art arda hata sayısına göre bir sonraki turun aralığı.
+export const etkinAralikMs = (aralikMs: number, ardisikHata: number): number => Math.min(EN_UZUN_ARALIK_MS, Math.max(aralikMs, aralikMs * 2 ** Math.min(ardisikHata, 6)));
 
 // Eşikler (kart 3373): iş mili hızı yüzde 2'den, yük 5 puandan fazla ayrışırsa fark sayılır.
 export const HIZ_ESIGI_ORANI = 0.02;
@@ -27,6 +36,9 @@ export interface TezgahOgesi {
   zaman: string | null;
   // Yalnız koşul öğelerinde: Normal, Warning, Fault, Unavailable.
   kosul: string | null;
+  // Servisin öğe kimliği (dataItemId) ve değerin sıra numarası.
+  kimlik: string | null;
+  sira: number | null;
 }
 
 export interface TezgahOkumasi {
@@ -43,6 +55,11 @@ const kirp = (m: string | undefined, sinir = AZAMI_DEGER_UZUNLUGU): string | nul
 const degerOku = (m: string): string | null => {
   const t = kirp(m);
   return t === null || t.toUpperCase() === 'UNAVAILABLE' ? null : t;
+};
+
+const tamSayi = (m: string | undefined): number | null => {
+  const n = Number(m ?? '');
+  return m !== undefined && m.trim() !== '' && Number.isSafeInteger(n) && n >= 0 ? n : null;
 };
 
 const KAPLAR = new Set(['Samples', 'Events', 'Condition']);
@@ -65,7 +82,6 @@ export function akislariOku(kok: XmlOgesi): TezgahOkumasi[] | null {
         for (const kap of bilesen.cocuklar) {
           if (!KAPLAR.has(kap.ad)) continue;
           for (const o of kap.cocuklar) {
-            if (ogeler.length >= AZAMI_OGE) break;
             const kosul = kap.ad === 'Condition';
             ogeler.push({
               tur: kirp(kosul ? o.nitelikler['type'] : o.ad, 60) ?? o.ad,
@@ -74,6 +90,8 @@ export function akislariOku(kok: XmlOgesi): TezgahOkumasi[] | null {
               deger: kosul ? kirp(o.metin) : degerOku(o.metin),
               zaman: kirp(o.nitelikler['timestamp'], 40),
               kosul: kosul ? o.ad : null,
+              kimlik: kirp(o.nitelikler['dataItemId'], 100),
+              sira: tamSayi(o.nitelikler['sequence']),
             });
           }
         }
@@ -180,4 +198,135 @@ export function farklar(t: TezgahOzeti, s: SmartesDegerleri): TezgahKarsilastirm
   return sonuc;
 }
 
-export const eskiMi = (okundu: string | Date, simdi: Date): boolean => simdi.getTime() - new Date(okundu).getTime() > ESKI_OKUMA_MS;
+// Son okuma iki turdan eskiyse "eski okuma".
+export const eskiMi = (okundu: string | Date, simdi: Date, aralikSn: number): boolean => simdi.getTime() - new Date(okundu).getTime() > 2 * aralikSn * 1000;
+
+export interface AkisBasligi {
+  instanceId: string | null;
+  firstSequence: number | null;
+  lastSequence: number | null;
+  nextSequence: number | null;
+}
+
+// MTConnectStreams başlığı: sıra numaraları /sample sürekliliğini, instanceId servisin yeniden başladığını söyler.
+export function baslikOku(kok: XmlOgesi): AkisBasligi {
+  const b = kok.cocuklar.find((c) => c.ad === 'Header')?.nitelikler ?? {};
+  return { instanceId: kirp(b['instanceId'], 40), firstSequence: tamSayi(b['firstSequence']), lastSequence: tamSayi(b['lastSequence']), nextSequence: tamSayi(b['nextSequence']) };
+}
+
+// İstenen sıradan sonra okunacak sıra: başlıktaki nextSequence; yoksa görülen en büyük sıra + 1.
+export function sonrakiSira(baslik: AkisBasligi, ogeler: readonly TezgahOgesi[], onceki: number): number {
+  if (baslik.nextSequence !== null) return baslik.nextSequence;
+  return Math.max(onceki, ...ogeler.map((o) => (o.sira ?? 0) + 1));
+}
+
+export type TezgahOgeleriHaritasi = Map<string, TezgahOgesi>;
+const ogeAnahtari = (o: TezgahOgesi): string => o.kimlik ?? `${o.bilesen ?? ''}|${o.tur}|${o.ad ?? ''}`;
+
+// /sample değişiklikleri son duruma işler: aynı kimlikli öğenin yeni değeri eskisinin yerine geçer.
+export function durumaIsle(durum: TezgahOgeleriHaritasi, yeni: readonly TezgahOgesi[]): void {
+  for (const o of yeni) durum.set(ogeAnahtari(o), o);
+}
+export const durumdanDiziye = (durum: TezgahOgeleriHaritasi): TezgahOgesi[] => [...durum.values()];
+export const diziyiDurumaCevir = (ogeler: readonly TezgahOgesi[]): TezgahOgeleriHaritasi => new Map(ogeler.map((o) => [ogeAnahtari(o), o]));
+
+export interface AlanTanimi {
+  kimlik: string;
+  tur: string;
+  altTur: string | null;
+  bilesen: string | null;
+  bilesenAdi: string | null;
+  birim: string | null;
+  kategori: 'SAMPLE' | 'EVENT' | 'CONDITION';
+}
+export interface TezgahTanimi {
+  cihazAdi: string;
+  alanlar: AlanTanimi[];
+}
+
+const KATEGORILER = new Set(['SAMPLE', 'EVENT', 'CONDITION']);
+
+function tanimTopla(oge: XmlOgesi, bilesen: string | null, bilesenAdi: string | null, cikti: AlanTanimi[]): void {
+  for (const c of oge.cocuklar) {
+    if (c.ad === 'DataItems') {
+      for (const d of c.cocuklar) {
+        const kimlik = kirp(d.nitelikler['id'], 100);
+        const tur = kirp(d.nitelikler['type'], 80);
+        const kategori = d.nitelikler['category'] ?? '';
+        if (d.ad !== 'DataItem' || kimlik === null || tur === null || !KATEGORILER.has(kategori)) continue;
+        cikti.push({ kimlik, tur, altTur: kirp(d.nitelikler['subType'], 80), bilesen, bilesenAdi, birim: kirp(d.nitelikler['units'], 40), kategori: kategori as AlanTanimi['kategori'] });
+      }
+    } else if (c.ad === 'Components') {
+      for (const k of c.cocuklar) tanimTopla(k, kirp(k.ad, 60), kirp(k.nitelikler['name'], 60), cikti);
+    }
+  }
+}
+
+// /probe cevabı: cihazlar ve alan tanımları (bileşen ağacı gezilir). Cihaz adı yalnız saklanır; günlüğe ve iletiye girmez.
+export function tanimlariOku(kok: XmlOgesi): TezgahTanimi[] | null {
+  if (kok.ad !== 'MTConnectDevices') return null;
+  const sonuc: TezgahTanimi[] = [];
+  for (const cihazlar of kok.cocuklar) {
+    if (cihazlar.ad !== 'Devices') continue;
+    for (const c of cihazlar.cocuklar) {
+      const cihazAdi = kirp(c.nitelikler['name'], 100);
+      if (c.ad !== 'Device' || cihazAdi === null || sonuc.length >= AZAMI_TEZGAH) continue;
+      const alanlar: AlanTanimi[] = [];
+      tanimTopla(c, 'Device', null, alanlar);
+      sonuc.push({ cihazAdi, alanlar });
+    }
+  }
+  return sonuc;
+}
+
+export interface OmurDegeri {
+  tur: string | null;
+  yon: string | null;
+  deger: number | null;
+  baslangic: number | null;
+  uyari: number | null;
+  sinir: number | null;
+}
+export interface TezgahVarligi {
+  kimlik: string;
+  tur: string;
+  takimNo: string | null;
+  omurler: OmurDegeri[];
+  zaman: string | null;
+}
+
+function altOgeler(oge: XmlOgesi, ad: string, cikti: XmlOgesi[] = [], derinlik = 0): XmlOgesi[] {
+  if (derinlik > 8) return cikti;
+  for (const c of oge.cocuklar) {
+    if (c.ad === ad) cikti.push(c);
+    altOgeler(c, ad, cikti, derinlik + 1);
+  }
+  return cikti;
+}
+
+// /assets cevabı: MTConnectAssets > Assets > (CuttingTool, ...). Ömür yoksa liste boş kalır; sıfır uydurulmaz.
+export function varliklariOku(kok: XmlOgesi): TezgahVarligi[] | null {
+  if (kok.ad !== 'MTConnectAssets') return null;
+  const sonuc: TezgahVarligi[] = [];
+  for (const kap of kok.cocuklar) {
+    if (kap.ad !== 'Assets') continue;
+    for (const v of kap.cocuklar) {
+      const kimlik = kirp(v.nitelikler['assetId'], 100);
+      if (kimlik === null) continue;
+      const takim = altOgeler(v, 'ProgramToolNumber')[0]?.metin;
+      sonuc.push({
+        kimlik, tur: v.ad,
+        takimNo: kirp(v.nitelikler['toolId'] ?? takim, 60),
+        zaman: kirp(v.nitelikler['timestamp'], 40),
+        omurler: altOgeler(v, 'ToolLife').map((t) => ({
+          tur: kirp(t.nitelikler['type'], 40), yon: kirp(t.nitelikler['countDirection'], 20), deger: sayi(kirp(t.metin)),
+          baslangic: sayi(kirp(t.nitelikler['initial'])), uyari: sayi(kirp(t.nitelikler['warning'])), sinir: sayi(kirp(t.nitelikler['limit'])),
+        })),
+      });
+    }
+  }
+  return sonuc;
+}
+
+// Servis tamponundan düşmüş sıra isteniyor mu (başlık): ilk sıra istenenden büyükse aradaki kayıtlar kaybolmuştur.
+export const tamponAsildiMi = (istenen: number, b: AkisBasligi): boolean => b.firstSequence !== null && istenen < b.firstSequence;

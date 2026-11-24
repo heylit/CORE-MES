@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { tezgahAdresiOku } from './ayar.ts';
-import { akislariOku, cihazSayisiOku, eskiMi, farklar, ozetle } from './kurallar.ts';
+import {
+  akislariOku, baslikOku, cihazSayisiOku, diziyiDurumaCevir, durumaIsle, durumdanDiziye, eskiMi, etkinAralikMs, farklar, ozetle, tanimlariOku, varliklariOku,
+} from './kurallar.ts';
 import type { TezgahOzeti } from './kurallar.ts';
 import { currentMetni, probeMetni } from './sahte-mtconnect.ts';
 import { AZAMI_CEVAP_UZUNLUGU, XmlHatasi, xmlAyristir } from './xml.ts';
@@ -78,7 +80,53 @@ describe('tezgah-baglantisi kuralları (kart 3373)', () => {
 
   test('eski okuma: okuma aralığının iki katından eskiyse', () => {
     const simdi = new Date('2026-11-10T09:10:00Z');
-    assert.equal(eskiMi('2026-11-10T09:08:00Z', simdi), false);
-    assert.equal(eskiMi('2026-11-10T09:07:59Z', simdi), true);
+    assert.equal(eskiMi('2026-11-10T09:08:00Z', simdi, 60), false);
+    assert.equal(eskiMi('2026-11-10T09:07:59Z', simdi, 60), true);
+    assert.equal(eskiMi('2026-11-10T09:09:50Z', simdi, 5), false);
+    assert.equal(eskiMi('2026-11-10T09:09:49Z', simdi, 5), true);
+  });
+
+  test('aralık: art arda hatada iki katına çıkar, 60 saniyede durur; hatasızken ayardaki değerdedir', () => {
+    assert.deepEqual([0, 1, 2, 3, 4, 5, 9].map((h) => etkinAralikMs(5000, h)), [5000, 10_000, 20_000, 40_000, 60_000, 60_000, 60_000]);
+    assert.deepEqual([0, 1, 2].map((h) => etkinAralikMs(30_000, h)), [30_000, 60_000, 60_000]);
+    assert.equal(etkinAralikMs(60_000, 3), 60_000);
+  });
+
+  test('alan sayısı sınırsızdır: 400\'den çok öğe okunur; cevap boyu sınırı yine geçerlidir', () => {
+    const cok = Array.from({ length: 450 }, (_, i) => `<Load dataItemId="l${i}" timestamp="2026-11-10T09:00:00Z" sequence="${i + 1}">${i}</Load>`).join('');
+    const xml = `<MTConnectStreams><Header nextSequence="451" firstSequence="1" lastSequence="450" instanceId="7"/><Streams><DeviceStream name="ORN-T01"><ComponentStream component="Rotary"><Samples>${cok}</Samples></ComponentStream></DeviceStream></Streams></MTConnectStreams>`;
+    const kok = xmlAyristir(xml);
+    assert.equal(akislariOku(kok)?.[0]?.ogeler.length, 450);
+    assert.deepEqual(baslikOku(kok), { instanceId: '7', firstSequence: 1, lastSequence: 450, nextSequence: 451 });
+    assert.equal(akislariOku(kok)?.[0]?.ogeler[449]?.sira, 450);
+  });
+
+  test('probe: bileşen ağacındaki alan tanımları (tür, alt tür, bileşen, birim, kategori) okunur; bilinmeyen kategori atlanır', () => {
+    const t = tanimlariOku(xmlAyristir(probeMetni([{ ad: 'ORN-T01' }])));
+    assert.equal(t?.length, 1);
+    const alanlar = t?.[0]?.alanlar ?? [];
+    assert.deepEqual(alanlar.find((a) => a.kimlik === 'sspeed'), { kimlik: 'sspeed', tur: 'SPINDLE_SPEED', altTur: null, bilesen: 'Rotary', bilesenAdi: 'S', birim: 'REVOLUTION/MINUTE', kategori: 'SAMPLE' });
+    assert.equal(alanlar.find((a) => a.kimlik === 'k')?.kategori, 'CONDITION');
+    assert.equal(alanlar.find((a) => a.kimlik === 'avail')?.bilesen, 'Device');
+    const kotu = tanimlariOku(xmlAyristir('<MTConnectDevices><Devices><Device name="ORN-T"><DataItems><DataItem id="a" type="X" category="BILINMEYEN"/></DataItems></Device></Devices></MTConnectDevices>'));
+    assert.deepEqual(kotu?.[0]?.alanlar, []);
+    assert.equal(tanimlariOku(xmlAyristir('<html/>')), null);
+  });
+
+  test('varlıklar: takım no ve ömür değerleri sınırlarıyla okunur; ömür yoksa liste boştur', () => {
+    const xml = `<MTConnectAssets><Assets><CuttingTool assetId="ORN-A1" timestamp="2026-11-10T09:00:00Z" toolId="T7"><CuttingToolLifeCycle><ProgramToolNumber>7</ProgramToolNumber>
+      <ToolLife type="MINUTES" countDirection="DOWN" initial="120" warning="10" limit="0">85.5</ToolLife></CuttingToolLifeCycle></CuttingTool><CuttingTool assetId="ORN-A2"/></Assets></MTConnectAssets>`;
+    const v = varliklariOku(xmlAyristir(xml));
+    assert.deepEqual(v?.[0], { kimlik: 'ORN-A1', tur: 'CuttingTool', takimNo: 'T7', zaman: '2026-11-10T09:00:00Z', omurler: [{ tur: 'MINUTES', yon: 'DOWN', deger: 85.5, baslangic: 120, uyari: 10, sinir: 0 }] });
+    assert.deepEqual(v?.[1]?.omurler, []);
+    assert.equal(v?.[1]?.takimNo, null);
+    assert.equal(varliklariOku(xmlAyristir('<html/>')), null);
+  });
+
+  test('durum birleştirme: aynı kimlikli öğenin yeni değeri eskisinin yerine geçer', () => {
+    const o = (kimlik: string, deger: string, sira: number) => ({ tur: 'Execution', ad: null, bilesen: null, deger, zaman: null, kosul: null, kimlik, sira });
+    const d = diziyiDurumaCevir([o('a', 'READY', 1), o('b', 'x', 2)]);
+    durumaIsle(d, [o('a', 'ACTIVE', 3)]);
+    assert.deepEqual(durumdanDiziye(d).map((e) => [e.kimlik, e.deger]), [['a', 'ACTIVE'], ['b', 'x']]);
   });
 });

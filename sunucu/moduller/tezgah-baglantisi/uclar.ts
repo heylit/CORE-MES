@@ -19,6 +19,6 @@ export const uclar = [
     yetki: { biri: ['sayfa.tezgah-baglantisi'] },
     parametre: tezgahParametresi,
     cevap: tezgahAyrintisiCevabi,
-    isle: ({ db, parametre }) => servis.ayrinti(db, parametre.cihazAdi, new Date()),
+    isle: ({ db, parametre }) => servis.ayrinti(db, parametre.cihazAdi, new Date(), turBellegi),
   }),
 ];
