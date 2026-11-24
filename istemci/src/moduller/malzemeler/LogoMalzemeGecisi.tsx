@@ -720,7 +720,7 @@ export function TekAlmaPenceresi({ satir, turAdlari, karsiliklar, kapat, alindi 
           : <Secim etiket="Birim" required secenekler={(birimler.data?.birimler ?? []).filter((b) => b.aktif).map((b) => ({ deger: b.kod, baslik: b.kod }))} bosSecenek="Seçiniz" value={birim} onChange={(o) => birimYaz(o.target.value)} />}
         {satir.koduUyar
           ? <p className="tc-lg-not">Kart CORE kodunu alır (aynı önekte sıradaki boş kod); Logo kodu kartta ERP kodu olarak kalır.</p>
-          : <Girdi etiket="Yeni kodun öneki" ipucu="Logo kodu CORE kod biçimine uymuyor; kart bu önekle CORE kodu alır, Logo kodu ERP kodu olarak kalır (ör. HM-GEN-)." value={onek} maxLength={20} onChange={(o) => onekYaz(o.target.value)} />}
+          : <Girdi etiket="Yeni kodun öneki (isteğe bağlı)" ipucu="Logo kodu CORE kod biçimine uymuyor; kart CORE kodu alır, Logo kodu ERP kodu olarak kalır. Boş bırakırsanız türün genel grubu kullanılır (ör. HM-GEN-)." value={onek} maxLength={20} onChange={(o) => onekYaz(o.target.value)} />}
         {al.isError && <p className="tc-lg-not tc-lg-hata" role="alert">{hataIletisi(al.error, 'Alınamadı')}</p>}
       </form>
     </Pencere>

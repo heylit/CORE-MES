@@ -514,6 +514,8 @@ export function denetlenecekKategoriler(kayit: Nesne, tur: string, kayitli: { ka
 }
 // MKK-1: önekin tür kısmı kartın türüyle aynı olmalı (prototipin `KOD_TUR` tablosu).
 const TUR_ONEKI: Record<string, string> = { hammadde: 'HM', yarimamul: 'YM', mamul: 'MM', sarf: 'SF', demirbas: 'DB', hizmet: 'HZ', ticari_mal: 'TM' };
+// 3631: Logo kodu CORE biçimine uymuyorsa ve önek verilmemişse türün genel grubu (ör. HM-GEN-) kullanılır; kod taslakta verilir, ekran önek sormaz.
+export const katalogGenelOneki = (tur: string): string | null => (TUR_ONEKI[tur] === undefined ? null : `${TUR_ONEKI[tur]}-GEN-`);
 export function katalogOnekiTureUyarMi(onek: string, tur: string): boolean {
   const beklenen = TUR_ONEKI[tur];
   return beklenen !== undefined && onek.split('-')[0] === beklenen;
