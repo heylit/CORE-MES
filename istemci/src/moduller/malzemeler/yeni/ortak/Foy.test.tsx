@@ -22,6 +22,17 @@ function c45(b: KuralBaglami): KartKaydi {
 const FIYAT = { kgFiyati: '42.5', birimFiyati: '650', paraBirimi: 'TRY', gecerlilik: '2026-10-01' };
 
 describe('foyVerisi', () => {
+  test('3630-2: ERP kodu satırı her türde Ticari bölümünün başında; boşsa yok', () => {
+    const b = baglam();
+    const d = c45(b);
+    const ticari = (x: KartKaydi) => foyVerisi(x, b).bolumler.find((k) => k.baslik === 'Ticari')?.satirlar;
+    for (const tur of ['hammadde', 'yarimamul', 'mamul', 'sarf', 'ticari_mal', 'demirbas', 'hizmet']) {
+      const x = { ...d, tur, com: { ...d.com, eskiKod: 'ORN-ERP-1' } } as unknown as KartKaydi;
+      expect(ticari(x)?.[0], tur).toEqual({ ad: 'ERP kodu', deger: 'ORN-ERP-1' });
+      expect(ticari({ ...x, com: { ...x.com, eskiKod: ' ' } } as KartKaydi)?.some((s) => s.ad === 'ERP kodu'), `${tur} bos`).toBe(false);
+    }
+  });
+
   test('3630: ERP kodu CORE koduyla aynı olsa da Ticari bölümünde yazılır; boşsa satır yok', () => {
     const b = baglam();
     const d = c45(b);
