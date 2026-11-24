@@ -7,7 +7,7 @@ import { AYRILMIS_KONUM_TURLERI, binde, bindenMetin, cikisOnerisi, type OneriSat
 // ADR 0025 kural 7, ilk değişmez: çıkış önerisi (DEP-05/06/07/08) hiçbir bakiyeden bakiyesinden fazlasını ayırmaz, istenenden ve
 // kullanılabilir toplamdan fazlasını önermez. Girdiler tohumdan üretilir; veriler uydurmadır.
 const tohum = tohumOku(process.env['TMIV2_TEST_TOHUM']);
-const ONERI_DISI = new Set<string>(['fason', 'uretim_cikisi', 'istasyon', ...AYRILMIS_KONUM_TURLERI]);
+const ONERI_DISI = new Set<string>(['fason', 'uretim_cikisi', 'istasyon', 'kisi', ...AYRILMIS_KONUM_TURLERI]);
 
 // Binde birim: eksi bakiye, sıfır ve küsuratlı miktar da üretilir.
 const miktar = (u: Uretec): string => bindenMetin(u.olasilik(0.15) ? 0n : BigInt(u.tamSayi(-2_000_000, 50_000_000)));

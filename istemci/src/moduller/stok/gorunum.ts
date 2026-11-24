@@ -50,7 +50,7 @@ export const HAREKET_TONU: Record<HareketTuru, RozetTonu> = {
   giris: 'tamam', cikis: 'hata', transfer: 'bilgi', sayim_fazla: 'uyari', sayim_eksik: 'uyari', geri_alma: 'pasif',
 };
 export const KONUM_ETIKETI: Record<KonumTuru, string> = { raf_gozu: 'Raf gözü', kabul: 'Mal kabul alanı', uretim_cikisi: 'Üretim çıkışı', depo_zemini: 'Depo zemini', fason: 'Fason kutusu', istasyon: 'İstasyon', ara_alan: 'Ara alan', hurda: 'Hurda alanı', yolda: 'Yolda (fasona)',
-  oda: 'Oda', cam_oda: 'Cam oda', bolge: 'Bölge', karantina: 'Karantina alanı', sevkiyat: 'Sevkiyat alanı', palet: 'Palet yeri',
+  oda: 'Oda', cam_oda: 'Cam oda', bolge: 'Bölge', karantina: 'Karantina alanı', sevkiyat: 'Sevkiyat alanı', palet: 'Palet yeri', kisi: 'Kişide (zimmet)',
 };
 export const ISTEK_DURUMU: Record<MalzemeIstegiDurumu, { etiket: string; ton: RozetTonu }> = {
   acik: { etiket: 'Açık', ton: 'bilgi' }, stok_yok: { etiket: 'Stokta yok', ton: 'hata' }, hazirlaniyor: { etiket: 'Hazırlanıyor', ton: 'uyari' },

@@ -17,7 +17,7 @@ export const RAF_TURLERI = ['palet', 'celik', 'konsol', 'zemin'] as const;
 export const NUMARALAMALAR = ['sirali', 'tek', 'cift'] as const;
 // İstasyon konumu elle açılmaz: istasyondan kendiliğinden doğar (kart #1208).
 export const KONUM_TURLERI = [
-  'raf_gozu', 'kabul', 'uretim_cikisi', 'depo_zemini', 'fason', 'istasyon', 'ara_alan', 'hurda', 'yolda', 'oda', 'cam_oda', 'bolge', 'karantina', 'sevkiyat', 'palet',
+  'raf_gozu', 'kabul', 'uretim_cikisi', 'depo_zemini', 'fason', 'istasyon', 'ara_alan', 'hurda', 'yolda', 'oda', 'cam_oda', 'bolge', 'karantina', 'sevkiyat', 'palet', 'kisi',
 ] as const;
 // Kalite durumu (134 a): rota statüsünün yanında ikinci eksen. Kullanılabilir stok serbest ya da şartlıdır; karar bekleyen ve red parça
 // üretimde uyarıyla ilerler, rezerveye girmez (135). Yanıtta alan yoksa serbesttir.

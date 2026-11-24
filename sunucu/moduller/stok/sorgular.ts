@@ -96,3 +96,4 @@ export {
   type AyirmaKaynagiHam, acikAyirmaKaynaklari, ayirmaKilidi, ayirmaIstegiEkle, type AyirmaIstegiHam, ayirmaIstekleri, ayirmaIstegiKilitle, ayirmaIstegiIlerlet, ayirmaIstegiIptal, siparisAyirmasiniTeslimEt, siparisAyirmaTesliminiGeriAl,
   siparisAyirmaIstegiEkle, siparisAyirmalari,
 } from './sorgular/kontrol/sorgular.ts';
+export * from './sorgular/takim/sorgular.ts';

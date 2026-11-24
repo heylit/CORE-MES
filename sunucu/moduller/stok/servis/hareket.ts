@@ -87,10 +87,24 @@ export async function cikisYap(db: Db, kisiId: number, g: CikisKomutu): Promise<
 // CNC takım stoğu (153 a, 164 b): kurulumda değişen takım ya da kullanılan uç seti kartın serbest bakiyesinden, ilk giren önce
 // (çıkış önerisiyle) düşer. Yetmezse hiç düşülmez, eksiye inilmez; mevcut miktar döner. Yetkiyi çağıran korur.
 export type CncTakimCikisiSonucu = { yeterli: true; hareketIdler: number[] } | { yeterli: false; mevcut: string };
-export async function cncTakimCikisi(db: Db, kisiId: number, g: { malzemeId: number; miktar: string; aciklama: string }): Promise<CncTakimCikisiSonucu> {
-  const oneri = await cikisOnerisiOku(db, g.malzemeId, g.miktar);
-  if (!oneri.yeterli) return { yeterli: false, mevcut: oneri.mevcut };
+// 3613 K2: takım raftan istasyona (ya da kişiye) çıktıktan sonra değişim önce istasyon konumundaki bakiyeden düşer; yoksa raftan
+// düşerek raf iki kez azalırdı. İstasyon belli değilse (iş emri bilinmiyor) başka
+// tezgâhın bakiyesine dokunulmaz: yalnız bugünkü gibi çıkış önerisiyle (raf, kabul, zemin) düşer. Belliyse önce o istasyondan, kalanı öneriden.
+export async function cncTakimCikisi(db: Db, kisiId: number, g: { malzemeId: number; miktar: string; aciklama: string; istasyonId?: number | null }): Promise<CncTakimCikisiSonucu> {
   const hareketIdler: number[] = [];
+  let kalan = binde(g.miktar);
+  const istasyonlar = g.istasyonId == null ? [] : await sorgular.istasyonBakiyeleri(db, g.malzemeId, g.istasyonId);
+  const istasyondaki = istasyonlar.reduce((t, b) => t + binde(b.miktar), 0n);
+  const oneri = await cikisOnerisiOku(db, g.malzemeId, bindenMetin(kalan > istasyondaki ? kalan - istasyondaki : 0n));
+  if (kalan > istasyondaki && !oneri.yeterli) return { yeterli: false, mevcut: bindenMetin(istasyondaki + binde(oneri.mevcut)) };
+  for (const b of istasyonlar) {
+    if (kalan <= 0n) break;
+    const al = binde(b.miktar) < kalan ? binde(b.miktar) : kalan;
+    const c = await cikisYap(db, kisiId, { malzemeId: g.malzemeId, konumId: b.konumId, partiId: b.partiId, miktar: bindenMetin(al), cikisNedeni: 'diger', aciklama: g.aciklama.slice(0, 200) });
+    hareketIdler.push(...c.hareketIdler);
+    kalan -= al;
+  }
+  if (kalan <= 0n) return { yeterli: true, hareketIdler };
   for (const o of oneri.oneriler) {
     const c = await cikisYap(db, kisiId, { malzemeId: g.malzemeId, konumId: o.konumId, partiId: o.partiId, miktar: o.miktar, cikisNedeni: 'diger', aciklama: g.aciklama.slice(0, 200) });
     hareketIdler.push(...c.hareketIdler);

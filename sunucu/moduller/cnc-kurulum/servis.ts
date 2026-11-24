@@ -92,7 +92,9 @@ export async function stokDus(db: Db, kullanici: Kullanici, g: StokDusGovdesi): 
   if (kart === undefined) throw gecersiz('Bu kalem stok kartına bağlı değil.');
   const emir = await seciliIsEmri(db);
   const aciklama = `CNC kurulum · ${g.kimlik}${emir === null ? '' : ` · iş emri ${String(emir.isEmriId)}`}`;
-  const r = await cncTakimCikisi(db, kullanici.id, { malzemeId: kart.malzemeId, miktar: String(g.miktar), aciklama });
+  // K2 (3613): takım önce tezgâhtaki (istasyon konumundaki) bakiyeden düşer; iş emri biliniyorsa yalnız onun istasyonundan.
+  const istasyonId = emir === null ? null : (await acikIsEmri(db, emir.isEmriId))?.istasyonId ?? null;
+  const r = await cncTakimCikisi(db, kullanici.id, { malzemeId: kart.malzemeId, miktar: String(g.miktar), aciklama, istasyonId });
   if (!r.yeterli) throw gecersiz(`Stokta yeterli ${kart.kod} yok (kullanılabilir: ${r.mevcut}); stoktan düşülmedi.`);
   return { hareketSayisi: r.hareketIdler.length };
 }

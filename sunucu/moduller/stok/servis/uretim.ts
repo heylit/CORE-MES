@@ -700,7 +700,10 @@ const birakmaNotu = (elden: boolean): string => (elden ? 'Elden teslim, alıcı 
 async function teslimAlaniDenetle(db: Db, k: Kullanici, t: TeslimHam): Promise<void> {
   const hedef = (await sorgular.teslimUclari(db, [t.hedefKonumId]))[0];
   let alan: Parameters<typeof teslimAlmaEngeli>[1];
-  if (hedef?.istasyonId != null) {
+  // Kişiye (zimmet) giden teslimi yalnız o kişi alır (3613 K3); gönderen alamaz kuralı teslimAlmaEngeli'nde kalır.
+  const hedefKisiId = hedef?.tur === 'kisi' ? await sorgular.konumKisisi(db, t.hedefKonumId) : null;
+  if (hedefKisiId !== null) alan = { tur: 'kisi', benimMi: hedefKisiId === k.id };
+  else if (hedef?.istasyonId != null) {
     const ist = await istasyonGetir(db, hedef.istasyonId);
     alan = { tur: 'istasyon', kapsamda: kapsamdaMi(await kapsamOku(db, k.id), ist?.isMerkeziId ?? null) };
   } else alan = { tur: 'depo', depoIslemi: islemVarMi(k, 'stok.transfer') };
