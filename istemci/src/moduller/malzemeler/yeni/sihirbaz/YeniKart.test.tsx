@@ -167,6 +167,23 @@ describe('M1 yeni kart sihirbazı', () => {
     expect(govde.kayit.talep?.yeni.g.yerlilik).toBe(100);
   });
 
+  // Sunucunun yazdığı kısa kart (yalnız tur, g, com ve onay) adımları geçecek kadar doludur; düzenleme taslağı eksik alanları varsayılanla açar.
+  test.each([
+    ['Logo\'dan alınan kısa kart', 'mlogo1', 'SF-LGO-00001'],
+    ['dolgu kartı', 'mdlg1', 'SF-DLG-00001'],
+  ])('%s dokunmadan kaydedilirse değişiklik yok denir, talep gitmez', async (_ad, kimlik, kod) => {
+    const kayit = {
+      id: kimlik, tur: 'sarf', onay: { durum: 'aktif' },
+      g: { kat: 'kaynak', tur: 'Gazaltı teli (MIG/MAG)', sinif: 'AWS A5.18 ER70S-6', marka: 'ORN marka' },
+      com: { kod, ad: 'ORN kısa kart', birim: 'adet' },
+    };
+    const istekler = sunucuKur(YAZAN, { 'GET /malzeme-katalogu-kartlari': kartlarYaniti({ kimlik, kayit }) });
+    ac(`?kart=${kimlik}`);
+    fireEvent.click(await screen.findByRole('button', { name: 'Değişiklikleri kaydet' }));
+    expect(await screen.findByText('Kartta değişiklik yok.')).toBeTruthy();
+    expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
+  });
+
   test('kayıt kartı ve özeti gönderir; sunucunun ret iletisi olduğu gibi gösterilir (madde 18)', async () => {
     const istekler = sunucuKur(YAZAN, {
       'GET /malzeme-katalogu-kartlari': kartlarYaniti({ kimlik: 'mdnm1', kayit: sarfKarti('mdnm1') }),
