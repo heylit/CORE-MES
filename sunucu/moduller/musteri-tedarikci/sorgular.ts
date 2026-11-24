@@ -149,6 +149,10 @@ export function firmaAdlariniBul(db: Db, idler: number[]): Promise<{ id: number;
   return db.sorgu<{ id: number; ad: string }>('SELECT id, ad FROM musteri_tedarikci_firma WHERE id = ANY($1::int[])', [idler]);
 }
 
+export function firmaLogoKodlariniBul(db: Db, idler: number[]): Promise<{ id: number; ad: string; logoKodu: string | null }[]> {
+  return db.sorgu<{ id: number; ad: string; logoKodu: string | null }>('SELECT id, ad, logo_cari_kodu AS "logoKodu" FROM musteri_tedarikci_firma WHERE id = ANY($1::int[])', [idler]);
+}
+
 export function musteriSiniflariniBul(db: Db, idler: number[]): Promise<{ id: number; sinif: MusteriSinifi | null }[]> {
   return db.sorgu<{ id: number; sinif: MusteriSinifi | null }>('SELECT id, musteri_sinifi AS sinif FROM musteri_tedarikci_firma WHERE id = ANY($1::int[])', [idler]);
 }

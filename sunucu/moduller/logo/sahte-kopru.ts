@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { CARI_HAREKET_YOLU, FATURA_LISTESI_YOLU } from './fatura-cari-sozlesmesi.ts';
+import { CARI_HAREKET_YOLU, FATURA_DEGISEN_YOLU, FATURA_LISTESI_YOLU } from './fatura-cari-sozlesmesi.ts';
 import { MALZEME_FISI_UCU } from './kurallar.ts';
 
 // Sahte Logo köprüsü: YALNIZ test ve yerel deneme içindir (kart #207, kullanıcı kararı 3). Üretim kodu bunu ithal etmez;
@@ -365,16 +365,29 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
         json(cevap, 200, { ...kopru.irsaliyeDonemi, data, next: data.length >= kopru.sayfaBoyu ? Number(data.at(-1)?.['logicalRef']) : null });
         return;
       }
-      if (istek.method === 'GET' && (yol === FATURA_LISTESI_YOLU || yol === CARI_HAREKET_YOLU)) {
+      if (istek.method === 'GET' && (yol === FATURA_LISTESI_YOLU || yol === CARI_HAREKET_YOLU || yol === FATURA_DEGISEN_YOLU)) {
         kopru.faturaCariIstekleri.push(istek.url ?? '');
         if (kopru.faturaCariUcuYok) { json(cevap, 404, { success: false, logicalRef: 0, error: 'Not found', validate: null }); return; }
         const q = new URL(istek.url ?? '', 'http://sahte').searchParams;
         const since = Number(q.get('since') ?? 0);
         const from = q.get('from') ?? '';
-        const kaynak = yol === FATURA_LISTESI_YOLU ? kopru.logoFaturalari.filter((x) => x['type'] === q.get('type')) : kopru.logoCariHareketleri;
-        const data = kaynak.filter((x) => Number(x['logicalRef']) > since && String(x['date']) >= from)
-          .sort((a, b) => Number(a['logicalRef']) - Number(b['logicalRef'])).slice(0, kopru.sayfaBoyu);
-        json(cevap, 200, { ...kopru.irsaliyeDonemi, data, next: data.length >= kopru.sayfaBoyu ? Number(data.at(-1)?.['logicalRef']) : null });
+        const donem = q.get('period') === null ? kopru.irsaliyeDonemi.period : Number(q.get('period'));
+        const donemde = (x: Record<string, unknown>): boolean => Number(x['period'] ?? kopru.irsaliyeDonemi.period) === donem;
+        let data: Record<string, unknown>[];
+        if (yol === FATURA_DEGISEN_YOLU) {
+          // (modifiedAt, logicalRef) sırasıyla, verilen (after, since) çiftinden büyükler.
+          const sonra = Date.parse(q.get('after') ?? '');
+          const an = (x: Record<string, unknown>): number => Date.parse(String(x['modifiedAt']));
+          data = kopru.logoFaturalari.filter((x) => typeof x['modifiedAt'] === 'string' && donemde(x) && String(x['date']) >= from
+            && (Number.isNaN(an(x)) || an(x) > sonra || (an(x) === sonra && Number(x['logicalRef']) > since)))
+            .sort((a, b) => an(a) - an(b) || Number(a['logicalRef']) - Number(b['logicalRef'])).slice(0, kopru.sayfaBoyu);
+        } else {
+          const kaynak = yol === FATURA_LISTESI_YOLU ? kopru.logoFaturalari.filter((x) => x['type'] === q.get('type')) : kopru.logoCariHareketleri;
+          data = kaynak.filter((x) => Number(x['logicalRef']) > since && String(x['date']) >= from && donemde(x))
+            .sort((a, b) => Number(a['logicalRef']) - Number(b['logicalRef'])).slice(0, kopru.sayfaBoyu);
+        }
+        const sonraki = yol !== FATURA_DEGISEN_YOLU && data.length >= kopru.sayfaBoyu ? Number(data.at(-1)?.['logicalRef']) : null;
+        json(cevap, 200, { firm: kopru.irsaliyeDonemi.firm, period: donem, data, next: yol === FATURA_DEGISEN_YOLU && data.length >= kopru.sayfaBoyu ? Number(data.at(-1)?.['logicalRef']) : sonraki });
         return;
       }
       if (istek.method === 'GET' && yol === '/api/Material/search') {

@@ -42,6 +42,9 @@ export async function alisBelgesiEslesmeTutari(db: Db, belgeId: number, firmaId:
   return { tutar: b.tutar, paraBirimi: b.paraBirimi };
 }
 export { malzemeKartiIzleri } from './sorgular.ts';
+// 3675 D2: Logo faturasıyla eşleştirilecek finans faturaları (tutar KDV hariç, kdvTutari; yalnız okunur; FNS-48 yetkisi çağıranın ucundadır).
+export { logoEslesmeBelgeleri } from './sorgular.ts';
+export type { LogoEslesmeBelgesi } from './sorgular.ts';
 // 2594 b (Mimar K1): genel gider bileşenlerinin başka modüllerdeki kaynakları kablolamada kaydedilir; finans onları ithal etmez.
 export {
   dolayliPersonelCozucusuKaydet as dolayliPersonelCozucusu, emilmeyenDogrudanCozucusuKaydet as emilmeyenDogrudanCozucusu, genelGiderOraniCozucusuKaydet as genelGiderOraniCozucusu,

@@ -227,6 +227,13 @@ export async function firmaAdlari(db: Db, idler: number[]): Promise<Map<number, 
   return new Map((await sorgular.firmaAdlariniBul(db, tekil)).map((s) => [s.id, s.ad]));
 }
 
+// 3675 D2: Logo faturası eşleşmesi için firmanın adı ve Logo cari kodu (yetki çağıranın ucundadır).
+export async function firmaLogoKodlari(db: Db, idler: number[]): Promise<Map<number, { ad: string; logoKodu: string | null }>> {
+  const tekil = [...new Set(idler)];
+  if (tekil.length === 0) return new Map();
+  return new Map((await sorgular.firmaLogoKodlariniBul(db, tekil)).map((s) => [s.id, { ad: s.ad, logoKodu: s.logoKodu }]));
+}
+
 export function firmaNoKoddan(db: Db, kod: string): Promise<number | null> {
   return sorgular.firmaNoKoddan(db, kod.trim());
 }
