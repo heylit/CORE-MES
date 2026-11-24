@@ -234,6 +234,93 @@ export const SAATLIK_ARALIKLAR = ['gun', 'hafta', 'yil'] as const;
 export const saatlikSorgusu = z.object({ aralik: z.enum(SAATLIK_ARALIKLAR) });
 export const saatlikCevabi = z.object({ saatler: z.array(saatOzetiSemasi) });
 
+// Kapanmalar ve günlük (kart 3668, dilim A).
+export const KAPANMA_NEDENLERI = ['bellek-tasmasi', 'yakalanmamis-hata', 'donma', 'ekrandan-yeniden-baslatma', 'guncelleme', 'bilinmiyor'] as const;
+export const kapanmaNedeniSemasi = z.enum(KAPANMA_NEDENLERI);
+
+export const GUNLUK_DUZEYLERI = ['bilgi', 'uyari', 'hata', 'olumcul'] as const;
+export const gunlukDuzeyiSemasi = z.enum(GUNLUK_DUZEYLERI);
+export const GUNLUK_EN_COK_SATIR = 500;
+
+export const kapanmaSatiriSemasi = z.object({
+  id: z.number().int().positive(),
+  kapandiAn: zamanSemasi,
+  acildiAn: zamanSemasi,
+  kapaliSn: sayi,
+  // Bekçi sinyalle kapanışı çıkış kodu yerine bildirir; ikisi de bilinmiyorsa null (sıfır uydurulmaz).
+  cikisKodu: z.number().int().nullable(),
+  sinyal: z.string().nullable(),
+  neden: kapanmaNedeniSemasi,
+});
+
+export const kapanmaHataSatiriSemasi = z.object({
+  zaman: zamanSemasi,
+  duzey: gunlukDuzeyiSemasi,
+  ileti: z.string(),
+  // Ekranda görünen "Hata kodu"; günlükte reqId.
+  hataKodu: z.string().nullable(),
+  hata: z.string().nullable(),
+});
+
+export const kapanmaSurenIstegiSemasi = z.object({
+  yontem: z.string(),
+  adres: z.string(),
+  kisiId: z.number().int().nullable(),
+  sureSn: z.number().nonnegative(),
+});
+
+export const kapanmaAyrintisiSemasi = kapanmaSatiriSemasi.extend({
+  // Nedenin dayandığı kanıt; neden bilinmiyorsa null.
+  kanit: z.string().nullable(),
+  yigin: z.string().nullable(),
+  hataSatirlari: z.array(kapanmaHataSatiriSemasi),
+  surenIstekler: z.array(kapanmaSurenIstegiSemasi),
+  bellek: z.object({ rssBayt: sayi, yiginBayt: sayi }).nullable(),
+  dakikalar: z.array(metrikDakikasiSemasi),
+});
+
+export const kapanmalarCevabi = z.object({ kapanmalar: z.array(kapanmaSatiriSemasi) });
+export const kapanmaParametresi = z.object({ id: z.coerce.number<number>().int().positive() });
+
+export const gunlukSatiriSemasi = z.object({
+  zaman: zamanSemasi,
+  duzey: gunlukDuzeyiSemasi,
+  ileti: z.string(),
+  yontem: z.string().nullable(),
+  uc: z.string().nullable(),
+  kisiId: z.number().int().nullable(),
+  durum: z.number().int().nullable(),
+  sureMs: z.number().nullable(),
+  hataKodu: z.string().nullable(),
+  hata: z.string().nullable(),
+});
+
+export const gunlukSorgusu = z.object({
+  // Seçilen düzey ve üstü.
+  duzey: gunlukDuzeyiSemasi.default('hata'),
+  // Uç kalıbında geçen metin (büyük/küçük harf ayrımsız).
+  uc: z.string().trim().min(1).max(200).optional(),
+  kisi: z.coerce.number<number>().int().positive().optional(),
+  baslangic: zamanSemasi.optional(),
+  bitis: zamanSemasi.optional(),
+  hataKodu: z.string().trim().regex(/^[0-9a-f]{8}$/i, 'Hata kodu 8 haneli olmalı').optional(),
+  // Verilirse yalnız o günün dosyası okunur (YYYY-AA-GG, günlük dosyası adındaki yerel tarih); verilmezse bugünkü ve önceki dosya.
+  gun: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Gün YYYY-AA-GG biçiminde olmalı').optional(),
+  // Önceki cevabın `sonraki` değeri: o noktadan geriye doğru okunur.
+  imlec: z.string().max(100).optional(),
+  adet: z.coerce.number<number>().int().min(1).max(GUNLUK_EN_COK_SATIR).default(200),
+});
+
+export const gunlukCevabi = z.object({
+  satirlar: z.array(gunlukSatiriSemasi),
+  // Daha eski satır varsa sonraki sayfanın imleci; yoksa null.
+  sonraki: z.string().nullable(),
+  // Okunan dosyalar (en yeniden eskiye); günlük kapalıysa ya da dosya yoksa boş.
+  dosyalar: z.array(z.string()),
+  // Klasörde bulunan bütün günlük günleri (YYYY-AA-GG, en yeniden eskiye); ekran gün seçimi bunu kullanır.
+  gunler: z.array(z.string()),
+});
+
 export type SaglikCevabi = z.output<typeof saglikCevabi>;
 export type Ayrinti = z.output<typeof ayrintiCevabi>;
 export type DiskDurumu = z.output<typeof diskDurumuSemasi>;
@@ -253,3 +340,13 @@ export type SaatlikAralik = (typeof SAATLIK_ARALIKLAR)[number];
 export type SaatlikCevabi = z.output<typeof saatlikCevabi>;
 export type MetrikDakikasi = z.output<typeof metrikDakikasiSemasi>;
 export type MetriklerCevabi = z.output<typeof metriklerCevabi>;
+export type KapanmaNedeni = z.output<typeof kapanmaNedeniSemasi>;
+export type KapanmaSatiri = z.output<typeof kapanmaSatiriSemasi>;
+export type KapanmaAyrintisi = z.output<typeof kapanmaAyrintisiSemasi>;
+export type KapanmaHataSatiri = z.output<typeof kapanmaHataSatiriSemasi>;
+export type KapanmaSurenIstegi = z.output<typeof kapanmaSurenIstegiSemasi>;
+export type KapanmalarCevabi = z.output<typeof kapanmalarCevabi>;
+export type GunlukDuzeyi = z.output<typeof gunlukDuzeyiSemasi>;
+export type GunlukSatiri = z.output<typeof gunlukSatiriSemasi>;
+export type GunlukSorgusu = z.output<typeof gunlukSorgusu>;
+export type GunlukCevabi = z.output<typeof gunlukCevabi>;

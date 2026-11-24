@@ -122,3 +122,7 @@ export { isEmriTakimHazirlaDurumlari } from './takim-hazirla.ts';
 // 3390-2: aralıkla kesişen canlı plan işleri (iş emri, makine, ilk başlangıç ISO). Yetki denetlemez; çağıran plan okumasıyla süzer.
 export const canliPlanAraligi = async (db: Db, baslangic: Date, bitis: Date): Promise<{ isEmriId: number; makineId: number | null; baslangic: string }[]> =>
   (await canliAraliktakiIsler(db, baslangic, bitis)).map((x) => ({ isEmriId: x.isEmriId, makineId: x.makineId, baslangic: x.baslangic.toISOString() }));
+
+// Sağlık izlemesi (3668-1): iş parçacığı hesaplarının sayaçları; bellekte, süreç yeniden açılınca sıfırlanır.
+export { planHesapDurumu, ISCI_BELLEK_SINIRI_MB } from './isci-izleme.ts';
+export type { PlanHesapDurumu, HesapTuru, HesapTuruDurumu } from './isci-izleme.ts';

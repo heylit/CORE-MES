@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { ekranHatasiniBildir } from '../veri/ekran-hatasi.ts';
 import { DurumKutusu } from './DurumKutusu.tsx';
 import { Dugme } from './Dugme.tsx';
 
@@ -34,6 +35,7 @@ export class HataSiniri extends Component<Ozellikler, Durum> {
 
   override componentDidCatch(hata: unknown, bilgi: ErrorInfo): void {
     console.error('Ekran hatası', hata, bilgi.componentStack);
+    ekranHatasiniBildir(hata);
   }
 
   private readonly yenile = (): void => {
