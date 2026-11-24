@@ -143,3 +143,47 @@
   .tc-izleme-gunluk-kartlari { display: grid; }
 }
 @media (min-width: 801px) { .tc-izleme-panel { padding: var(--b-4) var(--b-5); } }
+
+/* Sistem İzleme B: Özet olayları, Şu an, Yük ve davranış, Dış bağlantılar. */
+.tc-izleme-bolumler { display: grid; gap: var(--b-4); min-inline-size: 0; align-content: start; }
+.tc-izleme-bolumler .tc-sistem-baslik { margin: 0; }
+.tc-izleme-arac { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2); }
+.tc-izleme-cizelge { margin: 0; display: grid; gap: var(--b-2); min-inline-size: 0; }
+.tc-izleme-cizelge svg { display: block; inline-size: 100%; block-size: auto; overflow: visible; }
+.tc-izleme-olay { fill: var(--idle); stroke: var(--panel); stroke-width: 2; }
+.tc-izleme-olay[data-tur='kapanma'] { fill: var(--stop); }
+.tc-izleme-olay[data-tur='guncelleme'] { fill: var(--grafik); }
+.tc-izleme-olay[data-tur='takilma'] { fill: var(--hold); }
+.tc-izleme-nokta { display: inline-block; inline-size: var(--b-3); block-size: var(--b-3); border-radius: 50%; margin-inline-end: var(--b-1); background: var(--idle); vertical-align: middle; }
+.tc-izleme-nokta[data-tur='kapanma'] { background: var(--stop); }
+.tc-izleme-nokta[data-tur='guncelleme'] { background: var(--grafik); }
+.tc-izleme-nokta[data-tur='takilma'] { background: var(--hold); }
+.tc-izleme-olay-listesi { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--b-2); }
+.tc-izleme-olay-listesi li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); padding: var(--b-2) var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-1); overflow-wrap: anywhere; }
+.tc-izleme-cubuk { inline-size: 100%; min-inline-size: calc(var(--b-6) * 2); block-size: var(--b-3); }
+.tc-izleme-baglantilar { align-items: start; list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--b-6) * 6)), 1fr)); gap: var(--b-3); }
+.tc-izleme-baglanti-karti { border: 1px solid var(--edge); border-radius: var(--yari-2); padding: var(--b-3); background: var(--panel); min-inline-size: 0; display: grid; gap: var(--b-2); align-content: start; }
+.tc-izleme-baglanti-ad { margin: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2); font-size: var(--yazi-m); }
+.tc-sistem-isaret { stroke: var(--grafik); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.tc-sistem-isaret[data-tur='kapanma'] { stroke: var(--stop); }
+.tc-sistem-lejant-isaret { display: inline-block; inline-size: var(--b-3); margin-inline-end: var(--b-1); vertical-align: middle; border-inline-start: 2px dashed var(--stop); block-size: var(--b-3); }
+.tc-izleme-bolumler > *, .tc-izleme-panel > * { min-inline-size: 0; }
+.tc-izleme-eksen { display: flex; justify-content: space-between; gap: var(--b-1); color: var(--faint); font-family: var(--font-mono); font-size: var(--yazi-xs); }
+.tc-izleme-eksen span { min-inline-size: 0; }
+@media (max-width: 800px) { .tc-izleme-eksen span:nth-child(even) { display: none; } }
+.tc-izleme-olay { stroke-width: 1.5; }
+.tc-izleme-baglanti-plan { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--b-2); overflow-wrap: anywhere; }
+.tc-izleme-kutular { grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--b-6) * 4)), 1fr)); }
+.tc-izleme-bolumler .tc-sistem-aralik { justify-self: start; }
+.tc-izleme-bolumler .tc-sistem-soluk { color: var(--muted); }
+.tc-izleme-neden { margin: 0; color: var(--muted); }
+.tc-izleme-cubuk::-webkit-meter-optimum-value, .tc-izleme-cubuk::-webkit-meter-suboptimum-value, .tc-izleme-cubuk::-webkit-meter-even-less-good-value { background: var(--grafik); }
+.tc-izleme-cubuk::-moz-meter-bar { background: var(--grafik); }
+.tc-izleme-dar { display: none; }
+.tc-izleme-kompakt { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--b-2); }
+.tc-izleme-kompakt li { display: grid; gap: var(--b-1); border: 1px solid var(--edge); border-radius: var(--yari-1); padding: var(--b-2) var(--b-3); background: var(--panel); overflow-wrap: anywhere; }
+.tc-izleme-kompakt-liste { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-4); margin: 0; }
+.tc-izleme-kompakt-liste div { display: flex; gap: var(--b-1); }
+.tc-izleme-kompakt-liste dt { color: var(--muted); }
+.tc-izleme-kompakt-liste dd { margin: 0; font-variant-numeric: tabular-nums; }
+@media (max-width: 800px) { .tc-izleme-genis { display: none; } .tc-izleme-dar { display: block; } }

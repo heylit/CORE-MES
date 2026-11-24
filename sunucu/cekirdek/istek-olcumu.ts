@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { FastifyInstance } from 'fastify';
-import { HATA_ILETISI_AZAMI, istekBasladi, istekBitti, takilmaIzleyiciBaslat } from './istek-izleme.ts';
+import { HATA_ILETISI_AZAMI, ekranAdiTemizle, ekranIstegiSay, istekBasladi, istekBitti, takilmaIzleyiciBaslat } from './istek-izleme.ts';
 import { istekKisisi } from './red-kaydi.ts';
 
 interface Sayac {
@@ -57,7 +57,7 @@ export function kovaSirasi(sureMs: number): number {
   return sira === -1 ? SURE_KOVALARI_MS.length : sira;
 }
 
-export function istekSay(yontem: string, yol: string | null, durum: number, sureMs: number, boyutBayt: number | null = null): void {
+export function istekSay(yontem: string, yol: string | null, durum: number, sureMs: number, boyutBayt: number | null = null, sorguSayisi = 0): void {
   const sinif = durumSinifi(durum);
   const anahtar = `${yontem} ${yol ?? ''} ${sinif}`;
   let sayac = ucSayaclari.get(anahtar);
@@ -70,13 +70,16 @@ export function istekSay(yontem: string, yol: string | null, durum: number, sure
   const kova = kovaSirasi(sureMs);
   sayac.kovalar[kova] = (sayac.kovalar[kova] ?? 0) + 1;
   if (durum === 503) sayac.mesgul += 1;
+  const bk = `${yontem} ${yol ?? ''}`;
+  const b = ucBoyutlari.get(bk) ?? { yontem, yol, toplamBayt: 0, sayi: 0, istek: 0, toplamSorgu: 0, cakisma: 0 };
+  b.istek += 1;
+  b.toplamSorgu += sorguSayisi;
+  if (durum === 409) b.cakisma += 1;
   if (boyutBayt !== null) {
-    const bk = `${yontem} ${yol ?? ''}`;
-    const b = ucBoyutlari.get(bk) ?? { yontem, yol, toplamBayt: 0, sayi: 0 };
     b.toplamBayt += boyutBayt;
     b.sayi += 1;
-    ucBoyutlari.set(bk, b);
   }
+  ucBoyutlari.set(bk, b);
 }
 
 // Cevap boyutu (3668-1): Content-Length başlığı olan cevaplar; akışla giden cevapta başlık yoktur, o cevap sayılmaz (sıfır uydurulmaz).
@@ -85,7 +88,12 @@ export interface UcBoyutu {
   yontem: string;
   yol: string | null;
   toplamBayt: number;
+  // Boyutu bilinen cevap sayısı (ortalama cevap boyutunun paydası).
   sayi: number;
+  // Boyutu bilinsin bilinmesin bütün istekler, bunlardaki toplam sorgu ve 409 yanıtı (3668 B: ek alanlar ayrı yapıda, UcSayaci değişmez).
+  istek: number;
+  toplamSorgu: number;
+  cakisma: number;
 }
 
 const ucBoyutlari = new Map<string, UcBoyutu>();
@@ -136,7 +144,8 @@ export function istekOlcumunuKur(app: FastifyInstance, secenek: OlcumSecenegi = 
       sorgu: sayaclar.get(istek)?.sorgu ?? 0,
       boyutBayt,
     };
-    istekSay(olcum.yontem, olcum.yol, olcum.durum, sureMs, boyutBayt);
+    istekSay(olcum.yontem, olcum.yol, olcum.durum, sureMs, boyutBayt, olcum.sorgu);
+    ekranIstegiSay(ekranAdiTemizle(istek.headers['x-tc-ekran']), olcum.kisiId);
     const izlemeKimligi = izlemeKimlikleri.get(istek);
     if (izlemeKimligi !== undefined) {
       istekBitti(izlemeKimligi, { yontem: olcum.yontem, adres: olcum.adres, kisiId: olcum.kisiId, durum: olcum.durum, sureMs, hata: hatalar.get(istek) ?? null });

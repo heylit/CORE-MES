@@ -6,12 +6,18 @@ import { isDurumlari } from '#cekirdek/zamanlayici.ts';
 import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
 import { varsayilanGunlukDizini } from '#cekirdek/gunluk-dosyasi.ts';
 import { bulunamadi } from '#cekirdek/hata.ts';
-import { ayrintiCevabi, gunlukCevabi, gunlukSorgusu, kapanmaAyrintisiSemasi, kapanmaParametresi, kapanmalarCevabi, metriklerCevabi, saatOzetiSemasi, saatlikCevabi, saatlikSorgusu, saglikCevabi } from '#paylasilan/sozlesme/saglik.ts';
+import { ayrintiCevabi, disBaglantilarCevabi, gunlukCevabi, gunlukSorgusu, kapanmaAyrintisiSemasi, kapanmaParametresi, kapanmalarCevabi, metriklerCevabi, saatOzetiSemasi, saatlikCevabi, saatlikSorgusu, saglikCevabi, suAnCevabi, yukCevabi, yukSorgusu } from '#paylasilan/sozlesme/saglik.ts';
 import type { SaatOzeti } from '#paylasilan/sozlesme/saglik.ts';
+import { disBaglantilar, SUREC_DIS_BAGLANTI_KAYNAGI } from './dis-baglanti.ts';
+import type { DisBaglantiKaynagi } from './dis-baglanti.ts';
 import { gunlukOku } from './gunluk-okuyucu.ts';
 import { kapanmaAyrintisi, kapanmalarListesi } from './kapanma.ts';
 import { YOKLAMA_SURE_SINIRI_MS, saatlikBaslangic } from './kurallar.ts';
 import { metrikSaatleriOku } from './sorgular.ts';
+import { SUREC_SU_AN_KAYNAGI, SU_AN_UCU_ADRESI, suAnTopla } from './su-an.ts';
+import type { SuAnKaynagi } from './su-an.ts';
+import { surecYuku } from './yuk.ts';
+import type { YukToplayici } from './yuk.ts';
 import type { YedekBilgisi } from './kurallar.ts';
 import {
   ayrintiTopla, gitCommitOku, olayDongusuOlceri, onbellekliOkuyucu, onbellekliOtomatikAcilis, saglikliMi, surecMetrikleri, surecYedegi,
@@ -40,6 +46,10 @@ export interface SaglikKaynagi {
   metrikler?: Pick<MetrikToplayici, 'dakikalar'>;
   // Verilmezse TMIV2-GUNLUK klasörü (depo klasörünün yanında).
   gunlukDizini?: () => string;
+  // Şu an, yük ve dış bağlantı kaynakları (3668 B); verilmezse süreçtekiler.
+  suAn?: Omit<SuAnKaynagi, 'acilis'>;
+  yuk?: Pick<YukToplayici, 'oku' | 'sunucuAcilis'>;
+  disBaglanti?: DisBaglantiKaynagi;
 }
 
 async function surecDiskDizinleri(db: Db): Promise<DiskDizinleri> {
@@ -145,6 +155,33 @@ export function saglikUclari(yoklamaSureSiniriMs: number, kaynak: SaglikKaynagi 
       sorgu: gunlukSorgusu,
       cevap: gunlukCevabi,
       isle: ({ sorgu }) => gunlukOku((kaynak.gunlukDizini ?? varsayilanGunlukDizini)(), sorgu),
+    }),
+    // Şu an (3668 B1): süren istekler, hesaplar, oturumlar, veritabanı bağlantıları ve kilit beklemeleri; ekran 5 saniyede bir ister.
+    uc({
+      yontem: 'GET',
+      yol: SU_AN_UCU_ADRESI,
+      yetki: 'saglik.ayrinti-oku',
+      cevap: suAnCevabi,
+      isle: ({ db }) => suAnTopla(db, { ...(kaynak.suAn ?? SUREC_SU_AN_KAYNAGI), acilis: () => (kaynak.yuk ?? surecYuku).sunucuAcilis() }),
+    }),
+    // Yük ve davranış (3668 B2): tekrar eden denemeler, en meşgul uçlar, takılma anları, ekran başına yenileme yükü.
+    uc({
+      yontem: 'GET',
+      yol: '/saglik/yuk',
+      yetki: 'saglik.ayrinti-oku',
+      txDisi: true,
+      sorgu: yukSorgusu,
+      cevap: yukCevabi,
+      isle: ({ sorgu }) => (kaynak.yuk ?? surecYuku).oku(sorgu.donem),
+    }),
+    // Dış bağlantılar (3668 B3): yalnız modüllerin `disari.ts` ile bildirdiği durum.
+    uc({
+      yontem: 'GET',
+      yol: '/saglik/dis-baglantilar',
+      yetki: 'saglik.ayrinti-oku',
+      txDisi: true,
+      cevap: disBaglantilarCevabi,
+      isle: () => ({ baglantilar: disBaglantilar(kaynak.disBaglanti ?? SUREC_DIS_BAGLANTI_KAYNAGI) }),
     }),
   ];
 }

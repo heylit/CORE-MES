@@ -140,13 +140,18 @@ export function takilmaAnlariniAl(): TakilmaAni[] {
 export const TAKILMA_OLCUM_ARALIGI_MS = 50;
 
 // Zamanlayıcı beklenenden geç çalışırsa ana hat o kadar bloklanmıştır. Süreç kapanırken zamanlayıcı tutulmaz.
-export function takilmaIzleyiciBaslat(): () => void {
-  let beklenen = Date.now() + TAKILMA_OLCUM_ARALIGI_MS;
+// Açılışta modüller yüklenir, göç ve ilk işler koşar: ana hat o sırada normal olarak uzun meşguldür. Bu süre içindeki gecikme
+// takılma sayılmaz (her yeniden başlatmada sahte "sunucu takıldı" olayı düşmesin).
+export const TAKILMA_ISINMA_MS = 30_000;
+
+export function takilmaIzleyiciBaslat(isinmaMs: number = TAKILMA_ISINMA_MS): () => void {
+  const baslangic = Date.now();
+  let beklenen = baslangic + TAKILMA_OLCUM_ARALIGI_MS;
   const zamanlayici = setInterval(() => {
     const simdi = Date.now();
     const gecikme = simdi - beklenen;
     beklenen = simdi + TAKILMA_OLCUM_ARALIGI_MS;
-    if (gecikme < ayar.takilmaEsikMs) return;
+    if (gecikme < ayar.takilmaEsikMs || simdi - baslangic < isinmaMs) return;
     takilmalar.push({ an: simdi, takilmaMs: gecikme, suren: surenIstekler(simdi), sonBiten });
     if (takilmalar.length > AZAMI_TAKILMA) takilmalar.shift();
   }, TAKILMA_OLCUM_ARALIGI_MS);
@@ -156,9 +161,52 @@ export function takilmaIzleyiciBaslat(): () => void {
 
 export function izlemeyiSifirla(): void {
   suren.clear();
+  ekranIstekleri.clear();
   denemeler.clear();
   seriler.clear();
   takilmalar.length = 0;
   sonBiten = null;
   ayar = { ...VARSAYILAN_IZLEME_AYARI };
+}
+
+// Ekran başına otomatik yenileme yükü (3668 B): istemci hangi ekranda olduğunu `x-tc-ekran` başlığıyla bildirirse sayılır; başlıksız
+// istek "bilinmiyor"dur. Son bir dakikanın sayımı bellekte; sorgu dizgesi ve kimlik taşımaz (yalnız ilk yol parçası).
+export const EKRAN_BILINMIYOR = 'bilinmiyor';
+const EKRAN_PENCERESI_MS = 60_000;
+const AZAMI_EKRAN = 100;
+interface EkranIstegi { an: number; kisiId: number | null }
+const ekranIstekleri = new Map<string, EkranIstegi[]>();
+
+// Başlık değeri güvenilmez: yalnız küçük harf, rakam ve tire içeren, en çok 40 karakterlik tek yol parçası kabul edilir.
+export function ekranAdiTemizle(deger: unknown): string {
+  if (typeof deger !== 'string') return EKRAN_BILINMIYOR;
+  const parca = deger.trim().replace(/^\/+/, '').split(/[/?#]/, 1)[0] ?? '';
+  return /^[a-z0-9-]{1,40}$/.test(parca) ? parca : EKRAN_BILINMIYOR;
+}
+
+export function ekranIstegiSay(ekran: string, kisiId: number | null, simdi: number = Date.now()): void {
+  let liste = ekranIstekleri.get(ekran);
+  if (liste === undefined) {
+    if (ekranIstekleri.size >= AZAMI_EKRAN) return;
+    liste = [];
+    ekranIstekleri.set(ekran, liste);
+  }
+  liste.push({ an: simdi, kisiId });
+  // Pencerenin dışına düşenler, listeyi büyütmeden atılır.
+  if (liste.length > 1 && simdi - (liste[0]?.an ?? simdi) > EKRAN_PENCERESI_MS) {
+    const ilk = liste.findIndex((i) => simdi - i.an <= EKRAN_PENCERESI_MS);
+    liste.splice(0, ilk === -1 ? liste.length : ilk);
+  }
+}
+
+export interface EkranYuku { ekran: string; istekDk: number; kisiSayisi: number }
+
+export function ekranYukunuAl(simdi: number = Date.now()): EkranYuku[] {
+  const cikti: EkranYuku[] = [];
+  for (const [ekran, liste] of ekranIstekleri) {
+    const son = liste.filter((i) => simdi - i.an <= EKRAN_PENCERESI_MS);
+    if (son.length === 0) { ekranIstekleri.delete(ekran); continue; }
+    cikti.push({ ekran, istekDk: son.length, kisiSayisi: new Set(son.map((i) => i.kisiId).filter((k) => k !== null)).size });
+  }
+  return cikti.sort((a, b) => b.istekDk - a.istekDk);
 }

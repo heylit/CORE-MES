@@ -3,10 +3,10 @@ import { afterEach, describe, test } from 'node:test';
 import Fastify from 'fastify';
 import { istekKisisiniIsaretle } from './red-kaydi.ts';
 import {
-  VARSAYILAN_IZLEME_AYARI, istekBasladi, istekBitti, izlemeAyariniKur, izlemeyiSifirla, surenIstekler, takilmaAnlariniAl,
+  VARSAYILAN_IZLEME_AYARI, EKRAN_BILINMIYOR, ekranAdiTemizle, ekranIstegiSay, ekranYukunuAl, istekBasladi, istekBitti, izlemeAyariniKur, izlemeyiSifirla, surenIstekler, takilmaAnlariniAl,
   takilmaIzleyiciBaslat, tekrarSerileriniAl,
 } from './istek-izleme.ts';
-import { istekBoyutlari, istekOlcumunuKur } from './istek-olcumu.ts';
+import { istekBoyutlari, istekOlcumunuKur, sorguSayildi } from './istek-olcumu.ts';
 
 const biten = (yontem: string, adres: string, kisiId: number | null, durum: number, hata: string | null = null) =>
   ({ yontem, adres, kisiId, durum, sureMs: 5, hata });
@@ -73,7 +73,7 @@ describe('tekrar eden denemeler', () => {
 
 describe('takılma anı', () => {
   test('ana hattı bloklayan uç çalışırken eşiği aşan takılma o uçla kaydedilir', async () => {
-    const durdur = takilmaIzleyiciBaslat();
+    const durdur = takilmaIzleyiciBaslat(0);
     const bitir = istekBasladi('GET', '/bloklayan', () => 3);
     await new Promise((coz) => setTimeout(coz, 80));
     const bitis = Date.now() + 300;
@@ -89,10 +89,27 @@ describe('takılma anı', () => {
     assert.deepEqual(takilmaAnlariniAl(), []);
   });
 
+  test('açılış ısınma süresindeki gecikme takılma sayılmaz; süre geçince sayılır', async () => {
+    const isinirken = takilmaIzleyiciBaslat(60_000);
+    await new Promise((coz) => setTimeout(coz, 80));
+    const bitis = Date.now() + 300;
+    while (Date.now() < bitis) { /* açılış yükünü taklit eder */ }
+    await new Promise((coz) => setTimeout(coz, 120));
+    isinirken();
+    assert.deepEqual(takilmaAnlariniAl(), []);
+    const isinmis = takilmaIzleyiciBaslat(100);
+    await new Promise((coz) => setTimeout(coz, 200));
+    const bitis2 = Date.now() + 300;
+    while (Date.now() < bitis2) { /* ısınma bitti: bu takılmadır */ }
+    await new Promise((coz) => setTimeout(coz, 120));
+    isinmis();
+    assert.ok(takilmaAnlariniAl().length >= 1);
+  });
+
   test('eşik altında bekleme takılma sayılmaz', async () => {
     // Yüklü makinede gerçek gecikme 200 ms'yi aşabilir; eşik yüksek tutulur ki test yalnız eşik kuralını ölçsün.
     izlemeAyariniKur({ takilmaEsikMs: 60_000 });
-    const durdur = takilmaIzleyiciBaslat();
+    const durdur = takilmaIzleyiciBaslat(0);
     await new Promise((coz) => setTimeout(coz, 200));
     durdur();
     assert.deepEqual(takilmaAnlariniAl(), []);
@@ -106,7 +123,8 @@ describe('istek ölçümüne bağlanma (Fastify, veritabansız)', () => {
     istekOlcumunuKur(app);
     app.addHook('onRequest', (istek, _y, bitti) => { istekKisisiniIsaretle(istek, 42); bitti(); });
     app.post('/deneme', () => { throw new Error('Deneme hatası'); });
-    app.get('/boyut', () => 'abcde');
+    app.get('/boyut', () => { sorguSayildi(); sorguSayildi(); return 'abcde'; });
+    app.post('/cakisma', (_i, y) => y.code(409).send({ kod: 'CAKISMA' }));
     for (let i = 0; i < 2; i += 1) await app.inject({ method: 'POST', url: '/deneme?ara=gizli' });
     await new Promise((coz) => setTimeout(coz, 20));
     assert.deepEqual(tekrarSerileriniAl(), []);
@@ -118,6 +136,30 @@ describe('istek ölçümüne bağlanma (Fastify, veritabansız)', () => {
     assert.deepEqual({ k: seri[0]?.kisiId, adres: seri[0]?.adres, hata: seri[0]?.sonHata, durum: seri[0]?.sonDurum }, { k: 42, adres: '/deneme', hata: 'Deneme hatası', durum: 500 });
     const boyut = istekBoyutlari().find((s) => s.yol === '/boyut');
     assert.deepEqual({ bayt: boyut?.toplamBayt, sayi: boyut?.sayi }, { bayt: 5, sayi: 1 });
+    assert.deepEqual({ istek: boyut?.istek, sorgu: boyut?.toplamSorgu, cakisma: boyut?.cakisma }, { istek: 1, sorgu: 2, cakisma: 0 });
+    await app.inject({ method: 'POST', url: '/cakisma' });
+    assert.equal(istekBoyutlari().find((b) => b.yol === '/cakisma')?.cakisma, 1);
     await app.close();
+  });
+});
+
+describe('ekran başına yenileme yükü', () => {
+  test('başlık değeri tek yol parçasına indirilir; geçersiz değer bilinmiyor olur', () => {
+    assert.equal(ekranAdiTemizle('/kokpit'), 'kokpit');
+    assert.equal(ekranAdiTemizle('/uretim-emirleri/17?ara=gizli'), 'uretim-emirleri');
+    assert.equal(ekranAdiTemizle('Kokpit'), EKRAN_BILINMIYOR);
+    assert.equal(ekranAdiTemizle('<script>'), EKRAN_BILINMIYOR);
+    assert.equal(ekranAdiTemizle(undefined), EKRAN_BILINMIYOR);
+    assert.equal(ekranAdiTemizle('a'.repeat(41)), EKRAN_BILINMIYOR);
+  });
+
+  test('son bir dakikadaki istek ve farklı kişi sayısı; eski sayım düşer', () => {
+    ekranIstegiSay('kokpit', 1, 1000);
+    ekranIstegiSay('kokpit', 1, 2000);
+    ekranIstegiSay('kokpit', 2, 3000);
+    ekranIstegiSay('kokpit', null, 4000);
+    assert.deepEqual(ekranYukunuAl(30_000), [{ ekran: 'kokpit', istekDk: 4, kisiSayisi: 2 }]);
+    ekranIstegiSay('stok', 5, 70_000);
+    assert.deepEqual(ekranYukunuAl(75_000), [{ ekran: 'stok', istekDk: 1, kisiSayisi: 1 }]);
   });
 });

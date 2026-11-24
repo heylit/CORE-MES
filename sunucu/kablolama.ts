@@ -16,7 +16,10 @@ import * as bildirim from './moduller/bildirim/disari.ts';
 import { epostaAdresCozucusuKaydet as bildirimEpostaAdresCozucusu, epostaAyarOkuyucusuKaydet as bildirimEpostaAyarOkuyucusu, epostaLogoOkuyucusuKaydet as bildirimEpostaLogoOkuyucusu, istasyonCozucusuKaydet as bildirimIstasyonCozucusu } from './moduller/bildirim/disari.ts';
 import { makineOeeleri } from './moduller/oee/disari.ts';
 import { acilisKancasiKaydet } from './cekirdek/surec.ts';
-import { kapanmaAcilisKancasi } from './moduller/saglik/disari.ts';
+import { kapanmaAcilisKancasi, logoBaglantiOkuyucusuKaydet, oturumSayisiOkuyucusuKaydet, planHesapOkuyucusuKaydet, smartesBaglantiOkuyucusuKaydet, yaziciBaglantiOkuyucusuKaydet } from './moduller/saglik/disari.ts';
+import { acikOturumlariSay } from './moduller/oturum/disari.ts';
+import { smartesBaglantisiAcikMi } from './moduller/smartes/disari.ts';
+import { yaziciBaglantisiAcikMi } from './moduller/etiket-merkezi/disari.ts';
 import { coreOeeCozucusuKaydet as smartesCoreOeeCozucusu } from './moduller/smartes/disari.ts';
 import { malzemeKartiIzleri as markalamaKartIzleri, markalamaOperasyonCozucusu } from './moduller/markalama/disari.ts';
 import * as idariIsler from './moduller/idari-isler/disari.ts';
@@ -704,6 +707,11 @@ export function sunucununBaglari(): Bag[] {
     // 2147: istasyona elle bildirim, o günkü istasyon atamasındaki kişilere (bildirim istasyonları ithal edemez: döngü).
     bag('makine OEE -> SmartES hesap karşılaştırması', smartesCoreOeeCozucusu, makineOeeleri),
     bag('sağlık kapanma kaydı -> sunucu açılış kancası', acilisKancasiKaydet, kapanmaAcilisKancasi),
+    bag('plan hesap sayaçları -> sağlık şu an', planHesapOkuyucusuKaydet, plan.planHesapDurumu),
+    bag('açık oturum sayısı -> sağlık şu an', oturumSayisiOkuyucusuKaydet, async (db: Db) => (await acikOturumlariSay(db)).reduce((t, o) => t + o.acikOturum, 0)),
+    bag('smartes bağlantı durumu -> sağlık dış bağlantılar', smartesBaglantiOkuyucusuKaydet, () => smartesBaglantisiAcikMi()),
+    bag('logo bağlantı durumu -> sağlık dış bağlantılar', logoBaglantiOkuyucusuKaydet, () => logo.logoBaglantisiAcikMi()),
+    bag('etiket yazıcısı bağlantı durumu -> sağlık dış bağlantılar', yaziciBaglantiOkuyucusuKaydet, () => yaziciBaglantisiAcikMi()),
     bag('istasyon kişileri -> bildirim yayını', bildirimIstasyonCozucusu, [aktifIstasyonlar, istasyondakiKisiler].every((f) => typeof f === 'function')
       ? async (db: Db) => {
         const sonuc: { id: number; ad: string; kisiIdleri: number[] }[] = [];

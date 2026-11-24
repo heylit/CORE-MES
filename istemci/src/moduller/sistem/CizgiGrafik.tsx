@@ -1,6 +1,7 @@
 import { useState, type PointerEvent, type ReactNode } from 'react';
 import { Simge } from '../../ortak/arayuz/index.ts';
 import type { Yorum } from './gidisat-yorum.ts';
+import type { Isaret } from './izleme-yorumu.ts';
 import { sayiMetni, yuvarlakTavan, type Nokta } from './performans.ts';
 
 // Tek eksenli çizgi grafiği (paket yok, SVG). Ölçülmemiş nokta çizgide boşluk bırakır, sıfır uydurulmaz.
@@ -20,6 +21,8 @@ interface Ozellikler {
   yorum?: Yorum;
   // Son ölçü, büyük yazılır: "şu an" sorusunun cevabı.
   simdi?: string;
+  // Kapanma ve güncelleme anları: ilk ve son nokta arasında dikey kesikli çizgi (zaman oranıyla yerleşir).
+  isaretler?: readonly Isaret[];
 }
 
 function YorumSatiri({ yorum }: { yorum: Yorum }) {
@@ -53,7 +56,7 @@ const ALT = 18;
 
 const birimli = (n: number | null, birim: string): string => (n === null ? 'ölçülmedi' : `${sayiMetni(n)}${birim}`);
 
-export function CizgiGrafik({ baslik, seriler, birim, etiket, esik, tavan, aciklama, yorum, simdi }: Ozellikler) {
+export function CizgiGrafik({ baslik, seriler, birim, etiket, esik, tavan, aciklama, yorum, simdi, isaretler = [] }: Ozellikler) {
   const [imlec, imlecYaz] = useState<number | null>(null);
   const uzunluk = Math.max(0, ...seriler.map((s) => s.noktalar.length));
   const degerler = seriler.flatMap((s) => s.noktalar.map((n) => n.deger)).filter((d): d is number => d !== null);
@@ -86,6 +89,9 @@ export function CizgiGrafik({ baslik, seriler, birim, etiket, esik, tavan, acikl
     const gx = ((o.clientX - r.left) / r.width) * EN;
     imlecYaz(Math.max(0, Math.min(uzunluk - 1, Math.round(((gx - SOL) / (EN - SOL - SAG)) * (uzunluk - 1)))));
   };
+  const ilkAn = zamanlar[0]?.an.getTime();
+  const sonAn = zamanlar[uzunluk - 1]?.an.getTime();
+  const xZaman = (an: Date): number => (ilkAn === undefined || sonAn === undefined || sonAn === ilkAn ? SOL : SOL + ((an.getTime() - ilkAn) / (sonAn - ilkAn)) * (EN - SOL - SAG));
   const secili = imlec === null ? null : zamanlar[imlec];
 
   return (
@@ -94,6 +100,7 @@ export function CizgiGrafik({ baslik, seriler, birim, etiket, esik, tavan, acikl
         <span className="tc-sistem-lejant">
           {seriler.length > 1 && seriler.map((s) => <span key={s.ad}><i className="tc-sistem-lejant-cizgi" data-ton={s.ton} />{s.ad}</span>)}
           {esik !== undefined && <span><i className="tc-sistem-lejant-esik" />Sınır</span>}
+          {isaretler.length > 0 && <span><i className="tc-sistem-lejant-isaret" />Kapanma / güncelleme</span>}
         </span>
       </Baslik>
       <div className="tc-sistem-cizim">
@@ -111,6 +118,7 @@ export function CizgiGrafik({ baslik, seriler, birim, etiket, esik, tavan, acikl
             const hiza = i === 0 ? 'start' : i === uzunluk - 1 ? 'end' : 'middle';
             return n === undefined ? null : <text key={i} className="tc-sistem-eksen" x={x(i)} y={BOY - 4} textAnchor={hiza}>{etiket(n.an)}</text>;
           })}
+          {isaretler.map((i) => <line key={`${i.tur}-${i.an.toISOString()}`} className="tc-sistem-isaret" data-tur={i.tur} x1={xZaman(i.an)} x2={xZaman(i.an)} y1={UST} y2={BOY - ALT} />)}
           {imlec !== null && <line className="tc-sistem-imlec" x1={x(imlec)} x2={x(imlec)} y1={UST} y2={BOY - ALT} />}
         </svg>
       </div>

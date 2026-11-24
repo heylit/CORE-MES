@@ -5,7 +5,7 @@ import type { TabloOlcusu, VtIstatistigi } from './sorgular.ts';
 import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
 import type { PgSurumu, YedekDurumu } from '#paylasilan/sozlesme/ayarlar.ts';
 import type {
-  DisKopyaKaydi, DiskDurumu, GeriYuklemeDenemesi, GunIciKoruma, GunlukDuzeyi, GunlukSatiri, GunlukSorgusu, KapanmaNedeni, VeritabaniBuyumesi, WalArsivi, IsDurumuOzeti, IstekOzeti, MetrikDakikasi, OtomatikAcilis, SaatlikAralik, SaatOzeti, UcOzeti, Uyari,
+  DisKopyaKaydi, DiskDurumu, GeriYuklemeDenemesi, GunIciKoruma, GunlukDuzeyi, GunlukSatiri, GunlukSorgusu, KapanmaNedeni, VeritabaniBuyumesi, WalArsivi, IsDurumuOzeti, IstekOzeti, MesguUc, MetrikDakikasi, OtomatikAcilis, SaatlikAralik, SaatOzeti, UcOzeti, Uyari,
 } from '#paylasilan/sozlesme/saglik.ts';
 
 const COMMIT_BICIMI = /^[0-9a-f]{40}$/;
@@ -772,4 +772,99 @@ export function gunlukImleciCoz(imlec: string | undefined, dosyalar: readonly st
   const e = /^(sunucu-\d{4}-\d{2}-\d{2}\.log):(\d{1,15})$/.exec(imlec);
   const sira = e?.[1] === undefined ? -1 : dosyalar.indexOf(e[1]);
   return sira === -1 || e?.[2] === undefined ? { dosya: 0, ofset: null } : { dosya: sira, ofset: Number(e[2]) };
+}
+
+// ---- Şu an ve Yük ve davranış (3668 B) ----
+
+// pg_stat_activity sorgu metni ekrana yalnız yapısıyla çıkar: tırnaklı değerler ve sayılar `?` olur (parametreli sorguda `$1` kalır),
+// boşluklar teke iner, uzunluk sınırlanır. Metin kişisel veri taşıyabilir; ham hâli hiçbir cevaba girmez.
+export const SORGU_METNI_AZAMI = 120;
+export function sorguMetniniTemizle(sorgu: string): string {
+  const temiz = sorgu
+    .replace(/'(?:[^']|'')*'/g, '?')
+    .replace(/(?<![\w$])\d+(?:\.\d+)?\b/g, '?')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return temiz.length > SORGU_METNI_AZAMI ? `${temiz.slice(0, SORGU_METNI_AZAMI - 1)}…` : temiz;
+}
+
+// Dakikalık yük ölçüsü: istek sayacı ve boyut sayacı açılıştan beri artar; bir dakikalık fark uç başına tek satırdır.
+export interface UcYukSayaci {
+  yontem: string;
+  yol: string | null;
+  istek: number;
+  toplamMs: number;
+  toplamSorgu: number;
+  toplamBayt: number;
+  boyutluCevap: number;
+  cakisma: number;
+}
+
+export interface YukDakikasi { an: number; uclar: UcYukSayaci[] }
+
+const yukUcAnahtari = (yontem: string, yol: string | null): string => `${yontem} ${yol ?? ''}`;
+
+// Sayaçlar (sinif başına ayrı) ve boyutlar (uç başına) tek uç satırına birleşir. Boyut sayacı olmayan uçta sorgu ve bayt 0'dır.
+export function yukAnligiYap(
+  sayaclar: readonly Pick<UcSayaci, 'yontem' | 'yol' | 'sayi' | 'toplamMs'>[],
+  boyutlar: readonly { yontem: string; yol: string | null; toplamBayt: number; sayi: number; istek: number; toplamSorgu: number; cakisma: number }[],
+): UcYukSayaci[] {
+  const harita = new Map<string, UcYukSayaci>();
+  for (const s of sayaclar) {
+    const k = yukUcAnahtari(s.yontem, s.yol);
+    const m = harita.get(k) ?? { yontem: s.yontem, yol: s.yol, istek: 0, toplamMs: 0, toplamSorgu: 0, toplamBayt: 0, boyutluCevap: 0, cakisma: 0 };
+    m.istek += s.sayi;
+    m.toplamMs += s.toplamMs;
+    harita.set(k, m);
+  }
+  for (const b of boyutlar) {
+    const m = harita.get(yukUcAnahtari(b.yontem, b.yol));
+    if (m === undefined) continue;
+    m.toplamSorgu += b.toplamSorgu;
+    m.toplamBayt += b.toplamBayt;
+    m.boyutluCevap += b.sayi;
+    m.cakisma += b.cakisma;
+  }
+  return [...harita.values()];
+}
+
+// İki anlık arasındaki fark; sayaç geriye giderse (süreç yeniden açıldı) o uç farkı yok sayılır, negatif uydurulmaz.
+export function yukDakikasiHesapla(onceki: readonly UcYukSayaci[], simdiki: readonly UcYukSayaci[], an: number): YukDakikasi {
+  const eski = new Map(onceki.map((u) => [yukUcAnahtari(u.yontem, u.yol), u]));
+  const uclar: UcYukSayaci[] = [];
+  for (const u of simdiki) {
+    const e = eski.get(yukUcAnahtari(u.yontem, u.yol));
+    const f: UcYukSayaci = {
+      yontem: u.yontem, yol: u.yol,
+      istek: u.istek - (e?.istek ?? 0), toplamMs: u.toplamMs - (e?.toplamMs ?? 0), toplamSorgu: u.toplamSorgu - (e?.toplamSorgu ?? 0),
+      toplamBayt: u.toplamBayt - (e?.toplamBayt ?? 0), boyutluCevap: u.boyutluCevap - (e?.boyutluCevap ?? 0), cakisma: u.cakisma - (e?.cakisma ?? 0),
+    };
+    if (f.istek > 0 && f.toplamMs >= 0 && f.toplamSorgu >= 0 && f.toplamBayt >= 0 && f.boyutluCevap >= 0 && f.cakisma >= 0) uclar.push(f);
+  }
+  return { an, uclar };
+}
+
+export const MESGUL_UC_AZAMI = 10;
+
+// Dönemdeki dakikaların toplamı, toplam süreye göre çoktan aza (eşitlikte istek sayısı, sonra ad: sıra her çağrıda aynıdır).
+export function mesguUclariOzetle(dakikalar: readonly YukDakikasi[], baslangicMs: number): MesguUc[] {
+  const harita = new Map<string, UcYukSayaci>();
+  for (const d of dakikalar) {
+    if (d.an < baslangicMs) continue;
+    for (const u of d.uclar) {
+      const k = yukUcAnahtari(u.yontem, u.yol);
+      const m = harita.get(k) ?? { ...u, istek: 0, toplamMs: 0, toplamSorgu: 0, toplamBayt: 0, boyutluCevap: 0, cakisma: 0 };
+      m.istek += u.istek; m.toplamMs += u.toplamMs; m.toplamSorgu += u.toplamSorgu; m.toplamBayt += u.toplamBayt; m.boyutluCevap += u.boyutluCevap; m.cakisma += u.cakisma;
+      harita.set(k, m);
+    }
+  }
+  return [...harita.values()]
+    .sort((a, b) => b.toplamMs - a.toplamMs || b.istek - a.istek || yukUcAnahtari(a.yontem, a.yol).localeCompare(yukUcAnahtari(b.yontem, b.yol)))
+    .slice(0, MESGUL_UC_AZAMI)
+    .map((u) => ({
+      yontem: u.yontem, yol: u.yol, istek: u.istek, toplamMs: Math.round(u.toplamMs), ortMs: u.istek === 0 ? 0 : Math.round(u.toplamMs / u.istek),
+      sorguIstekBasina: u.istek === 0 ? null : Math.round((u.toplamSorgu / u.istek) * 10) / 10,
+      ortCevapBayt: u.boyutluCevap === 0 ? null : Math.round(u.toplamBayt / u.boyutluCevap),
+      cakisma409: u.cakisma,
+    }));
 }

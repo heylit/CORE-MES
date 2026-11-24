@@ -321,6 +321,111 @@ export const gunlukCevabi = z.object({
   gunler: z.array(z.string()),
 });
 
+// ---- Şu an, Yük ve davranış, Dış bağlantılar (3668 B) ----
+export const planHesapTuruSemasi = z.object({
+  tur: z.enum(['motor', 'degerlendirme', 'teklif', 'yillik']),
+  calisan: sayi,
+  biten: sayi,
+  zamanAsimi: sayi,
+  // Bellek sınırını aşıp düşen hesap sayısı.
+  bellekAsimi: sayi,
+  hata: sayi,
+  sonSureMs: z.number().nonnegative().nullable(),
+  enUzunSureMs: z.number().nonnegative().nullable(),
+});
+
+export const suAnKilidiSemasi = z.object({
+  // Parametresiz, değerleri maskelenmiş, kısaltılmış sorgu metni.
+  sorgu: z.string(),
+  // Bekleten veritabanı işleminin numarası; kişi bilinmez.
+  bekletenIslem: z.number().int(),
+  beklemeSn: z.number().nonnegative(),
+});
+
+export const suAnCevabi = z.object({
+  an: zamanSemasi,
+  surenIstekler: z.array(kapanmaSurenIstegiSemasi),
+  planHesaplari: z.array(planHesapTuruSemasi),
+  // Geçerli (kapanmamış, süresi dolmamış) oturum sayısı; okunamadıysa null.
+  acikOturum: sayi.nullable(),
+  // Okunamadıysa null: sıfır uydurulmaz.
+  veritabani: z.object({ baglanti: sayi, azami: sayi, kilitBekleyen: sayi }).nullable(),
+  kilitler: z.array(suAnKilidiSemasi),
+  bellek: z.object({ yiginBayt: sayi, yiginSiniriBayt: sayi, rssBayt: sayi }),
+  sunucuAcilis: zamanSemasi,
+});
+
+export const YUK_DONEMLERI = ['1s', '24s'] as const;
+export const yukSorgusu = z.object({ donem: z.enum(YUK_DONEMLERI).default('24s') });
+
+export const tekrarSerisiSemasi = z.object({
+  kisiId: z.number().int(),
+  yontem: z.string(),
+  adres: z.string(),
+  kez: sayi,
+  hatali: sayi,
+  sonDurum: z.number().int(),
+  sonHata: z.string().nullable(),
+  sonAn: zamanSemasi,
+});
+
+export const mesguUcSemasi = z.object({
+  yontem: z.string(),
+  yol: z.string().nullable(),
+  istek: sayi,
+  toplamMs: z.number().nonnegative(),
+  ortMs: z.number().nonnegative(),
+  // Bu uçtaki istek başına ortalama sorgu; hiç istek ölçülmediyse null.
+  sorguIstekBasina: z.number().nonnegative().nullable(),
+  // Content-Length başlığı olan cevapların ortalaması; hiçbirinde başlık yoksa null (akışla giden cevap sayılmaz).
+  ortCevapBayt: z.number().nonnegative().nullable(),
+  cakisma409: sayi,
+});
+
+export const takilmaKaydiSemasi = z.object({
+  an: zamanSemasi,
+  takilmaMs: z.number().nonnegative(),
+  suren: z.array(kapanmaSurenIstegiSemasi),
+  sonBiten: z.object({ yontem: z.string(), adres: z.string(), kisiId: z.number().int().nullable(), sureMs: z.number().nonnegative() }).nullable(),
+});
+
+export const ekranYukuSemasi = z.object({ ekran: z.string(), istekDk: sayi, kisiSayisi: sayi });
+
+export const yukCevabi = z.object({
+  donem: z.enum(YUK_DONEMLERI),
+  // Ölçümün başladığı an: dönem sunucunun açılışından kısaysa açılış, yoksa dönemin başı.
+  baslangic: zamanSemasi,
+  tekrarEsik: z.object({ kez: sayi, saniye: sayi }),
+  tekrarlar: z.array(tekrarSerisiSemasi),
+  mesguUclar: z.array(mesguUcSemasi),
+  takilmalar: z.array(takilmaKaydiSemasi),
+  takilmaEsikMs: sayi,
+  ekranlar: z.array(ekranYukuSemasi),
+});
+
+export const BAGLANTI_DURUMLARI = ['calisiyor', 'kapali', 'bilinmiyor'] as const;
+export const disBaglantiSemasi = z.object({
+  anahtar: z.enum(['smartes', 'logo', 'tezgah', 'eposta', 'etiket-yazicisi']),
+  durum: z.enum(BAGLANTI_DURUMLARI),
+  // Modül bildirmiyorsa null (ekranda "—"): son başarı, son hata ve kayıt sayıları ilgili modülün disari.ts isteğidir.
+  sonBasari: zamanSemasi.nullable(),
+  sonHata: z.object({ an: zamanSemasi, mesaj: z.string() }).nullable(),
+  bekleyen: sayi.nullable(),
+  yenidenDenenen: sayi.nullable(),
+});
+export const disBaglantilarCevabi = z.object({ baglantilar: z.array(disBaglantiSemasi) });
+
+export type SuAnCevabi = z.output<typeof suAnCevabi>;
+export type PlanHesapTuruDurumu = z.output<typeof planHesapTuruSemasi>;
+export type YukCevabi = z.output<typeof yukCevabi>;
+export type YukDonemi = (typeof YUK_DONEMLERI)[number];
+export type TekrarSerisiKaydi = z.output<typeof tekrarSerisiSemasi>;
+export type MesguUc = z.output<typeof mesguUcSemasi>;
+export type TakilmaKaydi = z.output<typeof takilmaKaydiSemasi>;
+export type EkranYuku = z.output<typeof ekranYukuSemasi>;
+export type DisBaglanti = z.output<typeof disBaglantiSemasi>;
+export type DisBaglantilarCevabi = z.output<typeof disBaglantilarCevabi>;
+
 export type SaglikCevabi = z.output<typeof saglikCevabi>;
 export type Ayrinti = z.output<typeof ayrintiCevabi>;
 export type DiskDurumu = z.output<typeof diskDurumuSemasi>;

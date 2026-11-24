@@ -239,3 +239,26 @@ export async function suresiGecenKapanmalariSil(db: Db, simdi: Date, gun: number
   );
   return s.length;
 }
+
+// Şu an ekranı (3668 B): bu veritabanındaki bağlantı sayısı, izin verilen en çok bağlantı ve kilit bekleyen işlemler.
+// pg_stat_activity ve pg_blocking_pids süper kullanıcı istemez; başka rolün işleminde sorgu metni boş gelir ("görünmeyen").
+export interface VtSuAn {
+  baglanti: number;
+  azami: number;
+  kilitler: { sorgu: string | null; bekletenIslem: number; beklemeSn: number }[];
+}
+
+export async function vtSuAnOku(db: Db): Promise<VtSuAn | null> {
+  const ozet = await db.tek<{ baglanti: number; azami: number }>(
+    "SELECT (SELECT count(*)::int FROM pg_stat_activity WHERE datname = current_database()) AS baglanti, current_setting('max_connections')::int AS azami",
+  );
+  if (ozet === null) return null;
+  const kilitler = await db.sorgu<{ sorgu: string | null; bekleten: number; bekleme: number }>(
+    `SELECT a.query AS sorgu, (pg_blocking_pids(a.pid))[1] AS bekleten,
+            COALESCE(EXTRACT(EPOCH FROM (now() - a.query_start)), 0)::float8 AS bekleme
+       FROM pg_stat_activity a
+      WHERE a.datname = current_database() AND cardinality(pg_blocking_pids(a.pid)) > 0
+      ORDER BY a.query_start LIMIT 20`,
+  );
+  return { baglanti: ozet.baglanti, azami: ozet.azami, kilitler: kilitler.map((k) => ({ sorgu: k.sorgu, bekletenIslem: k.bekleten, beklemeSn: k.bekleme })) };
+}

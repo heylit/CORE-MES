@@ -1,4 +1,4 @@
-import type { GunlukDuzeyi, KapanmaAyrintisi, KapanmaNedeni, KapanmaSatiri } from '#paylasilan/sozlesme/saglik.ts';
+import type { GunlukDuzeyi, KapanmaAyrintisi, KapanmaNedeni, KapanmaSatiri, YukDonemi } from '#paylasilan/sozlesme/saglik.ts';
 import type { RozetTonu } from '../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 import { sureMetni } from './sure.ts';
@@ -69,7 +69,8 @@ export function kapanmaOzeti(k: Pick<KapanmaAyrintisi, 'kapandiAn' | 'kapaliSn' 
 }
 
 // Adres: `?sistem=<sekme>&kayit=<no>` ve günlük süzgeci. Bilinmeyen sekme Özet'tir (kullanıcı yanlış adresle boş ekran görmez).
-export const SEKMELER = ['ozet', 'kapanmalar', 'gunluk'] as const;
+const YUK_DONEMLERI: readonly YukDonemi[] = ['1s', '24s'];
+export const SEKMELER = ['ozet', 'suan', 'kapanmalar', 'gunluk', 'yuk', 'dis'] as const;
 export type SekmeAnahtari = (typeof SEKMELER)[number];
 
 export interface GunlukSuzgeci {
@@ -86,6 +87,8 @@ export interface IzlemeAdresi {
   sekme: SekmeAnahtari;
   kayit: number | null;
   suzgec: Partial<GunlukSuzgeci>;
+  // Yalnız Yük sekmesinde ve adreste varsa; yoksa varsayılan dönem (24 saat) kullanılır.
+  donem?: YukDonemi;
 }
 
 const DUZEYLER: readonly string[] = ['bilgi', 'uyari', 'hata', 'olumcul'];
@@ -102,15 +105,19 @@ export function adresiCoz(p: URLSearchParams): IzlemeAdresi | null {
     if (d !== null && d !== '') suzgec[alan] = d;
   }
   if (duzey !== null && DUZEYLER.includes(duzey)) suzgec.duzey = duzey as GunlukDuzeyi;
-  return { sekme, kayit: Number.isInteger(kayit) && kayit > 0 ? kayit : null, suzgec };
+  const donem = p.get('donem');
+  const yon: IzlemeAdresi = { sekme, kayit: Number.isInteger(kayit) && kayit > 0 ? kayit : null, suzgec };
+  if (sekme === 'yuk' && donem !== null && (YUK_DONEMLERI as readonly string[]).includes(donem)) yon.donem = donem as YukDonemi;
+  return yon;
 }
 
 // Pencere açıkken adrese yazılacak parametreler; kapalıyken (null) bu parametreler adresten kalkar.
 export function adresiYaz(p: URLSearchParams, a: IzlemeAdresi | null): URLSearchParams {
   const yeni = new URLSearchParams(p);
-  for (const k of ['sistem', 'kayit', 'gun', 'baslangic', 'bitis', 'duzey', 'uc', 'kisi', 'hata']) yeni.delete(k);
+  for (const k of ['sistem', 'kayit', 'donem', 'gun', 'baslangic', 'bitis', 'duzey', 'uc', 'kisi', 'hata']) yeni.delete(k);
   if (a === null) return yeni;
   yeni.set('sistem', a.sekme);
+  if (a.sekme === 'yuk' && a.donem !== undefined) yeni.set('donem', a.donem);
   if (a.sekme === 'kapanmalar' && a.kayit !== null) yeni.set('kayit', String(a.kayit));
   if (a.sekme === 'gunluk') for (const [k, v] of Object.entries(a.suzgec)) if (v !== '' && v !== undefined) yeni.set(k, v);
   return yeni;

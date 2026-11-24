@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
-import type { GunlukCevabi, KapanmaAyrintisi, KapanmalarCevabi } from '#paylasilan/sozlesme/saglik.ts';
+import type { DisBaglantilarCevabi, GunlukCevabi, KapanmaAyrintisi, KapanmalarCevabi, SuAnCevabi, YukCevabi } from '#paylasilan/sozlesme/saglik.ts';
 import '../../ortak/rota/ust-eylemler.ts';
 import { ustEylemler } from './ust-eylem.tsx';
 
@@ -25,6 +25,25 @@ const ayrinti = (id: number, neden: KapanmaAyrintisi['neden'], an: string): Kapa
   surenIstekler: [{ yontem: 'POST', adres: '/plan/hesapla', kisiId: 12, sureSn: 38 }], bellek: null, dakikalar: [],
 });
 
+const SU_AN: SuAnCevabi = {
+  an: new Date(simdi).toISOString(), surenIstekler: [{ yontem: 'POST', adres: '/plan/hesapla', kisiId: 12, sureSn: 14 }],
+  planHesaplari: [{ tur: 'motor', calisan: 1, biten: 4, zamanAsimi: 0, bellekAsimi: 0, hata: 0, sonSureMs: 3000, enUzunSureMs: 9000 }],
+  acikOturum: 3, veritabani: { baglanti: 4, azami: 100, kilitBekleyen: 1 },
+  kilitler: [{ sorgu: 'UPDATE t SET a = $1 WHERE id = $2', bekletenIslem: 4321, beklemeSn: 6 }],
+  bellek: { yiginBayt: 800_000_000, yiginSiniriBayt: 1_000_000_000, rssBayt: 900_000_000 }, sunucuAcilis: once(2),
+};
+const YUK: YukCevabi = {
+  donem: '24s', baslangic: once(1), tekrarEsik: { kez: 5, saniye: 30 },
+  tekrarlar: [{ kisiId: 7, yontem: 'POST', adres: '/uretim/baslat', kez: 9, hatali: 9, sonDurum: 409, sonHata: 'Çakışma', sonAn: new Date(simdi - 60_000).toISOString() }],
+  mesguUclar: [{ yontem: 'GET', yol: '/plan', istek: 100, toplamMs: 50_000, ortMs: 500, sorguIstekBasina: 12, ortCevapBayt: 2048, cakisma409: 0 }],
+  takilmalar: [{ an: new Date(simdi - 3_600_000).toISOString(), takilmaMs: 4000, suren: [], sonBiten: null }],
+  takilmaEsikMs: 2000, ekranlar: [{ ekran: 'bilinmiyor', istekDk: 30, kisiSayisi: 5 }],
+};
+const DIS: DisBaglantilarCevabi = { baglantilar: [
+  { anahtar: 'logo', durum: 'calisiyor', sonBasari: null, sonHata: null, bekleyen: null, yenidenDenenen: null },
+  { anahtar: 'tezgah', durum: 'bilinmiyor', sonBasari: null, sonHata: null, bekleyen: null, yenidenDenenen: null },
+] };
+
 function sunucuKur(gunluk: (adres: string) => Response = () => json(200, { satirlar: [], sonraki: null, dosyalar: [], gunler: [] } satisfies GunlukCevabi)) {
   const istekler: string[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string) => {
@@ -35,6 +54,9 @@ function sunucuKur(gunluk: (adres: string) => Response = () => json(200, { satir
     if (yol === '/saglik/ayrinti') return json(200, { veritabaniGecikmeMs: 1, sonGoc: null, commit: null, calismaSuresiSn: 5, ortam: 'test', isler: [], uyarilar: [] });
     if (yol === '/saglik/metrikler') return json(200, { dakikalar: [] });
     if (yol === '/saglik/kapanmalar') return json(200, KAPANMALAR);
+    if (yol === '/saglik/su-an') return json(200, SU_AN);
+    if (yol.startsWith('/saglik/yuk')) return json(200, YUK);
+    if (yol === '/saglik/dis-baglantilar') return json(200, DIS);
     const m = /^\/saglik\/kapanmalar\/(\d+)$/.exec(yol);
     if (m?.[1] !== undefined) {
       const k = KAPANMALAR.kapanmalar.find((x) => String(x.id) === m[1]);
@@ -56,12 +78,55 @@ function ac(adres: string) {
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
+describe('Sistem İzleme B', () => {
+  it('Şu an: kutular, süren istek, plan hesabı ve kilit bekleyen yazılır; bellek %80 dikkat der', async () => {
+    sunucuKur();
+    ac('/ayarlar?sistem=suan');
+    const pencere = await screen.findByRole('dialog', { name: 'Sistem izleme' });
+    expect(await within(pencere).findByText('POST /plan/hesapla')).toBeTruthy();
+    expect(within(pencere).getByText('%80')).toBeTruthy();
+    expect(within(pencere).getByText('UPDATE t SET a = $1 WHERE id = $2')).toBeTruthy();
+    expect(within(pencere).getByRole('button', { name: 'Duraklat' })).toBeTruthy();
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Duraklat' }));
+    expect(within(pencere).getByText(/Yenileme durdu/)).toBeTruthy();
+  });
+
+  it('Yük: tekrar eden deneme, meşgul uç, takılma ve ekran yükü; dönem düğmesi 1 saati ister', async () => {
+    const istekler = sunucuKur();
+    ac('/ayarlar?sistem=yuk');
+    const pencere = await screen.findByRole('dialog', { name: 'Sistem izleme' });
+    expect((await within(pencere).findAllByText('POST /uretim/baslat')).length).toBeGreaterThan(0);
+    expect(within(pencere).getAllByText('GET /plan').length).toBeGreaterThan(0);
+    expect(within(pencere).getAllByText('Bilinmiyor').length).toBeGreaterThan(0);
+    fireEvent.click(within(pencere).getByRole('button', { name: '1 saat' }));
+    await waitFor(() => { expect(istekler).toContain('/saglik/yuk?donem=1s'); });
+  });
+
+  it('Dış bağlantılar: kanıtsız bağlantı "Bilinmiyor" ve tek neden satırı; plan motoru kartı vardır', async () => {
+    sunucuKur();
+    ac('/ayarlar?sistem=dis');
+    const pencere = await screen.findByRole('dialog', { name: 'Sistem izleme' });
+    expect(await within(pencere).findByText('Tezgah okuma')).toBeTruthy();
+    expect(within(pencere).getAllByText(/Plan motoru/).length).toBeGreaterThan(0);
+    expect(within(pencere).getAllByText('Durumu ölçülmüyor; modül bildirmiyor.').length).toBeGreaterThan(0);
+    expect(within(pencere).getAllByText('Durum doğrulanamıyor: modül başarı ya da hata kaydı bildirmiyor.').length).toBeGreaterThan(0);
+  });
+
+  it('Özet: üç kutu ve son 24 saatin olayları; 7 günde plansız kapanma kutuya yazılır', async () => {
+    sunucuKur();
+    ac('/ayarlar?sistem=ozet');
+    const pencere = await screen.findByRole('dialog', { name: 'Sistem izleme' });
+    expect((await within(pencere).findAllByText('1 plansız')).length).toBeGreaterThan(0);
+    expect(within(pencere).getByRole('list', { name: 'Son 24 saatin olayları' })).toBeTruthy();
+  });
+});
+
 describe('Sistem İzleme', () => {
   it('adresteki ?sistem=kapanmalar&kayit=12 pencereyi o kayda açar; üç sekme, rozet yalnız plansız kapanmayı sayar', async () => {
     sunucuKur();
     ac('/ayarlar?sistem=kapanmalar&kayit=12');
     const pencere = await screen.findByRole('dialog', { name: 'Sistem izleme' });
-    expect(within(pencere).getAllByRole('tab').map((t) => t.getAttribute('data-sekme'))).toEqual(['ozet', 'kapanmalar', 'gunluk']);
+    expect(within(pencere).getAllByRole('tab').map((t) => t.getAttribute('data-sekme'))).toEqual(['ozet', 'suan', 'kapanmalar', 'gunluk', 'yuk', 'dis']);
     expect(await within(pencere).findByRole('tab', { name: /Kapanmalar \(1\)/ })).toBeTruthy();
     expect(await within(pencere).findByText(/Sunucu belleği doldurdu\./)).toBeTruthy();
     expect(within(pencere).getByText(/Çıkış kodu 134; tanı raporu bellek taşmasını gösteriyor/)).toBeTruthy();
