@@ -530,6 +530,18 @@ export const oneriYaz = (db: Db, kimlik: string, durum: string | null, ertele: s
 export const kapanisYaz = (db: Db, donem: string, madde: string, isaretli: boolean, kisi: number) =>
   db.sorgu(`INSERT INTO finans_kapanis (donem, madde, isaretli, guncelleyen_id) VALUES ($1, $2, $3, $4)
     ON CONFLICT (donem, madde) DO UPDATE SET isaretli = EXCLUDED.isaretli, guncelleyen_id = EXCLUDED.guncelleyen_id, guncelleme = now()`, [donem, madde, isaretli, kisi]);
+export const donemKilitliMi = async (db: Db, donem: string): Promise<boolean> =>
+  (await db.tek<{ kilitli: boolean }>(
+    `SELECT coalesce((SELECT islem = 'kilitle' FROM finans_donem_kilidi WHERE donem = $1 ORDER BY id DESC LIMIT 1), false) AS kilitli`, [donem]))?.kilitli === true;
+export const donemKilidiYaz = (db: Db, donem: string, islem: 'kilitle' | 'ac', neden: string | null, kisi: number) =>
+  db.sorgu('INSERT INTO finans_donem_kilidi (donem, islem, neden, kisi_id) VALUES ($1, $2, $3, $4)', [donem, islem, neden, kisi]);
+export const kilitliDonemler = async (db: Db): Promise<string[]> =>
+  (await db.sorgu<{ donem: string }>(
+    `SELECT donem FROM (SELECT DISTINCT ON (donem) rtrim(donem) AS donem, islem FROM finans_donem_kilidi ORDER BY donem, id DESC) son
+      WHERE islem = 'kilitle' ORDER BY donem DESC`)).map((r) => r.donem);
+export const donemKilidiGecmisi = (db: Db) =>
+  db.sorgu<{ id: number; donem: string; islem: 'kilitle' | 'ac'; neden: string | null; kisiId: number; zaman: string }>(
+    `SELECT id, rtrim(donem) AS donem, islem, neden, kisi_id AS "kisiId", ${zamanMetni('zaman')} AS zaman FROM finans_donem_kilidi ORDER BY id DESC LIMIT 200`);
 // Günlük skoru zamanlayıcı yazar (1456 b): satırın kişisi yoktur; günün satırı varsa dokunulmaz.
 export const skorVarMi = async (db: Db, gun: string) =>
   (await db.tek<{ var: boolean }>('SELECT EXISTS (SELECT 1 FROM finans_skor WHERE gun = $1) AS var', [gun]))?.var === true;

@@ -27,7 +27,7 @@ import { kisiAdlari } from '../kisiler/disari.ts';
 import { makineGetir, makineler } from '../istasyonlar/disari.ts';
 import type {
   belgeDuzeltGovdesi, belgeEkleGovdesi, butceGovdesi, cekDuzeltGovdesi, cekEkleGovdesi, dagitGovdesi,
-  duzenliOdemeGovdesi, duzenliOdendiGovdesi, esitleGovdesi, hesapEkleGovdesi, kapanisGovdesi, faizEkleGovdesi, genelGiderOraniEkleGovdesi, kdvOraniEkleGovdesi, kdvOraniKapatGovdesi, kurFaizTopluGovdesi,
+  duzenliOdemeGovdesi, duzenliOdendiGovdesi, donemAcGovdesi, donemKilitleGovdesi, esitleGovdesi, hesapEkleGovdesi, kapanisGovdesi, faizEkleGovdesi, genelGiderOraniEkleGovdesi, kdvOraniEkleGovdesi, kdvOraniKapatGovdesi, kurFaizTopluGovdesi,
   kurCiftiGovdesi, kurCiftiGuncelleGovdesi, oranEkleGovdesi, oranTopluGovdesi, maliyetYazGovdesi, mahsupEkleGovdesi, sabitKiymetEkleGovdesi, sabitKiymetGuncelleGovdesi, sabitKiymetPasifGovdesi, odemeEkleGovdesi, oneriDurumuGovdesi, topluAktarGovdesi, virmanEkleGovdesi,
 } from '#paylasilan/sozlesme/finans.ts';
 import { cakisma } from '#cekirdek/hata.ts';
@@ -167,6 +167,7 @@ export async function panoOzeti(db: Db): Promise<FinansOzetiCevabi> {
 type G<T extends z.ZodTypeAny> = z.output<T>;
 type Hesap = { id: number; paraBirimi: string; bakiye: string; aktif: boolean; surum: number; tur: string; acilisBakiyesi: string; acilisTarihi: string };
 
+const DONEM_KILITLI_ILETISI = 'Bu dönem kilitli: kayıt eklenmez, değişmez, iptal edilmez. Dönemi yalnız yönetici gerekçeyle açabilir.';
 const DUZENLI_AYDA_BIR = 'Bu düzenli ödeme o ay için zaten ödendi; yanlışsa önceki belgeyi iptal edin.';
 const PARA_KISITLARI: KisitEslemesi = {
   finans_belge_duzenli_donem: { ileti: DUZENLI_AYDA_BIR, alan: 'tarih' },
@@ -189,6 +190,8 @@ const PARA_KISITLARI: KisitEslemesi = {
   finans_dagilim_capraz_kur_yok: { ileti: 'Çapraz kur denetlenemedi: o günün kurunu girin.', alan: 'dagitimlar' },
   finans_mahsup_capraz_kur_yok: { ileti: 'Mahsup kuru denetlenemedi: o günün kurunu girin.', alan: 'alisTutari' },
   finans_belge_kapali_kilit: 'Kapanmış ya da kısmen kapanmış belgenin parasal alanları değişmez.',
+  finans_belge_kapali_kategori: 'Kapanmış ya da kısmen kapanmış belgenin kategorisi ve belge no\'su değişmez.',
+  finans_donem_kilitli: DONEM_KILITLI_ILETISI,
   finans_belge_logo_kilit: 'Logo\'dan gelen ya da eşleşmiş belgenin alanları elle değişmez.',
   finans_belge_firma_gerekli: { ileti: 'Faturalı belgede firma zorunludur.', alan: 'firmaId' },
   finans_belge_faturasiz_kategori: { ileti: 'Faturasız belge yalnız personel, SGK, vergi, faiz ve kredi anapara kategorilerinde açılır.', alan: 'kategori' },
@@ -871,6 +874,23 @@ export async function oneriDurumu(db: Db, k: Kullanici, g: G<typeof oneriDurumuG
   await sorgular.oneriYaz(db, g.bulguKimligi, g.durum === 'acik' ? null : g.durum, g.erteleBitis, k.id);
   return { bulguKimligi: g.bulguKimligi };
 }
+// 3672: dönem kilidi. Kilit yalnız tamamlanmış (geçmiş) aya konur; açma gerekçelidir ve deftere yazılır.
+export async function donemKilitle(db: Db, k: Kullanici, g: G<typeof donemKilitleGovdesi>, bugun: string, ek: DefterEki): Promise<{ donem: string; kilitli: boolean }> {
+  if (g.donem >= bugun.slice(0, 7)) throw gecersiz('Yalnız tamamlanmış (geçmiş) bir dönem kilitlenir.');
+  if (await sorgular.donemKilitliMi(db, g.donem)) throw gecersiz('Bu dönem zaten kilitli.');
+  await sorgular.donemKilidiYaz(db, g.donem, 'kilitle', null, k.id);
+  farkYaz(ek, [`donem:${g.donem}`, { kilitli: false }, { kilitli: true }]);
+  return { donem: g.donem, kilitli: true };
+}
+export async function donemAc(db: Db, k: Kullanici, g: G<typeof donemAcGovdesi>, ek: DefterEki): Promise<{ donem: string; kilitli: boolean }> {
+  if (!(await sorgular.donemKilitliMi(db, g.donem))) throw gecersiz('Bu dönem kilitli değil.');
+  await sorgular.donemKilidiYaz(db, g.donem, 'ac', g.neden, k.id);
+  farkYaz(ek, [`donem:${g.donem}`, { kilitli: true }, { kilitli: false, acmaNedeni: g.neden }]);
+  return { donem: g.donem, kilitli: false };
+}
+export async function donemKilitleri(db: Db): Promise<{ kilitliDonemler: string[]; gecmis: Awaited<ReturnType<typeof sorgular.donemKilidiGecmisi>> }> {
+  return { kilitliDonemler: await sorgular.kilitliDonemler(db), gecmis: await sorgular.donemKilidiGecmisi(db) };
+}
 export async function kapanisIsaretle(db: Db, k: Kullanici, g: G<typeof kapanisGovdesi>) { await sorgular.kapanisYaz(db, g.donem, g.madde, g.isaretli, k.id); return g; }
 
 // ---- Günlük sağlık skoru (1456 b): zamanlayıcı yazar, ekran yalnız okur ----
@@ -1055,7 +1075,7 @@ export async function tedarikciAlacagiDurumYaz(db: Db, k: Kullanici, id: number,
   if (eski.surum !== g.surum) throw eskiSurum();
   const hata = tedarikciAlacagiGecisHatasi(eski.durum, g.durum, g.aciklama);
   if (hata !== null) throw gecersiz(hata);
-  const yazildi = await sorgular.tedarikciAlacagiDurumYaz(db, { id, surum: g.surum, eski: eski.durum, durum: g.durum, aciklama: g.aciklama ?? eski.aciklama }, k.id);
+  const yazildi = await korumali(() => sorgular.tedarikciAlacagiDurumYaz(db, { id, surum: g.surum, eski: eski.durum, durum: g.durum, aciklama: g.aciklama ?? eski.aciklama }, k.id));
   if (yazildi === null) throw eskiSurum();
   return { alacak: (await alacakGorunumu(db, [(await sorgular.tedarikciAlacagiOku(db, id))!]))[0]! };
 }
@@ -1191,6 +1211,7 @@ export async function makineAmortismani(db: Db, makineKodu: string, ay: string):
 }
 
 const SABIT_KIYMET_KISITLARI: KisitEslemesi = {
+  finans_donem_kilitli: DONEM_KILITLI_ILETISI,
   finans_sabit_kiymet_kalinti: { ileti: 'Kalıntı değer bedelden küçük olmalı.', alan: 'kalintiDegeri' },
   finans_sabit_kiymet_devir: { ileti: 'Devir tarihi alıştan önce olamaz; birikmiş amortisman amortismana tabi tutarı aşamaz.', alan: 'devirBirikmisTl' },
   finans_sabit_kiymet_pasif: { ileti: 'Pasif tarihi alış tarihinden önce olamaz.', alan: 'pasifTarihi' },
@@ -1347,6 +1368,6 @@ export async function vergiBeyanlari(db: Db, baslangic: string, bitis: string): 
 export async function vergiBeyaniIsaretle(db: Db, k: Kullanici, g: z.output<typeof vergiBeyaniGovdesi>, bugun: string) {
   const hata = beyanIsaretHatasi(g.sonGun, g.kod, bugun);
   if (hata) throw dogrulama(hata, 'sonGun');
-  await sorgular.beyanYaz(db, g.sonGun, g.kod, g.verildi, k.id);
+  await korumali(() => sorgular.beyanYaz(db, g.sonGun, g.kod, g.verildi, k.id));
   return g;
 }

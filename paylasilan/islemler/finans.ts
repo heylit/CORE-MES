@@ -2,6 +2,7 @@
 // finans.oku: bütün rakamlar; finans.yaz: günlük kayıt; iptal, geri alma, tanım ve ayar sekiz yönetim eylemindedir (3165 a).
 // finans.kur-yaz: günlük kur ve faiz girer (satın alma da girer, kart #953); rakam açmaz.
 // finans.beyan-yaz: vergi son gününün beyanını "verildi" işaretler ya da işareti kaldırır (1846, TKV-2 a); rakam açmaz.
+// finans.donem-ac: kilitli finans dönemini gerekçeyle açar (3672); hiçbir role verilmez, yöneticide bayrakla vardır.
 // finans.maliyet-oku: malzeme, istasyon ve kişi birim maliyetlerini görür (kart #1187); yazma finans.maliyet-yaz'dadır.
 // Finans yönetimi sekiz eyleme bölündü (3165 a): iptal, çek, hesap, oran, sabit kıymet, maliyet, düzenli ödeme, ayar.
 const FINANS_YONETIM_ISLEMLERI = [
@@ -18,6 +19,7 @@ const FINANS_YONETIM_ISLEMLERI = [
 const FINANS_ESKI_ISLEMLERI = ['finans.yonet'] as const;
 export const FINANS_ISLEMLERI = [
   'finans.beyan-yaz',
+  'finans.donem-ac',
   'finans.kur-yaz',
   'finans.maliyet-oku',
   'finans.oku',
