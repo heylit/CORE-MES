@@ -340,16 +340,18 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
         <span className="tc-rr1-grow" />
         {!liste && gorunum !== 'patlamis' && !hatli && !revSatiri && panelDugmesi}
         {/* Tam ekrandan çıkış kaydırmadan görünür kalır (B-2482-R3); girişi ⋯ menüsünde ve F tuşundadır. */}
-        {tamEkran && (
-          <Dugme className="tc-rr1-kd" simge="x" title="Tam ekrandan çık (Esc ya da F)" onClick={() => { setTamEkran(false); }}>Tam ekrandan çık</Dugme>
-        )}
-        {!liste && kokId && (o.yetki.emirRotasizAc || o.yetki.rotaEmreKopyala) && (
-          // Revizyon satırında ya da düzenleme çubuğunda sarı eylem varken bu düğme ikincildir (2155-9 a).
-          <Dugme className="tc-rr1-kd" simge="clipboard-check"
-            tur={(duzenKipi && duzenlemeAcar(o.yetki, taslakAcik)) || (revId !== null && revizyonAnaEylemiVar(r, revId)) ? 'ikincil' : 'birincil'}
-            onClick={() => { o.git('orders', `urun:${kokId}`); }}>Üretim emri oluştur</Dugme>
-        )}
-        <Menu etiket="Diğer rota işlemleri" ogeler={digerIslemler} />
+        <span className="tc-rr1-eylemgrup">
+          {tamEkran && (
+            <Dugme className="tc-rr1-kd" simge="x" title="Tam ekrandan çık (Esc ya da F)" onClick={() => { setTamEkran(false); }}>Tam ekrandan çık</Dugme>
+          )}
+          {!liste && kokId && (o.yetki.emirRotasizAc || o.yetki.rotaEmreKopyala) && (
+            // Revizyon satırında ya da düzenleme çubuğunda sarı eylem varken bu düğme ikincildir (2155-9 a).
+            <Dugme className="tc-rr1-kd" simge="clipboard-check"
+              tur={(duzenKipi && duzenlemeAcar(o.yetki, taslakAcik)) || (revId !== null && revizyonAnaEylemiVar(r, revId)) ? 'ikincil' : 'birincil'}
+              onClick={() => { o.git('orders', `urun:${kokId}`); }}>Üretim emri oluştur</Dugme>
+          )}
+          <Menu etiket="Diğer rota işlemleri" ogeler={digerIslemler} />
+        </span>
         {excelAcik && <RotaExcelPenceresi durum={o.veri.durum} kapat={() => { setExcelAcik(false); }} />}
         {revId && sablonPenceresi === 'ekle' && (
           <SablonPenceresi r={r} urunId={revId} acik kapat={() => { setSablonPenceresi(null); }}

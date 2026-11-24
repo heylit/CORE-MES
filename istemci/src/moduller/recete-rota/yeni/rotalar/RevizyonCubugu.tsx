@@ -181,9 +181,11 @@ export function RevizyonCubugu({ r, agac, urunId, urunSec, duzenleme = null }: {
             </>
           )}
           {duzenleme.panelDugmesi}
-          <Dugme tur="ikincil" simge="check" title="Görüntülemeye dön; kayıtlar taslakta kalır" onClick={() => { duzenleme.yaz(false); }}>Bitir</Dugme>
-          {yetki.rotaGonder && durumu === 'taslak' && <Dugme tur="birincil" simge="next" onClick={() => { ac('gonder'); }}>Onaya gönder…</Dugme>}
-          {islemMenusu}
+          <span className="tc-rr1-eylemgrup">
+            <Dugme tur="ikincil" simge="check" title="Görüntülemeye dön; kayıtlar taslakta kalır" onClick={() => { duzenleme.yaz(false); }}>Bitir</Dugme>
+            {yetki.rotaGonder && durumu === 'taslak' && <Dugme className="tc-rr1-eylem-ana" tur="birincil" simge="next" onClick={() => { ac('gonder'); }}>Onaya gönder…</Dugme>}
+            {islemMenusu}
+          </span>
         </div>
       ) : (
         <div className="tc-rr1-rv-row">
@@ -195,8 +197,7 @@ export function RevizyonCubugu({ r, agac, urunId, urunSec, duzenleme = null }: {
               onClick={() => { duzenleme.yaz(true); }}>Düzenle</Dugme>
           )}
           {duzenleme?.panelDugmesi}
-          {anaIs}
-          {islemMenusu}
+          <span className="tc-rr1-eylemgrup">{anaIs}{islemMenusu}</span>
         </div>
       )}
       {(duzen.sonDegisiklik || digerTaslaklar.length > 0 || durumNotu) && (
