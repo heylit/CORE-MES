@@ -1169,7 +1169,7 @@ export function Tahta(o: TahtaOzellikleri) {
           );
         })()}
         {menu && (
-          <div className="tc-pyq-menu" role="menu" aria-label={emir.get(menu.fis ? menu.id : m.isler[menu.id]?.job ?? '')?.no ?? 'İş'} ref={(el) => { el?.style.setProperty('--x', `${String(menu.x)}px`); el?.style.setProperty('--y', `${String(menu.y)}px`); el?.querySelector('button')?.focus(); }}>
+          <div className="tc-pyq-menu" role="menu" aria-label={emir.get(menu.fis ? menu.id : m.isler[menu.id]?.job ?? '')?.no ?? 'İş'} ref={(el) => { if (!el) return; const k = kap.current; const alt = k ? k.scrollTop + k.clientHeight : Infinity; const y = menu.y + el.offsetHeight > alt && k ? Math.max(k.scrollTop, menu.y - el.offsetHeight) : menu.y; el.style.setProperty('--x', `${String(menu.x)}px`); el.style.setProperty('--y', `${String(y)}px`); el.querySelector('button')?.focus(); }}>
             <button type="button" role="menuitem" onClick={() => { const x = m.isler[menu.id]; setMenu(null); if (menu.fis) sec(menu.id, null); else if (x) sec(x.job, x.id); }}><Simge ad="list" boyut="k" /><span>Ayrıntı</span></button>
             {bol && !menu.fis && m.isler[menu.id] && (() => {
               const neden = bolunemezNedeni(m.isler[menu.id], emir.get(m.isler[menu.id]!.job)?.adet ?? 0);

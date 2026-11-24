@@ -83,14 +83,13 @@ export function ElleBol({ c, m, isId, taslak, yazabilir, kapat }: ElleBolOzellik
   return (
     <aside ref={kok} className="tc-pyq-ayrinti tc-pyq-ayarlar tc-pyq-elle-bol" aria-label="Planda böl">
       <header>
-        <div><b>Planda böl</b><small>Adet parçalara ayrılır, her parça ayrı tezgâhta yapılır. Bölme yalnız bu plandadır: üretim emri ve sayım değişmez, partiyi bölmek değildir.</small></div>
+        <div><b>Planda böl{a ? ` · ${a.ad}` : ''}</b>{e && <small>{e.no} · {adet} adet</small>}</div>
         <button type="button" className="tc-pyq-simge-dugme" aria-label="Planda bölmeyi kapat" onClick={kapat}><Simge ad="x" boyut="k" /></button>
       </header>
       {!e || !a ? <p className="tc-pyq-not">Adım bulunamadı; plan değişmiş olabilir.</p> : (
         <>
+          <p className="tc-pyq-not">Adet parçalara ayrılır, her parça ayrı tezgâhta yapılır. Bölme yalnız bu plandadır: üretim emri ve sayım değişmez, partiyi bölmek değildir.</p>
           <dl className="tc-pyq-adim-ozet">
-            <div><dt>Operasyon</dt><dd>{e.no} · {a.ad}</dd></div>
-            <div><dt>Adet</dt><dd>{adet}</dd></div>
             <div><dt>Kayıtlı bölme</dt><dd data-kayitli-bolme={kayitli === null ? 'yok' : ''}>{kayitli === null ? 'yok' : kayitli.map((p) => `${kod(p.m)} ${String(p.adet)}`).join(', ')}</dd></div>
           </dl>
           {!yazabilir && <p className="tc-pyq-not">Adımı yalnız planı yazabilen kişi böler.</p>}
@@ -121,9 +120,10 @@ export function ElleBol({ c, m, isId, taslak, yazabilir, kapat }: ElleBolOzellik
                 {adet >= 3 && PARCA_EN_COK >= 3 && <Dugme tur="ikincil" simge="layers" disabled={kilitli} onClick={() => { esitle(3); }}>Eşit 3</Dugme>}
                 <Dugme tur="ikincil" simge="plus" disabled={kilitli || l.length >= PARCA_EN_COK} title={l.length >= PARCA_EN_COK ? `En çok ${String(PARCA_EN_COK)} parça` : undefined} onClick={() => { setEsitti(false); setL((o) => [...o, { adet: '', tezgah: tezgahlar[o.length % tezgahlar.length] ?? '' }]); }}>Parça ekle</Dugme>
               </div>
-              <p className="tc-pyq-not" data-toplam={d.toplam} role="status">Toplam {d.toplam} / {adet} adet{esitti ? ' · eşit dağıtıldı' : ''}. Parçaların yerini sistem seçer; bir parçayı sonra tahtadan taşıyabilirsiniz. Sonraki adım bütün parçaları bekler.</p>
-              {ileti !== null && <p className="tc-pyq-ayar-hata" role="alert">{ileti}</p>}
+              <p className="tc-pyq-not">Parçaların yerini sistem seçer; bir parçayı sonra tahtadan taşıyabilirsiniz. Sonraki adım bütün parçaları bekler.</p>
               <div className="tc-pyq-ayar-dugmeler">
+                <p className="tc-pyq-not" data-toplam={d.toplam} role="status">Toplam {d.toplam} / {adet} adet{esitti ? ' · eşit dağıtıldı' : ''}.</p>
+                {ileti !== null && <p className="tc-pyq-ayar-hata" role="alert">{ileti}</p>}
                 <Dugme type="submit" tur="birincil" simge="clock" disabled={kilitli || d.paylar === null} yukleniyor={durum.tur === 'hesap'}>{durum.tur === 'hesap' ? 'Hesaplanıyor' : 'Etkisini gör'}</Dugme>
                 {kayitli !== null && <Dugme tur="ikincil" simge="x" disabled={kilitli} onClick={kaldir}>Bölmeyi kaldır</Dugme>}
               </div>

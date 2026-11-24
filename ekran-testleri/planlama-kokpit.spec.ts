@@ -215,9 +215,11 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, taslak, Geri ve Canlıya al, Mat
     await tahta.evaluate((el) => { el.scrollTo({ left: 0 }); });
     const is = tahta.locator('[data-is="S2.a1"]');
     await expect(is).toBeVisible();
+    await is.evaluate((el) => { el.scrollIntoView({ block: 'center' }); });
     await is.click({ button: 'right' });
-    // Sağ tık menüsünde tutma yoktur; yalnız Ayrıntı.
+    // Sağ tık menüsünde tutma yoktur; Ayrıntı ve Planda böl (bölünemezse pasif, nedeni altında yazar).
     await expect(tahta.getByRole('menu').getByRole('menuitem')).toHaveText(['Ayrıntı', 'Planda böl']);
+    if (bilgi.project.name === 'g1280') await page.screenshot({ path: '/tmp/tmiv2-ekran/3661-tahta-menu-g1280.png' });
     await page.keyboard.press('Escape');
     const kutu = await is.boundingBox();
     if (!kutu) throw new Error('iş görünmüyor');

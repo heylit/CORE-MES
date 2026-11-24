@@ -632,14 +632,14 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
                   <td data-ad="Başlangıç">
                     {yer === 'fason' || x?.fason ? <span className="tc-pyq-not">{x ? zaman(x.S) : 'sistem yerleştirir'}</span>
                       : saatGirdisi ? <input className="tc-alan-kutu" type="datetime-local" step={900} aria-label={`${a.ad} başlangıcı`} aria-invalid={hata !== null || undefined} aria-describedby={hata !== null ? notKimligi : undefined} disabled={!girilir} title={kilit ?? undefined} value={x ? saatGirdisi.yaz(duzenli?.baslangic ?? x.S) : s?.baslangic !== undefined ? saatGirdisi.yaz(s.baslangic) : ''} onChange={(ev) => { saatDegisti(ev.target.value); }} />
-                        : <span>{x ? zaman(x.S) : '—'}</span>}
+                        : <span className="tc-pyq-mono">{x ? zaman(x.S) : '—'}</span>}
                     {x && !x.basladi && adimBekle?.[a.id] !== undefined && <small data-adim-bekle={a.id}>{adimBeklemeYazisi(m, adimBekle[a.id]!, zaman)}</small>}
                     {x && !x.basladi && kol?.adim[a.id] !== undefined && <small data-adim-parti={a.id}>{kol.adim[a.id]}</small>}
                     {x?.durdurmaBekliyor && <small data-durdurma-bekliyor={a.id}>{DURDURMA_BEKLIYOR}; canlıda eski yerinde</small>}
                     {!x && tahmin && s?.baslangic === undefined && <small data-ongoru="">öngörü {tz(tahmin.tezgah)} · {zaman(tahmin.S)}</small>}
                   </td>
-                  <td data-ad="Bitiş" className="tc-pyq-mono">
-                    {x ? zaman(x.C) : tahmin ? <span data-ongoru="" title="Öngörü: yazılmadı">{zaman(tahmin.C)}</span> : '—'}
+                  <td data-ad="Bitiş">
+                    {x ? <span className="tc-pyq-mono">{zaman(x.C)}</span> : tahmin ? <span className="tc-pyq-mono" data-ongoru="" title="Öngörü: yazılmadı">{zaman(tahmin.C)}</span> : '—'}
                     {x && adimEk?.[a.id] !== undefined && <small data-adim-ek={a.id}>{adimUzamaYazisi(adimEk[a.id]!)}</small>}
                   </td>
                   <td data-ad="Durum">
