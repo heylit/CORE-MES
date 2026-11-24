@@ -10,10 +10,25 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { BEKLEYEN_ESKIME_MS, belgeRozetDurumu, bekleyenTaze, rozetNedeni } from './kurallar.ts';
+import { BEKLEYEN_ESKIME_MS, belgeRozetDurumu, bekleyenTaze, rozetNedeni, teklifBeklerkenSiparisRozeti } from './kurallar.ts';
 
 // 3344: Logo'ya gidiş rozeti. Giden kutusu satırları testte doğrudan yazılır; Logo'ya istek yoktur. Veri uydurmadır.
 const PAROLA = 'dogru-parola-1';
+
+describe('teklifi gitmeyen siparişin rozeti (3628)', () => {
+  const t = (ek: Partial<{ no: string; surumNo: number; sirahata: string | null }> = {}) => ({ no: 'TK-1', surumNo: 1, sirahata: null, ...ek });
+  test('RZ-7 neden önceliği: rozet nedeni, sıra hatası, durum adı; sürümlü numara; teklif Logo\'daysa rozet yok; uzun neden kısalır', () => {
+    assert.deepEqual(teklifBeklerkenSiparisRozeti(t(), { durum: 'durdu', neden: 'Ret' }), { durum: 'sirada', kayitNo: null, neden: "Teklif TK-1 Logo'ya gitmedi: Ret" });
+    assert.equal(teklifBeklerkenSiparisRozeti(t({ sirahata: 'Kur yok' }), { durum: 'durdu', neden: 'Ret' })?.neden, "Teklif TK-1 Logo'ya gitmedi: Ret");
+    assert.equal(teklifBeklerkenSiparisRozeti(t({ sirahata: 'Kur yok' }), { durum: 'sirada', neden: null })?.neden, "Teklif TK-1 Logo'ya gitmedi: Kur yok");
+    assert.equal(teklifBeklerkenSiparisRozeti(t({ sirahata: 'Kur yok' }), null)?.neden, "Teklif TK-1 Logo'ya gitmedi: Kur yok");
+    assert.equal(teklifBeklerkenSiparisRozeti(t(), null)?.neden, "Teklif TK-1 Logo'ya gitmedi: sırada");
+    assert.equal(teklifBeklerkenSiparisRozeti(t(), { durum: 'kart-bekliyor', neden: null })?.neden, "Teklif TK-1 Logo'ya gitmedi: kart bekliyor");
+    assert.equal(teklifBeklerkenSiparisRozeti(t({ surumNo: 3 }), null)?.neden, "Teklif TK-1-R3 Logo'ya gitmedi: sırada");
+    assert.equal(teklifBeklerkenSiparisRozeti(t(), { durum: 'logoda', neden: null }), null);
+    assert.equal(teklifBeklerkenSiparisRozeti(t({ sirahata: 'x'.repeat(400) }), null)?.neden?.length, 160);
+  });
+});
 
 describe('belge rozeti kuralı (3344)', () => {
   const g = (ek: Partial<Parameters<typeof belgeRozetDurumu>[0] & object> = {}) =>
@@ -164,6 +179,76 @@ describe('Logo rozet ucu (3344, gerçek PostgreSQL)', () => {
     ]);
     const s = await oku('rz-satis', `tur=satis-siparisi&id=${String(sip)},${String(b)}`);
     assert.deepEqual(s.govde.durumlar, [{ id: sip, durum: 'logoda', kayitNo: '9004', neden: null, elle: false }]);
+  });
+
+  test('RZ-6 teklifi Logo\'ya gitmediği için sırada bekleyen satış siparişinin rozeti teklifin nedenini taşır; Logo sırası olmayan sipariş boş kalır', async () => {
+    const yonetici = cerez.get('rz-yonetici') ?? '';
+    const yaz = async <T>(yol: string, govde: unknown): Promise<T> => {
+      const c = await app.inject({ method: 'POST', url: `/api${yol}`, headers: { cookie: yonetici, 'istek-kimligi': randomUUID() }, payload: govde as object });
+      assert.equal(c.statusCode, 200, `${yol}: ${c.body}`);
+      return c.json() as T;
+    };
+    const { sahip } = ortam!;
+    const firmaId = (await yaz<{ firma: { id: number } }>('/musteri-tedarikci/firmalar/ekle', { ad: 'ORN rozet firma 6', tur: 'musteri', logoCariKodu: 'ORN-C-6' })).firma.id;
+    const teklif = async (): Promise<{ id: number; no: string }> => {
+      const t = await yaz<{ id: number; no: string; surum: number; satirlar: { id: number }[] }>('/siparisler/teklifler/ekle', {
+        firmaId, baslik: 'ORN rozet', istenenTarih: null, aciklama: null, satirlar: [{ malzemeNo: mamulNo, tanim: 'ORN parça', miktar: '3' }],
+      });
+      await yaz(`/siparisler/teklifler/${String(t.id)}/surum-ver`, { surum: t.surum, fiyatlar: [{ satirId: t.satirlar[0]!.id, birimFiyat: '50' }], iskontoOrani: '0' });
+      return t;
+    };
+    const siparis = async (): Promise<number> => (await yaz<{ id: number }>('/siparisler/ekle', {
+      firmaId, musteriSiparisNo: null, siparisTarihi: '2026-11-17', termin: '2026-12-17', kdvOrani: '20', odemeKosulu: null, aciklama: null,
+      satirlar: [{ malzemeNo: mamulNo, miktar: '3', birimFiyat: '50', termin: null, aciklama: null }],
+    })).id;
+    const sira = async (tur: string, teklifId: number): Promise<number> =>
+      (await sahip.tek<{ id: number }>('SELECT id FROM siparisler_logo_gonderim WHERE tur = $1 AND teklif_id = $2 AND surum_no = 1', [tur, teklifId]))!.id;
+    const bagla = (teklifId: number, siparisId: number, surum = 1) =>
+      sahip.sorgu("INSERT INTO siparisler_logo_gonderim (tur, teklif_id, surum_no, siparis_id) VALUES ('siparis', $1, $3, $2)", [teklifId, siparisId, surum]);
+    const surum2 = async (teklifId: number): Promise<number> => {
+      await sahip.sorgu(`INSERT INTO siparisler_teklif_surumu (teklif_id, surum_no, olusturan_id) SELECT teklif_id, 2, olusturan_id FROM siparisler_teklif_surumu
+        WHERE teklif_id = $1 AND surum_no = 1`, [teklifId]);
+      return (await sahip.tek<{ id: number }>("INSERT INTO siparisler_logo_gonderim (tur, teklif_id, surum_no) VALUES ('teklif', $1, 2) RETURNING id", [teklifId]))!.id;
+    };
+    const giden = (tur: string, no: number, kolon: string, deger: string) =>
+      vt().sorgu(`INSERT INTO logo_giden (belge_turu, belge_no${kolon}) VALUES ($1, $2${deger})`, [tur, no]);
+
+    const durdu = await teklif(); const sirada = await teklif(); const gitti = await teklif(); const gidenSiz = await teklif();
+    const kurYok = await teklif(); const surumlu = await teklif(); const cokSira = await teklif();
+    const [sDurdu, sSirada, sGitti, sGidenSiz, sElle, sKurYok, sSurum2, sSurum1, sCok] =
+      [await siparis(), await siparis(), await siparis(), await siparis(), await siparis(), await siparis(), await siparis(), await siparis(), await siparis()];
+    await bagla(durdu.id, sDurdu); await bagla(sirada.id, sSirada); await bagla(gitti.id, sGitti); await bagla(gidenSiz.id, sGidenSiz);
+    await giden('siparisler-teklifi', await sira('teklif', durdu.id), ', son_deneme, son_sonuc, son_hata', ", now(), 'reddedildi', 'Deneme ret'");
+    // Teklif Logo'ya gitti, sipariş henüz denenmedi: sipariş bugünkü gibi rozetsiz (kendiliğinden gider).
+    await giden('siparisler-teklifi', await sira('teklif', gitti.id), ', son_deneme, son_sonuc, logo_kayit_no', ", now(), 'gonderildi', '9101'");
+    // Teklif Logo'ya gitti, sipariş de gitti: "Logo'da".
+    await giden('siparisler-teklifi', await sira('teklif', gidenSiz.id), ', son_deneme, son_sonuc, logo_kayit_no', ", now(), 'gonderildi', '9102'");
+    await giden('siparisler-siparisi', await sira('siparis', gidenSiz.id), ', son_deneme, son_sonuc, logo_kayit_no', ", now(), 'gonderildi', '9103'");
+
+    // 3625 ile gelen neden: teklif sırasındaki hata metni (giden kutusunda iz yok).
+    await bagla(kurYok.id, sKurYok);
+    await sahip.sorgu("UPDATE siparisler_logo_gonderim SET durum = 'hata', hata = $2 WHERE tur = 'teklif' AND teklif_id = $1", [kurYok.id, "USD için 2026-11-17 kuru Finans'ta yok.\nayrıntı"]);
+    // Sürüm eşleşmesi: teklifin 1. sürümü Logo'da, 2. sürümü sırada; sipariş hangi sürümden açıldıysa onun durumuna bakılır, numara sürümlüdür.
+    const sira2 = await surum2(surumlu.id);
+    await giden('siparisler-teklifi', await sira('teklif', surumlu.id), ', son_deneme, son_sonuc, logo_kayit_no', ", now(), 'gonderildi', '9104'");
+    await giden('siparisler-teklifi', sira2, ', son_deneme, son_sonuc, son_hata', ", now(), 'reddedildi', 'Ret 2'");
+    await bagla(surumlu.id, sSurum2, 2); await bagla(surumlu.id, sSurum1, 1);
+    // Birden çok sıra: en yeni sipariş sırası geçerlidir.
+    await bagla(cokSira.id, sCok);
+    const sira2Cok = await surum2(cokSira.id);
+    await giden('siparisler-teklifi', sira2Cok, ', son_deneme, son_sonuc, son_hata', ", now(), 'reddedildi', 'Ret çok'");
+    await bagla(cokSira.id, sCok, 2);
+    const r = await oku('rz-satis', `tur=satis-siparisi&id=${[sDurdu, sSirada, sGitti, sGidenSiz, sElle, sKurYok, sSurum2, sSurum1, sCok].map(String).join(',')}`);
+    assert.equal(r.durum, 200, JSON.stringify(r.govde));
+    assert.deepEqual([...r.govde.durumlar].sort((x, y) => x.id - y.id), [
+      { id: sDurdu, durum: 'sirada', kayitNo: null, neden: `Teklif ${durdu.no} Logo'ya gitmedi: Deneme ret`, elle: false },
+      { id: sSirada, durum: 'sirada', kayitNo: null, neden: `Teklif ${sirada.no} Logo'ya gitmedi: sırada`, elle: false },
+      { id: sGidenSiz, durum: 'logoda', kayitNo: '9103', neden: null, elle: false },
+      { id: sKurYok, durum: 'sirada', kayitNo: null, neden: `Teklif ${kurYok.no} Logo'ya gitmedi: USD için 2026-11-17 kuru Finans'ta yok.`, elle: false },
+      { id: sSurum2, durum: 'sirada', kayitNo: null, neden: `Teklif ${surumlu.no}-R2 Logo'ya gitmedi: Ret 2`, elle: false },
+      { id: sCok, durum: 'sirada', kayitNo: null, neden: `Teklif ${cokSira.no}-R2 Logo'ya gitmedi: Ret çok`, elle: false },
+    ]);
+    // sGitti, sSurum1 (1. sürüm Logo'da, sipariş denenmedi) ve sElle (Logo sırası yok) listede yok: rozet bugünkü gibi boş çizgi.
   });
 
   test('RZ-5 malzeme: hizmet satırı da sayılır, kayıt no\'lu satır seçilir; giden satırı olmayan bağlı kart Logo\'da', async () => {

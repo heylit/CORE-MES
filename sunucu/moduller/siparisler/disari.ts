@@ -55,7 +55,7 @@ export {
 } from './logo-gonderim.ts';
 export type { SiparislerLogoSiparisi, SiparislerLogoSonucu, SiparislerLogoTeklifi } from './logo-gonderim.ts';
 // 3360-2 a: Logo'ya elle bağlama ve bağı kaldırma (Logo modülü çağırır; yetki onun ucunda).
-export { logoBaglamaSirasi, logoSirasiniGeriAl } from './logo-gonderim.ts';
+export { logoBaglamaSirasi, logoSirasiniGeriAl, logoSiparisTeklifSiralari } from './logo-gonderim.ts';
 export type { SiparislerLogoBaglamaSirasi } from './logo-gonderim.ts';
 export { malzemeKartiIzleri } from './sorgular.ts';
 // teklif formunun anteti (kurum bilgisi); satın almanın teklif isteme formu okur.

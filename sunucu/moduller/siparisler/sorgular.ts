@@ -937,6 +937,21 @@ export async function logoHatasiYaz(db: Db, tur: 'teklif' | 'siparis', id: numbe
   );
 }
 
+// Sipariş sırasının bağlı olduğu teklif sürümünün sırası, teklifin numarası, sürümü ve sıradaki hata metni (kur yok, kart bekliyor gibi
+// CORE'un kendi nedeni giden kutusuna değil sıraya yazılır). Siparişin birden çok sırası olsa en yenisi alınır.
+export interface LogoSiparisTeklifSirasi { siparisId: number; teklifSiraId: number; teklifNo: string; teklifSurumNo: number; teklifHata: string | null }
+export function logoSiparisTeklifSiralari(db: Db, siparisIdler: readonly number[]): Promise<LogoSiparisTeklifSirasi[]> {
+  return db.sorgu<LogoSiparisTeklifSirasi>(
+    `SELECT DISTINCT ON (g.siparis_id) g.siparis_id AS "siparisId", t.id AS "teklifSiraId", k.no AS "teklifNo", t.surum_no AS "teklifSurumNo",
+            CASE WHEN t.durum = 'hata' THEN t.hata END AS "teklifHata"
+       FROM siparisler_logo_gonderim g
+       JOIN siparisler_logo_gonderim t ON t.tur = 'teklif' AND t.teklif_id = g.teklif_id AND t.surum_no = g.surum_no
+       JOIN siparisler_teklif k ON k.id = g.teklif_id
+      WHERE g.tur = 'siparis' AND g.siparis_id = ANY($1::int[]) ORDER BY g.siparis_id, g.id DESC`,
+    [[...siparisIdler]],
+  );
+}
+
 // 3360-2 a: Logo'ya elle bağlanacak belgenin en yeni sırası (teklifte son sürüm, siparişte siparişin sırası). Sıra yoksa null.
 export interface LogoBaglamaSirasi {
   id: number; durum: 'bekliyor' | 'gonderildi' | 'hata'; logo_kayit_no: string | null; no: string; surum_no: number; firma_id: number | null; tarih: string;

@@ -20,9 +20,9 @@ import {
 import type { GidenIzlemeDurumu, LogoCari, LogoKullanimSatiri, LogoMalzemeKarti, LogoStokSatiri, Sayfa } from './kurallar.ts';
 import type { FisDurumSorusu, GonderilecekKarsilama, GonderilecekMalzemeFisi, StokFisi, StokFisSatiri, GonderilecekSatisSiparisi, GonderilecekSatisTeklifi, GonderilecekSiparis, GonderilecekTalep, GuncellenecekSiparisSatiri, HizmetYonu, KopruSonucu } from './kurallar.ts';
 import * as s from './sorgular.ts';
-import { BELGE_ARAMA_GIDEN_TURU, BELGE_ARAMA_TURU, crmDurumu, crmKodlari, crmSorguyuKeser, crmSorunu, seciliCrmEngeli, crmSorulurMu, PROJE_AYARI, ROZET_BELGELERI, belgeRozetDurumu, bekleyenTaze, projeBekliyorMetni, projeBekliyorNedeni, projeliGovde, satisSiparisiProjesi } from './kurallar.ts';
+import { BELGE_ARAMA_GIDEN_TURU, BELGE_ARAMA_TURU, crmDurumu, crmKodlari, crmSorguyuKeser, crmSorunu, seciliCrmEngeli, crmSorulurMu, PROJE_AYARI, ROZET_BELGELERI, belgeRozetDurumu, teklifBeklerkenSiparisRozeti, bekleyenTaze, projeBekliyorMetni, projeBekliyorNedeni, projeliGovde, satisSiparisiProjesi } from './kurallar.ts';
 import { projeGetir, siparisinProjeleri } from '../projeler/disari.ts';
-import { logoSiraBelgeleri, logoSiralari } from '../siparisler/disari.ts';
+import { logoSiraBelgeleri, logoSiralari, logoSiparisTeklifSiralari } from '../siparisler/disari.ts';
 import { aramayiHatirla, baglanacakBelge, baglanacakOzeti, bulguBaglamasi, satisElleEngeli } from './elle-bag.ts';
 import type { BelgeTuru, FisTuru, GidenIslemi, GidenSatiri, GidenSonucu } from './sorgular.ts';
 
@@ -1905,6 +1905,7 @@ export async function belgeRozetleri(db: Db, tur: LogoRozetTuru, idler: readonly
   const elle = new Set<number>();
   for (const b of belgeler) for (const e of await s.elleBagliNolar(db, b, nolar)) elle.add(e.belgeNo);
   const durumlar: LogoRozetCevabi['durumlar'] = [];
+  const teklifBekleyenler: number[] = [];
   for (const id of tekil) {
     const sira = kayitlar.get(id) ?? [];
     const no = sira.find((n) => giden.has(n) || belgeler.some((b) => kartBekleyenBelgeler.has(kartKaydiAnahtari(b, n))));
@@ -1913,6 +1914,22 @@ export async function belgeRozetleri(db: Db, tur: LogoRozetTuru, idler: readonly
     const bekleyen = v !== null && bekleyenTaze(v.goruldu, simdi) ? v : null;
     const d = belgeRozetDurumu(g, bekleyen, bagli.get(id) ?? null);
     if (d !== null) durumlar.push({ id, ...d, elle: d.durum === 'logoda' && no !== undefined && elle.has(no) });
+    else if (tur === 'satis-siparisi' && sira.length > 0) teklifBekleyenler.push(id);
+  }
+  // Sipariş sırası var ama giden kutusunda satırı yok: teklif Logo'ya gitmediği için sipariş için deneme yapılmamıştır.
+  if (teklifBekleyenler.length > 0) {
+    const baglar = await logoSiparisTeklifSiralari(db, teklifBekleyenler);
+    const teklifBelgeleri = ROZET_BELGELERI.teklif as readonly BelgeTuru[];
+    const teklifNolari = baglar.map((b) => b.teklifSiraId);
+    const teklifGiden = new Map<number, GidenSatiri>();
+    for (const b of teklifBelgeleri) for (const g of await s.gidenSatirlari(db, b, teklifNolari)) if (!teklifGiden.has(g.belgeNo) || g.logoKayitNo !== null) teklifGiden.set(g.belgeNo, g);
+    for (const b of baglar) {
+      const g = teklifGiden.get(b.teklifSiraId) ?? null;
+      const v = teklifBelgeleri.map((t) => kartBekleyenBelgeler.get(kartKaydiAnahtari(t, b.teklifSiraId))).find((x) => x !== undefined) ?? null;
+      const teklif = belgeRozetDurumu(g, v !== null && bekleyenTaze(v.goruldu, simdi) ? v : null, null);
+      const d = teklifBeklerkenSiparisRozeti({ no: b.teklifNo, surumNo: b.teklifSurumNo, sirahata: b.teklifHata }, teklif);
+      if (d !== null) durumlar.push({ id: b.siparisId, ...d, elle: false });
+    }
   }
   return { durumlar };
 }

@@ -333,7 +333,7 @@ export const logoRozetCevabi = z.object({
     durum: z.enum(LOGO_ROZET_DURUMLARI),
     // Logo'daki belgenin kayıt numarası; yalnız "logoda" durumunda ve biliniyorsa.
     kayitNo: z.string().nullable(),
-    // Gitmeyen belgenin nedeni (Logo'nun ya da CORE'un iletisi); "logoda" ve "sirada"da null.
+    // Gitmeyen belgenin nedeni (Logo'nun ya da CORE'un iletisi); "logoda" ve "sirada"da null (teklifi gitmediği için bekleyen satış siparişinde "sirada" teklifin nedenini taşır).
     neden: z.string().nullable(),
     // 3360-2 a: belge Logo'daki kayda elle bağlandı (CORE göndermedi, bir daha da göndermez).
     elle: z.boolean(),
