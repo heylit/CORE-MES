@@ -683,12 +683,13 @@ export function TekAlmaPenceresi({ satir, turAdlari, karsiliklar, kapat, alindi 
 }) {
   const [tur, turYaz] = useState(() => tekKarsilik(karsiliklar, 'tur', satir.kartTuru));
   const [birim, birimYaz] = useState(() => tekKarsilik(karsiliklar, 'birim', satir.birimSeti));
+  const [onekSecimi, onekSecimiYaz] = useState<'otomatik' | 'baska'>('otomatik');
   const [onek, onekYaz] = useState('');
   const birimler = useQuery({ queryKey: ['malzemeler', 'birimler'], queryFn: () => api.get<OlcuBirimleriCevabi>('/malzeme-birimleri') });
   const { bildir } = useBildirim();
   const al = useTekGonderim({
     mutationFn: () => api.post<LogodanAlCevabi>(`/malzeme-logo-kartlari/${satir.logoKayitNo}/al`, {
-      tur, birim, onek: satir.koduUyar || onek.trim() === '' ? null : onek.trim().toUpperCase(),
+      tur, birim, onek: satir.koduUyar || onekSecimi === 'otomatik' || onek.trim() === '' ? null : onek.trim().toUpperCase(),
     }),
     onSuccess: async (c) => {
       bildir('tamam', `${c.stok_kodu} taslak açıldı; Katalog'da tamamlayıp onaya gönderin.`);
@@ -720,7 +721,18 @@ export function TekAlmaPenceresi({ satir, turAdlari, karsiliklar, kapat, alindi 
           : <Secim etiket="Birim" required secenekler={(birimler.data?.birimler ?? []).filter((b) => b.aktif).map((b) => ({ deger: b.kod, baslik: b.kod }))} bosSecenek="Seçiniz" value={birim} onChange={(o) => birimYaz(o.target.value)} />}
         {satir.koduUyar
           ? <p className="tc-lg-not">Kart CORE kodunu alır (aynı önekte sıradaki boş kod); Logo kodu kartta ERP kodu olarak kalır.</p>
-          : <Girdi etiket="Yeni kodun öneki (isteğe bağlı)" ipucu="Logo kodu CORE kod biçimine uymuyor; kart CORE kodu alır, Logo kodu ERP kodu olarak kalır. Boş bırakırsanız türün genel grubu kullanılır (ör. HM-GEN-)." value={onek} maxLength={20} onChange={(o) => onekYaz(o.target.value)} />}
+          : (
+            <>
+              <Secim
+                etiket="Yeni kodun öneki"
+                secenekler={[{ deger: 'otomatik', baslik: 'Otomatik (genel grup)' }, { deger: 'baska', baslik: 'Başka önek yaz…' }]}
+                value={onekSecimi}
+                onChange={(o) => onekSecimiYaz(o.target.value === 'baska' ? 'baska' : 'otomatik')}
+              />
+              <p className="tc-lg-not">Logo kodu CORE kod biçimine uymuyor; kart CORE kodu alır, Logo kodu ERP kodu olarak kalır. Kodlama sistemini bilmiyorsanız "Otomatik" kalsın: türün genel grubu kullanılır (ör. HM-GEN-); grubu sonra Katalog'da düzenleyebilirsiniz.</p>
+              {onekSecimi === 'baska' && <Girdi etiket="Önek" ipucu="Tür-grup biçiminde, ör. HM-PAS-" value={onek} maxLength={20} onChange={(o) => onekYaz(o.target.value)} />}
+            </>
+          )}
         {al.isError && <p className="tc-lg-not tc-lg-hata" role="alert">{hataIletisi(al.error, 'Alınamadı')}</p>}
       </form>
     </Pencere>
