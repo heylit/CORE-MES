@@ -374,13 +374,24 @@ describe('LogoMalzemeGecisi: CORE\'dakini Logo\'ya gönder (3632)', () => {
     fireEvent.click(await screen.findByRole('button', { name: "HM-DEN-00014 CORE'dakini Logo'ya gönder" }));
     let pencere = within(await screen.findByRole('dialog'));
     expect(pencere.queryByText(/kartın adı değişir/)).toBeNull();
-    expect(pencere.getByText(/geri getirilemez/)).toBeTruthy();
+    expect(pencere.getByText(/denetim kaydında kalır/)).toBeTruthy();
     fireEvent.click(pencere.getByRole('button', { name: 'Vazgeç' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: "HM-DEN-00010 CORE'dakini Logo'ya gönder" }));
     pencere = within(await screen.findByRole('dialog'));
     expect(pencere.getByText("Logo'daki kartın adı değişir.")).toBeTruthy();
     expect(pencere.queryByText(/fatura/)).toBeNull();
+  });
+
+  it('hiç uygun kart yokken pencerenin düğmesi "0 kart" demez, pasif ve "Gönderilecek kart yok" yazar', async () => {
+    sunucuKur(YAZAN, liste([SIRADA, COREBOS]));
+    ac();
+    await screen.findByText('HM-DEN-00012');
+    fireEvent.click(screen.getByLabelText('Tümünü seç'));
+    fireEvent.click(within(screen.getByRole('toolbar', { name: 'Logo malzemeleri: toplu işlem' })).getByRole('button', { name: /Logo'ya gönder/ }));
+    const pencere = within(await screen.findByRole('dialog'));
+    expect((pencere.getByRole('button', { name: 'Gönderilecek kart yok' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(pencere.queryByText(/0 kartı/)).toBeNull();
   });
 
   it('"Logo\'dakini al" bugünkü gibi çalışır: onay penceresi ve uç aynı', async () => {

@@ -146,7 +146,7 @@ export function LogoMalzemeGecisi({ turAdlari }: Ozellikler) {
       const gonderNedeni = !veri.logoyaGonderim.acik ? veri.logoyaGonderim.neden
         : !k.logoyaGonder.gonderilebilir ? "CORE'da dolu açıklama yok; Logo'daki metin silinmez" : null;
       return (
-        <span className="tc-lg-eylemler">
+        <span className="tc-lg-eylemler tc-lg-gonder-eylemler">
           <Dugme simge="download" aria-label={`${k.kod} Logo'dakini al`} onClick={() => tekYaz({ satir: k, islem: 'farki-al' })}>Logo'dakini al</Dugme>
           <Dugme simge="upload" aria-label={`${k.kod} CORE'dakini Logo'ya gönder`} disabled={gonderNedeni !== null} {...(gonderNedeni ? { title: gonderNedeni } : {})}
             onClick={() => gonderYaz([gonderAdayi(k)])}>
@@ -502,7 +502,7 @@ export function LogoyaGonderPenceresi({ secili, gonderim, kapat, bitti }: {
           <Dugme onClick={kapat}>Vazgeç</Dugme>
           <Dugme tur="birincil" type="submit" form="logo-gonder" simge="upload" disabled={kapali || uygun.length === 0} yukleniyor={gonder.isPending}
             {...(kapali && gonderim.neden ? { title: gonderim.neden } : {})}>
-            {uygun.length === 1 ? "Logo'ya gönder" : `${sayi(uygun.length)} kartı Logo'ya gönder`}
+            {uygun.length === 0 ? "Gönderilecek kart yok" : uygun.length === 1 ? "Logo'ya gönder" : `${sayi(uygun.length)} kartı Logo'ya gönder`}
           </Dugme>
         </>
       )}
@@ -543,7 +543,7 @@ export function LogoyaGonderPenceresi({ secili, gonderim, kapat, bitti }: {
             {uygun.some((k) => gidecekAlanlar(k).some((a) => a.alan === 'aciklama_1' && a.gidecek !== null)) && (
               <li><Simge ad="alert" boyut="k" />Logo'daki kartın adı değişir.</li>
             )}
-            <li><Simge ad="minus" boyut="k" />Gönderimi Logo işi sıradaki turda yapar; Logo'daki eski metin geri getirilemez.</li>
+            <li><Simge ad="minus" boyut="k" />Gönderimi Logo işi sıradaki turda yapar; Logo'daki eski metin denetim kaydında kalır.</li>
             {[...nedenler].map(([n, adet]) => <li key={n}><Simge ad="minus" boyut="k" />{sayi(adet)} kart atlanacak: {n}</li>)}
             {fazla > 0 && <li><Simge ad="minus" boyut="k" />{sayi(fazla)} kart bu işleme sığmadı (tek işlemde en çok {sayi(LOGOYA_GONDER_AZAMI)}); sonra yeniden seçin.</li>}
           </ul>
