@@ -7,7 +7,7 @@ import { useSihirbaz } from '../baglam.ts';
 import { aileler, formlar } from '../turler.ts';
 import type { AileSecenegi } from '../../kurallar/index.ts';
 import { KatalogSimgesi } from '../../ortak/KatalogSimgesi.tsx';
-import { kartStandardi, standartAdlari, standartEtiketi, standartlaEslesir } from '../../standart-adlari.ts';
+import { secenekEtiketleri, standartTercihi, standartAdlari, standartEtiketi, standartlaEslesir } from '../../standart-adlari.ts';
 import { BagDugmesi, Cip, CipGrubu, MetinAlani, SecenekGrubu, Uyari, type CipTonu } from '../parcalar.tsx';
 
 type Secenek = AileSecenegi;
@@ -28,7 +28,7 @@ interface DurumAdimiOzellikleri {
 // Hammadde 4. adım (prototipte `s3`): seçenekler kalite ve forma göre süzülür; uyumsuz olanlar istenirse görünür.
 export function DurumAdimi({ anahtarlar, bolumler, haric = [] }: DurumAdimiOzellikleri = {}) {
   const { taslak: d, b, degistir, yenisiniKur, secim, secimYaz, bildir } = useSihirbaz();
-  const standart = kartStandardi(d);
+  const standart = standartTercihi(d);
   const [ara, araYaz] = useState('');
   const [stdAcik, stdAcikYaz] = useState(false);
   const adlar = useMemo(() => standartAdlari(b.ortam.malzemeAyari), [b.ortam.malzemeAyari]);
@@ -104,7 +104,14 @@ export function DurumAdimi({ anahtarlar, bolumler, haric = [] }: DurumAdimiOzell
       // Arama değerin kendisinde, ASTM ve EN adında bakar; seçili değer süzülse de görünür kalır.
       // EN / ASTM adları yalnız durum ve işlem listelerindedir; öteki listelerde (yüzey, üretim...) aynı metin başka anlam taşır.
       const esli = o.k === 'durum' || o.k === 'islem' ? adlar : {};
-      const etiket = (x: string) => standartEtiketi(x, esli, standart);
+      const etiketler = secenekEtiketleri(l, esli, standart);
+      const etiket = (x: string) => etiketler.get(x) ?? standartEtiketi(x, esli, standart);
+      // Seçilmeyen tarafın adı çipte yazmaz; fare ve ekran okuyucu için ipucunda durur (aramada neden eşleştiği de buradan okunur).
+      const ipucuMetni = (x: string, bilgi?: string) => {
+        const diger = standart === null ? undefined : standart === 'astm' ? esli[x]?.en : esli[x]?.astm;
+        if (diger) return `${standart === 'astm' ? 'EN' : 'ASTM'}: ${diger} · ${bilgi ?? x}`;
+        return bilgi ?? (etiket(x) === x ? undefined : x);
+      };
       const gorunen = uyanlar.filter((x) => cur.includes(x) || standartlaEslesir(x, esli, ara));
       if (!gorunen.length) return null;
       const mods = gorunen.filter((x) => S.MODS[x]);
@@ -114,7 +121,7 @@ export function DurumAdimi({ anahtarlar, bolumler, haric = [] }: DurumAdimiOzell
             {gorunen.map((x) => (
               <Cip
                 key={x} radyo={o.type === 'select'} basili={cur.includes(x)} ton={TON[K.optStatus(o.k, x, d, b).s]} ipucu
-                baslik={S.INFO[x]?.split('||')[0] ?? (etiket(x) === x ? undefined : x)} tikla={() => { sec(o, x); }}
+                baslik={ipucuMetni(x, S.INFO[x]?.split('||')[0])} tikla={() => { sec(o, x); }}
               >{etiket(x)}
               </Cip>
             ))}

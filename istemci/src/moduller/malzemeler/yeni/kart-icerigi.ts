@@ -6,7 +6,7 @@ import type { Nesne } from './tipler.ts';
 const FARK_DISI_ALANLAR = ['talep', 'rev', 'updatedAt', 'onay', 'birlesen', 'mukerrerOnay', 'yerine'];
 
 // Kayıtta ekranın türettiği alanlar (kodlariSabitle, finalAd): kullanıcı onları başka bir alandan değiştirir, o alan sayılır. Elle yazılan
-// açıklama, kod ve ad föy farkında (`diffItems`), standart ayrı denetimde (`kartStandardi`) görülür.
+// açıklama, kod ve ad föy farkında (`diffItems`), standart ayrı denetimde (sihirbaz/kaydet.ts) görülür.
 const TUREV_ALANLAR = ['acManual', 'kodManual', 'adManual', 'standart'];
 const TUREV_TICARI = ['kod', 'ad', 'tkod', 'ac1', 'ac2', 'ac3'];
 

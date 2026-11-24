@@ -4,11 +4,13 @@ import { useSihirbaz } from '../baglam.ts';
 import { BagDugmesi, Cip, CipGrubu, Kutu, MetinAlani, Alanlar, Yardim } from '../parcalar.tsx';
 import { aileler, girdiler } from '../turler.ts';
 import type { Aile, Kalite, Sinif } from '../../kurallar/index.ts';
+import { anaNorm, esdegerSirala, kaliteAdi, ortakAstmKarsiliklari, standartTercihi, tarafSirala } from '../../standart-adlari.ts';
 import { FavoriCipleri, SonKullanilanCipleri, yakinKaliteler } from './Baslangic.tsx';
 
 
 function Esdegerler({ eq }: { eq: Record<string, string> | undefined }) {
-  const e = Object.entries(eq ?? {});
+  const { taslak: d } = useSihirbaz();
+  const e = Object.entries(esdegerSirala(eq, standartTercihi(d)));
   if (!e.length) return null;
   return <span className="tc-my-esler">{e.map(([k, v]) => <span key={k} className="tc-my-es"><i>{k}</i>{v}</span>)}</span>;
 }
@@ -21,11 +23,11 @@ function KaliteSatiri({ fam, cls, g, nerede }: { fam: string; cls: string; g: Ka
   return (
     <button type="button" className="tc-my-kalite" aria-pressed={d.fam === fam && d.grade === g.kod} onClick={() => { kaliteSec(fam, cls, g.kod); }}>
       <span className="tc-my-kalite-ana">
-        <b>{g.ad}</b>
+        <b>{kaliteAdi(g, standartTercihi(d), ortakAstmKarsiliklari(b.t.FAMS))}</b>
         {nerede && <span className="tc-my-nerede" data-aile={fam}>{f.ad} / {c.ad}</span>}
         <Esdegerler eq={g.eq} />
       </span>
-      <span className="tc-my-kalite-std">{g.std || c.std || ''}</span>
+      <span className="tc-my-kalite-std">{anaNorm(g, standartTercihi(d)) || c.std || ''}</span>
       <span className="tc-my-kalite-deger">{K.keyFigure(d, g, fam, b)}</span>
     </button>
   );
@@ -102,7 +104,7 @@ function StandartKutusu() {
         Malzemenin uygun olacağı standartları seç. Birden fazlasını seçmek, her iki standardı da karşılayan çift sertifikalı tedarik anlamına gelir (ör. EN 10083-3 ve ASTM A29).
       </Yardim>
       <CipGrubu etiket="Standart">
-        {g.stds.map((x) => <Cip key={x} basili={sec.includes(x)} tikla={() => { degis(x); }}>{x}</Cip>)}
+        {tarafSirala(g.stds, standartTercihi(d), (x) => x).map((x) => <Cip key={x} basili={sec.includes(x)} tikla={() => { degis(x); }}>{x}</Cip>)}
       </CipGrubu>
       <Yardim>
         Katalog adında görünecek: <b>{K.gradeLabel(d, b)}</b>
@@ -161,7 +163,7 @@ export function KaliteAdimi() {
       {g && d.grade !== '__ozel' && !ara && (
         <div className="tc-ek-secili">
           <span className="tc-my-etiket">Seçili kalite</span>
-          <b>{g.ad}</b>
+          <b>{kaliteAdi(g, standartTercihi(d), ortakAstmKarsiliklari(b.t.FAMS))}</b>
           <Esdegerler eq={g.eq} />
         </div>
       )}

@@ -11,6 +11,7 @@ import type { Nesne } from '../../tipler.ts';
 import { clsKeyFor } from './uyumluluk.ts';
 import { variantKod__0 } from './varyant.ts';
 import { cleanKod, esc, fmtD, isNum } from './yardimcilar.ts';
+import { standartAdlari, standartEtiketi, standartTercihi } from '../../standart-adlari.ts';
 
 // Türün malzeme ayarındaki kuralı: zorunlu alanlar, ad kalıbı, açıklama kalıpları (ac[0..2]).
 export interface TurKurali { zorunlu?: Sozluk<unknown>; ad?: string; ac?: string[]; [alan: string]: unknown }
@@ -157,10 +158,20 @@ function hammaddeJetonu(k: string, d: Taslak): string | null {
     }
     if (!hammaddeJetonlari(FAMS).some(([j]) => j === k))
         return null;
-    const v = d.opts && d.opts[k];
+    const v0 = d.opts && d.opts[k];
+    const v = ESLI_ANAHTAR.has(k) ? standartAdli(v0, d) : v0;
     return v === undefined || v === null ? '' : Array.isArray(v) ? v.join(', ') : String(v);
 }
 export function musteriKoduAc(g: Nesne): string { const v = String(g.musteri || '').trim(); return v ? 'Müşteri kodu ' + v : ''; }
+// 3633: durum ve işlem değeri kartın seçtiği standardın adıyla yazılır; kart değeri ve ad değişmez.
+function standartAdli(x: unknown, d: Taslak): unknown {
+    if (Array.isArray(x))
+        return x.map(y => standartAdli(y, d));
+    const tercih = standartTercihi(d as Nesne);
+    // Standardı seçilmemiş eski kartta açıklama kart değerini olduğu gibi yazar (Logo'ya giden metin değişmez).
+    return tercih !== null && typeof x === 'string' && x ? standartEtiketi(x, standartAdlari(MA.v as Nesne), tercih) : x;
+}
+const ESLI_ANAHTAR = new Set(['durum', 'islem']);
 // Kalıp uygulanmış, kısaltılmamış açıklama satırları.
 export function aciklamaHam(d: Taslak = D): string[] {
     const t = d.tur || 'hammadde';
@@ -171,8 +182,8 @@ export function aciklamaHam(d: Taslak = D): string[] {
         const fm = FORMS[d.form as string];
         a[0] = [gradeLabel(d), fm ? fm.ad.split(' /')[0]!.toLocaleLowerCase('tr') : '', dimsStr(d, true)].filter(Boolean).join(' ');
         if (f) {
-            const durum = f.opts.filter(o => o.type === 'select' && ((o.grp || 'Durum') === 'Durum' || o.k === 'uretim')).map(o => d.opts[o.k]);
-            const isl = f.opts.filter(o => o.grp === 'İşlemler').map(o => d.opts[o.k]);
+            const durum = f.opts.filter(o => o.type === 'select' && ((o.grp || 'Durum') === 'Durum' || o.k === 'uretim')).map(o => ESLI_ANAHTAR.has(o.k) ? standartAdli(d.opts[o.k], d) : d.opts[o.k]);
+            const isl = f.opts.filter(o => o.grp === 'İşlemler').map(o => ESLI_ANAHTAR.has(o.k) ? standartAdli(d.opts[o.k], d) : d.opts[o.k]);
             a[1] = _bir(durum, isl);
         }
         const ut = d.opts && d.opts.ut;

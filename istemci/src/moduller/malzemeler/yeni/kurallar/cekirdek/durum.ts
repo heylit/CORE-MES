@@ -731,6 +731,7 @@ try {
     const s = JSON.parse(localStorage.getItem(DKEY) || 'null');
     if (s && s.D) {
         D = { ...newDraft(), ...s.D };
+        if (s.D.standart === undefined) delete D.standart;
         step = Math.min(6, s.step || 0);
     }
 }

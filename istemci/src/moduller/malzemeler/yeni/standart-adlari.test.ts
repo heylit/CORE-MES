@@ -2,9 +2,9 @@ import { describe, expect, test } from 'vitest';
 import { ORNEK_AYAR, ORNEK_KARTLAR } from './ornek-veri.ts';
 import { FAMS } from './sabitler/index.ts';
 import { metinListesi } from './katalog/liste.ts';
-import { autoKod, finalAd, kuralBaglami, metinAyristir, newDraft } from './kurallar/index.ts';
+import { autoKod, finalAd, finalStd, kartAnahtari, kartOzeti, kuralBaglami, metinAyristir, newDraft } from './kurallar/index.ts';
 import {
-  STANDART_AD_SINIRI, TABAN_STANDART_ADLARI, aramaMetinleri, kartStandardi, ayardakiStandartAdlari, esliAdlariCoz, standartAdiYaz, standartAdlari, standartEtiketi, standartlaEslesir,
+  STANDART_AD_SINIRI, TABAN_STANDART_ADLARI, aramaMetinleri, ayardakiStandartAdlari, esliAdlariCoz, standartAdiYaz, standartAdlari, anaNorm, kaliteAdi, ortakAstmKarsiliklari, secenekEtiketleri, standartTercihi, standartEtiketi, esdegerSirala, standartTarafi, tarafSirala, standartlaEslesir,
 } from './standart-adlari.ts';
 import type { KartKaydi, KatalogKarti } from './tipler.ts';
 import { ortamKur } from './veri.ts';
@@ -25,9 +25,9 @@ describe('2117 standart adları', () => {
     }
   });
 
-  test('seçili standart önce, diğeri parantez içinde; tek ad o ad, hiç yoksa değerin kendisi', () => {
-    expect(standartEtiketi('Islah (+QT)', ADLAR, 'astm')).toBe('QT-A (QT-E)');
-    expect(standartEtiketi('Islah (+QT)', ADLAR, 'en')).toBe('QT-E (QT-A)');
+  test('yalnız seçili standardın adı; o taraf boşsa öteki ad, hiç yoksa değerin kendisi', () => {
+    expect(standartEtiketi('Islah (+QT)', ADLAR, 'astm')).toBe('QT-A');
+    expect(standartEtiketi('Islah (+QT)', ADLAR, 'en')).toBe('QT-E');
     expect(standartEtiketi('Yalnız ASTM', ADLAR, 'en')).toBe('X1');
     expect(standartEtiketi('Aynı ad', ADLAR, 'en')).toBe('T6');
     expect(standartEtiketi('Normalize (+N)', ADLAR, 'astm')).toBe('Normalize (+N)');
@@ -75,7 +75,7 @@ describe('2117 taban tablo ve listeler', () => {
       for (const st of ['astm', 'en'] as const) {
         const gor = new Map<string, string>();
         for (const v of l.map(String)) {
-          const e = standartEtiketi(v, TABAN_STANDART_ADLARI, st);
+          const e = secenekEtiketleri(l.map(String), TABAN_STANDART_ADLARI, st).get(v)!;
           if (gor.has(e)) cakisan.push(`${yer} ${st}: ${gor.get(e)!} / ${v}`);
           gor.set(e, v);
         }
@@ -93,10 +93,7 @@ describe('2117 taban tablo ve listeler', () => {
 });
 
 describe('2117-1 b kartın standardı', () => {
-  test('alanı olmayan ya da bozuk kartta ASTM; kart adı ve kodu standarttan bağımsızdır (Logo ad güncellemesi tetiklenmez)', () => {
-    expect(kartStandardi({})).toBe('astm');
-    expect(kartStandardi({ standart: 'xx' })).toBe('astm');
-    expect(kartStandardi({ standart: 'en' })).toBe('en');
+  test('kart adı ve kodu durum/işlem standardından bağımsızdır (karşılığı olmayan kalitede Logo ad güncellemesi tetiklenmez)', () => {
     const ortam = ortamKur(ORNEK_AYAR);
     const b = kuralBaglami({ ortam, kartlar: [], kisi: { id: 1, ad: 'Deneme' }, birim: 'met', yetki: malzemeYetkisi(() => true, ortam) });
     const d = { ...newDraft(b), fam: 'metal', cls: 'islah', grade: 'C45', form: 'cubuk', dims: { d: 50, l: 1000 }, opts: { durum: 'Islah (+QT)', islem: ['Pasivasyon'] } } as KartKaydi;
@@ -104,6 +101,69 @@ describe('2117-1 b kartın standardı', () => {
     expect(finalAd(en, b)).toBe(finalAd(d, b));
     expect(autoKod(en, b)).toBe(autoKod(d, b));
     expect(finalAd(d, b)).toContain('Islah (+QT)');
+  });
+
+  test('3633 kalite adı: ASTM karşılığı varsa seçili ASTM ile o yazılır; EN, karşılığı olmayan kalite ve standardı seçilmemiş eski kart kendi adıyla kalır; kod ve mükerrer anahtarı değişmez', () => {
+    const ortam = ortamKur(ORNEK_AYAR);
+    const b = kuralBaglami({ ortam, kartlar: [], kisi: { id: 1, ad: 'Deneme' }, birim: 'met', yetki: malzemeYetkisi(() => true, ortam) });
+    const taban = { ...newDraft(b), fam: 'metal', cls: 'karbon', grade: 'S235', form: 'levha', dims: { t: 10, w: 1000, l: 2000 } } as KartKaydi;
+    const astm = { ...taban, standart: 'astm' } as KartKaydi;
+    const en = { ...taban, standart: 'en' } as KartKaydi;
+    const eski = { ...taban } as Record<string, unknown>;
+    delete eski['standart'];
+    const e = eski as unknown as KartKaydi;
+    // S235JR'nin ASTM karşılığı yakın eşdeğerdir (≈ A36): ASTM seçiliyken de kendi adı kalır.
+    expect(finalAd(astm, b)).toContain('S235JR');
+    expect(finalAd(astm, b)).not.toContain('A36');
+    expect(finalAd(en, b)).toContain('S235JR');
+    // Kesin karşılıkta (A536 60-40-18) ASTM seçiliyken ASTM adı yazılır.
+    const gjs = { ...taban, cls: 'dokme', grade: 'GJS400', form: 'cubuk', dims: { d: 50, l: 1000 } } as KartKaydi;
+    expect(finalAd({ ...gjs, standart: 'astm' } as KartKaydi, b)).toContain('ASTM A536 60-40-18');
+    expect(finalAd({ ...gjs, standart: 'en' } as KartKaydi, b)).not.toContain('ASTM A536');
+    // Eski kartın adı bugünkü hâliyle kalır: Logo ad güncellemesi kendiliğinden tetiklenmez.
+    expect(finalAd(e, b)).toBe(finalAd(en, b));
+    expect(finalAd(e, b)).not.toContain('ASTM');
+    expect(autoKod(astm, b)).toBe(autoKod(en, b));
+    expect(autoKod(e, b)).toBe(autoKod(en, b));
+    expect(kartAnahtari(astm, b)).toBe(kartAnahtari(en, b));
+    expect(kartAnahtari(e, b)).toBe(kartAnahtari(en, b));
+  });
+
+  test('kaliteAdi ve standartTercihi', () => {
+    const g = { ad: 'S235JR', eq: { ASTM: '≈ A36', 'W.Nr': '1.0038' } };
+    expect(kaliteAdi(g, 'astm')).toBe('S235JR');
+    expect(kaliteAdi(g, 'en')).toBe('S235JR');
+    expect(kaliteAdi(g, null)).toBe('S235JR');
+    expect(kaliteAdi({ ad: 'C45', eq: { 'AISI/SAE': '1045' } }, 'astm')).toBe('C45');
+    expect(kaliteAdi({ ad: 'X' }, 'astm')).toBe('X');
+    const ortak = new Set(['a572 gr.50']);
+    expect(kaliteAdi({ ad: 'S355J2', eq: { ASTM: '≈ A572 Gr.50' } }, 'astm', ortak)).toBe('S355J2');
+    expect(kaliteAdi({ ad: 'S235JR', eq: { ASTM: '≈ A36' } }, 'astm', ortak)).toBe('S235JR');
+    expect(kaliteAdi({ ad: 'X1', eq: { ASTM: 'A36' } }, 'astm', ortak)).toBe('ASTM A36');
+    expect(kaliteAdi({ ad: 'X1', eq: { ASTM: 'A36' } }, 'en', ortak)).toBe('X1');
+    expect(kaliteAdi({ ad: 'X1', eq: { ASTM: 'A36' } }, 'astm', new Set(['a36']))).toBe('X1');
+    expect(standartTercihi({})).toBeNull();
+    expect(standartTercihi({ standart: 'xx' })).toBeNull();
+    expect(standartTercihi({ standart: 'astm' })).toBe('astm');
+    expect(standartTercihi({ standart: 'en' })).toBe('en');
+    expect(standartEtiketi('Islah (+QT)', ADLAR, null)).toBe('QT-A (QT-E)');
+    expect(standartEtiketi('Yalnız ASTM', ADLAR, null)).toBe('X1');
+  });
+
+  test('standardı seçilmemiş eski kartta açıklama ham değeri, Standart satırı özgün sırayı yazar; seçilmiş kartta seçili ad ve taraf sırası', () => {
+    const ortam = ortamKur(ORNEK_AYAR);
+    const b = kuralBaglami({ ortam, kartlar: [], kisi: { id: 1, ad: 'Deneme' }, birim: 'met', yetki: malzemeYetkisi(() => true, ortam) });
+    const taban = { ...newDraft(b), fam: 'metal', cls: 'islah', grade: 'C45', form: 'cubuk', dims: { d: 50, l: 1000 }, opts: { durum: 'Islah (+QT)' }, stds: ['ASTM A29/A29M', 'EN 10083-2'] } as KartKaydi;
+    const eski = { ...taban } as Record<string, unknown>;
+    delete eski['standart'];
+    const ac = (x: unknown) => kartOzeti(x as KartKaydi, b);
+    expect(ac(eski).aciklama_2).toContain('Islah (+QT)');
+    const sirali = (x: unknown) => finalStd(x as KartKaydi, b);
+    expect(sirali(eski)).toBe('EN 10083-2 / ASTM A29/A29M');
+    expect(sirali({ ...taban, standart: 'astm' }).startsWith('ASTM')).toBe(true);
+    expect(sirali({ ...taban, standart: 'en' }).startsWith('EN')).toBe(true);
+    expect(ac({ ...taban, standart: 'astm' }).aciklama_2).toContain('Quenched and tempered');
+    expect(ac({ ...taban, standart: 'en' }).aciklama_2).toContain('+QT');
   });
 });
 
@@ -129,5 +189,68 @@ describe('2117 arama yerleri', () => {
     expect(esli.opts).toMatchObject({ durum: 'Islah (+QT)' });
     const ayarsiz = metinAyristir('C45 cubuk 50 QT-E', b({}));
     expect(ayarsiz.opts.durum).toBeUndefined();
+  });
+});
+
+describe('3633 kalite ve norm karşılıkları seçili standarda göre sıralanır', () => {
+  test('taraf tanıma: ASTM ailesi, EN ailesi, öteki tarafsız', () => {
+    for (const x of ['ASTM A29', 'AISI/SAE', 'UNS', 'AMS 6370', 'AA', 'ASTM D1418']) expect(standartTarafi(x), x).toBe('astm');
+    for (const x of ['EN 10083-3', 'EN kısa ad', 'EN numara', 'W.Nr']) expect(standartTarafi(x), x).toBe('en');
+    for (const x of ['DIN (eski)', 'JIS', 'GB', 'ISO', 'Ticari adlar']) expect(standartTarafi(x), x).toBeNull();
+  });
+  test('seçili taraf önce, tarafsız sonra, öteki taraf en sonda; hiçbir karşılık düşmez', () => {
+    const eq = { 'W.Nr': '1.0503', UNS: 'G10450', JIS: 'S45C', 'AISI/SAE': '1045', 'EN kısa ad': 'C45' };
+    expect(Object.keys(esdegerSirala(eq, 'astm'))).toEqual(['UNS', 'AISI/SAE', 'JIS', 'W.Nr', 'EN kısa ad']);
+    expect(Object.keys(esdegerSirala(eq, 'en'))).toEqual(['W.Nr', 'EN kısa ad', 'JIS', 'UNS', 'AISI/SAE']);
+    expect(tarafSirala(['EN 10083-3', 'ASTM A29', 'ISO 683'], 'astm', (x) => x)).toEqual(['ASTM A29', 'ISO 683', 'EN 10083-3']);
+  });
+  test('ana norm: seçili tarafın normu, yoksa kalitenin ana normu', () => {
+    const g = { std: 'EN 10083-2', stds: ['EN 10083-2', 'ASTM A29/A29M', 'SAE J403'] };
+    expect(anaNorm(g, 'astm')).toBe('ASTM A29/A29M');
+    expect(anaNorm(g, 'en')).toBe('EN 10083-2');
+    expect(anaNorm({ std: 'MIL-DTL-12560', stds: ['MIL-DTL-12560'] }, 'en')).toBe('MIL-DTL-12560');
+    expect(anaNorm({ std: 'X 1' }, 'astm')).toBe('X 1');
+    expect(anaNorm({}, 'astm')).toBe('');
+  });
+  test('sınıflandırma gerçek norm listesiyle: her norm bilinen bir tarafa ya da tarafsıza düşer, ASTM ve EN ile başlayanlar yanlış tarafa düşmez', async () => {
+    const tum = new Set<string>();
+    for (const f of Object.values(FAMS as Record<string, { classes: Record<string, { std?: string; grades: { std?: string; stds?: string[] }[] }> }>)) {
+      for (const c of Object.values(f.classes)) {
+        if (c.std) tum.add(c.std);
+        for (const g of c.grades) { if (g.std) tum.add(g.std); for (const x of g.stds ?? []) tum.add(x); }
+      }
+    }
+    expect(tum.size).toBeGreaterThan(50);
+    for (const n of tum) {
+      const t = standartTarafi(n);
+      if (/^ASTM\b/.test(n)) expect(t, n).toBe('astm');
+      if (/^EN\b/.test(n)) expect(t, n).toBe('en');
+      if (t === 'en') expect(/^(EN\b|W\.Nr)/.test(n), n).toBe(true);
+      if (t === null) expect(/\b(ASTM|EN|AMS|SAE|AISI|UNS)\b/.test(n), `tarafsız norm iki tarafı da anıyor: ${n}`).toBe(false);
+    }
+  });
+  test('gerçek kalite listesinde ASTM seçiliyken yalnız kesin karşılıklar değişir ve hiçbir iki kalite aynı adı almaz', () => {
+    const ortak = ortakAstmKarsiliklari(FAMS as never);
+    const adlar = new Map<string, string>();
+    let kesin = 0, yakin = 0;
+    for (const f of Object.values(FAMS as unknown as Record<string, { classes: Record<string, { grades: { kod: string; ad: string; eq?: Record<string, string> }[] }> }>)) {
+      for (const c of Object.values(f.classes)) for (const g of c.grades) {
+        const ad = kaliteAdi(g, 'astm', ortak);
+        const e = g.eq?.['ASTM'];
+        if (e?.trim().startsWith('≈')) { yakin++; expect(ad, g.kod).toBe(g.ad); }
+        else if (e) { if (ad !== g.ad) { kesin++; expect(ad).toBe(`ASTM ${e.trim()}`); } }
+        expect(adlar.has(ad), `${ad} (${g.kod}) ile ${adlar.get(ad) ?? ''}`).toBe(false);
+        adlar.set(ad, g.kod);
+      }
+    }
+    expect(kesin + yakin).toBeGreaterThan(0);
+  });
+  test('ortak karşılık kümesi sonradan eklenen kaliteyle yenilenir', () => {
+    const a = { f: { classes: { c: { grades: [{ ad: 'A1', eq: { ASTM: 'A36' } }] as { ad: string; eq?: Record<string, string> }[] } } } };
+    expect(ortakAstmKarsiliklari(a).has('a36')).toBe(false);
+    a.f.classes.c.grades.push({ ad: 'A2', eq: { ASTM: 'A36' } });
+    const k = ortakAstmKarsiliklari(a);
+    expect(k.has('a36')).toBe(true);
+    expect(kaliteAdi(a.f.classes.c.grades[0]!, 'astm', k)).toBe('A1');
   });
 });

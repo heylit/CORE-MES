@@ -7,6 +7,7 @@ import * as K from '../kurallar/index.ts';
 import type { KuralBaglami } from '../kurallar/index.ts';
 import type { KartKaydi } from '../tipler.ts';
 import { kategoriAdi } from './kategori.ts';
+import { esdegerSirala, standartTercihi } from '../standart-adlari.ts';
 
 type Hucre = string | number | null | undefined;
 
@@ -49,7 +50,7 @@ export function katalogCsvMetni(kayitlar: readonly KartKaydi[], b: KuralBaglami)
     } else {
       const s = K.specData(x, b);
       const ozellikler = new Set(K.propsFor(x.fam, b).map((p: { k: string }) => p.k));
-      const sirali: Hucre[] = ['Hammadde', s.kod, s.ad, s.f?.ad ?? '', s.c?.ad ?? '', s.g?.ad ?? '', s.std, K.eqText(s.eq, b), s.fm?.ad ?? '', K.dimsStr(x, true, b), x.tol,
+      const sirali: Hucre[] = ['Hammadde', s.kod, s.ad, s.f?.ad ?? '', s.c?.ad ?? '', s.g?.ad ?? '', s.std, K.eqText(esdegerSirala(s.eq, standartTercihi(x)), b), s.fm?.ad ?? '', K.dimsStr(x, true, b), x.tol,
         sayi(s.w?.kg), sayi(s.w?.perM), sayi(s.w?.perM2), s.opts.map((o) => `${o.ad}: ${String(o.v)}`).join(' | '), com.ted, s.birim,
         (com.sertifika ?? []).join(', '), com.not, '', ...props.map((p) => (ozellikler.has(p.k) ? sayi(K.val(p.k, x, b)) : ''))];
       sirali.forEach((v, i) => { r[i] = v; });
@@ -74,7 +75,7 @@ export function katalogJsonMetni(kayitlar: readonly KartKaydi[], b: KuralBaglami
       : (() => {
         const s = K.specData(x, b);
         return {
-          tur: 'hammadde', kod: s.kod, ad: s.ad, aile: s.f?.ad ?? '', sinif: s.c?.ad ?? '', kalite: s.g?.ad ?? '', standart: s.std, esdegerler: { ...s.eq },
+          tur: 'hammadde', kod: s.kod, ad: s.ad, aile: s.f?.ad ?? '', sinif: s.c?.ad ?? '', kalite: s.g?.ad ?? '', standart: s.std, esdegerler: { ...esdegerSirala(s.eq, standartTercihi(x)) },
           form: s.fm?.ad ?? '', olculer: { ...x.dims }, olcu_metni: K.dimsStr(x, true, b), tolerans: x.tol,
           agirlik: s.w ? { parca_kg: yuvarla(s.w.kg), kg_m: yuvarla(s.w.perM), kg_m2: yuvarla(s.w.perM2) } : null,
           durum_islem: Object.fromEntries(s.opts.map((o) => [o.ad, o.v])),

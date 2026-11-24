@@ -8,7 +8,7 @@ import * as K from '../kurallar/index.ts';
 import type { KuralBaglami } from '../kurallar/index.ts';
 import type { KatalogKarti, KartKaydi } from '../tipler.ts';
 import type { MalzemeYetkisi } from '../yetki.ts';
-import { kartStandardi, standartAdlari, standartEtiketi } from '../standart-adlari.ts';
+import { kaliteAdi, ortakAstmKarsiliklari, standartAdlari, standartEtiketi, standartTercihi } from '../standart-adlari.ts';
 import { kimlikOf, yerineOf } from './liste.ts';
 import { OnayRozeti } from './paneller.tsx';
 
@@ -44,7 +44,7 @@ export function QrPenceresi({ kartlar, b, kapat, bulundu }: {
 // Durum kartın seçtiği standartla gösterilir (2117-1 b).
 export function sahaSatirlari(x: KartKaydi, b: KuralBaglami): [string, string][] {
   const adlar = standartAdlari(b.ortam.malzemeAyari);
-  const standart = kartStandardi(x);
+  const standart = standartTercihi(x);
   const etiket = (v: unknown) => (typeof v === 'string' && v ? standartEtiketi(v, adlar, standart) : v);
   const sat: [string, string][] = [];
   const ek = (a: string, v: unknown) => { if (v !== undefined && v !== null && String(v).trim() !== '') sat.push([a, String(v)]); };
@@ -54,7 +54,7 @@ export function sahaSatirlari(x: KartKaydi, b: KuralBaglami): [string, string][]
   ek('Tür', TURLER[t]?.ad);
   if (!K.isGen(x, b)) {
     const s = K.specData(x, b);
-    ek('Kalite', s.g ? s.g.ad : '');
+    ek('Kalite', s.g ? kaliteAdi(s.g, standart, ortakAstmKarsiliklari(b.t.FAMS)) : '');
     ek('Standart', K.finalStd(x, b));
     ek('Ölçü', K.dimsStr(x, true, b));
     ek('Durum', [etiket(x.opts?.durum), x.opts?.yuzey].filter(Boolean).join(', '));
