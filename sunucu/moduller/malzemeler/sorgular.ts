@@ -717,6 +717,18 @@ export function logoGuncellemeKuyrugu(db: Db, sinir: number): Promise<LogoGuncel
   );
 }
 
+// 3632: elle gönderim, kartın değerini değiştirmeden mevcut ad güncellemesi kuyruğuna girer; kuyruğu Logo işi okur. Sürüm artmaz (kart içeriği değişmedi);
+// yalnız okunan sürümle eşleşen, Logo'ya gitmiş ve iptal olmayan kart girer.
+export async function logoGuncellemeIste(db: Db, kimlik: string, surum: number): Promise<{ no: number } | null> {
+  return db.tek(
+    `UPDATE malzeme_katalog_karti
+        SET logo_guncelleme_durumu = 'bekliyor', logo_guncelleme_hata = NULL, logo_guncelleme_zamani = now()
+      WHERE kimlik = $1 AND surum = $2 AND logo_kayit_no IS NOT NULL AND onay_durumu = 'aktif' AND logo_guncelleme_durumu IS DISTINCT FROM 'bekliyor'
+      RETURNING no`,
+    [kimlik, surum],
+  );
+}
+
 export function logoGuncellemeKilitle(db: Db, no: number): Promise<{
   durum: LogoGonderimDurumu | null; ad: string | null; aciklama1: string | null; aciklama2: string | null; aciklama3: string | null;
 } | null> {
@@ -1011,6 +1023,7 @@ export function katalogKartTuru(db: Db, kimlik: string): Promise<{ tur: string; 
 export interface LogoIcinTmiKarti {
   kimlik: string; stokKodu: string; ad: string | null; aciklama1: string | null; aciklama2: string | null; aciklama3: string | null;
   onayDurumu: KatalogKartDurumu; surum: number; logoKayitNo: string | null; logoGonderimDurumu: string | null; birim: string | null;
+  logoGuncellemeDurumu: string | null; logoGuncellemeHata: string | null;
 }
 // 3313: belge satırlarındaki kartların Logo kaydı ve türü (talep fişine hizmet satırı yazılmaz). Kodu bulunmayan satır dönmez.
 export function logoKartDurumlari(db: Db, kodlar: readonly string[]): Promise<{ stokKodu: string; logoKayitli: boolean; hizmet: boolean }[]> {
@@ -1033,9 +1046,21 @@ export function logoKayitNolari(db: Db, nolar: readonly number[]): Promise<{ no:
 export function logoIcinTmiKartlari(db: Db, refler: readonly string[], kodlar: readonly string[]): Promise<LogoIcinTmiKarti[]> {
   return db.sorgu(
     `SELECT kimlik, stok_kodu AS "stokKodu", ${KATALOG_AD} AS ad, aciklama_1 AS aciklama1, aciklama_2 AS aciklama2, aciklama_3 AS aciklama3,
-            onay_durumu AS "onayDurumu", surum, logo_kayit_no AS "logoKayitNo", logo_gonderim_durumu AS "logoGonderimDurumu", ${KATALOG_BIRIM} AS birim
+            onay_durumu AS "onayDurumu", surum, logo_kayit_no AS "logoKayitNo", logo_gonderim_durumu AS "logoGonderimDurumu", ${KATALOG_BIRIM} AS birim,
+            logo_guncelleme_durumu AS "logoGuncellemeDurumu", logo_guncelleme_hata AS "logoGuncellemeHata"
        FROM malzeme_katalog_karti WHERE logo_kayit_no = ANY($1::text[]) OR stok_kodu = ANY($2::text[])`,
     [refler, kodlar],
+  );
+}
+
+// 3632: katalog kartından Logo'ya gönder, kartı kimliğiyle okur.
+export function logoKartiKimlikle(db: Db, kimlik: string): Promise<LogoIcinTmiKarti | null> {
+  return db.tek(
+    `SELECT kimlik, stok_kodu AS "stokKodu", ${KATALOG_AD} AS ad, aciklama_1 AS aciklama1, aciklama_2 AS aciklama2, aciklama_3 AS aciklama3,
+            onay_durumu AS "onayDurumu", surum, logo_kayit_no AS "logoKayitNo", logo_gonderim_durumu AS "logoGonderimDurumu", ${KATALOG_BIRIM} AS birim,
+            logo_guncelleme_durumu AS "logoGuncellemeDurumu", logo_guncelleme_hata AS "logoGuncellemeHata"
+       FROM malzeme_katalog_karti WHERE kimlik = $1`,
+    [kimlik],
   );
 }
 

@@ -559,4 +559,52 @@ describe('3344 Katalog: Logo rozeti', () => {
     yeniEkranAc(KOK);
     expect((await screen.findAllByText('Okunamadı')).length).toBeGreaterThan(0);
   });
+  // 3632: Logo'ya bağlı kartta CORE açıklamalarını Logo'ya gönder (Logo geçişindeki pencere ve kuyrukla aynı).
+  test('kart penceresinde Logo açıklama farkı ve "CORE\'dakini Logo\'ya gönder": yazan görür, pencere şimdi ve gidecek değeri yazar, gönderim kartın sürümüyle gider; okuyan ve bağsız kart görmez', async () => {
+    const kart = (ek: Record<string, unknown> = {}) => ({
+      logoyaGonderim: { acik: true, neden: null },
+      satir: {
+        logoKayitNo: 77, kod: 'ORN-LG-77', stokKodu: 'SF-GEN-00001', surum: 1,
+        farklar: [{ alan: 'aciklama_1', logo: 'ORN Logo adi', tmi: 'ORN CORE adi' }, { alan: 'aciklama_2', logo: 'ORN Logo iki', tmi: null }],
+        logoyaGonder: { gonderilebilir: true, durum: null, hata: null }, ...ek,
+      },
+    });
+    const istekler = kur(YONETICI, {
+      'GET /malzeme-logo-gecisi/kart/mornek2': () => json(200, kart()),
+      'POST /malzeme-logo-gecisi/logoya-gonder': () => json(200, { kuyrugaAlinan: [{ logoKayitNo: 77, kod: 'ORN-LG-77', stokKodu: 'SF-GEN-00001' }], atlanan: [] }),
+    });
+    yeniEkranAc(KOK);
+    const p = within(await kartiAc('SF-GEN-00001'));
+    expect(await p.findByText("Logo'da Açıklama 1: ORN Logo adi")).toBeTruthy();
+    fireEvent.click(p.getByRole('button', { name: "CORE'dakini Logo'ya gönder" }));
+    const g = within(await screen.findByRole('dialog', { name: /Logo'ya gönder/ }));
+    expect(g.getByText('Logo\'da şimdi: ORN Logo adi')).toBeTruthy();
+    expect(g.getByText('ORN CORE adi')).toBeTruthy();
+    expect(g.getByText("Logo'daki Açıklama 2 kalır: ORN Logo iki")).toBeTruthy();
+    fireEvent.click(g.getByRole('button', { name: "Logo'ya gönder" }));
+    await waitFor(() => expect(istekler.find((i) => i.yol === '/malzeme-logo-gecisi/logoya-gonder')?.govde).toEqual({ kartlar: [{ logoKayitNo: 77, surum: 1 }] }));
+    cleanup();
+    kur(OKUYAN, { 'GET /malzeme-logo-gecisi/kart/mornek2': () => json(200, kart()) });
+    yeniEkranAc(KOK);
+    const o = within(await kartiAc('SF-GEN-00001'));
+    expect(o.queryByRole('button', { name: "CORE'dakini Logo'ya gönder" })).toBeNull();
+    cleanup();
+    kur(YONETICI, { 'GET /malzeme-logo-gecisi/kart/mornek2': () => json(200, { logoyaGonderim: { acik: true, neden: null }, satir: null }) });
+    yeniEkranAc(KOK);
+    const b = within(await kartiAc('SF-GEN-00001'));
+    expect(b.queryByText('Logo açıklamaları')).toBeNull();
+  });
+
+  test('kart penceresinde ayar kapalıyken düğme pasif ve neden yazılı', async () => {
+    kur(YONETICI, { 'GET /malzeme-logo-gecisi/kart/mornek2': () => json(200, {
+      logoyaGonderim: { acik: false, neden: 'Sistem Ayarları\'nda "Logo bağlantısı" kapalı' },
+      satir: { logoKayitNo: 77, kod: 'ORN-LG-77', stokKodu: 'SF-GEN-00001', surum: 1, farklar: [{ alan: 'aciklama_1', logo: 'ORN Logo adi', tmi: 'ORN CORE adi' }],
+        logoyaGonder: { gonderilebilir: true, durum: null, hata: null } },
+    }) });
+    yeniEkranAc(KOK);
+    const p = within(await kartiAc('SF-GEN-00001'));
+    const d = await p.findByRole('button', { name: "CORE'dakini Logo'ya gönder" });
+    expect((d as HTMLButtonElement).disabled).toBe(true);
+    expect(p.getByText(/Logo bağlantısı" kapalı/)).toBeTruthy();
+  });
 });

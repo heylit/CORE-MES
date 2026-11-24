@@ -5,7 +5,7 @@ import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import type { ErpKoduDoldurCevabi, ErpKoduOzetiCevabi, LogoGecisCevabi, LogoGeriAlCevabi, LogoTopluCevabi } from '#paylasilan/sozlesme/malzemeler.ts';
+import type { ErpKoduDoldurCevabi, ErpKoduOzetiCevabi, LogoGecisCevabi, LogoGeriAlCevabi, LogoTopluCevabi, LogoyaGonderCevabi, LogoGecisKartiCevabi } from '#paylasilan/sozlesme/malzemeler.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
@@ -331,6 +331,84 @@ describe('Logo geçişi: liste, toplu bağla ve al, geri al (3068 a; gerçek Pos
     const ikinci = await tamam<ErpKoduDoldurCevabi>('POST', '/malzeme-logo-gecisi/erp-kodlari-doldur');
     assert.equal(ikinci.doldurulan, 0);
     assert.ok(ikinci.ayni >= 1);
+  });
+
+  test('LGG-11 CORE açıklamalarını Logo\'ya gönder (3632): ayar kapalıyken 422 ve kuyruğa girmez; açıkken kart ad güncellemesi kuyruğuna girer, değeri ve sürümü değişmez; gidecek değeri olmayan, bağsız ve eski sürümlü kart atlanır; okuyan 403', async () => {
+    const guncelleme = (kimlik: string) => vt().tek<{ durum: string | null; surum: number }>(
+      'SELECT logo_guncelleme_durumu AS durum, surum FROM malzeme_katalog_karti WHERE kimlik = $1', [kimlik]);
+    const a = await taslakAc('HM-LGG-00040');
+    const b = await taslakAc('HM-LGG-00041');
+    const bagsiz = await taslakAc('HM-LGG-00042');
+    ayna.push(
+      kart(240, a.kod, { ad: 'ORN Logo adi', aciklama2: 'ORN Logo iki', aciklama3: 'ORN Logo uc' }),
+      kart(241, b.kod, { ad: `CORE ${b.kimlik}`, aciklama3: 'ORN Logo uc' }),
+      kart(242, bagsiz.kod),
+    );
+    await tamam<LogoTopluCevabi>('POST', '/malzeme-logo-gecisi/toplu-bagla', { kartlar: [{ logoKayitNo: 240, surum: a.surum }, { logoKayitNo: 241, surum: b.surum }] });
+    // Fixture: açıklamalar kart sihirbazında girilmiş gibi yazılır; B'de yalnız Açıklama 3 farklı ve CORE'da boştur.
+    await vt().sorgu("UPDATE malzeme_katalog_karti SET aciklama_1 = 'ORN CORE bir', aciklama_2 = 'ORN CORE iki', aciklama_3 = NULL WHERE kimlik = $1", [a.kimlik]);
+    // Yalnız aktif kart gider (K1): Logo'dan alınan kart taslak açılır, bu testte onaylanmış sayılır.
+    await vt().sorgu("UPDATE malzeme_katalog_karti SET onay_durumu = 'aktif' WHERE kimlik = ANY($1)", [[a.kimlik, b.kimlik]]);
+    const surumA = (await guncelleme(a.kimlik))!.surum;
+    const surumB = (await guncelleme(b.kimlik))!.surum;
+
+    const liste = async (): Promise<LogoGecisCevabi> => tamam<LogoGecisCevabi>('GET', '/malzeme-logo-gecisi?suzgec=tumu');
+    const satir = async (ref: number) => (await liste()).kartlar.find((k) => k.logoKayitNo === ref)!;
+    let l = await liste();
+    assert.deepEqual(l.logoyaGonderim, { acik: false, neden: 'Sistem Ayarları\'nda "Logo bağlantısı" kapalı' });
+    assert.deepEqual((await satir(240)).logoyaGonder, { gonderilebilir: true, durum: null, hata: null });
+    assert.equal((await satir(241)).logoyaGonder.gonderilebilir, false, 'CORE boşsa gidecek değer yok: Logo\'daki metin silinmez');
+    assert.equal((await satir(242)).logoyaGonder.gonderilebilir, false, 'bağsız kart gönderilemez');
+
+    const kapali = await istek('POST', '/malzeme-logo-gecisi/logoya-gonder', { kartlar: [{ logoKayitNo: 240, surum: surumA }] });
+    assert.equal(kapali.statusCode, 422, kapali.body);
+    assert.match(kapali.body, /Logo bağlantısı/);
+    assert.equal((await guncelleme(a.kimlik))!.durum, null, 'kapalıyken kuyruğa girmez');
+
+    await tamam('POST', '/ayarlar/logo.baglanti/degistir', { deger: true });
+    l = await liste();
+    assert.deepEqual(l.logoyaGonderim, { acik: false, neden: 'Sistem Ayarları\'nda "Logo: malzeme adı güncellemesi" kapalı' });
+    await tamam('POST', '/ayarlar/logo.malzeme-guncelleme-gonderimi/degistir', { deger: true });
+    assert.deepEqual((await liste()).logoyaGonderim, { acik: true, neden: null });
+
+    assert.equal((await istek('POST', '/malzeme-logo-gecisi/logoya-gonder', { kartlar: [{ logoKayitNo: 240, surum: surumA }] }, okuyucuCerezi)).statusCode, 403, 'yetkisiz kullanıcı');
+    assert.equal((await guncelleme(a.kimlik))!.durum, null);
+
+    const r = await tamam<LogoyaGonderCevabi>('POST', '/malzeme-logo-gecisi/logoya-gonder', {
+      kartlar: [{ logoKayitNo: 240, surum: surumA }, { logoKayitNo: 241, surum: surumB }, { logoKayitNo: 242, surum: 1 }, { logoKayitNo: 999, surum: 1 }],
+    });
+    assert.deepEqual(r.kuyrugaAlinan, [{ logoKayitNo: 240, kod: a.kod, stokKodu: a.kod }]);
+    assert.deepEqual(r.atlanan.map((x) => [x.logoKayitNo, x.neden]), [
+      [241, 'Gönderilecek fark yok.'], [242, 'Kart Logo kaydına bağlı değil.'], [999, 'Logo kartı okunan listede yok; Logo malzeme okumasını bekleyin.'],
+    ]);
+    assert.deepEqual(await guncelleme(a.kimlik), { durum: 'bekliyor', surum: surumA }, 'sürüm artmaz, kart değeri değişmez');
+    assert.equal((await guncelleme(b.kimlik))!.durum, null);
+    assert.deepEqual((await satir(240)).logoyaGonder.durum, 'bekliyor');
+
+    // Eski sürümle ikinci istek kuyruğu bozmaz.
+    await vt().sorgu("UPDATE malzeme_katalog_karti SET logo_guncelleme_durumu = NULL, logo_guncelleme_zamani = NULL WHERE kimlik = $1", [a.kimlik]);
+    const eski = await tamam<LogoyaGonderCevabi>('POST', '/malzeme-logo-gecisi/logoya-gonder', { kartlar: [{ logoKayitNo: 240, surum: surumA - 1 }] });
+    assert.deepEqual([eski.kuyrugaAlinan.length, eski.atlanan.length], [0, 1]);
+    assert.equal((await guncelleme(a.kimlik))!.durum, null);
+    // Aynı kart iki kez seçilmiş gövde reddedilir.
+    assert.equal((await istek('POST', '/malzeme-logo-gecisi/logoya-gonder', { kartlar: [{ logoKayitNo: 240, surum: surumA }, { logoKayitNo: 240, surum: surumA }] })).statusCode, 400);
+  });
+
+  test('LGG-12 katalog kartı (3632): bağlı kartta Logo açıklama farkı ve gönderim durumu gelir; bağsız kartta satır yok; okuyan da görür', async () => {
+    const a = await taslakAc('HM-LGG-00050');
+    const bagsiz = await taslakAc('HM-LGG-00051');
+    ayna.push(kart(250, a.kod, { ad: 'ORN Logo adi', aciklama2: 'ORN Logo iki' }), kart(251, bagsiz.kod));
+    await tamam<LogoTopluCevabi>('POST', '/malzeme-logo-gecisi/toplu-bagla', { kartlar: [{ logoKayitNo: 250, surum: a.surum }] });
+    await vt().sorgu("UPDATE malzeme_katalog_karti SET aciklama_1 = 'ORN CORE bir', aciklama_2 = NULL, onay_durumu = 'aktif' WHERE kimlik = $1", [a.kimlik]);
+    const r = await tamam<LogoGecisKartiCevabi>('GET', `/malzeme-logo-gecisi/kart/${a.kimlik}`, undefined, okuyucuCerezi);
+    assert.equal(r.satir?.logoKayitNo, 250);
+    assert.deepEqual(r.satir?.farklar, [{ alan: 'aciklama_1', logo: 'ORN Logo adi', tmi: 'ORN CORE bir' }, { alan: 'aciklama_2', logo: 'ORN Logo iki', tmi: null }]);
+    assert.deepEqual(r.satir?.logoyaGonder, { gonderilebilir: true, durum: null, hata: null });
+    assert.equal(typeof r.logoyaGonderim.acik, 'boolean');
+    assert.equal((await tamam<LogoGecisKartiCevabi>('GET', `/malzeme-logo-gecisi/kart/${bagsiz.kimlik}`)).satir, null);
+    await vt().sorgu("UPDATE malzeme_katalog_karti SET onay_durumu = 'taslak' WHERE kimlik = $1", [a.kimlik]);
+    const t = await tamam<LogoGecisKartiCevabi>('GET', `/malzeme-logo-gecisi/kart/${a.kimlik}`);
+    assert.equal(t.satir?.logoyaGonder.gonderilebilir, false, 'taslak kart gönderilebilir görünmez');
   });
 
   test('LGG-7 Kullanılanlar (3079 a): iz okununca açılış süzgeci; stok, son 12 ayda hareket ya da açık sipariş; neden satırda; 12 aydan eski hareket saymaz', async () => {

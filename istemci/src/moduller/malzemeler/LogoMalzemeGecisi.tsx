@@ -3,9 +3,9 @@ import { useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import type {
-  ErpKoduDoldurCevabi, ErpKoduOzetiCevabi, LogoDurumuCevabi, LogoGecisCevabi, LogoGecisSuzgeci, LogodanAlCevabi, LogoGeriAlCevabi, LogoKarsiligi, LogoTopluCevabi, OlcuBirimleriCevabi,
+  ErpKoduDoldurCevabi, ErpKoduOzetiCevabi, LogoDurumuCevabi, LogoGecisCevabi, LogoGecisSuzgeci, LogodanAlCevabi, LogoGeriAlCevabi, LogoKarsiligi, LogoTopluCevabi, LogoyaGonderCevabi, OlcuBirimleriCevabi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
-import { LOGO_GECIS_SAYFA_BOYU, LOGO_TOPLU_AZAMI } from '#paylasilan/sozlesme/logo-gecisi-sabitleri.ts';
+import { LOGO_GECIS_SAYFA_BOYU, LOGO_TOPLU_AZAMI, LOGOYA_GONDER_AZAMI } from '#paylasilan/sozlesme/logo-gecisi-sabitleri.ts';
 import type { LogoMalzemeAramaCevabi, LogoMalzemeEkleCevabi } from '#paylasilan/sozlesme/logo.ts';
 import {
   Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Pencere, Rozet, Secim, Simge, Tablo, useBildirim, type RozetTonu, type Sutun,
@@ -49,6 +49,9 @@ const TEK_ONAY: Record<TekIslem, { baslik: string; dugme: string; basari: string
   'yeni-koda-gec': { baslik: 'Farklı malzeme: CORE kartı yeni koda geçsin mi?', dugme: 'Yeni koda geç', basari: 'Kart yeni koda geçti' },
 };
 const FARK_ADLARI: Record<string, string> = { aciklama_1: 'Açıklama 1', aciklama_2: 'Açıklama 2', aciklama_3: 'Açıklama 3' };
+const FARK_SIRASI = ['aciklama_1', 'aciklama_2', 'aciklama_3'] as const;
+// 3632: Açıklama 1 Logo'daki addır; 2 ve 3 Logo'da NAME3 ve NAME4.
+const LOGO_ALAN_ADLARI: Record<(typeof FARK_SIRASI)[number], string> = { aciklama_1: 'Açıklama 1 (Logo adı)', aciklama_2: 'Açıklama 2 (NAME3)', aciklama_3: 'Açıklama 3 (NAME4)' };
 // Tek işlemde en çok bu kadar satır: yanlış seçimin geri alınacağı iş sınırlı kalsın.
 export const TOPLU_AZAMI = LOGO_TOPLU_AZAMI;
 
@@ -78,6 +81,7 @@ export function LogoMalzemeGecisi({ turAdlari }: Ozellikler) {
   const [sonuc, sonucYaz] = useState<TopluSonuc | null>(null);
   const [alinan, alinanYaz] = useState<Satir | null>(null);
   const [tek, tekYaz] = useState<{ satir: Satir; islem: TekIslem } | null>(null);
+  const [gonderilecek, gonderYaz] = useState<readonly GonderAdayi[] | null>(null);
   const [bitirSoruluyor, bitirSor] = useState(false);
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
@@ -139,7 +143,18 @@ export function LogoMalzemeGecisi({ turAdlari }: Ozellikler) {
       );
     }
     if (k.durum === 'bagli' && k.farklar.length > 0 && k.tmi && k.tmi.onayDurumu !== 'iptal') {
-      return <Dugme simge="download" aria-label={`${k.kod} Logo'dakini al`} onClick={() => tekYaz({ satir: k, islem: 'farki-al' })}>Logo'dakini al</Dugme>;
+      const gonderNedeni = !veri.logoyaGonderim.acik ? veri.logoyaGonderim.neden
+        : !k.logoyaGonder.gonderilebilir ? "CORE'da dolu açıklama yok; Logo'daki metin silinmez" : null;
+      return (
+        <span className="tc-lg-eylemler tc-lg-gonder-eylemler">
+          <Dugme simge="download" aria-label={`${k.kod} Logo'dakini al`} onClick={() => tekYaz({ satir: k, islem: 'farki-al' })}>Logo'dakini al</Dugme>
+          <Dugme simge="upload" aria-label={`${k.kod} CORE'dakini Logo'ya gönder`} disabled={gonderNedeni !== null} {...(gonderNedeni ? { title: gonderNedeni } : {})}
+            onClick={() => gonderYaz([gonderAdayi(k)])}>
+            CORE'dakini Logo'ya gönder
+          </Dugme>
+          {gonderNedeni !== null && veri.logoyaGonderim.acik && <span className="tc-lg-ek">{gonderNedeni}.</span>}
+        </span>
+      );
     }
     return null;
   };
@@ -166,6 +181,8 @@ export function LogoMalzemeGecisi({ turAdlari }: Ozellikler) {
           </span>
           {k.durum === 'kod-cakismasi' && <span className="tc-lg-ek">{KOD_CAKISMASI_ACIKLAMASI}</span>}
           {k.farklar.map((f) => <span key={f.alan} className="tc-lg-ek">Logo'da {FARK_ADLARI[f.alan]}: {f.logo ?? '(boş)'}</span>)}
+          {k.logoyaGonder.durum === 'bekliyor' && <span className="tc-lg-ek" role="status">Logo'ya gönderilmek üzere sırada.</span>}
+          {k.logoyaGonder.durum === 'hata' && <span className="tc-lg-ek tc-lg-hata" role="alert">Logo'ya gönderilemedi: {logoHataNedeni(k.logoyaGonder.hata)}</span>}
         </span>
       ),
       csv: (k) => DURUM[k.durum].ad,
@@ -186,6 +203,7 @@ export function LogoMalzemeGecisi({ turAdlari }: Ozellikler) {
   const topluEylemler = yazabilir ? [
     { anahtar: 'bagla', baslik: 'Bağla', simge: 'tag' as const, yap: (s: readonly Satir[]) => topluYaz({ tur: 'bagla', secili: s }) },
     { anahtar: 'al', baslik: 'Al', simge: 'download' as const, yap: (s: readonly Satir[]) => topluYaz({ tur: 'al', secili: s }) },
+    { anahtar: 'logoya-gonder', baslik: "Logo'ya gönder", simge: 'upload' as const, yap: (s: readonly Satir[]) => gonderYaz(s.map(gonderAdayi)) },
   ] : [];
   const okumaSuruyor = okuma.acik && okuma.suruyor;
   const bosMesaj = okumaSuruyor
@@ -211,6 +229,9 @@ export function LogoMalzemeGecisi({ turAdlari }: Ozellikler) {
         </span>
       </div>
       <Kart>
+        {yazabilir && !veri.logoyaGonderim.acik && (
+          <p className="tc-lg-not" role="status"><Simge ad="alert" boyut="k" /> CORE'daki açıklamalar Logo'ya gönderilemez: {veri.logoyaGonderim.neden}.</p>
+        )}
         <p className="tc-lg-not">
           Logo kayıtları ve CORE karşılığı yan yana. Toplu işlem yalnız karar istemeyen satırlarda yapılır; ötekiler satırdaki düğmelerle tek tek işlenir.
           {sayilar.kararBekleyen > 0 ? ` ${sayi(sayilar.kararBekleyen)} satır tek tek karar istiyor.` : ''}
@@ -250,6 +271,15 @@ export function LogoMalzemeGecisi({ turAdlari }: Ozellikler) {
           karsiliklar={durum.data?.karsiliklar ?? []}
           kapat={() => topluYaz(null)}
           bitti={async (s) => { topluYaz(null); sonucYaz(s); await yenile(); }}
+        />
+      )}
+      {gonderilecek && (
+        <LogoyaGonderPenceresi
+          key={gonderilecek.map((k) => k.logoKayitNo).join('-')}
+          secili={gonderilecek}
+          gonderim={veri.logoyaGonderim}
+          kapat={() => gonderYaz(null)}
+          bitti={yenile}
         />
       )}
       {sonuc && <SonucPenceresi sonuc={sonuc} kapat={() => sonucYaz(null)} geriAlindi={async () => { sonucYaz(null); await yenile(); }} />}
@@ -405,6 +435,121 @@ function TopluPencere({ tur, secili, turAdlari, karsiliklar, kapat, bitti }: {
         )}
         {gonder.isError && <p className="tc-lg-not tc-lg-hata" role="alert">{hataIletisi(gonder.error, 'Yapılamadı')}</p>}
       </form>
+    </Pencere>
+  );
+}
+
+// 3632: CORE'daki Açıklama 1-3'ü Logo'ya gönder. Pencere her kart için "Logo'da şimdi → gidecek" değerlerini yazar; CORE'da boş alan Logo'daki metni silmez.
+// Gönderim var olan ad güncellemesi kuyruğundan çıkar: bu pencere kartı kuyruğa alır, Logo işi sıradaki turda gönderir.
+const BOS_METIN = '(boş)';
+// Pencere liste satırından ve katalog kartından aynı aday biçimiyle açılır.
+export interface GonderAdayi {
+  logoKayitNo: number; stokKodu: string; surum: number; bagli: boolean;
+  farklar: Satir['farklar']; logoyaGonder: Satir['logoyaGonder'];
+}
+const gonderAdayi = (k: Satir): GonderAdayi => ({
+  logoKayitNo: k.logoKayitNo, stokKodu: k.tmi?.stokKodu ?? k.kod, surum: k.tmi?.surum ?? 0, bagli: k.durum === 'bagli' && k.tmi !== null,
+  farklar: k.farklar, logoyaGonder: k.logoyaGonder,
+});
+// Logo işinin ham hata metni ekranda çevrilmiş nedenle görünür; ham metin ipucunda kalır.
+export function logoHataNedeni(ham: string | null): string {
+  if (!ham) return 'Logo kartı güncellemedi.';
+  if (/not found|bulunamad/i.test(ham)) return "Kart Logo'da bulunamadı; Logo'daki kayıt silinmiş ya da değişmiş olabilir.";
+  if (/time ?out|zaman a|ECONN|ETIMEDOUT|ulaş/i.test(ham)) return 'Logo yanıt vermedi; sonraki turda yeniden denenir.';
+  return 'Logo kartı güncellemedi.';
+}
+function gidecekAlanlar(k: GonderAdayi): { alan: (typeof FARK_SIRASI)[number]; simdi: string; gidecek: string | null }[] {
+  return FARK_SIRASI.flatMap((alan) => {
+    const f = k.farklar.find((x) => x.alan === alan);
+    return f ? [{ alan, simdi: f.logo ?? BOS_METIN, gidecek: f.tmi }] : [];
+  });
+}
+export function LogoyaGonderPenceresi({ secili, gonderim, kapat, bitti }: {
+  secili: readonly GonderAdayi[]; gonderim: LogoGecisCevabi['logoyaGonderim']; kapat: () => void; bitti: () => Promise<void>;
+}) {
+  const { bildir } = useBildirim();
+  const [sonuc, sonucYaz] = useState<LogoyaGonderCevabi | null>(null);
+  const uygunlar = secili.filter((k) => k.bagli && k.logoyaGonder.gonderilebilir && k.logoyaGonder.durum !== 'bekliyor');
+  const uygun = uygunlar.slice(0, LOGOYA_GONDER_AZAMI);
+  const fazla = uygunlar.length - uygun.length;
+  const nedenler = new Map<string, number>();
+  for (const k of secili.filter((x) => !uygunlar.includes(x))) {
+    const n = !k.bagli ? "Logo'ya bağlı değil" : k.logoyaGonder.durum === 'bekliyor' ? 'Gönderim zaten sırada'
+      : k.farklar.length === 0 ? 'Fark yok' : "CORE'da dolu açıklama yok";
+    nedenler.set(n, (nedenler.get(n) ?? 0) + 1);
+  }
+  const gonder = useKorumaliKomut({
+    gonder: (_: void, deneme) => api.post<LogoyaGonderCevabi>('/malzeme-logo-gecisi/logoya-gonder', {
+      kartlar: uygun.map((k) => ({ logoKayitNo: k.logoKayitNo, surum: k.surum })),
+    }, deneme),
+    onSuccess: async (c) => {
+      await bitti();
+      if (c.atlanan.length === 0) {
+        bildir('tamam', `${sayi(c.kuyrugaAlinan.length)} kart Logo'ya gönderilmek üzere sıraya alındı.`);
+        kapat();
+      } else sonucYaz(c);
+    },
+  });
+  const tek = uygun.length === 1;
+  const kapali = !gonderim.acik;
+  return (
+    <Pencere
+      acik
+      kapat={kapat}
+      baslik={sonuc ? "Logo'ya gönderim sonucu" : tek ? `${uygun[0]!.stokKodu}: CORE'dakini Logo'ya gönder` : "CORE'dakini Logo'ya gönder"}
+      alt={sonuc ? <Dugme tur="birincil" onClick={kapat}>Tamam</Dugme> : (
+        <>
+          <Dugme onClick={kapat}>Vazgeç</Dugme>
+          <Dugme tur="birincil" type="submit" form="logo-gonder" simge="upload" disabled={kapali || uygun.length === 0} yukleniyor={gonder.isPending}
+            {...(kapali && gonderim.neden ? { title: gonderim.neden } : {})}>
+            {uygun.length === 0 ? "Gönderilecek kart yok" : uygun.length === 1 ? "Logo'ya gönder" : `${sayi(uygun.length)} kartı Logo'ya gönder`}
+          </Dugme>
+        </>
+      )}
+    >
+      {sonuc ? (
+        <>
+          <p className="tc-lg-not">{sayi(sonuc.kuyrugaAlinan.length)} kart Logo'ya gönderilmek üzere sıraya alındı, {sayi(sonuc.atlanan.length)} atlandı.</p>
+          <ul className="tc-lg-on-sonuc">
+            {sonuc.atlanan.map((a) => <li key={a.logoKayitNo}><Simge ad="minus" boyut="k" /><span className="tc-lg-kod">{a.kod}</span> {a.neden}</li>)}
+          </ul>
+        </>
+      ) : (
+        <form id="logo-gonder" className="tc-lg-toplu" onSubmit={(o: FormEvent) => { o.preventDefault(); gonder.mutate(); }}>
+          {kapali && <p className="tc-lg-not tc-lg-hata" role="alert"><Simge ad="alert" boyut="k" /> Gönderilemez: {gonderim.neden}.</p>}
+          <ul className="tc-lg-on-sonuc" aria-label="Logo'da şimdi ve gidecek değerler">
+            {uygun.map((k) => (
+              <li key={k.logoKayitNo} className="tc-lg-gonder-kart">
+                <span className="tc-lg-kod">{k.stokKodu}</span>
+                <span className="tc-lg-gonder-alanlar">
+                  {gidecekAlanlar(k).map((a) => (
+                    <span key={a.alan} className="tc-lg-gonder-alan">
+                      <span className="tc-lg-ek">{LOGO_ALAN_ADLARI[a.alan]}</span>
+                      {a.gidecek === null
+                        ? <span>Logo'daki {FARK_ADLARI[a.alan]} kalır: {a.simdi}</span>
+                        : (
+                          <>
+                            <span>Logo'da şimdi: {a.simdi}</span>
+                            <span>→ Gidecek: <strong>{a.gidecek}</strong></span>
+                          </>
+                        )}
+                    </span>
+                  ))}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <ul className="tc-lg-on-sonuc">
+            {uygun.some((k) => gidecekAlanlar(k).some((a) => a.alan === 'aciklama_1' && a.gidecek !== null)) && (
+              <li><Simge ad="alert" boyut="k" />Logo'daki kartın adı değişir.</li>
+            )}
+            <li><Simge ad="minus" boyut="k" />Gönderimi Logo işi sıradaki turda yapar; Logo'daki eski metin denetim kaydında kalır.</li>
+            {[...nedenler].map(([n, adet]) => <li key={n}><Simge ad="minus" boyut="k" />{sayi(adet)} kart atlanacak: {n}</li>)}
+            {fazla > 0 && <li><Simge ad="minus" boyut="k" />{sayi(fazla)} kart bu işleme sığmadı (tek işlemde en çok {sayi(LOGOYA_GONDER_AZAMI)}); sonra yeniden seçin.</li>}
+          </ul>
+          {gonder.isError && <p className="tc-lg-not tc-lg-hata" role="alert">{hataIletisi(gonder.error, 'Gönderilemedi')}</p>}
+        </form>
+      )}
     </Pencere>
   );
 }

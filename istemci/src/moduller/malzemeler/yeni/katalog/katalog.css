@@ -163,6 +163,7 @@
 .tc-mk-logo-esit { color: var(--run); }
 .tc-mk-logo-fark { color: var(--hold); }
 .tc-mk-logo-kaynak { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--b-2); margin: 0; font-size: var(--yazi-xs); color: var(--muted); }
+.tc-mk-logo-gonder { display: grid; gap: var(--b-2); }
 .tc-mk-logo-oku { display: grid; gap: var(--b-2); justify-items: start; }
 .tc-mk-logo-cizgi { display: grid; margin: 0; padding: 0; list-style: none; }
 .tc-mk-logo-cizgi > li { position: relative; display: grid; grid-template-columns: var(--b-3) minmax(0, 1fr) auto; gap: var(--b-2); padding: var(--b-2) 0; font-size: var(--yazi-s); }

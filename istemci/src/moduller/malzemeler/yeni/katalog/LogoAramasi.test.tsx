@@ -17,7 +17,7 @@ import { MALZEMELER_YENI } from '../veri.ts';
 type Satir = LogoGecisCevabi['kartlar'][number];
 const ortak: Omit<Satir, 'logoKayitNo' | 'kod' | 'ad' | 'durum' | 'tmi' | 'aktif'> = {
   birimSeti: 'ADET', kartTuru: '13', stok: null, sonHareket: null, kullanimNedenleri: null, farklar: [], kararNedeni: null,
-  topluBaglanir: false, topluAlinir: false, koduUyar: true,
+  topluBaglanir: false, topluAlinir: false, koduUyar: true, logoyaGonder: { gonderilebilir: false, durum: null, hata: null },
 };
 const tmi = (kimlik: string, stokKodu: string) => ({ kimlik, stokKodu, ad: 'CORE', birim: 'adet', onayDurumu: 'aktif' as const, surum: 3, logoKayitli: false });
 const SATIRLAR: Satir[] = [
@@ -30,7 +30,7 @@ const SATIRLAR: Satir[] = [
 const LISTE = (kartlar: Satir[]): LogoGecisCevabi => ({
   baglanti: true, okuma: { acik: false, suruyor: false, okunan: 5, sonTamam: null },
   sayilar: { toplam: 5, stoklu: 0, yeni: 2, bagsiz: 1, bagli: 1, kodCakismasi: 1, kullanimDisi: 1, kullanilan: null, kararBekleyen: 0 },
-  suzgec: 'tumu', kullanim: false, canliArama: true, uyan: kartlar.length, kartlar, sayfa: 0, sonrakiSayfa: null,
+  suzgec: 'tumu', kullanim: false, canliArama: true, uyan: kartlar.length, kartlar, sayfa: 0, sonrakiSayfa: null, logoyaGonderim: { acik: true, neden: null },
 });
 const YAZAN: Kullanici = { id: 1, ad: 'Deneme Yazan', islemler: ['sayfa.malzemeler', 'malzemeler.yaz'] };
 
