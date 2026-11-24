@@ -3181,3 +3181,58 @@ test('Kokpit 3618: Emir sütunu uzun emir numarasını taşır, yer yoksa ortada
     await kontrol(true);
   }
 });
+
+test('Kokpit 3663: seçili adımın panosu çubuğun yanında ve görünen alanın içinde; sürüklerken sabit köşede ve fareyi tutmaz; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  const t = await taslakSunucusu(page);
+  await page.route('**/api/plan/planlama-calismasi/is-tasi-onizlemesi?*', (r) => {
+    const q = new URL(r.request().url()).searchParams;
+    const id = q.get('isId') ?? '', S = Number(q.get('baslangic')), x = t.gorunum().ops[id];
+    return json(r, { calismaSurumu: t.s.surum, gecerli: true, ileti: null, isler: x ? [{ isId: id, tezgah: q.get('tezgah'), S, C: S + (x.C - x.S), eskiTezgah: x.m, eskiS: x.S, tur: 'tasinan' }] : [] });
+  });
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/kokpit?duzen=klasik');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const karsilama = page.getByRole('button', { name: 'Başlayalım' });
+  if (await karsilama.isVisible()) await karsilama.click();
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  // Telefonda tahta yok: pano alt sayfadır ve bu akışta (liste kapalı) görünmez.
+  if (bilgi.project.name === 'g360') { await expect(page.locator('.tc-pyq-pano[data-kip="secili"]')).toBeHidden(); expect(ag.hatalar).toEqual([]); return; }
+
+  const tahta = kokpit.locator('.tc-pyq-tahta');
+  await tahta.evaluate((el) => { el.scrollTo({ left: 0 }); });
+  const is = tahta.locator('[data-is="S3.a1"]');
+  await is.scrollIntoViewIfNeeded();
+  await is.click();
+  const pano = page.locator('.tc-pyq-pano[data-kip="secili"]');
+  await expect(pano).toBeVisible();
+  await expect(pano.locator('dt')).toHaveText(['Zaman', 'Etki', 'İlerleme', 'Tezgâh']);
+  const kutu = await pano.boundingBox(), ekran = page.viewportSize();
+  if (!kutu || !ekran) throw new Error('pano görünmüyor');
+  expect(kutu.x).toBeGreaterThanOrEqual(0);
+  expect(kutu.x + kutu.width).toBeLessThanOrEqual(ekran.width);
+  const resim = async (ad: string): Promise<void> => { const klasor = process.env['TMIV2_EKRAN_GORUNTU']?.trim(); if (klasor) await page.screenshot({ path: `${klasor}/pano-${ad}-${bilgi.project.name}.png` }); };
+  await resim('secili');
+  // Sürüklerken seçili pano yerini köşedeki panoya bırakır; fareyi tutmaz.
+  const c = await is.boundingBox();
+  if (!c) throw new Error('iş görünmüyor');
+  const y = c.y + c.height / 2, x0 = c.x + 6;
+  await page.mouse.move(x0, y);
+  await page.mouse.down();
+  await page.mouse.move(x0 - 60, y, { steps: 6 });
+  const suruk = page.locator('.tc-pyq-pano[data-kip="surukle"]');
+  await expect(suruk).toBeVisible();
+  await expect(pano).toHaveCount(0);
+  expect(await suruk.evaluate((el) => getComputedStyle(el).pointerEvents)).toBe('none');
+  const k2 = await suruk.boundingBox(), gorunum = page.viewportSize();
+  if (!k2 || !gorunum) throw new Error('pano görünmüyor');
+  expect(k2.x + k2.width).toBeLessThanOrEqual(gorunum.width);
+  expect(k2.y + k2.height).toBeLessThanOrEqual(gorunum.height);
+  await expect(suruk.locator('[data-pano="etki"]')).toContainText(/tahmin|sunucu doğruladı/);
+  await resim('surukle');
+  await page.keyboard.press('Escape');
+  await page.mouse.up();
+  await expect(suruk).toHaveCount(0);
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  expect(ag.hatalar).toEqual([]);
+});

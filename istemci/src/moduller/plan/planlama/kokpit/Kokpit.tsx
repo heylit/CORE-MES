@@ -48,6 +48,8 @@ import { adimMalzemeAnlari, emirMalzemeleri } from './malzeme.ts';
 import { planaAlOnizle } from './plana-al.ts';
 import { sonDegisiklikleriGeriAl, taslakOzeti, useTaslak, type TaslakYazici } from './taslak.ts';
 import { TaslakCubugu } from './TaslakCubugu.tsx';
+import { AdimPanosu } from './AdimPanosu.tsx';
+import { adimSayimlari } from './pano.ts';
 import { EmirAdimlari, SiraSeridi, type GeriOzeti, type PlanlaDurumu, type PlanlaIstegi, type YerlestirmeHedefi } from './Yerlestirme.tsx';
 import { ilkKart, kartAnahtari, kokCozucu, siparisAramasi, siraKartlari } from './yerlestirme.ts';
 import { Tur, type TurDurumu } from './Tur.tsx';
@@ -162,6 +164,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const an = useAn();
   const bugun = tesisGunu(an);
   const firma = useMemo(() => (emirKaynagi ? firmaYazilari(c, emirKaynagi, bugun) : null), [c, emirKaynagi, bugun]);
+  // 3663: adım panosunun sayımı (süren adımın sağlam adedi); durum okunamadıysa yok, panoda yalnız plana göre ilerleme yazılır.
+  const adimSayim = useMemo(() => (emirKaynagi ? adimSayimlari(c, emirKaynagi) : null), [c, emirKaynagi]);
   const biten = useMemo(() => (emirKaynagi ? bitenler(emirKaynagi, c.D) : plandanBitenler(c, p)), [c, p, emirKaynagi]);
   const cx = useMemo(() => derle(girdiKur(c, biten, an)), [c, biten, an]);
   const m = useMemo(() => modelKur(c, p, cx, emirNo), [c, p, cx, emirNo]);
@@ -905,7 +909,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
       {sonucCubugu}
       {genelSerit}
       {panelli(<Tahta
-        hucreAc={tur ? null : hucreAc} hucreSecili={hucre} pencereDeposu={pencereDeposu} ufukSonu={ufukSonu} satirBoyu={satirBoyu} kumeAc={(S) => { olcekSec('G', S); }} m={m} cx={cx} goz="T" olcek={olcek} emirler={gorunen} tablo={tezgahTablosu ? tablo : null} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
+        hucreAc={tur ? null : hucreAc} hucreSecili={hucre} pencereDeposu={pencereDeposu} ufukSonu={ufukSonu} satirBoyu={satirBoyu} kumeAc={(S) => { olcekSec('G', S); }} adimSayim={adimSayim} m={m} cx={cx} goz="T" olcek={olcek} emirler={gorunen} tablo={tezgahTablosu ? tablo : null} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
         tasi={yazabilir && !tur ? tasiDene : null} planaAl={yazabilir && !tur ? planaAlDene : null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
         yerlestirme={tur ? null : yerHedefi} yanan={tur ? null : yananTahta} secimiKaldir={gelenYanan ? () => { setGelenYanan(null); } : listedeSecimKalir}
         sorunBildir={null} bol={elleBolAc} onizle={tur ? null : onizle} okKipi={tur ? 'yok' : okKipi}
@@ -1142,7 +1146,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
               {yolIzi}
               {genelSerit}
               <Tahta
-                siparisler={siparisler} kademeZorla={eKademe} kademeIn={tur ? null : kademeIn} pencereDeposu={pencereDeposu} ufukSonu={ufukSonu} satirBoyu={satirBoyu} kumeAc={(S) => { olcekSec('G', S); }} m={m} cx={cx} goz="S" olcek={olcek} emirler={emirSirali} tablo={tablo} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
+                siparisler={siparisler} kademeZorla={eKademe} kademeIn={tur ? null : kademeIn} pencereDeposu={pencereDeposu} ufukSonu={ufukSonu} satirBoyu={satirBoyu} kumeAc={(S) => { olcekSec('G', S); }} adimSayim={adimSayim} m={m} cx={cx} goz="S" olcek={olcek} emirler={emirSirali} tablo={tablo} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
                 tasi={yazabilir && !tur ? tasiDene : null} planaAl={null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
                 yerlestirme={null} yanan={tur ? null : gelenYanan?.k ?? null} sorunBildir={null} bol={elleBolAc} onizle={tur ? null : onizle} okKipi={tur ? 'yok' : okKipi}
                 saatEni={saatEni} malzeme={malzeme} agac={{ acik: agacAcik, ac: agacAc, notlar: agacNotu }} {...gelenOz}
@@ -1166,6 +1170,9 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
             </>
           )}
         </div>
+        {secIs !== null && !tur && m.isler[secIs] && emir.get(m.isler[secIs]!.job) && (
+          <AdimPanosu kip="sayfa" m={m} e={emir.get(m.isler[secIs]!.job)!} x={m.isler[secIs]!} zaman={zaman} sayim={adimSayim?.[secIs]} kapat={() => { sec(null, null); }} />
+        )}
         {sorunAdimi !== null ? (
           <AdimSorunu key={sorunAdimi} c={c} m={m} isId={sorunAdimi} taslak={taslak} yazabilir={yazabilir} zaman={zaman} kapat={() => { setSorunAdimi(null); }}
             ustBekleme={adimBekle[sorunAdimi]?.ust !== undefined ? adimBekle[sorunAdimi] : null} ustAc={setSorunAdimi} />
@@ -1212,7 +1219,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
                 {goz !== 'T' && yolIzi}
                 {genelSerit}
                 {panelli(<Tahta
-                  siparisler={siparisler} kademeZorla={eKademe} kademeIn={tur ? null : kademeIn} hucreAc={tur ? null : hucreAc} hucreSecili={hucre} pencereDeposu={pencereDeposu} ufukSonu={ufukSonu} satirBoyu={satirBoyu} kumeAc={(S) => { olcekSec('G', S); }} m={m} cx={cx} goz={goz} olcek={olcek} emirler={emirSirali} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
+                  siparisler={siparisler} kademeZorla={eKademe} kademeIn={tur ? null : kademeIn} hucreAc={tur ? null : hucreAc} hucreSecili={hucre} pencereDeposu={pencereDeposu} ufukSonu={ufukSonu} satirBoyu={satirBoyu} kumeAc={(S) => { olcekSec('G', S); }} adimSayim={adimSayim} m={m} cx={cx} goz={goz} olcek={olcek} emirler={emirSirali} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
                   tasi={yazabilir && !tur ? tasiDene : null} planaAl={yazabilir && !tur ? planaAlDene : null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
                   yerlestirme={tur ? null : yerHedefi} yanan={tur ? null : yananTahta} secimiKaldir={secimiKaldir}
                   sorunBildir={sorunBildir} bol={elleBolAc} onizle={tur ? null : onizle} okKipi={tur ? 'yok' : okKipi}
