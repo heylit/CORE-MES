@@ -14,6 +14,8 @@ import { BekleyenIadeCipi } from './Parcalar.tsx';
 import './takimhane.css';
 
 type Bolum = 'stok' | 'karsilastir';
+// Reçete ve Rota > Kaynaklar'ın alt sekme tercihi (kaynaklar/Kaynaklar.tsx ALT_SEKME_ANAHTARI ile aynı).
+const RR_ALT_SEKME_ANAHTARI = 'tmi.recete-rota.yeni.kaynak-sekmesi';
 const KONUMLAR = ['raf', 'tezgah', 'kisi', 'bileme', 'ara'] as const;
 // Aparat bilemeye değil bakıma gider; sayılar aynı konum türünden gelir (fason), yalnız adı değişir.
 const APARAT_KONUM_ADI = { ...KONUM_ADI, bileme: 'Bakımda' } as const;
@@ -79,14 +81,14 @@ function StokListesi({ satirlar, arac, sec }: { satirlar: readonly AparatSatiri[
   );
 }
 
-function KarsilastirmaListesi({ satirlar, ac }: { satirlar: readonly AparatKarsilastirma[]; ac: () => void }) {
+function KarsilastirmaListesi({ satirlar, ac }: { satirlar: readonly AparatKarsilastirma[]; ac: (a: AparatKarsilastirma) => void }) {
   const sutunlar: readonly Sutun<AparatKarsilastirma>[] = [
     { anahtar: 'ad', baslik: 'Aparat', hucre: (a) => <span className="tc-tkm-ad"><span>{a.ad}</span><span className="tc-tkm-soluk mono">{a.kod}</span></span> },
     { anahtar: 'istasyon', baslik: 'İstasyon', hucre: (a) => a.istasyon ?? 'Ortak' },
     { anahtar: 'plan', baslik: 'Plan kapasitesi', hizala: 'sag', mono: true, hucre: (a) => a.planKapasitesi },
     { anahtar: 'stok', baslik: 'Stokta', hizala: 'sag', mono: true, hucre: (a) => a.stokta },
     { anahtar: 'durum', baslik: 'Durum', hucre: (a) => <UyumRozeti a={a} /> },
-    { anahtar: 'ac', baslik: '', kartTamSatir: true, hucre: () => <Dugme simge="gear" onClick={ac}>Kapasiteyi aç</Dugme> },
+    { anahtar: 'ac', baslik: '', kartTamSatir: true, hucre: (a) => <Dugme simge="gear" onClick={() => { ac(a); }}>Kapasiteyi aç</Dugme> },
   ];
   return (
     <IkiGorunum
@@ -95,7 +97,7 @@ function KarsilastirmaListesi({ satirlar, ac }: { satirlar: readonly AparatKarsi
         <KompaktListe
           etiket="Plan ile karşılaştırma" satirlar={satirlar} satirAnahtari={(a) => `${String(a.kartKimlik)}-${String(a.istasyonKimligi)}`}
           baslik={(a) => a.ad} sag={(a) => `Plan ${String(a.planKapasitesi)} · Stok ${String(a.stokta)}`} alt={(a) => `${a.kod} · ${a.istasyon ?? 'Ortak'}`}
-          ek={(a) => (<><UyumRozeti a={a} /><Dugme simge="gear" onClick={ac}>Kapasiteyi aç</Dugme></>)}
+          ek={(a) => (<><UyumRozeti a={a} /><Dugme simge="gear" onClick={() => { ac(a); }}>Kapasiteyi aç</Dugme></>)}
         />
       )}
     />
@@ -110,7 +112,15 @@ function UyumRozeti({ a }: { a: AparatKarsilastirma }) {
 // Aparat ekranı: stok ve konum (kart 3651 A) ve planın kapasitesiyle yan yana okuma (C). Ayırma yazılmaz, plan penceresinden türetilir.
 export function AparatSayfasi() {
   const git = useNavigate();
+  const bildirim = useBildirim();
   const sorgu = useQuery({ queryKey: anahtarlar.aparat, queryFn: () => api.get<AparatCevabi>('/takimhane/aparat') });
+  // Aparat kapasitesi Reçete ve Rota > Kaynaklar > İkincil kaynaklar'da yazılır; o ekran alt sekmeyi adresten değil cihaz tercihinden seçer,
+  // bu yüzden tercih yazılıp sayfa açılır. Satır bağlamı o ekranda arama ile bulunur: kod bildirimde yazılır.
+  const kapasiteyiAc = (a: AparatKarsilastirma) => {
+    try { window.localStorage.setItem(RR_ALT_SEKME_ANAHTARI, 'ikincil'); } catch { /* depo kapalı: Genel bakış açılır, sekme elle seçilir */ }
+    bildirim.bildir('bilgi', `${a.kod}${a.istasyon === null ? '' : ` · ${a.istasyon}`}: kapasite İkincil kaynaklar sekmesinde.`);
+    void git('/recete-rota/res');
+  };
   const [bolum, bolumYaz] = useState<Bolum>('stok');
   const [ara, araYaz] = useState('');
   const [suzgec, suzgecYaz] = useState('hepsi');
@@ -161,7 +171,7 @@ export function AparatSayfasi() {
         </>
       ) : (
         <Kart baslik="Plan kapasitesi ve stok" simge="gantt" baslikEki={<span className="tc-tkm-soluk">Yalnız okunur; plan etkilenmez</span>}>
-          <KarsilastirmaListesi satirlar={v.karsilastirma} ac={() => { void git('/istasyonlar/is-merkezleri'); }} />
+          <KarsilastirmaListesi satirlar={v.karsilastirma} ac={kapasiteyiAc} />
         </Kart>
       )}
     </div>

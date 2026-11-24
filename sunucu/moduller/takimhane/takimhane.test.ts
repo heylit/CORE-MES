@@ -315,7 +315,9 @@ describe('takimhane (gerçek PostgreSQL)', () => {
       assert.equal(eb.hazir, false);
       // Plan B'yi kaldırır: ayırma kalkar, emir plan bekler.
       pencere.delete(b.isEmriId);
-      assert.deepEqual((await emirApr(b.emirId)).satirlar.map((x) => x.durum), ['plan-bekliyor']);
+      const bekleyen = await emirApr(b.emirId);
+      assert.deepEqual(bekleyen.satirlar.map((x) => x.durum), ['plan-bekliyor']);
+      assert.equal(bekleyen.hazir, false, 'plan yerleştirmemiş emir aparat hazır sayılmaz');
       assert.equal((await apr()).satirlar.find((x) => x.kartKimlik === k)!.ayrilan, 2);
       // Plan B'yi A'dan sonraya kaydırır: pencereler ayrık, aynı adetler yeniden kullanılır.
       pencere.set(b.isEmriId, { baslangic: '2026-11-26T14:00:00Z', bitis: '2026-11-26T18:00:00Z' });

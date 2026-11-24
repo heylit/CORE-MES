@@ -183,5 +183,5 @@ export async function emirAparatCevabi(db: Db, emirId: number): Promise<EmirApar
   const turAdlari = new Map((await aletTurleri(db)).map((t) => [t.id, t.ad]));
   const olcuAletleri: EmirAparatCevabi['olcuAletleri'] = [];
   for (const id of turIdleri) olcuAletleri.push({ turKimlik: id, ad: turAdlari.get(id) ?? `Tür ${String(id)}`, gecerli: await gecerliAletVarMi(db, id) });
-  return { emirNo: emir.emirNo, parca: emir.parca, hazir: satirlar.every((s) => s.durum !== 'eksik'), satirlar, olcuAletleri };
+  return { emirNo: emir.emirNo, parca: emir.parca, hazir: satirlar.every((s) => s.durum !== 'eksik' && s.durum !== 'plan-bekliyor'), satirlar, olcuAletleri };
 }

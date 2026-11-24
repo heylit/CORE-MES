@@ -104,6 +104,20 @@ describe('Takımhane', () => {
       expect(gonderilen[0]).toMatchObject({ kartKimlik: 1, adet: 2, istasyonId: 7, kisiId: null, uretimEmriId: 1 });
     });
 
+    it('"Kapasiteyi aç" Reçete ve Rota > Kaynaklar > İkincil kaynaklar sekmesini seçip o sayfayı açar', async () => {
+      const cevap: AparatCevabi = {
+        konumlar: { raf: 1, tezgah: null, kisi: null, bileme: null, ara: null }, bekleyenIade: 0, satirlar: [],
+        karsilastirma: [{ kartKimlik: 1, kod: 'ORN-APR-021', ad: 'ORN Fikstür plakası', istasyonKimligi: 3, istasyon: 'ORN-IST-3', planKapasitesi: 2, kartPlanToplami: 2, stokta: 1, bakimda: 0, durum: 'plan-fazla' }],
+      };
+      vi.stubGlobal('fetch', vi.fn(async () => json(cevap)));
+      window.localStorage.removeItem('tmi.recete-rota.yeni.kaynak-sekmesi');
+      ac(<AparatSayfasi />);
+      fireEvent.click(await screen.findByRole('tab', { name: /Plan ile karşılaştır/ }));
+      fireEvent.click(screen.getAllByRole('button', { name: /Kapasiteyi aç/ })[0]!);
+      expect(window.localStorage.getItem('tmi.recete-rota.yeni.kaynak-sekmesi')).toBe('ikincil');
+      expect((await screen.findAllByText(/ORN-APR-021 · ORN-IST-3: kapasite İkincil kaynaklar sekmesinde/)).length).toBeGreaterThan(0);
+    });
+
     it('aparat sayfası konum özetini ve karşılaştırma sekmesini gösterir; plan stoktan fazlaysa işaretler', async () => {
       const cevap: AparatCevabi = {
         konumlar: { raf: 4, tezgah: 2, kisi: 1, bileme: 1, ara: null }, bekleyenIade: 1,
