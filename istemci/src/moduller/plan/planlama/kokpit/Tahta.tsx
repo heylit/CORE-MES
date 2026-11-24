@@ -196,7 +196,7 @@ export function Tahta(o: TahtaOzellikleri) {
   const olcuDuzeni = tabloKipi ? olcuSablonu(kolonlar, olcum.current) : null;
   const sutunSablonu = tabloKipi ? olcuDuzeni?.sablon ?? sablon(kolonlar) : '';
   const dogalEn = olcuDuzeni?.dogal ?? (tablo === null ? 0 : goz === 'T' ? tezgahToplamEni() : sutunToplamEni(tablo.sutunlar));
-  const bolmeGenisligi = tabloKipi && tablo ? bolmeEni(dogalEn, tablo.en) : '';
+  const bolmeGenisligi = tabloKipi && tablo ? bolmeEni(dogalEn, tablo.en, olcuDuzeni?.enAz) : '';
   // Açık balon: işaretin işi ve tahta içindeki yeri (px).
   const [balon, setBalon] = useState<{ id: string; x: number; y: number; alt: number; satir?: true } | null>(null);
   const fasonlar = useMemo(() => new Set(m.tezgahlar.filter((t) => t.fason).map((t) => t.id)), [m.tezgahlar]);
@@ -316,7 +316,7 @@ export function Tahta(o: TahtaOzellikleri) {
   duzenYaz.current = () => {
     const k = kap.current, d = tabloKipi && tablo ? olcuSablonu(kolonlar, olcum.current) : null;
     if (!k || !d || !tablo) return;
-    k.style.setProperty('--sutunlar', d.sablon); k.style.setProperty('--bas-en', bolmeEni(d.dogal, tablo.en));
+    k.style.setProperty('--sutunlar', d.sablon); k.style.setProperty('--bas-en', bolmeEni(d.dogal, tablo.en, d.enAz));
     if (tablo.en === null) k.querySelector('.tc-pyq-eksen [role="separator"]')?.setAttribute('aria-valuenow', String(Math.round(d.dogal)));
   };
   const olcCalis = useRef<(yaziDegisti: boolean) => void>(() => undefined);

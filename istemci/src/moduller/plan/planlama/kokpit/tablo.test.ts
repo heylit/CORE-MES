@@ -27,6 +27,8 @@ describe('tablo: sütunlar ve bölme (3533)', () => {
     expect(sablon([{ en: 100 }, { en: 50 }])).toBe('minmax(0, 100fr) minmax(0, 50fr)');
     expect(bolmeEni(400, null)).toBe('min(400px, 65cqw)');
     expect(bolmeEni(400, 512.4)).toBe('min(512px, 70cqw)');
+    // 3660: en dar hal oranı aşarsa bölme o kadar açılır (en çok 70cqw ve doğal enine kadar).
+    expect(bolmeEni(400, null, 426)).toBe('min(400px, max(65cqw, min(428px, 70cqw)))');
     expect(bolmeSinirla(50, 1000)).toBe(EN_ENAZ);
     expect(bolmeSinirla(5000, 1000)).toBe(840);
     expect(bolmeSinirla(500, 1000)).toBe(500);
@@ -139,7 +141,7 @@ describe('tablo: ölçülen sütun enleri (3570)', () => {
   const l = [{ id: 'emir' }, { id: 'urun' }, { id: 'termin' }, { id: 'fark' }];
   const olcum = { en: { emir: 130.2, urun: 400, termin: 96, fark: 200 }, baslik: { emir: 40, urun: 38, termin: 60, fark: 36 }, fark: 120 };
   it('sütun içerik enindedir; Emir ve Ürün tavanda kalır, tarih sabit, Ürün iki satıra (enin yüzde altmışı, en az başlığın iki katı), Fark iki satıra kadar kısalır', () => {
-    expect(olcuSablonu(l, olcum)).toEqual({ sablon: 'minmax(130px, 131px) minmax(144px, 240fr) 96px minmax(120px, 200px)', dogal: 131 + 240 + 96 + 200 });
+    expect(olcuSablonu(l, olcum)).toEqual({ sablon: 'minmax(130px, 131px) minmax(144px, 240fr) 96px minmax(120px, 200px)', dogal: 131 + 240 + 96 + 200, enAz: 130 + 144 + 96 + 120 });
   });
   it('Emir tam numarayı taşıyacak kadar açılır (tavan 360), ötesinde kısalır', () => {
     expect(olcuSablonu([{ id: 'emir' }], { en: { emir: 330 }, baslik: { emir: 40 }, fark: null })?.sablon).toBe('minmax(130px, 330px)');

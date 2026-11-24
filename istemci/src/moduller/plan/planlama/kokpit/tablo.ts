@@ -60,7 +60,7 @@ const ESNEK = new Set(['urun', 'ad']);
 export const EMIR_EN_AZ = 130;
 // İki satıra kırılan adın en dar hali: tek satır eninin bu oranı (sözcük sınırında kırıldığı için yarıdan biraz geniş).
 const IKI_SATIR = 0.6;
-export function olcuSablonu(l: readonly { id: string }[], o: SutunOlcumu | null): { sablon: string; dogal: number } | null {
+export function olcuSablonu(l: readonly { id: string }[], o: SutunOlcumu | null): { sablon: string; dogal: number; enAz: number } | null {
   if (o === null || l.length === 0 || l.some((s) => !((o.en[s.id] ?? 0) > 0))) return null;
   const parca = l.map((s) => {
     const en = Math.ceil(Math.min(o.en[s.id] ?? 0, SUTUN_TAVANI[s.id] ?? Infinity));
@@ -70,7 +70,7 @@ export function olcuSablonu(l: readonly { id: string }[], o: SutunOlcumu | null)
     const az = Math.ceil(Math.min(en, Math.max((o.baslik[s.id] ?? 0) * 2, en * IKI_SATIR)));
     return { en, az, yazi: `minmax(${String(az)}px, ${String(en)}fr)` };
   });
-  return { sablon: parca.map((p) => p.yazi).join(' '), dogal: parca.reduce((t, p) => t + p.en, 0) };
+  return { sablon: parca.map((p) => p.yazi).join(' '), dogal: parca.reduce((t, p) => t + p.en, 0), enAz: parca.reduce((t, p) => t + p.az, 0) };
 }
 // Aynı satır kümesine yeni satırlar gelince (sipariş odağı, açılan emir) yeni ölçü öncekiyle birleşir: sütun yalnız genişler, arama ya
 // da sıralamayla gidip gelirken zıplamaz.
@@ -93,7 +93,10 @@ export function farkEnAz(parcalar: readonly number[], bosluk: number, kenar: num
 
 // Bölme eni: ayarlanmamışsa sütunların doğal eni; hep görünen alanın oranıyla sınırlı (gantt sıkışıp kaybolmasın).
 export const EN_ENAZ = 200, EN_ENCOK_ORAN = 70, OTOMATIK_ORAN = 65, EN_PAYI = 160;
-export const bolmeEni = (dogal: number, ayar: number | null): string => (ayar === null ? `min(${String(dogal)}px, ${String(OTOMATIK_ORAN)}cqw)` : `min(${String(Math.round(ayar))}px, ${String(EN_ENCOK_ORAN)}cqw)`);
+// Bölmenin kendi çerçevesi (ayraç kenarlığı) sütunlara düşmez; en dar toplamın üstüne eklenir.
+const BOLME_KENARI = 2;
+// enAz: sütunların en dar halinin toplamı; kendiliğinden eni bunun altına inmez (sağdaki sütun bölmeden taşmasın, 3660), oranı aşan pay en çok 70cqw'ye kadardır (Gantt sıkışıp kaybolmasın).
+export const bolmeEni = (dogal: number, ayar: number | null, enAz = 0): string => (ayar === null ? (enAz > 0 ? `min(${String(dogal)}px, max(${String(OTOMATIK_ORAN)}cqw, min(${String(enAz + BOLME_KENARI)}px, ${String(EN_ENCOK_ORAN)}cqw)))` : `min(${String(dogal)}px, ${String(OTOMATIK_ORAN)}cqw)`) : `min(${String(Math.round(ayar))}px, ${String(EN_ENCOK_ORAN)}cqw)`);
 export const bolmeSinirla = (en: number, kapEni: number): number => Math.round(Math.max(EN_ENAZ, Math.min(Math.max(EN_ENAZ, kapEni - EN_PAYI), en)));
 
 // --- Sıralama (yalnız görünüm) ---
