@@ -43,7 +43,9 @@ test('liste: SmartES sütunu dört durumu ve gönderilmezi gösterir; OP kırıl
   expect(await duran.locator('.tc-smartes-op').evaluate((e) => new Set([...e.getClientRects()].map((r) => Math.round(r.top))).size), 'OP ve adım adı tek satırda').toBe(1);
   if (await hucre.count() >= 5) {
     await expect(hucre.filter({ hasText: "SmartES'te" }).first()).toContainText('2/2 adım');
-    await expect(hucre.getByLabel(/eşlemesi yok/).first()).toBeVisible();
+    // Telefonda kart gönderilmeyen emrin "—" işaretini göstermez (3676); geniş ekranda sütunda görünür.
+    if ((page.viewportSize()?.width ?? 1280) < 768) await expect(hucre.getByLabel(/eşlemesi yok/).first()).toBeHidden();
+    else await expect(hucre.getByLabel(/eşlemesi yok/).first()).toBeVisible();
     await expect(hucre.filter({ hasText: 'Yeniden denenecek' }).first()).toBeVisible();
     await expect(hucre.filter({ hasText: 'Sırada' }).first()).toBeVisible();
   }
