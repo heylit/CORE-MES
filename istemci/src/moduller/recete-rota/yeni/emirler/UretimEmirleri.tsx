@@ -352,7 +352,7 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun, il
             <label key={a.satirId} className="tc-rr-secenek">
               <input type="radio" name="emir-oneri" checked={secilenSatir === a.satirId} onChange={() => { setSecilenSatir(a.satirId); setElle({ miktar: false, teslim: false }); }} />
               <strong>{a.projeKod}</strong>
-              <span>{`${a.siparisNo} / satır ${String(a.satirNo)} · ${String(a.adet)} adet, açık emirlerde ${String(a.acik)} · termin ${a.termin === null ? '—' : tarih(a.termin)}`}</span>
+              <span>{`${a.siparisNo} / satır ${String(a.satirNo)} · ${String(a.adet)} adet, açık emirlerde ${String(a.acik)}, kalan ${String(a.kalan)} · termin ${a.termin === null ? '—' : tarih(a.termin)}`}</span>
             </label>
           ))}
           <label className="tc-rr-secenek">
@@ -390,7 +390,7 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun, il
       </div>
       {oneri !== null && (
         <p className={teslimBagsizMi(f.teslim, oneri) ? 'tc-rr3-uyari-kutu' : 'tc-rr3-uyari'} data-bilgi={teslimBagsizMi(f.teslim, oneri) ? undefined : ''} role="status">
-          <Simge ad="alert" boyut="k" />
+          <Simge ad={teslimBagsizMi(f.teslim, oneri) ? 'alert' : 'check'} boyut="k" />
           <span>{teslimBagsizMi(f.teslim, oneri)
             ? `Teslim sipariş terminden (${tarih(oneri.termin ?? '')}) farklı: emir ${oneri.siparisNo} / satır ${String(oneri.satirNo)} satırına bağsız açılır.`
             : `Öneri: ${oneri.projeKod} · ${oneri.siparisNo} / satır ${String(oneri.satirNo)}. Emir bu satıra bağlı açılır; proje penceresinde bu satır önseçili gelir.`}</span>

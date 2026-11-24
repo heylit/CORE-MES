@@ -29,6 +29,7 @@ describe('emir önerisi (3657)', () => {
     const form = await formAc(secenek([satir(1, 1, '500', '180', '2030-12-18'), satir(2, 2, '200', '0', '2031-01-08')]));
     const miktar = () => (within(form).getByLabelText('Miktar') as HTMLInputElement).value;
     await within(form).findByText('Seçmeden devam');
+    expect(within(form).getByText(/500 adet, açık emirlerde 180, kalan 320/)).toBeTruthy();
     expect(miktar()).toBe('100');
     fireEvent.click(within(form).getAllByRole('radio')[1]!);
     await waitFor(() => { expect(miktar()).toBe('200'); });
