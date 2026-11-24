@@ -333,7 +333,8 @@ function useOlcek(kok: HTMLDivElement | null, olcekli: boolean): boolean | null 
     const uygula = () => {
       const kutu = alan.getBoundingClientRect();
       const yukseklik = Math.max(0, window.innerHeight - Math.max(0, kutu.top));
-      const olcek = olcekHesapla(alan.clientWidth, yukseklik, yerel.oku<number>('scale'));
+      const genislik = scrollbarsizGenislik(alan);
+      const olcek = olcekHesapla(genislik, yukseklik, yerel.oku<number>('scale'));
       const mobil = olcekli ? olcek.mobil : olcekHesapla(window.innerWidth, window.innerHeight).mobil;
       const z = olcekli ? olcek.z : 1;
       kok.style.setProperty('--tc-ay-olcek', String(z));
@@ -343,7 +344,7 @@ function useOlcek(kok: HTMLDivElement | null, olcekli: boolean): boolean | null 
       kok.style.setProperty('--tc-ay-alt', `${Math.round(alt / z)}px`);
       kok.toggleAttribute('data-mobil', mobil);
       // Ölçülemeyen alan (genişlik 0) ve terminal null verir; dar düzen kararı pencere genişliğine düşer (useDarEkran).
-      mobilYaz(olcekli && alan.clientWidth > 0 ? mobil : null);
+      mobilYaz(olcekli && genislik > 0 ? mobil : null);
     };
     uygula();
     const izleyici = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(uygula);
@@ -353,6 +354,14 @@ function useOlcek(kok: HTMLDivElement | null, olcekli: boolean): boolean | null 
     return () => { izleyici?.disconnect(); window.removeEventListener('resize', uygula); window.removeEventListener('orientationchange', uygula); };
   }, [kok, olcekli]);
   return mobilMi;
+}
+
+// Alanın dikey kaydırma çubuğu dahil genişliği. clientWidth çubuk çıkınca daralır; ölçek ve mobil kararı genişliğe bağlı,
+// içerik yüksekliği ölçeğe bağlı olduğundan çubuğun çıkıp kaybolması sayfayı durmadan titretiyordu (çubuk genişliği ölçülmez).
+function scrollbarsizGenislik(alan: HTMLElement): number {
+  const stil = getComputedStyle(alan);
+  const cubuk = alan.offsetWidth - alan.clientWidth - (parseFloat(stil.borderLeftWidth) || 0) - (parseFloat(stil.borderRightWidth) || 0);
+  return alan.clientWidth + Math.max(0, cubuk);
 }
 
 // Ölçü, kutusu olan ilk atadan alınır: kalıcı rota sarmalayıcısı (Üretim Terminali) `display: contents` ya da gizliyken `none` olur;
