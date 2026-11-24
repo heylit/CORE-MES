@@ -5,7 +5,7 @@ import type { TabloOlcusu, VtIstatistigi } from './sorgular.ts';
 import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
 import type { PgSurumu, YedekDurumu } from '#paylasilan/sozlesme/ayarlar.ts';
 import type {
-  DisKopyaKaydi, DiskDurumu, GeriYuklemeDenemesi, GunIciKoruma, VeritabaniBuyumesi, WalArsivi, IsDurumuOzeti, IstekOzeti, MetrikDakikasi, OtomatikAcilis, SaatlikAralik, SaatOzeti, UcOzeti, Uyari,
+  DisKopyaKaydi, DiskDurumu, GeriYuklemeDenemesi, GunIciKoruma, GunlukDuzeyi, GunlukSatiri, GunlukSorgusu, KapanmaNedeni, VeritabaniBuyumesi, WalArsivi, IsDurumuOzeti, IstekOzeti, MetrikDakikasi, OtomatikAcilis, SaatlikAralik, SaatOzeti, UcOzeti, Uyari,
 } from '#paylasilan/sozlesme/saglik.ts';
 
 const COMMIT_BICIMI = /^[0-9a-f]{40}$/;
@@ -583,4 +583,193 @@ export function veritabaniBuyumesi(vt: VtIstatistigi | null, tablolar: readonly 
       sonAutoanalyze: zamanMetni(t.sonAutoanalyze),
     })),
   };
+}
+
+// ---- Kapanma kaydı ve günlük okuma (kart 3668, dilim A) ----
+
+export interface BekciSatiri { an: Date; metin: string }
+
+// Bekçi günlüğü satırı: `2026-11-24T12:22:00.000Z [bekçi] metin` (araclar/bekci.ts).
+export function bekciSatiriCoz(satir: string): BekciSatiri | null {
+  const e = /^(\d{4}-\d{2}-\d{2}T[\d:.]+Z) \[bekçi\] (.*)$/.exec(satir.trim());
+  const an = e?.[1] === undefined ? null : new Date(e[1]);
+  if (an === null || Number.isNaN(an.getTime()) || e?.[2] === undefined) return null;
+  return { an, metin: e[2] };
+}
+
+export interface BekciKapanisi {
+  kapandiAn: Date;
+  cikisKodu: number | null;
+  sinyal: string | null;
+  // Aynı kapanışın öncesinde bekçinin yazdığı nedenler.
+  donma: boolean;
+  guncelleme: boolean;
+}
+
+const KAPANDI = /^Sunucu kapandı \((?:sinyal (\S+)|çıkış (\S+?))\);/;
+const ACILIYOR = 'Sunucu açılıyor.';
+const DONMA = 'cevap vermedi; sonlandırılıp yeniden açılacak';
+const GUNCELLEME = 'Güncelleme sürüyor';
+
+// Açılan sürecin (açılış anı) hemen öncesindeki "Sunucu kapandı" satırı; yoksa ilk açılış ya da bekçisiz açılıştır, kayıt yazılmaz.
+// Satırlar zaman sırasındadır. Bir kapanış ancak bir kez kaydedilir (kapandi_an benzersiz).
+export function sonKapanisiBul(satirlar: readonly BekciSatiri[], acilis: Date): BekciKapanisi | null {
+  let k = -1;
+  for (let i = satirlar.length - 1; i >= 0; i -= 1) {
+    const s = satirlar[i];
+    if (s !== undefined && s.an.getTime() <= acilis.getTime() && KAPANDI.test(s.metin)) { k = i; break; }
+  }
+  const kapanis = satirlar[k];
+  if (kapanis === undefined) return null;
+  const e = KAPANDI.exec(kapanis.metin);
+  const kod = e?.[2] === undefined ? Number.NaN : Number(e[2]);
+  let donma = false;
+  let guncelleme = false;
+  // Önceki açılışa kadar geri: o açılışın ömründe yazılan nedenler bu kapanışındır.
+  for (let i = k - 1; i >= 0; i -= 1) {
+    const m = satirlar[i]?.metin ?? '';
+    if (m === ACILIYOR) break;
+    if (m.includes(DONMA)) donma = true;
+    if (m.startsWith(GUNCELLEME)) guncelleme = true;
+  }
+  return { kapandiAn: kapanis.an, cikisKodu: Number.isInteger(kod) ? kod : null, sinyal: e?.[1] ?? null, donma, guncelleme };
+}
+
+export interface CokusRaporuOzeti {
+  neden: 'bellek-tasmasi' | 'yakalanmamis-hata';
+  kanit: string;
+  yigin: string | null;
+  bellek: { rssBayt: number; yiginBayt: number } | null;
+  an: Date | null;
+}
+
+const sayiMi = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x) && x >= 0;
+const nesne = (x: unknown): Record<string, unknown> => (typeof x === 'object' && x !== null ? x as Record<string, unknown> : {});
+const YIGIN_EN_COK = 4000;
+
+// Node tanı raporu (process.report): ölümcül hata (bellek taşması dahil) ya da yakalanmamış istisna. Alan adları Node belgesindendir;
+// gerçek bir taşma raporuyla Windows'ta denenmedi (doğrulanmadı), bu yüzden eksik alan null olur, uydurulmaz.
+export function cokusRaporunuYorumla(ham: unknown): CokusRaporuOzeti | null {
+  const r = nesne(ham);
+  const baslik = nesne(r['header']);
+  const olay = typeof baslik['event'] === 'string' ? baslik['event'] : '';
+  const tetik = typeof baslik['trigger'] === 'string' ? baslik['trigger'] : '';
+  if (olay === '' && tetik === '') return null;
+  const js = nesne(r['javascriptStack']);
+  const iletisi = typeof js['message'] === 'string' ? js['message'] : '';
+  const bellekTasti = /out of memory|heap|allocation failed/i.test(`${olay} ${iletisi}`);
+  const yiginDizisi = Array.isArray(js['stack']) ? js['stack'].filter((x): x is string => typeof x === 'string') : [];
+  const yigin = [iletisi, ...yiginDizisi].filter((x) => x !== '').join('\n').slice(0, YIGIN_EN_COK);
+  const yiginBayt = nesne(r['javascriptHeap'])['usedMemory'];
+  const rssBayt = nesne(r['resourceUsage'])['rss'];
+  const an = typeof baslik['dumpEventTime'] === 'string' ? new Date(baslik['dumpEventTime']) : null;
+  return {
+    neden: bellekTasti ? 'bellek-tasmasi' : 'yakalanmamis-hata',
+    kanit: `rapor: ${[olay, tetik, iletisi].filter((x) => x !== '').join(' / ')}`.slice(0, 300),
+    yigin: yigin === '' ? null : yigin,
+    bellek: sayiMi(yiginBayt) && sayiMi(rssBayt) ? { rssBayt, yiginBayt } : null,
+    an: an !== null && !Number.isNaN(an.getTime()) ? an : null,
+  };
+}
+
+export interface KapanmaKanitlari {
+  bekci: BekciKapanisi;
+  rapor: CokusRaporuOzeti | null;
+  // Kapanıştan önceki iki dakikada sunucu günlüğünde "Yeniden başlatma (kişi N)" geçti mi.
+  ekrandanYenidenBaslatma: boolean;
+}
+
+// Öncelik: rapor (bellek, hata) > donma (bekçi kapattı) > güncelleme > ekrandan yeniden başlatma > bilinmiyor.
+export function kapanmaNedeniBelirle(k: KapanmaKanitlari): { neden: KapanmaNedeni; kanit: string | null } {
+  if (k.rapor !== null) return { neden: k.rapor.neden, kanit: k.rapor.kanit };
+  if (k.bekci.donma) return { neden: 'donma', kanit: 'bekçi: art arda cevapsız yoklama, süreç sonlandırıldı' };
+  if (k.bekci.guncelleme) return { neden: 'guncelleme', kanit: 'bekçi: güncelleme sürüyordu' };
+  if (k.ekrandanYenidenBaslatma) return { neden: 'ekrandan-yeniden-baslatma', kanit: 'sunucu günlüğü: yeniden başlatma isteği' };
+  return { neden: 'bilinmiyor', kanit: null };
+}
+
+export const KAPANMA_NEDEN_METNI: Record<KapanmaNedeni, string> = {
+  'bellek-tasmasi': 'bellek taşması',
+  'yakalanmamis-hata': 'yakalanmamış hata',
+  donma: 'donma (bekçi kapattı)',
+  'ekrandan-yeniden-baslatma': 'ekrandan yeniden başlatma',
+  guncelleme: 'güncelleme',
+  bilinmiyor: 'bilinmiyor',
+};
+
+export function sureMetni(sn: number): string {
+  if (sn < 60) return `${String(sn)} sn`;
+  const dk = Math.floor(sn / 60);
+  return sn % 60 === 0 ? `${String(dk)} dk` : `${String(dk)} dk ${String(sn % 60)} sn`;
+}
+
+// Yöneticiye giden açılış bildirimi metni ("15:22'de kapandı, 1 dk 40 sn, neden: bellek taşması"); saat tesis saatindedir.
+export function kapanmaBildirimMetni(kapandiAn: Date, kapaliSn: number, neden: KapanmaNedeni, saatDilimi: string): string {
+  const saat = new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: saatDilimi }).format(kapandiAn);
+  return `${saat}'de kapandı, ${sureMetni(kapaliSn)}, neden: ${KAPANMA_NEDEN_METNI[neden]}`;
+}
+
+export const KAPANMA_SAKLAMA_GUN = 90;
+export const KAPANMA_HATA_SATIRI_EN_COK = 50;
+export const KAPANMA_ONCESI_DAKIKA = 10;
+
+// ---- Günlük okuma ----
+
+const DUZEY_SIRASI: Record<GunlukDuzeyi, number> = { bilgi: 0, uyari: 1, hata: 2, olumcul: 3 };
+
+export function gunlukDuzeyi(pino: number): GunlukDuzeyi {
+  if (pino >= 60) return 'olumcul';
+  if (pino >= 50) return 'hata';
+  if (pino >= 40) return 'uyari';
+  return 'bilgi';
+}
+
+const metinOlmayanNull = (x: unknown, en: number): string | null => (typeof x === 'string' ? x.slice(0, en) : null);
+const ILETI_EN_COK = 500;
+
+// Günlük satırı pino JSON'udur; çözülemeyen satır (konsol metni, yarım satır) null. Sorgu dizgesi satırda zaten yoktur.
+export function gunlukSatiriCoz(satir: string): GunlukSatiri | null {
+  let h: Record<string, unknown>;
+  try { h = nesne(JSON.parse(satir) as unknown); } catch { return null; }
+  if (typeof h['time'] !== 'number' || typeof h['level'] !== 'number') return null;
+  const yol = metinOlmayanNull(h['yol'], 200) ?? metinOlmayanNull(h['adres'], 200);
+  const yontem = metinOlmayanNull(h['yontem'], 10);
+  const err = nesne(h['err']);
+  const tur = metinOlmayanNull(err['type'], 100);
+  const mesaj = metinOlmayanNull(err['message'], 300);
+  return {
+    zaman: new Date(h['time']).toISOString(),
+    duzey: gunlukDuzeyi(h['level']),
+    ileti: metinOlmayanNull(h['msg'], ILETI_EN_COK) ?? '',
+    yontem,
+    uc: yol,
+    kisiId: Number.isInteger(h['kisiId']) ? h['kisiId'] as number : null,
+    durum: Number.isInteger(h['durum']) ? h['durum'] as number : null,
+    sureMs: sayiMi(h['sureMs']) ? h['sureMs'] : null,
+    hataKodu: metinOlmayanNull(h['reqId'], 32),
+    hata: tur === null && mesaj === null ? null : [tur, mesaj].filter((x) => x !== null).join(': '),
+  };
+}
+
+export type GunlukSuzgeci = Pick<GunlukSorgusu, 'duzey' | 'uc' | 'kisi' | 'baslangic' | 'bitis' | 'hataKodu'>;
+
+export function gunlukSatiriUyar(s: GunlukSatiri, f: GunlukSuzgeci): boolean {
+  if (DUZEY_SIRASI[s.duzey] < DUZEY_SIRASI[f.duzey]) return false;
+  if (f.uc !== undefined && !(`${s.yontem ?? ''} ${s.uc ?? ''}`).toLowerCase().includes(f.uc.toLowerCase())) return false;
+  if (f.kisi !== undefined && s.kisiId !== f.kisi) return false;
+  if (f.hataKodu !== undefined && s.hataKodu?.toLowerCase() !== f.hataKodu.toLowerCase()) return false;
+  const t = Date.parse(s.zaman);
+  if (f.baslangic !== undefined && t < Date.parse(f.baslangic)) return false;
+  if (f.bitis !== undefined && t > Date.parse(f.bitis)) return false;
+  return true;
+}
+
+export const GUNLUK_DOSYA_DESENI = /^sunucu-\d{4}-\d{2}-\d{2}\.log$/;
+
+// İmleç `dosya:bayt`: o dosyada o bayttan önceki satırlar okunur. Bozuk imleç başa (en yeni dosyanın sonu) döner.
+export function gunlukImleciCoz(imlec: string | undefined, dosyalar: readonly string[]): { dosya: number; ofset: number | null } {
+  if (imlec === undefined) return { dosya: 0, ofset: null };
+  const e = /^(sunucu-\d{4}-\d{2}-\d{2}\.log):(\d{1,15})$/.exec(imlec);
+  const sira = e?.[1] === undefined ? -1 : dosyalar.indexOf(e[1]);
+  return sira === -1 || e?.[2] === undefined ? { dosya: 0, ofset: null } : { dosya: sira, ofset: Number(e[2]) };
 }

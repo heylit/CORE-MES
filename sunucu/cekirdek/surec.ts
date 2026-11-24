@@ -1,5 +1,5 @@
 import { inspect } from 'node:util';
-import { vtHataIzi } from './db.ts';
+import { vtHataIzi, type Veritabani } from './db.ts';
 
 export interface HataGunlugu {
   error(nesne: { err: unknown }, mesaj: string): void;
@@ -44,4 +44,32 @@ export function kapanisIste(neden: string): boolean {
   if (kapanisIsi === null) return false;
   kapanisIsi(neden);
   return true;
+}
+
+// Açılış kancaları (3668-1): açılışta bir kez koşan modül işi (önceki kapanışın kaydını yazmak gibi). Çekirdek modül ithal etmez:
+// modül kendini kablolama.ts'te kaydeder, ana.ts dinlemeye başladıktan sonra çalıştırır. Kanca hata atarsa sunucu açılışı etkilenmez.
+export interface AcilisBaglami {
+  vt: Veritabani;
+  gunluk: { error(nesne: { err: unknown }, mesaj: string): void };
+  gunlukDizini: string;
+  // Sürecin açıldığı an.
+  acilis: Date;
+}
+
+export type AcilisKancasi = (baglam: AcilisBaglami) => Promise<void>;
+
+const acilisKancalari: AcilisKancasi[] = [];
+
+export function acilisKancasiKaydet(kanca: AcilisKancasi): void {
+  acilisKancalari.push(kanca);
+}
+
+export async function acilisKancalariniCalistir(baglam: AcilisBaglami): Promise<void> {
+  for (const kanca of acilisKancalari) {
+    try {
+      await kanca(baglam);
+    } catch (err) {
+      baglam.gunluk.error({ err }, 'Açılış kancası başarısız');
+    }
+  }
 }

@@ -45,7 +45,7 @@ describe('üst çubukta sistem durumu', () => {
     const dugme = await screen.findByRole('button', { name: 'Sistem durumu, 2 uyarı' });
     expect(dugme.textContent).toBe('2');
     fireEvent.click(dugme);
-    const pencere = await screen.findByRole('dialog', { name: 'Sistem durumu' });
+    const pencere = await screen.findByRole('dialog', { name: 'Sistem izleme' });
     expect(await within(pencere).findByText('Son yedek 30 saat önce alındı.')).toBeTruthy();
     expect(within(pencere).getByText('Yedek diskinde 2,0 GB boş yer kaldı.')).toBeTruthy();
   });
@@ -80,5 +80,5 @@ it('Hesap menüsünden gelen açma isteği pencereyi açar', async () => {
   const { rerender } = render(<QueryClientProvider client={istemci}><eylem.dugme acmaIstegi={0} /></QueryClientProvider>);
   expect(screen.queryByRole('dialog')).toBeNull();
   rerender(<QueryClientProvider client={istemci}><eylem.dugme acmaIstegi={1} /></QueryClientProvider>);
-  expect(await screen.findByRole('dialog', { name: 'Sistem durumu' })).toBeTruthy();
+  expect(await screen.findByRole('dialog', { name: 'Sistem izleme' })).toBeTruthy();
 });

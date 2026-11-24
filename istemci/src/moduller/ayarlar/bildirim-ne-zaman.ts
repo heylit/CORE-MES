@@ -66,6 +66,7 @@ const METINLER: Readonly<Record<Exclude<BildirimTuru, KademeTuruAdi>, string>> =
   'arkon.olcumsuz-is': 'Biten işin süresi ölçülmeyince',
   'guvenlik.kritik-alarm': 'Güvenlik merkezinde kritik alarm çıkınca',
   'saglik.esik-uyarisi': 'Sistem ölçüsü eşiği aşınca',
+  'saglik.sunucu-kapandi': 'Sunucu kapanıp yeniden açılınca',
   'profil.geri-bildirim-geldi': 'Yeni şikayet, istek ya da öneri yazılınca',
   'profil.uygulama-geri-bildirimi-geldi': 'Uygulama için geri bildirim yazılınca',
   'profil.geri-bildirime-yanit': 'Geri bildirime yanıt yazılınca, yazana',

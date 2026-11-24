@@ -4,8 +4,12 @@ import type { Db } from '#cekirdek/db.ts';
 import { uc } from '#cekirdek/uc.ts';
 import { isDurumlari } from '#cekirdek/zamanlayici.ts';
 import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
-import { ayrintiCevabi, metriklerCevabi, saatOzetiSemasi, saatlikCevabi, saatlikSorgusu, saglikCevabi } from '#paylasilan/sozlesme/saglik.ts';
+import { varsayilanGunlukDizini } from '#cekirdek/gunluk-dosyasi.ts';
+import { bulunamadi } from '#cekirdek/hata.ts';
+import { ayrintiCevabi, gunlukCevabi, gunlukSorgusu, kapanmaAyrintisiSemasi, kapanmaParametresi, kapanmalarCevabi, metriklerCevabi, saatOzetiSemasi, saatlikCevabi, saatlikSorgusu, saglikCevabi } from '#paylasilan/sozlesme/saglik.ts';
 import type { SaatOzeti } from '#paylasilan/sozlesme/saglik.ts';
+import { gunlukOku } from './gunluk-okuyucu.ts';
+import { kapanmaAyrintisi, kapanmalarListesi } from './kapanma.ts';
 import { YOKLAMA_SURE_SINIRI_MS, saatlikBaslangic } from './kurallar.ts';
 import { metrikSaatleriOku } from './sorgular.ts';
 import type { YedekBilgisi } from './kurallar.ts';
@@ -34,6 +38,8 @@ export interface SaglikKaynagi {
   yayinOku?: () => Promise<string | null>;
   // Verilmezse süreçte dakikalık işin doldurduğu toplayıcı.
   metrikler?: Pick<MetrikToplayici, 'dakikalar'>;
+  // Verilmezse TMIV2-GUNLUK klasörü (depo klasörünün yanında).
+  gunlukDizini?: () => string;
 }
 
 async function surecDiskDizinleri(db: Db): Promise<DiskDizinleri> {
@@ -109,6 +115,36 @@ export function saglikUclari(yoklamaSureSiniriMs: number, kaynak: SaglikKaynagi 
       isle: async ({ db, sorgu }) => ({
         saatler: (await metrikSaatleriOku<SaatOzeti>(db, saatlikBaslangic(sorgu.aralik, new Date()))).filter((s) => saatOzetiSemasi.safeParse(s).success),
       }),
+    }),
+    // Kapanmalar (3668 A1): sunucu düşüp yeniden açılınca yazılan kayıtlar, en yeniden eskiye (90 gün).
+    uc({
+      yontem: 'GET',
+      yol: '/saglik/kapanmalar',
+      yetki: 'saglik.ayrinti-oku',
+      cevap: kapanmalarCevabi,
+      isle: async ({ db }) => ({ kapanmalar: await kapanmalarListesi(db, new Date()) }),
+    }),
+    uc({
+      yontem: 'GET',
+      yol: '/saglik/kapanmalar/:id',
+      yetki: 'saglik.ayrinti-oku',
+      parametre: kapanmaParametresi,
+      cevap: kapanmaAyrintisiSemasi,
+      isle: async ({ db, parametre }) => {
+        const k = await kapanmaAyrintisi(db, parametre.id);
+        if (k === null) throw bulunamadi('Kapanma kaydı bulunamadı.');
+        return k;
+      },
+    }),
+    // Günlük (3668 A2): bugünkü ve önceki günün dosyası ekrandan okunur; sondan, sayfalı, en çok 500 satır.
+    uc({
+      yontem: 'GET',
+      yol: '/saglik/gunluk',
+      yetki: 'saglik.ayrinti-oku',
+      txDisi: true,
+      sorgu: gunlukSorgusu,
+      cevap: gunlukCevabi,
+      isle: ({ sorgu }) => gunlukOku((kaynak.gunlukDizini ?? varsayilanGunlukDizini)(), sorgu),
     }),
   ];
 }

@@ -3,7 +3,10 @@ import type { ArayuzKapisi } from '#cekirdek/arayuz.ts';
 import { ayarOku, dinlemeAdresi } from '#cekirdek/ayar.ts';
 import { baglantiHatasiniYaz, mesgulGunlugu, uygulamaHavuzuAc, type Veritabani } from '#cekirdek/db.ts';
 import { bekleyenGocler } from '#cekirdek/goc.ts';
-import { kapanisIsiKur, yakalanmamisRetiDinle } from '#cekirdek/surec.ts';
+import { cokusRaporunuKur } from '#cekirdek/cokus-raporu.ts';
+import { varsayilanGunlukDizini } from '#cekirdek/gunluk-dosyasi.ts';
+import { surenIstekYaziciKur } from '#cekirdek/suren-istekler-dosyasi.ts';
+import { acilisKancalariniCalistir, kapanisIsiKur, yakalanmamisRetiDinle } from '#cekirdek/surec.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { isHavuzuBoyutu, modulIsleriniKesfet, zamanlayiciKur } from '#cekirdek/zamanlayici.ts';
 import { kablola } from './kablolama.ts';
@@ -16,6 +19,11 @@ try {
   process.exit(1);
 }
 const ayar = ayarOku();
+const gunlukDizini = varsayilanGunlukDizini();
+const acilis = new Date();
+// Test ortamında günlük kapalıdır; tanı raporu ve süren istek dosyası da yalnız gerçek açılışta yazılır.
+const izlemeAcik = ayar.ortam !== 'test';
+if (izlemeAcik) cokusRaporunuKur(process.report, gunlukDizini);
 // `--arayuz`: derlenmiş istemci de bu süreçten, telefonların bağlandığı kapıdan verilir (baslat, güncelleyici, ekran testleri).
 // Geliştirmede o kapıyı Vite tutar; bayrak verilmez. Arayüz kodu (istemci ve Arkon dosyalarını ithal eder) yalnız bayrakla yüklenir.
 const arayuzAcik = process.argv.includes('--arayuz');
@@ -101,6 +109,11 @@ try {
     });
   }
   zamanlayici.baslat();
+  if (izlemeAcik) {
+    const surenYazici = surenIstekYaziciKur(gunlukDizini, { hataBildir: (err) => { app.log.error({ err }, 'Süren istek dosyası yazılamadı'); } });
+    surenYazici.baslat();
+    await acilisKancalariniCalistir({ vt, gunluk: app.log, gunlukDizini, acilis });
+  }
   const arayuzMetni = arayuzSecenegi === null ? '' : ` | arayüz: ${arayuzSecenegi.https === null ? 'http' : 'https'}://${arayuzSecenegi.host}:${String(arayuzSecenegi.port)}`;
   console.log(`CORE dinliyor: port ${ayar.port}${arayuzMetni} | veritabanı: ${hedef?.ad ?? '?'} | ortam: ${ayar.ortam}`);
 } catch (hata) {

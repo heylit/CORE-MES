@@ -11,3 +11,6 @@ export { denemeUyarisi } from './kurallar.ts';
 // Şifreli dış kopya kaydının dosya adı ve satır biçimi (2290, 2282b): araç yazar, sağlık okur.
 export { DIS_KOPYA_KAYDI_DOSYASI, disKopyaSatiri } from './kurallar.ts';
 export type { DisKopyaKaydi } from '#paylasilan/sozlesme/saglik.ts';
+
+// Önceki kapanışın kaydı (kart 3668): kablolama.ts açılış kancası olarak kaydeder.
+export { kapanmaAcilisKancasi } from './kapanma.ts';

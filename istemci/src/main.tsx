@@ -7,6 +7,7 @@ import { App } from './App.tsx';
 import { HataSiniri } from './ortak/arayuz/HataSiniri.tsx';
 import { servisCalisaniKaydet } from './ortak/pwa/kayit.ts';
 import { cihazNabziniBaslat } from './ortak/veri/cihaz-nabzi.ts';
+import { ekranHatasiDinleyicisiniKur } from './ortak/veri/ekran-hatasi.ts';
 
 const kok = document.getElementById('kok');
 if (!kok) throw new Error('#kok bulunamadı');
@@ -19,3 +20,4 @@ createRoot(kok).render(
 // Kayıt ilk çizimi geciktirmesin diye sayfa yüklendikten sonra yapılır.
 window.addEventListener('load', () => { servisCalisaniKaydet(); });
 cihazNabziniBaslat();
+ekranHatasiDinleyicisiniKur();

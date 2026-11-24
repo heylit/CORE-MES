@@ -15,6 +15,8 @@ import { istasyonAcildiDinle, istasyonSilinecekDinle } from './moduller/istasyon
 import * as bildirim from './moduller/bildirim/disari.ts';
 import { epostaAdresCozucusuKaydet as bildirimEpostaAdresCozucusu, epostaAyarOkuyucusuKaydet as bildirimEpostaAyarOkuyucusu, epostaLogoOkuyucusuKaydet as bildirimEpostaLogoOkuyucusu, istasyonCozucusuKaydet as bildirimIstasyonCozucusu } from './moduller/bildirim/disari.ts';
 import { makineOeeleri } from './moduller/oee/disari.ts';
+import { acilisKancasiKaydet } from './cekirdek/surec.ts';
+import { kapanmaAcilisKancasi } from './moduller/saglik/disari.ts';
 import { coreOeeCozucusuKaydet as smartesCoreOeeCozucusu } from './moduller/smartes/disari.ts';
 import { malzemeKartiIzleri as markalamaKartIzleri, markalamaOperasyonCozucusu } from './moduller/markalama/disari.ts';
 import * as idariIsler from './moduller/idari-isler/disari.ts';
@@ -699,6 +701,7 @@ export function sunucununBaglari(): Bag[] {
     bag('satın alma siparişi dosyaları -> ortak dosyalar hazır liste', (f: () => ortakDosyalar.HazirSaglayici) => { ortakDosyalar.hazirSaglayiciKaydet('satin-alma-siparisi', f()); }, () => satinAlmaSaglayicisi()),
     // 2147: istasyona elle bildirim, o günkü istasyon atamasındaki kişilere (bildirim istasyonları ithal edemez: döngü).
     bag('makine OEE -> SmartES hesap karşılaştırması', smartesCoreOeeCozucusu, makineOeeleri),
+    bag('sağlık kapanma kaydı -> sunucu açılış kancası', acilisKancasiKaydet, kapanmaAcilisKancasi),
     bag('istasyon kişileri -> bildirim yayını', bildirimIstasyonCozucusu, [aktifIstasyonlar, istasyondakiKisiler].every((f) => typeof f === 'function')
       ? async (db: Db) => {
         const sonuc: { id: number; ad: string; kisiIdleri: number[] }[] = [];
