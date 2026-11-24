@@ -210,6 +210,10 @@ const ELLE_TANIMLI_TURLER = {
   'saglik.esik-uyarisi': {
     baslik: 'Sistem ölçüsü eşiği aştı', onem: 'uyari', alanIslemler: ['saglik.ayrinti-oku'], yol: '/ayarlar', varsayilan: { mesaj: false, eposta: false },
   },
+  // 3668: sunucu düşüp yeniden açılınca sistem durumunu okuyanlara uygulama içinde; kayda (neden, süren istekler) bağlantı verir.
+  'saglik.sunucu-kapandi': {
+    baslik: 'Sunucu kapandı ve yeniden açıldı', onem: 'uyari', alanIslemler: ['saglik.ayrinti-oku'], yol: '/ayarlar', varsayilan: { mesaj: false, eposta: false },
+  },
   // 2192: yeni şikayet, istek ve öneri merkezi okuyanlara gider; uygulama konulu kayıt ayrı türdür ki alıcısı Bildirim
   // yönetiminden ayrı seçilebilsin. Yanıt ve kapanış yalnız yazana gider (kayda bağlı kişi).
   'profil.geri-bildirim-geldi': {

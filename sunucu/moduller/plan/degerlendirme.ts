@@ -16,6 +16,7 @@ import { planGirdisi, type KaynakOkumasi } from './plan-girdisi.ts';
 import { planlamaGirdisi, type PlanCozumKaynagi } from './planlama-servis.ts';
 import { mesaiSaatGirdisi } from './mesai-maliyeti.ts';
 import { izlemeIletisi } from './isci-iletisi.ts';
+import { hataSonucu, hesapBasladi, isciSinirlari, type HesapSonucu } from './isci-izleme.ts';
 
 // Planlama değerlendirmesi (Soru 357 a): planlama sayfasının tarayıcıda motoru koşturan kartları burada, sayfanın motor kancaları
 // (motor/kancalar.js) ve kart hesaplarıyla (motor/degerlendir.js) koşar. Girdi planlama çalışması ucunun birleştirdiğidir (288 a);
@@ -84,16 +85,17 @@ async function kosustur(girdi: DegerlendirmeGirdisi, simdi: number, sureMs: numb
 function calistir(girdi: DegerlendirmeGirdisi, simdi: number, sureMs: number): Promise<DegerlendirmeDonusu> {
   const son = Date.now() + sureMs;
   return new Promise((coz, reddet) => {
-    const isci = new Worker(ISCI, { eval: true, workerData: { kod: degerlendirmeKodu(), dilim: TESIS_SAAT_DILIMI, simdi, girdi, birlestirmeAdresi: BIRLESTIRME_ADRESI } });
+    const isci = new Worker(ISCI, { eval: true, resourceLimits: isciSinirlari(), workerData: { kod: degerlendirmeKodu(), dilim: TESIS_SAAT_DILIMI, simdi, girdi, birlestirmeAdresi: BIRLESTIRME_ADRESI } });
     let bitti = false;
-    const sonlan = (f: () => void): void => { if (bitti) return; bitti = true; clearTimeout(sayac); f(); void isci.terminate(); };
-    const sayac = setTimeout(() => sonlan(() => reddet(mesgul(`Planlama değerlendirmesi ${String(sureMs)} ms içinde bitmedi; daha az seçenekle ya da biraz sonra yeniden deneyin.`))), sureMs);
-    isci.on('message', (s: DegerlendirmeDonusu) => { if (!izlemeIletisi(s)) sonlan(() => coz(s)); });
+    const bitir = hesapBasladi('degerlendirme');
+    const sonlan = (f: () => void, sonuc: HesapSonucu = 'hata'): void => { if (bitti) return; bitti = true; clearTimeout(sayac); bitir(sonuc); f(); void isci.terminate(); };
+    const sayac = setTimeout(() => sonlan(() => reddet(mesgul(`Planlama değerlendirmesi ${String(sureMs)} ms içinde bitmedi; daha az seçenekle ya da biraz sonra yeniden deneyin.`)), 'zaman-asimi'), sureMs);
+    isci.on('message', (s: DegerlendirmeDonusu) => { if (!izlemeIletisi(s)) sonlan(() => coz(s), 'tamam'); });
     // 1720: tipli dilimle iş parçacığı hata verirse aynı girdi eski yolla, kalan sürede yeniden koşar (bayrak kapalıymış gibi).
     isci.once('error', (e) => sonlan(() => {
       if (girdi.kaynakDilimi) calistir({ ...girdi, kaynakDilimi: null }, simdi, Math.max(1, son - Date.now())).then(coz, reddet);
       else reddet(e);
-    }));
+    }, hataSonucu(e)));
     isci.once('exit', (kodu) => sonlan(() => reddet(new Error(`Planlama değerlendirmesi iş parçacığı ${String(kodu)} koduyla kapandı.`))));
   });
 }

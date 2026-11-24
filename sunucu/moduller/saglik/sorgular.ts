@@ -169,3 +169,73 @@ export async function enBuyukTablolariOku(db: Db, enCok: number = EN_BUYUK_TABLO
     sonAutovacuum: s.son_autovacuum, sonAutoanalyze: s.son_autoanalyze,
   }));
 }
+
+// ---- Kapanma kaydı (kart 3668, dilim A) ----
+
+export interface KapanmaYazisi {
+  kapandiAn: Date;
+  acildiAn: Date;
+  kapaliSn: number;
+  cikisKodu: number | null;
+  sinyal: string | null;
+  neden: string;
+  kanit: string | null;
+  yigin: string | null;
+  hataSatirlari: unknown[];
+  surenIstekler: unknown[];
+  bellek: unknown;
+  dakikalar: unknown[];
+}
+
+// Aynı kapanış (bekçi satırı) ikinci kez kaydedilmez: kapandi_an benzersizdir. Yeni satırın numarası; zaten varsa null.
+export async function kapanmaEkle(db: Db, k: KapanmaYazisi): Promise<number | null> {
+  const s = await db.tek<{ id: string }>(
+    `INSERT INTO saglik_kapanma (kapandi_an, acildi_an, kapali_sn, cikis_kodu, sinyal, neden, kanit, yigin, hata_satirlari, suren_istekler, bellek, dakikalar)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11::jsonb, $12::jsonb)
+     ON CONFLICT (kapandi_an) DO NOTHING RETURNING id::text AS id`,
+    [k.kapandiAn, k.acildiAn, k.kapaliSn, k.cikisKodu, k.sinyal, k.neden, k.kanit, k.yigin, JSON.stringify(k.hataSatirlari),
+      JSON.stringify(k.surenIstekler), k.bellek === null ? null : JSON.stringify(k.bellek), JSON.stringify(k.dakikalar)],
+  );
+  return s === null ? null : Number(s.id);
+}
+
+export interface KapanmaSatiriHam {
+  id: number;
+  kapandiAn: Date;
+  acildiAn: Date;
+  kapaliSn: number;
+  cikisKodu: number | null;
+  sinyal: string | null;
+  neden: string;
+}
+
+const KAPANMA_SUTUNLARI = `id::int AS id, kapandi_an AS "kapandiAn", acildi_an AS "acildiAn", kapali_sn AS "kapaliSn", cikis_kodu AS "cikisKodu", sinyal, neden`;
+
+export function kapanmalariListele(db: Db, baslangic: Date, enCok: number): Promise<KapanmaSatiriHam[]> {
+  return db.sorgu<KapanmaSatiriHam>(
+    `SELECT ${KAPANMA_SUTUNLARI} FROM saglik_kapanma WHERE kapandi_an >= $1 ORDER BY kapandi_an DESC LIMIT $2`, [baslangic, enCok],
+  );
+}
+
+export interface KapanmaAyrintiHam extends KapanmaSatiriHam {
+  kanit: string | null;
+  yigin: string | null;
+  hataSatirlari: unknown;
+  surenIstekler: unknown;
+  bellek: unknown;
+  dakikalar: unknown;
+}
+
+export function kapanmaOku(db: Db, id: number): Promise<KapanmaAyrintiHam | null> {
+  return db.tek<KapanmaAyrintiHam>(
+    `SELECT ${KAPANMA_SUTUNLARI}, kanit, yigin, hata_satirlari AS "hataSatirlari", suren_istekler AS "surenIstekler", bellek, dakikalar
+       FROM saglik_kapanma WHERE id = $1`, [id],
+  );
+}
+
+export async function suresiGecenKapanmalariSil(db: Db, simdi: Date, gun: number): Promise<number> {
+  const s = await db.sorgu<{ id: string }>(
+    'DELETE FROM saglik_kapanma WHERE kapandi_an < $1::timestamptz - make_interval(days => $2::int) RETURNING id::text AS id', [simdi, gun],
+  );
+  return s.length;
+}

@@ -6,6 +6,7 @@ import { Worker } from 'node:worker_threads';
 import { mesgul } from '#cekirdek/hata.ts';
 import { TESIS_SAAT_DILIMI } from '#paylasilan/zaman.ts';
 import { motorGirdisiDenetle, motorPlaniDenetle, type MotorPlani } from './motor-sinir.ts';
+import { hataSonucu, hesapBasladi, isciSinirlari, type HesapSonucu } from './isci-izleme.ts';
 
 // Ortak plan motoru (ADR 0018): planlama çerçevesine gömülen dosyaların aynısı sunucuda koşar. Motor tarayıcı nesnesi kullanmaz; boş
 // `vm` bağlamında yüklenir, sunucunun hiçbir nesnesini görmez. Uzun çözüm olay döngüsünü tutmasın diye ayrı iş parçacığında koşar.
@@ -80,14 +81,15 @@ export function planCoz(istek: PlanIstegi, sureMs: number = COZUM_SURESI_MS, buy
 
 function calistir(istek: PlanIstegi, sureMs: number, buyumeMs: number): Promise<MotorPlani> {
   return new Promise((coz, reddet) => {
-    const isci = new Worker(ISCI, { eval: true, workerData: { kod: motorKodu(), dilim: TESIS_SAAT_DILIMI, istek, buyumeMs } });
+    const isci = new Worker(ISCI, { eval: true, resourceLimits: isciSinirlari(), workerData: { kod: motorKodu(), dilim: TESIS_SAAT_DILIMI, istek, buyumeMs } });
     let bitti = false;
-    const sonlan = (f: () => void): void => { if (bitti) return; bitti = true; clearTimeout(sayac); f(); void isci.terminate(); };
-    const sayac = setTimeout(() => sonlan(() => reddet(mesgul(`Plan ${String(Math.max(1, Math.round(sureMs / 1000)))} saniyede hesaplanamadı; plan değişmedi. Biraz sonra yeniden deneyin, yinelenirse yöneticinize bildirin.`))), sureMs);
+    const bitir = hesapBasladi('motor');
+    const sonlan = (f: () => void, sonuc: HesapSonucu = 'hata'): void => { if (bitti) return; bitti = true; clearTimeout(sayac); bitir(sonuc); f(); void isci.terminate(); };
+    const sayac = setTimeout(() => sonlan(() => reddet(mesgul(`Plan ${String(Math.max(1, Math.round(sureMs / 1000)))} saniyede hesaplanamadı; plan değişmedi. Biraz sonra yeniden deneyin, yinelenirse yöneticinize bildirin.`)), 'zaman-asimi'), sureMs);
     isci.once('message', (p: unknown) => sonlan(() => {
       try { coz(motorPlaniDenetle(p)); } catch (e) { reddet(e as Error); }
-    }));
-    isci.once('error', (e) => sonlan(() => reddet(e)));
+    }, 'tamam'));
+    isci.once('error', (e) => sonlan(() => reddet(e), hataSonucu(e)));
     isci.once('exit', (kodu) => sonlan(() => reddet(new Error(`Plan motoru iş parçacığı ${String(kodu)} koduyla kapandı.`))));
   });
 }

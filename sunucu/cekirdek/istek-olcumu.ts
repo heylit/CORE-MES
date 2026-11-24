@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { FastifyInstance } from 'fastify';
+import { HATA_ILETISI_AZAMI, istekBasladi, istekBitti, takilmaIzleyiciBaslat } from './istek-izleme.ts';
 import { istekKisisi } from './red-kaydi.ts';
 
 interface Sayac {
@@ -56,7 +57,7 @@ export function kovaSirasi(sureMs: number): number {
   return sira === -1 ? SURE_KOVALARI_MS.length : sira;
 }
 
-export function istekSay(yontem: string, yol: string | null, durum: number, sureMs: number): void {
+export function istekSay(yontem: string, yol: string | null, durum: number, sureMs: number, boyutBayt: number | null = null): void {
   const sinif = durumSinifi(durum);
   const anahtar = `${yontem} ${yol ?? ''} ${sinif}`;
   let sayac = ucSayaclari.get(anahtar);
@@ -69,6 +70,28 @@ export function istekSay(yontem: string, yol: string | null, durum: number, sure
   const kova = kovaSirasi(sureMs);
   sayac.kovalar[kova] = (sayac.kovalar[kova] ?? 0) + 1;
   if (durum === 503) sayac.mesgul += 1;
+  if (boyutBayt !== null) {
+    const bk = `${yontem} ${yol ?? ''}`;
+    const b = ucBoyutlari.get(bk) ?? { yontem, yol, toplamBayt: 0, sayi: 0 };
+    b.toplamBayt += boyutBayt;
+    b.sayi += 1;
+    ucBoyutlari.set(bk, b);
+  }
+}
+
+// Cevap boyutu (3668-1): Content-Length başlığı olan cevaplar; akışla giden cevapta başlık yoktur, o cevap sayılmaz (sıfır uydurulmaz).
+// Uç sayacından ayrıdır: sayacın biçimi değişmesin. Açılıştan beri artan toplam; dakikalık fark sağlık modülünün işidir.
+export interface UcBoyutu {
+  yontem: string;
+  yol: string | null;
+  toplamBayt: number;
+  sayi: number;
+}
+
+const ucBoyutlari = new Map<string, UcBoyutu>();
+
+export function istekBoyutlari(): UcBoyutu[] {
+  return [...ucBoyutlari.values()].map((b) => ({ ...b }));
 }
 
 // Kopya döner: okuyan sayacı değiştiremez.
@@ -83,14 +106,25 @@ export function istekSayaclari(): UcSayaci[] {
 export function istekOlcumunuKur(app: FastifyInstance, secenek: OlcumSecenegi = {}): void {
   const yavasMs = secenek.yavasMs ?? YAVAS_UC_MS;
   const sayaclar = new WeakMap<object, Sayac>();
+  const izlemeKimlikleri = new WeakMap<object, number>();
+  const hatalar = new WeakMap<object, string>();
   // Sayaç işleyicinin bütün devamına geçsin diye kanca geri çağırmalıdır: söz döndüren kancanın devamı bu bağlamın dışında koşar.
   app.addHook('onRequest', (istek, _yanit, bitti) => {
     const sayac: Sayac = { sorgu: 0 };
     sayaclar.set(istek, sayac);
+    izlemeKimlikleri.set(istek, istekBasladi(istek.method, istek.url.split('?', 1)[0] ?? '', () => istekKisisi(istek)));
     istekte.run(sayac, bitti);
   });
+  app.addHook('onError', (istek, _yanit, hata, bitti) => {
+    hatalar.set(istek, hata.message.slice(0, HATA_ILETISI_AZAMI));
+    bitti();
+  });
+  const takilmayiDurdur = takilmaIzleyiciBaslat();
+  app.addHook('onClose', (_app, bitti) => { takilmayiDurdur(); bitti(); });
   app.addHook('onResponse', (istek, yanit, bitti) => {
     const sureMs = Math.round(yanit.elapsedTime);
+    const baslik = Number(yanit.getHeader('content-length'));
+    const boyutBayt = Number.isFinite(baslik) && yanit.getHeader('content-length') !== undefined ? baslik : null;
     const olcum = {
       yontem: istek.method,
       yol: istek.routeOptions.url ?? null,
@@ -100,8 +134,13 @@ export function istekOlcumunuKur(app: FastifyInstance, secenek: OlcumSecenegi = 
       durum: yanit.statusCode,
       sureMs,
       sorgu: sayaclar.get(istek)?.sorgu ?? 0,
+      boyutBayt,
     };
-    istekSay(olcum.yontem, olcum.yol, olcum.durum, sureMs);
+    istekSay(olcum.yontem, olcum.yol, olcum.durum, sureMs, boyutBayt);
+    const izlemeKimligi = izlemeKimlikleri.get(istek);
+    if (izlemeKimligi !== undefined) {
+      istekBitti(izlemeKimligi, { yontem: olcum.yontem, adres: olcum.adres, kisiId: olcum.kisiId, durum: olcum.durum, sureMs, hata: hatalar.get(istek) ?? null });
+    }
     if (sureMs >= yavasMs) istek.log.warn(olcum, 'Yavaş uç');
     else istek.log.info(olcum, 'Uç süresi');
     bitti();

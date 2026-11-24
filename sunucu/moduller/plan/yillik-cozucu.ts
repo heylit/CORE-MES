@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { Worker } from 'node:worker_threads';
 import { bulunamadi, cakisma } from '#cekirdek/hata.ts';
 import type { YillikCozDurumuCevabi, YillikCozGovdesi, YillikCozumu } from '#paylasilan/sozlesme/planlama.ts';
+import { hataSonucu, hesapBasladi, isciSinirlari, type HesapSonucu } from './isci-izleme.ts';
 
 // Yıllık planın HiGHS çözücüsü (454/6 a): planlama sayfasının kurduğu kaba kapasite modelini (LP metni) çözer. Plan motoru değildir:
 // kayıt okumaz, yazmaz, plana dokunmaz. Paket (highs, kök package.json) ayrı iş parçacığında yüklenir; çözüm olay döngüsünü tutmaz.
@@ -51,14 +52,15 @@ function temizle(simdi: number): void {
 // Tek modeli iş parçacığında çözer. Süre aşılırsa iş parçacığı durdurulur.
 export function modelCoz(istek: YillikCozGovdesi, sureMs: number = istek.sure * 1000 + PAY_MS): Promise<YillikCozumu> {
   return new Promise((coz, reddet) => {
-    const isci = new Worker(ISCI, { eval: true, workerData: { highs: HIGHS, istek } });
+    const isci = new Worker(ISCI, { eval: true, resourceLimits: isciSinirlari(), workerData: { highs: HIGHS, istek } });
     let bitti = false;
-    const sonlan = (f: () => void): void => { if (bitti) return; bitti = true; clearTimeout(sayac); f(); void isci.terminate(); };
-    const sayac = setTimeout(() => sonlan(() => reddet(new Error(`Yıllık plan ${String(Math.round(sureMs / 1000))} saniyede çözülemedi.`))), sureMs);
+    const bitir = hesapBasladi('yillik');
+    const sonlan = (f: () => void, sonuc: HesapSonucu = 'hata'): void => { if (bitti) return; bitti = true; clearTimeout(sayac); bitir(sonuc); f(); void isci.terminate(); };
+    const sayac = setTimeout(() => sonlan(() => reddet(new Error(`Yıllık plan ${String(Math.round(sureMs / 1000))} saniyede çözülemedi.`)), 'zaman-asimi'), sureMs);
     isci.once('message', (m: { cozum?: YillikCozumu; hata?: string }) => sonlan(() => {
       if (m.cozum) coz(m.cozum); else reddet(new Error(`HiGHS modeli çözemedi: ${m.hata ?? 'bilinmeyen hata'}`));
-    }));
-    isci.once('error', (e) => sonlan(() => reddet(e)));
+    }, 'tamam'));
+    isci.once('error', (e) => sonlan(() => reddet(e), hataSonucu(e)));
     isci.once('exit', (kodu) => sonlan(() => reddet(new Error(`Yıllık plan çözücüsü ${String(kodu)} koduyla kapandı.`))));
   });
 }
