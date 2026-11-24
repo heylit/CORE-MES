@@ -218,3 +218,7 @@
 [data-kip="kart"][data-kompakt] .tc-tablo td.tc-tablo-kart-baslik::before,
 [data-kip="kart"][data-kompakt] .tc-tablo td[data-kart-rozet]::before { display: none; }
 [data-kip="kart"][data-kompakt] .tc-tablo td[data-kart-rozet] { grid-column: 2; grid-row: 1; justify-content: flex-end; flex-wrap: wrap; gap: var(--b-1); min-width: 0; border-bottom: 0; }
+[data-kip="kart"][data-kompakt] .tc-tablo td[data-kart-rozet] .tc-rozet { letter-spacing: .02em; }
+/* Birden çok rozet sütunu (durum ve bir iki işaret): ikincisi birincinin altında, başlık iki satıra yayılır. */
+[data-kip="kart"][data-kompakt] .tc-tablo td[data-kart-rozet] ~ td[data-kart-rozet] { grid-row: 2; }
+[data-kip="kart"][data-kompakt] .tc-tablo tr:has(> td[data-kart-rozet] ~ td[data-kart-rozet]) > td.tc-tablo-kart-baslik { grid-row: 1 / span 2; }
