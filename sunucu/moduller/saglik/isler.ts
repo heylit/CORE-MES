@@ -2,6 +2,7 @@ import { isTanimi } from '#cekirdek/zamanlayici.ts';
 import { METRIK_ARALIGI_MS } from './kurallar.ts';
 import { esikleriIsle, metrikleriSakla, surecEsikleri, surecMetrikleri } from './servis.ts';
 import { varsayilanGunlukDizini } from '#cekirdek/gunluk-dosyasi.ts';
+import { ekranHatasiTemizligi } from './ekran-hatasi.ts';
 import { kapanmaTemizligi } from './kapanma.ts';
 import { vtIstatistigiOku } from './sorgular.ts';
 import { surecYuku } from './yuk.ts';
@@ -19,6 +20,8 @@ export const isler = [
       surecYuku.tur();
       // Kapanma kaydı ve arşiv dosyaları 90 gün (kart 3668).
       await kapanmaTemizligi(db, varsayilanGunlukDizini(), new Date());
+      // Ekran hatası kaydı 90 gün (kart 3668 C).
+      await ekranHatasiTemizligi(db, new Date());
     },
   }),
 ];

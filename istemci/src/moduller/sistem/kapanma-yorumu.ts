@@ -1,4 +1,4 @@
-import type { GunlukDuzeyi, KapanmaAyrintisi, KapanmaNedeni, KapanmaSatiri, YukDonemi } from '#paylasilan/sozlesme/saglik.ts';
+import type { EkranHatasiDonemi, GunlukDuzeyi, KapanmaAyrintisi, KapanmaNedeni, KapanmaSatiri, YukDonemi } from '#paylasilan/sozlesme/saglik.ts';
 import type { RozetTonu } from '../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 import { sureMetni } from './sure.ts';
@@ -70,7 +70,8 @@ export function kapanmaOzeti(k: Pick<KapanmaAyrintisi, 'kapandiAn' | 'kapaliSn' 
 
 // Adres: `?sistem=<sekme>&kayit=<no>` ve günlük süzgeci. Bilinmeyen sekme Özet'tir (kullanıcı yanlış adresle boş ekran görmez).
 const YUK_DONEMLERI: readonly YukDonemi[] = ['1s', '24s'];
-export const SEKMELER = ['ozet', 'suan', 'kapanmalar', 'gunluk', 'yuk', 'dis'] as const;
+const EKRAN_DONEMLERI: readonly EkranHatasiDonemi[] = ['24s', '7g', '90g'];
+export const SEKMELER = ['ozet', 'suan', 'kapanmalar', 'gunluk', 'yuk', 'dis', 'ekran', 'veritabani'] as const;
 export type SekmeAnahtari = (typeof SEKMELER)[number];
 
 export interface GunlukSuzgeci {
@@ -89,6 +90,8 @@ export interface IzlemeAdresi {
   suzgec: Partial<GunlukSuzgeci>;
   // Yalnız Yük sekmesinde ve adreste varsa; yoksa varsayılan dönem (24 saat) kullanılır.
   donem?: YukDonemi;
+  // Ekran hataları sekmesinin dönemi (adreste `donem`); seçili hata `kayit`ta.
+  ekranDonem?: EkranHatasiDonemi;
 }
 
 const DUZEYLER: readonly string[] = ['bilgi', 'uyari', 'hata', 'olumcul'];
@@ -108,6 +111,7 @@ export function adresiCoz(p: URLSearchParams): IzlemeAdresi | null {
   const donem = p.get('donem');
   const yon: IzlemeAdresi = { sekme, kayit: Number.isInteger(kayit) && kayit > 0 ? kayit : null, suzgec };
   if (sekme === 'yuk' && donem !== null && (YUK_DONEMLERI as readonly string[]).includes(donem)) yon.donem = donem as YukDonemi;
+  if (sekme === 'ekran' && donem !== null && (EKRAN_DONEMLERI as readonly string[]).includes(donem)) yon.ekranDonem = donem as EkranHatasiDonemi;
   return yon;
 }
 
@@ -118,7 +122,8 @@ export function adresiYaz(p: URLSearchParams, a: IzlemeAdresi | null): URLSearch
   if (a === null) return yeni;
   yeni.set('sistem', a.sekme);
   if (a.sekme === 'yuk' && a.donem !== undefined) yeni.set('donem', a.donem);
-  if (a.sekme === 'kapanmalar' && a.kayit !== null) yeni.set('kayit', String(a.kayit));
+  if (a.sekme === 'ekran' && a.ekranDonem !== undefined) yeni.set('donem', a.ekranDonem);
+  if ((a.sekme === 'kapanmalar' || a.sekme === 'ekran') && a.kayit !== null) yeni.set('kayit', String(a.kayit));
   if (a.sekme === 'gunluk') for (const [k, v] of Object.entries(a.suzgec)) if (v !== '' && v !== undefined) yeni.set(k, v);
   return yeni;
 }

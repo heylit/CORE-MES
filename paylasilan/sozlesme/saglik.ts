@@ -426,6 +426,69 @@ export type EkranYuku = z.output<typeof ekranYukuSemasi>;
 export type DisBaglanti = z.output<typeof disBaglantiSemasi>;
 export type DisBaglantilarCevabi = z.output<typeof disBaglantilarCevabi>;
 
+// ---- Ekran hataları ve Veritabanı (3668 C) ----
+export const EKRAN_HATASI_DONEMLERI = ['24s', '7g', '90g'] as const;
+export const ekranHatalariSorgusu = z.object({ donem: z.enum(EKRAN_HATASI_DONEMLERI).default('7g') });
+
+// Kişi istemciden gelmez: sunucu oturumdan alır. Sınırlar istemcininkiyle aynıdır (ekran-hatasi.ts).
+export const ekranHatasiGovdesi = z.object({
+  sayfa: z.string().max(200),
+  hata: z.string().trim().min(1).max(300),
+  yigin: z.string().max(2000).nullable(),
+  surum: z.string().max(64).nullable(),
+});
+export const ekranHatasiYazildiCevabi = z.object({ kaydedildi: z.literal(true) });
+
+export const ekranHatasiSatiriSemasi = z.object({
+  id: z.number().int().positive(),
+  hata: z.string(),
+  sayfa: z.string(),
+  yigin: z.string().nullable(),
+  surum: z.string().nullable(),
+  kez: sayi,
+  kisiSayisi: sayi,
+  sonKisiId: z.number().int().nullable(),
+  ilkAn: zamanSemasi,
+  sonAn: zamanSemasi,
+});
+export const ekranHatalariCevabi = z.object({
+  donem: z.enum(EKRAN_HATASI_DONEMLERI),
+  // Seçili dönemden bağımsız: son 24 saatte görülen ayrı hata sayısı (sekme rozeti).
+  son24Saat: sayi,
+  // Seçili dönemdeki ayrı hata sayısı: liste en çok `enCok` satır taşır, kesilmişse ekran bunu söyler.
+  toplam: sayi,
+  enCok: sayi,
+  // En son hata bildiriminin anı (90 gün içinde); hiç gelmediyse null. Boş listenin "hata yok" mu "bildirim yok" mu olduğunu ayırır.
+  sonBildirim: zamanSemasi.nullable(),
+  satirlar: z.array(ekranHatasiSatiriSemasi),
+});
+
+export const vtSorguSatiriSemasi = z.object({
+  sorgu: z.string(), cagri: sayi, toplamMs: z.number().nonnegative(), ortMs: z.number().nonnegative(), satir: sayi,
+});
+export const vtTabloSatiriSemasi = z.object({
+  ad: z.string(), okunanSatir: sayi, tamTarama: sayi,
+  // Tablonun hiç dizini yoksa PostgreSQL null verir.
+  dizinTaramasi: sayi.nullable(), yazma: sayi, dizinEksikOlabilir: z.boolean(),
+});
+// eklenti: 'yok' = pg_stat_statements kurulu değil; 'yetkisiz' = kurulu ama sorgu metnini okuyacak yetki yok (sayı uydurulmaz).
+export const VT_EKLENTI_DURUMLARI = ['var', 'yok', 'yetkisiz'] as const;
+export const veritabaniCevabi = z.object({
+  eklenti: z.enum(VT_EKLENTI_DURUMLARI),
+  sorgular: z.array(vtSorguSatiriSemasi),
+  tablolar: z.array(vtTabloSatiriSemasi),
+  // Her listenin en çok kaç satır taşıdığı (sessiz kesme olmasın).
+  enCok: sayi,
+});
+
+export type EkranHatasiGovdesi = z.output<typeof ekranHatasiGovdesi>;
+export type EkranHatasiSatiri = z.output<typeof ekranHatasiSatiriSemasi>;
+export type EkranHatalariCevabi = z.output<typeof ekranHatalariCevabi>;
+export type EkranHatasiDonemi = (typeof EKRAN_HATASI_DONEMLERI)[number];
+export type VtSorguSatiri = z.output<typeof vtSorguSatiriSemasi>;
+export type VtTabloSatiri = z.output<typeof vtTabloSatiriSemasi>;
+export type VeritabaniCevabi = z.output<typeof veritabaniCevabi>;
+
 export type SaglikCevabi = z.output<typeof saglikCevabi>;
 export type Ayrinti = z.output<typeof ayrintiCevabi>;
 export type DiskDurumu = z.output<typeof diskDurumuSemasi>;

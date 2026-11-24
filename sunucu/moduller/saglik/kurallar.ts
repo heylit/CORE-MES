@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { SURE_KOVALARI_MS } from '#cekirdek/istek-olcumu.ts';
 import type { UcSayaci } from '#cekirdek/istek-olcumu.ts';
 import type { HavuzDurumu } from '#cekirdek/db.ts';
@@ -867,4 +868,26 @@ export function mesguUclariOzetle(dakikalar: readonly YukDakikasi[], baslangicMs
       ortCevapBayt: u.boyutluCevap === 0 ? null : Math.round(u.toplamBayt / u.boyutluCevap),
       cakisma409: u.cakisma,
     }));
+}
+
+// ---- Ekran hataları ve Veritabanı (3668 C) ----
+// Aynı hata: sayfa + ileti + yığının ilk satırı (derleme sürümüyle değişen satır numaraları gruplamayı bozmasın diye yalnız ilk satır).
+export function ekranHatasiParmagi(sayfa: string, hata: string, yigin: string | null): string {
+  const ilkSatir = yigin?.split('\n', 2)[1]?.trim() ?? '';
+  return createHash('sha256').update(`${sayfa}\n${hata}\n${ilkSatir}`).digest('hex').slice(0, 32);
+}
+
+// Kesin hüküm değil işaret: küçük tabloda tam tarama normaldir, bu yüzden en az bin satır ve yüz tarama aranır.
+export const DIZIN_ISARETI_EN_AZ_SATIR = 1000;
+export const DIZIN_ISARETI_EN_AZ_TARAMA = 100;
+export function dizinEksikOlabilirMi(t: { tamTarama: number; dizinTaramasi: number | null; canliSatir: number }): boolean {
+  return t.canliSatir >= DIZIN_ISARETI_EN_AZ_SATIR && t.tamTarama >= DIZIN_ISARETI_EN_AZ_TARAMA && t.tamTarama > (t.dizinTaramasi ?? 0);
+}
+
+export const EKRAN_HATASI_HIZ_PENCERESI_MS = 60_000;
+export const EKRAN_HATASI_HIZ_EN_COK = 20;
+
+// Kişi başına kayan pencere: pencere içindeki istek sayısı sınıra ulaştıysa yeni istek reddedilir (saf; durum çağıranda).
+export function ekranHatasiHizAsildiMi(oncekiAnlar: readonly number[], simdi: number): boolean {
+  return oncekiAnlar.filter((a) => simdi - a < EKRAN_HATASI_HIZ_PENCERESI_MS).length >= EKRAN_HATASI_HIZ_EN_COK;
 }

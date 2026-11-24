@@ -89,6 +89,8 @@ const OTURUM_UCLARI: Readonly<Record<string, Beyan>> = {
   'POST /profil/menu-sec': { sahiplik: 'kendi' },
   'POST /profil/mini-pano-sec': { sahiplik: 'kendi' },
   'POST /profil/tema-sec': { sahiplik: 'kendi' },
+  // Ekran hatası bildirimi: her oturum kendi ekranının hatasını yazar; kişi oturumdan alınır, gövdeden seçilemez (3668 C).
+  'POST /saglik/ekran-hatalari': { sahiplik: 'yok' },
   'POST /ziyaretcilerim/:id/iptal': { sahiplik: 'kendi', test: ['nizamiye/nizamiye.test.ts', 'NZ-08 çalışan başkasının ziyaretçisini'] },
   'POST /ziyaretcilerim/on-kayit': { sahiplik: 'kendi' },
 };

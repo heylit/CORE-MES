@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { DisBaglantilarCevabi, SuAnCevabi, YukCevabi, YukDonemi } from '#paylasilan/sozlesme/saglik.ts';
+import type { DisBaglantilarCevabi, EkranHatalariCevabi, EkranHatasiDonemi, SuAnCevabi, VeritabaniCevabi, YukCevabi, YukDonemi } from '#paylasilan/sozlesme/saglik.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 
@@ -33,4 +33,18 @@ export function useYuk(donem: YukDonemi) {
 export function useDisBaglantilar() {
   const gorur = useAyrintiGorur();
   return useQuery({ queryKey: anahtar.dis, queryFn: () => api.get<DisBaglantilarCevabi>('/saglik/dis-baglantilar'), enabled: gorur, retry: false, staleTime: 30_000 });
+}
+
+export function useEkranHatalari(donem: EkranHatasiDonemi) {
+  const gorur = useAyrintiGorur();
+  return useQuery({
+    queryKey: ['sistem', 'ekran-hatalari', donem] as const,
+    queryFn: () => api.get<EkranHatalariCevabi>(`/saglik/ekran-hatalari?donem=${donem}`),
+    enabled: gorur, retry: false, staleTime: 30_000,
+  });
+}
+
+export function useVeritabani() {
+  const gorur = useAyrintiGorur();
+  return useQuery({ queryKey: ['sistem', 'veritabani'] as const, queryFn: () => api.get<VeritabaniCevabi>('/saglik/veritabani'), enabled: gorur, retry: false, staleTime: 30_000 });
 }

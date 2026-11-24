@@ -262,3 +262,84 @@ export async function vtSuAnOku(db: Db): Promise<VtSuAn | null> {
   );
   return { baglanti: ozet.baglanti, azami: ozet.azami, kilitler: kilitler.map((k) => ({ sorgu: k.sorgu, bekletenIslem: k.bekleten, beklemeSn: k.bekleme })) };
 }
+
+// ---- Ekran hataları (3668 C) ----
+export interface EkranHatasiYazisi { parmakIzi: string; sayfa: string; hata: string; yigin: string | null; surum: string | null; kisiId: number }
+// Tablonun şişmesin diye en çok bu kadar ayrı hata tutulur; doluyken yeni hata satırı açılmaz, var olanın sayacı artar.
+export const EKRAN_HATASI_EN_COK_SATIR = 2000;
+
+export async function ekranHatasiYaz(db: Db, h: EkranHatasiYazisi): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO saglik_ekran_hatasi (parmak_izi, sayfa, hata, yigin, surum, kisiler, son_kisi_id)
+     SELECT $1, $2, $3, $4, $5, ARRAY[$6::int], $6::int
+      WHERE (SELECT count(*) FROM saglik_ekran_hatasi) < $7
+        OR EXISTS (SELECT 1 FROM saglik_ekran_hatasi WHERE parmak_izi = $1)
+     ON CONFLICT (parmak_izi) DO UPDATE SET
+       kez = saglik_ekran_hatasi.kez + 1, son_an = now(), surum = EXCLUDED.surum, son_kisi_id = EXCLUDED.son_kisi_id,
+       kisiler = CASE WHEN $6::int = ANY (saglik_ekran_hatasi.kisiler) OR cardinality(saglik_ekran_hatasi.kisiler) >= 50
+                      THEN saglik_ekran_hatasi.kisiler ELSE array_append(saglik_ekran_hatasi.kisiler, $6::int) END`,
+    [h.parmakIzi, h.sayfa, h.hata, h.yigin, h.surum, h.kisiId, EKRAN_HATASI_EN_COK_SATIR],
+  );
+}
+
+export interface EkranHatasiHam {
+  id: number; hata: string; sayfa: string; yigin: string | null; surum: string | null; kez: number; kisiSayisi: number;
+  sonKisiId: number | null; ilkAn: Date; sonAn: Date;
+}
+
+export function ekranHatalariOku(db: Db, baslangic: Date, enCok: number): Promise<EkranHatasiHam[]> {
+  return db.sorgu<EkranHatasiHam>(
+    `SELECT id::int AS id, hata, sayfa, yigin, surum, kez, cardinality(kisiler) AS "kisiSayisi", son_kisi_id AS "sonKisiId", ilk_an AS "ilkAn", son_an AS "sonAn"
+       FROM saglik_ekran_hatasi WHERE son_an >= $1 ORDER BY son_an DESC LIMIT $2`, [baslangic, enCok],
+  );
+}
+
+export async function ekranHatasiSayisi(db: Db, baslangic: Date): Promise<number> {
+  const s = await db.tek<{ n: number }>('SELECT count(*)::int AS n FROM saglik_ekran_hatasi WHERE son_an >= $1', [baslangic]);
+  return s?.n ?? 0;
+}
+
+export async function ekranHatasiSonAni(db: Db): Promise<Date | null> {
+  const s = await db.tek<{ an: Date | null }>('SELECT max(son_an) AS an FROM saglik_ekran_hatasi');
+  return s?.an ?? null;
+}
+
+export async function suresiGecenEkranHatalariniSil(db: Db, simdi: Date, gun: number): Promise<number> {
+  const s = await db.sorgu<{ id: string }>(
+    'DELETE FROM saglik_ekran_hatasi WHERE son_an < $1::timestamptz - make_interval(days => $2::int) RETURNING id::text AS id', [simdi, gun],
+  );
+  return s.length;
+}
+
+// ---- Veritabanı (3668 C) ----
+export type VtEklentiDurumu = 'var' | 'yok' | 'yetkisiz';
+export interface VtSorguHam { sorgu: string; cagri: number; toplamMs: number; ortMs: number; satir: number }
+
+// pg_stat_statements bir PostgreSQL eklentisidir (kurulum/yavas-sorgular.md); kurulu değilse ya da okunamıyorsa durum söylenir, sayı uydurulmaz.
+// Sorgu metni, okuyan rol pg_read_all_stats üyesi değilse başkasının sorgusunda "<insufficient privilege>" gelir.
+export async function vtPahaliSorgular(db: Db, enCok: number): Promise<{ durum: VtEklentiDurumu; sorgular: VtSorguHam[] }> {
+  const var_ = await db.tek<{ var: boolean }>("SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements') AS var");
+  if (var_?.var !== true) return { durum: 'yok', sorgular: [] };
+  try {
+    const s = await db.sorgu<VtSorguHam>(
+      `SELECT query AS sorgu, calls::float8 AS cagri, total_exec_time AS "toplamMs", mean_exec_time AS "ortMs", rows::float8 AS satir
+         FROM pg_stat_statements WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
+        ORDER BY total_exec_time DESC LIMIT $1`, [enCok],
+    );
+    if (s.length > 0 && s.every((r) => r.sorgu === '<insufficient privilege>')) return { durum: 'yetkisiz', sorgular: [] };
+    return { durum: 'var', sorgular: s.filter((r) => r.sorgu !== '<insufficient privilege>') };
+  } catch {
+    // Eklenti kurulu ama bu veritabanında CREATE EXTENSION yapılmamış ya da görünüm okunamıyor.
+    return { durum: 'yok', sorgular: [] };
+  }
+}
+
+export interface VtTabloHam { ad: string; okunanSatir: number; tamTarama: number; dizinTaramasi: number | null; yazma: number; canliSatir: number }
+
+export function vtTabloKullanimi(db: Db, enCok: number): Promise<VtTabloHam[]> {
+  return db.sorgu<VtTabloHam>(
+    `SELECT relname AS ad, (coalesce(seq_tup_read, 0) + coalesce(idx_tup_fetch, 0))::float8 AS "okunanSatir", coalesce(seq_scan, 0)::float8 AS "tamTarama",
+            idx_scan::float8 AS "dizinTaramasi", (coalesce(n_tup_ins, 0) + coalesce(n_tup_upd, 0) + coalesce(n_tup_del, 0))::float8 AS yazma, n_live_tup::float8 AS "canliSatir"
+       FROM pg_stat_user_tables ORDER BY (coalesce(seq_tup_read, 0) + coalesce(idx_tup_fetch, 0)) DESC, relname LIMIT $1`, [enCok],
+  );
+}

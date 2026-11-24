@@ -6,10 +6,12 @@ import { isDurumlari } from '#cekirdek/zamanlayici.ts';
 import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
 import { varsayilanGunlukDizini } from '#cekirdek/gunluk-dosyasi.ts';
 import { bulunamadi } from '#cekirdek/hata.ts';
-import { ayrintiCevabi, disBaglantilarCevabi, gunlukCevabi, gunlukSorgusu, kapanmaAyrintisiSemasi, kapanmaParametresi, kapanmalarCevabi, metriklerCevabi, saatOzetiSemasi, saatlikCevabi, saatlikSorgusu, saglikCevabi, suAnCevabi, yukCevabi, yukSorgusu } from '#paylasilan/sozlesme/saglik.ts';
+import { ayrintiCevabi, disBaglantilarCevabi, ekranHatalariCevabi, ekranHatalariSorgusu, ekranHatasiGovdesi, ekranHatasiYazildiCevabi, veritabaniCevabi, gunlukCevabi, gunlukSorgusu, kapanmaAyrintisiSemasi, kapanmaParametresi, kapanmalarCevabi, metriklerCevabi, saatOzetiSemasi, saatlikCevabi, saatlikSorgusu, saglikCevabi, suAnCevabi, yukCevabi, yukSorgusu } from '#paylasilan/sozlesme/saglik.ts';
 import type { SaatOzeti } from '#paylasilan/sozlesme/saglik.ts';
 import { disBaglantilar, SUREC_DIS_BAGLANTI_KAYNAGI } from './dis-baglanti.ts';
 import type { DisBaglantiKaynagi } from './dis-baglanti.ts';
+import { ekranHatalariListesi, ekranHatasiKaydet } from './ekran-hatasi.ts';
+import { veritabaniTopla } from './veritabani.ts';
 import { gunlukOku } from './gunluk-okuyucu.ts';
 import { kapanmaAyrintisi, kapanmalarListesi } from './kapanma.ts';
 import { YOKLAMA_SURE_SINIRI_MS, saatlikBaslangic } from './kurallar.ts';
@@ -125,6 +127,37 @@ export function saglikUclari(yoklamaSureSiniriMs: number, kaynak: SaglikKaynagi 
       isle: async ({ db, sorgu }) => ({
         saatler: (await metrikSaatleriOku<SaatOzeti>(db, saatlikBaslangic(sorgu.aralik, new Date()))).filter((s) => saatOzetiSemasi.safeParse(s).success),
       }),
+    }),
+    // Ekran hataları (3668 C): her oturum kendi ekranının hatasını bildirir (kişi oturumdan alınır); okumak ayrıntı işlemini ister.
+    // İstemci aynı hatayı dakikada en çok bir kez yollar; sunucu kişi başına dakikada 20 istekle sınırlar ve aynı hatayı tek satırda sayar.
+    // Denetim gövdesizdir: kalıcı defter bu uçtan şişmez (3668 C, Risk S1).
+    uc({
+      yontem: 'POST',
+      yol: '/saglik/ekran-hatalari',
+      yetki: 'oturum',
+      sahiplik: 'yok',
+      denetim: 'govdesiz',
+      govde: ekranHatasiGovdesi,
+      cevap: ekranHatasiYazildiCevabi,
+      isle: async ({ db, kullanici, govde }) => {
+        await ekranHatasiKaydet(db, kullanici.id, govde);
+        return { kaydedildi: true as const };
+      },
+    }),
+    uc({
+      yontem: 'GET',
+      yol: '/saglik/ekran-hatalari',
+      yetki: 'saglik.ayrinti-oku',
+      sorgu: ekranHatalariSorgusu,
+      cevap: ekranHatalariCevabi,
+      isle: ({ db, sorgu }) => ekranHatalariListesi(db, sorgu.donem, new Date()),
+    }),
+    uc({
+      yontem: 'GET',
+      yol: '/saglik/veritabani',
+      yetki: 'saglik.ayrinti-oku',
+      cevap: veritabaniCevabi,
+      isle: ({ db }) => veritabaniTopla(db),
     }),
     // Kapanmalar (3668 A1): sunucu düşüp yeniden açılınca yazılan kayıtlar, en yeniden eskiye (90 gün).
     uc({

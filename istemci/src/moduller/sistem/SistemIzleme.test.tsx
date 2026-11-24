@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
-import type { DisBaglantilarCevabi, GunlukCevabi, KapanmaAyrintisi, KapanmalarCevabi, SuAnCevabi, YukCevabi } from '#paylasilan/sozlesme/saglik.ts';
+import type { DisBaglantilarCevabi, EkranHatalariCevabi, GunlukCevabi, KapanmaAyrintisi, KapanmalarCevabi, SuAnCevabi, VeritabaniCevabi, YukCevabi } from '#paylasilan/sozlesme/saglik.ts';
 import '../../ortak/rota/ust-eylemler.ts';
 import { ustEylemler } from './ust-eylem.tsx';
 
@@ -44,6 +44,11 @@ const DIS: DisBaglantilarCevabi = { baglantilar: [
   { anahtar: 'tezgah', durum: 'bilinmiyor', sonBasari: null, sonHata: null, bekleyen: null, yenidenDenenen: null },
 ] };
 
+let EKRAN: EkranHatalariCevabi = { donem: '7g', son24Saat: 2, toplam: 140, enCok: 100, sonBildirim: new Date(simdi - 120_000).toISOString(), satirlar: [
+  { id: 5, hata: 'TypeError: ad okunamadı', sayfa: '/uretim-emirleri', yigin: 'TypeError: ad okunamadı\n  at Satir (a.js:1)', surum: '0.9.14', kez: 23, kisiSayisi: 4, sonKisiId: 12, ilkAn: once(3), sonAn: new Date(simdi - 60_000).toISOString() },
+] };
+let veritabani: VeritabaniCevabi = { enCok: 20, eklenti: 'yok', sorgular: [], tablolar: [{ ad: 'plan_adimlari', okunanSatir: 5000, tamTarama: 1940, dizinTaramasi: 210, yazma: 4200, dizinEksikOlabilir: true }] };
+
 function sunucuKur(gunluk: (adres: string) => Response = () => json(200, { satirlar: [], sonraki: null, dosyalar: [], gunler: [] } satisfies GunlukCevabi)) {
   const istekler: string[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string) => {
@@ -57,6 +62,8 @@ function sunucuKur(gunluk: (adres: string) => Response = () => json(200, { satir
     if (yol === '/saglik/su-an') return json(200, SU_AN);
     if (yol.startsWith('/saglik/yuk')) return json(200, YUK);
     if (yol === '/saglik/dis-baglantilar') return json(200, DIS);
+    if (yol.startsWith('/saglik/ekran-hatalari')) return json(200, EKRAN);
+    if (yol === '/saglik/veritabani') return json(200, veritabani);
     const m = /^\/saglik\/kapanmalar\/(\d+)$/.exec(yol);
     if (m?.[1] !== undefined) {
       const k = KAPANMALAR.kapanmalar.find((x) => String(x.id) === m[1]);
@@ -121,12 +128,58 @@ describe('Sistem İzleme B', () => {
   });
 });
 
+describe('Sistem İzleme C', () => {
+  it('Ekran hataları: gruplanmış satır, ayrıntıda yığın; sekme rozeti son 24 saatin sayısı', async () => {
+    sunucuKur();
+    ac('/ayarlar?sistem=ekran&donem=7g');
+    const pencere = await screen.findByRole('dialog', { name: 'Sistem izleme' });
+    expect((await within(pencere).findAllByText('TypeError: ad okunamadı')).length).toBeGreaterThan(0);
+    expect(await within(pencere).findByRole('tab', { name: /Ekran hataları \(2\)/ })).toBeTruthy();
+    fireEvent.click(within(pencere).getAllByRole('button', { name: /^Ayrıntı: TypeError: ad okunamadı/ })[0] as HTMLElement);
+    expect(await within(pencere).findByText(/at Satir \(a\.js:1\)/)).toBeTruthy();
+    expect(within(pencere).getAllByText('0.9.14').length).toBeGreaterThan(1);
+  });
+
+  it('Ekran hataları: liste kesilmişse toplam yazılır; boş listede bildirim durumu yazılır', async () => {
+    const ilk = EKRAN;
+    sunucuKur();
+    ac('/ayarlar?sistem=ekran&donem=7g');
+    const pencere = await screen.findByRole('dialog', { name: 'Sistem izleme' });
+    expect(await within(pencere).findByText(/En son görülen 100 hata gösteriliyor; bu dönemde toplam 140 ayrı hata var/)).toBeTruthy();
+    cleanup();
+    EKRAN = { ...ilk, toplam: 0, sonBildirim: null, satirlar: [] };
+    sunucuKur();
+    ac('/ayarlar?sistem=ekran&donem=7g');
+    const bos = await screen.findByRole('dialog', { name: 'Sistem izleme' });
+    expect(await within(bos).findByText(/Bu dönemde ekran hatası yok/)).toBeTruthy();
+    expect(within(bos).getByText(/bugüne kadar hiç bildirim gelmedi/)).toBeTruthy();
+    EKRAN = ilk;
+  });
+
+  it('Veritabanı: eklenti yokken açıklama (sayı uydurulmaz), tabloda "Dizin eksik olabilir" işareti', async () => {
+    sunucuKur();
+    ac('/ayarlar?sistem=veritabani');
+    const pencere = await screen.findByRole('dialog', { name: 'Sistem izleme' });
+    expect(await within(pencere).findByText(/pg_stat_statements eklentisi kurulu değil/)).toBeTruthy();
+    expect(within(pencere).getAllByText(/ilk 20/, { selector: 'span' })).toHaveLength(2);
+    expect((await within(pencere).findAllByText(/Dizin eksik olabilir/)).length).toBeGreaterThan(0);
+  });
+
+  it('Veritabanı: eklenti varken pahalı sorgular listelenir', async () => {
+    veritabani = { enCok: 20, eklenti: 'var', sorgular: [{ sorgu: 'SELECT * FROM uretim_emirleri WHERE durum = $1', cagri: 3120, toplamMs: 436_000, ortMs: 140, satir: 93_600 }], tablolar: [] };
+    sunucuKur();
+    ac('/ayarlar?sistem=veritabani');
+    const pencere = await screen.findByRole('dialog', { name: 'Sistem izleme' });
+    expect((await within(pencere).findAllByText(/SELECT \* FROM uretim_emirleri/)).length).toBeGreaterThan(0);
+  });
+});
+
 describe('Sistem İzleme', () => {
   it('adresteki ?sistem=kapanmalar&kayit=12 pencereyi o kayda açar; üç sekme, rozet yalnız plansız kapanmayı sayar', async () => {
     sunucuKur();
     ac('/ayarlar?sistem=kapanmalar&kayit=12');
     const pencere = await screen.findByRole('dialog', { name: 'Sistem izleme' });
-    expect(within(pencere).getAllByRole('tab').map((t) => t.getAttribute('data-sekme'))).toEqual(['ozet', 'suan', 'kapanmalar', 'gunluk', 'yuk', 'dis']);
+    expect(within(pencere).getAllByRole('tab').map((t) => t.getAttribute('data-sekme'))).toEqual(['ozet', 'suan', 'kapanmalar', 'gunluk', 'yuk', 'dis', 'ekran', 'veritabani']);
     expect(await within(pencere).findByRole('tab', { name: /Kapanmalar \(1\)/ })).toBeTruthy();
     expect(await within(pencere).findByText(/Sunucu belleği doldurdu\./)).toBeTruthy();
     expect(within(pencere).getByText(/Çıkış kodu 134; tanı raporu bellek taşmasını gösteriyor/)).toBeTruthy();
