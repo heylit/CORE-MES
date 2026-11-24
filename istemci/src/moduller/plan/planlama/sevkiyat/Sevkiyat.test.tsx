@@ -214,7 +214,7 @@ describe('P6 Sevk takvimi', () => {
     expect(within(liste).getByText('03.03 Sal 02:00')).toBeTruthy();
     // Plan terminden sonra ve planın aşımı varsa "Aşıyor" işareti ve fark satırda görünür.
     expect(within(liste).getByText(/Aşıyor \+6 sa/)).toBeTruthy();
-    expect(within(liste).getByText('+6 sa')).toBeTruthy();
+    expect(within(liste).getByText('6 sa geç')).toBeTruthy();
     // Takvimde sipariş olmayan ve plandan sonraki günler ayrı söylenir.
     expect(within(izgara).getAllByText('plan yok').length).toBeGreaterThan(0);
     fireEvent.click(within(liste).getByRole('button', { name: 'Bitecek' }));

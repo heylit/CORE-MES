@@ -6,7 +6,7 @@ import {
   GECIKMIS, MATRIS_GUN, anahtarDegeri, bitissizSayisi, gecikmisSayisi, gunListesi, matris, takvimGunleri,
   type DagilimAnahtari, type GunSatiri, type GunSecimi, type GunSekmesi,
 } from './dagilim.ts';
-import { farkYaz, gunYaz, saatMetni, sayiYaz, tarihSaatYaz, type Olcu, type SevkSatiri } from './kurallar.ts';
+import { gunYaz, saatMetni, sayiYaz, tarihSaatYaz, type Olcu, type SevkSatiri } from './kurallar.ts';
 
 // 3667: Sevk takvimi "Dağılım" görünümü. İki biçim: Takvim (ay ızgarası; günde bitecek, aşan, termin) ve Matris (müşteri, ürün ya da yer × gün).
 // Gün ya da matris hücresi seçilince altta siparişler açılır. İki ayrı küme: Gecikmiş (plan bitişi bugünden önce, sevk yok) ve Aşan (planın bitişi termini aşıyor).
@@ -232,6 +232,12 @@ export function SevkDagilimi({ satirlar, taban, simdi, emirNo, dar, gorunum, gos
   );
 }
 
+// Fark: artı geç, eksi erken; yuvarlandığında sıfır olan "0 sa" yazar (eksi sıfır görünmez).
+const farkMetni = (f: number): string => {
+  const a = Math.round(Math.abs(f) * 10) / 10;
+  return a === 0 ? '0 sa' : `${saatMetni(a)} ${f > 0 ? 'geç' : 'erken'}`;
+};
+
 function GunSatiriGorunumu({ s, taban, bugunNo, emirNo, goster }: { s: GunSatiri; taban: number; bugunNo: number; emirNo: EmirNo; goster: (id: string) => void }) {
   const { x } = s;
   const gecikmis = x.C !== null && Math.floor(x.C / 24) < bugunNo;
@@ -241,7 +247,7 @@ function GunSatiriGorunumu({ s, taban, bugunNo, emirNo, goster }: { s: GunSatiri
     <li data-ton={s.asan || gecikmis ? 'hata' : undefined}>
       <b className="mono">{emirNo(x.id)}</b>
       <span>{`${x.ad ?? '—'} · ${anahtarDegeri(x, 'musteri')} · ${x.adet === null ? '—' : sayiYaz(x.adet)} adet`}</span>
-      <span className="tc-pyv-d-tarihler"><span>Termin <b className="mono">{tarihSaatYaz(taban, x.termin)}</b></span><span>Plan <b className="mono">{tarihSaatYaz(taban, x.C)}</b></span>{fark !== null && <span>Fark <b className="mono">{fark === 0 ? '0 sa' : farkYaz(fark)}</b></span>}</span>
+      <span className="tc-pyv-d-tarihler"><span>Termin <b className="mono">{tarihSaatYaz(taban, x.termin)}</b></span><span>Plan <b className="mono">{tarihSaatYaz(taban, x.C)}</b></span>{fark !== null && <span>Fark <b className="mono">{farkMetni(fark)}</b></span>}</span>
       {durum !== '' && <span data-ton="hata" className="tc-pyv-d-durum"><Simge ad="alert" boyut="k" />{durum}</span>}
       <button type="button" className="tc-pyv-l-temizle tc-pyv-d-git" onClick={() => { goster(x.id); }}><Simge ad="target" boyut="k" />Kokpit'te gör</button>
     </li>
