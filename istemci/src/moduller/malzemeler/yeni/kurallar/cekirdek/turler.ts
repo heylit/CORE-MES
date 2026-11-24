@@ -334,6 +334,8 @@ export function gFlat(d: TurTaslagi): DuzSatir[] {
     bomSatirlari(d).forEach(r => P('Reçete', (r.it ? r.it.com.kod + ' ' : '') + (r.it ? r.it.com.ad : r.ad || '—'), `${fmt(_gnum(r.miktar) || 0)} ${r.birim || ''}${_gnum(r.fire) ? ` (+%${fmt(_gnum(r.fire))} fire)` : ''}`));
     rota(d).forEach(r => P('Operasyonlar', `${r.no}`, `${r.kod ? r.kod + ' ' : ''}${r.ad}${r.grupAdi ? ' (' + r.grupAdi + ')' : ''}`));
     const cm = d.com || {};
+    if (cm.eskiKod?.trim())
+        P('Ticari', 'ERP kodu', cm.eskiKod.trim());
     P('Ticari', 'Stok birimi', finalBirim(d));
     const gg: TurDegerleri = d.g || {};
     ([['tedarik', 'Tedarik tipi'], ...(d.tur === 'sarf' ? [['marka', 'Marka']] satisfies [string, string][] : []), ['urunKodu', 'Üretici ürün kodu'], ['gtin', 'Barkod (GTIN)'], ['gtip', 'GTİP'], ['mensei', 'Menşei'], ['depoYeri', 'Depo yeri'], ['siparisNoktasi', 'Sipariş noktası']] satisfies [string, string][]).forEach(([kk, ad]) => { if (gg[kk])
