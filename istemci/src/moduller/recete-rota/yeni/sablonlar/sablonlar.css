@@ -21,6 +21,10 @@
 }
 .tc-rs-kart { inline-size: var(--menu-sabit); cursor: default; }
 .tc-rs-kart .tc-rr1-hk-ad, .tc-rs-kart .tc-rr1-hk-ist, .tc-rs-kart .tc-rr1-hk-sure { white-space: normal; overflow-wrap: anywhere; }
+.tc-rs-hat .tc-rs-kart:hover { border-color: var(--edge); }
+.tc-rs-gizli { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.tc-rs-sayim { margin: 0; font-size: var(--yazi-xs); color: var(--muted); }
+.tc-rs-sayim:empty { display: none; }
 .tc-rs-kart-dugme { display: flex; gap: var(--b-1); padding: var(--b-1) var(--b-2) 0; }
 .tc-rs-opekle-ad { font-family: inherit; color: var(--muted); }
 .tc-rs-ad { font-weight: 700; overflow-wrap: anywhere; }

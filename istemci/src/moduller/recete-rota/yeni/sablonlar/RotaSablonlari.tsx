@@ -10,7 +10,7 @@ import { useRotaSablonKomutu, useRotaSablonlari, type RotaSablonKomutu } from '.
 // Rota şablonları (3273 a): şablon kartları ve düzenleme paneli (ad, öneri sözcükleri, yatay adım akışı, operasyon ekle). Kullanılmış şablon
 // silinmez, kullanımdan kalkar (Risk K1); varsayılan şablon kullanımdan kalkmaz (K2). Değişiklik yalnız sonra açılan rotalara gelir.
 
-interface DuzenAdimi { anahtar: string; operasyonTipiId: number; ad: string }
+interface DuzenAdimi { anahtar: string; operasyonTipiId: number; ad: string; kod: string }
 type OpBul = (id: string) => Operasyon | undefined;
 type IstBul = (id: string | null) => Istasyon | undefined;
 type Duzenlenen = { tur: 'yeni' } | { tur: 'var'; id: number };
@@ -20,14 +20,14 @@ let sayac = 0;
 const anahtarVer = (): string => { sayac += 1; return `a${String(sayac)}`; };
 const adimGovdesi = (l: readonly DuzenAdimi[]) => l.map((x) => ({ operasyonTipiId: x.operasyonTipiId, ad: x.ad }));
 const sablonAdimlari = (s: RotaSablonu): DuzenAdimi[] =>
-  [...s.adimlar].sort((a, b) => a.sira - b.sira).map((x) => ({ anahtar: anahtarVer(), operasyonTipiId: x.operasyonTipi.id, ad: x.ad }));
+  [...s.adimlar].sort((a, b) => a.sira - b.sira).map((x) => ({ anahtar: anahtarVer(), operasyonTipiId: x.operasyonTipi.id, ad: x.ad, kod: x.operasyonTipi.kod }));
 
 // Hat kartı: istasyon ve süre katalogdandır (şablon bunları saklamaz); katalogda olmayan tip kodu ve adıyla durur.
 const hatAdimi = (anahtar: string, opId: number, ad: string, kodYedek: string, opBul: OpBul, istBul: IstBul): HatAdimi => {
   const op = opBul(String(opId));
   const ist = istBul(op?.stationId ?? null);
   return {
-    anahtar, kod: op?.abbr ?? op?.code ?? kodYedek, renk: renkSinifi(op?.stationId ?? null), ad, operasyon: op?.name ?? ad,
+    anahtar, kod: op?.abbr ?? kodYedek, renk: renkSinifi(op?.stationId ?? null), ad, operasyon: op?.name ?? ad,
     istasyon: ist ? `${ist.code} ${ist.name}` : null, sure: op ? katalogSuresi(op) : 'katalogda yok',
   };
 };
@@ -62,7 +62,7 @@ function DuzenlemePaneli({ s, opler, istasyonlar, kapat, sec }: {
     setAdimlar(l);
   };
   const ekle = (o: Operasyon) => {
-    setAdimlar([...adimlar, { anahtar: anahtarVer(), operasyonTipiId: Number(o.id), ad: o.name }]);
+    setAdimlar([...adimlar, { anahtar: anahtarVer(), operasyonTipiId: Number(o.id), ad: o.name, kod: o.code }]);
   };
   const govde = { ad: ad.trim(), aciklama: aciklama.trim() || null, oneriSozcukleri: sozcukListesi(sozcuk), adimlar: adimGovdesi(adimlar) };
   const yeniId = (c: unknown): number | null => (c && typeof c === 'object' && 'sablon' in c ? (c as { sablon: { id: number } }).sablon.id : null);
@@ -85,7 +85,7 @@ function DuzenlemePaneli({ s, opler, istasyonlar, kapat, sec }: {
       <Girdi etiket="Açıklama" value={aciklama} maxLength={500} onChange={(e) => { setAciklama(e.target.value); }} />
       <h4>Adımlar</h4>
       {adimlar.length === 0 ? <p className="tc-rs-ipucu">Henüz adım yok; aşağıdan operasyon ekle.</p> : (
-        <SablonHatti etiket="Adım akışı" adimlar={adimlar.map((x) => hatAdimi(x.anahtar, x.operasyonTipiId, x.ad, '???', opBul, istBul))}
+        <SablonHatti etiket="Adım akışı" adimlar={adimlar.map((x) => hatAdimi(x.anahtar, x.operasyonTipiId, x.ad, x.kod, opBul, istBul))}
           duzen={{ tasi, kaldir: (i) => { setAdimlar(adimlar.filter((_, k) => k !== i)); } }} />
       )}
       <h4>Operasyon ekle</h4>
@@ -148,8 +148,10 @@ export function RotaSablonlari(o: EkranOzellikleri) {
     <div className="tc-rs" data-parca="R1">
       <div className="tc-rs-ust">
         <Girdi etiket="Ara" placeholder="ad, öneri sözcüğü, operasyon ya da istasyon" value={ara} onChange={(e) => { setAra(e.target.value); }} />
+        {ara !== '' && <Dugme tur="ikincil" simge="x" onClick={() => { setAra(''); }}>Aramayı temizle</Dugme>}
         {o.yetki.sablonYaz && <Dugme tur="birincil" simge="plus" onClick={() => { setDuzenlenen({ tur: 'yeni' }); }}>Yeni şablon</Dugme>}
       </div>
+      <p className="tc-rs-sayim" role="status" aria-live="polite">{ara === '' ? '' : `${String(liste.length)} şablon, ${String(sorgu.data.length)} içinden`}</p>
       {!o.yetki.sablonYaz && <p className="tc-rs-ipucu">Şablonları düzenleme yetkin yok; liste salt okunur.</p>}
       {panelAcik && (
         <DuzenlemePaneli key={secili ? `${String(secili.id)}-${String(secili.surum)}` : 'yeni'} s={secili} opler={opler} istasyonlar={istasyonlar}
@@ -182,7 +184,9 @@ export function RotaSablonlari(o: EkranOzellikleri) {
               </li>
             ))}
           </ul>
-          {liste.length === 0 && <p className="tc-rs-ipucu">Aramaya uyan şablon yok.</p>}
+          {liste.length === 0 && (
+            <p className="tc-rs-ipucu">Aramaya uyan şablon yok. <Dugme tur="ikincil" simge="x" onClick={() => { setAra(''); }}>Aramayı temizle</Dugme></p>
+          )}
         </>
       )}
     </div>

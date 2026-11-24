@@ -87,4 +87,23 @@ describe('3273 a: Rota şablonları sayfası', () => {
     await waitFor(() => { expect(within(liste).queryByText('Çok kullanılan')).toBeNull(); }, BEKLE);
     expect(within(liste).getByText('Mil hattı')).toBeTruthy();
   });
+
+  it('kartta uydurma OP numarası yok; arama sayısı duyurulur ve temizlenir; katalogda olmayan tipin kodu panelde de görünür', async () => {
+    const eksik = sablon(9, 'Eski tip', { adimlar: [{ sira: 1, operasyonTipi: { id: 99, kod: 'ESK', ad: 'Eski', aktif: false }, ad: 'Eski adım' }] });
+    sunucuKur(YONETICI, { yazmalar: { 'GET /rota/sablonlar': () => json(200, { sablonlar: [...SABLONLAR, eksik] }) } });
+    rrAc('/recete-rota/rota-sablonlari');
+    const liste = await screen.findByRole('list', { name: 'Rota şablonları' }, BEKLE);
+    expect(within(liste).queryByText(/^OP \d+$/)).toBeNull();
+    expect(within(liste).getAllByText('1/1').length).toBeGreaterThan(0);
+    fireEvent.change(screen.getByLabelText('Ara'), { target: { value: 'mil' } });
+    await waitFor(() => { expect(screen.getByText('1 şablon, 4 içinden')).toBeTruthy(); }, BEKLE);
+    fireEvent.click(screen.getByRole('button', { name: 'Aramayı temizle' }));
+    await waitFor(() => { expect(within(liste).getByText('Çok kullanılan')).toBeTruthy(); }, BEKLE);
+    fireEvent.click(screen.getByRole('button', { name: 'Düzenle: Eski tip' }));
+    const panel = await screen.findByRole('region', { name: 'Eski tip şablonunu düzenle' }, BEKLE);
+    expect(within(panel).getByText('ESK')).toBeTruthy();
+    expect(within(panel).queryByText('???')).toBeNull();
+    fireEvent.click(within(panel).getByRole('button', { name: 'Tornalama ekle' }));
+    expect(within(panel).getByRole('status').textContent).toMatch(/eklendi, 2\. sırada/);
+  });
 });
