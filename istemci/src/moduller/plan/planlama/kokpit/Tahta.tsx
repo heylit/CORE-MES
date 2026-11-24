@@ -3,6 +3,8 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { Dugme, Simge } from '../../../../ortak/arayuz/index.ts';
 import { hizaCizgileri, hizaNoktalari, hizalaYakala, type HizaCizgisi, type Yakalanan } from './hiza.ts';
 import { bolunemezNedeni } from './ElleBol.tsx';
+import { AdimPanosu } from './AdimPanosu.tsx';
+import { tahminCumlesi, tasimaTahmini, type AdimSayimi } from './pano.ts';
 import { emirKuyrugu, emirNoParcalari } from '../ortak/emir-no.ts';
 import type { Derleme } from '../motor/kurallar.ts';
 import type { IsTasiOnizlemesi } from '../motor/atolye/gonder.ts';
@@ -108,6 +110,8 @@ export interface TahtaOzellikleri {
   // Dilim 3c (G): Tezgâh gözünde Ay ve Hafta'da satır tezgâh x gün doluluk hücresidir; basınca o gün yan panelde açılır (el: odağın döneceği hücre).
   hucreAc?: ((tezgah: string, a: number, el: HTMLElement) => void) | null;
   hucreSecili?: { tezgah: string; a: number } | null;
+  // 3663: adımların sağlam adedi (sunucu durum okumasından); verilmezse panoda ilerleme plana göre yazılır.
+  adimSayim?: Readonly<Record<string, AdimSayimi>> | null;
 }
 export type OkKipi = 'is' | 'siparis' | 'yok';
 // Odaklanan saat görünümün sol kenarından bu kadar içeride durur (px).
@@ -221,6 +225,9 @@ export function Tahta(o: TahtaOzellikleri) {
   const [oklar, setOklar] = useState<Ok[]>([]);
   const [ustteki, setUstteki] = useState<string | null>(null);
   const [etki, setEtki] = useState<Etki | null>(null);
+  // 3663: kişinin kapattığı seçili adım panosu (hangi adım); başka adım seçilince yeniden açılır.
+  const [panoKapali, setPanoKapali] = useState<string | null>(null);
+  useEffect(() => { if (secIs === null) setPanoKapali(null); }, [secIs]);
   // 3531 b: bırakılan iş hemen taşınmaz; hayalet, itilen işler ve neden cümlesi yerinde durur, Uygula yazar, Vazgeç (ya da Esc) bırakır.
   const [onay, setOnay] = useState(false);
   // Fareyle basılan iş: kıpırdayınca sürükleme başlar; sürükleyerek tutulanı bırakmak imleci kaldırmaktır.
@@ -553,6 +560,21 @@ export function Tahta(o: TahtaOzellikleri) {
     el.toggleAttribute('data-asagi', asagi);
     el.style.setProperty('--y', `${String(Math.round(asagi ? alt : ust))}px`);
     el.style.setProperty('--ok', `${String(Math.round(Math.max(pay, Math.min(en - pay, x - sol))))}px`);
+  };
+  // 3663: seçili adım panosu çubuğun sağında durur (sığmazsa solunda) ve görünen alandan taşmaz.
+  const panoYerlestir = (el: HTMLElement, isId: string): void => {
+    const k = kap.current, ik = ic.current?.getBoundingClientRect(), cubuk = k?.querySelector<HTMLElement>(`[data-is="${tirnakIci(isId)}"]`);
+    if (!k || !ik || !cubuk) { el.hidden = true; return; }
+    el.hidden = false;
+    const b = cubuk.getBoundingClientRect(), pay = 8, en = el.offsetWidth, boy = el.offsetHeight;
+    const sol0 = k.scrollLeft + pay, sag0 = k.scrollLeft + k.clientWidth - pay;
+    let x = b.right - ik.left + pay;
+    if (x + en > sag0) x = b.left - ik.left - en - pay;
+    x = Math.max(sol0, Math.min(x, sag0 - en));
+    const eksen = k.querySelector<HTMLElement>('.tc-pyq-eksen')?.offsetHeight ?? 0;
+    const y = Math.max(k.scrollTop + eksen + pay, Math.min(b.top - ik.top, k.scrollTop + k.clientHeight - pay - boy));
+    el.style.setProperty('--x', `${String(Math.round(x))}px`);
+    el.style.setProperty('--y', `${String(Math.round(y))}px`);
   };
   const gelenYazisi = (l: readonly Degisiklik[]): string => l.map((d) => `${BASLIK_ADI[d.baslik]}: ${d.ne}`).join(' · ');
 
@@ -1006,12 +1028,28 @@ export function Tahta(o: TahtaOzellikleri) {
       default: return null;
     }
   };
+  // 3663 D1: açık emrin adım satırına basınca adım seçilir ve çubuğu görünüme gelir; seçili adıma yeniden basmak bırakır. Planda yeri olmayan adımın çubuğu yoktur, satır basılmaz.
+  const adimSatiriSec = (r: Satir): void => {
+    const x = r.isler[0], e = r.emirKaydi;
+    if (tasinan || onay || !x || !e) return;
+    if (secIs === x.id) { sec(null, null); return; }
+    sec(e.id, x.id);
+    const cubuk = kap.current?.querySelector<HTMLElement>(`[data-is="${tirnakIci(x.id)}"]`);
+    if (cubuk && typeof cubuk.scrollIntoView === 'function') cubuk.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+  };
   const tabloSatiri = (r: Satir): ReactNode => {
     if (!tablo) return null;
     const emirSatiri = goz === 'S' && r.emirKaydi !== undefined && !r.adim && !r.ara && !r.notlar;
+    const adimSatiri = goz === 'S' && r.adim === true && r.emirKaydi !== undefined && r.isler.length > 0 && !r.ara && !r.notlar;
+    const adimSecili = adimSatiri && secIs === r.isler[0]!.id;
     return (
       <>
-        <div className="tc-pyq-tablo-satir" role="row" data-secilebilir={emirSatiri ? '' : undefined} onClick={emirSatiri ? (ev) => { if (!(ev.target as Element).closest('button')) satirSec(r.emirKaydi!); } : undefined}>
+        <div
+          className="tc-pyq-tablo-satir" role="row" data-secilebilir={emirSatiri || adimSatiri ? '' : undefined} data-adim-satiri={adimSatiri ? r.isler[0]!.id : undefined}
+          aria-selected={adimSatiri ? adimSecili : undefined} tabIndex={adimSatiri ? 0 : undefined} title={adimSatiri ? 'Adımı Gantt\'ta göster' : undefined}
+          onClick={emirSatiri ? (ev) => { if (!(ev.target as Element).closest('button')) satirSec(r.emirKaydi!); } : adimSatiri ? (ev) => { if (!(ev.target as Element).closest('button')) adimSatiriSec(r); } : undefined}
+          onKeyDown={adimSatiri ? (ev) => { if (ev.target === ev.currentTarget && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); adimSatiriSec(r); } } : undefined}
+        >
           {r.notlar ? null : kolonlar.map((k) => (
             <div key={k.id} className="tc-pyq-h" role={r.ara ? 'columnheader' : 'cell'} data-sutun={k.id} data-sayi={k.sayi ? '' : undefined}>
               {r.ara ? SUTUN_ADI[k.id as SutunKimligi].adimAdi : goz === 'T' ? tezgahHucresi(r, k.id) : r.siparis ? siparisHucresi(r, k.id as SutunKimligi) : r.adim ? adimHucresi(r, k.id as SutunKimligi) : r.emirKaydi ? emirHucresi(r.emirKaydi, r, k.id as SutunKimligi) : null}
@@ -1168,6 +1206,11 @@ export function Tahta(o: TahtaOzellikleri) {
             </div>
           );
         })()}
+        {(() => {
+          const x = secIs !== null && !tasinan && !menu && !hucreli ? m.isler[secIs] : undefined, e = x ? emir.get(x.job) : undefined;
+          if (!x || !e || panoKapali === x.id) return null;
+          return <AdimPanosu kip="secili" m={m} e={e} x={x} zaman={zaman} sayim={o.adimSayim?.[x.id]} kapat={() => { setPanoKapali(x.id); }} yerlestir={(el) => { if (el) panoYerlestir(el, x.id); }} />;
+        })()}
         {menu && (
           <div className="tc-pyq-menu" role="menu" aria-label={emir.get(menu.fis ? menu.id : m.isler[menu.id]?.job ?? '')?.no ?? 'İş'} ref={(el) => { if (!el) return; const k = kap.current; const alt = k ? k.scrollTop + k.clientHeight : Infinity; const y = menu.y + el.offsetHeight > alt && k ? Math.max(k.scrollTop, menu.y - el.offsetHeight) : menu.y; el.style.setProperty('--x', `${String(menu.x)}px`); el.style.setProperty('--y', `${String(y)}px`); el.querySelector('button')?.focus(); }}>
             <button type="button" role="menuitem" onClick={() => { const x = m.isler[menu.id]; setMenu(null); if (menu.fis) sec(menu.id, null); else if (x) sec(x.job, x.id); }}><Simge ad="list" boyut="k" /><span>Ayrıntı</span></button>
@@ -1200,6 +1243,16 @@ export function Tahta(o: TahtaOzellikleri) {
         )}
         </>
       )}
+      {tasinan && !onay && tasinan.fis === undefined && hedef && (() => {
+        const x = m.isler[tasinan.id], e = x ? emir.get(x.job) : undefined;
+        if (!x || !e) return null;
+        const tezgah = goz === 'T' ? hedef.satir : x.m;
+        const tahmin = tasimaTahmini(m, e, x, tezgah, hedef.S, (t) => zaman(t).slice(-5));
+        const sunucu = etkiNe !== null && etkiNe.gecerli;
+        const etki = sunucu ? etkiCumlesi(etkiNe, zaman, m.simdi).replace(/^ · /, '') : tahminCumlesi(tahmin);
+        const neden = !hedef.gecerli ? 'Bu tezgâh adımın uygun tezgâhı değil.' : etkiNe?.gecerli === false ? etkiNe.ileti ?? 'Sunucu bu yere bırakmayı kabul etmez.' : null;
+        return createPortal(<AdimPanosu kip="surukle" m={m} e={e} x={x} zaman={zaman} sayim={o.adimSayim?.[x.id]} hedef={{ tezgah, S: hedef.S, tahmin, etki, dogrulandi: sunucu, neden }} />, document.body);
+      })()}
       {tasinan && !onay && <p className="tc-pyq-ipucu" role="status">{tasinan.suruk ? 'Bırakın: iş taşınır' : 'Bırakmak için tıklayın ya da Space'}{grupKaydir && coklu.size > 1 && coklu.has(tasinan.id) ? ` · seçili ${String(coklu.size)} iş aynı süre kayar` : ''}{etkiNe?.gecerli === false && etkiNe.ileti ? ` · ${etkiNe.ileti}` : ''}{etkiNe?.gecerli !== false ? etkiCumlesi(etkiNe, zaman, m.simdi) : ''}{hiza.filter((c) => c.hizali).map((c) => ` · Hizalı: ${c.ad} ${zaman(c.saat).slice(-5)}`).join('')} · Esc vazgeçer</p>}
       {once && <p className="tc-pyq-ipucu" role="status">Onaylı plan gösteriliyor · işlerin üzerinde sizin değişikliğinizle ne kadar kaydığı yazar</p>}
     </div>

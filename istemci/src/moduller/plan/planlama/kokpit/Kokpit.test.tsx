@@ -1183,6 +1183,47 @@ describe('Kokpit', () => {
     expect(satirlar().map((r) => r[0])).toEqual(['2>not']);
   });
 
+  // 3663 D1: Emirler ağacında açık emrin planda yeri olan adım satırı basılır: adım seçilir, aynı satıra yeniden basınca bırakılır. Planda yeri olmayan adım satırı basılmaz.
+  it('Emirler ağacında adım satırına basınca adım seçilir, yeniden basınca bırakılır; Enter da seçer', () => {
+    render(<MemoryRouter initialEntries={['/']}><BildirimSaglayici><Yuvali><SecimliKokpit /></Yuvali></BildirimSaglayici></MemoryRouter>);
+    const bolum = screen.getByRole('region', { name: 'Emirler' });
+    fireEvent.click(bolum.querySelector<HTMLElement>('button[data-agac="2"]')!);
+    const satirlar = (): HTMLElement[] => [...bolum.querySelectorAll<HTMLElement>('[data-satir^="2>"] [data-adim-satiri]')];
+    expect(satirlar().length).toBeGreaterThan(0);
+    const ilk = satirlar()[0]!, id = ilk.getAttribute('data-adim-satiri')!;
+    expect(ilk.getAttribute('aria-selected')).toBe('false');
+    fireEvent.click(ilk);
+    expect(satirlar()[0]!.getAttribute('aria-selected')).toBe('true');
+    expect(bolum.querySelector(`[data-is="${id}"]`)?.hasAttribute('data-secili') || bolum.querySelector(`[data-is="${id}"]`)?.getAttribute('aria-pressed') === 'true').toBe(true);
+    fireEvent.click(satirlar()[0]!);
+    expect(satirlar()[0]!.getAttribute('aria-selected')).toBe('false');
+    fireEvent.keyDown(satirlar()[0]!, { key: 'Enter' });
+    expect(satirlar()[0]!.getAttribute('aria-selected')).toBe('true');
+  });
+
+  // 3663: seçili adımın panosu: zaman, önce/sonra, ilerleme, tezgâh; yalnız bilgidir (düğmesi kapatmadır). Kapatılınca aynı adımda yeniden açılmaz, seçim kalkınca sıfırlanır.
+  it('seçili adımın panosu bilgi yazar, kapatılır ve seçim kalkınca yeniden açılır', () => {
+    render(<MemoryRouter initialEntries={['/']}><BildirimSaglayici><Yuvali><SecimliKokpit /></Yuvali></BildirimSaglayici></MemoryRouter>);
+    const bolum = screen.getByRole('region', { name: 'Emirler' });
+    expect(document.querySelector('.tc-pyq-pano[data-kip="secili"]')).toBeNull();
+    fireEvent.click(bolum.querySelector<HTMLElement>('button[data-agac="2"]')!);
+    const satir = (): HTMLElement => bolum.querySelector<HTMLElement>('[data-satir^="2>"] [data-adim-satiri]')!;
+    fireEvent.click(satir());
+    const pano = document.querySelector<HTMLElement>('.tc-pyq-pano[data-kip="secili"]')!;
+    expect(pano).not.toBeNull();
+    expect([...pano.querySelectorAll('dt')].map((d) => d.textContent)).toEqual(['Zaman', 'Etki', 'İlerleme', 'Tezgâh']);
+    expect(pano.querySelector('[data-pano="ilerleme"] dd')?.textContent).toMatch(/Başlamadı|Sürüyor|Bitti/);
+    expect(pano.querySelectorAll('button').length).toBe(1);
+    // Telefon sayfası aynı bilgiyi taşır (görünürlüğü CSS'tir: 768 altında).
+    expect(document.querySelector('.tc-pyq-pano[data-kip="sayfa"] [data-pano="ilerleme"]')).not.toBeNull();
+    fireEvent.click(pano.querySelector<HTMLElement>('button[aria-label="Adım bilgisini kapat"]')!);
+    expect(document.querySelector('.tc-pyq-pano[data-kip="secili"]')).toBeNull();
+    fireEvent.click(satir());
+    expect(document.querySelector('.tc-pyq-pano[data-kip="secili"]')).toBeNull();
+    fireEvent.click(satir());
+    expect(document.querySelector('.tc-pyq-pano[data-kip="secili"]')).not.toBeNull();
+  });
+
   // 3527: duruşların okunduğu pencerenin sonu çalışmayla gelir (sunucunun okuması); Kokpit onu kendi saatinden hesaplamaz.
   it('bitişi çalışmadaki duruş okuma gününden sonra olan emrin notu Emirler ağacında ve Siparişler görünümünde yazar; gün ilerideyse ya da yoksa yazmaz', () => {
     const NOT = 'Bitiş bir yıldan ileride; o tarihlerdeki planlı duruşlar hesaba katılmadı, bitiş daha geç olabilir.';
@@ -1476,9 +1517,15 @@ describe('Kokpit', () => {
     expect(is(komsu!).style.getPropertyValue('--x')).not.toBe(x0);
     expect(is(komsu!).textContent).toContain('gecikir · +2 sa');
     expect(is(komsu!).hasAttribute('data-gecikir')).toBe(true);
-    expect(screen.getByText(/termini .* gecikir/)).toBeTruthy();
-    expect(screen.getByText(/aynı tezgâhta 1 iş arkaya itilir/)).toBeTruthy();
+    const ipucu = document.querySelector('.tc-pyq-ipucu')!;
+    expect(ipucu.textContent).toMatch(/termini .* gecikir/);
+    expect(ipucu.textContent).toMatch(/aynı tezgâhta 1 iş arkaya itilir/);
+    // 3663: aynı cümle sürükleme panosunda da yazar; sunucu cevabı geldiği için "sunucu doğruladı" etiketi.
+    const pano = document.querySelector<HTMLElement>('.tc-pyq-pano[data-kip="surukle"]')!;
+    expect(pano.getAttribute('aria-hidden')).toBe('true');
+    expect(pano.querySelector('[data-pano="etki"]')?.textContent).toMatch(/aynı tezgâhta 1 iş arkaya itilir.*termini .* gecikir.*sunucu doğruladı/);
     fireEvent.keyDown(document, { key: 'Escape' });
+    expect(document.querySelector('.tc-pyq-pano[data-kip="surukle"]')).toBeNull();
     await waitFor(() => { expect(is(komsu!).style.getPropertyValue('--x')).toBe(x0); });
     expect(is(komsu!).hasAttribute('data-kaydi')).toBe(false);
     expect(is(komsu!).hasAttribute('data-gecikir')).toBe(false);
