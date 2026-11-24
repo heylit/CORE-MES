@@ -784,7 +784,7 @@ describe('Excel ile rota adımları (2627)', () => {
   test('yeni adım tip ve ad ister; gerisi varsayılandan', () => {
     assert.equal(excelYeniAdimi({ ad: 'Tipsiz' }), null);
     const y = excelYeniAdimi({ operasyonTipiId: 3, ad: 'Ek' });
-    assert.deepEqual([y?.opNo, y?.kaynak, y?.bagimlilik, y?.makineKullanimi, y?.ilkParca, y?.ayar], [null, null, 'bekleyen', 'tek', 'her_kurulum', true]);
+    assert.deepEqual([y?.opNo, y?.kaynak, y?.bagimlilik, y?.makineKullanimi, y?.ilkParca, y?.ayar], [null, null, 'bekleyen', 'tek', 'yok', true]);
   });
   test('dayanak: revizyon ve sürüm aynıysa tutar; revizyonsuz ürün yalnız dayanaksız dosyayla', () => {
     assert.equal(excelDayanagiTutar({ revizyonId: 7, surum: 3 }, { id: 7, surum: 3 }), true);

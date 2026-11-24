@@ -243,7 +243,7 @@ export async function kaydet(db: Db, kullanici: Kullanici, id: number, govde: Ka
   }
   // Seçimi göndermeyen (alanı bilmeyen) ekran adımın kayıtlı seçimini silmesin; yeni adım "her kurulumda" başlar.
   const eskiSecim = new Map(mevcut.adimlar.map((m) => [m.opNo, m.ilkParca]));
-  const secimli = adimlar.map((a) => ({ ...a, ilkParca: a.ilkParca ?? (a.opNo === null ? undefined : eskiSecim.get(a.opNo)) ?? ('her_kurulum' as const) }));
+  const secimli = adimlar.map((a) => ({ ...a, ilkParca: a.ilkParca ?? (a.opNo === null ? undefined : eskiSecim.get(a.opNo)) ?? ('yok' as const) }));
   // Dalı göndermeyen (alanı bilmeyen) ekran da kayıtlı dal ve birleştirmeyi silmesin (1248 a).
   const eskiDal = new Map(mevcut.adimlar.map((m) => [m.opNo, m]));
   const dalli = secimli.map((a) => {

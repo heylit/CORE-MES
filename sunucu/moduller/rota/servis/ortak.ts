@@ -414,7 +414,7 @@ export async function sablonAdimlariniKur(db: Db, sablonId: number): Promise<Yen
       opNo: null, operasyonTipiId: st.operasyonTipiId, ad: st.ad, kaynak: istasyon === null ? null : { tur: 'istasyon', id: istasyon },
       ayarSuresiDk: ayar, birimSureDk: null, islemSuresiDk: birim !== null && birim > 0 ? birim : null, degisimSuresiDk: null, terminGun: null,
       bagimlilik: 'bekleyen' as Bagimlilik, devirAdedi: null, firePayiYuzde: 0, makineKullanimi: 'tek' as MakineKullanimi,
-      enKucukParca: null, yenidenAyar: true, ilkParca: 'her_kurulum',
+      enKucukParca: null, yenidenAyar: true, ilkParca: 'yok',
       ...(ayar !== null && ayar > 0 ? { hazirlikDk: 0, ayar: true, ayarDk: ayar } : { hazirlikDk: ayar, ayar: false, ayarDk: null }),
       adaylar: [], bilesenler: [], yanUrunler: [], dal: null, birlesen: [], adetCarpani: null, ciktiMalzemeId: null,
     };
@@ -460,7 +460,7 @@ export async function taslagiAc(db: Db, acanKisiId: number, urunId: number, kayn
     adimlar = kart.map((a) => ({
       opNo: a.opNo, operasyonTipiId: a.operasyonTipiId, ad: a.ad, kaynak: null, ayarSuresiDk: null, birimSureDk: null, islemSuresiDk: null, degisimSuresiDk: null, terminGun: null,
       bagimlilik: 'bekleyen' as Bagimlilik, devirAdedi: null, firePayiYuzde: 0, makineKullanimi: 'tek' as MakineKullanimi,
-      enKucukParca: null, yenidenAyar: true, ilkParca: 'her_kurulum', hazirlikDk: null, ayar: false, ayarDk: null, adaylar: [], bilesenler: [], yanUrunler: [], dal: null, birlesen: [], adetCarpani: null,
+      enKucukParca: null, yenidenAyar: true, ilkParca: 'yok', hazirlikDk: null, ayar: false, ayarDk: null, adaylar: [], bilesenler: [], yanUrunler: [], dal: null, birlesen: [], adetCarpani: null,
       ciktiMalzemeId: null,
     }));
   } else if (kaynak.tur === 'urun') {

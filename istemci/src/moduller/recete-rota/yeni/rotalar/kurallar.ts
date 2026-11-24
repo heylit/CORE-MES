@@ -496,7 +496,7 @@ export function yeniAdim(op: Operasyon | undefined, id: string): Adim {
   return {
     id, seq: 0, opNo: null, opId: op?.id ?? '', name: op?.name ?? '', stationId: op?.stationId ?? null, machineId: null, kisiId: null, fasonId: null,
     terminGun: null, setup: op ? op.setup : 15, proc: op ? proc : 2, chg: null, cycle: op ? cevrimToplami(proc, null) : 2,
-    dep: 'bagimli', depQty: 1, rejectPct: 0, split: 'tek', minLot: null, resetup: true, ilkParca: 'her_kurulum', alts: [], altTimes: {}, digerAdaylar: [], ins: [], outs: [],
+    dep: 'bagimli', depQty: 1, rejectPct: 0, split: 'tek', minLot: null, resetup: true, ilkParca: 'yok', alts: [], altTimes: {}, digerAdaylar: [], ins: [], outs: [],
   };
 }
 // Adım `sonraId`den sonra (null: başa) eklenir; sıra yeniden 10, 20...
