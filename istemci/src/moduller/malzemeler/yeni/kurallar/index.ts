@@ -266,8 +266,9 @@ export function foyVerisi(d: KartKaydi, b: KuralBaglami, kisa = false): FoyVeris
     if (props.length) bolumler.push({ baslik: 'Teknik özellikler', satirlar: satirlar(props), not: TIPIK_DEGER_NOTU });
     const ekler = ((d.extra ?? []) as { ad?: string; v?: unknown; u?: string }[]).filter((e) => e.ad);
     if (ekler.length) bolumler.push({ baslik: 'Ek özellikler', satirlar: satirlar(ekler.map((e) => [String(e.ad), `${String(e.v)}${e.u ? ` ${e.u}` : ''}`] as const)) });
-    const cm = (d.com ?? {}) as { ted?: string; sertifika?: string[]; not?: string };
-    bolumler.push({ baslik: 'Ticari', satirlar: satirlar([['Tedarikçi', cm.ted], ['Stok birimi', s.birim], ['Sertifikalar', (cm.sertifika ?? []).join(', ')], ['Notlar', cm.not]]) });
+    const cm = (d.com ?? {}) as { ted?: string; sertifika?: string[]; not?: string; eskiKod?: string };
+    // 3630: ERP kodu CORE koduyla aynı olsa da yazılır (Teknik kod gibi gizlenmez).
+    bolumler.push({ baslik: 'Ticari', satirlar: satirlar([['ERP kodu', cm.eskiKod?.trim()], ['Tedarikçi', cm.ted], ['Stok birimi', s.birim], ['Sertifikalar', (cm.sertifika ?? []).join(', ')], ['Notlar', cm.not]]) });
     kodVeAciklama(m, d, kod, bolumler);
     return { kod, ad, tur, aile: d.fam, bos: false, agirliklar: [], bolumler };
   });
