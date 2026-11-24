@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import * as K from '../kurallar/index.ts';
+import { kartIcerigiDegistiMi } from '../kart-icerigi.ts';
 import * as S from '../sabitler/index.ts';
 import type { KartKaydi } from '../tipler.ts';
 import { kayitHatasi, useKartKaydet, useReceteRotaKopyasi, useRevizyonOlarakBagla } from '../veri.ts';
@@ -130,9 +131,10 @@ export function useKaydet(s: Sihirbaz, adimlar: readonly SihirbazAdimi[]): Kayde
     item = K.kodlariSabitle(item, b);
 
     if (onceki && b.genel.onayAkisi && K.onayDurum(onceki, b) === 'aktif') {
+      // Sunucunun yazdığı kısa kart (Logo'dan alınan, dolgu) düzenleme taslağında varsayılan alanlarla açılır; karşılaştırma aynı biçimdeki tabanladır.
       const f = K.diffItems(onceki, item, b);
       // Yalnız kartın standardı (2117-1 b) değiştiyse de talep gider; föy farkı onu göstermez, sunucu farkı gösterir.
-      if (!f.length && !K.birimFarki(onceki, item, b) && !K.talepVar(onceki, b) && kartStandardi(onceki) === kartStandardi(item)) {
+      if (!f.length && !kartIcerigiDegistiMi(K.kodlariSabitle({ ...K.newDraft(b), ...kopyala(onceki) }, b), item) && !K.birimFarki(onceki, item, b) && !K.talepVar(onceki, b) && kartStandardi(onceki) === kartStandardi(item)) {
         bildir('Kartta değişiklik yok.');
         return;
       }

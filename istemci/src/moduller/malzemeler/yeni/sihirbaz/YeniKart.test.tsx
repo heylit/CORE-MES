@@ -148,6 +148,42 @@ describe('M1 yeni kart sihirbazı', () => {
     expect(govde.kayit.onay.durum).toBe('aktif');
   });
 
+  test('onaylı mamulde yalnız yerlilik oranı değişirse de talep gider, "değişiklik yok" denmez', async () => {
+    const mamul = { ...ornekKayit('mdnm5', 'MM-DNM-00005', 'Deneme mamul', 'mamul'), g: { ad: 'Deneme mamul', yerlilik: 62.5 }, onay: { durum: 'aktif' } };
+    const istekler = sunucuKur(YAZAN, {
+      'GET /malzeme-katalogu-kartlari': kartlarYaniti({ kimlik: 'mdnm5', kayit: mamul }),
+      'POST /malzeme-katalogu-kartlari/mdnm5/kaydet': () => json(200, { id: 'mdnm5', stok_kodu: 'MM-DNM-00005', surum: 2 }),
+    });
+    ac('?kart=mdnm5');
+    await screen.findByRole('button', { name: 'Değişiklikleri kaydet' });
+    const adimlar = within(screen.getByRole('navigation', { name: 'Adımlar' }));
+    fireEvent.click(adimlar.getByRole('button', { name: /Ticari/ }));
+    fireEvent.change(await screen.findByLabelText('Yerlilik oranı'), { target: { value: '100' } });
+    fireEvent.click(adimlar.getByRole('button', { name: /Özet/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Değişiklikleri kaydet' }));
+    expect(await screen.findByText(/^Değişiklik talebi onaya gönderildi/)).toBeTruthy();
+    expect(screen.queryByText('Kartta değişiklik yok.')).toBeNull();
+    const govde = istekler.find((i) => i.yontem === 'POST')?.govde as { kayit: { talep?: { yeni: { g: { yerlilik: unknown } } } } };
+    expect(govde.kayit.talep?.yeni.g.yerlilik).toBe(100);
+  });
+
+  // Sunucunun yazdığı kısa kart (yalnız tur, g, com ve onay) adımları geçecek kadar doludur; düzenleme taslağı eksik alanları varsayılanla açar.
+  test.each([
+    ['Logo\'dan alınan kısa kart', 'mlogo1', 'SF-LGO-00001'],
+    ['dolgu kartı', 'mdlg1', 'SF-DLG-00001'],
+  ])('%s dokunmadan kaydedilirse değişiklik yok denir, talep gitmez', async (_ad, kimlik, kod) => {
+    const kayit = {
+      id: kimlik, tur: 'sarf', onay: { durum: 'aktif' },
+      g: { kat: 'kaynak', tur: 'Gazaltı teli (MIG/MAG)', sinif: 'AWS A5.18 ER70S-6', marka: 'ORN marka' },
+      com: { kod, ad: 'ORN kısa kart', birim: 'adet' },
+    };
+    const istekler = sunucuKur(YAZAN, { 'GET /malzeme-katalogu-kartlari': kartlarYaniti({ kimlik, kayit }) });
+    ac(`?kart=${kimlik}`);
+    fireEvent.click(await screen.findByRole('button', { name: 'Değişiklikleri kaydet' }));
+    expect(await screen.findByText('Kartta değişiklik yok.')).toBeTruthy();
+    expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
+  });
+
   test('kayıt kartı ve özeti gönderir; sunucunun ret iletisi olduğu gibi gösterilir (madde 18)', async () => {
     const istekler = sunucuKur(YAZAN, {
       'GET /malzeme-katalogu-kartlari': kartlarYaniti({ kimlik: 'mdnm1', kayit: sarfKarti('mdnm1') }),
