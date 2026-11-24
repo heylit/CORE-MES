@@ -1402,7 +1402,7 @@ export interface LogoAkisTanimi {
   // logo_giden belge türleri; sayılar bunlardan toplanır.
   belgeTurleri: readonly string[];
   // Okuma akışı (logo -> TMI): sayı giden kutusundan değil okunan satırlardan gelir; `gonderilen` okunan satır sayısıdır, `hatali` yoktur.
-  okuma?: 'mal-kabul' | 'cari-ambar' | 'fatura' | 'malzeme-karti' | 'stok' | 'kullanim' | 'malzeme-arama' | 'cari' | 'son-alis';
+  okuma?: 'mal-kabul' | 'cari-ambar' | 'fatura' | 'fatura-baslik' | 'cari-hareket' | 'malzeme-karti' | 'stok' | 'kullanim' | 'malzeme-arama' | 'cari' | 'son-alis';
 }
 
 export const LOGO_AKISLARI: readonly LogoAkisTanimi[] = [
@@ -1453,6 +1453,10 @@ export const LOGO_AKISLARI: readonly LogoAkisTanimi[] = [
     aciklama: 'Saatte bir Arp/list ve Lookup/warehouses okunup önbelleğe (kod, ad) yazılır. Sayı okunan kayıt sayısıdır.' },
   { anahtar: 'fatura', yon: 'logo-tmi', baslik: 'Fatura ve irsaliye', kaynak: 'bagli', ayarlar: ['logo.fatura-okumasi'], belgeTurleri: [], okuma: 'fatura',
     aciklama: 'Logo\'ya giden satın alma siparişlerinin faturaları (PurchaseOrder/{no}/invoices) sırayla okunup saklanır; Logo\'ya hiç yazılmaz. Okunacak sipariş, bu sürümden sonra Logo\'da açılan satın alma siparişleridir. Sayı okunan fatura sayısıdır.' },
+  { anahtar: 'fatura-listesi-okumasi', yon: 'logo-tmi', baslik: 'Fatura listesi (satış, alış, iadeler)', kaynak: 'bagli', ayarlar: ['logo.fatura-listesi-okumasi'], belgeTurleri: [], okuma: 'fatura-baslik',
+    aciklama: 'Satış, alış ve iade fatura başlıkları (Invoice/list, değişenler Invoice/changed) en çok saatte bir okunup aynaya yazılır; Logo\'ya ve finansa hiçbir şey yazılmaz. Sayı aynadaki başlık sayısıdır; ayrıştırılamayan sayfa o türün okumasını bekletir ve son hata burada görünür.' },
+  { anahtar: 'cari-hareket-okumasi', yon: 'logo-tmi', baslik: 'Cari hareketler', kaynak: 'bagli', ayarlar: ['logo.cari-hareket-okumasi'], belgeTurleri: [], okuma: 'cari-hareket',
+    aciklama: 'Cari hareketler (Arp/movements) en çok saatte bir okunup yalnız eklenen aynaya yazılır; Logo\'ya hiçbir şey yazılmaz. Sayı aynadaki hareket sayısıdır; son okuma hatası burada görünür.' },
   { anahtar: 'malzeme-karti-okuma', yon: 'logo-tmi', baslik: 'Malzeme kartı okuması', kaynak: 'bagli', ayarlar: ['logo.malzeme-okumasi'], belgeTurleri: [], okuma: 'malzeme-karti',
     aciklama: 'Logo malzeme kartları (Material/list) en çok saatte bir, sayfa sayfa okunur ve aynaya yazılır; Malzemeler\'de "Logo\'dan gelenler" listesi buradan beslenir. TMI kartı kendiliğinden değişmez, Logo\'ya hiçbir şey gitmez. Sayı son turda okunan kart sayısıdır.' },
   { anahtar: 'stok-okuma', yon: 'logo-tmi', baslik: 'Stok toplamı okuması', kaynak: 'bagli', ayarlar: ['logo.stok-okumasi'], belgeTurleri: [], okuma: 'stok',
@@ -2506,4 +2510,106 @@ export function kontrolKarari(no: string, bulgular: readonly LogoBelgeBulgusuHam
   const bulgu = esit[0]!;
   if (bulgu.iptal) return { karar: 'yapilamadi', ileti: "Logo'da bu numaralı kayıt iptal edilmiş; Logo'da elle bakın." };
   return { karar: 'bulundu', bulgu };
+}
+
+/* ---------------- 3675 D2: Logo faturası ile finans faturası eşleşmesi (saf) ---------------- */
+
+export interface EslesmeLogoFaturasi {
+  tur: 'satis' | 'alis' | 'satis-iade' | 'alis-iade'; faturaNo: string; tarih: string; cariKodu: string | null; dovizTuru: number | null;
+  net: string; kdv: string; brut: string; iptal: boolean;
+}
+export interface EslesmeFinansFaturasi {
+  belgeId: number; yon: string; tur: string; belgeNo: string; tarih: string; cariKodu: string | null; paraBirimi: string; tutar: string; kdvTutari: string; durum: string;
+}
+export type FaturaFarkKodu = 'iptal' | 'para-birimi' | 'tarih' | 'net' | 'kdv' | 'toplam';
+export interface FaturaEslesmeSonucu {
+  durum: 'eslesti' | 'farkli' | 'logoda-var-finansta-yok' | 'finansta-var-logoda-yok' | 'cari-kodu-yok';
+  yon: 'gelir' | 'gider'; iade: boolean; faturaNo: string; tarih: string; cariKodu: string | null;
+  logo: { net: string; kdv: string; toplam: string; paraBirimi: string; iptal: boolean } | null;
+  finans: { belgeId: number; net: string; kdv: string; toplam: string; paraBirimi: string; iptal: boolean } | null;
+  farklar: FaturaFarkKodu[]; farkTutari: string | null;
+}
+
+const kurusKarsiligi = (m: string): number => Math.round(Number(m) * 100);
+const kurusMetni = (k: number): string => (k / 100).toFixed(2);
+const logoParaBirimi = (doviz: number | null): string => {
+  if (doviz === null) return 'TRY';
+  return Object.entries(LOGO_DOVIZ_TURLERI).find(([, t]) => t === doviz)?.[0] ?? `D${doviz}`;
+};
+const eslesmeAnahtari = (yon: string, iade: boolean, cari: string | null, no: string): string => `${yon}|${iade ? 'iade' : 'fatura'}|${(cari ?? '').toLocaleUpperCase('tr')}|${no.trim().toLocaleUpperCase('tr')}`;
+
+// Anahtar: yön, iade mi, Logo cari kodu ve fatura no (büyük/küçük harf gözetmez). Tutarlar belge para biriminde ve kuruşa göre karşılaştırılır
+// (tolerans 0,01 TL); finans toplamı tevkifatsız (net + KDV) alınır, Logo brüt tutarı gibi. Logo'da iptal edilen faturanın finansta iptal olmaması fark sayılır.
+// Yön finans belgesinin yönüdür: iade asıl faturanın ters yönündedir (finans/kurallar.ts iadeHatasi: satış iadesi gider, alış iadesi gelir).
+// Aynı anahtarlı birden çok belge varsa (iptal edilip aynı numarayla yeniden girilen) iptal olmayan seçilir; iptal yalnız tek başınaysa kalır.
+const logoYonu = (tur: EslesmeLogoFaturasi['tur']): 'gelir' | 'gider' => (tur === 'satis' || tur === 'alis-iade' ? 'gelir' : 'gider');
+const etkinOlan = <T extends { iptal: boolean }>(harita: Map<string, T>, anahtar: string, yeni: T): void => {
+  const var_ = harita.get(anahtar);
+  if (var_ === undefined || var_.iptal || !yeni.iptal) harita.set(anahtar, yeni);
+};
+const kodsuzAnahtar = (yon: string, iade: boolean, no: string): string => `${yon}|${iade ? 'iade' : 'fatura'}|${no.trim().toLocaleUpperCase('tr')}`;
+export function faturaEslesmeleri(logo: readonly EslesmeLogoFaturasi[], finans: readonly EslesmeFinansFaturasi[], tolerans = 1): FaturaEslesmeSonucu[] {
+  const finansBul = new Map<string, EslesmeFinansFaturasi & { iptal: boolean }>();
+  const logoBul = new Map<string, EslesmeLogoFaturasi>();
+  for (const f of finans) {
+    if (f.cariKodu === null) continue;
+    etkinOlan(finansBul, eslesmeAnahtari(f.yon, f.tur === 'iade', f.cariKodu, f.belgeNo), { ...f, iptal: f.durum === 'iptal' });
+  }
+  for (const l of logo) etkinOlan(logoBul, eslesmeAnahtari(logoYonu(l.tur), l.tur.endsWith('-iade'), l.cariKodu, l.faturaNo), l);
+  const logoTarafi = (l: EslesmeLogoFaturasi) => ({ net: l.net, kdv: l.kdv, toplam: l.brut, paraBirimi: logoParaBirimi(l.dovizTuru), iptal: l.iptal });
+  const finansTarafi = (f: EslesmeFinansFaturasi) => ({ belgeId: f.belgeId, net: f.tutar, kdv: f.kdvTutari, toplam: kurusMetni(kurusKarsiligi(f.tutar) + kurusKarsiligi(f.kdvTutari)), paraBirimi: f.paraBirimi, iptal: f.durum === 'iptal' });
+  const kullanilan = new Set<string>();
+  const sonuc: FaturaEslesmeSonucu[] = [];
+
+  // Cari kodu olmayan firmanın finans belgesi anahtarla eşleşemez (N2): numarası aynı tek Logo faturası varsa yan yana gösterilir, "cari kodu yok" sınıfındadır.
+  const kodsuzLogo = new Map<string, EslesmeLogoFaturasi[]>();
+  for (const l of logoBul.values()) { const k = kodsuzAnahtar(logoYonu(l.tur), l.tur.endsWith('-iade'), l.faturaNo); kodsuzLogo.set(k, [...(kodsuzLogo.get(k) ?? []), l]); }
+  const kodsuzKullanilan = new Set<EslesmeLogoFaturasi>();
+  for (const f of finans) {
+    if (f.cariKodu !== null || f.durum === 'iptal') continue;
+    const adaylar = kodsuzLogo.get(kodsuzAnahtar(f.yon, f.tur === 'iade', f.belgeNo)) ?? [];
+    const l = adaylar.length === 1 && !adaylar[0]!.iptal ? adaylar[0]! : null;
+    if (l !== null) kodsuzKullanilan.add(l);
+    sonuc.push({
+      durum: 'cari-kodu-yok', yon: f.yon === 'gelir' ? 'gelir' : 'gider', iade: f.tur === 'iade', faturaNo: f.belgeNo, tarih: f.tarih, cariKodu: l?.cariKodu ?? null,
+      logo: l === null ? null : logoTarafi(l), finans: finansTarafi(f), farklar: [], farkTutari: null,
+    });
+  }
+
+  for (const l of logoBul.values()) {
+    const yon = logoYonu(l.tur);
+    const iade = l.tur.endsWith('-iade');
+    const anahtar = eslesmeAnahtari(yon, iade, l.cariKodu, l.faturaNo);
+    if (kodsuzKullanilan.has(l)) continue;
+    const f = finansBul.get(anahtar) ?? null;
+    const taban = { yon, iade, faturaNo: l.faturaNo, tarih: l.tarih, cariKodu: l.cariKodu, logo: logoTarafi(l) };
+    if (f === null) {
+      // Logo'da iptal ve finansta yok: eşleşmesi gerekmez.
+      if (!l.iptal) sonuc.push({ ...taban, durum: 'logoda-var-finansta-yok', finans: null, farklar: [], farkTutari: null });
+      continue;
+    }
+    kullanilan.add(anahtar);
+    const finansIptal = f.iptal;
+    const farklar: FaturaFarkKodu[] = [];
+    let farkTutari: string | null = null;
+    if (l.iptal !== finansIptal) farklar.push('iptal');
+    else if (!l.iptal) {
+      if (taban.logo.paraBirimi !== f.paraBirimi) farklar.push('para-birimi');
+      if (l.tarih !== f.tarih) farklar.push('tarih');
+      if (Math.abs(kurusKarsiligi(l.net) - kurusKarsiligi(f.tutar)) > tolerans) farklar.push('net');
+      if (Math.abs(kurusKarsiligi(l.kdv) - kurusKarsiligi(f.kdvTutari)) > tolerans) farklar.push('kdv');
+      const fark = kurusKarsiligi(l.brut) - (kurusKarsiligi(f.tutar) + kurusKarsiligi(f.kdvTutari));
+      if (Math.abs(fark) > tolerans) { farklar.push('toplam'); farkTutari = kurusMetni(fark); }
+    }
+    sonuc.push({ ...taban, durum: farklar.length === 0 ? 'eslesti' : 'farkli', finans: finansTarafi(f), farklar, farkTutari });
+  }
+  for (const f of finansBul.values()) {
+    const anahtar = eslesmeAnahtari(f.yon, f.tur === 'iade', f.cariKodu, f.belgeNo);
+    if (kullanilan.has(anahtar) || f.iptal) continue;
+    sonuc.push({
+      durum: 'finansta-var-logoda-yok', yon: f.yon === 'gelir' ? 'gelir' : 'gider', iade: f.tur === 'iade', faturaNo: f.belgeNo, tarih: f.tarih, cariKodu: f.cariKodu, logo: null,
+      finans: finansTarafi(f), farklar: [], farkTutari: null,
+    });
+  }
+  return sonuc.sort((a, b) => (a.tarih < b.tarih ? 1 : a.tarih > b.tarih ? -1 : a.faturaNo.localeCompare(b.faturaNo)));
 }

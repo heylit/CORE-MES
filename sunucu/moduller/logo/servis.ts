@@ -1826,10 +1826,14 @@ export async function hazirlik(db: Db, kopru: KopruIstemcisi | null, ortam: Logo
   const ozetler = await s.gidenOzetleri(db);
   const okuma = await s.birimSetiOkumasi(db);
   const okumalar = await s.okumaOzeti(db);
+  const aynalar = await s.faturaCariSayilari(db);
+  const hatalar = { 'fatura-baslik': await s.faturaCariSonHata(db, 'fatura-'), 'cari-hareket': await s.faturaCariSonHata(db, 'cari-hareket') } as const;
   const okunan = {
     'mal-kabul': { sayi: okumalar.malKabul, son: okumalar.malKabulSon },
     'cari-ambar': { sayi: okumalar.cariAmbar, son: okumalar.cariAmbarSon },
     fatura: { sayi: okumalar.fatura, son: okumalar.faturaSon },
+    'fatura-baslik': { sayi: aynalar.fatura, son: aynalar.faturaSon },
+    'cari-hareket': { sayi: aynalar.cari, son: aynalar.cariSon },
     'malzeme-karti': await sayfaliOzet(db, 'malzeme-karti'),
     stok: await sayfaliOzet(db, 'stok'),
     kullanim: await sayfaliOzet(db, 'kullanim'),
@@ -1852,6 +1856,7 @@ export async function hazirlik(db: Db, kopru: KopruIstemcisi | null, ortam: Logo
         gonderilen: ok ? ok.sayi : t.belgeTurleri.length === 0 ? null : ilgili.reduce((n, o) => n + o.gonderilen, 0),
         hatali: ok || t.belgeTurleri.length === 0 ? null : ilgili.reduce((n, o) => n + o.hatali, 0),
         sonDeneme: ok ? ok.son : t.anahtar === 'birim-setleri' ? okuma?.sonOkuma ?? null : sonDeneme,
+        ...(t.okuma === 'fatura-baslik' || t.okuma === 'cari-hareket' ? { sonHata: hatalar[t.okuma] === null ? null : `${hatalar[t.okuma]!.anahtar}: ${hatalar[t.okuma]!.ileti}` } : {}),
       };
     }),
     sonBirimSetiOkuma: okuma?.sonOkuma ?? null,

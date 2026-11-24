@@ -11,7 +11,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { cariHareketTuru, faturaListesiTuru } from './fatura-cari.ts';
-import { cariHareketSayfasiniAyikla, faturaCariBaslangicGunu, faturaCariOkunmaliMi, faturaSayfasiniAyikla, FATURA_CARI_ARALIGI_MS } from './fatura-cari-sozlesmesi.ts';
+import { cariHareketSayfasiniAyikla, faturaCariBaslangicGunu, faturaDegisenSayfasiniAyikla, faturaCariOkunmaliMi, faturaSayfasiniAyikla, FATURA_CARI_ARALIGI_MS } from './fatura-cari-sozlesmesi.ts';
 import { kopruIstemcisiKur } from './kopru.ts';
 import { OKUMA_HATA_BEKLEME_MS } from './kurallar.ts';
 import { sahteKopruAc } from './sahte-kopru.ts';
@@ -94,6 +94,7 @@ describe('Logo fatura ve cari hareket okuması (gerçek PostgreSQL, sahte köpr�
     kopru.logoFaturalari = [fatura(1, 'satis'), fatura(2, 'alis'), fatura(3, 'satis-iade', { netAmount: 100, vatAmount: 20, grossAmount: 120 }), fatura(4, 'alis-iade')];
     // Turda tek istek: dört tür dört turda; beşinci turda hepsi yetişmiştir.
     for (let i = 0; i < 4; i += 1) assert.deepEqual(await faturaTuru(), { tur: 'okuma', akis: 'fatura-listesi', sonuc: 'okundu', sayi: 1 });
+    assert.deepEqual(await faturaTuru(), { tur: 'okuma', akis: 'fatura-listesi', sonuc: 'okundu', sayi: 0 }, 'türler yetişti: değişen okuması (henüz değişen yok)');
     assert.deepEqual(await faturaTuru(), { tur: 'bos' });
     assert.equal(istekler('/api/Invoice/list').length, 4);
     assert.equal(await say('logo_fatura_baslik'), 4);
@@ -114,7 +115,7 @@ describe('Logo fatura ve cari hareket okuması (gerçek PostgreSQL, sahte köpr�
     assert.deepEqual(await faturaTuru(), { tur: 'okuma', akis: 'fatura-listesi', sonuc: 'okundu', sayi: 2 });
     assert.deepEqual(await faturaTuru(), { tur: 'okuma', akis: 'fatura-listesi', sonuc: 'okundu', sayi: 1 });
     // Satış yetişti; sıra diğer türlerde (boş sayfa), sonra bekleme.
-    for (let i = 0; i < 3; i += 1) assert.deepEqual(await faturaTuru(), { tur: 'okuma', akis: 'fatura-listesi', sonuc: 'okundu', sayi: 0 });
+    for (let i = 0; i < 4; i += 1) assert.deepEqual(await faturaTuru(), { tur: 'okuma', akis: 'fatura-listesi', sonuc: 'okundu', sayi: 0 });
     assert.deepEqual(await faturaTuru(), { tur: 'bos' });
     assert.equal(await say('logo_fatura_baslik'), 3);
   });
@@ -173,15 +174,127 @@ describe('Logo fatura ve cari hareket okuması (gerçek PostgreSQL, sahte köpr�
     assert.deepEqual(yeni, { donem: 2, logo_kayit_no: '1' });
   });
 
-  test('sözleşme ayıklayıcıları: biçim bozuksa sayfa okunmamış sayılır, bozuk satır atlanır', () => {
+  test('N2/N5: ayıklanamayan satır sessiz atlanmaz; o türün okuması belirsiz olur, hiçbir satır yazılmaz, imleç ilerlemez, yalnız o tür bekler; düzelince okunur', async () => {
+    kopru.sayfaBoyu = 10;
+    kopru.logoFaturalari = [fatura(1, 'satis'), fatura(2, 'satis', { invoiceNo: null }), fatura(3, 'alis')];
+    const r = await faturaTuru();
+    assert.equal(r.tur, 'okuma');
+    assert.equal(r.tur === 'okuma' ? r.sonuc : '', 'belirsiz');
+    assert.equal(await say('logo_fatura_baslik'), 0);
+    assert.equal(await say('logo_fatura_cari_imleci'), 0);
+    // N5: satış beklerken alış okunur (tek bozuk sayfa bütün fatura akışını durdurmaz); satış bekleme süresince yinelenmez.
+    assert.deepEqual(await faturaTuru(), { tur: 'okuma', akis: 'fatura-listesi', sonuc: 'okundu', sayi: 1 });
+    for (let i = 0; i < 6; i += 1) await faturaTuru();
+    assert.equal(kopru.faturaCariIstekleri.filter((u) => u.startsWith('/api/Invoice/list') && u.includes('type=satis&')).length, 1, 'satış bekleme süresince yinelenmedi');
+    const hata = await o().sahip.tek<{ anahtar: string; ileti: string }>('SELECT anahtar, ileti FROM logo_fatura_cari_hata');
+    assert.equal(hata?.anahtar, 'fatura-listesi:satis');
+    kopru.logoFaturalari = [fatura(1, 'satis'), fatura(2, 'satis'), fatura(3, 'alis')];
+    simdi += OKUMA_HATA_BEKLEME_MS;
+    for (let i = 0; i < 6; i += 1) await faturaTuru();
+    assert.equal(await say('logo_fatura_baslik'), 3);
+    assert.equal(await say('logo_fatura_cari_hata'), 0, 'başarılı okuma hata kaydını siler');
+  });
+
+  test('N5: son okuma hatası sağlık ekranının akış satırında görünür; başarılı okuma silince kaybolur', async () => {
+    kopru.sayfaBoyu = 10;
+    kopru.logoFaturalari = [fatura(2, 'satis', { invoiceNo: null })];
+    await faturaTuru();
+    const bak = async () => (await app.inject({ method: 'GET', url: '/api/logo/hazirlik', headers: { cookie: yonetici } })).json<{ akislar: { anahtar: string; sonHata?: string | null; gonderilen: number | null }[] }>().akislar.find((a) => a.anahtar === 'fatura-listesi-okumasi');
+    assert.match(String((await bak())?.sonHata), /fatura-listesi:satis/);
+    kopru.logoFaturalari = [fatura(1, 'satis')];
+    simdi += OKUMA_HATA_BEKLEME_MS;
+    for (let i = 0; i < 4; i += 1) await faturaTuru();
+    const b = await bak();
+    assert.equal(b?.sonHata, null);
+    assert.equal(b?.gonderilen, 1);
+  });
+
+  test('N3: Logo\'da sonradan iptal edilen fatura değişen okumasıyla aynada iptal olur', async () => {
+    kopru.sayfaBoyu = 10;
+    kopru.logoFaturalari = [fatura(1, 'satis'), fatura(2, 'alis')];
+    for (let i = 0; i < 4; i += 1) await faturaTuru();
+    assert.equal(await say('logo_fatura_baslik'), 2);
+    assert.deepEqual(await faturaTuru(), { tur: 'okuma', akis: 'fatura-listesi', sonuc: 'okundu', sayi: 0 }, 'değişen okuması başlar, değişen yok');
+    assert.deepEqual(await faturaTuru(), { tur: 'bos' });
+    simdi += FATURA_CARI_ARALIGI_MS;
+    kopru.logoFaturalari = [fatura(1, 'satis', { cancelled: true, modifiedAt: '2026-11-24T10:30:00.000Z' }), fatura(2, 'alis')];
+    // Önce türler yetişir (saat doldu, her biri bir tur), sonra değişen okuması.
+    for (let i = 0; i < 4; i += 1) await faturaTuru();
+    const r = await faturaTuru();
+    assert.deepEqual(r, { tur: 'okuma', akis: 'fatura-listesi', sonuc: 'okundu', sayi: 1 });
+    assert.equal((await o().sahip.tek<{ iptal: boolean }>('SELECT iptal FROM logo_fatura_baslik WHERE logo_kayit_no = 1'))?.iptal, true);
+    const imlec = await o().sahip.tek<{ degisme: string; son_ref: string }>("SELECT degisme, son_ref::text FROM logo_fatura_cari_imleci WHERE akis = 'fatura-degisen'");
+    assert.equal(Date.parse(imlec?.degisme ?? ''), Date.parse('2026-11-24T10:30:00.000Z'));
+    simdi += FATURA_CARI_ARALIGI_MS;
+    for (let i = 0; i < 4; i += 1) await faturaTuru();
+    assert.deepEqual(await faturaTuru(), { tur: 'okuma', akis: 'fatura-listesi', sonuc: 'okundu', sayi: 0 }, 'aynı değişiklik ikinci kez gelmez');
+  });
+
+  test('N4: yeni dönem açılınca önceki dönem 90 gün daha okunur; sonra okunmaz (geç girilen fatura)', async () => {
+    kopru.sayfaBoyu = 10;
+    kopru.logoFaturalari = [fatura(10, 'satis', { period: 1 })];
+    for (let i = 0; i < 4; i += 1) await faturaTuru();
+    assert.equal(await say('logo_fatura_baslik'), 1);
+    // Yardımcı yeni döneme geçer; yeni dönem imleci sıfırdan açılır, ardından türler yeni dönemde okunur.
+    kopru.irsaliyeDonemi = { firm: 1, period: 2 };
+    simdi += FATURA_CARI_ARALIGI_MS;
+    kopru.logoFaturalari = [fatura(10, 'satis', { period: 1 }), fatura(11, 'satis', { period: 1, invoiceNo: 'ORN-GEC-1' }), fatura(1, 'satis', { period: 2 })];
+    for (let i = 0; i < 14; i += 1) await faturaTuru();
+    const donemler = await o().sahip.sorgu<{ donem: number; n: string }>('SELECT donem, count(*)::text AS n FROM logo_fatura_baslik GROUP BY donem ORDER BY donem');
+    assert.deepEqual(donemler.map((x) => [x.donem, x.n]), [[1, '2'], [2, '1']], 'geç girilen önceki dönem faturası da okundu');
+    // 90 gün sonra önceki dönem artık okunmaz.
+    simdi += 91 * 86_400_000;
+    kopru.logoFaturalari = [fatura(12, 'satis', { period: 1, invoiceNo: 'ORN-GEC-2' })];
+    for (let i = 0; i < 14; i += 1) await faturaTuru();
+    assert.equal(await say('logo_fatura_baslik'), 3);
+  });
+
+  test('N3: değişme zamanı ISO değilse değişen sayfa okunmamış sayılır; imleç ilerlemez, bekleme süresince yinelenmez', async () => {
+    kopru.sayfaBoyu = 10;
+    kopru.logoFaturalari = [fatura(1, 'satis')];
+    for (let i = 0; i < 6; i += 1) await faturaTuru();
+    simdi += FATURA_CARI_ARALIGI_MS;
+    kopru.logoFaturalari = [fatura(1, 'satis', { cancelled: true, modifiedAt: '24.11.2026 10:30' })];
+    const degisenIstegi = (): number => kopru.faturaCariIstekleri.filter((u) => u.startsWith('/api/Invoice/changed')).length;
+    const onceki = degisenIstegi();
+    let belirsiz = 0;
+    for (let i = 0; i < 8; i += 1) { const r = await faturaTuru(); if (r.tur === 'okuma' && r.sonuc === 'belirsiz') belirsiz += 1; }
+    assert.equal(belirsiz, 1, 'bir kez belirsiz, sonra bekleme');
+    assert.equal(degisenIstegi() - onceki, 1, 'bekleme süresince yinelenmedi');
+    assert.equal((await o().sahip.tek<{ iptal: boolean }>('SELECT iptal FROM logo_fatura_baslik WHERE logo_kayit_no = 1'))?.iptal, false, 'bozuk zamanlı satır yazılmadı');
+    assert.equal(faturaDegisenSayfasiniAyikla({ firm: 1, period: 1, data: [fatura(1, 'satis', { modifiedAt: 'dün' })], next: null }), null);
+    assert.equal(faturaDegisenSayfasiniAyikla({ firm: 1, period: 1, data: [fatura(1, 'satis', { modifiedAt: '2026-11-24T10:30:00Z' })], next: null })?.kayitlar.length, 1);
+  });
+
+  // N4 sınırı: yeni dönemin imleci açıldıktan sonra önceki dönem 90 günden az süre okunur (89. gün okunur, 90. gün okunmaz).
+  for (const [gun, okunur] of [[89, true], [90, false], [91, false]] as const) {
+    test(`N4 sınırı: yeni dönemden ${gun} gün sonra önceki dönem ${okunur ? 'okunur' : 'okunmaz'}`, async () => {
+      kopru.sayfaBoyu = 10;
+      kopru.logoFaturalari = [fatura(10, 'satis', { period: 1 })];
+      for (let i = 0; i < 4; i += 1) await faturaTuru();
+      kopru.irsaliyeDonemi = { firm: 1, period: 2 };
+      simdi += FATURA_CARI_ARALIGI_MS;
+      kopru.logoFaturalari = [fatura(10, 'satis', { period: 1 }), fatura(1, 'satis', { period: 2 })];
+      for (let i = 0; i < 14; i += 1) await faturaTuru();
+      const ilk = await o().sahip.tek<{ z: string }>("SELECT (extract(epoch FROM ilk_okuma) * 1000)::text AS z FROM logo_fatura_cari_imleci WHERE akis = 'fatura-satis' AND donem = 2");
+      const once = await say('logo_fatura_baslik');
+      simdi = Math.round(Number(ilk?.z)) + gun * 86_400_000;
+      kopru.logoFaturalari = [fatura(10, 'satis', { period: 1 }), fatura(12, 'satis', { period: 1, invoiceNo: 'ORN-GEC-3' }), fatura(1, 'satis', { period: 2 })];
+      for (let i = 0; i < 14; i += 1) await faturaTuru();
+      assert.equal(await say('logo_fatura_baslik'), once + (okunur ? 1 : 0));
+    });
+  }
+
+  test('sözleşme ayıklayıcıları: biçim bozuksa ya da tek satır bile ayıklanamazsa sayfa okunmamış sayılır (sessiz atlama yok)', () => {
     const iyi = { firm: 1, period: 3, data: [fatura(1, 'satis'), { logicalRef: 2 }, fatura(3, 'alis', { cancelled: true })], next: null };
-    const s = faturaSayfasiniAyikla(iyi);
+    assert.equal(faturaSayfasiniAyikla(iyi), null, 'bozuk satır sayfayı okunmamış sayar');
+    const s = faturaSayfasiniAyikla({ ...iyi, data: [fatura(1, 'satis'), fatura(3, 'alis', { cancelled: true })] });
     assert.deepEqual(s?.kayitlar.map((x) => x.logoKayitNo), [1, 3]);
     assert.equal(s?.kayitlar[1]?.iptal, true);
     assert.equal(s?.donem, 3);
     assert.equal(faturaSayfasiniAyikla({ ...iyi, period: undefined }), null, 'dönem yoksa okunmamış');
     assert.equal(faturaSayfasiniAyikla({ data: 'x', firm: 1, period: 1 }), null);
-    assert.equal(cariHareketSayfasiniAyikla({ firm: 1, period: 1, data: [hareket(1, { debit: -5 }), hareket(2)] })?.kayitlar.length, 1, 'eksi tutar atlanır');
+    assert.equal(cariHareketSayfasiniAyikla({ firm: 1, period: 1, data: [hareket(1, { debit: -5 }), hareket(2)] }), null, 'eksi tutarlı satır sayfayı okunmamış sayar');
     assert.equal(faturaCariBaslangicGunu(new Date('2026-11-24T10:00:00Z')), '2025-11-01');
     assert.equal(faturaCariOkunmaliMi(null, new Date()), true);
   });

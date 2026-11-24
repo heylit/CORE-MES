@@ -69,6 +69,8 @@ export const logoHazirlikCevabi = z.object({
     gonderilen: z.number().int().nullable(),
     hatali: z.number().int().nullable(),
     sonDeneme: zamanSemasi.nullable(),
+    // Okuma akışında kaynak başına son okuma hatası (ayrıştırılamayan sayfa, ulaşılamayan yardımcı); yoksa null. Alan sonradan eklendi.
+    sonHata: z.string().nullable().optional(),
   })),
   sonBirimSetiOkuma: zamanSemasi.nullable(),
   // 3314: son sürüm bakışı (saatte bir ve canlı kontrolde); henüz bakılmadıysa null. Alan sonradan eklendi, eski istemci görmezden gelir.
@@ -664,3 +666,42 @@ export const logoBagKaldirGovdesi = z.object({ tur: z.enum(LOGO_BAGLANABILIR_TUR
 export type LogoBagKaldirGovdesi = z.input<typeof logoBagKaldirGovdesi>;
 export const logoBelgeBagCevabi = z.object({ kayitNo: z.string().nullable() });
 export type LogoBelgeBagCevabi = z.output<typeof logoBelgeBagCevabi>;
+
+// ---- 3675 D2: Logo faturası ile finans belgesi eşleşmesi (yalnız okuma; finans belgesine yazılmaz) ----
+export const FATURA_ESLESME_DURUMLARI = ['eslesti', 'farkli', 'logoda-var-finansta-yok', 'finansta-var-logoda-yok', 'cari-kodu-yok'] as const;
+export const FATURA_FARK_KODLARI = ['iptal', 'para-birimi', 'tarih', 'net', 'kdv', 'toplam'] as const;
+export const faturaEslesmeSorgusu = z.object({
+  sayfa: z.coerce.number<number>().int().min(1).max(100_000).prefault(1),
+  sayfaBoyu: z.coerce.number<number>().int().min(1).max(200).optional(),
+  gun: z.coerce.number<number>().int().min(1).max(365).prefault(90),
+  durum: z.enum(FATURA_ESLESME_DURUMLARI).optional(),
+});
+const faturaLogoTarafi = z.object({ net: ondalikMetinSemasi, kdv: ondalikMetinSemasi, toplam: ondalikMetinSemasi, paraBirimi: z.string(), iptal: z.boolean() });
+const faturaFinansTarafi = z.object({ belgeId: z.number().int(), net: ondalikMetinSemasi, kdv: ondalikMetinSemasi, toplam: ondalikMetinSemasi, paraBirimi: z.string(), iptal: z.boolean() });
+export const faturaEslesmeSatiri = z.object({
+  durum: z.enum(FATURA_ESLESME_DURUMLARI),
+  yon: z.enum(['gelir', 'gider']),
+  iade: z.boolean(),
+  faturaNo: z.string(),
+  tarih: tarihSemasi,
+  cariKodu: z.string().nullable(),
+  firmaAdi: z.string().nullable(),
+  logo: faturaLogoTarafi.nullable(),
+  finans: faturaFinansTarafi.nullable(),
+  farklar: z.array(z.enum(FATURA_FARK_KODLARI)),
+  // Logo toplamı eksi finans toplamı (yalnız toplam farklıysa).
+  farkTutari: ondalikMetinSemasi.nullable(),
+});
+export type FaturaEslesmeSatiri = z.output<typeof faturaEslesmeSatiri>;
+export const faturaEslesmeCevabi = z.object({
+  satirlar: z.array(faturaEslesmeSatiri),
+  toplam: z.number().int(),
+  sayfa: z.number().int(),
+  sayfaBoyu: z.number().int(),
+  durumlar: z.array(z.object({ durum: z.enum(FATURA_ESLESME_DURUMLARI), sayi: z.number().int() })),
+  // Finans faturası olup firmasının Logo cari kodu bulunmayan (eşleşemeyen) belge sayısı.
+  baglanamayan: z.number().int(),
+  baslangic: tarihSemasi,
+  okuma: z.object({ acik: z.boolean(), sonOkuma: zamanSemasi.nullable() }),
+});
+export type FaturaEslesmeCevabi = z.output<typeof faturaEslesmeCevabi>;

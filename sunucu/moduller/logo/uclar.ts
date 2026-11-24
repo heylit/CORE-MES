@@ -8,6 +8,8 @@ import { logoTekKayitCevabi, logoTekKayitGovdesi, logoTekKayitSorgusu } from '#p
 import { tekKayitYaz } from './tek-kayit.ts';
 import { irsaliyeCevabi, irsaliyeListesiCevabi, irsaliyeListesiSorgusu, irsaliyeParametresi, siparisLogoOzetiCevabi, siparisLogoOzetiSorgusu } from '#paylasilan/sozlesme/logo.ts';
 import { irsaliyeGetir, irsaliyeListesi } from './irsaliye.ts';
+import { faturaEslesmeCevabi, faturaEslesmeSorgusu } from '#paylasilan/sozlesme/logo.ts';
+import { faturaEslesmeListesi } from './fatura-eslesme.ts';
 import { siparisLogoOzeti } from './siparis-ozeti.ts';
 import { belgeBagla, belgeBaginiKaldir } from './elle-bag.ts';
 import { logoBagKaldirGovdesi, logoBelgeBagCevabi, logoBelgeBaglaGovdesi, type LogoBaglanabilirTur } from '#paylasilan/sozlesme/logo.ts';
@@ -124,6 +126,15 @@ export const uclar = [
     txDisi: true,
     cevap: entegrasyonKomutCevabi,
     isle: ({ db }) => baglantiTesti({ tx: (f) => f(db) }),
+  }),
+  // 3675 D2: Logo faturası ile finans faturası karşılaştırması; yalnız okunur, finans rakamı olduğu için finans.oku ister (FNS-48).
+  uc({
+    yontem: 'GET',
+    yol: '/logo/fatura-eslesme',
+    yetki: 'finans.oku',
+    sorgu: faturaEslesmeSorgusu,
+    cevap: faturaEslesmeCevabi,
+    isle: ({ db, sorgu }) => faturaEslesmeListesi(db, new Date(), sorgu),
   }),
   // 3345 a: Logo irsaliyeleri, yalnız okuma (aynadan; Logo'ya istek atmaz). Fiyat ve tutar yalnız tek irsaliyede ve fiyat yetkisiyle.
   uc({

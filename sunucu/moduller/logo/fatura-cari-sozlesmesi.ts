@@ -11,12 +11,23 @@ export type FaturaTuru = (typeof FATURA_TURLERI)[number];
 export const FATURA_LISTESI_YOLU = '/api/Invoice/list';
 export const CARI_HAREKET_YOLU = '/api/Arp/movements';
 
-export const faturaListesiYolu = (tur: FaturaTuru, since: number, from: string): string =>
-  `${FATURA_LISTESI_YOLU}?type=${tur}&since=${since}&from=${encodeURIComponent(from)}`;
+// Önceki dönem (Risk N4): `period` verilirse yardımcı o dönemin tablosunu okur; verilmezse açık dönemi.
+const donemEki = (donem: number | null): string => (donem === null ? '' : `&period=${donem}`);
+export const faturaListesiYolu = (tur: FaturaTuru, since: number, from: string, donem: number | null = null): string =>
+  `${FATURA_LISTESI_YOLU}?type=${tur}&since=${since}&from=${encodeURIComponent(from)}${donemEki(donem)}`;
 export const cariHareketYolu = (since: number, from: string): string => `${CARI_HAREKET_YOLU}?since=${since}&from=${encodeURIComponent(from)}`;
+// Sonradan değişen faturalar (iptal dahil; Risk N3): değişme zamanından (ISO) sonra değişenler, (modifiedAt, logicalRef) sırasıyla; her kayıt kendi türünü taşır.
+// SÖZLEŞME ŞARTI (doğrulanmadı; yardımcıdan istenir): değişen faturalar ucu yalnız istenen dönemin kayıtlarını verir; cevabın `period` alanı o dönemdir. Açık dönem numarasıyla
+// önceki dönemin kaydı dönerse (firma, dönem, kayıt no) anahtarı başka bir faturanın üstüne yazılırdı. Uç dönem taşımadığı için yalnız açık dönem izlenir; önceki dönemde sonradan iptal edilen fatura okunmaz.
+export const FATURA_DEGISEN_YOLU = '/api/Invoice/changed';
+export const faturaDegisenYolu = (sonra: string, since: number, from: string): string =>
+  `${FATURA_DEGISEN_YOLU}?after=${encodeURIComponent(sonra)}&since=${since}&from=${encodeURIComponent(from)}`;
 
 export interface FaturaBasligi {
   logoKayitNo: number;
+  // Yalnız değişen faturalar uçunda gelir (`type`, `modifiedAt`); liste ucunda tür istekten bilinir.
+  tur: FaturaTuru | null;
+  degisme: string | null;
   faturaNo: string;
   tarih: string;
   cariKodu: string | null;
@@ -51,7 +62,9 @@ function faturaAyikla(o: Record<string, unknown>): FaturaBasligi | null {
   const brut = parasal(ilkSayi(o, ['grossAmount']));
   if (logoKayitNo === null || faturaNo === null || tarih === null || !ISO_TARIH.test(tarih) || net === null || kdv === null || brut === null) return null;
   const doviz = tamSayi(ilkSayi(o, ['currencyType']));
-  return { logoKayitNo, faturaNo, tarih, cariKodu: ilkMetin(o, ['arpCode'], 64), dovizTuru: doviz !== null && doviz > 0 ? doviz : null, net, kdv, brut, iptal: o['cancelled'] === true };
+  const t = ilkMetin(o, ['type'], 20);
+  const degisme = ilkMetin(o, ['modifiedAt'], 40);
+  return { logoKayitNo, tur: (FATURA_TURLERI as readonly string[]).includes(t ?? '') ? (t as FaturaTuru) : null, degisme, faturaNo, tarih, cariKodu: ilkMetin(o, ['arpCode'], 64), dovizTuru: doviz !== null && doviz > 0 ? doviz : null, net, kdv, brut, iptal: o['cancelled'] === true };
 }
 
 function cariHareketAyikla(o: Record<string, unknown>): CariHareketi | null {
@@ -68,17 +81,29 @@ function cariHareketAyikla(o: Record<string, unknown>): CariHareketi | null {
   };
 }
 
+// Ayıklanamayan tek satır bile sayfayı okunmamış sayar (Risk N2): satır sessizce atlanıp imleç üstünden geçmez; sonuç "belirsiz" olur,
+// akış günlüğünde görünür ve imleç aynı yerde kalır (yardımcı düzelene kadar bekleme süresiyle yinelenir).
 function donemli<T>(govde: unknown, satir: (o: Record<string, unknown>) => T | null): (Sayfa<T> & { firma: number; donem: number }) | null {
-  const sayfa = sayfaAyikla(govde, satir);
+  if (govde === null || typeof govde !== 'object' || Array.isArray(govde)) return null;
   const g = govde as Record<string, unknown>;
+  const ham = g['data'];
+  if (!Array.isArray(ham)) return null;
+  const sayfa = sayfaAyikla(govde, satir);
+  if (sayfa === null || sayfa.kayitlar.length !== ham.length) return null;
   const firma = g['firm'];
   const donem = g['period'];
-  if (sayfa === null || !(typeof firma === 'number' && Number.isSafeInteger(firma) && firma > 0 && typeof donem === 'number' && Number.isSafeInteger(donem) && donem > 0)) return null;
+  if (!(typeof firma === 'number' && Number.isSafeInteger(firma) && firma > 0 && typeof donem === 'number' && Number.isSafeInteger(donem) && donem > 0)) return null;
   return { ...sayfa, firma, donem };
 }
 
 // Cevap { firm, period, data: [...], next } biçimindedir (Material/purchases ile aynı); biçim bozuksa null (imleç ilerlemez, satır yazılmaz).
 export const faturaSayfasiniAyikla = (govde: unknown): FaturaSayfasi | null => donemli(govde, faturaAyikla);
+// Değişen faturalarda tür ve ISO değişme zamanı zorunludur (yoksa ya da ayrıştırılamazsa sayfa okunmamış sayılır; imleç NaN ile kalıp aynı sayfayı yinelemesin, Risk N3).
+const ISO_ZAMAN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?$/;
+export const faturaDegisenSayfasiniAyikla = (govde: unknown): FaturaSayfasi | null => donemli(govde, (o) => {
+  const f = faturaAyikla(o);
+  return f !== null && f.tur !== null && f.degisme !== null && ISO_ZAMAN.test(f.degisme) && !Number.isNaN(Date.parse(f.degisme)) ? f : null;
+});
 export const cariHareketSayfasiniAyikla = (govde: unknown): CariHareketSayfasi | null => donemli(govde, cariHareketAyikla);
 
 // Okuma sırası: son sayfa doluysa hemen devam, değilse en çok saatte bir; ilk gün son 12 ay başındandır.
@@ -92,4 +117,6 @@ export const faturaCariBaslangicGunu = (simdi: Date): string => {
   return d.toISOString().slice(0, 10);
 };
 
-export type FaturaCariAkisi = `fatura-${FaturaTuru}` | 'cari-hareket';
+export type FaturaCariAkisi = `fatura-${FaturaTuru}` | 'fatura-degisen' | 'cari-hareket';
+// Önceki dönem, yeni dönemin imleci açıldıktan sonra bu kadar gün daha okunur (geç girilen faturalar).
+export const FATURA_ONCEKI_DONEM_GUNU = 90;

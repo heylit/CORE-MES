@@ -128,6 +128,18 @@ export const hesaplariKilitle = (db: Db, idler: readonly number[]) =>
   db.sorgu<{ id: number }>('SELECT id FROM finans_hesap WHERE id = ANY($1::int[]) ORDER BY id FOR UPDATE', [idler]);
 export const mahsupGetir = <T>(db: Db, id: number, kilit = false) => db.tek<T>(`SELECT ${MAHSUP} FROM finans_mahsup WHERE id = $1${kilit ? ' FOR UPDATE' : ''}`, [id]);
 export const virmanGetir = <T>(db: Db, id: number, kilit = false) => db.tek<T>(`SELECT ${VIRMAN} FROM finans_virman WHERE id = $1${kilit ? ' FOR UPDATE' : ''}`, [id]);
+// 3675 D2: Logo faturası eşleşmesi için faturalar ve iadeler (başlangıçtan sonrası; iptaller dahil, durumuyla).
+export interface LogoEslesmeBelgesi {
+  id: number; yon: string; tur: string; firmaId: number | null; belgeNo: string; belgeTarihi: string; paraBirimi: string;
+  tutar: string; kdvTutari: string; durum: string;
+}
+export const logoEslesmeBelgeleri = (db: Db, baslangic: string) => db.sorgu<LogoEslesmeBelgesi>(
+  `SELECT b.id, b.yon, b.tur, b.firma_id AS "firmaId", b.belge_no AS "belgeNo", ${tarihMetni('b.belge_tarihi')} AS "belgeTarihi", rtrim(b.para_birimi) AS "paraBirimi",
+          b.tutar, b.kdv_tutari AS "kdvTutari", b.durum
+     FROM finans_belge b WHERE b.tur IN ('fatura', 'iade') AND b.belge_no IS NOT NULL AND b.belge_tarihi >= $1::date ORDER BY b.belge_tarihi, b.id`,
+  [baslangic],
+);
+
 export const duzenliGetir = <T>(db: Db, id: number, kilit = false) => db.tek<T>(`SELECT ${DUZENLI} FROM finans_duzenli_odeme WHERE id = $1${kilit ? ' FOR UPDATE' : ''}`, [id]);
 export const duzenliAydaOdendiMi = async (db: Db, id: number, tarih: string) => (await db.tek<{ var: boolean }>(
   `SELECT EXISTS (SELECT 1 FROM finans_belge WHERE duzenli_odeme_id = $1 AND durum <> 'iptal'

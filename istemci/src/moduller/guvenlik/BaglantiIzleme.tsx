@@ -49,7 +49,7 @@ const AKIS_SUTUNLARI: readonly Sutun<AkisSatiri>[] = [
 function akisSatirlari(logo: LogoHazirlikCevabi | undefined, smartes: SmartesHazirlikCevabi | undefined): AkisSatiri[] {
   const l = (logo?.akislar ?? []).map((a): AkisSatiri => ({
     anahtar: `logo:${a.anahtar}`, kaynak: 'Logo', yon: a.yon === 'tmi-logo' ? 'Giden' : 'Gelen', baslik: a.baslik, durum: a.durum,
-    sayi: a.gonderilen, hatali: a.hatali, son: a.sonDeneme, sonHata: null,
+    sayi: a.gonderilen, hatali: a.hatali, son: a.sonDeneme, sonHata: a.sonHata ?? null,
   }));
   const s = (smartes?.akislar ?? []).map((a): AkisSatiri => ({
     anahtar: `smartes:${a.anahtar}`, kaynak: 'SmartES', yon: a.yon === 'tmi-smartes' ? 'Giden' : 'Gelen', baslik: a.baslik, durum: a.durum,

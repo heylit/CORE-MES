@@ -1181,12 +1181,12 @@ export function bekleyenGidenler(db: Db): Promise<{ belgeTuru: string; sayi: num
 
 /* ---------------- 3675 D1: Logo fatura başlığı ve cari hareket aynası ---------------- */
 
-export interface FaturaCariImleci { firma: number; donem: number; sonRef: number; dolu: boolean; sonOkuma: Date }
+export interface FaturaCariImleci { firma: number; donem: number; sonRef: number; dolu: boolean; sonOkuma: Date; degisme: string | null }
 
 // Akış başına en son okunan firma ve dönem (diğer okumalarla aynı kural).
 export function faturaCariImleci(db: Db, akis: FaturaCariAkisi): Promise<FaturaCariImleci | null> {
   return db.tek<FaturaCariImleci>(
-    `SELECT firma, donem, son_ref::float8 AS "sonRef", dolu, son_okuma AS "sonOkuma"
+    `SELECT firma, donem, son_ref::float8 AS "sonRef", dolu, son_okuma AS "sonOkuma", degisme
        FROM logo_fatura_cari_imleci WHERE akis = $1 ORDER BY son_okuma DESC, firma DESC, donem DESC LIMIT 1`,
     [akis],
   );
@@ -1196,27 +1196,66 @@ export function faturaCariImleciVar(db: Db, akis: FaturaCariAkisi, firma: number
   return db.tek<{ sonRef: number }>('SELECT son_ref::float8 AS "sonRef" FROM logo_fatura_cari_imleci WHERE akis = $1 AND firma = $2 AND donem = $3', [akis, firma, donem]);
 }
 
-export async function faturaCariImleciYaz(db: Db, akis: FaturaCariAkisi, i: Omit<FaturaCariImleci, 'sonOkuma'>, zaman: Date): Promise<void> {
+export async function faturaCariImleciYaz(db: Db, akis: FaturaCariAkisi, i: Omit<FaturaCariImleci, 'sonOkuma' | 'degisme'> & { degisme?: string | null }, zaman: Date): Promise<void> {
   await db.sorgu(
-    `INSERT INTO logo_fatura_cari_imleci (akis, firma, donem, son_ref, dolu, son_okuma) VALUES ($1, $2, $3, $4, $5, $6)
-     ON CONFLICT (akis, firma, donem) DO UPDATE SET son_ref = GREATEST(logo_fatura_cari_imleci.son_ref, EXCLUDED.son_ref), dolu = EXCLUDED.dolu, son_okuma = EXCLUDED.son_okuma`,
-    [akis, i.firma, i.donem, i.sonRef, i.dolu, zaman],
+    `INSERT INTO logo_fatura_cari_imleci (akis, firma, donem, son_ref, dolu, son_okuma, degisme, ilk_okuma) VALUES ($1, $2, $3, $4, $5, $6, $7, $6)
+     ON CONFLICT (akis, firma, donem) DO UPDATE SET son_ref = CASE WHEN $1 = 'fatura-degisen' THEN EXCLUDED.son_ref ELSE GREATEST(logo_fatura_cari_imleci.son_ref, EXCLUDED.son_ref) END,
+       dolu = EXCLUDED.dolu, son_okuma = EXCLUDED.son_okuma, degisme = COALESCE(EXCLUDED.degisme, logo_fatura_cari_imleci.degisme)`,
+    [akis, i.firma, i.donem, i.sonRef, i.dolu, zaman, i.degisme ?? null],
   );
+}
+
+// Kaynak başına son okuma başarısızlığı (Risk N5): sağlık ekranı bunu gösterir; ilgili okuma başarılı olunca silinir.
+export async function faturaCariHataYaz(db: Db, anahtar: string, zaman: Date, ileti: string): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO logo_fatura_cari_hata (anahtar, zaman, ileti) VALUES ($1, $2, left($3, 300))
+     ON CONFLICT (anahtar) DO UPDATE SET zaman = EXCLUDED.zaman, ileti = EXCLUDED.ileti`, [anahtar, zaman, ileti]);
+}
+export async function faturaCariHataSil(db: Db, anahtar: string): Promise<void> {
+  await db.sorgu('DELETE FROM logo_fatura_cari_hata WHERE anahtar = $1', [anahtar]);
+}
+export async function faturaCariSonHata(db: Db, onek: string): Promise<{ anahtar: string; zaman: string; ileti: string } | null> {
+  return db.tek<{ anahtar: string; zaman: string; ileti: string }>(
+    `SELECT anahtar, ${zamanMetni('zaman')} AS zaman, ileti FROM logo_fatura_cari_hata WHERE anahtar LIKE $1 ORDER BY zaman DESC LIMIT 1`, [`${onek}%`]);
+}
+export async function faturaCariSayilari(db: Db): Promise<{ fatura: number; faturaSon: string | null; cari: number; cariSon: string | null }> {
+  const r = await db.tek<{ fatura: number; faturaSon: string | null; cari: number; cariSon: string | null }>(
+    `SELECT (SELECT count(*) FROM logo_fatura_baslik)::int AS fatura, (SELECT ${zamanMetni('max(son_okuma)')} FROM logo_fatura_cari_imleci WHERE akis LIKE 'fatura-%') AS "faturaSon",
+            (SELECT count(*) FROM logo_cari_hareket)::int AS cari, (SELECT ${zamanMetni('max(son_okuma)')} FROM logo_fatura_cari_imleci WHERE akis = 'cari-hareket') AS "cariSon"`);
+  if (!r) throw new Error('Fatura ve cari ayna özeti okunamadı.');
+  return r;
+}
+
+// Önceki dönem (Risk N4): yeni dönemin imleci açıldıktan sonra FATURA_ONCEKI_DONEM_GUNU gün boyunca önceki dönemler de okunur (geç girilen faturalar).
+export function faturaOncekiDonemImlecleri(db: Db, akis: FaturaCariAkisi, firma: number, donem: number, simdi: Date, gun: number): Promise<FaturaCariImleci[]> {
+  return db.sorgu<FaturaCariImleci>(
+    `SELECT o.firma, o.donem, o.son_ref::float8 AS "sonRef", o.dolu, o.son_okuma AS "sonOkuma", o.degisme
+       FROM logo_fatura_cari_imleci o
+      WHERE o.akis = $1 AND o.firma = $2 AND o.donem < $3
+        AND EXISTS (SELECT 1 FROM logo_fatura_cari_imleci c WHERE c.akis = $1 AND c.firma = $2 AND c.donem = $3 AND c.ilk_okuma > $4::timestamptz - make_interval(days => $5))
+      ORDER BY o.donem DESC`,
+    [akis, firma, donem, simdi, gun],
+  );
+}
+
+// Değişen fatura okumasının başlangıcı: aynadaki en eski okuma (ayna boşsa değişen okuması başlamaz).
+export async function faturaAynaIlkOkuma(db: Db): Promise<string | null> {
+  return (await db.tek<{ z: string | null }>(`SELECT ${zamanMetni('min(okuma_zamani)')} AS z FROM logo_fatura_baslik`))?.z ?? null;
 }
 
 // Fatura başlığı iptal edilebilir; aynı kayıt yeniden gelirse son hâle getirilir. D1'de yalnız kayıt numarasından büyükler okunur: eski kaydın
 // sonradan değişmesi ya da silinmesi izlenmez (değişme imleci sonraki dilimde).
-export async function faturaBasliklariniYaz(db: Db, tur: FaturaTuru, firma: number, donem: number, b: readonly FaturaBasligi[], zaman: Date): Promise<number> {
+export async function faturaBasliklariniYaz(db: Db, tur: FaturaTuru | null, firma: number, donem: number, b: readonly FaturaBasligi[], zaman: Date): Promise<number> {
   if (b.length === 0) return 0;
   await db.sorgu(
-    `INSERT INTO logo_fatura_baslik (firma, donem, logo_kayit_no, tur, fatura_no, tarih, cari_kodu, doviz_turu, net, kdv, brut, iptal, okuma_zamani)
-     SELECT $1, $2, r, $3, n, t, c, d, ne, k, br, ip, $13
-       FROM unnest($4::bigint[], $5::text[], $6::date[], $7::text[], $8::int[], $9::numeric[], $10::numeric[], $11::numeric[], $12::boolean[]) AS x(r, n, t, c, d, ne, k, br, ip)
+    `INSERT INTO logo_fatura_baslik (firma, donem, logo_kayit_no, tur, fatura_no, tarih, cari_kodu, doviz_turu, net, kdv, brut, iptal, logo_degisme, okuma_zamani)
+     SELECT $1, $2, r, tu, n, t, c, d, ne, k, br, ip, dg, $14
+       FROM unnest($3::bigint[], $4::text[], $5::text[], $6::date[], $7::text[], $8::int[], $9::numeric[], $10::numeric[], $11::numeric[], $12::boolean[], $13::text[]) AS x(r, tu, n, t, c, d, ne, k, br, ip, dg)
      ON CONFLICT (firma, donem, logo_kayit_no) DO UPDATE SET
        tur = EXCLUDED.tur, fatura_no = EXCLUDED.fatura_no, tarih = EXCLUDED.tarih, cari_kodu = EXCLUDED.cari_kodu, doviz_turu = EXCLUDED.doviz_turu,
-       net = EXCLUDED.net, kdv = EXCLUDED.kdv, brut = EXCLUDED.brut, iptal = EXCLUDED.iptal, okuma_zamani = EXCLUDED.okuma_zamani`,
-    [firma, donem, tur, b.map((x) => x.logoKayitNo), b.map((x) => x.faturaNo), b.map((x) => x.tarih), b.map((x) => x.cariKodu), b.map((x) => x.dovizTuru),
-      b.map((x) => x.net), b.map((x) => x.kdv), b.map((x) => x.brut), b.map((x) => x.iptal), zaman],
+       net = EXCLUDED.net, kdv = EXCLUDED.kdv, brut = EXCLUDED.brut, iptal = EXCLUDED.iptal, logo_degisme = EXCLUDED.logo_degisme, okuma_zamani = EXCLUDED.okuma_zamani`,
+    [firma, donem, b.map((x) => x.logoKayitNo), b.map((x) => x.tur ?? tur), b.map((x) => x.faturaNo), b.map((x) => x.tarih), b.map((x) => x.cariKodu), b.map((x) => x.dovizTuru),
+      b.map((x) => x.net), b.map((x) => x.kdv), b.map((x) => x.brut), b.map((x) => x.iptal), b.map((x) => x.degisme), zaman],
   );
   return b.length;
 }
@@ -1242,3 +1281,13 @@ export async function faturaCariOzeti(db: Db): Promise<{ fatura: number | null; 
   );
   return r === null || r.son === null ? { fatura: null, cariHareket: null, son: null } : { fatura: r.fatura, cariHareket: r.hareket, son: r.son };
 }
+
+// 3675 D2: eşleşme için Logo fatura başlıkları (aynadan; başlangıçtan sonrası).
+export interface FaturaAynaSatiri {
+  tur: FaturaTuru; faturaNo: string; tarih: string; cariKodu: string | null; dovizTuru: number | null; net: string; kdv: string; brut: string; iptal: boolean;
+}
+export const faturaAynaSatirlari = (db: Db, baslangic: string) => db.sorgu<FaturaAynaSatiri>(
+  `SELECT tur, fatura_no AS "faturaNo", tarih::text AS tarih, cari_kodu AS "cariKodu", doviz_turu AS "dovizTuru", net::text AS net, kdv::text AS kdv, brut::text AS brut, iptal
+     FROM logo_fatura_baslik WHERE tarih >= $1::date ORDER BY tarih, logo_kayit_no`,
+  [baslangic],
+);
