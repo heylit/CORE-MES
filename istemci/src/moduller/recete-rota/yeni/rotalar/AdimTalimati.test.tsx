@@ -17,7 +17,7 @@ const YAYINDA: TalimatlarCevabi = {
 };
 const SABLONLAR: TalimatSablonlariCevabi = { sablonlar: [{ id: 3, kod: 'TS-DNM', ad: 'Deneme işleme', sartname: null, aktif: true, surum: 1, adimSayisi: 1, kontrolSayisi: 0, resimSayisi: 0, videoSayisi: 0, operasyonTipi: null, emreGelir: false }] };
 const SABLON: TalimatSablonuCevabi = {
-  sablon: { ...SABLONLAR.sablonlar[0]!, adimlar: [{ sira: 1, baslik: 'Çapak al', metin: null, kontrol: { tur: 'yok' }, zorunlu: false, medya: [], asama: 'uretim', hedefSureDk: null }] },
+  sablon: { ...SABLONLAR.sablonlar[0]!, adimlar: [{ sira: 1, baslik: 'Çapak al', metin: null, kontrol: { tur: 'yok' }, zorunlu: false, medya: [], asama: 'uretim', hedefSureDk: null, sahneHareketi: null }] },
 };
 
 function kur(kullanici: Kullanici) {

@@ -3,8 +3,8 @@ import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, cokBuyuk, dogrulama, eskiSurum } from '#cekirdek/hata.ts';
 import type { DenetimSecimi, IkiliCevap } from '#cekirdek/uc.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
-import type { TalimatlarCevabi, TalimatAdimi, TalimatSablonKopyalariCevabi, TalimatSablonlariCevabi, TalimatSablonuCevabi } from '#paylasilan/sozlesme/rota.ts';
-import { MEDYA_SINIRI } from '#paylasilan/sozlesme/rota.ts';
+import type { SablonSahneHareketi, TalimatlarCevabi, TalimatAdimi, TalimatSablonKopyalariCevabi, TalimatSablonlariCevabi, TalimatSablonuCevabi } from '#paylasilan/sozlesme/rota.ts';
+import { MEDYA_SINIRI, sablonSahneHareketiSemasi } from '#paylasilan/sozlesme/rota.ts';
 import { denetimSatiri, medyaTutamagi } from '../../dosya/disari.ts';
 import type { BagliDosya } from '#paylasilan/sozlesme/dosya.ts';
 import { kisiAdlari } from '../../kisiler/disari.ts';
@@ -283,7 +283,12 @@ export async function talimatSablonlari(db: Db): Promise<TalimatSablonlariCevabi
 export async function talimatSablonu(db: Db, id: number): Promise<TalimatSablonuCevabi> {
   const x = (await s.talimatSablonlari(db, [id]))[0];
   if (!x) throw bulunamadi(TALIMAT_SABLONU_YOK);
-  return { sablon: { ...sablonOzeti(x, await tipAdlari(db)), adimlar: talimatAdimlariKur(await s.talimatSablonAdimlari(db, id), await s.sablonMedyalari(db, id)).get(id) ?? [] } };
+  const hareketler = new Map((await s.talimatSablonHareketleri(db, id)).flatMap((h) => {
+    const r = sablonSahneHareketiSemasi.safeParse(h.hareket);
+    return r.success ? [[h.adimSira, r.data] as const] : [];
+  }));
+  const adimlar = talimatAdimlariKur(await s.talimatSablonAdimlari(db, id), await s.sablonMedyalari(db, id)).get(id) ?? [];
+  return { sablon: { ...sablonOzeti(x, await tipAdlari(db)), adimlar: adimlar.map((a) => ({ ...a, sahneHareketi: hareketler.get(a.sira) ?? null })) } };
 }
 
 // Kopyalar şablonun güncel sürümüyle karşılaştırılır; ürün özeti malzemeler modülünden toplu alınır.
@@ -322,8 +327,13 @@ export async function talimatSablonEkle(
   const yazilar = await adimYazilari(db, kullanici, g.adimlar, denetimEki);
   const id = await kisitKorumali(TALIMAT_SABLON_KISITLARI, () => s.talimatSablonEkle(db, { ...g, ...op }));
   await s.talimatSablonAdimlariniYaz(db, id, yazilar);
+  await s.talimatSablonHareketleriniYaz(db, id, sahneHareketleri(g.adimlar));
   return talimatSablonu(db, id);
 }
+
+// Hareketi olmayan adım için satır yazılmaz; sıra adımın yeni sırasıdır (adımlar bütün olarak 1'den yeniden yazılır).
+const sahneHareketleri = (adimlar: readonly TalimatAdimiYazisi[]): { adimSira: number; hareket: SablonSahneHareketi }[] =>
+  adimlar.flatMap((a, i) => (a.sahneHareketi ? [{ adimSira: i + 1, hareket: a.sahneHareketi }] : []));
 
 async function sablonKomutIcinAl(db: Db, id: number, surum: number): Promise<void> {
   const x = await s.talimatSablonKilitle(db, id);
@@ -344,6 +354,7 @@ export async function talimatSablonKaydet(
   const onceki = (await s.sablonMedyalari(db, id)).map((m) => m.ozet);
   await kisitKorumali(TALIMAT_SABLON_KISITLARI, () => s.talimatSablonGuncelle(db, id, { ...g, ...op }));
   await s.talimatSablonAdimlariniYaz(db, id, yazilar);
+  await s.talimatSablonHareketleriniYaz(db, id, sahneHareketleri(g.adimlar));
   await kullanilmayanMedyayiBirak(db, onceki, denetimEki);
   return talimatSablonu(db, id);
 }
@@ -380,7 +391,7 @@ export async function emreGelenSablonaAdimEkle(
   const mevcut = (await talimatSablonu(db, bag.id)).sablon.adimlar;
   if (mevcut.length >= 30) throw cakisma(SABLON_DOLU);
   const adimlar: TalimatAdimiYazisi[] = [
-    ...mevcut.map((a) => ({ baslik: a.baslik, metin: a.metin, kontrol: a.kontrol, zorunlu: a.zorunlu, medya: a.medya.map((m) => ({ ozet: m.ozet, ad: m.ad })), asama: a.asama, hedefSureDk: a.hedefSureDk })),
+    ...mevcut.map((a) => ({ baslik: a.baslik, metin: a.metin, kontrol: a.kontrol, zorunlu: a.zorunlu, medya: a.medya.map((m) => ({ ozet: m.ozet, ad: m.ad })), asama: a.asama, hedefSureDk: a.hedefSureDk, sahneHareketi: a.sahneHareketi })),
     { baslik: adim.baslik, metin: null, kontrol: adim.kontrol, zorunlu: false, medya: [], asama: adim.asama, hedefSureDk: null },
   ];
   const c = await talimatSablonKaydet(db, kullanici, bag.id, { surum: x.surum, ad: x.ad, sartnameId: x.sartnameId, adimlar, operasyonTipiId: x.operasyonTipiId, emreGelir: x.emreGelir }, denetimEki);

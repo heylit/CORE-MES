@@ -1,5 +1,5 @@
 import type {
-  AtifGirdisi, KontrolNoktasi, ParametreDegeri, ParametreTuru, SartnameKapsami, SartnameParametresiSatiri, SartnameSurumu, TalimatAdimi, TalimatAdimiGirdisi,
+  AtifGirdisi, KontrolNoktasi, ParametreDegeri, SablonSahneHareketi, ParametreTuru, SartnameKapsami, SartnameParametresiSatiri, SartnameSurumu, TalimatAdimi, TalimatAdimiGirdisi,
   TalimatAsamasi, TalimatMedyasi,
 } from '#paylasilan/sozlesme/rota.ts';
 
@@ -79,6 +79,8 @@ export interface AdimTaslagi {
   // 2098-8 a: dakika, yazıldığı gibi; boş hedef yok demektir. Operatöre gösterilmez.
   hedefSure: string;
   medya: TalimatMedyasi[];
+  // 3646: yalnız şablon adımında; düzenleyici adımı taşırken bozmaz, talimat adımında hiç yoktur.
+  sahneHareketi?: SablonSahneHareketi | null;
 }
 
 // Boş ya da okunamayan hedef null'dır; geçerliliği adimEksikleri söyler.
@@ -94,11 +96,15 @@ export const bosAdim = (): AdimTaslagi => ({ anahtar: yeniAnahtar(), baslik: '',
 export const taslagaCevir = (a: TalimatAdimi): AdimTaslagi => ({
   anahtar: yeniAnahtar(), baslik: a.baslik, metin: a.metin ?? '', kontrol: a.kontrol, zorunlu: a.zorunlu, asama: a.asama,
   hedefSure: a.hedefSureDk === null ? '' : String(a.hedefSureDk), medya: a.medya,
+  sahneHareketi: 'sahneHareketi' in a ? (a.sahneHareketi as SablonSahneHareketi | null) : null,
 });
 export const girdiyeCevir = (a: AdimTaslagi): TalimatAdimiGirdisi => ({
   baslik: a.baslik.trim(), metin: a.metin.trim() === '' ? null : a.metin.trim(), kontrol: a.kontrol, zorunlu: a.zorunlu, asama: a.asama,
   hedefSureDk: hedefSureOku(a.hedefSure), medya: a.medya.map((m) => ({ ozet: m.ozet, ad: m.ad })),
 });
+
+// Şablon kaydında hareket de gider (3646); kaydetmeyen ekran mevcut hareketi silmesin diye şablon adımı her zaman hareket alanını taşır.
+export const sablonGirdisineCevir = (a: AdimTaslagi): TalimatAdimiGirdisi & { sahneHareketi: SablonSahneHareketi | null } => ({ ...girdiyeCevir(a), sahneHareketi: a.sahneHareketi ?? null });
 
 // Sunucunun da reddettiği eksikler; gönderilmeden önce gösterilir ki tek tek 400 alınmasın.
 export function adimEksikleri(adimlar: readonly AdimTaslagi[]): string[] {

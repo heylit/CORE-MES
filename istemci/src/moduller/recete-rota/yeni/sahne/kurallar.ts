@@ -86,3 +86,47 @@ export const hareketYaz = (adimlar: readonly SahneAdimi[], sira: number, degisik
     ? adimlar.map((a) => (a.sira === sira ? { ...a, hareket: { ...a.hareket, ...degisiklik } } : a))
     : [...adimlar, { sira, hareket: { ...VARSAYILAN_HAREKET, ...degisiklik } }];
 
+
+// Şablonun hareketini talimat adımlarına uygular (3646): şablonun i. adımı talimatın i. adımına gider; fazla adım yok sayılır. Adımın var olan
+// parçaları ve kamerası korunur (şablonda parça ve kamera yok); yön, mesafe, süre ve sıralı şablondan gelir. Parçası olmayan adım kayda girmez,
+// bu yüzden beklenen parça sayısı ayrıca döner ve ekran "parça bekleniyor" der.
+export interface SablonHareketAdimi { sahneHareketi: { yon: SahneYonu; mesafeMm: number; sureSn: number; sirali: boolean; parcaSayisi: number } | null }
+export interface SablonUygulamaOzeti {
+  adimlar: SahneAdimi[];
+  beklenen: ReadonlyMap<number, number>;
+  uygulanan: number;
+  // Şablonda hareketi olup talimatta karşılığı olmayan adım sayısı ve şablonun toplam hareketli adımı.
+  atlanan: number;
+  hareketli: number;
+  // Uygulanınca mevcut hareketi (parçası ya da değerleri) değişecek talimat adımlarının sırası.
+  degisen: number[];
+}
+export function sablonHareketiUygula(
+  adimlar: readonly SahneAdimi[], talimatSiralari: readonly number[], sablonAdimlari: readonly SablonHareketAdimi[],
+): SablonUygulamaOzeti {
+  let sonuc = [...adimlar];
+  const beklenen = new Map<number, number>();
+  const degisen: number[] = [];
+  let uygulanan = 0;
+  sablonAdimlari.slice(0, talimatSiralari.length).forEach((s, i) => {
+    const sira = talimatSiralari[i];
+    const h = s.sahneHareketi;
+    if (sira === undefined || h === null) return;
+    const once = sonuc.find((a) => a.sira === sira)?.hareket;
+    if (once !== undefined && (once.yon !== h.yon || once.mesafeMm !== h.mesafeMm || once.sureSn !== h.sureSn || once.sirali !== h.sirali)) degisen.push(sira);
+    sonuc = hareketYaz(sonuc, sira, { yon: h.yon, mesafeMm: h.mesafeMm, sureSn: h.sureSn, sirali: h.sirali });
+    uygulanan += 1;
+    const mevcutParca = sonuc.find((a) => a.sira === sira)?.hareket.parcalar.length ?? 0;
+    if (mevcutParca < h.parcaSayisi) beklenen.set(sira, h.parcaSayisi);
+  });
+  const hareketli = sablonAdimlari.filter((s) => s.sahneHareketi !== null).length;
+  return { adimlar: sonuc, beklenen, uygulanan, atlanan: hareketli - uygulanan, hareketli, degisen };
+}
+
+// Şablon önizlemesi (3646): şablonda parça yoktur; seçilen ürün modelinde adım başına istenen sayıda parça, gövde (en büyük parça) hariç
+// büyükten küçüğe sırayla verilir. Yalnız göstermek içindir, hiçbir yere kaydedilmez. Model yetmezse son adımlar eksik parçayla kalır.
+export function onizlemeParcalari(kutular: readonly ParcaKutusu[], sayilar: readonly number[]): number[][] {
+  const sirali = kutular.map((k, i) => ({ i, v: hacim(k) })).sort((a, b) => b.v - a.v || a.i - b.i).map((x) => x.i).slice(1);
+  let basla = 0;
+  return sayilar.map((n) => { const dilim = sirali.slice(basla, basla + n); basla += n; return dilim; });
+}

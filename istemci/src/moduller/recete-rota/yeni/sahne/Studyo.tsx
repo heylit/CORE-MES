@@ -1,13 +1,13 @@
-import { Suspense, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { GeometriModelSatiri } from '#paylasilan/sozlesme/geometri.ts';
 import type { SahneAdimi, TalimatlarCevabi } from '#paylasilan/sozlesme/rota.ts';
 import { Dugme, DurumKutusu, IsaretKutusu, Pencere, Secim, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
 import { dosyaYukle, MontajOynatici as Sahne3B, type SahneDenetimi } from '../../../belge-merkezi/disari.ts';
-import { anahtarlar as talimatAnahtarlari, talimatYolu, useTalimatKomutu } from '../sartnameler/veri.ts';
+import { anahtarlar as talimatAnahtarlari, talimatYolu, useSablon, useTalimatKomutu } from '../sartnameler/veri.ts';
 import type { ParcaKutusu } from './kurallar.ts';
-import { donguSuresi, hareketYaz, kaydedilecekler, SAHNE_SINIRI, SAHNE_YONLERI, parcaDegistir, sahneEksigi, sahneOner, VARSAYILAN_HAREKET } from './kurallar.ts';
+import { donguSuresi, hareketYaz, kaydedilecekler, SAHNE_SINIRI, SAHNE_YONLERI, parcaDegistir, sablonHareketiUygula, type SablonUygulamaOzeti, sahneEksigi, sahneOner, VARSAYILAN_HAREKET } from './kurallar.ts';
 import { useModelDosyasi, useSahneKaydet, useSahneler, useUrunModelleri } from './veri.ts';
 import { tuvalKaydet, videoDesteklenirMi, videoluTaslak } from './video.ts';
 import './sahne.css';
@@ -65,6 +65,14 @@ function StudyoGovdesi({ yazabilir, urunId, opNo, revizyonId, talimat, kapat, ka
   const istemci = useQueryClient();
   const talimatKomutu = useTalimatKomutu(urunId, revizyonId);
   const dosya = useModelDosyasi(modelId);
+  const seritRef = useRef<HTMLDivElement>(null);
+  // Dar ekranda şerit yatay kayar; Önceki/Sonraki ile seçilen adım görünür kalsın.
+  useEffect(() => { seritRef.current?.querySelector('[aria-current="true"]')?.scrollIntoView?.({ inline: 'nearest', block: 'nearest' }); }, [aktif]);
+  // 3646: talimat bir şablondan kopyalandıysa şablonun 3B hareketleri adımlara uygulanabilir; parçalar yine elle seçilir.
+  const sablon = useSablon(talimat.koken?.sablon.id ?? null);
+  const sablonAdimlari = sablon.data?.sablon.adimlar ?? [];
+  const sablonHareketli = sablonAdimlari.some((a) => a.sahneHareketi !== null);
+  const [beklenen, beklenenYaz] = useState<ReadonlyMap<number, number>>(new Map());
 
   const degistir = (yeni: SahneAdimi[]) => { adimlarYaz(yeni); kirliYaz(true); hataYaz(null); };
   const hareket = adimlar.find((a) => a.sira === aktif)?.hareket ?? VARSAYILAN_HAREKET;
@@ -82,6 +90,20 @@ function StudyoGovdesi({ yazabilir, urunId, opNo, revizyonId, talimat, kapat, ka
     if (kutular.current.length === 0) { bildir('hata', 'Model açılmadan öneri yapılamaz.'); return; }
     degistir(sahneOner(kutular.current, talimatSiralari));
     bildir('tamam', 'Sıra ve yön önerildi: en büyük parça gövde kaldı, kalanlar büyükten küçüğe adımlara dağıtıldı. Kaydetmeden önce gözden geçirin.');
+  };
+  const [uygulamaOnayi, uygulamaOnayiYaz] = useState<SablonUygulamaOzeti | null>(null);
+  const surumFarki = talimat.koken !== null && sablon.data !== undefined && sablon.data.sablon.surum !== talimat.koken.surum;
+  const uygula = (r: SablonUygulamaOzeti) => {
+    degistir(r.adimlar);
+    beklenenYaz(r.beklenen);
+    uygulamaOnayiYaz(null);
+    bildir('tamam', `${talimat.koken?.sablon.kod ?? 'Şablon'} şablonunun hareketi ${String(r.uygulanan)} adıma uygulandı. Kamera açısı değişmedi; giren parçaları sahneden seçin, sonra kaydedin.`);
+  };
+  // Ezilecek hareket, atlanan adım ya da şablonun sonradan değişmiş olması varsa uygulamadan önce sorulur; fark yoksa doğrudan uygulanır.
+  const sablonuUygula = () => {
+    const r = sablonHareketiUygula(adimlar, talimatSiralari, sablonAdimlari);
+    if (r.degisen.length === 0 && r.atlanan === 0 && !surumFarki) uygula(r);
+    else uygulamaOnayiYaz(r);
   };
   const aciyiKaydet = () => {
     const k = denetim.current?.kameraOku() ?? null;
@@ -135,7 +157,29 @@ function StudyoGovdesi({ yazabilir, urunId, opNo, revizyonId, talimat, kapat, ka
         <p className="tc-sh-not">{oncekidenMi ? `Sürüm ${String(talimat.surum)} için sahne yok; önceki sürümün sahnesinden başlandı. ${durum}` : durum}</p>
         <div className="tc-sh-duzen tc-sh-araclar">
           <Dugme simge="bolt" disabled={parcaSayisi === 0} onClick={oner}>Sırayı ve yönü öner</Dugme>
+          {talimat.koken !== null && (
+            <span className="tc-sh-duzen">
+              <Dugme simge="cube" disabled={!sablonHareketli} yukleniyor={sablon.isPending} onClick={sablonuUygula}
+                title={sablonHareketli ? undefined : 'Bu şablonda 3B hareket tanımlı değil'}>{`Şablondan uygula (${talimat.koken.sablon.kod})`}</Dugme>
+              {sablon.isSuccess && !sablonHareketli && <span className="tc-sh-not">Bu şablonda 3B hareket tanımlı değil.</span>}
+            </span>
+          )}
         </div>
+        {uygulamaOnayi !== null && talimat.koken !== null && (
+          <div className="tc-sh-duzen tc-sh-alan" role="group" aria-label="Şablon uygulama özeti">
+            <p className="tc-sh-not">
+              {`Şablonda ${String(uygulamaOnayi.hareketli)} hareketli adım var; ${String(uygulamaOnayi.uygulanan)} adıma uygulanacak, talimatta ${String(talimatSiralari.length)} adım var.`}
+              {uygulamaOnayi.atlanan > 0 ? ` ${String(uygulamaOnayi.atlanan)} hareketli şablon adımının talimatta karşılığı yok, atlanacak.` : ''}
+              {uygulamaOnayi.degisen.length > 0 ? ` Şu adımların şimdiki yön, mesafe ya da süresi değişecek: ${uygulamaOnayi.degisen.map((s) => String(talimatSiralari.indexOf(s) + 1)).join(', ')}.` : ''}
+              {surumFarki ? ` Talimat şablonun ${String(talimat.koken.surum)}. sürümünden kopyalandı; şablonun güncel sürümü ${String(sablon.data?.sablon.surum ?? 0)}.` : ''}
+              {' Kamera açısı değişmez. Uygulamayı kaydetmeden geri almak için stüdyoyu kapatın.'}
+            </p>
+            <div className="tc-sh-araclar">
+              <Dugme tur="birincil" onClick={() => { uygula(uygulamaOnayi); }}>Hareketleri uygula</Dugme>
+              <Dugme onClick={() => { uygulamaOnayiYaz(null); }}>Vazgeç</Dugme>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="tc-sh-govde">
@@ -161,7 +205,7 @@ function StudyoGovdesi({ yazabilir, urunId, opNo, revizyonId, talimat, kapat, ka
               <span className="tc-sh-not tc-sh-duzen">Sürükle: döndür · tekerlek: yakınlaş · tıkla: parçayı bu adıma ekle ya da çıkar</span>
             </div>
           </div>
-          <div className="tc-sh-serit" role="list" aria-label="Talimat adımları">
+          <div ref={seritRef} className="tc-sh-serit" role="list" aria-label="Talimat adımları">
             {talimat.adimlar.map((t, i) => {
               const h = adimlar.find((a) => a.sira === t.sira)?.hareket ?? null;
               const n = h?.parcalar.length ?? 0;
@@ -191,6 +235,9 @@ function StudyoGovdesi({ yazabilir, urunId, opNo, revizyonId, talimat, kapat, ka
                 ))}
             </div>
           </div>
+          {beklenen.has(aktif) && hareket.parcalar.length < (beklenen.get(aktif) ?? 0) && (
+            <p className="tc-sh-not" role="status">{`Şablon bu adım için ${String(beklenen.get(aktif))} parça bekliyor; şimdi ${String(hareket.parcalar.length)} seçili.`}</p>
+          )}
           <div className="tc-sh-alan">
             <span>Giriş yönü</span>
             <div className="tc-sh-yonler">
@@ -201,12 +248,12 @@ function StudyoGovdesi({ yazabilir, urunId, opNo, revizyonId, talimat, kapat, ka
           </div>
           <label className="tc-sh-alan">
             <span>Mesafe <b>{`${String(Math.round(hareket.mesafeMm))} mm`}</b></span>
-            <input type="range" min={0} max={Math.min(SAHNE_SINIRI.mesafeMm, 500)} step={5} value={hareket.mesafeMm}
+            <input type="range" min={0} max={Math.min(SAHNE_SINIRI.mesafeMm, 500)} step={5} value={hareket.mesafeMm} aria-valuetext={`${String(Math.round(hareket.mesafeMm))} mm`}
               onChange={(e) => { yaz({ mesafeMm: Number(e.target.value) }); }} />
           </label>
           <label className="tc-sh-alan">
             <span>Süre <b>{`${sayi(hareket.sureSn)} sn`}</b></span>
-            <input type="range" min={SAHNE_SINIRI.sureSnAlt} max={6} step={0.1} value={hareket.sureSn}
+            <input type="range" min={SAHNE_SINIRI.sureSnAlt} max={6} step={0.1} value={hareket.sureSn} aria-valuetext={`${sayi(hareket.sureSn)} sn`}
               onChange={(e) => { yaz({ sureSn: Number(e.target.value) }); }} />
           </label>
           <IsaretKutusu etiket="Parçalar sırayla girsin (cıvata 1-2-3-4)" checked={hareket.sirali} disabled={hareket.parcalar.length < 2}

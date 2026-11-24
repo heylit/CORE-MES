@@ -29,8 +29,8 @@ const SABLON: TalimatSablonuCevabi = {
   sablon: {
     id: 3, kod: 'TS-DNM', ad: 'Deneme işleme', sartname: null, aktif: true, surum: 2, adimSayisi: 2, kontrolSayisi: 2, resimSayisi: 0, videoSayisi: 0, operasyonTipi: null, emreGelir: false,
     adimlar: [
-      { sira: 1, baslik: 'Programı doğrula', metin: 'Revizyon iş emriyle aynı.', kontrol: { tur: 'onay' }, zorunlu: true, medya: [], asama: 'uretim', hedefSureDk: 5 },
-      { sira: 2, baslik: 'İlk parçayı ölç', metin: null, kontrol: { tur: 'olcum', ad: 'Çap', alt: 9.98, ust: 10.02, birim: 'mm' }, zorunlu: true, medya: [], asama: 'uretim', hedefSureDk: null },
+      { sira: 1, baslik: 'Programı doğrula', metin: 'Revizyon iş emriyle aynı.', kontrol: { tur: 'onay' }, zorunlu: true, medya: [], asama: 'uretim', hedefSureDk: 5, sahneHareketi: null },
+      { sira: 2, baslik: 'İlk parçayı ölç', metin: null, kontrol: { tur: 'olcum', ad: 'Çap', alt: 9.98, ust: 10.02, birim: 'mm' }, zorunlu: true, medya: [], asama: 'uretim', hedefSureDk: null, sahneHareketi: null },
     ],
   },
 };
@@ -76,7 +76,7 @@ describe('3494-2 a: hazırlığın tek ekranından şablon açılışı', () => 
   it('?sablon=<id> talimat sekmesini o şablon seçili açar', async () => {
     const { adimlar, ...ilk } = SABLON.sablon;
     const ikinci = { ...ilk, id: 9, kod: 'TS-HZR', ad: 'Deneme hazırlık' };
-    const hazirlikAdimi = { sira: 1, baslik: 'Aparatı hazırla', metin: null, kontrol: { tur: 'yok' as const }, zorunlu: false, medya: [], asama: 'on_hazirlik' as const, hedefSureDk: null };
+    const hazirlikAdimi = { sira: 1, baslik: 'Aparatı hazırla', metin: null, kontrol: { tur: 'yok' as const }, zorunlu: false, medya: [], asama: 'on_hazirlik' as const, hedefSureDk: null, sahneHareketi: null };
     sunucuKur(OKUYAN, { yazmalar: {
       ...okumalar,
       'GET /rota/talimat-sablonlari': () => json(200, { sablonlar: [ilk, ikinci] } satisfies TalimatSablonlariCevabi),
@@ -138,6 +138,44 @@ describe('Şartname ve talimatlar: yazan', () => {
     const govde = istekler.find((i) => i.yol === '/rota/talimat-sablonlari/3/kaydet')?.govde as { surum: number; adimlar: { baslik: string; asama: string; hedefSureDk: number | null }[] };
     expect(govde.surum).toBe(2);
     expect(govde.adimlar.map((a) => [a.baslik, a.asama, a.hedefSureDk])).toEqual([['Programı ve sıfırı doğrula', 'hazirlik', 8], ['İlk parçayı ölç', 'uretim', null]]);
+  });
+
+  it('3646: şablon adımına 3B hareket stüdyoda tanımlanır; hareketi olan adım kaydette korunur', async () => {
+    const eskiHareket = { yon: '-X' as const, mesafeMm: 30, sureSn: 1, sirali: false, parcaSayisi: 2 };
+    const sablon: TalimatSablonuCevabi = { sablon: { ...SABLON.sablon, adimlar: SABLON.sablon.adimlar.map((a, i) => (i === 1 ? { ...a, sahneHareketi: eskiHareket } : a)) } };
+    const istekler = sunucuKur(YAZAN, {
+      yazmalar: {
+        ...okumalar, 'GET /rota/talimat-sablonlari/3': () => json(200, sablon), 'GET /geometri/modeller': () => json(200, { satirlar: [], toplam: 0, sayfa: 1, sayfaBoyu: 100 }),
+        'POST /rota/talimat-sablonlari/3/kaydet': () => json(200, { sablon: { ...sablon.sablon, surum: 3 } }),
+      },
+    });
+    await sayfaAc();
+    fireEvent.click(screen.getByRole('tab', { name: /Talimat şablonları/ }));
+    const onizleme = await screen.findByRole('region', { name: 'Şablon önizlemesi' });
+    fireEvent.click(await within(onizleme).findByRole('button', { name: 'Yeni sürüm' }));
+    const duzen = await screen.findByRole('dialog', { name: 'TS-DNM · yeni sürüm' });
+    fireEvent.click(within(duzen).getByRole('button', { name: '3B hareketler (1)' }));
+    const studyo = await screen.findByRole('dialog', { name: 'TS-DNM · 3B hareketler' });
+    expect(await within(studyo).findByText("Yayında 3B model yok.")).toBeTruthy();
+    expect(within(studyo).getByText('Hareketlerde kaydedilmemiş değişiklik yok.')).toBeTruthy();
+    const kutu = within(studyo).getByRole('checkbox', { name: 'Bu adımın 3B hareketi var' });
+    fireEvent.click(kutu);
+    fireEvent.click(within(studyo).getByRole('button', { name: '+Y' }));
+    fireEvent.change(within(studyo).getByLabelText(/^Beklenen parça sayısı/), { target: { value: '4' } });
+    expect(within(studyo).getByText(/henüz kaydedilmedi/)).toBeTruthy();
+    // Kutu kapatılıp açılınca değerler geri gelir (varsayılana dönmez).
+    fireEvent.click(kutu);
+    fireEvent.click(kutu);
+    expect((within(studyo).getByLabelText(/^Beklenen parça sayısı/) as HTMLInputElement).value).toBe('4');
+    expect(within(studyo).getByRole('button', { name: '+Y' }).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(within(studyo).getByRole('button', { name: 'Bitti' }));
+    expect(within(duzen).getByRole('button', { name: '3B hareketler (2) · kaydedilmedi' })).toBeTruthy();
+    fireEvent.click(within(duzen).getByRole('button', { name: '3B hareketler (2) · kaydedilmedi' }));
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'TS-DNM · 3B hareketler' })).getByRole('button', { name: 'Bitti' }));
+    fireEvent.click(within(duzen).getByRole('button', { name: 'Yeni sürümü kaydet' }));
+    await waitFor(() => { expect(istekler.some((i) => i.yol === '/rota/talimat-sablonlari/3/kaydet')).toBe(true); });
+    const govde = istekler.find((i) => i.yol === '/rota/talimat-sablonlari/3/kaydet')?.govde as { adimlar: { sahneHareketi: unknown }[] };
+    expect(govde.adimlar.map((a) => a.sahneHareketi)).toEqual([{ yon: '+Y', mesafeMm: 80, sureSn: 1.6, sirali: false, parcaSayisi: 4 }, eskiHareket]);
   });
 
   it('3249 b: şablon operasyon tipine bağlanır; tip seçilmeden emre gelme kapalıdır; ikisi kayıtla gider', async () => {
