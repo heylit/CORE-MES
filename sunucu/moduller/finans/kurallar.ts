@@ -525,3 +525,40 @@ export function tedarikciAlacagiGecisHatasi(eski: string, yeni: string, aciklama
   if ((yeni === 'dusuldu' || yeni === 'kapandi') && (aciklama === null || aciklama.trim() === '')) return 'Düşürme ve kapatma gerekçe ister.';
   return null;
 }
+
+// =====================================================================
+// 3673: ikinci kişi onayı (saf kurallar). Eşik boşsa o işlem onay istemez; eşik dahildir (tutar >= eşik).
+// =====================================================================
+export type OnayTuru = 'odeme' | 'iptal' | 'esitleme';
+export interface OnayAyari { esikOdeme: string | null; esikIptal: string | null; esikEsitleme: string | null }
+export function onayEsigi(a: OnayAyari, tur: OnayTuru): string | null {
+  return tur === 'odeme' ? a.esikOdeme : tur === 'iptal' ? a.esikIptal : a.esikEsitleme;
+}
+export function onayGerekliMi(esik: string | null, tutarTl: string): boolean {
+  return esik !== null && kurus(tutarTl) >= kurus(esik);
+}
+// Onayın bağlandığı komut: anahtarları sıralı, onayId ve tanımsız alanları dışarıda JSON. Aynı komut her zaman aynı metni verir.
+export function kanonikKomut(govde: unknown): string {
+  const sirala = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(sirala);
+    if (v !== null && typeof v === 'object') {
+      return Object.fromEntries(Object.entries(v as Record<string, unknown>)
+        .filter(([a, d]) => a !== 'onayId' && d !== undefined)
+        .sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0))
+        .map(([a, d]) => [a, sirala(d)]));
+    }
+    return v;
+  };
+  return JSON.stringify(sirala(govde));
+}
+// Dövizli tutarın TL karşılığı (kayıtların tutar_tl sütunuyla aynı yuvarlama: round(tutar * kur, 2)).
+export function tlKarsiligi(tutar: string, kur: string): string { return tl(Math.round(Number(tutar) * Number(kur) * 100)); }
+export function onayDurumuHatasi(durum: string): string | null {
+  switch (durum) {
+    case 'onaylandi': return null;
+    case 'bekliyor': return 'Onay talebi henüz karara bağlanmadı; onaylayacak kişiyi bekleyin.';
+    case 'reddedildi': return 'Onay talebi reddedildi; gerekçesini talep kaydında görürsünüz.';
+    case 'kullanildi': return 'Bu onay bir kez kullanıldı; yeni işlem için yeni onay isteyin.';
+    default: return 'Onay talebinden vazgeçilmiş.';
+  }
+}

@@ -96,7 +96,7 @@ const LISTELER = {
   kdv: { secim: `oran, ${tarihMetni('gecerlilik_baslangic')} AS "gecerlilikBaslangic", ${tarihMetni('gecerlilik_bitis')} AS "gecerlilikBitis", surum`, kaynak: 'finans_kdv_orani', iptal: 'true', sira: 'oran, gecerlilik_baslangic' },
   duzenli: { secim: DUZENLI, kaynak: 'finans_duzenli_odeme', iptal: 'true', sira: 'id' },
   butce: { secim: `kategori, ${tarihMetni('baslangic_ayi')} AS "baslangicAyi", aylik_tutar AS "aylikTutar", surum`, kaynak: 'finans_butce', iptal: 'true', sira: 'kategori, baslangic_ayi' },
-  esitleme: { secim: `id, hesap_id AS "hesapId", ${tarihMetni('tarih')} AS tarih, gercek_bakiye AS "gercekBakiye", fark, ${zamanMetni('olusturma')} AS olusturma`, kaynak: 'finans_bakiye_esitleme', iptal: 'true', sira: 'id' },
+  esitleme: { secim: `id, hesap_id AS "hesapId", ${tarihMetni('tarih')} AS tarih, gercek_bakiye AS "gercekBakiye", fark, neden, ${zamanMetni('olusturma')} AS olusturma`, kaynak: 'finans_bakiye_esitleme', iptal: 'true', sira: 'id' },
   oneri: { secim: `bulgu_kimligi AS "bulguKimligi", durum, ${tarihMetni('ertele_bitis')} AS "erteleBitis"`, kaynak: 'finans_oneri_durumu', iptal: 'true', sira: 'bulgu_kimligi' },
   kapanis: { secim: 'rtrim(donem) AS donem, madde, isaretli', kaynak: 'finans_kapanis', iptal: 'true', sira: 'donem, madde' },
   skor: { secim: `${tarihMetni('gun')} AS gun, skor, nakit`, kaynak: 'finans_skor', iptal: 'true', sira: 'gun' },
@@ -133,7 +133,7 @@ export const duzenliAydaOdendiMi = async (db: Db, id: number, tarih: string) => 
   `SELECT EXISTS (SELECT 1 FROM finans_belge WHERE duzenli_odeme_id = $1 AND durum <> 'iptal'
      AND date_trunc('month', belge_tarihi::timestamp) = date_trunc('month', $2::date::timestamp)) AS var`, [id, tarih]))?.var === true;
 export const ayarGetir = <T>(db: Db, kilit = false) => db.tek<T>(`SELECT ${AYAR} FROM finans_ayar WHERE id = 1${kilit ? ' FOR UPDATE' : ''}`);
-export const dagilimGetir = (db: Db, id: number) => db.tek<{ id: number; odemeId: number; belgeId: number; iptal: boolean }>(`SELECT ${DAGILIM} FROM finans_odeme_dagilimi WHERE id = $1 FOR UPDATE`, [id]);
+export const dagilimGetir = (db: Db, id: number) => db.tek<{ id: number; odemeId: number; belgeId: number; odemeTutari: string; iptal: boolean }>(`SELECT ${DAGILIM} FROM finans_odeme_dagilimi WHERE id = $1 FOR UPDATE`, [id]);
 export const kdvOranlari = (db: Db) => db.sorgu<{ oran: string; gecerlilikBaslangic: string; gecerlilikBitis: string | null }>(
   `SELECT oran, ${tarihMetni('gecerlilik_baslangic')} AS "gecerlilikBaslangic", ${tarihMetni('gecerlilik_bitis')} AS "gecerlilikBitis" FROM finans_kdv_orani`);
 // Belge no harf farkı gözetmeden aranır; iptal belge sayılmaz (finans_belge_no_tekil dizininin kapsamı).
@@ -234,8 +234,8 @@ export function hesapGuncelle(db: Db, id: number, surum: number, h: { ad: string
 }
 export const hesapAktiflik = (db: Db, id: number, surum: number, aktif: boolean) =>
   db.tek<{ id: number }>('UPDATE finans_hesap SET aktif = $3, surum = surum + 1 WHERE id = $1 AND surum = $2 RETURNING id', [id, surum, aktif]);
-export const esitlemeEkle = (db: Db, hesapId: number, tarih: string, gercek: string, fark: string, kisi: number) =>
-  db.tek<{ id: number }>('INSERT INTO finans_bakiye_esitleme (hesap_id, tarih, gercek_bakiye, fark, olusturan_id) VALUES ($1, $2, $3, $4, $5) RETURNING id', [hesapId, tarih, gercek, fark, kisi]);
+export const esitlemeEkle = (db: Db, hesapId: number, tarih: string, gercek: string, fark: string, neden: string, kisi: number) =>
+  db.tek<{ id: number }>('INSERT INTO finans_bakiye_esitleme (hesap_id, tarih, gercek_bakiye, fark, neden, olusturan_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id', [hesapId, tarih, gercek, fark, neden, kisi]);
 export async function virmanEkle(db: Db, v: { kaynakHesapId: number; hedefHesapId: number; tarih: string; tutar: string; aciklama: string | null }, kisi: number): Promise<number> {
   const s = await db.tek<{ id: number }>(`INSERT INTO finans_virman (kaynak_hesap_id, hedef_hesap_id, tarih, tutar, aciklama, olusturan_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
     [v.kaynakHesapId, v.hedefHesapId, v.tarih, v.tutar, v.aciklama, kisi]);
@@ -844,3 +844,35 @@ export async function malzemeKartiIzleri(db: Db, kartlar: readonly MalzemeKartiA
     [...malzemeKartiIzParametreleri(kartlar)],
   );
 }
+
+// ---- 3673: ikinci kişi onayı ----
+export interface OnayAyariSatiri { esikOdeme: string | null; esikIptal: string | null; esikEsitleme: string | null; surum: number; guncelleyenId: number | null; guncelleme: string | null }
+export const onayAyari = (db: Db, kilit = false) => db.tek<OnayAyariSatiri>(
+  `SELECT esik_odeme AS "esikOdeme", esik_iptal AS "esikIptal", esik_esitleme AS "esikEsitleme", surum, guncelleyen_id AS "guncelleyenId", ${zamanMetni('guncelleme')} AS guncelleme
+     FROM finans_onay_ayari WHERE id = 1${kilit ? ' FOR UPDATE' : ''}`);
+export const onayAyariYaz = (db: Db, surum: number, a: { esikOdeme: string | null; esikIptal: string | null; esikEsitleme: string | null }, kisi: number) => db.tek<{ surum: number }>(
+  `UPDATE finans_onay_ayari SET esik_odeme = $2, esik_iptal = $3, esik_esitleme = $4, guncelleyen_id = $5, guncelleme = now(), surum = surum + 1
+    WHERE id = 1 AND surum = $1 RETURNING surum`, [surum, a.esikOdeme, a.esikIptal, a.esikEsitleme, kisi]);
+
+export interface OnaySatiri {
+  id: number; tur: string; hedef: string; ozet: string; tutarTl: string; gerekce: string | null; talepEdenId: number; talepZamani: string;
+  durum: string; kararVerenId: number | null; kararZamani: string | null; kararNotu: string | null; kullanimZamani: string | null; surum: number;
+  govde: Record<string, unknown>;
+}
+const ONAY = `id, tur, hedef, ozet, tutar_tl AS "tutarTl", gerekce, talep_eden_id AS "talepEdenId", ${zamanMetni('talep_zamani')} AS "talepZamani", durum,
+  karar_veren_id AS "kararVerenId", ${zamanMetni('karar_zamani')} AS "kararZamani", karar_notu AS "kararNotu", ${zamanMetni('kullanim_zamani')} AS "kullanimZamani", surum, govde`;
+export const onayEkle = async (db: Db, o: { tur: string; hedef: string; ozet: string; govde: string; tutarTl: string; gerekce: string }, kisi: number): Promise<number> =>
+  ((await db.tek<{ id: number }>(
+    `INSERT INTO finans_onay (tur, hedef, ozet, govde, tutar_tl, gerekce, talep_eden_id) VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7) RETURNING id`,
+    [o.tur, o.hedef, o.ozet, o.govde, o.tutarTl, o.gerekce, kisi])) as { id: number }).id;
+export const onayGetir = (db: Db, id: number, kilit = false) => db.tek<OnaySatiri>(`SELECT ${ONAY} FROM finans_onay WHERE id = $1${kilit ? ' FOR UPDATE' : ''}`, [id]);
+export const onayListe = (db: Db, durum: string | null) => db.sorgu<OnaySatiri>(
+  `SELECT ${ONAY} FROM finans_onay WHERE ($1::text IS NULL OR durum = $1) ORDER BY id DESC LIMIT 200`, [durum]);
+// Karar tek geçişte yazılır; sürüm ve "bekliyor" koşulu eşzamanlı ikinci kararı eler.
+export const onayKararYaz = (db: Db, id: number, surum: number, durum: 'onaylandi' | 'reddedildi', kisi: number, not: string | null) => db.tek<{ id: number }>(
+  `UPDATE finans_onay SET durum = $3, karar_veren_id = $4, karar_zamani = now(), karar_notu = $5, surum = surum + 1
+    WHERE id = $1 AND surum = $2 AND durum = 'bekliyor' RETURNING id`, [id, surum, durum, kisi, not]);
+export const onayVazgecYaz = (db: Db, id: number, surum: number) => db.tek<{ id: number }>(
+  `UPDATE finans_onay SET durum = 'vazgecildi', surum = surum + 1 WHERE id = $1 AND surum = $2 AND durum IN ('bekliyor', 'onaylandi') RETURNING id`, [id, surum]);
+export const onayKullanYaz = (db: Db, id: number, surum: number) => db.tek<{ id: number }>(
+  `UPDATE finans_onay SET durum = 'kullanildi', kullanim_zamani = now(), surum = surum + 1 WHERE id = $1 AND surum = $2 AND durum = 'onaylandi' RETURNING id`, [id, surum]);

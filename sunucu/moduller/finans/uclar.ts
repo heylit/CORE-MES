@@ -12,7 +12,7 @@ import {
   satisSevkleriCevabi, satisSevkleriSorgusu, satisSiparisleriCevabi, satisSiparisleriSorgusu, ayarCevabi, ayarGuncelleGovdesi, belgeCevabi, belgeDuzeltGovdesi, belgeEkleGovdesi, belgeListesiCevabi, butceGovdesi, butceListesiCevabi,
   cekCevabi, cekDuzeltGovdesi, cekEkleGovdesi, cekListesiCevabi, cekSonucGovdesi, cekTarihGovdesi, ciroGovdesi, dagilimListesiCevabi, dagitGovdesi,
   duzenliOdemeGovdesi, duzenliOdemeGuncelleGovdesi, duzenliOdemeListesiCevabi, duzenliOdemeSemasi, duzenliOdendiGovdesi, esitleGovdesi,
-  aylikSeriCevabi, aylikSeriSorgusu, beklenenOdemelerCevabi, beklenenTahsilatlarCevabi, esitlemeListesiCevabi, finansListeSorgusu, finansOzetiCevabi, hesapCevabi, hesapEkleGovdesi, hesapGuncelleGovdesi, hesapListesiCevabi, donemAcGovdesi, donemKilidiDurumuCevabi, donemKilitleGovdesi, donemKilitleriCevabi, iptalGovdesi, kapanisGovdesi,
+  aylikSeriCevabi, aylikSeriSorgusu, beklenenOdemelerCevabi, beklenenTahsilatlarCevabi, esitlemeListesiCevabi, finansListeSorgusu, finansOzetiCevabi, hesapCevabi, hesapEkleGovdesi, hesapGuncelleGovdesi, hesapListesiCevabi, donemAcGovdesi, donemKilidiDurumuCevabi, donemKilitleGovdesi, donemKilitleriCevabi, iptalGovdesi, kapanisGovdesi, onayAyariCevabi, onayAyariGovdesi, onayKararGovdesi, onayRedGovdesi, onayTalepGovdesi, onayTalepleriCevabi, onayTalepleriSorgusu, onayTalebiCevabi, onayVazgecGovdesi, onayliBosGovdesi, onayliSurumGovdesi,
   kapanisListesiCevabi, faizEkleGovdesi, faizListesiCevabi, genelGiderOraniEkleGovdesi, genelGiderOraniListesiCevabi, genelGiderOnerisiSorgusu, genelGiderOnerisiCevabi, genelGiderBelgedenEkleGovdesi, kdvOraniEkleGovdesi, kdvOraniKapatGovdesi, kdvOraniListesiCevabi, kurFaizAraligiCevabi, kurFaizAraligiSorgusu, kurFaizOzetiCevabi, kurFaizTopluCevabi, kurFaizTopluGovdesi, kurListesiCevabi, kurCiftiGovdesi, kurCiftiGuncelleGovdesi, kurCiftiListesiCevabi, oranAraligiCevabi, oranEkleGovdesi, oranListesiCevabi, oranOzetiCevabi, oranTopluCevabi, oranTopluGovdesi,
   mahsupCevabi, mahsupEkleGovdesi, mahsupListesiCevabi, odemeCevabi, odemeEkleGovdesi, odemeListesiCevabi, oneriDurumuGovdesi, oneriListesiCevabi,
   maliyetCevabi, maliyetKaldirCevabi, maliyetKaldirGovdesi, maliyetKaldirParametresi, maliyetListesiCevabi, saatlikMaliyetListesiCevabi, saatlikMaliyetTuruParametresi, maliyetTuruParametresi, maliyetYazGovdesi, amortismanCevabi, sabitKiymetCevabi, sabitKiymetEkleGovdesi, sabitKiymetGuncelleGovdesi, sabitKiymetListesiCevabi, sabitKiymetPasifGovdesi, makineIdParametresi, makineSabitKiymetleriCevabi,
@@ -120,7 +120,7 @@ export const paraUclari = [
   uc({ yontem: 'POST', yol: '/finans/belgeler/:id/duzelt', yetki: 'finans.yaz', parametre: kimlikParametresi, govde: belgeDuzeltGovdesi, cevap: belgeCevabi,
     isle: async ({ db, kullanici, parametre, govde, denetimEki }) => ({ belge: await servis.belgeDuzelt(db, kullanici, parametre.id, govde, denetimEki) }) }),
   uc({ yontem: 'POST', yol: '/finans/belgeler/:id/iptal', yetki: 'finans.iptal', parametre: kimlikParametresi, govde: iptalGovdesi, cevap: belgeCevabi,
-    isle: async ({ db, kullanici, parametre, govde, denetimEki }) => ({ belge: await servis.belgeIptal(db, kullanici, parametre.id, govde.surum, govde.neden, denetimEki) }) }),
+    isle: async ({ db, kullanici, parametre, govde, denetimEki }) => ({ belge: await servis.belgeIptal(db, kullanici, parametre.id, govde, denetimEki) }) }),
 
   // ---- ödeme, dağıtım, mahsup ----
   uc({ yontem: 'POST', yol: '/finans/odemeler/ekle', yetki: 'finans.yaz', tekrarKorumali: true, govde: odemeEkleGovdesi, cevap: odemeCevabi,
@@ -128,13 +128,13 @@ export const paraUclari = [
   uc({ yontem: 'POST', yol: '/finans/odemeler/:id/dagit', yetki: 'finans.yaz', tekrarKorumali: true, parametre: kimlikParametresi, govde: dagitGovdesi, cevap: odemeCevabi,
     isle: async ({ db, kullanici, parametre, govde }) => ({ odeme: await servis.odemeDagit(db, kullanici, parametre.id, govde) }) }),
   uc({ yontem: 'POST', yol: '/finans/odemeler/:id/iptal', yetki: 'finans.iptal', parametre: kimlikParametresi, govde: iptalGovdesi, cevap: odemeCevabi,
-    isle: async ({ db, kullanici, parametre, govde, denetimEki }) => ({ odeme: await servis.odemeIptal(db, kullanici, parametre.id, govde.surum, govde.neden, denetimEki) }) }),
-  uc({ yontem: 'POST', yol: '/finans/dagitimlar/:id/iptal', yetki: 'finans.iptal', parametre: kimlikParametresi, govde: zod.object({}), cevap: zod.object({ belge: belgeCevabi.shape.belge, odeme: odemeCevabi.shape.odeme }),
-    isle: ({ db, kullanici, parametre, denetimEki }) => servis.dagilimIptalEt(db, kullanici, parametre.id, denetimEki) }),
+    isle: async ({ db, kullanici, parametre, govde, denetimEki }) => ({ odeme: await servis.odemeIptal(db, kullanici, parametre.id, govde, denetimEki) }) }),
+  uc({ yontem: 'POST', yol: '/finans/dagitimlar/:id/iptal', yetki: 'finans.iptal', parametre: kimlikParametresi, govde: onayliBosGovdesi, cevap: zod.object({ belge: belgeCevabi.shape.belge, odeme: odemeCevabi.shape.odeme }),
+    isle: ({ db, kullanici, parametre, govde, denetimEki }) => servis.dagilimIptalEt(db, kullanici, parametre.id, govde, denetimEki) }),
   uc({ yontem: 'POST', yol: '/finans/mahsuplar/ekle', yetki: 'finans.yaz', tekrarKorumali: true, govde: mahsupEkleGovdesi, cevap: mahsupCevabi,
     isle: async ({ db, kullanici, govde }) => ({ mahsup: await servis.mahsupEkle(db, kullanici, govde) as zod.output<typeof mahsupCevabi>['mahsup'] }) }),
-  uc({ yontem: 'POST', yol: '/finans/mahsuplar/:id/iptal', yetki: 'finans.iptal', parametre: kimlikParametresi, govde: surumGovdesi, cevap: mahsupCevabi,
-    isle: async ({ db, kullanici, parametre, govde, denetimEki }) => ({ mahsup: await servis.mahsupIptalEt(db, kullanici, parametre.id, govde.surum, denetimEki) as zod.output<typeof mahsupCevabi>['mahsup'] }) }),
+  uc({ yontem: 'POST', yol: '/finans/mahsuplar/:id/iptal', yetki: 'finans.iptal', parametre: kimlikParametresi, govde: onayliSurumGovdesi, cevap: mahsupCevabi,
+    isle: async ({ db, kullanici, parametre, govde, denetimEki }) => ({ mahsup: await servis.mahsupIptalEt(db, kullanici, parametre.id, govde, denetimEki) as zod.output<typeof mahsupCevabi>['mahsup'] }) }),
 
   // ---- çek ve senet ----
   uc({ yontem: 'POST', yol: '/finans/cekler/ekle', yetki: 'finans.yaz', tekrarKorumali: true, govde: cekEkleGovdesi, cevap: cekCevabi,
@@ -166,11 +166,11 @@ export const paraUclari = [
   uc({ yontem: 'POST', yol: '/finans/hesaplar/:id/aktif', yetki: 'finans.hesap-yonet', parametre: kimlikParametresi, govde: surumGovdesi, cevap: hesapCevabi,
     isle: async ({ db, kullanici, parametre, govde }) => ({ hesap: await servis.hesapDurumu(db, kullanici, parametre.id, govde.surum, true) as zod.output<typeof hesapCevabi>['hesap'] }) }),
   uc({ yontem: 'POST', yol: '/finans/hesaplar/:id/esitle', yetki: 'finans.hesap-yonet', tekrarKorumali: true, parametre: kimlikParametresi, govde: esitleGovdesi, cevap: hesapCevabi,
-    isle: async ({ db, kullanici, parametre, govde }) => ({ hesap: await servis.hesapEsitle(db, kullanici, parametre.id, govde) as zod.output<typeof hesapCevabi>['hesap'] }) }),
+    isle: async ({ db, kullanici, parametre, govde, denetimEki }) => ({ hesap: await servis.hesapEsitle(db, kullanici, parametre.id, govde, denetimEki) as zod.output<typeof hesapCevabi>['hesap'] }) }),
   uc({ yontem: 'POST', yol: '/finans/virmanlar/ekle', yetki: 'finans.yaz', tekrarKorumali: true, govde: virmanEkleGovdesi, cevap: zod.object({ virman: virmanSemasi }),
     isle: async ({ db, kullanici, govde }) => ({ virman: await servis.virmanEkle(db, kullanici, govde) as zod.output<typeof virmanSemasi> }) }),
-  uc({ yontem: 'POST', yol: '/finans/virmanlar/:id/iptal', yetki: 'finans.iptal', parametre: kimlikParametresi, govde: surumGovdesi, cevap: zod.object({ virman: virmanSemasi }),
-    isle: async ({ db, kullanici, parametre, govde, denetimEki }) => ({ virman: await servis.virmanIptal(db, kullanici, parametre.id, govde.surum, denetimEki) as zod.output<typeof virmanSemasi> }) }),
+  uc({ yontem: 'POST', yol: '/finans/virmanlar/:id/iptal', yetki: 'finans.iptal', parametre: kimlikParametresi, govde: onayliSurumGovdesi, cevap: zod.object({ virman: virmanSemasi }),
+    isle: async ({ db, kullanici, parametre, govde, denetimEki }) => ({ virman: await servis.virmanIptal(db, kullanici, parametre.id, govde, denetimEki) as zod.output<typeof virmanSemasi> }) }),
 
   // ---- tanımlar ve ayar ----
   uc({ yontem: 'POST', yol: '/finans/faizler/ekle', yetki: 'finans.kur-yaz', tekrarKorumali: true, govde: faizEkleGovdesi, cevap: anahtarCevap, isle: ({ db, kullanici, govde }) => servis.faizEkle(db, kullanici, govde) }),
@@ -235,6 +235,21 @@ export const paraUclari = [
     isle: ({ db, sorgu }) => servis.vergiBeyanlari(db, sorgu.baslangic, sorgu.bitis) }),
   uc({ yontem: 'POST', yol: '/finans/vergi-beyani/isaretle', yetki: 'finans.beyan-yaz', tekrarKorumali: true, govde: vergiBeyaniGovdesi, cevap: vergiBeyaniGovdesi,
     isle: ({ db, kullanici, govde }) => servis.vergiBeyaniIsaretle(db, kullanici, govde, tesisGunu(new Date())) }),
+  // 3673: ikinci kişi onayı. Ayar finans.ayar; talep açma ve kullanma komutun kendi yetkisiyle; karar finans.onay (hiçbir role verilmez, yöneticide bayrakla vardır).
+  uc({ yontem: 'GET', yol: '/finans/onay-ayari', yetki: 'finans.oku', cevap: onayAyariCevabi, isle: async ({ db }) => ({ ayar: await servis.onayAyariOku(db) }) }),
+  uc({ yontem: 'POST', yol: '/finans/onay-ayari', yetki: 'finans.ayar', tekrarKorumali: true, govde: onayAyariGovdesi, cevap: onayAyariCevabi,
+    isle: async ({ db, kullanici, govde, denetimEki }) => ({ ayar: await servis.onayAyariYaz(db, kullanici, govde, denetimEki) }) }),
+  uc({ yontem: 'GET', yol: '/finans/onay-talepleri', yetki: 'finans.oku', sorgu: onayTalepleriSorgusu, cevap: onayTalepleriCevabi,
+    isle: async ({ db, sorgu }) => ({ talepler: await servis.onayTalepleri(db, sorgu.durum ?? null) }) }),
+  uc({ yontem: 'POST', yol: '/finans/onay-talepleri/ac', yetki: 'finans.yaz', tekrarKorumali: true, govde: onayTalepGovdesi, cevap: onayTalebiCevabi,
+    isle: async ({ db, kullanici, govde }) => ({ talep: await servis.onayTalepAc(db, kullanici, govde) }) }),
+  uc({ yontem: 'POST', yol: '/finans/onay-talepleri/:id/onayla', yetki: 'finans.onay', tekrarKorumali: true, parametre: kimlikParametresi, govde: onayKararGovdesi, cevap: onayTalebiCevabi,
+    isle: async ({ db, kullanici, parametre, govde }) => ({ talep: await servis.onayKararVer(db, kullanici, parametre.id, govde.surum, 'onaylandi', govde.not) }) }),
+  uc({ yontem: 'POST', yol: '/finans/onay-talepleri/:id/reddet', yetki: 'finans.onay', tekrarKorumali: true, parametre: kimlikParametresi, govde: onayRedGovdesi, cevap: onayTalebiCevabi,
+    isle: async ({ db, kullanici, parametre, govde }) => ({ talep: await servis.onayKararVer(db, kullanici, parametre.id, govde.surum, 'reddedildi', govde.not) }) }),
+  uc({ yontem: 'POST', yol: '/finans/onay-talepleri/:id/vazgec', yetki: 'finans.yaz', tekrarKorumali: true, parametre: kimlikParametresi, govde: onayVazgecGovdesi, cevap: onayTalebiCevabi,
+    isle: async ({ db, kullanici, parametre, govde }) => ({ talep: await servis.onayTalepVazgec(db, kullanici, parametre.id, govde.surum) }) }),
+
   // 3672: dönem kilidi. Kilit finans.yaz; açma yalnız yönetici (finans.donem-ac, hiçbir role verilmez) ve gerekçeli.
   uc({ yontem: 'GET', yol: '/finans/donem-kilitleri', yetki: 'finans.oku', cevap: donemKilitleriCevabi, isle: ({ db }) => servis.donemKilitleri(db) }),
   uc({ yontem: 'POST', yol: '/finans/donem-kilitle', yetki: 'finans.yaz', tekrarKorumali: true, govde: donemKilitleGovdesi, cevap: donemKilidiDurumuCevabi,

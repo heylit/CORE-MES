@@ -386,7 +386,7 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
     assert.equal((await yaz(`/finans/hesaplar/${h}/pasif`, { surum: hg?.surum })).durum, 422);
     assert.equal((await yaz(`/finans/hesaplar/${h}/guncelle`, { ad: 'Değişti', tur: 'banka', paraBirimi: 'TRY', acilisBakiyesi: 900, acilisTarihi: '2026-01-01', surum: hg?.surum })).durum, 422);
     assert.equal((await yaz(`/finans/hesaplar/${h}/guncelle`, { ad: 'Değişti', tur: 'banka', paraBirimi: 'TRY', acilisBakiyesi: 500, acilisTarihi: '2026-01-01', surum: hg?.surum })).durum, 200);
-    tamam(await yaz(`/finans/hesaplar/${h}/esitle`, { tarih: TARIH, gercekBakiye: 0 }));
+    tamam(await yaz(`/finans/hesaplar/${h}/esitle`, { tarih: TARIH, gercekBakiye: 0, neden: 'Sayım farkı' }));
     assert.equal((await vt().tek<{ fark: string }>('SELECT fark FROM finans_bakiye_esitleme WHERE hesap_id = $1', [h]))?.fark, '-400.00');
     assert.match(String(await kisitAdi('UPDATE finans_bakiye_esitleme SET fark = 0 WHERE hesap_id = $1', [h])), /yalnız ekleme/);
     hg = tamam(await istek<{ satirlar: { id: number; surum: number; bakiye: string }[] }>('yonetim', 'GET', '/finans/hesaplar?sayfaBoyu=200')).satirlar.find((x) => x.id === h);
@@ -414,7 +414,7 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
     let bekleyen: Promise<Cevap> | undefined;
     await vt().tx(async (d) => {
       await d.sorgu('SELECT 1 FROM finans_hesap WHERE id = $1 FOR UPDATE', [k]);
-      bekleyen = yaz(`/finans/hesaplar/${k}/esitle`, { tarih: TARIH, gercekBakiye: 800 });
+      bekleyen = yaz(`/finans/hesaplar/${k}/esitle`, { tarih: TARIH, gercekBakiye: 800, neden: 'Sayım farkı' });
       for (let i = 0; i < 200 && Number((await vt().tek<{ n: string }>('SELECT count(*)::text AS n FROM pg_locks WHERE NOT granted'))?.n) === 0; i += 1) {
         await new Promise((r) => setTimeout(r, 10));
       }
@@ -424,13 +424,13 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
     assert.equal(await hesapBakiyesi(k), '800.00');
 
     const h = await hesap('banka', 'TRY', 1000);
-    const esitlemeler = await Promise.all(Array.from({ length: 10 }, () => yaz(`/finans/hesaplar/${h}/esitle`, { tarih: TARIH, gercekBakiye: 800 })));
+    const esitlemeler = await Promise.all(Array.from({ length: 10 }, () => yaz(`/finans/hesaplar/${h}/esitle`, { tarih: TARIH, gercekBakiye: 800, neden: 'Sayım farkı' })));
     for (const c of esitlemeler) tamam(c);
     assert.equal(await hesapBakiyesi(h), '800.00');
     const f = await firma();
     const karisik = await Promise.all([
       ...Array.from({ length: 4 }, () => yaz('/finans/odemeler/ekle', { yon: 'gelir', firmaId: f, tarih: TARIH, yontem: 'banka', hesapId: h, tutar: 50 })),
-      yaz(`/finans/hesaplar/${h}/esitle`, { tarih: TARIH, gercekBakiye: 500 }),
+      yaz(`/finans/hesaplar/${h}/esitle`, { tarih: TARIH, gercekBakiye: 500, neden: 'Sayım farkı' }),
     ]);
     for (const c of karisik) tamam(c);
     // Eşitlemeden önce yazılan ödeme eşitlemeye girer, sonra yazılan üstüne eklenir: sonuç 500 + 50 x (sonra yazılanlar).
@@ -843,8 +843,8 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
     const yollar = (...yetkiler: string[]) => uclar.filter((u) => u.yontem === 'POST' && typeof u.yetki === 'string' && yetkiler.includes(u.yetki)).map((u) => u.yol.replace('/finans/', '').replace(':id', '1'));
     const YONET = yollar('finans.iptal', 'finans.cek-yonet', 'finans.hesap-yonet', 'finans.oran-yaz', 'finans.sabit-kiymet', 'finans.maliyet-yaz', 'finans.duzenli-odeme', 'finans.ayar');
     const YAZ = yollar('finans.yaz');
-    assert.equal(YONET.length, 27);
-    assert.equal(YAZ.length, 17);
+    assert.equal(YONET.length, 28);
+    assert.equal(YAZ.length, 19);
     const sonuc = async (kim: string, yollar: string[]) => Promise.all(yollar.map(async (y) => `${y} ${(await yaz(`/finans/${y}`, {}, kim)).durum}`));
     assert.deepEqual(await sonuc('yazan', YONET), YONET.map((y) => `${y} 403`));
     assert.deepEqual(await sonuc('okuyan', YAZ), YAZ.map((y) => `${y} 403`));

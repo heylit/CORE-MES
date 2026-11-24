@@ -55,8 +55,12 @@ const metin = (azami: number) => z.string().trim().max(azami, `En çok ${azami} 
 const numerik = z.string();
 // Dövizli kayıtta kur verilmezse sunucu o güne kadar girilmiş son kuru alır, yoksa reddeder; varsayılan 1 dövizi TL sayardı.
 const kurBos = kurSemasi.nullish().transform((v) => v ?? null);
-const iptalGovdesi = z.object({ ...beklenenSurum, neden: metin(300) });
+// 3673: eşiği aşan komut onaylı talebin kimliğiyle gelir; kimlik komutun özetine bağlıdır, başka komutta kullanılamaz.
+export const onayKimligi = { onayId: kimlikSayisi.nullish().transform((v) => v ?? null) };
+const iptalGovdesi = z.object({ ...beklenenSurum, neden: metin(300), ...onayKimligi });
 export { iptalGovdesi };
+export const onayliSurumGovdesi = z.object({ ...beklenenSurum, ...onayKimligi });
+export const onayliBosGovdesi = z.object({ ...onayKimligi });
 
 // ---- Belge ----
 const tevkifat = { tevkifatPay: z.number().int().min(1).max(100).nullish().transform((v) => v ?? null), tevkifatPayda: z.number().int().min(1).max(100).nullish().transform((v) => v ?? null) };
@@ -85,6 +89,7 @@ export const belgeEkleGovdesi = belgeAlanlari.extend({
   iadeBelgeId: kimlikSayisi.nullish().transform((v) => v ?? null),
   pesin: pesinOdemeSemasi.nullish().transform((v) => v ?? null),
   cek: cekBilgisiSemasi.nullish().transform((v) => v ?? null),
+  ...onayKimligi,
 });
 export type BelgeEkleGovdesi = z.input<typeof belgeEkleGovdesi>;
 export const belgeDuzeltGovdesi = belgeAlanlari.omit({ yon: true, tur: true }).extend(beklenenSurum);
@@ -110,7 +115,7 @@ export const dagitimlarSemasi = z.array(dagitimSatiri).max(200, 'Tek seferde en 
 export const odemeEkleGovdesi = z.object({
   yon: z.enum(YONLER), firmaId: kimlikSayisi.nullish().transform((v) => v ?? null), tarih: tarihSemasi,
   yontem: z.enum(NAKIT_YONTEMLERI), hesapId: kimlikSayisi, paraBirimi: paraBirimiSemasi.prefault('TRY'), kur: kurBos,
-  tutar: tutarSemasi, aciklama: metin(500), dagitimlar: dagitimlarSemasi,
+  tutar: tutarSemasi, aciklama: metin(500), dagitimlar: dagitimlarSemasi, ...onayKimligi,
 });
 export type OdemeEkleGovdesi = z.input<typeof odemeEkleGovdesi>;
 export const dagitGovdesi = z.object({ tarih: tarihSemasi, dagitimlar: z.array(dagitimSatiri).min(1).max(200) });
@@ -146,7 +151,7 @@ export const cekEkleGovdesi = z.object({
 });
 export type CekEkleGovdesi = z.input<typeof cekEkleGovdesi>;
 export const cekDuzeltGovdesi = z.object({ ...beklenenSurum, banka: metin(100), seriNo: metin(40), vade: tarihSemasi });
-export const cekSonucGovdesi = z.object({ ...beklenenSurum, hesapId: kimlikSayisi, tarih: tarihSemasi });
+export const cekSonucGovdesi = z.object({ ...beklenenSurum, hesapId: kimlikSayisi, tarih: tarihSemasi, ...onayKimligi });
 export const cekTarihGovdesi = z.object({ ...beklenenSurum, tarih: tarihSemasi });
 export const ciroGovdesi = z.object({ ...beklenenSurum, firmaId: kimlikSayisi, tarih: tarihSemasi, dagitimlar: dagitimlarSemasi });
 export const cekSemasi = z.object({
@@ -169,8 +174,12 @@ export const hesapSemasi = z.object({
   bankaAdi: z.string().nullable(), logoKodu: z.string().nullable(), aktif: z.boolean(), bakiye: numerik, surum: surumSemasi,
 });
 export const hesapCevabi = z.object({ hesap: hesapSemasi });
-export const esitleGovdesi = z.object({ tarih: tarihSemasi, gercekBakiye: isaretliTutarSemasi });
-export const esitlemeSemasi = z.object({ id: z.number().int(), hesapId: z.number().int(), tarih: tarihSemasi, gercekBakiye: numerik, fark: numerik, olusturma: zamanSemasi });
+// 3673: eşitleme gerekçelidir (üç ile 300 karakter) ve eşiği aşarsa ikinci kişinin onayını ister.
+export const esitleGovdesi = z.object({
+  tarih: tarihSemasi, gercekBakiye: isaretliTutarSemasi,
+  neden: z.string().trim().min(3, 'Eşitleme nedenini yazın (en az 3 karakter).').max(300, 'En çok 300 karakter.'), ...onayKimligi,
+});
+export const esitlemeSemasi = z.object({ id: z.number().int(), hesapId: z.number().int(), tarih: tarihSemasi, gercekBakiye: numerik, fark: numerik, neden: z.string().nullish().transform((v) => v ?? null), olusturma: zamanSemasi });
 export const virmanEkleGovdesi = z.object({ kaynakHesapId: kimlikSayisi, hedefHesapId: kimlikSayisi, tarih: tarihSemasi, tutar: tutarSemasi, aciklama: metin(300) });
 export const virmanSemasi = z.object({
   id: z.number().int(), kaynakHesapId: z.number().int(), hedefHesapId: z.number().int(), tarih: tarihSemasi, tutar: numerik,
@@ -414,7 +423,7 @@ export const duzenliOdemeSemasi = z.object({
   id: z.number().int(), ad: z.string(), kategori: z.enum(GIDER_KATEGORILERI), firmaId: z.number().int().nullable(), hesapId: z.number().int().nullable(),
   paraBirimi: z.string(), tutar: numerik, kdvOrani: numerik, ayinGunu: z.number().int(), aktif: z.boolean(), surum: surumSemasi,
 });
-export const duzenliOdendiGovdesi = z.object({ tarih: tarihSemasi, hesapId: kimlikSayisi, yontem: z.enum(NAKIT_YONTEMLERI) });
+export const duzenliOdendiGovdesi = z.object({ tarih: tarihSemasi, hesapId: kimlikSayisi, yontem: z.enum(NAKIT_YONTEMLERI), ...onayKimligi });
 export const butceGovdesi = z.object({ kategori: z.enum(BUTCE_KALEMLERI), baslangicAyi: tarihSemasi.refine((t) => t.endsWith('-01'), 'Dönem ayın ilk günüdür.'), aylikTutar: negatifOlmayanTutar });
 export const butceSatiri = z.object({ kategori: z.enum(BUTCE_KALEMLERI), baslangicAyi: tarihSemasi, aylikTutar: numerik, surum: surumSemasi });
 
@@ -630,3 +639,32 @@ export const tedarikciAlacagiDurumGovdesi = z.object({
 });
 export type TedarikciAlacagiDurumYazimi = z.output<typeof tedarikciAlacagiDurumGovdesi>;
 export const tedarikciAlacagiCevabi = z.object({ alacak: tedarikciAlacagiSemasi });
+
+// ---- 3673: ikinci kişi onayı ----
+// Eşik işlem başınadır (ödeme, iptal, bakiye eşitleme); boş eşik o işlem için onay istemez. Tutar TL karşılığıdır, eşik dahildir (>=).
+export const ONAY_TURLERI = ['odeme', 'iptal', 'esitleme'] as const;
+export const ONAY_DURUMLARI = ['bekliyor', 'onaylandi', 'reddedildi', 'kullanildi', 'vazgecildi'] as const;
+const esikSemasi = z.string().trim().regex(/^[1-9]\d{0,15}(\.\d{1,2})?$/, 'Eşik sıfırdan büyük bir tutardır (en çok iki ondalık).').nullable();
+export const onayAyariGovdesi = z.object({ ...beklenenSurum, esikOdeme: esikSemasi, esikIptal: esikSemasi, esikEsitleme: esikSemasi });
+export const onayAyariSemasi = z.object({
+  esikOdeme: numerik.nullable(), esikIptal: numerik.nullable(), esikEsitleme: numerik.nullable(), surum: surumSemasi,
+  guncelleyenAdi: z.string().nullable(), guncelleme: zamanSemasi.nullable(),
+});
+export const onayAyariCevabi = z.object({ ayar: onayAyariSemasi });
+// Talep, komutun kendisini taşır: hedef (örn. odeme:ekle, belge:12:iptal, hesap:3:esitle) ve komutun gövdesi. Onay yalnız bu komuta yarar.
+export const onayTalepGovdesi = z.object({ tur: z.enum(ONAY_TURLERI), hedef: z.string().trim().min(3).max(40), govde: z.record(z.string(), z.unknown()), gerekce: z.string().trim().min(3, 'Gerekçe en az 3 karakter.').max(300) });
+export const onayKararGovdesi = z.object({ ...beklenenSurum, not: metin(300) });
+export const onayRedGovdesi = z.object({ ...beklenenSurum, not: z.string().trim().min(3, 'Red gerekçesi en az 3 karakter.').max(300) });
+export const onayVazgecGovdesi = z.object({ ...beklenenSurum });
+// 3673 N1: ikinci kişi komutu görerek karar verir: firma, hesap, tarih ve belge para biriminde tutar (komutun gövdesinden ve kayıtlardan okunur).
+export const onayAyrintisiSemasi = z.object({ firma: z.string().nullable(), hesap: z.string().nullable(), tarih: z.string().nullable(), tutar: z.string().nullable() });
+export const onayTalepSemasi = z.object({
+  id: z.number().int(), tur: z.enum(ONAY_TURLERI), hedef: z.string(), tutarTl: numerik, gerekce: z.string().nullable(), ayrinti: onayAyrintisiSemasi,
+  talepEdenId: z.number().int(), talepEdenAdi: z.string().nullable(), talepZamani: zamanSemasi,
+  durum: z.enum(ONAY_DURUMLARI), kararVerenAdi: z.string().nullable(), kararZamani: zamanSemasi.nullable(), kararNotu: z.string().nullable(),
+  kullanimZamani: zamanSemasi.nullable(), surum: surumSemasi,
+});
+export type OnayTalebi = z.output<typeof onayTalepSemasi>;
+export const onayTalebiCevabi = z.object({ talep: onayTalepSemasi });
+export const onayTalepleriSorgusu = z.object({ durum: z.enum(ONAY_DURUMLARI).optional() });
+export const onayTalepleriCevabi = z.object({ talepler: z.array(onayTalepSemasi) });

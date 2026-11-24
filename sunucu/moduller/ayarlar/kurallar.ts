@@ -553,7 +553,7 @@ export const SIFIRLAMA_SISTEM = [
   'ayar', 'ayar_firma_kodu', 'ayar_numara_sayaci',
   'bildirim_cagri_alicisi', 'bildirim_cagri_ekibi', 'bildirim_eposta_ozel_sablon', 'bildirim_eposta_sablonu', 'bildirim_eposta_tetikleyici', 'bildirim_eposta_yukselt_rolu',
   'bildirim_kademe_ayari', 'bildirim_kademe_baslangic', 'bildirim_olay_acik', 'bildirim_onceki_hal', 'bildirim_kurali', 'bildirim_push_turu', 'bildirim_tur_ayari', 'bildirim_tur_gosterimi', 'bildirim_tur_rolu',
-  'cekirdek_aylik_bolum', 'durus_nedeni', 'etiket_merkezi_etiket_turu', 'finans_ayar', 'finans_kdv_orani', 'hurda_nedeni',
+  'cekirdek_aylik_bolum', 'durus_nedeni', 'etiket_merkezi_etiket_turu', 'finans_ayar', 'finans_kdv_orani', 'finans_onay_ayari', 'hurda_nedeni',
   'istasyonlar_operasyon_tipi', 'logo_malzeme_fisi_imleci', 'malzeme_birimi', 'malzeme_durum_muadili', 'malzeme_kalite_muadili', 'malzeme_kategorisi',
   'musteri_tedarikci_karne_agirlik',
   'olcu_aleti_turu', 'ortak_dosyalar_sablon', 'oturum_cihaz_ayari', 'oturum_cihaz_profili', 'plan_ayari', 'plan_durumu',

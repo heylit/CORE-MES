@@ -33,7 +33,7 @@ export const OLAY_GRUPLARI: readonly OlayGrubu[] = [
   ] },
   { baslik: 'Çek ve banka', olaylar: [
     { tur: 'cekdurum', baslik: 'Çekin durumu değişti', aciklama: 'Bankaya verdim, tahsil edildi, ciro ettim, karşılıksız çıktı.', simge: 'clipboard-check' },
-    { tur: 'banka', baslik: 'Banka / kasa bakiyemi düzelt', aciklama: 'Sistemdeki nakit gerçek bakiyeden farklıysa eşitleyin.', simge: 'building' },
+    { tur: 'banka', baslik: 'Banka / kasa bakiyemi eşitle', aciklama: 'Sistemdeki nakit gerçek bakiyeden farklıysa eşitleyin.', simge: 'building' },
   ] },
   { baslik: 'Aktarım ve mahsup', olaylar: [
     { tur: 'virman', baslik: 'Hesaplar arası para aktardım', aciklama: 'Kasadan bankaya, bankadan kredi kartı borcuna; kâr/zararı etkilemez.', simge: 'route' },
@@ -277,7 +277,8 @@ export function akisKomutu(tur: OlayTuru, d: AkisDegerleri, V: HazirVeri, motor:
   if (tur === 'banka') {
     const h = V.hesapById.get(Number(d.hesap));
     if (!h) return hata('Hesap seçin.');
-    return tek({ uc: 'POST /finans/hesaplar/:id/esitle', parametre: { id: h.id }, govde: { tarih: motor.bugun, gercekBakiye: sayi(d.gercek) }, tekrar: true, basari: 'Bakiye eşitlendi.' });
+    if (d.aciklama.trim().length < 3) return hata('Eşitleme nedenini yazın (en az 3 karakter).');
+    return tek({ uc: 'POST /finans/hesaplar/:id/esitle', parametre: { id: h.id }, govde: { tarih: motor.bugun, gercekBakiye: sayi(d.gercek), neden: d.aciklama.trim() }, tekrar: true, basari: 'Bakiye eşitlendi.' });
   }
   if (tur === 'virman') {
     return tek({

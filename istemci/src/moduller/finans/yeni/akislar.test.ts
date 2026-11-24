@@ -32,7 +32,7 @@ const DURUMLAR: readonly [string, OlayTuru, Partial<AkisDegerleri>, string, Reco
   ['çek alındı', 'cekal', { party: musteri, amount: '500' }, 'POST /finans/cekler/ekle', { yon: 'alinan', tur: 'cek', firmaId: 1, tutar: 500 }, true],
   ['çek verildi', 'cekver', { party: tedarikci, amount: '500' }, 'POST /finans/cekler/ekle', { yon: 'verilen', tur: 'cek', firmaId: 2, tutar: 500 }, true],
   ['düzenli ödeme', 'sabit', { hesap: '1', amount: '5000' }, 'POST /finans/belgeler/ekle', { yon: 'gider', tur: 'faturasiz', firmaId: null, tutar: 5000, kdvOrani: 0 }, true],
-  ['banka bakiyesi', 'banka', { hesap: '1', gercek: '150100' }, 'POST /finans/hesaplar/:id/esitle', { tarih: BUGUN, gercekBakiye: 150100 }, true],
+  ['banka bakiyesi', 'banka', { hesap: '1', gercek: '150100', aciklama: ' Ay sonu sayımı ' }, 'POST /finans/hesaplar/:id/esitle', { tarih: BUGUN, gercekBakiye: 150100, neden: 'Ay sonu sayımı' }, true],
   ['hesaplar arası aktarım', 'virman', { kaynak: '1', hedef: '2', amount: '100' }, 'POST /finans/virmanlar/ekle', { kaynakHesapId: 1, hedefHesapId: 2, tutar: 100 }, true],
   ['mahsup', 'mahsup', { satis: '3', alis: '2', satisTutari: '10' }, 'POST /finans/mahsuplar/ekle', { firmaId: 3, satisBelgeId: 3, alisBelgeId: 2, satisTutari: 10 }, true],
   ['avans düşme', 'avans', { odeme: '4', belge: '2', amount: '100' }, 'POST /finans/odemeler/:id/dagit', { dagitimlar: [{ belgeId: 2, belgeTutari: 100 }] }, true],
