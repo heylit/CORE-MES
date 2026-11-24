@@ -447,10 +447,17 @@ export async function planCozumKaynagi(db: Db, simdi: number = Date.now()): Prom
 // birleştirirdi; aynı betik burada aynı girdiyle koşar, sayfa birleşmiş çalışmayı okur. Kaynak okuması çağıranın yetkisiyledir (çerçevedeki
 // gibi: okuyamadığı dilim kayıttaki gibi kalır). Takvim eki çerçevenin okuduğu vardiya takviminden kurulur (o uç yalnız oturum ister).
 export async function planlamaCalismasi(db: Db, kullanici: Kullanici, simdi: number = Date.now()): Promise<PlanlamaCalismasiCevabi> {
+  return (await planlamaCalismasiVeGirdisi(db, kullanici, simdi)).cevap;
+}
+
+// 3664: çalışmayı ve değerlendirmenin girdisini tek okumadan verir; girdi okuması Reçete ve Rota, kaynak ve takvim okumalarını içerir
+// (yüzlerce ms), Kokpit'te bir hamlenin her adımında yeniden okunması Uygula'dan sonraki beklemenin çoğuydu.
+export async function planlamaCalismasiVeGirdisi(db: Db, kullanici: Kullanici, simdi: number = Date.now()): Promise<{ cevap: PlanlamaCalismasiCevabi; okunan: { surum: number | null; girdi: PlanCozumKaynagi | null } }> {
   const k = await planlamaGirdisiOkumasi(db, kullanici);
-  if (k.girdi === null) return { calisma: null, surum: k.surum };
+  const okunan = { surum: k.surum, girdi: k.girdi };
+  if (k.girdi === null) return { cevap: { calisma: null, surum: k.surum }, okunan };
   const g = planGirdisi({ ...k.girdi, bugun: tesisGunu(simdi) }, simdi);
-  if (g === null) return { calisma: null, surum: k.surum };
+  if (g === null) return { cevap: { calisma: null, surum: k.surum }, okunan };
   // Birleşme kayıtta olmayan planTL'yi düşürebilir; sayfanın gördüğü ve geri yazdığı da aynı amacı taşır (yazıp okuma eşit kalır).
   // Motor ayarı, ölçek ve finansman oranı girdi kurulurken aynı istekte okundu; oran gününe bağlıdır, gün başkaysa yeniden okunur.
   const { degerler, olcek, finansman, genelGider } = k.okunan!;
@@ -461,8 +468,11 @@ export async function planlamaCalismasi(db: Db, kullanici: Kullanici, simdi: num
   const calisma = durusOkumaSonuYaz(mesaiSaatiniCikar(brutAlanlariniCikar(calismayaMotorAyari(g.S, degerler, fin, olcek, undefined, gg))),
     (k.girdi.kaynak.ek as { planliDurusSonu?: unknown } | null)?.planliDurusSonu);
   return {
-    calisma: maliyetsizCalisma(calisma, gorunum(kullanici)) as PlanlamaCalismasiCevabi['calisma'],
-    surum: k.surum, kaynakDegisikligi: g.kaynakDegisikligi ?? null,
+    cevap: {
+      calisma: maliyetsizCalisma(calisma, gorunum(kullanici)) as PlanlamaCalismasiCevabi['calisma'],
+      surum: k.surum, kaynakDegisikligi: g.kaynakDegisikligi ?? null,
+    },
+    okunan,
   };
 }
 

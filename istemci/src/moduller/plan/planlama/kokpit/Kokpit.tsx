@@ -46,7 +46,8 @@ import { Liste } from './Liste.tsx';
 import { ListeDuzeni, satirBirincilIster } from './ListeDuzeni.tsx';
 import { adimMalzemeAnlari, emirMalzemeleri } from './malzeme.ts';
 import { planaAlOnizle } from './plana-al.ts';
-import { sonDegisiklikleriGeriAl, taslakOzeti, useTaslak, type TaslakYazici } from './taslak.ts';
+import { dizmeIsleri, sonDegisiklikleriGeriAl, taslakOzeti, useTaslak, type TaslakYazici } from './taslak.ts';
+import { TUM_PLAN_NOTU, iyimserKatman, iyimserUygula, tumPlanDiziliyor, type IyimserKatman } from './iyimser.ts';
 import { TaslakCubugu } from './TaslakCubugu.tsx';
 import { AdimPanosu } from './AdimPanosu.tsx';
 import { adimSayimlari } from './pano.ts';
@@ -168,7 +169,11 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const adimSayim = useMemo(() => (emirKaynagi ? adimSayimlari(c, emirKaynagi) : null), [c, emirKaynagi]);
   const biten = useMemo(() => (emirKaynagi ? bitenler(emirKaynagi, c.D) : plandanBitenler(c, p)), [c, p, emirKaynagi]);
   const cx = useMemo(() => derle(girdiKur(c, biten, an)), [c, biten, an]);
-  const m = useMemo(() => modelKur(c, p, cx, emirNo), [c, p, cx, emirNo]);
+  // 3664: Uygula'dan sonra sunucu cevabı gelene kadar taşınan iş önizlemedeki yerinde çizilir; cevap gelince katman kalkar.
+  const [iyimser, setIyimser] = useState<IyimserKatman | null>(null);
+  const [tumNot, setTumNot] = useState(false);
+  const mSunucu = useMemo(() => modelKur(c, p, cx, emirNo), [c, p, cx, emirNo]);
+  const m = useMemo(() => iyimserUygula(mSunucu, iyimser), [mSunucu, iyimser]);
   const malzeme = useMemo(() => emirMalzemeleri(c, p, o.depo.acikSiparisler, cx.now), [c, p, o.depo.acikSiparisler, cx.now]);
   const malzemeAni = useMemo(() => adimMalzemeAnlari(malzeme, m.emirler), [malzeme, m.emirler]);
   const zaman = useCallback((t: number) => saatYaz(c.D, t), [c]);
@@ -359,6 +364,9 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   // Önceki taşıma yazılırken gelen taşıma reddedilmez, sıraya girer (3365); aynı işin sıradaki taşıması sonuncusuyla değişir (art arda ok tuşu
   // tek taşıma olur). Sıra, yazma bitince ve onay penceresi kapanınca yürür.
   const kuyruk = useRef(new Map<string, { tezgah: string; S: number }>());
+  const onizOnbellek = useRef<{ anahtar: string; oz: NonNullable<Awaited<ReturnType<typeof isTasiOnizle>>>; surum: string; t: number } | null>(null);
+  const surumAnahtariRef = useRef('');
+  surumAnahtariRef.current = `${String(surum)}|${String(taslak?.cevap?.taslak?.surum ?? '')}`;
   const tasiyor = useRef(false);
   // Yazılmakta olan taşımanın hedefi: ok tuşuna art arda basınca sonraki basış buradan devam eder (plan henüz yenilenmedi).
   const suren = useRef<{ isId: string; tezgah: string; S: number } | null>(null);
@@ -379,16 +387,25 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
       }
     };
     const S = tasimaSaati(hedefS, m.simdi);
-    void isTasiOnizle({ isId, tezgah, baslangic: S }).then(async (oz) => {
+    // Sürüklerken imleç durunca alınan önizleme aynı yer için yeniden istenmez (aynı taslak sürümünde).
+    const onbellekte = onizOnbellek.current, surumAnahtari = `${String(surum)}|${String(taslak?.cevap?.taslak?.surum ?? '')}`;
+    const hazir = onbellekte !== null && onbellekte.anahtar === `${isId}|${tezgah}|${String(S)}` && onbellekte.surum === surumAnahtari && Date.now() - onbellekte.t < 120_000 ? Promise.resolve(onbellekte.oz) : isTasiOnizle({ isId, tezgah, baslangic: S });
+    onizOnbellek.current = null;
+    void hazir.then(async (oz) => {
       if (oz && !oz.gecerli) { bildir('hata', oz.ileti ?? 'Bu taşıma yapılamıyor.'); return; }
       const bitis = oz && e ? onizlemeBitisi(m, e, oz.isler.map((y) => ({ isId: y.isId, C: y.C }))) : null;
       if (e && bitis !== null && e.termin !== null && bitis > e.termin + 0.01 && e.durum !== 'gec') {
         setOnay({ aday: { isId, tezgah, baslangic: S }, turda: false, baslik: 'Bu taşıma emri geç bırakır', dugme: 'Yine de taşı', ileti: `${e.no} terminden ${sureYaz(bitis - e.termin)} sonra biter.` });
         return;
       }
-      await yaz({ isId, tezgah, baslangic: S });
-    }).finally(bitir);
-  }, [m, emir, mesgul, onay, bildir, yaz]);
+      // 3664 (Soru Merkezi: "İyimser, not görünsün"): yer hemen çizilir, sunucu cevabı gelince katman kalkar; hata olursa iş eski yerine döner.
+      if (oz) setIyimser(iyimserKatman(oz.isler));
+      // Bayat planda dizme uzun sürer; not, katman kalkana kadar sayfada kalır (geçici bildirim değil).
+      if (taslak && tumPlanDiziliyor(dizmeIsleri(c))) setTumNot(true);
+      const yazildi = await yaz({ isId, tezgah, baslangic: S });
+      if (!yazildi && oz) bildir('hata', 'Taşıma kaydedilemedi; iş eski yerine döndü.');
+    }).finally(() => { setIyimser(null); setTumNot(false); bitir(); });
+  }, [m, emir, mesgul, onay, bildir, yaz, surum, taslak, c]);
   useEffect(() => {
     if (mesgul || tasiyor.current || onay !== null) return;
     const ilk = kuyruk.current.entries().next();
@@ -397,7 +414,10 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     kuyruk.current.delete(isId); setSirada(kuyruk.current.size);
     tasiDene(isId, h.tezgah, h.S);
   }, [mesgul, onay, sirada, tasimaBitti, tasiDene]);
-  const onizle = useMemo(() => (yazabilir ? (isId: string, tezgah: string, S: number) => isTasiOnizle({ isId, tezgah, baslangic: S }) : null), [yazabilir]);
+  const onizle = useMemo(() => (yazabilir ? (isId: string, tezgah: string, S: number) => isTasiOnizle({ isId, tezgah, baslangic: S }).then((oz) => {
+    onizOnbellek.current = oz === null ? null : { anahtar: `${isId}|${tezgah}|${String(S)}`, oz, surum: surumAnahtariRef.current, t: Date.now() };
+    return oz;
+  }) : null), [yazabilir]);
   const [okKipi, setOkKipi] = useState<OkKipi>('is');
 
   // Tepsiden tahtaya bırakılan plansız emir: önce sunucu önizlemesi (ilk adımın oturacağı yer ve emrin bitişi), sonra plana alma komutu.
@@ -1073,6 +1093,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
           {ileriAdim > 0 && <button type="button" className="tc-pyq-ok" title="İleri (Ctrl+Y): geri alınan değişikliği yeniden yapar" disabled={!yazabilir || mesgul || tur !== null} onClick={() => { ileri(); }}><span>İleri</span><Simge ad="chev-right" boyut="k" /><Sayi n={ileriAdim} /></button>}
         </span>
         {sirada > 0 && <span className="tc-pyq-sirada" role="status">{sirada} taşıma sırada</span>}
+        {tumNot && <span className="tc-pyq-sirada" role="status">{TUM_PLAN_NOTU}</span>}
         {coklu.size > 1 && <span className="tc-pyq-sirada" role="status">{coklu.size} iş seçili · birlikte kayar</span>}
         {TUR_ACIK && <Dugme simge="route" className="tc-pyq-tur-dugme" onClick={turBaslat} disabled={tur !== null}>Sorunları sırayla çöz</Dugme>}
         <button type="button" className="tc-pyq-ok tc-pyq-gorunum-dugme" aria-expanded={gorunumAcik || goz !== 'T'} aria-controls="tc-pyq-gorunum" title="Görünüm ve ölçek seçenekleri" disabled={goz !== 'T'} onClick={() => { setGorunumAcik(!gorunumAcik); }}>

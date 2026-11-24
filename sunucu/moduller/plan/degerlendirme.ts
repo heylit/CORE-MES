@@ -128,6 +128,8 @@ export interface TaslakDegerlendirmesi { calisma: unknown; bitince: (sonuc: Dege
 export async function degerlendirmeBaslat(
   db: Db, kullanici: Kullanici, g: { surum: number; istek: DegerlendirmeIstegi }, simdi: number = Date.now(), yap: typeof degerlendirmeYap = degerlendirmeYap,
   taslak: TaslakDegerlendirmesi | null = null,
+  // 3664: çağıran girdiyi aynı istekte zaten okuduysa verir; yeniden okunmaz.
+  okunmus: Awaited<ReturnType<typeof planlamaGirdisi>> | null = null,
 ): Promise<{ is: string }> {
   const maliyetGorunur = islemVarMi(kullanici, MALIYET_ISLEMI);
   const fiyatGorunur = islemVarMi(kullanici, FIYAT_ISLEMI);
@@ -139,7 +141,7 @@ export async function degerlendirmeBaslat(
   isler.set(is, { kisi, durum: 'suruyor' });
   let k: Awaited<ReturnType<typeof planlamaGirdisi>>;
   try {
-    k = await planlamaGirdisi(db, kullanici);
+    k = okunmus ?? await planlamaGirdisi(db, kullanici);
     if (k.girdi === null || k.surum === null) throw cakisma(CALISMA_YOK);
     if (k.surum !== g.surum) throw eskiSurum();
   } catch (e) { isler.delete(is); throw e; }

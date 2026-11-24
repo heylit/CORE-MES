@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { TUM_PLAN_NOTU } from './iyimser.ts';
 import { BildirimSaglayici } from '../../../../ortak/arayuz/index.ts';
 import { api } from '../../../../ortak/veri/api.ts';
 import { PLANLAMA_ISLEMI } from '../../planlama-menusu.ts';
@@ -1572,17 +1573,93 @@ describe('Kokpit', () => {
     expect(screen.getByRole('group', { name: 'Taşımayı onayla' }).textContent).toMatch(/\((\d.*) (erken|geç)\)/);
     fireEvent.click(within(screen.getByRole('group', { name: 'Taşımayı onayla' })).getByRole('button', { name: 'Uygula' }));
     expect(screen.queryByRole('group', { name: 'Taşımayı onayla' })).toBeNull();
-    // Uygula taşımayı başlatır: Kokpit taşımadan önce yeri sunucuya bir kez daha sorar; sorulan yer onay çubuğunda gösterilen tezgâh ve saattir.
-    await waitFor(() => { expect(oz.mock.calls.length).toBe(once + 1); });
-    expect(oz.mock.calls.at(-1)?.[0]).toEqual(gosterilen);
-    expect(oz.mock.calls.at(-1)![0]).toMatchObject({ isId: tasinanId });
+    // 3664: Uygula, sürüklerken alınan önizlemeyi kullanır; aynı yer sunucuya bir kez daha sorulmaz. Önizleme gösterilen tezgâh ve saattir.
+    await new Promise((r) => setTimeout(r, 100));
+    expect(oz.mock.calls.length).toBe(once);
+    expect(gosterilen).toMatchObject({ isId: tasinanId });
     oz.mockRestore();
     geriKur();
   });
 
+  // Komut isteği bırakılana kadar bekler; bırakılınca bu ve sonraki (tekrar korumalı gönderimin yeniden denemeleri) istekler reddedilir.
+  interface KomutBekletici { reddet: () => void; birakildi: boolean; bekleyenler: (() => void)[] }
+  const bekletici = (): KomutBekletici => {
+    const k: KomutBekletici = { birakildi: false, bekleyenler: [], reddet: () => { k.birakildi = true; k.bekleyenler.forEach((f) => { f(); }); } };
+    return k;
+  };
+  const komutBeklet = (k: KomutBekletici): Promise<never> => new Promise<never>((_, r) => {
+    const red = (): void => { r(new Error('sunucu yazamadı')); };
+    if (k.birakildi) red(); else k.bekleyenler.push(red);
+  });
+
+  it('3664: Uygula işi önizlemedeki yerinde hemen çizer; sunucu yazamazsa eski yerine döner ve bildirir, yer sunucuya bir kez sorulur', async () => {
+    const geriKur = imlecOlayiKur();
+    const { oz, is, x0 } = onayKur();
+    const grup = await screen.findByRole('group', { name: 'Taşımayı onayla' });
+    await waitFor(() => { expect(oz.mock.calls.length).toBeGreaterThan(0); });
+    const once = oz.mock.calls.length;
+    const bekleyen = bekletici();
+    vi.spyOn(api, 'post').mockImplementation(((yol: string) => (yol === '/plan/taslagim/komut' ? komutBeklet(bekleyen) : Promise.resolve(null))) as never);
+    fireEvent.click(within(grup).getByRole('button', { name: 'Uygula' }));
+    // Komut sunucuda sürerken iş yeni yerindedir.
+    await waitFor(() => { expect(is('3.10').style.getPropertyValue('--x')).not.toBe(x0); }, { timeout: 4000 });
+    expect(oz.mock.calls.length).toBe(once);
+    await waitFor(() => { expect(vi.mocked(api.post).mock.calls.some((c) => c[0] === '/plan/taslagim/komut')).toBe(true); }, { timeout: 4000 });
+    bekleyen.reddet();
+    await waitFor(() => { expect(is('3.10').style.getPropertyValue('--x')).toBe(x0); }, { timeout: 4000 });
+    expect(await screen.findByText('Taşıma kaydedilemedi; iş eski yerine döndü.')).toBeTruthy();
+    vi.mocked(api.post).mockRestore();
+    geriKur();
+  });
+
+  it.each([[true], [false]])('3664: bayat plan %s: "Tüm plan yeniden diziliyor" notu yalnız bayatta çıkar, katman kalkana kadar sayfada kalır, sonra silinir', async (bayat) => {
+    const geriKur = imlecOlayiKur();
+    const { is, x0 } = onayKur(bayat);
+    const grup = await screen.findByRole('group', { name: 'Taşımayı onayla' });
+    const b2 = bekletici();
+    const birak = (): void => { b2.reddet(); };
+    vi.spyOn(api, 'post').mockImplementation(((yol: string) => (yol === '/plan/taslagim/komut' ? komutBeklet(b2) : Promise.resolve(null))) as never);
+    fireEvent.click(within(grup).getByRole('button', { name: 'Uygula' }));
+    await waitFor(() => { expect(is('3.10').style.getPropertyValue('--x')).not.toBe(x0); }, { timeout: 4000 });
+    const not = () => screen.queryAllByRole('status').some((e) => e.textContent === TUM_PLAN_NOTU);
+    await new Promise((r) => setTimeout(r, 200));
+    expect(not()).toBe(bayat);
+    await waitFor(() => { expect(vi.mocked(api.post).mock.calls.some((c) => c[0] === '/plan/taslagim/komut')).toBe(true); }, { timeout: 4000 });
+    birak();
+    await waitFor(() => { expect(is('3.10').style.getPropertyValue('--x')).toBe(x0); }, { timeout: 4000 });
+    expect(not()).toBe(false);
+    vi.mocked(api.post).mockRestore();
+    geriKur();
+  });
+
+  it('3664: sunucu yazınca katman kalkar ve iş zıplamaz; yeni yer sunucunun cevabından gelir', async () => {
+    const geriKur = imlecOlayiKur();
+    const { oz, is, ops, x0 } = onayKur(false);
+    const grup = await screen.findByRole('group', { name: 'Taşımayı onayla' });
+    await waitFor(() => { expect(oz.mock.calls.length).toBeGreaterThan(0); });
+    const g = oz.mock.results.at(-1)!.value as Promise<{ isler: { S: number; C: number }[] }>;
+    const yer = (await g).isler[0]!;
+    const taban = ornekCalisma();
+    const op = (taban.plan as unknown as { ops: Record<string, Record<string, unknown>> }).ops['3.10']!;
+    const sunucuCevabi = { taslak: { surum: 11, tabanSurum: 4, satirlar: [satir(TASI, 'ORN taşıma')] }, surum: 4,
+      calisma: { ...gorunum(), plan: { ...taban.plan!, dataVer: taban.dataVer, ops: { ...ops, '3.10': { ...op, S: yer.S, C: yer.C } } } } };
+    vi.spyOn(api, 'get').mockImplementation(() => Promise.resolve(null as never));
+    vi.spyOn(api, 'post').mockImplementation((() => Promise.resolve(sunucuCevabi)) as never);
+    fireEvent.click(within(grup).getByRole('button', { name: 'Uygula' }));
+    await waitFor(() => { expect(is('3.10').style.getPropertyValue('--x')).not.toBe(x0); }, { timeout: 4000 });
+    const yeniX = is('3.10').style.getPropertyValue('--x');
+    // Katman kalkana kadar (taşıma tamamlandığını gösteren bildirim) ve sonrasında iş aynı yerdedir.
+    await screen.findByText(/İş taşındı/);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(is('3.10').style.getPropertyValue('--x')).toBe(yeniX);
+    vi.mocked(api.post).mockRestore();
+    geriKur();
+  });
+
   // Onay çubuğu testleri: 3.20, 3.10'un ardından aynı tezgâhta; 3.10 sürüklenip bırakılır, çubuk açılır.
-  const onayKur = () => {
+  const onayKur = (bayat: boolean | null = null) => {
     const c = ornekCalisma();
+    if (bayat !== null && c.plan) c.plan = { ...c.plan, dataVer: bayat ? c.dataVer - 1 : c.dataVer };
     type Op = { S: number; C: number; m: string; Su: number; lot1: number };
     const ops = structuredClone((c.plan as unknown as { ops: Record<string, Op> }).ops);
     const a = ops['3.10']!, b = ops['3.20']!;
@@ -1601,11 +1678,13 @@ describe('Kokpit', () => {
     }));
     const is = (id: string) => document.querySelector<HTMLElement>(`.tc-pyq-tahta [data-is="${id}"]`)!;
     const alan = is('3.10').closest<HTMLElement>('[data-satir]')!.querySelector<HTMLElement>('.tc-pyq-alan')!;
+    // Taşınmadan önceki yer: sürükleme başlayınca iş hayalet yerinde de çizilebilir, geri dönüş bu yere bakılır.
+    const x0 = is('3.10').style.getPropertyValue('--x');
     fireEvent.pointerDown(is('3.10'), { button: 0, pointerType: 'mouse', clientX: 0, clientY: 0 });
     fireEvent.pointerMove(alan, { pointerType: 'mouse', clientX: 30, clientY: 0 });
     fireEvent.pointerMove(alan, { pointerType: 'mouse', clientX: 60, clientY: 0 });
     fireEvent.pointerUp(document, { pointerType: 'mouse' });
-    return { r, ciz, ops, oz, is, sec };
+    return { r, ciz, ops, oz, is, sec, x0 };
   };
 
   it('onay açıkken başka işe çift tıklamak bekleyen taşımayı değiştirmez; Uygula ilk işi sorar (3531-1)', async () => {
@@ -1620,9 +1699,9 @@ describe('Kokpit', () => {
     expect(is('3.20').hasAttribute('data-tasinan')).toBe(false);
     const n = oz.mock.calls.length;
     fireEvent.click(within(screen.getByRole('group', { name: 'Taşımayı onayla' })).getByRole('button', { name: 'Uygula' }));
-    await waitFor(() => { expect(oz.mock.calls.length).toBe(n + 1); });
-    expect(oz.mock.calls.at(-1)?.[0]).toEqual(gosterilen);
-    expect(oz.mock.calls.at(-1)![0]).toMatchObject({ isId: '3.10' });
+    await new Promise((r) => setTimeout(r, 100));
+    expect(oz.mock.calls.length).toBe(n);
+    expect(gosterilen).toMatchObject({ isId: '3.10' });
     geriKur();
   });
 
