@@ -13,8 +13,7 @@ test('liste: açık emirler, sayılı durum çipleri, "Şu an" sütunu ve Bitenl
   await expect(page.getByRole('tab', { name: 'Açık emirler' })).toHaveAttribute('aria-selected', 'true');
   await expect(sayac(page)).toBeVisible();
   await expect(tablo.getByRole('link', { name: /^MM-ORN-/ }).first()).toBeVisible();
-  // 3676: telefonda kayıt listesi kart olarak çizilir, sütun başlığı görünmez; geniş ekranda sütun başlığı durur.
-  if ((page.viewportSize()?.width ?? 1280) >= 768) await expect(tablo.getByRole('columnheader', { name: 'Şu an' })).toBeVisible();
+  await expect(tablo.getByRole('columnheader', { name: 'Şu an' })).toBeVisible();
   // Emir no hücresinden taşıp yandaki sütunun üstüne binmez (telefonda sabit ilk sütun dardır).
   const no = tablo.getByRole('link', { name: /^MM-ORN-/ }).first();
   const [nk, hk] = await Promise.all([no.boundingBox(), no.locator('xpath=ancestor::td[1]').boundingBox()]);
