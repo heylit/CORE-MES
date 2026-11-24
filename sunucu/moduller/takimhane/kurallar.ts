@@ -62,3 +62,45 @@ export function aktarimOnizle(satirlar: readonly { kod: string; ad: string; kate
   });
   return { satirlar: sonuc, uygun };
 }
+
+// ---- Aparat ayırma (kart 3651): yazılmaz, canlı plan penceresinden türetilir ------------------------------------------------------
+export type AparatDurumu = 'plan-bekliyor' | 'ayrildi' | 'yolda' | 'tezgahta' | 'kisi' | 'eksik';
+
+export interface AparatIstegi {
+  emirId: number; kartId: number; adet: number;
+  // Canlı planın penceresi (ms); plan yerleştirmediyse null. Pencere ayrık adımların en erken başlangıcı ile en geç bitişidir (konservatif).
+  baslangic: number | null; bitis: number | null;
+  disarida: number; yolda: number; disaridaYeri: 'istasyon' | 'kisi' | null;
+}
+export interface AparatAyirmasi { emirId: number; kartId: number; kalan: number; ayrilan: number; eksik: number; durum: AparatDurumu }
+
+const ortusur = (a: AparatIstegi, b: AparatIstegi): boolean =>
+  a.baslangic !== null && a.bitis !== null && b.baslangic !== null && b.bitis !== null && a.baslangic < b.bitis && b.baslangic < a.bitis;
+
+// Kart başına rafta duran adet `raf`. Penceresi örtüşen ve daha erken başlayan istekler rafı önce alır; zamanda ayrık istekler aynı adedi
+// yeniden kullanır (aparat döner). Çıkmış adet raftan düşmüştür, tekrar sayılmaz. Plan yerleştirmemiş istek ayırma sayılmaz ("plan bekliyor").
+export function aparatAyirmalari(istekler: readonly AparatIstegi[], rafAdetleri: ReadonlyMap<number, number>): AparatAyirmasi[] {
+  const sirali = [...istekler].sort((a, b) => (a.baslangic ?? Infinity) - (b.baslangic ?? Infinity) || a.emirId - b.emirId);
+  const sonuc = new Map<AparatIstegi, AparatAyirmasi>();
+  const kalanOf = (i: AparatIstegi): number => Math.max(0, i.adet - i.disarida);
+  for (const i of sirali) {
+    const kalan = kalanOf(i);
+    const durumBos = { emirId: i.emirId, kartId: i.kartId, kalan, ayrilan: 0, eksik: 0 };
+    if (kalan === 0) { sonuc.set(i, { ...durumBos, durum: i.disaridaYeri === 'kisi' ? 'kisi' : 'tezgahta' }); continue; }
+    if (i.baslangic === null) { sonuc.set(i, { ...durumBos, durum: 'plan-bekliyor' }); continue; }
+    let onceki = 0;
+    for (const j of sirali) { if (j === i) break; if (j.kartId === i.kartId && ortusur(i, j)) onceki += sonuc.get(j)!.ayrilan; }
+    const bos = Math.max(0, (rafAdetleri.get(i.kartId) ?? 0) - onceki);
+    const ayrilan = Math.min(kalan, bos);
+    const eksik = kalan - ayrilan;
+    sonuc.set(i, { ...durumBos, ayrilan, eksik, durum: eksik > 0 ? 'eksik' : i.yolda >= kalan ? 'yolda' : 'ayrildi' });
+  }
+  return istekler.map((i) => sonuc.get(i)!);
+}
+
+// Planın aparat kapasitesi ile fiziksel stok yan yana. Karar vermez, yalnız işaretler (plan etkilenmez).
+export type AparatUyumu = 'uyumlu' | 'plan-fazla' | 'bakimda';
+export function aparatUyumu(planKapasitesi: number, stokta: number, bakimda: number): AparatUyumu {
+  if (planKapasitesi > stokta) return 'plan-fazla';
+  return bakimda > 0 ? 'bakimda' : 'uyumlu';
+}

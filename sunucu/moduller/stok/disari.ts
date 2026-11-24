@@ -464,7 +464,8 @@ export type { SiparisAyirmaGirdisi } from './servis.ts';
 
 // ---- Takımhane (kart 3613) -----------------------------------------------------------------------------------------------------
 // Takım bakiyesi Stok'tadır; Takımhane yalnız bu işlevlerle okur ve çıkış, iade yazar. Yetkiyi çağıran korur.
-export type { KonumTurToplami, AlandakiTakim } from './sorgular.ts';
+export type { KonumTurToplami, AlandakiTakim, EmirAparatCikisi } from './sorgular.ts';
+export const emirAparatCikislari = (db: Db, malzemeIdler: readonly number[]) => sorgular.emirAparatCikislari(db, malzemeIdler);
 export const takimKonumTurToplamlari = (db: Db, malzemeIdler: readonly number[]) => sorgular.malzemeKonumTurToplamlari(db, malzemeIdler);
 export const alandakiTakimlar = (db: Db, malzemeIdler: readonly number[]) => sorgular.alandakiTakimlar(db, malzemeIdler);
 export const takimEsikleri = (db: Db, malzemeIdler: readonly number[]) => sorgular.takimEsikleri(db, malzemeIdler);

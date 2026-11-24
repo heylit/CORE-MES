@@ -163,3 +163,71 @@ export const seceneklerCevabi = z.object({
   emirler: z.array(z.object({ id: z.number().int(), emirNo: z.string(), parca: z.string() })),
 });
 export type SeceneklerCevabi = z.infer<typeof seceneklerCevabi>;
+
+// Aparat (3651): aparat da Stok'taki tek defterde adetle izlenir; ayırma yazılmaz, canlı plan penceresi ile rotadaki aparat isteğinden
+// türetilir. Pencere ayırma kümesine dahildir: farklı zamanlarda aynı aparatı kullanan iki emir birbirini eksik göstermez.
+export const APARAT_DURUMLARI = ['plan-bekliyor', 'ayrildi', 'yolda', 'tezgahta', 'kisi', 'eksik'] as const;
+export const APARAT_ASAMALARI = ['ayar_isleme', 'isleme'] as const;
+export const APARAT_UYUM_DURUMLARI = ['uyumlu', 'plan-fazla', 'bakimda'] as const;
+
+export const aparatSatiriSemasi = z.object({
+  kartKimlik: z.number().int(),
+  kod: z.string(),
+  ad: z.string(),
+  konumlar: konumDagilimiSemasi,
+  toplam: z.number().int(),
+  // Planın penceresi olan ve henüz çıkmamış istekler toplamı; serbest = raf - ayrılan (eksi olmaz).
+  ayrilan: z.number().int(),
+  serbest: z.number().int(),
+  // Kişide ve kapanmış emre ait tezgâhta duran aparat: iadesi beklenir.
+  bekleyenIade: z.number().int(),
+  rafKodu: z.string().nullable(),
+});
+export type AparatSatiri = z.infer<typeof aparatSatiriSemasi>;
+
+export const aparatKarsilastirmaSemasi = z.object({
+  kartKimlik: z.number().int(),
+  kod: z.string(),
+  ad: z.string(),
+  istasyonKimligi: z.number().int().nullable(),
+  istasyon: z.string().nullable(),
+  planKapasitesi: z.number().int(),
+  // Kartın bütün kapasite satırlarının toplamı: uyum durumu satıra değil kartın toplamına bakar (iki satır 2+2, stok 3 ise ikisi de plan fazla).
+  kartPlanToplami: z.number().int(),
+  // Stokta = raf + tezgâh + kişi (kullanılabilir fiziksel adet); bakımda ayrı sayılır.
+  stokta: z.number().int(),
+  bakimda: z.number().int(),
+  durum: z.enum(APARAT_UYUM_DURUMLARI),
+});
+export type AparatKarsilastirma = z.infer<typeof aparatKarsilastirmaSemasi>;
+
+export const aparatCevabi = z.object({
+  konumlar: konumDagilimiSemasi,
+  bekleyenIade: z.number().int(),
+  satirlar: z.array(aparatSatiriSemasi),
+  karsilastirma: z.array(aparatKarsilastirmaSemasi),
+});
+export type AparatCevabi = z.infer<typeof aparatCevabi>;
+
+export const emirAparatSatiriSemasi = z.object({
+  kartKimlik: z.number().int(),
+  kod: z.string(),
+  ad: z.string(),
+  adet: z.number().int(),
+  asama: z.enum(APARAT_ASAMALARI),
+  durum: z.enum(APARAT_DURUMLARI),
+  eksik: z.number().int(),
+  // Tezgâhta ya da kişide duran adet ve yeri; çıkmamışsa konum raf kodudur (yoksa null).
+  disarida: z.number().int(),
+  konum: z.string().nullable(),
+  baslangic: z.string().nullable(),
+  bitis: z.string().nullable(),
+});
+export type EmirAparatSatiri = z.infer<typeof emirAparatSatiriSemasi>;
+export const emirAparatCevabi = z.object({
+  emirNo: z.string(),
+  parca: z.string(),
+  hazir: z.boolean(),
+  satirlar: z.array(emirAparatSatiriSemasi),
+});
+export type EmirAparatCevabi = z.infer<typeof emirAparatCevabi>;
