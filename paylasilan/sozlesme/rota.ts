@@ -714,7 +714,7 @@ export const rotaAdimTopluGovdesi = z.object({
 // Excel'in açtığı yeni adımın Excel'de olmayan alanları (sayfadaki "adım ekle" ile aynı seçimler; sayfa ekranın alan adlarını kullanır).
 export const YENI_ADIM_VARSAYILANI = {
   islemSuresiDk: null, degisimSuresiDk: null, terminGun: null, bagimlilik: 'bekleyen', devirAdedi: null, firePayiYuzde: 0, makineKullanimi: 'tek',
-  enKucukParca: null, yenidenAyar: false, ilkParca: 'her_kurulum', hazirlikDk: null, ayar: true, ayarDk: null, dal: null, adetCarpani: null,
+  enKucukParca: null, yenidenAyar: false, ilkParca: 'yok', hazirlikDk: null, ayar: true, ayarDk: null, dal: null, adetCarpani: null,
 } as const;
 // taslaklar: Excel'in yazdığı (açtığı ya da değiştirdiği) taslak revizyon sayısı.
 export const rotaAdimTopluCevabi = z.object({ eklenen: z.number().int().min(0), guncellenen: z.number().int().min(0), taslaklar: z.number().int().min(0) });

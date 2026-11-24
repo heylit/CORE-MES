@@ -184,7 +184,7 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
     assert.deepEqual(a.adimlar.map((x) => [x.opNo, x.operasyonTipi?.kod]), [[10, 'TRN'], [20, 'FRZ']]);
     const adim = (opNo: number, kod: string, ad: string, makine: number, giren: boolean) => ({
       opNo, operasyonTipiId: tip(kod), ad, kaynak: { tur: 'makine', id: makine }, ayarSuresiDk: 30, birimSureDk: 3,
-      bagimlilik: 'bekleyen', devirAdedi: null, firePayiYuzde: 0, makineKullanimi: 'tek', enKucukParca: null, yenidenAyar: true,
+      bagimlilik: 'bekleyen', devirAdedi: null, firePayiYuzde: 0, makineKullanimi: 'tek', enKucukParca: null, yenidenAyar: true, ilkParca: 'her_kurulum',
       adaylar: [], bilesenler: giren ? [{ malzemeId: S.hm, miktar: 1, fireYuzde: 0 }] : [], yanUrunler: [],
     });
     const k = tamam(await yaz<{ durum: string; surum: number }>('planlama', `/rota/revizyonlar/${S.rev}/kaydet`, {

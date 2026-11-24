@@ -171,7 +171,7 @@ describe('kaydet gövdesi', () => {
     const g = kaydetGovdesi([adim('a', 10, { ilkParca: 'yok' }), bilinmeyen], [10, 20], opBul);
     expect(g[0]).toMatchObject({ ilkParca: 'yok' });
     expect(g[1]).not.toHaveProperty('ilkParca');
-    expect(yeniAdim(op('21'), 'x').ilkParca).toBe('her_kurulum');
+    expect(yeniAdim(op('21'), 'x').ilkParca).toBe('yok');
   });
 
   it('fason adımda süre gitmez, termin gider; işlem süresi yoksa değişim de gitmez', () => {

@@ -150,7 +150,7 @@ describe('recete-rota rota dilimi (gerçek PostgreSQL)', () => {
     );
     assert.deepEqual(
       { stationId: s3?.stationId, setup: s3?.setup, proc: s3?.proc, cycle: s3?.cycle, dep: s3?.dep, split: s3?.split, minLot: s3?.minLot, ilkParca: s3?.ilkParca },
-      { stationId: null, setup: 1, proc: 2, cycle: 2, dep: 'bagimsiz', split: 'tek', minLot: null, ilkParca: 'her_kurulum' },
+      { stationId: null, setup: 1, proc: 2, cycle: 2, dep: 'bagimsiz', split: 'tek', minLot: null, ilkParca: 'yok' },
     );
     // Kabul: aynı rota rota modülünün kendi ucundan aynı adımlarla (istasyon dahil) döner.
     const liste = await tamamIstek<UrunRevizyonlariCevabi>(tam, 'GET', `/rota/urunler/${String(urun)}`);

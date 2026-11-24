@@ -259,23 +259,23 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     assert.equal(g.json<{ mesaj: string }>().mesaj, 'OP 10: giren (hammadde ya da yarı mamul) seçilmeli.');
   });
 
-  test('RT-81: adımın ilk parça seçimi kaydedilir ve okunur; seçimi göndermeyen kayıt adımın seçimini korur, yeni adım her kurulumda başlar; geçersiz seçim reddedilir', async () => {
+  test('RT-81: adımın ilk parça seçimi kaydedilir ve okunur; seçimi göndermeyen kayıt adımın seçimini korur, yeni adım ilk parçasız başlar (3648); geçersiz seçim reddedilir', async () => {
     const urun = await mamulAc();
     const { id } = (await taslakAc(urun)).json<KomutCevabi>();
-    const k = await kaydet(id, 1, [yeniAdim(), yeniAdim({ ilkParca: 'yok' })]);
+    const k = await kaydet(id, 1, [yeniAdim({ ilkParca: 'her_kurulum' }), yeniAdim()]);
     assert.equal(k.statusCode, 200, k.body);
     const a = await ayrinti(id);
     assert.deepEqual(a.adimlar.map((x) => [x.opNo, x.ilkParca]), [[10, 'her_kurulum'], [20, 'yok']]);
-    // Alanı bilmeyen eski görünüm seçimi göndermez: kayıtlı seçim kalır, yeni adım "her kurulumda" olur.
+    // Alanı bilmeyen eski görünüm seçimi göndermez: kayıtlı seçim kalır, yeni adım "yok" olur (3648).
     const { ilkParca: _a, ...op10 } = govdeye(a.adimlar[0]!);
     const { ilkParca: _b, ...op20 } = govdeye(a.adimlar[1]!);
     const k2 = await kaydet(id, k.json<KomutCevabi>().surum, [op10, op20, yeniAdim({ bilesenler: [] })]);
     assert.equal(k2.statusCode, 200, k2.body);
-    assert.deepEqual((await ayrinti(id)).adimlar.map((x) => [x.opNo, x.ilkParca]), [[10, 'her_kurulum'], [20, 'yok'], [30, 'her_kurulum']]);
+    assert.deepEqual((await ayrinti(id)).adimlar.map((x) => [x.opNo, x.ilkParca]), [[10, 'her_kurulum'], [20, 'yok'], [30, 'yok']]);
     const bozuk = await kaydet(id, k2.json<KomutCevabi>().surum, [{ ...yeniAdim(), ilkParca: 'bazen' as never }]);
     assert.equal(bozuk.statusCode, 400);
     const secim = await vt().tx((db) => adimIlkParcaSecimleri(db, [id]));
-    assert.deepEqual([...secim].sort(), [[`${id}:10`, 'her_kurulum'], [`${id}:20`, 'yok'], [`${id}:30`, 'her_kurulum']]);
+    assert.deepEqual([...secim].sort(), [[`${id}:10`, 'her_kurulum'], [`${id}:20`, 'yok'], [`${id}:30`, 'yok']]);
     assert.equal((await vt().tx((db) => adimIlkParcaSecimleri(db, []))).size, 0);
   });
 
