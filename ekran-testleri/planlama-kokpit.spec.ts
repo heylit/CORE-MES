@@ -97,6 +97,9 @@ const calismaKur = (d: Durum) => ({ ...calisma(d.ops, d.locks), w: d.w, down: d.
 // 3297: Önce / sonra, Duruş ve mesai ve Ayarlar üst şeritte tek "Araçlar" menüsündedir.
 // 3414: görünüm ve ölçek seçenekleri "Görünüm" düğmesinin ardındadır. Var olan testler onları açık kullanır; kapalı geliş 3414 testinde ölçülür.
 // Olay doğrudan düğmeye gider: açılış karşılaması üstte dursa da açılır.
+// 3669: Canlıya al ve Onaya gönder, sunucunun gönderme önizlemesi sıra denetimini bitirene kadar kapalıdır. Bu senaryolar sunucuyu taklit eder
+// (çalışma sürümü gerçek kayıtta yok), gerçek uç 409 verirdi; temiz sonuç (ihlal yok) burada verilir.
+const temizOnizleme = (page: Page) => page.route('**/api/plan/planlama-calismasi/gonderme-onizlemesi', (r) => json(r, { kapali: [], kilitYetkisi: true, oneri: null, oneriNedeni: null, ihlaller: [] }));
 const gorunumAc = (kokpit: Locator) => kokpit.locator('.tc-pyq-gorunum-dugme').dispatchEvent('click');
 async function arac(kokpit: Locator, ad: string) {
   await kokpit.getByRole('button', { name: 'Araçlar' }).click();
@@ -143,6 +146,7 @@ async function taslakSunucusu(page: Page, kur: (d: Durum) => Record<string, unkn
 }
 
 test('Kokpit: tahta, sağ tıkla tut ve bırak, taslak, Geri ve Canlıya al, Matris; telefonda liste; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  await temizOnizleme(page);
   const t = await taslakSunucusu(page);
   const { tasinan, alinan } = t;
   const onizleme: string[] = [];
@@ -374,7 +378,8 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, taslak, Geri ve Canlıya al, Mat
 
   await tasma();
   expect(ag.hatalar).toEqual([]);
-  expect(ag.yazmalar.every((y) => /plan\/taslagim\/|duzenleyen/.test(y))).toBe(true);
+  // gonderme-onizlemesi POST'tur ama yazdıklarını ara noktaya geri alır (3669 TK-07); kayıt bırakmaz.
+  expect(ag.yazmalar.every((y) => /plan\/taslagim\/|duzenleyen|gonderme-onizlemesi/.test(y))).toBe(true);
 });
 
 // Tezgâh çoksa yük şeridi emirleri ilk ekrandan itmesin: her genişlikte yalnız dolu tezgâhlar görünür, düğme hepsini açar.
@@ -405,6 +410,7 @@ test('Kokpit Matris: tezgâh çoksa yük şeridinde yalnız dolu tezgâhlar, dü
 // Kart 3282 (dilim 1a), 3317 a: Planlama Kokpit'le açılır; saha olayı şeritteki listede görünür, plansız emrin kartını seçer ve boş yerleri
 // açar. Canlıya al onay sayfasını Kokpit'in yerine açar; Kokpit'e dön tahtaya döner. Sayfa hiçbir adımda yatay taşmaz.
 test('Kokpit 3282: /plan Kokpit\'i açar; saha olayı şeritteki listede; plansız emir kartı seçili gelir; Canlıya al onay sayfasını açar (üç sekme, geri düğmesi Kokpit\'e döner); yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  await temizOnizleme(page);
   await page.route('**/api/plan/planlama-calismasi', (r) => json(r, { calisma: calisma({ ...ILK }, {}), surum: 1 }));
   await page.route('**/api/plan/surum', (r) => json(r, {
     planSurumu: 3, sonCanliyaAlma: { zaman: '2026-10-19T05:00:00Z', kisi: 'ORN-Mudur' },
@@ -479,6 +485,7 @@ test('Kokpit 3282: /plan Kokpit\'i açar; saha olayı şeritteki listede; plans�
 // Kart 3335 a: 4 saat kuralı canlıya almayı gerekçe isteyerek geri çevirince pencere açılmaz; neden kontrol listesine yazılır, not alanı zorunlu
 // gerekçe olur ve boşken karar düğmeleri kapalıdır. Onayda bekleyen plan kendi sekmesindedir. Veriler uydurmadır.
 test('Kokpit 3335: 4 saat kuralı reddedince karar alanı zorunlu gerekçe olur, yazılınca komut gerekçeyle gider; onay bekleyen plan kendi sekmesinde; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  await temizOnizleme(page);
   const c = calisma({ ...ILK }, {});
   await page.route('**/api/plan/planlama-calismasi', (r) => json(r, { calisma: { ...c, plan: { ...c.plan, kim: 'ORN-Planlamaci', zaman: Date.parse('2026-10-19T06:30:00+03:00') } }, surum: 1 }));
   const bekleyen = {
@@ -2225,6 +2232,7 @@ test('Kokpit Araçlar menüsü: bütün maddeler ekranın içinde görünür, so
 // Kart 3414: planlama yolu. Kişi hangi adımda olduğunu ve yaptığının sonucunu cümleyle görür: plansız siparişte "Sistem önersin", plana
 // alınınca bitiş ve termin, geç siparişte motorun kaydındaki neden ve sonucu yazılı seçenekler, taslak varken "Onaya geç".
 test('Kokpit 3414: planlama yolu; plansız siparişte Sistem önersin, sonuç cümlesi, geç siparişte neden ve seçenekler, Onaya geç; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  await temizOnizleme(page);
   const nedenli = (ops: Record<string, Is>) => ({ ...plan(ops), ops: { ...ops, 'S1.a2': { ...ops['S1.a2'], why: { t: 'tezgah', r: 'S2.a1' } } } });
   const t = await taslakSunucusu(page, (d) => ({ ...calismaKur(d), plan: nedenli(d.ops) }));
   await page.route('**/api/plan/planlama-calismasi/plana-al-onizlemesi?*', (r) => {
