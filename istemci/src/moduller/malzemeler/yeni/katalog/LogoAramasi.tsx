@@ -28,6 +28,8 @@ const sureMetni = (sn: number): string => `${Math.floor(sn / 60)}:${String(sn % 
 // Köprünün sistem hata kodu (ECONNREFUSED gibi) kullanıcıya gösterilmez; neden metni kalır.
 const kodsuz = (ileti: string): string => ileti.replace(/\s*\(([A-Z][A-Z0-9_]{2,})\)/g, '');
 
+const KOD_CAKISMASI_ACIKLAMASI = "Bu kod CORE'da başka bir Logo kaydına bağlı kartta";
+
 export function useKatalogLogoAramasi({ metin, yazabilir, kartAc }: { metin: string; yazabilir: boolean; kartAc: (kimlik: string) => void }): {
   dugme: ReactNode; serit: ReactNode;
 } {
@@ -122,10 +124,18 @@ export function useKatalogLogoAramasi({ metin, yazabilir, kartAc }: { metin: str
     </span>
   );
 
-  const satirHucresi = (k: Satir) => {
+  const satirHucresi = (k: Satir): { rozet: ReactNode; eylem: ReactNode; not?: string } => {
     if (!k.aktif) return { rozet: <Rozet ton="pasif">Logo'da pasif</Rozet>, eylem: <span className="tc-mk-logo-not">Pasif kart alınmaz</span> };
     if (k.durum === 'bagli' && k.tmi) {
       return { rozet: <Rozet ton="tamam">CORE'da: {k.tmi.stokKodu}</Rozet>, eylem: <Dugme simge="next" onClick={() => kartAc(k.tmi!.kimlik)}>Kartı aç</Dugme> };
+    }
+    if (k.durum === 'kod-cakismasi') {
+      return {
+        rozet: <Rozet ton="hata">Kod çakışması</Rozet>,
+        eylem: null,
+        // Eylem sütunu genişlerse listenin bütün satırlarının sütunları kayar; not satırın altında tam genişlikte durur.
+        not: KOD_CAKISMASI_ACIKLAMASI,
+      };
     }
     const baglanir = k.durum === 'bagsiz' && k.tmi !== null && k.tmi.onayDurumu !== 'iptal';
     return {
@@ -193,6 +203,7 @@ export function useKatalogLogoAramasi({ metin, yazabilir, kartAc }: { metin: str
                 <span>{logoTurMetni(k.kartTuru, logoDurumu.data, LOGO_TUR_ADLARI) ?? '—'}</span>
                 <span>{h.rozet}</span>
                 <span>{h.eylem}</span>
+                {h.not && <span className="tc-mk-logo-satir-not">{h.not}</span>}
               </li>
             );
           })}

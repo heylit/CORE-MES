@@ -25,16 +25,18 @@ export type Satir = LogoGecisCevabi['kartlar'][number];
 type TekIslem = 'bagla' | 'farki-al' | 'yeni-koda-gec';
 
 const SUZGEC_ADLARI: Record<LogoGecisSuzgeci, string> = {
-  kullanilan: 'Kullanılanlar', stoklu: 'Stoğu olanlar', tumu: 'Tümü', yeni: "CORE'da yok", bagsiz: 'Aynı kod var', bagli: 'Bağlı', 'kullanim-disi': 'Kullanım dışı',
+  kullanilan: 'Kullanılanlar', stoklu: 'Stoğu olanlar', tumu: 'Tümü', yeni: "CORE'da yok", bagsiz: 'Aynı kod var', bagli: 'Bağlı', 'kod-cakismasi': 'Kod çakışması', 'kullanim-disi': 'Kullanım dışı',
 };
 const SUZGEC_SAYISI: Record<LogoGecisSuzgeci, keyof LogoGecisCevabi['sayilar']> = {
-  kullanilan: 'kullanilan', stoklu: 'stoklu', tumu: 'toplam', yeni: 'yeni', bagsiz: 'bagsiz', bagli: 'bagli', 'kullanim-disi': 'kullanimDisi',
+  kullanilan: 'kullanilan', stoklu: 'stoklu', tumu: 'toplam', yeni: 'yeni', bagsiz: 'bagsiz', bagli: 'bagli', 'kod-cakismasi': 'kodCakismasi', 'kullanim-disi': 'kullanimDisi',
 };
 const DURUM: Record<Satir['durum'], { ad: string; ton: RozetTonu; simge: 'plus' | 'alert' | 'check' }> = {
   yeni: { ad: "CORE'da yok", ton: 'bilgi', simge: 'plus' },
   bagsiz: { ad: 'Aynı kod var', ton: 'uyari', simge: 'alert' },
   bagli: { ad: 'Bağlı', ton: 'tamam', simge: 'check' },
+  'kod-cakismasi': { ad: 'Kod çakışması', ton: 'hata', simge: 'alert' },
 };
+const KOD_CAKISMASI_ACIKLAMASI = "Bu kod CORE'da başka bir Logo kaydına bağlı kartta";
 const KARAR_NEDENI: Record<NonNullable<Satir['kararNedeni']>, string> = {
   'birim-farki': 'Birim farklı',
   'kod-eslenecek': 'Kod eşlenecek',
@@ -162,6 +164,7 @@ export function LogoMalzemeGecisi({ turAdlari }: Ozellikler) {
             <Rozet ton={DURUM[k.durum].ton}><Simge ad={DURUM[k.durum].simge} boyut="k" />{DURUM[k.durum].ad}</Rozet>
             {k.kararNedeni !== null && <Rozet ton="pasif"><Simge ad="help" boyut="k" />{KARAR_NEDENI[k.kararNedeni]}</Rozet>}
           </span>
+          {k.durum === 'kod-cakismasi' && <span className="tc-lg-ek">{KOD_CAKISMASI_ACIKLAMASI}</span>}
           {k.farklar.map((f) => <span key={f.alan} className="tc-lg-ek">Logo'da {FARK_ADLARI[f.alan]}: {f.logo ?? '(boş)'}</span>)}
         </span>
       ),
@@ -343,7 +346,7 @@ function TopluPencere({ tur, secili, turAdlari, karsiliklar, kapat, bitti }: {
   const disarida = secili.filter((k) => !(tur === 'bagla' ? k.topluBaglanir : k.topluAlinir));
   const nedenler = new Map<string, number>();
   for (const k of disarida) {
-    const n = k.kararNedeni !== null ? KARAR_NEDENI[k.kararNedeni] : tur === 'bagla' ? (k.durum === 'bagli' ? 'Zaten bağlı' : "CORE'da yok") : (k.durum === 'bagli' ? 'Zaten bağlı' : 'Aynı kod CORE\'da var');
+    const n = k.durum === 'kod-cakismasi' ? 'Kod çakışması' : k.kararNedeni !== null ? KARAR_NEDENI[k.kararNedeni] : tur === 'bagla' ? (k.durum === 'bagli' ? 'Zaten bağlı' : "CORE'da yok") : (k.durum === 'bagli' ? 'Zaten bağlı' : 'Aynı kod CORE\'da var');
     nedenler.set(n, (nedenler.get(n) ?? 0) + 1);
   }
   const [turSecim, turYaz] = useState('');

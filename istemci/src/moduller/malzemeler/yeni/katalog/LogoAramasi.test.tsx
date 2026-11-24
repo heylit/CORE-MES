@@ -25,10 +25,11 @@ const SATIRLAR: Satir[] = [
   { ...ortak, logoKayitNo: 41, kod: 'ORN-LG-1041', ad: 'Deneme mil 41', durum: 'bagli', aktif: true, tmi: { ...tmi('k41', 'HM-ORN-00412'), logoKayitli: true } },
   { ...ortak, logoKayitNo: 42, kod: 'ORN-LG-2210', ad: 'Deneme flans', durum: 'yeni', aktif: false, tmi: null },
   { ...ortak, logoKayitNo: 43, kod: 'HM-ORN-00043', ad: 'Deneme ayni kod', durum: 'bagsiz', aktif: true, tmi: tmi('k43', 'HM-ORN-00043') },
+  { ...ortak, logoKayitNo: 44, kod: 'HM-ORN-00044', ad: 'Deneme cakisan kod', durum: 'kod-cakismasi', aktif: true, tmi: { ...tmi('k44', 'HM-ORN-00044'), logoKayitli: true } },
 ];
 const LISTE = (kartlar: Satir[]): LogoGecisCevabi => ({
-  baglanti: true, okuma: { acik: false, suruyor: false, okunan: 4, sonTamam: null },
-  sayilar: { toplam: 4, stoklu: 0, yeni: 2, bagsiz: 1, bagli: 1, kullanimDisi: 1, kullanilan: null, kararBekleyen: 0 },
+  baglanti: true, okuma: { acik: false, suruyor: false, okunan: 5, sonTamam: null },
+  sayilar: { toplam: 5, stoklu: 0, yeni: 2, bagsiz: 1, bagli: 1, kodCakismasi: 1, kullanimDisi: 1, kullanilan: null, kararBekleyen: 0 },
   suzgec: 'tumu', kullanim: false, canliArama: true, uyan: kartlar.length, kartlar, sayfa: 0, sonrakiSayfa: null,
 });
 const YAZAN: Kullanici = { id: 1, ad: 'Deneme Yazan', islemler: ['sayfa.malzemeler', 'malzemeler.yaz'] };
@@ -51,7 +52,7 @@ function sunucuKur(k: Kurulum = {}) {
       if (typeof k.arama === 'function') return k.arama();
       return json(200, k.arama ?? { durum: 'tamam', ileti: null, kartlar: SATIRLAR.map((s) => ({ logoKayitNo: s.logoKayitNo, kod: s.kod, ad: s.ad })) });
     }
-    if (yol === '/logo-gecisi/malzeme-ekle') return json(200, { eklenen: 4 });
+    if (yol === '/logo-gecisi/malzeme-ekle') return json(200, { eklenen: 5 });
     if (yol.startsWith('/malzeme-logo-gecisi?')) return json(200, LISTE(SATIRLAR));
     if (yol === '/malzeme-logo-durumu') {
       return json(200, { kartlar: [], karsiliklar: [{ cesit: 'tur', tmiDegeri: 'sarf', logoDegeri: '13' }], kartTuruSecenekleri: [{ kod: '13', ad: 'Tüketim malı' }], karsilikYazabilir: false });
@@ -122,8 +123,8 @@ describe('Katalogda Logo araması (3319 a)', () => {
     const serit = await screen.findByRole('region', { name: "Logo'da bulunanlar" });
     await within(serit).findByText('ORN-LG-1040');
     expect(istekler.filter((i) => i.yol.startsWith('/logo-gecisi/malzeme-ara?')).map((i) => i.yol)).toEqual(['/logo-gecisi/malzeme-ara?q=mil']);
-    expect(istekler.find((i) => i.yol === '/logo-gecisi/malzeme-ekle')?.govde).toEqual({ kartlar: [40, 41, 42, 43] });
-    expect(istekler.some((i) => i.yol === '/malzeme-logo-gecisi?kayitlar=40%2C41%2C42%2C43&sayfa=0')).toBe(true);
+    expect(istekler.find((i) => i.yol === '/logo-gecisi/malzeme-ekle')?.govde).toEqual({ kartlar: [40, 41, 42, 43, 44] });
+    expect(istekler.some((i) => i.yol === '/malzeme-logo-gecisi?kayitlar=40%2C41%2C42%2C43%2C44&sayfa=0')).toBe(true);
     await waitFor(() => expect(within(satir('ORN-LG-1040')).getByText('Tüketim malı (CORE: Sarf)')).toBeTruthy());
     expect(within(satir('ORN-LG-1040')).getByRole('button', { name: "ORN-LG-1040 CORE'a al" })).toBeTruthy();
     expect(within(satir('ORN-LG-1040')).queryByRole('button', { name: /var olan karta bağla/ })).toBeNull();
@@ -132,6 +133,12 @@ describe('Katalogda Logo araması (3319 a)', () => {
     expect(acilan).toEqual(['k41']);
     expect(within(satir('ORN-LG-2210')).getByText("Logo'da pasif")).toBeTruthy();
     expect(within(satir('ORN-LG-2210')).queryByRole('button')).toBeNull();
+    // 3629: aynı kodlu kart başka bir Logo kaydına bağlıysa bağlama yok; neden yazar.
+    expect(within(satir('HM-ORN-00044')).getByText('Kod çakışması')).toBeTruthy();
+    expect(within(satir('HM-ORN-00044')).getByText("Bu kod CORE'da başka bir Logo kaydına bağlı kartta")).toBeTruthy();
+    expect(within(satir('HM-ORN-00044')).queryByRole('button')).toBeNull();
+    // Not sütun genişliğini bozmasın diye eylem hücresinde değil, satırın altında ayrı hücrededir.
+    expect(within(satir('HM-ORN-00044')).getByText("Bu kod CORE'da başka bir Logo kaydına bağlı kartta").className).toContain('tc-mk-logo-satir-not')
     // Aynı kodlu CORE kartı varsa bağlama; Logo'ya yazılmaz, yalnız CORE'da bağ kurulur.
     fireEvent.click(within(satir('HM-ORN-00043')).getByRole('button', { name: 'HM-ORN-00043 var olan karta bağla' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Bağla' }));
@@ -148,7 +155,7 @@ describe('Katalogda Logo araması (3319 a)', () => {
     await waitFor(() => expect(yenilenenler(yoklama)).toEqual(expect.arrayContaining(YENILENMELI)));
     // Gizle sonucu silmez; yeniden açılır ve Logo'ya ikinci istek gitmez.
     fireEvent.click(within(serit).getByRole('button', { name: 'Gizle' }));
-    fireEvent.click(await screen.findByRole('button', { name: "Logo'da bulunanları göster (4)" }));
+    fireEvent.click(await screen.findByRole('button', { name: "Logo'da bulunanları göster (5)" }));
     expect(await screen.findByRole('region', { name: "Logo'da bulunanlar" })).toBeTruthy();
     expect(istekler.filter((i) => i.yol.startsWith('/logo-gecisi/malzeme-ara?'))).toHaveLength(1);
   });

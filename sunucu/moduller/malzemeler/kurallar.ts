@@ -1320,18 +1320,19 @@ export function logoKoduTureUyar(b: { onek: string }, tur: string, firmaOneki: s
   return KOD_ONEKI_DESENI.test(`${b.onek}1`) && katalogOnekiTureUyarMi(b.onek, tur);
 }
 
-export type LogoGelenDurumu = 'yeni' | 'bagsiz' | 'bagli';
+export type LogoGelenDurumu = 'yeni' | 'bagsiz' | 'bagli' | 'kod-cakismasi';
 export interface LogoyaBagliTmiKarti { kimlik: string; stokKodu: string; logoKayitNo: string | null }
 
-// Eşleşme sırası: Logo kayıt numarası, kod eşlemesi (2116-3 c), aynı stok kodu. Aynı kodlu kart başka Logo kaydına bağlıysa "bagsiz"
-// görünür ama bağlanamaz (servis reddeder).
+// Eşleşme sırası: Logo kayıt numarası, kod eşlemesi (2116-3 c), aynı stok kodu. Aynı kodlu kart başka bir Logo kaydına bağlıysa
+// "kod-cakismasi": kart bu Logo kaydının karşılığı değildir, bağlanmaz. Bağlı olmayan aynı kodlu kart "bagsiz" kalır (bağlanır).
 export function logoGelenDurumu<T extends LogoyaBagliTmiKarti>(
   k: { logoKayitNo: number; kod: string }, refle: ReadonlyMap<string, T>, kodla: ReadonlyMap<string, T>, esleme: ReadonlyMap<string, string>,
 ): { durum: LogoGelenDurumu; tmi: T | null } {
   const bagli = refle.get(String(k.logoKayitNo)) ?? (esleme.has(k.kod) ? kodla.get(esleme.get(k.kod)!) : undefined);
   if (bagli) return { durum: 'bagli', tmi: bagli };
   const ayni = kodla.get(k.kod);
-  return ayni ? { durum: 'bagsiz', tmi: ayni } : { durum: 'yeni', tmi: null };
+  if (!ayni) return { durum: 'yeni', tmi: null };
+  return { durum: ayni.logoKayitNo !== null ? 'kod-cakismasi' : 'bagsiz', tmi: ayni };
 }
 
 // 2088-1: Açıklama 1 Logo adıdır (boşsa TMI adı gider), Açıklama 2 ve 3 NAME3 ve NAME4. Fark bu üç alanda aranır; boşluklar kırpılır.
@@ -1361,6 +1362,8 @@ export function logoGecisAdayligi(o: {
 }): { topluBaglanir: boolean; topluAlinir: boolean; kararNedeni: LogoGecisKararNedeni | null } {
   const yok = { topluBaglanir: false, topluAlinir: false };
   if (o.durum === 'bagli') return { ...yok, kararNedeni: null };
+  // Kod çakışmasının nedeni durum rozetinin kendisidir; toplu işleme girmez, satırda çözülür.
+  if (o.durum === 'kod-cakismasi') return { ...yok, kararNedeni: null };
   if (!o.aktif) return { ...yok, kararNedeni: 'kullanim-disi' };
   if (o.durum === 'yeni') return o.koduUyar ? { ...yok, topluAlinir: true, kararNedeni: null } : { ...yok, kararNedeni: 'kod-eslenecek' };
   if (!o.tmi || o.tmi.onayDurumu === 'iptal') return { ...yok, kararNedeni: 'iptal-kart' };

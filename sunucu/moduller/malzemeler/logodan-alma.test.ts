@@ -40,6 +40,9 @@ describe('Logo\'dan gelen kart kuralları (2116-2 a, 2116-3 c)', () => {
     assert.deepEqual(logoGelenDurumu({ logoKayitNo: 8, kod: 'LG.1' }, refle, kodla, new Map([['LG.1', 'HM-BBB-00001']])), { durum: 'bagli', tmi: b });
     assert.deepEqual(logoGelenDurumu({ logoKayitNo: 9, kod: 'HM-BBB-00001' }, refle, kodla, new Map()), { durum: 'bagsiz', tmi: b });
     assert.deepEqual(logoGelenDurumu({ logoKayitNo: 9, kod: 'YOK' }, refle, kodla, new Map()), { durum: 'yeni', tmi: null });
+    // 3629: aynı kodlu kart başka bir Logo kaydına (7) bağlıysa bu Logo kaydının (9) karşılığı değildir.
+    assert.deepEqual(logoGelenDurumu({ logoKayitNo: 9, kod: 'HM-AAA-00001' }, refle, kodla, new Map()), { durum: 'kod-cakismasi', tmi: a });
+    assert.deepEqual(logoGelenDurumu({ logoKayitNo: 7, kod: 'HM-AAA-00001' }, refle, kodla, new Map()), { durum: 'bagli', tmi: a }, 'kendi kaydıysa bağlı');
     assert.deepEqual(
       logoKartFarklari({ ad: ' Mil ', aciklama2: null, aciklama3: 'Uc' }, { ad: 'Mil', aciklama1: null, aciklama2: ' ', aciklama3: 'Baska' }),
       [{ alan: 'aciklama_3', logo: 'Uc', tmi: 'Baska' }],
@@ -264,5 +267,72 @@ describe('Logo\'dan gelen kartlar: liste, alma, bağlama, Logo\'dakini alma (211
     assert.deepEqual(await sil(t.kimlik), { id: t.kimlik, logodaPasifeAliniyor: false }, 'bağlanan kart, bağlantı kapalıyken de silinir');
     assert.deepEqual(await satir(t.kimlik), { durum: 'iptal', pasif: null, logo: '111', gonderim: 'gonderildi' });
     assert.equal(await vt().tek('SELECT 1 FROM malzeme_katalog_karti WHERE logo_pasif_durumu IS NOT NULL'), null, 'kuyrukta pasife alma isteği yok');
+  });
+
+  test('LMA-11 (3629) aynı kodlu kart başka Logo kaydına bağlıysa durum "kod-cakismasi": bağlama ve alma anlaşılır hatayla reddedilir, kart değişmez; bağlı olmayan aynı kodlu kart bağlanmaya devam eder', async () => {
+    const t = await taslakAc('HM-CKS-00001');
+    await vt().sorgu("UPDATE malzeme_katalog_karti SET logo_kayit_no = '9100', logo_gonderim_durumu = 'gonderildi', logo_gonderim_zamani = now() WHERE kimlik = $1", [t.kimlik]);
+    ayna.push(kart(9101, t.kod, { ad: 'Baska malzeme' }));
+    const l = (await liste(`?ara=${t.kod}`)).kartlar[0]!;
+    assert.equal(l.durum, 'kod-cakismasi');
+    assert.equal(l.tmi?.kimlik, t.kimlik);
+    const once = await kartSatiri(t.kimlik);
+    const b = await istek('POST', '/malzeme-logo-kartlari/9101/bagla', { surum: once!.surum });
+    assert.equal(b.statusCode, 409, b.body);
+    assert.match(String((b.json() as { ileti?: string; mesaj?: string }).ileti ?? (b.json() as { mesaj?: string }).mesaj ?? b.body), /Kart zaten Logo kaydı 9100'ya bağlı/);
+    assert.equal((await istek('POST', '/malzeme-logo-kartlari/9101/al', { tur: 'hammadde', birim: 'kg', onek: null })).statusCode, 409);
+    assert.equal(await kartSatiri('logo-9101'), null, 'yeni kart açılmadı');
+    assert.deepEqual(await kartSatiri(t.kimlik), once, 'kart değişmedi');
+    // Bağlı olmayan aynı kodlu kart: bugünkü bağsız davranış.
+    const u = await taslakAc('HM-CKS-00002');
+    ayna.push(kart(9102, u.kod));
+    assert.equal((await liste(`?ara=${u.kod}`)).kartlar[0]?.durum, 'bagsiz');
+    assert.equal((await istek('POST', '/malzeme-logo-kartlari/9102/bagla', { surum: u.surum })).statusCode, 200);
+  });
+
+  test('LMA-12 (3629) Logo\'da dolu kod yeni karta verilmez: kod listesi boşken bile kart aynası dolu kodu gösterir; eşlemedeki kod Logo\'da başka kayıtta doluysa alma durur', async () => {
+    logoKodCozucusu(async () => []);
+    ayna.push(kart(9110, 'HM-DUP-00001', { ad: 'Logo\'da baska malzeme' }), kart(9111, '150.01.0111'));
+    const c = await istek('POST', '/malzeme-logo-kartlari/9111/al', { tur: 'hammadde', birim: 'kg', onek: 'HM-DUP-' });
+    assert.equal(c.statusCode, 200, c.body);
+    assert.equal((c.json() as { stok_kodu: string }).stok_kodu, 'HM-DUP-00002', 'dolu 00001 atlandı');
+    await vt().sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('HM-DUQ-', 1)");
+    eslemeler.set('150.01.0112', 'HM-DUQ-00001');
+    ayna.push(kart(9112, '150.01.0112'), kart(9113, 'HM-DUQ-00001'));
+    const d = await istek('POST', '/malzeme-logo-kartlari/9112/al', { tur: 'hammadde', birim: 'kg', onek: null });
+    assert.equal(d.statusCode, 409, d.body);
+    assert.match(d.body, /eşlemedeki kodu HM-DUQ-00001 Logo'da başka bir kayıtta kullanılıyor/);
+    assert.equal(await kartSatiri('logo-9112'), null, 'kopya kodlu kart açılmadı');
+    // Eşlemedeki kod Logo'da boşsa bugünkü davranış: kod korunur.
+    await vt().sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('HM-DUR-', 1)");
+    eslemeler.set('150.01.0114', 'HM-DUR-00001');
+    ayna.push(kart(9114, '150.01.0114'));
+    const e = await istek('POST', '/malzeme-logo-kartlari/9114/al', { tur: 'hammadde', birim: 'kg', onek: null });
+    assert.equal(e.statusCode, 200, e.body);
+    assert.equal((e.json() as { stok_kodu: string }).stok_kodu, 'HM-DUR-00001');
+  });
+
+  test('LMA-13 (3629) bağlama okuduktan sonra başkası kartı bağlarsa kaybeden "Kart zaten Logo kaydı <no>\'ya bağlı" iletisini alır, sürüm hatası görmez', async () => {
+    const t = await taslakAc('HM-YRS-00001');
+    ayna.push(kart(9120, t.kod));
+    // Satır kilidi: istek kartı bağsız okur, yazma kilidi bekler; kilit tutan işlem kartı başka kayda bağlayıp bırakır.
+    let kilitliOldu!: () => void;
+    const kilitli = new Promise<void>((r) => { kilitliOldu = r; });
+    let birak!: () => void;
+    const bekle = new Promise<void>((r) => { birak = r; });
+    const tutan = vt().tx(async (db) => {
+      await db.sorgu('SELECT 1 FROM malzeme_katalog_karti WHERE kimlik = $1 FOR UPDATE', [t.kimlik]);
+      kilitliOldu();
+      await bekle;
+      await db.sorgu("UPDATE malzeme_katalog_karti SET logo_kayit_no = '9998', logo_gonderim_durumu = 'gonderildi', logo_gonderim_zamani = now() WHERE kimlik = $1", [t.kimlik]);
+    });
+    await kilitli;
+    const istekSonucu = istek('POST', '/malzeme-logo-kartlari/9120/bagla', { surum: t.surum });
+    await new Promise((r) => setTimeout(r, 500));
+    birak();
+    await tutan;
+    const c = await istekSonucu;
+    assert.equal(c.statusCode, 409, c.body);
+    assert.match(c.body, /Kart zaten Logo kaydı 9998'ya bağlı/);
   });
 });

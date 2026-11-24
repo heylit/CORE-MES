@@ -540,11 +540,22 @@ export function logoKodCozucusuKaydet(cozucu: LogoKodCozucusu): void { logodaKul
 // Logo'da art arda bu kadar dolu numaradan sonra durulur (3316 Risk K1): dolu kod verilmez, Logo'daki başka kartla karışmasın.
 export const LOGO_KOD_ATLAMA_EN_COK = 1000;
 
+// Kod Logo'da başka bir kayıtta kullanılıyor mu: kod listesi okumasına ve kart aynasına birlikte bakılır. Sıfırlama ikisini de boşaltır,
+// ikisi ayrı okunur; biri henüz dolmadıysa öteki dolu kodu yine gösterir (3629). Eşlemedeki kod ilgili Logo kaydının kendi kodu değildir
+// (eşleme yalnız kod farklıyken yazılır), bu yüzden kaydı hariç tutmak gerekmez.
+async function logodaKullanilanKodMu(db: Db, kod: string): Promise<boolean> {
+  if (logoKartAynasi) {
+    const kartlar = await logoKartAynasi(db, { kodlar: [kod], sinir: 1, sonra: 0 });
+    if (kartlar.some((k) => k.kod === kod)) return true;
+  }
+  return logodaKullanilanKodlar !== null && (await logodaKullanilanKodlar(db, [kod])).length > 0;
+}
+
 // Sıradaki numara; Logo'da kullanılıyorsa atlanır, atlanan numara bu önekte bir daha verilmez (2089-2 a).
 async function logoyuAtlayanSira(db: Db, onek: string): Promise<number> {
   let sira = await s.katalogSiraAl(db, onek);
-  if (logodaKullanilanKodlar === null) return sira;
-  const dolu = async (n: number): Promise<boolean> => (await logodaKullanilanKodlar!(db, [katalogStokKodu(onek, n)])).length > 0;
+  if (logodaKullanilanKodlar === null && logoKartAynasi === null) return sira;
+  const dolu = (n: number): Promise<boolean> => logodaKullanilanKodMu(db, katalogStokKodu(onek, n));
   for (let atlanan = 0; await dolu(sira); atlanan += 1) {
     if (atlanan >= LOGO_KOD_ATLAMA_EN_COK) {
       throw cakisma(`${onek} önekinde Logo'da art arda ${String(LOGO_KOD_ATLAMA_EN_COK)}'den çok dolu kod var; boş kod bulunamadı. Logo'daki kodları kontrol edin.`);
@@ -1151,7 +1162,7 @@ const stokVar = (stok: string | null): boolean => stok !== null && Number(stok) 
 // 3068: Logo geçişi. Süzgeç ve sayaçlar bütün aynanın hafif özetinden, sayfa satırları yalnız o sayfanın kartlarından kurulur;
 // sayaçlar aramadan bağımsızdır (aynanın tamamı), süzgece uyan sayı aramayla birlikte.
 export async function logoGecisi(db: Db, q: z.output<typeof logoGecisSorgusu>, bugun = new Date()): Promise<LogoGecisCevabi> {
-  const bos = { toplam: 0, stoklu: 0, yeni: 0, bagsiz: 0, bagli: 0, kullanimDisi: 0, kullanilan: null, kararBekleyen: 0 };
+  const bos = { toplam: 0, stoklu: 0, yeni: 0, bagsiz: 0, bagli: 0, kodCakismasi: 0, kullanimDisi: 0, kullanilan: null, kararBekleyen: 0 };
   if (!logoKartAynasi || !logoAynaOzeti) {
     return {
       baglanti: false, okuma: { acik: false, suruyor: false, okunan: null, sonTamam: null }, sayilar: bos, suzgec: q.suzgec ?? 'stoklu', kullanim: false, canliArama: false,
@@ -1180,6 +1191,7 @@ export async function logoGecisi(db: Db, q: z.output<typeof logoGecisSorgusu>, b
     if (!r.k.aktif) sayilar.kullanimDisi += 1;
     if (r.durum === 'yeni') sayilar.yeni += 1;
     else if (r.durum === 'bagsiz') sayilar.bagsiz += 1;
+    else if (r.durum === 'kod-cakismasi') sayilar.kodCakismasi += 1;
     else sayilar.bagli += 1;
   }
   const arananlar = q.ara ? new Set((await logoAynaOzeti(db, { ara: q.ara })).kartlar.map((k) => k.logoKayitNo)) : null;
@@ -1208,7 +1220,7 @@ export async function logoGecisi(db: Db, q: z.output<typeof logoGecisSorgusu>, b
     };
   });
   // Karar bekleyen sayısı yalnız birim farkı dışındakiler için bütün aynadan sayılır; birim için tam kart gerekir, sayfa kadarı yazılır.
-  sayilar.kararBekleyen = satirlar.filter((r) => r.k.aktif && ((r.durum === 'yeni' && !r.koduUyar) || (r.durum === 'bagsiz' && r.tmi?.onayDurumu === 'iptal'))).length
+  sayilar.kararBekleyen = satirlar.filter((r) => r.k.aktif && ((r.durum === 'yeni' && !r.koduUyar) || (r.durum === 'bagsiz' && r.tmi?.onayDurumu === 'iptal') || r.durum === 'kod-cakismasi')).length
     + kartlar.filter((k) => k.kararNedeni === 'birim-farki').length;
   return {
     baglanti: true, okuma: ozet.okuma, sayilar, suzgec, kullanim, canliArama: ozet.arama.acik, uyan: uyanlar.length, kartlar, sayfa: q.sayfa,
@@ -1244,6 +1256,7 @@ async function logodanKartAlIc(
   const { durum, tmi } = logoGelenDurumu(k, refle, kodla, esleme);
   if (durum === 'bagli') throw cakisma(`Bu Logo kartı TMI'de zaten var: ${tmi!.stokKodu}.`);
   if (durum === 'bagsiz') throw cakisma(`TMI'de aynı kodlu kart var: ${tmi!.stokKodu}. Yeni kart açmak yerine bağlayın.`);
+  if (durum === 'kod-cakismasi') throw cakisma(`Bu kod CORE'da başka bir Logo kaydına (${tmi!.logoKayitNo ?? ''}) bağlı ${tmi!.stokKodu} kartında; önce kod çakışmasını çözün.`);
   if (!(await s.birimSecilebilirMi(db, g.birim))) throw dogrulama(`"${g.birim}" birim listesinde yok; Ayarlar'daki birim listesinden seçin.`, 'birim');
   if (!logoEslemeYazici) throw gecersiz(LOGO_BAGI_YOK);
   const genel = await firmaliGenel(db);
@@ -1254,6 +1267,10 @@ async function logodanKartAlIc(
   if (eskiKod !== null) {
     const b = logoKodBicimi(eskiKod, firmaKodu);
     if (!b || !logoKoduTureUyar(b, g.tur, firmaOneki)) throw gecersiz(`Bu Logo kartı daha önce ${eskiKod} koduyla eşlendi; kod korunur, bu koda uyan türü seçin.`);
+    // Eşleme değişmez (tetik); eşlemedeki kod Logo'da başka bir kayıtta kullanılıyorsa kopya kod verilmez, alma durur (3629).
+    if (await logodaKullanilanKodMu(db, eskiKod)) {
+      throw cakisma(`Bu Logo kartının eşlemedeki kodu ${eskiKod} Logo'da başka bir kayıtta kullanılıyor; kod korunamaz. Kod eşlemesi için yöneticiye bildirin.`);
+    }
     kod = { ...b, stokKodu: eskiKod };
   } else {
     const bicim = logoKodBicimi(k.kod, firmaKodu);
@@ -1304,6 +1321,8 @@ export async function logoKartiYeniKodaGec(db: Db, kullanici: Kullanici, ref: nu
   return { id: tmi.kimlik, stok_kodu: r.stokKodu, eski_kod: r.eskiKod, surum: r.surum };
 }
 
+const kartLogoyaBagli = (kayitNo: string): string => `Kart zaten Logo kaydı ${kayitNo}'ya bağlı.`;
+
 // 3474-3: bağlanan kartın boş "Eski / ERP kodu" alanına Logo'daki kod yazılır; dolu alan ezilmez.
 export async function logoKartiBagla(db: Db, kullanici: Kullanici, ref: number, surum: number): Promise<{ id: string; surum: number }> {
   const { id, surum: yeni } = await logoKartiBaglaIc(db, kullanici, ref, surum);
@@ -1318,10 +1337,15 @@ async function logoKartiBaglaIc(
   const { durum, tmi } = logoGelenDurumu(k, refle, kodla, esleme);
   if (durum === 'bagli') throw cakisma(`Bu Logo kartı zaten ${tmi!.stokKodu} kartına bağlı.`);
   if (!tmi) throw bulunamadi('TMI\'de aynı kodlu kart yok; kartı Logo\'dan alın.');
-  if (tmi.logoKayitNo !== null) throw cakisma(`${tmi.stokKodu} başka bir Logo kaydına bağlı.`);
+  if (tmi.logoKayitNo !== null) throw cakisma(kartLogoyaBagli(tmi.logoKayitNo));
   if (tmi.onayDurumu === 'iptal') throw gecersiz('Silinmiş kart bağlanmaz.');
   const r = await s.logoKaydiYaz(db, tmi.kimlik, { kayitNo: String(ref), kartTuru: k.kartTuru === null ? null : String(k.kartTuru), birimSeti: k.birimSeti }, { surum, kisiId: kullanici.id });
-  if (!r) throw eskiSurum();
+  if (!r) {
+    // Boş dönüş sürüm farkı ya da başkasının az önce bağlaması demektir; ikincisi sessiz kalmaz.
+    const bagli = await s.kartinLogoKayitNosu(db, tmi.kimlik);
+    if (bagli !== null) throw cakisma(kartLogoyaBagli(bagli));
+    throw eskiSurum();
+  }
   const erp = await s.erpKoduDoldur(db, tmi.kimlik, k.kod, kullanici.id);
   if (!erp) throw bulunamadi('Kart bulunamadı.');
   return { id: tmi.kimlik, surum: erp.surum, kod: k.kod, erp: { sonuc: erp.sonuc, mevcut: erp.mevcut } };
@@ -1349,7 +1373,7 @@ export async function logoTopluBagla(db: Db, kullanici: Kullanici, g: z.output<t
     const { tmi } = logoGelenDurumu(k, refle, kodla, esleme);
     const birimKarsiliklari = (await s.logoKarsiliklari(db)).filter((x) => x.cesit === 'birim');
     const aday = logoGecisAdayligi({ durum: logoGelenDurumu(k, refle, kodla, esleme).durum, aktif: k.aktif, koduUyar: true, logoBirimSeti: k.birimSeti, tmi, birimKarsiliklari });
-    if (!aday.topluBaglanir) throw gecersiz(aday.kararNedeni === 'birim-farki' ? 'Birim farklı; tek tek bağlayın.' : 'Toplu bağlanamaz; satırdan işleyin.');
+    if (!aday.topluBaglanir) throw gecersiz(tmi?.logoKayitNo != null ? kartLogoyaBagli(tmi.logoKayitNo) : aday.kararNedeni === 'birim-farki' ? 'Birim farklı; tek tek bağlayın.' : 'Toplu bağlanamaz; satırdan işleyin.');
     const onceki = tmi ? await s.logoGonderimAlanlari(db, tmi.kimlik) : null;
     const r = await logoKartiBaglaIc(db, kullanici, ref, surum);
     return {

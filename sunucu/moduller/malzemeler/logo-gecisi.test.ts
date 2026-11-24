@@ -33,6 +33,7 @@ describe('Logo geçişi toplu adaylık kuralı (3068 a)', () => {
     assert.deepEqual(aday({ durum: 'yeni', tmi: null }), { topluBaglanir: false, topluAlinir: true, kararNedeni: null });
     assert.equal(aday({ durum: 'yeni', tmi: null, koduUyar: false }).kararNedeni, 'kod-eslenecek');
     assert.deepEqual(aday({ durum: 'bagli' }), { topluBaglanir: false, topluAlinir: false, kararNedeni: null });
+    assert.deepEqual(aday({ durum: 'kod-cakismasi' }), { topluBaglanir: false, topluAlinir: false, kararNedeni: null }, '3629: kod çakışmasında toplu işlem yok');
   });
 });
 
@@ -142,7 +143,7 @@ describe('Logo geçişi: liste, toplu bağla ve al, geri al (3068 a; gerçek Pos
     ayna.push(kart(201, a.kod), kart(202, 'HM-LGY-00002', { stok: null }), kart(203, 'HM-LGY-00003', { aktif: false }));
     const l = await tamam<LogoGecisCevabi>('GET', '/malzeme-logo-gecisi', undefined, okuyucuCerezi);
     assert.deepEqual(l.kartlar.map((k) => [k.kod, k.durum, k.topluBaglanir, k.topluAlinir]), [[a.kod, 'bagsiz', true, false], ['HM-LGY-00003', 'yeni', false, false]]);
-    assert.deepEqual({ ...l.sayilar, kararBekleyen: undefined }, { toplam: 3, stoklu: 2, yeni: 2, bagsiz: 1, bagli: 0, kullanimDisi: 1, kullanilan: null, kararBekleyen: undefined });
+    assert.deepEqual({ ...l.sayilar, kararBekleyen: undefined }, { toplam: 3, stoklu: 2, yeni: 2, bagsiz: 1, bagli: 0, kodCakismasi: 0, kullanimDisi: 1, kullanilan: null, kararBekleyen: undefined });
     assert.deepEqual([l.suzgec, l.kullanim, l.kartlar[0]?.kullanimNedenleri], ['stoklu', false, null], 'kullanım izi okunmadan süzgeç stoğu olanlar');
     const yeni = await tamam<LogoGecisCevabi>('GET', '/malzeme-logo-gecisi?suzgec=yeni&ara=LGY-00002', undefined, okuyucuCerezi);
     assert.deepEqual(yeni.kartlar.map((k) => k.kod), ['HM-LGY-00002']);
@@ -224,6 +225,22 @@ describe('Logo geçişi: liste, toplu bağla ve al, geri al (3068 a; gerçek Pos
       await db.sorgu("SELECT set_config('tmiv2.logo_gecis_geri_al', 'baska-kart', true)");
       await db.sorgu('DELETE FROM malzeme_katalog_karti WHERE kimlik = $1', [d.kimlik]);
     }), /silinmez/);
+  });
+
+  test('LGG-11 (3629) kod çakışması: aynı kodlu kart başka Logo kaydına bağlıysa satır "kod-cakismasi" olur, toplu işleme girmez, toplu bağlama nedenini yazar; sayaç ve karar bekleyen artar', async () => {
+    const t = await taslakAc('HM-LGC-00001');
+    const onceki = (await tamam<LogoGecisCevabi>('GET', '/malzeme-logo-gecisi?suzgec=yeni')).sayilar; // sayfa satırları birim farkını da sayar; ikisinde de yeni süzgeci
+    ayna.push(kart(9301, t.kod));
+    await vt().sorgu("UPDATE malzeme_katalog_karti SET logo_kayit_no = '9300', logo_gonderim_durumu = 'gonderildi', logo_gonderim_zamani = now() WHERE kimlik = $1", [t.kimlik]);
+    const l = await tamam<LogoGecisCevabi>('GET', '/malzeme-logo-gecisi?suzgec=kod-cakismasi');
+    const sonra = (await tamam<LogoGecisCevabi>('GET', '/malzeme-logo-gecisi?suzgec=yeni')).sayilar;
+    assert.deepEqual(l.kartlar.map((k) => [k.kod, k.durum, k.topluBaglanir, k.topluAlinir, k.kararNedeni]), [[t.kod, 'kod-cakismasi', false, false, null]]);
+    assert.equal(l.sayilar.kodCakismasi, 1);
+    assert.equal(sonra.kararBekleyen, onceki.kararBekleyen + 1, 'kod çakışması karar bekleyen sayar');
+    assert.equal(sonra.bagsiz, onceki.bagsiz, 'çakışan satır bağsız sayılmaz');
+    const s = await tamam<LogoTopluCevabi>('POST', '/malzeme-logo-gecisi/toplu-bagla', { kartlar: [{ logoKayitNo: 9301, surum: (await kartSatiri(t.kimlik))!.surum }] });
+    assert.deepEqual(s.basarili, []);
+    assert.deepEqual(s.atlanan.map((x) => [x.kod, x.neden]), [[t.kod, "Kart zaten Logo kaydı 9300'ya bağlı."]]);
   });
 
   test('LGG-6 gövde: aynı kart iki kez ya da 200\'den fazla kart reddedilir', async () => {

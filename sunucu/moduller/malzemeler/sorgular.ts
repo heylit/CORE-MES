@@ -1057,6 +1057,10 @@ export function yeniKodaGec(
   );
 }
 
+export async function kartinLogoKayitNosu(db: Db, kimlik: string): Promise<string | null> {
+  return (await db.tek<{ no: string | null }>('SELECT logo_kayit_no::text AS no FROM malzeme_katalog_karti WHERE kimlik = $1', [kimlik]))?.no ?? null;
+}
+
 export async function kartinOneki(db: Db, kimlik: string): Promise<string | null> {
   return (await db.tek<{ onek: string }>('SELECT onek FROM malzeme_katalog_karti WHERE kimlik = $1', [kimlik]))?.onek ?? null;
 }
