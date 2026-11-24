@@ -560,7 +560,7 @@ export const SIFIRLAMA_SISTEM = [
   'profil_geri_bildirim_kategori', 'projeler_ayar', 'projeler_hazirlik_kademe_ayari', 'rol', 'rol_islemi',
   'rota_islem_kategorisi', 'rota_islem_sartnamesi', 'rota_islem_sartnamesi_atfi', 'rota_islem_sartnamesi_parametresi',
   'rota_islem_sartnamesi_surumu', 'rota_sablon_adimi', 'rota_sablonu', 'rota_standart_adim', 'rota_standart_atfi',
-  'rota_talimat_sablon_adimi', 'rota_talimat_sablonu', 'satin_alma_ayar', 'satin_alma_kur', 'satin_alma_teklif_istek_formu', 'siparisler_teklif_formu_kurum',
+  'rota_talimat_sablon_adim_hareketi', 'rota_talimat_sablon_adimi', 'rota_talimat_sablonu', 'satin_alma_ayar', 'satin_alma_kur', 'satin_alma_teklif_istek_formu', 'siparisler_teklif_formu_kurum',
   'siparisler_teklif_formu_sablonu', 'smartes_sayim_aktarimi', 'stok_depo', 'stok_depo_yerlesimi', 'stok_konum',
   'uretim_emirleri_hazirlik_maddesi',
 ] as const;

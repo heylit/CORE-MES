@@ -19,7 +19,7 @@ import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { adimliEmirAyrintisi } from '../uretim-emirleri/disari.ts';
 import { EK_ADIM_SARTNAME_ROTA } from './kurallar.ts';
-import { isEmriSartnameleri, talimatSurumuAdimlari, yuzeyIslemiAdimlari } from './disari.ts';
+import { emreGelenSablonaAdimEkle, isEmriSartnameleri, talimatSurumuAdimlari, yuzeyIslemiAdimlari } from './disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -600,6 +600,38 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     await red(c.planlama, `/rota/talimat-sablonlari/${e.sablon.id}/kaydet`, { surum: e.sablon.surum, ad: 'Eski', sartnameId: null, adimlar: [adim()] }, 409);
     const p = await tamam<TalimatSablonuCevabi>(c.planlama, 'POST', `/rota/talimat-sablonlari/${e.sablon.id}/durum`, { surum: k.sablon.surum, aktif: false });
     assert.equal(p.sablon.aktif, false);
+  });
+  test('3646: şablon adımının 3B hareketi yazılır ve okunur; yeni sürümde gönderilmeyen adımın hareketi kalkar; sınır dışı değer reddedilir', async () => {
+    const h = { yon: '-Y', mesafeMm: 60, sureSn: 2.4, sirali: true, parcaSayisi: 4 } as const;
+    const govde = { kod: 'TS-HRK', ad: 'Hareketli şablon', sartnameId: null, adimlar: [adim({ baslik: 'Hareketsiz' }), { ...adim({ baslik: 'Hareketli' }), sahneHareketi: h }] };
+    for (const kotu of [{ yon: '+W' }, { mesafeMm: 2001 }, { sureSn: 0.1 }, { parcaSayisi: 101 }, { parcaSayisi: -1 }, { kamera: null }]) {
+      await red(c.planlama, '/rota/talimat-sablonlari/ekle', { ...govde, adimlar: [{ ...adim({ baslik: 'Kötü' }), sahneHareketi: { ...h, ...kotu } }] }, 400);
+    }
+    const e = await tamam<TalimatSablonuCevabi>(c.planlama, 'POST', '/rota/talimat-sablonlari/ekle', govde);
+    assert.deepEqual(e.sablon.adimlar.map((a) => a.sahneHareketi), [null, h]);
+    const okunan = await tamam<TalimatSablonuCevabi>(c.mudur, 'GET', `/rota/talimat-sablonlari/${e.sablon.id}`);
+    assert.deepEqual(okunan.sablon.adimlar.map((a) => a.sahneHareketi), [null, h]);
+    // Adımlar sırası değişirse hareket adımla gider; hareketi göndermeyen eski istemci hareketi siler (ekran her kayıtta geri gönderir).
+    const k = await tamam<TalimatSablonuCevabi>(c.planlama, 'POST', `/rota/talimat-sablonlari/${e.sablon.id}/kaydet`, {
+      surum: e.sablon.surum, ad: 'Hareketli şablon', sartnameId: null, adimlar: [{ ...adim({ baslik: 'Hareketli' }), sahneHareketi: h }, adim({ baslik: 'Hareketsiz' })],
+    });
+    assert.deepEqual(k.sablon.adimlar.map((a) => [a.baslik, a.sahneHareketi]), [['Hareketli', h], ['Hareketsiz', null]]);
+    const g = await tamam<TalimatSablonuCevabi>(c.planlama, 'POST', `/rota/talimat-sablonlari/${e.sablon.id}/kaydet`, {
+      surum: k.sablon.surum, ad: 'Hareketli şablon', sartnameId: null, adimlar: [adim({ baslik: 'Hareketli' })],
+    });
+    assert.deepEqual(g.sablon.adimlar.map((a) => a.sahneHareketi), [null]);
+  });
+  test('3646: Adım Durumu\'ndan şablona adım eklemek şablonun mevcut 3B hareketlerini korur', async () => {
+    const h = { yon: '+X', mesafeMm: 40, sureSn: 1.2, sirali: true, parcaSayisi: 3 } as const;
+    const tipId = (tipler.find((x) => x.kod !== 'TRN') ?? tipler[0])!.id;
+    const e = await tamam<TalimatSablonuCevabi>(c.planlama, 'POST', '/rota/talimat-sablonlari/ekle', {
+      kod: 'TS-HRK-EMR', ad: 'Emre gelen hareketli', sartnameId: null, operasyonTipiId: tipId, emreGelir: true,
+      adimlar: [adim({ baslik: 'Hareketsiz' }), { ...adim({ baslik: 'Hareketli' }), sahneHareketi: h }],
+    });
+    const sonuc = await vt().tx((db) => emreGelenSablonaAdimEkle(db, { id: yoneticiId, ad: 'Deneme Yönetici', islemler: [] }, tipId, { baslik: 'Sahadan eklenen', kontrol: { tur: 'yok' }, asama: 'uretim' }, () => undefined));
+    assert.equal(sonuc.surum, e.sablon.surum + 1);
+    const okunan = await tamam<TalimatSablonuCevabi>(c.mudur, 'GET', `/rota/talimat-sablonlari/${e.sablon.id}`);
+    assert.deepEqual(okunan.sablon.adimlar.map((a) => [a.baslik, a.sahneHareketi]), [['Hareketsiz', null], ['Hareketli', h], ['Sahadan eklenen', null]]);
   });
   test('3249 b: operasyon tipine bağlı şablon emre kendiliğinden gelir; kendi talimatı olan adım onu alır; tip başına tek şablon', async () => {
     const adimlar = [adim({ baslik: 'Ayna kontrolü', asama: 'hazirlik' }), adim({ baslik: 'Sıfır noktası', asama: 'on_hazirlik' })];

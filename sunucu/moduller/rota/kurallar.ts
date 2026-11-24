@@ -1,5 +1,5 @@
 import { YENI_ADIM_VARSAYILANI } from '#paylasilan/sozlesme/rota.ts';
-import type { Bagimlilik, GerceklesenKaynagi, GerceklesenTuru, KontrolNoktasi, MakineKullanimi, ParametreDegeri, ParametreDegerleri, ParametreTuru, RevizyonDurumu, RevizyonKomutu, SartnameKapsami, TalimatAsamasi } from '#paylasilan/sozlesme/rota.ts';
+import type { Bagimlilik, GerceklesenKaynagi, GerceklesenTuru, KontrolNoktasi, MakineKullanimi, ParametreDegeri, ParametreDegerleri, ParametreTuru, RevizyonDurumu, RevizyonKomutu, SablonSahneHareketi, SartnameKapsami, TalimatAsamasi } from '#paylasilan/sozlesme/rota.ts';
 import { oncullerCikar } from '#paylasilan/sozlesme/rota-dal-kurali.ts';
 import type { Oncul } from '#paylasilan/sozlesme/rota-dal-kurali.ts';
 import { ROTA_YAZMA_ISLEMLERI } from '#paylasilan/islemler.ts';
@@ -1076,6 +1076,8 @@ export function sartnameOnayEngeli(durumlar: readonly AdimSartnameDurumu[]): str
 export interface TalimatAdimiYazisi {
   baslik: string; metin: string | null; kontrol: KontrolNoktasi; zorunlu: boolean; medya: readonly { ozet: string; ad: string }[]; asama: TalimatAsamasi;
   hedefSureDk: number | null;
+  // Yalnız şablon adımında (3646); talimat adımı bunu yazmaz.
+  sahneHareketi?: SablonSahneHareketi | null | undefined;
 }
 
 // Şemanın tek başına göremediği adım kuralları; hata yoksa null.

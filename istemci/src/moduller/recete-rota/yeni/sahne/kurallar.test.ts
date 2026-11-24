@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SahneAdimi } from '#paylasilan/sozlesme/rota.ts';
-import { hareketYaz, kaydedilecekler, parcaDegistir, sahneEksigi, sahneOner, VARSAYILAN_HAREKET, yonOner, type ParcaKutusu } from './kurallar.ts';
+import { hareketYaz, kaydedilecekler, sablonHareketiUygula, parcaDegistir, sahneEksigi, sahneOner, VARSAYILAN_HAREKET, yonOner, type ParcaKutusu } from './kurallar.ts';
 
 const adim = (sira: number, parcalar: number[], ek: Partial<SahneAdimi['hareket']> = {}): SahneAdimi => ({ sira, hareket: { ...VARSAYILAN_HAREKET, parcalar, ...ek } });
 const kutu = (en: [number, number, number], ust: [number, number, number]): ParcaKutusu => ({ en, ust });
@@ -29,5 +29,23 @@ describe('talimat sahnesi kuralları (3209 a)', () => {
     expect(kaydedilecekler(a)).toEqual([]);
     expect(sahneEksigi([adim(1, [5]), adim(2, [5])])).toBe('6. parça hem 1. hem 2. adımda giriyor; parça tek adımda takılır.');
     expect(hareketYaz([], 3, { yon: '-Y' })).toEqual([adim(3, [], { yon: '-Y' })]);
+  });
+
+  it('şablon hareketi adımlara sırayla uygulanır; var olan parça ve kamera kalır, eksik parça sayısı bildirilir (3646)', () => {
+    const kamera = { yatay: 1, dikey: 0.5, uzaklik: 300 };
+    const mevcut = [adim(1, [2], { kamera })];
+    const s = { yon: '-Y' as const, mesafeMm: 60, sureSn: 2.4, sirali: true };
+    const r = sablonHareketiUygula(mevcut, [1, 2], [{ sahneHareketi: { ...s, parcaSayisi: 1 } }, { sahneHareketi: { ...s, parcaSayisi: 4 } }, { sahneHareketi: { ...s, parcaSayisi: 9 } }]);
+    expect(r.uygulanan).toBe(2);
+    expect(r.adimlar.find((a) => a.sira === 1)?.hareket).toMatchObject({ ...s, parcalar: [2], kamera });
+    expect(r.adimlar.find((a) => a.sira === 2)?.hareket).toMatchObject({ ...s, parcalar: [], kamera: null });
+    expect([...r.beklenen]).toEqual([[2, 4]]);
+    expect(kaydedilecekler(r.adimlar).map((a) => a.sira)).toEqual([1]);
+    expect(sablonHareketiUygula(mevcut, [1], [{ sahneHareketi: null }]).uygulanan).toBe(0);
+    // Yalnız "sıralı" farkı da ezilecek değer sayılır; aynı değerler fark sayılmaz.
+    const ayni = { ...s, sirali: false };
+    const m2 = [adim(1, [2], { ...ayni })];
+    expect(sablonHareketiUygula(m2, [1], [{ sahneHareketi: { ...ayni, parcaSayisi: 1 } }]).degisen).toEqual([]);
+    expect(sablonHareketiUygula(m2, [1], [{ sahneHareketi: { ...ayni, sirali: true, parcaSayisi: 1 } }]).degisen).toEqual([1]);
   });
 });

@@ -3,8 +3,9 @@ import type { SartnameOzeti, TalimatSablonuCevabi } from '#paylasilan/sozlesme/r
 import { hataIletisi } from '../../../../ortak/veri/api.ts';
 import { DurumKutusu, Dugme, Girdi, IsaretKutusu, Pencere, Rozet, Secim, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { AdimDuzenleyici } from './AdimDuzenleyici.tsx';
+import { SablonStudyosu } from '../sahne/SablonStudyosu.tsx';
 import { AdimOnizleme } from './AdimOnizleme.tsx';
-import { adimEksikleri, eslesir, girdiyeCevir, sablonOzeti, taslagaCevir, type AdimTaslagi } from './kurallar.ts';
+import { adimEksikleri, eslesir, sablonGirdisineCevir, sablonOzeti, taslagaCevir, type AdimTaslagi } from './kurallar.ts';
 import { useOperasyonTipleri, useSablon, useSablonKomutu, useSablonlar } from './veri.ts';
 
 type Sablon = TalimatSablonuCevabi['sablon'];
@@ -131,6 +132,11 @@ function SablonDuzenleyici({ duzen, sartnameler, degistir, kapat, kaydedildi }: 
   const komut = useSablonKomutu();
   const { bildir } = useBildirim();
   const [hata, setHata] = useState<string | null>(null);
+  const [studyo, setStudyo] = useState(false);
+  const hareketSayisi = duzen.adimlar.filter((a) => (a.sahneHareketi ?? null) !== null).length;
+  // Kayıtlı hâle göre hareketler değişti mi: yeni şablonda hareketi olan her adım, sürümde kayıtlı sıra ve değerlerden herhangi bir fark.
+  const kayitliHareketler = JSON.stringify(duzen.tur === 'surum' ? duzen.sablon.adimlar.map((a) => a.sahneHareketi) : []);
+  const hareketKaydedilmedi = JSON.stringify(duzen.adimlar.map((a) => a.sahneHareketi ?? null)) !== (duzen.tur === 'surum' ? kayitliHareketler : JSON.stringify(duzen.adimlar.map(() => null)));
   const eksikler = adimEksikleri(duzen.adimlar);
   if (duzen.ad.trim() === '') eksikler.unshift('Şablon adı zorunlu.');
   if (duzen.tur === 'yeni' && !/^[A-Z0-9][A-Z0-9-]{1,29}$/.test(duzen.kod.trim().toUpperCase())) eksikler.unshift('Kod 2-30 karakter: büyük harf, rakam ve tire.');
@@ -141,7 +147,7 @@ function SablonDuzenleyici({ duzen, sartnameler, degistir, kapat, kaydedildi }: 
 
   const kaydet = () => {
     setHata(null);
-    const adimlar = duzen.adimlar.map(girdiyeCevir);
+    const adimlar = duzen.adimlar.map(sablonGirdisineCevir);
     const ortak = { ad: duzen.ad.trim(), sartnameId: duzen.sartnameId, adimlar, operasyonTipiId: duzen.operasyonTipiId, emreGelir: duzen.emreGelir && duzen.operasyonTipiId !== null };
     komut.mutate(duzen.tur === 'yeni'
       ? { ad: 'ekle', govde: { kod: duzen.kod.trim().toUpperCase(), ...ortak } }
@@ -173,6 +179,7 @@ function SablonDuzenleyici({ duzen, sartnameler, degistir, kapat, kaydedildi }: 
               {eksikler.length > 0 && <ul className="tc-st-eksik">{eksikler.slice(0, 5).map((e) => <li key={e}>{e}</li>)}</ul>}
               {hata && <p className="tc-st-hata" role="alert">{hata}</p>}
               <div className="tc-st-araclar tc-st-sag">
+                <Dugme simge="cube" disabled={duzen.adimlar.length === 0} onClick={() => { setStudyo(true); }}>{`3B hareketler (${String(hareketSayisi)})${hareketKaydedilmedi ? ' · kaydedilmedi' : ''}`}</Dugme>
                 <Dugme onClick={kapat}>Vazgeç</Dugme>
                 <Dugme tur="birincil" simge="check" disabled={eksikler.length > 0} yukleniyor={komut.isPending} onClick={kaydet}>
                   {duzen.tur === 'yeni' ? 'Şablonu ekle' : 'Yeni sürümü kaydet'}
@@ -180,6 +187,8 @@ function SablonDuzenleyici({ duzen, sartnameler, degistir, kapat, kaydedildi }: 
               </div>
             </>
           )} />
+        {studyo && <SablonStudyosu kod={duzen.tur === 'yeni' ? duzen.kod.trim().toUpperCase() : duzen.sablon.kod} adimlar={duzen.adimlar}
+          degistir={(adimlar) => { degistir({ ...duzen, adimlar }); }} kapat={() => { setStudyo(false); }} kaydedilmedi={hareketKaydedilmedi} />}
       </div>
     </Pencere>
   );

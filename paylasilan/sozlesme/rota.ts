@@ -963,6 +963,25 @@ export type RevizyonSartnameleriCevabi = z.output<typeof revizyonSartnameleriCev
 export type IsEmriSartnamesi = z.output<typeof isEmriSartnamesiSemasi>;
 export type IsEmriSartnameleriCevabi = z.output<typeof isEmriSartnameleriCevabi>;
 
+/* ---------------- talimat şablonunun 3B hareketi (3646) ---------------- */
+
+export const SAHNE_YONLERI = ['+X', '-X', '+Y', '-Y', '+Z', '-Z'] as const;
+export type SahneYonu = (typeof SAHNE_YONLERI)[number];
+export const SAHNE_SINIRI = { adim: 100, parca: 100, parcaNo: 9999, mesafeMm: 2000, sureSnAlt: 0.3, sureSnUst: 10 } as const;
+// Şablon adımının hareketi ürün modelinden bağımsızdır: parça ağ sırası modele özgü olduğu için şablona yazılmaz, yalnız kaç parça girdiği
+// (ipucu) tutulur. Kamera da modelin ölçüsüne bağlı olduğu için şablonda yoktur. Talimata kopyalanınca stüdyo bu hareketi adıma uygular.
+export const sablonSahneHareketiSemasi = z.object({
+  yon: z.enum(SAHNE_YONLERI),
+  mesafeMm: z.number().min(0).max(SAHNE_SINIRI.mesafeMm),
+  sureSn: z.number().min(SAHNE_SINIRI.sureSnAlt).max(SAHNE_SINIRI.sureSnUst),
+  sirali: z.boolean(),
+  parcaSayisi: z.number().int().min(0).max(SAHNE_SINIRI.parca),
+}).strict();
+export type SablonSahneHareketi = z.output<typeof sablonSahneHareketiSemasi>;
+// Boş olabilir: hareketi olmayan adım null taşır. Gönderilmezse null sayılır; ekran kaydederken şablonun mevcut hareketlerini geri göndermelidir.
+const sablonAdimlari = z.array(talimatAdimiGirdisi.extend({ sahneHareketi: sablonSahneHareketiSemasi.nullable().prefault(null) }))
+  .min(1, 'En az bir adım gerekir.').max(AZAMI_TALIMAT_ADIMI);
+
 /* ---------------- talimat şablonu (989 a) ---------------- */
 
 // Şablon kütüphanedir: "şablondan başla" adımları talimata kopyalar, bağ kurmaz; şablon sonra değişse ürün talimatı değişmez.
@@ -972,10 +991,10 @@ const talimatSablonKodu = z.string().trim().toUpperCase().regex(/^[A-Z0-9][A-Z0-
 // hazırlık listesine kopyalanır. Tip başına en çok bir şablon emre gelir. Gönderilmeyen alan değişmez (eski istemci tipi silmesin).
 const sablonOperasyonAlanlari = { operasyonTipiId: KIMLIK.nullable().optional(), emreGelir: z.boolean().optional() };
 export const talimatSablonEkleGovdesi = z.object({
-  kod: talimatSablonKodu, ad: metin(120, 'Şablon adı zorunlu.'), sartnameId: KIMLIK.nullable(), adimlar: talimatAdimlari, ...sablonOperasyonAlanlari,
+  kod: talimatSablonKodu, ad: metin(120, 'Şablon adı zorunlu.'), sartnameId: KIMLIK.nullable(), adimlar: sablonAdimlari, ...sablonOperasyonAlanlari,
 });
 export const talimatSablonKaydetGovdesi = z.object({
-  surum: KIMLIK, ad: metin(120, 'Şablon adı zorunlu.'), sartnameId: KIMLIK.nullable(), adimlar: talimatAdimlari, ...sablonOperasyonAlanlari,
+  surum: KIMLIK, ad: metin(120, 'Şablon adı zorunlu.'), sartnameId: KIMLIK.nullable(), adimlar: sablonAdimlari, ...sablonOperasyonAlanlari,
 });
 export const talimatSablonDurumGovdesi = z.object({ surum: KIMLIK, aktif: z.boolean() });
 const talimatSablonOzeti = z.object({
@@ -986,7 +1005,7 @@ const talimatSablonOzeti = z.object({
   operasyonTipi: z.object({ id: KIMLIK, kod: z.string(), ad: z.string() }).nullable(), emreGelir: z.boolean(),
 });
 export const talimatSablonlariCevabi = z.object({ sablonlar: z.array(talimatSablonOzeti) });
-export const talimatSablonuCevabi = z.object({ sablon: talimatSablonOzeti.extend({ adimlar: z.array(talimatAdimiSemasi) }) });
+export const talimatSablonuCevabi = z.object({ sablon: talimatSablonOzeti.extend({ adimlar: z.array(talimatAdimiSemasi.extend({ sahneHareketi: sablonSahneHareketiSemasi.nullable() })) }) });
 // Şablonun kopyaları (2588 a): kökeni bu şablon olan talimat sürümleri ve taslaklar. geride: kopyalandığı şablon sürümü güncelden eski;
 // gecerli: sürüm OP'nin son yayınıdır (taslakta false). Kopya şablona bağlı değildir; liste yalnız "nerede kullanıldı" bilgisidir.
 export const talimatSablonKopyalariCevabi = z.object({
@@ -1035,9 +1054,7 @@ export type HamOnerisiCevabi = z.output<typeof hamOnerisiCevabi>;
 /* ---------------- talimatın 3B sahnesi (3209 a) ---------------- */
 // Sahne yayınlanmış talimat sürümüne bağlıdır; her adımda giren parçalar (model okumasındaki ağ sırası), yön, mesafe, süre ve
 // kamera. Yalnız eklenir: düzeltme aynı talimat sürümünün yeni sahne sürümüdür. Sınırlar RT-90..RT-94.
-export const SAHNE_YONLERI = ['+X', '-X', '+Y', '-Y', '+Z', '-Z'] as const;
-export type SahneYonu = (typeof SAHNE_YONLERI)[number];
-export const SAHNE_SINIRI = { adim: 100, parca: 100, parcaNo: 9999, mesafeMm: 2000, sureSnAlt: 0.3, sureSnUst: 10 } as const;
+// SAHNE_YONLERI ve SAHNE_SINIRI talimat şablonu bölümünün üstünde tanımlıdır (şablon adımı hareketi de kullanır).
 const sahneKamerasi = z.object({
   yatay: z.number().min(-7).max(7), dikey: z.number().min(-0.2).max(1.5), uzaklik: z.number().min(10).max(50000),
 }).strict();

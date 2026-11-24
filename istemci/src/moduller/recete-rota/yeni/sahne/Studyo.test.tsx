@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
-import type { TalimatlarCevabi, TalimatSahneleriCevabi } from '#paylasilan/sozlesme/rota.ts';
+import type { TalimatlarCevabi, TalimatSablonuCevabi, TalimatSahneleriCevabi } from '#paylasilan/sozlesme/rota.ts';
 import { json, OKUYAN, rrAc, sunucuKur, YONETICI } from '../test-ortak.tsx';
 import { revizyonOrnegi, rotaDurumu } from '../rotalar/test-veri.ts';
 
@@ -36,18 +36,19 @@ const MODEL = {
   dosyaTuru: 'step', durum: 'hazir', hataMetni: null, yayinda: true,
 };
 
-function kur(kullanici: Kullanici) {
+function kur(kullanici: Kullanici, ek: { talimat?: TalimatlarCevabi; sablon?: TalimatSablonuCevabi } = {}) {
   const yazilan: unknown[] = [];
   sunucuKur(kullanici, {
     durum: () => json(200, rotaDurumu([revizyonOrnegi('71', 'A', 'yururlukte', 3)])),
     yazmalar: {
       'GET /rota/sartnameler': () => json(200, { kategoriler: [], standartlar: [], sartnameler: [] }),
       'GET /rota/revizyonlar/71/sartnameler': () => json(200, { adimlar: [] }),
-      'GET /rota/urunler/11/talimatlar/10': () => json(200, TALIMAT),
+      'GET /rota/urunler/11/talimatlar/10': () => json(200, ek.talimat ?? TALIMAT),
       'GET /rota/urunler/11/talimatlar/10/sahneler': () => json(200, SAHNE),
       'GET /rota/urunler/11': () => json(200, { urun: { id: 11, stokKodu: 'ORN-MNT-01', ad: 'Deneme montaj', tur: 'mamul', stokBirimi: null }, revizyonlar: [], taslakAcilabilir: false }),
       'GET /geometri/modeller': () => json(200, { satirlar: [MODEL], toplam: 1, sayfa: 1, sayfaBoyu: 100 }),
       'GET /geometri/modeller/41/dosya': () => new Response(new Uint8Array([0]), { status: 200 }),
+      ...(ek.sablon ? { 'GET /rota/talimat-sablonlari/5': () => json(200, ek.sablon) } : {}),
       'POST /rota/urunler/11/talimat-sahnesi-kaydet': (g) => { yazilan.push(g); return json(200, SAHNE); },
     },
   });
@@ -114,5 +115,54 @@ describe('3B adım stüdyosu (3209 a, A Adım şeridi)', () => {
     expect(pencere.querySelector('.tc-sh-salt')).not.toBeNull();
     expect(within(pencere).queryByText(/Sahne telefonda yalnız izlenir/)).toBeNull();
     expect((await within(pencere).findByRole('button', { name: 'Sahnede parça 1' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('şablondan kopyalanan talimatta şablonun 3B hareketi adımlara uygulanır; parça seçilmeden kayıt kapalı kalır (3646)', async () => {
+    const sh = (parcaSayisi: number) => ({ yon: '-Y' as const, mesafeMm: 60, sureSn: 2.4, sirali: true, parcaSayisi });
+    const sablon: TalimatSablonuCevabi = { sablon: {
+      id: 5, kod: 'TS-ORN', ad: 'Deneme şablon', sartname: null, aktif: true, surum: 1, adimSayisi: 2, kontrolSayisi: 0, resimSayisi: 0, videoSayisi: 0, operasyonTipi: null, emreGelir: false,
+      adimlar: [{ ...adim(1, 'a'), sahneHareketi: null }, { ...adim(2, 'b'), sahneHareketi: sh(2) }],
+    } };
+    const kokenli: TalimatlarCevabi = { taslak: null, surumler: [{ ...TALIMAT.surumler[0]!, koken: { sablon: { id: 5, kod: 'TS-ORN', ad: 'Deneme şablon' }, surum: 1 } }] };
+    const yazilan = kur(YAZAN, { talimat: kokenli, sablon });
+    const pencere = await studyoAc('3B adım stüdyosu');
+    await within(pencere).findByRole('list', { name: 'Talimat adımları' });
+    const uygula = await within(pencere).findByRole('button', { name: 'Şablondan uygula (TS-ORN)' });
+    await waitFor(() => { expect((uygula as HTMLButtonElement).disabled).toBe(false); });
+    fireEvent.click(uygula);
+    fireEvent.click(await within(pencere).findByRole('button', { name: /ADIM 2/ }));
+    expect(within(pencere).getByText('Şablon bu adım için 2 parça bekliyor; şimdi 0 seçili.')).toBeTruthy();
+    fireEvent.click(await within(pencere).findByRole('button', { name: 'Sahnede parça 3' }));
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Sahneyi kaydet (sürüm 2)' }));
+    await waitFor(() => { expect(yazilan).toHaveLength(1); });
+    const g = yazilan[0] as { adimlar: { sira: number; hareket: { parcalar: number[]; yon: string; sirali: boolean; mesafeMm: number } }[] };
+    expect(g.adimlar.map((a) => [a.sira, a.hareket.parcalar, a.hareket.yon, a.hareket.sirali, a.hareket.mesafeMm])).toEqual([[1, [1], '+Z', false, 80], [2, [2], '-Y', true, 60]]);
+  });
+
+  it('şablon uygulaması ezilecek hareketi ve atlanan adımı gösterir; onaylanmadan değişiklik olmaz, vazgeçilince kalır (3646)', async () => {
+    const sh = (yon: '-Y' | '+Z', parcaSayisi: number) => ({ yon, mesafeMm: 60, sureSn: 2.4, sirali: false, parcaSayisi });
+    const sablon: TalimatSablonuCevabi = { sablon: {
+      id: 5, kod: 'TS-ORN', ad: 'Deneme şablon', sartname: null, aktif: true, surum: 2, adimSayisi: 3, kontrolSayisi: 0, resimSayisi: 0, videoSayisi: 0, operasyonTipi: null, emreGelir: false,
+      adimlar: [{ ...adim(1, 'a'), sahneHareketi: sh('-Y', 1) }, { ...adim(2, 'b'), sahneHareketi: null }, { ...adim(3, 'c'), sahneHareketi: sh('+Z', 1) }],
+    } };
+    const kokenli: TalimatlarCevabi = { taslak: null, surumler: [{ ...TALIMAT.surumler[0]!, koken: { sablon: { id: 5, kod: 'TS-ORN', ad: 'Deneme şablon' }, surum: 1 } }] };
+    kur(YAZAN, { talimat: kokenli, sablon });
+    const pencere = await studyoAc('3B adım stüdyosu');
+    await within(pencere).findByRole('list', { name: 'Talimat adımları' });
+    const uygula = await within(pencere).findByRole('button', { name: 'Şablondan uygula (TS-ORN)' });
+    await waitFor(() => { expect((uygula as HTMLButtonElement).disabled).toBe(false); });
+    fireEvent.click(uygula);
+    const ozet = await within(pencere).findByRole('group', { name: 'Şablon uygulama özeti' });
+    expect(ozet.textContent).toContain('Şablonda 2 hareketli adım var; 1 adıma uygulanacak, talimatta 2 adım var.');
+    expect(ozet.textContent).toContain('1 hareketli şablon adımının talimatta karşılığı yok');
+    expect(ozet.textContent).toContain('değişecek: 1.');
+    expect(ozet.textContent).toContain('güncel sürümü 2');
+    // Vazgeçince hiçbir şey değişmez: kayıtlı +Z yönü sürer.
+    fireEvent.click(within(ozet).getByRole('button', { name: 'Vazgeç' }));
+    expect(within(pencere).queryByRole('group', { name: 'Şablon uygulama özeti' })).toBeNull();
+    expect(within(pencere).getByRole('button', { name: '+Z' }).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Şablondan uygula (TS-ORN)' }));
+    fireEvent.click(within(await within(pencere).findByRole('group', { name: 'Şablon uygulama özeti' })).getByRole('button', { name: 'Hareketleri uygula' }));
+    expect(within(pencere).getByRole('button', { name: '-Y' }).getAttribute('aria-pressed')).toBe('true');
   });
 });

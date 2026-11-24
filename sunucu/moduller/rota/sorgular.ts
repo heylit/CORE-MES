@@ -3,7 +3,7 @@ import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import type { EmirTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { turunRotasiSec, type TurunRotasi, type TurunRotasiAdayi } from './kurallar.ts';
 import type {
-  Bagimlilik, EkipmanAsamasi, EkipmanTuru, GerceklesenKaynagi, GerceklesenTuru, IlkParcaSecimi, MakineKullanimi, ParametreDegeri, ParametreDegerleri, ParametreTuru, RevizyonDurumu, RevizyonOzeti, SartnameKapsami, TalimatAsamasi,
+  Bagimlilik, EkipmanAsamasi, EkipmanTuru, GerceklesenKaynagi, GerceklesenTuru, IlkParcaSecimi, MakineKullanimi, ParametreDegeri, ParametreDegerleri, ParametreTuru, RevizyonDurumu, RevizyonOzeti, SablonSahneHareketi, SartnameKapsami, TalimatAsamasi,
 } from '#paylasilan/sozlesme/rota.ts';
 import { MALZEME_KARTI_IZ_YOLU, malzemeKartiIzParametreleri, type MalzemeKartiAnahtari, type MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 
@@ -1072,6 +1072,20 @@ export function talimatSablonAdimlari(db: Db, sablonId: number): Promise<Talimat
 export async function talimatSablonAdimlariniYaz(db: Db, sablonId: number, adimlar: readonly TalimatAdimiYazisi[]): Promise<void> {
   await db.sorgu('DELETE FROM rota_talimat_sablon_adimi WHERE sablon_id = $1', [sablonId]);
   await adimlariEkle(db, SABLON_TABLOLARI, sablonId, adimlar);
+}
+
+// Şablon adımının 3B hareketi (3646). Adımlar yeniden yazılınca satırlar silinir (ON DELETE CASCADE); çağıran adımlardan sonra yeniden yazar.
+export function talimatSablonHareketleri(db: Db, sablonId: number): Promise<{ adimSira: number; hareket: unknown }[]> {
+  return db.sorgu('SELECT adim_sira AS "adimSira", hareket FROM rota_talimat_sablon_adim_hareketi WHERE sablon_id = $1 ORDER BY adim_sira', [sablonId]);
+}
+
+export async function talimatSablonHareketleriniYaz(db: Db, sablonId: number, hareketler: readonly { adimSira: number; hareket: SablonSahneHareketi }[]): Promise<void> {
+  if (hareketler.length === 0) return;
+  await db.sorgu(
+    `INSERT INTO rota_talimat_sablon_adim_hareketi (sablon_id, adim_sira, hareket)
+     SELECT $1, x.adim_sira, x.hareket FROM jsonb_to_recordset($2::jsonb) AS x (adim_sira int, hareket jsonb)`,
+    [sablonId, JSON.stringify(hareketler.map((h) => ({ adim_sira: h.adimSira, hareket: h.hareket })))],
+  );
 }
 
 export const sartnameVarMi = async (db: Db, id: number): Promise<boolean> =>

@@ -10,7 +10,7 @@ import { HazirlikAdimlari } from './HazirlikAdimlari.tsx';
 type Sablon = TalimatSablonuCevabi['sablon'];
 type Adim = Sablon['adimlar'][number];
 const adim = (sira: number, baslik: string, asama: Adim['asama'], kontrol: Adim['kontrol'] = { tur: 'yok' }): Adim => ({
-  sira, baslik, metin: null, kontrol, zorunlu: false, medya: [], asama, hedefSureDk: null,
+  sira, baslik, metin: null, kontrol, zorunlu: false, medya: [], asama, hedefSureDk: null, sahneHareketi: null,
 });
 const ozet = (id: number, ad: string, ek: Partial<Sablon> = {}): Sablon => ({
   id, kod: `TS-D${String(id)}`, ad, sartname: null, aktif: true, surum: 2, adimSayisi: 0, kontrolSayisi: 0, resimSayisi: 0, videoSayisi: 0,
