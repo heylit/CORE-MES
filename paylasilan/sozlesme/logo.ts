@@ -103,6 +103,8 @@ export const logoGidenIzlemeCevabi = z.object({
     neden: z.string().nullable(),
     neYapmali: z.string(),
     yenidenGonderilebilir: z.boolean(),
+    // 3626: sonucu bilinmeyen belge için "Logo'da kontrol et ve gönder" açık mı (belge türünün Logo'da aranabildiği ve belirsiz ya da "sonucu bilinmiyor" satırı).
+    kontrolEdilebilir: z.boolean(),
     denemeSayisi: z.number().int().nullable(),
     sonDeneme: zamanSemasi.nullable(),
     sonrakiDeneme: zamanSemasi.nullable(),
@@ -221,6 +223,43 @@ export type LogoYenidenGonderGovdesi = z.input<typeof logoYenidenGonderGovdesi>;
 // sirada: yeniden sıraya giren; durmayan: durmadığı için (gönderilmiş, kendiliğinden yinelenecek ya da arada değişmiş) dokunulmayan.
 export const logoYenidenGonderCevabi = z.object({ sirada: z.number().int(), durmayan: z.number().int() });
 export type LogoYenidenGonderCevabi = z.output<typeof logoYenidenGonderCevabi>;
+
+// 3626: sonucu bilinmeyen belgeyi önce Logo'da arayıp gönderme. Kontrol (GET) belgeyi tam numarasıyla arar ve kararı kişinin süreç belleğinde
+// tutar; gönderme (POST) o kararı uygular, köprüye gitmez. Bulunduysa belge gönderilmez, yoksa sıraya girer.
+export const logoBelirsizKontrolSorgusu = z.object({
+  belge: z.string().trim().min(1).max(40),
+  no: z.coerce.number().int().positive(),
+  islem: z.enum(['gonder', 'pasif']).default('gonder'),
+}).strict();
+export const LOGO_KONTROL_KARARLARI = ['bulundu', 'yok', 'yapilamadi'] as const;
+export const logoBelirsizKontrolCevabi = z.object({
+  karar: z.enum(LOGO_KONTROL_KARARLARI),
+  ileti: z.string(),
+  logoKayitNo: z.string().nullable(),
+}).strict();
+export type LogoBelirsizKontrolCevabi = z.output<typeof logoBelirsizKontrolCevabi>;
+export const logoKontrolluGonderGovdesi = z.object({
+  belge: z.string().trim().min(1).max(40),
+  no: z.number().int().positive(),
+  islem: z.enum(['gonder', 'pasif']).default('gonder'),
+}).strict();
+export type LogoKontrolluGonderGovdesi = z.input<typeof logoKontrolluGonderGovdesi>;
+export const LOGO_KONTROLLU_SONUCLARI = ['eslendi', 'gonderime-alindi', 'degisti'] as const;
+export const logoKontrolluGonderCevabi = z.object({
+  sonuc: z.enum(LOGO_KONTROLLU_SONUCLARI),
+  ileti: z.string(),
+  logoKayitNo: z.string().nullable(),
+}).strict();
+export type LogoKontrolluGonderCevabi = z.output<typeof logoKontrolluGonderCevabi>;
+
+// 3626: okuma akışında tek kaydı yeniden okuma (kod ya da numara). Okunan yalnız aynaya yazılır; Logo'da yoksa aynadaki kopya silinmez.
+export const LOGO_TEK_KAYIT_AKISLARI = ['malzeme-karti', 'fatura'] as const;
+export const LOGO_TEK_KAYIT_EN_AZ = 3;
+export const LOGO_TEK_KAYIT_EN_COK = 100;
+export const logoTekKayitGovdesi = z.object({ kod: z.string().trim().min(LOGO_TEK_KAYIT_EN_AZ, `En az ${LOGO_TEK_KAYIT_EN_AZ} karakter yazın.`).max(LOGO_TEK_KAYIT_EN_COK) }).strict();
+export const logoTekKayitCevabi = z.object({ sonuc: z.enum(['okundu', 'logoda-yok', 'okunamadi']), ileti: z.string() }).strict();
+export const logoTekKayitSorgusu = logoTekKayitGovdesi;
+export type LogoTekKayitCevabi = z.output<typeof logoTekKayitCevabi>;
 
 // 3080 a: Logo geçişinde tek kart canlı araması. Arama yalnız okur ve sonucu kişinin süreç belleğinde tutar; "ekle" bulunan kartı
 // okunmuş kopyaya yazar (köprüye gitmez). Kapalıysa ya da köprü yoksa durum ve ileti döner, kart dönmez.

@@ -1,5 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
-import { LOGO_FIS_TURLERI, sonrakiDenemeYazilir } from './kurallar.ts';
+import { LOGO_FIS_TURLERI, SONUCU_BILINMIYOR, sonrakiDenemeYazilir } from './kurallar.ts';
 import type { FaturaKaydi, FisGidenDurumu, LogoTopluAlis, IrsaliyeBasligiOkuma, IrsaliyeOkumaSirasi, IrsaliyeTuru, ListeKaydi, LogoFisTuru, LogoKullanimSatiri, LogoMalzemeKarti, LogoStokSatiri, MalKabulSatiri } from './kurallar.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import { icindeDeseni } from '#paylasilan/kayit-aramasi.ts';
@@ -113,6 +113,20 @@ export async function duraniYenidenAc(db: Db, belgeTuru: BelgeTuru, no: number, 
     `UPDATE ${tablo(belgeTuru)} SET sonraki_deneme = $3
       WHERE belge_turu = $1 AND belge_no = $2${islemKosulu(belgeTuru, 4)} AND son_sonuc = 'reddedildi' AND sonraki_deneme IS NULL RETURNING 1 AS x`,
     [belgeTuru, no, simdi, ...islemDegeri(belgeTuru, islem)],
+  );
+  return r.length > 0;
+}
+
+// 3626: sonucu bilinmeyen belgeyi (belirsiz sonuç ya da kalkanın "sonucu bilinmiyor" reddi) Logo'da "yok" bulunduktan sonra yeniden sıraya alır.
+// Eski niyet boşalır: tur yeni niyet yazar, sonraki turda gönderir; eski niyetle gönderim kalkana takılıp yine reddedilirdi. Koşulludur: arada tur
+// başka sonuç yazdıysa hiçbir şey değişmez ve false döner.
+export async function belirsizYenidenAc(db: Db, belgeTuru: BelgeTuru, no: number, simdi: Date, islem: GidenIslemi = 'gonder'): Promise<boolean> {
+  const r = await db.sorgu<{ x: number }>(
+    `UPDATE ${tablo(belgeTuru)} SET sonraki_deneme = $3, niyet_zamani = NULL
+      WHERE belge_turu = $1 AND belge_no = $2${islemKosulu(belgeTuru, 5)}
+        AND (son_sonuc = 'belirsiz' OR (son_sonuc = 'reddedildi' AND sonraki_deneme IS NULL AND left(son_hata, length($4::text)) = $4::text))
+      RETURNING 1 AS x`,
+    [belgeTuru, no, simdi, SONUCU_BILINMIYOR, ...islemDegeri(belgeTuru, islem)],
   );
   return r.length > 0;
 }
@@ -333,6 +347,15 @@ export function faturaSiparisleri(db: Db, eskiden: Date, sinir: number): Promise
   );
 }
 
+// 3626: tek siparişin faturası yeniden okunurken yalnız Logo'ya giden CORE siparişi okunur (toplu okumayla aynı sipariş kümesi).
+export async function faturaSiparisiVarMi(db: Db, siparisNo: string): Promise<boolean> {
+  return (await db.tek<{ x: number }>(
+    `SELECT 1 AS x FROM logo_giden g JOIN logo_siparis_no n ON n.belge_no = g.belge_no
+      WHERE g.belge_turu = 'siparis' AND g.islem = 'gonder' AND g.son_sonuc IN ('gonderildi', 'zaten-vardi') AND g.logo_kayit_no IS NOT NULL AND n.siparis_no = $1`,
+    [siparisNo],
+  )) !== null;
+}
+
 // 3472 b: kopya silinmez; Logo'da iptal edilen fatura yeniden okumada ham kaydındaki "cancelled" ile işaretlenir.
 export async function faturaYaz(db: Db, siparisNo: string, faturalar: readonly FaturaKaydi[], zaman: Date): Promise<void> {
   if (faturalar.length > 0) {
@@ -548,6 +571,16 @@ export async function sayfaYaz(
   );
 }
 
+// 3626: tek kayıt okumasında ekranın "ne yazıldı" cümlesi için aynadaki önceki durum.
+export function malzemeKartiAynada(db: Db, logoKayitNo: number): Promise<Omit<LogoMalzemeKarti, 'logoKayitNo'> | null> {
+  return db.tek<Omit<LogoMalzemeKarti, 'logoKayitNo'>>(
+    `SELECT kod, ad, aciklama_2 AS "aciklama2", aciklama_3 AS "aciklama3", kart_turu AS "kartTuru", birim_seti AS "birimSeti", aktif FROM logo_malzeme_karti WHERE logical_ref = $1`,
+    [logoKayitNo],
+  );
+}
+export async function faturaSayisi(db: Db, siparisNo: string): Promise<number> {
+  return (await db.tek<{ n: number }>('SELECT count(*)::int AS n FROM logo_fatura WHERE siparis_no = $1', [siparisNo]))?.n ?? 0;
+}
 export async function malzemeKartlariniYaz(db: Db, kartlar: readonly LogoMalzemeKarti[], zaman: Date): Promise<void> {
   if (kartlar.length === 0) return;
   // Kod Logo'da tekildir; kartın kodu değiştiyse eski kayıttaki aynı kod önce boşaltılır (tekil kısıt sıraya takılmasın).

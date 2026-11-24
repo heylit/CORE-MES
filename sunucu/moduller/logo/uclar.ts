@@ -3,6 +3,9 @@ import { bulunamadi, yetkiYok } from '#cekirdek/hata.ts';
 import { uc } from '#cekirdek/uc.ts';
 import { disDuzeltmeCevabi, disDuzeltmelerCevabi, disSiparisCevabi, disSiparisDuzeltGovdesi, disSiparisSorgusu } from '#paylasilan/sozlesme/logo.ts';
 import { logoCariHazirlikCevabi, logoCariHazirlikSorgusu, logoCrmCevabi, logoCrmDenetimiCevabi, logoCrmKodCevabi, logoCrmKodSorgusu, logoCrmSorgusu, logoGidenIzlemeCevabi, logoProjeDurumuCevabi, logoRozetCevabi, logoRozetSorgusu, logoProjeParametresi, logoYenidenGonderCevabi, logoYenidenGonderGovdesi } from '#paylasilan/sozlesme/logo.ts';
+import { logoBelirsizKontrolCevabi, logoKontrolluGonderCevabi, logoKontrolluGonderGovdesi, logoBelirsizKontrolSorgusu } from '#paylasilan/sozlesme/logo.ts';
+import { logoTekKayitCevabi, logoTekKayitGovdesi, logoTekKayitSorgusu } from '#paylasilan/sozlesme/logo.ts';
+import { tekKayitYaz } from './tek-kayit.ts';
 import { irsaliyeCevabi, irsaliyeListesiCevabi, irsaliyeListesiSorgusu, irsaliyeParametresi, siparisLogoOzetiCevabi, siparisLogoOzetiSorgusu } from '#paylasilan/sozlesme/logo.ts';
 import { irsaliyeGetir, irsaliyeListesi } from './irsaliye.ts';
 import { siparisLogoOzeti } from './siparis-ozeti.ts';
@@ -22,7 +25,7 @@ import { baglantiTesti, gunlukListesi, simdiOku, yonetimOzeti } from './yonetim.
 import { disDuzeltmeAcik, ortamKoprusu, ortamOzeti } from './baglanti.ts';
 import { disDuzeltmeleri, disSiparisDuzelt } from './dis-siparis.ts';
 import { FIYAT_GOREN_ISLEMLER as SATIN_ALMA_FIYAT_GOREN_ISLEMLER } from '../satin-alma/disari.ts';
-import { logodaBelgeAra, logodaMalzemeAra, logodanDisSiparisOku, logodanKartAlislari, logodanKartHareketleri } from './isler.ts';
+import { logodaBelgeAra, logodaBelgeKontrol, logodaKontrolluGonder, logodaMalzemeAra, logodanTekKayitOku, logodanDisSiparisOku, logodanKartAlislari, logodanKartHareketleri } from './isler.ts';
 import {
   BEKLEME_NEDENLERI, belgeRozetleri, cariCrmDurumlari, cariKodCrmDurumlari, cariHazirligi, crmDenetimi, birimSetiEkle, birimSetiKaldir, birimSetleriniGetir, duranlariYenidenGonder, gecisiBitir, gidenIzleme, hazirlik, kontrol, LOGO_ARAMA_KAPALI,
   logoAramaSonucunuEkle, logoBelgeAramasiAcik, logoMalzemeAramasiAcik,
@@ -91,6 +94,27 @@ export const uclar = [
     parametre: entegrasyonAkisParametresi,
     cevap: entegrasyonKomutCevabi,
     isle: ({ db, parametre }) => simdiOku(db, parametre.anahtar),
+  }),
+  // 3626: tek kayıt yeniden okuma. GET kaydı Logo'dan alır (yalnız okur, kişinin belleğinde tutar), POST aynaya yazar (köprüye gitmez).
+  uc({
+    yontem: 'GET',
+    yol: '/logo/yonetim/akislar/:anahtar/kayit',
+    yetki: 'ayarlar.yaz',
+    txDisi: true,
+    parametre: entegrasyonAkisParametresi,
+    sorgu: logoTekKayitSorgusu,
+    cevap: logoTekKayitCevabi,
+    isle: ({ db, kullanici, parametre, sorgu }) => logodanTekKayitOku({ tx: (f) => f(db) }, kullanici.id, parametre.anahtar, sorgu.kod),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/logo/yonetim/akislar/:anahtar/kayit-yaz',
+    yetki: 'ayarlar.yaz',
+    tekrarKorumali: true,
+    parametre: entegrasyonAkisParametresi,
+    govde: logoTekKayitGovdesi,
+    cevap: logoTekKayitCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => tekKayitYaz(db, kullanici.id, parametre.anahtar, govde.kod, new Date()),
   }),
   // Test yardımcıya yalnız GET atar ve cevabını beklerken transaction açık tutmaz (köprüyü bekleyen öteki okumalar gibi).
   uc({
@@ -276,6 +300,25 @@ export const uclar = [
     govde: logoYenidenGonderGovdesi,
     cevap: logoYenidenGonderCevabi,
     isle: ({ db, govde }) => duranlariYenidenGonder(db, govde.belgeler, new Date()),
+  }),
+  // 3626: sonucu bilinmeyen belge önce Logo'da aranır (GET, yalnız okur; karar kişinin belleğinde), sonra karar uygulanır (POST, köprüye gitmez).
+  uc({
+    yontem: 'GET',
+    yol: '/logo/giden/kontrol',
+    yetki: 'ayarlar.yaz',
+    txDisi: true,
+    sorgu: logoBelirsizKontrolSorgusu,
+    cevap: logoBelirsizKontrolCevabi,
+    isle: ({ db, kullanici, sorgu }) => logodaBelgeKontrol({ tx: (f) => f(db) }, kullanici.id, sorgu),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/logo/giden/kontrollu-gonder',
+    yetki: 'ayarlar.yaz',
+    tekrarKorumali: true,
+    govde: logoKontrolluGonderGovdesi,
+    cevap: logoKontrolluGonderCevabi,
+    isle: ({ db, kullanici, govde }) => logodaKontrolluGonder(db, kullanici.id, govde, new Date()),
   }),
   // 3316: toplu okuma ekrandan istenmez; kart Logo'da canlı aranır. "Geçişi bitir" açık kalan okumaları kapatır (3078 b: ayar yazma yetkisi).
   uc({

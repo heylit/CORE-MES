@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { LogoGidenIzlemeCevabi, LogoHazirlikCevabi, LogoKontrolCevabi, LogoYardimciSurumu, LogoYenidenGonderCevabi } from '#paylasilan/sozlesme/logo.ts';
+import type { LogoBelirsizKontrolCevabi, LogoGidenIzlemeCevabi, LogoHazirlikCevabi, LogoKontrolCevabi, LogoKontrolluGonderCevabi, LogoYardimciSurumu, LogoYenidenGonderCevabi } from '#paylasilan/sozlesme/logo.ts';
 import type { SmartesGidenIzlemeCevabi, SmartesHazirlikCevabi, SmartesYenidenGonderCevabi } from '#paylasilan/sozlesme/smartes.ts';
 import { Dugme, DurumKutusu, IsaretKutusu, Pencere, Rozet, Simge, Tablo, useBildirim, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
@@ -188,13 +188,51 @@ function useYenidenGonder(kapat: () => void) {
   });
 }
 
+// 3626: iki adım. Önce Logo'da aranır (GET) ve sonuç gösterilir; belgeye dokunmak ayrı onayla (POST) olur.
+function useLogoKontrol() {
+  return useMutation({
+    mutationFn: (s: IzlemeSatiri) => api.get<LogoBelirsizKontrolCevabi>(`/logo/giden/kontrol?belge=${encodeURIComponent(s.belge)}&no=${String(s.no)}&islem=${s.islem}`),
+  });
+}
+function useKontrolluUygula() {
+  const istemci = useQueryClient();
+  const { bildir } = useBildirim();
+  return useMutation({
+    mutationFn: (s: IzlemeSatiri) => api.post<LogoKontrolluGonderCevabi>('/logo/giden/kontrollu-gonder', { belge: s.belge, no: s.no, islem: s.islem }, { istekKimligi: yeniIstekKimligi() }),
+    onSuccess: async (c) => {
+      bildir(c.sonuc === 'degisti' ? 'hata' : 'tamam', c.ileti);
+      await istemci.invalidateQueries({ queryKey: anahtarlar.izleme });
+    },
+    onError: (h) => bildir('hata', hataIletisi(h, 'Uygulanamadı.')),
+  });
+}
+
 function BelgeAyrintisi({ satir, gonderir, kapat }: { satir: IzlemeSatiri; gonderir: boolean; kapat: () => void }) {
   const gonder = useYenidenGonder(kapat);
+  const kontrol = useLogoKontrol();
+  const uygula = useKontrolluUygula();
+  const karar = kontrol.data?.karar;
+  const uygulanir = karar === 'bulundu' || karar === 'yok';
+  const kontrolEder = satir.kontrolEdilebilir && gonderir;
   return (
     <Pencere acik tur="yan" kapat={kapat} baslik={satir.belgeAdi}
-      alt={satir.yenidenGonderilebilir && gonderir
-        ? <Dugme tur="birincil" simge="next" onClick={() => gonder.mutate([satir])} yukleniyor={gonder.isPending}>Yeniden gönder</Dugme>
-        : undefined}>
+      alt={kontrolEder || (satir.yenidenGonderilebilir && gonderir) ? (
+        <>
+          {kontrolEder && !uygulanir && (
+            <Dugme tur="birincil" simge="search" onClick={() => kontrol.mutate(satir)} yukleniyor={kontrol.isPending}>
+              {kontrol.isPending ? "Logo'da aranıyor…" : "Logo'da kontrol et"}
+            </Dugme>
+          )}
+          {kontrolEder && uygulanir && (
+            <Dugme tur="birincil" simge={'next'} onClick={() => uygula.mutate(satir)} yukleniyor={uygula.isPending}>
+              {uygula.isPending ? 'Uygulanıyor…' : karar === 'yok' ? 'Logo\'da yok, şimdi gönder' : 'Logo kaydına bağla'}
+            </Dugme>
+          )}
+          {satir.yenidenGonderilebilir && gonderir && !satir.kontrolEdilebilir && (
+            <Dugme tur="birincil" simge="next" onClick={() => gonder.mutate([satir])} yukleniyor={gonder.isPending}>Yeniden gönder</Dugme>
+          )}
+        </>
+      ) : undefined}>
       <div className="tc-guvenlik-ayrinti">
         <div className="tc-guvenlik-cipler"><Rozet ton={DURUM_TONU[satir.durum]}>{DURUM_ADI[satir.durum]}</Rozet></div>
         <section>
@@ -209,7 +247,10 @@ function BelgeAyrintisi({ satir, gonderir, kapat }: { satir: IzlemeSatiri; gonde
           <dt>Son deneme</dt><dd>{zamanMetni(satir.sonDeneme)}</dd>
           <dt>Sonraki deneme</dt><dd>{satir.durum === 'durdu' ? 'Yok; yeniden gönderilmeyi bekliyor' : zamanMetni(satir.sonrakiDeneme)}</dd>
         </dl>
-        {satir.yenidenGonderilebilir && !gonderir && <p className="tc-guvenlik-not">Yeniden göndermek Sistem Ayarları yazma yetkisi ister.</p>}
+        {kontrol.data !== undefined && <p className="tc-guvenlik-not" role="status">{kontrol.data.karar === 'yapilamadi' ? `Kontrol yapılamadı, belgeye dokunulmadı. ${kontrol.data.ileti}` : kontrol.data.ileti}</p>}
+        {kontrol.isError && <p className="tc-guvenlik-not" role="status">{hataIletisi(kontrol.error, 'Kontrol edilemedi.')}</p>}
+        {satir.kontrolEdilebilir && gonderir && <p className="tc-guvenlik-not">Sonucu bilinmeyen belge önce Logo'da aranır; yeniden göndermek aynı reddi tekrar üretirdi.</p>}
+        {(satir.yenidenGonderilebilir || satir.kontrolEdilebilir) && !gonderir && <p className="tc-guvenlik-not">Yeniden göndermek ya da Logo'da kontrol etmek Sistem Ayarları yazma yetkisi ister.</p>}
       </div>
     </Pencere>
   );

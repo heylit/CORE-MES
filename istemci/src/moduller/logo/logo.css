@@ -1,0 +1,3 @@
+.tc-logo-tek { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-logo-tek-not { margin: 0; color: var(--muted); font-size: var(--yazi-s); }
+.tc-logo-tek-dugme { display: flex; flex-wrap: wrap; gap: var(--b-3); }

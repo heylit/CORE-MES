@@ -1138,6 +1138,8 @@ export function baglanacakEngeli(
   return null;
 }
 const miktarMetni = (d: number | null): string | null => (d === null || !Number.isFinite(d) ? null : String(Math.round(d * 1e6) / 1e6));
+// Yardımcı arama cevabından en çok bu kadar kayıt alınır; sınıra dayanan arama "yok" demeye yetmez (3626).
+export const BELGE_ARAMA_SONUC_SINIRI = 50;
 export function belgeBulgulariniAyikla(govde: unknown): LogoBelgeBulgusuHam[] | null {
   if (!Array.isArray(govde)) return null;
   const sonuc: LogoBelgeBulgusuHam[] = [];
@@ -1162,7 +1164,7 @@ export function belgeBulgulariniAyikla(govde: unknown): LogoBelgeBulgusuHam[] | 
       iptal: o['cancelled'] === true,
       satirlar, satirSayisi: sayi !== null && Number.isSafeInteger(sayi) && sayi >= satirlar.length ? sayi : satirlar.length,
     });
-    if (sonuc.length >= 50) break;
+    if (sonuc.length >= BELGE_ARAMA_SONUC_SINIRI) break;
   }
   return sonuc;
 }
@@ -2465,4 +2467,41 @@ export function gunlukSatiri(
 export function kapiSonucu(r: { tur: string; sonuc?: string; sayi?: number }): { kayitGeldi: boolean } | null {
   if (r.tur.endsWith('-kapali') || r.tur === 'kapali' || r.tur === 'ortam-degiskeni-yok') return null;
   return { kayitGeldi: r.tur === 'okuma' && r.sonuc === 'okundu' && (r.sayi ?? 0) > 0 };
+}
+
+/* ---------------- 3626: sonucu bilinmeyen belgeyi Logo'da kontrol edip gönderme ---------------- */
+
+// Kalkanın "sonucu bilinmiyor" reddi: köprü isteği gitmiş olabilir ve belgeyi numarayla arayan yol yoktur (kart #777). Satır "durdu" görünür;
+// kontrol bu satırı da kapsar (başlangıç metni eşleşir, sonuna CORE'a yazma notu eklenmiş olabilir).
+export const SONUCU_BILINMIYOR = 'Önceki açma isteğinin sonucu bilinmiyor ve bu belge için Logo\'da "var mı" okunamıyor; Logo\'da kontrol edin. Kendiliğinden yeniden gönderilmez.';
+// ara: belge numarasıyla genel belge aramasıyla kontrol edilir; kendiliginden: tur her seferinde önce "var mı" okur (bekleme 5 dk, kontrol gerekmez);
+// yok: yardımcıda belgeyi numarayla bulan uç yok (hizmet kartı, malzeme fişleri ve öteki adımlar); elle kontrol, belgeden elle bağlama.
+export type KontrolSinifi = 'ara' | 'kendiliginden' | 'yok';
+const KONTROL_SINIFI: Readonly<Record<string, KontrolSinifi>> = Object.freeze({
+  talep: 'ara', 'siparisler-teklifi': 'ara', 'siparisler-siparisi': 'ara', malzeme: 'kendiliginden', siparis: 'kendiliginden', proje: 'kendiliginden',
+});
+export const kontrolSinifi = (belge: string): KontrolSinifi => KONTROL_SINIFI[belge] ?? 'yok';
+// Giden kutusu belge türünün yardımcıdaki arama türü ("Logo'da ara" ile aynı adlar).
+export const KONTROL_ARAMA_TURU: Readonly<Record<string, string>> = Object.freeze({
+  talep: BELGE_ARAMA_TURU.talep, 'siparisler-teklifi': BELGE_ARAMA_TURU.teklif, 'siparisler-siparisi': BELGE_ARAMA_TURU['satis-siparisi'],
+});
+export function kontrolEdilebilirMi(g: { belgeTuru: string; islem: string; sonSonuc: GidenSonucu | null; sonHata: string | null }): boolean {
+  if (g.islem !== 'gonder' || kontrolSinifi(g.belgeTuru) !== 'ara') return false;
+  return g.sonSonuc === 'belirsiz' || (g.sonSonuc === 'reddedildi' && (g.sonHata?.startsWith(SONUCU_BILINMIYOR) ?? false));
+}
+export const KONTROL_NE_YAPMALI = "Logo belgeyi alıp almadığını bilmiyoruz. \"Logo'da kontrol et ve gönder\": belge Logo'da varsa eşlenir ve gönderilmez, yoksa gönderime alınır.";
+export type KontrolKarari = { karar: 'bulundu'; bulgu: LogoBelgeBulgusuHam } | { karar: 'yok' } | { karar: 'yapilamadi'; ileti: string };
+// Arama numarayı parça olarak da bulur (LIKE); yalnız tam eşit numara sayılır. "Yok" yalnız sonuç sınıra dayanmadıysa söylenir.
+export function kontrolKarari(no: string, bulgular: readonly LogoBelgeBulgusuHam[]): KontrolKarari {
+  const hedef = no.trim().toLocaleUpperCase('tr');
+  const esit = bulgular.filter((b) => b.no !== null && b.no.trim().toLocaleUpperCase('tr') === hedef);
+  if (esit.length === 0) {
+    return bulgular.length >= BELGE_ARAMA_SONUC_SINIRI
+      ? { karar: 'yapilamadi', ileti: `Arama ${BELGE_ARAMA_SONUC_SINIRI} kayıtla sınırlı ve sınıra dayandı; belge var mı söylenemez. Logo'da elle bakın.` }
+      : { karar: 'yok' };
+  }
+  if (esit.length > 1) return { karar: 'yapilamadi', ileti: "Logo'da aynı numaralı birden çok kayıt var; Logo'da elle bakın." };
+  const bulgu = esit[0]!;
+  if (bulgu.iptal) return { karar: 'yapilamadi', ileti: "Logo'da bu numaralı kayıt iptal edilmiş; Logo'da elle bakın." };
+  return { karar: 'bulundu', bulgu };
 }

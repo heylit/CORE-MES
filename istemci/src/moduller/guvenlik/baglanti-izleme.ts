@@ -15,6 +15,8 @@ export interface IzlemeSatiri {
   neden: string | null;
   neYapmali: string;
   yenidenGonderilebilir: boolean;
+  // 3626: sonucu bilinmeyen belge Logo'da aranıp gönderilebilir (yalnız Logo).
+  kontrolEdilebilir: boolean;
   denemeSayisi: number | null;
   sonDeneme: string | null;
   sonrakiDeneme: string | null;
@@ -31,7 +33,7 @@ export function izlemeSatirlari(logo: LogoGidenIzlemeCevabi | undefined, smartes
   const s = (smartes?.belgeler ?? []).map((b): IzlemeSatiri => ({
     anahtar: `smartes:${b.isEmriId}`, kaynak: 'SmartES', belge: 'is-emri', belgeAdi: `İş emri ${b.smartesIsEmriNo}`, no: b.isEmriId, islem: 'gonder',
     durum: b.durdu ? 'durdu' : 'yeniden-denenecek', neden: b.neden, neYapmali: b.durdu ? SMARTES_DURDU_NE_YAPMALI : SMARTES_NE_YAPMALI,
-    yenidenGonderilebilir: b.durdu, denemeSayisi: b.denemeSayisi, sonDeneme: b.sonDeneme, sonrakiDeneme: b.durdu ? null : b.sonrakiDeneme,
+    yenidenGonderilebilir: b.durdu, kontrolEdilebilir: false, denemeSayisi: b.denemeSayisi, sonDeneme: b.sonDeneme, sonrakiDeneme: b.durdu ? null : b.sonrakiDeneme,
   }));
   return [...l, ...s];
 }

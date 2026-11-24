@@ -13,7 +13,7 @@ import type { LogoyaGidecekMalzeme, MalzemeLogoSonucu } from '../malzemeler/disa
 import { yardimciSurumu, yardimciSurumunuSor } from './yardimci-surumu.ts';
 import type { KopruIstemcisi, SatirliSonuc } from './kopru.ts';
 import {
-  BELIRSIZ_BEKLEME_MS, bekletmeGovdesi, denemeZamaniMi, durduMu, durduNeYapmali, GIDEN_NE_YAPMALI, gidenBelgeAdi, gidenIzlemeDurumu, kartBekliyorMetni, logodaOlmayanKartlar, TALEP_HIZMET_ILETISI, eklemeGovdesi, kodCakismasiMetni, guncellemeEslemesi, HIZMET_ALANLARI, kapatmaGovdesi, karsilamaGovdesi, karsilamaKaydiBul, malzemeGuncellemeGovdesi, siparisGuncellemeGovdesi, talepGovdesi, satirEslemesi, siparisGovdesi, gecerliBirimSetleri, geriCekilmeMs, hizmetGovdesi, HIZMET_AYARI, MALZEME_GONDERIM_AYARI, kartEylemi, kirp, KUYRUK_SINIRI,
+  BELIRSIZ_BEKLEME_MS, SONUCU_BILINMIYOR, bekletmeGovdesi, denemeZamaniMi, durduMu, durduNeYapmali, GIDEN_NE_YAPMALI, gidenBelgeAdi, gidenIzlemeDurumu, kontrolEdilebilirMi, KONTROL_NE_YAPMALI, kartBekliyorMetni, logodaOlmayanKartlar, TALEP_HIZMET_ILETISI, eklemeGovdesi, kodCakismasiMetni, guncellemeEslemesi, HIZMET_ALANLARI, kapatmaGovdesi, karsilamaGovdesi, karsilamaKaydiBul, malzemeGuncellemeGovdesi, siparisGuncellemeGovdesi, talepGovdesi, satirEslemesi, siparisGovdesi, gecerliBirimSetleri, geriCekilmeMs, hizmetGovdesi, HIZMET_AYARI, MALZEME_GONDERIM_AYARI, kartEylemi, kirp, KUYRUK_SINIRI,
   FATURA_TUR_SINIRI, FATURA_YENIDEN_OKUMA_MS, FIS_GONDERIM_AYARI, gonderimSekli, LOGO_FIS_TURLERI, logoFisDurumu, STOK_FISI_LOGO_TURU, stokFisindenLogoFisi, kontrolAdiminiYorumla, listeOkunmaliMi, malzemeFisiGovdesi, malzemeFisiOzeti, eskiEmirFisiNo, FIS_NO_EN_COK, logoFisNumarasi, OKUMA_HATA_BEKLEME_MS, LOGO_AKISLARI, LOGO_KONTROL_ADIMLARI, logoAkisDurumu, satisSiparisiGovdesi, satisTeklifiGovdesi,
   belgeStokKodlari, CARI_ARAMA_EN_AZ, CARI_ARAMA_EN_COK, logoKodlarinaCevir, sayfaliOkumaSirasi,
 } from './kurallar.ts';
@@ -241,7 +241,6 @@ async function malzemeHazirla(db: Db, o: TurOrtami): Promise<TurSonucu | KopruAd
   return pasifTuru(db, o, kopru);
 }
 
-const SONUCU_BILINMIYOR = 'Önceki açma isteğinin sonucu bilinmiyor ve bu belge için Logo\'da "var mı" okunamıyor; Logo\'da kontrol edin. Kendiliğinden yeniden gönderilmez.';
 
 const LOGODAN_GELEN_KART = 'Kart Logo\'dan alındı ya da bağlandı; Logo\'ya pasife alma gönderilmedi. Gerekiyorsa Logo\'da elle bakın.';
 
@@ -1218,7 +1217,8 @@ export async function gidenIzleme(db: Db, simdi: Date): Promise<LogoGidenIzlemeC
     const durum = gidenIzlemeDurumu(g);
     return {
       belge: g.belgeTuru, belgeAdi: gidenBelgeAdi(g.belgeTuru, g.islem), no: g.belgeNo, islem: g.islem, durum, neden: g.sonHata,
-      neYapmali: durum === 'durdu' ? (g.belgeTuru === 'proje' ? PROJE_DURDU_NE_YAPMALI : durduNeYapmali(g.sonHata)) : GIDEN_NE_YAPMALI[durum], yenidenGonderilebilir: durum === 'durdu', denemeSayisi: g.denemeSayisi,
+      neYapmali: kontrolEdilebilirMi(g) ? KONTROL_NE_YAPMALI : durum === 'durdu' ? (g.belgeTuru === 'proje' ? PROJE_DURDU_NE_YAPMALI : durduNeYapmali(g.sonHata)) : GIDEN_NE_YAPMALI[durum], yenidenGonderilebilir: durum === 'durdu',
+      kontrolEdilebilir: kontrolEdilebilirMi(g), denemeSayisi: g.denemeSayisi,
       sonDeneme: zaman(g.sonDeneme), sonrakiDeneme: durum === 'durdu' ? null : zaman(g.sonrakiDeneme),
     };
   });
@@ -1227,7 +1227,7 @@ export async function gidenIzleme(db: Db, simdi: Date): Promise<LogoGidenIzlemeC
     const i = belgeler.findIndex((b) => b.belge === v.belge && b.no === v.no && b.islem === 'gonder');
     const satir = {
       belge: v.belge, belgeAdi: gidenBelgeAdi(v.belge, 'gonder'), no: v.no, islem: 'gonder' as const, durum: v.durum, neden: v.ileti,
-      neYapmali: GIDEN_NE_YAPMALI[v.durum], yenidenGonderilebilir: false,
+      neYapmali: GIDEN_NE_YAPMALI[v.durum], yenidenGonderilebilir: false, kontrolEdilebilir: false,
       denemeSayisi: i >= 0 ? belgeler[i]!.denemeSayisi : null, sonDeneme: i >= 0 ? belgeler[i]!.sonDeneme : null, sonrakiDeneme: null,
     };
     if (i >= 0) belgeler[i] = satir;
