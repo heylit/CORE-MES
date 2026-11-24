@@ -314,6 +314,18 @@ export function gidenListeSatirlari<T>(db: Db, d: Dilim): Promise<T[]> {
   );
 }
 
+// 3658: gruplu gönderim ekranı. Önce hafif satırlar (özetsiz) emir gruplamak için, sonra sayfadaki adımların ayrıntısı.
+export function gidenHafifSatirlari(db: Db): Promise<{ isEmriId: number; durum: GidenSatiri['durum']; sonDeneme: Date }[]> {
+  return db.sorgu('SELECT is_emri_id AS "isEmriId", durum, son_deneme AS "sonDeneme" FROM smartes_giden');
+}
+
+export interface GidenAyrintisi extends GidenSatiri { denemeSayisi: number; sonDeneme: Date }
+export function gidenAyrintilari(db: Db, idler: readonly number[]): Promise<GidenAyrintisi[]> {
+  if (idler.length === 0) return Promise.resolve([]);
+  return db.sorgu<GidenAyrintisi>(
+    `SELECT ${GIDEN_ALANLARI}, deneme_sayisi AS "denemeSayisi", son_deneme AS "sonDeneme" FROM smartes_giden WHERE is_emri_id = ANY($1::int[])`, [idler]);
+}
+
 /* ---------------- kalite, hurda, ambar okuması ---------------- */
 
 export interface AkisIzi {

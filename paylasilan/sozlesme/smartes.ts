@@ -536,3 +536,47 @@ export const smartesEmirDurumlariCevabi = z.object({
   }).strict()),
 }).strict();
 export type SmartesEmirDurumlariCevabi = z.output<typeof smartesEmirDurumlariCevabi>;
+
+// 3658: iş emri gönderimi, üretim emri başına gruplu ve operasyon operasyon. Gönderilen alanlar giden kutusundaki özetten, eşleme kaynağı
+// bugünkü eşlemeden okunur; adım henüz gönderilmediyse alanlar boştur ve durum nedenini söyler.
+export const SMARTES_ESLEME_KAYNAKLARI = ['istasyon', 'is-merkezi'] as const;
+export const SMARTES_KOD_KAYNAKLARI = ['onek', 'tip-kodu'] as const;
+export const SMARTES_GIDEN_EMIR_SAYFA_BOYU = 20;
+export const gidenEmirleriCevabi = z.object({
+  toplam: z.number().int(),
+  sayfa: z.number().int(),
+  sayfaBoyu: z.number().int(),
+  // Sayfadaki emirlerden sorunlu (durdu ya da yeniden denenecek adımı olan) sayısı; sorunlu emirler her sayfada önce gelir.
+  sorunlu: z.number().int(),
+  emirler: z.array(z.object({
+    emirId: z.number().int(),
+    emirNo: z.string(),
+    sorunlu: z.boolean(),
+    gonderilen: z.number().int(),
+    adimSayisi: z.number().int(),
+    adimlar: z.array(z.object({
+      isEmriId: z.number().int(),
+      opNo: z.number().int(),
+      ad: z.string(),
+      durum: z.enum(SMARTES_ROZET_DURUMLARI).nullable(),
+      gonderilmez: z.enum(SMARTES_GONDERILMEZ_NEDENLERI).nullable(),
+      kapandi: z.boolean(),
+      smartesIsEmriNo: z.string().nullable(),
+      coreIstasyonKodu: z.string().nullable(),
+      smartesIstasyonKodu: z.string().nullable(),
+      istasyonEslemesi: z.enum(SMARTES_ESLEME_KAYNAKLARI).nullable(),
+      operasyonTipi: z.string().nullable(),
+      operasyonOneki: z.string().nullable(),
+      operasyonKodu: z.string().nullable(),
+      kodKaynagi: z.enum(SMARTES_KOD_KAYNAKLARI).nullable(),
+      makineKodu: z.string().nullable(),
+      adet: z.number().nullable(),
+      denemeSayisi: z.number().int().nullable(),
+      sonDeneme: zamanSemasi.nullable(),
+      sonrakiDeneme: zamanSemasi.nullable(),
+      neden: z.string().nullable(),
+      alanlar: z.array(z.object({ ad: z.string(), deger: z.string() })),
+    })),
+  })),
+});
+export type GidenEmirleriCevabi = z.output<typeof gidenEmirleriCevabi>;

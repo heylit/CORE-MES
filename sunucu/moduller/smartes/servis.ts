@@ -6,10 +6,11 @@ import { sayfaliListe } from '#cekirdek/liste.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type {
   AlarmlarCevabi, CanliMakineAyrintisiCevabi, MakineBulgulariCevabi, CanliMakinelerCevabi, DurumCevabi, DuruslarCevabi, EslemeCevabi, EslemelerCevabi,
-  GidenCevabi, SmartesEmirDurumlariCevabi, SmartesGidenIzlemeCevabi, IsEmriDurumlariCevabi, SmartesBaglantiDurumu, GelenAdEsleGovdesi, GelenAdKaldirGovdesi, GelenAdlarCevabi, GelenAdOnerileriOnaylaGovdesi, GelenAdAktarimCevabi, GelenAdAktarSonucu,
+  GidenCevabi, SmartesEmirDurumlariCevabi, SmartesGidenIzlemeCevabi, IsEmriDurumlariCevabi, SmartesBaglantiDurumu, GelenAdEsleGovdesi, GelenAdKaldirGovdesi, GelenAdlarCevabi, GelenAdOnerileriOnaylaGovdesi, GelenAdAktarimCevabi, GelenAdAktarSonucu, GidenEmirleriCevabi,
   OnerileriOnaylaCevabi, OnerileriOnaylaGovdesi, SmartesHazirlikCevabi, SmartesKontrolCevabi, AmbarHareketleriCevabi, FireHareketleriCevabi, GelenlerCevabi,
   HamKayitCevabi, KaliteOlcumleriCevabi, HesaplarCevabi, AdetKarariCevabi, AdetOnaylariCevabi,
 } from '#paylasilan/sozlesme/smartes.ts';
+import { SMARTES_GIDEN_EMIR_SAYFA_BOYU } from '#paylasilan/sozlesme/smartes.ts';
 import type { IkinciMenuSayaclari } from '#paylasilan/sayfa-tanimi.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
@@ -341,6 +342,12 @@ async function eslemeHaritasi(db: Db, tur: EslemeTuru): Promise<Map<number, stri
 type IstasyonKoduCozucu = (istasyonId: number | null) => string | undefined;
 
 async function istasyonKoduCozucu(db: Db): Promise<IstasyonKoduCozucu> {
+  const c = await istasyonEslemesiCozucu(db);
+  return (istasyonId) => c(istasyonId)?.kod;
+}
+
+// 3658: aynı çözüm, eşlemenin hangi kayıttan geldiğini de söyler (istasyonun kendisi mi, iş merkezi mi).
+async function istasyonEslemesiCozucu(db: Db): Promise<(istasyonId: number | null) => { kod: string; kaynak: 'istasyon' | 'is-merkezi' } | undefined> {
   const istasyonKodlari = await eslemeHaritasi(db, 'istasyon');
   const merkezKodlari = await eslemeHaritasi(db, 'is-merkezi');
   const merkezeBagli = merkezKodlari.size === 0
@@ -348,8 +355,11 @@ async function istasyonKoduCozucu(db: Db): Promise<IstasyonKoduCozucu> {
     : new Map((await istasyonlar(db, { pasiflerDahil: true })).map((i) => [i.id, i.isMerkeziId]));
   return (istasyonId) => {
     if (istasyonId === null) return undefined;
+    const kendi = istasyonKodlari.get(istasyonId);
+    if (kendi !== undefined) return { kod: kendi, kaynak: 'istasyon' };
     const merkezId = merkezeBagli.get(istasyonId);
-    return istasyonKodlari.get(istasyonId) ?? (merkezId === undefined ? undefined : merkezKodlari.get(merkezId));
+    const merkez = merkezId === undefined ? undefined : merkezKodlari.get(merkezId);
+    return merkez === undefined ? undefined : { kod: merkez, kaynak: 'is-merkezi' };
   };
 }
 
@@ -528,6 +538,78 @@ export async function emirDurumlari(db: Db, emirIdleri: readonly number[], istem
       return [{ emirId: id, toplam, adimlar: liste }];
     }),
   };
+}
+
+/* ---------------- 3658: iş emri gönderimi, emir başına gruplu ---------------- */
+
+const ozetAlanlari = (ozet: string | null): Map<string, string> => {
+  const sonuc = new Map<string, string>();
+  if (ozet === null) return sonuc;
+  try {
+    const dizi: unknown = JSON.parse(ozet);
+    if (Array.isArray(dizi)) for (const o of dizi) if (Array.isArray(o) && typeof o[0] === 'string') sonuc.set(o[0], o[1] === null || o[1] === undefined ? '' : String(o[1]));
+  } catch { /* okunamayan özet alansız gösterilir */ }
+  return sonuc;
+};
+
+// Yalnız CORE'daki izi okur. Gönderilen alanlar giden kutusundaki özetten (reddedilen denemede denenen özetten) gelir; istasyon eşlemesi
+// ve kod kaynağı bugünkü eşlemeden. Sorunlu (durdu, yeniden denenecek) emirler her sayfada önce, sonra en son denenen.
+export async function gidenEmirleri(db: Db, q: { sayfa: number; sayfaBoyu?: number | undefined }, istemci: SmartesIstemcisi | null): Promise<GidenEmirleriCevabi> {
+  const boy = Math.min(q.sayfaBoyu ?? SMARTES_GIDEN_EMIR_SAYFA_BOYU, 100);
+  const hafif = await s.gidenHafifSatirlari(db);
+  const ozetler = await isEmriOzetleri(db, hafif.map((g) => g.isEmriId));
+  const gruplar = new Map<number, { sorunlu: boolean; son: number }>();
+  for (const g of hafif) {
+    const emirId = ozetler.get(g.isEmriId)?.uretimEmriId;
+    if (emirId === undefined) continue;
+    const e = gruplar.get(emirId) ?? { sorunlu: false, son: 0 };
+    e.sorunlu ||= g.durum === 'hata';
+    e.son = Math.max(e.son, g.sonDeneme.getTime());
+    gruplar.set(emirId, e);
+  }
+  const sirali = [...gruplar.entries()].sort((a, b) => Number(b[1].sorunlu) - Number(a[1].sorunlu) || b[1].son - a[1].son || b[0] - a[0]);
+  const sayfa = Math.max(1, q.sayfa);
+  const secilen = sirali.slice((sayfa - 1) * boy, sayfa * boy);
+  const adimlar = await emirAdimlari(db, secilen.map(([id]) => id));
+  const adimOzetleri = await isEmriOzetleri(db, adimlar.map((a) => a.isEmriId));
+  const gidenler = new Map((await s.gidenAyrintilari(db, adimlar.map((a) => a.isEmriId))).map((g) => [g.isEmriId, g]));
+  const cozucu = await istasyonEslemesiCozucu(db);
+  const istasyonKodlari = new Map((await istasyonlar(db, { pasiflerDahil: true })).map((i) => [i.id, i.kod]));
+  const tipler = new Map((await operasyonTipleri(db, { pasiflerDahil: true })).map((x) => [x.id, x.kod]));
+  const tipOnekleri = await eslemeHaritasi(db, 'operasyon-tipi');
+  const tipOlan = new Map((await planlanacakIsEmirleri(db)).map((i) => [i.id, i.operasyonTipiId]));
+  const baglantiAcik = baglantiDurumu(await sistemAyariOku(db, 'smartes.baglanti'), istemci) === 'acik';
+  const emirler = secilen.map(([emirId, grup]) => {
+    const liste = adimlar.filter((a) => a.uretimEmriId === emirId).sort((a, b) => a.opNo - b.opNo).map((a) => {
+      const g = gidenler.get(a.isEmriId) ?? null;
+      const eslesme = cozucu(a.istasyonId);
+      const gidecek = (a.emirDurumu === 'planli' || a.emirDurumu === 'basladi') && a.durum !== 'tamam' && !a.fason;
+      const r = adimRozeti({ eslemeli: eslesme !== undefined, gidecek, baglantiAcik, giden: g });
+      const alanlar = ozetAlanlari(g === null ? null : (g.durum === 'hata' ? (g.denenenOzet ?? g.ozet) : (g.ozet ?? g.denenenOzet)));
+      const tipId = tipOlan.get(a.isEmriId);
+      const tip = tipKodu(tipId ?? undefined, tipler, tipOnekleri);
+      const sayi = (ad: string): number | null => { const d = alanlar.get(ad); return d === undefined || d === '' || Number.isNaN(Number(d)) ? null : Number(d); };
+      const bos = (ad: string): string | null => { const d = alanlar.get(ad); return d === undefined || d === '' ? null : d; };
+      return {
+        isEmriId: a.isEmriId, opNo: a.opNo, ad: a.ad, durum: r.durum, gonderilmez: r.gonderilmez, kapandi: g?.durum === 'kapandi',
+        smartesIsEmriNo: g?.smartesIsEmriNo ?? null,
+        coreIstasyonKodu: a.istasyonId === null ? null : (istasyonKodlari.get(a.istasyonId) ?? null),
+        smartesIstasyonKodu: bos('WorkstationCode') ?? eslesme?.kod ?? null,
+        istasyonEslemesi: eslesme?.kaynak ?? null,
+        operasyonTipi: tip?.kod ?? null, operasyonOneki: tip?.smartesOnek ?? null,
+        operasyonKodu: bos('OperationCode'), kodKaynagi: tip === null ? null : (tip.smartesOnek === null ? 'tip-kodu' as const : 'onek' as const),
+        makineKodu: bos('MachineCode'), adet: sayi('Quantity'),
+        denemeSayisi: g?.denemeSayisi ?? null, sonDeneme: g === null ? null : g.sonDeneme.toISOString(), sonrakiDeneme: g?.sonrakiDeneme?.toISOString() ?? null,
+        neden: r.neden,
+        alanlar: [...alanlar].map(([ad, deger]) => ({ ad, deger })),
+      };
+    });
+    return {
+      emirId, emirNo: adimOzetleri.get(liste[0]?.isEmriId ?? 0)?.emirNo ?? String(emirId), sorunlu: grup.sorunlu,
+      gonderilen: liste.filter((a) => a.durum === 'gonderildi').length, adimSayisi: liste.length, adimlar: liste,
+    };
+  });
+  return { toplam: sirali.length, sayfa, sayfaBoyu: boy, sorunlu: emirler.filter((e) => e.sorunlu).length, emirler };
 }
 
 /* ---------------- tanım gönderimi (SME-21) ---------------- */
