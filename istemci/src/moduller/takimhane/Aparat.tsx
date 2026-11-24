@@ -151,13 +151,23 @@ export function AparatSayfasi() {
   );
 }
 
-const EMIR_SUTUNLARI: readonly Sutun<EmirAparatSatiri>[] = [
+// Tek düğme, duruma göre: dışarıdaysa İade, çıkabiliyorsa Çıkar. Kapalı düğmenin sebebi yazılır (plan bekliyor, eksik).
+function SatirDugmesi({ a, emirId }: { a: EmirAparatSatiri; emirId: string }) {
+  const git = useNavigate();
+  const kalan = a.adet - a.disarida;
+  if (a.disarida > 0 && kalan === 0) return <Dugme simge="rotate" onClick={() => { void git(`/takimhane/cikis-iade?iade=${String(a.kartKimlik)}`); }}>İade</Dugme>;
+  if (a.durum === 'eksik' || a.durum === 'plan-bekliyor' || a.durum === 'yolda') return <span className="tc-tkm-soluk">{a.durum === 'eksik' ? 'Rafta yok' : a.durum === 'yolda' ? 'Alan bekleniyor' : 'Plan bekliyor'}</span>;
+  return <Dugme simge="truck" onClick={() => { void git(`/takimhane/cikis-iade?emir=${emirId}&kart=${String(a.kartKimlik)}`); }}>Çıkar</Dugme>;
+}
+
+const emirSutunlari = (emirId: string): readonly Sutun<EmirAparatSatiri>[] => [
   { anahtar: 'ad', baslik: 'Aparat', hucre: (a) => <span className="tc-tkm-ad"><span>{a.ad}</span><span className="tc-tkm-soluk mono">{a.kod}</span></span> },
   { anahtar: 'adet', baslik: 'Adet', hizala: 'sag', mono: true, hucre: (a) => a.adet },
   { anahtar: 'asama', baslik: 'Aşama', hucre: (a) => APARAT_ASAMA_ADI[a.asama] },
   { anahtar: 'pencere', baslik: 'Plan penceresi', mono: true, kirilmaz: true, hucre: (a) => pencereMetni(a.baslangic, a.bitis) },
   { anahtar: 'durum', baslik: 'Durum', hucre: (a) => <DurumRozeti a={a} /> },
   { anahtar: 'konum', baslik: 'Konum', hucre: (a) => a.konum ?? '—' },
+  { anahtar: 'islem', baslik: '', csv: false, kartTamSatir: true, hucre: (a) => <SatirDugmesi a={a} emirId={emirId} /> },
 ];
 
 function DurumRozeti({ a }: { a: EmirAparatSatiri }) {
@@ -176,12 +186,12 @@ export function EmirAparatlari({ emirId }: { emirId: string }) {
   return (
     <Kart baslik="Aparat" simge="wrench" baslikEki={v.hazir ? <Rozet ton="tamam">Aparat hazır</Rozet> : <Rozet ton="hata">{`${String(eksikler.length)} aparat eksik`}</Rozet>}>
       <IkiGorunum
-        masa={<Tablo etiket="Emrin aparatları" sutunlar={EMIR_SUTUNLARI} satirlar={v.satirlar} satirAnahtari={(a) => a.kartKimlik} />}
+        masa={<Tablo etiket="Emrin aparatları" sutunlar={emirSutunlari(emirId)} satirlar={v.satirlar} satirAnahtari={(a) => a.kartKimlik} />}
         kompakt={(
           <KompaktListe
             etiket="Emrin aparatları" satirlar={v.satirlar} satirAnahtari={(a) => a.kartKimlik}
             baslik={(a) => a.ad} sag={(a) => `${String(a.adet)} adet`} alt={(a) => `${a.kod} · ${pencereMetni(a.baslangic, a.bitis)} · ${a.konum ?? '—'}`}
-            ek={(a) => <DurumRozeti a={a} />}
+            ek={(a) => <><DurumRozeti a={a} /><SatirDugmesi a={a} emirId={emirId} /></>}
           />
         )}
       />

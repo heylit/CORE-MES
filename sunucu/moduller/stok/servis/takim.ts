@@ -38,7 +38,8 @@ export async function takimCikisi(db: Db, k: Kullanici, g: TakimCikisi): Promise
   });
 }
 
-export interface TakimIadesi { malzemeId: number; konumId: number; adet: number; durum: IadeDurumu; neden: string | null; kaynakKimligi: string }
+// `uretimEmriId`: iadenin hangi emrin çıkışından döndüğü (aparat, kart 3651); çıkıştaki emirle eşleşince emrin dışarıdaki adedi düşer.
+export interface TakimIadesi { malzemeId: number; konumId: number; adet: number; durum: IadeDurumu; neden: string | null; kaynakKimligi: string; uretimEmriId?: number | null }
 // Depo iadeyi elden alır: kayıt anında kapanır (bırakma), hedef iade durumuna göre raf, ara alan ya da hurda olur.
 export async function takimIadesi(db: Db, k: Kullanici, g: TakimIadesi): Promise<TeslimCevabi> {
   const yetkili = takimYetkilisi(k);
@@ -49,7 +50,7 @@ export async function takimIadesi(db: Db, k: Kullanici, g: TakimIadesi): Promise
   if (hedef === null) throw dogrulama(tur === 'raf_gozu' ? 'Bu takımın raf konumu yok; iade rafa alınamaz.' : `Hedef konum yok (${tur}); önce stok tanımlarından açılır.`, 'durum');
   const cevap = await teslimGonder(db, yetkili, {
     malzemeId: g.malzemeId, miktar: String(g.adet), statuId: null, kaynak: { konumId: g.konumId }, hedef: { konumId: hedef },
-    kaynakKimligi: g.kaynakKimligi, birak: true, not: `Takımhane iadesi (${g.durum})`,
+    uretimEmriId: g.uretimEmriId ?? null, kaynakKimligi: g.kaynakKimligi, birak: true, not: `Takımhane iadesi (${g.durum})`,
   });
   await sorgular.teslimIadeDurumuYaz(db, cevap.teslim.id, g.durum, g.durum === 'kirik' ? g.neden!.trim() : null);
   return cevap;

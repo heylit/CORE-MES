@@ -77,3 +77,8 @@ export const emirAparatCikislari = (db: Db, malzemeIdler: readonly number[]): Pr
      SELECT emir AS "emirId", malzeme AS "malzemeId", konum AS "konumId", tur AS "konumTur", max(ad) AS "konumAd",
             sum(giden)::text AS disarida, sum(yolda)::text AS yolda
        FROM hareket GROUP BY emir, malzeme, konum, tur HAVING sum(giden) <> 0 OR sum(yolda) <> 0`, [[...malzemeIdler]]);
+
+// Kişide ya da tezgâhta bakiyesi duran her malzeme: kartı kümeden düşmüş (emir kapanmış, kapasite satırı silinmiş) aparatın iadesi yine alınabilir.
+export const konumlardakiMalzemeler = async (db: Db): Promise<number[]> =>
+  (await db.sorgu<{ id: number }>(
+    `SELECT DISTINCT b.malzeme_id AS id FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id WHERE k.tur IN ('kisi', 'istasyon') AND b.miktar > 0`)).map((r) => r.id);

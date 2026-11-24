@@ -38,7 +38,7 @@ function TakimSecimi({ takimlar, son, secili, sec }: {
   return (
     <div className="tc-tkm-secim">
       <div className="tc-tkm-secim-ust">
-        <Girdi etiket="Takım" placeholder="Kod ya da ad yazın" value={ara} onChange={(e) => { araYaz(e.target.value); }} />
+        <Girdi etiket="Takım ya da aparat" placeholder="Kod ya da ad yazın" value={ara} onChange={(e) => { araYaz(e.target.value); }} />
         <Dugme simge="scan" onClick={() => { okutMesajYaz(null); okutAcikYaz(true); }}>Okut</Dugme>
       </div>
       {aranan === '' && son.length > 0 && (
@@ -64,17 +64,20 @@ function TakimSecimi({ takimlar, son, secili, sec }: {
 }
 
 // Depo çıkarır, operatör alır; çıkış kaydı alışkanlığı için tek ekran, az alan (3613 Dilim 2).
-export function CikisFormu({ takimlar, son, alicilar, emirler, gonder }: {
+export function CikisFormu({ takimlar, son, alicilar, emirler, gonder, ilkKart = null, ilkEmir = '' }: {
   takimlar: readonly TakimSatiri[];
   son: readonly TakimSatiri[];
   alicilar: readonly Secenek[];
   emirler: readonly Secenek[];
   gonder: (g: { kartKimlik: number; adet: number; alici: string; emir: string }) => void;
+  // Emir ekranından gelen çıkışta aparat ve emir hazır seçilidir (3651).
+  ilkKart?: number | null;
+  ilkEmir?: string;
 }) {
-  const [secili, seciliYaz] = useState<TakimSatiri | null>(null);
+  const [secili, seciliYaz] = useState<TakimSatiri | null>(() => takimlar.find((t) => t.kartKimlik === ilkKart) ?? null);
   const [adet, adetYaz] = useState('1');
   const [alici, aliciYaz] = useState('');
-  const [emir, emirYaz] = useState('');
+  const [emir, emirYaz] = useState(ilkEmir);
   const yeter = secili === null || (secili.konumlar.raf ?? 0) >= Number(adet);
   // Kapalı düğmenin sebebi görünür: önce takım, sonra alan, sonra adet.
   const sebep = secili === null ? 'Takım seçin.' : alici === '' ? 'Alan seçin.' : Number(adet) < 1 ? 'Adet en az 1 olmalı.' : yeter ? null : 'Rafta bu kadar yok.';
