@@ -181,6 +181,14 @@ const kapaliMi = (durum: string): boolean => durum === 'bitti' || durum === 'ipt
 // iptal edilebilir: iptal onay değildir, görevi bitmiş saymaz.
 export const IPTAL_EDILEMEZ = 'Bitmiş ya da zaten iptal edilmiş görev iptal edilemez.';
 export const iptalReddi = (durum: string): string | null => (kapaliMi(durum) ? IPTAL_EDILEMEZ : null);
+// 3642: "Bu emirde gerekmez" işareti. Başlamamış (yapılacak), sürmekte olan ve bekleyen görev işaretle iptal olur; kontrolde ya da bitmiş görevi olan
+// (emir, madde) işaretlenmez. İptal olan görevin geçmişine gerekçe bu önekle yazılır (önek + gerekçe 500 karakteri aşmaz: gerekçe en çok 450).
+export const GEREKMEZ_ONEKI = 'Bu emirde gerekmez: ';
+export const GEREKMEZ_KONTROLDE = 'Bu maddenin kontrolde ya da bitmiş görevi var; "Bu emirde gerekmez" işareti konamaz.';
+export const GEREKMEZ_ZATEN = 'Bu madde bu emirde zaten "gerekmez" diye işaretli.';
+export const GEREKMEZ_YOK = 'Bu madde bu emirde "gerekmez" diye işaretli değil.';
+const GEREKMEZ_IPTAL_EDILEBILIR: ReadonlySet<string> = new Set(['yapilacak', 'suruyor', 'bekliyor']);
+export const gerekmezReddi = (durumlar: readonly string[]): string | null => (durumlar.every((d) => GEREKMEZ_IPTAL_EDILEBILIR.has(d)) ? null : GEREKMEZ_KONTROLDE);
 const rolde = (rolId: number | null, k: Isleyen): boolean => rolId !== null && k.rolIdleri.includes(rolId);
 
 // Üstlenme: kişiye atanmamış, kişinin rolüne açık, kapanmamış ve kontrolde olmayan görev. Zaten kendisindeyse red yoktur (servis yazmaz).

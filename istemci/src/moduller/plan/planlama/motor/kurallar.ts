@@ -412,7 +412,7 @@ const GEVSEK: Record<string, (g: Girdi) => void> = {
   ayarci: (g) => {
     for (const v of g.D.vardiyalar ?? []) for (let i = 0; i < 40; i++) (g.D.personel ??= []).push({ id: `~A${String(v.id)}${i}`, ad: 'sanal ayarcı', vardiya: String(v.id), gruplar: [], ayar: true });
   },
-  // 3650: sunucu motoruyla (girdi.js GEVSEK) aynı ayrım: aparat anahtarı ölçü aletine, kalibrasyon anahtarı aparata dokunmaz.
+  // 3652: aparat ve kalibrasyon anahtarları artık çalışmanın kapali listesinden okunmaz (kaynakKipleri); yalnız ek listesi ve eski ad için kalır.
   aparat: (g) => {
     g.D.aparatlar = (Array.isArray(g.D.aparatlar) ? g.D.aparatlar : []).filter(nesne).map((a) => ({ ...a, adet: 999 }));
     if (Array.isArray(g.D.ikincilKaynaklar)) Object.assign(g.D, { ikincilKaynaklar: g.D.ikincilKaynaklar.filter(nesne).map((k) => (k.tur === 'olcu_aleti' ? k : { ...k, kisit: 'izle' })) });
@@ -425,14 +425,40 @@ const GEVSEK: Record<string, (g: Girdi) => void> = {
   fasonGun: (g) => { g.D.fasoncular = (g.D.fasoncular ?? []).map((f) => ({ ...f, cikisGunleri: [...GUN_KODLARI] })); },
   ayar: (g) => { g.D.ayarMatrisi = []; },
 };
+// 3652: kaynak türü başına kip (sunucu motoru girdi.js kaynakKipleri ile aynı kural): acik sert, uyari izle, kapali kaynak ve istekleri hiç kurulmaz.
+type KaynakKipi = 'acik' | 'uyari' | 'kapali';
+const KAYNAK_KIPI_TURU: Record<string, 'aparat' | 'takim' | 'olcu'> = { aparat: 'aparat', ozel_takim: 'takim', olcu_aleti: 'olcu' };
+export function kaynakKipleri(c: Pick<PlanlamaCalismasi, 'kapali' | 'kisitKipi'>): Record<'aparat' | 'takim' | 'olcu', KaynakKipi> {
+  const kk = c.kisitKipi ?? {};
+  const kip = (v: unknown, eski: boolean): KaynakKipi => (v === 'acik' || v === 'uyari' || v === 'kapali' ? v : eski ? 'uyari' : 'acik');
+  const eskiAparat = c.kapali.includes('aparat');
+  return { aparat: kip(kk.aparat, eskiAparat), takim: kip(kk.takim, eskiAparat), olcu: kip(kk.olcu, c.kapali.includes('kalibrasyon')) };
+}
+function kaynakKipiUygula(g: Girdi, kipler: Record<'aparat' | 'takim' | 'olcu', KaynakKipi>): void {
+  if (kipler.aparat !== 'acik') g.D.aparatlar = (Array.isArray(g.D.aparatlar) ? g.D.aparatlar : []).filter(nesne).map((a) => ({ ...a, adet: 999 }));
+  const turu = (k: Record<string, unknown>) => KAYNAK_KIPI_TURU[String(k.tur)] ?? 'aparat';
+  if (!Array.isArray(g.D.ikincilKaynaklar)) return;
+  const hepsi = g.D.ikincilKaynaklar.filter(nesne);
+  const kartTuru = new Map(hepsi.map((k) => [String(k.kart), turu(k)]));
+  Object.assign(g.D, { ikincilKaynaklar: hepsi.filter((k) => kipler[turu(k)] !== 'kapali').map((k) => (kipler[turu(k)] === 'uyari' ? { ...k, kisit: 'izle' } : k)) });
+  if (!nesne(g.D.opKaynak)) return;
+  const opKaynak: Record<string, unknown> = {};
+  for (const [op, l] of Object.entries(g.D.opKaynak)) {
+    // İsteğin türü kendisinde yazılıdır; yazılı değilse kartının kaynak satırından, satırsız kart aparattır.
+    const kalan = (Array.isArray(l) ? l : []).filter((x) => !(nesne(x) && kipler[(x.tur === 'aparat' || x.tur === 'takim' || x.tur === 'olcu' ? x.tur : kartTuru.get(String(x.kart))) ?? 'aparat'] === 'kapali'));
+    if (kalan.length > 0) opKaynak[op] = kalan;
+  }
+  Object.assign(g.D, { opKaynak });
+}
 export function girdiKur(c: PlanlamaCalismasi, biten: Bitenler = { siparis: new Set(), adim: new Set() }, an?: number): Girdi {
   const D = structuredClone(c.D) as Girdi['D'];
   D.ayarlar = nesne(D.ayarlar) ? D.ayarlar : {};
   D.siparisler = D.siparisler.filter((s) => !planDisi(s) && !biten.siparis.has(s.id));
-  const g: Girdi = { D, now: simdiSaati(c, an), kapali: new Set(c.kapali), bitti: biten.kolDisi?.size ? new Set([...biten.adim, ...biten.kolDisi]) : biten.adim, down: [], ekMesai: [], saGecik: {}, sapma: {} };
+  const g: Girdi = { D, now: simdiSaati(c, an), kapali: new Set(c.kapali.filter((k) => k !== 'aparat' && k !== 'kalibrasyon')), bitti: biten.kolDisi?.size ? new Set([...biten.adim, ...biten.kolDisi]) : biten.adim, down: [], ekMesai: [], saGecik: {}, sapma: {} };
   for (const d of c.down) { const m = metin(d.m), a = sayi(d.from), b = sayi(d.to); if (m !== null && a !== null && b !== null) g.down.push({ m, from: a, to: b }); }
   for (const e of c.ekMesai) { const m = metin(e.m), gun = sayi(e.gun), v = metin(e.vardiya); if (m !== null && gun !== null && v !== null) g.ekMesai.push({ m, gun, vardiya: v }); }
   for (const k of g.kapali) GEVSEK[k]?.(g);
+  kaynakKipiUygula(g, kaynakKipleri(c));
   // Soru 159 b: vardiyası olan ayarcı yoksa ayarcı sınırı uygulanmaz.
   const vids = new Set((D.vardiyalar ?? []).map((v) => String(v.id)));
   if (!g.kapali.has('ayarci') && !(D.personel ?? []).some((p) => p.ayar && vids.has(String(p.vardiya)))) GEVSEK.ayarci?.(g);

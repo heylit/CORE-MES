@@ -7,3 +7,4 @@
 .tc-pya-kaynak-secim button:disabled { cursor: not-allowed; opacity: .6; }
 .tc-pya-kaynak > small { color: var(--muted); font-size: var(--yazi-xs); }
 .tc-pya-kaynak-satir { display: grid; grid-template-columns: 1fr; gap: var(--b-2); }
+.tc-pya-kaynak-not { margin: 0; color: var(--muted); font-size: var(--yazi-xs); }

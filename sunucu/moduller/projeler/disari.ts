@@ -11,6 +11,8 @@ export type { SiparistenProjeVerisi } from '#paylasilan/sozlesme/projeler.ts';
 export { ADIM_EN_COK, hedefYerleri } from './kurallar.ts';
 export type { KalemSuzgeci } from './kurallar.ts';
 export { hazirlikGorevleri, hazirlikGorevleriAc, hazirlikIsEmriEklendi, hazirlikSablonlari, projeninHazirlikGorevleri } from './hazirlik-gorevleri.ts';
+export { hazirlikGerekmezIsaretle, hazirlikGerekmezKaldir, hazirlikGerekmezleri } from './hazirlik-gerekmez.ts';
+export type { HazirlikGerekmezi } from './hazirlik-gerekmez.ts';
 export type { HazirlikGorevi, HazirlikGorevleriAcVerisi, HazirlikHedefi, HazirlikMaddeBilgisi, HazirlikPlani, HazirlikSablonKalemi } from './hazirlik-gorevleri.ts';
 // 3458: Görevleri dağıt ekranı projeye bağlı açık emirleri Üretim Emirleri'nden alır; bağ kablolamadadır.
 export { hazirlikHedefCozucusuKaydet } from './dagitim.ts';

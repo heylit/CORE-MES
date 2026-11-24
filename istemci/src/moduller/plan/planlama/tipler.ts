@@ -149,6 +149,8 @@ export interface PlanlamaCalismasi extends ExtraAlanlar {
   w: PlanAgirliklari;
   param: PlanParametreleri;
   kapali: string[];
+  // 3652: aparat, takım ve ölçü aleti kısıtının kipi (acik | uyari | kapali); eksik tür acik, eski kapali listesindeki aparat ve kalibrasyon uyari okunur.
+  kisitKipi?: { aparat?: 'acik' | 'uyari' | 'kapali'; takim?: 'acik' | 'uyari' | 'kapali'; olcu?: 'acik' | 'uyari' | 'kapali' };
   // 561 2 a: 2 ise kapali listesi kullanıcının kararıdır; daha eski çalışmada personel kısıtı kapalı sayılır (durum.ts calismaOku).
   kisitSurum?: number;
   bedel: unknown;

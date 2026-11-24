@@ -1,10 +1,10 @@
 import { uc } from '#cekirdek/uc.ts';
-import { tezgahAyrintisiCevabi, tezgahBaglantisiDurumCevabi, tezgahParametresi } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
+import { tezgahAyrintisiCevabi, tezgahBaglantisiDurumCevabi, tezgahParametresi, tezgahTuruCevabi, tezgahTuruGovdesi } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
 import { ortamIstemcisi } from './baglanti.ts';
 import { turBellegi } from './isler.ts';
 import * as servis from './servis.ts';
 
-// Deneme ekranı yalnız okur; sayfa işlemi hiçbir role verilmez (yalnız yönetici).
+// Deneme ekranı okunan değerleri yalnız gösterir; tek yazma tezgâh türü seçimidir (çizim ayarı). Sayfa işlemi hiçbir role verilmez (yalnız yönetici).
 export const uclar = [
   uc({
     yontem: 'GET',
@@ -20,5 +20,14 @@ export const uclar = [
     parametre: tezgahParametresi,
     cevap: tezgahAyrintisiCevabi,
     isle: ({ db, parametre }) => servis.ayrinti(db, parametre.cihazAdi, new Date(), turBellegi),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/tezgah-baglantisi/tezgahlar/:cihazAdi/tur',
+    yetki: { biri: ['sayfa.tezgah-baglantisi'] },
+    parametre: tezgahParametresi,
+    govde: tezgahTuruGovdesi,
+    cevap: tezgahTuruCevabi,
+    isle: ({ db, parametre, govde }) => servis.turAta(db, parametre.cihazAdi, govde.tur),
   }),
 ];

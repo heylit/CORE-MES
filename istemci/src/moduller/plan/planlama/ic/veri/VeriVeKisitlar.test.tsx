@@ -44,14 +44,15 @@ describe('Veri ve kısıtlar', () => {
     expect(git).toHaveBeenCalledWith('plan');
   });
 
-  it('Kısıtlar: aparat ve ölçü aleti Sert kısıt | Kısıt yok olarak seçilir, Açık/Kapalı anahtarı yoktur (3650)', () => {
+  it('Kısıtlar: aparat ve ölçü aleti Açık | Uyarı | Kapalı olarak seçilir, Açık/Kapalı anahtarı yoktur (3650)', () => {
     const { degisiklikler } = ekranAc();
     bolum('Kısıtlar');
     expect(screen.queryByRole('switch', { name: 'Aparat ve özel takım adedi' })).toBeNull();
     expect(screen.queryByRole('switch', { name: 'Ölçü aleti adedi' })).toBeNull();
-    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Ölçü aleti' })).getByRole('radio', { name: 'Kısıt yok' }));
-    expect(degisiklikler.at(-1)?.sonra.kapali).toContain('kalibrasyon');
-    expect(degisiklikler.at(-1)).toMatchObject({ ne: 'Kısıt kapatıldı' });
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Ölçü aleti' })).getByRole('radio', { name: 'Kapalı' }));
+    expect(degisiklikler.at(-1)?.sonra.kisitKipi).toMatchObject({ olcu: 'kapali', aparat: 'acik' });
+    expect(degisiklikler.at(-1)?.sonra.kapali).not.toContain('kalibrasyon');
+    expect(degisiklikler.at(-1)).toMatchObject({ ne: 'Kısıt kipi değişti' });
   });
 
   it('Kısıtlar: kapalı kısıt şeridi, anahtar ve Hepsini aç çalışmaya yazar; bedel aynı veri sürümünden, hesabı motor ister', () => {

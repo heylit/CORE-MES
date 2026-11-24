@@ -909,9 +909,18 @@ export type HazirlikProjesiSecenekleri = z.infer<typeof hazirlikProjesiSecenekle
 const hazirlikAtanan = z.object({ tur: z.enum(['kisi', 'rol']), id: z.number().int(), ad: z.string(), kisiSayisi: z.number().int() });
 export const hazirlikMatrisiSorgusu = z.object({ projeId: z.coerce.number<number>().int().positive().max(2147483647) });
 const hazirlikHaliSemasi = z.enum(['tamam', 'eksik', 'muaf', 'gerekmez', 'bilinmiyor']);
+// 3642: "Bu emirde gerekmez" işareti. Gerekçe en çok 450 karakter (görev geçmişine önekle yazılır). Durduran madde işaretlenmez (sunucu reddeder).
+export const hazirlikGerekmezGovdesi = z.object({ madde: hazirlikMaddeKodu, gerekce: metin(450, 'Gerekçe yaz.') }).strict();
+export type HazirlikGerekmezGovdesi = z.infer<typeof hazirlikGerekmezGovdesi>;
+export const hazirlikGerekmezKaldirGovdesi = z.object({ madde: hazirlikMaddeKodu }).strict();
+export type HazirlikGerekmezKaldirGovdesi = z.infer<typeof hazirlikGerekmezKaldirGovdesi>;
+export const hazirlikGerekmezCevabi = z.object({ iptalEdilen: z.number().int() });
+export type HazirlikGerekmezCevabi = z.infer<typeof hazirlikGerekmezCevabi>;
 export const hazirlikMatrisiCevabi = z.object({
   proje: z.object({ id: z.number().int(), kod: z.string(), ad: z.string(), durum: z.string() }),
   dagitir: z.boolean(),
+  // 3642: işareti koyma ve kaldırma yetkisi (dağıtma yetkisiyle aynı kaynaktan; sunucu uçta ayrıca denetler).
+  gerekmezYazar: z.boolean(),
   maddeler: z.array(z.object({ kod: z.string(), ad: z.string(), kisa: z.string(), durduran: z.boolean(), isEmriDuzeyi: z.boolean() })),
   emirler: z.array(z.object({
     id: z.number().int(), emirNo: z.string(), parcaNo: z.string(), adet: z.number().int(), acik: z.boolean(),
@@ -925,6 +934,8 @@ export const hazirlikMatrisiCevabi = z.object({
     // malzemesiz emirde sistem hâli yoktur.
     sistem: hazirlikHaliSemasi.nullable(),
   })),
+  // 3642: emirde gerekmez diye işaretli maddeler; işaretleyince görev iptal olduğundan hücre buradan okunur.
+  gerekmezler: z.array(z.object({ emriId: z.number().int(), madde: z.string(), gerekce: z.string(), kisiAdi: z.string().nullable(), an: zamanSemasi })),
 });
 export type HazirlikMatrisiCevabi = z.infer<typeof hazirlikMatrisiCevabi>;
 // Dağıt: projenin açık emirlerine şablonun hazırlık görevleri. Deneme yalnız kime kaç görev gideceğini döner, hiçbir şey yazmaz.

@@ -42,11 +42,11 @@ const kaynak = (k: Partial<MotorIkincilKaynagi> = {}): MotorIkincilKaynagi => ({
   id: '1', kart: '900', kod: 'AP-ORN-12', ad: 'Flans baglama fiksturu', istasyon: null, adet: 1, tur: 'aparat', kisit: 'sert', kesintiler: [],
   omur: null, omurBirimi: null, degisimDk: null, kalanPay: null, ...k,
 });
-const iste = (x: Partial<MotorKaynakIstegi> = {}): MotorKaynakIstegi => ({ kart: '900', adet: 1, asama: 'ayar_isleme', ...x });
+const iste = (x: Partial<MotorKaynakIstegi> = {}): MotorKaynakIstegi => ({ kart: '900', adet: 1, asama: 'ayar_isleme', tur: 'aparat', ...x });
 
 interface Islem { m: string; S: number; Su: number; C: number; why: { t: string; r?: string }; ikBas?: number; takim?: { id: string; n: number; dk: number; at: number | null; kalan: number; bilinmiyor: boolean }[] }
-function planla(ikincil: unknown, ayar = 0, kapali: string[] = ['personel']) {
-  const g = planGirdisi({ calisma: calismayaMotorAyari({ ...calisma(), kapali }, MOTOR_AYARI_VARSAYILAN), kayit: kayit(ayar), kaynak: kaynakOkumasi(ikincil), bugun: '2026-10-19' });
+function planla(ikincil: unknown, ayar = 0, kapali: string[] = ['personel'], kisitKipi?: Record<string, string>) {
+  const g = planGirdisi({ calisma: calismayaMotorAyari({ ...calisma(), kapali, ...(kisitKipi === undefined ? {} : { kisitKipi }) }, MOTOR_AYARI_VARSAYILAN), kayit: kayit(ayar), kaynak: kaynakOkumasi(ikincil), bugun: '2026-10-19' });
   assert.ok(g);
   const m = motorYukle();
   const st = m.stHazirla(g.st) as { pref: Record<string, string> };
@@ -126,6 +126,36 @@ describe('plan 3199: ikincil kaynak kısıtı', () => {
     assert.ok(warn.some((w) => w.txt.includes('AP-ORN-12')), JSON.stringify(warn));
   });
 
+  // 3652: aparat, ölçü aleti ve takım için Açık / Uyarı / Kapalı; eski kapali listesi yalnız Uyarı okunur.
+  const takimKaynagi = () => kaynak({ id: '2', kart: '950', kod: 'TK-ORN-03', tur: 'ozel_takim' });
+  const takimIstegi = () => ({ 'ORN-E1|10': [iste({ kart: '950', tur: 'takim' })], 'ORN-E2|10': [iste({ kart: '950', tur: 'takim' })] });
+  test('kisitKipi: takim Açık sınırlar, Uyarı sınırlamaz ama aşımı uyarır, Kapali ne sınırlar ne uyarır', () => {
+    const girdi = { kaynaklar: [takimKaynagi()], istekler: takimIstegi() };
+    const acik = planla(girdi, 0, ['personel'], { takim: 'acik' });
+    assert.ok(acik.ops[1]!.S >= acik.ops[0]!.C - 1e-6, JSON.stringify(acik.ops));
+    const uyari = planla(girdi, 0, ['personel'], { takim: 'uyari' });
+    assert.ok(uyari.ops.every((o) => yakin(o.S, 8)));
+    assert.ok(uyari.warn.some((w) => w.txt.includes('TK-ORN-03')), JSON.stringify(uyari.warn));
+    const kapali = planla(girdi, 0, ['personel'], { takim: 'kapali' });
+    assert.ok(kapali.ops.every((o) => yakin(o.S, 8)));
+    assert.equal(kapali.warn.filter((w) => w.t === 'ikincil' || w.txt.includes('TK-ORN-03')).length, 0);
+  });
+  test('kisitKipi türleri birbirinden bağımsızdır: takım Kapali aparatı sınırlamaya devam eder', () => {
+    const girdi = { kaynaklar: [kaynak(), takimKaynagi()], istekler: { 'ORN-E1|10': [iste(), iste({ kart: '950', tur: 'takim' })], 'ORN-E2|10': [iste(), iste({ kart: '950', tur: 'takim' })] } };
+    const { ops } = planla(girdi, 0, ['personel'], { takim: 'kapali' });
+    assert.ok(ops[1]!.S >= ops[0]!.C - 1e-6, JSON.stringify(ops));
+    const aparatUyari = planla(girdi, 0, ['personel'], { aparat: 'uyari', takim: 'acik' });
+    assert.ok(aparatUyari.ops[1]!.S >= aparatUyari.ops[0]!.C - 1e-6, 'takım hâlâ sert');
+  });
+  test('eski kapali listesi: aparat biti aparatı ve takımı Uyarı okur, kisitKipi o türde eskiyi ezer; kalibrasyon yalnız ölçü aletini', () => {
+    const girdi = { kaynaklar: [kaynak(), takimKaynagi()], istekler: { 'ORN-E1|10': [iste(), iste({ kart: '950', tur: 'takim' })], 'ORN-E2|10': [iste(), iste({ kart: '950', tur: 'takim' })] } };
+    assert.ok(planla(girdi, 0, ['personel', 'aparat']).ops.every((o) => yakin(o.S, 8)));
+    const ezen = planla(girdi, 0, ['personel', 'aparat'], { aparat: 'acik', takim: 'acik' });
+    assert.ok(ezen.ops[1]!.S >= ezen.ops[0]!.C - 1e-6);
+    const kal = planla(girdi, 0, ['personel', 'kalibrasyon']);
+    assert.ok(kal.ops[1]!.S >= kal.ops[0]!.C - 1e-6, 'kalibrasyon biti aparatı gevşetmez');
+  });
+
   test('kesinti (bakım) o saatlerde adedi düşürür: bakımdaki tek aparatı isteyen iş bakım bitince başlar', () => {
     const bakim = { neden: 'bakim' as const, bas: '2026-10-19T08:00:00+03:00', bit: '2026-10-19T10:00:00+03:00', adet: 1 };
     const { ops } = planla({ kaynaklar: [kaynak({ kesintiler: [bakim] })], istekler: { 'ORN-E1|10': [iste()] } });
@@ -184,14 +214,14 @@ describe('plan 3199: ikincil kaynak kısıtı', () => {
         degistiren: { id: 1, ad: null }, degisme: '2026-11-13T08:00:00+03:00', surum: 1,
       }],
       kartlar: new Map([[950, { kod: 'TK-ORN-03', ad: 'Form freze' }]]),
-      istekler: [{ anahtar: 'ORN-E1|10', istekler: [{ malzemeId: 950, adet: 1, asama: 'isleme' }] }],
+      istekler: [{ anahtar: 'ORN-E1|10', istekler: [{ malzemeId: 950, adet: 1, asama: 'isleme', tur: 'takim' }] }],
       takimlar: [{ kartId: 950, istasyonId: 10, kalanPay: 0.2 }, { kartId: 950, istasyonId: 11, kalanPay: 0.1 }],
     });
     assert.deepEqual(e.kaynaklar?.[0], {
       id: '7', kart: '950', kod: 'TK-ORN-03', ad: 'Form freze', istasyon: '10', adet: 1, tur: 'ozel_takim', kisit: 'sert',
       kesintiler: [{ neden: 'bakim', bas: '2026-11-13T08:00:00+03:00', bit: '2026-11-13T11:00:00+03:00', adet: 1 }], omur: 600, omurBirimi: 'dk', degisimDk: 20, kalanPay: 0.2,
     });
-    assert.deepEqual(e.istekler, { 'ORN-E1|10': [{ kart: '950', adet: 1, asama: 'isleme' }] });
+    assert.deepEqual(e.istekler, { 'ORN-E1|10': [{ kart: '950', adet: 1, asama: 'isleme', tur: 'takim' }] });
     assert.deepEqual(ikincilKaynakKur({ kaynaklar: null, kartlar: new Map(), istekler: null, takimlar: null }), { kaynaklar: null, istekler: null });
   });
 });
@@ -206,7 +236,7 @@ describe('plan: ölçü aleti kısıtı', () => {
     const e = olcu([{ turId: 7, tur: 'ORN-MIKROMETRE', durum: 'gecerli' }, { turId: 7, tur: 'ORN-MIKROMETRE', durum: 'gecmis' },
       { turId: 8, tur: 'ORN-KUMPAS', durum: 'gecmis' }]);
     assert.deepEqual(e.kaynaklar?.map((k) => [k.id, k.adet, k.tur, k.istasyon]), [['olcu-7', 1, 'olcu_aleti', null]]);
-    assert.deepEqual(e.istekler?.['ORN-E1|10'], [{ kart: 'olcu-7', adet: 1, asama: 'isleme' }]);
+    assert.deepEqual(e.istekler?.['ORN-E1|10'], [{ kart: 'olcu-7', adet: 1, asama: 'isleme', tur: 'olcu' }]);
   });
 
   test('tek aleti olan tür iki işi işleme boyunca sıraya koyar; anahtar kapanınca yalnız izlenir, aparat anahtarı ona dokunmaz', () => {
@@ -227,13 +257,13 @@ describe('plan: ölçü aleti kısıtı', () => {
   test('aynı adımın aparat ve ölçü aleti isteği birlikte gider; aparatsız adıma yalnız alet eklenir', () => {
     const e = ikincilKaynakKur({
       kaynaklar: [], kartlar: new Map(), takimlar: null,
-      istekler: [{ anahtar: 'ORN-E1|10', istekler: [{ malzemeId: 900, adet: 1, asama: 'ayar_isleme' }] }],
+      istekler: [{ anahtar: 'ORN-E1|10', istekler: [{ malzemeId: 900, adet: 1, asama: 'ayar_isleme', tur: 'aparat' }] }],
       aletler: [{ turId: 7, tur: 'ORN-MIKROMETRE', durum: 'gecerli' }],
       aletIstekleri: [{ anahtar: 'ORN-E1|10', turler: [7] }, { anahtar: 'ORN-E2|10', turler: [7] }],
     });
     assert.deepEqual(e.istekler, {
-      'ORN-E1|10': [{ kart: '900', adet: 1, asama: 'ayar_isleme' }, { kart: 'olcu-7', adet: 1, asama: 'isleme' }],
-      'ORN-E2|10': [{ kart: 'olcu-7', adet: 1, asama: 'isleme' }],
+      'ORN-E1|10': [{ kart: '900', adet: 1, asama: 'ayar_isleme', tur: 'aparat' }, { kart: 'olcu-7', adet: 1, asama: 'isleme', tur: 'olcu' }],
+      'ORN-E2|10': [{ kart: 'olcu-7', adet: 1, asama: 'isleme', tur: 'olcu' }],
     });
   });
 

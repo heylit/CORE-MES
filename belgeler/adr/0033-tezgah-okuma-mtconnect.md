@@ -84,3 +84,11 @@ değişmez; sayfa yalnız `sayfa.tezgah-baglantisi` yetkisiyle açılır; progra
 - Gerçek servisin tampon dışı isteğe cevabının biçimi (HTTP kodu, `MTConnectError` içeriği) denenmedi; istemci 400/404/416 ile `OUT_OF_RANGE` gövdesini
   ve başlıktaki `firstSequence`'i tanır.
 - 24 saatlik geçmişin gerçek hacmi (FARK.md'deki ölçüm sentetiktir).
+
+## Ek 2 (24.11.2026, kart 3659-2): canlı tezgâh görünümü ve tezgâh türü
+- Ayrıntı sayfası kayıtlı Position (X/Y/Z) değerlerinden şematik bir görünüm çizer ve son bir saati geri oynatır; yalnız gösterir, **karar 6 aynen geçerlidir**.
+- MTConnect tezgâh türünü vermez. Yönetici türü seçer (dikey freze, torna, yatay işlem merkezi): göç `20261124132000`, tablo `tezgah_turu`, yazma ucu
+  `POST /tezgah-baglantisi/tezgahlar/:cihazAdi/tur` (`sayfa.tezgah-baglantisi`; okunmamış tezgâh 404). Tür yoksa çizim yapılmaz, yalnız konum değerleri gösterilir.
+  Tür okunan değerlere, sayıma, duruşa, stoğa ve plana dokunmaz.
+- **Doğrulanmadı:** servisin eksen Position öğelerini X/Y/Z bileşen adıyla yayınladığı; torna için Y'nin yokluğu ve yatay işlem merkezinde eksen yönleri
+  şematik varsayımdır, gerçek makineyle karşılaştırılmadı.

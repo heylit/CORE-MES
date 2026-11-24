@@ -5,13 +5,14 @@ import { HAZIRLIK_MADDELERI, YALNIZ_GORUNUM_MADDELERI, hazirlikUyarirMi } from '
 import { makineDurumlari, makineler } from '../istasyonlar/disari.ts';
 import type { HazirlikCevabi, HazirlikMaddesi, HazirlikMuafiyetiGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
+import { hazirlikGerekmezleri } from '../projeler/disari.ts';
 import type { BaslatmaOlayi } from './baslatma-denetimi.ts';
 import {
   EMIR_YOK, MUAF_IS_EMRI_YOK, MUAF_KAPALI_EMIR, MUAF_MADDE_YOK, MUAF_TUTULUR, MUAF_ZATEN, hazirlikEngeli, hazirlikHali, acikElleEksikler, acikOnaylar, elleEksikNedeni,
   makineHazirligi, onayGecerliMi, talimatHazirligi,
 } from './kurallar.ts';
 import type { HazirlikBilgisi, HazirlikHali } from './kurallar.ts';
-import { IS_EMRI_DUZEYI, kapaliSistemMaddeleri } from './hazirlik-maddeleri.ts';
+import { IS_EMRI_DUZEYI, durduranMaddeKodlari, kapaliSistemMaddeleri } from './hazirlik-maddeleri.ts';
 import * as s from './sorgular.ts';
 import { talimatHazirlikSayilari } from './sorgular/adim/sorgular.ts';
 
@@ -138,13 +139,16 @@ export async function hazirliklar(db: Db, uretimEmriIdleri: readonly number[]): 
   const onay = await elleOnaylar(db, isEmriIdleri);
   const eksik = await elleEksikler(db, isEmriIdleri);
   const adlar = await kisiAdlari(db, [...new Set(emirler.flatMap((e) => e.muaf.map((x) => x.kisiId)))]);
+  // 3642: emirde "gerekmez" işaretli madde emirde aranmaz; durduran madde işaretlenemez, kayıt olsa bile okunurken yok sayılır.
+  const durduranlar = await durduranMaddeKodlari(db);
+  const gerekmez = new Set((await hazirlikGerekmezleri(db, emirIdleri)).filter((x) => !durduranlar.has(x.madde)).map((x) => `${String(x.emriId)}:${x.madde}`));
   for (const { id, muaf } of emirler) {
     const kendi = isEmirleri.filter((i) => i.uretimEmriId === id);
     const acik = kendi.filter((i) => i.durum !== 'tamam').map((i) => i.id);
     sonuc.set(id, {
       maddeler: HAZIRLIK_MADDELERI.map((madde) => {
         const d = durumlar.get(madde) ?? null;
-        const durum: HazirlikHali = kapali.has(madde) ? 'gerekmez' : IS_EMRI_DUZEYI.has(madde)
+        const durum: HazirlikHali = kapali.has(madde) || gerekmez.has(`${String(id)}:${madde}`) ? 'gerekmez' : IS_EMRI_DUZEYI.has(madde)
           ? enKotu(acik.map((i) => elleUygula(hazirlikHali(d?.get(i), muafMi(muaf, madde, i) || onayliMi(onay, madde, i, d?.get(i)?.surum)), elleEksikMi(eksik, madde, i))))
           : elleUygula(hazirlikHali(d?.get(id), muafMi(muaf, madde, null) || hepsiOnayli(onay, madde, acik, d?.get(id)?.surum)), acik.some((i) => elleEksikMi(eksik, madde, i)));
         return { madde, durum, muafTutulur: MUAF_TUTULUR.has(madde), isEmriDuzeyi: IS_EMRI_DUZEYI.has(madde) };
@@ -155,7 +159,7 @@ export async function hazirliklar(db: Db, uretimEmriIdleri: readonly number[]): 
         maddeler: HAZIRLIK_MADDELERI.filter((m) => IS_EMRI_DUZEYI.has(m))
           .map((madde) => {
             const b = durumlar.get(madde)?.get(i.id);
-            if (kapali.has(madde)) return { madde, durum: 'gerekmez' as const };
+            if (kapali.has(madde) || gerekmez.has(`${String(id)}:${madde}`)) return { madde, durum: 'gerekmez' as const };
             return { madde, durum: elleUygula(hazirlikHali(b, muafMi(muaf, madde, i.id) || onayliMi(onay, madde, i.id, b?.surum)), elleEksikMi(eksik, madde, i.id)) };
           }),
       })),

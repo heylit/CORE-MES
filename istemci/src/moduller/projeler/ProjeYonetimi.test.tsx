@@ -57,7 +57,7 @@ function sunucuKur(kullanici: Kullanici, durum: Proje['durum'] = 'aktif') {
     if (yontem === 'GET' && yol === '/projeler/statuler') return json(200, STATULER);
     if (yontem === 'GET' && yol.startsWith('/projeler?')) return json(200, { satirlar: [proje(durum)], toplam: 1, sayfa: 1, sayfaBoyu: 200 });
     if (yontem === 'GET' && yol === '/projeler/gorevlerim/liste') return json(200, { gorevler: [] });
-    if (yontem === 'GET' && yol === '/hazirlik-matrisi?projeId=1') return json(200, { proje: { id: 1, kod: 'PRJ.01', ad: 'Deneme projesi', durum: 'aktif' }, dagitir: false, maddeler: [], emirler: [], gorevler: [] });
+    if (yontem === 'GET' && yol === '/hazirlik-matrisi?projeId=1') return json(200, { proje: { id: 1, kod: 'PRJ.01', ad: 'Deneme projesi', durum: 'aktif' }, dagitir: false, gerekmezYazar: false, maddeler: [], emirler: [], gorevler: [], gerekmezler: [] });
     if (yontem === 'GET' && yol === '/projeler/sorumlu-secenekleri') return json(200, { kisiler: [{ id: 3, ad: 'Deneme Planlamacı' }] });
     if (yontem === 'GET' && yol === '/projeler/rol-secenekleri') return json(200, { roller: [{ id: 8, ad: 'Kalite' }] });
     if (yontem === 'POST' && yol.startsWith('/projeler/statu')) return json(200, STATULER);

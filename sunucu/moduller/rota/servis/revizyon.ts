@@ -194,7 +194,7 @@ export async function kaydet(db: Db, kullanici: Kullanici, id: number, govde: Ka
   const tipler = new Map((await operasyonTipleri(db)).map((t) => [t.id, t]));
   const eskiKartlar = new Set([...mevcut.bilesenler.map((b) => b.malzemeId), ...mevcut.yanUrunler.map((y) => y.malzemeId), ...(mevcut.ekipman ?? []).flatMap((x) => (x.malzemeId === null ? [] : [x.malzemeId]))]);
   const yeniKartlar = adimlar.flatMap((a) => [
-    ...[...a.bilesenler, ...a.yanUrunler].map((b) => b.malzemeId), ...(a.ekipman ?? []).flatMap((x) => (x.tur === 'aparat' ? [x.malzemeId] : [])),
+    ...[...a.bilesenler, ...a.yanUrunler].map((b) => b.malzemeId), ...(a.ekipman ?? []).flatMap((x) => (x.tur !== 'olcu_aleti' ? [x.malzemeId] : [])),
   ]).filter((m) => !eskiKartlar.has(m));
   const kartlar = await urunOzetleri(db, yeniKartlar);
   for (const [i, a] of adimlar.entries()) {
@@ -253,7 +253,7 @@ export async function kaydet(db: Db, kullanici: Kullanici, id: number, govde: Ka
     // Alanı göndermeyen kayıt çarpanı korur; dalı kaldırılan adımda korunan çarpan düşer (ana hat bir mamul içindir).
     const carpan = a.adetCarpani === undefined ? (dal === null ? null : eski?.adetCarpani ?? null) : a.adetCarpani;
     // Ekipmanı göndermeyen (alanı bilmeyen) ekran da adımın kayıtlı listesini silmesin (2893-4 a).
-    const ekipman = a.ekipman?.map((x) => (x.tur === 'aparat'
+    const ekipman = a.ekipman?.map((x) => (x.tur !== 'olcu_aleti'
       ? { tur: x.tur, malzemeId: x.malzemeId, aletTuruId: null, aciklama: x.aciklama, adet: x.adet, asama: x.asama }
       : { tur: x.tur, malzemeId: null, aletTuruId: x.aletTuruId, aciklama: x.aciklama, adet: 1, asama: 'ayar_isleme' as const }))
       ?? (eski === undefined ? [] : (mevcut.ekipman ?? []).filter((x) => x.adimId === eski.id).map(({ tur, malzemeId, aletTuruId, aciklama, adet, asama }) => ({ tur, malzemeId, aletTuruId, aciklama, adet, asama })));
@@ -285,23 +285,23 @@ export async function adimEkipmaniKaydet(db: Db, kullanici: Kullanici, id: numbe
   const eski = (icerik.ekipman ?? []).filter((x) => x.adimId === adim.id);
   const eskiKart = new Set(eski.flatMap((x) => (x.malzemeId === null ? [] : [x.malzemeId])));
   const eskiTur = new Set(eski.flatMap((x) => (x.aletTuruId === null ? [] : [x.aletTuruId])));
-  const kartlar = await urunOzetleri(db, g.ekipman.flatMap((x) => (x.tur === 'aparat' && !eskiKart.has(x.malzemeId) ? [x.malzemeId] : [])));
+  const kartlar = await urunOzetleri(db, g.ekipman.flatMap((x) => (x.tur !== 'olcu_aleti' && !eskiKart.has(x.malzemeId) ? [x.malzemeId] : [])));
   const turler = g.ekipman.some((x) => x.tur === 'olcu_aleti' && !eskiTur.has(x.aletTuruId)) ? new Set((await aletTurleri(db)).map((t) => t.id)) : new Set<number>();
   const gorulen = new Set<string>();
   for (const [i, x] of g.ekipman.entries()) {
-    const anahtar = x.tur === 'aparat' ? `a:${x.malzemeId}` : `o:${x.aletTuruId}`;
-    if (gorulen.has(anahtar)) throw dogrulama('Aynı aparat ya da ölçü aleti türü adıma iki kez eklenmez.', `ekipman.${i}`);
+    const anahtar = x.tur === 'olcu_aleti' ? `o:${x.aletTuruId}` : `${x.tur === 'takim' ? 't' : 'a'}:${x.malzemeId}`;
+    if (gorulen.has(anahtar)) throw dogrulama('Aynı aparat, takım ya da ölçü aleti türü adıma iki kez eklenmez.', `ekipman.${i}`);
     gorulen.add(anahtar);
-    if (x.tur === 'aparat' && !eskiKart.has(x.malzemeId)) {
+    if (x.tur !== 'olcu_aleti' && !eskiKart.has(x.malzemeId)) {
       const k = kartlar.get(x.malzemeId);
-      if (!k) throw dogrulama('Aparat kartı bulunamadı.', `ekipman.${i}.malzemeId`);
+      if (!k) throw dogrulama(x.tur === 'takim' ? 'Takım kartı bulunamadı.' : 'Aparat kartı bulunamadı.', `ekipman.${i}.malzemeId`);
       if (k.onayDurumu !== 'aktif') throw dogrulama(`${k.stokKodu ?? k.ad} kartı kullanımda değil.`, `ekipman.${i}.malzemeId`);
     }
     if (x.tur === 'olcu_aleti' && !eskiTur.has(x.aletTuruId) && !turler.has(x.aletTuruId)) {
       throw dogrulama('Ölçü aleti türü bulunamadı ya da kullanımda değil.', `ekipman.${i}.aletTuruId`);
     }
   }
-  await s.adimEkipmaniniYaz(db, adim.id, g.ekipman.map((x) => (x.tur === 'aparat'
+  await s.adimEkipmaniniYaz(db, adim.id, g.ekipman.map((x) => (x.tur !== 'olcu_aleti'
     ? { tur: x.tur, malzemeId: x.malzemeId, aletTuruId: null, aciklama: x.aciklama, adet: x.adet, asama: x.asama }
     : { tur: x.tur, malzemeId: null, aletTuruId: x.aletTuruId, aciklama: x.aciklama, adet: 1, asama: 'ayar_isleme' as const })));
   return cevap(id, 'taslak', await s.duzenlemeYaz(db, id, kullanici.id));

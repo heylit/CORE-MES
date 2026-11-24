@@ -504,7 +504,7 @@ export function aparatKullanimi(db: Db): Promise<{ malzemeId: number; adim: numb
        FROM rota_adim_ekipmani e
        JOIN rota_adimi a ON a.id = e.adim_id
        JOIN rota_revizyonu r ON r.id = a.revizyon_id
-      WHERE e.tur = 'aparat' AND r.durum IN ('yururlukte', 'taslak', 'onay_bekliyor')
+      WHERE e.tur IN ('aparat', 'takim') AND r.durum IN ('yururlukte', 'taslak', 'onay_bekliyor')
       GROUP BY e.malzeme_id
       ORDER BY e.malzeme_id`,
   );

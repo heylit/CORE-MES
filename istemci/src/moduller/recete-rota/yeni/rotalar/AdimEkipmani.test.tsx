@@ -23,6 +23,7 @@ function kur() {
       'GET /rota/urunler/11/talimatlar/10': () => json(200, TALIMAT),
       'GET /rota/revizyonlar/72': () => json(200, { adimlar: [{ opNo: 10, ekipman }] }),
       'GET /rota/olcu-aleti-turleri': () => json(200, TURLER),
+      'GET /istasyonlar/aparat-kapasiteleri': () => json(200, { kapasiteler: [] }),
       'GET /rota/malzeme-ara': () => json(200, { satirlar: [kart], toplam: 1, sayfaBoyu: 20 }),
       'POST /rota/revizyonlar/72/adim-ekipmani': (g) => {
         yazilan.push(g);
@@ -47,12 +48,12 @@ const adimAc = async () => {
   return within(bolge).getByRole('complementary', { name: 'Düzenleme paneli' });
 };
 
-describe('Rota adımının aparat ve ölçü aleti listesi (2893-4 a)', () => {
+describe('Rota adımının aparat, takım ve ölçü aleti listesi (2893-4 a, 3652)', () => {
   it('ölçü aleti türü ve aparat eklenir, liste OP numarası ve revizyon sürümüyle bütün yazılır; çıkarılır', async () => {
     const yazilan = kur();
     const panel = await adimAc();
     fireEvent.click(within(panel).getByRole('button', { name: /^Belgeler/ }));
-    await within(panel).findByText('Bu adımda aparat ya da ölçü aleti istenmiyor.');
+    await within(panel).findByText('Bu adımda aparat, takım ya da ölçü aleti istenmiyor.');
     const secim = within(panel).getByLabelText('Ölçü aleti türü');
     await within(secim).findByRole('option', { name: 'Mikrometre' });
     fireEvent.change(secim, { target: { value: '3' } });
@@ -81,8 +82,25 @@ describe('Rota adımının aparat ve ölçü aleti listesi (2893-4 a)', () => {
     expect(satirlar.find((s) => /DM-DNM-1/.test(s ?? ''))).toMatch(/DM-DNM-1 Deneme aparat.*2.*Yalnız işleme/);
     expect(satirlar.find((s) => /Mikrometre/.test(s ?? ''))).toMatch(/Mikrometre.*—.*Plana girmez, hazırlık uyarısı/);
 
-    fireEvent.click(within(panel).getByRole('button', { name: 'Mikrometre adımdan çıkar' }));
+    // 3652: takım aparatla aynı alanları taşır (kart, adet, ne zaman); ayrı tür olarak yazılır.
+    fireEvent.change(within(panel).getByLabelText('Tür'), { target: { value: 'takim' } });
+    fireEvent.change(within(panel).getByLabelText('Takım kartı ara'), { target: { value: 'DNM' } });
+    const takim = within(panel).getByLabelText('Takım');
+    await within(takim).findByRole('option', { name: 'DM-DNM-1 Deneme aparat' });
+    fireEvent.change(takim, { target: { value: '501' } });
+    fireEvent.change(within(panel).getByLabelText('Adet'), { target: { value: '3' } });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Adıma ekle' }));
     await waitFor(() => { expect(yazilan).toHaveLength(3); });
-    expect(yazilan[2]).toEqual({ surum: 5, opNo: 10, ekipman: [{ tur: 'aparat', malzemeId: 501, aciklama: null, adet: 2, asama: 'isleme' }] });
+    expect(yazilan[2]).toEqual({
+      surum: 5, opNo: 10,
+      ekipman: [{ tur: 'olcu_aleti', aletTuruId: 3, aciklama: '0-25 mm' }, { tur: 'aparat', malzemeId: 501, aciklama: null, adet: 2, asama: 'isleme' }, { tur: 'takim', malzemeId: 501, aciklama: null, adet: 3, asama: 'ayar_isleme' }],
+    });
+
+    await within(panel).findByText(/· Takım/);
+    // Kapasite satırı olmayan takım plana girmez; satırda yazar (3652).
+    await within(panel).findByText(/Kapasite satırı yok, plana girmez/);
+    fireEvent.click(within(panel).getByRole('button', { name: 'Mikrometre adımdan çıkar' }));
+    await waitFor(() => { expect(yazilan).toHaveLength(4); });
+    expect(yazilan[3]).toEqual({ surum: 5, opNo: 10, ekipman: [{ tur: 'aparat', malzemeId: 501, aciklama: null, adet: 2, asama: 'isleme' }, { tur: 'takim', malzemeId: 501, aciklama: null, adet: 3, asama: 'ayar_isleme' }] });
   });
 });

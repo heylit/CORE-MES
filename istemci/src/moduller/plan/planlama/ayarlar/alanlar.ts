@@ -43,31 +43,60 @@ export const PANEL_KISITLARI = [
 // Ad Kısıtlar sayfasıyla aynıdır (tek katalog).
 export const panelKisitAdi = (k: (typeof PANEL_KISITLARI)[number]): string => kisitBul(k)?.ad ?? k;
 
-// 3650: aparat ve ölçü aleti açık/kapalı kutusu değil, "Sert kısıt" ve "Kısıt yok" seçimidir. Saklama aynı kalır (çalışmanın kapali listesi):
-// Sert kısıt = açık (plan kaynak boşalana kadar bekletir), Kısıt yok = kapalı (plan yalnız izler, aşım uyarısı kalır). Varsayılan sert.
-export const KAYNAK_KISITLARI = ['aparat', 'kalibrasyon'] as const;
+// 3652 (3650 üstüne): aparat, takım ve ölçü aleti kısıtı açık/kapalı kutusu değil, üç kiplik seçimdir: Açık (plan kaynak boşalana kadar bekletir),
+// Uyarı (plan sınırlamaz, kullanım izlenir, aşım uyarılır) ve Kapalı (plan kaynağı hiç saymaz, uyarı da yazmaz). Saklama çalışmanın kisitKipi
+// alanıdır { aparat, takim, olcu }; eksik tür Açık, ancak eski kapali listesinde aparat (aparat ve takım) ya da kalibrasyon (ölçü aleti) varsa Uyarı
+// okunur (sunucu motor girdi.js kaynakKipleri ile aynı kural). Seçim yazılınca eski bitler listeden düşer.
+export const KAYNAK_KISITLARI = ['aparat', 'takim', 'kalibrasyon'] as const;
 export type KaynakKisiti = (typeof KAYNAK_KISITLARI)[number];
-export type KaynakSecimi = 'sert' | 'yok';
-export const KAYNAK_SECIMLERI: readonly { deger: KaynakSecimi; ad: string }[] = [{ deger: 'sert', ad: 'Sert kısıt' }, { deger: 'yok', ad: 'Kısıt yok' }];
+export type KaynakSecimi = 'acik' | 'uyari' | 'kapali';
+export const KAYNAK_SECIMLERI: readonly { deger: KaynakSecimi; ad: string }[] = [{ deger: 'acik', ad: 'Açık' }, { deger: 'uyari', ad: 'Uyarı' }, { deger: 'kapali', ad: 'Kapalı' }];
 export const kaynakMi = (k: string): k is KaynakKisiti => (KAYNAK_KISITLARI as readonly string[]).includes(k);
-export const kaynakAdi = (k: KaynakKisiti): string => (k === 'aparat' ? 'Aparat ve özel takım' : 'Ölçü aleti');
+export const kaynakAdi = (k: KaynakKisiti): string => (k === 'aparat' ? 'Aparat' : k === 'takim' ? 'Takım' : 'Ölçü aleti');
 export const secimAdi = (s: KaynakSecimi): string => KAYNAK_SECIMLERI.find((x) => x.deger === s)!.ad;
+// Çalışmadaki alan adı: ölçü aletinin kısıt kimliği kalibrasyondur, kip anahtarı olcu.
+export const KIP_ANAHTARI: Record<KaynakKisiti, 'aparat' | 'takim' | 'olcu'> = { aparat: 'aparat', takim: 'takim', kalibrasyon: 'olcu' };
+const ESKI_BIT: Record<KaynakKisiti, 'aparat' | 'kalibrasyon'> = { aparat: 'aparat', takim: 'aparat', kalibrasyon: 'kalibrasyon' };
 export const KAYNAK_ETKISI: Record<KaynakKisiti, Record<KaynakSecimi, string>> = {
   aparat: {
-    sert: 'Sert kısıt: rotasında bu aparatı ya da özel takımı isteyen adım, boş adet olana kadar kayar. Yalnız onu isteyen işler sıraya girer; kartında "izle" yazan aparat yine yalnız izlenir.',
-    yok: 'Kısıt yok: plan aparatı ve özel takımı sınırlamaz; kullanım yine izlenir ve aşım olursa "İzle: plan sınırlamadı" uyarısı yazılır.',
+    acik: 'Açık: rotasında bu aparatı isteyen adım, boş adet olana kadar kayar. Yalnız onu isteyen işler sıraya girer; kartında "izle" yazan aparat yine yalnız izlenir.',
+    uyari: 'Uyarı: plan aparatı sınırlamaz; kullanım izlenir ve aşım olursa "İzle: plan sınırlamadı" uyarısı yazılır.',
+    kapali: 'Kapalı: plan aparatı hiç saymaz, uyarı da yazmaz. Rotada ve hazırlıkta bilgi olarak kalır.',
+  },
+  takim: {
+    acik: 'Açık: rotasında bu takımı isteyen adım, kapasite satırındaki boş adet olana kadar kayar. Kapasite satırı olmayan takım plana girmez.',
+    uyari: 'Uyarı: plan takımı sınırlamaz; kullanım ve ömür izlenir, aşım olursa "İzle: plan sınırlamadı" uyarısı yazılır.',
+    kapali: 'Kapalı: plan takımı hiç saymaz, uyarı da yazmaz. Rotada ve hazırlıkta bilgi olarak kalır.',
   },
   kalibrasyon: {
-    sert: 'Sert kısıt: kalibrasyonu geçerli alet sayısı kadar iş aynı anda ölçü aleti kullanır, fazlası sıraya girer. Kullanılabilir aleti olmayan tür sayılmaz.',
-    yok: 'Kısıt yok: plan ölçü aletini sınırlamaz; kullanım yine izlenir ve aşım olursa "İzle: plan sınırlamadı" uyarısı yazılır.',
+    acik: 'Açık: kalibrasyonu geçerli alet sayısı kadar iş aynı anda ölçü aleti kullanır, fazlası sıraya girer. Kullanılabilir aleti olmayan tür sayılmaz.',
+    uyari: 'Uyarı: plan ölçü aletini sınırlamaz; kullanım izlenir ve aşım olursa "İzle: plan sınırlamadı" uyarısı yazılır.',
+    kapali: 'Kapalı: plan ölçü aletini hiç saymaz, uyarı da yazmaz. Rotada ve hazırlıkta bilgi olarak kalır.',
   },
 };
-export const kaynakSecimi = (t: { acik: Record<string, boolean> }, k: KaynakKisiti): KaynakSecimi => (t.acik[k] === false ? 'yok' : 'sert');
-// Genel açıp kapama listesinde kalanlar (aparat ve ölçü aleti kendi seçimiyle yazılır).
+const kipMi = (v: unknown): v is KaynakSecimi => v === 'acik' || v === 'uyari' || v === 'kapali';
+// Çalışmada geçerli kip (yukarıdaki okuma kuralı).
+export function kaynakKipi(c: Pick<PlanlamaCalismasi, 'kapali'> & { kisitKipi?: unknown }, k: KaynakKisiti): KaynakSecimi {
+  const kayit = typeof c.kisitKipi === 'object' && c.kisitKipi !== null ? (c.kisitKipi as Record<string, unknown>)[KIP_ANAHTARI[k]] : undefined;
+  return kipMi(kayit) ? kayit : c.kapali.includes(ESKI_BIT[k]) ? 'uyari' : 'acik';
+}
+export const kaynakSecimi = (t: { kip: Record<KaynakKisiti, KaynakSecimi> }, k: KaynakKisiti): KaynakSecimi => t.kip[k];
+// Kipi çalışmaya yazar: üç türün kipi birlikte saklanır ve eski aparat ve kalibrasyon bitleri listeden düşer. Değişen yoksa false.
+export function kaynakKipiYaz(c: PlanlamaCalismasi, kipler: Partial<Record<KaynakKisiti, KaynakSecimi>>): boolean {
+  const simdi = Object.fromEntries(KAYNAK_KISITLARI.map((k) => [k, kaynakKipi(c, k)])) as Record<KaynakKisiti, KaynakSecimi>;
+  const yeni = { ...simdi, ...kipler };
+  const eskiBitVar = c.kapali.includes('aparat') || c.kapali.includes('kalibrasyon');
+  const ayni = KAYNAK_KISITLARI.every((k) => simdi[k] === yeni[k]) && typeof c.kisitKipi === 'object' && c.kisitKipi !== null;
+  if (ayni && !eskiBitVar) return false;
+  c.kisitKipi = Object.fromEntries(KAYNAK_KISITLARI.map((k) => [KIP_ANAHTARI[k], yeni[k]])) as NonNullable<PlanlamaCalismasi['kisitKipi']>;
+  c.kapali = c.kapali.filter((x) => x !== 'aparat' && x !== 'kalibrasyon');
+  return true;
+}
+// Genel açıp kapama listesinde kalanlar (aparat, takım ve ölçü aleti kendi seçimiyle yazılır).
 export const GENEL_KISITLAR = PANEL_KISITLARI.filter((k) => !kaynakMi(k));
 
 export type AyarDegeri = string | number | boolean | null;
-export interface AyarTaslagi { alan: Record<string, AyarDegeri>; acik: Record<string, boolean> }
+export interface AyarTaslagi { alan: Record<string, AyarDegeri>; acik: Record<string, boolean>; kip: Record<KaynakKisiti, KaynakSecimi> }
 export const alanAnahtari = (a: AyarAlani): string => `${a.yer}.${a.k}`;
 const anahtar = alanAnahtari;
 
@@ -80,12 +109,14 @@ function deger(c: PlanlamaCalismasi, a: AyarAlani): AyarDegeri {
 export function ayarTaslagi(c: PlanlamaCalismasi): AyarTaslagi {
   return {
     alan: Object.fromEntries(AYAR_ALANLARI.map((a) => [anahtar(a), deger(c, a)])),
-    acik: Object.fromEntries(PANEL_KISITLARI.map((k) => [k, !c.kapali.includes(k)])),
+    acik: Object.fromEntries(GENEL_KISITLAR.map((k) => [k, !c.kapali.includes(k)])),
+    kip: Object.fromEntries(KAYNAK_KISITLARI.map((k) => [k, kaynakKipi(c, k)])) as Record<KaynakKisiti, KaynakSecimi>,
   };
 }
 export const alanDegeri = (t: AyarTaslagi, a: AyarAlani): AyarDegeri => t.alan[anahtar(a)] ?? null;
 export const alanYaz = (t: AyarTaslagi, a: AyarAlani, v: AyarDegeri): AyarTaslagi => ({ ...t, alan: { ...t.alan, [anahtar(a)]: v } });
 export const kisitYaz = (t: AyarTaslagi, k: string, acik: boolean): AyarTaslagi => ({ ...t, acik: { ...t.acik, [k]: acik } });
+export const kipYaz = (t: AyarTaslagi, k: KaynakKisiti, s: KaynakSecimi): AyarTaslagi => ({ ...t, kip: { ...t.kip, [k]: s } });
 
 // Sayı alanının girdisi: boş ya da sınır dışı hatadır.
 export function sayiOku(a: Extract<AyarAlani, { tur: 'sayi' }>, girdi: string): { deger: number } | { hata: string } {
@@ -105,11 +136,9 @@ export function farklar(c: PlanlamaCalismasi, t: AyarTaslagi): string[] {
   const simdi = ayarTaslagi(c);
   const alan = AYAR_ALANLARI.filter((a) => alanDegeri(simdi, a) !== alanDegeri(t, a))
     .map((a) => `${a.etiket}: ${alanYazisi(a, alanDegeri(simdi, a))} → ${alanYazisi(a, alanDegeri(t, a))}`);
-  const kisit = PANEL_KISITLARI.filter((k) => simdi.acik[k] !== t.acik[k])
-    .map((k) => (kaynakMi(k)
-      ? `${kaynakAdi(k)}: ${secimAdi(kaynakSecimi(simdi, k))} → ${secimAdi(kaynakSecimi(t, k))}`
-      : `${panelKisitAdi(k)}: ${t.acik[k] ? 'kapalı → açık' : 'açık → kapalı'}`));
-  return [...alan, ...kisit];
+  const kisit = GENEL_KISITLAR.filter((k) => simdi.acik[k] !== t.acik[k]).map((k) => `${panelKisitAdi(k)}: ${t.acik[k] ? 'kapalı → açık' : 'açık → kapalı'}`);
+  const kaynak = KAYNAK_KISITLARI.filter((k) => simdi.kip[k] !== t.kip[k]).map((k) => `${kaynakAdi(k)}: ${secimAdi(simdi.kip[k])} → ${secimAdi(t.kip[k])}`);
+  return [...alan, ...kisit, ...kaynak];
 }
 
 // Taslağı çalışmanın kopyasına yazar; değişen yoksa false.
@@ -119,10 +148,12 @@ export function ayarlariYaz(c: PlanlamaCalismasi, t: AyarTaslagi): boolean {
     const v = alanDegeri(t, a);
     if (v !== null && v !== deger(c, a)) degisti = parametreYaz(c, a.yer, a.k, v) || degisti;
   }
-  for (const k of PANEL_KISITLARI) {
+  for (const k of GENEL_KISITLAR) {
     const acik = t.acik[k];
     if (acik !== undefined && acik === c.kapali.includes(k)) { kisitDegistir(c, k, acik); degisti = true; }
   }
+  const degisenKip = Object.fromEntries(KAYNAK_KISITLARI.filter((k) => t.kip[k] !== kaynakKipi(c, k)).map((k) => [k, t.kip[k]]));
+  if (Object.keys(degisenKip).length > 0) degisti = kaynakKipiYaz(c, degisenKip) || degisti;
   return degisti;
 }
 

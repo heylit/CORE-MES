@@ -10,6 +10,10 @@ export type TezgahDurumu = (typeof TEZGAH_DURUMLARI)[number];
 export const TEZGAH_KARSILASTIRMA_ALANLARI = ['durum', 'program', 'sayac', 'isMiliHizi', 'isMiliYuku'] as const;
 export type TezgahKarsilastirmaAlani = (typeof TEZGAH_KARSILASTIRMA_ALANLARI)[number];
 
+// Tezgâh türü MTConnect'ten okunmaz; yönetici seçer (kart 3659-2). Çizim türe göre yapılır, tür yoksa çizilmez.
+export const TEZGAH_TURLERI = ['dikey-freze', 'torna', 'yatay-islem'] as const;
+export type TezgahTuru = (typeof TEZGAH_TURLERI)[number];
+
 export const TEZGAH_VARLIK_DURUMLARI = ['bekleniyor', 'okundu', 'yok', 'hata'] as const;
 export const TEZGAH_BAGLANTI_HALLERI = ['kapali', 'adres-yok', 'acik'] as const;
 
@@ -65,6 +69,8 @@ export const tezgahAyrintisiCevabi = z.object({
   okundu: zamanSemasi,
   eski: z.boolean(),
   aralikSaniye: z.number().int(),
+  // Yöneticinin seçtiği tür; seçilmediyse null.
+  tezgahTuru: z.enum(TEZGAH_TURLERI).nullable(),
   // Tezgahın yayınladığı bütün öğeler, geldiği adla.
   ogeler: z.array(z.object({
     tur: z.string(), ad: z.string().nullable(), bilesen: z.string().nullable(), deger: z.string().nullable(), zaman: z.string().nullable(),
@@ -96,3 +102,6 @@ export const tezgahAyrintisiCevabi = z.object({
   egriSonu: zamanSemasi,
 });
 export type TezgahAyrintisiCevabi = z.output<typeof tezgahAyrintisiCevabi>;
+
+export const tezgahTuruGovdesi = z.object({ tur: z.enum(TEZGAH_TURLERI).nullable() });
+export const tezgahTuruCevabi = z.object({ tezgahTuru: z.enum(TEZGAH_TURLERI).nullable() });

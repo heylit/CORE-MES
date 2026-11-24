@@ -8,7 +8,7 @@ import { calismaOku } from '../durum.ts';
 import { bekleyenListesi } from '../kayit.ts';
 import { degerlendirmeBekle } from '../siparis/degerlendirme.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
-import { AYAR_ALANLARI, PANEL_KISITLARI, alanDegeri, ayarTaslagi, type AyarTaslagi } from '../ayarlar/alanlar.ts';
+import { AYAR_ALANLARI, GENEL_KISITLAR, KAYNAK_KISITLARI, KIP_ANAHTARI, alanDegeri, ayarTaslagi, type AyarTaslagi } from '../ayarlar/alanlar.ts';
 
 // Kişinin taslağı (3282 1d-2b). Kokpit'te planlayanın kararları (taşı, plana al, ayar, emrin yönü) sunucudaki taslağa komut olarak yazılır;
 // ortak çalışma "Plana yaz"a kadar değişmez, başkasının yazması taslağı bozmaz. Komuttan sonra plan taslağın görünümünde yeniden dizilir
@@ -37,10 +37,12 @@ export function ayarKomutu(c: PlanlamaCalismasi, t: AyarTaslagi, ayrinti: string
     const v = alanDegeri(t, a);
     if (v !== null && v !== alanDegeri(simdi, a)) (a.yer === 'w' ? w : a.yer === 'param' ? param : ayarlar)[a.k] = v;
   }
-  const ac = PANEL_KISITLARI.filter((k) => t.acik[k] === true && simdi.acik[k] === false);
-  const kapat = PANEL_KISITLARI.filter((k) => t.acik[k] === false && simdi.acik[k] === true);
-  if (Object.keys(w).length + Object.keys(param).length + Object.keys(ayarlar).length + ac.length + kapat.length === 0) return null;
-  return { tur: 'ayar', ayar: { w, param, ...(Object.keys(ayarlar).length > 0 ? { ayarlar } : {}), ac, kapat }, ayrinti } as TaslakKomutu;
+  const ac = GENEL_KISITLAR.filter((k) => t.acik[k] === true && simdi.acik[k] === false);
+  const kapat = GENEL_KISITLAR.filter((k) => t.acik[k] === false && simdi.acik[k] === true);
+  // 3652: yalnız değişen türün kipi gider; sunucu eski aparat ve kalibrasyon bitlerini kipe çevirip listeden düşer.
+  const kisitKipi = Object.fromEntries(KAYNAK_KISITLARI.filter((k) => t.kip[k] !== simdi.kip[k]).map((k) => [KIP_ANAHTARI[k], t.kip[k]]));
+  if (Object.keys(w).length + Object.keys(param).length + Object.keys(ayarlar).length + ac.length + kapat.length + Object.keys(kisitKipi).length === 0) return null;
+  return { tur: 'ayar', ayar: { w, param, ...(Object.keys(ayarlar).length > 0 ? { ayarlar } : {}), ac, kapat, ...(Object.keys(kisitKipi).length > 0 ? { kisitKipi } : {}) }, ayrinti } as TaslakKomutu;
 }
 
 // Dizmenin işleri: görünümdeki bekleyenlerin işleri; biri bütün planı etkiliyorsa '*'. Bekleyen yoksa dizilecek bir şey yoktur.

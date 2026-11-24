@@ -38,7 +38,7 @@ const alan = (kimlik: string, tur: string, bilesen: string, bilesenAdi: string |
 });
 
 export const ORNEK_AYRINTI = (): TezgahAyrintisiCevabi => ({
-  cihazAdi: 'ORN-T01', durum: 'calisiyor', okundu: once(3), eski: false, aralikSaniye: 5,
+  cihazAdi: 'ORN-T01', durum: 'calisiyor', okundu: once(3), eski: false, aralikSaniye: 5, tezgahTuru: 'dikey-freze',
   ogeler: [],
   alanlar: [
     alan('avail', 'Availability', 'Device', null, null, 'EVENT', 'AVAILABLE'),
@@ -49,6 +49,9 @@ export const ORNEK_AYRINTI = (): TezgahAyrintisiCevabi => ({
     alan('feed', 'PathFeedrate', 'Controller', 'controller', 'MILLIMETER/SECOND', 'SAMPLE', '180', egri(150, 170, 180, 175, 180)),
     alan('xload', 'Load', 'Linear', 'X', 'PERCENT', 'SAMPLE', '11.5', egri(8, 12, 9, 14, 11.5)),
     alan('sspeed', 'SpindleSpeed', 'Rotary', 'S', 'REVOLUTION/MINUTE', 'SAMPLE', '2350', egri(2000, 2350, 2350, 2400, 2350)),
+    alan('xpos', 'Position', 'Linear', 'X', 'MILLIMETER', 'SAMPLE', '112.4', egri(80, 95, 120, 100, 112.4)),
+    alan('ypos', 'Position', 'Linear', 'Y', 'MILLIMETER', 'SAMPLE', '214.35', egri(214, 214.35, 214.35, 214, 214.35)),
+    alan('zpos', 'Position', 'Linear', 'Z', 'MILLIMETER', 'SAMPLE', '-38.1', egri(-10, -30, -45, -20, -38.1)),
     alan('sload', 'Load', 'Rotary', 'S', 'PERCENT', 'SAMPLE', '42', egri(30, 45, 40, 44, 42)),
   ],
   kosullar: [

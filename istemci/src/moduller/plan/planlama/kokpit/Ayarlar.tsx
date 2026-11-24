@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Simge } from '../../../../ortak/arayuz/index.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
-import { AYAR_ALANLARI, KAYNAK_KISITLARI, alanYaz, ayarTaslagi, farklar, kaynakAdi, kaynakSecimi, kisitYaz, planYonu, secimAdi } from '../ayarlar/alanlar.ts';
+import { AYAR_ALANLARI, KAYNAK_KISITLARI, alanYaz, ayarTaslagi, farklar, kaynakAdi, kaynakSecimi, kipYaz, planYonu, secimAdi } from '../ayarlar/alanlar.ts';
 import { KaynakSecimiGrubu } from '../ayarlar/KaynakSecimi.tsx';
 import { EtkiBolumu, useEtki } from './etki.tsx';
 import { ayarKomutu, type TaslakYazici } from './taslak.ts';
@@ -68,19 +68,19 @@ export function Ayarlar({ c, taslak, yazabilir, kapat, yon, etkiBekliyor }: Ayar
     </section>
   );
   return (
-    <aside className="tc-pyq-ayrinti tc-pyq-ayarlar" aria-label="Yön ve kaynak kısıtları">
+    <aside className="tc-pyq-ayrinti tc-pyq-ayarlar" aria-label="Aparat, takım ve ölçü aleti kısıtı">
       <header>
-        <div><b>Yön ve kaynak kısıtları</b><small>{oncekiYon === yon ? `Yön: ${YON_ADI[yon]}` : `${YON_ADI[oncekiYon]} → ${YON_ADI[yon]}`}</small>
+        <div><b>Aparat, takım ve ölçü aleti kısıtı</b><small>{oncekiYon === yon ? `Yön: ${YON_ADI[yon]}` : `${YON_ADI[oncekiYon]} → ${YON_ADI[yon]}`}</small>
           {KAYNAK_KISITLARI.filter((k) => kaynakSecimi(t, k) !== kaynakSecimi(oncekiKaynak, k)).map((k) => (
             <small key={k}>{kaynakAdi(k)}: {secimAdi(kaynakSecimi(oncekiKaynak, k))} → {secimAdi(kaynakSecimi(t, k))}</small>
           ))}</div>
         <button type="button" className="tc-pyq-simge-dugme" aria-label="Yönü kapat" onClick={kapat}><Simge ad="x" boyut="k" /></button>
       </header>
-      <section className="tc-pyq-ayar-kaynak" aria-label="Aparat ve ölçü aleti">
+      <section className="tc-pyq-ayar-kaynak" aria-label="Aparat, takım ve ölçü aleti">
         {KAYNAK_KISITLARI.map((k) => (
           <div key={k} className="tc-pyq-ayar-alan">
             <b>{kaynakAdi(k)}</b>
-            <KaynakSecimiGrubu kimlik={`pyq-${k}`} kisit={k} deger={kaynakSecimi(t, k)} kilitli={kilitli} sec={(s) => { setT(kisitYaz(t, k, s === 'sert')); }} />
+            <KaynakSecimiGrubu kimlik={`pyq-${k}`} kisit={k} deger={kaynakSecimi(t, k)} kilitli={kilitli} sec={(s) => { setT(kipYaz(t, k, s)); }} />
           </div>
         ))}
       </section>

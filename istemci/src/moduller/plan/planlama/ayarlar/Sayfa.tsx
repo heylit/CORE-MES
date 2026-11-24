@@ -8,7 +8,7 @@ import { calismaOku } from '../durum.ts';
 import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import {
-  GENEL_KISITLAR, KAYNAK_KISITLARI, alanAnahtari, alanDegeri, alanYaz, ayarTaslagi, farklar, kaynakAdi, kaynakSecimi, kisitYaz, panelKisitAdi, sayiOku, type AyarAlani, type AyarTaslagi,
+  GENEL_KISITLAR, KAYNAK_KISITLARI, alanAnahtari, alanDegeri, alanYaz, ayarTaslagi, farklar, kaynakAdi, kaynakSecimi, kipYaz, kisitYaz, panelKisitAdi, sayiOku, type AyarAlani, type AyarTaslagi,
 } from './alanlar.ts';
 import {
   BOLUMLER, BOLUM_KAPILARI, acikKisitOzeti, bedelKontrolSatirlari, bedelSatirlari, bolumAlanlari, bolumBasligi, bolumFarklari, bolumOku, calismaSatirlari, motorSatirlari,
@@ -272,13 +272,14 @@ function CalismaFormu({ bolum, c, taslak, yazabilir, satirlar }: {
       <div className="tc-pya-alanlar">{bolumAlanlari(bolum).map(alan)}</div>
       {bolum === 'kisitlar' && (
         <>
-          <h4>Aparat ve ölçü aleti</h4>
+          <h4>Aparat, takım ve ölçü aleti</h4>
+          <p className="tc-pya-kaynak-not">Eskiden "kapalı" işaretli aparat ve ölçü aleti Uyarı olarak okunur: plan sınırlamaz, kullanım izlenir. Kapalı yeni seçimdir: plan hiç saymaz.</p>
           <div className="tc-pya-kaynak-satir">
             {KAYNAK_KISITLARI.map((k) => (
               <div key={k} className="tc-pya-kisit tc-pya-kaynak-kisit">
                 <b>{kaynakAdi(k)}</b>
                 {taslaktaki.get(`kisit.${k}`) != null && <small className="tc-pya-rozet">taslakta {taslaktaki.get(`kisit.${k}`)}</small>}
-                <KaynakSecimiGrubu kimlik={`pya-${k}`} kisit={k} deger={kaynakSecimi(t, k)} kilitli={!yazabilir || kilitli} sec={(s) => { setT(kisitYaz(t, k, s === 'sert')); }} />
+                <KaynakSecimiGrubu kimlik={`pya-${k}`} kisit={k} deger={kaynakSecimi(t, k)} kilitli={!yazabilir || kilitli} sec={(s) => { setT(kipYaz(t, k, s)); }} />
               </div>
             ))}
           </div>

@@ -42,7 +42,7 @@ function sunucuKur(kullanici: Kullanici) {
     if (yol === '/projeler/2') return json(200, proje(2, 'PRJ.02'));
     if (yol === '/projeler/9') return json(200, proje(9, 'PRJ.09', 'tamamlandi'));
     if (/^\/projeler\/\d+\/yonetim$/.test(yol)) return json(200, YONETIM);
-    if (yol.startsWith('/hazirlik-matrisi')) return json(200, { proje: { id: 1, kod: 'PRJ.01', ad: 'Deneme', durum: 'aktif' }, dagitir: false, maddeler: [], emirler: [], gorevler: [] });
+    if (yol.startsWith('/hazirlik-matrisi')) return json(200, { proje: { id: 1, kod: 'PRJ.01', ad: 'Deneme', durum: 'aktif' }, dagitir: false, gerekmezYazar: false, maddeler: [], emirler: [], gorevler: [], gerekmezler: [] });
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
   }));
   return yollar;

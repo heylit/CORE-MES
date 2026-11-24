@@ -2,8 +2,8 @@ import { useRef, type KeyboardEvent } from 'react';
 import { KAYNAK_ETKISI, KAYNAK_SECIMLERI, kaynakAdi, type KaynakKisiti, type KaynakSecimi } from './alanlar.ts';
 import './kaynak-secimi.css';
 
-// Aparat ve ölçü aleti kısıtının iki seçimi (3650): Planlama ayarları, Kokpit paneli ve Veri > Kısıtlar aynı bileşeni kullanır.
-// Seçim yalnız değeri bildirir; yazma ve etki akışı çağıranındır. Sert kısıt çalışmada kısıt "açık", Kısıt yok "kapalı" demektir.
+// Aparat, takım ve ölçü aleti kısıtının üç seçimi: Açık | Uyarı | Kapalı (3650, 3652): Planlama ayarları, Kokpit paneli ve Veri > Kısıtlar aynı bileşeni kullanır.
+// Seçim yalnız değeri bildirir; yazma ve etki akışı çağıranındır. Seçim çalışmanın kisitKipi alanına yazılır (alanlar.ts).
 export function KaynakSecimiGrubu({ kisit, deger, sec, kilitli = false, etki = true, kimlik }: {
   kisit: KaynakKisiti; deger: KaynakSecimi; sec: (s: KaynakSecimi) => void; kilitli?: boolean; etki?: boolean; kimlik: string;
 }) {

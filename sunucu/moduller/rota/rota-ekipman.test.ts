@@ -13,7 +13,7 @@ import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { adimliEmirAyrintisi } from '../uretim-emirleri/disari.ts';
 import { malzemeStokDurumlari } from '../stok/disari.ts';
-import { isEmriAletIstekleri, isEmriAparatHazirliklari, isEmriOlcuAletiHazirliklari } from './disari.ts';
+import { isEmriAletIstekleri, isEmriAparatHazirliklari, isEmriKaynakIstekleri, isEmriOlcuAletiHazirliklari } from './disari.ts';
 import { isEmriEkipmanlari } from './sorgular.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -202,6 +202,25 @@ describe('rota adım ekipmanı (2893-4 a, gerçek PostgreSQL)', () => {
     const ie = emir.isEmirleri.find((i) => i.opNo === 10)!.id;
     const liste = await vt().tx((db) => isEmriEkipmanlari(db, [ie]));
     assert.deepEqual(liste.map((x) => [x.malzemeId, x.adet, x.asama]), [[aparat, 1, 'ayar_isleme'], [takim, 2, 'isleme'], [null, 1, 'ayar_isleme']]);
+  });
+
+  test('3652: takım türü aparatla aynı alanları taşır, iş emrine kopyalanır, plan isteği türünü söyler; kart olmadan ve aynı kartla iki kez reddedilir', async () => {
+    const { id, surum } = await taslak();
+    const takim = await kartAc('hammadde');
+    assert.equal((await yaz(id, surum, 10, [{ tur: 'takim', malzemeId: 0, aciklama: null }])).statusCode, 400, 'kart yok');
+    assert.equal((await yaz(id, surum, 10, [{ tur: 'takim', aciklama: null }])).statusCode, 400, 'malzemeId eksik');
+    assert.equal((await yaz(id, surum, 10, [{ tur: 'takim', malzemeId: takim, aciklama: null }, { tur: 'takim', malzemeId: takim, aciklama: null }])).statusCode, 400, 'aynı kart iki kez');
+    const y = await yaz(id, surum, 10, [{ tur: 'aparat', malzemeId: aparat, aciklama: null }, { tur: 'takim', malzemeId: takim, aciklama: null, adet: 3, asama: 'isleme' }]);
+    assert.equal(y.statusCode, 200, y.body);
+    const r = await oku(id);
+    assert.deepEqual(r.adimlar.find((a) => a.opNo === 10)!.ekipman.map((x) => [x.tur, x.malzeme?.id ?? null, x.adet, x.asama]), [['aparat', aparat, 1, 'ayar_isleme'], ['takim', takim, 3, 'isleme']]);
+    const kullanim = (await tamam<{ kullanim: { malzemeId: number; adim: number }[] }>(c.planlama, 'GET', '/rota/aparat-kullanimi')).kullanim;
+    assert.equal(kullanim.find((k) => k.malzemeId === takim)?.adim, 1);
+    await yururlugeAl(id, y.json<KomutCevabi>().surum);
+    const { uretimEmriId } = await emirAc(id);
+    const ie = (await vt().tx((db) => adimliEmirAyrintisi(db, uretimEmriId))).isEmirleri.find((i) => i.opNo === 10)!.id;
+    const istekler = (await vt().tx((db) => isEmriKaynakIstekleri(db, [ie]))).get(ie);
+    assert.deepEqual(istekler?.map((x) => [x.malzemeId, x.adet, x.tur]), [[aparat, 1, 'aparat'], [takim, 3, 'takim']]);
   });
 
   test('yürürlükteki revizyona yazılmaz; emir açılınca liste iş emrine kopyalanır, hazırlık maddeleri eksik görünür; bölünen kol kopyalar', async () => {

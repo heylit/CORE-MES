@@ -101,11 +101,19 @@ export async function hazirlikGorevleriAc(
   const dayanak = { baslangic: v.tarih.baslangic ?? proje.baslangic, bitis: v.tarih.bitis ?? proje.bitis };
   const plan: HazirlikPlani[] = [];
   const denenen = new Set<string>();
+  // 3642: "Bu emirde gerekmez" işaretli (emir, madde) görev doğurmaz; denemede de sayılmaz.
+  const gerekmez = new Set((await sorgular.hazirlikGerekmezleri(db, v.hedefler.map((h) => h.emriId))).map((x) => `${String(x.emri_id)}:${x.madde}`));
   for (const k of kalemler) {
     const madde = v.maddeler.get(k.hazirlikMaddesi);
     if (madde === undefined) continue;
     const t = sablonTarihleri({ dayanak: k.dayanak, gun: k.gun, sureGun: k.sureGun }, dayanak, bugun);
     for (const h of v.hedefler) {
+      if (gerekmez.has(`${String(h.emriId)}:${k.hazirlikMaddesi}`)) continue;
+      // Yazarken işaretle aynı kilitle sıralanır: eşzamanlı işaret varsa o işlemin bitmesi beklenir ve işaret yeniden okunur (Risk N1).
+      if (!deneme) {
+        await sorgular.hazirlikGerekmezKilitle(db, h.emriId, k.hazirlikMaddesi);
+        if ((await sorgular.hazirlikGerekmezleri(db, [h.emriId])).some((x) => x.madde === k.hazirlikMaddesi)) continue;
+      }
       const yerler = await acilacakYerler(db, h, madde, k.hazirlikMaddesi, (k.adimlar?.length ?? 0) > 0, k);
       for (const y of yerler) {
         const anahtar = `${String(h.emriId)}:${String(y.isEmriId ?? 0)}:${k.hazirlikMaddesi}`;

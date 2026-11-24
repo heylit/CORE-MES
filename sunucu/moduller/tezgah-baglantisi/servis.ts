@@ -1,6 +1,7 @@
 import type { Db, Veritabani } from '#cekirdek/db.ts';
 import { bulunamadi } from '#cekirdek/hata.ts';
-import type { TezgahAyrintisiCevabi, TezgahBaglantisiDurumCevabi } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
+import { TEZGAH_TURLERI } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
+import type { TezgahAyrintisiCevabi, TezgahBaglantisiDurumCevabi, TezgahTuru } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { smartesMakineDegerleri } from '../smartes/disari.ts';
 import type { TezgahIstemcisi } from './istemci.ts';
@@ -246,6 +247,18 @@ const EGRI_PENCERESI_MS = 3_600_000;
 const BOSLUK_PENCERESI_MS = GECMIS_SAKLAMA_MS;
 const HALLER = new Set(['Normal', 'Warning', 'Fault', 'Unavailable']);
 
+const tezgahTuruOku = async (db: Db, cihazAdi: string): Promise<TezgahTuru | null> => {
+  const tur = await s.turGetir(db, cihazAdi);
+  return TEZGAH_TURLERI.find((x) => x === tur) ?? null;
+};
+
+// Tür yalnız ekranın çizimini seçer; okunan değerlere ve başka hiçbir tabloya dokunmaz. Okunmamış tezgâha tür atanmaz.
+export async function turAta(db: Db, cihazAdi: string, tur: TezgahTuru | null): Promise<{ tezgahTuru: TezgahTuru | null }> {
+  if (await s.okumaGetir(db, cihazAdi) === null) throw bulunamadi('Tezgâh bulunamadı.');
+  await s.turYaz(db, cihazAdi, tur);
+  return { tezgahTuru: tur };
+}
+
 export async function ayrinti(db: Db, cihazAdi: string, simdi: Date, bellek: TurBellegi = yeniTurBellegi()): Promise<TezgahAyrintisiCevabi> {
   const t = await s.okumaGetir(db, cihazAdi);
   if (t === null) throw bulunamadi('Tezgâh bulunamadı.');
@@ -258,7 +271,7 @@ export async function ayrinti(db: Db, cihazAdi: string, simdi: Date, bellek: Tur
     .filter((k) => HALLER.has(k.hal))
     .map((k) => ({ ...k, hal: k.hal as 'Normal' | 'Warning' | 'Fault' | 'Unavailable', tur: tanimlar.get(k.kimlik)?.tur ?? null }));
   return {
-    cihazAdi: t.cihazAdi, durum: t.durum, okundu: t.okundu, eski: eskiMi(t.okundu, simdi, aralik), aralikSaniye: aralik,
+    cihazAdi: t.cihazAdi, durum: t.durum, okundu: t.okundu, eski: eskiMi(t.okundu, simdi, aralik), aralikSaniye: aralik, tezgahTuru: await tezgahTuruOku(db, cihazAdi),
     ogeler: t.ogeler.map((o) => ({ tur: o.kosul === null ? o.tur : `${o.tur} (${o.kosul})`, ad: o.ad, bilesen: o.bilesen, deger: o.deger, zaman: o.zaman })),
     alanlar: t.ogeler.filter((o) => o.kosul === null).map((o) => {
       const d = o.kimlik === null ? undefined : tanimlar.get(o.kimlik);

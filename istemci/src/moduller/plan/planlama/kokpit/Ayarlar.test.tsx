@@ -23,7 +23,7 @@ describe('Kokpit yön paneli (3304 a)', () => {
     const bekliyor = vi.fn();
     const { t, yazilan, kapat } = kur(ornekCalisma(), true, 'geri', bekliyor);
     // Yön seçiminden açılan panel yalnız yönün etkisini taşır; öteki ayarlar çizilmez.
-    const panel = screen.getByRole('complementary', { name: 'Yön ve kaynak kısıtları' });
+    const panel = screen.getByRole('complementary', { name: 'Aparat, takım ve ölçü aleti kısıtı' });
     expect(panel.textContent).toContain('İleriye → Teslimden geriye');
     expect(screen.queryByLabelText('Planlama yönü')).toBeNull();
     const etki = await screen.findByRole('region', { name: 'Ayarın etkisi' });
@@ -39,22 +39,22 @@ describe('Kokpit yön paneli (3304 a)', () => {
     await waitFor(() => { expect(kapat).toHaveBeenCalled(); });
   });
 
-  it('aparat ve ölçü aleti seçimi planı kendiliğinden değiştirmez: Etkisini gör ile etki açılır, Vazgeç geri alır (3650)', async () => {
+  it('aparat, takım ve ölçü aleti seçimi planı kendiliğinden değiştirmez: Etkisini gör ile etki açılır, Vazgeç geri alır (3650)', async () => {
     const { t, yazilan, kapat } = kur(ornekCalisma(), true, 'ileri');
     expect(yazilan).toEqual([]);
     const olcu = within(screen.getByRole('radiogroup', { name: 'Ölçü aleti' }));
-    expect(olcu.getByRole('radio', { name: 'Sert kısıt' }).getAttribute('aria-checked')).toBe('true');
-    fireEvent.click(olcu.getByRole('radio', { name: 'Kısıt yok' }));
+    expect(olcu.getByRole('radio', { name: 'Açık' }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(olcu.getByRole('radio', { name: 'Kapalı' }));
     expect(yazilan).toEqual([]);
-    expect(screen.getAllByText('Ölçü aleti: Sert kısıt → Kısıt yok')).toHaveLength(2);
+    expect(screen.getAllByText('Ölçü aleti: Açık → Kapalı')).toHaveLength(2);
     // Başlık özeti de kaynak değişimini taşır; yön değişmediği için "Yön: İleriye" yazar.
-    const baslik = screen.getByRole('complementary', { name: 'Yön ve kaynak kısıtları' }).querySelector('header')!;
+    const baslik = screen.getByRole('complementary', { name: 'Aparat, takım ve ölçü aleti kısıtı' }).querySelector('header')!;
     expect(baslik.textContent).toContain('Yön: İleriye');
-    expect(baslik.textContent).toContain('Ölçü aleti: Sert kısıt → Kısıt yok');
+    expect(baslik.textContent).toContain('Ölçü aleti: Açık → Kapalı');
     fireEvent.click(screen.getByRole('button', { name: /Etkisini gör/ }));
     const etki = await screen.findByRole('region', { name: 'Ayarın etkisi' });
     expect(yazilan).toHaveLength(1);
-    expect(yazilan[0]).toMatchObject({ tur: 'ayar', ayar: { kapat: ['kalibrasyon'] } });
+    expect(yazilan[0]).toMatchObject({ tur: 'ayar', ayar: { kisitKipi: { olcu: 'kapali' } } });
     fireEvent.click(within(etki).getByRole('button', { name: 'Vazgeç' }));
     await waitFor(() => { expect(t.geriAl).toHaveBeenCalledWith(false, false); });
     await waitFor(() => { expect(kapat).toHaveBeenCalled(); });
@@ -62,7 +62,7 @@ describe('Kokpit yön paneli (3304 a)', () => {
 
   it('yazamayan kişide aparat ve ölçü aleti seçimi pasiftir (3650)', () => {
     kur(ornekCalisma(), false, 'ileri');
-    expect(within(screen.getByRole('radiogroup', { name: 'Aparat ve özel takım' })).getAllByRole('radio').every((r) => (r as HTMLButtonElement).disabled)).toBe(true);
+    expect(within(screen.getByRole('radiogroup', { name: 'Takım' })).getAllByRole('radio').every((r) => (r as HTMLButtonElement).disabled)).toBe(true);
   });
 
   it('Uygula dizmeyi taslağa yazar ve paneli kapatır', async () => {
@@ -78,7 +78,7 @@ describe('Kokpit yön paneli (3304 a)', () => {
     const ciz = (x: PlanlamaCalismasi) => <MemoryRouter><Ayarlar c={x} taslak={t} yazabilir kapat={() => {}} yon="geri" /></MemoryRouter>;
     const { rerender } = render(ciz(c));
     rerender(ciz({ ...c, w: { ...c.w, yon: 'geri' } }));
-    expect(screen.getByRole('complementary', { name: 'Yön ve kaynak kısıtları' }).textContent).toContain('İleriye → Teslimden geriye');
+    expect(screen.getByRole('complementary', { name: 'Aparat, takım ve ölçü aleti kısıtı' }).textContent).toContain('İleriye → Teslimden geriye');
   });
 
   it('etki beklerken panel kapanırsa (kaldırılırsa) bekleme bildirimi düşer: Canlıya al kilitli kalmaz', async () => {

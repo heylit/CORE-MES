@@ -113,8 +113,8 @@ describe('Planlama ayarları sayfası (3561)', () => {
     expect(a.t.dizmeyiYaz).not.toHaveBeenCalled();
     cleanup();
     const b = kur(PLAN_YAZAR, 'kisitlar', { ...ornekCalisma(), plan: null });
-    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Ölçü aleti' })).getByRole('radio', { name: 'Kısıt yok' }));
-    expect(screen.getByText('Ölçü aleti: Sert kısıt → Kısıt yok')).toBeTruthy();
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Ölçü aleti' })).getByRole('radio', { name: 'Kapalı' }));
+    expect(screen.getByText('Ölçü aleti: Açık → Kapalı')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => { expect(b.yazilan).toHaveLength(1); });
     expect(b.t.degerlendir).not.toHaveBeenCalled();
@@ -128,20 +128,24 @@ describe('Planlama ayarları sayfası (3561)', () => {
     expect(screen.queryByRole('button', { name: /Etkisini gör/ })).toBeNull();
   });
 
-  it('kısıtlar bölümü: 17 kısıt açılıp kapanır, aparat ve ölçü aleti Sert kısıt | Kısıt yok seçer (3650); yazamayan değeri yazıyla görür', () => {
+  it('kısıtlar bölümü: 17 kısıt açılıp kapanır, aparat, takım ve ölçü aleti Açık | Uyarı | Kapalı seçer (3650, 3652); yazamayan değeri yazıyla görür', () => {
     kur(PLAN_YAZAR, 'kisitlar');
     expect(screen.getAllByRole('checkbox')).toHaveLength(17);
-    for (const ad of ['Aparat ve özel takım', 'Ölçü aleti']) {
+    for (const ad of ['Aparat', 'Takım', 'Ölçü aleti']) {
       const g = screen.getByRole('radiogroup', { name: ad });
-      expect(within(g).getByRole('radio', { name: 'Sert kısıt' }).getAttribute('aria-checked')).toBe('true');
+      expect(within(g).getByRole('radio', { name: 'Açık' }).getAttribute('aria-checked')).toBe('true');
+      expect(within(g).getAllByRole('radio').map((r) => r.textContent)).toEqual(['Açık', 'Uyarı', 'Kapalı']);
       expect(within(g).getAllByRole('radio').filter((r) => r.getAttribute('tabindex') === '0')).toHaveLength(1);
     }
     // Ok tuşu seçimi değiştirir ve odağı taşır.
     const olcu = within(screen.getByRole('radiogroup', { name: 'Ölçü aleti' }));
-    fireEvent.keyDown(olcu.getByRole('radio', { name: 'Sert kısıt' }), { key: 'ArrowRight' });
-    expect(screen.getByText('Ölçü aleti: Sert kısıt → Kısıt yok')).toBeTruthy();
-    expect(olcu.getByRole('radio', { name: 'Kısıt yok' }).getAttribute('aria-checked')).toBe('true');
-    expect(screen.getByText(/Kısıt yok: plan ölçü aletini sınırlamaz; kullanım yine izlenir/)).toBeTruthy();
+    fireEvent.keyDown(olcu.getByRole('radio', { name: 'Açık' }), { key: 'ArrowRight' });
+    expect(screen.getByText('Ölçü aleti: Açık → Uyarı')).toBeTruthy();
+    expect(olcu.getByRole('radio', { name: 'Uyarı' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByText(/Uyarı: plan ölçü aletini sınırlamaz; kullanım izlenir/)).toBeTruthy();
+    fireEvent.click(olcu.getByRole('radio', { name: 'Kapalı' }));
+    expect(screen.getByText('Ölçü aleti: Açık → Kapalı')).toBeTruthy();
+    expect(screen.getByText(/Kapalı: plan ölçü aletini hiç saymaz, uyarı da yazmaz/)).toBeTruthy();
     expect(screen.getAllByRole('link', { name: 'Kısıtlar' })[0]).toBeTruthy();
     cleanup();
     kur(['plan.planlama-oku'], 'kisitlar', ornekCalisma(), false);

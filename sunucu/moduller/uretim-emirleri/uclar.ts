@@ -6,7 +6,7 @@ import {
   emirlerSorgusu, emirTopluGuncelleCevabi, emirTopluGuncelleGovdesi,
   adimKaynagiGovdesi, uretimYeriGovdesi, fasonFirmalariCevabi, adimliEmirCevabi, adimliIptalGovdesi, iptalOnizlemeCevabi, adimliListeCevabi, adimliListeSorgusu, adimliOzetCevabi, fasonGidisGovdesi, siradakiFasonCevabi,
   asimlarCevabi, emirTuruGovdesi, teslimBaglaGovdesi, terminOnerisiCevabi, terminOnerileriSorgusu, terminOnerileriCevabi, terminKarariGovdesi, fasonHareketiCevabi, isEmriParametresi, oncelikGovdesi, ozetCevabi, partiBirlestirGovdesi, partiBolCevabi, partiBolGovdesi, planaAlGovdesi,
-  birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMaddeleriCevabi, hazirlikMaddeParametresi, hazirlikMaddesiDegistirGovdesi, hazirlikMaddesiEkleGovdesi, hazirlikProjesiCevabi, hazirlikProjesiGovdesi, hazirlikProjesiSecenekleri, hazirlikMatrisiSorgusu, hazirlikMatrisiCevabi, hazirlikDagitGovdesi, hazirlikDagitCevabi, hazirlikMuafiyetiGovdesi, hazirlikOzetiCevabi, hazirlikOzetiSorgusu, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, makineEkleGovdesi, adimPaylariCevabi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
+  birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMaddeleriCevabi, hazirlikMaddeParametresi, hazirlikMaddesiDegistirGovdesi, hazirlikMaddesiEkleGovdesi, hazirlikProjesiCevabi, hazirlikProjesiGovdesi, hazirlikProjesiSecenekleri, hazirlikMatrisiSorgusu, hazirlikMatrisiCevabi, hazirlikDagitGovdesi, hazirlikDagitCevabi, hazirlikMuafiyetiGovdesi, hazirlikGerekmezCevabi, hazirlikGerekmezGovdesi, hazirlikGerekmezKaldirGovdesi, hazirlikOzetiCevabi, hazirlikOzetiSorgusu, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, makineEkleGovdesi, adimPaylariCevabi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
   hataliCevabi, hataliGovdesi, hataliListeCevabi, hataliListeSorgusu, reworkAdimiGovdesi,
   disIslemEmriAcGovdesi, disIslemEmriCevabi, disIslemEmriIptalGovdesi, disIslemEmriParametresi,
   adimDurumuCevabi, adimDurumuTerminalCevabi, adimMatrisiCevabi, adimMatrisiSorgusu, statuTopluCevabi, statuTopluGovdesi, elleStatuGovdesi, elleStatuKaldirGovdesi, hazirlikElleEksikGovdesi, hazirlikOnayiGovdesi, hazirlikOnayiKaldirGovdesi, listeEkleGovdesi, listeKaldirGovdesi, listeFotografiParametresi, listeIsaretleGovdesi,
@@ -28,6 +28,7 @@ import { altlariylaIptal, iptalOnizleme } from './zincir-iptal.ts';
 import { dieAc, dieIptal, dieOku } from './dis-islem-emri.ts';
 import { hataliKaydet, hataliKayitlari } from './hatali-parca.ts';
 import { hazirlik, hazirliklar, muafiyetVer } from './hazirlik.ts';
+import { GEREKMEZ_YETKISI, gerekmezIsaretle, gerekmezKaldir } from './hazirlik-gerekmez.ts';
 import { hazirlikMaddeleri, hazirlikMaddesiDegistir, ozelHazirlikMaddesiEkle } from './hazirlik-maddeleri.ts';
 import { hazirlikDagit, hazirlikMatrisi, hazirlikProjesiKur, hazirlikProjesiSecenekleri as hazirlikProjesiSecenekleriAl } from './hazirlik-gorevi.ts';
 import { emirKapat, kapanis, kapanisGeriAc, kapanislar, kapanisMuafTut, kapanisOnayla, kapanisReddet } from './kapanis.ts';
@@ -324,6 +325,27 @@ const adimliUclar = [
     govde: hazirlikMuafiyetiGovdesi,
     cevap: hazirlikCevabi,
     isle: ({ db, kullanici, parametre, govde }) => muafiyetVer(db, kullanici, parametre.id, govde),
+  }),
+  // 3642: emirde gerekçeli "bu emirde gerekmez" işareti ve kaldırma; yetki tek yerden (hazirlik-gerekmez.ts).
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/hazirlik-gerekmez',
+    yetki: GEREKMEZ_YETKISI,
+    parametre: emirParametresi,
+    govde: hazirlikGerekmezGovdesi,
+    cevap: hazirlikGerekmezCevabi,
+    tekrarKorumali: true,
+    isle: ({ db, kullanici, parametre, govde }) => gerekmezIsaretle(db, kullanici, parametre.id, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/hazirlik-gerekmez-kaldir',
+    yetki: GEREKMEZ_YETKISI,
+    parametre: emirParametresi,
+    govde: hazirlikGerekmezKaldirGovdesi,
+    cevap: hazirlikGerekmezCevabi,
+    tekrarKorumali: true,
+    isle: ({ db, kullanici, parametre, govde }) => gerekmezKaldir(db, kullanici, parametre.id, govde),
   }),
   // 3396 a: hazırlık maddesi listesi. Okuma hazırlık ekranı olan işlemlerle (ad ve sıra, kayıt bilgisi yok); yazma
   // yalnız hazirlik-ayar. Durduran maddenin kapatılmasını hem kural hem kısıt reddeder.

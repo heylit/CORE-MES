@@ -71,6 +71,20 @@ describe('3282 1d: ayar ve yön komutu', () => {
     assert.ok(!('hata' in ayni) && !ayni.degisti);
   });
 
+  test('3652: kisitKipi yazılınca eski aparat ve kalibrasyon bitleri kipe çevrilip listeden düşer; gelmeyen tür eski bitle Uyarı, bitsiz Açık kalır; geri yaması önceki değeri taşır', () => {
+    const r = ayarUygula(calisma({ kapali: ['personel', 'aparat'] }), { w: {}, param: {}, ac: [], kapat: [], kisitKipi: { olcu: 'kapali' } }, '', k);
+    assert.ok(!('hata' in r) && r.degisti);
+    const d = r.deger as { kapali: string[]; kisitKipi: Record<string, string>; bekleyen: { geri: unknown[] }[] };
+    assert.deepEqual(d.kapali, ['personel']);
+    assert.deepEqual({ ...d.kisitKipi }, { aparat: 'uyari', takim: 'uyari', olcu: 'kapali' });
+    assert.deepEqual(d.bekleyen[0]!.geri, [{ yol: ['kisitKipi'] }, { yol: ['kapali'], once: ['personel', 'aparat'] }]);
+    const ikinci = ayarUygula(r.deger, { w: {}, param: {}, ac: [], kapat: [], kisitKipi: { takim: 'acik' } }, '', k);
+    assert.ok(!('hata' in ikinci) && ikinci.degisti);
+    assert.deepEqual({ ...(ikinci.deger as { kisitKipi: Record<string, string> }).kisitKipi }, { aparat: 'uyari', takim: 'acik', olcu: 'kapali' });
+    const ayni = ayarUygula(ikinci.deger, { w: {}, param: {}, ac: [], kapat: [], kisitKipi: { takim: 'acik' } }, '', k);
+    assert.ok(!('hata' in ayni) && !ayni.degisti);
+  });
+
   test('3561 D3: Veri sayfasından doğrudan değişen başka alan ve kısıt, eski taslağın ayar komutu oynatılınca geri dönmez; başkası ayarı değiştirdiyse Uygula çatışma sorar', () => {
     // Taslak yalnız dondurmayı 8 yapar. Taslak açıldıktan sonra ortak çalışmada başkası mat'ı değiştirdi ve personel kısıtını kapattı.
     const dogrudan = calisma({ w: { dondurma: 4, mat: 'sert' }, kapali: ['personel'] });

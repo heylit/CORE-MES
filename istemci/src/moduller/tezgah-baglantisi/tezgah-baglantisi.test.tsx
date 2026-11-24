@@ -99,7 +99,7 @@ describe('Tezgâh bağlantısı (deneme)', () => {
     expect(within(takimlar).getByText(/başlangıç 120 dk · uyarı 10 dk/)).toBeTruthy();
     expect(within(takimlar).queryByText(/sınır/i)).toBeNull();
     expect(within(takimlar).getByText('Ömür verisi yok')).toBeTruthy();
-    expect(screen.getByRole('img', { name: 'Son bir saatte 1 veri boşluğu' })).toBeTruthy();
+    expect(screen.getAllByRole('img', { name: 'Son bir saatte 1 veri boşluğu' }).length).toBeGreaterThanOrEqual(1);
     const bosluklar = screen.getByRole('list', { name: 'Veri boşlukları' });
     expect(within(bosluklar).getByText(/Servis tamponundan düştü/)).toBeTruthy();
     expect(screen.getByText(/Son bir saatte 1, son 24 saatte 2 veri boşluğu/)).toBeTruthy();

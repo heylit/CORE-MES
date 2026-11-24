@@ -251,6 +251,28 @@ describe('ekranın şimdisi (B-2500-3, 2506 a)', () => {
     expect(kisitlar(['kalibrasyon'])).toEqual(['sert', 'izle']);
     expect(kisitlar(['aparat', 'kalibrasyon'])).toEqual(['izle', 'izle']);
   });
+
+  it('kisitKipi: Kapalı tür kaynağını ve isteklerini düşürür, Uyarı izle yapar, eski aparat biti aparatı ve takımı Uyarı okur (3652)', () => {
+    const { c } = kur();
+    const x = structuredClone(c);
+    Object.assign(x.D, {
+      ikincilKaynaklar: [
+        { id: '1', kart: '900', kod: 'AP-ORN-12', adet: 1, tur: 'aparat', kisit: 'sert' },
+        { id: '2', kart: '950', kod: 'TK-ORN-03', adet: 1, tur: 'ozel_takim', kisit: 'sert' },
+        { id: '3', kart: 'olcu-5', kod: 'ORN-Mikrometre', adet: 2, tur: 'olcu_aleti', kisit: 'sert' },
+      ],
+      opKaynak: { 'S1.10': [{ kart: '900', adet: 1, asama: 'isleme', tur: 'aparat' }, { kart: '950', adet: 1, asama: 'isleme', tur: 'takim' }, { kart: 'olcu-5', adet: 1, asama: 'isleme', tur: 'olcu' }], 'S2.10': [{ kart: '950', adet: 1, asama: 'isleme' }] },
+    });
+    const d = (kapali: string[], kisitKipi?: Record<string, string>) => girdiKur({ ...x, kapali, ...(kisitKipi ? { kisitKipi } : {}) } as typeof x).D as unknown as {
+      ikincilKaynaklar: { id: string; kisit: string }[]; opKaynak: Record<string, { kart: string }[]>;
+    };
+    expect(d([]).ikincilKaynaklar.map((k) => k.kisit)).toEqual(['sert', 'sert', 'sert']);
+    const kapali = d([], { takim: 'kapali', olcu: 'uyari' });
+    expect(kapali.ikincilKaynaklar.map((k) => [k.id, k.kisit])).toEqual([['1', 'sert'], ['3', 'izle']]);
+    expect(Object.fromEntries(Object.entries(kapali.opKaynak).map(([k, l]) => [k, l.map((i) => i.kart)]))).toEqual({ 'S1.10': ['900', 'olcu-5'] });
+    expect(d(['aparat']).ikincilKaynaklar.map((k) => k.kisit)).toEqual(['izle', 'izle', 'sert']);
+    expect(d(['aparat'], { aparat: 'acik', takim: 'acik' }).ikincilKaynaklar.map((k) => k.kisit)).toEqual(['sert', 'sert', 'sert']);
+  });
 });
 
 // 3457 Test T4: her alt neden kendi önlemini yazar; sayısı olmayan tanıda sayısız cümle.

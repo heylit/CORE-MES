@@ -3,7 +3,7 @@ import { MOTOR_NOTU, YOK_NOTU, degisken } from '../../motor/ortak.tsx';
 import type { CalismaKomutu } from '../../kayit.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { gercekFasoncular } from '../../kaynak-kodu.tsx';
-import { kaynakMi, kaynakSecimi } from '../../ayarlar/alanlar.ts';
+import { KAYNAK_KISITLARI, kaynakAdi, kaynakKipi, kaynakKipiYaz, kaynakMi, type KaynakSecimi } from '../../ayarlar/alanlar.ts';
 import { KaynakSecimiGrubu } from '../../ayarlar/KaynakSecimi.tsx';
 import {
   AMAC_SIRASI, DURUM_ROZETI, KATALOG, bedelEsigi, bedelOku, bolumAdi, durumSayilari, kisitBul, kisitDegistir, parametreDegeri, parametreOku, parametreYaz,
@@ -81,7 +81,22 @@ export function Kisitlar({ c, komut, planYaz, git, uyar }: {
     if (p.k === 'maxChg') { yaz.degistir('Parametre değişti', (t) => parametreYaz(t, p.yer, p.k, o.deger), { sessiz: true }); return; }
     yaz.degistir('Parametre değişti', (t) => parametreYaz(t, p.yer, p.k, o.deger), { ayrinti: `${p.etiket}: ${String(once ?? '—')} → ${String(o.deger ?? '—')}` });
   };
-  const hepsiniAc = () => { yaz?.degistir('Kısıtların hepsi açıldı', (t) => { if (!t.kapali.length) return false; t.kapali = []; }); };
+  // 3652: aparat, takım ve ölçü aleti Kapalı ya da Uyarı iken plan onları sınırlamaz; tabloda "kapalı" sayılır (Uyarı'nın ayrı sayılması fark kartı 3652 madde 2'ye bağlı).
+  const kapaliMi = (id: string): boolean => (kaynakMi(id) ? kaynakKipi(c, id) !== 'acik' : c.kapali.includes(id));
+  const kaynakKipleri = (k: Kisit, s: KaynakSecimi) => {
+    if (!kaynakMi(k.id)) return;
+    const k0 = k.id;
+    // Aparat anahtarı eskiden takımı da kapsıyordu; kipler ayrı saklanır, burada yalnız dokunulan tür değişir.
+    yaz?.degistir('Kısıt kipi değişti', (t) => kaynakKipiYaz(t, { [k0]: s }), { ayrinti: `${k.ad}: ${s}` });
+  };
+  const hepsiniAc = () => {
+    yaz?.degistir('Kısıtların hepsi açıldı', (t) => {
+      const kip = kaynakKipiYaz(t, Object.fromEntries(KAYNAK_KISITLARI.map((k) => [k, 'acik'])));
+      if (!t.kapali.length) return kip;
+      t.kapali = [];
+      return true;
+    });
+  };
 
   const sutunlar: Sutun<Kisit>[] = [
     { anahtar: 'kisit', baslik: 'Kısıt', hucre: (k) => <><b>{k.ad}</b>{k.not && <><br /><span className="tc-pyi-k">{k.not}</span></>}</> },
@@ -89,9 +104,9 @@ export function Kisitlar({ c, komut, planYaz, git, uyar }: {
     { anahtar: 'hesapta', baslik: 'Hesapta', hucre: (k) => {
       if (!k.g) return <span className="tc-pyi-k">{k.durum === 'yok' ? '—' : 'sabit'}</span>;
       const kapali = c.kapali.includes(k.id);
-      // 3650: aparat ve ölçü aleti Planlama ayarları ile aynı dili kullanır: Sert kısıt | Kısıt yok.
+      // 3650, 3652: aparat ve ölçü aleti Planlama ayarları ile aynı dili kullanır: Açık | Uyarı | Kapalı.
       if (kaynakMi(k.id)) {
-        return <KaynakSecimiGrubu kimlik={`pyi-${k.id}`} kisit={k.id} deger={kaynakSecimi({ acik: { [k.id]: !kapali } }, k.id)} etki={false} kilitli={!yaz} sec={(s) => { anahtar(k, s === 'sert'); }} />;
+        return <KaynakSecimiGrubu kimlik={`pyi-${k.id}`} kisit={k.id} deger={kaynakKipi(c, k.id)} etki={false} kilitli={!yaz} sec={(s) => { kaynakKipleri(k, s); }} />;
       }
       return (
         <label className="tc-pyi-anahtar" title={kapali ? 'Motor bu kısıtı saymıyor' : 'Motor bu kısıtı uyguluyor'}>
@@ -103,17 +118,18 @@ export function Kisitlar({ c, komut, planYaz, git, uyar }: {
     { anahtar: 'parametre', baslik: 'Parametre', hucre: (k) => (k.p?.length
       ? <div className="tc-pyi-paramlar">{k.p.map((p) => <ParametreGirdisi key={p.k} p={p} c={c} yaz={yaz ? parametre : null} />)}</div>
       : <span className="tc-pyi-k">—</span>) },
-    { anahtar: 'bedel', baslik: 'Bedel', hucre: (k) => <div className="tc-pyi-bedel-hucre"><BedelHucresi k={k} bedel={bedel} kapali={c.kapali.includes(k.id)} /></div> },
+    { anahtar: 'bedel', baslik: 'Bedel', hucre: (k) => <div className="tc-pyi-bedel-hucre"><BedelHucresi k={k} bedel={bedel} kapali={kapaliMi(k.id)} /></div> },
     { anahtar: 'veri', baslik: 'Veri', gizliBaslik: true, hucre: (k) => (k.sayfa
       ? <KucukDugme ad={`Verisi: ${bolumAdi(k.sayfa)}`} simge="edit" yap={() => { if (k.sayfa) git(k.sayfa); }} /> : null) },
   ];
 
-  const kapaliAdlar = c.kapali.map((id) => kisitBul(id)?.ad ?? id);
+  const kapaliIdler = [...c.kapali.filter((id) => !kaynakMi(id)), ...KAYNAK_KISITLARI.filter((k) => kaynakKipi(c, k) !== 'acik')];
+  const kapaliAdlar = kapaliIdler.map((id) => (kaynakMi(id) ? kaynakAdi(id) : kisitBul(id)?.ad ?? id));
   return (
     <div className="tc-pyi-dik">
-      {c.kapali.length > 0 && (
+      {kapaliIdler.length > 0 && (
         <Serit ton="hata" simge="alert" eylem={yaz ? <KucukDugme ad="Hepsini aç" simge="check" metin="Hepsini aç" yap={hepsiniAc} /> : undefined}>
-          <b>Kapalı kısıt:</b> {kapaliAdlar.join(', ')}. Motor bunları saymadan çözer; plan gerçekte uygulanamayabilir. Kaynak yükünde aşımlar kırmızı görünür.
+          <b>Kapalı kısıt:</b> {kapaliAdlar.join(', ')}. Uyarı kaynakları planı sınırlamaz, Kapalı olanlar planda hiç kurulmaz; plan gerçekte uygulanamayabilir. Kaynak yükünde aşımlar kırmızı görünür.
         </Serit>
       )}
       <div className="tc-pyi-sayilar">
@@ -134,8 +150,8 @@ export function Kisitlar({ c, komut, planYaz, git, uyar }: {
         {bedel && <p className="tc-pyi-k">Temel: ağırlıklı gecikme {saat(bedel.temel.wT)} · geciken {bedel.temel.late} · {zamanYaz(bedel.zaman)}</p>}
       </VeriKarti>
       {KATALOG.map((g) => (
-        <VeriKarti key={g.grup} baslik={g.grup} simge={g.simge} sag={<span className="tc-pyi-k">{g.l.length} kısıt · {g.l.filter((k) => c.kapali.includes(k.id)).length} kapalı</span>}>
-          <VeriTablosu etiket={g.grup} sutunlar={sutunlar} satirlar={g.l} anahtar={(k) => k.id} satirTonu={(k) => (c.kapali.includes(k.id) ? 'kapali' : undefined)} />
+        <VeriKarti key={g.grup} baslik={g.grup} simge={g.simge} sag={<span className="tc-pyi-k">{g.l.length} kısıt · {g.l.filter((k) => kapaliMi(k.id)).length} kapalı</span>}>
+          <VeriTablosu etiket={g.grup} sutunlar={sutunlar} satirlar={g.l} anahtar={(k) => k.id} satirTonu={(k) => (kapaliMi(k.id) ? 'kapali' : undefined)} />
         </VeriKarti>
       ))}
       <div className="tc-pyi-iki tc-pyi-iki-esit">

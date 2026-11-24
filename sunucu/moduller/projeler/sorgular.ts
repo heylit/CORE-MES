@@ -912,3 +912,37 @@ export async function notlar(db: Db, gorevId: number): Promise<NotSatiri[]> {
 export async function notEkle(db: Db, gorevId: number, kisiId: number, metin: string): Promise<void> {
   await db.sorgu('INSERT INTO projeler_gorev_notu (gorev_id, kisi_id, metin) VALUES ($1, $2, $3)', [gorevId, kisiId, metin]);
 }
+
+// 3642: "Bu emirde gerekmez" defteri. Geçerli hâl (emir, madde) başına son satırdır; yalnız eklenir.
+export interface GerekmezSatiri { emri_id: number; madde: string; gerekce: string; kisi_id: number; an: string }
+export function hazirlikGerekmezleri(db: Db, emirIdleri: readonly number[]): Promise<GerekmezSatiri[]> {
+  if (emirIdleri.length === 0) return Promise.resolve([]);
+  return db.sorgu<GerekmezSatiri>(
+    `SELECT emri_id, madde, gerekce, kisi_id, ${zamanMetni('an')} AS an
+       FROM (SELECT DISTINCT ON (emri_id, madde) emri_id, madde, olay, gerekce, kisi_id, an FROM projeler_hazirlik_gerekmez
+              WHERE emri_id = ANY($1::int[]) ORDER BY emri_id, madde, id DESC) son
+      WHERE olay = 'isaretle' ORDER BY emri_id, madde`,
+    [[...emirIdleri]],
+  );
+}
+// Aynı (emir, madde) için işaret ve kaldırma sıralı yazılır: kilit iki eşzamanlı yazmanın arka arkaya çift satır bırakmasını önler.
+export async function hazirlikGerekmezKilitle(db: Db, emriId: number, madde: string): Promise<void> {
+  await db.sorgu('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`projeler.hazirlik-gerekmez:${String(emriId)}:${madde}`]);
+}
+export async function hazirlikGerekmezYaz(db: Db, emriId: number, madde: string, olay: 'isaretle' | 'kaldir', kisiId: number, gerekce: string | null): Promise<void> {
+  await db.sorgu('INSERT INTO projeler_hazirlik_gerekmez (emri_id, madde, olay, kisi_id, gerekce) VALUES ($1, $2, $3, $4, $5)', [emriId, madde, olay, kisiId, gerekce]);
+}
+// Emirde maddenin iptal edilmemiş bütün görevleri (iş emri başına eski biçim dahil); satırlar kilitlenir.
+export function emirMaddesininGorevleri(db: Db, emriId: number, madde: string): Promise<{ id: number; durum: string }[]> {
+  return db.sorgu<{ id: number; durum: string }>(
+    "SELECT id, durum FROM projeler_gorev WHERE hazirlik_emri_id = $1 AND hazirlik_maddesi = $2 AND durum <> 'iptal' ORDER BY id FOR UPDATE", [emriId, madde],
+  );
+}
+// İşaretleyen görevin son değiştireni olur (sistem kapanışından farkı: kişi yazılır).
+export function hazirlikGoreviniGerekmezKapat(db: Db, id: number, kisiId: number): Promise<{ id: number } | null> {
+  return db.tek<{ id: number }>(
+    `UPDATE projeler_gorev SET durum = 'iptal', guncelleyen_id = $2, guncelleme = now(), surum = surum + 1
+      WHERE id = $1 AND hazirlik_maddesi IS NOT NULL AND durum IN ('yapilacak', 'suruyor', 'bekliyor') RETURNING id`,
+    [id, kisiId],
+  );
+}

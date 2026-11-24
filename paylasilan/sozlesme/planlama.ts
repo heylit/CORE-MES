@@ -443,6 +443,9 @@ const taslakKimlik = z.string().trim().min(1).max(120);
 // Motorun en uzun ufku 182 gün (motor/engine.js UFUK_ENCOK); ufkun kendisi çalışmanın ayarıdır, sunucu komutta ayrıca sınar.
 const durusSaati = z.number().min(0).max(182 * 24).multipleOf(0.25);
 const ekMesaiGunu = z.number().int().min(0).max(182);
+// 3652: acik = sert kısıt, uyari = plan sınırlamaz ama kullanım sayılır ve aşım uyarılır, kapali = plan kaynağı hiç saymaz.
+export const KAYNAK_KISIT_KIPLERI = ['acik', 'uyari', 'kapali'] as const;
+export type KaynakKisitKipi = (typeof KAYNAK_KISIT_KIPLERI)[number];
 // Ayar komutu Kokpit Ayarlar panelinin alanlarıdır (istemci kokpit/ayarlar.ts AYAR_ALANLARI); sınırlar aynı.
 export const taslakAyarlari = z.object({
   w: z.object({
@@ -459,6 +462,8 @@ export const taslakAyarlari = z.object({
   }).partial().strict().optional(),
   // Açılan ve kapanan kısıtlar (çalışmanın kapali listesi).
   ac: z.array(taslakKimlik).max(40), kapat: z.array(taslakKimlik).max(40),
+  // 3652: aparat, ölçü aleti ve takım kısıtının kipi (çalışmanın kisitKipi alanı). Gelen tür yazılır; gelmeyen tür kayıtlı kipini korur.
+  kisitKipi: z.object({ aparat: z.enum(KAYNAK_KISIT_KIPLERI), olcu: z.enum(KAYNAK_KISIT_KIPLERI), takim: z.enum(KAYNAK_KISIT_KIPLERI) }).partial().strict().optional(),
 }).strict();
 export const taslakKomutu = z.discriminatedUnion('tur', [
   isTasiGovdesi.omit({ calismaSurumu: true }).extend({ tur: z.literal('tasi') }).strict(),

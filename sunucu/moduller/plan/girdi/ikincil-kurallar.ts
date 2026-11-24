@@ -19,7 +19,8 @@ export interface MotorIkincilKaynagi {
   // Başlangıçta kalan ömrün payı (0..1); CNC Kurulum'da yük kaydı yoksa null: motor tam ömür sayar ve "başlangıç ömrü bilinmiyor" yazar (V13).
   kalanPay: number | null;
 }
-export interface MotorKaynakIstegi { kart: string; adet: number; asama: 'ayar_isleme' | 'isleme' }
+// tur: isteğin kaynak türü (3652); motor kisitKipi'nde kapalı türün isteğini bununla eler.
+export interface MotorKaynakIstegi { kart: string; adet: number; asama: 'ayar_isleme' | 'isleme'; tur: 'aparat' | 'takim' | 'olcu' }
 export interface IkincilEki {
   kaynaklar: MotorIkincilKaynagi[] | null;
   // Anahtar "emir no|OP no" (girdi.betik tmiIslemler ile planın işlem kimliğine çevrilir).
@@ -28,7 +29,7 @@ export interface IkincilEki {
 export interface IkincilOkuma {
   kaynaklar: AparatKapasitesi[] | null;
   kartlar: Map<number, { kod: string | null; ad: string | null }>;
-  istekler: { anahtar: string; istekler: { malzemeId: number; adet: number; asama: 'ayar_isleme' | 'isleme' }[] }[] | null;
+  istekler: { anahtar: string; istekler: { malzemeId: number; adet: number; asama: 'ayar_isleme' | 'isleme'; tur: 'aparat' | 'takim' }[] }[] | null;
   takimlar: { kartId: number; istasyonId: number; kalanPay: number | null }[] | null;
   // Ölçü aleti: alet türü başına bugün kullanılabilir (kalibrasyonu geçerli ya da yaklaşan) alet sayısı ve adımların istediği türler.
   aletler?: { turId: number; tur: string; durum: string }[] | null;
@@ -53,7 +54,7 @@ export function ikincilKaynakKur(o: IkincilOkuma): IkincilEki {
     omur: k.omur, omurBirimi: k.omurBirimi, degisimDk: k.degisimDk, kalanPay: kalanPayi(k, o.takimlar),
   }));
   const istekler = o.istekler === null ? null
-    : Object.fromEntries(o.istekler.map((i) => [i.anahtar, i.istekler.map((x): MotorKaynakIstegi => ({ kart: String(x.malzemeId), adet: x.adet, asama: x.asama }))]));
+    : Object.fromEntries(o.istekler.map((i) => [i.anahtar, i.istekler.map((x): MotorKaynakIstegi => ({ kart: String(x.malzemeId), adet: x.adet, asama: x.asama, tur: x.tur }))]));
   // Ölçü aleti ortak kaynaktır; kalibrasyonu geçerli ya da yaklaşan alet sayılır (Kalibrasyon olcumdeKullanilabilirMi ile aynı),
   // geçmiş, kullanım dışı ya da kaydı olmayan sayılmaz. Kaynak istasyonsuzdur; adedi türdeki kullanılabilir alet sayısıdır. Kullanılabilir aleti olmayan tür kaynak
   // olarak kurulmaz: plan o isteği saymaz ve veri denetimi uyarır (motor kisitlar.betik), iş yerleşmez diye beklemez.
@@ -72,7 +73,7 @@ export function ikincilKaynakKur(o: IkincilOkuma): IkincilEki {
   if (o.aletIstekleri != null) {
     tumIstekler = { ...(istekler ?? {}) };
     for (const i of o.aletIstekleri) {
-      tumIstekler[i.anahtar] = [...(tumIstekler[i.anahtar] ?? []), ...i.turler.map((t): MotorKaynakIstegi => ({ kart: olcuKarti(t), adet: 1, asama: 'isleme' }))];
+      tumIstekler[i.anahtar] = [...(tumIstekler[i.anahtar] ?? []), ...i.turler.map((t): MotorKaynakIstegi => ({ kart: olcuKarti(t), adet: 1, asama: 'isleme', tur: 'olcu' }))];
     }
   }
   return { kaynaklar: tumKaynaklar, istekler: tumIstekler };

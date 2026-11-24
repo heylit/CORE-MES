@@ -69,7 +69,7 @@ describe('tezgah bağlantısı denemesi (kart 3373, gerçek PostgreSQL)', () => 
       { ad: 'ORN-T04', calisma: 'READY', mod: 'AUTOMATIC', program: 'O2002', sayac: '63', hiz: '0', yuk: '0' },
     ], simdi);
     bellek = yeniTurBellegi();
-    for (const t of ['tezgah_okuma', 'tezgah_ornek', 'tezgah_alan_tanimi', 'tezgah_deger_gecmisi', 'tezgah_varlik', 'tezgah_veri_boslugu', 'smartes_makine_durumu']) await vt().sorgu(`DELETE FROM ${t}`);
+    for (const t of ['tezgah_okuma', 'tezgah_ornek', 'tezgah_alan_tanimi', 'tezgah_deger_gecmisi', 'tezgah_varlik', 'tezgah_veri_boslugu', 'tezgah_turu', 'smartes_makine_durumu']) await vt().sorgu(`DELETE FROM ${t}`);
     await ayar(true);
   });
   afterEach(async () => { await sahte.kapat(); });
@@ -385,6 +385,26 @@ describe('tezgah bağlantısı denemesi (kart 3373, gerçek PostgreSQL)', () => 
     assert.ok(a.ogeler.some((o) => o.tur === 'Load' && o.bilesen === 'Rotary' && o.deger === '42'));
     assert.equal((await istek('GET', '/tezgah-baglantisi/tezgahlar/ORN-T01')).statusCode, 200);
     assert.equal((await istek('GET', '/tezgah-baglantisi/tezgahlar/ORN-YOK')).statusCode, 404);
+  });
+
+  test('tezgâh türü: yalnız yönetici seçer; tür ayrıntıda gelir; null siler; geçersiz tür 400, olmayan tezgâh 404; başka tabloya yazılmaz', async () => {
+    await tur();
+    const yol = '/tezgah-baglantisi/tezgahlar/ORN-T01/tur';
+    assert.equal((await istek('POST', yol, { tur: 'torna' }, rollu)).statusCode, 403);
+    assert.equal((await istek('POST', yol, { tur: 'robot' })).statusCode, 400);
+    assert.equal((await istek('POST', '/tezgah-baglantisi/tezgahlar/ORN-YOK/tur', { tur: 'torna' })).statusCode, 404);
+    assert.equal(tezgahAyrintisiCevabi.parse(await vt().tx((db) => ayrinti(db, 'ORN-T01', new Date(simdi)))).tezgahTuru, null);
+    const once = await say('tezgah_okuma');
+    const c = await istek('POST', yol, { tur: 'yatay-islem' });
+    assert.equal(c.statusCode, 200, c.body);
+    assert.equal(c.json().tezgahTuru, 'yatay-islem');
+    assert.equal(tezgahAyrintisiCevabi.parse(await vt().tx((db) => ayrinti(db, 'ORN-T01', new Date(simdi)))).tezgahTuru, 'yatay-islem');
+    assert.equal(tezgahAyrintisiCevabi.parse(await vt().tx((db) => ayrinti(db, 'ORN-T04', new Date(simdi)))).tezgahTuru, null);
+    assert.equal((await istek('POST', yol, { tur: 'torna' })).statusCode, 200);
+    assert.equal(await say('tezgah_turu'), 1);
+    assert.equal((await istek('POST', yol, { tur: null })).statusCode, 200);
+    assert.equal(await say('tezgah_turu'), 0);
+    assert.equal(await say('tezgah_okuma'), once);
   });
 
   test('otuz günden eski durum örneği silinir', async () => {

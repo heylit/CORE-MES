@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import type { TezgahAyrintisiCevabi, TezgahBaglantisiDurumCevabi } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
-import { DurumKutusu, Kart, Rozet, Simge } from '../../ortak/arayuz/index.ts';
+import type { TezgahAyrintisiCevabi, TezgahBaglantisiDurumCevabi, TezgahTuru } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
+import { DurumKutusu, Kart, Rozet, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { CanliGosterge } from './CanliGosterge.tsx';
 import { Egri, ZamanCizgisi, ZamanEkseni } from './Egri.tsx';
+import { Simulasyon } from './Simulasyon.tsx';
 import { BILESEN_SIRASI, BOSLUK_NEDENI, DURUM, KOSUL_ADI, KOSUL_TONU, YOK, bilesenMetni, degerAdi, degerMetni, gunSaatMetni, saatMetni, sayiMetni, sorunaGoreSirala, turAdi } from './gosterim.ts';
 import './tezgah-baglantisi.css';
 
@@ -75,11 +76,24 @@ function Bolum({ simge, baslik, children }: { simge: 'cpu' | 'alert' | 'tool' | 
 
 function Icerik({ a }: { a: Ayrinti }) {
   const gruplar = grupla(a.alanlar);
+  const istemci = useQueryClient();
+  const { bildir } = useBildirim();
+  const turDegisimi = useMutation({
+    mutationFn: (tur: TezgahTuru | null) => api.post<{ tezgahTuru: TezgahTuru | null }>(`/tezgah-baglantisi/tezgahlar/${encodeURIComponent(a.cihazAdi)}/tur`, { tur }),
+    onSuccess: (c) => {
+      istemci.setQueryData<Ayrinti>(anahtarlar.tezgah(a.cihazAdi), (eski) => (eski === undefined ? eski : { ...eski, tezgahTuru: c.tezgahTuru }));
+      bildir('tamam', 'Tezgâh türü kaydedildi.');
+    },
+    onError: (hata) => bildir('hata', hataIletisi(hata, 'Tezgâh türü kaydedilemedi.')),
+  });
   return (
     <>
       <p className="tc-tzb-not">
         <CanliGosterge okundu={a.okundu} aralikSaniye={a.aralikSaniye} />
       </p>
+      <Bolum simge="cpu" baslik="Canlı tezgâh görünümü">
+        <Simulasyon a={a} turSec={(t) => turDegisimi.mutate(t)} turKaydediliyor={turDegisimi.isPending} />
+      </Bolum>
       <Bolum simge="clock" baslik="Zaman çizgisi">
         <ZamanCizgisi basi={a.egriBasi} sonu={a.egriSonu} bosluklar={a.bosluklar} />
         <ZamanEkseni basi={a.egriBasi} sonu={a.egriSonu} />

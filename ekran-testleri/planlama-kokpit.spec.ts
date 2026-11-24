@@ -1887,7 +1887,7 @@ test('Kokpit 3282 1c: plan yönü üst şeritte, emrin yönü emir satırında; 
   // Düğme geçerli yönü yazar, menüde iki yön açıklamasıyla durur; öteki yön seçilince yalnız yönün etkisini taşıyan küçük panel açılır.
   const ustYon = kokpit.getByRole('button', { name: 'Plan', exact: true });
   const yonMenusu = kokpit.getByRole('menu', { name: 'Plan' });
-  const panel = kokpit.getByRole('complementary', { name: 'Yön ve kaynak kısıtları' });
+  const panel = kokpit.getByRole('complementary', { name: 'Aparat, takım ve ölçü aleti kısıtı' });
   const yonEtkisi = panel.getByRole('region', { name: 'Ayarın etkisi' });
   const taslakCubugu = kokpit.getByRole('region', { name: 'Değişiklikleriniz' });
   await expect(kokpit.getByRole('button', { name: /^Tüm plan:/ })).toHaveCount(0);
