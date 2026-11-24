@@ -5,6 +5,7 @@ import {
   MIKTAR_TAM_SAYI, PARTI_TOPLAMI_TUTMUYOR, partiReddi, SIPARIS_TARIHI_ARALIK_DISI, TERMIN_COK_UZAK, TUTAR_COK_BUYUK, miktarReddi, tarihAraligiReddi, tutarTasmaReddi,
   BAGLI_ACIK_EMIR, KALEM_BASKA_SIPARISIN, KILITLI_KALEM_DEGISMEZ, KILITLI_KALEM_SILINMEZ, KILITLI_KALEM_SIRASI, PARTI_YALNIZ_URETILENDE, kalemKarsilamasi, karsilamaPartiReddi, kilitliKalemReddi, bagliEmirReddi, duzenlemeReddi, firmaReddi, fiyatlariKoru, gecisHedefi, gecisReddi, malzemeReddi,
   FIYAT_EKSIK, KARTSIZ_SATIR, KART_BAGLANAMAZ, YALNIZ_YENI_TEKLIF, fiyatReddi, kartBaglamaReddi, kartsizSatirReddi, talepDuzenlemeReddi,
+  KABUL_ONAYSIZ_ISKONTO, KABUL_SONRASI_PLAN, KABUL_ZATEN, UYGULA_KABULSUZ, UYGULA_SIPARIS_YOK, UYGULA_ZATEN, kabulSonrasiMi, kabulSonrasiPlanReddi, siparisUygulaReddi, surumDurumu, yenidenKabulReddi,
   dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi, terminAraligi, terminDagilimi,
   GENEL_GIDER_YOK, denemeCevabi, denemeSuzgeci, gunFarki, adetSatirlari, carpilmisAdet, kalemMaliyeti, kilitler, motorSonucu, motorTaslaklari, planSeridi, onayHedefi, yenidenYerlesirMi,
   SIPARIS_ARSIVDE, SIPARIS_ARSIVDE_DEGIL, SIPARIS_ARSIVLENEMEZ, siparisArsivReddi,
@@ -547,4 +548,48 @@ describe('3635 teklif sürümünde fiyat alanları fiyatsız cevapta gitmez (sü
     assert.equal(v?.teslimGun, 25);
     assert.equal(v?.odemeKosulu, '45 gün');
   });
+});
+
+test('3637: kabul ve sipariş durumunda sürüm, iskonto onayı ve yeni kabul geçişi açık; red, revizyon ve ikinci siparişe dönüş kapalı', () => {
+  for (const d of ['kabul', 'siparis'] as const) {
+    assert.equal(kabulSonrasiMi(d), true);
+    assert.equal(teklifGecisReddi(d, 'surum'), null);
+    assert.equal(teklifGecisReddi(d, 'iskonto-onay'), null);
+    assert.equal(teklifGecisReddi(d, 'kabul'), null);
+    assert.notEqual(teklifGecisReddi(d, 'red'), null);
+    assert.notEqual(teklifGecisReddi(d, 'revizyon'), null);
+    assert.notEqual(teklifGecisReddi(d, 'termin-onay'), null);
+  }
+  assert.equal(teklifGecisReddi('kabul', 'siparis'), null);
+  assert.notEqual(teklifGecisReddi('siparis', 'siparis'), null);
+  assert.equal(kabulSonrasiMi('verildi'), false);
+});
+
+test('3637: kabul sonrası sürüm teklif durumunu değiştirmez; kabulden önce hedef durum işler', () => {
+  assert.equal(surumDurumu('kabul', 'onay-bekliyor'), 'kabul');
+  assert.equal(surumDurumu('siparis', 'verildi'), 'siparis');
+  assert.equal(surumDurumu('verildi', 'onay-bekliyor'), 'onay-bekliyor');
+  assert.equal(surumDurumu('yeni', 'verildi'), 'verildi');
+});
+
+test('3637: kabulden sonra plan taslağı reddedilir; yeni kabul kabul edilenden sonraki, iskontosu onaylı sürüme olur', () => {
+  assert.equal(kabulSonrasiPlanReddi('kabul', true), KABUL_SONRASI_PLAN);
+  assert.equal(kabulSonrasiPlanReddi('siparis', true), KABUL_SONRASI_PLAN);
+  assert.equal(kabulSonrasiPlanReddi('kabul', false), null);
+  assert.equal(kabulSonrasiPlanReddi('verildi', true), null);
+  assert.equal(yenidenKabulReddi('verildi', null, 1, true), null);
+  assert.equal(yenidenKabulReddi('kabul', 2, 2, false), KABUL_ZATEN);
+  assert.equal(yenidenKabulReddi('siparis', 2, 1, false), KABUL_ZATEN);
+  assert.equal(yenidenKabulReddi('kabul', 2, 3, true), KABUL_ONAYSIZ_ISKONTO);
+  assert.equal(yenidenKabulReddi('siparis', 2, 3, false), null);
+});
+
+test('3637: Siparişe uygula yalnız siparişe dönmüş teklifte, kabul edilen ve siparişte olmayan sürüm için', () => {
+  const t = { durum: 'siparis' as const, siparisId: 7, kabulSurumu: 3 };
+  assert.equal(siparisUygulaReddi(t, 3, 1), null);
+  assert.equal(siparisUygulaReddi(t, 3, null), null);
+  assert.equal(siparisUygulaReddi(t, 3, 3), UYGULA_ZATEN);
+  assert.equal(siparisUygulaReddi(t, 2, 1), UYGULA_KABULSUZ);
+  assert.equal(siparisUygulaReddi({ ...t, durum: 'kabul', siparisId: null }, 3, null), UYGULA_SIPARIS_YOK);
+  assert.equal(siparisUygulaReddi({ ...t, siparisId: null }, 3, null), UYGULA_SIPARIS_YOK);
 });

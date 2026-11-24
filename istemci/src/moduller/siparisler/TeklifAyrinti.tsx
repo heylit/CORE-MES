@@ -11,6 +11,7 @@ import { KalemMetni, MalzemeSecici } from './MalzemeSecici.tsx';
 import { LogoCariHazirligi } from './LogoCariHazirligi.tsx';
 import { SayfaBasligi } from './SayfaBasligi.tsx';
 import { TeklifFormuPenceresi } from './TeklifFormuPenceresi.tsx';
+import { TeklifSiparisUygula } from './TeklifSiparisUygula.tsx';
 import { TeklifSurumFarki } from './TeklifSurumFarki.tsx';
 import { TeklifSurumu } from './TeklifSurumu.tsx';
 import { surumCakismasiMi, useFiyatGorur, useIskontoOnaylar, useOnaylayabilir, useKorumaliGonderim, useMaliyetToplamiGorur, useTerminOnaylar, useYazabilir, yazmaIletisi } from './yazma.ts';
@@ -18,7 +19,7 @@ import { useOnayOdagi } from './onay-odagi.ts';
 import './siparisler.css';
 
 type Satir = TeklifAyrintiCevabi['satirlar'][number];
-type Dialog = 'kabul' | 'iskonto' | 'termin' | 'revizyon' | 'red' | 'siparis' | 'sil' | 'arsiv';
+type Dialog = 'kabul' | 'iskonto' | 'termin' | 'revizyon' | 'red' | 'siparis' | 'sil' | 'arsiv' | 'uygula';
 
 // 3419 a: fiyatı verilmiş, siparişe dönmemiş teklif arşivlenir; fiyatı verilmemiş teklif silinir.
 const ARSIVLENIR: readonly TeklifDurumu[] = ['onay-bekliyor', 'verildi', 'revizyon', 'red'];
@@ -119,7 +120,13 @@ export function TeklifAyrinti() {
   const kdvSapti = kabulKdv !== null && donusum.kdvOrani.trim() !== '' && !belirsizSayi(donusum.kdvOrani) && Number(sayiGirdisi(donusum.kdvOrani)) !== Number(kabulKdv);
   const kartsiz = t.satirlar.filter((s) => s.malzemeNo === null).length;
   const arsivde = t.arsiv !== null;
-  const surumVerilir = !arsivde && (t.durum === 'yeni' || t.durum === 'onay-bekliyor' || t.durum === 'verildi' || t.durum === 'revizyon');
+  // 3637: kabul edilmiş ve siparişe dönmüş teklife de sürüm verilir; teklif durumu değişmez, kabul edilen sürüm ve sipariş yerinde kalır.
+  const kabulSonrasi = t.durum === 'kabul' || t.durum === 'siparis';
+  const surumVerilir = !arsivde && (t.durum === 'yeni' || t.durum === 'onay-bekliyor' || t.durum === 'verildi' || t.durum === 'revizyon' || kabulSonrasi);
+  const kabulBekleyen = kabulSonrasi && t.kabulSurumu !== null && son !== null && son.surumNo > t.kabulSurumu ? son : null;
+  const kabulEdilecek = kabulSonrasi ? kabulBekleyen : son;
+  // Sipariş kabul edilen sürümün fiyatlarında değilse "Siparişe uygula" açılır (siparişi değiştirmek siparisler.onayla yetkisidir).
+  const uygulanir = !arsivde && t.durum === 'siparis' && t.siparisId !== null && t.kabulSurumu !== null && t.siparisteSurumNo !== t.kabulSurumu && onaylayabilir && fiyatGorur;
   const kartDegisir = !arsivde && t.durum !== 'red' && t.durum !== 'siparis';
   // Asıl denetim sunucudadır; düğme yalnız açana ve sipariş onay yetkilisine çizilir.
   const silinir = yazabilir && t.durum === 'yeni' && t.surumler.length === 0 && (t.olusturanId === kisiId || onaylayabilir);
@@ -150,11 +157,12 @@ export function TeklifAyrinti() {
 
   // 63 b: onay bekleyen teklifte iskonto ve termin onayı ayrı bekler; hangisinin beklendiği sürümden ve plan taslağından okunur.
   const bekleyenTaslak = taslaklar.data?.taslaklar.find((x) => x.gorunum === 'onay-bekliyor') ?? null;
-  const iskontoBekler = t.durum === 'onay-bekliyor' && son !== null && son.iskontoOnaylayan === null && son.iskontoOrani !== null && Number(son.iskontoOrani) > ISKONTO_ONAY_ESIGI;
-  const iskontoOnaylanir = iskontoOnaylar && !arsivde && t.durum === 'onay-bekliyor' && son !== null && (son.iskontoOrani === null || iskontoBekler);
+  const onayAsamasi = t.durum === 'onay-bekliyor' || kabulSonrasi;
+  const iskontoBekler = onayAsamasi && son !== null && son.iskontoOnaylayan === null && son.iskontoOrani !== null && Number(son.iskontoOrani) > ISKONTO_ONAY_ESIGI;
+  const iskontoOnaylanir = iskontoOnaylar && !arsivde && onayAsamasi && son !== null && (son.iskontoOrani === null || iskontoBekler);
   const terminOnaylanir = terminOnaylar && !arsivde && t.durum === 'onay-bekliyor' && bekleyenTaslak !== null;
   const formBasilir = fiyatGorur && gosterilen !== null;
-  const islemler = (yazabilir || iskontoOnaylanir || terminOnaylanir || formBasilir) && (
+  const islemler = (yazabilir || iskontoOnaylanir || terminOnaylanir || formBasilir || uygulanir) && (
     <>
       {formBasilir && <Dugme simge="printer" onClick={() => formAcikYaz(true)}>Teklif formu</Dugme>}
       {iskontoOnaylanir && <Dugme tur="birincil" simge="check" data-onay-eylemi="onayla" onClick={() => dialogYaz('iskonto')}>İskontoyu onayla</Dugme>}
@@ -166,12 +174,14 @@ export function TeklifAyrinti() {
       )}
       {yazabilir && !arsivde && t.durum === 'yeni' && <Dugme simge="edit" onClick={() => { void gezin(`/siparisler/teklifler/${t.id}/duzenle`); }}>Düzenle</Dugme>}
       {yazabilir && !arsivde && t.durum === 'verildi' && son && <Dugme tur="birincil" simge="check" onClick={() => dialogYaz('kabul')}>Müşteri kabulünü kaydet</Dugme>}
+      {yazabilir && !arsivde && kabulBekleyen !== null && !iskontoBekler && <Dugme simge="check" onClick={() => dialogYaz('kabul')}>{`Sürüm ${kabulBekleyen.surumNo} kabulünü kaydet`}</Dugme>}
+      {uygulanir && <Dugme tur="birincil" simge="next" onClick={() => dialogYaz('uygula')}>Siparişe uygula</Dugme>}
       {yazabilir && !arsivde && t.durum === 'verildi' && <Dugme simge="rotate" onClick={() => dialogYaz('revizyon')}>Revizyon iste</Dugme>}
       {yazabilir && !arsivde && t.durum === 'kabul' && <Dugme tur="birincil" simge="next" onClick={() => { donusumYaz((d) => ({ ...d, ...(d.termin === '' && t.istenenTarih !== null ? { termin: t.istenenTarih } : {}), kdvOrani: kdvBaslangic })); dialogYaz('siparis'); }}>Satış siparişine dönüştür</Dugme>}
       {arsivlenir && <Dugme simge="box" onClick={() => dialogYaz('arsiv')}>Arşivle</Dugme>}
       {yazabilir && arsivde && <Dugme tur="birincil" simge="rotate" onClick={() => komut.mutate({ yol: 'arsivden-cikar', govde: { surum: t.surum }, basari: 'Teklif arşivden çıkarıldı.' })} yukleniyor={komut.isPending}>Arşivden çıkar</Dugme>}
       {silinir && <Dugme simge="trash" onClick={() => dialogYaz('sil')}>Teklifi sil</Dugme>}
-      {yazabilir && surumVerilir && <Dugme tur="tehlike" simge="x" onClick={() => dialogYaz('red')}>Reddet</Dugme>}
+      {yazabilir && surumVerilir && !kabulSonrasi && <Dugme tur="tehlike" simge="x" onClick={() => dialogYaz('red')}>Reddet</Dugme>}
     </>
   );
 
@@ -238,6 +248,16 @@ export function TeklifAyrinti() {
           {kartsiz > 0 && ` ${kartsiz} satırda malzeme seçilmedi; dönüştürmeden önce malzemeden seçin.`}
         </p>
       )}
+      {!arsivde && kabulSonrasi && son !== null && t.kabulSurumu !== null && son.surumNo > t.kabulSurumu && (
+        <p className="tc-sp-bildirim" role="status">
+          {iskontoBekler
+            ? <><strong>{`Sürüm ${son.surumNo} iskonto onayı bekliyor`}</strong>{` %${ISKONTO_ONAY_ESIGI} sınırını aşıyor; müdür onaylayınca müşteriye gider. Kabul edilen sürüm ${t.kabulSurumu} yerinde kalır.`}</>
+            : <><strong>{`Sürüm ${son.surumNo} müşteri kabulü bekliyor`}</strong>{` Kabul edilen sürüm ${t.kabulSurumu}${t.durum === 'siparis' ? ' ve sipariş' : ''} yerinde kalır; müşteri yeni sürümü kabul edince kaydedin.`}</>}
+        </p>
+      )}
+      {!arsivde && t.durum === 'siparis' && t.kabulSurumu !== null && t.siparisteSurumNo !== null && t.siparisteSurumNo !== t.kabulSurumu && (
+        <p className="tc-sp-bildirim" role="status"><strong>Sipariş eski sürümde</strong>{` Sipariş sürüm ${t.siparisteSurumNo} fiyatlarında; müşterinin kabul ettiği sürüm ${t.kabulSurumu}.${uygulanir ? ' "Siparişe uygula" ile fiyatlar siparişe geçer.' : ''}`}</p>
+      )}
       {t.durum === 'red' && <p className="tc-sp-bildirim tc-sp-bildirim-hata" role="status"><strong>Teklif reddedildi</strong> {t.not ?? 'Gerekçe belirtilmedi.'}</p>}
       {t.durum === 'siparis' && (
         <p className="tc-sp-bildirim tc-sp-bildirim-tamam" role="status">
@@ -285,7 +305,7 @@ export function TeklifAyrinti() {
                 {t.surumler.map((s, i) => ({ s, onceki: t.surumler[i - 1] ?? null })).reverse().map(({ s, onceki }) => (
                   <li key={s.surumNo}>
                     <span><strong>{`Sürüm ${s.surumNo}`}</strong> <span className="tc-sp-soluk">{zamanMetni(s.olusturma)}</span></span>
-                    <span>{fiyatGorur && paraMetni(s.toplam, t.paraBirimi)}{s.iskontoOnaylayan !== null && <> <Rozet ton="bilgi">{`İskonto onayı: ${s.iskontoOnaylayan}`}</Rozet></>}{t.kabulSurumu === s.surumNo && <> <Rozet ton="tamam">Kabul edilen</Rozet></>}</span>
+                    <span>{fiyatGorur && paraMetni(s.toplam, t.paraBirimi)}{s.iskontoOnaylayan !== null && <> <Rozet ton="bilgi">{`İskonto onayı: ${s.iskontoOnaylayan}`}</Rozet></>}{t.kabulSurumu === s.surumNo && <> <Rozet ton="tamam">Kabul edilen</Rozet></>}{t.siparisteSurumNo === s.surumNo && <> <Rozet ton="bilgi">Siparişte</Rozet></>}{kabulSonrasi && t.kabulSurumu !== null && s.surumNo > t.kabulSurumu && <> <Rozet ton="uyari">Kabul bekliyor</Rozet></>}</span>
                     <TeklifSurumFarki teklif={t} surum={s} onceki={onceki} />
                   </li>
                 ))}
@@ -296,18 +316,23 @@ export function TeklifAyrinti() {
       </div>
 
       <OnayPenceresi
-        acik={dialog === 'kabul' && son !== null}
+        acik={dialog === 'kabul' && kabulEdilecek !== null}
         baslik="Müşteri kabulünü kaydet"
         onayMetni="Kabulü kaydet"
         yukleniyor={komut.isPending}
         vazgec={kapat}
-        onayla={() => { if (son) komut.mutate({ yol: 'kabul', govde: { surum: t.surum, surumNo: son.surumNo }, basari: 'Kabul kaydedildi.' }); }}
+        onayla={() => { if (kabulEdilecek) komut.mutate({ yol: 'kabul', govde: { surum: t.surum, surumNo: kabulEdilecek.surumNo }, basari: 'Kabul kaydedildi.' }); }}
       >
         <div className="tc-sp-yigin">
-          <p>{`${t.no}: müşteri sürüm ${son?.surumNo ?? ''} teklifini kabul etti.`}</p>
+          <p>{`${t.no}: müşteri sürüm ${kabulEdilecek?.surumNo ?? ''} teklifini kabul etti.`}</p>
+          {t.durum === 'siparis' && <p className="tc-sp-ipucu">Sipariş yerinde kalır; fiyatları sonra "Siparişe uygula" ile geçirirsiniz.</p>}
           {hata !== null && <p className="tc-sp-hata" role="alert">{hata}</p>}
         </div>
       </OnayPenceresi>
+
+      {t.kabulSurumu !== null && (
+        <TeklifSiparisUygula teklif={t} surumNo={t.kabulSurumu} logoda={logoda} acik={dialog === 'uygula'} kapat={kapat} yenile={yenile} />
+      )}
 
       <OnayPenceresi
         acik={dialog === 'iskonto' && son !== null}

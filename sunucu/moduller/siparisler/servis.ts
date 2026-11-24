@@ -305,7 +305,7 @@ export async function siparisArsivle(db: Db, kullanici: Kullanici, id: number, g
 // Fiyatı görmeyenin gövdesi fiyatsızdır: kayıtlı fiyat ve ticari şart kimlikle korunur. Termin bağlı projeye ve başlamamış emre onaydaki
 // gibi kayar (olay), tutar beklenen tahsilata yeniden yazılır. Logo'ya gitmiş siparişte sürüm bunu işaretler; Logo'ya yeniden gitmez.
 export async function siparisRevizeEt(
-  db: Db, kullanici: Kullanici, id: number, g: SiparisRevizyonVerisi, fiyatYazar = true,
+  db: Db, kullanici: Kullanici, id: number, g: SiparisRevizyonVerisi, fiyatYazar = true, kaynakSurumNo: number | null = null,
 ): Promise<SiparisAyrintisi> {
   const fiyatRet = fiyatYazmaReddi(fiyatYazar, g.satirlar) ?? ticariSartReddi(fiyatYazar, g);
   if (fiyatRet !== null) throw yetkiYok(fiyatRet);
@@ -337,7 +337,7 @@ export async function siparisRevizeEt(
     const s = satirlar[i];
     return { id: k.id, birimFiyat: s?.birimFiyat ?? null, termin: s?.termin ?? null, aciklama: s?.aciklama ?? null };
   }));
-  await sorgular.revizyonEkle(db, { siparisId: id, gerekce: g.gerekce, kisiId: kullanici.id, onceki: once, degisiklikler });
+  await sorgular.revizyonEkle(db, { siparisId: id, gerekce: g.gerekce, kisiId: kullanici.id, onceki: once, degisiklikler, kaynakSurumNo });
   await siparisRevizeEdildiBildir(db, { siparisId: id, kullanici });
   await siparisDegistiBildir(db, { siparisId: id, kullanici });
   await tahsilatiFinansaYaz(db, kullanici.id, id);
@@ -362,7 +362,7 @@ export async function siparisRevizyonlari(db: Db, id: number, fiyatGorur: boolea
     revizyonlar: satirlar.map((r) => {
       const degisiklikler = r.degisiklikler as RevizyonDegisikligi[];
       return {
-        revNo: r.rev_no, gerekce: r.gerekce, kisi: adlar.get(r.kisi_id) ?? null, an: r.an, logoGitmisti: r.logo_gitmisti,
+        revNo: r.rev_no, gerekce: r.gerekce, kisi: adlar.get(r.kisi_id) ?? null, an: r.an, logoGitmisti: r.logo_gitmisti, kaynakSurumNo: r.kaynak_surum_no,
         degisiklikler: fiyatGorur ? degisiklikler : degisiklikler.map(degisiklikFiyatsiz),
       };
     }),

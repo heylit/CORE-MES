@@ -10,7 +10,7 @@ import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { PARA_BIRIMI_LISTEDE_YOK, paraBirimiSemasi } from '#paylasilan/sozlesme/siparisler.ts';
 import type {
   SiparisDonusumVerisi, Teklif, TeklifArsivVerisi, TeklifAyrintisi, TeklifDurumu, TeklifEkleVerisi, TeklifFormuMetni, TeklifGuncelleVerisi, TeklifListesiSuzgeci,
-  TeklifSilmeCevabi, TeklifSurumuVerisi,
+  TeklifSilmeCevabi, TeklifSiparisUygulaVerisi, TeklifSurumuVerisi,
 } from '#paylasilan/sozlesme/siparisler.ts';
 import { firmaKoduSecimi, numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { bildirimGonder, bildirimKapat, kalanGun } from '../bildirim/disari.ts';
@@ -20,11 +20,11 @@ import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeOzetleri, malzemeSatinAlmaAyrintilari, malzemeYerlilikOranlari, satisBirimleri } from '../malzemeler/disari.ts';
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import {
-  ARSIVDE_DEGIL, arsivdeReddi, arsivReddi, silmeReddi, silmeYetkisiReddi, BIRIM_LISTEDE_YOK, FIRMA_YOK, NUMARA_UZUN, ONAYLANACAK_ISKONTO_YOK, ONAYLANACAK_TERMIN_YOK, SURUM_YOK, TEKLIF_YOK, aramaKalibi, fiyatReddi, firmaReddi, iskontoOnayiGerekir,
-  formMetniReddi, kartBaglamaReddi, kartsizSatirReddi, malzemeReddi, miktarReddi, onayHedefi, talepDuzenlemeReddi, talepKalemi, dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi,
+  ARSIVDE_DEGIL, UYGULA_KALEM_UYUMSUZ, arsivdeReddi, arsivReddi, silmeReddi, silmeYetkisiReddi, BIRIM_LISTEDE_YOK, FIRMA_YOK, NUMARA_UZUN, ONAYLANACAK_ISKONTO_YOK, ONAYLANACAK_TERMIN_YOK, SURUM_YOK, TEKLIF_YOK, aramaKalibi, fiyatReddi, firmaReddi, iskontoOnayiGerekir,
+  formMetniReddi, kartBaglamaReddi, kartsizSatirReddi, malzemeReddi, miktarReddi, onayHedefi, talepDuzenlemeReddi, talepKalemi, dortGozReddi, surumHedefi, surumDurumu, kabulSonrasiPlanReddi, yenidenKabulReddi, siparisUygulaReddi, teklifGecisReddi, teklifHedefi,
 } from './kurallar.ts';
 import type { TeklifKomutu } from './kurallar.ts';
-import { siparisEkle } from './servis.ts';
+import { siparisAyrintisi, siparisEkle, siparisRevizeEt } from './servis.ts';
 import * as sorgular from './sorgular.ts';
 import { satisTaslagiHazirla, satisTaslagiYaz, yerTutaniKaldir } from './teklif-deneme.ts';
 import type { KilitliTeklif, TeklifAlanlari, TeklifBaslikSatiri } from './sorgular.ts';
@@ -91,6 +91,7 @@ export async function teklifAyrintisi(db: Db, id: number): Promise<TeklifAyrinti
       };
     }),
     surumler,
+    siparisteSurumNo: teklif.siparisId === null ? null : await sorgular.siparistekiTeklifSurumu(db, teklif.siparisId),
     kdvSecenekleri: await kdvSecenekleri(db, tesisGunu(Date.now())),
   };
 }
@@ -176,6 +177,10 @@ export async function teklifGuncelle(db: Db, kullanici: Kullanici, id: number, g
 export async function surumVer(db: Db, kullanici: Kullanici, id: number, g: TeklifSurumuVerisi): Promise<TeklifAyrintisi> {
   const mevcut = await kilitle(db, id);
   gecisDenetle(mevcut.durum, 'surum');
+  // 3637: kabul edilmiş teklifin plandaki yeri değişmez; plan taslaklı sürüm de, yeri kaldıran elle sürüm de bu durumda yoktur.
+  const planRet = kabulSonrasiPlanReddi(mevcut.durum, g.planTaslagi !== null);
+  if (planRet !== null) throw dogrulama(planRet, 'planTaslagi');
+  const kabulSonrasi = mevcut.durum === 'kabul' || mevcut.durum === 'siparis';
   const talep = await sorgular.talepSatirlari(db, id);
   const ret = fiyatReddi(talep.map((t) => t.id), g.fiyatlar.map((f) => f.satirId));
   if (ret !== null) throw dogrulama(ret, 'fiyatlar');
@@ -184,13 +189,13 @@ export async function surumVer(db: Db, kullanici: Kullanici, id: number, g: Tekl
   const terminOnayi = plan?.onayBekler ?? false;
   const hedef = surumHedefi(g.iskontoOrani, terminOnayi);
   await surumluYaz(db, id, () => sorgular.teklifDurumYaz(db, id, {
-    hedef, surum: g.surum, kisiId: kullanici.id, not: null, kabulSurumu: null, siparisId: null,
+    hedef: surumDurumu(mevcut.durum, hedef), surum: g.surum, kisiId: kullanici.id, not: null, kabulSurumu: null, siparisId: null,
   }));
   const surum = await sorgular.surumEkle(db, id, { ...g, terminTarihi: plan === null ? g.terminTarihi : plan.termin }, g.fiyatlar, kullanici.id);
   if (hedef === 'verildi') await sorgular.logoTeklifSirasinaEkle(db, id, null);
   if (plan !== null && g.planTaslagi !== null && g.gecerlilik !== null) {
     await satisTaslagiYaz(db, kullanici, id, surum.id, g.gecerlilik, g.planTaslagi, plan.hazirlik);
-  } else {
+  } else if (!kabulSonrasi) {
     await yerTutaniKaldir(db, id);
   }
   const t = await teklifAyrintisi(db, id);
@@ -226,7 +231,7 @@ export async function iskontoOnayla(db: Db, kullanici: Kullanici, id: number, g:
   const ret = veren === null ? null : dortGozReddi(await sistemAyariOku(db, 'siparisler.iskonto-dort-goz'), veren, kullanici.id);
   if (ret !== null) throw gecersiz(ret);
   await surumluYaz(db, id, () => sorgular.teklifDurumYaz(db, id, {
-    hedef: onayHedefi({ ...bekleyen, iskonto: false }), surum: g.surum, kisiId: kullanici.id, not: null, kabulSurumu: null, siparisId: null,
+    hedef: surumDurumu(mevcut.durum, onayHedefi({ ...bekleyen, iskonto: false })), surum: g.surum, kisiId: kullanici.id, not: null, kabulSurumu: null, siparisId: null,
   }));
   await sorgular.iskontoOnayiEkle(db, id, kullanici.id);
   if (onayHedefi({ ...bekleyen, iskonto: false }) === 'verildi') await sorgular.logoTeklifSirasinaEkle(db, id, null);
@@ -287,9 +292,14 @@ export async function formMetniKaydet(db: Db, kullanici: Kullanici, id: number, 
 export async function kabulEt(db: Db, kullanici: Kullanici, id: number, g: { surum: number; surumNo: number }): Promise<TeklifAyrintisi> {
   const mevcut = await kilitle(db, id);
   gecisDenetle(mevcut.durum, 'kabul');
-  if (!(await sorgular.teklifSurumleri(db, id)).some((v) => v.surum_no === g.surumNo)) throw dogrulama(SURUM_YOK, 'surumNo');
+  const surumler = await sorgular.teklifSurumleri(db, id);
+  const kabulEdilen = surumler.find((v) => v.surum_no === g.surumNo);
+  if (kabulEdilen === undefined) throw dogrulama(SURUM_YOK, 'surumNo');
+  // 3637: kabuldeki ya da siparişteki teklifte yeni kabul, kabul edilenden sonraki ve iskontosu onaylı sürüme olur.
+  const yeniden = yenidenKabulReddi(mevcut.durum, mevcut.kabul_surumu, g.surumNo, iskontoOnayiGerekir(kabulEdilen.iskonto_orani) && kabulEdilen.onaylayan_id === null);
+  if (yeniden !== null) throw gecersiz(yeniden);
   await surumluYaz(db, id, () => sorgular.teklifDurumYaz(db, id, {
-    hedef: teklifHedefi('kabul'), surum: g.surum, kisiId: kullanici.id, not: null, kabulSurumu: g.surumNo, siparisId: null,
+    hedef: surumDurumu(mevcut.durum, teklifHedefi('kabul')), surum: g.surum, kisiId: kullanici.id, not: null, kabulSurumu: g.surumNo, siparisId: null,
   }));
   return teklifAyrintisi(db, id);
 }
@@ -342,6 +352,41 @@ export async function siparisDonustur(
   // Sipariş plana kendi emriyle girer; satış taslağının yeri kalkar.
   await yerTutaniKaldir(db, id);
   return { teklif: await teklifAyrintisi(db, id), siparisId: siparis.id };
+}
+
+// 3637: kabul edilen sürümün fiyatları, KDV oranı ve ödeme koşulu onaylı siparişin yeni sürümü (Rev) olarak uygulanır. Kalem, miktar, termin,
+// müşteri ve para birimi değişmez (sipariş Rev kuralı da bunu ister); sürümdeki termin siparişe geçmez, sipariş ekranından elle değişir.
+// Sipariş Rev yetkisi ve kuralları aynen işler (yetki uçta: siparisler.onayla ve fiyat görme); Finans beklenen tahsilatı Rev ile yeniden yazılır.
+export async function siparisUygula(
+  db: Db, kullanici: Kullanici, id: number, g: TeklifSiparisUygulaVerisi,
+): Promise<{ teklif: TeklifAyrintisi; siparisId: number }> {
+  const mevcut = await kilitle(db, id);
+  const siparisteki = mevcut.siparis_id === null ? null : await sorgular.siparistekiTeklifSurumu(db, mevcut.siparis_id);
+  const ret = siparisUygulaReddi({ durum: mevcut.durum, siparisId: mevcut.siparis_id, kabulSurumu: mevcut.kabul_surumu }, g.surumNo, siparisteki);
+  if (ret !== null) throw gecersiz(ret);
+  const siparisId = mevcut.siparis_id;
+  if (siparisId === null) throw new Error('Teklifin siparişi yok');
+  const teklif = await teklifAyrintisi(db, id);
+  const surum = teklif.surumler.find((v) => v.surumNo === g.surumNo);
+  if (surum === undefined) throw dogrulama(SURUM_YOK, 'surumNo');
+  const fiyat = new Map(surum.fiyatlar.map((f) => [f.satirId, f.iskontoluFiyat]));
+  const siparis = await siparisAyrintisi(db, siparisId);
+  const satirlar = siparis.satirlar.map((k) => {
+    const t = teklif.satirlar.find((x) => x.sira === k.sira && x.malzemeNo === k.malzemeNo);
+    const yeni = t === undefined ? undefined : fiyat.get(t.id);
+    return { id: k.id, malzemeNo: k.malzemeNo, miktar: k.miktar, birimFiyat: yeni ?? null, termin: k.termin, aciklama: k.aciklama, eslesti: yeni !== undefined };
+  });
+  if (satirlar.length !== teklif.satirlar.length || satirlar.some((k) => !k.eslesti)) throw gecersiz(UYGULA_KALEM_UYUMSUZ);
+  const gerekce = `${teklif.no} sürüm ${String(g.surumNo)}: ${g.gerekce}`;
+  const paraBirimi = paraBirimiSemasi.safeParse(siparis.paraBirimi);
+  if (!paraBirimi.success) throw dogrulama(PARA_BIRIMI_LISTEDE_YOK, 'paraBirimi');
+  await siparisRevizeEt(db, kullanici, siparisId, {
+    firmaId: siparis.firmaId, musteriSiparisNo: siparis.musteriSiparisNo, siparisTarihi: siparis.siparisTarihi, termin: siparis.termin,
+    paraBirimi: paraBirimi.data, kdvOrani: surum.kdvOrani ?? siparis.kdvOrani, odemeKosulu: surum.odemeKosulu ?? siparis.odemeKosulu,
+    aciklama: siparis.aciklama, cezaOraniGun: siparis.cezaOraniGun, cezaTavaniOrani: siparis.cezaTavaniOrani, odemeVadesiGun: siparis.odemeVadesiGun,
+    satirlar: satirlar.map(({ eslesti: _e, ...k }) => k), surum: g.siparisSurum, gerekce,
+  }, true, g.surumNo);
+  return { teklif: await teklifAyrintisi(db, id), siparisId };
 }
 
 // 3419 a: yalnız sürümü olmayan teklif kalıcı silinir; açan ya da sipariş onay yetkilisi siler. Numara geri verilmez.
