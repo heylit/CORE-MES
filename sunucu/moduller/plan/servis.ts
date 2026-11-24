@@ -38,7 +38,7 @@ import type { BasladigiGun } from '../vardiya/disari.ts';
 import type { AdimDugumu, PlanIsEmri } from '../uretim-emirleri/disari.ts';
 import {
   araliktanCikar, arkaArkaya, dortSaatGerekcesi, dortSaatIhlalleri, korunanIsler, kilitCakisani, emirTutari, katkiPaylari, calisilanParcalar, oncelikCarpani, oncelikSinifi, ayniKaynak, cakisirMi, dondurulacaklar, enErkenBaslangic, enErkenBitis, gostergeler, isSuresi, calismaBitisi,
-  adetPayi, araliklaraEkle, ayarVeGecikme, bolmeAdetleri, EK_MESAI_HAFTA_SAAT, ekMesaiButcesi, vardiyaSaati, kapasiteBollugu, kapasiteKesri, kaynakAnahtari, kesisimDk, motorUyarilari, onayGecisiReddi, onayGecisleri, personelYuku, planMaliyeti, sabitYeri, sinirliGunSayisi, terminDakikasi, uyarilar, uzayanBosluk, verimliSure, yetkinlikUyarisi, yukYuzdesi,
+  adetPayi, araliklaraEkle, ayarVeGecikme, bolmeAdetleri, EK_MESAI_HAFTA_SAAT, ekMesaiButcesi, vardiyaSaati, kapasiteBollugu, kapasiteKesri, kaynakAnahtari, kesisimDk, motorUyarilari, onayGecisiReddi, onayGecisleri, personelYuku, planMaliyeti, sabitYeri, sinirliGunSayisi, terminDakikasi, uyarilar, uzayanBosluk, verimliSure, kisiBaskaIstasyonda, yetkinlikUyarisi, yukYuzdesi,
   vardiyasiTanimsiz,
 } from './kurallar.ts';
 import type { OnayBaglami, PersonelMerkezi, YetkinlikVerisi } from './kurallar.ts';
@@ -115,6 +115,8 @@ interface Baglam {
   operator: Map<number, number>;
   // S3: bugün geçerli istasyon yetkinlikleri (kişi -> istasyonlar; yetkinliği tanımlanmamış kişi haritada yoktur) ve makine yetkinlikleri.
   yetkinlik: YetkinlikVerisi;
+  // 3612: kişi -> bugünkü istasyonu (en büyük yüzdeli atama); atamasız kişi haritada yoktur.
+  kisiIstasyonu: ReadonlyMap<number, number>;
   // Motorun yerleştiremediği bölünmüş işlerin parçaları (no, adet): bölme kalır, iş yerleşmemiş görünür.
   yersiz: Map<number, BolmeParcasi[]>;
   // İstasyonun aktif makineleri (kod sırasıyla): rota adımının istasyonu bunlara açılır; okunmamış istasyon sorulunca okunur.
@@ -519,7 +521,8 @@ async function baglamKur(db: Db, kullanici: Kullanici | null, hedef: Hedef, orta
   const b: Baglam = {
     simdi, gun0, hedef, ayar, isler, rotaEksik, eskiRota: new Map(), motorNo: new Map(), kaynaklar, defter, kapaliGunler: [], siparisSatirlari, bedelAyari: await s.bedelAyariOku(db, hedef),
     finansmanOraniGun: await bir('finansman', () => planFinansmanOrani(db, tesisGunu(simdi))), kurlar: await bir('kurlar', () => planKurlari(db, tesisGunu(simdi))),
-    yetkinlik: await bir('yetkinlik', () => yetkinlikOku(db)), yersiz: await s.yersizBolmeler(db, hedef), istasyonMakineleri,
+    yetkinlik: await bir('yetkinlik', () => yetkinlikOku(db)),
+    kisiIstasyonu: await bir('kisi-istasyonu', async () => new Map((await istasyonKisileri(db)).map((x) => [x.kisiId, x.istasyonId]))), yersiz: await s.yersizBolmeler(db, hedef), istasyonMakineleri,
     ...await ekMesaiTakvimde(db, hedef, simdi, await bir('vardiya', () => vardiyaOku(db, simdi, okunanKaynaklar))),
     izinli: kullanici ? await bir('izinli', () => kisininIzinliIsMerkezleri(db, kullanici.id)) : [],
     fiyatGorur: kullanici !== null && islemVarMi(kullanici, 'siparisler.fiyat-oku'), katkilar: new Map(), gercek: gerceklesenler(simdi, acik), fiili: fiiliKaynaklar(acik),
@@ -1090,6 +1093,7 @@ function uyariListesi(b: Baglam, y: Yer, yerler: readonly Yer[]): string[] {
   const yetkinlik = new Set([y.kaynak, ...(y.parcalar ?? []).map((p) => p.kaynak)].map((x) => yetkinlikUyarisi(
     x, x.tur === 'makine' ? b.kaynaklar.get(kaynakAnahtari(x))?.istasyon?.id ?? null : rotaIst, b.yetkinlik, TERMINAL_YETKINLIGI)));
   for (const m of yetkinlik) if (m !== null) u.push(m);
+  for (const x of new Set([y.kaynak, ...(y.parcalar ?? []).map((p) => p.kaynak)].map((k) => kisiBaskaIstasyonda(k, rotaIst, b.kisiIstasyonu)))) if (x !== null) u.push(x);
   // 2511 a: vardiyası seçilmemiş kişiye yerleşen iş uyarı alır; motor kayıtlıyken kişinin çalışma zamanı yoktur (anahtarTakvimi), uyarı
   // yalnız önceden yerleşmiş ya da motorsuz kurulumdaki iş içindir. Kapasiteye girmez.
   if ([y.kaynak, ...(y.parcalar ?? []).map((p) => p.kaynak)].some((x) => x.tur === 'kisi' && (b.takvimler.get(kaynakAnahtari(x)) ?? null) === null)) u.push(KISI_VARDIYASIZ);

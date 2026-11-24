@@ -417,6 +417,15 @@ export function uyarilar(y: Aralik & { kaynak: Kaynak }, b: {
 // sayılmaz: operatör yerine yöneticinin başlatacağı varsayılmaz. İstasyonu bilinmeyen adımda denetim yok.
 export const KISI_YETKINLIGI_YOK = 'Kişinin bu istasyonda yetkinliği yok; terminal işi başlatmaz.';
 export const YETKIN_KISI_YOK = 'Bu makinede işi başlatabilecek yetkin kişi yok; terminal işi başlatmaz.';
+// 3612: kişi başka istasyona atalıysa iş adımın rotadaki istasyonunun terminalinde görünür; kişinin istasyonu (en büyük yüzdeli bugünkü atama)
+// adımınkinden farklıysa planlayıcı uyarılır. Atamasız kişide ya da istasyonu bilinmeyen adımda uyarı yoktur (veri yok).
+export const KISI_BASKA_ISTASYONDA = 'Kişi başka istasyona atalı; iş rotadaki istasyonun terminalinde görünür.';
+export function kisiBaskaIstasyonda(kaynak: Kaynak, adimIstasyonId: number | null, kisiIstasyonu: ReadonlyMap<number, number>): string | null {
+  if (kaynak.tur !== 'kisi' || adimIstasyonId === null) return null;
+  const atali = kisiIstasyonu.get(kaynak.id);
+  return atali === undefined || atali === adimIstasyonId ? null : KISI_BASKA_ISTASYONDA;
+}
+
 export interface YetkinlikKurali {
   istasyon: (yetkin: boolean, muaf: boolean) => string | null;
   makine: (kisiId: number, makineler: readonly number[], kayitlar: readonly { kisiId: number; makineId: number }[], muaf: boolean) => string | null;
