@@ -136,6 +136,7 @@ describe('Rota sekmeleri (3247 a)', () => {
     fireEvent.click(within(g).getByRole('button', { name: /Rota$/ }));
     const turler = within(bolge).getByRole('group', { name: 'Yeni rotanın emir türü' });
     expect((within(turler).getByRole('button', { name: 'Seri' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(within(bolge).getByText(/Seri, ürünün Standart rotasıdır ve hep vardır/)).toBeTruthy();
     fireEvent.click(within(turler).getByRole('button', { name: 'Numune' }));
     fireEvent.click(within(bolge).getByRole('checkbox', { name: /yürürlükteki revizyonundan başla/ }));
     fireEvent.click(within(bolge).getByRole('button', { name: 'Numune rotasını aç' }));

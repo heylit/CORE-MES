@@ -102,6 +102,7 @@ export function YeniRotaFormu({ r, urunId, rotalar, kapat }: { r: RotaEkrani; ur
           );
         })}
       </span>
+      {!ilk && <p className="tc-rr1-ipucu">Seri, ürünün Standart rotasıdır ve hep vardır; ayrıca açılmaz. Başka bir tür seç.</p>}
       {(tur !== 'seri' || ilk) && (
         <label className="tc-rr1-alan">
           <span>Rotanın adı</span>
