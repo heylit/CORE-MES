@@ -6,6 +6,8 @@ import type { Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { CizgiGrafik } from './CizgiGrafik.tsx';
+import { gidisatIsaretleri } from './izleme-yorumu.ts';
+import { useKapanmalar } from './kapanma-sorgusu.ts';
 import {
   ISLEMCI_ESIGI_YUZDE, bellekYorumu, hatYorumu, islemciYorumu, mesguliyetYorumu, takilmaYorumu, yanitYorumu, yogunlukYorumu,
 } from './gidisat-yorum.ts';
@@ -43,6 +45,7 @@ export function Gidisat({ ek }: { ek?: ReactNode }) {
     enabled: aralik !== 'saat',
     refetchInterval: TAZELEME_MS,
   });
+  const kapanmalar = useKapanmalar();
   const sorgu = aralik === 'saat' ? dakikalar : saatlik;
   const veri = aralik === 'saat'
     ? dakikalar.data && {
@@ -50,6 +53,8 @@ export function Gidisat({ ek }: { ek?: ReactNode }) {
     }
     : saatlik.data && { seriler: saatSerileri(saatlik.data.saatler), ozet: saatOzetiKutulari(saatlik.data.saatler), bellekEsigi: null };
   const etiket = (an: Date) => zamanEtiketi(an, aralik);
+  const noktalar = veri?.seriler.p95;
+  const isaretler = gidisatIsaretleri(kapanmalar.data?.kapanmalar, noktalar?.[0]?.an, noktalar?.at(-1)?.an);
   const yavas = dakikalar.data ? enYavasUclar(dakikalar.data.dakikalar) : [];
   const birim = aralik === 'saat' ? 'dakikada' : 'saatte';
   const bekleyen = veri && (veri.ozet.havuzBekleyen === null && veri.ozet.havuzReddi === null
@@ -71,17 +76,20 @@ export function Gidisat({ ek }: { ek?: ReactNode }) {
         <>
           <div className="tc-sistem-grafikler">
             <CizgiGrafik
+              isaretler={isaretler}
               baslik="Sunucunun yanıt süresi" aciklama="isteklerin %95'inin yanıtlandığı süre, ms" birim=" ms" etiket={etiket} esik={YANIT_ESIGI_MS}
               simdi={sonDeger(veri.seriler.p95, ' ms')} yorum={yanitYorumu(veri.seriler.p95)}
               seriler={[{ ad: 'Yanıt süresi', ton: 'birinci', noktalar: veri.seriler.p95 }]}
             />
             <CizgiGrafik
+              isaretler={isaretler}
               baslik="Kullanım yoğunluğu" aciklama={`${birim} gelen istek`} birim="" etiket={etiket}
               simdi={sonDeger(veri.seriler.istek, '')} yorum={yogunlukYorumu(veri.seriler.istek, etiket, veri.ozet.sunucuHatasi)}
               seriler={[{ ad: 'İstek', ton: 'birinci', noktalar: veri.seriler.istek }]}
             />
             {ek}
             <CizgiGrafik
+              isaretler={isaretler}
               baslik="Sunucunun yükü" aciklama="işlemci, %" birim="%" etiket={etiket} tavan={100} esik={ISLEMCI_ESIGI_YUZDE}
               yorum={islemciYorumu(veri.seriler.makine, veri.seriler.surec)}
               seriler={[{ ad: 'Makine', ton: 'birinci', noktalar: veri.seriler.makine }, { ad: 'Bu uygulama', ton: 'ikinci', noktalar: veri.seriler.surec }]}
@@ -90,21 +98,25 @@ export function Gidisat({ ek }: { ek?: ReactNode }) {
           <h3 className="tc-sistem-baslik">Sunucunun içi <span className="tc-sistem-soluk">sorun ararken bakılır</span></h3>
           <div className="tc-sistem-grafikler">
             <CizgiGrafik
+              isaretler={isaretler}
               baslik="Bellek" aciklama="MB, makinede boş kalan ve bu uygulamanın kullandığı" birim=" MB" etiket={etiket} esik={veri.bellekEsigi ?? undefined}
               yorum={bellekYorumu(veri.seriler.makineBosBellek, veri.seriler.uygulamaBellek, veri.bellekEsigi)}
               seriler={[{ ad: 'Makinede boş', ton: 'birinci', noktalar: veri.seriler.makineBosBellek }, { ad: 'Bu uygulama', ton: 'ikinci', noktalar: veri.seriler.uygulamaBellek }]}
             />
             <CizgiGrafik
+              isaretler={isaretler}
               baslik="Sunucunun meşguliyeti" aciklama="istekleri sırayla işleyen ana hattın dolu geçen payı, %" birim="%" etiket={etiket} tavan={100}
               simdi={sonDeger(veri.seriler.anaIs, '%')} yorum={mesguliyetYorumu(veri.seriler.anaIs)}
               seriler={[{ ad: 'Dolu', ton: 'birinci', noktalar: veri.seriler.anaIs }]}
             />
             <CizgiGrafik
+              isaretler={isaretler}
               baslik="Takılma süresi" aciklama="sunucunun bir işe takılıp ötekileri beklettiği en uzun süre, ms" birim=" ms" etiket={etiket} esik={OLAY_DONGUSU_ESIGI_MS}
               simdi={sonDeger(veri.seriler.dongu, ' ms')} yorum={takilmaYorumu(veri.seriler.dongu)}
               seriler={[{ ad: 'Takılma', ton: 'birinci', noktalar: veri.seriler.dongu }]}
             />
             <CizgiGrafik
+              isaretler={isaretler}
               baslik="Veritabanı hatları" aciklama="aynı anda kullanılan veritabanı bağlantısı" birim="" etiket={etiket}
               tavan={veri.ozet.havuzBoyut ?? undefined}
               simdi={veri.ozet.havuzKullanimda === null ? undefined : veri.ozet.havuzBoyut === null ? sayiMetni(veri.ozet.havuzKullanimda) : `${veri.ozet.havuzKullanimda} / ${veri.ozet.havuzBoyut}`}

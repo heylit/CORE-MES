@@ -14,3 +14,7 @@ export type { DisKopyaKaydi } from '#paylasilan/sozlesme/saglik.ts';
 
 // Önceki kapanışın kaydı (kart 3668): kablolama.ts açılış kancası olarak kaydeder.
 export { kapanmaAcilisKancasi } from './kapanma.ts';
+
+// Şu an ve dış bağlantılar ekranının okumaları (3668 B): başka modüllerin durumunu `kablolama.ts` bu kayıtlarla bağlar.
+export { oturumSayisiOkuyucusuKaydet, planHesapOkuyucusuKaydet } from './su-an.ts';
+export { logoBaglantiOkuyucusuKaydet, smartesBaglantiOkuyucusuKaydet, yaziciBaglantiOkuyucusuKaydet } from './dis-baglanti.ts';

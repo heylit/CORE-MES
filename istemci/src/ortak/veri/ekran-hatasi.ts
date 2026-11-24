@@ -23,8 +23,8 @@ export interface EkranHatasiGovdesi {
 
 export type EkranHatasiGondericisi = (govde: EkranHatasiGovdesi) => Promise<unknown>;
 
-// Uç dilim C ile gelir; gelene kadar gönderim kapalıdır (olmayan uca istek 404 üretir). C'de true olur.
-export const EKRAN_HATASI_UCU_HAZIR = false;
+// Uç sağlık modülündedir (dilim C); false yapılırsa gönderim kapanır.
+export const EKRAN_HATASI_UCU_HAZIR = true;
 
 const sunucuyaGonder: EkranHatasiGondericisi = (govde) => !EKRAN_HATASI_UCU_HAZIR ? Promise.resolve() :
   api.post(EKRAN_HATASI_YOLU, govde, { arkaPlan: true, oturumBitirmez: true, zamanAsimiMs: ZAMAN_ASIMI_MS });

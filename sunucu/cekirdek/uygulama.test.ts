@@ -134,6 +134,8 @@ const TAM_DENETLENMEYEN_UCLAR = [
   // Dosya saklama yüklemesi: içerik deftere girmez (kart #82, DS9 a).
   'POST /dosyalar/:ozet/parca govdesiz',
   'POST /dosyalar/eksikler govdesiz',
+  // Ekran hatası bildirimi: gövde (en çok ~2,5 KB) tablo satırında durur, silinemeyen defteri doldurmaz (kart 3668, Risk S1).
+  'POST /saglik/ekran-hatalari govdesiz',
   'POST /malzeme-katalogu-kartlari/:kimlik/kaydet govdesiz+secim',
   'POST /malzeme-katalogu-sablonlari/:kimlik/kaydet govdesiz',
   'POST /satin-alma-talepleri/ac govdesiz',

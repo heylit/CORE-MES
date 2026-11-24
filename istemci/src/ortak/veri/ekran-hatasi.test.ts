@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
 import { AgHatasi, ApiHatasi } from './api.ts';
-import { EKRAN_HATASI_ARALIGI_MS, EKRAN_HATASI_UCU_HAZIR, ekranHatasiBildiriciKur, ekranHatasiDinleyicisiniKur, ekranHatasiGovdesi } from './ekran-hatasi.ts';
+import { EKRAN_HATASI_ARALIGI_MS, ekranHatasiBildiriciKur, ekranHatasiDinleyicisiniKur, ekranHatasiGovdesi } from './ekran-hatasi.ts';
 
 describe('ekran hatası bildirimi', () => {
   test('aynı hata dakikada bir kez gider; süre geçince yeniden, farklı hata hemen', () => {
@@ -30,10 +30,6 @@ describe('ekran hatası bildirimi', () => {
     expect(b.bildir('ResizeObserver loop completed with undelivered notifications.')).toBe(false);
     expect(b.bildir(new Error('ResizeObserver loop limit exceeded'))).toBe(false);
     expect(gonder).not.toHaveBeenCalled();
-  });
-
-  test('uç gelene kadar (dilim C) varsayılan gönderim kapalıdır', () => {
-    expect(EKRAN_HATASI_UCU_HAZIR).toBe(false);
   });
 
   test('gövde sorgusuz sayfa, kısaltılmış iletiyi ve kişisiz alanları taşır', () => {
