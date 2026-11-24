@@ -179,6 +179,7 @@ describe('Malzemeler rol dağılımı (gerçek PostgreSQL, gerçek giriş)', () 
     satin_alma_muduru: YAZAR,
     uretim_muduru: { ...HIC, sayfa: true },
     proses_muhendisi: { ...HIC, sayfa: true },
+    takimhane_operatoru: HIC,
   };
 
   test('her rol: sayfa, kart açma, onaylama ve ayar onaylı dağılımdaki gibidir; okuma yalnız sayfası olan role açık', async () => {

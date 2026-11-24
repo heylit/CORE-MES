@@ -97,6 +97,7 @@ describe('rol dağılımı: Arkon rolleri, bakım rolü ve malzeme tanım yetkis
     satin_alma_muduru: { arkon: null, tanim: false, yansima: false, yeniden: false },
     uretim_muduru: { arkon: 'lead', tanim: false, yansima: true, yeniden: true },
     proses_muhendisi: { arkon: null, tanim: false, yansima: false, yeniden: false },
+    takimhane_operatoru: { arkon: null, tanim: false, yansima: false, yeniden: false },
   };
   // Kişinin Arkon rolünü belirleyen işlemler; `arkon.yansima-oku` liste okuma işlemidir, Arkon rolü değildir.
   // Olmayan satırı yeniden denemek: yetkili 404 alır (kapsam ve varlık uçta), yetkisiz 403; hiçbir satır yazılmaz.
