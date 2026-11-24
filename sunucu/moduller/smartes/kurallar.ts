@@ -281,10 +281,12 @@ export interface GidecekIsEmri {
   makineKodu: string | null;
   stokNo: string;
   stokAdi: string | null;
+  // SmartES OperationCode: operasyon tipinden kurulur (`smartesOperasyonKodu`); tip yoksa boş (gönderilmez).
+  operasyonKodu: string;
 }
 
 export const IS_EMRI_METODU = 'WorkOrdersCreateUpdate';
-export const OPERASYON_METODU = 'OperationCreateUpdate';
+export const OPERASYON_LISTE_METODU = 'OperationList';
 
 // Aynı SmartES koduna birden çok CORE kaydı bağlıysa (atölyenin tek iş istasyonu) koddan kayıt çıkarılamaz: null.
 export function koddanTekKayit(eslemeler: readonly { tmiId: number; smartesKod: string }[], kod: string): number | null {
@@ -294,8 +296,29 @@ export function koddanTekKayit(eslemeler: readonly { tmiId: number; smartesKod: 
 
 // SmartES iş emri no: üretim emri no ve adım no (her adım ayrı iş emridir, brief tuzak 12).
 export const smartesIsEmriNo = (emirNo: string, opNo: number): string => `${emirNo}-${opNo}`;
-// Operasyon kodu adım numarasıdır (VARSAYIM): iş emrinde operasyon tipi kimliği yok (BASKA-MODUL-ISTEKLERI madde 1); gelince eşlemeden okunur.
-export const smartesOperasyonKodu = (opNo: number): string => String(opNo);
+// SmartES operasyon kodu = önek + adım numarası (TRN20). Önek tipin SmartES eşlemesi, yoksa CORE tip kodudur. Tip kodu SmartES operasyon
+// listesinde aynen varsa (geçici tipler: FRZ20) kod aynen gider, adım numarası eklenmez (VARSAYIM, FARK.md). Tipi olmayan adımın kodu null.
+export interface OperasyonTipiKodu { kod: string; smartesOnek: string | null }
+export function smartesOperasyonKodu(opNo: number, tip: OperasyonTipiKodu | null | undefined, listedekiler: ReadonlySet<string> | null = null): string | null {
+  if (tip == null) return null;
+  if (tip.smartesOnek === null && listedekiler?.has(tip.kod.toLowerCase())) return tip.kod;
+  return `${tip.smartesOnek ?? tip.kod}${opNo}`;
+}
+
+// OperationList satırlarındaki kodlar (küçük harfle). Satır var ama hiçbirinde kod alanı yoksa null: alan adı yanlış varsayılmıştır, "yok" sayılıp iş emri bekletilmez ya da gönderilmez.
+export function operasyonListesiKodlari(satirlar: readonly TabloSatiri[]): Set<string> | null {
+  const kodlar = new Set<string>();
+  for (const s of satirlar) {
+    const k = listeKaydiOku('operasyon', s)?.kod;
+    if (k != null) kodlar.add(k.toLowerCase());
+  }
+  return satirlar.length > 0 && kodlar.size === 0 ? null : kodlar;
+}
+
+// Eşleme ekranı: operasyon tipinin SmartES karşılığı bir önektir; SmartES kodlarından sondaki rakamlar atılarak öneriler çıkar (TRN10, TRN20 -> TRN).
+export function operasyonOnekleri(kodlar: readonly string[]): string[] {
+  return [...new Set(kodlar.map((k) => k.replace(/\d+$/, '')).filter((k) => k !== ''))].sort();
+}
 
 const dakika = (d: string | null, carpan = 1): number => {
   if (d === null) return 0;
@@ -312,7 +335,7 @@ export function isEmriParametreleri(i: GidecekIsEmri, kapanis: 'yok' | 'bitti' |
   return [
     ['WorkOrderNo', smartesIsEmriNo(i.emirNo, i.opNo)],
     ['WorkstationCode', i.istasyonKodu],
-    ['OperationCode', smartesOperasyonKodu(i.opNo)],
+    ['OperationCode', i.operasyonKodu],
     ['MachineCode', i.makineKodu ?? ''],
     ['WorkOrderDate', gunBasi(i.baslangic ?? bugun)],
     ['StockNo', i.stokNo],
@@ -335,12 +358,6 @@ export function isEmriParametreleri(i: GidecekIsEmri, kapanis: 'yok' | 'bitti' |
     ['RouteCode', ''],
   ];
 }
-
-// OperationCreateUpdate (md. 75). ID 0 yeni ya da koda göre var olan kayıttır (VARSAYIM: belge "Bkz. ID*" der, tanımı vermez).
-export const operasyonParametreleri = (i: Pick<GidecekIsEmri, 'istasyonKodu' | 'opNo' | 'ad'>): Parametreler => [
-  ['ID', 0], ['Code', smartesOperasyonKodu(i.opNo)], ['Name', i.ad.slice(0, 50)], ['WorkstationCode', i.istasyonKodu], ['IsPassive', false],
-  ['IsQualityControl', false],
-];
 
 // Gönderilen alanların özeti: değişmeyen iş emri yeniden gönderilmez, değişen (adet, istasyon, makine, termin...) gönderilir.
 // QuantityUpdate özete girmez: değişikliğin sonucudur, alanı değildir; girseydi bir sonraki tur özet farkıyla yeniden gönderirdi.
@@ -727,7 +744,7 @@ export interface SmartesAkisTanimi {
 
 export const SMARTES_AKISLARI: readonly SmartesAkisTanimi[] = [
   { anahtar: 'is-emri', yon: 'tmi-smartes', baslik: 'İş emri gönderimi', kaynak: 'bagli',
-    aciklama: 'SmartES karşılığı olan istasyonun planlı iş emri gider (WorkOrdersCreateUpdate, OperationCreateUpdate).' },
+    aciklama: 'SmartES karşılığı olan istasyonun planlı iş emri gider (WorkOrdersCreateUpdate; operasyon kodu OperationList içinde aranır, operasyon açılmaz).' },
   { anahtar: 'tanimlar', yon: 'tmi-smartes', baslik: 'İstasyon ve stok tanımları', kaynak: 'bagli', ayar: TANIM_AYARI,
     aciklama: 'Ayrı anahtar: "SmartES tanım gönderimi". SmartES\'te kodu olmayan aktif istasyon ve stok kartı tanım olarak gider '
       + '(WorkStationCreateUpdate, StockCreateUpdate); var olan kod gönderilmez, sonucu bilinmeyen gönderim yinelenmez. Kod eşlemesi kendiliğinden yazılmaz; rota tanımı yok.' },
@@ -755,7 +772,7 @@ export function smartesAkisDurumu(
 
 // Okuma ve gönderim metotları olmadan bağlantı çalışmaz; WSDL'de yoksa adlar yanlış varsayılmıştır (UYUM-BORCU 4).
 export const GEREKLI_METOTLAR: readonly string[] = [
-  ...Object.values(OKUMA_METOTLARI), MAKINE_LISTESI_METODU, IS_EMRI_METODU, OPERASYON_METODU,
+  ...Object.values(OKUMA_METOTLARI), MAKINE_LISTESI_METODU, IS_EMRI_METODU, OPERASYON_LISTE_METODU,
 ];
 
 export const eksikMetotlar = (wsdldekiler: readonly string[]): string[] => GEREKLI_METOTLAR.filter((m) => !wsdldekiler.includes(m));
@@ -764,7 +781,7 @@ export const eksikMetotlar = (wsdldekiler: readonly string[]): string[] => GEREK
 export const ISTEGE_BAGLI_METOTLAR: readonly string[] = [
   'WsWorkordersRejectStatusList', 'WarehouseStatusList', 'QualityControlStatusList', 'WorkStationList', 'WorkStationCreateUpdate', 'StocksList', 'StockCreateUpdate',
   'AllMachineInformationList', 'WorkordersList',
-  'OperationList', 'RejectsList', 'DownTimeList', 'OEEReport', 'PartsCycleTimesList',
+  'RejectsList', 'DownTimeList', 'OEEReport', 'PartsCycleTimesList',
 ];
 
 export const eksikIstegeBagliMetotlar = (wsdldekiler: readonly string[]): string[] => ISTEGE_BAGLI_METOTLAR.filter((m) => !wsdldekiler.includes(m));
@@ -998,7 +1015,7 @@ export const LISTE_TURLERI = SMARTES_LISTE_TURLERI;
 export type ListeTuru = (typeof LISTE_TURLERI)[number];
 
 export const LISTE_METOTLARI: Readonly<Record<ListeTuru, string>> = {
-  istasyon: 'WorkStationList', makine: MAKINE_LISTESI_METODU, operasyon: 'OperationList', fire: 'RejectsList', durus: 'DownTimeList',
+  istasyon: 'WorkStationList', makine: MAKINE_LISTESI_METODU, operasyon: OPERASYON_LISTE_METODU, fire: 'RejectsList', durus: 'DownTimeList',
 };
 
 // Süzgeç parametreleri boş gider: boş süzgeç bütün listeyi döner (VARSAYIM; belge süzgeçleri zorunlu saymaz).
@@ -1340,12 +1357,13 @@ export function cevrimSaniyesi(metni: string | null): number | null {
 
 // CORE'da tanımlı birim süre: plandaki iş emirlerinden (SmartES'e giden stok no ve operasyon kodu ile). Aynı stok ve operasyon için
 // farklı süreler varsa hangisinin geçerli olduğu bilinmez: null.
-export function tanimliSaniyeler(isler: readonly { stokNo: string; opNo: number; birimSureDk: string | null }[]): Map<string, number | null> {
+export function tanimliSaniyeler(isler: readonly { stokNo: string; operasyonKodu: string | null; birimSureDk: string | null }[]): Map<string, number | null> {
   const sonuc = new Map<string, number | null>();
   for (const i of isler) {
     const dk = i.birimSureDk === null ? NaN : Number(i.birimSureDk);
     if (!Number.isFinite(dk) || dk <= 0) continue;
-    const anahtar = `${i.stokNo}\u001f${smartesOperasyonKodu(i.opNo)}`;
+    if (i.operasyonKodu === null) continue;
+    const anahtar = tanimliAnahtari(i.stokNo, i.operasyonKodu);
     const sn = Math.round(dk * 60 * 10) / 10;
     sonuc.set(anahtar, sonuc.has(anahtar) && sonuc.get(anahtar) !== sn ? null : sn);
   }
@@ -1394,7 +1412,7 @@ export const ONAY_ILETILERI = {
 const ORNEK_PENCERE = { bas: new Date(0), son: new Date(0) };
 const ORNEK_IS_EMRI: GidecekIsEmri = {
   isEmriId: 1, emirNo: 'ORN', opNo: 10, ad: 'ORN', durum: 'planli', adet: 1, oncelik: 0, teslim: null, baslangic: null, ayarSuresiDk: null,
-  birimSureDk: null, istasyonKodu: 'ORN', makineKodu: null, stokNo: 'ORN', stokAdi: null,
+  birimSureDk: null, istasyonKodu: 'ORN', makineKodu: null, stokNo: 'ORN', stokAdi: null, operasyonKodu: 'ORN10',
 };
 
 export function kodParametreleri(): Map<string, string[]> {
@@ -1409,7 +1427,6 @@ export function kodParametreleri(): Map<string, string[]> {
   ekle(OKUMA_METOTLARI.alarm, alarmParametreleri(1, ORNEK_PENCERE));
   ekle(MAKINE_LISTESI_METODU, []);
   ekle(IS_EMRI_METODU, isEmriParametreleri(ORNEK_IS_EMRI, 'yok', '2026-01-01'));
-  ekle(OPERASYON_METODU, operasyonParametreleri(ORNEK_IS_EMRI));
   for (const k of KALITE_AMBAR_KAYNAKLARI) ekle(KALITE_AMBAR_METOTLARI[k], kaliteAmbarParametreleri(k, ORNEK_PENCERE));
   for (const tur of TANIM_TURLERI) {
     ekle(TANIM_METOTLARI[tur], tanimParametreleri({ tur, tmiId: 1, kod: 'ORN', ad: 'ORN' }));
@@ -1455,6 +1472,40 @@ export function parametreFarklari(wsdl: WsdlParametreleri): { karsilastirilan: n
     }
   }
   return { karsilastirilan, farklar };
+}
+
+// ASMX parametreyi adıyla bağlar: gönderilen ad serviste yoksa tarih parametresi sessizce DateTime.MinValue (0001-01-01) kalır ve SQL tarafı
+// "SqlDateTime overflow" verir. Gönderilen adın serviste yalnız büyük-küçük harf ya da alt çizgi farkıyla tek karşılığı varsa servisin adı kullanılır;
+// karşılığı olmayan ad ve gönderilmeyen zorunlu parametre ayrıca döner (hata iletisinde görünür). Değer uydurulmaz.
+export interface UyarlananParametreler {
+  parametreler: Parametreler;
+  // Servisin adına çevrilenler: [gönderilen, servis].
+  cevrilen: (readonly [string, string])[];
+  // Serviste karşılığı bulunamayan, olduğu gibi giden adlar.
+  eslesmeyen: string[];
+  // Serviste zorunlu görünen ama gönderilmeyen adlar.
+  eksik: string[];
+}
+
+const adAnahtariParametre = (ad: string): string => ad.toLowerCase().replaceAll('_', '');
+
+export function parametreAdlariniUydur(parametreler: Parametreler, servis: readonly { ad: string; zorunlu: boolean }[]): UyarlananParametreler {
+  const servisAdlari = servis.map((x) => x.ad);
+  const kullanilan = new Set(parametreler.map(([ad]) => ad).filter((ad) => servisAdlari.includes(ad)));
+  const cevrilen: (readonly [string, string])[] = [];
+  const eslesmeyen: string[] = [];
+  const yeni: [string, Parametreler[number][1]][] = [];
+  for (const [ad, deger] of parametreler) {
+    if (servisAdlari.includes(ad)) { yeni.push([ad, deger]); continue; }
+    const adaylar = servisAdlari.filter((x) => adAnahtariParametre(x) === adAnahtariParametre(ad) && !kullanilan.has(x));
+    const hedef = adaylar.length === 1 ? adaylar[0] : undefined;
+    if (hedef === undefined) { eslesmeyen.push(ad); yeni.push([ad, deger]); continue; }
+    kullanilan.add(hedef);
+    cevrilen.push([ad, hedef]);
+    yeni.push([hedef, deger]);
+  }
+  const eksik = servis.filter((x) => x.zorunlu && !kullanilan.has(x.ad)).map((x) => x.ad);
+  return { parametreler: yeni, cevrilen, eslesmeyen, eksik };
 }
 
 export const PARAMETRE_ADIMI_ADI = 'Parametre adları (WSDL)';
@@ -1544,4 +1595,62 @@ export function gunlukSatiri(a: YonetimAkisi, r: TurCevabi): { sonuc: 'tamam' | 
 // Sıklık kapısına giden sonuç: SmartES okuması pencereyle okur, tur başına bir istek yeter; engelde null (zaman yazılmaz).
 export function kapiSonucu(r: { tur: string }): { kayitGeldi: boolean } | null {
   return r.tur === 'kapali' || r.tur === 'ortam-degiskeni-yok' || r.tur === 'akis-kapali' ? null : { kayitGeldi: false };
+}
+
+/* ---------------- SmartES duruş ve fire listesini CORE'a aktarma (3655 B) ---------------- */
+
+export interface AktarimGirdisi { anahtar: string; smartesId: number | null; ad: string; grup: string | null; pasif: boolean | null }
+export interface AktarimCoreNedeni { id: number; kod: string; ad: string }
+export interface AktarimEsleme { ad: string; nedenId: number }
+export interface AktarimSatiri {
+  anahtar: string;
+  ad: string;
+  eylem: 'ekle' | 'esle' | 'eslenmis' | 'ad-farkli' | 'atla';
+  // Eklenecekte ve kodla bulunanda `SME-<SmartES kimliği>`; yalnız adla eşlenende null.
+  kod: string | null;
+  kategori: 'planli' | 'plansiz' | null;
+  aktif: boolean;
+  // Var olan CORE nedeni (eşlenecek); aynı çalıştırmada eklenecek nedene bağlananda null, `kod` ile bulunur.
+  coreNedenId: number | null;
+  coreAdi: string | null;
+  not: string | null;
+}
+
+export const NEDEN_AD_EN_UZUN = 80;
+export const AKTARIM_KOD_ONEKI = 'SME-';
+// Duruş/fire neden kodu deseni {1,12} (paylasilan/sozlesme/durus-nedenleri.ts KOD_DESENI)
+export const AKTARIM_KOD_EN_UZUN = 12;
+// Büyük-küçük harf ve boşluk farkı gözetilmez.
+export const nedenAdAnahtari = (ad: string): string => ad.trim().replace(/\s+/g, ' ').toLocaleLowerCase('tr');
+export const aktarimKategorisi = (grup: string | null): 'planli' | 'plansiz' => (grup !== null && grup.toLocaleUpperCase('tr').includes('PLANLI') ? 'planli' : 'plansiz');
+
+// Liste sırasıyla hesaplanır. Eşlenmiş ad atlanır (SmartES'te adı değişmişse "ad-farkli", güncellenmez); CORE'da aynı adlı ya da `SME-<id>` kodlu
+// neden varsa yalnız eşlenir; yoksa eklenir. Aynı adlı iki SmartES satırı tek CORE nedenine bağlanır. Kimliksiz, adı boş ya da çok uzun satır atlanır.
+export function aktarimPlani(
+  liste: readonly AktarimGirdisi[], eslemeler: ReadonlyMap<string, AktarimEsleme>, core: readonly AktarimCoreNedeni[],
+): AktarimSatiri[] {
+  const adlaCore = new Map<string, AktarimCoreNedeni>();
+  for (const c of core) if (!adlaCore.has(nedenAdAnahtari(c.ad))) adlaCore.set(nedenAdAnahtari(c.ad), c);
+  const kodlaCore = new Map(core.map((c) => [c.kod.toUpperCase(), c]));
+  const bu = new Map<string, { kod: string; ad: string }>();
+  return liste.map((g): AktarimSatiri => {
+    const ad = g.ad.trim().replace(/\s+/g, ' ');
+    const taban = { anahtar: g.anahtar, ad, kod: null, kategori: null, aktif: g.pasif !== true, coreNedenId: null, coreAdi: null, not: null };
+    const e = eslemeler.get(g.anahtar);
+    if (e !== undefined) {
+      const farkli = nedenAdAnahtari(e.ad) !== nedenAdAnahtari(ad);
+      return { ...taban, eylem: farkli ? 'ad-farkli' : 'eslenmis', coreAdi: core.find((c) => c.id === e.nedenId)?.ad ?? null, not: farkli ? `Eşlenirken adı "${e.ad}" idi` : null };
+    }
+    if (ad === '') return { ...taban, eylem: 'atla', not: 'Ad boş' };
+    if (g.smartesId === null) return { ...taban, eylem: 'atla', not: 'SmartES kimliği gelmedi' };
+    if (ad.length > NEDEN_AD_EN_UZUN) return { ...taban, eylem: 'atla', not: `Ad ${NEDEN_AD_EN_UZUN} karakterden uzun` };
+    const kod = `${AKTARIM_KOD_ONEKI}${g.smartesId}`;
+    if (kod.length > AKTARIM_KOD_EN_UZUN) return { ...taban, eylem: 'atla', not: `SmartES kimliği çok uzun (kod ${AKTARIM_KOD_EN_UZUN} karakteri aşar)` };
+    const mevcut = adlaCore.get(nedenAdAnahtari(ad)) ?? kodlaCore.get(kod);
+    if (mevcut !== undefined) return { ...taban, eylem: 'esle', kod: mevcut.kod, coreNedenId: mevcut.id, coreAdi: mevcut.ad };
+    const ayni = bu.get(nedenAdAnahtari(ad));
+    if (ayni !== undefined) return { ...taban, eylem: 'esle', kod: ayni.kod, coreAdi: ayni.ad };
+    bu.set(nedenAdAnahtari(ad), { kod, ad });
+    return { ...taban, eylem: 'ekle', kod, kategori: aktarimKategorisi(g.grup), coreAdi: ad };
+  });
 }

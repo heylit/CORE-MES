@@ -4,10 +4,10 @@ import { surumSemasi } from '../surum.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 
 // SmartES bağlantısı (kart #778): kod eşlemesi, okunan makine gerçekleşenleri ve iş emri giden kutusu.
-export const SMARTES_ESLEME_TURLERI = ['istasyon', 'makine', 'operasyon-tipi', 'durus-nedeni'] as const;
+export const SMARTES_ESLEME_TURLERI = ['istasyon', 'is-merkezi', 'makine', 'operasyon-tipi', 'durus-nedeni'] as const;
 export type SmartesEslemeTuru = (typeof SMARTES_ESLEME_TURLERI)[number];
 export const SMARTES_ESLEME_TURU_ADLARI: Readonly<Record<SmartesEslemeTuru, string>> = {
-  istasyon: 'İstasyon', makine: 'Makine', 'operasyon-tipi': 'Operasyon tipi', 'durus-nedeni': 'Duruş nedeni',
+  istasyon: 'İstasyon', 'is-merkezi': 'İş merkezi', makine: 'Makine', 'operasyon-tipi': 'Operasyon tipi', 'durus-nedeni': 'Duruş nedeni',
 };
 
 export const SMARTES_BAGLANTI_DURUMLARI = ['kapali', 'acik', 'ortam-degiskeni-yok'] as const;
@@ -51,6 +51,12 @@ export const eslemelerCevabi = z.object({
     surum: surumSemasi.nullable(),
     // Eşlenmemiş kayda SmartES listesinden bulunan aday: aynı kod, aynı ad ya da benzer ad. Kişi onaylamadan eşleme yazılmaz.
     oneri: z.object({ kod: z.string(), ad: z.string().nullable(), gerekce: z.enum(SMARTES_ONERI_GEREKCELERI) }).nullable(),
+    // Yalnız operasyon tipinde: bu tipte SmartES'e gidecek açık iş emri sayısı; önek değişince bunların kodu değişir. Öteki türde null.
+    acikIsEmri: z.number().int().nullable(),
+    // Yalnız iş merkezinde: merkezin istasyonları ve her birinin kendi SmartES kodu (varsa merkezinkinin önüne geçer). Öteki türde null.
+    altIstasyonlar: z.array(z.object({ kod: z.string(), ad: z.string(), kendiKodu: z.string().nullable() })).nullable(),
+    // Yalnız istasyonda: kendi eşlemesi yokken iş merkezinin kodunu miras alıyorsa o merkez ve kod.
+    miras: z.object({ merkezKodu: z.string(), smartesKod: z.string() }).nullable(),
   })),
   // SmartES'in kendi listesi (istasyon, makine, operasyon); kod buradan seçilir. Hiç okunamadıysa null: kod elle girilir.
   smartesListesi: z.array(z.object({ kod: z.string(), ad: z.string().nullable() })).nullable(),
@@ -366,6 +372,35 @@ export const gelenAdOnerileriOnaylaGovdesi = z.object({
   tur: z.enum(SMARTES_GELEN_AD_TURLERI),
   satirlar: z.array(z.object({ anahtar: adAnahtari, nedenId: z.number().int().positive() })).min(1).max(500),
 });
+
+// SmartES listesini CORE'a aktarma (3655 B): önizleme ne eklenecek, ne eşlenecek, hangi eşlemenin adı SmartES'te değişmiş gösterir; aktarım aynı hesabı yazar.
+export const SMARTES_AKTARIM_EYLEMLERI = ['ekle', 'esle', 'eslenmis', 'ad-farkli', 'atla'] as const;
+export type SmartesAktarimEylemi = (typeof SMARTES_AKTARIM_EYLEMLERI)[number];
+export const gelenAdAktarimCevabi = z.object({
+  tur: z.enum(SMARTES_GELEN_AD_TURLERI),
+  // SmartES listesi hiç okunamadıysa false; sayılar sıfırdır.
+  listeVar: z.boolean(),
+  eklenecek: z.number().int(),
+  eslenecek: z.number().int(),
+  zatenEslenmis: z.number().int(),
+  adFarkli: z.number().int(),
+  atlanan: z.number().int(),
+  satirlar: z.array(z.object({
+    anahtar: z.string(),
+    ad: z.string(),
+    eylem: z.enum(SMARTES_AKTARIM_EYLEMLERI),
+    kod: z.string().nullable(),
+    kategori: z.enum(['planli', 'plansiz']).nullable(),
+    aktif: z.boolean(),
+    // Eşlenen ya da eşlenecek CORE nedeninin adı; eklenecekte SmartES adıdır, atlananda neden.
+    coreAdi: z.string().nullable(),
+    not: z.string().nullable(),
+  })),
+});
+export type GelenAdAktarimCevabi = z.output<typeof gelenAdAktarimCevabi>;
+export const gelenAdAktarGovdesi = z.object({ tur: z.enum(SMARTES_GELEN_AD_TURLERI) });
+export const gelenAdAktarSonucu = z.object({ eklenen: z.number().int(), eslenen: z.number().int(), atlanan: z.number().int() });
+export type GelenAdAktarSonucu = z.output<typeof gelenAdAktarSonucu>;
 
 // "Şimdi oku": SmartES'in tanım listeleri (istasyon, makine, operasyon, fire, duruş) yeniden okunur. Okunamayan liste eski haliyle kalır.
 export const SMARTES_LISTE_TURLERI = ['istasyon', 'makine', 'operasyon', 'fire', 'durus'] as const;

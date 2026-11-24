@@ -11,7 +11,7 @@ import { IS_ARALIKLARI_MS, KALITE_AMBAR_KAYNAKLARI, MAKINE_OKUMA_ARALIGI_MS, SIK
 import type { KaliteAmbarKaynagi, OkumaKaynagi } from './kurallar.ts';
 import {
   BEKLEME_NEDENLERI, ilerlemeTuru, makineTuru, yeniMakineBellegi, gonderimTuru, kaliteAmbarTuru, listeTuru, okumaTuru, tanimTuru, yeniBekleyenBellegi,
-  yeniOkumaBellegi, yeniSurecBellegi,
+  yeniOkumaBellegi,
 } from './servis.ts';
 import { hesapTuru } from './servis.ts';
 import type { TurOrtami } from './servis.ts';
@@ -19,7 +19,7 @@ import type { TurOrtami } from './servis.ts';
 // İşler her zaman koşar; istek ancak "SmartES bağlantısı" ayarı açık ve TMIV2_SMARTES_ADRESI varken çıkar (karar 3b: okuma ve yazma birlikte).
 // Kalite/ambar okuması ve tanım gönderimi ayrıca kendi anahtarlarıyla (varsayılan kapalı) açılır.
 const ortam: TurOrtami = {
-  istemci: ortamIstemcisi, saat: () => new Date(), operasyonlar: yeniSurecBellegi(), okumalar: yeniOkumaBellegi(), bekleyenler: yeniBekleyenBellegi(), niyetler: new Set<string>(),
+  istemci: ortamIstemcisi, saat: () => new Date(), okumalar: yeniOkumaBellegi(), bekleyenler: yeniBekleyenBellegi(), niyetler: new Set<string>(),
 };
 
 const makineBellegi = yeniMakineBellegi();

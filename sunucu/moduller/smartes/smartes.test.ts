@@ -20,7 +20,7 @@ import { isler } from './isler.ts';
 import { smartesIstemcisiKur } from './istemci.ts';
 import { sahteSmartesAc, tabloCevapMetni } from './sahte-smartes.ts';
 import type { SahteCevap, SahteSmartes } from './sahte-smartes.ts';
-import { adetOnayinaAl, emirDurumlari, gonderimTuru, kaliteAmbarTuru, okumaTuru, sayimGecerliligi, tanimTuru, yeniBekleyenBellegi, yeniOkumaBellegi, yeniSurecBellegi } from './servis.ts';
+import { adetOnayinaAl, emirDurumlari, gonderimTuru, kaliteAmbarTuru, okumaTuru, sayimGecerliligi, tanimTuru, yeniBekleyenBellegi, yeniOkumaBellegi } from './servis.ts';
 import type { TurOrtami } from './servis.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -36,6 +36,8 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
   let yoneticiId = 0;
   let denemeProjeId = 0;
   let sayac = 0;
+  // SmartES'in OperationList cevabı: emirKur adımların kodlarını (tip kodu + adım no) buraya ekler.
+  let opKodlari: string[] = [];
   let simdi = Date.parse('2026-10-12T08:00:00Z');
 
   const vt = (): TestVeritabani['vt'] => {
@@ -50,7 +52,6 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
   const turOrtami = (): TurOrtami => ({
     istemci: smartesIstemcisiKur({ adres: sahte.adres, adAlani: VARSAYILAN_AD_ALANI }, { bekle: async () => {}, istekSuresiMs: 5000, listeSuresiMs: 5000 }),
     saat: () => new Date(simdi),
-    operasyonlar: yeniSurecBellegi(),
     okumalar: yeniOkumaBellegi(),
     bekleyenler: yeniBekleyenBellegi(),
   });
@@ -71,9 +72,13 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     await vt().sorgu('UPDATE kisi_rolu SET rol_id = (SELECT id FROM rol WHERE kod = $2) WHERE kisi_id = $1', [id, rol]);
     return giris(kullaniciAdi);
   }
-  async function istasyonAc(): Promise<number> {
-    const im = await istek('POST', '/is-merkezleri', { kod: `SM${(sayac += 1)}`, ad: 'SmartES merkezi' });
-    const ist = await istek('POST', '/istasyonlar', { kod: `SI${(sayac += 1)}`, ad: 'SmartES istasyonu', isMerkeziId: (im.json() as { id: number }).id, tip: 'talasli' });
+  const merkezeBagliMi = (istasyonId: number) => ortam!.sahip.tek<{ is_merkezi_id: number }>('SELECT is_merkezi_id FROM istasyon WHERE id = $1', [istasyonId]);
+  // `merkezDeki`: verilen istasyonla aynı iş merkezinde yeni istasyon açılır.
+  async function istasyonAc(merkezDeki?: number): Promise<number> {
+    const merkezId = merkezDeki === undefined
+      ? (await istek('POST', '/is-merkezleri', { kod: `SM${(sayac += 1)}`, ad: 'SmartES merkezi' }).then((c) => (c.json() as { id: number }).id))
+      : (await merkezeBagliMi(merkezDeki))!.is_merkezi_id;
+    const ist = await istek('POST', '/istasyonlar', { kod: `SI${(sayac += 1)}`, ad: 'SmartES istasyonu', isMerkeziId: merkezId, tip: 'talasli' });
     assert.equal(ist.statusCode, 200, ist.body);
     return (ist.json() as { id: number }).id;
   }
@@ -101,6 +106,7 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
   after(async () => { await app?.close(); await ortam?.kaldir(); });
   beforeEach(async () => {
     sahte = await sahteSmartesAc();
+    sahte.isleyiciler.set('OperationList', () => tablo(opKodlari.map((CODE) => ({ CODE, NAME: 'ORN' }))));
     simdi += 24 * 3_600_000;
     await baglanti(true);
   });
@@ -206,6 +212,57 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     const b = await vt().tek<{ bitis: Date | null }>(
       "SELECT bitis FROM smartes_alarm WHERE makine_kodu = 'M1' AND alarm_kodu = '1001'");
     assert.ok(b?.bitis instanceof Date, 'bitiş güncellenir');
+  });
+
+  // ASMX gerçeği: serviste olmayan ad bağlanmaz, tarih parametresi 0001-01-01 kalır ve SQL tarafı taşar (D). Sahte servis bu davranışı taklit eder.
+  const tarihTasmasi = (adlar: readonly string[], satirlar: Record<string, string>[]) => (p: Record<string, string>): SahteCevap =>
+    (adlar.some((a) => (p[a] ?? '') === '')
+      ? { tur: 'fault', ileti: 'SqlDateTime overflow. Must be between 1/1/1753 12:00:00 AM and 12/31/9999 11:59:59 PM.' }
+      : tablo(satirlar));
+
+  test('SME-11/12 (D): serviste ad harf ya da alt çizgi farklıysa istek servisin adıyla gider, tarihler dolu; taşma hatası bozuk adı gösterir', async () => {
+    makineler();
+    sahte.wsdlParametreleri = {
+      ...sahte.wsdlParametreleri,
+      DownTimeStatusListWithoutWorkOrder: ['StartDateTime', 'EndDateTime', 'WorkstationCode', 'MachineCode', 'IncludeActives'],
+      AlarmsList: ['MachineID', 'StartDateTime', 'EndDateTime'],
+    };
+    sahte.isleyiciler.set('DownTimeStatusListWithoutWorkOrder', tarihTasmasi(['StartDateTime', 'EndDateTime'],
+      [{ ID: '601', MACHINE_CODE: 'M1', DOWNTIME_NAME: 'Bakım', START_DATETIME: '2026-10-12T09:00:00' }]));
+    sahte.isleyiciler.set('AlarmsList', tarihTasmasi(['StartDateTime', 'EndDateTime'], [{ ALARMNO: '9', START_DATETIME: '2026-10-12T09:00:00' }]));
+    await vt().sorgu("DELETE FROM smartes_okuma WHERE kaynak IN ('durus', 'alarm')");
+
+    assert.deepEqual(await okumaTuru(vt(), 'durus', turOrtami()), { tur: 'okundu', okunan: 1, kimliksiz: 0 });
+    const durus = sahte.cagrilar.find((c) => c.metot === 'DownTimeStatusListWithoutWorkOrder');
+    assert.deepEqual(Object.keys(durus?.parametreler ?? {}), ['StartDateTime', 'EndDateTime', 'WorkstationCode', 'MachineCode', 'IncludeActives']);
+    assert.match(durus?.parametreler['StartDateTime'] ?? '', /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/);
+    assert.equal((await okumaTuru(vt(), 'alarm', turOrtami())).tur, 'okundu');
+    assert.ok(alarmCagrilari().every((c) => (c.parametreler['StartDateTime'] ?? '') !== '' && (c.parametreler['EndDateTime'] ?? '') !== ''));
+
+    // Servis adı hiç eşleşmiyorsa ad uydurulmaz: taşma hatası iletisinde gönderilen ve servisin beklediği adlar yazılır.
+    sahte.wsdlParametreleri = { ...sahte.wsdlParametreleri, DownTimeStatusListWithoutWorkOrder: ['BaslangicZamani!', 'BitisZamani!'] };
+    sahte.isleyiciler.set('DownTimeStatusListWithoutWorkOrder', tarihTasmasi(['BaslangicZamani', 'BitisZamani'], []));
+    simdi += 15 * 60_000;
+    const r = await okumaTuru(vt(), 'durus', turOrtami());
+    assert.equal(r.tur, 'hata');
+    const ileti = r.tur === 'hata' ? r.ileti : '';
+    assert.match(ileti, /SqlDateTime overflow/);
+    assert.match(ileti, /gönderilen: START_DATETIME, END_DATETIME/);
+    assert.match(ileti, /serviste olup gönderilmeyen: BaslangicZamani, BitisZamani/);
+  });
+
+  test('SME-11/12 (D): belgedeki adlar serviste aynen varsa istek değişmez; tarihler geçerli aralıkta', async () => {
+    makineler();
+    sahte.isleyiciler.set('DownTimeStatusListWithoutWorkOrder', tarihTasmasi(['START_DATETIME', 'END_DATETIME'], []));
+    sahte.isleyiciler.set('AlarmsList', tarihTasmasi(['StartDatetime', 'EndDatetime'], []));
+    await vt().sorgu("DELETE FROM smartes_okuma WHERE kaynak IN ('durus', 'alarm')");
+    assert.equal((await okumaTuru(vt(), 'durus', turOrtami())).tur, 'okundu');
+    assert.equal((await okumaTuru(vt(), 'alarm', turOrtami())).tur, 'okundu');
+    for (const c of sahte.cagrilar.filter((x) => x.metot === 'DownTimeStatusListWithoutWorkOrder' || x.metot === 'AlarmsList')) {
+      const bas = Date.parse(`${c.parametreler['START_DATETIME'] ?? c.parametreler['StartDatetime'] ?? ''}Z`);
+      const son = Date.parse(`${c.parametreler['END_DATETIME'] ?? c.parametreler['EndDatetime'] ?? ''}Z`);
+      assert.ok(bas > Date.parse('1753-01-01Z') && son >= bas, `${c.metot} tarihleri geçerli`);
+    }
   });
 
   test('SME-12 (ret): bir makinenin alarm okuması düşerse pencere ilerlemez, öteki makinenin satırı da yazılmaz; makine listesi düşerse alarm istenmez', async () => {
@@ -357,19 +414,21 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
   });
 
   // Rotalı emir: iki adım; ilk adımın istasyonu SmartES eşlemeli, ikincininki `ikinciEslemeli` değilse eşlemesiz.
-  async function emirKur(ikinciEslemeli = false): Promise<{ uretimEmriId: number; ilk: number; ikinci: number }> {
+  async function emirKur(ikinciEslemeli = false, ayniMerkez = false): Promise<{ uretimEmriId: number; ilk: number; ikinci: number; istasyonlar: [number, number]; tipKodu: string }> {
     const sahip = ortam!.sahip;
     const eslemeli = await istasyonAc();
-    const diger = await istasyonAc();
+    const diger = await istasyonAc(ayniMerkez ? eslemeli : undefined);
     const makine = async (ist: number) => (await sahip.tek<{ id: number }>('INSERT INTO makine (kod, ad, istasyon_id) VALUES ($1, $2, $3) RETURNING id',
       [`SMK${(sayac += 1)}`, 'Tezgah', ist]))!.id;
     const [m1, m2] = [await makine(eslemeli), await makine(diger)];
     const ata = async (tur: string, tmiId: number, smartesKod: string) =>
       assert.equal((await istek('POST', '/smartes/eslemeler/ata', { tur, tmiId, smartesKod, surum: null })).statusCode, 200);
-    await ata('istasyon', eslemeli, `TI${sayac}`);
+    if (!ayniMerkez) await ata('istasyon', eslemeli, `TI${sayac}`);
     await ata('makine', m1, `CNC${sayac}`);
     if (ikinciEslemeli) await ata('istasyon', diger, `TJ${sayac}`);
-    const tip = (await sahip.tek<{ id: number }>('INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ($1, $2, $3) RETURNING id', [`ST${(sayac += 1)}`, 'Frezeleme', 'TAL']))!.id;
+    const tipKodu = `ST${(sayac += 1)}`;
+    const tip = (await sahip.tek<{ id: number }>('INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ($1, $2, $3) RETURNING id', [tipKodu, 'Frezeleme', 'TAL']))!.id;
+    opKodlari.push(`${tipKodu}10`, `${tipKodu}20`);
     await sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('SMS-', 0) ON CONFLICT (onek) DO NOTHING");
     const kart = (await sahip.tek<{ no: number }>(
       `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
@@ -386,17 +445,16 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
       projeId: denemeProjeId, malzemeNo: kart, adet: 20, teslim: '2026-12-01', kaynakRotaRevizyonId: revizyon, isEmirleri: [adim(1, m1), adim(2, m2)],
     }));
     const [ilk, ikinci] = isEmriIdleri as [number, number];
-    return { uretimEmriId, ilk, ikinci };
+    return { uretimEmriId, ilk, ikinci, istasyonlar: [eslemeli, diger], tipKodu };
   }
   const iptalEt = (id: number) => vt().tx(async (db) => emirIptalEt(db, (await kullaniciYukle(db, yoneticiId))!, id));
 
   test('SME-14, SME-15: eşlemeli istasyondaki iş emri SmartES\'e gider, değişmeyen yeniden gitmez, iptal edilen pasif olur', async () => {
-    const { uretimEmriId, ilk, ikinci } = await emirKur();
+    const { uretimEmriId, ilk, ikinci, tipKodu } = await emirKur();
     const r = await gonderimTuru(vt(), turOrtami());
     assert.deepEqual(r, { tur: 'islendi', gonderilen: 1, kapanan: 0, hatali: 0 });
-    assert.deepEqual(sahte.cagrilar.map((c) => c.metot), ['OperationCreateUpdate', 'WorkOrdersCreateUpdate']);
-    assert.deepEqual(sahte.cagrilar[0]!.parametreler,
-      { ID: '0', Code: '10', Name: 'Adım 1', WorkstationCode: `TI${sayac - 1}`, IsPassive: 'false', IsQualityControl: 'false' });
+    // Operasyon açılmaz (OperationCreateUpdate yok); kod SmartES operasyon listesinde aranır.
+    assert.deepEqual(sahte.cagrilar.map((c) => c.metot), ['OperationList', 'WorkOrdersCreateUpdate']);
     const p = sahte.cagrilar[1]!.parametreler;
     // Belgedeki adlar ve sıra (md. 39): çarpan "Multipler", QuantityUpdate TrackingNo ile RouteCode arasında; ilk gönderimde adet değişikliği yok.
     assert.equal(p['Multipler'], '1');
@@ -405,7 +463,7 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     assert.equal(p['QuantityUpdate'], 'false');
     assert.equal(p['WorkstationCode'], `TI${sayac - 1}`);
     assert.equal(p['MachineCode'], `CNC${sayac - 1}`);
-    assert.equal(p['OperationCode'], '10');
+    assert.equal(p['OperationCode'], `${tipKodu}10`);
     assert.equal(p['ErpID'], String(ilk));
     assert.equal(p['Quantity'], '20');
     assert.equal(p['EstimatedPreparationTime'], '13');
@@ -477,6 +535,98 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     assert.equal(sahte.cagrilar.length, 0);
   });
 
+  test('SME-14 (C): iş merkezi eşlenince altındaki iki istasyonun iş emri aynı SmartES kodıyla gider; istasyonun kendi eşlemesi önce gelir; tanım gönderilmez', async () => {
+    const { ilk, ikinci, istasyonlar: [ist1, ist2] } = await emirKur(false, true);
+    const merkez = (await merkezeBagliMi(ist1))!.is_merkezi_id;
+    assert.equal((await merkezeBagliMi(ist2))!.is_merkezi_id, merkez, 'iki istasyon aynı iş merkezinde');
+    const ata = (tur: string, tmiId: number, smartesKod: string, surum: number | null = null, c = yonetici) =>
+      istek('POST', '/smartes/eslemeler/ata', { tur, tmiId, smartesKod, surum }, c);
+
+    // Eşleme yokken iş emri gitmez; eşleme yetkisi `smartes.esleme-yaz` ister.
+    assert.deepEqual(await gonderimTuru(vt(), turOrtami()), { tur: 'islendi', gonderilen: 0, kapanan: 0, hatali: 0 });
+    assert.equal((await ata('is-merkezi', merkez, 'TLS-ORN', null, okuyucu)).statusCode, 403);
+    assert.equal((await ata('is-merkezi', merkez, 'TLS-ORN')).statusCode, 200);
+    const merkezSatiri = ((await istek('GET', '/smartes/eslemeler?tur=is-merkezi')).json() as { satirlar: { tmiId: number; altIstasyonlar: { kod: string; kendiKodu: string | null }[] | null }[] }).satirlar.find((x) => x.tmiId === merkez);
+    assert.equal(merkezSatiri?.altIstasyonlar?.length, 2, 'merkezin iki istasyonu listelenir');
+    assert.deepEqual(merkezSatiri?.altIstasyonlar?.map((x) => x.kendiKodu), [null, null]);
+    const miraslar = ((await istek('GET', '/smartes/eslemeler?tur=istasyon')).json() as { satirlar: { tmiId: number; miras: { smartesKod: string } | null }[] }).satirlar;
+    assert.deepEqual([ist1, ist2].map((id) => miraslar.find((x) => x.tmiId === id)?.miras?.smartesKod), ['TLS-ORN', 'TLS-ORN'], 'kendi eşlemesi olmayan istasyon merkezin kodunu miras alır');
+
+    assert.deepEqual(await gonderimTuru(vt(), turOrtami()), { tur: 'islendi', gonderilen: 2, kapanan: 0, hatali: 0 });
+    const gidenler = sahte.cagrilar.filter((c) => c.metot === 'WorkOrdersCreateUpdate').map((c) => [c.parametreler['ErpID'], c.parametreler['WorkstationCode']]);
+    assert.deepEqual(gidenler.sort(), [[String(ilk), 'TLS-ORN'], [String(ikinci), 'TLS-ORN']].sort());
+
+    // Tanım gönderimi: iş merkezi eşli iki istasyon SmartES'e ayrı istasyon olarak açılmaz.
+    assert.equal((await istek('POST', '/ayarlar/smartes.tanim-gonderimi/degistir', { deger: true })).statusCode, 200);
+    sahte.isleyiciler.set('WorkStationList', () => tablo([]));
+    sahte.cagrilar.length = 0;
+    const o = turOrtami();
+    o.tanimKaynagi = {
+      istasyonlar: async () => [{ tur: 'istasyon', tmiId: ist1, kod: 'ORN-A', ad: 'ORN A' }, { tur: 'istasyon', tmiId: ist2, kod: 'ORN-B', ad: 'ORN B' }],
+      stoklar: async () => ({ kayitlar: [], sonSayfa: true }),
+    };
+    await tanimTuru(vt(), o);
+    await tanimTuru(vt(), o);
+    assert.equal(sahte.cagrilar.some((c) => c.metot === 'WorkStationCreateUpdate'), false);
+
+    // İstasyonun kendi eşlemesi iş merkezininkinin önüne geçer.
+    assert.equal((await ata('istasyon', ist2, 'FRZ-ORN')).statusCode, 200);
+    await ortam!.sahip.sorgu("DELETE FROM smartes_giden WHERE is_emri_id IN ($1, $2)", [ilk, ikinci]);
+    sahte.cagrilar.length = 0;
+    assert.deepEqual(await gonderimTuru(vt(), turOrtami()), { tur: 'islendi', gonderilen: 2, kapanan: 0, hatali: 0 });
+    const son = new Map(sahte.cagrilar.filter((c) => c.metot === 'WorkOrdersCreateUpdate').map((c) => [c.parametreler['ErpID'], c.parametreler['WorkstationCode']]));
+    assert.deepEqual([son.get(String(ilk)), son.get(String(ikinci))], ['TLS-ORN', 'FRZ-ORN']);
+
+    // Sonraki testler bu emirleri görmesin: eşlemesiz istasyondaki emir gönderilmez.
+    await ortam!.sahip.sorgu("DELETE FROM smartes_giden WHERE is_emri_id IN ($1, $2)", [ilk, ikinci]);
+    await ortam!.sahip.sorgu("DELETE FROM smartes_esleme WHERE tur IN ('is-merkezi', 'istasyon') AND tmi_id IN ($1, $2, $3)", [merkez, ist1, ist2]);
+  });
+
+  test('SME-14 (A): operasyon kodu tip önekli gider; eşleme öneki kullanılır; geçici tip aynen gider; listede olmayan kod ve tipsiz adım gönderilmez, nedeni görünür; OperationCreateUpdate çağrılmaz', async () => {
+    const { ilk, ikinci, tipKodu, istasyonlar: ist } = await emirKur(true);
+    const saat0 = simdi;
+    const kodlar = () => new Map(sahte.cagrilar.filter((c) => c.metot === 'WorkOrdersCreateUpdate').map((c) => [c.parametreler['ErpID'], c.parametreler['OperationCode']]));
+    const neden = async (id: number) => (await vt().tek<{ son_hata: string | null }>('SELECT son_hata FROM smartes_giden WHERE is_emri_id = $1', [id]))?.son_hata ?? null;
+
+    // Adım 2 (op 20) listede yok: TRN20 gibi kod SmartES'te tanımlı değilse iş emri gitmez ve nedeni yazılır.
+    opKodlari = opKodlari.filter((k) => k !== `${tipKodu}20`);
+    assert.deepEqual(await gonderimTuru(vt(), turOrtami()), { tur: 'islendi', gonderilen: 1, kapanan: 0, hatali: 1 });
+    assert.equal(kodlar().get(String(ilk)), `${tipKodu}10`);
+    assert.equal(kodlar().has(String(ikinci)), false);
+    assert.equal(await neden(ikinci), `SmartES'te ${tipKodu}20 operasyonu yok`);
+    assert.equal(sahte.cagrilar.filter((c) => c.metot === 'OperationList').length, 1, 'liste tur başına bir kez okunur');
+    assert.equal(sahte.cagrilar.some((c) => c.metot === 'OperationCreateUpdate'), false);
+
+    // Eşleme ekranı, önek değişince kodu değişecek açık iş emri sayısını verir (3655 uyarısı).
+    const tipSatirlari = (await istek('GET', '/smartes/eslemeler?tur=operasyon-tipi')).json() as { satirlar: { tmiKod: string; acikIsEmri: number | null }[] };
+    assert.equal(tipSatirlari.satirlar.find((x) => x.tmiKod === tipKodu)?.acikIsEmri, 2);
+    assert.equal(((await istek('GET', '/smartes/eslemeler?tur=istasyon')).json() as { satirlar: { acikIsEmri: number | null }[] }).satirlar.every((x) => x.acikIsEmri === null), true);
+
+    // Tipin SmartES eşlemesi önek olur; değişen kod yeniden gönderilir.
+    const tipId = (await ortam!.sahip.tek<{ id: number }>('SELECT id FROM istasyonlar_operasyon_tipi WHERE kod = $1', [tipKodu]))!.id;
+    assert.equal((await istek('POST', '/smartes/eslemeler/ata', { tur: 'operasyon-tipi', tmiId: tipId, smartesKod: 'ORNONEK', surum: null })).statusCode, 200);
+    opKodlari = [...opKodlari, 'ORNONEK10', 'ORNONEK20'];
+    simdi += 3 * 3_600_000;
+    sahte.cagrilar.length = 0;
+    assert.deepEqual(await gonderimTuru(vt(), turOrtami()), { tur: 'islendi', gonderilen: 2, kapanan: 0, hatali: 0 });
+    assert.deepEqual([kodlar().get(String(ilk)), kodlar().get(String(ikinci))], ['ORNONEK10', 'ORNONEK20']);
+
+    // Geçici tip: tip kodu listede aynen varsa (ör. FRZ20) kod aynen gider, adım numarası eklenmez.
+    await ortam!.sahip.sorgu("DELETE FROM smartes_esleme WHERE tur = 'operasyon-tipi' AND tmi_id = $1", [tipId]);
+    await ortam!.sahip.sorgu("UPDATE istasyonlar_operasyon_tipi SET kod = 'FRZ20' WHERE id = $1", [tipId]);
+    opKodlari = [...opKodlari, 'FRZ20'];
+    simdi += 3 * 3_600_000;
+    sahte.cagrilar.length = 0;
+    const r = await gonderimTuru(vt(), turOrtami());
+    assert.equal(r.tur, 'islendi');
+    assert.deepEqual([kodlar().get(String(ilk)), kodlar().get(String(ikinci))], ['FRZ20', 'FRZ20']);
+    await ortam!.sahip.sorgu("UPDATE istasyonlar_operasyon_tipi SET kod = $2 WHERE id = $1", [tipId, tipKodu]);
+    simdi = saat0;
+    // Sonraki testler bu emirleri görmesin.
+    await ortam!.sahip.sorgu("DELETE FROM smartes_giden WHERE is_emri_id IN ($1, $2)", [ilk, ikinci]);
+    await ortam!.sahip.sorgu("DELETE FROM smartes_esleme WHERE tur = 'istasyon' AND tmi_id IN ($1, $2)", ist);
+  });
+
   test('SME-14 (ret): SmartES reddederse iş emri durur ve kendiliğinden yinelenmez; ağ hatası bekleme yazar ve turu durdurur', async () => {
     const { uretimEmriId, ilk, ikinci } = await emirKur(true);
     sahte.isleyiciler.set('WorkOrdersCreateUpdate', () => ({ tur: 'skaler', etkilenen: 0, hata: 'İstasyon tanımsız' }));
@@ -488,7 +638,7 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     simdi += 3 * 3_600_000;
     sahte.cagrilar.length = 0;
     await gonderimTuru(vt(), turOrtami());
-    assert.equal(sahte.cagrilar.length, 0, 'duran iş emri saatler sonra da yinelenmez');
+    assert.deepEqual(sahte.cagrilar.map((c) => [c.metot]), [], 'duran iş emri saatler sonra da yinelenmez');
     const izleme = await istek('GET', '/smartes/giden/sorunlar');
     assert.equal(izleme.statusCode, 200, izleme.body);
     const satirlar = (izleme.json() as { belgeler: { isEmriId: number; durdu: boolean; sonrakiDeneme: string | null }[] }).belgeler;
@@ -665,8 +815,9 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     await iptalEt(uretimEmriId);
     assert.equal((await gonderimTuru(izli, o)).tur, 'islendi');
     const metotlar = new Set(sahte.cagrilar.map((c) => c.metot));
-    for (const m of ['WorkOrdersStatusList', 'OperationCreateUpdate', 'WorkOrdersCreateUpdate']) assert.ok(metotlar.has(m), m);
+    for (const m of ['WorkOrdersStatusList', 'OperationList', 'WorkOrdersCreateUpdate']) assert.ok(metotlar.has(m), m);
     assert.equal(metotlar.has('SetErpOkRed'), false);
+    assert.equal(metotlar.has('OperationCreateUpdate'), false);
     assert.ok(pidler.size > 0);
     assert.deepEqual(acik, []);
   });

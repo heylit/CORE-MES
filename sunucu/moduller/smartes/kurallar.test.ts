@@ -9,6 +9,7 @@ import {
   listeParametreleri, nedenOnerisi, cevrimOku, cevrimSaniyesi, gelenKalemleri, hamAlanlari, HESAP_METOTLARI, HESAP_TURLERI, hesapOkunmaliMi,
   hesapParametreleri, oeeOku, oeeYuzdeleri, tanimliAnahtari, tanimliSaniyeler, adetOnayFarklari, onayaGirerMi, FAULT_SINIRI, gonderimEylemi, kesinRetMi,
   adimRozeti, emirRozeti, rozetNedeni, ROZET_NEDENI_AZAMI,
+  smartesOperasyonKodu, operasyonListesiKodlari, operasyonOnekleri, parametreAdlariniUydur, aktarimPlani,
 } from './kurallar.ts';
 import type { GidecekIsEmri } from './kurallar.ts';
 
@@ -90,7 +91,7 @@ describe('Duruş ve alarm satır eşleme (belge md. 91, 5, 1)', () => {
 describe('İş emri gönderimi (belge md. 39)', () => {
   const i: GidecekIsEmri = {
     isEmriId: 7, emirNo: 'UE-1', opNo: 10, ad: 'Frezeleme', durum: 'planli', adet: 20, oncelik: 1, teslim: null, baslangic: null, ayarSuresiDk: null,
-    birimSureDk: null, istasyonKodu: 'TI1', makineKodu: null, stokNo: 'S1', stokAdi: 'X'.repeat(200),
+    birimSureDk: null, istasyonKodu: 'TI1', makineKodu: null, stokNo: 'S1', stokAdi: 'X'.repeat(200), operasyonKodu: 'TRN10',
   };
   const ad = (p: ReturnType<typeof isEmriParametreleri>) => p.map(([a]) => a);
 
@@ -388,8 +389,8 @@ describe('SmartES’ten gelen bilgiler ve SmartES hesapları (SME-32, SME-33)', 
 
   test('tanımlı birim süre plandaki iş emirlerinden: dakika saniyeye çevrilir; süresiz iş sayılmaz; aynı stok ve operasyonda farklı süre varsa null', () => {
     const t = tanimliSaniyeler([
-      { stokNo: 'ORN-A', opNo: 10, birimSureDk: '1.5' }, { stokNo: 'ORN-A', opNo: 10, birimSureDk: '1.50' }, { stokNo: 'ORN-A', opNo: 20, birimSureDk: null },
-      { stokNo: 'ORN-B', opNo: 10, birimSureDk: '2' }, { stokNo: 'ORN-B', opNo: 10, birimSureDk: '3' },
+      { stokNo: 'ORN-A', operasyonKodu: '10', birimSureDk: '1.5' }, { stokNo: 'ORN-A', operasyonKodu: '10', birimSureDk: '1.50' }, { stokNo: 'ORN-A', operasyonKodu: '20', birimSureDk: null },
+      { stokNo: 'ORN-B', operasyonKodu: '10', birimSureDk: '2' }, { stokNo: 'ORN-B', operasyonKodu: '10', birimSureDk: '3' },
     ]);
     assert.equal(t.get(tanimliAnahtari('ORN-A', '10')), 90);
     assert.equal(t.has(tanimliAnahtari('ORN-A', '20')), false);
@@ -484,5 +485,43 @@ describe('Üretim emrinde SmartES rozeti (3346)', () => {
     assert.equal(rozetNedeni(null), null);
     const g = { durum: 'hata' as const, sonrakiDeneme: null, sonHata: `a\nb${'y'.repeat(300)}`, smartesIsEmriNo: 'ORN-1' };
     assert.equal(adimRozeti({ eslemeli: true, gidecek: true, baglantiAcik: true, giden: g }).neden?.length, ROZET_NEDENI_AZAMI);
+  });
+});
+
+describe('Operasyon kodu: önek + adım numarası (A) ve parametre adı uyarlaması (D)', () => {
+  const liste = new Set(['trn10', 'trn20', 'frz20']);
+  test('TRN tipi, op 20 -> TRN20; SmartES eşlemesi varsa önek odur; tipsiz adımın kodu null', () => {
+    assert.equal(smartesOperasyonKodu(20, { kod: 'TRN', smartesOnek: null }, liste), 'TRN20');
+    assert.equal(smartesOperasyonKodu(20, { kod: 'TRN', smartesOnek: 'TORNA' }, liste), 'TORNA20');
+    assert.equal(smartesOperasyonKodu(20, null, liste), null);
+    assert.equal(smartesOperasyonKodu(20, undefined, liste), null);
+  });
+  test('geçici tip: tip kodu listede aynen varsa op no eklenmez; listede yoksa eklenir; eşlemesi olan tipe uygulanmaz', () => {
+    assert.equal(smartesOperasyonKodu(20, { kod: 'FRZ20', smartesOnek: null }, liste), 'FRZ20');
+    assert.equal(smartesOperasyonKodu(20, { kod: 'FRZ30', smartesOnek: null }, liste), 'FRZ3020');
+    assert.equal(smartesOperasyonKodu(20, { kod: 'FRZ20', smartesOnek: 'X' }, liste), 'X20');
+  });
+  test('operasyon listesi kodları ve eşleme önerisi önekleri', () => {
+    assert.deepEqual([...(operasyonListesiKodlari([{ CODE: 'TRN10' }, { CODE: 'FRZ120' }]) ?? [])], ['trn10', 'frz120']);
+    assert.equal(operasyonListesiKodlari([{ ALAN: 'x' }]), null);
+    assert.deepEqual(operasyonOnekleri(['TRN10', 'TRN20', 'FRZ120', '15', 'OP5']), ['FRZ', 'OP', 'TRN']);
+  });
+  test('parametre adı: harf ya da alt çizgi farkı servisin adına çevrilir, eşleşmeyen ve eksik zorunlu bildirilir, değer uydurulmaz', () => {
+    const u = parametreAdlariniUydur([['START_DATETIME', 'a'], ['EndDatetime', 'b'], ['XYZ', 'c']],
+      [{ ad: 'StartDateTime', zorunlu: true }, { ad: 'EndDatetime', zorunlu: true }, { ad: 'Sube', zorunlu: true }]);
+    assert.deepEqual(u.parametreler, [['StartDateTime', 'a'], ['EndDatetime', 'b'], ['XYZ', 'c']]);
+    assert.deepEqual(u.cevrilen, [['START_DATETIME', 'StartDateTime']]);
+    assert.deepEqual([u.eslesmeyen, u.eksik], [['XYZ'], ['Sube']]);
+  });
+});
+
+describe('Neden aktarımı: kod uzunluğu (3655 N2)', () => {
+  test('SME-<id> 12 karakteri aşan kimlik yalnız o satırı atlar, öbürleri eklenir', () => {
+    const plan = aktarimPlani([
+      { anahtar: 'id:5', smartesId: 5, ad: 'ORN kısa', grup: null, pasif: false },
+      { anahtar: 'id:123456789', smartesId: 123456789, ad: 'ORN uzun kimlik', grup: null, pasif: false },
+      { anahtar: 'id:12345678', smartesId: 12345678, ad: 'ORN sınırda', grup: null, pasif: false },
+    ], new Map(), []);
+    assert.deepEqual(plan.map((x) => [x.anahtar, x.eylem, x.kod]), [['id:5', 'ekle', 'SME-5'], ['id:123456789', 'atla', null], ['id:12345678', 'ekle', 'SME-12345678']]);
   });
 });
