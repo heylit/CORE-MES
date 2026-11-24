@@ -213,3 +213,13 @@
 .tc-sp-termin-onerileri { display: grid; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
 .tc-sp-termin-onerisi { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
 .tc-sp-termin-onerisi-dugmeler { display: flex; gap: var(--b-2); margin-inline-start: auto; }
+
+/* 3635: teklif sürüm farkı */
+.tc-sp-fark { flex: 1 1 100%; min-width: 0; }
+.tc-sp-fark-ozet { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-sp-fark-govde { display: grid; gap: var(--b-4); min-width: 0; }
+.tc-sp-fark-baslik { margin: 0 0 var(--b-2); font-size: var(--yazi-s); color: var(--muted); }
+.tc-sp-fark-liste { display: grid; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+.tc-sp-fark-liste li { display: grid; gap: var(--b-1); padding-bottom: var(--b-2); border-bottom: 1px solid var(--edge); min-width: 0; overflow-wrap: anywhere; }
+.tc-sp-fark-eski { color: var(--muted); text-decoration: line-through; }
+.tc-sp-fark-toplam { margin: 0; font-variant-numeric: tabular-nums; }

@@ -45,6 +45,7 @@ export function TeklifSurumu({ teklif, surum, kabul }: { teklif: TeklifAyrintiCe
         </dl>
       )}
       <dl className="tc-sp-ozellikler">
+        {!fiyatGorur && <div className="tc-sp-ozellik"><dt>KDV oranı</dt><dd>{surum.kdvOrani === null ? '—' : `%${miktarMetni(surum.kdvOrani)}`}</dd></div>}
         <div className="tc-sp-ozellik"><dt>Teslim süresi</dt><dd>{surum.teslimGun === null ? '—' : `${surum.teslimGun} gün`}</dd></div>
         {surum.terminTarihi !== null && <div className="tc-sp-ozellik"><dt>Termin</dt><dd>{tarihMetni(surum.terminTarihi)}</dd></div>}
         <div className="tc-sp-ozellik"><dt>Ödeme koşulu</dt><dd>{surum.odemeKosulu ?? '—'}</dd></div>

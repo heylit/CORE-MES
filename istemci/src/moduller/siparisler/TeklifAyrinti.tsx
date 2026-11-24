@@ -11,6 +11,7 @@ import { KalemMetni, MalzemeSecici } from './MalzemeSecici.tsx';
 import { LogoCariHazirligi } from './LogoCariHazirligi.tsx';
 import { SayfaBasligi } from './SayfaBasligi.tsx';
 import { TeklifFormuPenceresi } from './TeklifFormuPenceresi.tsx';
+import { TeklifSurumFarki } from './TeklifSurumFarki.tsx';
 import { TeklifSurumu } from './TeklifSurumu.tsx';
 import { surumCakismasiMi, useFiyatGorur, useIskontoOnaylar, useOnaylayabilir, useKorumaliGonderim, useMaliyetToplamiGorur, useTerminOnaylar, useYazabilir, yazmaIletisi } from './yazma.ts';
 import { useOnayOdagi } from './onay-odagi.ts';
@@ -281,10 +282,11 @@ export function TeklifAyrinti() {
               <p className="tc-sp-soluk">Henüz sürüm verilmedi.</p>
             ) : (
               <ul className="tc-sp-surumler">
-                {t.surumler.slice().reverse().map((s) => (
+                {t.surumler.map((s, i) => ({ s, onceki: t.surumler[i - 1] ?? null })).reverse().map(({ s, onceki }) => (
                   <li key={s.surumNo}>
                     <span><strong>{`Sürüm ${s.surumNo}`}</strong> <span className="tc-sp-soluk">{zamanMetni(s.olusturma)}</span></span>
                     <span>{fiyatGorur && paraMetni(s.toplam, t.paraBirimi)}{s.iskontoOnaylayan !== null && <> <Rozet ton="bilgi">{`İskonto onayı: ${s.iskontoOnaylayan}`}</Rozet></>}{t.kabulSurumu === s.surumNo && <> <Rozet ton="tamam">Kabul edilen</Rozet></>}</span>
+                    <TeklifSurumFarki teklif={t} surum={s} onceki={onceki} />
                   </li>
                 ))}
               </ul>
