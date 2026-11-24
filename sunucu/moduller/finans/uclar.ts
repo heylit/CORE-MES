@@ -12,7 +12,7 @@ import {
   satisSevkleriCevabi, satisSevkleriSorgusu, satisSiparisleriCevabi, satisSiparisleriSorgusu, ayarCevabi, ayarGuncelleGovdesi, belgeCevabi, belgeDuzeltGovdesi, belgeEkleGovdesi, belgeListesiCevabi, butceGovdesi, butceListesiCevabi,
   cekCevabi, cekDuzeltGovdesi, cekEkleGovdesi, cekListesiCevabi, cekSonucGovdesi, cekTarihGovdesi, ciroGovdesi, dagilimListesiCevabi, dagitGovdesi,
   duzenliOdemeGovdesi, duzenliOdemeGuncelleGovdesi, duzenliOdemeListesiCevabi, duzenliOdemeSemasi, duzenliOdendiGovdesi, esitleGovdesi,
-  aylikSeriCevabi, aylikSeriSorgusu, beklenenOdemelerCevabi, beklenenTahsilatlarCevabi, esitlemeListesiCevabi, finansListeSorgusu, finansOzetiCevabi, hesapCevabi, hesapEkleGovdesi, hesapGuncelleGovdesi, hesapListesiCevabi, iptalGovdesi, kapanisGovdesi,
+  aylikSeriCevabi, aylikSeriSorgusu, beklenenOdemelerCevabi, beklenenTahsilatlarCevabi, esitlemeListesiCevabi, finansListeSorgusu, finansOzetiCevabi, hesapCevabi, hesapEkleGovdesi, hesapGuncelleGovdesi, hesapListesiCevabi, donemAcGovdesi, donemKilidiDurumuCevabi, donemKilitleGovdesi, donemKilitleriCevabi, iptalGovdesi, kapanisGovdesi,
   kapanisListesiCevabi, faizEkleGovdesi, faizListesiCevabi, genelGiderOraniEkleGovdesi, genelGiderOraniListesiCevabi, genelGiderOnerisiSorgusu, genelGiderOnerisiCevabi, genelGiderBelgedenEkleGovdesi, kdvOraniEkleGovdesi, kdvOraniKapatGovdesi, kdvOraniListesiCevabi, kurFaizAraligiCevabi, kurFaizAraligiSorgusu, kurFaizOzetiCevabi, kurFaizTopluCevabi, kurFaizTopluGovdesi, kurListesiCevabi, kurCiftiGovdesi, kurCiftiGuncelleGovdesi, kurCiftiListesiCevabi, oranAraligiCevabi, oranEkleGovdesi, oranListesiCevabi, oranOzetiCevabi, oranTopluCevabi, oranTopluGovdesi,
   mahsupCevabi, mahsupEkleGovdesi, mahsupListesiCevabi, odemeCevabi, odemeEkleGovdesi, odemeListesiCevabi, oneriDurumuGovdesi, oneriListesiCevabi,
   maliyetCevabi, maliyetKaldirCevabi, maliyetKaldirGovdesi, maliyetKaldirParametresi, maliyetListesiCevabi, saatlikMaliyetListesiCevabi, saatlikMaliyetTuruParametresi, maliyetTuruParametresi, maliyetYazGovdesi, amortismanCevabi, sabitKiymetCevabi, sabitKiymetEkleGovdesi, sabitKiymetGuncelleGovdesi, sabitKiymetListesiCevabi, sabitKiymetPasifGovdesi, makineIdParametresi, makineSabitKiymetleriCevabi,
@@ -235,6 +235,12 @@ export const paraUclari = [
     isle: ({ db, sorgu }) => servis.vergiBeyanlari(db, sorgu.baslangic, sorgu.bitis) }),
   uc({ yontem: 'POST', yol: '/finans/vergi-beyani/isaretle', yetki: 'finans.beyan-yaz', tekrarKorumali: true, govde: vergiBeyaniGovdesi, cevap: vergiBeyaniGovdesi,
     isle: ({ db, kullanici, govde }) => servis.vergiBeyaniIsaretle(db, kullanici, govde, tesisGunu(new Date())) }),
+  // 3672: dönem kilidi. Kilit finans.yaz; açma yalnız yönetici (finans.donem-ac, hiçbir role verilmez) ve gerekçeli.
+  uc({ yontem: 'GET', yol: '/finans/donem-kilitleri', yetki: 'finans.oku', cevap: donemKilitleriCevabi, isle: ({ db }) => servis.donemKilitleri(db) }),
+  uc({ yontem: 'POST', yol: '/finans/donem-kilitle', yetki: 'finans.yaz', tekrarKorumali: true, govde: donemKilitleGovdesi, cevap: donemKilidiDurumuCevabi,
+    isle: ({ db, kullanici, govde, denetimEki }) => servis.donemKilitle(db, kullanici, govde, tesisGunu(new Date()), denetimEki) }),
+  uc({ yontem: 'POST', yol: '/finans/donem-ac', yetki: 'finans.donem-ac', tekrarKorumali: true, govde: donemAcGovdesi, cevap: donemKilidiDurumuCevabi,
+    isle: ({ db, kullanici, govde, denetimEki }) => servis.donemAc(db, kullanici, govde, denetimEki) }),
   uc({ yontem: 'POST', yol: '/finans/kapanis/isaretle', yetki: 'finans.yaz', govde: kapanisGovdesi, cevap: anahtarCevap, isle: ({ db, kullanici, govde }) => servis.kapanisIsaretle(db, kullanici, govde) }),
 ];
 

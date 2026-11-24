@@ -64,6 +64,7 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'etiket-merkezi.sablon-yaz': 'Etiket şablonu düzenleme',
   'etiket-merkezi.yazici-yaz': 'Etiket yazıcısı tanımlama',
   'finans.beyan-yaz': 'Vergi beyanı verildi işaretleme',
+  'finans.donem-ac': 'Kilitli finans dönemini gerekçeyle açma',
   'finans.kur-yaz': 'Günlük kur ve faiz girme',
   'finans.maliyet-oku': 'Birim maliyetleri görme',
   'finans.oku': 'Finans kayıtlarını görme',

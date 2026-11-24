@@ -457,6 +457,15 @@ export const oneriDurumuSatiri = z.object({ bulguKimligi: z.string(), durum: z.e
 export const KAPANIS_MADDELERI = ['banka', 'kasa', 'cari', 'fatura', 'cek', 'stok', 'bordro', 'kdv', 'butce', 'danisman'] as const;
 export const kapanisGovdesi = z.object({ donem: z.string().regex(/^[0-9]{4}-(0[1-9]|1[0-2])$/), madde: z.enum(KAPANIS_MADDELERI), isaretli: z.boolean() });
 export const kapanisSatiri = z.object({ donem: z.string(), madde: z.string(), isaretli: z.boolean() });
+// 3672: dönem kilidi. Kilitleme finans.yaz; açma yalnız yöneticidir (finans.donem-ac) ve gerekçe ister.
+export const donemSemasi = z.string().regex(/^[0-9]{4}-(0[1-9]|1[0-2])$/, 'Dönem YYYY-AA biçimindedir.');
+export const donemKilitleGovdesi = z.object({ donem: donemSemasi });
+export const donemAcGovdesi = z.object({ donem: donemSemasi, neden: z.string().trim().min(3, 'Açma gerekçesi en az 3 karakter.').max(300, 'En çok 300 karakter.') });
+export const donemKilidiSatiri = z.object({
+  id: z.number().int(), donem: z.string(), islem: z.enum(['kilitle', 'ac']), neden: z.string().nullable(), kisiId: z.number().int(), zaman: z.string(),
+});
+export const donemKilitleriCevabi = z.object({ kilitliDonemler: z.array(z.string()), gecmis: z.array(donemKilidiSatiri) });
+export const donemKilidiDurumuCevabi = z.object({ donem: z.string(), kilitli: z.boolean() });
 export const skorSatiri = z.object({ gun: tarihSemasi, skor: z.number().int(), nakit: numerik.nullable() });
 
 // ---- Toplu içe aktarma (yalnız açık belge; firma tam eşleşmeyle, FNS-50) ----
