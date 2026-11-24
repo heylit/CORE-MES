@@ -48,12 +48,12 @@ function sunucuKur({ liste, yazma, ek }: Kurulum = {}) {
 
 // Oturum, uygulamada olduğu gibi ekran açılmadan önce bellidir (kabuk girişten sonra çizer). Sayfa Genel'de açılır;
 // denenen ayarın kategorisi sekmesiyle seçilir.
-function ac(ekranlar?: readonly AyarEkrani[], islemler?: Islem[], sekme: string | null = 'Onay kuralları', ekran?: React.ReactNode) {
+function ac(ekranlar?: readonly AyarEkrani[], islemler?: Islem[], sekme: string | null = 'Onay kuralları', ekran?: React.ReactNode, adres = '/') {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   if (islemler) istemci.setQueryData<Kullanici>(ortakAnahtarlar.oturum, { id: 1, ad: 'Deneme', islemler });
   render(
     <QueryClientProvider client={istemci}>
-      <BildirimSaglayici><MemoryRouter>{ekran ?? <SistemAyarlari ekranlar={ekranlar} />}</MemoryRouter></BildirimSaglayici>
+      <BildirimSaglayici><MemoryRouter initialEntries={[adres]}>{ekran ?? <SistemAyarlari ekranlar={ekranlar} />}</MemoryRouter></BildirimSaglayici>
     </QueryClientProvider>,
   );
   if (sekme !== null) fireEvent.click(screen.getByRole('tab', { name: sekme }));
@@ -65,6 +65,15 @@ const acikMi = (oge: HTMLElement): boolean => oge.getAttribute('aria-checked') =
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('Sistem Ayarları', () => {
+  it('?sekme=onay bağlantısı doğrudan Onay kuralları sekmesini açar; geçersiz ad Genel\'e düşer', async () => {
+    sunucuKur();
+    ac(undefined, undefined, null, undefined, '/ayarlar?sekme=onay');
+    expect(screen.getByRole('tab', { name: 'Onay kuralları' }).getAttribute('aria-selected')).toBe('true');
+    cleanup();
+    ac(undefined, undefined, null, undefined, '/ayarlar?sekme=yok');
+    expect(screen.getByRole('tab', { name: 'Genel' }).getAttribute('aria-selected')).toBe('true');
+  });
+
   it('her ayarı başlığı, açıklaması ve sunucudaki değeriyle listeler; açıklama anahtara bağlıdır', async () => {
     sunucuKur();
     ac();
@@ -428,6 +437,11 @@ describe('Sistem Ayarları: kategoriler', () => {
   it('anahtar kategorisi: dört göz onaya, logo. ve smartes. ile başlayan kendi bağlantı sekmesine, tanınmayan Genel e düşer', () => {
     expect(ayarKategorisi({ anahtar: 'malzemeler.dort-goz', tur: 'boolean' })).toBe('onay');
     expect(ayarKategorisi({ anahtar: 'satin-alma.dort-goz', tur: 'boolean' })).toBe('onay');
+    expect(ayarKategorisi({ anahtar: 'ortak-dosyalar.silme-dort-goz', tur: 'boolean' })).toBe('onay');
+    expect(ayarKategorisi({ anahtar: 'siparisler.iskonto-dort-goz', tur: 'boolean' })).toBe('onay');
+    expect(ayarKategorisi({ anahtar: 'siparisler.termin-dort-goz', tur: 'boolean' })).toBe('onay');
+    expect(ayarKategorisi({ anahtar: 'siparisler.dort-gozlu', tur: 'boolean' })).toBe('genel');
+    expect(ayarKategorisi({ anahtar: 'siparisler.dortgoz', tur: 'boolean' })).toBe('genel');
     expect(ayarKategorisi({ anahtar: 'logo.baglanti', tur: 'boolean' })).toBe('logo');
     expect(ayarKategorisi({ anahtar: 'logo.hizmet-kdv-orani', tur: 'boolean' })).toBe('logo');
     expect(ayarKategorisi({ anahtar: 'smartes.baglanti', tur: 'boolean' })).toBe('smartes');
