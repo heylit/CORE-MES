@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CanliyaAlOnizlemesiCevabi } from '#paylasilan/sozlesme/plan.ts';
-import { api, hataIletisi } from '../../../../../ortak/veri/api.ts';
+import { api, ApiHatasi, hataIletisi } from '../../../../../ortak/veri/api.ts';
 import type { CalismaKomutu } from '../../kayit.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { simdiSaati, type OkunanPlan } from '../kurallar.ts';
-import { calismayiGeriAl, isiTasi, otomatikUygulaIste, tasimaSaati } from './gonder.ts';
+import { calismayiGeriAl, isiTasi, otomatikUygulaIste } from './gonder.ts';
 
 // 3669: çalışma planı gönderilmeden önce sunucunun yazacağı yerleşimin sıra denetimi. Uç yazar ve geri alır (kalıcı iz yok); sonuç çalışmanın
 // sürümüne bağlıdır: sürüm değişince sonuç eskir ve yeniden okunur. Okunamazsa gönderme engellenmez, sunucu gönderirken yine denetler.
@@ -13,27 +13,52 @@ export type OnizlemeDurumu =
   | { tur: 'yukleniyor'; onceki: CanliyaAlOnizlemesiCevabi | null }
   | { tur: 'hazir'; veri: CanliyaAlOnizlemesiCevabi }
   | { tur: 'hata'; ileti: string };
-type Kayit = { surum: number } & ({ tur: 'hazir'; veri: CanliyaAlOnizlemesiCevabi } | { tur: 'hata'; ileti: string });
 
-// Sonuç okunduğu çalışma sürümüne bağlıdır: sürüm değiştiği anda (istek yola çıkmadan) durum "yükleniyor" olur, önceki sonuç eski diye kalır;
-// düğmeler arada açılıp kapanmaz.
-export function useGondermeOnizlemesi(a: { calismaSurumu: number | null; etkin: boolean; ad: string }): { durum: OnizlemeDurumu; yenidenDene: () => void } {
+// Sonuç okunduğu çalışmaya bağlıdır: çalışma değiştiği anda (plan yeniden çözülünce, kilit kaydırılınca, her yazmada) durum "yükleniyor" olur,
+// önceki sonuç eski diye kalır ve kaydırma düğmesi kapanır. İstek çalışma durulunca (kısa bekleme) ve bekleyen yazma sunucuya yazıldıktan sonra,
+// yazılan sürümle gider: sunucu planı kaydından okur, yazılmamış plana önizleme eski planı denetlerdi (3669 K1). Sunucu "eski sürüm" derse
+// (yazma o arada sürümü ilerletti) bir kez yeniden yazılıp denenir (O2); yine olmazsa ileti ve "Yeniden dene" kalır. Yazma ya da istek
+// ONIZLEME_ZAMAN_ASIMI_MS içinde dönmezse durum hataya düşer (sonsuz "yükleniyor" yok); geç gelen sonuç yine kabul edilir.
+// Efekt yalnız çalışma nesnesine, açılış sürümüne, etkine ve sayaca bağlıdır: komut nesnesi her çizimde yeni olabilir, ref'ten okunur
+// (bağımlılık olsaydı bekleme sürekli sıfırlanır, sonuç hiç gelmezdi).
+export const ONIZLEME_BEKLEME_MS = 150;
+export const ONIZLEME_ZAMAN_ASIMI_MS = 20_000;
+const YENIDEN_DENEME_MS = 600;
+type Kayit = { calisma: PlanlamaCalismasi } & ({ tur: 'hazir'; veri: CanliyaAlOnizlemesiCevabi } | { tur: 'hata'; ileti: string });
+const surumCakismasi = (h: unknown): boolean => h instanceof ApiHatasi && h.durum === 409;
+export function useGondermeOnizlemesi(a: { calisma: PlanlamaCalismasi | null; komut: CalismaKomutu | null; ilkSurum: number | null; etkin: boolean; ad: string }): { durum: OnizlemeDurumu; yenidenDene: () => void } {
   const [kayit, setKayit] = useState<Kayit | null>(null);
   const [sayac, setSayac] = useState(0);
   const sonVeri = useRef<CanliyaAlOnizlemesiCevabi | null>(null);
-  const { calismaSurumu, etkin, ad } = a;
+  const { calisma, komut, ilkSurum, etkin, ad } = a;
+  const komutRef = useRef(komut);
+  komutRef.current = komut;
   useEffect(() => {
-    if (calismaSurumu === null || !etkin) return undefined;
+    if (calisma === null || !etkin) return undefined;
     let iptal = false;
-    setKayit((k) => (k !== null && k.surum === calismaSurumu ? null : k));
-    api.post<CanliyaAlOnizlemesiCevabi>(GONDERME_ONIZLEME_YOLU, { ad, calismaSurumu }).then(
-      (veri) => { if (!iptal) { sonVeri.current = veri; setKayit({ surum: calismaSurumu, tur: 'hazir', veri }); } },
-      (h: unknown) => { if (!iptal) setKayit({ surum: calismaSurumu, tur: 'hata', ileti: hataIletisi(h, 'sunucuya ulaşılamadı') }); },
-    );
-    return () => { iptal = true; };
-  }, [calismaSurumu, etkin, ad, sayac]);
-  const yenidenDene = useCallback(() => { setSayac((n) => n + 1); }, []);
-  const durum: OnizlemeDurumu = kayit !== null && kayit.surum === calismaSurumu ? kayit : { tur: 'yukleniyor', onceki: sonVeri.current };
+    const sor = async (yeniden: boolean): Promise<void> => {
+      const k = komutRef.current;
+      const surum = k === null ? ilkSurum : await k.kaydet();
+      if (iptal) return;
+      if (surum === null) { setKayit({ calisma, tur: 'hata', ileti: 'Çalışma kaydedilemedi; sıra denetimi yapılamadı. Yeniden deneyin.' }); return; }
+      try {
+        const veri = await api.post<CanliyaAlOnizlemesiCevabi>(GONDERME_ONIZLEME_YOLU, { ad, calismaSurumu: surum });
+        if (!iptal) { sonVeri.current = veri; setKayit({ calisma, tur: 'hazir', veri }); }
+      } catch (h) {
+        if (iptal) return;
+        if (!yeniden && surumCakismasi(h)) { await new Promise((r) => { setTimeout(r, YENIDEN_DENEME_MS); }); if (!iptal) await sor(true); return; }
+        setKayit({ calisma, tur: 'hata', ileti: hataIletisi(h, 'sunucuya ulaşılamadı') });
+      }
+    };
+    let asim: ReturnType<typeof setTimeout> | null = null;
+    const t = setTimeout(() => {
+      asim = setTimeout(() => { if (!iptal) setKayit((k) => (k !== null && k.calisma === calisma ? k : { calisma, tur: 'hata', ileti: 'Sıra denetimi zamanında dönmedi; yeniden deneyin.' })); }, ONIZLEME_ZAMAN_ASIMI_MS);
+      void sor(false).finally(() => { if (asim !== null) clearTimeout(asim); });
+    }, ONIZLEME_BEKLEME_MS);
+    return () => { iptal = true; clearTimeout(t); if (asim !== null) clearTimeout(asim); };
+  }, [calisma, ilkSurum, etkin, ad, sayac]);
+  const yenidenDene = useCallback(() => { setKayit(null); setSayac((n) => n + 1); }, []);
+  const durum: OnizlemeDurumu = kayit !== null && kayit.calisma === calisma ? (kayit.tur === 'hazir' ? { tur: 'hazir', veri: kayit.veri } : { tur: 'hata', ileti: kayit.ileti }) : { tur: 'yukleniyor', onceki: sonVeri.current };
   return { durum, yenidenDene };
 }
 
@@ -72,6 +97,8 @@ export function kaydirmaIsleri(c: PlanlamaCalismasi, p: OkunanPlan, oneri: NonNu
 // Kilitler Kokpit'in kendi taşıma komutuyla kayar (iş yeni saate kilitlenir, plan yeniden dizilir). Hepsi ya da hiçbiri: bir adım reddedilirse
 // yazılanlar çalışma kaydının geri alma ucuyla tek tek geri alınır (her yazma bir sürümdür); geri alma da düşerse kişiye söylenir.
 // Başarıdan sonra tek Geri al Kokpit'in geri almasıdır (komut başında alınan hâle döner).
+// Önerilen saat öncülün bitişinden sonraki en erken andır: çeyrek saate yukarı yuvarlanır (en yakına yuvarlamak 05:46'yı 05:45'e düşürüp adımı yine öncülden önce başlatırdı).
+export const kaydirmaSaati = (S: number, simdi: number): number => Math.max(Math.ceil(simdi * 4 - 1e-9) / 4, Math.ceil(S * 4 - 1e-9) / 4);
 export class KaydirmaHatasi extends Error {}
 export async function kilitleriKaydir(komut: CalismaKomutu, c: PlanlamaCalismasi, isler: readonly KaydirmaIsi[], ne: string): Promise<void> {
   const simdi = simdiSaati(c, Date.now());
@@ -80,7 +107,7 @@ export async function kilitleriKaydir(komut: CalismaKomutu, c: PlanlamaCalismasi
   let surum = 0;
   try {
     for (const i of isler) {
-      const r = await isiTasi(komut, { isId: i.k, tezgah: i.tezgah, baslangic: tasimaSaati(i.S, simdi) });
+      const r = await isiTasi(komut, { isId: i.k, tezgah: i.tezgah, baslangic: kaydirmaSaati(i.S, simdi) });
       otomatikUygulaIste(r);
       surum = r.calismaSurumu;
       yazilan += 1;
