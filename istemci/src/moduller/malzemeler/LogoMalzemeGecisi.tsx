@@ -729,7 +729,7 @@ export function TekAlmaPenceresi({ satir, turAdlari, karsiliklar, kapat, alindi 
                 value={onekSecimi}
                 onChange={(o) => onekSecimiYaz(o.target.value === 'baska' ? 'baska' : 'otomatik')}
               />
-              <p className="tc-lg-not">Logo kodu CORE kod biçimine uymuyor; kart CORE kodu alır, Logo kodu ERP kodu olarak kalır. Kodlama sistemini bilmiyorsanız "Otomatik" kalsın: türün genel grubu kullanılır (ör. HM-GEN-); grubu sonra Katalog'da düzenleyebilirsiniz.</p>
+              <p className="tc-lg-not">Logo kodu CORE kod biçimine uymuyor; kart CORE kodu alır, Logo kodu ERP kodu olarak kalır. Kod şimdi verilir, sonradan değişmez; grubu biliyorsanız "Başka önek yaz" seçin. Bilmiyorsanız "Otomatik" kalsın: türün genel grubu (ör. HM-GEN-) kullanılır.</p>
               {onekSecimi === 'baska' && <Girdi etiket="Önek" ipucu="Tür-grup biçiminde, ör. HM-PAS-" value={onek} maxLength={20} onChange={(o) => onekYaz(o.target.value)} />}
             </>
           )}
