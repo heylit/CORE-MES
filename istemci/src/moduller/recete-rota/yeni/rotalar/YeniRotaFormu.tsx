@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { EMIR_TURLERI, EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
 import type { UrunRevizyonlariCevabi } from '#paylasilan/sozlesme/rota.ts';
@@ -31,6 +31,11 @@ export function YeniRotaFormu({ r, urunId, rotalar, kapat }: { r: RotaEkrani; ur
   const [kopya, setKopya] = useState(true);
   const [hata, setHata] = useState<string | null>(null);
   const [mesgul, setMesgul] = useState(false);
+  const kap = useRef<HTMLDivElement>(null);
+  const adAlani = useRef<HTMLInputElement>(null);
+  // Klavye ve ekran okuyucu kullanıcısı formun açıldığını bilsin: açılınca ilk seçilebilir tür, tür seçilince ad alanı odak alır.
+  useEffect(() => { kap.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus(); }, []);
+  const turSec = (t: EmirTuru) => { setTur(t); if (t !== 'seri') window.setTimeout(() => { adAlani.current?.focus(); }, 0); };
   const turVar = (t: EmirTuru): boolean => (t === 'seri' ? !ilk : rotalar.some((x) => x.emirTurleri.includes(t)));
   const tumTurler: readonly (EmirTuru)[] = ['seri', ...EMIR_TURLERI.filter((t) => t !== 'seri')];
   const turAdi = (t: EmirTuru) => (t === 'seri' && !ilk ? `Seri · ${standart?.ad ?? 'Standart'}` : EMIR_TURU_ADLARI[t]);
@@ -48,13 +53,15 @@ export function YeniRotaFormu({ r, urunId, rotalar, kapat }: { r: RotaEkrani; ur
         { emirTuru: tur, ...(ad.trim() ? { ad: ad.trim() } : {}) }, { istekKimligi: yeniIstekKimligi() });
       istemci.setQueryData(urunRotalariAnahtari(urunId), c);
       const yeni = c.rotalar.find((x) => !onceki.has(x.id) && !x.standart);
-      if (!yeni || !duzen.rotaSec(urunId, String(yeni.id))) return;
+      if (!yeni || !duzen.rotaSec(urunId, String(yeni.id))) { setHata('Rota açıldı ama seçilemedi; sekmeden seç.'); return; }
       kapat();
       const kaynak = yururlukteki(duzen.rotaRevleri(urunId, null));
       if (kopya && kaynak) await duzen.yeniTaslak(urunId, kaynak);
       else adimEkle();
     } catch (h) {
       const k = h instanceof RrHatasi ? h : new RrHatasi(h);
+      // Başkası araya girdiyse (eski sürüm ya da aynı tür/ad) ürün rotaları yeniden okunur ki tür listesi bayat kalmasın.
+      if (k.eskiSurum || k.durum === 409) void istemci.invalidateQueries({ queryKey: urunRotalariAnahtari(urunId) });
       setHata(k.eskiSurum ? 'Rota bu arada başka biri tarafından değiştirildi; güncel hâli yüklendi, yeniden dene.' : k.message);
     } finally {
       setMesgul(false);
@@ -62,21 +69,21 @@ export function YeniRotaFormu({ r, urunId, rotalar, kapat }: { r: RotaEkrani; ur
   };
 
   return (
-    <div className="tc-rr1-rv-panel">
+    <div className="tc-rr1-rv-panel" ref={kap}>
       <b>Hangi emir türü için rota açılsın?</b>
       <span className="tc-rr1-rv-row" role="group" aria-label="Yeni rotanın emir türü">
         {tumTurler.map((t) => {
           const var_ = turVar(t);
           return (
-            <Dugme key={t} aria-pressed={tur === t} disabled={var_ || mesgul} title={var_ ? 'Bu türün rotası var' : undefined}
-              onClick={() => { setTur(t); }}>{var_ ? `${turAdi(t)} (var)` : turAdi(t)}</Dugme>
+            <Dugme key={t} aria-pressed={tur === t} disabled={var_ || mesgul} title={var_ ? (t === 'seri' ? 'Seri rotası ürünün Standart rotasıdır; hep vardır' : 'Bu türün rotası var') : undefined}
+              onClick={() => { turSec(t); }}>{var_ && !(t === 'seri') ? `${turAdi(t)} (var)` : turAdi(t)}</Dugme>
           );
         })}
       </span>
       {tur !== 'seri' && (
         <label className="tc-rr1-alan">
           <span>Rotanın adı</span>
-          <input className="tc-rr1-metin" value={ad} aria-label="Yeni rotanın adı" maxLength={ROTA_ADI_EN_COK}
+          <input ref={adAlani} className="tc-rr1-metin" value={ad} aria-label="Yeni rotanın adı" maxLength={ROTA_ADI_EN_COK}
             placeholder={tur === null ? 'Boş kalırsa türün adı' : EMIR_TURU_ADLARI[tur]} onChange={(e) => { setAd(e.target.value); }} />
         </label>
       )}
@@ -87,6 +94,7 @@ export function YeniRotaFormu({ r, urunId, rotalar, kapat }: { r: RotaEkrani; ur
       <p className="tc-rr1-ipucu">
         {tur === null ? 'Ad boş kalırsa türün adı olur; sonradan "Rotanın adı" ile değişir. Her türde bir rota, her rotada bir yürürlükte revizyon olur.'
           : tur === 'seri' ? 'Seri emirleri ve kendi rotası olmayan türler Standart rotayı kullanır; adı sonradan "Rotanın adı" ile değişir.'
+          : ilk ? `Bu üründe henüz yürürlükte rota yok: ${EMIR_TURU_ADLARI[tur]} emirleri, Standart (Seri) rotayı kurup yürürlüğe alana kadar rota bulamaz.`
           : `${EMIR_TURU_ADLARI[tur]} emirleri, bu rota yürürlüğe girene kadar Standart rotayla açılmaya devam eder.`}
       </p>
       <span className="tc-rr1-rv-row">

@@ -397,6 +397,8 @@ describe('R1 Ürün ve rotalar: reddedilen', () => {
     expect(within(turler).getByRole('button', { name: 'Seri' }).getAttribute('aria-pressed')).toBe('true');
     expect(within(bolge).queryByRole('textbox', { name: 'Yeni rotanın adı' })).toBeNull();
     fireEvent.click(within(turler).getByRole('button', { name: 'Numune' }));
+    expect(within(bolge).getByText(/Bu üründe henüz yürürlükte rota yok/)).toBeTruthy();
+    await waitFor(() => { expect(document.activeElement).toBe(within(bolge).getByRole('textbox', { name: 'Yeni rotanın adı' })); });
     fireEvent.change(within(bolge).getByRole('textbox', { name: 'Yeni rotanın adı' }), { target: { value: 'ORN Numune hattı' } });
     fireEvent.click(within(bolge).getByRole('button', { name: 'Numune rotasını aç' }));
     await waitFor(() => { expect(istekler.some((i) => i.yol === '/rota/urunler/11/rotalar')).toBe(true); });

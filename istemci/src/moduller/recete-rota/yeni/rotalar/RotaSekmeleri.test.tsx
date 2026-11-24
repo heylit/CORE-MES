@@ -130,7 +130,7 @@ describe('Rota sekmeleri (3247 a)', () => {
     const bolge = screen.getByRole('region', { name: 'Ürün ve rotalar' });
     fireEvent.click(within(g).getByRole('button', { name: /Rota$/ }));
     const turler = within(bolge).getByRole('group', { name: 'Yeni rotanın emir türü' });
-    expect((within(turler).getByRole('button', { name: 'Seri · Seri (var)' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((within(turler).getByRole('button', { name: 'Seri · Seri' }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(within(turler).getByRole('button', { name: 'Numune' }));
     fireEvent.click(within(bolge).getByRole('checkbox', { name: /yürürlükteki revizyonundan başla/ }));
     fireEvent.click(within(bolge).getByRole('button', { name: 'Numune rotasını aç' }));
@@ -138,8 +138,8 @@ describe('Rota sekmeleri (3247 a)', () => {
     expect(istekler.some((i) => i.yol === '/rota/urunler/11/taslak-ac')).toBe(false);
   });
 
-  it('3644: sunucu rota açmayı reddederse neden formda görünür ve rota açılmaz', async () => {
-    sunucuKur(YONETICI, {
+  it('3644: sunucu rota açmayı reddederse neden formda görünür, rota açılmaz ve ürün rotaları yeniden okunur', async () => {
+    const istekler = sunucuKur(YONETICI, {
       durum: () => json(200, rotaDurumu([standartRev, faiRev])),
       yazmalar: {
         'GET /rota/urunler/11': () => json(200, cevap([rota(1, 'Seri', true), rota(2, 'FAI rotası', false, ['fai'])])),
@@ -154,6 +154,7 @@ describe('Rota sekmeleri (3247 a)', () => {
     fireEvent.click(within(bolge).getByRole('button', { name: 'Numune rotasını aç' }));
     expect((await within(bolge).findByRole('alert')).textContent).toContain('bu adla bir rota var');
     expect(within(g).queryByRole('button', { name: /^Numune/ })).toBeNull();
+    await waitFor(() => { expect(istekler.filter((i) => i.yontem === 'GET' && i.yol === '/rota/urunler/11').length).toBeGreaterThan(1); });
   });
 
   it('3482-1 b: yeni rotaya ad yazılırsa o adla açılır', async () => {
