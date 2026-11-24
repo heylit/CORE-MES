@@ -134,7 +134,9 @@ export function Eslemeler() {
     enabled: gelen === null,
   });
   const satirlar = liste.data?.tur === tur ? liste.data.satirlar : [];
-  const eslenen = satirlar.filter((s) => s.smartesKod !== null).length;
+  // İstasyonda kendi eşlemesi olmayan ama iş merkezinin kodunu miras alan satır da SmartES'e bağlıdır.
+  const mirasli = satirlar.filter((s) => s.smartesKod === null && s.miras !== null).length;
+  const eslenen = satirlar.filter((s) => s.smartesKod !== null).length + mirasli;
   const smartesListesi = liste.data?.tur === tur ? liste.data.smartesListesi : null;
   const smartesAdi = (kod: string) => smartesListesi?.find((x) => x.kod === kod)?.ad ?? null;
   const onerili = satirlar.filter((s) => s.smartesKod === null && s.oneri !== null);
@@ -221,6 +223,7 @@ export function Eslemeler() {
             <div className="tc-sga-ust">
               <p className="tc-smartes-ozet">
                 <Rozet ton={eslenen === satirlar.length ? 'tamam' : 'bilgi'}>{`${eslenen} / ${satirlar.length} eşli`}</Rozet>
+                {mirasli > 0 && <span className="tc-sm-not">{`${mirasli} istasyon iş merkezinin koduyla bağlı.`}</span>}
                 {onerili.length > 0 && <span className="tc-sm-not">{`${onerili.length} kayıt için SmartES’te aynı ya da benzer adlı karşılık bulundu.`}</span>}
               </p>
               {yazabilir && onerili.length > 0 && (

@@ -1,4 +1,4 @@
-import type { DurumCevabi, GidenCevabi } from '#paylasilan/sozlesme/smartes.ts';
+import type { DurumCevabi } from '#paylasilan/sozlesme/smartes.ts';
 import type { RozetTonu } from '../../ortak/arayuz/index.ts';
 
 export const YOK = '—';
@@ -28,11 +28,4 @@ export const BAGLANTI: Record<DurumCevabi['baglanti'], { metin: string; ton: Roz
 
 export const KAYNAK_ADI: Record<DurumCevabi['okumalar'][number]['kaynak'], string> = {
   'is-emri-durumu': 'Üretim sayıları', durus: 'Duruşlar', alarm: 'Alarmlar',
-};
-
-type GidenDurumu = GidenCevabi['satirlar'][number]['durum'];
-export const GIDEN: Record<GidenDurumu, { metin: string; ton: RozetTonu }> = {
-  gonderildi: { metin: 'Gönderildi', ton: 'tamam' },
-  hata: { metin: 'Hata', ton: 'hata' },
-  kapandi: { metin: 'Kapatıldı', ton: 'pasif' },
 };

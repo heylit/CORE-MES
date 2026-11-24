@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type {
-  AlarmlarCevabi, AmbarHareketleriCevabi, DuruslarCevabi, FireHareketleriCevabi, GidenCevabi, HamKayitCevabi,
+  AlarmlarCevabi, AmbarHareketleriCevabi, DuruslarCevabi, FireHareketleriCevabi, HamKayitCevabi,
   IsEmriDurumlariCevabi, KaliteOlcumleriCevabi,
 } from '#paylasilan/sozlesme/smartes.ts';
 import { Dugme, DurumKutusu, Kart, Pencere, Rozet, Tablo, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { GIDEN, YOK, sayiMetni, zamanMetni } from './gosterim.ts';
+import { YOK, sayiMetni, zamanMetni } from './gosterim.ts';
+
+export { Giden } from './GidenEmirler.tsx';
 import './smartes.css';
 
 interface Sayfa<S> { satirlar: S[]; toplam: number | null; sayfa: number; sayfaBoyu: number }
@@ -123,24 +125,6 @@ export const Alarmlar = () => (
   <SayfaliListe
     ad="alarm" yol="/smartes/alarmlar" baslik="Alarmlar" aciklama="SmartES’ten okunan makine alarmları."
     sutunlar={ALARM_SUTUNLARI} anahtar={(s) => s.smartesId} bos="Henüz okunan alarm yok."
-  />
-);
-
-type GidenSatiri = GidenCevabi['satirlar'][number];
-const GIDEN_SUTUNLARI: readonly Sutun<GidenSatiri>[] = [
-  { anahtar: 'no', baslik: 'SmartES iş emri no', hucre: (s) => s.smartesIsEmriNo, mono: true },
-  { anahtar: 'durum', baslik: 'Durum', hucre: (s) => <Rozet ton={GIDEN[s.durum].ton}>{GIDEN[s.durum].metin}</Rozet> },
-  { anahtar: 'deneme', baslik: 'Deneme', hucre: (s) => sayiMetni(s.denemeSayisi), hizala: 'sag', mono: true },
-  { anahtar: 'sonDeneme', baslik: 'Son deneme', hucre: (s) => zamanMetni(s.sonDeneme), kirilmaz: true },
-  { anahtar: 'sonraki', baslik: 'Sonraki deneme', hucre: (s) => zamanMetni(s.sonrakiDeneme), kirilmaz: true },
-  { anahtar: 'hata', baslik: 'Hata', hucre: (s) => s.sonHata ?? YOK },
-];
-
-export const Giden = () => (
-  <SayfaliListe
-    ad="giden" yol="/smartes/giden" baslik="İş emri gönderimi"
-    aciklama="Planlı iş emirleri, istasyonu SmartES’te eşlenmişse SmartES’e gönderilir. Plandan düşen emir SmartES’te kapatılır, silinmez."
-    sutunlar={GIDEN_SUTUNLARI} anahtar={(s) => s.isEmriId} bos="Henüz gönderilen iş emri yok." ham={false}
   />
 );
 

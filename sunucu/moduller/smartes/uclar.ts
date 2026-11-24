@@ -3,7 +3,7 @@ import { uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
   alarmlarCevabi, canliMakineAyrintisiCevabi, canliMakineParametresi, canliMakinelerCevabi, durumCevabi, duruslarCevabi, eslemeAtaGovdesi, eslemeCevabi,
-  eslemeKaldirGovdesi, eslemelerCevabi, eslemeSorgusu, gidenCevabi, smartesEmirDurumlariCevabi, smartesEmirDurumlariSorgusu, smartesGidenIzlemeCevabi, smartesYenidenGonderCevabi, smartesYenidenGonderGovdesi, isEmriDurumlariCevabi, makineBulgulariCevabi, sayfaSorgusu, smartesHazirlikCevabi,
+  eslemeKaldirGovdesi, eslemelerCevabi, gidenEmirleriCevabi, eslemeSorgusu, gidenCevabi, smartesEmirDurumlariCevabi, smartesEmirDurumlariSorgusu, smartesGidenIzlemeCevabi, smartesYenidenGonderCevabi, smartesYenidenGonderGovdesi, isEmriDurumlariCevabi, makineBulgulariCevabi, sayfaSorgusu, smartesHazirlikCevabi,
   smartesKontrolCevabi, gelenAdEsleGovdesi, gelenAdKaldirGovdesi, gelenAdlarCevabi, gelenAdOnerileriOnaylaGovdesi, gelenAdSorgusu, listeOkuCevabi, gelenAdAktarimCevabi, gelenAdAktarGovdesi, gelenAdAktarSonucu,
   onerileriOnaylaCevabi, onerileriOnaylaGovdesi, ambarHareketleriCevabi, fireHareketleriCevabi, gelenlerCevabi, hamKayitCevabi, hamKayitParametresi,
   kaliteOlcumleriCevabi, hesaplarCevabi, adetKarariCevabi, adetOnaylaGovdesi, adetOnaylariCevabi, adetOnaySorgusu, adetReddetGovdesi,
@@ -289,6 +289,15 @@ export const uclar = [
     sorgu: smartesEmirDurumlariSorgusu,
     cevap: smartesEmirDurumlariCevabi,
     isle: ({ db, sorgu }) => servis.emirDurumlari(db, sorgu.emir, ortamIstemcisi),
+  }),
+  // 3658: iş emri gönderimi, üretim emri başına gruplu ve operasyon operasyon; yalnız CORE'daki izi okur.
+  uc({
+    yontem: 'GET',
+    yol: '/smartes/giden/emirler',
+    yetki: { biri: ['sayfa.smartes'] },
+    sorgu: sayfaSorgusu,
+    cevap: gidenEmirleriCevabi,
+    isle: ({ db, sorgu }) => servis.gidenEmirleri(db, sorgu, ortamIstemcisi),
   }),
   // Canlı makine panosu: yalnız saklanan son okumayı verir; SmartES'e istek atmaz.
   // 3192: makine verisiyle çalışanın girdiği karşılaştırılır; yalnız okur, bir şey düzeltmez.

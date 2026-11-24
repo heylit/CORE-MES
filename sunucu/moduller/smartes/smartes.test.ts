@@ -627,6 +627,29 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     await ortam!.sahip.sorgu("DELETE FROM smartes_esleme WHERE tur = 'istasyon' AND tmi_id IN ($1, $2)", ist);
   });
 
+  test('3658: gönderim üretim emri başına gruplu ve adım adım gelir; sorunlu emir üstte, gönderilen alanlar ve neden görünür', async () => {
+    const { uretimEmriId, ilk, ikinci, tipKodu, istasyonlar: ist } = await emirKur(true);
+    opKodlari = opKodlari.filter((k) => k !== `${tipKodu}20`);
+    assert.deepEqual(await gonderimTuru(vt(), turOrtami()), { tur: 'islendi', gonderilen: 1, kapanan: 0, hatali: 1 });
+    const c = await istek('GET', '/smartes/giden/emirler');
+    assert.equal(c.statusCode, 200, c.body);
+    type Adim = { isEmriId: number; opNo: number; durum: string | null; operasyonKodu: string | null; kodKaynagi: string | null; smartesIstasyonKodu: string | null; istasyonEslemesi: string | null; neden: string | null; adet: number | null; alanlar: { ad: string; deger: string }[] };
+    const o = c.json() as { toplam: number; emirler: { emirId: number; sorunlu: boolean; gonderilen: number; adimSayisi: number; adimlar: Adim[] }[] };
+    const emir = o.emirler.find((e) => e.emirId === uretimEmriId)!;
+    assert.ok(emir, 'emir gruplu listede');
+    assert.equal(emir.sorunlu, true);
+    assert.equal(o.emirler[0]?.sorunlu, true, 'sorunlu emirler üstte');
+    assert.deepEqual([emir.gonderilen, emir.adimSayisi], [1, 2]);
+    const a1 = emir.adimlar.find((a) => a.isEmriId === ilk)!;
+    const a2 = emir.adimlar.find((a) => a.isEmriId === ikinci)!;
+    assert.deepEqual([a1.durum, a1.operasyonKodu, a1.kodKaynagi, a1.istasyonEslemesi], ['gonderildi', `${tipKodu}10`, 'tip-kodu', 'istasyon']);
+    assert.ok(a1.smartesIstasyonKodu !== null && a1.alanlar.some((x) => x.ad === 'WorkOrderNo'), 'gönderilen alanlar özetten gelir');
+    assert.deepEqual([a2.durum, a2.operasyonKodu, a2.neden], ['yeniden-denenecek', `${tipKodu}20`, `SmartES'te ${tipKodu}20 operasyonu yok`]);
+    assert.equal((await istek('GET', '/smartes/giden/emirler', undefined, okuyucu)).statusCode, 200);
+    await ortam!.sahip.sorgu("DELETE FROM smartes_giden WHERE is_emri_id IN ($1, $2)", [ilk, ikinci]);
+    await ortam!.sahip.sorgu("DELETE FROM smartes_esleme WHERE tur = 'istasyon' AND tmi_id IN ($1, $2)", ist);
+  });
+
   test('SME-14 (ret): SmartES reddederse iş emri durur ve kendiliğinden yinelenmez; ağ hatası bekleme yazar ve turu durdurur', async () => {
     const { uretimEmriId, ilk, ikinci } = await emirKur(true);
     sahte.isleyiciler.set('WorkOrdersCreateUpdate', () => ({ tur: 'skaler', etkilenen: 0, hata: 'İstasyon tanımsız' }));

@@ -7,7 +7,7 @@ import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import { MemoryRouter } from 'react-router-dom';
 import type {
-  DurumCevabi, EslemelerCevabi, FireHareketleriCevabi, GelenAdlarCevabi, GelenlerCevabi, GidenCevabi, HamKayitCevabi, HesaplarCevabi,
+  DurumCevabi, EslemelerCevabi, FireHareketleriCevabi, GelenAdlarCevabi, GelenlerCevabi, GidenEmirleriCevabi, HamKayitCevabi, HesaplarCevabi,
   IsEmriDurumlariCevabi, OnerileriOnaylaCevabi,
 } from '#paylasilan/sozlesme/smartes.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
@@ -336,13 +336,48 @@ describe('SmartES listeleri', () => {
     expect(within(screen.getByText('E-2-10').closest('tr')!).getByText('Onay bekliyor')).toBeTruthy();
   });
 
-  it('giden kutusu boşsa boş iletisi gösterir', async () => {
-    sunucuKur(IZLEYICI, (yol) => (yol.startsWith('/smartes/giden')
-      ? json(200, { toplam: 0, sayfa: 1, sayfaBoyu: 50, satirlar: [] } satisfies GidenCevabi)
+  it('3658: giden emirler üretim emri başına gruplu gelir; sorunlu emir açık, öteki kapalı; durmuş adımda yeniden gönder, gönderilen alanlar penceresi', async () => {
+    const adim = (ek: Partial<GidenEmirleriCevabi['emirler'][number]['adimlar'][number]>): GidenEmirleriCevabi['emirler'][number]['adimlar'][number] => ({
+      isEmriId: 1, opNo: 10, ad: 'ORN Tornalama', durum: 'gonderildi', gonderilmez: null, kapandi: false, smartesIsEmriNo: 'E-1-10', coreIstasyonKodu: 'IST-01',
+      smartesIstasyonKodu: 'S-01', istasyonEslemesi: 'istasyon', operasyonTipi: 'TRN', operasyonOneki: 'TRN', operasyonKodu: 'TRN10', kodKaynagi: 'onek', makineKodu: 'M-1',
+      adet: 5, denemeSayisi: 1, sonDeneme: '2026-11-24T08:00:00.000Z', sonrakiDeneme: null, neden: null, alanlar: [{ ad: 'OperationCode', deger: 'TRN10' }], ...ek,
+    });
+    const cevap: GidenEmirleriCevabi = {
+      toplam: 2, sayfa: 1, sayfaBoyu: 20, sorunlu: 1,
+      emirler: [
+        { emirId: 7, emirNo: 'E-1', sorunlu: true, gonderilen: 1, adimSayisi: 2, adimlar: [
+          adim({}),
+          adim({ isEmriId: 2, opNo: 20, durum: 'durdu', operasyonKodu: 'TRN20', neden: 'SmartES reddetti: Operasyon kodu tanımsız', smartesIstasyonKodu: 'FRZ-ORN', istasyonEslemesi: 'is-merkezi' }),
+        ] },
+        { emirId: 8, emirNo: 'E-2', sorunlu: false, gonderilen: 1, adimSayisi: 1, adimlar: [adim({ isEmriId: 3 })] },
+      ],
+    };
+    const cagrilar = sunucuKur(YONETICI, (yol) => (yol.startsWith('/smartes/giden/emirler') ? json(200, cevap)
+      : yol === '/smartes/giden/yeniden-gonder' ? json(200, { sirada: 1, durmayan: 0 }) : null));
+    ac(<MemoryRouter><Giden /></MemoryRouter>);
+    expect(await screen.findByText('E-1')).toBeTruthy();
+    // Sorunlu emir açık: adım ayrıntıları görünür; ikinci emir kapalı.
+    expect(screen.getByText('TRN20')).toBeTruthy();
+    expect(screen.getByText('IST-01 → FRZ-ORN')).toBeTruthy();
+    expect(screen.getByText('iş merkezinden')).toBeTruthy();
+    expect(screen.getByText('SmartES reddetti: Operasyon kodu tanımsız')).toBeTruthy();
+    expect(screen.queryByRole('table', { name: 'E-2 adımları' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /E-2/ }));
+    expect(await screen.findByRole('table', { name: 'E-2 adımları' })).toBeTruthy();
+    expect(screen.getAllByRole('link', { name: 'Eşlemeyi aç' }).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Alanlar' })[0]!);
+    expect(await screen.findByText('SmartES’e giden alanlar', { exact: false })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Yeniden gönder' }));
+    await waitFor(() => { expect(cagrilar.find((c) => c.yol === '/smartes/giden/yeniden-gonder')?.govde).toEqual({ isEmirleri: [2] }); });
+  });
+
+  it('giden emirler boşsa boş iletisi gösterir; yeniden gönder yetkisiz kullanıcıda görünmez', async () => {
+    sunucuKur(IZLEYICI, (yol) => (yol.startsWith('/smartes/giden/emirler')
+      ? json(200, { toplam: 0, sayfa: 1, sayfaBoyu: 20, sorunlu: 0, emirler: [] } satisfies GidenEmirleriCevabi)
       : null));
-    ac(<Giden />);
+    ac(<MemoryRouter><Giden /></MemoryRouter>);
     expect(await screen.findByText('Henüz gönderilen iş emri yok.')).toBeTruthy();
-    expect(screen.queryByText('Tüm alanlar')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Yeniden gönder' })).toBeNull();
   });
 
   it('fire listesinde "Tüm alanlar" satırın SmartES’ten geldiği haliyle bütün alanlarını açar; boş alan boşluk işaretiyle', async () => {
@@ -437,6 +472,9 @@ describe('SmartES eşleme ekranı: önek, iş merkezi, miras (3655)', () => {
     });
     ac(<Eslemeler />);
     expect(await screen.findByText('iş merkezinden: FRZ')).toBeTruthy();
+    // Miras alan istasyon da eşli sayılır.
+    expect(screen.getByText('1 / 1 eşli')).toBeTruthy();
+    expect(screen.getByText('1 istasyon iş merkezinin koduyla bağlı.')).toBeTruthy();
     fireEvent.click(screen.getByRole('tab', { name: 'İş merkezi' }));
     expect(await screen.findByText('kendi eşlemesi: ORN-FRZ-ST')).toBeTruthy();
     expect(screen.getByText('SmartES istasyon kodu')).toBeTruthy();

@@ -205,13 +205,14 @@
 .tc-mbg-ince[data-tur="kapali"] { stroke: var(--idle); }
 .tc-mbg-ince[data-tur="alarm"] { stroke-dasharray: 2px 2px; }
 .tc-sg-sayfa { display: flex; flex-direction: column; gap: var(--b-4); }
-.tc-sg-ham { grid-template-columns: minmax(0, 1fr); }
+.tc-sg-alanlar { width: 100%; }
+.tc-sg-ham { grid-template-columns: minmax(0, 1fr); max-width: none; }
 .tc-sg-ham-satir {
-  display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: var(--b-3); padding: var(--b-1) 0;
+  display: grid; grid-template-columns: minmax(18ch, max-content) minmax(0, 1fr); gap: var(--b-3); padding: var(--b-1) 0;
   border-bottom: 1px solid var(--edge);
 }
 .tc-sg-ham-satir dt { font-family: var(--font-mono); font-size: var(--yazi-s); overflow-wrap: anywhere; }
-.tc-sg-baglanti { display: inline-flex; align-items: center; min-height: var(--dokunma-yogun); }
+.tc-sg-baglanti { display: inline-flex; align-items: center; min-height: var(--dokunma-yogun); color: var(--done); text-decoration: underline; text-underline-offset: 2px; }
 @media (max-width: 767px) {
   .tc-sg-baglanti { display: flex; min-height: var(--dokunma); }
 }
@@ -223,3 +224,18 @@
 .tc-ob-kararlar li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2) var(--b-3); }
 .tc-ob-ozet > .tc-sm-kod { white-space: nowrap; }
 .tc-ob-ozet .tc-ob-eylem { flex-wrap: wrap; }
+
+/* İş emri gönderimi, emir başına grup (3658) */
+.tc-gd-emir { display: flex; flex-direction: column; gap: var(--b-2); padding: var(--b-3); border: 1px solid var(--edge); border-left: var(--ikinci-vurgu) solid var(--faint); border-radius: var(--yari-2); background: var(--panel); min-width: 0; }
+.tc-gd-emir[data-sorunlu] { border-left-color: var(--stop); }
+.tc-gd-baslik { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2); margin: 0; font-size: inherit; font-weight: inherit; }
+.tc-gd-ac {
+  display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); min-height: var(--dokunma); padding: 0; border: 0; background: none;
+  color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+}
+.tc-gd-ac .mono { font-weight: 700; }
+.tc-gd-deneme { display: flex; flex-direction: column; gap: var(--b-1); width: 22ch; max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
+.tc-gd-yigin { display: inline-flex; flex-direction: column; align-items: flex-start; gap: var(--b-1); min-width: 0; }
+.tc-gd-islem { display: inline-flex; flex-direction: column; align-items: flex-start; gap: var(--b-2); min-width: 0; }
+.tc-sg-ham-satir dt { overflow-wrap: normal; word-break: keep-all; }
+.tc-sg-ham-satir dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
