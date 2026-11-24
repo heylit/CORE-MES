@@ -1,6 +1,6 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
-  erpKoduDoldurCevabi, erpKoduOzetiCevabi, logoGecisCevabi, logoGecisSorgusu, logoGeriAlCevabi, logoGeriAlGovdesi, logoTopluAlGovdesi, logoTopluBaglaGovdesi, logoTopluCevabi,
+  erpKoduDoldurCevabi, erpKoduOzetiCevabi, logoGecisCevabi, logoGecisSorgusu, logoGeriAlCevabi, logoGeriAlGovdesi, logoTopluAlGovdesi, logoTopluBaglaGovdesi, logoTopluCevabi, logoyaGonderCevabi, logoyaGonderGovdesi, logoGecisKartiCevabi,
   katalogAyarKaydetGovdesi, katalogAyarParametresi, katalogAyarlariCevabi, katalogKartiKaydetCevabi, katalogKartiKaydetGovdesi, katalogKartiRotasiCevabi,
   katalogKartlariCevabi, katalogKartlariSorgusu, katalogKimlikCevabi, katalogKimlikParametresi, katalogSablonlariCevabi, katalogSablonuKaydetGovdesi, katalogSurumluKayitCevabi,
   demirbasMakineSecenekleriCevabi, demirbasTeknikCevabi, demirbasTeknikKaydetGovdesi,
@@ -119,6 +119,16 @@ export const uclar = [
   uc({
     yontem: 'POST', yol: '/malzeme-logo-gecisi/toplu-al', yetki: 'malzemeler.yaz', tekrarKorumali: true, govde: logoTopluAlGovdesi, cevap: logoTopluCevabi,
     isle: ({ db, kullanici, govde }) => servis.logoTopluAl(db, kullanici, govde),
+  }),
+  // 3632: katalog kartında Logo açıklama farkı ve gönderim durumu (okuma; Logo'ya istek yok).
+  uc({
+    yontem: 'GET', yol: '/malzeme-logo-gecisi/kart/:kimlik', yetki: OKUMA, parametre: katalogKimlikParametresi, cevap: logoGecisKartiCevabi,
+    isle: ({ db, parametre }) => servis.logoGecisKarti(db, parametre.kimlik),
+  }),
+  // 3632: CORE'daki açıklamaları Logo'ya elle gönder; kartı var olan ad güncellemesi kuyruğuna alır (yeni işlem yok, kart yazma yetkisi).
+  uc({
+    yontem: 'POST', yol: '/malzeme-logo-gecisi/logoya-gonder', yetki: 'malzemeler.yaz', tekrarKorumali: true, govde: logoyaGonderGovdesi, cevap: logoyaGonderCevabi,
+    isle: ({ db, govde }) => servis.logoyaGonder(db, govde),
   }),
   // 3474-3: boş ERP kodları Logo'daki kodla doldurulur; kart yazma işlemiyle (yeni işlem yok), Logo'ya istek gitmez.
   uc({ yontem: 'GET', yol: '/malzeme-logo-gecisi/erp-kodlari', yetki: OKUMA, cevap: erpKoduOzetiCevabi, isle: ({ db }) => servis.erpKoduOzeti(db) }),

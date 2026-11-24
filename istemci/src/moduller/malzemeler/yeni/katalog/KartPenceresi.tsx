@@ -17,6 +17,7 @@ import { DepodaBolumu } from './DepodaBolumu.tsx';
 import { TurKunyesi } from '../ortak/TurKunyesi.tsx';
 import { kategoriAdi, turAdi, turKisa, turOf } from './kategori.ts';
 import { LogoBolumu } from './LogoBolumu.tsx';
+import { LogoyaGonderBolumu } from './LogoyaGonderBolumu.tsx';
 import { kimlikOf, yerineOf } from './liste.ts';
 import { Muadiller, OnayPaneli, Revizyonlar, TalepPaneli, type OnayIslemi, type TalepIslemi } from './paneller.tsx';
 
@@ -111,6 +112,7 @@ export function KartPenceresi({
       />
       {x.tur === 'hammadde' && <KartKesiti x={x} b={b} />}
       {!hizmet && x.com.kod && <LogoBolumu kod={x.com.kod} birim={x.com.birim ?? ''} />}
+      {!hizmet && <LogoyaGonderBolumu kimlik={kart.kimlik} yazar={yetki.yaz} />}
       {x.tur === 'demirbas' && <DemirbasBolumu kimlik={kart.kimlik} yazar={yetki.yaz && !kilitli} />}
       <ResimAlani tur={x.tur} no={kart.no} />
       {!hizmet && x.com.kod && <DepodaBolumu no={kart.no} kod={x.com.kod} birim={x.com.birim ?? ''} />}

@@ -1351,6 +1351,15 @@ export function logoKartFarklari(
   return ciftler.filter(([, l, t]) => l !== t).map(([alan, l, t]) => ({ alan, logo: l, tmi: t }));
 }
 
+// 3632: CORE'daki açıklamaları Logo'ya gönderme. Boş CORE açıklaması Logo'daki metni silmez (malzemeGuncellemeGovdesi), bu yüzden
+// yalnız CORE'da değeri olan bir alanda fark varsa gidecek bir şey vardır. Gidecek değer CORE değeridir; yoksa Logo'daki kalır.
+export function logoyaGidecekFarklar(farklar: readonly LogoFarki[]): LogoFarki[] {
+  return farklar.filter((f) => f.tmi !== null);
+}
+export function logoyaGonderilebilirMi(k: { logoKayitli: boolean; onayDurumu: string; farklar: readonly LogoFarki[] }): boolean {
+  return k.logoKayitli && k.onayDurumu !== 'iptal' && logoyaGidecekFarklar(k.farklar).length > 0;
+}
+
 // Logo geçişi (3068): satırın toplu işleme girip girmediği. Toplu bağlama yalnız aynı kodlu, bağsız, iptal olmayan ve birimi
 // karşılıkla (ya da aynen) tutan kartta; toplu alma yalnız CORE'da olmayan, Logo'da kullanımda ve kodu CORE biçimine uyan kartta.
 // Geri kalanı tek tek karar ister; neden ekranda yazar.

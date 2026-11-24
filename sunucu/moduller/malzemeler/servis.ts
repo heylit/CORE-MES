@@ -16,7 +16,7 @@ import type {
   HizmetYonu, LogoDurumuCevabi, LogoEksik, LogoKarsiligi,
   KatalogAyarlariCevabi, KatalogKartiKaydetCevabi, MalzemelerOzetiCevabi, KatalogKartlariCevabi, KatalogMalzemeOzeti, KatalogSablonlariCevabi, KatalogTuru, MalzemeSecimCevabi,
   OlcuAletiSecenekleriCevabi, OlcuBirimleriCevabi, katalogKartiKaydetGovdesi, KatalogKartiRotasiCevabi,
-  LogoGecisCevabi, logoGecisSorgusu, LogoGelenCevabi, LogoGeriAlCevabi, logoTopluAlGovdesi, logoTopluBaglaGovdesi, LogoTopluCevabi, LogodanAlCevabi, ErpKoduDoldurCevabi, ErpKoduOzetiCevabi, ErpKoduSonucu, LogoYeniKodCevabi, logodanAlGovdesi, logoGelenSorgusu,
+  LogoGecisCevabi, logoGecisSorgusu, LogoGelenCevabi, LogoGeriAlCevabi, logoTopluAlGovdesi, logoTopluBaglaGovdesi, LogoTopluCevabi, logoyaGonderGovdesi, LogoyaGonderCevabi, LogoGecisKartiCevabi, LogodanAlCevabi, ErpKoduDoldurCevabi, ErpKoduOzetiCevabi, ErpKoduSonucu, LogoYeniKodCevabi, logodanAlGovdesi, logoGelenSorgusu,
   ArsivKarti, ArsivKartiCevabi, ArsivKartlariCevabi, KatalogKartiIptalCevabi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
@@ -39,7 +39,7 @@ import type { OlcuDegeri } from './kurallar.ts';
 import type { KategoriAgaciDugumu, KategoriAgaciTuru } from '#paylasilan/sozlesme/kategori-agaci-sabitleri.ts';
 import { arsivdenDonusDurumu, arsivIzAdetleri, arsivKaliciSilmeEngeli, type ArsivIzi } from './kurallar.ts';
 import type { MalzemeKartiAnahtari, MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
-import { logoGecisAdayligi, logoGelenDurumu, logoKullanimEsigi, logoKullanimNedenleri, logoKartFarklari, logoKodBicimi, logoKoduTureUyar } from './kurallar.ts';
+import { logoGecisAdayligi, logoGelenDurumu, logoKullanimEsigi, logoKullanimNedenleri, logoKartFarklari, logoKodBicimi, logoKoduTureUyar, logoyaGidecekFarklar, logoyaGonderilebilirMi } from './kurallar.ts';
 import * as s from './sorgular.ts';
 import { setSayilariniTazele } from './alternatif/servis.ts';
 
@@ -1166,7 +1166,7 @@ export async function logoGecisi(db: Db, q: z.output<typeof logoGecisSorgusu>, b
   if (!logoKartAynasi || !logoAynaOzeti) {
     return {
       baglanti: false, okuma: { acik: false, suruyor: false, okunan: null, sonTamam: null }, sayilar: bos, suzgec: q.suzgec ?? 'stoklu', kullanim: false, canliArama: false,
-      uyan: 0, kartlar: [], sayfa: 0, sonrakiSayfa: null,
+      uyan: 0, kartlar: [], sayfa: 0, sonrakiSayfa: null, logoyaGonderim: await logoyaGonderimDurumu(db),
     };
   }
   const ozet = await logoAynaOzeti(db, {});
@@ -1208,6 +1208,7 @@ export async function logoGecisi(db: Db, q: z.output<typeof logoGecisSorgusu>, b
   })).map((k) => [k.logoKayitNo, k]));
   const kartlar = sayfaSatirlari.map((r) => {
     const t = tam.get(r.k.logoKayitNo);
+    const farklar = r.durum === 'bagli' && r.tmi && t ? logoKartFarklari(t, r.tmi) : [];
     const birimSeti = t?.birimSeti ?? null;
     const aday = logoGecisAdayligi({ durum: r.durum, aktif: r.k.aktif, koduUyar: r.koduUyar, logoBirimSeti: birimSeti, tmi: r.tmi, birimKarsiliklari });
     return {
@@ -1216,7 +1217,12 @@ export async function logoGecisi(db: Db, q: z.output<typeof logoGecisSorgusu>, b
       tmi: r.tmi && {
         kimlik: r.tmi.kimlik, stokKodu: r.tmi.stokKodu, ad: r.tmi.ad, birim: r.tmi.birim, onayDurumu: r.tmi.onayDurumu, surum: r.tmi.surum, logoKayitli: r.tmi.logoKayitNo !== null,
       },
-      farklar: r.durum === 'bagli' && r.tmi && t ? logoKartFarklari(t, r.tmi) : [],
+      farklar,
+      logoyaGonder: {
+        gonderilebilir: r.durum === 'bagli' && r.tmi !== null && logoyaGonderilebilirMi({ logoKayitli: r.tmi.logoKayitNo !== null, onayDurumu: r.tmi.onayDurumu, farklar }),
+        durum: r.tmi?.logoGuncellemeDurumu === 'bekliyor' ? 'bekliyor' as const : r.tmi?.logoGuncellemeDurumu === 'hata' ? 'hata' as const : null,
+        hata: r.tmi?.logoGuncellemeDurumu === 'hata' ? r.tmi.logoGuncellemeHata : null,
+      },
     };
   });
   // Karar bekleyen sayısı yalnız birim farkı dışındakiler için bütün aynadan sayılır; birim için tam kart gerekir, sayfa kadarı yazılır.
@@ -1224,8 +1230,70 @@ export async function logoGecisi(db: Db, q: z.output<typeof logoGecisSorgusu>, b
     + kartlar.filter((k) => k.kararNedeni === 'birim-farki').length;
   return {
     baglanti: true, okuma: ozet.okuma, sayilar, suzgec, kullanim, canliArama: ozet.arama.acik, uyan: uyanlar.length, kartlar, sayfa: q.sayfa,
-    sonrakiSayfa: (q.sayfa + 1) * LOGO_GECIS_SAYFA_BOYU < uyanlar.length ? q.sayfa + 1 : null,
+    sonrakiSayfa: (q.sayfa + 1) * LOGO_GECIS_SAYFA_BOYU < uyanlar.length ? q.sayfa + 1 : null, logoyaGonderim: await logoyaGonderimDurumu(db),
   };
+}
+
+// 3632: elle gönderim, Logo işinin ad güncellemesi koşuluyla aynıdır: "Logo bağlantısı" ve "Logo: malzeme adı güncellemesi" açık.
+async function logoyaGonderimDurumu(db: Db): Promise<{ acik: boolean; neden: string | null }> {
+  if (!(await sistemAyariOku(db, 'logo.baglanti'))) return { acik: false, neden: 'Sistem Ayarları\'nda "Logo bağlantısı" kapalı' };
+  if (!(await sistemAyariOku(db, 'logo.malzeme-guncelleme-gonderimi'))) return { acik: false, neden: 'Sistem Ayarları\'nda "Logo: malzeme adı güncellemesi" kapalı' };
+  return { acik: true, neden: null };
+}
+
+// 3632: CORE'daki Açıklama 1-3'ü Logo'ya gönder. Yeni yazma yolu yok: kart var olan ad güncellemesi kuyruğuna alınır, istek Logo işinden çıkar
+// (malzemeGuncellemeGovdesi: ad = Açıklama 1 ya da kart adı, NAME3 = Açıklama 2, NAME4 = Açıklama 3; boş açıklama Logo'daki metni silmez).
+// Kart değeri değişmez, sürüm artmaz. Kapalıyken hiçbir kart kuyruğa girmez. Her kart kendi kayıt noktasında; olmayan atlanır ve nedeni döner.
+export async function logoyaGonder(db: Db, g: z.output<typeof logoyaGonderGovdesi>): Promise<LogoyaGonderCevabi> {
+  if (!logoKartAynasi) throw gecersiz(LOGO_BAGI_YOK);
+  const durum = await logoyaGonderimDurumu(db);
+  if (!durum.acik) throw gecersiz(`Logo'ya gönderilemez: ${durum.neden}.`);
+  const kuyrugaAlinan: LogoyaGonderCevabi['kuyrugaAlinan'] = [];
+  const atlanan: LogoyaGonderCevabi['atlanan'] = [];
+  for (const istek of g.kartlar) {
+    const r = await kayitNoktasi(db, async () => {
+      const k = await aynadakiKart(db, istek.logoKayitNo);
+      const { refle, kodla, esleme } = await logoGelenTmiKartlari(db, [k]);
+      const { durum: eslesme, tmi } = logoGelenDurumu(k, refle, kodla, esleme);
+      if (eslesme !== 'bagli' || !tmi) throw gecersiz('Kart Logo kaydına bağlı değil.');
+      if (tmi.onayDurumu === 'iptal') throw gecersiz('Silinmiş kart Logo\'ya gönderilmez.');
+      if (tmi.logoKayitNo === null) throw gecersiz('Kart Logo\'ya gönderilmemiş; önce Logo kaydıyla bağlanmalı.');
+      if (logoyaGidecekFarklar(logoKartFarklari(k, tmi)).length === 0) throw gecersiz('Gönderilecek fark yok.');
+      const y = await s.logoGuncellemeIste(db, tmi.kimlik, istek.surum);
+      if (!y) throw eskiSurum();
+      return { kod: k.kod, stokKodu: tmi.stokKodu };
+    });
+    if (r.tamam) kuyrugaAlinan.push({ logoKayitNo: istek.logoKayitNo, ...r.deger });
+    else atlanan.push({ logoKayitNo: istek.logoKayitNo, kod: await aynadaKodu(db, istek.logoKayitNo), neden: r.hata.message });
+  }
+  return { kuyrugaAlinan, atlanan };
+}
+
+// 3632: katalog kartı açılınca "Logo'ya gönder" bölümü için kartın Logo'daki açıklama farkı; Logo'ya istek yok, ayna okunur.
+export async function logoGecisKarti(db: Db, kimlik: string): Promise<LogoGecisKartiCevabi> {
+  const logoyaGonderim = await logoyaGonderimDurumu(db);
+  const tmi = await s.logoKartiKimlikle(db, kimlik);
+  const ref = tmi?.logoKayitNo == null ? null : Number(tmi.logoKayitNo);
+  if (!tmi || ref === null || !Number.isSafeInteger(ref) || !logoKartAynasi) return { logoyaGonderim, satir: null };
+  const k = (await logoKartAynasi(db, { sinir: 1, sonra: ref - 1 }))[0];
+  if (!k || k.logoKayitNo !== ref) return { logoyaGonderim, satir: null };
+  const farklar = logoKartFarklari(k, tmi);
+  return {
+    logoyaGonderim,
+    satir: {
+      logoKayitNo: ref, kod: k.kod, stokKodu: tmi.stokKodu, surum: tmi.surum, farklar,
+      logoyaGonder: {
+        gonderilebilir: logoyaGonderilebilirMi({ logoKayitli: true, onayDurumu: tmi.onayDurumu, farklar }),
+        durum: tmi.logoGuncellemeDurumu === 'bekliyor' ? 'bekliyor' : tmi.logoGuncellemeDurumu === 'hata' ? 'hata' : null,
+        hata: tmi.logoGuncellemeDurumu === 'hata' ? tmi.logoGuncellemeHata : null,
+      },
+    },
+  };
+}
+
+async function aynadaKodu(db: Db, ref: number): Promise<string> {
+  const k = logoKartAynasi ? (await logoKartAynasi(db, { sinir: 1, sonra: ref - 1 }))[0] : undefined;
+  return k?.logoKayitNo === ref ? k.kod : String(ref);
 }
 
 async function aynadakiKart(db: Db, ref: number): Promise<LogoAynaKarti> {

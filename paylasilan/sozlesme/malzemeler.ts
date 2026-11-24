@@ -427,7 +427,11 @@ export const logoGecisCevabi = z.object({
     }).nullable(),
     // Bağlı kartta Logo'daki açıklama farkı (2116-2 a); tek tek "Logo'dakini al" ile alınır.
     farklar: z.array(z.object({ alan: z.enum(LOGO_FARK_ALANLARI), logo: z.string().nullable(), tmi: z.string().nullable() })),
+    // 3632: CORE'daki açıklamaları Logo'ya göndermek (mevcut ad güncellemesi kuyruğu): gidecek değer var mı, kuyrukta mı, son hata.
+    logoyaGonder: z.object({ gonderilebilir: z.boolean(), durum: z.enum(['bekliyor', 'hata']).nullable(), hata: z.string().nullable() }),
   })),
+  // 3632: elle gönderim açık mı; kapalıysa nedeni (Sistem Ayarları'ndaki anahtar adıyla).
+  logoyaGonderim: z.object({ acik: z.boolean(), neden: z.string().nullable() }),
   sayfa: z.number().int(),
   sonrakiSayfa: z.number().int().nullable(),
 });
@@ -457,6 +461,27 @@ export const logoTopluCevabi = z.object({
   atlanan: z.array(z.object({ logoKayitNo: z.number().int(), kod: z.string(), neden: z.string() })),
 });
 export type LogoTopluCevabi = z.output<typeof logoTopluCevabi>;
+// 3632: CORE'daki Açıklama 1-3'ü Logo'ya gönder. Gönderim var olan "Malzeme adı güncellemesi" kuyruğundan gider; bu uç yalnız kartı kuyruğa alır.
+export const logoyaGonderGovdesi = z.object({
+  kartlar: z.array(z.object({ logoKayitNo: z.number().int().positive(), surum: surumSemasi }).strict())
+    .min(1).max(LOGO_TOPLU_AZAMI)
+    .refine((l) => new Set(l.map((k) => k.logoKayitNo)).size === l.length, 'Aynı Logo kartı iki kez seçilmiş.'),
+}).strict();
+export const logoyaGonderCevabi = z.object({
+  kuyrugaAlinan: z.array(z.object({ logoKayitNo: z.number().int(), kod: z.string(), stokKodu: z.string() })),
+  atlanan: z.array(z.object({ logoKayitNo: z.number().int(), kod: z.string(), neden: z.string() })),
+});
+export type LogoyaGonderCevabi = z.output<typeof logoyaGonderCevabi>;
+// 3632: katalog kartında Logo'ya gönder: kartın Logo'daki açıklama farkı (Logo'ya bağlı değilse ya da Logo okunmadıysa satır null).
+export const logoGecisKartiCevabi = z.object({
+  logoyaGonderim: z.object({ acik: z.boolean(), neden: z.string().nullable() }),
+  satir: z.object({
+    logoKayitNo: z.number().int(), kod: z.string(), stokKodu: z.string(), surum: surumSemasi,
+    farklar: z.array(z.object({ alan: z.enum(LOGO_FARK_ALANLARI), logo: z.string().nullable(), tmi: z.string().nullable() })),
+    logoyaGonder: z.object({ gonderilebilir: z.boolean(), durum: z.enum(['bekliyor', 'hata']).nullable(), hata: z.string().nullable() }),
+  }).nullable(),
+});
+export type LogoGecisKartiCevabi = z.output<typeof logoGecisKartiCevabi>;
 // 3474-3: Logo'ya bağlı kartlarda boş ERP kodu Logo'daki kodla doldurulur; dolu ve farklı olan ezilmez, listelenir. Logo'ya bir şey gitmez.
 // yazilan: bu işlemde yazılan kartlar (geri alınmaz; hangi kartın yazıldığı iz olarak döner).
 export const erpKoduDoldurCevabi = z.object({

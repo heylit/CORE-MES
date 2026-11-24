@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
-import type { ErpKoduDoldurCevabi, ErpKoduOzetiCevabi, LogoGecisCevabi, LogoKarsiligi, LogoTopluCevabi } from '#paylasilan/sozlesme/malzemeler.ts';
+import type { ErpKoduDoldurCevabi, ErpKoduOzetiCevabi, LogoGecisCevabi, LogoKarsiligi, LogoTopluCevabi, LogoyaGonderCevabi } from '#paylasilan/sozlesme/malzemeler.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { LogoMalzemeGecisi } from './LogoMalzemeGecisi.tsx';
 import { LogodanGelenler } from './LogodanGelenler.tsx';
@@ -20,8 +20,9 @@ const KARSILIKLAR: LogoKarsiligi[] = [
   { cesit: 'birim', tmiDegeri: 'kg', logoDegeri: '06' },
 ];
 type Satir = LogoGecisCevabi['kartlar'][number];
-const ortak: Pick<Satir, 'birimSeti' | 'aktif' | 'stok' | 'sonHareket' | 'kullanimNedenleri' | 'farklar' | 'kararNedeni' | 'topluBaglanir' | 'topluAlinir'> = {
+const ortak: Pick<Satir, 'birimSeti' | 'aktif' | 'stok' | 'sonHareket' | 'kullanimNedenleri' | 'farklar' | 'kararNedeni' | 'topluBaglanir' | 'topluAlinir' | 'logoyaGonder'> = {
   birimSeti: '06', aktif: true, stok: '12', sonHareket: null, kullanimNedenleri: null, farklar: [], kararNedeni: null, topluBaglanir: false, topluAlinir: false,
+  logoyaGonder: { gonderilebilir: false, durum: null, hata: null },
 };
 const tmi = (kimlik: string, stokKodu: string, surum: number, logoKayitli = false) =>
   ({ kimlik, stokKodu, ad: 'CORE', birim: 'kg', onayDurumu: 'aktif' as const, surum, logoKayitli });
@@ -46,6 +47,7 @@ const LISTE: LogoGecisCevabi = {
   ],
   sayfa: 0,
   sonrakiSayfa: null,
+  logoyaGonderim: { acik: true, neden: null },
 };
 
 const json = (kod: number, govde: unknown) => new Response(JSON.stringify(govde), { status: kod });
@@ -84,6 +86,10 @@ function sunucuKur(kullanici: Kullanici, liste: LogoGecisCevabi = LISTE, karsili
       } satisfies ErpKoduDoldurCevabi);
     }
     if (yol === '/malzeme-logo-gecisi/geri-al') return json(200, { geriAlinan: 1, atlanan: [] });
+    if (yol === '/malzeme-logo-gecisi/logoya-gonder') {
+      const kartlar = (govde as { kartlar: { logoKayitNo: number }[] }).kartlar;
+      return json(200, { kuyrugaAlinan: kartlar.map((k) => ({ logoKayitNo: k.logoKayitNo, kod: `ORN-${k.logoKayitNo}`, stokKodu: `ORN-${k.logoKayitNo}` })), atlanan: [] } satisfies LogoyaGonderCevabi);
+    }
     if (yol === '/logo-gecisi/malzeme-ekle') return json(200, { eklenen: 1 });
     if (yol.startsWith('/logo-gecisi/')) return json(200, { tamam: true });
     if (yol.endsWith('/al')) return json(200, { id: 'logo-1', stok_kodu: 'HM-DEN-00001', eslendi: false });
@@ -324,5 +330,100 @@ describe('Logo gönderimindeki "Logo\'dan gelenler" özeti (3068 a)', () => {
     ac(<LogodanGelenler />);
     expect(await screen.findByText(/Logo'da 9 kart okundu: 5 stoğu olan, 3 CORE'da yok, 1 bağlı/)).toBeTruthy();
     expect(screen.getByRole('link').getAttribute('href')).toBe('/logo-gecisi');
+  });
+});
+
+// 3632: CORE'daki açıklamaları Logo'ya elle gönder (var olan ad güncellemesi kuyruğu); onay penceresi "Logo'da şimdi → gidecek" değerlerini yazar.
+describe('LogoMalzemeGecisi: CORE\'dakini Logo\'ya gönder (3632)', () => {
+  const farkli = (logoKayitNo: number, kod: string, ek: Partial<Satir> = {}): Satir => ({
+    ...ortak, logoKayitNo, kod, ad: `Logo ad ${logoKayitNo}`, kartTuru: '10', durum: 'bagli', koduUyar: true, tmi: tmi(`k${logoKayitNo}`, `ORN-${kod}`, 2 + logoKayitNo, true),
+    farklar: [{ alan: 'aciklama_1', logo: `Logo ad ${logoKayitNo}`, tmi: 'ORN CORE bir' }, { alan: 'aciklama_2', logo: 'ORN Logo iki', tmi: null }, { alan: 'aciklama_3', logo: null, tmi: 'ORN CORE uc' }],
+    logoyaGonder: { gonderilebilir: true, durum: null, hata: null }, ...ek,
+  });
+  const GONDERILEBILIR = farkli(10, 'HM-DEN-00010');
+  const COREBOS = farkli(11, 'HM-DEN-00011', { farklar: [{ alan: 'aciklama_3', logo: 'ORN Logo uc', tmi: null }], logoyaGonder: { gonderilebilir: false, durum: null, hata: null } });
+  const SIRADA = farkli(12, 'HM-DEN-00012', { logoyaGonder: { gonderilebilir: true, durum: 'bekliyor', hata: null } });
+  const HATALI = farkli(13, 'HM-DEN-00013', { logoyaGonder: { gonderilebilir: true, durum: 'hata', hata: 'Güncelleme: Card not found' } });
+  const BAGSIZ = { ...LISTE.kartlar[2]! };
+  const liste = (kartlar: Satir[], gonderim = { acik: true, neden: null as string | null }): LogoGecisCevabi => ({ ...LISTE, uyan: kartlar.length, kartlar, logoyaGonderim: gonderim });
+
+  it('farkı olan bağlı kartta "Logo\'dakini al" yanında düğme çıkar; onay penceresi her alan için Logo\'da şimdi ve gidecek değeri yazar, boş CORE alanı "Logo\'daki … kalır" der; gönderim kartın sürümüyle gider', async () => {
+    const istekler = sunucuKur(YAZAN, liste([GONDERILEBILIR]));
+    ac();
+    const al = await screen.findByRole('button', { name: "HM-DEN-00010 Logo'dakini al" });
+    expect(al).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: "HM-DEN-00010 CORE'dakini Logo'ya gönder" }));
+    const pencere = within(await screen.findByRole('dialog'));
+    expect(pencere.getByText(/Logo'da şimdi: Logo ad 10/)).toBeTruthy();
+    expect(pencere.getByText('ORN CORE bir')).toBeTruthy();
+    expect(pencere.getAllByText(/→ Gidecek:/)).toHaveLength(2);
+    expect(pencere.getByText("Logo'daki Açıklama 2 kalır: ORN Logo iki")).toBeTruthy();
+    expect(pencere.getByText(/Logo'da şimdi: \(boş\)/)).toBeTruthy();
+    expect(pencere.getByText('ORN CORE uc')).toBeTruthy();
+    expect(istekler.some((i) => i.yol === '/malzeme-logo-gecisi/logoya-gonder')).toBe(false);
+    fireEvent.click(pencere.getByRole('button', { name: "Logo'ya gönder" }));
+    await waitFor(() => expect(istekler.find((i) => i.yol === '/malzeme-logo-gecisi/logoya-gonder')?.govde).toEqual({ kartlar: [{ logoKayitNo: 10, surum: 12 }] }));
+    // "Logo'dakini al" yolu değişmez.
+    expect(istekler.some((i) => i.yol.endsWith('/farki-al'))).toBe(false);
+  });
+
+  it('"Logo\'dakini al" bugünkü gibi çalışır: onay penceresi ve uç aynı', async () => {
+    const istekler = sunucuKur(YAZAN, liste([GONDERILEBILIR]));
+    ac();
+    fireEvent.click(await screen.findByRole('button', { name: "HM-DEN-00010 Logo'dakini al" }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Al' }));
+    await waitFor(() => expect(istekler.find((i) => i.yol === '/malzeme-logo-kartlari/10/farki-al')?.govde).toEqual({ surum: 12 }));
+  });
+
+  it('ayar kapalıyken düğme pasif ve nedeni yazılı; pencere açılsa da gönder pasif, istek gitmez', async () => {
+    const neden = 'Sistem Ayarları\'nda "Logo: malzeme adı güncellemesi" kapalı';
+    const istekler = sunucuKur(YAZAN, liste([GONDERILEBILIR], { acik: false, neden }));
+    ac();
+    const dugme = await screen.findByRole('button', { name: "HM-DEN-00010 CORE'dakini Logo'ya gönder" });
+    expect((dugme as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getAllByText(new RegExp(neden.replace(/[()"]/g, '.'))).length).toBeGreaterThan(0);
+    fireEvent.click(dugme);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    // Toplu çubuktaki düğme ortak tabloda pasif olamaz: pencere açılır, Gönder pasif ve neden yazılı.
+    fireEvent.click(screen.getByLabelText('Tümünü seç'));
+    fireEvent.click(within(screen.getByRole('toolbar', { name: 'Logo malzemeleri: toplu işlem' })).getByRole('button', { name: /Logo'ya gönder/ }));
+    const pencere = within(await screen.findByRole('dialog'));
+    expect(pencere.getByText(/Gönderilemez: Sistem Ayarları'nda "Logo: malzeme adı güncellemesi" kapalı/)).toBeTruthy();
+    expect((pencere.getByRole('button', { name: "Logo'ya gönder" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(istekler.some((i) => i.yol === '/malzeme-logo-gecisi/logoya-gonder')).toBe(false);
+  });
+
+  it('CORE\'da dolu açıklama yoksa düğme pasif ve nedeni yazılı (Logo\'daki metin silinmez)', async () => {
+    sunucuKur(YAZAN, liste([COREBOS]));
+    ac();
+    const dugme = await screen.findByRole('button', { name: "HM-DEN-00011 CORE'dakini Logo'ya gönder" });
+    expect((dugme as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/CORE'da dolu açıklama yok; Logo'daki metin silinmez/)).toBeTruthy();
+  });
+
+  it('okuyucuda düğme ve toplu eylem yok', async () => {
+    sunucuKur(OKUYUCU, liste([GONDERILEBILIR]));
+    ac();
+    await screen.findByText('HM-DEN-00010');
+    expect(screen.queryByRole('button', { name: /Logo'ya gönder/ })).toBeNull();
+    expect(screen.queryByText(/Logo'ya gönderilemez/)).toBeNull();
+  });
+
+  it('toplu: yalnız gönderilebilir kartlar gider, ötekiler nedeniyle sayılır; sıradaki ve hatalı kart satırda görünür', async () => {
+    const istekler = sunucuKur(YAZAN, liste([GONDERILEBILIR, COREBOS, SIRADA, HATALI, BAGSIZ]));
+    ac();
+    await screen.findByText('HM-DEN-00010');
+    expect(screen.getByText("Logo'ya gönderilmek üzere sırada.")).toBeTruthy();
+    expect(screen.getByText(/Logo'ya gönderilemedi: Güncelleme: Card not found/)).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Tümünü seç'));
+    fireEvent.click(within(screen.getByRole('toolbar', { name: 'Logo malzemeleri: toplu işlem' })).getByRole('button', { name: /Logo'ya gönder/ }));
+    const pencere = within(await screen.findByRole('dialog'));
+    expect(pencere.getByText(/2 kart atlanacak: CORE'da dolu açıklama yok|1 kart atlanacak: CORE'da dolu açıklama yok/)).toBeTruthy();
+    expect(pencere.getByText(/1 kart atlanacak: Gönderim zaten sırada/)).toBeTruthy();
+    expect(pencere.getByText(/1 kart atlanacak: Logo'ya bağlı değil/)).toBeTruthy();
+    fireEvent.click(pencere.getByRole('button', { name: "2 kartı Logo'ya gönder" }));
+    await waitFor(() => expect(istekler.find((i) => i.yol === '/malzeme-logo-gecisi/logoya-gonder')?.govde).toEqual({
+      kartlar: [{ logoKayitNo: 10, surum: 12 }, { logoKayitNo: 13, surum: 15 }],
+    }));
   });
 });
