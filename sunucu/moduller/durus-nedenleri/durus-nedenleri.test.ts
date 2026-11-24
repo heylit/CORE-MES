@@ -8,7 +8,9 @@ import { KATEGORILER } from '#paylasilan/sozlesme/durus-nedenleri.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { durusNedeniGetir, durusNedenleriniListele, hurdaNedeniGetir, hurdaNedenleriniListele } from './disari.ts';
+import {
+  durusNedeniGetir, durusNedenleriEkle, durusNedenleriniListele, hataNedenleriEkle, hurdaNedeniGetir, hurdaNedenleriniListele,
+} from './disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 const OLMAYAN_ID = 2147483647;
@@ -449,5 +451,71 @@ describe('durus-nedenleri (gerçek PostgreSQL)', () => {
     const once = await say();
     await durusAc();
     assert.equal(await say() > once, true);
+  });
+  test('DN-T1: toplu duruş ekleme id döner, sona sıralanır, tekrarında yeni satır açmaz; var olan satır değişmez', async () => {
+    const kod = (n: number): string => `ORN-${String(++sayac)}-${String(n)}`;
+    const [a, b, c] = [kod(1), kod(2), kod(3)];
+    const once = (await vt().tx((db) => durusNedenleriniListele(db, { yalnizAktif: false }))).length;
+    const girdi = [
+      { kod: a, ad: 'ORN planlı', kategori: 'planli' as const, aktif: true },
+      { kod: b, ad: 'ORN plansız pasif', kategori: 'plansiz' as const, aktif: false },
+    ];
+    const ilk = await vt().tx((db) => durusNedenleriEkle(db, yoneticiId, girdi));
+    assert.equal(ilk.length, 2);
+    const ikinci = await vt().tx((db) => durusNedenleriEkle(db, yoneticiId, [
+      { ...girdi[0] as (typeof girdi)[0], ad: 'ORN başka ad', aktif: false }, { kod: c, ad: 'ORN üçüncü', kategori: 'plansiz', aktif: true },
+    ]));
+    assert.equal(ikinci[0], ilk[0]);
+    const liste = await vt().tx((db) => durusNedenleriniListele(db, { yalnizAktif: false }));
+    assert.equal(liste.length, once + 3);
+    const satirA = liste.find((s) => s.id === ilk[0]);
+    assert.equal(satirA?.ad, 'ORN planlı');
+    assert.equal(satirA?.aktif, true);
+    const satirB = liste.find((s) => s.id === ilk[1]);
+    assert.deepEqual([satirB?.aktif, satirB?.kategori, satirB?.cagriEkibi, satirB?.simge], [false, 'plansiz', null, null]);
+    const siralar = [ilk[0], ilk[1], ikinci[1]].map((id) => liste.find((s) => s.id === id)?.sira ?? 0);
+    assert.equal(siralar[0] as number < (siralar[1] as number) && (siralar[1] as number) < (siralar[2] as number), true);
+    assert.equal(siralar[0] as number > Math.max(...hazirDurus.map((s) => s.sira)), true);
+    const ayniListede = await vt().tx((db) => durusNedenleriEkle(db, yoneticiId, [girdi[0] as (typeof girdi)[0], girdi[0] as (typeof girdi)[0]]));
+    assert.deepEqual(ayniListede, [ilk[0], ilk[0]]);
+    const pasifTekrar = await vt().tx((db) => durusNedenleriEkle(db, yoneticiId, [{ kod: b, ad: 'ORN pasif tekrar', kategori: 'plansiz', aktif: true }]));
+    assert.deepEqual(pasifTekrar, [ilk[1]]);
+    const pasifSatir = (await vt().tx((db) => durusNedenleriniListele(db, { yalnizAktif: false }))).find((x) => x.id === ilk[1]);
+    assert.deepEqual([pasifSatir?.aktif, pasifSatir?.ad], [false, 'ORN plansız pasif']);
+  });
+
+  test('DN-T2: kategori dışı değer 422 verir ve listedeki hiçbir satır yazılmaz; sabit ve hazır nedenler değişmez', async () => {
+    const kod = `ORN-${String(++sayac)}`;
+    const once = (await vt().tx((db) => durusNedenleriniListele(db, { yalnizAktif: false }))).length;
+    await assert.rejects(
+      vt().tx((db) => durusNedenleriEkle(db, yoneticiId, [
+        { kod, ad: 'ORN geçerli', kategori: 'planli', aktif: true },
+        { kod: `${kod}-X`, ad: 'ORN geçersiz', kategori: 'baska' as 'planli', aktif: true },
+      ])),
+      (hata: { kod?: string; durum?: number }) => hata.kod === 'GECERSIZ' && hata.durum === 422,
+    );
+    assert.equal((await vt().tx((db) => durusNedenleriniListele(db, { yalnizAktif: false }))).length, once);
+    const sonra = await vt().tx((db) => durusNedenleriniListele(db, { yalnizAktif: false }));
+    for (const hazir of hazirDurus) assert.deepEqual(sonra.find((s) => s.id === hazir.id), hazir);
+  });
+
+  test('DN-T3: toplu hata nedeni ekleme aynı kuralları izler; fason türleri ve H-01 değişmez', async () => {
+    const [a, b] = [`ORN-${String(++sayac)}`, `ORN-${String(++sayac)}`];
+    const ilk = await vt().tx((db) => hataNedenleriEkle(db, yoneticiId, [
+      { kod: a, ad: 'ORN hata bir', aktif: true }, { kod: b, ad: 'ORN hata iki', aktif: false },
+    ]));
+    const yine = await vt().tx((db) => hataNedenleriEkle(db, yoneticiId, [
+      { kod: b, ad: 'ORN başka', aktif: true }, { kod: 'H-01', ad: 'ORN H-01 adı', aktif: false },
+    ]));
+    assert.equal(yine[0], ilk[1]);
+    const liste = await vt().tx((db) => hurdaNedenleriniListele(db, { yalnizAktif: false }));
+    assert.equal(liste.find((s) => s.id === ilk[1])?.ad, 'ORN hata iki');
+    assert.equal(liste.find((s) => s.id === ilk[1])?.aktif, false);
+    for (const hazir of hazirHurda) assert.deepEqual(liste.find((s) => s.id === hazir.id), hazir);
+    await assert.rejects(
+      vt().tx((db) => hataNedenleriEkle(db, yoneticiId, [{ kod: 'kötü kod!', ad: 'ORN', aktif: true }])),
+      (hata: { kod?: string; durum?: number }) => hata.kod === 'GECERSIZ' && hata.durum === 422,
+    );
+    assert.deepEqual(await vt().tx((db) => hataNedenleriEkle(db, yoneticiId, [])), []);
   });
 });

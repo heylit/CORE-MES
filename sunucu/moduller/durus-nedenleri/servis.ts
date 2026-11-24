@@ -1,15 +1,18 @@
 import { kisitIhlali } from '#cekirdek/db.ts';
 import type { Db } from '#cekirdek/db.ts';
-import { bulunamadi, cakisma, dogrulama } from '#cekirdek/hata.ts';
+import { bulunamadi, cakisma, dogrulama, gecersiz } from '#cekirdek/hata.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type {
   DurusNedeni, DurusNedeniGuncelleGovdesi, DurusNedeniOlusturGovdesi, DurusNedenleriCevabi,
   HurdaNedeni, HurdaNedeniGuncelleGovdesi, HurdaNedeniOlusturGovdesi, HurdaNedenleriCevabi,
 } from '#paylasilan/sozlesme/durus-nedenleri.ts';
-import { DURUS_ONEKI, HURDA_ONEKI, cagriyiDuzenle, kodOner, sabitKodEngeli } from './kurallar.ts';
 import {
-  durusKodlariniOku, durusNedeniEkle, durusNedeniVarMi, durusNedeniniGuncelle, durusNedeniniOku, durusNedenleriniOku,
-  hurdaKodlariniOku, hurdaNedeniEkle, hurdaNedeniVarMi, hurdaNedeniniGuncelle, hurdaNedeniniOku, hurdaNedenleriniOku,
+  DURUS_ONEKI, HURDA_ONEKI, cagriyiDuzenle, kodOner, sabitKodEngeli, topluDurusuDuzenle, topluHatayiDuzenle,
+} from './kurallar.ts';
+import type { TopluDurusGirdisi, TopluHataGirdisi } from './kurallar.ts';
+import {
+  durusKodlariniOku, durusKoduylaKimlikOku, durusNedeniEkle, durusNedeniTopluEkle, durusTablosunuKilitle, durusNedeniVarMi, durusNedeniniGuncelle, durusNedeniniOku, durusNedenleriniOku,
+  hurdaKodlariniOku, hurdaKoduylaKimlikOku, hurdaNedeniEkle, hurdaNedeniTopluEkle, hurdaTablosunuKilitle, hurdaNedeniVarMi, hurdaNedeniniGuncelle, hurdaNedeniniOku, hurdaNedenleriniOku,
 } from './sorgular.ts';
 
 const KOD_CAKISMASI = 'Bu kod başka bir nedende kullanılıyor.';
@@ -103,4 +106,35 @@ export async function hurdaNedeniGuncelle(db: Db, id: number, govde: HurdaNedeni
     varMi: () => hurdaNedeniVarMi(db, id),
     bulunamadiIletisi: NEDEN_YOK,
   }));
+}
+
+// Çağıranın transaction'ında çalışır. Denetim kaydını çağıranın ucu yazar (denetim üst katmandır, buradan ithal edilmez; sinir g);
+// `kisiId` imzada çağıranla uyum için durur ve tabloya yazılmaz (tabloda ekleyen sütunu yok).
+// Aynı kod varsa satıra dokunmadan var olanın id'sini verir. Dönüş girdi sırasındadır.
+export async function durusNedenleriEkle(db: Db, _kisiId: number, girdiler: readonly TopluDurusGirdisi[]): Promise<number[]> {
+  const duzen = topluDurusuDuzenle(girdiler);
+  if ('hata' in duzen) throw gecersiz(duzen.hata);
+  if (duzen.satirlar.length === 0) return [];
+  await durusTablosunuKilitle(db);
+  const idler: number[] = [];
+  for (const s of duzen.satirlar) {
+    const mevcut = await durusKoduylaKimlikOku(db, s.kod);
+    if (mevcut !== null) { idler.push(mevcut); continue; }
+    idler.push(await durusNedeniTopluEkle(db, s.kod, s.ad, s.kategori, s.aktif));
+  }
+  return idler;
+}
+
+export async function hataNedenleriEkle(db: Db, _kisiId: number, girdiler: readonly TopluHataGirdisi[]): Promise<number[]> {
+  const duzen = topluHatayiDuzenle(girdiler);
+  if ('hata' in duzen) throw gecersiz(duzen.hata);
+  if (duzen.satirlar.length === 0) return [];
+  await hurdaTablosunuKilitle(db);
+  const idler: number[] = [];
+  for (const s of duzen.satirlar) {
+    const mevcut = await hurdaKoduylaKimlikOku(db, s.kod);
+    if (mevcut !== null) { idler.push(mevcut); continue; }
+    idler.push(await hurdaNedeniTopluEkle(db, s.kod, s.ad, s.aktif));
+  }
+  return idler;
 }

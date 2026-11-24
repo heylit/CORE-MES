@@ -15,3 +15,5 @@ Koddan okunamayanlar: neden, vazgeçilen yol, tuzak. En çok 30 satır; eskiyen 
 - Sıra: yeni kayıt sona eklenir; sırayı değiştiren uç yok (kapsamda yoktu).
 - DN-02 (plansız duruş kullanılabilirlik kaybıdır, planlı duruş planlı süreden düşülür) burada ölçülmez: bu modül
   yalnız kategoriyi saklar; madde hesabı yapan modülün testine ertelendi.
+- Toplu ekleme (`disari.ts` `durusNedenleriEkle`, `hataNedenleriEkle`): çağıranın transaction'ında, tablo kilidi altında; aynı kod
+  varsa satır yazılmaz, var olanın id'si döner (ad, kategori, aktiflik değişmez). Denetim kaydını çağıranın ucu yazar (denetim üst katman).
