@@ -4,7 +4,7 @@ import { bulunamadi, cakisma, dogrulama, eskiSurum, gecersiz, kapsamDisi, yetkiY
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import type {
   DortSaatAyrintisi,
-  CanliYerlesimCevabi, CanliyaAlCevabi, CanliyaAlmaGecmisiCevabi, CanliyaAlOnizlemesiCevabi, HizliDeneme, MotorFarki, MotorUyarilariCevabi, MotorYerlesimiCevabi, KuyrukYazCevabi, KuyrukYazGovdesi, OnizlemeCevabi, PlanAyari, PlanCanliOzeti, PlanCevabi, PlanKaynagi, BedelAyari, BedelAyariGovdesi, PlanSurumCevabi, SenaryolarCevabi, SiparisCarpaniCevabi, TaslakGirdisi,
+  CanliYerlesimCevabi, CanliyaAlCevabi, CanliyaAlmaGecmisiCevabi, CanliyaAlOnizlemesiCevabi, KaydirmaOnerisiCevabi, HizliDeneme, MotorFarki, MotorUyarilariCevabi, MotorYerlesimiCevabi, KuyrukYazCevabi, KuyrukYazGovdesi, OnizlemeCevabi, PlanAyari, PlanCanliOzeti, PlanCevabi, PlanKaynagi, BedelAyari, BedelAyariGovdesi, PlanSurumCevabi, SenaryolarCevabi, SiparisCarpaniCevabi, TaslakGirdisi,
   EkMesaiGovdesi, GeriGonderGovdesi, MotorKuraliGovdesi, OnayaGonderGovdesi, PlanEkMesai, PlanOnayKomutu, PlanlanabilirlikCevabi, RotaPlanlanabilirlikCevabi,
 } from '#paylasilan/sozlesme/plan.ts';
 import { CANLI_DEGISTI, DORT_SAAT_RED_NEDENI, PLAN_ONAY_KOMUTLARI, SONRADAN_BASLAYAN, type CanliDegistiAyrintisi, type SonradanBaslayanAyrintisi } from '#paylasilan/sozlesme/plan.ts';
@@ -2942,6 +2942,115 @@ function canliyaGecisKumesi(b: Baglam, canli: readonly YerlesimSatiri[], taslak:
   return { canliYeri, siralanmisCalisan, degisebilir, degisen, baslamisKayan };
 }
 
+// 3669: kilitli adım öncülünden önce başlıyorsa önerilen kaydırma (yazmaz). Yeni başlangıç öncülün izin verdiği en erken andır; aynı kaynakta
+// çarptığı kilitli adım da ardına kayar, kilitsiz adım kaydırılmaz (sessiz kayma yok: neden döner). Kaydırınca kilitsiz ardıl bozulursa kalanIhlal sayar.
+type KilitliYer = ReturnType<typeof yerOf>;
+function kaydirmaOnerisi(b: Baglam, yerler: readonly KilitliYer[], emirler: ReadonlySet<number>): { oneri: KaydirmaOnerisiCevabi | null; neden: string | null } {
+  const cur = yerler.map((y) => ({ ...y }));
+  const tasinan = new Set<number>();
+  const koy = (y: KilitliYer, bas: number): string | null => {
+    if (y.parcalar?.length) return BOLUNMUS_ISI;
+    const sure = kesisimDk(takvim(b)(y.kaynak), y.baslangic, y.bitis) || y.bitis - y.baslangic;
+    const yer = arkaArkaya([sure], bas, takvim(b)(y.kaynak))?.[0];
+    if (!yer) return `${kaynakMetni(b, y.kaynak)} için planlama ufkunda çalışma zamanı yok.`;
+    y.baslangic = yer.baslangic;
+    y.bitis = yer.bitis;
+    tasinan.add(y.isEmriId);
+    return null;
+  };
+  for (let tur = 0; tur < 25; tur++) {
+    let degisti = false;
+    for (const ih of siraIhlalleri(b, cur, emirler)) {
+      if (!ih.kilitli) continue;
+      const y = cur.find((x) => x.isEmriId === ih.y.isEmriId)!;
+      const { enErken } = onculSinirlari(b, y.isEmriId, cur, y.kaynak);
+      if (enErken === null || !sinirdanOnce(y.baslangic, enErken)) continue;
+      const hata = koy(y, enErken);
+      if (hata !== null) return { oneri: null, neden: hata };
+      degisti = true;
+    }
+    for (const id of [...tasinan]) {
+      const m = cur.find((x) => x.isEmriId === id)!;
+      for (const o of cur) {
+        if (o.isEmriId === id || !ayniKaynak(o.kaynak, m.kaynak) || !cakisirMi(o, m)) continue;
+        if (!o.kilitli) return { oneri: null, neden: `${isMetni(b, o.isEmriId)} aynı kaynakta bu saatlere denk geliyor ve kilitli değil; önce onun yerini değiştirin.` };
+        const hata = koy(o, m.bitis);
+        if (hata !== null) return { oneri: null, neden: hata };
+        degisti = true;
+      }
+    }
+    if (!degisti) break;
+  }
+  if (tasinan.size === 0) return { oneri: null, neden: null };
+  const eski = new Map(yerler.map((y) => [y.isEmriId, y]));
+  const iso = (d: number) => tarih(b, d).toISOString();
+  const emirIdleri = new Set([...tasinan].map((id) => b.isler.get(id)?.uretimEmriId ?? 0));
+  const bitisi = (l: readonly Yer[], emirId: number) => {
+    const bitisler = l.filter((y) => b.isler.get(y.isEmriId)?.uretimEmriId === emirId).map((y) => y.bitis);
+    return bitisler.length === 0 ? null : iso(Math.max(...bitisler));
+  };
+  return {
+    neden: null,
+    oneri: {
+      adimlar: [...tasinan].map((id) => {
+        const y = cur.find((x) => x.isEmriId === id)!;
+        const is = b.isler.get(id)!;
+        return { isEmriId: id, emirNo: is.emirNo, opNo: is.opNo, k: null, eskiBaslangic: iso(eski.get(id)!.baslangic), yeniBaslangic: iso(y.baslangic), yeniBitis: iso(y.bitis) };
+      }).sort((x, y) => x.yeniBaslangic.localeCompare(y.yeniBaslangic) || x.isEmriId - y.isEmriId),
+      emirler: [...emirIdleri].map((e) => {
+        const is = [...b.isler.values()].find((i) => i.uretimEmriId === e)!;
+        return { emirNo: is.emirNo, once: bitisi(yerler, e), sonra: bitisi(cur, e), termin: is.teslim };
+      }).sort((x, y) => x.emirNo.localeCompare(y.emirNo)),
+      kalanIhlal: siraIhlalleri(b, cur, emirler).length,
+    },
+  };
+}
+
+// 3669: kilitli adımları verilen başlangıçlara taşır (öneriyi uygulamak ve "Geri al" aynı uçtur). Yalnız sahibin açık taslağı ve kilitleme yetkisi;
+// her adım taslakta kilitli, planlı ve bölünmemiş olmalı. Saat yine sunucuda aynı takvimle dizilir; geriAl yalnız defterdeki son kaydırmayı eski saatine döndürür (öncülden önceye dönebilir, başka saate dönemez).
+export async function kilitliKaydir(db: Db, k: Kullanici, g: { taslak: TaslakGirdisi; adimlar: readonly { isEmriId: number; baslangic: string }[]; geriAl: boolean; planSurumu?: number | undefined }) {
+  if (!islemVarMi(k, 'plan.kilitle')) throw yetkiYok('Kilitli adımı kaydırmak plan kilitleme yetkisi ister.');
+  if (g.taslak === null) throw dogrulama('Kaydırma açık bir taslakta yapılır.', 'taslak');
+  const idler = g.adimlar.map((a) => a.isEmriId);
+  if (new Set(idler).size !== idler.length) throw dogrulama('Aynı adım iki kez verildi.', 'adimlar');
+  await planSurumuDenetle(db, g.planSurumu);
+  return taslagaYaz(db, k, g.taslak, async (b, id) => {
+    const taslak = await s.yerlesimler(db, id);
+    let yerler = taslak.map((y) => yerOf(b, y));
+    const yeniler: { y: YerlesimSatiri; yer: Aralik }[] = [];
+    // Geri al yalnız bu taslakta yapılmış son kaydırmayı döndürür: hedef saat defterdeki kaydırma kaydının eski saati, adım da o kaydın yeni saatinde
+    // olmalı. İstemcinin verdiği bayrak başka bir saate izin vermez (öncülden önceye ya da geçmişe serbest taşıma yolu değildir).
+    const kayitlar = g.geriAl ? (await s.degisiklikler(db, [id])).flatMap((d) => (Array.isArray(d.veri?.kaydirma) ? [d.veri.kaydirma as { isEmriId: number; eski: string; yeni: string }[]] : [])) : [];
+    for (const a of g.adimlar) {
+      const is = isDenetle(b, a.isEmriId);
+      const y = await taslakYeri(db, b, id, a.isEmriId);
+      if (!y.kilitli) throw cakisma(`${isMetni(b, a.isEmriId)} kilitli değil; kilitsiz adım taşı ile yerleşir.`);
+      if (bolunmus(y)) throw cakisma(BOLUNMUS_ISI);
+      if (is.durum !== 'planli') throw cakisma(`${isMetni(b, a.isEmriId)} planlı değil; kaydırılamaz.`);
+      if (g.geriAl) {
+        const son = [...kayitlar].reverse().flatMap((l) => l.filter((x) => x.isEmriId === a.isEmriId))[0];
+        if (son === undefined || Date.parse(son.eski) !== Date.parse(a.baslangic) || Math.abs(Date.parse(son.yeni) - y.baslangic.getTime()) > 60_000) {
+          throw cakisma(`${isMetni(b, a.isEmriId)} için geri alınacak kaydırma yok ya da saat son kaydırmayla eşleşmiyor.`);
+        }
+      } else gecmisDenetle(b, a.baslangic);
+      const sure = calismaDakikasi(b, y);
+      const yer = arkaArkaya([sure], dk(b, new Date(a.baslangic)), takvim(b)(y.kaynak))?.[0];
+      if (!yer) throw cakisma(`${kaynakMetni(b, y.kaynak)} için planlama ufkunda çalışma zamanı yok.`);
+      yeniler.push({ y, yer });
+    }
+    const yeniIdler = new Set(idler);
+    yerler = [...yerler.filter((x) => !yeniIdler.has(x.isEmriId)), ...yeniler.map(({ y, yer }) => ({ ...yerOf(b, y), ...yer }))];
+    for (const { y, yer } of yeniler) cakismaDenetle(b, yerler, { isEmriId: y.isEmriId, kaynak: y.kaynak, ...yer });
+    if (!g.geriAl) {
+      const ihlal = siraIhlalleri(b, yerler, new Set(idler.map((x) => b.isler.get(x)!.uretimEmriId))).find((i) => yeniIdler.has(i.is.id));
+      if (ihlal) throw cakisma(`${siraIhlaliMetni(b, ihlal)} Önceki adımın bitişinden sonraya kaydır.`);
+    }
+    for (const { y, yer } of yeniler) await s.yerlesimYaz(db, id, { ...y, baslangic: tarih(b, yer.baslangic), bitis: tarih(b, yer.bitis) });
+    const veri = g.geriAl ? undefined : { kaydirma: yeniler.map(({ y, yer }) => ({ isEmriId: y.isEmriId, eski: y.baslangic.toISOString(), yeni: tarih(b, yer.baslangic).toISOString() })) };
+    return { tur: 'tasi', ozet: `${g.geriAl ? 'Kilitli adımlar eski saatine döndü' : 'Kilitli adımlar kaydırıldı'}: ${idler.map((x) => isMetni(b, x)).join(', ')}`, isEmriIdleri: idler, ...(veri === undefined ? {} : { veri }) };
+  });
+}
+
 // 3669: canlıya almadan önce sıra denetimi, yazmadan (canliyaAl ile aynı küme ve aynı denetim). Sahip ya da canlıya alma yetkilisi okur.
 // Onaydaki senaryoda kapalı liste gönderildiği andakidir (onaylayan gönderenin gördüğünü görür); açıkta çalışmanın bugünkü listesi.
 export async function canliyaAlOnizlemesi(db: Db, k: Kullanici, id: number): Promise<CanliyaAlOnizlemesiCevabi> {
@@ -2954,11 +3063,21 @@ export async function canliyaAlOnizlemesi(db: Db, k: Kullanici, id: number): Pro
   const { degisen, baslamisKayan } = canliyaGecisKumesi(b, await s.yerlesimler(db, null), taslak);
   const ihlaller = siraIhlalleri(b, taslak.map((y) => yerOf(b, y)), new Set([...degisen, ...baslamisKayan].map((y) => b.isler.get(y.isEmriId)?.uretimEmriId ?? 0)));
   const kapali = x.durum === 'onayda' ? (await s.onayaGonderilenKapali(db, id)) ?? [...b.kapali] : [...b.kapali];
+  const kilitYetkisi = islemVarMi(k, 'plan.kilitle');
+  const kilitliVar = ihlaller.some((i) => i.kilitli && i.oncul !== null);
+  const oneri = !kilitliVar ? { oneri: null, neden: null }
+    : x.durum !== 'acik' ? { oneri: null, neden: 'Onaydaki taslakta kilit kaydırılamaz; önce taslağı geri alın.' }
+    : x.acanKisiId !== k.id ? { oneri: null, neden: BASKASININ_TASLAGI }
+    : !kilitYetkisi ? { oneri: null, neden: 'Kilitli adımı kaydırmak plan kilitleme yetkisi ister.' }
+    : kaydirmaOnerisi(b, taslak.map((y) => yerOf(b, y)), new Set([...degisen, ...baslamisKayan].map((y) => b.isler.get(y.isEmriId)?.uretimEmriId ?? 0)));
   return {
     kapali: kapali.sort(),
+    kilitYetkisi,
+    oneri: oneri.oneri,
+    oneriNedeni: oneri.neden,
     ihlaller: ihlaller.map((i) => ({
-      emirNo: i.is.emirNo, opNo: i.is.opNo, kilitli: i.kilitli, baslangic: tarih(b, i.y.baslangic).toISOString(),
-      oncul: i.oncul === null ? null : { emirNo: i.oncul.is.emirNo, opNo: i.oncul.is.opNo, bitis: tarih(b, i.oncul.bitis).toISOString() },
+      isEmriId: i.is.id, emirNo: i.is.emirNo, opNo: i.is.opNo, k: null, kilitli: i.kilitli, baslangic: tarih(b, i.y.baslangic).toISOString(),
+      oncul: i.oncul === null ? null : { emirNo: i.oncul.is.emirNo, opNo: i.oncul.is.opNo, k: null, bitis: tarih(b, i.oncul.bitis).toISOString() },
       farkDk: i.oncul === null ? null : Math.round(i.oncul.bitis) - Math.round(i.y.baslangic),
     })),
   };

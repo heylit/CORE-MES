@@ -51,7 +51,7 @@ describe('plan (gerçek PostgreSQL): kapalı kısıt sunucu süresine uyar (3669
     const { k } = await tasi(e!, await taslaktaOner());
     const t = k.taslak!;
     const onizleme = await tamam<CanliyaAlOnizlemesiCevabi>(c.planlama, 'GET', `/plan/senaryolar/${String(t.id)}/canliya-al-onizlemesi`);
-    assert.deepEqual(onizleme, { kapali: ['ayar', 'tatil'], ihlaller: [] });
+    assert.deepEqual(onizleme, { kapali: ['ayar', 'tatil'], kilitYetkisi: true, oneri: null, oneriNedeni: null, ihlaller: [] });
     const gonder = (await tamam<SenaryolarCevabi>(c.planlama, 'POST', `/plan/senaryolar/${String(t.id)}/onaya-gonder`, { surum: t.surum })).senaryolar.find((x) => x.id === t.id)!;
     // Gönderildikten sonra çalışmadaki liste değişse de onaylayan gönderilen listeyi görür.
     await kapaliYaz(['personel']);

@@ -14,6 +14,8 @@ import type { BekleyenDegisiklik, PlanlamaCalismasi } from '../../tipler.ts';
 import { KURULUYOR, useBekleyenKarari, usePlanKur, type BekleyenKarari } from '../coz.ts';
 import { bitenler, derle, girdiKur, plandanBitenler, yerlesmeyenSiparisler, type OkunanPlan } from '../kurallar.ts';
 import { degisken } from '../ortak.tsx';
+import { CanliOnizleme } from './CanliOnizleme.tsx';
+import { onizlemeEngeli, useGondermeOnizlemesi } from './canli-onizleme.ts';
 import { MotorKurali } from './MotorKurali.tsx';
 import { acmaOzeti, calismayaAc, calismayiGeriAl, calismayiYolla, canliDegistiMi, canliDegistiOku, GonderHatasi, gonderHataIletisi, gonderIletisi, senaryoHataIletisi, soruEki, type GonderEki, type GonderHedefi } from './gonder.ts';
 import {
@@ -514,6 +516,9 @@ function Planim({ K, c, p, cf, canliGeciken, plansiz, imza, bekleyen, karar, o, 
 }) {
   const yazP = o.yetki.planYaz && o.komut !== null, yazC = o.yetki.planCanliyaAl && o.komut !== null;
   const donDugmesi = <button type="button" className="tc-dugme" onClick={don}><Simge ad="back" boyut="k" />Kokpit'e dön</button>;
+  // 3669: sunucunun yazacağı yerleşimin sıra denetimi; yazamayan rol ve güncel olmayan plan için okunmaz (gönderme zaten kapalı).
+  const onizlemeEtkin = !!c && !!p && (yazP || yazC) && planGuncel(c);
+  const { durum: onizleme, yenidenDene } = useGondermeOnizlemesi({ calismaSurumu: o.depo.calismaSurumu ?? null, etkin: onizlemeEtkin, ad: 'Önizleme' });
   if (!c || !p) {
     return (
       <Kart baslik="Planım" simge="eye">
@@ -524,8 +529,9 @@ function Planim({ K, c, p, cf, canliGeciken, plansiz, imza, bekleyen, karar, o, 
   }
   const red = paRedVar(K);
   const eksikGerekce = gerekceZorunlu && not.trim() === '';
-  const kapali = gidiyor || red || eksikGerekce;
-  const neden = red ? 'Kontroldeki engel giderilince açılır.' : eksikGerekce ? 'Gerekçe yazınca açılır.' : '';
+  const siraEngeli = onizlemeEngeli(onizleme, onizlemeEtkin);
+  const kapali = gidiyor || red || eksikGerekce || siraEngeli !== null;
+  const neden = red ? 'Kontroldeki engel giderilince açılır.' : siraEngeli ?? (eksikGerekce ? 'Gerekçe yazınca açılır.' : '');
   const sayilar: [string, string][] = [
     ['işin yeri değişti', cf?.tasinan == null ? '—' : sayi(cf.tasinan)],
     ['yeni yerleşen iş', cf?.yeni == null ? '—' : sayi(cf.yeni)],
@@ -544,6 +550,7 @@ function Planim({ K, c, p, cf, canliGeciken, plansiz, imza, bekleyen, karar, o, 
           {sayilar.map(([ad, v]) => <div key={ad}><dd className="mono">{v}</dd><dt>{ad}</dt></div>)}
         </dl>
         {cf && !cf.var && <p className="tc-pym-pa-kucuk" data-cizgi-notu="">Canlı plan yok; yeri değişen ve yeni yerleşen iş sayılamaz (—).</p>}
+        {(yazP || yazC) && <CanliOnizleme o={o} c={c} p={p} durum={onizleme} yenidenDene={yenidenDene} etkin={onizlemeEtkin} />}
         <section className="tc-pym-pa-bolum"><h3><Simge ad="target" boyut="k" /> Kontrol</h3><Kontrol K={K} /></section>
         {bekleyen.length > 0 && <Bekleyenler c={c} l={bekleyen} karar={karar} gidiyor={gidiyor} />}
         <section className="tc-pym-pa-karar">

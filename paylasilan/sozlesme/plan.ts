@@ -471,13 +471,28 @@ export const canliyaAlmaGecmisiCevabi = z.object({
 });
 // 3669: canlıya almadan önce sunucunun yazacağı yerleşimin sıra denetimi (yazmaz). kapali çalışmanın kapalı kısıtlarıdır; ihlaller sıraya aykırı
 // adımlardır (yoksa boş): adımın taslaktaki başlangıcı, sınırı koyan öncülün bitişi ve aradaki fark. Sayı bilinmiyorsa null (sıfır uydurulmaz).
+// k: Kokpit'teki işin kimliği (yalnız çalışma planının önizlemesinde, eşleşen iş varsa); taslak önizlemesinde null.
+export const kaydirmaOnerisiCevabi = z.object({
+  adimlar: z.array(z.object({ isEmriId: KIMLIK, emirNo: z.string(), opNo: z.number().int(), k: z.string().nullable(), eskiBaslangic: zaman, yeniBaslangic: zaman, yeniBitis: zaman })),
+  emirler: z.array(z.object({ emirNo: z.string(), once: zaman.nullable(), sonra: zaman.nullable(), termin: z.string().nullable() })),
+  // Kaydırınca öncülünden önce kalan (kilitsiz, yeniden dizilmesi gereken) adım sayısı.
+  kalanIhlal: z.number().int(),
+});
+// oneri yoksa oneriNedeni neden olduğunu söyler (yetki, başkasının taslağı, kilitsiz çakışma); ihlal kilitli değilse ikisi de null.
 export const canliyaAlOnizlemesiCevabi = z.object({
   kapali: z.array(z.string()),
+  kilitYetkisi: z.boolean(),
+  oneri: kaydirmaOnerisiCevabi.nullable(),
+  oneriNedeni: z.string().nullable(),
   ihlaller: z.array(z.object({
-    emirNo: z.string(), opNo: z.number().int(), kilitli: z.boolean(), baslangic: zaman,
-    oncul: z.object({ emirNo: z.string(), opNo: z.number().int(), bitis: zaman }).nullable(),
+    isEmriId: KIMLIK, emirNo: z.string(), opNo: z.number().int(), k: z.string().nullable(), kilitli: z.boolean(), baslangic: zaman,
+    oncul: z.object({ emirNo: z.string(), opNo: z.number().int(), k: z.string().nullable(), bitis: zaman }).nullable(),
     farkDk: z.number().int().nullable(),
   })),
+});
+export const kilitliKaydirGovdesi = taslakGovdesi.extend({
+  adimlar: z.array(z.object({ isEmriId: KIMLIK, baslangic: tarihZaman })).min(1).max(50),
+  geriAl: z.boolean().default(false), planSurumu: okunanPlanSurumu,
 });
 export const senaryoParametresi = z.object({ id: z.coerce.number<number>().int().positive() });
 export const degisiklikParametresi = z.object({ id: z.coerce.number<number>().int().positive(), degisiklikId: z.coerce.number<number>().int().positive() });
@@ -577,6 +592,7 @@ export type CanliyaAlCevabi = z.output<typeof canliyaAlCevabi>;
 export type PlanAyari = z.output<typeof planAyari>;
 export type PlanCevabi = z.output<typeof planCevabi>;
 export type PlanEkMesai = z.output<typeof planEkMesai>;
+export type KaydirmaOnerisiCevabi = z.output<typeof kaydirmaOnerisiCevabi>;
 export type CanliyaAlOnizlemesiCevabi = z.output<typeof canliyaAlOnizlemesiCevabi>;
 export type CanliyaAlmaGecmisiCevabi = z.output<typeof canliyaAlmaGecmisiCevabi>;
 export type EkMesaiGovdesi = z.output<typeof ekMesaiGovdesi>;
