@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import type { Islem } from '#paylasilan/islemler.ts';
 import { BILDIRIM_BASLIK_EN_COK, BILDIRIM_METIN_EN_COK, BILDIRIM_TUR_ANAHTARLARI } from '#paylasilan/sozlesme/bildirim.ts';
 import {
-  alicilariSec, ekAlicilariEkle, epostaSecilebilir, hemenMi, kaynakModulu, metniHazirla, olmayanKimlikler, otomatikGosterim, otomatikOrtadaMi, varsayilanMi, tekilAnahtar, YAYIN_ONEMI,
+  alicilariSec, ekAlicilariEkle, epostaSecilebilir, hemenMi, kaynakModulu, kuyrukSablonu, metniHazirla, olmayanKimlikler, otomatikGosterim, otomatikOrtadaMi, varsayilanMi, tekilAnahtar, YAYIN_ONEMI,
   yayinAlicilari, yayiniGorurMu, yayinZamaniHatasi, yolTureUyar,
 } from './kurallar.ts';
 
@@ -169,5 +169,14 @@ describe('ek alıcı (3597 a)', () => {
     assert.deepEqual(ekAlicilariEkle([5], [1, 2, 3, 9], islemler, 'siparisler.oku'), [1, 3, 5]);
     assert.deepEqual(ekAlicilariEkle([], [], islemler, 'siparisler.oku'), []);
     assert.deepEqual(ekAlicilariEkle([1], [1], islemler, 'siparisler.oku'), [1]);
+  });
+});
+
+describe('kuyruk şablonu önceliği (3639)', () => {
+  test('alıcı grubunun şablonu olayın şablonundan önce gelir; grup yoksa olayınki; özet şablonsuzdur', () => {
+    assert.equal(kuyrukSablonu(false, 7, 3), 7);
+    assert.equal(kuyrukSablonu(false, null, 3), 3);
+    assert.equal(kuyrukSablonu(false, null, undefined), null);
+    assert.equal(kuyrukSablonu(true, 7, 3), null);
   });
 });

@@ -323,7 +323,7 @@ function KuralFormu({ tur, kural, roller, kisiler, kapat }: {
         ))}
       </ul>
       <Secim
-        etiket="Kurala kişi ekle"
+        etiket={grup ? 'Gruba kişi ekle' : 'Kurala kişi ekle'}
         value=""
         bosSecenek="Kişi seçin"
         disabled={eklenebilir.length === 0}

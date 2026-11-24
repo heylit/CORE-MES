@@ -19,7 +19,7 @@ import {
   ONEM_ADI, VARSAYILAN_SABLONLAR, bildirimAcikMi, epostaKur, kademeDegeri, sablonIcerigi, sablonYerTutucuHatasi, kayitBaglantisi, kisiEpostaAlir, olmayanKimlikler,
   sessizMi, sonrakiDenemeDk, turKademesi, varsayilanTetikleyici, yukseltmeCumlesi, type EpostaDegerleri, type EpostaTetikleyicisi,
 } from './kurallar.ts';
-import { BOS_TOPLANTI_DEGERLERI, disKipMi, epostaKipi, epostaLogosu, toplantiAlanlari } from './kurallar.ts';
+import { BOS_TOPLANTI_DEGERLERI, disKipMi, epostaKipi, epostaLogosu, kuyrukSablonu, toplantiAlanlari } from './kurallar.ts';
 import { ortamPostaAyari, postaGonder, iletiKur, izinliAdresMi, type HatAc, type PostaAyari } from './posta.ts';
 import { simgePng } from './posta-simgeleri.ts';
 import * as s from './sorgular.ts';
@@ -271,7 +271,7 @@ export async function epostaTuru(vt: Veritabani, gunluk: Gunluk, ac?: HatAc, sim
         const ilk = parca[0] as s.KuyrukSatiri;
         const konu = ozet ? 'genel' : turKonusu(ilk.tur);
         const tetik = hazirlik.tetikler.get(ilk.tur);
-        const ozelId = ozet ? null : ilk.sablonId ?? tetik?.sablonId ?? null;
+        const ozelId = kuyrukSablonu(ozet, ilk.sablonId, tetik?.sablonId);
         const ozelSablon = ozelId === null ? undefined : hazirlik.ozelSablonlar.get(ozelId);
         const sablon = ozelSablon ?? hazirlik.sablonlar.get(konu) ?? VARSAYILAN_SABLONLAR[konu];
         const g = ozet ? { ...ozetGirdisi(parca, ad, ayarlar.uygulamaAdresi), gonderenAdi: ayarlar.gonderenAdi } : {

@@ -68,6 +68,10 @@ export function ekAlicilariEkle(
   return [...sonuc].sort((a, b) => a - b);
 }
 
+// 3639: kuyruk satırının özel şablonu (alıcı grubunun seçtiği) olayın tetikleyicisinde atanan şablondan önce gelir; özet e-postası şablon kullanmaz.
+export const kuyrukSablonu = (ozet: boolean, satirSablonId: number | null, tetikSablonId: number | null | undefined): number | null =>
+  ozet ? null : satirSablonId ?? tetikSablonId ?? null;
+
 // BIL-4: tekil anahtar tür ve kaynak kimliğinden kurulur; kimlik yoksa her olay ayrı satırdır.
 export const tekilAnahtar = (tur: BildirimTuru, kaynakKimlik: string | null | undefined): string | null =>
   kaynakKimlik === null || kaynakKimlik === undefined || kaynakKimlik === '' ? null : `${tur}:${kaynakKimlik}`;

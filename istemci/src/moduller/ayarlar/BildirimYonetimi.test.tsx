@@ -566,7 +566,7 @@ describe('3639 alıcı grupları (kayda bağlı olay)', () => {
     expect(screen.queryByRole('button', { name: 'Koşul ekle' })).toBeNull();
     expect(screen.queryByLabelText('E-posta şablonu')).toBeNull();
     fireEvent.change(screen.getByLabelText('Grup adı'), { target: { value: 'Satış yönetimi' } });
-    fireEvent.change(screen.getByLabelText('Kurala kişi ekle'), { target: { value: '7' } });
+    fireEvent.change(screen.getByLabelText('Gruba kişi ekle'), { target: { value: '7' } });
     fireEvent.change(screen.getByLabelText('Başlık (zil ve e-posta)'), { target: { value: 'Sipariş onaylandı' } });
     fireEvent.change(screen.getByLabelText('Zil metni (isteğe bağlı)'), { target: { value: 'Planlama için: {olay}' } });
     fireEvent.click(screen.getByRole('checkbox', { name: 'E-posta' }));

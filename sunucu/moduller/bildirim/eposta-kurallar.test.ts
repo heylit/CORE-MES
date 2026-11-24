@@ -230,6 +230,14 @@ describe('e-posta kuralları (3397)', () => {
     assert.deepEqual(sablonYerTutucuHatasi({ ...s, duzen: { ustBant: '{musteri}', altSatir: null } }), { alan: 'duzen.ustBant', bilinmeyen: ['musteri'] });
     assert.deepEqual(sablonYerTutucuHatasi({ ...s, duzen: { ustBant: null, altSatir: '{fiyat}' } }), { alan: 'duzen.altSatir', bilinmeyen: ['fiyat'] });
     assert.match(ozel.metin, /sistem yöneticin belirler/);
+    // Güvenlik: üst bant ve alt satır HTML'e kaçışlı girer.
+    const kacisli = epostaKur({
+      ...temel,
+      sablon: { ...VARSAYILAN_SABLONLAR.satis, duzen: { ...VARSAYILAN_SABLONLAR.satis.duzen, ustBant: '<b>ORN</b> & Ortak', altSatir: '<i>x</i>' } },
+    });
+    assert.match(kacisli.html, /&lt;b&gt;ORN&lt;\/b&gt; &amp; Ortak/);
+    assert.doesNotMatch(kacisli.html, /<b>ORN/);
+    assert.doesNotMatch(kacisli.html, /<i>x/);
     assert.match(ozel.metin, /Bu e-posta CORE MES gönderildi/);
   });
 
