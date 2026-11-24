@@ -619,6 +619,8 @@ export async function katalogKartiKaydet(
   if (kayitli && turDegisti && !katalogKodDegisebilirMi(kayitli.onayDurumu, kayitli.aktifOlmus)) {
     throw gecersiz('Kartın türü ve stok kodu yalnız hiç aktif olmamış taslakta değişir.');
   }
+  // 3631 (Risk S1): Logo kaydı (eşlemesi) olan kartın kodu taslakta da değişmez; eşleme eski kodda kalır, belgeler Logo'da başka kayıtla eşleşir.
+  if (kayitli?.logoKayitNo && turDegisti) throw gecersiz('Logo\'dan alınan kartın türü değişmez; kodu Logo eşlemesinde yaşıyor.');
   if (kayitli && kayitli.hizmetYonu !== hizmetYonu && !katalogKodDegisebilirMi(kayitli.onayDurumu, kayitli.aktifOlmus)) {
     throw gecersiz('Hizmet kartının yönü yalnız hiç aktif olmamış taslakta değişir; öteki yön için yeni kart açın.');
   }
@@ -748,7 +750,7 @@ export async function katalogKartiKaydet(
     gkk,
   };
   // Firma kodlu türde önek ayardan gelir, gelen kod okunmaz.
-  const onekDegisti = kayitli !== null && !turDegisti && katalogFirmaOneki(await firmaliGenel(db), tur) === null
+  const onekDegisti = kayitli !== null && !kayitli.logoKayitNo && !turDegisti && katalogFirmaOneki(await firmaliGenel(db), tur) === null
     && katalogYeniOnek({ durum: kayitli.onayDurumu, aktifOlmus: kayitli.aktifOlmus, kayitliOnek: kayitli.onek, tur, gelenKod: alanlar.stokKodu }) !== null;
   let r: { stokKodu: string; surum: number };
   if (kayitli && !turDegisti && !onekDegisti) {
@@ -1279,7 +1281,7 @@ async function logodanKartAlIc(
       kod = await yeniStokKodu(db, firmaOneki ? null : k.kod, g.tur);
     } else {
       if (secenek.yalnizKendiKodu) throw gecersiz('Logo kodu seçilen türün koduna uymuyor; tek tek alın.');
-      const onek = g.onek ?? katalogGenelOneki(g.tur);
+      const onek = g.onek || katalogGenelOneki(g.tur);
       if (!firmaOneki && !onek) throw dogrulama('Logo kodu TMI kod biçimine ya da seçilen türe uymuyor; yeni kodun önekini girin (ör. HM-GEN-).', 'onek');
       kod = await yeniStokKodu(db, firmaOneki ? null : `${onek!.toUpperCase()}1`, g.tur);
     }
