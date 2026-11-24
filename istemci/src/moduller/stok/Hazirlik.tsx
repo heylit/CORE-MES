@@ -377,10 +377,10 @@ function Listeler() {
           <Tablo etiket="Toplama listeleri" kip="kayit" satirlar={l.data?.satirlar ?? []} satirAnahtari={(t) => t.id} mesgul={l.isPending} bosMesaj='Henüz liste yok. İstekleri seçip "Liste aç" deyin.'
             sutunlar={[
               { anahtar: 'no', baslik: 'Liste', mono: true, sabit: 'sol', csv: (t) => t.no, hucre: (t) => <Link to={`/stok/hazirlik/${t.id}`}>{t.no}</Link> },
-              { anahtar: 'ad', baslik: 'Ad', kes: true, hucre: (t) => t.ad },
+              { anahtar: 'ad', baslik: 'Ad', kartta: true, kes: true, hucre: (t) => t.ad },
               { anahtar: 'z', baslik: 'Açılış', hucre: (t) => zamanMetni(t.acilis) },
-              { anahtar: 'i', baslik: 'İlerleme', hizala: 'sag', hucre: (t) => `${t.toplanan}/${t.adimSayisi}` },
-              { anahtar: 'd', baslik: 'Durum', hucre: (t) => <><Rozet ton={LISTE_DURUMU[t.durum].ton}>{LISTE_DURUMU[t.durum].etiket}</Rozet>{t.eksikVar && <Rozet ton="uyari">Eksik</Rozet>}</> },
+              { anahtar: 'i', baslik: 'İlerleme', kartta: true, hizala: 'sag', hucre: (t) => `${t.toplanan}/${t.adimSayisi}` },
+              { anahtar: 'd', baslik: 'Durum', kartRozet: true, hucre: (t) => <><Rozet ton={LISTE_DURUMU[t.durum].ton}>{LISTE_DURUMU[t.durum].etiket}</Rozet>{t.eksikVar && <Rozet ton="uyari">Eksik</Rozet>}</> },
             ]} />
         )}
       </div>

@@ -224,9 +224,9 @@ type Liste = SeriListelerCevabi['listeler'][number];
 const listeSutunlari = (id: number | null, sec: (id: number) => void): Sutun<Liste>[] => [
   { anahtar: 'liste', baslik: 'Açıldı', csv: (l) => zamanMetni(l.acilis),
     hucre: (l) => <Dugme aria-current={l.id === id} aria-label={`Seri liste · ${zamanMetni(l.acilis)}`} onClick={() => sec(l.id)}>{zamanMetni(l.acilis)}</Dugme> },
-  { anahtar: 'kaynak', baslik: 'Kaynak', hucre: (l) => (l.kaynak === 'hafiza' ? 'Okuyucu hafızası' : 'Okutma') },
-  { anahtar: 'acik', baslik: 'Açık', hizala: 'sag', hucre: (l) => l.acikSatir },
-  { anahtar: 'satir', baslik: 'Satır', hizala: 'sag', hucre: (l) => l.satirSayisi },
+  { anahtar: 'kaynak', baslik: 'Kaynak', kartta: false, hucre: (l) => (l.kaynak === 'hafiza' ? 'Okuyucu hafızası' : 'Okutma') },
+  { anahtar: 'acik', baslik: 'Açık', kartta: true, hizala: 'sag', hucre: (l) => l.acikSatir },
+  { anahtar: 'satir', baslik: 'Satır', kartta: true, hizala: 'sag', hucre: (l) => l.satirSayisi },
 ];
 
 // Satır: seçim ve tür simgesi kimlik hücresinde (yana kayarken yapışık kalır); kayıtlı yer kesilir, tamamı ipucunda.
