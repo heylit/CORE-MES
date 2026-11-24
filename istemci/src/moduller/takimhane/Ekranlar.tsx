@@ -8,6 +8,7 @@ import { DurumKutusu, Girdi, Kart, SayfaBasligi, Secim, useBildirim } from '../.
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { EmirAparatlari } from './Aparat.tsx';
 import { AktarimOnizleme } from './Aktarim.tsx';
 import { AcikTeslimler, CikisFormu, IadePenceresi } from './CikisIade.tsx';
 import { EmirTakimlari } from './EmirTakimlari.tsx';
@@ -158,6 +159,7 @@ export function EmirTakimlariSayfasi() {
       {liste.data && (liste.data.satirlar.length === 0
         ? <Kart><p className="tc-tkm-bos">Bu emir için takım listesi girilmemiş.</p></Kart>
         : <Kart><EmirTakimlari liste={liste.data} /></Kart>)}
+      {emirId !== '' && <EmirAparatlari emirId={emirId} />}
     </div>
   );
 }
