@@ -2635,6 +2635,14 @@ describe('3438 a: kalem yürürlükteki revizyonu seçer', () => {
       expect(screen.getByText('Siparişte')).toBeTruthy();
     });
 
+    it('elle değiştirilmiş siparişte (sürüm bağı yok) Siparişe uygula açıktır ve nedeni uyarıda yazar', async () => {
+      sunucuKur(YONETICI, (yontem, yol) => (yontem === 'GET' && yol === '/siparisler/teklifler/21' ? json(200, { ...KABUL_2, siparisteSurumNo: null }) : undefined));
+      ac('/siparisler/teklifler/21');
+      expect(await screen.findByRole('button', { name: 'Siparişe uygula' })).toBeTruthy();
+      expect(screen.getByText('Sipariş elle değiştirilmiş')).toBeTruthy();
+      expect(screen.queryByText('Sipariş eski sürümde')).toBeNull();
+    });
+
     it('onay yetkisi olmayan yazarda ve sipariş zaten kabul edilen sürümdeyken Siparişe uygula çizilmez', async () => {
       sunucuKur(FIYATCI, (yontem, yol) => (yontem === 'GET' && yol === '/siparisler/teklifler/21' ? json(200, KABUL_2) : undefined));
       ac('/siparisler/teklifler/21');

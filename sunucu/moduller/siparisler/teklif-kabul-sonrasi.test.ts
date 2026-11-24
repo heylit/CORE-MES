@@ -189,6 +189,13 @@ describe('3637 kabul edilmiş teklife yeni sürüm (gerçek PostgreSQL, gerçek 
     s = (await oku(yonetici, `/siparisler/${siparisId}`)).json<SiparisAyrintisi>();
     // Yetki: onaylama yetkisi olmayan 403; eski sipariş sürümü 409.
     assert.equal((await gonder(operator, `/siparisler/teklifler/${t.id}/siparise-uygula`, { surum: t.surum, ...govde() })).statusCode, 403);
+    // Onaylama yetkisi var, fiyat görme yetkisi yok: fiyat yazan işlem 403.
+    const kod = `kabul_fiyatsiz_${randomUUID().slice(0, 8)}`;
+    await o().sahip.sorgu('INSERT INTO rol (kod, ad) VALUES ($1, $1)', [kod]);
+    await o().sahip.sorgu('INSERT INTO rol_islemi (rol_id, islem) SELECT (SELECT id FROM rol WHERE kod = $1), unnest($2::text[])', [kod, ['siparisler.oku', 'siparisler.yaz', 'siparisler.onayla']]);
+    const fiyatsiz = (await girisYap(kod)).cerez;
+    const fiyatsizRet = await gonder(fiyatsiz, `/siparisler/teklifler/${t.id}/siparise-uygula`, { surum: t.surum, ...govde() });
+    assert.equal(fiyatsizRet.statusCode, 403, fiyatsizRet.body);
     assert.equal((await gonder(yonetici, `/siparisler/teklifler/${t.id}/siparise-uygula`, { surum: t.surum, ...govde({ siparisSurum: s.surum + 5 }) })).statusCode, 409);
     await komut(t, 'siparise-uygula', govde({ surumNo: 1 }), 422);
     const uyg = await gonder(yonetici, `/siparisler/teklifler/${t.id}/siparise-uygula`, { surum: t.surum, ...govde() });

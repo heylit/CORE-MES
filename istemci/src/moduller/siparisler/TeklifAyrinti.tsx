@@ -252,11 +252,11 @@ export function TeklifAyrinti() {
         <p className="tc-sp-bildirim" role="status">
           {iskontoBekler
             ? <><strong>{`Sürüm ${son.surumNo} iskonto onayı bekliyor`}</strong>{` %${ISKONTO_ONAY_ESIGI} sınırını aşıyor; müdür onaylayınca müşteriye gider. Kabul edilen sürüm ${t.kabulSurumu} yerinde kalır.`}</>
-            : <><strong>{`Sürüm ${son.surumNo} müşteri kabulü bekliyor`}</strong>{` Kabul edilen sürüm ${t.kabulSurumu}${t.durum === 'siparis' ? ' ve sipariş' : ''} yerinde kalır; müşteri yeni sürümü kabul edince kaydedin.`}</>}
+            : <><strong>{`Sürüm ${son.surumNo} müşteri kabulü bekliyor`}</strong>{` Kabul edilen sürüm ${t.kabulSurumu}${t.durum === 'siparis' ? ' ve sipariş' : ''} yerinde kalır; müşteri yeni sürümü kabul edince kaydedin. Kabul gelmezse yeni sürüm bekler, kabul edilen sürümü etkilemez.`}</>}
         </p>
       )}
-      {!arsivde && t.durum === 'siparis' && t.kabulSurumu !== null && t.siparisteSurumNo !== null && t.siparisteSurumNo !== t.kabulSurumu && (
-        <p className="tc-sp-bildirim" role="status"><strong>Sipariş eski sürümde</strong>{` Sipariş sürüm ${t.siparisteSurumNo} fiyatlarında; müşterinin kabul ettiği sürüm ${t.kabulSurumu}.${uygulanir ? ' "Siparişe uygula" ile fiyatlar siparişe geçer.' : ''}`}</p>
+      {!arsivde && t.durum === 'siparis' && t.kabulSurumu !== null && t.siparisteSurumNo !== t.kabulSurumu && (
+        <p className="tc-sp-bildirim" role="status"><strong>{t.siparisteSurumNo === null ? 'Sipariş elle değiştirilmiş' : 'Sipariş eski sürümde'}</strong>{t.siparisteSurumNo === null ? ` Hangi teklif sürümünden geldiği bilinmiyor; kabul edilen sürüm ${t.kabulSurumu} siparişe yazılmadı olabilir.` : ` Sipariş sürüm ${t.siparisteSurumNo} fiyatlarında; müşterinin kabul ettiği sürüm ${t.kabulSurumu}.`}{uygulanir ? ' "Siparişe uygula" ile fiyatlar siparişe geçer.' : ''}</p>
       )}
       {t.durum === 'red' && <p className="tc-sp-bildirim tc-sp-bildirim-hata" role="status"><strong>Teklif reddedildi</strong> {t.not ?? 'Gerekçe belirtilmedi.'}</p>}
       {t.durum === 'siparis' && (

@@ -95,7 +95,7 @@ export function TeklifSiparisUygula({ teklif, surumNo, logoda, acik, kapat, yeni
             {fark.eslesmeyen && <p className="tc-sp-bildirim" role="alert"><strong>Kalemler eşleşmiyor</strong> Siparişin kalemleri teklif satırlarıyla aynı değil; siparişi elle düzenleyin.</p>}
             {onayli && !fark.eslesmeyen && !degisiklik && <p className="tc-sp-bildirim" role="status"><strong>Fark yok</strong> Bu sürümün fiyatları ve koşulları siparişle aynı.</p>}
             <Tablo etiket="Sipariş ve sürüm fiyatları" sutunlar={sutunlar} satirlar={fark.satirlar} satirAnahtari={(x) => x.sira} bosMesaj="Kalem yok." />
-            <dl className="tc-sp-toplamlar">
+            <dl className="tc-sp-toplamlar tc-sp-toplamlar-sutun">
               <div><dt>Toplam (KDV hariç)</dt><dd>{`${paraMetni(fark.toplam.eski, para)} → ${paraMetni(fark.toplam.yeni, para)}`}</dd></div>
               {fark.genel !== null && <div className="tc-sp-genel"><dt>Genel toplam (KDV dahil)</dt><dd>{`${paraMetni(fark.genel.eski, para)} → ${paraMetni(fark.genel.yeni, para)}`}</dd></div>}
               {fark.kdv !== null && <div><dt>KDV oranı</dt><dd>{`%${miktarMetni(fark.kdv.eski)} → %${miktarMetni(fark.kdv.yeni)}`}</dd></div>}
