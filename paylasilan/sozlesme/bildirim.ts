@@ -35,6 +35,9 @@ export interface BildirimTuruTanimi {
   varsayilan: Record<BildirimKanali, boolean>;
   // Verilirse bildirim, Bildirim yönetimi ayarlanmadıkça "Okudum, anladım" denene dek kalır (3303-2 a).
   onayIstenir?: true;
+  // 3619 b (kullanıcı kararı): olay kapalıyken görev sınıfı da Gelenler'e yazılmaz (Risk K1 istisnası). Yalnız bu bayrağı taşıyan tür;
+  // öteki görev türleri kapalıyken yine Gelenler'e düşer.
+  kapaliykenYazilmaz?: true;
 }
 
 // Birinci aşamanın dört olayı (221 a). Anahtar `<modül>.<olay>`; modül adı kaynak modüldür.
@@ -118,7 +121,7 @@ const ELLE_TANIMLI_TURLER = {
   // stok.istek ve stok.transfer taşıyan, yönetici rolü hariç); alınınca, reddedilince, iptal olunca ya da süresi dolunca stok kapatır.
   // Alındı ve reddedildi gönderene gider; yapan kendisi almaz.
   'stok.teslim-yolda': {
-    baslik: 'Teslim yolda', onem: 'bilgi', sinif: 'gorev', alanIslemler: [], yol: '/stok', varsayilan: { mesaj: false, eposta: false },
+    baslik: 'Teslim yolda', onem: 'bilgi', sinif: 'gorev', kapaliykenYazilmaz: true, alanIslemler: [], yol: '/stok', varsayilan: { mesaj: false, eposta: false },
   },
   'stok.teslim-alindi': {
     baslik: 'Teslim alındı', onem: 'bilgi', alanIslemler: [], yol: '/stok', varsayilan: { mesaj: false, eposta: false },

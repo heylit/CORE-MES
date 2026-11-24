@@ -146,10 +146,11 @@ export const varsayilanMi = (t: GosterimTanimi, g: Gosterim): boolean => {
 
 // 3478: olayın ana anahtarı. Ekip çağrısı ve kademeli uyarı türleri anahtara bakmaz (kendi ayarları geçer). Kapalı olayda yalnız
 // görev sınıfı ve "Okudum, anladım" isteyen türün satırı Gelenler'e yazılır (Risk K1: onaylayanın iş listesi boşalmaz); zil ortası,
-// telefon ve e-posta gitmez. Öteki türde hiçbir şey yazılmaz.
+// telefon ve e-posta gitmez. Öteki türde hiçbir şey yazılmaz. `kapaliykenYazilmaz` taşıyan tür (3619 b) kapalıyken sınıfı ne olursa olsun yazılmaz.
 export type OlayYazimi = 'tam' | 'yalniz-gelenler' | 'yok';
-export function olayYazimi(t: { anahtarli: boolean; acik: boolean; sinif: string; onayIstenir: boolean }): OlayYazimi {
+export function olayYazimi(t: { anahtarli: boolean; acik: boolean; sinif: string; onayIstenir: boolean; kapaliykenYazilmaz?: boolean }): OlayYazimi {
   if (!t.anahtarli || t.acik) return 'tam';
+  if (t.kapaliykenYazilmaz === true) return 'yok';
   return t.sinif === 'gorev' || t.onayIstenir ? 'yalniz-gelenler' : 'yok';
 }
 

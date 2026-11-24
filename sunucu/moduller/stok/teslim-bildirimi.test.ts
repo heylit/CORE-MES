@@ -138,18 +138,17 @@ describe('stok: teslim ve istek bildirimleri (gerçek PostgreSQL)', () => {
   });
   after(async () => { await ortam?.kaldir(); });
 
-  test('kapalıyken beş türden yalnız yolda görevi Gelenler\'e düşer ve kapanır; dört bilgi türü hiç yazılmaz (3478-2 a, Risk K1)', async () => {
+  test('kapalıyken beş türün hiçbiri yazılmaz; yolda görevi de Gelenler\'e düşmez (3478-2 a, 3619 b)', async () => {
     await tabanAl();
     const a = await istasyon(['op_a']);
     const { h, t } = await depodanIstasyona(a);
-    const yolda = await satirlar('stok.teslim-yolda', t.no);
-    assert.deepEqual(yolda.map((x) => [x.kisiId, x.sinif, x.ortada, x.yapildi]), [[id('op_a'), 'gorev', false, null]]);
+    assert.equal((await o().vt.tek<{ durum: string }>('SELECT durum FROM stok_teslim WHERE id = $1', [t.id]))!.durum, 'yolda', 'teslim gerçekten yolda');
     await al('op_a', t, '2');
-    assert.notEqual((await satirlar('stok.teslim-yolda', t.no))[0]!.yapildi, null, 'alınınca görev yapıldı olur');
     await reddet(await gonder('depo', { malzemeId: h, miktar: '1', kaynak: { konumId: await kabulKonumu() }, hedef: { istasyonId: a } }));
     await dogrudanTeslim(await hazirla(await istekAc('kalite', h)), a);
-    for (const tur of BES_TUR.slice(1)) assert.deepEqual(await satirlar(tur), [], `${tur} kapalıyken yazılmaz`);
-    assert.equal((await satirlar('stok.teslim-yolda')).length, 2, 'olaylar gerçekten oldu: iki yolda görevi açıldı');
+    for (const tur of BES_TUR) assert.deepEqual(await satirlar(tur), [], `${tur} kapalıyken yazılmaz`);
+    assert.equal((await o().vt.tek<{ n: number }>("SELECT count(*)::int AS n FROM stok_teslim WHERE malzeme_id = $1 AND durum IN ('teslim', 'red')", [h]))!.n, 2,
+      'olaylar gerçekten oldu: biri alındı, biri reddedildi');
   });
 
   describe('olaylar açık', () => {
@@ -162,6 +161,7 @@ describe('stok: teslim ve istek bildirimleri (gerçek PostgreSQL)', () => {
       const { h, t } = await depodanIstasyona(a, '3');
       assert.deepEqual(await alicilar('stok.teslim-yolda', t.no), sirali([id('op_a'), id('op_b')]), 'depo, başka istasyon, işlemsiz ve kapsamsız almaz');
       const s = (await satirlar('stok.teslim-yolda', t.no))[0]!;
+      assert.deepEqual([s.sinif, s.yapildi], ['gorev', null], 'açıkken görevdir');
       const sira = (await o().vt.tek<{ s: number }>('SELECT sira_no AS s FROM malzeme_katalog_karti WHERE no = $1', [h]))!.s;
       assert.equal(s.baslik, `${t.no}: ORN-Malzeme ${sira} yolda`);
       assert.equal(s.metin, `3 adet yolda (${t.no}). Teslim kutusundan alın ya da gerekçeyle reddedin.`);
