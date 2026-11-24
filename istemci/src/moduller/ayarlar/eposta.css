@@ -86,8 +86,15 @@
 }
 .tc-eposta-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
 .tc-eposta-dugme-ikincil { background: var(--panel); color: var(--ink); border-color: var(--edge); }
-.tc-eposta-logo { display: flex; align-items: center; padding-block: var(--b-2); border-block-end: 1px solid var(--edge); }
-.tc-eposta-logo img { display: block; max-block-size: var(--dokunma); max-inline-size: 40%; object-fit: contain; }
+/* 3639: üst bant (gönderen adı ya da kurum logosu, önem rozeti) ve düğme renkleri; sunucudaki e-posta çizimiyle aynı düzen. */
+.tc-eposta-bant { display: flex; align-items: center; justify-content: space-between; gap: var(--b-2); margin: 0 calc(var(--b-4) * -1); padding: var(--b-2) var(--b-4); background: var(--ink); color: var(--panel); font-weight: 700; }
+.tc-eposta-bant img { display: block; max-block-size: var(--dokunma); max-inline-size: 60%; object-fit: contain; padding: var(--b-1); border-radius: var(--yari-1); background: var(--panel); }
+.tc-eposta-rozet { padding: 0 var(--b-2); border-radius: var(--yari-3); background: var(--bg2); color: var(--hold); font-size: var(--yazi-s); }
+.tc-eposta-dugme-yesil { border-color: var(--run); background: var(--run); color: var(--panel); }
+.tc-eposta-dugme-mavi { border-color: var(--done); background: var(--done); color: var(--panel); }
+.tc-eposta-satirlar { display: flex; flex-direction: column; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+.tc-eposta-satir-duzeni { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--b-2); align-items: end; }
+.tc-eposta-satir-tasi { display: inline-flex; gap: var(--b-1); }
 
 /* 3435-3 a: olay ve kanal tablosu. */
 .tc-matris-rozetler { display: inline-flex; flex-wrap: wrap; gap: var(--b-1); }

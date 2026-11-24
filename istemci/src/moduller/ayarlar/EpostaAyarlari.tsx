@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import {
-  EPOSTA_ALT_BILGI_EN_UZUN, EPOSTA_BASLIK_EN_UZUN, EPOSTA_DUGME_EN_UZUN, EPOSTA_GOVDE_EN_UZUN, EPOSTA_KIP_ADLARI, EPOSTA_KONU_ADLARI,
+  EPOSTA_ALT_BILGI_EN_UZUN, EPOSTA_ALT_SATIR_EN_UZUN, EPOSTA_BASLIK_EN_UZUN, EPOSTA_DUGME_EN_UZUN, EPOSTA_DUGME_RENKLERI, EPOSTA_DUGME_RENK_ADLARI, EPOSTA_SATIR_ADI_EN_UZUN, EPOSTA_UST_BANT_EN_UZUN, EPOSTA_VARSAYILAN_ALT_SATIR, type EpostaDugmeRengi, type EpostaDuzeni, EPOSTA_GOVDE_EN_UZUN, EPOSTA_KIP_ADLARI, EPOSTA_KONU_ADLARI,
   EPOSTA_KONU_EN_UZUN, EPOSTA_SABLON_AD_EN_UZUN, EPOSTA_SERITLERI, EPOSTA_SERIT_ADLARI, EPOSTA_SIMGELERI, EPOSTA_TABLO_ADLARI, EPOSTA_TABLO_ALANLARI,
   EPOSTA_VARSAYILAN_DUGME, EPOSTA_YER_TUTUCULARI, bilinmeyenYerTutucular, sablonDoldur, type EpostaDegerleri, type EpostaKonusu, type EpostaSablonIcerigi,
   type EpostaSeridi, type EpostaSimgesi, type EpostaSonucu, type EpostaTabloAlani, type EpostaYerTutucusu,
@@ -178,7 +178,7 @@ function ornekDegerler(olay: string): EpostaDegerleri {
 type SablonSecimi = { tur: 'sistem'; konu: EpostaKonusu } | { tur: 'ozel'; id: number } | { tur: 'yeni'; ad: string; icerik: EpostaSablonIcerigi };
 const icerigi = (s: EpostaSablonu | EpostaOzelSablonu): EpostaSablonIcerigi => ({
   simge: s.simge, konuKalibi: s.konuKalibi, baslikKalibi: s.baslikKalibi, govde: s.govde, tabloAlanlari: s.tabloAlanlari,
-  dugmeYazisi: s.dugmeYazisi, onayDugmesi: s.onayDugmesi, altBilgi: s.altBilgi, serit: s.serit, logo: s.logo,
+  dugmeYazisi: s.dugmeYazisi, onayDugmesi: s.onayDugmesi, altBilgi: s.altBilgi, serit: s.serit, logo: s.logo, duzen: s.duzen,
 });
 
 export function EpostaSablonlari() {
@@ -300,10 +300,17 @@ function SablonDuzenleyici({ hedef, icerik, olay, kullananlar, sonra }: {
   const [onayDugmesi, setOnayDugmesi] = useState(icerik.onayDugmesi);
   const [altBilgi, setAltBilgi] = useState(icerik.altBilgi ?? '');
   const [logo, setLogo] = useState(icerik.logo);
+  const [ustBant, setUstBant] = useState(icerik.duzen.ustBant ?? '');
+  const [onemRozeti, setOnemRozeti] = useState(icerik.duzen.onemRozeti);
+  const [altSatir, setAltSatir] = useState(icerik.duzen.altSatir ?? '');
+  const [satirAdlari, setSatirAdlari] = useState<EpostaDuzeni['tabloAdlari']>(icerik.duzen.tabloAdlari);
+  const [dugmeRengi, setDugmeRengi] = useState<EpostaDugmeRengi>(icerik.duzen.dugmeRengi);
   const kurumLogosu = useKurumLogosu();
   const [silinsin, setSilinsin] = useState(false);
   const govdesi = (varsayilan = false) => ({
-    simge, konuKalibi, baslikKalibi, govde, tabloAlanlari: alanlar, dugmeYazisi, onayDugmesi, altBilgi, serit, logo, ...(varsayilan ? { varsayilan: true } : {}),
+    simge, konuKalibi, baslikKalibi, govde, tabloAlanlari: alanlar, dugmeYazisi, onayDugmesi, altBilgi, serit, logo,
+    duzen: { ustBant, onemRozeti, altSatir, tabloAdlari: Object.fromEntries(alanlar.flatMap((a) => (satirAdlari[a]?.trim() ? [[a, satirAdlari[a]]] : []))), dugmeRengi },
+    ...(varsayilan ? { varsayilan: true } : {}),
   });
   const basari = (guncel: EpostaSablonlariCevabi, mesaj: string, secim?: SablonSecimi) => {
     istemci.setQueryData(ANAHTAR.sablonlar, guncel);
@@ -349,16 +356,30 @@ function SablonDuzenleyici({ hedef, icerik, olay, kullananlar, sonra }: {
     baslik: bilinmeyen(baslikKalibi),
     govde: govde.trim() === '' ? 'Gövde boş olamaz.' : bilinmeyen(govde),
     altBilgi: bilinmeyen(altBilgi),
+    ustBant: bilinmeyen(ustBant),
+    altSatir: bilinmeyen(altSatir),
   };
   const gecerli = Object.values(hatalar).every((h) => h === undefined);
   const ilk = { ad: hedef.tur === 'sistem' ? '' : hedef.ad, ...icerik, baslikKalibi: icerik.baslikKalibi ?? '', dugmeYazisi: icerik.dugmeYazisi ?? '', altBilgi: icerik.altBilgi ?? '' };
   const degisti = hedef.tur === 'yeni' || ad !== ilk.ad || simge !== ilk.simge || serit !== ilk.serit || konuKalibi !== ilk.konuKalibi || baslikKalibi !== ilk.baslikKalibi
-    || govde !== ilk.govde || alanlar.join() !== ilk.tabloAlanlari.join() || dugmeYazisi !== ilk.dugmeYazisi || onayDugmesi !== ilk.onayDugmesi || altBilgi !== ilk.altBilgi || logo !== ilk.logo;
+    || govde !== ilk.govde || alanlar.join() !== ilk.tabloAlanlari.join() || dugmeYazisi !== ilk.dugmeYazisi || onayDugmesi !== ilk.onayDugmesi || altBilgi !== ilk.altBilgi || logo !== ilk.logo
+    || ustBant !== (icerik.duzen.ustBant ?? '') || onemRozeti !== icerik.duzen.onemRozeti || altSatir !== (icerik.duzen.altSatir ?? '') || dugmeRengi !== icerik.duzen.dugmeRengi
+    || alanlar.some((a) => (satirAdlari[a] ?? '') !== (icerik.duzen.tabloAdlari[a] ?? ''));
   const d = ornekDegerler(olay);
   const onizlemeKonu = sablonDoldur(konuKalibi, d).replace(/\s*·\s*$/, '').trim();
   const onizlemeBaslik = sablonDoldur(baslikKalibi, d).trim() || olay;
   const onizlemeAlt = sablonDoldur(altBilgi, d).trim() || 'Bu e-postayı kimin alacağını sistem yöneticin belirler.';
-  const tablo = alanlar.flatMap((a) => (d[a] === null || d[a] === '' ? [] : [[EPOSTA_TABLO_ADLARI[a], d[a]] as const]));
+  const tablo = alanlar.flatMap((a) => (d[a] === null || d[a] === '' ? [] : [[satirAdlari[a]?.trim() || EPOSTA_TABLO_ADLARI[a], d[a]] as const]));
+  const onizlemeUstBant = sablonDoldur(ustBant, d).trim() || 'CORE MES';
+  const onizlemeAltSatir = altSatir.trim() === '' ? `${d.kayit_no ?? ''} · ${d.tarih ?? ''}` : sablonDoldur(altSatir, d).trim();
+  const tasi = (a: EpostaTabloAlani, yon: -1 | 1) => {
+    const i = alanlar.indexOf(a);
+    const j = i + yon;
+    if (j < 0 || j >= alanlar.length) return;
+    const yeni = [...alanlar];
+    [yeni[i], yeni[j]] = [yeni[j] as EpostaTabloAlani, yeni[i] as EpostaTabloAlani];
+    setAlanlar(yeni);
+  };
   const ekle = (y: EpostaYerTutucusu) => { setGovde(`${govde}{${y}}`); };
   return (
     <div className="tc-eposta-sablon">
@@ -419,10 +440,49 @@ function SablonDuzenleyici({ hedef, icerik, olay, kullananlar, sonra }: {
                 key={a}
                 etiket={EPOSTA_TABLO_ADLARI[a]}
                 checked={alanlar.includes(a)}
-                onChange={(o) => { setAlanlar(o.target.checked ? EPOSTA_TABLO_ALANLARI.filter((x) => x === a || alanlar.includes(x)) : alanlar.filter((x) => x !== a)); }}
+                onChange={(o) => { setAlanlar(o.target.checked ? [...alanlar, a] : alanlar.filter((x) => x !== a)); }}
               />
             ))}
           </div>
+          {alanlar.length > 0 && (
+            <ol className="tc-eposta-satirlar" aria-label="Tablo satırları">
+              {alanlar.map((a, i) => (
+                <li key={a} className="tc-eposta-satir-duzeni">
+                  <Girdi
+                    etiket={`Satır adı: ${EPOSTA_TABLO_ADLARI[a]}`}
+                    value={satirAdlari[a] ?? ''}
+                    maxLength={EPOSTA_SATIR_ADI_EN_UZUN}
+                    ipucu={`Boşsa "${EPOSTA_TABLO_ADLARI[a]}".`}
+                    onChange={(o) => { setSatirAdlari({ ...satirAdlari, [a]: o.target.value }); }}
+                  />
+                  <span className="tc-eposta-satir-tasi">
+                    <Dugme simge="up" aria-label={`${EPOSTA_TABLO_ADLARI[a]} satırını yukarı al`} disabled={i === 0} onClick={() => { tasi(a, -1); }} />
+                    <Dugme simge="down" aria-label={`${EPOSTA_TABLO_ADLARI[a]} satırını aşağı al`} disabled={i === alanlar.length - 1} onClick={() => { tasi(a, 1); }} />
+                  </span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </fieldset>
+        <fieldset className="tc-eposta-grup">
+          <legend>Üst bant ve başlık satırı</legend>
+          <Girdi
+            etiket="Üst bant metni"
+            value={ustBant}
+            maxLength={EPOSTA_UST_BANT_EN_UZUN}
+            hata={hatalar.ustBant}
+            ipucu="Boşsa gönderen adı (Sistem Ayarları) yazılır."
+            onChange={(o) => { setUstBant(o.target.value); }}
+          />
+          <IsaretKutusu etiket="Üst bantta önem rozeti (Bilgi, Uyarı, Acil)" checked={onemRozeti} onChange={(o) => { setOnemRozeti(o.target.checked); }} />
+          <Girdi
+            etiket="Başlık altı satırı"
+            value={altSatir}
+            maxLength={EPOSTA_ALT_SATIR_EN_UZUN}
+            hata={hatalar.altSatir}
+            ipucu={`Boşsa "${EPOSTA_VARSAYILAN_ALT_SATIR}".`}
+            onChange={(o) => { setAltSatir(o.target.value); }}
+          />
         </fieldset>
         <fieldset className="tc-eposta-grup">
           <legend>Düğmeler</legend>
@@ -432,6 +492,12 @@ function SablonDuzenleyici({ hedef, icerik, olay, kullananlar, sonra }: {
             maxLength={EPOSTA_DUGME_EN_UZUN}
             ipucu={`Boşsa "${EPOSTA_VARSAYILAN_DUGME}".`}
             onChange={(o) => { setDugmeYazisi(o.target.value); }}
+          />
+          <Secim
+            etiket="Düğme rengi"
+            value={dugmeRengi}
+            secenekler={EPOSTA_DUGME_RENKLERI.map((r) => ({ deger: r, baslik: EPOSTA_DUGME_RENK_ADLARI[r] }))}
+            onChange={(o) => { setDugmeRengi(o.target.value as EpostaDugmeRengi); }}
           />
           <IsaretKutusu etiket="Onay olaylarında Onayla / Reddet düğmesi" checked={onayDugmesi} onChange={(o) => { setOnayDugmesi(o.target.checked); }} />
         </fieldset>
@@ -465,15 +531,16 @@ function SablonDuzenleyici({ hedef, icerik, olay, kullananlar, sonra }: {
       <section className="tc-eposta-onizleme" aria-label="Ön izleme">
         <p className="tc-eposta-onizleme-konu"><Simge ad="mail" boyut="k" /> {onizlemeKonu || olay}</p>
         <div className="tc-eposta-zarf">
-          {logo && kurumLogosu.data?.logo != null && (
-            <div className="tc-eposta-logo"><img src={kurumLogosu.data.logo} alt="Kurum logosu" /></div>
-          )}
+          <div className="tc-eposta-bant">
+            {logo && kurumLogosu.data?.logo != null ? <img src={kurumLogosu.data.logo} alt="Kurum logosu" /> : <span>{onizlemeUstBant}</span>}
+            {onemRozeti && <span className="tc-eposta-rozet">Uyarı</span>}
+          </div>
           <div className={serit === 'yok' ? 'tc-eposta-serit-bosluk' : `tc-eposta-serit ${SERIT_SINIFI[serit]}`} />
           <div className="tc-eposta-ust">
             <span className="tc-eposta-simge"><Simge ad={SIMGE[simge]} /></span>
             <div>
               <p className="tc-eposta-baslik">{onizlemeBaslik}</p>
-              <p className="tc-ayar-aciklama">{d.kayit_no} · {d.tarih}</p>
+              <p className="tc-ayar-aciklama">{onizlemeAltSatir}</p>
             </div>
           </div>
           {sablonDoldur(govde, d).trim().split(/\n{2,}/).map((p, i) => <p key={i} className="tc-eposta-paragraf">{p}</p>)}
@@ -485,7 +552,7 @@ function SablonDuzenleyici({ hedef, icerik, olay, kullananlar, sonra }: {
             </dl>
           )}
           <div className="tc-eposta-dugmeler">
-            <span className="tc-eposta-dugme">{dugmeYazisi.trim() || EPOSTA_VARSAYILAN_DUGME}</span>
+            <span className={`tc-eposta-dugme tc-eposta-dugme-${dugmeRengi}`}>{dugmeYazisi.trim() || EPOSTA_VARSAYILAN_DUGME}</span>
             {onayDugmesi && <span className="tc-eposta-dugme tc-eposta-dugme-ikincil" title="Yalnız onay olaylarında">Onayla</span>}
             {onayDugmesi && <span className="tc-eposta-dugme tc-eposta-dugme-ikincil" title="Yalnız ret olan onay olaylarında">Reddet</span>}
           </div>

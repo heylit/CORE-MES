@@ -43,7 +43,7 @@ describe('3478-3 bildirim kuralları (gerçek PostgreSQL)', () => {
   const govde = (ek: Partial<BildirimKuralEkleGovdesi> = {}): BildirimKuralEkleGovdesi => ({
     tur: TUR, ad: 'M-1 durunca bakım', acik: true, kosullar: [{ alan: 'makine', karsilastirma: '=', deger: 'M-1' }],
     rolIdleri: [], kisiIdleri: [b, c], ortada: false, eposta: false, telefon: false,
-    sablonBaslik: '{makine} durdu', sablonMetin: '{olay}', ...ek,
+    sablonBaslik: '{makine} durdu', sablonMetin: '{olay}', epostaSablonId: null, ...ek,
   });
   async function ekle(ek: Partial<BildirimKuralEkleGovdesi> = {}): Promise<BildirimKuralSatiri> {
     const r = await istek('kisi-a', 'POST', '/bildirimler/kurallar/ekle', govde(ek));

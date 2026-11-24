@@ -2,7 +2,7 @@ import type { BildirimTuru } from './bildirim.ts';
 
 // 3478-3 a: kural motorunun zod'suz sabitleri; istemci de değer olarak ithal eder. Kural = olay + basit koşul + alıcı + kanal +
 // şablon. Tetik yalnız kodun yayınladığı olaydır; koşul yalnız olayın burada adı geçen alanlarına bakar (başka tablo, formül,
-// VEYA yok). Alanı olmayan olay kurala açılmaz.
+// VEYA yok). Alanı olmayan olay kurala açılmaz; kayda bağlı olaylar alanı boş liste olarak açılır (alıcı grubu, 3639).
 export const KURAL_ALAN_TIPLERI = ['sayi', 'metin', 'secim'] as const;
 export type KuralAlanTipi = (typeof KURAL_ALAN_TIPLERI)[number];
 export interface KuralAlani {
@@ -41,6 +41,17 @@ export const KURAL_ALANLARI = {
   ],
   'stok.gkk-bekliyor': [{ ad: 'tedarikci', etiket: 'Tedarikçi', tip: 'metin' }, malzemeKodu],
   'uretim-emirleri.emir-tamamlandi': [malzemeKodu, proje],
+  // 3639: kayda bağlı olaylarda kural alıcı grubudur: koşulsuz, kendi başlığı, metni, şablonu ve kanalıyla (alan listesi boş).
+  // Alıcı grubuna yalnız olayı görme işlemini taşıyan kişi girer (`EK_ALICI_GORME_ISLEMLERI`); 3597 ek alıcısıyla yan yana durur.
+  'siparisler.siparis-onaylandi': [],
+  'siparisler.siparis-iptal-edildi': [],
+  'siparisler.iskonto-onaylandi': [],
+  'siparisler.termin-onaylandi': [],
+  'malzemeler.kart-onaylandi': [],
+  'projeler.gorev-geri-cevrildi': [],
+  'projeler.gorev-onaylandi': [],
+  'ik.izin-onaylandi': [],
+  'ik.izin-reddedildi': [],
 } as const satisfies Partial<Record<BildirimTuru, readonly KuralAlani[]>>;
 export type KuralliTur = keyof typeof KURAL_ALANLARI;
 // Olayı yayan modül alanları bununla verir: alan adı yanlış yazılırsa derleme kırılır (değer sessizce boş kalmaz).

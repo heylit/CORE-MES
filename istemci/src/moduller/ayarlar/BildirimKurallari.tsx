@@ -4,7 +4,7 @@ import {
   KARSILASTIRMA_ADI, KURAL_GUNLUK_EN_COK, kuralAlanlari, type KuralAlani, type KuralKarsilastirmasi, type KuralliTur,
 } from '#paylasilan/sozlesme/bildirim-kural-sabitleri.ts';
 import type {
-  BildirimKuralEkleGovdesi, BildirimKuralOnIzlemeCevabi, BildirimKuralSatiri, BildirimKurallariCevabi, KuralKosulu,
+  BildirimKuralEkleGovdesi, BildirimKuralOnIzlemeCevabi, BildirimKuralSablonlariCevabi, BildirimKuralSatiri, BildirimKurallariCevabi, KuralKosulu,
 } from '#paylasilan/sozlesme/bildirim-kural.ts';
 import type { BildirimAlicilariCevabi } from '#paylasilan/sozlesme/bildirim.ts';
 import { AcKapa, Dugme, DurumKutusu, Girdi, IsaretKutusu, OnayPenceresi, Rozet, Secim, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
@@ -40,7 +40,7 @@ export function useKurallar(etkin: boolean) {
 
 const govdeOf = (k: BildirimKuralSatiri) => ({
   ad: k.ad, acik: k.acik, kosullar: k.kosullar, rolIdleri: k.rolIdleri, kisiIdleri: k.kisiIdleri,
-  ortada: k.ortada, eposta: k.eposta, telefon: k.telefon, sablonBaslik: k.sablonBaslik, sablonMetin: k.sablonMetin,
+  ortada: k.ortada, eposta: k.eposta, telefon: k.telefon, sablonBaslik: k.sablonBaslik, sablonMetin: k.sablonMetin, epostaSablonId: k.epostaSablonId,
 });
 
 // formAcik: kural formu açıkken panelin kendi Vazgeç/Kaydet çubuğu gizlenir (iki Kaydet görünmesin).
@@ -76,17 +76,21 @@ export function KuralBolumu({ tur, roller, kisiler, formAcik }: { tur: KuralliTu
   };
 
   const kurallar = (sorgu.data?.kurallar ?? []).filter((k) => k.tur === tur);
+  // 3639: alanı olmayan (kayda bağlı) olayda kural koşulsuz alıcı grubudur: kendi başlığı, metni, e-posta şablonu ve kanalı vardır.
+  const grup = kuralAlanlari(tur).length === 0;
   return (
     <fieldset className="tc-eposta-grup">
-      <legend>Kurallar</legend>
+      <legend>{grup ? 'Alıcı grupları' : 'Kurallar'}</legend>
       <p className="tc-ayar-aciklama">
-        Koşul tutunca seçilen kişilere ayrı bildirim gider. Olay kapalıyken kurallar da çalışmaz; olayı görme yetkisi olmayan kişi almaz.
+        {grup
+          ? 'Kayıttaki kişi bildirimi olayın kendi metniyle alır. Gruptaki kişi grubun başlığı ve metniyle alır; hem ek alıcı hem grupta olan kişiye yalnız grup metni gider. Olay kapalıyken gruplar da çalışmaz; olayı görme yetkisi olmayan kişi almaz.'
+          : 'Koşul tutunca seçilen kişilere ayrı bildirim gider. Olay kapalıyken kurallar da çalışmaz; olayı görme yetkisi olmayan kişi almaz.'}
       </p>
       {sorgu.isPending && <DurumKutusu durum="yukleniyor" />}
       {sorgu.isError && <DurumKutusu durum="hata" mesaj={hataIletisi(sorgu.error, 'Kurallar alınamadı.')} yenile={() => { void sorgu.refetch(); }} />}
       {sorgu.isSuccess && form === null && (
         <>
-          {kurallar.length === 0 && <p className="tc-ayar-aciklama">Bu olayda kural yok.</p>}
+          {kurallar.length === 0 && <p className="tc-ayar-aciklama">{grup ? 'Bu olayda alıcı grubu yok.' : 'Bu olayda kural yok.'}</p>}
           <ul className="tc-kural-liste" aria-label="Kurallar">
             {kurallar.map((k) => {
               const alici = [...k.rolIdleri.map((id) => rolAdi.get(id) ?? `Rol ${String(id)}`), ...(k.kisiIdleri.length > 0 ? [`${String(k.kisiIdleri.length)} kişi`] : [])].join(', ');
@@ -113,7 +117,7 @@ export function KuralBolumu({ tur, roller, kisiler, formAcik }: { tur: KuralliTu
               );
             })}
           </ul>
-          <Dugme simge="plus" onClick={() => { setForm('yeni'); }}>Kural ekle</Dugme>
+          <Dugme simge="plus" onClick={() => { setForm('yeni'); }}>{grup ? 'Grup ekle' : 'Kural ekle'}</Dugme>
         </>
       )}
       {form !== null && (
@@ -180,6 +184,8 @@ function KuralFormu({ tur, kural, roller, kisiler, kapat }: {
   const [telefon, setTelefon] = useState(kural?.telefon ?? false);
   const [baslik, setBaslik] = useState(kural?.sablonBaslik ?? '{olay}');
   const [metin, setMetin] = useState(kural?.sablonMetin ?? '');
+  const [epostaSablonId, setEpostaSablonId] = useState<number | null>(kural?.epostaSablonId ?? null);
+  const sablonlar = useQuery({ queryKey: [...KURAL_ANAHTARI, 'sablonlar'], queryFn: () => api.get<BildirimKuralSablonlariCevabi>('/bildirimler/kurallar/sablonlar') });
   const [onIzleme, setOnIzleme] = useState<{ anahtar: string; sonuc: BildirimKuralOnIzlemeCevabi } | null>(null);
   const [calisiyor, setCalisiyor] = useState<'on-izleme' | 'kaydet' | null>(null);
   const [hata, setHata] = useState<string | null>(null);
@@ -189,10 +195,11 @@ function KuralFormu({ tur, kural, roller, kisiler, kapat }: {
   const kosulHatasi = cevrilen.some((x) => x === null);
   const govde: BildirimKuralEkleGovdesi = {
     tur, ad: ad.trim(), acik: kural?.acik ?? true, kosullar: cevrilen.filter((x): x is KuralKosulu => x !== null), rolIdleri, kisiIdleri,
-    ortada, eposta, telefon, sablonBaslik: baslik.trim(), sablonMetin: metin.trim() === '' ? null : metin.trim(),
+    ortada, eposta, telefon, sablonBaslik: baslik.trim(), sablonMetin: metin.trim() === '' ? null : metin.trim(), epostaSablonId: eposta ? epostaSablonId : null,
   };
   const anahtar = JSON.stringify(govde);
-  const eksik = ad.trim() === '' ? 'Kural adı zorunlu.'
+  const grup = alanlar.length === 0;
+  const eksik = ad.trim() === '' ? (grup ? 'Grup adı zorunlu.' : 'Kural adı zorunlu.')
     : kosulHatasi ? 'Her koşulun değeri yazılmalı.'
       : rolIdleri.length + kisiIdleri.length === 0 ? 'En az bir rol ya da kişi seçin.'
         : baslik.trim() === '' ? 'Başlık zorunlu.' : null;
@@ -229,9 +236,9 @@ function KuralFormu({ tur, kural, roller, kisiler, kapat }: {
   const eklenebilir = kisiler.filter((k) => !kisiIdleri.includes(k.id));
   const o = onIzleme?.sonuc;
   return (
-    <div className="tc-kural-form" aria-label={kural === null ? 'Yeni kural' : `${kural.ad}: düzenle`} role="group">
-      <Girdi etiket="Kural adı" value={ad} maxLength={80} onChange={(e) => { setAd(e.target.value); }} />
-      <div className="tc-kural-kosullar" role="group" aria-label="Koşullar">
+    <div className="tc-kural-form" aria-label={kural === null ? (grup ? 'Yeni grup' : 'Yeni kural') : `${kural.ad}: düzenle`} role="group">
+      <Girdi etiket={grup ? 'Grup adı' : 'Kural adı'} value={ad} maxLength={80} onChange={(e) => { setAd(e.target.value); }} />
+      {!grup && <div className="tc-kural-kosullar" role="group" aria-label="Koşullar">
         <span className="tc-alan-etiket">Koşullar (hepsi tutmalı)</span>
         {kosullar.length === 0 && <p className="tc-ayar-aciklama">Koşul yok: olayın her oluşunda gider.</p>}
         {kosullar.map((k, i) => {
@@ -294,7 +301,7 @@ function KuralFormu({ tur, kural, roller, kisiler, kapat }: {
           );
         })}
         <Dugme simge="plus" disabled={kosullar.length >= 10} onClick={kosulEkle}>Koşul ekle</Dugme>
-      </div>
+      </div>}
       <span className="tc-alan-etiket">Kime</span>
       <div className="tc-cagri-rolleri" role="group" aria-label="Kural alıcı rolleri">
         {roller.map((r) => (
@@ -329,8 +336,23 @@ function KuralFormu({ tur, kural, roller, kisiler, kapat }: {
         <IsaretKutusu etiket="E-posta" checked={eposta} onChange={(e) => { setEposta(e.target.checked); }} />
         <IsaretKutusu etiket="Telefon" checked={telefon} onChange={(e) => { setTelefon(e.target.checked); }} />
       </div>
-      <Girdi etiket="Bildirim başlığı" value={baslik} maxLength={200} ipucu={`Yer tutucular: ${yerTutucular}`} onChange={(e) => { setBaslik(e.target.value); }} />
-      <Girdi etiket="Bildirim metni (isteğe bağlı)" value={metin} maxLength={1000} onChange={(e) => { setMetin(e.target.value); }} />
+      {eposta && (
+        <Secim
+          etiket="E-posta şablonu"
+          value={epostaSablonId === null ? '' : String(epostaSablonId)}
+          bosSecenek="Olayın şablonu"
+          secenekler={(sablonlar.data?.sablonlar ?? []).map((x) => ({ deger: String(x.id), baslik: x.ad }))}
+          onChange={(e) => { setEpostaSablonId(e.target.value === '' ? null : Number(e.target.value)); }}
+        />
+      )}
+      <Girdi
+        etiket={grup ? 'Başlık (zil ve e-posta)' : 'Bildirim başlığı'}
+        value={baslik}
+        maxLength={200}
+        ipucu={`Yer tutucular: ${yerTutucular}${grup && eposta ? '. E-postada bu başlık şablonun {olay} yerinde görünür.' : ''}`}
+        onChange={(e) => { setBaslik(e.target.value); }}
+      />
+      <Girdi etiket={grup ? 'Zil metni (isteğe bağlı)' : 'Bildirim metni (isteğe bağlı)'} value={metin} maxLength={1000} onChange={(e) => { setMetin(e.target.value); }} />
       <p className="tc-ayar-aciklama">{`Kural kişi başına günde en çok ${String(KURAL_GUNLUK_EN_COK)} bildirim gönderir. Para tutarı yalnız koşulda kullanılır, metne yazılmaz.`}</p>
       {o && (
         <div className={`tc-kural-on-izleme${gorulduMu ? '' : ' tc-kural-on-izleme-eski'}`} role="status">
@@ -346,10 +368,10 @@ function KuralFormu({ tur, kural, roller, kisiler, kapat }: {
       )}
       {hata && <p className="tc-alan-alt" role="alert">{hata}</p>}
       <div className="tc-eposta-eylemler">
-        <Dugme onClick={kapat}>Kuraldan vazgeç</Dugme>
+        <Dugme onClick={kapat}>{grup ? 'Gruptan vazgeç' : 'Kuraldan vazgeç'}</Dugme>
         <Dugme simge="search" disabled={eksik !== null} yukleniyor={calisiyor === 'on-izleme'} title={eksik ?? undefined} onClick={() => { void onIzle(); }}>Ön izle</Dugme>
         <Dugme tur="birincil" simge="check" disabled={!gorulduMu || eksik !== null} yukleniyor={calisiyor === 'kaydet'} title={gorulduMu ? undefined : 'Önce ön izleyin.'} onClick={() => { void kaydet(); }}>
-          Kuralı kaydet
+          {grup ? 'Grubu kaydet' : 'Kuralı kaydet'}
         </Dugme>
       </div>
       {eksik !== null && <p className="tc-ayar-aciklama">{eksik}</p>}

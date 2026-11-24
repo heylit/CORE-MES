@@ -144,7 +144,7 @@ const SABLONLAR = {
   satirlar: [],
   ozel: [{
     id: 9, ad: 'ORN Acil talep', simge: 'alert', konuKalibi: '{olay}', baslikKalibi: null, govde: '{olay}', tabloAlanlari: [], dugmeYazisi: null,
-    onayDugmesi: true, altBilgi: null, serit: 'onem', logo: false, olaySayisi: 1, surum: 1, degistirildi: '2026-11-19T08:00:00.000+03:00',
+    onayDugmesi: true, altBilgi: null, serit: 'onem', logo: false, duzen: { ustBant: null, onemRozeti: true, altSatir: null, tabloAdlari: {}, dugmeRengi: 'koyu' }, olaySayisi: 1, surum: 1, degistirildi: '2026-11-19T08:00:00.000+03:00',
   }],
 } satisfies EpostaSablonlariCevabi;
 
@@ -165,7 +165,7 @@ const KAYNAK: KademeAyarSatiri = {
 const KURALLAR: BildirimKurallariCevabi = {
   kurallar: [{
     id: 4, tur: 'istasyonlar.makine-durdu', ad: 'M-1 bakıma', acik: true, kosullar: [{ alan: 'makine', karsilastirma: '=', deger: 'M-1' }],
-    rolIdleri: [1], kisiIdleri: [], ortada: false, eposta: true, telefon: false, sablonBaslik: '{makine} durdu', sablonMetin: null,
+    rolIdleri: [1], kisiIdleri: [], ortada: false, eposta: true, telefon: false, sablonBaslik: '{makine} durdu', sablonMetin: null, epostaSablonId: null,
     surum: 1, degisti: '2026-11-20T09:00:00Z', gecersiz: null,
   }],
 };
@@ -213,6 +213,7 @@ function matrisSunucusu(hataliYol?: string, secenek: { acik?: boolean; kademe?: 
     if (yol === '/bildirimler/eposta/sablonlar') return json(200, SABLONLAR);
     if (yol === '/bildirim-kademe/kaynaklar') return json(200, kademe);
     if (yol === '/bildirimler/olaylar') return json(200, olaylar);
+    if (yol === '/bildirimler/kurallar/sablonlar') return json(200, { sablonlar: [{ id: 9, ad: 'ORN Acil durus' }] });
     if (yol === '/bildirimler/kurallar') return json(200, KURALLAR);
     if (yol === '/bildirimler/cagri-yonlendirme') return json(200, BASLANGIC);
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
@@ -545,8 +546,39 @@ describe('3478-3 olay kuralları', () => {
     fireEvent.click(kaydet);
     await waitFor(() => { expect(yazilanlar.some((y) => y.yol === '/bildirimler/kurallar/ekle')).toBe(true); });
     expect(yazilanlar.find((y) => y.yol === '/bildirimler/kurallar/ekle')?.govde).toEqual({
-      tur: 'istasyonlar.makine-durdu', ad: 'M-2 durunca', acik: true, kosullar: [{ alan: 'makine', karsilastirma: '=', deger: 'M-3' }],
+      tur: 'istasyonlar.makine-durdu', epostaSablonId: null, ad: 'M-2 durunca', acik: true, kosullar: [{ alan: 'makine', karsilastirma: '=', deger: 'M-3' }],
       rolIdleri: [], kisiIdleri: [7], ortada: false, eposta: false, telefon: false, sablonBaslik: '{olay}', sablonMetin: null,
+    });
+  });
+});
+
+describe('3639 alıcı grupları (kayda bağlı olay)', () => {
+  it('kayda bağlı olayda kural koşulsuz alıcı grubudur: kendi başlığı, metni, e-posta şablonu ve kanalıyla yazılır', async () => {
+    const { yazilanlar } = matrisSunucusu();
+    ac();
+    await screen.findByRole('table', { name: 'Bildirim olayları' });
+    fireEvent.click(screen.getByRole('button', { name: 'Açtığın sipariş onaylandı: ayrıntı' }));
+    expect(await screen.findByText('Alıcı grupları')).toBeTruthy();
+    expect(screen.getByText(/hem ek alıcı hem grupta olan kişiye yalnız grup metni gider/)).toBeTruthy();
+    expect(screen.getByText('Bu olayda alıcı grubu yok.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Grup ekle' }));
+    expect(screen.queryByRole('group', { name: 'Koşullar' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Koşul ekle' })).toBeNull();
+    expect(screen.queryByLabelText('E-posta şablonu')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Grup adı'), { target: { value: 'Satış yönetimi' } });
+    fireEvent.change(screen.getByLabelText('Kurala kişi ekle'), { target: { value: '7' } });
+    fireEvent.change(screen.getByLabelText('Başlık (zil ve e-posta)'), { target: { value: 'Sipariş onaylandı' } });
+    fireEvent.change(screen.getByLabelText('Zil metni (isteğe bağlı)'), { target: { value: 'Planlama için: {olay}' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'E-posta' }));
+    await screen.findByRole('option', { name: 'ORN Acil durus' });
+    fireEvent.change(screen.getByLabelText('E-posta şablonu'), { target: { value: '9' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Ön izle' }));
+    await screen.findByText(/Son 7 günde bu olay 3 kez oldu/);
+    fireEvent.click(screen.getByRole('button', { name: 'Grubu kaydet' }));
+    await waitFor(() => { expect(yazilanlar.some((y) => y.yol === '/bildirimler/kurallar/ekle')).toBe(true); });
+    expect(yazilanlar.find((y) => y.yol === '/bildirimler/kurallar/ekle')?.govde).toEqual({
+      tur: 'siparisler.siparis-onaylandi', ad: 'Satış yönetimi', acik: true, kosullar: [], rolIdleri: [], kisiIdleri: [7], ortada: false, eposta: true, telefon: false,
+      sablonBaslik: 'Sipariş onaylandı', sablonMetin: 'Planlama için: {olay}', epostaSablonId: 9,
     });
   });
 });

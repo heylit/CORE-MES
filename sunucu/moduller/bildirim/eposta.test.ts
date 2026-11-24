@@ -497,6 +497,25 @@ describe('bildirim e-postası (ADR 0015, 3397; gerçek PostgreSQL, sahte posta s
     assert.deepEqual(s2, s0);
   });
 
+  test('3639: şablonun düzeni (üst bant, rozet, alt satır, satır adı, düğme rengi) kaydedilir; yer tutucu sınanır; eksik düzen varsayılandır', async () => {
+    const icerik = {
+      simge: 'cart', konuKalibi: '{olay}', baslikKalibi: null, govde: 'Merhaba {alici_adi}', tabloAlanlari: ['kayit_no', 'tarih'],
+      dugmeYazisi: null, onayDugmesi: true, altBilgi: null, serit: 'mavi', logo: false,
+    };
+    const duzen = { ustBant: 'CORE MES Satış', onemRozeti: false, altSatir: '{kayit_no}', tabloAdlari: { kayit_no: 'Sipariş no' }, dugmeRengi: 'yesil' };
+    const red = await istek('yonetici', 'POST', '/bildirimler/eposta/ozel-sablonlar/yeni', { ad: 'ORN Düzen', ...icerik, duzen: { ...duzen, ustBant: '{musteri}' } });
+    assert.equal(red.durum, 400);
+    assert.match(JSON.stringify(red.govde), /duzen\.ustBant/);
+    assert.equal((await istek('yonetici', 'POST', '/bildirimler/eposta/ozel-sablonlar/yeni', { ad: 'ORN Düzen', ...icerik, duzen: { ...duzen, dugmeRengi: 'kirmizi' } })).durum, 400);
+    assert.equal((await istek('yonetici', 'POST', '/bildirimler/eposta/ozel-sablonlar/yeni', { ad: 'ORN Düzen', ...icerik, duzen: { ...duzen, baglanti: 'http://x' } })).durum, 400, 'bilinmeyen düzen alanı (dış bağlantı) kabul edilmez');
+    const c = epostaSablonlariCevabi.parse(await tamam('POST', '/bildirimler/eposta/ozel-sablonlar/yeni', { ad: 'ORN Düzen', ...icerik, duzen }));
+    assert.deepEqual(c.ozel.find((x) => x.ad === 'ORN Düzen')?.duzen, duzen);
+    const eksik = epostaSablonlariCevabi.parse(await tamam('POST', '/bildirimler/eposta/ozel-sablonlar/yeni', { ad: 'ORN Düzensiz', ...icerik }));
+    assert.deepEqual(eksik.ozel.find((x) => x.ad === 'ORN Düzensiz')?.duzen, { ustBant: null, onemRozeti: true, altSatir: null, tabloAdlari: {}, dugmeRengi: 'koyu' });
+    const konu = epostaSablonlariCevabi.parse(await tamam('GET', '/bildirimler/eposta/sablonlar')).satirlar.find((x) => x.konu === 'genel');
+    assert.deepEqual(konu?.duzen, { ustBant: null, onemRozeti: true, altSatir: null, tabloAdlari: {}, dugmeRengi: 'koyu' }, 'konu şablonu ayarsızken düzen varsayılandır');
+  });
+
   test('3435-2: yönetici şablonu açar, olaya atar; e-posta o şablonla gider; ad tekil; silinince konunun şablonuna döner', async () => {
     await ayar('bildirim.eposta', true);
     const icerik = {

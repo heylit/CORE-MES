@@ -26,9 +26,9 @@ import {
 import { acikTakipler, gecikenlerim, kademeAyarlari, kademeAyariYaz, seridim } from './kademe.ts';
 import {
   bildirimKuralDegistirGovdesi, bildirimKuralEkleGovdesi, bildirimKuralOnIzlemeCevabi, bildirimKuralParametresi, bildirimKuralSilGovdesi,
-  bildirimKuralSorgusu, bildirimKurallariCevabi,
+  bildirimKuralSorgusu, bildirimKurallariCevabi, bildirimKuralSablonlariCevabi,
 } from '#paylasilan/sozlesme/bildirim-kural.ts';
-import { kuralDegistir, kuralEkle, kuralOnIzleme, kuralSil, kurallariOku } from './kural.ts';
+import { kuralDegistir, kuralEkle, kuralOnIzleme, kuralSablonlari, kuralSil, kurallariOku } from './kural.ts';
 import { olayAnahtarlari, olayAnahtarlariTopluDegistir, olayAnahtariDegistir, oncekiHaleDon } from './olay-anahtari.ts';
 import {
   bildirimOlayAcikDegistirGovdesi, bildirimOlayAciklariCevabi, bildirimOlayParametresi, bildirimOlayTopluGovdesi, bildirimOncekiHaleDonGovdesi,
@@ -108,6 +108,7 @@ export const uclar = [
   }),
   // 3478-3 a: olay başına kurallar (koşul + alıcı + kanal + şablon). Sistem Ayarları'nın işlemiyle okunur ve yazılır; ön izleme kaydetmez.
   uc({ yontem: 'GET', yol: '/bildirimler/kurallar', yetki: 'ayarlar.yaz', sorgu: bildirimKuralSorgusu, cevap: bildirimKurallariCevabi, isle: ({ db, sorgu }) => kurallariOku(db, sorgu.tur) }),
+  uc({ yontem: 'GET', yol: '/bildirimler/kurallar/sablonlar', yetki: 'ayarlar.yaz', cevap: bildirimKuralSablonlariCevabi, isle: ({ db }) => kuralSablonlari(db) }),
   uc({
     yontem: 'POST', yol: '/bildirimler/kurallar/ekle', yetki: 'ayarlar.yaz', govde: bildirimKuralEkleGovdesi, cevap: bildirimKurallariCevabi,
     isle: ({ db, kullanici, govde }) => kuralEkle(db, kullanici, govde),

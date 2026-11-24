@@ -9,7 +9,7 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { tesisGunBasi, tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import { BILDIRIM_TUR_ANAHTARLARI, BILDIRIM_TURLERI, anahtarliTurMu, turSinifi, type BildirimOnemi, type BildirimTuru } from '#paylasilan/sozlesme/bildirim.ts';
 import {
-  EPOSTA_KONULARI, turKonusu, turOnayi, type EpostaDefterSatiri, type EpostaDenemeCevabi, type EpostaDurumuCevabi, type EpostaKonusu, type EpostaSablonDegistirGovdesi,
+  EPOSTA_KONULARI, epostaDuzeni, turKonusu, turOnayi, type EpostaDefterSatiri, type EpostaDenemeCevabi, type EpostaDurumuCevabi, type EpostaKonusu, type EpostaSablonDegistirGovdesi,
   type EpostaOzelSablonDegistirGovdesi, type EpostaOzelSablonYeniGovdesi, type EpostaSablonIcerigi, type EpostaSablonlariCevabi, type EpostaSablonu,
   type EpostaSinamaCevabi, type EpostaSonucu, type EpostaTetikleyiciDegistirGovdesi, type EpostaTetikleyicileriCevabi,
 } from '#paylasilan/sozlesme/bildirim-eposta.ts';
@@ -122,7 +122,7 @@ export async function epostaKuyrugaAl(
 // ayarından, metin olayın e-posta şablonundan; "olay" yer tutucusu kuralın başlığıdır. Kural kademe açmaz. Para alanı kural
 // şablonunda geçemez (kuralGecersizligi), başlık e-postaya güvenle girer.
 export async function kuralEpostasiKuyrugaAl(
-  db: Db, olay: { tur: BildirimTuru; baslik: string; yol: string | null; eposta?: EpostaEki | undefined },
+  db: Db, olay: { tur: BildirimTuru; baslik: string; yol: string | null; eposta?: EpostaEki | undefined; sablonId?: number | null | undefined },
   yazilan: readonly { kisiId: number; id: number; yeni: boolean }[], islemler: ReadonlyMap<number, readonly string[]>,
 ): Promise<void> {
   const alanlar = yazilan.filter((y) => y.yeni && kisiEpostaAlir(true, islemler.get(y.kisiId) ?? []));
@@ -134,7 +134,7 @@ export async function kuralEpostasiKuyrugaAl(
     kayitNo: olay.eposta?.kayitNo ?? null, yol: olay.yol,
     gecikmeGunu: olay.eposta?.gecikmeGunu ?? null, istasyon: olay.eposta?.istasyon ?? null,
     ...toplantiAlanlari(olay.tur, olay.eposta?.toplanti),
-    kisiId: y.kisiId, bildirimId: y.id, kademe: 0, ozet, zamani,
+    kisiId: y.kisiId, bildirimId: y.id, kademe: 0, ozet, zamani, sablonId: olay.sablonId ?? null,
   })));
 }
 
@@ -209,9 +209,10 @@ export async function epostaTuru(vt: Veritabani, gunluk: Gunluk, ac?: HatAc, sim
       for (const tur of new Set(sira.map((q) => q.tur))) {
         if ((BILDIRIM_TUR_ANAHTARLARI as readonly string[]).includes(tur)) tetikler.set(tur, await tetikleyici(db, tur as BildirimTuru));
       }
-      // Olaya atanmış yönetici şablonu; silinmişse (bulunamazsa) konunun şablonu geçer.
+      // Alıcı grubunun seçtiği ya da olaya atanmış yönetici şablonu; silinmişse (bulunamazsa) konunun şablonu geçer.
       const ozelSablonlar = new Map<number, Sablon>();
-      for (const id of new Set([...tetikler.values()].flatMap((t) => (t.sablonId === null ? [] : [t.sablonId])))) {
+      const ozelIdler = [...tetikler.values()].flatMap((t) => (t.sablonId === null ? [] : [t.sablonId]));
+      for (const id of new Set([...ozelIdler, ...sira.flatMap((q) => (q.sablonId === null ? [] : [q.sablonId]))])) {
         const o = await ozelSablonOku(db, id);
         if (o !== null) ozelSablonlar.set(id, o);
       }
@@ -270,7 +271,8 @@ export async function epostaTuru(vt: Veritabani, gunluk: Gunluk, ac?: HatAc, sim
         const ilk = parca[0] as s.KuyrukSatiri;
         const konu = ozet ? 'genel' : turKonusu(ilk.tur);
         const tetik = hazirlik.tetikler.get(ilk.tur);
-        const ozelSablon = ozet || tetik?.sablonId == null ? undefined : hazirlik.ozelSablonlar.get(tetik.sablonId);
+        const ozelId = ozet ? null : ilk.sablonId ?? tetik?.sablonId ?? null;
+        const ozelSablon = ozelId === null ? undefined : hazirlik.ozelSablonlar.get(ozelId);
         const sablon = ozelSablon ?? hazirlik.sablonlar.get(konu) ?? VARSAYILAN_SABLONLAR[konu];
         const g = ozet ? { ...ozetGirdisi(parca, ad, ayarlar.uygulamaAdresi), gonderenAdi: ayarlar.gonderenAdi } : {
           sablon, degerler: degerler(ilk, ad, ayarlar.uygulamaAdresi), baslik: ilk.baslik, onem: ilk.onem, simgeVar: true,
@@ -391,13 +393,13 @@ function yerTutucuSina(g: Pick<EpostaSablonIcerigi, 'konuKalibi' | 'baslikKalibi
 }
 const yazim = (g: EpostaSablonIcerigi): s.SablonYazimi => ({
   simge: g.simge, konuKalibi: g.konuKalibi, baslikKalibi: g.baslikKalibi, govde: g.govde, tabloAlanlari: g.tabloAlanlari,
-  dugmeYazisi: g.dugmeYazisi, onayDugmesi: g.onayDugmesi, altBilgi: g.altBilgi, serit: g.serit, logo: g.logo,
+  dugmeYazisi: g.dugmeYazisi, onayDugmesi: g.onayDugmesi, altBilgi: g.altBilgi, serit: g.serit, logo: g.logo, duzen: g.duzen,
 });
 // Gövde şemasının çıktısı (boş metin null'a dönmüş) içerikle aynı alanlardır.
 type IcerikGovdesi = Omit<EpostaSablonDegistirGovdesi, 'varsayilan' | 'surum'>;
 const icerik = (g: IcerikGovdesi): EpostaSablonIcerigi => ({
   simge: g.simge, konuKalibi: g.konuKalibi, baslikKalibi: g.baslikKalibi ?? null, govde: g.govde, tabloAlanlari: g.tabloAlanlari,
-  dugmeYazisi: g.dugmeYazisi ?? null, onayDugmesi: g.onayDugmesi, altBilgi: g.altBilgi ?? null, serit: g.serit, logo: g.logo,
+  dugmeYazisi: g.dugmeYazisi ?? null, onayDugmesi: g.onayDugmesi, altBilgi: g.altBilgi ?? null, serit: g.serit, logo: g.logo, duzen: epostaDuzeni(g.duzen),
 });
 
 export async function epostaSablonuYaz(db: Db, kullanici: Kullanici, konu: EpostaKonusu, g: EpostaSablonDegistirGovdesi): Promise<EpostaSablonlariCevabi> {

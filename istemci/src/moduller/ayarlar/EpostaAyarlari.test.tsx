@@ -29,7 +29,8 @@ const TETIK = {
   kisiler: [{ id: 7, ad: 'Deneme Kalite' }],
 } satisfies EpostaTetikleyicileriCevabi;
 
-const EK = { baslikKalibi: null, dugmeYazisi: null, onayDugmesi: true, altBilgi: null, serit: 'onem', logo: false } as const;
+const DUZEN = { ustBant: null, onemRozeti: true, altSatir: null, tabloAdlari: {}, dugmeRengi: 'koyu' } as const;
+const EK = { baslikKalibi: null, dugmeYazisi: null, onayDugmesi: true, altBilgi: null, serit: 'onem', logo: false, duzen: DUZEN } as const;
 const SABLONLAR = {
   satirlar: [
     {
@@ -44,7 +45,7 @@ const SABLONLAR = {
   ozel: [
     {
       id: 9, ad: 'ORN Acil durus', simge: 'alert', konuKalibi: 'Acil: {olay}', baslikKalibi: '{onem} · {olay}', govde: 'Merhaba {alici_adi}', tabloAlanlari: ['kademe'],
-      dugmeYazisi: 'Tezgahı aç', onayDugmesi: false, altBilgi: 'Bakım birimi', serit: 'kirmizi', logo: true, olaySayisi: 1, surum: 3, degistirildi: '2026-11-18T09:00:00.000+03:00',
+      dugmeYazisi: 'Tezgahı aç', onayDugmesi: false, altBilgi: 'Bakım birimi', serit: 'kirmizi', logo: true, duzen: DUZEN, olaySayisi: 1, surum: 3, degistirildi: '2026-11-18T09:00:00.000+03:00',
     },
   ],
 } satisfies EpostaSablonlariCevabi;
@@ -156,8 +157,41 @@ describe('E-posta ayarları (3397, 3435-3)', () => {
     expect(yazilanlar[0]?.govde).toEqual({
       simge: 'clipboard-check', konuKalibi: 'Onay: {kayit_no}', baslikKalibi: '', govde: 'Merhaba {alici_adi},\n\n{olay}.', tabloAlanlari: ['kayit_no', 'tarih', 'istasyon'],
       dugmeYazisi: '', onayDugmesi: true, altBilgi: '', serit: 'onem', logo: false, surum: null,
+      duzen: { ustBant: '', onemRozeti: true, altSatir: '', tabloAdlari: {}, dugmeRengi: 'koyu' },
     } satisfies EpostaSablonDegistirGovdesi);
     expect(screen.queryByRole('button', { name: 'Varsayılana dön' })).toBeNull();
+  });
+
+  it('3639: üst bant, önem rozeti, başlık altı satırı, satır adı ve sırası, düğme rengi ön izlemeye ve kayda yansır', async () => {
+    const { yazilanlar } = sunucuKur();
+    sablonAc();
+    await screen.findByLabelText('Konu satırı');
+    const onizleme = screen.getByRole('region', { name: 'Ön izleme' });
+    expect(within(onizleme).getByText('CORE MES')).toBeTruthy();
+    expect(within(onizleme).getByText('Uyarı')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Üst bant metni'), { target: { value: 'CORE MES Satış' } });
+    expect(within(onizleme).getByText('CORE MES Satış')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Üst bantta önem rozeti (Bilgi, Uyarı, Acil)'));
+    expect(within(onizleme).queryByText('Uyarı')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Başlık altı satırı'), { target: { value: '{olay} · {kayit_no}' } });
+    expect(within(onizleme).getByText('Satın alma talebi onay bekliyor · ORN-0042')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Başlık altı satırı'), { target: { value: '{musteri}' } });
+    expect(screen.getByText('Bilinmeyen alan: {musteri}')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Kaydet' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('Başlık altı satırı'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Satır adı: Kayıt no'), { target: { value: 'Sipariş no' } });
+    expect(within(onizleme).getByText('Sipariş no')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Kayıt no satırını aşağı al' }));
+    const adlar = within(onizleme).getAllByRole('term').map((x) => x.textContent);
+    expect(adlar).toEqual(['Tarih', 'Sipariş no']);
+    fireEvent.change(screen.getByLabelText('Düğme rengi'), { target: { value: 'yesil' } });
+    expect(within(onizleme).getByText('Kayda git').className).toContain('tc-eposta-dugme-yesil');
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(yazilanlar).toHaveLength(1); });
+    expect(yazilanlar[0]?.govde).toMatchObject({
+      tabloAlanlari: ['tarih', 'kayit_no'],
+      duzen: { ustBant: 'CORE MES Satış', onemRozeti: false, altSatir: '', tabloAdlari: { kayit_no: 'Sipariş no' }, dugmeRengi: 'yesil' },
+    });
   });
 
   it('değiştirilmiş şablonda varsayılana dönülür', async () => {
@@ -195,6 +229,7 @@ describe('E-posta ayarları (3397, 3435-3)', () => {
       govde: {
         ad: 'ORN Gecikme', simge: 'bell', konuKalibi: '[CORE MES] {olay}', baslikKalibi: '{onem}: {olay}', govde: 'Merhaba {alici_adi}', tabloAlanlari: [],
         dugmeYazisi: 'Talebi aç', onayDugmesi: true, altBilgi: 'Satın alma birimi', serit: 'yesil', logo: false,
+        duzen: { ustBant: '', onemRozeti: true, altSatir: '', tabloAdlari: {}, dugmeRengi: 'koyu' },
       },
     });
   });

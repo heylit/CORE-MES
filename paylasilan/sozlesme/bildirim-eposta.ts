@@ -4,7 +4,7 @@ import { surumSemasi } from '../surum.ts';
 import { zamanSemasi } from '../zaman.ts';
 import { BILDIRIM_ONEMLERI, BILDIRIM_SINIFLARI, BILDIRIM_TUR_ANAHTARLARI } from './bildirim.ts';
 import {
-  EPOSTA_ALT_BILGI_EN_UZUN, EPOSTA_BASLIK_EN_UZUN, EPOSTA_DUGME_EN_UZUN, EPOSTA_SABLON_AD_EN_UZUN, EPOSTA_SERITLERI, EPOSTA_GOVDE_EN_UZUN, EPOSTA_GUN_EN_COK, EPOSTA_KIPLERI, EPOSTA_KONULARI, EPOSTA_KONU_EN_UZUN, EPOSTA_SIMGELERI, EPOSTA_SONUCLARI, EPOSTA_TABLO_ALANLARI,
+  EPOSTA_ALT_BILGI_EN_UZUN, EPOSTA_ALT_SATIR_EN_UZUN, EPOSTA_BASLIK_EN_UZUN, EPOSTA_DUGME_RENKLERI, EPOSTA_SATIR_ADI_EN_UZUN, EPOSTA_UST_BANT_EN_UZUN, EPOSTA_VARSAYILAN_DUZEN, epostaDuzeni, type EpostaDuzeni, EPOSTA_DUGME_EN_UZUN, EPOSTA_SABLON_AD_EN_UZUN, EPOSTA_SERITLERI, EPOSTA_GOVDE_EN_UZUN, EPOSTA_GUN_EN_COK, EPOSTA_KIPLERI, EPOSTA_KONULARI, EPOSTA_KONU_EN_UZUN, EPOSTA_SIMGELERI, EPOSTA_SONUCLARI, EPOSTA_TABLO_ALANLARI,
   EPOSTA_TEKRAR_EN_COK, EPOSTA_YUKSELT_KISI_EN_COK, EPOSTA_YUKSELT_ROL_EN_COK, EPOSTA_ZAMANLARI,
 } from './eposta-sabitleri.ts';
 
@@ -36,6 +36,23 @@ export const epostaDurumuCevabi = z.object({
   sonGonderim: zamanSemasi.nullable(),
 });
 
+const duzenSemasi = z.object({
+  ustBant: z.string().nullable(),
+  onemRozeti: z.boolean(),
+  altSatir: z.string().nullable(),
+  tabloAdlari: z.partialRecord(z.enum(EPOSTA_TABLO_ALANLARI), z.string()),
+  dugmeRengi: z.enum(EPOSTA_DUGME_RENKLERI),
+});
+// Gövdede boş ya da eksik alan varsayılandır; çıktı her zaman tam düzendir.
+const bosIseNullKisa = (en: number) => z.string().trim().max(en).nullable().optional().transform((v) => (v === undefined || v === null || v === '' ? null : v));
+const duzenGovdesi = z.object({
+  ustBant: bosIseNullKisa(EPOSTA_UST_BANT_EN_UZUN),
+  onemRozeti: z.boolean().optional().transform((v) => v !== false),
+  altSatir: bosIseNullKisa(EPOSTA_ALT_SATIR_EN_UZUN),
+  tabloAdlari: z.partialRecord(z.enum(EPOSTA_TABLO_ALANLARI), z.string().trim().max(EPOSTA_SATIR_ADI_EN_UZUN)).optional().transform((v) => epostaDuzeni({ tabloAdlari: v }).tabloAdlari),
+  dugmeRengi: z.enum(EPOSTA_DUGME_RENKLERI).optional().transform((v) => v ?? 'koyu'),
+}).strict().optional().transform((v): EpostaDuzeni => v ?? EPOSTA_VARSAYILAN_DUZEN);
+
 const sablonIcerikSemasi = {
   simge: z.enum(EPOSTA_SIMGELERI),
   konuKalibi: z.string(),
@@ -47,6 +64,7 @@ const sablonIcerikSemasi = {
   altBilgi: z.string().nullable(),
   serit: z.enum(EPOSTA_SERITLERI),
   logo: z.boolean(),
+  duzen: duzenSemasi,
 };
 // Boş metin "yok" demektir: başlık olay adına, düğme "Kayda git"e, alt bilgi sistemin cümlesine döner.
 const bosIseNull = (en: number) => z.string().trim().max(en).nullable().transform((v) => (v === null || v === '' ? null : v));
@@ -62,6 +80,7 @@ const sablonIcerikGovdesi = {
   altBilgi: bosIseNull(EPOSTA_ALT_BILGI_EN_UZUN),
   serit: z.enum(EPOSTA_SERITLERI),
   logo: z.boolean(),
+  duzen: duzenGovdesi,
 };
 
 export const epostaSablonSemasi = z.object({
