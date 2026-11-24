@@ -198,4 +198,33 @@ describe('P6 Sevk takvimi', () => {
     expect(await screen.findByText('Planlama sayfalarını görme yetkiniz yok.', {}, { timeout: 10000 })).toBeTruthy();
     expect(screen.queryByText('S1')).toBeNull();
   }, 20000);
+
+  it('Dağılım görünümü: takvim günü ve matris hücresi siparişleri açar; termini o gün olan da listelenir; yalnız okur', async () => {
+    const istekler = sunucuKur(YONETICI, kayitlar(calisma) as never);
+    ac('/plan/sevkiyat');
+    await screen.findByRole('table', { name: 'Siparişler' }, { timeout: 10000 });
+    gorunum('Dağılım');
+    expect(localStorage.getItem('tmi.sevkiyat.gorunum')).toBe('dagilim');
+    expect(screen.getByRole('button', { name: /^Gecikmiş \(0\)$/ })).toBeTruthy();
+    const izgara = screen.getByRole('group', { name: 'Takvim' });
+    // 02.03: S2'nin termini bugün, bitişi ertesi gün: bitecek yok, termin var; seçilince termin listede çıkar.
+    fireEvent.click(within(izgara).getByRole('button', { name: /^02\.03 Pzt: 0 bitecek, 0 aşan, 1 termin, bugün$/ }));
+    const liste = screen.getByRole('region', { name: 'Seçilen günün siparişleri' });
+    expect(within(liste).getByText('termin: 02.03 Pzt, plan: 03.03 Sal')).toBeTruthy();
+    fireEvent.click(within(liste).getByRole('button', { name: 'Bitecek' }));
+    expect(within(liste).getByText('Bu seçim için sipariş yok.')).toBeTruthy();
+    // 03.03: S2 bitecek ve termini aştığı için aşan.
+    fireEvent.click(within(izgara).getByRole('button', { name: /^03\.03 Sal: 1 bitecek, 1 aşan, 0 termin$/ }));
+    expect(within(screen.getByRole('region', { name: 'Seçilen günün siparişleri' })).getByText(/Aşıyor \+6 sa/)).toBeTruthy();
+    // Matris: hücre seçilince liste müşteriye ve güne süzülür; süzgeç kaldırılır.
+    fireEvent.click(within(screen.getByRole('group', { name: 'Biçim' })).getByRole('button', { name: 'Matris' }));
+    expect(localStorage.getItem('tmi.sevkiyat.dagilim')).toBe('matris');
+    const tablo = screen.getByRole('table', { name: 'Müşteri ve gün matrisi' });
+    expect(within(tablo).getByRole('columnheader', { name: 'Gecikmiş' })).toBeTruthy();
+    fireEvent.click(within(tablo).getByRole('button', { name: /^—, 03\.03 Sal: 1 bitecek, 1 aşan$/ }));
+    expect(within(screen.getByRole('region', { name: 'Seçilen günün siparişleri' })).getByText('Süzgeci kaldır')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Süzgeci kaldır' }));
+    expect(screen.queryByRole('button', { name: 'Süzgeci kaldır' })).toBeNull();
+    expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
+  }, 20000);
 });

@@ -10,6 +10,7 @@ import {
   type Donem, type DonemOzeti, type Olcu, type SevkIsiSatiri, type SevkSatiri,
 } from './kurallar.ts';
 import { sevkListeSatirlari } from './liste.ts';
+import { SevkDagilimi } from './SevkDagilimi.tsx';
 import { SevkListesi, zamanYaz } from './SevkListesi.tsx';
 import './sevkiyat.css';
 
@@ -19,7 +20,7 @@ import './sevkiyat.css';
 // Görünüm yalnız okur (455/1 a: sevk sevkiyat modülünden okunacak; 455/2 a: bitiş akışını sunucu yazar).
 
 type Gosterim = 'ikisi' | 'grafik' | 'tablo';
-type Gorunum = 'liste' | 'takvim' | 'grafik';
+type Gorunum = 'liste' | 'dagilim' | 'takvim' | 'grafik';
 const OLCULER: readonly { deger: Olcu; baslik: string }[] = [{ deger: 'siparis', baslik: 'Sipariş' }, { deger: 'adet', baslik: 'Adet' }];
 const GOSTERIMLER: readonly { deger: Gosterim; baslik: string }[] = [
   { deger: 'ikisi', baslik: 'Grafik ve tablo' }, { deger: 'grafik', baslik: 'Grafik' }, { deger: 'tablo', baslik: 'Tablo' },
@@ -43,13 +44,15 @@ function useEkran(sorgu: string): boolean {
   return eslesti;
 }
 
-const GORUNUMLER: readonly { deger: Gorunum; baslik: string }[] = [{ deger: 'liste', baslik: 'Liste' }, { deger: 'takvim', baslik: 'Takvim' }, { deger: 'grafik', baslik: 'Grafik' }];
+const GORUNUMLER: readonly { deger: Gorunum; baslik: string }[] = [
+  { deger: 'liste', baslik: 'Liste' }, { deger: 'dagilim', baslik: 'Dağılım' }, { deger: 'takvim', baslik: 'Takvim' }, { deger: 'grafik', baslik: 'Grafik' },
+];
 const GORUNUM_ANAHTARI = 'tmi.sevkiyat.gorunum';
 const DONEM_ANAHTARI = 'tmi.sevkiyat.donem';
 function gorunumOku(): Gorunum {
   try {
     const g = localStorage.getItem(GORUNUM_ANAHTARI);
-    return g === 'takvim' || g === 'grafik' ? g : 'liste';
+    return g === 'dagilim' || g === 'takvim' || g === 'grafik' ? g : 'liste';
   } catch { return 'liste'; }
 }
 function donemOku(): Donem {
@@ -134,6 +137,9 @@ export function Sevkiyat({ calisma, sec, git, depo }: PlanlamaEkranOzellikleri) 
       <Baslik ust={isi.durum} />
       {etkin === 'liste' && (
         <SevkListesi satirlar={satirlar} taban={liste.taban} emirNo={emirNo} donemSecici={donemSecici} donem={donem} ertelenen={sevkSayilari(liste.satirlar).ertelenen} gorunum={gorunumSecici} dar={dar} yerSutunu={!orta} goster={goster} />
+      )}
+      {etkin === 'dagilim' && (
+        <SevkDagilimi satirlar={liste.satirlar} taban={liste.taban} simdi={simdi(calisma)} emirNo={emirNo} dar={dar} gorunum={gorunumSecici} goster={goster} />
       )}
       {etkin === 'takvim' && (
         <>
