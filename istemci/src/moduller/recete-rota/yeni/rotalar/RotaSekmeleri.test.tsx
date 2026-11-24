@@ -40,6 +40,11 @@ const kur = (kullanici = YONETICI, rotalar: Rota[] = [rota(1, 'Seri', true), rot
         liste = liste.map((x) => (x.id === 3 ? { ...x, emirTurleri: t, surum: 2 } : x));
         return json(200, cevap(liste));
       },
+      'POST /rota/urunler/11/rotalar/1/ad': (g) => {
+        const { ad } = g as { ad: string };
+        liste = liste.map((x) => (x.id === 1 ? { ...x, ad, surum: 2 } : x));
+        return json(200, cevap(liste));
+      },
       'POST /rota/urunler/11/rotalar/4/ad': (g) => {
         const { ad } = g as { ad: string };
         liste = liste.map((x) => (x.id === 4 ? { ...x, ad, surum: 2 } : x));
@@ -183,6 +188,21 @@ describe('Rota sekmeleri (3247 a)', () => {
     fireEvent.click(within(bolge).getByRole('button', { name: 'Kaydet' }));
     await within(g).findByRole('button', { name: /^ORN Numune hattı/ });
     expect(istekler.find((i) => i.yol === '/rota/urunler/11/rotalar/4/ad')?.govde).toEqual({ ad: 'ORN Numune hattı', surum: 1 });
+    expect(istekler.some((i) => i.yol.endsWith('/turler'))).toBe(false);
+  });
+
+  it('3647 N1: Standart (Seri) rotanın adı "Rotanın adı" ile değişir, türü sorulmaz; yeni ad sekmede görünür', async () => {
+    const istekler = kur();
+    rrAc('/recete-rota/schema');
+    const g = await sekmeler();
+    const bolge = screen.getByRole('region', { name: 'Ürün ve rotalar' });
+    await within(g).findByRole('button', { name: /^Seri/ });
+    menudenSec(bolge, 'Rotanın adı ve emir türleri');
+    expect(within(bolge).queryByRole('group', { name: 'Bu rotayı kullanan emir türleri' })).toBeNull();
+    fireEvent.change(within(bolge).getByRole('textbox', { name: 'Rota adı' }), { target: { value: 'ORN Ana hat' } });
+    fireEvent.click(within(bolge).getByRole('button', { name: 'Kaydet' }));
+    await within(g).findByRole('button', { name: /^ORN Ana hat/ });
+    expect(istekler.find((i) => i.yol === '/rota/urunler/11/rotalar/1/ad')?.govde).toEqual({ ad: 'ORN Ana hat', surum: 1 });
     expect(istekler.some((i) => i.yol.endsWith('/turler'))).toBe(false);
   });
 

@@ -135,7 +135,7 @@ export function useRotaSekmeleri(r: RotaEkrani, urunId: string): Parcalar {
       </span>
     </div>
   );
-  const ayarAc = yetki.rotaTaslakAc && aktif && !aktif.standart ? () => { ac('ayar'); } : null;
+  const ayarAc = yetki.rotaTaslakAc && aktif ? () => { ac('ayar'); } : null;
   const panelNode = (
     <>
       {panel === 'yeni' && <YeniRotaFormu r={r} urunId={urunId} rotalar={rotalar} kapat={() => { setPanel(null); }} />}
@@ -146,7 +146,7 @@ export function useRotaSekmeleri(r: RotaEkrani, urunId: string): Parcalar {
             <Dugme tur="birincil" disabled={mesgul || ad.trim() === ''} onClick={() => { void ayarKaydet(); }}>Kaydet</Dugme>
           </div>
           {aktif.standart ? (
-            <p className="tc-rr1-ipucu">Seri rotasına tür bağlanmaz; başka rotaya bağlanmayan her emir türü bu rotayı kullanır.</p>
+            <p className="tc-rr1-ipucu">Seri rotasına tür bağlanmaz; başka rotaya bağlanmayan her emir türü bu rotayı kullanır. Adı değiştirmezsen "Seri" görünür.</p>
           ) : turRotasiMi(aktif) ? (
             <p className="tc-rr1-ipucu">Emir türü: {rotaTurMetni(aktif, rotalar)}. Tür rotasının türü değişmez; başka tür için yeni rota açılır.</p>
           ) : yetki.rotaOnayla ? turSecimi : (

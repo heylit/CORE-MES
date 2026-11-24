@@ -43,8 +43,27 @@ export function YeniRotaFormu({ r, urunId, rotalar, kapat }: { r: RotaEkrani; ur
 
   const ac = async () => {
     if (tur === null) return;
-    // İlk rota Seri ise yeni sunucu kaydı yoktur: Standart rota ilk revizyonla birlikte açılır, adım eklemeye geçilir.
-    if (tur === 'seri') { kapat(); adimEkle(); return; }
+    // İlk rota Seri: ad verildiyse sunucu Standart rotayı o adla açar (3647); verilmediyse Standart rota ilk revizyonla "Standart" adıyla açılır ve "Seri" görünür.
+    if (tur === 'seri') {
+      if (ad.trim()) {
+        setMesgul(true);
+        setHata(null);
+        try {
+          const c = await api.post<UrunRevizyonlariCevabi>(`/rota/urunler/${encodeURIComponent(urunId)}/rotalar`, { emirTuru: 'seri', ad: ad.trim() }, { istekKimligi: yeniIstekKimligi() });
+          istemci.setQueryData(urunRotalariAnahtari(urunId), c);
+        } catch (h) {
+          const k = h instanceof RrHatasi ? h : new RrHatasi(h);
+          if (k.durum === 409) void istemci.invalidateQueries({ queryKey: urunRotalariAnahtari(urunId) });
+          setHata(k.message);
+          setMesgul(false);
+          return;
+        }
+        setMesgul(false);
+      }
+      kapat();
+      adimEkle();
+      return;
+    }
     const onceki = new Set(rotalar.map((x) => x.id));
     setMesgul(true);
     setHata(null);
@@ -81,11 +100,11 @@ export function YeniRotaFormu({ r, urunId, rotalar, kapat }: { r: RotaEkrani; ur
           );
         })}
       </span>
-      {tur !== 'seri' && (
+      {(tur !== 'seri' || ilk) && (
         <label className="tc-rr1-alan">
           <span>Rotanın adı</span>
           <input ref={adAlani} className="tc-rr1-metin" value={ad} aria-label="Yeni rotanın adı" maxLength={ROTA_ADI_EN_COK}
-            placeholder={tur === null ? 'Boş kalırsa türün adı' : EMIR_TURU_ADLARI[tur]} onChange={(e) => { setAd(e.target.value); }} />
+            placeholder={tur === null ? 'Boş kalırsa türün adı' : tur === 'seri' ? 'Boş kalırsa Seri' : EMIR_TURU_ADLARI[tur]} onChange={(e) => { setAd(e.target.value); }} />
         </label>
       )}
       {tur !== null && tur !== 'seri' && standart !== null && kopyalanabilir && (

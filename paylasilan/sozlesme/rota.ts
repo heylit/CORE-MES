@@ -351,7 +351,8 @@ export const ROTA_ADI_EN_COK = 60;
 const rotaAdi = z.string().trim().min(1).max(ROTA_ADI_EN_COK);
 // 3411 a: yeni rota emir türüyle açılır. 3482-1 b: ad serbesttir; verilmezse türün adı olur. Seri'nin rotası ürünün Standart rotasıdır, ayrıca açılmaz.
 export const rotaEkleGovdesi = z.object({
-  emirTuru: z.enum(EMIR_TURLERI).refine((t) => t !== 'seri', 'Seri rotası ürünün varsayılan rotasıdır; ayrıca açılmaz.'),
+  // 3647: 'seri' yalnız rotası olmayan ürünün ilk (Standart) rotasını verilen adla açar; rotası olan üründe sunucu 409 verir.
+  emirTuru: z.enum(EMIR_TURLERI),
   ad: rotaAdi.optional(),
 }).strict();
 export const rotaAdiGovdesi = z.object({ ad: rotaAdi, surum: KIMLIK });

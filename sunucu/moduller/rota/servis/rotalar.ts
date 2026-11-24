@@ -14,6 +14,7 @@ import { urunRevizyonlari } from './liste.ts';
 const ROTA_ADI_KULLANILIYOR = 'Bu üründe bu adla bir rota var; başka bir ad yazın.';
 const turunRotasiVarIletisi = (tur: string): string => `Bu üründe ${tur} türünün rotası var.`;
 const TUR_ROTASI_TURU_DEGISMEZ = 'Tür rotasının türü değişmez; başka tür için yeni rota açın.';
+const SERI_ROTASI_VAR = 'Bu ürünün Seri rotası var; adını "Rotanın adı" ile değiştirin.';
 const STANDART_TURSUZ = 'Seri rotasına emir türü bağlanmaz; bağlanmayan her tür zaten Seri rotasını kullanır.';
 
 async function adiKoru<T>(is: () => Promise<T>): Promise<T> {
@@ -36,6 +37,12 @@ async function urununRotasi(db: Db, urunId: number, rotaId: number): Promise<s.R
 // yoksa önce o açılır. Türün rotası varsa yeni rota açılmaz.
 export async function rotaEkle(db: Db, kullanici: Kullanici, urunId: number, emirTuru: EmirTuru, ad?: string): Promise<UrunRevizyonlariCevabi> {
   await rotaKurulabilirUrun(db, urunId);
+  // 3647: Seri ürünün Standart rotasıdır; ayrıca açılmaz, yalnız rotası olmayan ürünün ilk rotası verilen adla açılır.
+  if (emirTuru === 'seri') {
+    if ((await s.standartRotaId(db, urunId)) !== null) throw cakisma(SERI_ROTASI_VAR);
+    await adiKoru(() => s.standartRotaAc(db, urunId, kullanici.id, ad));
+    return urunRevizyonlari(db, kullanici, urunId);
+  }
   await s.standartRotaAc(db, urunId, kullanici.id);
   if ((await s.urunRotalari(db, urunId)).some((r) => r.emirTurleri.includes(emirTuru))) throw cakisma(turunRotasiVarIletisi(EMIR_TURU_ADLARI[emirTuru]));
   const id = await adiKoru(() => s.rotaEkle(db, urunId, ad ?? EMIR_TURU_ADLARI[emirTuru], kullanici.id));

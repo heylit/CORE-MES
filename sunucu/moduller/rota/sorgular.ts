@@ -161,8 +161,8 @@ export async function rotadaAcikRevizyonVarMi(db: Db, rotaId: number | null): Pr
 /* ---------------- rotalar (3247 a) ---------------- */
 
 export interface RotaSatiri { id: number; malzemeId: number; ad: string; standart: boolean; surum: number; emirTurleri: EmirTuru[] }
-// 3411 a: Standart rota her yerde "Seri" adıyla görünür; kayıttaki ad değişmez (veri dönüşmez).
-const ROTA_ADI = `CASE WHEN t.standart THEN 'Seri' ELSE t.ad END`;
+// 3411 a, 3647 N1: Standart rota ad verilmediyse (kayıtta "Standart") "Seri" adıyla görünür; ad verildiyse ya da değiştirildiyse o adla. Kayıttaki ad değişmez (veri dönüşmez).
+const ROTA_ADI = `CASE WHEN t.standart AND t.ad = 'Standart' THEN 'Seri' ELSE t.ad END`;
 const ROTA = `t.id, t.malzeme_id AS "malzemeId", ${ROTA_ADI} AS ad, t.standart, t.surum,
   COALESCE((SELECT array_agg(u.emir_turu ORDER BY u.emir_turu) FROM rota_tanimi_turu u WHERE u.rota_id = t.id), '{}') AS "emirTurleri"`;
 
@@ -188,11 +188,11 @@ export async function standartRotaId(db: Db, malzemeId: number): Promise<number 
 }
 
 // Ürünün Standart rotası yoksa açılır (ilk rota ad verilmeden de açılabilir); var olan döner.
-export async function standartRotaAc(db: Db, malzemeId: number, kisiId: number): Promise<number> {
+export async function standartRotaAc(db: Db, malzemeId: number, kisiId: number, ad = 'Standart'): Promise<number> {
   const satir = await db.tek<{ id: number }>(
-    `INSERT INTO rota_tanimi (malzeme_id, ad, standart, acan_kisi_id) VALUES ($1, 'Standart', true, $2)
+    `INSERT INTO rota_tanimi (malzeme_id, ad, standart, acan_kisi_id) VALUES ($1, $3, true, $2)
      ON CONFLICT (malzeme_id) WHERE standart DO NOTHING RETURNING id`,
-    [malzemeId, kisiId],
+    [malzemeId, kisiId, ad],
   );
   return satir?.id ?? (await standartRotaId(db, malzemeId))!;
 }

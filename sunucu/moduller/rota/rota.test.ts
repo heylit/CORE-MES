@@ -1680,7 +1680,7 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     // türün rotası varken 409, operatör 403.
     const rotaYol = `/rota/urunler/${urun}/rotalar`;
     assert.equal((await istek(c.operator, 'POST', rotaYol, { emirTuru: 'fai' })).statusCode, 403);
-    assert.equal((await istek(c.planlama, 'POST', rotaYol, { emirTuru: 'seri' })).statusCode, 400);
+    assert.equal((await istek(c.planlama, 'POST', rotaYol, { emirTuru: 'seri' })).statusCode, 409, 'Seri rotası olan üründe ikinci Seri rotası açılmaz');
     assert.equal((await istek(c.planlama, 'POST', rotaYol, { ad: 'FAI' })).statusCode, 400);
     const acildi = await tamam<UrunRevizyonlariCevabi>(c.planlama, 'POST', rotaYol, { emirTuru: 'fai' });
     const fai = acildi.rotalar.find((r) => r.ad === 'FAI')!;
@@ -1691,6 +1691,20 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     assert.equal((await istek(c.planlama, 'POST', rotaYol, { emirTuru: 'prototip', ad: 'FAI' })).statusCode, 409);
     const adla = await tamam<UrunRevizyonlariCevabi>(c.planlama, 'POST', rotaYol, { emirTuru: 'prototip', ad: ' ORN Prototip hattı ' });
     assert.deepEqual(adla.rotalar.filter((r) => r.emirTurleri.includes('prototip')).map((r) => r.ad), ['ORN Prototip hattı']);
+    // 3647: rotası olmayan ürünün ilk rotası Seri olarak verilen adla açılır (izinli); operatör 403; ikinci kez 409; ad boşsa Standart.
+    const yeniUrun = await mamulAc();
+    const yeniYol = `/rota/urunler/${yeniUrun}/rotalar`;
+    assert.equal((await istek(c.operator, 'POST', yeniYol, { emirTuru: 'seri', ad: 'ORN Ana rota' })).statusCode, 403);
+    const ilkRota = await tamam<UrunRevizyonlariCevabi>(c.planlama, 'POST', yeniYol, { emirTuru: 'seri', ad: ' ORN Ana rota ' });
+    assert.deepEqual(ilkRota.rotalar.map((r) => [r.ad, r.standart, r.emirTurleri]), [['ORN Ana rota', true, []]]);
+    assert.equal((await istek(c.planlama, 'POST', yeniYol, { emirTuru: 'seri', ad: 'Başka' })).statusCode, 409);
+    // 3647 N1: Standart rota adı değişince o adla görünür, kayıttaki ad ve "Standart" adlı rotanın "Seri" gösterimi bozulmaz.
+    const yeniStandart = ilkRota.rotalar[0]!;
+    const adlandi = await tamam<UrunRevizyonlariCevabi>(c.planlama, 'POST', `${yeniYol}/${yeniStandart.id}/ad`, { ad: 'ORN Ana hat', surum: yeniStandart.surum });
+    assert.deepEqual(adlandi.rotalar.map((r) => r.ad), ['ORN Ana hat']);
+    const adsizUrun = await mamulAc();
+    const adsiz = await tamam<UrunRevizyonlariCevabi>(c.planlama, 'POST', `/rota/urunler/${adsizUrun}/rotalar`, { emirTuru: 'seri' });
+    assert.deepEqual(adsiz.rotalar.map((r) => [r.ad, r.standart]), [['Seri', true]]);
     // Tür eşlemesi onay yetkisiyle (K4); Standart rotaya tür yazılmaz; başka ürünün rotası 409 (K8).
     const turYol = (rota: number, u = urun) => `/rota/urunler/${u}/rotalar/${rota}/turler`;
     assert.equal((await istek(c.planlama, 'POST', turYol(fai.id), { emirTurleri: ['fai'], surum: fai.surum })).statusCode, 403);
