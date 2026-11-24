@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import type { PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
+import type { CanliyaAlOnizlemesiCevabi, PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { CalismaGonderCevabi, DegerlendirmeDurumuCevabi, DegisiklikDefteriCevabi, PlanlamaCalismasiCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { randomUUID } from 'node:crypto';
 import { kullaniciYukle } from '../kisiler/disari.ts';
@@ -114,6 +114,23 @@ describe('plan (gerçek PostgreSQL): çalışma planı tek komutla onaya ve canl
     assert.equal(ikinci.statusCode, 200, ikinci.body);
     assert.equal(ikinci.json<CalismaGonderCevabi>().taslak.id, ilk.json<CalismaGonderCevabi>().taslak.id);
     assert.equal((await senaryolar()).senaryolar.length, once + 1, 'tek taslak açıldı');
+  });
+
+  test('TK-07 (3669): gönderme önizlemesi sıra denetimini söyler, taslak, onay ve defter bırakmaz; eski sürüm 409, yetkisiz 403', async () => {
+    const { surum } = await planliCalisma();
+    const once = await senaryolar();
+    const defterOnce = await defterSayisi();
+    const oz = await tamam<CanliyaAlOnizlemesiCevabi>(c.planlama, 'POST', '/plan/planlama-calismasi/gonderme-onizlemesi', { ad: 'Önizleme', calismaSurumu: surum });
+    assert.deepEqual([oz.ihlaller, oz.oneri, oz.kilitYetkisi], [[], null, true]);
+    assert.ok(Array.isArray(oz.kapali));
+    const sonra = await senaryolar();
+    assert.deepEqual(sonra.senaryolar.map((x) => x.id), once.senaryolar.map((x) => x.id), 'önizleme taslak bırakmadı');
+    assert.equal(await defterSayisi(), defterOnce, 'önizleme deftere satır bırakmadı');
+    assert.equal(sonra.canliSurum, once.canliSurum);
+    const eski = await istek(c.planlama, 'POST', '/plan/planlama-calismasi/gonderme-onizlemesi', { ad: 'Eski', calismaSurumu: surum - 1 });
+    assert.equal(eski.statusCode, 409, eski.body);
+    const yetkisiz = await istek(c.operator, 'POST', '/plan/planlama-calismasi/gonderme-onizlemesi', { ad: 'Yetkisiz', calismaSurumu: surum });
+    assert.equal(yetkisiz.statusCode, 403, yetkisiz.body);
   });
 
   test('TK-05: canlıya alma adımına 4 saat gerekçesi ve sabitleme aynen geçer; canlı değişti hiç kabul edilmez', () => {

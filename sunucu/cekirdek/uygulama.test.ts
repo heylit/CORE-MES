@@ -149,6 +149,8 @@ const TAM_DENETLENMEYEN_UCLAR = [
   'POST /recete-rota/kayitlar/yaz govdesiz+secim',
   // Planlama çalışması aynı kayıttan plan modülüne taşındı (658 b, 662 a): aynı kalıp, kapsam genişlemez.
   'POST /plan/planlama-kayitlari/yaz govdesiz+secim',
+  // 3669: gönderme önizlemesi her çalışma sürümünde çağrılır, hiçbir şey kalıcı yazmaz; gövde (ad, not) deftere girmez (teknik tercih, 3668 C kalıbı).
+  'POST /plan/planlama-calismasi/gonderme-onizlemesi govdesiz',
   // Kalite Merkezi kaydı fotoğraf taşır: içerik deftere girmez; kayıt adresle, sürüm ve geri yüklemenin parça bilgisi seçimle girer (kullanıcı kararı 16.10.2026, "Gövdesiz").
   'POST /kalite-merkezi/kayitlar/:koleksiyon/:kimlik/yaz govdesiz+secim',
   'POST /kalite-merkezi/geri-yukle govdesiz+secim',

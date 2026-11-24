@@ -97,3 +97,28 @@
 @media (max-width: 599px) { .tc-pym-pa-adaylar[data-karsilastirmasiz] .tc-pym-pa-aday { grid-template-columns: minmax(0, 1fr); } .tc-pym-pa-adaylar[data-karsilastirmasiz] .tc-pym-pa-aday-sag { grid-column: 1; } }
 .tc-pym-pa-ayrinti > summary { display: flex; align-items: center; min-height: var(--dokunma); color: var(--muted); font-size: var(--yazi-s); font-weight: 600; cursor: pointer; }
 .tc-pym-pa-ayrinti > * + * { margin-top: var(--b-3); }
+
+/* 3669: kalıcı kapalı kısıt satırı ve gönderme öncesi sıra uyarısı. */
+.tc-pym-pa-onizleme { display: grid; gap: var(--b-2); }
+.tc-pym-pa-kisit { display: flex; flex-wrap: wrap; gap: var(--b-2); align-items: center; margin: 0; padding: var(--b-2) var(--b-3); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); font-size: var(--yazi-s); }
+.tc-pym-pa-kisit[data-ton='uyari'] { border-color: var(--hold); }
+.tc-pym-pa-kisit > span { flex: 1 1 14rem; min-width: 0; }
+.tc-pym-pa-kisit a { min-height: var(--dokunma); display: inline-flex; align-items: center; }
+.tc-pym-pa-kisit-fazla { min-height: var(--dokunma); padding: 0 var(--b-2); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-2); background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.tc-pym-pa-ihlal-kart { display: grid; gap: var(--b-2); padding: var(--b-3); border: var(--cizgi-ince) solid var(--hold); border-radius: var(--yari-2); background: var(--panel2); min-width: 0; }
+
+.tc-pym-pa-ihlal-kart h3 { margin: 0; font-size: var(--yazi-s); }
+.tc-pym-pa-ihlaller, .tc-pym-pa-oneri { display: grid; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+.tc-pym-pa-oneri { font-size: var(--yazi-s); }
+.tc-pym-pa-ihlal { display: grid; gap: var(--pay-ince); min-width: 0; font-size: var(--yazi-s); }
+.tc-pym-pa-ihlal-saat { display: grid; gap: var(--pay-ince); margin: 0; }
+.tc-pym-pa-ihlal-saat div { display: grid; grid-template-columns: minmax(0, 8rem) minmax(0, 1fr); gap: var(--b-2); }
+.tc-pym-pa-ihlal-saat dt { color: var(--muted); }
+.tc-pym-pa-ihlal-saat dd { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 599px) { .tc-pym-pa-ihlal-saat div { grid-template-columns: minmax(0, 1fr); } }
+.tc-pym-pa-eski { color: var(--muted); font-weight: 400; }
+.tc-pym-pa-kaydirildi { display: grid; gap: var(--b-2); padding: var(--b-3); border: var(--cizgi-ince) solid var(--run); border-radius: var(--yari-2); background: var(--panel2); min-width: 0; }
+.tc-pym-pa-ihlal-saat dd { display: grid; gap: 0; }
+.tc-pym-pa-kaydirildi > .tc-dugme, .tc-pym-pa-ihlal-kart > .tc-dugme { justify-self: start; }
+.tc-pym-pa-kaydirildi > strong { display: flex; gap: var(--b-1); align-items: center; }
+.tc-pym-pa-kisit-fazla { white-space: nowrap; }

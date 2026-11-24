@@ -2,7 +2,7 @@ import { uc } from '#cekirdek/uc.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
-  ayarGovdesi, bedelAyariCevabi, canliyaAlmaGecmisiCevabi, ekMesaiGovdesi, bedelAyariTaslakGovdesi, geriGonderGovdesi, onayaGonderGovdesi, onaydanCekGovdesi, canliYerlesimCevabi, canliYerlesimSorgusu, canliyaAlCevabi, canliyaAlGovdesi, musteriSecenekleriCevabi, musteriSecenekleriSorgusu, degisiklikParametresi, hizliGovdesi, isEmriParametresi, kuyrukGovdesi, motorUyarilariCevabi, motorYerlesimiCevabi, kuyrukYazCevabi, kuyrukYazGovdesi, onizleSorgusu, onizlemeCevabi, projePlaniCevabi, projePlaniParametresi,
+  ayarGovdesi, bedelAyariCevabi, canliyaAlmaGecmisiCevabi, canliyaAlOnizlemesiCevabi, kilitliKaydirGovdesi, ekMesaiGovdesi, bedelAyariTaslakGovdesi, geriGonderGovdesi, onayaGonderGovdesi, onaydanCekGovdesi, canliYerlesimCevabi, canliYerlesimSorgusu, canliyaAlCevabi, canliyaAlGovdesi, musteriSecenekleriCevabi, musteriSecenekleriSorgusu, degisiklikParametresi, hizliGovdesi, isEmriParametresi, kuyrukGovdesi, motorUyarilariCevabi, motorYerlesimiCevabi, kuyrukYazCevabi, kuyrukYazGovdesi, onizleSorgusu, onizlemeCevabi, projePlaniCevabi, projePlaniParametresi,
   motorAyariGovdesi, motorAyarlariCevabi, motorKuraliGovdesi, planCevabi, planSistemAyariGovdesi, planSistemAyariParametresi, planSistemAyariSatiri, planSistemAyarlariCevabi, planSorgusu, planSurumCevabi,
   senaryoBilgiGovdesi, senaryoGovdesi, senaryoParametresi, senaryoSurumGovdesi, senaryolarCevabi, siparisCarpaniCevabi, siparisParametresi,
   siralaGovdesi, taslakGovdesi, grupSaatMaliyetleriCevabi, mesaiMaliyetiCevabi, mesaiMaliyetiSorgusu, mesaiSaatDegerleriCevabi, mesaiSaatDegerleriSorgusu, mesaiGrupSirasiCevabi, mesaiGrupSirasiSorgusu, tasiGovdesi, PLAN_ONAY_KOMUTLARI, mrpIhtiyaciCevabi, planSagligiCevabi, veriSagligiCevabi,
@@ -25,7 +25,7 @@ import {
 import { kayitlarCevabi, silCevabi, yazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { PLAN_OKUMA_ISLEMLERI } from './kurallar.ts';
 import { ekMesaiyiEkle, emriPlanaAl, isiTasi, isTasiOnizlemesi, olayiEkle, planaAlOnizlemesi } from './atolye-komutlari.ts';
-import { calismaGeriAl, calismaTaslagi, calismayiCanliyaAl, calismayiOnayaGonder, canliFarki, tabanVeCanli, taslaktanCalismaya } from './calisma-plani.ts';
+import { calismaGeriAl, calismaOnizlemesi, calismaTaslagi, calismayiCanliyaAl, calismayiOnayaGonder, canliFarki, tabanVeCanli, taslaktanCalismaya } from './calisma-plani.ts';
 import { degerlendirmeBaslat, degerlendirmeDurumu } from './degerlendirme.ts';
 import { taslagim, taslagiUygula, taslakDegerlendirmesi, taslakDiz, taslakGeriAl, taslakKomutuEkle, taslaktanVazgec } from './taslak.ts';
 import { grupSaatMaliyetleri } from './grup-saat-maliyeti.ts';
@@ -72,6 +72,9 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/plan/canli-yerlesim', yetki: PLAN_OKUR, sorgu: canliYerlesimSorgusu, cevap: canliYerlesimCevabi,
     isle: ({ db, sorgu }) => servis.canliYerlesim(db, sorgu.isEmirleri) }),
   // 510 a: canlıya alma geçmişi (eski "Plan değişikliği" kutusu); planı okuyan görür.
+  // 3669: canlıya almadan önce sunucunun yazacağı yerleşimin sıra denetimi (yazmaz); sahip ya da canlıya alma yetkilisi.
+  uc({ yontem: 'GET', yol: '/plan/senaryolar/:id/canliya-al-onizlemesi', yetki: { biri: ['plan.yaz', 'plan.canliya-al'] }, parametre: senaryoParametresi, cevap: canliyaAlOnizlemesiCevabi,
+    isle: ({ db, kullanici, parametre }) => servis.canliyaAlOnizlemesi(db, kullanici, parametre.id) }),
   uc({ yontem: 'GET', yol: '/plan/canliya-alma-gecmisi', yetki: PLAN_OKUR, cevap: canliyaAlmaGecmisiCevabi, isle: ({ db }) => servis.canliyaAlmaGecmisi(db) }),
   // 782: plana giden verinin kaynağında boş olan yerler; yalnız okur, kaynak çağıranın yetkisiyle.
   uc({ yontem: 'GET', yol: '/plan/veri-sagligi', yetki: { biri: ['plan.oku', 'plan.yaz', PLANLAMA_OKUR] }, cevap: veriSagligiCevabi, isle: ({ db, kullanici }) => veriSagligi(db, kullanici) }),
@@ -106,6 +109,8 @@ export const uclar = [
     isle: ({ db, kullanici, govde }) => servis.yerlestir(db, kullanici, govde) }),
   uc({ yontem: 'POST', yol: '/plan/is-emirleri/:id/tasi', yetki: 'plan.yaz', tekrarKorumali: true, parametre: isEmriParametresi, govde: tasiGovdesi,
     cevap: planCevabi, isle: ({ db, kullanici, parametre, govde }) => servis.tasi(db, kullanici, parametre.id, govde) }),
+  uc({ yontem: 'POST', yol: '/plan/kilitli-adimlari-kaydir', yetki: 'plan.kilitle', tekrarKorumali: true, govde: kilitliKaydirGovdesi, cevap: planCevabi,
+    isle: ({ db, kullanici, govde }) => servis.kilitliKaydir(db, kullanici, govde) }),
   uc({ yontem: 'POST', yol: '/plan/is-emirleri/:id/kaldir', yetki: 'plan.yaz', tekrarKorumali: true, parametre: isEmriParametresi, govde: taslakGovdesi,
     cevap: planCevabi, isle: ({ db, kullanici, parametre, govde }) => servis.kaldir(db, kullanici, parametre.id, govde.taslak) }),
   uc({ yontem: 'POST', yol: '/plan/is-emirleri/:id/kilitle', yetki: 'plan.kilitle', tekrarKorumali: true, parametre: isEmriParametresi,
@@ -258,6 +263,9 @@ export const uclar = [
       denetimEki([{ taslak: r.taslak.id, yazilan: r.yazilan, atlanan: r.atlanan, yazilamaz: r.yazilamaz.length }]);
       return r;
     } }),
+  // 3669: gönderilecek planın sıra denetimi; komutla aynı yazım yapılır ve geri alınır, kalıcı iz bırakmaz.
+  uc({ yontem: 'POST', yol: '/plan/planlama-calismasi/gonderme-onizlemesi', yetki: 'plan.yaz', denetim: 'govdesiz', govde: calismaGonderGovdesi, cevap: canliyaAlOnizlemesiCevabi,
+    isle: ({ db, kullanici, govde }) => calismaOnizlemesi(db, kullanici, govde) }),
   // Canlıya alma plan sürümünü ve kardeş taslakları kilitler (502 a); kilitlenirse baştan yeniden koşar.
   uc({ yontem: 'POST', yol: '/plan/planlama-calismasi/canliya-al', yetki: 'plan.canliya-al', tekrarKorumali: true, kilitlenmedeYinele: true, govde: calismaCanliyaAlGovdesi, cevap: calismaGonderCevabi,
     isle: async ({ db, kullanici, govde, denetimEki }) => {

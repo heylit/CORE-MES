@@ -33,6 +33,7 @@ function sunucu(retler: ApiHatasi[]) {
   const kalan = [...retler];
   vi.spyOn(api, 'get').mockImplementation(((yol: string) => (yol === '/plan/surum' ? Promise.resolve({ planSurumu: 4, sonCanliyaAlma: null }) : Promise.reject(new Error('yok')))) as never);
   return vi.spyOn(api, 'post').mockImplementation(((yol: string) => {
+    if (yol === '/plan/planlama-calismasi/gonderme-onizlemesi') return Promise.resolve({ kapali: [], kilitYetkisi: true, oneri: null, oneriNedeni: null, ihlaller: [] });
     if (yol !== CANLI) return Promise.reject(new Error(`beklenmeyen istek ${yol}`));
     const ret = kalan.shift();
     return ret ? Promise.reject(ret) : Promise.resolve(TAMAM);
@@ -112,9 +113,12 @@ describe('Kokpit Onay ve canlı: çalışma planı tek komutla canlıya alınır
     };
     vi.spyOn(api, 'get').mockImplementation(((yol: string) => (yol === '/plan/surum' ? Promise.resolve({ planSurumu: 3, sonCanliyaAlma: null }) : Promise.reject(new Error('yok')))) as never);
     const post = vi.spyOn(api, 'post').mockImplementation(((yol: string) => (yol === '/plan/planlama-calismasi/onaya-gonder'
-      ? Promise.resolve({ ...TAMAM, senaryolar: { canli: null, canliSurum: 3, senaryolar: [gonderilen] } }) : Promise.reject(new Error(`beklenmeyen istek ${yol}`)))) as never);
+      ? Promise.resolve({ ...TAMAM, senaryolar: { canli: null, canliSurum: 3, senaryolar: [gonderilen] } })
+      : yol === '/plan/planlama-calismasi/gonderme-onizlemesi' ? Promise.resolve({ kapali: [], kilitYetkisi: true, oneri: null, oneriNedeni: null, ihlaller: [] })
+        : Promise.reject(new Error(`beklenmeyen istek ${yol}`)))) as never);
     sayfayiAc();
     await sayfaDugmesi();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Onaya gönder' }).hasAttribute('disabled')).toBe(false));
     expect(screen.getByRole('tab', { name: 'Planım' }).getAttribute('aria-selected')).toBe('true');
     fireEvent.click(screen.getByRole('button', { name: 'Onaya gönder' }));
     await waitFor(() => expect(post).toHaveBeenCalled());

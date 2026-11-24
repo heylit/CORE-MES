@@ -16,8 +16,9 @@ const kopya = <T>(x: T): T => structuredClone(x);
 // Sayfanın değişiklik izi sınırı (istemci kayit.ts IZ_SINIRI).
 export const IZ_SINIRI = 400;
 
-export interface KomutKisisi { kim: string; sayfa: string; t: number }
-export type KomutHatasi = { tur: 'dogrulama'; ileti: string; alan: string } | { tur: 'cakisma'; ileti: string };
+// kilitYetkisi (3669, Risk 3661 N1): kişi plan.kilitle taşır; kilidi kaldıran komut (elle bölme) onsuz yazılmaz. Verilmezse yok sayılır.
+export interface KomutKisisi { kim: string; sayfa: string; t: number; kilitYetkisi?: boolean }
+export type KomutHatasi = { tur: 'dogrulama'; ileti: string; alan: string } | { tur: 'cakisma'; ileti: string } | { tur: 'yetki'; ileti: string };
 export type KomutSonucu = { deger: Nesne; degisti: boolean } | { hata: KomutHatasi };
 
 export interface GeriYama { yol: string[]; id?: string; once?: unknown }
