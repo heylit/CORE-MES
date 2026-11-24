@@ -24,8 +24,12 @@ import { BEKLEME_NEDENLERI, faturaTuru, listeOkumaTuru, malKabulTuru, malzemeFis
 import { cariCrmKodlariOku, logoBelgeAra, logoCariAra, logoCariOku, logoMalzemeAra } from './servis.ts';
 import type { CariOkumasi, MalzemeFisiKaynagi, SatinAlmaKaynagi, SatisKaynagi, TurSonucu, TxAcan } from './servis.ts';
 import type { LogoCari, LogoMalzemeKarti } from './kurallar.ts';
-import type { DisSiparisCevabi, LogoBelgeAramaCevabi, LogoBelgeAramaTuru, LogoKartAlislariCevabi, LogoKartHareketleriCevabi } from '#paylasilan/sozlesme/logo.ts';
+import type { DisSiparisCevabi, LogoBelgeAramaCevabi, LogoBelirsizKontrolCevabi, LogoKontrolluGonderCevabi, LogoTekKayitCevabi, LogoBelgeAramaTuru, LogoKartAlislariCevabi, LogoKartHareketleriCevabi } from '#paylasilan/sozlesme/logo.ts';
 import { kartAlislari, kartHareketleri } from './kart-bolumu.ts';
+import { logoKontrol, logoKontrolluGonder } from './kontrollu-gonder.ts';
+import type { Db } from '#cekirdek/db.ts';
+import { tekKayitOku } from './tek-kayit.ts';
+import type { KontrolIstegi } from './kontrollu-gonder.ts';
 import { yardimciSurumunuSor } from './yardimci-surumu.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { projeSecenekleri } from '../projeler/disari.ts';
@@ -239,6 +243,14 @@ export const logodaMalzemeAra = (vt: TxAcan, kisiId: number, metin: string): Pro
 export const logodaBelgeAra = (
   vt: TxAcan, tur: LogoBelgeAramaTuru, metin: string, fiyatGorunur: boolean, a: { kisiId?: number; belge?: number } = {},
 ): Promise<LogoBelgeAramaCevabi> => sirali(() => logoBelgeAra(vt, ortamKoprusu, tur, metin, fiyatGorunur, a));
+// 3626: sonucu bilinmeyen belgeyi gönderme öncesi Logo'da arama; köprüye zamanlanmış işlerle aynı sıradan gider. Uç transaction dışında çağırır.
+export const logodaBelgeKontrol = (vt: TxAcan, kisiId: number, g: KontrolIstegi): Promise<LogoBelirsizKontrolCevabi> => sirali(() => logoKontrol(vt, ortamKoprusu, kisiId, g));
+// 3626: onayda göndermeden hemen önce yeniden arama (köprüye tek GET); POST transaction içinde çalışır, sıradan gider.
+export const logodaKontrolluGonder = (db: Db, kisiId: number, g: KontrolIstegi, simdi: Date): Promise<LogoKontrolluGonderCevabi> =>
+  sirali(() => logoKontrolluGonder(db, ortamKoprusu, kisiId, g, simdi));
+// 3626: okuma akışında tek kaydı yeniden okuma; köprüye zamanlanmış işlerle aynı sıradan gider. Uç transaction dışında çağırır.
+export const logodanTekKayitOku = (vt: TxAcan, kisiId: number, akis: string, kod: string): Promise<LogoTekKayitCevabi> =>
+  sirali(() => tekKayitOku(vt, ortamKoprusu, kisiId, akis, kod));
 export const logodanCariOku = (vt: TxAcan, kod: string): Promise<CariOkumasi<LogoCari | null>> => sirali(() => logoCariOku(vt, ortamKoprusu, kod));
 // 3391-2 a: firma kartında CRM kodu seçimi; kullanıcı isteğiyle, sırayla.
 export const logodanCrmKodlari = (vt: TxAcan, kod: string): Promise<CariOkumasi<{ kodlar: string[]; secilebilir: boolean } | null>> =>

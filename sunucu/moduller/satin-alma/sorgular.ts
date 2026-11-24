@@ -318,6 +318,10 @@ export function faturaEslemesiKaldir(db: Db, idler: readonly number[], kisiId: n
 export function talepNolari(db: Db, idler: readonly string[]): Promise<{ id: string; no: string }[]> {
   return db.sorgu<{ id: string; no: string }>('SELECT id, no FROM satin_alma_talep WHERE id = ANY($1::uuid[])', [idler]);
 }
+// 3626: Logo giden kutusundaki talep belge numarası talebin sayı kimliğidir; Logo'ya gönderilen talep numarası buradan okunur.
+export async function talepNoSayiKimligiyle(db: Db, sayiId: number): Promise<string | null> {
+  return (await db.tek<{ no: string }>('SELECT no FROM satin_alma_talep WHERE sayi_id = $1', [sayiId]))?.no ?? null;
+}
 export function teslimYontemiYaz(db: Db, id: string, teslimYontemi: string | null, surum: number): Promise<{ id: string } | null> {
   return db.tek<{ id: string }>(
     'UPDATE satin_alma_talep SET teslim_yontemi = $3, surum = surum + 1, guncelleme = now() WHERE id = $1 AND surum = $2 RETURNING id',

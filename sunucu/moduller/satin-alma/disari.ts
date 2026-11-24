@@ -64,6 +64,8 @@ export async function talepNolari(db: Db, idler: readonly string[]): Promise<Map
   if (idler.length === 0) return new Map();
   return new Map((await sorgu.talepNolari(db, [...new Set(idler)])).map((t) => [t.id, t.no]));
 }
+// 3626: Logo giden kutusundaki talep belge numarasından (sayı kimliği) talep numarası; Logo'da kontrol bu numarayla aranır.
+export const talepNoSayiKimligiyle = (db: Db, sayiId: number): Promise<string | null> => sorgu.talepNoSayiKimligiyle(db, sayiId);
 export type { AlimDinleyicisi, AlimOlayi, AlimTasimasi } from './alim-olayi.ts';
 // 3256-1: açık siparişin gelişi ya da elle tedarik termini değişti (plan canlı planı eskidi işaretler).
 export { terminDinle } from './termin-olayi.ts';

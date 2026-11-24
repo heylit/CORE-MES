@@ -16,7 +16,7 @@ const T = '2099-11-16T08:00:00.000Z';
 type LogoBelgesi = LogoGidenIzlemeCevabi['belgeler'][number];
 const belge = (o: Partial<LogoBelgesi>): LogoBelgesi => ({
   belge: 'siparis', belgeAdi: 'Satın alma siparişi', no: 1, islem: 'gonder', durum: 'durdu', neden: 'Firmanın Logo cari kodu boş.',
-  neYapmali: 'Nedeni düzeltin, sonra "Yeniden gönder".', yenidenGonderilebilir: true, denemeSayisi: 1, sonDeneme: T, sonrakiDeneme: null, ...o,
+  neYapmali: 'Nedeni düzeltin, sonra "Yeniden gönder".', yenidenGonderilebilir: true, kontrolEdilebilir: false, denemeSayisi: 1, sonDeneme: T, sonrakiDeneme: null, ...o,
 });
 const logo: LogoGidenIzlemeCevabi = {
   sayac: { durdu: 3, yenidenDenenecek: 1, kartBekliyor: 1, projeBekliyor: 0, sirada: 0 },
@@ -180,6 +180,54 @@ describe('Bağlantı izleme (3313)', () => {
     fireEvent.click(within(pencere).getByRole('button', { name: '1 belgeyi gönder' }));
     await waitFor(() => expect(cagrilar.some((c) => c.yontem === 'POST')).toBe(true));
     expect(cagrilar.filter((c) => c.yontem === 'POST').map((c) => c.govde)).toEqual([{ belgeler: [{ belge: 'talep', no: 3, islem: 'gonder' }] }]);
+  });
+
+  const belirsizTalep = belge({ belge: 'talep', belgeAdi: 'Talep fişi', no: 12, durum: 'yeniden-denenecek', yenidenGonderilebilir: false, kontrolEdilebilir: true,
+    neden: 'Köprü bağlantısı koptu; işlenip işlenmediği bilinmiyor.', neYapmali: 'Logo belgeyi alıp almadığını bilmiyoruz.', sonrakiDeneme: T });
+  const kontrolSunucusu = (karar: { karar: string; ileti: string; logoKayitNo: string | null }) => {
+    const cagrilar = sunucuKur({ ...logo, belgeler: [belirsizTalep] }, { belgeler: [], kesildi: false });
+    const asil = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
+      if (adres.startsWith('/api/logo/giden/kontrol?')) { cagrilar.push({ yontem: 'GET', yol: adres.replace('/api', ''), govde: undefined }); return json(200, karar); }
+      if (adres === '/api/logo/giden/kontrollu-gonder') {
+        cagrilar.push({ yontem: 'POST', yol: '/logo/giden/kontrollu-gonder', govde: JSON.parse(String(secenek?.body)) });
+        return json(200, { sonuc: 'gonderime-alindi', ileti: "Logo'da yok; gönderime alındı. İlk turda gider.", logoKayitNo: null });
+      }
+      return asil(adres, secenek);
+    }));
+    return cagrilar;
+  };
+
+  it('3626 belirsiz belge: Logo\'da kontrol et önce arar, gönderme ayrı onayla, yoksa sıraya alır; Yeniden gönder yoktur', async () => {
+    const cagrilar = kontrolSunucusu({ karar: 'yok', ileti: "Logo'da bu numaralı belge yok; gönderilebilir.", logoKayitNo: null });
+    cizdir(yazmali);
+    fireEvent.click(await screen.findByText('Talep fişi'));
+    expect(await screen.findByText(/Logo belgeyi alıp almadığını bilmiyoruz/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Yeniden gönder' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: "Logo'da kontrol et" }));
+    expect(await screen.findByText("Logo'da bu numaralı belge yok; gönderilebilir.")).toBeTruthy();
+    expect(cagrilar.some((c) => c.yontem === 'POST')).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: "Logo'da yok, şimdi gönder" }));
+    await waitFor(() => { expect(cagrilar.filter((c) => c.yontem === 'POST')).toHaveLength(1); });
+    expect(cagrilar.filter((c) => c.yol.startsWith('/logo/giden/kontrol?'))).toEqual([{ yontem: 'GET', yol: '/logo/giden/kontrol?belge=talep&no=12&islem=gonder', govde: undefined }]);
+    expect(cagrilar.filter((c) => c.yontem === 'POST')).toEqual([{ yontem: 'POST', yol: '/logo/giden/kontrollu-gonder', govde: { belge: 'talep', no: 12, islem: 'gonder' } }]);
+  });
+
+  it('3626 kontrol yapılamazsa gönderme çağrısı yapılmaz ve neden yazılır', async () => {
+    const cagrilar = kontrolSunucusu({ karar: 'yapilamadi', ileti: 'Logo yardımcısına sorulamadı: yetkisiz.', logoKayitNo: null });
+    cizdir(yazmali);
+    fireEvent.click(await screen.findByText('Talep fişi'));
+    fireEvent.click(await screen.findByRole('button', { name: "Logo'da kontrol et" }));
+    expect(await screen.findByText(/Kontrol yapılamadı, belgeye dokunulmadı\. Logo yardımcısına sorulamadı/)).toBeTruthy();
+    expect(cagrilar.some((c) => c.yontem === 'POST')).toBe(false);
+  });
+
+  it('3626 yazma yetkisi olmayan kontrol düğmesini görmez, nedenini okur', async () => {
+    kontrolSunucusu({ karar: 'yok', ileti: '', logoKayitNo: null });
+    cizdir(yalnizGoren);
+    fireEvent.click(await screen.findByText('Talep fişi'));
+    expect(await screen.findByText(/Logo'da kontrol etmek Sistem Ayarları yazma yetkisi ister/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: "Logo'da kontrol et" })).toBeNull();
   });
 
   it('3314 yardımcı eski sürümdeyse Logo kartı uyarır ve ne yapılacağını yazar; aynıysa uyarı yok', async () => {
