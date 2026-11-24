@@ -39,3 +39,11 @@ VARSAYIM: plan vadeyi okumaya başlayınca ipucu yeniden yazılır.
 ## 2663 (2661 a, 2669 b): gizli genel gider oranı
 - Teklif denemesi gizli ayda oranı, genel gider payını ve onu içeren her maliyeti (kalem birim ve toplam, maliyet toplamı, adet denemesi) ve dökümün bütün tutarlarını (genel gidersiz satırların toplamı hariç maliyet olurdu, 2669 b) null verir; `genelGiderGizli` alanı terminDenemesiCevabi ve adetDenemesiCevabi'ne eklendi. Genel gider hariç maliyet gösterilmez (2669 b). Plan taslağına maliyet toplamı null yazılır (sütun boş olabilir).
 - Ekran "Gizli" ve "Fiyat önerisi yok: genel gider oranı gizli" yazar; birim maliyet null olduğu için fiyat önerilmez (Arayüz K8).
+
+## 3625: dövizli satış teklifi Logo kuru
+- Kur teklifte saklanmaz; TRY dışı teklifte `logoyaGidecekSatisTeklifleri` her gönderimde `finans/disari.ts` `kurCiftiGetir(db, paraBirimi, teklif tarihi)` ile okur. Finans'ın kur tablosuna yazılmaz. Göç yok.
+- Oran: alış kuru (`ORAN_KULLANIMLARI.muhasebe.kur`). VARSAYIM: Logo'ya giden satış belgesi muhasebe kaydıdır; döviz alacağı bankaya satılacağı için alış kuru, satın almanın "satış" seçimi (döviz alıp ödeme) ters yöndür. Doğrulanmadı: Logo kullanıcısı satış belgesinde hangi kurun beklendiğini teyit etmeli. Değişirse tek satır (`ORAN_KULLANIMLARI.<kullanım>.kur`); yeni bir `satisBelgesi` kullanımı paylasilan'a eklemek ayrı çekirdek isteğidir, eklenmedi.
+- Kur yoksa ya da teklif tarihine kadarki son kur `ORAN_ESKIME_GUNU` (30 gün) sınırından eskiyse (tam 30 gün geçerli) teklif o turda gitmez; sıraya "<para birimi> için <tarih> kuru Finans'ta yok ya da çok eski." yazılır, sıra "hata" ile bekleyenlerin arkasına geçer, kur girilince sonraki turda gider. Kur 0 ya da 1 uydurulmaz; teklif tarihinden sonra girilmiş kur kullanılmaz. VARSAYIM (güvenli yön): eski kur sessizce gitmesin diye 30 gün sınırı; sınır Finans'ın eskime işaretiyle aynıdır. TRY teklifte kur boş (davranış aynı).
+- Sınırlama: kuru olmayan teklifler kuyruk sınırı (200) içinde yer tutar; hata satırları hep bekleyenlerin arkasına gider, ama 200'den fazla kursuz teklif birikirse arkadakiler gecikir.
+- Teklifin kendi kurunu saklamak (kur dondurma) ayrı karardır; bu işte yapılmadı.
+- EkoTigerAPI `m.Rate ?? 1` davranışına dokunulmadı.
