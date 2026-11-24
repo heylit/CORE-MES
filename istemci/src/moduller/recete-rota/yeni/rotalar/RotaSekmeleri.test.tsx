@@ -136,6 +136,8 @@ describe('Rota sekmeleri (3247 a)', () => {
     fireEvent.click(within(bolge).getByRole('button', { name: 'Numune rotasını aç' }));
     await within(g).findByRole('button', { name: /^Numune/ });
     expect(istekler.some((i) => i.yol === '/rota/urunler/11/taslak-ac')).toBe(false);
+    // 3647: işaret kapalıysa rota boş açılır ve "Nasıl başlayalım?" ekranı gelir.
+    expect(await screen.findByText('Bu ürünün rotası yok. Nasıl başlayalım?')).toBeTruthy();
   });
 
   it('3644: sunucu rota açmayı reddederse neden formda görünür, rota açılmaz ve ürün rotaları yeniden okunur', async () => {

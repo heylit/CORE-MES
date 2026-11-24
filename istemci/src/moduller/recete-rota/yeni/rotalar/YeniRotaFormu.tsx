@@ -57,7 +57,8 @@ export function YeniRotaFormu({ r, urunId, rotalar, kapat }: { r: RotaEkrani; ur
       kapat();
       const kaynak = yururlukteki(duzen.rotaRevleri(urunId, null));
       if (kopya && kaynak) await duzen.yeniTaslak(urunId, kaynak);
-      else adimEkle();
+      else r.kokSec(urunId);
+      // İşaret kapalı: rota açılır ve "Nasıl başlayalım?" ekranı gelir (şablon, benzer ürün, boş); kopyada taslak zaten açılmıştır.
     } catch (h) {
       const k = h instanceof RrHatasi ? h : new RrHatasi(h);
       // Başkası araya girdiyse (eski sürüm ya da aynı tür/ad) ürün rotaları yeniden okunur ki tür listesi bayat kalmasın.

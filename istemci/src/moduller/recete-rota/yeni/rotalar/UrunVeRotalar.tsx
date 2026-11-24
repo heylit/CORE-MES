@@ -22,7 +22,7 @@ import { RevizyonCubugu, revizyonAnaEylemiVar, type Duzenleme } from './Revizyon
 import { UrunListesi } from './UrunListesi.tsx';
 import { RotaExcelPenceresi } from './ExcelGirisi.tsx';
 import { useKalanBoy } from './kalanBoy.ts';
-import { SablonPenceresi, SablonSaklaPenceresi } from './SablonSecici.tsx';
+import { SablonPenceresi, SablonSaklaPenceresi, SablonSecici } from './SablonSecici.tsx';
 
 // Ürün ve rotalar: ürün listesi, akış şeması ya da akış tablosu, revizyon çubuğu ve düzenleme paneli. Açılışta yazma yoktur; rota
 // değişikliği ilk düzenlemede taslağa yazılır.
@@ -389,7 +389,10 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
             {dugum ? (
               gorunum === 'tablo'
                 ? <AkisTablosu r={r} urunler={agac} miktar={miktar} cop={cop} />
-                : <AkisSemasi r={r} kok={dugum} cop={cop} />
+                // 3647: adımı olmayan tek ürünlük rotada Yatay hattaki "Nasıl başlayalım?" ekranı şemada da gelir (şablon, benzer ürün, boş).
+                : kokId && agac.length === 1 && !dugum.dongu && duzen.adimlar(kokId).length === 0
+                  ? <SablonSecici r={r} urunId={kokId} />
+                  : <AkisSemasi r={r} kok={dugum} cop={cop} />
             ) : (
               <div className="tc-rr1-emptycv">
                 <h3>İlk rotanı kur</h3>
