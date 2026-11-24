@@ -50,7 +50,7 @@ export function TekKayitOku() {
           secenekler={AKISLAR.map((a) => ({ deger: a.deger, baslik: a.baslik }))} />
         <Girdi etiket={tanim.etiket} ipucu={tanim.ipucu} value={kod} maxLength={LOGO_TEK_KAYIT_EN_COK} onChange={(e) => { kodYaz(e.target.value); sonucYaz(null); }} />
         <div className="tc-logo-tek-dugme">
-          <Dugme tur="birincil" simge="search" type="submit" disabled={!gecerli} yukleniyor={oku.isPending}>Logo'dan oku</Dugme>
+          <Dugme tur="ikincil" simge="search" type="submit" disabled={!gecerli} yukleniyor={oku.isPending}>Logo'dan oku</Dugme>
         </div>
         {!gecerli && <p className="tc-logo-tek-not">{`En az ${String(LOGO_TEK_KAYIT_EN_AZ)} karakter yazın.`}</p>}
         {sonuc !== null && <p className="tc-logo-tek-not" role="status">{sonuc.ileti}</p>}
