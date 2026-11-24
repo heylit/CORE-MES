@@ -336,6 +336,8 @@ function KuralFormu({ tur, kural, roller, kisiler, kapat }: {
         <IsaretKutusu etiket="E-posta" checked={eposta} onChange={(e) => { setEposta(e.target.checked); }} />
         <IsaretKutusu etiket="Telefon" checked={telefon} onChange={(e) => { setTelefon(e.target.checked); }} />
       </div>
+      {eposta && sablonlar.isPending && <p className="tc-ayar-aciklama" role="status">E-posta şablonları yükleniyor.</p>}
+      {eposta && sablonlar.isError && <p className="tc-ayar-aciklama" role="alert">E-posta şablonları okunamadı; seçim şimdilik yalnız olayın şablonunu kullanır.</p>}
       {eposta && (
         <Secim
           etiket="E-posta şablonu"
@@ -353,7 +355,7 @@ function KuralFormu({ tur, kural, roller, kisiler, kapat }: {
         onChange={(e) => { setBaslik(e.target.value); }}
       />
       <Girdi etiket={grup ? 'Zil metni (isteğe bağlı)' : 'Bildirim metni (isteğe bağlı)'} value={metin} maxLength={1000} onChange={(e) => { setMetin(e.target.value); }} />
-      <p className="tc-ayar-aciklama">{`Kural kişi başına günde en çok ${String(KURAL_GUNLUK_EN_COK)} bildirim gönderir. Para tutarı yalnız koşulda kullanılır, metne yazılmaz.`}</p>
+      <p className="tc-ayar-aciklama">{grup ? `Grup kişi başına günde en çok ${String(KURAL_GUNLUK_EN_COK)} bildirim gönderir.` : `Kural kişi başına günde en çok ${String(KURAL_GUNLUK_EN_COK)} bildirim gönderir. Para tutarı yalnız koşulda kullanılır, metne yazılmaz.`}</p>
       {o && (
         <div className={`tc-kural-on-izleme${gorulduMu ? '' : ' tc-kural-on-izleme-eski'}`} role="status">
           <Simge ad="search" boyut="k" />

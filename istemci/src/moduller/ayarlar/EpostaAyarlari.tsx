@@ -18,6 +18,7 @@ import {
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useKurumLogosu } from '../../ortak/veri/kurum-logosu.ts';
+import { useKurallar } from './BildirimKurallari.tsx';
 import type { AyarListesiEki } from './SistemAyarlari.tsx';
 import './eposta.css';
 
@@ -184,6 +185,7 @@ const icerigi = (s: EpostaSablonu | EpostaOzelSablonu): EpostaSablonIcerigi => (
 export function EpostaSablonlari() {
   const liste = useQuery({ queryKey: ANAHTAR.sablonlar, queryFn: () => api.get<EpostaSablonlariCevabi>('/bildirimler/eposta/sablonlar') });
   const tetik = useQuery({ queryKey: ANAHTAR.tetikleyiciler, queryFn: () => api.get<EpostaTetikleyicileriCevabi>('/bildirimler/eposta/tetikleyiciler') });
+  const kurallar = useKurallar(true);
   const [secim, setSecim] = useState<SablonSecimi>({ tur: 'sistem', konu: 'satin-alma' });
   if (liste.isPending) return <Kart baslik="Şablonlar"><DurumKutusu durum="yukleniyor" /></Kart>;
   if (liste.isError) {
@@ -197,6 +199,7 @@ export function EpostaSablonlari() {
   const sistem = secim.tur === 'sistem' ? satirlar.find((s) => s.konu === secim.konu) : undefined;
   const ozelSablon = secim.tur === 'ozel' ? ozel.find((s) => s.id === secim.id) : undefined;
   const olaylar = tetik.data?.satirlar ?? [];
+  const grupSayisi = ozelSablon ? (kurallar.data?.kurallar ?? []).filter((k) => k.epostaSablonId === ozelSablon.id).length : 0;
   const kullananlar = sistem ? olaylar.filter((o) => o.sablonId === null && o.konu === sistem.konu)
     : ozelSablon ? olaylar.filter((o) => o.sablonId === ozelSablon.id) : [];
   const olay = kullananlar[0]?.baslik ?? 'Örnek olay';
@@ -255,7 +258,7 @@ export function EpostaSablonlari() {
             hedef={{ tur: 'sistem', konu: sistem.konu, surum: sistem.surum }}
             icerik={icerigi(sistem)}
             olay={olay}
-            kullananlar={kullananlar.map((o) => o.baslik)}
+            kullananlar={kullananlar.map((o) => o.baslik)} grupSayisi={grupSayisi}
             sonra={setSecim}
           />
         )}
@@ -265,12 +268,12 @@ export function EpostaSablonlari() {
             hedef={{ tur: 'ozel', id: ozelSablon.id, ad: ozelSablon.ad, surum: ozelSablon.surum }}
             icerik={icerigi(ozelSablon)}
             olay={olay}
-            kullananlar={kullananlar.map((o) => o.baslik)}
+            kullananlar={kullananlar.map((o) => o.baslik)} grupSayisi={grupSayisi}
             sonra={setSecim}
           />
         )}
         {secim.tur === 'yeni' && (
-          <SablonDuzenleyici key={`y:${secim.ad}`} hedef={{ tur: 'yeni', ad: secim.ad }} icerik={secim.icerik} olay={olay} kullananlar={[]} sonra={setSecim} />
+          <SablonDuzenleyici key={`y:${secim.ad}`} hedef={{ tur: 'yeni', ad: secim.ad }} icerik={secim.icerik} olay={olay} kullananlar={[]} grupSayisi={0} sonra={setSecim} />
         )}
       </div>
     </Kart>
@@ -284,8 +287,8 @@ const SERIT_SINIFI: Record<Exclude<EpostaSeridi, 'yok'>, string> = {
   mavi: 'tc-eposta-serit-mavi', yesil: 'tc-eposta-serit-yesil',
 };
 
-function SablonDuzenleyici({ hedef, icerik, olay, kullananlar, sonra }: {
-  hedef: SablonHedefi; icerik: EpostaSablonIcerigi; olay: string; kullananlar: readonly string[]; sonra: (s: SablonSecimi) => void;
+function SablonDuzenleyici({ hedef, icerik, olay, kullananlar, grupSayisi, sonra }: {
+  hedef: SablonHedefi; icerik: EpostaSablonIcerigi; olay: string; kullananlar: readonly string[]; grupSayisi: number; sonra: (s: SablonSecimi) => void;
 }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
@@ -530,10 +533,10 @@ function SablonDuzenleyici({ hedef, icerik, olay, kullananlar, sonra }: {
       </div>
       <section className="tc-eposta-onizleme" aria-label="Ön izleme">
         <p className="tc-eposta-onizleme-konu"><Simge ad="mail" boyut="k" /> {onizlemeKonu || olay}</p>
-        <div className="tc-eposta-zarf">
+        <div className="tc-eposta-zarf" data-theme="light">
           <div className="tc-eposta-bant">
             {logo && kurumLogosu.data?.logo != null ? <img src={kurumLogosu.data.logo} alt="Kurum logosu" /> : <span>{onizlemeUstBant}</span>}
-            {onemRozeti && <span className="tc-eposta-rozet">Uyarı</span>}
+            {onemRozeti && <span className="tc-eposta-rozet" title="Örnek: gerçekte olayın önemine göre Bilgi, Uyarı ya da Acil">Uyarı</span>}
           </div>
           <div className={serit === 'yok' ? 'tc-eposta-serit-bosluk' : `tc-eposta-serit ${SERIT_SINIFI[serit]}`} />
           <div className="tc-eposta-ust">
@@ -559,7 +562,7 @@ function SablonDuzenleyici({ hedef, icerik, olay, kullananlar, sonra }: {
           <p className="tc-eposta-alt">Bu e-posta CORE MES tarafından kurumunuz adına gönderildi. {onizlemeAlt}</p>
         </div>
         <p className="tc-ayar-aciklama">
-          {kullananlar.length === 0 ? 'Bu şablonu kullanan olay yok. Olaya Olaylar sekmesinden atanır.' : `Bu şablonu kullanan olaylar: ${kullananlar.slice(0, 5).join(', ')}${kullananlar.length > 5 ? ` ve ${String(kullananlar.length - 5)} olay daha` : ''}.`}
+          {kullananlar.length === 0 ? 'Bu şablonu kullanan olay yok. Olaya Olaylar sekmesinden atanır.' : `Bu şablonu kullanan olaylar: ${kullananlar.slice(0, 5).join(', ')}${kullananlar.length > 5 ? ` ve ${String(kullananlar.length - 5)} olay daha` : ''}.`}{grupSayisi > 0 ? ` ${String(grupSayisi)} alıcı grubu da bu şablonu seçmiş.` : ''}
         </p>
       </section>
       {silinsin && hedef.tur === 'ozel' && (
@@ -572,7 +575,7 @@ function SablonDuzenleyici({ hedef, icerik, olay, kullananlar, sonra }: {
           onayla={() => { sil.mutate(); }}
           vazgec={() => { setSilinsin(false); }}
         >
-          <p>Bu şablonu kullanan {kullananlar.length} olay konusunun sistem şablonuna döner.</p>
+          <p>{`Bu şablonu kullanan ${String(kullananlar.length)} olay konusunun sistem şablonuna döner.${grupSayisi > 0 ? ` ${String(grupSayisi)} alıcı grubu da olayın şablonuna döner.` : ''}`}</p>
         </OnayPenceresi>
       )}
     </div>
