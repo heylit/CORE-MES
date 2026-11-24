@@ -178,7 +178,10 @@ describe('Logo\'dan gelen kartlar: liste, alma, bağlama, Logo\'dakini alma (211
     const onekDeg = await kaydet({ tur: 'sarf' });
     assert.equal(onekDeg.statusCode, 200, onekDeg.body);
     assert.equal((onekDeg.json() as { stok_kodu: string }).stok_kodu, 'SF-GEN-00002', 'önek değişse de kod kalır');
-    assert.equal((await kaydet({ tur: 'hammadde', fam: 'metal', com: { kod: 'HM-YAP-00001', ad: 'x', birim: 'kg' } })).statusCode, 422, 'Logo kartının türü değişmez');
+    const turDeg = await kaydet({ tur: 'hammadde', fam: 'metal', com: { kod: 'HM-YAP-00001', ad: 'x', birim: 'kg' } });
+    assert.equal(turDeg.statusCode, 422, 'Logo kartının türü değişmez');
+    // 3631 (Test B3): 422 başka bir doğrulamadan da gelebilir; iletiyi denetle.
+    assert.match(String((turDeg.json() as { ileti?: string; mesaj?: string }).ileti ?? (turDeg.json() as { mesaj?: string }).mesaj ?? turDeg.body), /Logo'dan alınan kartın türü değişmez/);
     assert.equal((await kartSatiri('logo-112'))?.kod, 'SF-GEN-00002');
     // Adı olmayan Logo kartı koduyla adlanır; liste eşleme üzerinden bağlı gösterir.
     assert.equal((await vt().tek<{ ad: string }>("SELECT kayit -> 'com' ->> 'ad' AS ad FROM malzeme_katalog_karti WHERE kimlik = 'logo-102'"))?.ad, '150.01.0003');
