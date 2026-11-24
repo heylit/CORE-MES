@@ -100,3 +100,28 @@
   .tc-tzb-liste { flex-wrap: wrap; overflow: visible; }
   .tc-tzb-sec { flex: 1 1 auto; }
 }
+
+/* Canlı tezgâh görünümü (kart 3659-2). */
+.tc-sim { container: tc-sim / inline-size; display: grid; gap: var(--b-4); grid-template-columns: minmax(0, 1fr); min-width: 0; }
+.tc-sim-resim { inline-size: 100%; block-size: auto; max-block-size: 20rem; border: 1px solid var(--edge); border-radius: var(--yari-3); background: var(--panel-solid); }
+.tc-sim-govde, .tc-sim-tabla { fill: var(--panel2); stroke: var(--ink); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
+.tc-sim-parca { fill: var(--grafik); stroke: var(--ink); stroke-width: 1.5px; vector-effect: non-scaling-stroke; opacity: 0.8; }
+.tc-sim-takim { stroke: var(--ink); stroke-width: 3px; vector-effect: non-scaling-stroke; }
+.tc-sim-donus { fill: none; stroke: var(--muted); stroke-width: 2px; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; transform-box: fill-box; transform-origin: center; }
+.tc-sim-donus[data-donuyor] { stroke: var(--grafik); animation: tc-sim-don 1s linear infinite; }
+.tc-sim-resim[data-durum="alarm"] .tc-sim-parca { fill: var(--stop); }
+.tc-sim-resim[data-durum="bekliyor"] .tc-sim-parca { fill: var(--hold); }
+.tc-sim-resim[data-durum="baglanti-yok"] .tc-sim-parca, .tc-sim-resim[data-durum="bilinmiyor"] .tc-sim-parca { fill: var(--muted); }
+@keyframes tc-sim-don { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .tc-sim-donus[data-donuyor] { animation: none; } }
+.tc-sim-okuma { display: flex; flex-direction: column; gap: var(--b-2); margin: 0; align-content: start; }
+.tc-sim-satir { display: flex; justify-content: space-between; gap: var(--b-3); }
+.tc-sim-satir dt { color: var(--muted); }
+.tc-sim-satir dd { margin: 0; text-align: right; white-space: nowrap; flex-shrink: 0; }
+.tc-sim-gecmis { display: flex; flex-direction: column; gap: var(--b-2); align-items: start; }
+.tc-sim-cubuk { display: flex; flex-direction: column; gap: var(--b-1); inline-size: 100%; }
+.tc-sim-cubuk input { inline-size: 100%; min-block-size: 2.75rem; }
+@container tc-sim (min-width: 600px) { .tc-sim { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); } .tc-sim-gecmis, .tc-sim > p { grid-column: 1 / -1; } }
+.tc-sim-resim[data-eski] { opacity: 0.55; }
+.tc-sim-uclar { display: flex; justify-content: space-between; inline-size: 100%; }
+@container tc-sim (min-width: 600px) { .tc-sim-uyari { grid-column: 1 / -1; } }

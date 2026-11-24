@@ -124,7 +124,7 @@ export interface TezgahOzeti {
 }
 
 const sayi = (m: string | null): number | null => {
-  if (m === null) return null;
+  if (m === null || m.trim() === '') return null;
   const n = Number(m);
   return Number.isFinite(n) ? n : null;
 };

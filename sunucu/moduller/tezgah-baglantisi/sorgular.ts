@@ -169,3 +169,18 @@ export function kosullar(db: Db, cihazAdi: string, baslangic: Date): Promise<Kos
 export async function sonOkuma(db: Db): Promise<string | null> {
   return (await db.tek<{ z: string | null }>(`SELECT ${zamanMetni('max(okundu)')} AS z FROM tezgah_okuma`))?.z ?? null;
 }
+
+export async function turGetir(db: Db, cihazAdi: string): Promise<string | null> {
+  return (await db.sorgu<{ tur: string }>('SELECT tur FROM tezgah_turu WHERE cihaz_adi = $1', [cihazAdi]))[0]?.tur ?? null;
+}
+
+export async function turYaz(db: Db, cihazAdi: string, tur: string | null): Promise<void> {
+  if (tur === null) {
+    await db.sorgu('DELETE FROM tezgah_turu WHERE cihaz_adi = $1', [cihazAdi]);
+    return;
+  }
+  await db.sorgu(
+    'INSERT INTO tezgah_turu (cihaz_adi, tur) VALUES ($1, $2) ON CONFLICT (cihaz_adi) DO UPDATE SET tur = EXCLUDED.tur, guncellendi = now()',
+    [cihazAdi, tur],
+  );
+}
