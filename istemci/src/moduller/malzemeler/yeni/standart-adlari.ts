@@ -221,19 +221,22 @@ const AD_SINIRI = 40;
 // (seçili ad, norm sırası, kalite adı) o kartta uygulanmaz, açıklama, Standart satırı ve Logo'ya giden metin bugünkü hâliyle kalır.
 export const standartTercihi = (x: { readonly [k: string]: unknown }): Standart | null => (x['standart'] === 'en' ? 'en' : x['standart'] === 'astm' ? 'astm' : null);
 
-// Kalitenin seçili standarttaki adı: ASTM seçiliyse ve kalitenin ASTM karşılığı varsa "ASTM A36"; karşılığı olmayan kalitede ve EN seçiliyken
-// kalitenin kendi adı. Karşılık birden çok kalitede aynıysa (ör. S355J2 ve S355JR için A572 Gr.50) kalitenin kendi adı eklenir:
-// "ASTM A572 Gr.50 (≈ S355JR)"; böylece iki kartın adı ve Logo açıklaması aynı olmaz. Kalite kimliği (kod) ve mükerrer anahtarı değişmez.
-const karsilikAnahtari = (v: string): string => v.replace(/^≈\s*/, '').trim().toLocaleLowerCase('tr');
+// Kalitenin seçili standarttaki adı: ASTM seçiliyse ve kalitenin KESİN ASTM karşılığı varsa "ASTM A36". Karşılık "≈" ile başlıyorsa (yakın eşdeğer)
+// ya da karşılık yoksa ya da EN seçiliyse kalitenin kendi adı kalır. Aynı kesin karşılık birden çok kalitede geçiyorsa o kalitelerde de kendi ad kalır
+// (iki kartın adı ve Logo açıklaması aynı olmasın). Kalite kimliği (kod) ve mükerrer anahtarı değişmez.
+const kesinKarsilik = (v: string | undefined): string => {
+  const t = (v ?? '').trim();
+  return t && !t.startsWith('≈') ? t : '';
+};
 type KaliteAileleri = Readonly<Record<string, { readonly classes: Readonly<Record<string, { readonly grades: readonly { readonly ad: string; readonly eq?: Readonly<Record<string, string>> }[] }>> }>>;
 const COKLU_KARSILIK = new WeakMap<object, ReadonlySet<string>>();
-// Birden çok kalitede geçen ASTM karşılıkları (ayardan eklenen kaliteler dahil).
+// Birden çok kalitede geçen kesin ASTM karşılıkları (ayardan eklenen kaliteler dahil).
 export function ortakAstmKarsiliklari(aileler: KaliteAileleri): ReadonlySet<string> {
   const onceki = COKLU_KARSILIK.get(aileler);
   if (onceki) return onceki;
   const sayim = new Map<string, number>();
   for (const f of Object.values(aileler)) for (const c of Object.values(f.classes)) for (const g of c.grades) {
-    const k = karsilikAnahtari(g.eq?.['ASTM'] ?? '');
+    const k = kesinKarsilik(g.eq?.['ASTM']).toLocaleLowerCase('tr');
     if (k) sayim.set(k, (sayim.get(k) ?? 0) + 1);
   }
   const ortak = new Set([...sayim].filter(([, n]) => n > 1).map(([k]) => k));
@@ -242,9 +245,9 @@ export function ortakAstmKarsiliklari(aileler: KaliteAileleri): ReadonlySet<stri
 }
 export function kaliteAdi(g: { readonly ad: string; readonly eq?: Readonly<Record<string, string>> }, tercih: Standart | null, ortak?: ReadonlySet<string>): string {
   if (tercih !== 'astm') return g.ad;
-  const ham = (g.eq?.['ASTM'] ?? '').replace(/^≈\s*/, '').trim();
-  if (!ham) return g.ad;
-  return ortak?.has(karsilikAnahtari(ham)) ? `ASTM ${ham} (≈ ${g.ad})` : `ASTM ${ham}`;
+  const k = kesinKarsilik(g.eq?.['ASTM']);
+  if (!k || ortak?.has(k.toLocaleLowerCase('tr'))) return g.ad;
+  return `ASTM ${k}`;
 }
 
 function temizAd(x: unknown): string | undefined {

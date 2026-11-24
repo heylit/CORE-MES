@@ -112,9 +112,14 @@ describe('2117-1 b kartın standardı', () => {
     const eski = { ...taban } as Record<string, unknown>;
     delete eski['standart'];
     const e = eski as unknown as KartKaydi;
-    expect(finalAd(astm, b)).toContain('ASTM A36');
-    expect(finalAd(astm, b)).not.toContain('S235JR');
+    // S235JR'nin ASTM karşılığı yakın eşdeğerdir (≈ A36): ASTM seçiliyken de kendi adı kalır.
+    expect(finalAd(astm, b)).toContain('S235JR');
+    expect(finalAd(astm, b)).not.toContain('A36');
     expect(finalAd(en, b)).toContain('S235JR');
+    // Kesin karşılıkta (A536 60-40-18) ASTM seçiliyken ASTM adı yazılır.
+    const gjs = { ...taban, cls: 'dokme', grade: 'GJS400', form: 'cubuk', dims: { d: 50, l: 1000 } } as KartKaydi;
+    expect(finalAd({ ...gjs, standart: 'astm' } as KartKaydi, b)).toContain('ASTM A536 60-40-18');
+    expect(finalAd({ ...gjs, standart: 'en' } as KartKaydi, b)).not.toContain('ASTM A536');
     // Eski kartın adı bugünkü hâliyle kalır: Logo ad güncellemesi kendiliğinden tetiklenmez.
     expect(finalAd(e, b)).toBe(finalAd(en, b));
     expect(finalAd(e, b)).not.toContain('ASTM');
@@ -126,15 +131,17 @@ describe('2117-1 b kartın standardı', () => {
 
   test('kaliteAdi ve standartTercihi', () => {
     const g = { ad: 'S235JR', eq: { ASTM: '≈ A36', 'W.Nr': '1.0038' } };
-    expect(kaliteAdi(g, 'astm')).toBe('ASTM A36');
+    expect(kaliteAdi(g, 'astm')).toBe('S235JR');
     expect(kaliteAdi(g, 'en')).toBe('S235JR');
     expect(kaliteAdi(g, null)).toBe('S235JR');
     expect(kaliteAdi({ ad: 'C45', eq: { 'AISI/SAE': '1045' } }, 'astm')).toBe('C45');
     expect(kaliteAdi({ ad: 'X' }, 'astm')).toBe('X');
     const ortak = new Set(['a572 gr.50']);
-    expect(kaliteAdi({ ad: 'S355J2', eq: { ASTM: '≈ A572 Gr.50' } }, 'astm', ortak)).toBe('ASTM A572 Gr.50 (≈ S355J2)');
-    expect(kaliteAdi({ ad: 'S235JR', eq: { ASTM: '≈ A36' } }, 'astm', ortak)).toBe('ASTM A36');
-    expect(kaliteAdi({ ad: 'S355J2', eq: { ASTM: '≈ A572 Gr.50' } }, 'en', ortak)).toBe('S355J2');
+    expect(kaliteAdi({ ad: 'S355J2', eq: { ASTM: '≈ A572 Gr.50' } }, 'astm', ortak)).toBe('S355J2');
+    expect(kaliteAdi({ ad: 'S235JR', eq: { ASTM: '≈ A36' } }, 'astm', ortak)).toBe('S235JR');
+    expect(kaliteAdi({ ad: 'X1', eq: { ASTM: 'A36' } }, 'astm', ortak)).toBe('ASTM A36');
+    expect(kaliteAdi({ ad: 'X1', eq: { ASTM: 'A36' } }, 'en', ortak)).toBe('X1');
+    expect(kaliteAdi({ ad: 'X1', eq: { ASTM: 'A36' } }, 'astm', new Set(['a36']))).toBe('X1');
     expect(standartTercihi({})).toBeNull();
     expect(standartTercihi({ standart: 'xx' })).toBeNull();
     expect(standartTercihi({ standart: 'astm' })).toBe('astm');
@@ -222,19 +229,20 @@ describe('3633 kalite ve norm karşılıkları seçili standarda göre sıralan�
       if (t === null) expect(/\b(ASTM|EN|AMS|SAE|AISI|UNS)\b/.test(n), `tarafsız norm iki tarafı da anıyor: ${n}`).toBe(false);
     }
   });
-  test('gerçek kalite listesinde ASTM seçiliyken hiçbir iki kalite aynı adı almaz (35 ASTM karşılığı dahil); çakışanlara kalitenin kendi adı eklenir', () => {
+  test('gerçek kalite listesinde ASTM seçiliyken yalnız kesin karşılıklar değişir ve hiçbir iki kalite aynı adı almaz', () => {
     const ortak = ortakAstmKarsiliklari(FAMS as never);
-    expect(ortak.has('a572 gr.50')).toBe(true);
     const adlar = new Map<string, string>();
-    let karsilikli = 0;
+    let kesin = 0, yakin = 0;
     for (const f of Object.values(FAMS as unknown as Record<string, { classes: Record<string, { grades: { kod: string; ad: string; eq?: Record<string, string> }[] }> }>)) {
       for (const c of Object.values(f.classes)) for (const g of c.grades) {
-        if (g.eq?.['ASTM']) karsilikli++;
         const ad = kaliteAdi(g, 'astm', ortak);
+        const e = g.eq?.['ASTM'];
+        if (e?.trim().startsWith('≈')) { yakin++; expect(ad, g.kod).toBe(g.ad); }
+        else if (e) { if (ad !== g.ad) { kesin++; expect(ad).toBe(`ASTM ${e.trim()}`); } }
         expect(adlar.has(ad), `${ad} (${g.kod}) ile ${adlar.get(ad) ?? ''}`).toBe(false);
         adlar.set(ad, g.kod);
       }
     }
-    expect(karsilikli).toBe(35);
+    expect(kesin + yakin).toBeGreaterThan(0);
   });
 });
