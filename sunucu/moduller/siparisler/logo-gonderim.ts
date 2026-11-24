@@ -97,6 +97,9 @@ export const satisSiparisiLogoSonucu = (db: Db, id: number, sonuc: SiparislerLog
 export const logoSiralari = (db: Db, tur: 'teklif' | 'siparis', belgeIdler: readonly number[]) => sorgular.logoSiraEslemesi(db, tur, 'belge', belgeIdler);
 export const logoSiraBelgeleri = (db: Db, tur: 'teklif' | 'siparis', siraIdler: readonly number[]) => sorgular.logoSiraEslemesi(db, tur, 'sira', siraIdler);
 
+export const logoSiparisTeklifSiralari = (db: Db, siparisIdler: readonly number[]) => sorgular.logoSiparisTeklifSiralari(db, siparisIdler);
+export type { LogoSiparisTeklifSirasi } from './sorgular.ts';
+
 // 3360-2 a: Logo'ya elle bağlama. Bağlanacak sıra belgenin en yeni sırasıdır; numara Logo'daki gibi sürümlüdür. Yetki denetlemez.
 // Tutar karşılaştırma içindir: KDV hariç (teklifte iskontolu); KDV dahil siparişte ve KDV oranı girilmiş teklif sürümünde, yoksa null.
 export interface SiparislerLogoBaglamaSirasi {

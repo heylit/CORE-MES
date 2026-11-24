@@ -1950,6 +1950,22 @@ export function belgeRozetDurumu(
   return { durum, kayitNo: null, neden: durum === 'sirada' ? null : rozetNedeni(g.sonHata) };
 }
 
+// Teklifi Logo'ya gitmediği için sırada bekleyen satış siparişinin rozeti: durum "Sırada", neden teklifi ve onun durumunu söyler.
+// Teklifin nedeni teklif rozetinde gösterilen metindir; yoksa durumun adı yazılır. Teklif Logo'daysa sipariş bugünkü gibi kendi izini taşır (null).
+const TEKLIF_DURUM_YAZISI: Readonly<Record<LogoRozetDurumu, string>> = Object.freeze({
+  logoda: 'Logo\'da', sirada: 'sırada', 'yeniden-denenecek': 'yeniden denenecek', 'kart-bekliyor': 'kart bekliyor', 'proje-bekliyor': 'proje bekliyor', durdu: 'durdu',
+});
+// Neden önceliği: teklif rozetinin nedeni (giden kutusu ya da bekleme), yoksa Siparişler sırasındaki hata (kur yok vb.), yoksa durumun adı.
+// Teklif numarası Logo'daki gibi sürümlüdür (ilk sürüm yalın, sonrakiler "-R<n>").
+export function teklifBeklerkenSiparisRozeti(
+  teklif: { no: string; surumNo: number; sirahata: string | null }, rozet: { durum: LogoRozetDurumu; neden: string | null } | null,
+): { durum: LogoRozetDurumu; kayitNo: null; neden: string } | null {
+  if (rozet?.durum === 'logoda') return null;
+  const no = teklif.surumNo === 1 ? teklif.no : `${teklif.no}-R${String(teklif.surumNo)}`;
+  const yazi = rozet === null ? teklif.sirahata ?? TEKLIF_DURUM_YAZISI.sirada : rozet.neden ?? teklif.sirahata ?? TEKLIF_DURUM_YAZISI[rozet.durum];
+  return { durum: 'sirada', kayitNo: null, neden: rozetNedeni(`Teklif ${no} Logo'ya gitmedi: ${yazi}`) ?? '' };
+}
+
 /* ---------------- Logo irsaliyeleri (3345 a): yalnız okunur, CORE karşılığıyla gösterilir ---------------- */
 
 // Logo STFICHE.TRCODE (yardımcının beyaz listesi araclar/logo-yardimcisi SqlOkuma.IrsaliyeTurleri ile aynı). 4 ve 5'in anlamı canlı dışı
