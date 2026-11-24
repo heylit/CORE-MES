@@ -146,6 +146,14 @@ export const ILETILER = {
   birlesikDegil: 'Bu talep birleşik talep değil.',
   kaynakDegil: 'Seçilen talep bu birleşik talebin kaynağı değil.',
   ayirmaTeklifli: 'Teklifi ya da kararı olan birleşik talep ayrılamaz.',
+  parcaliDurum: 'Kalemlerin bir kısmı yalnız değerlendirmedeki talepte onaya gönderilir.',
+  parcaliKalemYok: 'Ayrılacak kalem bu talepte yok.',
+  parcaliHepsi: 'En az bir kalem onaya gitmeli; bütün kalemler için olağan onaya gönderin.',
+  parcaliKararKalemi: 'Karar, ayrılan kaleme tedarikçi atayamaz.',
+  parcaliBirlesik: 'Birleşik talepte kalemler bölünerek onaya gönderilemez; önce talebi ayırın.',
+  parcaliGrup: 'Güncelleme talebi açık olan talepte kalemler bölünerek onaya gönderilemez.',
+  parcaliLogo: "Logo'ya gitmiş talepte kalemler bölünemez.",
+  parcaliSiparis: 'Siparişi olan talepte kalemler bölünemez.',
   birlesmeKalemSiniri: 'Birleşik talep en çok 200 kalem taşır.',
   dortGoz: 'Kararı veren kişi o kararı onaylayamaz.',
   onayKademesi: 'Bu tutardaki kararı onaylama basamağınız yetmiyor.',
@@ -1973,6 +1981,22 @@ export function ayirmaReddi(t: Pick<Talep, 'kaynaklar' | 'teklifler' | 'karar'>,
   if (kaynaklar.size === 0) return ILETILER.birlesikDegil;
   if (t.teklifler.length > 0 || t.karar !== null) return ILETILER.ayirmaTeklifli;
   if ((talepIdleri ?? []).some((id) => !kaynaklar.has(id))) return ILETILER.kaynakDegil;
+  return null;
+}
+
+// 3590 (S7, S8): kalemlerin bir kısmı onaya gidip kalanı ayrılırken ön koşullar. Hepsi seçilirse olağan onaya gönderme kullanılır.
+export function parcaliGonderimReddi(t: Pick<Talep, 'id' | 'durum' | 'kalemler' | 'kaynaklar' | 'birlesme' | 'guncellemeGrubu' | 'karar'>,
+  kalanKalemIdleri: readonly string[], karar: { mod: string; teklifId: string | null; bolunme: readonly { kalemId: string }[] }, logoyaGitti: boolean): string | null {
+  if (t.durum !== 'degerlendirme') return ILETILER.parcaliDurum;
+  if ((t.kaynaklar ?? []).length > 0 || t.birlesme != null) return ILETILER.parcaliBirlesik;
+  if ((t.guncellemeGrubu ?? []).some((u) => u.id !== t.id && u.durum !== 'iptal')) return ILETILER.parcaliGrup;
+  if (logoyaGitti) return ILETILER.parcaliLogo;
+  if ((t.karar?.siparisler ?? []).length > 0) return ILETILER.parcaliSiparis;
+  const kalemler = new Set(t.kalemler.map((k) => k.id));
+  if (kalanKalemIdleri.some((id) => !kalemler.has(id))) return ILETILER.parcaliKalemYok;
+  if (kalanKalemIdleri.length >= kalemler.size) return ILETILER.parcaliHepsi;
+  const kalan = new Set(kalanKalemIdleri);
+  if (karar.bolunme.some((b) => kalan.has(b.kalemId))) return ILETILER.parcaliKararKalemi;
   return null;
 }
 

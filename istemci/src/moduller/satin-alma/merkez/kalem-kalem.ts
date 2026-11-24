@@ -11,6 +11,7 @@ import { onaylayabilir } from "./roles.ts";
 import { render } from "./views.ts";
 import { closeModal, openModal, toast } from "./ui.ts";
 import { kalemleriBol, paylarTamam, type Dagilim } from "./kalem-bol.ts";
+import { bolmeyiTaslagaIsle } from "./karar-matrisi.ts";
 
 /** Kalemin kendisi bölünebilir mi; bölünemiyorsa nedeni. */
 export function bolunemezNedeni(it: RequestItem): string | null {
@@ -121,9 +122,9 @@ function bolPenceresi(r: PurchaseRequest, it: RequestItem): void {
     </tbody></table></div>
     <div id="kk-ozet" aria-live="polite"></div>
     <div id="kk-kabul" class="small muted">Kabul sınırı denetleniyor...</div>
-    <label class="f"><span>Gerekçe <small>— isteğe bağlı, karar özetine yazılır</small></span><textarea id="kk-gerekce" maxlength="2000" placeholder="Örn. termin riski için miktarın bir kısmı ikinci tedarikçiden"></textarea></label>
-    <p class="xs muted">Bölünen kalemin teklif fiyatı, kademesi, en az miktarı ve alternatifi yeni satırlara kopyalanır; alternatif uygunluğu yeni satırda yeniden değerlendirilir. Karar onaya gider, varsa onaylar sıfırlanır.</p>
-  </div><div class="mf"><button class="btn primary" data-act="kk-bol-yes" data-item="${it.id}" disabled>Böl ve onaya gönder</button><button class="btn ghost" data-act="close">Vazgeç</button></div>`, true, true);
+    ${r.status === "eval" ? "" : '<label class="f"><span>Gerekçe <small>— isteğe bağlı, karar özetine yazılır</small></span><textarea id="kk-gerekce" maxlength="2000" placeholder="Örn. termin riski için miktarın bir kısmı ikinci tedarikçiden"></textarea></label>'}
+    <p class="xs muted">Bölünen kalemin teklif fiyatı, kademesi, en az miktarı ve alternatifi yeni satırlara kopyalanır; alternatif uygunluğu yeni satırda yeniden değerlendirilir. ${r.status === "eval" ? "Karar, sayfanın altındaki çubuktan gönderilir." : "Karar onaya gider, varsa onaylar sıfırlanır."}</p>
+  </div><div class="mf"><button class="btn primary" data-act="kk-bol-yes" data-item="${it.id}" disabled>${r.status === "eval" ? "Böl" : "Böl ve onaya gönder"}</button><button class="btn ghost" data-act="close">Vazgeç</button></div>`, true, true);
   ozetiYaz(r, it);
   void kabulReddi(r.id, [it.id]).then((red) => {
     const kutu = $<HTMLElement>("#kk-kabul"); if (!kutu || $<HTMLElement>(`[data-kk-pencere="${it.id}"]`) === null) return;
@@ -176,6 +177,13 @@ export function bolunmusKarar(r: PurchaseRequest, kalemId: string, pay: Record<s
   n.status = "approval";
   return { talep: n, metin: `Kalem bölündü: ${bolunenler.join("; ")}. Karar onaya gönderildi.` };
 }
+/** Değerlendirmede Böl yalnız kalemi satırlara ayırır; karar tek sayfadaki çubukla gönderilir (3590). */
+export function bolunmusTalep(r: PurchaseRequest, kalemId: string, pay: Record<string, number>): { talep: PurchaseRequest; atama: Record<string, string>; metin: string } {
+  const ad = (qid: string) => supName(r.quotes.find((q) => q.id === qid)!);
+  const { talep: n, atama, bolunenler } = kalemleriBol(r, { [kalemId]: pay }, ad);
+  n.award = null;
+  return { talep: n, atama, metin: `Kalem bölündü: ${bolunenler.join("; ")}.` };
+}
 
 /* ---------------- sipariş adımı: kalem tablosu ---------------- */
 export function siparisKalemleriHTML(r: PurchaseRequest): string {
@@ -226,7 +234,17 @@ document.addEventListener("click", (e) => {
   const ps = paylar(r, it, ev);
   if (!paylarTamam(it.qty ?? 0, ps.map((p) => p.miktar)) || ps.filter((p) => p.miktar > 0).length < 2) { toast("Miktarı en az iki tedarikçiye, toplamı kalem miktarına eşit olacak şekilde paylaştırın."); return; }
   if ($<HTMLElement>("#kk-kabul")?.dataset.kkKabul !== "tamam") { toast("Bu kalem bölünemez; kabul sınırı notuna bakın."); return; }
-  const { talep, metin } = bolunmusKarar(r, it.id, Object.fromEntries(ps.filter((p) => p.miktar > 0).map((p) => [p.x.q.id, p.miktar])), ($<HTMLTextAreaElement>("#kk-gerekce")?.value ?? "").trim());
+  const pay = Object.fromEntries(ps.filter((p) => p.miktar > 0).map((p) => [p.x.q.id, p.miktar]));
+  if (r.status === "eval") {
+    const b = bolunmusTalep(r, it.id, pay);
+    closeModal();
+    saveRequest(b.talep, b.metin);
+    bolmeyiTaslagaIsle(b.talep, it.id, b.atama);
+    render();
+    toast("Kalem bölündü; karar çubuğundan gönderin");
+    return;
+  }
+  const { talep, metin } = bolunmusKarar(r, it.id, pay, ($<HTMLTextAreaElement>("#kk-gerekce")?.value ?? "").trim());
   closeModal();
   saveRequest(talep, metin);
   render();

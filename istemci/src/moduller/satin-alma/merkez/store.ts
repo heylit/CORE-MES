@@ -184,6 +184,8 @@ export interface Backend {
   /** 3574-1: sipariş satırları (pay, firma, fiyat, satır termini, başlık) tek komutla gider. 'onayda': onaylı tutarı aşan ya da yeni
    *  firmaya giden sipariş onaya düştü (S1 a). Başarısızsa ileti gösterilir, null döner. */
   siparisVer(talepId: string, govde: Omit<SiparisVerGovdesi, 'surum'>): Promise<'verildi' | 'onayda' | null>;
+  /** 3590 (P1): taslağın kararıyla seçilen kalemler onaya, kalanlar yeni talebe (tek komut). */
+  parcaliOnayaGonder(talepId: string, kalanKalemIdleri: readonly string[], talep: PurchaseRequest): Promise<{ ayrilanId: string; ayrilanNo: string } | null>;
   /** 3574-1: onaya düşen siparişin onayı ya da reddi (onay yetkilisi; dört göz sunucuda). */
   siparisOnerisiKarari(talepId: string, sonuc: 'onay' | 'ret', notlar: string): Promise<boolean>;
   /** 3574-2a: verilmiş siparişin değişikliği (bütün satırlar son hâliyle). 'onayda': değişiklik onaya düştü, sipariş eski hâliyle sürer.

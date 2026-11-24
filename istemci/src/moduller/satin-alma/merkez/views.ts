@@ -16,7 +16,6 @@ import {
   pad, parseNum, pct, short, sum, todayStr, type FormEl,
 } from "./util.ts";
 import { viewMaterial, viewMaterials, viewReports, viewSettings, viewSupplier, viewSuppliers } from "./memory.ts";
-import { tabSim } from "./sim.ts";
 import { siparisTakibiHTML } from "./takip.ts";
 import { inlineBulkHTML, rfqPanelHTML } from "./ui.ts";
 import { kalemAdiParcayla, kalemBagMetinleri, parcaAltSatiri, uygulananSatiri } from "./kalem-bagi.ts";
@@ -25,7 +24,8 @@ import { rehberRozetleri } from "./onayli-ekran.ts";
 import { getRole, onaylayabilir, viewApproval, viewApprovals, viewRequesterHome, viewRequestRequester } from "./roles.ts";
 import { secilemezAlternatif, sonucRozeti } from "./alternatif.ts";
 import { alternatifOzetleriniDoldur } from "./alternatif-ozeti.ts";
-import { kalemKalemHTML, siparisKalemleriHTML } from "./kalem-kalem.ts";
+import { siparisKalemleriHTML } from "./kalem-kalem.ts";
+import { ayrilmaBagi, kararSayfasiHTML } from "./karar-matrisi.ts";
 import { siparisOnerisiHTML, siparisOzeti, siparisSatirlariHTML, taslak } from "./siparis-satirlari.ts";
 import { degisecekSiparisler, degisiklikGecmisiHTML, degisiklikOnerisiHTML, siparisDegistirDugmesi } from "./siparis-degistir.ts";
 /* ================= render çekirdeği ================= */
@@ -393,22 +393,11 @@ export function talepGovdesi(r: PurchaseRequest): string {
   else if (sec === "rfq") govde = tabRfq(r);
   else if (sec === "quotes") govde = tabQuotes(r);
   else if (sec === "compare") {
-    if (!(r.quotes || []).length) govde = tabCompare(r);
-    else {
-      // TMI (kullanıcı kararı): paylaştırma çubukları karşılaştırmanın içinde açık durur, ayrı ekran yok. Prototipin koşulu: talep
-      // açık ve en az iki tedarikçi fiyat vermiş.
-      const paylas = OPEN.includes(r.status) && evaluate(r).elig.length >= 2
-        ? `<div class="stack sa-paylastir" id="sa-paylastir"><div class="sa-paylastir-h"><h3>Paylaştırma</h3><span class="small muted">Siparişi tek tedarikçiye değil, miktarı çubuklarla tedarikçiler arasında bölerek verin; beğendiğiniz dağılımı karara aktarın.</span></div>${tabSim(r)}</div>`
-        : "";
-      // Kart #956: önde tek tablo ve tek düğme; ağırlık, kalem kalem tablo, bölme ve paylaştırma kapalı "Ayrıntılar" altında.
-      const acik = UI.adv.detay || r.award?.mode === "split";
-      govde = `<div data-sa-y="46">${tabDecision(r, "select")}</div>${kalemKalemHTML(r)}
-        <details class="adv sa-detay" data-adv="detay" ${acik ? "open" : ""}><summary>Ayrıntılar ve bölme <span class="muted">(ağırlıklar, şartlar tablosu, kalemleri dağıtma, paylaştırma)</span></summary>
-        <div class="stack">${tabCompare(r, true)}${tabDecision(r, "split")}${paylas}</div></details>`;
-    }
+    // 3590 (D): teklifler, kalem fiyatları, şartlar ve dağıtma tek tabloda; karar alttaki tek çubukta (karar-matrisi.ts).
+    govde = evaluate(r).elig.length ? kararSayfasiHTML(r) : tabCompare(r);
   } else if (sec === "approval" || sec === "order" || sec === "delivery") govde = tabDecision(r, sec);
   else govde = tabLog(r);
-  return `${iptal}<div class="sa-adim-govde" data-sec="${sec}">${govde}</div>`;
+  return `${iptal}${sec === "compare" ? "" : ayrilmaBagi(r)}<div class="sa-adim-govde" data-sec="${sec}">${govde}</div>`;
 }
 function viewRequest(): string {
   const r = S.requests[V.id!];

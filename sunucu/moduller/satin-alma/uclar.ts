@@ -4,7 +4,7 @@ import {
   teklifIstekFormuCevabi, teklifIstekFormuKaydetGovdesi,
   kabulZarfiCevabi, kalemZarflariCevabi, kabulZarfiParametresi,
   acilisCevabi, disOperasyonlarCevabi, disOperasyonAyrintisiCevabi, disOperasyonParametresi, fasonSureleriCevabi, fasonSureleriSorgusu, ayarlarKaydetGovdesi, onayKisileriCevabi, hizliAcGovdesi, talebimiDuzenleGovdesi, talebimGuncellemeGovdesi, alternatifIzniGovdesi, talebimSemasi, taleplerimCevabi, taleplerimSorgusu, ayarlarSemasi, firmaParametresi, firmaSecenekleriCevabi, firmaSecenekleriSorgusu, katalogKaydetGovdesi, malzemeSecenekleriCevabi, malzemeSecenekleriSorgusu, katalogSemasi, katalogSilGovdesi, talepGovdesi, acikEmirlerCevabi, projeSecenekleriCevabi, onTalepleriCevabi, onTalepYoksayGovdesi, onTalepGeriAlGovdesi,
-  iptaliGeriAlCevabi, iptaliGeriAlGovdesi, talepAyirGovdesi, talepBirlestirGovdesi, satinAlmaOzetiCevabi, degerlendirmeCevabi, kartAyrintilariCevabi, stokYokIstekleriCevabi, odemePlaniGovdesi, siparisTakibiCevabi, siparisBelgeleriCevabi, siparisBelgesiGovdesi, siparisBelgesiParametresi, siparisSatiriParametresi, siparisFaturalariCevabi, siparisFaturalariSorgusu, siparisFaturasiGovdesi, siparisKalemiDegistirGovdesi, siparisKapatGovdesi, siparisLogoBekletGovdesi, teslimYontemiGovdesi, talepKaydetGovdesi, talepParametresi, talepSemasi, talepSilGovdesi, tamamCevabi, tedarikciKaydetGovdesi, tedarikciSemasi,
+  iptaliGeriAlCevabi, iptaliGeriAlGovdesi, talepAyirGovdesi, parcaliOnayaGonderGovdesi, parcaliOnayaGonderCevabi, talepBirlestirGovdesi, satinAlmaOzetiCevabi, degerlendirmeCevabi, kartAyrintilariCevabi, stokYokIstekleriCevabi, odemePlaniGovdesi, siparisTakibiCevabi, siparisBelgeleriCevabi, siparisBelgesiGovdesi, siparisBelgesiParametresi, siparisSatiriParametresi, siparisFaturalariCevabi, siparisFaturalariSorgusu, siparisFaturasiGovdesi, siparisKalemiDegistirGovdesi, siparisKapatGovdesi, siparisLogoBekletGovdesi, teslimYontemiGovdesi, talepKaydetGovdesi, talepParametresi, talepSemasi, talepSilGovdesi, tamamCevabi, tedarikciKaydetGovdesi, tedarikciSemasi,
   tedarikTerminiKaydetGovdesi, tedarikTerminiKaydetCevabi, tedarikTerminleriCevabi, siparisVerGovdesi, siparisOnerisiKararGovdesi, siparisDegistirGovdesi, siparisOnerisiGeriAlGovdesi,
   butceKullanimiCevabi, butceKullanimiSorgusu, kgFiyatiEkleGovdesi, kgFiyatiIptalGovdesi, kgFiyatiParametresi, kgFiyatiGecmisiCevabi, kgFiyatiGecmisiSorgusu, kgFiyatlariCevabi, malzemeKgFiyatlariCevabi, malzemeKgFiyatlariSorgusu,
   faturaEslemesiCevabi, faturaEslemesiKaydetGovdesi, faturaEslemesiParametresi, onayliListeCevabi,
@@ -142,6 +142,12 @@ export const uclar = [
   uc({
     yontem: 'POST', yol: '/satin-alma-talepleri/:id/ayir', yetki: 'satin-alma.yaz', parametre: talepParametresi, govde: talepAyirGovdesi, cevap: talepSemasi,
     isle: ({ db, kullanici, parametre, govde }) => servis.talepAyir(db, kullanici, parametre.id, govde),
+  }),
+  // 3590 (P1, S1): seçilen kalemler onaya, kalanlar yeni talebe; tek komut, tek işlem. Ayırma yeni talep açtığı için tekrar korumalı.
+  uc({
+    yontem: 'POST', yol: '/satin-alma-talepleri/:id/parcali-onaya-gonder', yetki: 'satin-alma.yaz', parametre: talepParametresi,
+    govde: parcaliOnayaGonderGovdesi, cevap: parcaliOnayaGonderCevabi, tekrarKorumali: true,
+    isle: ({ db, kullanici, parametre, govde, denetimEki }) => servis.parcaliOnayaGonder(db, kullanici, parametre.id, govde, denetimEki),
   }),
   uc({
     yontem: 'POST', yol: '/satin-alma-talepleri/:id/sil', yetki: 'satin-alma.talep-ac', parametre: talepParametresi, govde: talepSilGovdesi,

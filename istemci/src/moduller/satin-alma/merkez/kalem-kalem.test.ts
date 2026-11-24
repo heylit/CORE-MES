@@ -38,7 +38,7 @@ function sunucu(t: Talep, zarf: unknown[] = []): Istek[] {
     const govde = init?.body ? JSON.parse(String(init.body)) : null;
     istekler.push({ yol: String(yol), govde });
     const cevap = String(yol).includes('/kalem-zarflari') ? { kalemler: zarf }
-      : String(yol).includes('/kaydet') ? { ...t, surum: 2 } : acilis(t);
+      : String(yol).includes('/kaydet') ? { ...(govde as Talep), id: t.id, no: t.no, surum: (govde as Talep).surum + 1 } : acilis(t);
     return new Response(JSON.stringify(cevap), { status: 200, headers: { 'content-type': 'application/json' } });
   }));
   return istekler;
@@ -49,7 +49,7 @@ async function ac(t: Talep): Promise<{ kok: HTMLElement; kapat: () => void }> {
   const kapat = ekranliBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {} });
   await vi.waitFor(() => expect(talepSatiri(kok, t.id)).not.toBeNull());
   talepSatiri(kok, t.id)!.click();
-  await vi.waitFor(() => expect(kok.querySelector('[data-sa-kalem-kalem]')).not.toBeNull());
+  await vi.waitFor(() => expect(kok.querySelector('[data-sa-karar-matrisi]')).not.toBeNull());
   return { kok, kapat };
 }
 const yaz = (el: HTMLInputElement, v: string) => { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); };
@@ -57,26 +57,27 @@ const yaz = (el: HTMLInputElement, v: string) => { el.value = v; el.dispatchEven
 afterEach(() => { vi.unstubAllGlobals(); document.body.innerHTML = ''; });
 
 describe('3442-5 kalem kalem karşılaştırma ve bölme', () => {
-  it('karar adımında kalem başına tedarikçi fiyatları görünür; bağlı kalemde Böl yoktur ve nedeni yazılır', async () => {
+  it('karar tablosunda kalem başına tedarikçi fiyatları görünür; bağlı kalemde Böl yoktur ve nedeni yazılır', async () => {
     const t = talep();
     sunucu(t);
     const { kok, kapat } = await ac(t);
-    const k1 = kok.querySelector<HTMLElement>(`[data-kk-kalem="${K1}"]`)!;
-    expect(k1.querySelectorAll('td[data-l]')).toHaveLength(2);
-    expect(k1.querySelector('td.best')?.getAttribute('data-l')).toContain('Deneme A');
-    expect(k1.textContent).toContain('seçili');
+    const k1 = kok.querySelector<HTMLElement>(`.sa-kr-genis [data-kr-kalem="${K1}"]`)!;
+    expect(k1.querySelectorAll('[data-act="kr-ata"]')).toHaveLength(2);
+    const secili = k1.querySelector<HTMLElement>('[data-act="kr-ata"][aria-pressed="true"]')!;
+    expect(secili.dataset.qid).toBe(QA);
+    expect(secili.textContent).toContain('en ucuz');
     expect(k1.querySelector('[data-act="kk-bol"]')).not.toBeNull();
-    const k2 = kok.querySelector<HTMLElement>(`[data-kk-kalem="${K2}"]`)!;
+    const k2 = kok.querySelector<HTMLElement>(`.sa-kr-genis [data-kr-kalem="${K2}"]`)!;
     expect(k2.querySelector('[data-act="kk-bol"]')).toBeNull();
     expect(k2.textContent).toContain('bağlı kalem bölünemez');
     kapat();
   });
 
-  it('Böl: toplam eşit olmadan gönderilmez; eşitlenince kalem iki satıra ayrılır, karar bölünmüş olarak onaya gider, geçmişe önce ve sonra yazılır', async () => {
+  it('Böl: toplam eşit olmadan bölünmez; eşitlenince kalem iki satıra ayrılır, karar göndermez; çubuktan bölünmüş karar onaya gider', async () => {
     const t = talep();
     const istekler = sunucu(t);
     const { kok, kapat } = await ac(t);
-    kok.querySelector<HTMLElement>(`[data-act="kk-bol"][data-item="${K1}"]`)!.click();
+    kok.querySelector<HTMLElement>(`.sa-kr-genis [data-act="kk-bol"][data-item="${K1}"]`)!.click();
     const dugme = document.querySelector<HTMLButtonElement>('[data-act="kk-bol-yes"]')!;
     await vi.waitFor(() => expect(document.querySelector<HTMLElement>('#kk-kabul')?.dataset.kkKabul).toBe('tamam'));
     const a = document.querySelector<HTMLInputElement>(`[data-kk-q="${QA}"]`)!, b = document.querySelector<HTMLInputElement>(`[data-kk-q="${QB}"]`)!;
@@ -92,6 +93,7 @@ describe('3442-5 kalem kalem karşılaştırma ve bölme', () => {
     expect(dugme.disabled).toBe(false);
     // Pay en az miktarda kaldığı için birim tam kalemdekiyle aynı; kademe notu yalnız fiyat farklıysa yazılır.
     expect(document.querySelector('[data-kk-kademe]')).toBeNull();
+    expect(dugme.textContent).toBe('Böl');
     dugme.click();
     await vi.waitFor(() => expect(istekler.some((i) => i.yol.endsWith('/kaydet'))).toBe(true));
     const g = istekler.find((i) => i.yol.endsWith('/kaydet'))!.govde as Talep;
@@ -99,10 +101,22 @@ describe('3442-5 kalem kalem karşılaştırma ve bölme', () => {
     expect(bolunen.map((x) => Number(x.miktar))).toEqual([5, 5]);
     expect(bolunen.some((x) => x.id === K1)).toBe(false);
     expect(g.kalemler.find((x) => x.id === K2)?.miktar).toBe('5');
-    expect(g.karar?.mod).toBe('bolunmus');
-    expect(g.karar?.bolunme).toEqual(expect.arrayContaining([{ kalemId: bolunen[0]!.id, teklifId: QA }, { kalemId: bolunen[1]!.id, teklifId: QB }]));
-    expect(g.durum).toBe('onayda');
+    expect(g.karar).toBeNull();
+    expect(g.durum).toBe('degerlendirme');
     expect(g.hareketler.at(-1)?.metin).toContain('Deneme kalem 10 → 5 Deneme A + 5 Deneme B');
+    // Bölünen satırlar tabloda kendi tedarikçisinde seçili; gönderim çubuktan.
+    await vi.waitFor(() => expect(kok.querySelector(`.sa-kr-genis [data-kr-kalem="${bolunen[1]!.id}"]`)).not.toBeNull());
+    expect(kok.querySelector<HTMLElement>(`.sa-kr-genis [data-act="kr-ata"][data-item="${bolunen[0]!.id}"][aria-pressed="true"]`)?.dataset.qid).toBe(QA);
+    expect(kok.querySelector<HTMLElement>(`.sa-kr-genis [data-act="kr-ata"][data-item="${bolunen[1]!.id}"][aria-pressed="true"]`)?.dataset.qid).toBe(QB);
+    const gerekce = kok.querySelector<HTMLTextAreaElement>('[data-kr-gerekce]')!;
+    yaz(gerekce as unknown as HTMLInputElement, 'Termin riski');
+    const once = istekler.length;
+    kok.querySelector<HTMLElement>('[data-kr-cubuk] [data-act="kr-gonder"]')!.click();
+    await vi.waitFor(() => expect(istekler.slice(once).some((i) => i.yol.endsWith('/kaydet'))).toBe(true));
+    const g2 = istekler.slice(once).find((i) => i.yol.endsWith('/kaydet'))!.govde as Talep;
+    expect(g2.karar?.mod).toBe('bolunmus');
+    expect(g2.karar?.bolunme).toEqual(expect.arrayContaining([{ kalemId: bolunen[0]!.id, teklifId: QA }, { kalemId: bolunen[1]!.id, teklifId: QB }]));
+    expect(g2.durum).toBe('onayda');
     kapat();
   });
 
@@ -110,7 +124,7 @@ describe('3442-5 kalem kalem karşılaştırma ve bölme', () => {
     const t = talep();
     sunucu(t, [{ kalemId: K1, malzemeNo: 9, kabul: { yalnizAyni: true, sartliKabul: false, kaliteler: null, durumlar: null, payMm: null }, zarf: { kaliteler: [], durumlar: [], payMm: null } }]);
     const { kok, kapat } = await ac(t);
-    kok.querySelector<HTMLElement>(`[data-act="kk-bol"][data-item="${K1}"]`)!.click();
+    kok.querySelector<HTMLElement>(`.sa-kr-genis [data-act="kk-bol"][data-item="${K1}"]`)!.click();
     await vi.waitFor(() => expect(document.querySelector<HTMLElement>('#kk-kabul')?.dataset.kkKabul).toBe('red'));
     yaz(document.querySelector<HTMLInputElement>(`[data-kk-q="${QA}"]`)!, '5'); yaz(document.querySelector<HTMLInputElement>(`[data-kk-q="${QB}"]`)!, '5');
     expect(document.querySelector<HTMLButtonElement>('[data-act="kk-bol-yes"]')!.disabled).toBe(true);
@@ -137,9 +151,10 @@ describe('3442-5 kalem kalem karşılaştırma ve bölme', () => {
     git.dataset.act = 'tab'; git.dataset.tab = 'compare';
     kok.querySelector('.sa-adim-govde')!.append(git);
     git.click();
-    await vi.waitFor(() => expect(kok.querySelector('[data-sa-kalem-kalem]')).not.toBeNull());
+    await vi.waitFor(() => expect(kok.querySelector('[data-sa-karar-matrisi]')).not.toBeNull());
     expect(kok.querySelector('[data-act="kk-bol"]')).toBeNull();
-    expect(kok.querySelector(`[data-kk-kalem="${K1}"]`)!.textContent).toContain('Onaylanmış karar değişmez');
+    expect(kok.querySelector<HTMLButtonElement>(`.sa-kr-genis [data-act="kr-ata"][data-item="${K1}"]`)!.disabled).toBe(true);
+    expect(kok.querySelector('[data-kr-kilit]')!.textContent).toContain('Onaylanmış karar değişmez');
     kapat();
   });
 });

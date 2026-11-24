@@ -117,7 +117,7 @@ describe('uygulanacak malzeme karşılaştırma ve siparişte (2875)', () => {
     S.requests = { [r.id]: r }; V.tab = 'compare'; bump();
     const el = document.createElement('div');
     el.innerHTML = talepGovdesi(r);
-    const satirlar = [...el.querySelectorAll('table.matrix tr')].filter((tr) => /Deneme (kaplama hizmeti|vida)/.test(tr.textContent ?? ''))
+    const satirlar = [...el.querySelectorAll('table.sa-kr-t tbody tr')].filter((tr) => /Deneme (kaplama hizmeti|vida)/.test(tr.textContent ?? ''))
       .map((tr) => [...tr.querySelectorAll('[data-sa-uygulanan]')].map((x) => x.textContent));
     expect(satirlar).toEqual([['Uygulanacak malzeme: DNM-7 Deneme flanş'], []]);
   });
