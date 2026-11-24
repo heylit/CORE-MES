@@ -111,3 +111,5 @@
 @media (min-width: 1280px) {
   .tc-pya-kisitlar, .tc-pya-kisit-salt { grid-template-columns: 1fr 1fr 1fr; }
 }
+.tc-pya-kaynak-kisit { align-items: flex-start; flex-direction: column; gap: var(--b-1); padding-block: var(--b-1); }
+@media (min-width: 768px) { .tc-pya-kaynak-satir { grid-template-columns: 1fr 1fr; } }

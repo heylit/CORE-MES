@@ -3,7 +3,7 @@ import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import { ACIL_PAY, AYAR_SECENEKLERI, FASON_GUN, degerAdi, gunMetni, yuzdeMetni, type SecimAyari } from '../../motor-ayarlari/kurallar.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import {
-  AYAR_ALANLARI, PANEL_KISITLARI, alanAnahtari, alanDegeri, alanYazisi, ayarTaslagi, panelKisitAdi, type AyarAlani,
+  AYAR_ALANLARI, PANEL_KISITLARI, alanAnahtari, alanDegeri, alanYazisi, ayarTaslagi, kaynakAdi, kaynakMi, kaynakSecimi, panelKisitAdi, secimAdi, type AyarAlani,
 } from './alanlar.ts';
 
 // Planlama ayarları sayfasının bölümleri ve kontrol tablosu (3561). Saf: ekran yalnız çizer. Bölüm bir ayarı hangi kapıyla yazdığını da söyler;
@@ -91,7 +91,9 @@ export function calismaSatirlari(ortak: PlanlamaCalismasi, gorunum: PlanlamaCali
     };
   });
   const kisit = PANEL_KISITLARI.map((k): KontrolSatiri => ({
-    id: `kisit.${k}`, bolum: 'kisitlar', ad: panelKisitAdi(k), deger: o.acik[k] ? 'açık' : 'kapalı', taslakta: o.acik[k] === g.acik[k] ? null : g.acik[k] ? 'açık' : 'kapalı',
+    id: `kisit.${k}`, bolum: 'kisitlar', ad: kaynakMi(k) ? kaynakAdi(k) : panelKisitAdi(k),
+    deger: kaynakMi(k) ? secimAdi(kaynakSecimi(o, k)) : o.acik[k] ? 'açık' : 'kapalı',
+    taslakta: o.acik[k] === g.acik[k] ? null : kaynakMi(k) ? secimAdi(kaynakSecimi(g, k)) : g.acik[k] ? 'açık' : 'kapalı',
     kaynak: 'Çalışma', degistiren: null, zaman: null,
   }));
   return [...alan, ...kisit];

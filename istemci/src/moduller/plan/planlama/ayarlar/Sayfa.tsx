@@ -8,13 +8,14 @@ import { calismaOku } from '../durum.ts';
 import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import {
-  PANEL_KISITLARI, alanAnahtari, alanDegeri, alanYaz, ayarTaslagi, farklar, kisitYaz, panelKisitAdi, sayiOku, type AyarAlani, type AyarTaslagi,
+  GENEL_KISITLAR, KAYNAK_KISITLARI, alanAnahtari, alanDegeri, alanYaz, ayarTaslagi, farklar, kaynakAdi, kaynakSecimi, kisitYaz, panelKisitAdi, sayiOku, type AyarAlani, type AyarTaslagi,
 } from './alanlar.ts';
 import {
   BOLUMLER, BOLUM_KAPILARI, acikKisitOzeti, bedelKontrolSatirlari, bedelSatirlari, bolumAlanlari, bolumBasligi, bolumFarklari, bolumOku, calismaSatirlari, motorSatirlari,
   sistemSatirlari, suz, zamanYazisi, type BedelSatiri, type BolumAnahtari, type CalismaBolumu, type KontrolSatiri, type KontrolSuzgeci,
 } from './bolumler.ts';
 import { useOku } from './kullan-oku.ts';
+import { KaynakSecimiGrubu } from './KaynakSecimi.tsx';
 import { MotorBolumu } from './MotorBolumu.tsx';
 import { SistemBolumu } from './SistemBolumu.tsx';
 import './ayarlar.css';
@@ -271,10 +272,20 @@ function CalismaFormu({ bolum, c, taslak, yazabilir, satirlar }: {
       <div className="tc-pya-alanlar">{bolumAlanlari(bolum).map(alan)}</div>
       {bolum === 'kisitlar' && (
         <>
+          <h4>Aparat ve ölçü aleti</h4>
+          <div className="tc-pya-kaynak-satir">
+            {KAYNAK_KISITLARI.map((k) => (
+              <div key={k} className="tc-pya-kisit tc-pya-kaynak-kisit">
+                <b>{kaynakAdi(k)}</b>
+                {taslaktaki.get(`kisit.${k}`) != null && <small className="tc-pya-rozet">taslakta {taslaktaki.get(`kisit.${k}`)}</small>}
+                <KaynakSecimiGrubu kimlik={`pya-${k}`} kisit={k} deger={kaynakSecimi(t, k)} kilitli={!yazabilir || kilitli} sec={(s) => { setT(kisitYaz(t, k, s === 'sert')); }} />
+              </div>
+            ))}
+          </div>
           <h4>Açılıp kapanan kısıtlar</h4>
           {yazabilir ? (
             <div className="tc-pya-kisitlar">
-              {PANEL_KISITLARI.map((k) => (
+              {GENEL_KISITLAR.map((k) => (
                 <div key={k} className="tc-pya-kisit">
                   <IsaretKutusu etiket={panelKisitAdi(k)} checked={t.acik[k] === true} disabled={kilitli} onChange={(ev) => { setT(kisitYaz(t, k, ev.target.checked)); }} />
                   {taslaktaki.get(`kisit.${k}`) != null && <small className="tc-pya-rozet">taslakta {taslaktaki.get(`kisit.${k}`)}</small>}
@@ -282,7 +293,7 @@ function CalismaFormu({ bolum, c, taslak, yazabilir, satirlar }: {
               ))}
             </div>
           ) : (
-            <ul className="tc-pya-kisit-salt">{PANEL_KISITLARI.map((k) => <li key={k}>{panelKisitAdi(k)}: <b>{t.acik[k] === true ? 'açık' : 'kapalı'}</b></li>)}</ul>
+            <ul className="tc-pya-kisit-salt">{GENEL_KISITLAR.map((k) => <li key={k}>{panelKisitAdi(k)}: <b>{t.acik[k] === true ? 'açık' : 'kapalı'}</b></li>)}</ul>
           )}
           <p className="tc-pya-not">Aç kapa olmayanlar: tezgâhta aynı anda tek iş (tezgâh iki işi birden yapamaz) ve vardiya saatleri (Takvim sayfasından değişir). Süren iş de taşınır: durdurulmuş sayılır, yapılan kısım yerinde kalır, kalan adet yeni yerine planlanır; biten iş taşınmaz. Elle taşıdığınız işin yeri sizin kararınızdır; Geri al ile kalkar. Veri sayfasındaki <Link to="/plan/veri?bolum=kisitlar">Kısıtlar</Link> doğrudan çalışmaya yazar; açıklamalar orada.</p>
         </>

@@ -412,9 +412,13 @@ const GEVSEK: Record<string, (g: Girdi) => void> = {
   ayarci: (g) => {
     for (const v of g.D.vardiyalar ?? []) for (let i = 0; i < 40; i++) (g.D.personel ??= []).push({ id: `~A${String(v.id)}${i}`, ad: 'sanal ayarcı', vardiya: String(v.id), gruplar: [], ayar: true });
   },
+  // 3650: sunucu motoruyla (girdi.js GEVSEK) aynı ayrım: aparat anahtarı ölçü aletine, kalibrasyon anahtarı aparata dokunmaz.
   aparat: (g) => {
     g.D.aparatlar = (Array.isArray(g.D.aparatlar) ? g.D.aparatlar : []).filter(nesne).map((a) => ({ ...a, adet: 999 }));
-    if (Array.isArray(g.D.ikincilKaynaklar)) Object.assign(g.D, { ikincilKaynaklar: g.D.ikincilKaynaklar.filter(nesne).map((k) => ({ ...k, kisit: 'izle' })) });
+    if (Array.isArray(g.D.ikincilKaynaklar)) Object.assign(g.D, { ikincilKaynaklar: g.D.ikincilKaynaklar.filter(nesne).map((k) => (k.tur === 'olcu_aleti' ? k : { ...k, kisit: 'izle' })) });
+  },
+  kalibrasyon: (g) => {
+    if (Array.isArray(g.D.ikincilKaynaklar)) Object.assign(g.D, { ikincilKaynaklar: g.D.ikincilKaynaklar.filter(nesne).map((k) => (k.tur === 'olcu_aleti' ? { ...k, kisit: 'izle' } : k)) });
   },
   serbest: (g) => { g.D.siparisler = g.D.siparisler.map((s) => ({ ...s, serbest: null })); },
   tasima: (g) => { g.D.ayarlar = { ...g.D.ayarlar, tasimaSaat: 0 }; },

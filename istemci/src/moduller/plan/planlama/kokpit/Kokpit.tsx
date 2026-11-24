@@ -20,7 +20,7 @@ import { AdimSorunu } from './AdimSorunu.tsx';
 import { ElleBol } from './ElleBol.tsx';
 import { Ayarlar } from './Ayarlar.tsx';
 import { useBitinceBildir } from './bitince-bildir.ts';
-import { emirYonu, planYonu } from '../ayarlar/alanlar.ts';
+import { KAYNAK_KISITLARI, ayarTaslagi, emirYonu, kaynakAdi, kaynakSecimi, planYonu, secimAdi } from '../ayarlar/alanlar.ts';
 import { TabloAraci, useTablo } from './Tablo.tsx';
 import { siralaGecikme, siralaPlan } from './tablo.ts';
 import { GENEL_ANAHTARI, HUCRE_ROZET_EN, SATIR_ANAHTARI, hucreKipi, YOGUN_OK_ACIKLAMASI, YOGUN_SATIR, gorunenSatirSayisi, KADEME_YAZISI, inisGorunumu, kademe, pencereOlcegi, satirBoyuCoz, siparisGruplari, siparisOzeti, ufkaSigmaz, ufkaSigmayanSayisi, type SatirBoyu } from './yogunluk.ts';
@@ -963,6 +963,11 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
               {planYonu(c) === y ? <Simge ad="check" boyut="k" /> : <i className="tc-pyq-menu-bosluk" aria-hidden="true" />}<span>{YON_ADI[y]}<small>{YON_ACIKLAMASI[y]}</small></span>
             </button>
           ))}
+          <b className="tc-pyq-menu-baslik" role="presentation">Ayar · aparat ve ölçü aleti</b>
+          <button type="button" role="menuitem" disabled={tur !== null || onayAcik}
+            onClick={() => { kapat(); sec(null, null); setKapasiteAcik(false); setSorunAdimi(null); setAyarYon(planYonu(c)); setEngelAcik(false); setAyarAcik(true); }}>
+            <Simge ad="layers" boyut="k" /><span>Aparat ve ölçü aleti kısıtı<small>{KAYNAK_KISITLARI.map((k) => `${kaynakAdi(k)}: ${secimAdi(kaynakSecimi(ayarTaslagi(c), k))}`).join(' · ')}</small></span>
+          </button>
         </div>
       </>
     );

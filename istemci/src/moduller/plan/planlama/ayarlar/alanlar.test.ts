@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ornekCalisma } from '../motor/ornek.ts';
-import { AYAR_ALANLARI, alanYaz, ayarTaslagi, ayarlariYaz, emirYonu, emirYonuYaz, etkiSatirlari, farklar, kisitYaz, ozetOku, planYonu, sayiOku } from './alanlar.ts';
+import { AYAR_ALANLARI, alanYaz, ayarTaslagi, ayarlariYaz, emirYonu, emirYonuYaz, etkiSatirlari, farklar, kaynakSecimi, kisitYaz, ozetOku, planYonu, sayiOku } from './alanlar.ts';
 
 const alan = (k: string) => {
   const a = AYAR_ALANLARI.find((x) => x.k === k);
@@ -35,7 +35,9 @@ describe('Kokpit ayarları (3282 1b)', () => {
   it('aparat ve özel takım kısıtı panelden kapanır; çalışmanın kapalı listesine girer, malzeme kuralı stok ve termini anlatır', () => {
     const c = ornekCalisma();
     const t = kisitYaz(ayarTaslagi(c), 'aparat', false);
-    expect(farklar(c, t)).toEqual(['Aparat ve özel takım adedi: açık → kapalı']);
+    expect(farklar(c, t)).toEqual(['Aparat ve özel takım: Sert kısıt → Kısıt yok']);
+    expect(kaynakSecimi(t, 'aparat')).toBe('yok');
+    expect(kaynakSecimi(t, 'kalibrasyon')).toBe('sert');
     expect(ayarlariYaz(c, t)).toBe(true);
     expect(c.kapali).toContain('aparat');
     const m = alan('mat');
