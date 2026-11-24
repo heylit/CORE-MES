@@ -1,7 +1,7 @@
 import { D, FAMS } from './durum.ts';
 import { kimyasalStandartlari, mekanikStandartlari, varsayilanStandart } from './metal-standartlari.ts';
 import { grade } from './taslak.ts';
-import { kaliteAdi, standartTercihi } from '../../standart-adlari.ts';
+import { kaliteAdi, ortakAstmKarsiliklari, standartTercihi } from '../../standart-adlari.ts';
 import type { Taslak } from './tipler.ts';
 
 export function gradeLabel(d: Taslak = D): string {
@@ -9,7 +9,7 @@ export function gradeLabel(d: Taslak = D): string {
     if (!g)
         return '';
     // 3633: standardı seçilmiş kartta kalite adı seçili standarda göre (ASTM karşılığı varsa o); eski kartta kalitenin kendi adı.
-    const ad = kaliteAdi(g, standartTercihi(d as unknown as { readonly [k: string]: unknown }));
+    const ad = kaliteAdi(g, standartTercihi(d as unknown as { readonly [k: string]: unknown }), ortakAstmKarsiliklari(FAMS));
     const st = d.stds || [];
     if (!st.length)
         return ad;

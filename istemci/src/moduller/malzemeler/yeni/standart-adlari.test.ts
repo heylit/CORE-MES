@@ -4,7 +4,7 @@ import { FAMS } from './sabitler/index.ts';
 import { metinListesi } from './katalog/liste.ts';
 import { autoKod, finalAd, finalStd, kartAnahtari, kartOzeti, kuralBaglami, metinAyristir, newDraft } from './kurallar/index.ts';
 import {
-  STANDART_AD_SINIRI, TABAN_STANDART_ADLARI, aramaMetinleri, kartStandardi, ayardakiStandartAdlari, esliAdlariCoz, standartAdiYaz, standartAdlari, anaNorm, kaliteAdi, secenekEtiketleri, standartTercihi, standartEtiketi, esdegerSirala, standartTarafi, tarafSirala, standartlaEslesir,
+  STANDART_AD_SINIRI, TABAN_STANDART_ADLARI, aramaMetinleri, ayardakiStandartAdlari, esliAdlariCoz, standartAdiYaz, standartAdlari, anaNorm, kaliteAdi, ortakAstmKarsiliklari, secenekEtiketleri, standartTercihi, standartEtiketi, esdegerSirala, standartTarafi, tarafSirala, standartlaEslesir,
 } from './standart-adlari.ts';
 import type { KartKaydi, KatalogKarti } from './tipler.ts';
 import { ortamKur } from './veri.ts';
@@ -93,10 +93,7 @@ describe('2117 taban tablo ve listeler', () => {
 });
 
 describe('2117-1 b kartın standardı', () => {
-  test('alanı olmayan ya da bozuk kartta ASTM; kart adı ve kodu standarttan bağımsızdır (Logo ad güncellemesi tetiklenmez)', () => {
-    expect(kartStandardi({})).toBe('astm');
-    expect(kartStandardi({ standart: 'xx' })).toBe('astm');
-    expect(kartStandardi({ standart: 'en' })).toBe('en');
+  test('kart adı ve kodu durum/işlem standardından bağımsızdır (karşılığı olmayan kalitede Logo ad güncellemesi tetiklenmez)', () => {
     const ortam = ortamKur(ORNEK_AYAR);
     const b = kuralBaglami({ ortam, kartlar: [], kisi: { id: 1, ad: 'Deneme' }, birim: 'met', yetki: malzemeYetkisi(() => true, ortam) });
     const d = { ...newDraft(b), fam: 'metal', cls: 'islah', grade: 'C45', form: 'cubuk', dims: { d: 50, l: 1000 }, opts: { durum: 'Islah (+QT)', islem: ['Pasivasyon'] } } as KartKaydi;
@@ -134,6 +131,10 @@ describe('2117-1 b kartın standardı', () => {
     expect(kaliteAdi(g, null)).toBe('S235JR');
     expect(kaliteAdi({ ad: 'C45', eq: { 'AISI/SAE': '1045' } }, 'astm')).toBe('C45');
     expect(kaliteAdi({ ad: 'X' }, 'astm')).toBe('X');
+    const ortak = new Set(['a572 gr.50']);
+    expect(kaliteAdi({ ad: 'S355J2', eq: { ASTM: '≈ A572 Gr.50' } }, 'astm', ortak)).toBe('ASTM A572 Gr.50 (≈ S355J2)');
+    expect(kaliteAdi({ ad: 'S235JR', eq: { ASTM: '≈ A36' } }, 'astm', ortak)).toBe('ASTM A36');
+    expect(kaliteAdi({ ad: 'S355J2', eq: { ASTM: '≈ A572 Gr.50' } }, 'en', ortak)).toBe('S355J2');
     expect(standartTercihi({})).toBeNull();
     expect(standartTercihi({ standart: 'xx' })).toBeNull();
     expect(standartTercihi({ standart: 'astm' })).toBe('astm');
@@ -220,5 +221,20 @@ describe('3633 kalite ve norm karşılıkları seçili standarda göre sıralan�
       if (t === 'en') expect(/^(EN\b|W\.Nr)/.test(n), n).toBe(true);
       if (t === null) expect(/\b(ASTM|EN|AMS|SAE|AISI|UNS)\b/.test(n), `tarafsız norm iki tarafı da anıyor: ${n}`).toBe(false);
     }
+  });
+  test('gerçek kalite listesinde ASTM seçiliyken hiçbir iki kalite aynı adı almaz (35 ASTM karşılığı dahil); çakışanlara kalitenin kendi adı eklenir', () => {
+    const ortak = ortakAstmKarsiliklari(FAMS as never);
+    expect(ortak.has('a572 gr.50')).toBe(true);
+    const adlar = new Map<string, string>();
+    let karsilikli = 0;
+    for (const f of Object.values(FAMS as unknown as Record<string, { classes: Record<string, { grades: { kod: string; ad: string; eq?: Record<string, string> }[] }> }>)) {
+      for (const c of Object.values(f.classes)) for (const g of c.grades) {
+        if (g.eq?.['ASTM']) karsilikli++;
+        const ad = kaliteAdi(g, 'astm', ortak);
+        expect(adlar.has(ad), `${ad} (${g.kod}) ile ${adlar.get(ad) ?? ''}`).toBe(false);
+        adlar.set(ad, g.kod);
+      }
+    }
+    expect(karsilikli).toBe(35);
   });
 });

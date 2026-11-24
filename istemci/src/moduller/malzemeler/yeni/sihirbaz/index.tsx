@@ -207,7 +207,7 @@ function SihirbazKabugu(o: EkranOzellikleri & { kartlar: readonly KatalogKarti[]
                   {(['astm', 'en'] as const).map((x) => (
                     <button
                       key={x} type="button" aria-pressed={standartTercihi(d) === x} onClick={() => { degistir((t) => { t.standart = x; }); }}
-                      title={x === 'astm' ? 'Durum ve işlem adları ASTM adıyla yazılır (seçimde, açıklamada, föyde)' : 'Durum ve işlem adları EN adıyla yazılır (seçimde, açıklamada, föyde)'}
+                      title={standartIpucu(x, standartTercihi(d))}
                     >{x === 'astm' ? 'ASTM' : 'EN'}
                     </button>
                   ))}
@@ -230,6 +230,13 @@ function SihirbazKabugu(o: EkranOzellikleri & { kartlar: readonly KatalogKarti[]
       </div>
     </SihirbazBaglami.Provider>
   );
+}
+
+// ASTM / EN düğmesinin ipucu: seçim durum ve işlem adlarını, kalite adını (ASTM karşılığı olan kalitelerde), norm sırasını, açıklamayı ve Logo adını belirler.
+function standartIpucu(x: 'astm' | 'en', secili: 'astm' | 'en' | null): string {
+  const ne = 'Durum ve işlem adları, kalite adı, norm sırası, açıklama ve Logo adı';
+  const tek = `${ne} ${x === 'astm' ? 'ASTM' : 'EN'} adıyla yazılır.`;
+  return secili === null ? `${tek} Bu kartta standart seçilmedi: seçilene kadar kart bugünkü adlarıyla kalır; seçince adlar değişir ve Logo adı güncellenebilir.` : tek;
 }
 
 function ortaSatir(d: Taslak, b: KuralBaglami): string {

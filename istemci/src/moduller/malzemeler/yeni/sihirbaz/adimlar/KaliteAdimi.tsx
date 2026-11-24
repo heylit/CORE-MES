@@ -4,7 +4,7 @@ import { useSihirbaz } from '../baglam.ts';
 import { BagDugmesi, Cip, CipGrubu, Kutu, MetinAlani, Alanlar, Yardim } from '../parcalar.tsx';
 import { aileler, girdiler } from '../turler.ts';
 import type { Aile, Kalite, Sinif } from '../../kurallar/index.ts';
-import { anaNorm, esdegerSirala, kaliteAdi, standartTercihi, tarafSirala } from '../../standart-adlari.ts';
+import { anaNorm, esdegerSirala, kaliteAdi, ortakAstmKarsiliklari, standartTercihi, tarafSirala } from '../../standart-adlari.ts';
 import { FavoriCipleri, SonKullanilanCipleri, yakinKaliteler } from './Baslangic.tsx';
 
 
@@ -23,7 +23,7 @@ function KaliteSatiri({ fam, cls, g, nerede }: { fam: string; cls: string; g: Ka
   return (
     <button type="button" className="tc-my-kalite" aria-pressed={d.fam === fam && d.grade === g.kod} onClick={() => { kaliteSec(fam, cls, g.kod); }}>
       <span className="tc-my-kalite-ana">
-        <b>{kaliteAdi(g, standartTercihi(d))}</b>
+        <b>{kaliteAdi(g, standartTercihi(d), ortakAstmKarsiliklari(b.t.FAMS))}</b>
         {nerede && <span className="tc-my-nerede" data-aile={fam}>{f.ad} / {c.ad}</span>}
         <Esdegerler eq={g.eq} />
       </span>
@@ -163,7 +163,7 @@ export function KaliteAdimi() {
       {g && d.grade !== '__ozel' && !ara && (
         <div className="tc-ek-secili">
           <span className="tc-my-etiket">Seçili kalite</span>
-          <b>{kaliteAdi(g, standartTercihi(d))}</b>
+          <b>{kaliteAdi(g, standartTercihi(d), ortakAstmKarsiliklari(b.t.FAMS))}</b>
           <Esdegerler eq={g.eq} />
         </div>
       )}

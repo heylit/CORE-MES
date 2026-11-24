@@ -5,7 +5,7 @@ import type { MalzemeYetkisi } from '../yetki.ts';
 import { cekirdekSec, derinKopya, type BaslatGirdisi } from './cekirdek/baglam.ts';
 import { SABIT_NESNELER } from './cekirdek/hepsi.ts';
 import type * as C from './cekirdek/hepsi.ts';
-import { esdegerSirala, esliAdlariCoz, kaliteAdi, standartAdlari, standartEtiketi, standartTercihi } from '../standart-adlari.ts';
+import { esdegerSirala, esliAdlariCoz, kaliteAdi, ortakAstmKarsiliklari, standartAdlari, standartEtiketi, standartTercihi } from '../standart-adlari.ts';
 
 // Prototipin işlevleri aynı ad ve aynı parametre sırasıyla (PARCA-SOZLESMESI.md, imza kuralı): taslağa (prototipte genel `D`) bakan
 // işlev taslağı parametre olarak alır, genel duruma bakan her işlev son parametre olarak bağlamı alır. Çekirdek (cekirdek/) prototipin
@@ -256,7 +256,7 @@ export function foyVerisi(d: KartKaydi, b: KuralBaglami, kisa = false): FoyVeris
       const ciftler = [['Aile', s.f.ad], ['Sınıf', s.c?.ad], ...esdeger.slice(0, 3), ['Form', s.fm?.ad], ['Ölçü', m.dimsStr(d)], ...props.slice(0, 6)] as const;
       return { kod, ad, tur, aile: d.fam, bos: false, agirliklar, bolumler: [{ baslik: '', satirlar: satirlar(ciftler) }] };
     }
-    const bolumler: FoyBolumu[] = [{ baslik: 'Tanım', satirlar: satirlar([['Aile', s.f.ad], ['Sınıf', s.c?.ad], ['Kalite', s.g ? kaliteAdi(s.g, standartTercihi(d)) : undefined], ['Standart', s.std]]) }];
+    const bolumler: FoyBolumu[] = [{ baslik: 'Tanım', satirlar: satirlar([['Aile', s.f.ad], ['Sınıf', s.c?.ad], ['Kalite', s.g ? kaliteAdi(s.g, standartTercihi(d), ortakAstmKarsiliklari(b.t.FAMS)) : undefined], ['Standart', s.std]]) }];
     if (esdeger.length) bolumler.push({ baslik: 'Eşdeğerler ve diğer adlar', satirlar: satirlar(esdeger), not: ESDEGER_NOTU });
     if (s.fm) {
       const agir = w ? [[s.fm.mass ? 'Ambalaj / rulo ağırlığı' : 'Parça ağırlığı', m.kgFmt(w.kg)], ...(m.isNum(w.perM) ? [['Metre ağırlığı', m.perMFmt(w.perM)]] : []), ...(m.isNum(w.perM2) ? [['Metrekare ağırlığı', m.perM2Fmt(w.perM2)]] : [])] : [];

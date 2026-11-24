@@ -8,7 +8,7 @@ import * as K from '../kurallar/index.ts';
 import type { KuralBaglami } from '../kurallar/index.ts';
 import type { KatalogKarti, KartKaydi } from '../tipler.ts';
 import type { MalzemeYetkisi } from '../yetki.ts';
-import { kaliteAdi, standartAdlari, standartEtiketi, standartTercihi } from '../standart-adlari.ts';
+import { kaliteAdi, ortakAstmKarsiliklari, standartAdlari, standartEtiketi, standartTercihi } from '../standart-adlari.ts';
 import { kimlikOf, yerineOf } from './liste.ts';
 import { OnayRozeti } from './paneller.tsx';
 
@@ -54,7 +54,7 @@ export function sahaSatirlari(x: KartKaydi, b: KuralBaglami): [string, string][]
   ek('Tür', TURLER[t]?.ad);
   if (!K.isGen(x, b)) {
     const s = K.specData(x, b);
-    ek('Kalite', s.g ? kaliteAdi(s.g, standart) : '');
+    ek('Kalite', s.g ? kaliteAdi(s.g, standart, ortakAstmKarsiliklari(b.t.FAMS)) : '');
     ek('Standart', K.finalStd(x, b));
     ek('Ölçü', K.dimsStr(x, true, b));
     ek('Durum', [etiket(x.opts?.durum), x.opts?.yuzey].filter(Boolean).join(', '));

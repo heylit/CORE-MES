@@ -3,6 +3,7 @@ import { ORNEK_AYAR } from '../ornek-veri.ts';
 import type { KartKaydi } from '../tipler.ts';
 import { ortamKur } from '../veri.ts';
 import { malzemeYetkisi } from '../yetki.ts';
+import { katalogCsvMetni } from '../katalog/disa-aktarma.ts';
 import { cekirdek, kuralBaglami, newDraft, type KuralBaglami } from './index.ts';
 
 // 3633: Excel açıklama sütunları seçili ASTM/EN adını ve norm sırasını taşır; dışa aktar, içe aktar gidiş-dönüşü kartı bozmaz.
@@ -45,5 +46,23 @@ describe('Excel dışa ve içe aktarma', () => {
       expect(m.kartAnahtari(y)).toBe(m.kartAnahtari(x));
       expect([0, 1, 2].map((i) => m.finalAc(y, i))).toEqual([0, 1, 2].map((i) => m.finalAc(x, i)));
     }
+  });
+
+  test('CSV: Standart ve Eşdeğerler sütunları seçili tarafı öne alır; eski kartta özgün sıra', () => {
+    const b = baglam();
+    const hucre = (std: 'astm' | 'en' | null) => {
+      const satirlar = katalogCsvMetni([kart(b, std)], b).split('\n');
+      const bas = satirlar[0]!.split(';');
+      const v = satirlar[1]!.split(';');
+      return { standart: v[bas.indexOf('Standart')]!, es: v[bas.indexOf('Eşdeğerler')]! };
+    };
+    const a = hucre('astm'), e = hucre('en'), o = hucre(null);
+    expect(a.standart.startsWith('ASTM')).toBe(true);
+    expect(e.standart.startsWith('EN')).toBe(true);
+    expect(o.standart).toBe('EN 10083-2 / ASTM A29/A29M');
+    // Hücre ';' içerdiği için tırnaklıdır; ilk eşdeğer seçili tarafın anahtarıdır.
+    expect(a.es.startsWith('"AISI/SAE')).toBe(true);
+    expect(e.es.startsWith('"W.Nr')).toBe(true);
+    expect(o.es.startsWith('"W.Nr')).toBe(true);
   });
 });
