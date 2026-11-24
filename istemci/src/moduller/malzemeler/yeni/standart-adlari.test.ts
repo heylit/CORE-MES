@@ -4,7 +4,7 @@ import { FAMS } from './sabitler/index.ts';
 import { metinListesi } from './katalog/liste.ts';
 import { autoKod, finalAd, kuralBaglami, metinAyristir, newDraft } from './kurallar/index.ts';
 import {
-  STANDART_AD_SINIRI, TABAN_STANDART_ADLARI, aramaMetinleri, kartStandardi, ayardakiStandartAdlari, esliAdlariCoz, standartAdiYaz, standartAdlari, secenekEtiketleri, standartEtiketi, standartlaEslesir,
+  STANDART_AD_SINIRI, TABAN_STANDART_ADLARI, aramaMetinleri, kartStandardi, ayardakiStandartAdlari, esliAdlariCoz, standartAdiYaz, standartAdlari, secenekEtiketleri, standartEtiketi, esdegerSirala, standartTarafi, tarafSirala, standartlaEslesir,
 } from './standart-adlari.ts';
 import type { KartKaydi, KatalogKarti } from './tipler.ts';
 import { ortamKur } from './veri.ts';
@@ -129,5 +129,19 @@ describe('2117 arama yerleri', () => {
     expect(esli.opts).toMatchObject({ durum: 'Islah (+QT)' });
     const ayarsiz = metinAyristir('C45 cubuk 50 QT-E', b({}));
     expect(ayarsiz.opts.durum).toBeUndefined();
+  });
+});
+
+describe('3633 kalite ve norm karşılıkları seçili standarda göre sıralanır', () => {
+  test('taraf tanıma: ASTM ailesi, EN ailesi, öteki tarafsız', () => {
+    for (const x of ['ASTM A29', 'AISI/SAE', 'UNS', 'AMS 6370', 'AA', 'ASTM D1418']) expect(standartTarafi(x), x).toBe('astm');
+    for (const x of ['EN 10083-3', 'EN kısa ad', 'EN numara', 'W.Nr']) expect(standartTarafi(x), x).toBe('en');
+    for (const x of ['DIN (eski)', 'JIS', 'GB', 'ISO', 'Ticari adlar']) expect(standartTarafi(x), x).toBeNull();
+  });
+  test('seçili taraf önce, tarafsız sonra, öteki taraf en sonda; hiçbir karşılık düşmez', () => {
+    const eq = { 'W.Nr': '1.0503', UNS: 'G10450', JIS: 'S45C', 'AISI/SAE': '1045', 'EN kısa ad': 'C45' };
+    expect(Object.keys(esdegerSirala(eq, 'astm'))).toEqual(['UNS', 'AISI/SAE', 'JIS', 'W.Nr', 'EN kısa ad']);
+    expect(Object.keys(esdegerSirala(eq, 'en'))).toEqual(['W.Nr', 'EN kısa ad', 'JIS', 'UNS', 'AISI/SAE']);
+    expect(tarafSirala(['EN 10083-3', 'ASTM A29', 'ISO 683'], 'astm', (x) => x)).toEqual(['ASTM A29', 'ISO 683', 'EN 10083-3']);
   });
 });

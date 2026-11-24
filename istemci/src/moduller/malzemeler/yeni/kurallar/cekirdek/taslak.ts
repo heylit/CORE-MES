@@ -1,4 +1,5 @@
 import { D, DEFBIRIM, DKEY, FAMS, FORMS, MODS, PROPS, Store, ayarla_draftT, draftT, step } from './durum.ts';
+import { kartStandardi, tarafSirala } from '../../standart-adlari.ts';
 import { autoKod, turKurali } from './kod-yapisi.ts';
 import { Host, localStorage } from './ortam.ts';
 import { gradeLabel } from './standartlar.ts';
@@ -161,7 +162,8 @@ export function autoAd__0(d: Taslak = D): string {
 export function autoStd__0(d: Taslak = D): string { if (d.stds && d.stds.length) {
     const gk: Partial<Kalite> = grade(d) || {};
     const gl = gk.stds || [];
-    return d.stds.slice().sort((a, b) => (gl.indexOf(a) + 99 * +(gl.indexOf(a) < 0)) - (gl.indexOf(b) + 99 * +(gl.indexOf(b) < 0))).join(' / ');
+    const ozgun = d.stds.slice().sort((a, b) => (gl.indexOf(a) + 99 * +(gl.indexOf(a) < 0)) - (gl.indexOf(b) + 99 * +(gl.indexOf(b) < 0)));
+    return tarafSirala(ozgun, kartStandardi(d as unknown as { readonly [k: string]: unknown }), x => x).join(' / ');
 } const g = grade(d); const c = FAMS[d.fam as string] && clsObj(d); return (g && g.std) || (c && c.std) || ''; }
 export function kayitliKod(d: Taslak | null | undefined): string { if (!Host.on || !d || !d.id)
     return ''; const k = Store.items.find(x => x && x.id === d.id); return k && (k.tur || 'hammadde') === (d.tur || 'hammadde') && k.com && k.com.kod ? k.com.kod : ''; }

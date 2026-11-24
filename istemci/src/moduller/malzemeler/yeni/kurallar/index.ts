@@ -5,7 +5,7 @@ import type { MalzemeYetkisi } from '../yetki.ts';
 import { cekirdekSec, derinKopya, type BaslatGirdisi } from './cekirdek/baglam.ts';
 import { SABIT_NESNELER } from './cekirdek/hepsi.ts';
 import type * as C from './cekirdek/hepsi.ts';
-import { esliAdlariCoz, kartStandardi, standartAdlari, standartEtiketi } from '../standart-adlari.ts';
+import { esdegerSirala, esliAdlariCoz, kartStandardi, standartAdlari, standartEtiketi } from '../standart-adlari.ts';
 
 // Prototipin işlevleri aynı ad ve aynı parametre sırasıyla (PARCA-SOZLESMESI.md, imza kuralı): taslağa (prototipte genel `D`) bakan
 // işlev taslağı parametre olarak alır, genel duruma bakan her işlev son parametre olarak bağlamı alır. Çekirdek (cekirdek/) prototipin
@@ -245,7 +245,7 @@ export function foyVerisi(d: KartKaydi, b: KuralBaglami, kisa = false): FoyVeris
     const ad = String(s.ad || `${s.f.ad} (kalite seçilmedi)`);
     const w = s.w;
     const props = (s.props as { ad: string; v: unknown; u: string; ch: boolean }[]).map((p) => [p.ad, m.propDisp(p.v, p.u), p.ch] as const);
-    const esdeger = Object.entries(s.eq as Record<string, string>);
+    const esdeger = Object.entries(esdegerSirala(s.eq as Record<string, string>, kartStandardi(d)));
     if (kisa) {
       const agirliklar: FoyAgirligi[] = [];
       if (w) {

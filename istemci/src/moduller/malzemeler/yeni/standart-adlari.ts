@@ -261,6 +261,24 @@ export function secenekEtiketleri(degerler: readonly string[], adlar: StandartAd
   return new Map(ham.map(([v, e]) => [v, (sayim.get(e) ?? 0) > 1 && e !== v ? `${e} - ${v}` : e]));
 }
 
+// 3633: eşdeğer anahtarı ve norm adı hangi standart ailesine ait: ASTM tarafı (ASTM, AMS, SAE, AISI, UNS, AA, MIL) ya da EN tarafı (EN, W.Nr).
+// İki tarafa da girmeyen (ISO, DIN, JIS, GB, ticari adlar) tarafsızdır; seçili standart ne olursa olsun yerinde kalır.
+export function standartTarafi(ad: string): Standart | null {
+  if (/^(ASTM|AMS|SAE|MIL|AISI|UNS|AA\b|Döküm)/.test(ad)) return 'astm';
+  if (/^(EN\b|W\.Nr)/.test(ad)) return 'en';
+  return null;
+}
+const TARAF_SIRASI = (t: Standart | null, tercih: Standart): number => (t === tercih ? 0 : t === null ? 1 : 2);
+// Seçili standardın tarafı önce, tarafsızlar sonra, öteki taraf en sonda; kendi içinde özgün sıra korunur. Hiçbir değer düşmez.
+export function tarafSirala<T>(liste: readonly T[], tercih: Standart, ad: (x: T) => string): T[] {
+  return liste.map((x, i) => [x, i] as const)
+    .sort((a, b) => TARAF_SIRASI(standartTarafi(ad(a[0])), tercih) - TARAF_SIRASI(standartTarafi(ad(b[0])), tercih) || a[1] - b[1])
+    .map(([x]) => x);
+}
+export function esdegerSirala(eq: Readonly<Record<string, string>> | undefined, tercih: Standart): Record<string, string> {
+  return Object.fromEntries(tarafSirala(Object.entries(eq ?? {}), tercih, ([k]) => k));
+}
+
 const kucuk = (s: string) => s.toLocaleLowerCase('tr');
 
 // Değer, ASTM ve EN adlarının hepsinde arar.
