@@ -136,14 +136,13 @@ describe('kayda bağlı klasörler (kart 3288)', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('Ayarlar: kalıcı silmede dört göz genel ayar ucuyla, görülen değerle değişir (3443 a, 5)', async () => {
+  it('Ayarlar: kalıcı silmede dört göz yalnız gösterilir; değiştirme Sistem Ayarları > Onay kuralları\'ndadır', async () => {
     const cagrilar = sunucuKur();
     ciz('ayarlar');
-    const anahtar = await screen.findByRole('checkbox', { name: /kalıcı silmeye dört göz/ });
-    expect((anahtar as HTMLInputElement).checked).toBe(false);
-    fireEvent.click(anahtar);
-    await waitFor(() => expect(cagrilar.some((c) => c.yol === '/ayarlar/ortak-dosyalar.silme-dort-goz/degistir')).toBe(true));
-    expect(cagrilar.find((c) => c.yol === '/ayarlar/ortak-dosyalar.silme-dort-goz/degistir')?.govde).toEqual({ deger: true, beklenen: false });
+    await screen.findByText('Dört göz kapalı');
+    expect(screen.queryByRole('checkbox', { name: /kalıcı silmeye dört göz/ })).toBeNull();
+    expect(screen.getByRole('link', { name: /Onay kurallarında değiştir/ }).getAttribute('href')).toBe('/ayarlar?sekme=onay');
+    expect(cagrilar.some((c) => c.yol.includes('/degistir'))).toBe(false);
   });
 
   it('Ayarlar: kök yokken yönetici "Müşteriler" klasörünü açar', async () => {

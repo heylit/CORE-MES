@@ -1,6 +1,6 @@
 import { Fragment, useId, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { agAraligiHatasi } from '#paylasilan/ag-araligi.ts';
 import { kalipHatasi, numaraKur } from '#paylasilan/numara.ts';
 import { tarihAraligiHatasi } from '#paylasilan/tarih-araligi.ts';
@@ -284,7 +284,7 @@ function AyarSatiri({ ayar, mesgul, degistir }: { ayar: Ayar; mesgul: boolean; d
 
 export type AyarKategorisi = 'genel' | 'konum' | 'onay' | 'logo' | 'smartes' | 'pdks' | 'numara' | 'arkon' | 'gorunum' | 'eposta';
 
-// Numara kalıpları türünden, ötekiler anahtardan ayrılır: dört göz ayarları modül adıyla biter, dış bağlantıların (Logo,
+// Numara kalıpları türünden, ötekiler anahtardan ayrılır: dört göz ayarları `dort-goz` ile biter (modül adının ardından `.` ya da konu adının ardından `-`), dış bağlantıların (Logo,
 // SmartES) ayarları kendi adlarıyla başlar, PDKS kart okuyucu ayarı `nizamiye.pdks-` ile; hepsi Bağlantılar'da kendi alt sekmesine düşer. Arkon ayarları (üretim anomalisi eşikleri)
 // Modül ayarları'nda Arkon'un ekranının başında açılır (kart #1193). Tanınmayan yeni ayar kaybolmasın diye Genel'e düşer.
 export function ayarKategorisi({ anahtar, tur }: { anahtar: string; tur: Ayar['tur'] }): AyarKategorisi {
@@ -295,7 +295,7 @@ export function ayarKategorisi({ anahtar, tur }: { anahtar: string; tur: Ayar['t
   if (anahtar.startsWith('logo.')) return 'logo';
   if (anahtar.startsWith('smartes.')) return 'smartes';
   if (anahtar.startsWith('nizamiye.pdks-')) return 'pdks';
-  if (anahtar.endsWith('.dort-goz')) return 'onay';
+  if (/[.-]dort-goz$/.test(anahtar)) return 'onay';
   if (anahtar.startsWith('arkon.')) return 'arkon';
   // E-posta gönderim ayarları E-posta sekmesinin Sunucu bölümündedir (3397).
   if (anahtar.startsWith('bildirim.eposta')) return 'eposta';
@@ -511,7 +511,9 @@ export function SistemAyarlari({ ekranlar = ayarEkranlari }: { ekranlar?: readon
   const sekmeler = SEKMELER.filter((s) => (s.anahtar !== 'moduller' || moduller.length > 0) && (s.anahtar !== 'formlar' || formEkranlari.length > 0)
     && (s.anahtar !== 'guncelleme' || guncelleyebilir) && (s.anahtar !== 'yedek' || yedekleyebilir) && (s.anahtar !== 'temizlik' || temizleyebilir)
     && (s.anahtar !== 'cihazlar' || cihazKaydedebilir) && (s.anahtar !== 'eposta' || epostaYonetir));
-  const [secili, setSecili] = useState<SayfaSekmesi>('genel');
+  // Başka ekranlardan `?sekme=onay` gibi bağlantıyla doğrudan sekmeye gelinir; geçersiz ad Genel'e düşer.
+  const istenen = useSearchParams()[0].get('sekme');
+  const [secili, setSecili] = useState<SayfaSekmesi>(SEKMELER.find((s) => s.anahtar === istenen)?.anahtar ?? 'genel');
   const gecerli = sekmeler.some((s) => s.anahtar === secili) ? secili : 'genel';
   return (
     <div className="tc-ayar-sayfa">

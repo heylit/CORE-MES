@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { Islem } from '#paylasilan/islemler.ts';
@@ -76,7 +77,7 @@ function ac(islemler: Islem[]) {
   istemci.setQueryData<Kullanici>(ortakAnahtarlar.oturum, { id: 1, ad: 'ORN', islemler });
   render(
     <QueryClientProvider client={istemci}>
-      <BildirimSaglayici><SistemAyarlari ekranlar={[]} /></BildirimSaglayici>
+      <BildirimSaglayici><MemoryRouter><SistemAyarlari ekranlar={[]} /></MemoryRouter></BildirimSaglayici>
     </QueryClientProvider>,
   );
 }

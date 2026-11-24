@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { Islem } from '#paylasilan/islemler.ts';
@@ -62,7 +63,7 @@ function sunucuKur(logoKontrol: LogoKontrolCevabi = LOGO_KONTROL_HATA) {
 function cizdir(icerik: React.ReactNode, islemler?: Islem[]) {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   if (islemler) istemci.setQueryData<Kullanici>(ortakAnahtarlar.oturum, { id: 1, ad: 'Deneme', islemler });
-  render(<QueryClientProvider client={istemci}><BildirimSaglayici>{icerik}</BildirimSaglayici></QueryClientProvider>);
+  render(<QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter>{icerik}</MemoryRouter></BildirimSaglayici></QueryClientProvider>);
 }
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });

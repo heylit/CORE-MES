@@ -47,6 +47,6 @@ YETKI = `ortak-dosyalar.yetki-ver` (yalnız yönetici rolü; Risk K4 a: yeni iş
 | `POST .../silme-iste` | SAYFA + Yönetir | dört göz kapalıysa 409; dosya başına tek açık istek | OD-36 |
 | `POST .../silme-onayla`, `/silme-reddet` | SAYFA + Yönetir | isteyen değil (403); onayda sürüm ve ad | OD-36 |
 | `POST .../silme-geri-cek` | SAYFA + Yönetir | yalnız isteyen | OD-36 |
-| Ayar `ortak-dosyalar.silme-dort-goz` | `ayarlar.yaz` (genel uç) | denetime yazılır | OD-36 |
+| Ayar `ortak-dosyalar.silme-dort-goz` | `ayarlar.yaz` (genel uç; Sistem Ayarları > Onay kuralları) | denetime yazılır | OD-36 |
 
 - Silme yazıları satır kilidi altında; kilitli satırda arşiv ve sürüm yeniden denetlenir. Defter satırı ve denetim kaydı silinmez.
