@@ -38,6 +38,14 @@ export const durumGosterimi = (emir: Pick<Emir, 'durum' | 'canli'> & KapanisSonu
     ? { etiket: `Birleşti: ${emir.birlestigiEmir.emirNo}`, ton: 'pasif' }
     : emirDurumuGosterimi({ durum: emir.durum, kapanisSonucu: emir.kapanisSonucu ?? null, calisma: emir.canli?.calisma ?? null }));
 
+// Telefon kartının sol şeridi (kart 3676): rozet renkleri her ekranda ortak sözlükten gelir ve değişmez; şerit yerel eşlemedir.
+// Yeşil yalnız tamam: planlı gri (pasif), çalışan emir mavi (bilgi), diğerleri rozetin tonudur.
+export const seritTonu = (emir: Parameters<typeof durumGosterimi>[0]): DurumGosterimi['ton'] => {
+  if (emir.durum === 'planli') return 'pasif';
+  if (emir.durum === 'basladi' && emir.canli?.calisma === 'calisiyor') return 'bilgi';
+  return durumGosterimi(emir).ton;
+};
+
 // Başlamışta canlı sayaç, bitmişte kapanış adedi; öbürlerinde yok (sıfır uydurulmaz).
 export function saglamSayisi(emir: Pick<Emir, 'durum' | 'canli' | 'saglamAdet'>): number | null {
   if (emir.durum === 'bitti') return emir.saglamAdet;

@@ -22,6 +22,7 @@ export { Karsilama } from './Karsilama.tsx';
 export { AcilisGosterisi, AcilisOnizleme } from './Acilis.tsx';
 export { Tablo, tabloCsvSatirlari, type Sutun, type TabloAraci, type TabloSuzgeci } from './Tablo.tsx';
 export { SayfaBasligi, type BirincilEylem } from './SayfaBasligi.tsx';
+export { Yenile, gecenMetni, type YenilenenSorgu } from './Yenile.tsx';
 export { Sayfalama, type SayfalamaOzellikleri } from './Sayfalama.tsx';
 export { CokSatir, Girdi, IsaretKutusu, Secim, type Secenek } from './Alan.tsx';
 export { AcKapa } from './AcKapa.tsx';

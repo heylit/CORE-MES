@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import type { MalKabulSatirlariCevabi, MalKabulSatirOzeti } from '#paylasilan/sozlesme/stok-mal-kabul-satirlari.ts';
-import { DurumKutusu, Girdi, Kart, Rozet, Secim, Simge, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
+import { DurumKutusu, Girdi, Kart, Rozet, Secim, Simge, Tablo, Yenile, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
 import { anahtarlar } from './anahtarlar.ts';
@@ -84,8 +84,9 @@ export function MalKabulYapilanlar() {
         <Secim etiket="Logo durumu" value={liste.suzgecler.logoDurumu} onChange={(e) => liste.suzgecDegistir({ logoDurumu: e.target.value as '' })}
           secenekler={LOGO_ESLESME_DURUMLARI.map((d) => ({ deger: d, baslik: LOGO_ETIKETI[d].etiket }))} bosSecenek="Hepsi" />
       </div>
-      {l.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(l.error)} yenile={() => void l.refetch()} /> : (
-        <Tablo etiket="Mal kabulü yapılanlar" kip="kayit" sutunlar={SUTUNLAR} satirlar={l.data?.satirlar ?? []} satirAnahtari={(s) => s.id} mesgul={l.isPending}
+      <Yenile sorgu={l} ad="Mal kabulü yapılanlar" />
+      {l.isError && !l.data ? <DurumKutusu durum="hata" mesaj={hataMetni(l.error)} yenile={() => void l.refetch()} /> : (
+        <Tablo etiket="Mal kabulü yapılanlar" kip="kayit" serit={(s) => kabulSatiriDurumu(s).ton} sutunlar={SUTUNLAR} satirlar={l.data?.satirlar ?? []} satirAnahtari={(s) => s.id} mesgul={l.isPending}
           bosMesaj="Henüz mal kabul yok." siralama={liste.siralama} siralamaDegistir={liste.siralamaDegistir}
           {...(l.data ? { sayfalama: { sayfa: l.data.sayfa, sayfaBoyu: l.data.sayfaBoyu, toplam: l.data.toplam, degistir: liste.sayfaDegistir } } : {})} />
       )}

@@ -3,11 +3,11 @@ import { useQueries, useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { KucukResim } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import type { BitenEmirlerCevabi, EmirDurumu, IzlemeEmri, IzlemeListeCevabi, KapanisListeCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { Dugme, DurumKutusu, Kart, Rozet, Sekmeler, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Kart, Rozet, Sekmeler, Tablo, Yenile, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { KucukResimKutusu, useKucukResimler } from '../belge-merkezi/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { ADIMLI_OKUMA_ISLEMLERI, durumGosterimi, saglamSayisi, zamanMetni } from './gorunum.ts';
+import { ADIMLI_OKUMA_ISLEMLERI, durumGosterimi, saglamSayisi, seritTonu, zamanMetni } from './gorunum.ts';
 import { SmartesEmirHucresi, useSmartesRozetleri } from './SmartesRozeti.tsx';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { beklemeNedeniKisa, beklemeSuresi } from './Bekletme.tsx';
@@ -189,12 +189,13 @@ export function UretimEmirleri({ emirAcma }: { emirAcma?: EmirAcmaYuvasi }) {
           ))}
         </div>
       )}
+      <Yenile sorgu={sorgu} ad="Üretim emirleri" />
       {sorgu.isPending && <DurumKutusu durum="yukleniyor" />}
-      {sorgu.isError && <DurumKutusu durum="hata" mesaj={hataIletisi(sorgu.error, 'Emirler alınamadı.')} yenile={() => { void sorgu.refetch(); }} />}
+      {sorgu.isError && !sorgu.data && <DurumKutusu durum="hata" mesaj={hataIletisi(sorgu.error, 'Emirler alınamadı.')} yenile={() => { void sorgu.refetch(); }} />}
       {gorunum === 'acik' && liste.data && (
         <>
           <p className="tc-emir-sayac" role="status">{emirler.length} açık emir</p>
-          <Tablo etiket="Üretim emirleri" kip="kayit" sutunlar={SUTUNLAR} satirlar={emirler} satirAnahtari={(e) => e.id}
+          <Tablo etiket="Üretim emirleri" kip="kayit" serit={seritTonu} sutunlar={SUTUNLAR} satirlar={emirler} satirAnahtari={(e) => e.id}
             satirSec={(e) => { void yonlendir(`/uretim-emirleri/${e.id}`); }} bosMesaj="Açık emir yok" />
           {ara !== '' && emirler.length === 0 && (
             <Dugme simge="search" onClick={() => gorunumSec('bitenler')}>Bitenlerde ara</Dugme>
@@ -202,7 +203,7 @@ export function UretimEmirleri({ emirAcma }: { emirAcma?: EmirAcmaYuvasi }) {
         </>
       )}
       {gorunum === 'bitenler' && bitenler.data && (
-        <Tablo etiket="Biten üretim emirleri" kip="kayit" sutunlar={SUTUNLAR} satirlar={bitenler.data.satirlar} satirAnahtari={(e) => e.id}
+        <Tablo etiket="Biten üretim emirleri" kip="kayit" serit={seritTonu} sutunlar={SUTUNLAR} satirlar={bitenler.data.satirlar} satirAnahtari={(e) => e.id}
           satirSec={(e) => { void yonlendir(`/uretim-emirleri/${e.id}`); }} bosMesaj="Biten emir yok" mesgul={bitenler.isPlaceholderData}
           sayfalama={{ sayfa: bitenler.data.sayfa, sayfaBoyu: bitenler.data.sayfaBoyu, toplam: bitenler.data.toplam, degistir: setSayfa, etiket: 'Biten emir sayfaları' }} />
       )}

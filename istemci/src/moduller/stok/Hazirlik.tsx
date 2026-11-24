@@ -6,7 +6,7 @@ import type {
   ToplamaAyrintiCevabi, ToplamaKapatGovdesi, ToplamalarCevabi, YerdekiStokCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
 import {
-  Dugme, DurumKutusu, Girdi, KodOkuyucu, Kart, Menu, OnayPenceresi, Pencere, Rozet, Sayfalama, Secim, Sekmeler, Simge, Tablo, useOkutmaGecmisi,
+  Dugme, DurumKutusu, Girdi, KodOkuyucu, Kart, Menu, OnayPenceresi, Pencere, Rozet, Sayfalama, Secim, Sekmeler, Simge, Tablo, Yenile, useOkutmaGecmisi,
   type KomutIsleyici, type OkutmaGecmisi, type OkutmaTonu, type RozetTonu, type Sutun,
 } from '../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
@@ -329,9 +329,10 @@ function Istekler() {
             <Dugme tur="ikincil" onClick={() => setSecim({})}>Seçimi bırak</Dugme>
           </div>
         )}
-        {l.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(l.error)} yenile={() => void l.refetch()} />
+        <Yenile sorgu={l} ad="Malzeme istekleri" />
+        {l.isError && !l.data ? <DurumKutusu durum="hata" mesaj={hataMetni(l.error)} yenile={() => void l.refetch()} />
           : l.isPending ? <DurumKutusu durum="yukleniyor" />
-          : <Tablo etiket="Malzeme istekleri" kip="kayit" sutunlar={sutunlar} satirlar={l.data.satirlar} satirAnahtari={(i) => i.id} bosMesaj={durum === 'acik' ? 'Bekleyen malzeme isteği yok. İstekler üretimden, Okut panelindeki "Malzeme iste" ile gelir.' : 'Bu durumda istek yok.'} />}
+          : <Tablo etiket="Malzeme istekleri" kip="kayit" serit={(i) => istekDurumu(i).ton} sutunlar={sutunlar} satirlar={l.data?.satirlar ?? []} satirAnahtari={(i) => i.id} bosMesaj={durum === 'acik' ? 'Bekleyen malzeme isteği yok. İstekler üretimden, Okut panelindeki "Malzeme iste" ile gelir.' : 'Bu durumda istek yok.'} />}
         {l.data && l.data.satirlar.length > 0 && <Sayfalama sayfa={l.data.sayfa} sayfaBoyu={l.data.sayfaBoyu} toplam={l.data.toplam} degistir={setSayfa} satirSayisi={l.data.satirlar.length} />}
       </div>
       {liste && <ListeAcPenceresi istekler={secililer} kapat={() => { setListe(false); setSecim({}); }} />}
@@ -373,8 +374,9 @@ function Listeler() {
       <div className="tc-stok-form">
         <p className="tc-stok-not">Liste, seçilen malzemelerin raf sırasına dizilmiş toplama turudur; açık listeyi buradan sürdürün.</p>
         {yetkili && <div className="tc-stok-eylem"><Dugme tur="ikincil" simge="plus" onClick={() => setYeni(true)}>İsteksiz liste</Dugme></div>}
-        {l.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(l.error)} /> : (
-          <Tablo etiket="Toplama listeleri" kip="kayit" satirlar={l.data?.satirlar ?? []} satirAnahtari={(t) => t.id} mesgul={l.isPending} bosMesaj='Henüz liste yok. İstekleri seçip "Liste aç" deyin.'
+        <Yenile sorgu={l} ad="Toplama listeleri" />
+        {l.isError && !l.data ? <DurumKutusu durum="hata" mesaj={hataMetni(l.error)} /> : (
+          <Tablo etiket="Toplama listeleri" kip="kayit" serit={(t) => LISTE_DURUMU[t.durum].ton} satirlar={l.data?.satirlar ?? []} satirAnahtari={(t) => t.id} mesgul={l.isPending} bosMesaj='Henüz liste yok. İstekleri seçip "Liste aç" deyin.'
             sutunlar={[
               { anahtar: 'no', baslik: 'Liste', mono: true, sabit: 'sol', csv: (t) => t.no, hucre: (t) => <Link to={`/stok/hazirlik/${t.id}`}>{t.no}</Link> },
               { anahtar: 'ad', baslik: 'Ad', kartta: true, kes: true, hucre: (t) => t.ad },
