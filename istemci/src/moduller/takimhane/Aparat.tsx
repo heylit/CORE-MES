@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import type { AparatCevabi, AparatKarsilastirma, AparatSatiri, EmirAparatCevabi, EmirAparatSatiri } from '#paylasilan/sozlesme/takimhane.ts';
-import { Dugme, DurumKutusu, Kart, Rozet, SayfaBasligi, Sekmeler, Simge, Tablo, type Sutun, type TabloAraci } from '../../ortak/arayuz/index.ts';
-import { api } from '../../ortak/veri/api.ts';
+import type { AparatCevabi, AparatKarsilastirma, AparatSatiri, EmirAparatCevabi, EmirAparatSatiri, SeceneklerCevabi } from '#paylasilan/sozlesme/takimhane.ts';
+import { Dugme, DurumKutusu, GrupluSecim, Kart, Rozet, SayfaBasligi, Secim, Sekmeler, Simge, Tablo, useBildirim, type Sutun, type TabloAraci } from '../../ortak/arayuz/index.ts';
+import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import {
   APARAT_ASAMA_ADI, APARAT_DURUMU_ADI, APARAT_DURUMU_TONU, APARAT_UYUMU_ADI, APARAT_UYUMU_TONU, KONUM_ADI, KONUM_SIMGESI, adetMetni, pencereMetni,
@@ -27,6 +28,21 @@ export function AparatKonumlari({ konumlar }: { konumlar: AparatCevabi['konumlar
         </div>
       ))}
     </dl>
+  );
+}
+
+// Aparatın nerede durduğu tek çubukta: her adet bir dilimdir (genişlik adetle orantılı, satır içi stil gerekmez), renk konum türünden; yazı altta.
+function DagilimCubugu({ satir }: { satir: AparatSatiri }) {
+  const parcalar = KONUMLAR.map((k) => ({ anahtar: k, ad: APARAT_KONUM_ADI[k], adet: satir.konumlar[k] ?? 0 })).filter((p) => p.adet > 0);
+  if (parcalar.length === 0) return null;
+  const metin = parcalar.map((p) => `${p.ad} ${String(p.adet)}`);
+  return (
+    <div>
+      <div className="tc-tkm-cubuk" role="img" aria-label={metin.join(', ')}>
+        {parcalar.flatMap((p) => Array.from({ length: Math.min(p.adet, 200) }, (_, n) => <i key={`${p.anahtar}-${String(n)}`} data-konum={p.anahtar} />))}
+      </div>
+      <p className="tc-tkm-soluk">{metin.join(' · ')}</p>
+    </div>
   );
 }
 
@@ -133,6 +149,7 @@ export function AparatSayfasi() {
             <Kart baslik={acik.ad} simge="wrench" baslikEki={<Dugme onClick={() => { acikYaz(null); }}>Kapat</Dugme>}>
               <div className="tc-tkm-ayrinti">
                 <p className="tc-tkm-soluk mono">{acik.kod}</p>
+                <DagilimCubugu satir={acik} />
                 <dl className="tc-tkm-dagilim">
                   {KONUMLAR.map((k) => <div key={k}><dt><Simge ad={KONUM_SIMGESI[k]} boyut="k" />{APARAT_KONUM_ADI[k]}</dt><dd className="mono">{adetMetni(acik.konumlar[k])}</dd></div>)}
                   <div><dt><Simge ad="clock" boyut="k" />Ayrılan (plan)</dt><dd className="mono">{acik.ayrilan}</dd></div>
@@ -172,7 +189,52 @@ const emirSutunlari = (emirId: string): readonly Sutun<EmirAparatSatiri>[] => [
 
 function DurumRozeti({ a }: { a: EmirAparatSatiri }) {
   const metin = a.durum === 'eksik' ? `${APARAT_DURUMU_ADI.eksik}: ${String(a.eksik)}/${String(a.adet - a.disarida)}` : APARAT_DURUMU_ADI[a.durum];
-  return <Rozet ton={APARAT_DURUMU_TONU[a.durum]}>{metin}</Rozet>;
+  return (
+    <span className="tc-tkm-bulgu">
+      <Rozet ton={APARAT_DURUMU_TONU[a.durum]}>{metin}</Rozet>
+      {a.planKaydi && a.baslangic !== null && <Rozet ton="uyari">{`Plan ertelendi · ${pencereMetni(a.baslangic, a.baslangic).slice(0, 5)}`}</Rozet>}
+    </span>
+  );
+}
+
+// Emrin çıkabilir aparatlarını tek alana verir: tezgâh (istasyon) ya da kişi. Her aparat ayrı çıkış kaydıdır, kalan adetle; biri başarısız olursa kalanı yazılmaz.
+function EmirToplamCikisi({ emirId, satirlar }: { emirId: string; satirlar: readonly EmirAparatSatiri[] }) {
+  const istemci = useQueryClient();
+  const bildirim = useBildirim();
+  const secenekler = useQuery({ queryKey: [...anahtarlar.ozet, 'secenekler'], queryFn: () => api.get<SeceneklerCevabi>('/takimhane/secenekler') });
+  const [hedef, hedefYaz] = useState<'tezgah' | 'kisi'>('tezgah');
+  const [alan, alanYaz] = useState('');
+  const cikabilen = satirlar.filter((a) => a.adet - a.disarida > 0 && a.durum === 'ayrildi');
+  const cikar = useMutation({
+    mutationFn: async () => {
+      for (const a of cikabilen) {
+        const istekKimligi = yeniIstekKimligi();
+        await api.post('/takimhane/cikis', {
+          kartKimlik: a.kartKimlik, adet: a.adet - a.disarida, kisiId: hedef === 'kisi' ? Number(alan) : null, istasyonId: hedef === 'tezgah' ? Number(alan) : null,
+          uretimEmriId: Number(emirId), istekKimligi,
+        }, { istekKimligi });
+      }
+    },
+    onSuccess: () => { bildirim.bildir('tamam', 'Aparatlar çıkarıldı; alan kabul edince teslim tamamlanır.'); },
+    onError: (h) => { bildirim.bildir('hata', hataIletisi(h, 'Toplu çıkış tamamlanamadı; çıkanlar Teslimdekiler listesindedir.')); },
+    onSettled: () => { void istemci.invalidateQueries({ queryKey: ['takimhane'] }); },
+  });
+  if (cikabilen.length === 0 || !secenekler.data) return null;
+  const secenek = (hedef === 'tezgah' ? secenekler.data.istasyonlar : secenekler.data.kisiler).map((x) => ({ deger: String(x.id), baslik: x.ad }));
+  return (
+    <Kart baslik="Emir için toplu çıkış" simge="truck" baslikEki={<span className="tc-tkm-soluk">{cikabilen.length} aparat</span>}>
+      <div className="tc-tkm-form">
+        <GrupluSecim
+          etiket="Alan türü" secili={hedef} sec={(d) => { hedefYaz(d); alanYaz(''); }}
+          gruplar={[{ anahtar: 'h', baslik: 'Kime', secenekler: [{ deger: 'tezgah', baslik: 'Tezgâh', simge: 'cpu' }, { deger: 'kisi', baslik: 'Kişi', simge: 'user' }] }]}
+        />
+        <Secim etiket={hedef === 'tezgah' ? 'İstasyon' : 'Kişi'} value={alan} onChange={(e) => { alanYaz(e.target.value); }} bosSecenek="Seçiniz" secenekler={secenek} />
+        <div className="tc-tkm-eylemler">
+          <Dugme tur="birincil" simge="truck" disabled={alan === '' || cikar.isPending} onClick={() => { cikar.mutate(); }}>Hepsini çıkar</Dugme>
+        </div>
+      </div>
+    </Kart>
+  );
 }
 
 // Emir seçilince aparat satırları: durum, konum ve plan penceresi. Ayırma plandan türetilir; burada yazılmaz. Yalnız uyarır, başlatmayı engellemez.
@@ -181,9 +243,24 @@ export function EmirAparatlari({ emirId }: { emirId: string }) {
   if (sorgu.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (sorgu.isError || !sorgu.data) return <DurumKutusu durum="hata" hata={sorgu.error} mesaj="Aparat listesi yüklenemedi." yenile={() => { void sorgu.refetch(); }} />;
   const v = sorgu.data;
-  if (v.satirlar.length === 0) return <Kart baslik="Aparat" simge="wrench"><p className="tc-tkm-bos">Bu emrin rotasında aparat yok.</p></Kart>;
   const eksikler = v.satirlar.filter((s) => s.durum === 'eksik');
+  const olcu = v.olcuAletleri.length === 0 ? null : (
+    <Kart baslik="Ölçü aleti" simge="ruler" baslikEki={<span className="tc-tkm-soluk">Yalnız kalibrasyon durumu; stok tutulmaz</span>}>
+      <ul className="tc-tkm-kritik" aria-label="Emrin ölçü aletleri">
+        {v.olcuAletleri.map((o) => (
+          <li key={o.turKimlik} className="tc-tkm-kritik-satir">
+            <span>{o.ad}</span>
+            <Rozet ton={o.gecerli === true ? 'tamam' : o.gecerli === false ? 'hata' : 'pasif'}>
+              {o.gecerli === true ? 'Kalibrasyonu geçerli alet var' : o.gecerli === false ? 'Geçerli alet yok' : 'Bu türde alet kaydı yok'}
+            </Rozet>
+          </li>
+        ))}
+      </ul>
+    </Kart>
+  );
+  if (v.satirlar.length === 0) return <><Kart baslik="Aparat" simge="wrench"><p className="tc-tkm-bos">Bu emrin rotasında aparat yok.</p></Kart>{olcu}</>;
   return (
+    <>
     <Kart baslik="Aparat" simge="wrench" baslikEki={v.hazir ? <Rozet ton="tamam">Aparat hazır</Rozet> : <Rozet ton="hata">{`${String(eksikler.length)} aparat eksik`}</Rozet>}>
       <IkiGorunum
         masa={<Tablo etiket="Emrin aparatları" sutunlar={emirSutunlari(emirId)} satirlar={v.satirlar} satirAnahtari={(a) => a.kartKimlik} />}
@@ -199,5 +276,8 @@ export function EmirAparatlari({ emirId }: { emirId: string }) {
         <p className="tc-tkm-uyari"><Simge ad="alert" boyut="k" />{`${eksikler.map((e) => e.ad).join(', ')}: planlı pencerede stok yetmiyor. Emir başlayabilir; bu yalnız uyarıdır, plan kapasitesini etkilemez.`}</p>
       )}
     </Kart>
+    <EmirToplamCikisi emirId={emirId} satirlar={v.satirlar} />
+    {olcu}
+    </>
   );
 }

@@ -104,3 +104,8 @@ export function aparatUyumu(planKapasitesi: number, stokta: number, bakimda: num
   if (planKapasitesi > stokta) return 'plan-fazla';
   return bakimda > 0 ? 'bakimda' : 'uyumlu';
 }
+
+// Aparat plan saatinden bu kadar önce çıkmışsa plan sonradan kaymış sayılır (plan geçmişi tutulmaz; çıkış zamanıyla pencere başı karşılaştırılır).
+export const PLAN_KAYMA_ESIGI_MS = 24 * 3_600_000;
+export const planKaydiMi = (cikisMs: number | null, baslangicMs: number | null): boolean =>
+  cikisMs !== null && baslangicMs !== null && baslangicMs - cikisMs > PLAN_KAYMA_ESIGI_MS;

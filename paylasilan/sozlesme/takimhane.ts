@@ -222,6 +222,8 @@ export const emirAparatSatiriSemasi = z.object({
   konum: z.string().nullable(),
   baslangic: z.string().nullable(),
   bitis: z.string().nullable(),
+  // Aparat plan saatinden çok önce çıkmış: plan sonradan kaymış olabilir (kayıt tutulmaz, çıkış zamanından türetilir).
+  planKaydi: z.boolean(),
 });
 export type EmirAparatSatiri = z.infer<typeof emirAparatSatiriSemasi>;
 export const emirAparatCevabi = z.object({
@@ -229,5 +231,7 @@ export const emirAparatCevabi = z.object({
   parca: z.string(),
   hazir: z.boolean(),
   satirlar: z.array(emirAparatSatiriSemasi),
+  // Ölçü aleti stok konusu değil: yalnız emrin istediği tür ve Kalibrasyon'daki geçerli alet durumu (null: o türde alet kaydı yok).
+  olcuAletleri: z.array(z.object({ turKimlik: z.number().int(), ad: z.string(), gecerli: z.boolean().nullable() })),
 });
 export type EmirAparatCevabi = z.infer<typeof emirAparatCevabi>;

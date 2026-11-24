@@ -2,11 +2,12 @@ import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi } from '#cekirdek/hata.ts';
 import type { AparatCevabi, AparatKarsilastirma, AparatSatiri, EmirAparatCevabi, EmirAparatSatiri, KonumDagilimi } from '#paylasilan/sozlesme/takimhane.ts';
 import { aparatKapasiteleri, istasyonAdlari } from '../istasyonlar/disari.ts';
+import { aletTurleri, gecerliAletVarMi } from '../kalibrasyon/disari.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
-import { isEmriKaynakIstekleri } from '../rota/disari.ts';
+import { isEmriAletIstekleri, isEmriKaynakIstekleri } from '../rota/disari.ts';
 import { emirAparatCikislari, konumlardakiMalzemeler, takimEsikleri, takimKonumTurToplamlari } from '../stok/disari.ts';
 import { acikEmirler, emirlerinIsEmriIdleri } from '../uretim-emirleri/disari.ts';
-import { aparatAyirmalari, aparatUyumu, bosDagilim, dagilimaEkle, konumGrubu, takimKoduMu, type AparatIstegi } from './kurallar.ts';
+import { aparatAyirmalari, aparatUyumu, bosDagilim, dagilimaEkle, konumGrubu, planKaydiMi, takimKoduMu, type AparatIstegi } from './kurallar.ts';
 
 // Plan, takımhane'den üst katmandadır (sınır tablosu): canlı plan okuması bağdan gelir, takımhane plan modülünü ithal etmez.
 export interface CanliPlanPenceresi { isEmriId: number; baslangic: string; bitis: string }
@@ -48,11 +49,11 @@ export async function aparatKartListesi(db: Db): Promise<Kart[]> {
 export const aparatKartKimlikleri = async (db: Db): Promise<Set<number>> => new Set((await aparatKartListesi(db)).map((k) => k.id));
 
 interface EmirAparati {
-  emirId: number; kart: Kart; adet: number; asama: 'ayar_isleme' | 'isleme'; istek: AparatIstegi; konumAd: string | null;
+  emirId: number; kart: Kart; adet: number; asama: 'ayar_isleme' | 'isleme'; istek: AparatIstegi; konumAd: string | null; sonCikis: number | null;
 }
 interface Hesap {
   kartlar: Kart[]; dagilimlar: Map<number, KonumDagilimi>; emirler: Map<number, { emirNo: string; parca: string }>;
-  istekler: EmirAparati[]; sonuclar: ReturnType<typeof aparatAyirmalari>; bekleyenIade: Map<number, number>;
+  emirIsEmirleri: Map<number, number[]>; istekler: EmirAparati[]; sonuclar: ReturnType<typeof aparatAyirmalari>; bekleyenIade: Map<number, number>;
 }
 
 async function hesapla(db: Db): Promise<Hesap> {
@@ -102,8 +103,10 @@ async function hesapla(db: Db): Promise<Hesap> {
     const disarida = satirlar.reduce((a, c) => a + tamSayi(c.disarida), 0);
     const yolda = cikislar.filter((c) => c.emirId === t.emirId && c.malzemeId === t.kart.id).reduce((a, c) => a + Math.max(0, tamSayi(c.yolda)), 0);
     const baskin = [...satirlar].sort((a, b) => tamSayi(b.disarida) - tamSayi(a.disarida))[0];
+    const cikislar2 = cikislar.filter((c) => c.emirId === t.emirId && c.malzemeId === t.kart.id && c.sonCikis !== null);
     return {
       emirId: t.emirId, kart: t.kart, adet: t.adet, asama: t.asama, konumAd: baskin?.konumAd ?? null,
+      sonCikis: cikislar2.length === 0 ? null : Math.max(...cikislar2.map((c) => Date.parse(c.sonCikis!))),
       istek: {
         emirId: t.emirId, kartId: t.kart.id, adet: t.adet, baslangic: t.bas, bitis: t.bit, disarida, yolda,
         disaridaYeri: baskin === undefined ? null : baskin.konumTur === 'kisi' ? 'kisi' : 'istasyon',
@@ -120,7 +123,7 @@ async function hesapla(db: Db): Promise<Hesap> {
     const kapaliTezgah = cikislar.filter((c) => c.malzemeId === k.id && c.konumTur === 'istasyon' && (c.emirId === null || !acikEmirKumesi.has(c.emirId))).reduce((a, c) => a + Math.max(0, tamSayi(c.disarida)), 0);
     bekleyenIade.set(k.id, kisi + Math.min(kapaliTezgah, sayi(dagilimlar.get(k.id)!.tezgah)));
   }
-  return { kartlar, dagilimlar, emirler, istekler, sonuclar, bekleyenIade };
+  return { kartlar, dagilimlar, emirler, emirIsEmirleri: new Map([...isEmriEmri].reduce((m, [i, e]) => m.set(e, [...(m.get(e) ?? []), i]), new Map<number, number[]>())), istekler, sonuclar, bekleyenIade };
 }
 
 export async function aparatCevabi(db: Db): Promise<AparatCevabi> {
@@ -171,8 +174,14 @@ export async function emirAparatCevabi(db: Db, emirId: number): Promise<EmirApar
     satirlar.push({
       kartKimlik: i.kart.id, kod: i.kart.kod, ad: i.kart.ad, adet: i.adet, asama: i.asama, durum: s.durum, eksik: s.eksik, disarida: i.istek.disarida,
       konum: i.istek.disarida > 0 ? i.konumAd : raflar.get(i.kart.id) ?? null, baslangic: iso(i.istek.baslangic), bitis: iso(i.istek.bitis),
+      planKaydi: i.istek.disarida > 0 && planKaydiMi(i.sonCikis, i.istek.baslangic),
     });
   });
   satirlar.sort((a, b) => a.kod.localeCompare(b.kod, 'tr'));
-  return { emirNo: emir.emirNo, parca: emir.parca, hazir: satirlar.every((s) => s.durum !== 'eksik'), satirlar };
+  // Ölçü aleti: emrin iş emirlerinin istediği türler; durum Kalibrasyon'dan (stok defteri yoktur).
+  const turIdleri = [...new Set([...(await isEmriAletIstekleri(db, h.emirIsEmirleri.get(emirId) ?? [])).values()].flat())];
+  const turAdlari = new Map((await aletTurleri(db)).map((t) => [t.id, t.ad]));
+  const olcuAletleri: EmirAparatCevabi['olcuAletleri'] = [];
+  for (const id of turIdleri) olcuAletleri.push({ turKimlik: id, ad: turAdlari.get(id) ?? `Tür ${String(id)}`, gecerli: await gecerliAletVarMi(db, id) });
+  return { emirNo: emir.emirNo, parca: emir.parca, hazir: satirlar.every((s) => s.durum !== 'eksik'), satirlar, olcuAletleri };
 }

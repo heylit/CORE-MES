@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { aktarimOnizle, aparatAyirmalari, aparatUyumu, type AparatIstegi, bosDagilim, dagilimToplami, dagilimaEkle, konumGrubu, stokDurumu, takimKoduMu } from './kurallar.ts';
+import { aktarimOnizle, aparatAyirmalari, aparatUyumu, planKaydiMi, type AparatIstegi, bosDagilim, dagilimToplami, dagilimaEkle, konumGrubu, stokDurumu, takimKoduMu } from './kurallar.ts';
 
 describe('takimhane kuralları (saf)', () => {
   test('sipariş noktası yoksa durum uydurulmaz: yalnız sıfır bilinir, kalan eşiksiz', () => {
@@ -69,6 +69,10 @@ describe('takimhane kuralları (saf)', () => {
     test('rafta hiç yoksa eksik; yolda olan çıkış kalanı karşılıyorsa durum yolda', () => {
       assert.deepEqual(aparatAyirmalari([istek(1, 2, 8, 12)], new Map()).map((x) => [x.durum, x.eksik]), [['eksik', 2]]);
       assert.equal(aparatAyirmalari([istek(1, 2, 8, 12, { yolda: 2 })], new Map([[1, 2]]))[0]!.durum, 'yolda');
+    });
+
+    test('aparat plan saatinden bir günden fazla önce çıkmışsa plan kaymış sayılır; çıkış ya da pencere yoksa uydurulmaz', () => {
+      assert.deepEqual([planKaydiMi(saat(0), saat(0) + 25 * 3_600_000), planKaydiMi(saat(0), saat(0) + 3_600_000), planKaydiMi(null, saat(8)), planKaydiMi(saat(0), null)], [true, false, false, false]);
     });
 
     test('plan kapasitesi stoğu aşarsa işaretlenir; bakımdaki ayrıca not edilir', () => {

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import type { AcikTeslim, AparatCevabi, EmirAparatCevabi, TakimSatiri } from '#paylasilan/sozlesme/takimhane.ts';
@@ -66,9 +66,10 @@ describe('Takımhane', () => {
       const cevap: EmirAparatCevabi = {
         emirNo: 'ORN-EMIR-1', parca: 'ORN parça', hazir: false,
         satirlar: [
-          { kartKimlik: 1, kod: 'ORN-APR-014', ad: 'ORN Mengene çene seti', adet: 2, asama: 'isleme', durum: 'ayrildi', eksik: 0, disarida: 0, konum: 'ORN-R2-04', baslangic: '2026-11-26T08:00:00', bitis: '2026-11-26T14:00:00' },
-          { kartKimlik: 2, kod: 'ORN-APR-044', ad: 'ORN Dişli mastar tutacağı', adet: 2, asama: 'isleme', durum: 'eksik', eksik: 1, disarida: 0, konum: null, baslangic: null, bitis: null },
+          { kartKimlik: 1, kod: 'ORN-APR-014', ad: 'ORN Mengene çene seti', adet: 2, asama: 'isleme', durum: 'ayrildi', eksik: 0, disarida: 0, konum: 'ORN-R2-04', baslangic: '2026-11-26T08:00:00', bitis: '2026-11-26T14:00:00', planKaydi: true },
+          { kartKimlik: 2, kod: 'ORN-APR-044', ad: 'ORN Dişli mastar tutacağı', adet: 2, asama: 'isleme', durum: 'eksik', eksik: 1, disarida: 0, konum: null, baslangic: null, bitis: null, planKaydi: false },
         ],
+        olcuAletleri: [{ turKimlik: 1, ad: 'ORN Mikrometre', gecerli: true }],
       };
       vi.stubGlobal('fetch', vi.fn(async () => json(cevap)));
       ac(<EmirAparatlari emirId="1" />);
@@ -76,6 +77,31 @@ describe('Takımhane', () => {
       expect(screen.getAllByText('Eksik: 1/2').length).toBeGreaterThan(0);
       expect(screen.getAllByText('Ayrıldı').length).toBeGreaterThan(0);
       expect(screen.getByText(/yalnız uyarıdır, plan kapasitesini etkilemez/)).toBeTruthy();
+      expect(screen.getAllByText('Plan ertelendi · 26.11').length).toBeGreaterThan(0);
+      expect(screen.getByText('Kalibrasyonu geçerli alet var')).toBeTruthy();
+    });
+
+    it('emir için toplu çıkış: tezgâh seçilir, çıkabilen her aparat kalan adetle ve emre bağlı çıkar', async () => {
+      const emir: EmirAparatCevabi = {
+        emirNo: 'ORN-EMIR-1', parca: 'ORN parça', hazir: true, olcuAletleri: [],
+        satirlar: [
+          { kartKimlik: 1, kod: 'ORN-APR-014', ad: 'ORN Mengene çene seti', adet: 2, asama: 'isleme', durum: 'ayrildi', eksik: 0, disarida: 0, konum: 'ORN-R2-04', baslangic: null, bitis: null, planKaydi: false },
+          { kartKimlik: 2, kod: 'ORN-APR-044', ad: 'ORN Mastar tutacağı', adet: 1, asama: 'isleme', durum: 'eksik', eksik: 1, disarida: 0, konum: null, baslangic: null, bitis: null, planKaydi: false },
+        ],
+      };
+      const secenekler = { kisiler: [{ id: 5, ad: 'ORN Operatör A' }], istasyonlar: [{ id: 7, ad: 'ORN Tezgâh 1' }], emirler: [] };
+      const gonderilen: unknown[] = [];
+      vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+        if (init?.method === 'POST') { gonderilen.push(JSON.parse(String(init.body))); return json({}); }
+        return json(String(url).includes('/secenekler') ? secenekler : emir);
+      }));
+      ac(<EmirAparatlari emirId="1" />);
+      const dugme = (await screen.findByRole('button', { name: /Hepsini çıkar/ })) as HTMLButtonElement;
+      expect(dugme.disabled).toBe(true);
+      fireEvent.change(screen.getByLabelText('İstasyon'), { target: { value: '7' } });
+      fireEvent.click(dugme);
+      await waitFor(() => { expect(gonderilen).toHaveLength(1); });
+      expect(gonderilen[0]).toMatchObject({ kartKimlik: 1, adet: 2, istasyonId: 7, kisiId: null, uretimEmriId: 1 });
     });
 
     it('aparat sayfası konum özetini ve karşılaştırma sekmesini gösterir; plan stoktan fazlaysa işaretler', async () => {

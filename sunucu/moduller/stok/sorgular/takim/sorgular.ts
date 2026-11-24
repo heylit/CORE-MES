@@ -62,20 +62,21 @@ export const takimEsikleri = (db: Db, malzemeIdler: readonly number[]): Promise<
 
 // Aparat (kart 3651): emir ve konum başına tezgâha ya da kişiye çıkmış, henüz dönmemiş adet. Çıkış teslim kaydıdır (alan aldığında bakiye
 // taşınır); aynı emirden kişi ya da tezgâhtan dönen iade düşer. `yolda`: alan henüz almadığı çıkış (bakiye hâlâ rafta).
-export interface EmirAparatCikisi { emirId: number | null; malzemeId: number; konumId: number; konumTur: string; konumAd: string | null; disarida: string; yolda: string }
+export interface EmirAparatCikisi { emirId: number | null; malzemeId: number; konumId: number; konumTur: string; konumAd: string | null; disarida: string; yolda: string; sonCikis: string | null }
 export const emirAparatCikislari = (db: Db, malzemeIdler: readonly number[]): Promise<EmirAparatCikisi[]> =>
   malzemeIdler.length === 0 ? Promise.resolve([]) : db.sorgu(
     `WITH hareket AS (
        SELECT t.uretim_emri_id AS emir, t.malzeme_id AS malzeme, hk.id AS konum, hk.tur AS tur, hk.ad AS ad,
-              CASE WHEN t.durum = 'teslim' THEN t.alinan ELSE 0 END AS giden, CASE WHEN t.durum = 'yolda' THEN t.miktar ELSE 0 END AS yolda
+              CASE WHEN t.durum = 'teslim' THEN t.alinan ELSE 0 END AS giden, CASE WHEN t.durum = 'yolda' THEN t.miktar ELSE 0 END AS yolda, t.gonderim AS gonderim
          FROM stok_teslim t JOIN stok_konum hk ON hk.id = t.hedef_konum_id
         WHERE t.malzeme_id = ANY($1::int[]) AND hk.tur IN ('kisi', 'istasyon') AND t.durum IN ('teslim', 'yolda')
        UNION ALL
-       SELECT t.uretim_emri_id, t.malzeme_id, kk.id, kk.tur, kk.ad, -t.alinan, 0
+       SELECT t.uretim_emri_id, t.malzeme_id, kk.id, kk.tur, kk.ad, -t.alinan, 0, NULL::timestamptz
          FROM stok_teslim t JOIN stok_konum kk ON kk.id = t.kaynak_konum_id
         WHERE t.malzeme_id = ANY($1::int[]) AND kk.tur IN ('kisi', 'istasyon') AND t.durum = 'teslim')
      SELECT emir AS "emirId", malzeme AS "malzemeId", konum AS "konumId", tur AS "konumTur", max(ad) AS "konumAd",
-            sum(giden)::text AS disarida, sum(yolda)::text AS yolda
+            sum(giden)::text AS disarida, sum(yolda)::text AS yolda,
+            ${zamanMetni('max(gonderim)')} AS "sonCikis"
        FROM hareket GROUP BY emir, malzeme, konum, tur HAVING sum(giden) <> 0 OR sum(yolda) <> 0`, [[...malzemeIdler]]);
 
 // Kişide ya da tezgâhta bakiyesi duran her malzeme: kartı kümeden düşmüş (emir kapanmış, kapasite satırı silinmiş) aparatın iadesi yine alınabilir.

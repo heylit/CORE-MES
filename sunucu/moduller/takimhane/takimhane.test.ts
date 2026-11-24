@@ -346,6 +346,35 @@ describe('takimhane (gerçek PostgreSQL)', () => {
       assert.equal((await apr()).satirlar.find((x) => x.kartKimlik === k)!.bekleyenIade, 0);
     });
 
+    test('plan ertelendi: aparat plan saatinden bir günden fazla önce çıktıysa işaretlenir, yakın pencerede işaretlenmez', async () => {
+      canliPlanOkuyucusu(async (_db, idler) => idler.flatMap((i) => { const p = pencere.get(i); return p === undefined ? [] : [{ isEmriId: i, ...p }]; }));
+      const sonra = (saat: number) => new Date(Date.now() + saat * 3_600_000).toISOString();
+      const k = await aparatKarti();
+      await rafaKoy(k, '2');
+      const yakin = await emirAc(k, 1, sonra(2), sonra(6));
+      const uzak = await emirAc(k, 1, sonra(72), sonra(76));
+      for (const e of [yakin, uzak]) {
+        const r = await istek('depo', 'POST', '/takimhane/cikis', { kartKimlik: k, adet: 1, kisiId: null, istasyonId, uretimEmriId: e.emirId, istekKimligi: randomUUID() });
+        assert.equal(r.durum, 200, JSON.stringify(r.govde));
+        assert.equal((await teslimAl('kisi-a', teslimCevabi.parse(r.govde).teslim, '1')).durum, 200);
+      }
+      const planKaydi = async (id: number) => ((await istek<{ satirlar: { planKaydi: boolean }[] }>('depo', 'GET', `/takimhane/emirler/${id}/aparat`)).govde.satirlar.map((x) => x.planKaydi));
+      assert.deepEqual(await planKaydi(yakin.emirId), [false]);
+      assert.deepEqual(await planKaydi(uzak.emirId), [true]);
+    });
+
+    test('ölçü aleti kartı: emrin istediği tür ve geçerli alet durumu; stok konusu değildir', async () => {
+      canliPlanOkuyucusu(async () => []);
+      const kk = await aparatKarti();
+      const a = await emirAc(kk, 1, '', '');
+      const tur = (await o().sahip.tek<{ id: number }>("INSERT INTO olcu_aleti_turu (ad) VALUES ('ORN-Mastar') RETURNING id"))!.id;
+      await o().sahip.sorgu("INSERT INTO rota_is_emri_ekipmani (is_emri_id, sira, tur, alet_turu_id) VALUES ($1, 2, 'olcu_aleti', $2)", [a.isEmriId, tur]);
+      const oku = async () => (await istek<{ olcuAletleri: { turKimlik: number; ad: string; gecerli: boolean | null }[] }>('depo', 'GET', `/takimhane/emirler/${a.emirId}/aparat`)).govde.olcuAletleri;
+      assert.deepEqual(await oku(), [{ turKimlik: tur, ad: 'ORN-Mastar', gecerli: null }], 'türde alet kaydı yok');
+      await o().sahip.sorgu("INSERT INTO olcu_aleti (no, tur_id, ad) VALUES ('ORN-MST-1', $1, 'ORN-Mastar 1')", [tur]);
+      assert.deepEqual((await oku()).map((x) => x.gecerli), [false], 'alet var, kalibrasyon kaydı yok');
+    });
+
     test('teslimdekiler aparatı da taşır; aparat olmayan kart çıkış ve iadede bulunamaz', async () => {
       const k = await aparatKarti();
       await rafaKoy(k, '1');
