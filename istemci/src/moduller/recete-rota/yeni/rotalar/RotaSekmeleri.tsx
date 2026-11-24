@@ -1,23 +1,20 @@
 import { useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { EMIR_TURLERI, EMIR_TURU_ADLARI, ROTA_ACILABILEN_TURLER } from '#paylasilan/sozlesme/emir-turleri.ts';
+import { EMIR_TURLERI, EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
 import type { UrunRevizyonlariCevabi } from '#paylasilan/sozlesme/rota.ts';
 import { api } from '../../../../ortak/veri/api.ts';
-import { yeniIstekKimligi } from '../../../../ortak/veri/istek-kimligi.ts';
-import { Dugme, DurumKutusu, IsaretKutusu } from '../../../../ortak/arayuz/index.ts';
-import { RR_ANAHTARI, RrHatasi } from '../veri.ts';
+import { Dugme, DurumKutusu, IsaretKutusu, Simge } from '../../../../ortak/arayuz/index.ts';
+import { RrHatasi } from '../veri.ts';
 import { acikRevizyon, yururlukteki } from './kurallar.ts';
 import type { RotaEkrani } from './ortak.tsx';
+import { YeniRotaFormu, urunRotalariAnahtari, type RotaTanimi } from './YeniRotaFormu.tsx';
 
-// Sahibinin sınırı (sozlesme/rota.ts ROTA_ADI_EN_COK); aşan adı sahibi 400 ile reddeder.
 const ROTA_ADI_EN_COK = 60;
 
-type RotaTanimi = UrunRevizyonlariCevabi['rotalar'][number];
 type EmirTuru = (typeof EMIR_TURLERI)[number];
 type Panel = 'yeni' | 'ayar' | null;
 
-// Emir formundaki "Rota" alanıyla aynı anahtar: sekmede yapılan değişiklik formda da görünür.
-export const urunRotalariAnahtari = (urunId: string) => [...RR_ANAHTARI, 'urun-rotalari', Number(urunId)] as const;
+export { urunRotalariAnahtari };
 
 export function rotaTurMetni(rota: RotaTanimi, rotalar: readonly RotaTanimi[]): string {
   if (!rota.standart) return rota.emirTurleri.length === 0 ? 'Emir türü bağlı değil' : `Yalnız ${rota.emirTurleri.map((t) => EMIR_TURU_ADLARI[t]).join(', ')} emirleri`;
@@ -28,9 +25,9 @@ export function rotaTurMetni(rota: RotaTanimi, rotalar: readonly RotaTanimi[]): 
 // alan yok: tek türlü her Standart dışı rota tür rotası sayılır. 15.11'den kalan türsüz ya da çok türlü rotalarda türler de değişir.
 export const turRotasiMi = (rota: RotaTanimi): boolean => !rota.standart && rota.emirTurleri.length === 1;
 
-// satir: sekmeler; yeniAc ve ayarAc revizyon çubuğunun "⋯" menüsündedir (3295 a); rotaAdi revizyon satırının başlığıdır.
-interface Parcalar { satir: ReactNode; yeniAc: (() => void) | null; ayarAc: (() => void) | null; panel: ReactNode; rotaAdi: string | null }
-const BOS: Parcalar = { satir: null, yeniAc: null, ayarAc: null, panel: null, rotaAdi: null };
+// satir: sekmeler ve "+ Rota" (3644); ayarAc revizyon çubuğunun "⋯" menüsündedir (3295 a); rotaAdi revizyon satırının başlığıdır.
+interface Parcalar { satir: ReactNode; ayarAc: (() => void) | null; panel: ReactNode; rotaAdi: string | null }
+const BOS: Parcalar = { satir: null, ayarAc: null, panel: null, rotaAdi: null };
 
 // 3247 a: ürünün rotaları revizyon çubuğunun üstünde sekme olur; altta seçili rotanın revizyonları durur. Parçalar ayrı döner ki
 // "Adı ve türleri" onaylı ön izlemedeki gibi revizyon satırında dursun.
@@ -39,9 +36,6 @@ export function useRotaSekmeleri(r: RotaEkrani, urunId: string): Parcalar {
   const istemci = useQueryClient();
   const [panel, setPanel] = useState<Panel>(null);
   const [ad, setAd] = useState('');
-  const [yeniAd, setYeniAd] = useState('');
-  const [standarttan, setStandarttan] = useState(true);
-  const [yeniTur, setYeniTur] = useState<EmirTuru | null>(null);
   const [turler, setTurler] = useState<readonly EmirTuru[]>([]);
   const [hata, setHata] = useState<string | null>(null);
   const [mesgul, setMesgul] = useState(false);
@@ -71,8 +65,6 @@ export function useRotaSekmeleri(r: RotaEkrani, urunId: string): Parcalar {
     setHata(null);
     setAd(p === 'ayar' ? aktif?.ad ?? '' : '');
     setTurler(p === 'ayar' ? aktif?.emirTurleri ?? [] : []);
-    setYeniTur(null);
-    setYeniAd('');
   };
   const yaz = async (is: () => Promise<UrunRevizyonlariCevabi>): Promise<UrunRevizyonlariCevabi | null> => {
     setMesgul(true);
@@ -89,18 +81,6 @@ export function useRotaSekmeleri(r: RotaEkrani, urunId: string): Parcalar {
     } finally {
       setMesgul(false);
     }
-  };
-  // 3411 a: rota türüyle açılır, tür hemen bağlanır (rota yürürlüğe girene kadar o türün emirleri Seri rotasıyla açılır).
-  const yeniRota = async () => {
-    if (yeniTur === null) return;
-    const onceki = new Set(rotalar.map((x) => x.id));
-    const c = await yaz(() => api.post(`/rota/urunler/${encodeURIComponent(urunId)}/rotalar`, { emirTuru: yeniTur, ...(yeniAd.trim() ? { ad: yeniAd.trim() } : {}) }, { istekKimligi: yeniIstekKimligi() }));
-    const yeni = c?.rotalar.find((x) => !onceki.has(x.id) && !x.standart);
-    if (!yeni) return;
-    if (!duzen.rotaSec(urunId, String(yeni.id))) return;
-    setPanel(null);
-    const kaynak = yururlukteki(duzen.rotaRevleri(urunId, null));
-    if (standarttan && kaynak) await duzen.yeniTaslak(urunId, kaynak);
   };
   const ayarKaydet = async () => {
     if (!aktif) return;
@@ -143,50 +123,22 @@ export function useRotaSekmeleri(r: RotaEkrani, urunId: string): Parcalar {
             <button key={x.id} type="button" className={`tc-rr1-rvtab tc-rr1-rotasekme${secili ? ' tc-rr1-cur' : ''}`} aria-pressed={secili}
               onClick={() => { sec(x); }}>
               <b>{x.ad}</b>
-              <small>{rotaTurMetni(x, rotalar)} · {y ? `Rev ${y.no}` : 'yürürlükte revizyon yok'}{acik ? ` · ${acik.status === 'onay' ? 'onayda' : 'taslak var'}` : ''}</small>
+              <small>{rotaTurMetni(x, rotalar)} · {y ? `Rev ${y.no} yürürlükte` : 'yürürlükte revizyon yok'}{acik ? ` · ${acik.status === 'onay' ? 'onayda' : 'taslak var'}` : ''}</small>
             </button>
           );
         })}
+        {yetki.rotaTaslakAc && (
+          <button type="button" className="tc-rr1-rvtab tc-rr1-rotasekme tc-rr1-rotayeni" aria-expanded={panel === 'yeni'} onClick={() => { ac('yeni'); }}>
+            <Simge ad="plus" boyut="k" /> <b>Rota</b>
+          </button>
+        )}
       </span>
     </div>
   );
-  const yeniAc = yetki.rotaTaslakAc ? () => { ac('yeni'); } : null;
   const ayarAc = yetki.rotaTaslakAc && aktif && !aktif.standart ? () => { ac('ayar'); } : null;
   const panelNode = (
     <>
-      {panel === 'yeni' && (
-        <div className="tc-rr1-rv-panel">
-          <b>Hangi emir türü için rota açılsın?</b>
-          <span className="tc-rr1-rv-row" role="group" aria-label="Yeni rotanın emir türü">
-            {ROTA_ACILABILEN_TURLER.map((t) => {
-              const var_ = rotalar.some((x) => x.emirTurleri.includes(t));
-              return (
-                <Dugme key={t} aria-pressed={yeniTur === t} disabled={var_ || mesgul} title={var_ ? 'Bu türün rotası var' : undefined}
-                  onClick={() => { setYeniTur(t); }}>{var_ ? `${EMIR_TURU_ADLARI[t]} (var)` : EMIR_TURU_ADLARI[t]}</Dugme>
-              );
-            })}
-          </span>
-          {standart && yururlukteki(duzen.rotaRevleri(urunId, null)) && (
-            <IsaretKutusu etiket={`${standart.ad} rotasının yürürlükteki revizyonundan başla`} checked={standarttan}
-              onChange={(e) => { setStandarttan(e.target.checked); }} />
-          )}
-          <label className="tc-rr1-alan">
-            <span>Rotanın adı</span>
-            <input className="tc-rr1-metin" value={yeniAd} aria-label="Yeni rotanın adı" maxLength={ROTA_ADI_EN_COK}
-              placeholder={yeniTur === null ? 'Boş kalırsa türün adı' : EMIR_TURU_ADLARI[yeniTur]} onChange={(e) => { setYeniAd(e.target.value); }} />
-          </label>
-          <p className="tc-rr1-ipucu">
-            {yeniTur === null ? 'Ad boş kalırsa türün adı olur; sonradan "Rotanın adı" ile değişir.' : `${EMIR_TURU_ADLARI[yeniTur]} emirleri, bu rota yürürlüğe girene kadar Seri rotasıyla açılmaya devam eder.`}
-          </p>
-          <span className="tc-rr1-rv-row">
-            <Dugme tur="birincil" simge="check" disabled={mesgul || yeniTur === null} onClick={() => { void yeniRota(); }}>
-              {yeniTur === null ? 'Rotayı aç' : `${EMIR_TURU_ADLARI[yeniTur]} rotasını aç`}
-            </Dugme>
-            <Dugme onClick={() => { setPanel(null); }}>Vazgeç</Dugme>
-          </span>
-          {hata && <p className="tc-rr1-hata" role="alert">{hata}</p>}
-        </div>
-      )}
+      {panel === 'yeni' && <YeniRotaFormu r={r} urunId={urunId} rotalar={rotalar} kapat={() => { setPanel(null); }} />}
       {panel === 'ayar' && aktif && (
         <div className="tc-rr1-rv-panel">
           <div className="tc-rr1-rv-row">
@@ -205,5 +157,5 @@ export function useRotaSekmeleri(r: RotaEkrani, urunId: string): Parcalar {
       )}
     </>
   );
-  return { satir, yeniAc, ayarAc, panel: panelNode, rotaAdi: aktif?.ad ?? null };
+  return { satir, ayarAc, panel: panelNode, rotaAdi: aktif?.ad ?? null };
 }

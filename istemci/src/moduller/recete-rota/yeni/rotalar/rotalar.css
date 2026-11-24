@@ -993,3 +993,8 @@ tr[data-bekleyen] .tc-rr1-pr-op { color: var(--hold); }
 .tc-rr1-sb-satir[aria-checked="true"] { border-color: var(--ink); outline: var(--pay-ince) solid var(--ink); }
 .tc-rr1-sb-konum { display: grid; gap: var(--b-1); border: 1px solid var(--edge); border-radius: var(--yari-1); padding: var(--b-2); }
 .tc-rr1-sb-konum label { display: flex; gap: var(--b-1); align-items: center; min-height: var(--dokunma); }
+
+/* 3644: sekme satırındaki "+ Rota" düğmesi sekmelerden kesik çizgiyle ayrılır. */
+.tc-rr1-rotayeni { border-style: dashed; flex-direction: row; align-items: center; justify-content: center; }
+/* 3644: seçili emir türü açıkça görünür. */
+.tc-rr1-rv-panel .tc-dugme[aria-pressed="true"] { background: var(--hazard); color: var(--on-hazard); border-color: var(--hazard); }

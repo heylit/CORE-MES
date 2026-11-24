@@ -381,6 +381,28 @@ describe('R1 Ürün ve rotalar: reddedilen', () => {
     expect(menu(bolge)).toEqual(expect.arrayContaining(['Yeni rota', 'Excel ile rota adımları']));
   }, 30000);
 
+  it('3644: ilk rota — ürün seçilince rota türü ve adı aynı formda sorulur; Seri hazır gelir, Seri dışı tür sunucuya yazılır', async () => {
+    const istekler = sunucuKur(YONETICI, {
+      durum: () => json(200, rotaDurumu([])),
+      yazmalar: { 'POST /rota/urunler/11/rotalar': () => json(200, { urun: { id: 11, kod: 'ORN-11', ad: 'Örnek mamul', tur: 'mamul' }, revizyonlar: [], rotalar: [
+        { id: 1, ad: 'Standart', standart: true, surum: 1, emirTurleri: [], taslakAcilabilir: true },
+        { id: 3, ad: 'Numune', standart: false, surum: 1, emirTurleri: ['numune'], taslakAcilabilir: true }], taslakAcilabilir: true, kartOperasyonlari: null }) },
+    });
+    rrAc('/recete-rota/schema');
+    const bolge = await screen.findByRole('region', { name: 'Ürün ve rotalar' });
+    fireEvent.click(await within(bolge).findByRole('button', { name: 'Diğer rota işlemleri' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Yeni rota' }));
+    fireEvent.click((await within(bolge).findAllByRole('button', { name: /MM-0001/ })).find((b) => b.classList.contains('tc-rr1-pick'))!);
+    const turler = within(bolge).getByRole('group', { name: 'Yeni rotanın emir türü' });
+    expect(within(turler).getByRole('button', { name: 'Seri' }).getAttribute('aria-pressed')).toBe('true');
+    expect(within(bolge).queryByRole('textbox', { name: 'Yeni rotanın adı' })).toBeNull();
+    fireEvent.click(within(turler).getByRole('button', { name: 'Numune' }));
+    fireEvent.change(within(bolge).getByRole('textbox', { name: 'Yeni rotanın adı' }), { target: { value: 'ORN Numune hattı' } });
+    fireEvent.click(within(bolge).getByRole('button', { name: 'Numune rotasını aç' }));
+    await waitFor(() => { expect(istekler.some((i) => i.yol === '/rota/urunler/11/rotalar')).toBe(true); });
+    expect(istekler.find((i) => i.yol === '/rota/urunler/11/rotalar')?.govde).toEqual({ emirTuru: 'numune', ad: 'ORN Numune hattı' });
+  }, 30000);
+
   it('onay işlemi olmayan onay bekleyen revizyonu onaylayamaz', async () => {
     sunucuKur({ ...YONETICI, islemler: YONETICI.islemler.filter((i) => i !== 'rota.onayla') }, {
       durum: rotaDurumu([revizyonOrnegi('72', 'B', 'onay', 2)]),

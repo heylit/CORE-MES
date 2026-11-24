@@ -17,6 +17,7 @@ import { BAG_ADI, Bolme, KatBolme, AramaliSecimAlani, operasyonSecenekleri, Sayi
 import { useRevizyonSartnameleri, useTalimatlar } from '../sartnameler/veri.ts';
 import { HizliEkle, MalzemeListesi } from './MalzemeSecici.tsx';
 import { AdimCiktisi } from './AdimCiktisi.tsx';
+import { YeniRotaFormu } from './YeniRotaFormu.tsx';
 import { SahibindeDuzenle } from '../kaynaklar/parcalar.tsx';
 
 const BAG_ACIKLAMA = { bagimli: 'Önceki adım tamamen bitince başlar.', ortulu: 'Önceki adımdan belirli adet çıkınca başlar, akarak devam eder.', bagimsiz: 'Önceki adımı beklemez, paralel yapılır.' } as const;
@@ -682,18 +683,31 @@ function AdimEklePaneli({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tu
 
 function YeniRotaPaneli({ r, kapat }: { r: RotaEkrani; kapat: () => void }) {
   const [q, setQ] = useState('');
+  const [secilen, setSecilen] = useState<string | null>(null);
   const { duzen: dz } = r;
   const s = kucuk(q.trim());
   const adaylar = [...dz.h.malzeme.values()].filter((m) => (m.type === 'mamul' || m.type === 'yari') && dz.adimlar(m.id).length === 0
     && dz.revler(m.id).every((x) => x.status !== 'taslak' && x.status !== 'onay') && (!s || kucuk(`${m.code} ${m.name}`).includes(s)));
+  const urun = secilen === null ? null : dz.h.malzeme.get(secilen) ?? null;
+  // 3644: ürün seçilince rota türü ve adı, ürünün rotası varken açılan formla aynı formda sorulur.
+  if (urun) {
+    return (
+      <>
+        <Baslik baslik="Yeni rota" kapat={kapat} />
+        <p className="tc-rr1-ipucu"><b>{urun.code}</b> {urun.name}</p>
+        <YeniRotaFormu r={r} urunId={urun.id} rotalar={[]} kapat={() => { setSecilen(null); }} />
+        <MalzemeGit />
+      </>
+    );
+  }
   return (
     <>
       <Baslik baslik="Yeni rota" kapat={kapat} />
-      <p className="tc-rr1-ipucu">Rotası olmayan yarı mamul ya da mamulü seç; ilk adımı ekleyerek rotasını kur.</p>
+      <p className="tc-rr1-ipucu">Rotası olmayan yarı mamul ya da mamulü seç; sonra emir türünü ve adı seçersin.</p>
       <input className="tc-rr1-metin" type="search" value={q} placeholder="Ürün ara: kod ya da ad" aria-label="Ürün ara" onChange={(e) => { setQ(e.target.value); }} />
       <div className="tc-rr1-picklist">
         {adaylar.map((m) => (
-          <button key={m.id} type="button" className="tc-rr1-pick" onClick={() => { r.kokSec(m.id); r.sec({ tur: 'adimEkle', urunId: m.id, sonraId: null }); r.paletAc(); }}>
+          <button key={m.id} type="button" className="tc-rr1-pick" onClick={() => { setSecilen(m.id); }}>
             <span className={`tc-rr1-slot tc-rr1-slot-${m.type}`}>{turKisa(m.type)}</span><span className="tc-rr1-pn"><b>{m.code}</b> {m.name}</span>
           </button>
         ))}

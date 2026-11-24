@@ -77,7 +77,7 @@ describe('Rota sekmeleri (3247 a)', () => {
     rrAc('/recete-rota/schema');
     const g = await sekmeler();
     const std = await within(g).findByRole('button', { name: /^Seri/ });
-    expect(std.textContent).toBe('SeriSeri ve kendi rotası olmayan türler · Rev A');
+    expect(std.textContent).toBe('SeriSeri ve kendi rotası olmayan türler · Rev A yürürlükte');
     expect(std.getAttribute('aria-pressed')).toBe('true');
     const fai = within(g).getByRole('button', { name: /FAI rotası/ });
     expect(fai.textContent).toBe('FAI rotasıYalnız FAI emirleri · yürürlükte revizyon yok · taslak var');
@@ -92,14 +92,14 @@ describe('Rota sekmeleri (3247 a)', () => {
     rrAc('/recete-rota/schema');
     const g = await sekmeler();
     const bolge = screen.getByRole('region', { name: 'Ürün ve rotalar' });
-    menudenSec(bolge, 'Yeni rota');
+    fireEvent.click(within(bolge).getByRole('button', { name: /Rota$/, expanded: false }));
     expect((within(bolge).getByRole('textbox', { name: 'Yeni rotanın adı' }) as HTMLInputElement).value).toBe('');
     const turler = within(bolge).getByRole('group', { name: 'Yeni rotanın emir türü' });
     expect(within(turler).queryByRole('button', { name: 'Seri' })).toBeNull();
     expect((within(turler).getByRole('button', { name: 'FAI (var)' }) as HTMLButtonElement).disabled).toBe(true);
     expect((within(bolge).getByRole('button', { name: 'Rotayı aç' }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(within(turler).getByRole('button', { name: 'Numune' }));
-    expect(within(bolge).getByText('Numune emirleri, bu rota yürürlüğe girene kadar Seri rotasıyla açılmaya devam eder.')).toBeTruthy();
+    expect(within(bolge).getByText('Numune emirleri, bu rota yürürlüğe girene kadar Standart rotayla açılmaya devam eder.')).toBeTruthy();
     fireEvent.click(within(bolge).getByRole('button', { name: 'Numune rotasını aç' }));
     const yeni = await within(g).findByRole('button', { name: /^Numune/ });
     await waitFor(() => { expect(yeni.getAttribute('aria-pressed')).toBe('true'); });
@@ -113,12 +113,55 @@ describe('Rota sekmeleri (3247 a)', () => {
     expect(within(bolge).queryByRole('group', { name: 'Bu rotayı kullanan emir türleri' })).toBeNull();
   });
 
+  it('3644: "+ Rota" sekme satırında görünür, rota işlemleri menüsünde "Yeni rota" yoktur', async () => {
+    kur();
+    rrAc('/recete-rota/schema');
+    const g = await sekmeler();
+    expect(within(g).getByRole('button', { name: /Rota$/ })).toBeTruthy();
+    const bolge = screen.getByRole('region', { name: 'Ürün ve rotalar' });
+    fireEvent.click(within(bolge).getByRole('button', { name: 'Rota işlemleri' }));
+    expect(screen.queryByRole('menuitem', { name: 'Yeni rota' })).toBeNull();
+  });
+
+  it('3644: Seri rotası yok sayılmaz ama seçilemez; "başla" işareti kapalıysa Seri revizyonundan taslak açılmaz', async () => {
+    const istekler = kur();
+    rrAc('/recete-rota/schema');
+    const g = await sekmeler();
+    const bolge = screen.getByRole('region', { name: 'Ürün ve rotalar' });
+    fireEvent.click(within(g).getByRole('button', { name: /Rota$/ }));
+    const turler = within(bolge).getByRole('group', { name: 'Yeni rotanın emir türü' });
+    expect((within(turler).getByRole('button', { name: 'Seri · Seri (var)' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(within(turler).getByRole('button', { name: 'Numune' }));
+    fireEvent.click(within(bolge).getByRole('checkbox', { name: /yürürlükteki revizyonundan başla/ }));
+    fireEvent.click(within(bolge).getByRole('button', { name: 'Numune rotasını aç' }));
+    await within(g).findByRole('button', { name: /^Numune/ });
+    expect(istekler.some((i) => i.yol === '/rota/urunler/11/taslak-ac')).toBe(false);
+  });
+
+  it('3644: sunucu rota açmayı reddederse neden formda görünür ve rota açılmaz', async () => {
+    sunucuKur(YONETICI, {
+      durum: () => json(200, rotaDurumu([standartRev, faiRev])),
+      yazmalar: {
+        'GET /rota/urunler/11': () => json(200, cevap([rota(1, 'Seri', true), rota(2, 'FAI rotası', false, ['fai'])])),
+        'POST /rota/urunler/11/rotalar': () => json(409, { kod: 'CAKISMA', mesaj: 'Bu üründe bu adla bir rota var; başka bir ad yazın.' }),
+      },
+    });
+    rrAc('/recete-rota/schema');
+    const g = await sekmeler();
+    const bolge = screen.getByRole('region', { name: 'Ürün ve rotalar' });
+    fireEvent.click(within(g).getByRole('button', { name: /Rota$/ }));
+    fireEvent.click(within(within(bolge).getByRole('group', { name: 'Yeni rotanın emir türü' })).getByRole('button', { name: 'Numune' }));
+    fireEvent.click(within(bolge).getByRole('button', { name: 'Numune rotasını aç' }));
+    expect((await within(bolge).findByRole('alert')).textContent).toContain('bu adla bir rota var');
+    expect(within(g).queryByRole('button', { name: /^Numune/ })).toBeNull();
+  });
+
   it('3482-1 b: yeni rotaya ad yazılırsa o adla açılır', async () => {
     const istekler = kur();
     rrAc('/recete-rota/schema');
     const g = await sekmeler();
     const bolge = screen.getByRole('region', { name: 'Ürün ve rotalar' });
-    menudenSec(bolge, 'Yeni rota');
+    fireEvent.click(within(bolge).getByRole('button', { name: /Rota$/, expanded: false }));
     fireEvent.click(within(within(bolge).getByRole('group', { name: 'Yeni rotanın emir türü' })).getByRole('button', { name: 'Numune' }));
     fireEvent.change(within(bolge).getByRole('textbox', { name: 'Yeni rotanın adı' }), { target: { value: '  ORN Numune hattı ' } });
     fireEvent.click(within(bolge).getByRole('button', { name: 'Numune rotasını aç' }));

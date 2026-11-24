@@ -99,7 +99,6 @@ export function RevizyonCubugu({ r, agac, urunId, urunSec, duzenleme = null }: {
     ...(yetki.rotaYaz && (O || taslak) && revs.length > 0
       ? [{ anahtar: 'ilk-rev', baslik: 'Taslağı ilk revizyona çevir', simge: 'back' as const, sec: () => { duzen.ilkRevizyonaCevir(urunId); } }] : []),
     ...(yetki.rotaYaz && yetki.rotaTaslakAc ? [{ anahtar: 'kopya', baslik: 'Rotayı başka ürüne kopyala', simge: 'next' as const, sec: () => { setPanel('kopya'); } }] : []),
-    ...(rotalar.yeniAc ? [{ anahtar: 'yeni-rota', baslik: 'Yeni rota', simge: 'plus' as const, sec: rotalar.yeniAc }] : []),
     ...(yetki.rotaYaz && (O || taslak) ? [{
       anahtar: 'sil', baslik: 'Taslağı sil', simge: 'trash' as const, ton: 'tehlike' as const,
       sec: () => {
