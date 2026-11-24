@@ -138,7 +138,8 @@ export function RotaSablonlari(o: EkranOzellikleri) {
   if (sorgu.isError) return <DurumKutusu durum="hata" mesaj="Rota şablonları okunamadı." />;
   // Arama ad, öneri sözcüğü, açıklama ve adımlarda (adım adı, operasyon kodu ve adı, istasyon) bakar; sözcükler ayrı ayrı ve birlikte eşleşir.
   const metin = (s: RotaSablonu, hat: readonly HatAdimi[]): string =>
-    sade([s.ad, s.aciklama ?? '', ...s.oneriSozcukleri, ...hat.flatMap((x) => [x.kod, x.ad, x.operasyon, x.istasyon ?? ''])].join(' '));
+    sade([s.ad, s.aciklama ?? '', ...s.oneriSozcukleri, ...hat.flatMap((x) => [x.kod, x.ad, x.operasyon, x.istasyon ?? '']),
+      ...s.adimlar.flatMap((x) => [x.operasyonTipi.kod, x.operasyonTipi.ad, opBul(String(x.operasyonTipi.id))?.code ?? ''])].join(' '));
   const kartlar = sorgu.data.map((s) => ({ s, hat: sablonHatti(s, opBul, istBul) }));
   const sozcukler = sade(ara).split(' ').filter((x) => x !== '');
   const liste = kartlar.filter(({ s, hat }) => { const m = metin(s, hat); return sozcukler.every((z) => m.includes(z)); });

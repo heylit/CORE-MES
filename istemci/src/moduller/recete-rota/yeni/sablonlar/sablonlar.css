@@ -38,7 +38,7 @@
 .tc-rs-panel h4 { font-size: var(--yazi-s); }
 .tc-rs-panel-bas { display: flex; gap: var(--b-2); align-items: center; }
 .tc-rs-panel-bas h3 { flex: 1 1 auto; font-size: var(--yazi-m); }
-.tc-rs-opler { display: flex; flex-wrap: wrap; gap: var(--b-1); }
+.tc-rs-opler { display: flex; flex-wrap: wrap; gap: var(--b-1); max-height: 14rem; overflow-y: auto; }
 .tc-rs-opekle {
   display: inline-flex; gap: var(--b-1); align-items: center; min-height: var(--dokunma); padding: 0 var(--b-2); cursor: pointer;
   font-family: var(--font-mono); font-size: var(--yazi-xs); border: 1px dashed var(--edge); border-radius: var(--yari-1); background: var(--panel-solid); color: var(--ink);
