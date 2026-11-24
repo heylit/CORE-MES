@@ -300,6 +300,30 @@ describe('Yeni Arkon ekranı (eski düzen)', () => {
   }, 20000);
 });
 
+describe('Ölçek ve kaydırma çubuğu', () => {
+  it('alanın dikey kaydırma çubuğu ölçeği ve mobil kararını değiştirmez', async () => {
+    const olc = async (client: number) => {
+      const genislik = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get')
+        .mockImplementation(function (this: HTMLElement) { return this.hasAttribute('data-deneme-alan') ? client : 0; });
+      const tam = vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get')
+        .mockImplementation(function (this: HTMLElement) { return this.hasAttribute('data-deneme-alan') ? 905 : 0; });
+      const yukseklik = vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(720);
+      const kural = document.head.appendChild(document.createElement('style'));
+      kural.textContent = '.tc-kalici-ekran { display: contents; }';
+      try {
+        sunucuKur(YONETICI);
+        arkonAc('/arkon/pano', { kalici: true });
+        await bolum('Pano');
+        const kok = document.querySelector<HTMLElement>('.tc-ay');
+        await waitFor(() => { expect(kok?.style.getPropertyValue('--tc-ay-olcek')).not.toBe(''); });
+        return { z: kok?.style.getPropertyValue('--tc-ay-olcek'), mobil: kok?.hasAttribute('data-mobil') };
+      } finally { genislik.mockRestore(); tam.mockRestore(); yukseklik.mockRestore(); kural.remove(); cleanup(); }
+    };
+    // 905 genişlikte çubuk yokken ve 890 (905 - 15 px çubuk) görünürken aynı sonuç: eşik 900'de gidip gelmez.
+    expect(await olc(890)).toEqual(await olc(905));
+  }, 30000);
+});
+
 describe('Bağlantı özeti', () => {
   const temel = { memory: false, mode: 'server' as const, online: true, pending: 0, base: 'x' };
   it('durum metinle söylenir, renk tek başına değildir', () => {
