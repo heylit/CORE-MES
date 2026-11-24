@@ -14,6 +14,7 @@ import {
 } from './akislar.ts';
 import { kisaTarih, paraMetni, tl } from './bicim.ts';
 import { firmaEtiketi, HESAP_TURU_ADI, sayi, TEVKIFATLAR, type Hesap, type HazirVeri, type SunucuCeki } from './donustur.ts';
+import { kdvDahildenNet, kdvTutari } from '#paylasilan/finans-motor/kdv.ts';
 import { addDays, diffDays, gross, ymLong } from './motor.ts';
 import { OlaySecici } from './OlaySecici.tsx';
 import { satisSevkleriOku, satisSiparisleriOku, useFinansKomutu, useFinansYetkisi, type FinansVerisi } from './veri.ts';
@@ -220,7 +221,10 @@ function FaturaAlanlari(p: GovdeOzellikleri) {
   const elleDegistir = (yama: Partial<AkisDegerleri>) => { elleYaz(true); dg(yama); };
   const kdvler = gecerliKdvOranlari(V, finans.motor.bugun);
   const k = sayi(d.kdv), a = sayi(d.amount);
-  const net = d.incl ? a / (1 + k / 100) : a;
+  // Tek KDV kuralı (paylasilan/finans-motor/kdv.ts): ekran, sunucu ve veritabanı aynı kuruşu gösterir.
+  const dahilNet = d.incl && a > 0 ? kdvDahildenNet(a.toFixed(2), String(k)) : null;
+  const net = d.incl ? (dahilNet === null ? a / (1 + k / 100) : Number(dahilNet)) : a;
+  const kdvMetni = Number(kdvTutari(net.toFixed(2), String(k)));
   const yontemler: readonly (readonly [OdemeSekli, string])[] = side === 'gelir'
     ? [['vadeli', 'Vadeli, sonra gelecek'], ['pesin', 'Peşin, para geldi'], ['cek', 'Çek / senet aldım']]
     : [['vadeli', 'Vadeli, sonra ödeyeceğim'], ['pesin', 'Hemen ödedim'], ['cek', 'Çek / senet verdim']];
@@ -240,7 +244,7 @@ function FaturaAlanlari(p: GovdeOzellikleri) {
       <ParaBirimiAlani {...p} />
       <Secim etiket="Tevkifat" value={d.tevk} secenekler={TEVKIFATLAR.map(([deger, baslik]) => ({ deger, baslik }))} onChange={(e) => dg({ tevk: e.target.value })} />
       <IsaretKutusu etiket="Girdiğim tutar KDV dahil" checked={d.incl} onChange={(e) => dg({ incl: e.target.checked })} />
-      {a > 0 && <p className="tc-fy-not">KDV hariç {paraMetni(net, d.pb)} · KDV dahil {paraMetni(net * (1 + k / 100), d.pb)}</p>}
+      {a > 0 && <p className="tc-fy-not">KDV hariç {paraMetni(net, d.pb)} · KDV dahil {paraMetni(net + kdvMetni, d.pb)}</p>}
       <Serit etiket={side === 'gelir' ? 'Para ne zaman geliyor?' : 'Ne zaman ödenecek?'} secenekler={yontemler} secili={d.method} sec={(method) => elleDegistir({ method })} />
       {d.method === 'vadeli' && (
         <div className="tc-fy-grup">

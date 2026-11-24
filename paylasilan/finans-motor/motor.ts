@@ -16,6 +16,10 @@ export interface Islem {
   due: string;
   amount: number;
   kdv?: number;
+  // Sunucu belgesinden gelen kuruşa yuvarlanmış KDV (tevkifat düşülmüş, parçalara tam bölünmüş); yoksa tutar x oran / 100.
+  kdvTl?: number;
+  // Tevkif edilen KDV (alış belgesinde, TL): kdvTl etkin KDV'dir (toplam KDV - tevkifat); özet toplam KDV'yi ve tevkifatı ayrı gösterir.
+  tevkifatTl?: number;
   status: IslemDurumu;
   paidDate?: string | null;
   // Açılış bakiyesi ya da avans: kâr/zarara ve KDV'ye girmez.
@@ -207,7 +211,8 @@ export const CATS: Record<IslemTuru, Kategori[]> = {
 export const catInfo = (type: string, k: string): Partial<Kategori> => (CATS[type as IslemTuru] ?? []).find((c) => c.k === k) ?? {};
 export const isPnl = (t: Islem): boolean => !t.np && (t.type === 'gelir' || catInfo('gider', t.cat).pnl !== false);
 export const real = (t: Islem): boolean => !t.np;
-export const gross = (t: Islem): number => t.amount * (1 + (t.kdv || 0) / 100);
+export const kdvTutariTl = (t: Islem): number => t.kdvTl ?? t.amount * (t.kdv || 0) / 100;
+export const gross = (t: Islem): number => t.amount + kdvTutariTl(t);
 export const PNL_GIDER = CATS.gider.filter((c) => c.pnl !== false).map((c) => c.k);
 export const AMORT = 'Amortisman (nakit dışı)';
 
@@ -257,18 +262,23 @@ export function taxDay(ym: string, d: number): string {
   if (wd === 0) dt.setDate(dt.getDate() + 1);
   return iso(dt);
 }
-export interface KdvAyi { ym: string; h: number; i: number; carryIn: number; payable: number; carryOut: number }
+export interface KdvAyi { ym: string; h: number; i: number; tev: number; carryIn: number; payable: number; carryOut: number; nakit: number }
 export function kdvByMonth(tx: readonly Islem[]): KdvAyi[] {
   const map: Record<string, KdvAyi> = {};
   for (const t of tx) {
-    if (!t.kdv || t.np) continue;
+    if ((!t.kdv && t.kdvTl === undefined) || t.np) continue;
     const ym = t.date.slice(0, 7);
-    const m = map[ym] = map[ym] ?? { ym, h: 0, i: 0, carryIn: 0, payable: 0, carryOut: 0 };
-    if (t.type === 'gelir') m.h += t.amount * t.kdv / 100; else m.i += t.amount * t.kdv / 100;
+    const m = map[ym] = map[ym] ?? { ym, h: 0, i: 0, tev: 0, carryIn: 0, payable: 0, carryOut: 0, nakit: 0 };
+    if (t.type === 'gelir') m.h += kdvTutariTl(t); else { m.i += kdvTutariTl(t); m.tev += t.tevkifatTl ?? 0; }
   }
   const out = Object.values(map).sort((a, b) => (a.ym < b.ym ? -1 : 1));
+  // payable ve devreden 1 no'lu beyandaki gibidir: indirilecek tevkif edilen kısmı da içerir (m.i + m.tev), tevkif edilen 2 no'lu beyanla ayrı ödenir.
+  // nakit: aynı ayda çıkacak toplam KDV nakdi = 1 no'lu ödenecek + tevkif edilen; 2 no'lu tevkifat devreden KDV ile mahsup edilmez.
   let carry = 0;
-  for (const m of out) { m.carryIn = carry; const net = m.h - m.i - carry; m.payable = Math.max(0, net); carry = Math.max(0, -net); m.carryOut = carry; }
+  for (const m of out) {
+    m.carryIn = carry; const net = m.h - m.i - m.tev - carry; m.payable = Math.max(0, net); carry = Math.max(0, -net); m.carryOut = carry;
+    m.nakit = m.payable + m.tev;
+  }
   return out;
 }
 export function npv(rate: number, flows: readonly number[]): number { return flows.reduce((a, c, t) => a + c / Math.pow(1 + rate, t), 0); }
@@ -451,8 +461,8 @@ export function finansMotoru(baslangic?: string) {
       const ym = ymAdd(TODAY.slice(0, 7), k), d = ym + '-' + pad(Math.min(Number(r.day) || 1, new Date(+ym.slice(0, 4), +ym.slice(5, 7), 0).getDate()));
       if (d > TODAY && !recPaidIn(r, ym)) put(d, -(Number(r.amount) || 0), r.name);
     }
-    const kd = kdvByMonth(state.tx), kdMap: Record<string, number> = Object.fromEntries(kd.map((m) => [m.ym, m.payable]));
-    const recentK = kd.filter((m) => m.ym < TODAY.slice(0, 7)).slice(-3), avgK = recentK.length ? sum(recentK, (m) => m.payable) / recentK.length : 0;
+    const kd = kdvByMonth(state.tx), kdMap: Record<string, number> = Object.fromEntries(kd.map((m) => [m.ym, m.nakit]));
+    const recentK = kd.filter((m) => m.ym < TODAY.slice(0, 7)).slice(-3), avgK = recentK.length ? sum(recentK, (m) => m.nakit) / recentK.length : 0;
     for (let k = 0; k < 4; k++) {
       const ym = ymAdd(TODAY.slice(0, 7), k), d = taxDay(ym, 28);
       if (d <= TODAY) continue;
@@ -566,7 +576,7 @@ export function finansMotoru(baslangic?: string) {
   }
   function taxCalendar(daysAhead = 75): { date: string; name: string; per: string; amount?: number | undefined }[] {
     const ev: { date: string; name: string; per: string; amount?: number | undefined }[] = [];
-    const cur = TODAY.slice(0, 7), kd: Record<string, number> = Object.fromEntries(kdvByMonth(state.tx).map((m) => [m.ym, m.payable]));
+    const cur = TODAY.slice(0, 7), kd: Record<string, number> = Object.fromEntries(kdvByMonth(state.tx).map((m) => [m.ym, m.nakit]));
     for (let k = -1; k <= 3; k++) {
       const ym = ymAdd(cur, k), per = ymAdd(ym, -1), m = Number(ym.slice(5, 7));
       ev.push({ date: taxDay(ym, 25), name: "KDV tevkifatı (2 no'lu) beyanı ve ödemesi", per: ymLong(per) });

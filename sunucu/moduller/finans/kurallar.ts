@@ -1,5 +1,6 @@
 import type { FirmaTuru } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import { durumKur, verileriHazirla, yuvarla, type FinansHamVerisi, type FirmaCekirdegi } from '#paylasilan/finans-motor/donustur.ts';
+import { kdvDahildenNet, olcekli } from '#paylasilan/finans-motor/kdv.ts';
 import { finansMotoru } from '#paylasilan/finans-motor/motor.ts';
 import { aylikFaizdenGunluk, gunlukFaizdenAylik } from '#paylasilan/sozlesme/finansman.ts';
 
@@ -216,13 +217,6 @@ export function dagitimHesapla(belgeParaBirimi: string, odemeParaBirimi: string,
   if (kurus(odemeTutari) <= 0) return 'Kurla hesaplanan ödeme tutarı sıfır olamaz.';
   return { belgeId: d.belgeId, belgeTutari: d.belgeTutari, odemeTutari, caprazKur: d.caprazKur };
 }
-// Ondalık metni 10^basamak ölçekli tamsayıya çevirir ("35.5" -> 3550000000 için basamak 8); fazla basamak yarım yukarı yuvarlanır.
-function olcekli(metin: string, basamak: number): bigint {
-  const [tam = '0', kesir = ''] = Number(metin).toFixed(basamak + 1).split('.');
-  const deger = BigInt(tam + kesir);
-  return (deger + 5n) / 10n;
-}
-
 // B-008, B-009 (kullanıcı kararı FK1): çapraz kur (1 birim belge/satış para birimi = ? birim ödeme/alış para birimi) iki para biriminin
 // o günkü TL kurlarının oranından en çok `payYuzde` kadar sapar. O gün için kur girilmemişse kaydın kendi kuru kullanılır (sorgu);
 // referans bulunamazsa denetim atlanmaz, kur istenir. Pay finans ayarındadır; veritabanı aynı ayarı okur.
@@ -237,16 +231,8 @@ export function caprazKurHatasi(capraz: number, r: CaprazReferans, kaynakPb: str
     + 'Kur doğruysa Ayarlar > Kurlar\'da o günün kurunu girin.';
 }
 
-// B-003: KDV dahil tutardan net tutar. Veritabanı KDV'yi netten `round(net * oran / 100, 2)` ile hesaplar; net, toplamı girilen
-// tutara tam eşit veren kuruştur. Tek oranla hiçbir net o toplamı vermiyorsa (ör. %20'de 0,15) null döner.
-export function kdvDahildenNet(brut: string, oran: string): string | null {
-  const g = BigInt(kurus(brut));
-  const o = olcekli(oran, 2);
-  const kdv = (n: bigint): bigint => (n * o + 5_000n) / 10_000n;
-  const tahmin = (g * 10_000n) / (10_000n + o);
-  for (let n = tahmin - 2n; n <= tahmin + 2n; n += 1n) if (n > 0n && n + kdv(n) === g) return tl(Number(n));
-  return null;
-}
+// B-003: KDV dahil tutardan net tutar tek KDV kuralındadır (paylasilan/finans-motor/kdv.ts); sunucu ve ekran aynı işlevi kullanır.
+export { kdvDahildenNet };
 
 export function toplamOdeme(dagitimlar: readonly { odemeTutari: string }[]): string {
   return tl(dagitimlar.reduce((a, d) => a + kurus(d.odemeTutari), 0));

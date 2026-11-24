@@ -1,5 +1,6 @@
 import type { SimgeAdi } from '../../../ortak/tasarim/simgeler.ts';
 import { firmaEtiketi, KAT_KOD, sayi, tlKuru, yuvarla, type Belge, type Hesap, type HazirVeri, type SunucuCeki } from './donustur.ts';
+import { kdvDahildenNet } from '#paylasilan/finans-motor/kdv.ts';
 import { addDays, CATS, type FinansMotoru, type Islem } from './motor.ts';
 
 // "Kayıt gir": olay seçici ve her olayın komutu (prototipte EVENTS, akisGonder, ekFormGonder). Burası saftır: form
@@ -203,7 +204,9 @@ export function akisKomutu(tur: OlayTuru, d: AkisDegerleri, V: HazirVeri, motor:
     const { pb, kur } = kurDegeri(d);
     if (!(kur > 0)) return hata('Kur girin.');
     const [tp, tpd] = (d.tevk || '').split('/').map(Number);
-    const tutar = yuvarla(d.incl ? a / (1 + k / 100) : a);
+    const dahilNet = d.incl ? kdvDahildenNet(a.toFixed(2), String(k)) : null;
+    if (d.incl && dahilNet === null) return hata('Bu KDV dahil toplam tek oranla kuruşa uymuyor; KDV hariç tutarı girin.');
+    const tutar = dahilNet === null ? yuvarla(a) : Number(dahilNet);
     const govde: Record<string, unknown> = {
       yon: side, tur: 'fatura', kategori: KAT_KOD[d.cat], firmaId: fr.id, belgeNo: d.fno.trim() || null, aciklama: d.desc.trim() || null, belgeTarihi: date,
       vade: d.method === 'vadeli' ? (d.due || date) : date, paraBirimi: pb, kur, tutar, kdvOrani: k, ...(tp ? { tevkifatPay: tp, tevkifatPayda: tpd } : {}),
