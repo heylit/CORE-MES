@@ -4,7 +4,7 @@ import { useSihirbaz } from '../baglam.ts';
 import { BagDugmesi, Cip, CipGrubu, Kutu, MetinAlani, Alanlar, Yardim } from '../parcalar.tsx';
 import { aileler, girdiler } from '../turler.ts';
 import type { Aile, Kalite, Sinif } from '../../kurallar/index.ts';
-import { kartStandardi, standartTarafi, tarafSirala, esdegerSirala } from '../../standart-adlari.ts';
+import { anaNorm, kartStandardi, tarafSirala, esdegerSirala } from '../../standart-adlari.ts';
 import { FavoriCipleri, SonKullanilanCipleri, yakinKaliteler } from './Baslangic.tsx';
 
 
@@ -13,12 +13,6 @@ function Esdegerler({ eq }: { eq: Record<string, string> | undefined }) {
   const e = Object.entries(esdegerSirala(eq, kartStandardi(d)));
   if (!e.length) return null;
   return <span className="tc-my-esler">{e.map(([k, v]) => <span key={k} className="tc-my-es"><i>{k}</i>{v}</span>)}</span>;
-}
-
-// Kalitenin ana normu: kart ASTM seçtiyse ve kalitenin norm listesinde ASTM tarafı varsa o, EN seçtiyse EN tarafı; yoksa kalitenin ana normu.
-function anaNorm(g: Kalite, tercih: 'astm' | 'en'): string {
-  const uygun = (g.stds ?? []).find((x) => standartTarafi(x) === tercih);
-  return uygun ?? g.std ?? '';
 }
 
 function KaliteSatiri({ fam, cls, g, nerede }: { fam: string; cls: string; g: Kalite; nerede: boolean }) {

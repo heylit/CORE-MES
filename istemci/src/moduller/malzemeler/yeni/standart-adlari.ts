@@ -275,6 +275,10 @@ export function tarafSirala<T>(liste: readonly T[], tercih: Standart, ad: (x: T)
     .sort((a, b) => TARAF_SIRASI(standartTarafi(ad(a[0])), tercih) - TARAF_SIRASI(standartTarafi(ad(b[0])), tercih) || a[1] - b[1])
     .map(([x]) => x);
 }
+// Kalitenin ana normu: kart ASTM seçtiyse ve kalitenin norm listesinde ASTM tarafı varsa o, EN seçtiyse EN tarafı; yoksa kalitenin ana normu.
+export function anaNorm(g: { readonly std?: string; readonly stds?: readonly string[] }, tercih: Standart): string {
+  return (g.stds ?? []).find((x) => standartTarafi(x) === tercih) ?? g.std ?? '';
+}
 export function esdegerSirala(eq: Readonly<Record<string, string>> | undefined, tercih: Standart): Record<string, string> {
   return Object.fromEntries(tarafSirala(Object.entries(eq ?? {}), tercih, ([k]) => k));
 }

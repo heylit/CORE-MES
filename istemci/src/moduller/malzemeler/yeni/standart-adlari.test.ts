@@ -4,7 +4,7 @@ import { FAMS } from './sabitler/index.ts';
 import { metinListesi } from './katalog/liste.ts';
 import { autoKod, finalAd, kuralBaglami, metinAyristir, newDraft } from './kurallar/index.ts';
 import {
-  STANDART_AD_SINIRI, TABAN_STANDART_ADLARI, aramaMetinleri, kartStandardi, ayardakiStandartAdlari, esliAdlariCoz, standartAdiYaz, standartAdlari, secenekEtiketleri, standartEtiketi, esdegerSirala, standartTarafi, tarafSirala, standartlaEslesir,
+  STANDART_AD_SINIRI, TABAN_STANDART_ADLARI, aramaMetinleri, kartStandardi, ayardakiStandartAdlari, esliAdlariCoz, standartAdiYaz, standartAdlari, anaNorm, secenekEtiketleri, standartEtiketi, esdegerSirala, standartTarafi, tarafSirala, standartlaEslesir,
 } from './standart-adlari.ts';
 import type { KartKaydi, KatalogKarti } from './tipler.ts';
 import { ortamKur } from './veri.ts';
@@ -143,5 +143,30 @@ describe('3633 kalite ve norm karşılıkları seçili standarda göre sıralan�
     expect(Object.keys(esdegerSirala(eq, 'astm'))).toEqual(['UNS', 'AISI/SAE', 'JIS', 'W.Nr', 'EN kısa ad']);
     expect(Object.keys(esdegerSirala(eq, 'en'))).toEqual(['W.Nr', 'EN kısa ad', 'JIS', 'UNS', 'AISI/SAE']);
     expect(tarafSirala(['EN 10083-3', 'ASTM A29', 'ISO 683'], 'astm', (x) => x)).toEqual(['ASTM A29', 'ISO 683', 'EN 10083-3']);
+  });
+  test('ana norm: seçili tarafın normu, yoksa kalitenin ana normu', () => {
+    const g = { std: 'EN 10083-2', stds: ['EN 10083-2', 'ASTM A29/A29M', 'SAE J403'] };
+    expect(anaNorm(g, 'astm')).toBe('ASTM A29/A29M');
+    expect(anaNorm(g, 'en')).toBe('EN 10083-2');
+    expect(anaNorm({ std: 'MIL-DTL-12560', stds: ['MIL-DTL-12560'] }, 'en')).toBe('MIL-DTL-12560');
+    expect(anaNorm({ std: 'X 1' }, 'astm')).toBe('X 1');
+    expect(anaNorm({}, 'astm')).toBe('');
+  });
+  test('sınıflandırma gerçek norm listesiyle: her norm bilinen bir tarafa ya da tarafsıza düşer, ASTM ve EN ile başlayanlar yanlış tarafa düşmez', async () => {
+    const tum = new Set<string>();
+    for (const f of Object.values(FAMS as Record<string, { classes: Record<string, { std?: string; grades: { std?: string; stds?: string[] }[] }> }>)) {
+      for (const c of Object.values(f.classes)) {
+        if (c.std) tum.add(c.std);
+        for (const g of c.grades) { if (g.std) tum.add(g.std); for (const x of g.stds ?? []) tum.add(x); }
+      }
+    }
+    expect(tum.size).toBeGreaterThan(50);
+    for (const n of tum) {
+      const t = standartTarafi(n);
+      if (/^ASTM\b/.test(n)) expect(t, n).toBe('astm');
+      if (/^EN\b/.test(n)) expect(t, n).toBe('en');
+      if (t === 'en') expect(/^(EN\b|W\.Nr)/.test(n), n).toBe(true);
+      if (t === null) expect(/\b(ASTM|EN|AMS|SAE|AISI|UNS)\b/.test(n), `tarafsız norm iki tarafı da anıyor: ${n}`).toBe(false);
+    }
   });
 });

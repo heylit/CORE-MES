@@ -106,6 +106,12 @@ export function DurumAdimi({ anahtarlar, bolumler, haric = [] }: DurumAdimiOzell
       const esli = o.k === 'durum' || o.k === 'islem' ? adlar : {};
       const etiketler = secenekEtiketleri(l, esli, standart);
       const etiket = (x: string) => etiketler.get(x) ?? standartEtiketi(x, esli, standart);
+      // Seçilmeyen tarafın adı çipte yazmaz; fare ve ekran okuyucu için ipucunda durur (aramada neden eşleştiği de buradan okunur).
+      const ipucuMetni = (x: string, bilgi?: string) => {
+        const diger = standart === 'astm' ? esli[x]?.en : esli[x]?.astm;
+        if (diger) return `${standart === 'astm' ? 'EN' : 'ASTM'}: ${diger} · ${bilgi ?? x}`;
+        return bilgi ?? (etiket(x) === x ? undefined : x);
+      };
       const gorunen = uyanlar.filter((x) => cur.includes(x) || standartlaEslesir(x, esli, ara));
       if (!gorunen.length) return null;
       const mods = gorunen.filter((x) => S.MODS[x]);
@@ -115,7 +121,7 @@ export function DurumAdimi({ anahtarlar, bolumler, haric = [] }: DurumAdimiOzell
             {gorunen.map((x) => (
               <Cip
                 key={x} radyo={o.type === 'select'} basili={cur.includes(x)} ton={TON[K.optStatus(o.k, x, d, b).s]} ipucu
-                baslik={S.INFO[x]?.split('||')[0] ?? (etiket(x) === x ? undefined : x)} tikla={() => { sec(o, x); }}
+                baslik={ipucuMetni(x, S.INFO[x]?.split('||')[0])} tikla={() => { sec(o, x); }}
               >{etiket(x)}
               </Cip>
             ))}
