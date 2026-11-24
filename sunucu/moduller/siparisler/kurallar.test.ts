@@ -495,13 +495,28 @@ describe('SIP-40 (3427-4 a) onaylı siparişin yeni sürümü', () => {
     });
     assert.deepEqual(d, [
       { alan: 'termin', kalemSira: null, eski: '2026-11-15', yeni: '2026-11-25', fiyat: false },
-      { alan: 'odemeVadesiGun', kalemSira: null, eski: '30', yeni: null, fiyat: false },
+      { alan: 'odemeVadesiGun', kalemSira: null, eski: '30', yeni: null, fiyat: true },
       { alan: 'birimFiyat', kalemSira: 1, eski: '12.5000', yeni: '13', fiyat: true },
       { alan: 'termin', kalemSira: 1, eski: null, yeni: '2026-11-20', fiyat: false },
       { alan: 'aciklama', kalemSira: 1, eski: null, yeni: 'Not', fiyat: false },
     ]);
     assert.deepEqual(d.map(degisiklikFiyatsiz)[2], { alan: 'birimFiyat', kalemSira: 1, eski: null, yeni: null, fiyat: true });
     assert.deepEqual(d.map(degisiklikFiyatsiz)[0], d[0]);
+    assert.deepEqual(d.map(degisiklikFiyatsiz)[1], { alan: 'odemeVadesiGun', kalemSira: null, eski: null, yeni: null, fiyat: true });
+  });
+
+  test('SIP-40 ceza oranı, ceza tavanı ve ödeme vadesi fiyat alanıdır; eski kayıtta fiyat: false olsa da alan adıyla maskelenir, kalem termini maskelenmez', () => {
+    const d = revizyonDegisiklikleri(onceki, { baslik: { ...baslik, cezaOraniGun: '0.5', cezaTavaniOrani: '10', odemeVadesiGun: 60 }, kalemler: [kalem] });
+    assert.deepEqual(d.map((x) => [x.alan, x.fiyat]), [['cezaOraniGun', true], ['cezaTavaniOrani', true], ['odemeVadesiGun', true]]);
+    assert.deepEqual(d.map(degisiklikFiyatsiz).map((x) => [x.eski, x.yeni]), [[null, null], [null, null], [null, null]]);
+    const eski = { alan: 'cezaOraniGun', kalemSira: null, eski: null, yeni: '0.5', fiyat: false };
+    assert.deepEqual(degisiklikFiyatsiz(eski), { ...eski, yeni: null, fiyat: true });
+    const kdv = revizyonDegisiklikleri(onceki, { baslik: { ...baslik, kdvOrani: '10' }, kalemler: [kalem] });
+    assert.deepEqual(kdv, [{ alan: 'kdvOrani', kalemSira: null, eski: '20.00', yeni: '10', fiyat: false }]);
+    assert.deepEqual(kdv.map(degisiklikFiyatsiz), kdv, '3635: KDV oranı fiyat sayılmaz, fiyat görmeyene açık kalır');
+    const kalemTermin = { alan: 'termin', kalemSira: 1, eski: null, yeni: '2026-11-20', fiyat: false };
+    assert.deepEqual(degisiklikFiyatsiz(kalemTermin), kalemTermin);
+    assert.deepEqual(degisiklikFiyatsiz({ alan: 'termin', kalemSira: null, eski: '2026-11-15', yeni: '2026-11-25', fiyat: false }).yeni, '2026-11-25');
   });
 });
 

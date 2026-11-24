@@ -280,6 +280,8 @@ const SABIT_BASLIK = ['firmaId', 'siparisTarihi', 'paraBirimi'] as const;
 const SAYI_ALANI = new Set(['kdvOrani', 'cezaOraniGun', 'cezaTavaniOrani', 'odemeVadesiGun', 'birimFiyat']);
 const DEGISEN_BASLIK = ['musteriSiparisNo', 'termin', 'kdvOrani', 'odemeKosulu', 'aciklama', 'cezaOraniGun', 'cezaTavaniOrani', 'odemeVadesiGun'] as const;
 const KALEM_ALANI = ['birimFiyat', 'termin', 'aciklama'] as const;
+// 3401-2 a: ceza ve vade fiyat görme yetkisinin parçasıdır; geçmişte de değeri yalnız fiyat gören okur.
+const FIYAT_BASLIK_ALANI = new Set<string>(['cezaOraniGun', 'cezaTavaniOrani', 'odemeVadesiGun']);
 const revMetni = (v: string | number | null): string | null => (v === null ? null : String(v));
 const alanAyni = (alan: string, a: string | null, b: string | null): boolean => (SAYI_ALANI.has(alan) ? sayiAyni(a, b) : a === b);
 
@@ -303,7 +305,7 @@ export function revizyonDegisiklikleri(onceki: RevizyonHali, yeni: RevizyonGirdi
   for (const a of DEGISEN_BASLIK) {
     const eski = revMetni(onceki.baslik[a]);
     const y = revMetni(yeni.baslik[a]);
-    if (!alanAyni(a, eski, y)) sonuc.push({ alan: a, kalemSira: null, eski, yeni: y, fiyat: false });
+    if (!alanAyni(a, eski, y)) sonuc.push({ alan: a, kalemSira: null, eski, yeni: y, fiyat: FIYAT_BASLIK_ALANI.has(a) });
   }
   for (const [i, k] of onceki.kalemler.entries()) {
     const y = yeni.kalemler[i];
@@ -315,9 +317,9 @@ export function revizyonDegisiklikleri(onceki: RevizyonHali, yeni: RevizyonGirdi
   return sonuc;
 }
 
-// Fiyat görmeyene fiyat değişikliğinin yalnız varlığı görünür (180).
+// Fiyat görmeyene fiyat değişikliğinin yalnız varlığı görünür (180). Eski kayıtlarda ceza ve vade fiyat: false taşır; alan adına da bakılır.
 export function degisiklikFiyatsiz(d: RevizyonDegisikligi): RevizyonDegisikligi {
-  return d.fiyat ? { ...d, eski: null, yeni: null } : d;
+  return d.fiyat || (d.kalemSira === null && FIYAT_BASLIK_ALANI.has(d.alan)) ? { ...d, eski: null, yeni: null, fiyat: true } : d;
 }
 
 // Aramada no ve müşteri sipariş no büyük-küçük harf duyarsız aranır (SQL tarafı ILIKE).
