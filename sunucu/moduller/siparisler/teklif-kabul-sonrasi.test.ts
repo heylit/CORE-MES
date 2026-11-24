@@ -166,6 +166,30 @@ describe('3637 kabul edilmiş teklife yeni sürüm (gerçek PostgreSQL, gerçek 
     assert.equal(t.kabulSurumu, 2);
   });
 
+  test('Siparişe uygula iskontolu sürümün iskontolu birim fiyatını yazar; kalem eşleşmiyorsa 422 ve sipariş değişmez', async () => {
+    let t = await teklifAc();
+    t = await komut(t, 'surum-ver', { fiyatlar: fiyatlar(t, '10', '20'), kdvOrani: '20' });
+    t = await komut(t, 'kabul', { surumNo: 1 });
+    const c = await gonder(yonetici, `/siparisler/teklifler/${t.id}/siparise-donustur`, { surum: t.surum, ...donusum });
+    t = c.json<SiparisDonusumCevabi>().teklif;
+    const siparisId = t.siparisId ?? 0;
+    t = await komut(t, 'surum-ver', { fiyatlar: fiyatlar(t, '8', '16'), kdvOrani: '20', iskontoOrani: '5' });
+    t = await komut(t, 'kabul', { surumNo: 2 });
+    let s = (await oku(yonetici, `/siparisler/${siparisId}`)).json<SiparisAyrintisi>();
+    assert.equal((await gonder(yonetici, `/siparisler/${siparisId}/onayla`, { surum: s.surum })).statusCode, 200);
+    s = (await oku(yonetici, `/siparisler/${siparisId}`)).json<SiparisAyrintisi>();
+    const govde = { siparisSurum: s.surum, surumNo: 2, gerekce: 'Müşteri iskontolu fiyatı kabul etti' };
+    // Kalem eşleşmesi bozulursa (sipariş satırının sırası teklifinkinden ayrılırsa) uygulanmaz.
+    await o().sahip.sorgu('UPDATE siparisler_siparis_satiri SET sira = sira + 50 WHERE siparis_id = $1 AND sira = 2', [siparisId]);
+    await komut(t, 'siparise-uygula', govde, 422);
+    assert.equal((await oku(yonetici, `/siparisler/${siparisId}`)).json<SiparisAyrintisi>().surum, s.surum);
+    await o().sahip.sorgu('UPDATE siparisler_siparis_satiri SET sira = sira - 50 WHERE siparis_id = $1 AND sira = 52', [siparisId]);
+    t = await komut(t, 'siparise-uygula', govde);
+    s = (await oku(yonetici, `/siparisler/${siparisId}`)).json<SiparisAyrintisi>();
+    // 8 ve 16, %5 iskonto: iskontosuz birim fiyat (8, 16) değil iskontolu fiyat yazılır.
+    assert.deepEqual(s.satirlar.map((r) => r.birimFiyat), ['7.6000', '15.2000']);
+  });
+
   test('Siparişe uygula: yalnız kabul edilen sürüm, yalnız onaylı siparişe; fiyat, KDV ve ödeme koşulu Rev olarak geçer, kalem ve termin yerinde kalır', async () => {
     const operator = (await girisYap('operator')).cerez;
     let t = await teklifAc();
