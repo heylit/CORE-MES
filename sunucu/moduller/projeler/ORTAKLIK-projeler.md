@@ -19,3 +19,4 @@
 | görev şablonu | `projeler_gorev_sablonu`, `projeler_gorev_sablon_kalemi`, uygulanan hâl `projeler_proje_sablonu` | projeler | 3269 a; Rota'nın talimat şablonu ve Etiket şablonu ayrı kavramlardır |
 | hazırlık maddesi (şablon kalemi bağı) | `projeler_gorev_sablon_kalemi.hazirlik_maddesi` (kod metni) | uretim-emirleri (`HAZIRLIK_MADDELERI`) | 3269-B emir başına görev doğurur; şimdilik yalnız saklanır |
 | görev olayı (üstlen, başla, bitti, onay, geri) | `projeler_gorev_olayi` | projeler | yalnız ekleme; kontrol kuralı son "bitti" olayını okur |
+| bu emirde gerekmez işareti | `projeler_hazirlik_gerekmez` (`emri_id`, `madde`, `olay`, `kisi_id`, `gerekce`, `an`; yalnız ekleme) | projeler (yazar); emir ve madde uretim-emirleri'nin | 3642; emir bağı yabancı anahtarsız; kişi `kisi.id` yabancı anahtar; ad `kisiAdlari` ile; okuma `hazirlikGerekmezleri`, yazma `hazirlikGerekmezIsaretle` ve `hazirlikGerekmezKaldir` (`disari.ts`, yetki çağıranın ucunda) |

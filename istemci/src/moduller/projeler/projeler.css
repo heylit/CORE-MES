@@ -112,10 +112,13 @@ button.tc-prj-pano-kart { cursor: pointer; }
 .tc-prj-hz-grup th { background: var(--panel2); font-size: var(--yazi-xs); font-weight: 700; letter-spacing: .04em; color: var(--muted); }
 .tc-prj-hz-ortak { background: var(--panel2); }
 .tc-prj-hz-yok { color: var(--faint); }
+.tc-prj-hz-on { min-width: var(--dokunma); min-height: var(--dokunma); border: 1px dashed var(--edge); border-radius: var(--yari-1); background: none; font: inherit; cursor: pointer; }
+.tc-prj-hz-on[aria-pressed="true"] { outline: 2px solid var(--edge2); outline-offset: 2px; }
 .tc-prj-hz-hucre { display: inline-flex; flex-direction: column; align-items: flex-start; gap: var(--b-1); min-width: var(--dokunma); min-height: var(--dokunma);
   padding: var(--b-1) var(--b-2); text-align: left; border: 1px solid var(--edge2); border-radius: var(--yari-1); background: var(--panel2); color: inherit; font: inherit; font-weight: 700; cursor: pointer; }
 .tc-prj-hz-hucre[data-hal="atanmamis"] { border-style: dashed; background: none; color: var(--muted); }
 .tc-prj-hz-hucre[data-hal="hazir"] { border-color: transparent; }
+.tc-prj-hz-hucre[data-hal="gerekmez"] { border-style: dashed; background: none; color: var(--muted); }
 .tc-prj-hz-hucre[data-gecikmis] { border: 2px solid var(--stop); }
 .tc-prj-hz-hucre[aria-pressed="true"] { outline: 2px solid var(--edge2); outline-offset: 2px; }
 .tc-prj-hz-ikili { display: inline-flex; }

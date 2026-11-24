@@ -42,6 +42,11 @@ export async function kapaliSistemMaddeleri(db: Db): Promise<ReadonlySet<string>
     .map((x) => x.kod));
 }
 
+// 3642: "Bu emirde gerekmez" ile kapatılamayan maddeler: kodla durduran üç madde ve tabloda durduran işaretli özel madde.
+export async function durduranMaddeKodlari(db: Db): Promise<ReadonlySet<string>> {
+  return new Set(['cnc', 'cizim', 'yayin', ...(await s.hazirlikMaddeSatirlari(db)).filter((x) => x.durduran).map((x) => x.kod)]);
+}
+
 export async function hazirlikMaddesiDegistir(db: Db, kullanici: Kullanici, kod: string, g: HazirlikMaddesiDegistirGovdesi): Promise<HazirlikMaddeleriCevabi> {
   const mevcut = (await s.hazirlikMaddeSatirlari(db)).find((x) => x.kod === kod);
   if (mevcut === undefined) throw bulunamadi(MADDE_YOK);

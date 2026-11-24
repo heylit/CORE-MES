@@ -8,10 +8,11 @@ import type {
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { kisiAdlari, rolSecenekleri, rollerdekiKisiler } from '../kisiler/disari.ts';
 import {
-  hedefYerleri, hazirlikGorevleri, hazirlikGorevleriAc, hazirlikIsEmriEklendi, hazirlikSablonlari, projeGetir, projeninHazirlikGorevleri, projeSecenekleri,
+  hedefYerleri, hazirlikGerekmezleri, hazirlikGorevleri, hazirlikGorevleriAc, hazirlikIsEmriEklendi, hazirlikSablonlari, projeGetir, projeninHazirlikGorevleri, projeSecenekleri,
 } from '../projeler/disari.ts';
 import type { HazirlikHedefleri, HazirlikMaddeBilgisi, HazirlikPlani } from '../projeler/disari.ts';
 import { hazirliklar } from './hazirlik.ts';
+import { gerekmezYazarMi } from './hazirlik-gerekmez.ts';
 import { hazirlikMaddeTanimlari } from './hazirlik-maddeleri.ts';
 import { acikEmirIhlali, gorevinSistemHali } from './kurallar.ts';
 import * as s from './sorgular.ts';
@@ -111,7 +112,10 @@ export async function hazirlikMatrisi(db: Db, kullanici: Kullanici, projeId: num
   const emirler = [...projeninEmirleri.reverse(), ...await s.ustEmirlerBul(db, disaridan)];
   const isEmirleri = await s.isEmirleriGetir(db, emirler.map((e) => e.id));
   const tanimlar = await hazirlikMaddeTanimlari(db);
-  const kullanilan = new Set(gorevler.map((g) => g.madde));
+  // 3642: işaretle iptal olan görev listede yoktur; işaretli madde sütunda ve hücrede görünsün diye kullanılan sayılır.
+  const gerekmezler = await hazirlikGerekmezleri(db, emirler.map((e) => e.id));
+  const gerekmezAdlari = await kisiAdlari(db, [...new Set(gerekmezler.map((x) => x.kisiId))]);
+  const kullanilan = new Set([...gorevler.map((g) => g.madde), ...gerekmezler.map((x) => x.madde)]);
   const atanan = await atananCozucu(
     db,
     gorevler.flatMap((g) => [g.sorumluKisiId, g.kontrolKisiId]).filter((x): x is number => x !== null),
@@ -124,6 +128,7 @@ export async function hazirlikMatrisi(db: Db, kullanici: Kullanici, projeId: num
   return {
     proje: { id: proje.id, kod: proje.kod, ad: proje.ad, durum: proje.durum },
     dagitir: islemVarMi(kullanici, 'projeler.hazirlik-dagit') && proje.durum === 'aktif',
+    gerekmezYazar: gerekmezYazarMi(kullanici) && proje.durum === 'aktif',
     maddeler: tanimlar.filter((m) => kullanilan.has(m.kod)).map((m) => ({ kod: m.kod, ad: m.ad, kisa: m.kisa, durduran: m.durduran, isEmriDuzeyi: m.isEmriDuzeyi })),
     emirler: emirler.map((e) => ({
       id: e.id, emirNo: e.emirNo, parcaNo: e.parcaNo, adet: e.adet, acik: acikEmirIhlali(e.durum, e.arsiv) === null,
@@ -137,6 +142,7 @@ export async function hazirlikMatrisi(db: Db, kullanici: Kullanici, projeId: num
       gecikmeGun: g.adimIsareti === true ? null : g.gecikmeGun, yapan: atanan(g.sorumluKisiId, g.yapanRolId), kontrol: atanan(g.kontrolKisiId, g.kontrolRolId), surum: g.surum, kademe: g.kademe,
       sistem: gorevinSistemHali(sistem.get(g.emriId), g.madde, g.isEmriId),
     })),
+    gerekmezler: gerekmezler.map((x) => ({ emriId: x.emriId, madde: x.madde, gerekce: x.gerekce, kisiAdi: gerekmezAdlari.get(x.kisiId) ?? null, an: x.an })),
   };
 }
 

@@ -42,7 +42,7 @@ function sunucuKur(ilk: DagitimCevabi) {
     if (yol === '/projeler/rol-secenekleri') return json(200, { roller: [{ id: 5, ad: 'Planlama' }] });
     if (yontem === 'GET' && yol.startsWith('/projeler/4/dagitim')) return json(200, ilk);
     if (yol === '/hazirlik-matrisi?projeId=4') {
-      return json(200, { proje: { id: 4, kod: 'ORN-PRJ-1', ad: 'Deneme', durum: 'aktif' }, dagitir: true, maddeler: [], gorevler: [],
+      return json(200, { proje: { id: 4, kod: 'ORN-PRJ-1', ad: 'Deneme', durum: 'aktif' }, dagitir: true, gerekmezYazar: true, maddeler: [], gorevler: [], gerekmezler: [],
         emirler: [{ id: 1, emirNo: 'ORN-UE-1', parcaNo: 'ORN-P-1', adet: 1, acik: true, isEmirleri: [] }] });
     }
     if (yontem === 'POST' && yol === '/hazirlik-matrisi/dagit') {
