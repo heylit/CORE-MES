@@ -63,6 +63,16 @@ export const dortSaatGerekcesi = (g: string | null | undefined): string | null =
   return t.length > 0 ? t.slice(0, DORT_SAAT_GEREKCE_EN_COK) : null;
 };
 
+// 3669: çalışmanın kapalı kısıtları. Motorun kapaliKisitlar (motor/girdi.js) kuralıyla aynıdır: kisitSurum 2'den eski kayıtta
+// 'personel' kapalı sayılır. Kayıt yoksa ya da bozuksa boş küme (kısıtların hepsi açık: sunucunun bugünkü davranışı).
+export const KISIT_SURUMU = 2;
+export function kapaliKisitlar(calisma: unknown): ReadonlySet<string> {
+  const c = calisma !== null && typeof calisma === 'object' ? (calisma as { kapali?: unknown; kisitSurum?: unknown }) : null;
+  if (c === null || !Array.isArray(c.kapali)) return new Set();
+  const k = c.kapali.filter((x): x is string => typeof x === 'string');
+  return new Set((Number(c.kisitSurum) || 0) >= KISIT_SURUMU || k.includes('personel') ? k : [...k, 'personel']);
+}
+
 // İşin süresi: ayar + adet x birim süre (dakika). Süresi bilinmeyen iş motorca yerleşmez.
 export function isSuresi(ayarDk: number | null, birimDk: number | null, adet: number): number | null {
   if (birimDk === null) return null;

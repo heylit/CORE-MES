@@ -2,7 +2,7 @@ import { uc } from '#cekirdek/uc.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
-  ayarGovdesi, bedelAyariCevabi, canliyaAlmaGecmisiCevabi, ekMesaiGovdesi, bedelAyariTaslakGovdesi, geriGonderGovdesi, onayaGonderGovdesi, onaydanCekGovdesi, canliYerlesimCevabi, canliYerlesimSorgusu, canliyaAlCevabi, canliyaAlGovdesi, musteriSecenekleriCevabi, musteriSecenekleriSorgusu, degisiklikParametresi, hizliGovdesi, isEmriParametresi, kuyrukGovdesi, motorUyarilariCevabi, motorYerlesimiCevabi, kuyrukYazCevabi, kuyrukYazGovdesi, onizleSorgusu, onizlemeCevabi, projePlaniCevabi, projePlaniParametresi,
+  ayarGovdesi, bedelAyariCevabi, canliyaAlmaGecmisiCevabi, canliyaAlOnizlemesiCevabi, ekMesaiGovdesi, bedelAyariTaslakGovdesi, geriGonderGovdesi, onayaGonderGovdesi, onaydanCekGovdesi, canliYerlesimCevabi, canliYerlesimSorgusu, canliyaAlCevabi, canliyaAlGovdesi, musteriSecenekleriCevabi, musteriSecenekleriSorgusu, degisiklikParametresi, hizliGovdesi, isEmriParametresi, kuyrukGovdesi, motorUyarilariCevabi, motorYerlesimiCevabi, kuyrukYazCevabi, kuyrukYazGovdesi, onizleSorgusu, onizlemeCevabi, projePlaniCevabi, projePlaniParametresi,
   motorAyariGovdesi, motorAyarlariCevabi, motorKuraliGovdesi, planCevabi, planSistemAyariGovdesi, planSistemAyariParametresi, planSistemAyariSatiri, planSistemAyarlariCevabi, planSorgusu, planSurumCevabi,
   senaryoBilgiGovdesi, senaryoGovdesi, senaryoParametresi, senaryoSurumGovdesi, senaryolarCevabi, siparisCarpaniCevabi, siparisParametresi,
   siralaGovdesi, taslakGovdesi, grupSaatMaliyetleriCevabi, mesaiMaliyetiCevabi, mesaiMaliyetiSorgusu, mesaiSaatDegerleriCevabi, mesaiSaatDegerleriSorgusu, mesaiGrupSirasiCevabi, mesaiGrupSirasiSorgusu, tasiGovdesi, PLAN_ONAY_KOMUTLARI, mrpIhtiyaciCevabi, planSagligiCevabi, veriSagligiCevabi,
@@ -72,6 +72,9 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/plan/canli-yerlesim', yetki: PLAN_OKUR, sorgu: canliYerlesimSorgusu, cevap: canliYerlesimCevabi,
     isle: ({ db, sorgu }) => servis.canliYerlesim(db, sorgu.isEmirleri) }),
   // 510 a: canlıya alma geçmişi (eski "Plan değişikliği" kutusu); planı okuyan görür.
+  // 3669: canlıya almadan önce sunucunun yazacağı yerleşimin sıra denetimi (yazmaz); sahip ya da canlıya alma yetkilisi.
+  uc({ yontem: 'GET', yol: '/plan/senaryolar/:id/canliya-al-onizlemesi', yetki: { biri: ['plan.yaz', 'plan.canliya-al'] }, parametre: senaryoParametresi, cevap: canliyaAlOnizlemesiCevabi,
+    isle: ({ db, kullanici, parametre }) => servis.canliyaAlOnizlemesi(db, kullanici, parametre.id) }),
   uc({ yontem: 'GET', yol: '/plan/canliya-alma-gecmisi', yetki: PLAN_OKUR, cevap: canliyaAlmaGecmisiCevabi, isle: ({ db }) => servis.canliyaAlmaGecmisi(db) }),
   // 782: plana giden verinin kaynağında boş olan yerler; yalnız okur, kaynak çağıranın yetkisiyle.
   uc({ yontem: 'GET', yol: '/plan/veri-sagligi', yetki: { biri: ['plan.oku', 'plan.yaz', PLANLAMA_OKUR] }, cevap: veriSagligiCevabi, isle: ({ db, kullanici }) => veriSagligi(db, kullanici) }),

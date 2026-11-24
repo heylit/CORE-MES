@@ -32,6 +32,7 @@ const BEKLENEN: BeklenenYetkiler = {
   'GET /plan/motor-uyarilari': MOTOR_GORUNUMU_OKUR,
   'GET /plan/canli-yerlesim': PLAN_OKUR,
   'GET /plan/canliya-alma-gecmisi': PLAN_OKUR,
+  'GET /plan/senaryolar/:id/canliya-al-onizlemesi': { biri: ['plan.yaz', 'plan.canliya-al'] },
   'GET /plan/veri-sagligi': { biri: ['plan.oku', 'plan.yaz', 'plan.planlama-oku'] } as const,
   'GET /plan/takim-omurleri': { biri: ['sayfa.istasyonlar', ...ISTASYON_YAZMA_ISLEMLERI] } as const,
   'GET /plan/plan-sagligi': 'plan.planlama-oku',

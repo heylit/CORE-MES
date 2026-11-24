@@ -35,7 +35,7 @@ const kilitYetkisiDenetle = (kullanici: Kullanici, komutlar: readonly SatirKomut
   if (komutlar.some(kilitKaldirir) && !islemVarMi(kullanici, KILIT_KALDIRMA_ISLEMI)) throw yetkiYok(KILIT_KALDIRMA_YETKISIZ);
   if (komutlar.some(baslamisDizer) && !islemVarMi(kullanici, BASLAMIS_DIZME_ISLEMI)) throw yetkiYok(BASLAMIS_DIZME_YETKISIZ);
 };
-const kisiOf = (kullanici: Kullanici, simdi: number) => ({ kim: kullanici.ad, sayfa: SAYFA, t: simdi });
+const kisiOf = (kullanici: Kullanici, simdi: number) => ({ kim: kullanici.ad, sayfa: SAYFA, t: simdi, kilitYetkisi: islemVarMi(kullanici, KILIT_KALDIRMA_ISLEMI) });
 
 // Satırları bu modül yazar; okurken yine de sözleşmeden geçer (dizme satırı kendi biçimiyle), bozuk satır oynatılmaz.
 const nesneMi = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
@@ -95,7 +95,7 @@ export async function taslakKomutuEkle(db: Db, kullanici: Kullanici, g: { taslak
   if (eski.length >= TASLAK_KOMUTU_EN_COK) throw dogrulama(`Taslakta en çok ${String(TASLAK_KOMUTU_EN_COK)} değişiklik durur; önce uygulayın.`, 'komut');
   const o = oynat(c.calisma, eski, kisiOf(kullanici, simdi), HESAPLAR);
   const r = komutUygula(o.deger, g.komut, kisiOf(kullanici, simdi), HESAPLAR);
-  if ('hata' in r) throw r.hata.tur === 'dogrulama' ? dogrulama(r.hata.ileti, r.hata.alan) : cakisma(r.hata.ileti);
+  if ('hata' in r) throw r.hata.tur === 'dogrulama' ? dogrulama(r.hata.ileti, r.hata.alan) : r.hata.tur === 'yetki' ? yetkiYok(r.hata.ileti) : cakisma(r.hata.ileti);
   if (!r.degisti) return gorunum(db, kullanici, t, simdi);
   // Adım uzadı: bildirildiği andaki planlı bitiş satırda saklanır; taslak sonradan oynatılırken o günkü bitişten yeniden hesaplanmaz.
   const bitis0 = g.komut.tur === 'adim-uzadi' ? adimEkBitisi(r.deger, g.komut.isId) : undefined;

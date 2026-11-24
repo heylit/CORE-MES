@@ -435,6 +435,7 @@ export function elleBolUygula(deger: unknown, k: { isId: string; paylar: readonl
   const yeni = kopya(deger);
   yeni.elleBol = { ...eskiBol, [k.isId]: yeniBol };
   const geri: GeriYama[] = [eskiBol[k.isId] === undefined ? { yol: ['elleBol'], id: k.isId } : { yol: ['elleBol'], id: k.isId, once: eskiBol[k.isId] }];
+  if (kilitler.length > 0 && kisi.kilitYetkisi !== true) return { hata: { tur: 'yetki', ileti: 'Kilitli adımı bölmek plan kilitleme yetkisi ister (bölme kilidi kaldırır).' } };
   if (kilitler.length > 0) {
     const l = { ...locks };
     for (const id of kilitler) { delete l[id]; geri.push({ yol: ['locks'], id, once: locks[id] }); }

@@ -269,11 +269,13 @@ export const sonCanliyaAlma = (db: Db): Promise<{ zaman: string; kisiId: number 
   db.tek(`SELECT to_json(kapanma) #>> '{}' AS zaman, kapatan_kisi_id AS "kisiId" FROM plan_senaryosu
            WHERE durum = 'canliya_alindi' ORDER BY kapanma DESC, id DESC LIMIT 1`);
 // 510 a: taban planın ilk yazılışından sonraki canlıya almalar (ilk canlıya alma tabanı yazar, sayılmaz), yeniden eskiye.
-export async function canliyaAlmalar(db: Db): Promise<{ tabanZamani: string | null; satirlar: { senaryoId: number; ad: string; kisiId: number; zaman: string }[] }> {
+export async function canliyaAlmalar(db: Db): Promise<{ tabanZamani: string | null; satirlar: { senaryoId: number; ad: string; kisiId: number; zaman: string; kapaliKisitlar: string[] | null }[] }> {
   const t = (await db.tek<{ z: string | null }>("SELECT to_json(min(zaman)) #>> '{}' AS z FROM plan_taban"))!.z;
   if (t === null) return { tabanZamani: null, satirlar: [] };
-  const satirlar = await db.sorgu<{ senaryoId: number; ad: string; kisiId: number; zaman: string }>(
-    `SELECT id AS "senaryoId", ad, kapatan_kisi_id AS "kisiId", to_json(kapanma) #>> '{}' AS zaman FROM plan_senaryosu
+  const satirlar = await db.sorgu<{ senaryoId: number; ad: string; kisiId: number; zaman: string; kapaliKisitlar: string[] | null }>(
+    `SELECT id AS "senaryoId", ad, kapatan_kisi_id AS "kisiId", to_json(kapanma) #>> '{}' AS zaman,
+            (SELECT o.kapali_kisitlar FROM plan_senaryo_onay_kaydi o WHERE o.senaryo_id = plan_senaryosu.id AND o.islem = 'canliya_al' ORDER BY o.id DESC LIMIT 1) AS "kapaliKisitlar"
+       FROM plan_senaryosu
       WHERE durum = 'canliya_alindi' AND kapanma > (SELECT min(zaman) FROM plan_taban) ORDER BY kapanma DESC, id DESC`);
   return { tabanZamani: t, satirlar };
 }
@@ -385,9 +387,15 @@ export const degisiklikKaldir = (db: Db, senaryoId: number, ids: readonly number
 /* ---------------- onay kaydı (146, 147 a) ---------------- */
 
 export type OnayIslemi = 'onaya_gonder' | 'onaydan_cek' | 'geri_gonder' | 'canliya_al';
-export const onayKaydiEkle = (db: Db, senaryoId: number, islem: OnayIslemi, kisiId: number, metin: string | null, dortGozsuz = false) =>
-  db.sorgu('INSERT INTO plan_senaryo_onay_kaydi (senaryo_id, islem, kisi_id, metin, dort_gozsuz) VALUES ($1, $2, $3, $4, $5)',
-    [senaryoId, islem, kisiId, metin, dortGozsuz]);
+// 3669: kapaliKisitlar kaydın yazıldığı andaki çalışmanın kapalı kısıtlarıdır; verilmezse (null) bilinmiyor.
+export const onayKaydiEkle = (db: Db, senaryoId: number, islem: OnayIslemi, kisiId: number, metin: string | null, dortGozsuz = false, kapaliKisitlar: readonly string[] | null = null) =>
+  db.sorgu('INSERT INTO plan_senaryo_onay_kaydi (senaryo_id, islem, kisi_id, metin, dort_gozsuz, kapali_kisitlar) VALUES ($1, $2, $3, $4, $5, $6::text[])',
+    [senaryoId, islem, kisiId, metin, dortGozsuz, kapaliKisitlar === null ? null : [...kapaliKisitlar]]);
+// Senaryonun son onaya gönderme kaydındaki kapalı liste; onaylayan gönderenin gördüğü listeyi görür. Kayıt ya da liste yoksa null.
+export async function onayaGonderilenKapali(db: Db, senaryoId: number): Promise<string[] | null> {
+  return (await db.tek<{ k: string[] | null }>(
+    "SELECT kapali_kisitlar AS k FROM plan_senaryo_onay_kaydi WHERE senaryo_id = $1 AND islem = 'onaya_gonder' ORDER BY id DESC LIMIT 1", [senaryoId]))?.k ?? null;
+}
 export interface OnaySatiri {
   senaryoId: number; gonderenKisiId: number; gonderme: string; not: string | null;
   geriGonderenKisiId: number | null; geriGonderme: string | null; geriNeden: string | null;
