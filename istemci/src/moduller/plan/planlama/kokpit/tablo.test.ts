@@ -182,4 +182,8 @@ describe('ölçülecek satırların seçimi (3570)', () => {
     const l = [satir({ emir: 'ORN-1' }), satir({ emir: 'ORN-22' })];
     expect(olcuAdaylari(l, 3)).toEqual(l);
   });
+  it('3660: adım satırlarında yalnız verilen sütunlar sayılır; uzun adım adı satırı seçtirmez', () => {
+    const l = Array.from({ length: 6 }, (_, i) => satir({ emir: i === 0 ? '9. Çok uzun bir adım adı burada' : '1. Adım', ilerleme: i === 4 ? 'Bekliyor' : 'Bitti' }));
+    expect(olcuAdaylari(l, 1, new Set(['ilerleme']))).toEqual([l[4]]);
+  });
 });

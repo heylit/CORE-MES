@@ -19,7 +19,7 @@ import { MalzemeSeridi, malzemeCubuklari } from './MalzemeCubugu.tsx';
 import type { EmirMalzemeleri } from './malzeme.ts';
 import type { YerlestirmeHedefi } from './Yerlestirme.tsx';
 import type { PencereDeposu } from './pencereDeposu.ts';
-import { Ayrac, Bos, FarkRozeti, Halka, olcuAdaylari, sutunlariOlc, type TabloDurumu } from './Tablo.tsx';
+import { ADIM_OLCULEN, Ayrac, Bos, FarkRozeti, Halka, olcuAdaylari, sutunlariOlc, type TabloDurumu } from './Tablo.tsx';
 import {
   ADIM_DURUMU_ADI, SUTUN_ADI, SU_AN_ADI, TEZGAH_SUTUNLARI, adimDurumu, bolmeEni, farkOlustur, ilerleme, olcumBirlestir, olcuSablonu, sablon, suAn, sutunToplamEni, tarihSaat, tezgahToplamEni,
   type AdimDurumu, type SutunKimligi, type SutunOlcumu,
@@ -307,8 +307,8 @@ export function Tahta(o: TahtaOzellikleri) {
     else { k.style.removeProperty('--sutunlar'); k.style.removeProperty('--bas-en'); }
   });
   // Yalnız daha önce ölçülmemiş emir ve sipariş satırları ölçülür (sütun kümesi, kademe, satır boyu, yazı tipi ya da plan değişince hepsi
-  // yeniden), boyamadan önce; her sütunda yazısı en uzun görünen birkaç satır düzenle ölçülür (olcuAdaylari). Açılan emrin adım satırları ölçülmez
-  // (kendi sütunlarına sığmayan adım adı eskisi gibi "…" ile kısalır); arama, sıralama, seçim ve kaydırma ölçmez. Enler yalnız büyür;
+  // yeniden), boyamadan önce; her sütunda yazısı en uzun görünen birkaç satır düzenle ölçülür (olcuAdaylari). Açılan emrin adım satırları yalnız
+  // Süre ve Durum sütununda ölçülür (3660; kendi sütunlarına sığmayan adım adı eskisi gibi "…" ile kısalır); arama, sıralama, seçim ve kaydırma ölçmez. Enler yalnız büyür;
   // değişince sütun şablonu doğrudan tahtanın değişkenine yazılır (satırlar yeniden çizilmez).
   const olcuAnahtari = tabloKipi ? `${kolonlar.map((x) => x.id).join(',')}|${kad}|${o.satirBoyu ?? ''}` : '';
   const olculen = useRef<{ anahtar: string; m: unknown; satirlar: Set<string> } | null>(null);
@@ -327,9 +327,10 @@ export function Tahta(o: TahtaOzellikleri) {
     const yeniAnahtar = yaziDegisti || once === null || once.anahtar !== olcuAnahtari || once.m !== m;
     const kayit = yeniAnahtar ? { anahtar: olcuAnahtari, m, satirlar: new Set<string>() } : once;
     olculen.current = kayit;
-    const yeni = [...k.querySelectorAll<HTMLElement>('.tc-pyq-satir[data-satir]:not([data-agac-adim], [data-agac-ara], [data-agac-not])')].filter((x) => !kayit.satirlar.has(x.dataset['satir'] ?? ''));
+    const yeniSatirlar = (sec: string): HTMLElement[] => [...k.querySelectorAll<HTMLElement>(sec)].filter((x) => !kayit.satirlar.has(x.dataset['satir'] ?? ''));
+    const yeni = yeniSatirlar('.tc-pyq-satir[data-satir]:not([data-agac-adim], [data-agac-ara], [data-agac-not])'), yeniAdim = yeniSatirlar('.tc-pyq-satir[data-satir][data-agac-adim]');
     const baslik = yeniAnahtar ? [...k.querySelectorAll<HTMLElement>('.tc-pyq-satir.tc-pyq-eksen')] : [];
-    if (yeni.length === 0 && baslik.length === 0) return;
+    if (yeni.length === 0 && yeniAdim.length === 0 && baslik.length === 0) return;
     // Tahta baştan dizilecekse (ilk açılış, sütun kümesi, kademe ya da satır boyu değişince) satırlar ölçüm süresince gizlenir:
     // ölçüm yalnız kopyaları dizer, satırlar yeni şablonla bir kez dizilir (iki kez değil). Odak satırlardaysa gizlenmez (odak düşmesin).
     const ic = k.querySelector<HTMLElement>(':scope > .tc-pyq-ic');
@@ -338,8 +339,8 @@ export function Tahta(o: TahtaOzellikleri) {
     const ust = gizle && once !== null ? k.scrollTop : 0, sol = gizle && once !== null ? k.scrollLeft : 0;
     if (gizle) k.setAttribute('data-olcum', '');
     try {
-      const y = sutunlariOlc(k, [...baslik, ...olcuAdaylari(yeni)]);
-      for (const x of yeni) kayit.satirlar.add(x.dataset['satir'] ?? '');
+      const y = sutunlariOlc(k, [...baslik, ...olcuAdaylari(yeni), ...olcuAdaylari(yeniAdim, 3, ADIM_OLCULEN)]);
+      for (const x of [...yeni, ...yeniAdim]) kayit.satirlar.add(x.dataset['satir'] ?? '');
       if (!y) return;
       const onceki = yeniAnahtar ? null : olcum.current, z = onceki ? olcumBirlestir(onceki, y) : y;
       if (olcum.current && JSON.stringify(olcum.current) === JSON.stringify(z)) return;
