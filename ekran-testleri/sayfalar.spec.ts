@@ -44,9 +44,9 @@ const VARDIYA_BOLUMLERI = [
   ['/vardiya/fazla-mesai', 'Fazla mesai'], ['/vardiya/planli-duruslar', 'Planlı duruşlar'], ['/vardiya/mesai', /^Günlük mesai · /],
 ] as const;
 
-// Planlama'nın Veri grubu (B-2495-4): motor ayarları yalnız yöneticide, öteki dört sayfa planlama rolünde de (maliyetsiz) sınanır.
+// Planlama'nın Veri grubu (B-2495-4): motor ayarları yalnız yöneticide, öteki üç sayfa planlama rolünde de (maliyetsiz) sınanır.
 const PLAN_VERI_SAYFALARI = [
-  ['/plan/veri-sagligi', 'Veri sağlığı'], ['/plan/plan-sagligi', 'Plan sağlığı'], ['/plan/analiz', 'Planlama analizi'], ['/plan/mrp', 'Malzeme ihtiyacı'],
+  ['/plan/veri-sagligi', 'Veri sağlığı'], ['/plan/plan-sagligi', 'Plan sağlığı'], ['/plan/analiz', 'Planlama analizi'],
 ] as const;
 
 const SAYFALAR: Sayfa[] = [

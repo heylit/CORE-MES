@@ -4,7 +4,6 @@ import type { MrpIhtiyaciCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { DurumKutusu } from '../../../ortak/arayuz/DurumKutusu.tsx';
 import { Kart } from '../../../ortak/arayuz/Kart.tsx';
 import { Rozet } from '../../../ortak/arayuz/Rozet.tsx';
-import { SayfaBasligi } from '../../../ortak/arayuz/SayfaBasligi.tsx';
 import { SayiKarti } from '../../../ortak/arayuz/SayiKarti.tsx';
 import { Simge } from '../../../ortak/arayuz/Simge.tsx';
 import { Tablo, type Sutun, type TabloSuzgeci } from '../../../ortak/arayuz/Tablo.tsx';
@@ -12,22 +11,35 @@ import { api } from '../../../ortak/veri/api.ts';
 import { gunMetni, mrpOzeti, netGorunur, sayiMetni, suz, turAdi, yetkiNotu, zamanMetni, type MrpSatiri, type MrpSuzgeci } from './kurallar.ts';
 import './mrp.css';
 
-// Malzeme ihtiyacı (1472 M1, ekran 1560, 1564 a): açık emirlerin brüt ve net malzeme ihtiyacı. Yalnız okur; görünmeyen stok ve satın alma
+// Malzeme ihtiyacı (1472 M1, ekran 1560, 1564 a): açık emirlerin brüt ve net malzeme ihtiyacı. Ayrı sayfa değil, Malzeme ihtiyacı ve satın alma
+// sayfasının katlanır bölümüdür (3666); plana girmemiş açık emirler de burada görünür. Yalnız okur; görünmeyen stok ve satın alma
 // alanlarının (1545 a) sütunu listeden çıkar.
 export const MRP_YOLU = '/plan/mrp';
 const UC = '/plan/mrp-ihtiyaci';
 
-export function Mrp() {
+export function AcikEmirMalzemeleri() {
   const q = useQuery({ queryKey: ['plan', 'mrp-ihtiyaci'], queryFn: () => api.get<MrpIhtiyaciCevabi>(UC) });
   const yenile = () => { void q.refetch(); };
+  const [acik, acikYaz] = useState(false);
+  if (q.isError) return <DurumKutusu durum="hata" mesaj="Açık emirlerin malzeme ihtiyacı alınamadı" hata={q.error} yenile={yenile} />;
+  if (q.isPending) return null;
+  const c = q.data;
   return (
-    <div className="tc-mrp">
-      <SayfaBasligi baslik="Malzeme ihtiyacı" simge="box" alt="Açık emirlerin malzeme ihtiyacı; stok ve açık siparişle netlenir. Yalnız okur."
-        birincil={{ etiket: 'Yenile', simge: 'rotate', yap: yenile, yukleniyor: q.isFetching }} />
-      {q.isPending ? <DurumKutusu durum="yukleniyor" />
-        : q.isError ? <DurumKutusu durum="hata" mesaj="Malzeme ihtiyacı alınamadı" hata={q.error} yenile={yenile} />
-          : <Rapor c={q.data} />}
-    </div>
+    <section className="tc-mrp" aria-label="Tüm açık emirlerin malzeme ihtiyacı">
+      {c.urunsuzEmir > 0 && (
+        <p className="tc-mrp-not" role="status">
+          <Simge ad="alert" boyut="k" />
+          <span><b>{`${String(c.urunsuzEmir)} açık emrin ürünü yok:`}</b> malzeme ihtiyacı hesaplanamadı, listeye girmedi.</span>
+        </p>
+      )}
+      <button type="button" className="tc-mrp-ac" aria-expanded={acik} onClick={() => { acikYaz(!acik); }}>
+        <Simge ad="chev-right" boyut="k" />
+        <span>Tüm açık emirler (plana girmeyen dahil)</span>
+        <small>{`${String(c.satirlar.length)} malzeme`}</small>
+      </button>
+      {acik && <p className="tc-pyz-tp-not">Plana girmeyen emirler dahil olduğu için sayılar yukarıdaki matristen büyük olabilir.</p>}
+      {acik && <Rapor c={c} />}
+    </section>
   );
 }
 
@@ -37,12 +49,6 @@ function Rapor({ c }: { c: MrpIhtiyaciCevabi }) {
   return (
     <>
       {not && <p className="tc-mrp-not" role="status"><Simge ad="lock" boyut="k" /><span><b>{not.baslik}</b> {not.metin}</span></p>}
-      {c.urunsuzEmir > 0 && (
-        <p className="tc-mrp-not" role="status">
-          <Simge ad="alert" boyut="k" />
-          <span><b>{`${String(c.urunsuzEmir)} açık emrin ürünü yok:`}</b> malzeme ihtiyacı hesaplanamadı, listeye girmedi.</span>
-        </p>
-      )}
       <div className="tc-pano-izgara">
         <SayiKarti baslik="Malzeme" simge="box" sayi={ozet.malzeme} altMetin="Açık emirlerde ihtiyacı olan malzeme" />
         <SayiKarti baslik="Eksik malzeme" simge="alert" sayi={ozet.eksik} ton="uyari"

@@ -1,5 +1,4 @@
 import type { Malzeme, PlanlamaCalismasi, PlanVerisi, Siparis, Urun } from '../tipler.ts';
-import { hucreKoy, type IsiHucresi, type IsiSatiri, type IsiSutunu, type IsiUstDurumu } from '../ortak/isi/index.ts';
 import { kolYerleri, planDisi } from '../tipler.ts';
 
 // Malzeme satın alma planının hesabı (224 a: MRP Planlama'nındır; 205 a: saf işlev). Eski ekranın zt-malzeme-plan.betik'i ve motorun
@@ -719,63 +718,4 @@ export function tedarikciAdi(D: PlanVerisi, t: string): string {
   const l = Array.isArray(D.tedarikciler) ? (D.tedarikciler as unknown[]).filter(nesneMi) : [];
   const x = l.find((y) => y.id === t);
   return x && typeof x.ad === 'string' ? x.ad : t;
-}
-
-// ---- Isı haritası (zz30-isi ISI.malzplan): malzeme x gün, stok yetiyor mu ---------------------------------------
-const ISI_GUN = 21;
-export const isiGunu = (t: number): number => Math.floor(t / 24);
-
-export interface MalzemeIsiSatiri extends IsiSatiri { r: AlimPlaniSatiri; d: string }
-export interface MalzemeIsisi { sutunlar: IsiSutunu[]; satirlar: MalzemeIsiSatiri[]; ust: IsiUstDurumu }
-
-const ISI_SIRA: Record<'hata' | 'uyari' | 'tamam', number> = { hata: 0, uyari: 1, tamam: 2 };
-
-// Satırlar satın alma planının satırlarıdır (asıl, tahmini ve eksik); bugünden 21 gün. Yolda, eksik, son sipariş günü, geliş ve planın
-// istediği gün hücrelere işlenir; karşılanan satırlar gizlidir. `fiyat` verilirse (maliyet gören) durum satırı açık siparişlerin tutar
-// toplamını yazar (483/3); fiyatı olmayan satır varsa toplam bilinmez.
-export function malzemeIsisi(l: readonly AlimPlaniSatiri[], taban: number, simdi: number, miktar: (q: number, kod: string) => string,
-  malzemeAdi: (kod: string) => string, fiyat?: (kod: string, q: number) => number | null): MalzemeIsisi {
-  const g0 = isiGunu(simdi);
-  const sutunlar: IsiSutunu[] = [];
-  for (let g = g0; g < g0 + ISI_GUN; g++) { const s = gunYaz(taban, g * 24); sutunlar.push({ k: `g${g}`, ad: s.slice(0, 5), alt: s.slice(6, 9), bugun: g === g0 }); }
-  const kis = (g: number): string => `g${Math.min(Math.max(g, g0), g0 + ISI_GUN - 1)}`;
-  const son = g0 + ISI_GUN - 1;
-  const anahtarlar = new Map<string, number>();
-  const satirlar = l.map((r): MalzemeIsiSatiri => {
-    const h: Record<string, IsiHucresi> = {};
-    const d = DURUM_ADI[r.durum];
-    const ton = DURUM_TONU[r.durum];
-    const tah = r.tb ? 'Satın Alma termini bekleniyor, olması gereken tarih' : undefined;
-    const gel = r.etkin, plan = r.gerekli;
-    const gec = gel !== null && plan !== null && gel > plan + 0.05;
-    const kd = ton === 'hata' ? 4 : 2;
-    const q = miktar(Math.ceil(r.miktar), r.kod);
-    if (r.src !== null && gel !== null) for (let g = g0; g <= Math.min(isiGunu(gec && plan !== null ? plan : gel) - (gec ? 0 : 1), son); g++) hucreKoy(h, `g${g}`, { is: true, etiket: 'yolda' });
-    if (gec && plan !== null && gel !== null) for (let g = Math.max(isiGunu(plan), g0); g <= Math.min(isiGunu(gel), son); g++) hucreKoy(h, `g${g}`, { kd, tahmin: tah, etiket: 'eksik' });
-    if (r.src === null && r.siparisGun !== null) {
-      const gc = r.siparisGun < simdi;
-      hucreKoy(h, kis(isiGunu(r.siparisGun)), { kd: gc ? 4 : 1, sm: gc ? 'alert' : 'clock', v: gc ? 'geçti' : 'son', etiket: `en geç sipariş günü ${gunYaz(taban, r.siparisGun)}${gc ? ' (geçti)' : ''}` });
-    }
-    if (gel !== null) {
-      hucreKoy(h, kis(isiGunu(gel)), { sm: 'box', iyi: gec ? undefined : true, kd: gec ? kd : undefined, tahmin: tah, v: gec ? `+${Math.ceil((gel - (plan ?? gel)) / 24)}g` : '', etiket: `geliş ${gunYaz(taban, gel)}` });
-    }
-    if (plan !== null) hucreKoy(h, kis(isiGunu(plan)), { bayrak: true, v: gec || r.src === null ? q : undefined, etiket: `plan ${gunYaz(taban, plan)} istiyor, ${q}` });
-    // Eski anahtar malzeme kodu (asıl satırda sırasıyla); aynı malzemenin ikinci eksiği ayrı satırdır.
-    const k0 = r.kod + (r.src !== null ? `-${r.src}` : '');
-    const n = anahtarlar.get(k0) ?? 0;
-    anahtarlar.set(k0, n + 1);
-    return {
-      k: n ? `${k0}#${n}` : k0, ad: r.kod, alt: `${malzemeAdi(r.kod)} · ${d}`, simge: 'box', ton, gizli: ton === 'tamam', h, r, d,
-    };
-  });
-  const sira = (x: MalzemeIsiSatiri): number => ISI_SIRA[x.ton === 'tamam' ? 'tamam' : x.ton === 'hata' ? 'hata' : 'uyari'];
-  satirlar.sort((a, b) => sira(a) - sira(b));
-  const sor = satirlar.filter((x) => x.ton === 'hata');
-  const en = sor[0];
-  const yeni = l.filter((r) => r.src === null).length;
-  const tutarlar = fiyat ? l.filter((r) => r.src !== null).map((r) => fiyat(r.kod, r.miktar)) : [];
-  const acikTutar = tutarlar.some((x) => x === null) ? null : tutarlar.reduce<number>((a, x) => a + (x ?? 0), 0);
-  const metin = `${en ? `En sıcak satır ${en.ad}: ${en.d.toLocaleLowerCase('tr-TR')}, plan ${gunYaz(taban, en.r.gerekli)} istiyor${en.r.etkin !== null ? `, geliş ${gunYaz(taban, en.r.etkin)}` : ''}. ` : ''}`
-    + `${yeni} malzeme için sipariş verilmedi, ${sor.length} malzeme işi geciktirebilir${fiyat ? `; açık alım ${tlYaz(acikTutar)}` : ''}.`;
-  return { sutunlar, satirlar, ust: { ton: sor.length ? 'hata' : yeni ? 'uyari' : 'tamam', simge: 'box', metin } };
 }
