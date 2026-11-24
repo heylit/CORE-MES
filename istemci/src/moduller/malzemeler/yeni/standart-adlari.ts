@@ -244,14 +244,21 @@ export function standartAdlari(ayar: { [k: string]: unknown } | null | undefined
   return { ...TABAN_STANDART_ADLARI, ...ayardakiStandartAdlari(ayar) };
 }
 
-// Seçili standardın adı önce, diğeri parantez içinde: "H1025 (P1070)". Tek ad varsa o; hiç yoksa değerin kendisi.
+// 3633: yalnız seçili standardın adı görünür ("H1025"); seçili tarafın adı yoksa öteki ad, hiç yoksa değerin kendisi.
 export function standartEtiketi(deger: string, adlar: StandartAdlari, tercih: Standart): string {
   const a = adlar[deger];
   if (!a) return deger;
   const birinci = tercih === 'astm' ? a.astm : a.en;
   const ikinci = tercih === 'astm' ? a.en : a.astm;
-  if (birinci && ikinci) return birinci === ikinci ? birinci : `${birinci} (${ikinci})`;
   return birinci ?? ikinci ?? deger;
+}
+
+// Seçim listesinde iki değer aynı adı alırsa (ör. iki değerin EN adı aynı) çip ayırt edilsin diye değerin kendisi eklenir.
+export function secenekEtiketleri(degerler: readonly string[], adlar: StandartAdlari, tercih: Standart): Map<string, string> {
+  const ham = degerler.map((v) => [v, standartEtiketi(v, adlar, tercih)] as const);
+  const sayim = new Map<string, number>();
+  for (const [, e] of ham) sayim.set(e, (sayim.get(e) ?? 0) + 1);
+  return new Map(ham.map(([v, e]) => [v, (sayim.get(e) ?? 0) > 1 && e !== v ? `${e} - ${v}` : e]));
 }
 
 const kucuk = (s: string) => s.toLocaleLowerCase('tr');
