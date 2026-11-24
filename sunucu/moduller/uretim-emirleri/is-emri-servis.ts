@@ -28,7 +28,7 @@ import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
 import { emrinHazirlikGorevleriniAc, isEmriHazirligiEkle } from './hazirlik-gorevi.ts';
 import { siparisAyrintisi, siparisinSatirOzetleri, siparisKilitliAyrinti, siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import {
-  EMIR_YOK, IKAME_BASKA, IKAME_BILESEN_YOK, IKAME_CAKISMA, IS_EMRI_YOK, KAYNAK_YOK, acikEmirIhlali, arsivdeFasonDonusuAcik, adimliOzetSay, adimliIptalIhlali, hataliDurduMu, kaynakSuresi, fasonDonusIhlali, fasonGidisIhlali, fasonTamamIhlali,
+  adimSonKurulumAni, EMIR_YOK, IKAME_BASKA, IKAME_BILESEN_YOK, IKAME_CAKISMA, IS_EMRI_YOK, KAYNAK_YOK, acikEmirIhlali, arsivdeFasonDonusuAcik, adimliOzetSay, adimliIptalIhlali, hataliDurduMu, kaynakSuresi, fasonDonusIhlali, fasonGidisIhlali, fasonTamamIhlali,
   gorunenDurum, guvenliUygula, isEmriFarki, rotayiEmreCevir, oneDusenYeniAdimlar, yeniAdimOndeIletisi, isEmirleriIhlali, kaynakDegisimIhlali, kisininIstasyonu, siparisSatiriIhlali, oncelikDegisimIhlali, turDegisimIhlali, TUR_PROJESIZ, farkliRotaliBolmeIhlali, farkliRotaYururlukteDegilIletisi, farkliRotaRezerveliIletisi, kalemTeslimi, partiIhlali, teslimBaglaIhlali, malzemeIhtiyaci, planaAlIhlali, siradakiFasonAdimi, siradakiIsEmri, teslimIhlali,
   BIRLESME_ADIMI_YOK, BIRLESME_PLANI_KOLDA, BOLME_ADET, BOLME_BIRLESME_ADIMI, BOLME_URETILMIS, EK_ADIM_OP, birlesmeBeklemeIhlali, birlesmePlaniIhlali, birlesmePlaniKaldirIhlali, birlestirmeIhlali, bolmeIhlali, ekAdimIhlali,
   ekAdimKaldirIhlali, kartAdimi, kartDagilimi, type KartDagilimi, kartSiniri, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
@@ -1858,6 +1858,8 @@ export interface PlanIsEmri {
   adimBaslama?: string | null;
   islenenAdet?: number;
   sonSayimAni?: string | null;
+  // 3649: adımın son kurulum anı (adimSonKurulumAni): durdurulup dönülmüşse dönüş anı, değilse başlama. Hazırlık bu andan sonra sayım yoksa yeniden kalandır.
+  sonKurulumAni?: string | null;
   // Terminalin çalıştırdığı makine (açık kullanım; 393 d): planlanan makine çalışanlar arasındaysa o, değilse ilk açılan. Makinesiz
   // çalışmada ve çalışmayan adımda yoktur.
   fiiliMakineId?: number;
@@ -1929,6 +1931,7 @@ async function acikAdimlar<R extends number | null>(
   const simdi = Date.now();
   const calisanlar = satirlar.filter((i) => i.durum === 'calisiyor').map((i) => i.id);
   const islenen = await s.islenenAdetleriGetir(db, calisanlar);
+  const kurulumOlaylari = await s.kurulumOlaylariGetir(db, calisanlar);
   const fiili = new Map<number, number[]>();
   for (const k of await s.acikMakineleriGetir(db, calisanlar)) fiili.set(k.isEmriId, [...(fiili.get(k.isEmriId) ?? []), k.makineId]);
   const fiiliMakine = (i: { id: number; makineId: number | null }): number | undefined => {
@@ -1958,7 +1961,7 @@ async function acikAdimlar<R extends number | null>(
       durum: e.durum === 'taslak' ? 'taslak' : e.baslamis ? 'basladi' : 'planli', adimDurumu: i.durum, ekAciklama: i.ekAciklama,
       fasonBekleGun: fasonBeklemesi(butun.filter((x) => x.uretimEmriId === e.id), i.sira, (x) => tahminler.get(`${e.id}|${x.sira}`) ?? null, simdi,
         (x) => (x.id === undefined ? null : siparisGelisleri.get(x.id) ?? null), fasonGun),
-      ...(i.durum === 'calisiyor' ? { adimBaslama: i.baslama, islenenAdet: islenen.get(i.id)?.adet ?? 0, sonSayimAni: islenen.get(i.id)?.sonAn ?? null } : {}),
+      ...(i.durum === 'calisiyor' ? { adimBaslama: i.baslama, islenenAdet: islenen.get(i.id)?.adet ?? 0, sonSayimAni: islenen.get(i.id)?.sonAn ?? null, sonKurulumAni: adimSonKurulumAni(i.baslama, kurulumOlaylari.get(i.id) ?? []) } : {}),
       ...(makine === undefined ? {} : { fiiliMakineId: makine }),
     }];
   });

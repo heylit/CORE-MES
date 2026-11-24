@@ -1055,6 +1055,21 @@ export function ayarIhlali(durum: EmirDurumu, ayarVar: boolean): string | null {
   return ayarVar ? AYAR_YINELENDI : null;
 }
 
+// 3649: adımın son "kurulum anı": durdurulup devam ile dönülen adımda son dönüşün (durdur'dan sonraki ilk devam) zamanı; dönüş yoksa adımın
+// başladığı an. Duraklat-devam kısa moladır, dönüş sayılmaz; ama duraklatma sırasında makineyi başka iş kullandıysa (makine devri) o duraklatma
+// 'devir' olarak gelir ve durdur gibi sayılır. Plan (hazırlığın yeniden eklenmesi) ve ilk parça kapısı aynı kuralı okur.
+export interface KurulumOlayi { olay: 'ayar' | 'duraklat' | 'durdur' | 'devir' | 'devam'; zaman: string }
+export function adimSonKurulumAni(baslama: string | null, olaylar: readonly KurulumOlayi[]): string | null {
+  if (baslama === null) return null;
+  let son = baslama;
+  let durdu = false;
+  for (const o of [...olaylar].sort((a, b) => Date.parse(a.zaman) - Date.parse(b.zaman))) {
+    if (o.olay === 'durdur' || o.olay === 'devir') durdu = true;
+    else if (o.olay === 'devam' && durdu) { durdu = false; son = o.zaman; }
+  }
+  return son;
+}
+
 export interface SureOlayi {
   olay: 'duraklat' | 'durdur' | 'devam';
   zaman: string;

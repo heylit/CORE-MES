@@ -70,6 +70,19 @@ export function isSuresi(ayarDk: number | null, birimDk: number | null, adet: nu
 }
 
 // Kaynaktaki süre: verim yalnız işlemeye uygulanır, ayar verimden bağımsızdır (prototip: ayar + işleme / verim).
+// 3649: çalışan adımda hazırlık kalandır: hiç parça sayılmadıysa ya da adım durdurulup dönüldüyse ve dönüşten sonra sayım yoksa.
+// Dönüşten sonra ilk parça sayılınca biter (ilk çalıştırmadaki kuralın aynısı).
+export function kurulumBekliyor(i: { islenenAdet?: number; sonSayimAni?: string | null; sonKurulumAni?: string | null }): boolean {
+  if ((i.islenenAdet ?? 0) === 0) return true;
+  if (!i.sonKurulumAni || !i.sonSayimAni) return false;
+  return Date.parse(i.sonSayimAni) < Date.parse(i.sonKurulumAni);
+}
+// Kalanın sayıldığı an: son sayım (yoksa adımın başı) ile son kurulum anından geç olanı; hiç parça sayılmamış adımda da dönüşten sayılır.
+export function kalanBaslangici(i: { adimBaslama?: string | null; sonSayimAni?: string | null; sonKurulumAni?: string | null }): string | null {
+  const sayim = i.sonSayimAni ?? i.adimBaslama ?? null;
+  if (!i.sonKurulumAni || sayim === null) return sayim;
+  return Date.parse(i.sonKurulumAni) > Date.parse(sayim) ? i.sonKurulumAni : sayim;
+}
 export const verimliSure = (sureDk: number, ayarDk: number | null | undefined, verim: number): number => (ayarDk ?? 0) + (sureDk - (ayarDk ?? 0)) / verim;
 
 const GUN_DK = 24 * 60;

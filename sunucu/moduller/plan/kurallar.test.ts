@@ -5,6 +5,7 @@ import {
   adetPayi, bolmeAdetleri, kapasiteBollugu, kapasiteKesri, onayGecisiReddi, onayGecisleri, sabitYeri, emirTutari, gecikmeMaliyeti, katkiPaylari, motorUyarilari, PERSONEL_TANIMSIZ, oncelikCarpani, oncelikSinifi, planMaliyeti, personelYuku, sinirdanOnce, sinirliGunSayisi, takvimliBosluk, uyarilar, yukYuzdesi,
 } from './kurallar.ts';
 import type { MaliyetSatiri, PersonelMerkezi } from './kurallar.ts';
+import { kalanBaslangici, kurulumBekliyor } from './kurallar.ts';
 
 const M1 = { tur: 'makine' as const, id: 1 };
 const M2 = { tur: 'makine' as const, id: 2 };
@@ -382,5 +383,32 @@ describe('plan kuralları: 507 1 a ayar saati ve öncelik ağırlıklı gecikme'
     test('takvimsiz kaynak sürekli çalışır', () => {
       assert.equal(sabitYeri([], null, 500, 50).tur, 'yer');
     });
+  });
+});
+
+// 3649: durdurulup dönülen çalışan adımda hazırlık yeniden kalandır; dönüşten sonra ilk parça sayılınca biter.
+describe('kurulumBekliyor ve kalanBaslangici', () => {
+  const BAS = '2026-11-24T08:00:00.000Z';
+  const DONUS = '2026-11-24T10:00:00.000Z';
+  test('hiç sayım yoksa hazırlık kalan', () => assert.equal(kurulumBekliyor({ islenenAdet: 0, sonKurulumAni: BAS }), true));
+  test('sayım var, dönüş yok: hazırlık biter', () => {
+    assert.equal(kurulumBekliyor({ islenenAdet: 5, sonSayimAni: '2026-11-24T09:00:00.000Z', sonKurulumAni: BAS }), false);
+  });
+  test('dönüşten önceki sayım hazırlığı geri getirir, kalan dönüşten sayılır', () => {
+    const i = { adimBaslama: BAS, islenenAdet: 5, sonSayimAni: '2026-11-24T09:00:00.000Z', sonKurulumAni: DONUS };
+    assert.equal(kurulumBekliyor(i), true);
+    assert.equal(kalanBaslangici(i), DONUS);
+  });
+  test('dönüşten sonraki sayım hazırlığı düşürür, kalan son sayımdan', () => {
+    const i = { adimBaslama: BAS, islenenAdet: 6, sonSayimAni: '2026-11-24T10:30:00.000Z', sonKurulumAni: DONUS };
+    assert.equal(kurulumBekliyor(i), false);
+    assert.equal(kalanBaslangici(i), '2026-11-24T10:30:00.000Z');
+  });
+  test('hiç parça sayılmamış adımda da kalan dönüş anından sayılır', () => {
+    assert.equal(kalanBaslangici({ adimBaslama: BAS, sonSayimAni: null, sonKurulumAni: DONUS }), DONUS);
+    assert.equal(kurulumBekliyor({ islenenAdet: 0, sonSayimAni: null, sonKurulumAni: DONUS }), true);
+  });
+  test('dönüş yokken kalan bugünkü gibi: sayım yoksa başlama', () => {
+    assert.equal(kalanBaslangici({ adimBaslama: BAS, sonSayimAni: null, sonKurulumAni: BAS }), BAS);
   });
 });

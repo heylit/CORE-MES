@@ -244,6 +244,87 @@ describe('recete-rota emir dilimi (gerçek PostgreSQL)', () => {
     assert.equal(await calisan(), undefined, 'biten adım listeden çıkar');
   });
 
+  test('EMR-9b (3649): durdurulup devam ile dönülen adımda hazırlık kalana yeniden eklenir, duraklat eklemez; dönüşten sonra sayım hazırlığı düşürür', async () => {
+    const id = await emirAc(10);
+    const terminal = (yol: string, govde?: unknown) => terminalKomutu(id, yol, govde);
+    const no = (await siparis(id)).emir.no;
+    const isEmri = (await ayrinti(id)).isEmirleri[0];
+    const opNo = isEmri?.opNo;
+    const calisan = async () => (await durum('yonetici')).calisanAdimlar?.find((a) => a.anahtar === `${no}|${String(opNo)}`);
+    assert.equal((await terminal('/baslat')).durum, 200);
+    assert.equal((await terminal('/sayim', { tur: 'saglam', adet: 4 })).durum, 200);
+    await o().vt.tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'onay'));
+    const once = await calisan();
+    assert.ok(once);
+    // Hazırlık 10 dk, birim 1,5 dk: 4 parça sayılmış, kalan 6 x 1,5 = 9 dk, hazırlık yok.
+    assert.equal(once.kalanVerimliDk, 9);
+    const olay = (olayAdi: 'duraklat' | 'durdur' | 'devam', sn: number) => o().vt.tx((db) => db.sorgu(
+      `INSERT INTO uretim_olayi (emir_id, kisi_id, istasyon_id, olay, durus_nedeni_id, zaman, is_emri_id)
+       SELECT $1, $2, i.istasyon_id, $3, CASE WHEN $3 = 'durdur' THEN (SELECT min(id) FROM durus_nedeni) END, now() + ($4 || ' seconds')::interval, i.id
+         FROM uretim_emirleri_is_emri i WHERE i.uretim_emri_id = $1 AND i.sira = 1`, [id, yoneticiId, olayAdi, String(sn)]));
+    await olay('duraklat', 1);
+    await olay('devam', 2);
+    assert.equal((await calisan())?.kalanVerimliDk, 9, 'duraklat dönüş sayılmaz');
+    await olay('durdur', 3);
+    await olay('devam', 4);
+    const donus = await calisan();
+    assert.equal(donus?.kalanVerimliDk, 19, 'hazırlık 10 dk yeniden eklenir');
+    assert.ok(donus.sayimAni !== null && donus.sayimAni > (once.sayimAni ?? ''), 'kalan dönüş anından sayılır');
+    await new Promise((r) => setTimeout(r, 4200));
+    assert.equal((await terminal('/sayim', { tur: 'saglam', adet: 1 })).durum, 200);
+    await o().vt.tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'onay'));
+    assert.equal((await calisan())?.kalanVerimliDk, 7.5, 'dönüşten sonra ilk parça hazırlığı bitirir');
+  });
+
+  test('EMR-9d (3649): hiç parça sayılmamış adımda durdur ve devam sonrası kalan dönüş anından sayılır', async () => {
+    const id = await emirAc(10);
+    const terminal = (yol: string, govde?: unknown) => terminalKomutu(id, yol, govde);
+    const no = (await siparis(id)).emir.no;
+    const opNo = (await ayrinti(id)).isEmirleri[0]?.opNo;
+    const calisan = async () => (await durum('yonetici')).calisanAdimlar?.find((a) => a.anahtar === `${no}|${String(opNo)}`);
+    assert.equal((await terminal('/baslat')).durum, 200);
+    const once = await calisan();
+    assert.ok(once);
+    assert.equal(once.sayimAni, once.baslangic, 'sayım yok: kalan adım başından sayılır');
+    const olay = (olayAdi: 'durdur' | 'devam', sn: number) => o().vt.tx((db) => db.sorgu(
+      `INSERT INTO uretim_olayi (emir_id, kisi_id, istasyon_id, olay, durus_nedeni_id, zaman, is_emri_id)
+       SELECT $1, $2, i.istasyon_id, $3, CASE WHEN $3 = 'durdur' THEN (SELECT min(id) FROM durus_nedeni) END, now() + ($4 || ' seconds')::interval, i.id
+         FROM uretim_emirleri_is_emri i WHERE i.uretim_emri_id = $1 AND i.sira = 1`, [id, yoneticiId, olayAdi, String(sn)]));
+    await olay('durdur', 1);
+    await olay('devam', 2);
+    const sonra = await calisan();
+    assert.ok(sonra?.sayimAni && sonra.baslangic && sonra.sayimAni > sonra.baslangic, 'kalan dönüş anından sayılır');
+    assert.equal(sonra.kalanVerimliDk, once.kalanVerimliDk, 'hazırlık hâlâ kalan: süre değişmez');
+  });
+
+  test('EMR-9c (3649): duraklatma sırasında makineyi başka iş kullandıysa (makine devri) dönüşte hazırlık eklenir', async () => {
+    const id = await emirAc(10);
+    const baska = await emirAc(5);
+    const terminal = (yol: string, govde?: unknown) => terminalKomutu(id, yol, govde);
+    const no = (await siparis(id)).emir.no;
+    const opNo = (await ayrinti(id)).isEmirleri[0]?.opNo;
+    const baskaAdim = (await ayrinti(baska)).isEmirleri[0]?.id;
+    const calisan = async () => (await durum('yonetici')).calisanAdimlar?.find((a) => a.anahtar === `${no}|${String(opNo)}`);
+    assert.equal((await terminal('/baslat')).durum, 200);
+    assert.equal((await terminal('/sayim', { tur: 'saglam', adet: 4 })).durum, 200);
+    await o().vt.tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'onay'));
+    assert.equal((await calisan())?.kalanVerimliDk, 9);
+    // Makine devri: duraklatma anında kullanım kapanır, makineyi başka emrin adımı alır, sonra bu adım devam eder.
+    await o().vt.tx(async (db) => {
+      await db.sorgu(
+        `INSERT INTO uretim_olayi (emir_id, kisi_id, istasyon_id, olay, zaman, is_emri_id)
+         SELECT emir_id, $2, istasyon_id, 'duraklat', now() + interval '1 second', is_emri_id FROM uretim_emirleri_makine_kullanimi WHERE emir_id = $1 AND bitis IS NULL`, [id, yoneticiId]);
+      await db.sorgu(`UPDATE uretim_emirleri_makine_kullanimi SET bitis = now() + interval '1 second', kapatan_id = $2 WHERE emir_id = $1 AND bitis IS NULL`, [id, yoneticiId]);
+      await db.sorgu(
+        `INSERT INTO uretim_emirleri_makine_kullanimi (emir_id, is_emri_id, istasyon_id, makine_id, kisi_id, baslama)
+         SELECT $2, $3, istasyon_id, makine_id, $4, now() + interval '2 seconds' FROM uretim_emirleri_makine_kullanimi WHERE emir_id = $1 ORDER BY id DESC LIMIT 1`, [id, baska, baskaAdim, yoneticiId]);
+      await db.sorgu(
+        `INSERT INTO uretim_olayi (emir_id, kisi_id, istasyon_id, olay, zaman, is_emri_id)
+         SELECT emir_id, $2, istasyon_id, 'devam', now() + interval '3 seconds', is_emri_id FROM uretim_olayi WHERE emir_id = $1 AND olay = 'duraklat' ORDER BY id DESC LIMIT 1`, [id, yoneticiId]);
+    });
+    assert.equal((await calisan())?.kalanVerimliDk, 19, 'makine devri dönüşünde hazırlık yeniden eklenir');
+  });
+
   test('EMR-10 (24 a): sonraki adımın adedi önceki adımın hurdası kadar düşer; tek kaynak uretim-emirleri, farksız adım gelmez', async () => {
     const id = await emirAc(10);
     const terminal = (yol: string, govde?: unknown) => terminalKomutu(id, yol, govde);
