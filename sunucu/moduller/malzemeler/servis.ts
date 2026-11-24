@@ -4,6 +4,7 @@ import { kayitNoktasi } from '#cekirdek/db.ts';
 import type { Db } from '#cekirdek/db.ts';
 import { bagimliKayit, bulunamadi, cakisma, dogrulama, eskiSurum, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
+import type { DenetimSecimi } from '#cekirdek/uc.ts';
 import { denemeIsaretiKalkmaAni, denemeIsaretliKimlikler, firmaKoduSecenekleri, firmaKoduSecimi, sistemAyariOku, varsayilanFirmaKodu } from '../ayarlar/disari.ts';
 import { firmaAra, firmaOzeti, tedarikciOlabilirMi } from '../musteri-tedarikci/disari.ts';
 import { aletKimlikleri, aletNoIleGetir } from '../kalibrasyon/disari.ts';
@@ -31,7 +32,7 @@ import {
   katalogAgirlikAlanlari, katalogGkkAyari, katalogNetAgirlikKg, katalogOnayiBas, katalogOnekiTureUyarMi, katalogRolu, katalogSurumUyarMi, katalogTalebiBas, katalogTalepBicimiGecerliMi, katalogTalepYokMu,
   katalogTalepDenetle, katalogTalepUygulamaDenetle, katalogKaydiAlanlari, ayarBirimleri, ayarKaliteYogunluklari, ayarKategorileri, kartBilesenKimlikleri, kartOperasyonlari, kartRotaIcerigiDegistiMi, ROTALI_KART_ILETISI, hammaddeOlcuHatasi, hammaddeTanimHatasi, kartZorunluAlanEksigi, kartYerlilikHatasi, katalogSunucuAnahtari, kartTedarikciFirmaId, katalogAciklamalari, kartBirimDonusumu, kartBirimDonusumleri, kartBirimi, kartTedarikciKimlikleri, tedarikciDegistiMi, kartAletNo, kartAletNolari, kartAletNoYaz, eskiKalibrasyonAlanlariniKoru, denetlenecekKategoriler, MUKERRER_GEREKCE_ILETISI, mukerrerGerekcesiKisaMi, logoAciklamasiDegistiMi, logoAdiDegistiMi, logoBirimiDegistiMi, logoGuncellemeSonucuDurumu, logoKarsiligiHatasi, logoBirimSetiGecersizHatasi, logoDurumSirasi, logoEksikleri, logoHataMetni, ornekKartKimligi,
 } from './kurallar.ts';
-import type { BirimDonusumu, KimlikliKartOperasyonu, LogoGuncellemeSonucu, OrnekMalzemeAnahtari } from './kurallar.ts';
+import type { BirimDonusumu, KimlikliKartOperasyonu, LogoFarkAlani, LogoGuncellemeSonucu, OrnekMalzemeAnahtari } from './kurallar.ts';
 import { kalkmaSonradirMi, kartOperasyonKimlikleri, OPERASYON_AYARI_ILETISI } from './kurallar.ts';
 import { demirbasTeknikYazilabilirMi, demirbasTeknikYazimi, tekrarlananOzellik } from './kurallar.ts';
 import { katalogGeriCekildiMi, katalogKartAdi, kategoriAgaciKur, olcuListesi, olcuMetni } from './kurallar.ts';
@@ -1244,29 +1245,49 @@ async function logoyaGonderimDurumu(db: Db): Promise<{ acik: boolean; neden: str
 // 3632: CORE'daki Açıklama 1-3'ü Logo'ya gönder. Yeni yazma yolu yok: kart var olan ad güncellemesi kuyruğuna alınır, istek Logo işinden çıkar
 // (malzemeGuncellemeGovdesi: ad = Açıklama 1 ya da kart adı, NAME3 = Açıklama 2, NAME4 = Açıklama 3; boş açıklama Logo'daki metni silmez).
 // Kart değeri değişmez, sürüm artmaz. Kapalıyken hiçbir kart kuyruğa girmez. Her kart kendi kayıt noktasında; olmayan atlanır ve nedeni döner.
-export async function logoyaGonder(db: Db, g: z.output<typeof logoyaGonderGovdesi>): Promise<LogoyaGonderCevabi> {
+export async function logoyaGonder(
+  db: Db, g: z.output<typeof logoyaGonderGovdesi>, denetimEki: (satirlar: readonly DenetimSecimi[]) => void = () => undefined,
+): Promise<LogoyaGonderCevabi> {
   if (!logoKartAynasi) throw gecersiz(LOGO_BAGI_YOK);
   const durum = await logoyaGonderimDurumu(db);
   if (!durum.acik) throw gecersiz(`Logo'ya gönderilemez: ${durum.neden}.`);
   const kuyrugaAlinan: LogoyaGonderCevabi['kuyrugaAlinan'] = [];
   const atlanan: LogoyaGonderCevabi['atlanan'] = [];
+  const iz: DenetimSecimi[] = [];
   for (const istek of g.kartlar) {
     const r = await kayitNoktasi(db, async () => {
       const k = await aynadakiKart(db, istek.logoKayitNo);
       const { refle, kodla, esleme } = await logoGelenTmiKartlari(db, [k]);
       const { durum: eslesme, tmi } = logoGelenDurumu(k, refle, kodla, esleme);
       if (eslesme !== 'bagli' || !tmi) throw gecersiz('Kart Logo kaydına bağlı değil.');
-      if (tmi.onayDurumu === 'iptal') throw gecersiz('Silinmiş kart Logo\'ya gönderilmez.');
+      if (tmi.onayDurumu !== 'aktif') throw gecersiz('Yalnız aktif kart Logo\'ya gönderilir.');
+      if (tmi.logoGuncellemeDurumu === 'bekliyor') throw gecersiz('Gönderim zaten sırada.');
       if (tmi.logoKayitNo === null) throw gecersiz('Kart Logo\'ya gönderilmemiş; önce Logo kaydıyla bağlanmalı.');
       if (logoyaGidecekFarklar(logoKartFarklari(k, tmi)).length === 0) throw gecersiz('Gönderilecek fark yok.');
       const y = await s.logoGuncellemeIste(db, tmi.kimlik, istek.surum);
       if (!y) throw eskiSurum();
+      // Logo'daki eski metin geri getirilemez; deftere kartın "Logo'da şimdi" değerleri girer (baytı sınırlı, kısalırsa işaretli).
+      const a1 = denetimMetni(k, 'aciklama_1'), a2 = denetimMetni(k, 'aciklama_2'), a3 = denetimMetni(k, 'aciklama_3');
+      iz.push({ logoKayitNo: istek.logoKayitNo, kod: kisalt(k.kod, 40).metin, simdi1: a1.metin, simdi2: a2.metin, simdi3: a3.metin, kisaldi: a1.kisaldi || a2.kisaldi || a3.kisaldi });
       return { kod: k.kod, stokKodu: tmi.stokKodu };
     });
     if (r.tamam) kuyrugaAlinan.push({ logoKayitNo: istek.logoKayitNo, ...r.deger });
     else atlanan.push({ logoKayitNo: istek.logoKayitNo, kod: await aynadaKodu(db, istek.logoKayitNo), neden: r.hata.message });
   }
+  if (iz.length > 0) denetimEki(iz);
   return { kuyrugaAlinan, atlanan };
+}
+
+// Denetim satırı 512 bayt ile sınırlıdır; kırpılan metin kısaldi işaretiyle yazılır, hiçbir zaman sessizce kırpılmaz.
+function kisalt(m: string | null, bayt: number): { metin: string | null; kisaldi: boolean } {
+  if (m === null) return { metin: null, kisaldi: false };
+  let metin = m;
+  while (Buffer.byteLength(metin, 'utf8') > bayt) metin = metin.slice(0, -1);
+  return { metin, kisaldi: metin.length !== m.length };
+}
+function denetimMetni(k: LogoAynaKarti, alan: LogoFarkAlani): { metin: string | null; kisaldi: boolean } {
+  const m = alan === 'aciklama_1' ? k.ad : alan === 'aciklama_2' ? k.aciklama2 : k.aciklama3;
+  return kisalt(m, 100);
 }
 
 // 3632: katalog kartı açılınca "Logo'ya gönder" bölümü için kartın Logo'daki açıklama farkı; Logo'ya istek yok, ayna okunur.

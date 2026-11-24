@@ -367,6 +367,22 @@ describe('LogoMalzemeGecisi: CORE\'dakini Logo\'ya gönder (3632)', () => {
     expect(istekler.some((i) => i.yol.endsWith('/farki-al'))).toBe(false);
   });
 
+  it('"Logo\'daki kartın adı değişir" uyarısı yalnız Açıklama 1 gidecekse görünür; Logo davranışı iddiası yazılmaz', async () => {
+    const SADECE3 = farkli(14, 'HM-DEN-00014', { farklar: [{ alan: 'aciklama_3', logo: 'ORN Logo uc', tmi: 'ORN CORE uc' }] });
+    sunucuKur(YAZAN, liste([SADECE3, GONDERILEBILIR]));
+    ac();
+    fireEvent.click(await screen.findByRole('button', { name: "HM-DEN-00014 CORE'dakini Logo'ya gönder" }));
+    let pencere = within(await screen.findByRole('dialog'));
+    expect(pencere.queryByText(/kartın adı değişir/)).toBeNull();
+    expect(pencere.getByText(/geri getirilemez/)).toBeTruthy();
+    fireEvent.click(pencere.getByRole('button', { name: 'Vazgeç' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: "HM-DEN-00010 CORE'dakini Logo'ya gönder" }));
+    pencere = within(await screen.findByRole('dialog'));
+    expect(pencere.getByText("Logo'daki kartın adı değişir.")).toBeTruthy();
+    expect(pencere.queryByText(/fatura/)).toBeNull();
+  });
+
   it('"Logo\'dakini al" bugünkü gibi çalışır: onay penceresi ve uç aynı', async () => {
     const istekler = sunucuKur(YAZAN, liste([GONDERILEBILIR]));
     ac();
@@ -414,7 +430,7 @@ describe('LogoMalzemeGecisi: CORE\'dakini Logo\'ya gönder (3632)', () => {
     ac();
     await screen.findByText('HM-DEN-00010');
     expect(screen.getByText("Logo'ya gönderilmek üzere sırada.")).toBeTruthy();
-    expect(screen.getByText(/Logo'ya gönderilemedi: Güncelleme: Card not found/)).toBeTruthy();
+    expect(screen.getByText(/Logo'ya gönderilemedi: Kart Logo'da bulunamadı/)).toBeTruthy();
     fireEvent.click(screen.getByLabelText('Tümünü seç'));
     fireEvent.click(within(screen.getByRole('toolbar', { name: 'Logo malzemeleri: toplu işlem' })).getByRole('button', { name: /Logo'ya gönder/ }));
     const pencere = within(await screen.findByRole('dialog'));

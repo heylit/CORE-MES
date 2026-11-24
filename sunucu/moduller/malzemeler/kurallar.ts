@@ -1357,7 +1357,8 @@ export function logoyaGidecekFarklar(farklar: readonly LogoFarki[]): LogoFarki[]
   return farklar.filter((f) => f.tmi !== null);
 }
 export function logoyaGonderilebilirMi(k: { logoKayitli: boolean; onayDurumu: string; farklar: readonly LogoFarki[] }): boolean {
-  return k.logoKayitli && k.onayDurumu !== 'iptal' && logoyaGidecekFarklar(k.farklar).length > 0;
+  // Yalnız aktif kart gider: Logo'dan alınan kart taslak açılır, taslağın değeri henüz onaylı değildir.
+  return k.logoKayitli && k.onayDurumu === 'aktif' && logoyaGidecekFarklar(k.farklar).length > 0;
 }
 
 // Logo geçişi (3068): satırın toplu işleme girip girmediği. Toplu bağlama yalnız aynı kodlu, bağsız, iptal olmayan ve birimi

@@ -347,6 +347,8 @@ describe('Logo geçişi: liste, toplu bağla ve al, geri al (3068 a; gerçek Pos
     await tamam<LogoTopluCevabi>('POST', '/malzeme-logo-gecisi/toplu-bagla', { kartlar: [{ logoKayitNo: 240, surum: a.surum }, { logoKayitNo: 241, surum: b.surum }] });
     // Fixture: açıklamalar kart sihirbazında girilmiş gibi yazılır; B'de yalnız Açıklama 3 farklı ve CORE'da boştur.
     await vt().sorgu("UPDATE malzeme_katalog_karti SET aciklama_1 = 'ORN CORE bir', aciklama_2 = 'ORN CORE iki', aciklama_3 = NULL WHERE kimlik = $1", [a.kimlik]);
+    // Yalnız aktif kart gider (K1): Logo'dan alınan kart taslak açılır, bu testte onaylanmış sayılır.
+    await vt().sorgu("UPDATE malzeme_katalog_karti SET onay_durumu = 'aktif' WHERE kimlik = ANY($1)", [[a.kimlik, b.kimlik]]);
     const surumA = (await guncelleme(a.kimlik))!.surum;
     const surumB = (await guncelleme(b.kimlik))!.surum;
 
@@ -397,7 +399,7 @@ describe('Logo geçişi: liste, toplu bağla ve al, geri al (3068 a; gerçek Pos
     const bagsiz = await taslakAc('HM-LGG-00051');
     ayna.push(kart(250, a.kod, { ad: 'ORN Logo adi', aciklama2: 'ORN Logo iki' }), kart(251, bagsiz.kod));
     await tamam<LogoTopluCevabi>('POST', '/malzeme-logo-gecisi/toplu-bagla', { kartlar: [{ logoKayitNo: 250, surum: a.surum }] });
-    await vt().sorgu("UPDATE malzeme_katalog_karti SET aciklama_1 = 'ORN CORE bir', aciklama_2 = NULL WHERE kimlik = $1", [a.kimlik]);
+    await vt().sorgu("UPDATE malzeme_katalog_karti SET aciklama_1 = 'ORN CORE bir', aciklama_2 = NULL, onay_durumu = 'aktif' WHERE kimlik = $1", [a.kimlik]);
     const r = await tamam<LogoGecisKartiCevabi>('GET', `/malzeme-logo-gecisi/kart/${a.kimlik}`, undefined, okuyucuCerezi);
     assert.equal(r.satir?.logoKayitNo, 250);
     assert.deepEqual(r.satir?.farklar, [{ alan: 'aciklama_1', logo: 'ORN Logo adi', tmi: 'ORN CORE bir' }, { alan: 'aciklama_2', logo: 'ORN Logo iki', tmi: null }]);

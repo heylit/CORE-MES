@@ -181,4 +181,23 @@ describe('CORE açıklamalarını Logo\'ya gönder, sahte köprüyle uçtan uca 
     assert.equal(s.durum, 'hata');
     assert.match(s.hata ?? '', /Güncelleme: .*Card not found/);
   });
+  test('LEG-5 yalnız aktif kart gider, sırada olan kart ikinci kez girmez, denetim kaydı "Logo\'da şimdi" değerlerini taşır, tek işlem en çok 100 kart', async () => {
+    const aktif = await baglıKart(['ORN CORE bir', 'ORN CORE iki', null], { ad: 'ORN Logo adi', a2: 'ORN Logo iki', a3: null });
+    const taslak = await baglıKart(['ORN CORE bir', null, null], { ad: 'ORN Logo taslak adi', a2: null, a3: null });
+    await vt().sorgu("UPDATE malzeme_katalog_karti SET onay_durumu = 'taslak' WHERE kimlik = $1", [taslak.kimlik]);
+    const c = await istek('POST', '/malzeme-logo-gecisi/logoya-gonder', { kartlar: [{ logoKayitNo: aktif.ref, surum: aktif.surum }, { logoKayitNo: taslak.ref, surum: taslak.surum }] });
+    assert.equal(c.statusCode, 200, c.body);
+    const s = c.json() as LogoyaGonderCevabi;
+    assert.deepEqual(s.kuyrugaAlinan.map((x) => x.logoKayitNo), [aktif.ref]);
+    assert.deepEqual(s.atlanan.map((x) => [x.logoKayitNo, x.neden]), [[taslak.ref, "Yalnız aktif kart Logo'ya gönderilir."]]);
+    assert.equal((await gecis(taslak.ref)).logoyaGonder.gonderilebilir, false);
+    // Sırada olan kart yeniden kuyruğa alınmaz.
+    const ikinci = await gonder(aktif, aktif.ref);
+    assert.deepEqual((ikinci.json() as LogoyaGonderCevabi).atlanan.map((x) => x.neden), ['Gönderim zaten sırada.']);
+    const iz = await vt().tek<{ govde: { _ek: { logoKayitNo: number; kod: string; simdi1: string; simdi2: string | null; simdi3: string | null; kisaldi: boolean }[] } }>(
+      "SELECT govde FROM denetim_kaydi WHERE yol = '/malzeme-logo-gecisi/logoya-gonder' AND govde::text LIKE $1 ORDER BY id DESC LIMIT 1", [`%${aktif.kod}%`]);
+    assert.deepEqual(iz?.govde._ek, [{ logoKayitNo: aktif.ref, kod: aktif.kod, simdi1: 'ORN Logo adi', simdi2: 'ORN Logo iki', simdi3: null, kisaldi: false }]);
+    const cok = await istek('POST', '/malzeme-logo-gecisi/logoya-gonder', { kartlar: Array.from({ length: 101 }, (_, i) => ({ logoKayitNo: i + 1, surum: 1 })) });
+    assert.equal(cok.statusCode, 400);
+  });
 });

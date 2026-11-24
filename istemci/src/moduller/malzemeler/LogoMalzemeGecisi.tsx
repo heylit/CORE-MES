@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import type {
   ErpKoduDoldurCevabi, ErpKoduOzetiCevabi, LogoDurumuCevabi, LogoGecisCevabi, LogoGecisSuzgeci, LogodanAlCevabi, LogoGeriAlCevabi, LogoKarsiligi, LogoTopluCevabi, LogoyaGonderCevabi, OlcuBirimleriCevabi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
-import { LOGO_GECIS_SAYFA_BOYU, LOGO_TOPLU_AZAMI } from '#paylasilan/sozlesme/logo-gecisi-sabitleri.ts';
+import { LOGO_GECIS_SAYFA_BOYU, LOGO_TOPLU_AZAMI, LOGOYA_GONDER_AZAMI } from '#paylasilan/sozlesme/logo-gecisi-sabitleri.ts';
 import type { LogoMalzemeAramaCevabi, LogoMalzemeEkleCevabi } from '#paylasilan/sozlesme/logo.ts';
 import {
   Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Pencere, Rozet, Secim, Simge, Tablo, useBildirim, type RozetTonu, type Sutun,
@@ -182,7 +182,7 @@ export function LogoMalzemeGecisi({ turAdlari }: Ozellikler) {
           {k.durum === 'kod-cakismasi' && <span className="tc-lg-ek">{KOD_CAKISMASI_ACIKLAMASI}</span>}
           {k.farklar.map((f) => <span key={f.alan} className="tc-lg-ek">Logo'da {FARK_ADLARI[f.alan]}: {f.logo ?? '(boş)'}</span>)}
           {k.logoyaGonder.durum === 'bekliyor' && <span className="tc-lg-ek" role="status">Logo'ya gönderilmek üzere sırada.</span>}
-          {k.logoyaGonder.durum === 'hata' && <span className="tc-lg-ek tc-lg-hata" role="alert">Logo'ya gönderilemedi: {k.logoyaGonder.hata}</span>}
+          {k.logoyaGonder.durum === 'hata' && <span className="tc-lg-ek tc-lg-hata" role="alert">Logo'ya gönderilemedi: {logoHataNedeni(k.logoyaGonder.hata)}</span>}
         </span>
       ),
       csv: (k) => DURUM[k.durum].ad,
@@ -451,6 +451,13 @@ const gonderAdayi = (k: Satir): GonderAdayi => ({
   logoKayitNo: k.logoKayitNo, stokKodu: k.tmi?.stokKodu ?? k.kod, surum: k.tmi?.surum ?? 0, bagli: k.durum === 'bagli' && k.tmi !== null,
   farklar: k.farklar, logoyaGonder: k.logoyaGonder,
 });
+// Logo işinin ham hata metni ekranda çevrilmiş nedenle görünür; ham metin ipucunda kalır.
+export function logoHataNedeni(ham: string | null): string {
+  if (!ham) return 'Logo kartı güncellemedi.';
+  if (/not found|bulunamad/i.test(ham)) return "Kart Logo'da bulunamadı; Logo'daki kayıt silinmiş ya da değişmiş olabilir.";
+  if (/time ?out|zaman a|ECONN|ETIMEDOUT|ulaş/i.test(ham)) return 'Logo yanıt vermedi; sonraki turda yeniden denenir.';
+  return 'Logo kartı güncellemedi.';
+}
 function gidecekAlanlar(k: GonderAdayi): { alan: (typeof FARK_SIRASI)[number]; simdi: string; gidecek: string | null }[] {
   return FARK_SIRASI.flatMap((alan) => {
     const f = k.farklar.find((x) => x.alan === alan);
@@ -463,7 +470,7 @@ export function LogoyaGonderPenceresi({ secili, gonderim, kapat, bitti }: {
   const { bildir } = useBildirim();
   const [sonuc, sonucYaz] = useState<LogoyaGonderCevabi | null>(null);
   const uygunlar = secili.filter((k) => k.bagli && k.logoyaGonder.gonderilebilir && k.logoyaGonder.durum !== 'bekliyor');
-  const uygun = uygunlar.slice(0, TOPLU_AZAMI);
+  const uygun = uygunlar.slice(0, LOGOYA_GONDER_AZAMI);
   const fazla = uygunlar.length - uygun.length;
   const nedenler = new Map<string, number>();
   for (const k of secili.filter((x) => !uygunlar.includes(x))) {
@@ -533,9 +540,12 @@ export function LogoyaGonderPenceresi({ secili, gonderim, kapat, bitti }: {
             ))}
           </ul>
           <ul className="tc-lg-on-sonuc">
-            <li><Simge ad="alert" boyut="k" />Logo'daki kartın adı değişir; Logo'daki fatura ve belge adları bu karta bakar. Gönderimi Logo işi sıradaki turda yapar.</li>
+            {uygun.some((k) => gidecekAlanlar(k).some((a) => a.alan === 'aciklama_1' && a.gidecek !== null)) && (
+              <li><Simge ad="alert" boyut="k" />Logo'daki kartın adı değişir.</li>
+            )}
+            <li><Simge ad="minus" boyut="k" />Gönderimi Logo işi sıradaki turda yapar; Logo'daki eski metin geri getirilemez.</li>
             {[...nedenler].map(([n, adet]) => <li key={n}><Simge ad="minus" boyut="k" />{sayi(adet)} kart atlanacak: {n}</li>)}
-            {fazla > 0 && <li><Simge ad="minus" boyut="k" />{sayi(fazla)} kart bu işleme sığmadı (tek işlemde en çok {sayi(TOPLU_AZAMI)}); sonra yeniden seçin.</li>}
+            {fazla > 0 && <li><Simge ad="minus" boyut="k" />{sayi(fazla)} kart bu işleme sığmadı (tek işlemde en çok {sayi(LOGOYA_GONDER_AZAMI)}); sonra yeniden seçin.</li>}
           </ul>
           {gonder.isError && <p className="tc-lg-not tc-lg-hata" role="alert">{hataIletisi(gonder.error, 'Gönderilemedi')}</p>}
         </form>

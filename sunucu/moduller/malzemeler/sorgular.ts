@@ -723,7 +723,7 @@ export async function logoGuncellemeIste(db: Db, kimlik: string, surum: number):
   return db.tek(
     `UPDATE malzeme_katalog_karti
         SET logo_guncelleme_durumu = 'bekliyor', logo_guncelleme_hata = NULL, logo_guncelleme_zamani = now()
-      WHERE kimlik = $1 AND surum = $2 AND logo_kayit_no IS NOT NULL AND onay_durumu <> 'iptal'
+      WHERE kimlik = $1 AND surum = $2 AND logo_kayit_no IS NOT NULL AND onay_durumu = 'aktif' AND logo_guncelleme_durumu IS DISTINCT FROM 'bekliyor'
       RETURNING no`,
     [kimlik, surum],
   );

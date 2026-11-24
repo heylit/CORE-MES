@@ -128,7 +128,7 @@ export const uclar = [
   // 3632: CORE'daki açıklamaları Logo'ya elle gönder; kartı var olan ad güncellemesi kuyruğuna alır (yeni işlem yok, kart yazma yetkisi).
   uc({
     yontem: 'POST', yol: '/malzeme-logo-gecisi/logoya-gonder', yetki: 'malzemeler.yaz', tekrarKorumali: true, govde: logoyaGonderGovdesi, cevap: logoyaGonderCevabi,
-    isle: ({ db, govde }) => servis.logoyaGonder(db, govde),
+    isle: ({ db, govde, denetimEki }) => servis.logoyaGonder(db, govde, denetimEki),
   }),
   // 3474-3: boş ERP kodları Logo'daki kodla doldurulur; kart yazma işlemiyle (yeni işlem yok), Logo'ya istek gitmez.
   uc({ yontem: 'GET', yol: '/malzeme-logo-gecisi/erp-kodlari', yetki: OKUMA, cevap: erpKoduOzetiCevabi, isle: ({ db }) => servis.erpKoduOzeti(db) }),

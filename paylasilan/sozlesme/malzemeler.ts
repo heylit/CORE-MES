@@ -3,9 +3,9 @@ import { listeCevapSemasi, sayfaSorguAlanlari } from '../liste.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 import { surumSemasi } from '../surum.ts';
 import { durumSemasi as aletDurumu } from './kalibrasyon.ts';
-import { LOGO_GECIS_SAYFA_BOYU, LOGO_TOPLU_AZAMI } from './logo-gecisi-sabitleri.ts';
+import { LOGO_GECIS_SAYFA_BOYU, LOGO_TOPLU_AZAMI, LOGOYA_GONDER_AZAMI } from './logo-gecisi-sabitleri.ts';
 
-export { LOGO_GECIS_SAYFA_BOYU, LOGO_TOPLU_AZAMI };
+export { LOGO_GECIS_SAYFA_BOYU, LOGO_TOPLU_AZAMI, LOGOYA_GONDER_AZAMI };
 
 /* ---------------- Malzeme Kataloğu (prototip) kartları ----------------
    KULLANICI KARARI: prototip ekranları birebir yerleşir; kart bütün olarak saklanır. Tür, onay durumu ve stok kodu karttan okunur (özet bunları taşırsa kartla aynı olmalı);
@@ -464,7 +464,7 @@ export type LogoTopluCevabi = z.output<typeof logoTopluCevabi>;
 // 3632: CORE'daki Açıklama 1-3'ü Logo'ya gönder. Gönderim var olan "Malzeme adı güncellemesi" kuyruğundan gider; bu uç yalnız kartı kuyruğa alır.
 export const logoyaGonderGovdesi = z.object({
   kartlar: z.array(z.object({ logoKayitNo: z.number().int().positive(), surum: surumSemasi }).strict())
-    .min(1).max(LOGO_TOPLU_AZAMI)
+    .min(1).max(LOGOYA_GONDER_AZAMI)
     .refine((l) => new Set(l.map((k) => k.logoKayitNo)).size === l.length, 'Aynı Logo kartı iki kez seçilmiş.'),
 }).strict();
 export const logoyaGonderCevabi = z.object({

@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { LogoGecisKartiCevabi } from '#paylasilan/sozlesme/malzemeler.ts';
 import { Dugme, Kart, Rozet } from '../../../../ortak/arayuz/index.ts';
 import { api } from '../../../../ortak/veri/api.ts';
-import { LogoyaGonderPenceresi, type GonderAdayi } from '../../LogoMalzemeGecisi.tsx';
+import { LogoyaGonderPenceresi, logoHataNedeni, type GonderAdayi } from '../../LogoMalzemeGecisi.tsx';
 
 // 3632: Logo'ya bağlı kartta CORE'daki açıklamaları Logo'ya gönder. Logo geçişindeki düğmeyle aynı pencere ve aynı ad güncellemesi kuyruğu;
 // bağlı olmayan kartta ya da Logo okunmamışken bölüm görünmez.
@@ -27,7 +27,7 @@ export function LogoyaGonderBolumu({ kimlik, yazar }: { kimlik: string; yazar: b
       <div className="tc-mk-logo-gonder">
         {satir.farklar.map((f) => <p key={f.alan} className="tc-mk-logo-kaynak"><span>Logo'da {FARK_ADLARI[f.alan]}: {f.logo ?? '(boş)'}</span></p>)}
         {satir.logoyaGonder.durum === 'bekliyor' && <p className="tc-mk-soluk" role="status">Logo'ya gönderilmek üzere sırada.</p>}
-        {satir.logoyaGonder.durum === 'hata' && <p className="tc-mk-uyari" data-ton="hata" role="alert">Logo'ya gönderilemedi: {satir.logoyaGonder.hata}</p>}
+        {satir.logoyaGonder.durum === 'hata' && <p className="tc-mk-uyari" data-ton="hata" role="alert">Logo'ya gönderilemedi: {logoHataNedeni(satir.logoyaGonder.hata)}</p>}
         <div className="tc-mk-logo-oku">
           <Dugme simge="upload" disabled={neden !== null} {...(neden ? { title: neden } : {})} onClick={() => acikYaz(true)}>CORE'dakini Logo'ya gönder</Dugme>
           {neden !== null && <p className="tc-mk-logo-kaynak"><span>{neden}.</span></p>}
