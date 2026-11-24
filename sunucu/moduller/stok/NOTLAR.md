@@ -16,7 +16,6 @@
 - Sayaç ucu sayıyı yetkiye göre süzer: `mal-kabul` sayısı yalnız `stok.giris` olana; sayılamayan maddeler null.
 - Ekran başlığı `h2`: kabuk sayfa başlığını `h1` basar (App testi tek `h1` ister).
 - Vazgeçilen yol: konumu metin koduyla anahtarlamak (kod değişince bakiye taşımak gerekirdi); bakiyeyi yalnız defterden hesaplamak (parti seçimi her seferinde toplam ister).
-- Test: `npm run test:modul` Linux'ta sunucu testlerini bulmuyor (çekirdek Ç6); geçici: `node --import ./araclar/ortam-yukle-goc.ts --test sunucu/moduller/stok/*.test.ts`.
 - Ambalaj kataloğu (ölçüler) yalnız istemcide (`ambalaj.ts`): sunucu ölçü kodunu ve özel ölçüyü saklar. Sığma ve matris doluluğu ekran hesabıdır, kural değildir.
 - Panel ucu (`/stok/panel`) iş kutusunun gösterge ve özet bölümlerini tek istekte verir; stok değeri yok (maliyet stokta tutulmaz).
 - 3B depo modülde (kullanıcı kararı); çekirdek ortak 3B parçası gelince ona taşınır (Ç3). Renkler tasarım değişkenlerinden okunur; yerleşim hesabı saf (`depo3b-yerlesim.ts`).
@@ -27,3 +26,5 @@
 - Ayırma isteği talep kalemine yabancı anahtar taşımaz: tamamı karşılanan kalem silinir, satırı `kalem_satiri`'nda iptal için saklanır.
 - Refakat kartı kapısı (Model A, kullanıcı kararı): kural tek yerde, `kartGerekir`. Depo yolları kartı açar (`teslimGonder` kapıda durdurur, `istekTeslimEt` aynı işlemde açar ve `acilanKartlar` döner); alma yolları (`okutarakAl`, `istekKabulEt`) kartsızı reddeder ve kart AÇMAZ (depo işi). `sepettenCek`, emirsiz, statülü ve hammadde dışı kapı dışıdır.
 - `kartGerekir.zorunlu` emir durumundan bağımsızdır (`teslimGonder` eski davranışı korur); alma yollarında yalnız kart açılabilen (açık emir, üretim çıktısı olmayan lot) durumda kilitlenir: kapalı emir alımı çıkmaza sokmaz.
+- Teslim bildirimleri (3619): yolda görevi `teslimiKapat`, red, iptal, süre dolumu ve numune onayında (doğrudan `teslimKapat`) kapanır; yeni bir `sorgular.teslimKapat` çağrısı `yoldaGoreviniKapat`'ı da çağırmalı. İstek "teslim edildi" yalnız `malzemeIstegiGecir` teslim geçişinde; yolda teslimle kapanan istek yaymaz.
+- Yolda görevi olay kapalıyken Gelenler'e de yazılmaz (3619 b, tür bayrağı `kapaliykenYazilmaz`). Yolda alıcısı teslimi alabilenlerdir (stok.istek; istasyonda kapsam, depoda stok.transfer); depo dalında yönetici rolü dışarıda (her depo teslimi Gelenler'e yığılmasın diye). Numune ve itiraz iadesi yolda açar ama bildirim yaymaz (bilinen boşluk). Elden teslim hiç yolda kalmaz.

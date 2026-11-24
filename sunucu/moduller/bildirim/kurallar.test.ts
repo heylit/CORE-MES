@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import type { Islem } from '#paylasilan/islemler.ts';
 import { BILDIRIM_BASLIK_EN_COK, BILDIRIM_METIN_EN_COK, BILDIRIM_TUR_ANAHTARLARI } from '#paylasilan/sozlesme/bildirim.ts';
 import {
-  alicilariSec, ekAlicilariEkle, epostaSecilebilir, hemenMi, kaynakModulu, kuyrukSablonu, metniHazirla, olmayanKimlikler, otomatikGosterim, otomatikOrtadaMi, varsayilanMi, tekilAnahtar, YAYIN_ONEMI,
+  alicilariSec, ekAlicilariEkle, olayYazimi, epostaSecilebilir, hemenMi, kaynakModulu, kuyrukSablonu, metniHazirla, olmayanKimlikler, otomatikGosterim, otomatikOrtadaMi, varsayilanMi, tekilAnahtar, YAYIN_ONEMI,
   yayinAlicilari, yayiniGorurMu, yayinZamaniHatasi, yolTureUyar,
 } from './kurallar.ts';
 
@@ -178,5 +178,16 @@ describe('kuyruk şablonu önceliği (3639)', () => {
     assert.equal(kuyrukSablonu(false, null, 3), 3);
     assert.equal(kuyrukSablonu(false, null, undefined), null);
     assert.equal(kuyrukSablonu(true, 7, 3), null);
+  });
+
+  test('olay yazımı: kapalı görev Gelenler\'e düşer; kapalıyken yazılmaz bayraklı tür hiç yazılmaz; açıkken ikisi de tam (3478, 3619 b)', () => {
+    const gorev = { anahtarli: true, sinif: 'gorev', onayIstenir: false };
+    assert.equal(olayYazimi({ ...gorev, acik: false }), 'yalniz-gelenler');
+    assert.equal(olayYazimi({ ...gorev, acik: false, kapaliykenYazilmaz: false }), 'yalniz-gelenler');
+    assert.equal(olayYazimi({ ...gorev, acik: false, kapaliykenYazilmaz: true }), 'yok');
+    assert.equal(olayYazimi({ ...gorev, onayIstenir: true, acik: false, kapaliykenYazilmaz: true }), 'yok');
+    assert.equal(olayYazimi({ ...gorev, acik: true, kapaliykenYazilmaz: true }), 'tam');
+    assert.equal(olayYazimi({ anahtarli: false, acik: false, sinif: 'gorev', onayIstenir: false, kapaliykenYazilmaz: true }), 'tam');
+    assert.equal(olayYazimi({ anahtarli: true, acik: false, sinif: 'bilgi', onayIstenir: false }), 'yok');
   });
 });

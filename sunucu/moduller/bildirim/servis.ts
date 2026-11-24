@@ -63,7 +63,10 @@ export async function bildirimGonder(db: Db, olay: BildirimOlayi): Promise<numbe
   if (olay.yol !== undefined && olay.yol !== null && !kayitYoluMu(olay.yol)) throw new Error(`Bildirim yolu geçersiz: ${olay.yol}`);
   if (!yolTureUyar(olay.tur, olay.yol)) throw new Error(`Bildirim yolu türün ekranında değil: ${olay.tur} ${olay.yol}`);
   const anahtarli = anahtarliTurMu(olay.tur);
-  const yazim = olayYazimi({ anahtarli, acik: anahtarli && await so.turAcikMi(db, olay.tur), sinif: turSinifi(olay.tur), onayIstenir: (tanim as BildirimTuruTanimi).onayIstenir === true });
+  const yazim = olayYazimi({
+    anahtarli, acik: anahtarli && await so.turAcikMi(db, olay.tur), sinif: turSinifi(olay.tur), onayIstenir: (tanim as BildirimTuruTanimi).onayIstenir === true,
+    kapaliykenYazilmaz: (tanim as BildirimTuruTanimi).kapaliykenYazilmaz === true,
+  });
   if (yazim === 'yok') return 0;
   const { baslik, metin } = metniHazirla(olay.baslik, olay.metin);
   const islemler = await kisilerinIslemleri(db);

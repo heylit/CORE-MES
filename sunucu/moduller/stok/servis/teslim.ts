@@ -39,7 +39,10 @@ import { kaynakPartisi, sevkCikisiniDenetle, eksiKaliteDenetle } from './hareket
 import { STOKLANIR_TURLER } from './malzeme.ts';
 import { belgeNo, korumali, adlar, emirNoDe, emirNoHaritasi, bakiyeSatiri, hareketleriCevir, aktifKonum, varsayilanKonum, bakiyeDegistir, siraliKilitle, hareket, teslimYaz, sktBugun } from './ortak.ts';
 import { refakatPartileriCevir, refakatPartisiAc } from './refakat.ts';
-import { sarfEmriDenetle, emreKartiSagla, kartsizAlmaEngeli, teslimGonder, kartaBagliLotuReddet, teslimAlabilir, teslimiKapat, istegiYenidenDene, adimStatusu, rezerveyiAsmasin, rezerveDegistir } from './uretim.ts';
+import {
+  sarfEmriDenetle, emreKartiSagla, kartsizAlmaEngeli, teslimGonder, kartaBagliLotuReddet, teslimAlabilir, teslimiKapat, istegiYenidenDene, adimStatusu, rezerveyiAsmasin, rezerveDegistir,
+  teslimYoldaBildir, yoldaGoreviniKapat,
+} from './uretim.ts';
 
 // ---- Sepet (DEP-54: kişiye özel) ------------------------------------------------------------------------------------------
 const KULLANILABILIR = new Set(['raf_gozu', 'kabul', 'depo_zemini']);
@@ -422,7 +425,27 @@ export async function malzemeIstegiGecir(db: Db, k: IstekKisisi, id: number, gec
     bulunamadiIletisi: 'Malzeme isteği bulunamadı.',
   });
   if (i && gecis === 'teslim') await kalaniAc(db, i, g.karsilanan!);
+  if (i && gecis === 'hazirla') await istekHazirBildir(db, k.id, i);
+  if (i && gecis === 'teslim') await istekTeslimEdildiBildir(db, k.id, i, g.karsilanan!);
   return malzemeIstegiOku(db, id);
+}
+// 3619: isteği açan kişiye. Teslim yalnız doğrudan kapanışta (depo "Teslim et"); yolda teslimle kapanan istek teslim alınınca
+// istegiTeslimlerleKapat'tan geçer ve bunu yaymaz: o teslim "teslim yolda" ile zaten duyurulmuştur.
+async function istekHazirBildir(db: Db, yapanKisiId: number, i: IstekHam): Promise<void> {
+  const o = await malzemeOzeti(db, i.malzemeId);
+  await bildirimGonder(db, {
+    tur: 'stok.istek-hazir', baslik: `${i.no}: ${o?.ad ?? o?.kod ?? 'malzeme'} hazırlanıyor`.slice(0, 200),
+    metin: `${bindenMetin(binde(i.miktar))}${o?.birim ? ` ${o.birim}` : ''} isteğin hazırlanmaya başladı.`, kisiler: [i.kisiId], haric: yapanKisiId, kaynakKimlik: i.no,
+  });
+}
+async function istekTeslimEdildiBildir(db: Db, yapanKisiId: number, i: IstekHam, karsilanan: string): Promise<void> {
+  const o = await malzemeOzeti(db, i.malzemeId);
+  const birim = o?.birim ? ` ${o.birim}` : '';
+  await bildirimGonder(db, {
+    tur: 'stok.istek-teslim-edildi', baslik: `${i.no}: ${o?.ad ?? o?.kod ?? 'malzeme'} teslim edildi`.slice(0, 200),
+    metin: `${bindenMetin(binde(karsilanan))}${birim} teslim edildi${binde(karsilanan) === binde(i.miktar) ? '' : ` (istenen ${bindenMetin(binde(i.miktar))}${birim})`}; istek kapandı.`,
+    kisiler: [i.kisiId], haric: yapanKisiId, kaynakKimlik: i.no,
+  });
 }
 // Kısmi karşılanan isteğin kalanı aynı kişiye, istasyona ve emre yeni istekle açılır; kimliği kapanan isteğe bağlıdır, ikinci kez açılmaz.
 export const kalanKimligi = (i: IstekHam): string => `${i.kaynakKimligi.slice(0, 100)}~k${i.id}`;
@@ -1074,7 +1097,7 @@ export async function istekKabulEt(db: Db, k: Kullanici, id: number, g: IstekKab
     guncelle: () => sorgular.istekGecir(db, id, g.surum, { kaynaklar: ISTEK_GECIS_KAYNAKLARI.hazirla, durum: 'hazirlaniyor', karsilanan: null, kapatanKisiId: null }),
     varMi: () => sorgular.istekVarMi(db, id), bulunamadiIletisi: 'Malzeme isteği bulunamadı.',
   });
-  await korumali(async () => {
+  const teslimId = await korumali(async () => {
     await serbestDenetle(db, i.malzemeId, kaynak, partiId, statuId, miktar, 'gönderilemez');
     if (i.uretimEmriId !== null) await rezerveyiAsmasin(db, i.malzemeId, statuId, i.uretimEmriId, binde(miktar));
     return teslimYaz(db, {
@@ -1082,6 +1105,8 @@ export async function istekKabulEt(db: Db, k: Kullanici, id: number, g: IstekKab
       uretimEmriId: i.uretimEmriId, istekId: i.id, aciklama: [`İstek ${i.no}`, istenenFazlaNotu(i.miktar, miktar)].filter((x) => x !== null).join(' · '), gonderenKisiId: k.id,
     });
   });
+  await istekHazirBildir(db, k.id, i);
+  if (teslimId !== null) await teslimYoldaBildir(db, k.id, teslimId);
   return malzemeIstegiOku(db, id);
 }
 export async function istekReddet(db: Db, k: Kullanici, id: number, g: IstekReddetGovdesi): Promise<MalzemeIstegiCevabi> {
@@ -1256,6 +1281,7 @@ export async function suresiDolanTeslimleriIptal(db: Db): Promise<number> {
     if (!kapandi) continue;
     await sorgular.teslimeNotYaz(db, t.id, 'Süre doldu');
     await istegiYenidenDene(db, t.gonderenKisiId, t.istekId);
+    await yoldaGoreviniKapat(db, t);
     n++;
     const hedefIstasyonId = (await sorgular.teslimUclari(db, [t.hedefKonumId]))[0]?.istasyonId ?? null;
     const alicilar = hedefIstasyonId === null ? [] : (await istasyondakiKisiler(db, hedefIstasyonId)).map((x) => x.kisiId);
