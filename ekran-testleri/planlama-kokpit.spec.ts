@@ -217,7 +217,7 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, taslak, Geri ve Canlıya al, Mat
     await expect(is).toBeVisible();
     await is.click({ button: 'right' });
     // Sağ tık menüsünde tutma yoktur; yalnız Ayrıntı.
-    await expect(tahta.getByRole('menu').getByRole('menuitem')).toHaveText(['Ayrıntı']);
+    await expect(tahta.getByRole('menu').getByRole('menuitem')).toHaveText(['Ayrıntı', 'Planda böl']);
     await page.keyboard.press('Escape');
     const kutu = await is.boundingBox();
     if (!kutu) throw new Error('iş görünmüyor');
@@ -2372,7 +2372,7 @@ test('Kokpit 3414 b: liste düzeni; plansız sipariş satırdan planlanır, sonu
 
 // Kart 3488 a: yerleşmeyen adım liste düzeninde elle yerleştirilir. Boş yerler önizlemeyle bulunur, seçilen yerin sonucu yazar,
 // "Yerleştir ve kilitle" taşıma komutunu taslağa yazar; Böl paneli adımı tezgâhlara paylaştırma formunu açar.
-test('Kokpit 3488: yerleşmeyen adım elle yerleştirilir ve kilitlenir; Böl paneli açılır; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+test('Kokpit 3488: yerleşmeyen adım elle yerleştirilir ve kilitlenir; Planda böl paneli açılır; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
   // S1'in Freze adımı planda yeri olmadan başlar; kilitlenince (taslakta elle yerleştirilince) plana girer.
   const { 'S1.a2': _, ...yerlesmeyen } = ILK;
   // Freze adımının malzemesi salı 16:00'da (40) gelir: daha erken başlayan yerde uyarı yazar (0004).
@@ -2399,7 +2399,7 @@ test('Kokpit 3488: yerleşmeyen adım elle yerleştirilir ve kilitlenir; Böl pa
   await expect(ac2).toBeVisible();
   // Böl adımın adedini tezgâhlara paylaştıran paneli açar (komut ve etkisi birim testlerinde).
   await s1.locator('[data-bol-ac="S1.a2"]').click();
-  const bol = kokpit.getByRole('complementary', { name: 'Adımı böl' });
+  const bol = kokpit.getByRole('complementary', { name: 'Planda böl' });
   await expect(bol.getByLabel('Adet')).toHaveCount(2);
   await tasma();
   await cek('0-bol');
@@ -2412,7 +2412,7 @@ test('Kokpit 3488: yerleşmeyen adım elle yerleştirilir ve kilitlenir; Böl pa
   await cek('0b-bol-etki');
   await etki.getByRole('button', { name: 'Vazgeç' }).click();
   await expect(etki).toHaveCount(0);
-  await bol.getByRole('button', { name: 'Adımı bölmeyi kapat' }).click();
+  await bol.getByRole('button', { name: 'Planda bölmeyi kapat' }).click();
   await expect(bol).toHaveCount(0);
   await ac2.click();
   const elle = s1.getByRole('group', { name: 'Freze için elle yerleştirme' });
