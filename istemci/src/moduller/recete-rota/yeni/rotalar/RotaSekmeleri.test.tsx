@@ -146,6 +146,30 @@ describe('Rota sekmeleri (3247 a)', () => {
     expect(await screen.findByText('Bu ürünün rotası yok. Nasıl başlayalım?')).toBeTruthy();
   });
 
+  it.each(['hat', 'dikey'])('3647: kopya taslak açılırken "Nasıl başlayalım?" kartları görünmez (%s görünümü)', async (gorunum) => {
+    try { localStorage.setItem('tc-rr1-gorunum', gorunum); } catch { /* test ortamında depo yoksa */ }
+    kur();
+    const asil = globalThis.fetch;
+    let basladi = false;
+    let birak: () => void = () => undefined;
+    const kapi = new Promise<void>((coz) => { birak = coz; });
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
+      if (adres.endsWith('/taslak-ac')) { basladi = true; await kapi; }
+      return asil(adres, secenek);
+    }));
+    rrAc('/recete-rota/schema');
+    const g = await sekmeler();
+    const bolge = screen.getByRole('region', { name: 'Ürün ve rotalar' });
+    fireEvent.click(within(g).getByRole('button', { name: /Rota$/ }));
+    fireEvent.click(within(within(bolge).getByRole('group', { name: 'Yeni rotanın emir türü' })).getByRole('button', { name: 'Numune' }));
+    fireEvent.click(within(bolge).getByRole('button', { name: 'Numune rotasını aç' }));
+    const yeni = await within(g).findByRole('button', { name: /^Numune/ });
+    await waitFor(() => { expect(yeni.getAttribute('aria-pressed')).toBe('true'); });
+    await waitFor(() => { expect(basladi).toBe(true); });
+    expect(screen.queryByText('Bu ürünün rotası yok. Nasıl başlayalım?')).toBeNull();
+    birak();
+  });
+
   it('3644: sunucu rota açmayı reddederse neden formda görünür, rota açılmaz ve ürün rotaları yeniden okunur', async () => {
     const istekler = sunucuKur(YONETICI, {
       durum: () => json(200, rotaDurumu([standartRev, faiRev])),
