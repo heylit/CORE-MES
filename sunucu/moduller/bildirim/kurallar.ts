@@ -9,7 +9,7 @@ import {
   type BildirimSinifi,
 } from '#paylasilan/sozlesme/bildirim.ts';
 import {
-  EPOSTA_KIPLERI, EPOSTA_TABLO_ADLARI, bilinmeyenYerTutucular, onayEylemiYolu, sablonDoldur, type EpostaDegerleri, type EpostaKipi, type EpostaKonusu, type EpostaSablonIcerigi, type EpostaSeridi, type EpostaSimgesi, type EpostaTabloAlani, EPOSTA_VARSAYILAN_DUGME, EPOSTA_SIMGELERI, EPOSTA_TABLO_ALANLARI, EPOSTA_SERITLERI, type EpostaZamani,
+  EPOSTA_KIPLERI, EPOSTA_TABLO_ADLARI, bilinmeyenYerTutucular, onayEylemiYolu, sablonDoldur, type EpostaDegerleri, type EpostaKipi, type EpostaKonusu, type EpostaSablonIcerigi, type EpostaSeridi, type EpostaSimgesi, type EpostaTabloAlani, EPOSTA_VARSAYILAN_DUGME, EPOSTA_VARSAYILAN_DUZEN, epostaDuzeni, type EpostaDuzeni, type EpostaDugmeRengi, EPOSTA_SIMGELERI, EPOSTA_TABLO_ALANLARI, EPOSTA_SERITLERI, type EpostaZamani,
 } from '#paylasilan/sozlesme/bildirim-eposta.ts';
 
 // BIL-6: gönderilen yol türün ekranı ya da onun altıdır; başka ekrana giden bildirim alıcıya açılmayan sayfa gösterebilirdi.
@@ -57,18 +57,20 @@ export function alicilariSec(
 }
 
 // 3597 a: kayda bağlı türde seçim ek alıcıdır. Asıl alıcılar (kayıttaki kişi) olduğu gibi kalır; seçilen kişi yalnız kaydı
-// görme işlemini taşıyorsa, olayı başlatan değilse ve etkin girişliyse (işlem haritasında varsa) eklenir.
+// görme işlemini taşıyorsa ve etkin girişliyse (3639: listede açıkça seçilen başlatan da kendi eylemini alır) (işlem haritasında varsa) eklenir.
 export function ekAlicilariEkle(
   asil: readonly number[], secilen: readonly number[], kisiIslemleri: ReadonlyMap<number, readonly Islem[]>, gormeIslemi: Islem,
-  haric: number | null | undefined,
 ): number[] {
   const sonuc = new Set(asil);
   for (const kisiId of secilen) {
-    if (kisiId === haric) continue;
     if (kisiIslemleri.get(kisiId)?.includes(gormeIslemi) === true) sonuc.add(kisiId);
   }
   return [...sonuc].sort((a, b) => a - b);
 }
+
+// 3639: kuyruk satırının özel şablonu (alıcı grubunun seçtiği) olayın tetikleyicisinde atanan şablondan önce gelir; özet e-postası şablon kullanmaz.
+export const kuyrukSablonu = (ozet: boolean, satirSablonId: number | null, tetikSablonId: number | null | undefined): number | null =>
+  ozet ? null : satirSablonId ?? tetikSablonId ?? null;
 
 // BIL-4: tekil anahtar tür ve kaynak kimliğinden kurulur; kimlik yoksa her olay ayrı satırdır.
 export const tekilAnahtar = (tur: BildirimTuru, kaynakKimlik: string | null | undefined): string | null =>
@@ -154,7 +156,7 @@ export function olayYazimi(t: { anahtarli: boolean; acik: boolean; sinif: string
 // --- E-posta kanalı (ADR 0015, 3397) ---------------------------------------------------------------------------------
 
 // BIL-40: konu başına varsayılan şablon. Gövdede yalnız izinli yer tutucular; müşteri, tedarikçi, fiyat, parça no ve serbest metin yok.
-const EK: Pick<EpostaSablonIcerigi, 'baslikKalibi' | 'dugmeYazisi' | 'onayDugmesi' | 'altBilgi' | 'serit' | 'logo'> = { baslikKalibi: null, dugmeYazisi: null, onayDugmesi: true, altBilgi: null, serit: 'onem', logo: false };
+const EK: Pick<EpostaSablonIcerigi, 'baslikKalibi' | 'dugmeYazisi' | 'onayDugmesi' | 'altBilgi' | 'serit' | 'logo' | 'duzen'> = { baslikKalibi: null, dugmeYazisi: null, onayDugmesi: true, altBilgi: null, serit: 'onem', logo: false, duzen: EPOSTA_VARSAYILAN_DUZEN };
 export const VARSAYILAN_SABLONLAR: Record<EpostaKonusu, EpostaSablonIcerigi> = {
   'satin-alma': { simge: 'cart', konuKalibi: '[CORE MES] {olay} · {kayit_no}', govde: 'Merhaba {alici_adi},\n\n{olay}.\n\nAyrıntıyı ve işlemi uygulamada görebilirsin.', tabloAlanlari: ['kayit_no', 'olay', 'tarih'], ...EK },
   proje: { simge: 'clipboard-check', konuKalibi: '[CORE MES] {olay} · {kayit_no}', govde: 'Merhaba {alici_adi},\n\n{olay}.\n\nAyrıntıyı ve işlemi uygulamada görebilirsin.', tabloAlanlari: ['kayit_no', 'olay', 'tarih', 'gecikme_gunu'], ...EK },
@@ -184,6 +186,8 @@ export const BOS_TOPLANTI_DEGERLERI = { kayit_basligi: null, zaman_araligi: null
 export interface SablonKaydi {
   simge: string; konuKalibi: string; baslikKalibi: string | null; govde: string; tabloAlanlari: readonly string[]; dugmeYazisi: string | null;
   onayDugmesi: boolean | null; altBilgi: string | null; serit: string | null; logo: boolean | null;
+  // 3639: göçten önceki satırda null; kod varsayılanı geçer.
+  duzen?: unknown;
 }
 export function sablonIcerigi(v: EpostaSablonIcerigi, r: SablonKaydi | null): EpostaSablonIcerigi {
   if (r === null) return v;
@@ -194,12 +198,14 @@ export function sablonIcerigi(v: EpostaSablonIcerigi, r: SablonKaydi | null): Ep
     dugmeYazisi: r.dugmeYazisi, onayDugmesi: r.onayDugmesi ?? v.onayDugmesi, altBilgi: r.altBilgi,
     serit: r.serit !== null && (EPOSTA_SERITLERI as readonly string[]).includes(r.serit) ? r.serit as EpostaSeridi : v.serit,
     logo: r.logo ?? v.logo,
+    duzen: r.duzen === null || r.duzen === undefined ? v.duzen : epostaDuzeni(r.duzen),
   };
 }
 
 // BIL-56 (3435-2 a): şablonun metin alanlarında yalnız izinli yer tutucu; ilk hatalı alan ve bilinmeyenler, yoksa null.
-export function sablonYerTutucuHatasi(s: Pick<EpostaSablonIcerigi, 'konuKalibi' | 'baslikKalibi' | 'govde' | 'altBilgi'>): { alan: string; bilinmeyen: string[] } | null {
-  for (const [alan, metin] of [['konuKalibi', s.konuKalibi], ['baslikKalibi', s.baslikKalibi], ['govde', s.govde], ['altBilgi', s.altBilgi]] as const) {
+export function sablonYerTutucuHatasi(s: Pick<EpostaSablonIcerigi, 'konuKalibi' | 'baslikKalibi' | 'govde' | 'altBilgi'> & { duzen?: Pick<EpostaDuzeni, 'ustBant' | 'altSatir'> }): { alan: string; bilinmeyen: string[] } | null {
+  for (const [alan, metin] of [['konuKalibi', s.konuKalibi], ['baslikKalibi', s.baslikKalibi], ['govde', s.govde], ['altBilgi', s.altBilgi],
+    ['duzen.ustBant', s.duzen?.ustBant ?? null], ['duzen.altSatir', s.duzen?.altSatir ?? null]] as const) {
     const bilinmeyen = metin === null ? [] : bilinmeyenYerTutucular(metin);
     if (bilinmeyen.length > 0) return { alan, bilinmeyen };
   }
@@ -228,6 +234,10 @@ const ONEM_RENGI: Record<BildirimOnemi, { serit: string; zemin: string }> = {
   bilgi: { serit: '#2456c9', zemin: '#e3ebfb' }, uyari: { serit: '#b45f06', zemin: '#fbe9d3' }, acil: { serit: '#c62f45', zemin: '#f9e0e4' },
 };
 
+// 3639: tek düğmenin (Kayda git) rengi: zemin, yazı, kenar.
+const DUGME_RENKLERI: Record<EpostaDugmeRengi, readonly [string, string, string]> = {
+  koyu: ['#1c1a14', '#f6c400', '#f6c400'], yesil: ['#1f7a4a', '#ffffff', '#1f7a4a'], mavi: ['#2456c9', '#ffffff', '#2456c9'],
+};
 const SERIT_RENGI: Record<Exclude<EpostaSeridi, 'onem' | 'yok'>, string> = {
   sari: '#f6c400', turuncu: '#b45f06', kirmizi: '#c62f45', mavi: '#2456c9', yesil: '#1f7a4a',
 };
@@ -238,7 +248,7 @@ export interface EpostaGovdesi { konu: string; metin: string; html: string }
 // 3431 a: kademeli uyarının basamağı (K2-K5) ve 3397 tetikleyicisinin yükseltmesi e-postada görünür.
 export interface EpostaKademesi { no: number; toplam: number; ad: string }
 export interface EpostaGirdisi {
-  sablon: { konuKalibi: string; govde: string; tabloAlanlari: readonly EpostaTabloAlani[] } & Partial<Pick<EpostaSablonIcerigi, 'baslikKalibi' | 'dugmeYazisi' | 'onayDugmesi' | 'altBilgi' | 'serit' | 'logo'>>;
+  sablon: { konuKalibi: string; govde: string; tabloAlanlari: readonly EpostaTabloAlani[] } & Partial<Pick<EpostaSablonIcerigi, 'baslikKalibi' | 'dugmeYazisi' | 'onayDugmesi' | 'altBilgi' | 'serit' | 'logo' | 'duzen'>>;
   degerler: EpostaDegerleri;
   baslik: string;
   onem: BildirimOnemi;
@@ -280,12 +290,13 @@ export function konuEtiketi(g: Pick<EpostaGirdisi, 'onem' | 'onay' | 'kademe'>):
 // kaydı açar; adres onay vermez (iletilen e-posta yetki taşımaz).
 export function epostaKur(g: EpostaGirdisi): EpostaGovdesi {
   const etiket = konuEtiketi(g);
+  const duzen = g.sablon.duzen ?? EPOSTA_VARSAYILAN_DUZEN;
   const sablonKonusu = sablonDoldur(g.sablon.konuKalibi, g.degerler).replace(/\s*·\s*$/, '').trim() || g.baslik;
   const konu = etiket === null ? sablonKonusu : `${etiket} ${sablonKonusu}`;
   const govde = sablonDoldur(g.sablon.govde, g.degerler).trim();
   const satirlar = g.sablon.tabloAlanlari.flatMap((a) => {
     const d = g.degerler[a];
-    return d === null || d === '' ? [] : [[EPOSTA_TABLO_ADLARI[a], d] as const];
+    return d === null || d === '' ? [] : [[duzen.tabloAdlari[a] ?? EPOSTA_TABLO_ADLARI[a], d] as const];
   });
   const baglanti = g.degerler.kayit_baglantisi;
   const onay = g.onay && baglanti !== null && g.sablon.onayDugmesi !== false ? g.onay : null;
@@ -294,6 +305,8 @@ export function epostaKur(g: EpostaGirdisi): EpostaGovdesi {
   const dugmeYazisi = g.sablon.dugmeYazisi?.trim() || EPOSTA_VARSAYILAN_DUGME;
   const altBilgi = (g.sablon.altBilgi ? sablonDoldur(g.sablon.altBilgi, g.degerler).trim() : '') || 'Bu e-postayı kimin alacağını sistem yöneticin belirler.';
   const ad = g.gonderenAdi?.trim() || 'CORE MES';
+  const ustBant = (duzen.ustBant ? sablonDoldur(duzen.ustBant, g.degerler).trim() : '') || ad;
+  const altSatir = (duzen.altSatir ? sablonDoldur(duzen.altSatir, g.degerler) : [g.degerler.kayit_no, g.degerler.tarih].filter((x) => x !== null && x !== '').join(' · ')).trim();
   const kademeMetni = g.kademe ? `Kademe ${String(g.kademe.no)} / ${String(g.kademe.toplam)}: ${g.kademe.ad}` : null;
   const altlar = [
     `Bu e-posta ${ad === 'CORE MES' ? 'CORE MES' : `CORE MES tarafından ${ad} adına`} gönderildi.`,
@@ -318,20 +331,20 @@ export function epostaKur(g: EpostaGirdisi): EpostaGovdesi {
     ? `<p style="margin:16px 0 0"><a href="${kacis(onayEylemiYolu(baglanti, 'onayla'))}" style="${dugmeStili('#1f7a4a', '#ffffff', '#1f7a4a')}">Onayla</a>`
       + (onay.reddet ? `<a href="${kacis(onayEylemiYolu(baglanti, 'reddet'))}" style="${dugmeStili('#ffffff', '#c62f45', '#c62f45')}">Reddet</a>` : '')
       + `<a href="${kacis(baglanti)}" style="${dugmeStili('#ffffff', '#1c1a14', '#1c1a14')}">Kaydı aç</a></p>`
-    : `<p style="margin:16px 0 0"><a href="${kacis(baglanti)}" style="${dugmeStili('#1c1a14', '#f6c400', '#f6c400')}">${kacis(dugmeYazisi)}</a></p>`;
+    : `<p style="margin:16px 0 0"><a href="${kacis(baglanti)}" style="${dugmeStili(...DUGME_RENKLERI[duzen.dugmeRengi])}">${kacis(dugmeYazisi)}</a></p>`;
   const kademeCubugu = g.kademe ? `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:4px 0 2px"><tr>${
     Array.from({ length: g.kademe.toplam }, (_, i) => `<td style="height:6px;padding:0 2px"><div style="height:6px;border-radius:3px;background:${i < (g.kademe?.no ?? 0) ? r.serit : '#e3dfd6'}"></div></td>`).join('')
   }</tr></table><div style="font-size:12px;color:#6d685d;margin-bottom:8px">${kacis(kademeMetni ?? '')}</div>` : '';
   const yukseltme = g.yukseltme ? `<div style="font-size:12.5px;color:#6d685d;margin:0 0 10px">${kacis(g.yukseltme)}</div>` : '';
   const paragraflar = govde.split(/\n{2,}/).map((p) => `<p style="margin:0 0 10px">${kacis(p).replace(/\n/g, '<br>')}</p>`).join('');
   const ust = `<tr><td style="padding:10px 22px;background:#1c1a14;border-radius:6px 6px 0 0"><table role="presentation" cellpadding="0" cellspacing="0" style="width:100%"><tr>`
-    + `<td style="color:#ffffff;font-weight:bold;font-size:14px">${g.logoVar === true ? `<img src="cid:logo" height="28" alt="${kacis(ad)}" style="display:block;height:28px;max-width:180px;background:#ffffff;border-radius:4px;padding:2px">` : kacis(ad)}</td>`
-    + `<td style="text-align:right"><span style="display:inline-block;background:${r.zemin};color:${r.serit};font-size:12px;font-weight:bold;padding:2px 8px;border-radius:999px">${ONEM_ADI[g.onem]}</span></td></tr></table></td></tr>`;
+    + `<td style="color:#ffffff;font-weight:bold;font-size:14px">${g.logoVar === true ? `<img src="cid:logo" height="28" alt="${kacis(ustBant)}" style="display:block;height:28px;max-width:180px;background:#ffffff;border-radius:4px;padding:2px">` : kacis(ustBant)}</td>`
+    + `<td style="text-align:right">${duzen.onemRozeti ? `<span style="display:inline-block;background:${r.zemin};color:${r.serit};font-size:12px;font-weight:bold;padding:2px 8px;border-radius:999px">${ONEM_ADI[g.onem]}</span>` : ''}</td></tr></table></td></tr>`;
   const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="color-scheme" content="light"></head><body style="margin:0;padding:16px;background:#f1eee7">`
     + `<table role="presentation" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;margin:0 auto;background:#ffffff;border-radius:6px;font:14px/1.5 Arial,Helvetica,sans-serif;color:#1c1a14">`
     + `${ust}${serit === null ? '' : `<tr><td style="height:6px;background:${serit}"></td></tr>`}<tr><td style="padding:20px 22px">`
     + `<table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:14px"><tr>${simge}<td style="vertical-align:middle"><div style="font-size:18px;font-weight:bold">${kacis(baslik)}</div>`
-    + `<div style="font-size:12px;color:#6d685d">${kacis([g.degerler.kayit_no, g.degerler.tarih].filter((x) => x !== null && x !== '').join(' · '))}</div></td></tr></table>`
+    + `<div style="font-size:12px;color:#6d685d">${kacis(altSatir)}</div></td></tr></table>`
     + `${kademeCubugu}${yukseltme}${paragraflar}${tablo}${dugme}</td></tr><tr><td style="padding:12px 22px;background:#f3f1ec;color:#6d685d;font-size:12.5px;border-radius:0 0 6px 6px">${altlar.map(kacis).join('<br>')}</td></tr></table></body></html>`;
   return { konu, metin, html };
 }

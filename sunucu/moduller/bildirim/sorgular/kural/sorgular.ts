@@ -5,15 +5,15 @@ import type { KuralKosulu } from '#paylasilan/sozlesme/bildirim-kural.ts';
 
 export interface KuralSatiri {
   id: number; tur: string; ad: string; acik: boolean; kosullar: KuralKosulu[]; rolIdleri: number[]; kisiIdleri: number[];
-  ortada: boolean; eposta: boolean; telefon: boolean; sablonBaslik: string; sablonMetin: string | null; surum: number; degisti: string;
+  ortada: boolean; eposta: boolean; telefon: boolean; sablonBaslik: string; sablonMetin: string | null; epostaSablonId: number | null; surum: number; degisti: string;
 }
 export interface KuralYazimi {
   ad: string; acik: boolean; kosullar: readonly KuralKosulu[]; rolIdleri: readonly number[]; kisiIdleri: readonly number[];
-  ortada: boolean; eposta: boolean; telefon: boolean; sablonBaslik: string; sablonMetin: string | null;
+  ortada: boolean; eposta: boolean; telefon: boolean; sablonBaslik: string; sablonMetin: string | null; epostaSablonId: number | null;
 }
 
 const ALANLAR = `id, tur, ad, acik, kosullar, rol_idleri AS "rolIdleri", kisi_idleri AS "kisiIdleri", ortada, eposta, telefon,
-  sablon_baslik AS "sablonBaslik", sablon_metin AS "sablonMetin", surum, to_char(degisti AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS degisti`;
+  sablon_baslik AS "sablonBaslik", sablon_metin AS "sablonMetin", sablon_id AS "epostaSablonId", surum, to_char(degisti AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS degisti`;
 
 export function kurallar(db: Db, tur: string | null): Promise<KuralSatiri[]> {
   return db.sorgu(`SELECT ${ALANLAR} FROM bildirim_kurali WHERE $1::text IS NULL OR tur = $1 ORDER BY tur, id`, [tur]);
@@ -27,12 +27,12 @@ export function kural(db: Db, id: number): Promise<KuralSatiri | null> {
   return db.tek(`SELECT ${ALANLAR} FROM bildirim_kurali WHERE id = $1`, [id]);
 }
 
-const degerler = (g: KuralYazimi) => [g.ad, g.acik, JSON.stringify(g.kosullar), [...g.rolIdleri], [...g.kisiIdleri], g.ortada, g.eposta, g.telefon, g.sablonBaslik, g.sablonMetin];
+const degerler = (g: KuralYazimi) => [g.ad, g.acik, JSON.stringify(g.kosullar), [...g.rolIdleri], [...g.kisiIdleri], g.ortada, g.eposta, g.telefon, g.sablonBaslik, g.sablonMetin, g.epostaSablonId];
 
 export async function kuralEkle(db: Db, tur: string, g: KuralYazimi, kisiId: number): Promise<number> {
   const r = await db.tek<{ id: number }>(
-    `INSERT INTO bildirim_kurali (ad, acik, kosullar, rol_idleri, kisi_idleri, ortada, eposta, telefon, sablon_baslik, sablon_metin, tur, degistiren_id)
-     VALUES ($1, $2, $3::jsonb, $4::int[], $5::int[], $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+    `INSERT INTO bildirim_kurali (ad, acik, kosullar, rol_idleri, kisi_idleri, ortada, eposta, telefon, sablon_baslik, sablon_metin, sablon_id, tur, degistiren_id)
+     VALUES ($1, $2, $3::jsonb, $4::int[], $5::int[], $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
     [...degerler(g), tur, kisiId]);
   if (r === null) throw new Error('Kural yazılamadı.');
   return r.id;
@@ -42,8 +42,8 @@ export async function kuralEkle(db: Db, tur: string, g: KuralYazimi, kisiId: num
 export async function kuralDegistir(db: Db, id: number, g: KuralYazimi, surum: number, kisiId: number): Promise<boolean> {
   return (await db.tek(
     `UPDATE bildirim_kurali SET ad = $1, acik = $2, kosullar = $3::jsonb, rol_idleri = $4::int[], kisi_idleri = $5::int[], ortada = $6, eposta = $7,
-       telefon = $8, sablon_baslik = $9, sablon_metin = $10, surum = surum + 1, degistiren_id = $13, degisti = now()
-     WHERE id = $11 AND surum = $12 RETURNING id`,
+       telefon = $8, sablon_baslik = $9, sablon_metin = $10, sablon_id = $11, surum = surum + 1, degistiren_id = $14, degisti = now()
+     WHERE id = $12 AND surum = $13 RETURNING id`,
     [...degerler(g), id, surum, kisiId])) !== null;
 }
 

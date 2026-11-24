@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { EPOSTA_KONULARI, EPOSTA_YER_TUTUCULARI, adrestekiOnayEylemi, onayEylemiYolu, turKonusu, turOnayi } from '#paylasilan/sozlesme/bildirim-eposta.ts';
+import { EPOSTA_KONULARI, EPOSTA_VARSAYILAN_DUZEN, EPOSTA_YER_TUTUCULARI, adrestekiOnayEylemi, onayEylemiYolu, turKonusu, turOnayi } from '#paylasilan/sozlesme/bildirim-eposta.ts';
 import { basliktanKayitNo } from './eposta.ts';
 import {
   EPOSTA_LOGO_EN_BUYUK, VARSAYILAN_SABLONLAR, bildirimAcikMi, epostaLogosu, kademeDegeri, sablonIcerigi, sablonYerTutucuHatasi, seritRengi, disKipMi, epostaKipi, bilinmeyenYerTutucular, epostaKur, kayitBaglantisi, kisiEpostaAlir, sablonDoldur, sessizMi,
@@ -198,7 +198,47 @@ describe('e-posta kuralları (3397)', () => {
     const yeni = sablonIcerigi(v, {
       simge: 'alert', konuKalibi: 'K', baslikKalibi: 'B', govde: 'G', tabloAlanlari: [], dugmeYazisi: 'Aç', onayDugmesi: false, altBilgi: 'A', serit: 'kirmizi', logo: true,
     });
-    assert.deepEqual(yeni, { simge: 'alert', konuKalibi: 'K', baslikKalibi: 'B', govde: 'G', tabloAlanlari: [], dugmeYazisi: 'Aç', onayDugmesi: false, altBilgi: 'A', serit: 'kirmizi', logo: true });
+    assert.deepEqual(yeni, { simge: 'alert', konuKalibi: 'K', baslikKalibi: 'B', govde: 'G', tabloAlanlari: [], dugmeYazisi: 'Aç', onayDugmesi: false, altBilgi: 'A', serit: 'kirmizi', logo: true, duzen: EPOSTA_VARSAYILAN_DUZEN });
+    const duzenli = sablonIcerigi(v, {
+      simge: 'alert', konuKalibi: 'K', baslikKalibi: null, govde: 'G', tabloAlanlari: [], dugmeYazisi: null, onayDugmesi: null, altBilgi: null, serit: null, logo: null,
+      duzen: { ustBant: 'Satış', onemRozeti: false, dugmeRengi: 'mavi', tabloAdlari: { kayit_no: 'Sipariş no', fiyat: 'x' }, altSatir: null },
+    });
+    assert.deepEqual(duzenli.duzen, { ustBant: 'Satış', onemRozeti: false, altSatir: null, tabloAdlari: { kayit_no: 'Sipariş no' }, dugmeRengi: 'mavi' });
+  });
+
+  test('3639: üst bant, önem rozeti, başlık altı satırı, tablo satır adı ve sırası, düğme rengi şablondan; boşsa varsayılan', () => {
+    const temel = { degerler: DEGER, baslik: 'Olay adı', onem: 'uyari' as const, simgeVar: false };
+    const varsayilan = epostaKur({ ...temel, sablon: VARSAYILAN_SABLONLAR.satis });
+    assert.match(varsayilan.html, /<td style="color:#ffffff;font-weight:bold;font-size:14px">CORE MES<\/td>/);
+    assert.match(varsayilan.html, />Uyarı</);
+    assert.match(varsayilan.html, /background:#1c1a14;color:#f6c400;border:2px solid #f6c400/);
+    const ozel = epostaKur({
+      ...temel,
+      sablon: {
+        ...VARSAYILAN_SABLONLAR.satis, tabloAlanlari: ['tarih', 'kayit_no'],
+        duzen: { ustBant: 'CORE MES Satış', onemRozeti: false, altSatir: '{olay} · {kayit_no}', tabloAdlari: { kayit_no: 'Sipariş no' }, dugmeRengi: 'yesil' },
+      },
+    });
+    assert.match(ozel.html, />CORE MES Satış</);
+    assert.doesNotMatch(ozel.html, />Uyarı</);
+    assert.match(ozel.html, /background:#1f7a4a;color:#ffffff;border:2px solid #1f7a4a/);
+    assert.ok(ozel.html.indexOf('Tarih') < ozel.html.indexOf('Sipariş no'), 'satır sırası şablondaki sıradır');
+    assert.match(ozel.html, /Satın alma talebi onay bekliyor · ORN-TLP-0042/);
+    assert.match(ozel.metin, /Sipariş no: /);
+    // Yer tutucu denetimi yeni metin alanlarını da kapsar; sistem cümlesi ve düğme bağlantısı düzenlenmez.
+    const s = { konuKalibi: '{olay}', baslikKalibi: null, govde: 'G', altBilgi: null };
+    assert.deepEqual(sablonYerTutucuHatasi({ ...s, duzen: { ustBant: '{musteri}', altSatir: null } }), { alan: 'duzen.ustBant', bilinmeyen: ['musteri'] });
+    assert.deepEqual(sablonYerTutucuHatasi({ ...s, duzen: { ustBant: null, altSatir: '{fiyat}' } }), { alan: 'duzen.altSatir', bilinmeyen: ['fiyat'] });
+    assert.match(ozel.metin, /sistem yöneticin belirler/);
+    // Güvenlik: üst bant ve alt satır HTML'e kaçışlı girer.
+    const kacisli = epostaKur({
+      ...temel,
+      sablon: { ...VARSAYILAN_SABLONLAR.satis, duzen: { ...VARSAYILAN_SABLONLAR.satis.duzen, ustBant: '<b>ORN</b> & Ortak', altSatir: '<i>x</i>' } },
+    });
+    assert.match(kacisli.html, /&lt;b&gt;ORN&lt;\/b&gt; &amp; Ortak/);
+    assert.doesNotMatch(kacisli.html, /<b>ORN/);
+    assert.doesNotMatch(kacisli.html, /<i>x/);
+    assert.match(ozel.metin, /Bu e-posta CORE MES gönderildi/);
   });
 
   test('BIL-56 (3435-2): başlık ve alt bilgide de yalnız izinli yer tutucu', () => {

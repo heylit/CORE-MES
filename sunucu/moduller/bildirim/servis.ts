@@ -16,7 +16,7 @@ import {
   ONAY_ILETILERI, alicilariSec, ekAlicilariEkle, kaynakModulu, kuralDegerleriniAyikla, metniHazirla, olayYazimi, olmayanKimlikler, otomatikGosterim, tekilAnahtar, varsayilanGosterim, varsayilanMi, yolTureUyar,
 } from './kurallar.ts';
 import { epostaKuyrugaAl, kuralEpostasiKuyrugaAl, type EpostaEki } from './eposta.ts';
-import { kurallariUygula } from './kural.ts';
+import { grupKazanir, grupKisileri, kuralHedefleri, kurallariUygula } from './kural.ts';
 import { izinliUcNoktaMi, ortamPushAyari } from './push.ts';
 import * as s from './sorgular.ts';
 import * as so from './sorgular/olay/sorgular.ts';
@@ -73,7 +73,12 @@ export async function bildirimGonder(db: Db, olay: BildirimOlayi): Promise<numbe
   const asil = alicilariSec(olay.tur, islemler, {
     kisiler: olay.kisiler, haric: olay.haric, ayarli: gorme === null ? ayarli : null, yalnizKisiler: olay.yalnizKisiler,
   });
-  const alicilar = gorme !== null && ayarli !== null ? ekAlicilariEkle(asil, ayarli, islemler, gorme, olay.haric) : asil;
+  const ekliAlicilar = gorme !== null && ayarli !== null ? ekAlicilariEkle(asil, ayarli, islemler, gorme) : asil;
+  // 3639: alıcı grubu varsa grubun kişisi ana bildirimi almaz, grubun metniyle alır (grup, 3597 ek alıcısından önce gelir).
+  const kuralDegerleri = kuralliTurMu(olay.tur) ? kuralDegerleriniAyikla(olay.tur, olay.alanlar) : {};
+  const hedefler = yazim === 'tam' ? await kuralHedefleri(db, { tur: olay.tur, haric: olay.haric, degerler: kuralDegerleri }, islemler) : [];
+  const grup = grupKazanir(olay.tur) ? grupKisileri(hedefler) : new Set<number>();
+  const alicilar = ekliAlicilar.filter((k) => !grup.has(k));
   const anahtar = tekilAnahtar(olay.tur, olay.kaynakKimlik);
   const gosterim = otomatikGosterim(tanim, alicilar.length === 0 ? null : await s.turGosterimi(db, olay.tur));
   const yazilan: { kisiId: number; id: number; yeni: boolean }[] = [];
@@ -88,11 +93,10 @@ export async function bildirimGonder(db: Db, olay: BildirimOlayi): Promise<numbe
   if (alicilar.length > 0 && await pushTuruAcik(db, olay.tur)) await s.pushKuyrugaIsaretle(db, alicilar);
   if (kuralliTurMu(olay.tur)) {
     const kural = await kurallariUygula(db, {
-      tur: olay.tur, baslik, yol: olay.yol ?? null, kaynakKimlik: olay.kaynakKimlik, haric: olay.haric,
-      degerler: kuralDegerleriniAyikla(olay.tur, olay.alanlar),
-    }, new Set(alicilar), islemler);
+      tur: olay.tur, baslik, yol: olay.yol ?? null, kaynakKimlik: olay.kaynakKimlik, haric: olay.haric, degerler: kuralDegerleri,
+    }, new Set(alicilar), hedefler);
     for (const k of kural.filter((x) => x.eposta)) {
-      await kuralEpostasiKuyrugaAl(db, { tur: olay.tur, baslik: k.baslik, yol: olay.yol ?? null, eposta: olay.eposta }, [k], islemler);
+      await kuralEpostasiKuyrugaAl(db, { tur: olay.tur, baslik: k.baslik, yol: olay.yol ?? null, eposta: olay.eposta, sablonId: k.epostaSablonId }, [k], islemler);
     }
     const telefon = kural.filter((x) => x.telefon && x.yeni).map((x) => x.kisiId);
     if (telefon.length > 0 && ortamPushAyari() !== null) await s.pushKuyrugaIsaretle(db, telefon);

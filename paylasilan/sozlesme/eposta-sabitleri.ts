@@ -60,6 +60,40 @@ export const EPOSTA_SERIT_ADLARI: Readonly<Record<EpostaSeridi, string>> = {
 export interface EpostaSablonIcerigi {
   simge: EpostaSimgesi; konuKalibi: string; baslikKalibi: string | null; govde: string; tabloAlanlari: EpostaTabloAlani[];
   dugmeYazisi: string | null; onayDugmesi: boolean; altBilgi: string | null; serit: EpostaSeridi; logo: boolean;
+  duzen: EpostaDuzeni;
+}
+
+// 3639: şablonun üst bant metni, önem rozeti, başlık altı satırı, tablo satır adları ve düğme rengi. Tek jsonb sütunudur; boş alan
+// kod varsayılanı demektir (üst bant gönderen adı, rozet açık, alt satır "{kayit_no} · {tarih}", satır adı alanın adı, düğme koyu).
+// "Bu e-posta CORE MES tarafından gönderildi" cümlesi ve onay düğmelerinin bağlantısı burada yoktur: iletilen e-posta yönlendirme
+// aracı olmasın.
+export const EPOSTA_DUGME_RENKLERI = ['koyu', 'yesil', 'mavi'] as const;
+export type EpostaDugmeRengi = (typeof EPOSTA_DUGME_RENKLERI)[number];
+export const EPOSTA_DUGME_RENK_ADLARI: Readonly<Record<EpostaDugmeRengi, string>> = { koyu: 'Koyu', yesil: 'Yeşil', mavi: 'Mavi' };
+export const EPOSTA_UST_BANT_EN_UZUN = 60;
+export const EPOSTA_ALT_SATIR_EN_UZUN = 150;
+export const EPOSTA_SATIR_ADI_EN_UZUN = 40;
+export interface EpostaDuzeni {
+  ustBant: string | null;
+  onemRozeti: boolean;
+  altSatir: string | null;
+  tabloAdlari: Partial<Record<EpostaTabloAlani, string>>;
+  dugmeRengi: EpostaDugmeRengi;
+}
+export const EPOSTA_VARSAYILAN_DUZEN: EpostaDuzeni = { ustBant: null, onemRozeti: true, altSatir: null, tabloAdlari: {}, dugmeRengi: 'koyu' };
+export const EPOSTA_VARSAYILAN_ALT_SATIR = '{kayit_no} · {tarih}';
+// Kayıtlı (ya da gövdeden gelen) değeri tam düzene çevirir: eksik ya da geçersiz alan varsayılandır.
+export function epostaDuzeni(ham: unknown): EpostaDuzeni {
+  const o = typeof ham === 'object' && ham !== null && !Array.isArray(ham) ? ham as Record<string, unknown> : {};
+  const metin = (x: unknown, en: number): string | null => (typeof x === 'string' && x.trim() !== '' ? x.trim().slice(0, en) : null);
+  const adlar: Partial<Record<EpostaTabloAlani, string>> = {};
+  const ham2 = typeof o['tabloAdlari'] === 'object' && o['tabloAdlari'] !== null ? o['tabloAdlari'] as Record<string, unknown> : {};
+  for (const a of EPOSTA_TABLO_ALANLARI) { const m = metin(ham2[a], EPOSTA_SATIR_ADI_EN_UZUN); if (m !== null) adlar[a] = m; }
+  const renk = EPOSTA_DUGME_RENKLERI.find((r) => r === o['dugmeRengi']);
+  return {
+    ustBant: metin(o['ustBant'], EPOSTA_UST_BANT_EN_UZUN), onemRozeti: o['onemRozeti'] !== false,
+    altSatir: metin(o['altSatir'], EPOSTA_ALT_SATIR_EN_UZUN), tabloAdlari: adlar, dugmeRengi: renk ?? 'koyu',
+  };
 }
 
 // Posta sunucusu kipi (3397-4 a): kurum içi sunucu ve yerel aktarıcı kurum içi adresi, dış servis tek tanımlı dış adresi kullanır.

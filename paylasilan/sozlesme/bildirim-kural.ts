@@ -25,6 +25,8 @@ const kuralAlanlariGovdesi = {
   telefon: z.boolean(),
   sablonBaslik: z.string().trim().min(1, 'Başlık zorunlu.').max(200),
   sablonMetin: z.string().trim().max(1000).nullable(),
+  // 3639: e-postanın gideceği özel şablon; boşsa olayın şablonu.
+  epostaSablonId: z.number().int().positive().max(2147483647).nullable().optional().transform((v) => v ?? null),
 };
 export const bildirimKuralEkleGovdesi = z.object({ tur: z.enum(KURALLI_TURLER), ...kuralAlanlariGovdesi }).strict();
 export type BildirimKuralEkleGovdesi = z.output<typeof bildirimKuralEkleGovdesi>;
@@ -47,6 +49,7 @@ export const bildirimKuralSatiri = z.object({
   telefon: z.boolean(),
   sablonBaslik: z.string(),
   sablonMetin: z.string().nullable(),
+  epostaSablonId: z.number().int().nullable(),
   surum: surumSemasi,
   degisti: zamanSemasi,
   // Kuralın baktığı alan olaydan kalktıysa kural çalışmaz; neden burada yazar. Geçerli kuralda null.
@@ -55,6 +58,10 @@ export const bildirimKuralSatiri = z.object({
 export type BildirimKuralSatiri = z.output<typeof bildirimKuralSatiri>;
 export const bildirimKurallariCevabi = z.object({ kurallar: z.array(bildirimKuralSatiri) });
 export type BildirimKurallariCevabi = z.output<typeof bildirimKurallariCevabi>;
+
+// 3639: kural formunun e-posta şablonu seçimi; yalnız kimlik ve ad (içerik şablon yönetiminde, `bildirim.eposta-yonet`).
+export const bildirimKuralSablonlariCevabi = z.object({ sablonlar: z.array(z.object({ id: z.number().int(), ad: z.string() })) });
+export type BildirimKuralSablonlariCevabi = z.output<typeof bildirimKuralSablonlariCevabi>;
 
 export const bildirimKuralOnIzlemeCevabi = z.object({
   gun: z.number().int(),
