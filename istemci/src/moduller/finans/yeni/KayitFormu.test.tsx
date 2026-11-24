@@ -26,9 +26,9 @@ function ac(ilkTur: OlayTuru | null = null) {
 
 describe('KayitCekmecesi', () => {
   it('olay seçilince form gelir, "Olay seç" seçiciye döner', () => {
-    fireEvent.click(within(ac()).getByRole('button', { name: /Banka \/ kasa bakiyemi düzelt/ }));
+    fireEvent.click(within(ac()).getByRole('button', { name: /Banka \/ kasa bakiyemi eşitle/ }));
     const form = screen.getByRole('dialog');
-    expect(within(form).getByRole('form', { name: 'Banka / kasa bakiyemi düzelt' })).toBeTruthy();
+    expect(within(form).getByRole('form', { name: 'Banka / kasa bakiyemi eşitle' })).toBeTruthy();
     fireEvent.click(within(form).getByRole('button', { name: 'Olay seç' }));
     expect(within(screen.getByRole('dialog')).getByRole('group', { name: 'Ne oldu?' })).toBeTruthy();
   });
@@ -38,9 +38,13 @@ describe('KayitCekmecesi', () => {
     const p = ac('banka');
     fireEvent.change(within(p).getByLabelText(/^Hesap/), { target: { value: '1' } });
     fireEvent.change(within(p).getByLabelText(/gerçek bakiyesi/), { target: { value: '150100' } });
+    expect(within(p).getByText(/Sistemdeki .* · Fark [+−]/)).toBeTruthy();
+    fireEvent.change(within(p).getByLabelText(/^Neden/), { target: { value: 'Ay' } });
+    expect(within(p).getByText('En az 3 karakter yazın.')).toBeTruthy();
+    fireEvent.change(within(p).getByLabelText(/^Neden/), { target: { value: 'Ay sonu sayımı' } });
     fireEvent.click(within(p).getByRole('button', { name: 'Bakiyeyi eşitle' }));
     await waitFor(() => expect(istekler.filter((i) => i.yontem === 'POST')).toEqual([
-      { yontem: 'POST', yol: '/finans/hesaplar/1/esitle', govde: { tarih: '2026-10-15', gercekBakiye: 150100 } },
+      { yontem: 'POST', yol: '/finans/hesaplar/1/esitle', govde: { tarih: '2026-10-15', gercekBakiye: 150100, neden: 'Ay sonu sayımı' } },
     ]));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });

@@ -97,7 +97,7 @@ describe('kasa, çek vadesi ve ay sonu maddesi (gerçek PostgreSQL)', () => {
   });
   test('kasa eksi açılış bakiyesiyle açılmaz ve eksiye eşitlenmez', async () => {
     assert.equal((await yaz('/finans/hesaplar/ekle', { ad: 'Deneme Kasa 2', tur: 'kasa', acilisBakiyesi: -1, acilisTarihi: '2026-01-01' })).durum, 422);
-    assert.equal((await yaz(`/finans/hesaplar/${kasa}/esitle`, { tarih: '2026-10-31', gercekBakiye: -5 })).durum, 422);
+    assert.equal((await yaz(`/finans/hesaplar/${kasa}/esitle`, { tarih: '2026-10-31', gercekBakiye: -5, neden: 'Sayım farkı' })).durum, 422);
   });
   test('eşzamanlı iki kasa çıkışından yalnız biri geçer', async () => {
     const once = Number((await hesap(kasa)).bakiye);

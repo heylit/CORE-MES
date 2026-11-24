@@ -5,7 +5,8 @@ import type {
   SabitKiymetSatiri, skorSatiri, virmanSemasi,
 } from '#paylasilan/sozlesme/finans.ts';
 import type { FirmaSatiri } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
-import type { FinansMotoru, Islem, MotorDurumu } from './motor.ts';
+import { kurlaKurus, kurusaCevir, kurusBol, kurusTl } from './kdv.ts';
+import type { FinansMotoru, Islem, IslemDurumu, MotorDurumu } from './motor.ts';
 
 // Sunucu verisi prototipin motor biçimine çevrilir: prototipte `verileriHazirla` ve `durumKur` (tam kip). Hesap ve sıra
 // prototiple aynıdır; istemcideki `donustur.test.ts` iki tarafı aynı girdiyle karşılaştırır. Sunucunun günlük skoru da buradan geçer (1456 b).
@@ -165,20 +166,25 @@ export function durumKur(V: HazirVeri<FirmaCekirdegi>, motor: FinansMotoru): Mot
   }
   for (const b of V.belgeler) {
     if (b.durum === 'iptal') continue;
-    const kur = sayi(b.kur), toplam = sayi(b.toplam), netTl = sayi(b.tutar) * kur, toplamTl = sayi(b.toplamTl);
+    const netTl = sayi(b.tutar) * sayi(b.kur), toplamTl = sayi(b.toplamTl);
     const kdv = netTl > 0 ? (toplamTl / netTl - 1) * 100 : 0;
     const temel = {
       type: b.yon, cat: kategoriAdi(b.kategori), party: firmaEtiketi(V, b.firmaId) || kategoriAdi(b.kategori), kdv, due: b.vade, date: b.belgeTarihi, np: b.tur === 'acilis',
       desc: belgeAciklamasi(V, b),
       _belgeId: b.id, paraBirimi: b.paraBirimi,
     };
-    const parca = (oran: number): number => yuvarla(netTl * oran);
+    // Belge tek KDV kuralıyla kuruşa yazılıdır (kdv.ts); parçalar net ve KDV'yi tam bölüşür, toplamları belgeninkinden sapmaz.
+    const netK = kurlaKurus(kurusaCevir(b.tutar), b.kur), kdvK = kurusaCevir(b.toplamTl) - netK;
+    const parcalar: { id: string; w: bigint; status: IslemDurumu; paidDate: string | null }[] = [];
     for (const x of dagitimlar[b.id] ?? []) {
       const o = V.odemeById.get(x.odemeId), nakit = o ? nakitYontemi(o) : false;
-      s.tx.push({ ...temel, id: `b${b.id}-d${x.id}`, amount: parca(sayi(x.belgeTutari) / toplam), status: nakit ? 'odendi' : 'cek', paidDate: nakit ? x.tarih : null });
+      parcalar.push({ id: `b${b.id}-d${x.id}`, w: kurusaCevir(x.belgeTutari), status: nakit ? 'odendi' : 'cek', paidDate: nakit ? x.tarih : null });
     }
-    for (const m of mahsuplar[b.id] ?? []) s.tx.push({ ...temel, id: `b${b.id}-m${m.id}`, amount: parca(sayi(m.tutar) / toplam), status: 'cek', paidDate: null });
-    if (sayi(b.kalan) > 0.004) s.tx.push({ ...temel, id: `b${b.id}`, amount: parca(sayi(b.kalan) / toplam), status: 'acik', paidDate: null });
+    for (const m of mahsuplar[b.id] ?? []) parcalar.push({ id: `b${b.id}-m${m.id}`, w: kurusaCevir(m.tutar), status: 'cek', paidDate: null });
+    if (sayi(b.kalan) > 0.004) parcalar.push({ id: `b${b.id}`, w: kurusaCevir(b.kalan), status: 'acik', paidDate: null });
+    const tevK = kurlaKurus(kurusaCevir(b.tevkifatTutari), b.kur);
+    const netPay = kurusBol(netK, parcalar.map((p) => p.w)), kdvPay = kurusBol(kdvK, parcalar.map((p) => p.w)), tevPay = kurusBol(tevK, parcalar.map((p) => p.w));
+    parcalar.forEach((p, i) => s.tx.push({ ...temel, id: p.id, amount: kurusTl(netPay[i] ?? 0n), kdvTl: kurusTl(kdvPay[i] ?? 0n), ...(tevK > 0n ? { tevkifatTl: kurusTl(tevPay[i] ?? 0n) } : {}), status: p.status, paidDate: p.paidDate }));
   }
   // Dağıtılmamış nakit ödeme avanstır (FNS-17): kâr/zarara girmez, nakde girer.
   for (const o of V.odemeler) {

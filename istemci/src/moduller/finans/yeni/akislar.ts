@@ -1,5 +1,6 @@
 import type { SimgeAdi } from '../../../ortak/tasarim/simgeler.ts';
 import { firmaEtiketi, KAT_KOD, sayi, tlKuru, yuvarla, type Belge, type Hesap, type HazirVeri, type SunucuCeki } from './donustur.ts';
+import { kdvDahildenNet } from '#paylasilan/finans-motor/kdv.ts';
 import { addDays, CATS, type FinansMotoru, type Islem } from './motor.ts';
 
 // "Kayıt gir": olay seçici ve her olayın komutu (prototipte EVENTS, akisGonder, ekFormGonder). Burası saftır: form
@@ -32,7 +33,7 @@ export const OLAY_GRUPLARI: readonly OlayGrubu[] = [
   ] },
   { baslik: 'Çek ve banka', olaylar: [
     { tur: 'cekdurum', baslik: 'Çekin durumu değişti', aciklama: 'Bankaya verdim, tahsil edildi, ciro ettim, karşılıksız çıktı.', simge: 'clipboard-check' },
-    { tur: 'banka', baslik: 'Banka / kasa bakiyemi düzelt', aciklama: 'Sistemdeki nakit gerçek bakiyeden farklıysa eşitleyin.', simge: 'building' },
+    { tur: 'banka', baslik: 'Banka / kasa bakiyemi eşitle', aciklama: 'Sistemdeki nakit gerçek bakiyeden farklıysa eşitleyin.', simge: 'building' },
   ] },
   { baslik: 'Aktarım ve mahsup', olaylar: [
     { tur: 'virman', baslik: 'Hesaplar arası para aktardım', aciklama: 'Kasadan bankaya, bankadan kredi kartı borcuna; kâr/zararı etkilemez.', simge: 'route' },
@@ -203,7 +204,9 @@ export function akisKomutu(tur: OlayTuru, d: AkisDegerleri, V: HazirVeri, motor:
     const { pb, kur } = kurDegeri(d);
     if (!(kur > 0)) return hata('Kur girin.');
     const [tp, tpd] = (d.tevk || '').split('/').map(Number);
-    const tutar = yuvarla(d.incl ? a / (1 + k / 100) : a);
+    const dahilNet = d.incl ? kdvDahildenNet(a.toFixed(2), String(k)) : null;
+    if (d.incl && dahilNet === null) return hata('Bu KDV dahil toplam tek oranla kuruşa uymuyor; KDV hariç tutarı girin.');
+    const tutar = dahilNet === null ? yuvarla(a) : Number(dahilNet);
     const govde: Record<string, unknown> = {
       yon: side, tur: 'fatura', kategori: KAT_KOD[d.cat], firmaId: fr.id, belgeNo: d.fno.trim() || null, aciklama: d.desc.trim() || null, belgeTarihi: date,
       vade: d.method === 'vadeli' ? (d.due || date) : date, paraBirimi: pb, kur, tutar, kdvOrani: k, ...(tp ? { tevkifatPay: tp, tevkifatPayda: tpd } : {}),
@@ -274,7 +277,8 @@ export function akisKomutu(tur: OlayTuru, d: AkisDegerleri, V: HazirVeri, motor:
   if (tur === 'banka') {
     const h = V.hesapById.get(Number(d.hesap));
     if (!h) return hata('Hesap seçin.');
-    return tek({ uc: 'POST /finans/hesaplar/:id/esitle', parametre: { id: h.id }, govde: { tarih: motor.bugun, gercekBakiye: sayi(d.gercek) }, tekrar: true, basari: 'Bakiye eşitlendi.' });
+    if (d.aciklama.trim().length < 3) return hata('Eşitleme nedenini yazın (en az 3 karakter).');
+    return tek({ uc: 'POST /finans/hesaplar/:id/esitle', parametre: { id: h.id }, govde: { tarih: motor.bugun, gercekBakiye: sayi(d.gercek), neden: d.aciklama.trim() }, tekrar: true, basari: 'Bakiye eşitlendi.' });
   }
   if (tur === 'virman') {
     return tek({

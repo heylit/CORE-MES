@@ -14,6 +14,7 @@ import {
 } from './akislar.ts';
 import { kisaTarih, paraMetni, tl } from './bicim.ts';
 import { firmaEtiketi, HESAP_TURU_ADI, sayi, TEVKIFATLAR, type Hesap, type HazirVeri, type SunucuCeki } from './donustur.ts';
+import { kdvDahildenNet, kdvTutari } from '#paylasilan/finans-motor/kdv.ts';
 import { addDays, diffDays, gross, ymLong } from './motor.ts';
 import { OlaySecici } from './OlaySecici.tsx';
 import { satisSevkleriOku, satisSiparisleriOku, useFinansKomutu, useFinansYetkisi, type FinansVerisi } from './veri.ts';
@@ -21,7 +22,7 @@ import { satisSevkleriOku, satisSiparisleriOku, useFinansKomutu, useFinansYetkis
 // Sunucunun alan adı formdakiyle aynı değil: hata ilgili alanın altına düşsün diye çevrilir.
 const SUNUCU_ALANLARI: Record<string, keyof AkisDegerleri> = {
   firmaId: 'party', tutar: 'amount', belgeTarihi: 'date', tarih: 'date', vade: 'due', kdvOrani: 'kdv', hesapId: 'hesap', kur: 'pbKur', aciklama: 'desc', belgeNo: 'fno',
-  siparisId: 'siparis', sevkiyatIsiId: 'sevk', gercekBakiye: 'gercek', kaynakHesapId: 'kaynak', hedefHesapId: 'hedef', satisTutari: 'satisTutari', alisTutari: 'alisTutari',
+  siparisId: 'siparis', sevkiyatIsiId: 'sevk', gercekBakiye: 'gercek', neden: 'aciklama', kaynakHesapId: 'kaynak', hedefHesapId: 'hedef', satisTutari: 'satisTutari', alisTutari: 'alisTutari',
 };
 
 // Ön denetim iletisinin form hatalarındaki yeri: hiçbir alana bağlı değildir.
@@ -220,7 +221,10 @@ function FaturaAlanlari(p: GovdeOzellikleri) {
   const elleDegistir = (yama: Partial<AkisDegerleri>) => { elleYaz(true); dg(yama); };
   const kdvler = gecerliKdvOranlari(V, finans.motor.bugun);
   const k = sayi(d.kdv), a = sayi(d.amount);
-  const net = d.incl ? a / (1 + k / 100) : a;
+  // Tek KDV kuralı (paylasilan/finans-motor/kdv.ts): ekran, sunucu ve veritabanı aynı kuruşu gösterir.
+  const dahilNet = d.incl && a > 0 ? kdvDahildenNet(a.toFixed(2), String(k)) : null;
+  const net = d.incl ? (dahilNet === null ? a / (1 + k / 100) : Number(dahilNet)) : a;
+  const kdvMetni = Number(kdvTutari(net.toFixed(2), String(k)));
   const yontemler: readonly (readonly [OdemeSekli, string])[] = side === 'gelir'
     ? [['vadeli', 'Vadeli, sonra gelecek'], ['pesin', 'Peşin, para geldi'], ['cek', 'Çek / senet aldım']]
     : [['vadeli', 'Vadeli, sonra ödeyeceğim'], ['pesin', 'Hemen ödedim'], ['cek', 'Çek / senet verdim']];
@@ -240,7 +244,7 @@ function FaturaAlanlari(p: GovdeOzellikleri) {
       <ParaBirimiAlani {...p} />
       <Secim etiket="Tevkifat" value={d.tevk} secenekler={TEVKIFATLAR.map(([deger, baslik]) => ({ deger, baslik }))} onChange={(e) => dg({ tevk: e.target.value })} />
       <IsaretKutusu etiket="Girdiğim tutar KDV dahil" checked={d.incl} onChange={(e) => dg({ incl: e.target.checked })} />
-      {a > 0 && <p className="tc-fy-not">KDV hariç {paraMetni(net, d.pb)} · KDV dahil {paraMetni(net * (1 + k / 100), d.pb)}</p>}
+      {a > 0 && <p className="tc-fy-not">KDV hariç {paraMetni(net, d.pb)} · KDV dahil {paraMetni(net + kdvMetni, d.pb)}</p>}
       <Serit etiket={side === 'gelir' ? 'Para ne zaman geliyor?' : 'Ne zaman ödenecek?'} secenekler={yontemler} secili={d.method} sec={(method) => elleDegistir({ method })} />
       {d.method === 'vadeli' && (
         <div className="tc-fy-grup">
@@ -399,6 +403,10 @@ function SabitAlanlari(p: GovdeOzellikleri) {
 
 /* ---------- Banka ve kasa bakiyesi ---------- */
 function BankaAlanlari({ d, dg, hata, V }: GovdeOzellikleri) {
+  const secili = V.hesapById.get(Number(d.hesap));
+  const gercek = d.gercek.trim() === '' ? null : Number(d.gercek);
+  const fark = secili && gercek !== null && Number.isFinite(gercek) ? gercek - Number(secili.bakiye) : null;
+  const nedenKisa = d.aciklama.length > 0 && d.aciklama.trim().length < 3;
   return (
     <div className="tc-fy-alanlar">
       <div className="tc-fy-grup">
@@ -409,6 +417,10 @@ function BankaAlanlari({ d, dg, hata, V }: GovdeOzellikleri) {
       </div>
       <Secim etiket="Hesap" value={d.hesap} hata={hata('hesap')} bosSecenek="Hesap seçin" secenekler={hesapSecenekleri(V)} onChange={(e) => dg({ hesap: e.target.value })} />
       <Girdi etiket="Hesabın gerçek bakiyesi" type="number" step="0.01" inputMode="decimal" required value={d.gercek} hata={hata('gercek')} onChange={(e) => dg({ gercek: e.target.value })} />
+      {secili && gercek !== null && fark !== null && (
+        <p className="tc-fy-not">{`Gerçek\u00a0${paraMetni(gercek, secili.paraBirimi)}`} · {`Sistemdeki\u00a0${paraMetni(secili.bakiye, secili.paraBirimi)}`} · {`Fark\u00a0${fark < 0 ? '−' : '+'}\u2060${paraMetni(Math.abs(fark), secili.paraBirimi)}`}</p>
+      )}
+      <Girdi etiket="Neden" maxLength={300} required value={d.aciklama} placeholder="Örn. ay sonu banka ekstresi farkı" hata={hata('aciklama') ?? (nedenKisa ? 'En az 3 karakter yazın.' : undefined)} onChange={(e) => dg({ aciklama: e.target.value })} />
       <p className="tc-fy-not">Fark, eşitleme kaydı olarak yazılır; kâr/zararı etkilemez ve silinmez.</p>
     </div>
   );

@@ -68,7 +68,7 @@ describe('ileri tarih ve belge no (gerçek PostgreSQL)', () => {
     assert.equal((await belge({ pesin: { yontem: 'banka', hesapId: banka, tarih: yarin } })).durum, 400);
     const kasa = tamam(await yaz<{ hesap: { id: number } }>('/finans/hesaplar/ekle', { ad: 'Deneme Kasa', tur: 'kasa', acilisTarihi: '2026-01-01' })).hesap.id;
     assert.equal((await yaz('/finans/virmanlar/ekle', { kaynakHesapId: banka, hedefHesapId: kasa, tarih: yarin, tutar: 1 })).durum, 400);
-    assert.equal((await yaz(`/finans/hesaplar/${banka}/esitle`, { tarih: yarin, gercekBakiye: 5 })).durum, 400);
+    assert.equal((await yaz(`/finans/hesaplar/${banka}/esitle`, { tarih: yarin, gercekBakiye: 5, neden: 'Sayım farkı' })).durum, 400);
   });
   test('ileri tarihli çek tahsili bakiyeye girmez', async () => {
     const c = tamam(await yaz<{ cek: Cek }>('/finans/cekler/ekle', { yon: 'alinan', tur: 'cek', firmaId: firma, duzenlemeTarihi: bugun, vade: gunEkle(bugun, 40), tutar: 50 })).cek;

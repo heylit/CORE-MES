@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { CARI_HAREKET_YOLU, FATURA_LISTESI_YOLU } from './fatura-cari-sozlesmesi.ts';
 import { MALZEME_FISI_UCU } from './kurallar.ts';
 
 // Sahte Logo köprüsü: YALNIZ test ve yerel deneme içindir (kart #207, kullanıcı kararı 3). Üretim kodu bunu ithal etmez;
@@ -97,6 +98,11 @@ export interface SahteKopru {
   irsaliyeler: Record<string, unknown>[];
   irsaliyeDonemi: { firm: number; period: number };
   irsaliyeIstekleri: string[];
+  // 3675 D1: önerilen fatura ve cari hareket uçları (fatura-cari-sozlesmesi.ts, doğrulanmadı); kayıt sırasıyla sayfaBoyu kadar, dönem irsaliyeDonemi.
+  logoFaturalari: Record<string, unknown>[];
+  logoCariHareketleri: Record<string, unknown>[];
+  faturaCariIstekleri: string[];
+  faturaCariUcuYok: boolean;
   cariListesi: unknown;
   ambarlar: unknown;
   faturalar: Map<string, unknown[]>;
@@ -201,6 +207,10 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
     irsaliyeler: [],
     irsaliyeDonemi: { firm: 1, period: 1 },
     irsaliyeIstekleri: [],
+    logoFaturalari: [],
+    logoCariHareketleri: [],
+    faturaCariIstekleri: [],
+    faturaCariUcuYok: false,
     cariListesi: [],
     ambarlar: [{ nr: 0, name: 'Merkez' }],
     faturalar: new Map(),
@@ -351,6 +361,18 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
         if (kopru.topluAlisUcuYok) { json(cevap, 404, { success: false, logicalRef: 0, error: 'Not found', validate: null }); return; }
         const since = Number(new URL(istek.url ?? '', 'http://sahte').searchParams.get('since') ?? 0);
         const data = kopru.logoAlislari.filter((x) => Number(x['logicalRef']) > since)
+          .sort((a, b) => Number(a['logicalRef']) - Number(b['logicalRef'])).slice(0, kopru.sayfaBoyu);
+        json(cevap, 200, { ...kopru.irsaliyeDonemi, data, next: data.length >= kopru.sayfaBoyu ? Number(data.at(-1)?.['logicalRef']) : null });
+        return;
+      }
+      if (istek.method === 'GET' && (yol === FATURA_LISTESI_YOLU || yol === CARI_HAREKET_YOLU)) {
+        kopru.faturaCariIstekleri.push(istek.url ?? '');
+        if (kopru.faturaCariUcuYok) { json(cevap, 404, { success: false, logicalRef: 0, error: 'Not found', validate: null }); return; }
+        const q = new URL(istek.url ?? '', 'http://sahte').searchParams;
+        const since = Number(q.get('since') ?? 0);
+        const from = q.get('from') ?? '';
+        const kaynak = yol === FATURA_LISTESI_YOLU ? kopru.logoFaturalari.filter((x) => x['type'] === q.get('type')) : kopru.logoCariHareketleri;
+        const data = kaynak.filter((x) => Number(x['logicalRef']) > since && String(x['date']) >= from)
           .sort((a, b) => Number(a['logicalRef']) - Number(b['logicalRef'])).slice(0, kopru.sayfaBoyu);
         json(cevap, 200, { ...kopru.irsaliyeDonemi, data, next: data.length >= kopru.sayfaBoyu ? Number(data.at(-1)?.['logicalRef']) : null });
         return;

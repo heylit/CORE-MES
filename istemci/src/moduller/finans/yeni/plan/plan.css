@@ -62,3 +62,5 @@
 .tc-fc-butce-girdi { width: calc(var(--dokunma) * 3); max-width: 100%; text-align: right; font-variant-numeric: tabular-nums; }
 .tc-fc-takvim { justify-content: flex-start; }
 .tc-fc-takvim > .tc-fc-yigin { flex: 1 1 auto; }
+/* Rozet küçülüp başlığa binmesin (360). */
+.tc-fc-takvim > :first-child { flex: none; overflow-wrap: normal; white-space: nowrap; }

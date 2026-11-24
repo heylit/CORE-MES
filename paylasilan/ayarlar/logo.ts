@@ -154,6 +154,21 @@ export const LOGO_AYARLARI = {
     baslik: 'Logo: son alış fiyatı kopyası',
     aciklama: 'Açıkken Logo\'daki alış faturası satırları okunup CORE\'da kopyalanır (önce bütün geçmiş sayfa sayfa, sonra seçilen sıklıkla yenileri). Teklifte ve proje maliyetinde fiyatı bilinmeyen malzemenin yanında "Logo son alış" önerisi olarak görünür, hesaba girmez. Logo yardımcısının bu sürümü gerekir; Logo\'ya yazılmaz. "Logo bağlantısı" da açık olmalı.',
   },
+  // 3675 D1: Logo fatura başlığı ve cari hareket aynası; yalnız GET, varsayılan kapalı. Yardımcının bu uçları hazır olmadan açılmaz.
+  'logo.fatura-listesi-okumasi': {
+    modul: 'logo',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'Logo: fatura listesi okuması',
+    aciklama: 'Açıkken Logo\'daki satış ve alış faturaları ile iadelerin başlığı (numara, tarih, cari, net, KDV, toplam, iptal) okunup CORE\'da kopyalanır. Hiçbir kayıt değişmez, finans belgesine işlenmez. Logo yardımcısının bu sürümü gerekir. "Logo bağlantısı" da açık olmalı.',
+  },
+  'logo.cari-hareket-okumasi': {
+    modul: 'logo',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'Logo: cari hareket okuması',
+    aciklama: 'Açıkken Logo\'daki cari borç ve alacak hareketleri (tahsilat ve ödeme dahil) okunup CORE\'da kopyalanır. Hiçbir kayıt değişmez. Logo yardımcısının bu sürümü gerekir. "Logo bağlantısı" da açık olmalı.',
+  },
   'logo.cari-aramasi': {
     modul: 'logo',
     tur: 'boolean',
@@ -297,5 +312,15 @@ export const LOGO_AYARLARI = {
     modul: 'logo', tur: 'secim', varsayilan: '60dk', secenekler: siklikSecenekleri(['elle', '60dk', 'gunluk']),
     baslik: 'Logo: son alış kopyası okuma sıklığı',
     aciklama: 'Logo alış faturası satırlarının ne sıklıkla okunacağı; geçmiş okunurken sayfalar arka arkaya gelir. "Şimdi oku" hemen okur.',
+  },
+  'logo.fatura-listesi-sikligi': {
+    modul: 'logo', tur: 'secim', varsayilan: '60dk', secenekler: siklikSecenekleri(['elle', '60dk', 'gunluk']),
+    baslik: 'Logo: fatura listesi okuma sıklığı',
+    aciklama: 'Logo fatura başlıklarının ne sıklıkla okunacağı; geçmiş okunurken sayfalar arka arkaya gelir. "Şimdi oku" hemen okur.',
+  },
+  'logo.cari-hareket-sikligi': {
+    modul: 'logo', tur: 'secim', varsayilan: '60dk', secenekler: siklikSecenekleri(['elle', '60dk', 'gunluk']),
+    baslik: 'Logo: cari hareket okuma sıklığı',
+    aciklama: 'Logo cari hareketlerinin ne sıklıkla okunacağı; geçmiş okunurken sayfalar arka arkaya gelir. "Şimdi oku" hemen okur.',
   },
 } as const satisfies Record<string, AyarTanimi>;

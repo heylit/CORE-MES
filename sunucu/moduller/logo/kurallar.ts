@@ -856,7 +856,7 @@ export const FATURA_YENIDEN_OKUMA_MS = 60 * 60_000;
 // Başarısız okuma bu aralıktan önce yinelenmez (401 ya da ağ hatasında köprüye her dakika yüklenilmez).
 export const OKUMA_HATA_BEKLEME_MS = LISTE_DENEME_ARALIGI_MS;
 
-const kayitMi = (d: unknown): d is Record<string, unknown> => d !== null && typeof d === 'object' && !Array.isArray(d);
+export const kayitMi = (d: unknown): d is Record<string, unknown> => d !== null && typeof d === 'object' && !Array.isArray(d);
 
 // DOĞRULANMADI (VARSAYIM): okuma uçlarının cevap biçimi köprü notunda yok. Cevap dizi ya da zarfın bilinen bir alanında dizidir.
 function kayitDizisi(govde: unknown, adaylar: readonly string[]): unknown[] | null {
@@ -866,7 +866,7 @@ function kayitDizisi(govde: unknown, adaylar: readonly string[]): unknown[] | nu
   return null;
 }
 
-function ilkSayi(k: Record<string, unknown>, adlar: readonly string[]): number | null {
+export function ilkSayi(k: Record<string, unknown>, adlar: readonly string[]): number | null {
   for (const a of adlar) {
     const d = k[a];
     if (typeof d === 'number' && Number.isFinite(d)) return d;
@@ -875,7 +875,7 @@ function ilkSayi(k: Record<string, unknown>, adlar: readonly string[]): number |
   return null;
 }
 
-function ilkMetin(k: Record<string, unknown>, adlar: readonly string[], enCok: number): string | null {
+export function ilkMetin(k: Record<string, unknown>, adlar: readonly string[], enCok: number): string | null {
   for (const a of adlar) {
     const d = k[a];
     const m = typeof d === 'string' ? d.trim() : typeof d === 'number' && Number.isFinite(d) ? String(d) : '';
@@ -884,7 +884,7 @@ function ilkMetin(k: Record<string, unknown>, adlar: readonly string[], enCok: n
   return null;
 }
 
-const kayitNumarasi = (k: Record<string, unknown>, adlar: readonly string[]): number | null => {
+export const kayitNumarasi = (k: Record<string, unknown>, adlar: readonly string[]): number | null => {
   const n = ilkSayi(k, adlar);
   return n !== null && Number.isSafeInteger(n) && n > 0 ? n : null;
 };
@@ -1020,7 +1020,7 @@ export interface LogoCari {
   aktif: boolean;
 }
 
-function sayfaAyikla<T>(govde: unknown, satir: (o: Record<string, unknown>) => T | null): Sayfa<T> | null {
+export function sayfaAyikla<T>(govde: unknown, satir: (o: Record<string, unknown>) => T | null): Sayfa<T> | null {
   if (!kayitMi(govde) || !Array.isArray(govde['data'])) return null;
   const n = govde['next'];
   if (n !== null && n !== undefined && !(typeof n === 'number' && Number.isSafeInteger(n) && n > 0)) return null;
@@ -1530,8 +1530,8 @@ export interface LogoAlisFiyati {
   dovizFiyati: string | null;
 }
 
-const ISO_TARIH = /^\d{4}-\d{2}-\d{2}$/;
-const tamSayi = (n: number | null): number | null => (n !== null && Number.isSafeInteger(n) ? n : null);
+export const ISO_TARIH = /^\d{4}-\d{2}-\d{2}$/;
+export const tamSayi = (n: number | null): number | null => (n !== null && Number.isSafeInteger(n) ? n : null);
 
 function hareketSatiri(o: Record<string, unknown>): LogoMalzemeHareketi | null {
   const logoKayitNo = kayitNumarasi(o, ['logicalRef']);
@@ -2389,6 +2389,8 @@ export const YONETIM_AKISLARI: readonly YonetimAkisi[] = [
   { anahtar: 'mal-kabul', ad: 'Mal kabul', ne: 'Satın alma siparişi kabulleri', yon: 'okuma', acikAyari: 'logo.mal-kabul-okumasi', siklikAyari: 'logo.mal-kabul-sikligi', isAdi: 'logo-mal-kabul-okumasi' },
   { anahtar: 'irsaliye', ad: 'İrsaliyeler', ne: 'Alış ve satış irsaliyeleri', yon: 'okuma', acikAyari: 'logo.irsaliye-okumasi', siklikAyari: 'logo.irsaliye-sikligi', isAdi: 'logo-irsaliye-okumasi', enAzTur: 2 },
   { anahtar: 'fatura', ad: 'Faturalar', ne: 'Siparişe bağlı alış faturaları', yon: 'okuma', acikAyari: 'logo.fatura-okumasi', siklikAyari: 'logo.fatura-sikligi', isAdi: 'logo-fatura-okumasi' },
+  { anahtar: 'fatura-listesi', ad: 'Fatura listesi', ne: 'Satış ve alış faturaları, iadeler (başlık)', yon: 'okuma', acikAyari: 'logo.fatura-listesi-okumasi', siklikAyari: 'logo.fatura-listesi-sikligi', isAdi: 'logo-fatura-listesi-okumasi' },
+  { anahtar: 'cari-hareket', ad: 'Cari hareketler', ne: 'Cari borç ve alacak hareketleri', yon: 'okuma', acikAyari: 'logo.cari-hareket-okumasi', siklikAyari: 'logo.cari-hareket-sikligi', isAdi: 'logo-cari-hareket-okumasi' },
   { anahtar: 'liste', ad: 'Cari ve ambar listesi', ne: 'Cari kartlar, ambarlar', yon: 'okuma', acikAyari: 'logo.liste-okumasi', siklikAyari: 'logo.liste-sikligi', isAdi: 'logo-liste-okumasi' },
   { anahtar: 'malzeme-kodu', ad: 'Malzeme kodları', ne: 'Logo\'da kullanılan stok kodları', yon: 'okuma', acikAyari: null, siklikAyari: 'logo.malzeme-kodu-sikligi', isAdi: 'logo-malzeme-kodu-okumasi' },
   { anahtar: 'son-alis', ad: 'Son alış kopyası', ne: 'Alış faturası satırları', yon: 'okuma', acikAyari: 'logo.son-alis-okumasi', siklikAyari: 'logo.son-alis-sikligi', isAdi: 'logo-son-alis-okumasi' },

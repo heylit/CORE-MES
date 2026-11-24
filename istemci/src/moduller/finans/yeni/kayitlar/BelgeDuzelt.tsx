@@ -3,6 +3,7 @@ import { DurumKutusu, Dugme, FormPenceresi, Girdi, Pencere, Secim, useBildirim }
 import { hataIletisi } from '../../../../ortak/veri/api.ts';
 import { useForm } from '../../../../ortak/veri/form.ts';
 import { EslemeBaglantisi } from '../../fatura-esleme/EslemeBaglantisi.tsx';
+import { belgeToplami } from '#paylasilan/finans-motor/kdv.ts';
 import { tl, YOK } from '../bicim.ts';
 import type { Belge, Odeme } from '../donustur.ts';
 import { useFinansKomutu, type FinansVerisi, type FinansYetkisi } from '../veri.ts';
@@ -92,7 +93,7 @@ function BelgeDuzelt({ belge: b, finans, yetki, kapat }: { belge: Belge; finans:
           {...(kdvKilitli(b) ? { ipucu: `Tevkifatlı belge (${b.tevkifatPay}/${b.tevkifatPayda}); KDV oranı değişmez.` } : {})}
           {...form.alan('kdv')}
         />
-        {tutar > 0 && !tutarKilitli(b) && <p className="tc-fk-not">KDV {tl(tutar * kdv / 100)}, KDV dahil toplam <b>{tl(tutar * (1 + kdv / 100))}</b></p>}
+        {tutar > 0 && !tutarKilitli(b) && <p className="tc-fk-not">KDV {tl(Number(belgeToplami(tutar.toFixed(2), String(kdv)).kdv))}, KDV dahil toplam <b>{tl(Number(belgeToplami(tutar.toFixed(2), String(kdv)).toplam))}</b></p>}
         <Girdi etiket="Vade tarihi" type="date" {...form.alan('due')} />
         <EslemeBaglantisi belge={b} kaydedilmemis={JSON.stringify(d) !== JSON.stringify(ilk)} />
         {yetki.iptal && (

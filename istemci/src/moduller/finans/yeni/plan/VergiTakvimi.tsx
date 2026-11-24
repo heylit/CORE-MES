@@ -16,9 +16,10 @@ export function VergiTakvimi({ finans, yetki }: EkranOzellikleri) {
   const { motor } = finans;
   const v = vergiOzeti(motor);
   const sutunlar: Sutun<KdvAyi>[] = [
-    { anahtar: 'donem', baslik: 'Dönem', hucre: (m) => ymLong(m.ym), csv: (m) => m.ym },
+    { anahtar: 'donem', baslik: 'Dönem', hucre: (m) => (m.ym === motor.bugun.slice(0, 7) ? `${ymLong(m.ym)} (ay devam ediyor)` : ymLong(m.ym)), csv: (m) => m.ym },
     { anahtar: 'h', baslik: 'Hesaplanan', hizala: 'sag', mono: true, hucre: (m) => tl(m.h), csv: (m) => m.h },
-    { anahtar: 'i', baslik: 'İndirilecek', hizala: 'sag', mono: true, hucre: (m) => tl(m.i), csv: (m) => m.i },
+    { anahtar: 'i', baslik: 'Toplam indirilecek', hizala: 'sag', mono: true, hucre: (m) => tl(m.i + m.tev), csv: (m) => m.i + m.tev },
+    { anahtar: 'tev', baslik: 'Tevkif edilen', hizala: 'sag', mono: true, hucre: (m) => tl(m.tev), csv: (m) => m.tev },
     { anahtar: 'devir', baslik: 'Devreden', hizala: 'sag', mono: true, hucre: (m) => tl(m.carryOut), csv: (m) => m.carryOut },
     { anahtar: 'odenecek', baslik: 'Ödenecek', hizala: 'sag', mono: true, hucre: (m) => <b>{tl(m.payable)}</b>, csv: (m) => m.payable },
   ];
@@ -61,6 +62,7 @@ export function VergiTakvimi({ finans, yetki }: EkranOzellikleri) {
       <GecmisBeyanlar bugun={motor.bugun} yazabilir={yetki.beyanYaz} />
       <Kart baslik="KDV dönem tablosu" baslikEki={<span className="tc-fy-not">Devreden KDV sonraki aya aktarılır</span>}>
         <Tablo<KdvAyi> etiket="KDV dönem tablosu" sutunlar={sutunlar} satirlar={v.aylar.slice().reverse()} satirAnahtari={(m) => m.ym} />
+        <p className="tc-fy-not">Ödenecek = Hesaplanan − Toplam indirilecek (1 no'lu beyan); Toplam indirilecek tevkif edilen kısmı da içerir. Tevkif edilen tutar 2 no'lu beyanla ayrıca ödenir ve Ödenecek'e eklenmez.</p>
       </Kart>
     </div>
   );
