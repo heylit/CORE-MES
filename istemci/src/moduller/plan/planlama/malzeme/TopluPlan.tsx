@@ -304,10 +304,10 @@ export function TopluPlan({ satirlar, taban, simdi, dar, orta, stok, malzemeAdi,
       </p>
       {talepAcar && secilenler.length > 0 && (
         <div className="tc-pyz-tp-serit" data-dar={dar ? '' : undefined} role="region" aria-label="Toplu talep">
-          <span>{`${String(secilenler.length)} malzeme · ${String(kalemSayisi)} kalem (${TOPLU_DUZENLER.find((d) => d[0] === duzen)?.[1].toLocaleLowerCase('tr-TR') ?? ''})`}</span>
+          <span>{dar ? `${String(secilenler.length)} malzeme · ${String(kalemSayisi)} kalem` : `${String(secilenler.length)} malzeme · ${String(kalemSayisi)} kalem (${TOPLU_DUZENLER.find((d) => d[0] === duzen)?.[1].toLocaleLowerCase('tr-TR') ?? ''})`}</span>
           <span className="tc-pyz-tp-grup">
             <Dugme onClick={() => { secimYaz(new Set()); }}>Seçimi kaldır</Dugme>
-            <Dugme tur="birincil" simge="plus" onClick={() => { talepAc(plan); }}>{`Talep aç (${String(kalemSayisi)} kalem)`}</Dugme>
+            <Dugme tur="birincil" simge={dar ? undefined : 'plus'} aria-label={`Talep aç (${String(kalemSayisi)} kalem)`} onClick={() => { talepAc(plan); }}>{dar ? `Talep aç (${String(kalemSayisi)})` : `Talep aç (${String(kalemSayisi)} kalem)`}</Dugme>
           </span>
         </div>
       )}
