@@ -1,6 +1,7 @@
-import type { Db } from '#cekirdek/db.ts';
+import { kayitNoktasi, type Db } from '#cekirdek/db.ts';
 import { cakisma, eskiSurum, yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
+import type { CanliyaAlOnizlemesiCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { CalismaCanliyaAlGovdesi, CalismaGeriAlCevabi, CalismaGonderCevabi, CalismaGonderGovdesi, CalismaTaslagiCevabi, CalismaTaslagiGovdesi, CanliFarkiCevabi, TabanVeCanliCevabi, TaslaktanCalismayaCevabi, TaslaktanCalismayaGovdesi } from '#paylasilan/sozlesme/planlama.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import { emirDilimi, isEmriPlanBilgileri } from '../uretim-emirleri/disari.ts';
@@ -9,7 +10,7 @@ import { calismaDurdurulanlari, calismaEkMesaisi, calismaElleBolmeleri, calismaF
 import { saklanmayanKayitDegeri } from './motor-ayari-kurallar.ts';
 import { calismaPlani, type CalismaPlani } from './plan-girdisi.ts';
 import { PLANLAMA_ANAHTARI, planlamaGirdisi, planlamaYaz, planlamaYazmaDenetimi } from './planlama-servis.ts';
-import { canliyaAl, motorNumaralariOku, onayaGonder, planlanacakIsler } from './servis.ts';
+import { canliyaAl, canliyaAlOnizlemesi, motorNumaralariOku, onayaGonder, planlanacakIsler } from './servis.ts';
 import * as sorgular from './sorgular.ts';
 import type { YerlesimSatiri } from './sorgular.ts';
 
@@ -136,6 +137,29 @@ export async function calismayiCanliyaAl(db: Db, kullanici: Kullanici, g: Calism
   const y = await calismayiOnayaGonder(db, kullanici, g, simdi);
   const senaryolar = await canliyaAl(db, kullanici, y.taslak.id, canliyaAlSecenekleri(y.taslak.surum, g));
   return { ...y, taslak: { id: y.taslak.id, surum: taslakSurumu(senaryolar, y.taslak) }, senaryolar };
+}
+
+// 3669: çalışma planı gönderilmeden önce sunucunun yazacağı yerleşim önizlenir: komutla aynı taslak yazımı yapılır, sıra denetimi okunur ve
+// bütün yazılar ara noktaya geri alınır (taslak, onay, canlı hiçbir şey kalmaz). Yazma hatası (sürüm, yetki, yazılacak iş yok) olduğu gibi döner.
+export async function calismaOnizlemesi(db: Db, kullanici: Kullanici, g: CalismaGonderGovdesi, simdi: number = Date.now()): Promise<CanliyaAlOnizlemesiCevabi> {
+  const sonuc: { deger: CanliyaAlOnizlemesiCevabi | null } = { deger: null };
+  const r = await kayitNoktasi(db, async () => {
+    const y = await calismaTaslagi(db, kullanici, g, simdi);
+    sonuc.deger = await canliyaAlOnizlemesi(db, kullanici, y.taslak.id);
+    throw cakisma('Önizleme yazılmaz; yazılanlar geri alınır.');
+  });
+  if (sonuc.deger !== null) {
+    const ters = tersKimlik((await calismaOku(db, kullanici, simdi)).plan);
+    const k = (emirNo: string, opNo: number) => ters.get(`${emirNo}|${String(opNo)}`) ?? null;
+    const { ihlaller, oneri } = sonuc.deger;
+    return {
+      ...sonuc.deger,
+      ihlaller: ihlaller.map((i) => ({ ...i, k: k(i.emirNo, i.opNo), oncul: i.oncul === null ? null : { ...i.oncul, k: k(i.oncul.emirNo, i.oncul.opNo) } })),
+      oneri: oneri === null ? null : { ...oneri, adimlar: oneri.adimlar.map((a) => ({ ...a, k: k(a.emirNo, a.opNo) })) },
+    };
+  }
+  if (!r.tamam) throw r.hata;
+  throw new Error('Önizleme sonuç vermedi.');
 }
 
 // Canlıya alma adımına giden seçenekler: 4 saat gerekçesi ve başlayan işi sabitleme komuttan aynen geçer; "canlı değişti" hiç kabul edilmez.

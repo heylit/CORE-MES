@@ -48,6 +48,8 @@ const BEKLENEN: BeklenenYetkiler = {
   'POST /plan/yerlestir': 'plan.yaz',
   'POST /plan/is-emirleri/:id/tasi': 'plan.yaz',
   'POST /plan/is-emirleri/:id/kaldir': 'plan.yaz',
+  'POST /plan/kilitli-adimlari-kaydir': 'plan.kilitle',
+  'POST /plan/planlama-calismasi/gonderme-onizlemesi': 'plan.yaz',
   'POST /plan/is-emirleri/:id/kilitle': 'plan.kilitle',
   'POST /plan/is-emirleri/:id/kilidi-ac': 'plan.kilitle',
   'POST /plan/is-emirleri/:id/dondurmayi-kaldir': 'plan.kilitle',
