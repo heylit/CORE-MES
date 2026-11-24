@@ -35,6 +35,15 @@ export function kasaBakiyesiHatasi(tur: string, bakiye: string): string | null {
 // FIN-9 a: olmamış para hareketi (ödeme, tahsil, virman, çek sonucu, eşitleme) bugünden ileri tarihle girilmez; belge ve çek düzenleme tarihi
 // en çok ILERI_BELGE_GUNU ileri olabilir (önceden gelen kira faturası gibi). bugun ve sinir YYYY-AA-GG metnidir.
 export const ILERI_BELGE_GUNU = 31;
+// Kart 3671: kayıt kuru girilmediğinde o güne kadarki son alış kuru alınır; bu kadar günden eskiyse sessizce kullanılmaz, kuru elle girmek ya da
+// güncel kuru kaydetmek gerekir. Tatil ve hafta sonu için bir haftadır.
+export const KUR_ESKIME_GUNU = 7;
+export function kurEskiHatasi(paraBirimi: string, kurTarihi: string, kayitTarihi: string): string | null {
+  const gun = (Date.parse(`${kayitTarihi}T00:00:00Z`) - Date.parse(`${kurTarihi}T00:00:00Z`)) / 86_400_000;
+  return gun > KUR_ESKIME_GUNU
+    ? `${paraBirimi} için son girilmiş alış kuru ${kurTarihi} tarihli (${Math.round(gun)} gün eski); güncel kuru kaydedin ya da kuru elle girin.`
+    : null;
+}
 export function ileriTarihHatasi(tarih: string, bugun: string, belgeSiniri: string, tur: 'hareket' | 'belge'): string | null {
   if (tur === 'hareket') return tarih > bugun ? 'Para hareketi bugünden ileri tarihle girilemez; hareket gerçekleşince girin.' : null;
   return tarih > belgeSiniri ? `Belge ve çek tarihi bugünden en çok ${ILERI_BELGE_GUNU} gün ileri olabilir.` : null;

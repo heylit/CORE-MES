@@ -295,7 +295,7 @@ describe('proje-maliyet taban ve masraf (934, 936 a, 940 c; gerçek PostgreSQL, 
     c = await maliyet(doviz.id);
     assert.deepEqual([c.butce, c.hedef], [null, 900]);
     assert.ok(c.eksikler.includes('butce_kuru_yok'));
-    await tamam(gonder(yonetici, '/finans/kurlar/ekle', { paraBirimi: 'CHF', tarih: '2026-01-01', kur: 40 }));
+    await tamam(gonder(yonetici, '/finans/kur-ciftleri/ekle', { paraBirimi: 'CHF', tarih: '2026-01-01', alis: 40, satis: 40 }));
     c = await maliyet(doviz.id);
     assert.deepEqual([c.butce, c.hedef], [4000, 4000]);
     assert.ok(!c.eksikler.includes('butce_kuru_yok'));

@@ -178,8 +178,6 @@ export const virmanSemasi = z.object({
 });
 
 // ---- Kur, KDV oranı, düzenli ödeme, bütçe ----
-export const kurGovdesi = z.object({ paraBirimi: paraBirimiSemasi.refine((p) => p !== 'TRY', 'TRY için kur girilmez.'), tarih: tarihSemasi, kur: kurSemasi });
-export const kurGuncelleGovdesi = kurGovdesi.extend(beklenenSurum);
 export const kurSatiri = z.object({ paraBirimi: z.string(), tarih: tarihSemasi, kur: numerik, surum: surumSemasi });
 export const kdvOraniEkleGovdesi = z.object({ oran: oranSemasi, gecerlilikBaslangic: tarihSemasi });
 // Faiz para birimi başına aylık yüzdedir; yeni oran başlangıç gününden sonrasını etkiler, eskisi silinmez ve değişmez.
@@ -334,7 +332,7 @@ export const kurFaizAraligiCevabi = z.object({
 });
 export type KurFaizAraligi = z.output<typeof kurFaizAraligiCevabi>;
 // ---- Kur ve faiz matrisi (kart 2238) ----
-// 2238-1 c: alış ve satış kuru aynı gün birlikte girilir; eski tek kur (kurGovdesi) yalnız geçmiş olarak okunur.
+// 2238-1 c: alış ve satış kuru aynı gün birlikte girilir. Eski tek kur tablosu (finans_kur) kart 3671'de çifte taşındı; yalnız geçmiş olarak durur.
 // 2238-2 a: faiz türü başına (kredi, mevduat, politika) yıllık yüzde; yeni oran başlangıç gününden sonrasını etkiler.
 export { FAIZ_TURLERI, KUR_TURLERI, ORAN_ESKIME_GUNU, ORAN_KULLANIMLARI, yillikFaizdenAylik, yillikFaizdenGunluk, yillikVadeIndirimCarpani } from './finansman.ts';
 export type { FaizTuru, KurTuru } from './finansman.ts';

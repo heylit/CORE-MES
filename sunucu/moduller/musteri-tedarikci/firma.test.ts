@@ -356,7 +356,7 @@ describe('müşteri ve tedarikçi firma kartı (gerçek PostgreSQL)', () => {
   test('disari.ts: kurGetir o güne kadarki son kuru tarihiyle döndürür, sonrakini almaz; kur yoksa null; TRY 1', async () => {
     await vt().tx(async (db) => {
       for (const [pb, tarih, kur] of [['USD', '2026-09-01', '33.5'], ['USD', '2026-09-03', '33.75'], ['EUR', '2026-09-02', '36.1']] as const)
-        await db.sorgu('INSERT INTO finans_kur (para_birimi, tarih, kur, olusturan_id) VALUES ($1, $2, $3, $4)', [pb, tarih, kur, yoneticiId]);
+        await db.sorgu('INSERT INTO finans_kur_cifti (para_birimi, tarih, alis, satis, olusturan_id) VALUES ($1, $2, $3, $3, $4)', [pb, tarih, kur, yoneticiId]);
     });
     const al = (pb: string, tarih: string) => vt().tx((db) => kurGetir(db, pb, tarih));
     assert.deepEqual(await al('USD', '2026-09-03'), { kur: '33.750000', tarih: '2026-09-03' });

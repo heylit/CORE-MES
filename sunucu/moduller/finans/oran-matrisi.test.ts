@@ -59,12 +59,11 @@ describe('kur ve faiz matrisi (kart 2238, gerçek PostgreSQL)', () => {
     assert.equal(topluKurCiftiKarari({ alis: '41.1', satis: '41.3' }, { alis: '41.100000', satis: '41.200000' }), 'farkli');
   });
 
-  test('izinli: kur yazan alış ve satışı birlikte girer, düzeltir; dışarı alış ve satışı ayrı verir, eski tek kura düşmez', async () => {
+  test('izinli: kur yazan alış ve satışı birlikte girer, düzeltir; dışarı alış ve satışı ayrı verir, kuru olmayan dövizde null döner', async () => {
     tamam(await yaz('/finans/kur-ciftleri/ekle', { paraBirimi: 'USD', tarih: '2026-10-01', alis: 34.25, satis: 34.4 }));
     assert.equal((await yaz('/finans/kur-ciftleri/ekle', { paraBirimi: 'USD', tarih: '2026-10-01', alis: 34.3, satis: 34.5 })).durum, 409);
     tamam(await yaz('/finans/kur-ciftleri/guncelle', { paraBirimi: 'USD', tarih: '2026-10-01', alis: 34.3, satis: 34.5, surum: 1 }));
     assert.equal((await yaz('/finans/kur-ciftleri/guncelle', { paraBirimi: 'USD', tarih: '2026-10-01', alis: 34.3, satis: 34.6, surum: 1 })).durum, 409);
-    tamam(await yaz('/finans/kurlar/ekle', { paraBirimi: 'EUR', tarih: '2026-10-01', kur: 37 }));
     await vt().tx(async (db) => {
       assert.deepEqual(await kurCiftiGetir(db, 'USD', '2026-10-05', 'alis'), { kur: '34.300000', tarih: '2026-10-01' });
       assert.deepEqual(await kurCiftiGetir(db, 'USD', '2026-10-05', 'satis'), { kur: '34.500000', tarih: '2026-10-01' });
