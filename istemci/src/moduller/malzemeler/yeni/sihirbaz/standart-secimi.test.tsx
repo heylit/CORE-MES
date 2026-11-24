@@ -63,6 +63,24 @@ describe('2117 EN / ASTM adları: kart açan ekran', () => {
     expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
   });
 
+  test('standardı seçilmemiş eski kartta yalnız ASTM seçilip kaydedilirse talep gider; standart astm yazılır, kod aynı kalır, ad ASTM almaz (3633)', async () => {
+    const istekler: Istek[] = sunucuKur(YAZAN, {
+      ...ESLI, 'POST /malzeme-katalogu-kartlari/mornek1/kaydet': () => json(200, { id: 'mornek1', stok_kodu: 'HM-MET-C45-0001', surum: 2 }),
+    });
+    await durumAdiminiAc();
+    fireEvent.click(within(screen.getByRole('group', { name: 'Bu kartta durum ve işlem adlarının standardı' })).getByRole('button', { name: 'ASTM' }));
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Adımlar' })).getByRole('button', { name: /Özet/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Değişiklikleri kaydet' }));
+    expect(await screen.findByText(/^Değişiklik talebi onaya gönderildi/)).toBeTruthy();
+    const govde = istekler.find((i) => i.yontem === 'POST')?.govde as { kayit: Record<string, unknown> & { com: Record<string, unknown>; talep: { yeni: Record<string, unknown> & { com: Record<string, unknown> } } } };
+    expect(govde.kayit.talep.yeni.standart).toBe('astm');
+    expect(govde.kayit.standart).toBeUndefined();
+    expect(govde.kayit.talep.yeni.com['kod']).toBe(govde.kayit.com['kod']);
+    // C45'in kesin ASTM karşılığı yok: ASTM seçilince de kalite adı kendi adıyla kalır (örnek kartın kayıtlı adı elle yazılmamış, otomatik ad üretilir).
+    expect(String(govde.kayit.talep.yeni.com['ad'])).not.toContain('ASTM');
+    expect(String(govde.kayit.talep.yeni.com['ad'])).toContain('C45');
+  });
+
   test('2763: geçiş yalnız çipleri değil, föydeki durum satırını da değiştirir; kart değeri aynı kalır', async () => {
     const istekler: Istek[] = sunucuKur(YAZAN, {
       ...ESLI, 'POST /malzeme-katalogu-kartlari/mornek1/kaydet': () => json(200, { id: 'mornek1', stok_kodu: 'HM-MET-C45-0001', surum: 2 }),
