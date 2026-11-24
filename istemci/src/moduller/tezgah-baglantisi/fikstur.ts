@@ -6,12 +6,12 @@ type Tezgah = TezgahBaglantisiDurumCevabi['tezgahlar'][number];
 const once = (sn: number): string => new Date(Date.now() - sn * 1000).toISOString();
 const tezgah = (cihazAdi: string, ek: Partial<Tezgah> = {}): Tezgah => ({
   cihazAdi, durum: 'calisiyor', calisma: 'ACTIVE', mod: 'AUTOMATIC', program: 'O1204', sayac: 148, takim: '7', isMiliHizi: 2350, isMiliYuku: 42,
-  ilerleme: 180, alarm: null, okundu: once(20), eski: false,
+  ilerleme: 180, alarm: null, okundu: once(3), eski: false,
   smartes: { durum: 'calisiyor', program: 'O1204', sayac: 148, isMiliHizi: 2350, isMiliYuku: 41, okundu: once(30) }, farklar: [], ...ek,
 });
 
 export const ORNEK_DURUM = (): TezgahBaglantisiDurumCevabi => ({
-  baglanti: 'acik', aralikSaniye: 60, sonDeneme: once(20), sonOkuma: once(20), sonHata: null,
+  baglanti: 'acik', aralikSaniye: 5, varlikDurumu: 'okundu', sonDeneme: once(3), sonOkuma: once(3), sonHata: null,
   tezgahlar: [
     tezgah('ORN-T01'),
     tezgah('ORN-T04', {
@@ -30,19 +30,36 @@ export const ORNEK_DURUM = (): TezgahBaglantisiDurumCevabi => ({
   ],
 });
 
+const dakika = (n: number): string => new Date(Date.now() - n * 60_000).toISOString();
+// Son bir saate yayılmış dakikalık noktalar.
+const egri = (...v: number[]) => v.map((deger, i) => ({ zaman: dakika(Math.round(58 - (i * 58) / Math.max(1, v.length - 1))), deger }));
+const alan = (kimlik: string, tur: string, bilesen: string, bilesenAdi: string | null, birim: string | null, kategori: 'SAMPLE' | 'EVENT', deger: string | null, egriVeri: ReturnType<typeof egri> = []) => ({
+  kimlik, tur, ad: kimlik, bilesen, bilesenAdi, birim, kategori, deger, sonDegisme: once(12), egri: egriVeri,
+});
+
 export const ORNEK_AYRINTI = (): TezgahAyrintisiCevabi => ({
-  cihazAdi: 'ORN-T01', durum: 'calisiyor', okundu: once(20), eski: false,
-  ogeler: [
-    { tur: 'Availability', ad: 'avail', bilesen: 'Device', deger: 'AVAILABLE', zaman: '2026-11-10T09:40:12Z' },
-    { tur: 'EmergencyStop', ad: 'estop', bilesen: 'Controller', deger: 'ARMED', zaman: '2026-11-10T09:40:12Z' },
-    { tur: 'Execution', ad: 'exec', bilesen: 'Controller', deger: 'ACTIVE', zaman: '2026-11-10T09:40:12Z' },
-    { tur: 'ControllerMode', ad: 'mode', bilesen: 'Controller', deger: 'AUTOMATIC', zaman: '2026-11-10T09:40:12Z' },
-    { tur: 'Program', ad: 'pgm', bilesen: 'Controller', deger: 'O1204', zaman: '2026-11-10T09:40:12Z' },
-    { tur: 'PartCount', ad: 'pc', bilesen: 'Controller', deger: '148', zaman: '2026-11-10T09:40:12Z' },
-    { tur: 'ToolNumber', ad: 'tool', bilesen: 'Controller', deger: '7', zaman: '2026-11-10T09:40:12Z' },
-    { tur: 'SpindleSpeed', ad: 'sspeed', bilesen: 'Rotary', deger: '2350', zaman: '2026-11-10T09:40:12Z' },
-    { tur: 'Load', ad: 'sload', bilesen: 'Rotary', deger: '42', zaman: '2026-11-10T09:40:12Z' },
-    { tur: 'PathFeedrate', ad: 'feed', bilesen: 'Controller', deger: '180', zaman: '2026-11-10T09:40:12Z' },
-    { tur: 'MOTION_PROGRAM (Normal)', ad: null, bilesen: 'Controller', deger: null, zaman: '2026-11-10T09:40:12Z' },
+  cihazAdi: 'ORN-T01', durum: 'calisiyor', okundu: once(3), eski: false, aralikSaniye: 5,
+  ogeler: [],
+  alanlar: [
+    alan('avail', 'Availability', 'Device', null, null, 'EVENT', 'AVAILABLE'),
+    alan('exec', 'Execution', 'Controller', 'controller', null, 'EVENT', 'ACTIVE'),
+    alan('mode', 'ControllerMode', 'Controller', 'controller', null, 'EVENT', 'AUTOMATIC'),
+    alan('pgm', 'Program', 'Controller', 'controller', null, 'EVENT', 'O1204'),
+    alan('pc', 'PartCount', 'Controller', 'controller', 'COUNT', 'EVENT', '148'),
+    alan('feed', 'PathFeedrate', 'Controller', 'controller', 'MILLIMETER/SECOND', 'SAMPLE', '180', egri(150, 170, 180, 175, 180)),
+    alan('xload', 'Load', 'Linear', 'X', 'PERCENT', 'SAMPLE', '11.5', egri(8, 12, 9, 14, 11.5)),
+    alan('sspeed', 'SpindleSpeed', 'Rotary', 'S', 'REVOLUTION/MINUTE', 'SAMPLE', '2350', egri(2000, 2350, 2350, 2400, 2350)),
+    alan('sload', 'Load', 'Rotary', 'S', 'PERCENT', 'SAMPLE', '42', egri(30, 45, 40, 44, 42)),
   ],
+  kosullar: [
+    { kimlik: 'k', tur: 'MOTION_PROGRAM', hal: 'Fault', ileti: 'ORN hata', baslangic: dakika(20), bitis: dakika(18) },
+    { kimlik: 'k', tur: 'MOTION_PROGRAM', hal: 'Normal', ileti: null, baslangic: dakika(18), bitis: null },
+  ],
+  varlikDurumu: 'okundu',
+  varliklar: [
+    { kimlik: 'ORN-A1', tur: 'CuttingTool', takimNo: '7', zaman: dakika(30), omurler: [{ tur: 'MINUTES', yon: 'DOWN', deger: 85, baslangic: 120, uyari: 10, sinir: 0 }] },
+    { kimlik: 'ORN-A2', tur: 'CuttingTool', takimNo: '21', zaman: dakika(30), omurler: [] },
+  ],
+  bosluklar: [{ zaman: dakika(25), neden: 'tampon-asildi' }, { zaman: dakika(240), neden: 'servis-yeniden-basladi' }],
+  egriBasi: dakika(60), egriSonu: new Date().toISOString(),
 });

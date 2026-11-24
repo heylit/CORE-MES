@@ -1,6 +1,6 @@
 // MTConnect cevabı için küçük, saf XML okuyucu: yalnız öğe, nitelik ve metin. DTD, ENTITY ve işleme bildirimi dışındaki "<!" reddedilir;
-// tanımsız varlık çözülmez. Cevap boyu ayrıştırmadan önce sınırlanır.
-export const AZAMI_CEVAP_UZUNLUGU = 4 * 1024 * 1024;
+// tanımsız varlık çözülmez. Alan sayısı sınırlı değildir (kart 3659); cevap boyu okunurken ve ayrıştırmadan önce sınırlanır.
+export const AZAMI_CEVAP_UZUNLUGU = 8 * 1024 * 1024;
 export const AZAMI_DERINLIK = 64;
 
 export interface XmlOgesi {

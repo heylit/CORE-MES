@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { zamanSemasi } from '../zaman.ts';
 
-// Tezgah bağlantısı denemesi (kart 3373, ADR 0033): tezgahların ortak MTConnect servisinden salt okunur anlık değerler.
+// Tezgâh bağlantısı denemesi (kart 3373, ADR 0033): tezgahların ortak MTConnect servisinden salt okunur anlık değerler.
 // Üretim kaydına, sayıma, stoğa işlenmez; yalnız SmartES'in aynı tezgah için değeriyle yan yana gösterilir.
 export const TEZGAH_DURUMLARI = ['calisiyor', 'bekliyor', 'alarm', 'baglanti-yok', 'bilinmiyor'] as const;
 export type TezgahDurumu = (typeof TEZGAH_DURUMLARI)[number];
@@ -10,6 +10,7 @@ export type TezgahDurumu = (typeof TEZGAH_DURUMLARI)[number];
 export const TEZGAH_KARSILASTIRMA_ALANLARI = ['durum', 'program', 'sayac', 'isMiliHizi', 'isMiliYuku'] as const;
 export type TezgahKarsilastirmaAlani = (typeof TEZGAH_KARSILASTIRMA_ALANLARI)[number];
 
+export const TEZGAH_VARLIK_DURUMLARI = ['bekleniyor', 'okundu', 'yok', 'hata'] as const;
 export const TEZGAH_BAGLANTI_HALLERI = ['kapali', 'adres-yok', 'acik'] as const;
 
 const tezgahSatiri = z.object({
@@ -42,7 +43,10 @@ const tezgahSatiri = z.object({
 
 export const tezgahBaglantisiDurumCevabi = z.object({
   baglanti: z.enum(TEZGAH_BAGLANTI_HALLERI),
+  // Ayardaki okuma aralığı; ekran bu aralıkta yenilenir.
   aralikSaniye: z.number().int(),
+  // /assets: servis takım verisi vermiyorsa "yok"; henüz okunmadıysa "bekleniyor".
+  varlikDurumu: z.enum(TEZGAH_VARLIK_DURUMLARI),
   sonDeneme: zamanSemasi.nullable(),
   sonOkuma: zamanSemasi.nullable(),
   // Son turun hatası; adres ve cevap gövdesi taşımaz.
@@ -53,14 +57,42 @@ export type TezgahBaglantisiDurumCevabi = z.output<typeof tezgahBaglantisiDurumC
 
 export const tezgahParametresi = z.object({ cihazAdi: z.string().min(1).max(100) });
 
+const alanKategorisi = z.enum(['SAMPLE', 'EVENT', 'CONDITION']);
+
 export const tezgahAyrintisiCevabi = z.object({
   cihazAdi: z.string(),
   durum: z.enum(TEZGAH_DURUMLARI),
   okundu: zamanSemasi,
   eski: z.boolean(),
+  aralikSaniye: z.number().int(),
   // Tezgahın yayınladığı bütün öğeler, geldiği adla.
   ogeler: z.array(z.object({
     tur: z.string(), ad: z.string().nullable(), bilesen: z.string().nullable(), deger: z.string().nullable(), zaman: z.string().nullable(),
   })),
+  // /probe tanımıyla birleşmiş alanlar (koşullar hariç): bileşen, birim, kategori; sayısal alanda son saatin dakikalık eğrisi.
+  alanlar: z.array(z.object({
+    kimlik: z.string().nullable(), tur: z.string(), ad: z.string().nullable(),
+    bilesen: z.string().nullable(), bilesenAdi: z.string().nullable(), birim: z.string().nullable(), kategori: alanKategorisi.nullable(),
+    deger: z.string().nullable(), sonDegisme: z.string().nullable(),
+    egri: z.array(z.object({ zaman: zamanSemasi, deger: z.number() })),
+  })),
+  // Koşul kayıtları (son 24 saat, en yeni önce); bitis null ise sürüyor.
+  kosullar: z.array(z.object({
+    kimlik: z.string(), tur: z.string().nullable(), hal: z.enum(['Normal', 'Warning', 'Fault', 'Unavailable']),
+    ileti: z.string().nullable(), baslangic: zamanSemasi, bitis: zamanSemasi.nullable(),
+  })),
+  varlikDurumu: z.enum(TEZGAH_VARLIK_DURUMLARI),
+  varliklar: z.array(z.object({
+    kimlik: z.string(), tur: z.string(), takimNo: z.string().nullable(), zaman: zamanSemasi.nullable(),
+    omurler: z.array(z.object({
+      tur: z.string().nullable(), yon: z.string().nullable(), deger: z.number().nullable(), baslangic: z.number().nullable(),
+      uyari: z.number().nullable(), sinir: z.number().nullable(),
+    })),
+  })),
+  // Servis tamponundan düşen ya da servisin yeniden başladığı anlar (son 24 saat).
+  bosluklar: z.array(z.object({ zaman: zamanSemasi, neden: z.enum(['tampon-asildi', 'servis-yeniden-basladi']) })),
+  // Eğrilerin penceresi.
+  egriBasi: zamanSemasi,
+  egriSonu: zamanSemasi,
 });
 export type TezgahAyrintisiCevabi = z.output<typeof tezgahAyrintisiCevabi>;

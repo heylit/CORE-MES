@@ -49,3 +49,38 @@ MTConnect servisinden yayın yapar; servis standart olarak yalnız okunur (HTTP 
 
 - Ortak servisin sahibi (tezgah üreticisinin aracı mı, SmartES'in parçası mı) bilinmiyor.
 - `/current` cevabındaki değer biçimleri canlı serviste denenmedi; tanınmayan değer boş kalır, durum "bilinmiyor" görünür.
+- Sık okumanın (5 saniye) servise ve SmartES'e etkisi ölçülmedi (Ek, 24.11.2026).
+- Servisin `/assets` yolunu destekleyip desteklemediği bilinmiyor; desteklemiyorsa ekran "Veri yok" yazar, tur hata vermez (Ek).
+
+## Ek (24.11.2026, kart 3659)
+
+Kullanıcı kararı: tezgah verisi anlık okunacak; `/current` ile `/sample` arasındaki değişiklikler kaybolmayacak; `/probe` alan tanımları ve
+`/assets` takım bilgisi alınacak. Karar 2 ve karar 5 aşağıdaki hâliyle değişir; kararların kalanı aynen geçerlidir.
+
+**Karar 2 (yeni hâli): dört sabit yol, `/sample` parametreleri.** Yalnız `GET /probe`, `/current`, `/sample` ve `/assets`; yönlendirme izlenmez
+(`TEZGAH_YOLLARI`, `redirect: 'error'`). Sorgu parametresi yalnız `/sample`'da ve yalnız `from` ile `count`'tur; `from` sıfır ya da pozitif tam
+sayı, `count` izin listesinden (`SAMPLE_SAYILARI`: 100, 500, 1000, 2000). Başka yol ya da parametre istemcide reddedilir, istek hiç çıkmaz. Adres kuralı
+(karar 3) değişmez; istek yine yalnız `istemci.ts`'ten çıkar. Alan sayısı sınırı kalktı (eskiden cihaz başına 400); yerine cevap boyu sınırı
+geldi: gövde okunurken 8 MiB'ı aşarsa reddedilir (`xml.ts` `AZAMI_CEVAP_UZUNLUGU`); DTD ve ENTITY reddi kalır.
+
+**Karar 5 (yeni hâli): ayarlanabilir aralık, geri çekilme, tampon boşluğu.**
+- Tur aralığı Sistem Ayarları'ndaki "Tezgah bağlantısı okuma aralığı (saniye)" ayarıdır: 5-60, varsayılan 5. Servis başka sistemleri de
+  besleyebileceği için kullanıcı kod değiştirmeden yavaşlatabilir. Okuma ayarı (karar 4) varsayılan kapalı kalır.
+- Art arda hatada aralık ikiye katlanarak 60 saniyeye kadar uzar; başarılı turda ayardaki değere döner. Önceki tur sürerken yenisi başlamaz;
+  istek süresi 5 saniyedir, yinelenmez.
+- Her turda `/sample?from=<son sıra + 1>&count=<sınır>` okunur; geride kalınmışsa bir turda en çok 5 sayfa. İlk tur ve boşluk sonrası `/current` ile başlanır.
+  İstenen sıra tampondan düşmüşse (`from` < `firstSequence`, ya da servis OUT_OF_RANGE verirse) "veri boşluğu" kaydı yazılır ve `/current` ile
+  devam edilir. Servisin `instanceId`'si değişirse boşluk yazılır, `/probe` yeniden okunur.
+- `/probe` süreç başında ve `instanceId` değişince; `/assets` 60 saniyede bir okunur. `/assets` hatası ya da 404'ü turu bozmaz.
+- Saklama (göç `20261124130100`): `tezgah_alan_tanimi`, `tezgah_deger_gecmisi` (24 saat, saatlik silinir), `tezgah_varlik`, `tezgah_veri_boslugu`
+  (24 saat). `tezgah_okuma` ve `tezgah_ornek` değişmez; örnekler 30 gün kalır. Değer gelmediyse `null` yazılır, sıfır yazılmaz.
+
+**Karar 6 aynen geçerlidir.** Okunan hiçbir değer üretim kaydına, sayıma, duruşa, stoğa ya da plana işlenmez; SmartES modülünün ayarı ve verisi
+değişmez; sayfa yalnız `sayfa.tezgah-baglantisi` yetkisiyle açılır; program ve cihaz adı günlüğe ya da hata iletisine yazılmaz.
+
+**Doğrulanmadı (Ek).**
+- Beş saniyelik okumanın servise ve aynı servisi okuyan SmartES'e yükü ölçülmedi; kullanıcı aralığı Sistem Ayarları'ndan yükseltebilir.
+- Servisin `/assets` yolunu desteklediği doğrulanmadı.
+- Gerçek servisin tampon dışı isteğe cevabının biçimi (HTTP kodu, `MTConnectError` içeriği) denenmedi; istemci 400/404/416 ile `OUT_OF_RANGE` gövdesini
+  ve başlıktaki `firstSequence`'i tanır.
+- 24 saatlik geçmişin gerçek hacmi (FARK.md'deki ölçüm sentetiktir).
