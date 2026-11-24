@@ -963,10 +963,10 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
               {planYonu(c) === y ? <Simge ad="check" boyut="k" /> : <i className="tc-pyq-menu-bosluk" aria-hidden="true" />}<span>{YON_ADI[y]}<small>{YON_ACIKLAMASI[y]}</small></span>
             </button>
           ))}
-          <b className="tc-pyq-menu-baslik" role="presentation">Ayar · aparat ve ölçü aleti</b>
+          <b className="tc-pyq-menu-baslik" role="presentation">Ayar · aparat, takım ve ölçü aleti</b>
           <button type="button" role="menuitem" disabled={tur !== null || onayAcik}
             onClick={() => { kapat(); sec(null, null); setKapasiteAcik(false); setSorunAdimi(null); setAyarYon(planYonu(c)); setEngelAcik(false); setAyarAcik(true); }}>
-            <Simge ad="layers" boyut="k" /><span>Aparat ve ölçü aleti kısıtı<small>{KAYNAK_KISITLARI.map((k) => `${kaynakAdi(k)}: ${secimAdi(kaynakSecimi(ayarTaslagi(c), k))}`).join(' · ')}</small></span>
+            <Simge ad="layers" boyut="k" /><span>Aparat, takım ve ölçü aleti kısıtı<small>{KAYNAK_KISITLARI.map((k) => `${kaynakAdi(k)}: ${secimAdi(kaynakSecimi(ayarTaslagi(c), k))}`).join(' · ')}</small></span>
           </button>
         </div>
       </>

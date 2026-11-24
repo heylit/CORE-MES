@@ -68,7 +68,7 @@ describe('plan ölçü aleti okuması (3403, gerçek PostgreSQL)', () => {
     const e = await vt().okumaTx((db) => ikincilEkiOku(db, { istasyon: false, emir: true, alet: true }, [{ id: isEmri, emirNo: 'ORN-UE-1', opNo: 20 }]));
     // Aleti kalmayan türün (kumpas) isteği de gelir: kaynağı kurulmadığı için motor onu beklemez (ikincil-kaynak.test.ts O2).
     assert.deepEqual(e.istekler, { 'ORN-UE-1|20': [
-      { kart: `olcu-${String(mikrometre)}`, adet: 1, asama: 'isleme' }, { kart: `olcu-${String(kumpas)}`, adet: 1, asama: 'isleme' },
+      { kart: `olcu-${String(mikrometre)}`, adet: 1, asama: 'isleme', tur: 'olcu' }, { kart: `olcu-${String(kumpas)}`, adet: 1, asama: 'isleme', tur: 'olcu' },
     ] });
   });
 

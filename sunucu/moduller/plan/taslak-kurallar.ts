@@ -46,7 +46,7 @@ export function imza(c: unknown): TaslakImzasi {
   for (const [id, x] of Object.entries(ops)) { const y = yerYazisi(x); if (y !== null) yer[id] = y; }
   for (const [id, x] of Object.entries(locks)) { const y = yerYazisi(x); if (y !== null) kilit[id] = y; }
   // gerideTasinir yalnız yazılmışsa imzaya girer: alan eklenmeden önce açılmış taslağın imzası değişmez.
-  const ayar = JSON.stringify([[...W_ALANLARI.map((k) => w[k] ?? null), ...(typeof w.gerideTasinir === 'boolean' ? [w.gerideTasinir] : [])], PARAM_ALANLARI.map((k) => param[k] ?? null), Array.isArray(d.kapali) ? [...d.kapali].map(String).sort() : []]);
+  const ayar = JSON.stringify([[...W_ALANLARI.map((k) => w[k] ?? null), ...(typeof w.gerideTasinir === 'boolean' ? [w.gerideTasinir] : [])], PARAM_ALANLARI.map((k) => param[k] ?? null), Array.isArray(d.kapali) ? [...d.kapali].map(String).sort() : [], ...(nesne(d.kisitKipi) ? [d.kisitKipi.aparat ?? null, d.kisitKipi.olcu ?? null, d.kisitKipi.takim ?? null] : [])]);
   const yon = Object.fromEntries(Object.entries(nesne(w.yonEmir) ? w.yonEmir : {}).filter(([, v]) => v === 'ileri' || v === 'geri').map(([id, v]) => [id, String(v)]));
   const D = nesne(d.D) ? d.D : {}, meta = nesne(D.meta) ? D.meta : {};
   return { yer, kilit, ayar, yon, kapasite: kapasiteImzasi(d), eksen: typeof meta.baslangic === 'string' ? meta.baslangic : null, ...mesaiImzasi(d), adimEk: adimEkImzasi(w), adimBekle: adimBekleImzasi(w), elleBol: elleBolImzasi(d) };
@@ -217,6 +217,21 @@ export function ayarUygula(deger: unknown, a: TaslakAyarlari, ayrinti: string, k
   }
   const kapali = Array.isArray(deger.kapali) ? deger.kapali.map(String) : [];
   const yeniKapali = [...kapali.filter((x) => !a.ac.includes(x)), ...a.kapat.filter((x) => !kapali.includes(x))];
+  // 3652: kip yazılınca eski kapali listesindeki aparat ve kalibrasyon bitleri kipe çevrilip listeden düşer (eski bit okunurken Uyari'ydı; aparat biti takımı da kapsıyordu).
+  const kipYazisi = a.kisitKipi !== undefined && Object.keys(a.kisitKipi).length > 0;
+  if (kipYazisi) {
+    const eskiKip = nesne(deger.kisitKipi) ? deger.kisitKipi : {};
+    const eskiAparat = yeniKapali.includes('aparat'), eskiOlcu = yeniKapali.includes('kalibrasyon');
+    const kip = (v: unknown, eski: boolean): string => (v === 'acik' || v === 'uyari' || v === 'kapali' ? v : eski ? 'uyari' : 'acik');
+    const onceki = { aparat: kip(eskiKip.aparat, eskiAparat), takim: kip(eskiKip.takim, eskiAparat), olcu: kip(eskiKip.olcu, eskiOlcu) };
+    const sonraki = { ...onceki, ...a.kisitKipi };
+    const ayniKip = nesne(deger.kisitKipi) && (['aparat', 'takim', 'olcu'] as const).every((t) => eskiKip[t] === sonraki[t]);
+    if (!ayniKip) {
+      yeni.kisitKipi = sonraki;
+      geri.push(deger.kisitKipi === undefined ? { yol: ['kisitKipi'] } : { yol: ['kisitKipi'], once: deger.kisitKipi });
+    }
+    for (let i = yeniKapali.length - 1; i >= 0; i--) if (yeniKapali[i] === 'aparat' || yeniKapali[i] === 'kalibrasyon') yeniKapali.splice(i, 1);
+  }
   if (yeniKapali.length !== kapali.length || yeniKapali.some((x, i) => x !== kapali[i])) { geri.push({ yol: ['kapali'], once: kapali }); yeni.kapali = yeniKapali; }
   if (geri.length === 0) return { deger, degisti: false };
   return { deger: isle(deger, yeni, { ne: 'Plan ayarı değişti', ayrinti, isler: ['*'], geri }, k), degisti: true };

@@ -1270,17 +1270,18 @@ describe('Kokpit', () => {
     fireEvent.click(yon);
     fireEvent.click(yonler(screen.getByRole('menu', { name: 'Plan' }))[1]!);
     expect(screen.queryByRole('menu', { name: 'Plan' })).toBeNull();
-    expect(screen.getByRole('complementary', { name: 'Yön ve kaynak kısıtları' })).toBeTruthy();
+    expect(screen.getByRole('complementary', { name: 'Aparat, takım ve ölçü aleti kısıtı' })).toBeTruthy();
     expect(screen.queryByRole('complementary', { name: 'Plan ayarları' })).toBeNull();
   });
 
-  it('Plan menüsündeki "Aparat ve ölçü aleti kısıtı" paneli yön değişmeden açar; seçim hesaplamaz (3650)', async () => {
+  it('Plan menüsündeki "Aparat, takım ve ölçü aleti kısıtı" paneli yön değişmeden açar; seçim hesaplamaz (3650)', async () => {
     ac({ yetki: yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz']) });
     const yon = screen.getByRole('button', { name: 'Plan' }) as HTMLButtonElement;
     await waitFor(() => { expect(yon.disabled).toBe(false); }, { timeout: 4000 });
     fireEvent.click(yon);
-    const m = within(screen.getByRole('menu', { name: 'Plan' })).getByRole('menuitem', { name: /Aparat ve ölçü aleti kısıtı/ });
-    expect(m.textContent).toContain('Aparat ve özel takım: Sert kısıt');
+    const m = within(screen.getByRole('menu', { name: 'Plan' })).getByRole('menuitem', { name: /Aparat, takım ve ölçü aleti kısıtı/ });
+    expect(m.textContent).toContain('Aparat: Açık');
+    expect(m.textContent).toContain('Takım: Açık');
     fireEvent.click(m);
     expect(screen.getByRole('radiogroup', { name: 'Ölçü aleti' })).toBeTruthy();
     expect(screen.queryByRole('region', { name: 'Ayarın etkisi' })).toBeNull();

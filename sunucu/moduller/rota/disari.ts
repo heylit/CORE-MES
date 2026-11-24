@@ -50,9 +50,9 @@ export { malzemeKartiIzleri } from './sorgular.ts';
 export type StokAdetleri = (db: Db, malzemeIdler: number[]) => Promise<ReadonlyMap<number, { toplam: string }>>;
 export async function isEmriAparatHazirliklari(db: Db, isEmriIdleri: readonly number[], stokAdetleri: StokAdetleri): Promise<Map<number, EkipmanHazirligi>> {
   const liste = await isEmriEkipmanlari(db, isEmriIdleri);
-  const kartlar = [...new Set(liste.flatMap((x) => (x.tur === 'aparat' && x.malzemeId !== null ? [x.malzemeId] : [])))];
+  const kartlar = [...new Set(liste.flatMap((x) => (x.tur !== 'olcu_aleti' && x.malzemeId !== null ? [x.malzemeId] : [])))];
   const stokta = kartlar.length === 0 ? new Map() : await stokAdetleri(db, kartlar);
-  return ekipmanHazirliklari(isEmriIdleri, liste.flatMap((x) => (x.tur === 'aparat' && x.malzemeId !== null ? [{ isEmriId: x.isEmriId, kimlik: x.malzemeId }] : [])),
+  return ekipmanHazirliklari(isEmriIdleri, liste.flatMap((x) => (x.tur !== 'olcu_aleti' && x.malzemeId !== null ? [{ isEmriId: x.isEmriId, kimlik: x.malzemeId }] : [])),
     (id) => Number(stokta.get(id)?.toplam ?? 0) > 0);
 }
 export async function isEmriOlcuAletiHazirliklari(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, EkipmanHazirligi>> {
@@ -63,15 +63,15 @@ export async function isEmriOlcuAletiHazirliklari(db: Db, isEmriIdleri: readonly
     (id) => gecerli.get(id) === true);
 }
 
-// 3199 (A): planın ikincil kaynak isteği. İş emrine kopyalanan listenin aparat ve özel takım satırları (kart, adet, aşama); ölçü aleti plana
-// girmez (V5). Yetki denetlemez; çağıran plan kendi okuma yetkisiyle açar.
-export interface IkincilKaynakIstegi { malzemeId: number; adet: number; asama: 'ayar_isleme' | 'isleme' }
+// 3199 (A): planın ikincil kaynak isteği. İş emrine kopyalanan listenin aparat ve takım satırları (kart, adet, aşama; 3652: tür); ölçü aleti ayrı
+// okunur (isEmriAletIstekleri). Yetki denetlemez; çağıran plan kendi okuma yetkisiyle açar.
+export interface IkincilKaynakIstegi { malzemeId: number; adet: number; asama: 'ayar_isleme' | 'isleme'; tur: 'aparat' | 'takim' }
 export async function isEmriKaynakIstekleri(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, IkincilKaynakIstegi[]>> {
   const sonuc = new Map<number, IkincilKaynakIstegi[]>();
   if (isEmriIdleri.length === 0) return sonuc;
   for (const x of await isEmriEkipmanlari(db, isEmriIdleri)) {
-    if (x.tur !== 'aparat' || x.malzemeId === null) continue;
-    sonuc.set(x.isEmriId, [...(sonuc.get(x.isEmriId) ?? []), { malzemeId: x.malzemeId, adet: x.adet, asama: x.asama }]);
+    if (x.tur === 'olcu_aleti' || x.malzemeId === null) continue;
+    sonuc.set(x.isEmriId, [...(sonuc.get(x.isEmriId) ?? []), { malzemeId: x.malzemeId, adet: x.adet, asama: x.asama, tur: x.tur }]);
   }
   return sonuc;
 }

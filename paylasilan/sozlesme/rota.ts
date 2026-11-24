@@ -109,7 +109,7 @@ export const yanUrunGirdisi = z.object({
 });
 
 // Adım ekipmanı (2893-4 a): aparat bir malzeme kartıdır (adet ve yer Stok'ta), ölçü aleti kalibrasyondaki alet türüdür.
-export const EKIPMAN_TURLERI = ['aparat', 'olcu_aleti'] as const;
+export const EKIPMAN_TURLERI = ['aparat', 'olcu_aleti', 'takim'] as const;
 const ekipmanAciklamasi = z.string().trim().max(200, 'Açıklama en çok 200 karakter.').nullable().transform((x) => (x === '' ? null : x));
 // 3199 (A): aparat ve özel takım planın ikincil kaynağıdır; adım kaç adet ve hangi aşamada (ayar ve işleme ya da yalnız işleme) istediğini
 // söyler. Ölçü aleti plana girmez (V5): alanları yoktur.
@@ -118,6 +118,11 @@ export const EKIPMAN_ADET_TAVANI = 100;
 export const ekipmanGirdisi = z.discriminatedUnion('tur', [
   z.object({
     tur: z.literal('aparat'), malzemeId: MALZEME_KIMLIGI, aciklama: ekipmanAciklamasi,
+    adet: z.number().int().min(1, 'Adet en az 1.').max(EKIPMAN_ADET_TAVANI).default(1), asama: z.enum(EKIPMAN_ASAMALARI).default('ayar_isleme'),
+  }),
+  // 3652: takım kartı aparatla aynı alanları taşır (kart, adet, ne zaman); planda özel takım kapasite satırıyla eşleşir.
+  z.object({
+    tur: z.literal('takim'), malzemeId: MALZEME_KIMLIGI, aciklama: ekipmanAciklamasi,
     adet: z.number().int().min(1, 'Adet en az 1.').max(EKIPMAN_ADET_TAVANI).default(1), asama: z.enum(EKIPMAN_ASAMALARI).default('ayar_isleme'),
   }),
   z.object({ tur: z.literal('olcu_aleti'), aletTuruId: KIMLIK, aciklama: ekipmanAciklamasi }),

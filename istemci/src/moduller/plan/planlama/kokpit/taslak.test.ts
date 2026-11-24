@@ -3,7 +3,7 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { DegerlendirmeCevabi, TaslakCevabi, TaslakKomutu } from '#paylasilan/sozlesme/planlama.ts';
 import { ornekCalisma } from '../motor/ornek.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
-import { ayarTaslagi, alanYaz, AYAR_ALANLARI, kisitYaz } from '../ayarlar/alanlar.ts';
+import { ayarTaslagi, alanYaz, AYAR_ALANLARI, kipYaz, kisitYaz } from '../ayarlar/alanlar.ts';
 import { ayarKomutu, dizmeIsleri, sonDegisiklikleriGeriAl, taslakOzeti, useTaslak, type TaslakSatiri, type TaslakUcu } from './taslak.ts';
 
 // Taslak uydurmadır; sunucu sahte uçla taklit edilir (komut sona eklenir, geri-al sondan siler, sürüm her yazışta artar).
@@ -42,6 +42,15 @@ describe('ayarKomutu', () => {
     const acik = t.acik['personel'] === true;
     const k = ayarKomutu(c, kisitYaz(alanYaz(t, dondurma, 7), 'personel', !acik), 'Dondurma 7');
     expect(k).toEqual({ tur: 'ayar', ayar: { w: { dondurma: 7 }, param: {}, ac: acik ? [] : ['personel'], kapat: acik ? ['personel'] : [] }, ayrinti: 'Dondurma 7' });
+  });
+
+  it('kaynak kipi değişince komut yalnız değişen türün kisitKipi\'ni taşır, ac ve kapat listesine girmez (3652)', () => {
+    const c = ornekCalisma();
+    const t = ayarTaslagi(c);
+    expect(ayarKomutu(c, kipYaz(kipYaz(t, 'takim', 'kapali'), 'kalibrasyon', 'uyari'), 'Kaynak')).toEqual({
+      tur: 'ayar', ayar: { w: {}, param: {}, ac: [], kapat: [], kisitKipi: { takim: 'kapali', olcu: 'uyari' } }, ayrinti: 'Kaynak',
+    });
+    expect(ayarKomutu(c, kipYaz(t, 'aparat', 'acik'), 'x')).toBeNull();
   });
 
   it('çalışmanın süre ayarları (taşıma, transfer, program, ilk parça) komutta ayarlar altında gider; ağırlık ve bedel kendi yerinde', () => {

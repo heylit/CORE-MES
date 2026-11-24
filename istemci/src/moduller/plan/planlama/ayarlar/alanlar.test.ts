@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ornekCalisma } from '../motor/ornek.ts';
-import { AYAR_ALANLARI, alanYaz, ayarTaslagi, ayarlariYaz, emirYonu, emirYonuYaz, etkiSatirlari, farklar, kaynakSecimi, kisitYaz, ozetOku, planYonu, sayiOku } from './alanlar.ts';
+import { AYAR_ALANLARI, KAYNAK_KISITLARI, alanYaz, ayarTaslagi, ayarlariYaz, emirYonu, emirYonuYaz, etkiSatirlari, farklar, kaynakKipi, kaynakSecimi, kipYaz, kisitYaz, ozetOku, planYonu, sayiOku } from './alanlar.ts';
 
 const alan = (k: string) => {
   const a = AYAR_ALANLARI.find((x) => x.k === k);
@@ -32,14 +32,22 @@ describe('Kokpit ayarları (3282 1b)', () => {
     expect(farklar(c, t)).toEqual([]);
   });
 
-  it('aparat ve özel takım kısıtı panelden kapanır; çalışmanın kapalı listesine girer, malzeme kuralı stok ve termini anlatır', () => {
+  it('aparat, takım ve ölçü aleti kipi çalışmanın kisitKipi alanına yazılır; eski aparat ve kalibrasyon bitleri Uyarı okunur ve yazınca listeden düşer (3652), malzeme kuralı stok ve termini anlatır', () => {
     const c = ornekCalisma();
-    const t = kisitYaz(ayarTaslagi(c), 'aparat', false);
-    expect(farklar(c, t)).toEqual(['Aparat ve özel takım: Sert kısıt → Kısıt yok']);
-    expect(kaynakSecimi(t, 'aparat')).toBe('yok');
-    expect(kaynakSecimi(t, 'kalibrasyon')).toBe('sert');
+    const t = kipYaz(ayarTaslagi(c), 'takim', 'kapali');
+    expect(farklar(c, t)).toEqual(['Takım: Açık → Kapalı']);
+    expect(kaynakSecimi(t, 'takim')).toBe('kapali');
+    expect(kaynakSecimi(t, 'aparat')).toBe('acik');
     expect(ayarlariYaz(c, t)).toBe(true);
-    expect(c.kapali).toContain('aparat');
+    expect(c.kisitKipi).toEqual({ aparat: 'acik', takim: 'kapali', olcu: 'acik' });
+    expect(ayarlariYaz(c, t)).toBe(false);
+    const eski = { ...ornekCalisma(), kapali: ['personel', 'aparat', 'kalibrasyon'] };
+    expect(KAYNAK_KISITLARI.map((k) => kaynakKipi(eski, k))).toEqual(['uyari', 'uyari', 'uyari']);
+    const e = kipYaz(ayarTaslagi(eski), 'aparat', 'acik');
+    expect(farklar(eski, e)).toEqual(['Aparat: Uyarı → Açık']);
+    expect(ayarlariYaz(eski, e)).toBe(true);
+    expect(eski.kapali).toEqual(['personel']);
+    expect(eski.kisitKipi).toEqual({ aparat: 'acik', takim: 'uyari', olcu: 'uyari' });
     const m = alan('mat');
     if (m.tur !== 'sec') throw new Error('tur');
     expect(m.secenekler.find(([d]) => d === 'karma')?.[1]).toBe('Termin belliyse bekle');

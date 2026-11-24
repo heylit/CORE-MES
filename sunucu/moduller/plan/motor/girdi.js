@@ -680,7 +680,7 @@ function tmiIkincilKaynaklar(l) {
 /* Adımın isteği "emir no|OP no" anahtarıyla gelir, planın işlem kimliğine (sipariş.adım) adım adedi gibi çevrilir (tmiIslemler). */
 function tmiOpKaynak(istekler, st, D) {
   const opOf = tmiIslemler(st, D); const y = {};
-  for (const [k, l] of Object.entries(istekler)) if (opOf[k] && Array.isArray(l) && l.length) y[opOf[k]] = l.map(x => ({ kart: String(x.kart), adet: +x.adet || 1, asama: x.asama === 'isleme' ? 'isleme' : 'ayar_isleme' }));
+  for (const [k, l] of Object.entries(istekler)) if (opOf[k] && Array.isArray(l) && l.length) y[opOf[k]] = l.map(x => ({ kart: String(x.kart), adet: +x.adet || 1, asama: x.asama === 'isleme' ? 'isleme' : 'ayar_isleme', ...(x.tur === 'aparat' || x.tur === 'takim' || x.tur === 'olcu' ? { tur: x.tur } : {}) }));
   return y;
 }
 /* B-2483-67: siparişi verilmemiş eksik malzemenin tek kuralı sunucudadır (plan/mrp-kurallar.ts: emrin brüt kopyası, adım ve bileşen firesi,
@@ -835,7 +835,8 @@ const GEVSEK = {
   yetkin: st => { const g = [...new Set(st.D.tezgahlar.map(m => m.grup))]; for (const p of st.D.personel) { p.gruplar = g.slice(); delete p.makineler; delete p.enCok; } },
   devam: st => { st.D.devamsizlik = []; },
   ayarci: st => { for (const v of st.D.vardiyalar) for (let i = 0; i < 40; i++) st.D.personel.push({ id: `~A${v.id}${i}`, ad: 'sanal ayarcı', vardiya: v.id, gruplar: [], ayar: true }); },
-  /* 3199: ikincil kaynak (aparat, özel takım) aynı kısıttır; gevşeyince plan onu yalnız izler (İzle), ömür yine sayılır */
+  /* 3199: ikincil kaynak (aparat, özel takım) aynı kısıttır; gevşeyince plan onu yalnız izler (İzle), ömür yine sayılır.
+     Çalışmanın kapali listesi bu anahtarları artık okumaz (kaynakKipleri); yalnız "bu kısıt olmasaydı" ek listesi kullanır. */
   aparat: st => { for (const a of st.D.aparatlar || []) a.adet = 999; for (const k of st.D.ikincilKaynaklar || []) if (k.tur !== 'olcu_aleti') k.kisit = 'izle'; },
   /* ölçü aleti ikincil kaynağın ayrı anahtarıdır: kapanınca plan aleti yalnız izler */
   kalibrasyon: st => { for (const k of st.D.ikincilKaynaklar || []) if (k.tur === 'olcu_aleti') k.kisit = 'izle'; },
@@ -848,6 +849,35 @@ const GEVSEK = {
   ayar: st => { for (const u of st.D.urunler) for (const o of u.rota) for (const t of o.tezgahlar || []) t.ayar = 0; st.D.ayarMatrisi = []; },
   malzeme: st => { st.w.mat = 'uyari'; },
 };
+/* 3652: kaynak türü başına kısıt kipi. acik: sert kısıt; uyari: plan sınırlamaz, kullanım sayılır, aşım uyarılır (izle); kapali: kaynak hiç kurulmaz,
+   adımların isteği sayılmaz, veri denetimi de yazmaz. Çalışmanın kisitKipi alanı { aparat, olcu, takim }; eksik tür acik, ancak eski kapali listesinde
+   aparat (aparat ve özel takım) ya da kalibrasyon (ölçü aleti) varsa uyari. */
+const KAYNAK_KIPLERI = ['acik', 'uyari', 'kapali'];
+function kaynakKipleri(S, eskiKapali) {
+  const kk = S.kisitKipi && typeof S.kisitKipi === 'object' ? S.kisitKipi : {};
+  const kip = (tur, eski) => (KAYNAK_KIPLERI.includes(kk[tur]) ? kk[tur] : eski ? 'uyari' : 'acik');
+  const eskiAparat = eskiKapali.includes('aparat');
+  return { aparat: kip('aparat', eskiAparat), takim: kip('takim', eskiAparat), olcu: kip('olcu', eskiKapali.includes('kalibrasyon')) };
+}
+const KAYNAK_TURU = { aparat: 'aparat', ozel_takim: 'takim', olcu_aleti: 'olcu' };
+function kaynakKipiUygula(st, kipler) {
+  if (!kipler) return;
+  const D = st.D;
+  if (kipler.aparat !== 'acik') for (const a of D.aparatlar || []) a.adet = 999;
+  const turu = k => KAYNAK_TURU[k.tur] || 'aparat';
+  for (const k of D.ikincilKaynaklar || []) if (kipler[turu(k)] === 'uyari') k.kisit = 'izle';
+  const kapaliTur = t => kipler[t] === 'kapali';
+  if (!Object.values(kipler).includes('kapali')) return;
+  const kalan = (D.ikincilKaynaklar || []).filter(k => !kapaliTur(turu(k)));
+  const kartTuru = new Map((D.ikincilKaynaklar || []).map(k => [k.kart, turu(k)]));
+  D.ikincilKaynaklar = kalan;
+  /* istek türünü kendisi söyler; söylemeyen (eski ek) isteğin türü kartının kaynak satırındandır, satırsız kart aparattır */
+  const istekTuru = x => x.tur || kartTuru.get(x.kart) || 'aparat';
+  for (const id of Object.keys(D.opKaynak || {})) {
+    const l = D.opKaynak[id].filter(x => !kapaliTur(istekTuru(x)));
+    if (l.length) D.opKaynak[id] = l; else delete D.opKaynak[id];
+  }
+}
 /* 561 2 a: personel kısıtı (operatör oranı) kullanıcı Kısıtlar sayfasından açana kadar kapalıdır. kisitSurum 2 olan çalışmada
    kapali listesi kullanıcının kararıdır; daha eski çalışmada listeye personel eklenir. */
 const KISIT_SURUM = 2;
@@ -905,8 +935,12 @@ function stKur(S, ek = [], gevset = true) {
     if (!isFinite(k) || k <= beklemeSimdi || (st.gercek[id] && st.gercek[id].S != null)) continue;
     beklemeKoy(st, id, k);
   }
-  const kapali = new Set([...(gevset ? kapaliKisitlar(S) : []), ...ek]);
+  /* 3652: aparat, ölçü aleti ve takım kısıtı tür başına üç kiptir (kisitKipi); kapali listesindeki aparat ve kalibrasyon yalnız eski kayıttır,
+     kisitKipi'nde karşılığı yoksa Uyarı okunur. "Bu kısıt olmasaydı" sorusunun ek listesi (ek) eskisi gibi GEVSEK'ten geçer. */
+  const eskiKapali = gevset ? kapaliKisitlar(S) : [];
+  const kapali = new Set([...eskiKapali.filter(k => k !== 'aparat' && k !== 'kalibrasyon'), ...ek]);
   for (const k of kapali) if (GEVSEK[k]) GEVSEK[k](st);
+  kaynakKipiUygula(st, gevset ? kaynakKipleri(S, eskiKapali) : null);
   /* Soru 159 b: vardiyası olan ayarcı yoksa ayarcı sınırı uygulanmaz (yoksa ayarlı hiçbir adım yerleşmez); motor bunu uyarıyla söyler */
   if (!kapali.has('ayarci') && ayarciYok(D)) { GEVSEK.ayarci(st); st.ayarciYok = true; }
   for (const ev of S.olaylar || []) applyEvent(st, ev);

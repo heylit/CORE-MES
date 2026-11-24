@@ -3,7 +3,7 @@ import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import { ACIL_PAY, AYAR_SECENEKLERI, FASON_GUN, degerAdi, gunMetni, yuzdeMetni, type SecimAyari } from '../../motor-ayarlari/kurallar.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import {
-  AYAR_ALANLARI, PANEL_KISITLARI, alanAnahtari, alanDegeri, alanYazisi, ayarTaslagi, kaynakAdi, kaynakMi, kaynakSecimi, panelKisitAdi, secimAdi, type AyarAlani,
+  AYAR_ALANLARI, GENEL_KISITLAR, KAYNAK_KISITLARI, alanAnahtari, alanDegeri, alanYazisi, ayarTaslagi, kaynakAdi, kaynakSecimi, panelKisitAdi, secimAdi, type AyarAlani,
 } from './alanlar.ts';
 
 // Planlama ayarları sayfasının bölümleri ve kontrol tablosu (3561). Saf: ekran yalnız çizer. Bölüm bir ayarı hangi kapıyla yazdığını da söyler;
@@ -90,19 +90,22 @@ export function calismaSatirlari(ortak: PlanlamaCalismasi, gorunum: PlanlamaCali
       kaynak: 'Çalışma', degistiren: null, zaman: null,
     };
   });
-  const kisit = PANEL_KISITLARI.map((k): KontrolSatiri => ({
-    id: `kisit.${k}`, bolum: 'kisitlar', ad: kaynakMi(k) ? kaynakAdi(k) : panelKisitAdi(k),
-    deger: kaynakMi(k) ? secimAdi(kaynakSecimi(o, k)) : o.acik[k] ? 'açık' : 'kapalı',
-    taslakta: o.acik[k] === g.acik[k] ? null : kaynakMi(k) ? secimAdi(kaynakSecimi(g, k)) : g.acik[k] ? 'açık' : 'kapalı',
-    kaynak: 'Çalışma', degistiren: null, zaman: null,
+  const kisit = GENEL_KISITLAR.map((k): KontrolSatiri => ({
+    id: `kisit.${k}`, bolum: 'kisitlar', ad: panelKisitAdi(k), deger: o.acik[k] ? 'açık' : 'kapalı',
+    taslakta: o.acik[k] === g.acik[k] ? null : g.acik[k] ? 'açık' : 'kapalı', kaynak: 'Çalışma', degistiren: null, zaman: null,
   }));
-  return [...alan, ...kisit];
+  const kaynak = KAYNAK_KISITLARI.map((k): KontrolSatiri => ({
+    id: `kisit.${k}`, bolum: 'kisitlar', ad: kaynakAdi(k), deger: secimAdi(kaynakSecimi(o, k)),
+    taslakta: o.kip[k] === g.kip[k] ? null : secimAdi(kaynakSecimi(g, k)), kaynak: 'Çalışma', degistiren: null, zaman: null,
+  }));
+  return [...alan, ...kisit, ...kaynak];
 }
 
 export function acikKisitOzeti(ortak: PlanlamaCalismasi, gorunum: PlanlamaCalismasi): { acik: number; toplam: number; taslakta: number | null } {
-  const o = ayarTaslagi(ortak).acik, g = ayarTaslagi(gorunum).acik;
-  const say = (x: Record<string, boolean>) => PANEL_KISITLARI.filter((k) => x[k] === true).length;
-  return { acik: say(o), toplam: PANEL_KISITLARI.length, taslakta: say(o) === say(g) ? null : say(g) };
+  const o = ayarTaslagi(ortak), g = ayarTaslagi(gorunum);
+  // Kaynak kısıtı yalnız Açık kipte "açık" sayılır; Uyarı ve Kapalı sınırlamaz.
+  const say = (x: ReturnType<typeof ayarTaslagi>) => GENEL_KISITLAR.filter((k) => x.acik[k] === true).length + KAYNAK_KISITLARI.filter((k) => x.kip[k] === 'acik').length;
+  return { acik: say(o), toplam: GENEL_KISITLAR.length + KAYNAK_KISITLARI.length, taslakta: say(o) === say(g) ? null : say(g) };
 }
 
 // Bölüm rozeti: bölümde taslakta farklı satır sayısı.
