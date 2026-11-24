@@ -18,6 +18,7 @@ import type { DisDuzeltmeOrtami } from './dis-siparis.ts';
 import type { KopruIstemcisi } from './kopru.ts';
 import { IS_ARALIGI_MS, OKUMA_ISI_ARALIGI_MS, gunlukSatiri, kapiSonucu, yonetimAkisi } from './kurallar.ts';
 import type { YonetimAkisi } from './kurallar.ts';
+import { cariHareketTuru, faturaListesiTuru } from './fatura-cari.ts';
 import { irsaliyeTuru } from './irsaliye.ts';
 import { sonAlisTuru } from './son-alis.ts';
 import { BEKLEME_NEDENLERI, faturaTuru, listeOkumaTuru, malKabulTuru, malzemeFisiTuru, malzemeKartiOkumaTuru, malzemeKoduTuru, malzemeTuru, stokOkumaTuru, kullanimOkumaTuru, satinAlmaTuru, satisTuru, stokMalzemeFisiKaynagi, yeniSurecBellegi } from './servis.ts';
@@ -61,7 +62,7 @@ function sirali<T>(is: () => Promise<T>): Promise<T> {
 function beklemeyeCevir(sonuc: TurSonucu): IsBekliyor | undefined {
   switch (sonuc.tur) {
     case 'kapali': case 'ortam-degiskeni-yok': case 'satin-alma-kapali': case 'satis-kapali':
-    case 'mal-kabul-kapali': case 'liste-kapali': case 'fatura-kapali': case 'malzeme-fisi-kapali': case 'malzeme-karti-kapali': case 'stok-kapali': case 'kullanim-kapali': case 'irsaliye-kapali': case 'son-alis-kapali':
+    case 'mal-kabul-kapali': case 'liste-kapali': case 'fatura-kapali': case 'malzeme-fisi-kapali': case 'malzeme-karti-kapali': case 'stok-kapali': case 'kullanim-kapali': case 'irsaliye-kapali': case 'son-alis-kapali': case 'fatura-listesi-kapali': case 'cari-hareket-kapali':
     case 'dis-duzeltme-kapali':
       return isBekliyor(BEKLEME_NEDENLERI[sonuc.tur]);
     case 'proje-kapali':
@@ -225,6 +226,9 @@ export const isler = [
   kopruIsi('logo-irsaliye-okumasi', OKUMA_ISI_ARALIGI_MS, (vt, z) => irsaliyeTuru(vt, okumaOrtami(z)), kapisi('irsaliye')),
   // 3384-c a: Logo son alış kopyası (yalnız okunur, yalnız eklenir).
   kopruIsi('logo-son-alis-okumasi', OKUMA_ISI_ARALIGI_MS, (vt, z) => sonAlisTuru(vt, okumaOrtami(z)), kapisi('son-alis')),
+  // 3675 D1: fatura başlığı ve cari hareket aynası (yalnız okunur, varsayılan kapalı).
+  kopruIsi('logo-fatura-listesi-okumasi', OKUMA_ISI_ARALIGI_MS, (vt, z) => faturaListesiTuru(vt, okumaOrtami(z)), kapisi('fatura-listesi')),
+  kopruIsi('logo-cari-hareket-okumasi', OKUMA_ISI_ARALIGI_MS, (vt, z) => cariHareketTuru(vt, okumaOrtami(z)), kapisi('cari-hareket')),
   // 3314: çalışan yardımcının sürümü saatte bir sorulur (yalnız GET); bağlantı kapalıyken ya da köprü yokken istek atılmaz.
   isTanimi({ ad: 'logo-yardimci-surumu', aralikMs: YARDIMCI_SURUM_ARALIGI_MS, txDisi: (vt) => sirali(() => yardimciSurumIsi(vt, ortamKoprusu)) }),
   // D7: Logo'da açılmış siparişin düzeltmesi; istek ancak TMIV2_LOGO_SIPARIS_DUZELTME=acik ve "Logo bağlantısı" açıkken çıkar.

@@ -1,4 +1,6 @@
 import type { LogoAyari } from './ayar.ts';
+import { cariHareketSayfasiniAyikla, cariHareketYolu, faturaListesiYolu, faturaSayfasiniAyikla } from './fatura-cari-sozlesmesi.ts';
+import type { CariHareketSayfasi, FaturaSayfasi, FaturaTuru } from './fatura-cari-sozlesmesi.ts';
 import { agHatasiniYorumla, belgeBulgulariniAyikla, ESKI_YARDIMCI_ILETISI, kirp, PROJE_KURULUM_ILETISI, alisFiyatlariniAyikla, topluAlisSayfasiniAyikla, geriHareketSayfasiniAyikla, malzemeHareketleriniAyikla, cariKaydiniAyikla, cariListesiniAyikla, cevabiYorumla, crmKodlariniAyikla, faturalariAyikla, malzemeKartlariniAyikla, stokToplamlariniAyikla, kullanimlariAyikla, malzemeAramasiniAyikla, ISTEK_SURESI_MS, listeKayitlariniAyikla, malKabulSatirlariniAyikla, irsaliyeRefleriniAyikla, irsaliyeSayfasiniAyikla, MALZEME_FISI_UCU, malzemeKodlariniAyikla, siparisIcerigiAyikla, varMiAdi } from './kurallar.ts';
 import type { LogoAlisFiyati, LogoBelgeBulgusuHam, LogoMalzemeHareketi, FaturaKaydi, HizmetYonu, KopruSonucu, LogoCari, LogoFisTuru, LogoMalzemeKarti, LogoStokSatiri, LogoKullanimSatiri, KopruZarfi, IrsaliyeSayfasi, TopluAlisSayfasi, ListeKaydi, MalKabulSatiri, MalzemeEklemeGovdesi, LogoSiparisIcerigi, Sayfa } from './kurallar.ts';
 
@@ -57,6 +59,9 @@ export interface KopruIstemcisi {
   kullanimlariOku(since: number): Promise<OkumaSonucu<Sayfa<LogoKullanimSatiri>>>;
   // 3384-c a: bütün kartların alış faturası satırları kayıt sırasıyla sayfa; firma ve dönemle (kayıt numarası dönem tablosunundur).
   topluAlislariOku(since: number): Promise<OkumaSonucu<TopluAlisSayfasi>>;
+  // 3675 D1: fatura başlığı ve cari hareket (sözleşme fatura-cari-sozlesmesi.ts'de, doğrulanmadı); yalnız okunur.
+  faturaListesiOku(tur: FaturaTuru, since: number, from: string): Promise<OkumaSonucu<FaturaSayfasi>>;
+  cariHareketleriOku(since: number, from: string): Promise<OkumaSonucu<CariHareketSayfasi>>;
   // 2961-D4: malzemenin hareketleri (kayıt sırasıyla sayfa) ve en yeni alış faturası satırları (en çok 10). Logo'da kart yoksa veri null.
   malzemeHareketleriOku(kod: string, since: number): Promise<OkumaSonucu<Sayfa<LogoMalzemeHareketi> | null>>;
   sonAlisFiyatlariOku(kod: string): Promise<OkumaSonucu<LogoAlisFiyati[] | null>>;
@@ -231,6 +236,8 @@ export function kopruIstemcisiKur(ayar: LogoAyari, secenek: KopruSecenegi = {}):
     malKabulOku: (since) => oku(`/api/PurchaseOrder/receipts?since=${since}`, malKabulSatirlariniAyikla),
     irsaliyeOku: (since, from, changedAfter) =>
       oku(`/api/Dispatch/list?since=${since}&from=${encodeURIComponent(from)}${changedAfter === null ? '' : `&changedAfter=${encodeURIComponent(changedAfter)}`}`, irsaliyeSayfasiniAyikla),
+    faturaListesiOku: (tur, since, from) => oku(faturaListesiYolu(tur, since, from), faturaSayfasiniAyikla),
+    cariHareketleriOku: (since, from) => oku(cariHareketYolu(since, from), cariHareketSayfasiniAyikla),
     irsaliyeRefleriOku: (from) => oku(`/api/Dispatch/refs?from=${encodeURIComponent(from)}`, irsaliyeRefleriniAyikla),
     cariListesiOku: () => oku('/api/Arp/list', (g) => listeKayitlariniAyikla(g, 'cari')),
     ambarListesiOku: () => oku('/api/Lookup/warehouses', (g) => listeKayitlariniAyikla(g, 'ambar')),

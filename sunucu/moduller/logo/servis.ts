@@ -60,6 +60,8 @@ export const BEKLEME_NEDENLERI = {
   'kullanim-kapali': 'Logo malzeme kullanım okuması Sistem Ayarları\'nda kapalı; istek atılmıyor.',
   'irsaliye-kapali': 'Logo irsaliye okuması Sistem Ayarları\'nda kapalı; istek atılmıyor.',
   'son-alis-kapali': 'Logo son alış fiyatı kopyası Sistem Ayarları\'nda kapalı; istek atılmıyor.',
+  'fatura-listesi-kapali': 'Logo fatura listesi okuması Sistem Ayarları\'nda kapalı; istek atılmıyor.',
+  'cari-hareket-kapali': 'Logo cari hareket okuması Sistem Ayarları\'nda kapalı; istek atılmıyor.',
   'proje-kapali': 'Logo proje kartı gönderimi Sistem Ayarları\'nda kapalı; projeler gönderilmiyor, belgeler proje kodu olmadan gidiyor.',
   'dis-duzeltme-kapali': 'Logo\'da açılmış siparişi düzeltme kapalı (TMIV2_LOGO_SIPARIS_DUZELTME); istek atılmıyor.',
   'ortam-degiskeni-yok': 'Logo bağlantısı açık ama TMIV2_LOGO_KOPRU_ADRESI ve TMIV2_LOGO_KOPRU_ANAHTARI tanımlı değil; istek atılmıyor.',
@@ -135,8 +137,8 @@ export type TurSonucu =
   | { tur: 'guncelleme' | 'pasif' | 'kapatma' | 'bekletme' | 'iptal' | 'karsilama'; no: number; sonuc: GidenSonucu }
   | { tur: 'pasif-niyet'; no: number }
   | { tur: 'satis-kapali' }
-  | { tur: 'mal-kabul-kapali' | 'liste-kapali' | 'fatura-kapali' | 'malzeme-fisi-kapali' | 'malzeme-karti-kapali' | 'stok-kapali' | 'kullanim-kapali' | 'irsaliye-kapali' | 'son-alis-kapali' }
-  | { tur: 'okuma'; akis: 'mal-kabul' | 'cari' | 'ambar' | 'fatura' | 'malzeme-kodu' | 'malzeme-karti' | 'stok' | 'kullanim' | 'irsaliye' | 'son-alis'; sonuc: 'okundu' | Exclude<KopruSonucu, { tur: 'basarili' }>['tur']; sayi: number; ileti?: string }
+  | { tur: 'mal-kabul-kapali' | 'liste-kapali' | 'fatura-kapali' | 'malzeme-fisi-kapali' | 'malzeme-karti-kapali' | 'stok-kapali' | 'kullanim-kapali' | 'irsaliye-kapali' | 'son-alis-kapali' | 'fatura-listesi-kapali' | 'cari-hareket-kapali' }
+  | { tur: 'okuma'; akis: 'mal-kabul' | 'cari' | 'ambar' | 'fatura' | 'malzeme-kodu' | 'malzeme-karti' | 'stok' | 'kullanim' | 'irsaliye' | 'son-alis' | 'fatura-listesi' | 'cari-hareket'; sonuc: 'okundu' | Exclude<KopruSonucu, { tur: 'basarili' }>['tur']; sayi: number; ileti?: string }
   | { tur: 'malzeme-fisi-niyet'; no: number }
   | { tur: 'malzeme-fisi'; no: number; sonuc: GidenSonucu }
   | { tur: `${NiyetliBelge}-niyet`; no: number }
@@ -1018,7 +1020,7 @@ async function logoKoduyla<T extends Parameters<typeof logoKodlarinaCevir>[0]>(d
 // kendi anahtarı açık VE köprü değişkenleri varken çıkar. Turda en çok bir okuma isteği (fatura turu hariç: sınırlı sayıda sipariş, sıralı).
 export async function okumaKapisi(
   db: Db, o: TurOrtami, ayar: LogoAyarAnahtari,
-  kapali: 'mal-kabul-kapali' | 'liste-kapali' | 'fatura-kapali' | 'malzeme-fisi-kapali' | 'malzeme-karti-kapali' | 'stok-kapali' | 'kullanim-kapali' | 'irsaliye-kapali' | 'son-alis-kapali',
+  kapali: 'mal-kabul-kapali' | 'liste-kapali' | 'fatura-kapali' | 'malzeme-fisi-kapali' | 'malzeme-karti-kapali' | 'stok-kapali' | 'kullanim-kapali' | 'irsaliye-kapali' | 'son-alis-kapali' | 'fatura-listesi-kapali' | 'cari-hareket-kapali',
 ): Promise<TurSonucu | KopruIstemcisi> {
   if (!(await sistemAyariOku(db, 'logo.baglanti'))) return { tur: 'kapali' };
   if (!(await sistemAyariOku(db, ayar))) return { tur: kapali };
