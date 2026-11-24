@@ -472,4 +472,15 @@ describe('kişinin taslağı (gerçek PostgreSQL)', () => {
     assert.deepEqual(bek(await ortak()), {});
   });
 
+  test('TS-18 (3664): komutun cevabındaki görünüm, sonra okunan görünümle aynıdır (ilk komut ve ikinci komut; cevap için çalışma yeniden okunmaz)', async () => {
+    // Bekleyen kaydının kimliği ve saati isteğin anındandır; iki okuma arasında yalnız onlar farklı olabilir.
+    const sabit = (x: TaslakCevabi): unknown => JSON.parse(JSON.stringify(x).replace(/"id":"\d+-\d+"/g, '"id":"-"').replace(/"t":\d+/g, '"t":0'));
+    const t1 = await istek<TaslakCevabi>(a, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut: ayar({ dondurma: 6 }, 'ORN') });
+    assert.deepEqual(sabit(await istek<TaslakCevabi>(a, 'GET', '/plan/taslagim')), sabit(t1));
+    const t2 = await istek<TaslakCevabi>(a, 'POST', '/plan/taslagim/komut', { taslakSurumu: t1.taslak!.surum, komut: ayar({ dondurma: 7 }, 'ORN 2') });
+    assert.deepEqual(sabit(await istek<TaslakCevabi>(a, 'GET', '/plan/taslagim')), sabit(t2));
+    assert.equal(t2.taslak?.satirlar.length, 2);
+    await istek<TaslakCevabi>(a, 'POST', '/plan/taslagim/vazgec', { taslakSurumu: t2.taslak!.surum });
+  });
+
 });

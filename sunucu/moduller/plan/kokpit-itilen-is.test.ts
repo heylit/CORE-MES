@@ -64,7 +64,7 @@ describe('plan (gerçek PostgreSQL): Kokpit\'te itilen iş', () => {
       await tamam(c.planlama, 'POST', `/plan/senaryolar/${String(taslak)}/canliya-al`, { surum: await g(), cakismalariKabul: true });
       return tamam<PlanCevabi>(c.planlama, 'GET', '/plan');
     };
-    return { sahip, vardiya, i1, i2, it, saatte, canliyaAl };
+    return { sahip, vardiya, i1, i2, it, saatte, canliyaAl, ops, mk };
   }
 
   test('KI-01: itilen adım öncülünün bittiği anda yerleşir; taslak ve canlı önizlemedeki saattedir, farklı saat paylarında da', async () => {
@@ -105,4 +105,13 @@ describe('plan (gerçek PostgreSQL): Kokpit\'te itilen iş', () => {
     const canli = await canliyaAl(y.taslak.id);
     assert.deepEqual([Date.parse(yer(canli, i1).baslangic), Date.parse(yer(canli, i2).baslangic)], [saatte(13.5), saatte(13.5) + 50 * 60_000]);
   });
+  test('KI-03 (3664): taşıma komutunun cevabındaki taslak görünümü, sonra okunan görünümle aynıdır; bekleyen kaydının kimliği ve saati hariç', async () => {
+    const { ops, mk } = await hazirla('KC');
+    const sabit = (x: unknown): unknown => JSON.parse(JSON.stringify(x).replace(/"id":"\d+-\d+"/g, '"id":"-"').replace(/"t":\d+/g, '"t":0'));
+    const yaz = await tamam<{ taslak: { surum: number } | null }>(c.planlama, 'POST', '/plan/taslagim/komut', { taslakSurumu: null, komut: { tur: 'tasi', isId: ops[0]!, tezgah: String(mk), baslangic: 24 + 9 } });
+    assert.notEqual(yaz.taslak, null);
+    assert.deepEqual(sabit(await tamam(c.planlama, 'GET', '/plan/taslagim')), sabit(yaz));
+    await tamam(c.planlama, 'POST', '/plan/taslagim/vazgec', { taslakSurumu: yaz.taslak!.surum });
+  });
+
 });

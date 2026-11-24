@@ -7,7 +7,7 @@ import {
 import { degerCokBuyukMu } from '../recete-rota/disari.ts';
 import { DEGERLENDIRME_SURESI_MS, degerlendirmeBaslat, degerlendirmeYap } from './degerlendirme.ts';
 import { planaAlmaHesabi } from './plana-al.ts';
-import { PLANLAMA_ANAHTARI, planlamaCalismasi, planlamaYaz, planlamaYazmaDenetimi } from './planlama-servis.ts';
+import { PLANLAMA_ANAHTARI, planlamaCalismasi, planlamaCalismasiVeGirdisi, planlamaYaz, planlamaYazmaDenetimi } from './planlama-servis.ts';
 import * as sorgular from './sorgular.ts';
 import {
   adimEkBitisi, dataVerOf, dizImzasi, eksenOf, imza, kapasiteKomutuMu, kilitKaydi, komutAdi, komutUygula, oynat, uygulaKarari, type DizKomutu, type KilitKaydi, type SatirKomutu, type TaslakHesaplari, type TaslakImzasi, type TaslakSatiri as Satir,
@@ -101,11 +101,20 @@ export async function taslakKomutuEkle(db: Db, kullanici: Kullanici, g: { taslak
   const bitis0 = g.komut.tur === 'adim-uzadi' ? adimEkBitisi(r.deger, g.komut.isId) : undefined;
   const komutlar = [...eski, { komut: g.komut, ne: komutAdi(g.komut), t: simdi, ...(kapasiteKomutuMu(g.komut) ? { eksen: eksenOf(c.calisma) } : {}), ...(bitis0 === undefined ? {} : { bitis0 }) }];
   if (degerCokBuyukMu(komutlar)) throw cokBuyuk(BUYUK);
+  let yeniSurum: number | null;
   if (t === null) {
     const tabanImzasi: TaslakImzasi = imza(c.calisma);
-    if ((await sorgular.taslakEkle(db, { kisiId: kullanici.id, tabanSurum: c.surum, tabanImzasi, komutlar })) === null) throw cakisma(ESKI);
-  } else if ((await sorgular.taslakKomutlariYaz(db, { kisiId: kullanici.id, beklenenSurum: t.surum, komutlar })) === null) throw cakisma(ESKI);
-  return gorunum(db, kullanici, await sorgular.taslakOku(db, kullanici.id), simdi);
+    yeniSurum = await sorgular.taslakEkle(db, { kisiId: kullanici.id, tabanSurum: c.surum, tabanImzasi, komutlar });
+  } else yeniSurum = await sorgular.taslakKomutlariYaz(db, { kisiId: kullanici.id, beklenenSurum: t.surum, komutlar });
+  if (yeniSurum === null) throw cakisma(ESKI);
+  // 3664: cevap, taslağın görünümüdür; görünüm yeni komutu az önce oynatılan önceki komutların üstüne bir kez uygulayarak kurulur
+  // (çalışmanın yeniden okunması yüzlerce ms sürer). Aynı oynatma çağrısı hata verirse eski yoldan okunur.
+  const yinelenen = komutUygula(o.deger, g.komut, kisiOf(kullanici, simdi), HESAPLAR, bitis0, true);
+  if ('hata' in yinelenen) return gorunum(db, kullanici, await sorgular.taslakOku(db, kullanici.id), simdi);
+  return {
+    taslak: { surum: yeniSurum, tabanSurum: t === null ? c.surum : t.tabanSurum, satirlar: komutlar.map(({ eksen: _, bitis0: _b, ...s }, i) => ({ ...s, komut: disKomut(s.komut), hata: o.hatalar[i] ?? null })) },
+    calisma: yinelenen.deger as Record<string, unknown>, surum: c.surum,
+  };
 }
 
 // Son komut taslaktan çıkar; taslak boşalırsa silinir.
@@ -164,7 +173,7 @@ export async function taslakDegerlendirmesi(
   dizTemizle(simdi);
   const t = await sorgular.taslakOku(db, kullanici.id);
   surumDenetle(t, g.taslakSurumu);
-  const c = await planlamaCalismasi(db, kullanici, simdi);
+  const { cevap: c, okunan } = await planlamaCalismasiVeGirdisi(db, kullanici, simdi);
   if (c.calisma === null || c.surum === null) throw cakisma('Planlama çalışması yok; önce planı kurun.');
   const l = satirlar(t!.komutlar);
   const o = oynat(c.calisma, l, kisiOf(kullanici, simdi), HESAPLAR);
@@ -173,7 +182,7 @@ export async function taslakDegerlendirmesi(
   const r = await degerlendirmeBaslat(db, kullanici, { surum: c.surum, istek: g.istek }, simdi, yap, {
     calisma: o.deger,
     bitince: (s) => { if (d !== null && s.tur === 'plan-uygula') { d.plan = s.plan as Record<string, unknown>; d.bitis = Date.now(); } },
-  });
+  }, okunan);
   if (d !== null) dizler.set(r.is, d);
   return r;
 }
