@@ -396,6 +396,11 @@ export function planMaliyeti(
   return { tl: Math.round(toplam), bilinmeyen };
 }
 
+// Plan dakikaya yuvarlı yazılır (planAni) ve dakikayla gösterilir: sıra denetiminde sınır dakika çözünürlüğünde yarı açıktır. Öncül 12:15'te
+// bitip ardıl 12:15'te başlıyorsa (ya da fark yuvarlamadan doğan saniye payıysa) ihlal yoktur; ihlal ancak ardıl bir dakika erken başlarsa çıkar.
+// Değerler plan dakikasıdır (saat ekseni değil).
+export const sinirdanOnce = (deger: number, sinir: number): boolean => Math.round(deger) < Math.round(sinir);
+
 // Uyarılar (P5; kayıt geçer): teslim gecikmesi, sıraya aykırı başlangıç, akışlı işin öncülünden önce bitmesi, rotadaki kaynak ve adaylar
 // dışında kaynak. 308 b: elle taşıma ve yerleştirmede ve canlıya almada sıraya aykırı başlangıç reddedilir (servis); burada kalan uyarı
 // motorun ya da eski kaydın bıraktığı aykırılık içindir. Rota dışı kaynak uyarıyla geçer.
@@ -404,9 +409,9 @@ export function uyarilar(y: Aralik & { kaynak: Kaynak }, b: {
 }): string[] {
   const u: string[] = [];
   if (b.teslimDk !== null && y.bitis > b.teslimDk) u.push('Teslim tarihinden sonra bitiyor.');
-  if (b.enErken !== null && y.baslangic < b.enErken) u.push('Önceki iş emri bitmeden (sıraya aykırı) başlıyor.');
+  if (b.enErken !== null && sinirdanOnce(y.baslangic, b.enErken)) u.push('Önceki iş emri bitmeden (sıraya aykırı) başlıyor.');
   // Yerleşim tarihten (milisaniye) okunur; dakikanın yüzde biri tolerans.
-  else if (b.enErkenBitis != null && y.bitis < b.enErkenBitis - 0.01) u.push('Önceki iş emri bitmeden bitiyor (akışlı devir).');
+  else if (b.enErkenBitis != null && sinirdanOnce(y.bitis, b.enErkenBitis)) u.push('Önceki iş emri bitmeden bitiyor (akışlı devir).');
   if (b.rotaKaynaklari.length > 0 && !b.rotaKaynaklari.some((k) => ayniKaynak(k, y.kaynak))) u.push('Kaynak rotadaki makine, kişi ya da adaylar arasında değil.');
   return u;
 }

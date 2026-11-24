@@ -37,7 +37,7 @@ import { basladigiGunTakvimleri, calismaTakvimleri, gunYaz, isMerkeziKisiPaylari
 import type { BasladigiGun } from '../vardiya/disari.ts';
 import type { AdimDugumu, PlanIsEmri } from '../uretim-emirleri/disari.ts';
 import {
-  araliktanCikar, arkaArkaya, dortSaatGerekcesi, dortSaatIhlalleri, korunanIsler, kilitCakisani, emirTutari, katkiPaylari, calisilanParcalar, oncelikCarpani, oncelikSinifi, ayniKaynak, cakisirMi, dondurulacaklar, enErkenBaslangic, enErkenBitis, gostergeler, isSuresi, calismaBitisi,
+  araliktanCikar, arkaArkaya, dortSaatGerekcesi, dortSaatIhlalleri, korunanIsler, kilitCakisani, emirTutari, katkiPaylari, calisilanParcalar, oncelikCarpani, oncelikSinifi, ayniKaynak, cakisirMi, dondurulacaklar, enErkenBaslangic, enErkenBitis, sinirdanOnce, gostergeler, isSuresi, calismaBitisi,
   adetPayi, araliklaraEkle, ayarVeGecikme, bolmeAdetleri, EK_MESAI_HAFTA_SAAT, ekMesaiButcesi, vardiyaSaati, kapasiteBollugu, kapasiteKesri, kaynakAnahtari, kesisimDk, motorUyarilari, onayGecisiReddi, onayGecisleri, personelYuku, planMaliyeti, sabitYeri, sinirliGunSayisi, terminDakikasi, uyarilar, uzayanBosluk, verimliSure, kisiBaskaIstasyonda, yetkinlikUyarisi, yukYuzdesi,
   vardiyasiTanimsiz,
 } from './kurallar.ts';
@@ -1064,7 +1064,7 @@ function siraIhlali(b: Baglam, yerler: readonly Yer[], uretimEmriIdleri: Readonl
     const is = b.isler.get(y.isEmriId);
     if (!is || is.durum !== 'planli' || !uretimEmriIdleri.has(is.uretimEmriId)) continue;
     const { enErken } = onculSinirlari(b, y.isEmriId, yerler, y.kaynak);
-    if (enErken === null || y.baslangic >= enErken - 0.01) continue;
+    if (enErken === null || !sinirdanOnce(y.baslangic, enErken)) continue;
     const kilitli = 'kilitli' in y && y.kilitli === true;
     const ad = `${is.emirNo} OP ${is.opNo}`;
     const o = sinirlayanOncul(b, y, yerler);

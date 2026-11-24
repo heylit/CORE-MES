@@ -521,7 +521,7 @@ function yerindeTutmaBozuklari(p, st, cx) {
   const out = {};
   for (const id in p.ops) {
     const r = p.ops[id], o = cx.byId[id], t = o && tur(r); if (!t) continue;
-    for (const [pid, ty] of o.pr) { const q = p.ops[pid]; if (q && (ty === 'o' && !q.fas ? q.lot1 : q.C) > r.S + 1e-6) { out[id] = t; break; } }
+    for (const [pid, ty] of o.pr) { const q = p.ops[pid]; if (q && dkSayi(ty === 'o' && !q.fas ? q.lot1 : q.C) > dkSayi(r.S)) { out[id] = t; break; } }
   }
   const byM = {}; for (const r of Object.values(p.ops)) if (!r.fas && isFinite(r.S) && isFinite(r.C)) (byM[r.m] = byM[r.m] || []).push(r);
   for (const m in byM) {

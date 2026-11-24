@@ -23,12 +23,13 @@ export interface KokpitIsi {
 // onculler: adımın rotadaki bitmemiş öncülleri ve bağ türü (b: öncül bitince başlar, o: örtüşmeli, öncül bitmeden başlayabilir).
 export type BagTuru = 'b' | 'o';
 export interface KokpitAdimi { id: string; ad: string; adaylar: string[]; onculler?: readonly (readonly [string, BagTuru])[] }
+// Sınır dakika çözünürlüğünde yarı açıktır (plan dakikayla yazılır, 3662): aynı dakikada biten ve başlayan adım ters sayılmaz.
 // Tahtada çizilen bağ: öncülün ve ardılın planda yeri vardır. ters: "bitince" bağlı ardıl öncülü bitmeden başlıyor (geçersiz sıra).
 export interface AdimBagi { kimden: string; kime: string; tur: BagTuru; ters: boolean }
 export function adimBaglari(emirler: readonly KokpitEmri[], isler: Readonly<Record<string, KokpitIsi>>): AdimBagi[] {
   return emirler.flatMap((e) => e.adimlar.flatMap((a) => (a.onculler ?? []).flatMap(([kimden, tur]): AdimBagi[] => {
     const o = isler[kimden], x = isler[a.id];
-    return o && x ? [{ kimden, kime: a.id, tur, ters: tur === 'b' && x.S < o.C - 0.01 }] : [];
+    return o && x ? [{ kimden, kime: a.id, tur, ters: tur === 'b' && Math.round(x.S * 60) < Math.round(o.C * 60) }] : [];
   })));
 }
 // Adımın bağımlılık yazısı (3330): öncül, emrin operasyon listesindeki sıra numarasıyla (tablodaki # sütunu). uzun tablo sütunudur
