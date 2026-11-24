@@ -35,7 +35,7 @@ test('liste: SmartES sütunu dört durumu ve gönderilmezi gösterir; OP kırıl
   await sahteDurumlar(page);
   await ac('/uretim-emirleri');
   const tablo = page.getByRole('table', { name: 'Üretim emirleri' });
-  await expect(tablo.getByRole('columnheader', { name: 'SmartES' })).toBeVisible();
+  if ((page.viewportSize()?.width ?? 1280) >= 768) await expect(tablo.getByRole('columnheader', { name: 'SmartES' })).toBeVisible();
   const hucre = tablo.locator('td[data-baslik="SmartES"]');
   // İstek sıralı kimliklerle gider; durumlar listedeki sıraya değil kimliğe göre dağılır.
   const duran = hucre.filter({ hasText: 'Durdu' }).first();

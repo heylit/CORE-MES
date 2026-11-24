@@ -51,12 +51,12 @@ const sutunlar = (resimler: ReadonlyMap<number, KucukResim>, smartes: SmartesSut
       const hurda = e.canli?.hurda ?? 0;
       return <>{saglam === null ? '—' : saglam} / {e.adet}{hurda > 0 && <span className="tc-emir-hurda"> (hurda {hurda})</span>}</>;
     } },
-  { anahtar: 'suAn', baslik: 'Şu an', hucre: suAnMetni },
+  { anahtar: 'suAn', kartta: true, baslik: 'Şu an', hucre: suAnMetni },
   { anahtar: 'durum', baslik: 'Durum', hucre: (e) => {
       const d = durumGosterimi(e);
       return <><Rozet ton={d.ton}>{d.etiket}</Rozet>{e.bekletme && <> <Rozet ton="uyari">Beklemede</Rozet></>}{e.rotaBekliyor === true && <> <Rozet ton="uyari">Rota bekliyor</Rozet></>}</>;
     } },
-  ...(smartes ? [{ anahtar: 'smartes', baslik: 'SmartES', hucre: (e: IzlemeEmri) => <SmartesEmirHucresi bilgi={smartes.emir(e.id)} hata={smartes.hata} /> }] : []),
+  ...(smartes ? [{ anahtar: 'smartes', kartRozet: true, baslik: 'SmartES', hucre: (e: IzlemeEmri) => <SmartesEmirHucresi bilgi={smartes.emir(e.id)} hata={smartes.hata} /> }] : []),
   { anahtar: 'acilma', baslik: 'Açılma', kirilmaz: true, hucre: (e) => zamanMetni(e.acilma) },
 ];
 
