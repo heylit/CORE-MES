@@ -73,7 +73,7 @@ export async function bildirimGonder(db: Db, olay: BildirimOlayi): Promise<numbe
   const asil = alicilariSec(olay.tur, islemler, {
     kisiler: olay.kisiler, haric: olay.haric, ayarli: gorme === null ? ayarli : null, yalnizKisiler: olay.yalnizKisiler,
   });
-  const ekliAlicilar = gorme !== null && ayarli !== null ? ekAlicilariEkle(asil, ayarli, islemler, gorme, olay.haric) : asil;
+  const ekliAlicilar = gorme !== null && ayarli !== null ? ekAlicilariEkle(asil, ayarli, islemler, gorme) : asil;
   // 3639: alıcı grubu varsa grubun kişisi ana bildirimi almaz, grubun metniyle alır (grup, 3597 ek alıcısından önce gelir).
   const kuralDegerleri = kuralliTurMu(olay.tur) ? kuralDegerleriniAyikla(olay.tur, olay.alanlar) : {};
   const hedefler = yazim === 'tam' ? await kuralHedefleri(db, { tur: olay.tur, haric: olay.haric, degerler: kuralDegerleri }, islemler) : [];

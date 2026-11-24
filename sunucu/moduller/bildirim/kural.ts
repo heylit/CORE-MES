@@ -81,7 +81,7 @@ export const olayIzleriniTemizle = (db: Db): Promise<void> => sr.eskiIzleriSil(d
 
 export interface KuralSonucu { kisiId: number; id: number; yeni: boolean; eposta: boolean; telefon: boolean; baslik: string; epostaSablonId: number | null }
 
-// Bu olayda çalışacak kurallar ve her birinin alıcıları (olayı görme yetkisi olmayan, olayı başlatan ve günlük sınırı dolan düşer).
+// Bu olayda çalışacak kurallar ve her birinin alıcıları (olayı görme yetkisi olmayan ve günlük sınırı dolan düşer; listede açıkça olan başlatan kendi eylemini de alır, 3639).
 // Kural motoru ana satırlardan önce de çağrılır: kayda bağlı olayda alıcı grubu ek alıcıdan önce gelir (3639, aşağıda).
 export interface KuralHedefi { kural: sr.KuralSatiri; yetkili: number[] }
 export async function kuralHedefleri(
@@ -95,7 +95,7 @@ export async function kuralHedefleri(
     if (!kosullarTutar(kural.kosullar, olay.degerler)) continue;
     const { yetkili } = await kuralAlicilari(db, olay.tur, kural, islemler);
     const bugun = await sr.kuralBugunSayilari(db, kural.id, gunBasi);
-    hedefler.push({ kural, yetkili: yetkili.filter((k) => k !== olay.haric && (bugun.get(k) ?? 0) < KURAL_GUNLUK_EN_COK) });
+    hedefler.push({ kural, yetkili: yetkili.filter((k) => (bugun.get(k) ?? 0) < KURAL_GUNLUK_EN_COK) });
   }
   return hedefler;
 }

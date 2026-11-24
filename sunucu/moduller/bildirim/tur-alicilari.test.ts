@@ -195,7 +195,10 @@ describe('bildirim alıcıları (760 c, 761 b, gerçek PostgreSQL)', () => {
     assert.deepEqual(await alanlar('siparisler.siparis-onaylandi'), sirala([kim('operator'), kim('mudur')]));
     await bosalt();
     await gonder({ tur: 'siparisler.siparis-onaylandi', baslik: 'Onaylandı', yol: '/siparisler/1', kaynakKimlik: 's-3', kisiler: [kim('operator')], haric: kim('mudur') });
-    assert.deepEqual(await alanlar('siparisler.siparis-onaylandi'), [kim('operator')]);
+    assert.deepEqual(await alanlar('siparisler.siparis-onaylandi'), sirala([kim('operator'), kim('mudur')]), '3639: ek alıcı listesinde açıkça olan başlatan kendi eylemini alır');
+    await bosalt();
+    await gonder({ tur: 'siparisler.siparis-onaylandi', baslik: 'Onaylandı', yol: '/siparisler/1', kaynakKimlik: 's-4', kisiler: [kim('operator')], haric: kim('kalite') });
+    assert.deepEqual(await alanlar('siparisler.siparis-onaylandi'), sirala([kim('operator'), kim('mudur')]), 'listede olmayan başlatan almaz');
     await ayarla('siparisler.siparis-onaylandi', [], []);
   });
 

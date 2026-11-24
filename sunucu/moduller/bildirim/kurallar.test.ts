@@ -165,9 +165,9 @@ test('BIL-17: türün gösterim ayarı varsayılanın yerine geçer; varsayılan
 
 describe('ek alıcı (3597 a)', () => {
   const islemler = new Map<number, Islem[]>([[1, ['siparisler.oku']], [2, []], [3, ['siparisler.oku']]]);
-  test('asıl alıcılar kalır; seçilen yalnız görme işlemiyle ve tetikleyen değilse eklenir', () => {
-    assert.deepEqual(ekAlicilariEkle([5], [1, 2, 3, 9], islemler, 'siparisler.oku', 3), [1, 5]);
-    assert.deepEqual(ekAlicilariEkle([], [], islemler, 'siparisler.oku', null), []);
-    assert.deepEqual(ekAlicilariEkle([1], [1], islemler, 'siparisler.oku', undefined), [1]);
+  test('asıl alıcılar kalır; seçilen yalnız görme işlemiyle eklenir (listedeki tetikleyen de alır, 3639)', () => {
+    assert.deepEqual(ekAlicilariEkle([5], [1, 2, 3, 9], islemler, 'siparisler.oku'), [1, 3, 5]);
+    assert.deepEqual(ekAlicilariEkle([], [], islemler, 'siparisler.oku'), []);
+    assert.deepEqual(ekAlicilariEkle([1], [1], islemler, 'siparisler.oku'), [1]);
   });
 });

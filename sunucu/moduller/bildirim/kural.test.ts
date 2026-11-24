@@ -136,10 +136,12 @@ describe('3478-3 bildirim kuralları (gerçek PostgreSQL)', () => {
     assert.deepEqual((await satirlar('k3b')).map((x) => x.kisi_id), [a]);
   });
 
-  test('KM-4 ana bildirimi alan ve olayı tetikleyen kişi kuraldan ikinci satır almaz', async () => {
+  test('KM-4 ana bildirimi alan kişi kuraldan ikinci satır almaz; listedeki tetikleyen alır (3639)', async () => {
     await ekle({ kisiIdleri: [a, b] });
     await gonder('M-1', 'k4', { haric: b });
-    assert.deepEqual((await satirlar('k4')).map((x) => x.kisi_id), [a]);
+    assert.deepEqual((await satirlar('k4')).map((x) => x.kisi_id), [a, b]);
+    await gonder('M-1', 'k4b', { haric: c });
+    assert.deepEqual((await satirlar('k4b')).map((x) => x.kisi_id), [a, b], 'listede olmayan tetikleyen almaz');
   });
 
   test('KM-5 kaynak kapanınca kural satırı da kapanır', async () => {

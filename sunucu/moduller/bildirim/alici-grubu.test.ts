@@ -139,7 +139,7 @@ describe('3639 alıcı grubu (kayda bağlı olay, gerçek PostgreSQL)', () => {
     await ekAlici([]);
   });
 
-  test('kayıttaki kişi de gruptaysa grup metni kazanır; olayı başlatan grupta olsa da almaz', async () => {
+  test('kayıttaki kişi de gruptaysa grup metni kazanır; olayı başlatan grupta açıkça varsa kendi eylemini alır, yoksa almaz (3639)', async () => {
     await bosalt();
     await o().sahip.sorgu('DELETE FROM bildirim_kurali');
     await grupEkle({ kisiIdleri: [kim('mudur'), yoneticiId] });
@@ -149,7 +149,10 @@ describe('3639 alıcı grubu (kayda bağlı olay, gerçek PostgreSQL)', () => {
     assert.equal(m[0]?.baslik, 'Sipariş onaylandı');
     await bosalt();
     await gonder({ haric: yoneticiId });
-    assert.deepEqual(await satirlar(yoneticiId), []);
+    assert.equal((await satirlar(yoneticiId)).length, 1, 'gruptaki başlatan alır');
+    await bosalt();
+    await gonder({ haric: kim('bakim') });
+    assert.deepEqual(await satirlar(kim('bakim')), [], 'grupta olmayan başlatan almaz');
   });
 
   test('grup e-postası seçilen özel şablonla kuyruğa girer; şablon silinirse olayın şablonuna döner', async () => {
