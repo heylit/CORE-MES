@@ -22,6 +22,16 @@ function c45(b: KuralBaglami): KartKaydi {
 const FIYAT = { kgFiyati: '42.5', birimFiyati: '650', paraBirimi: 'TRY', gecerlilik: '2026-10-01' };
 
 describe('foyVerisi', () => {
+  test('3630: ERP kodu CORE koduyla aynı olsa da Ticari bölümünde yazılır; boşsa satır yok', () => {
+    const b = baglam();
+    const d = c45(b);
+    const ticari = (x: KartKaydi) => foyVerisi(x, b).bolumler.find((k) => k.baslik === 'Ticari')?.satirlar;
+    expect(ticari(d)?.some((s) => s.ad === 'ERP kodu')).toBe(false);
+    const kod = foyVerisi(d, b).kod;
+    const ayni = ticari({ ...d, com: { ...d.com, eskiKod: kod } });
+    expect(ayni?.[0]).toEqual({ ad: 'ERP kodu', deger: kod });
+  });
+
   test('hammadde föyü prototipin bölüm sırasıyla; kod ve açıklama bölümü sonda', () => {
     const b = baglam();
     const v = foyVerisi(c45(b), b);
