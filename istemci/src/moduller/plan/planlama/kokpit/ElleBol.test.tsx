@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { ornekCalisma } from '../motor/ornek.ts';
 import { planKurSifirla } from '../motor/coz.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
-import { ElleBol, ilkParcalar, parcaDenetimi } from './ElleBol.tsx';
+import { ElleBol, bolunemezNedeni, esitParcalar, ilkParcalar, parcaDenetimi } from './ElleBol.tsx';
 import type { KokpitModeli } from './kurallar.ts';
 import { sahteTaslak } from './taslak-test-yardim.ts';
 
@@ -22,7 +22,7 @@ function kur({ yazabilir = true, kayitli = null as { adet: number; m: string }[]
   const { t, yazilan } = sahteTaslak(c.dataVer);
   const kapat = vi.fn();
   render(<ElleBol c={c} m={M} isId="ORN-1.20" taslak={t} yazabilir={yazabilir} kapat={kapat} />);
-  return { t, yazilan, kapat, panel: screen.getByRole('complementary', { name: 'Adımı böl' }) };
+  return { t, yazilan, kapat, panel: screen.getByRole('complementary', { name: 'Planda böl' }) };
 }
 const adetler = (panel: HTMLElement) => within(panel).getAllByLabelText('Adet') as HTMLInputElement[];
 const tezgahlar = (panel: HTMLElement) => within(panel).getAllByLabelText('Tezgâh') as HTMLSelectElement[];
@@ -46,7 +46,7 @@ describe('Kokpit adımı elle böl (3488 c)', () => {
     expect(tezgahlar(panel).map((x) => x.value)).toEqual(['ORN-F1', 'ORN-F2']);
     fireEvent.change(adetler(panel)[1]!, { target: { value: '2' } });
     expect(panel.querySelector('[data-toplam]')?.textContent).toMatch(/^Toplam 7 \/ 9 adet\./);
-    fireEvent.click(within(panel).getByRole('button', { name: 'Etkisini gör' }));
+    expect((within(panel).getByRole('button', { name: 'Etkisini gör' }) as HTMLButtonElement).disabled).toBe(true);
     expect(within(panel).getByRole('alert').textContent).toBe('Parçaların toplamı adımın adedi (9) olmalı.');
     expect(yazilan).toEqual([]);
     fireEvent.click(within(panel).getByRole('button', { name: 'Parça ekle' }));
@@ -64,10 +64,10 @@ describe('Kokpit adımı elle böl (3488 c)', () => {
     const { yazilan, panel } = kur({ kayitli: [{ adet: 6, m: 'ORN-F2' }, { adet: 3, m: 'ORN-F1' }] });
     expect(panel.querySelector('[data-kayitli-bolme]')?.textContent).toBe('F2 6, F1 3');
     expect(adetler(panel).map((x) => x.value)).toEqual(['6', '3']);
-    expect(within(panel).queryByRole('button', { name: /Parça \d'i sil/ })).toBeNull();
+    expect(within(panel).getAllByRole('button', { name: /Parça \d'i sil/ }).every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
     for (let i = 0; i < 4; i++) fireEvent.click(within(panel).getByRole('button', { name: 'Parça ekle' }));
     expect(adetler(panel).length).toBe(6);
-    expect(within(panel).queryByRole('button', { name: 'Parça ekle' })).toBeNull();
+    expect((within(panel).getByRole('button', { name: 'Parça ekle' }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(within(panel).getByRole('button', { name: "Parça 6'i sil" }));
     expect(adetler(panel).length).toBe(5);
     fireEvent.click(within(panel).getByRole('button', { name: 'Bölmeyi kaldır' }));
@@ -79,7 +79,38 @@ describe('Kokpit adımı elle böl (3488 c)', () => {
     const { panel, kapat } = kur({ yazabilir: false });
     expect(within(panel).queryByRole('textbox')).toBeNull();
     expect(within(panel).getByText('Adımı yalnız planı yazabilen kişi böler.')).toBeTruthy();
-    fireEvent.click(within(panel).getByRole('button', { name: 'Adımı bölmeyi kapat' }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Planda bölmeyi kapat' }));
     expect(kapat).toHaveBeenCalled();
+  });
+
+  it('Eşit 3 adedi kalanı ilk parçalara vererek paylaştırır, tezgâhları korur, elle girileni ezer ve bunu yazar', () => {
+    expect(esitParcalar([], 3, 100, ['A', 'B'])).toEqual([{ adet: '34', tezgah: 'A' }, { adet: '33', tezgah: 'B' }, { adet: '33', tezgah: 'A' }]);
+    expect(esitParcalar([{ adet: '1', tezgah: 'B' }, { adet: '2', tezgah: 'A' }, { adet: '3', tezgah: 'B' }, { adet: '4', tezgah: 'A' }], 2, 9, ['A', 'B'])).toEqual([{ adet: '5', tezgah: 'B' }, { adet: '4', tezgah: 'A' }]);
+    const { panel } = kur();
+    fireEvent.change(adetler(panel)[0]!, { target: { value: '1' } });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Eşit 3' }));
+    expect(adetler(panel).map((x) => x.value)).toEqual(['3', '3', '3']);
+    expect(tezgahlar(panel).map((x) => x.value)).toEqual(['ORN-F1', 'ORN-F2', 'ORN-F3']);
+    expect(panel.querySelector('[data-toplam]')?.textContent).toMatch(/^Toplam 9 \/ 9 adet · eşit dağıtıldı\./);
+    fireEvent.change(adetler(panel)[0]!, { target: { value: '4' } });
+    expect(panel.querySelector('[data-toplam]')?.textContent).not.toMatch(/eşit dağıtıldı/);
+  });
+
+  it('bölünemeyen adımda neden yazılır ve form çıkmaz; kilitli adımda kilidin kalkacağı yazılır', () => {
+    expect(bolunemezNedeni({ basladi: true, fason: false }, 9)).toBe('Başlamış adım bölünmez');
+    expect(bolunemezNedeni({ basladi: false, fason: false, bitti: true }, 9)).toBe('Bitmiş adım bölünmez');
+    expect(bolunemezNedeni({ basladi: false, fason: true }, 9)).toBe('Fason adım bölünmez');
+    expect(bolunemezNedeni({ basladi: false, fason: false }, 1)).toBe('Adedi bölmeye yetmiyor (en az 2)');
+    expect(bolunemezNedeni({ basladi: false, fason: false }, 2)).toBeNull();
+    expect(bolunemezNedeni(undefined, 2)).toBeNull();
+    const baslamis = { ...M, isler: { 'ORN-1.20': { basladi: true, fason: false, kilitli: false } } } as unknown as typeof M;
+    const c = ornekCalisma() as unknown as PlanlamaCalismasi;
+    render(<ElleBol c={c} m={baslamis} isId="ORN-1.20" taslak={sahteTaslak(c.dataVer).t} yazabilir kapat={vi.fn()} />);
+    expect(document.querySelector('[data-bolunemez]')?.textContent).toBe('Başlamış adım bölünmez.');
+    expect(screen.queryByRole('button', { name: 'Etkisini gör' })).toBeNull();
+    cleanup();
+    const kilitli = { ...M, isler: { 'ORN-1.20': { basladi: false, fason: false, kilitli: true } } } as unknown as typeof M;
+    render(<ElleBol c={c} m={kilitli} isId="ORN-1.20" taslak={sahteTaslak(c.dataVer).t} yazabilir kapat={vi.fn()} />);
+    expect(document.querySelector('[data-kilit-kalkar]')).not.toBeNull();
   });
 });

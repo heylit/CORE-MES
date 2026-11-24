@@ -884,6 +884,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const elleBolAc = yazabilir && !tur
     ? (isId: string): void => { setAyarAcik(false); setAyarYon(null); setKapasiteAcik(false); setSorunTezgahi(null); setEngelAcik(false); setSorunAdimi(null); setBolAdimi(isId); }
     : null;
+  // Kayıtlı elle bölmeler (adım kimliği -> parça sayısı): listede "Bölünmüş" işareti.
+  const bolunmus = useMemo(() => Object.fromEntries(Object.entries((c as unknown as { elleBol?: Record<string, readonly unknown[]> }).elleBol ?? {}).map(([k, v]) => [k, v.length])), [c]);
   const adimEk = useMemo(() => adimEkleri(c), [c]);
   const adimBekle = useMemo(() => ustBeklemeleri(adimBeklemeleri(c, m.simdi), emirKaynagi, biten, m), [c, m, emirKaynagi, biten]);
   const kol = useMemo(() => kolNotlari(m, c.D, emirKaynagi), [c, m, emirKaynagi]);
@@ -1158,7 +1160,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
             planla={yazabilir && c.plan !== null ? (k) => { void yenidenPlanla(k.emirler.filter((e) => e.durum === 'plansiz').map((e) => e.id), `${k.siparis?.no ?? k.emirler[0]?.no ?? ''} planlandı.`); } : null}
             yenidenPlanla={yazabilir && c.plan !== null ? (k) => { void yenidenPlanla(k.emirler.map((e) => e.id), `${k.siparis?.no ?? k.emirler[0]?.no ?? ''} yeniden planlandı.`); } : null}
             tahta={listeTahtasi} satirBirincil={satirBirincil} adimSec={listeAdimSec} seciliIs={secIs}
-            tasi={yazabilir && !tur ? tasiDene : null} bol={elleBolAc} malzemeAni={malzemeAni} hedef={setYerHedefi} secimiBirak={() => { sec(null, null); }}
+            tasi={yazabilir && !tur ? tasiDene : null} bol={elleBolAc} bolAcik={bolAdimi} bolunmus={bolunmus} malzemeAni={malzemeAni} hedef={setYerHedefi} secimiBirak={() => { sec(null, null); }}
           />
           {butunTezgahlar && !vurgu && <section className="tc-pyq-bolum tc-pyq-bolum-plan" aria-label="Tezgâhlar"><h2>Tezgâhlar</h2>{listeTahtasi}</section>}
             </>

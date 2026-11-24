@@ -30,6 +30,21 @@ export function parcaDenetimi(l: readonly Parca[], adet: number): { paylar: { ad
   return { paylar: l.map((p, i) => ({ adet: sayilar[i]!, tezgah: p.tezgah })), toplam, hata: null };
 }
 
+// Eşit N (3661): parça sayısını N'e getirir, adedi eşit paylaştırır (kalan ilk parçalara: 100/3 = 34+33+33). Var olan parçaların tezgâhı
+// korunur, yeni parçalar sıradaki uygun tezgâhı alır; elle girilmiş adetlerin üstüne yazar. Toplam denetimi sunucudadır.
+export function esitParcalar(l: readonly Parca[], n: number, adet: number, tezgahlar: readonly string[]): Parca[] {
+  const taban = Math.floor(adet / n), kalan = adet % n;
+  return Array.from({ length: n }, (_, i) => ({ adet: String(taban + (i < kalan ? 1 : 0)), tezgah: l[i]?.tezgah ?? tezgahlar[i % Math.max(tezgahlar.length, 1)] ?? '' }));
+}
+// Adım neden bölünemez (sunucudaki elleBolAdimi ile aynı kapılar); bölünebiliyorsa null. Düğme pasif kalır, neden satırda yazılır.
+export function bolunemezNedeni(x: { basladi: boolean; bitti?: boolean; fason: boolean } | undefined, adet: number): string | null {
+  if (x?.bitti === true) return 'Bitmiş adım bölünmez';
+  if (x?.basladi === true) return 'Başlamış adım bölünmez';
+  if (x?.fason === true) return 'Fason adım bölünmez';
+  if (adet < 2) return 'Adedi bölmeye yetmiyor (en az 2)';
+  return null;
+}
+
 export interface ElleBolOzellikleri {
   c: PlanlamaCalismasi;
   m: Pick<KokpitModeli, 'emirler' | 'tezgahlar' | 'isler'>;
@@ -46,28 +61,30 @@ export function ElleBol({ c, m, isId, taslak, yazabilir, kapat }: ElleBolOzellik
   const kayitli = (c as unknown as { elleBol?: Record<string, { adet: number; m: string }[]> }).elleBol?.[isId] ?? null;
   const adet = e?.adet ?? 0;
   const [l, setL] = useState<Parca[]>(() => ilkParcalar(adet, tezgahlar, kayitli));
-  const [goster, setGoster] = useState(false);
+  const [esitti, setEsitti] = useState(false);
   const { durum, dene, uygula, vazgec } = useEtki({ c, taslak, sonuc: () => undefined });
   const kilitli = !yazabilir || taslak === null || taslak.mesgul || durum.tur === 'hesap' || durum.tur === 'etki';
   const d = parcaDenetimi(l, adet);
   const kod = (id: string): string => m.tezgahlar.find((t) => t.id === id)?.kod ?? id;
   const kok = useRef<HTMLElement>(null);
   useEffect(() => { kok.current?.scrollIntoView?.({ block: 'start' }); }, []);
-  const yaz = (i: number, p: Partial<Parca>): void => { setL((o) => o.map((x, j) => (j === i ? { ...x, ...p } : x))); };
+  const yaz = (i: number, p: Partial<Parca>): void => { setEsitti(false); setL((o) => o.map((x, j) => (j === i ? { ...x, ...p } : x))); };
+  const esitle = (n: number): void => { setEsitti(true); setL((o) => esitParcalar(o, n, adet, tezgahlar)); };
+  const yok = bolunemezNedeni(m.isler[isId], adet);
+  const kilitliAdim = m.isler[isId]?.kilitli === true;
   const gonder = (ev: FormEvent): void => {
     ev.preventDefault();
-    setGoster(true);
     if (!e || d.paylar === null) return;
     void dene({ tur: 'elle-bol', isId, paylar: d.paylar } satisfies TaslakKomutu, [e.id]);
   };
   const kaldir = (): void => { if (e) void dene({ tur: 'elle-bol-sil', isId } satisfies TaslakKomutu, [e.id]); };
-  const ileti = durum.tur === 'hata' ? durum.ileti : goster ? d.hata : null;
+  const ileti = durum.tur === 'hata' ? durum.ileti : d.hata;
 
   return (
-    <aside ref={kok} className="tc-pyq-ayrinti tc-pyq-ayarlar tc-pyq-elle-bol" aria-label="Adımı böl">
+    <aside ref={kok} className="tc-pyq-ayrinti tc-pyq-ayarlar tc-pyq-elle-bol" aria-label="Planda böl">
       <header>
-        <div><b>Adımı böl</b><small>Adet parçalara ayrılır, her parça ayrı tezgâhta yapılır. Bölme yalnız bu plandadır, üretim emrini partiye bölmez.</small></div>
-        <button type="button" className="tc-pyq-simge-dugme" aria-label="Adımı bölmeyi kapat" onClick={kapat}><Simge ad="x" boyut="k" /></button>
+        <div><b>Planda böl</b><small>Adet parçalara ayrılır, her parça ayrı tezgâhta yapılır. Bölme yalnız bu plandadır: üretim emri ve sayım değişmez, partiyi bölmek değildir.</small></div>
+        <button type="button" className="tc-pyq-simge-dugme" aria-label="Planda bölmeyi kapat" onClick={kapat}><Simge ad="x" boyut="k" /></button>
       </header>
       {!e || !a ? <p className="tc-pyq-not">Adım bulunamadı; plan değişmiş olabilir.</p> : (
         <>
@@ -77,8 +94,10 @@ export function ElleBol({ c, m, isId, taslak, yazabilir, kapat }: ElleBolOzellik
             <div><dt>Kayıtlı bölme</dt><dd data-kayitli-bolme={kayitli === null ? 'yok' : ''}>{kayitli === null ? 'yok' : kayitli.map((p) => `${kod(p.m)} ${String(p.adet)}`).join(', ')}</dd></div>
           </dl>
           {!yazabilir && <p className="tc-pyq-not">Adımı yalnız planı yazabilen kişi böler.</p>}
+          {yok !== null && <p className="tc-pyq-not" data-bolunemez={yok}>{yok}.</p>}
+          {kilitliAdim && yok === null && <p className="tc-pyq-not" data-kilit-kalkar="">Uygulayınca adımın kilidi kalkar; parçaların yerini sistem seçer.</p>}
           {tezgahlar.length < 1 && <p className="tc-pyq-not">Bu adımın uygun tezgâhı yok; bölünemez.</p>}
-          {durum.tur === 'etki' ? <EtkiBolumu ad="Bölmenin etkisi" e={durum.e} uygula={() => { void uygula(durum.e); }} vazgec={() => { void vazgec(); }} /> : yazabilir && tezgahlar.length > 0 && (
+          {durum.tur === 'etki' ? <EtkiBolumu ad="Bölmenin etkisi" e={durum.e} uygula={() => { void uygula(durum.e); }} vazgec={() => { void vazgec(); }} /> : yazabilir && yok === null && tezgahlar.length > 0 && (
             <form className="tc-pyq-ayar-etki" noValidate aria-label="Parçalar" onSubmit={gonder}>
               {l.map((p, i) => (
                 <fieldset key={i} className="tc-pyq-elle-parca" data-parca={i + 1}>
@@ -94,14 +113,18 @@ export function ElleBol({ c, m, isId, taslak, yazabilir, kapat }: ElleBolOzellik
                       {tezgahlar.map((t) => <option key={t} value={t}>{kod(t)}</option>)}
                     </select>
                   </label>
-                  {l.length > 2 && <Dugme tur="ikincil" simge="trash" aria-label={`Parça ${String(i + 1)}'i sil`} disabled={kilitli} onClick={() => { setL((o) => o.filter((_, j) => j !== i)); }}>Sil</Dugme>}
+                  <Dugme tur="ikincil" simge="trash" aria-label={`Parça ${String(i + 1)}'i sil`} disabled={kilitli || l.length <= 2} title={l.length <= 2 ? 'En az iki parça kalmalı' : undefined} onClick={() => { setEsitti(false); setL((o) => o.filter((_, j) => j !== i)); }}>Sil</Dugme>
                 </fieldset>
               ))}
-              {l.length < PARCA_EN_COK && <span><Dugme tur="ikincil" simge="plus" disabled={kilitli} onClick={() => { setL((o) => [...o, { adet: '', tezgah: tezgahlar[o.length % tezgahlar.length] ?? '' }]); }}>Parça ekle</Dugme></span>}
-              <p className="tc-pyq-not" data-toplam={d.toplam} role="status">Toplam {d.toplam} / {adet} adet. Parçaların yerini sistem seçer; bir parçayı sonra tahtadan taşıyabilirsiniz. Sonraki adım bütün parçaları bekler.</p>
+              <div className="tc-pyq-elle-sayi" role="group" aria-label="Parça sayısı">
+                {adet >= 2 && <Dugme tur="ikincil" simge="layers" disabled={kilitli} onClick={() => { esitle(2); }}>Eşit 2</Dugme>}
+                {adet >= 3 && PARCA_EN_COK >= 3 && <Dugme tur="ikincil" simge="layers" disabled={kilitli} onClick={() => { esitle(3); }}>Eşit 3</Dugme>}
+                <Dugme tur="ikincil" simge="plus" disabled={kilitli || l.length >= PARCA_EN_COK} title={l.length >= PARCA_EN_COK ? `En çok ${String(PARCA_EN_COK)} parça` : undefined} onClick={() => { setEsitti(false); setL((o) => [...o, { adet: '', tezgah: tezgahlar[o.length % tezgahlar.length] ?? '' }]); }}>Parça ekle</Dugme>
+              </div>
+              <p className="tc-pyq-not" data-toplam={d.toplam} role="status">Toplam {d.toplam} / {adet} adet{esitti ? ' · eşit dağıtıldı' : ''}. Parçaların yerini sistem seçer; bir parçayı sonra tahtadan taşıyabilirsiniz. Sonraki adım bütün parçaları bekler.</p>
               {ileti !== null && <p className="tc-pyq-ayar-hata" role="alert">{ileti}</p>}
               <div className="tc-pyq-ayar-dugmeler">
-                <Dugme type="submit" tur="birincil" simge="clock" disabled={kilitli} yukleniyor={durum.tur === 'hesap'}>{durum.tur === 'hesap' ? 'Hesaplanıyor' : 'Etkisini gör'}</Dugme>
+                <Dugme type="submit" tur="birincil" simge="clock" disabled={kilitli || d.paylar === null} yukleniyor={durum.tur === 'hesap'}>{durum.tur === 'hesap' ? 'Hesaplanıyor' : 'Etkisini gör'}</Dugme>
                 {kayitli !== null && <Dugme tur="ikincil" simge="x" disabled={kilitli} onClick={kaldir}>Bölmeyi kaldır</Dugme>}
               </div>
             </form>

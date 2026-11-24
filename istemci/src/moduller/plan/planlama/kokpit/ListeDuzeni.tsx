@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Dugme, Rozet, Simge, type RozetTonu } from '../../../../ortak/arayuz/index.ts';
 import type { OkunanPlan } from '../motor/kurallar.ts';
+import { bolunemezNedeni } from './ElleBol.tsx';
 import { ElleYerlestir } from './ElleYerlestir.tsx';
 import { Hamleler, type HamleOzellikleri } from './Hamleler.tsx';
 import { DURDURMA_BEKLIYOR, DURUS_OKUNMADI, adimBeklemeYazisi, adimUzamaYazisi, durumYazisi as emirDurumYazisi, durusOkunmadi, eksikNedeni, engelleyenAdim, sureYaz, type AdimBeklemesi, type EmirDurumu, type KokpitModeli, type KolNotlari } from './kurallar.ts';
@@ -43,6 +44,9 @@ export interface ListeDuzeniOzellikleri {
   // 3488: yerleşmeyen adımı elle yerleştirme (taşıma komutu, adım o yerde kilitlenir) ve elle bölme. Yazamayan kişide ve turda null.
   tasi?: ((isId: string, tezgah: string, baslangic: number) => void) | null;
   bol?: ((isId: string) => void) | null;
+  // Planda böl (3661): açık bölme panelinin adımı ve kayıtlı bölmelerin parça sayısı (adım kimliği -> sayı).
+  bolAcik?: string | null;
+  bolunmus?: Readonly<Record<string, number>>;
   // Elle yerleştirmede tahtada yanan yerler; seçili iş varsa elle yerleştirme açılınca seçim bırakılır (tahta seçili işin yerlerini çizer).
   hedef?: (h: YerlestirmeHedefi | null) => void;
   secimiBirak?: () => void;
@@ -67,7 +71,7 @@ const durumYazisi = (k: SiraKarti): string => {
   return `${sureYaz(g)} geç`;
 };
 
-export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, yenidenPlanla, hamle, surum, malzemeBekleyen, kolPartileri, kol, adimBekle, adimEk, adimSorunu = null, tahta, satirBirincil, adimSec, seciliIs, tasi = null, bol = null, hedef, secimiBirak, malzemeAni }: ListeDuzeniOzellikleri) {
+export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, yenidenPlanla, hamle, surum, malzemeBekleyen, kolPartileri, kol, adimBekle, adimEk, adimSorunu = null, tahta, satirBirincil, adimSec, seciliIs, tasi = null, bol = null, bolAcik = null, bolunmus, hedef, secimiBirak, malzemeAni }: ListeDuzeniOzellikleri) {
   // Elle yerleştirilen adım (3488 a); satır kapanınca ya da başka iş seçilince düşer.
   const [elle, setElle] = useState<string | null>(null);
   useEffect(() => { setElle(null); }, [acik]);
@@ -155,9 +159,10 @@ export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, ye
                           // Yerleşmeyen tezgâh adımı elle yerleştirilir ya da bölünür (3488); fason adımı sistem yerleştirir.
                           // Önceki adımı da yerleşmediyse önce o yerleştirilir (sunucu da reddeder): düğme yerine sırası yazılır.
                           const oncekiYok = e.adimlar.slice(0, i).findIndex((o) => m.isler[o.id] === undefined);
+                          const bolNedeni = x && bol ? bolunemezNedeni(x, e.adet) : null;
                           const elleOlur = !x && tasi !== null && adimYeri(m, a, {}) === 'bos' && oncekiYok < 0;
                           return (
-                            <li key={a.id} data-yok={x ? undefined : ''}>
+                            <li key={a.id} data-yok={x ? undefined : ''} aria-current={bolAcik === a.id ? 'true' : undefined} data-bol-secili={bolAcik === a.id ? '' : undefined}>
                               {gosterilen !== null && hedefIs
                                 ? <button type="button" data-adim={a.id} data-engel={engel ?? undefined} aria-pressed={x ? seciliIs === a.id : undefined} title={x ? 'Tezgâhlarda göster' : 'Bu adımı tutan önceki adımı tezgâhlarda göster'} onClick={() => { adimSec(hedefIs.job, gosterilen); }}>{govde}</button>
                                 : govde}
@@ -170,7 +175,14 @@ export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, ye
                               {elleOlur && elle !== a.id && (
                                 <span className="tc-pyq-ld-elle-eylem">
                                   <Dugme tur="ikincil" simge="pin" data-elle-ac={a.id} disabled={mesgul} onClick={() => { secimiBirak?.(); setElle(a.id); }}>Elle yerleştir</Dugme>
-                                  {bol && <Dugme tur="ikincil" simge="layers" data-bol-ac={a.id} disabled={mesgul} onClick={() => { bol(a.id); }}>Böl</Dugme>}
+                                  {bol && <Dugme tur="ikincil" simge="layers" data-bol-ac={a.id} disabled={mesgul} onClick={() => { bol(a.id); }}>Planda böl</Dugme>}
+                                </span>
+                              )}
+                              {x && bol && (
+                                <span className="tc-pyq-ld-elle-eylem" data-bol-satir={a.id}>
+                                  {bolunmus?.[a.id] !== undefined && <small data-bolunmus={a.id}><Simge ad="layers" boyut="k" />Bölünmüş · {String(bolunmus[a.id])} parça</small>}
+                                  <Dugme tur="ikincil" simge="layers" data-bol-ac={a.id} aria-pressed={bolAcik === a.id} disabled={mesgul || bolNedeni !== null} onClick={() => { bol(a.id); }}>Planda böl</Dugme>
+                                  {bolNedeni !== null && <small data-bol-neden={a.id}>{bolNedeni}</small>}
                                 </span>
                               )}
                               {elleOlur && elle === a.id && tasi && (
