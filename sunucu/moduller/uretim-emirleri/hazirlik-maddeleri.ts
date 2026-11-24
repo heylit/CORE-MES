@@ -17,7 +17,7 @@ export const MADDE_YOK = 'Hazırlık maddesi bulunamadı.';
 // Çözücünün kayıtlı olduğu modül (kablolama); kullanıcıya "durumu veren" olarak gösterilir.
 const SAHIP: Readonly<Record<string, string>> = {
   cnc: 'CNC Kurulum', cizim: 'Kalite Merkezi', yayin: 'Üretim Hazırlık', rota: 'Reçete ve Rota', malzeme: 'Stok Merkezi', 'takim-omru': 'CNC Kurulum',
-  'takim-hazirla': 'Planlama', makine: 'İstasyonlar', talimat: 'Terminal', 'ek-madde': 'Üretim Hazırlık', aparat: 'Stok Merkezi', 'olcu-aleti': 'Ölçü Aletleri',
+  'takim-hazirla': 'Planlama', makine: 'İstasyonlar', talimat: 'Terminal', 'ek-madde': 'Üretim Hazırlık', aparat: 'Takımhane', 'olcu-aleti': 'Ölçü Aletleri',
 };
 const tanim = (x: s.HazirlikMaddeSatiri): HazirlikMaddeTanimi => ({
   ...x, sahip: x.sistem ? SAHIP[x.kod] ?? 'Sistem' : 'Hazırlık görevi', isEmriDuzeyi: !x.sistem || IS_EMRI_DUZEYI.has(x.kod),
