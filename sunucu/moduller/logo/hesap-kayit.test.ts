@@ -114,6 +114,12 @@ test('LG-HESAP: satış teklifinde iskonto ayrı alandır, fiyat dört ondalığ
   });
 });
 
+test('LG-HESAP: dövizli satış teklifinde Finans kuru gövdeye rate olarak yazılır', () => {
+  const g = satisTeklifiGovdesi({ ...TEKLIF, kur: '34.250000' }, SECENEK);
+  assert.ok('govde' in g);
+  assert.deepEqual([g.govde.currencyCode, g.govde.rate], [20, 34.25]);
+});
+
 test('LG-HESAP: TL teklifte döviz ve geçerlilik yok; hizmet KDV boşsa yazılmaz; %100 üstü iskonto reddedilir', () => {
   assert.deepEqual(satisTeklifiGovdesi({ ...TEKLIF, paraBirimi: 'TL', gecerlilikBitis: null }, { cariKodu: 'CARI-A', kdv: 20, hizmetKdv: null }), {
     govde: {

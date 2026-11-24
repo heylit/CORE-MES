@@ -13,6 +13,7 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import {
   logoyaGidecekSatisSiparisleri, logoyaGidecekSatisTeklifleri, satisSiparisiLogoSonucu, satisTeklifiLogoSonucu,
 } from './disari.ts';
+import { kurYokIletisi } from './logo-gonderim.ts';
 import type { SiparislerLogoTeklifi } from './disari.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -57,9 +58,9 @@ describe('siparisler Logo satış sırası (H10; gerçek PostgreSQL, gerçek gir
     assert.equal(c.statusCode, 200, c.body);
     return c.json<T>();
   }
-  async function teklifAc(): Promise<TeklifAyrintisi> {
+  async function teklifAc(paraBirimi = 'TRY'): Promise<TeklifAyrintisi> {
     return komut('/siparisler/teklifler/ekle', {
-      firmaId: musteriId, baslik: 'Logo deneme talebi', istenenTarih: '2026-11-30', aciklama: null,
+      firmaId: musteriId, paraBirimi, baslik: 'Logo deneme talebi', istenenTarih: '2026-11-30', aciklama: null,
       satirlar: [{ malzemeNo: mamulNo, tanim: 'Deneme parça A', miktar: '100' }, { malzemeNo: mamulNo, tanim: 'Deneme parça B', miktar: '10' }],
     });
   }
@@ -200,5 +201,42 @@ describe('siparisler Logo satış sırası (H10; gerçek PostgreSQL, gerçek gir
     await o().vt.tx((db) => satisTeklifiLogoSonucu(db, x.id, { kayitNo: '9001', satirlar: [] }));
     await assert.rejects(o().vt.tx((db) => satisTeklifiLogoSonucu(db, x.id, { kayitNo: '9002', satirlar: [] })), { kod: 'GECERSIZ' });
     await o().vt.tx((db) => satisTeklifiLogoSonucu(db, x.id, { kayitNo: '9001', satirlar: [] }));
+  });
+
+  const gunEkle = (gun: number): string => new Date(Date.now() + gun * 86_400_000).toLocaleDateString('sv-SE', { timeZone: 'Europe/Istanbul' });
+  const kurEkle = async (paraBirimi: string, tarih: string, alis: number, satis: number): Promise<void> => {
+    const r = await gonder(yonetici, '/finans/kur-ciftleri/ekle', { paraBirimi, tarih, alis, satis });
+    assert.equal(r.statusCode, 200, r.body);
+  };
+  const siraDurumu = (teklifId: number) => o().sahip.tek<{ durum: string; hata: string | null }>(
+    "SELECT durum, hata FROM siparisler_logo_gonderim WHERE tur = 'teklif' AND teklif_id = $1", [teklifId]);
+
+  test('dövizli teklifte kur teklif tarihi için Finans\'tan okunur (alış, tarihe kadarki son kur); kur yoksa teklif gitmez, sıraya neden yazılır, kur girilince sonraki turda gider; TRY\'de kur boş', async () => {
+    const tl = await surumVer(await teklifAc(), '0', '1', '1');
+    assert.equal((await teklifSirasi(tl.no))[0]?.kur, null);
+
+    let d = await teklifAc('USD');
+    d = await surumVer(d, '0', '10', '20');
+    assert.deepEqual(await teklifSirasi(d.no), []);
+    assert.deepEqual(await siraDurumu(d.id), { durum: 'hata', hata: kurYokIletisi('USD', gunEkle(0)) });
+    assert.deepEqual(await teklifSirasi(d.no), []);
+
+    // Teklif tarihine kadarki son kur alınır (önceki iki kurdan yenisi); teklif tarihinden sonraki tarihli kur kullanılmaz.
+    await kurEkle('USD', gunEkle(-10), 31, 32);
+    await kurEkle('USD', gunEkle(-3), 33.5, 34);
+    await kurEkle('USD', gunEkle(1), 99, 100);
+    const [gonderilecek] = await teklifSirasi(d.no);
+    assert.deepEqual([gonderilecek?.paraBirimi, gonderilecek?.tarih, Number(gonderilecek?.kur)], ['USD', gunEkle(0), 33.5]);
+  });
+
+  test('teklif tarihine kadarki son kur ORAN_ESKIME_GUNU\'nden eskiyse kur yok sayılır; teklif gitmez, sıraya "yok ya da çok eski" yazılır', async () => {
+    let e = await teklifAc('EUR');
+    e = await surumVer(e, '0', '5', '5');
+    await kurEkle('EUR', gunEkle(-60), 30, 31);
+    assert.deepEqual(await teklifSirasi(e.no), []);
+    assert.match((await siraDurumu(e.id))?.hata ?? '', /^EUR için \d{4}-\d{2}-\d{2} kuru Finans'ta yok ya da çok eski\.$/);
+    // 30 gün sınırı dahil: tam 30 gün önceki kur geçerlidir.
+    await kurEkle('EUR', gunEkle(-30), 36, 37);
+    assert.equal(Number((await teklifSirasi(e.no))[0]?.kur), 36);
   });
 });

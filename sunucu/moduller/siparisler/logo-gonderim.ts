@@ -1,5 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import { gecersiz } from '#cekirdek/hata.ts';
+import { ORAN_ESKIME_GUNU, ORAN_KULLANIMLARI } from '#paylasilan/sozlesme/finans.ts';
+import { kurCiftiGetir } from '../finans/disari.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import * as sorgular from './sorgular.ts';
 
@@ -27,15 +29,31 @@ export type SiparislerLogoSonucu = { kayitNo: string; satirlar: { satirId: numbe
 // Müşteriye ilk verilen sürüm teklifin kendi numarasıyla, sonrakiler "-R<n>" ekiyle gider: Logo'da her sürüm ayrı tekliftir.
 const surumluNo = (no: string, surumNo: number): string => (surumNo === 1 ? no : `${no}-R${String(surumNo)}`);
 
-// İskonto teklif sürümünün tek oranıdır; Logo'ya satır iskontosu olarak gider. Kur Siparişler'de tutulmaz.
+// İskonto teklif sürümünün tek oranıdır; Logo'ya satır iskontosu olarak gider. Kur Siparişler'de tutulmaz: TRY dışı teklifte her
+// gönderimde Finans'tan teklif tarihi için okunur (muhasebe kaydı gibi alış kuru; Finans'ın kur tablosuna yazılmaz). Kur yoksa teklif
+// bu turda gitmez, Logo sırasına neden yazılır; sıra "hata" ile bekleyenlerin arkasına geçer ve kur girilince sonraki turda gider.
+export const kurYokIletisi = (paraBirimi: string, tarih: string): string => `${paraBirimi} için ${tarih} kuru Finans'ta yok ya da çok eski.`;
+const GUN_MS = 86_400_000;
+// Teklif tarihine kadarki son kur ORAN_ESKIME_GUNU'nden eskiyse yok sayılır: eski kur sessizce Logo'ya gitmez (güvenli yön).
+const kurEskiMi = (kurTarihi: string, teklifTarihi: string): boolean => (Date.parse(teklifTarihi) - Date.parse(kurTarihi)) / GUN_MS > ORAN_ESKIME_GUNU;
+
 export async function logoyaGidecekSatisTeklifleri(db: Db, sinir: number): Promise<SiparislerLogoTeklifi[]> {
   const sonuc: SiparislerLogoTeklifi[] = [];
   for (const s of await sorgular.logoyaGidecekTeklifSiralari(db, sinir)) {
     const satirlar = await sorgular.logoTeklifSatirlari(db, s.teklif_id, s.surum_no);
     const kartlar = await malzemeOzetleri(db, satirlar.flatMap((r) => (r.malzeme_no === null ? [] : [r.malzeme_no])));
     const iskonto = Number(s.iskonto_orani) > 0 ? s.iskonto_orani : null;
+    let kur: string | null = null;
+    if (s.para_birimi !== 'TRY') {
+      const g = await kurCiftiGetir(db, s.para_birimi, s.tarih, ORAN_KULLANIMLARI.muhasebe.kur);
+      kur = g === null || kurEskiMi(g.tarih, s.tarih) ? null : g.kur;
+      if (kur === null || !(Number(kur) > 0)) {
+        await sorgular.logoHatasiYaz(db, 'teklif', s.id, kurYokIletisi(s.para_birimi, s.tarih));
+        continue;
+      }
+    }
     sonuc.push({
-      id: s.id, no: surumluNo(s.no, s.surum_no), tarih: s.tarih, gecerlilikBitis: s.gecerlilik, paraBirimi: s.para_birimi, kur: null, firmaId: s.firma_id,
+      id: s.id, no: surumluNo(s.no, s.surum_no), tarih: s.tarih, gecerlilikBitis: s.gecerlilik, paraBirimi: s.para_birimi, kur, firmaId: s.firma_id,
       not: s.aciklama,
       satirlar: satirlar.map((r) => {
         const kart = r.malzeme_no === null ? undefined : kartlar.get(r.malzeme_no);
