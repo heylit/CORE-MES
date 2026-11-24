@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { MALIYETSIZ, PLANLAMASIZ, YONETICI, ac, sunucuKur } from '../test-ortak.tsx';
 import { PLANLAMA_ANAHTARI } from '../veri.ts';
+import { planAni, saatiSabitle } from '../test-saati.ts';
 
 // Veri ve kişi adları uydurmadır. Görünüm yalnız okur (soru 355 cevabına kadar): hiçbir yazma isteği gitmez.
 const calisma = {
@@ -27,6 +28,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); try { localStorage.clear(); 
 const gorunum = (ad: string): void => { fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: ad })); };
 
 describe('P6 Sevk takvimi', () => {
+  saatiSabitle(() => calisma);
   it('Liste açılır: sipariş başına tek satır, geç satır üstte ve işaretli, sevk edilen en altta; çipler süzer, arama müşteride de arar; yalnız okur (izinli)', async () => {
     const istekler = sunucuKur(YONETICI, kayitlar(calisma) as never);
     ac('/plan/sevkiyat');
@@ -232,5 +234,19 @@ describe('P6 Sevk takvimi', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Süzgeci kaldır' }));
     expect(screen.queryByRole('button', { name: 'Süzgeci kaldır' })).toBeNull();
     expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
+  }, 20000);
+
+  it('Canlı çalışmada kayıtlı şimdi yoktur: Dağılım bugünü gerçek saatten alır, planın başlangıcından değil; gecikmiş sayısı buna göre', async () => {
+    // Plan başlangıcı 02.03; gerçek saat 05.03 08:00 (saat 80). S2'nin plan bitişi 03.03 (saat 26): bugünden önce, sevk yok -> gecikmiş.
+    vi.setSystemTime(planAni({ D: calisma.D, simdi: 80 }));
+    sunucuKur(YONETICI, kayitlar(calisma) as never);
+    ac('/plan/sevkiyat');
+    await screen.findByRole('table', { name: 'Siparişler' }, { timeout: 10000 });
+    gorunum('Dağılım');
+    expect(screen.getByRole('button', { name: /^Gecikmiş \(1\)$/ })).toBeTruthy();
+    const izgara = screen.getByRole('group', { name: 'Takvim' });
+    expect(within(izgara).getByRole('button', { name: /^05\.03 Per: .*bugün$/ }).getAttribute('aria-current')).toBe('date');
+    fireEvent.click(screen.getByRole('button', { name: /^Gecikmiş \(1\)$/ }));
+    expect(within(screen.getByRole('region', { name: 'Seçilen günün siparişleri' })).getByText('S2')).toBeTruthy();
   }, 20000);
 });

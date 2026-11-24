@@ -108,9 +108,10 @@ export function Sevkiyat({ calisma, sec, git, depo }: PlanlamaEkranOzellikleri) 
   const [gosterim, gosterimYaz] = useState<Gosterim>('ikisi');
   const [gorunum, gorunumYaz] = useState<Gorunum>(gorunumOku);
   const [secim, secimYaz] = useState<IsiSecimi | null>(null);
+  const an = useMemo(() => Date.now(), [calisma]); // şimdi plan her yenilendiğinde okunur
   const liste = useMemo(() => (calisma ? sevkListesi(calisma) : null), [calisma]);
-  const isi = useMemo(() => (calisma && liste ? sevkIsisi(liste.satirlar, liste.taban, simdi(calisma), emirNo) : null), [calisma, liste, emirNo]);
-  const satirlar = useMemo(() => (calisma && liste ? sevkListeSatirlari(liste.satirlar, liste.taban, simdi(calisma)) : []), [calisma, liste]);
+  const isi = useMemo(() => (calisma && liste ? sevkIsisi(liste.satirlar, liste.taban, simdi(calisma, an), emirNo) : null), [calisma, liste, emirNo, an]);
+  const satirlar = useMemo(() => (calisma && liste ? sevkListeSatirlari(liste.satirlar, liste.taban, simdi(calisma, an)) : []), [calisma, liste, an]);
 
   const takvimVar = !dar;
   const etkin: Gorunum = gorunum === 'takvim' && !takvimVar ? 'liste' : gorunum;
@@ -139,7 +140,7 @@ export function Sevkiyat({ calisma, sec, git, depo }: PlanlamaEkranOzellikleri) 
         <SevkListesi satirlar={satirlar} taban={liste.taban} emirNo={emirNo} donemSecici={donemSecici} donem={donem} ertelenen={sevkSayilari(liste.satirlar).ertelenen} gorunum={gorunumSecici} dar={dar} yerSutunu={!orta} goster={goster} />
       )}
       {etkin === 'dagilim' && (
-        <SevkDagilimi satirlar={liste.satirlar} taban={liste.taban} simdi={simdi(calisma)} emirNo={emirNo} dar={dar} gorunum={gorunumSecici} goster={goster} />
+        <SevkDagilimi satirlar={liste.satirlar} taban={liste.taban} simdi={simdi(calisma, an)} emirNo={emirNo} dar={dar} gorunum={gorunumSecici} goster={goster} />
       )}
       {etkin === 'takvim' && (
         <>

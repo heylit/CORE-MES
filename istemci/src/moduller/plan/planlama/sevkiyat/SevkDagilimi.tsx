@@ -9,7 +9,7 @@ import {
 import { gunYaz, saatMetni, sayiYaz, tarihSaatYaz, type Olcu, type SevkSatiri } from './kurallar.ts';
 
 // 3667: Sevk takvimi "Dağılım" görünümü. İki biçim: Takvim (ay ızgarası; günde bitecek, aşan, termin) ve Matris (müşteri, ürün ya da yer × gün).
-// Gün ya da matris hücresi seçilince altta siparişler açılır. İki ayrı küme: Gecikmiş (plan bitişi bugünden önce, sevk yok) ve Aşan (planın bitişi termini aşıyor).
+// Gün ya da matris hücresi seçilince altta siparişler açılır. İki ad: Gecikmiş (plan bitişi bugünden önce, sevk yok) ve Aşan (planın bitişi termini aşıyor); biri öbürünü dışlamaz.
 // Görünüm yalnız okur; hesaplar dagilim.ts ve kurallar.ts'tendir.
 
 type Bicim = 'takvim' | 'matris';
@@ -210,7 +210,7 @@ export function SevkDagilimi({ satirlar, taban, simdi, emirNo, dar, gorunum, gos
 
       <p className="tc-pyv-not">
         Bitecek: son adımın plana göre bitişi o gün olan, sevk edilmemiş sipariş. Aşan: planın bitişi termini aşıyor. Gecikmiş: plan bitişi bugünden önce, sevk kaydı yok
-        (aşan ve gecikmiş ayrı kümelerdir). Termin: müşteriye söz verilen gün.{bitissiz > 0 ? ` Plana göre bitişi olmayan ${sayiYaz(bitissiz)} sipariş günlere dağıtılmaz.` : ''}
+        (biri öbürünü dışlamaz: plan bitişi geçmiş bir sipariş termini de aşıyorsa ikisinde de sayılır). Termin: müşteriye söz verilen gün.{bitissiz > 0 ? ` Plana göre bitişi olmayan ${sayiYaz(bitissiz)} sipariş günlere dağıtılmaz.` : ''}
       </p>
 
       {secim === null
