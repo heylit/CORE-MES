@@ -13,7 +13,7 @@ export const sablonSeridi = (s: RotaSablonu, opBul: (id: string) => Operasyon | 
   });
 
 export function OpCipi({ kod, renk }: { kod: string; renk: string }) {
-  return <span className={`tc-rr1-cip ${renk}`}>{kod}</span>;
+  return <span className={`tc-rr1-opcip ${renk}`}>{kod}</span>;
 }
 
 export function OpSeridi({ ogeler, etiket }: { ogeler: readonly SeritOgesi[]; etiket: string }) {

@@ -716,6 +716,12 @@
   .tc-rr1-qadd-ara { grid-column: 1 / -1; }
   .tc-rr1-kok { max-width: 100%; flex: 1 1 100%; }
   .tc-rr1-seg { flex-wrap: wrap; }
+  /* Görünüm düğmeleri (4, yetkisizde 3) tek satıra sığmaz: yarım kalan satırın boşluğu çerçevede açık kalmasın diye yalnız bu grupta iki
+     sütunlu ızgara; tek kalan son düğme satırı doldurur. Öteki gruplar (Tür, Miktar) sarmaya devam eder. */
+  .tc-rr1-seg[aria-label="Görünüm"] { display: inline-grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tc-rr1-seg[aria-label="Görünüm"] button:nth-child(even), .tc-rr1-seg[aria-label="Görünüm"] button:last-child { border-right: 0; }
+  .tc-rr1-seg[aria-label="Görünüm"] button:nth-child(n + 3) { border-top: 1px solid var(--edge); }
+  .tc-rr1-seg[aria-label="Görünüm"] button:last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
 
 /* Adımın şartnameleri ve talimatı (989 a, 1187 a) */
@@ -953,7 +959,7 @@ tr[data-bekleyen] .tc-rr1-pr-op { color: var(--hold); }
 .tc-rr1-cipler { display: flex; flex-wrap: wrap; gap: var(--b-1); align-items: center; }
 .tc-rr1-cipler > span { display: inline-flex; align-items: center; gap: var(--b-1); }
 .tc-rr1-cipler > span:not(:last-child)::after { content: "›"; color: var(--muted); font-size: var(--yazi-xs); }
-.tc-rr1-cip {
+.tc-rr1-opcip {
   display: inline-block; min-width: 2.75em; text-align: center; padding: 0 var(--b-1); border-radius: var(--yari-1);
   background: var(--renk); color: var(--on-sig); font-family: var(--font-mono); font-size: var(--yazi-xs); font-weight: 700; line-height: 1.6;
 }
