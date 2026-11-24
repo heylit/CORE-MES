@@ -32,16 +32,18 @@ export function gunSayisi(l: readonly SevkSatiri[], gun: number, o: Olcu): GunSa
   return { bitecek: topla(b, o), asan: topla(b.filter(gecMi), o), termin: topla(terminliler(l, gun), o) };
 }
 
-export interface TakvimGunu { gun: number; tarih: Date; haftaGunu: number; bugun: boolean; sayi: GunSayisi; bos: boolean }
+// planDisi: günün, plandaki son bitişten sonra olduğu (plan o güne kadar bakmıyor); boş gün "sipariş yok", plan dışı gün "plan yok" diye ayrılır. Plan ufku bu ekrana gelmez; son bitiş günü ölçüdür (V8).
+export interface TakvimGunu { gun: number; tarih: Date; haftaGunu: number; bugun: boolean; sayi: GunSayisi; bos: boolean; planDisi: boolean }
 
 // Takvim bugünün haftasından (pazartesi) başlar; geçmiş haftalar yer tutmaz.
 export function takvimGunleri(l: readonly SevkSatiri[], taban: number, simdi: number, o: Olcu, hafta = TAKVIM_HAFTA): TakvimGunu[] {
   const bugun = gunNo(simdi);
   const ilk = bugun - ((saatTarihi(taban, bugun * 24).getUTCDay() + 6) % 7);
+  const sonBitis = Math.max(-Infinity, ...acik(l).map((x) => (x.C === null ? -Infinity : gunNo(x.C))));
   return Array.from({ length: hafta * 7 }, (_, i) => {
     const gun = ilk + i;
     const sayi = gunSayisi(l, gun, o);
-    return { gun, tarih: saatTarihi(taban, gun * 24), haftaGunu: i % 7, bugun: gun === bugun, sayi, bos: sayi.bitecek === 0 && sayi.termin === 0 };
+    return { gun, tarih: saatTarihi(taban, gun * 24), haftaGunu: i % 7, bugun: gun === bugun, sayi, bos: sayi.bitecek === 0 && sayi.termin === 0, planDisi: gun > sonBitis };
   });
 }
 
@@ -86,8 +88,9 @@ export function gunListesi(
   else {
     const b = new Set(bitecekler(l, secim)), t = new Set(terminliler(l, secim));
     const hepsi = [...new Set([...b, ...t])];
-    satirlar = hepsi.map((x) => ({ x, bitecek: b.has(x), termin: t.has(x), asan: b.has(x) && gecMi(x) }))
-      .filter((s) => (sekme === 'tumu' ? true : sekme === 'bitecek' ? s.bitecek : sekme === 'termin' ? s.termin : s.asan));
+    satirlar = hepsi.map((x) => ({ x, bitecek: b.has(x), termin: t.has(x), asan: gecMi(x) }))
+      // Satırın aşan işareti günden bağımsızdır (siparişin planı termini aşıyor); Aşan sekmesi ise takvimdeki sayı gibi o gün bitecek olan aşanları süzer.
+      .filter((s) => (sekme === 'tumu' ? true : sekme === 'bitecek' ? s.bitecek : sekme === 'termin' ? s.termin : s.bitecek && s.asan));
   }
   if (suzgec) satirlar = satirlar.filter((s) => anahtarDegeri(s.x, suzgec.anahtar) === suzgec.deger);
   return satirlar.sort((a, b) => (a.x.C ?? Infinity) - (b.x.C ?? Infinity) || a.x.id.localeCompare(b.x.id, 'tr'));

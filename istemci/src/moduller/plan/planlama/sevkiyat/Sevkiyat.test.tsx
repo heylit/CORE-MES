@@ -86,11 +86,11 @@ describe('P6 Sevk takvimi', () => {
     expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
   }, 20000);
 
-  it('Takvim görünümü bugünkü ısı haritasıdır: durum satırı, sipariş × gün ızgarası; hücre açılımı neden ve bilgiyle açılır (kilit metni yok), Esc kapatır; Kokpit seçeneği Kokpit\'i açar', async () => {
+  it('Sipariş × gün görünümü bugünkü ısı haritasıdır: durum satırı, sipariş × gün ızgarası; hücre açılımı neden ve bilgiyle açılır (kilit metni yok), Esc kapatır; Kokpit seçeneği Kokpit\'i açar', async () => {
     const istekler = sunucuKur(YONETICI, kayitlar(calisma) as never);
     ac('/plan/sevkiyat');
     await screen.findByRole('table', { name: 'Siparişler' }, { timeout: 10000 });
-    gorunum('Takvim');
+    gorunum('Sipariş × gün');
     expect(localStorage.getItem('tmi.sevkiyat.gorunum')).toBe('takvim');
     const izgara = screen.getByRole('group', { name: 'Sipariş × gün, termine kalan süre' });
     expect(document.querySelector('.tc-pyv-nabiz')?.textContent).toContain('En sıcak satır S2');
@@ -151,7 +151,7 @@ describe('P6 Sevk takvimi', () => {
     ac('/plan/sevkiyat');
     const tablo = await screen.findByRole('table', { name: 'Siparişler' }, { timeout: 10000 });
     expect(tablo.closest('.tc-tablo-kap')?.getAttribute('data-kip')).toBe('kart');
-    expect(within(screen.getByRole('group', { name: 'Görünüm' })).queryByRole('button', { name: 'Takvim' })).toBeNull();
+    expect(within(screen.getByRole('group', { name: 'Görünüm' })).queryByRole('button', { name: 'Sipariş × gün' })).toBeNull();
     expect(screen.queryByRole('button', { name: "S2 Kokpit'te gör" })).toBeNull();
     // Kartta Adet ve Termin satırda görünür (CSS ile gizlenmez): Fark termin olmadan okunmaz.
     expect(tablo.querySelectorAll('td[data-kart-gizli]').length).toBeGreaterThan(0);
@@ -210,7 +210,13 @@ describe('P6 Sevk takvimi', () => {
     // 02.03: S2'nin termini bugün, bitişi ertesi gün: bitecek yok, termin var; seçilince termin listede çıkar.
     fireEvent.click(within(izgara).getByRole('button', { name: /^02\.03 Pzt: 0 bitecek, 0 aşan, 1 termin, bugün$/ }));
     const liste = screen.getByRole('region', { name: 'Seçilen günün siparişleri' });
-    expect(within(liste).getByText('termin: 02.03 Pzt, plan: 03.03 Sal')).toBeTruthy();
+    expect(within(liste).getByText('02.03 Pzt 20:00')).toBeTruthy();
+    expect(within(liste).getByText('03.03 Sal 02:00')).toBeTruthy();
+    // Plan terminden sonra ve planın aşımı varsa "Aşıyor" işareti ve fark satırda görünür.
+    expect(within(liste).getByText(/Aşıyor \+6 sa/)).toBeTruthy();
+    expect(within(liste).getByText('+6 sa')).toBeTruthy();
+    // Takvimde sipariş olmayan ve plandan sonraki günler ayrı söylenir.
+    expect(within(izgara).getAllByText('plan yok').length).toBeGreaterThan(0);
     fireEvent.click(within(liste).getByRole('button', { name: 'Bitecek' }));
     expect(within(liste).getByText('Bu seçim için sipariş yok.')).toBeTruthy();
     // 03.03: S2 bitecek ve termini aştığı için aşan.

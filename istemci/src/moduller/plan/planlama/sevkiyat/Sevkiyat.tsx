@@ -15,7 +15,7 @@ import { SevkListesi, zamanYaz } from './SevkListesi.tsx';
 import './sevkiyat.css';
 
 // Sevk takvimi (3537 a, Kokpit dili; malzeme satın alma planının ikizi): üç görünüm. Liste sipariş başına tek satırdır (asıl görünüm);
-// Takvim bugünkü ısı haritasıdır (telefonda yer yok, Liste açılır); Grafik dönem özeti ve bitiş akışıdır. Son seçilen görünüm ve dönem
+// "Sipariş × gün" bugünkü ısı haritasıdır (eski adı Takvim; 3667'de Dağılım > Takvim geldi) (telefonda yer yok, Liste açılır); Grafik dönem özeti ve bitiş akışıdır. Son seçilen görünüm ve dönem
 // tarayıcıda hatırlanır. Plan durumu (yok, eski) plan şeridindedir (KOKPITE_GIDEN); sayfa yinelemez.
 // Görünüm yalnız okur (455/1 a: sevk sevkiyat modülünden okunacak; 455/2 a: bitiş akışını sunucu yazar).
 
@@ -45,7 +45,7 @@ function useEkran(sorgu: string): boolean {
 }
 
 const GORUNUMLER: readonly { deger: Gorunum; baslik: string }[] = [
-  { deger: 'liste', baslik: 'Liste' }, { deger: 'dagilim', baslik: 'Dağılım' }, { deger: 'takvim', baslik: 'Takvim' }, { deger: 'grafik', baslik: 'Grafik' },
+  { deger: 'liste', baslik: 'Liste' }, { deger: 'dagilim', baslik: 'Dağılım' }, { deger: 'takvim', baslik: 'Sipariş × gün' }, { deger: 'grafik', baslik: 'Grafik' },
 ];
 const GORUNUM_ANAHTARI = 'tmi.sevkiyat.gorunum';
 const DONEM_ANAHTARI = 'tmi.sevkiyat.donem';

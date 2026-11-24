@@ -50,6 +50,11 @@ describe('Takvim', () => {
     const t = takvimGunleri(l, TABAN, g(9, 8), 'siparis');
     expect(t[0]?.gun).toBe(7);
   });
+  it('plan dışı gün: plandaki son bitişten sonra; arası "sipariş yok" (sayı uydurulmaz)', () => {
+    const t = takvimGunleri(l, TABAN, SIMDI, 'siparis');
+    expect(t.find((x) => x.gun === 4)).toMatchObject({ bos: true, planDisi: false });
+    expect(t.find((x) => x.gun === 21)).toMatchObject({ bos: true, planDisi: true });
+  });
   it('boş gün: bitecek de termin de yok', () => {
     const t = takvimGunleri(l, TABAN, SIMDI, 'siparis');
     expect(t.find((x) => x.gun === 4)?.bos).toBe(true);
@@ -81,6 +86,10 @@ describe('Gün listesi', () => {
     expect(gunListesi(l, SIMDI, 3, 'bitecek', null).map((s) => s.x.id).sort()).toEqual(['S1', 'S2']);
     expect(gunListesi(l, SIMDI, 3, 'termin', null).map((s) => s.x.id).sort()).toEqual(['S1', 'S5']);
     expect(gunListesi(l, SIMDI, 3, 'asan', null).map((s) => s.x.id)).toEqual(['S2']);
+  });
+  it('termini o gün olan ama planı sonra biten ve termini aşan sipariş, bitecek olmasa da aşan işaretlidir', () => {
+    const g2 = gunListesi(l, SIMDI, 2, 'tumu', null).find((s) => s.x.id === 'S2');
+    expect(g2).toMatchObject({ bitecek: false, termin: true, asan: true });
   });
   it('gecikmiş seçimi ve hücre süzgeci', () => {
     expect(gunListesi(l, SIMDI, GECIKMIS, 'tumu', null).map((s) => s.x.id)).toEqual(['S3']);

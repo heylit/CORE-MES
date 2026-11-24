@@ -1,11 +1,12 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Simge } from '../../../../ortak/arayuz/index.ts';
 import type { EmirNo } from '../ortak/emir-no.ts';
+import { sevkFarki } from './liste.ts';
 import {
   GECIKMIS, MATRIS_GUN, anahtarDegeri, bitissizSayisi, gecikmisSayisi, gunListesi, matris, takvimGunleri,
   type DagilimAnahtari, type GunSatiri, type GunSecimi, type GunSekmesi,
 } from './dagilim.ts';
-import { gunYaz, saatMetni, sayiYaz, type Olcu, type SevkSatiri } from './kurallar.ts';
+import { farkYaz, gunYaz, saatMetni, sayiYaz, tarihSaatYaz, type Olcu, type SevkSatiri } from './kurallar.ts';
 
 // 3667: Sevk takvimi "Dağılım" görünümü. İki biçim: Takvim (ay ızgarası; günde bitecek, aşan, termin) ve Matris (müşteri, ürün ya da yer × gün).
 // Gün ya da matris hücresi seçilince altta siparişler açılır. İki ayrı küme: Gecikmiş (plan bitişi bugünden önce, sevk yok) ve Aşan (planın bitişi termini aşıyor).
@@ -36,6 +37,19 @@ function Secici<T extends string>({ etiket, secenekler, secili, sec }: {
     <div className="tc-pyv-seg" role="group" aria-label={etiket}>
       {secenekler.map((s) => <button key={s.deger} type="button" aria-pressed={s.deger === secili} onClick={() => { sec(s.deger); }}>{s.baslik}</button>)}
     </div>
+  );
+}
+
+function SecimKutusu<T extends string>({ etiket, secenekler, secili, sec }: {
+  etiket: string; secenekler: readonly { deger: T; baslik: string }[]; secili: T; sec: (d: T) => void;
+}) {
+  return (
+    <label>
+      <span>{etiket}</span>
+      <select value={secili} onChange={(e) => { sec(e.target.value as T); }}>
+        {secenekler.map((o) => <option key={o.deger} value={o.deger}>{o.baslik}</option>)}
+      </select>
+    </label>
   );
 }
 
@@ -84,8 +98,19 @@ export function SevkDagilimi({ satirlar, taban, simdi, emirNo, dar, gorunum, gos
       <div className="tc-pyv-serit">
         {gorunum}
         <Secici etiket="Biçim" secenekler={[{ deger: 'takvim', baslik: 'Takvim' }, { deger: 'matris', baslik: 'Matris' }]} secili={bicim} sec={bicimSec} />
-        <Secici etiket="Ölçü" secenekler={OLCULER} secili={olcu} sec={olcuYaz} />
-        {bicim === 'matris' && <Secici etiket="Satır" secenekler={ANAHTARLAR} secili={anahtar} sec={(a) => { anahtarYaz(a); hucreYaz(null); }} />}
+        {dar
+          ? (
+            <span className="tc-pyv-d-sec">
+              <SecimKutusu etiket="Ölçü" secenekler={OLCULER} secili={olcu} sec={olcuYaz} />
+              {bicim === 'matris' && <SecimKutusu etiket="Satır" secenekler={ANAHTARLAR} secili={anahtar} sec={(a) => { anahtarYaz(a); hucreYaz(null); }} />}
+            </span>
+          )
+          : (
+            <>
+              <Secici etiket="Ölçü" secenekler={OLCULER} secili={olcu} sec={olcuYaz} />
+              {bicim === 'matris' && <Secici etiket="Satır" secenekler={ANAHTARLAR} secili={anahtar} sec={(a) => { anahtarYaz(a); hucreYaz(null); }} />}
+            </>
+          )}
       </div>
 
       {bicim === 'takvim' && (
@@ -105,6 +130,7 @@ export function SevkDagilimi({ satirlar, taban, simdi, emirNo, dar, gorunum, gos
                     {g.sayi.bitecek > 0 && <span data-k="bitecek"><Simge ad="truck" boyut="k" />{sayiYaz(g.sayi.bitecek)} bitecek</span>}
                     {g.sayi.asan > 0 && <span data-k="asan"><Simge ad="alert" boyut="k" />{sayiYaz(g.sayi.asan)} aşan</span>}
                     {g.sayi.termin > 0 && <span data-k="termin"><Simge ad="flag" boyut="k" />{sayiYaz(g.sayi.termin)} termin</span>}
+                    {g.bos && <span className="tc-pyv-d-bos">{g.planDisi ? 'plan yok' : 'sipariş yok'}</span>}
                   </button>
                 );
               })}
@@ -119,9 +145,10 @@ export function SevkDagilimi({ satirlar, taban, simdi, emirNo, dar, gorunum, gos
                   aria-label={`${gunAdi(g.gun)}: ${sayiYaz(g.sayi.bitecek)} bitecek, ${sayiYaz(g.sayi.asan)} aşan, ${sayiYaz(g.sayi.termin)} termin${g.bugun ? ', bugün' : ''}`}
                 >
                   <b className="tc-pyv-d-tarih">{gunAdi(g.gun)}{g.bugun ? ' · bugün' : ''}</b>
-                  <span data-k="bitecek"><Simge ad="truck" boyut="k" />{sayiYaz(g.sayi.bitecek)}</span>
-                  {g.sayi.asan > 0 && <span data-k="asan"><Simge ad="alert" boyut="k" />{sayiYaz(g.sayi.asan)}</span>}
-                  <span data-k="termin"><Simge ad="flag" boyut="k" />{sayiYaz(g.sayi.termin)}</span>
+                  {g.sayi.bitecek > 0 && <span data-k="bitecek"><Simge ad="truck" boyut="k" />{sayiYaz(g.sayi.bitecek)} bitecek</span>}
+                  {g.sayi.asan > 0 && <span data-k="asan"><Simge ad="alert" boyut="k" />{sayiYaz(g.sayi.asan)} aşan</span>}
+                  {g.sayi.termin > 0 && <span data-k="termin"><Simge ad="flag" boyut="k" />{sayiYaz(g.sayi.termin)} termin</span>}
+                  {g.bos && <span className="tc-pyv-d-bos">{g.planDisi ? 'plan yok' : 'sipariş yok'}</span>}
                 </button>
               ))}
               {!daha && <button type="button" className="tc-pyv-d-daha" onClick={() => { dahaYaz(true); }}>Daha fazla gün</button>}
@@ -131,6 +158,7 @@ export function SevkDagilimi({ satirlar, taban, simdi, emirNo, dar, gorunum, gos
       )}
 
       {bicim === 'matris' && (
+        <>
         <div className="tc-pyv-d-kap" tabIndex={0} role="region" aria-label="Matris, yana kaydırılabilir">
           <table className="tc-pyv-d-matris" aria-label={`${ANAHTARLAR.find((a) => a.deger === anahtar)?.baslik ?? ''} ve gün matrisi`}>
             <thead>
@@ -156,8 +184,8 @@ export function SevkDagilimi({ satirlar, taban, simdi, emirNo, dar, gorunum, gos
                       <td key={g} data-ton={h.asan > 0 ? 'hata' : undefined} data-secili={secim === g && hucre === s.ad ? '' : undefined}>
                         {h.toplam > 0
                           ? (
-                            <button type="button" aria-label={`${s.ad}, ${gunAdi(g)}: ${sayiYaz(h.toplam)} bitecek${h.asan > 0 ? `, ${sayiYaz(h.asan)} aşan` : ''}`} onClick={() => { secimYaz(g); hucreYaz(s.ad); }}>
-                              {sayiYaz(h.toplam)}{h.asan > 0 && <Simge ad="alert" boyut="k" />}
+                            <button type="button" aria-label={`${s.ad}, ${gunAdi(g)}: ${sayiYaz(h.toplam)} bitecek, ${sayiYaz(h.asan)} aşan`} onClick={() => { secimYaz(g); hucreYaz(s.ad); }}>
+                              {sayiYaz(h.toplam)}{h.asan > 0 && <span className="tc-pyv-d-asan"><Simge ad="alert" boyut="k" />{sayiYaz(h.asan)}</span>}
                             </button>
                           )
                           : <span className="tc-pyv-bos" aria-label="yok">·</span>}
@@ -176,6 +204,8 @@ export function SevkDagilimi({ satirlar, taban, simdi, emirNo, dar, gorunum, gos
             </tbody>
           </table>
         </div>
+        {dar && <p className="tc-pyv-not">Yatay kayar: Gecikmiş ve bugün sabit, ilerleyen günler sağda. Hücredeki üçgen ve sayı: o kadarı aşan.</p>}
+        </>
       )}
 
       <p className="tc-pyv-not">
@@ -205,13 +235,14 @@ export function SevkDagilimi({ satirlar, taban, simdi, emirNo, dar, gorunum, gos
 function GunSatiriGorunumu({ s, taban, bugunNo, emirNo, goster }: { s: GunSatiri; taban: number; bugunNo: number; emirNo: EmirNo; goster: (id: string) => void }) {
   const { x } = s;
   const gecikmis = x.C !== null && Math.floor(x.C / 24) < bugunNo;
+  const fark = sevkFarki(x);
   const durum = s.asan ? `Aşıyor +${saatMetni(x.T ?? 0)}` : gecikmis ? 'Gecikmiş' : '';
   return (
     <li data-ton={s.asan || gecikmis ? 'hata' : undefined}>
       <b className="mono">{emirNo(x.id)}</b>
       <span>{`${x.ad ?? '—'} · ${anahtarDegeri(x, 'musteri')} · ${x.adet === null ? '—' : sayiYaz(x.adet)} adet`}</span>
-      <span className="mono">{`termin: ${gunYaz(taban, x.termin)}, plan: ${gunYaz(taban, x.C)}`}</span>
-      {durum !== '' && <span data-ton="hata" className="mono"><Simge ad="alert" boyut="k" />{durum}</span>}
+      <span className="tc-pyv-d-tarihler"><span>Termin <b className="mono">{tarihSaatYaz(taban, x.termin)}</b></span><span>Plan <b className="mono">{tarihSaatYaz(taban, x.C)}</b></span>{fark !== null && <span>Fark <b className="mono">{fark === 0 ? '0 sa' : farkYaz(fark)}</b></span>}</span>
+      {durum !== '' && <span data-ton="hata" className="tc-pyv-d-durum"><Simge ad="alert" boyut="k" />{durum}</span>}
       <button type="button" className="tc-pyv-l-temizle tc-pyv-d-git" onClick={() => { goster(x.id); }}><Simge ad="target" boyut="k" />Kokpit'te gör</button>
     </li>
   );

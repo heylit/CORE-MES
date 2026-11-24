@@ -53,8 +53,8 @@ test.describe('P6 Sevk takvimi', () => {
     await expect(acilim.getByText('Sevk kaydı', { exact: false }).first()).toBeVisible();
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
 
-    // Takvim (768 ve üstü): bugünkü ısı haritası, hücre açılımı, Esc kapatır.
-    const takvim = kap.getByRole('group', { name: 'Görünüm' }).getByRole('button', { name: 'Takvim', exact: true });
+    // Sipariş × gün (768 ve üstü): bugünkü ısı haritası, hücre açılımı, Esc kapatır.
+    const takvim = kap.getByRole('group', { name: 'Görünüm' }).getByRole('button', { name: 'Sipariş × gün', exact: true });
     if (await takvim.count()) {
       await takvim.click();
       const izgara = kap.getByRole('group', { name: 'Sipariş × gün, termine kalan süre' });
