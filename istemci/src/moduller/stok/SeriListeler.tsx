@@ -48,7 +48,7 @@ export function SeriListeler() {
             {listeler.isPending ? <DurumKutusu durum="yukleniyor" />
               : acik.length === 0 ? <p className="tc-stok-not">Açık liste yok. Okut panelinde Seri modunu seç ya da hafızadan aktar.</p>
               : (
-                <Tablo etiket="Açık listeler" kip="kaydir" sutunlar={listeSutunlari(id, setSecili)} satirlar={acik} satirAnahtari={(l) => l.id} satirSec={(l) => setSecili(l.id)} />
+                <Tablo etiket="Açık listeler" kip="kayit" sutunlar={listeSutunlari(id, setSecili)} satirlar={acik} satirAnahtari={(l) => l.id} satirSec={(l) => setSecili(l.id)} />
               )}
           </Kart>
           {id !== null && <ListeAyrintisi key={id} id={id} />}

@@ -59,10 +59,10 @@ function KartListesi({ kartlar, ozetler, secili, sec, durum, setDurum, kume, set
     { anahtar: 'kart', baslik: 'Kart', sabit: 'sol', csv: (k) => k.refakat.etiket, hucre: (k) => (
       <Dugme aria-pressed={secili === k.refakat.id} onClick={(o) => { o.stopPropagation(); sec(k.refakat.id); }}><span className="mono">{k.refakat.etiket}</span></Dugme>
     ) },
-    { anahtar: 'durum', baslik: 'Şimdi', csv: false, hucre: (k) => <ListeDurumu k={k} ozet={ozetler.get(k.refakat.id)} /> },
+    { anahtar: 'durum', kartRozet: true, baslik: 'Şimdi', csv: false, hucre: (k) => <ListeDurumu k={k} ozet={ozetler.get(k.refakat.id)} /> },
     { anahtar: 'sira', baslik: 'Sıradaki', mono: true, hucre: (k) => { const o = ozetler.get(k.refakat.id); return (o === undefined ? null : siradakiMetni(o)) ?? '—'; } },
-    { anahtar: 'urun', baslik: 'Ürün', kes: true, hucre: (k) => k.urun.ad },
-    { anahtar: 'emir', baslik: 'Üretim emri', mono: true, hucre: (k) => k.refakat.emirNo ?? '—' },
+    { anahtar: 'urun', kartta: true, baslik: 'Ürün', kes: true, hucre: (k) => k.urun.ad },
+    { anahtar: 'emir', kartta: true, baslik: 'Üretim emri', mono: true, hucre: (k) => k.refakat.emirNo ?? '—' },
     { anahtar: 'son', baslik: 'Son an', kes: true, hucre: (k) => { const o = ozetler.get(k.refakat.id); return o ? sonAnMetni(o) : `${k.adimSayisi} adım · ${k.refakat.lotNo ?? 'lotsuz'}`; } },
   ];
   return (
@@ -85,7 +85,7 @@ function KartListesi({ kartlar, ozetler, secili, sec, durum, setDurum, kume, set
         </div>
       )}
       {gorunen.length === 0 && <p className="tc-refakat-bos">Kart yok.</p>}
-      {gorunen.length > 0 && <Tablo etiket="Kart listesi" kip="kaydir" sutunlar={sutunlar} satirlar={gorunen} satirAnahtari={(k) => k.refakat.id} satirSec={(k) => sec(k.refakat.id)} />}
+      {gorunen.length > 0 && <Tablo etiket="Kart listesi" kip="kayit" sutunlar={sutunlar} satirlar={gorunen} satirAnahtari={(k) => k.refakat.id} satirSec={(k) => sec(k.refakat.id)} />}
     </section>
   );
 }

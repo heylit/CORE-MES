@@ -26,15 +26,15 @@ const SUTUNLAR: Sutun<MalKabulSatirOzeti>[] = [
   // İrsaliye PDF'i aranmadan görülsün diye sütun malzemenin hemen yanında, belge simge değil yazılı bağlantı ve
   // numaradan önce (uzun numarada telefonda kaydırmadan görünsün); miktar hemen ardından
   // gelir ki 1280'de yapışkan Etiket sütununun altında kalmasın (3152).
-  { anahtar: 'irsaliye', baslik: 'İrsaliye', csv: (s) => s.irsaliyeNo ?? '', hucre: (s) => (
+  { anahtar: 'irsaliye', kartta: true, baslik: 'İrsaliye', csv: (s) => s.irsaliyeNo ?? '', hucre: (s) => (
     <span className="tc-stok-irsaliye-eylem">{s.irsaliyeBelgeleri.map((b, i) => (
       <a key={b.id} className="tc-stok-bag" href={irsaliyeAdresi(s.malKabulId, b.id)} target="_blank" rel="noopener" aria-label={`${b.ad} belgesini aç`} title={b.ad}
         onClick={(e) => e.stopPropagation()}><Simge ad="file" boyut="k" />{s.irsaliyeBelgeleri.length > 1 ? `PDF ${i + 1}` : 'PDF'}</a>
     ))}<span className="mono">{s.irsaliyeNo}</span></span>
   ) },
-  { anahtar: 'miktar', baslik: 'Kabul edilen', hizala: 'sag', hucre: (s) => birimli(s.sayilanMiktar, s.birim) },
+  { anahtar: 'miktar', kartta: true, baslik: 'Kabul edilen', hizala: 'sag', hucre: (s) => birimli(s.sayilanMiktar, s.birim) },
   { anahtar: 'kod', baslik: 'Stok kodu', mono: true, hucre: (s) => s.malzemeKod },
-  { anahtar: 'zaman', baslik: 'Kabul zamanı', sirala: true, csv: (s) => s.zaman, hucre: (s) => zamanMetni(s.zaman) },
+  { anahtar: 'zaman', kartta: true, baslik: 'Kabul zamanı', sirala: true, csv: (s) => s.zaman, hucre: (s) => zamanMetni(s.zaman) },
   { anahtar: 'kisi', baslik: 'Alan', kes: true, hucre: (s) => s.kisiAd },
   { anahtar: 'lot', baslik: 'Lot', mono: true, csv: (s) => s.lotNo ?? '', hucre: (s) => (s.partiId === null ? null : s.lotNo) },
   { anahtar: 'tedarikciParti', baslik: 'Tedarikçi partisi', mono: true, hucre: (s) => s.tedarikciPartiNo },
@@ -85,7 +85,7 @@ export function MalKabulYapilanlar() {
           secenekler={LOGO_ESLESME_DURUMLARI.map((d) => ({ deger: d, baslik: LOGO_ETIKETI[d].etiket }))} bosSecenek="Hepsi" />
       </div>
       {l.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(l.error)} yenile={() => void l.refetch()} /> : (
-        <Tablo etiket="Mal kabulü yapılanlar" kip="kaydir" sutunlar={SUTUNLAR} satirlar={l.data?.satirlar ?? []} satirAnahtari={(s) => s.id} mesgul={l.isPending}
+        <Tablo etiket="Mal kabulü yapılanlar" kip="kayit" sutunlar={SUTUNLAR} satirlar={l.data?.satirlar ?? []} satirAnahtari={(s) => s.id} mesgul={l.isPending}
           bosMesaj="Henüz mal kabul yok." siralama={liste.siralama} siralamaDegistir={liste.siralamaDegistir}
           {...(l.data ? { sayfalama: { sayfa: l.data.sayfa, sayfaBoyu: l.data.sayfaBoyu, toplam: l.data.toplam, degistir: liste.sayfaDegistir } } : {})} />
       )}

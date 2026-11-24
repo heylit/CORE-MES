@@ -61,3 +61,5 @@ export { KilitliDeger, KilitliSutunNotu, YETKI_ADI } from './KilitliDeger.tsx';
 export { LogoBelgeAramasi } from './LogoBelgeAramasi.tsx';
 export { LogoBagi } from './LogoBagi.tsx';
 export { EntegrasyonYonetimi } from './EntegrasyonYonetimi.tsx';
+export { SabitEylem } from './SabitEylem.tsx';
+export { useTelefon } from './telefon.ts';

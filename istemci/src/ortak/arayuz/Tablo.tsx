@@ -8,6 +8,7 @@ import { Dugme } from './Dugme.tsx';
 import { DurumKutusu } from './DurumKutusu.tsx';
 import { Sayfalama, type SayfalamaOzellikleri } from './Sayfalama.tsx';
 import { Simge } from './Simge.tsx';
+import { useTelefon } from './telefon.ts';
 import './tablo.css';
 
 export interface Sutun<S> {
@@ -28,6 +29,13 @@ export interface Sutun<S> {
   kes?: boolean;
   // Hücresi birkaç parçadan oluşan sütun (rozet, kod, düğme birlikte): kart kipinde değer başlığın yanına sıkışmaz, altında tam satıra iner.
   kartTamSatir?: boolean;
+  // Kart kipinde sütunun görünüp görünmeyeceği; tablo kipinde etkisizdir. `kip="kayit"` kartı kompakttır: ilk başlıklı sütun
+  // kartın başlığı, `durum` anahtarlı (ya da kartRozet) sütun başlığın yanında rozet, `kartta: true` olanlar alt satırlarda görünür;
+  // hiçbiri işaretlenmemişse ilk üç başlıklı sütun görünür. Sağa sabitli (eylem) sütun her zaman kalır. Öteki kart kiplerinde
+  // yalnız `kartta: false` olan gizlenir.
+  kartta?: boolean;
+  // Kompakt kartta sütun başlığın yanında, etiketsiz rozet olarak durur.
+  kartRozet?: boolean;
 }
 
 export interface TabloSuzgeci {
@@ -117,7 +125,8 @@ interface Ozellikler<S> {
   toplu?: { eylemler: readonly TopluEylem<S>[]; buyukSecim?: boolean };
   // 'kaydir': sığmayan tablo kart kipine geçmez, kendi kabında yatay ve dikey kayar; başlık kabın üstünde, `sabit` sütunlar
   // yanlarda kalır. Çok sütunlu izleme listeleri içindir. Verilmezse uyarlanır (sığmayınca kart kipi).
-  kip?: 'uyarlanir' | 'kaydir';
+  // 'kayit': kayıt listesi. Geniş ekranda 'kaydir' gibi, telefonda her zaman karttır (kart 3676); matris ve rapor tabloları 'kaydir' kalır.
+  kip?: 'uyarlanir' | 'kaydir' | 'kayit';
   // Verilince satırlar katlanır başlıklarla gruplanır (kart 3284); katlama tablo açık kaldıkça sürer.
   grup?: TabloGrubu<S>;
 }
@@ -301,7 +310,17 @@ export function Tablo<S>({
   yukleniyor = false, satirEylemi, toplu, kip = 'uyarlanir', grup,
 }: Ozellikler<S>) {
   const [katli, katliYaz] = useState<ReadonlySet<string>>(() => new Set());
-  const kaydir = kip === 'kaydir';
+  const telefon = useTelefon();
+  const kayitKarti = kip === 'kayit' && telefon;
+  const kaydir = kip === 'kaydir' || (kip === 'kayit' && !telefon);
+  const kartBasligi = sutunlar.find((s) => s.baslik !== '');
+  const acikIsaretli = sutunlar.some((s) => s.kartta === true);
+  const ilkUc = new Set(sutunlar.filter((s) => s.baslik !== '').slice(0, 3));
+  const rozetMi = (s: Sutun<S>) => s.kartRozet === true || (s.anahtar === 'durum' && s.kartta !== false);
+  // Kompakt kartta sütunun görünürlüğü; kartta olmayan kiplerde yalnız `kartta: false` gizler.
+  const kartGizli = (s: Sutun<S>) => (kayitKarti
+    ? s.kartta === false || !(s === kartBasligi || rozetMi(s) || s.sabit === 'sag' || (acikIsaretli ? s.kartta === true : ilkUc.has(s)))
+    : s.kartta === false);
   const kap = useRef<HTMLDivElement>(null);
   const [kart, kartYaz] = useState(false);
   const kaydirma = useSatirKaydirma(kart && satirEylemi !== undefined);
@@ -342,6 +361,7 @@ export function Tablo<S>({
   useLayoutEffect(() => {
     const el = kap.current;
     if (kaydir) { kartYaz(false); return undefined; }
+    if (kayitKarti) { kartYaz(true); return undefined; }
     if (!el || typeof ResizeObserver === 'undefined') return undefined;
     let sonEn = -1;
     // Sığma yalnız tablo kipinde ölçülür. Kart kipinden ölçüm için çıkmak sayfayı kısaltıp kaydırma yerini
@@ -365,7 +385,7 @@ export function Tablo<S>({
     let canli = true;
     void document.fonts?.ready.then(() => { if (canli) { sonEn = -1; olc(); } });
     return () => { canli = false; izleyen.disconnect(); };
-  }, [bos, kaydir]);
+  }, [bos, kaydir, kayitKarti]);
 
   const sayfaDegistir = (sayfa: number) => {
     sayfalama?.degistir(sayfa);
@@ -453,9 +473,9 @@ export function Tablo<S>({
               )}
               {sutunlar.map((s) => {
                 const icerik = s.hucre(satir);
-                const sinif = [s.hizala === 'sag' && 'tc-tablo-sag', s.mono && 'mono', s.kirilmaz && 'tc-tablo-kirilmaz', s.kartTamSatir && 'tc-tablo-tam', sabitSinif(s)].filter(Boolean).join(' ');
+                const sinif = [s.hizala === 'sag' && 'tc-tablo-sag', s.mono && 'mono', s.kirilmaz && 'tc-tablo-kirilmaz', s.kartTamSatir && 'tc-tablo-tam', kayitKarti && s === kartBasligi && 'tc-tablo-kart-baslik', sabitSinif(s)].filter(Boolean).join(' ');
                 return (
-                  <td key={s.anahtar} data-baslik={s.baslik} className={sinif || undefined}>
+                  <td key={s.anahtar} data-baslik={s.baslik} data-kart-gizli={kartGizli(s) ? '' : undefined} data-kart-rozet={kayitKarti && rozetMi(s) && s !== kartBasligi ? '' : undefined} className={sinif || undefined}>
                     {icerik === null || icerik === undefined || icerik === '' ? <BosHucre />
                       : kaydir && s.kes ? <span className="tc-tablo-kes" title={kesIpucu(s, satir, icerik)}>{icerik}</span> : icerik}
                   </td>
@@ -479,7 +499,7 @@ export function Tablo<S>({
   return (
     <>
       {ust}
-      <div ref={kap} className="tc-tablo-kap" data-olcer={kaydir ? undefined : ''} data-kaydir={kaydir ? '' : undefined} data-kip={kart ? 'kart' : undefined} data-buyuk-secim={topluAcik && toplu?.buyukSecim ? '' : undefined} aria-busy={mesgul || undefined}>
+      <div ref={kap} className="tc-tablo-kap" data-olcer={kaydir ? undefined : ''} data-kaydir={kaydir ? '' : undefined} data-kip={kart ? 'kart' : undefined} data-kompakt={kayitKarti ? '' : undefined} data-buyuk-secim={topluAcik && toplu?.buyukSecim ? '' : undefined} aria-busy={mesgul || undefined}>
         {/* Kart kipinde sütun başlığı görünmez; sıralama düğmeleri kartların üstüne taşınır. */}
         {kart && siralanan.length > 0 && (
           <div className="tc-tablo-siralar" role="group" aria-label="Sıralama">

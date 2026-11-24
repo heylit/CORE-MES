@@ -40,13 +40,13 @@ function suAnMetni(e: IzlemeEmri): ReactNode {
 type SmartesSutunu = { emir: (id: number) => Parameters<typeof SmartesEmirHucresi>[0]['bilgi']; hata: boolean };
 const sutunlar = (resimler: ReadonlyMap<number, KucukResim>, smartes: SmartesSutunu | null): Sutun<IzlemeEmri>[] => [
   { anahtar: 'emirNo', baslik: 'Emir no', sabit: 'sol', kirilmaz: true, hucre: (e) => <Link to={`/uretim-emirleri/${e.id}`} className="tc-emir-kod tc-emir-no">{e.emirNo}</Link> },
-  { anahtar: 'parca', baslik: 'Parça', hucre: (e) => (
+  { anahtar: 'parca', kartta: true, baslik: 'Parça', hucre: (e) => (
     <span className="tc-emir-parca">
       {e.malzemeNo != null && <KucukResimKutusu resim={resimler.get(e.malzemeNo)} ad={e.parcaAd} />}
       <span><b>{e.parcaNo}</b> {e.parcaAd}</span>
     </span>
   ) },
-  { anahtar: 'adet', baslik: 'Sağlam / adet', hizala: 'sag', kirilmaz: true, hucre: (e) => {
+  { anahtar: 'adet', kartta: true, baslik: 'Sağlam / adet', hizala: 'sag', kirilmaz: true, hucre: (e) => {
       const saglam = saglamSayisi(e);
       const hurda = e.canli?.hurda ?? 0;
       return <>{saglam === null ? '—' : saglam} / {e.adet}{hurda > 0 && <span className="tc-emir-hurda"> (hurda {hurda})</span>}</>;
@@ -194,7 +194,7 @@ export function UretimEmirleri({ emirAcma }: { emirAcma?: EmirAcmaYuvasi }) {
       {gorunum === 'acik' && liste.data && (
         <>
           <p className="tc-emir-sayac" role="status">{emirler.length} açık emir</p>
-          <Tablo etiket="Üretim emirleri" kip="kaydir" sutunlar={SUTUNLAR} satirlar={emirler} satirAnahtari={(e) => e.id}
+          <Tablo etiket="Üretim emirleri" kip="kayit" sutunlar={SUTUNLAR} satirlar={emirler} satirAnahtari={(e) => e.id}
             satirSec={(e) => { void yonlendir(`/uretim-emirleri/${e.id}`); }} bosMesaj="Açık emir yok" />
           {ara !== '' && emirler.length === 0 && (
             <Dugme simge="search" onClick={() => gorunumSec('bitenler')}>Bitenlerde ara</Dugme>
@@ -202,7 +202,7 @@ export function UretimEmirleri({ emirAcma }: { emirAcma?: EmirAcmaYuvasi }) {
         </>
       )}
       {gorunum === 'bitenler' && bitenler.data && (
-        <Tablo etiket="Biten üretim emirleri" kip="kaydir" sutunlar={SUTUNLAR} satirlar={bitenler.data.satirlar} satirAnahtari={(e) => e.id}
+        <Tablo etiket="Biten üretim emirleri" kip="kayit" sutunlar={SUTUNLAR} satirlar={bitenler.data.satirlar} satirAnahtari={(e) => e.id}
           satirSec={(e) => { void yonlendir(`/uretim-emirleri/${e.id}`); }} bosMesaj="Biten emir yok" mesgul={bitenler.isPlaceholderData}
           sayfalama={{ sayfa: bitenler.data.sayfa, sayfaBoyu: bitenler.data.sayfaBoyu, toplam: bitenler.data.toplam, degistir: setSayfa, etiket: 'Biten emir sayfaları' }} />
       )}

@@ -1,4 +1,4 @@
-// Örnek depo: birkaç konum ve raf, partili mal kabul girişleri, bir taşıma ve farklı durumlarda malzeme istekleri.
+// Örnek depo: birkaç konum ve raf, partili mal kabul girişleri, bir taşıma, farklı durumlarda malzeme istekleri, bir toplama listesi ve bir açık seri liste.
 // Kartlar malzemeler örnek verisinindir, istasyonlar istasyonlar örnek verisinindir; burada yalnız stok kayıtları açılır
 // ve hepsi servis komutlarıyla yazılır (parti, bakiye ve istek kuralları gerçek yazımdaki gibi işler).
 import type { Db } from '#cekirdek/db.ts';
@@ -115,6 +115,9 @@ export const ornekVeri = ornekVeriTanimi({
     await servis.malzemeIstegiGecir(db, depocu, hazir.id, 'hazirla', { surum: hazir.surum });
     const teslim = await ac(isteyen1, 'ornek-istek-5', yag, '5', istasyon.id, 'Örnek: teslim edilen istek');
     await servis.malzemeIstegiGecir(db, depocu, teslim.id, 'teslim', { surum: teslim.surum, karsilanan: '5' });
+    // Toplama listesi (hazırlık) ve açık seri liste: telefonda kart olarak denenebilsin (kart 3676). Seri liste okutulan lot kodlarını sayar.
+    await servis.toplamaAc(db, depocu, { ad: 'ORN-TOPLAMA-1', kalemler: [{ malzemeId: cubuk, miktar: '20' }, { malzemeId: levha, miktar: '10' }] });
+    await servis.seriEkle(db, depocu.id, { kaynak: 'okutma', kodlar: ['LOT:ORN-L1', 'LOT:ORN-L1', 'LOT:ORN-L3'] });
     const iptal = await ac(isteyen2, 'ornek-istek-6', cubuk, '15', null, 'Örnek: iptal edilen istek');
     await servis.malzemeIstegiGecir(db, depocu, iptal.id, 'iptal', { surum: iptal.surum });
   },
