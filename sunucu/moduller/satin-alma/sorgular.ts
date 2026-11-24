@@ -34,13 +34,13 @@ export interface TalepSatiri {
   ihtiyacTarihi: string | null; notlar: string; durum: string; iptalNedeni: string;
   agirlikMaliyet: number | null; agirlikTermin: number | null; agirlikTedarikci: number | null; agirlikGaranti: number | null;
   teslimYontemi: 'firma_getirir' | 'biz_alacagiz' | null; uretimEmriId: number | null; surum: number; olusturma: string; guncelleme: string;
-  birlesenTalepId: string | null; projeId: number | null; idariTalepId: number | null; guncellenenTalepId: string | null;
+  birlesenTalepId: string | null; projeId: number | null; idariTalepId: number | null; guncellenenTalepId: string | null; ayrildigiTalepId: string | null;
 }
 const TALEP = `id, no, baslik, birim, talep_eden_kisi_id AS "talepEdenKisiId", acan_kisi_id AS "acanKisiId", oncelik,
   ihtiyac_tarihi AS "ihtiyacTarihi", notlar, durum, iptal_nedeni AS "iptalNedeni", agirlik_maliyet AS "agirlikMaliyet",
   agirlik_termin AS "agirlikTermin", agirlik_tedarikci AS "agirlikTedarikci", agirlik_garanti AS "agirlikGaranti", teslim_yontemi AS "teslimYontemi", uretim_emri_id AS "uretimEmriId", surum,
   ${ISO('olusturma')} AS olusturma, ${ISO('guncelleme')} AS guncelleme, birlesen_talep_id AS "birlesenTalepId",
-  proje_id AS "projeId", idari_talep_id AS "idariTalepId", guncellenen_talep_id AS "guncellenenTalepId"`;
+  proje_id AS "projeId", idari_talep_id AS "idariTalepId", guncellenen_talep_id AS "guncellenenTalepId", ayrildigi_talep_id AS "ayrildigiTalepId"`;
 
 // kisiId verilirse yalnız o kişinin açtığı ya da adına açılan talepler.
 export function talepSatirlariOku(db: Db, kisiId: number | null, id: string | null = null): Promise<TalepSatiri[]> {
@@ -2376,4 +2376,122 @@ export async function siparisDegisikligiEkle(db: Db, d: Omit<SiparisDegisikligiO
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
     [d.id, d.talepId, d.teklifId, d.degisiklikNo, d.sonuc, JSON.stringify(d.ozet), d.onceTutar, d.sonraTutar, d.gerekce, d.teyitKisi, d.teyitTarihi,
       d.yapanKisiId, d.onaylayanKisiId, d.kararNotu, d.dortGozsuz, d.oneriZamani]);
+}
+
+// 3590 (P1): kalan kalemlerin gideceği talep kaynağın başlığıyla açılır; açan, talep eden, emir ve proje kaynaktandır (S6). Numara olağan sayaçtan.
+export async function ayrilanTalepEkle(db: Db, kaynakId: string, yeniId: string, no: string): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO satin_alma_talep (id, no, acan_kisi_id, baslik, birim, talep_eden_kisi_id, oncelik, ihtiyac_tarihi, notlar, durum, iptal_nedeni,
+       agirlik_maliyet, agirlik_termin, agirlik_tedarikci, agirlik_garanti, uretim_emri_id, proje_id, idari_talep_id, teslim_yontemi, ayrildigi_talep_id)
+     SELECT $2, $3, acan_kisi_id, baslik, birim, talep_eden_kisi_id, oncelik, ihtiyac_tarihi, notlar, 'degerlendirme', '',
+       agirlik_maliyet, agirlik_termin, agirlik_tedarikci, agirlik_garanti, uretim_emri_id, proje_id, idari_talep_id, teslim_yontemi, id
+       FROM satin_alma_talep WHERE id = $1`,
+    [kaynakId, yeniId, no],
+  );
+  await talepEdenGecmisiniKopyala(db, yeniId, [kaynakId]);
+  await db.sorgu(
+    `INSERT INTO satin_alma_teklif_istegi (talep_id, firma_id, gonderim, son_tarih) SELECT $2, firma_id, gonderim, son_tarih FROM satin_alma_teklif_istegi WHERE talep_id = $1`,
+    [kaynakId, yeniId]);
+}
+
+// 3590 (S3, S4): kalem taşınır, kopyalanmaz (kimlik, sayı kimliği, emir ve satış bağı, alternatif kartı kalemle gider). Kaleme fiyat vermiş teklifin
+// başlığı yeni kimlikle kopyalanır; satırları, basamakları ve senaryo payları yeni talebe geçer. İlk toplam iki tarafta kalem payıyla bölünür:
+// ayırma revizyon saymaz, tasarruf şişmez. Kaynağın kararı silinir; komut yeni kararı aynı işlemde yazar. Dönen eşleme: eski teklif -> yeni teklif.
+export async function kalemleriAyrilanTalebeTasi(db: Db, kaynakId: string, yeniId: string, kalemIdleri: readonly string[]): Promise<{ eski: string; yeni: string }[]> {
+  await db.sorgu('DELETE FROM satin_alma_karar WHERE talep_id = $1', [kaynakId]);
+  const teklifler = await db.sorgu<{ eski: string; yeni: string; ilk: string | null; toplam: string | null }>(
+    `SELECT t.id AS eski, gen_random_uuid() AS yeni, t.ilk_toplam AS ilk, satin_alma_teklif_toplami(t.talep_id, t.id) AS toplam
+       FROM satin_alma_teklif t WHERE t.talep_id = $1
+        AND EXISTS (SELECT 1 FROM satin_alma_teklif_satiri x WHERE x.talep_id = t.talep_id AND x.teklif_id = t.id AND x.kalem_id = ANY($2::uuid[]))
+      ORDER BY t.sira, t.id`, [kaynakId, kalemIdleri]);
+  const eslem = [teklifler.map((t) => t.eski), teklifler.map((t) => t.yeni)];
+  await db.sorgu(
+    `INSERT INTO satin_alma_teklif (talep_id, id, sira, firma_id, tedarikci_adi, teklif_tarihi, gecerlilik, para_birimi, kur, iskonto_yuzdesi, nakliye,
+       diger_masraf, teslim_sekli, nakliye_dahil, termin_gun, vade_gun, avans_yuzdesi, garanti_ay, teknik_uygun, notlar, ilk_toplam, revizyon, olusturma,
+       odeme_yontemi, kaynak)
+     SELECT $2, m.yeni, t.sira, t.firma_id, t.tedarikci_adi, t.teklif_tarihi, t.gecerlilik, t.para_birimi, t.kur, t.iskonto_yuzdesi, t.nakliye,
+       t.diger_masraf, t.teslim_sekli, t.nakliye_dahil, t.termin_gun, t.vade_gun, t.avans_yuzdesi, t.garanti_ay, t.teknik_uygun, t.notlar, t.ilk_toplam,
+       t.revizyon, t.olusturma, t.odeme_yontemi, t.kaynak
+       FROM unnest($3::uuid[], $4::uuid[]) AS m(eski, yeni) JOIN satin_alma_teklif t ON t.talep_id = $1 AND t.id = m.eski`,
+    [kaynakId, yeniId, ...eslem]);
+  const satirlar = await db.sorgu<Record<string, unknown>>(
+    `SELECT * FROM satin_alma_teklif_satiri WHERE talep_id = $1 AND kalem_id = ANY($2::uuid[])`, [kaynakId, kalemIdleri]);
+  const basamaklar = await db.sorgu<{ teklifId: string; kalemId: string; esik: string; birimFiyat: string }>(
+    `SELECT teklif_id AS "teklifId", kalem_id AS "kalemId", esik, birim_fiyat AS "birimFiyat" FROM satin_alma_teklif_fiyat_basamagi
+      WHERE talep_id = $1 AND kalem_id = ANY($2::uuid[])`, [kaynakId, kalemIdleri]);
+  const senaryolar = await db.sorgu<{ eski: string; yeni: string }>(
+    `SELECT s.id AS eski, gen_random_uuid() AS yeni FROM satin_alma_senaryo s WHERE s.talep_id = $1
+        AND (EXISTS (SELECT 1 FROM satin_alma_senaryo_payi x WHERE x.talep_id = s.talep_id AND x.senaryo_id = s.id AND x.kalem_id = ANY($2::uuid[]))
+          OR EXISTS (SELECT 1 FROM satin_alma_senaryo_kalemi x WHERE x.talep_id = s.talep_id AND x.senaryo_id = s.id AND x.kalem_id = ANY($2::uuid[])))`,
+    [kaynakId, kalemIdleri]);
+  const senEslem = [senaryolar.map((x) => x.eski), senaryolar.map((x) => x.yeni)];
+  await db.sorgu(
+    `INSERT INTO satin_alma_senaryo (talep_id, id, ad, kisi_id, olusturma)
+     SELECT $2, m.yeni, s.ad, s.kisi_id, s.olusturma FROM unnest($3::uuid[], $4::uuid[]) AS m(eski, yeni) JOIN satin_alma_senaryo s ON s.talep_id = $1 AND s.id = m.eski`,
+    [kaynakId, yeniId, ...senEslem]);
+  const paylar = await db.sorgu<{ senaryoId: string; kalemId: string; teklifId: string; miktar: string }>(
+    `SELECT senaryo_id AS "senaryoId", kalem_id AS "kalemId", teklif_id AS "teklifId", miktar FROM satin_alma_senaryo_payi
+      WHERE talep_id = $1 AND kalem_id = ANY($2::uuid[])`, [kaynakId, kalemIdleri]);
+  const dengeler = await db.sorgu<{ senaryoId: string; kalemId: string; denge: string | null }>(
+    `SELECT senaryo_id AS "senaryoId", kalem_id AS "kalemId", denge FROM satin_alma_senaryo_kalemi WHERE talep_id = $1 AND kalem_id = ANY($2::uuid[])`,
+    [kaynakId, kalemIdleri]);
+  // Kalemin kaynaktaki çocukları silinir (basamak satırla gider); kalem satırı böylece yerinde yeni talebe geçer.
+  for (const t of ['satin_alma_teklif_satiri', 'satin_alma_senaryo_payi', 'satin_alma_senaryo_kalemi']) {
+    await db.sorgu(`DELETE FROM ${t} WHERE talep_id = $1 AND kalem_id = ANY($2::uuid[])`, [kaynakId, kalemIdleri]);
+  }
+  await db.sorgu(
+    `UPDATE satin_alma_talep_kalemi k SET talep_id = $2, sira = y.sira
+       FROM (SELECT id, row_number() OVER (ORDER BY sira, id) AS sira FROM satin_alma_talep_kalemi WHERE talep_id = $1 AND id = ANY($3::uuid[])) y
+      WHERE k.talep_id = $1 AND k.id = y.id`, [kaynakId, yeniId, kalemIdleri]);
+  const yeniTeklif = new Map(teklifler.map((t) => [t.eski, t.yeni]));
+  const yeniSenaryo = new Map(senaryolar.map((x) => [x.eski, x.yeni]));
+  // Satır bütün sütunlarıyla taşınır (alternatif sonucu ve izni dahil): yeni sütun eklenince burası değişmeden onu da taşır.
+  await db.sorgu(
+    `INSERT INTO satin_alma_teklif_satiri SELECT (jsonb_populate_record(NULL::satin_alma_teklif_satiri, r)).* FROM jsonb_array_elements($1::jsonb) AS r`,
+    [JSON.stringify(satirlar.map((r) => ({ ...r, talep_id: yeniId, teklif_id: yeniTeklif.get(r['teklif_id'] as string) })))]);
+  await db.sorgu(
+    `INSERT INTO satin_alma_teklif_fiyat_basamagi (talep_id, teklif_id, kalem_id, esik, birim_fiyat) SELECT $1, * FROM unnest($2::uuid[], $3::uuid[], $4::numeric[], $5::numeric[])`,
+    [yeniId, basamaklar.map((b) => yeniTeklif.get(b.teklifId)), basamaklar.map((b) => b.kalemId), basamaklar.map((b) => b.esik), basamaklar.map((b) => b.birimFiyat)]);
+  await db.sorgu(
+    `INSERT INTO satin_alma_senaryo_payi (talep_id, senaryo_id, kalem_id, teklif_id, miktar) SELECT $1, * FROM unnest($2::uuid[], $3::uuid[], $4::uuid[], $5::numeric[])`,
+    [yeniId, paylar.map((x) => yeniSenaryo.get(x.senaryoId)), paylar.map((x) => x.kalemId), paylar.map((x) => yeniTeklif.get(x.teklifId)), paylar.map((x) => x.miktar)]);
+  await db.sorgu(
+    `INSERT INTO satin_alma_senaryo_kalemi (talep_id, senaryo_id, kalem_id, denge) SELECT $1, * FROM unnest($2::uuid[], $3::uuid[], $4::numeric[])`,
+    [yeniId, dengeler.map((x) => yeniSenaryo.get(x.senaryoId)), dengeler.map((x) => x.kalemId), dengeler.map((x) => x.denge)]);
+  // Pazarlık izi: ilk toplam ayırmadan önceki ilk/toplam oranıyla iki tarafa bölünür; revizyon değişmez.
+  await db.sorgu(
+    `UPDATE satin_alma_teklif t SET ilk_toplam = round(m.ilk * satin_alma_teklif_toplami(t.talep_id, t.id) / m.toplam, 4)
+       FROM unnest($2::uuid[], $3::uuid[], $4::numeric[], $5::numeric[]) AS m(eski, yeni, ilk, toplam)
+      WHERE m.ilk IS NOT NULL AND m.toplam > 0 AND ((t.talep_id = $1 AND t.id = m.eski) OR (t.talep_id = $6 AND t.id = m.yeni))`,
+    [kaynakId, ...eslem, teklifler.map((t) => t.ilk), teklifler.map((t) => t.toplam), yeniId]);
+  return teklifler.map((t) => ({ eski: t.eski, yeni: t.yeni }));
+}
+
+// 3590: ayırma ailesi (kök ve ondan ayrılanlar, zincir dahil); tek üyeli aile dönmez. Onay basamağı ailenin karar toplamından (S5).
+export async function ayrilmaAilesi(db: Db, id: string): Promise<{ id: string; no: string; durum: string }[]> {
+  return db.sorgu(
+    `WITH RECURSIVE yukari AS (SELECT id, ayrildigi_talep_id FROM satin_alma_talep WHERE id = $1
+                               UNION ALL SELECT t.id, t.ayrildigi_talep_id FROM satin_alma_talep t JOIN yukari y ON t.id = y.ayrildigi_talep_id),
+          kok AS (SELECT id FROM yukari WHERE ayrildigi_talep_id IS NULL),
+          asagi AS (SELECT id FROM kok UNION ALL SELECT t.id FROM satin_alma_talep t JOIN asagi a ON t.ayrildigi_talep_id = a.id)
+     SELECT t.id, t.no, t.durum FROM satin_alma_talep t WHERE t.id IN (SELECT id FROM asagi) AND (SELECT count(*) FROM asagi) > 1
+      ORDER BY t.olusturma, t.no`, [id]);
+}
+
+// 3590 (S9): talebin ayrıldığı talep ve ondan ayrılanlar (kalem sayısıyla); tutar taşımaz.
+export function ayrilmaBaglariOku(db: Db, idler: readonly string[]): Promise<{ talepId: string; yon: 'kaynak' | 'ayrilan'; id: string; no: string; kalemSayisi: number }[]> {
+  if (idler.length === 0) return Promise.resolve([]);
+  return db.sorgu(
+    `SELECT t.id AS "talepId", 'kaynak' AS yon, k.id, k.no, (SELECT count(*)::int FROM satin_alma_talep_kalemi x WHERE x.talep_id = k.id) AS "kalemSayisi"
+       FROM satin_alma_talep t JOIN satin_alma_talep k ON k.id = t.ayrildigi_talep_id WHERE t.id = ANY($1::uuid[])
+     UNION ALL
+     SELECT a.ayrildigi_talep_id, 'ayrilan', a.id, a.no, (SELECT count(*)::int FROM satin_alma_talep_kalemi x WHERE x.talep_id = a.id)
+       FROM satin_alma_talep a WHERE a.ayrildigi_talep_id = ANY($1::uuid[])
+     ORDER BY 1, 2, 4`, [idler]);
+}
+
+// 3590 (S7): talep fişi Logo kuyruğuna girmiş ya da gitmişse talep bölünmez.
+export async function talepLogoyaGirdiMi(db: Db, id: string): Promise<boolean> {
+  return (await db.tek<{ var: boolean }>(
+    'SELECT (logo_gonderim_durumu IS NOT NULL OR logo_kayit_no IS NOT NULL) AS var FROM satin_alma_talep WHERE id = $1', [id]))?.var ?? false;
 }

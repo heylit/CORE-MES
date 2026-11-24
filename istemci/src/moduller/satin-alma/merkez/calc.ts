@@ -598,7 +598,8 @@ export function evaluate(req: PurchaseRequest, wOverride?: Weights | null): Eval
     }
     return { all, elig, ranking, bestUnit, w, split, set };
   };
-  return wOverride ? run() : memo(`ev:${req.id}:${req.updatedAt ?? 0}`, run);
+  // Kalem listesi anahtarda: onay formu önizlemesi aynı talebi yalnız karara giren kalemlerle değerlendirir (3590).
+  return wOverride ? run() : memo(`ev:${req.id}:${req.updatedAt ?? 0}:${(req.items ?? []).map((it) => `${it.id}=${it.qty}`).join(",")}`, run);
 }
 
 export interface AwardTotals { totalTRY: number; pvTRY: number; ev: Evaluation; x?: EvalRow; suppliers: string[]; plan?: Plan }

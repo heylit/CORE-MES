@@ -9,7 +9,7 @@ import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { KmOnayliListeSatiri } from '#paylasilan/sozlesme/kalite-merkezi-kategori-onayi.ts';
 import type {
   AcilisCevabi, AlternatifIzniYazimi, KabulSiniri, KabulZarfiCevabi, KalemZarflariCevabi, AyarlarKaydi as Ayarlar, Ayarlar as AyarlarCikisi, Talep as TalepCikisi, TalepKaydi as Talep, ButceKullanimiCevabi, DegerlendirmeCevabi, DisOperasyonAyrintisiCevabi, KartAyrintilariCevabi, KartAyrintisi, DisOperasyonlarCevabi, FasonSureleriCevabi, SiparisBelgeleriCevabi, SiparisBelgesi, SiparisBelgesiYazimi, AyarlarKaydetYazimi, HizliAcYazimi, TalebimiDuzenleYazimi, TalebimGuncellemeYazimi, KatalogKaydetYazimi, KatalogKaydi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisCikisi, SiparisFaturalariCevabi, SiparisFaturasiYazimi, SiparisKalemiDegistirYazimi, SiparisKapatYazimi, SiparisLogoBekletYazimi, TeslimYontemiYazimi, OdemePlaniYazimi, SiparisTakibiCevabi, TalepDurumu, TalepKaydetYazimi, TalepTuru,
-  IptaliGeriAlCevabi, IptaliGeriAlYazimi, ProjeSecenekleriCevabi, TalepAyirYazimi, TalepBirlestirYazimi, AcikEmirlerCevabi, Onay, OnTalepleriCevabi, OnTalepYoksayYazimi, TedarikTermini, TedarikTerminiKaydetYazimi, TedarikTerminleriCevabi, TerminTakipSatiri, GuncelKgFiyatiSatiri, KgFiyatiGecmisiCevabi, KgFiyatiIptalYazimi, KgFiyatiSatiri, KgFiyatlariCevabi, KgStokDegeri, StokAyriGrubu, StokYokIstekleriCevabi, TaleplerimCevabi, Talebim, TalepYazimi, Tedarikci, TedarikciKaydetYazimi, TeklifEki, TeklifEkiYazimi, TeklifEkleriCevabi,
+  IptaliGeriAlCevabi, IptaliGeriAlYazimi, ProjeSecenekleriCevabi, TalepAyirYazimi, ParcaliOnayaGonderYazimi, ParcaliOnayaGonderCevabi, TalepBirlestirYazimi, AcikEmirlerCevabi, Onay, OnTalepleriCevabi, OnTalepYoksayYazimi, TedarikTermini, TedarikTerminiKaydetYazimi, TedarikTerminleriCevabi, TerminTakipSatiri, GuncelKgFiyatiSatiri, KgFiyatiGecmisiCevabi, KgFiyatiIptalYazimi, KgFiyatiSatiri, KgFiyatlariCevabi, KgStokDegeri, StokAyriGrubu, StokYokIstekleriCevabi, TaleplerimCevabi, Talebim, TalepYazimi, Tedarikci, TedarikciKaydetYazimi, TeklifEki, TeklifEkiYazimi, TeklifEkleriCevabi,
 } from '#paylasilan/sozlesme/satin-alma.ts';
 import {
   STOK_AYRI_GRUPLARI, TALEP_CIZIMI_AZAMI_BAYT, TEKLIF_EKI_AZAMI_BAYT, siparisVerGovdesi, type CizimSeciciCevabi, type SeciciDosyalariCevabi, type SeciciKlasorlerCevabi, type TalepCizimi,
@@ -52,7 +52,7 @@ import {
   fasonKalemReddi, fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi, type KalemBagi,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGovdeDurumu, talepEdenGorunumu, avansAsimi, gerceklesenKosul, planGerceklesenFarki, talepKartiReddi, tamGorurMu, fiyatGorurMu, fiyatsizGorunum, talasFiyatiGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
   askidakiTedarikciReddi, birimFiyati, kaliteSiparisReddi, karneTeslimOlayi, stokTutari, uygulananKgFiyati, yeniSiparisFirmalari,
-  iptalOncesiTuret, iptalGeriAlmaHareketi, bilinmeyenKgSatirlari, kgEskimeHatirlatmalari, kgFiyatiEskiMi, kgFiyatiKartta, kgFiyatiYasi, kgSapanMi, kgSapmasi, kgSonAlislari, ondalikCarp, ondalikTopla, birlestirmeReddi, birlesmeProjesiReddi, birlesikTalep, emirHareketi, projeHareketi, projeReddi, siparisDagilimi, type SiparisDagilimi, type DagilimSatiri, genelGiderOrani, satirYolu, type SatirYolu, belgeGenelGiderOrani, eslemeListesiHatasi, eslemeSurumu, type EslemeDurumu, ayirmaReddi, kaynakKalemiReddi, BIRLESIK_KALEM_SINIRI, KUR_KILIDI, HATIRLATMA_ADLARI, type HatirlatmaAyarlari, type HatirlatmaTalebi, haftaIciGunleri, hatirlatmaAnahtari, hatirlatmaFarki, hatirlatmalar,
+  iptalOncesiTuret, iptalGeriAlmaHareketi, bilinmeyenKgSatirlari, kgEskimeHatirlatmalari, kgFiyatiEskiMi, kgFiyatiKartta, kgFiyatiYasi, kgSapanMi, kgSapmasi, kgSonAlislari, ondalikCarp, ondalikTopla, birlestirmeReddi, birlesmeProjesiReddi, birlesikTalep, emirHareketi, projeHareketi, projeReddi, siparisDagilimi, type SiparisDagilimi, type DagilimSatiri, genelGiderOrani, satirYolu, type SatirYolu, belgeGenelGiderOrani, eslemeListesiHatasi, eslemeSurumu, type EslemeDurumu, ayirmaReddi, parcaliGonderimReddi, kaynakKalemiReddi, BIRLESIK_KALEM_SINIRI, KUR_KILIDI, HATIRLATMA_ADLARI, type HatirlatmaAyarlari, type HatirlatmaTalebi, haftaIciGunleri, hatirlatmaAnahtari, hatirlatmaFarki, hatirlatmalar,
 } from './kurallar.ts';
 import type { BirimKarsiligi, FiyatIzi, KalemKabulu, KalemOzelligi } from './kurallar.ts';
 import { kalemTerminEmriTuret, satisBagReddi } from './kurallar.ts';
@@ -126,13 +126,20 @@ async function birlesmeyleKur(db: Db, satirlar: s.TalepSatiri[]): Promise<{ tale
   };
   const birlesenler = new Map(birlesenYalin.map((t) => [t.id, { ...t, birlesme: null, kaynaklar: kaynaklariKur(t) }]));
   const gruplar = await guncellemeGruplari(db, talepler.map((t) => t.id), new Map(talepler.map((t) => [t.id, t.durum])));
+  const ayrilma = await s.ayrilmaBaglariOku(db, talepler.map((t) => t.id));
+  const ayrilmaKur = (id: string): NonNullable<Talep['ayrilma']> | undefined => {
+    const l = ayrilma.filter((x) => x.talepId === id);
+    if (l.length === 0) return undefined;
+    const k = l.find((x) => x.yon === 'kaynak');
+    return { ayrildigi: k === undefined ? null : { id: k.id, no: k.no }, ayrilanlar: l.filter((x) => x.yon === 'ayrilan').map((x) => ({ id: x.id, no: x.no, kalemSayisi: x.kalemSayisi })) };
+  };
   return {
     talepler: talepler.map((t, i) => {
       const b = satirlar[i]!.birlesenTalepId;
       const bt = b === null ? undefined : birlesenler.get(b);
       const grup = gruplar.get(t.id);
       return { ...t, birlesme: bt === undefined ? null : { talepId: bt.id, no: bt.no, durum: bt.durum }, kaynaklar: kaynaklariKur(t),
-        ...(grup === undefined ? {} : { guncellemeGrubu: grup }) };
+        ...(grup === undefined ? {} : { guncellemeGrubu: grup }), ...(ayrilmaKur(t.id) === undefined ? {} : { ayrilma: ayrilmaKur(t.id)! }) };
     }),
     birlesenler,
   };
@@ -2049,9 +2056,32 @@ export async function siparisTakibi(db: Db, talepId: string, islemler: readonly 
 const para = (x: number | null): string | null => (x === null || !Number.isFinite(x) ? null : x.toFixed(2));
 const ondalik = (x: number): string => sade(x.toFixed(6));
 // 2397 b: onay basamağı yazılmış kararın TL tutarından (değerlendirmeyle aynı hesap, kilitliyse sabit kur); kur eksikse boş.
+/** Kararsız parçanın alt sınırı: her kalemin teklifler arasındaki en düşük TL tutarı (vade etkisi dahil); fiyatsız kalem sayılmaz. */
+function enDusukKalemToplami(d: DegerlendirmeCevabi): number {
+  const enAz = new Map<string, number>();
+  for (const q of d.teklifler) {
+    if (q.disarida) continue;
+    for (const r of q.satirlar) {
+      if (r.bugunkuDegerTl === null) continue;
+      const v = Number(r.bugunkuDegerTl);
+      if (!enAz.has(r.kalemId) || v < enAz.get(r.kalemId)!) enAz.set(r.kalemId, v);
+    }
+  }
+  return [...enAz.values()].reduce((a, v) => a + v, 0);
+}
 async function kararTlToplami(db: Db, talepId: string): Promise<number | null> {
   const k = (await degerlendirme(db, talepId)).karar;
-  return k === null ? null : Number(k.tlToplam);
+  if (k === null) return null;
+  // 3590 (S5, N1 b): ayrılan parçalar onay basamağını aşamaz; basamak ailenin iptal olmayan parçalarının toplamından. Kararı olmayan
+  // parça kalemlerinin en düşük teklif tutarıyla sayılır: toplam eşiği aşacaksa ilk parçadan itibaren üst basamak istenir.
+  let toplam = Number(k.tlToplam);
+  for (const u of await s.ayrilmaAilesi(db, talepId)) {
+    if (u.id === talepId || u.durum === 'iptal') continue;
+    const d = await degerlendirme(db, u.id);
+    if (d.karar !== null) toplam += Number(d.karar.tlToplam);
+    else toplam += enDusukKalemToplami(d);
+  }
+  return toplam;
 }
 // Kararın kuru: kilitli durumda (sipariş verilmiş) kararın sabit kuru (1096 a, 2454 T1), değilse finansın güncel kuru; ikisi de yoksa teklifin kuru.
 function kararKurlari(t: Talep, ayar: Ayarlar): { sabit: NonNullable<Talep['karar']>['sabitKurlar'] | null;
@@ -3423,6 +3453,34 @@ export async function talepAyir(db: Db, k: Kullanici, id: string, g: TalepAyirYa
   for (const kid of ayrilan) await s.hareketEkle(db, kid, randomUUID(), `${t.no} talebinden ayrıldı.`, k.id);
   if (ayrilan.length === kaynaklar.length) await s.kalemsizTalebiIptalEt(db, id, 'Bütün kaynak talepler ayrıldı.');
   return (await talepOku(db, id))!;
+}
+
+// 3590 (P1, S1-S9): seçilen kalemler bu kararla onaya gider; kalanlar teklif fiyatlarıyla yeni talebe ayrılır. Tek işlem: sürüm kilidi,
+// ayırma, karar ve onaya gönderme ya hep birlikte yazılır ya hiç. Onaya gönderme olağan kaydet yolundan geçer (yetki, dört göz, kur, bildirim).
+export async function parcaliOnayaGonder(db: Db, k: Kullanici, id: string, g: ParcaliOnayaGonderYazimi, izYaz: FiyatIziYazici): Promise<ParcaliOnayaGonderCevabi> {
+  const eski = await talepOku(db, id);
+  if (eski === null) throw bulunamadi(ILETILER.talepYok);
+  if (g.surum !== eski.surum) throw eskiSurum();
+  const red = parcaliGonderimReddi(eski, g.kalanKalemIdleri, g.karar, await s.talepLogoyaGirdiMi(db, id));
+  if (red !== null) throw gecersiz(red);
+  await surumluGuncelle({ guncelle: () => s.talepSurumuArttir(db, id, g.surum), varMi: () => s.talepVarMi(db, id), bulunamadiIletisi: ILETILER.talepYok });
+  const no = await belgeNo(db, 'satin-alma.talep-no', (x) => s.talepNoVarMi(db, x));
+  await kisitKorumali({}, () => s.ayrilanTalepEkle(db, id, g.ayrilanTalepId, no), { CAKISMA: ILETILER.talepVar });
+  const eslem = await s.kalemleriAyrilanTalebeTasi(db, id, g.ayrilanTalepId, g.kalanKalemIdleri);
+  for (const m of eslem) {
+    for (const b of await teklifTutamagi.bagliDosyalar(db, teklifEkiKaydi(id, m.eski))) {
+      await teklifTutamagi.kayittanKaydaBagla(db, teklifEkiKaydi(id, m.eski), teklifEkiKaydi(g.ayrilanTalepId, m.yeni), b.ozet, b.ekleyenId);
+    }
+  }
+  await cizimleriTasi(db, id, g.ayrilanTalepId, false);
+  const ad = (x: Talep) => x.kalemler.map((y) => y.ad).join(', ');
+  const ayrilan = (await talepOku(db, g.ayrilanTalepId))!;
+  await s.hareketEkle(db, g.ayrilanTalepId, randomUUID(), `${eski.no} talebinden ayrıldı (${g.kalanKalemIdleri.length} kalem: ${ad(ayrilan)}).`, k.id);
+  const kaynak = (await talepOku(db, id))!;
+  const hareket = { id: randomUUID(), zaman: new Date().toISOString(), kisiId: k.id, kisiAdi: null,
+    metin: `Kalan ${g.kalanKalemIdleri.length} kalem ${no} talebine ayrıldı; ${kaynak.kalemler.length} kalem onaya gönderildi.` };
+  const gonderilen = await talepKaydet(db, k, id, { ...kaynak, karar: g.karar, durum: 'onayda', hareketler: [...kaynak.hareketler, hareket], surum: kaynak.surum }, izYaz);
+  return { kaynak: gonderilen, ayrilan: gorunen(k, (await talepOku(db, g.ayrilanTalepId))!) };
 }
 
 // 2611 a, 2637 a, 2638 (Veri 2): emir ve proje tutarı ile genel gider oranı aynı dağılımdan (satirYolu) okunur. Kart türü malzeme

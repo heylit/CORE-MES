@@ -117,6 +117,7 @@ export function talepEkrana(t: Talep): PurchaseRequest {
     // 3279-2 a: teklifte projenin müşterisinin onayı (emirli talepte proje emirdedir; burada gelmez).
     projeId: t.proje?.id ?? null,
     ...(t.guncellemeGrubu ? { guncellemeGrubu: t.guncellemeGrubu.map((x) => ({ id: x.id, no: x.no, status: DURUM_T[x.durum], kok: x.kok })) } : {}),
+    ...(t.ayrilma ? { ayrilma: t.ayrilma } : {}),
     weights: t.agirliklar === null ? null : { cost: t.agirliklar.maliyet, lead: t.agirliklar.termin, supplier: t.agirliklar.tedarikci, warranty: t.agirliklar.garanti },
     items: t.kalemler.map((i) => {
       const bag = t.kalemBaglari?.find((b) => b.kalemId === i.id);
@@ -483,6 +484,24 @@ const backend: Backend = {
       const t = await uc.post('/satin-alma-talepleri/:id/siparis-ver', { parametre: { id }, govde: { ...govde, surum: sun.surum }, ...sure });
       applyLocal('requests', id, talepEkrana(t));
       return t.siparisOnerisi ? 'onayda' : 'verildi';
+    } catch (h) {
+      await hata(h);
+      return null;
+    }
+  },
+  async parcaliOnayaGonder(id, kalanKalemIdleri, talep) {
+    const sun = talepSunucu.get(id);
+    if (sun === undefined) return null;
+    const karar = talepSunucuya(talep).karar;
+    if (karar === null) return null;
+    try {
+      const ayrilanTalepId = yeniIstekKimligi();
+      const c = await korumali((deneme) => uc.post('/satin-alma-talepleri/:id/parcali-onaya-gonder', {
+        ...deneme, parametre: { id }, govde: { ayrilanTalepId, kalanKalemIdleri: [...kalanKalemIdleri], karar, surum: sun.surum },
+      }));
+      applyLocal('requests', c.ayrilan.id, talepEkrana(c.ayrilan));
+      applyLocal('requests', id, talepEkrana(c.kaynak));
+      return { ayrilanId: c.ayrilan.id, ayrilanNo: c.ayrilan.no };
     } catch (h) {
       await hata(h);
       return null;

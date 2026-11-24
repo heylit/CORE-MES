@@ -13,6 +13,7 @@ import { empty, render } from "./views.ts";
 import { closeModal, openModal, toast } from "./ui.ts";
 import { kalemleriBol } from "./kalem-bol.ts";
 import { bolunemezNedeni, kabulReddi } from "./kalem-kalem.ts";
+import { dagilimiTaslagaAktar } from "./karar-matrisi.ts";
 
 /** kalem kimliği → teklif kimliği → miktar */
 type Alloc = Record<string, Record<string, number>>;
@@ -426,7 +427,7 @@ async function applyModal(r: PurchaseRequest, ev: Evaluation, st: SimState): Pro
     <p>${k.orders === 1 ? "Tüm kalemler tek tedarikçiden alınacak." : `${k.orders} tedarikçiye ayrı sipariş verilecek.`} Net maliyet nakliye dahil <b>${money(k.total, "TRY", 0)}</b>.</p>
     <ul data-sa-y="25">${k.groups.map((g) => `<li><b>${esc(supName(g.x.q))}</b>: ${g.lines.map((l) => `${esc(l.it.name)} ${numIn(l.qty)} ${esc(l.it.unit)}`).join(", ")}</li>`).join("")}</ul>
     ${splitItems.length ? `<div class="note small">Miktarı bölünen ${splitItems.length} kalem (${splitItems.map((it) => esc(it.name)).join(", ")}) talepte ayrı satırlara ayrılacak; tekliflerdeki birim fiyatlar yeni satırlara kopyalanır. Bu değişiklik hareket geçmişine yazılır.</div>` : ""}
-    <p class="small muted">Karar onaya gönderilir; mevcut karar ve onaylar varsa yenisiyle değiştirilir.</p>
+    <p class="small muted">${r.status === "eval" ? "Dağılım karar tablosuna işlenir; gönderim sayfanın altındaki karar çubuğundandır." : "Karar onaya gönderilir; mevcut karar ve onaylar varsa yenisiyle değiştirilir."}</p>
   </div><div class="mf"><button class="btn primary" data-act="sim-apply-yes">Karara aktar</button><button class="btn ghost" data-act="close">Vazgeç</button></div>`, true);
 }
 
@@ -437,11 +438,20 @@ function applyAlloc(r: PurchaseRequest, st: SimState): void {
     ? { mode: "single", quoteId: used[0]!, reason: "Dağıtım denemesinden aktarıldı", by: "", decidedAt: todayStr(), approvals: [] }
     : { mode: "split", quoteId: null, splits: assign, reason: "Dağıtım denemesinden aktarıldı", by: "", decidedAt: todayStr(), approvals: [] };
   if (r.award?.fx) award.fx = r.award.fx;
+  delete SIMS[r.id];
+  closeModal();
+  if (r.status === "eval") {
+    // 3590: aktarma kararı göndermez; dağılım tek sayfadaki tabloya işlenir, gönderim karar çubuğundan.
+    n.award = null;
+    if (moved.length) saveRequest(n, `Dağıtım denemesinden kalem bölündü: ${moved.join("; ")}`);
+    dagilimiTaslagaAktar(n, assign);
+    V.tab = "compare"; render();
+    toast("Dağılım karar tablosuna işlendi; karar çubuğundan gönderin");
+    return;
+  }
   n.award = award;
   n.status = "approval";
   saveRequest(n, `Dağıtım denemesi karara aktarıldı (${used.length} tedarikçi)${moved.length ? ": " + moved.join("; ") : ""}`);
-  delete SIMS[r.id];
-  closeModal();
   V.tab = "decision"; render(); window.scrollTo(0, 0);
   toast("Dağılım karara aktarıldı, onay bekliyor");
 }

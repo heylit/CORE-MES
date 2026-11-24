@@ -55,13 +55,12 @@ describe('3100 merkezde kalem karşılığı', () => {
     const kapat = ekranliBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {} });
     await vi.waitFor(() => expect(talepSatiri(kok, t.id)).not.toBeNull());
     talepSatiri(kok, t.id)!.click();
-    await vi.waitFor(() => expect(kok.querySelector('.sa-karar')).not.toBeNull());
+    await vi.waitFor(() => expect(kok.querySelector('[data-sa-karar-matrisi]')).not.toBeNull());
 
-    // Karşılaştırma tablosu ve (kapalı ayrıntıdaki) dağılım düzenleyicisi: ikisi de çubuğun satırını yazar.
+    // Tek tablo (geniş) ve telefon listesi (dar): ikisi de kalemin miktar satırını yazar.
     const cubuk = miktarSatirlari(kok, '10 kg');
     expect(cubuk.length).toBeGreaterThanOrEqual(2);
     expect(cubuk.every((s) => s.includes('(≈ 4 adet)'))).toBe(true);
-    expect(kok.querySelector('details.sa-detay')?.textContent).toContain('10 kg (≈ 4 adet)');
     const levha = miktarSatirlari(kok, '7 kg');
     expect(levha.length).toBeGreaterThanOrEqual(2);
     expect(levha.some((s) => s.includes('≈'))).toBe(false);

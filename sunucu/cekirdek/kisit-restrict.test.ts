@@ -30,6 +30,8 @@ const RESTRICT_ANAHTARLARI = [
   'satin_alma_siparis_degisikligi.yapan_kisi_id -> kisi',
   'satin_alma_siparis_onerisi.oneren_kisi_id -> kisi',
   // 2414 a: birleşmiş kaynak ve kalemi kaynakta olan talep silinmez; silinse birleşik talep kaynağını, kalem geri döneceği yeri yitirirdi.
+  // 3590: kısmi onayda kalanı ayrılan talep silinmez; silinse ayrılan talep kaynağını yitirirdi.
+  'satin_alma_talep.ayrildigi_talep_id -> satin_alma_talep',
   'satin_alma_talep.birlesen_talep_id -> satin_alma_talep',
   // 2876: güncellemesi olan kök talep silinmez; silinse güncelleme talebi grubunu ve otomatik iptalin bağını yitirirdi (servis önce 409 ile reddeder).
   'satin_alma_talep.guncellenen_talep_id -> satin_alma_talep',
@@ -216,6 +218,26 @@ describe('RESTRICT yabancı anahtar (bütün göçler, gerçek PostgreSQL)', () 
     // Güncellemesi silinen kök artık bağsızdır, silinir.
     await sil(kok);
     assert.equal((await s.tek<{ n: number }>('SELECT count(*)::int AS n FROM satin_alma_talep WHERE id = $1', [kok]))?.n, 0);
+  });
+
+  test('3590: kalanı ayrılan talebi silmek 409 BAGIMLI_KAYIT; ayrılan talep ve bağsız talep silinir', async () => {
+    const { vt: uygulama, sahip: s } = acik();
+    const kisi = (await s.tek<{ id: number }>("INSERT INTO kisi (ad) VALUES ('Deneme Kişi') RETURNING id"))!.id;
+    let sayac = 0;
+    const talep = async (ayrildigi: string | null = null): Promise<string> => (await s.tek<{ id: string }>(
+      `INSERT INTO satin_alma_talep (id, no, acan_kisi_id, baslik, talep_eden_kisi_id, ayrildigi_talep_id) VALUES (gen_random_uuid(), $3, $1, 'Deneme', $1, $2) RETURNING id`,
+      [kisi, ayrildigi, `RA-${++sayac}`]))!.id;
+    const kok = await talep();
+    const ayrilan = await talep(kok);
+    const sil = (id: string) => uygulama.tx((db) => db.sorgu('DELETE FROM satin_alma_talep WHERE id = $1', [id])).catch((h: unknown) => h);
+    const ihlal = kisitIhlali(await sil(kok));
+    assert.equal(ihlal?.hata.kod, 'BAGIMLI_KAYIT');
+    assert.equal(ihlal?.hata.durum, 409);
+    assert.equal(ihlal?.iz.kisit, 'satin_alma_talep_ayrildigi');
+    assert.ok(['23503', '23001'].includes(String(ihlal?.iz.pgKodu)));
+    await sil(ayrilan);
+    await sil(kok);
+    assert.equal((await s.tek<{ n: number }>('SELECT count(*)::int AS n FROM satin_alma_talep WHERE id = ANY($1)', [[kok, ayrilan]]))?.n, 0);
   });
 
   test('2540: tedarikçi alacağı olan siparişi silmek 409 BAGIMLI_KAYIT (düşüldü alacak da); alacağı olmayan sipariş silinir', async () => {

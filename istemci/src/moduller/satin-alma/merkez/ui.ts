@@ -38,6 +38,7 @@ import type { KurumLogosuCevabi } from "#paylasilan/sozlesme/ayarlar.ts";
 import { BELIRSIZ_MIKTAR } from "../../../ortak/veri/miktar.ts";
 import { alternatifDegisti, alternatifHatalariniGoster, alternatifSatiri, alternatifleriOku, type KalemZarfi } from "./alternatif.ts";
 import { SIMGELER } from "../../../ortak/tasarim/simgeler.ts";
+import { ONIZLEME } from "./karar-matrisi.ts";
 import "../../../ortak/arayuz/pencere.css";
 import "../../../ortak/arayuz/simge.css";
 /* ================= modal altyapısı ================= */
@@ -1459,10 +1460,12 @@ const ACTIONS: Record<string, Action> = {
   },
   "calc": (el, r) => { if (r) calcModal(r, el.dataset.qid); },
   "undo": () => undoLast(),
-  "approval-form": (_el, r) => {
+  "approval-form": (_el, gercek) => {
+    // 3590: karar çubuğundaki taslağın önizlemesi yalnız seçilen kalemlerle gelir (karar-matrisi.ts).
+    const r = ONIZLEME.talep ?? gercek;
     if (!r || !r.award) { toast("Onay formu için önce karar verin."); return; }
     openModal(`<div class="mh"><h2>Onay formu</h2><span class="spacer"></span><span class="muted small">${esc(r.no)}</span></div>
-      <div class="mb"><div class="doc-wrap">${approvalFormHTML(r)}</div></div>
+      <div class="mb"><div class="doc-wrap">${approvalFormHTML(r, ONIZLEME.talep?.kalanKalemSayisi ?? 0)}</div></div>
       <div class="mf"><button class="btn primary" data-act="doc-print">Yazdır / PDF olarak kaydet</button><button class="btn" data-act="copy-summary">Metin olarak kopyala</button><span class="spacer"></span><button class="btn ghost" data-act="close">Kapat</button></div>`, "wide");
   },
   "doc-print": () => { const d = $("#modal-root .doc"); if (d) printDoc(d.outerHTML); },

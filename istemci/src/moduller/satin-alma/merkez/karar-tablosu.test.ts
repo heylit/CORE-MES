@@ -30,45 +30,73 @@ const acilis: AcilisCevabi = {
 
 afterEach(() => { vi.unstubAllGlobals(); document.body.innerHTML = ''; });
 
-describe('karşılaştır ve karar ver tek tabloda (kart #956)', () => {
-  it('önerilen satır seçili gelir; başka satır seçilince gerekçe istenir, gerekçesiz onaya gitmez', async () => {
-    const istekler: string[] = [];
-    vi.stubGlobal('fetch', vi.fn(async (yol: string) => {
-      istekler.push(String(yol));
-      return new Response(JSON.stringify(acilis), { status: 200, headers: { 'content-type': 'application/json' } });
-    }));
-    const kok = document.createElement('div');
-    document.body.append(kok);
-    const kapat = ekranliBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {} });
-    await vi.waitFor(() => expect(talepSatiri(kok, t.id)).not.toBeNull());
-    talepSatiri(kok, t.id)!.click();
-    await vi.waitFor(() => expect(kok.querySelector('.sa-karar')).not.toBeNull());
+async function ac(istekler: { yol: string; govde: unknown }[]): Promise<{ kok: HTMLElement; kapat: () => void }> {
+  vi.stubGlobal('fetch', vi.fn(async (yol: string, init?: RequestInit) => {
+    istekler.push({ yol: String(yol), govde: typeof init?.body === 'string' ? JSON.parse(init.body) : null });
+    return new Response(JSON.stringify(acilis), { status: 200, headers: { 'content-type': 'application/json' } });
+  }));
+  const kok = document.createElement('div');
+  document.body.append(kok);
+  const kapat = ekranliBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {} });
+  await vi.waitFor(() => expect(talepSatiri(kok, t.id)).not.toBeNull());
+  talepSatiri(kok, t.id)!.click();
+  await vi.waitFor(() => expect(kok.querySelector('[data-sa-karar-matrisi]')).not.toBeNull());
+  return { kok, kapat };
+}
+const hucre = (kok: HTMLElement, kalem: string, qid: string) => kok.querySelector<HTMLButtonElement>(`.sa-kr-genis [data-act="kr-ata"][data-item="${kalem}"][data-qid="${qid}"]`)!;
+const gonderDugmesi = (kok: HTMLElement) => kok.querySelector<HTMLButtonElement>('[data-kr-cubuk] [data-act="kr-gonder"]')!;
 
+describe('karşılaştır ve karar tek tabloda (3590 D)', () => {
+  it('önerilen tedarikçi her kalemde seçili gelir; başka hücre seçilince gerekçe istenir, gerekçesiz onaya gitmez', async () => {
+    const istekler: { yol: string; govde: unknown }[] = [];
+    const { kok, kapat } = await ac(istekler);
     expect(kok.querySelector('.sa-adim-govde')?.getAttribute('data-sec')).toBe('compare');
-    const satirlar = [...kok.querySelectorAll<HTMLElement>('.sa-karar-t tbody tr[data-qid]')];
-    expect(satirlar.map((s) => s.dataset.qid)).toEqual([QA, QB]);
-    expect(satirlar[0]!.textContent).toContain('Önerilen');
-    expect(satirlar[0]!.classList.contains('sel')).toBe(true);
-    expect(kok.querySelector<HTMLInputElement>(`input[name="d-sec"][value="${QA}"]`)?.checked).toBe(true);
-    expect(kok.querySelector<HTMLElement>('#d-reason-wrap')!.hidden).toBe(true);
-    // Ağırlıklar ve bölme varsayılan olarak kapalı ayrıntıdadır.
-    expect(kok.querySelector<HTMLDetailsElement>('details.sa-detay')!.open).toBe(false);
-    expect(kok.querySelector('details.sa-detay #d-split-panel')).not.toBeNull();
+    // Ayrı bölme, ağırlık sürgüsü ve şartlar tablosu yok: tek tablo, tek çubuk.
+    expect(kok.querySelector('details.sa-detay')).toBeNull();
+    expect(kok.querySelectorAll('[data-kr-cubuk]')).toHaveLength(1);
+    expect(kok.querySelector('[data-kr-agirlik]')).not.toBeNull();
+    expect(kok.querySelector('.sa-kr-t tfoot')?.textContent).toContain('Ödeme');
+    expect(hucre(kok, K1, QA).getAttribute('aria-pressed')).toBe('true');
+    expect(hucre(kok, K2, QA).getAttribute('aria-pressed')).toBe('true');
+    expect(gonderDugmesi(kok).getAttribute('aria-disabled')).toBeNull();
+    expect(gonderDugmesi(kok).textContent).toContain('Onaya gönder');
 
-    satirlar[1]!.click();
-    expect(kok.querySelector('.sa-karar-t tr.sel')?.getAttribute('data-qid')).toBe(QB);
-    expect(kok.querySelector<HTMLInputElement>('#d-quote')!.value).toBe(QB);
-    expect(kok.querySelector<HTMLElement>('#d-reason-wrap')!.hidden).toBe(false);
+    hucre(kok, K1, QB).click();
+    expect(hucre(kok, K1, QB).getAttribute('aria-pressed')).toBe('true');
+    expect(hucre(kok, K1, QA).getAttribute('aria-pressed')).toBe('false');
+    expect(gonderDugmesi(kok).getAttribute('aria-disabled')).toBe('true');
+    const once = istekler.length;
+    gonderDugmesi(kok).click();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(istekler.slice(once).filter((y) => !y.yol.includes('/acilis'))).toEqual([]);
+    expect(document.activeElement?.hasAttribute('data-kr-gerekce')).toBe(true);
+
+    // Sütunun "Tümünü ver"i önerilene döndürür; gerekçe gerekmez.
+    kok.querySelector<HTMLElement>(`.sa-kr-genis [data-act="kr-tek"][data-qid="${QA}"]`)!.click();
+    expect(gonderDugmesi(kok).getAttribute('aria-disabled')).toBeNull();
+    kapat();
+  });
+
+  it('parçalı karar: işaretsiz kalem ayrılır; önce geri alınamaz uyarısı, sonra tek komut', async () => {
+    const istekler: { yol: string; govde: unknown }[] = [];
+    const { kok, kapat } = await ac(istekler);
+    const kutu = kok.querySelector<HTMLInputElement>(`.sa-kr-genis [data-kr-dahil="${K2}"]`)!;
+    kutu.checked = false;
+    kutu.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(gonderDugmesi(kok).textContent).toContain('Seçilenleri onaya gönder (1/2)');
+    expect(kok.querySelector('.sa-kr-serit')?.textContent).toContain('Deneme kalem 2');
 
     const once = istekler.length;
-    kok.querySelector<HTMLElement>('.sa-karar [data-act="save-decision"]')!.click();
-    await new Promise((r) => setTimeout(r, 50));
-    expect(istekler.slice(once).filter((y) => y.includes('/karar'))).toEqual([]);
-    expect(document.activeElement?.id).toBe('d-reason');
-
-    // Önerilene dönünce gerekçe kutusu yeniden gizlenir.
-    satirlar[0]!.click();
-    expect(kok.querySelector<HTMLElement>('#d-reason-wrap')!.hidden).toBe(true);
+    gonderDugmesi(kok).click();
+    const pencere = document.querySelector('[data-kr-pencere]');
+    expect(pencere?.textContent).toContain('geri alınamaz');
+    expect(document.activeElement?.hasAttribute('data-kr-ilk')).toBe(true);
+    expect(istekler.length).toBe(once);
+    document.querySelector<HTMLElement>('[data-act="kr-gonder-evet"]')!.click();
+    await vi.waitFor(() => expect(istekler.some((y) => y.yol.includes('/parcali-onaya-gonder'))).toBe(true));
+    const g = istekler.find((y) => y.yol.includes('/parcali-onaya-gonder'))!.govde as { kalanKalemIdleri: string[]; karar: { teklifId: string | null }; surum: number };
+    expect(g.kalanKalemIdleri).toEqual([K2]);
+    expect(g.surum).toBe(1);
     kapat();
   });
 });

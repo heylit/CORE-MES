@@ -323,6 +323,14 @@ export const talepBirlestirGovdesi = z.object({
 });
 // Boş liste: bütün kaynaklar ayrılır.
 export const talepAyirGovdesi = z.object({ talepIdleri: z.array(uuid).min(1).max(20).optional(), ...beklenenSurum });
+// 3590 (P1, S1): seçilen kalemler bu kararla onaya gider; kalanlar teklif fiyatlarıyla yeni talebe ayrılır (tek işlem). Kimlik istemcide üretilir.
+export const parcaliOnayaGonderGovdesi = z.object({
+  ayrilanTalepId: uuid,
+  kalanKalemIdleri: z.array(uuid).min(1, 'Ayrılacak kalem seçin.').max(200).refine((l) => new Set(l).size === l.length, 'Aynı kalem iki kez seçilemez.'),
+  karar: kararSemasi,
+  ...beklenenSurum,
+});
+
 export const iptaliGeriAlGovdesi = z.object({ gerekce: z.string().trim().min(1, 'Gerekçe zorunlu.').max(500), ...beklenenSurum });
 // Borç 36: siparişi verilmiş kalemin miktarı ya da birimi onay yetkilisince, gerekçeyle değişir; değişiklik talebin hareketine yazılır.
 export const siparisKalemiDegistirGovdesi = z.object({
@@ -508,6 +516,11 @@ const malzemeOzelligiAlanlari = {
   // 3133: kartın açıklaması ve föydeki ayrıntılar (boş alan yazılmaz).
   aciklama: z.string().nullable(), ayrinti: z.array(z.object({ ad: z.string(), deger: z.string() })),
 };
+// 3590 (S9): talebin ayrıldığı talep ve ondan ayrılanlar; tutar taşımaz.
+export const ayrilmaSemasi = z.object({
+  ayrildigi: z.object({ id: uuid, no: z.string() }).nullable(),
+  ayrilanlar: z.array(z.object({ id: uuid, no: z.string(), kalemSayisi: z.number().int() })),
+});
 export const guncellemeGrubuSemasi = z.array(z.object({ id: uuid, no: z.string(), durum: z.enum(TALEP_DURUMLARI), kok: z.boolean() }));
 export const talepKaynagiSemasi = z.object({
   talepId: uuid, no: z.string(), talepEdenAdi: z.string().nullable(), kalemIdleri: z.array(uuid), ihtiyacTarihi: z.string().nullable(),
@@ -525,6 +538,7 @@ export const talepSemasi = z.object({
   birlesme: birlesmeSemasi.nullable().optional(),
   kaynaklar: z.array(talepKaynagiSemasi).optional(),
   guncellemeGrubu: guncellemeGrubuSemasi.optional(),
+  ayrilma: ayrilmaSemasi.optional(),
   kalemBaglari: z.array(kalemBagiCikisSemasi).optional(),
   // 3100: kalemin yaklaşık karşılığı (kg ile stok birimi ya da kg stoklu kartta parça); hesaplanamayan kalem listede yoktur. Yalnız çıkışta.
   kalemKarsiliklari: z.array(z.object({ kalemId: uuid, miktar: z.string(), birim: z.string() })).optional(),
@@ -549,6 +563,8 @@ export const talepSemasi = z.object({
   olusturma: z.string(),
   guncelleme: z.string(),
 });
+
+export const parcaliOnayaGonderCevabi = z.object({ kaynak: talepSemasi, ayrilan: talepSemasi });
 
 // Talep formunun üretim emri seçimi: açık emirler.
 // 2611 a: talepte seçilebilen projeler (yalnız aktif); talep açan projeler.oku yetkisini taşımayabilir.
@@ -1122,6 +1138,7 @@ export interface SatinAlmaUclari {
   'POST /satin-alma-talepleri/:id/sil': { govde: z.input<typeof talepSilGovdesi>; cevap: { tamam: true } };
   'POST /satin-alma-talepleri/:id/siparis-kalemi-degistir': { govde: z.input<typeof siparisKalemiDegistirGovdesi>; cevap: Talep };
   'POST /satin-alma-talepleri/:id/siparis-ver': { govde: z.input<typeof siparisVerGovdesi>; cevap: Talep };
+  'POST /satin-alma-talepleri/:id/parcali-onaya-gonder': { govde: z.input<typeof parcaliOnayaGonderGovdesi>; cevap: ParcaliOnayaGonderCevabi };
   'POST /satin-alma-talepleri/:id/siparis-onerisi-karari': { govde: z.input<typeof siparisOnerisiKararGovdesi>; cevap: Talep };
   'POST /satin-alma-talepleri/:id/siparis-degistir': { govde: z.input<typeof siparisDegistirGovdesi>; cevap: Talep };
   'POST /satin-alma-talepleri/:id/siparis-onerisi-geri-al': { govde: z.input<typeof siparisOnerisiGeriAlGovdesi>; cevap: Talep };
@@ -1531,6 +1548,9 @@ export type IptaliGeriAlCevabi = z.infer<typeof iptaliGeriAlCevabi>;
 export type IptaliGeriAlYazimi = z.infer<typeof iptaliGeriAlGovdesi>;
 export type TalepBirlestirYazimi = z.output<typeof talepBirlestirGovdesi>;
 export type TalepAyirYazimi = z.output<typeof talepAyirGovdesi>;
+export type ParcaliOnayaGonderYazimi = z.output<typeof parcaliOnayaGonderGovdesi>;
+export type ParcaliOnayaGonderGirdisi = z.input<typeof parcaliOnayaGonderGovdesi>;
+export type ParcaliOnayaGonderCevabi = z.output<typeof parcaliOnayaGonderCevabi>;
 
 // 2642 b: fatura (Finans belgesi) tutarının sipariş satırlarına eşlemesi. Tutar belgenin para biriminde, KDV hariç. surum belgenin eşleme
 // sürümüdür (kayıt sayısı + kaldırılmış sayısı; 0'dan başlar), belge sürümü değil.

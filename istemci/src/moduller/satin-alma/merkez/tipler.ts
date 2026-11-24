@@ -287,6 +287,8 @@ export interface PurchaseRequest {
   projeId?: number | null;
   /** 2876: güncelleme grubu (kök önce; tek üyeli grup yok); sunucu yazar, merkez yalnız gösterir. */
   guncellemeGrubu?: { id: string; no: string; status: RequestStatus; kok: boolean }[];
+  /** 3590: talebin ayrıldığı talep ve ondan ayrılanlar (kararın bir kısmı onaya gidince kalan kalemler); sunucu yazar. */
+  ayrilma?: { ayrildigi: { id: string; no: string } | null; ayrilanlar: { id: string; no: string; kalemSayisi: number }[] };
   weights?: Weights | null;
   items: RequestItem[];
   rfqs: Rfq[];
