@@ -17,7 +17,7 @@ const SURUM2 = {
 } satisfies TeklifAyrintiCevabi['surumler'][number];
 const TEKLIF = {
   id: 21, no: 'TK-2026-0021', durum: 'verildi', firmaId: 7, firmaAd: 'ORN-Firma A', firmaKodu: null, baslik: 'ORN-Teklif', paraBirimi: 'TRY', istenenTarih: null, aciklama: null, not: null,
-  kabulSurumu: null, siparisId: null, sonSurumNo: 2, olusturma: '2026-11-11T09:00:00+03:00', guncelleme: null, surum: 4, olusturanId: 3, arsiv: null,
+  kabulSurumu: null, siparisId: null, siparisteSurumNo: null, sonSurumNo: 2, olusturma: '2026-11-11T09:00:00+03:00', guncelleme: null, surum: 4, olusturanId: 3, arsiv: null,
   satirlar: [{ id: 11, sira: 1, malzemeNo: null, malzemeKodu: null, malzemeAdi: null, aciklamalar: [], tanim: 'ORN-Mil 40', birim: 'adet', miktar: '200.000', yerlilikOrani: null }],
   surumler: [SURUM1, SURUM2], kdvSecenekleri: { oranlar: ['20.00'], genel: '20.00' },
 } satisfies TeklifAyrintiCevabi;

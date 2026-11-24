@@ -340,13 +340,15 @@ export const KART_BAGLANAMAZ = 'Reddedilmiş ya da siparişe dönüşmüş tekli
 
 // TKL-05: teklif durum geçişleri. Sürüm yeni, verilmiş ve revizyondaki teklife verilir; kabul ve revizyon verilmiş teklife;
 // red kabulden önce; siparişe yalnız kabul edilmiş teklif döner. Red ve sipariş son durumdur.
+// 3637: kabul edilmiş ve siparişe dönmüş teklife de sürüm verilir ve yeni sürüm kabul edilir; teklif durumu o zaman değişmez
+// (kabulSonrasiMi, surumDurumu). İskonto onayı da bu iki durumda beklenebilir.
 export type TeklifKomutu = 'surum' | 'iskonto-onay' | 'termin-onay' | 'revizyon' | 'kabul' | 'red' | 'siparis';
 const TEKLIF_GECISLERI: Readonly<Record<TeklifKomutu, { kaynak: readonly TeklifDurumu[]; hedef: TeklifDurumu }>> = {
-  surum: { kaynak: ['yeni', 'onay-bekliyor', 'verildi', 'revizyon'], hedef: 'verildi' },
-  'iskonto-onay': { kaynak: ['onay-bekliyor'], hedef: 'verildi' },
+  surum: { kaynak: ['yeni', 'onay-bekliyor', 'verildi', 'revizyon', 'kabul', 'siparis'], hedef: 'verildi' },
+  'iskonto-onay': { kaynak: ['onay-bekliyor', 'kabul', 'siparis'], hedef: 'verildi' },
   'termin-onay': { kaynak: ['onay-bekliyor'], hedef: 'verildi' },
   revizyon: { kaynak: ['verildi'], hedef: 'revizyon' },
-  kabul: { kaynak: ['verildi'], hedef: 'kabul' },
+  kabul: { kaynak: ['verildi', 'kabul', 'siparis'], hedef: 'kabul' },
   red: { kaynak: ['yeni', 'onay-bekliyor', 'verildi', 'revizyon'], hedef: 'red' },
   siparis: { kaynak: ['kabul'], hedef: 'siparis' },
 };
@@ -379,6 +381,41 @@ export const ONAYLANACAK_TERMIN_YOK = 'Plancı onayı bekleyen satış taslağı
 // 293 ve 273: ayar açıkken sürümü veren kişi kendi iskontosunu ya da terminini onaylayamaz; kapalıyken onay yetkisi yeter.
 export function dortGozReddi(acik: boolean, surumuVeren: number, onaylayan: number, konu: 'iskonto' | 'termin' = 'iskonto'): string | null {
   return acik && surumuVeren === onaylayan ? `Dört göz kuralı açık: kendi verdiğiniz sürümün ${konu === 'iskonto' ? 'iskontosunu' : 'terminini'} başka bir yetkili onaylamalı.` : null;
+}
+
+// 3637: kabul ya da sipariş durumundaki teklife verilen sürüm, onay ve yeni kabul teklif durumunu değiştirmez: kabul edilen sürüm ve
+// sipariş yerinde kalır, yeni sürüm yalnız kayıttır; siparişe ancak "Siparişe uygula" ile geçer.
+export function kabulSonrasiMi(durum: TeklifDurumu): boolean {
+  return durum === 'kabul' || durum === 'siparis';
+}
+export function surumDurumu(mevcut: TeklifDurumu, hedef: TeklifDurumu): TeklifDurumu {
+  return kabulSonrasiMi(mevcut) ? mevcut : hedef;
+}
+// Kabul edilmiş teklifin plandaki yeri müşterinin kabul ettiği sürümündür; sonradan verilen sürüm onu ne kaldırır ne taşır.
+export const KABUL_SONRASI_PLAN = 'Kabulden sonra verilen sürümde plan taslağı kullanılmaz; termin elle girilir, plandaki yer değişmez.';
+export function kabulSonrasiPlanReddi(durum: TeklifDurumu, planTaslagiVar: boolean): string | null {
+  return kabulSonrasiMi(durum) && planTaslagiVar ? KABUL_SONRASI_PLAN : null;
+}
+export const KABUL_ZATEN = 'Bu sürüm zaten kabul edilmiş; kabul edilen sürümden yenisi kaydedilir.';
+export const KABUL_ONAYSIZ_ISKONTO = 'Bu sürümün iskontosu onay bekliyor; önce müdür onaylamalı.';
+// Kabul edilmiş teklifte yeni kabul yalnız kabul edilenden sonra verilen, iskontosu onaylı sürüme olur.
+export function yenidenKabulReddi(
+  durum: TeklifDurumu, kabulSurumu: number | null, yeniNo: number, iskontoOnaysiz: boolean,
+): string | null {
+  if (!kabulSonrasiMi(durum)) return null;
+  if (kabulSurumu !== null && yeniNo <= kabulSurumu) return KABUL_ZATEN;
+  return iskontoOnaysiz ? KABUL_ONAYSIZ_ISKONTO : null;
+}
+
+// 3637: "Siparişe uygula": teklif siparişe dönmüş olmalı, uygulanacak sürüm müşterinin kabul ettiği sürüm olmalı ve siparişte olmamalı.
+export const UYGULA_SIPARIS_YOK = 'Teklif siparişe dönüşmemiş; önce siparişe dönüştürün.';
+export const UYGULA_KABULSUZ = 'Yalnız müşterinin kabul ettiği sürüm siparişe uygulanır; önce kabulü kaydedin.';
+export const UYGULA_ZATEN = 'Bu sürümün fiyatları zaten siparişte.';
+export const UYGULA_KALEM_UYUMSUZ = 'Siparişin kalemleri teklif satırlarıyla eşleşmiyor; sipariş elle düzenlenmeli.';
+export function siparisUygulaReddi(t: { durum: TeklifDurumu; siparisId: number | null; kabulSurumu: number | null }, surumNo: number, siparisteki: number | null): string | null {
+  if (t.durum !== 'siparis' || t.siparisId === null) return UYGULA_SIPARIS_YOK;
+  if (t.kabulSurumu !== surumNo) return UYGULA_KABULSUZ;
+  return siparisteki === surumNo ? UYGULA_ZATEN : null;
 }
 
 export function teklifGecisReddi(durum: TeklifDurumu, komut: TeklifKomutu): string | null {

@@ -217,6 +217,8 @@ export const siparisRevizyonuSemasi = z.object({
   degisiklikler: z.array(siparisRevizyonDegisikligiSemasi),
   // Sürüm verildiğinde sipariş Logo'ya gitmişti: Logo'daki kayıt elle güncellenir.
   logoGitmisti: z.boolean(),
+  // 3637: sürüm teklifin kabul sonrası sürümünden "Siparişe uygula" ile geldiyse o sürümün no'su; elle açılan sürümde null.
+  kaynakSurumNo: z.number().int().nullable(),
 });
 export const siparisRevizyonlariCevabi = z.object({ revizyonlar: z.array(siparisRevizyonuSemasi) });
 
@@ -331,6 +333,15 @@ export const teklifNotGovdesi = z.object({
   not: z.string().trim().min(1, 'Not zorunlu.').max(500, 'En çok 500 karakter.'),
 });
 export const teklifKabulGovdesi = z.object({ ...beklenenSurum, surumNo: z.number().int().min(1).max(99) });
+// 3637: kabul edilen teklif sürümünün fiyatlarını siparişe uygular (onaylı siparişin yeni sürümü). `surum` teklifin, `siparisSurum` siparişin
+// okunan sürümüdür; ikisinden biri eskidiyse sunucu çakışma verir. Gerekçe siparişin sürüm gerekçesine teklif no ve sürümle birlikte yazılır.
+export const TEKLIF_UYGULAMA_GEREKCESI_EN_COK = 400;
+export const teklifSiparisUygulaGovdesi = z.object({
+  ...beklenenSurum,
+  siparisSurum: surumSemasi,
+  surumNo: z.number().int().min(1).max(99),
+  gerekce: z.string().trim().min(REVIZYON_GEREKCESI_EN_AZ, 'Değişiklik gerekçesi zorunlu (en az 3 harf).').max(TEKLIF_UYGULAMA_GEREKCESI_EN_COK, `En çok ${TEKLIF_UYGULAMA_GEREKCESI_EN_COK} karakter.`),
+});
 // 3419 a: fiyatı verilmiş, siparişe dönmemiş teklif silinmez, arşivlenir; neden zorunlu, not isteğe bağlı. Arşiv geri alınır.
 export const TEKLIF_ARSIV_NEDENLERI = ['tekrar', 'yanlis-firma', 'deneme', 'diger'] as const;
 export const teklifArsivNedeniSemasi = z.enum(TEKLIF_ARSIV_NEDENLERI, { error: 'Arşiv nedeni seçin.' });
@@ -435,6 +446,9 @@ export const teklifSemasi = z.object({
 export const teklifAyrintiSemasi = teklifSemasi.extend({
   satirlar: z.array(teklifSatiriSemasi),
   surumler: z.array(teklifSurumuSemasi),
+  // 3637: siparişe dönmüş teklifte siparişin şu an hangi teklif sürümünün fiyatlarında olduğu; sipariş elle değiştirildiyse ya da
+  // eski kayıtsa null (uydurulmaz). Siparişe dönmemiş teklifte de null.
+  siparisteSurumNo: z.number().int().nullable(),
   // 3461: sürüm verirken seçilecek KDV oranları finansın bugün geçerli oranlarıdır; genel en yüksek orandır, oran tanımlı değilse null.
   kdvSecenekleri: z.object({ oranlar: z.array(ondalikMetinSemasi), genel: ondalikMetinSemasi.nullable() }),
 });
@@ -446,6 +460,7 @@ export type TeklifEkleVerisi = z.output<typeof teklifEkleGovdesi>;
 export type TeklifGuncelleVerisi = z.output<typeof teklifGuncelleGovdesi>;
 export type TeklifSurumuVerisi = z.output<typeof teklifSurumuGovdesi>;
 export type SiparisDonusumVerisi = z.output<typeof siparisDonusumGovdesi>;
+export type TeklifSiparisUygulaVerisi = z.output<typeof teklifSiparisUygulaGovdesi>;
 export type TeklifListesiSuzgeci = z.output<typeof teklifListesiSorgusu>;
 export type Teklif = z.output<typeof teklifSemasi>;
 export type TeklifAyrintisi = z.output<typeof teklifAyrintiSemasi>;

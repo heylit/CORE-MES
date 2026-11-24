@@ -360,10 +360,11 @@ export function teklifGetir(db: Db, id: number): Promise<TeklifBaslikSatiri | nu
 
 export interface KilitliTeklif {
   no: string; durum: TeklifDurumu; firma_id: number; firma_kodu: string | null; para_birimi: string; olusturan_id: number; arsivde: boolean; surum: number;
+  kabul_surumu: number | null; siparis_id: number | null;
 }
 export function teklifKilitle(db: Db, id: number): Promise<KilitliTeklif | null> {
   return db.tek<KilitliTeklif>(
-    `SELECT no, durum, firma_id, firma_kodu, para_birimi, olusturan_id, arsiv_an IS NOT NULL AS arsivde, surum
+    `SELECT no, durum, firma_id, firma_kodu, para_birimi, olusturan_id, arsiv_an IS NOT NULL AS arsivde, surum, kabul_surumu, siparis_id
        FROM siparisler_teklif WHERE id = $1 FOR UPDATE`, [id],
   );
 }
@@ -1172,27 +1173,40 @@ export async function revizyonKalemleriYaz(
 }
 
 export interface RevizyonSatiri {
-  rev_no: number; gerekce: string; kisi_id: number; an: string; degisiklikler: unknown; logo_gitmisti: boolean;
+  rev_no: number; gerekce: string; kisi_id: number; an: string; degisiklikler: unknown; logo_gitmisti: boolean; kaynak_surum_no: number | null;
 }
 
 export function revizyonlar(db: Db, siparisId: number): Promise<RevizyonSatiri[]> {
   return db.sorgu<RevizyonSatiri>(
-    `SELECT rev_no, gerekce, kisi_id, ${zamanMetni('an')} AS an, degisiklikler, logo_gitmisti
+    `SELECT rev_no, gerekce, kisi_id, ${zamanMetni('an')} AS an, degisiklikler, logo_gitmisti, kaynak_surum_no
        FROM siparisler_siparis_revizyonu WHERE siparis_id = $1 ORDER BY rev_no DESC`,
     [siparisId],
   );
 }
 
+// 3637: siparişin şu an hangi teklif sürümünün fiyatlarında olduğu. Son sürüm teklif sürümünden geldiyse onun no'su; elle açılmışsa null
+// (sipariş artık o sürümle birebir değil). Sürüm hiç açılmadıysa siparişin açıldığı kabul sürümü (Logo sırası kaydı); eski kayıtta null.
+export async function siparistekiTeklifSurumu(db: Db, siparisId: number): Promise<number | null> {
+  const s = await db.tek<{ surum_no: number | null }>(
+    `SELECT CASE WHEN r.rev_no IS NULL THEN l.surum_no ELSE r.kaynak_surum_no END AS surum_no
+       FROM (SELECT 1) x
+       LEFT JOIN LATERAL (SELECT rev_no, kaynak_surum_no FROM siparisler_siparis_revizyonu WHERE siparis_id = $1 ORDER BY rev_no DESC LIMIT 1) r ON true
+       LEFT JOIN LATERAL (SELECT surum_no FROM siparisler_logo_gonderim WHERE tur = 'siparis' AND siparis_id = $1 LIMIT 1) l ON true`,
+    [siparisId],
+  );
+  return s?.surum_no ?? null;
+}
+
 // Sürüm numarası sipariş satırı kilitliyken verilir (servis kilitle ile); tekillik kısıtı yine de çakışmayı yakalar.
 export async function revizyonEkle(
-  db: Db, g: { siparisId: number; gerekce: string; kisiId: number; onceki: unknown; degisiklikler: unknown },
+  db: Db, g: { siparisId: number; gerekce: string; kisiId: number; onceki: unknown; degisiklikler: unknown; kaynakSurumNo?: number | null },
 ): Promise<{ rev_no: number; logo_gitmisti: boolean }> {
   const satir = await db.tek<{ rev_no: number; logo_gitmisti: boolean }>(
-    `INSERT INTO siparisler_siparis_revizyonu (siparis_id, rev_no, gerekce, kisi_id, onceki, degisiklikler, logo_gitmisti)
+    `INSERT INTO siparisler_siparis_revizyonu (siparis_id, rev_no, gerekce, kisi_id, onceki, degisiklikler, logo_gitmisti, kaynak_surum_no)
      SELECT $1, coalesce((SELECT max(rev_no) FROM siparisler_siparis_revizyonu WHERE siparis_id = $1), 0) + 1, $2, $3, $4::jsonb, $5::jsonb,
-            EXISTS (SELECT 1 FROM siparisler_logo_gonderim WHERE siparis_id = $1 AND durum = 'gonderildi')
+            EXISTS (SELECT 1 FROM siparisler_logo_gonderim WHERE siparis_id = $1 AND durum = 'gonderildi'), $6::smallint
      RETURNING rev_no, logo_gitmisti`,
-    [g.siparisId, g.gerekce, g.kisiId, JSON.stringify(g.onceki), JSON.stringify(g.degisiklikler)],
+    [g.siparisId, g.gerekce, g.kisiId, JSON.stringify(g.onceki), JSON.stringify(g.degisiklikler), g.kaynakSurumNo ?? null],
   );
   if (satir === null) throw new Error('Sipariş sürümü eklenemedi');
   return satir;

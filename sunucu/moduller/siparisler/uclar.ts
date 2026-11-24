@@ -2,7 +2,7 @@ import { uc } from '#cekirdek/uc.ts';
 import { yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import {
-  adetDenemesiCevabi, adetDenemesiSorgusu, atolyeTaslaklariCevabi, denemeTaslagiGovdesi, idParametresi, kapatGovdesi, planTaslaklariCevabi, terminDenemesiCevabi, terminDenemesiSorgusu, terminOnayGovdesi, iskontoOnayGovdesi, malzemeSecenekSorgusu, malzemeSecenekleriCevabi, birimSecenekleriCevabi, iptalGovdesi, siparisArsivGovdesi, kartBaglaGovdesi, onayGeriAlGovdesi, onayGovdesi, siparisAyrintiSemasi, siparisDonusumCevabi, siparisDonusumGovdesi,
+  adetDenemesiCevabi, adetDenemesiSorgusu, atolyeTaslaklariCevabi, denemeTaslagiGovdesi, idParametresi, kapatGovdesi, planTaslaklariCevabi, terminDenemesiCevabi, terminDenemesiSorgusu, terminOnayGovdesi, iskontoOnayGovdesi, malzemeSecenekSorgusu, malzemeSecenekleriCevabi, birimSecenekleriCevabi, iptalGovdesi, siparisArsivGovdesi, kartBaglaGovdesi, onayGeriAlGovdesi, onayGovdesi, siparisAyrintiSemasi, siparisDonusumCevabi, siparisDonusumGovdesi, teklifSiparisUygulaGovdesi,
   siparisEkleGovdesi, siparisGuncelleGovdesi, siparisListesiCevabi, siparisRevizyonGovdesi, siparisRevizyonlariCevabi, siparisListesiSorgusu, siparisOzetiCevabi, teklifAyrintiCevabi, terminDagilimiCevabi, teklifEkleGovdesi,
   teklifGuncelleGovdesi, teklifKabulGovdesi, teklifListesiCevabi, teklifListesiSorgusu, teklifNotGovdesi, teklifSatirParametresi,
   teklifSurumuGovdesi, teklifArsivGovdesi, teklifSilGovdesi, teklifSilmeCevabi, teklifFormuCevabi, teklifFormuKurumKaydetGovdesi, teklifFormuMetniGovdesi, teklifFormuSorgusu, teklifFormuVerisiCevabi, teklifFormuSablonKaydetGovdesi,
@@ -400,6 +400,21 @@ export const uclar = [
     isle: async ({ db, kullanici, parametre, govde }) => {
       const sonuc = await teklif.siparisDonustur(db, kullanici, parametre.id, govde);
       return fiyatGorur(kullanici) ? sonuc : { ...sonuc, teklif: teklifFiyatsiz(sonuc.teklif) };
+    },
+  }),
+  // 3637: kabul edilen teklif sürümünü siparişe uygular. Onaylı siparişi değiştirmek siparisler.onayla yetkisidir (siparisler/:id/yeni-surum ile
+  // aynı); sürüm fiyattır, yalnız fiyatı gören uygular.
+  uc({
+    yontem: 'POST',
+    yol: '/siparisler/teklifler/:id/siparise-uygula',
+    yetki: 'siparisler.onayla',
+    tekrarKorumali: true,
+    parametre: idParametresi,
+    govde: teklifSiparisUygulaGovdesi,
+    cevap: siparisDonusumCevabi,
+    isle: async ({ db, kullanici, parametre, govde }) => {
+      if (!fiyatGorur(kullanici)) throw yetkiYok(FIYAT_YETKISI_YOK);
+      return teklif.siparisUygula(db, kullanici, parametre.id, govde);
     },
   }),
   // 3245 d: teklif formu şablonları. Basan (fiyat gören) ve düzenleyen (Sistem Ayarları) okur; yalnız ayar yetkisi yazar.

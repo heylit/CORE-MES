@@ -38,6 +38,9 @@
 
 .tc-sp-toplamlar { display: grid; justify-items: end; gap: var(--b-2); margin: var(--b-4) 0 0; }
 .tc-sp-toplamlar div { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--b-4); }
+.tc-sp-toplamlar-sutun { justify-items: stretch; }
+.tc-sp-toplamlar-sutun div { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; }
+.tc-sp-toplamlar-sutun dd { min-width: 0; overflow-wrap: anywhere; }
 .tc-sp-toplamlar dt { color: var(--muted); }
 .tc-sp-toplamlar dd { margin: 0; min-width: calc(var(--b-6) * 4); text-align: right; font-variant-numeric: tabular-nums; }
 .tc-sp-genel { font-size: var(--yazi-l); font-weight: 700; }

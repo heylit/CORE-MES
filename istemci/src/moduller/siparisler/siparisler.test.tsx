@@ -57,8 +57,8 @@ const SURUM_1 = {
   iskontoOnaylayan: null, iskontoOnayAni: null, kdvOrani: null, kdvTutari: null, genelToplam: null,
 };
 const KDV_SECENEKLERI = { oranlar: ['0.00', '1.00', '10.00', '20.00'], genel: '20.00' };
-const TEKLIF_VERILDI = { ...TEKLIF, kdvSecenekleri: KDV_SECENEKLERI, satirlar: [TEKLIF_SATIR], surumler: [SURUM_1] } satisfies TeklifAyrintisi;
-const TEKLIF_YENI = { ...TEKLIF, kdvSecenekleri: KDV_SECENEKLERI, durum: 'yeni', sonSurumNo: null, satirlar: [TEKLIF_SATIR], surumler: [] } satisfies TeklifAyrintisi;
+const TEKLIF_VERILDI = { ...TEKLIF, siparisteSurumNo: null, kdvSecenekleri: KDV_SECENEKLERI, satirlar: [TEKLIF_SATIR], surumler: [SURUM_1] } satisfies TeklifAyrintisi;
+const TEKLIF_YENI = { ...TEKLIF, siparisteSurumNo: null, kdvSecenekleri: KDV_SECENEKLERI, durum: 'yeni', sonSurumNo: null, satirlar: [TEKLIF_SATIR], surumler: [] } satisfies TeklifAyrintisi;
 const TEKLIF_KABUL = { ...TEKLIF_VERILDI, durum: 'kabul', kabulSurumu: 1, surum: 5 } satisfies TeklifAyrintisi;
 // Sunucunun fiyat yetkisi olmayana döndüğü biçim.
 const AYRINTI_FIYATSIZ = { ...AYRINTI_TASLAK, araToplam: null, kdvTutari: null, genelToplam: null, satirlar: [{ ...SATIR, birimFiyat: null, tutar: null }] } satisfies SiparisAyrintisi;
@@ -695,11 +695,11 @@ describe('Onaylı siparişin yeni sürümü (SIP-40, 3427-4 a)', () => {
   const REV = {
     revizyonlar: [
       {
-        revNo: 2, gerekce: 'Deneme aciklama eklendi', kisi: 'Deneme Yonetici', an: '2026-10-05T10:00:00+03:00', logoGitmisti: true,
+        revNo: 2, gerekce: 'Deneme aciklama eklendi', kisi: 'Deneme Yonetici', an: '2026-10-05T10:00:00+03:00', logoGitmisti: true, kaynakSurumNo: null,
         degisiklikler: [{ alan: 'aciklama', kalemSira: 1, eski: null, yeni: 'Kaplamali', fiyat: false }],
       },
       {
-        revNo: 1, gerekce: 'Deneme musteri termini', kisi: 'Deneme Yonetici', an: '2026-10-04T10:00:00+03:00', logoGitmisti: false,
+        revNo: 1, gerekce: 'Deneme musteri termini', kisi: 'Deneme Yonetici', an: '2026-10-04T10:00:00+03:00', logoGitmisti: false, kaynakSurumNo: null,
         degisiklikler: [
           { alan: 'termin', kalemSira: null, eski: '2026-10-30', yeni: '2026-11-05', fiyat: false },
           { alan: 'birimFiyat', kalemSira: 1, eski: '12.5000', yeni: '13', fiyat: true },
@@ -2596,5 +2596,89 @@ describe('3438 a: kalem yürürlükteki revizyonu seçer', () => {
     const kalem = (yazmalar(istekler)[0]?.govde as { satirlar: Record<string, unknown>[] }).satirlar[0];
     expect(kalem?.['malzemeNo']).toBe(42);
     expect('eskiRevizyonGerekcesi' in (kalem ?? {})).toBe(false);
+  });
+
+  // 3637: kabul edilmiş ve siparişe dönmüş teklife de sürüm verilir; kabul ve sipariş yerinde kalır, fiyatlar "Siparişe uygula" ile geçer.
+  describe('3637 kabul sonrası sürüm', () => {
+    const SATIR_KARTLI = { ...TEKLIF_SATIR, malzemeNo: 31, malzemeKodu: 'DNM-001', malzemeAdi: 'Deneme Braket' };
+    const SURUM_2 = {
+      ...SURUM_1, surumNo: 2, iskontoOrani: '10.00', odemeKosulu: '45 gün', olusturma: '2026-10-05T09:00:00+03:00',
+      fiyatlar: [{ satirId: 11, birimFiyat: '9.0000', iskontoluFiyat: '8.1000', tutar: '324.00' }], toplam: '324.00', kdvOrani: '20.00', kdvTutari: '64.80', genelToplam: '388.80',
+    };
+    const KABUL_1 = { ...TEKLIF_KABUL, satirlar: [SATIR_KARTLI], surumler: [SURUM_1, SURUM_2] } satisfies TeklifAyrintisi;
+    const SIPARISTE = { ...KABUL_1, durum: 'siparis', siparisId: 6, siparisteSurumNo: 1, surum: 6 } satisfies TeklifAyrintisi;
+    const KABUL_2 = { ...SIPARISTE, kabulSurumu: 2, surum: 7 } satisfies TeklifAyrintisi;
+
+    it('kabul edilmiş teklifte yeni sürüm verilir, Reddet yok; kabul edilmemiş yeni sürümün kabulü kaydedilir', async () => {
+      const istekler = sunucuKur(FIYATCI, (yontem, yol) => {
+        if (yontem === 'GET' && yol === '/siparisler/teklifler/21') return json(200, KABUL_1);
+        if (yontem === 'POST' && yol === '/siparisler/teklifler/21/kabul') return json(200, { ...KABUL_1, kabulSurumu: 2, surum: 6 });
+        return undefined;
+      });
+      ac('/siparisler/teklifler/21');
+      expect(await screen.findByRole('button', { name: 'Yeni sürüm ver' })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Reddet' })).toBeNull();
+      expect(screen.getByText('Sürüm 2 müşteri kabulü bekliyor')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Sürüm 2 kabulünü kaydet' }));
+      const pencere = await screen.findByRole('dialog', { name: 'Müşteri kabulünü kaydet' });
+      fireEvent.click(within(pencere).getByRole('button', { name: 'Kabulü kaydet' }));
+      await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+      expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/teklifler/21/kabul', govde: { surum: 5, surumNo: 2 } });
+    });
+
+    it('siparişe dönmüş teklifte sürüm düğmesi durur; sipariş eski sürümde uyarısı ve Siparişe uygula yalnız kabul edilen sürüm farklıysa ve onay yetkisi varsa', async () => {
+      sunucuKur(YONETICI, (yontem, yol) => (yontem === 'GET' && yol === '/siparisler/teklifler/21' ? json(200, KABUL_2) : undefined));
+      ac('/siparisler/teklifler/21');
+      expect(await screen.findByRole('button', { name: 'Yeni sürüm ver' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Siparişe uygula' })).toBeTruthy();
+      expect(screen.getByText('Sipariş eski sürümde')).toBeTruthy();
+      expect(screen.getByText('Siparişte')).toBeTruthy();
+    });
+
+    it('elle değiştirilmiş siparişte (sürüm bağı yok) Siparişe uygula açıktır ve nedeni uyarıda yazar', async () => {
+      sunucuKur(YONETICI, (yontem, yol) => (yontem === 'GET' && yol === '/siparisler/teklifler/21' ? json(200, { ...KABUL_2, siparisteSurumNo: null }) : undefined));
+      ac('/siparisler/teklifler/21');
+      expect(await screen.findByRole('button', { name: 'Siparişe uygula' })).toBeTruthy();
+      expect(screen.getByText('Sipariş elle değiştirilmiş')).toBeTruthy();
+      expect(screen.queryByText('Sipariş eski sürümde')).toBeNull();
+    });
+
+    it('onay yetkisi olmayan yazarda ve sipariş zaten kabul edilen sürümdeyken Siparişe uygula çizilmez', async () => {
+      sunucuKur(FIYATCI, (yontem, yol) => (yontem === 'GET' && yol === '/siparisler/teklifler/21' ? json(200, KABUL_2) : undefined));
+      ac('/siparisler/teklifler/21');
+      await screen.findByRole('button', { name: 'Yeni sürüm ver' });
+      expect(screen.queryByRole('button', { name: 'Siparişe uygula' })).toBeNull();
+      cleanup();
+      sunucuKur(YONETICI, (yontem, yol) => (yontem === 'GET' && yol === '/siparisler/teklifler/21' ? json(200, { ...KABUL_2, siparisteSurumNo: 2 }) : undefined));
+      ac('/siparisler/teklifler/21');
+      await screen.findByRole('button', { name: 'Yeni sürüm ver' });
+      expect(screen.queryByRole('button', { name: 'Siparişe uygula' })).toBeNull();
+    });
+
+    it('Siparişe uygula: fark ve gerekçe görünür, gerekçesiz gönderilmez; gövde teklif ve sipariş sürümüyle gider', async () => {
+      const donus = { teklif: { ...KABUL_2, siparisteSurumNo: 2, surum: 8 }, siparisId: 6 } satisfies SiparisDonusumCevabi;
+      const istekler = sunucuKur(YONETICI, (yontem, yol) => {
+        if (yontem === 'GET' && yol === '/siparisler/teklifler/21') return json(200, KABUL_2);
+        if (yontem === 'GET' && yol === '/siparisler/6') return json(200, AYRINTI_ONAYLI);
+        if (yontem === 'POST' && yol === '/siparisler/teklifler/21/siparise-uygula') return json(200, donus);
+        return undefined;
+      });
+      ac('/siparisler/teklifler/21');
+      fireEvent.click(await screen.findByRole('button', { name: 'Siparişe uygula' }));
+      const pencere = await screen.findByRole('dialog', { name: 'Siparişe uygula · sürüm 2' });
+      expect(await within(pencere).findByText(/Para değişir/)).toBeTruthy();
+      expect(within(pencere).getByText(/1\.250,00 TRY → 324,00 TRY/)).toBeTruthy();
+      expect(within(pencere).getByText('30 gün vadeli → 45 gün')).toBeTruthy();
+      const gonder = within(pencere).getByRole('button', { name: 'Siparişe uygula' });
+      expect((gonder as HTMLButtonElement).disabled).toBe(true);
+      fireEvent.change(within(pencere).getByLabelText(/^Gerekçe/), { target: { value: 'Müşteri yeni fiyatı kabul etti' } });
+      expect((gonder as HTMLButtonElement).disabled).toBe(false);
+      fireEvent.click(gonder);
+      await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+      expect(yazmalar(istekler)[0]).toMatchObject({
+        yol: '/siparisler/teklifler/21/siparise-uygula', govde: { surum: 7, siparisSurum: 3, surumNo: 2, gerekce: 'Müşteri yeni fiyatı kabul etti' },
+      });
+      expect(Object.keys(yazmalar(istekler)[0]?.baslik ?? {}).map((k) => k.toLowerCase())).toContain(ISTEK_KIMLIGI_BASLIGI.toLowerCase());
+    });
   });
 });
