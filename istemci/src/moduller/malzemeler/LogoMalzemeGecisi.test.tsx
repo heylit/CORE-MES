@@ -28,7 +28,7 @@ const tmi = (kimlik: string, stokKodu: string, surum: number, logoKayitli = fals
 const LISTE: LogoGecisCevabi = {
   baglanti: true,
   okuma: { acik: false, suruyor: false, okunan: 5, sonTamam: '2026-11-12T05:00:00+00:00' },
-  sayilar: { toplam: 9, stoklu: 5, yeni: 3, bagsiz: 2, bagli: 1, kullanimDisi: 1, kullanilan: null, kararBekleyen: 2 },
+  sayilar: { toplam: 9, stoklu: 5, yeni: 3, bagsiz: 2, bagli: 1, kodCakismasi: 1, kullanimDisi: 1, kullanilan: null, kararBekleyen: 2 },
   suzgec: 'stoklu',
   kullanim: false,
   canliArama: false,
@@ -42,6 +42,7 @@ const LISTE: LogoGecisCevabi = {
       farklar: [{ alan: 'aciklama_1', logo: 'Logo adi', tmi: 'CORE' }],
     },
     { ...ortak, logoKayitNo: 5, kod: 'HM-DEN-00005', ad: 'Deneme birim', kartTuru: '10', durum: 'bagsiz', koduUyar: true, birimSeti: '07', kararNedeni: 'birim-farki', tmi: tmi('k5', 'HM-DEN-00005', 1) },
+    { ...ortak, logoKayitNo: 6, kod: 'HM-DEN-00006', ad: 'Deneme cakisma', kartTuru: '10', durum: 'kod-cakismasi', koduUyar: true, tmi: tmi('k6', 'HM-DEN-00006', 2, true) },
   ],
   sayfa: 0,
   sonrakiSayfa: null,
@@ -166,6 +167,10 @@ describe('LogoMalzemeGecisi (3068 a; satır işlemleri 2116)', () => {
     expect(await within(satir('Deneme yeni')).findByText(/^Hammadde/)).toBeTruthy();
     expect(within(satir('Deneme eslenecek')).getByText(/^Tüketim malı/)).toBeTruthy();
     expect(within(satir('Logo adi')).getByRole('button', { name: "HM-DEN-00004 Logo'dakini al" })).toBeTruthy();
+    // 3629: kod çakışmasında bağla, yeni koda geç ve al yok; neden satırda yazar.
+    expect(within(satir('Deneme cakisma')).getByText('Kod çakışması')).toBeTruthy();
+    expect(within(satir('Deneme cakisma')).getByText("Bu kod CORE'da başka bir Logo kaydına bağlı kartta")).toBeTruthy();
+    expect(within(satir('Deneme cakisma')).queryByRole('button', { name: /HM-DEN-00006/ })).toBeNull();
   });
 
   it('okuyucu listeyi görür; satır ve toplu işlem, okuma düğmeleri yok', async () => {
@@ -211,6 +216,7 @@ describe('LogoMalzemeGecisi (3068 a; satır işlemleri 2116)', () => {
     expect(await screen.findByText(/1 kart CORE'daki aynı kodlu kartla bağlanacak/)).toBeTruthy();
     expect(screen.getByText(/1 satır atlanacak: Birim farklı/)).toBeTruthy();
     expect(screen.getByText(/1 satır atlanacak: Kod eşlenecek/)).toBeTruthy();
+    expect(screen.getByText(/1 satır atlanacak: Kod çakışması/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '1 kartı bağla' }));
     await waitFor(() => expect(istekler.find((i) => i.yol === '/malzeme-logo-gecisi/toplu-bagla')?.govde).toEqual({ kartlar: [{ logoKayitNo: 3, surum: 4 }] }));
     expect(await screen.findByText('1 bağlandı, 0 atlandı.')).toBeTruthy();

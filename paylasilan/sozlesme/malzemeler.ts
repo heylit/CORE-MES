@@ -310,8 +310,9 @@ export const demirbasMakineSecenekleriCevabi = z.object({
 export type DemirbasMakineSecenekleriCevabi = z.output<typeof demirbasMakineSecenekleriCevabi>;
 
 /* ---------------- Logo'dan gelen kartlar (2116; kararlar 2116-2 a, 2116-3 c, 2116-4 a) ---------------- */
-// Logo'daki kart TMI'de: yok (alınabilir), bağsız aynı kodlu kart var (bağlanır, yeniden gönderilmez) ya da bağlı (fark listelenir).
-export const LOGO_GELEN_DURUMLARI = ['yeni', 'bagsiz', 'bagli'] as const;
+// Logo'daki kart TMI'de: yok (alınabilir), bağsız aynı kodlu kart var (bağlanır, yeniden gönderilmez), bağlı (fark listelenir) ya da
+// aynı kodlu kart başka bir Logo kaydına bağlı (kod çakışması: bağlanmaz).
+export const LOGO_GELEN_DURUMLARI = ['yeni', 'bagsiz', 'bagli', 'kod-cakismasi'] as const;
 export const LOGO_FARK_ALANLARI = ['aciklama_1', 'aciklama_2', 'aciklama_3'] as const;
 export const LOGO_GELEN_SAYFA_BOYU = 100;
 export const logoGelenSorgusu = z.object({
@@ -368,7 +369,7 @@ export type LogoYeniKodCevabi = z.output<typeof logoYeniKodCevabi>;
 /* ---------------- Logo geçişi (3068): Logo kartları CORE karşılığıyla yan yana, süzgeç ve toplu işlem adaylığı ---------------- */
 // Süzgeçler sunucuda uygulanır: istemciye bütün ayna inmez. "stoklu" Logo stok toplamı sıfırdan büyük karttır (aynadaki stok okuması).
 // "kullanilan" (3079 a): stoklu, son 12 ayda hareketi olan ya da açık siparişte geçen; yalnız kullanım izi okunduysa anlamlıdır.
-export const LOGO_GECIS_SUZGECLERI = ['kullanilan', 'stoklu', 'tumu', 'yeni', 'bagsiz', 'bagli', 'kullanim-disi'] as const;
+export const LOGO_GECIS_SUZGECLERI = ['kullanilan', 'stoklu', 'tumu', 'yeni', 'bagsiz', 'bagli', 'kod-cakismasi', 'kullanim-disi'] as const;
 export const LOGO_KULLANIM_NEDENLERI = ['stok', 'hareket', 'siparis'] as const;
 export type LogoGecisSuzgeci = (typeof LOGO_GECIS_SUZGECLERI)[number];
 // Toplu işleme girmeyen satırın nedeni: kullanıcı satırda tek tek karar verir.
@@ -383,7 +384,7 @@ export const logoGecisSorgusu = z.object({
     .transform((d) => d.split(',').map(Number)).optional(),
 });
 const logoGecisSayilari = z.object({
-  toplam: z.number().int(), stoklu: z.number().int(), yeni: z.number().int(), bagsiz: z.number().int(), bagli: z.number().int(),
+  toplam: z.number().int(), stoklu: z.number().int(), yeni: z.number().int(), bagsiz: z.number().int(), bagli: z.number().int(), kodCakismasi: z.number().int(),
   kullanimDisi: z.number().int(),
   // Kullanım izi okunmadıysa null.
   kullanilan: z.number().int().nullable(),
