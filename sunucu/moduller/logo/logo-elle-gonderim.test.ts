@@ -197,6 +197,14 @@ describe('CORE açıklamalarını Logo\'ya gönder, sahte köprüyle uçtan uca 
     const iz = await vt().tek<{ govde: { _ek: { logoKayitNo: number; kod: string; simdi1: string; simdi2: string | null; simdi3: string | null; kisaldi: boolean }[] } }>(
       "SELECT govde FROM denetim_kaydi WHERE yol = '/malzeme-logo-gecisi/logoya-gonder' AND govde::text LIKE $1 ORDER BY id DESC LIMIT 1", [`%${aktif.kod}%`]);
     assert.deepEqual(iz?.govde._ek, [{ logoKayitNo: aktif.ref, kod: aktif.kod, simdi1: 'ORN Logo adi', simdi2: 'ORN Logo iki', simdi3: null, kisaldi: false }]);
+    // Denetim metni 100 bayta kısalır ve işaretlenir.
+    const uzunMetin = 'ORN uzun metin '.repeat(10);
+    const uzun = await baglıKart(['ORN CORE bir', null, null], { ad: 'ORN Logo adi', a2: uzunMetin, a3: null });
+    assert.equal((await gonder(uzun, uzun.ref)).statusCode, 200);
+    const izUzun = await vt().tek<{ govde: { _ek: { simdi2: string | null; kisaldi: boolean }[] } }>(
+      "SELECT govde FROM denetim_kaydi WHERE yol = '/malzeme-logo-gecisi/logoya-gonder' AND govde::text LIKE $1 ORDER BY id DESC LIMIT 1", [`%${uzun.kod}%`]);
+    assert.equal(izUzun?.govde._ek[0]?.kisaldi, true);
+    assert.equal(Buffer.byteLength(izUzun?.govde._ek[0]?.simdi2 ?? '', 'utf8'), 100);
     const cok = await istek('POST', '/malzeme-logo-gecisi/logoya-gonder', { kartlar: Array.from({ length: 101 }, (_, i) => ({ logoKayitNo: i + 1, surum: 1 })) });
     assert.equal(cok.statusCode, 400);
   });

@@ -406,6 +406,9 @@ describe('Logo geçişi: liste, toplu bağla ve al, geri al (3068 a; gerçek Pos
     assert.deepEqual(r.satir?.logoyaGonder, { gonderilebilir: true, durum: null, hata: null });
     assert.equal(typeof r.logoyaGonderim.acik, 'boolean');
     assert.equal((await tamam<LogoGecisKartiCevabi>('GET', `/malzeme-logo-gecisi/kart/${bagsiz.kimlik}`)).satir, null);
+    await vt().sorgu("UPDATE malzeme_katalog_karti SET onay_durumu = 'taslak' WHERE kimlik = $1", [a.kimlik]);
+    const t = await tamam<LogoGecisKartiCevabi>('GET', `/malzeme-logo-gecisi/kart/${a.kimlik}`);
+    assert.equal(t.satir?.logoyaGonder.gonderilebilir, false, 'taslak kart gönderilebilir görünmez');
   });
 
   test('LGG-7 Kullanılanlar (3079 a): iz okununca açılış süzgeci; stok, son 12 ayda hareket ya da açık sipariş; neden satırda; 12 aydan eski hareket saymaz', async () => {
