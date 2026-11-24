@@ -14,6 +14,8 @@ Yeni veri işlemi yoktur: yazma uçları Stok'un var olan işlemleriyle korunur,
 | `POST /takimhane/iade` | `takimhane.cikis-iade` | durum hedefi belirler (sağlam raf, aşınmış ara alan, kırık hurda); kırık nedensiz olmaz (kısıt + kural); konumdan fazlası olmaz | "iade: durum hedefi belirler ..." | aynı test (400) |
 | `GET /takimhane/emirler/:id/takimlar` | `biri: sayfa.takimhane` | açık emir; eksik = adet - raf - tezgâh | "emir takım listesi ..." | aynı |
 | `POST /takimhane/emirler/:id/takimlar` | `takimhane.cikis-iade` | liste tümden yazılır; aynı cep ve takım iki kez olmaz; yalnız takım kartı; tekrar korumalı | "emir takım listesi ..." | aynı (400) |
+| `GET /takimhane/aparat` | `sayfa.takimhane` | yalnız okur; ayırma yazılmaz, canlı plan penceresi ile rota isteğinden türetilir | "örtüşen iki emir rafı paylaşır" | "yazma ucu yoktur" (404) |
+| `GET /takimhane/emirler/:id/aparat` | `sayfa.takimhane` | emir açık olmalı (yoksa 404); plan yerleştirmemiş emir hazır sayılmaz; ölçü aleti yalnız Kalibrasyon durumu | "aparat çıkışı emre bağlıdır", "plan ertelendi", "ölçü aleti kartı" | oturumsuz 401 (çekirdek) |
 | `POST /takimhane/baslangic/onizleme` | `stok.giris` | yalnız ön izleme, hiçbir şey yazılmaz; aynı kod toplanmaz | "başlangıç stoğu ön izlemesi" | rol taraması |
 
 ## Risk koşulları (3613 Risk raporu)
