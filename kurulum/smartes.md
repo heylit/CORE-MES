@@ -22,7 +22,7 @@ Değerler `.env` dosyasına (depoya girmez) ya da sunucu servisinin ortamına ya
      `MACHINE_CODE`, `INCLUDE_ACTIVES`); `ActiveMachinesList` ve ardından makine başına `AlarmsList` (`MachineID`, `StartDatetime`, `EndDatetime`).
      Alarm satırında kimlik yoktur; kayıt makine + `ALARMTYPE` + `ALARMNO` + `START_DATETIME` ile tekildir.
    - İşaretlemeden okuma: `WsWorkordersRejectStatusList` (hurda), `WarehouseStatusList` (ambar), `QualityControlStatusList` (kalite).
-   - Yazma: `WorkOrdersCreateUpdate`, `OperationCreateUpdate`. `SetErpOkRed` çağrılmaz (346 a). İş emrinde çarpan belgedeki yazımla `Multipler`
+   - Yazma: `WorkOrdersCreateUpdate`. Operasyon açılmaz (`OperationCreateUpdate` çağrılmaz): operasyon kodu önek + adım no (TRN20) olarak `OperationList`te aranır, yoksa iş emri beklemede kalır. `SetErpOkRed` çağrılmaz (346 a). İş emrinde çarpan belgedeki yazımla `Multipler`
      adıyla ve her zaman 1 gider; `QuantityUpdate` miktar önceki gönderimden farklıysa true, değilse false; kapatmada false.
      `QuantityUpdate` olmadan SmartES'in miktarı değiştirmeyebileceği bir varsayımdır; ilk gönderimde doğrulayın.
    - Tanım: `WorkStationList` ve `WorkStationCreateUpdate`, `StocksList` ve `StockCreateUpdate`.

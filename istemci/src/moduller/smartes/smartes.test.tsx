@@ -27,8 +27,8 @@ const SAYILAR: DurumCevabi['sayilar'] = {
 const ESLEMELER: EslemelerCevabi = {
   tur: 'istasyon',
   satirlar: [
-    { tmiId: 1, tmiKod: 'IST-01', tmiAd: 'Deneme torna', aktif: true, smartesKod: 'S-01', surum: 2, oneri: null },
-    { tmiId: 2, tmiKod: 'IST-02', tmiAd: 'Deneme freze', aktif: false, smartesKod: null, surum: null, oneri: null },
+    { tmiId: 1, tmiKod: 'IST-01', tmiAd: 'Deneme torna', aktif: true, smartesKod: 'S-01', surum: 2, oneri: null, acikIsEmri: null, altIstasyonlar: null, miras: null },
+    { tmiId: 2, tmiKod: 'IST-02', tmiAd: 'Deneme freze', aktif: false, smartesKod: null, surum: null, oneri: null, acikIsEmri: null, altIstasyonlar: null, miras: null },
   ],
   smartesListesi: null,
 };
@@ -37,10 +37,10 @@ const ESLEMELER: EslemelerCevabi = {
 const ONERILI: EslemelerCevabi = {
   tur: 'istasyon',
   satirlar: [
-    { tmiId: 1, tmiKod: 'IST-01', tmiAd: 'Deneme torna', aktif: true, smartesKod: 'S-01', surum: 2, oneri: null },
-    { tmiId: 2, tmiKod: 'IST-02', tmiAd: 'Deneme freze', aktif: true, smartesKod: null, surum: null, oneri: { kod: 'S-02', ad: 'Deneme freze', gerekce: 'ayni-ad' } },
-    { tmiId: 3, tmiKod: 'IST-03', tmiAd: 'Deneme taşlama', aktif: true, smartesKod: null, surum: null, oneri: { kod: 'IST-03', ad: 'Taşlama', gerekce: 'ayni-kod' } },
-    { tmiId: 4, tmiKod: 'IST-04', tmiAd: 'Deneme montaj', aktif: true, smartesKod: null, surum: null, oneri: null },
+    { tmiId: 1, tmiKod: 'IST-01', tmiAd: 'Deneme torna', aktif: true, smartesKod: 'S-01', surum: 2, oneri: null, acikIsEmri: null, altIstasyonlar: null, miras: null },
+    { tmiId: 2, tmiKod: 'IST-02', tmiAd: 'Deneme freze', aktif: true, smartesKod: null, surum: null, oneri: { kod: 'S-02', ad: 'Deneme freze', gerekce: 'ayni-ad' }, acikIsEmri: null, altIstasyonlar: null, miras: null },
+    { tmiId: 3, tmiKod: 'IST-03', tmiAd: 'Deneme taşlama', aktif: true, smartesKod: null, surum: null, oneri: { kod: 'IST-03', ad: 'Taşlama', gerekce: 'ayni-kod' }, acikIsEmri: null, altIstasyonlar: null, miras: null },
+    { tmiId: 4, tmiKod: 'IST-04', tmiAd: 'Deneme montaj', aktif: true, smartesKod: null, surum: null, oneri: null, acikIsEmri: null, altIstasyonlar: null, miras: null },
   ],
   smartesListesi: [{ kod: 'S-01', ad: 'Torna' }, { kod: 'S-02', ad: 'Deneme freze' }, { kod: 'IST-03', ad: 'Taşlama' }, { kod: 'S-09', ad: null }],
 };
@@ -142,6 +142,21 @@ describe('SmartES bağlantı durumu', () => {
 });
 
 describe('SmartES kod eşlemeleri', () => {
+  it('3655: iş merkezi sekmesi vardır; operasyon tipinde karşılık "önek" olarak anılır ve değişimin açık emirleri etkileyeceği yazılır', async () => {
+    sunucuKur(YONETICI, (yol) => (yol.startsWith('/smartes/eslemeler?tur=operasyon-tipi')
+      ? json(200, { tur: 'operasyon-tipi', satirlar: [{ tmiId: 5, tmiKod: 'TRN', tmiAd: 'Tornalama', aktif: true, smartesKod: null, surum: null, oneri: null, acikIsEmri: 3, altIstasyonlar: null, miras: null }], smartesListesi: null })
+      : null));
+    ac(<Eslemeler />);
+    expect(await screen.findByRole('tab', { name: 'İş merkezi' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Operasyon tipi' }));
+    expect(await screen.findByText('SmartES öneki')).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'Eşle' }));
+    const pencere = await screen.findByRole('dialog');
+    expect(within(pencere).queryByText(/açık iş emrinin SmartES operasyon kodu değişir/)).toBeNull();
+    fireEvent.change(within(pencere).getByLabelText(/SmartES öneki/), { target: { value: 'TRN' } });
+    expect(within(pencere).getByText(/3 açık iş emrinin SmartES operasyon kodu değişir/)).toBeTruthy();
+  });
+
   it('yazma işlemi olmayan listeyi görür, düzenleme düğmesi görmez', async () => {
     sunucuKur(IZLEYICI);
     ac(<Eslemeler />);
@@ -392,5 +407,61 @@ describe('SmartES, Sistem Ayarları ekranı', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Kod eşlemeleri' }));
     expect(await screen.findByText('Deneme torna')).toBeTruthy();
     expect(cagrilar.some((c) => c.yol === '/smartes/eslemeler?tur=istasyon')).toBe(true);
+  });
+});
+
+describe('SmartES eşleme ekranı: önek, iş merkezi, miras (3655)', () => {
+  const satir = (ek: Record<string, unknown>) => ({ tmiId: 5, tmiKod: 'TRN', tmiAd: 'Tornalama', aktif: true, smartesKod: null, surum: null, oneri: null, acikIsEmri: null, altIstasyonlar: null, miras: null, ...ek });
+  it('operasyon tipinde örnek kod görünür; öneriyi kabul etmek açık emir sayısıyla onay penceresi açar, sayı yoksa söyler', async () => {
+    const cagrilar = sunucuKur(YONETICI, (yol) => (yol.startsWith('/smartes/eslemeler?tur=operasyon-tipi')
+      ? json(200, { tur: 'operasyon-tipi', satirlar: [satir({ oneri: { kod: 'TRN', ad: null, gerekce: 'ayni-kod' }, acikIsEmri: 4 })], smartesListesi: null })
+      : null));
+    ac(<Eslemeler />);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Operasyon tipi' }));
+    expect(await screen.findByText('TRN10, TRN20 …')).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'Kabul' }));
+    const pencere = await screen.findByRole('dialog');
+    expect(within(pencere).getByText(/4 açık iş emrinin SmartES operasyon kodu değişir/)).toBeTruthy();
+    expect(cagrilar.some((c) => c.yontem === 'POST')).toBe(false);
+  });
+
+  it('iş merkezinde altındaki istasyonlar ve kendi eşlemesi görünür; istasyon kendi eşlemesi yokken merkezden miras aldığını söyler', async () => {
+    sunucuKur(YONETICI, (yol) => {
+      if (yol.startsWith('/smartes/eslemeler?tur=is-merkezi')) {
+        return json(200, { tur: 'is-merkezi', smartesListesi: null, satirlar: [satir({ tmiKod: 'FRZ', smartesKod: 'ORN-FRZ', surum: 1, altIstasyonlar: [{ kod: 'IST-A', ad: 'A', kendiKodu: null }, { kod: 'IST-B', ad: 'B', kendiKodu: 'ORN-FRZ-ST' }] })] });
+      }
+      if (yol.startsWith('/smartes/eslemeler?tur=istasyon')) {
+        return json(200, { tur: 'istasyon', smartesListesi: null, satirlar: [satir({ tmiKod: 'IST-A', miras: { merkezKodu: 'FRZ', smartesKod: 'ORN-FRZ' } })] });
+      }
+      return null;
+    });
+    ac(<Eslemeler />);
+    expect(await screen.findByText('iş merkezinden: FRZ')).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'İş merkezi' }));
+    expect(await screen.findByText('kendi eşlemesi: ORN-FRZ-ST')).toBeTruthy();
+    expect(screen.getByText('SmartES istasyon kodu')).toBeTruthy();
+  });
+});
+
+describe('SmartES adlarını CORE nedenine aktarma (3655)', () => {
+  it('önizleme sayıları ve satırları gösterir; aktar düğmesi ekle ve esle sayısını taşır, sonuç bildirilir', async () => {
+    const onizleme = {
+      tur: 'fire', listeVar: true, eklenecek: 1, eslenecek: 1, zatenEslenmis: 0, adFarkli: 0, atlanan: 0,
+      satirlar: [
+        { anahtar: 'id:1', ad: 'Ölçü dışı', eylem: 'esle', kod: 'H-01', kategori: null, aktif: true, coreAdi: 'Ölçü dışı', not: null },
+        { anahtar: 'id:9', ad: 'ORN Yeni fire', eylem: 'ekle', kod: 'SME-9', kategori: null, aktif: true, coreAdi: 'ORN Yeni fire', not: null },
+      ],
+    };
+    const cagrilar = sunucuKur(YONETICI, (yol) => (yol === '/smartes/gelen-adlar/aktarim?tur=fire' ? json(200, onizleme)
+      : yol === '/smartes/gelen-adlar/aktar' ? json(200, { eklenen: 1, eslenen: 1, atlanan: 0 }) : null));
+    ac(<Eslemeler />);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Fire' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'SmartES listesini CORE’a aktar' }));
+    const pencere = await screen.findByRole('dialog');
+    expect(await within(pencere).findByText('SME-9')).toBeTruthy();
+    expect(within(pencere).getByText('1 eklenecek')).toBeTruthy();
+    fireEvent.click(within(pencere).getByRole('button', { name: '1 neden ekle, 1 ad eşle' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull(); });
+    expect(cagrilar.find((c) => c.yol === '/smartes/gelen-adlar/aktar')).toEqual({ yol: '/smartes/gelen-adlar/aktar', yontem: 'POST', govde: { tur: 'fire' } });
   });
 });

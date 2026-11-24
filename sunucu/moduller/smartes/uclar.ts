@@ -4,7 +4,7 @@ import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
   alarmlarCevabi, canliMakineAyrintisiCevabi, canliMakineParametresi, canliMakinelerCevabi, durumCevabi, duruslarCevabi, eslemeAtaGovdesi, eslemeCevabi,
   eslemeKaldirGovdesi, eslemelerCevabi, eslemeSorgusu, gidenCevabi, smartesEmirDurumlariCevabi, smartesEmirDurumlariSorgusu, smartesGidenIzlemeCevabi, smartesYenidenGonderCevabi, smartesYenidenGonderGovdesi, isEmriDurumlariCevabi, makineBulgulariCevabi, sayfaSorgusu, smartesHazirlikCevabi,
-  smartesKontrolCevabi, gelenAdEsleGovdesi, gelenAdKaldirGovdesi, gelenAdlarCevabi, gelenAdOnerileriOnaylaGovdesi, gelenAdSorgusu, listeOkuCevabi,
+  smartesKontrolCevabi, gelenAdEsleGovdesi, gelenAdKaldirGovdesi, gelenAdlarCevabi, gelenAdOnerileriOnaylaGovdesi, gelenAdSorgusu, listeOkuCevabi, gelenAdAktarimCevabi, gelenAdAktarGovdesi, gelenAdAktarSonucu,
   onerileriOnaylaCevabi, onerileriOnaylaGovdesi, ambarHareketleriCevabi, fireHareketleriCevabi, gelenlerCevabi, hamKayitCevabi, hamKayitParametresi,
   kaliteOlcumleriCevabi, hesaplarCevabi, adetKarariCevabi, adetOnaylaGovdesi, adetOnaylariCevabi, adetOnaySorgusu, adetReddetGovdesi,
 } from '#paylasilan/sozlesme/smartes.ts';
@@ -142,6 +142,23 @@ export const uclar = [
     govde: gelenAdOnerileriOnaylaGovdesi,
     cevap: onerileriOnaylaCevabi,
     isle: ({ db, kullanici, govde }) => servis.gelenAdOnerileriniOnayla(db, kullanici.id, govde),
+  }),
+  // 3655 B: SmartES duruş ve fire listesini CORE'a aktarma. Önizleme yazmaz; aktarım tek transaction'da ekler ve eşler.
+  uc({
+    yontem: 'GET',
+    yol: '/smartes/gelen-adlar/aktarim',
+    yetki: 'smartes.esleme-yaz',
+    sorgu: gelenAdSorgusu,
+    cevap: gelenAdAktarimCevabi,
+    isle: ({ db, sorgu }) => servis.gelenAdAktarimOnizleme(db, sorgu.tur),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/smartes/gelen-adlar/aktar',
+    yetki: 'smartes.esleme-yaz',
+    govde: gelenAdAktarGovdesi,
+    cevap: gelenAdAktarSonucu,
+    isle: ({ db, kullanici, govde, denetimEki }) => servis.gelenAdAktar(db, kullanici.id, govde.tur, denetimEki),
   }),
   // 3193 a: listeyi sayfayı gören görür; onay ve red `smartes.adet-onayla` ister. Onay üretim emrine ve stoğa yazar (ADR 0013 eki).
   uc({

@@ -3,25 +3,33 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   EslemeAtaGovdesi, EslemeCevabi, EslemeKaldirGovdesi, EslemelerCevabi, OnerileriOnaylaCevabi, OnerileriOnaylaGovdesi, SmartesEslemeTuru,
 } from '#paylasilan/sozlesme/smartes.ts';
-import { Dugme, DurumKutusu, Girdi, Kart, Pencere, Rozet, Secim, Sekmeler, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Girdi, Kart, Pencere, Rozet, Secim, Sekmeler, Simge, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { YOK } from './gosterim.ts';
 import { GelenAdlar } from './GelenAdlar.tsx';
 import './smartes.css';
 
 type Satir = EslemelerCevabi['satirlar'][number];
 type Smartes = NonNullable<EslemelerCevabi['smartesListesi']>[number];
+// Operasyon tipinin SmartES karşılığı bir kod değil, operasyon kodunun önekidir (ör. TRN: adım 20 için TRN20).
+const KARSILIK = (tur: SmartesEslemeTuru) => (tur === 'operasyon-tipi' ? 'SmartES öneki' : tur === 'is-merkezi' ? 'SmartES istasyon kodu' : 'SmartES’teki karşılığı');
+// Önek değişince açık iş emirlerinin kodu değişir; sayı sunucudan gelir.
+const ACIK_EMIR_UYARISI = (n: number | null) => (n !== null && n > 0
+  ? `Önek değişince ${n} açık iş emrinin SmartES operasyon kodu değişir; emirler yeni kodla bir kez yeniden gönderilir.`
+  : 'Önek değişince açık iş emirlerinin SmartES operasyon kodu değişir; şu an SmartES’e gidecek açık iş emri yok.');
+const ORNEK_KOD = (onek: string) => `${onek}10, ${onek}20 …`;
 const GEREKCE = { 'ayni-kod': 'kod aynı', 'ayni-ad': 'ad aynı', 'benzer-ad': 'ad benzer' } as const;
 
 // Sözleşme dosyası zod taşır, istemci ondan değer ithal etmez; tip eksik ya da fazla türü yakalar.
 const TUR_ADLARI = {
-  istasyon: 'İstasyon', makine: 'Makine', 'operasyon-tipi': 'Operasyon tipi', 'durus-nedeni': 'Duruş nedeni',
+  istasyon: 'İstasyon', 'is-merkezi': 'İş merkezi', makine: 'Makine', 'operasyon-tipi': 'Operasyon tipi', 'durus-nedeni': 'Duruş nedeni',
 } as const satisfies Record<SmartesEslemeTuru, string>;
 // Fire ve duruş SmartES'in ad listesiyle eşlenir (3174); öbür türler CORE kaydına SmartES kodu yazılarak.
 type Bolum = Exclude<SmartesEslemeTuru, 'durus-nedeni'> | 'fire' | 'durus';
 const SEKMELER: readonly { anahtar: Bolum; baslik: string }[] = [
-  { anahtar: 'istasyon', baslik: 'İstasyon' }, { anahtar: 'makine', baslik: 'Makine' }, { anahtar: 'operasyon-tipi', baslik: 'Operasyon tipi' },
+  { anahtar: 'istasyon', baslik: 'İstasyon' }, { anahtar: 'is-merkezi', baslik: 'İş merkezi' }, { anahtar: 'makine', baslik: 'Makine' }, { anahtar: 'operasyon-tipi', baslik: 'Operasyon tipi' },
   { anahtar: 'fire', baslik: 'Fire' }, { anahtar: 'durus', baslik: 'Duruş' },
 ];
 
@@ -84,16 +92,25 @@ function EslemeFormu({ tur, satir, liste, kapat }: { tur: SmartesEslemeTuru; sat
       <form className="tc-smartes-form" onSubmit={(o) => { o.preventDefault(); if (kod.trim() !== '') kaydet(); }}>
         <p className="tc-smartes-aciklama">{satir.tmiAd}</p>
         {liste === null ? (
-          <Girdi etiket="SmartES kodu" ipucu="SmartES listesi okunamadı; kodu elle yazın. Aynı kod iki kayda verilemez." maxLength={50}
+          <Girdi etiket={tur === 'operasyon-tipi' ? 'SmartES öneki' : 'SmartES kodu'} ipucu="SmartES listesi okunamadı; kodu elle yazın. Aynı kod iki kayda verilemez." maxLength={50}
             value={kod} onChange={(o) => { kodYaz(o.target.value); }} autoFocus />
         ) : (
-          <Secim etiket="SmartES’teki karşılığı" bosSecenek="Seçiniz" value={kod} onChange={(o) => { kodYaz(o.target.value); }} autoFocus
+          <Secim etiket={KARSILIK(tur)} bosSecenek="Seçiniz" value={kod} onChange={(o) => { kodYaz(o.target.value); }} autoFocus
             ipucu={satir.oneri !== null && kod === satir.oneri.kod ? `Öneri: ${GEREKCE[satir.oneri.gerekce]}.` : 'Liste SmartES’ten okunur; başka kayda eşlenmiş kodlar listede yoktur.'}
             secenekler={[
               // Elle girilmiş ya da SmartES listesinden çıkmış eski kod seçili kalabilsin diye listeye eklenir.
               ...(satir.smartesKod !== null && !liste.some((x) => x.kod === satir.smartesKod) ? [{ deger: satir.smartesKod, baslik: `${satir.smartesKod} · SmartES listesinde yok` }] : []),
               ...liste.map((x) => ({ deger: x.kod, baslik: x.ad === null ? x.kod : `${x.kod} · ${x.ad}` })),
             ]} />
+        )}
+        {tur === 'operasyon-tipi' && kod.trim() !== (satir.smartesKod ?? '') && (
+          <p className="tc-sga-bant" role="note">
+            <Simge ad="alert" />
+            <span>{ACIK_EMIR_UYARISI(satir.acikIsEmri)}</span>
+          </p>
+        )}
+        {tur === 'is-merkezi' && (
+          <p className="tc-smartes-aciklama">Merkezin istasyonları, kendi eşlemesi yoksa bu SmartES istasyonuyla gönderilir; merkez SmartES’te tanım olarak ayrıca gönderilmez.</p>
         )}
         {hata !== null && <p role="alert" className="tc-smartes-hata">{hata}</p>}
       </form>
@@ -109,7 +126,8 @@ export function Eslemeler() {
   const tur: SmartesEslemeTuru = bolum === 'fire' || bolum === 'durus' ? 'istasyon' : bolum;
   const gelen = bolum === 'fire' || bolum === 'durus' ? bolum : null;
   const [secili, seciliYaz] = useState<Satir | null>(null);
-  const [topluSor, topluSorYaz] = useState(false);
+  // Toplu eşleme ya da (operasyon tipinde) tek öneri onayı önce bu pencerede gösterilir.
+  const [onayAday, onayAdayYaz] = useState<Satir[] | null>(null);
   const liste = useQuery({
     queryKey: anahtarlar.eslemeler(tur),
     queryFn: () => api.get<EslemelerCevabi>(`/smartes/eslemeler?tur=${tur}`),
@@ -136,21 +154,49 @@ export function Eslemeler() {
   // İstasyon dışında yalnız eşlenmemiş kod ya da satırın kendi kodu seçilebilir. İstasyonda atölyenin tek SmartES istasyonu
   // birden çok CORE istasyonuna verilebilir.
   const secilebilir = (s: Satir) => (smartesListesi === null ? null
-    : smartesListesi.filter((x) => tur === 'istasyon' || x.kod === s.smartesKod || !satirlar.some((y) => y.smartesKod === x.kod)));
+    : smartesListesi.filter((x) => tur === 'istasyon' || tur === 'is-merkezi' || x.kod === s.smartesKod || !satirlar.some((y) => y.smartesKod === x.kod)));
 
   const sutunlar: Sutun<Satir>[] = [
     { anahtar: 'tmiKod', baslik: 'CORE kodu', hucre: (s) => s.tmiKod, mono: true },
     { anahtar: 'tmiAd', baslik: 'Ad', hucre: (s) => <>{s.tmiAd}{!s.aktif && <> <Rozet ton="pasif">Pasif</Rozet></>}</> },
+    ...(tur === 'operasyon-tipi'
+      ? [{
+        anahtar: 'ornek', baslik: 'Örnek kod', hucre: (s: Satir) => (
+          <span className="tc-sga-ad">
+            <span className="mono">{ORNEK_KOD(s.smartesKod ?? s.tmiKod)}</span>
+            {s.smartesKod === null && <span className="tc-sm-not">eşleme yoksa tip kodu</span>}
+          </span>
+        ),
+      }]
+      : []),
+    ...(tur === 'is-merkezi'
+      ? [{
+        anahtar: 'altlar', baslik: 'Altındaki istasyonlar', kartTamSatir: true, hucre: (s: Satir) => (
+          <span className="tc-sga-ad">
+            {(s.altIstasyonlar ?? []).length === 0 && YOK}
+            {(s.altIstasyonlar ?? []).map((i) => (
+              <span key={i.kod} className="tc-sga-ad">
+                <span className="mono">{i.kod}</span>
+                {i.kendiKodu !== null && <Rozet ton="bilgi" gorunum="cizgi">{`kendi eşlemesi: ${i.kendiKodu}`}</Rozet>}
+              </span>
+            ))}
+          </span>
+        ),
+      }]
+      : []),
     {
-      anahtar: 'smartesKod', baslik: 'SmartES’teki karşılığı', kartTamSatir: true, hucre: (s) => {
+      anahtar: 'smartesKod', baslik: KARSILIK(tur), kartTamSatir: true, hucre: (s) => {
         if (s.smartesKod !== null) { const ad = smartesAdi(s.smartesKod); return <span className="tc-sga-ad"><span className="mono">{s.smartesKod}</span>{ad !== null && <span className="tc-sm-not">{ad}</span>}</span>; }
+        if (s.oneri === null && s.miras !== null) {
+          return <span className="tc-sga-ad"><span className="mono">{s.miras.smartesKod}</span><Rozet ton="bilgi" gorunum="cizgi">{`iş merkezinden: ${s.miras.merkezKodu}`}</Rozet></span>;
+        }
         if (s.oneri === null) return <span className="tc-sga-ad"><Rozet ton="uyari" gorunum="cizgi">Eşlenmedi</Rozet></span>;
         return (
           <span className="tc-sga-ad">
             <Rozet ton="bilgi" gorunum="cizgi">Öneri</Rozet>
             <span className="mono">{s.oneri.kod}</span>
             <span className="tc-sm-not">{s.oneri.ad ?? ''} ({GEREKCE[s.oneri.gerekce]})</span>
-            {yazabilir && <Dugme simge="check" yukleniyor={onayla.isPending && onayla.variables?.length === 1 && onayla.variables[0]?.tmiId === s.tmiId} onClick={() => onayla.mutate([s])}>Kabul</Dugme>}
+            {yazabilir && <Dugme simge="check" yukleniyor={onayla.isPending && onayla.variables?.length === 1 && onayla.variables[0]?.tmiId === s.tmiId} onClick={() => { if (tur === 'operasyon-tipi') onayAdayYaz([s]); else onayla.mutate([s]); }}>Kabul</Dugme>}
           </span>
         );
       },
@@ -164,7 +210,7 @@ export function Eslemeler() {
     <Kart baslik="Kod eşlemeleri">
       <div className="tc-smartes">
         <p className="tc-smartes-aciklama">
-          SmartES’e yalnız eşlenmiş istasyonların iş emri gider; okunan kayıtlar bu eşlemelerle CORE kayıtlarına bağlanır. Karşılıklar SmartES’in kendi listesinden seçilir; adı ya da kodu tutanlar öneri olarak gelir.
+          SmartES’e yalnız eşlenmiş istasyonların (ya da eşlenmiş iş merkezindeki istasyonların) iş emri gider; okunan kayıtlar bu eşlemelerle CORE kayıtlarına bağlanır. Operasyon tipinde SmartES öneki girilir, operasyon kodu önek ve adım numarasından kurulur (TRN + 20 = TRN20). Karşılıklar SmartES’in kendi listesinden seçilir; adı ya da kodu tutanlar öneri olarak gelir.
         </p>
         <Sekmeler etiket="Eşleme türü" sekmeler={SEKMELER} secili={bolum} sec={(t) => { bolumYaz(t); seciliYaz(null); }} />
         {gelen !== null && <GelenAdlar key={gelen} tur={gelen} yazabilir={yazabilir} />}
@@ -178,7 +224,7 @@ export function Eslemeler() {
                 {onerili.length > 0 && <span className="tc-sm-not">{`${onerili.length} kayıt için SmartES’te aynı ya da benzer adlı karşılık bulundu.`}</span>}
               </p>
               {yazabilir && onerili.length > 0 && (
-                <Dugme tur="birincil" simge="check" yukleniyor={onayla.isPending} onClick={() => { topluSorYaz(true); }}>{`Önerilerin hepsini eşle (${onerili.length})`}</Dugme>
+                <Dugme tur="birincil" simge="check" yukleniyor={onayla.isPending} onClick={() => { onayAdayYaz(onerili); }}>{`Önerilerin hepsini eşle (${onerili.length})`}</Dugme>
               )}
             </div>
             <Tablo etiket="Kod eşlemeleri" sutunlar={sutunlar} satirlar={satirlar} satirAnahtari={(s) => s.tmiId} bosMesaj="Bu türde CORE kaydı yok." />
@@ -186,24 +232,24 @@ export function Eslemeler() {
         )}
       </div>
       {/* Toplu eşleme tek dokunuşla yazılmaz: eşlenen istasyonun iş emirleri SmartES'e gitmeye başlar. */}
-      {topluSor && onerili.length > 0 && (
+      {onayAday !== null && onayAday.length > 0 && (
       <Pencere
         acik
-        kapat={() => { topluSorYaz(false); }}
-        baslik={`${onerili.length} öneri eşlensin mi?`}
+        kapat={() => { onayAdayYaz(null); }}
+        baslik={onayAday.length === 1 ? 'Öneri eşlensin mi?' : `${onayAday.length} öneri eşlensin mi?`}
         alt={(
           <>
-            <Dugme disabled={onayla.isPending} onClick={() => { topluSorYaz(false); }} data-ilk-odak>Vazgeç</Dugme>
-            <Dugme tur="birincil" simge="check" yukleniyor={onayla.isPending} onClick={() => { onayla.mutate(onerili, { onSettled: () => { topluSorYaz(false); } }); }}>{`${onerili.length} eşlemeyi kaydet`}</Dugme>
+            <Dugme disabled={onayla.isPending} onClick={() => { onayAdayYaz(null); }} data-ilk-odak>Vazgeç</Dugme>
+            <Dugme tur="birincil" simge="check" yukleniyor={onayla.isPending} onClick={() => { onayla.mutate(onayAday, { onSettled: () => { onayAdayYaz(null); } }); }}>{`${onayAday.length} eşlemeyi kaydet`}</Dugme>
           </>
         )}
       >
         <div className="tc-smartes">
           <p className="tc-smartes-aciklama">
-            {tur === 'istasyon' ? 'Eşlenen istasyonların planlı iş emirleri SmartES’e gönderilmeye başlar. ' : ''}Aşağıdaki eşlemeler yazılır; yanlış olan sonradan “Değiştir” ile düzeltilir.
+            {tur === 'istasyon' ? 'Eşlenen istasyonların planlı iş emirleri SmartES’e gönderilmeye başlar. ' : ''}{tur === 'operasyon-tipi' ? `${ACIK_EMIR_UYARISI(onayAday.reduce((t, x) => t + (x.acikIsEmri ?? 0), 0))} ` : ''}Aşağıdaki eşlemeler yazılır; yanlış olan sonradan “Değiştir” ile düzeltilir.
           </p>
           <ul className="tc-sga-cift">
-            {onerili.map((s) => (
+            {onayAday.map((s) => (
               <li key={s.tmiId}>
                 <span><span className="mono">{s.tmiKod}</span> {s.tmiAd}</span>
                 <span><span className="mono">{s.oneri?.kod}</span> {s.oneri?.ad ?? ''} <span className="tc-sm-not">({s.oneri ? GEREKCE[s.oneri.gerekce] : ''})</span></span>

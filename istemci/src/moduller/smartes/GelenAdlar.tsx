@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
-  GelenAdEsleGovdesi, GelenAdKaldirGovdesi, GelenAdlarCevabi, GelenAdOnerileriOnaylaGovdesi, ListeOkuCevabi, OnerileriOnaylaCevabi, SmartesGelenAdTuru,
+  GelenAdAktarimCevabi, GelenAdAktarSonucu, SmartesAktarimEylemi, GelenAdEsleGovdesi, GelenAdKaldirGovdesi, GelenAdlarCevabi, GelenAdOnerileriOnaylaGovdesi, ListeOkuCevabi, OnerileriOnaylaCevabi, SmartesGelenAdTuru,
 } from '#paylasilan/sozlesme/smartes.ts';
 import { Dugme, DurumKutusu, Pencere, Rozet, Secim, Simge, Tablo, useBildirim, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
@@ -25,6 +25,79 @@ const AD: Record<SmartesGelenAdTuru, { tekil: string; neden: string }> = {
   fire: { tekil: 'Fire', neden: 'Hurda nedeni' },
   durus: { tekil: 'Duruş', neden: 'Duruş nedeni' },
 };
+
+const AKTARIM: Record<SmartesAktarimEylemi, { metin: string; ton: RozetTonu }> = {
+  ekle: { metin: 'Eklenecek', ton: 'tamam' },
+  esle: { metin: 'Eşlenecek', ton: 'bilgi' },
+  eslenmis: { metin: 'Zaten eşli', ton: 'pasif' },
+  'ad-farkli': { metin: 'Adı değişmiş', ton: 'uyari' },
+  atla: { metin: 'Atlanacak', ton: 'uyari' },
+};
+
+// SmartES adları CORE nedenine bir kerede aktarılır; önce ne olacağı gösterilir. Aynı adlı CORE nedeni yalnız eşlenir, adı ve kategorisi değişmez.
+function AktarimPenceresi({ tur, kapat }: { tur: SmartesGelenAdTuru; kapat: () => void }) {
+  const istemci = useQueryClient();
+  const { bildir } = useBildirim();
+  const onizleme = useQuery({ queryKey: [...anahtarlar.gelenAdlar(tur), 'aktarim'], queryFn: () => api.get<GelenAdAktarimCevabi>(`/smartes/gelen-adlar/aktarim?tur=${tur}`) });
+  const aktar = useMutation({
+    mutationFn: () => api.post<GelenAdAktarSonucu>('/smartes/gelen-adlar/aktar', { tur }),
+    onSuccess: async (c) => {
+      await istemci.invalidateQueries({ queryKey: anahtarlar.kok });
+      bildir('tamam', `${c.eklenen} neden eklendi, ${c.eslenen} ad eşlendi${c.atlanan > 0 ? `, ${c.atlanan} satır atlandı` : ''}.`);
+      kapat();
+    },
+  });
+  const o = onizleme.data;
+  const islenecek = o === undefined ? 0 : o.eklenecek + o.eslenecek;
+  const sutunlar: Sutun<GelenAdAktarimCevabi['satirlar'][number]>[] = [
+    { anahtar: 'ad', baslik: 'SmartES adı', hucre: (s) => <span className="tc-sga-ad"><span>{s.ad}</span>{!s.aktif && <Rozet ton="pasif" gorunum="cizgi">Pasif</Rozet>}</span> },
+    { anahtar: 'eylem', baslik: 'Ne olacak', hucre: (s) => <Rozet ton={AKTARIM[s.eylem].ton}>{AKTARIM[s.eylem].metin}</Rozet> },
+    {
+      anahtar: 'core', baslik: `CORE ${AD[tur].neden.toLocaleLowerCase('tr')}`, kartTamSatir: true, hucre: (s) => (
+        <span className="tc-sga-ad">
+          {s.kod !== null && <span className="mono">{s.kod}</span>}
+          {s.coreAdi !== null && <span>{s.coreAdi}</span>}
+          {s.kategori !== null && <span className="tc-sm-not">{s.kategori === 'planli' ? 'Planlı' : 'Plansız'}</span>}
+          {s.not !== null && <span className="tc-sm-not">{s.not}</span>}
+        </span>
+      ),
+    },
+  ];
+  return (
+    <Pencere acik kapat={kapat} baslik={`${AD[tur].tekil} adlarını CORE’a aktar`}
+      alt={(
+        <>
+          <Dugme disabled={aktar.isPending} onClick={kapat} data-ilk-odak>Vazgeç</Dugme>
+          <Dugme tur="birincil" simge="check" yukleniyor={aktar.isPending} disabled={islenecek === 0}
+            onClick={() => { aktar.mutate(); }}>{o === undefined ? 'Aktar' : islenecek === 0 ? 'Aktarılacak ad yok' : `${o.eklenecek} neden ekle, ${o.eslenecek} ad eşle`}</Dugme>
+        </>
+      )}>
+      <div className="tc-smartes">
+        {onizleme.isPending && <DurumKutusu durum="yukleniyor" />}
+        {onizleme.isError && <DurumKutusu durum="hata" mesaj={hataIletisi(onizleme.error, 'Önizleme alınamadı')} yenile={() => { void onizleme.refetch(); }} />}
+        {o !== undefined && !o.listeVar && <p className="tc-smartes-aciklama">SmartES listesi henüz okunmadı; önce “Şimdi oku” ile listeyi okuyun.</p>}
+        {o !== undefined && o.listeVar && (
+          <>
+            <p className="tc-smartes-aciklama">
+              Aynı adlı CORE nedeni yalnız eşlenir; olmayan ad yeni neden olarak eklenir (kodu SME-numara). Pasif ad pasif eklenir. Var olan nedenin adı ve kategorisi değişmez.
+              {tur === 'durus' ? ' Kategori, SmartES grubunda “planlı” geçiyorsa planlı, yoksa plansızdır.' : ' Eşlenen adlar “Hatalı (kalite kararına)” olarak yazılır; hurda olacaklar sonradan “Değiştir” ile düzeltilir.'}
+              {islenecek === 0 ? ' Aktarılacak yeni ad yok.' : ''}
+            </p>
+            <p className="tc-smartes-ozet">
+              <Rozet ton="tamam">{`${o.eklenecek} eklenecek`}</Rozet>
+              <Rozet ton="bilgi">{`${o.eslenecek} eşlenecek`}</Rozet>
+              <Rozet ton="pasif">{`${o.zatenEslenmis} zaten eşli`}</Rozet>
+              {o.adFarkli > 0 && <Rozet ton="uyari">{`${o.adFarkli} adı değişmiş`}</Rozet>}
+              {o.atlanan > 0 && <Rozet ton="uyari">{`${o.atlanan} atlanacak`}</Rozet>}
+            </p>
+            <Tablo etiket="Aktarım önizlemesi" sutunlar={sutunlar} satirlar={o.satirlar} satirAnahtari={(s) => s.anahtar} bosMesaj="SmartES listesi boş." />
+          </>
+        )}
+        {aktar.isError && <p role="alert" className="tc-smartes-hata">{hataIletisi(aktar.error, 'Aktarım yapılamadı')}</p>}
+      </div>
+    </Pencere>
+  );
+}
 
 function EsleFormu({ tur, satir, nedenler, islemeBagli, kapat }: { tur: SmartesGelenAdTuru; satir: Satir; nedenler: GelenAdlarCevabi['nedenler']; islemeBagli: boolean; kapat: () => void }) {
   const istemci = useQueryClient();
@@ -71,6 +144,7 @@ function EsleFormu({ tur, satir, nedenler, islemeBagli, kapat }: { tur: SmartesG
 export function GelenAdlar({ tur, yazabilir }: { tur: SmartesGelenAdTuru; yazabilir: boolean }) {
   const [secili, seciliYaz] = useState<Satir | null>(null);
   const [topluSor, topluSorYaz] = useState(false);
+  const [aktarimAcik, aktarimAcikYaz] = useState(false);
   const istemci = useQueryClient();
   const liste = useQuery({ queryKey: anahtarlar.gelenAdlar(tur), queryFn: () => api.get<GelenAdlarCevabi>(`/smartes/gelen-adlar?tur=${tur}`) });
   const { bildir } = useBildirim();
@@ -171,6 +245,7 @@ export function GelenAdlar({ tur, yazabilir }: { tur: SmartesGelenAdTuru; yazabi
               {yazabilir && onerili.length > 0 && (
                 <Dugme tur="birincil" simge="check" yukleniyor={onayla.isPending} onClick={() => { topluSorYaz(true); }}>{`Önerilerin hepsini eşle (${onerili.length})`}</Dugme>
               )}
+              {yazabilir && <Dugme simge="upload" onClick={() => { aktarimAcikYaz(true); }}>SmartES listesini CORE’a aktar</Dugme>}
               {yazabilir && <Dugme simge="rotate" yukleniyor={oku.isPending} onClick={() => oku.mutate()}>Şimdi oku</Dugme>}
             </span>
           </div>
@@ -216,6 +291,7 @@ export function GelenAdlar({ tur, yazabilir }: { tur: SmartesGelenAdTuru; yazabi
         </div>
       </Pencere>
       )}
+      {aktarimAcik && <AktarimPenceresi tur={tur} kapat={() => { aktarimAcikYaz(false); }} />}
       {secili !== null && v && <EsleFormu key={secili.anahtar} tur={tur} satir={secili} nedenler={v.nedenler} islemeBagli={v.islemeBagli} kapat={() => seciliYaz(null)} />}
     </>
   );

@@ -300,4 +300,65 @@ describe('SmartES listeleri ve eşleme önerileri (kart 3174, gerçek PostgreSQL
       [{ anahtar: 'id:1', sonuc: null }, { anahtar: 'id:2', sonuc: null }]);
     assert.deepEqual((await onayla(onerili.map((x) => ({ anahtar: x.anahtar, nedenId: x.oneri?.id ?? 0 })))).json(), { yazilan: 0, atlanan: 2 });
   });
+
+  test('3655 B: SmartES duruş listesi CORE\'a aktarılır: aynı adlı eşlenir, yenisi SME-<id> koduyla eklenir, tekrar kayıt eklemez, var olan neden değişmez, ad farkı bildirilir', async () => {
+    sahte.isleyiciler.set('DownTimeList', () => tablo([
+      { ID: '901', NAME: '  mekanik   ARIZA ', GROUP_INFORMATION: 'PLANSIZ DURUŞLAR' },
+      { ID: '902', NAME: 'ORN Planlı bakım', GROUP_INFORMATION: 'PLANLI DURUŞLAR' },
+      { ID: '903', NAME: 'ORN pasif neden', GROUP_INFORMATION: 'DİĞER', ISPASSIVE: 'true' },
+      { ID: '904', NAME: 'orn planlı  bakım', GROUP_INFORMATION: 'PLANLI DURUŞLAR' },
+    ]));
+    const onizle = (c = yonetici) => istek('GET', '/smartes/gelen-adlar/aktarim?tur=durus', undefined, c);
+    const aktar = (c = yonetici) => istek('POST', '/smartes/gelen-adlar/aktar', { tur: 'durus' }, c);
+    const durusNedenleri = () => vt().sorgu<{ kod: string; ad: string; kategori: string; aktif: boolean }>('SELECT kod, ad, kategori, aktif FROM durus_nedeni ORDER BY sira');
+    const hazir = await durusNedenleri();
+    const mekanik = hazir.find((n) => n.ad.toLocaleLowerCase('tr') === 'mekanik arıza')?.kod ?? 'YOK';
+
+    // Liste okunmadan aktarım yapılmaz.
+    assert.equal((await aktar()).statusCode, 400);
+    await oku(['durus']);
+    assert.equal((await onizle(okuyucu)).statusCode, 403);
+    assert.equal((await aktar(okuyucu)).statusCode, 403);
+    const o = (await onizle()).json() as { eklenecek: number; eslenecek: number; zatenEslenmis: number; adFarkli: number; atlanan: number; satirlar: { anahtar: string; eylem: string; kod: string | null; kategori: string | null }[] };
+    assert.deepEqual([o.eklenecek, o.eslenecek, o.zatenEslenmis, o.adFarkli, o.atlanan], [2, 2, 0, 0, 0]);
+    assert.deepEqual(o.satirlar.map((x) => [x.anahtar, x.eylem, x.kod]).sort(), [['id:901', 'esle', mekanik], ['id:902', 'ekle', 'SME-902'], ['id:903', 'ekle', 'SME-903'], ['id:904', 'esle', 'SME-902']]);
+    assert.deepEqual(await durusNedenleri(), hazir, 'önizleme yazmaz');
+
+    const r = await aktar();
+    assert.equal(r.statusCode, 200, r.body);
+    assert.deepEqual(r.json(), { eklenen: 2, eslenen: 4, atlanan: 0 });
+    const sonra = await durusNedenleri();
+    assert.deepEqual(sonra.slice(0, hazir.length), hazir, 'var olan nedenler değişmez');
+    assert.deepEqual(sonra.slice(hazir.length), [
+      { kod: 'SME-902', ad: 'ORN Planlı bakım', kategori: 'planli', aktif: true },
+      { kod: 'SME-903', ad: 'ORN pasif neden', kategori: 'plansiz', aktif: false },
+    ]);
+    const esler = await vt().sorgu<{ anahtar: string; kod: string }>(
+      "SELECT e.anahtar, n.kod FROM smartes_ad_esleme e JOIN durus_nedeni n ON n.id = e.neden_id WHERE e.tur = 'durus' ORDER BY e.anahtar");
+    assert.deepEqual(esler.map((x) => [x.anahtar, x.kod]), [['id:901', mekanik], ['id:902', 'SME-902'], ['id:903', 'SME-903'], ['id:904', 'SME-902']]);
+
+    // Tekrar: kayıt eklenmez; SmartES'te değişen ad güncellenmez ama önizlemede görünür; sonradan eklenen neden eklenir.
+    assert.deepEqual((await aktar()).json(), { eklenen: 0, eslenen: 0, atlanan: 0 });
+    assert.equal((await durusNedenleri()).length, sonra.length);
+    sahte.isleyiciler.set('DownTimeList', () => tablo([
+      { ID: '902', NAME: 'ORN Yeni ad', GROUP_INFORMATION: 'PLANLI DURUŞLAR' }, { ID: '905', NAME: 'ORN sonradan eklenen', GROUP_INFORMATION: 'PLANSIZ DURUŞLAR' },
+    ]));
+    await oku(['durus']);
+    const o2 = (await onizle()).json() as { eklenecek: number; adFarkli: number; zatenEslenmis: number };
+    assert.deepEqual([o2.eklenecek, o2.adFarkli, o2.zatenEslenmis], [1, 1, 0]);
+    assert.deepEqual((await aktar()).json(), { eklenen: 1, eslenen: 1, atlanan: 0 });
+    assert.equal((await vt().tek<{ ad: string }>("SELECT ad FROM durus_nedeni WHERE kod = 'SME-902'"))?.ad, 'ORN Planlı bakım');
+  });
+
+  test('3655 B: fire listesi hata nedenlerine aktarılır; eşleme Hatalı ile yazılır', async () => {
+    fireListesi([{ ID: '71', NAME: 'ORN ölçü dışı fire', GROUP_INFORMATION: 'ORN grup' }, { ID: '72', NAME: 'ORN kırık takım' }]);
+    await oku(['fire']);
+    const r = await istek('POST', '/smartes/gelen-adlar/aktar', { tur: 'fire' });
+    assert.equal(r.statusCode, 200, r.body);
+    assert.deepEqual(r.json(), { eklenen: 2, eslenen: 2, atlanan: 0 });
+    assert.deepEqual(await vt().sorgu("SELECT kod, ad, aktif FROM hurda_nedeni WHERE kod LIKE 'SME-%' ORDER BY kod"),
+      [{ kod: 'SME-71', ad: 'ORN ölçü dışı fire', aktif: true }, { kod: 'SME-72', ad: 'ORN kırık takım', aktif: true }]);
+    assert.deepEqual(await vt().sorgu("SELECT anahtar, sonuc FROM smartes_ad_esleme WHERE tur = 'fire' ORDER BY anahtar"),
+      [{ anahtar: 'id:71', sonuc: 'hatali' }, { anahtar: 'id:72', sonuc: 'hatali' }]);
+  });
 });

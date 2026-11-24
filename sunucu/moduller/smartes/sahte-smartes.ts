@@ -94,7 +94,7 @@ export async function sahteSmartesAc(): Promise<SahteSmartes> {
     adres: '', cagrilar: [], isleyiciler: new Map(), kapat: async () => {}, getIstekleri: 0, cagriOncesi: null,
     wsdlParametreleri: Object.fromEntries(kodParametreleri()),
     wsdlMetotlari: [
-      'ActiveMachinesList', 'AlarmsList', 'DownTimeStatusListWithoutWorkOrder', 'OperationCreateUpdate', 'SetErpOkRed', 'WorkOrdersCreateUpdate',
+      'ActiveMachinesList', 'AlarmsList', 'DownTimeStatusListWithoutWorkOrder', 'OperationList', 'SetErpOkRed', 'WorkOrdersCreateUpdate',
       'WorkOrdersStatusList',
       // İsteğe bağlı akışların metotları (kalite/ambar okuması, tanım gönderimi).
       'QualityControlStatusList', 'StockCreateUpdate', 'StocksList', 'WarehouseStatusList', 'WorkStationCreateUpdate', 'WorkStationList',

@@ -16,7 +16,7 @@ import { TANIM_TUR_SINIRI, yasakMetotMu } from './kurallar.ts';
 import type { KaliteAmbarKaynagi, TanimKaydi } from './kurallar.ts';
 import { sahteSmartesAc } from './sahte-smartes.ts';
 import type { SahteCevap, SahteSmartes } from './sahte-smartes.ts';
-import { hazirlik, kaliteAmbarTuru, tanimTuru, yeniBekleyenBellegi, yeniOkumaBellegi, yeniSurecBellegi } from './servis.ts';
+import { hazirlik, kaliteAmbarTuru, tanimTuru, yeniBekleyenBellegi, yeniOkumaBellegi } from './servis.ts';
 import type { TurOrtami } from './servis.ts';
 import type { TanimKaynagi } from './tanim-kaynagi.ts';
 
@@ -47,7 +47,7 @@ describe('SmartES kalite, hurda, ambar okuması ve tanım gönderimi (gerçek Po
   };
   const istemciKur = () => smartesIstemcisiKur({ adres: sahte.adres, adAlani: VARSAYILAN_AD_ALANI }, { bekle: async () => {}, istekSuresiMs: 5000, listeSuresiMs: 5000 });
   const turOrtami = (ekle: Partial<TurOrtami> = {}): TurOrtami => ({
-    istemci: istemciKur(), saat: () => new Date(simdi), operasyonlar: yeniSurecBellegi(), okumalar: yeniOkumaBellegi(), bekleyenler: yeniBekleyenBellegi(), ...ekle,
+    istemci: istemciKur(), saat: () => new Date(simdi), okumalar: yeniOkumaBellegi(), bekleyenler: yeniBekleyenBellegi(), ...ekle,
   });
   const sayi = async (tablo: string): Promise<number> => (await vt().tek<{ n: number }>(`SELECT count(*)::int AS n FROM ${tablo}`))?.n ?? -1;
   const metotlar = () => sahte.cagrilar.map((c) => c.metot);
