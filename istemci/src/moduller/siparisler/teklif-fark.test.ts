@@ -61,4 +61,12 @@ describe('Teklif sürüm farkı (3635)', () => {
     expect(f.toplam).toBeNull();
     expect(f.kosullar.map((k) => k.alan)).toEqual(['teslim', 'odeme', 'not']);
   });
+
+  it('yalnız termin değişince de fark sayılır (boştan tarihe ve tarihten tarihe)', () => {
+    const f = surumFarki(S1, { ...S1, terminTarihi: '2026-12-01' }, false);
+    expect(f.kosullar).toEqual([{ alan: 'termin', eski: null, yeni: '2026-12-01' }]);
+    expect(farkVarMi(f)).toBe(true);
+    expect(surumFarki({ ...S1, terminTarihi: '2026-12-01' }, { ...S1, terminTarihi: '2026-12-15' }, true).kosullar).toEqual([{ alan: 'termin', eski: '2026-12-01', yeni: '2026-12-15' }]);
+    expect(farkVarMi(surumFarki({ ...S1, terminTarihi: '2026-12-01' }, { ...S1, terminTarihi: '2026-12-01' }, true))).toBe(false);
+  });
 });

@@ -1244,6 +1244,23 @@ describe('Teklifler', () => {
     expect(screen.getByRole('heading', { name: 'Sürüm geçmişi' })).toBeTruthy();
   });
 
+  it('3635: sürüm geçmişinde her satır listedeki bir önceki sürümle karşılaştırılır (numara atlasa da); ilk sürümde fark yoktur', async () => {
+    const S2 = { ...SURUM_1, surumNo: 3, teslimGun: 10 };
+    const S3 = { ...S2, surumNo: 5, odemeKosulu: '60 gün' };
+    const uc = { ...TEKLIF_VERILDI, sonSurumNo: 5, surumler: [SURUM_1, S2, S3] } satisfies TeklifAyrintisi;
+    sunucuKur(FIYAT_OKUYUCU, (yontem, yol) => (yontem === 'GET' && yol === '/siparisler/teklifler/21' ? json(200, uc) : undefined));
+    ac('/siparisler/teklifler/21');
+    const gecmis = within((await screen.findByRole('heading', { name: 'Sürüm geçmişi' })).closest('.tc-kart')!);
+    expect(await gecmis.findByRole('button', { name: 'Sürüm 3 ile farkı göster' })).toBeTruthy();
+    expect(gecmis.getByRole('button', { name: 'Sürüm 1 ile farkı göster' })).toBeTruthy();
+    expect(gecmis.getByText('İlk sürüm')).toBeTruthy();
+    expect(gecmis.queryByRole('button', { name: /Sürüm 2 ile/ })).toBeNull();
+    fireEvent.click(gecmis.getByRole('button', { name: 'Sürüm 3 ile farkı göster' }));
+    const pencere = await screen.findByRole('dialog', { name: /Sürüm 3 → Sürüm 5/ });
+    expect(pencere.textContent).toMatch(/30 gün → 60 gün/);
+    expect(pencere.textContent).not.toMatch(/14 gün/);
+  });
+
   it('fiyat yetkisi olmayan sürümün koşullarını görür, fiyatlarını ve sürüm formunu görmez (180, 201 a)', async () => {
     const istekler = sunucuKur(YAZAR, (yontem, yol) => (yontem === 'GET' && yol === '/siparisler/teklifler/21' ? json(200, TEKLIF_FIYATSIZ) : undefined));
     ac('/siparisler/teklifler/21');
