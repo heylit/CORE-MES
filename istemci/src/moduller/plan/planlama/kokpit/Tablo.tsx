@@ -154,7 +154,7 @@ export function Ayrac({ tablo, erisilir = false, deger }: { tablo: Pick<TabloDur
 // çerçeve. Ölçülecek bir şey yoksa null.
 // Her sütunda yazısı en uzun görünen birkaç satır seçilir; yalnız onlar düzenle ölçülür. Metin eni tuvalle (düzen hesabı yapmadan)
 // sütunun yazı tipiyle kestirilir; tuval yoksa (test ortamı) harf sayısı kullanılır. Hücrenin yazı dışı payı (ikon, boşluk) sütunda sabittir.
-export function olcuAdaylari(satirlar: readonly HTMLElement[], adet = 3): HTMLElement[] {
+export function olcuAdaylari(satirlar: readonly HTMLElement[], adet = 3, sutunlar?: ReadonlySet<string>): HTMLElement[] {
   if (satirlar.length <= adet) return [...satirlar];
   const tuval = typeof OffscreenCanvas === 'function' ? new OffscreenCanvas(1, 1).getContext('2d') : null;
   const yazi = new Map<string, string>(), enIyi = new Map<string, { s: HTMLElement; p: number }[]>();
@@ -166,7 +166,7 @@ export function olcuAdaylari(satirlar: readonly HTMLElement[], adet = 3): HTMLEl
     for (const h of izgara.children) {
       if (!(h instanceof HTMLElement)) continue;
       const id = h.dataset['sutun'];
-      if (id === undefined) continue;
+      if (id === undefined || (sutunlar && !sutunlar.has(id))) continue;
       const t = h.textContent ?? '';
       let p = t.length;
       if (tuval) {
@@ -187,6 +187,10 @@ export function olcuAdaylari(satirlar: readonly HTMLElement[], adet = 3): HTMLEl
   return satirlar.filter((s) => secilen.has(s));
 }
 
+// 3660: açık emrin adım satırları yalnız bu sütunlarda ölçülür; Durum ve Süre yazısı ("Bekliyor", "4 gün 7 sa 30 dk") sütunu açar. Adım adı (Emir
+// sütunu) ve Tezgâh eskisi gibi ölçülmez: uzun ad sütunu şişirmez, "…" ile kısalır.
+export const ADIM_OLCULEN: ReadonlySet<string> = new Set(['bitis', 'ilerleme']);
+
 export function sutunlariOlc(kap: HTMLElement, satirlar: readonly HTMLElement[]): SutunOlcumu | null {
   const en: Record<string, number> = {}, baslik: Record<string, number> = {};
   let fark: number | null = null;
@@ -199,7 +203,9 @@ export function sutunlariOlc(kap: HTMLElement, satirlar: readonly HTMLElement[])
     if (!izgara || !bas) continue;
     const s2 = s.cloneNode(false) as HTMLElement, b2 = bas.cloneNode(false);
     s2.removeAttribute('data-satir');
-    b2.appendChild(izgara.cloneNode(true));
+    const g2 = izgara.cloneNode(true) as HTMLElement;
+    if (s.hasAttribute('data-agac-adim')) for (const h of [...g2.children]) if (!ADIM_OLCULEN.has((h as HTMLElement).dataset['sutun'] ?? '')) h.remove();
+    b2.appendChild(g2);
     s2.appendChild(b2);
     olcu.appendChild(s2);
   }

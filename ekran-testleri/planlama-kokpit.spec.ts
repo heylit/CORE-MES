@@ -3143,7 +3143,7 @@ test('Kokpit 3618: Emir sütunu uzun emir numarasını taşır, yer yoksa ortada
     return { metin: b.textContent ?? '', kisaldi: gizli || (ilk !== undefined && ilk.scrollWidth > ilk.clientWidth + 1), kuyrukGorunur: son !== undefined && son.getBoundingClientRect().right <= b.getBoundingClientRect().right + 1 && son.getBoundingClientRect().width > 0, sonYazi: son?.textContent ?? '' };
   });
   // Emir sütunu açılınca yanındaki sütunlar Gantt'ın ya da ayracın altına girmemeli: her hücre bölme satırının sağ kenarında biter (kırpılmaz),
-  // ortasındaki nokta hücrenin kendisine aittir (başka öğe örtmüyor) ve tarih ile süre yazısı kesik değildir (adım Durum yazısı ölçülmez: adım satırları sütun ölçümüne girmez, 3570). Emir satırında ve açılan emrin adım satırlarında ölçülür.
+  // ortasındaki nokta hücrenin kendisine aittir (başka öğe örtmüyor) ve tarih ile süre yazısı kesik değildir (adım satırlarının Durum ve Süre yazısı da ölçülür, 3660: sütun o kadar açılır, bölme de en dar sütun toplamının altına inmez). Emir satırında ve açılan emrin adım satırlarında ölçülür.
   const hucreler = () => page.evaluate(() => [...document.querySelectorAll<HTMLElement>('.tc-pyq-tablo-satir > .tc-pyq-h[data-sutun]')].filter((h) => h.getAttribute('role') === 'cell' && h.firstElementChild !== null).map((h) => {
     const r = h.getBoundingClientRect(), y = r.top + r.height / 2, gorunur = y > 60 && y < innerHeight - 60, adim = h.closest('.tc-pyq-satir')?.hasAttribute('data-agac-adim') === true;
     const ic = h.querySelector<HTMLElement>('span.tc-pyq-h-veri'), son = (ic ?? h.firstElementChild ?? h).getBoundingClientRect();
