@@ -6,8 +6,9 @@ export interface KalemFarki { satirId: number; eski: string | null; yeni: string
 export interface ToplamFarki { eski: string; yeni: string; yuzde: number | null; kdvDahil: boolean }
 export interface SurumFarki { kosullar: KosulFarki[]; kalemler: KalemFarki[]; toplam: ToplamFarki | null }
 
-// İskonto ve KDV fiyat kapsamındadır (TeklifSurumu föyünde de fiyatı görmeyene gizlidir); fiyat görmeyen için bu alanlar hiç hesaplanmaz.
-export const FIYAT_KOSULLARI: ReadonlySet<KosulAlani> = new Set<KosulAlani>(['iskonto', 'kdv']);
+// İskonto fiyat kapsamındadır; fiyat görmeyen için hiç hesaplanmaz. KDV oranı fiyat sayılmaz (kullanıcı kararı 24.11), herkese görünür;
+// KDV tutarı ve toplamlar fiyat yetkisine bağlı kalır.
+export const FIYAT_KOSULLARI: ReadonlySet<KosulAlani> = new Set<KosulAlani>(['iskonto']);
 
 const SAYISAL: ReadonlySet<KosulAlani> = new Set<KosulAlani>(['iskonto', 'kdv']);
 

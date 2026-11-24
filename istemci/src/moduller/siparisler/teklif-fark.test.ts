@@ -45,12 +45,13 @@ describe('Teklif sürüm farkı (3635)', () => {
     expect(surumFarki({ ...S1, fiyatlar: [{ satirId: 1, birimFiyat: '0.0000', iskontoluFiyat: '0', tutar: '0' }] }, S2, true).kalemler[0]?.yuzde).toBeNull();
   });
 
-  it('fiyat görmeyene fiyat, iskonto, KDV ve toplam farkı hiç hesaplanmaz; koşul farkı kalır', () => {
-    const f = surumFarki(S1, S2, false);
-    expect(f.kosullar.map((k) => k.alan)).toEqual(['teslim', 'odeme', 'not']);
+  it('fiyat görmeyene fiyat, iskonto ve toplam farkı hiç hesaplanmaz; KDV oranı dahil koşul farkı kalır', () => {
+    const f = surumFarki(S1, { ...S2, kdvOrani: '10.00' }, false);
+    expect(f.kosullar.map((k) => k.alan)).toEqual(['kdv', 'teslim', 'odeme', 'not']);
+    expect(f.kosullar[0]).toEqual({ alan: 'kdv', eski: '20.00', yeni: '10.00' });
     expect(f.kalemler).toEqual([]);
     expect(f.toplam).toBeNull();
-    expect(JSON.stringify(f)).not.toMatch(/118|120|56100|52839|iskonto|kdv/);
+    expect(JSON.stringify(f)).not.toMatch(/118|120|56100|52839|iskonto/);
   });
 
   it('sunucunun fiyatsız cevabında (alanlar null) fiyat farkı çıkmaz', () => {

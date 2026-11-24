@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { TeklifAyrintiCevabi } from '#paylasilan/sozlesme/siparisler.ts';
 import { TeklifSurumFarki } from './TeklifSurumFarki.tsx';
+import { TeklifSurumu } from './TeklifSurumu.tsx';
 
 // Cevaplar uydurmadır (ORN-).
 const SURUM1 = {
@@ -54,16 +55,18 @@ describe('Teklif sürüm geçmişinde fark (3635)', () => {
     expect(istekler.filter((i) => i !== '/oturum')).toEqual([]);
   });
 
-  it('fiyatı görmeyende fiyat, iskonto, KDV ve toplam farkı ne özette ne pencerede çıkar; koşul farkı çıkar; ek istek yok', async () => {
-    const istekler = ciz(['siparisler.oku']);
+  it('fiyatı görmeyende fiyat, iskonto ve toplam farkı ne özette ne pencerede çıkar; KDV oranı ve koşul farkı çıkar; ek istek yok', async () => {
+    const istekler = ciz(['siparisler.oku'], { ...SURUM2, kdvOrani: '10.00' });
     await waitFor(() => expect(istekler).toContain('/oturum'));
     await new Promise((coz) => setTimeout(coz, 30));
     expect(screen.getByText('Teslim süresi')).toBeTruthy();
+    expect(screen.getByText('KDV oranı')).toBeTruthy();
     expect(screen.queryByText('İskonto')).toBeNull();
     expect(screen.queryByText(/kalemde fiyat/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Sürüm 1 ile farkı göster' }));
     const pencere = await screen.findByRole('dialog');
     expect(pencere.textContent).toMatch(/30 gün → 25 gün/);
+    expect(pencere.textContent).toMatch(/%20 → %10/);
     expect(pencere.textContent).not.toMatch(/TRY|118|120|%5|ORN-Mil|Kalem birim|Genel toplam/);
     expect(istekler.filter((i) => i !== '/oturum')).toEqual([]);
   });
@@ -84,5 +87,23 @@ describe('Teklif sürüm geçmişinde fark (3635)', () => {
     expect(screen.getByText('Koşullarda fark yok')).toBeTruthy();
     expect(screen.queryByText(/ile aynı/)).toBeNull();
     expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('teklif föyünde KDV oranı fiyat görmeyene de görünür; KDV tutarı ve toplam görünmez', async () => {
+    const istekler: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (adres: string) => {
+      istekler.push(adres);
+      return new Response(JSON.stringify({ kullanici: { id: 7, ad: 'ORN-Kullanici', islemler: ['siparisler.oku'] } }), { status: 200 });
+    }));
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <TeklifSurumu teklif={TEKLIF} surum={{ ...SURUM2, iskontoOrani: null, toplam: null, kdvTutari: null, genelToplam: null }} kabul={false} />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(istekler.length).toBeGreaterThan(0));
+    await new Promise((coz) => setTimeout(coz, 30));
+    expect(screen.getByText('KDV oranı')).toBeTruthy();
+    expect(screen.getByText('%20')).toBeTruthy();
+    expect(screen.queryByText(/Genel toplam|Toplam \(KDV hariç\)/)).toBeNull();
   });
 });

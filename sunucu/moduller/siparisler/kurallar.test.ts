@@ -515,7 +515,7 @@ test('SIP-41 (3429-1 a): eksikle kapatma gerekçe ister; eksik yoksa ya da başk
 });
 
 describe('3635 teklif sürümünde fiyat alanları fiyatsız cevapta gitmez (sürüm farkı bunlara dayanır)', () => {
-  test('iskonto, toplam, KDV tutarı, genel toplam ve satır fiyatları null olur; koşullar kalır', () => {
+  test('iskonto, toplam, KDV tutarı, genel toplam ve satır fiyatları null olur; KDV oranı ve koşullar kalır', () => {
     const surum = {
       surumNo: 2, iskontoOrani: '5.00', teslimGun: 25, terminTarihi: null, odemeKosulu: '45 gün', gecerlilik: '2026-12-05', aciklama: 'ORN-not', olusturma: '2026-11-16T14:05:00+03:00',
       fiyatlar: [{ satirId: 1, birimFiyat: '118.0000', iskontoluFiyat: '112.1000', tutar: '22420.00' }], toplam: '22420.00',
@@ -528,6 +528,7 @@ describe('3635 teklif sürümünde fiyat alanları fiyatsız cevapta gitmez (sü
     assert.equal(v?.kdvTutari, null);
     assert.equal(v?.genelToplam, null);
     assert.deepEqual(v?.fiyatlar, [{ satirId: 1, birimFiyat: null, iskontoluFiyat: null, tutar: null }]);
+    assert.equal(v?.kdvOrani, '20.00', 'KDV oranı fiyat sayılmaz, herkese gider');
     assert.equal(v?.teslimGun, 25);
     assert.equal(v?.odemeKosulu, '45 gün');
   });
