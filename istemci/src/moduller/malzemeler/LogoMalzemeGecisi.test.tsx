@@ -201,6 +201,37 @@ describe('LogoMalzemeGecisi (3068 a; satır işlemleri 2116)', () => {
     expect(await screen.findByLabelText(/Yeni kodun öneki/)).toBeTruthy();
   });
 
+  it('3631: uymayan kodda önek Otomatik gelir (gönderilmez); Başka önek seçilince alan açılır ve yazılan gider', async () => {
+    const istekler = sunucuKur(YAZAN);
+    ac();
+    fireEvent.click(await screen.findByRole('button', { name: '150.01 al' }));
+    const secim = (await screen.findByLabelText(/Yeni kodun öneki/)) as HTMLSelectElement;
+    expect(secim.value).toBe('otomatik');
+    expect(screen.queryByLabelText('Önek')).toBeNull();
+    await waitFor(() => expect((screen.getByLabelText(/^Birim/) as HTMLSelectElement).value).toBe('kg'));
+    fireEvent.change(screen.getByLabelText(/CORE türü/), { target: { value: 'sarf' } });
+    fireEvent.change(secim, { target: { value: 'baska' } });
+    fireEvent.change(await screen.findByLabelText('Önek'), { target: { value: 'sf-kay-' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Taslak aç' }));
+    await waitFor(() => expect(istekler.find((i) => i.yol === '/malzeme-logo-kartlari/2/al')?.govde).toMatchObject({ onek: 'SF-KAY-' }));
+  });
+
+  it('3631 N1: Başka önek yazılıp Otomatik\'e dönülünce önek gönderilmez; ipucu kodun sonradan değişmediğini söyler', async () => {
+    const istekler = sunucuKur(YAZAN);
+    ac();
+    fireEvent.click(await screen.findByRole('button', { name: '150.01 al' }));
+    const secim = (await screen.findByLabelText(/Yeni kodun öneki/)) as HTMLSelectElement;
+    expect(screen.getByText(/Kod şimdi verilir, sonradan değişmez/)).toBeTruthy();
+    await waitFor(() => expect((screen.getByLabelText(/^Birim/) as HTMLSelectElement).value).toBe('kg'));
+    fireEvent.change(screen.getByLabelText(/CORE türü/), { target: { value: 'sarf' } });
+    fireEvent.change(secim, { target: { value: 'baska' } });
+    fireEvent.change(await screen.findByLabelText('Önek'), { target: { value: 'sf-kay-' } });
+    fireEvent.change(secim, { target: { value: 'otomatik' } });
+    expect(screen.queryByLabelText('Önek')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Taslak aç' }));
+    await waitFor(() => expect(istekler.find((i) => i.yol === '/malzeme-logo-kartlari/2/al')?.govde).toMatchObject({ onek: null }));
+  });
+
   it('tek bağlama onayla gider ve kartın sürümünü taşır; yeni koda geçiş yeni kodu bildirir', async () => {
     const istekler = sunucuKur(YAZAN);
     ac();
