@@ -356,13 +356,14 @@ describe('Kokpit', () => {
     expect(screen.queryByRole('button', { name: 'Onaya gönder' })).toBeNull();
   });
 
-  it('yazabilen kişide sağ tık menüsü yalnız Ayrıntı sunar (3365); çift tık işi tutar, ipucu çıkar, Esc vazgeçer', () => {
+  it('yazabilen kişide sağ tık menüsü Ayrıntı ve Planda böl sunar (3365, 3661); çift tık işi tutar, ipucu çıkar, Esc vazgeçer', () => {
     ac();
     const is = document.querySelector<HTMLElement>('[data-is="3.10"]');
     if (!is) throw new Error('iş yok');
     fireEvent.contextMenu(is);
     const menu = screen.getByRole('menu');
-    expect(within(menu).getAllByRole('menuitem').map((x) => x.textContent)).toEqual([expect.stringContaining('Ayrıntı')]);
+    expect(within(menu).getAllByRole('menuitem').map((x) => x.textContent)).toEqual([expect.stringContaining('Ayrıntı'), expect.stringContaining('Planda böl')]);
+    expect(within(menu).getByRole('menuitem', { name: /Planda böl/ }).hasAttribute('disabled')).toBe(menu.querySelector('[data-bol-neden]') !== null);
     fireEvent.keyDown(document, { key: 'Escape' });
     fireEvent.doubleClick(is);
     expect(screen.getByText(/Bırakmak için tıklayın/)).toBeTruthy();
@@ -946,6 +947,27 @@ describe('Kokpit', () => {
     fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: 'Sipariş' }));
     expect(document.querySelectorAll('.tc-pyq-satir[data-satir]').length).toBeGreaterThan(0);
     expect(document.querySelector('.tc-pyq-satir [data-sorun-bildir]')).toBeNull();
+  });
+
+  // 3661: ayrıntılı tablonun satırından Planda böl paneli o adımla açılır; salt okuyan kişide düğme yoktur; bölünemeyen adımda düğme pasiftir ve nedeni yazar.
+  it('Planda böl: operasyon satırında düğme vardır, panel o adımla açılır ve satır vurgulanır; salt okuyan kişide yoktur', () => {
+    const c = ornekCalisma();
+    ac({ calisma: c, secim: { ...BOS_SECIM, siparis: '2', adim: '2.20' } });
+    const bolum = screen.getByRole('region', { name: 'Emirler ve operasyonlar' });
+    const satirlar = [...bolum.querySelectorAll<HTMLElement>('[data-bol-satir]')].map((x) => x.getAttribute('data-bol-satir')!);
+    expect(satirlar.length).toBeGreaterThan(0);
+    for (const id of satirlar) {
+      const d = bolum.querySelector<HTMLButtonElement>(`[data-bol-ac="${id}"]`)!;
+      expect(d.disabled).toBe(bolum.querySelector(`[data-bol-neden="${id}"]`) !== null);
+    }
+    const acik = satirlar.find((id) => !bolum.querySelector<HTMLButtonElement>(`[data-bol-ac="${id}"]`)!.disabled);
+    expect(acik).toBeDefined();
+    fireEvent.click(bolum.querySelector(`[data-bol-ac="${acik!}"]`)!);
+    expect(screen.getByRole('complementary', { name: 'Planda böl' })).toBeTruthy();
+    expect(bolum.querySelector(`[data-adim-satir="${acik!}"]`)?.hasAttribute('data-bol-secili')).toBe(true);
+    cleanup();
+    ac({ calisma: c, secim: { ...BOS_SECIM, siparis: '2', adim: '2.20' } }, false);
+    expect(document.querySelector('[data-bol-ac]')).toBeNull();
   });
 
   // 3335-3b: operasyon satırından adıma sorun bildirilir; panel Duruş ve mesai ile aynı yerdedir.
