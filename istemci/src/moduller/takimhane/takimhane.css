@@ -109,3 +109,11 @@
 .tc-tkm-yigin { display: flex; flex-direction: column; gap: var(--b-4); }
 .tc-tkm-iki { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-4); }
 @media (min-width: 1024px) { .tc-tkm-iki { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); align-items: start; } }
+
+.tc-tkm-cubuk { display: flex; height: var(--b-3); border-radius: var(--yari-tam); overflow: hidden; background: var(--edge); }
+.tc-tkm-cubuk > i { display: block; flex: 1 1 0; }
+.tc-tkm-cubuk > i[data-konum="raf"] { background: var(--run); }
+.tc-tkm-cubuk > i[data-konum="tezgah"] { background: var(--hazard-ink); }
+.tc-tkm-cubuk > i[data-konum="kisi"] { background: var(--done); }
+.tc-tkm-cubuk > i[data-konum="bileme"] { background: var(--hold); }
+.tc-tkm-cubuk > i[data-konum="ara"] { background: var(--stop); }

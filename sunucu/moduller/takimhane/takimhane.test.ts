@@ -12,6 +12,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { cncTakimCikisi } from '../stok/disari.ts';
+import { canliPlanOkuyucusu } from './disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -266,5 +267,135 @@ describe('takimhane (gerçek PostgreSQL)', () => {
     assert.equal(c.durum, 200);
     assert.equal(c.govde.uygun, false);
     assert.deepEqual(c.govde.satirlar.map((s) => s.bulgu), ['yinelenen-kod', 'yinelenen-kod', 'bos-kategori', 'bosluk']);
+  });
+
+  // ---- 3651 aparat: ayırma yazılmaz, canlı plan penceresi ile rotadaki istekten türetilir ------------------------------------------
+  describe('aparat ayırma (3651)', () => {
+    const pencere = new Map<number, { baslangic: string; bitis: string }>();
+    interface EmirAp { emirId: number; isEmriId: number }
+    let operasyonTipi = 0;
+    async function aparatKarti(): Promise<number> {
+      sira += 1;
+      await o().sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('APR-', 0) ON CONFLICT (onek) DO NOTHING");
+      return (await o().sahip.tek<{ no: number }>(
+        `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+         VALUES ($1, 'demirbas', 'APR-', $2, 'aktif', $3, $4, $4) RETURNING no`,
+        [`apr-${sira}`, sira, JSON.stringify({ id: `apr-${sira}`, com: { ad: `ORN-Aparat ${sira}`, birim: 'adet' } }), kisiler.get('depo')]))!.no;
+    }
+    async function emirAc(kart: number, adet: number, bas: string, bit: string): Promise<EmirAp> {
+      operasyonTipi ||= (await o().sahip.tek<{ id: number }>('SELECT id FROM istasyonlar_operasyon_tipi ORDER BY id LIMIT 1'))!.id;
+      sira += 1;
+      const emirId = (await o().sahip.tek<{ id: number }>(
+        "INSERT INTO uretim_emri (parca_no, parca_ad, adet, istasyon_id, acan_id, durum) VALUES ($1, 'ORN-Parça', 5, $2, $3, 'planli') RETURNING id", [`P-APR-${sira}`, istasyonId, kisiler.get('depo')]))!.id;
+      const isEmriId = (await o().sahip.tek<{ id: number }>(
+        "INSERT INTO uretim_emirleri_is_emri (uretim_emri_id, sira, op_no, operasyon_tipi_id, ad, istasyon_id) VALUES ($1, 1, 10, $2, 'OP10', $3) RETURNING id", [emirId, operasyonTipi, istasyonId]))!.id;
+      await o().sahip.sorgu("INSERT INTO rota_is_emri_ekipmani (is_emri_id, sira, tur, malzeme_id, adet, asama) VALUES ($1, 1, 'aparat', $2, $3, 'isleme')", [isEmriId, kart, adet]);
+      if (bas !== '') pencere.set(isEmriId, { baslangic: bas, bitis: bit });
+      return { emirId, isEmriId };
+    }
+    type Cevap = { satirlar: { kartKimlik: number; konumlar: Record<string, number | null>; ayrilan: number; serbest: number; bekleyenIade: number }[]; karsilastirma: { kartKimlik: number; durum: string; kartPlanToplami: number; stokta: number }[] };
+    type EmirCevap = { hazir: boolean; satirlar: { durum: string; eksik: number; disarida: number; konum: string | null }[] };
+    const apr = async (): Promise<Cevap> => { const r = await istek<Cevap>('depo', 'GET', '/takimhane/aparat'); assert.equal(r.durum, 200, JSON.stringify(r.govde)); return r.govde; };
+    const emirApr = async (id: number): Promise<EmirCevap> => { const r = await istek<EmirCevap>('depo', 'GET', `/takimhane/emirler/${id}/aparat`); assert.equal(r.durum, 200, JSON.stringify(r.govde)); return r.govde; };
+
+    test('örtüşen iki emir rafı paylaşır, sonraki eksik görünür; plan işi kaldırınca ayırma kalkar; ayrık pencere eksik göstermez', async () => {
+      canliPlanOkuyucusu(async (_db, idler) => idler.flatMap((i) => { const p = pencere.get(i); return p === undefined ? [] : [{ isEmriId: i, ...p }]; }));
+      const k = await aparatKarti();
+      await rafaKoy(k, '3');
+      await o().sahip.sorgu("INSERT INTO istasyonlar_aparat_kapasitesi (aparat_karti_id, istasyon_id, adet, degistiren_kisi_id) VALUES ($1, $2, 2, $3)", [k, istasyonId, kisiler.get('depo')]);
+      const a = await emirAc(k, 2, '2026-11-26T08:00:00Z', '2026-11-26T14:00:00Z');
+      const b = await emirAc(k, 2, '2026-11-26T10:00:00Z', '2026-11-26T16:00:00Z');
+      const c1 = await apr();
+      const s = c1.satirlar.find((x) => x.kartKimlik === k)!;
+      assert.deepEqual([s.konumlar.raf, s.ayrilan, s.serbest], [3, 3, 0]);
+      assert.deepEqual(c1.karsilastirma.filter((x) => x.kartKimlik === k).map((x) => [x.durum, x.kartPlanToplami, x.stokta]), [['uyumlu', 2, 3]]);
+      assert.deepEqual((await emirApr(a.emirId)).satirlar.map((x) => [x.durum, x.eksik]), [['ayrildi', 0]]);
+      const eb = await emirApr(b.emirId);
+      assert.deepEqual(eb.satirlar.map((x) => [x.durum, x.eksik]), [['eksik', 1]]);
+      assert.equal(eb.hazir, false);
+      // Plan B'yi kaldırır: ayırma kalkar, emir plan bekler.
+      pencere.delete(b.isEmriId);
+      const bekleyen = await emirApr(b.emirId);
+      assert.deepEqual(bekleyen.satirlar.map((x) => x.durum), ['plan-bekliyor']);
+      assert.equal(bekleyen.hazir, false, 'plan yerleştirmemiş emir aparat hazır sayılmaz');
+      assert.equal((await apr()).satirlar.find((x) => x.kartKimlik === k)!.ayrilan, 2);
+      // Plan B'yi A'dan sonraya kaydırır: pencereler ayrık, aynı adetler yeniden kullanılır.
+      pencere.set(b.isEmriId, { baslangic: '2026-11-26T14:00:00Z', bitis: '2026-11-26T18:00:00Z' });
+      assert.deepEqual((await emirApr(b.emirId)).satirlar.map((x) => x.durum), ['ayrildi']);
+    });
+    test('aparat çıkışı emre bağlıdır: tezgâhta görünür, rafı düşer; iade emre yazılır ve emrin dışarıdaki adedini düşürür; kırık iade neden ister', async () => {
+      canliPlanOkuyucusu(async (_db, idler) => idler.flatMap((i) => { const p = pencere.get(i); return p === undefined ? [] : [{ isEmriId: i, ...p }]; }));
+      const k = await aparatKarti();
+      await rafaKoy(k, '3');
+      const a = await emirAc(k, 2, '2026-11-27T08:00:00Z', '2026-11-27T14:00:00Z');
+      const r = await istek('depo', 'POST', '/takimhane/cikis', { kartKimlik: k, adet: 2, kisiId: null, istasyonId, uretimEmriId: a.emirId, istekKimligi: randomUUID() });
+      assert.equal(r.durum, 200, JSON.stringify(r.govde));
+      assert.deepEqual((await emirApr(a.emirId)).satirlar.map((x) => [x.durum, x.disarida]), [['yolda', 0]]);
+      assert.equal((await teslimAl('kisi-a', teslimCevabi.parse(r.govde).teslim, '2')).durum, 200);
+      const e = await emirApr(a.emirId);
+      assert.deepEqual(e.satirlar.map((x) => [x.durum, x.disarida]), [['tezgahta', 2]]);
+      assert.equal(e.hazir, true);
+      const s1 = (await apr()).satirlar.find((x) => x.kartKimlik === k)!;
+      assert.deepEqual([s1.konumlar.raf, s1.konumlar.tezgah, s1.ayrilan], [1, 2, 0]);
+      const ist = await istasyonKonumu();
+      const iade = (govde: Record<string, unknown>) => istek('depo', 'POST', '/takimhane/iade', { kartKimlik: k, konumKimligi: ist, istekKimligi: randomUUID(), neden: null, ...govde });
+      assert.equal((await iade({ adet: 1, durum: 'kirik' })).durum, 400, 'kırık iade nedensiz olmaz');
+      assert.equal((await iade({ adet: 1, durum: 'kirik', neden: 'ORN-neden' })).durum, 200);
+      assert.equal(await bakiye(k, hurdaKonumu), 1);
+      assert.deepEqual((await emirApr(a.emirId)).satirlar.map((x) => [x.durum, x.disarida, x.eksik]), [['ayrildi', 1, 0]], 'iade emre yazıldı: dışarıdaki adet düştü, kalan yeniden ayrıldı');
+      assert.equal((await iade({ adet: 1, durum: 'saglam' })).durum, 200);
+      assert.deepEqual((await emirApr(a.emirId)).satirlar.map((x) => [x.durum, x.disarida]), [['ayrildi', 0]], 'saglam iade rafa döndü: raf 2, emir 2 ister');
+      assert.equal((await apr()).satirlar.find((x) => x.kartKimlik === k)!.bekleyenIade, 0);
+    });
+
+    test('plan ertelendi: aparat plan saatinden bir günden fazla önce çıktıysa işaretlenir, yakın pencerede işaretlenmez', async () => {
+      canliPlanOkuyucusu(async (_db, idler) => idler.flatMap((i) => { const p = pencere.get(i); return p === undefined ? [] : [{ isEmriId: i, ...p }]; }));
+      const sonra = (saat: number) => new Date(Date.now() + saat * 3_600_000).toISOString();
+      const k = await aparatKarti();
+      await rafaKoy(k, '2');
+      const yakin = await emirAc(k, 1, sonra(2), sonra(6));
+      const uzak = await emirAc(k, 1, sonra(72), sonra(76));
+      for (const e of [yakin, uzak]) {
+        const r = await istek('depo', 'POST', '/takimhane/cikis', { kartKimlik: k, adet: 1, kisiId: null, istasyonId, uretimEmriId: e.emirId, istekKimligi: randomUUID() });
+        assert.equal(r.durum, 200, JSON.stringify(r.govde));
+        assert.equal((await teslimAl('kisi-a', teslimCevabi.parse(r.govde).teslim, '1')).durum, 200);
+      }
+      const planKaydi = async (id: number) => ((await istek<{ satirlar: { planKaydi: boolean }[] }>('depo', 'GET', `/takimhane/emirler/${id}/aparat`)).govde.satirlar.map((x) => x.planKaydi));
+      assert.deepEqual(await planKaydi(yakin.emirId), [false]);
+      assert.deepEqual(await planKaydi(uzak.emirId), [true]);
+    });
+
+    test('ölçü aleti kartı: emrin istediği tür ve geçerli alet durumu; stok konusu değildir', async () => {
+      canliPlanOkuyucusu(async () => []);
+      const kk = await aparatKarti();
+      const a = await emirAc(kk, 1, '', '');
+      const tur = (await o().sahip.tek<{ id: number }>("INSERT INTO olcu_aleti_turu (ad) VALUES ('ORN-Mastar') RETURNING id"))!.id;
+      await o().sahip.sorgu("INSERT INTO rota_is_emri_ekipmani (is_emri_id, sira, tur, alet_turu_id) VALUES ($1, 2, 'olcu_aleti', $2)", [a.isEmriId, tur]);
+      const oku = async () => (await istek<{ olcuAletleri: { turKimlik: number; ad: string; gecerli: boolean | null }[] }>('depo', 'GET', `/takimhane/emirler/${a.emirId}/aparat`)).govde.olcuAletleri;
+      assert.deepEqual(await oku(), [{ turKimlik: tur, ad: 'ORN-Mastar', gecerli: null }], 'türde alet kaydı yok');
+      await o().sahip.sorgu("INSERT INTO olcu_aleti (no, tur_id, ad) VALUES ('ORN-MST-1', $1, 'ORN-Mastar 1')", [tur]);
+      assert.deepEqual((await oku()).map((x) => x.gecerli), [false], 'alet var, kalibrasyon kaydı yok');
+    });
+
+    test('teslimdekiler aparatı da taşır; aparat olmayan kart çıkış ve iadede bulunamaz', async () => {
+      const k = await aparatKarti();
+      await rafaKoy(k, '1');
+      const t = await istek('depo', 'POST', '/takimhane/cikis', { kartKimlik: k, adet: 1, kisiId: null, istasyonId, uretimEmriId: null, istekKimligi: randomUUID() });
+      assert.equal(t.durum, 404, 'rotada ve kapasitede yok, kişide de durmuyor: aparat kümesinde değil');
+      await o().sahip.sorgu("INSERT INTO istasyonlar_aparat_kapasitesi (aparat_karti_id, istasyon_id, adet, degistiren_kisi_id) VALUES ($1, $2, 1, $3)", [k, istasyonId, kisiler.get('depo')]);
+      const t2 = await istek('depo', 'POST', '/takimhane/cikis', { kartKimlik: k, adet: 1, kisiId: null, istasyonId, uretimEmriId: null, istekKimligi: randomUUID() });
+      assert.equal(t2.durum, 200, JSON.stringify(t2.govde));
+      assert.equal((await teslimAl('kisi-a', teslimCevabi.parse(t2.govde).teslim, '1')).durum, 200);
+      const d = (await istek<{ teslimler: { kartKimlik: number; adet: number }[] }>('depo', 'GET', '/takimhane/teslimdekiler')).govde.teslimler.filter((x) => x.kartKimlik === k);
+      assert.deepEqual(d.map((x) => x.adet), [1]);
+      // Kapasite satırı silinse de kişide/tezgâhta duran aparatın iadesi alınır.
+      await o().sahip.sorgu('DELETE FROM istasyonlar_aparat_kapasitesi WHERE aparat_karti_id = $1', [k]);
+      const ist = await istasyonKonumu();
+      assert.equal((await istek('depo', 'POST', '/takimhane/iade', { kartKimlik: k, konumKimligi: ist, adet: 1, durum: 'saglam', neden: null, istekKimligi: randomUUID() })).durum, 200);
+    });
+
+    test('yazma ucu yoktur: ayırma plandan türetilir', async () => {
+      assert.equal((await istek('depo', 'POST', '/takimhane/aparat', {})).durum, 404);
+    });
   });
 });

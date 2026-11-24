@@ -12,6 +12,7 @@ export const TAKIMHANE_IKINCI_MENU = {
   gruplar: [
     { maddeler: [
       { anahtar: 'genel', baslik: 'Genel bakış', yol: '/takimhane', simge: 'gauge', islem: 'sayfa.takimhane' },
+      { anahtar: 'aparat', baslik: 'Aparat', yol: '/takimhane/aparat', simge: 'wrench', islem: 'sayfa.takimhane' },
       { anahtar: 'emirler', baslik: 'Emir takımları', yol: '/takimhane/emirler', simge: 'clipboard-check', islem: 'sayfa.takimhane' },
     ] },
     { baslik: 'Depo', maddeler: [

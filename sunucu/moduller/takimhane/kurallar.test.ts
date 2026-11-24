@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { aktarimOnizle, bosDagilim, dagilimToplami, dagilimaEkle, konumGrubu, stokDurumu, takimKoduMu } from './kurallar.ts';
+import { aktarimOnizle, aparatAyirmalari, aparatUyumu, planKaydiMi, type AparatIstegi, bosDagilim, dagilimToplami, dagilimaEkle, konumGrubu, stokDurumu, takimKoduMu } from './kurallar.ts';
 
 describe('takimhane kuralları (saf)', () => {
   test('sipariş noktası yoksa durum uydurulmaz: yalnız sıfır bilinir, kalan eşiksiz', () => {
@@ -37,5 +37,46 @@ describe('takimhane kuralları (saf)', () => {
     assert.equal(b.satirlar[0]?.bulgu, 'bosluk');
     assert.equal(b.satirlar[0]?.kod, 'B-1');
     assert.equal(aktarimOnizle([{ kod: 'C', ad: 'z', kategori: '  ', adet: 1, rafKodu: null }]).uygun, false);
+  });
+
+  describe('aparat ayırma (3651)', () => {
+    const saat = (g: number): number => Date.UTC(2026, 10, 26, g);
+    const istek = (emirId: number, adet: number, bas: number | null, bit: number | null, o: Partial<AparatIstegi> = {}): AparatIstegi =>
+      ({ emirId, kartId: 1, adet, baslangic: bas === null ? null : saat(bas), bitis: bit === null ? null : saat(bit), disarida: 0, yolda: 0, disaridaYeri: null, ...o });
+
+    test('pencereleri örtüşen iki emir rafı paylaşır; sonra başlayan eksik kalır', () => {
+      const r = aparatAyirmalari([istek(1, 2, 8, 14), istek(2, 2, 10, 16)], new Map([[1, 3]]));
+      assert.deepEqual(r.map((x) => [x.durum, x.ayrilan, x.eksik]), [['ayrildi', 2, 0], ['eksik', 1, 1]]);
+    });
+
+    test('zamanda ayrık iki emir aynı adedi yeniden kullanır, birbirini eksik göstermez', () => {
+      const r = aparatAyirmalari([istek(1, 3, 8, 12), istek(2, 3, 12, 18)], new Map([[1, 3]]));
+      assert.deepEqual(r.map((x) => x.durum), ['ayrildi', 'ayrildi']);
+    });
+
+    test('plan yerleştirmemiş istek ayırma sayılmaz ve rafı tutmaz', () => {
+      const r = aparatAyirmalari([istek(1, 2, null, null), istek(2, 3, 8, 12)], new Map([[1, 3]]));
+      assert.deepEqual(r.map((x) => [x.durum, x.ayrilan]), [['plan-bekliyor', 0], ['ayrildi', 3]]);
+    });
+
+    test('çıkmış adet raftan düşmüştür: tamamı çıkmışsa durum yeridir, kısmen çıkmışsa kalan ayrılır', () => {
+      const r = aparatAyirmalari([
+        istek(1, 2, 8, 12, { disarida: 2, disaridaYeri: 'kisi' }), istek(2, 2, 8, 12, { disarida: 1, disaridaYeri: 'istasyon' }), istek(3, 1, 9, 11, { disarida: 1, disaridaYeri: 'istasyon' }),
+      ], new Map([[1, 1]]));
+      assert.deepEqual(r.map((x) => [x.durum, x.ayrilan, x.eksik]), [['kisi', 0, 0], ['ayrildi', 1, 0], ['tezgahta', 0, 0]]);
+    });
+
+    test('rafta hiç yoksa eksik; yolda olan çıkış kalanı karşılıyorsa durum yolda', () => {
+      assert.deepEqual(aparatAyirmalari([istek(1, 2, 8, 12)], new Map()).map((x) => [x.durum, x.eksik]), [['eksik', 2]]);
+      assert.equal(aparatAyirmalari([istek(1, 2, 8, 12, { yolda: 2 })], new Map([[1, 2]]))[0]!.durum, 'yolda');
+    });
+
+    test('aparat plan saatinden bir günden fazla önce çıkmışsa plan kaymış sayılır; çıkış ya da pencere yoksa uydurulmaz', () => {
+      assert.deepEqual([planKaydiMi(saat(0), saat(0) + 25 * 3_600_000), planKaydiMi(saat(0), saat(0) + 3_600_000), planKaydiMi(null, saat(8)), planKaydiMi(saat(0), null)], [true, false, false, false]);
+    });
+
+    test('plan kapasitesi stoğu aşarsa işaretlenir; bakımdaki ayrıca not edilir', () => {
+      assert.deepEqual([aparatUyumu(4, 3, 0), aparatUyumu(1, 1, 1), aparatUyumu(2, 5, 0)], ['plan-fazla', 'bakimda', 'uyumlu']);
+    });
   });
 });

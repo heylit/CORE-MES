@@ -41,7 +41,8 @@ export const MADDE: { [K in HazirlikMaddesi]: MaddeBilgisi<K> } = {
   // 2227-1 b: iş emrine özel madde Üretim Hazırlık'ta eklenir ve işaretlenir.
   'ek-madde': { ad: 'Ek hazırlık maddesi', kisa: 'Ek madde', sahip: 'Üretim Hazırlık', git: { yol: '/arkon/hazirlik', islem: 'sayfa.arkon', ad: "Üretim Hazırlık'ta aç" }, uyarir: true },
   // 2893-4 a: liste rota adımında tanımlanır; aparat stokta, ölçü aleti türünde kalibrasyonu geçerli alet aranır.
-  aparat: { ad: 'Aparat', kisa: 'Aparat', sahip: 'Stok Merkezi', git: { yol: '/stok', islem: 'sayfa.stok', ad: "Stok Merkezi'nde aç" }, uyarir: true },
+  // 3651: aparatın ayırma, konum ve iade ekranları Takımhane'dedir; hazırlık maddesi (stokta en az bir adet) değişmedi, yalnız bağlantı oraya gider.
+  aparat: { ad: 'Aparat', kisa: 'Aparat', sahip: 'Takımhane', git: { yol: '/takimhane/emirler', islem: 'sayfa.takimhane', ad: "Takımhane'de aç" }, uyarir: true },
   'olcu-aleti': { ad: 'Ölçü aleti (kalibrasyon)', kisa: 'Ölçü', sahip: 'Ölçü Aletleri', git: { yol: '/kalibrasyon', islem: 'sayfa.kalibrasyon', ad: "Ölçü Aletleri'nde aç" }, uyarir: true },
 };
 

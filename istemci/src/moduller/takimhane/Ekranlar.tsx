@@ -1,13 +1,14 @@
 import { useMemo, useState, type ChangeEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import type {
-  AcikTeslim, AktarimSatiri, EmirTakimListesi, SeceneklerCevabi, TakimSatiri, TakimhaneOzeti,
+  AcikTeslim, AktarimSatiri, AparatCevabi, EmirTakimListesi, SeceneklerCevabi, TakimSatiri, TakimhaneOzeti,
 } from '#paylasilan/sozlesme/takimhane.ts';
 import { DurumKutusu, Girdi, Kart, SayfaBasligi, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { EmirAparatlari } from './Aparat.tsx';
 import { AktarimOnizleme } from './Aktarim.tsx';
 import { AcikTeslimler, CikisFormu, IadePenceresi } from './CikisIade.tsx';
 import { EmirTakimlari } from './EmirTakimlari.tsx';
@@ -20,6 +21,12 @@ import './takimhane.css';
 function useTakimlar() {
   return useQuery({ queryKey: anahtarlar.takimlar, queryFn: () => api.get<{ takimlar: TakimSatiri[] }>('/takimhane/takimlar') });
 }
+
+// Çıkış ve iade aparatı da kapsar (3651): aparat satırı takım satırı biçimine çevrilir, kategorisi "Aparat"tır; ayrı bir form yoktur.
+const aparatTakim = (a: AparatCevabi['satirlar'][number]): TakimSatiri => ({
+  kartKimlik: a.kartKimlik, kod: a.kod, ad: a.ad, kategori: 'Aparat', sinif: 'diger', capMm: null, kesiciSayisi: null, isoKodu: null, malzemeGruplari: [],
+  yenidenBilenir: false, izleme: 'adet', rafKodu: a.rafKodu, konumlar: a.konumlar, toplam: a.toplam, kritikSeviye: null,
+});
 
 // Ana ekran (B+C): önce neresi sıkıştı (kritik liste, nerede), altında süzülebilir takım listesi. Yeni takım kartı katalogdan açılır.
 export function TakimhaneGenel() {
@@ -79,10 +86,19 @@ export function TakimhaneGenel() {
 export function CikisIade() {
   const istemci = useQueryClient();
   const bildirim = useBildirim();
-  const takimlar = useTakimlar();
+  const takimSorgusu = useTakimlar();
+  const aparatSorgusu = useQuery({ queryKey: anahtarlar.aparat, queryFn: () => api.get<AparatCevabi>('/takimhane/aparat') });
+  const takimlar = useMemo(() => ({
+    ...takimSorgusu,
+    data: takimSorgusu.data && aparatSorgusu.data ? { takimlar: [...takimSorgusu.data.takimlar, ...aparatSorgusu.data.satirlar.map(aparatTakim)] } : undefined,
+    isPending: takimSorgusu.isPending || aparatSorgusu.isPending, isError: takimSorgusu.isError || aparatSorgusu.isError, error: takimSorgusu.error ?? aparatSorgusu.error,
+    refetch: () => Promise.all([takimSorgusu.refetch(), aparatSorgusu.refetch()]),
+  }), [takimSorgusu, aparatSorgusu]);
+  const [adres] = useSearchParams();
   const teslimler = useQuery({ queryKey: anahtarlar.acikTeslimler, queryFn: () => api.get<{ teslimler: AcikTeslim[] }>('/takimhane/teslimdekiler') });
   const secenekler = useQuery({ queryKey: [...anahtarlar.ozet, 'secenekler'], queryFn: () => api.get<SeceneklerCevabi>('/takimhane/secenekler') });
   const [iade, iadeYaz] = useState<AcikTeslim | null>(null);
+  const [iadeIstendi, iadeIstendiYaz] = useState(adres.get('iade'));
   const [son, sonYaz] = useState<number[]>([]);
   const yenile = () => { void istemci.invalidateQueries({ queryKey: ['takimhane'] }); };
 
@@ -105,7 +121,7 @@ export function CikisIade() {
         kartKimlik: g.teslim.kartKimlik, konumKimligi: g.teslim.konumKimligi, adet: g.adet, durum: g.durum, neden: g.neden === '' ? null : g.neden, istekKimligi,
       }, { istekKimligi });
     },
-    onSuccess: () => { iadeYaz(null); bildirim.bildir('tamam', 'İade alındı.'); yenile(); },
+    onSuccess: () => { iadeYaz(null); iadeIstendiYaz(null); bildirim.bildir('tamam', 'İade alındı.'); yenile(); },
     onError: (h) => { bildirim.bildir('hata', hataIletisi(h, 'İade alınamadı.')); },
   });
 
@@ -113,7 +129,11 @@ export function CikisIade() {
   if (takimlar.isError || teslimler.isError || secenekler.isError || !takimlar.data || !teslimler.data || !secenekler.data) {
     return <DurumKutusu durum="hata" hata={takimlar.error ?? teslimler.error ?? secenekler.error} mesaj="Çıkış ve iade yüklenemedi." yenile={() => { void takimlar.refetch(); void teslimler.refetch(); void secenekler.refetch(); }} />;
   }
-  const sonTakimlar = son.flatMap((id) => takimlar.data.takimlar.filter((t) => t.kartKimlik === id));
+  // Emir ekranından gelen "İade": o aparatın ilk teslimi açılır; kapanınca ya da iade alınınca istek düşer.
+  const istenen = iadeIstendi === null ? null : teslimler.data.teslimler.find((t) => t.kartKimlik === Number(iadeIstendi)) ?? null;
+  const acikIade = iade ?? istenen;
+  const takimListesi = takimlar.data.takimlar;
+  const sonTakimlar = son.flatMap((id) => takimListesi.filter((t) => t.kartKimlik === id));
   const alicilar = [
     ...secenekler.data.kisiler.map((k) => ({ deger: `k:${String(k.id)}`, baslik: k.ad })),
     ...secenekler.data.istasyonlar.map((i) => ({ deger: `i:${String(i.id)}`, baslik: i.ad })),
@@ -124,13 +144,16 @@ export function CikisIade() {
       <SayfaBasligi baslik="Çıkış ve iade" simge="rotate" />
       <div className="tc-tkm-iki">
         <Kart baslik="Çıkış" simge="upload">
-          <CikisFormu takimlar={takimlar.data.takimlar} son={sonTakimlar} alicilar={alicilar} emirler={emirler} gonder={(g) => { cikis.mutate(g); }} />
+          <CikisFormu takimlar={takimListesi} son={sonTakimlar} alicilar={alicilar} emirler={emirler} ilkKart={Number(adres.get('kart')) || null} ilkEmir={adres.get('emir') ?? ''} gonder={(g) => { cikis.mutate(g); }} />
         </Kart>
         <Kart baslik="Teslimdekiler" simge="clock" baslikEki={<span className="tc-tkm-soluk">{teslimler.data.teslimler.length} kayıt</span>}>
           <AcikTeslimler teslimler={teslimler.data.teslimler} iade={iadeYaz} />
         </Kart>
       </div>
-      <IadePenceresi key={iade === null ? 'kapali' : `${String(iade.konumKimligi)}-${String(iade.kartKimlik)}`} teslim={iade} kapat={() => { iadeYaz(null); }} onayla={(g) => { if (iade) iadeAl.mutate({ teslim: iade, ...g }); }} />
+      <IadePenceresi
+        key={acikIade === null ? 'kapali' : `${String(acikIade.konumKimligi)}-${String(acikIade.kartKimlik)}`} teslim={acikIade}
+        kapat={() => { iadeYaz(null); iadeIstendiYaz(null); }} onayla={(g) => { if (acikIade) iadeAl.mutate({ teslim: acikIade, ...g }); }}
+      />
     </div>
   );
 }
@@ -158,6 +181,7 @@ export function EmirTakimlariSayfasi() {
       {liste.data && (liste.data.satirlar.length === 0
         ? <Kart><p className="tc-tkm-bos">Bu emir için takım listesi girilmemiş.</p></Kart>
         : <Kart><EmirTakimlari liste={liste.data} /></Kart>)}
+      {emirId !== '' && <EmirAparatlari emirId={emirId} />}
     </div>
   );
 }

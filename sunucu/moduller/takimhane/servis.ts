@@ -8,9 +8,10 @@ import type {
 import { aktifIstasyonlar, istasyonAdlari } from '../istasyonlar/disari.ts';
 import { kisiAdlari, kisiSecenekleri } from '../kisiler/disari.ts';
 import { malzemeAra } from '../malzemeler/disari.ts';
-import { alandakiTakimlar, takimCikisi, takimEsikleri, takimIadesi, takimKonumTurToplamlari } from '../stok/disari.ts';
+import { alandakiTakimlar, emirAparatCikislari, takimCikisi, takimEsikleri, takimIadesi, takimKonumTurToplamlari } from '../stok/disari.ts';
 import { acikEmir, acikEmirler } from '../uretim-emirleri/disari.ts';
 import { aktarimOnizle, bosDagilim, dagilimToplami, dagilimaEkle, konumGrubu, kritikMi, stokDurumu, takimKoduMu } from './kurallar.ts';
+import { aparatKartKimlikleri, aparatKartListesi } from './aparat.ts';
 import * as sorgular from './sorgular.ts';
 
 const SAYFA_BOYU = 200;
@@ -83,8 +84,10 @@ export async function ozet(db: Db): Promise<TakimhaneOzeti> {
 
 export async function teslimdekiler(db: Db): Promise<AcikTeslim[]> {
   const kartlar = await takimKartlari(db, null);
-  const harita = new Map(kartlar.map((k) => [k.id, k]));
-  const satirlar = await alandakiTakimlar(db, kartlar.map((k) => k.id));
+  // Aparat da teslimdedir (3651): kartı Malzemeler'den, adı kodu kendi kümesinden gelir.
+  const aparatlar = await aparatKartListesi(db);
+  const harita = new Map([...kartlar, ...aparatlar].map((k) => [k.id, k]));
+  const satirlar = await alandakiTakimlar(db, [...harita.keys()]);
   const kisiler = await kisiAdlari(db, satirlar.flatMap((s) => (s.kisiId === null ? [] : [s.kisiId])));
   const istasyonlar = await istasyonAdlari(db, satirlar.flatMap((s) => (s.istasyonId === null ? [] : [s.istasyonId])));
   return satirlar.flatMap((s): AcikTeslim[] => {
@@ -96,8 +99,10 @@ export async function teslimdekiler(db: Db): Promise<AcikTeslim[]> {
   });
 }
 
+// Takım kümesi aparatı da kapsar (3651): çıkış ve iade ikisi için de aynı uçlardandır.
 async function kartiDenetle(db: Db, kartKimlik: number): Promise<void> {
-  if (!(await takimKartlari(db, null)).some((k) => k.id === kartKimlik)) throw bulunamadi('Takım kartı bulunamadı.');
+  if ((await takimKartlari(db, null)).some((k) => k.id === kartKimlik)) return;
+  if (!(await aparatKartKimlikleri(db)).has(kartKimlik)) throw bulunamadi('Takım ya da aparat kartı bulunamadı.');
 }
 
 export async function cikis(db: Db, k: Kullanici, g: CikisGovdesi): Promise<TeslimCevabi> {
@@ -110,7 +115,13 @@ export async function iade(db: Db, k: Kullanici, g: IadeGovdesi): Promise<Teslim
   const eldeki = (await alandakiTakimlar(db, [g.kartKimlik])).find((s) => s.konumId === g.konumKimligi);
   if (eldeki === undefined) throw dogrulama('Bu konumda iade edilecek bu takım yok.', 'konumKimligi');
   if (g.adet > tamSayi(eldeki.miktar)) throw dogrulama(`Konumda yalnız ${String(tamSayi(eldeki.miktar))} adet var.`, 'adet');
-  return takimIadesi(db, k, { malzemeId: g.kartKimlik, konumId: g.konumKimligi, adet: g.adet, durum: g.durum, neden: g.neden, kaynakKimligi: `tkm:iade:${g.istekKimligi}`.slice(0, 120) });
+  // Aparat çıkışı emre bağlıdır: iade, o konumda aparatı duran en eski emre yazılır ki emrin "dışarıda" adedi düşsün (kart 3651).
+  const emir = (await emirAparatCikislari(db, [g.kartKimlik])).filter((r) => r.konumId === g.konumKimligi && r.emirId !== null && tamSayi(r.disarida) > 0)
+    .sort((a, b) => a.emirId! - b.emirId!)[0];
+  return takimIadesi(db, k, {
+    malzemeId: g.kartKimlik, konumId: g.konumKimligi, adet: g.adet, durum: g.durum, neden: g.neden, kaynakKimligi: `tkm:iade:${g.istekKimligi}`.slice(0, 120),
+    uretimEmriId: emir?.emirId ?? null,
+  });
 }
 
 export async function ozellikYaz(db: Db, kartKimlik: number, g: OzellikGovdesi): Promise<{ tamam: true }> {

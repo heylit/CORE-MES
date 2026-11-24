@@ -2,9 +2,10 @@ import { uc } from '#cekirdek/uc.ts';
 import { teslimCevabi } from '#paylasilan/sozlesme/stok.ts';
 import {
   acikTeslimlerCevabi, aktarimOnizlemeCevabi, aktarimOnizlemeGovdesi, cikisGovdesi, emirParametresi, emirTakimListesiSemasi, emirTakimiGovdesi,
-  iadeGovdesi, kartParametresi, ozellikGovdesi, seceneklerCevabi, takimSorgusu, takimhaneOzetiSemasi, takimlarCevabi,
+  aparatCevabi as aparatCevapSemasi, emirAparatCevabi as emirAparatCevapSemasi, iadeGovdesi, kartParametresi, ozellikGovdesi, seceneklerCevabi, takimSorgusu, takimhaneOzetiSemasi, takimlarCevabi,
 } from '#paylasilan/sozlesme/takimhane.ts';
 import { z } from 'zod';
+import * as ap from './aparat.ts';
 import * as s from './servis.ts';
 
 // Okuma kendi sayfasının işlemidir. Bakiye Stok'ta kalır: çıkış, iade ve başlangıç stoğu Stok'un işlemleriyle yapılır (yeni işlem yok, 3613 Risk).
@@ -41,6 +42,12 @@ export const uclar = [
   uc({
     yontem: 'POST', tekrarKorumali: true, yol: '/takimhane/emirler/:id/takimlar', yetki: 'takimhane.cikis-iade', parametre: emirParametresi, govde: emirTakimiGovdesi, cevap: emirTakimListesiSemasi,
     isle: ({ db, parametre, govde }) => s.emirTakimListesiYaz(db, parametre.id, govde),
+  }),
+  // Aparat (3651): ayırma yazılmaz, plan penceresinden türetilir; yazan uç yoktur (çıkış ve iade yukarıdaki uçlardır).
+  uc({ yontem: 'GET', yol: '/takimhane/aparat', yetki: OKUMA, cevap: aparatCevapSemasi, isle: ({ db }) => ap.aparatCevabi(db) }),
+  uc({
+    yontem: 'GET', yol: '/takimhane/emirler/:id/aparat', yetki: OKUMA, parametre: emirParametresi, cevap: emirAparatCevapSemasi,
+    isle: ({ db, parametre }) => ap.emirAparatCevabi(db, parametre.id),
   }),
   // Yalnız ön izleme: hiçbir şey yazılmaz. Başlangıç stoğu yazımı sonraki iştir (gerçek veri yalnız canlıda girer, V7).
   uc({

@@ -28,6 +28,7 @@ import * as logo from './moduller/logo/disari.ts';
 import * as ortakDosyalar from './moduller/ortak-dosyalar/disari.ts';
 import * as projeler from './moduller/projeler/disari.ts';
 import * as plan from './moduller/plan/disari.ts';
+import { canliPlanOkuyucusu as takimhaneCanliPlanOkuyucusu } from './moduller/takimhane/disari.ts';
 import { acilSiparisOnaylandi, isEmriTakimHazirlaDurumlari, bakimCozucusu as planBakimCozucusu, bayatAdimBittiYansit, bayatEmirBittiYansit, bayatEmirIptalYansit, bayatFasonHareketiYansit, bayatIsEmirleriDegistiYansit, bayatSatinAlmaTerminiYansit, canliMakineAyrimlari, canliPaylar, canliPlan, malzemeKartiIzleri as planKartIzleri, malzemeMaliyetiCozucusu, planMotoruCozucusu, sunucuPlanCozucusu, tahminiMaliyetCozucusu, teklifDene } from './moduller/plan/disari.ts';
 import { isEmriTahminiMaliyetleri, projedeSayilanBelgeler, uretimEmriMalzemeMaliyetleri } from './moduller/proje-maliyet/disari.ts';
 import { satisSatiriAcikTalepleriKilitle, satisSatiriBagliKalemler, satisSiparisiKalemCozucusu } from './moduller/satin-alma/disari.ts';
@@ -671,6 +672,7 @@ export function sunucununBaglari(): Bag[] {
     bag('ölçü aleti (rota adımı, kalibrasyon) -> hazırlık uyarısı', uretimEmirleri.olcuAletiHazirlikCozucusu, isEmriOlcuAletiHazirliklari),
     bag('girdi stoğu -> hazırlık uyarısı', uretimEmirleri.malzemeHazirlikCozucusu, stok.isEmriMalzemeHazirliklari),
     bag('takım ömrü -> hazırlık uyarısı', uretimEmirleri.takimHazirlikCozucusu, cncKurulum.isEmriTakimHazirliklari),
+    bag('canlı plan penceresi -> aparat ayırma (Takımhane)', takimhaneCanliPlanOkuyucusu, canliPlan),
     bag('plandaki takım değişimi -> hazırlık uyarısı', uretimEmirleri.takimHazirlaCozucusu, (db: Db, idler: readonly number[]) => isEmriTakimHazirlaDurumlari(db, idler)),
     // Onaylı kapanışın dış maddeleri (1074 a): sahipler üretim emirlerini okur, çözücüleri ters yönde kaydedilir.
     bag('GKK özeti -> malzeme etiketi', gkkOzetiCozucusuKaydet, kaliteMerkezi.girisOzetleri),
