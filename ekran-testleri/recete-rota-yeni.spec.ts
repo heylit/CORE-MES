@@ -303,8 +303,8 @@ test.describe('3273 rota şablonları', () => {
       await expect(pencere.getByRole('radiogroup', { name: 'Şablonlar' })).toBeVisible();
       await pencere.getByRole('button', { name: 'Vazgeç' }).click();
       await ac('/recete-rota/rota-sablonlari');
-      const tablo = page.getByRole('table', { name: 'Rota şablonları' });
-      await tablo.getByRole('button', { name: /^Düzenle/ }).first().click({ timeout: 15_000 });
+      const liste = page.getByRole('list', { name: 'Rota şablonları' });
+      await liste.locator('.tc-rs-oge').getByRole('button', { name: /^Düzenle/ }).first().click({ timeout: 15_000 });
       const panel = page.getByRole('region', { name: /şablonunu düzenle$/ });
       await expect(panel.getByRole('group', { name: 'Operasyon ekle' })).toBeVisible();
       expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
@@ -317,10 +317,10 @@ test.describe('3273 rota şablonları', () => {
     test.use({ hesap: 'ornek.mudur' });
     test('şablon sayfası salt okunur; boş rotada seçici yok', async ({ page, ag, ac }) => {
       await ac('/recete-rota/rota-sablonlari');
-      const tablo = page.getByRole('table', { name: 'Rota şablonları' });
-      // Ornek veride tek sablon (Standart rota) olabilir; dar ekranda baslik satiri gorunmez: satir basligi aranir.
-      await expect(tablo.getByRole('rowheader').first()).toBeVisible({ timeout: 15_000 });
-      await expect(tablo.getByRole('button')).toHaveCount(0);
+      const liste = page.getByRole('list', { name: 'Rota şablonları' });
+      // Ornek veride tek sablon (Standart rota) olabilir: ilk sablon karti aranir.
+      await expect(liste.locator('.tc-rs-oge').first()).toBeVisible({ timeout: 15_000 });
+      await expect(liste.getByRole('button')).toHaveCount(0);
       await expect(page.getByRole('button', { name: 'Yeni şablon' })).toHaveCount(0);
       await expect(page.getByText(/liste salt okunur/)).toBeVisible();
       await ac('/recete-rota/schema');
