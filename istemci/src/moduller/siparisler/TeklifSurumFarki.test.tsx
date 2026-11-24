@@ -76,4 +76,13 @@ describe('Teklif sürüm geçmişinde fark (3635)', () => {
     expect(await screen.findByText('Sürüm 1 ile aynı')).toBeTruthy();
     expect(screen.queryByRole('button')).toBeNull();
   });
+
+  it('fiyat görmeyende yalnız fiyat ya da iskonto değiştiyse "Koşullarda fark yok" yazar', async () => {
+    const istekler = ciz(['siparisler.oku'], { ...SURUM1, surumNo: 2, iskontoOrani: '5.00', fiyatlar: [{ satirId: 11, birimFiyat: '118.0000', iskontoluFiyat: '112.1000', tutar: '22420.00' }] }, SURUM1);
+    await waitFor(() => expect(istekler).toContain('/oturum'));
+    await new Promise((coz) => setTimeout(coz, 30));
+    expect(screen.getByText('Koşullarda fark yok')).toBeTruthy();
+    expect(screen.queryByText(/ile aynı/)).toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
+  });
 });

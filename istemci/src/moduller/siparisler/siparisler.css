@@ -215,7 +215,7 @@
 .tc-sp-termin-onerisi-dugmeler { display: flex; gap: var(--b-2); margin-inline-start: auto; }
 
 /* 3635: teklif sürüm farkı */
-.tc-sp-fark { min-width: 0; }
+.tc-sp-fark { flex: 1 1 100%; min-width: 0; }
 .tc-sp-fark-ozet { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
 .tc-sp-fark-govde { display: grid; gap: var(--b-4); min-width: 0; }
 .tc-sp-fark-baslik { margin: 0 0 var(--b-2); font-size: var(--yazi-s); color: var(--muted); }

@@ -30,10 +30,18 @@ describe('Teklif sürüm farkı (3635)', () => {
     expect(farkVarMi(surumFarki(S2, { ...S2, iskontoOrani: '5.0000', fiyatlar: S2.fiyatlar.map((x) => ({ ...x, birimFiyat: Number(x.birimFiyat).toFixed(2) })) }, true))).toBe(false);
   });
 
-  it('KDV girilmemiş eski sürümde toplam, KDV hariç toplamla karşılaştırılır; sıfırdan değişimde yüzde yoktur', () => {
-    const eski = { ...S1, kdvOrani: null, kdvTutari: null, genelToplam: null };
-    const f = surumFarki(eski, { ...S1, toplam: '50000.00', genelToplam: null, kdvOrani: null }, true);
-    expect(f.toplam).toMatchObject({ eski: '46750.00', yeni: '50000.00' });
+  it('KDV girilmemiş eski sürüm: iki tarafta genel toplam yoksa KDV hariç toplam karşılaştırılır; fiyat değişmemişse fark yok (iki yönlü)', () => {
+    const kdvsiz = { ...S1, kdvOrani: null, kdvTutari: null, genelToplam: null };
+    const ileri = surumFarki(kdvsiz, S1, true);
+    expect(ileri.toplam).toBeNull();
+    expect(ileri.kosullar.map((k) => k.alan)).toEqual(['kdv']);
+    expect(surumFarki(S1, kdvsiz, true).toplam).toBeNull();
+    const degisti = surumFarki(kdvsiz, { ...S1, toplam: '50000.00' }, true);
+    expect(degisti.toplam).toMatchObject({ eski: '46750.00', yeni: '50000.00', kdvDahil: false });
+    expect(surumFarki(S1, S2, true).toplam?.kdvDahil).toBe(true);
+  });
+
+  it('sıfırdan değişimde yüzde yoktur', () => {
     expect(surumFarki({ ...S1, fiyatlar: [{ satirId: 1, birimFiyat: '0.0000', iskontoluFiyat: '0', tutar: '0' }] }, S2, true).kalemler[0]?.yuzde).toBeNull();
   });
 

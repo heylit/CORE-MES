@@ -24,7 +24,7 @@ const yuzdeMetni = (y: number | null): string | null => (y === null ? null : `${
 function Yuzde({ y }: { y: number | null }) {
   const metin = yuzdeMetni(y);
   if (metin === null) return null;
-  return <Rozet ton={y !== null && y > 0 ? 'uyari' : 'tamam'}>{metin}</Rozet>;
+  return <Rozet ton={y !== null && y > 0 ? 'uyari' : 'bilgi'}>{metin}</Rozet>;
 }
 
 // 3635 (A): her sürüm satırında önceki sürümden değişenlerin özeti; ayrıntı pencerede. Fiyat görmeyen yalnız koşul farkını görür.
@@ -35,10 +35,10 @@ export function TeklifSurumFarki({ teklif, surum, onceki }: { teklif: TeklifAyri
   const fark = surumFarki(onceki, surum, fiyatGorur);
   const para = teklif.paraBirimi;
   const satir = new Map(teklif.satirlar.map((s) => [s.id, s]));
-  if (!farkVarMi(fark)) return <span className="tc-sp-soluk">{`Sürüm ${onceki.surumNo} ile aynı`}</span>;
+  if (!farkVarMi(fark)) return <span className="tc-sp-soluk">{fiyatGorur ? `Sürüm ${onceki.surumNo} ile aynı` : 'Koşullarda fark yok'}</span>;
   return (
     <div className="tc-sp-fark">
-      <div className="tc-sp-fark-ozet" aria-label={`Sürüm ${onceki.surumNo} ile farklar`}>
+      <div className="tc-sp-fark-ozet" role="group" aria-label={`Sürüm ${onceki.surumNo} ile farklar`}>
         {fark.kosullar.map((k) => <Rozet key={k.alan} ton="bilgi" gorunum="cizgi">{KOSUL_ADI[k.alan]}</Rozet>)}
         {fark.kalemler.length > 0 && <Rozet ton="bilgi">{`${fark.kalemler.length} kalemde fiyat`}</Rozet>}
         {fark.toplam !== null && <Yuzde y={fark.toplam.yuzde} />}
@@ -74,7 +74,7 @@ export function TeklifSurumFarki({ teklif, surum, onceki }: { teklif: TeklifAyri
           )}
           {fark.toplam !== null && (
             <section aria-label="Toplam">
-              <h3 className="tc-sp-fark-baslik">{surum.genelToplam === null ? 'Toplam (KDV hariç)' : 'Genel toplam (KDV dahil)'}</h3>
+              <h3 className="tc-sp-fark-baslik">{fark.toplam.kdvDahil ? 'Genel toplam (KDV dahil)' : 'Toplam (KDV hariç)'}</h3>
               <p className="tc-sp-fark-toplam">
                 <span className="tc-sp-fark-eski">{paraMetni(fark.toplam.eski, para)}</span>{' → '}<strong>{paraMetni(fark.toplam.yeni, para)}</strong> <Yuzde y={fark.toplam.yuzde} />
               </p>

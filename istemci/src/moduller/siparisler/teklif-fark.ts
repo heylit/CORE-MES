@@ -3,7 +3,7 @@ import type { TeklifSurumuCevabi as Surum } from '#paylasilan/sozlesme/siparisle
 export type KosulAlani = 'iskonto' | 'kdv' | 'teslim' | 'termin' | 'odeme' | 'gecerlilik' | 'not';
 export interface KosulFarki { alan: KosulAlani; eski: string | null; yeni: string | null }
 export interface KalemFarki { satirId: number; eski: string | null; yeni: string | null; yuzde: number | null }
-export interface ToplamFarki { eski: string; yeni: string; yuzde: number | null }
+export interface ToplamFarki { eski: string; yeni: string; yuzde: number | null; kdvDahil: boolean }
 export interface SurumFarki { kosullar: KosulFarki[]; kalemler: KalemFarki[]; toplam: ToplamFarki | null }
 
 // İskonto ve KDV fiyat kapsamındadır (TeklifSurumu föyünde de fiyatı görmeyene gizlidir); fiyat görmeyen için bu alanlar hiç hesaplanmaz.
@@ -43,10 +43,11 @@ export function surumFarki(onceki: Surum, yeni: Surum, fiyatGorur: boolean): Sur
     if (e === f.birimFiyat || (e !== null && f.birimFiyat !== null && Number(e) === Number(f.birimFiyat))) return [];
     return [{ satirId: f.satirId, eski: e, yeni: f.birimFiyat, yuzde: e === null || f.birimFiyat === null ? null : yuzde(e, f.birimFiyat) }];
   });
-  // KDV girilmemiş eski sürümde genel toplam yoktur; karşılaştırma KDV hariç toplamla yapılır.
-  const e = onceki.genelToplam ?? onceki.toplam;
-  const y = yeni.genelToplam ?? yeni.toplam;
-  const toplam = e === null || y === null || Number(e) === Number(y) ? null : { eski: e, yeni: y, yuzde: yuzde(e, y) };
+  // Yalnız iki tarafta da genel toplam varsa genel toplamlar, yoksa ikisinde de KDV hariç toplam karşılaştırılır; KDV'li ile KDV'siz toplam karıştırılmaz.
+  const genel = onceki.genelToplam !== null && yeni.genelToplam !== null;
+  const e = genel ? onceki.genelToplam : onceki.toplam;
+  const y = genel ? yeni.genelToplam : yeni.toplam;
+  const toplam = e === null || y === null || Number(e) === Number(y) ? null : { eski: e, yeni: y, yuzde: yuzde(e, y), kdvDahil: genel };
   return { kosullar, kalemler, toplam };
 }
 
