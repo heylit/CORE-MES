@@ -113,8 +113,8 @@ describe('Planlama ayarları sayfası (3561)', () => {
     expect(a.t.dizmeyiYaz).not.toHaveBeenCalled();
     cleanup();
     const b = kur(PLAN_YAZAR, 'kisitlar', { ...ornekCalisma(), plan: null });
-    fireEvent.click(screen.getByLabelText('Ölçü aleti adedi'));
-    expect(screen.getByText('Ölçü aleti adedi: açık → kapalı')).toBeTruthy();
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Ölçü aleti' })).getByRole('radio', { name: 'Kısıt yok' }));
+    expect(screen.getByText('Ölçü aleti: Sert kısıt → Kısıt yok')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => { expect(b.yazilan).toHaveLength(1); });
     expect(b.t.degerlendir).not.toHaveBeenCalled();
@@ -128,14 +128,26 @@ describe('Planlama ayarları sayfası (3561)', () => {
     expect(screen.queryByRole('button', { name: /Etkisini gör/ })).toBeNull();
   });
 
-  it('kısıtlar bölümü: 19 kısıt açılıp kapanır; yazamayan açık ve kapalıyı yazıyla görür', () => {
+  it('kısıtlar bölümü: 17 kısıt açılıp kapanır, aparat ve ölçü aleti Sert kısıt | Kısıt yok seçer (3650); yazamayan değeri yazıyla görür', () => {
     kur(PLAN_YAZAR, 'kisitlar');
-    expect(screen.getAllByRole('checkbox')).toHaveLength(19);
+    expect(screen.getAllByRole('checkbox')).toHaveLength(17);
+    for (const ad of ['Aparat ve özel takım', 'Ölçü aleti']) {
+      const g = screen.getByRole('radiogroup', { name: ad });
+      expect(within(g).getByRole('radio', { name: 'Sert kısıt' }).getAttribute('aria-checked')).toBe('true');
+      expect(within(g).getAllByRole('radio').filter((r) => r.getAttribute('tabindex') === '0')).toHaveLength(1);
+    }
+    // Ok tuşu seçimi değiştirir ve odağı taşır.
+    const olcu = within(screen.getByRole('radiogroup', { name: 'Ölçü aleti' }));
+    fireEvent.keyDown(olcu.getByRole('radio', { name: 'Sert kısıt' }), { key: 'ArrowRight' });
+    expect(screen.getByText('Ölçü aleti: Sert kısıt → Kısıt yok')).toBeTruthy();
+    expect(olcu.getByRole('radio', { name: 'Kısıt yok' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByText(/Kısıt yok: plan ölçü aletini sınırlamaz; kullanım yine izlenir/)).toBeTruthy();
     expect(screen.getAllByRole('link', { name: 'Kısıtlar' })[0]).toBeTruthy();
     cleanup();
     kur(['plan.planlama-oku'], 'kisitlar', ornekCalisma(), false);
     expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
-    expect(screen.getByText(/Ölçü aleti adedi:/).textContent).toContain('açık');
+    expect(within(screen.getByRole('radiogroup', { name: 'Ölçü aleti' })).getAllByRole('radio').every((r) => (r as HTMLButtonElement).disabled)).toBe(true);
+    expect(screen.getByText(/Arıza ve planlı bakım:/).textContent).toContain('açık');
   });
 
   it('motor bölümü: plan.motor-ayari olan değiştirir, olmayan okur', async () => {

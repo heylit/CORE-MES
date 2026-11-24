@@ -237,6 +237,20 @@ describe('ekranın şimdisi (B-2500-3, 2506 a)', () => {
     expect(kisit([])).toBe('sert');
     expect(kisit(['aparat'])).toBe('izle');
   });
+
+  it('aparat ve ölçü aleti anahtarı ayrıdır: aparat ölçü aletine, kalibrasyon aparata dokunmaz (3650)', () => {
+    const { c } = kur();
+    const x = structuredClone(c);
+    Object.assign(x.D, { ikincilKaynaklar: [
+      { id: '1', kart: '900', kod: 'AP-ORN-12', adet: 1, tur: 'aparat', kisit: 'sert' },
+      { id: '2', kart: 'olcu-5', kod: 'ORN-Mikrometre', adet: 2, tur: 'olcu_aleti', kisit: 'sert' },
+    ] });
+    const kisitlar = (kapali: string[]) => (girdiKur({ ...x, kapali }).D as unknown as { ikincilKaynaklar: { kisit: string }[] }).ikincilKaynaklar.map((k) => k.kisit);
+    expect(kisitlar([])).toEqual(['sert', 'sert']);
+    expect(kisitlar(['aparat'])).toEqual(['izle', 'sert']);
+    expect(kisitlar(['kalibrasyon'])).toEqual(['sert', 'izle']);
+    expect(kisitlar(['aparat', 'kalibrasyon'])).toEqual(['izle', 'izle']);
+  });
 });
 
 // 3457 Test T4: her alt neden kendi önlemini yazar; sayısı olmayan tanıda sayısız cümle.

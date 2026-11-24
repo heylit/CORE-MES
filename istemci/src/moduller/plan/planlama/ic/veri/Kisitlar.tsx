@@ -3,6 +3,8 @@ import { MOTOR_NOTU, YOK_NOTU, degisken } from '../../motor/ortak.tsx';
 import type { CalismaKomutu } from '../../kayit.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { gercekFasoncular } from '../../kaynak-kodu.tsx';
+import { kaynakMi, kaynakSecimi } from '../../ayarlar/alanlar.ts';
+import { KaynakSecimiGrubu } from '../../ayarlar/KaynakSecimi.tsx';
 import {
   AMAC_SIRASI, DURUM_ROZETI, KATALOG, bedelEsigi, bedelOku, bolumAdi, durumSayilari, kisitBul, kisitDegistir, parametreDegeri, parametreOku, parametreYaz,
   type Kisit, type KisitBedeli, type Parametre, type VeriBolumu,
@@ -87,6 +89,10 @@ export function Kisitlar({ c, komut, planYaz, git, uyar }: {
     { anahtar: 'hesapta', baslik: 'Hesapta', hucre: (k) => {
       if (!k.g) return <span className="tc-pyi-k">{k.durum === 'yok' ? '—' : 'sabit'}</span>;
       const kapali = c.kapali.includes(k.id);
+      // 3650: aparat ve ölçü aleti Planlama ayarları ile aynı dili kullanır: Sert kısıt | Kısıt yok.
+      if (kaynakMi(k.id)) {
+        return <KaynakSecimiGrubu kimlik={`pyi-${k.id}`} kisit={k.id} deger={kaynakSecimi({ acik: { [k.id]: !kapali } }, k.id)} etki={false} kilitli={!yaz} sec={(s) => { anahtar(k, s === 'sert'); }} />;
+      }
       return (
         <label className="tc-pyi-anahtar" title={kapali ? 'Motor bu kısıtı saymıyor' : 'Motor bu kısıtı uyguluyor'}>
           <input type="checkbox" role="switch" aria-label={k.ad} checked={!kapali} disabled={!yaz} onChange={(e) => { anahtar(k, e.target.checked); }} />
