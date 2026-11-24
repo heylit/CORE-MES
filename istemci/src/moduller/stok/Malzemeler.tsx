@@ -83,7 +83,7 @@ export function Malzemeler() {
       <MalzemeSekmeleri secili="malzemeler" metin={arama} />
       <Kart>
         {l.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(l.error)} yenile={() => void l.refetch()} /> : (
-          <Tablo etiket="Malzeme stokları" kip="kaydir" sutunlar={sutunlar} satirlar={l.data?.satirlar ?? []} satirAnahtari={(m) => m.malzemeId} mesgul={l.isPending}
+          <Tablo etiket="Malzeme stokları" kip="kayit" sutunlar={sutunlar} satirlar={l.data?.satirlar ?? []} satirAnahtari={(m) => m.malzemeId} mesgul={l.isPending}
             satirSec={(m) => { void yonlendir(`/stok/malzemeler/${m.malzemeId}`); }} bosMesaj={kartlar ? 'Malzeme kartı yok; kartı Malzemeler sayfasında açın.' : 'Bu süzgece uyan malzeme yok. Stoğu olmayan kartlar Bütün kartlar süzgecinde.'}
             siralama={liste.siralama} siralamaDegistir={liste.siralamaDegistir} toplu={{ eylemler: topluEylemler }}
             arac={{
