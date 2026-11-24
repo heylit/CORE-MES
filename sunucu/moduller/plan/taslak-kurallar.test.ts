@@ -9,7 +9,7 @@ import {
 } from './taslak-kurallar.ts';
 
 // 3282 1d: taslağın saf kuralları. Veriler uydurmadır.
-const k = { kim: 'ORN-Planlamaci', sayfa: 'Kokpit', t: 1 };
+const k = { kim: 'ORN-Planlamaci', sayfa: 'Kokpit', t: 1, kilitYetkisi: true };
 const calisma = (ek: Record<string, unknown> = {}) => ({
   dataVer: 3, kapali: ['malzeme'], locks: { 'S2.10': { m: 'T2', S: 30 } },
   w: { dondurma: 4, mat: 'uyari' }, param: { tampon: false },
@@ -738,6 +738,16 @@ describe('3488 c: adımı elle böl', () => {
     ...ek,
   });
   const bol = (isId: string, paylar: [string, number][]) => ({ isId, paylar: paylar.map(([tezgah, adet]) => ({ tezgah, adet })) });
+
+  // 3669 (Risk 3661 N1): bölme kilidi kaldırır; plan.kilitle olmayan kişi kilitli adımı bölemez, kilitsiz adımı bölebilir. Sunucu denetler.
+  test('kilitli adımı bölmek plan.kilitle ister; yetkisiz kişide kilit ve bölme değişmez, kilitsiz adım bölünür', () => {
+    const yetkisiz = { ...k, kilitYetkisi: false };
+    const r = elleBolUygula(c(), bol('S1.10', [['T2', 6], ['T3', 3]]), yetkisiz);
+    assert.ok('hata' in r && r.hata.tur === 'yetki', JSON.stringify(r));
+    assert.ok('hata' in elleBolUygula(c(), bol('S1.10', [['T2', 6], ['T3', 3]]), { kim: k.kim, sayfa: k.sayfa, t: k.t }), 'yetki bilgisi yoksa yok sayılır');
+    assert.ok('deger' in elleBolUygula(c(), bol('S1.30', [['T2', 5], ['T3', 4]]), yetkisiz), 'kilitsiz adım yetkisiz de bölünür');
+    assert.ok('deger' in elleBolUygula(c(), bol('S1.10', [['T2', 6], ['T3', 3]]), k));
+  });
 
   test('bölme çalışmanın elleBol\'una yazılır, adımın kilidi kalkar, geri alma ikisini döndürür; aynısı yeniden değişiklik değildir', () => {
     const r = elleBolUygula(c(), bol('S1.10', [['T2', 6], ['T3', 3]]), k);

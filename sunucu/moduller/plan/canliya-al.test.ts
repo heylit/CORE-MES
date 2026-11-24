@@ -764,6 +764,29 @@ describe('Reçete ve Rota canlıya al akışı (gerçek PostgreSQL)', () => {
     assert.deepEqual(hazirlik.emirler.map((x) => x.emirId), [e.uretimEmriId], 'Hazırlık okuması emri paketleriyle verir');
   });
 
+  // 3669: bölünmüş iş ve kişi kuyruğu motorsuz yazılır, makine kuyruğu sonra sunucu motoruyla dizilir. Motor kişi öncülünü sabit yerleşimden okur:
+  // makine adımı kişi öncülünün bitişinden önce başlamaz, taslak canlıya alınabilir (siraIhlali yok).
+  test('CA-11d (3669): kişi öncüllü makine adımı motorla dizildikten sonra öncülünden önce başlamaz', async () => {
+    const kisi = await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme oncul kisi', kullaniciAdi: 'onculkisi', parola: PAROLA }));
+    const gunduz = (await ortam!.sahip.tek<{ id: number }>("SELECT id FROM vardiya WHERE ad = 'CA gunduz'"))!.id;
+    await atamaYaz(vt(), 'istasyon', istasyonA, kisi, '100.00');
+    await tamam(c.yonetici, 'POST', `/kisi-vardiyalari/${String(kisi)}/belirle`, { vardiyaId: gunduz });
+    const makine = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'CA-MD', ad: 'Deneme makine D', istasyonId: istasyonA })).id;
+    const e = await emirAc([yeniAdim({ ad: 'Deneme kisi oncul', kaynak: { tur: 'kisi', id: kisi }, ayarSuresiDk: 20, birimSureDk: 3 }), yeniAdim({ kaynak: { tur: 'makine', id: makine } })]);
+    const [i1, i2] = e.isEmriIdleri as [number, number];
+    const baslangic = new Date(Date.now() + 3600_000).toISOString();
+    const yaz = await istek(c.planlama, 'POST', '/plan/kuyruklari-yaz', { kuyruklar: [
+      { kaynak: { tur: 'kisi', id: kisi }, baslangic, isler: [{ ...(await emirOp(i1)), dondurulmus: false }] },
+      { kaynak: { tur: 'makine', id: makine }, baslangic, isler: [{ ...(await emirOp(i2)), dondurulmus: false }] },
+    ] });
+    assert.equal(yaz.statusCode, 200, yaz.body);
+    const taslak = await tamam<PlanCevabi>(c.planlama, 'GET', `/plan?taslak=${String(yaz.json<KuyrukYazCevabi>().taslak)}`);
+    const bak = (id: number) => taslak.yerlesimler.find((x) => x.isEmriId === id)!;
+    assert.deepEqual(bak(i1).kaynak, { tur: 'kisi', id: kisi });
+    assert.ok(Date.parse(bak(i2).baslangic) >= Date.parse(bak(i1).bitis) - 60_000, `kişi öncülü ${bak(i1).baslangic}-${bak(i1).bitis}, makine adımı ${bak(i2).baslangic}`);
+    await canliyaYaz(yaz.json<KuyrukYazCevabi>().taslak);
+  });
+
   test('CA-12 (898 a): canlıya alma, canlı planın malzeme eksiğini aynı işlemde satın almaya yazar; taslağa yazmak yazmaz', async () => {
     const ham = await kartAc('hammadde');
     const e = await emirAc([yeniAdim({ bilesenler: [{ malzemeId: ham, miktar: 2, fireYuzde: 0 }] })]);

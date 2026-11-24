@@ -1,6 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
-import { cakisma, dogrulama, eskiSurum } from '#cekirdek/hata.ts';
+import { cakisma, dogrulama, eskiSurum, yetkiYok } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
+import { islemVarMi } from '#cekirdek/yetki.ts';
 import type {
   AtolyeKomutuCevabi, EkMesaiEkleGovdesi, IsTasiGovdesi, IsTasiOnizlemeSorgusu, IsTasiOnizlemesiCevabi, OlayEkleGovdesi, PlanaAlGovdesi, PlanaAlOnizlemeSorgusu,
   PlanaAlOnizlemesiCevabi,
@@ -23,8 +24,8 @@ async function uygula(db: Db, kullanici: Kullanici, calismaSurumu: number, fn: (
   // kendi yazmasında birleşmiş hâli yazar.
   const c = await planlamaCalismasi(db, kullanici, simdi);
   if (c.calisma === null || c.surum !== surum) throw cakisma('Planlama çalışması okunamadı; sayfayı yenileyin.');
-  const r = fn(c.calisma, { kim: kullanici.ad, sayfa: SAYFA, t: simdi });
-  if ('hata' in r) throw r.hata.tur === 'dogrulama' ? dogrulama(r.hata.ileti, r.hata.alan) : cakisma(r.hata.ileti);
+  const r = fn(c.calisma, { kim: kullanici.ad, sayfa: SAYFA, t: simdi, kilitYetkisi: islemVarMi(kullanici, 'plan.kilitle') });
+  if ('hata' in r) throw r.hata.tur === 'dogrulama' ? dogrulama(r.hata.ileti, r.hata.alan) : r.hata.tur === 'yetki' ? yetkiYok(r.hata.ileti) : cakisma(r.hata.ileti);
   const ileti = r.ileti === undefined ? {} : { ileti: r.ileti };
   if (!r.degisti) return { calismaSurumu: surum, oncekiSurum: surum, ...ileti };
   const y = await planlamaYaz(db, kullanici, { anahtar: PLANLAMA_ANAHTARI, bicim: 'json', deger: r.deger, beklenenSurum: surum });
