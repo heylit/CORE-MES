@@ -7,7 +7,7 @@ import { kullaniciYukle } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { acilSiparisOnaylandi, menuSayaclari, plan as planServisi } from './servis.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
-import { KISI_YETKINLIGI_YOK } from './kurallar.ts';
+import { KISI_BASKA_ISTASYONDA, KISI_YETKINLIGI_YOK } from './kurallar.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
 // 3616: istasyon ve makine ataması yetkinlik ister; bu test atamanın kuralını değil okuduğu sonucu sınar, atamayı doğrudan yazar.
@@ -85,6 +85,19 @@ describe('plan (gerçek PostgreSQL): denemeler, sayaçlar ve sorgu sayısı', ()
       await tamam(c.yonetici, 'POST', `/kisi-yetkinlikleri/${operatorId}/belirle`, { istasyonIdleri: [] });
       await tamam(c.yonetici, 'POST', `/makineler/${mak.id}/durum`, { durum: 'calisir', aciklama: null });
     }
+    // 3612: kişi adımın istasyonunda atalıysa uyarı yok; en büyük yüzdeli ataması başka istasyondaysa plan uyarır (servis kablolaması: satır
+    // silinirse bu test kırmızıya döner). Atama yetkinlikten ayrıdır: yetkinlik burada boş.
+    const baskaIstasyonda = (pp: PlanCevabi) => yer(pp, k1!).uyarilar.includes(KISI_BASKA_ISTASYONDA);
+    assert.equal(baskaIstasyonda(await planOku(p.taslak!.id)), false, 'kişi adımın istasyonunda atalı');
+    await ortam!.sahip.sorgu('UPDATE istasyon_kisi SET yuzde = 40 WHERE istasyon_id = $1 AND kisi_id = $2', [istasyonA, operatorId]);
+    await atamaYaz(ortam!.sahip, 'istasyon', istasyonB, operatorId, '60.00');
+    try {
+      assert.equal(baskaIstasyonda(await planOku(p.taslak!.id)), true, 'en büyük yüzdeli atama başka istasyonda');
+    } finally {
+      await ortam!.sahip.sorgu('DELETE FROM istasyon_kisi WHERE istasyon_id = $1 AND kisi_id = $2', [istasyonB, operatorId]);
+      await ortam!.sahip.sorgu('UPDATE istasyon_kisi SET yuzde = 100 WHERE istasyon_id = $1 AND kisi_id = $2', [istasyonA, operatorId]);
+    }
+    assert.equal(baskaIstasyonda(await planOku(p.taslak!.id)), false, 'atama geri alınınca uyarı kalkar');
   });
 
   test('A7 ikinci menü sayaçları plan modülünde: açık revizyon, geciken emir, açık senaryo, düşük stok; emirler uydurulmaz', async () => {
