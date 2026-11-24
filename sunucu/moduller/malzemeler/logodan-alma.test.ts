@@ -150,18 +150,20 @@ describe('Logo\'dan gelen kartlar: liste, alma, bağlama, Logo\'dakini alma (211
     assert.equal(ikinci.statusCode, 409, 'aynı Logo kartı iki kez alınmaz');
   });
 
-  test('LMA-5 uymayan kod: önek istenir; önekle yeni TMI kodu ve eşleme yazılır; türe uymayan önek ve listede olmayan birim reddedilir', async () => {
+  test('LMA-5 uymayan kod: önek isteğe bağlı; önekle yeni TMI kodu ve eşleme yazılır; türe uymayan önek ve listede olmayan birim reddedilir', async () => {
     ayna.push(kart(102, '150.01.0003', { ad: null }));
     assert.equal((await liste('?ara=150.01.0003')).kartlar[0]?.koduUyar, false);
-    const onekYok = await istek('POST', '/malzeme-logo-kartlari/102/al', { tur: 'sarf', birim: 'kg', onek: null });
-    assert.equal(onekYok.statusCode, 400, onekYok.body);
-    assert.equal((onekYok.json() as { alan?: string }).alan, 'onek');
     assert.equal((await istek('POST', '/malzeme-logo-kartlari/102/al', { tur: 'sarf', birim: 'kg', onek: 'HM-GEN-' })).statusCode, 400, 'türe uymayan önek');
     assert.equal((await istek('POST', '/malzeme-logo-kartlari/102/al', { tur: 'sarf', birim: 'yok-birim', onek: 'SF-GEN-' })).statusCode, 400, 'birim listede yok');
     const c = await istek('POST', '/malzeme-logo-kartlari/102/al', { tur: 'sarf', birim: 'kg', onek: 'SF-GEN-' });
     assert.equal(c.statusCode, 200, c.body);
     assert.deepEqual(c.json(), { id: 'logo-102', stok_kodu: 'SF-GEN-00001', eslendi: true });
     assert.deepEqual(yazilanEslemeler.at(-1), { stokKodu: 'SF-GEN-00001', logoKodu: '150.01.0003', logoKayitNo: 102 });
+    // 3631: önek verilmezse türün genel grubu kullanılır; ekran taslakta önek sormaz.
+    ayna.push(kart(112, '150.01.0004', { ad: null }));
+    const varsayilan = await istek('POST', '/malzeme-logo-kartlari/112/al', { tur: 'sarf', birim: 'kg', onek: null });
+    assert.equal(varsayilan.statusCode, 200, varsayilan.body);
+    assert.equal((varsayilan.json() as { stok_kodu: string }).stok_kodu, 'SF-GEN-00002');
     // Adı olmayan Logo kartı koduyla adlanır; liste eşleme üzerinden bağlı gösterir.
     assert.equal((await vt().tek<{ ad: string }>("SELECT kayit -> 'com' ->> 'ad' AS ad FROM malzeme_katalog_karti WHERE kimlik = 'logo-102'"))?.ad, '150.01.0003');
     assert.equal((await liste('?ara=150.01.0003')).kartlar[0]?.durum, 'bagli');

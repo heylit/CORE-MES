@@ -32,7 +32,7 @@ import {
   katalogTalepDenetle, katalogTalepUygulamaDenetle, katalogKaydiAlanlari, ayarBirimleri, ayarKaliteYogunluklari, ayarKategorileri, kartBilesenKimlikleri, kartOperasyonlari, kartRotaIcerigiDegistiMi, ROTALI_KART_ILETISI, hammaddeOlcuHatasi, hammaddeTanimHatasi, kartZorunluAlanEksigi, kartYerlilikHatasi, katalogSunucuAnahtari, kartTedarikciFirmaId, katalogAciklamalari, kartBirimDonusumu, kartBirimDonusumleri, kartBirimi, kartTedarikciKimlikleri, tedarikciDegistiMi, kartAletNo, kartAletNolari, kartAletNoYaz, eskiKalibrasyonAlanlariniKoru, denetlenecekKategoriler, MUKERRER_GEREKCE_ILETISI, mukerrerGerekcesiKisaMi, logoAciklamasiDegistiMi, logoAdiDegistiMi, logoBirimiDegistiMi, logoGuncellemeSonucuDurumu, logoKarsiligiHatasi, logoBirimSetiGecersizHatasi, logoDurumSirasi, logoEksikleri, logoHataMetni, ornekKartKimligi,
 } from './kurallar.ts';
 import type { BirimDonusumu, KimlikliKartOperasyonu, LogoGuncellemeSonucu, OrnekMalzemeAnahtari } from './kurallar.ts';
-import { kalkmaSonradirMi, kartOperasyonKimlikleri, OPERASYON_AYARI_ILETISI } from './kurallar.ts';
+import { katalogGenelOneki, kalkmaSonradirMi, kartOperasyonKimlikleri, OPERASYON_AYARI_ILETISI } from './kurallar.ts';
 import { demirbasTeknikYazilabilirMi, demirbasTeknikYazimi, tekrarlananOzellik } from './kurallar.ts';
 import { katalogGeriCekildiMi, katalogKartAdi, kategoriAgaciKur, olcuListesi, olcuMetni } from './kurallar.ts';
 import type { OlcuDegeri } from './kurallar.ts';
@@ -1279,8 +1279,9 @@ async function logodanKartAlIc(
       kod = await yeniStokKodu(db, firmaOneki ? null : k.kod, g.tur);
     } else {
       if (secenek.yalnizKendiKodu) throw gecersiz('Logo kodu seçilen türün koduna uymuyor; tek tek alın.');
-      if (!firmaOneki && !g.onek) throw dogrulama('Logo kodu TMI kod biçimine ya da seçilen türe uymuyor; yeni kodun önekini seçin (ör. HM-GEN-).', 'onek');
-      kod = await yeniStokKodu(db, firmaOneki ? null : `${g.onek!.toUpperCase()}1`, g.tur);
+      const onek = g.onek ?? katalogGenelOneki(g.tur);
+      if (!firmaOneki && !onek) throw dogrulama('Logo kodu TMI kod biçimine ya da seçilen türe uymuyor; yeni kodun önekini girin (ör. HM-GEN-).', 'onek');
+      kod = await yeniStokKodu(db, firmaOneki ? null : `${onek!.toUpperCase()}1`, g.tur);
     }
   }
   if (kodla.has(kod.stokKodu)) throw cakisma(`TMI'de ${kod.stokKodu} kodlu kart var.`);
