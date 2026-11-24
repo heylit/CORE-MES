@@ -1017,7 +1017,9 @@ async function aktarimHesapla(db: Db, tur: AdTuru): Promise<{ listeVar: boolean;
   if (((await s.listeOkumasi(db, tur))?.sonBasarili ?? null) === null) return { listeVar: false, satirlar: [] };
   // Listeden çıkmış satır aktarılmaz; pasif olan CORE'a pasif eklenir.
   const liste = (await s.listeSatirlari(db, tur)).filter((l) => l.var && l.ad !== null)
-    .map((l) => ({ anahtar: l.anahtar, smartesId: l.smartesId, ad: l.ad ?? '', grup: l.grup, pasif: l.pasif }));
+    .map((l) => ({ anahtar: l.anahtar, smartesId: l.smartesId, ad: l.ad ?? '', grup: l.grup, pasif: l.pasif }))
+    // Aynı adlı satırlardan hangisinin eklenip hangisinin eşleneceği veritabanının harf sıralamasına bağlı kalmasın: kimliğe göre.
+    .sort((a, b) => (a.smartesId ?? Number.MAX_SAFE_INTEGER) - (b.smartesId ?? Number.MAX_SAFE_INTEGER) || a.anahtar.localeCompare(b.anahtar));
   const eslemeler = new Map((await s.adEslemeleri(db, tur)).map((e) => [e.anahtar, { ad: e.ad, nedenId: e.nedenId }]));
   const core = (await nedenler(db, tur)).map((n) => ({ id: n.id, kod: n.kod, ad: n.ad }));
   return { listeVar: true, satirlar: aktarimPlani(liste, eslemeler, core) };
