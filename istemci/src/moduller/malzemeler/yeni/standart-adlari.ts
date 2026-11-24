@@ -229,18 +229,21 @@ const kesinKarsilik = (v: string | undefined): string => {
   return t && !t.startsWith('≈') ? t : '';
 };
 type KaliteAileleri = Readonly<Record<string, { readonly classes: Readonly<Record<string, { readonly grades: readonly { readonly ad: string; readonly eq?: Readonly<Record<string, string>> }[] }>> }>>;
-const COKLU_KARSILIK = new WeakMap<object, ReadonlySet<string>>();
+// Önbellek kalite sayısına bağlıdır: ayardan sonradan kalite eklenince (liste yerinde büyür) küme yeniden hesaplanır.
+const COKLU_KARSILIK = new WeakMap<object, { readonly n: number; readonly kume: ReadonlySet<string> }>();
 // Birden çok kalitede geçen kesin ASTM karşılıkları (ayardan eklenen kaliteler dahil).
 export function ortakAstmKarsiliklari(aileler: KaliteAileleri): ReadonlySet<string> {
+  let n = 0;
+  for (const f of Object.values(aileler)) for (const c of Object.values(f.classes)) n += c.grades.length;
   const onceki = COKLU_KARSILIK.get(aileler);
-  if (onceki) return onceki;
+  if (onceki && onceki.n === n) return onceki.kume;
   const sayim = new Map<string, number>();
   for (const f of Object.values(aileler)) for (const c of Object.values(f.classes)) for (const g of c.grades) {
     const k = kesinKarsilik(g.eq?.['ASTM']).toLocaleLowerCase('tr');
     if (k) sayim.set(k, (sayim.get(k) ?? 0) + 1);
   }
   const ortak = new Set([...sayim].filter(([, n]) => n > 1).map(([k]) => k));
-  COKLU_KARSILIK.set(aileler, ortak);
+  COKLU_KARSILIK.set(aileler, { n, kume: ortak });
   return ortak;
 }
 export function kaliteAdi(g: { readonly ad: string; readonly eq?: Readonly<Record<string, string>> }, tercih: Standart | null, ortak?: ReadonlySet<string>): string {

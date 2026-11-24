@@ -245,4 +245,12 @@ describe('3633 kalite ve norm karşılıkları seçili standarda göre sıralan�
     }
     expect(kesin + yakin).toBeGreaterThan(0);
   });
+  test('ortak karşılık kümesi sonradan eklenen kaliteyle yenilenir', () => {
+    const a = { f: { classes: { c: { grades: [{ ad: 'A1', eq: { ASTM: 'A36' } }] as { ad: string; eq?: Record<string, string> }[] } } } };
+    expect(ortakAstmKarsiliklari(a).has('a36')).toBe(false);
+    a.f.classes.c.grades.push({ ad: 'A2', eq: { ASTM: 'A36' } });
+    const k = ortakAstmKarsiliklari(a);
+    expect(k.has('a36')).toBe(true);
+    expect(kaliteAdi(a.f.classes.c.grades[0]!, 'astm', k)).toBe('A1');
+  });
 });
