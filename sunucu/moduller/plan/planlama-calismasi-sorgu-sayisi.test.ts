@@ -85,4 +85,13 @@ describe('planlama çalışması sorgu sayısı (gerçek PostgreSQL)', () => {
     assert.equal(await sonu(yonetici), okunan);
     assert.equal(await sonu(makinesiz), undefined);
   });
+
+  // 3669 O1: bedeli göremeyen okuyucu (emri ya da sipariş fiyatını okuyamayan) kaynak okumasında bayrak taşır; ikisinden yalnız biri eksikken de.
+  test('kaynak okuması sipariş bedelini göremeyen okuyucuda siparisBedeliGizli taşır, görende taşımaz', async () => {
+    const bayrak = async (k: Kullanici) => ((await vt().tx((db) => kaynakOku(db, k))).ek as { siparisBedeliGizli: boolean }).siparisBedeliGizli;
+    const eksik = (islem: readonly string[]): Kullanici => ({ ...yonetici, islemler: ISLEMLER.filter((i) => !islem.includes(i)) });
+    assert.equal(await bayrak(yonetici), false);
+    assert.equal(await bayrak(eksik(['siparisler.fiyat-oku'])), true);
+    assert.equal(await bayrak(eksik(KAYNAK_OKUMA.emir as readonly string[])), true);
+  });
 });
