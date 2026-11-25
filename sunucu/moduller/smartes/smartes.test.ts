@@ -426,7 +426,8 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     if (!ayniMerkez) await ata('istasyon', eslemeli, `TI${sayac}`);
     await ata('makine', m1, `CNC${sayac}`);
     if (ikinciEslemeli) await ata('istasyon', diger, `TJ${sayac}`);
-    const tipKodu = `ST${(sayac += 1)}`;
+    // Tip kodu harfle biter: numara ile biten kod önek eşlemesi olmadan bozuk birleşik kod sayılır (3705).
+    const tipKodu = `ST${[...(sayac += 1).toString(26)].map((c) => String.fromCharCode(65 + Number.parseInt(c, 26))).join('')}`;
     const tip = (await sahip.tek<{ id: number }>('INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ($1, $2, $3) RETURNING id', [tipKodu, 'Frezeleme', 'TAL']))!.id;
     opKodlari.push(`${tipKodu}10`, `${tipKodu}20`);
     await sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('SMS-', 0) ON CONFLICT (onek) DO NOTHING");
@@ -448,6 +449,107 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     return { uretimEmriId, ilk, ikinci, istasyonlar: [eslemeli, diger], tipKodu };
   }
   const iptalEt = (id: number) => vt().tx(async (db) => emirIptalEt(db, (await kullaniciYukle(db, yoneticiId))!, id));
+
+  // 3705: durmuş adımı SmartES reddettirerek kurar; "eski kural" kaydı denenen özetin OperationCode'unu yalın adım numarasına çevirir.
+  const adimlari = async (): Promise<{ isEmriId: number; opNo: number; operasyonTipi: string | null; operasyonKodu: string | null; gidecekKod: string | null; gidecekNedenKodu: string | null; gidecekNeden: string | null; eskiKural: boolean; durum: string | null; neden: string | null }[]> =>
+    ((await istek('GET', '/smartes/giden/emirler')).json() as { emirler: { adimlar: never[] }[] }).emirler.flatMap((e) => e.adimlar);
+  // Sonraki testin turu bu emirlerle karışmasın: emir iptal edilir, durmuş izleri silinir.
+  const temizle = async (uretimEmriId: number): Promise<void> => {
+    await vt().tx(async (db) => emirIptalEt(db, (await kullaniciYukle(db, yoneticiId))!, uretimEmriId));
+    await ortam!.sahip.sorgu('DELETE FROM smartes_giden WHERE is_emri_id IN (SELECT id FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1)', [uretimEmriId]);
+  };
+  const eskiKodluDurdur = async (isEmriId: number): Promise<void> => {
+    sahte.isleyiciler.set('WorkOrdersCreateUpdate', () => ({ tur: 'skaler', etkilenen: 0, hata: 'operasyon kodu 20 tanımlı değil' }));
+    assert.equal((await gonderimTuru(vt(), turOrtami())).tur, 'islendi');
+    sahte.isleyiciler.delete('WorkOrdersCreateUpdate');
+    await ortam!.sahip.sorgu(`UPDATE smartes_giden SET denenen_ozet = '[["OperationCode","20"]]' WHERE is_emri_id = $1 AND durum = 'hata'`, [isEmriId]);
+  };
+
+  test('3705: eski kodla (20) durmuş adım yeniden gönderilince bugünkü kodla (önek+adım no) gider; ekran eski ve gidecek kodu ayrı gösterir', async () => {
+    const saat = simdi;
+    const { uretimEmriId, ilk, tipKodu } = await emirKur();
+    await eskiKodluDurdur(ilk);
+    const once = (await adimlari()).find((a) => a.isEmriId === ilk)!;
+    assert.deepEqual([once.durum, once.operasyonKodu, once.gidecekKod, once.eskiKural, once.operasyonTipi], ['durdu', '20', `${tipKodu}10`, true, tipKodu]);
+    sahte.cagrilar.length = 0;
+    assert.deepEqual((await yenidenGonder([ilk])).json(), { sirada: 1, durmayan: 0, listeDisi: 0 });
+    assert.deepEqual(await gonderimTuru(vt(), turOrtami()), { tur: 'islendi', gonderilen: 1, kapanan: 0, hatali: 0 });
+    assert.equal(sahte.cagrilar.find((c) => c.metot === 'WorkOrdersCreateUpdate')!.parametreler['OperationCode'], `${tipKodu}10`);
+    const sonra = (await adimlari()).find((a) => a.isEmriId === ilk)!;
+    assert.deepEqual([sonra.durum, sonra.operasyonKodu, sonra.eskiKural], ['gonderildi', `${tipKodu}10`, false]);
+    simdi = saat;
+    await temizle(uretimEmriId);
+  });
+
+  test('3705: rotasız emrin durmuş adımı yeniden gönderilir, tipi ekranda dolu görünür; rotasız emrin gönderilmemiş adımı yeni gönderim kapsamına girmez', async () => {
+    const saat = simdi;
+    const { uretimEmriId, ilk, ikinci, tipKodu } = await emirKur(true);
+    await eskiKodluDurdur(ilk);
+    await ortam!.sahip.sorgu('UPDATE uretim_emri SET kaynak_rota_revizyonu_id = NULL WHERE id = $1', [uretimEmriId]);
+    // Rotasız emirde adımın tipi kendi kaydından okunur; durmuş adım "Yeniden gönder"den sonra gider, ikinci adım (kaydı yok) gitmez.
+    const durmus = (await adimlari()).find((a) => a.isEmriId === ilk)!;
+    assert.deepEqual([durmus.operasyonTipi, durmus.gidecekKod], [tipKodu, `${tipKodu}10`]);
+    sahte.cagrilar.length = 0;
+    assert.deepEqual((await yenidenGonder([ilk])).json(), { sirada: 1, durmayan: 0, listeDisi: 0 });
+    assert.deepEqual(await gonderimTuru(vt(), turOrtami()), { tur: 'islendi', gonderilen: 1, kapanan: 0, hatali: 0 });
+    const gidenler = sahte.cagrilar.filter((c) => c.metot === 'WorkOrdersCreateUpdate').map((c) => c.parametreler['ErpID']);
+    assert.deepEqual(gidenler, [String(ilk)]);
+    assert.equal(gidenler.includes(String(ikinci)), false);
+    assert.equal((await adimlari()).find((a) => a.isEmriId === ikinci)!.operasyonTipi, tipKodu);
+    // İkinci tur: SmartES'in kabul ettiği rotasız adım listede kalır; kapatılmaz, IsPassive gönderilmez, yeniden gönderilmez (Risk S1).
+    simdi += 3 * 3_600_000;
+    sahte.cagrilar.length = 0;
+    assert.deepEqual(await gonderimTuru(vt(), turOrtami()), { tur: 'islendi', gonderilen: 0, kapanan: 0, hatali: 0 });
+    assert.equal(sahte.cagrilar.some((c) => c.metot === 'WorkOrdersCreateUpdate'), false);
+    assert.equal((await adimlari()).find((a) => a.isEmriId === ilk)!.durum, 'gonderildi');
+    assert.equal((await adimlari()).find((a) => a.isEmriId === ilk)!.neden, null);
+    simdi = saat;
+    await temizle(uretimEmriId);
+  });
+
+  test('3705: bitmiş adımın durmuş kaydı yeniden gönderilemez (409), kayıt yerinde kalır; numaralı tip kodunun birleşik kodu SmartES listesindeyse gönderilir', async () => {
+    const saat = simdi;
+    const { uretimEmriId, ilk, tipKodu } = await emirKur();
+    await eskiKodluDurdur(ilk);
+    await ortam!.sahip.sorgu("UPDATE uretim_emirleri_is_emri SET durum = 'tamam', baslama = now(), bitis = now(), saglam_adet = 20 WHERE id = $1", [ilk]);
+    const r = await yenidenGonder([ilk]);
+    assert.equal(r.statusCode, 409, r.body);
+    assert.equal((await vt().tek<{ sonraki: Date | null }>('SELECT sonraki_deneme AS sonraki FROM smartes_giden WHERE is_emri_id = $1', [ilk]))?.sonraki, null);
+    // Toplu istekte liste dışı adım atlanır ve ayrı sayılır; geçerli adım sıraya girer (tüm istek 409 olmaz).
+    const ikinci = (await ortam!.sahip.tek<{ id: number }>('SELECT id FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 AND id <> $2', [uretimEmriId, ilk]))!.id;
+    await ortam!.sahip.sorgu("INSERT INTO smartes_giden (is_emri_id, smartes_is_emri_no, durum, deneme_sayisi, ardisik_hata, son_deneme, son_hata, sonraki_deneme, denenen_ozet) VALUES ($1, 'ORN-2', 'hata', 1, 1, now(), 'x', NULL, '[]')", [ikinci]);
+    const toplu = await yenidenGonder([ilk, ikinci]);
+    assert.equal(toplu.statusCode, 200, toplu.body);
+    assert.deepEqual(toplu.json(), { sirada: 1, durmayan: 0, listeDisi: 1 });
+    await ortam!.sahip.sorgu('DELETE FROM smartes_giden WHERE is_emri_id = $1', [ikinci]);
+    await ortam!.sahip.sorgu("UPDATE uretim_emirleri_is_emri SET durum = 'bekliyor', baslama = NULL, bitis = NULL, saglam_adet = NULL WHERE id = $1", [ilk]);
+    assert.deepEqual((await yenidenGonder([ilk])).json(), { sirada: 1, durmayan: 0, listeDisi: 0 });
+    // Numaralı tip kodu (önek yok): birleşik kod listedeyse gider.
+    const yeniKod = `${tipKodu}3`;
+    await ortam!.sahip.sorgu('UPDATE istasyonlar_operasyon_tipi SET kod = $1 WHERE kod = $2', [yeniKod, tipKodu]);
+    opKodlari = [...opKodlari, `${yeniKod}10`];
+    simdi += 3 * 3_600_000;
+    sahte.cagrilar.length = 0;
+    assert.deepEqual(await gonderimTuru(vt(), turOrtami()), { tur: 'islendi', gonderilen: 1, kapanan: 0, hatali: 0 });
+    assert.equal(sahte.cagrilar.find((c) => c.metot === 'WorkOrdersCreateUpdate')!.parametreler['OperationCode'], `${yeniKod}10`);
+    simdi = saat;
+    await temizle(uretimEmriId);
+  });
+
+  test('3705: önek eşlemesi olmayan, kodu numara içeren tipte bozuk birleşik kod kurulmaz; adım nedenle bekler, SmartES\'e gitmez', async () => {
+    const saat = simdi;
+    const { uretimEmriId, ilk, tipKodu } = await emirKur();
+    const yeniKod = `${tipKodu}30`;
+    await ortam!.sahip.sorgu('UPDATE istasyonlar_operasyon_tipi SET kod = $1 WHERE kod = $2', [yeniKod, tipKodu]);
+    sahte.cagrilar.length = 0;
+    assert.deepEqual(await gonderimTuru(vt(), turOrtami()), { tur: 'islendi', gonderilen: 0, kapanan: 0, hatali: 1 });
+    assert.equal(sahte.cagrilar.some((c) => c.metot === 'WorkOrdersCreateUpdate'), false, 'SmartES\'e iş emri gitmez');
+    const a = (await adimlari()).find((x) => x.isEmriId === ilk)!;
+    const neden = `Operasyon tipi ${yeniKod}’nin SmartES öneki yok; Eşlemeler > Operasyon tipi’nden önek verin`;
+    assert.deepEqual([a.durum, a.neden, a.gidecekKod, a.gidecekNedenKodu, a.gidecekNeden, a.operasyonKodu], ['yeniden-denenecek', neden, null, 'onek-yok', neden, null]);
+    simdi = saat;
+    await temizle(uretimEmriId);
+  });
 
   test('SME-14, SME-15: eşlemeli istasyondaki iş emri SmartES\'e gider, değişmeyen yeniden gitmez, iptal edilen pasif olur', async () => {
     const { uretimEmriId, ilk, ikinci, tipKodu } = await emirKur();
@@ -495,7 +597,7 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     assert.equal(sahte.cagrilar.length, 0);
     const yg = await yenidenGonder([ilk]);
     assert.equal(yg.statusCode, 200, yg.body);
-    assert.deepEqual(yg.json(), { sirada: 1, durmayan: 0 });
+    assert.deepEqual(yg.json(), { sirada: 1, durmayan: 0, listeDisi: 0 });
     assert.deepEqual(await gonderimTuru(vt(), turOrtami()), { tur: 'islendi', gonderilen: 1, kapanan: 0, hatali: 0 });
     const yeniden = sahte.cagrilar.find((c) => c.metot === 'WorkOrdersCreateUpdate')!.parametreler;
     assert.deepEqual([yeniden['Quantity'], yeniden['QuantityUpdate']], ['24', 'true']);
@@ -517,7 +619,7 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     sahte.cagrilar.length = 0;
     assert.deepEqual(await gonderimTuru(vt(), turOrtami()), { tur: 'islendi', gonderilen: 0, kapanan: 0, hatali: 0 }, 'duran kapanış yinelenmez');
     assert.equal(sahte.cagrilar.length, 0);
-    assert.deepEqual((await yenidenGonder([ilk])).json(), { sirada: 1, durmayan: 0 });
+    assert.deepEqual((await yenidenGonder([ilk])).json(), { sirada: 1, durmayan: 0, listeDisi: 0 });
     const k = await gonderimTuru(vt(), turOrtami());
     assert.deepEqual(k, { tur: 'islendi', gonderilen: 0, kapanan: 1, hatali: 0 });
     const kapanis = sahte.cagrilar.find((c) => c.metot === 'WorkOrdersCreateUpdate')!.parametreler;
@@ -669,7 +771,7 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
 
     // İkisi yeniden gönderilir, bağlantı kopar: ilk iş emrinde tur durur, ikinciye istek gitmez; ağ hatası bekleme yazar (durmaz).
     const yg = await yenidenGonder([ilk, ikinci]);
-    assert.deepEqual(yg.json(), { sirada: 2, durmayan: 0 });
+    assert.deepEqual(yg.json(), { sirada: 2, durmayan: 0, listeDisi: 0 });
     sahte.isleyiciler.set('WorkOrdersCreateUpdate', () => ({ tur: 'kopar' }));
     const r = await gonderimTuru(vt(), turOrtami());
     assert.deepEqual(r, { tur: 'islendi', gonderilen: 0, kapanan: 0, hatali: 1 });
@@ -698,7 +800,7 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     // Yetki: yeniden gönderme Sistem Ayarları yazma yetkisi ister; duran olmayan iş emri dokunulmaz sayılır.
     assert.equal((await yenidenGonder([ilk], okuyucu)).statusCode, 403);
     assert.equal((await durum())?.sonraki_deneme, null);
-    assert.deepEqual((await yenidenGonder([ilk, 999_999])).json(), { sirada: 1, durmayan: 1 });
+    assert.deepEqual((await yenidenGonder([ilk, 999_999])).json(), { sirada: 1, durmayan: 1, listeDisi: 0 });
     assert.equal((await durum())?.ardisik_hata, 0, 'yeniden gönderme Fault sayacını sıfırlar');
 
     // HTTP 5xx kesin değildir; 4xx hemen durur.
@@ -707,7 +809,7 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     assert.notEqual((await durum())?.sonraki_deneme, null, '5xx yinelenir');
     // Yinelenecek satır durmaz: yeniden gönderme dokunmaz.
     const yinelenecek = await durum();
-    assert.deepEqual((await yenidenGonder([ilk])).json(), { sirada: 0, durmayan: 1 });
+    assert.deepEqual((await yenidenGonder([ilk])).json(), { sirada: 0, durmayan: 1, listeDisi: 0 });
     assert.deepEqual(await durum(), yinelenecek);
     simdi += 2 * 3_600_000;
     sahte.isleyiciler.set('WorkOrdersCreateUpdate', () => ({ tur: 'http', durum: 400, govde: 'bozuk istek' }));
@@ -723,7 +825,7 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     assert.deepEqual(await gonderimTuru(vt(), turOrtami()), { tur: 'islendi', gonderilen: 1, kapanan: 0, hatali: 0 });
     // Gönderilmiş satır durmaz: yeniden gönderme dokunmaz.
     const gonderilmis = await durum();
-    assert.deepEqual((await yenidenGonder([ilk])).json(), { sirada: 0, durmayan: 1 });
+    assert.deepEqual((await yenidenGonder([ilk])).json(), { sirada: 0, durmayan: 1, listeDisi: 0 });
     assert.deepEqual(await durum(), gonderilmis);
     await iptalEt(uretimEmriId);
   });

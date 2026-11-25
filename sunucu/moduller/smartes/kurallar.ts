@@ -2,7 +2,7 @@
 // Kural kodları SME-n; testleri KURAL-TEST.md'de.
 import { createHash } from 'node:crypto';
 import { SMARTES_LISTE_TURLERI, SMARTES_OKUMA_KAYNAKLARI } from '#paylasilan/sozlesme/smartes.ts';
-import type { SmartesEslemeTuru, SmartesMakineDurumu } from '#paylasilan/sozlesme/smartes.ts';
+import type { SMARTES_KOD_NEDENLERI, SmartesEslemeTuru, SmartesMakineDurumu } from '#paylasilan/sozlesme/smartes.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { mantiksal, metinAlani, tamSayi, tarihAlani } from './soap.ts';
 import type { ParametreDegeri, Parametreler, TabloSatiri } from './soap.ts';
@@ -303,6 +303,25 @@ export function smartesOperasyonKodu(opNo: number, tip: OperasyonTipiKodu | null
   if (tip == null) return null;
   if (tip.smartesOnek === null && listedekiler?.has(tip.kod.toLowerCase())) return tip.kod;
   return `${tip.smartesOnek ?? tip.kod}${opNo}`;
+}
+
+// Bugünkü gönderim kuralı, nedenli: kod kurulamıyorsa nedenKodu ekranın bağlantısını seçer. Tip kodu numara içeriyor ve önek eşlemesi yoksa
+// (eski kayıtlı tip, TRN20) ikinci numara eklenmez: "TRN2020" gibi bozuk kod gönderilmez, adım önek verilene dek bekler. Liste verilmişse
+// (null: okunmadı) kurulan kod listede aranır; numaralı tip kodunun birleşik hali listedeyse o gider.
+export type KodNedeni = Exclude<(typeof SMARTES_KOD_NEDENLERI)[number], 'liste-disi'>;
+export type OperasyonKoduSonucu = { kod: string; nedenKodu: null; neden: null } | { kod: null; nedenKodu: KodNedeni; neden: string };
+export function operasyonKoduKur(opNo: number, tip: OperasyonTipiKodu | null | undefined, listedekiler: ReadonlySet<string> | null): OperasyonKoduSonucu {
+  if (tip == null) return { kod: null, nedenKodu: 'tip-yok', neden: 'Adımın operasyon tipi yok' };
+  const tipKoduListede = tip.smartesOnek === null && listedekiler?.has(tip.kod.toLowerCase()) === true;
+  // Birleşik kod (OP2 + 20 = OP220) SmartES listesinde varsa bozuk sayılmaz; liste okunmadıysa (null) doğrulanamaz, önek istenir.
+  const birlesikListede = listedekiler?.has(`${tip.kod}${opNo}`.toLowerCase()) === true;
+  if (tip.smartesOnek === null && !tipKoduListede && !birlesikListede && /\d$/.test(tip.kod)) {
+    return { kod: null, nedenKodu: 'onek-yok', neden: `Operasyon tipi ${tip.kod}’nin SmartES öneki yok; Eşlemeler > Operasyon tipi’nden önek verin` };
+  }
+  const kod = smartesOperasyonKodu(opNo, tip, listedekiler);
+  if (kod === null) return { kod: null, nedenKodu: 'tip-yok', neden: 'Adımın operasyon tipi yok' };
+  if (listedekiler !== null && !listedekiler.has(kod.toLowerCase())) return { kod: null, nedenKodu: 'smartes-kodu-yok', neden: `SmartES'te ${kod} operasyonu yok` };
+  return { kod, nedenKodu: null, neden: null };
 }
 
 // OperationList satırlarındaki kodlar (küçük harfle). Satır var ama hiçbirinde kod alanı yoksa null: alan adı yanlış varsayılmıştır, "yok" sayılıp iş emri bekletilmez ya da gönderilmez.

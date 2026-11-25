@@ -9,7 +9,7 @@ import {
   listeParametreleri, nedenOnerisi, cevrimOku, cevrimSaniyesi, gelenKalemleri, hamAlanlari, HESAP_METOTLARI, HESAP_TURLERI, hesapOkunmaliMi,
   hesapParametreleri, oeeOku, oeeYuzdeleri, tanimliAnahtari, tanimliSaniyeler, adetOnayFarklari, onayaGirerMi, FAULT_SINIRI, gonderimEylemi, kesinRetMi,
   adimRozeti, emirRozeti, rozetNedeni, ROZET_NEDENI_AZAMI,
-  smartesOperasyonKodu, operasyonListesiKodlari, operasyonOnekleri, parametreAdlariniUydur, aktarimPlani,
+  smartesOperasyonKodu, operasyonKoduKur, operasyonListesiKodlari, operasyonOnekleri, parametreAdlariniUydur, aktarimPlani,
 } from './kurallar.ts';
 import type { GidecekIsEmri } from './kurallar.ts';
 
@@ -500,6 +500,22 @@ describe('Operasyon kodu: önek + adım numarası (A) ve parametre adı uyarlama
     assert.equal(smartesOperasyonKodu(20, { kod: 'FRZ20', smartesOnek: null }, liste), 'FRZ20');
     assert.equal(smartesOperasyonKodu(20, { kod: 'FRZ30', smartesOnek: null }, liste), 'FRZ3020');
     assert.equal(smartesOperasyonKodu(20, { kod: 'FRZ20', smartesOnek: 'X' }, liste), 'X20');
+  });
+  test('3705: operasyonKoduKur nedenli kurar; numaralı tip kodu önek olmadan listede yoksa bozuk birleşik kod kurulmaz', () => {
+    assert.deepEqual(operasyonKoduKur(20, { kod: 'TRN', smartesOnek: null }, liste), { kod: 'TRN20', nedenKodu: null, neden: null });
+    assert.deepEqual(operasyonKoduKur(20, { kod: 'FRZ20', smartesOnek: null }, liste), { kod: 'FRZ20', nedenKodu: null, neden: null });
+    assert.deepEqual(operasyonKoduKur(20, null, liste), { kod: null, nedenKodu: 'tip-yok', neden: 'Adımın operasyon tipi yok' });
+    assert.equal(operasyonKoduKur(20, { kod: 'FRZ30', smartesOnek: null }, liste).nedenKodu, 'onek-yok');
+    // Birleşik kod listede varsa bozuk sayılmaz (OP2 + 20 = OP220); liste okunmadıysa ya da birleşik kod listede yoksa önek istenir.
+    const birlesik = new Set(['op220']);
+    assert.deepEqual(operasyonKoduKur(20, { kod: 'OP2', smartesOnek: null }, birlesik), { kod: 'OP220', nedenKodu: null, neden: null });
+    assert.equal(operasyonKoduKur(20, { kod: 'OP2', smartesOnek: null }, new Set(['op230'])).nedenKodu, 'onek-yok');
+    assert.equal(operasyonKoduKur(20, { kod: 'OP2', smartesOnek: null }, null).nedenKodu, 'onek-yok');
+    assert.equal(operasyonKoduKur(20, { kod: 'FRZ30', smartesOnek: 'QQ' }, liste).nedenKodu, 'smartes-kodu-yok');
+    assert.equal(operasyonKoduKur(20, { kod: 'FRZ30', smartesOnek: 'QQ' }, liste).neden, 'SmartES\'te QQ20 operasyonu yok');
+    assert.equal(operasyonKoduKur(20, { kod: 'XYZ', smartesOnek: null }, liste).nedenKodu, 'smartes-kodu-yok');
+    // Liste okunmadıysa (null) kod listede aranmaz.
+    assert.equal(operasyonKoduKur(20, { kod: 'XYZ', smartesOnek: null }, null).kod, 'XYZ20');
   });
   test('operasyon listesi kodları ve eşleme önerisi önekleri', () => {
     assert.deepEqual([...(operasyonListesiKodlari([{ CODE: 'TRN10' }, { CODE: 'FRZ120' }]) ?? [])], ['trn10', 'frz120']);
