@@ -571,21 +571,96 @@ export function Tahta(o: TahtaOzellikleri) {
     el.style.setProperty('--y', `${String(Math.round(asagi ? alt : ust))}px`);
     el.style.setProperty('--ok', `${String(Math.round(Math.max(pay, Math.min(en - pay, x - sol))))}px`);
   };
-  // 3663: seçili adım panosu çubuğun sağında durur (sığmazsa solunda) ve görünen alandan taşmaz.
-  const panoYerlestir = (el: HTMLElement, isId: string): void => {
-    const k = kap.current, ik = ic.current?.getBoundingClientRect(), cubuk = k?.querySelector<HTMLElement>(`[data-is="${tirnakIci(isId)}"]`);
-    if (!k || !ik || !cubuk) { el.hidden = true; return; }
-    el.hidden = false;
-    const b = cubuk.getBoundingClientRect(), pay = 8, en = el.offsetWidth, boy = el.offsetHeight;
-    const sol0 = k.scrollLeft + pay, sag0 = k.scrollLeft + k.clientWidth - pay;
-    let x = b.right - ik.left + pay;
-    if (x + en > sag0) x = b.left - ik.left - en - pay;
-    x = Math.max(sol0, Math.min(x, sag0 - en));
-    const eksen = k.querySelector<HTMLElement>('.tc-pyq-eksen')?.offsetHeight ?? 0;
-    const y = Math.max(k.scrollTop + eksen + pay, Math.min(b.top - ik.top, k.scrollTop + k.clientHeight - pay - boy));
-    el.style.setProperty('--x', `${String(Math.round(x))}px`);
-    el.style.setProperty('--y', `${String(Math.round(y))}px`);
+  // 3663: seçili adım panosu ekranda sabittir (gövdeye taşınır: tahtanın kaydırma alanı onu kırpmaz) ve sol tablonun üstüne binmez.
+  // Sıra: çubuğun sağı, solu (Gantt alanı içinde), altı, üstü; önceki yer hâlâ sığıyorsa korunur (kaydırırken sağ-üst arası zıplamaz).
+  // Gantt alanı dar kalırsa (768) pano yüzmez, 360'taki gibi alt sayfa olur ve tablo hiç örtülmez. Çubuk görünmüyorsa pano gizlenir.
+  // Görünen dikey aralık: ekran ile tahtayı saran tüm kaydırma kaplarının kesişimi (üst sayfa, sekme şeridini ve sarı üst çubuğu örtmesin).
+  const gorunenDikey = (k: HTMLElement): { ust: number; alt: number } => {
+    let ust = 0, alt = document.documentElement.clientHeight;
+    for (let a = k.parentElement; a && a !== document.body; a = a.parentElement) {
+      const oy = getComputedStyle(a).overflowY;
+      if (oy === 'auto' || oy === 'scroll' || oy === 'hidden') { const r = a.getBoundingClientRect(); ust = Math.max(ust, r.top); alt = Math.min(alt, r.bottom); }
+    }
+    return { ust, alt };
   };
+  const panoYerlestir = (el: HTMLElement, isId: string, sabit = false): void => {
+    const k = kap.current, cubuk = k?.querySelector<HTMLElement>(`[data-is="${tirnakIci(isId)}"]`);
+    if (!k || !cubuk) { el.hidden = true; return; }
+    el.hidden = false;
+    const kr = k.getBoundingClientRect(), pay = 8, enAz = 260, bas = k.querySelector<HTMLElement>('.tc-pyq-bas')?.offsetWidth ?? 0;
+    const ekranEn = document.documentElement.clientWidth, gd = gorunenDikey(k), ekranBoy = gd.alt;
+    const c = cubuk.getBoundingClientRect(), gl = Math.max(c.left, kr.left + bas, 0), gr = Math.min(c.right, kr.right, ekranEn), gt = Math.max(c.top, kr.top, gd.ust), gb = Math.min(c.bottom, kr.bottom, ekranBoy);
+    if (gr - gl < pay || gb - gt < pay) { el.hidden = true; return; }
+    const b = { left: gl, right: gr, top: gt, bottom: gb };
+    const sag = Math.min(kr.right, ekranEn) - pay, sol = Math.max(kr.left + bas, 0) + pay;
+    const ipucu = (): void => { el.toggleAttribute('data-kayar', el.scrollHeight > el.clientHeight + 1 && el.scrollTop + el.clientHeight < el.scrollHeight - 1); };
+    el.onscroll = ipucu;
+    const dar = sag - sol < (el.hasAttribute('data-alt') ? 340 : 300);
+    if (!dar) el.removeAttribute('data-alt');
+    if (dar) {
+      // Alt sayfa çubuğu örtmesin: çubuğun üstünde ya da altında en az 160 px yer olan yanda açılır (önceki yan yeterliyse korunur).
+      // Üstte açılırsa Gantt kartının üstünden başlar; sayfanın sarı üst çubuğunu ve sekmelerini örtmez.
+      const topY = Math.max(kr.top, gd.ust) + pay, roomUst = b.top - pay - topY, roomAlt = ekranBoy - 2 * pay - (b.bottom + 2 * pay), eski = el.getAttribute('data-alt'), tut = 160;
+      // İki yanda da az yer varsa sayfa, çubuk üst kısma gelecek kadar bir kez yumuşakça kayar (alt sayfa altta açılır).
+      if (Math.max(roomUst, roomAlt) < 200 && el.dataset['kay'] !== isId) { el.dataset['kay'] = isId; window.scrollBy({ top: b.top - ekranBoy * 0.3, behavior: 'smooth' }); }
+      const yan = eski === 'ust' && roomUst >= tut ? 'ust' : eski === 'alt' && roomAlt >= tut ? 'alt' : roomUst >= roomAlt ? 'ust' : 'alt';
+      el.setAttribute('data-alt', yan);
+      el.style.maxWidth = '';
+      el.style.maxHeight = `${String(Math.max(0, Math.min(yan === 'ust' ? roomUst : roomAlt, ekranBoy * 0.5)))}px`;
+      el.style.setProperty('--y', `${String(Math.round(topY))}px`);
+      ipucu(); return;
+    }
+    const eksen = k.querySelector<HTMLElement>('.tc-pyq-eksen')?.offsetHeight ?? 0;
+    const ust = Math.max(kr.top, gd.ust) + eksen + pay, alt = ekranBoy - pay;
+    el.style.maxWidth = `${String(Math.max(enAz, sag - sol))}px`;
+    el.style.maxHeight = `${String(Math.max(0, alt - gd.ust - pay))}px`;
+    const en = el.offsetWidth, boy = el.offsetHeight;
+    const yanY = Math.max(gd.ust + pay, Math.min(Math.max(ust, (b.top + b.bottom) / 2 - boy / 2), alt - boy));
+    const yerler: Record<string, (bos: number) => { x: number; y: number } | null> = {
+      sag: (m) => (b.right + pay + en + m <= sag ? { x: b.right + pay, y: yanY } : null),
+      sol: (m) => (b.left - pay - en - m >= sol ? { x: b.left - pay - en, y: yanY } : null),
+      alt: (m) => (b.bottom + pay + boy + m <= alt ? { x: Math.max(sol, Math.min(b.left, sag - en)), y: b.bottom + pay } : null),
+      ust: (m) => (b.top - pay - boy - m >= ust ? { x: Math.max(sol, Math.min(b.left, sag - en)), y: b.top - pay - boy } : null),
+    };
+    // Eşik payı: önceki yer payla (24 px) korunur, yeni yer ancak rahat sığıyorsa seçilir.
+    const onceki = el.getAttribute('data-yon') ?? '';
+    let yon = '', yer = onceki ? yerler[onceki]?.(0) ?? null : null;
+    // Kaydırma sürerken yan değişmez: önceki yan sığmasa da aynı yanda (ekrana sıkıştırılarak) kalır; kaydırma durunca yeniden değerlendirilir.
+    if (!yer && sabit && onceki && yerler[onceki]) {
+      const g = onceki === 'sag' ? { x: b.right + pay, y: yanY } : onceki === 'sol' ? { x: b.left - pay - en, y: yanY } : { x: b.left, y: onceki === 'alt' ? b.bottom + pay : b.top - pay - boy };
+      yer = { x: Math.max(sol, Math.min(g.x, sag - en)), y: Math.max(gd.ust + pay, Math.min(g.y, alt - boy)) };
+    }
+    if (yer && onceki) yon = onceki;
+    else for (const ad of ['sag', 'sol', 'alt', 'ust']) { const r = yerler[ad]!(onceki ? 24 : 0); if (r) { yer = r; yon = ad; break; } }
+    // Eksen ve Genel bakış şeridi altında yer yoksa son çare: çubuğun üstüne ya da altına, ekranın tam yüksekliğiyle (eksen geçici örtülür); çubuk örtülmez.
+    if (!yer) {
+      const x = Math.max(sol, Math.min(b.left, sag - en));
+      if (b.top - pay - boy >= gd.ust + pay) { yon = 'ust'; yer = { x, y: b.top - pay - boy }; }
+      else if (b.bottom + pay + boy <= alt) { yon = 'alt'; yer = { x, y: b.bottom + pay }; }
+      else { yon = 'alt'; yer = { x, y: Math.max(gd.ust + pay, Math.min(b.bottom + pay, alt - boy)) }; }
+    }
+    el.setAttribute('data-yon', yon);
+    el.style.setProperty('--x', `${String(Math.round(yer.x))}px`);
+    el.style.setProperty('--y', `${String(Math.round(yer.y))}px`);
+    ipucu();
+  };
+  const panoOge = useRef<{ el: HTMLElement; id: string } | null>(null), panoYeni = useRef(panoYerlestir);
+  panoYeni.current = panoYerlestir;
+  useEffect(() => {
+    const k = kap.current;
+    if (!k || secIs === null) return undefined;
+    let kare = 0, bosta = 0;
+    // Kaydırma sürerken pano yan değiştirmez (sabit); kaydırma durunca (150 ms) yer normal kurallarla yeniden değerlendirilir.
+    const yeni = (): void => {
+      cancelAnimationFrame(kare); clearTimeout(bosta);
+      kare = requestAnimationFrame(() => { if (panoOge.current) panoYeni.current(panoOge.current.el, panoOge.current.id, true); });
+      bosta = window.setTimeout(() => { if (panoOge.current) panoYeni.current(panoOge.current.el, panoOge.current.id); }, 150);
+    };
+    k.addEventListener('scroll', yeni, { passive: true });
+    window.addEventListener('scroll', yeni, { capture: true, passive: true });
+    window.addEventListener('resize', yeni);
+    return () => { cancelAnimationFrame(kare); clearTimeout(bosta); k.removeEventListener('scroll', yeni); window.removeEventListener('scroll', yeni, { capture: true }); window.removeEventListener('resize', yeni); };
+  }, [secIs]);
   const gelenYazisi = (l: readonly Degisiklik[]): string => l.map((d) => `${BASLIK_ADI[d.baslik]}: ${d.ne}`).join(' · ');
 
   const hucreli = hucreKipi(goz, olcek, px) && !isi;
@@ -1045,7 +1120,13 @@ export function Tahta(o: TahtaOzellikleri) {
     if (secIs === x.id) { sec(null, null); return; }
     sec(e.id, x.id);
     const cubuk = kap.current?.querySelector<HTMLElement>(`[data-is="${tirnakIci(x.id)}"]`);
-    if (cubuk && typeof cubuk.scrollIntoView === 'function') cubuk.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+    if (cubuk && typeof cubuk.scrollIntoView === 'function') cubuk.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+    // Çubuk sol bölmenin (sticky tablo) hemen sağına yaklaşır: pano sağına sığar, tablonun altında kalmaz.
+    const k = kap.current, ik = ic.current?.getBoundingClientRect();
+    if (k && ik && cubuk && typeof k.scrollTo === 'function') {
+      const bas = k.querySelector<HTMLElement>('.tc-pyq-bas')?.offsetWidth ?? 0, b = cubuk.getBoundingClientRect();
+      k.scrollTo({ left: Math.max(0, b.left - ik.left - bas - 24), behavior: 'smooth' });
+    }
   };
   const satirNo = new Map(satirlar.map((r, i) => [r.kimlik, i]));
   const tabloSatiri = (r: Satir): ReactNode => {
@@ -1223,7 +1304,7 @@ export function Tahta(o: TahtaOzellikleri) {
         {(() => {
           const x = secIs !== null && !tasinan && !menu && !hucreli ? m.isler[secIs] : undefined, e = x ? emir.get(x.job) : undefined;
           if (!x || !e || panoKapali === x.id) return null;
-          return <AdimPanosu kip="secili" m={m} e={e} x={x} zaman={zaman} sayim={o.adimSayim?.[x.id]} kapat={() => { setPanoKapali(x.id); }} yerlestir={(el) => { if (el) panoYerlestir(el, x.id); }} />;
+          return createPortal(<AdimPanosu kip="secili" m={m} e={e} x={x} zaman={zaman} sayim={o.adimSayim?.[x.id]} kapat={() => { setPanoKapali(x.id); }} yerlestir={(el) => { if (el) { panoOge.current = { el, id: x.id }; panoYerlestir(el, x.id); } else panoOge.current = null; }} />, document.body);
         })()}
         {menu && (
           <div className="tc-pyq-menu" role="menu" aria-label={emir.get(menu.fis ? menu.id : m.isler[menu.id]?.job ?? '')?.no ?? 'İş'} ref={(el) => { if (!el) return; const k = kap.current; const alt = k ? k.scrollTop + k.clientHeight : Infinity; const y = menu.y + el.offsetHeight > alt && k ? Math.max(k.scrollTop, menu.y - el.offsetHeight) : menu.y; el.style.setProperty('--x', `${String(menu.x)}px`); el.style.setProperty('--y', `${String(y)}px`); el.querySelector('button')?.focus(); }}>

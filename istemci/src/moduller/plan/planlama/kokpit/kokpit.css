@@ -1314,10 +1314,15 @@
 /* 3663: adım bilgi panosu. Seçili adımda çubuğun yanında (tahta içinde), sürüklerken sabit köşede (fareyi tutmaz, tahtayı kaydırmaz). Yalnız bilgi. */
 .tc-pyq-pano {
   display: flex; flex-direction: column; gap: var(--b-2); width: min(var(--kuyruk-genis), calc(100vw - var(--b-6))); padding: var(--b-3);
-  border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); background: color-mix(in oklab, var(--panel-solid) 90%, transparent); color: var(--ink);
+  border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); background: var(--panel-solid); color: var(--ink);
   box-shadow: var(--shadow); font-size: var(--yazi-s);
 }
-.tc-pyq-pano[data-kip="secili"] { position: absolute; left: var(--x, 0); top: var(--y, 0); z-index: 8; }
+.tc-pyq-pano[data-kip="secili"] { overflow-y: auto; position: fixed; left: var(--x, 0); top: var(--y, 0); z-index: var(--z-ust); }
+.tc-pyq-pano[hidden] { display: none; }
+/* Gantt alanı dar (768): pano yüzmez, alt sayfa olur; sol menü şeridinin sağında durur, tablo örtülmez. */
+.tc-pyq-pano[data-kip="secili"][data-alt] { left: calc(var(--menu-serit) + var(--b-4)); right: var(--b-4); top: auto; bottom: var(--b-4); width: auto; max-height: var(--ekran-boy-50); }
+.tc-pyq-pano[data-kip="secili"][data-alt="ust"] { top: var(--y, var(--b-4)); bottom: auto; }
+.tc-pyq-pano[data-kayar]::after { content: ""; position: sticky; bottom: calc(-1 * var(--b-3)); flex: 0 0 auto; height: var(--b-5); margin: calc(-1 * var(--b-5)) calc(-1 * var(--b-3)) calc(-1 * var(--b-3)); background: linear-gradient(transparent, var(--panel-solid)); pointer-events: none; }
 .tc-pyq-pano[data-kip="surukle"] { position: fixed; right: var(--b-4); bottom: var(--b-4); z-index: var(--z-ust); pointer-events: none; }
 .tc-pyq-pano[data-ihlal] { border-color: var(--stop); }
 .tc-pyq-pano header { display: flex; align-items: flex-start; gap: var(--b-2); }
