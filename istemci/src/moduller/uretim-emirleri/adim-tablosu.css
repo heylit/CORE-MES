@@ -72,7 +72,7 @@
 .tc-at-hucre[aria-expanded='true'] { background: var(--secili-zemin); color: var(--secili-yazi); border-color: var(--ink); box-shadow: 0 0 0 var(--cizgi-orta) var(--ink); }
 .tc-at-hucre:focus-visible { outline: var(--cizgi-orta) solid var(--done); outline-offset: var(--cizgi); }
 .tc-at-acilim [role='region']:focus { outline: none; }
-.tc-at-hazir {.tc-at-hazir { display: inline-flex; align-items: center; gap: var(--b-1); font-size: var(--yazi-s); color: var(--run); }
+.tc-at-hazir { display: inline-flex; align-items: center; gap: var(--b-1); font-size: var(--yazi-s); color: var(--run); }
 .tc-at-bekle { color: var(--muted); font-size: var(--yazi-s); }
 
 /* Sabit yuvalar: kaldır, menü ve aç her satırda aynı yerdedir; yoksa boş yer tutar. */
@@ -125,7 +125,7 @@
   .tc-at-fazla-dar { display: inline; }
   .tc-at-acilim-ic { grid-template-columns: minmax(0, 1fr); }
 }
-@container tc-at (max-width: 480px) {
+@container tc-at (max-width: 640px) {
   .tc-at-tablo thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
   .tc-at-tablo, .tc-at-tablo tbody { display: block; }
   .tc-at-satir { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--b-1) var(--b-2); padding: var(--b-2) var(--b-3); border-top: thin solid var(--edge); }
@@ -153,7 +153,11 @@
   .tc-at-hucre { inline-size: var(--dokunma); block-size: var(--dokunma); }
   .tc-at-matris { grid-template-columns: repeat(6, var(--dokunma)); }
 }
-/* Dar kapta matris 4x3 sabit (tablet dokunma kuralından sonra gelir ki onu ezsin). */
-@container tc-at (max-width: 480px) {
-  .tc-at-matris { grid-template-columns: repeat(4, var(--dokunma)); }
+/* Dar ve orta kapta (tablet dahil) matris 4x3 sabit, durum rozeti sarabilir: tablo kabından geniş olmaz (dokunma kuralından sonra gelir ki onu ezsin). */
+@container tc-at (max-width: 820px) {
+  .tc-at-matris { grid-template-columns: repeat(4, max-content); }
+  .tc-at-durum .tc-rozet { white-space: normal; }
+}
+@container tc-at (max-width: 640px) {
+  .tc-at-matris { grid-template-columns: repeat(4, max-content); }
 }
