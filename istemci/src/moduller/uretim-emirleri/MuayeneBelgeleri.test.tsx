@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { MuayeneBelgeleriCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { dosyaYukle } from '../belge-merkezi/disari.ts';
 import { MuayeneBelgeleri, muayeneBelgesiAdresi } from './MuayeneBelgeleri.tsx';
 import { OKUYUCU, ac, json, sunucuKur } from './test-ortak.tsx';
 
@@ -15,15 +16,27 @@ const YOL = '/adimli-emirler/3/is-emirleri/32/muayene-belgeleri';
 const ekran = [{ yol: '/', ekran: () => <MuayeneBelgeleri emirId={3} isEmriId={32} opNo={25} /> }];
 const belge = { ozet: OZET, ad: 'ORN-sertifika.pdf', boyut: 2000, tur: 'pdf' as const, belgeTuru: 'Malzeme sertifikası', ekleyenId: 1, zaman: '2026-11-25T10:00:00Z' };
 const EKSIK: MuayeneBelgeleriCevabi = { zorunlu: ['Malzeme sertifikası', 'Test raporu'], eksik: ['Malzeme sertifikası', 'Test raporu'], belgeler: [] };
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.clearAllMocks(); });
 
 describe('Muayene belgeleri (3708)', () => {
-  it('fason yetkisi olmayan kişide bölüm görünmez ve uç sorulmaz', async () => {
-    const istekler = sunucuKur(OKUYUCU, { [`GET ${YOL}`]: () => json(200, EKSIK) });
+  it('fason yetkisi olmayan okuyucu (kalite) belgeleri görür ve açar; yükleme ve kaldırma yoktur', async () => {
+    sunucuKur(OKUYUCU, { [`GET ${YOL}`]: () => json(200, { ...EKSIK, eksik: ['Test raporu'], belgeler: [belge] } satisfies MuayeneBelgeleriCevabi) });
     ac(ekran, '/');
-    await waitFor(() => expect(istekler.some((i) => i.yol === '/oturum')).toBe(true));
-    expect(screen.queryByText('Muayene belgeleri')).toBeNull();
-    expect(istekler.some((i) => i.yol.startsWith('/adimli-emirler/'))).toBe(false);
+    expect(await screen.findByRole('link', { name: 'ORN-sertifika.pdf' })).toBeTruthy();
+    expect(screen.getByText('Eksik: Test raporu. Eksik belgeyle adım bitirilemez.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'ORN-sertifika.pdf kaldır' })).toBeNull();
+    expect(screen.queryByLabelText(/^Dosya/)).toBeNull();
+  });
+
+  it('PDF ya da resim olmayan dosya yüklenmeden reddedilir', async () => {
+    const istekler = sunucuKur(FASONCU, { [`GET ${YOL}`]: () => json(200, EKSIK) });
+    ac(ekran, '/');
+    const girdi = await screen.findByLabelText(/^Dosya/);
+    const metin = Object.assign(new File(['x'], 'ORN-not.txt', { type: 'text/plain' }), { arrayBuffer: async () => new ArrayBuffer(1) });
+    fireEvent.change(girdi, { target: { files: [metin] } });
+    expect(await screen.findByText('Yalnız PDF ya da resim (JPEG, PNG, WEBP) yüklenir.')).toBeTruthy();
+    expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
+    expect(vi.mocked(dosyaYukle)).not.toHaveBeenCalled();
   });
 
   it('eksik zorunlu belgeler yazılır; seçilen türle yüklenen dosya tekrar korumalı komutla bağlanır', async () => {

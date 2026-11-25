@@ -905,9 +905,10 @@ const adimliUclar = [
     cevap: siradakiFasonCevabi,
     isle: async ({ db, parametre }) => ({ fason: await isEmri.siradakiFason(db, parametre.id) }),
   }),
-  // 3708: kaynağında muayene adımının belgeleri; zorunlu belge eksikken adım bitirilemez (servis.emirBitir).
+  // 3708: kaynağında muayene adımının belgeleri; zorunlu belge eksikken adım bitirilemez (servis.emirBitir). Adım Durumu'nu okuyan
+  // (kalite dahil) belgeleri görür ve açar; bağlama ve kaldırma fason yetkisindedir.
   uc({
-    yontem: 'GET', yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/muayene-belgeleri', yetki: 'uretim-emirleri.fason',
+    yontem: 'GET', yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/muayene-belgeleri', yetki: ADIM_DURUMU_OKUMA,
     parametre: isEmriParametresi, cevap: muayeneBelgeleriCevabi,
     isle: ({ db, parametre }) => isEmri.muayeneBelgeleri(db, parametre.id, parametre.isEmriId),
   }),
@@ -922,7 +923,7 @@ const adimliUclar = [
     isle: ({ db, parametre, denetimEki }) => isEmri.muayeneBelgeKaldir(db, parametre.id, parametre.isEmriId, parametre.ozet, denetimEki),
   }),
   uc({
-    yontem: 'GET', yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/muayene-belgeleri/:ozet/dosya', yetki: 'uretim-emirleri.fason',
+    yontem: 'GET', yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/muayene-belgeleri/:ozet/dosya', yetki: ADIM_DURUMU_OKUMA,
     parametre: muayeneBelgeParametresi, cevap: ikiliCevap,
     isle: ({ db, parametre }) => isEmri.muayeneBelgeDosyasi(db, parametre.id, parametre.isEmriId, parametre.ozet),
   }),

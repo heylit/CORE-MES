@@ -12,7 +12,7 @@ import type { SurumluOperasyonTipi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type { AdimDurumuCevabi, MuayeneBelgeleriCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
-import { kullaniciYukle, yoneticiOlustur } from '../kisiler/disari.ts';
+import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { uretimEmriAc } from './disari.ts';
 import type { IsEmriGirdisi } from './disari.ts';
@@ -43,9 +43,9 @@ describe('uretim-emirleri kaynağında muayene belge kapısı (3708; gerçek Pos
     return ortam;
   };
   const tx = <T>(is: (db: Db) => Promise<T>): Promise<T> => o().vt.tx(is);
-  async function istek<T = unknown>(yontem: 'GET' | 'POST', yol: string, govde?: unknown): Promise<Cevap<T>> {
+  async function istek<T = unknown>(yontem: 'GET' | 'POST', yol: string, govde?: unknown, kimCerez = cerez): Promise<Cevap<T>> {
     const c = await app.inject({
-      method: yontem, url: `/api${yol}`, headers: { cookie: cerez, [ISTEK_KIMLIGI_BASLIGI]: randomUUID() }, ...(govde === undefined ? {} : { payload: govde as object }),
+      method: yontem, url: `/api${yol}`, headers: { cookie: kimCerez, [ISTEK_KIMLIGI_BASLIGI]: randomUUID() }, ...(govde === undefined ? {} : { payload: govde as object }),
     });
     return { durum: c.statusCode, govde: (c.headers['content-type']?.includes('json') === true ? c.json() : c.rawPayload) as T };
   }
@@ -169,6 +169,29 @@ describe('uretim-emirleri kaynağında muayene belge kapısı (3708; gerçek Pos
     const sonra = await istek<{ mesaj?: string }>('POST', `${yol(emirId, muayeneId)}/${ozet2}/kaldir`);
     assert.deepEqual([sonra.durum, sonra.govde.mesaj], [409, 'Muayene bitti; onaylı muayenenin belgesi kaldırılamaz.']);
     assert.deepEqual((await istek<MuayeneBelgeleriCevabi>('GET', yol(emirId, muayeneId))).govde.eksik, []);
+  });
+
+  // Test1 G2: kalite (fason yetkisi yok) Adım Durumu'nu okuduğu için belgeleri görür ve açar; bağlayamaz, kaldıramaz.
+  test('kalite belgeleri okur ve açar; bağlama ve kaldırma 403', async () => {
+    const rol = await o().vt.tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'kalite'");
+    const yoneticiRolu = await o().vt.tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'yonetici'");
+    assert.ok(rol && yoneticiRolu, 'rol yok');
+    await o().vt.tx(async (db) => {
+      const yeni = await yoneticiOlustur(db, { ad: 'Deneme kalite', kullaniciAdi: 'muayene-kalite', parola: PAROLA });
+      await rolAta(db, yonetici.id, yeni, rol.id);
+      await rolAl(db, yonetici.id, yeni, yoneticiRolu.id);
+    });
+    const g = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi: 'muayene-kalite', parola: PAROLA } });
+    assert.equal(g.statusCode, 200, g.body);
+    const kalite = String(g.headers['set-cookie']).split(';')[0] ?? '';
+    const { emirId, muayeneId } = await muayenedeEmir(false);
+    const ozet = await belgeYukle();
+    assert.equal((await istek('POST', yol(emirId, muayeneId), { ozet, dosyaAdi: 'ORN-k.pdf', belgeTuru: 'Test raporu' })).durum, 200);
+    const v = await istek<MuayeneBelgeleriCevabi>('GET', yol(emirId, muayeneId), undefined, kalite);
+    assert.deepEqual([v.durum, v.govde.belgeler.map((b) => b.ad)], [200, ['ORN-k.pdf']]);
+    assert.equal((await istek('GET', `${yol(emirId, muayeneId)}/${ozet}/dosya`, undefined, kalite)).durum, 200);
+    assert.equal((await istek('POST', yol(emirId, muayeneId), { ozet, dosyaAdi: 'ORN-k2.pdf', belgeTuru: 'Test raporu' }, kalite)).durum, 403);
+    assert.equal((await istek('POST', `${yol(emirId, muayeneId)}/${ozet}/kaldir`, undefined, kalite)).durum, 403);
   });
 
   test('belge bir emrin muayenesine bağlıdır: başka emrin yolundan okunmaz', async () => {
