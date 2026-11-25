@@ -67,6 +67,20 @@ function dengeKilit(st, geriyiKaydir = false) {
 
 /* planın kaydı (c-masa): ekranın sakladığı biçim. 3199: özel takımın ömür hesabı (değişim anı, kalan) yalnız takımlı işte taşınır */
 function opKaydi(r) { return { ...(r.ufukDisi > 0 ? { ufukDisi: Math.round(r.ufukDisi * 100) / 100 } : {}), id: r.id, job: r.job, m: r.m, S: r.S, Su: r.Su, C: r.C, su: r.su, run: r.run, lot1: r.lot1, fas: r.fas ? 1 : 0, why: r.why || null, sl: r.sl, famHit: !!r.famHit, pin: r.pin ? 1 : 0, done: r.done ? 1 : 0, act: r.act ? 1 : 0, ...(r.bitti ? { bitti: 1 } : {}), ...(r.takim && r.takim.length ? { takim: r.takim } : {}), ...(r.ikBas != null ? { ikBas: r.ikBas } : {}) }; }
+/* 3681: bölünmüş adımın payı plan kaydında kendini tanıtır (Kokpit pay yazısını ve vurgusunu buradan kurar): no/n pay sırası, asil ana adım,
+   adet payın adedi (elle bölmede kayıtlı adet), kalan ve sayilan başlamış payın ilerlemesi. Bölünmeyen adımda boş. */
+/** @param {any} [o] */
+function payKaydi(o) {
+  const elenen = o && o.elenenPay > 0 ? { elenenPay: o.elenenPay } : {};
+  if (o && !(o.parca > 0) && o.sayilan != null) return { sayilan: o.sayilan, ...elenen };
+  if (!o || !(o.parca > 0)) return elenen;
+  return { pay: { no: o.parca, n: o.parcaAdedi, asil: o.asil, adet: o.bolAdet != null ? o.bolAdet : o.adet, ...(o.elle ? { elle: 1 } : {}), ...(o.kalanAdet != null ? { kalan: o.kalanAdet } : {}), ...(o.sayilan != null ? { sayilan: o.sayilan } : {}) } };
+}
+/* 3681 (D): uygulanamayan elle bölmenin nedeni plan uyarısıdır; adım tek parça kalır ama neden söylenir. */
+/** @param {Derleme} cx */
+function bolmeUyarilari(cx) {
+  return Object.entries(cx.bolme || {}).map(([id, n]) => ({ t: 'bolme', j: id.split('.')[0], id, txt: `${id} elle bölünemedi: ${n.metin}` }));
+}
 /* 3369: emrin malzemesi nereden karşılanıyor (motorun dağıtımı, compile matAlloc). Plan kaydında yalnız miktar, an ve gelişin kararlı
    anahtarı (kim: Satın Alma satırı) durur; sipariş numarası ve tedarikçi adı kayda girmez, ekran onları kendi okuma yetkisiyle ayrıca okur.
    pay.tur 'sa': verilmiş sipariş ya da onaylı talep; 'yok': siparişi verilmemiş eksik için motorun varsaydığı satır. tb: termini girilmemiş,
@@ -123,11 +137,12 @@ function planKaydi(p, st, ref) {
   const cx = p.cx || compile(st);
   takvimYokla(p, cx);
   const ef = evaluate(p.cx ? p : { ...p, cx }, st, ref, false);
-  const ops = {}; for (const id in p.ops) ops[id] = opKaydi(p.ops[id]);
+  const ops = {}; for (const id in p.ops) ops[id] = { ...opKaydi(p.ops[id]), ...payKaydi(cx.byId[id]) };
+  const bolme = cx.bolme || {};
   const J = {}; for (const k in ef.J) { const x = ef.J[k]; J[k] = { C: isFinite(x.C) ? x.C : null, T: x.T, ...(x.ufukEksik > 0 ? { ufukEksik: Math.round(x.ufukEksik * 100) / 100 } : {}) }; }
   const util = {}; for (const m in ef.util) util[m] = ef.util[m];
   const kisiTezgahIsleri = kisiTezgahIsleriOf(p);
-  return { ops, fail: p.fail || [], failNeden: failNedenKaydi(p, st), ozet: { kisiTezgahIsleri, wT: ef.wT, onT: ef.onT, late: ef.late, yerlesmeyenSip: ef.yerlesmeyenSip, n: ef.n, suH: ef.suH, suN: ef.suN, famN: ef.famN, Cmax: ef.Cmax, tl: ef.tl, wB: ef.wB, chg: ref ? ef.chg : null }, J, util, warn: [...cakisanIsler(p, cx), ...ef.warn].slice(0, 300), mal: malKaydi(p, st) };
+  return { ops, fail: p.fail || [], failNeden: failNedenKaydi(p, st), ...(Object.keys(bolme).length ? { bolme } : {}), ozet: { kisiTezgahIsleri, wT: ef.wT, onT: ef.onT, late: ef.late, yerlesmeyenSip: ef.yerlesmeyenSip, n: ef.n, suH: ef.suH, suN: ef.suN, famN: ef.famN, Cmax: ef.Cmax, tl: ef.tl, wB: ef.wB, chg: ref ? ef.chg : null }, J, util, warn: [...cakisanIsler(p, cx), ...bolmeUyarilari(cx), ...ef.warn].slice(0, 300), mal: malKaydi(p, st) };
 }
 /* aynı veriyle kural tabanlı ilk plan (zw-denge PD_ISCI, ms 0) */
 /** @param {MotorDurumu} [st] @param {any} [ms] */
@@ -468,7 +483,7 @@ function partiBol(jid, dagitim, adetler) {
     if (!(C1 > st.now + 1e-9)) partiBilgi.push({ id: id1, k: kk, tur: 'erken', adet });
     else if (Math.abs(run1 - r.run) > 1e-6 && Math.abs(q.S - r.S) < 1e-6) partiBilgi.push({ id: id1, k: kk, tur: 'yenilendi', adet });
   }
-  if (partiBilgi.length) kayit.partiBilgi = partiBilgi;
+  if (partiBilgi.length) /** @type {any} */ (kayit).partiBilgi = partiBilgi;
   let T = 0, C = -1e9; for (const y of yeni) { const J = kayit.J[y.id] || {}; T = Math.max(T, J.T || 0); C = Math.max(C, J.C ?? 1e9); }
   return { siparisId: jid, darbogaz, sonuc: {
     partiler: parcalar.map((x, i) => ({ siparisId: `${jid}/${i + 1}`, adet: x.n, makineId: x.m })),

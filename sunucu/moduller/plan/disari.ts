@@ -12,7 +12,9 @@ import {
   kuyruklariYazIc, taslakYerlesimleri,
 } from './servis.ts';
 export { calisanAdimlar, canliMakineAyrimlari, canliOzeti, canliSira, kuyruguSirala, taslaktakiler } from './servis.ts';
-export type { CalisanAdim } from './servis.ts';
+export type { CalisanAdim, PayIlerlemesi, PayIlerlemesiCozucusu } from './servis.ts';
+// 3681: bölünmüş çalışan adımın pay ilerlemesi (kişi payında kişinin, makine payında makinenin sayımı) Üretim Emirleri'nden gelir; bağı kablolama.ts kurar.
+export { payIlerlemesiCozucusuKaydet as payIlerlemesiCozucusu } from './servis.ts';
 
 // 1979 (2003 c): adımın canlı plandaki yerleşmiş payları (bölünmüş işin parçaları); üretim emirleri terminalde payı olana izin verir
 // (kablolama.ts). Bölünmemiş ya da canlıda olmayan adımda boş.

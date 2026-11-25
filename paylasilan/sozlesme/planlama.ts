@@ -165,6 +165,8 @@ export const durumCevabi = receteRotaDurumCevabi.extend({
   calisanAdimlar: z.array(z.object({
     anahtar: z.string(), makineId: kimlikMetni.nullable(), baslangic: zamanSemasi.nullable(), sayimAni: zamanSemasi.nullable(),
     kalanVerimliDk: z.number(), saglam: z.number().int(), adet: z.number().int(),
+    // 3681: bölünmüş adımın payı başına sayım (kişi payında kişinin, makine payında makinenin sağlamı); bölünmemiş adımda ve çözücü bağlı değilken yok.
+    paylar: z.array(z.object({ makineId: kimlikMetni.nullable(), kisiId: kimlikMetni.nullable(), sayilan: z.number().int().nonnegative() })).optional(),
   })).nullable().optional(),
   // Canlı plan ayarı; plan okuması oturumla açıktır.
   settings: durumAyarSemasi,
