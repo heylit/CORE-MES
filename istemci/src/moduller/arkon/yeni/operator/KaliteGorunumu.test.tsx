@@ -7,6 +7,7 @@ import { ArkonBaglamiKaynagi, type ArkonBaglami } from '../veri/baglam.ts';
 import { KaliteGorunumu } from './KaliteGorunumu.tsx';
 import { numuneOlcumYazici } from './NumuneOlcumu.tsx';
 import type { Is } from './tipler.ts';
+import { NUMUNE_KART_TESLIMI_OLAYI } from './kurallar.ts';
 
 // 600 a: kalite istasyonu terminalinin numune ve lot kararı. Değerler uydurmadır; karar sunucuda Kalite Merkezi'ne yazılır (sunucu testleri).
 
@@ -14,14 +15,14 @@ afterEach(cleanup);
 
 const numune = (id: string, ek: Record<string, unknown> = {}) => ({
   id, pkgId: 'tmi-ie-1', no: 'IE-1', part: 'Deneme', rev: 'A', machine: 'TOR', by: 'op', at: 1, reason: 'İlk parça', items: [1], crit: false, cnt: 1,
-  status: 'waiting', results: {}, kaliteIstasyonu: 'KAL', ...ek,
+  status: 'waiting', results: {}, kaliteIstasyonu: 'KAL', numuneTeslimAlindi: { at: 1, kisi: 'Kalite K', yol: 'dugme' }, ...ek,
 });
 const is = (ek: Partial<Is> = {}): Is => ({
   no: 'IE-2', part: 'Deneme', op: 'Op 20', due: '—', target: 40, cycle: 0, state: 'running', good: 0, scrap: 0, meas: {}, pins: [],
   pkg: { id: 'tmi-ie-2', tmi: { aql: { n: 13, ac: 1, re: 2 } } }, ...ek,
 } as unknown as Is);
 
-function kur(g: { istekler?: unknown[]; sonuc?: unknown; izinli?: boolean; o?: Is } = {}) {
+function kur(g: { istekler?: unknown[]; sonuc?: unknown; izinli?: boolean; olcebilir?: boolean; o?: Is; okut?: () => void } = {}) {
   const put = vi.fn(async () => {});
   const send = vi.fn();
   const depo = {
@@ -33,7 +34,7 @@ function kur(g: { istekler?: unknown[]; sonuc?: unknown; izinli?: boolean; o?: I
   const sar = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={istemci}><MemoryRouter><ArkonBaglamiKaynagi.Provider value={baglam}>{children}</ArkonBaglamiKaynagi.Provider></MemoryRouter></QueryClientProvider>
   );
-  render(<KaliteGorunumu istasyon="KAL" is={g.o ?? is()} izinli={g.izinli ?? true} olcebilir soyle={() => {}} />, { wrapper: sar });
+  render(<KaliteGorunumu istasyon="KAL" is={g.o ?? is()} izinli={g.izinli ?? true} olcebilir={g.olcebilir ?? true} soyle={() => {}} okut={g.okut ?? null} />, { wrapper: sar });
   return { put, send };
 }
 
@@ -130,5 +131,40 @@ describe('798: terminal ölçüsü', () => {
     expect(giden).toHaveLength(1);
     expect(giden[0]!.adres).toMatch(/\/arkon\/numuneler\/rq%201\/olcum$/);
     expect(giden[0]!.govde).toEqual({ olcumler: [{ balonId: 7, deger: '10.02' }], parcaSayisi: 4, kaynak: 'kalite-formu' });
+  });
+});
+
+// 3718 a: yoldaki numune ayrı bölümde; ölçüm ve karar teslimden sonra. Teslim alma isteği `teslimAl` ile yazılır, damgayı sunucu basar.
+describe('3718 a: yoldaki numuneyi teslim alma', () => {
+  const yolda = (id: string, ek: Record<string, unknown> = {}) => numune(id, { numuneTeslimAlindi: undefined, numuneTeslim: { id: 70, no: 'TS-70' }, ...ek });
+
+  it('yoldaki numunede Ölç, Kabul, Red yok; "Teslim al" düğme yoluyla yazar; teslim alınan "Teslim alındı" bölümünde', async () => {
+    const okut = vi.fn();
+    const { put } = kur({ istekler: [yolda('n1'), numune('n2')], okut });
+    const yol = await screen.findByRole('region', { name: 'Yoldaki numuneler' });
+    expect(within(yol).queryByRole('button', { name: /^(Ölç|Kabul|Red)$/ })).toBeNull();
+    expect(within(screen.getByRole('region', { name: 'Gelen numuneler' })).getByText('Teslim alındı')).toBeTruthy();
+    expect(within(screen.getByRole('region', { name: 'Gelen numuneler' })).getByText(/teslim alındı \d\d:\d\d · Kalite K/)).toBeTruthy();
+    fireEvent.click(within(yol).getByRole('button', { name: /Kamerayla okut/ }));
+    expect(okut).toHaveBeenCalledTimes(1);
+    fireEvent.click(within(yol).getByRole('button', { name: /Teslim al/ }));
+    await waitFor(() => expect(put).toHaveBeenCalledWith('requests', expect.objectContaining({ id: 'n1', teslimAl: 'dugme' })));
+  });
+
+  it('kalite istasyonunda okutulan kartın aldığı stok teslimi yoldaki numuneyi okutma yoluyla teslim alır; başka teslim almaz', async () => {
+    const { put } = kur({ istekler: [yolda('n1'), yolda('n3', { numuneTeslim: { id: 71, no: 'TS-71' } })] });
+    await screen.findByRole('region', { name: 'Yoldaki numuneler' });
+    window.dispatchEvent(new CustomEvent(NUMUNE_KART_TESLIMI_OLAYI, { detail: { teslimIdler: [70, 99] } }));
+    await waitFor(() => expect(put).toHaveBeenCalledWith('requests', expect.objectContaining({ id: 'n1', teslimAl: 'okutma' })));
+    expect(put).toHaveBeenCalledTimes(1);
+  });
+
+  it('karar ve ölçüm yetkisi olmayan rol teslim alamaz: düğme yok, okutma yazmaz (reddedilen)', async () => {
+    const { put } = kur({ istekler: [yolda('n1')], izinli: false, olcebilir: false });
+    const yol = await screen.findByRole('region', { name: 'Yoldaki numuneler' });
+    expect(within(yol).queryByRole('button', { name: /Teslim al/ })).toBeNull();
+    window.dispatchEvent(new CustomEvent(NUMUNE_KART_TESLIMI_OLAYI, { detail: { teslimIdler: [70] } }));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(put).not.toHaveBeenCalled();
   });
 });
