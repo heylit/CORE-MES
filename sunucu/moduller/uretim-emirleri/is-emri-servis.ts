@@ -1220,6 +1220,7 @@ const belgeTutamagi = dosyaTutamagi('uretim-emirleri');
 const BELGE_SINIRI = { turler: ['jpeg', 'png', 'webp', 'pdf'] as const, azamiBayt: 20 * 1024 * 1024 };
 const belgeKaydi = (isEmriId: number): string => `muayene:${String(isEmriId)}`;
 const MUAYENE_ADIMI_DEGIL = 'Belge yalnız kaynağında muayene adımına bağlanır.';
+const MUAYENE_BITTI_BELGE_KALMAZ = 'Muayene bitti; onaylı muayenenin belgesi kaldırılamaz.';
 
 async function muayeneBelgeleriOku(db: Db, emirId: number, isEmriId: number): Promise<MuayeneBelgeleriCevabi> {
   const adim = (await s.isEmirleriGetir(db, [emirId])).find((i) => i.id === isEmriId);
@@ -1256,6 +1257,9 @@ export async function muayeneBelgeKaldir(
   db: Db, emirId: number, isEmriId: number, ozet: string, denetimEki: (s: readonly DenetimSecimi[]) => void,
 ): Promise<MuayeneBelgeleriCevabi> {
   await muayeneBelgeleriOku(db, emirId, isEmriId);
+  // Biten muayenenin belgesi onayın kanıtıdır: kaldırılırsa kapı geriye dönük boşalır.
+  const adim = (await s.isEmirleriGetir(db, [emirId])).find((i) => i.id === isEmriId);
+  if (adim?.durum === 'tamam') throw cakisma(MUAYENE_BITTI_BELGE_KALMAZ);
   const kalkan = await belgeTutamagi.bagKaldir(db, belgeKaydi(isEmriId), ozet);
   if (kalkan.length === 0) throw bulunamadi('Belge bulunamadı.');
   denetimEki(kalkan.map((d) => denetimSatiri('kaldir', d)));

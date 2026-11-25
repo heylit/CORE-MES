@@ -1630,13 +1630,16 @@ export function baslatilabilirAdimlar<T extends ParalelAdim & { istasyonId: numb
 
 // 649 a (uyarılı ret): akışlı ya da bekleyen adım, öncülleri bitmeden bitirilemez; bağımsız adım ve dal başı bekleme olmadan biter.
 // 3708: kaynağında muayene parça firmadayken yapılır; fason adımı muayenenin kararıyla (aktarım) ya da ondan sonraki dönüşle kapanır.
-// Muayene adımını kendi fason öncülü beklerse ikisi de kapanamaz: o öncül bitirme sırasından düşer.
-type SiraAdimi = ParalelAdim & { tur?: string; ekAciklama?: string | null; fasonFirmaId?: number | null; kontrolTuru?: string };
+// Muayene adımını kendi fason öncülü beklerse ikisi de kapanamaz: o öncül bitirme sırasından düşer. Muayeneden sonraki adım ise
+// muayeneyle birlikte o fasonu da bekler: parça firmadayken (dönüş girmeden) iç adım bitmez.
+type SiraAdimi = ParalelAdim & { tur?: string; ekAciklama?: string | null; fasonFirmaId?: number | null; fasonFirmasiz?: boolean; kontrolTuru?: string };
+const muayeneMi = (a: SiraAdimi): boolean => a.tur !== undefined && otomatikMuayeneMi({ tur: a.tur, ekAciklama: a.ekAciklama ?? null });
 const muayeneninFasonu = (adim: SiraAdimi, oncul: SiraAdimi): boolean =>
-  adim.tur !== undefined && otomatikMuayeneMi({ tur: adim.tur, ekAciklama: adim.ekAciklama ?? null })
-  && (oncul.fasonFirmaId ?? null) !== null && oncul.kontrolTuru === 'kaynakta';
+  muayeneMi(adim) && fasonMu({ fasonFirmaId: oncul.fasonFirmaId ?? null, fasonFirmasiz: oncul.fasonFirmasiz }) && oncul.kontrolTuru === 'kaynakta';
 export function oncekiBitmediIhlali<T extends SiraAdimi>(adimlar: readonly T[], adim: T): string | null {
-  const onceki = adimOnculleri(adimlar, adim).find((o) => o.adim.durum !== 'tamam' && !muayeneninFasonu(adim, o.adim))?.adim;
+  const dogrudan = adimOnculleri(adimlar, adim).map((o) => o.adim);
+  const muayeneFasonlari = dogrudan.filter(muayeneMi).flatMap((m) => adimOnculleri(adimlar, m).map((o) => o.adim).filter((f) => muayeneninFasonu(m, f)));
+  const onceki = [...dogrudan.filter((o) => !muayeneninFasonu(adim, o)), ...muayeneFasonlari].find((o) => o.durum !== 'tamam');
   return onceki === undefined ? null : `OP ${onceki.opNo} bitmeden OP ${adim.opNo} bitirilemez; önce OP ${onceki.opNo} bitirilmeli.`;
 }
 

@@ -89,6 +89,15 @@ describe('uretim-emirleri fason kontrol türü kuralları (3708)', () => {
     assert.equal(oncekiBitmediIhlali(kaynakta, muayene), null);
     const gkk = [s(1, { durum: 'tamam' }), s(2, { durum: 'calisiyor', fasonFirmaId: 5, kontrolTuru: 'gkk' }), muayene];
     assert.match(oncekiBitmediIhlali(gkk, muayene) ?? '', /OP 20 bitmeden OP 30/);
+    // Risk R3: firması seçilmemiş fason da muayenenin fasonudur.
+    const firmasiz = [s(1, { durum: 'tamam' }), s(2, { durum: 'calisiyor', fasonFirmaId: null, fasonFirmasiz: true, kontrolTuru: 'kaynakta' }), muayene];
+    assert.equal(oncekiBitmediIhlali(firmasiz, muayene), null);
+    // Risk R1: muayeneden sonraki adım, muayene bitse de parça firmadayken (fason açık) bitmez.
+    const ic = s(4, { durum: 'calisiyor' });
+    const bitti = { ...muayene, durum: 'tamam' as IsEmriDurumu };
+    assert.match(oncekiBitmediIhlali([kaynakta[0]!, kaynakta[1]!, bitti, ic], ic) ?? '', /OP 20 bitmeden OP 40/);
+    assert.equal(oncekiBitmediIhlali([kaynakta[0]!, { ...kaynakta[1]!, durum: 'tamam' as IsEmriDurumu }, bitti, ic], ic), null);
+    assert.match(oncekiBitmediIhlali([firmasiz[0]!, firmasiz[1]!, bitti, ic], ic) ?? '', /OP 20 bitmeden OP 40/);
     const elle = s(3, { tur: 'ek', ekAciklama: 'Elle ek adım', durum: 'calisiyor' });
     assert.match(oncekiBitmediIhlali([kaynakta[0]!, kaynakta[1]!, elle], elle) ?? '', /OP 20 bitmeden/);
   });

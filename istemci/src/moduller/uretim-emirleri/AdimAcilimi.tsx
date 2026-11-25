@@ -75,7 +75,7 @@ export function AdimAcilimi(g: AcilimGirdisi) {
       <div className="tc-at-sag">
         <DurumKutusuAcilim g={g} />
         <KontrolListesi emirId={g.emirId} adim={adim} yazar={g.yazilir} sablonVar={v.yetki.sablon} />
-        {adim.muayene === true && <MuayeneBelgeleri emirId={g.emirId} isEmriId={adim.isEmriId} opNo={adim.opNo} />}
+        {adim.muayene === true && <MuayeneBelgeleri emirId={g.emirId} isEmriId={adim.isEmriId} opNo={adim.opNo} bitti={adim.durum === 'tamam'} />}
       </div>
     </div>
   );

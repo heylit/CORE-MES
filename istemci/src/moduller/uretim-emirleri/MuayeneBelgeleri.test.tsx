@@ -58,6 +58,13 @@ describe('Muayene belgeleri (3708)', () => {
     expect(muayeneBelgesiAdresi(3, 32, OZET)).toBe(`/api${YOL}/${OZET}/dosya`);
   });
 
+  it('biten muayenede belge kaldırılmaz', async () => {
+    sunucuKur(FASONCU, { [`GET ${YOL}`]: () => json(200, { zorunlu: ['Malzeme sertifikası'], eksik: [], belgeler: [belge] } satisfies MuayeneBelgeleriCevabi) });
+    ac([{ yol: '/', ekran: () => <MuayeneBelgeleri emirId={3} isEmriId={32} opNo={25} bitti /> }], '/');
+    expect(await screen.findByRole('link', { name: 'ORN-sertifika.pdf' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'ORN-sertifika.pdf kaldır' })).toBeNull();
+  });
+
   it('zorunlu belge yoksa serbest türle yüklenir', async () => {
     sunucuKur(FASONCU, { [`GET ${YOL}`]: () => json(200, { zorunlu: [], eksik: [], belgeler: [] } satisfies MuayeneBelgeleriCevabi) });
     ac(ekran, '/');

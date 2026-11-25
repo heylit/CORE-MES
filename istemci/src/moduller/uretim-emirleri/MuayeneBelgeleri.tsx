@@ -15,7 +15,7 @@ const yol = (emirId: number, isEmriId: number) => `/adimli-emirler/${String(emir
 export const muayeneBelgesiAdresi = (emirId: number, isEmriId: number, ozet: string) =>
   `/api${yol(emirId, isEmriId)}/${encodeURIComponent(ozet)}/dosya`;
 
-export function MuayeneBelgeleri({ emirId, isEmriId, opNo }: { emirId: number; isEmriId: number; opNo: number }) {
+export function MuayeneBelgeleri({ emirId, isEmriId, opNo, bitti = false }: { emirId: number; isEmriId: number; opNo: number; bitti?: boolean }) {
   const yetkili = (useOturum().data?.islemler ?? []).includes('uretim-emirleri.fason');
   const q = useQuery({
     queryKey: anahtarlar.muayeneBelgeleri(emirId, isEmriId), enabled: yetkili,
@@ -32,12 +32,13 @@ export function MuayeneBelgeleri({ emirId, isEmriId, opNo }: { emirId: number; i
       </header>
       {q.isPending ? <DurumKutusu durum="yukleniyor" />
         : q.isError ? <DurumKutusu durum="hata" mesaj={hataIletisi(q.error, 'Belgeler okunamadı.')} yenile={() => { void q.refetch(); }} />
-          : <Icerik emirId={emirId} isEmriId={isEmriId} v={q.data} />}
+          : <Icerik emirId={emirId} isEmriId={isEmriId} v={q.data} bitti={bitti} />}
     </section>
   );
 }
 
-function Icerik({ emirId, isEmriId, v }: { emirId: number; isEmriId: number; v: MuayeneBelgeleriCevabi }) {
+// Biten muayenenin belgesi kaldırılmaz (sunucu da reddeder); ekleme açık kalır.
+function Icerik({ emirId, isEmriId, v, bitti }: { emirId: number; isEmriId: number; v: MuayeneBelgeleriCevabi; bitti: boolean }) {
   const istemci = useQueryClient();
   const [tur, turYaz] = useState(v.eksik[0] ?? v.zorunlu[0] ?? '');
   const [oran, oranYaz] = useState<number | null>(null);
@@ -88,9 +89,11 @@ function Icerik({ emirId, isEmriId, v }: { emirId: number; isEmriId: number; v: 
                 <Simge ad="file" boyut="k" />
                 <span><b>{b.belgeTuru ?? 'Belge'}</b><small><a href={muayeneBelgesiAdresi(emirId, isEmriId, b.ozet)} target="_blank" rel="noreferrer">{b.ad}</a></small></span>
               </span>
-              <span className="tc-at-madde-eylem">
-                <Dugme simge="x" aria-label={`${b.ad} kaldır`} disabled={mesgul} onClick={() => kaldir.mutate(b.ozet)}>Kaldır</Dugme>
-              </span>
+              {!bitti && (
+                <span className="tc-at-madde-eylem">
+                  <Dugme simge="x" aria-label={`${b.ad} kaldır`} disabled={mesgul} onClick={() => kaldir.mutate(b.ozet)}>Kaldır</Dugme>
+                </span>
+              )}
             </li>
           ))}
         </ul>
