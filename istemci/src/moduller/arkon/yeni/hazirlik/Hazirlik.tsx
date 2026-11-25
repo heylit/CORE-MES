@@ -39,7 +39,7 @@ import { useStudyoParcasi } from '../../../kalite-merkezi/disari.ts';
 import { useYetki } from '../../../../ortak/veri/yetki.ts';
 import { KuralSekmesi } from './KuralSekmesi.tsx';
 import {
-  ADIM_SABLONLARI, IS_TURLERI, PAKET_DURUMLARI, SIKLIKLAR, TMI_KILIT, VARSAYILAN_AYARLAR, isTuru, numunePlani, numunePlaniYaz,
+  IS_TURLERI, PAKET_DURUMLARI, SIKLIKLAR, TMI_KILIT, VARSAYILAN_AYARLAR, isTuru, numunePlani, numunePlaniYaz,
   olcumYontemi, onayBekliyor, onayGerekir, onayReddedildi, onayli, kmBagsizUyarisiGerekir, paketDenetimi, paketKartDurumu, planYokUyarisiGerekir, tmiIsEmri, yeniKimlik,
   beklemeEki, planDisiEki, geriCekilebilir, takipSuzgeciOku, topluGeriCekilebilir, type TakipSuzgeci,
 } from './kurallar.ts';
@@ -47,13 +47,13 @@ import { HazirlikListesi } from '../operator/HazirlikListesi.tsx';
 import { EkHazirlikMaddeleri } from './EkHazirlikMaddeleri.tsx';
 import { MatrisGorunumu } from './MatrisGorunumu.tsx';
 import { HazirlikPaketCipi, paketHazirligi, paketIsEmriId, useHazirlikOzeti } from './HazirlikTakibi.tsx';
-import { TalimatSekmesi, talimatSayisi, useTalimatOkuma } from './TalimatSekmesi.tsx';
+import { TalimatVeAdimlar, talimatSayisi, useTalimatOkuma } from './TalimatSekmesi.tsx';
 import { NumuneSekmesi } from './NumuneSekmesi.tsx';
 import { PlanCipi } from './PlanCipi.tsx';
 import { GeriCekPenceresi, TakipTablosu } from './TakipTablosu.tsx';
 import { BenzerPaketPenceresi, TopluBenzerPenceresi, TopluGonderPenceresi, topluDoldurmaPlani, type GonderimIlerlemesi, type TopluDoldurmaSatiri } from './TopluPencereler.tsx';
 import { benzerKopya, enIyiAday, gelecekler, gidecekMi, gonderimHali, icerikDolu, topluGonderilebilir, varsayilanKopya, type KopyaAlani } from './toplu.ts';
-import type { OpType, Pkg, PkgFile, PlanItem, Result, SampleRequest, Step, Ton } from './tipler.ts';
+import type { OpType, Pkg, PkgFile, PlanItem, Result, SampleRequest, Ton } from './tipler.ts';
 import './hazirlik.css';
 
 // Çizim parçası (A5) ağırdır; yalnız Dokümanlar ve Kontrol planı sekmesi açılınca yüklenir.
@@ -78,7 +78,7 @@ const MerkezDurumu = lazy(async () => {
 // Üretim Terminali Hazırlık (hazirlik.ts PrepApp). Paket TMI'de emir açılınca oluşur; burada resim, kontrol planı, adım, kural ve
 // istasyon ayarı hazırlanır ve operatöre yayınlanır. Değişiklik yarım saniye sonra cihaza ve sunucuya yazılır (eskisi gibi).
 
-type Sekme = 'info' | 'tl' | 'docs' | 'st' | 'plan' | 'samp' | 'steps' | 'rules' | 'pub';
+type Sekme = 'info' | 'docs' | 'st' | 'plan' | 'samp' | 'steps' | 'rules' | 'pub';
 // 3111: aynı paketler iki görünümde: kart listesi ve ayrıntı (bugünkü) ya da emir ve adım sırasıyla takip tablosu.
 type Gorunum = 'paket' | 'tablo' | 'matris';
 const GORUNUMLER: readonly (readonly [Gorunum, string, SimgeAdi])[] = [['paket', 'Kartlar', 'list'], ['tablo', 'Liste', 'grid'], ['matris', 'Matris', 'clipboard-check']];
@@ -122,8 +122,6 @@ async function hazirVeri(depo: ArkonDeposu, n: Pkg): Promise<Record<string, unkn
   return hazir;
 }
 const paketAdiKisa = (p: Pkg) => `${p.no} · ${p.op || 'Operasyon girilmedi'}`;
-// Adımın "zorunlu" alanı kayıtta eskisi gibi true/false yazılır (modelde sayı tiplidir, okuyan ekranlar doğruluğuna bakar).
-const zorunlu = (v: boolean): Step['r'] => v as unknown as Step['r'];
 
 function indir(ad: string, veri: string, tur: string) {
   const url = URL.createObjectURL(new Blob([veri], { type: tur }));
@@ -158,6 +156,12 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
   const hz = useHazirlikOzeti(paketler);
   const [secili, seciliYaz] = useState<Pkg | null>(null);
   const [sekme, sekmeYaz] = useState<Sekme>('info');
+  // Dar ekranda adım şeridi yatay kayar; seçili sekme görünür kalsın diye yalnız şerit kaydırılır (sayfa dikeyde oynamaz).
+  const adimSeridi = useRef<HTMLOListElement>(null);
+  useEffect(() => {
+    const ol = adimSeridi.current; const b = ol?.querySelector<HTMLElement>('[aria-current="step"]');
+    if (ol && b && (b.offsetLeft < ol.scrollLeft || b.offsetLeft + b.offsetWidth > ol.scrollLeft + ol.clientWidth)) ol.scrollLeft = Math.max(0, b.offsetLeft - ol.offsetLeft);
+  }, [sekme]);
   const [duzenAcik, duzenAcikYaz] = useState(false);
   const [ara, araYaz] = useState('');
   const [grup, grupYaz] = useState<PaketGrubu>(() => paketGrubuOku(yerel.oku('prepGrup')));
@@ -642,10 +646,10 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
   const talimat = useTalimatOkuma(p);
   const talimatN = talimatSayisi(talimat);
   const SEKMELER = ([
-    { id: 'info', l: 'Bilgiler' }, { id: 'tl', l: 'Talimatlar' }, { id: 'docs', l: 'Dokümanlar' },
+    { id: 'info', l: 'Bilgiler' }, { id: 'steps', l: 'Talimat ve adımlar' }, { id: 'docs', l: 'Dokümanlar' },
     p && tur !== 'cnc' ? { id: 'st', l: IS_TURLERI[tur].tab || IS_TURLERI[tur].l } : null,
     { id: 'plan', l: 'Kontrol planı' }, p && tur === 'cnc' ? { id: 'samp', l: 'Numune' } : null,
-    { id: 'steps', l: 'Adımlar' }, { id: 'rules', l: 'Kurallar' }, { id: 'pub', l: 'Terminale gönder' },
+    { id: 'rules', l: 'Kurallar' }, { id: 'pub', l: 'Terminale gönder' },
   ] as const).filter((x): x is { id: Sekme; l: string } => x !== null);
   const res = p ? sonuclar[p.id] : undefined;
   const hzSecili = p ? paketHazirligi(hz.harita, p) : null;
@@ -759,7 +763,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
             </div>
           ) : null}
           {gorunum === 'matris' ? (
-            <MatrisGorunumu paketler={liste} hazirlik={hz.harita} seciliId={duzenAcik && p ? p.id : null} ac={(x, hucre, el, madde) => { sonTik.current = el; void sec(x, hucre ? (madde === 'talimat' ? 'tl' : 'pub') : 'info'); }} />
+            <MatrisGorunumu paketler={liste} hazirlik={hz.harita} seciliId={duzenAcik && p ? p.id : null} ac={(x, hucre, el, madde) => { sonTik.current = el; void sec(x, hucre ? (madde === 'talimat' ? 'steps' : 'pub') : 'info'); }} />
           ) : gorunum === 'tablo' ? (
             <TakipTablosu
               paketler={liste} sonuclar={sonuclar} hazirlik={hz.harita} hazirlikOkundu={hz.zaman !== null} suz={takipSuz} suzYaz={takipSuzSec} yayinlar={yayinlar}
@@ -804,20 +808,20 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
               </div>
             </div>
             <KmPlanBilgisi p={p} karar={kmKarari} okunamadi={kmOkunamadi} yetkisiz={kmYetkisiz} resimler={() => sekmeYaz('docs')} al={duzenler ? (r) => { void kmdenAl(r); } : undefined} />
-            <ol className="tc-ay2-adimlar" aria-label="Hazırlık adımları">
+            <ol ref={adimSeridi} className="tc-ay2-adimlar" aria-label="Hazırlık adımları">
               {SEKMELER.map((t, i) => {
-                const ok = t.id !== 'pub' && t.id !== 'tl' && tamam(t.id);
+                const ok = t.id !== 'pub' && tamam(t.id);
                 return (
                   <li key={t.id}>
                     <button type="button" aria-current={sekme === t.id ? 'step' : undefined} data-tamam={ok ? '' : undefined} onClick={() => sekmeYaz(t.id)}>
-                      <span className="tc-ay2-adim-no">{ok ? <Simge ad="check" boyut="k" /> : i + 1}</span>{t.l}{t.id === 'tl' && talimatN !== null ? <em className="tc-ay2-rozet-sayi">{talimatN}</em> : null}
+                      <span className="tc-ay2-adim-no">{ok ? <Simge ad="check" boyut="k" /> : i + 1}</span>{t.l}{t.id === 'steps' ? <em className="tc-ay2-rozet-ikili">{talimatN !== null ? `${String(talimatN)} talimat · ` : ''}{String(p.steps.length)} adım</em> : null}
                     </button>
                   </li>
                 );
               })}
             </ol>
-            <fieldset className="tc-ay2-sekme" disabled={!duzenler && sekme !== 'pub' && sekme !== 'tl'}>
-              {!duzenler && sekme !== 'pub' && sekme !== 'tl' ? <p className="tc-ay2-bilgi"><Simge ad="lock" /><span>Paketi düzenleme yetkin yok; yalnız görüntülenir.</span></p> : null}
+            <fieldset className="tc-ay2-sekme" disabled={!duzenler && sekme !== 'pub' && sekme !== 'steps'}>
+              {!duzenler && sekme !== 'pub' && sekme !== 'steps' ? <p className="tc-ay2-bilgi"><Simge ad="lock" /><span>Paketi düzenleme yetkin yok; yalnız görüntülenir.</span></p> : null}
               {sekme === 'info' && seritAday ? (
                 <div className="tc-ay2-benzer-serit" role="note">
                   <Simge ad="layers" />
@@ -866,7 +870,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                   </Alan>
                 </div>
               ) : null}
-              {sekme === 'tl' ? <TalimatSekmesi paket={p} d={talimat} /> : null}
+              {sekme === 'steps' ? <TalimatVeAdimlar paket={p} d={talimat} duzenler={duzenler} yama={yama} /> : null}
               {sekme === 'docs' ? (
                 <div className="tc-ay2-kurallar">
                   {kmPaket && typeof p.malzemeNo === 'number' ? (
@@ -1000,39 +1004,6 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                     </div>
                   </section>
                 </div>
-              ) : null}
-              {sekme === 'steps' ? (
-                <section className="tc-ay2-kart" aria-label="Operasyon adımları">
-                  <div className="tc-ay2-kb">
-                    <b>Operasyon adımları</b><span className="tc-ay2-ust-yazi">{p.steps.length} adım</span>
-                    <span className="tc-ay2-sag tc-ay2-satir">
-                      {Object.keys(ADIM_SABLONLARI).map((k) => (
-                        <Dugme key={k} tur="ikincil" simge="plus" onClick={() => yama({ steps: [...p.steps, ...(ADIM_SABLONLARI[k] || []).map((s): Step => ({ id: yeniKimlik(), ...s, r: zorunlu(s.r) }))] })}>{k}</Dugme>
-                      ))}
-                    </span>
-                  </div>
-                  <div className="tc-ay2-adim-listesi">
-                    {p.steps.map((s, i) => {
-                      const adimYaz = (ch: Partial<Step>) => yama({ steps: p.steps.map((x) => (x.id === s.id ? { ...x, ...ch } : x)) });
-                      return (
-                        <div key={s.id} className="tc-ay2-adim">
-                          <span className="tc-ay2-kural-no">{i + 1}</span>
-                          <div className="tc-ay2-adim-alan">
-                            <input className="tc-ay2-kalin" value={s.t} placeholder="Adım başlığı" aria-label="Adım başlığı" onChange={(e) => adimYaz({ t: e.target.value })} />
-                            <input value={s.d || ''} placeholder="Açıklama / değer" aria-label="Açıklama" onChange={(e) => adimYaz({ d: e.target.value })} />
-                          </div>
-                          <button type="button" className="tc-ay2-onay" aria-pressed={!!s.r} onClick={() => adimYaz({ r: zorunlu(!s.r) })}>Zorunlu</button>
-                          <button
-                            type="button" className="tc-ay2-arac" disabled={i === 0} aria-label="Yukarı"
-                            onClick={() => { const a = p.steps.slice(); const u = a[i - 1]; const o = a[i]; if (u && o) { a[i - 1] = o; a[i] = u; yama({ steps: a }); } }}
-                          ><Simge ad="up" /></button>
-                          <button type="button" className="tc-ay2-arac" aria-label="Sil" onClick={() => yama({ steps: p.steps.filter((x) => x.id !== s.id) })}><Simge ad="trash" /></button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <button type="button" className="tc-ay2-ekle" onClick={() => yama({ steps: [...p.steps, { id: yeniKimlik(), t: '', d: '', r: zorunlu(false) }] })}><Simge ad="plus" /><b>Adım ekle</b></button>
-                </section>
               ) : null}
               {sekme === 'st' ? <IstasyonDuzenleyici paket={p} yama={yama} /> : null}
               {sekme === 'rules' ? <KuralSekmesi paket={p} yama={yama} sonuc={res ?? null} /> : null}
