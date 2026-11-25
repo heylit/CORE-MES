@@ -22,7 +22,7 @@ Logo istemcisi TMI sunucusuyla aynı bilgisayardadır. Yazma kuralları kullanı
    ek olarak hizmet kartı "var mı" ucu (`/api/PurchaseService|SalesService/exists/{kod}`) gelir.
 4. **Yazma yalnız Logo Objects ile, SQL yalnız okuma.** Logo tablolarına SQL ile yazılmaz: sorgular tek sınıfta ve yalnız `SELECT`,
    metin denetimi başka her şeyi reddeder, her sorgu geri alınan transaction'da koşar; kurulumda salt okunur SQL kullanıcısı önerilir.
-   Her yazmadan sonra kayıt SQL ile doğrulanır (`Post` true yetmez). İrsaliye ve fatura yazılmaz, yalnız okunur.
+   Her yazmadan sonra kayıt SQL ile doğrulanır (`Post` true yetmez). İrsaliye yalnız iki kaynaktan yazılır: stoğun satın alma mal kabul belgesi (STFICHE TRCODE 1, kart 3665) ve stoğun sevk çıkışı (toptan satış TRCODE 8 ve konsinye çıkış TRCODE 9, kart 3684). Başka kaynaktan irsaliye ve her fatura yazılmaz, yalnız okunur. Her yazma ayrı ayarla, varsayılan kapalı açılır; ayar ancak gerçek Logo dökümüyle etiketler ölçüldükten sonra (madde 5) ve ilgili kart kabul edildikten sonra açılır. Çift kayıt kalkanı: göndermeden önce Logo'da aynı cari ve belge no'su ile CORE'un benzersiz anahtarı (fiş açıklaması) aranır; varsa irsaliye yazılmaz ve o kayda eşlenir; belirsiz sonuçta mevcut kontrol uygulanır. Satışta ayrıca: stok kontrolü CORE stokundan yapılır, sipariş satırının kalanı göndermeden hemen önce yeniden okunur; e-irsaliye durumu (`EDESPSTATUS`) yalnız okunur, CORE yazmaz; araç çıkışı (sevk işinin "yola çıktı" geçişi) e-irsaliye durumu yeterli olmadan açılmaz, stok hareketi bundan etkilenmez. Gönderilmiş irsaliye CORE'dan silinmez ya da değiştirilmez; düzeltme Logo'da yapılır (iade irsaliyesi). Faturaya bağlanmış irsaliye hiçbir zaman değiştirilmez.
 5. **Ölçülmemiş etiket yazılmaz.** Etiket ve alan adları rehberin ölçülmüş listesinden gelir; ölçülmemiş alan (ör. Açıklama 1) istekte
    gelirse yazılmadan reddedilir. Ölçüm `--olc` ile gerçek kaydın `ExportToXmlStr` dökümünden yapılır.
 6. **Kimlik ve adres yalnız yapılandırmada.** Logo kullanıcı adı, parolası, firma ve dönem numarası, SQL bağlantısı ve anahtar yardımcının
@@ -59,6 +59,11 @@ Logo istemcisi TMI sunucusuyla aynı bilgisayardadır. Yazma kuralları kullanı
 
 ## Doğrulanmadı
 
+- Alış ve satış irsaliyesinin Logo Objects nesne türü, XML kökü, `TYPE` değeri, başlık ve satır etiketleri (cari, belge no, ambar, sipariş satırı bağı) gerçek Logo'da ölçülmedi.
+- Konsinye çıkış (9) ve konsinye çıkış iade (4) TRCODE'larının Logo'da anlamı CORE'da da ölçülmedi (yardımcının rehber tablosu ters yazar).
+- e-irsaliye ve taşıma etiketleri (plaka, dorse, şoför, fiili sevk zamanı, `EDESPATCH`) ve `EDESPSTATUS` kodlarının canlı Logo'da anlamı; hangi kodun "çıkışa yeter" sayılacağı mali müşavir ve entegratörle netleşecek.
+- Siparişi çağıran irsaliye satırında fiyatın siparişten geldiği; `STFICHE.DOCODE` uzunluğu.
+- Logo Connect'in mal kabul yapmadığı kullanıcı beyanıdır; giden e-irsaliyeyi bugün kimin ve nasıl gönderdiği bilinmiyor (Logo yetkilisine sorulacak).
 - Gerçek Logo'da hiçbir yazma denenmedi; sözleşme sahte Logo ile sınandı. Varsayılan sütun ve etiketler `SqlOkuma.cs` `Sorgular.Dogrulanmadi`
   listesinde ve `kurulum/logo-yardimcisi.md`'de; `--deneme` ile gerçek Logo'da doğrulanır.
 - Logo bilgisayarında .NET Framework 4.x'in kurulu olduğu (VARSAYIM; Logo istemcisi .NET Framework ister).
