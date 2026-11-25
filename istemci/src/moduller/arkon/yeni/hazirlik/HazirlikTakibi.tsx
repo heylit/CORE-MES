@@ -92,6 +92,8 @@ export function HazirlikMatrisiSeridi({ satirlar }: { satirlar: readonly Hazirli
   const parcalar = [hata.length ? `${hata.length} eksik` : '', uyari.length ? `${uyari.length} uyarı` : '', muaf ? `${muaf} muaf` : '', bilinmiyor ? `${bilinmiyor} denetlenmiyor` : ''].filter(Boolean);
   const ozet = parcalar.length === 0 ? 'hepsi tamam' : parcalar.join(', ');
   const ad = (e: { x: HazirlikSatiri }) => HAZIRLIK_MADDE_BILGISI[e.x.madde].kisa;
+  // Not en çok üç adı yazar, kalanı sayıyla: 12 eksikte bile iki satırı geçmez (satır yüksekliği sabit kalır); tamamı hücrelerin başlığındadır.
+  const adlar = (l: typeof g) => (l.length > 3 ? `${l.slice(0, 3).map(ad).join(' · ')} +${String(l.length - 3)}` : l.map(ad).join(' · '));
   return (
     <span className="tc-ay2-takip-matris" role="group" aria-label={`Hazırlık matrisi: ${ozet}`}>
       <span className="tc-ay2-takip-hucreler">
@@ -101,8 +103,8 @@ export function HazirlikMatrisiSeridi({ satirlar }: { satirlar: readonly Hazirli
         })}
       </span>
       <span className="tc-ay2-takip-not" aria-hidden="true">
-        {hata.length ? <span data-ton="hata">Eksik: {hata.map(ad).join(' · ')}</span> : null}
-        {uyari.length ? <span data-ton="uyari">Uyarı: {uyari.map(ad).join(' · ')}</span> : null}
+        {hata.length ? <span data-ton="hata">Eksik: {adlar(hata)}</span> : null}
+        {uyari.length ? <span data-ton="uyari">Uyarı: {adlar(uyari)}</span> : null}
       </span>
     </span>
   );
