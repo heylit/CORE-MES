@@ -13,7 +13,7 @@ import {
 } from "./calc.ts";
 import {
   $, $$, addDays, clamp, dayDiff, deltaHTML, esc, fiyatKilitli, fmtDate, fmtTs, isNum, kilitPaneli, money, MONTHS, nf0, nf2, nfx, norm, numIn,
-  pad, parseNum, pct, short, sum, todayStr, type FormEl,
+  pad, parseNum, pct, short, sum, todayStr, tsDate, type FormEl,
 } from "./util.ts";
 import { viewMaterial, viewMaterials, viewReports, viewSettings, viewSupplier, viewSuppliers } from "./memory.ts";
 import { siparisTakibiHTML } from "./takip.ts";
@@ -260,6 +260,7 @@ function reqList(list: PurchaseRequest[]): string {
 const SORTS: Record<string, (r: PurchaseRequest) => string | number> = {
   no: r => r.no, title: r => norm(r.title), status: r => (r.status === "cancelled" ? 99 : FLOW.indexOf(r.status)),
   quotes: r => (r.quotes || []).length, value: r => reqValue(r).v ?? -1, need: r => r.needDate || "9999",
+  created: r => r.createdAt || 0,
 };
 export function reqTable(list: PurchaseRequest[], compact = false, sortable = false): string {
   if (!list.length) return `<div class="empty">Bu filtreye uyan talep yok.</div>`;
@@ -267,7 +268,7 @@ export function reqTable(list: PurchaseRequest[], compact = false, sortable = fa
   const th = (k: string, label: string, cls = "") => sortable
     ? `<th class="${cls}" aria-sort="${V.sort === k ? (V.dir > 0 ? "ascending" : "descending") : "none"}"><button class="sortbtn" data-act="sort" data-k="${k}">${label}${V.sort === k ? (V.dir > 0 ? " ▲" : " ▼") : ""}</button></th>`
     : `<th class="${cls}">${label}</th>`;
-  return `<div class="tw"><table class="rt"><thead><tr>${th("no", "No")}${th("title", "Talep")}${th("status", "Durum")}${compact ? "" : th("quotes", "Teklif", "r")}${th("value", "En iyi / seçilen", "r")}${compact ? "" : th("need", "İstenen termin")}</tr></thead><tbody>
+  return `<div class="tw"><table class="rt"><thead><tr>${th("no", "No")}${th("title", "Talep")}${th("status", "Durum")}${compact ? "" : th("quotes", "Teklif", "r")}${th("value", "En iyi / seçilen", "r")}${compact ? "" : th("created", "Talep tarihi")}${compact ? "" : th("need", "İstenen termin")}</tr></thead><tbody>
   ${list.map(r => {
     const tt = r.award ? awardTotals(r) : null;
     const ev = (r.quotes || []).length ? evaluate(r) : null;
@@ -275,7 +276,7 @@ export function reqTable(list: PurchaseRequest[], compact = false, sortable = fa
     const d = r.needDate ? dayDiff(t, r.needDate) : null;
     const nd = r.needDate ? `${fmtDate(r.needDate)}${OPEN.includes(r.status) && d !== null ? (d < 0 ? ' <span class="flag bad">geçti</span>' : d <= 7 ? ` <span class="flag warn">${d} gün</span>` : "") : ""}` : "–";
     const val = tt ? `${money(tt.totalTRY, "TRY", 0)}<span class="sub">${tt.x ? esc(supName(tt.x.q)) : "kalem bazlı"}</span>` : best ? `${money(best.c.pvTRY, "TRY", 0)}<span class="sub">${esc(supName(best.q))}</span>` : "–";
-    return `<tr class="click" data-act="open" data-id="${r.id}"><td class="num muted">${esc(r.no)}</td><td class="lead">${prioDot(r.priority)}<b>${esc(r.title)}</b><span class="sub">${esc([r.department, (r.items || []).length + " kalem"].filter(Boolean).join(", "))}</span>${uygulananSatiri(r, "sub")}${grupMetni(r) ? `<span class="sub">${esc(grupMetni(r))}</span>` : ""}</td><td>${reqChip(r)}${ilerlemeNoktalari(r)}</td>${compact ? "" : `<td class="r num">${(r.quotes || []).length}${(r.rfqs || []).length ? `<span class="sub">${(r.rfqs || []).length} istendi</span>` : ""}</td>`}<td class="r num">${val}</td>${compact ? "" : `<td class="num">${nd}</td>`}</tr>`;
+    return `<tr class="click" data-act="open" data-id="${r.id}"><td class="num muted">${esc(r.no)}</td><td class="lead">${prioDot(r.priority)}<b>${esc(r.title)}</b><span class="sub">${esc([r.department, (r.items || []).length + " kalem"].filter(Boolean).join(", "))}</span>${uygulananSatiri(r, "sub")}${grupMetni(r) ? `<span class="sub">${esc(grupMetni(r))}</span>` : ""}</td><td>${reqChip(r)}${ilerlemeNoktalari(r)}</td>${compact ? "" : `<td class="r num">${(r.quotes || []).length}${(r.rfqs || []).length ? `<span class="sub">${(r.rfqs || []).length} istendi</span>` : ""}</td>`}<td class="r num">${val}</td>${compact ? "" : `<td class="num">${r.createdAt ? fmtDate(tsDate(r.createdAt)) : "–"}</td><td class="num">${nd}</td>`}</tr>`;
   }).join("")}</tbody></table></div>`;
 }
 export function filteredRequests(): PurchaseRequest[] {

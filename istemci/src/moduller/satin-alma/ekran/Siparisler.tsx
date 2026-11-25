@@ -121,7 +121,7 @@ export function Siparisler() {
     { anahtar: 'ted', baslik: 'Tedarikçi', sirala: true, hucre: (s) => <b>{s.tedarikci}</b>, csv: (s) => s.tedarikci },
     {
       anahtar: 'talep', baslik: 'Talep', hucre: (s) => <span className="sa-ekran-govde"><span>{s.talepAdi}</span><small className="sa-sp-nowrap">{s.talepNo}
-        <CizimSayisi sayi={s.cizimSayisi} /></small></span>,
+        <CizimSayisi sayi={s.cizimSayisi} /></small>{s.talepTarihi && <small>{`talep ${fmtDate(s.talepTarihi)}`}</small>}</span>,
       csv: (s) => `${s.talepNo} ${s.talepAdi}`,
     },
     { anahtar: 'tutar', baslik: 'Tutar', hizala: 'sag', kirilmaz: true, sirala: true, hucre: (s) => money(s.tutar, 'TRY', 0), csv: (s) => s.tutar ?? '' },

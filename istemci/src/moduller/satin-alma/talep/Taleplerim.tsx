@@ -3,6 +3,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { Talebim } from '#paylasilan/sozlesme/satin-alma.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Simge } from '../../../ortak/arayuz/index.ts';
 import { ayrintiyiBirlestir, useKartSatirlari } from '../merkez/kart-satirlari.ts';
+import { fmtDate, tsDate } from '../merkez/util.ts';
 import { TalepCizimleri } from './Cizimler.tsx';
 
 // 3437-2: kalemin daraltılmış kabul sınırı tek satırda; sınırsız kalemde (kartın sınırı) satır yok.
@@ -75,6 +76,10 @@ function terminNotlari(x: TerminKalemi): string[] {
 }
 const enGecPay = (x: TerminKalemi): string | undefined => ((x.siparisPayAdedi ?? 1) > 1 ? 'Birden çok firmaya bölünmüş; en geç payın günü' : undefined);
 
+// 3710: talebin açıldığı gün, öteki satın alma listeleriyle aynı biçimde. Kayıt zamanı (timestamptz) yerel güne çevrilir; gunYaz tarihin
+// ilk on harfini aldığından gece yarısı sonrası açılan talebi bir gün önceye yazardı.
+const talepGunu = (zaman: string) => fmtDate(tsDate(Date.parse(zaman)));
+
 export type Duzenleme = 'duzenle' | 'guncelle';
 function Satir({ t, tam, duzenle }: { t: Talebim; tam: boolean; duzenle: ((t: Talebim, kip: Duzenleme) => void) | undefined }) {
   const [acik, acikYaz] = useState(false);
@@ -95,6 +100,7 @@ function Satir({ t, tam, duzenle }: { t: Talebim; tam: boolean; duzenle: ((t: Ta
       <div><b>{t.baslik}</b></div>
       <div className="sa-talep-not">
         {tam ? `${t.kalemler.length} kalem` : t.kalemler.map((x) => `${x.ad}${x.miktar === null ? '' : ` ${x.miktar} ${x.birim}`}${x.karsilik ? ` (${karsilikYaz(x.karsilik)})` : ''}`).join(', ')}
+        {` · talep ${talepGunu(t.olusturma)}`}
         {t.ihtiyacTarihi && <> · istenen {gunYaz(t.ihtiyacTarihi)}</>}
         {t.uretimEmriNo && <> · üretim emri {t.uretimEmriNo}</>}
       </div>
