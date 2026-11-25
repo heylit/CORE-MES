@@ -794,11 +794,27 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
   ) : null;
   const pin = pinSel != null ? ctl.notlar?.find((p) => p.id === pinSel) : undefined;
   const sayfaGec = (n: number) => { if (doc.file && doc.baseKey) void showPdfPage(n, doc.file, doc.baseKey).then(() => setBusy(null)); };
+  // Dikey araç çubuğu çizimin üstünde durur; çizim (sığdır ve yakınlaştırma dahil) sahnenin çubuk dışında kalan genişliğine göre yerleşsin diye
+  // çubuğun kapladığı pay ölçülüp CSS değişkeniyle sahnenin sağ kenarından düşülür. Çubuk yataysa (telefon) pay yoktur.
+  const kokRef = useRef<HTMLDivElement>(null), aracRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const k = kokRef.current, a = aracRef.current;
+    if (!k) return undefined;
+    const yaz = () => {
+      const dikey = a !== null && getComputedStyle(a).flexDirection === 'column';
+      k.style.setProperty('--tc-arac-pay', dikey ? Math.max(0, k.getBoundingClientRect().right - a.getBoundingClientRect().left + 8) + 'px' : '0px');
+    };
+    yaz();
+    if (!a || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(yaz);
+    ro.observe(a); ro.observe(k);
+    return () => { ro.disconnect(); };
+  }, [mode3d, telefon, onPrimary, fs]);
   const kok = ['tc-ay5-resim', fs && 'tc-ay5-tam', !dims && 'tc-ay5-olcusuz', !hidden && 'tc-ay5-gizlisiz', (adding || regMode) && 'tc-ay5-ekliyor'].filter(Boolean).join(' ');
   const tolKonumu = b && m && typeof m.v === 'number' ? toleransKonumu(b, m.v) : null;
 
   return (
-    <div className={kok} role="region" aria-label="Teknik resim" onKeyDown={tusa}>
+    <div ref={kokRef} className={kok} role="region" aria-label="Teknik resim" onKeyDown={tusa}>
       {grid && <div className="tc-ay5-izgara" aria-hidden="true" />}
       {mode3d && (doc.kind === 'step' || model3d) ? (
         doc.kind === 'step' && doc.data ? <Model3B data={doc.data} fa={doc.fa ?? 2} /> : model3d ? <Model3B data={model3d.data} fa={model3d.fa} /> : null
@@ -869,7 +885,7 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
             </div>
           )}
         </div>
-        <div className="tc-ay5-araclar" role="toolbar" aria-label="Teknik resim araçları">
+        <div ref={aracRef} className="tc-ay5-araclar" role="toolbar" aria-label="Teknik resim araçları">
           {arac(fs ? 'x' : 'expand', fs, () => setFs(!fs), fs ? 'Odak modundan çık' : 'Odak modu · tam ekran')}
           {arac('layers', drawer === 'lib', () => setDrawer(drawer === 'lib' ? null : 'lib'), 'Dokümanlar')}
           {!mode3d && (
