@@ -1562,3 +1562,45 @@ button.tc-ay1-yer { font: inherit; color: inherit; text-align: start; cursor: po
 .tc-ay1-tl-onizleme { display: flex; align-items: center; gap: var(--b-2); margin: 0 0 var(--b-2); color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; }
 .tc-ay1-talimatlar[data-onizleme] .tc-ay1-tl-madde { opacity: .72; }
 .tc-ay1-talimatlar[data-onizleme] .tc-ay1-tl-kutu { border-style: dashed; cursor: not-allowed; }
+
+/* ── 3714: sıradaki işler kartı ──
+   Kart dar ve özetlidir; bakılan kart genişler ve ayrıntı açar. Şerit yüksekliği sabittir (en uzun kart hali), kart yalnız yatayda
+   genişler; ekrandaki iş sarı çerçevelidir, bakılan iş mavi (done) çerçevelidir. */
+.tc-ay1-sira { --tc-sk-dar: calc(var(--dokunma-ana) * 4.2); --tc-sk-genis: calc(var(--dokunma-ana) * 9.5); }
+.tc-ay1-sira li { inline-size: var(--tc-sk-dar); }
+.tc-ay1-sira li:has(> button[aria-pressed='true']) { inline-size: var(--tc-sk-genis); }
+.tc-ay1-sk {
+  display: grid; grid-template-columns: var(--tc-sk-resim, calc(var(--dokunma) * 1.2)) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); block-size: 100%;
+  border: var(--cizgi-ince) solid var(--edge); border-inline-start: var(--b-1) solid var(--sig, var(--edge)); border-radius: var(--yari-3);
+  background: var(--panel); overflow: hidden; min-width: 0;
+}
+.tc-ay1-sk[data-durum='calisiyor'] { --sig: var(--run); }
+.tc-ay1-sk[data-ekranda] { outline: var(--cizgi) solid var(--hazard); }
+.tc-ay1-sira li > button[aria-pressed='true'] .tc-ay1-sk:not([data-ekranda]) { outline: var(--cizgi) solid var(--done); }
+.tc-ay1-sk-resim { display: grid; place-items: center; background: var(--panel2); color: var(--muted); min-width: 0; overflow: hidden; }
+.tc-ay1-sk-resim > img { inline-size: 100%; block-size: 100%; object-fit: cover; }
+.tc-ay1-sk-ic { display: grid; align-content: center; gap: var(--pay-ince); padding: var(--b-1) var(--b-2); min-width: 0; }
+.tc-ay1-sk-ic > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-ay1-sk-etiketler { display: flex; gap: var(--b-1); min-block-size: var(--b-4); }
+.tc-ay1-sk-parca { font-size: var(--yazi-m); }
+.tc-ay1-sk-no { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-ay1-sk-ayrinti { display: grid; grid-column: 1 / -1; grid-template-columns: auto minmax(0, 1fr); gap: var(--pay-ince) var(--b-2); margin: 0; padding: 0 var(--b-2) var(--b-1); }
+.tc-ay1-sk-ayrinti > div { display: contents; }
+.tc-ay1-sk-ayrinti dt { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-ay1-sk-ayrinti dd { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--yazi-s); }
+.tc-ay1-sk-ayrinti dd > b { margin-inline-end: var(--b-2); }
+/* Bakılan kart genişleyince iki sütun: solda özet, sağda ayrıntı. */
+.tc-ay1-sira li:has(> button[aria-pressed='true']) .tc-ay1-sk { grid-template-columns: var(--tc-sk-resim, calc(var(--dokunma) * 1.2)) minmax(0, 1.3fr) minmax(0, 1fr); }
+.tc-ay1-sira li:has(> button[aria-pressed='true']) .tc-ay1-sk-ayrinti { grid-column: 3; align-content: center; padding: var(--b-1) var(--b-2); border-inline-start: var(--cizgi-ince) solid var(--edge); }
+/* Şerit boş pay bırakmaz; kart genişliği şeridi aşmaz. */
+.tc-ay1-sira ol { padding-inline: var(--b-2); block-size: 100%; min-block-size: 0; }
+.tc-ay1-sira li { min-block-size: 0; max-inline-size: 88%; }
+/* Telefon: bakılan kart biraz genişler ve emir no'yu gösterir; Op, malzeme, termin ve tezgâh alttaki iş satırındadır. */
+.tc-ay1-dar .tc-ay1-sira { --tc-sk-dar: calc(var(--dokunma) * 4.2); --tc-sk-genis: calc(var(--dokunma) * 5.6); --tc-sk-resim: 0px; block-size: calc(var(--dokunma) * 2.3); }
+.tc-ay1-dar .tc-ay1-sk-resim, .tc-ay1-dar .tc-ay1-sk-etiketler, .tc-ay1-dar .tc-ay1-sk-ayrinti, .tc-ay1-dar .tc-ay1-sk .tc-ay1-tcark-ilerleme, .tc-ay1-dar .tc-ay1-sk-no { display: none; }
+.tc-ay1-dar .tc-ay1-sira li:has(> button[aria-pressed='true']) .tc-ay1-sk-no { display: block; }
+.tc-ay1-dar .tc-ay1-sk, .tc-ay1-dar .tc-ay1-sira li:has(> button[aria-pressed='true']) .tc-ay1-sk { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 900px) {
+  .tc-ay1-genis .tc-ay1-sira { --tc-sk-resim: calc(var(--dokunma) * 0.9); }
+  .tc-ay1-genis .tc-ay1-sk-ic { padding-inline: var(--b-1); }
+}

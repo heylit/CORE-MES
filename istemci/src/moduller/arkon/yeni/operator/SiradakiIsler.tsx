@@ -1,8 +1,48 @@
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { Simge } from '../../../../ortak/arayuz/index.ts';
-import { IsOnizKarti } from './Cark.tsx';
+import { IS_DURUMLARI } from '../cekirdek/sabitler.ts';
 import type { IsYeriBilgisi } from './Parcalar.tsx';
-import type { Is } from './tipler.ts';
+import type { Is, IsDurumu } from './tipler.ts';
+
+// 3714: kart dardır ve özet taşır (resim, parça, proje · Rev, adet, emir no en altta); bakılan kart genişler ve Op, malzeme, termin, tezgâhı açar.
+// Şerit yüksekliği sabittir: kart yalnız yatayda genişler, alt hiza kımıldamaz.
+const durumRengi = (s: string) => IS_DURUMLARI[s as IsDurumu]?.durum ?? 'sirada';
+const durumAdi = (s: string): string => IS_DURUMLARI[s as IsDurumu]?.etiket ?? s;
+const terminYaz = (t: string | null | undefined): string => (t && /^\d{4}-\d{2}-\d{2}$/.test(t) ? t.split('-').reverse().join('.') : t || '—');
+
+export function SiradakiKart({ is, siradaki, ekranda, acik, yer, resim }: {
+  is: Is; siradaki: boolean; ekranda: boolean; acik: boolean; yer: IsYeriBilgisi | null; resim?: ReactNode;
+}) {
+  const oran = is.target > 0 ? Math.min(1, Math.max(0, is.good / is.target)) : 0;
+  const durum = durumRengi(is.state);
+  const projeRev = [is.pkg?.proje, is.pkg?.rev ? `Rev ${is.pkg.rev}` : null].filter(Boolean).join(' · ');
+  const tezgah = yer?.makine ? [yer.makine, yer.makineAd].filter(Boolean) : null;
+  return (
+    <article className="tc-ay1-sk" data-durum={durum} data-ekranda={ekranda || undefined} data-acik={acik || undefined}>
+      <span className="tc-ay1-sk-resim" aria-hidden="true">{resim ?? <Simge ad="camera" />}</span>
+      <div className="tc-ay1-sk-ic">
+        <span className="tc-ay1-sk-etiketler">
+          {acik ? <span className="tc-ay1-cip" data-durum={durum}><i aria-hidden="true" />{durumAdi(is.state)}</span> : null}
+          {ekranda ? <span className="tc-ay1-etiket tc-ay1-tcark-ekranda">Ekranda</span> : siradaki ? <span className="tc-ay1-etiket">Sıradaki</span> : null}
+          {is.urgent ? <span className="tc-ay1-etiket" data-durum="durdu">Acil</span> : null}
+        </span>
+        <b className="tc-ay1-sk-parca" title={is.part}>{is.part || '—'}</b>
+        {projeRev ? <small className="tc-ay1-sk-proje" title={projeRev}>{projeRev}</small> : null}
+        {is.empty ? null : <small className="tc-ay1-mono tc-ay1-sk-adet">{is.good} / {is.target} adet</small>}
+        {is.empty ? null : <progress className="tc-ay1-tcark-ilerleme" max={1} value={oran} aria-label="İlerleme" />}
+        <small className="tc-ay1-mono tc-ay1-sk-no" title={is.no}>{is.no}</small>
+      </div>
+      {acik && !is.empty ? (
+        <dl className="tc-ay1-sk-ayrinti">
+          <div><dt>Op</dt><dd title={is.op}>{is.op || '—'}</dd></div>
+          <div><dt>Malzeme</dt><dd title={is.pkg?.material}>{is.pkg?.material || '—'}</dd></div>
+          <div><dt>Termin</dt><dd>{terminYaz(is.due)}</dd></div>
+          <div><dt>Tezgâh</dt><dd>{tezgah ? <><b>{tezgah[0]}</b>{tezgah[1] ? <span>{tezgah[1]}</span> : null}</> : 'Makine seçilmedi'}</dd></div>
+        </dl>
+      ) : null}
+    </article>
+  );
+}
 
 // 3338-6 a: terminalin en üstünde istasyonun işleri boydan boya, elle kayar. Ekrandaki iş ortaya gelir ve sarı çerçevelidir.
 // Karta dokunmak yalnız bakar (önizleme); geçiş "Bu işe geç" ile ve bugünkü geçiş sorusuyla olur. Biten işler soluk durur.
@@ -48,7 +88,7 @@ export function SiradakiIsler({ isler, ekranda, bakilan, siradakiMi, yer, sec, e
           {isler.map((x, i) => (
             <li key={`${x.no}:${String(i)}`} data-bitti={x.state === 'done' ? '' : undefined}>
               <button type="button" aria-pressed={i === odak} aria-label={`${x.no}${i === ekranda ? ' · ekranda' : ''}`} onClick={() => sec(i)}>
-                <IsOnizKarti is={x} siradaki={i !== ekranda && siradakiMi(i)} ekranda={i === ekranda} yer={yer(i)} />
+                <SiradakiKart is={x} siradaki={i !== ekranda && siradakiMi(i)} ekranda={i === ekranda} acik={i === odak} yer={yer(i)} />
               </button>
             </li>
           ))}
