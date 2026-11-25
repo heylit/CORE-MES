@@ -146,7 +146,7 @@ export function TakipTablosu({ paketler, sonuclar, hazirlik, hazirlikOkundu, suz
                   </td>
                   <td data-etiket="Hazırlık">
                     {bd ? (
-                      <Link className="tc-ay2-takip-hazirlik" to={`/arkon/hazirlik-matrisi${emir === null ? '' : `?ara=${encodeURIComponent(p.no)}`}`} onClick={(o) => o.stopPropagation()} title="Hazırlık matrisinde aç">
+                      <Link className="tc-ay2-takip-hazirlik" to={`/adim-durumu${emir === null ? '' : `?emir=${String(emir)}`}`} onClick={(o) => o.stopPropagation()} title="Adım Durumu'nda aç">
                         <Cip ton={BASLAMA_TONU[bd]}>{BASLAMA_DURUMLARI[bd]}</Cip>
                       </Link>
                     ) : YOK}
