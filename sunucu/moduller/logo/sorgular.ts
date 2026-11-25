@@ -12,8 +12,12 @@ export const GIDEN_BELGELERI = [
   'malzeme', 'hizmet', 'malzeme-guncelleme', 'siparis', 'siparis-guncelleme', 'siparis-kapatma', 'siparis-bekletme', 'siparis-iptal', 'talep', 'karsilama',
   'satis-teklifi', 'satis-siparisi', 'siparisler-teklifi', 'siparisler-siparisi', 'proje',
 ] as const;
-export type BelgeTuru = (typeof GIDEN_BELGELERI)[number] | FisTuru;
-export const belgeTuruMu = (b: string): b is BelgeTuru => (GIDEN_BELGELERI as readonly string[]).includes(b) || (LOGO_FIS_TURLERI as readonly string[]).includes(b);
+// İrsaliye (3694): mal kabul ve sevk için tek giden kutusu; belge no kaynak modülün kayıt kimliğidir.
+export const IRSALIYE_GIDEN_TURLERI = ['satin-alma-irsaliyesi', 'satis-irsaliyesi', 'konsinye-irsaliyesi'] as const;
+export type IrsaliyeGidenTuru = (typeof IRSALIYE_GIDEN_TURLERI)[number];
+export type BelgeTuru = (typeof GIDEN_BELGELERI)[number] | FisTuru | IrsaliyeGidenTuru;
+export const belgeTuruMu = (b: string): b is BelgeTuru => (GIDEN_BELGELERI as readonly string[]).includes(b) || (LOGO_FIS_TURLERI as readonly string[]).includes(b)
+  || (IRSALIYE_GIDEN_TURLERI as readonly string[]).includes(b);
 export type { GidenSonucu } from './kurallar.ts';
 import type { GidenSonucu } from './kurallar.ts';
 
@@ -33,8 +37,9 @@ const ALANLAR = `belge_no AS "belgeNo", niyet_zamani AS "niyetZamani", deneme_sa
   son_deneme AS "sonDeneme", son_sonuc AS "sonSonuc", son_hata AS "sonHata", sonraki_deneme AS "sonrakiDeneme", logo_kayit_no AS "logoKayitNo"`;
 
 // Malzeme fişleri logo_giden'in kısıtını genişletmeden (dolu tablo) kendi giden kutusundadır; sütunlar aynıdır. Tablo adı sabittir, dışarıdan gelmez.
-const tablo = (belgeTuru: BelgeTuru): 'logo_giden' | 'logo_malzeme_fisi_giden' =>
-  (LOGO_FIS_TURLERI as readonly string[]).includes(belgeTuru) ? 'logo_malzeme_fisi_giden' : 'logo_giden';
+const tablo = (belgeTuru: BelgeTuru): 'logo_giden' | 'logo_malzeme_fisi_giden' | 'logo_irsaliye_giden' =>
+  (IRSALIYE_GIDEN_TURLERI as readonly string[]).includes(belgeTuru) ? 'logo_irsaliye_giden'
+    : (LOGO_FIS_TURLERI as readonly string[]).includes(belgeTuru) ? 'logo_malzeme_fisi_giden' : 'logo_giden';
 
 // logo_giden'de işlem türü (2114b): kart belgesinin gönderim ve Logo'da pasife alma izi ayrı satırdır. Fiş giden kutusunda işlem yoktur (yalnız gönderim).
 export type GidenIslemi = 'gonder' | 'pasif';
@@ -145,6 +150,7 @@ export function gidenIzlemeSatirlari(db: Db, sinir: number): Promise<GidenIzleme
     `SELECT * FROM (
        SELECT ${IZLEME_ALANLARI}, islem FROM logo_giden WHERE ${IZLEME_KOSULU}
        UNION ALL SELECT ${IZLEME_ALANLARI}, 'gonder' AS islem FROM logo_malzeme_fisi_giden WHERE ${IZLEME_KOSULU}
+       UNION ALL SELECT ${IZLEME_ALANLARI}, 'gonder' AS islem FROM logo_irsaliye_giden WHERE ${IZLEME_KOSULU}
      ) g ORDER BY "sonDeneme" NULLS FIRST, "belgeTuru", "belgeNo" LIMIT $1`,
     [sinir],
   );
@@ -241,7 +247,7 @@ export function gidenOzetleri(db: Db): Promise<GidenOzeti[]> {
        count(*) FILTER (WHERE son_sonuc IN ('gonderildi', 'zaten-vardi'))::int AS gonderilen,
        count(*) FILTER (WHERE son_sonuc IS NOT NULL AND son_sonuc NOT IN ('gonderildi', 'zaten-vardi'))::int AS hatali,
        ${zamanMetni('max(son_deneme)')} AS "sonDeneme"
-     FROM (SELECT belge_turu, son_sonuc, son_deneme FROM logo_giden WHERE islem = 'gonder' UNION ALL SELECT belge_turu, son_sonuc, son_deneme FROM logo_malzeme_fisi_giden) g GROUP BY belge_turu`,
+     FROM (SELECT belge_turu, son_sonuc, son_deneme FROM logo_giden WHERE islem = 'gonder' UNION ALL SELECT belge_turu, son_sonuc, son_deneme FROM logo_malzeme_fisi_giden UNION ALL SELECT belge_turu, son_sonuc, son_deneme FROM logo_irsaliye_giden) g GROUP BY belge_turu`,
   );
 }
 

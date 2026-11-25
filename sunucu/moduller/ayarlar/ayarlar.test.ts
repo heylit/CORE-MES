@@ -254,7 +254,7 @@ describe('ayarlar (gerçek PostgreSQL)', () => {
 
   test('3168: değiştiren ekranı bildirilen ayarı genel uç yazmaz (422, değer değişmez), modülün komutu yazar; bayraksız ayarların genel ucu değişmedi', async () => {
     const bayrakli = Object.entries(AYAR_TANIMLARI).flatMap(([a, t]) => ('degistirenEkran' in t ? [a] : []));
-    assert.deepEqual(bayrakli, ['atolye.raf-kodlama']);
+    assert.deepEqual([...bayrakli].sort(), ['atolye.raf-kodlama', 'logo.satin-alma-irsaliyesi', 'logo.sevk-irsaliyesi']);
     const red = await degistir('bolme-kat-goz', yonetici, 'atolye.raf-kodlama');
     assert.equal(red.statusCode, 422, red.body);
     assert.match((red.json() as { mesaj: string }).mesaj, /Stok > Ayarlar ekranından/);
@@ -265,6 +265,13 @@ describe('ayarlar (gerçek PostgreSQL)', () => {
       if (!ayarAnahtariMi(anahtar)) continue;
       const c = await degistir(varsayilanDeger(anahtar), yonetici, anahtar);
       assert.equal(c.statusCode, 200, `${anahtar}: ${c.body}`);
+    }
+    // 3694: irsaliye yazma ayarları genel uçtan açılamaz (ölçüm kapısı Logo modülünün komutundadır); değer kapalı kalır.
+    for (const anahtar of ['logo.satin-alma-irsaliyesi', 'logo.sevk-irsaliyesi'] as const) {
+      const irsaliye = await degistir(true, yonetici, anahtar);
+      assert.equal(irsaliye.statusCode, 422, `${anahtar}: ${irsaliye.body}`);
+      assert.match((irsaliye.json() as { mesaj: string }).mesaj, /Logo > Irsaliye ayarları ekranından/);
+      assert.equal(await vt().tx((db) => sistemAyariOku(db, anahtar)), false);
     }
     const yeni = await vt().tx((db) => modulAyariDegistir(db, yoneticiId, 'atolye.raf-kodlama', 'bolme-kat-goz', 'duz-sayi', { modul: 'atolye', yol: '/stok/raf-kodlama/degistir', yetki: 'stok.tanim' }));
     assert.equal(yeni, 'bolme-kat-goz');
