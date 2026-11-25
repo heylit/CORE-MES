@@ -123,6 +123,8 @@ async function taslakSunucusu(page: Page, kur: (d: Durum) => Record<string, unkn
     return { taslak: { surum: s.taslakSurumu, tabanSurum: s.surum, satirlar: s.satirlar }, calisma: dizildi ? c : { ...c, dataVer: 4, bekleyen }, surum: s.surum };
   };
   const ekle = (komut: Komut, ne: string) => { s.satirlar.push({ komut, ne, t: 0, hata: null }); s.taslakSurumu += 1; };
+  // Başka bir kişinin yakın zamanlı yazması "düzenleyen" şeridini açıp tabloyu aşağı iterdi; taklit sunucuda düzenleyen yoktur.
+  await page.route('**/api/plan/planlama-calismasi/duzenleyen', (r) => json(r, { kisiId: null, kisi: null, zaman: null, surum: null }));
   await page.route('**/api/plan/planlama-calismasi', (r) => json(r, { calisma: kur(s.ortak), surum: s.surum }));
   await page.route('**/api/plan/taslagim', (r) => json(r, cevap()));
   await page.route('**/api/plan/taslagim/komut', (r) => {
