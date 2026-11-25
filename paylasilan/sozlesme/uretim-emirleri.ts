@@ -916,6 +916,38 @@ export const hazirlikGerekmezKaldirGovdesi = z.object({ madde: hazirlikMaddeKodu
 export type HazirlikGerekmezKaldirGovdesi = z.infer<typeof hazirlikGerekmezKaldirGovdesi>;
 export const hazirlikGerekmezCevabi = z.object({ iptalEdilen: z.number().int() });
 export type HazirlikGerekmezCevabi = z.infer<typeof hazirlikGerekmezCevabi>;
+
+// 3688: hazırlık şablonu operasyon türüne göre (Faz 1). Tür null: varsayılan şablon (tipi olmayan adım). Kaydet yeni sürüm yazar;
+// beklenenSurum şablonun ekranın gördüğü sürümüdür (ilk kayıtta null), eskiyse sunucu 409 verir. Rol ve gün Faz 1'de yalnız saklanır.
+export const hazirlikSablonSatiri = z.object({
+  madde: hazirlikMaddeKodu,
+  gerekli: z.boolean(),
+  rolId: z.number().int().positive().nullable(),
+  gun: z.number().int().min(0).max(60),
+}).strict();
+export type HazirlikSablonSatiri = z.infer<typeof hazirlikSablonSatiri>;
+export const hazirlikSablonuYazGovdesi = z.object({
+  satirlar: z.array(hazirlikSablonSatiri).min(1).max(60),
+  gerekce: z.string().trim().min(1).max(450).nullable(),
+  beklenenSurum: z.number().int().positive().nullable(),
+}).strict();
+export type HazirlikSablonuYazGovdesi = z.infer<typeof hazirlikSablonuYazGovdesi>;
+export const hazirlikSablonTuruParametresi = z.object({ tur: z.string().regex(/^(varsayilan|[1-9][0-9]{0,9})$/) });
+export const hazirlikSablonuCevabi = z.object({
+  turler: z.array(z.object({
+    operasyonTipiId: z.number().int().nullable(),
+    ad: z.string(),
+    surum: z.number().int().nullable(),
+    kisiAdi: z.string().nullable(),
+    an: z.string().nullable(),
+    gerekce: z.string().nullable(),
+    satirlar: z.array(hazirlikSablonSatiri.extend({ rolAdi: z.string().nullable() })),
+  })),
+  yazar: z.boolean(),
+});
+export type HazirlikSablonuCevabi = z.infer<typeof hazirlikSablonuCevabi>;
+export const hazirlikSablonuYazCevabi = z.object({ surum: z.number().int() });
+export type HazirlikSablonuYazCevabi = z.infer<typeof hazirlikSablonuYazCevabi>;
 export const hazirlikMatrisiCevabi = z.object({
   proje: z.object({ id: z.number().int(), kod: z.string(), ad: z.string(), durum: z.string() }),
   dagitir: z.boolean(),
@@ -1490,3 +1522,12 @@ export type AdimMatrisiCevabi = z.output<typeof adimMatrisiCevabi>;
 export type StatuTopluGovdesi = z.input<typeof statuTopluGovdesi>;
 export type StatuTopluCevabi = z.output<typeof statuTopluCevabi>;
 export type StatuTopluSonucu = (typeof STATU_TOPLU_SONUCLARI)[number];
+
+// 3688: emre özel fark. Tür şablonu bir maddeyi kapatmış ya da açmışsa bu emirde tersi yazılabilir; "Şablona dön" farkı kaldırır (defter yalnız eklenir).
+export const hazirlikSablonuOzelYazGovdesi = z.object({ gerekli: z.boolean(), gerekce: metin(450, 'Gerekçe yaz.') }).strict();
+export type HazirlikSablonuOzelYazGovdesi = z.infer<typeof hazirlikSablonuOzelYazGovdesi>;
+export const hazirlikSablonuOzelParametresi = z.object({ id: z.coerce.number().int().positive(), madde: hazirlikMaddeKodu });
+export const hazirlikSablonuOzelCevabi = z.object({
+  farklar: z.array(z.object({ madde: hazirlikMaddeKodu, gerekli: z.boolean(), kisiAdi: z.string().nullable(), an: z.string(), gerekce: z.string().nullable() })),
+});
+export type HazirlikSablonuOzelCevabi = z.infer<typeof hazirlikSablonuOzelCevabi>;

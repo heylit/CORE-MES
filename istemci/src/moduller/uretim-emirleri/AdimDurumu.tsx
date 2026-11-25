@@ -9,6 +9,8 @@ import { adimDurumuUcu } from './adim-durumu.ts';
 import { ACIK, gecikti } from './adim-tablosu.ts';
 import { AdimTablosu } from './AdimTablosu.tsx';
 import { AdimMatrisi } from './AdimMatrisi.tsx';
+import { EmreOzelSablon } from './EmreOzelSablon.tsx';
+import { HazirlikSablonu } from './HazirlikSablonu.tsx';
 import { gorunumOku, type Gorunum } from './adim-matrisi.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { DURUM_ETIKETI } from './gorunum.ts';
@@ -33,6 +35,7 @@ const GORUNUM_SEKMELERI: readonly Sekme<Gorunum>[] = [
   { anahtar: 'emir', baslik: 'Emir', simge: 'list' },
   { anahtar: 'matris', baslik: 'Matris', simge: 'grid' },
   { anahtar: 'tablo', baslik: 'Tablo', simge: 'kanban' },
+  { anahtar: 'sablon', baslik: 'Hazırlık şablonu', simge: 'gear' },
 ];
 export function AdimDurumu() {
   const [adres, adresYaz] = useSearchParams();
@@ -43,7 +46,7 @@ export function AdimDurumu() {
   return (
     <div className="tc-ad-kok">
       <Sekmeler etiket="Adım Durumu görünümü" sekmeler={GORUNUM_SEKMELERI} secili={gorunum} sec={gorunumSec} />
-      {gorunum === 'emir' ? <EmirGorunumu /> : <AdimMatrisi gorunum={gorunum} />}
+      {gorunum === 'emir' ? <EmirGorunumu /> : gorunum === 'sablon' ? <HazirlikSablonu /> : <AdimMatrisi gorunum={gorunum} />}
     </div>
   );
 }
@@ -128,6 +131,7 @@ function EmrinAdimDurumu({ id, geri }: { id: number; geri: () => void }) {
       </p>
       {v.rotaYuzde !== null && <Cubuk yuzde={v.rotaYuzde} etiket="Rota" />}
       <AdimTablosu emirId={id} />
+      <EmreOzelSablon emirId={id} />
     </Kart>
   );
 }

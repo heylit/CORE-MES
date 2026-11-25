@@ -12,6 +12,7 @@ import {
   adimDurumuCevabi, adimDurumuTerminalCevabi, adimMatrisiCevabi, adimMatrisiSorgusu, statuTopluCevabi, statuTopluGovdesi, elleStatuGovdesi, elleStatuKaldirGovdesi, hazirlikElleEksikGovdesi, hazirlikOnayiGovdesi, hazirlikOnayiKaldirGovdesi, listeEkleGovdesi, listeKaldirGovdesi, listeFotografiParametresi, listeIsaretleGovdesi,
   arsivOnizlemeCevabi, arsiveAlCevabi, arsiveAlGovdesi, emirKapatGovdesi, kapanisCevabi, kapanisGeriAcGovdesi, kapanisListeCevabi, kapanislarSorgusu, kapanisMuafGovdesi, kapanisOnayGovdesi, kapanisRetGovdesi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { hazirlikSablonTuruParametresi, hazirlikSablonuCevabi, hazirlikSablonuOzelCevabi, hazirlikSablonuOzelParametresi, hazirlikSablonuOzelYazGovdesi, hazirlikSablonuYazCevabi, hazirlikSablonuYazGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { ADIM_DURUMU_OKUMA_ISLEMLERI } from './kurallar.ts';
 import { emrinTerminOnerisi, siparisinTerminOnerileri, terminKarariVer } from './termin-onerisi.ts';
 import { adimDurumu, adimDurumuTerminal, adimMatrisi, statuTopluYaz, elleStatuKaldir, elleStatuYaz, hazirlikElleEksik, hazirlikOnayKaldir, hazirlikOnayla, listeFotografi, listeIsaretle, listeMaddesiEkle, listeMaddesiKaldir } from './adim-durumu.ts';
@@ -30,6 +31,7 @@ import { hataliKaydet, hataliKayitlari } from './hatali-parca.ts';
 import { hazirlik, hazirliklar, muafiyetVer } from './hazirlik.ts';
 import { GEREKMEZ_YETKISI, gerekmezIsaretle, gerekmezKaldir } from './hazirlik-gerekmez.ts';
 import { hazirlikMaddeleri, hazirlikMaddesiDegistir, ozelHazirlikMaddesiEkle } from './hazirlik-maddeleri.ts';
+import { SABLON_YAZMA_YETKISI, hazirlikSablonu, hazirlikSablonuOzel, hazirlikSablonuOzelSil, hazirlikSablonuOzelYaz, hazirlikSablonuYaz } from './hazirlik-sablonu.ts';
 import { hazirlikDagit, hazirlikMatrisi, hazirlikProjesiKur, hazirlikProjesiSecenekleri as hazirlikProjesiSecenekleriAl } from './hazirlik-gorevi.ts';
 import { emirKapat, kapanis, kapanisGeriAc, kapanislar, kapanisMuafTut, kapanisOnayla, kapanisReddet } from './kapanis.ts';
 import {
@@ -375,6 +377,52 @@ const adimliUclar = [
     cevap: hazirlikMaddeleriCevabi,
     tekrarKorumali: true,
     isle: ({ db, kullanici, govde }) => ozelHazirlikMaddesiEkle(db, kullanici, govde),
+  }),
+  // 3688: hazırlık şablonu operasyon türüne göre; yazma bugünkü şablon işlemidir (projeler.sablon-yaz).
+  uc({
+    yontem: 'GET',
+    yol: '/hazirlik-sablonu',
+    yetki: { biri: [...ADIMLI_OKUMA_ISLEMLERI, 'uretim-emirleri.hazirlik-ayar', 'projeler.sablon-yaz', 'projeler.hazirlik-dagit', 'projeler.oku'] },
+    cevap: hazirlikSablonuCevabi,
+    isle: ({ db, kullanici }) => hazirlikSablonu(db, kullanici),
+  }),
+  uc({
+    yontem: 'PUT',
+    yol: '/hazirlik-sablonu/:tur',
+    yetki: SABLON_YAZMA_YETKISI,
+    parametre: hazirlikSablonTuruParametresi,
+    govde: hazirlikSablonuYazGovdesi,
+    cevap: hazirlikSablonuYazCevabi,
+    tekrarKorumali: true,
+    isle: ({ db, kullanici, parametre, govde }) => hazirlikSablonuYaz(db, kullanici, parametre.tur, govde),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/adimli-emirler/:id/hazirlik-sablonu-ozel',
+    yetki: { biri: [...ADIMLI_OKUMA_ISLEMLERI, 'projeler.sablon-yaz', 'projeler.hazirlik-dagit', 'projeler.oku'] },
+    parametre: emirParametresi,
+    cevap: hazirlikSablonuOzelCevabi,
+    isle: ({ db, parametre }) => hazirlikSablonuOzel(db, parametre.id),
+  }),
+  uc({
+    yontem: 'PUT',
+    yol: '/adimli-emirler/:id/hazirlik-sablonu-ozel/:madde',
+    yetki: SABLON_YAZMA_YETKISI,
+    parametre: hazirlikSablonuOzelParametresi,
+    govde: hazirlikSablonuOzelYazGovdesi,
+    cevap: hazirlikSablonuOzelCevabi,
+    tekrarKorumali: true,
+    isle: ({ db, kullanici, parametre, govde }) => hazirlikSablonuOzelYaz(db, kullanici, parametre.id, parametre.madde, govde),
+  }),
+  // "Şablona dön": emre özel farkı kaldırır.
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/hazirlik-sablonu-ozel/:madde/sil',
+    yetki: SABLON_YAZMA_YETKISI,
+    parametre: hazirlikSablonuOzelParametresi,
+    cevap: hazirlikSablonuOzelCevabi,
+    tekrarKorumali: true,
+    isle: ({ db, kullanici, parametre }) => hazirlikSablonuOzelSil(db, kullanici, parametre.id, parametre.madde),
   }),
   // 3396 a: emir için hazırlık projesi kurulur, şablonun hazırlık kalemleri emir ya da iş emri başına görev olur (tekrarında çoğalmaz).
   // 3396 a (A): Proje > Hazırlık matrisi; okuma proje okuyana, dağıtma hazirlik-dagit işlemine.
