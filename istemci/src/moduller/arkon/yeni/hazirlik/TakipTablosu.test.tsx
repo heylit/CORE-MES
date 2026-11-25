@@ -14,7 +14,7 @@ const paket = (id: string, no: string, opNo: number, isEmriId: number): Pkg => (
   due: '', priority: 'normal', material: '', note: '', files: [], primary: null, plan: [], steps: [], status: 'published', version: 1, dirty: false,
   createdAt: 1, updatedAt: 2, by: 'ORN', publishedAt: 2, tmi: { emirId: 7, isEmriId, opNo },
 } as Pkg);
-function kur(d: Deneme, ek: string, perms?: unknown) {
+function kur(d: Deneme, ek: string, perms?: unknown, ozet?: unknown) {
   const a = paket(`tmi-ie-${ek}1`, `ORN-UE-${ek}`, 10, 1), b = paket(`tmi-ie-${ek}2`, `ORN-UE-${ek}`, 20, 2);
   const istekler = sunucuKur(d, {
     belgeler: {
@@ -23,7 +23,7 @@ function kur(d: Deneme, ek: string, perms?: unknown) {
       kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }, ...(perms ? [{ kimlik: 'perms', surum: 1, govde: { v: perms } }] : [])],
     },
     uclar: {
-      'GET /adimli-emirler/hazirlik-ozeti': { emirler: [{ emirId: 7, hazirlik: { maddeler: [{ madde: 'cnc', durum: 'eksik', muafTutulur: true, isEmriDuzeyi: true }, { madde: 'rota', durum: 'tamam', muafTutulur: false, isEmriDuzeyi: false }], muafiyetler: [], isEmirleri: [
+      'GET /adimli-emirler/hazirlik-ozeti': ozet ?? { emirler: [{ emirId: 7, hazirlik: { maddeler: [{ madde: 'cnc', durum: 'eksik', muafTutulur: true, isEmriDuzeyi: true }, { madde: 'rota', durum: 'tamam', muafTutulur: false, isEmriDuzeyi: false }], muafiyetler: [], isEmirleri: [
         { isEmriId: 1, opNo: 10, ad: 'Torna', bitti: false, maddeler: [{ madde: 'cnc', durum: 'eksik' }] }, { isEmriId: 2, opNo: 20, ad: 'Freze', bitti: false, maddeler: [] },
         { isEmriId: 3, opNo: 30, ad: 'Taşlama', bitti: false, maddeler: [] },
       ] } }] },
@@ -54,6 +54,14 @@ describe('3111 Hazırlık takip tablosu', () => {
     const m = (await within(t).findAllByRole('group', { name: /^Hazırlık matrisi/ }, { timeout: 10000 }))[0]!;
     expect(within(m).getByRole('img', { name: 'CNC kurulumu: Eksik' })).toBeTruthy();
     expect(within(m).getByRole('img', { name: 'Rota yürürlükte: Tamam' })).toBeTruthy();
+  }, 40000);
+
+  it('3688: okuma bitti ve veri yoksa yer tutucu da şerit de çizilmez (süresiz boş yer kalmaz)', async () => {
+    kur(YONETICI, 'Y', undefined, { emirler: [] });
+    const t = await tablo();
+    await within(t).findByText('ORN-UE-Y', undefined, { timeout: 10000 });
+    await waitFor(() => { expect(t.querySelector('[data-yukleniyor]')).toBeNull(); }, { timeout: 10000 });
+    expect(within(t).queryAllByRole('group', { name: /^Hazırlık matrisi/ })).toEqual([]);
   }, 40000);
 
   it('toplu geri çekme yalnız başlamamış yayındaki işte; onaydan sonra taslağa yazılır, çalışan iş değişmez', async () => {
