@@ -341,14 +341,18 @@ describe('SmartES listeleri', () => {
     const adim = (ek: Partial<GidenEmirleriCevabi['emirler'][number]['adimlar'][number]>): GidenEmirleriCevabi['emirler'][number]['adimlar'][number] => ({
       isEmriId: 1, opNo: 10, ad: 'ORN Tornalama', durum: 'gonderildi', gonderilmez: null, kapandi: false, smartesIsEmriNo: 'E-1-10', coreIstasyonKodu: 'IST-01',
       smartesIstasyonKodu: 'S-01', istasyonEslemesi: 'istasyon', operasyonTipi: 'TRN', operasyonOneki: 'TRN', operasyonKodu: 'TRN10', kodKaynagi: 'onek', makineKodu: 'M-1',
-      adet: 5, denemeSayisi: 1, sonDeneme: '2026-11-24T08:00:00.000Z', sonrakiDeneme: null, neden: null, alanlar: [{ ad: 'OperationCode', deger: 'TRN10' }], ...ek,
+      adet: 5, denemeSayisi: 1, sonDeneme: '2026-11-24T08:00:00.000Z', sonrakiDeneme: null, neden: null, alanlar: [{ ad: 'OperationCode', deger: 'TRN10' }],
+      gidecekKod: 'TRN10', gidecekNedenKodu: null, gidecekNeden: null, eskiKural: false, ...ek,
     });
     const cevap: GidenEmirleriCevabi = {
       toplam: 2, sayfa: 1, sayfaBoyu: 20, sorunlu: 1,
       emirler: [
-        { emirId: 7, emirNo: 'E-1', sorunlu: true, gonderilen: 1, adimSayisi: 2, adimlar: [
+        { emirId: 7, emirNo: 'E-1', sorunlu: true, gonderilen: 1, adimSayisi: 4, adimlar: [
           adim({}),
-          adim({ isEmriId: 2, opNo: 20, durum: 'durdu', operasyonKodu: 'TRN20', neden: 'SmartES reddetti: Operasyon kodu tanımsız', smartesIstasyonKodu: 'FRZ-ORN', istasyonEslemesi: 'is-merkezi' }),
+          adim({ isEmriId: 2, opNo: 20, durum: 'durdu', operasyonKodu: '20', gidecekKod: 'TRN20', eskiKural: true, neden: 'SmartES reddetti: Operasyon kodu tanımsız', smartesIstasyonKodu: 'FRZ-ORN', istasyonEslemesi: 'is-merkezi' }),
+          adim({ isEmriId: 4, opNo: 30, durum: 'yeniden-denenecek', operasyonKodu: null, operasyonTipi: 'TRN30', operasyonOneki: null, kodKaynagi: 'tip-kodu', gidecekKod: null,
+            gidecekNedenKodu: 'onek-yok', gidecekNeden: 'Operasyon tipi TRN30’nin SmartES öneki yok; Eşlemeler > Operasyon tipi’nden önek verin', neden: 'Operasyon tipi TRN30’nin SmartES öneki yok' }),
+          adim({ isEmriId: 5, opNo: 40, durum: 'durdu', operasyonKodu: '40', gidecekKod: null, gidecekNedenKodu: 'liste-disi', gidecekNeden: 'Adım gönderim listesinde değil', neden: 'x' }),
         ] },
         { emirId: 8, emirNo: 'E-2', sorunlu: false, gonderilen: 1, adimSayisi: 1, adimlar: [adim({ isEmriId: 3 })] },
       ],
@@ -358,7 +362,16 @@ describe('SmartES listeleri', () => {
     ac(<MemoryRouter><Giden /></MemoryRouter>);
     expect(await screen.findByText('E-1')).toBeTruthy();
     // Sorunlu emir açık: adım ayrıntıları görünür; ikinci emir kapalı.
+    // Durmuş adımda eski gönderilen kod ve bugünkü kuralla gidecek kod iki satırdır; eski kuralla alınan hata için ipucu çıkar.
     expect(screen.getByText('TRN20')).toBeTruthy();
+    expect(screen.getByText('20')).toBeTruthy();
+    expect(screen.getByText('(eski)', { exact: false })).toBeTruthy();
+    expect(screen.getAllByText('Bu hata eski kod kuralıyla alındı; yeniden gönderince bugünkü kodla denenir.')).toHaveLength(1);
+    // Gidecek kod kurulamıyorsa "yok" ve nedeni yazar; bağlantı doğrudan Operasyon tipi sekmesine gider; liste dışı adımda yeniden gönder yoktur.
+    expect(screen.getAllByText('yok', { selector: '.mono' }).length).toBe(2);
+    expect(screen.getByText('Operasyon tipi TRN30’nin SmartES öneki yok; Eşlemeler > Operasyon tipi’nden önek verin', { selector: '.tc-sm-not' })).toBeTruthy();
+    expect(screen.getAllByRole('link', { name: 'Eşlemeyi aç' }).map((a) => a.getAttribute('href'))).toEqual(['/smartes/eslemeler?tur=operasyon-tipi']);
+    expect(screen.getAllByRole('button', { name: 'Yeniden gönder' })).toHaveLength(1);
     expect(screen.getByText('IST-01 → FRZ-ORN')).toBeTruthy();
     expect(screen.getByText('iş merkezinden')).toBeTruthy();
     expect(screen.getByText('SmartES reddetti: Operasyon kodu tanımsız')).toBeTruthy();
@@ -368,11 +381,11 @@ describe('SmartES listeleri', () => {
     expect(screen.getAllByRole('link', { name: 'Eşlemeyi aç' }).length).toBeGreaterThan(0);
     fireEvent.click(screen.getAllByRole('button', { name: 'Alanlar' })[0]!);
     expect(await screen.findByText('SmartES’e giden alanlar', { exact: false })).toBeTruthy();
-    const yenidenGonder = screen.getByRole('button', { name: 'Yeniden gönder' });
-    fireEvent.click(yenidenGonder);
-    fireEvent.click(yenidenGonder);
+    // İki hızlı basış tek istektir.
+    const dugme = screen.getAllByRole('button', { name: 'Yeniden gönder' })[0]!;
+    fireEvent.click(dugme);
+    fireEvent.click(dugme);
     await waitFor(() => { expect(cagrilar.find((c) => c.yol === '/smartes/giden/yeniden-gonder')?.govde).toEqual({ isEmirleri: [2] }); });
-    // Risk 3700: çift tık tek istektir.
     expect(cagrilar.filter((c) => c.yol === '/smartes/giden/yeniden-gonder')).toHaveLength(1);
     // 3700: tekrar korumalı komut istek kimliğiyle gider.
     expect(cagrilar.find((c) => c.yol === '/smartes/giden/yeniden-gonder')?.kimlik).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);

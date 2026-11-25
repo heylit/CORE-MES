@@ -4,10 +4,9 @@ import { Link } from 'react-router-dom';
 import type { GidenEmirleriCevabi, SmartesYenidenGonderCevabi } from '#paylasilan/sozlesme/smartes.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Pencere, Rozet, Simge, Tablo, useBildirim, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
-import { useTekGonderim } from '../../ortak/veri/korumali-komut.ts';
+import { useKorumaliKomut } from '../../ortak/veri/korumali-komut.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { KimlikDefteri, korumaliGonder } from './kimlik-defteri.ts';
 import { YOK, sayiMetni, zamanMetni } from './gosterim.ts';
 import './smartes.css';
 
@@ -61,23 +60,25 @@ function GonderilenAlanlar({ adim, kapat }: { adim: Adim; kapat: () => void }) {
   );
 }
 
-function EmirGrubu({ e, gonderir }: { e: Emir; gonderir: boolean }) {
-  const [acik, acikYaz] = useState(e.sorunlu);
-  const [alanlar, alanlarYaz] = useState<Adim | null>(null);
-  const genis = useGenis();
+// Her adımın kendi komutu ve kimliği vardır: çift tık tek istek, başarıya ya da sunucu retine dek tek kimlik (useKorumaliKomut).
+function YenidenGonder({ isEmriId }: { isEmriId: number }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
-  // Tekrar korumalı komut: kimlik iş emri başına tutulur; sonucu bilinmeyen hatadan sonraki basış aynı kimliği taşır.
-  const [defter] = useState(() => new KimlikDefteri());
-  // Gönderim sürerken gelen ikinci tık düşer (çift tık tek istek, tek bildirim).
-  const yeniden = useTekGonderim({
-    mutationFn: (isEmriId: number) => korumaliGonder(defter, String(isEmriId), (d) => api.post<SmartesYenidenGonderCevabi>('/smartes/giden/yeniden-gonder', { isEmirleri: [isEmriId] }, d)),
+  const yeniden = useKorumaliKomut<number, SmartesYenidenGonderCevabi>({
+    gonder: (id, d) => api.post<SmartesYenidenGonderCevabi>('/smartes/giden/yeniden-gonder', { isEmirleri: [id] }, d),
     onSuccess: async (c) => {
       await istemci.invalidateQueries({ queryKey: anahtarlar.kok });
       bildir(c.sirada > 0 ? 'tamam' : 'bilgi', c.sirada > 0 ? 'Yeniden gönderilmek üzere sıraya alındı.' : 'Bu adım durmuş değil; sıraya alınmadı.');
     },
     onError: (x) => { bildir('hata', hataIletisi(x, 'Yeniden gönderilemedi')); },
   });
+  return <Dugme simge="rotate" yukleniyor={yeniden.isPending} onClick={() => { yeniden.mutate(isEmriId); }}>Yeniden gönder</Dugme>;
+}
+
+function EmirGrubu({ e, gonderir }: { e: Emir; gonderir: boolean }) {
+  const [acik, acikYaz] = useState(e.sorunlu);
+  const [alanlar, alanlarYaz] = useState<Adim | null>(null);
+  const genis = useGenis();
   const d = emirDurumu(e);
   const sutunlar: Sutun<Adim>[] = [
     {
@@ -97,13 +98,24 @@ function EmirGrubu({ e, gonderir }: { e: Emir; gonderir: boolean }) {
       ),
     },
     {
-      anahtar: 'operasyon', baslik: 'Operasyon kodu', kartTamSatir: true, hucre: (a) => (
-        <span className="tc-gd-yigin">
-          <span className="mono">{a.operasyonKodu ?? YOK}</span>
-          {a.operasyonTipi !== null && <span className="tc-sm-not">{`tip ${a.operasyonTipi}${a.kodKaynagi === 'onek' ? `, önek ${a.operasyonOneki ?? ''}` : a.kodKaynagi === 'tip-kodu' ? ', tip kodu' : ''}`}</span>}
-          {a.operasyonTipi === null && <span className="tc-sm-not">tipi yok</span>}
-        </span>
-      ),
+      anahtar: 'operasyon', baslik: 'Operasyon kodu', kartTamSatir: true, hucre: (a) => {
+        const takildi = a.durum === 'durdu' || a.durum === 'yeniden-denenecek';
+        return (
+          <span className="tc-gd-yigin">
+            {takildi
+              ? (
+                <>
+                  <span><span className="tc-sm-not">Gönderilen: </span><span className="mono">{a.operasyonKodu ?? YOK}</span>{a.eskiKural && <span className="tc-sm-not">{' (eski)'}</span>}</span>
+                  <span><span className="tc-sm-not">Gidecek: </span><span className="mono">{a.gidecekKod ?? 'yok'}</span></span>
+                  {a.gidecekNeden !== null && <span className="tc-sm-not">{a.gidecekNeden}</span>}
+                </>
+              )
+              : <span className="mono">{a.operasyonKodu ?? YOK}</span>}
+            {a.operasyonTipi !== null && <span className="tc-sm-not">{`tip ${a.operasyonTipi}${a.kodKaynagi === 'onek' ? `, önek ${a.operasyonOneki ?? ''}` : a.kodKaynagi === 'tip-kodu' ? ', tip kodu' : ''}`}</span>}
+            {a.operasyonTipi === null && <span className="tc-sm-not">tip okunamadı</span>}
+          </span>
+        );
+      },
     },
     {
       anahtar: 'durum', baslik: 'Durum ve neden', kartTamSatir: true, csv: (a) => `${adimDurumu(a).metin} ${a.neden ?? ''}`, hucre: (a) => (
@@ -115,21 +127,20 @@ function EmirGrubu({ e, gonderir }: { e: Emir; gonderir: boolean }) {
             </span>
           )}
           {a.neden !== null && <span>{a.neden}</span>}
+          {a.eskiKural && <span className="tc-sm-not">Bu hata eski kod kuralıyla alındı; yeniden gönderince bugünkü kodla denenir.</span>}
         </span>
       ),
     },
     {
       anahtar: 'eylem', baslik: 'İşlem', kartTamSatir: true, csv: false, sabit: 'sag', hucre: (a) => {
         const takildi = a.durum === 'durdu' || a.durum === 'yeniden-denenecek';
-        const eslemeNedeni = a.neden !== null && /operasyonu yok|operasyon tipi yok|operasyon kodu tanımsız/i.test(a.neden);
+        const eslemeNedeni = a.gidecekNedenKodu === 'onek-yok' || a.gidecekNedenKodu === 'smartes-kodu-yok';
         return (
           <span className="tc-gd-islem">
             <Dugme simge="list" onClick={() => { alanlarYaz(a); }}>Alanlar</Dugme>
-            {a.durum === 'durdu' && gonderir && (
-              <Dugme simge="rotate" yukleniyor={yeniden.isPending && yeniden.variables === a.isEmriId} onClick={() => { yeniden.mutate(a.isEmriId); }}>Yeniden gönder</Dugme>
-            )}
+            {a.durum === 'durdu' && gonderir && a.gidecekNedenKodu !== 'liste-disi' && <YenidenGonder isEmriId={a.isEmriId} />}
             {takildi && <Link className="tc-sg-baglanti" to={`/uretim-emirleri/${String(e.emirId)}`}>Rota adımını aç</Link>}
-            {takildi && eslemeNedeni && <Link className="tc-sg-baglanti" to="/smartes/eslemeler">Eşlemeyi aç</Link>}
+            {takildi && eslemeNedeni && <Link className="tc-sg-baglanti" to="/smartes/eslemeler?tur=operasyon-tipi">Eşlemeyi aç</Link>}
           </span>
         );
       },

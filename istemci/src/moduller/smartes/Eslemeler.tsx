@@ -122,7 +122,8 @@ function EslemeFormu({ tur, satir, liste, kapat }: { tur: SmartesEslemeTuru; sat
 export function Eslemeler() {
   const oturum = useOturum();
   const yazabilir = oturum.data?.islemler.includes('smartes.esleme-yaz') === true;
-  const [bolum, bolumYaz] = useState<Bolum>('istasyon');
+  // ?tur=operasyon-tipi gibi bir bağlantı ilgili sekmeyi açar (Giden emirler ekranından önek vermeye gidiş).
+  const [bolum, bolumYaz] = useState<Bolum>(() => SEKMELER.find((x) => x.anahtar === new URLSearchParams(window.location.search).get('tur'))?.anahtar ?? 'istasyon');
   const tur: SmartesEslemeTuru = bolum === 'fire' || bolum === 'durus' ? 'istasyon' : bolum;
   const gelen = bolum === 'fire' || bolum === 'durus' ? bolum : null;
   const [secili, seciliYaz] = useState<Satir | null>(null);
