@@ -1,4 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
+import type { FasonKontrol } from '#paylasilan/fason-kontrol.ts';
 import type { EmirDurumu, EmirTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { AdimOnculu } from '../../kurallar.ts';
 import { DAL_VE_ONCUL, ISO, NULLU_ISO, TARIH } from '../ortak/sorgular.ts';
@@ -26,6 +27,9 @@ export interface IsEmriSatiri {
   enKucukParca: number | null;
   yenidenAyar: boolean;
   talimatSurumu: number | null;
+  // 3708: fason adımın kontrol türü (rota adımından kopyalanır) ve kaynağında muayene süresi (saat, metin).
+  kontrolTuru: FasonKontrol;
+  muayeneSuresiSaat: string | null;
   tur: 'rota' | 'rework' | 'tamir' | 'ek';
   ekAciklama: string | null;
   durum: 'bekliyor' | 'calisiyor' | 'tamam';
@@ -44,7 +48,7 @@ const IS_EMRI = `i.id, i.uretim_emri_id AS "uretimEmriId", i.sira, i.op_no AS "o
   i.makine_id AS "makineId", i.kisi_id AS "kisiId", i.fason_firma_id AS "fasonFirmaId", i.fason_firmasiz AS "fasonFirmasiz", i.istasyon_id AS "istasyonId",
   i.ayar_suresi_dk::text AS "ayarSuresiDk", i.birim_sure_dk::text AS "birimSureDk", i.termin_gun AS "terminGun", i.bagimlilik,
   i.devir_adedi AS "devirAdedi", i.fire_payi_yuzde::text AS "firePayiYuzde", i.makine_kullanimi AS "makineKullanimi",
-  i.en_kucuk_parca AS "enKucukParca", i.yeniden_ayar AS "yenidenAyar", i.talimat_surumu AS "talimatSurumu", i.tur, i.ek_aciklama AS "ekAciklama", i.durum,
+  i.en_kucuk_parca AS "enKucukParca", i.yeniden_ayar AS "yenidenAyar", i.talimat_surumu AS "talimatSurumu", i.kontrol_turu AS "kontrolTuru", i.muayene_suresi_saat::text AS "muayeneSuresiSaat", i.tur, i.ek_aciklama AS "ekAciklama", i.durum,
   ${NULLU_ISO('i.baslama')} AS baslama, ${NULLU_ISO('i.bitis')} AS bitis, i.saglam_adet AS "saglamAdet", i.surum, ${DAL_VE_ONCUL}`;
 
 export function isEmirleriGetir(db: Db, emirIdleri: readonly number[]): Promise<IsEmriSatiri[]> {
@@ -164,6 +168,9 @@ export interface IsEmriYazisi {
   enKucukParca: number | null;
   yenidenAyar: boolean;
   talimatSurumu: number | null;
+  // 3708: verilmezse GKK (eski çağıran, ek adım).
+  kontrolTuru?: FasonKontrol;
+  muayeneSuresiSaat?: number | string | null;
   // Yalnız eklemede: verilmezse rota adımıdır. Güncelleme türü değiştirmez.
   tur?: 'rota' | 'rework' | 'tamir' | 'ek';
   ekAciklama?: string | null;
@@ -182,10 +189,10 @@ export async function isEmriEkle(db: Db, emirId: number, y: IsEmriYazisi): Promi
   const satir = await db.tek<{ id: number }>(
     `INSERT INTO uretim_emirleri_is_emri (uretim_emri_id, sira, op_no, operasyon_tipi_id, ad, makine_id, kisi_id, fason_firma_id, istasyon_id,
        ayar_suresi_dk, birim_sure_dk, termin_gun, bagimlilik, devir_adedi, fire_payi_yuzde, makine_kullanimi, en_kucuk_parca, yeniden_ayar,
-       talimat_surumu, fason_firmasiz, tur, ek_aciklama, dugum, dugum_malzeme_id, kaynak_op_no, birim_carpani, operasyon_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26::numeric, $27) RETURNING id`,
+       talimat_surumu, fason_firmasiz, tur, ek_aciklama, dugum, dugum_malzeme_id, kaynak_op_no, birim_carpani, operasyon_id, kontrol_turu, muayene_suresi_saat)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26::numeric, $27, $28, $29) RETURNING id`,
     [emirId, ...IS_EMRI_DEGERLERI(y), y.tur ?? 'rota', y.ekAciklama ?? null,
-      y.dugum?.ad ?? null, y.dugum?.malzemeNo ?? null, y.dugum?.kaynakOpNo ?? null, y.dugum?.birimCarpani ?? null, y.operasyonId ?? null],
+      y.dugum?.ad ?? null, y.dugum?.malzemeNo ?? null, y.dugum?.kaynakOpNo ?? null, y.dugum?.birimCarpani ?? null, y.operasyonId ?? null, y.kontrolTuru ?? 'gkk', y.muayeneSuresiSaat ?? null],
   );
   if (satir === null) throw new Error('İş emri eklenemedi.');
   return satir.id;
@@ -229,9 +236,9 @@ export async function bekleyenIsEmriniGuncelle(db: Db, id: number, y: IsEmriYazi
             fason_firma_id = CASE WHEN $20 AND fason_firma_id IS NOT NULL THEN fason_firma_id ELSE $8 END, istasyon_id = $9, ayar_suresi_dk = $10,
             birim_sure_dk = $11, termin_gun = $12, bagimlilik = $13, devir_adedi = $14, fire_payi_yuzde = $15, makine_kullanimi = $16,
             en_kucuk_parca = $17, yeniden_ayar = $18, talimat_surumu = $19, fason_firmasiz = $20 AND fason_firma_id IS NULL,
-            operasyon_id = coalesce($21, operasyon_id), surum = surum + 1
+            operasyon_id = coalesce($21, operasyon_id), kontrol_turu = $22, muayene_suresi_saat = $23, surum = surum + 1
       WHERE id = $1 AND durum = 'bekliyor'`,
-    [id, ...IS_EMRI_DEGERLERI(y), y.operasyonId ?? null],
+    [id, ...IS_EMRI_DEGERLERI(y), y.operasyonId ?? null, y.kontrolTuru ?? 'gkk', y.muayeneSuresiSaat ?? null],
   );
   await db.sorgu('DELETE FROM uretim_emirleri_is_emri_adayi WHERE is_emri_id = $1', [id]);
   await db.sorgu('DELETE FROM uretim_emirleri_is_emri_bileseni WHERE is_emri_id = $1', [id]);
@@ -432,6 +439,8 @@ export function isEmriBitir(db: Db, id: number, saglamAdet: number, an: string):
 
 export interface FasonHareketiSatiri {
   id: number;
+  // 'aktarim': kimlik aktarım tablosunun kendi kimliğidir (hareket kimliğiyle çakışabilir; kaynakla birlikte okunur).
+  kaynak: 'hareket' | 'aktarim';
   isEmriId: number;
   yon: 'gidis' | 'donus';
   adet: number;
@@ -440,13 +449,28 @@ export interface FasonHareketiSatiri {
   zaman: string;
 }
 
-const FASON = `f.id, f.is_emri_id AS "isEmriId", f.yon, f.adet, f.hurda_adet AS "hurdaAdet", f.kisi_id AS "kisiId", ${ISO('f.zaman')} AS zaman`;
+const FASON = `f.id, 'hareket' AS kaynak, f.is_emri_id AS "isEmriId", f.yon, f.adet, f.hurda_adet AS "hurdaAdet", f.kisi_id AS "kisiId", ${ISO('f.zaman')} AS zaman`;
 
+// 3708: firmaya aktarım (kaynağında muayene ya da kontrolsüz geçiş) fason adımını dönüş gibi kapatır; adet hesabı için dönüş satırı olarak
+// (kaynak 'aktarim') katılır. Stok hareketi bu satırdan doğmaz: stok, yalnız gerçek dönüş kaydının kimliğine bağlanır.
 export function fasonHareketleriGetir(db: Db, isEmriIdleri: readonly number[]): Promise<FasonHareketiSatiri[]> {
   return db.sorgu<FasonHareketiSatiri>(
-    `SELECT ${FASON} FROM uretim_emirleri_fason_hareketi f WHERE f.is_emri_id = ANY($1::int[]) ORDER BY f.is_emri_id, f.id`,
+    `SELECT ${FASON} FROM uretim_emirleri_fason_hareketi f WHERE f.is_emri_id = ANY($1::int[])
+     UNION ALL
+     SELECT a.id AS id, 'aktarim' AS kaynak, a.is_emri_id AS "isEmriId", 'donus' AS yon, a.saglam_adet AS adet, a.hurda_adet AS "hurdaAdet", a.kisi_id AS "kisiId", ${ISO('a.zaman')} AS zaman
+       FROM uretim_emirleri_fason_aktarimi a WHERE a.is_emri_id = ANY($1::int[])
+     ORDER BY "isEmriId", zaman, kaynak, id`,
     [[...isEmriIdleri]],
   );
+}
+
+export async function fasonAktarimiEkle(db: Db, isEmriId: number, hedefFirmaId: number, saglamAdet: number, hurdaAdet: number, kisiId: number): Promise<number> {
+  const satir = await db.tek<{ id: number }>(
+    `INSERT INTO uretim_emirleri_fason_aktarimi (is_emri_id, hedef_firma_id, saglam_adet, hurda_adet, kisi_id) VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+    [isEmriId, hedefFirmaId, saglamAdet, hurdaAdet, kisiId],
+  );
+  if (satir === null) throw new Error('Aktarım kaydı yazılamadı.');
+  return satir.id;
 }
 
 // Satın almanın dış operasyon listesi: bitmemiş fason iş emirleri ve hareket toplamları. Gün dönüşümü bağlantının saat dilimiyle
@@ -456,6 +480,9 @@ export function fasonIsEmirleri(db: Db): Promise<FasonIsEmri[]> {
   return db.sorgu<FasonIsEmri>(
     `SELECT i.id AS "isEmriId", e.id AS "uretimEmriId", e.emir_no AS "emirNo", e.parca_ad AS urun, i.op_no AS "opNo", i.ad AS adim, i.fason_firma_id AS "firmaId",
        e.adet, e.malzeme_no AS "malzemeNo", i.termin_gun AS "terminGun", to_char(e.teslim, 'YYYY-MM-DD') AS teslim,
+       i.kontrol_turu AS "kontrolTuru",
+       (SELECT n.fason_firma_id FROM uretim_emirleri_is_emri n WHERE n.uretim_emri_id = i.uretim_emri_id AND n.tur = 'rota' AND n.sira > i.sira ORDER BY n.sira LIMIT 1) AS "sonrakiFirmaId",
+       COALESCE((SELECT n.fason_firma_id IS NOT NULL OR n.fason_firmasiz FROM uretim_emirleri_is_emri n WHERE n.uretim_emri_id = i.uretim_emri_id AND n.tur = 'rota' AND n.sira > i.sira ORDER BY n.sira LIMIT 1), false) AS "sonrakiFason",
        ${NULLU_ISO('h.ilk_gidis')} AS "ilkGidis",
        CASE WHEN h.ilk_gidis IS NULL OR i.termin_gun IS NULL THEN NULL ELSE to_char(h.ilk_gidis::date + i.termin_gun, 'YYYY-MM-DD') END AS termin,
        ${NULLU_ISO('h.ilk_donus')} AS "ilkDonus", ${NULLU_ISO('h.son_donus')} AS "sonDonus", h.gonderilen, h.donen, h.hurda,
@@ -488,6 +515,10 @@ export interface FasonIsEmri {
   malzemeNo: number | null;
   terminGun: number | null;
   teslim: string | null;
+  // 3708: adımın kontrol türü ve sonraki rota adımı (fason mu, firması): fason siparişinde teslim yeri ve muayene notu bunlardan gelir.
+  kontrolTuru: 'gkk' | 'kaynakta' | 'kontrolsuz';
+  sonrakiFason: boolean;
+  sonrakiFirmaId: number | null;
   ilkGidis: string | null;
   termin: string | null;
   ilkDonus: string | null;

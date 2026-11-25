@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Dugme, IsaretKutusu, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
+import { KONTROLSUZ_SONRAKI_FASON_DEGIL, fasonKontrolDuzelt, fasonKontrolSecilebilir, type FasonKontrol } from '#paylasilan/fason-kontrol.ts';
 import { miktar as miktarMetni, sayi, YOK } from '../bicim.ts';
 import {
   seritKomsusu, seritteKaydir, adimBirlesen, adimCarpani, adimDali, adimGuncelle, adimOnculleri, adimSil, adimSurukle, akisKarti, bagimlilikYaz, BAGIMLILIK_SIRASI, birlesebilenDallar, birlesenYaz,
   cevrimToplami, DAL_HARFLERI, dalBilgileri, dalCarpaniYaz, dalEtiketi, dalYaz, kollariBirlestir, serbestDal, degisimOrani, fasonaCevir, fasonMu,
   girenTekrarIletisi, girenTekrari, hazirlikBolumu, hazirlikYaz, istasyonYaz, kartBasligi, katalogaDon, katalogdanFarkli, kucuk, malzemeMaliyetiSonucu, operasyonYaz, rotaEksikleri,
-  sirali, statuNo, sureYaz, tasinanMalzeme, tuketilenAdimlar, TUR_ADI, turKisa,
+  fasonKontrolSorunlari, sirali, statuNo, sureYaz, tasinanMalzeme, tuketilenAdimlar, TUR_ADI, turKisa,
   type Adim, type Malzeme,
 } from './kurallar.ts';
 import { AdimSartnameleri } from './AdimSartnameleri.tsx';
@@ -146,7 +147,44 @@ function UretimYeri({ r, s, a, duzen }: { r: RotaEkrani; s: { urunId: string }; 
           </p>
         </div>
       )}
+      {fason && <FasonKontrolu r={r} s={s} a={a} duzen={duzen} yaz={yaz} />}
     </Bolme>
+  );
+}
+
+// 3708: fason adımın arkasındaki kontrol. Kontrolsüz yalnız sonraki adım da fasonsa seçilebilir (kapalı seçenek nedenini yazar).
+const KONTROL_SECENEKLERI: readonly { deger: FasonKontrol; baslik: string; not: string }[] = [
+  { deger: 'gkk', baslik: 'GKK (TMI\'de)', not: 'Parça TMI\'ye döner, mal kabul, GKK' },
+  { deger: 'kaynakta', baslik: 'Kaynağında muayene (firmada)', not: 'Muayene firmada; sonraki adım fasonsa parça doğrudan oraya gider' },
+  { deger: 'kontrolsuz', baslik: 'Kontrolsüz (doğrudan sonraki firmaya)', not: 'Aktarım kaydıyla sonraki firmaya gider' },
+];
+function FasonKontrolu({ r, s, a, duzen, yaz }: { r: RotaEkrani; s: { urunId: string }; a: Adim; duzen: boolean; yaz: (f: (x: Adim) => Adim, metin: string) => void }) {
+  const liste = sirali(r.duzen.adimlar(s.urunId));
+  const sonraki = liste[liste.findIndex((x) => x.id === a.id) + 1];
+  const sonrakiFason = sonraki !== undefined && fasonMu(sonraki);
+  const kontrol = fasonKontrolDuzelt(a.kontrolTuru ?? 'gkk', sonrakiFason).kontrol;
+  const sorunlar = fasonKontrolSorunlari(a, sonraki);
+  return (
+    <div className="tc-rr1-fkontrol">
+      <span className="tc-rr1-fkontrol-baslik" id={`fk-${a.id}`}>Kontrol</span>
+      <div className="tc-rr1-depsel" role="radiogroup" aria-labelledby={`fk-${a.id}`}>
+        {KONTROL_SECENEKLERI.map((o) => {
+          const kapali = !fasonKontrolSecilebilir(o.deger, sonrakiFason);
+          return (
+            <button key={o.deger} type="button" role="radio" aria-checked={kontrol === o.deger} aria-disabled={kapali || !duzen} className={`tc-rr1-depb${kontrol === o.deger ? ' tc-rr1-on' : ''}`}
+              onClick={() => { if (!kapali && duzen) yaz((x) => ({ ...x, kontrolTuru: o.deger, muayeneSuresiSaat: o.deger === 'kaynakta' ? x.muayeneSuresiSaat ?? null : null }), 'Fason kontrolü değişti'); }}>
+              <b>{o.baslik}</b>
+              <small>{kapali ? KONTROLSUZ_SONRAKI_FASON_DEGIL : o.not}</small>
+            </button>
+          );
+        })}
+      </div>
+      {kontrol === 'kaynakta' && (
+        <SayiAlani etiket="Muayene süresi (saat)" deger={a.muayeneSuresiSaat ?? null} kapali={!duzen} yerTutucu="saat"
+          yaz={(v) => { yaz((x) => ({ ...x, muayeneSuresiSaat: v === null || v <= 0 ? null : v }), 'Muayene süresi değişti'); }} />
+      )}
+      {sorunlar.map((m) => <p key={m} className="tc-rr1-warnbox" role="status">OP {String(statuNo(a))}: {m}.</p>)}
+    </div>
   );
 }
 

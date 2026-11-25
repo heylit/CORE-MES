@@ -3,6 +3,7 @@
 // yalnız alanları süzer ve türünü denetler (zod'suz: `paylasilan` sözleşmesi zod taşıdığı için istemciye değer olarak giremez, sunucu testi
 // `rota-dilimi.test.ts` aynı tabloyla sahibin ucunu dener). Taslak kaydet bütün içeriği değiştirir; sürüm okunan
 // revizyonun sürümüdür, başkası arada yazdıysa sahibi 409 döner.
+import { FASON_KONTROLLERI } from '#paylasilan/fason-kontrol.ts';
 type Nesne = Record<string, unknown>;
 export interface RotaHazirKomut { yol: string; govde: Nesne; tekrarKorumali?: boolean }
 // hafif: komut sonrası yalnız bağlı durum yeniden okunur (kaynak sürümleri ve takvim okunmaz); kaydet her düzenlemede koşabilir.
@@ -87,6 +88,10 @@ function adim(a: Nesne): Nesne {
     yenidenAyar: a['yenidenAyar'] === true,
     // Seçimi taşımayan (eski görünüm) adımda alan gönderilmez: sunucu kayıtlı seçimi korur.
     ...(a['ilkParca'] === undefined ? {} : { ilkParca: secenek(a['ilkParca'], ILK_PARCA_SECIMLERI, 'ilk parça onayı') }),
+    // 3708: kontrol türünü taşımayan adımda alanlar gönderilmez: sunucu kayıtlı seçimi korur.
+    ...(a['kontrolTuru'] === undefined ? {} : {
+      kontrolTuru: secenek(a['kontrolTuru'], FASON_KONTROLLERI, 'fason kontrolü'), muayeneSuresiSaat: sayiVeyaBos(a['muayeneSuresiSaat'], 'muayene süresi'),
+    }),
     ...(a['dal'] === undefined ? {} : { dal: a['dal'] === null ? null : dal(a['dal'], 'dal') }),
     ...(a['birlesen'] === undefined ? {} : { birlesen: dallar(a['birlesen']) }),
     ...(a['adetCarpani'] === undefined ? {} : { adetCarpani: tamSayiVeyaBos(a['adetCarpani'], 'adet çarpanı') }),

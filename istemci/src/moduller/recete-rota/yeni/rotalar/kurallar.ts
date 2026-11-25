@@ -1,3 +1,4 @@
+import { fasonKontrolDuzelt, fasonKontrolUyarisi } from '#paylasilan/fason-kontrol.ts';
 import { dalDenetle, dalliMi, oncullerCikar } from '#paylasilan/sozlesme/rota-dal-kurali.ts';
 import type { DurumMalzemesi, DurumRotaAdimi, DurumRotaRevizyonu } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
@@ -356,6 +357,15 @@ export function gkkUyarilari(adimlar: readonly Adim[], opKodu: (opId: string) =>
 export const islemSuresiBos = (s: Adim): boolean => !fasonMu(s) && !((sureSayisi(s.proc) ?? 0) > 0);
 export const islemSuresiEksik = (adimlar: readonly Adim[]): Adim | null => sirali(adimlar).find(islemSuresiBos) ?? null;
 
+// 3708: fason adımın kontrol uyarıları: kaynağında muayene süresi boşsa "süre yok"; kontrolsüz seçilip sonraki adım fason değilse seçim GKK'ya döner.
+export function fasonKontrolSorunlari(a: Adim, sonraki: Adim | undefined): string[] {
+  if (!fasonMu(a)) return [];
+  const kontrol = a.kontrolTuru ?? 'gkk';
+  const duzeltilmis = fasonKontrolDuzelt(kontrol, sonraki !== undefined && fasonMu(sonraki));
+  const sure = fasonKontrolUyarisi(duzeltilmis.kontrol, a.muayeneSuresiSaat ?? null);
+  return [...(duzeltilmis.uyari === null ? [] : ['kontrol GKK\'ya döndü: sonraki adım fason değil']), ...(sure === null ? [] : ['muayene süresi yok'])];
+}
+
 // 2558 b/7: üstteki "Sorunlar" çipinin listesi: rota eksikleri (giren, dal, ayar), işlem süresi boş ve istasyonu olmayan iç üretim adımı.
 // Her satır adıma gider; adım sırasıyla.
 export function rotaSorunlari(adimlar: readonly Adim[], malzemeVar: (id: string) => boolean, opAdi: (opId: string) => string | null): RotaEksigi[] {
@@ -370,6 +380,7 @@ export function rotaSorunlari(adimlar: readonly Adim[], malzemeVar: (id: string)
       ...(!fasonMu(a) && !a.stationId ? ['istasyon yok'] : []),
       // Kaydı, onayı ve emir açılışını durdurmaz (2874): emir "firma bekleniyor" olarak açılır.
       ...(fasonMu(a) && !a.fasonId ? ['fason firma seçilmedi'] : []),
+      ...fasonKontrolSorunlari(a, ss.at(ss.findIndex((x) => x.id === a.id) + 1)),
     ];
     const m = eksik.get(a.id) ?? [];
     if (ek.length === 0) return m.map((metin) => ({ adimId: a.id, metin }));
@@ -496,7 +507,7 @@ export function yeniAdim(op: Operasyon | undefined, id: string): Adim {
   return {
     id, seq: 0, opNo: null, opId: op?.id ?? '', name: op?.name ?? '', stationId: op?.stationId ?? null, machineId: null, kisiId: null, fasonId: null,
     terminGun: null, setup: op ? op.setup : 15, proc: op ? proc : 2, chg: null, cycle: op ? cevrimToplami(proc, null) : 2,
-    dep: 'bagimli', depQty: 1, rejectPct: 0, split: 'tek', minLot: null, resetup: true, ilkParca: 'yok', alts: [], altTimes: {}, digerAdaylar: [], ins: [], outs: [],
+    dep: 'bagimli', depQty: 1, rejectPct: 0, split: 'tek', minLot: null, resetup: true, ilkParca: 'yok', kontrolTuru: 'gkk', muayeneSuresiSaat: null, alts: [], altTimes: {}, digerAdaylar: [], ins: [], outs: [],
   };
 }
 // Adım `sonraId`den sonra (null: başa) eklenir; sıra yeniden 10, 20...
@@ -611,7 +622,7 @@ export function fasonaCevir(a: Adim, firmaId: string | null, op: Operasyon | und
       ...a, machineId: null, stationId: null, kisiId: null, alts: [], altTimes: {}, digerAdaylar: [], split: 'tek', minLot: null, fasonId: firmaId, fason: true,
     };
   }
-  const b: Adim = { ...a, fasonId: null, fason: false, terminGun: null };
+  const b: Adim = { ...a, fasonId: null, fason: false, terminGun: null, kontrolTuru: 'gkk', muayeneSuresiSaat: null };
   return b.stationId ? b : { ...b, stationId: op?.stationId ?? null };
 }
 export function sureYaz(a: Adim, alan: 'setup' | 'proc' | 'chg', deger: number | null): Adim {
@@ -756,6 +767,8 @@ export function kaydetGovdesi(adimlar: readonly Adim[], izinliOpNolar: readonly 
       yenidenAyar: s.resetup !== false,
       // Seçimi bilinmeyen adımda alan gönderilmez: sunucu kayıtlı seçimi korur.
       ...(s.ilkParca === undefined ? {} : { ilkParca: s.ilkParca }),
+      // 3708: kontrol türü yalnız fason adımda anlamlıdır; sunucu geçersiz seçimi (sonraki adım fason değil) GKK'ya çevirir.
+      ...(s.kontrolTuru === undefined ? {} : { kontrolTuru: fason ? s.kontrolTuru : 'gkk', muayeneSuresiSaat: fason && s.kontrolTuru === 'kaynakta' ? s.muayeneSuresiSaat ?? null : null }),
       dal: adimDali(s),
       birlesen: [...adimBirlesen(s)],
       // Çarpanı taşımayan yerel taslakta alan gönderilmez: sunucu kayıtlı çarpanı korur.

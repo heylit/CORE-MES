@@ -718,7 +718,7 @@ export const isEmriSemasi = z.object({
     donenSaglam: z.number().int().nonnegative(),
     donenHurda: z.number().int().nonnegative(),
     hareketler: z.array(z.object({
-      id: KIMLIK, yon: z.enum(FASON_YONLERI), adet: z.number().int().nonnegative(), hurdaAdet: z.number().int().nonnegative().nullable(),
+      id: KIMLIK, kaynak: z.enum(['hareket', 'aktarim']).optional(), yon: z.enum(FASON_YONLERI), adet: z.number().int().nonnegative(), hurdaAdet: z.number().int().nonnegative().nullable(),
       kisi: adliKayit, zaman: zamanSemasi,
     })),
   }).nullable(),

@@ -8,7 +8,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const json = (d: number, g: unknown) => new Response(JSON.stringify(g), { status: d });
 const BELGE = { id: 9, no: 'MK-000009', tur: 'satin_alma', irsaliyeNo: null, zaman: '2026-11-25T10:00:00+03:00', kisiAd: 'D', satirSayisi: 1, farkSayisi: 0, duzeltilenId: null, duzeltenId: null };
 const FASON_SATIRI = { id: 41, siparisNo: 'SAS-41', talepNo: 'TLP-41', tedarikciAdi: 'ORN-Firma A', malzemeId: 950, malzemeTur: 'hizmet', kalemAdi: 'ORN-Flanş', miktar: '120.000', kalanMiktar: '120.000', birim: 'adet', beklenenTeslim: null, isEmriId: 77, emirNo: 'ORN-UE-1' };
-const FASON_ISI = { isEmriId: 77, emirNo: 'ORN-UE-1', opNo: 30, adim: 'Isıl işlem', gonderilen: 120, donen: 0, hurda: 0, donenKart: { malzemeId: 960, kod: 'ORN-K', ad: 'Mil', birim: 'adet' }, statulu: false };
+const FASON_ISI = { isEmriId: 77, emirNo: 'ORN-UE-1', opNo: 30, adim: 'Isıl işlem', gonderilen: 120, donen: 0, hurda: 0, donenKart: { malzemeId: 960, kod: 'ORN-K', ad: 'Mil', birim: 'adet' }, statulu: false, donusYolu: 'gkk' as const };
 
 function sunucu(islemler: string[], ek: Record<string, () => Response> = {}) {
   const istekler: { yontem: string; yol: string; govde: unknown }[] = [];

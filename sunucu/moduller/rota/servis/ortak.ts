@@ -171,6 +171,7 @@ export function adimlariKur(b: AdimGorunumuBaglami, urunMiktari = 1): RevizyonAy
       ayarSuresiDk: a.ayarSuresiDk, birimSureDk: a.birimSureDk, islemSuresiDk: ayrim.islem, degisimSuresiDk: ayrim.degisim,
       degisimOraniYuzde: oran === null ? null : ondalikMetin(oran, 2), terminGun: a.terminGun, bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi,
       firePayiYuzde: a.firePayiYuzde, makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar, ilkParca: a.ilkParca,
+      kontrolTuru: a.kontrolTuru, muayeneSuresiSaat: a.muayeneSuresiSaat === null ? null : ondalikMetin(Number(a.muayeneSuresiSaat), 2),
       hazirlikDk: a.hazirlikDk, ayar: a.ayar, ayarDk: a.ayarDk, dal: a.dal, birlesen: a.birlesen, adetCarpani: a.adetCarpani, onculler: onculler[i] ?? null,
       adaylar: icerik.adaylar.filter((x) => x.adimId === a.id)
         .map((x) => {
@@ -325,7 +326,7 @@ export function icerikYazimlari(icerik: Icerik): (YeniAdim & { opNo: number })[]
     opNo: a.opNo, operasyonTipiId: a.operasyonTipiId, ad: a.ad, kaynak: a.kaynak, ayarSuresiDk: a.ayarSuresiDk,
     birimSureDk: a.birimSureDk, islemSuresiDk: a.islemSuresiDk, degisimSuresiDk: a.degisimSuresiDk, terminGun: a.terminGun,
     bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi, firePayiYuzde: a.firePayiYuzde,
-    makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar, ilkParca: a.ilkParca,
+    makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar, ilkParca: a.ilkParca, kontrolTuru: a.kontrolTuru, muayeneSuresiSaat: a.muayeneSuresiSaat,
     adaylar: icerik.adaylar.filter((x) => x.adimId === a.id)
       .map(({ kaynak, ayarSuresiDk, birimSureDk, islemSuresiDk, degisimSuresiDk }) => ({ kaynak, ayarSuresiDk, birimSureDk, islemSuresiDk, degisimSuresiDk })),
     bilesenler: icerik.bilesenler.filter((x) => x.adimId === a.id).map(({ malzemeId, miktar, fireYuzde }) => ({ malzemeId, miktar, fireYuzde })),
@@ -414,7 +415,7 @@ export async function sablonAdimlariniKur(db: Db, sablonId: number): Promise<Yen
       opNo: null, operasyonTipiId: st.operasyonTipiId, ad: st.ad, kaynak: istasyon === null ? null : { tur: 'istasyon', id: istasyon },
       ayarSuresiDk: ayar, birimSureDk: null, islemSuresiDk: birim !== null && birim > 0 ? birim : null, degisimSuresiDk: null, terminGun: null,
       bagimlilik: 'bekleyen' as Bagimlilik, devirAdedi: null, firePayiYuzde: 0, makineKullanimi: 'tek' as MakineKullanimi,
-      enKucukParca: null, yenidenAyar: true, ilkParca: 'yok',
+      enKucukParca: null, yenidenAyar: true, ilkParca: 'yok', kontrolTuru: 'gkk' as const, muayeneSuresiSaat: null,
       ...(ayar !== null && ayar > 0 ? { hazirlikDk: 0, ayar: true, ayarDk: ayar } : { hazirlikDk: ayar, ayar: false, ayarDk: null }),
       adaylar: [], bilesenler: [], yanUrunler: [], dal: null, birlesen: [], adetCarpani: null, ciktiMalzemeId: null,
     };
@@ -460,7 +461,7 @@ export async function taslagiAc(db: Db, acanKisiId: number, urunId: number, kayn
     adimlar = kart.map((a) => ({
       opNo: a.opNo, operasyonTipiId: a.operasyonTipiId, ad: a.ad, kaynak: null, ayarSuresiDk: null, birimSureDk: null, islemSuresiDk: null, degisimSuresiDk: null, terminGun: null,
       bagimlilik: 'bekleyen' as Bagimlilik, devirAdedi: null, firePayiYuzde: 0, makineKullanimi: 'tek' as MakineKullanimi,
-      enKucukParca: null, yenidenAyar: true, ilkParca: 'yok', hazirlikDk: null, ayar: false, ayarDk: null, adaylar: [], bilesenler: [], yanUrunler: [], dal: null, birlesen: [], adetCarpani: null,
+      enKucukParca: null, yenidenAyar: true, ilkParca: 'yok', kontrolTuru: 'gkk' as const, muayeneSuresiSaat: null, hazirlikDk: null, ayar: false, ayarDk: null, adaylar: [], bilesenler: [], yanUrunler: [], dal: null, birlesen: [], adetCarpani: null,
       ciktiMalzemeId: null,
     }));
   } else if (kaynak.tur === 'urun') {
@@ -539,7 +540,7 @@ export async function isEmriGirdileri(db: Db, malzemeId: number, rota: NonNullab
     adetCarpani: a.adetCarpani,
     kontrolListesi: listeler.get(a.operasyonId) ?? (a.operasyonTipiId === null ? undefined : sablonlar.get(a.operasyonTipiId)) ?? [],
     // Emir adedi istenen sağlam çıktıdır (250 a): ihtiyacı adımın fire payı büyütür; adım ayarları planın girdisidir, varsayılana düşmez.
-    firePayiYuzde: a.firePayiYuzde, makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar,
+    firePayiYuzde: a.firePayiYuzde, makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar, kontrolTuru: a.kontrolTuru, muayeneSuresiSaat: a.muayeneSuresiSaat === null ? null : Number(a.muayeneSuresiSaat),
     // İş emrinin adayı makine ya da kişidir; istasyon adayı emirde karşılıksızdır, adımın istasyonu zaten başlıktır.
     adaylar: a.adaylar.flatMap((x) => (x.kaynak.tur === 'istasyon' ? [] : [{ kaynak: { tur: x.kaynak.tur, id: x.kaynak.id }, ayarSuresiDk: x.ayarSuresiDk, birimSureDk: x.birimSureDk }])),
     // Adımın girenleri emre kopyalanır: stok üretim sayımında adımın girdisini bunlardan sarf eder; yoksa sayım yalnız ürün girişi olur.

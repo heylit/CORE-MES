@@ -447,7 +447,7 @@ test('SAT-77: stok tutarı miktar x TL birim fiyat toplamıdır, kuruşa yuvarla
 test('898 a: fason ön talep bağlı, yoksayılmış ve gönderilmiş adımı almaz; en erken teslim üstte, tarihsiz sonda', () => {
   const f = (isEmriId: number, teslim: string | null, gonderilen: number | null = null) => ({
     isEmriId, uretimEmriId: 1, emirNo: `E${isEmriId}`, urun: null, opNo: 10, adim: null, firmaId: 1, adet: 5, malzemeNo: null, terminGun: 3, teslim,
-    ilkGidis: null, termin: null, ilkDonus: null, sonDonus: null, gonderilen, donen: null, hurda: null, donusler: [],
+    kontrolTuru: 'gkk' as const, sonrakiFason: false, sonrakiFirmaId: null, ilkGidis: null, termin: null, ilkDonus: null, sonDonus: null, gonderilen, donen: null, hurda: null, donusler: [],
   });
   const l = fasonOnTalepAdaylari([f(1, null), f(2, '2026-11-05'), f(3, '2026-11-01'), f(4, '2026-10-30'), f(5, '2026-10-29'), f(6, '2026-10-28', 2)], new Set([4]), new Set([5]));
   assert.deepEqual(l.map((x) => x.isEmriId), [3, 2, 1]);
