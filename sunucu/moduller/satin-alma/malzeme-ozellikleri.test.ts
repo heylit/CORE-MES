@@ -11,7 +11,8 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { kablola } from '../../kablolama.ts';
-import { kopyaOzelligi } from './kurallar.ts';
+import { kopyaOzelligi, talebim } from './kurallar.ts';
+import type { KalemOzelligi } from './kurallar.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -26,11 +27,39 @@ describe('3121, 3133 (1105 a): sipariş satırının sütunları ve kart ayrınt
         { ad: 'Kalite', deger: 'ORN-K1' }, { ad: 'Form', deger: 'Yuvarlak çubuk' }, { ad: 'Ölçü', deger: 'Ø50×3000 mm' }, { ad: 'Açıklama', deger: 'ORN açıklama' },
         { ad: 'Standart', deger: 'ORN-STD' }, { ad: 'Durum', deger: 'Tavlı' }, { ad: 'İşlem', deger: 'Kumlama' },
       ],
+      // 3706-2: iç alanlar ayrı listedir (tedarikçiye gitmez), ayrıntıya karışmaz.
+      ic: [{ ad: 'En az sipariş', deger: '10' }, { ad: 'Tercih edilen tedarikçi', deger: 'ORN-F' }, { ad: 'Kart notu', deger: 'iç not' }],
     });
   });
   test('yasak: eski kopyada işlem ve ölçü yoksa doldurulmaz, satır kayıtsız döner; iç alanlar (en az sipariş, tercih tedarikçi, not) ayrıntıda yok', () => {
     const o = kopyaOzelligi({ kaliteAdi: 'ORN-K1', durum: 'Tavlı', aciklamalar: [], enAzSiparis: '10', tercihTedarikci: 'ORN-F', not: 'iç not' });
-    assert.deepEqual(o, { kalite: 'ORN-K1', durum: 'Tavlı', islem: null, olcu: null, aciklama: null, kayitsiz: true, ayrinti: [{ ad: 'Kalite', deger: 'ORN-K1' }, { ad: 'Durum', deger: 'Tavlı' }] });
+    assert.deepEqual(o, {
+      kalite: 'ORN-K1', durum: 'Tavlı', islem: null, olcu: null, aciklama: null, kayitsiz: true, ayrinti: [{ ad: 'Kalite', deger: 'ORN-K1' }, { ad: 'Durum', deger: 'Tavlı' }],
+      ic: [{ ad: 'En az sipariş', deger: '10' }, { ad: 'Tercih edilen tedarikçi', deger: 'ORN-F' }, { ad: 'Kart notu', deger: 'iç not' }],
+    });
+  });
+  test('3706-2: hizmet kartının türe özel kaydı kart olarak döner; kayıt yoksa alan hiç gelmez, iç alan yoksa ic gelmez', () => {
+    const turKarti = { g: { kat: 'isil', yon: 'Alınan' }, com: { ad: 'ORN hizmet', kod: 'HZ-ORN-1', birim: 'kg', sertifika: [] } };
+    const o = kopyaOzelligi({ tur: 'hizmet', aciklamalar: [], standartlar: [], sertifikalar: [], turKarti });
+    assert.deepEqual(o.kart, { tur: 'hizmet', ...turKarti });
+    assert.equal('ic' in o, false);
+    assert.equal('kart' in kopyaOzelligi({ tur: 'hammadde', aciklamalar: [], turKarti: null }), false);
+  });
+});
+
+describe('3706-2 A: iç bilgi talep edenin cevabında yoktur (saf)', () => {
+  test('talebim: kalemin malzemesinde ic düşer, kart ve ayrıntı kalır; özelliği olmayan kalem null', () => {
+    const o: KalemOzelligi = {
+      kalite: null, durum: null, islem: null, olcu: null, aciklama: null, ayrinti: [{ ad: 'Form', deger: 'ORN' }],
+      kart: { tur: 'hizmet', g: {}, com: { ad: 'ORN', kod: null, birim: null, sertifika: [] } }, ic: [{ ad: 'Kart notu', deger: 'iç not' }],
+    };
+    const t = { id: 't', no: 'T-1', baslik: 'b', durum: 'taslak', ihtiyacTarihi: null, olusturma: '2026-01-01T00:00:00Z', uretimEmriNo: null, notlar: '', surum: 1,
+      kalemler: [{ id: 'k1', ad: 'a', miktar: '1', birim: 'adet', ozellik: '', katalogId: 'c' }, { id: 'k2', ad: 'b', miktar: '1', birim: 'adet', ozellik: '', katalogId: null }] } as unknown as Parameters<typeof talebim>[0];
+    const c = talebim(t, new Map(), new Map(), new Map([['k1', o]]));
+    assert.equal(JSON.stringify(c).includes('iç not'), false);
+    assert.equal('ic' in (c.kalemler[0]!.malzeme as object), false);
+    assert.deepEqual(c.kalemler[0]!.malzeme?.ayrinti, o.ayrinti);
+    assert.equal(c.kalemler[1]!.malzeme, null);
   });
 });
 

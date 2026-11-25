@@ -1297,6 +1297,8 @@ export interface KalemBagi { uygulanan: string | null; fasonAdim: string | null;
 export interface KalemOzelligi {
   kalite: string | null; durum: string | null; islem: string | null; olcu: string | null; aciklama: string | null;
   ayrinti: { ad: string; deger: string }[];
+  kart?: { tur: string; g: Record<string, unknown>; com: { ad: string | null; kod: string | null; birim: string | null; sertifika: string[] } };
+  ic?: { ad: string; deger: string }[];
 }
 // Kart ayrıntısı (bugünkü hâl ya da siparişteki kopya, 1105 a) aynı biçimdedir. Ayrıntı listesi malzeme kartının föyündeki sırayla;
 // boş alan yazılmaz. Fiyat, en az sipariş, tercih edilen tedarikçi ve kart notu satın almanın iç alanıdır, listede yoktur.
@@ -1310,7 +1312,15 @@ export function kopyaOzelligi(a: Record<string, unknown>): KalemOzelligi & { kay
     ['Tolerans', metin(a['tolerans'])], ['Durum', o.durum], ['İşlem', o.islem], ['Yüzey', metin(a['yuzey'])],
     ['İstenen sertifikalar', dizi(a['sertifikalar'])], ['Üretici ürün kodu', metin(a['ureticiUrunKodu'])], ['Menşei', metin(a['mensei'])], ['GTİP', metin(a['gtip'])],
   ];
-  return { ...o, ayrinti: satirlar.flatMap(([ad, deger]) => (deger === null ? [] : [{ ad, deger }])), kayitsiz: !('islem' in a) || !('olcu' in a) };
+  // 3706-2: iç alanlar ayrı listedir (ekran "tedarikçiye gitmez" diye gösterir, teklif formu okumaz).
+  const ic: [string, string | null][] = [['En az sipariş', metin(a['enAzSiparis'])], ['Tercih edilen tedarikçi', metin(a['tercihTedarikci'])], ['Kart notu', metin(a['not'])]];
+  const dolu = ic.flatMap(([ad, deger]) => (deger === null ? [] : [{ ad, deger }]));
+  const tk = a['turKarti'];
+  return {
+    ...o, ayrinti: satirlar.flatMap(([ad, deger]) => (deger === null ? [] : [{ ad, deger }])), kayitsiz: !('islem' in a) || !('olcu' in a),
+    ...(dolu.length > 0 ? { ic: dolu } : {}),
+    ...(typeof tk === 'object' && tk !== null ? { kart: { tur: String(a['tur'] ?? ''), ...(tk as Omit<NonNullable<KalemOzelligi['kart']>, 'tur'>) } } : {}),
+  };
 }
 // 3462 a: kalemin geçerli termini ve emri; kendi değeri yoksa talebinki.
 function kalemTerminEmriGorunumu(t: Pick<TalepCikisi, 'ihtiyacTarihi' | 'uretimEmriId' | 'uretimEmriNo'>, kendi: KalemBagi['kendi']) {
@@ -1320,6 +1330,12 @@ function kalemTerminEmriGorunumu(t: Pick<TalepCikisi, 'ihtiyacTarihi' | 'uretimE
     uretimEmriNo: kendi?.uretimEmriId != null ? kendi.uretimEmriNo : t.uretimEmriNo,
   };
 }
+// 3706-2 A: iç bilgi (en az sipariş, tercih edilen tedarikçi, kart notu) yalnız satın alma ekranındadır; talep edenin cevabında yoktur.
+const talepEdeneOzelligi = (o: KalemOzelligi | undefined): Omit<KalemOzelligi, 'ic'> | null => {
+  if (o === undefined) return null;
+  const { ic: _, ...acik } = o;
+  return acik;
+};
 export function talebim(
   t: TalepCikisi, baglar: ReadonlyMap<string, KalemBagi> = new Map(), karsiliklar: ReadonlyMap<string, BirimKarsiligi> = new Map(),
   ozellikler: ReadonlyMap<string, KalemOzelligi> = new Map(), kabuller: ReadonlyMap<string, KalemKabulu> = new Map(),
@@ -1334,7 +1350,7 @@ export function talebim(
     ...(t.guncellemeGrubu === undefined ? {} : { guncellemeGrubu: t.guncellemeGrubu }),
     kaynak: t.kalemler.some((k) => bag(k.id).fasonAdim !== null) ? 'fason' : 'elle',
     kalemler: t.kalemler.map((k) => ({ id: k.id, aciklama: k.ozellik, ad: k.ad, miktar: k.miktar, birim: k.birim, kartBekliyor: k.katalogId === null,
-      uygulanan: bag(k.id).uygulanan, fasonAdim: bag(k.id).fasonAdim, ...kalemTerminEmriGorunumu(t, bag(k.id).kendi), karsilik: karsiliklar.get(k.id) ?? null, malzeme: ozellikler.get(k.id) ?? null, ...kabuller.get(k.id),
+      uygulanan: bag(k.id).uygulanan, fasonAdim: bag(k.id).fasonAdim, ...kalemTerminEmriGorunumu(t, bag(k.id).kendi), karsilik: karsiliklar.get(k.id) ?? null, malzeme: talepEdeneOzelligi(ozellikler.get(k.id)), ...kabuller.get(k.id),
       ...(sartli.has(k.id) ? { sartliAlternatifler: sartli.get(k.id)! } : {}) })),
   };
 }

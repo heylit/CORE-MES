@@ -410,6 +410,9 @@ export interface KatalogSatinAlmaSatiri {
   no: number; tur: string; surum: number; kaliteAdi: string | null; formAdi: string | null; aciklamalar: string[];
   standartlar: string[]; tolerans: string | null; durum: string | null; yuzey: string | null; sertifikalar: string[];
   ureticiUrunKodu: string | null; mensei: string | null; gtip: string | null; enAzSiparis: string | null; tercihTedarikci: string | null; not: string | null;
+  // 3706-2: hizmet, sarf ve demirbaş kartının türe özel alanları (kategori, çeşit, yön ...); ekran föyün satırlarını bundan kurar. Fiyat, tedarikçi,
+  // not ve demirbaşın zimmet, seri ve konumu girmez. Diğer türde null.
+  turKarti: { g: Record<string, unknown>; com: { ad: string | null; kod: string | null; birim: string | null; sertifika: string[] } } | null;
 }
 export const KATALOG_DIZI = (yol: string): string => `ARRAY(SELECT btrim(e) FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(k.kayit #> '{${yol}}') = 'array'
   THEN k.kayit #> '{${yol}}' ELSE '[]'::jsonb END) e WHERE btrim(e) <> '')`;
@@ -425,7 +428,11 @@ export function katalogSatinAlmaSatirlari(db: Db, nolar: number[]): Promise<Kata
             ${KATALOG_METIN('g,urunKodu')} AS "ureticiUrunKodu", ${KATALOG_METIN('g,mensei')} AS mensei, ${KATALOG_METIN('g,gtip')} AS gtip,
             CASE WHEN jsonb_typeof(k.kayit #> '{com,moq}') = 'number' AND (k.kayit #>> '{com,moq}')::numeric > 0
                  THEN (k.kayit #>> '{com,moq}')::numeric::text END AS "enAzSiparis",
-            ${KATALOG_METIN('com,ted')} AS "tercihTedarikci", ${KATALOG_METIN('com,not')} AS not
+            ${KATALOG_METIN('com,ted')} AS "tercihTedarikci", ${KATALOG_METIN('com,not')} AS not,
+            CASE WHEN k.tur IN ('hizmet', 'sarf', 'demirbas') THEN jsonb_build_object(
+              'g', COALESCE(k.kayit -> 'g', '{}'::jsonb) - 'sorumlu' - 'seri' - 'konum',
+              'com', jsonb_build_object('ad', k.kayit #>> '{com,ad}', 'kod', k.kayit #>> '{com,kod}', 'birim', k.kayit #>> '{com,birim}',
+                                        'sertifika', to_jsonb(${KATALOG_DIZI('com,sertifika')}))) END AS "turKarti"
        FROM malzeme_katalog_karti k WHERE k.no = ANY($1::int[]) AND k.onay_durumu <> 'iptal'`, [nolar]);
 }
 

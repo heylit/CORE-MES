@@ -110,6 +110,36 @@ describe('3467 Teklif al ekranı', () => {
     await vi.waitFor(() => expect(pano).toHaveLength(1));
     expect(pano[0]).toMatch(/^Konu: Fiyat teklifi talebi, ST-2026-011 ORN- ST-2026-011\n\n/);
 
+    // 3706: son cevap tarihi gün sayısıyla da seçilir; varsayılan bugün + 3, düğmeler +2 ve +3, ikisi birbirinin karşılığıdır.
+    const gun = kok.querySelector<HTMLInputElement>('#rfq-gun')!;
+    const ozet = () => kok.querySelector('#rfq-due-ozet')?.textContent;
+    const bugunden = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); return `${String(d.getFullYear())}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+    expect(gun.value).toBe('3');
+    expect(kok.querySelector<HTMLInputElement>('#rfq-due')!.value).toBe(bugunden(3));
+    expect(ozet()).toMatch(/^3 gün · \d\d\.\d\d\.\d{4}$/);
+    kok.querySelector<HTMLButtonElement>('[data-act="rfq-gun"][data-gun="2"]')!.click();
+    expect(gun.value).toBe('2');
+    expect(kok.querySelector<HTMLInputElement>('#rfq-due')!.value).toBe(bugunden(2));
+    expect(kok.querySelector('[data-act="rfq-gun"][data-gun="2"]')!.getAttribute('aria-pressed')).toBe('true');
+    expect(kok.querySelector('[data-act="rfq-gun"][data-gun="3"]')!.getAttribute('aria-pressed')).toBe('false');
+    gun.value = '5'; degistir(gun);
+    expect(kok.querySelector<HTMLInputElement>('#rfq-due')!.value).toBe(bugunden(5));
+    expect(ozet()).toMatch(/^5 gün · /);
+    expect(kok.querySelector('[data-act="rfq-gun"][data-gun="3"]')!.getAttribute('aria-pressed')).toBe('false');
+    // Aralık dışı değer tarihi silmez: tarih kalır, kutu hata gösterir; geçerli değer hatayı kaldırır.
+    for (const kotu of ['400', '-1', '2.5']) {
+      gun.value = kotu; degistir(gun);
+      expect(kok.querySelector<HTMLInputElement>('#rfq-due')!.value, kotu).toBe(bugunden(5));
+      expect(ozet(), kotu).toBe('Gün sayısı 0 ile 365 arasında, tam sayı olur.');
+      expect(gun.getAttribute('aria-invalid'), kotu).toBe('true');
+    }
+    gun.value = '6'; degistir(gun);
+    expect(gun.hasAttribute('aria-invalid')).toBe(false);
+    expect(kok.querySelector<HTMLInputElement>('#rfq-due')!.value).toBe(bugunden(6));
+    const takvim = kok.querySelector<HTMLInputElement>('#rfq-due')!;
+    takvim.value = bugunden(7); degistir(takvim);
+    expect(gun.value).toBe('7');
+
     // Form: logo basılır; Geri seçimi ve son tarihi korur.
     const tarih = kok.querySelector<HTMLInputElement>('#rfq-due')!;
     tarih.value = '2026-12-01'; degistir(tarih);

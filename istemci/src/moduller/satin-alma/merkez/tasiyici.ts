@@ -13,6 +13,7 @@ import { ApiHatasi, api } from '../../../ortak/veri/api.ts';
 import { karsilikYaz } from '../talep/ortak.ts';
 import { tekrarKorumaliGonder, yeniIstekKimligi, yenidenDenenebilirMi, type Deneme } from '../../../ortak/veri/istek-kimligi.ts';
 import { ucCagrisi } from '../../../ortak/veri/uc-cagrisi.ts';
+import { ayrintiyiBirlestir, kartSatirlariniHazirla } from './kart-satirlari.ts';
 import { FIRMA_KARTLARI, S, applyLocal, notify, scheduleRender, type Backend, type Coll, type Entity, type Transport } from './store.ts';
 import type {
   AppUser, ApprovalLimit, Approval, Award, AwardOrder, Currency, ExcessLine, Material, Priority, PurchaseRequest, Quality, Quote, RequestStatus, Settings, SimScenario,
@@ -126,7 +127,7 @@ export function talepEkrana(t: Talep): PurchaseRequest {
         id: i.id, materialId: i.katalogId, name: i.ad, spec: i.ozellik, qty: sayi(i.miktar), unit: i.birim, category: i.kategori,
         ...(bag?.uygulanan ? { parca: bag.uygulanan } : {}),
         ...((k) => (k ? { karsilik: karsilikYaz(k) } : {}))(t.kalemKarsiliklari?.find((x) => x.kalemId === i.id)),
-        ...((o) => (o ? { malzeme: { kalite: o.kalite, durum: o.durum, islem: o.islem, olcu: o.olcu, aciklama: o.aciklama, ayrinti: o.ayrinti } } : {}))(t.kalemOzellikleri?.find((x) => x.kalemId === i.id)),
+        ...((o) => (o ? { malzeme: { kalite: o.kalite, durum: o.durum, islem: o.islem, olcu: o.olcu, aciklama: o.aciklama, ayrinti: ayrintiyiBirlestir(o.ayrinti, o.kart), ...(o.kart ? { kart: o.kart } : {}), ...(o.ic?.length ? { ic: o.ic } : {}) } } : {}))(t.kalemOzellikleri?.find((x) => x.kalemId === i.id)),
         ...((a) => (a && a.kartlar.length > 0 ? { alternatifler: a.kartlar } : {}))(t.kalemAlternatifleri?.find((x) => x.kalemId === i.id)),
         ...((k) => (k ? { istenenTermin: k.ihtiyacTarihi.slice(0, 10) } : {}))(t.kalemTerminleri?.find((x) => x.kalemId === i.id)),
         ...(bag?.fason ? { fason: { emirNo: bag.fason.emirNo, opNo: bag.fason.opNo, adim: bag.fason.adim, firmaAdi: bag.fason.firmaAdi } } : {}),
@@ -437,6 +438,7 @@ async function yukle(): Promise<void> {
   const ben: AppUser = { id: String(a.kullanici.id), email: '', name: a.kullanici.ad };
   S.users[ben.id] = ben;
   S.me = ben;
+  await kartSatirlariniHazirla(a.talepler.flatMap((t) => (t.kalemOzellikleri ?? []).map((o) => o.kart)));
   S.requests = kimlikle(a.talepler.map(talepEkrana));
   S.suppliers = kimlikle(a.tedarikciler.map(tedarikciEkrana));
   FIRMA_KARTLARI.splice(0, FIRMA_KARTLARI.length, ...a.firmaKartlari.map((f) => ({ id: String(f.id), ad: f.ad })));

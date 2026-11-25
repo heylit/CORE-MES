@@ -138,6 +138,9 @@ export interface MalzemeOzelligi {
   kalite: string | null; durum: string | null; islem: string | null; olcu: string | null; aciklama: string | null;
   /** 3133: kart föyündeki ayrıntılar, föy sırasıyla; boş alan yok. */
   ayrinti: { ad: string; deger: string }[]; kayitsiz?: boolean;
+  /** 3706-2: hizmet, sarf ve demirbaş kartının türe özel kaydı (satırları `kart-satirlari.ts` kurar) ve satın almanın iç alanları (tedarikçiye gitmez). */
+  kart?: { tur: string; g: Record<string, unknown>; com: { ad: string | null; kod: string | null; birim: string | null; sertifika: string[] } };
+  ic?: { ad: string; deger: string }[];
 }
 
 export interface Rfq { supplierId: string; sentAt: DateStr; dueDate: DateStr }

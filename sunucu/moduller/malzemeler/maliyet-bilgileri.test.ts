@@ -69,7 +69,7 @@ describe('Kg fiyatı için kalite, form ve stok birimi (satın alma isteği 19.1
       grade: 'S235JR', form: 'cubuk', dims: OLCU.cubuk, stds: ['EN 10025-2', ' '], tol: 'h9', opts: { durum: 'Normalize', yuzey: ' ' },
       com: { std: 'EN 10025-2', sertifika: ['EN 10204 3.1', ''], moq: 25, ted: 'Deneme Tedarik', not: 'Deneme not' },
     }, 'aktif', 'hammadde', { kalite_adi: 'S235JR (1.0038)', form_adi: 'Yuvarlak çubuk', aciklama_1: 'Ø50', aciklama_2: ' ' });
-    const sarf = await kaydet({ g: { urunKodu: 'DNM-123', mensei: 'TR', gtip: '8207' }, com: { moq: 0 } }, 'aktif', 'sarf');
+    const sarf = await kaydet({ g: { urunKodu: 'DNM-123', mensei: 'TR', gtip: '8207', sorumlu: 'Deneme zimmet' }, com: { moq: 0 } }, 'aktif', 'sarf');
     const m = await vt().tx((db) => malzemeSatinAlmaAyrintilari(db, [hm, sarf, hm, 2147483000]));
     assert.deepEqual([...m.keys()].sort((a, b) => a - b), [hm, sarf].sort((a, b) => a - b));
     const { surum, ...a } = m.get(hm)!;
@@ -77,10 +77,15 @@ describe('Kg fiyatı için kalite, form ve stok birimi (satın alma isteği 19.1
     assert.deepEqual(a, {
       tur: 'hammadde', kaliteAdi: 'S235JR (1.0038)', formAdi: 'Yuvarlak çubuk', aciklamalar: ['Ø50'], standartlar: ['EN 10025-2'], tolerans: 'h9',
       durum: 'Normalize', yuzey: null, sertifikalar: ['EN 10204 3.1'], ureticiUrunKodu: null, mensei: null, gtip: null, enAzSiparis: '25',
-      tercihTedarikci: 'Deneme Tedarik', not: 'Deneme not', islem: null, olcu: 'Ø50×1001 mm',
+      tercihTedarikci: 'Deneme Tedarik', not: 'Deneme not', turKarti: null, islem: null, olcu: 'Ø50×1001 mm',
     });
     const b = m.get(sarf)!;
     assert.deepEqual([b.kaliteAdi, b.ureticiUrunKodu, b.mensei, b.gtip, b.enAzSiparis, b.sertifikalar, b.standartlar, b.islem, b.olcu], [null, 'DNM-123', 'TR', '8207', null, [], [], null, null]);
+    // 3706-2: sarf, hizmet ve demirbaşta türe özel alanlar kısaltılmış kayıtla döner; zimmet, seri ve konum girmez; hammaddede kayıt yok.
+    assert.equal(m.get(hm)!.turKarti, null);
+    assert.equal(b.turKarti?.g['urunKodu'], 'DNM-123');
+    assert.equal('sorumlu' in (b.turKarti?.g ?? {}), false);
+    assert.deepEqual(Object.keys(b.turKarti?.com ?? {}).sort(), ['ad', 'birim', 'kod', 'sertifika']);
     assert.equal((await vt().tx((db) => malzemeSatinAlmaAyrintilari(db, []))).size, 0);
   });
 

@@ -171,3 +171,6 @@
   .sa-mal-serit-oz:not([data-tumu]) .sa-mal-serit-fazla { display: none; }
   .sa-mal-serit-tumu { display: block; }
 }
+
+/* 3706-2: kartın satın alma iç alanları ayrı blok; tedarikçiye giden forma girmez. */
+.sa-kart-ic-baslik { grid-column: 1 / -1; margin-top: var(--b-2); padding-top: var(--b-1); border-top: 1px solid var(--line, currentColor); font-size: var(--yazi-xs); font-weight: 600; color: var(--muted); }

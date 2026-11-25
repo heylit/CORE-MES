@@ -519,8 +519,10 @@ export function ozellikAlti(o: MalzemeOzelligi | undefined): string {
 const AYRINTI_SIMGESI = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="${SIMGELER.list}"/></svg>`;
 /** 3133: malzeme kartının föyündeki ayrıntılar kalem hücresinde açılır; her genişlikte aynı (betik gerekmez). */
 function ozellikAyrintisi(o: MalzemeOzelligi | undefined): string {
-  if (!o?.ayrinti.length) return "";
-  return `<details class="sa-oz-ayrinti" data-sa-oz-ayrinti=""><summary>${AYRINTI_SIMGESI}<span>Kart ayrıntısı</span></summary><dl>${o.ayrinti.map(x => `<dt>${esc(x.ad)}</dt><dd>${esc(x.deger)}</dd>`).join("")}</dl></details>`;
+  if (!o?.ayrinti.length && !o?.ic?.length) return "";
+  // 3706-2: iç alanlar aynı listede (aynı sütun hizası), başlıkla ayrılır; tedarikçiye gitmez.
+  const ic = o.ic?.length ? `<dt class="sa-kart-ic-baslik" data-sa-kart-ic="">Satın alma iç bilgisi (tedarikçiye gitmez)</dt>${o.ic.map(x => `<dt>${esc(x.ad)}</dt><dd>${esc(x.deger)}</dd>`).join("")}` : "";
+  return `<details class="sa-oz-ayrinti" data-sa-oz-ayrinti=""><summary>${AYRINTI_SIMGESI}<span>Kart ayrıntısı</span></summary><dl>${o.ayrinti.map(x => `<dt>${esc(x.ad)}</dt><dd>${esc(x.deger)}</dd>`).join("")}${ic}</dl></details>`;
 }
 /** 3100: miktar hücresinde ikinci satır; ayrı sütun açılmaz. */
 const karsilikAlti = (it: RequestItem): string => (it.karsilik ? `<span class="sub" data-sa-karsilik="">${esc(it.karsilik)}</span>` : "");
