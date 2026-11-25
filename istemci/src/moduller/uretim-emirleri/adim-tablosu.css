@@ -56,6 +56,15 @@
 .tc-at-cip:focus-visible { outline: var(--cizgi-orta) solid var(--done); outline-offset: var(--cizgi); }
 .tc-at-fazla { color: var(--muted); font-size: var(--yazi-s); white-space: nowrap; }
 .tc-at-fazla-dar { display: none; }
+.tc-at-matris { display: flex; flex-wrap: wrap; gap: var(--b-1); margin-block-start: var(--b-1); }
+.tc-at-hucre { --c: var(--muted); display: inline-grid; place-items: center; inline-size: var(--b-5); block-size: var(--b-5); padding: 0; border-radius: var(--yari-1); border: var(--cizgi-ince) solid var(--edge); background: transparent; color: var(--c); cursor: pointer; }
+.tc-at-hucre[data-ton='tamam'] { --c: var(--run); }
+.tc-at-hucre[data-ton='uyari'] { --c: var(--hold); border-color: var(--c); }
+.tc-at-hucre[data-ton='hata'] { --c: var(--stop); border-color: var(--c); }
+.tc-at-hucre[data-ton='bilgi'] { --c: var(--done); }
+.tc-at-hucre[data-elle] { border-width: var(--cizgi-orta); }
+.tc-at-hucre[aria-expanded='true'] { box-shadow: 0 0 0 var(--cizgi-orta) var(--ink); }
+.tc-at-hucre:focus-visible { outline: var(--cizgi-orta) solid var(--done); outline-offset: var(--cizgi); }
 .tc-at-hazir { display: inline-flex; align-items: center; gap: var(--b-1); font-size: var(--yazi-s); color: var(--run); }
 .tc-at-bekle { color: var(--muted); font-size: var(--yazi-s); }
 
@@ -133,4 +142,5 @@
 @media (max-width: 1023px) {
   .tc-at-yuvalar .tc-dugme { min-height: var(--dokunma); min-width: var(--dokunma); }
   .tc-at-cip { min-height: var(--dokunma); }
+  .tc-at-hucre { inline-size: var(--dokunma); block-size: var(--dokunma); }
 }

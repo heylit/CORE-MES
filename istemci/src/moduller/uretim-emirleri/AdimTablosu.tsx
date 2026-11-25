@@ -128,6 +128,22 @@ export function AdimTablosu({ emirId, malzemeNo, satirlar: dis, ekleme }: { emir
     );
   };
 
+  // 3688: 12 maddelik matris her satırda; hücre ayrıntı panelini o maddeye odaklı açar (işaretleme, kaynak bağlantısı, kim ne zaman: AdimAcilimi).
+  const matris = (a: Adim, opNo: number) => (
+    <span className="tc-at-matris" role="group" aria-label={`OP ${String(opNo)} hazırlık matrisi`}>
+      {a.maddeler.filter((m) => mg.acik(m.madde)).map((m) => {
+        const g = cipGorunumu(a, m);
+        return (
+          <button key={m.madde} type="button" className="tc-at-hucre" data-ton={g.ton} data-elle={g.elle === null ? undefined : ''}
+            aria-expanded={acik.get(opNo) === m.madde} aria-controls={acimId(opNo)} title={`${MADDE[m.madde].ad}: ${g.ad}`}
+            aria-label={`Matris: OP ${String(opNo)} ${erisilebilirAd(a, m)}`} onClick={() => ac(opNo, m.madde)}>
+            <Simge ad={g.simge} boyut="k" />
+          </button>
+        );
+      })}
+    </span>
+  );
+
   const satirCiz = (s: TabloSatiri, i: number) => {
     const a = adimBul(s.opNo);
     const bilgi = eki.satir(s.opNo);
@@ -173,7 +189,7 @@ export function AdimTablosu({ emirId, malzemeNo, satirlar: dis, ekleme }: { emir
             ))}
           </td>
           <td className="tc-at-hazirlik">
-            {a !== null ? cipler(a, s.opNo)
+            {a !== null ? <>{cipler(a, s.opNo)}{matris(a, s.opNo)}</>
               : okunuyor ? <span className="tc-at-bekle" aria-busy="true" role="status">Okunuyor…</span>
                 : hata ? <span className="tc-at-bekle">Okunamadı</span> : '–'}
           </td>
