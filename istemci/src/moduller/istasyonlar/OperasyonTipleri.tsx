@@ -24,6 +24,7 @@ function OperasyonTipiFormu({ kayit, kullanim, kapat }: { kayit: SurumluOperasyo
   const [ayarDk, ayarDkYaz] = useState(kayit?.varsayilanAyarDk ?? '');
   const [birimDk, birimDkYaz] = useState(kayit?.varsayilanBirimDk ?? '');
   const [istasyonId, istasyonIdYaz] = useState(kayit?.varsayilanIstasyonId == null ? '' : String(kayit.varsayilanIstasyonId));
+  const [belgeler, belgelerYaz] = useState((kayit?.zorunluBelgeler ?? []).join(', '));
   const { kaydet, hata, mesgul } = useKayitIslemleri('/operasyon-tipleri', kapat);
   const istasyonlar = useQuery({
     queryKey: anahtarlar.istasyonlar,
@@ -32,6 +33,8 @@ function OperasyonTipiFormu({ kayit, kullanim, kapat }: { kayit: SurumluOperasyo
   const istasyonSecenekleri = (istasyonlar.data?.istasyonlar ?? [])
     .filter((i) => i.aktif || i.id === kayit?.varsayilanIstasyonId)
     .map((i) => ({ deger: String(i.id), baslik: `${i.kod} - ${i.ad}${i.aktif ? '' : ' (pasif)'}` }));
+  // 3708: zorunlu belgeler yalnız kalite tipinde (kaynağında muayene) anlamlıdır; başka grupta alan yalnız değer varsa görünür, gönderilmeyen değer sunucuda değişmez.
+  const belgeAlani = grup === 'KAL' || (kayit?.zorunluBelgeler ?? []).length > 0;
   // Kısaltma ekranda yok (kullanıcı kararı: kod zaten kısaltmadır); gönderilmediği için girilmiş değer sunucuda değişmez.
   // Varsayılanlar rota adımına öneridir; boş bırakılan "bilinmiyor" olarak gider. Ekran hepsini gönderir; boşaltılan alan null gider, sunucu yalnız gönderilmeyeni korur.
   const ortak = {
@@ -39,6 +42,7 @@ function OperasyonTipiFormu({ kayit, kullanim, kapat }: { kayit: SurumluOperasyo
     varsayilanAyarDk: ayarDk.trim() === '' ? null : ayarDk.trim().replace(',', '.'),
     varsayilanBirimDk: birimDk.trim() === '' ? null : birimDk.trim().replace(',', '.'),
     varsayilanIstasyonId: istasyonId === '' ? null : Number(istasyonId),
+    ...(belgeAlani ? { zorunluBelgeler: belgeler.split(',').map((b) => b.trim()).filter((b) => b !== '') } : {}),
   };
   // Kod yalnız değiştirilince gönderilir: gönderilmeyen kod sunucuda aynı kalır, kullanılmış tipte kilide takılmaz.
   const kodDegisti = kayit !== null && kod.trim().toLocaleUpperCase('tr-TR') !== kayit.kod;
@@ -80,6 +84,15 @@ function OperasyonTipiFormu({ kayit, kullanim, kapat }: { kayit: SurumluOperasyo
         value={istasyonId}
         onChange={(o) => istasyonIdYaz(o.target.value)}
       />
+      {belgeAlani && (
+        <Girdi
+          etiket="Zorunlu belgeler"
+          value={belgeler}
+          onChange={(o) => belgelerYaz(o.target.value)}
+          maxLength={400}
+          ipucu="Virgülle ayırın (ör. Malzeme sertifikası, Test raporu). Kaynağında muayene bu belgeler yüklenmeden onaylanmaz; boşsa belge istenmez."
+        />
+      )}
       <IsaretKutusu etiket="Aktif" checked={aktif} onChange={(o) => aktifYaz(o.target.checked)} />
     </KayitPenceresi>
   );

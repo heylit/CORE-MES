@@ -91,4 +91,49 @@ test.describe('3708 fason ekranları', () => {
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
     await cek(page, 'dis-operasyonlar', bilgi);
   });
+
+  // Belge kapısı: Adım Durumu'nda kaynağında muayene adımının açılımında belgeler. Örnek veride muayene adımı yok: ilk adım muayene
+  // diye işaretlenir, belge listesi sabit cevapla gelir; yükleme ve kaldırma çağrılmaz.
+  test('Adım Durumu: muayene adımının açılımında eksik zorunlu belgeler ve yükleme alanı görünür', async ({ page, ac, ag }, bilgi) => {
+    let muayeneId = 0;
+    await page.route(/\/api\/adimli-emirler\/\d+\/adim-durumu$/, async (r) => {
+      const c = await r.fetch();
+      const g = (await c.json()) as { adimlar: { isEmriId: number; muayene?: boolean }[] };
+      muayeneId = g.adimlar[0]?.isEmriId ?? 0;
+      await r.fulfill({ response: c, json: { ...g, adimlar: g.adimlar.map((a, i) => ({ ...a, muayene: i === 0 })) } });
+    });
+    await page.route(/\/muayene-belgeleri$/, (r) => r.fulfill(cevap({
+      zorunlu: ['Malzeme sertifikası', 'Test raporu'], eksik: ['Test raporu'],
+      belgeler: [{ ozet: 'a'.repeat(64), ad: 'ORN-sertifika.pdf', boyut: 2000, tur: 'pdf', belgeTuru: 'Malzeme sertifikası', ekleyenId: 1, zaman: '2026-11-25T10:00:00Z' }],
+    })));
+    await ac('/adim-durumu');
+    await page.getByRole('list', { name: 'Açık emirler' }).getByRole('button').first().click();
+    const ac1 = page.getByRole('table').getByRole('button', { name: /^OP \d+ .* ayrıntısı$/ }).first();
+    await ac1.click();
+    const bolum = page.getByRole('region', { name: /muayene belgeleri$/ });
+    await expect(bolum).toBeVisible({ timeout: 15_000 });
+    expect(muayeneId).toBeGreaterThan(0);
+    await expect(bolum.getByText('Eksik: Test raporu. Eksik belgeyle adım bitirilemez.')).toBeVisible();
+    await expect(bolum.getByRole('link', { name: 'ORN-sertifika.pdf' })).toBeVisible();
+    await expect(bolum.getByLabel('Belge türü')).toBeVisible();
+    await bolum.evaluate((el) => { el.scrollIntoView({ block: 'center' }); });
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    await cek(page, 'adim-durumu-muayene-belgeleri', bilgi);
+    expect(ag.yazmalar, 'görünüm yazmaz').toEqual([]);
+  });
+
+  test('Operasyon tipi: kalite grubunda Zorunlu belgeler alanı çıkar, başka grupta çıkmaz', async ({ page, ac }, bilgi) => {
+    await ac('/istasyonlar/operasyon-tipleri');
+    await page.getByRole('button', { name: 'Yeni operasyon tipi' }).click();
+    const pencere = page.getByRole('dialog');
+    await pencere.getByLabel(/Grup/).selectOption('TAL');
+    await expect(pencere.getByLabel(/Zorunlu belgeler/)).toHaveCount(0);
+    await pencere.getByLabel(/Grup/).selectOption('KAL');
+    const alan = pencere.getByLabel(/Zorunlu belgeler/);
+    await expect(alan).toBeVisible();
+    await alan.fill('Malzeme sertifikası, Test raporu');
+    await alan.evaluate((el) => { el.scrollIntoView({ block: 'center' }); });
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    await cek(page, 'operasyon-tipi-zorunlu-belgeler', bilgi);
+  });
 });

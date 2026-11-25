@@ -18,7 +18,7 @@ import { emrinTerminOnerisi, siparisinTerminOnerileri, terminKarariVer } from '.
 import { adimDurumu, adimDurumuTerminal, adimMatrisi, statuTopluYaz, elleStatuKaldir, elleStatuYaz, hazirlikElleEksik, hazirlikOnayKaldir, hazirlikOnayla, listeFotografi, listeIsaretle, listeMaddesiEkle, listeMaddesiKaldir } from './adim-durumu.ts';
 import { aramaUclari } from './arama/uclar.ts';
 import { gecmisGeriAl, gecmisGir } from './gecmis-giris.ts';
-import { gecmisGeriAlGovdesi, gecmisGirisCevabi, gecmisGirisGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { gecmisGeriAlGovdesi, gecmisGirisCevabi, gecmisGirisGovdesi, muayeneBelgeBaglaGovdesi, muayeneBelgeParametresi, muayeneBelgeleriCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { siparisAcilisiCevabi, siparisAcilisiGovdesi, siparisAcilisiParametresi, siparisAcilisiSonucu } from '#paylasilan/sozlesme/siparis-acilisi.ts';
 import { bolmeCozuculeri, siparisAcilisiDurumu, siparisAcilisiYap } from './siparis-acilisi.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
@@ -904,6 +904,27 @@ const adimliUclar = [
     parametre: emirParametresi,
     cevap: siradakiFasonCevabi,
     isle: async ({ db, parametre }) => ({ fason: await isEmri.siradakiFason(db, parametre.id) }),
+  }),
+  // 3708: kaynağında muayene adımının belgeleri; zorunlu belge eksikken adım bitirilemez (servis.emirBitir).
+  uc({
+    yontem: 'GET', yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/muayene-belgeleri', yetki: 'uretim-emirleri.fason',
+    parametre: isEmriParametresi, cevap: muayeneBelgeleriCevabi,
+    isle: ({ db, parametre }) => isEmri.muayeneBelgeleri(db, parametre.id, parametre.isEmriId),
+  }),
+  uc({
+    yontem: 'POST', yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/muayene-belgeleri', yetki: 'uretim-emirleri.fason', tekrarKorumali: true,
+    parametre: isEmriParametresi, govde: muayeneBelgeBaglaGovdesi, cevap: muayeneBelgeleriCevabi,
+    isle: ({ db, kullanici, parametre, govde, denetimEki }) => isEmri.muayeneBelgeBagla(db, kullanici, parametre.id, parametre.isEmriId, govde, denetimEki),
+  }),
+  uc({
+    yontem: 'POST', yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/muayene-belgeleri/:ozet/kaldir', yetki: 'uretim-emirleri.fason', tekrarKorumali: true,
+    parametre: muayeneBelgeParametresi, cevap: muayeneBelgeleriCevabi,
+    isle: ({ db, parametre, denetimEki }) => isEmri.muayeneBelgeKaldir(db, parametre.id, parametre.isEmriId, parametre.ozet, denetimEki),
+  }),
+  uc({
+    yontem: 'GET', yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/muayene-belgeleri/:ozet/dosya', yetki: 'uretim-emirleri.fason',
+    parametre: muayeneBelgeParametresi, cevap: ikiliCevap,
+    isle: ({ db, parametre }) => isEmri.muayeneBelgeDosyasi(db, parametre.id, parametre.isEmriId, parametre.ozet),
   }),
   // Fason gidiş ve dönüş yinelenirse adet iki kez sayılır: istek kimliği zorunludur.
   uc({

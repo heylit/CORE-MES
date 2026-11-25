@@ -4,7 +4,7 @@ import type { FasonKontrol } from '#paylasilan/fason-kontrol.ts';
 import { fasonYolu } from '#paylasilan/fason-kontrol.ts';
 import {
   AKTARIM_HEDEFI_YOK, AKTARIM_YOLU_DEGIL, DONUS_YOLU_DEGIL, FASON_DONUS_ASIMI, MUAYENE_BELGESI_EKSIK, aktarilanSaglam, aktarimIhlali, donusYoluIhlali,
-  fasonDonusPayiMs, muayeneOnayIhlali, muayeneSonucu, otomatikGkkYerleri, otomatikMuayeneYerleri,
+  fasonDonusPayiMs, muayeneOnayIhlali, muayeneSonucu, oncekiBitmediIhlali, OTOMATIK_MUAYENE, otomatikGkkYerleri, otomatikMuayeneYerleri,
 } from './kurallar.ts';
 import type { FasonDurumu, IsEmriDurumu } from './kurallar.ts';
 
@@ -78,5 +78,18 @@ describe('uretim-emirleri fason kontrol türü kuralları (3708)', () => {
     assert.equal(fasonDonusPayiMs('kaynakta', true, pay), 0);
     assert.equal(fasonDonusPayiMs('kontrolsuz', true, pay), 0);
     assert.equal(fasonDonusPayiMs('kaynakta', false, pay), pay);
+  });
+
+  test('kaynağında muayene kendi fason öncülü açıkken bitirilir; başka öncül ve GKK beklemeye devam eder', () => {
+    const s = (id: number, ek: Record<string, unknown>) => ({
+      id, sira: id, opNo: id * 10, durum: 'bekliyor' as IsEmriDurumu, bagimlilik: 'bekleyen' as const, devirAdedi: null, onculler: null, ...ek,
+    });
+    const muayene = s(3, { tur: 'ek', ekAciklama: OTOMATIK_MUAYENE, durum: 'calisiyor', fasonFirmaId: null });
+    const kaynakta = [s(1, { durum: 'tamam' }), s(2, { durum: 'calisiyor', fasonFirmaId: 5, kontrolTuru: 'kaynakta' }), muayene];
+    assert.equal(oncekiBitmediIhlali(kaynakta, muayene), null);
+    const gkk = [s(1, { durum: 'tamam' }), s(2, { durum: 'calisiyor', fasonFirmaId: 5, kontrolTuru: 'gkk' }), muayene];
+    assert.match(oncekiBitmediIhlali(gkk, muayene) ?? '', /OP 20 bitmeden OP 30/);
+    const elle = s(3, { tur: 'ek', ekAciklama: 'Elle ek adım', durum: 'calisiyor' });
+    assert.match(oncekiBitmediIhlali([kaynakta[0]!, kaynakta[1]!, elle], elle) ?? '', /OP 20 bitmeden/);
   });
 });

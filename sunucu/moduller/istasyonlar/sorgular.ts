@@ -250,7 +250,7 @@ export function koddanKimlikler(db: Db, duzey: TesisDuzeyi, kodlar: readonly str
 }
 
 const OPERASYON_TIPI_ALANLARI = `id, kod, ad, grup, aktif, kisaltma, varsayilan_ayar_dk::text AS "varsayilanAyarDk",
-  varsayilan_birim_dk::text AS "varsayilanBirimDk", varsayilan_istasyon_id AS "varsayilanIstasyonId"`;
+  varsayilan_birim_dk::text AS "varsayilanBirimDk", varsayilan_istasyon_id AS "varsayilanIstasyonId", zorunlu_belgeler AS "zorunluBelgeler"`;
 
 export function operasyonTipleriListele(db: Db, pasiflerDahil: boolean): Promise<OperasyonTipi[]> {
   return db.sorgu<OperasyonTipi>(
@@ -270,9 +270,9 @@ export function operasyonTipiKayitlari(db: Db, pasiflerDahil: boolean): Promise<
 
 export function operasyonTipiEkle(db: Db, g: OperasyonTipiKaydi): Promise<SurumluOperasyonTipi | null> {
   return db.tek<SurumluOperasyonTipi>(
-    `INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup, aktif, kisaltma, varsayilan_ayar_dk, varsayilan_birim_dk, varsayilan_istasyon_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING ${OPERASYON_TIPI}`,
-    [g.kod, g.ad, g.grup, g.aktif, g.kisaltma, g.varsayilanAyarDk, g.varsayilanBirimDk, g.varsayilanIstasyonId],
+    `INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup, aktif, kisaltma, varsayilan_ayar_dk, varsayilan_birim_dk, varsayilan_istasyon_id, zorunlu_belgeler)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::text[]) RETURNING ${OPERASYON_TIPI}`,
+    [g.kod, g.ad, g.grup, g.aktif, g.kisaltma, g.varsayilanAyarDk, g.varsayilanBirimDk, g.varsayilanIstasyonId, g.zorunluBelgeler ?? []],
   );
 }
 
@@ -282,10 +282,11 @@ export function operasyonTipiGuncelle(db: Db, id: number, g: OperasyonTipiGuncel
             kisaltma = CASE WHEN $10 THEN $6 ELSE kisaltma END,
             varsayilan_ayar_dk = CASE WHEN $11 THEN $7::numeric ELSE varsayilan_ayar_dk END,
             varsayilan_birim_dk = CASE WHEN $12 THEN $8::numeric ELSE varsayilan_birim_dk END,
-            varsayilan_istasyon_id = CASE WHEN $13 THEN $9::int ELSE varsayilan_istasyon_id END, surum = surum + 1
+            varsayilan_istasyon_id = CASE WHEN $13 THEN $9::int ELSE varsayilan_istasyon_id END,
+            zorunlu_belgeler = CASE WHEN $16 THEN $15::text[] ELSE zorunlu_belgeler END, surum = surum + 1
       WHERE id = $1 AND surum = $5 RETURNING ${OPERASYON_TIPI}`,
     [id, g.ad, g.grup, g.aktif, g.surum, g.kisaltma ?? null, g.varsayilanAyarDk ?? null, g.varsayilanBirimDk ?? null, g.varsayilanIstasyonId ?? null,
-      g.kisaltma !== undefined, g.varsayilanAyarDk !== undefined, g.varsayilanBirimDk !== undefined, g.varsayilanIstasyonId !== undefined, g.kod ?? null],
+      g.kisaltma !== undefined, g.varsayilanAyarDk !== undefined, g.varsayilanBirimDk !== undefined, g.varsayilanIstasyonId !== undefined, g.kod ?? null, g.zorunluBelgeler ?? [], g.zorunluBelgeler !== undefined],
   );
 }
 

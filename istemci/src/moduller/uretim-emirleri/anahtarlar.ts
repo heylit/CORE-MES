@@ -20,6 +20,7 @@ export const anahtarlar = {
   adimDurumu: (id: number) => ['uretim-emirleri', 'adim-durumu', id] as const,
   fasonFirmalari: ['uretim-emirleri', 'fason-firmalari'] as const,
   siradakiFason: (id: number) => ['uretim-emirleri', 'siradaki-fason', id] as const,
+  muayeneBelgeleri: (id: number, isEmriId: number) => ['uretim-emirleri', 'muayene-belgeleri', id, isEmriId] as const,
   kapanislar: (asama: KapanisAsamasi | '', ara: string, sayfa: number) => ['uretim-emirleri', 'kapanislar', asama, ara, sayfa] as const,
   kapanis: (id: number) => ['uretim-emirleri', 'kapanis', id] as const,
 };

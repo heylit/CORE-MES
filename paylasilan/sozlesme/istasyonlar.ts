@@ -200,6 +200,8 @@ export const operasyonTipiSemasi = z.object({
   varsayilanAyarDk: ondalikMetinSemasi.nullable(),
   varsayilanBirimDk: ondalikMetinSemasi.nullable(),
   varsayilanIstasyonId: z.number().int().nullable(),
+  // 3708: bu tipteki adım (kaynağında muayene) bu adlı belgeler yüklenmeden onaylanmaz. İsteğe bağlı: sunucu her zaman yazar.
+  zorunluBelgeler: z.array(z.string()).optional(),
 });
 
 export const operasyonTipiKaydiSemasi = operasyonTipiSemasi.extend(surumlu);
@@ -225,6 +227,8 @@ export const operasyonTipiGovdesi = z.object({
   varsayilanAyarDk: sureMetni(2),
   varsayilanBirimDk: sureMetni(4),
   varsayilanIstasyonId: kimlik.nullish().transform((k) => k ?? null),
+  // Belge adları kırpılır, boşlar atılır, tekrarlar teke iner; gönderilmezse güncellemede değişmez, eklemede boştur.
+  zorunluBelgeler: z.array(z.string().trim().max(60)).max(10).optional().transform((l) => (l === undefined ? undefined : [...new Set(l.filter((b) => b !== ''))])),
 });
 // Varsayılanları bilmeyen çağıran girilmiş değeri silmesin diye gönderilmeyen alan değişmez; boşaltmak için açıkça null gönderilir.
 export const operasyonTipiGuncellemeGovdesi = operasyonTipiGovdesi.extend({

@@ -9,6 +9,7 @@ import { TALIMAT_ASAMALARI } from './talimat-asamasi.ts';
 import { TOPLU_EN_COK_KALEM } from './adim-matrisi-kurali.ts';
 import { KOD_DESENI as NEDEN_KODU } from './durus-nedenleri.ts';
 import { EMIR_TURLERI, EMIR_TURU_ADLARI } from './emir-turleri.ts';
+import { bagliDosyaSemasi } from './dosya.ts';
 
 // Taslak planlanmamış emirdir ("Plana al" planlı yapar). Ekrandaki adlar: taslak, serbest (planlı), üretimde (başladı), tamamlanan (bitti).
 export const EMIR_DURUMLARI = ['taslak', 'planli', 'basladi', 'bitti', 'iptal'] as const;
@@ -457,6 +458,17 @@ export const adimliListeSorgusu = z.object({
 });
 export const adimliBitenlerSorgusu = z.object({ ...sayfaSorguAlanlari, durum: z.enum(BITEN_EMIR_DURUMLARI).optional(), ara: aramaMetni });
 export const isEmriParametresi = z.object({ id: yolKimligi, isEmriId: yolKimligi });
+// 3708: kaynağında muayene adımının belgeleri (sertifika, test raporu); zorunlu adlar operasyon tipi ayarından gelir, eksikler onay kapısıdır.
+const OZET_DESENI = /^[0-9a-f]{64}$/;
+export const muayeneBelgeBaglaGovdesi = z.object({
+  ozet: z.string().regex(OZET_DESENI),
+  dosyaAdi: z.string().trim().min(1, 'Dosya adı zorunlu.').max(200),
+  belgeTuru: z.string().trim().min(1, 'Belge türü zorunlu.').max(60),
+});
+export const muayeneBelgeParametresi = z.object({ id: yolKimligi, isEmriId: yolKimligi, ozet: z.string().regex(OZET_DESENI) });
+export const muayeneBelgeleriCevabi = z.object({ zorunlu: z.array(z.string()), eksik: z.array(z.string()), belgeler: z.array(bagliDosyaSemasi) });
+export type MuayeneBelgeBaglaGovdesi = z.input<typeof muayeneBelgeBaglaGovdesi>;
+export type MuayeneBelgeleriCevabi = z.output<typeof muayeneBelgeleriCevabi>;
 export const fasonHareketiCevabi = z.object({ emir: z.lazy(() => adimliEmirAyrintisi), hareketId: KIMLIK });
 // 3296-2 a: ayriEmir true ise parti, türünün rotasıyla ayrı emir olarak açıldı (altEmirId o emirdir).
 export const partiBolCevabi = z.object({ emir: z.lazy(() => adimliEmirAyrintisi), altEmirId: KIMLIK, ayriEmir: z.boolean() });
@@ -1435,6 +1447,8 @@ export const adimDurumuCevabi = z.object({
     liste: z.array(listeMaddesiSemasi),
     // Adımın operasyon tipinin emre gelen şablonu ("Şablona da ekle" hedefi); yoksa null.
     sablon: z.object({ id: KIMLIK, kod: z.string(), ad: z.string() }).nullable(),
+    // 3708: kaynağında muayene adımı (belgeleri açılımda yüklenir). İsteğe bağlı: sunucu her zaman yazar.
+    muayene: z.boolean().optional(),
   })),
   // 3249-2 a: okuyanın ek yetkileri; yazma uçları aynısını sunucuda arar. sablon: talimat yazma. 3494-3 a: ek madde listededir.
   yetki: z.object({ sablon: z.boolean() }),

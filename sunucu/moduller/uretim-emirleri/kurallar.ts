@@ -1629,8 +1629,14 @@ export function baslatilabilirAdimlar<T extends ParalelAdim & { istasyonId: numb
 }
 
 // 649 a (uyarılı ret): akışlı ya da bekleyen adım, öncülleri bitmeden bitirilemez; bağımsız adım ve dal başı bekleme olmadan biter.
-export function oncekiBitmediIhlali(adimlar: readonly ParalelAdim[], adim: ParalelAdim): string | null {
-  const onceki = adimOnculleri(adimlar, adim).find((o) => o.adim.durum !== 'tamam')?.adim;
+// 3708: kaynağında muayene parça firmadayken yapılır; fason adımı muayenenin kararıyla (aktarım) ya da ondan sonraki dönüşle kapanır.
+// Muayene adımını kendi fason öncülü beklerse ikisi de kapanamaz: o öncül bitirme sırasından düşer.
+type SiraAdimi = ParalelAdim & { tur?: string; ekAciklama?: string | null; fasonFirmaId?: number | null; kontrolTuru?: string };
+const muayeneninFasonu = (adim: SiraAdimi, oncul: SiraAdimi): boolean =>
+  adim.tur !== undefined && otomatikMuayeneMi({ tur: adim.tur, ekAciklama: adim.ekAciklama ?? null })
+  && (oncul.fasonFirmaId ?? null) !== null && oncul.kontrolTuru === 'kaynakta';
+export function oncekiBitmediIhlali<T extends SiraAdimi>(adimlar: readonly T[], adim: T): string | null {
+  const onceki = adimOnculleri(adimlar, adim).find((o) => o.adim.durum !== 'tamam' && !muayeneninFasonu(adim, o.adim))?.adim;
   return onceki === undefined ? null : `OP ${onceki.opNo} bitmeden OP ${adim.opNo} bitirilemez; önce OP ${onceki.opNo} bitirilmeli.`;
 }
 

@@ -16,6 +16,7 @@ import { zamanMetni } from './gorunum.ts';
 import { MADDE, halGorunumu } from './hazirlik-bilgisi.ts';
 import type { MaddeGorunumu } from './hazirlik-maddeleri.ts';
 import { KontrolListesi } from './KontrolListesi.tsx';
+import { MuayeneBelgeleri } from './MuayeneBelgeleri.tsx';
 import { gonderilmezMetni, SMARTES_DURUM_ADI } from './SmartesRozeti.tsx';
 import { fasonMu, yerMetni } from './UretimYerleri.tsx';
 
@@ -74,6 +75,7 @@ export function AdimAcilimi(g: AcilimGirdisi) {
       <div className="tc-at-sag">
         <DurumKutusuAcilim g={g} />
         <KontrolListesi emirId={g.emirId} adim={adim} yazar={g.yazilir} sablonVar={v.yetki.sablon} />
+        {adim.muayene === true && <MuayeneBelgeleri emirId={g.emirId} isEmriId={adim.isEmriId} opNo={adim.opNo} />}
       </div>
     </div>
   );

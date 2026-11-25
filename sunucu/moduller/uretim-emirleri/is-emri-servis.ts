@@ -23,6 +23,9 @@ import { firmaAra, firmaOzetleri, karneOlayiYaz } from '../musteri-tedarikci/dis
 import { aktifIstasyonlar, istasyonAdlari, istasyonKisiAtamalari, istasyonlar, makineGetir, operasyonTipleri } from '../istasyonlar/disari.ts';
 import { EMIR_TURU_ADLARI, PARTI_ROTASI_GECERSIZ } from '#paylasilan/sozlesme/emir-turleri.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
+import { dosyaTutamagi, denetimSatiri } from '../dosya/disari.ts';
+import type { DenetimSecimi } from '#cekirdek/uc.ts';
+import type { MuayeneBelgeBaglaGovdesi, MuayeneBelgeleriCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { denemeIsaretliKimlikler, numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { kayitlarinKucukResimleri } from '../belge-merkezi/disari.ts';
 import { malzemeOzeti, malzemeOzetleri, malzemeResimAnahtarlari, revizyonBilgileri } from '../malzemeler/disari.ts';
@@ -36,7 +39,7 @@ import {
   ekAdimKaldirIhlali, kartAdimi, kartDagilimi, type KartDagilimi, kartSiniri, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, ROTASIZ_EMIR_KAPALI, PROJE_GECERSIZ, PROJE_ZORUNLU, adaySatirlar, bilesenOlabilirMi, kendiligindenSatir, projeZorunluMu, rotasizAdimDegisimIhlali, rotasizAdimEkleIhlali, URETIM_YERI_BASLAMIS, uretimYeriIhlali, fasonBeklemesi, adimAdetleri,
   adimEksigi, adimTuketimi, reworkAdimiIhlali, reworkTermini, adimOnculleri, fasonSirasindaMi, kolAdimlari, onculdenGelen, onculGirdisiIhlali, dugumGirdisiIhlali,
-  SIPARIS_ONAYI_GERI_ALINDI, TESLIM_KALEMSIZ, emirEskiRevizyonIhlali, FASON_FIRMA_BEKLENIYOR, GKK_TIPI, OTOMATIK_GKK, OTOMATIK_GKK_ADI, fasonKarneOlayi, fasonMu, talimatKontrolu, gkkFasonu, gkkTipiSec, kaliteIstasyonuSec, otomatikGkkMi, otomatikGkkYerleri, otomatikKontrolMu, otomatikMuayeneYerleri, muayeneTipiSec, OTOMATIK_MUAYENE, OTOMATIK_MUAYENE_ADI, aktarimIhlali, donusYoluIhlali, fasonDonusPayiMs, AKTARIM_HEDEFI_SONRAKI_FIRMA_DEGIL, otomatikMuayeneMi, muayeneDonusIhlali,
+  SIPARIS_ONAYI_GERI_ALINDI, TESLIM_KALEMSIZ, emirEskiRevizyonIhlali, FASON_FIRMA_BEKLENIYOR, GKK_TIPI, OTOMATIK_GKK, OTOMATIK_GKK_ADI, fasonKarneOlayi, fasonMu, talimatKontrolu, gkkFasonu, gkkTipiSec, kaliteIstasyonuSec, otomatikGkkMi, otomatikGkkYerleri, otomatikKontrolMu, otomatikMuayeneYerleri, muayeneTipiSec, OTOMATIK_MUAYENE, OTOMATIK_MUAYENE_ADI, aktarimIhlali, donusYoluIhlali, fasonDonusPayiMs, AKTARIM_HEDEFI_SONRAKI_FIRMA_DEGIL, otomatikMuayeneMi, muayeneDonusIhlali, muayeneOnayIhlali,
 } from './kurallar.ts';
 import { emirAcildiBildir, emirBirlestiBildir, emirBittiBildir, emirIptalBildir, fasonHareketiBildir, isEmirleriDegistiBildir, isEmriKopyalandiBildir } from './emir-olaylari.ts';
 import type { AdimOnculu, BolmeDurumu, FasonDurumu, IsEmriKaynakTuru, KolDurumu, OnculTuru, UretimYeri } from './kurallar.ts';
@@ -1209,6 +1212,61 @@ export async function muayeneKarariniYaz(db: Db, kisiId: number, emirId: number,
   const hurda = Math.min((sayac?.hurda ?? 0) + (sayac?.red ?? 0), kalan - saglam);
   if (saglam + hurda <= 0) return;
   await fasonAktarimiKaydet(db, kisiId, emirId, fason.id, { saglamAdet: saglam, hurdaAdet: hurda, hedefFirmaId: sonraki.fasonFirmaId });
+}
+
+// 3708: kaynağında muayene adımının belgeleri dosya modülünün bağındadır (kayıt "muayene:<iş emri>", belge türü = zorunlu belgenin adı). Zorunlu adlar
+// adımın operasyon tipinin ayarından gelir; eksik belgeyle adım onaylanmaz (bitirilmez).
+const belgeTutamagi = dosyaTutamagi('uretim-emirleri');
+const BELGE_SINIRI = { turler: ['jpeg', 'png', 'webp', 'pdf'] as const, azamiBayt: 20 * 1024 * 1024 };
+const belgeKaydi = (isEmriId: number): string => `muayene:${String(isEmriId)}`;
+const MUAYENE_ADIMI_DEGIL = 'Belge yalnız kaynağında muayene adımına bağlanır.';
+
+async function muayeneBelgeleriOku(db: Db, emirId: number, isEmriId: number): Promise<MuayeneBelgeleriCevabi> {
+  const adim = (await s.isEmirleriGetir(db, [emirId])).find((i) => i.id === isEmriId);
+  if (adim === undefined) throw bulunamadi(IS_EMRI_YOK);
+  if (!otomatikMuayeneMi(adim)) throw cakisma(MUAYENE_ADIMI_DEGIL);
+  const tip = (await operasyonTipleri(db, { pasiflerDahil: true })).find((t) => t.id === adim.operasyonTipiId);
+  const zorunlu = tip?.zorunluBelgeler ?? [];
+  const belgeler = await belgeTutamagi.bagliDosyalar(db, belgeKaydi(isEmriId));
+  const yuklenen = belgeler.flatMap((b) => (b.belgeTuru === null ? [] : [b.belgeTuru]));
+  return { zorunlu, eksik: zorunlu.filter((z) => !yuklenen.includes(z)), belgeler };
+}
+
+// Bitirme kapısı: muayene adımı olmayan ya da zorunlu belgesi tanımsız adımda bir şey yapmaz.
+export async function muayeneBelgeKapisi(db: Db, adim: IsEmriSatiri): Promise<void> {
+  if (!otomatikMuayeneMi(adim)) return;
+  const { zorunlu, eksik } = await muayeneBelgeleriOku(db, adim.uretimEmriId, adim.id);
+  const ihlal = muayeneOnayIhlali(zorunlu, zorunlu.filter((z) => !eksik.includes(z)));
+  if (ihlal !== null) throw cakisma(`${ihlal} Eksik: ${eksik.join(', ')}.`);
+}
+
+export const muayeneBelgeleri = (db: Db, emirId: number, isEmriId: number): Promise<MuayeneBelgeleriCevabi> => muayeneBelgeleriOku(db, emirId, isEmriId);
+
+export async function muayeneBelgeBagla(
+  db: Db, kullanici: Kullanici, emirId: number, isEmriId: number, g: MuayeneBelgeBaglaGovdesi, denetimEki: (s: readonly DenetimSecimi[]) => void,
+): Promise<MuayeneBelgeleriCevabi> {
+  const { zorunlu } = await muayeneBelgeleriOku(db, emirId, isEmriId);
+  if (zorunlu.length > 0 && !zorunlu.includes(g.belgeTuru)) throw dogrulama(`Belge türü zorunlu belgelerden biri olmalı: ${zorunlu.join(', ')}.`, 'belgeTuru');
+  const d = await belgeTutamagi.dosyaBagla(db, kullanici, { ozet: g.ozet, kayit: belgeKaydi(isEmriId), ad: g.dosyaAdi, belgeTuru: g.belgeTuru }, BELGE_SINIRI);
+  denetimEki([denetimSatiri('bagla', d)]);
+  return muayeneBelgeleriOku(db, emirId, isEmriId);
+}
+
+export async function muayeneBelgeKaldir(
+  db: Db, emirId: number, isEmriId: number, ozet: string, denetimEki: (s: readonly DenetimSecimi[]) => void,
+): Promise<MuayeneBelgeleriCevabi> {
+  await muayeneBelgeleriOku(db, emirId, isEmriId);
+  const kalkan = await belgeTutamagi.bagKaldir(db, belgeKaydi(isEmriId), ozet);
+  if (kalkan.length === 0) throw bulunamadi('Belge bulunamadı.');
+  denetimEki(kalkan.map((d) => denetimSatiri('kaldir', d)));
+  return muayeneBelgeleriOku(db, emirId, isEmriId);
+}
+
+export async function muayeneBelgeDosyasi(db: Db, emirId: number, isEmriId: number, ozet: string) {
+  await muayeneBelgeleriOku(db, emirId, isEmriId);
+  const akis = await belgeTutamagi.dosyaAkisi(db, belgeKaydi(isEmriId), ozet);
+  if (akis === null) throw bulunamadi('Belge bulunamadı.');
+  return akis;
 }
 
 // Fason dönüşü mal kabulden girer (kullanıcı kararı 15.10, B): stok, mal kabul yetkisiyle dönüş kaydını bu yoldan yazar; adet sınırı

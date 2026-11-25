@@ -236,6 +236,20 @@ describe('operasyon tipleri bölümü (IS13)', () => {
     });
     // Gönderilmeyen kısaltma sunucuda değişmez: girilmiş değer silinmez.
     expect(cagrilar.find((c) => c.yontem === 'POST')?.govde).not.toHaveProperty('kisaltma');
+    // 3708: talaşlı tipte zorunlu belge alanı yoktur ve gönderilmez (sunucudaki liste değişmez).
+    expect(within(pencere).queryByLabelText(/Zorunlu belgeler/)).toBeNull();
+    expect(cagrilar.find((c) => c.yontem === 'POST')?.govde).not.toHaveProperty('zorunluBelgeler');
+  });
+
+  it('3708: kalite tipinde zorunlu belgeler virgülle girilir ve liste olarak gider', async () => {
+    const cagrilar = sunucuKur(YONETICI, ek);
+    goster(<Istasyonlar />, '/istasyonlar/operasyon-tipleri');
+    fireEvent.click(await screen.findByText('Eski İşlem'));
+    const pencere = await screen.findByRole('dialog');
+    fireEvent.change(within(pencere).getByLabelText(/Zorunlu belgeler/), { target: { value: 'Malzeme sertifikası, Test raporu, ' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(cagrilar.some((c) => c.yontem === 'POST')).toBe(true); });
+    expect(cagrilar.find((c) => c.yontem === 'POST')?.govde).toMatchObject({ zorunluBelgeler: ['Malzeme sertifikası', 'Test raporu'], surum: 1 });
   });
 });
 
