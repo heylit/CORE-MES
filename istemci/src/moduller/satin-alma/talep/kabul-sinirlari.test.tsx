@@ -97,13 +97,13 @@ describe('3437-2: talep formunda kabul sınırları', () => {
     expect(within(bolum).getByText('d 50 – 52,5 mm')).toBeTruthy();
     // Şartlı kabul açılınca şartlı muadil seçilebilir olur ama kendiliğinden listeye girmez; kapanınca listeden düşer.
     const sartli = () => within(bolum).getByRole('button', { name: /6060/ }) as HTMLButtonElement;
-    fireEvent.click(within(bolum).getByLabelText('Şartlı muadilleri kabul ediyorum'));
+    fireEvent.click(within(bolum).getByLabelText(/Şartlı kalite ve durum muadillerini de kabul ediyorum/));
     expect(sartli().disabled).toBe(false);
     expect(sartli().getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(sartli());
-    fireEvent.click(within(bolum).getByLabelText('Şartlı muadilleri kabul ediyorum'));
+    fireEvent.click(within(bolum).getByLabelText(/Şartlı kalite ve durum muadillerini de kabul ediyorum/));
     expect(sartli().disabled).toBe(true);
-    fireEvent.click(within(bolum).getByLabelText('Şartlı muadilleri kabul ediyorum'));
+    fireEvent.click(within(bolum).getByLabelText(/Şartlı kalite ve durum muadillerini de kabul ediyorum/));
     expect(sartli().getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(sartli());
     expect((await gonder(cagrilar)).kabul).toEqual({ yalnizAyni: false, sartliKabul: true, kaliteler: ['6061', '6060'], durumlar: [], payMm: 2.5 });

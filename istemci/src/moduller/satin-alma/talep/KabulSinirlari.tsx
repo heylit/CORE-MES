@@ -149,7 +149,7 @@ export function KabulSinirlari({ no, kabul, degistir }: { no: number; kabul: Kab
       )}
       <div className="sa-kabul-secim">
         {sartliVar && !k.yalnizAyni && (
-          <IsaretKutusu etiket="Şartlı muadilleri kabul ediyorum" checked={k.sartliKabul} onChange={(e) => sartliYaz(e.target.checked)} />
+          <IsaretKutusu etiket="Şartlı kalite ve durum muadillerini de kabul ediyorum (satın alma bulunca size sorulur)" checked={k.sartliKabul} onChange={(e) => sartliYaz(e.target.checked)} />
         )}
         <p className="sa-talep-not">{k.yalnizAyni ? 'Satın alma alternatif seçemez.' : 'Satın alma bu sınırlar içindeki alternatifi seçebilir; şartlı muadil size sorulur.'}</p>
       </div>

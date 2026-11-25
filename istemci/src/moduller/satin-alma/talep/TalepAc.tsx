@@ -231,11 +231,13 @@ const zarfKarti = (tur: TalepTuru, k: KalemTaslagi): number | null =>
   (tur !== 'malzeme' ? null : k.mevcut !== null ? k.zarfNo : k.kart?.hammadde === true ? k.kart.no : null);
 
 function AlternatifOzeti({ no, sira, kabul, isaretSayisi, ac }: { no: number; sira: number; kabul: KabulSiniri | null; isaretSayisi: number | null; ac: () => void }) {
-  const z = useKabulZarfi(no).data?.zarf;
+  const veri = useKabulZarfi(no).data;
+  const z = veri?.zarf;
+  const toplam = veri?.alternatifKartlari?.length ?? null;
   if (z?.kapali) return <span className="sa-talep-not">{kapaliZarfNotu(z.gerekce)}</span>;
   return (
     <span className="sa-talep-alternatif-ozet">
-      {kabulOzeti(kabul)}{isaretSayisi !== null && isaretSayisi > 0 && ` · ${String(isaretSayisi)} alternatif kartı`}
+      {kabulOzeti(kabul)}{isaretSayisi !== null && isaretSayisi > 0 && ` · ${toplam === null ? String(isaretSayisi) : `${String(isaretSayisi)}/${String(toplam)}`} alternatif kartı işaretli`}
       {' '}<Dugme simge="edit" onClick={ac} aria-label={`Kalem ${String(sira)}: alternatif sınırını değiştir`}>Değiştir</Dugme>
     </span>
   );
@@ -325,12 +327,18 @@ function KalemSatiri({ tur, sira, k, emirSecenekleri, emirDegisir, degistir, kal
           {/* Kutu dar ekranda numarayı kesebilir: tam numara ve parça altında yazılır. */}
           {emirSecenekleri.find((e) => e.deger === k.emirId) && <span className="sa-talep-not">{emirSecenekleri.find((e) => e.deger === k.emirId)!.baslik}</span>}
         </td>
-        <td data-etiket="Açıklama"><input className="tc-alan-kutu" aria-label="Kalem açıklaması" value={k.aciklama} maxLength={500} placeholder="Ölçü, marka, kullanım yeri" onChange={(e) => degistir({ aciklama: e.target.value })} /></td>
-        <td><span className="sa-talep-eylem">
+      </tr>
+      <tr className="sa-talep-ek-satir">
+        <td colSpan={sutunSayisi} data-etiket="Açıklama">
+          <div className="sa-talep-ek">
+            <input className="tc-alan-kutu" aria-label="Kalem açıklaması" value={k.aciklama} maxLength={500} placeholder="Ölçü, marka, kullanım yeri" onChange={(e) => degistir({ aciklama: e.target.value })} />
+            <span className="sa-talep-eylem">
           {ayrintiVar && <Dugme simge={acik ? 'up' : 'down'} aria-expanded={acik} aria-controls={`ayr-${ad}`} onClick={() => acikYaz(!acik)}>Ayrıntı</Dugme>}
           {bol && <Dugme simge="layers" aria-label={`Kalem ${String(sira)}: teslimi böl`} onClick={bol}>Teslimi böl</Dugme>}
           {kaldir && <Dugme simge="trash" aria-label={`Kalem ${String(sira)}: kaldır`} onClick={kaldir} />}
-        </span></td>
+        </span>
+          </div>
+        </td>
       </tr>
       {acik && ayrintiVar && (
         <tr className="sa-talep-ayrinti-satir" id={`ayr-${ad}`}>
@@ -565,8 +573,6 @@ export function TalepAc({ taslak = null, taslakEmri = null, taslakBitti, duzenle
                 <th scope="col">Birim</th>
                 <th scope="col">Termin</th>
                 <th scope="col">Üretim emri</th>
-                <th scope="col">Açıklama</th>
-                <th scope="col"><span className="sa-talep-gizli">İşlemler</span></th>
               </tr>
             </thead>
             <tbody>

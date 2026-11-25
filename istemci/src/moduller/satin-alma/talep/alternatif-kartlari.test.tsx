@@ -55,7 +55,7 @@ describe('3593: talep kaleminde alternatif kartları', () => {
     const cagrilar = sunucuKur();
     sar(<TalepAc />);
     await kartSec();
-    expect(await screen.findByText(/1 alternatif kartı/)).toBeTruthy();
+    expect(await screen.findByText(/1\/\d+ alternatif kartı işaretli/)).toBeTruthy();
     expect((await gonder(cagrilar)).alternatifKartlari).toEqual([5]);
   });
 
