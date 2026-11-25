@@ -658,3 +658,18 @@ span.tc-ay2-mt-h { cursor: default; }
 .tc-ay2-km-bilgi { flex-wrap: wrap; align-items: center; border: var(--cizgi-ince) solid var(--c, var(--edge)); }
 .tc-ay2-km-bilgi > span { display: grid; gap: var(--b-1); min-width: 0; flex: 1 1 calc(var(--dokunma) * 4); }
 .tc-ay2-km-bilgi small { color: var(--muted); }
+
+/* 3688 d4: Talimat ve adımlar tek liste; satır kaynağı rozetle (Rota salt okunur, Paket burada düzenlenir) */
+.tc-ay2-rozet-ikili { font-style: normal; font-size: var(--yazi-xs); font-weight: 700; padding: 0 var(--b-2); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-tam); white-space: nowrap; }
+.tc-ay2-talimat-liste em[data-kaynak="rota"], .tc-ay2-kaynak-notu em[data-kaynak="rota"] { border-color: var(--done); color: var(--done); }
+.tc-ay2-talimat-liste em[data-kaynak="paket"], .tc-ay2-kaynak-notu em[data-kaynak="paket"] { border-color: var(--hazard-ink); color: var(--hazard-ink); }
+.tc-ay2-kaynak-notu em { font-style: normal; font-weight: 700; padding: 0 var(--b-1); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); }
+.tc-ay2-paket-adimi[data-acik] { outline: var(--cizgi-orta) solid var(--hazard); }
+.tc-ay2-paket-adimi .tc-ay2-adim { border: 0; padding: 0; grid-template-columns: minmax(0, 1fr) auto auto auto; }
+.tc-ay2-paket-adimi .tc-ay2-adim input { min-block-size: var(--alan-boy); }
+@media (max-width: 767px) {
+  .tc-ay2-paket-adimi .tc-ay2-adim { grid-template-columns: auto auto minmax(0, 1fr); }
+  .tc-ay2-paket-adimi .tc-ay2-adim-alan { grid-column: 1 / -1; }
+  .tc-ay2-paket-adimi .tc-ay2-adim > .tc-ay2-onay { grid-row: 2; grid-column: 1; }
+  .tc-ay2-paket-adimi .tc-ay2-adim > .tc-ay2-arac:last-child { justify-self: end; }
+}
