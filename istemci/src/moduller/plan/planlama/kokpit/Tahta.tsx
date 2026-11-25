@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom';
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as FareOlayi, type PointerEvent as ImlecOlayi, type ReactNode, type KeyboardEvent as TusOlayi } from 'react';
+import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as FareOlayi, type PointerEvent as ImlecOlayi, type ReactNode, type KeyboardEvent as TusOlayi } from 'react';
 import { Dugme, Simge } from '../../../../ortak/arayuz/index.ts';
 import { hizaCizgileri, hizaNoktalari, hizalaYakala, type HizaCizgisi, type Yakalanan } from './hiza.ts';
 import { bolunemezNedeni } from './ElleBol.tsx';
@@ -197,6 +197,9 @@ export function Tahta(o: TahtaOzellikleri) {
   // Yük hücreleri yalnız Tezgâh gözünün (ya da kademesiz tahtanın) Yıl ölçeğinde.
   const isi = olcek === 'Y' && kad === 'adim';
   const tabloKipi = tablo !== null && !isi && (goz === 'T' || (o.agac ?? null) !== null);
+  const tabloKimligi = useId();
+  // aria-owns yalnız o an çizilmiş satırları sayar (çizilmeyen kimliğe işaret etmez); her çizimden sonra DOM'dan kurulur.
+  const tabloSahibi = useRef<HTMLDivElement>(null);
   const kolonlar: readonly { id: string; ad: string; en: number; sayi: boolean }[] = tablo === null ? [] : goz === 'T' ? TEZGAH_SUTUNLARI : tablo.sutunlar.map((x) => SUTUN_ADI[x]);
   // 3570: sütunlar içeriğin ölçülen enine göre açılır (yazı boyu büyükse kesilmesin); ölçüm yokken (ilk kare, test ortamı) sabit ağırlıklar.
   // Ölçü durumda değil: değişince yalnız tahtanın CSS değişkeni yazılır, satırlar yeniden çizilmez (800 emirde tam çizim pahalı).
@@ -222,6 +225,13 @@ export function Tahta(o: TahtaOzellikleri) {
   const [menu, setMenu] = useState<{ id: string; x: number; y: number; tut: number; fis?: boolean } | null>(null);
   const imlecteki = useRef<string | null>(null);
   const ic = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    const sahip = tabloSahibi.current, kok = ic.current;
+    if (!sahip || !kok) return;
+    const onek = `${tabloKimligi}-`;
+    const idler = [...kok.querySelectorAll<HTMLElement>('[role="row"][id]')].map((x) => x.id).filter((x) => x.startsWith(onek)).join(' ');
+    if (sahip.getAttribute('aria-owns') !== idler) sahip.setAttribute('aria-owns', idler);
+  });
   const [oklar, setOklar] = useState<Ok[]>([]);
   const [ustteki, setUstteki] = useState<string | null>(null);
   const [etki, setEtki] = useState<Etki | null>(null);
@@ -732,7 +742,7 @@ export function Tahta(o: TahtaOzellikleri) {
       {tabloKipi && tablo
         ? (
           <div className="tc-pyq-bas" data-tablo="">
-            <div className="tc-pyq-tablo-satir" role="row">
+            <div className="tc-pyq-tablo-satir" role="row" id={`${tabloKimligi}-b`}>
               {kolonlar.map((k) => <div key={k.id} className="tc-pyq-h" role="columnheader" data-sutun={k.id} data-sayi={k.sayi ? '' : undefined}>{kad === 'siparis' && k.id === 'emir' ? 'Sipariş' : kad === 'siparis' && k.id === 'urun' ? 'Emirler' : kad === 'siparis' && k.id === 'fark' ? 'En kötü fark' : k.ad}</div>)}
             </div>
             <Ayrac tablo={tablo} erisilir deger={Math.round(tablo.en ?? dogalEn)} />
@@ -1037,6 +1047,7 @@ export function Tahta(o: TahtaOzellikleri) {
     const cubuk = kap.current?.querySelector<HTMLElement>(`[data-is="${tirnakIci(x.id)}"]`);
     if (cubuk && typeof cubuk.scrollIntoView === 'function') cubuk.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
   };
+  const satirNo = new Map(satirlar.map((r, i) => [r.kimlik, i]));
   const tabloSatiri = (r: Satir): ReactNode => {
     if (!tablo) return null;
     const emirSatiri = goz === 'S' && r.emirKaydi !== undefined && !r.adim && !r.ara && !r.notlar;
@@ -1045,7 +1056,7 @@ export function Tahta(o: TahtaOzellikleri) {
     return (
       <>
         <div
-          className="tc-pyq-tablo-satir" role="row" data-secilebilir={emirSatiri || adimSatiri ? '' : undefined} data-adim-satiri={adimSatiri ? r.isler[0]!.id : undefined}
+          className="tc-pyq-tablo-satir" role="row" id={satirNo.has(r.kimlik) ? `${tabloKimligi}-${String(satirNo.get(r.kimlik))}` : undefined} data-secilebilir={emirSatiri || adimSatiri ? '' : undefined} data-adim-satiri={adimSatiri ? r.isler[0]!.id : undefined}
           aria-selected={adimSatiri ? adimSecili : undefined} tabIndex={adimSatiri ? 0 : undefined} title={adimSatiri ? 'Adımı Gantt\'ta göster' : undefined}
           onClick={emirSatiri ? (ev) => { if (!(ev.target as Element).closest('button')) satirSec(r.emirKaydi!); } : adimSatiri ? (ev) => { if (!(ev.target as Element).closest('button')) adimSatiriSec(r); } : undefined}
           onKeyDown={adimSatiri ? (ev) => { if (ev.target === ev.currentTarget && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); adimSatiriSec(r); } } : undefined}
@@ -1082,7 +1093,10 @@ export function Tahta(o: TahtaOzellikleri) {
       className="tc-pyq-tahta" data-olcek={olcek} data-tasima={tasinan ? '' : undefined} ref={kap} onScroll={pencereyiBildir}
       onPointerMove={izle} onClickCapture={(ev) => { if (balon && !(ev.target as Element).closest('.tc-pyq-balon, .tc-pyq-gelen')) setBalon(null); if (tasinan && !onay) { ev.preventDefault(); ev.stopPropagation(); birak(); } else if (menu && !(ev.target as Element).closest('.tc-pyq-menu')) setMenu(null); }}
     >
-      <div className="tc-pyq-ic" role={tabloKipi ? 'table' : undefined} aria-label={tabloKipi ? goz === 'T' ? 'Tezgâhlar' : 'Emirler' : undefined} ref={(el) => { ic.current = el; el?.style.setProperty('--en', `${String(en)}px`); el?.style.setProperty('--gun', `${String(24 * px)}px`); }}>
+      <div className="tc-pyq-ic" ref={(el) => { ic.current = el; el?.style.setProperty('--en', `${String(en)}px`); el?.style.setProperty('--gun', `${String(24 * px)}px`); }}>
+        {/* Tablo rolü satırlara aria-owns ile bağlı ayrı öğededir: Gantt düğmeleri ve sütun ayracı aynı satırlarda durur, role=table içinde
+            satır ya da hücre olmayan çocuk olarak sayılırdı (axe aria-required-children). */}
+        {tabloKipi && <div className="tc-pyq-tablo-sahip" role="table" aria-label={goz === 'T' ? 'Tezgâhlar' : 'Emirler'} ref={tabloSahibi} />}
         {eksen}
         {plansiz.length > 0 && (
           <div className="tc-pyq-satir tc-pyq-tepsi">

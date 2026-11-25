@@ -1348,3 +1348,5 @@
   }
   .tc-pyq-pano[data-kip="sayfa"]:has(~ .tc-pyq-ayrinti) { display: none; }
 }
+/* Tablo rolünü taşıyan boş sahip öğe: satırlara aria-owns ile bağlıdır, yer kaplamaz. */
+.tc-pyq-tablo-sahip { position: absolute; inline-size: 0; block-size: 0; overflow: hidden; }

@@ -1,4 +1,5 @@
 import type { Locator, Page, Route } from '@playwright/test';
+import { AxeBuilder } from '@axe-core/playwright';
 import { expect, tasmaOlc, test } from './ortak.ts';
 
 // Kart 3151: Kokpit (Planlama > Kokpit). Genişlik projeden gelir (360, 768, 1280). Çalışma okuması ve sunucu komutları ağ katmanında uydurma
@@ -3243,4 +3244,31 @@ test('Kokpit 3663: seçili adımın panosu çubuğun yanında ve görünen alan�
   await expect(suruk).toHaveCount(0);
   expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
   expect(ag.hatalar).toEqual([]);
+});
+
+// Erişilebilirlik: planlama çalışması açıkken Kokpit (tahta ve tablo) kritik ihlal vermez. erisilebilirlik.spec.ts çalışması olmayan
+// boş sayfayı tarar; tablo rolü Gantt düğmelerini ve sütun ayracını kapsarsa aria-required-children yalnız dolu planda çıkar.
+test('Kokpit erişilebilirlik: çalışma açıkken tahta ve tablo kritik ihlal vermez; tablo rolü yalnız satırlara bağlıdır', async ({ page, ac }, bilgi) => {
+  await taslakSunucusu(page, (d) => calismaKur(d));
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const karsilama = page.getByRole('button', { name: 'Başlayalım' });
+  if (await karsilama.isVisible()) await karsilama.click();
+  const telefon = bilgi.project.name === 'g360';
+  const sahip = kokpit.locator('[role="table"].tc-pyq-tablo-sahip');
+  if (!telefon) {
+    await expect(kokpit.getByRole('region', { name: 'Emirler' }).locator('.tc-pyq-tahta')).toBeVisible();
+    await expect(sahip).toHaveCount(1);
+  }
+  const tarama = async () => {
+    const sonuc = await new AxeBuilder({ page }).include('.tc-pyq').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+    return sonuc.violations.filter((v) => v.impact === 'critical').map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`);
+  };
+  expect(await tarama()).toEqual([]);
+  if (!telefon) {
+    expect(await sahip.evaluate((e) => e.children.length)).toBe(0);
+    expect(await sahip.evaluate((e) => (e.getAttribute('aria-owns') ?? '').split(' ').every((id) => document.getElementById(id)?.getAttribute('role') === 'row'))).toBe(true);
+  }
 });

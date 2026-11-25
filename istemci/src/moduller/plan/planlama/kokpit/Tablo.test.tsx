@@ -189,7 +189,15 @@ describe('Kokpit sol tablo (3533)', () => {
     const durumlar = [...bolum.querySelectorAll('.tc-pyq-liste h3 i[data-su-an]')].map((x) => x.textContent);
     expect(durumlar.length).toBeGreaterThan(0);
     for (const d of durumlar) expect(d).toMatch(/Çalışıyor|Duruş|Boşta/);
-    for (const a of bolum.querySelectorAll('[role="table"] .tc-pyq-alan')) expect(a.getAttribute('role')).toBe('presentation');
+    // Tablo rolü Gantt düğmelerini ve ayracı kapsamaz (axe aria-required-children): boş sahip öğe yalnız satırlara aria-owns ile bağlıdır.
+    const sahip = bolum.querySelector('[role="table"]')!;
+    expect(sahip.children.length).toBe(0);
+    const idler = (sahip.getAttribute('aria-owns') ?? '').split(' ').filter((x) => x !== '');
+    expect(idler.length).toBeGreaterThan(1);
+    for (const id of idler) expect(bolum.ownerDocument.getElementById(id)?.getAttribute('role')).toBe('row');
+    expect(bolum.querySelectorAll('[role="row"]').length).toBe(idler.length);
+    expect(new Set(idler).size).toBe(idler.length);
+    expect(sahip.querySelector('button, [role="separator"]')).toBeNull();
   });
   it('j tuşu görünen sırayı izler: Plan sırasında plan sırasındaki ilk sorunlu emri, Termine göre gecikmede o sıradaki ilk sorunlu emri seçer (K6)', () => {
     vi.stubGlobal('CSS', { escape: (x: string) => x });
