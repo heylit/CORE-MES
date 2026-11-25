@@ -873,52 +873,53 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
               {sekme === 'steps' ? <TalimatVeAdimlar paket={p} d={talimat} duzenler={duzenler} yama={yama} /> : null}
               {sekme === 'docs' ? (
                 <div className="tc-ay2-kurallar">
-                  {kmPaket && typeof p.malzemeNo === 'number' ? (
-                    <KaliteMerkeziCizimleri p={p} malzemeNo={p.malzemeNo} duzenler={duzenler} mesgul={merkezMesgul} al={(r) => { void kmdenAl(r); }} />
-                  ) : null}
-                  {sunucuda ? (
-                    <section className="tc-ay2-kart tc-ay2-genis" aria-label="Çizim Merkezi’nden">
-                      <div className="tc-ay2-kb">
-                        <span className="tc-ay2-kb-simge" data-ton="done"><Simge ad="layers" /></span>
-                        <div><b>Çizim Merkezi’nden</b><small>Yayındaki PDF ve 3B model · merkezde yeni revizyon yayınlanınca burada görünür</small></div>
-                        <Dugme tur="ikincil" simge="plus" onClick={() => merkezSecYaz(true)}>Çizim Merkezi’nden ekle</Dugme>
+                  {/* 3688 d4 (seçenek A): pakette olan bir kartta, alınacak kaynaklar ötekinde; format rehberi katlı. */}
+                  <section className="tc-ay2-kart tc-ay2-genis" aria-label="Paketteki dosyalar">
+                    <div className="tc-ay2-kb"><div><b>Paketteki dosyalar</b><small>Operatörün gördüğü resim ve model</small></div></div>
+                    {([['pdf', 'PDF', 'Teknik resim', pdfF], ['model', '3B', '3B model', mdlF]] as const).map(([k, kisa, ad, f]) => (
+                      <div key={k} className="tc-ay2-dosya" role="group" aria-label={ad}>
+                        <span className="tc-ay2-dosya-turu" data-tur={k}>{kisa}</span>
+                        {f ? (
+                          <>
+                            <b>{f.name}</b><span>{boyutMetni(dosyaBoyu(f))}</span>{p.primary === f.name ? <span className="tc-ay2-ana-isaret">★ Ana resim</span> : null}
+                            {sunucuda ? <Suspense fallback={null}><MerkezDurumu f={f} mesgul={merkezMesgul} guncelle={(g) => { void merkezdenAl(Number(g.merkez), true); }} /></Suspense> : null}
+                            <button type="button" className="tc-ay2-arac" aria-label={ad + ' kaldır'} onClick={() => dosyaKaldir(k)}><Simge ad="trash" /></button>
+                          </>
+                        ) : <span className="tc-ay2-soluk">{MERKEZDEN_EKLENIR}</span>}
                       </div>
-                    </section>
-                  ) : null}
-                  {merkezSec ? <Suspense fallback={null}><MerkezSecici sec={(b) => merkezdenAl(b.id, false)} kapat={() => merkezSecYaz(false)} malzeme={p.malzemeNo ?? null} /></Suspense> : null}
-                  {([['pdf', 'PDF', 'Teknik resim', "CAD'den çıkmış PDF · ölçüler otomatik okunur", pdfF], ['model', '3B', '3B model', 'STEP önerilir · IGES, STL de olur', mdlF]] as const).map(([k, kisa, ad, acik, f]) => (
-                    <section key={k} className="tc-ay2-kart" aria-label={ad}>
-                      <div className="tc-ay2-kb"><span className="tc-ay2-dosya-turu" data-tur={k}>{kisa}</span><div><b>{ad}</b><small>{acik}</small></div></div>
-                      {f ? (
-                        <div className="tc-ay2-dosya">
-                          <Simge ad="check" /><b>{f.name}</b><span>{boyutMetni(dosyaBoyu(f))}</span>
-                          {sunucuda ? <Suspense fallback={null}><MerkezDurumu f={f} mesgul={merkezMesgul} guncelle={(g) => { void merkezdenAl(Number(g.merkez), true); }} /></Suspense> : null}
-                          <button type="button" className="tc-ay2-arac" aria-label={ad + ' kaldır'} onClick={() => dosyaKaldir(k)}><Simge ad="trash" /></button>
-                        </div>
-                      ) : <p className="tc-ay2-soluk">{MERKEZDEN_EKLENIR}</p>}
-                    </section>
-                  ))}
-                  <section className="tc-ay2-kart tc-ay2-genis" aria-label="Operatör ekranında ana resim">
-                    <span className="tc-ay2-ust-yazi">Operatör ekranında ana resim</span>
-                    {p.files.length ? (
-                      <Bolmeli
-                        etiket="Ana resim" deger={p.primary || ''} secenekler={p.files.map((f) => [f.name, f.kind === 'pdf' ? 'PDF · ' + f.name : 'Modelden üret · ' + f.name] as const)}
-                        degistir={(ad) => yama({ primary: ad, ...(ad !== p.primary ? { plan: [], kmResim: null, ...kmElle(p) } : {}) })}
-                      />
-                    ) : <span className="tc-ay2-soluk">Önce dosya ekle</span>}
-                    <p className="tc-ay2-soluk">Ana resmi değiştirirsen kontrol planı sıfırlanır (balonlar resme bağlıdır).</p>
-                  </section>
-                  <section className="tc-ay2-kart tc-ay2-genis" aria-label="Hangi 3B format?">
-                    <span className="tc-ay2-ust-yazi">Hangi 3B format?</span>
-                    <div className="tc-ay2-formatlar">
-                      {([
-                        ['STEP AP242 / AP214', 'Önerilen', 'Tam (B-rep) geometri. Çaplar, delikler, kademeler hassas okunur; teknik resim ve ölçüler üretilir. Tüm CAD\'ler verir.', 'run'],
-                        ['IGES', 'Olur', 'Eski ama yaygın; yüzey tabanlı, bazen boşluklu. STEP yoksa kullan.', 'hold'],
-                        ['STL', 'Sadece görüntü', 'Üçgen ağ; ölçüler yaklaşık. Görselleştirme için yeterli, ölçüm kaynağı olmamalı.', 'hold'],
-                        ['SLDPRT, IPT, CATPart…', 'Desteklenmez', 'Üretici formatları kapalı; CAD\'den STEP olarak dışa aktar.', 'stop'],
-                      ] as const).map(([a, b, c, t]) => <div key={a}><b>{a}</b><Cip ton={t}>{b}</Cip><p>{c}</p></div>)}
+                    ))}
+                    <div className="tc-ay2-ana-resim">
+                      <span className="tc-ay2-ust-yazi">Operatör ekranında ana resim</span>
+                      {p.files.length ? (
+                        <Bolmeli
+                          etiket="Ana resim" deger={p.primary || ''} secenekler={p.files.map((f) => [f.name, f.kind === 'pdf' ? 'PDF · ' + f.name : 'Modelden üret · ' + f.name] as const)}
+                          degistir={(ad) => yama({ primary: ad, ...(ad !== p.primary ? { plan: [], kmResim: null, ...kmElle(p) } : {}) })}
+                        />
+                      ) : <span className="tc-ay2-soluk">Önce dosya ekle</span>}
+                      {duzenler && p.files.length ? <p className="tc-ay2-soluk">Ana resmi değiştirirsen kontrol planı sıfırlanır (balonlar resme bağlıdır).</p> : null}
                     </div>
                   </section>
+                  <section className="tc-ay2-kart tc-ay2-genis" aria-label="Kaynaktan ekle">
+                    <div className="tc-ay2-kb">
+                      <div><b>Kaynaktan ekle</b><small>Kalite Merkezi ve Çizim Merkezi · merkezde yeni revizyon yayınlanınca burada görünür</small></div>
+                      {sunucuda ? <span className="tc-ay2-sag"><Dugme tur="ikincil" simge="plus" onClick={() => merkezSecYaz(true)}>Çizim Merkezi’nden ekle</Dugme></span> : null}
+                    </div>
+                    {kmPaket && typeof p.malzemeNo === 'number' ? (
+                      <KaliteMerkeziCizimleri p={p} malzemeNo={p.malzemeNo} duzenler={duzenler} mesgul={merkezMesgul} al={(r) => { void kmdenAl(r); }} gomulu />
+                    ) : null}
+                    <details className="tc-ay2-rehber">
+                      <summary>Hangi 3B format? STEP önerilir</summary>
+                      <div className="tc-ay2-formatlar">
+                        {([
+                          ['STEP AP242 / AP214', 'Önerilen', 'Tam (B-rep) geometri. Çaplar, delikler, kademeler hassas okunur; teknik resim ve ölçüler üretilir. Tüm CAD\'ler verir.', 'run'],
+                          ['IGES', 'Olur', 'Eski ama yaygın; yüzey tabanlı, bazen boşluklu. STEP yoksa kullan.', 'hold'],
+                          ['STL', 'Sadece görüntü', 'Üçgen ağ; ölçüler yaklaşık. Görselleştirme için yeterli, ölçüm kaynağı olmamalı.', 'hold'],
+                          ['SLDPRT, IPT, CATPart…', 'Desteklenmez', 'Üretici formatları kapalı; CAD\'den STEP olarak dışa aktar.', 'stop'],
+                        ] as const).map(([a, b, c, t]) => <div key={a}><b>{a}</b><Cip ton={t}>{b}</Cip><p>{c}</p></div>)}
+                      </div>
+                    </details>
+                  </section>
+                  {merkezSec ? <Suspense fallback={null}><MerkezSecici sec={(b) => merkezdenAl(b.id, false)} kapat={() => merkezSecYaz(false)} malzeme={p.malzemeNo ?? null} /></Suspense> : null}
                 </div>
               ) : null}
               {sekme === 'plan' ? (

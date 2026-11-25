@@ -382,7 +382,7 @@ describe('A2 Hazırlık ekranı', () => {
     expect(istekler.filter((i) => i.yol === `/arkon/belgeler/pkgs/${BOS.id}/yaz`)).toEqual([]);
   }, 40000);
 
-  it('Kalite Merkezi resmi değişince paket "değişti" gösterir; düzenleme yetkisi olmayan alamaz (reddedilen)', async () => {
+  it('Kalite Merkezi resmi değişince "Yeni revizyon var" gösterir; düzenleme yetkisi olmayan alamaz (reddedilen)', async () => {
     // Önceki denemenin cihazda kalan paketiyle karışmasın diye ayrı kimlik.
     const BAGLI = { ...KM_PAKETI, id: 'tmi-ue-10', no: 'IE-DENEME-4', kmResim: { id: 12, surum: 3 } };
     const istekler = sunucuKur(kmOkur(HAZIRLIKCI), {
@@ -394,7 +394,9 @@ describe('A2 Hazırlık ekranı', () => {
     const d = await ekran();
     fireEvent.click(within(d).getByRole('button', { name: /Dokümanlar/ }));
     const km = await within(d).findByRole('region', { name: 'Kalite Merkezi’nden' }, { timeout: 10000 });
-    expect(await within(km).findByText('Kalite Merkezi’nde değişti', undefined, { timeout: 10000 })).toBeTruthy();
+    expect(await within(km).findByText('Yeni revizyon var', undefined, { timeout: 10000 })).toBeTruthy();
+    // 3688 d4: yetkisizde ana resim uyarısı çizilmez (seçim de kapalı).
+    expect(within(d).queryByText(/kontrol planı sıfırlanır/)).toBeNull();
     expect(within(km).queryByRole('button', { name: /Güncelle|Pakete al/ })).toBeNull();
     expect(yazmalar(istekler)).toEqual([]);
   }, 40000);
@@ -474,12 +476,31 @@ describe('A2 Hazırlık ekranı', () => {
     expect(istekler.filter((i) => i.yol === `/arkon/belgeler/pkgs/${P.id}/yaz`)).toEqual([]);
   }, 40000);
 
+  it('3688 d4: Dokümanlar iki kartta; pakettekiler ve ana resim birinde, Çizim Merkezi ve format rehberi (katlı, tam) ötekinde', async () => {
+    sunucuKur(YONETICI, sunucu());
+    arkonAc('/arkon/hazirlik');
+    const d = await ekran();
+    fireEvent.click(within(d).getByRole('button', { name: /Dokümanlar/ }));
+    const paket = await within(d).findByRole('region', { name: 'Paketteki dosyalar' }, { timeout: 10000 });
+    expect(within(paket).getByRole('group', { name: 'Teknik resim' }).textContent).toContain('deneme.pdf');
+    expect(within(paket).getByRole('group', { name: 'Teknik resim' }).textContent).toContain('Ana resim');
+    expect(within(paket).getByRole('group', { name: '3B model' }).textContent).not.toContain('Ana resim');
+    expect(within(paket).getByText(/kontrol planı sıfırlanır/)).toBeTruthy();
+    const kaynak = within(d).getByRole('region', { name: 'Kaynaktan ekle' });
+    expect(within(kaynak).getByRole('button', { name: /Çizim Merkezi’nden ekle/ })).toBeTruthy();
+    const rehber = within(kaynak).getByText(/Hangi 3B format/).closest('details');
+    expect(rehber?.open).toBe(false);
+    expect(rehber?.textContent).toContain('IGES');
+    expect(rehber?.textContent).toContain('SLDPRT, IPT, CATPart');
+    expect(within(d).queryByRole('region', { name: 'Hangi 3B format?' })).toBeNull();
+  }, 40000);
+
   it('malzemesi olmayan eski pakette Kalite Merkezi okunmaz ve plan düzenlenir', async () => {
     const istekler = sunucuKur(YONETICI, sunucu());
     arkonAc('/arkon/hazirlik');
     const d = await ekran();
     fireEvent.click(within(d).getByRole('button', { name: /Dokümanlar/ }));
-    await within(d).findByRole('region', { name: 'Teknik resim' }, { timeout: 10000 });
+    await within(d).findByRole('group', { name: 'Teknik resim' }, { timeout: 10000 });
     expect(within(d).queryByRole('region', { name: 'Kalite Merkezi’nden' })).toBeNull();
     expect(istekler.some((i) => i.yol.startsWith('/kalite-merkezi/'))).toBe(false);
     fireEvent.click(within(d).getByRole('button', { name: /Kontrol planı/ }));
