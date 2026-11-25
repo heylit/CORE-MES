@@ -1845,6 +1845,24 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
       for (const c of ['ls-a', 'ls-b1', 'ls-b2', 'ls-b3', 'ls-n', 'ls-karisik']) assert.ok(hepsi.includes(c), c);
     });
 
+    test('3689: Kalite Merkezi\'ne bağlı paketin numune planı Hazırlık\'tan değiştirilemez; bağsız paket serbesttir', async () => {
+      const kimlik = 'km-numune-1';
+      const govde = { id: kimlik, malzemeNo: 987654, tmi: { opNo: 20 }, samp: [] as unknown[] };
+      const pYaz = (taban: number, g: unknown) => istek<BelgeYazCevabi>(cerezler.admin, 'POST', `/arkon/belgeler/pkgs/${kimlik}/yaz`, { taban, govde: g, kaynak: 'g1' });
+      const ilk = await pYaz(0, govde);
+      assert.equal(ilk.durum, 200);
+      const s1 = surum(ilk);
+      // Bağsız paket numune planını yazabilir.
+      const kural = { id: 'k1', when: 'first', who: ['q'], items: 'all' };
+      const serbest = await pYaz(s1, { ...govde, samp: [kural] });
+      assert.equal(serbest.durum, 200);
+      // Kalite Merkezi'nde bu operasyonun planı yokken bağ kurmak ya da bağlı paketin samp'ını değiştirmek reddedilir.
+      const s2 = surum(serbest);
+      const ret = await pYaz(s2, { ...govde, kmNumune: { surum: 1 }, samp: [kural] });
+      assert.equal(ret.durum, 403);
+      assert.deepEqual((await oku('admin', 'pkgs', kimlik)).govde.belge?.govde, { ...govde, samp: [kural] });
+    });
+
     test('istasyona bağlı belgeler: kapsam dışı yazma, ezme, silme 403; liste ve okuma kapsam dışını göstermez', async () => {
       const pa = surum(await yaz('admin', 'pkgs', 'kb-pa', 0, { id: 'kb-pa', machine: A.istasyon }));
       const pb = surum(await yaz('admin', 'pkgs', 'kb-pb', 0, { id: 'kb-pb', machine: B.istasyon }));

@@ -47,6 +47,7 @@ export const ILETILER = {
   lotKarariTutmadi: 'Bulunan kusurlu sayıları AQL planına göre başka karar veriyor; sayıları ya da kararı düzeltin.',
   lotPaketi: 'Lot kararı yalnız kalite istasyonundaki CORE iş emri paketinde verilir.',
   kaliteKarari: 'Bu kayıt karara bağlanmış ya da kapanmış: değiştirmek yalnız kararı veren ya da kapatan role ve yöneticiye açıktır.',
+  kmNumune: 'Numune planı Kalite Merkezi\'ndedir: pakete yalnız oradaki planın bu operasyondaki güncel sürümüyle girer, Hazırlık\'tan değiştirilemez.',
   ilkParcaKmde: 'İlk parça kararı Kalite Merkezi\'nde verilir.',
   kmNumuneYok: 'Bu numune Kalite Merkezi\'ne bağlı değil: ölçüm buradan girilmez.',
   numuneYok: 'Numune isteği bulunamadı.',

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { etkinResimler, kmBagi, kmPlani, kmResimDurumu, kmSahibi, otomatikKmResmi } from './km-cizim.ts';
+import { etkinResimler, kmBagi, kmNumuneDurumu, kmNumuneKurallari, kmNumunePlani, kmPlani, kmResimDurumu, kmSahibi, otomatikKmNumunesi, otomatikKmResmi } from './km-cizim.ts';
 
 // Kalite Merkezi resmi ve balonları (789, 795 a); değerler uydurmadır.
 const BALON = {
@@ -44,5 +44,37 @@ describe('Kalite Merkezi çizimi', () => {
     expect(otomatikKmResmi({ ...taslak, kmResim: { id: 1, surum: 1 } }, [r])).toBeNull();
     expect(otomatikKmResmi({ ...taslak, plan: [{ id: 1 }] }, [r])).toBeNull();
     expect(otomatikKmResmi({ malzemeNo: null, status: 'draft' as const }, [r])).toBeNull();
+  });
+
+  // 3689: numune planının sahibi Kalite Merkezi; paket `samp`'ına çevrilir, sürüm pakette tutulur.
+  const PLAN = { opNo: 20, surum: 3, kurallar: [
+    { kimlik: 'a', ne: 'ilk' as const, kim: ['kalite' as const], balonlar: 'hepsi' as const, kapi: true },
+    { kimlik: 'b', ne: 'her' as const, n: 25, kim: ['operator' as const, 'kalite' as const], balonlar: 'kritik' as const },
+    { kimlik: 'c', ne: 'vardiya' as const, kim: ['operator' as const], balonlar: [3, 5] },
+  ] };
+  it('Kalite Merkezi kuralı paket numune kuralına çevrilir', () => {
+    expect(kmNumuneKurallari(PLAN)).toEqual([
+      { id: 'a', when: 'first', who: ['q'], items: 'all', gate: true },
+      { id: 'b', when: 'every', n: 25, who: ['op', 'q'], items: 'crit' },
+      { id: 'c', when: 'shift', who: ['op'], items: [3, 5] },
+    ]);
+  });
+  it('plan paketin operasyon numarasıyla bulunur; sürüm farkı "değişti" der', () => {
+    const p = { malzemeNo: 5, tmi: { opNo: 20 }, kmNumune: { surum: 3 } };
+    expect(kmNumunePlani(p, [PLAN, { ...PLAN, opNo: 30 }])?.opNo).toBe(20);
+    expect(kmNumunePlani({ malzemeNo: 5, tmi: { opNo: 99 } }, [PLAN])).toBeNull();
+    expect(kmNumuneDurumu(p, PLAN)).toBe('pakette');
+    expect(kmNumuneDurumu(p, { ...PLAN, surum: 4 })).toBe('degisti');
+    expect(kmNumuneDurumu({ malzemeNo: 5 }, PLAN)).toBe('bagsiz');
+    expect(kmNumuneDurumu(p, null)).toBe('yok');
+  });
+  it('otomatik numune planı: yalnız taslakta, bağsız ve kuralsız pakette, kuralı olan planla', () => {
+    const t = { malzemeNo: 5, status: 'draft' as const, tmi: { opNo: 20 }, samp: [] };
+    expect(otomatikKmNumunesi(t, [PLAN])?.surum).toBe(3);
+    expect(otomatikKmNumunesi({ ...t, status: 'published' as const }, [PLAN])).toBeNull();
+    expect(otomatikKmNumunesi({ ...t, kmNumune: { surum: 1 } }, [PLAN])).toBeNull();
+    expect(otomatikKmNumunesi({ ...t, samp: [{ id: 'x', when: 'first', who: ['q'], items: 'all' }] as unknown as never[] }, [PLAN])).toBeNull();
+    expect(otomatikKmNumunesi({ ...t, malzemeNo: null }, [PLAN])).toBeNull();
+    expect(otomatikKmNumunesi(t, [{ ...PLAN, kurallar: [] }])).toBeNull();
   });
 });

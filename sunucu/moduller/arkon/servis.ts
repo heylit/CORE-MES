@@ -22,6 +22,8 @@ import type { HazirlikMaddeleriCevabi, HazirlikMaddesiOlayi, KuyrukSiralaGovdesi
 import type { IlkParcaSecimi } from '#paylasilan/sozlesme/rota.ts';
 import { durusNedenleriniListele, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import { aletlerVeKayitlari, olcumAletiGecerliMi } from '../kalibrasyon/disari.ts';
+import { kmNumuneDegisimiGecerli, kmNumuneDegisimiGerekli } from './km-numune-ceviri.ts';
+import { studyoParcasi } from '../kalite-merkezi/disari.ts';
 import { adimIlkParcaKararlari, ilkParcaKararlari, lotKarariYaz, muayenePlaniOner, emirNumuneleri, numuneIste, numuneKarariVer, numuneOku, olcumYaz } from '../kalite-merkezi/disari.ts';
 import type { KmOlcumKaynagi, KmOlcumVerisi } from '../kalite-merkezi/disari.ts';
 import {
@@ -827,6 +829,7 @@ export async function belgeYaz(
   const onayZorunlu = depo === 'pkgs' && onayZorunluMu((await sorgular.belge(db, 'kv', 'policy'))?.govde);
   const alanReddi = alanYetkisiReddi(depo, g.govde, guncel?.govde, rol, onayZorunlu);
   if (alanReddi !== null) throw yetkiYok(ILETILER[alanReddi]);
+  if (depo === 'pkgs' && kmNumuneDegisimiGerekli(g.govde, guncel?.govde) && !(await kmNumunePlaniGecerli(db, g.govde))) throw yetkiYok(ILETILER.kmNumune);
   const olcumAleti = olcumAletleri(depo, g.govde, guncel?.govde);
   if (olcumAleti?.eksik === true) throw dogrulama(ILETILER.aletZorunlu, 'gid');
   for (const id of olcumAleti?.aletler ?? []) if (!(await olcumAletiGecerliMi(db, id))) throw dogrulama(ILETILER.aletGecersiz, 'gid');
@@ -3333,3 +3336,15 @@ export async function cihazBagiYaz(db: Db, kullanici: Kullanici, g: CihazBagiGov
   await sorgular.cihazBagiEkle(db, g.cihaz, istasyon.id, makineId, kullanici.id);
   return { tamam: true };
 }
+
+// 3689: numune planı Kalite Merkezi'ndedir; pakete yalnız oradaki planın çevirisiyle ve sürümüyle girer (istemci denetimi tek başına yetmez).
+async function kmNumunePlaniGecerliOku(db: Db, govde: unknown): Promise<boolean> {
+  const g = govde !== null && typeof govde === 'object' ? govde as Record<string, unknown> : {};
+  const malzemeNo = g['malzemeNo'];
+  const tmi = g['tmi'] !== null && typeof g['tmi'] === 'object' ? g['tmi'] as Record<string, unknown> : {};
+  const opNo = tmi['opNo'];
+  if (typeof malzemeNo !== 'number' || typeof opNo !== 'number') return false;
+  const plan = (await studyoParcasi(db, malzemeNo)).numunePlanlari.find((x) => x.opNo === opNo) ?? null;
+  return kmNumuneDegisimiGecerli(govde, plan);
+}
+const kmNumunePlaniGecerli = kmNumunePlaniGecerliOku;

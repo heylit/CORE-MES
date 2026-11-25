@@ -28,7 +28,8 @@ import { IstasyonDuzenleyici, TurSecici } from './IstasyonDuzenleyici.tsx';
 import { ArkonBandi } from '../ortak/SaatSeridi.tsx';
 import { IstasyonSecimi } from './IstasyonSecici.tsx';
 import { KaliteMerkeziCizimleri } from './KaliteMerkeziCizimleri.tsx';
-import { kmPlani, kmSahibi, otomatikKmResmi } from './km-cizim.ts';
+import { kmBagi, kmNumuneDurumu, kmNumuneKurallari, kmNumunePlani, kmPlani, kmSahibi, otomatikKmNumunesi, otomatikKmResmi } from './km-cizim.ts';
+import type { KmNumunePlani } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import { useStudyoParcasi } from '../../../kalite-merkezi/disari.ts';
 import { useYetki } from '../../../../ortak/veri/yetki.ts';
 import { KuralSekmesi } from './KuralSekmesi.tsx';
@@ -341,6 +342,23 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
     kmOtomatik.current.add(p.id);
     void kmdenAl(r);
   }, [p?.id, p?.status, p?.files.length, kmParca.data, duzenler, dosyaBekliyor, merkezMesgul]);
+  // 3689: numune planı Kalite Merkezi'ndedir; taslak pakete kendiliğinden gelir, yayındaki pakette "Güncelle" ile alınır. Terminal `samp`'ı okur.
+  const kmNumuneAl = (plan: KmNumunePlani) => {
+    if (!p) return;
+    if (!duzenler) { yetkisiz(); return; }
+    yama({ ...(numunePlaniYaz(p, kmNumuneKurallari(plan)) as Partial<Pkg>), kmNumune: { surum: plan.surum } });
+    soyle('Numune planı Kalite Merkezi’nden alındı · ' + plan.kurallar.length + ' kural', 'run');
+  };
+  const kmNumuneOtomatik = useRef(new Set<string>());
+  useEffect(() => {
+    if (!p || !duzenler || !kmParca.data || dosyaBekliyor || merkezMesgul || kmNumuneOtomatik.current.has(p.id)) return;
+    // Resim alımı planı yeniden yazar; numune çevirisi (ölçü sıklığı etiketleri) onun bitmesini bekler.
+    if (otomatikKmResmi(p, kmParca.data.resimler) !== null) return;
+    const plan = otomatikKmNumunesi(p, kmParca.data.numunePlanlari);
+    if (plan === null) return;
+    kmNumuneOtomatik.current.add(p.id);
+    kmNumuneAl(plan);
+  }, [p?.id, p?.status, p?.files.length, p && kmBagi(p)?.surum, kmParca.data, duzenler, dosyaBekliyor, merkezMesgul]);
   // Karar 732 a: dosyasız TMI taslağı açılınca malzemenin Çizimler'deki yayında PDF ve 3B modeli bir kez kendiliğinden pakete gelir.
   const otomatikAlinan = useRef(new Set<string>());
   useEffect(() => {
@@ -916,8 +934,8 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                               ) : p.samp && p.samp.length ? (
                                 <select value="" aria-label={b.nom + ' sıklığı'} title="Numune planından gelir" onChange={(e) => { if (e.target.value === 'n') nSorYaz(b.id); else if (e.target.value === 'tab') sekmeYaz('samp'); }}>
                                   <option value="">{b.freq}</option>
-                                  {tur === 'cnc' ? <option value="n">Her N parçada bir…</option> : null}
-                                  <option value="tab">Numune sekmesinde düzenle</option>
+                                  {tur === 'cnc' && !kmPaket ? <option value="n">Her N parçada bir…</option> : null}
+                                  <option value="tab">{kmPaket ? 'Numune planını gör' : 'Numune sekmesinde düzenle'}</option>
                                 </select>
                               ) : (
                                 <select value={b.freq || 'İlk parça'} disabled={kmPaket} aria-label={b.nom + ' sıklığı'} onChange={(e) => { if (e.target.value === 'n') nSorYaz(b.id); else satirYaz({ freq: e.target.value }); }}>
@@ -973,7 +991,10 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
               ) : null}
               {sekme === 'st' ? <IstasyonDuzenleyici paket={p} yama={yama} /> : null}
               {sekme === 'rules' ? <KuralSekmesi paket={p} yama={yama} sonuc={res ?? null} /> : null}
-              {sekme === 'samp' ? <NumuneSekmesi paket={p} yama={yama} /> : null}
+              {sekme === 'samp' ? (() => {
+                const kmPlan = kmParca.data ? kmNumunePlani(p, kmParca.data.numunePlanlari) : null;
+                return <NumuneSekmesi paket={p} yama={yama} km={kmSahibi(p) ? { durum: kmNumuneDurumu(p, kmPlan), plan: kmPlan, yukleniyor: kmOkunur && !kmParca.data, okunur: kmOkunur, duzenler, al: kmNumuneAl } : null} />;
+              })() : null}
               {sekme === 'pub' ? (
                 <div className="tc-ay2-yayin">
                   {hzSecili ? (
