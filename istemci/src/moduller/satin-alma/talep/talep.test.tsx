@@ -148,6 +148,29 @@ describe('Ana sayfadan talep (#375)', () => {
     expect((await screen.findByText(/üretim emri UE-000031/)).textContent).toContain('UE-000031');
   });
 
+  it('3711: Taleplerim siparişli kalemde sipariş terminini etiketli yazar; istenenden sonraysa "N gün geç" düz metni, bölünmüş kalemde en geç pay ipucu; siparişsizde istenen tarih kalır', async () => {
+    const g = (s: string) => new Date(`${s}T00:00:00`).toLocaleDateString('tr-TR');
+    const k = (ad: string, ek: Partial<Talebim['kalemler'][number]>): Talebim['kalemler'][number] =>
+      ({ ad, miktar: '4', birim: 'adet', kartBekliyor: false, uygulanan: null, fasonAdim: null, ihtiyacTarihi: '2026-12-10', siparisTermini: null, ...ek });
+    vi.stubGlobal('fetch', vi.fn(async () => json(200, { talepler: [talep(1, { durum: 'siparis_verildi', ihtiyacTarihi: '2026-12-10', kalemler: [
+      k('Deneme çubuk', { siparisTermini: '2026-12-20', siparisPayAdedi: 2 }),
+      k('Deneme levha', { siparisTermini: '2026-12-10', siparisPayAdedi: 1 }),
+      k('Deneme flanş', { siparisTermini: '2026-12-05', siparisPayAdedi: 1 }),
+      k('Deneme burç', {}),
+    ] })], toplam: 1 } satisfies TaleplerimCevabi)));
+    sar(<Taleplerim tam />);
+    fireEvent.click(await screen.findByRole('button', { name: /Deneme talep 1/ }));
+    const hucre = (ad: string) => within(screen.getByText(ad).closest('tr')!).getByText((_, e) => e?.getAttribute('data-etiket') === 'Termin' && e.tagName === 'TD').textContent;
+    expect(hucre('Deneme çubuk')).toBe(`${g('2026-12-20')}sipariş · istenen ${g('2026-12-10')} · 10 gün geç`);
+    expect(hucre('Deneme levha')).toBe(`${g('2026-12-10')}sipariş`);
+    expect(hucre('Deneme flanş')).toBe(`${g('2026-12-05')}sipariş · istenen ${g('2026-12-10')}`);
+    expect(hucre('Deneme burç')).toBe(g('2026-12-10'));
+    expect(screen.getByTitle('Birden çok firmaya bölünmüş; en geç payın günü').textContent).toBe(g('2026-12-20'));
+    // Dar kip: kalem adının altındaki satır da istenen günü ve gecikmeyi söyler.
+    expect(screen.getByText(`Sipariş termini ${g('2026-12-20')} (en geç pay) · istenen ${g('2026-12-10')} · 10 gün geç`)).toBeTruthy();
+    expect(screen.getByText(`Sipariş termini ${g('2026-12-05')} · istenen ${g('2026-12-10')}`)).toBeTruthy();
+  });
+
   it('SAT-78 (2871): Taleplerim kalemi kg karşılığını gösterir; karşılığı olmayan kalemde gösterilmez', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => json(200, { talepler: [talep(1, { kalemler: [
       { ad: 'Deneme çubuk', miktar: '4', birim: 'adet', kartBekliyor: false, uygulanan: null, fasonAdim: null, karsilik: { miktar: '10.25', birim: 'kg' } },

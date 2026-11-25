@@ -65,6 +65,16 @@ function KartAyrintisi({ m }: { m: Ozellik | null }) {
   );
 }
 
+// 3711: siparişli kalemin termin notu (düz yazı): istenen gün farklıysa gösterilir, sipariş istenenden sonraysa kaç gün geç olduğu yazılır.
+const gunNo = (g: string) => Math.round(Date.parse(`${g.slice(0, 10)}T00:00:00Z`) / 86400000);
+type TerminKalemi = Talebim['kalemler'][number];
+function terminNotlari(x: TerminKalemi): string[] {
+  if (!x.siparisTermini || !x.ihtiyacTarihi || x.ihtiyacTarihi.slice(0, 10) === x.siparisTermini.slice(0, 10)) return [];
+  const fark = gunNo(x.siparisTermini) - gunNo(x.ihtiyacTarihi);
+  return [`istenen ${gunYaz(x.ihtiyacTarihi)}`, ...(fark > 0 ? [`${String(fark)} gün geç`] : [])];
+}
+const enGecPay = (x: TerminKalemi): string | undefined => ((x.siparisPayAdedi ?? 1) > 1 ? 'Birden çok firmaya bölünmüş; en geç payın günü' : undefined);
+
 export type Duzenleme = 'duzenle' | 'guncelle';
 function Satir({ t, tam, duzenle }: { t: Talebim; tam: boolean; duzenle: ((t: Talebim, kip: Duzenleme) => void) | undefined }) {
   const [acik, acikYaz] = useState(false);
@@ -120,8 +130,8 @@ function Satir({ t, tam, duzenle }: { t: Talebim; tam: boolean; duzenle: ((t: Ta
                     {x.aciklama && <span className="sa-talep-not">{x.aciklama}</span>}
                     {x.kabul && <span className="sa-talep-not">Kabul sınırı: {kabulOzeti(x.kabul)}</span>}
                     <OzellikAlti m={x.malzeme ?? null} />
-                    {(x.ihtiyacTarihi || x.uretimEmriNo) && (
-                      <span className="sa-talep-not sa-talep-oz-alt">{[x.ihtiyacTarihi && `Termin ${gunYaz(x.ihtiyacTarihi)}`, x.uretimEmriNo && `Üretim emri ${x.uretimEmriNo}`].filter(Boolean).join(' · ')}</span>
+                    {(x.siparisTermini || x.ihtiyacTarihi || x.uretimEmriNo) && (
+                      <span className="sa-talep-not sa-talep-oz-alt">{[x.siparisTermini ? `Sipariş termini ${gunYaz(x.siparisTermini)}${enGecPay(x) ? ' (en geç pay)' : ''}` : x.ihtiyacTarihi && `Termin ${gunYaz(x.ihtiyacTarihi)}`, ...terminNotlari(x), x.uretimEmriNo && `Üretim emri ${x.uretimEmriNo}`].filter(Boolean).join(' · ')}</span>
                     )}
                     <KartAyrintisi m={x.malzeme ?? null} />
                     <SartliAlternatifler talepId={t.id} kalem={x} />
@@ -131,7 +141,14 @@ function Satir({ t, tam, duzenle }: { t: Talebim; tam: boolean; duzenle: ((t: Ta
                     <span className="sa-talep-no">{x.miktar === null ? '—' : `${x.miktar} ${x.birim}`}</span>
                     {x.karsilik && <span className="sa-talep-not">{karsilikYaz(x.karsilik)}</span>}
                   </td>
-                  <td className="sa-talep-oz" data-etiket="Termin">{x.ihtiyacTarihi ? gunYaz(x.ihtiyacTarihi) : <span className="sa-talep-bos">–</span>}</td>
+                  <td className="sa-talep-oz" data-etiket="Termin">
+                    {x.siparisTermini ? (
+                      <>
+                        <span title={enGecPay(x)}>{gunYaz(x.siparisTermini)}</span>
+                        <span className="sa-talep-not">{['sipariş', ...terminNotlari(x)].join(' · ')}</span>
+                      </>
+                    ) : x.ihtiyacTarihi ? gunYaz(x.ihtiyacTarihi) : <span className="sa-talep-bos">–</span>}
+                  </td>
                   <td className="sa-talep-oz" data-etiket="Üretim emri">{x.uretimEmriNo ?? <span className="sa-talep-bos">–</span>}</td>
                 </tr>
               ))}
