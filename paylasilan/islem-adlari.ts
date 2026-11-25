@@ -197,6 +197,7 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'sevkiyat.is-yaz': 'Sevkiyat işi girme',
   'sevkiyat.plan-yaz': 'Sevkiyat planlama',
   'sevkiyat.onayla': 'Sevkiyatı onaylama',
+  'sevkiyat.sofor-kimlik-oku': 'Şoförün kimlik numarasını tam görme',
   'siparisler.oku': 'Satış siparişlerini görme',
   'siparisler.yaz': 'Satış siparişi açma ve düzenleme',
   'siparisler.onayla': 'Satış siparişini onaylama, kapatma ve iptal',

@@ -61,6 +61,7 @@ Hiçbir role verilmez; yalnız bayraklı yönetici yapar:
 - Arkon yöneticisi: `arkon.yonetici`
 - Logo birim seti listesini yazma: `logo.birim-seti-yaz`
 - ikinci kişi onayı eşik tutarlarını yazma: `finans.onay-ayar`
+- şoförün kimlik numarasını tam görme: `sevkiyat.sofor-kimlik-oku` (3685; sevk planlayıcı girer ve maskeli görür)
 - SmartES kod eşlemelerini düzenleme: `smartes.esleme-yaz`
 - Tezgah bağlantısı (deneme) sayfası: `sayfa.tezgah-baglantisi` (3373 a)
 - denetim kaydının gövdesi ve bütün parametreleri: `denetim.govde-oku`
