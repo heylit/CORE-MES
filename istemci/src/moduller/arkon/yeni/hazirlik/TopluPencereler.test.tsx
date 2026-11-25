@@ -10,7 +10,7 @@ import type { Pkg } from './tipler.ts';
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.localStorage.clear(); window.sessionStorage.clear(); });
 
 const TESIS = { wcs: [{ id: 'TAL', name: 'ORN merkez' }], sts: [{ id: 'ORN-IST', name: 'ORN tezgah', wc: 'TAL', t: 'cnc' }], mcs: [] };
-const PLAN = [{ id: 1, nom: '10', lsl: 9.9, usl: 10.1, freq: 'İlk parça', crit: true }];
+const PLAN = [{ id: 1, nom: '10', lsl: 9.9, usl: 10.1, freq: 'İlk parça', crit: true, kmBalon: 71 }];
 const paket = (id: string, no: string, opNo: number, isEmriId: number, ek: Partial<Pkg> = {}): Pkg => ({
   id, no, opType: 'cnc', st: {}, partNo: 'ORN-P', part: 'ORN parça', rev: 'B', op: `Op ${String(opNo)}`, machine: 'ORN-IST', target: 40, cycle: 30,
   due: '', priority: 'normal', material: '', note: '', files: [], primary: 'r.pdf', plan: PLAN, steps: [{ id: 's1', t: 'Bağla', d: '', r: false }],

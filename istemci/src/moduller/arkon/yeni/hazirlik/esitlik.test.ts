@@ -70,7 +70,7 @@ beforeAll(async () => {
 }, 30000);
 
 const PLAN = [
-  { id: 1, nom: 'Ø60', tol: '+0.02 / −0.01', min: 59.99, max: 60.02, tool: 'Mikrometre', freq: 'İlk parça', crit: true },
+  { id: 1, nom: 'Ø60', tol: '+0.02 / −0.01', min: 59.99, max: 60.02, tool: 'Mikrometre', freq: 'İlk parça', crit: true, kmBalon: 71 },
   { id: 2, nom: '25', tol: '±0.1', min: 24.9, max: 25.1, tool: 'CMM', freq: 'Her 50 parça', crit: false },
   { id: 3, nom: 'M8', tol: 'Mastar', min: 0, max: 0, tool: 'Tampon', freq: 'Saatlik', gauge: true },
   { id: 4, nom: '12', tol: '±0.2', min: 11.8, max: 12.2, tool: 'Kumpas', freq: 'Vardiya başı' },

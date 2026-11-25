@@ -8,7 +8,7 @@ import type { Pkg } from './tipler.ts';
 
 // 3362: toplu gönderim kapıları ve benzer paketten doldurma. Adlar ve sayılar uydurmadır (ORN-).
 const TESIS = { wcs: [{ id: 'TAL', name: 'ORN merkez' }], sts: [{ id: 'ORN-IST', name: 'ORN tezgah', wc: 'TAL', t: 'cnc' }], mcs: [] } as unknown as Plant;
-const plan1 = [{ id: 1, nom: '10', lsl: 9.9, usl: 10.1, freq: 'İlk parça', crit: true }] as unknown as Pkg['plan'];
+const plan1 = [{ id: 1, nom: '10', lsl: 9.9, usl: 10.1, freq: 'İlk parça', crit: true, kmBalon: 71 }] as unknown as Pkg['plan'];
 const paket = (ek: Partial<Pkg> = {}): Pkg => ({
   id: 'tmi-ie-1', no: 'ORN-UE-1', opType: 'cnc', st: {}, partNo: 'ORN-P', part: 'ORN parça', rev: 'B', op: 'Op 20 · Freze', machine: 'ORN-IST', target: 40, cycle: 30,
   due: '', priority: 'normal', material: '', note: '', files: [], primary: 'r.pdf', plan: plan1, steps: [{ id: 's1', t: 'Bağla', d: '', r: false }], status: 'draft',
@@ -33,6 +33,17 @@ describe('3362-1 toplu gönderim kapıları', () => {
     expect(gonderimHali(disi, TESIS, ONAYSIZ)).toMatchObject({ tur: 'terminal', uyarilar: [{ tur: 'planDisi' }] });
     expect(gonderimHali(paket({ plan: [] }), TESIS, ONAYLI)).toMatchObject({ tur: 'kalite', uyarilar: [{ tur: 'planYok' }] });
     expect(gonderimHali(paket({ apReq: { at: 5, by: 'ORN' } }), TESIS, ONAYLI)).toMatchObject({ tur: 'bekliyor' });
+  });
+
+  it('3717: planın hiçbir ölçüsü Kalite Merkezi balonuna bağlı değilse ayrı uyarı ister; kısmen bağlı ya da boş plan istemez', () => {
+    const bagsiz = [{ id: 1, nom: '10', lsl: 9.9, usl: 10.1, freq: 'İlk parça', crit: true }] as unknown as Pkg['plan'];
+    expect(gonderimHali(paket({ plan: bagsiz }), TESIS, ONAYSIZ)).toMatchObject({ tur: 'terminal', uyarilar: [{ tur: 'kmBagsiz' }] });
+    expect(gonderimHali(paket({ plan: bagsiz }), TESIS, ONAYLI)).toMatchObject({ tur: 'kalite', uyarilar: [{ tur: 'kmBagsiz' }] });
+    expect(gonderimHali(paket({ plan: [...bagsiz, ...plan1] }), TESIS, ONAYSIZ)).toEqual({ tur: 'terminal', uyarilar: [] });
+    expect(gonderimHali(paket({ plan: [] }), TESIS, ONAYSIZ)).toMatchObject({ uyarilar: [{ tur: 'planYok' }] });
+    const h = gonderimHali(paket({ id: 'z', plan: bagsiz }), TESIS, ONAYSIZ);
+    expect(gidecekMi('z', h, new Set())).toBe(false);
+    expect(gidecekMi('z', h, new Set([uyariAnahtari('z', 'kmBagsiz')]))).toBe(true);
   });
 
   it('Risk K1: her uyarı ayrı onaylanır; kaliteye gidecek iş hiçbir kutuyla terminale sayılmaz', () => {

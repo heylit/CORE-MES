@@ -1,7 +1,7 @@
 import { gonderimUyarisi, istasyonsuzMu, rotaEksigi, ISTASYONSUZ_GONDERIM } from '../../../../../../arkon/web/src/data/tmi-plan.ts';
 import type { Plant, Policy } from '../cekirdek/tipler.ts';
 import { kmDolduruldu } from './km-cizim.ts';
-import { isTuru, onayBekliyor, onayGerekir, paketDenetimi, planYokUyarisiGerekir } from './kurallar.ts';
+import { isTuru, kmBagsizUyarisiGerekir, onayBekliyor, onayGerekir, paketDenetimi, planYokUyarisiGerekir } from './kurallar.ts';
 import type { Pkg, Result } from './tipler.ts';
 
 // 3362-1: takip tablosundan toplu terminale gönderme. Her paket tek paketteki "Terminale gönder" kapılarından aynı sırayla geçer
@@ -12,13 +12,14 @@ import type { Pkg, Result } from './tipler.ts';
 export const topluGonderilebilir = (p: Pick<Pkg, 'status' | 'dirty'>, r: Pick<Result, 'state'> | null | undefined): boolean =>
   r?.state !== 'done' && (p.status === 'draft' || p.dirty);
 
-export type GonderimUyariTuru = 'planYok' | 'planDisi';
+export type GonderimUyariTuru = 'planYok' | 'kmBagsiz' | 'planDisi';
 export interface GonderimUyarisiSatiri { tur: GonderimUyariTuru; neden: string }
 export type GonderimHali =
   | { tur: 'engel'; neden: string }
   | { tur: 'bekliyor'; neden: string }
   | { tur: 'terminal' | 'kalite'; uyarilar: GonderimUyarisiSatiri[] };
 
+export const KM_BAGSIZ_NEDENI = 'Ölçüler Kalite Merkezi balonlarına bağlı değil: operatör numune gönderince numune Kalite Merkezi\'ne açılmaz, kalitenin listesinde görünmez. Resmi planı Kalite Merkezi\'nden alın.';
 export const PLAN_YOK_NEDENI = 'Kontrol planı olmayan iş yalnız onaylanırsa gider; onay kayda geçer.';
 
 export function gonderimHali(p: Pkg, tesis: Plant, kurallar: Pick<Policy, 'approval'>): GonderimHali {
@@ -27,6 +28,7 @@ export function gonderimHali(p: Pkg, tesis: Plant, kurallar: Pick<Policy, 'appro
     return { tur: 'engel', neden: istasyonsuzMu(p) ? ISTASYONSUZ_GONDERIM : rota ?? 'Paket eksik: Bilgiler, Kontrol planı ya da Adımlar sekmesine bakın.' };
   }
   const uyarilar: GonderimUyarisiSatiri[] = planYokUyarisiGerekir(p) ? [{ tur: 'planYok', neden: PLAN_YOK_NEDENI }] : [];
+  if (kmBagsizUyarisiGerekir(p)) uyarilar.push({ tur: 'kmBagsiz', neden: KM_BAGSIZ_NEDENI });
   if (onayGerekir(p, kurallar)) {
     if (onayBekliyor(p)) return { tur: 'bekliyor', neden: 'Kalite onayı bekleniyor.' };
     return { tur: 'kalite', uyarilar };

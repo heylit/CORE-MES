@@ -49,6 +49,9 @@ function SaltOkunurNotu() {
 // Numunenin Kalite Merkezi numunesi (798); sunucu numuneyi açarken yazar. Eski numunede yoktur.
 const kmNumunesi = (r: SampleRequest): number | null => { const v = (r as { kmNumune?: unknown }).kmNumune; return typeof v === 'number' ? v : null; };
 
+// Sunucu numuneyi Kalite Merkezi'ne açamadıysa nedeni isteğe yazar (`kmUyari`); kalite bunu görür.
+const kmUyarisi = (r: SampleRequest): string | null => { const v = (r as { kmUyari?: unknown }).kmUyari; return typeof v === 'string' && v !== '' ? v : null; };
+
 // Kalite Merkezi ölçümü Arkon'un ölçü biçiminde: numunenin balonundaki son ölçüm. Numunesi bağlı değilse eski numune kaydı okunur.
 export function numuneOlcumleri(r: SampleRequest, items: readonly PlanItem[], km: readonly KmOlcum[]): Record<number, Meas> {
   const numune = kmNumunesi(r);
@@ -158,7 +161,7 @@ export function KaliteSayfasi() {
                 <button key={x.id} type="button" className="tc-ay3-kutu tc-ay4-numune" aria-pressed={x.id === selId} onClick={() => sec(x.id)}>
                   <span><b>{x.no}</b> <small className="tc-ay3-not">Rev {x.rev}</small></span>
                   <span>{x.part}</span>
-                  <small className="tc-ay3-not"><b>{x.machine}</b> · {x.by} · {x.reason} · {x.items.length} ölçü</small>
+                  <small className="tc-ay3-not"><b>{x.machine}</b> · {x.by} · {x.reason} · {x.items.length} ölçü{kmUyarisi(x) ? ' · Kalite Merkezi uyarısı' : ''}</small>
                   <span className="tc-ay3-dugmeler">
                     <Cip renk={NUMUNE_DURUMLARI[x.status].renk}>{NUMUNE_DURUMLARI[x.status].etiket}</Cip>
                     {x.crit && <Cip renk="stop">Kritik</Cip>}
@@ -185,6 +188,7 @@ export function KaliteSayfasi() {
                     <span className="tc-ay3-ust">{r.machine} · {r.by} · {new Date(r.at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</span>
                     <h3>{r.no} <small className="tc-ay3-not">Rev {r.rev}</small></h3>
                     <p className="tc-ay3-not">{r.part} · {r.reason} · {sayi(r.cnt)}. parça</p>
+                    {kmUyarisi(r) ? <p className="tc-ay3-not" role="status"><Simge ad="alert" /> {kmUyarisi(r)}</p> : null}
                     <div className="tc-ay3-arac">
                       <progress className="tc-ay3-cubuk" data-renk={nBad ? 'stop' : 'run'} max={Math.max(1, items.length)} value={nMeas} aria-label="Ölçülen" />
                       <b className="mono">{nMeas}/{items.length}</b>

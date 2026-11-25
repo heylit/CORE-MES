@@ -15,7 +15,7 @@ const HAZIRLIKCI: Deneme = { rol: 'prep', kullanici: { ...YONETICI.kullanici, id
 const PAKET = {
   id: 'tmi-ue-7', no: 'IE-DENEME-1', opType: 'cnc', st: {}, partNo: 'DN-1', part: 'Deneme parça', rev: 'A', op: 'Op 10 · Torna', machine: 'IST-1',
   target: 20, cycle: 30, due: '', priority: 'normal', material: '', note: '', files: [{ kind: 'pdf', name: 'deneme.pdf', size: 2048 }], primary: 'deneme.pdf',
-  plan: [{ id: 1, nom: 'Ø20', tol: '±0.1', min: 19.9, max: 20.1, tool: 'Kumpas', freq: 'İlk parça' }], steps: [{ id: 's1', t: 'Bağla', d: '', r: true }],
+  plan: [{ id: 1, nom: 'Ø20', tol: '±0.1', min: 19.9, max: 20.1, tool: 'Kumpas', freq: 'İlk parça', kmBalon: 71 }], steps: [{ id: 's1', t: 'Bağla', d: '', r: true }],
   status: 'draft', version: 0, dirty: true, createdAt: 1, updatedAt: 2, by: 'Deneme',
 };
 const TESIS = { wcs: [{ id: 'TAL', name: 'Deneme merkez' }], sts: [{ id: 'IST-1', name: 'Deneme tezgah', wc: 'TAL', t: 'cnc' }], mcs: [] };

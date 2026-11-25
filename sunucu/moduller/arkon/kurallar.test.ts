@@ -259,7 +259,8 @@ test('798: numune isteği bağlı balonlarla Kalite Merkezi numunesi olur; kapı
   assert.deepEqual(istekKmPlani(istek([2, 3]), paket), { ilkParca: false, km: { opNo: 20, balonlar: [72], neden: 'İlk parça', parcaSayisi: 1 }, uyari: KM_UYARILARI.bagsizOlcu(1) }, '796 a: bağsız ölçü Arkon\'da kalır');
   assert.deepEqual(istekKmPlani(istek([3]), paket), { ilkParca: false, km: null, uyari: KM_UYARILARI.numuneAcilmadi });
   assert.deepEqual(istekKmPlani(istek([1]), { ...paket, tmi: {} }), { ilkParca: true, km: null, uyari: KM_UYARILARI.numuneAcilmadi }, 'adımsız paket');
-  assert.deepEqual(istekKmPlani(istek([1]), { plan: [{ id: 1 }] }), { ilkParca: true, km: null, uyari: null }, 'Kalite Merkezi\'nden alınmamış plan');
+  assert.deepEqual(istekKmPlani(istek([1]), { plan: [{ id: 1 }] }), { ilkParca: true, km: null, uyari: KM_UYARILARI.bagsizPlanIlkParca }, 'Kalite Merkezi\'nden alınmamış plan: sessiz kalmaz, ilk parça kilidi yazılır');
+  assert.equal(istekKmPlani(istek([2]), { plan: [{ id: 1 }, { id: 2, freq: 'Her 10 parça' }] }).uyari, KM_UYARILARI.bagsizPlan, 'ilk parça kapısında olmayan ölçü');
   assert.equal(istekKmPlani(istek([1]), { ...paket, rules: { q: { who: 'operator' } } }).ilkParca, false, 'operatörün ölçtüğü kapı');
   assert.equal(istekKmPlani(istek([1], { reason: 'x'.repeat(90) }), paket).km?.neden.length, 80);
 });
