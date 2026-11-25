@@ -140,7 +140,7 @@ describe('App oturum akisi', () => {
   });
 
   it('giristen sonra karsilama adiyla bir kez cikar; cikip yeniden giren yeniden karsilanir', async () => {
-    window.sessionStorage.clear();
+    window.localStorage.clear();
     const metin = 'Deneme karşılama';
     sunucuKur(null, { karsilama: () => new Response(JSON.stringify({ acik: true, metin, geceMetni: metin, gunduzBaslangic: 6, geceBaslangic: 18, sozAcik: false, gunNotuAcik: false, ramazanBayrami: null, kurbanBayrami: null } satisfies KarsilamaCevabi), { status: 200 }) });
     render(<App />);
