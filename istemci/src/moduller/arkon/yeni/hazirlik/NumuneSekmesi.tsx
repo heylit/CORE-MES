@@ -1,19 +1,26 @@
-import { Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
+import { Link } from 'react-router-dom';
+import { Dugme, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { sayi } from '../cekirdek/bicim.ts';
 import { Anahtar, Bolmeli, KartBasligi } from './denetimler.tsx';
 import {
   HAZIR_NUMUNE_PLANLARI, OLCENLER, araNumuneSikligi, numuneEtiketi, numuneOlaylari, numuneOlculeri, numunePlani, numunePlaniYaz, yeniKimlik,
 } from './kurallar.ts';
+import type { KmNumunePlani } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
+import type { KmNumuneDurumu } from './km-cizim.ts';
 import type { NumuneKurali, NumuneZamani, Pkg } from './tipler.ts';
+
+// 3689: malzemesi olan pakette numune planı Kalite Merkezi'ndedir; sekme salt okunur, plan oradan alınır.
+export interface KmNumuneBaglami { durum: KmNumuneDurumu; plan: KmNumunePlani | null; yukleniyor: boolean; okunur: boolean; duzenler: boolean; al: (p: KmNumunePlani) => void }
 
 const ZAMANLAR: readonly (readonly [NumuneZamani, string])[] = [
   ['first', 'Başta (ilk parça)'], ['every', 'Her N parça'], ['time', 'Her N dakika'], ['shift', 'Vardiya başı'], ['last', 'Sonda (son parça)'],
 ];
 
 // Hazırlık › Numune planı sekmesi (istasyonlar.ts SampTab): kurallar ve parça eksenindeki önizleme.
-export function NumuneSekmesi({ paket, yama }: { paket: Pkg; yama: (ch: Partial<Pkg>) => void }) {
+export function NumuneSekmesi({ paket, yama, km = null }: { paket: Pkg; yama: (ch: Partial<Pkg>) => void; km?: KmNumuneBaglami | null }) {
+  const salt = km !== null;
   const { bildir } = useBildirim();
-  const kurallar = numunePlani(paket);
+  const kurallar = salt && !(paket.samp && paket.samp.length) ? [] : numunePlani(paket);
   const eski = !(paket.samp && paket.samp.length);
   const kaydet = (rs: NumuneKurali[]) => yama(numunePlaniYaz(paket, rs) as Partial<Pkg>);
   const guncelle = (id: string, ch: Partial<NumuneKurali>) => kaydet(kurallar.map((r) => (r.id === id ? { ...r, ...ch } : r)));
@@ -31,13 +38,14 @@ export function NumuneSekmesi({ paket, yama }: { paket: Pkg; yama: (ch: Partial<
           simge={<Simge ad="target" />} ton="done" baslik="Numune planı"
           aciklama={'Numune ne zaman alınır, kim ölçer, hangi ölçüler · ' + sayi(hedef) + ' parçalık iş için'}
         />
-        {eski && paket.plan.length ? (
+        {km ? <KmBilgisi km={km} malzemeNo={paket.malzemeNo} /> : null}
+        {!salt && eski && paket.plan.length ? (
           <div className="tc-ay2-bilgi">
             <Simge ad="alert" />
             <span>Bu paket eski usul ölçü başına sıklıkla çalışıyor; aşağıdaki kurallar ondan türetildi. Değiştirdiğin anda numune planı geçerli olur.</span>
           </div>
         ) : null}
-        {!paket.plan.length ? <p className="tc-ay2-soluk">Önce <b>Kontrol planı</b> sekmesinde ölçüleri ekle.</p> : null}
+        {!salt && !paket.plan.length ? <p className="tc-ay2-soluk">Önce <b>Kontrol planı</b> sekmesinde ölçüleri ekle.</p> : null}
         <div className="tc-ay2-zaman">
           <div className="tc-ay2-zaman-ust">
             <span className="tc-ay2-ust-yazi">Önizleme · parça sayısına göre</span>
@@ -68,13 +76,14 @@ export function NumuneSekmesi({ paket, yama }: { paket: Pkg; yama: (ch: Partial<
         const ara = r.when === 'every' ? araNumuneSikligi(r.n, adet) : null;
         return (
           <section key={r.id} className="tc-ay2-kart" aria-label={(ri + 1) + '. numune kuralı'}>
+            <fieldset disabled={salt} className="tc-ay2-salt-alan">
             <div className="tc-ay2-kb">
               <span className="tc-ay2-kural-no">{ri + 1}</span>
               <div>
                 <b>{numuneEtiketi(r)}</b>
                 <small>{kim.map((w) => OLCENLER[w].l).join(' → ')}{kim.length > 1 ? ' → (tekrar)' : ''} · {olculer.length} ölçü</small>
               </div>
-              <button type="button" className="tc-ay2-arac tc-ay2-sag" aria-label="Kuralı sil" onClick={() => sil(r.id)}><Simge ad="trash" /></button>
+              {salt ? null : <button type="button" className="tc-ay2-arac tc-ay2-sag" aria-label="Kuralı sil" onClick={() => sil(r.id)}><Simge ad="trash" /></button>}
             </div>
             <div className="tc-ay2-alan">
               <span className="tc-ay2-ust-yazi">Ne zaman</span>
@@ -147,10 +156,11 @@ export function NumuneSekmesi({ paket, yama }: { paket: Pkg; yama: (ch: Partial<
             {r.when === 'first' ? (
               <Anahtar acik={!!r.gate} degistir={(v) => guncelle(r.id, { gate: v })} baslik="İlk parça kapısı" aciklama="Bu ölçüler kalitede karara bağlanana kadar sayılan parçalar karar bekler; üretim durmaz" />
             ) : null}
+            </fieldset>
           </section>
         );
       })}
-      <section className="tc-ay2-kart tc-ay2-genis" aria-label="Numune kuralı ekle">
+      {salt ? null : <section className="tc-ay2-kart tc-ay2-genis" aria-label="Numune kuralı ekle">
         <button type="button" className="tc-ay2-ekle" onClick={ekle}><Simge ad="plus" /><b>Numune kuralı ekle</b></button>
         <div className="tc-ay2-hazirlar">
           <span className="tc-ay2-ust-yazi">Hazır planlar</span>
@@ -161,7 +171,28 @@ export function NumuneSekmesi({ paket, yama }: { paket: Pkg; yama: (ch: Partial<
             ><i aria-hidden="true" />{x.l}</button>
           ))}
         </div>
-      </section>
+      </section>}
+    </div>
+  );
+}
+
+function KmBilgisi({ km, malzemeNo }: { km: KmNumuneBaglami; malzemeNo: unknown }) {
+  const adres = '/kalite-merkezi/resimler' + (typeof malzemeNo === 'number' ? '?parca=' + String(malzemeNo) : '');
+  const ac = <Link className="tc-ay2-hazir" to={adres}><Simge ad="expand" boyut="k" />Kalite Merkezi’nde aç</Link>;
+  if (!km.okunur) return <div className="tc-ay2-bilgi"><Simge ad="lock" /><span>Numune planı Kalite Merkezi’ndedir; görmek için Kalite Merkezi okuma yetkisi gerekir.</span></div>;
+  if (km.yukleniyor) return <div className="tc-ay2-bilgi"><Simge ad="clock" /><span>Kalite Merkezi’nden numune planı okunuyor…</span></div>;
+  if (km.durum === 'yok') return <div className="tc-ay2-bilgi"><Simge ad="alert" /><span>Kalite Merkezi’nde bu operasyon için numune planı tanımlı değil.</span>{ac}</div>;
+  const plan = km.plan;
+  return (
+    <div className="tc-ay2-bilgi">
+      <Simge ad={km.durum === 'pakette' ? 'check' : 'alert'} />
+      <span>
+        {km.durum === 'pakette' ? 'Numune planı Kalite Merkezi’nden geldi (sürüm ' + String(plan?.surum) + '). Değiştirmek için Kalite Merkezi’nde düzenle.'
+          : km.durum === 'degisti' ? 'Kalite Merkezi’nde numune planı değişti (sürüm ' + String(plan?.surum) + '). Pakette eski sürüm var.'
+            : 'Numune planı Kalite Merkezi’nde hazır; pakete alınmadı.'}
+      </span>
+      {plan && km.durum !== 'pakette' && km.duzenler ? <Dugme onClick={() => km.al(plan)}>{km.durum === 'degisti' ? 'Güncelle' : 'Pakete al'}</Dugme> : null}
+      {ac}
     </div>
   );
 }

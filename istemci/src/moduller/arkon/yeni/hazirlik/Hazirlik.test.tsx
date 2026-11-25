@@ -243,11 +243,11 @@ describe('A2 Hazırlık ekranı', () => {
     eklendi: '2026-01-01T00:00:00Z', balonlar: [KM_BALONU],
   };
   const kmSunucusu = () => ({ belgeler: { pkgs: [{ kimlik: KM_PAKETI.id, surum: 1, govde: KM_PAKETI }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
-  function kmKur(resimler: unknown[]) {
+  function kmKur(resimler: unknown[], numunePlanlari: unknown[] = []) {
     const asil = globalThis.fetch;
     vi.stubGlobal('fetch', vi.fn(async (adres: string, ayar?: RequestInit) => {
       const yol = new URL(adres, 'http://tmi.yerel').pathname.replace(/^\/api/, '');
-      if (yol === '/kalite-merkezi/studyo/parcalar/901') return jsonCevap({ resimler, numunePlanlari: [] });
+      if (/^\/kalite-merkezi\/studyo\/parcalar\/(901|905|906|907)$/.test(yol)) return jsonCevap({ resimler, numunePlanlari });
       return asil(adres, ayar);
     }));
   }
@@ -339,6 +339,62 @@ describe('A2 Hazırlık ekranı', () => {
     const bolum = await within(d).findByRole('region', { name: 'Kalite Merkezi’nden' }, { timeout: 10000 });
     expect(await within(bolum).findByText('Kalite Merkezi’ni okuma yetkin yok.', undefined, { timeout: 10000 })).toBeTruthy();
     expect(km).toEqual([]);
+  }, 40000);
+
+  // 3689: numune planının sahibi Kalite Merkezi; taslak pakete kendiliğinden gelir, Numune sekmesi salt okunur, plan yoksa Kalite Merkezi'ne bağlanır.
+  const KM_NUMUNE = { opNo: 20, surum: 2, kurallar: [{ kimlik: 'k1', ne: 'ilk', kim: ['kalite'], balonlar: 'hepsi', kapi: true }] };
+  // Parça sorgusu testler arasında önbellekte kalır; bu iki test kendi malzeme numarasını (905, 906) kullanır.
+  it('taslak pakete Kalite Merkezi numune planı gelir; Numune sekmesi salt okunur (3689)', async () => {
+    const P = { ...KM_PAKETI, id: 'tmi-ue-21', no: 'IE-DENEME-21', malzemeNo: 905, tmi: { emirId: 21, isEmriId: 210, opNo: 20 } };
+    const istekler = sunucuKur(kmOkur(YONETICI), { belgeler: { pkgs: [{ kimlik: P.id, surum: 1, govde: P }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
+    merkezKur(istekler);
+    kmKur([KM_RESMI], [KM_NUMUNE]);
+    arkonAc('/arkon/hazirlik');
+    const d = await ekran();
+    await waitFor(() => {
+      const p = istekler.filter((i) => i.yol === `/arkon/belgeler/pkgs/${P.id}/yaz`).map((i) => (i.govde as { govde: Pkg }).govde).at(-1);
+      expect(p?.kmNumune).toEqual({ surum: 2 });
+      expect(p?.kmResim).toEqual({ id: 12, surum: 4 });
+      expect(p?.samp).toMatchObject([{ id: 'k1', when: 'first', who: ['q'], items: 'all', gate: true }]);
+    }, { timeout: 15000 });
+    fireEvent.click(within(d).getByRole('button', { name: 'Numune' }));
+    expect(await within(d).findByText(/Numune planı Kalite Merkezi’nden geldi/, undefined, { timeout: 10000 })).toBeTruthy();
+    expect(within(d).queryByRole('button', { name: /Numune kuralı ekle/ })).toBeNull();
+    expect(within(d).queryByRole('button', { name: 'Kuralı sil' })).toBeNull();
+    // Risk S1: kuralın bütün alanları kapalı; değişirse paket Kalite Merkezi'nden ayrışırdı.
+    const kural = within(d).getByRole('region', { name: '1. numune kuralı' });
+    const alanlar = Array.from(kural.querySelectorAll<HTMLElement>('button, input, select, textarea'));
+    expect(alanlar.length).toBeGreaterThan(0);
+    expect(alanlar.every((a) => (a as HTMLButtonElement).disabled || a.closest('fieldset[disabled]') !== null)).toBe(true);
+    expect(kural.querySelector('fieldset')?.disabled).toBe(true);
+  }, 40000);
+
+  it('Kalite Merkezi\'nde numune planı yoksa Numune sekmesi bunu söyler ve oraya bağlar (3689)', async () => {
+    const P = { ...KM_PAKETI, id: 'tmi-ue-22', no: 'IE-DENEME-22', malzemeNo: 906, tmi: { emirId: 22, isEmriId: 220, opNo: 20 } };
+    const istekler = sunucuKur(kmOkur(YONETICI), { belgeler: { pkgs: [{ kimlik: P.id, surum: 1, govde: P }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
+    merkezKur(istekler);
+    kmKur([KM_RESMI], []);
+    arkonAc('/arkon/hazirlik');
+    const d = await ekran();
+    fireEvent.click(within(d).getByRole('button', { name: 'Numune' }));
+    expect(await within(d).findByText(/numune planı tanımlı değil/, undefined, { timeout: 10000 })).toBeTruthy();
+    expect(within(d).getByRole('link', { name: /Kalite Merkezi’nde aç/ }).getAttribute('href')).toBe('/kalite-merkezi/resimler?parca=906');
+    expect(within(d).queryByRole('button', { name: /Numune kuralı ekle/ })).toBeNull();
+  }, 40000);
+
+  it('düzenleme yetkisi olmayan kişide numune planı kendiliğinden alınmaz ve Güncelle çıkmaz (reddedilen, 3689)', async () => {
+    const P = { ...KM_PAKETI, id: 'tmi-ue-23', no: 'IE-DENEME-23', malzemeNo: 907, kmResim: { id: 12, surum: 4 }, tmi: { emirId: 23, isEmriId: 230, opNo: 20 } };
+    const istekler = sunucuKur(kmOkur(HAZIRLIKCI), {
+      belgeler: { pkgs: [{ kimlik: P.id, surum: 1, govde: P }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }, { kimlik: 'perms', surum: 1, govde: { v: { prep: ['page.op', 'page.prep'] } } }] },
+    });
+    merkezKur(istekler);
+    kmKur([KM_RESMI], [KM_NUMUNE]);
+    arkonAc('/arkon/hazirlik');
+    const d = await ekran();
+    fireEvent.click(within(d).getByRole('button', { name: 'Numune' }));
+    expect(await within(d).findByText(/Numune planı Kalite Merkezi’nde hazır; pakete alınmadı/, undefined, { timeout: 10000 })).toBeTruthy();
+    expect(within(d).queryByRole('button', { name: /Pakete al|Güncelle/ })).toBeNull();
+    expect(istekler.filter((i) => i.yol === `/arkon/belgeler/pkgs/${P.id}/yaz`)).toEqual([]);
   }, 40000);
 
   it('malzemesi olmayan eski pakette Kalite Merkezi okunmaz ve plan düzenlenir', async () => {

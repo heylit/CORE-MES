@@ -642,3 +642,4 @@ span.tc-ay2-mt-h { cursor: default; }
 .tc-ay2-talimat-etiket { display: flex; flex-wrap: wrap; gap: var(--b-1); }
 .tc-ay2-talimat-liste em { font-style: normal; display: inline-flex; align-items: center; gap: var(--b-1); font-size: var(--yazi-s); font-weight: 700; padding: 0 var(--b-2); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); }
 .tc-ay2-talimat-liste em[data-zorunlu] { border-color: var(--hold); color: var(--hold); }
+.tc-ay2-salt-alan { display: contents; border: 0; margin: 0; padding: 0; min-inline-size: 0; }
