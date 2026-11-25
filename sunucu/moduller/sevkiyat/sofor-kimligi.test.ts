@@ -11,6 +11,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { KIMLIK_ANAHTARI_DEGISKENI, kimlikCoz, kimlikGecerliMi, kimlikSifrele } from './kimlik-sifre.ts';
+import { isler } from './isler.ts';
 import { soforKimlikleriniTemizle } from './servis.ts';
 
 // Kart 3694-4: şoför kimlik no'su uçları (gerçek PostgreSQL). Numara sentetiktir (sağlama haneleri tutan örnek), gerçek kişiye ait değildir.
@@ -142,5 +143,19 @@ describe('şoför kimlik no uçları (3694-4)', () => {
     assert.equal(await vt().tx((db) => soforKimlikleriniTemizle(db, '2027-01-05')), 0);
     assert.equal(await vt().tx((db) => soforKimlikleriniTemizle(db, '2027-01-07')), 1);
     assert.equal((await iste('GET', `/sevkiyat/isler/${isId}/sofor-kimligi`, isleyen)).json().var, false);
+  });
+
+  test('zamanlanmış iş saatlik koşar, süresi dolmuş kimliği siler; dolmamışa dokunmaz', async () => {
+    const is = isler.find((i) => i.ad === 'sevkiyat-sofor-kimligi-saklama');
+    assert.ok(is?.calis);
+    assert.equal(is.aralikMs, 3_600_000);
+    const y = await iste('POST', `/sevkiyat/isler/${isId}/sofor-kimligi`, isleyen, { kimlik: KIMLIK });
+    assert.equal(y.statusCode, 200, y.body);
+    await vt().sorgu("UPDATE sevkiyat_isi SET tarih = current_date - 10 WHERE id = $1", [isId]);
+    await vt().tx((db) => is.calis!(db, { uyar: () => undefined, hata: () => undefined }));
+    assert.equal((await iste('GET', `/sevkiyat/isler/${isId}/sofor-kimligi`, isleyen)).json().var, true, 'süresi dolmadı');
+    await vt().sorgu("UPDATE sevkiyat_isi SET tarih = current_date - 91 WHERE id = $1", [isId]);
+    await vt().tx((db) => is.calis!(db, { uyar: () => undefined, hata: () => undefined }));
+    assert.equal((await iste('GET', `/sevkiyat/isler/${isId}/sofor-kimligi`, isleyen)).json().var, false, 'süresi doldu');
   });
 });

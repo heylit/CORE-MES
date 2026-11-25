@@ -48,6 +48,7 @@ const IS_ADLARI: Readonly<Record<string, string>> = {
   'bildirim-yayin-dagit': 'Bildirim: ileri tarihli bildirimleri dağıtma',
   'bildirim-push-gonder': 'Bildirim: anlık bildirim gönderimi',
   'denetim-okuma-saklama': 'Denetim: süresi dolan okuma kayıtlarını silme',
+  'sevkiyat-sofor-kimligi-saklama': 'Sevkiyat: süresi dolan şoför kimliklerini silme',
   'logo-malzeme-kodu-okumasi': 'Logo: malzeme kodu okuması',
   'oturum-nabiz-temizligi': 'Eski cihaz nabzı temizliği',
   'stok-defter-karsilastirma': 'Stok: gece defter karşılaştırması',
