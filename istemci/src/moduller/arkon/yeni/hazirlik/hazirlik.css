@@ -673,3 +673,10 @@ span.tc-ay2-mt-h { cursor: default; }
   .tc-ay2-paket-adimi .tc-ay2-adim > .tc-ay2-onay { grid-row: 2; grid-column: 1; }
   .tc-ay2-paket-adimi .tc-ay2-adim > .tc-ay2-arac:last-child { justify-self: end; }
 }
+
+/* 3688 d4: Dokümanlar iki kart (Paketteki dosyalar, Kaynaktan ekle); format rehberi katlı */
+.tc-ay2-kart > .tc-ay2-dosya { padding: var(--b-2) var(--b-3); border-radius: var(--yari-2); background: var(--panel2); }
+.tc-ay2-ana-resim, .tc-ay2-kaynak-blok { display: grid; gap: var(--b-2); min-width: 0; }
+.tc-ay2-rehber > summary { cursor: pointer; color: var(--muted); font-size: var(--yazi-s); font-weight: 700; min-block-size: var(--dokunma); display: flex; align-items: center; }
+.tc-ay2-rehber[open] > summary { margin-block-end: var(--b-2); }
+.tc-ay2-dosya .tc-ay2-ana-isaret { display: inline-flex; align-items: center; color: var(--hazard-ink); font-weight: 700; }
