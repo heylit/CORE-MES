@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { z } from 'zod';
 import type { genelGiderOnerisiCevabi } from '#paylasilan/sozlesme/finans.ts';
 import { Dugme, DurumKutusu, Girdi, Rozet, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { useKorumaliKomut } from '../../ortak/veri/korumali-komut.ts';
 
 type Oneri = z.output<typeof genelGiderOnerisiCevabi>;
 type Disarida = Oneri['disarida'][number];
@@ -112,10 +113,11 @@ function BelgedenKayit({ ay, bugun, kaydedilebilir, listeAnahtari }: { ay: strin
   const bos = { gun: bugun, saat: '', elleEk: '', aciklama: '' };
   const [f, setF] = useState(bos);
   const sayi = (v: string): number => Number(v.replace(',', '.'));
-  const yaz = useMutation({
-    mutationFn: () => api.post('/finans/genel-gider-oranlari/belgeden-ekle', {
+  // Tekrar korumalı komut: kimlik tek basış için bir kez üretilir; sonucu bilinmeyen hatadan sonra yeniden gönderim aynı kimliği taşır.
+  const yaz = useKorumaliKomut<void>({
+    gonder: (_g, deneme) => api.post('/finans/genel-gider-oranlari/belgeden-ekle', {
       gecerlilikBaslangic: f.gun, ay, aylikMakineSaati: sayi(f.saat), elleEk: f.elleEk === '' ? 0 : sayi(f.elleEk), aciklama: f.aciklama,
-    }),
+    }, deneme),
     onSuccess: async () => { setF(bos); bildir('tamam', 'Genel gider oranı belgelerden kaydedildi.'); await istemci.invalidateQueries({ queryKey: listeAnahtari }); },
     onError: (h) => bildir('hata', hataIletisi(h, 'Genel gider oranı kaydedilemedi.')),
   });

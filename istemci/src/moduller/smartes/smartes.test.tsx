@@ -57,14 +57,15 @@ const FIRE_ADLARI: GelenAdlarCevabi = {
 };
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
-interface Cagri { yol: string; yontem: string; govde: unknown }
+interface Cagri { yol: string; yontem: string; govde: unknown; kimlik?: string }
 
 function sunucuKur(kullanici: Kullanici, ozel: (yol: string, yontem: string) => Response | null = () => null) {
   const cagrilar: Cagri[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
     const yol = adres.replace('/api', '');
     const yontem = secenek?.method ?? 'GET';
-    cagrilar.push({ yol, yontem, govde: typeof secenek?.body === 'string' ? JSON.parse(secenek.body) : undefined });
+    const kimlik = (secenek?.headers as Record<string, string> | undefined)?.['istek-kimligi'];
+    cagrilar.push({ yol, yontem, govde: typeof secenek?.body === 'string' ? JSON.parse(secenek.body) : undefined, ...(kimlik === undefined ? {} : { kimlik }) });
     const o = ozel(yol, yontem);
     if (o) return o;
     if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
@@ -367,8 +368,14 @@ describe('SmartES listeleri', () => {
     expect(screen.getAllByRole('link', { name: 'Eşlemeyi aç' }).length).toBeGreaterThan(0);
     fireEvent.click(screen.getAllByRole('button', { name: 'Alanlar' })[0]!);
     expect(await screen.findByText('SmartES’e giden alanlar', { exact: false })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Yeniden gönder' }));
+    const yenidenGonder = screen.getByRole('button', { name: 'Yeniden gönder' });
+    fireEvent.click(yenidenGonder);
+    fireEvent.click(yenidenGonder);
     await waitFor(() => { expect(cagrilar.find((c) => c.yol === '/smartes/giden/yeniden-gonder')?.govde).toEqual({ isEmirleri: [2] }); });
+    // Risk 3700: çift tık tek istektir.
+    expect(cagrilar.filter((c) => c.yol === '/smartes/giden/yeniden-gonder')).toHaveLength(1);
+    // 3700: tekrar korumalı komut istek kimliğiyle gider.
+    expect(cagrilar.find((c) => c.yol === '/smartes/giden/yeniden-gonder')?.kimlik).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   });
 
   it('giden emirler boşsa boş iletisi gösterir; yeniden gönder yetkisiz kullanıcıda görünmez', async () => {

@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { MotorAyarlari, MotorAyarlariCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { Dugme, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
+import { KimlikDefteri, korumaliGonder } from './kimlik-defteri.ts';
 import { ACIL_PAY, ACIL_PAY_SINIRI, AYAR_SECENEKLERI, FASON_GUN, degerAdi, gunMetni, gunOku, secilebilir, secimDegeri, surumMetni, yuzdeMetni, yuzdeOku, type SecimAyari } from '../../motor-ayarlari/kurallar.ts';
 
 // Motor bölümü (811, 3487, 3561): bütün planlar içindir, kayıt yeni sürümdür. Okunan sürümle yazılır; arada başkası yazdıysa sunucu reddeder
@@ -37,19 +38,25 @@ function MotorFormu({ g, kaydedildi }: { g: Guncel; kaydedildi: (x: Guncel) => v
   const [pay, setPay] = useState(yuzdeMetni(d.acilPay));
   const [gun, setGun] = useState(String(d.fasonGun));
   const [yaziyor, setYaziyor] = useState(false);
+  // Tekrar korumalı komut: kimlik gövde başına tutulur; çift basış tek istektir, sonucu bilinmeyen hatadan sonraki basış aynı kimliği taşır.
+  const [defter] = useState(() => new KimlikDefteri());
+  const suruyor = useRef(false);
   const payOrani = yuzdeOku(pay, ACIL_PAY_SINIRI), fasonGun = gunOku(gun);
   const degisti = MOTOR_SECIMLERI.some((k) => f[k] !== d[k]) || (payOrani !== null && payOrani !== d.acilPay) || (fasonGun !== null && fasonGun !== d.fasonGun);
   const kaydet = async (): Promise<void> => {
-    if (payOrani === null || fasonGun === null) return;
+    if (payOrani === null || fasonGun === null || suruyor.current) return;
+    suruyor.current = true;
     setYaziyor(true);
     try {
-      const c = await api.post<MotorAyarlariCevabi>('/plan/motor-ayarlari', { ...f, acilPay: payOrani, fasonGun, surumId: g.surumId });
+      const govde = { ...f, acilPay: payOrani, fasonGun, surumId: g.surumId };
+      const c = await korumaliGonder(defter, JSON.stringify(govde), (d) => api.post<MotorAyarlariCevabi>('/plan/motor-ayarlari', govde, d));
       bildir('tamam', 'Motor ayarları kaydedildi; bir sonraki Planı güncelle ile plana girer.');
       kaydedildi(c.guncel);
     } catch (h) {
       bildir('hata', hataIletisi(h, 'Motor ayarları kaydedilemedi.'));
       try { kaydedildi((await api.get<MotorAyarlariCevabi>('/plan/motor-ayarlari')).guncel); } catch { /* okunamazsa form eldeki değerle kalır */ }
     } finally {
+      suruyor.current = false;
       setYaziyor(false);
     }
   };

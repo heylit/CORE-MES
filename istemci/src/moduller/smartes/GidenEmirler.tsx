@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import type { GidenEmirleriCevabi, SmartesYenidenGonderCevabi } from '#paylasilan/sozlesme/smartes.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Pencere, Rozet, Simge, Tablo, useBildirim, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { useTekGonderim } from '../../ortak/veri/korumali-komut.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { KimlikDefteri, korumaliGonder } from './kimlik-defteri.ts';
 import { YOK, sayiMetni, zamanMetni } from './gosterim.ts';
 import './smartes.css';
 
@@ -65,8 +67,11 @@ function EmirGrubu({ e, gonderir }: { e: Emir; gonderir: boolean }) {
   const genis = useGenis();
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
-  const yeniden = useMutation({
-    mutationFn: (isEmriId: number) => api.post<SmartesYenidenGonderCevabi>('/smartes/giden/yeniden-gonder', { isEmirleri: [isEmriId] }),
+  // Tekrar korumalı komut: kimlik iş emri başına tutulur; sonucu bilinmeyen hatadan sonraki basış aynı kimliği taşır.
+  const [defter] = useState(() => new KimlikDefteri());
+  // Gönderim sürerken gelen ikinci tık düşer (çift tık tek istek, tek bildirim).
+  const yeniden = useTekGonderim({
+    mutationFn: (isEmriId: number) => korumaliGonder(defter, String(isEmriId), (d) => api.post<SmartesYenidenGonderCevabi>('/smartes/giden/yeniden-gonder', { isEmirleri: [isEmriId] }, d)),
     onSuccess: async (c) => {
       await istemci.invalidateQueries({ queryKey: anahtarlar.kok });
       bildir(c.sirada > 0 ? 'tamam' : 'bilgi', c.sirada > 0 ? 'Yeniden gönderilmek üzere sıraya alındı.' : 'Bu adım durmuş değil; sıraya alınmadı.');

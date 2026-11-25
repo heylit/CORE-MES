@@ -63,6 +63,8 @@ describe('Adım Durumu matrisi (3604)', () => {
     fireEvent.click(within(onay).getByRole('button', { name: '1 adıma yaz' }));
     await waitFor(() => { expect(posts(istekler)).toHaveLength(1); });
     expect(posts(istekler)[0]?.yol).toBe('/adimli-emirler/statu-toplu');
+    // 3700: tekrar korumalı komut istek kimliğiyle gider; geri alma yeni komuttur.
+    expect(posts(istekler)[0]?.kimlik).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     expect(posts(istekler)[0]?.govde).toEqual({
       kalemler: [{ emirId: 1, isEmriId: 12, statu: 'cizim', not: 'Revizyon bekleniyor', sistemStatusu: 'baslayabilir' }], calisanOnay: false,
     });
@@ -70,6 +72,8 @@ describe('Adım Durumu matrisi (3604)', () => {
     expect(son.closest('[role="status"]')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Geri al' }));
     await waitFor(() => { expect(posts(istekler)).toHaveLength(2); });
+    expect(posts(istekler)[1]?.kimlik).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(posts(istekler)[1]?.kimlik).not.toBe(posts(istekler)[0]?.kimlik);
     expect(posts(istekler)[1]?.govde).toEqual({
       kalemler: [{ emirId: 1, isEmriId: 12, statu: null, not: null, sistemStatusu: 'baslayabilir' }], calisanOnay: true,
     });

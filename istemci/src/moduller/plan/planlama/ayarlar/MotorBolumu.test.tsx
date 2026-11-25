@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { MotorAyarlari as Ayarlar, MotorAyarlariCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { BildirimSaglayici } from '../../../../ortak/arayuz/index.ts';
-import { api, ApiHatasi } from '../../../../ortak/veri/api.ts';
+import { api, ApiHatasi, istekKimligiMi } from '../../../../ortak/veri/api.ts';
 import { degerAdi, gunOku, secilebilir, secimDegeri, surumMetni } from '../../motor-ayarlari/kurallar.ts';
 import { MotorBolumu } from './MotorBolumu.tsx';
 
@@ -13,6 +13,7 @@ const MOTOR_AYARI_VARSAYILAN: Ayarlar = {
   amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali', acilPay: 0.05, bolmeKip: 'otomatik', bolmeMaks: 3, fasonGun: 7,
 };
 const BOS: MotorAyarlariCevabi = { guncel: { surumId: null, degerler: MOTOR_AYARI_VARSAYILAN, yazan: null, zaman: null }, taslak: null };
+const KIMLIKLI = expect.objectContaining({ istekKimligi: expect.stringMatching(/^[0-9a-f-]{36}$/) });
 let yazabilir = false;
 const yetki = (islemler: string[]) => { yazabilir = islemler.includes('plan.motor-ayari'); };
 const ciz = (g: MotorAyarlariCevabi['guncel'] = BOS.guncel) => render(<BildirimSaglayici><MotorBolumu g={g} yazabilir={yazabilir} kaydedildi={() => undefined} /></BildirimSaglayici>);
@@ -46,7 +47,7 @@ describe('Planlama ayarları: Motor bölümü (3561; 811)', () => {
     expect((kaydet as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(screen.getByLabelText('Sıralama kuralı'), { target: { value: 'edd' } });
     fireEvent.click(kaydet);
-    await vi.waitFor(() => { expect(post).toHaveBeenCalledWith('/plan/motor-ayarlari', { ...MOTOR_AYARI_VARSAYILAN, kural: 'edd', surumId: null }); });
+    await vi.waitFor(() => { expect(post).toHaveBeenCalledWith('/plan/motor-ayarlari', { ...MOTOR_AYARI_VARSAYILAN, kural: 'edd', surumId: null }, KIMLIKLI); });
   });
 
   it('1786: arada başkası yazdıysa ret iletisi gösterilir ve güncel ayar yeniden okunur', async () => {
@@ -72,7 +73,7 @@ describe('Planlama ayarları: Motor bölümü (3561; 811)', () => {
     expect((kaydet as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(alan, { target: { value: '2,5' } });
     fireEvent.click(kaydet);
-    await vi.waitFor(() => { expect(post).toHaveBeenCalledWith('/plan/motor-ayarlari', { ...MOTOR_AYARI_VARSAYILAN, acilPay: 0.025, surumId: null }); });
+    await vi.waitFor(() => { expect(post).toHaveBeenCalledWith('/plan/motor-ayarlari', { ...MOTOR_AYARI_VARSAYILAN, acilPay: 0.025, surumId: null }, KIMLIKLI); });
   });
 
   it('3355: fason süresi gün girilir ve gönderilir; 1-90 dışı ya da kesirli değer kaydedilmez; yalnız görende gün yazılır', async () => {
@@ -88,7 +89,7 @@ describe('Planlama ayarları: Motor bölümü (3561; 811)', () => {
     expect((kaydet as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(alan, { target: { value: '10' } });
     fireEvent.click(kaydet);
-    await vi.waitFor(() => { expect(post).toHaveBeenCalledWith('/plan/motor-ayarlari', { ...MOTOR_AYARI_VARSAYILAN, fasonGun: 10, surumId: null }); });
+    await vi.waitFor(() => { expect(post).toHaveBeenCalledWith('/plan/motor-ayarlari', { ...MOTOR_AYARI_VARSAYILAN, fasonGun: 10, surumId: null }, KIMLIKLI); });
     cleanup();
     yetki(['plan.planlama-oku']);
     ciz();
@@ -104,7 +105,7 @@ describe('Planlama ayarları: Motor bölümü (3561; 811)', () => {
     expect((secim as HTMLSelectElement).value).toBe('kapali');
     fireEvent.change(secim, { target: { value: 'acik' } });
     fireEvent.click(screen.getByRole('button', { name: /kaydet/i }));
-    await vi.waitFor(() => { expect(post).toHaveBeenCalledWith('/plan/motor-ayarlari', { ...MOTOR_AYARI_VARSAYILAN, ogrenme: 'acik', surumId: null }); });
+    await vi.waitFor(() => { expect(post).toHaveBeenCalledWith('/plan/motor-ayarlari', { ...MOTOR_AYARI_VARSAYILAN, ogrenme: 'acik', surumId: null }, KIMLIKLI); });
   });
 
   it('2523 a: paralel bölme kapatılır ve pay sayısı sayı olarak gönderilir', async () => {
@@ -119,6 +120,26 @@ describe('Planlama ayarları: Motor bölümü (3561; 811)', () => {
     fireEvent.change(kip, { target: { value: 'kapali' } });
     fireEvent.change(screen.getByLabelText('Bölmede en çok pay'), { target: { value: '2' } });
     fireEvent.click(screen.getByRole('button', { name: /kaydet/i }));
-    await vi.waitFor(() => { expect(post).toHaveBeenCalledWith('/plan/motor-ayarlari', { ...MOTOR_AYARI_VARSAYILAN, bolmeKip: 'kapali', bolmeMaks: 2, surumId: null }); });
+    await vi.waitFor(() => { expect(post).toHaveBeenCalledWith('/plan/motor-ayarlari', { ...MOTOR_AYARI_VARSAYILAN, bolmeKip: 'kapali', bolmeMaks: 2, surumId: null }, KIMLIKLI); });
+  });
+
+  it('3700: kayıt istek kimliğiyle gider; iki hızlı basış tek istek ve tek kimliktir', async () => {
+    yetki(['plan.planlama-oku', 'plan.motor-ayari']);
+    vi.spyOn(api, 'get').mockResolvedValue(BOS);
+    let bitir: (c: MotorAyarlariCevabi) => void = () => undefined;
+    const post = vi.spyOn(api, 'post').mockImplementation(() => new Promise((coz) => { bitir = coz as typeof bitir; }));
+    ciz();
+    fireEvent.change(await screen.findByLabelText('Sıralama kuralı'), { target: { value: 'edd' } });
+    const kaydet = screen.getByRole('button', { name: /kaydet/i });
+    fireEvent.click(kaydet);
+    fireEvent.click(kaydet);
+    expect(post).toHaveBeenCalledTimes(1);
+    const deneme = post.mock.calls[0]?.[2] as { istekKimligi: string } | undefined;
+    expect(istekKimligiMi(deneme?.istekKimligi)).toBe(true);
+    bitir(BOS);
+    await vi.waitFor(() => { expect((kaydet as HTMLButtonElement).disabled).toBe(false); });
+    fireEvent.click(kaydet);
+    expect(post).toHaveBeenCalledTimes(2);
+    expect((post.mock.calls[1]?.[2] as { istekKimligi: string }).istekKimligi).not.toBe(deneme?.istekKimligi);
   });
 });

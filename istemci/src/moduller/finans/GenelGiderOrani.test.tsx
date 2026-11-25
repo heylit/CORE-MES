@@ -25,10 +25,11 @@ const SATIRLAR = [
 ];
 
 function sunucuKur(islemler: string[], satirlar: unknown[] = SATIRLAR, oneri: unknown = null) {
-  const istekler: { yontem: string; yol: string; govde: unknown }[] = [];
+  const istekler: { yontem: string; yol: string; govde: unknown; kimlik?: string }[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
     const yol = adres.replace('/api', '');
-    istekler.push({ yontem: secenek?.method ?? 'GET', yol, govde: secenek?.body ? JSON.parse(String(secenek.body)) : undefined });
+    const kimlik = (secenek?.headers as Record<string, string> | undefined)?.['istek-kimligi'];
+    istekler.push({ yontem: secenek?.method ?? 'GET', yol, govde: secenek?.body ? JSON.parse(String(secenek.body)) : undefined, ...(kimlik === undefined ? {} : { kimlik }) });
     if (yol === '/oturum') return json(200, { kullanici: { id: 9, ad: 'Deneme', islemler } });
     if (yol.startsWith('/finans/genel-gider-oranlari?')) return json(200, { satirlar, toplam: satirlar.length, sayfa: 1, sayfaBoyu: 500 });
     if (yol === '/finans/genel-gider-oranlari/ekle') return json(200, { id: 4 });
@@ -121,6 +122,8 @@ describe('Genel gider oranı (206 a)', () => {
       gecerlilikBaslangic: '2026-11-01', ay: '2026-10',
       aylikMakineSaati: 400, elleEk: 20, aciklama: 'Belgesiz kalem',
     });
+    // 3700: tekrar korumalı komut istek kimliğiyle gider.
+    expect(istekler.find((i) => i.yol === '/finans/genel-gider-oranlari/belgeden-ekle')?.kimlik).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   });
 
   it('2652 a: dolaylı personel gizliyse bileşen ve toplam "Gizli"; kayıt açık; listede gizli satırın tutarı ve saat başı "Gizli"', async () => {
