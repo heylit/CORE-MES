@@ -29,7 +29,7 @@ describe('Balon grupları paneli (3693)', () => {
     expect(within(panel).getByText('Op 20 için bir grup bağlayın.')).toBeTruthy();
     const baglar = within(panel).getAllByLabelText('Operasyon bağla');
     fireEvent.change(baglar[1]!, { target: { value: '102' } });
-    expect(within(panel).queryByText('Kontrol grubu yok')).toBeNull();
+    await waitFor(() => { expect(within(panel).queryByText('Kontrol grubu yok')).toBeNull(); });
     fireEvent.click(within(panel).getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => {
       expect(s.yazmalar.find((y) => y.yol === '/kalite-merkezi/studyo/resimler/1/gruplar')?.govde).toEqual({
