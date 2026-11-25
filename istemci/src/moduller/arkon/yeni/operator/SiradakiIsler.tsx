@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { Simge } from '../../../../ortak/arayuz/index.ts';
+import { KucukResimKutusu, useKucukResimler } from '../../../belge-merkezi/disari.ts';
 import { IS_DURUMLARI } from '../cekirdek/sabitler.ts';
 import type { IsYeriBilgisi } from './Parcalar.tsx';
 import type { Is, IsDurumu } from './tipler.ts';
@@ -52,6 +53,8 @@ export function SiradakiIsler({ isler, ekranda, bakilan, siradakiMi, yer, sec, e
 }) {
   const ol = useRef<HTMLOListElement>(null);
   const odak = bakilan >= 0 ? bakilan : ekranda;
+  // 3714-2: mamulün resmi malzeme kartının kapak küçük resmidir; emrin paketi `malzemeNo` taşır (yeni sunucu ucu yok).
+  const resimler = useKucukResimler('malzemeler', isler.map((x) => x.pkg?.malzemeNo).filter((n): n is number => typeof n === 'number'));
   useLayoutEffect(() => {
     const kap = ol.current;
     const li = kap?.children[odak] as HTMLElement | undefined;
@@ -88,7 +91,7 @@ export function SiradakiIsler({ isler, ekranda, bakilan, siradakiMi, yer, sec, e
           {isler.map((x, i) => (
             <li key={`${x.no}:${String(i)}`} data-bitti={x.state === 'done' ? '' : undefined}>
               <button type="button" aria-pressed={i === odak} aria-label={`${x.no}${i === ekranda ? ' · ekranda' : ''}`} onClick={() => sec(i)}>
-                <SiradakiKart is={x} siradaki={i !== ekranda && siradakiMi(i)} ekranda={i === ekranda} acik={i === odak} yer={yer(i)} />
+                <SiradakiKart is={x} resim={x.pkg?.malzemeNo != null ? <KucukResimKutusu resim={resimler.get(x.pkg.malzemeNo)} ad={x.part || x.no} /> : undefined} siradaki={i !== ekranda && siradakiMi(i)} ekranda={i === ekranda} acik={i === odak} yer={yer(i)} />
               </button>
             </li>
           ))}

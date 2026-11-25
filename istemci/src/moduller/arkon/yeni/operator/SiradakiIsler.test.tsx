@@ -1,10 +1,13 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render as ciz0, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactElement } from 'react';
 import { bosIs } from './kurallar.ts';
 import { SiradakiIsler } from './SiradakiIsler.tsx';
 import type { Is } from './tipler.ts';
 
 afterEach(cleanup);
+const render = (e: ReactElement) => ciz0(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{e}</QueryClientProvider>);
 
 // 3338-6 a: istasyonun işleri şeridi. Veriler uydurmadır (ORN-).
 const is = (no: string, state: Is['state']): Is => ({ ...bosIs({ l: 'Deneme' }), empty: false, no, part: `ORN parça ${no}`, op: 'Op 20', state, target: 10, good: 2 });
@@ -68,5 +71,17 @@ describe('Sıradaki işler kartı (3714)', () => {
     expect(sirada).toContain('Sıradaki');
     expect(sirada).not.toMatch(/Sırada(?!ki)/);
   });
-});
 
+  it('mamulün resmi emrin paketindeki malzemeNo ile malzeme kartının küçük resminden gelir', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ resimler: [{ hedefId: 7, belgeId: 1, revizyonId: 9, harf: 'A', kareSayisi: 1, revUyumu: true }] }), { status: 200, headers: { 'content-type': 'application/json' } })));
+    const resimli = { ...liste[1]!, pkg: { ...liste[1]!.pkg, malzemeNo: 7 } as unknown as Is['pkg'] };
+    ciz0(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <SiradakiIsler isler={[liste[0]!, resimli]} ekranda={0} bakilan={-1} siradakiMi={() => false} yer={() => null} sec={() => undefined} eylem={null} />
+      </QueryClientProvider>,
+    );
+    const img = await screen.findByAltText('ORN parça ORN-2', {}, { timeout: 3000 });
+    expect(img.getAttribute('src')).toBe('/api/cizimler/kucuk-resim/9/0');
+    vi.unstubAllGlobals();
+  });
+});
