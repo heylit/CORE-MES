@@ -325,7 +325,7 @@ export function GkkFormu({ id, ncrler, sablonlar, muayeneAc, kapat }: Ozellikler
               <div className="tc-km-gkk-eylem"><LotEtiketiDugmesi partiId={k.partiId} lotNo={k.partiEtiketi} /></div>
             </div>
           )}
-          {k.durum === 'karar_bekliyor' && <p className="tc-km-gkk-soluk">Etiket, hatalı için kalite kararı verilince basılır.</p>}
+          {k.durum === 'karar_bekliyor' && <p className="tc-km-gkk-soluk">Etiket, hatalı lot için kalite kararı verilince basılır.</p>}
         </Kart>
 
         {k.durum === 'karar_bekliyor' && (

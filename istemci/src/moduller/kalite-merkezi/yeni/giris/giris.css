@@ -65,5 +65,5 @@
 
 /* 3713: lot etiketi düğmesi; bağlantı düğmeyi sarar, ikon düğme dokunma ölçüsünde kare. */
 .tc-km-gkk-etiket { display: grid; gap: var(--b-3); margin-top: var(--b-3); }
-.tc-km-gkk-etiket-baglanti { display: inline-flex; text-decoration: none; }
-.tc-km-gkk-ikon-dugme { inline-size: var(--dokunma); min-height: var(--dokunma); padding: 0; }
+.tc-km-gkk-etiket-dugme { min-height: var(--dokunma); text-decoration: none; }
+.tc-km-gkk-ikon-dugme { inline-size: var(--dokunma); padding: 0; }

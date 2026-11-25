@@ -57,9 +57,9 @@ const YAPILAN_SUTUNLARI: Sutun<KmGirisKaydi>[] = [
   ...ORTAK_SUTUNLAR,
   { anahtar: 'sonuc', baslik: 'Sonuç', hucre: (k) => <Rozet ton={SONUC_TONU[gkkSonucu(k) ?? 'kabul']}>{sonucMetni(k)}</Rozet>, csv: (k) => sonucMetni(k) },
   { anahtar: 'ncr', baslik: 'NCR', mono: true, kirilmaz: true, hucre: (k) => k.ncrNo ?? YOK },
+  { anahtar: 'gkk', baslik: 'GKK', hucre: (k) => <span className="tc-km-gkk-hucre"><span>{k.gkkKisiAd ?? YOK}</span><small>{zamanKisa(k.gkkZaman)}</small></span>, csv: (k) => k.gkkKisiAd ?? '' },
   // 3713: etiket güncel GKK sonucunu taşır; yalnız kapanan GKK'da (sonuç kesin) basılır.
   { anahtar: 'etiket', baslik: 'Etiket', sabit: 'sag', csv: false, hucre: (k) => <LotEtiketiDugmesi partiId={k.partiId} lotNo={k.partiEtiketi} ikon /> },
-  { anahtar: 'gkk', baslik: 'GKK', hucre: (k) => <span className="tc-km-gkk-hucre"><span>{k.gkkKisiAd ?? YOK}</span><small>{zamanKisa(k.gkkZaman)}</small></span>, csv: (k) => k.gkkKisiAd ?? '' },
 ];
 
 // 3117: giriş kalite kontrolü listesi. Satın alma lotları (kartı GKK isteyen) üç sekmede: GKK bekleyen, hatalısı kararı bekleyen,

@@ -330,14 +330,17 @@ describe('GKK lot etiketi düğmesi (3713)', () => {
     ac(ETIKETCI, 'giris-kontrolu', [GKK, KARAR]);
     fireEvent.click(await screen.findByRole('tab', { name: /Karar bekleyen/ }));
     fireEvent.click(await screen.findByText('MK-0002'));
-    expect(await screen.findByText('Etiket, hatalı için kalite kararı verilince basılır.')).toBeTruthy();
+    expect(await screen.findByText('Etiket, hatalı lot için kalite kararı verilince basılır.')).toBeTruthy();
     expect(screen.queryByRole('link', { name: /etiketini bas/ })).toBeNull();
     cleanup();
     ac(ETIKETCI, 'giris-kontrolu', [GKK]);
     fireEvent.click(await screen.findByRole('tab', { name: /Yapılan/ }));
     fireEvent.click(await screen.findByText('MK-0003'));
     await screen.findByText('NCR-2026-0001');
-    expect(screen.getAllByRole('link', { name: 'LT-000123 etiketini bas' })).toHaveLength(1);
+    const baglanti = screen.getAllByRole('link', { name: 'LT-000123 etiketini bas' });
+    expect(baglanti).toHaveLength(1);
+    expect(baglanti[0]?.querySelector('button')).toBeNull();
+    expect(baglanti[0]?.getAttribute('href')).toBe('/etiket-merkezi?tur=lot&id=4');
   });
 
   it('Etiket Merkezi sayfa yetkisi olmayan kişi düğmeyi görmez', async () => {
