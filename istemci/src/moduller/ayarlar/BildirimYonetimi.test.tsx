@@ -185,7 +185,7 @@ function matrisSunucusu(hataliYol?: string, secenek: { acik?: boolean; kademe?: 
       if (yol === hataliYol) return json(409, { kod: 'CAKISMA', mesaj: 'Kayıt başkası tarafından değiştirildi.' });
       const g = govde as { acik?: boolean; turler?: string[] };
       const olay = /^\/bildirimler\/olaylar\/([^/]+)\/degistir$/.exec(yol);
-      const degisen = olay ? [olay[1]] : yol === '/bildirimler/olaylar/toplu' ? (g.turler ?? []) : yol === '/bildirimler/olaylar/onceki-hale-don' ? olaylar.satirlar.map((x) => x.tur) : null;
+      const degisen = olay ? [olay[1]] : yol === '/bildirimler/olaylar/toplu' ? (g.turler ?? []) : null;
       if (degisen) {
         for (const x of olaylar.satirlar) if (degisen.includes(x.tur)) Object.assign(x, { acik: g.acik ?? true, surum: (x.surum ?? 0) + 1 });
         return json(200, olaylar);
@@ -454,7 +454,6 @@ describe('bildirim ve uyarı yönetimi: olaylar (3435-3, 3456)', () => {
     const { yazilanlar } = matrisSunucusu(undefined, { acik: false });
     ac();
     await screen.findByRole('table', { name: 'Bildirim olayları' });
-    expect(screen.getByRole('note').textContent).toMatch(/Gelenler'de kalır/);
     const kanal = () => screen.getAllByRole('switch', { name: /^Makine durdu: / }).find((d) => d.getAttribute('aria-label') !== 'Makine durdu: Açık' && d.getAttribute('aria-checked') === 'true');
     expect(kanal()?.className).toContain('tc-kanal-soluk');
     expect(kanal()?.getAttribute('title')).toMatch(/Olay kapalı; açınca bu kanal kullanılır/);
@@ -482,15 +481,13 @@ describe('bildirim ve uyarı yönetimi: olaylar (3435-3, 3456)', () => {
     expect(yazilanlar[0]?.govde).toMatchObject({ acik: true, k3Gun: 2, k4Gun: 2, k5Gun: 5, surum: 0 });
   });
 
-  it('3478: Önceki hale dön onaydan sonra yazılır ve bütün olaylar açık görünür', async () => {
-    const { yazilanlar } = matrisSunucusu(undefined, { acik: false });
+  it('3707: Olaylar sayfasında kapalı olay uyarısı ve Önceki hale dön düğmesi yoktur', async () => {
+    matrisSunucusu(undefined, { acik: false });
     ac();
     await screen.findByRole('table', { name: 'Bildirim olayları' });
-    fireEvent.click(screen.getByRole('button', { name: 'Önceki hale dön' }));
-    const pencere = await screen.findByRole('dialog', { name: 'Önceki hale dönülsün mü?' });
-    fireEvent.click(within(pencere).getByRole('button', { name: 'Önceki hale dön' }));
-    await waitFor(() => { expect(yazilanlar).toEqual([{ yol: '/bildirimler/olaylar/onceki-hale-don', govde: {} }]); });
-    await waitFor(() => { expect(anahtar('Malzeme bırakıldı: Açık').getAttribute('aria-checked')).toBe('true'); });
+    expect(screen.queryByRole('button', { name: 'Önceki hale dön' })).toBeNull();
+    expect(screen.queryByText(/Kapalı olay bildirim göndermez/)).toBeNull();
+    expect(screen.queryByRole('note')).toBeNull();
   });
 
   it('menü maddesi üç işlemden biriyle görünür: yalnız e-posta ya da yalnız kademe yöneten kişi de görür', () => {

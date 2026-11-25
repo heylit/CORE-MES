@@ -307,8 +307,6 @@ function AcikTopluAnahtar({ etiket, satirlar, degistir, disabled }: {
   );
 }
 
-const zamanMetni = (deger: string) => new Date(deger).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' });
-
 export function BildirimMatrisi() {
   const yetki = useYetki();
   const ayar = yetki.var('ayarlar.yaz');
@@ -325,13 +323,9 @@ export function BildirimMatrisi() {
   const kurallar = useKurallar(ayar);
   const kuralSayisi = new Map<string, number>();
   for (const k of kurallar.data?.kurallar ?? []) kuralSayisi.set(k.tur, (kuralSayisi.get(k.tur) ?? 0) + 1);
-  const istemci = useQueryClient();
-  const { bildir } = useBildirim();
   const { yaz, bekliyor } = useKanalYazici();
   const acikYazici = useAcikYazici();
   const [acikSor, setAcikSor] = useState<{ baslik: string; hedef: readonly MatrisSatiri[] } | null>(null);
-  const [geriSor, setGeriSor] = useState(false);
-  const [geriDonuluyor, setGeriDonuluyor] = useState(false);
   const [kaynakAcik, setKaynakAcik] = useState<string | null>(null);
   const [arama, setArama] = useState('');
   const [modul, setModul] = useState('');
@@ -360,7 +354,6 @@ export function BildirimMatrisi() {
     .filter((m) => aranan === '' || m.baslik.toLocaleLowerCase('tr').includes(aranan));
   const secili = tumu.find((m) => m.tur === acik) ?? null;
   const seciliKaynak = kademe.data?.kaynaklar.find((k) => k.kaynak === kaynakAcik) ?? null;
-  const oncekiHal = olaylar.data?.oncekiHal ?? null;
   // Anahtarı yazılabilen satırlar: olay (ayarlar.yaz) ve kademe kaynağı (bildirim.kademe-yonet).
   const anahtarli = (m: MatrisSatiri) => (m.olay !== null && ayar) || (m.kaynak !== null && kademeYetki);
   // Açmak kişilere yeni yük düşürür; kademe kaynağı açılınca bekleyen bütün işler ilk turda çalar. Toplu açma ve kaynak açma önce sorulur.
@@ -369,18 +362,6 @@ export function BildirimMatrisi() {
     if (yazilacak.length === 0) return;
     if (deger && (yazilacak.length > 1 || yazilacak.some((m) => m.kaynak !== null))) { setAcikSor({ baslik, hedef: yazilacak }); return; }
     void acikYazici.yaz(yazilacak, deger, yazilacak.length === 1 ? `${baslik}: ${deger ? 'açıldı' : 'kapandı'}.` : `${baslik}: ${String(yazilacak.length)} olay ${deger ? 'açıldı' : 'kapandı'}.`);
-  };
-  const oncekiHaleDon = async () => {
-    setGeriDonuluyor(true);
-    try {
-      istemci.setQueryData(MATRIS_ANAHTARI.olaylar, await api.post<BildirimOlayAciklariCevabi>('/bildirimler/olaylar/onceki-hale-don', {}));
-      bildir('tamam', 'Bütün olaylar açıldı; kademeli uyarılar önceki hale döndü.');
-    } catch (h) {
-      bildir('hata', hataIletisi(h, 'Önceki hale dönülemedi.'));
-    }
-    void istemci.invalidateQueries({ queryKey: MATRIS_ANAHTARI.kademe });
-    setGeriDonuluyor(false);
-    setGeriSor(false);
   };
   const kanallar: Kanal[] = [...(ayar ? ['ortada', 'onay', 'telefon'] as const : []), ...(eposta ? ['eposta'] as const : [])];
 
@@ -510,16 +491,6 @@ export function BildirimMatrisi() {
         Alıcıyı değiştirmek için Alıcılar hücresine basın; e-posta şablonu, tekrar ve üst kademe kalem düğmesiyle açılan paneldedir. Kademeli uyarı kaynağı tek satırdır; merdiveni
         iş yapılmazsa sırayla çıkan basamaklardır (yaklaşıyor, gecikti, yöneticide, devret).
       </p>
-      <div className="tc-matris-uyari" role="note">
-        <Simge ad="alert" boyut="k" />
-        <p>
-          Kapalı olay bildirim göndermez. Sizden iş bekleyen olaylar (onay, görev) kapalıyken de Gelenler&apos;de kalır; ekran ortasına çıkmaz,
-          telefon ve e-posta gitmez. Ekip çağrısı her zaman gider.
-        </p>
-        {ayar && oncekiHal?.alindi != null && (
-          <Dugme simge="rotate" disabled={geriDonuluyor} onClick={() => { setGeriSor(true); }}>Önceki hale dön</Dugme>
-        )}
-      </div>
       <Tablo
         etiket="Bildirim olayları"
         sutunlar={sutunlar}
@@ -584,20 +555,6 @@ export function BildirimMatrisi() {
             {`${String(acikSor.hedef.length)} satır açılacak; seçili kanallardan bildirim gitmeye başlar.`}
             {acikSor.hedef.some((m) => m.kaynak !== null) && ' Kademeli uyarı açılınca bekleyen bütün işler ilk turda değerlendirilir; geciken her iş için uyarı birden çıkabilir.'}
             {' Sonradan tek tek kapatabilirsiniz.'}
-          </p>
-        </OnayPenceresi>
-      )}
-      {geriSor && oncekiHal?.alindi != null && (
-        <OnayPenceresi
-          acik
-          baslik="Önceki hale dönülsün mü?"
-          onayMetni="Önceki hale dön"
-          vazgec={() => { setGeriSor(false); }}
-          onayla={() => { void oncekiHaleDon(); }}
-        >
-          <p>
-            {`Bütün olaylar açılır; kademeli uyarılar ${zamanMetni(oncekiHal.alindi)} tarihindeki ayara döner; o tarihten sonra kademeli uyarılarda yaptığınız değişiklikler kalmaz. Açılan uyarılar bekleyen bütün işler için ilk turda çalar.`}
-            {oncekiHal.donuldu !== null && ` Son dönüş: ${zamanMetni(oncekiHal.donuldu)}.`}
           </p>
         </OnayPenceresi>
       )}
