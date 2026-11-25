@@ -13,6 +13,7 @@ import {
   type Kalem, type MatrisEmri, type OncekiDefter, type Siralama, type Suzgec, type TabloSutunu, type YazimOzeti,
 } from './adim-matrisi.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { KimlikDefteri, topluGonder } from './kimlik-defteri.ts';
 import './adim-matrisi.css';
 
 // Adım Durumu: Matris ve Tablo görünümleri (3604). Satır emir, sütun OP; hücreden ya da seçimden elle statü yazılır, "Otomatiğe dön" toplu da yapılır.
@@ -70,6 +71,8 @@ export function AdimMatrisi({ gorunum }: { gorunum: 'matris' | 'tablo' }) {
   const [mesgul, mesgulYaz] = useState(false);
   const [hata, hataYaz] = useState<string | null>(null);
   const sonSayac = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Tekrar korumalı komut: her parça isteği kendi kimliğini taşır; sonucu bilinmeyen hatadan sonraki basış parçaların kimliğini korur.
+  const [defter] = useState(() => new KimlikDefteri());
 
   const emirler = useMemo(() => veri.data?.emirler ?? [], [veri.data]);
   const yazabilir = veri.data?.yazabilir === true;
@@ -123,11 +126,7 @@ export function AdimMatrisi({ gorunum }: { gorunum: 'matris' | 'tablo' }) {
 
   // ----- yazma -----
   const gonder = async (kalemler: readonly Kalem[], mod: 'yaz' | 'don', hedef: ElleYazilanStatu | null, notMetni: string, calisanOnay: boolean): Promise<StatuTopluCevabi[]> => {
-    const cevaplar: StatuTopluCevabi[] = [];
-    for (const govde of istekGovdeleri(kalemler, mod === 'don' ? null : hedef, notMetni, calisanOnay)) {
-      cevaplar.push(await api.post<StatuTopluCevabi>('/adimli-emirler/statu-toplu', govde));
-    }
-    return cevaplar;
+    return topluGonder(defter, istekGovdeleri(kalemler, mod === 'don' ? null : hedef, notMetni, calisanOnay), (govde, d) => api.post<StatuTopluCevabi>('/adimli-emirler/statu-toplu', govde, d));
   };
   const uygula = async (p: Plan) => {
     const yazilanlar = yazilacaklar(p.kalemler, p.mod === 'don' ? null : p.statu, p.calisanOnay);
@@ -160,8 +159,7 @@ export function AdimMatrisi({ gorunum }: { gorunum: 'matris' | 'tablo' }) {
     mesgulYaz(true);
     hataYaz(null);
     try {
-      const cevaplar: StatuTopluCevabi[] = [];
-      for (const govde of geriAlGovdeleri(son.yazilanlar, son.onceki)) cevaplar.push(await api.post<StatuTopluCevabi>('/adimli-emirler/statu-toplu', govde));
+      const cevaplar = await topluGonder(defter, geriAlGovdeleri(son.yazilanlar, son.onceki), (govde, d) => api.post<StatuTopluCevabi>('/adimli-emirler/statu-toplu', govde, d));
       const ozet = yazimOzeti(cevaplar);
       sonYaz({ ...son, geriAlindi: true, ozet: { ...ozet, yazildi: 0 }, yazilanlar: [] });
       void yenile();

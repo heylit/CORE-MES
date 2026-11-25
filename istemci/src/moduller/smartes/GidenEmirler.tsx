@@ -6,6 +6,7 @@ import { Dugme, DurumKutusu, Girdi, Kart, Pencere, Rozet, Simge, Tablo, useBildi
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { KimlikDefteri, korumaliGonder } from './kimlik-defteri.ts';
 import { YOK, sayiMetni, zamanMetni } from './gosterim.ts';
 import './smartes.css';
 
@@ -65,8 +66,10 @@ function EmirGrubu({ e, gonderir }: { e: Emir; gonderir: boolean }) {
   const genis = useGenis();
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
+  // Tekrar korumalı komut: kimlik iş emri başına tutulur; sonucu bilinmeyen hatadan sonraki basış aynı kimliği taşır.
+  const [defter] = useState(() => new KimlikDefteri());
   const yeniden = useMutation({
-    mutationFn: (isEmriId: number) => api.post<SmartesYenidenGonderCevabi>('/smartes/giden/yeniden-gonder', { isEmirleri: [isEmriId] }),
+    mutationFn: (isEmriId: number) => korumaliGonder(defter, String(isEmriId), (d) => api.post<SmartesYenidenGonderCevabi>('/smartes/giden/yeniden-gonder', { isEmirleri: [isEmriId] }, d)),
     onSuccess: async (c) => {
       await istemci.invalidateQueries({ queryKey: anahtarlar.kok });
       bildir(c.sirada > 0 ? 'tamam' : 'bilgi', c.sirada > 0 ? 'Yeniden gönderilmek üzere sıraya alındı.' : 'Bu adım durmuş değil; sıraya alınmadı.');
