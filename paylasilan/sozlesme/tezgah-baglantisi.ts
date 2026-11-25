@@ -14,6 +14,8 @@ export type TezgahKarsilastirmaAlani = (typeof TEZGAH_KARSILASTIRMA_ALANLARI)[nu
 export const TEZGAH_TURLERI = ['dikey-freze', 'torna', 'yatay-islem'] as const;
 export type TezgahTuru = (typeof TEZGAH_TURLERI)[number];
 
+export const BOSLUK_NEDENLERI = ['tampon-asildi', 'servis-yeniden-basladi', 'satir-siniri'] as const;
+export const DOLULUK_SEVIYELERI = ['normal', 'uyari', 'kritik'] as const;
 export const TEZGAH_VARLIK_DURUMLARI = ['bekleniyor', 'okundu', 'yok', 'hata'] as const;
 export const TEZGAH_BAGLANTI_HALLERI = ['kapali', 'adres-yok', 'acik'] as const;
 
@@ -45,6 +47,28 @@ const tezgahSatiri = z.object({
   farklar: z.array(z.enum(TEZGAH_KARSILASTIRMA_ALANLARI)),
 });
 
+// Değer geçmişi tablosunun doluluğu (kart 3680). Yüzde 80'de uyarı, 95'te kritik; Sistem İzleme de bu alanı okuyabilir.
+export const tezgahDoluluguSemasi = z.object({
+  satirSayisi: z.number().int(),
+  satirSiniri: z.number().int(),
+  // Satır sayısının sınıra oranı (yüzde, bir ondalık).
+  yuzde: z.number(),
+  seviye: z.enum(DOLULUK_SEVIYELERI),
+  // Tablonun diskteki boyutu (indeksler dahil, bayt); okunamadıysa null.
+  diskBayt: z.number().int().nullable(),
+  enEskiKayit: zamanSemasi.nullable(),
+  // Süzgecin sayaçları sunucu belleğindedir: sunucu yeniden açılınca sıfırlanır. Ölçülmediyse (henüz tur yok) null.
+  olcum: z.object({
+    // Sayaçların kapsadığı süre (1-60 dakika).
+    pencereDakika: z.number().int(),
+    yazilan: z.number().int(),
+    atlanan: z.number().int(),
+    yazilanDakikada: z.number(),
+    atlananDakikada: z.number(),
+  }).nullable(),
+});
+export type TezgahDoluluguCevabi = z.output<typeof tezgahDoluluguSemasi>;
+
 export const tezgahBaglantisiDurumCevabi = z.object({
   baglanti: z.enum(TEZGAH_BAGLANTI_HALLERI),
   // Ayardaki okuma aralığı; ekran bu aralıkta yenilenir.
@@ -56,6 +80,7 @@ export const tezgahBaglantisiDurumCevabi = z.object({
   // Son turun hatası; adres ve cevap gövdesi taşımaz.
   sonHata: z.string().nullable(),
   tezgahlar: z.array(tezgahSatiri),
+  doluluk: tezgahDoluluguSemasi,
 });
 export type TezgahBaglantisiDurumCevabi = z.output<typeof tezgahBaglantisiDurumCevabi>;
 
@@ -96,7 +121,7 @@ export const tezgahAyrintisiCevabi = z.object({
     })),
   })),
   // Servis tamponundan düşen ya da servisin yeniden başladığı anlar (son 24 saat).
-  bosluklar: z.array(z.object({ zaman: zamanSemasi, neden: z.enum(['tampon-asildi', 'servis-yeniden-basladi']) })),
+  bosluklar: z.array(z.object({ zaman: zamanSemasi, neden: z.enum(BOSLUK_NEDENLERI) })),
   // Eğrilerin penceresi.
   egriBasi: zamanSemasi,
   egriSonu: zamanSemasi,

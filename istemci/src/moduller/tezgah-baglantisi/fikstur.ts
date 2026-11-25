@@ -12,6 +12,10 @@ const tezgah = (cihazAdi: string, ek: Partial<Tezgah> = {}): Tezgah => ({
 
 export const ORNEK_DURUM = (): TezgahBaglantisiDurumCevabi => ({
   baglanti: 'acik', aralikSaniye: 5, varlikDurumu: 'okundu', sonDeneme: once(3), sonOkuma: once(3), sonHata: null,
+  doluluk: {
+    satirSayisi: 412_300, satirSiniri: 2_000_000, yuzde: 20.6, seviye: 'normal', diskBayt: 118_000_000, enEskiKayit: once(86_000),
+    olcum: { pencereDakika: 60, yazilan: 31_200, atlanan: 168_000, yazilanDakikada: 520, atlananDakikada: 2800 },
+  },
   tezgahlar: [
     tezgah('ORN-T01'),
     tezgah('ORN-T04', {

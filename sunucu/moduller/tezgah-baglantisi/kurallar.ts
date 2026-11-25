@@ -16,6 +16,12 @@ export const ORNEK_SAKLAMA_GUNU = 30;
 export const GECMIS_SAKLAMA_MS = 24 * 3_600_000;
 export const AZAMI_TEZGAH = 64;
 export const AZAMI_DEGER_UZUNLUGU = 200;
+export const SATIR_SINIRI_AYARI = 'tezgah-baglantisi.satir-siniri';
+export const VARSAYILAN_SATIR_SINIRI = 2_000_000;
+// Temizlik büyük tek DELETE yerine bu kadar satırlık parçalarla yapılır; bir tur en çok bu süre ve parça kadar silebilir.
+export const TEMIZLIK_PARCASI = 10_000;
+export const TEMIZLIK_TUR_BUTCESI_MS = 500;
+export const TEMIZLIK_TUR_PARCASI = 5;
 export const OKUMA_AYARI = 'tezgah-baglantisi.okuma';
 export const ARALIK_AYARI = 'tezgah-baglantisi.okuma-araligi';
 
@@ -330,3 +336,182 @@ export function varliklariOku(kok: XmlOgesi): TezgahVarligi[] | null {
 
 // Servis tamponundan düşmüş sıra isteniyor mu (başlık): ilk sıra istenenden büyükse aradaki kayıtlar kaybolmuştur.
 export const tamponAsildiMi = (istenen: number, b: AkisBasligi): boolean => b.firstSequence !== null && istenen < b.firstSequence;
+
+// ---- Değer geçmişi süzgeci (kart 3680) ----
+// EVENT ve CONDITION her değişimde saklanır. SAMPLE (sayısal) yalnız son saklanan değere göre anlamlı değişimde saklanır; aynı öğe
+// GECMIS_EN_SIK_MS'den sık yazılmaz (aradaki son değer bekletilir), değişmese de GECMIS_EN_UZUN_ARA_MS'de bir değer yazılır.
+export const GECMIS_ORAN_ESIGI = 0.01;
+export const GECMIS_EN_SIK_MS = 6_000;
+export const GECMIS_EN_UZUN_ARA_MS = 60_000;
+
+export interface GecmisKaydi {
+  cihazAdi: string;
+  kimlik: string;
+  sira: number;
+  zaman: Date;
+  deger: string | null;
+  kosul: string | null;
+}
+
+export type GecmisKategorisi = 'SAMPLE' | 'EVENT' | 'CONDITION';
+
+// Akıştaki öğe adı (SpindleSpeed) ve probe adı (SPINDLE_SPEED) aynı türe çıkar.
+const turAdi = (tur: string): string => tur.replace(/_/g, '').toLowerCase();
+const HIZ_TURLERI = new Set(['rotaryvelocity', 'spindlespeed']);
+
+const sayisalDeger = (m: string | null): number | null => sayi(m);
+
+// Son saklanan değerden yeni değere geçiş saklanmaya değer mi: hız yüzde 2, yük 5 puan, öteki sayısallar yüzde 1'den fazla ayrışırsa.
+// Sayıya çevrilemeyen ya da değer yok (UNAVAILABLE) olan taraf varsa her değişim anlamlıdır.
+export function anlamliDegisim(tur: string, onceki: string | null, yeni: string | null): boolean {
+  if (onceki === yeni) return false;
+  const a = sayisalDeger(onceki);
+  const b = sayisalDeger(yeni);
+  if (a === null || b === null) return true;
+  const fark = Math.abs(b - a);
+  const t = turAdi(tur);
+  if (HIZ_TURLERI.has(t)) return fark > Math.abs(a) * HIZ_ESIGI_ORANI;
+  if (t === 'load') return fark > YUK_ESIGI_PUANI;
+  return fark > Math.abs(a) * GECMIS_ORAN_ESIGI;
+}
+
+// Öğe başına süzgeç durumu. Nesneler değiştirilmez, yenisiyle değiştirilir: işlem geri alınırsa bellek eski haliyle kalır.
+export interface GecmisOgeDurumu {
+  tur: string;
+  // Son saklanan değer: verinin kendi zamanı ve saklandığı tur anı (ms).
+  son: { zaman: number; deger: string | null; ani: number };
+  // En son görülen değer (saklansın ya da atlansın).
+  guncel: GecmisKaydi;
+  // Pencerede son saklanana en uzak değer: kısa bir tepe (çıkıp dönen sıçrama) kaybolmasın, kendi zamanıyla yazılır.
+  bekleyen: GecmisKaydi | null;
+}
+export type GecmisSuzgeci = ReadonlyMap<string, GecmisOgeDurumu>;
+
+export interface SuzulecekOge {
+  kayit: GecmisKaydi;
+  tur: string;
+  // Probe'da tanımı yoksa null: veri yitmesin diye olduğu gibi saklanır.
+  kategori: GecmisKategorisi | null;
+}
+
+export interface SuzmeSonucu {
+  yazilacak: GecmisKaydi[];
+  atlanan: number;
+  suzgec: Map<string, GecmisOgeDurumu>;
+}
+
+const anahtar = (k: GecmisKaydi): string => `${k.cihazAdi}\u0000${k.kimlik}`;
+
+// `a`, son saklanan değerden `b`'den daha uzakta mı (sayısal değilse yenisi sayılır).
+function dahaUc(son: string | null, a: GecmisKaydi, b: GecmisKaydi): boolean {
+  const s = sayisalDeger(son);
+  const x = sayisalDeger(a.deger);
+  const y = sayisalDeger(b.deger);
+  if (s === null || x === null || y === null) return false;
+  return Math.abs(x - s) > Math.abs(y - s);
+}
+
+// Bir turun öğelerini süzer. `simdi` turun anıdır (verinin saatinden bağımsız: saat farkı süzgeci kilitlemesin).
+export function gecmisiSuz(onceki: GecmisSuzgeci, ogeler: readonly SuzulecekOge[], simdi: Date): SuzmeSonucu {
+  const suzgec = new Map(onceki);
+  const yazilacak: GecmisKaydi[] = [];
+  let atlanan = 0;
+  const ani = simdi.getTime();
+  for (const { kayit, tur, kategori } of [...ogeler].sort((x, y) => x.kayit.sira - y.kayit.sira)) {
+    if (kategori !== 'SAMPLE') {
+      yazilacak.push(kayit);
+      continue;
+    }
+    const k = anahtar(kayit);
+    const d = suzgec.get(k);
+    const zaman = kayit.zaman.getTime();
+    const yaz = (r: GecmisKaydi, bekleyen: GecmisKaydi | null): void => {
+      yazilacak.push(r);
+      suzgec.set(k, { tur, son: { zaman: r.zaman.getTime(), deger: r.deger, ani }, guncel: kayit, bekleyen });
+    };
+    if (d === undefined) { yaz(kayit, null); continue; }
+    const bekleyen = d.bekleyen;
+    if (!anlamliDegisim(tur, d.son.deger, kayit.deger)) {
+      // Son saklanana yaklaştı; bekleyen tepe varsa korunur (geri dönüş değeri bir sonraki boşaltmada yazılır).
+      atlanan += 1;
+      suzgec.set(k, { ...d, guncel: kayit });
+    } else if (zaman - d.son.zaman >= GECMIS_EN_SIK_MS) {
+      if (bekleyen !== null && dahaUc(d.son.deger, bekleyen, kayit)) {
+        // Pencerenin tepesi kendi zamanıyla yazılır; dönüş değeri hâlâ anlamlıysa sıradaki pencerede yazılır.
+        yazilacak.push(bekleyen);
+        const donus = anlamliDegisim(tur, bekleyen.deger, kayit.deger) ? kayit : null;
+        if (donus === null) atlanan += 1;
+        suzgec.set(k, { tur, son: { zaman: bekleyen.zaman.getTime(), deger: bekleyen.deger, ani }, guncel: kayit, bekleyen: donus });
+      } else {
+        if (bekleyen !== null) atlanan += 1;
+        yaz(kayit, null);
+      }
+    } else if (bekleyen === null || !dahaUc(d.son.deger, bekleyen, kayit)) {
+      if (bekleyen !== null) atlanan += 1;
+      suzgec.set(k, { ...d, guncel: kayit, bekleyen: kayit });
+    } else {
+      atlanan += 1;
+      suzgec.set(k, { ...d, guncel: kayit });
+    }
+  }
+  return { yazilacak, atlanan, suzgec };
+}
+
+// Tur sonunda: GECMIS_EN_SIK_MS'yi dolduran bekleyen değer (pencerenin tepesi) kendi zamanıyla yazılır; güncel değer ondan anlamlı ayrışıyorsa
+// sıradaki boşaltmada yazılmak üzere bekler. 60 saniyedir hiçbir şey yazılmayan SAMPLE öğesinin güncel değeri yazılır (grafik ve tekrar
+// oynatma boşluk göstermesin). Tekrar satırının zamanı verinin saatinde ilerler.
+export function gecmisiBosalt(onceki: GecmisSuzgeci, simdi: Date): { yazilacak: GecmisKaydi[]; suzgec: Map<string, GecmisOgeDurumu> } {
+  const suzgec = new Map(onceki);
+  const yazilacak: GecmisKaydi[] = [];
+  const ani = simdi.getTime();
+  for (const [k, d] of onceki) {
+    const gecen = ani - d.son.ani;
+    if (d.bekleyen !== null) {
+      if (gecen < GECMIS_EN_SIK_MS) continue;
+      const b = d.bekleyen;
+      yazilacak.push(b);
+      const donus = b.sira !== d.guncel.sira && anlamliDegisim(d.tur, b.deger, d.guncel.deger) ? d.guncel : null;
+      suzgec.set(k, { ...d, son: { zaman: b.zaman.getTime(), deger: b.deger, ani }, bekleyen: donus });
+    } else if (gecen >= GECMIS_EN_UZUN_ARA_MS) {
+      const zaman = d.son.zaman + gecen;
+      yazilacak.push({ ...d.guncel, zaman: new Date(zaman), kosul: null });
+      suzgec.set(k, { ...d, son: { zaman, deger: d.guncel.deger, ani } });
+    }
+  }
+  return { yazilacak, suzgec };
+}
+
+// ---- Doluluk (kart 3680) ----
+export const DOLULUK_UYARI_YUZDESI = 80;
+export const DOLULUK_KRITIK_YUZDESI = 95;
+
+export const dolulukYuzdesi = (satir: number, sinir: number): number => Math.round((satir / sinir) * 1000) / 10;
+export const dolulukSeviyesi = (yuzde: number): 'normal' | 'uyari' | 'kritik' =>
+  (yuzde >= DOLULUK_KRITIK_YUZDESI ? 'kritik' : yuzde >= DOLULUK_UYARI_YUZDESI ? 'uyari' : 'normal');
+
+// Dakika kovaları: son bir saatte yazılan ve süzgeçle atlanan satır sayısı (sunucu belleğinde).
+export interface DakikaKovasi { dakika: number; yazilan: number; atlanan: number }
+export interface SatirSayaci { baslangic: number | null; kovalar: DakikaKovasi[] }
+export const yeniSatirSayaci = (): SatirSayaci => ({ baslangic: null, kovalar: [] });
+const DAKIKA_MS = 60_000;
+const SAYAC_DAKIKASI = 60;
+
+export function sayaciArttir(c: SatirSayaci, simdi: number, yazilan: number, atlanan: number): SatirSayaci {
+  const dakika = Math.floor(simdi / DAKIKA_MS);
+  const kovalar = c.kovalar.filter((k) => k.dakika > dakika - SAYAC_DAKIKASI);
+  const son = kovalar[kovalar.length - 1];
+  if (son !== undefined && son.dakika === dakika) kovalar[kovalar.length - 1] = { dakika, yazilan: son.yazilan + yazilan, atlanan: son.atlanan + atlanan };
+  else kovalar.push({ dakika, yazilan, atlanan });
+  return { baslangic: c.baslangic ?? simdi, kovalar };
+}
+
+export function sayaciOzetle(c: SatirSayaci, simdi: number): { pencereDakika: number; yazilan: number; atlanan: number; yazilanDakikada: number; atlananDakikada: number } | null {
+  if (c.baslangic === null) return null;
+  const dakika = Math.floor(simdi / DAKIKA_MS);
+  const icinde = c.kovalar.filter((k) => k.dakika > dakika - SAYAC_DAKIKASI);
+  const yazilan = icinde.reduce((t, k) => t + k.yazilan, 0);
+  const atlanan = icinde.reduce((t, k) => t + k.atlanan, 0);
+  const pencereDakika = Math.min(SAYAC_DAKIKASI, Math.max(1, dakika - Math.floor(c.baslangic / DAKIKA_MS) + 1));
+  const bir = (n: number): number => Math.round((n / pencereDakika) * 10) / 10;
+  return { pencereDakika, yazilan, atlanan, yazilanDakikada: bir(yazilan), atlananDakikada: bir(atlanan) };
+}

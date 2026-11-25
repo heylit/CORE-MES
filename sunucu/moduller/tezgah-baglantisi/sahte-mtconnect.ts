@@ -15,6 +15,13 @@ export interface SahteTezgah {
   yuk?: string;
   eksenYuku?: string;
   ilerleme?: string;
+  // Ek sayısal öğeler (süzgeç ölçümü için): yalnız verilen tezgahta probe'a ve akışa girer.
+  konumX?: string;
+  konumY?: string;
+  konumZ?: string;
+  sicaklik?: string;
+  titresim?: string;
+  basinc?: string;
   // Koşul: [tür, hal, metin]
   kosullar?: readonly (readonly [string, 'Normal' | 'Warning' | 'Fault' | 'Unavailable', string])[];
 }
@@ -62,11 +69,18 @@ const ALANLAR: Record<Alan, AlanBicimi> = {
   ilerleme: { ad: 'PathFeedrate', kimlik: 'feed', kap: 'Samples', bilesen: 'Controller', bilesenAdi: 'controller', kategori: 'SAMPLE', birim: 'MILLIMETER/SECOND' },
   eksenYuku: { ad: 'Load', kimlik: 'xload', kap: 'Samples', bilesen: 'Linear', bilesenAdi: 'X', kategori: 'SAMPLE', birim: 'PERCENT' },
   hiz: { ad: 'SpindleSpeed', kimlik: 'sspeed', kap: 'Samples', bilesen: 'Rotary', bilesenAdi: 'S', kategori: 'SAMPLE', birim: 'REVOLUTION/MINUTE' },
+  konumX: { ad: 'Position', kimlik: 'xpos', kap: 'Samples', bilesen: 'Linear', bilesenAdi: 'X', kategori: 'SAMPLE', birim: 'MILLIMETER' },
+  konumY: { ad: 'Position', kimlik: 'ypos', kap: 'Samples', bilesen: 'Linear', bilesenAdi: 'X', kategori: 'SAMPLE', birim: 'MILLIMETER' },
+  konumZ: { ad: 'Position', kimlik: 'zpos', kap: 'Samples', bilesen: 'Linear', bilesenAdi: 'X', kategori: 'SAMPLE', birim: 'MILLIMETER' },
+  sicaklik: { ad: 'Temperature', kimlik: 'temp', kap: 'Samples', bilesen: 'Linear', bilesenAdi: 'X', kategori: 'SAMPLE', birim: 'CELSIUS' },
+  titresim: { ad: 'Vibration', kimlik: 'vib', kap: 'Samples', bilesen: 'Linear', bilesenAdi: 'X', kategori: 'SAMPLE', birim: 'MILLIMETER/SECOND' },
+  basinc: { ad: 'Pressure', kimlik: 'pres', kap: 'Samples', bilesen: 'Linear', bilesenAdi: 'X', kategori: 'SAMPLE', birim: 'PASCAL' },
   yuk: { ad: 'Load', kimlik: 'sload', kap: 'Samples', bilesen: 'Rotary', bilesenAdi: 'S', kategori: 'SAMPLE', birim: 'PERCENT' },
 };
 // Erişim verilmediyse tezgah erişilebilirdir.
 const alanDegeri = (t: SahteTezgah, a: Alan): string | undefined => (a === 'erisim' ? t.erisim ?? 'AVAILABLE' : t[a]);
 const ALAN_ADLARI = Object.keys(ALANLAR) as Alan[];
+const EK_ALANLAR: Alan[] = ['konumX', 'konumY', 'konumZ', 'sicaklik', 'titresim', 'basinc'];
 
 const oge = (a: AlanBicimi, deger: string | undefined, sira: number, zaman: string): string =>
   deger === undefined ? '' : `<${a.ad} dataItemId="${a.kimlik}" timestamp="${zaman}" name="${a.kimlik}" sequence="${sira}">${kac(deger)}</${a.ad}>`;
@@ -84,7 +98,7 @@ export function probeMetni(tezgahlar: readonly SahteTezgah[], instanceId = 1): s
   return `<?xml version="1.0" encoding="UTF-8"?><MTConnectDevices xmlns="urn:mtconnect.org:MTConnectDevices:1.2"><Header sender="ORN" version="1.2" instanceId="${instanceId}"/><Devices>${
     tezgahlar.map((t) => `<Device id="d-${kac(t.ad)}" name="${kac(t.ad)}" uuid="ORN-UUID"><DataItems>${alan('erisim')}</DataItems><Components>${
       bilesenler('Controller', 'controller', 'c', ['calisma', 'mod', 'program', 'sayac', 'takim', 'ilerleme'], '<DataItem id="k" type="SYSTEM" category="CONDITION"/>')
-    }${bilesenler('Linear', 'X', 'x', ['eksenYuku'])}${bilesenler('Rotary', 'S', 's', ['hiz', 'yuk'])}</Components></Device>`).join('')
+    }${bilesenler('Linear', 'X', 'x', ['eksenYuku', ...EK_ALANLAR.filter((k) => tezgahlar.some((t) => t[k] !== undefined))])}${bilesenler('Rotary', 'S', 's', ['hiz', 'yuk'])}</Components></Device>`).join('')
   }</Devices></MTConnectDevices>`;
 }
 
@@ -106,7 +120,7 @@ function akisMetni(tezgahlar: readonly SahteTezgah[], kayitlar: readonly Kayit[]
 <ComponentStream component="Controller" name="controller" componentId="c"><Events>${grup(['calisma', 'mod', 'program', 'sayac', 'takim'], 'Events')}</Events>
 <Samples>${grup(['ilerleme'], 'Samples')}</Samples>
 <Condition>${kosul}</Condition></ComponentStream>
-<ComponentStream component="Linear" name="X" componentId="x"><Samples>${grup(['eksenYuku'], 'Samples')}</Samples></ComponentStream>
+<ComponentStream component="Linear" name="X" componentId="x"><Samples>${grup(['eksenYuku', ...EK_ALANLAR], 'Samples')}</Samples></ComponentStream>
 <ComponentStream component="Rotary" name="S" componentId="s"><Samples>${grup(['hiz', 'yuk'], 'Samples')}</Samples></ComponentStream>
 </DeviceStream>`;
   };

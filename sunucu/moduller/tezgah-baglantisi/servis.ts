@@ -1,16 +1,17 @@
 import type { Db, Veritabani } from '#cekirdek/db.ts';
 import { bulunamadi } from '#cekirdek/hata.ts';
 import { TEZGAH_TURLERI } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
-import type { TezgahAyrintisiCevabi, TezgahBaglantisiDurumCevabi, TezgahTuru } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
+import type { TezgahAyrintisiCevabi, TezgahBaglantisiDurumCevabi, TezgahDoluluguCevabi, TezgahTuru } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { smartesMakineDegerleri } from '../smartes/disari.ts';
 import type { TezgahIstemcisi } from './istemci.ts';
 import {
-  akislariOku, ARALIK_AYARI, AZAMI_SAMPLE_SAYFASI, baslikOku, cihazSayisiOku, diziyiDurumaCevir, durumaIsle, durumdanDiziye, eskiMi, etkinAralikMs, farklar,
-  GECMIS_SAKLAMA_MS, OKUMA_AYARI, ORNEK_SAKLAMA_GUNU, ozetle, SAMPLE_SAYISI, sonrakiSira, tamponAsildiMi, tanimlariOku, TEMIZLIK_ARALIGI_MS,
-  varliklariOku, VARLIK_ARALIGI_MS, VARSAYILAN_ARALIK_SN,
+  akislariOku, ARALIK_AYARI, AZAMI_SAMPLE_SAYFASI, baslikOku, cihazSayisiOku, diziyiDurumaCevir, dolulukSeviyesi, dolulukYuzdesi, durumaIsle, durumdanDiziye, eskiMi,
+  etkinAralikMs, farklar, GECMIS_SAKLAMA_MS, gecmisiBosalt, gecmisiSuz, OKUMA_AYARI, ORNEK_SAKLAMA_GUNU, ozetle, sayaciArttir, sayaciOzetle, SAMPLE_SAYISI,
+  SATIR_SINIRI_AYARI, sonrakiSira, tamponAsildiMi, tanimlariOku, TEMIZLIK_ARALIGI_MS, TEMIZLIK_PARCASI, TEMIZLIK_TUR_BUTCESI_MS, TEMIZLIK_TUR_PARCASI,
+  varliklariOku, VARLIK_ARALIGI_MS, VARSAYILAN_ARALIK_SN, VARSAYILAN_SATIR_SINIRI, yeniSatirSayaci,
 } from './kurallar.ts';
-import type { TezgahOgeleriHaritasi, TezgahOgesi, TezgahOkumasi } from './kurallar.ts';
+import type { GecmisKaydi, GecmisKategorisi, GecmisOgeDurumu, SatirSayaci, SuzulecekOge, TezgahOgeleriHaritasi, TezgahOgesi, TezgahOkumasi } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
 // Süreç belleği: /probe süreç başına ve servis yeniden başlayınca okunur; son sıra, son durum ve tur zamanlaması burada durur.
@@ -33,11 +34,20 @@ export interface TurBellegi {
   sonVarlikOkuma: number | null;
   varlikDurumu: VarlikDurumu;
   sonTemizlik: number | null;
+  // Geçmiş süzgeci (kart 3680): öğe başına son saklanan değer; sunucu yeniden açılınca boştur, her öğenin ilk değeri saklanır.
+  suzgec: ReadonlyMap<string, GecmisOgeDurumu>;
+  // Cihaz başına probe kategorileri; probe yenilenince silinir.
+  kategoriler: Map<string, Map<string, GecmisKategorisi>>;
+  sayac: SatirSayaci;
+  // Geçmiş tablosunun satır sayısı: saatlik temizlikte tam sayılır, aradaki yazma ve silmelerle güncellenir; null ise henüz sayılmadı.
+  satirSayisi: number | null;
+  temizlik: { surer: boolean; asama: 'yas' | 'sinir'; sonZaman: string | null };
 }
 
 export const yeniTurBellegi = (): TurBellegi => ({
   probeTamam: false, sonDeneme: null, sonHata: null, calisiyor: false, sonKontrol: null, aralikMs: VARSAYILAN_ARALIK_SN * 1000, ardisikHata: 0,
   instanceId: null, sonrakiSira: null, durum: new Map(), sonVarlikOkuma: null, varlikDurumu: 'bekleniyor', sonTemizlik: null,
+  suzgec: new Map(), kategoriler: new Map(), sayac: yeniSatirSayaci(), satirSayisi: null, temizlik: { surer: false, asama: 'yas', sonZaman: null },
 });
 
 export type TurSonucu =
@@ -55,7 +65,7 @@ export interface TurOrtami {
   bellek: TurBellegi;
 }
 
-const gecmisKaydi = (cihazAdi: string, o: TezgahOgesi, okundu: Date): s.GecmisKaydi | null => {
+const gecmisKaydi = (cihazAdi: string, o: TezgahOgesi, okundu: Date): GecmisKaydi | null => {
   if (o.kimlik === null || o.sira === null) return null;
   const z = o.zaman === null ? Number.NaN : Date.parse(o.zaman);
   const kosul = o.kosul;
@@ -112,6 +122,7 @@ async function oku(vt: Pick<Veritabani, 'tx'>, istemci: TezgahIstemcisi, o: TurO
       const tanimlar = tanimlariOku(p.kok);
       if (tanimlar === null || cihazSayisiOku(p.kok) === null) return hata('Tezgâh servisi MTConnect cihaz listesi döndürmedi.');
       await vt.tx((db) => s.tanimlariYaz(db, tanimlar));
+      b.kategoriler.clear();
       b.instanceId = baslikOku(p.kok).instanceId;
       b.probeTamam = true;
     }
@@ -144,7 +155,11 @@ async function oku(vt: Pick<Veritabani, 'tx'>, istemci: TezgahIstemcisi, o: TurO
         continue;
       }
       const taban = istenen === null;
-      await vt.tx((db) => isle(db, b, okumalar, taban, zaman));
+      const isleme = await vt.tx((db) => isle(db, b, okumalar, taban, zaman));
+      // Bellek yalnız işlem kesinleşince değişir: geri alınan turda süzgeç eski haliyle kalır, aynı değerler yeniden süzülür.
+      b.suzgec = isleme.suzgec;
+      b.sayac = sayaciArttir(b.sayac, zaman.getTime(), isleme.yazilan, isleme.atlanan);
+      if (b.satirSayisi !== null) b.satirSayisi += isleme.eklenen;
       const tum = okumalar.flatMap((m) => m.ogeler);
       const sonraki = sonrakiSira(baslik, tum, istenen ?? 0);
       b.instanceId ??= baslik.instanceId;
@@ -155,27 +170,22 @@ async function oku(vt: Pick<Veritabani, 'tx'>, istemci: TezgahIstemcisi, o: TurO
     if (yenidenBasladi) continue;
     if (b.sonrakiSira === null) return hata('Tezgâh servisinden anlık değer alınamadı.');
     const simdi = o.saat();
-    await vt.tx(async (db) => {
-      await s.okunduYenile(db, simdi);
-      if (b.sonTemizlik === null || simdi.getTime() - b.sonTemizlik >= TEMIZLIK_ARALIGI_MS) {
-        await s.gecmisiTemizle(db, new Date(simdi.getTime() - GECMIS_SAKLAMA_MS));
-        await s.eskiOrnekleriSil(db, new Date(simdi.getTime() - ORNEK_SAKLAMA_GUNU * 86_400_000));
-        b.sonTemizlik = simdi.getTime();
-      }
-    });
+    await vt.tx((db) => s.okunduYenile(db, simdi));
+    await temizlikTuru(vt, b, simdi);
     return { tur: 'okundu', tezgah: b.durum.size };
   }
   return hata('Tezgâh servisi tur sırasında yeniden başladı.');
 }
 
-// Cihazın son durumu ve geçmişi: /current duruma yazılan değeri yerine koyar, /sample yalnız değişen öğeleri işler.
-async function isle(db: Db, b: TurBellegi, okumalar: readonly TezgahOkumasi[], taban: boolean, zaman: Date): Promise<void> {
-  const gecmis: s.GecmisKaydi[] = [];
+// Cihazın son durumu ve geçmişi: /current duruma yazılan değeri yerine koyar, /sample yalnız değişen öğeleri işler. Geçmişe yalnız süzgeçten
+// geçen değerler yazılır (EVENT ve CONDITION her değişimde, SAMPLE anlamlı değişimde; bkz. kurallar.ts gecmisiSuz).
+async function isle(db: Db, b: TurBellegi, okumalar: readonly TezgahOkumasi[], taban: boolean, zaman: Date) {
+  const adaylar: SuzulecekOge[] = [];
   const sinir = zaman.getTime() - GECMIS_SAKLAMA_MS;
   for (const okuma of okumalar) {
     for (const oge of okuma.ogeler) {
       const k = gecmisKaydi(okuma.cihazAdi, oge, zaman);
-      if (k !== null && k.zaman.getTime() >= sinir) gecmis.push(k);
+      if (k !== null && k.zaman.getTime() >= sinir) adaylar.push({ kayit: k, tur: oge.tur, kategori: await kategoriOku(db, b, okuma.cihazAdi, oge) });
     }
     // /current durumu baştan kurar; /sample yalnız değişenleri getirir, bilinmeyen cihazın son durumu veritabanından alınır.
     if (taban) b.durum.set(okuma.cihazAdi, new Map());
@@ -188,7 +198,68 @@ async function isle(db: Db, b: TurBellegi, okumalar: readonly TezgahOkumasi[], t
     if ((await s.oncekiDurum(db, okuma.cihazAdi)) !== ozet.durum) await s.ornekYaz(db, okuma.cihazAdi, zaman, ozet.durum, ozet.sayac);
     await s.okumaYaz(db, okuma.cihazAdi, ozet, ogeler, zaman);
   }
-  await s.gecmisYaz(db, gecmis);
+  const suzulen = gecmisiSuz(b.suzgec, adaylar, zaman);
+  const bosalan = gecmisiBosalt(suzulen.suzgec, zaman);
+  const yazilacak = [...suzulen.yazilacak, ...bosalan.yazilacak];
+  const eklenen = await s.gecmisYaz(db, yazilacak);
+  return { suzgec: bosalan.suzgec, yazilan: yazilacak.length, atlanan: suzulen.atlanan, eklenen };
+}
+
+// Koşul her zaman CONDITION; öteki öğelerin kategorisi probe tanımındandır. Tanımı olmayan öğe süzülmez (veri yitmesin).
+async function kategoriOku(db: Db, b: TurBellegi, cihazAdi: string, o: TezgahOgesi): Promise<GecmisKategorisi | null> {
+  if (o.kosul !== null) return 'CONDITION';
+  let harita = b.kategoriler.get(cihazAdi);
+  if (harita === undefined) {
+    harita = await s.kategorileriGetir(db, cihazAdi);
+    b.kategoriler.set(cihazAdi, harita);
+  }
+  return o.kimlik === null ? null : harita.get(o.kimlik) ?? null;
+}
+
+// Saatlik temizlik tur süresini uzatmasın diye parça parça yapılır: bir turda en çok TEMIZLIK_TUR_PARCASI parça ya da TEMIZLIK_TUR_BUTCESI_MS;
+// bitmeyen iş sonraki turda sürer. Önce 24 saat kuralı, sonra satır sınırı uygulanır.
+export async function temizlikTuru(vt: Pick<Veritabani, 'tx'>, b: TurBellegi, simdi: Date): Promise<void> {
+  if (!b.temizlik.surer) {
+    if (b.sonTemizlik !== null && simdi.getTime() - b.sonTemizlik < TEMIZLIK_ARALIGI_MS) return;
+    b.sonTemizlik = simdi.getTime();
+    await vt.tx(async (db) => {
+      await s.bosluklariTemizle(db, new Date(simdi.getTime() - GECMIS_SAKLAMA_MS));
+      await s.eskiOrnekleriSil(db, new Date(simdi.getTime() - ORNEK_SAKLAMA_GUNU * 86_400_000));
+    });
+    b.temizlik = { surer: true, asama: 'yas', sonZaman: null };
+  }
+  const basla = Date.now();
+  for (let i = 0; i < TEMIZLIK_TUR_PARCASI; i += 1) {
+    if (await vt.tx((db) => temizlikParcasi(db, b, simdi))) {
+      b.temizlik = { surer: false, asama: 'yas', sonZaman: null };
+      return;
+    }
+    if (Date.now() - basla >= TEMIZLIK_TUR_BUTCESI_MS) return;
+  }
+}
+
+// Bir parça siler; temizlik bittiyse true.
+async function temizlikParcasi(db: Db, b: TurBellegi, simdi: Date): Promise<boolean> {
+  const t = b.temizlik;
+  if (t.asama === 'yas') {
+    const silinen = await s.eskiGecmisParcasiniSil(db, new Date(simdi.getTime() - GECMIS_SAKLAMA_MS), TEMIZLIK_PARCASI);
+    if (b.satirSayisi !== null) b.satirSayisi = Math.max(0, b.satirSayisi - silinen);
+    if (silinen >= TEMIZLIK_PARCASI) return false;
+    b.satirSayisi = await s.gecmisSatirSay(db);
+    b.temizlik = { ...t, asama: 'sinir' };
+    return false;
+  }
+  const sinir = (await sistemAyariOku(db, SATIR_SINIRI_AYARI)) ?? VARSAYILAN_SATIR_SINIRI;
+  const sayi = b.satirSayisi ?? await s.gecmisSatirSay(db);
+  const fazla = sayi - sinir;
+  const r = fazla > 0 ? await s.enEskiGecmisParcasiniSil(db, Math.min(TEMIZLIK_PARCASI, fazla)) : { silinen: 0, sonZaman: null };
+  b.satirSayisi = sayi - r.silinen;
+  const sonZaman = r.sonZaman ?? t.sonZaman;
+  b.temizlik = { ...t, sonZaman };
+  if (fazla > r.silinen && r.silinen > 0) return false;
+  // Silinen en eski kayıtların en yenisinin anı: oynatma o ana kadar veri yok der.
+  if (sonZaman !== null) await s.boslukYaz(db, new Date(sonZaman), 'satir-siniri', null, null);
+  return true;
 }
 
 // Takım varlıkları dakikada bir okunur; hata turu bozmaz (servis /assets vermeyebilir).
@@ -225,6 +296,7 @@ export async function durum(db: Db, istemci: TezgahIstemcisi | null, bellek: Tur
     sonDeneme: bellek.sonDeneme?.toISOString() ?? null,
     sonOkuma,
     sonHata: bellek.sonHata,
+    doluluk: await doluluk(db, bellek, simdi),
     tezgahlar: satirlar.map((t) => {
       const m = koddan.get(t.cihazAdi.toLowerCase()) ?? null;
       return {
@@ -234,6 +306,17 @@ export async function durum(db: Db, istemci: TezgahIstemcisi | null, bellek: Tur
         farklar: m === null ? [] : farklar(t, m),
       };
     }),
+  };
+}
+
+async function doluluk(db: Db, bellek: TurBellegi, simdi: Date): Promise<TezgahDoluluguCevabi> {
+  const sinir = (await sistemAyariOku(db, SATIR_SINIRI_AYARI)) ?? VARSAYILAN_SATIR_SINIRI;
+  bellek.satirSayisi ??= await s.gecmisSatirSay(db);
+  const boyut = await s.gecmisBoyutu(db);
+  const yuzde = dolulukYuzdesi(bellek.satirSayisi, sinir);
+  return {
+    satirSayisi: bellek.satirSayisi, satirSiniri: sinir, yuzde, seviye: dolulukSeviyesi(yuzde),
+    diskBayt: boyut.diskBayt === null ? null : Math.round(boyut.diskBayt), enEskiKayit: boyut.enEski, olcum: sayaciOzetle(bellek.sayac, simdi.getTime()),
   };
 }
 

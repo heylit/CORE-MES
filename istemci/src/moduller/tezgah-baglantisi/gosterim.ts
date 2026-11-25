@@ -52,7 +52,7 @@ export function degerMetni(deger: string | null, birim: string | null): string {
 
 export const KOSUL_TONU = { Normal: 'tamam', Warning: 'uyari', Fault: 'hata', Unavailable: 'pasif' } as const;
 export const KOSUL_ADI = { Normal: 'Normal', Warning: 'Uyarı', Fault: 'Hata', Unavailable: 'Yok' } as const;
-export const BOSLUK_NEDENI = { 'tampon-asildi': 'Servis tamponundan düştü', 'servis-yeniden-basladi': 'Servis yeniden başladı' } as const;
+export const BOSLUK_NEDENI = { 'tampon-asildi': 'Servis tamponundan düştü', 'servis-yeniden-basladi': 'Servis yeniden başladı', 'satir-siniri': 'Satır sınırı aşıldı, eski kayıtlar silindi' } as const;
 
 const SAAT_DK = new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute: '2-digit' });
 export const dakikaMetni = (z: string): string => SAAT_DK.format(new Date(z));

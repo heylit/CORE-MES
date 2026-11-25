@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { tezgahAdresiOku } from './ayar.ts';
 import {
-  akislariOku, baslikOku, cihazSayisiOku, diziyiDurumaCevir, durumaIsle, durumdanDiziye, eskiMi, etkinAralikMs, farklar, ozetle, tanimlariOku, varliklariOku,
+  akislariOku, anlamliDegisim, baslikOku, cihazSayisiOku, diziyiDurumaCevir, dolulukSeviyesi, dolulukYuzdesi, durumaIsle, durumdanDiziye, eskiMi, etkinAralikMs, farklar,
+  gecmisiBosalt, gecmisiSuz, ozetle, sayaciArttir, sayaciOzetle, tanimlariOku, varliklariOku, yeniSatirSayaci,
 } from './kurallar.ts';
-import type { TezgahOzeti } from './kurallar.ts';
+import type { GecmisKategorisi, GecmisSuzgeci, SuzulecekOge, TezgahOzeti } from './kurallar.ts';
 import { currentMetni, probeMetni } from './sahte-mtconnect.ts';
 import { AZAMI_CEVAP_UZUNLUGU, XmlHatasi, xmlAyristir } from './xml.ts';
 
@@ -128,5 +129,143 @@ describe('tezgah-baglantisi kuralları (kart 3373)', () => {
     const d = diziyiDurumaCevir([o('a', 'READY', 1), o('b', 'x', 2)]);
     durumaIsle(d, [o('a', 'ACTIVE', 3)]);
     assert.deepEqual(durumdanDiziye(d).map((e) => [e.kimlik, e.deger]), [['a', 'ACTIVE'], ['b', 'x']]);
+  });
+
+  describe('geçmiş süzgeci (kart 3680)', () => {
+    const T0 = Date.parse('2026-11-25T08:00:00Z');
+    const oge = (kimlik: string, tur: string, deger: string | null, sn: number, kategori: GecmisKategorisi | null = 'SAMPLE', sira = sn + 1): SuzulecekOge => ({
+      kayit: { cihazAdi: 'ORN-T01', kimlik, sira, zaman: new Date(T0 + sn * 1000), deger, kosul: null }, tur, kategori,
+    });
+    const bos: GecmisSuzgeci = new Map();
+
+    test('yük 40 → 43 saklanmaz, 40 → 46 saklanır; hız 1000 → 1015 saklanmaz, 1000 → 1025 saklanır; öteki sayısal yüzde 1', () => {
+      assert.equal(anlamliDegisim('Load', '40', '43'), false);
+      assert.equal(anlamliDegisim('Load', '40', '46'), true);
+      assert.equal(anlamliDegisim('Load', '40', '34'), true);
+      assert.equal(anlamliDegisim('SpindleSpeed', '1000', '1015'), false);
+      assert.equal(anlamliDegisim('SpindleSpeed', '1000', '1025'), true);
+      assert.equal(anlamliDegisim('ROTARY_VELOCITY', '1000', '1025'), true);
+      assert.equal(anlamliDegisim('Position', '100', '100.9'), false);
+      assert.equal(anlamliDegisim('Position', '100', '101.5'), true);
+      assert.equal(anlamliDegisim('Position', '0', '0.001'), true);
+      assert.equal(anlamliDegisim('Position', '5', '5.0'), false);
+    });
+
+    test('sayıya çevrilemeyen ya da UNAVAILABLE (null) değer her değişimde anlamlıdır', () => {
+      assert.equal(anlamliDegisim('Position', '10', null), true);
+      assert.equal(anlamliDegisim('Position', null, '10'), true);
+      assert.equal(anlamliDegisim('Position', null, null), false);
+      assert.equal(anlamliDegisim('Message', 'a', 'b'), true);
+      assert.equal(anlamliDegisim('Message', 'a', 'a'), false);
+    });
+
+    test('EVENT, CONDITION ve tanımsız öğe her değişimde saklanır; süzgeç durumu tutmaz', () => {
+      const girdi = [oge('exec', 'Execution', 'ACTIVE', 0, 'EVENT'), oge('exec', 'Execution', 'READY', 1, 'EVENT'), oge('k', 'SYSTEM', 'x', 2, 'CONDITION'), oge('bil', 'Foo', '1', 3, null)];
+      const s = gecmisiSuz(bos, girdi, new Date(T0));
+      assert.equal(s.yazilacak.length, 4);
+      assert.equal(s.atlanan, 0);
+      assert.equal(s.suzgec.size, 0);
+    });
+
+    test('ilk değer saklanır; eşik altı değişim atlanır; eşik üstü değişim saklanır', () => {
+      let s = gecmisiSuz(bos, [oge('yuk', 'Load', '40', 0)], new Date(T0));
+      assert.deepEqual(s.yazilacak.map((k) => k.deger), ['40']);
+      s = gecmisiSuz(s.suzgec, [oge('yuk', 'Load', '43', 6)], new Date(T0 + 6000));
+      assert.deepEqual([s.yazilacak.length, s.atlanan], [0, 1]);
+      s = gecmisiSuz(s.suzgec, [oge('yuk', 'Load', '46', 12)], new Date(T0 + 12_000));
+      assert.deepEqual(s.yazilacak.map((k) => k.deger), ['46']);
+    });
+
+    test('aynı öğe 1 sn arayla 10 kez büyük değişirse 6 sn içinde en çok bir satır yazılır; son değer 6 sn dolunca yazılır', () => {
+      const girdi = Array.from({ length: 10 }, (_, i) => oge('xpos', 'Position', String(100 * (i + 1)), i));
+      const s = gecmisiSuz(bos, girdi, new Date(T0 + 9000));
+      assert.deepEqual(s.yazilacak.map((k) => k.deger), ['100', '700'], 'ilk değer ve 6 sn sonraki değer; ara değerler yazılmaz');
+      assert.equal(s.atlanan, 7, 'yazılan 2 + bekleyen 1 + atlanan 7 = 10');
+      assert.equal(s.suzgec.get('ORN-T01\u0000xpos')?.bekleyen?.deger, '1000');
+      const ayni = gecmisiBosalt(s.suzgec, new Date(T0 + 9000));
+      assert.equal(ayni.yazilacak.length, 0, 'tur anında 6 sn dolmadı');
+      const sonra = gecmisiBosalt(s.suzgec, new Date(T0 + 15_000));
+      assert.deepEqual(sonra.yazilacak.map((k) => k.deger), ['1000']);
+      assert.equal(gecmisiBosalt(sonra.suzgec, new Date(T0 + 21_000)).yazilacak.length, 0, 'bekleyen yazıldıktan sonra tekrar yazılmaz');
+    });
+
+    test('6 sn içinde gidip dönen tepe kaybolmaz: pencerenin en uç değeri kendi zamanıyla, dönüş değeri sonraki pencerede yazılır', () => {
+      let s = gecmisiSuz(bos, [oge('yuk', 'Load', '20', 0)], new Date(T0));
+      s = gecmisiSuz(s.suzgec, [oge('yuk', 'Load', '40', 10)], new Date(T0 + 10_000));
+      assert.deepEqual(s.yazilacak.map((k) => k.deger), ['40']);
+      s = gecmisiSuz(s.suzgec, [oge('yuk', 'Load', '95', 12), oge('yuk', 'Load', '96', 13), oge('yuk', 'Load', '41', 14)], new Date(T0 + 14_000));
+      assert.equal(s.yazilacak.length, 0, 'pencere dolmadı');
+      let b = gecmisiBosalt(s.suzgec, new Date(T0 + 20_000));
+      assert.deepEqual(b.yazilacak.map((k) => [k.deger, k.zaman.getTime()]), [['96', T0 + 13_000]], 'tepe kendi zamanıyla');
+      b = gecmisiBosalt(b.suzgec, new Date(T0 + 21_000));
+      assert.equal(b.yazilacak.length, 0, 'dönüş değeri 6 sn dolunca yazılır');
+      b = gecmisiBosalt(b.suzgec, new Date(T0 + 26_000));
+      assert.deepEqual(b.yazilacak.map((k) => k.deger), ['41']);
+      assert.equal(gecmisiBosalt(b.suzgec, new Date(T0 + 40_000)).yazilacak.length, 0);
+    });
+
+    test('6 sn dolduktan sonra yeni değer gelince önce bekleyen tepe yazılır; dönüş değeri bekler (pencere başına en çok bir satır)', () => {
+      let s = gecmisiSuz(bos, [oge('yuk', 'Load', '20', 0)], new Date(T0));
+      s = gecmisiSuz(s.suzgec, [oge('yuk', 'Load', '90', 2)], new Date(T0 + 2000));
+      assert.equal(s.yazilacak.length, 0);
+      // 8. sn: son saklanandan (0. sn) 6 sn geçti; yeni değer tepeden daha az uç.
+      s = gecmisiSuz(s.suzgec, [oge('yuk', 'Load', '50', 8)], new Date(T0 + 8000));
+      assert.deepEqual(s.yazilacak.map((k) => [k.deger, k.zaman.getTime()]), [['90', T0 + 2000]], 'önce tepe, kendi zamanıyla');
+      assert.equal(s.suzgec.get('ORN-T01\u0000yuk')?.bekleyen?.deger, '50', 'dönüş değeri sonraki pencerede');
+      const b = gecmisiBosalt(s.suzgec, new Date(T0 + 14_000));
+      assert.deepEqual(b.yazilacak.map((k) => k.deger), ['50']);
+    });
+
+    test('6 sn dolduktan sonra gelen değer bekleyenden daha uçtaysa yalnız o yazılır', () => {
+      let s = gecmisiSuz(bos, [oge('yuk', 'Load', '20', 0)], new Date(T0));
+      s = gecmisiSuz(s.suzgec, [oge('yuk', 'Load', '50', 2)], new Date(T0 + 2000));
+      s = gecmisiSuz(s.suzgec, [oge('yuk', 'Load', '90', 8)], new Date(T0 + 8000));
+      assert.deepEqual(s.yazilacak.map((k) => k.deger), ['90']);
+      assert.equal(s.suzgec.get('ORN-T01\u0000yuk')?.bekleyen, null);
+    });
+
+    test('bekleyen sapma geri dönerse de tepe yazılır; hiç sapmayan öğe için bekleyen oluşmaz', () => {
+      let s = gecmisiSuz(bos, [oge('yuk', 'Load', '40', 0)], new Date(T0));
+      s = gecmisiSuz(s.suzgec, [oge('yuk', 'Load', '60', 1), oge('yuk', 'Load', '41', 2)], new Date(T0 + 2000));
+      assert.equal(s.yazilacak.length, 0);
+      assert.deepEqual(gecmisiBosalt(s.suzgec, new Date(T0 + 8000)).yazilacak.map((k) => k.deger), ['60']);
+      const sakin = gecmisiSuz(gecmisiSuz(bos, [oge('yuk', 'Load', '40', 0)], new Date(T0)).suzgec, [oge('yuk', 'Load', '41', 2)], new Date(T0 + 2000));
+      assert.equal(gecmisiBosalt(sakin.suzgec, new Date(T0 + 8000)).yazilacak.length, 0);
+    });
+
+    test('değişmeyen SAMPLE öğesi 60 sn\'de bir güncel değerini yazar; EVENT için tekrar yazılmaz', () => {
+      let s = gecmisiSuz(bos, [oge('hiz', 'SpindleSpeed', '2000', 0), oge('exec', 'Execution', 'ACTIVE', 0, 'EVENT')], new Date(T0));
+      assert.equal(s.yazilacak.length, 2);
+      assert.equal(gecmisiBosalt(s.suzgec, new Date(T0 + 59_000)).yazilacak.length, 0);
+      let b = gecmisiBosalt(s.suzgec, new Date(T0 + 60_000));
+      assert.deepEqual(b.yazilacak.map((k) => [k.kimlik, k.deger, k.zaman.getTime()]), [['hiz', '2000', T0 + 60_000]]);
+      b = gecmisiBosalt(b.suzgec, new Date(T0 + 119_000));
+      assert.equal(b.yazilacak.length, 0);
+      b = gecmisiBosalt(b.suzgec, new Date(T0 + 120_000));
+      assert.equal(b.yazilacak.length, 1);
+      s = gecmisiSuz(b.suzgec, [oge('hiz', 'SpindleSpeed', '2005', 130)], new Date(T0 + 130_000));
+      assert.equal(s.yazilacak.length, 0, 'tekrar satırı da son saklanan değer sayılır');
+    });
+
+    test('süzgeç girdi durumunu değiştirmez (işlem geri alınırsa bellek eski kalır)', () => {
+      const s1 = gecmisiSuz(bos, [oge('yuk', 'Load', '40', 0)], new Date(T0));
+      const kopya = new Map(s1.suzgec);
+      gecmisiSuz(s1.suzgec, [oge('yuk', 'Load', '90', 10)], new Date(T0 + 10_000));
+      gecmisiBosalt(s1.suzgec, new Date(T0 + 100_000));
+      assert.deepEqual([...s1.suzgec], [...kopya]);
+      assert.equal(bos.size, 0);
+    });
+
+    test('doluluk: yüzde 80 uyarı, 95 kritik; sayaç son bir saati kapsar', () => {
+      assert.equal(dolulukYuzdesi(1_500_000, 2_000_000), 75);
+      assert.deepEqual([79.9, 80, 94.9, 95, 120].map(dolulukSeviyesi), ['normal', 'uyari', 'uyari', 'kritik', 'kritik']);
+      assert.equal(sayaciOzetle(yeniSatirSayaci(), T0), null, 'ölçülmediyse null');
+      let c = sayaciArttir(yeniSatirSayaci(), T0, 30, 270);
+      c = sayaciArttir(c, T0 + 60_000, 30, 270);
+      assert.deepEqual(sayaciOzetle(c, T0 + 60_000), { pencereDakika: 2, yazilan: 60, atlanan: 540, yazilanDakikada: 30, atlananDakikada: 270 });
+      const sonra = sayaciOzetle(c, T0 + 3 * 3_600_000);
+      assert.equal(sonra?.yazilan, 0);
+      assert.equal(sonra?.pencereDakika, 60);
+    });
   });
 });
