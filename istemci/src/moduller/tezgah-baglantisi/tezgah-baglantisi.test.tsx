@@ -6,7 +6,9 @@ import type { ReactNode } from 'react';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { TezgahBaglantisiDurumCevabi } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
-import { ORNEK_AYRINTI, ORNEK_DURUM } from './fikstur.ts';
+import { DolulukGostergesi } from './DolulukGostergesi.tsx';
+import { ORNEK_AYRINTI, ORNEK_DOLULUK, ORNEK_DURUM } from './fikstur.ts';
+import { boyutMetni, kayitYasiMetni } from './gosterim.ts';
 import { Karsilastirma } from './Karsilastirma.tsx';
 import { TezgahAyrintisi } from './TezgahAyrintisi.tsx';
 
@@ -145,5 +147,65 @@ describe('Tezgâh bağlantısı (deneme)', () => {
       gorunur.mockRestore();
       vi.useRealTimers();
     }
+  });
+});
+
+describe('Geçmiş doluluğu göstergesi (kart 3680)', () => {
+  // Fikstürdeki zamanlar çağrı anından geriye sayılır; saat, fikstürden sonra okunur.
+  const goster = (d: TezgahBaglantisiDurumCevabi['doluluk']) => ac(<DolulukGostergesi doluluk={d} simdi={Date.now()} />);
+
+  it('normalde tek satır: yüzde, satır sayısı ve yazılan hız; uyarı cümlesi ve karolar yok', () => {
+    goster(ORNEK_DOLULUK('normal'));
+    expect(screen.getByText('%20,6')).toBeTruthy();
+    expect(screen.getByText('Normal')).toBeTruthy();
+    expect(screen.getByText('412.300 / 2.000.000 satır · 520 satır/dk yazılıyor')).toBeTruthy();
+    expect(screen.queryByText(/Dolunca en eski kayıtlar silinir/)).toBeNull();
+    expect(screen.queryByText('Tablo boyutu')).toBeNull();
+    expect(screen.getByRole('progressbar', { name: 'Geçmiş tablosu doluluğu %20,6' })).toBeTruthy();
+  });
+
+  it('uyarı ve kritikte cümle, Sistem Ayarları bağlantısı ve dört karo görünür', () => {
+    for (const s of ['uyari', 'kritik'] as const) {
+      cleanup();
+      goster(ORNEK_DOLULUK(s));
+      expect(screen.getByText(s === 'uyari' ? 'Uyarı' : 'Kritik')).toBeTruthy();
+      expect(screen.getByText(/Dolunca en eski kayıtlar silinir; sınırı/)).toBeTruthy();
+      expect(screen.getByText(/Tezgâh değer geçmişi satır sınırı/)).toBeTruthy();
+      expect((screen.getByRole('link', { name: 'Sistem Ayarları' }) as HTMLAnchorElement).getAttribute('href')).toBe('/ayarlar');
+      for (const ad of ['Yazılan (son 60 dk)', 'Atlanan (eşik altı değişim)', 'Tablo boyutu', 'En eski kayıt (yaşı)']) expect(screen.getByText(ad)).toBeTruthy();
+    }
+    cleanup();
+    goster(ORNEK_DOLULUK('kritik'));
+    expect(screen.getByText('2.600 /dk')).toBeTruthy();
+    expect(screen.getByText('13.100 /dk')).toBeTruthy();
+    expect(screen.getByText('535,8 MB')).toBeTruthy();
+    expect(screen.getByText('2 sa 31 dk')).toBeTruthy();
+  });
+
+  it('ölçüm, disk boyutu ve en eski kayıt yoksa "ölçüm başlıyor" ve "—" yazılır; sıfır uydurulmaz', () => {
+    goster({ ...ORNEK_DOLULUK('uyari'), olcum: null, diskBayt: null, enEskiKayit: null });
+    expect(screen.getByText('1.680.000 / 2.000.000 satır · ölçüm başlıyor')).toBeTruthy();
+    expect(screen.getAllByText('Ölçüm başlıyor')).toHaveLength(2);
+    expect(screen.getAllByText('—')).toHaveLength(2);
+  });
+
+  it('boyut ve yaş metni', () => {
+    expect(boyutMetni(null)).toBe('—');
+    expect(boyutMetni(512 * 1024)).toBe('512 KB');
+    expect(boyutMetni(118_000_000)).toBe('112,5 MB');
+    expect(boyutMetni(2 * 1024 ** 3)).toBe('2,0 GB');
+    const s = Date.parse('2026-11-25T12:00:00Z');
+    expect(kayitYasiMetni(null, s)).toBe('—');
+    expect(kayitYasiMetni('2026-11-25T11:59:15Z', s)).toBe('45 sn');
+    expect(kayitYasiMetni('2026-11-25T11:48:00Z', s)).toBe('12 dk');
+    expect(kayitYasiMetni('2026-11-24T12:06:00Z', s)).toBe('23 sa 54 dk');
+    expect(kayitYasiMetni('2026-11-24T09:30:00Z', s)).toBe('1 gün 2 sa');
+  });
+
+  it('Tezgâh bağlantısı sayfasının üstünde görünür', async () => {
+    sunucuKur({ ...ORNEK_DURUM(), doluluk: ORNEK_DOLULUK('uyari') });
+    ac(<Karsilastirma />);
+    expect(await screen.findByRole('region', { name: 'Geçmiş doluluğu' })).toBeTruthy();
+    expect(screen.getByText('%84')).toBeTruthy();
   });
 });

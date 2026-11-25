@@ -94,3 +94,28 @@ export const sorunaGoreSirala = <T extends Siralanabilir>(liste: readonly T[]): 
 
 const GUN_SAAT = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 export const gunSaatMetni = (z: string): string => GUN_SAAT.format(new Date(z));
+
+// Geçmiş doluluğu göstergesi (kart 3680): değer yoksa "—", sıfır uydurulmaz.
+const MB = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+export function boyutMetni(bayt: number | null): string {
+  if (bayt === null) return YOK;
+  if (bayt < 1024 * 1024) return `${SAYI.format(Math.max(0, Math.round(bayt / 1024)))} KB`;
+  if (bayt < 1024 ** 3) return `${MB.format(bayt / 1024 ** 2)} MB`;
+  return `${MB.format(bayt / 1024 ** 3)} GB`;
+}
+
+// "1 gün 2 sa", "23 sa 54 dk", "12 dk", "45 sn": en eski kaydın yaşı.
+export function kayitYasiMetni(z: string | null, simdi: number): string {
+  if (z === null) return YOK;
+  const sn = Math.max(0, Math.round((simdi - new Date(z).getTime()) / 1000));
+  if (sn < 60) return `${sn} sn`;
+  if (sn < 3600) return `${Math.floor(sn / 60)} dk`;
+  if (sn < 86_400) return `${Math.floor(sn / 3600)} sa ${Math.floor((sn % 3600) / 60)} dk`;
+  return `${Math.floor(sn / 86_400)} gün ${Math.floor((sn % 86_400) / 3600)} sa`;
+}
+
+const ONDALIK_1 = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 1 });
+export const ondalikMetni = (n: number): string => ONDALIK_1.format(n);
+export const dakikadaMetni = (n: number | null): string => (n === null ? YOK : `${ONDALIK_1.format(n)} /dk`);
+export const yuzdeMetni = (n: number): string => `%${ONDALIK_1.format(n)}`;
+export const DOLULUK_SEVIYESI = { normal: 'Normal', uyari: 'Uyarı', kritik: 'Kritik' } as const;

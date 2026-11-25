@@ -5,6 +5,7 @@ import { Dugme, DurumKutusu, Kart, Rozet, Simge } from '../../ortak/arayuz/index
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { CanliGosterge } from './CanliGosterge.tsx';
+import { DolulukGostergesi } from './DolulukGostergesi.tsx';
 import { ALAN_ADI, DURUM, KAYIT_YOK, degerAdi, YOK, saatMetni, sayiMetni, smartesDurumMetni, sorunaGoreSirala, sorunDerecesi, yukMetni } from './gosterim.ts';
 import './tezgah-baglantisi.css';
 
@@ -66,6 +67,7 @@ export function Karsilastirma() {
     >
       <div className="tc-tzb">
         <p className="tc-tzb-not">Yalnız okur. Tezgâhlar ortak MTConnect servisinden {v?.aralikSaniye ?? 5} saniyede bir okunur; üretim kaydına hiçbir şey işlenmez.</p>
+        {v && <DolulukGostergesi doluluk={v.doluluk} simdi={sorgu.dataUpdatedAt} />}
         {sorgu.isPending && <DurumKutusu durum="yukleniyor" />}
         {sorgu.isError && <DurumKutusu durum="hata" mesaj={hataIletisi(sorgu.error, 'Tezgâh değerleri alınamadı')} yenile={() => { void sorgu.refetch(); }} />}
         {v && (

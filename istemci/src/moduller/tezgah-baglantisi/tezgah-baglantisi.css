@@ -125,3 +125,24 @@
 .tc-sim-resim[data-eski] { opacity: 0.55; }
 .tc-sim-uclar { display: flex; justify-content: space-between; inline-size: 100%; }
 @container tc-sim (min-width: 600px) { .tc-sim-uyari { grid-column: 1 / -1; } }
+
+/* Geçmiş doluluğu göstergesi (kart 3680). */
+.tc-tzb-dol { --dol: var(--run); display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; padding: var(--b-3) var(--b-4); border: 1px solid var(--edge); border-radius: var(--yari-3); background: var(--panel-solid); }
+.tc-tzb-dol[data-seviye="uyari"] { --dol: var(--hold); border-color: var(--hold); }
+.tc-tzb-dol[data-seviye="kritik"] { --dol: var(--stop); border-color: var(--stop); }
+.tc-tzb-dol-ust { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2); }
+.tc-tzb-dol-ad { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-tzb-dol-yuzde { color: var(--dol); }
+.tc-tzb-dol-cubuk { width: 100%; height: var(--b-2); border: 0; border-radius: var(--yari-2); background: var(--panel2); accent-color: var(--dol); appearance: none; overflow: hidden; }
+.tc-tzb-dol-cubuk::-webkit-progress-bar { background: var(--panel2); }
+.tc-tzb-dol-cubuk::-webkit-progress-value { background: var(--dol); }
+.tc-tzb-dol-cubuk::-moz-progress-bar { background: var(--dol); }
+.tc-tzb-dol-uyari { display: flex; align-items: flex-start; gap: var(--b-2); margin: 0; padding: var(--b-2) var(--b-3); border-radius: var(--yari-2); background: var(--panel2); color: var(--ink); overflow-wrap: anywhere; }
+.tc-tzb-dol-uyari > :first-child { flex: none; color: var(--dol); }
+.tc-tzb-dol-uyari a { color: inherit; text-decoration: underline; }
+.tc-tzb-dol-karolar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--b-2); margin: 0; }
+@container tc-tzb (min-width: 36rem) { .tc-tzb-dol-karolar { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.tc-tzb-dol-karolar > div { display: flex; flex-direction: column-reverse; gap: var(--b-1); min-width: 0; padding: var(--b-2) var(--b-3); border-radius: var(--yari-2); background: var(--panel2); }
+.tc-tzb-dol-karolar dt { color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
+.tc-tzb-dol-karolar dd { margin: 0; font-weight: 700; overflow-wrap: anywhere; }
+
