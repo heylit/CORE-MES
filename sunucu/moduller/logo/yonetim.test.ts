@@ -265,4 +265,24 @@ describe('Logo yönetimi: sıklık kapısı, akış günlüğü ve sayfa uçlar�
     baglantiHatasiniTemizle();
     assert.equal((await o().vt.okumaTx((db) => hazirlik(db, istemci(), { adres: kopru.adres, anahtarTanimli: true }))).yazilamiyor ?? null, null);
   });
+
+  test('3698: yardımcıya ulaşılamıyorsa oturum denenmez: tek istek gider, ileti "denenmedi" der ve sonuç hata olur', async () => {
+    baglantiHatasiniTemizle();
+    const yanlisAnahtar = kopruIstemcisiKur({ adres: kopru.adres, anahtar: 'yanlis-anahtar' }, { sureMs: 5000 });
+    const r = await baglantiTesti(o().vt, yanlisAnahtar, saat);
+    assert.equal(r.sonuc, 'hata');
+    assert.match(r.ileti, /Logo oturumu: denenmedi \(yardımcıya ulaşılamadı\)/);
+    assert.deepEqual(kopru.istekler.map((i) => `${i.yontem} ${i.yol}`), ['GET /api/version'], 'oturum ucu çağrılmaz');
+  });
+
+  test('3698: yazmadan gelen 503 sonrası oturum açık görülünce hazırlıktaki uyarı silinir', async () => {
+    baglantiHatasiniTemizle();
+    yardimciCevabiniIzle('POST', 503, { neden: 'baglanamadi', adim: 'UserLogin', kod: -93, ileti: 'x', beklemeSn: 240 }, new Date());
+    const once = await o().vt.okumaTx((db) => hazirlik(db, istemci(), { adres: kopru.adres, anahtarTanimli: true }));
+    assert.equal(once.yazilamiyor?.kod, -93);
+    assert.equal((await baglantiTesti(o().vt, istemci(), saat)).sonuc, 'tamam');
+    const sonra = await o().vt.okumaTx((db) => hazirlik(db, istemci(), { adres: kopru.adres, anahtarTanimli: true }));
+    assert.equal(sonra.yazilamiyor ?? null, null);
+    assert.equal(sonra.baglantiHatasi ?? null, null);
+  });
 });

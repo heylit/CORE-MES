@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { LogoBelirsizKontrolCevabi, LogoGidenIzlemeCevabi, LogoHazirlikCevabi, LogoKontrolCevabi, LogoKontrolluGonderCevabi, LogoYardimciBaglantiHatasi, LogoYardimciSurumu, LogoYenidenGonderCevabi } from '#paylasilan/sozlesme/logo.ts';
-import { baglantiHatasiOzeti, yazilamiyorOzeti } from '#paylasilan/logo-baglanti-metni.ts';
+import { baglantiHatasiSatirlari, yazilamiyorSatirlari } from '#paylasilan/logo-baglanti-metni.ts';
+import type { HataSatirlari } from '#paylasilan/logo-baglanti-metni.ts';
 import type { SmartesGidenIzlemeCevabi, SmartesHazirlikCevabi, SmartesYenidenGonderCevabi } from '#paylasilan/sozlesme/smartes.ts';
 import { Dugme, DurumKutusu, IsaretKutusu, Pencere, Rozet, Simge, Tablo, useBildirim, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
@@ -86,10 +87,10 @@ export function BaglantiIzleme() {
           {gonderir && gruplar.length > 0 && <Dugme simge="next" onClick={() => topluYaz(true)}>Düzelttiklerimi yeniden gönder…</Dugme>}
         </div>
       </div>
-      {logoHazirlik.data?.yazilamiyor && <DurumKutusu durum="hata" mesaj={yazilamiyorOzeti(logoHazirlik.data.yazilamiyor)} />}
+      {logoHazirlik.data?.yazilamiyor && <HataKutusu satirlar={yazilamiyorSatirlari(logoHazirlik.data.yazilamiyor)} />}
       <div className="tc-izleme-kartlar">
         <BaglantiKarti ad="Logo yardımcısı" simge="laptop" baglanti={logoHazirlik.data?.baglanti} kontrolUcu="/logo/hazirlik/kontrol"
-          surum={logoHazirlik.data?.yardimci ?? null} baglantiHatasi={logoHazirlik.data?.baglantiHatasi ?? null} kontrolSonrasi={() => void logoHazirlik.refetch()} />
+          surum={logoHazirlik.data?.yardimci ?? null} baglantiHatasi={logoHazirlik.data?.baglantiHatasi ?? null} ayrintiUstte={!!logoHazirlik.data?.yazilamiyor} kontrolSonrasi={() => void logoHazirlik.refetch()} />
         <BaglantiKarti ad="SmartES" simge="cpu" baglanti={smartesHazirlik.data?.baglanti} kontrolUcu="/smartes/hazirlik/kontrol" />
         <section className="tc-izleme-kart" aria-label="Gitmeyen belgeler">
           <Simge ad="alert" />
@@ -129,9 +130,18 @@ export function BaglantiIzleme() {
   );
 }
 
-function BaglantiKarti({ ad, simge, baglanti, kontrolUcu, surum = null, baglantiHatasi = null, kontrolSonrasi }: {
+function HataKutusu({ satirlar }: { satirlar: HataSatirlari }) {
+  return (
+    <DurumKutusu durum="hata" mesaj={satirlar.ozet}>
+      {satirlar.neden !== null && <p>Neden: {satirlar.neden}.</p>}
+      <p className="tc-guvenlik-not">{satirlar.teknik}</p>
+    </DurumKutusu>
+  );
+}
+
+function BaglantiKarti({ ad, simge, baglanti, kontrolUcu, surum = null, baglantiHatasi = null, ayrintiUstte = false, kontrolSonrasi }: {
   ad: string; simge: 'laptop' | 'cpu'; baglanti: LogoHazirlikCevabi['baglanti'] | undefined; kontrolUcu: string;
-  surum?: LogoYardimciSurumu | null; baglantiHatasi?: LogoYardimciBaglantiHatasi | null; kontrolSonrasi?: () => void;
+  surum?: LogoYardimciSurumu | null; baglantiHatasi?: LogoYardimciBaglantiHatasi | null; ayrintiUstte?: boolean; kontrolSonrasi?: () => void;
 }) {
   const kontrol = useMutation({ mutationFn: () => api.get<LogoKontrolCevabi>(kontrolUcu), onSettled: kontrolSonrasi });
   const durum = baglanti === undefined ? null : BAGLANTI[baglanti];
@@ -144,7 +154,7 @@ function BaglantiKarti({ ad, simge, baglanti, kontrolUcu, surum = null, baglanti
         {eskiSurum && <Rozet ton="uyari">Eski sürüm</Rozet>}
         {eskiSurum && <p className="tc-guvenlik-not" role="status">{surum.ileti}</p>}
         {baglantiHatasi !== null && <Rozet ton="hata">Oturum açılamadı</Rozet>}
-        {baglantiHatasi !== null && <p className="tc-guvenlik-not" role="status">{baglantiHatasiOzeti(baglantiHatasi)}</p>}
+        {baglantiHatasi !== null && !ayrintiUstte && <p className="tc-guvenlik-not" role="status">{baglantiHatasiSatirlari(baglantiHatasi, '').teknik}</p>}
         <p className="tc-guvenlik-not">
           {kontrol.isSuccess ? (kontrol.data.ulasildi ? `Ulaşıldı · ${zamanMetni(kontrol.data.zaman)}` : `Ulaşılamadı: ${kontrol.data.adimlar[0]?.ileti ?? BOS}`)
             : kontrol.isError ? hataIletisi(kontrol.error, 'Denenemedi.') : 'Çalıştığını görmek için deneyin.'}

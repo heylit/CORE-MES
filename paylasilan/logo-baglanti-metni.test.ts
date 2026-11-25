@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { baglantiHatasiMetni, baglantiHatasiOzeti, yazilamiyorOzeti } from './logo-baglanti-metni.ts';
+import { baglantiHatasiMetni, baglantiHatasiOzeti, yazilamiyorSatirlari } from './logo-baglanti-metni.ts';
 import type { LogoYardimciBaglantiHatasi } from './sozlesme/logo.ts';
 
 const hata: LogoYardimciBaglantiHatasi = {
@@ -11,13 +11,13 @@ const hata: LogoYardimciBaglantiHatasi = {
 describe('Logo bağlantı hatası metni (3698)', () => {
   test('zaman tesis saatiyle, adım, kod, açıklama ve yeniden deneme saati yazılır', () => {
     const m = baglantiHatasiMetni(hata, new Date('2026-11-25T09:15:00.000Z'));
-    assert.deepEqual(m, { baslik: '2026-11-25 12:14 · UserLogin · kod -93', ayrinti: 'Logo lisansı dolu ya da oturum başka yerde açık.', yenidenDeneme: '12:19', gecti: false });
+    assert.deepEqual(m, { baslik: '25.11.2026 12:14 · UserLogin · kod -93', ayrinti: 'Logo lisansı dolu ya da oturum başka yerde açık', yenidenDeneme: '12:19', gecti: false });
     assert.equal(baglantiHatasiOzeti(hata, new Date('2026-11-25T09:15:00.000Z')),
-      '2026-11-25 12:14 · UserLogin · kod -93: Logo lisansı dolu ya da oturum başka yerde açık. Logo: [code=-93] Kullanıcı sayısı limiti aşılmıştır. Yeniden deneme: 12:19');
+      'Logo lisansı dolu ya da oturum başka yerde açık. 25.11.2026 12:14 · UserLogin · kod -93 · Logo: [code=-93] Kullanıcı sayısı limiti aşılmıştır · Yeniden deneme: 12:19');
   });
   test('bilinmeyen kod düz gösterilir: açıklama yoksa Logo\'nun metni, ikisi de yoksa boş; bekleme bildirilmediyse yeniden deneme yok', () => {
     const m = baglantiHatasiMetni({ ...hata, kod: null, aciklama: null, yenidenDeneme: null });
-    assert.equal(m.baslik, '2026-11-25 12:14 · UserLogin · kod okunamadı');
+    assert.equal(m.baslik, '25.11.2026 12:14 · UserLogin · kod okunamadı');
     assert.equal(m.ayrinti, '[code=-93] Kullanıcı sayısı limiti aşılmıştır');
     assert.equal(m.yenidenDeneme, null);
     assert.equal(m.gecti, false);
@@ -27,9 +27,13 @@ describe('Logo bağlantı hatası metni (3698)', () => {
     assert.equal(baglantiHatasiMetni(hata, new Date('2026-11-25T09:20:00.000Z')).gecti, true);
     assert.match(baglantiHatasiOzeti(hata, new Date('2026-11-25T09:20:00.000Z')), /zamanı geçti/);
   });
-  test('yazılamıyor uyarısı "Logo\'ya yazılamıyor: oturum açılamıyor" ile başlar ve son nedeni taşır', () => {
-    const m = yazilamiyorOzeti(hata, new Date('2026-11-25T09:15:00.000Z'));
-    assert.ok(m.startsWith("Logo'ya yazılamıyor: oturum açılamıyor. Son neden: 2026-11-25 12:14 · UserLogin · kod -93"));
-    assert.match(m, /Yeniden deneme: 12:19/);
+  test('yazılamıyor uyarısı üç satırdır: özet, neden, teknik ayrıntı; çift nokta olmaz', () => {
+    const m = yazilamiyorSatirlari(hata, new Date('2026-11-25T09:15:00.000Z'));
+    assert.equal(m.ozet, "Logo'ya yazılamıyor: oturum açılamıyor, giden belgeler bekliyor.");
+    assert.equal(m.neden, 'Logo lisansı dolu ya da oturum başka yerde açık');
+    assert.equal(m.teknik, '25.11.2026 12:14 · UserLogin · kod -93 · Logo: [code=-93] Kullanıcı sayısı limiti aşılmıştır · Yeniden deneme: 12:19');
+    const noktali = yazilamiyorSatirlari({ ...hata, aciklama: null, ileti: 'Parola hatalı.' }, new Date('2026-11-25T09:15:00.000Z'));
+    assert.equal(noktali.neden, 'Parola hatalı');
+    assert.ok(!noktali.teknik.includes('..') && !baglantiHatasiOzeti({ ...hata, aciklama: null, ileti: 'Parola hatalı.' }).includes('..'));
   });
 });

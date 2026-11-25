@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { BaglantiAkisDurumu, LogoHazirlikCevabi, LogoKontrolCevabi, LogoYardimciSurumu } from '#paylasilan/sozlesme/logo.ts';
-import { baglantiHatasiOzeti, yazilamiyorOzeti } from '#paylasilan/logo-baglanti-metni.ts';
+import { baglantiHatasiSatirlari, yazilamiyorSatirlari } from '#paylasilan/logo-baglanti-metni.ts';
+import type { HataSatirlari } from '#paylasilan/logo-baglanti-metni.ts';
 import type { SmartesHazirlikCevabi, SmartesKontrolCevabi } from '#paylasilan/sozlesme/smartes.ts';
 import { Dugme, DurumKutusu, Kart, Rozet, Simge, type RozetTonu } from '../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
@@ -111,7 +112,7 @@ interface SistemOzellikleri {
   baglanti: 'kapali' | 'acik' | 'ortam-degiskeni-yok';
   ortam: readonly [string, string][];
   // Yardımcının son bağlantı hatası gibi kullanıcının görmesi gereken tek satır; yoksa gösterilmez.
-  uyari?: string | null;
+  uyari?: HataSatirlari | null;
   ayarlar: readonly [string, boolean][];
   gruplar: readonly { baslik: string; simge: SimgeAdi; akislar: readonly Akis[] }[];
   kontrol: { veri: Kontrol | undefined; yukleniyor: boolean; hata: unknown; dene: () => void };
@@ -127,7 +128,12 @@ function Sistem({ baslik, baglanti, ortam, uyari = null, ayarlar, gruplar, kontr
     >
       <div className="tc-hazirlik">
         <p role="status" className="tc-hazirlik-ozet"><Rozet ton={genel.ton}>{genel.metin}</Rozet></p>
-        {uyari !== null && <p role="alert" className="tc-hazirlik-hata">{uyari}</p>}
+        {uyari !== null && (
+          <DurumKutusu durum="hata" mesaj={uyari.ozet}>
+            {uyari.neden !== null && <p>Neden: {uyari.neden}.</p>}
+            <p className="tc-hazirlik-teknik">{uyari.teknik}</p>
+          </DurumKutusu>
+        )}
         <dl className="tc-hazirlik-liste">
           {ortam.map(([ad, deger]) => <Satir key={ad} ad={ad} deger={deger} />)}
           {ayarlar.map(([ad, acik]) => (
@@ -179,7 +185,7 @@ function LogoBolumu() {
         ['Köprü anahtarı', d.ortam.anahtarTanimli ? 'Tanımlı' : 'Tanımlı değil (TMIV2_LOGO_KOPRU_ANAHTARI)'],
         ['Yardımcı sürümü', yardimciSurumMetni(d.yardimci ?? null)],
       ]}
-      uyari={d.yazilamiyor ? yazilamiyorOzeti(d.yazilamiyor) : d.baglantiHatasi ? `Logo oturumu açılamadı, son hata ${baglantiHatasiOzeti(d.baglantiHatasi)}` : null}
+      uyari={d.yazilamiyor ? yazilamiyorSatirlari(d.yazilamiyor) : d.baglantiHatasi ? baglantiHatasiSatirlari(d.baglantiHatasi, 'Logo oturumu açılamadı.') : null}
       ayarlar={d.ayarlar.map((a) => [a.baslik, a.acik] as const)}
       gruplar={[
         { baslik: 'CORE → Logo', simge: 'upload', akislar: akis('tmi-logo') },

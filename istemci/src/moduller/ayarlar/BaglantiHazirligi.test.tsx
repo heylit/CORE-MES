@@ -116,7 +116,9 @@ describe('Bağlantı hazırlığı', () => {
     try {
       cizdir(<BaglantiHazirligi />);
       const uyari = await screen.findByRole('alert');
-      expect(uyari.textContent).toContain('2026-10-15 12:14 · UserLogin · kod -93: Logo lisansı dolu ya da oturum başka yerde açık.');
+      expect(uyari.textContent).toContain('Logo oturumu açılamadı.');
+      expect(uyari.textContent).toContain('Neden: Logo lisansı dolu ya da oturum başka yerde açık.');
+      expect(uyari.textContent).toContain('15.10.2026 12:14 · UserLogin · kod -93');
       expect(uyari.textContent).toContain('Yeniden deneme: 12:19');
     } finally {
       delete LOGO.baglantiHatasi;
@@ -139,7 +141,8 @@ describe('Bağlantı hazırlığı', () => {
     try {
       cizdir(<BaglantiHazirligi />);
       const uyari = await screen.findByRole('alert');
-      expect(uyari.textContent).toContain("Logo'ya yazılamıyor: oturum açılamıyor. Son neden:");
+      expect(uyari.textContent).toContain("Logo'ya yazılamıyor: oturum açılamıyor, giden belgeler bekliyor.");
+      expect(uyari.textContent).toContain('Neden:');
       expect(uyari.textContent).toContain('UserLogin · kod -93');
       fireEvent.click(screen.getAllByRole('button', { name: 'Bağlantıyı dene' })[0] as HTMLElement);
       expect(await screen.findByText(/Logo oturumu \(Connect, UserLogin, CompanyLogin\)/)).toBeTruthy();

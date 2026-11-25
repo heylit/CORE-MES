@@ -64,7 +64,7 @@ export const LOGO_AYARLARI = {
       { deger: '4', etiket: 'Sevk edilebilir' },
     ],
     baslik: 'Logo satın alma siparişi durumu',
-    aciklama: 'CORE\'dan Logo\'da yeni açılan satın alma siparişinin durumu. Öneri: sipariş Logo\'da öneri olarak açılır, onayı Logo\'da verilir. Sevk edilebilir: sipariş doğrudan kesinleşmiş açılır. Yalnız ilk gönderimde uygulanır; Logo\'da açılmış siparişlere ve sonraki güncellemelere dokunulmaz. "Logo bağlantısı" ve "Logo: satın alma gönderimi" da açık olmalı.',
+    aciklama: 'Yeni açılan satın alma siparişi Logo\'da öneri (onayı Logo\'da verilir) ya da sevk edilebilir (kesinleşmiş) açılır. Yalnız ilk gönderimde uygulanır; Logo\'daki siparişlere ve sonraki güncellemelere dokunulmaz.',
   },
   // Kart 3665 ve 3684: irsaliye yazma kapalı gelir; ölçüm kapısı (irsaliye-yazma-kapisi) tamamlanmadan Logo modülünün komutu da açmaz,
   // bu yüzden genel ayar ucu yazmaz (degistirenEkran).
