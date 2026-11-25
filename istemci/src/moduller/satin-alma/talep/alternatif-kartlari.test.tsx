@@ -66,6 +66,7 @@ describe('3593: talep kaleminde alternatif kartları', () => {
     fireEvent.click(await screen.findByRole('button', { name: /alternatif sınırını değiştir/ }));
     const grup = await screen.findByRole('group', { name: 'Kalem 1: kabul edilen alternatif kartları' });
     expect(within(grup).getByText('6082 ya da 6061 · T6 · Ø 50–55 (−0/+5)')).toBeTruthy();
+    expect(within(grup).getByRole('link', { name: 'İkame ve alternatifler' }).getAttribute('href')).toBe('/malzemeler/alternatifler');
     const kutular = within(grup).getAllByRole('checkbox') as HTMLInputElement[];
     expect(kutular.map((k) => k.checked)).toEqual([true, false]);
     fireEvent.click(kutular[1]!);

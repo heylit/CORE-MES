@@ -4,7 +4,7 @@ import type { AlternatifKartiSecenegi } from '#paylasilan/sozlesme/malzeme-alter
 import type { KalemAlternatifKarti } from '#paylasilan/sozlesme/satin-alma.ts';
 import { Dugme, Rozet, Simge } from '../../../ortak/arayuz/index.ts';
 import { useKabulZarfi } from './KabulSinirlari.tsx';
-import { SURE, anahtarlar, cagri } from './ortak.ts';
+import { ALTERNATIF_SAYFASI, SURE, anahtarlar, cagri } from './ortak.ts';
 
 // 3593: talep eden kalemde kartın alternatif kartlarını işaretler (Malzemeler > İkame ve alternatifler). Tam ve üst varsayılan işaretli,
 // şartlı varsayılan işaretsiz (talep eden onayı gerekir). Satın alma yalnız işaretli kartla genişler; işaretsizse kalem kabul sınırıyla gider.
@@ -56,7 +56,8 @@ export function AlternatifKartlari({ no, sira, secili, onceki, yeni, degistir, y
   // Kartta artık talepte kullanılmayan ama bu kalemde işaretli olan kart işaretlendiği hâliyle görünür; kaldırılabilir, yeniden eklenemez.
   const eski = onceki.filter((x) => x.setId !== null && !liste.some((o) => o.id === x.setId) && isaretli.includes(x.setId));
   const silinen = onceki.filter((x) => x.setId === null);
-  if (liste.length === 0 && eski.length === 0 && silinen.length === 0) return null;
+  const kartAc = <>Yeni alternatif kartı <a href={ALTERNATIF_SAYFASI.yol} target="_blank" rel="noopener">{ALTERNATIF_SAYFASI.baslik}</a> sayfasında açılır; yeni sekmede açılır, bu form açık kalır.</>;
+  if (liste.length === 0 && eski.length === 0 && silinen.length === 0) return <p className="sa-talep-not">Bu malzemenin alternatif kartı yok. {kartAc}</p>;
   // Y10: ana kart ölçüsü (ya da kart) değişti; işaret işaretlendiği hâliyle duruyor. Talep eden yeni özeti yazar ya da eskisinde bırakır.
   const degisen = onceki.flatMap((x) => {
     const o = x.setId === null ? undefined : liste.find((y) => y.id === x.setId);
@@ -93,7 +94,7 @@ export function AlternatifKartlari({ no, sira, secili, onceki, yeni, degistir, y
       {silinen.map((o, i) => (
         <p key={`s${String(i)}`} className="sa-talep-not"><AlternatifKartiOzeti ad={o.ad} tur={o.tur} ozet={o.ozet} /> (kart kaldırıldı; işaretlendiği hâliyle kalır)</p>
       ))}
-      <p className="sa-talep-not">Satın alma yalnız işaretli kartlardaki alternatifle teklif alabilir; şartlı kart varsayılan işaretsizdir.</p>
+      <p className="sa-talep-not">Satın alma yalnız işaretli kartlardaki alternatifle teklif alabilir; şartlı kart varsayılan işaretsizdir. {kartAc}</p>
     </fieldset>
   );
 }
