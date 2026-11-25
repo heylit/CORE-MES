@@ -1621,27 +1621,39 @@ button.tc-ay1-yer { font: inherit; color: inherit; text-align: start; cursor: po
 .tc-ay1-sk-uyari { display: inline-flex; align-items: center; gap: var(--b-1); color: var(--hazard-ink); font-size: var(--yazi-s); font-weight: 700; }
 .tc-ay1-dar .tc-ay1-sk-etiketler + .tc-ay1-sk-parca { margin-block-start: 0; }
 /* Telefonda uyarılı kart aynı satır sayısına sığar: uyarı yazısı küçülür, emir no düşer (uyarı ve düğme adı zaten okunur). */
-.tc-ay1-dar .tc-ay1-sk-uyari { font-size: var(--yazi-xs); line-height: 1.1; }
+.tc-ay1-dar .tc-ay1-sk-uyari { font-size: var(--yazi-s); line-height: 1.1; }
 .tc-ay1-dar .tc-ay1-sira li:has(> button[aria-pressed='true']) .tc-ay1-sk[data-uyari] .tc-ay1-sk-no { display: none; }
 
-/* 3714 Test K1/K2/G2/G4: şerit boyu ekran yüksekliğine ve yazı ölçeğine uyar. Önce ilerleme çubuğu ve emir no, sonra etiket sırası düşer; ayrıntı etiket: değer satırlarına geçer. */
-.tc-ay1-sk-opterm { display: none; color: var(--muted); font-size: var(--yazi-xs); }
+/* 3714 Test K1/K2/G2: şerit boyu ekran yüksekliğine ve yazı ölçeğine uyar. Kısa pencerede yalnız ilerleme çubuğu düşer; emir no ile adet aynı satıra,
+   ayrıntı etiket: değer satırlarına geçer. En küçük yazı --yazi-s (14 px). */
+.tc-ay1-sk-opterm { display: none; color: var(--muted); font-size: var(--yazi-s); }
 .tc-ay1-dar .tc-ay1-sira li:has(> button[aria-pressed='true']) .tc-ay1-sk-opterm { display: block; }
-.tc-ay1-genis .tc-ay1-sira { --tc-sk-resim: calc(var(--dokunma) * 1.6); }
+.tc-ay1-sk-ic > .tc-ay1-sk-opterm { text-overflow: ellipsis; }
+.tc-ay1-genis .tc-ay1-sira { --tc-sk-genis: calc(var(--dokunma-ana) * 12.5); }
 @media (max-height: 820px) {
-  .tc-ay1-genis .tc-ay1-sk .tc-ay1-tcark-ilerleme, .tc-ay1-genis .tc-ay1-sk-no, .tc-ay1-genis .tc-ay1-sk[data-uyari] .tc-ay1-sk-etiketler { display: none; }
-  .tc-ay1-genis .tc-ay1-sk-ayrinti { grid-template-columns: auto minmax(0, 1fr); gap: 0 var(--b-2); }
+  .tc-ay1-genis .tc-ay1-sk .tc-ay1-tcark-ilerleme, .tc-ay1-genis .tc-ay1-sk[data-uyari] .tc-ay1-sk-etiketler { display: none; }
+  .tc-ay1-genis .tc-ay1-sk-ic { display: flex; flex-wrap: wrap; align-content: center; gap: 0 var(--b-2); }
+  .tc-ay1-genis .tc-ay1-sk-ic > * { flex: 1 1 100%; }
+  .tc-ay1-genis .tc-ay1-sk-ic > .tc-ay1-sk-adet { order: 4; flex: 0 0 auto; }
+  .tc-ay1-genis .tc-ay1-sk-ic > .tc-ay1-sk-no { order: 5; flex: 1 1 0; min-width: 0; font-size: var(--yazi-s); }
+  .tc-ay1-genis .tc-ay1-sk-ic > .tc-ay1-sk-uyari { order: 6; }
+  .tc-ay1-genis .tc-ay1-sira li:has(> button[aria-pressed='true']) .tc-ay1-sk { grid-template-columns: var(--tc-sk-resim, calc(var(--dokunma) * 1.2)) minmax(0, 1.15fr) minmax(0, 1.35fr); }
+  .tc-ay1-genis .tc-ay1-sk-ayrinti { grid-template-columns: auto minmax(0, 1.7fr) auto minmax(0, 1fr); gap: 0 var(--b-2); align-content: center; }
   .tc-ay1-genis .tc-ay1-sk-ayrinti > div { display: contents; }
-  .tc-ay1-genis .tc-ay1-sk-ayrinti dd[data-satir] { display: block; white-space: nowrap; }
+  .tc-ay1-genis .tc-ay1-sk-ayrinti > div:nth-child(1) dt { grid-area: 1 / 1; }
+  .tc-ay1-genis .tc-ay1-sk-ayrinti > div:nth-child(1) dd { grid-area: 1 / 2; }
+  .tc-ay1-genis .tc-ay1-sk-ayrinti > div:nth-child(3) dt { grid-area: 1 / 3; }
+  .tc-ay1-genis .tc-ay1-sk-ayrinti > div:nth-child(3) dd { grid-area: 1 / 4; }
+  .tc-ay1-genis .tc-ay1-sk-ayrinti > div:nth-child(2) dt { grid-area: 2 / 1; }
+  .tc-ay1-genis .tc-ay1-sk-ayrinti > div:nth-child(2) dd { grid-area: 2 / 2 / auto / -1; display: block; white-space: nowrap; }
+  .tc-ay1-genis .tc-ay1-sk-ayrinti > div:nth-child(4) dt { grid-area: 3 / 1; }
+  .tc-ay1-genis .tc-ay1-sk-ayrinti > div:nth-child(4) dd { grid-area: 3 / 2 / auto / -1; }
   .tc-ay1-genis .tc-ay1-sk-ayrinti dt { line-height: 1.35; }
 }
+/* Çok kısa pencerede şerit kısa pencere ölçüsünde kalır (88 px dört satırlı kartı taşırırdı). */
 @media (max-height: 700px) {
-  .tc-ay1-genis .tc-ay1-sk-etiketler, .tc-ay1-genis .tc-ay1-sk[data-uyari] .tc-ay1-sk-adet { display: none; }
-  .tc-ay1-genis .tc-ay1-sk-ic { padding-block: 0; gap: 0; }
-  .tc-ay1-genis .tc-ay1-sk-ic :is(small, .tc-ay1-sk-proje) { font-size: var(--yazi-xs); line-height: 1.2; }
-  .tc-ay1-genis .tc-ay1-sk-ayrinti :is(dt, dd) { font-size: var(--yazi-xs); line-height: 1.2; }
+  .tc-ay1-genis .tc-ay1-sira { block-size: calc(var(--dokunma) * 2.5); }
 }
-.tc-ay1-sk-ic > .tc-ay1-sk-opterm { text-overflow: ellipsis; }
 /* Şerit sabit yükseklikte kalır; içerik yüksekliği şeridi büyütmez, kartlar şeride sığar. */
 .tc-ay1-genis .tc-ay1-sira { grid-template-rows: minmax(0, 1fr); }
 .tc-ay1-genis .tc-ay1-sira-govde { block-size: 100%; min-block-size: 0; }

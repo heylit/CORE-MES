@@ -9,6 +9,10 @@ import type { Is, IsDurumu } from './tipler.ts';
 // Şerit yüksekliği sabittir: kart yalnız yatayda genişler, alt hiza kımıldamaz.
 const durumRengi = (s: string) => IS_DURUMLARI[s as IsDurumu]?.durum ?? 'sirada';
 const durumAdi = (s: string): string => IS_DURUMLARI[s as IsDurumu]?.etiket ?? s;
+const terminKisa = (t: string | null | undefined): string => {
+  const m = t && /^(\d{4})-(\d{2})-(\d{2})$/.exec(t);
+  return m ? `${m[3]}.${m[2]}${Number(m[1]) === new Date().getFullYear() ? '' : `.${m[1].slice(2)}`}` : '—';
+};
 const terminYaz = (t: string | null | undefined): string => (t && /^\d{4}-\d{2}-\d{2}$/.test(t) ? t.split('-').reverse().join('.') : t || '—');
 
 export function SiradakiKart({ is, siradaki, ekranda, acik, yer, resim, revUyumsuz = false }: {
@@ -32,7 +36,7 @@ export function SiradakiKart({ is, siradaki, ekranda, acik, yer, resim, revUyums
         {is.empty ? null : <small className="tc-ay1-mono tc-ay1-sk-adet">{is.good} / {is.target} adet</small>}
         {revUyumsuz ? <small className="tc-ay1-sk-uyari"><Simge ad="alert" boyut="k" />Rev uyuşmuyor</small> : null}
         {is.empty || revUyumsuz ? null : <progress className="tc-ay1-tcark-ilerleme" max={1} value={oran} aria-label="İlerleme" />}
-        {is.empty ? null : <small className="tc-ay1-sk-opterm">{[is.op, terminYaz(is.due)].filter(Boolean).join(' · ')}</small>}
+        {is.empty ? null : <small className="tc-ay1-sk-opterm">{[is.op?.split(' · ')[0], terminKisa(is.due)].filter(Boolean).join(' · ')}</small>}
         <small className="tc-ay1-mono tc-ay1-sk-no" title={is.no}>{is.no}</small>
       </div>
       {acik && !is.empty ? (
