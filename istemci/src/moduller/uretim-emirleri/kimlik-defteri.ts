@@ -39,10 +39,12 @@ export async function korumaliGonder<T>(defter: KimlikDefteri, anahtar: string, 
 // sunucu bir parçayı reddederse defter boşalır; sonraki basış yeni komuttur.
 export async function topluGonder<G, C>(defter: KimlikDefteri, govdeler: readonly G[], gonder: (govde: G, deneme: Deneme) => Promise<C>): Promise<C[]> {
   const cevaplar: C[] = [];
-  defter.yeniKomut(govdeler.map((g) => JSON.stringify(g)));
+  // Anahtar parça sırasını taşır: aynı gövdeli iki parça aynı kimliği paylaşsa ikincisi sunucuda saklanan cevapla yutulurdu.
+  const anahtarlar = govdeler.map((g, i) => `${String(i)}:${JSON.stringify(g)}`);
+  defter.yeniKomut(anahtarlar);
   try {
-    for (const govde of govdeler) {
-      cevaplar.push(await tekrarKorumaliGonder((d) => gonder(govde, d), { istekKimligi: defter.kimlik(JSON.stringify(govde)) }));
+    for (const [i, govde] of govdeler.entries()) {
+      cevaplar.push(await tekrarKorumaliGonder((d) => gonder(govde, d), { istekKimligi: defter.kimlik(anahtarlar[i]!) }));
     }
     defter.temizle();
     return cevaplar;

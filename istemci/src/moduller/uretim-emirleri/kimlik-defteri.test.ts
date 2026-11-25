@@ -63,4 +63,11 @@ describe('toplu yazımın istek kimlikleri', () => {
     expect(kimlikler).toHaveLength(1);
     expect(kimlikler[0]).not.toBe(ilkCizim);
   });
+
+  it('Test 3700: aynı gövdeli iki parça ayrı kimlik alır', async () => {
+    const kimlikler: string[] = [];
+    await topluGonder(new KimlikDefteri(), [{ p: 'ORN-1' }, { p: 'ORN-1' }], (_g, d) => { kimlikler.push(d.istekKimligi); return Promise.resolve(1); });
+    expect(kimlikler).toHaveLength(2);
+    expect(kimlikler[0]).not.toBe(kimlikler[1]);
+  });
 });
