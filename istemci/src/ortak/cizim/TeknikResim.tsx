@@ -155,7 +155,7 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
   const [z, setZ] = useState({ k: 1, x: 0, y: 0 });
   const [dims, setDims] = useState(true), [showB, setShowB] = useState(true), [grid, setGrid] = useState(true), [hidden, setHidden] = useState(true);
   const telefon = useTelefon();
-  const [adding, setAdding] = useState(false), [serbestEkle, setSerbestEkle] = useState(false), [kodGoster, setKodGoster] = useState(true);
+  const [topluAcik, setTopluAcik] = useState(false), [adding, setAdding] = useState(false), [serbestEkle, setSerbestEkle] = useState(false), [kodGoster, setKodGoster] = useState(true);
   const [model3d, setModel3d] = useState<{ data: Gorunum3B; fa: number } | null>(null);
   const [fs, setFs] = useState(false);
   const [suggest, setSuggest] = useState<{ v: number; alt: number } | null>(null), [pinMode, setPinMode] = useState(false);
@@ -908,22 +908,27 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
       )}
       {pinMode && <div className="tc-ay5-ipucu"><Simge ad="flag" />Notu bırakmak istediğin yere dokun<Dugme onClick={() => setPinMode(false)}>Vazgeç</Dugme></div>}
       {selMode && (
-        <div className="tc-ay5-ipucu tc-ay5-coklu" onPointerDown={(e) => e.stopPropagation()}>
+        <div className="tc-ay5-ipucu tc-ay5-coklu" role="group" aria-label="Çoklu seçim" onPointerDown={(e) => e.stopPropagation()}>
           <Simge ad="clipboard-check" /><span><b>{msel.length}</b> balon seçili<small>Balona dokun ya da çerçeve çiz</small></span>
           <Dugme onClick={() => setMsel(msel.length === bal.length ? [] : bal.map((x) => x.id))}>{msel.length === bal.length ? 'Hiçbiri' : 'Tümü'}</Dugme>
-          <Dugme simge="ruler" disabled={!msel.length} onClick={() => setMeth(msel, 'man')}>Elle</Dugme>
-          <Dugme simge="box" disabled={!msel.length} onClick={() => setMeth(msel, 'cmm')}>CMM</Dugme>
-          <Dugme simge="alert" disabled={!msel.length} onClick={() => { const hepsi = msel.every((id) => bal.find((x) => x.id === id)?.crit); topluYaz(msel, (x) => ({ ...x, crit: hepsi ? undefined : true }), hepsi ? 'kritik değil' : 'kritik'); }}>Kritik</Dugme>
-          <Secim etiket="Ölçü aleti" value="" disabled={!msel.length} bosSecenek="Seç" secenekler={OLCU_ALETLERI.map((a) => ({ deger: a, baslik: a }))}
-            onChange={(e) => { const a = e.target.value; if (a) topluYaz(msel, (x) => ({ ...x, tool: a, ...(a === 'CMM' ? { m: 'cmm' as const } : {}) }), a); }} />
-          <Secim etiket="Sıklık" value="" disabled={!msel.length} bosSecenek="Seç" secenekler={KONTROL_SIKLIKLARI.map((a) => ({ deger: a, baslik: a }))}
-            onChange={(e) => { const a = e.target.value; if (a) topluYaz(msel, (x) => ({ ...x, freq: a }), a); }} />
-          <Dugme simge="trash" tur="tehlike" disabled={!msel.length} onClick={() => removeBalloons(msel)}>Sil</Dugme>
-          <Dugme tur="birincil" onClick={() => { setSelMode(false); setMsel([]); }}>Bitti</Dugme>
+          {!RO && <Dugme simge="gear" aria-expanded={topluAcik} onClick={() => setTopluAcik(!topluAcik)}>Toplu işlemler</Dugme>}
+          <Dugme tur="birincil" onClick={() => { setSelMode(false); setMsel([]); setTopluAcik(false); }}>Bitti</Dugme>
+          {topluAcik && !RO && (
+            <div className="tc-ay5-coklu-islem">
+              <Dugme simge="ruler" disabled={!msel.length} onClick={() => setMeth(msel, 'man')}>Elle</Dugme>
+              <Dugme simge="box" disabled={!msel.length} onClick={() => setMeth(msel, 'cmm')}>CMM</Dugme>
+              <Dugme simge="alert" disabled={!msel.length} onClick={() => { const hepsi = msel.every((id) => bal.find((x) => x.id === id)?.crit); topluYaz(msel, (x) => ({ ...x, crit: hepsi ? undefined : true }), hepsi ? 'kritik değil' : 'kritik'); }}>Kritik</Dugme>
+              <Secim etiket="Ölçü aleti" value="" disabled={!msel.length} bosSecenek="Seç" secenekler={OLCU_ALETLERI.map((a) => ({ deger: a, baslik: a }))}
+                onChange={(e) => { const a = e.target.value; if (a) topluYaz(msel, (x) => ({ ...x, tool: a, ...(a === 'CMM' ? { m: 'cmm' as const } : {}) }), a); }} />
+              <Secim etiket="Sıklık" value="" disabled={!msel.length} bosSecenek="Seç" secenekler={KONTROL_SIKLIKLARI.map((a) => ({ deger: a, baslik: a }))}
+                onChange={(e) => { const a = e.target.value; if (a) topluYaz(msel, (x) => ({ ...x, freq: a }), a); }} />
+              <Dugme simge="trash" tur="tehlike" disabled={!msel.length} onClick={() => removeBalloons(msel)}>Sil</Dugme>
+            </div>
+          )}
         </div>
       )}
       {regMode && <div className="tc-ay5-ipucu"><Simge ad="scan" />Okunacak ölçüyü parmağınla çerçeve içine al<Dugme onClick={() => { setRegMode(false); setRegRect(null); }}>Vazgeç</Dugme></div>}
-      {telefon && !mode3d && onPrimary && (
+      {telefon && !mode3d && onPrimary && !selMode && (
         <div className="tc-ay5-alt-serit" role="group" aria-label="Balon ve plan işlemleri">
           {balonEkleMenusu}
           {RO && ctl.saltOkunurNedeni ? <span className="tc-ay5-soluk">{ctl.saltOkunurNedeni}</span> : null}

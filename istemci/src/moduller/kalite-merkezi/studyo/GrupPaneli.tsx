@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { KmResim } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import { Dugme, Girdi, OnayPenceresi, Rozet, Secim, Simge, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { hataIletisi } from '../../../ortak/veri/api.ts';
-import { degisti, govdeOlustur, grupsuzOperasyonlar, operasyonBagla, operasyonMetni, taslakHatasi, taslakOlustur, yeniGrupAdi, type GrupTaslagi, type RotaOperasyonu } from './gruplar.ts';
+import { degisti, govdeOlustur, grupKodu, grupsuzOperasyonlar, operasyonBagla, operasyonMetni, taslakHatasi, taslakOlustur, yeniGrupAdi, type GrupTaslagi, type RotaOperasyonu } from './gruplar.ts';
 import { useGruplariYaz } from './veri.ts';
 
 // Balon grupları ve operasyon ataması (3693): Kalite Merkezi resmin balonlarını adlı gruplara ayırır, operasyonu gruba bağlar. Atama yalnız
@@ -51,9 +51,10 @@ export function GrupPaneli({ resim, rota, duzenler, secili = [], secimTemizle }:
       {resim.eski ? <span className="km-st-soluk">Eski revizyon salt okunur; grupları güncel revizyonda düzenleyin.</span> : null}
       {!duzenler && !resim.eski ? <span className="km-st-soluk">Grupları düzenlemek için kalite onayı gerekir.</span> : null}
       {taslak.length === 0 ? <span className="km-st-soluk">Bu resimde grup yok; operasyonlar bütün balonları görür.</span> : null}
-      {taslak.map((g) => (
+      {taslak.map((g, sira) => (
         <div key={g.anahtar} className="km-st-grup">
           <div className="km-st-grup-ust">
+            <Rozet ton="bilgi">Kod {grupKodu(sira)}</Rozet>
             {duzenlenebilir
               ? <Girdi etiket="Grup adı" value={g.ad} maxLength={60} onChange={(o) => { guncelle(g.anahtar, (x) => ({ ...x, ad: o.target.value })); }} />
               : <b>{g.ad}</b>}

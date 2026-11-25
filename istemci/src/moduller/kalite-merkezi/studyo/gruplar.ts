@@ -5,6 +5,13 @@ export interface GrupTaslagi { anahtar: string; id: number | null; ad: string; b
 export interface RotaOperasyonu { operasyonId: number; opNo: number; ad?: string | undefined }
 export const operasyonMetni = (o: Pick<RotaOperasyonu, 'opNo' | 'ad'>): string => (o.ad ? `Op ${String(o.opNo)} · ${o.ad}` : `Op ${String(o.opNo)}`);
 
+// Resimde balonun yanında yazan kısa kod: grubun sırası (A, B, ... Z, AA); ad uzun olabilir, kod hep kısadır.
+export function grupKodu(sira: number): string {
+  let n = sira, kod = '';
+  do { kod = String.fromCharCode(65 + (n % 26)) + kod; n = Math.floor(n / 26) - 1; } while (n >= 0);
+  return kod;
+}
+
 export function taslakOlustur(resim: KmResim): GrupTaslagi[] {
   return (resim.gruplar ?? []).map((g) => ({ anahtar: `g${String(g.id)}`, id: g.id, ad: g.ad, balonlar: [...g.balonlar], operasyonlar: g.operasyonlar.map((o) => o.operasyonId) }));
 }

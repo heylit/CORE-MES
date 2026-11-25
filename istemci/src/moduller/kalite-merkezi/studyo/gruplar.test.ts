@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { KmResim } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
-import { degisti, govdeOlustur, grupsuzOperasyonlar, operasyonBagla, taslakHatasi, taslakOlustur, yeniGrupAdi } from './gruplar.ts';
+import { grupKodu, degisti, govdeOlustur, grupsuzOperasyonlar, operasyonBagla, taslakHatasi, taslakOlustur, yeniGrupAdi } from './gruplar.ts';
 
 const resim = { gruplar: [
   { id: 1, ad: 'A', balonlar: [1, 2], operasyonlar: [{ operasyonId: 10, opNo: 10 }] },
@@ -42,5 +42,9 @@ describe('Balon grubu taslağı (3693)', () => {
       gruplar: [{ id: 1, ad: 'A', balonlar: [1, 2] }, { id: 2, ad: 'B', balonlar: [3] }, { ad: 'Çaplar', balonlar: [3, 4] }],
       atamalar: [{ operasyonId: 10, grup: 'A' }, { operasyonId: 20, grup: 'Çaplar' }],
     });
+  });
+
+  it('KM-G6 resimdeki grup kodu kısa ve sıraya göredir (A, B, ... Z, AA)', () => {
+    expect([0, 1, 25, 26, 27, 701, 702].map(grupKodu)).toEqual(['A', 'B', 'Z', 'AA', 'AB', 'ZZ', 'AAA']);
   });
 });

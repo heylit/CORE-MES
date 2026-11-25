@@ -14,6 +14,7 @@ import { NUMUNE_DURUMU, numuneKuraliMetni, planGirdileri, uretimEmriKimligi } fr
 import { CmmPlani } from './CmmPlani.tsx';
 import { CmmYukle } from './CmmYukle.tsx';
 import { GrupPaneli } from './GrupPaneli.tsx';
+import { grupKodu } from './gruplar.ts';
 import { MerkezdenAl } from './MerkezdenAl.tsx';
 import { OkumaAyarlari, useOkumaAyari } from './OkumaAyarlari.tsx';
 import { useBalonPlaniYaz, useEmirNumuneleri, useMerkezdenEsitle, useOlcumYaz, usePlanKopyala, useResimAl, useResimKaldir, useStudyoParcasi } from './veri.ts';
@@ -110,7 +111,7 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
   // Balon kodu: resimde balonun yanında grubunun adı (aynı balon birden çok grupta olabilir).
   const grupKodlari = useMemo(() => {
     const k: Record<number, string> = {};
-    for (const g of resim?.gruplar ?? []) for (const no of g.balonlar) k[no] = k[no] ? `${k[no]}, ${g.ad}` : g.ad;
+    (resim?.gruplar ?? []).forEach((g, sira) => { for (const no of g.balonlar) k[no] = k[no] ? `${k[no]}, ${grupKodu(sira)}` : grupKodu(sira); });
     return k;
   }, [resim?.gruplar]);
   const balonEkleNedeni = planDuzenler ? null : resim?.eski ? `Eski revizyon (Rev ${resim.revizyon ?? ''}) salt okunur; güncel revizyona geç.` : 'Planı düzenlemek için kalite onayı gerekir.';
