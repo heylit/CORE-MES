@@ -68,7 +68,7 @@ describe('3437-2: talep formunda kabul sınırları', () => {
     sar(<TalepAc />);
     await kartSec(/ORN-HM-00021/);
     const bolum = await sinirlariAc();
-    expect(within(bolum).getByText('Alternatif kabul')).toBeTruthy();
+    expect(within(bolum).getByRole('radio', { name: /Alternatif kabul/ })).toBeTruthy();
     expect(within(bolum).getByText('d 50 – 55 mm')).toBeTruthy();
     expect(within(bolum).getByText('3.000 ve uzun (kesilir)')).toBeTruthy();
     // Şartlı muadil varsayılan kapalı: seçilemez.
@@ -97,13 +97,13 @@ describe('3437-2: talep formunda kabul sınırları', () => {
     expect(within(bolum).getByText('d 50 – 52,5 mm')).toBeTruthy();
     // Şartlı kabul açılınca şartlı muadil seçilebilir olur ama kendiliğinden listeye girmez; kapanınca listeden düşer.
     const sartli = () => within(bolum).getByRole('button', { name: /6060/ }) as HTMLButtonElement;
-    fireEvent.click(within(bolum).getByLabelText('Şartlı muadilleri kabul ediyorum'));
+    fireEvent.click(within(bolum).getByLabelText(/Şartlı kalite ve durum muadillerini de kabul ediyorum/));
     expect(sartli().disabled).toBe(false);
     expect(sartli().getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(sartli());
-    fireEvent.click(within(bolum).getByLabelText('Şartlı muadilleri kabul ediyorum'));
+    fireEvent.click(within(bolum).getByLabelText(/Şartlı kalite ve durum muadillerini de kabul ediyorum/));
     expect(sartli().disabled).toBe(true);
-    fireEvent.click(within(bolum).getByLabelText('Şartlı muadilleri kabul ediyorum'));
+    fireEvent.click(within(bolum).getByLabelText(/Şartlı kalite ve durum muadillerini de kabul ediyorum/));
     expect(sartli().getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(sartli());
     expect((await gonder(cagrilar)).kabul).toEqual({ yalnizAyni: false, sartliKabul: true, kaliteler: ['6061', '6060'], durumlar: [], payMm: 2.5 });
@@ -114,7 +114,7 @@ describe('3437-2: talep formunda kabul sınırları', () => {
     sar(<TalepAc />);
     await kartSec(/ORN-HM-00021/);
     const bolum = await sinirlariAc();
-    fireEvent.click(within(bolum).getByLabelText('Yalnız aynı malzeme'));
+    fireEvent.click(within(bolum).getByLabelText(/Yalnız aynı malzeme/));
     expect(within(bolum).queryByRole('table')).toBeNull();
     expect(within(bolum).getByText('Satın alma alternatif seçemez.')).toBeTruthy();
     expect((await gonder(cagrilar)).kabul).toEqual({ yalnizAyni: true, sartliKabul: false, kaliteler: null, durumlar: null, payMm: null });
@@ -126,8 +126,8 @@ describe('3437-2: talep formunda kabul sınırları', () => {
     await kartSec(/ORN-HM-00021/);
     const bolum = await sinirlariAc();
     fireEvent.click(within(bolum).getByRole('button', { name: /7075/ }));
-    fireEvent.click(within(bolum).getByLabelText('Yalnız aynı malzeme'));
-    fireEvent.click(within(bolum).getByLabelText('Yalnız aynı malzeme'));
+    fireEvent.click(within(bolum).getByLabelText(/Yalnız aynı malzeme/));
+    fireEvent.click(within(bolum).getByRole('radio', { name: /Alternatif kabul/ }));
     expect(within(bolum).getByRole('button', { name: /7075/ }).getAttribute('aria-pressed')).toBe('false');
     expect((await gonder(cagrilar)).kabul).toEqual({ yalnizAyni: false, sartliKabul: false, kaliteler: ['6061'], durumlar: null, payMm: null });
   });
@@ -138,7 +138,7 @@ describe('3437-2: talep formunda kabul sınırları', () => {
     sar(<TalepAc />);
     await kartSec(/ORN-HM-00021/);
     expect(await screen.findByText(/alternatif kapalı: Deneme müşteri şartı/)).toBeTruthy();
-    expect(screen.queryByLabelText('Yalnız aynı malzeme')).toBeNull();
+    expect(screen.queryByLabelText(/Yalnız aynı malzeme/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Değiştir' }));
     await kartSec(/ORN-SR-00007/);
     expect(screen.queryByRole('region', { name: 'Kabul sınırları' })).toBeNull();

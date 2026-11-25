@@ -60,7 +60,8 @@ export function TaleplerimSayfasi() {
         ))}
       </div>
       <Sekmeler etiket="Taleplerim bölümleri" sekmeler={sekmeler} secili={bolum} sec={bolumYaz} />
-      {bolum === 'on' && <OnTalepler cevir={(l) => { taslakYaz(l); taslakEmriYaz(null); bolumYaz('yeni'); }} />}
+      {bolum === 'on' && <OnTalepler talepler={talepler.data?.talepler ?? []} talepteGit={() => { suzgecYaz('hepsi'); bolumYaz('liste'); }}
+        cevir={(l) => { taslakYaz(l); taslakEmriYaz(null); bolumYaz('yeni'); }} />}
       {bolum === 'liste' && <Taleplerim tam suzgec={suzgec} suzgecYaz={suzgecYaz} duzenle={(t, k) => { kipYaz(k); duzenlenenYaz(t); bolumYaz('yeni'); }} />}
       {/* Form bölüm değişse de bağlı kalır ki yarım kalan talep kaybolmasın. */}
       <div hidden={bolum !== 'yeni'}>

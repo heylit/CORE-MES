@@ -211,10 +211,6 @@ const FOY_SIRASI = ['Kalite', 'Form', 'Ölçü', 'Standart', 'Tolerans', 'Durum'
 const FOY_BASLIGI: Record<string, string> = { Açıklama: 'Kart açıklaması', 'İstenen sertifikalar': 'Sertifikalar' };
 const COK_DEGERLI = new Set(['Standart', 'Durum', 'İşlem', 'İstenen sertifikalar', 'Açıklama']);
 const foyu = (k: KalemTaslagi): readonly { ad: string; deger: string }[] => k.kart?.ayrinti ?? k.foy;
-export function foySutunlari(kalemler: readonly KalemTaslagi[]): string[] {
-  const dolu = new Set(kalemler.flatMap((k) => foyu(k).map((x) => x.ad)));
-  return [...FOY_SIRASI.filter((a) => dolu.has(a)), ...[...dolu].filter((a) => !FOY_SIRASI.includes(a))];
-}
 function FoyHucresi({ ad, deger }: { ad: string; deger: string | undefined }) {
   if (deger === undefined) return <span className="sa-talep-not">–</span>;
   const parcalar = COK_DEGERLI.has(ad) ? deger.split(', ').filter(Boolean) : [deger];
@@ -235,29 +231,50 @@ const zarfKarti = (tur: TalepTuru, k: KalemTaslagi): number | null =>
   (tur !== 'malzeme' ? null : k.mevcut !== null ? k.zarfNo : k.kart?.hammadde === true ? k.kart.no : null);
 
 function AlternatifOzeti({ no, sira, kabul, isaretSayisi, ac }: { no: number; sira: number; kabul: KabulSiniri | null; isaretSayisi: number | null; ac: () => void }) {
-  const z = useKabulZarfi(no).data?.zarf;
+  const veri = useKabulZarfi(no).data;
+  const z = veri?.zarf;
+  const toplam = veri?.alternatifKartlari?.length ?? null;
   if (z?.kapali) return <span className="sa-talep-not">{kapaliZarfNotu(z.gerekce)}</span>;
   return (
     <span className="sa-talep-alternatif-ozet">
-      {kabulOzeti(kabul)}{isaretSayisi !== null && isaretSayisi > 0 && ` · ${String(isaretSayisi)} alternatif kartı`}
+      {kabulOzeti(kabul)}{isaretSayisi !== null && isaretSayisi > 0 && ` · ${toplam === null ? String(isaretSayisi) : `${String(isaretSayisi)}/${String(toplam)}`} alternatif kartı işaretli`}
       {' '}<Dugme simge="edit" onClick={ac} aria-label={`Kalem ${String(sira)}: alternatif sınırını değiştir`}>Değiştir</Dugme>
     </span>
   );
 }
 
+// 3695: seçilen kartın her bilgisi (kod ve föy) ayrı etiketli hücre olarak kalemin altında açılır; tabloda yatay sütun olarak yer tutmaz.
+function SecilenMalzeme({ k }: { k: KalemTaslagi }) {
+  const sira = (ad: string) => { const i = FOY_SIRASI.indexOf(ad); return i < 0 ? FOY_SIRASI.length : i; };
+  const satirlar = [...foyu(k)].sort((a, b) => sira(a.ad) - sira(b.ad));
+  const kod = k.kart?.kod ?? null;
+  if (kod === null && satirlar.length === 0) return null;
+  return (
+    <section className="sa-secili-malzeme" aria-label="Seçilen malzeme">
+      <b>Seçilen malzeme</b>
+      <dl>
+        {kod !== null && <div><dt>Kod</dt><dd className="sa-talep-no">{kod}</dd></div>}
+        {satirlar.map((x) => <div key={x.ad}><dt>{FOY_BASLIGI[x.ad] ?? x.ad}</dt><dd><FoyHucresi ad={x.ad} deger={x.deger} /></dd></div>)}
+      </dl>
+    </section>
+  );
+}
+
 // 3462 a: her kalem tek satır; ayrıntı (ön talep kaynağı, uygulanacak parça, kabul sınırı, adet yardımcısı) satırın altında açılır.
-function KalemSatiri({ tur, sira, k, foySutunlari: sutunlar, emirSecenekleri, emirDegisir, degistir, kaldir, bol = null }: {
-  tur: TalepTuru; sira: number; k: KalemTaslagi; foySutunlari: readonly string[]; emirSecenekleri: readonly { deger: string; baslik: string; no: string; parca: string }[];
+function KalemSatiri({ tur, sira, k, emirSecenekleri, emirDegisir, degistir, kaldir, bol = null }: {
+  tur: TalepTuru; sira: number; k: KalemTaslagi; emirSecenekleri: readonly { deger: string; baslik: string; no: string; parca: string }[];
   emirDegisir: boolean; degistir: (d: Partial<KalemTaslagi>) => void; kaldir: (() => void) | null; bol?: (() => void) | null;
 }) {
   // Ön talepten gelen kalemde kaynak ve bağ açık gelir (talep eden neyi çevirdiğini görsün).
   const [acik, acikYaz] = useState(k.kaynak !== null);
   const zarf = zarfKarti(tur, k);
-  const ayrintiVar = k.kaynak !== null || (tur === 'hizmet' && k.mevcut === null) || zarf !== null;
+  const foyVar = foyu(k).length > 0;
+  const ayrintiVar = k.kaynak !== null || (tur === 'hizmet' && k.mevcut === null) || zarf !== null || foyVar;
+  // Kart seçilince seçilen malzemenin bilgileri açılır (kullanıcı kapatabilir).
+  useEffect(() => { if (foyVar) acikYaz(true); }, [foyVar]);
   const birim = k.kart?.birim ?? (k.mevcut ? k.birim : null);
-  const foy = new Map(foyu(k).map((x) => [x.ad, x.deger]));
   const ad = k.mevcut?.id ?? k.anahtar;
-  const sutunSayisi = 9 + sutunlar.length + (tur === 'malzeme' ? 1 : 0);
+  const sutunSayisi = 9 + (tur === 'malzeme' ? 1 : 0);
   const alternatifDegistir = useCallback((l: number[]) => degistir({ alternatifKartlari: l }), [degistir]);
   useVarsayilanIsaretler(zarf, k.mevcut === null, k.alternatifKartlari, alternatifDegistir);
   return (
@@ -282,7 +299,6 @@ function KalemSatiri({ tur, sira, k, foySutunlari: sutunlar, emirSecenekleri, em
           )}
           {k.kaynak && <span className="sa-talep-kaynak"><Rozet ton="uyari" gorunum="cizgi">{k.isEmriId !== null ? 'Fason adım' : k.satisSatiriId !== null ? 'Satış siparişi' : 'Plan ihtiyacı'}</Rozet> {k.kaynak}</span>}
         </td>
-        {sutunlar.map((s) => <td key={s} data-sutun={s} data-etiket={FOY_BASLIGI[s] ?? s}><FoyHucresi ad={s} deger={foy.get(s)} /></td>)}
         {tur === 'malzeme' && (
           <td className="sa-talep-alternatif" data-etiket="Alternatif">
             {zarf === null ? <span className="sa-talep-not">Yalnız aynı malzeme</span> : <AlternatifOzeti no={zarf} sira={sira} kabul={k.kabul} ac={() => acikYaz(true)}
@@ -301,7 +317,12 @@ function KalemSatiri({ tur, sira, k, foySutunlari: sutunlar, emirSecenekleri, em
             : <span className="sa-talep-not">–</span>}
         </td>
         <td data-etiket="Termin"><input className="tc-alan-kutu" type="date" aria-label="Termin" value={k.termin} onChange={(e) => degistir({ termin: e.target.value })} /></td>
-        <td data-etiket="Üretim emri">
+      </tr>
+      <tr className="sa-talep-ek-satir">
+        <td colSpan={sutunSayisi} data-etiket="Açıklama">
+          <div className="sa-talep-ek">
+          <div className="sa-talep-ek-emir">
+            <span className="sa-talep-not">Üretim emri</span>
           <select className="tc-alan-kutu sa-talep-emir" aria-label="Kalemin üretim emri" value={k.emirId} disabled={!emirDegisir || k.mevcut !== null || k.isEmriId !== null}
             onChange={(e) => degistir({ emirId: e.target.value })}>
             <option value="">Bağlı değil</option>
@@ -310,18 +331,21 @@ function KalemSatiri({ tur, sira, k, foySutunlari: sutunlar, emirSecenekleri, em
           </select>
           {/* Kutu dar ekranda numarayı kesebilir: tam numara ve parça altında yazılır. */}
           {emirSecenekleri.find((e) => e.deger === k.emirId) && <span className="sa-talep-not">{emirSecenekleri.find((e) => e.deger === k.emirId)!.baslik}</span>}
-        </td>
-        <td data-etiket="Açıklama"><input className="tc-alan-kutu" aria-label="Kalem açıklaması" value={k.aciklama} maxLength={500} placeholder="Ölçü, marka, kullanım yeri" onChange={(e) => degistir({ aciklama: e.target.value })} /></td>
-        <td><span className="sa-talep-eylem">
+          </div>
+            <input className="tc-alan-kutu" aria-label="Kalem açıklaması" value={k.aciklama} maxLength={500} placeholder="Ölçü, marka, kullanım yeri" onChange={(e) => degistir({ aciklama: e.target.value })} />
+            <span className="sa-talep-eylem">
           {ayrintiVar && <Dugme simge={acik ? 'up' : 'down'} aria-expanded={acik} aria-controls={`ayr-${ad}`} onClick={() => acikYaz(!acik)}>Ayrıntı</Dugme>}
           {bol && <Dugme simge="layers" aria-label={`Kalem ${String(sira)}: teslimi böl`} onClick={bol}>Teslimi böl</Dugme>}
           {kaldir && <Dugme simge="trash" aria-label={`Kalem ${String(sira)}: kaldır`} onClick={kaldir} />}
-        </span></td>
+        </span>
+          </div>
+        </td>
       </tr>
       {acik && ayrintiVar && (
         <tr className="sa-talep-ayrinti-satir" id={`ayr-${ad}`}>
           <td colSpan={sutunSayisi}>
             <div className="sa-talep-ayrinti-ic">
+              <SecilenMalzeme k={k} />
               {k.kaynak && (
                 <p className="sa-talep-kaynak">
                   <span className="sa-talep-not">{k.isEmriId !== null ? 'Bağ talebe taşınır; talep açılınca ön talep listeden düşer.' : k.satisSatiriId !== null ? 'Bağ talebe taşınır; talep açılınca kalem ön talep listesinden düşer. Kart siparişteki karttır.' : 'Talep açılınca miktarı ön talepten düşer; plan değişirse kalan yeniden hesaplanır.'}</span>
@@ -336,11 +360,11 @@ function KalemSatiri({ tur, sira, k, foySutunlari: sutunlar, emirSecenekleri, em
                 <KartArama tur="malzeme" etiket="Uygulanacak malzeme / parça" sec={(x) => degistir({ uygulanan: { no: x.no, kod: x.kod, ad: x.ad } })}
                   ipucu="İsteğe bağlı. Hizmet hangi parça ya da malzeme üzerinde yapılacak; satın alma teklif isterken bu bilgiyle gider." />
               ))}
+              {zarf !== null && <KabulSinirlari no={zarf} kabul={k.kabul} degistir={(kabul, kabulHatali) => degistir({ kabul, kabulHatali })} />}
               {zarf !== null && (
                 <AlternatifKartlari no={zarf} sira={sira} secili={k.alternatifKartlari} onceki={k.alternatifOnceki} yeni={k.mevcut === null} degistir={alternatifDegistir}
                   yenile={k.alternatifYenile} yenileDegistir={(l) => degistir({ alternatifYenile: l })} />
               )}
-              {zarf !== null && <KabulSinirlari no={zarf} kabul={k.kabul} degistir={(kabul, kabulHatali) => degistir({ kabul, kabulHatali })} />}
             </div>
           </td>
         </tr>
@@ -439,7 +463,6 @@ export function TalepAc({ taslak = null, taslakEmri = null, taslakBitti, duzenle
     ...x, termin: tarih, ...(duzenlenen === null && x.mevcut === null && x.isEmriId === null ? { emirId } : {}),
   })));
   const emirSecenekleri = (emirler.data?.emirler ?? []).map((e) => ({ deger: String(e.id), baslik: `${e.emirNo} · ${e.parcaNo} ${e.parcaAd}`, no: e.emirNo, parca: `${e.parcaNo} ${e.parcaAd}` }));
-  const sutunlar = foySutunlari(kalemler);
   const gonder = useMutation({
     mutationFn: (govde: HizliAcGovdesi) =>
       tekrarKorumaliGonder((deneme) => cagri.post('/satin-alma-talepleri/hizli-ac', { govde, ...deneme, ...SURE }), { ...SURE, istekKimligi: govde.id }),
@@ -546,19 +569,15 @@ export function TalepAc({ taslak = null, taslakEmri = null, taslakBitti, duzenle
               <tr>
                 <th className="sa-talep-sabit" scope="col">#</th>
                 <th className="sa-talep-sabit sa-talep-malzeme" scope="col">{TUR_ADI[tur]}</th>
-                {sutunlar.map((x) => <th key={x} scope="col">{FOY_BASLIGI[x] ?? x}</th>)}
                 {tur === 'malzeme' && <th scope="col">Alternatif</th>}
                 <th scope="col">Miktar</th>
                 <th scope="col">Birim</th>
                 <th scope="col">Termin</th>
-                <th scope="col">Üretim emri</th>
-                <th scope="col">Açıklama</th>
-                <th scope="col"><span className="sa-talep-gizli">İşlemler</span></th>
               </tr>
             </thead>
             <tbody>
               {kalemler.map((k, i) => (
-                <KalemSatiri key={k.anahtar} tur={tur} sira={i + 1} k={k} foySutunlari={sutunlar} emirSecenekleri={emirSecenekleri} emirDegisir={duzenlenen === null}
+                <KalemSatiri key={k.anahtar} tur={tur} sira={i + 1} k={k} emirSecenekleri={emirSecenekleri} emirDegisir={duzenlenen === null}
                   degistir={(d) => degistir(k.anahtar, d)}
                   kaldir={kalemler.length > 1 && k.mevcut?.bagli !== true ? () => kalemlerYaz((l) => l.filter((x) => x.anahtar !== k.anahtar)) : null}
                   bol={teslimGrubu(tur, k, true) !== null && miktarSayisi(k.miktar) !== null && kalemler.length < 50 && kopyaKarti(k) !== null ? () => bolunenYaz(k.anahtar) : null} />

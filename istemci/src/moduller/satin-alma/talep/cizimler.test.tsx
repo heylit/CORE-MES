@@ -115,12 +115,11 @@ describe('3442-2 talebin çizimi', () => {
     await screen.findByRole('option', { name: /HM-00007/ });
     fireEvent.keyDown(kutu, { key: 'ArrowDown' });
     fireEvent.keyDown(kutu, { key: 'Enter' });
-    // 3462 a: föyün her alanı ayrı sütun; başlık ve değer kalemin satırında.
-    const basliklar = screen.getAllByRole('columnheader').map((x) => x.textContent);
-    expect(basliklar.slice(2, 4)).toEqual(['Kalite', 'Ölçü']);
-    const satir = screen.getAllByRole('row')[1]!;
-    expect(within(satir).getByText('ORN-K1')).toBeTruthy();
-    expect(within(satir).getByText('Ø50×3000 mm')).toBeTruthy();
+    // 3695: föyün her alanı kalemin altındaki "Seçilen malzeme" şeridinde ayrı etiketli hücredir; tabloda sütun yoktur.
+    const serit = await screen.findByRole('region', { name: 'Seçilen malzeme' });
+    expect(within(serit).getByText('Kalite').nextElementSibling?.textContent).toBe('ORN-K1');
+    expect(within(serit).getByText('Ölçü').nextElementSibling?.textContent).toBe('Ø50×3000 mm');
+    expect(screen.getAllByRole('columnheader').map((x) => x.textContent)).not.toContain('Kalite');
   });
 });
 

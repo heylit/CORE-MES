@@ -24,6 +24,8 @@ const kartSayfasi = SAYFALAR.find((s) => s.islem === 'sayfa.malzemeler');
 type Madde = (typeof MALZEMELER_IKINCI_MENU)['gruplar'][number]['maddeler'][number];
 const YENI_KART_YOLU: Extract<Madde, { anahtar: 'new' }>['yol'] = '/malzemeler/yeni';
 export const KART_SAYFASI = { yol: YENI_KART_YOLU, baslik: kartSayfasi?.baslik ?? 'Malzemeler ve Hizmetler' };
+// 3695: alternatif kartı Malzemeler'deki alternatifler sayfasında açılır; talepte yalnız var olan kartlar seçilir.
+export const ALTERNATIF_SAYFASI = { yol: '/malzemeler/alternatifler', baslik: 'İkame ve alternatifler' } as const;
 
 // Talep edenin gördüğü sade durum: satın almanın iç aşamaları (teklif, değerlendirme) ayrılmaz.
 export const DURUM: Record<Talebim['durum'], { metin: string; ton: RozetTonu }> = {

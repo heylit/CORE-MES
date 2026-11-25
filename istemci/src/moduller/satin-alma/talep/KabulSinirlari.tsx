@@ -127,9 +127,20 @@ export function KabulSinirlari({ no, kabul, degistir }: { no: number; kabul: Kab
     ...(z.boy ? [{ ad: 'Boy', istenen: z.boy.istenen === null ? '-' : sayi(z.boy.istenen), kabul: z.boy.istenen === null ? '-' : z.boy.uzunKesilir ? `${sayi(z.boy.istenen)} ve uzun (kesilir)` : 'Aynı' }] : []),
     ...(z.yuzey.istenen === null ? [] : [{ ad: 'Yüzey', istenen: z.yuzey.istenen, kabul: z.yuzey.serbest ? 'Serbest' : 'Aynı' }]),
   ];
+  const yalnizAyniYaz = (ayni: boolean) => {
+    if (ayni === k.yalnizAyni) return;
+    if (ayni) { yalnizOncesiYaz(kabul); degistir({ ...BOS, yalnizAyni: true }, false); return; }
+    degistir(yalnizOncesi, payOku(payYazi, enCokPay).hata !== null);
+  };
   return (
     <section className="sa-kabul" aria-label="Kabul sınırları">
       {baslik}
+      <fieldset className="sa-kabul-kip">
+        <legend>Bu malzeme yerine başka malzeme kabul edilir mi?</legend>
+        <label className="tc-isaret"><input type="radio" name={`kabul-kip-${String(no)}`} checked={k.yalnizAyni} onChange={() => yalnizAyniYaz(true)} /><span><b>Yalnız aynı malzeme</b><span className="sa-talep-not"> Alternatif teklif alınmaz</span></span></label>
+        <label className="tc-isaret"><input type="radio" name={`kabul-kip-${String(no)}`} checked={!k.yalnizAyni} onChange={() => yalnizAyniYaz(false)} /><span><b>Alternatif kabul</b><span className="sa-talep-not"> Aşağıdaki sınırlar içinde</span></span></label>
+      </fieldset>
+      <p className="sa-talep-not">Satın alma yalnız burada izin verdiğiniz alternatiflerle teklif alır. Muadil: kalite ya da durumu eşdeğer sayılan kart. Şartlı: ancak siz onaylarsanız kabul edilir.</p>
       {satirlar.length > 0 && (
         <table className="sa-talep-kt sa-kabul-tablo">
           <thead><tr><th scope="col">Özellik</th><th scope="col">İstenen</th><th scope="col">Kabul edilen</th></tr></thead>
@@ -138,13 +149,9 @@ export function KabulSinirlari({ no, kabul, degistir }: { no: number; kabul: Kab
       )}
       <div className="sa-kabul-secim">
         {sartliVar && !k.yalnizAyni && (
-          <IsaretKutusu etiket="Şartlı muadilleri kabul ediyorum" checked={k.sartliKabul} onChange={(e) => sartliYaz(e.target.checked)} />
+          <IsaretKutusu etiket="Şartlı kalite ve durum muadillerini de kabul ediyorum (satın alma bulunca size sorulur)" checked={k.sartliKabul} onChange={(e) => sartliYaz(e.target.checked)} />
         )}
-        <IsaretKutusu etiket="Yalnız aynı malzeme" checked={k.yalnizAyni}
-          onChange={(e) => {
-            if (e.target.checked) { yalnizOncesiYaz(kabul); degistir({ ...BOS, yalnizAyni: true }, false); return; }
-            degistir(yalnizOncesi, payOku(payYazi, enCokPay).hata !== null);
-          }} />
+        {!k.yalnizAyni && sartliVar && <p className="sa-talep-not">Bu kutu kalite ve durum muadil listesindeki şartlı değerleri açar; alternatif kartındaki "şartlı" rozeti ise kartın kendi türüdür ve kart ayrıca işaretlenince geçerli olur.</p>}
         <p className="sa-talep-not">{k.yalnizAyni ? 'Satın alma alternatif seçemez.' : 'Satın alma bu sınırlar içindeki alternatifi seçebilir; şartlı muadil size sorulur.'}</p>
       </div>
     </section>
