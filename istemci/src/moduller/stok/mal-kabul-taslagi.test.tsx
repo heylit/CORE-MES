@@ -51,7 +51,7 @@ describe('Yarım kalan mal kabul (3087, 3091)', () => {
     const k = istekler.find((i) => i.yol === '/stok/mal-kabul-taslagi/kaydet')!;
     expect(k.govde).toMatchObject({ surum: 3, govde: { tur: 'diger', irsaliye: 'ORN-IRS-13' } });
     expect(await screen.findByText(/Taslak kaydedildi/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Teslim al' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kabul et' }));
     await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST' && i.yol === '/stok/mal-kabul')).toBe(true));
     expect(istekler.find((i) => i.yol === '/stok/mal-kabul')!.govde).toMatchObject({ taslakSil: true, irsaliyeNo: 'ORN-IRS-13' });
   }, 10000);
@@ -64,7 +64,7 @@ describe('Yarım kalan mal kabul (3087, 3091)', () => {
     await new Promise((r) => setTimeout(r, 2500));
     expect(istekler.some((i) => i.yol.startsWith('/stok/mal-kabul-taslagi/'))).toBe(false);
     // Boş satırın zorunlu alanı tarayıcıda gönderimi durdurur; burada yalnız gövde ölçülür.
-    fireEvent.submit(screen.getByRole('button', { name: 'Teslim al' }).closest('form')!);
+    fireEvent.submit(screen.getByRole('button', { name: 'Kabul et' }).closest('form')!);
     await waitFor(() => expect(istekler.some((i) => i.yol === '/stok/mal-kabul')).toBe(true));
     expect(istekler.find((i) => i.yol === '/stok/mal-kabul')!.govde).toMatchObject({ taslakSil: false });
   }, 10000);
@@ -76,7 +76,7 @@ describe('Yarım kalan mal kabul (3087, 3091)', () => {
     await waitFor(() => expect(istekler.some((i) => i.yol === '/stok/mal-kabul-taslagi')).toBe(true));
     fireEvent.change(irsaliyeAlani(), { target: { value: 'ORN-IRS-40' } });
     await new Promise((r) => setTimeout(r, 500));
-    fireEvent.submit(screen.getByRole('button', { name: 'Teslim al' }).closest('form')!);
+    fireEvent.submit(screen.getByRole('button', { name: 'Kabul et' }).closest('form')!);
     await waitFor(() => expect(istekler.some((i) => i.yol === '/stok/mal-kabul')).toBe(true));
     expect(istekler.find((i) => i.yol === '/stok/mal-kabul')!.govde).toMatchObject({ taslakSil: false });
     await new Promise((r) => setTimeout(r, 4500));
@@ -90,7 +90,7 @@ describe('Yarım kalan mal kabul (3087, 3091)', () => {
     await waitFor(() => expect(istekler.some((i) => i.yol === '/stok/mal-kabul-taslagi')).toBe(true));
     fireEvent.change(irsaliyeAlani(), { target: { value: 'ORN-IRS-41' } });
     await waitFor(() => expect(istekler.some((i) => i.yol === '/stok/mal-kabul-taslagi/kaydet')).toBe(true), { timeout: 4000 });
-    fireEvent.submit(screen.getByRole('button', { name: 'Teslim al' }).closest('form')!);
+    fireEvent.submit(screen.getByRole('button', { name: 'Kabul et' }).closest('form')!);
     await waitFor(() => expect(istekler.some((i) => i.yol === '/stok/mal-kabul')).toBe(true));
     expect(istekler.find((i) => i.yol === '/stok/mal-kabul')!.govde).toMatchObject({ taslakSil: true });
     await waitFor(() => expect(istekler.find((i) => i.yol === '/stok/mal-kabul-taslagi/sil')?.govde).toEqual({ surum: 1 }), { timeout: 4000 });

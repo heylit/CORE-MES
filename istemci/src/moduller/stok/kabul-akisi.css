@@ -1,0 +1,31 @@
+/* Telefonda kalem kalem mal kabul (kart 3676 dilim 2c): tam ekran katman; tuş takımı 56 px, alt düğmeler sabit, orta kısım kayar. */
+.tc-kabul-akisi { position: fixed; inset: 0; z-index: var(--z-katman); display: flex; flex-direction: column; background: var(--bg); color: var(--ink); }
+.tc-kabul-akisi-ust { display: flex; align-items: center; gap: var(--b-3); padding: var(--b-3) var(--b-4); background: var(--kusak); color: var(--on-kusak); }
+.tc-kabul-akisi-ust h2 { margin: 0; font-size: var(--yazi-l); }
+.tc-kabul-akisi-kapat { display: grid; place-items: center; inline-size: var(--dokunma); block-size: var(--dokunma); border: 1px solid var(--edge2); border-radius: var(--yari-2); background: var(--panel-solid); color: var(--ink); cursor: pointer; }
+.tc-kabul-akisi-ilerleme { display: flex; gap: var(--b-1); padding: var(--b-2) var(--b-4); }
+.tc-kabul-akisi-ilerleme span { flex: 1; block-size: var(--b-1); border-radius: var(--yari-tam); background: var(--edge2); }
+.tc-kabul-akisi-ilerleme span[data-tamam] { background: var(--run); }
+.tc-kabul-akisi-ilerleme span[data-simdiki] { background: var(--ink); }
+.tc-kabul-akisi-orta { flex: 1; min-block-size: 0; overflow-y: auto; display: flex; flex-direction: column; align-items: center; gap: var(--b-2); padding: var(--b-3) var(--b-4); text-align: center; }
+.tc-kabul-akisi-orta h3 { margin: 0; font-size: var(--yazi-l); overflow-wrap: anywhere; }
+.tc-kabul-akisi-siparis, .tc-kabul-akisi-bilgi { margin: 0; color: var(--muted); font-size: var(--yazi-s); }
+.tc-kabul-akisi-sayi { display: flex; align-items: baseline; gap: var(--b-2); margin: 0; font-size: var(--yazi-baslik); font-weight: 800; font-variant-numeric: tabular-nums; }
+.tc-kabul-akisi-sayi span { color: var(--muted); font-size: var(--yazi-m); font-weight: 600; }
+.tc-kabul-akisi-uyari { margin: 0; padding: var(--b-2) var(--b-3); border: 1px solid var(--hold); border-radius: var(--yari-1); font-size: var(--yazi-s); }
+.tc-kabul-akisi-ipucu { margin: 0; color: var(--muted); font-size: var(--yazi-s); }
+.tc-kabul-akisi-tuslar { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--b-2); padding: var(--b-2) var(--b-4); }
+.tc-kabul-akisi-tuslar button { min-block-size: var(--dokunma-ana); border: 1px solid var(--edge2); border-radius: var(--yari-2); background: var(--panel-solid); color: var(--ink); font-size: var(--yazi-xl); font-weight: 700; cursor: pointer; }
+.tc-kabul-akisi-alt { display: flex; gap: var(--b-2); padding: var(--b-3) var(--b-4); border-block-start: 1px solid var(--edge); }
+.tc-kabul-akisi-alt > * { flex: 1; min-block-size: var(--dokunma-ana); }
+.tc-kabul-akisi-ozet { align-items: stretch; text-align: start; }
+.tc-kabul-akisi-ozet ul { display: flex; flex-direction: column; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+.tc-kabul-akisi-ozet li { display: flex; align-items: center; justify-content: space-between; gap: var(--b-3); padding: var(--b-2) 0; border-block-end: 1px solid var(--edge); }
+.tc-kabul-akisi-hata { display: grid; gap: var(--b-2); padding: var(--b-2) var(--b-3); border: 1px solid var(--stop); border-radius: var(--yari-1); font-size: var(--yazi-s); }
+.tc-kabul-akisi-hata p { margin: 0; }
+.tc-kabul-akisi-satir { display: flex; align-items: center; justify-content: space-between; gap: var(--b-3); inline-size: 100%; min-block-size: var(--dokunma); padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.tc-kabul-akisi-satir-sag { display: flex; flex-direction: column; align-items: flex-end; gap: var(--b-1); }
+.tc-kabul-akisi-satir-sag small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-kabul-akisi-sor { position: absolute; inset: 0; display: grid; place-items: center; padding: var(--b-4); background: color-mix(in srgb, var(--bg) 70%, transparent); }
+.tc-kabul-akisi-sor > div { display: grid; gap: var(--b-3); inline-size: 100%; padding: var(--b-4); border: 1px solid var(--edge2); border-radius: var(--yari-3); background: var(--panel-solid); }
+.tc-kabul-akisi-sor h3, .tc-kabul-akisi-sor p { margin: 0; }

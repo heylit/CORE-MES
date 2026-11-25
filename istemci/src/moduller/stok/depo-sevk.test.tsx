@@ -56,7 +56,7 @@ describe('Depo sevk', () => {
     fireEvent.click(within(girecek).getByRole('button', { name: 'Kabul et' }));
     expect(await screen.findByText(/^Sevkiyat kalemi:/)).toBeTruthy();
     await waitFor(() => expect((screen.getAllByLabelText(/Sayılan miktar/) as HTMLInputElement[]).map((k) => k.value)).toEqual(['15']));
-    fireEvent.click(screen.getByRole('button', { name: 'Teslim al' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kabul et' }));
     await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST' && i.yol === '/stok/mal-kabul')).toBe(true));
     const govde = istekler.find((i) => i.yol === '/stok/mal-kabul')!.govde as { tur: string; satirlar: unknown[] };
     expect(govde.tur).toBe('satin_alma');

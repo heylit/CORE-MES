@@ -111,9 +111,12 @@ export function SayfaBasi({ baslik, alt, aciklama, sag }: { baslik: string; alt?
 
 // Yetersiz stokta sunucu ONAY_GEREKLI döner (DEP-02); kullanıcı onaylarsa aynı komut `eksiOnay: true` ile yinelenir (DEP-03).
 // Emre giden malzemenin kartı (632 a) aynı yolla sorulur; onay `kartOnayi: true` ile yinelenir.
-export function useStokKomutu<G extends object>(gonder: (govde: G) => Promise<unknown>, basarili: string | null, sonra?: () => void) {
+// sessiz: ekran sonucu kendi gösteriyorsa (tam ekran akış) hata ve başarı bildirimi çıkmaz; eski hata bildirimi her yeni denemede kapanır.
+export function useStokKomutu<G extends object>(gonder: (govde: G) => Promise<unknown>, basarili: string | null, sonra?: () => void, sessiz?: () => boolean) {
   const istemci = useQueryClient();
-  const { bildir } = useBildirim();
+  const { bildir, kaldir } = useBildirim();
+  const hataBildirimi = useRef<number | null>(null);
+  const eskiHatayiKapat = () => { if (hataBildirimi.current !== null) { kaldir(hataBildirimi.current); hataBildirimi.current = null; } };
   const [onay, setOnay] = useState<{ govde: G; mevcut: string } | null>(null);
   const [kartOnayi, setKartOnayi] = useState<{ govde: G; bilgi: KartOnayi } | null>(null);
   const [kartsiz, setKartsiz] = useState<{ govde: G; bilgi: KartsizBilgi } | null>(null);
@@ -121,13 +124,14 @@ export function useStokKomutu<G extends object>(gonder: (govde: G) => Promise<un
   const [skt, setSkt] = useState<{ govde: G; sonKullanma: string | null } | null>(null);
   const sktOnaylayabilir = useIslem('stok.skt-onayla');
   const komut = useMutation({
+    onMutate: eskiHatayiKapat,
     mutationFn: (govde: G) => (belirsizMiktarVar(govde) ? Promise.reject(new BelirsizMiktarHatasi()) : gonder(govde)),
     onSuccess: async () => {
       setOnay(null);
       setKartOnayi(null);
       setKartsiz(null);
       setSkt(null);
-      if (basarili !== null) bildir('tamam', basarili);
+      if (basarili !== null && sessiz?.() !== true) bildir('tamam', basarili);
       await istemci.invalidateQueries({ queryKey: anahtarlar.hepsi });
       sonra?.();
     },
@@ -144,7 +148,8 @@ export function useStokKomutu<G extends object>(gonder: (govde: G) => Promise<un
         setOnay({ govde, mevcut: ayrinti?.mevcut ?? '0' });
         return;
       }
-      bildir('hata', hata instanceof BelirsizMiktarHatasi ? hata.message : hataIletisi(hata, 'Kaydedilemedi. Bağlantıyı kontrol edip yeniden deneyin.'));
+      if (sessiz?.() === true) return;
+      hataBildirimi.current = bildir('hata', hata instanceof BelirsizMiktarHatasi ? hata.message : hataIletisi(hata, 'Kaydedilemedi. Bağlantıyı kontrol edip yeniden deneyin.'));
     },
   });
   const onayPenceresi = (
