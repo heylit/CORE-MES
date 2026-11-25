@@ -25,9 +25,9 @@ export function tusEkle(d: OkuyucuDurumu, tus: string, zaman: number): { durum: 
 // Önek ve biçim paylasilan/kod-sozlugu.ts ile aynıdır (test eşliği sabitler); okutma buraya `okutmaDuzelt`ten geçmiş gelir.
 export type TerminalOkutmasi = { tur: 'kart'; kartId: number } | { tur: 'etiket'; kod: string } | { tur: 'baska'; kod: string };
 export function terminalOkutmasi(ham: string): TerminalOkutmasi {
-  const k = /^RP:(\d{1,9})$/.exec(ham.replace(/\s+/g, '').toUpperCase());
-  if (k) return { tur: 'kart', kartId: Number(k[1]) };
+  // Basılı kart özet kod (CM1/RP:12/...) taşır; çıplak RP:12 ve elle yazılan da aynı sözlükten geçer.
   const t = kodTuru(ham);
+  if (t.tur === 'refakat-partisi') return { tur: 'kart', kartId: Number(t.deger) };
   return t.tur === 'lot' || t.tur === 'malzeme' ? { tur: 'etiket', kod: ham.trim() } : { tur: 'baska', kod: ham.trim() };
 }
 export const KART_DEGIL_ILETISI = 'Refakat kartı değil; malzeme ve lot üst çubuktaki Okut panelinde okutulur';

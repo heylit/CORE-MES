@@ -47,6 +47,10 @@ describe('1337 a el okuyucu', () => {
     expect(terminalOkutmasi('LOC:A-01')).toEqual({ tur: 'baska', kod: 'LOC:A-01' });
     // paylasilan/kod-sozlugu.test.ts ile aynı girdiler: boşluk ve küçük harf kart sayılır, bozuk gövde sayılmaz.
     expect(terminalOkutmasi(' rp : 7 ')).toEqual({ tur: 'kart', kartId: 7 });
+    // Basılı refakat kartı özet kod taşır (3542 dilim 2): kart yine kart sayılır, UE özet kodu sayılmaz.
+    expect(terminalOkutmasi('CM1/RP:12/PRC:ORN-P1/REV:A/LOT:ORN-LT-1/ADT:50/BT:261122')).toEqual({ tur: 'kart', kartId: 12 });
+    expect(terminalOkutmasi('CM1/RP:12/+3').tur).toBe('kart');
+    expect(terminalOkutmasi('CM1/UE:142/REV:B').tur).toBe('baska');
     for (const ham of ['RP:abc', 'RP:', 'RP-12', 'RP:-3', 'RP:12a', 'UE:4', 'RP:1234567890']) expect(terminalOkutmasi(ham).tur).toBe('baska');
   });
 });
