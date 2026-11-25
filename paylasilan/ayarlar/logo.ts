@@ -53,6 +53,24 @@ export const LOGO_AYARLARI = {
     baslik: 'Logo: satın alma gönderimi',
     aciklama: 'Açıkken onaylı satın alma talepleri talep fişi, verilen siparişler satın alma siparişi olarak Logo\'ya gider; düzenleme, kapatma, iptal ve talep karşılaması da gider. Sipariş bekletme ve talep fişi iptali ayrı anahtarla açılır. "Logo bağlantısı" da açık olmalı. Kapalıyken "bekliyor" olarak birikir.',
   },
+  // Kart 3665 ve 3684: irsaliye yazma kapalı gelir; ölçüm kapısı (irsaliye-yazma-kapisi) tamamlanmadan Logo modülünün komutu da açmaz,
+  // bu yüzden genel ayar ucu yazmaz (degistirenEkran).
+  'logo.satin-alma-irsaliyesi': {
+    modul: 'logo',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: "Logo: satın alma irsaliyesi gönderimi",
+    aciklama: "Açıkken mal kabul kayıtları Logo'ya satın alma irsaliyesi olarak gider. Logo etiketleri ölçülmeden açılmaz. \"Logo bağlantısı\" da açık olmalı.",
+    degistirenEkran: 'Logo > Irsaliye ayarları',
+  },
+  'logo.sevk-irsaliyesi': {
+    modul: 'logo',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: "Logo: sevk (satış ve konsinye) irsaliyesi gönderimi",
+    aciklama: "Açıkken sevk kayıtları Logo'ya toptan satış ya da konsinye çıkış irsaliyesi olarak gider. Logo etiketleri, durum kodu kümesi ve e-irsaliye üreticisi belli olmadan açılmaz. \"Logo bağlantısı\" da açık olmalı.",
+    degistirenEkran: 'Logo > Irsaliye ayarları',
+  },
   // 3315 c, 3315 a: proje kartı Logo Objects nesnesi gerçek Logo'da ölçülmedi; kapalı gelir. Kapalıyken belgeler proje kodu olmadan gider.
   'logo.proje-gonderimi': {
     modul: 'logo',

@@ -1,21 +1,18 @@
 import { FIS_NO_EN_COK, logoBirimKodu, logoTarihi, STOK_KODU_EN_COK } from './kurallar.ts';
 import type { LogoBelgeBulgusuHam } from './kurallar.ts';
+import { SATIN_ALMA_ETIKETLERI, SATIN_ALMA_IRSALIYESI_TRCODE } from './irsaliye-etiket-esleme.ts';
 
 // Mal kabulden Logo'ya satın alma irsaliyesi (kart 3665; kurgu devir-heylit/mal-kabul-irsaliye/KURGU.md). Bu dosya saf kurallardır:
 // ön kontrol, kısmi gönderim, gövde ve çift kayıt kalkanı. Köprüye gitmez, hiçbir şey yazmaz; gönderim turu ve ekran sonraki dilimdedir.
 
 // Logo tür kodu: rehberde satın alma irsaliyesi STFICHE TRCODE 1 (DOĞRULANDI, EkoTigerAPI rehberi).
-export const SATIN_ALMA_IRSALIYESI_TRCODE = 1;
+export { SATIN_ALMA_IRSALIYESI_TRCODE };
 
 // DOĞRULANMADI: etiket adları kullanıcının 25.11'de verdiği belgeden (kök PURCHASE_DISPATCHES/DISPATCH; ORDER_REFERENCE = ORFLINE.LOGICALREF) alındı;
 // gerçek Logo dökümü değil (KURGU bölüm 10, devir-heylit/3665/LOGO-ISTEK.md). Doğrulanınca yalnız bu harita ve gövde kuralı değişir.
 // Bilerek yazılmayanlar: TIME (isteğe bağlı, paketli tamsayı; sistem saati), satır SOURCEINDEX (rehberde siparişte etiket değil, ölçüldü), döviz alanları,
 // SL_DETAILS (lot; ilk dilimde lotlu satır gitmez), DBOP UPD (rehber: bu sürümde INSERT'e zorlar). Sipariş bağı yalnız satırda yazılır.
-export const IRSALIYE_ALANLARI = Object.freeze({
-  tur: 'TYPE', no: 'NUMBER', tarih: 'DATE', belgeNo: 'DOC_NUMBER', cari: 'ARP_CODE', ambar: 'SOURCE_WH', maliyetGrubu: 'SOURCE_COST_GRP', proje: 'PROJECT_CODE',
-  satirlar: 'TRANSACTIONS', kod: 'MASTER_CODE', miktar: 'QUANTITY', birim: 'UNIT_CODE', carpan1: 'UNIT_CONV1', carpan2: 'UNIT_CONV2',
-  satirTuru: 'TYPE', aciklama: 'DESCRIPTION', siparisSatiri: 'ORDER_REFERENCE', notlar1: 'NOTES1', fiyat: 'PRICE', kdv: 'VAT_RATE',
-});
+export const IRSALIYE_ALANLARI = SATIN_ALMA_ETIKETLERI;
 const SATIR_ACIKLAMA_EN_COK = 50;
 const BELGE_NO_EN_COK = 16; // VARSAYIM: STFICHE.DOCODE uzunluğu bilinmiyor; kırpmak yerine reddedilir.
 const ONDALIK = /^\d+(\.\d+)?$/;
