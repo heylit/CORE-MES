@@ -359,6 +359,7 @@ describe('A2 Hazırlık ekranı', () => {
     }, { timeout: 15000 });
     fireEvent.click(within(d).getByRole('button', { name: 'Numune' }));
     expect(await within(d).findByText(/Numune planı Kalite Merkezi’nden geldi/, undefined, { timeout: 10000 })).toBeTruthy();
+    expect(within(d).queryByRole('button', { name: /Sıraya ekle/ })).toBeNull();
     expect(within(d).queryByRole('button', { name: /Numune kuralı ekle/ })).toBeNull();
     expect(within(d).queryByRole('button', { name: 'Kuralı sil' })).toBeNull();
     // Risk S1: kuralın bütün alanları kapalı; değişirse paket Kalite Merkezi'nden ayrışırdı.

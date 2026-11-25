@@ -120,7 +120,7 @@ export function NumuneSekmesi({ paket, yama, km = null }: { paket: Pkg; yama: (c
                     ) : null}
                   </span>
                 ))}
-                {r.when !== 'first' && r.when !== 'last' ? (
+                {!salt && r.when !== 'first' && r.when !== 'last' ? (
                   <button type="button" className="tc-ay2-hazir" onClick={() => guncelle(r.id, { who: [...kim, kim[kim.length - 1] === 'q' ? 'op' : 'q'] })}>
                     <Simge ad="plus" boyut="k" />Sıraya ekle
                   </button>
