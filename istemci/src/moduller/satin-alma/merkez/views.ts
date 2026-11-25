@@ -908,14 +908,14 @@ export function singleOrderHTML(r: PurchaseRequest, a: Partial<Award>): string {
   // Sipariş verilmeden sipariş tarihi boştur ama alan bugünü gösterir; öneri de ondan sayılır (boş kalıp termin yeniden girilmesin).
   const expDefault = a.expectedDate || (ld !== null ? addDays(a.orderDate || todayStr(), ld) : "");
   return `<p class="small muted">Sipariş no: ${a.orderNo ? `<b>${esc(a.orderNo)}</b>` : "sipariş verilince CORE verir (numara kuralı)"}${logoRozeti(a.logo)}</p><div class="grid g3">
-      <label class="f"><span>Logo / tedarikçi no</span><input type="text" id="o-po" value="${esc(a.poNo || "")}"></label>
+      <label class="f"><span>Tedarikçi / dış sipariş no</span><input type="text" id="o-po" value="${esc(a.poNo || "")}"></label>
       <label class="f"><span>Sipariş tarihi</span><input type="date" id="o-date" value="${esc(a.orderDate || todayStr())}"></label>
       <label class="f"><span>Beklenen teslim <small>— termine göre önerildi</small></span><input type="date" id="o-exp" value="${esc(expDefault)}"${ld !== null ? ` data-termin="${ld}" data-oneri="${esc(a.expectedDate ? "" : expDefault)}"` : ""}></label>
     </div>${selQ ? `<div class="row"><button class="btn sm" data-act="po-text" data-qid="${selQ.id}">Sipariş metni</button><span class="small muted">Tedarikçiye gönderilecek sipariş e-postası</span></div>` : ""}`;
 }
 /* kalem bazlı kararda her tedarikçiye ayrı sipariş satırı */
 function ordersFormHTML(r: PurchaseRequest, orders: OrderInfo[]): string {
-  return `<div class="tw"><table class="itbl rt" id="orders-form"><thead><tr><th>Tedarikçi</th><th>Sipariş no</th><th>Logo / tedarikçi no</th><th>Sipariş tarihi</th><th>Beklenen teslim</th><th></th></tr></thead><tbody>
+  return `<div class="tw"><table class="itbl rt" id="orders-form"><thead><tr><th>Tedarikçi</th><th>Sipariş no</th><th>Tedarikçi / dış sipariş no</th><th>Sipariş tarihi</th><th>Beklenen teslim</th><th></th></tr></thead><tbody>
   ${orders.map(o => { const ld = parseNum(o.q.leadDays); return `<tr data-order="${o.qid}"><td class="lead"><b>${esc(supName(o.q))}</b><span class="sub">${o.items.map(it => esc(kalemAdiParcayla(it))).join(", ")}${ld !== null ? `, termin ${ld} gün` : ""}</span></td>
     <td class="num">${o.orderNo ? esc(o.orderNo) : '<span class="muted">sipariş verilince</span>'}${logoRozeti(o.logo)}</td>
     <td><input type="text" data-of="poNo" value="${esc(o.poNo)}"></td>
