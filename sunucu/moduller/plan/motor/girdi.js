@@ -785,7 +785,11 @@ function kaynakBirlestir(D0, kayit, kaynak, bugun) {
      sürümü artırdığı için kaynak değişikliği sayılırsa her "Planı kur"dan sonra plan güncel değil görünür. Karşılaştırmada dışarıda kalır;
      ekran termin yazarken güncel sürümü ister, alan yine yenilenir. B-2500-4: terminsiz satır (saTermin null) ile satırın olmaması motor için
      aynıdır (durum.js tmSaTermin yalnız metni okur); ilk termin satırı açılınca "boş → boş" farkı sayılmaz. */
-  const surumsuz = (a, v) => a === 'malzemeler' && Array.isArray(v) ? v.map(m => { if (!m || typeof m !== 'object') return m; const { saSurum, ...r } = m; if (r.saTermin == null) delete r.saTermin; return r; }) : v;
+  const surumsuz = (a, v) => a === 'siparisler' && bedelsiz && Array.isArray(v) ? v.map(x => { if (!x || typeof x !== 'object') return x; const r = Object.assign({}, x); for (const f of BEDEL_ALANLARI) delete r[f]; return r; }) : a === 'malzemeler' && Array.isArray(v) ? v.map(m => { if (!m || typeof m !== 'object') return m; const { saSurum, ...r } = m; if (r.saTermin == null) delete r.saTermin; return r; }) : v;
+  /* Siparis bedelini goremeyen okuyucuda kaynak bedeli null verir, kayitta ise fiyat goren kisinin yazdigi deger kalir (yazma onu korur):
+     karsilastirmada bedel alanlari sayilmazsa her acilis plani "degisti" diye eskitir ve veri surumunu artirir. */
+  const bedelsiz = kaynak && kaynak.ek && kaynak.ek.siparisBedeliGizli === true;
+  const BEDEL_ALANLARI = ['gelir', 'cezaOran', 'cezaTavan', 'cezaGun'];
   const uygun = TMI_KAYNAK_ALANLARI.filter(a => D[a] !== undefined && !okunamayan.has(a) && !rrEsit(D[a], D0k[a]));
   const alanlar = uygun.filter(a => !rrEsit(surumsuz(a, D[a]), surumsuz(a, D0k[a])));
   for (const a of uygun) D0[a] = D[a];

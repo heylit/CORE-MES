@@ -326,7 +326,7 @@ async function kaynakOkuKur(db: Db, kullanici: Kullanici): Promise<KaynakOkumasi
     // Ekrana giden okuma (planlamaKaynagi) emrin numarasını korur; yalnız motora giden kopya rotanın numarasına çevrilir.
     durum: { ...d, ...(d.adimAdetleri == null ? {} : { adimAdetleri: adimAdetleriMotora(d.adimAdetleri, esle) }),
       ...(d.calisanAdimlar == null ? {} : { calisanAdimlar: d.calisanAdimlar.map((c) => ({ ...c, anahtar: esle.get(c.anahtar) ?? c.anahtar })) }) },
-    ek: { takvim: null, makineNotu, kisiGorevi: gorev, insanliIstasyonlar, ekipUyeleri: ekipUyeleriEki, kapasite: await kapasite(db, kullanici), malzemeFiyatlari: null, ...sa, siparisBedelleri: await siparisBedelleri(db, kullanici), bakimlar, planliDuruslar, planliDurusSonu, ikincil },
+    ek: { takvim: null, makineNotu, kisiGorevi: gorev, insanliIstasyonlar, ekipUyeleri: ekipUyeleriEki, kapasite: await kapasite(db, kullanici), malzemeFiyatlari: null, ...sa, siparisBedelleri: await siparisBedelleri(db, kullanici), siparisBedeliGizli: !yetkiliMi(kullanici, KAYNAK_OKUMA.emir) || !yetkiliMi(kullanici, SIPARIS_FIYATI_OKUMA), bakimlar, planliDuruslar, planliDurusSonu, ikincil },
   };
 }
 

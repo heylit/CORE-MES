@@ -94,4 +94,25 @@ describe('plan girdisi: sunucunun emirleri (13.1)', () => {
     assert.deepEqual(kur2(r.S.D, ['2026-10-21', '2026-10-22']).S.D, r.S.D);
     assert.deepEqual(kur2(r.S.D, []).S.D.devamsizlik, [elle, { personel: '6', gun: '2026-10-21', sunucu: true }]);
   });
+
+  // 3669 O1: bedeli göremeyen okuyucuda kaynak bedeli null verir, kayıtta fiyat göreninki kalır; bu fark plan eskitme sayılmaz
+  // (her açılış veri sürümünü artırıp "başka sayfada değişti" satırı yazıyordu). Bedeli gören okuyucuda fark yine sayılır.
+  test('bedeli göremeyen okuyucunun açılışı planı eskitmez; gören okuyucuda bedel farkı eskitir', () => {
+    const emirler = { orders: [emir('7', 'UE-7', 'serbest')] };
+    const bedelsiz = { 7: { gelir: null, cezaOran: null, cezaTavan: null } };
+    const ac = (D: Record<string, unknown>, ek: Record<string, unknown>) => planGirdisi({
+      calisma: calisma(D), kayit: KAYIT, kaynak: { durum: durum(emirler), ek: { takvim: null, ...ek } }, bugun: '2026-10-19',
+    }) as unknown as { S: { dataVer: number }; kaynakDegisikligi: { alanlar: string[] } | null };
+    const oturmus = kur(D0, emirler).S.D as unknown as { siparisler: Record<string, unknown>[] };
+    const D = { ...oturmus, siparisler: oturmus.siparisler.map((x) => ({ ...x, gelir: 500, cezaOran: 1 })) } as unknown as Record<string, unknown>;
+    const gizli = ac(D, { siparisBedelleri: bedelsiz, siparisBedeliGizli: true });
+    assert.equal(gizli.kaynakDegisikligi, null);
+    assert.equal(gizli.S.dataVer, 1);
+    const goren = ac(D, { siparisBedelleri: bedelsiz, siparisBedeliGizli: false });
+    assert.deepEqual(goren.kaynakDegisikligi?.alanlar, ['siparisler']);
+    // Bayrak yalnız bedel alanlarını susturur: bedel dışı sipariş alanı (termin) gizli okuyucuda da planı eskitir.
+    const terminli = { ...D, siparisler: (D as unknown as { siparisler: Record<string, unknown>[] }).siparisler.map((x) => ({ ...x, termin: '2026-12-31 12:00' })) };
+    const termin = ac(terminli, { siparisBedelleri: bedelsiz, siparisBedeliGizli: true });
+    assert.deepEqual(termin.kaynakDegisikligi?.alanlar, ['siparisler']);
+  });
 });
