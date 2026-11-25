@@ -161,8 +161,9 @@ export interface TestAdimi { ad: string; argv: string[] }
 const NODE_TEST = ['node', '--import', './araclar/ortam-yukle-goc.ts', '--import', './araclar/kablolama-yukle.ts', '--test'];
 
 // Değişen dosyalardan koşulacak testler: modül klasörü o modülün testleri (test:modul ile aynı tanım), çekirdek ve
-// paylaşılan kendi testleri, araçta değişen dosyanın yanındaki test. Göçler ayrı adımda boş veritabanına uygulanır.
+// paylaşılan kendi testleri, araçta değişen dosyanın yanındaki test, değişen istemci CSS dosyalarında stylelint. Göçler ayrı adımda boş veritabanına uygulanır.
 // Kısa yolda modülün sunucu testleri koşmaz: veritabanı ister. İstemci kaynağına bakan sunucu testi olan modül kısa yola girmez (kisaYolKarari; 3221 a).
+const STYLELINT = 'node_modules/stylelint/bin/stylelint.mjs';
 export function testPlani(dosyalar: readonly string[], varMi: (yol: string) => boolean, yalnizIstemci = false): TestAdimi[] {
   const adimlar: TestAdimi[] = [];
   const moduller = new Set<string>();
@@ -180,6 +181,10 @@ export function testPlani(dosyalar: readonly string[], varMi: (yol: string) => b
   const aracTestleri = new Set(dosyalar.filter((f) => /^araclar\/[^/]+\.ts$/.test(f))
     .map((f) => (f.endsWith('.test.ts') ? f : f.replace(/\.ts$/, '.test.ts'))).filter(varMi));
   for (const t of [...aracTestleri].sort()) adimlar.push({ ad: t, argv: [...NODE_TEST, t] });
+  // CI'daki `npm run lint:css` (istemci/**/*.css) yalnız değişen dosyalarda yerelde de koşar: kapanmamış blok gibi sözdizimi
+  // hataları testlerden ve derlemeden geçebilir, yalnız CI'da yakalanırdı (3699). Silinen dosya varMi ile ayıklanır.
+  const css = [...new Set(dosyalar.filter((f) => /^istemci\/.+\.css$/.test(f) && !f.includes('..')))].filter(varMi).sort();
+  if (css.length > 0) adimlar.push({ ad: `stylelint (değişen CSS: ${String(css.length)} dosya)`, argv: ['node', STYLELINT, ...css] });
   return adimlar;
 }
 
