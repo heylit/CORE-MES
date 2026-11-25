@@ -54,18 +54,12 @@ function OzellikAlti({ m }: { m: Ozellik | null }) {
 function KartAyrintisi({ m }: { m: Ozellik | null }) {
   useKartSatirlari(m?.kart); // hazır olunca yeniden çizilir
   const satirlar = m ? ayrintiyiBirlestir(m.ayrinti, m.kart) : [];
-  if (!satirlar.length && !m?.ic?.length) return null;
+  if (!satirlar.length) return null;
   return (
     <details className="sa-talep-ayrinti">
       <summary><Simge ad="list" boyut="k" /> Kart ayrıntısı</summary>
       <dl>
         {satirlar.map((x) => <Fragment key={x.ad}><dt>{x.ad}</dt><dd>{x.deger}</dd></Fragment>)}
-        {m?.ic?.length ? (
-          <>
-            <dt className="sa-kart-ic-baslik" data-sa-kart-ic="">Satın alma iç bilgisi (tedarikçiye gitmez)</dt>
-            {m.ic.map((x) => <Fragment key={x.ad}><dt>{x.ad}</dt><dd>{x.deger}</dd></Fragment>)}
-          </>
-        ) : null}
       </dl>
     </details>
   );

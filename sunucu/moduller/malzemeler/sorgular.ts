@@ -430,7 +430,7 @@ export function katalogSatinAlmaSatirlari(db: Db, nolar: number[]): Promise<Kata
                  THEN (k.kayit #>> '{com,moq}')::numeric::text END AS "enAzSiparis",
             ${KATALOG_METIN('com,ted')} AS "tercihTedarikci", ${KATALOG_METIN('com,not')} AS not,
             CASE WHEN k.tur IN ('hizmet', 'sarf', 'demirbas') THEN jsonb_build_object(
-              'g', COALESCE(k.kayit -> 'g', '{}'::jsonb) - 'sorumlu' - 'seri' - 'konum',
+              'g', COALESCE(k.kayit -> 'g', '{}'::jsonb) - ARRAY['sorumlu', 'seri', 'konum', 'fatura', 'alis', 'garantiBitis', 'bakimAy', 'sonBakim', 'kalibrasyon', 'kalAy', 'sonKal', 'kalKurulus', 'periyodik', 'periyodikAy', 'tedarik', 'depoYeri', 'siparisNoktasi']::text[],
               'com', jsonb_build_object('ad', k.kayit #>> '{com,ad}', 'kod', k.kayit #>> '{com,kod}', 'birim', k.kayit #>> '{com,birim}',
                                         'sertifika', to_jsonb(${KATALOG_DIZI('com,sertifika')}))) END AS "turKarti"
        FROM malzeme_katalog_karti k WHERE k.no = ANY($1::int[]) AND k.onay_durumu <> 'iptal'`, [nolar]);

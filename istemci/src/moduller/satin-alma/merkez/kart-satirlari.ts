@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react';
-import { kartAyrintiSatirlari, type KartKaydiKisaltmasi } from '../../malzemeler/disari.ts';
+
+// Malzemeler üst kattadır (ADR 0006); satırları kuran işlev uygulama açılırken main.tsx'ten verilir.
+export interface KartKaydiKisaltmasi {
+  tur: string; g: Record<string, unknown>; com: { ad: string | null; kod: string | null; birim: string | null; sertifika: string[] };
+}
+type SatirKaynagi = (k: KartKaydiKisaltmasi) => Promise<KartSatiri[]>;
+let kaynak: SatirKaynagi | null = null;
+export const kartSatiriKaynagiKur = (f: SatirKaynagi): void => { kaynak = f; };
 
 // 3706-2: hizmet, sarf ve demirbaş kartının föy satırları. Satırları Malzemeler modülü kurar (parça ilk kullanımda yüklenir); burada
 // kart başına bir kez hesaplanır, hazır olunca dinleyenler (ekran ve taşıyıcı) haberdar edilir. Hazır değilken liste boştur.
@@ -13,7 +20,7 @@ function iste(k: KartKaydiKisaltmasi): Promise<void> {
   const a = anahtar(k);
   if (ONBELLEK.has(a) || BEKLEYEN.has(a)) return Promise.resolve();
   BEKLEYEN.add(a);
-  return kartAyrintiSatirlari(k).catch(() => [] as KartSatiri[]).then((s) => {
+  return (kaynak === null ? Promise.resolve([] as KartSatiri[]) : kaynak(k)).catch(() => [] as KartSatiri[]).then((s) => {
     ONBELLEK.set(a, s); BEKLEYEN.delete(a);
     DINLEYENLER.forEach((f) => { f(); });
   });

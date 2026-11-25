@@ -130,6 +130,21 @@ describe('3121: Taleplerim ve satın alma merkezinde kalite, durum, işlem, öl�
     assert.deepEqual(secenek.malzemeler.find((m) => m.no === kart)?.ayrinti, beklenen.ayrinti);
   });
 
+  test('3706-2: sarf kartının depo yeri, tedarik tipi ve sipariş noktası tedarikçiye giden kart kaydına girmez; teknik alan kalır', async () => {
+    const kimlik = 'mo-sarf-1';
+    const r = await post(c.yonetici, `/malzeme-katalogu-kartlari/${kimlik}/kaydet`, {
+      kayit: { id: kimlik, tur: 'sarf', g: { kat: 'asindirici', tur: 'Kesme diski', marka: 'ORN-MARKA', depoYeri: 'RAF-9', tedarik: 'Stoklu', siparisNoktasi: '5', fatura: 'F-1', kalKurulus: 'ORN-KURULUS' }, bom: [], ops: [], opts: {}, ov: {}, extra: [], stds: [], com: { kod: 'SF-ASN-00001', ad: 'Deneme sarf', birim: 'adet' }, onay: { durum: 'aktif' } },
+      ozet: { benzersiz_anahtar: `sarf|malzeme-ozellikleri|${kimlik}`, mukerrer_gerekcesi: null, birim_agirlik_kg: null }, surum: null,
+    });
+    assert.equal(r.statusCode, 200, r.body);
+    const no = (await ortam!.sahip.tek<{ no: number }>("SELECT no FROM malzeme_katalog_karti WHERE kayit->'com'->>'kod' = 'SF-ASN-00001'"))!.no;
+    const acilan = await post(c.talep, '/satin-alma-talepleri/hizli-ac', { id: randomUUID(), kalemler: [{ malzemeNo: no, miktar: '1' }] });
+    assert.equal(acilan.statusCode, 200, acilan.body);
+    const kart = (acilan.json() as TaleplerimCevabi['talepler'][number]).kalemler[0]?.malzeme?.kart;
+    assert.equal(kart?.g['marka'], 'ORN-MARKA');
+    for (const yasak of ['depoYeri', 'tedarik', 'siparisNoktasi', 'fatura', 'kalKurulus']) assert.equal(yasak in (kart?.g ?? {}), false, yasak);
+  });
+
   test('yasak: kartta durum ve işlem yoksa uydurulmaz; Taleplerim fiyat ve teklif taşımaz', async () => {
     const kart = await kartAc(2, {});
     const acilan = await post(c.talep, '/satin-alma-talepleri/hizli-ac', { id: randomUUID(), kalemler: [{ malzemeNo: kart, miktar: '1' }] });

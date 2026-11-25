@@ -53,6 +53,9 @@ export async function kartAyrintiSatirlari(kart: KartKaydiKisaltmasi): Promise<{
   const b = kuralBaglami({ ortam, kartlar: [], kisi: { id: 0, ad: '' }, birim: 'met', yetki: malzemeYetkisi(() => false, ortam) });
   const kayit = { tur: kart.tur, g: kart.g, bom: [], ops: [], opts: {}, ov: {}, extra: [], stds: [], com: { kod: kart.com.kod ?? '', ad: kart.com.ad ?? '', std: '', ted: '', birim: kart.com.birim ?? '', sertifika: kart.com.sertifika, not: '' }, onay: { durum: 'aktif' } };
   const kod = kart.com.kod ?? '';
-  return foyVerisi(kayit as never, b).bolumler.flatMap((bolum) => bolum.satirlar)
-    .filter((s) => s.deger.trim() !== '' && s.deger !== '—' && s.ad !== 'Kod' && s.ad !== 'Ad' && s.deger !== kod);
+  // Tedarikçiye giden formda yalnız teknik tanım görünür: alış, garanti, bakım, kalibrasyon, depo ve tedarik tipi ile serbest açıklama satırları atılır.
+  const KAPALI_BOLUM = new Set(['Satın alma ve garanti', 'Bakım ve kalibrasyon', 'Belgeler ve notlar', 'Özet ve kayıt', 'Kod ve açıklamalar']);
+  const KAPALI_SATIR = new Set(['Kod', 'Ad', 'Tedarik tipi', 'Depo yeri', 'Sipariş noktası', 'Tedarikçi', 'Notlar', 'ERP kodu', 'Bakım (sonraki)', 'Kalibrasyon (sonraki)', 'Garanti bitiş']);
+  return foyVerisi(kayit as never, b).bolumler.filter((bolum) => !KAPALI_BOLUM.has(bolum.baslik)).flatMap((bolum) => bolum.satirlar)
+    .filter((s) => s.deger.trim() !== '' && s.deger !== '—' && !KAPALI_SATIR.has(s.ad) && !/^Açıklama \d/.test(s.ad) && s.deger !== kod);
 }
