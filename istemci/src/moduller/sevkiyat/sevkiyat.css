@@ -362,3 +362,28 @@
 .tc-sevkiyat-ty-klavye { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--dokunma), 1fr)); gap: var(--b-1); }
 .tc-sevkiyat-ty-klavye button { min-block-size: var(--dokunma); font: inherit; font-weight: 600; color: var(--ink); background: var(--panel-solid); border: thin solid var(--edge); border-radius: var(--yari-1); cursor: pointer; }
 .tc-sevkiyat-mono { font-family: var(--font-mono); }
+
+/* 3694: Logo irsaliye durumu ve şoför kimlik alanı (yalnız ayar açıkken çizilir). */
+.tc-sevkiyat-logo-aciklama {
+  flex-basis: 100%; margin: 0 0 0 var(--b-6); padding: var(--b-1) var(--b-2); border-left: var(--b-1) solid var(--edge2);
+  color: var(--muted); font-size: var(--yazi-xs); min-width: 0; overflow-wrap: anywhere;
+}
+.tc-sevkiyat-logo-aciklama[data-ton="hata"] { border-left-color: var(--stop); color: var(--stop); }
+.tc-sevkiyat-logo-aciklama[data-ton="uyari"] { border-left-color: var(--hazard); }
+.tc-sevkiyat-logo-aciklama[data-ton="bilgi"] { border-left-color: var(--bp); }
+.tc-sevkiyat-kimlik { display: grid; gap: var(--b-2); }
+.tc-sevkiyat-kimlik-satir { display: flex; flex-wrap: wrap; align-items: end; gap: var(--b-2); min-width: 0; }
+.tc-sevkiyat-kimlik-satir > :first-child { flex: 1 1 calc(var(--b-6) * 4); min-width: 0; }
+.tc-sevkiyat-kimlik-deger { font-variant-numeric: tabular-nums; letter-spacing: var(--b-1); }
+.tc-sevkiyat-kimlik-not {
+  display: grid; gap: var(--b-1); padding: var(--b-2); border: thin solid var(--edge2); border-radius: var(--yari-1);
+  color: var(--muted); font-size: var(--yazi-xs);
+}
+
+.tc-sevkiyat-kimlik-onay {
+  display: grid; gap: var(--b-2); padding: var(--b-2); border: thin solid var(--stop); border-radius: var(--yari-1); min-width: 0;
+}
+@media (max-width: 1023px) {
+  /* İnce işaretçide (fare) düğme ve alan 32 px'e iner; dar ekranda parmakla da kullanılır, kimlik alanı 44 px kalır. */
+  .tc-sevkiyat-kimlik { --dugme-boy: var(--dokunma); --alan-boy: var(--dokunma); }
+}

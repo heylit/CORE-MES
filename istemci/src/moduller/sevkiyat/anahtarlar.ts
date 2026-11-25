@@ -11,4 +11,6 @@ export const anahtarlar = {
   tekRota: (sorgu: string) => ['sevkiyat', 'tek-rota', sorgu] as const,
   arama: (metin: string) => ['sevkiyat', 'arama', metin] as const,
   firmalar: (metin: string) => ['sevkiyat', 'firmalar', metin] as const,
+  logoIrsaliye: (idler: readonly number[]) => ['sevkiyat', 'logo-irsaliye', idler.join(',')] as const,
+  soforKimligi: (isId: number) => ['sevkiyat', 'sofor-kimligi', isId] as const,
 };
