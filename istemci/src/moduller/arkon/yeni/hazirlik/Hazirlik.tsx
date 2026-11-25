@@ -718,7 +718,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
             <MatrisGorunumu paketler={liste} hazirlik={hz.harita} seciliId={duzenAcik && p ? p.id : null} ac={(x, hucre, el, madde) => { sonTik.current = el; void sec(x, hucre ? (madde === 'talimat' ? 'tl' : 'pub') : 'info'); }} />
           ) : gorunum === 'tablo' ? (
             <TakipTablosu
-              paketler={liste} sonuclar={sonuclar} hazirlik={hz.harita} suz={takipSuz} suzYaz={takipSuzSec} yayinlar={yayinlar}
+              paketler={liste} sonuclar={sonuclar} hazirlik={hz.harita} hazirlikOkundu={hz.zaman !== null} suz={takipSuz} suzYaz={takipSuzSec} yayinlar={yayinlar}
               seciliId={duzenAcik && p ? p.id : null} ac={(x) => { void sec(x); }} geriCekSor={(l, toplu) => geriSorYaz({ l, toplu })}
               duzenler={duzenler} gonderSor={gonderSorYaz} benzerSor={(l) => benzerPlanYaz(topluDoldurmaPlani(l, paketler))}
             />

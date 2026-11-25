@@ -19,7 +19,7 @@ const HAL: Record<Hal, { ton: Ton; simge: SimgeAdi; ad: string }> = {
 const UYARI = { ton: 'uyari' as Ton, simge: 'alert' as SimgeAdi, ad: 'Uyarı' };
 const SIRA: readonly (Hal | 'uyari')[] = ['eksik', 'uyari', 'muaf', 'bilinmiyor', 'tamam', 'gerekmez'];
 const sira = (x: HazirlikSatiri) => SIRA.indexOf(x.hal === 'eksik' && x.uyarir ? 'uyari' : x.hal);
-const gorunum = (x: HazirlikSatiri) => (x.hal === 'eksik' && x.uyarir ? UYARI : HAL[x.hal]);
+export const gorunum = (x: HazirlikSatiri) => (x.hal === 'eksik' && x.uyarir ? UYARI : HAL[x.hal]);
 // Eksik maddede çağrı her zaman vardiya amirine gider; amir ilgili ekibe yönlendirir (2095-1 b).
 const EKIP: (typeof CAGRI_EKIPLERI)[number]['k'] = 'amir';
 

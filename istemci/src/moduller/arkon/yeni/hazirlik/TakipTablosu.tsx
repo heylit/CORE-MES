@@ -8,7 +8,7 @@ import { YOK, sayi } from '../cekirdek/bicim.ts';
 import { IS_DURUMLARI } from '../cekirdek/sabitler.ts';
 import { baslamaDurumu, BASLAMA_DURUMLARI } from '../operator/HazirlikListesi.tsx';
 import { BeklemeCipi, Cip } from './denetimler.tsx';
-import { paketHazirligi } from './HazirlikTakibi.tsx';
+import { HazirlikMatrisiSeridi, HazirlikMatrisiYerTutucu, hazirlikBeklenir, paketHazirligi } from './HazirlikTakibi.tsx';
 import {
   PAKET_DURUMLARI, TAKIP_SUZGECLERI, calisiyorMu, geriCekilebilir, topluGeriCekilebilir, takipEmirleri,
   type AdimDilimi, type TakipSuzgeci,
@@ -24,6 +24,8 @@ interface Ozellikler {
   paketler: readonly Pkg[];
   sonuclar: Readonly<Record<string, Result>>;
   hazirlik: ReadonlyMap<number, HazirlikCevabi>;
+  // Okuma bitti mi (başarıyla ya da değil): bitmeden şeridin yeri ayrılır, bittikten sonra veri yoksa hiçbir şey çizilmez.
+  hazirlikOkundu: boolean;
   suz: TakipSuzgeci;
   suzYaz: (d: TakipSuzgeci) => void;
   yayinlar: boolean;
@@ -41,7 +43,7 @@ const DILIM_ADI: Readonly<Record<AdimDilimi, string>> = {
 };
 const BASLAMA_TONU: Readonly<Record<keyof typeof BASLAMA_DURUMLARI, Ton>> = { durur: 'stop', uyari: 'hold', hazir: 'run' };
 
-export function TakipTablosu({ paketler, sonuclar, hazirlik, suz, suzYaz, yayinlar, seciliId, ac, geriCekSor, duzenler, gonderSor, benzerSor }: Ozellikler) {
+export function TakipTablosu({ paketler, sonuclar, hazirlik, hazirlikOkundu, suz, suzYaz, yayinlar, seciliId, ac, geriCekSor, duzenler, gonderSor, benzerSor }: Ozellikler) {
   const emirler = useMemo(() => takipEmirleri(paketleriGrupla(paketler, 'emir'), sonuclar, hazirlik, suz), [paketler, sonuclar, hazirlik, suz]);
   const [secili, seciliYaz] = useState<ReadonlySet<string>>(() => new Set());
   // Seçilebilir: yayındaki başlamamış iş (geri çekme) ya da gönderilebilir iş (3362-1). Başlamış iş tek tek çekilir.
@@ -148,6 +150,7 @@ export function TakipTablosu({ paketler, sonuclar, hazirlik, suz, suzYaz, yayinl
                         <Cip ton={BASLAMA_TONU[bd]}>{BASLAMA_DURUMLARI[bd]}</Cip>
                       </Link>
                     ) : YOK}
+                    {h ? <HazirlikMatrisiSeridi satirlar={h} /> : !hazirlikOkundu && hazirlikBeklenir(p) ? <HazirlikMatrisiYerTutucu /> : null}
                   </td>
                   <td data-etiket="Üretim">{r && IS_DURUMLARI[r.state] ? IS_DURUMLARI[r.state].etiket : 'Başlamadı'}</td>
                   <td data-etiket="Adet" className="tc-ay2-takip-sayi">
