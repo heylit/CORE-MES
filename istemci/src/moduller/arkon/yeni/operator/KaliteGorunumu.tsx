@@ -87,10 +87,12 @@ function NumuneVeLot({ istasyon, is: o, izinli, olcebilir, soyle, kuyrugaGec, ok
   const teslimAlabilir = izinli || olcebilir;
   const teslimAl = useCallback(async (r: KaliteNumunesi, yol: 'okutma' | 'dugme') => {
     if (!teslimAlabilir) return;
-    await depo.DB.put('requests', { ...r, teslimAl: yol });
+    // Damga sunucunundur (istemcinin yazdığını atar, kendi saatiyle yazar); yerel kopyadaki damga yalnız satırın sunucu yanıtını
+    // beklemeden "Teslim alındı"ya geçmesi içindir, eşitlemede sunucununki yerine geçer.
+    await depo.DB.put('requests', { ...r, teslimAl: yol, numuneTeslimAlindi: { at: Date.now(), kisi: kisi?.name ?? '', yol } });
     soyle(`Numune teslim alındı · ${r.no}`, 'ok');
     await yenile();
-  }, [depo, soyle, teslimAlabilir, yenile]);
+  }, [depo, kisi, soyle, teslimAlabilir, yenile]);
   useEffect(() => {
     const f = (e: Event) => {
       const ids = (e as CustomEvent<{ teslimIdler?: number[] }>).detail?.teslimIdler ?? [];
@@ -126,7 +128,7 @@ function NumuneVeLot({ istasyon, is: o, izinli, olcebilir, soyle, kuyrugaGec, ok
             <Simge ad="truck" boyut="k" /><span className="tc-ay1-ust-yazi">Yolda</span>
             <small className="tc-ay1-soluk">{sayi(yolda.length)} numune</small>
           </div>
-          <div className="tc-ay1-not" role="note">
+          <div className="tc-ay1-not tc-ay1-okut-ipucu" role="note">
             <Simge ad="scan" boyut="k" /><span>Numunenin refakat kartını okutun: yoldaki numune teslim alınır, ölçüm açılır.</span>
             {okut ? <Dugme tur="ikincil" simge="camera" onClick={okut}>Kamerayla okut</Dugme> : null}
           </div>

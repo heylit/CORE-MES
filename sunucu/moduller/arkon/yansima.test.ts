@@ -3625,6 +3625,56 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
       "SELECT tur, sum(adet)::int AS adet FROM uretim_sayimi WHERE emir_id = $1 GROUP BY tur ORDER BY tur", [y.emirId]), [{ tur: 'saglam', adet: 7 }]);
   });
 
+  // 3718 a: yoldaki numuneyi yalnız kalite rolü teslim alır; damgayı (saat, kişi, yol) sunucu basar, `teslimAl` kayda girmez, istemcinin
+  // uydurduğu damga yok sayılır. Kalite istasyonu olmayan istek teslim alınamaz (608 b).
+  test('3718 a: numune teslim alma uçtan: operatöre 403 ve yazım yok, kaliteye damga; sahte damga yok sayılır, istasyonsuz istek 400', async () => {
+    const r = await rotaliEmirKur();
+    await ortam!.sahip.sorgu("UPDATE istasyon SET tip = 'kalite' WHERE id = $1", [r.ikinciId]);
+    const [ie1] = await isEmriIdleri(r.emirId);
+    const kimlik = `nt-${r.emirId}`;
+    const belge = async (k = kimlik) => (await vt().tek<{ govde: Record<string, unknown>; surum: number }>(
+      "SELECT govde, surum::float8 AS surum FROM arkon_belge WHERE depo = 'requests' AND kimlik = $1", [k]))!;
+    const govde = { id: kimlik, pkgId: ieKimligi(ie1!), machine: r.ilk, status: 'waiting', items: [1], results: {} };
+    const ilk = await istek<{ surum: number }>(operator, 'POST', `/arkon/belgeler/requests/${kimlik}/yaz`, {
+      taban: 0, govde: { ...govde, numuneTeslimAlindi: { at: 1, kisi: 'SAHTE', yol: 'dugme' } }, kaynak: 'nt',
+    });
+    assert.equal(ilk.durum, 200, JSON.stringify(ilk.govde));
+    const acilis = await belge();
+    assert.equal(acilis.govde['kaliteIstasyonu'], r.ikinci);
+    assert.equal('numuneTeslimAlindi' in acilis.govde, false, 'istemcinin damgası yok sayılır');
+
+    const red = await istek(operator, 'POST', `/arkon/belgeler/requests/${kimlik}/yaz`, { taban: acilis.surum, govde: { ...acilis.govde, teslimAl: 'okutma' }, kaynak: 'nt' });
+    assert.equal(red.durum, 403, JSON.stringify(red.govde));
+    const sonra = await belge();
+    assert.equal(sonra.surum, acilis.surum, 'reddedilen yazım kayıt değiştirmez');
+    assert.equal('numuneTeslimAlindi' in sonra.govde, false);
+
+    const once = Date.now();
+    const al = await istek<{ surum: number }>(yonetici, 'POST', `/arkon/belgeler/requests/${kimlik}/yaz`, { taban: acilis.surum, govde: { ...acilis.govde, teslimAl: 'okutma' }, kaynak: 'nt' });
+    assert.equal(al.durum, 200, JSON.stringify(al.govde));
+    const alindi = await belge();
+    const damga = alindi.govde['numuneTeslimAlindi'] as { at: number; kisi: string; yol: string };
+    assert.equal(damga.yol, 'okutma');
+    assert.ok(damga.at >= once && damga.at <= Date.now(), 'saat sunucudan');
+    assert.ok(typeof damga.kisi === 'string' && damga.kisi !== '' && damga.kisi !== 'SAHTE', 'kişi oturumdan');
+    assert.equal('teslimAl' in alindi.govde, false, 'teslimAl kayda girmez');
+
+    const ikinci = await istek(yonetici, 'POST', `/arkon/belgeler/requests/${kimlik}/yaz`, {
+      taban: alindi.surum, govde: { ...alindi.govde, teslimAl: 'dugme', numuneTeslimAlindi: { at: 2, kisi: 'SAHTE', yol: 'dugme' } }, kaynak: 'nt',
+    });
+    assert.equal(ikinci.durum, 200, JSON.stringify(ikinci.govde));
+    assert.deepEqual((await belge()).govde['numuneTeslimAlindi'], damga, 'ikinci teslim ve sahte damga ilk damgayı değiştirmez');
+
+    // İstasyonsuz istek (kalite istasyonu olmayan iş): teslim adımı yok, 400.
+    const yalin = `nt-yalin-${r.emirId}`;
+    const y = await istek(operator, 'POST', `/arkon/belgeler/requests/${yalin}/yaz`, { taban: 0, govde: { id: yalin, pkgId: 'yerel-1', machine: r.ilk, status: 'waiting', items: [1], results: {} }, kaynak: 'nt' });
+    assert.equal(y.durum, 200, JSON.stringify(y.govde));
+    const yb = await belge(yalin);
+    assert.equal(yb.govde['kaliteIstasyonu'], undefined);
+    const y400 = await istek(yonetici, 'POST', `/arkon/belgeler/requests/${yalin}/yaz`, { taban: yb.surum, govde: { ...yb.govde, teslimAl: 'dugme' }, kaynak: 'nt' });
+    assert.equal(y400.durum, 400, JSON.stringify(y400.govde));
+  });
+
   // 564 1 b, 6 a, 600 a: numune emrin sonraki kalite istasyonuna gider (istek o istasyonla işaretlenir); kalite istasyonu terminalindeki lot
   // Kabul/Red'i Kalite Merkezi'nin lot kaydıdır. Karar AQL planı ve bulunan sayılardan çıkar; tutmayan istek yazılmaz, kayıt da kalmaz.
   test('564 1 b, 6 a, 600 a: numune kalite istasyonuna işaretlenir; lot kararı Kalite Merkezi lot kaydıdır, rol, eksik, tutmayan ve verilmiş karar reddedilir', async () => {

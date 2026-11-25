@@ -148,7 +148,7 @@ describe('3718 a: yoldaki numuneyi teslim alma', () => {
     fireEvent.click(within(yol).getByRole('button', { name: /Kamerayla okut/ }));
     expect(okut).toHaveBeenCalledTimes(1);
     fireEvent.click(within(yol).getByRole('button', { name: /Teslim al/ }));
-    await waitFor(() => expect(put).toHaveBeenCalledWith('requests', expect.objectContaining({ id: 'n1', teslimAl: 'dugme' })));
+    await waitFor(() => expect(put).toHaveBeenCalledWith('requests', expect.objectContaining({ id: 'n1', teslimAl: 'dugme', numuneTeslimAlindi: expect.objectContaining({ yol: 'dugme' }) })));
   });
 
   it('kalite istasyonunda okutulan kartın aldığı stok teslimi yoldaki numuneyi okutma yoluyla teslim alır; başka teslim almaz', async () => {

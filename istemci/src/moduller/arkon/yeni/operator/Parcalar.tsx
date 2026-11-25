@@ -89,7 +89,11 @@ export function GorevKarti({ gorev, eylem, ertele, izinli, ek }: {
   return (
     <div key={gorev.t} className={sinif} data-durum={tonDurumu(gorev.tone)} role="status">
       <span className="tc-ay1-gorev-simge"><Simge ad={gorev.icon} /></span>
-      <div className="tc-ay1-gorev-metin"><span className="tc-ay1-ust-yazi">Şimdi</span><b>{gorev.t}</b><small>{gorev.d}</small>{ek}</div>
+      <div className="tc-ay1-gorev-metin"><span className="tc-ay1-ust-yazi">Şimdi</span><b>{gorev.t}</b>{gorev.adimlar ? (
+        <span className="tc-ay1-gorev-adimlar" aria-label="Numune yolu">
+          {gorev.adimlar.map((a) => <span key={a.ad} data-durum={a.durum} aria-current={a.durum === 'simdi' ? 'step' : undefined}>{a.durum === 'bitti' ? <Simge ad="check" boyut="k" /> : null}{a.ad}</span>)}
+        </span>
+      ) : null}<small>{gorev.d}</small>{ek}</div>
       {gorev.act2 && gorev.btn2 && izinli(gorev.act2) ? <Dugme tur="ikincil" onClick={() => eylem(gorev.act2!, gorev)}>{gorev.btn2}</Dugme> : null}
       {gorev.btn && gorev.act && izinli(gorev.act) ? <Dugme simge="next" onClick={() => eylem(gorev.act!, gorev)}>{gorev.btn}</Dugme> : null}
       {gorev.dismiss ? (

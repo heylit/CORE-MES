@@ -224,6 +224,20 @@ describe('702: Şimdi şeridi', () => {
   });
 });
 
+describe('3718 a: numune yolu Şimdi kartında', () => {
+  it('tamamlanan adım tikli, geçerli adım vurgulu (aria-current), bekleyen soluk', () => {
+    const gorev = { tone: 'done' as const, icon: 'cube' as const, t: 'Numune kalitede · teslim 14:12', d: 'Bekleme 02:00', adimlar: [
+      { ad: 'Yolda', durum: 'bitti' as const }, { ad: 'Kalitede', durum: 'simdi' as const }, { ad: 'Karar', durum: 'bekliyor' as const }] };
+    const { getByLabelText } = render(<GorevKarti gorev={gorev} eylem={() => {}} ertele={() => {}} izinli={() => true} />);
+    const yol = getByLabelText('Numune yolu');
+    const adim = (ad: string) => Array.from(yol.children).find((x) => x.textContent === ad)!;
+    expect(adim('Yolda').getAttribute('data-durum')).toBe('bitti');
+    expect(adim('Yolda').querySelector('svg')).toBeTruthy();
+    expect(adim('Kalitede').getAttribute('aria-current')).toBe('step');
+    expect(adim('Karar').getAttribute('data-durum')).toBe('bekliyor');
+  });
+});
+
 describe('1999 a: adımlar sayfalanır', () => {
   const adimlar = Array.from({ length: 8 }, (_, i) => ({ id: `a${i}`, t: `Adım ${i + 1}`, on: i < 7 ? 1 : 0 }));
   const kutular = () => screen.getAllByRole('checkbox').map((k) => k.textContent);

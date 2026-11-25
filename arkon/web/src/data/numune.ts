@@ -30,7 +30,7 @@ export const kaliteIstasyonuOku = (r: object | null | undefined): string | null 
   const v = (r as { kaliteIstasyonu?: unknown } | null | undefined)?.kaliteIstasyonu;
   return typeof v === 'string' && v !== '' ? v : null;
 };
-export const yoldaMi = (r: { status?: string } & object): boolean =>
+export const yoldaMi = (r: { status?: string; [alan: string]: unknown } | { status?: string }): boolean =>
   (r.status === 'waiting' || r.status === 'measuring') && kaliteIstasyonuOku(r) !== null && numuneTeslimi(r) === null;
 
 // 3718 a: numune refakat kartı okutularak gönderilir; kart yanında değilse gerekçeyle kartsız gider. Gönderim yolu isteğe yazılır.

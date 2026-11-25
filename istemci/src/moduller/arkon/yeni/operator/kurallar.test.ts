@@ -263,10 +263,12 @@ describe('3718 a: numune yolu ve okutma', () => {
     expect(yolda.t).toBe('Numune yolda · ORN-KAL-1');
     expect(yolda.tone).toBe('hold');
     expect(yolda.icon).toBe('truck');
-    expect(yolda.d).toMatch(/^Yolda › Kalitede › Karar · Bekleme/);
+    expect(yolda.d).toBe(bekleyen.d);
+    expect(yolda.adimlar).toEqual([{ ad: 'Yolda', durum: 'simdi' }, { ad: 'Kalitede', durum: 'bekliyor' }, { ad: 'Karar', durum: 'bekliyor' }]);
     const kalitede = numuneYoluGorevi(bekleyen, { istasyon: 'ORN-KAL-1', teslim: { at: new Date(2026, 10, 25, 14, 12).getTime(), kisi: 'ORN Kaliteci' } })!;
     expect(kalitede.t).toBe('Numune kalitede · teslim 14:12');
-    expect(kalitede.d).toContain('Yolda ✓ › Kalitede · ORN Kaliteci › Karar');
+    expect(kalitede.d).toBe(`${bekleyen.d} · ORN Kaliteci`);
+    expect(kalitede.adimlar?.map((x) => x.durum)).toEqual(['bitti', 'simdi', 'bekliyor']);
     expect(numuneYoluGorevi(bekleyen, { istasyon: null, teslim: null })).toBe(bekleyen);
     expect(numuneYoluGorevi({ ...bekleyen, key: 'ilk' }, { istasyon: 'ORN-KAL-1', teslim: null })!.key).toBe('ilk');
     expect(numuneYoluGorevi(bekleyen, null)).toBe(bekleyen);
