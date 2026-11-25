@@ -22,7 +22,7 @@ export function SiradakiKart({ is, siradaki, ekranda, acik, yer, resim }: {
       <span className="tc-ay1-sk-resim" aria-hidden="true">{resim ?? <Simge ad="camera" />}</span>
       <div className="tc-ay1-sk-ic">
         <span className="tc-ay1-sk-etiketler">
-          {acik ? <span className="tc-ay1-cip" data-durum={durum}><i aria-hidden="true" />{durumAdi(is.state)}</span> : null}
+          {acik && !(siradaki && durum === 'sirada') ? <span className="tc-ay1-cip" data-durum={durum}><i aria-hidden="true" />{durumAdi(is.state)}</span> : null}
           {ekranda ? <span className="tc-ay1-etiket tc-ay1-tcark-ekranda">Ekranda</span> : siradaki ? <span className="tc-ay1-etiket">Sıradaki</span> : null}
           {is.urgent ? <span className="tc-ay1-etiket" data-durum="durdu">Acil</span> : null}
         </span>
@@ -34,8 +34,8 @@ export function SiradakiKart({ is, siradaki, ekranda, acik, yer, resim }: {
       </div>
       {acik && !is.empty ? (
         <dl className="tc-ay1-sk-ayrinti">
-          <div><dt>Op</dt><dd title={is.op}>{is.op || '—'}</dd></div>
-          <div><dt>Malzeme</dt><dd title={is.pkg?.material}>{is.pkg?.material || '—'}</dd></div>
+          <div data-tam=""><dt>Op</dt><dd title={is.op}>{is.op || '—'}</dd></div>
+          <div data-tam=""><dt>Malzeme</dt><dd data-satir="" title={is.pkg?.material}>{is.pkg?.material || '—'}</dd></div>
           <div><dt>Termin</dt><dd>{terminYaz(is.due)}</dd></div>
           <div><dt>Tezgâh</dt><dd>{tezgah ? <><b>{tezgah[0]}</b>{tezgah[1] ? <span>{tezgah[1]}</span> : null}</> : 'Makine seçilmedi'}</dd></div>
         </dl>
