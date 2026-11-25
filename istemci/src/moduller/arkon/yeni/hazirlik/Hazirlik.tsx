@@ -28,7 +28,9 @@ import { IstasyonDuzenleyici, TurSecici } from './IstasyonDuzenleyici.tsx';
 import { ArkonBandi } from '../ortak/SaatSeridi.tsx';
 import { IstasyonSecimi } from './IstasyonSecici.tsx';
 import { KaliteMerkeziCizimleri } from './KaliteMerkeziCizimleri.tsx';
-import { kmPlani, kmSahibi } from './km-cizim.ts';
+import { kmPlani, kmSahibi, otomatikKmResmi } from './km-cizim.ts';
+import { useStudyoParcasi } from '../../../kalite-merkezi/disari.ts';
+import { useYetki } from '../../../../ortak/veri/yetki.ts';
 import { KuralSekmesi } from './KuralSekmesi.tsx';
 import {
   ADIM_SABLONLARI, IS_TURLERI, PAKET_DURUMLARI, SIKLIKLAR, TMI_KILIT, VARSAYILAN_AYARLAR, isTuru, numunePlani, numunePlaniYaz,
@@ -325,6 +327,20 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
     } catch (e) { soyle('Çizim Merkezi’nden alınamadı: ' + (e instanceof Error ? e.message : String(e)), 'stop'); }
     merkezMesgulYaz(false);
   };
+  // 3687: Kalite Merkezi'nin hazırladığı kontrol planı taslak pakete kendiliğinden gelir. Çizim Merkezi'nden dosya alımı (aşağıda) bitmeden
+  // beklenir: o alım planı sıfırlar, sonra bu çalışır. Okuma yetkisi olmayan rol için istek gönderilmez.
+  const kmYetki = useYetki();
+  const kmOkunur = !!p && kmSahibi(p) && kmYetki.hazir && kmYetki.var('kalite-merkezi.oku');
+  const kmParca = useStudyoParcasi(kmOkunur && typeof p?.malzemeNo === 'number' ? p.malzemeNo : null);
+  const kmOtomatik = useRef(new Set<string>());
+  const dosyaBekliyor = !!p && p.from === 'tmi' && p.files.length === 0 && !!p.malzemeCizimleri?.length;
+  useEffect(() => {
+    if (!p || !duzenler || !kmParca.data || dosyaBekliyor || merkezMesgul || kmOtomatik.current.has(p.id)) return;
+    const r = otomatikKmResmi(p, kmParca.data.resimler);
+    if (r === null) return;
+    kmOtomatik.current.add(p.id);
+    void kmdenAl(r);
+  }, [p?.id, p?.status, p?.files.length, kmParca.data, duzenler, dosyaBekliyor, merkezMesgul]);
   // Karar 732 a: dosyasız TMI taslağı açılınca malzemenin Çizimler'deki yayında PDF ve 3B modeli bir kez kendiliğinden pakete gelir.
   const otomatikAlinan = useRef(new Set<string>());
   useEffect(() => {

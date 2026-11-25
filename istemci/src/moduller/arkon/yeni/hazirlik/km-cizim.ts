@@ -31,3 +31,11 @@ export function kmResimDurumu(p: Readonly<Record<string, unknown>>, r: Pick<KmRe
 }
 
 export const etkinResimler = (l: readonly KmResim[]): KmResim[] => l.filter((r) => r.aktif);
+
+// Taslak paket Kalite Merkezi'nin balonlu resmiyle kendiliğinden kurulur (3687): balon tanımı zaten salt okunurdur, "Pakete al" bekleyen taslak
+// boş ve düzenlenemez bir plan gösterirdi. Yayındaki paket elle güncellenir ("değişti" görünür), bağı olan taslak yeniden kurulmaz.
+export function otomatikKmResmi(p: Readonly<Pick<Pkg, 'malzemeNo' | 'status'>> & Readonly<Record<string, unknown>>, resimler: readonly KmResim[]): KmResim | null {
+  // Elle girilmiş plan kalemi varsa kendiliğinden değiştirilmez (kalem kaybolmasın); kişi "Pakete al" ile bilerek alır.
+  if (!kmSahibi(p) || p.status !== 'draft' || kmBagi(p) !== null || (Array.isArray(p['plan']) && p['plan'].length > 0)) return null;
+  return etkinResimler(resimler).find((r) => r.eski !== true && r.tur === 'resim' && r.balonlar.length > 0) ?? null;
+}
