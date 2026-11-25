@@ -109,8 +109,12 @@ describe('çift kayıt kalkanı', () => {
     assert.deepEqual(irsaliyeKalkani(b, [], false), { karar: 'gonder' });
     assert.deepEqual(irsaliyeKalkani(b, [bulgu({ belgeNo: 'ORN-IRS-1' }), bulgu({ cariKodu: 'ORN-CARI-02' })], false), { karar: 'gonder' });
   });
-  test('aynı cari ve irsaliye no varsa gönderilmez, eşlenir (büyük/küçük harf ve boşluk fark etmez)', () => {
-    assert.deepEqual(irsaliyeKalkani(b, [bulgu({ belgeNo: ' orn-irs-20417 ' })], false), { karar: 'esle', logoKayitNo: 501, neden: 'ayni-cari-ve-belge-no' });
+  test('Risk S1: aynı cari ve irsaliye no tek başına eşleşme değildir; fiş no ya da anahtarı yoksa elle bakıma düşer, otomatik eşlenmez ve yazılmaz da', () => {
+    const k = irsaliyeKalkani(b, [bulgu({ belgeNo: ' orn-irs-20417 ', no: '0000000000000900', aciklama: 'MK-ORN-0086 düzeltme' })], false);
+    assert.equal(k.karar, 'yapilamadi');
+    assert.match(k.karar === 'yapilamadi' ? k.ileti : '', /elle bakın/);
+    // Anahtarı (NOTES1 tam sözcük) da taşıyan kayıt bizimdir: eşlenir.
+    assert.deepEqual(irsaliyeKalkani(b, [bulgu({ belgeNo: 'ORN-IRS-20417', aciklama: 'ORN MK-ORN-0087' })], false), { karar: 'esle', logoKayitNo: 501, neden: 'ayni-anahtar' });
   });
   test('aynı fiş no (daha önce gitmiş) eşlenir', () => {
     assert.deepEqual(irsaliyeKalkani(b, [bulgu({ no: 'MK-ORN-0087', belgeNo: null })], false), { karar: 'esle', logoKayitNo: 501, neden: 'ayni-fis-no' });

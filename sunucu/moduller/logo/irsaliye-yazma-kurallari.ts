@@ -159,7 +159,7 @@ export function irsaliyeGovdesi(b: KabulBelgesi): IrsaliyeGovdesi | { hata: stri
 // Girdi: Logo'da tedarikçi irsaliye no'suyla (ya da mal kabul no'suyla) yapılan genel belge araması. Yalnız Logo'dan gelen irsaliyeler (alış).
 export type KalkanKarari =
   | { karar: 'gonder' }
-  | { karar: 'esle'; logoKayitNo: number; neden: 'ayni-cari-ve-belge-no' | 'ayni-fis-no' | 'ayni-anahtar' }
+  | { karar: 'esle'; logoKayitNo: number; neden: 'ayni-fis-no' | 'ayni-anahtar' }
   | { karar: 'yapilamadi'; ileti: string };
 // İ, ı ve i aynı harf sayılır: tr büyük harfi 'i'yi 'İ' yapar ve "orn-irs" ile "ORN-IRS" ayrı görünür; çift kayıt kaçmasın diye gevşek karşılaştırılır.
 const norm = (s: string): string => s.trim().replace(/[İıi]/g, 'I').toUpperCase();
@@ -186,7 +186,12 @@ export function irsaliyeKalkani(
   const bulunan = [...new Set([...fisNoEsit, ...belgeEsit, ...anahtarEsit])];
   if (bulunan.length > 1) return { karar: 'yapilamadi', ileti: "Logo'da eşleşebilecek birden çok irsaliye var; Logo'da elle bakın." };
   const tek = bulunan[0];
-  if (tek !== undefined) return { karar: 'esle', logoKayitNo: tek.logoKayitNo, neden: fisNoEsit.includes(tek) ? 'ayni-fis-no' : anahtarEsit.includes(tek) ? 'ayni-anahtar' : 'ayni-cari-ve-belge-no' };
+  // Aynı cari ve aynı tedarikçi irsaliye no'su tek başına eşleşme sayılmaz (Risk 3694-3 S1): düzeltme ya da parçalı kabul aynı irsaliye no'sunu başka mal kabulle
+  // kullanır; otomatik eşlenirse bu kabul hiç yazılmazdı. Fiş no ya da NOTES1 anahtarı olmayan kayıt elle bakıma düşer.
+  if (tek !== undefined && !fisNoEsit.includes(tek) && !anahtarEsit.includes(tek)) {
+    return { karar: 'yapilamadi', ileti: "Logo'da aynı cari ve irsaliye no'lu başka bir kayıt var ama bu mal kabulün fiş no'suyla ya da anahtarıyla eşleşmiyor (düzeltme ya da parçalı kabul olabilir); Logo'da elle bakın." };
+  }
+  if (tek !== undefined) return { karar: 'esle', logoKayitNo: tek.logoKayitNo, neden: fisNoEsit.includes(tek) ? 'ayni-fis-no' : 'ayni-anahtar' };
   if (aramaSinirinaDayandi) return { karar: 'yapilamadi', ileti: "Arama sınıra dayandı; Logo'da bu irsaliye var mı söylenemez. Logo'da elle bakın." };
   return { karar: 'gonder' };
 }

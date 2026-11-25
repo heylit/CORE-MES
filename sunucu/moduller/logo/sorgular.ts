@@ -1,6 +1,8 @@
 import type { Db } from '#cekirdek/db.ts';
-import { LOGO_FIS_TURLERI, SONUCU_BILINMIYOR, sonrakiDenemeYazilir } from './kurallar.ts';
+import { LOGO_FIS_TURLERI, SONUCU_BILINMIYOR, denemeZamaniMi, sonrakiDenemeYazilir } from './kurallar.ts';
 import type { FaturaKaydi, FisGidenDurumu, LogoTopluAlis, IrsaliyeBasligiOkuma, IrsaliyeOkumaSirasi, IrsaliyeTuru, ListeKaydi, LogoFisTuru, LogoKullanimSatiri, LogoMalzemeKarti, LogoStokSatiri, MalKabulSatiri } from './kurallar.ts';
+import { IRSALIYE_GIDEN_TURLERI } from './irsaliye-etiket-esleme.ts';
+import type { IrsaliyeGidenTuru } from './irsaliye-etiket-esleme.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { CariHareketi, FaturaBasligi, FaturaCariAkisi, FaturaTuru } from './fatura-cari-sozlesmesi.ts';
 import { icindeDeseni } from '#paylasilan/kayit-aramasi.ts';
@@ -13,8 +15,8 @@ export const GIDEN_BELGELERI = [
   'satis-teklifi', 'satis-siparisi', 'siparisler-teklifi', 'siparisler-siparisi', 'proje',
 ] as const;
 // İrsaliye (3694): mal kabul ve sevk için tek giden kutusu; belge no kaynak modülün kayıt kimliğidir.
-export const IRSALIYE_GIDEN_TURLERI = ['satin-alma-irsaliyesi', 'satis-irsaliyesi', 'konsinye-irsaliyesi'] as const;
-export type IrsaliyeGidenTuru = (typeof IRSALIYE_GIDEN_TURLERI)[number];
+export { IRSALIYE_GIDEN_TURLERI };
+export type { IrsaliyeGidenTuru };
 export type BelgeTuru = (typeof GIDEN_BELGELERI)[number] | FisTuru | IrsaliyeGidenTuru;
 export const belgeTuruMu = (b: string): b is BelgeTuru => (GIDEN_BELGELERI as readonly string[]).includes(b) || (LOGO_FIS_TURLERI as readonly string[]).includes(b)
   || (IRSALIYE_GIDEN_TURLERI as readonly string[]).includes(b);
@@ -75,6 +77,24 @@ export async function niyetYaz(db: Db, belgeTuru: BelgeTuru, no: number, zaman: 
      ON CONFLICT ${cakisma(belgeTuru)} DO UPDATE SET niyet_zamani = EXCLUDED.niyet_zamani${yeniIstek}`,
     [belgeTuru, no, zaman, ...islemDegeri(belgeTuru, islem)],
   );
+}
+
+// İrsaliye giden kutusunda kaynağı silinmiş olabilecek satırlar: Logo'ya hiç gitmemiş ve niyeti yok (Logo'da kaydı ya da niyeti olan satır korunur).
+export function irsaliyeYetimAdaylari(db: Db, sinir: number): Promise<{ belgeTuru: IrsaliyeGidenTuru; belgeNo: number }[]> {
+  return db.sorgu(
+    `SELECT belge_turu AS "belgeTuru", belge_no AS "belgeNo" FROM logo_irsaliye_giden
+      WHERE logo_kayit_no IS NULL AND niyet_zamani IS NULL ORDER BY olusma, belge_no LIMIT $1`, [sinir]);
+}
+export async function irsaliyeYetimSil(db: Db, belgeTuru: IrsaliyeGidenTuru, no: number): Promise<void> {
+  await db.sorgu('DELETE FROM logo_irsaliye_giden WHERE belge_turu = $1 AND belge_no = $2 AND logo_kayit_no IS NULL AND niyet_zamani IS NULL', [belgeTuru, no]);
+}
+
+// Kuyruğu dolduran ama bu turda gidemeyecek satırlar: yalnız Logo'ya gitmemiş, durmuş ya da bekleme süresindeki (gönderilmişler sınırı doldurmasın; kaynak onları zaten döndürmez, tur da atlar). Kaynak bunları atlayıp sınırı yeni belgelere ayırır.
+export async function irsaliyeAtlanacaklar(db: Db, simdi: Date, sinir: number): Promise<{ tur: IrsaliyeGidenTuru; id: number }[]> {
+  const satirlar = await db.sorgu<{ belgeTuru: IrsaliyeGidenTuru } & GidenSatiri>(
+    `SELECT belge_turu AS "belgeTuru", ${ALANLAR} FROM logo_irsaliye_giden
+      WHERE logo_kayit_no IS NULL AND son_sonuc IS NOT NULL ORDER BY olusma, belge_no LIMIT $1`, [sinir]);
+  return satirlar.filter((g) => !denemeZamaniMi(g, simdi)).map((g) => ({ tur: g.belgeTuru, id: g.belgeNo }));
 }
 
 export interface DenemeSonucu {

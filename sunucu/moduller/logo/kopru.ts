@@ -1,4 +1,6 @@
 import type { LogoAyari } from './ayar.ts';
+import { IRSALIYE_YAZMA_UCU } from './irsaliye-etiket-esleme.ts';
+import type { IrsaliyeGidenTuru } from './irsaliye-etiket-esleme.ts';
 import { cariHareketSayfasiniAyikla, cariHareketYolu, faturaDegisenSayfasiniAyikla, faturaDegisenYolu, faturaListesiYolu, faturaSayfasiniAyikla } from './fatura-cari-sozlesmesi.ts';
 import type { CariHareketSayfasi, FaturaSayfasi, FaturaTuru } from './fatura-cari-sozlesmesi.ts';
 import { agHatasiniYorumla, belgeBulgulariniAyikla, ESKI_YARDIMCI_ILETISI, kirp, PROJE_KURULUM_ILETISI, alisFiyatlariniAyikla, topluAlisSayfasiniAyikla, geriHareketSayfasiniAyikla, malzemeHareketleriniAyikla, cariKaydiniAyikla, cariListesiniAyikla, cevabiYorumla, crmKodlariniAyikla, faturalariAyikla, malzemeKartlariniAyikla, stokToplamlariniAyikla, kullanimlariAyikla, malzemeAramasiniAyikla, ISTEK_SURESI_MS, listeKayitlariniAyikla, malKabulSatirlariniAyikla, irsaliyeRefleriniAyikla, irsaliyeSayfasiniAyikla, MALZEME_FISI_UCU, malzemeKodlariniAyikla, siparisIcerigiAyikla, varMiAdi } from './kurallar.ts';
@@ -80,6 +82,8 @@ export interface KopruIstemcisi {
   // Malzeme fişi (türler ve uçlar kurallar.ts MALZEME_FISI_TURU, MALZEME_FISI_UCU). Açmada kalkan yalnız niyettir (yardımcının numarayla
   // bulma ucu TMI'de kullanılmıyor).
   malzemeFisiEkle(tur: LogoFisTuru, govde: Record<string, unknown>): Promise<KopruSonucu>;
+  // 3694: irsaliye yazma. Kapalı gelir (irsaliye-yazma-kapisi); uç adı DOĞRULANMADI (irsaliye-etiket-esleme.ts).
+  irsaliyeEkle(tur: IrsaliyeGidenTuru, govde: Record<string, unknown>): Promise<KopruSonucu>;
   // 233: fişi numarasıyla siler (değişen fiş silinip aynı numarayla yeniden açılır); 404 "fiş yok" başarı sayılır (logicalRef null).
   malzemeFisiSil(tur: LogoFisTuru, no: string): Promise<KopruSonucu>;
   // 3315: proje kartı. Yardımcı proje nesnesi ölçülmeden 501 döner, eski yardımcı yolu tanımaz: ikisi de "kurulum bekliyor"dur (deneme sayılmaz).
@@ -261,6 +265,9 @@ export function kopruIstemcisiKur(ayar: LogoAyari, secenek: KopruSecenegi = {}):
     siparisIcerigiOku: (no) => oku<LogoSiparisIcerigi | null>(`/api/PurchaseOrder/${encodeURIComponent(no)}/content`, siparisIcerigiAyikla, null),
     async malzemeFisiEkle(tur, govde) {
       return yorumla(await istek('POST', `/api/MaterialSlip/Add${MALZEME_FISI_UCU[tur]}`, govde));
+    },
+    async irsaliyeEkle(tur, govde) {
+      return yorumla(await istek('POST', `/api/Dispatch/Add${IRSALIYE_YAZMA_UCU[tur]}`, govde));
     },
     async malzemeFisiSil(tur, no) {
       const c = await istek('DELETE', `/api/MaterialSlip/${MALZEME_FISI_UCU[tur]}/${encodeURIComponent(no)}`);

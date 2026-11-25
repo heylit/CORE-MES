@@ -63,7 +63,7 @@ function beklemeyeCevir(sonuc: TurSonucu): IsBekliyor | undefined {
   switch (sonuc.tur) {
     case 'kapali': case 'ortam-degiskeni-yok': case 'satin-alma-kapali': case 'satis-kapali':
     case 'mal-kabul-kapali': case 'liste-kapali': case 'fatura-kapali': case 'malzeme-fisi-kapali': case 'malzeme-karti-kapali': case 'stok-kapali': case 'kullanim-kapali': case 'irsaliye-kapali': case 'son-alis-kapali': case 'fatura-listesi-kapali': case 'cari-hareket-kapali':
-    case 'dis-duzeltme-kapali':
+    case 'dis-duzeltme-kapali': case 'irsaliye-yazma-kapali':
       return isBekliyor(BEKLEME_NEDENLERI[sonuc.tur]);
     case 'proje-kapali':
       return isBekliyor(BEKLEME_NEDENLERI['proje-kapali']);
@@ -72,7 +72,7 @@ function beklemeyeCevir(sonuc: TurSonucu): IsBekliyor | undefined {
     case 'proje': case 'proje-niyet':
       return undefined;
     case 'bos': case 'gonderim': case 'guncelleme': case 'pasif': case 'pasif-niyet': case 'iptal': case 'kapatma': case 'bekletme': case 'karsilama': case 'liste':
-    case 'malzeme-fisi-niyet': case 'malzeme-fisi': case 'niyet': case 'okuma': case 'siparisler-siparisi-niyet':
+    case 'malzeme-fisi-niyet': case 'malzeme-fisi': case 'irsaliye-niyet': case 'irsaliye': case 'niyet': case 'okuma': case 'siparisler-siparisi-niyet':
     case 'siparisler-siparisi': case 'siparisler-teklifi-niyet': case 'siparisler-teklifi': case 'talep-niyet':
     case 'talep': case 'dis-duzeltme':
     default:

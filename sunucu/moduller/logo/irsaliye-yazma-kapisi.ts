@@ -1,5 +1,4 @@
 import { OLCUM_DURUMU } from './irsaliye-etiket-esleme.ts';
-import type { OlcumDurumu } from './irsaliye-etiket-esleme.ts';
 
 // Irsaliye yazma ayarının açılabilirlik kapısı (saf). Ayar tek başına yetmez: ölçülmemiş etiketle Logo'ya yazılmaz (ADR 0017 m.5).
 export type IrsaliyeTuru = 'satin_alma' | 'satis' | 'konsinye';
@@ -15,7 +14,8 @@ export const KAPI_ENGEL_ILETILERI: Readonly<Record<KapiEngeli, string>> = Object
 
 export interface KapiSonucu { acik: boolean; engeller: KapiEngeli[] }
 
-export function yazmaKapisi(tur: IrsaliyeTuru, durum: OlcumDurumu = OLCUM_DURUMU): KapiSonucu {
+export function yazmaKapisi(tur: IrsaliyeTuru): KapiSonucu {
+  const durum = OLCUM_DURUMU;
   const engeller: KapiEngeli[] = [];
   const etiketOlculdu = tur === 'satin_alma' ? durum.satinAlmaEtiketleriOlculdu : durum.satisEtiketleriOlculdu;
   if (!etiketOlculdu) engeller.push('etiket');
