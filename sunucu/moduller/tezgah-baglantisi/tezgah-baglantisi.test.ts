@@ -413,4 +413,148 @@ describe('tezgah bağlantısı denemesi (kart 3373, gerçek PostgreSQL)', () => 
     await tur();
     assert.equal(await say('tezgah_ornek'), 3);
   });
+
+  describe('geçmiş azaltma (kart 3680)', () => {
+    const OGE_ALANLARI = ['ilerleme', 'eksenYuku', 'hiz', 'yuk', 'konumX', 'konumY', 'konumZ', 'sicaklik', 'titresim', 'basinc'] as const;
+    const SAYISAL_KIMLIKLER = ['feed', 'xload', 'sspeed', 'sload', 'xpos', 'ypos', 'zpos', 'temp', 'vib', 'pres'];
+    const satirlar = (kimlik: string) => vt().sorgu<{ zaman: Date; deger: string | null }>(
+      "SELECT zaman, deger FROM tezgah_deger_gecmisi WHERE cihaz_adi = 'ORN-T01' AND data_item_id = $1 ORDER BY zaman, sira", [kimlik]);
+
+    test('EVENT her değişimde saklanır; sayısal SAMPLE eşik altı değişimde, 5 sn\'den sık saklanmaz', async () => {
+      await tur();
+      // Yük 42 → 45 (eşik altı), hız 2350 → 2360 (eşik altı), program her değişimde.
+      sahte.degistir(0, 'yuk', '45');
+      sahte.degistir(0, 'hiz', '2360');
+      sahte.degistir(0, 'program', 'O1002');
+      simdi += 5000;
+      await tur();
+      assert.deepEqual((await satirlar('sload')).map((r) => r.deger), ['42']);
+      assert.deepEqual((await satirlar('sspeed')).map((r) => r.deger), ['2350']);
+      assert.deepEqual((await satirlar('pgm')).map((r) => r.deger), ['O1001', 'O1002']);
+      sahte.degistir(0, 'yuk', '60');
+      simdi += 5000;
+      await tur();
+      assert.deepEqual((await satirlar('sload')).map((r) => r.deger), ['42', '60']);
+    });
+
+    test('1 sn arayla 10 büyük değişim: 6 sn içinde en çok bir satır; son değer 6 sn dolunca (en geç ikinci turda) yazılır', async () => {
+      await tur();
+      const taban = sahte.saatMs;
+      for (let i = 0; i < 10; i += 1) {
+        sahte.saatMs = taban + i * 1000;
+        sahte.degistir(0, 'hiz', String(i % 2 === 0 ? 4000 : 1000));
+      }
+      simdi += 5000;
+      await tur();
+      const ilk = await satirlar('sspeed');
+      const yeniler = ilk.slice(1);
+      assert.ok(yeniler.length <= 2 && yeniler.every((r, i) => i === 0 || r.zaman.getTime() - (yeniler[i - 1]?.zaman.getTime() ?? 0) > 5000), JSON.stringify(yeniler));
+      for (let i = 0; i < 4; i += 1) { simdi += 5000; await tur(); }
+      const hepsi = (await satirlar('sspeed')).map((r) => r.deger);
+      assert.ok(hepsi.includes('4000'), 'pencerenin tepe değeri yazıldı');
+      assert.equal(hepsi.at(-1), '1000', 'dönüş değeri sonradan yazıldı');
+    });
+
+    test('değişmeyen sayısal öğe 60 sn\'de bir satır üretir; EVENT için tekrar satırı yazılmaz', async () => {
+      await tur();
+      for (let s = 0; s < 24; s += 1) { simdi += 5000; await tur(); }
+      const hiz = await satirlar('sspeed');
+      assert.ok(hiz.length >= 2 && hiz.length <= 3, `120 sn'de ilk değer + en çok 2 tekrar: ${hiz.length}`);
+      assert.ok(hiz.every((r) => r.deger === '2350'));
+      assert.equal((await satirlar('pgm')).length, 1);
+    });
+
+    test('sunucu yeniden açılınca (bellek boş) her öğenin ilk değeri eşik altı olsa da saklanır', async () => {
+      await tur();
+      bellek = yeniTurBellegi();
+      sahte.degistir(0, 'yuk', '45');
+      simdi += 5000;
+      await tur();
+      assert.deepEqual((await satirlar('sload')).map((r) => r.deger), ['42', '45']);
+    });
+
+    test('satır sınırı 100.000 (alt sınır): 24 saat kuralından sonra en eski satırlar silinir ve satır sınırı boşluğu yazılır', async () => {
+      const c = await istek('POST', '/ayarlar/tezgah-baglantisi.satir-siniri/degistir', { deger: 100_000 });
+      assert.equal(c.statusCode, 200, c.body);
+      assert.equal((await istek('POST', '/ayarlar/tezgah-baglantisi.satir-siniri/degistir', { deger: 1000 })).statusCode, 400, 'alt sınırın altı reddedilir');
+      await vt().sorgu(
+        `INSERT INTO tezgah_deger_gecmisi (cihaz_adi, data_item_id, sira, zaman, deger)
+         SELECT 'ORN-T01', 'ek', n, $1::timestamptz - n * interval '0.5 second', n::text FROM generate_series(1, 150000) n`, [new Date(simdi - 60_000)]);
+      await vt().sorgu("INSERT INTO tezgah_deger_gecmisi (cihaz_adi, data_item_id, sira, zaman, deger) VALUES ('ORN-T01', 'eski', 1, $1, '1')", [new Date(simdi - 25 * 3_600_000)]);
+      await tur();
+      // Bir turda en çok 5 parça silinir; kalanı sonraki turlarda sürer.
+      for (let i = 0; i < 6 && (await say('tezgah_deger_gecmisi') ?? 0) > 100_000; i += 1) { simdi += 5000; await tur(); }
+      assert.equal(await say('tezgah_deger_gecmisi'), 100_000);
+      assert.equal(await say("tezgah_deger_gecmisi WHERE data_item_id = 'eski'"), 0);
+      const b = await vt().sorgu<{ neden: string }>("SELECT neden FROM tezgah_veri_boslugu WHERE neden = 'satir-siniri'");
+      assert.equal(b.length, 1);
+      assert.equal((await ayrintiAl('ORN-T01')).bosluklar.some((x) => x.neden === 'satir-siniri'), true);
+      const eski = await vt().tek<{ en: Date }>("SELECT min(zaman) AS en FROM tezgah_deger_gecmisi");
+      const bosluk = await vt().tek<{ z: Date }>("SELECT zaman AS z FROM tezgah_veri_boslugu WHERE neden = 'satir-siniri'");
+      assert.ok(bosluk !== null && eski !== null && bosluk.z.getTime() <= eski.en.getTime(), 'boşluk kalan en eski kayıttan önce biter');
+      assert.equal((await istek('POST', '/ayarlar/tezgah-baglantisi.satir-siniri/degistir', { deger: 2_000_000 })).statusCode, 200);
+    });
+
+    test('temizlik 10.000 satırlık parçalarla yapılır: tek turda en çok bütçe kadar silinir, kalanı sonraki turda sürer', async () => {
+      await vt().sorgu(
+        `INSERT INTO tezgah_deger_gecmisi (cihaz_adi, data_item_id, sira, zaman, deger)
+         SELECT 'ORN-T01', 'eski', n, $1::timestamptz - interval '30 hours' - n * interval '1 second', n::text FROM generate_series(1, 60000) n`, [new Date(simdi)]);
+      await tur();
+      const kalan1 = (await vt().tek<{ n: number }>("SELECT count(*)::int AS n FROM tezgah_deger_gecmisi WHERE data_item_id = 'eski'"))?.n ?? -1;
+      assert.ok(kalan1 >= 10_000 && kalan1 % 10_000 === 0 && kalan1 < 60_000 || kalan1 === 0, `parçalı silme: ${kalan1}`);
+      for (let i = 0; i < 20 && kalan1 > 0; i += 1) { simdi += 5000; await tur(); }
+      assert.equal(await say("tezgah_deger_gecmisi WHERE data_item_id = 'eski'"), 0);
+    });
+
+    test('doluluk: durum ucu satır sayısı, yüzde, seviye, disk boyutu, en eski kayıt ve dakikalık sayaçları verir', async () => {
+      await tur();
+      simdi += 5000;
+      sahte.degistir(0, 'hiz', '4000');
+      await tur();
+      const c = await istek('GET', '/tezgah-baglantisi/durum');
+      assert.equal(c.statusCode, 200, c.body);
+      // Uç, işin süreç belleğini (turBellegi) okur; bu testin belleği değil: şemayı uçtan, sayıları bu testin belleğiyle denetle.
+      assert.equal(tezgahBaglantisiDurumCevabi.parse(JSON.parse(c.body)).doluluk.satirSiniri, 2_000_000);
+      const d = (await pano()).doluluk;
+      assert.equal(d.satirSiniri, 2_000_000);
+      assert.equal(d.satirSayisi, await say('tezgah_deger_gecmisi'), JSON.stringify(d));
+      assert.equal(d.seviye, 'normal');
+      assert.ok(d.diskBayt !== null && d.diskBayt > 0);
+      assert.ok(d.enEskiKayit !== null);
+      assert.ok(d.olcum !== null && d.olcum.yazilan > 0 && d.olcum.pencereDakika >= 1);
+    });
+
+    test('10 dakika, saniyede değişen 10 sayısal öğe: yazılan satır bugünkünden en az 5 kat az; 1 saatlik eğri boşluksuz', async () => {
+      await sahte.kapat();
+      sahte = await sahteMtconnectAc([{ ad: 'ORN-T01', calisma: 'ACTIVE', program: 'O1001', ilerleme: '1', eksenYuku: '1', hiz: '1', yuk: '1', konumX: '1', konumY: '1', konumZ: '1', sicaklik: '1', titresim: '1', basinc: '1' }], simdi);
+      bellek = yeniTurBellegi();
+      await tur();
+      const baslangic = simdi;
+      let degisiklik = 0;
+      for (let tursayisi = 1; tursayisi <= 120; tursayisi += 1) {
+        for (let sn = 1; sn <= 5; sn += 1) {
+          const an = baslangic + (tursayisi - 1) * 5000 + sn * 1000;
+          const deger = String(((tursayisi * 5 + sn) % 2 === 0) ? 4000 : 1000);
+          for (const alan of OGE_ALANLARI) {
+            sahte.saatMs = an - 1000;
+            sahte.degistir(0, alan, deger);
+            degisiklik += 1;
+          }
+        }
+        simdi = baslangic + tursayisi * 5000;
+        await tur();
+      }
+      const yazilan = (await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM tezgah_deger_gecmisi WHERE data_item_id = ANY($1)', [SAYISAL_KIMLIKLER]))?.n ?? 0;
+      assert.equal(degisiklik, 6000);
+      assert.ok(yazilan * 5 <= degisiklik, `bugünkü ${degisiklik} satır, süzülen ${yazilan} satır (${(degisiklik / yazilan).toFixed(2)} kat)`);
+      const a = await ayrintiAl('ORN-T01');
+      for (const kimlik of SAYISAL_KIMLIKLER) {
+        const egri = a.alanlar.find((x) => x.kimlik === kimlik)?.egri ?? [];
+        const dakikalar = egri.map((e) => Math.floor(Date.parse(e.zaman) / 60_000));
+        assert.ok(dakikalar.length >= 10, `${kimlik}: ${dakikalar.length} dakika noktası`);
+        assert.ok(dakikalar.every((m, i) => i === 0 || m - (dakikalar[i - 1] ?? 0) === 1), `${kimlik}: eğride dakika boşluğu var`);
+      }
+      assert.deepEqual(a.bosluklar, []);
+    });
+  });
 });

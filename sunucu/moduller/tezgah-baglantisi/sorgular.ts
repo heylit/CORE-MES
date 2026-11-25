@@ -1,7 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { TezgahDurumu } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
-import type { AlanTanimi, OmurDegeri, TezgahOgesi, TezgahOzeti, TezgahTanimi, TezgahVarligi } from './kurallar.ts';
+import type { AlanTanimi, GecmisKaydi, GecmisKategorisi, OmurDegeri, TezgahOgesi, TezgahOzeti, TezgahTanimi, TezgahVarligi } from './kurallar.ts';
 
 export interface OkumaSatiri extends TezgahOzeti {
   cihazAdi: string;
@@ -73,34 +73,63 @@ export function tanimlariGetir(db: Db, cihazAdi: string): Promise<(AlanTanimi & 
   );
 }
 
-export interface GecmisKaydi {
-  cihazAdi: string;
-  kimlik: string;
-  sira: number;
-  zaman: Date;
-  deger: string | null;
-  kosul: string | null;
+export async function kategorileriGetir(db: Db, cihazAdi: string): Promise<Map<string, GecmisKategorisi>> {
+  const satirlar = await db.sorgu<{ kimlik: string; kategori: GecmisKategorisi }>('SELECT data_item_id AS kimlik, kategori FROM tezgah_alan_tanimi WHERE cihaz_adi = $1', [cihazAdi]);
+  return new Map(satirlar.map((r) => [r.kimlik, r.kategori]));
 }
 
-// Aynı (cihaz, öğe, sıra, zaman) ikinci kez yazılmaz: /current tekrarı ve yeniden denenen tur çift satır üretmez.
-export async function gecmisYaz(db: Db, kayitlar: readonly GecmisKaydi[]): Promise<void> {
-  if (kayitlar.length === 0) return;
-  await db.sorgu(
-    `INSERT INTO tezgah_deger_gecmisi (cihaz_adi, data_item_id, sira, zaman, deger, kosul)
-     SELECT * FROM unnest($1::text[], $2::text[], $3::bigint[], $4::timestamptz[], $5::text[], $6::text[])
-     ON CONFLICT ON CONSTRAINT tezgah_deger_gecmisi_tekil DO NOTHING`,
+// Aynı (cihaz, öğe, sıra, zaman) ikinci kez yazılmaz: /current tekrarı ve yeniden denenen tur çift satır üretmez. Gerçekten eklenen satır sayısı döner.
+export async function gecmisYaz(db: Db, kayitlar: readonly GecmisKaydi[]): Promise<number> {
+  if (kayitlar.length === 0) return 0;
+  const r = await db.tek<{ n: number }>(
+    `WITH eklenen AS (
+       INSERT INTO tezgah_deger_gecmisi (cihaz_adi, data_item_id, sira, zaman, deger, kosul)
+       SELECT * FROM unnest($1::text[], $2::text[], $3::bigint[], $4::timestamptz[], $5::text[], $6::text[])
+       ON CONFLICT ON CONSTRAINT tezgah_deger_gecmisi_tekil DO NOTHING RETURNING 1)
+     SELECT count(*)::int AS n FROM eklenen`,
     [kayitlar.map((k) => k.cihazAdi), kayitlar.map((k) => k.kimlik), kayitlar.map((k) => k.sira), kayitlar.map((k) => k.zaman),
       kayitlar.map((k) => k.deger), kayitlar.map((k) => k.kosul)],
   );
+  return r?.n ?? 0;
 }
 
-export async function boslukYaz(db: Db, zaman: Date, neden: 'tampon-asildi' | 'servis-yeniden-basladi', istenen: number | null, ilk: number | null): Promise<void> {
+export async function boslukYaz(db: Db, zaman: Date, neden: 'tampon-asildi' | 'servis-yeniden-basladi' | 'satir-siniri', istenen: number | null, ilk: number | null): Promise<void> {
   await db.sorgu('INSERT INTO tezgah_veri_boslugu (zaman, neden, istenen_sira, ilk_sira) VALUES ($1, $2, $3, $4)', [zaman, neden, istenen, ilk]);
 }
 
-export async function gecmisiTemizle(db: Db, sinir: Date): Promise<void> {
-  await db.sorgu('DELETE FROM tezgah_deger_gecmisi WHERE zaman < $1', [sinir]);
+export async function bosluklariTemizle(db: Db, sinir: Date): Promise<void> {
   await db.sorgu('DELETE FROM tezgah_veri_boslugu WHERE zaman < $1', [sinir]);
+}
+
+// Temizlik parçası: en çok `parca` satır silinir, silinen sayı döner (parçadan azsa iş bitmiştir).
+export async function eskiGecmisParcasiniSil(db: Db, sinir: Date, parca: number): Promise<number> {
+  const r = await db.tek<{ n: number }>(
+    `WITH silinen AS (DELETE FROM tezgah_deger_gecmisi WHERE id IN (SELECT id FROM tezgah_deger_gecmisi WHERE zaman < $1 LIMIT $2) RETURNING 1)
+     SELECT count(*)::int AS n FROM silinen`,
+    [sinir, parca],
+  );
+  return r?.n ?? 0;
+}
+
+// Satır sınırı: en eski satırlar silinir; silinenlerin en yenisinin zamanı döner (veri boşluğu o ana yazılır).
+export async function enEskiGecmisParcasiniSil(db: Db, parca: number): Promise<{ silinen: number; sonZaman: string | null }> {
+  const r = await db.tek<{ n: number; son: string | null }>(
+    `WITH silinen AS (DELETE FROM tezgah_deger_gecmisi WHERE id IN (SELECT id FROM tezgah_deger_gecmisi ORDER BY zaman, id LIMIT $1) RETURNING zaman)
+     SELECT count(*)::int AS n, ${zamanMetni('max(zaman)')} AS son FROM silinen`,
+    [parca],
+  );
+  return { silinen: r?.n ?? 0, sonZaman: r?.son ?? null };
+}
+
+export async function gecmisSatirSay(db: Db): Promise<number> {
+  return (await db.tek<{ n: number }>('SELECT count(*)::int AS n FROM tezgah_deger_gecmisi'))?.n ?? 0;
+}
+
+export async function gecmisBoyutu(db: Db): Promise<{ diskBayt: number | null; enEski: string | null }> {
+  const r = await db.tek<{ bayt: number | null; eski: string | null }>(
+    `SELECT pg_total_relation_size(to_regclass('tezgah_deger_gecmisi'))::float8 AS bayt, (SELECT ${zamanMetni('min(zaman)')} FROM tezgah_deger_gecmisi) AS eski`,
+  );
+  return { diskBayt: r?.bayt ?? null, enEski: r?.eski ?? null };
 }
 
 export async function varliklariYaz(db: Db, varliklar: readonly TezgahVarligi[], zaman: Date): Promise<void> {
@@ -130,7 +159,7 @@ export async function sonVarlikOkuma(db: Db): Promise<string | null> {
   return (await db.tek<{ z: string | null }>(`SELECT ${zamanMetni('max(okundu)')} AS z FROM tezgah_varlik`))?.z ?? null;
 }
 
-export function bosluklar(db: Db, sinir: Date): Promise<{ zaman: string; neden: 'tampon-asildi' | 'servis-yeniden-basladi' }[]> {
+export function bosluklar(db: Db, sinir: Date): Promise<{ zaman: string; neden: 'tampon-asildi' | 'servis-yeniden-basladi' | 'satir-siniri' }[]> {
   return db.sorgu(`SELECT ${zamanMetni('zaman')} AS zaman, neden FROM tezgah_veri_boslugu WHERE zaman >= $1 ORDER BY zaman`, [sinir]);
 }
 
