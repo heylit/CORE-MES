@@ -44,4 +44,23 @@ describe('toplu yazımın istek kimlikleri', () => {
     await topluGonder(defter, [{ p: 'ORN-1' }], (_g, d) => { kimlikler.push(d.istekKimligi); return Promise.resolve(1); });
     expect(new Set(kimlikler).size).toBe(3);
   });
+
+  it('Risk 3700: sonucu bilinmeyen ayrı komutlar birikmez; aynı gövdeli sonraki komut yeni kimlik alır', async () => {
+    vi.useFakeTimers();
+    const defter = new KimlikDefteri();
+    const kimlikler: string[] = [];
+    const bozuk = (_g: unknown, d: { istekKimligi: string }) => { kimlikler.push(d.istekKimligi); return Promise.reject(new AgHatasi('ag')); };
+    const cizim = [{ statu: 'cizim' }];
+    const otomatik = [{ statu: null }];
+    for (const govdeler of [cizim, otomatik]) {
+      const sonuc = topluGonder(defter, govdeler, bozuk).catch((h: unknown) => h);
+      await vi.runAllTimersAsync();
+      expect(await sonuc).toBeInstanceOf(AgHatasi);
+    }
+    const ilkCizim = kimlikler[0]!;
+    kimlikler.length = 0;
+    await topluGonder(defter, cizim, (_g, d) => { kimlikler.push(d.istekKimligi); return Promise.resolve(1); });
+    expect(kimlikler).toHaveLength(1);
+    expect(kimlikler[0]).not.toBe(ilkCizim);
+  });
 });

@@ -5,16 +5,25 @@ import { tekrarKorumaliGonder, yeniIstekKimligi, yenidenDenenebilirMi, type Dene
 // değiştiyse kimlik de yenidir; aynı kimlik başka gövdeyle sunucuda reddedilir. Ortak parçaya taşınması çekirdek isteğidir (3700).
 export class KimlikDefteri {
   private readonly kimlikler = new Map<string, string>();
+  private son = '';
+  // Defter yalnız son komutun kimliklerini tutar: başka bir komut başlayınca öncekinin (sonucu bilinmeyen) kimlikleri düşer. Yoksa aynı
+  // gövdeli sonraki komut eski kimlikle gider ve sunucu saklanan cevabı döner, komut uygulanmaz.
+  yeniKomut(anahtarlar: readonly string[]): void {
+    const imza = JSON.stringify(anahtarlar);
+    if (imza !== this.son) this.kimlikler.clear();
+    this.son = imza;
+  }
   kimlik(anahtar: string): string {
     let k = this.kimlikler.get(anahtar);
     if (k === undefined) { k = yeniIstekKimligi(); this.kimlikler.set(anahtar, k); }
     return k;
   }
   birak(anahtar: string): void { this.kimlikler.delete(anahtar); }
-  temizle(): void { this.kimlikler.clear(); }
+  temizle(): void { this.kimlikler.clear(); this.son = ''; }
 }
 
 export async function korumaliGonder<T>(defter: KimlikDefteri, anahtar: string, gonder: (deneme: Deneme) => Promise<T>): Promise<T> {
+  defter.yeniKomut([anahtar]);
   try {
     const cevap = await tekrarKorumaliGonder(gonder, { istekKimligi: defter.kimlik(anahtar) });
     defter.birak(anahtar);
@@ -30,6 +39,7 @@ export async function korumaliGonder<T>(defter: KimlikDefteri, anahtar: string, 
 // sunucu bir parçayı reddederse defter boşalır; sonraki basış yeni komuttur.
 export async function topluGonder<G, C>(defter: KimlikDefteri, govdeler: readonly G[], gonder: (govde: G, deneme: Deneme) => Promise<C>): Promise<C[]> {
   const cevaplar: C[] = [];
+  defter.yeniKomut(govdeler.map((g) => JSON.stringify(g)));
   try {
     for (const govde of govdeler) {
       cevaplar.push(await tekrarKorumaliGonder((d) => gonder(govde, d), { istekKimligi: defter.kimlik(JSON.stringify(govde)) }));
