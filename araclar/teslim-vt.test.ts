@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import {
   anaDalYamaKimlikleri, dayanakDurumu, denemeOrtami, initdbArgumanlari, istemciSarmalayicisi, pgBinBul, sarmalayiciyaYonelt, sonucMetni, sonucOku, testPlani, istemciyeBakanSunucuTestleri, kararDosyalari, kisaYolKarari, veritabanisizMi, VT_ISTEMCI_YAPILANDIRMASI, vtDenetle, yamaKimlikleri,
@@ -49,6 +50,37 @@ test('testPlani: modül iki tarafı, çekirdek, paylaşılan ve aracın yanında
     'test:modul stok (sunucu)', 'test:modul stok (istemci)', 'çekirdek testleri', 'paylaşılan testleri', 'araclar/teslim-vt.test.ts',
   ]);
   assert.deepEqual(testPlani(['sunucu/gocler/20261108120000_x.sql'], () => true), []);
+});
+
+test('testPlani: değişen istemci CSS dosyalarında stylelint koşar; silinen, istemci dışı ve .css olmayan dosya eklemez', () => {
+  const var_ = new Set(['istemci/src/ortak/tasarim/tokens.css', 'istemci/src/moduller/plan/planlama/kokpit/kokpit.css']);
+  const plan = testPlani([
+    'istemci/src/moduller/plan/planlama/kokpit/kokpit.css', 'istemci/src/ortak/tasarim/tokens.css', 'istemci/src/ortak/silinen.css',
+    'arkon/web/arkon.css', 'istemci/src/ortak/Sayfa.tsx', 'istemci/src/ortak/tasarim/tokens.css',
+  ], (y) => var_.has(y));
+  const adim = plan.find((a) => a.ad.startsWith('stylelint'));
+  assert.ok(adim);
+  assert.equal(adim.ad, 'stylelint (değişen CSS: 2 dosya)');
+  assert.deepEqual(adim.argv, ['node', 'node_modules/stylelint/bin/stylelint.mjs', 'istemci/src/moduller/plan/planlama/kokpit/kokpit.css', 'istemci/src/ortak/tasarim/tokens.css']);
+  assert.equal(testPlani(['istemci/src/ortak/Sayfa.tsx', 'arkon/web/arkon.css'], () => true).some((a) => a.ad.startsWith('stylelint')), false);
+});
+
+test('stylelint adımı kapanmamış CSS bloğunu yakalar, geçerli dosyayı geçirir (3699)', () => {
+  const kok = resolve(fileURLToPath(new URL('..', import.meta.url)));
+  const klasor = mkdtempSync(join(tmpdir(), 'tmiv2-css-'));
+  try {
+    const yol = join(klasor, 'deneme.css');
+    // Komut, planın kendi argv'sidir; yalnız dosya yolu geçici dosyayla değişir.
+    const [komut = '', betik = ''] = (testPlani(['istemci/src/ortak/a.css'], () => true).find((x) => x.ad.startsWith('stylelint'))?.argv ?? []);
+    const kos = (metin: string) => {
+      writeFileSync(yol, metin);
+      return spawnSync(komut, [betik, '--config', join(kok, 'stylelint.config.js'), yol], { cwd: kok, encoding: 'utf8' }).status;
+    };
+    assert.equal(kos('.a { color: var(--ink); }\n'), 0);
+    assert.notEqual(kos('.a { color: var(--ink);\n'), 0);
+  } finally {
+    rmSync(klasor, { recursive: true, force: true });
+  }
 });
 
 test('denemeOrtami: yazarın TMIV2_ ve PG değişkenleri geçmez; port denemenin kümesidir', () => {
