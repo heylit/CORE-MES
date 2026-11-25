@@ -6,6 +6,7 @@ import { sonrakiSiralama, type Siralama } from '../veri/liste-durumu.ts';
 import { Girdi } from './Alan.tsx';
 import { Dugme } from './Dugme.tsx';
 import { DurumKutusu } from './DurumKutusu.tsx';
+import type { RozetTonu } from './Rozet.tsx';
 import { Sayfalama, type SayfalamaOzellikleri } from './Sayfalama.tsx';
 import { Simge } from './Simge.tsx';
 import { useTelefon } from './telefon.ts';
@@ -127,6 +128,10 @@ interface Ozellikler<S> {
   // yanlarda kalır. Çok sütunlu izleme listeleri içindir. Verilmezse uyarlanır (sığmayınca kart kipi).
   // 'kayit': kayıt listesi. Geniş ekranda 'kaydir' gibi, telefonda her zaman karttır (kart 3676); matris ve rapor tabloları 'kaydir' kalır.
   kip?: 'uyarlanir' | 'kaydir' | 'kayit';
+  // Telefonda kayıt kartının solunda durum şeridi (kart 3676): yeşil yalnız tamam, mavi bilgi (çalışıyor, toplanıyor), turuncu uyarı
+  // (kısmi), kırmızı hata (gecikti), gri pasif (bekliyor, planlı); verilmeyen satırda şerit yoktur. Ton rozetin tonudur; renk tek başına anlam taşımaz,
+  // rozet metni durumu söyler.
+  serit?: (satir: S) => RozetTonu | null | undefined;
   // Verilince satırlar katlanır başlıklarla gruplanır (kart 3284); katlama tablo açık kaldıkça sürer.
   grup?: TabloGrubu<S>;
 }
@@ -307,7 +312,7 @@ function BosHucre() {
 
 export function Tablo<S>({
   etiket, sutunlar, satirlar, satirAnahtari, satirSec, bosMesaj, bosEylem, siralama = null, siralamaDegistir, sayfalama, mesgul = false, arac,
-  yukleniyor = false, satirEylemi, toplu, kip = 'uyarlanir', grup,
+  yukleniyor = false, satirEylemi, toplu, kip = 'uyarlanir', serit, grup,
 }: Ozellikler<S>) {
   const [katli, katliYaz] = useState<ReadonlySet<string>>(() => new Set());
   const telefon = useTelefon();
@@ -448,6 +453,7 @@ export function Tablo<S>({
               key={satirAnahtari(satir)}
               data-satir={anahtar(satir)}
               data-secili={topluAcik && secili.has(anahtar(satir)) ? '' : undefined}
+              data-serit={kayitKarti ? (serit?.(satir) ?? undefined) : undefined}
               className={satirSec ? 'tc-tablo-secilir' : undefined}
               tabIndex={satirSec ? 0 : undefined}
               {...kaydirma()}

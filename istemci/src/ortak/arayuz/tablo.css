@@ -224,3 +224,10 @@
 [data-kip="kart"][data-kompakt] .tc-tablo tr:has(> td[data-kart-rozet] ~ td[data-kart-rozet]) > td[data-kart-rozet] { grid-column: 1; justify-content: flex-start; }
 [data-kip="kart"][data-kompakt] .tc-tablo tr:has(> td[data-kart-rozet] ~ td[data-kart-rozet]) > td[data-kart-rozet] { grid-row: 2; }
 [data-kip="kart"][data-kompakt] .tc-tablo tr:has(> td[data-kart-rozet] ~ td[data-kart-rozet]) > td[data-kart-rozet] ~ td[data-kart-rozet] { grid-row: 3; }
+
+/* Kart sol durum şeridi (kip="kayit", telefon; kart 3676): tek yerde ton -> renk; kartın kendi kenar boşluğunda iç gölgeyle çizilir. */
+[data-kip="kart"][data-kompakt] .tc-tablo tr[data-serit="tamam"] { box-shadow: inset 4px 0 0 var(--run); }
+[data-kip="kart"][data-kompakt] .tc-tablo tr[data-serit="bilgi"] { box-shadow: inset 4px 0 0 var(--done); }
+[data-kip="kart"][data-kompakt] .tc-tablo tr[data-serit="uyari"] { box-shadow: inset 4px 0 0 var(--hold); }
+[data-kip="kart"][data-kompakt] .tc-tablo tr[data-serit="hata"] { box-shadow: inset 4px 0 0 var(--stop); }
+[data-kip="kart"][data-kompakt] .tc-tablo tr[data-serit="pasif"] { box-shadow: inset 4px 0 0 var(--idle); }

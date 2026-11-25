@@ -1,0 +1,10 @@
+/* Telefonda liste üstü: güncellenme zamanı, yenile düğmesi, hata satırı (kart 3676). */
+.tc-yenile { display: flex; flex-direction: column; gap: var(--b-2); }
+.tc-yenile-satir { display: flex; align-items: center; justify-content: space-between; gap: var(--b-3); }
+.tc-yenile-son { color: var(--muted); font-size: var(--yazi-s); }
+.tc-yenile-dugme { min-inline-size: var(--dokunma); min-block-size: var(--dokunma); padding-inline: var(--b-2); }
+.tc-yenile-cek { block-size: var(--dokunma); display: flex; align-items: center; justify-content: center; overflow: hidden; color: var(--muted); font-size: var(--yazi-s); }
+.tc-yenile-satir[data-hata] { padding: var(--b-2) var(--b-3); border: 1px solid var(--hold); border-radius: var(--yari-1); }
+.tc-yenile-satir[data-hata] .tc-yenile-son { color: var(--ink); }
+/* Tarayıcının kendi aşağı çek-yenilesi sayfayı yeniden yüklemesin; yenileme Yenile bileşenindedir. */
+@media (max-width: 767px) { .tc-kabuk-icerik { overscroll-behavior-y: contain; } }

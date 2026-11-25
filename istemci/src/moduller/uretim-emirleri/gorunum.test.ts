@@ -14,7 +14,7 @@ describe('farkMetni', () => {
   });
 });
 
-import { durumGosterimi, kayitAdedi, saglamSayisi } from './gorunum.ts';
+import { durumGosterimi, kayitAdedi, saglamSayisi, seritTonu } from './gorunum.ts';
 
 describe('canlı gösterim', () => {
   const canli = { calisma: 'durakli', saglam: 4, hurda: 1, durusNedeni: null, durusBaslangic: null } as const;
@@ -48,5 +48,17 @@ describe('canlı gösterim', () => {
     expect(kayitAdedi({ olay: 'duzeltme', adet: -2, saglamAdet: null })).toBe('-2');
     expect(kayitAdedi({ olay: 'bitir', adet: null, saglamAdet: 0 })).toBe(0);
     expect(kayitAdedi({ olay: 'baslat', adet: undefined, saglamAdet: null })).toBeNull();
+  });
+});
+
+describe('kart şeridi (kart 3676)', () => {
+  const canli = { calisma: 'calisiyor', saglam: 4, hurda: 0, durusNedeni: null, durusBaslangic: null } as const;
+  it('yeşil yalnız tamam: planlı gri, çalışan mavi; rozet rengi sözlükten değişmez', () => {
+    expect(seritTonu({ durum: 'planli', canli: null })).toBe('pasif');
+    expect(seritTonu({ durum: 'basladi', canli })).toBe('bilgi');
+    expect(seritTonu({ durum: 'basladi', canli: { ...canli, calisma: 'durakli' } })).toBe('uyari');
+    expect(seritTonu({ durum: 'bitti', canli: null, kapanisSonucu: 'tamamlandi' })).toBe('tamam');
+    expect(durumGosterimi({ durum: 'basladi', canli }).ton).toBe('tamam');
+    expect(durumGosterimi({ durum: 'planli', canli: null }).ton).toBe('bilgi');
   });
 });
