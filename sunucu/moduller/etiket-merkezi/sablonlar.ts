@@ -3,7 +3,7 @@ import type { Sablon, SablonTuru } from '#paylasilan/sozlesme/etiket-merkezi.ts'
 import { cm1Yaz } from './kod-yaz.ts';
 import { yerlesimleriUret } from './yerlesimler.ts';
 import { altSatir, ana, baslik as govdeBasligi, bant, ozel, satir, seritSablonu, yanSatir, type SeritGirdisi } from './serit.ts';
-import { REFAKAT_ADIM_SAYISI, SATIR_BASI, refakatAdimlari, type AlanDegerleri } from './kurallar.ts';
+import { REFAKAT_ADIM_SAYISI, REFAKAT_ALT_CIZGI, REFAKAT_SATIR_ARALIGI, SATIR_BASI, refakatAdimlari, type AlanDegerleri } from './kurallar.ts';
 
 // Hazır şablonlar kodda durur: kullanıcı şablonu gelince bunlar kopyalanıp değiştirilecek. Ölçüler mm.
 // Piktogram alanı "<karo>:<piktogram>" (paylasilan/etiket-piktogramlari.ts).
@@ -71,13 +71,13 @@ const simge = (x: number, y: number, boyut: number, alan: string, kosul?: string
 const baslik = (x: number, y: number, genislik: number, metni: string, kosul?: string) => metin(x, y, genislik, 2.2, 1.9, `=${metni}`, false, kosul === undefined ? {} : { kosul });
 
 // Refakat kartında işlem satırı (EM-27, 2907): no, ad, yer ve işaret (fason ya da çıkış); satır altında ince çizgi. İmza kutusu yok
-// (2907-1 a), elle kayıt kutusu da yok (2932: kullanıcı kaldırdı). Satır aralığı 7 mm: on satır işlem başlığından alt çizgiye yayılır.
+// (2907-1 a), elle kayıt kutusu da yok (2932: kullanıcı kaldırdı). Satır aralığı REFAKAT_SATIR_ARALIGI: on beş satır işlem başlığından alt çizgiye yayılır.
 const refakatAdimi = (i: number) => {
-  const y = 65 + (i - 1) * 7;
+  const y = 65 + (i - 1) * REFAKAT_SATIR_ARALIGI;
   const ad = `adim${i}Ad`;
   return [
     metin(4, y, 9, 3.6, 3.2, `adim${i}No`, true), metin(14, y, 37, 3.6, 3.2, ad, true), metin(52, y + 0.4, 36, 3, 2.4, `adim${i}Yer`),
-    simge(90.5, y - 0.3, 4.4, `adim${i}Isaret`), kutu(4, y + 5.2, 92, 0.2, 0.2, ad),
+    simge(90.8, y + 0.1, 3.8, `adim${i}Isaret`), kutu(4, y + 4.4, 92, 0.2, 0.2, ad),
   ];
 };
 const DENEME_SIMGELERI = ['konum', 'raf', 'malzeme', 'lot', 'refakat', 'tezgah', 'kalite', 'hatali', 'koli', 'kumpas'];
@@ -171,13 +171,13 @@ const SERIT_SABLONLARI: readonly Sablon[] = [
   dene('lot-100x50', 'Lot 100x50', 'lot', 100, 50, {
     turAdi: 'LOT', simge: 'siyah:lot', bloklar: [govdeBasligi('LOT', false, false, [{ alan: 'kart', genislik: 'kalan', yazi: 2.2 }]), ana('lotNo', 6.2), satir('MALZEME', 'malzeme', 2.8), satir('PARTİ · DÖKÜM · SERTİFİKA', 'parti'), satir('GİRİŞ', 'giris')],
   }),
-  // 2907 (2912 a): şerit ve gövde ilk 60 mm; işlem sırası adım başına tek satır, on satır; elle kayıt kutusu yok (2932).
+  // 2907 (2912 a): şerit ve gövde ilk 60 mm; işlem sırası adım başına tek satır, on beş satır; elle kayıt kutusu yok (2932).
   dene('refakat-100x150', 'Refakat kartı 100x150', 'refakat', 100, 150, {
     turAdi: 'REFAKAT', simge: 'siyah:refakat', bloklar: refakatGovdesi,
     ek: [
       kutu(1, 60, 98, 0.4), baslik(4, 61.6, 60, 'İŞLEM SIRASI', 'adim1Ad'),
       ...Array.from({ length: REFAKAT_ADIM_SAYISI }, (_, i) => refakatAdimi(i + 1)).flat(),
-      kutu(1.5, 137.4, 97, 0.3), metin(4, 138.8, 58, 3, 2.4, 'parti'),
+      kutu(1.5, REFAKAT_ALT_CIZGI, 97, 0.3), metin(4, REFAKAT_ALT_CIZGI + 1.4, 58, 3, 2.4, 'parti'),
     ],
   }),
   // 2922 a: istasyon etiketi yer etiketinin bir boyudur; kod aynı konum kodudur (LOC), başlıkta "Teslim yeri" yazar.

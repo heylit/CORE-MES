@@ -514,7 +514,11 @@ export function refakatDegerleri(k: RefakatKartiCevabi, basim: Date): AlanDegerl
 // kutusu yoktur, kayıt okutmadır. Kartta REFAKAT_ADIM_SAYISI satır vardır; daha çok işlem varsa son satır kalan işlem sayısını yazar.
 // Fason işlem kamyon, diğerleri tezgâh piktogramıyla (Simge); İşaret yalnız fason işlemde ve son işlemden sonraki çıkış satırındadır.
 // Boş satır kaldıysa son işlemin altına çıkış satırı ("Mamul deposu / sevk") yazılır.
-export const REFAKAT_ADIM_SAYISI = 10;
+export const REFAKAT_ADIM_SAYISI = 15;
+// Satır aralığı (mm): on beş satır işlem başlığı ile alt çizgi (143,4 mm) arasına sığar.
+export const REFAKAT_SATIR_ARALIGI = 5.2;
+// Alt çizgi (mm); işlem satırları ve basım satırı bu çizgiye göre yerleşir.
+export const REFAKAT_ALT_CIZGI = 143.4;
 export const REFAKAT_CIKIS_SATIRI = 'Mamul deposu / sevk';
 export function refakatAdimlari(adimlar: RefakatKartiCevabi['adimlar']): Record<string, string | null> {
   const sonuc: Record<string, string | null> = {};

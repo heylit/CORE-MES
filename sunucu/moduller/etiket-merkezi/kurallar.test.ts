@@ -8,7 +8,7 @@ import { KOD_KENAR_MODUL, SATIR_ARALIGI, type Sablon } from '#paylasilan/sozlesm
 import { yaziciAgiOku } from './ag.ts';
 import { seritEni } from './kod-yaz.ts';
 import { KOD_ALTI_EN_KUCUK_YAZI, KOD_MODUL_EN_AZ_MM, YAZI_EN_AZ_MM, enKucukOlcu, kopyaDegerleri, okunurluk, olcekle, kodAltiYeri, kodModulu } from './kurallar.ts';
-import { BEKLEYEN_GUN, HATALI_KARAR_SIMGESI, KALITE_KARAR_SIMGESI, REFAKAT_ADIM_SAYISI, REFAKAT_CIKIS_SATIRI, bekleyenBaslangici, bekleyenSirasi, kaliteBekleyenleri, kaliteDurumDegerleri, hataliBekleyenleri, malKabulBekleyenleri, refakatBekleyenleri, cikmadiIsaretlenebilir, defterKayitTuru, defterTuru } from './kurallar.ts';
+import { BEKLEYEN_GUN, HATALI_KARAR_SIMGESI, KALITE_KARAR_SIMGESI, REFAKAT_ADIM_SAYISI, REFAKAT_ALT_CIZGI, REFAKAT_CIKIS_SATIRI, bekleyenBaslangici, bekleyenSirasi, kaliteBekleyenleri, kaliteDurumDegerleri, hataliBekleyenleri, malKabulBekleyenleri, refakatBekleyenleri, cikmadiIsaretlenebilir, defterKayitTuru, defterTuru } from './kurallar.ts';
 import { alanDegeri, baskiEngeli, dogrudanBaskiDurumu, indirmeEngeli, istasyonDegerleri, kayitUyumHatasi, konumDegerleri, lotDegerleri, kayitSablonTuru, malzemeDegerleri, metinGenisligi, noktaya, rafDegerleri, refakatDegerleri, refakatPartisiDegerleri, toplamEtiketHatasi, yaziciAdresHatasi, kodDikdortgenleri, sablonHatalari, sadelestir, SATIR_BASI, satirlaraBol, sigdirilmisYazi, yerlesim } from './kurallar.ts';
 import { ALANLAR, HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
 import { gkkSonucu, malzemeBandi, malzemeEtiketiDegerleri, type MalzemeEtiketiGirdisi, type MalzemeGirisOzeti } from './kurallar.ts';
@@ -470,9 +470,9 @@ describe('etiket-merkezi kuralları', () => {
     const alt = refakatDegerleri({ ...k, teslim: null, parti: { ustEmirNo: 'UE-004500', bolunmeSira: 2 }, adimlar: [] }, new Date('2026-10-19T08:00:00.000Z'));
     assert.deepEqual([alt['adetTermin'], alt['parti'], alt['adimlar'], alt['termin'], alt['adim1Ad']], ['Adet 40 · Termin yok', 'Alt parti 2 · üst UE-004500', null, null, null]);
     // Kartta REFAKAT_ADIM_SAYISI satır var: fazla işlemde son satır kalanları sayar, no ve piktogram basılmaz.
-    const cok = refakatDegerleri({ ...k, adimlar: Array.from({ length: 12 }, (_, i) => ({ opNo: (i + 1) * 10, ad: `İş ${i + 1}`, yer: null, fason: false })) }, new Date());
+    const cok = refakatDegerleri({ ...k, adimlar: Array.from({ length: REFAKAT_ADIM_SAYISI + 2 }, (_, i) => ({ opNo: (i + 1) * 10, ad: `İş ${i + 1}`, yer: null, fason: false })) }, new Date());
     assert.deepEqual([cok[`adim${REFAKAT_ADIM_SAYISI - 1}Ad`], cok[`adim${REFAKAT_ADIM_SAYISI}Ad`], cok[`adim${REFAKAT_ADIM_SAYISI}No`], cok[`adim${REFAKAT_ADIM_SAYISI}Simge`]],
-      [`İş ${REFAKAT_ADIM_SAYISI - 1}`, `+${12 - REFAKAT_ADIM_SAYISI + 1} işlem daha`, null, null]);
+      [`İş ${REFAKAT_ADIM_SAYISI - 1}`, `+${3} işlem daha`, null, null]);
     assert.equal(Object.values(cok).filter((v) => v === REFAKAT_CIKIS_SATIRI).length, 0, 'satırlar dolunca çıkış satırı basılmaz');
     const onBir = refakatDegerleri({ ...k, adimlar: Array.from({ length: REFAKAT_ADIM_SAYISI + 1 }, (_, i) => ({ opNo: (i + 1) * 10, ad: `İş ${i + 1}`, yer: null, fason: false })) }, new Date());
     assert.equal(onBir[`adim${REFAKAT_ADIM_SAYISI}Ad`], '+2 işlem daha', 'on bir işlemde son satır iki işlemi sayar');
@@ -503,10 +503,10 @@ describe('etiket-merkezi kuralları', () => {
     assert.equal(metinler.filter((m) => m.includes('Parti')).length, 0);
     // Atölye D1: adet kutusu emrin adedidir.
     assert.ok(metinler.includes('EMİR ADEDİ'));
-    // 2932: on işlem satırı; QR boyutu okutma mesafesi için sabit. On satır alt çizginin (137,4 mm) üstünde biter.
-    assert.equal(REFAKAT_ADIM_SAYISI, 10);
+    // 2932: on beş işlem satırı; QR boyutu okutma mesafesi için sabit. Son satır alt çizginin (REFAKAT_ALT_CIZGI) üstünde biter.
+    assert.equal(REFAKAT_ADIM_SAYISI, 15);
     const satirAd = s.ogeler.find((o) => o.tur === 'metin' && o.alan === `adim${REFAKAT_ADIM_SAYISI}Ad`);
-    assert.ok(satirAd?.tur === 'metin' && satirAd.y + 5.4 < 137.4);
+    assert.ok(satirAd?.tur === 'metin' && satirAd.y + 4.4 < REFAKAT_ALT_CIZGI);
     assert.equal(ogeler.find((o) => o.tur === 'kod')?.boyut, 28);
     // İşaret yalnız fason satırında ve çıkış satırında; boş satırın çizgisi basılmaz.
     assert.deepEqual(ogeler.filter((o) => o.tur === 'simge').map((o) => o.tur === 'simge' && `${o.karo}:${o.ad}`), ['siyah:refakat', 'siyah:fason', 'siyah:bayrak']);
