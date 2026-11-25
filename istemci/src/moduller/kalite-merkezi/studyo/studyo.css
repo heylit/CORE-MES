@@ -89,6 +89,8 @@
   .km-st-sag { grid-column: auto; grid-template-columns: minmax(0, 1fr); }
   .km-st-orta { height: calc(100dvh - var(--ust-cubuk) - var(--alt-cubuk) - var(--b-6) * 3); min-height: var(--pencere-genis); }
   .km-st-m-dosya .km-st-orta, .km-st-m-dosya .km-st-sag,
+  .km-st-m-dosya .km-st-gr, .km-st-m-resim .km-st-gr, .km-st-m-plan .km-st-gr,
+  .km-st-m-gruplar .km-st-sol, .km-st-m-gruplar .km-st-orta, .km-st-m-gruplar .km-st-sag,
   .km-st-m-resim .km-st-sol, .km-st-m-resim .km-st-sag,
   .km-st-m-plan .km-st-sol, .km-st-m-plan .km-st-orta { display: none; }
 }
@@ -116,3 +118,18 @@
 .km-st-grup-balon.on { background: var(--hazard); border-color: var(--hazard); color: var(--ink); }
 .km-st-grup-balon:disabled { cursor: default; opacity: .7; }
 .km-st-grup-x { display: inline-grid; place-items: center; border: 0; background: none; color: inherit; cursor: pointer; }
+
+/* Gruplar: 1280'de sağ sütunun üstünde, 768'de alt satırda tam genişlikte, 360'ta kendi sekmesinde. */
+.km-st-gr { display: flex; flex-direction: column; gap: var(--b-3); min-height: 0; overflow: auto; }
+@media (min-width: 1200px) {
+  .km-st { grid-template-areas: "sol orta gr" "sol orta sag"; grid-template-rows: minmax(0, 3fr) minmax(0, 2fr); }
+  .km-st-sol { grid-area: sol; } .km-st-orta { grid-area: orta; } .km-st-gr { grid-area: gr; } .km-st-sag { grid-area: sag; }
+  .km-st-genis { grid-template-areas: "orta"; grid-template-rows: minmax(0, 1fr); }
+  .km-st-genis .km-st-gr { display: none; }
+}
+@media (min-width: 768px) and (max-width: 1199px) { .km-st-gr { grid-column: 1 / -1; } .km-st-genis .km-st-gr { display: none; } }
+/* Dar sütunda taşmasın: kart ve grup içeriği daralır, uzun düğme metni sarar. */
+.km-st-gruplar, .km-st-grup, .km-st-grup > *, .km-st-gruplar > * { min-width: 0; }
+.km-st-grup-ust { flex-wrap: wrap; }
+.km-st-grup .tc-dugme, .km-st-gruplar .tc-dugme { white-space: normal; text-align: start; max-inline-size: 100%; }
+.km-st-grup-ust > :first-child { flex: 1 1 calc(var(--b-6) * 3); }

@@ -86,7 +86,7 @@ export async function studyoParcasi(db: Db, malzemeNo: number): Promise<KmStudyo
     .sort((a, b) => a.opNo - b.opNo);
   const alinan = new Set((await sorgular.parcaResimKaynaklari(db, malzemeNo)).map((r) => resimAnahtari(r.merkezBelgeId, r.ozet)));
   const alinmamis = (await kartinYayindakiBelgeleri(db, malzemeNo)).filter((b) => !alinan.has(resimAnahtari(b.id, b.ozet))).length;
-  return { resimler, numunePlanlari, alinmamis, operasyonlar: rotaOperasyonlari.map((o) => ({ operasyonId: o.operasyonId, opNo: o.opNo })) };
+  return { resimler, numunePlanlari, alinmamis, operasyonlar: rotaOperasyonlari.map((o) => ({ operasyonId: o.operasyonId, opNo: o.opNo, ad: o.ad })) };
 }
 
 // Arkon taslak paketinin kendiliğinden planı: yalnız etkin balonlu resmi olan parçaların resimleri (balon ve grupla). Okuma yetkisinden bağımsızdır;

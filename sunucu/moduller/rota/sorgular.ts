@@ -777,10 +777,10 @@ export function revizyonOperasyonlari(db: Db, revizyonId: number): Promise<{ opN
   return db.sorgu('SELECT op_no AS "opNo", operasyon_id AS "operasyonId" FROM rota_adimi WHERE revizyon_id = $1 ORDER BY sira', [revizyonId]);
 }
 
-export interface YururlukteOperasyon { malzemeId: number; operasyonId: OperasyonKimligi; opNo: number; kayitliOpNo: number }
+export interface YururlukteOperasyon { malzemeId: number; operasyonId: OperasyonKimligi; opNo: number; kayitliOpNo: number; ad: string }
 export function yururlukteOperasyonlar(db: Db, malzemeIdleri: readonly number[]): Promise<YururlukteOperasyon[]> {
   return db.sorgu(
-    `SELECT r.malzeme_id AS "malzemeId", a.operasyon_id AS "operasyonId", a.op_no AS "opNo", o.op_no AS "kayitliOpNo"
+    `SELECT r.malzeme_id AS "malzemeId", a.operasyon_id AS "operasyonId", a.op_no AS "opNo", o.op_no AS "kayitliOpNo", a.ad AS "ad"
        FROM rota_adimi a JOIN rota_revizyonu r ON r.id = a.revizyon_id JOIN rota_op_numarasi o ON o.id = a.operasyon_id
       WHERE r.malzeme_id = ANY($1::int[]) AND r.durum = 'yururlukte' ORDER BY r.malzeme_id, a.sira`,
     [malzemeIdleri],

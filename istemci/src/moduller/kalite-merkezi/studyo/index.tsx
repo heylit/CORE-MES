@@ -23,7 +23,7 @@ import './studyo.css';
 // görüntüleyicisi (616 b), sağda numune planı ve numuneler. Kontrol planını onay yetkisi olan düzenler ve kaydeder; seçili emre ölçüm
 // yazma yetkisiyle yazılır (603 a).
 // Telefonda üç sütun sekmeyle değişir.
-type MobilGorunum = 'dosya' | 'resim' | 'plan';
+type MobilGorunum = 'dosya' | 'resim' | 'gruplar' | 'plan';
 
 // Geniş ekranda yan sütunlar katlanır, resim tam genişliğe çıkar (1738 c): üç sütunda resim balonlanamayacak kadar küçük kalır. Varsayılan
 // kapalıdır; tercih yalnız bu tarayıcıda tutulur, depolama kullanılamıyorsa varsayılan geçerlidir.
@@ -58,6 +58,8 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
   const [secici, seciciYaz] = useState(false);
   const [mobil, mobilYaz] = useState<MobilGorunum>('resim');
   const [cmm, cmmYaz] = useState<'yukle' | 'plan' | null>(null);
+  const [secili, seciliYaz] = useState<readonly number[]>([]);
+  const [secimAnahtari, secimAnahtariYaz] = useState(0);
   const [yanAcik, yanAcikYaz] = useState(yanPanelOku);
   const yanDegistir = () => { const y = !yanAcik; yanAcikYaz(y); yanPanelYaz(y); };
 
@@ -105,6 +107,13 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
   useEffect(() => { okumaSifirla(); }, [resim?.id, okumaSifirla]);
   const [taslak, taslakYaz] = useState<Balon[] | null>(null);
   useEffect(() => { taslakYaz(null); }, [resim?.id, resim?.surum]);
+  // Balon kodu: resimde balonun yanında grubunun adı (aynı balon birden çok grupta olabilir).
+  const grupKodlari = useMemo(() => {
+    const k: Record<number, string> = {};
+    for (const g of resim?.gruplar ?? []) for (const no of g.balonlar) k[no] = k[no] ? `${k[no]}, ${g.ad}` : g.ad;
+    return k;
+  }, [resim?.gruplar]);
+  const balonEkleNedeni = planDuzenler ? null : resim?.eski ? `Eski revizyon (Rev ${resim.revizyon ?? ''}) salt okunur; güncel revizyona geç.` : 'Planı düzenlemek için kalite onayı gerekir.';
   const planYaz = useBalonPlaniYaz(malzemeNo);
   const planKaydet = () => {
     if (!resim || !taslak) return;
@@ -171,7 +180,7 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
   return (
     <div className={`km-st km-st-m-${mobil}${yanAcik ? '' : ' km-st-genis'}`}>
       <div className="km-st-mseg" role="tablist" aria-label="Görünüm">
-        {([['dosya', 'Parça'], ['resim', 'Resim'], ['plan', 'Plan']] as const).map(([k, ad]) => (
+        {([['dosya', 'Parça'], ['resim', 'Resim'], ['gruplar', 'Gruplar'], ['plan', 'Plan']] as const).map(([k, ad]) => (
           <button key={k} type="button" role="tab" aria-selected={mobil === k} className={mobil === k ? 'on' : ''} onClick={() => { mobilYaz(k); }}>{ad}</button>
         ))}
       </div>
@@ -235,6 +244,11 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
           <Dugme tur="ikincil" simge="layers" aria-expanded={yanAcik} aria-controls="km-st-sol km-st-sag" onClick={yanDegistir}>
             {yanAcik ? 'Yan panelleri gizle' : 'Yan panelleri göster'}
           </Dugme>
+          {resim && resim.tur === 'resim' ? (
+            <Dugme tur="ikincil" simge="layers" className="km-st-gruplar-dugme" onClick={() => { if (!yanAcik) yanDegistir(); }} aria-label="Balon gruplarını göster">
+              {`Gruplar · ${String(resim.gruplar?.length ?? 0)}`}
+            </Dugme>
+          ) : null}
           <Dugme tur="ikincil" simge="gear" className="km-st-okuma-dugme" aria-expanded={okumaAcik} aria-controls="km-st-okuma" onClick={() => { okumaAcikYaz((a) => !a); }}>Okuma ayarları</Dugme>
           {!yanAcik && kart ? <span className="km-st-soluk"><b className="km-st-kod">{kart.kod}</b>{resim ? ` · ${resim.ad}` : ''}{emir ? ` · ${emir.no ?? ''}` : ''}</span> : null}
         </div>
@@ -250,6 +264,7 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
           {resim ? (
             <Resim resim={resim} yerYaz={planDuzenler && taslak === null} okuma={okuma.okuma} kontrol={{
               ...okuma.kontrol(okumaAcik),
+              grupKodlari, secimBildir: seciliYaz, secimAnahtari, saltOkunurNedeni: balonEkleNedeni,
               balonlar: taslak ?? balonlar, balonlarYaz: (b) => { taslakYaz(b); }, olcumler: gosterilen, olcumlerYaz, saltOkunur: !planDuzenler,
             }} />
           ) : <DurumKutusu durum="bos" mesaj={bos ?? 'Resimler alınamadı.'} />}
@@ -257,8 +272,14 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
         </div>
       </section>
 
+      <aside id="km-st-gr" className="km-st-gr" aria-label="Balon grupları">
+        {resim && resim.tur === 'resim' ? (
+          <GrupPaneli resim={resim} rota={parca.data?.operasyonlar ?? []} duzenler={duzenler} secili={secili}
+            secimTemizle={() => { secimAnahtariYaz((n) => n + 1); }} />
+        ) : <span className="km-st-soluk">Gruplar yalnız teknik resimde tanımlanır.</span>}
+      </aside>
+
       <aside id="km-st-sag" className="km-st-sag" aria-label="Numune planı ve numuneler">
-        {resim && resim.tur === 'resim' ? <GrupPaneli resim={resim} rota={parca.data?.operasyonlar ?? []} duzenler={duzenler} /> : null}
         <section className="km-st-kart">
           <span className="km-st-baslik">Numune planı</span>
           {parca.data?.numunePlanlari.length ? parca.data.numunePlanlari.map((p) => (

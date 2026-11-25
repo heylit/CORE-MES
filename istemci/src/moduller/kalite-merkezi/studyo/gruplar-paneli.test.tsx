@@ -54,4 +54,14 @@ describe('Balon grupları paneli (3693)', () => {
     expect(within(panel).queryByRole('button', { name: 'Yeni grup' })).toBeNull();
     expect(within(panel).getByText('Grupları düzenlemek için kalite onayı gerekir.')).toBeTruthy();
   });
+
+  it('gruplar ayrı bölgede durur; "Seçilileri ekle" resimden seçim yokken kapalıdır ve operasyon adı rotadan gelir', async () => {
+    const r = resim();
+    kmAc('resimler?parca=7', MUHENDIS, {}, { ...secenek(r), studyo: { parcalar: { 7: { ...parca(r), operasyonlar: [{ operasyonId: 101, opNo: 10, ad: 'Tornalama' }, { operasyonId: 102, opNo: 20, ad: 'Taşlama' }] } } } });
+    const bolge = await screen.findByRole('complementary', { name: 'Balon grupları' });
+    const dugmeler = await within(bolge).findAllByRole('button', { name: 'Resimde “Çoklu seç” ile balon seçin' });
+    expect(dugmeler.every((d) => (d as HTMLButtonElement).disabled)).toBe(true);
+    expect(within(bolge).getAllByText('Op 10 · Tornalama').length).toBeGreaterThan(0);
+    expect(within(bolge).getByText('Op 20 · Taşlama için bir grup bağlayın.')).toBeTruthy();
+  });
 });

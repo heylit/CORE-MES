@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import type { KmResim } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import { Dugme, Girdi, OnayPenceresi, Rozet, Secim, Simge, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { hataIletisi } from '../../../ortak/veri/api.ts';
-import { degisti, govdeOlustur, grupsuzOperasyonlar, operasyonBagla, taslakHatasi, taslakOlustur, yeniGrupAdi, type GrupTaslagi, type RotaOperasyonu } from './gruplar.ts';
+import { degisti, govdeOlustur, grupsuzOperasyonlar, operasyonBagla, operasyonMetni, taslakHatasi, taslakOlustur, yeniGrupAdi, type GrupTaslagi, type RotaOperasyonu } from './gruplar.ts';
 import { useGruplariYaz } from './veri.ts';
 
 // Balon grupları ve operasyon ataması (3693): Kalite Merkezi resmin balonlarını adlı gruplara ayırır, operasyonu gruba bağlar. Atama yalnız
 // grup kartından yapılır; operatör ve numune formu operasyonunun grubunu kendiliğinden kullanır.
-export function GrupPaneli({ resim, rota, duzenler }: { resim: KmResim; rota: readonly RotaOperasyonu[]; duzenler: boolean }) {
+export function GrupPaneli({ resim, rota, duzenler, secili = [], secimTemizle }: {
+  resim: KmResim; rota: readonly RotaOperasyonu[]; duzenler: boolean; secili?: readonly number[]; secimTemizle?: () => void;
+}) {
   const { bildir } = useBildirim();
   const yaz = useGruplariYaz();
   const [taslak, taslakYaz] = useState<GrupTaslagi[]>(() => taslakOlustur(resim));
@@ -20,11 +22,16 @@ export function GrupPaneli({ resim, rota, duzenler }: { resim: KmResim; rota: re
   const hata = taslakHatasi(taslak);
   const degisen = degisti(resim, taslak);
   const grupsuz = grupsuzOperasyonlar(taslak, rota);
-  const opMetni = (id: number) => `Op ${String(rota.find((o) => o.operasyonId === id)?.opNo ?? '?')}`;
+  const opMetni = (id: number) => { const o = rota.find((x) => x.operasyonId === id); return o ? operasyonMetni(o) : 'Op ?'; };
 
   const guncelle = (anahtar: string, f: (g: GrupTaslagi) => GrupTaslagi) => { taslakYaz((t) => t.map((g) => (g.anahtar === anahtar ? f(g) : g))); };
   const balonDegistir = (anahtar: string, no: number) => {
     guncelle(anahtar, (g) => ({ ...g, balonlar: g.balonlar.includes(no) ? g.balonlar.filter((x) => x !== no) : [...g.balonlar, no] }));
+  };
+  // Resimde "Çoklu seç" ile seçilen balonlar gruba eklenir (zaten üye olanlar tekrarlanmaz); seçim eklenince temizlenir.
+  const seciliEkle = (anahtar: string) => {
+    guncelle(anahtar, (g) => ({ ...g, balonlar: [...g.balonlar, ...secili.filter((no) => !g.balonlar.includes(no))] }));
+    secimTemizle?.();
   };
   const ekle = () => { taslakYaz((t) => [...t, { anahtar: `y${String(Date.now())}${String(t.length)}`, id: null, ad: yeniGrupAdi(t), balonlar: [], operasyonlar: [] }]); };
   const kaydet = () => {
@@ -52,6 +59,11 @@ export function GrupPaneli({ resim, rota, duzenler }: { resim: KmResim; rota: re
               : <b>{g.ad}</b>}
             {duzenlenebilir ? <Dugme tur="ikincil" simge="trash" aria-label={`${g.ad} grubunu sil`} onClick={() => { silinecekYaz(g); }} /> : null}
           </div>
+          {duzenlenebilir ? (
+            <Dugme tur={secili.length ? 'birincil' : 'ikincil'} simge="plus" disabled={secili.length === 0} onClick={() => { seciliEkle(g.anahtar); }}>
+              {secili.length ? `Seçilileri ekle (${String(secili.length)})` : 'Resimde “Çoklu seç” ile balon seçin'}
+            </Dugme>
+          ) : null}
           <div className="km-st-grup-balonlar" role="group" aria-label={`${g.ad} balonları`}>
             {balonNolari.map((no) => (
               <button key={no} type="button" className={`km-st-grup-balon${g.balonlar.includes(no) ? ' on' : ''}`} aria-pressed={g.balonlar.includes(no)}
@@ -69,7 +81,7 @@ export function GrupPaneli({ resim, rota, duzenler }: { resim: KmResim; rota: re
             ))}
             {duzenlenebilir ? (
               <Secim etiket="Operasyon bağla" value="" onChange={(o) => { if (o.target.value) taslakYaz((t) => operasyonBagla(t, g.anahtar, Number(o.target.value))); }}
-                secenekler={[{ deger: '', baslik: '＋ Operasyon' }, ...rota.filter((o) => !g.operasyonlar.includes(o.operasyonId)).map((o) => ({ deger: String(o.operasyonId), baslik: `Op ${String(o.opNo)}` }))]} />
+                secenekler={[{ deger: '', baslik: '＋ Operasyon' }, ...rota.filter((o) => !g.operasyonlar.includes(o.operasyonId)).map((o) => ({ deger: String(o.operasyonId), baslik: operasyonMetni(o) }))]} />
             ) : null}
           </div>
         </div>
@@ -77,7 +89,7 @@ export function GrupPaneli({ resim, rota, duzenler }: { resim: KmResim; rota: re
       {grupsuz.map((o) => (
         <div key={o.operasyonId} className="km-st-grup km-st-grup-uyari" role="status">
           <Rozet ton="hata">Kontrol grubu yok</Rozet>
-          <span className="km-st-soluk">Op {o.opNo} için bir grup bağlayın.</span>
+          <span className="km-st-soluk">{operasyonMetni(o)} için bir grup bağlayın.</span>
         </div>
       ))}
       {hata !== null ? <span className="km-st-soluk" role="alert">{hata}</span> : null}

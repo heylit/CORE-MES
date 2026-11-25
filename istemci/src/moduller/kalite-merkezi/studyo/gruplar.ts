@@ -2,7 +2,8 @@ import type { KmGruplarGovdesi, KmResim } from '#paylasilan/sozlesme/kalite-merk
 
 // 3693: grup planı ekranda taslak olarak düzenlenir, Kaydet'le resim başına bütün yazılır. Taslak yerel anahtarla izlenir (yeni grubun kimliği yoktur).
 export interface GrupTaslagi { anahtar: string; id: number | null; ad: string; balonlar: number[]; operasyonlar: number[] }
-export interface RotaOperasyonu { operasyonId: number; opNo: number }
+export interface RotaOperasyonu { operasyonId: number; opNo: number; ad?: string | undefined }
+export const operasyonMetni = (o: Pick<RotaOperasyonu, 'opNo' | 'ad'>): string => (o.ad ? `Op ${String(o.opNo)} · ${o.ad}` : `Op ${String(o.opNo)}`);
 
 export function taslakOlustur(resim: KmResim): GrupTaslagi[] {
   return (resim.gruplar ?? []).map((g) => ({ anahtar: `g${String(g.id)}`, id: g.id, ad: g.ad, balonlar: [...g.balonlar], operasyonlar: g.operasyonlar.map((o) => o.operasyonId) }));

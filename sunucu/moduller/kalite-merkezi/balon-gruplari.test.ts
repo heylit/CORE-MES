@@ -133,6 +133,9 @@ describe('Balon grupları (gerçek PostgreSQL, gerçek giriş)', () => {
     const r0 = await resimAc('Grup resmi');
     const ops = (await o().vt.tx((db) => yururlukteOperasyonlar(db, [flans]))).map((x) => x.operasyonId);
     assert.ok(ops.length >= 1, 'örnek rotada operasyon olmalı');
+    const parcaOps = ((await oku(kalite, `/kalite-merkezi/studyo/parcalar/${String(flans)}`)).json() as KmStudyoParcaCevabi).operasyonlar ?? [];
+    assert.deepEqual(parcaOps.map((x) => x.operasyonId), ops, 'parça cevabı rotanın operasyonlarını verir');
+    assert.ok(parcaOps.every((x) => typeof x.ad === 'string' && x.ad.length > 0), 'operasyon adı rotadan gelir');
     const govde = { surum: r0.gruplarSurum!, gruplar: [{ ad: 'Boyutlar', balonlar: [1, 2] }, { ad: 'Çaplar', balonlar: [2] }], atamalar: ops.map((operasyonId) => ({ operasyonId, grup: 'Boyutlar' })) };
     assert.equal((await yaz(yazar, yol(r0.id), govde)).statusCode, 403);
     assert.equal((await yaz(operator, yol(r0.id), govde)).statusCode, 403);
