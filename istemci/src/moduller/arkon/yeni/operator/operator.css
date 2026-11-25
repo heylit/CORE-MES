@@ -1620,3 +1620,6 @@ button.tc-ay1-yer { font: inherit; color: inherit; text-align: start; cursor: po
 /* 3714-2: malzeme kartının resmi revizyona uymuyorsa operatör şeritte okur (resim üstündeki küçük rozet kapalıdır). */
 .tc-ay1-sk-uyari { display: inline-flex; align-items: center; gap: var(--b-1); color: var(--hazard-ink); font-size: var(--yazi-s); font-weight: 700; }
 .tc-ay1-dar .tc-ay1-sk-etiketler + .tc-ay1-sk-parca { margin-block-start: 0; }
+/* Telefonda uyarılı kart aynı satır sayısına sığar: uyarı yazısı küçülür, emir no düşer (uyarı ve düğme adı zaten okunur). */
+.tc-ay1-dar .tc-ay1-sk-uyari { font-size: var(--yazi-xs); line-height: 1.1; }
+.tc-ay1-dar .tc-ay1-sira li:has(> button[aria-pressed='true']) .tc-ay1-sk[data-uyari] .tc-ay1-sk-no { display: none; }

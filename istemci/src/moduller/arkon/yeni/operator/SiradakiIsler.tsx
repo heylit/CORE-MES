@@ -19,7 +19,7 @@ export function SiradakiKart({ is, siradaki, ekranda, acik, yer, resim, revUyums
   const projeRev = [is.pkg?.proje, is.pkg?.rev ? `Rev ${is.pkg.rev}` : null].filter(Boolean).join(' · ');
   const tezgah = yer?.makine ? [yer.makine, yer.makineAd].filter(Boolean) : null;
   return (
-    <article className="tc-ay1-sk" data-durum={durum} data-ekranda={ekranda || undefined} data-acik={acik || undefined}>
+    <article className="tc-ay1-sk" data-durum={durum} data-uyari={revUyumsuz || undefined} data-ekranda={ekranda || undefined} data-acik={acik || undefined}>
       <span className="tc-ay1-sk-resim" aria-hidden="true">{resim ?? <Simge ad="camera" />}</span>
       <div className="tc-ay1-sk-ic">
         <span className="tc-ay1-sk-etiketler">
