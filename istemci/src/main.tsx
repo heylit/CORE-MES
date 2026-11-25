@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 import './ortak/tasarim/tokens.css';
 import './ortak/tasarim/fonts.css';
 import './ortak/tasarim/temel.css';
+import { kartSatiriKaynagiKur } from './moduller/satin-alma/merkez/kart-satirlari.ts';
+import { kartAyrintiSatirlari } from './moduller/malzemeler/disari.ts';
 import { App } from './App.tsx';
 import { HataSiniri } from './ortak/arayuz/HataSiniri.tsx';
 import { servisCalisaniKaydet } from './ortak/pwa/kayit.ts';
@@ -19,5 +21,6 @@ createRoot(kok).render(
 );
 // Kayıt ilk çizimi geciktirmesin diye sayfa yüklendikten sonra yapılır.
 window.addEventListener('load', () => { servisCalisaniKaydet(); });
+kartSatiriKaynagiKur(kartAyrintiSatirlari);
 cihazNabziniBaslat();
 ekranHatasiDinleyicisiniKur();

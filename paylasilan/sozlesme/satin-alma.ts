@@ -521,6 +521,13 @@ const malzemeOzelligiAlanlari = {
   kalite: z.string().nullable(), durum: z.string().nullable(), islem: z.string().nullable(), olcu: z.string().nullable(),
   // 3133: kartın açıklaması ve föydeki ayrıntılar (boş alan yazılmaz).
   aciklama: z.string().nullable(), ayrinti: z.array(z.object({ ad: z.string(), deger: z.string() })),
+  // 3706-2: hizmet, sarf ve demirbaş kartının türe özel alanları (ekran föy satırlarını bundan kurar) ve satın almanın iç alanları
+  // (en az sipariş, tercih edilen tedarikçi, kart notu; tedarikçiye giden forma girmez). İsteğe bağlı: yalnız çıkışta.
+  kart: z.object({
+    tur: z.string(), g: z.record(z.string(), z.unknown()),
+    com: z.object({ ad: z.string().nullable(), kod: z.string().nullable(), birim: z.string().nullable(), sertifika: z.array(z.string()) }),
+  }).optional(),
+  ic: z.array(z.object({ ad: z.string(), deger: z.string() })).optional(),
 };
 // 3590 (S9): talebin ayrıldığı talep ve ondan ayrılanlar; tutar taşımaz.
 export const ayrilmaSemasi = z.object({

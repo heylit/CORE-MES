@@ -2,6 +2,7 @@ import { Fragment, useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { Talebim } from '#paylasilan/sozlesme/satin-alma.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Simge } from '../../../ortak/arayuz/index.ts';
+import { ayrintiyiBirlestir, useKartSatirlari } from '../merkez/kart-satirlari.ts';
 import { TalepCizimleri } from './Cizimler.tsx';
 
 // 3437-2: kalemin daraltılmış kabul sınırı tek satırda; sınırsız kalemde (kartın sınırı) satır yok.
@@ -51,11 +52,15 @@ function OzellikAlti({ m }: { m: Ozellik | null }) {
 }
 // 3133: malzeme kartının föyündeki ayrıntılar kalem hücresinde açılır.
 function KartAyrintisi({ m }: { m: Ozellik | null }) {
-  if (!m?.ayrinti.length) return null;
+  useKartSatirlari(m?.kart); // hazır olunca yeniden çizilir
+  const satirlar = m ? ayrintiyiBirlestir(m.ayrinti, m.kart) : [];
+  if (!satirlar.length) return null;
   return (
     <details className="sa-talep-ayrinti">
       <summary><Simge ad="list" boyut="k" /> Kart ayrıntısı</summary>
-      <dl>{m.ayrinti.map((x) => <Fragment key={x.ad}><dt>{x.ad}</dt><dd>{x.deger}</dd></Fragment>)}</dl>
+      <dl>
+        {satirlar.map((x) => <Fragment key={x.ad}><dt>{x.ad}</dt><dd>{x.deger}</dd></Fragment>)}
+      </dl>
     </details>
   );
 }

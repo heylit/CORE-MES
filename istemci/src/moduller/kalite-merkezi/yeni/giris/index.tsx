@@ -8,6 +8,7 @@ import { YOK, zamanKisa } from '../bicim.ts';
 import { GIRIS_ANAHTARI } from '../bugun/GirisKarari.tsx';
 import type { EkranOzellikleri, KmSayaci } from '../sekmeler.ts';
 import { GkkFormu } from './GkkFormu.tsx';
+import { LotEtiketiDugmesi } from './LotEtiketiDugmesi.tsx';
 import { DURUM_ADI, DURUM_TONU, GIRIS_KAYITLARI_ANAHTARI, GKK_TURU_ADI, girisAraniyor, gkkSonucu, miktarMetni, sonucMetni } from './ortak.ts';
 import './giris.css';
 
@@ -57,6 +58,8 @@ const YAPILAN_SUTUNLARI: Sutun<KmGirisKaydi>[] = [
   { anahtar: 'sonuc', baslik: 'Sonuç', hucre: (k) => <Rozet ton={SONUC_TONU[gkkSonucu(k) ?? 'kabul']}>{sonucMetni(k)}</Rozet>, csv: (k) => sonucMetni(k) },
   { anahtar: 'ncr', baslik: 'NCR', mono: true, kirilmaz: true, hucre: (k) => k.ncrNo ?? YOK },
   { anahtar: 'gkk', baslik: 'GKK', hucre: (k) => <span className="tc-km-gkk-hucre"><span>{k.gkkKisiAd ?? YOK}</span><small>{zamanKisa(k.gkkZaman)}</small></span>, csv: (k) => k.gkkKisiAd ?? '' },
+  // 3713: etiket güncel GKK sonucunu taşır; yalnız kapanan GKK'da (sonuç kesin) basılır.
+  { anahtar: 'etiket', baslik: 'Etiket', sabit: 'sag', csv: false, hucre: (k) => <LotEtiketiDugmesi partiId={k.partiId} lotNo={k.partiEtiketi} ikon /> },
 ];
 
 // 3117: giriş kalite kontrolü listesi. Satın alma lotları (kartı GKK isteyen) üç sekmede: GKK bekleyen, hatalısı kararı bekleyen,

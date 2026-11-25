@@ -368,6 +368,27 @@ function rfqTaslagi(r: PurchaseRequest): RfqTaslagi {
   if (!RFQ_TASLAK || RFQ_TASLAK.rid !== r.id) RFQ_TASLAK = { rid: r.id, secilen: null, sonTarih: addDays(todayStr(), 3), onizleme: null };
   return RFQ_TASLAK;
 }
+// Son cevap tarihi gün sayısıyla ya da takvimden seçilir; ikisi birbirinin karşılığıdır (bugünden sayılır).
+const sonCevapGunu = (tarih: string): number | null => { const g = tarih ? dayDiff(todayStr(), tarih) : NaN; return Number.isInteger(g) && g >= 0 ? g : null; };
+const sonCevapOzeti = (tarih: string): string => { const g = sonCevapGunu(tarih); return tarih ? (g === null ? `${fmtDate(tarih)} (geçmiş tarih)` : `${g} gün · ${fmtDate(tarih)}`) : "Tarih seçin"; };
+function sonCevapSenkron(kaynak: "gun" | "tarih" | "dugme", dugmeGunu = 0): void {
+  const tarih = $("#rfq-due"), gun = $("#rfq-gun");
+  if (kaynak === "dugme") gun.value = String(dugmeGunu);
+  // Aralık dışı ya da tam sayı olmayan değer tarihi sessizce silmez: tarih olduğu gibi kalır, kutu hata gösterir.
+  let hata = "";
+  if (kaynak !== "tarih" && gun.value.trim() !== "") {
+    const g = Number(gun.value);
+    if (Number.isInteger(g) && g >= 0 && g <= 365) tarih.value = addDays(todayStr(), g);
+    else hata = "Gün sayısı 0 ile 365 arasında, tam sayı olur.";
+  }
+  const g = sonCevapGunu(tarih.value);
+  if (kaynak === "tarih") gun.value = g === null ? "" : String(g);
+  if (hata === "") gun.removeAttribute("aria-invalid"); else gun.setAttribute("aria-invalid", "true");
+  const ozet = $("#rfq-due-ozet");
+  ozet.textContent = hata !== "" ? hata : sonCevapOzeti(tarih.value);
+  ozet.classList.toggle("bad", hata !== "");
+  document.querySelectorAll<HTMLElement>("[data-act='rfq-gun']").forEach((b) => b.setAttribute("aria-pressed", String(g !== null && Number(b.dataset.gun) === g)));
+}
 export function rfqPanelHTML(r: PurchaseRequest): string {
   const t = rfqTaslagi(r);
   const sugg = rfqSuggestions(r); const sids = new Set(sugg.map(s => s.id));
@@ -385,7 +406,13 @@ export function rfqPanelHTML(r: PurchaseRequest): string {
     ${sugg.length ? `<div><h4 data-sa-y="30">Hafızanın önerdikleri</h4><div class="sugg">${sugg.map(o => line(S.suppliers[o.id]!, o.why.slice(0, 2).join("; "), secili(o.id, !asked.has(o.id)))).join("")}</div></div>` : ""}
     ${others.length ? `<details ${acikDiger ? "open" : ""}><summary class="small" data-sa-y="31">Diğer tedarikçiler (${others.length})</summary><div class="sugg">${others.map(s => line(s, (s.categories || []).join(", "), secili(s.id, false))).join("")}</div></details>` : ""}
     ${!Object.keys(S.suppliers).length ? '<div class="note small">Henüz tedarikçi kaydı yok. E-posta taslağını genel olarak kopyalayabilir ya da önce tedarikçi ekleyebilirsiniz.</div>' : ""}
-    <label class="f sa-rfq-tarih"><span>Son cevap tarihi</span><input type="date" id="rfq-due" value="${esc(t.sonTarih)}"></label>
+    <div class="f sa-rfq-tarih" data-sa-son-cevap=""><span id="rfq-due-baslik">Son cevap tarihi</span>
+      <div class="sa-rfq-gun" role="group" aria-labelledby="rfq-due-baslik">
+        ${[2, 3].map((g) => `<button type="button" class="btn sm" data-act="rfq-gun" data-gun="${g}" aria-pressed="${sonCevapGunu(t.sonTarih) === g}">+${g} gün</button>`).join("")}
+        <label class="sa-rfq-gun-sayi"><input type="number" id="rfq-gun" min="0" max="365" step="1" inputmode="numeric" aria-label="Bugünden kaç gün sonra" value="${sonCevapGunu(t.sonTarih) ?? ""}"><span>gün</span></label>
+        <input type="date" id="rfq-due" aria-label="Son cevap tarihi" value="${esc(t.sonTarih)}">
+      </div>
+      <small class="muted" id="rfq-due-ozet">${esc(sonCevapOzeti(t.sonTarih))}</small></div>
     <label class="sa-rfq-taslak"><span>Taslak:</span><select id="rfq-prev" aria-label="Taslağın tedarikçisi"><option value="">Genel (tedarikçisiz)</option></select></label>
     <div class="sa-rfq-cikti">
       <div class="sa-rfq-kutu" data-sa-rfq="eposta"><div class="sa-rfq-kutu-h">${SIMGE_EPOSTA}<h3>E-posta taslağı</h3></div>
@@ -1176,6 +1203,7 @@ const ACTIONS: Record<string, Action> = {
     const d = rfqTaslagi(r); d.secilen = t.secilen; d.sonTarih = t.sonTarih; d.onizleme = t.tedarikci; render();
   },
   "rfq-form-print": () => { const d = $("#ifo-kagit .doc"); if (d) printDoc(d.outerHTML); },
+  "rfq-gun": (el) => { sonCevapSenkron("dugme", Number(el.dataset.gun)); syncRfqPreview(); },
   "mark-rfq": (el, r) => {
     const sel = $$("[data-rfq]").filter(i => i.checked && !i.disabled).map(i => i.dataset.rfq!);
     if (!sel.length) { toast("İstendi olarak kaydetmek için en az bir tedarikçi seçin."); return; }
@@ -1593,6 +1621,7 @@ document.addEventListener("input", (e) => {
   const t = e.target as FormEl;
   if (t.id === "gsearch") { gsearch(t.value); return; }
   if (t.id === "s-firma-ara") { firmaAra(t.value); return; }
+  if (t.id === "rfq-gun") { sonCevapSenkron("gun"); syncRfqPreview(); return; }
   if (t.id === "m-kart-ara") { kartAra(t.value); return; }
   const sk = t.dataset.in ? SEARCH_KEYS[t.dataset.in] : undefined;
   if (sk) { V[sk] = t.value; render(); return; }
@@ -1634,7 +1663,8 @@ document.addEventListener("change", (e) => {
     if (draftQ) alternatifDegisti(draftQ, id); readQuoteForm(); if (r) $("#q-items").innerHTML = fiyatSatirlari(r, draftQ); updateQuoteLive(); altOnDenetim(); return;
   }
   if (t.closest("#qform")) { readQuoteForm(); updateQuoteLive(); if (t.id === "q-sup" && t.value === "__new") $("#q-newsup").focus(); return; }
-  if (t.dataset.rfq !== undefined || t.id === "rfq-due" || t.id === "rfq-prev") { syncRfqPreview(t.id === "rfq-prev"); return; }
+  if (t.id === "rfq-gun" || t.id === "rfq-due") sonCevapSenkron(t.id === "rfq-gun" ? "gun" : "tarih");
+  if (t.dataset.rfq !== undefined || t.id === "rfq-due" || t.id === "rfq-gun" || t.id === "rfq-prev") { syncRfqPreview(t.id === "rfq-prev"); return; }
   if (t.closest("#ifo")) { istekFormuOku(); return; }
   if (t.dataset.w && UI.wDraft) { const r = S.requests[V.id ?? ""]; if (r && canWrite()) { const n = clone(r); n.weights = Object.assign({}, UI.wDraft.w); saveRequest(n); } }
 });

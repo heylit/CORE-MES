@@ -38,3 +38,24 @@ const KATEGORI_DUZENLEME_BOLUMU: Readonly<Record<KategoriAgaciTuru, string | nul
 
 // 3215 c: hammaddenin biçim ve ölçüsünden ölçülü kesit çizimi (mal kabul); çizim parçası ilk kullanımda yüklenir, Suspense içinde kullanılır.
 export const MalzemeKesiti = lazy(() => import('./yeni/olcu-modeli/KesitGorunumu.tsx').then((m) => ({ default: m.KesitGorunumu })));
+
+// 3706-2: hizmet, sarf ve demirbaş kartının türe özel alanları föyün satırlarıyla (grup, çeşit, yön, standart, çeşit alanları ...). Satın alma
+// kartın kaydını sunucudan kısaltılmış alır; adlar ve görünür alanlar bu modülün tanımlarındandır. Parça ilk kullanımda yüklenir. Yerleşik
+// tanımlarla kurulur (hizmet grupları zaten yerleşiktir); Ayarlar'da değiştirilmiş sarf ve demirbaş kategori adları bu satırlara yansımaz.
+export interface KartKaydiKisaltmasi {
+  tur: string; g: Record<string, unknown>; com: { ad: string | null; kod: string | null; birim: string | null; sertifika: string[] };
+}
+export async function kartAyrintiSatirlari(kart: KartKaydiKisaltmasi): Promise<{ ad: string; deger: string }[]> {
+  const [{ kuralBaglami, foyVerisi }, { ortamKur }, { malzemeYetkisi }] = await Promise.all([
+    import('./yeni/kurallar/index.ts'), import('./yeni/veri.ts'), import('./yeni/yetki.ts'),
+  ]);
+  const ortam = ortamKur({ surumler: { malzeme: null, operasyonlar: null, genel: null }, malzeme: null, operasyonlar: null, operasyonTipleri: [], genel: null, dortGoz: false, rol: '', ayarYazabilir: false } as never);
+  const b = kuralBaglami({ ortam, kartlar: [], kisi: { id: 0, ad: '' }, birim: 'met', yetki: malzemeYetkisi(() => false, ortam) });
+  const kayit = { tur: kart.tur, g: kart.g, bom: [], ops: [], opts: {}, ov: {}, extra: [], stds: [], com: { kod: kart.com.kod ?? '', ad: kart.com.ad ?? '', std: '', ted: '', birim: kart.com.birim ?? '', sertifika: kart.com.sertifika, not: '' }, onay: { durum: 'aktif' } };
+  const kod = kart.com.kod ?? '';
+  // Tedarikçiye giden formda yalnız teknik tanım görünür: alış, garanti, bakım, kalibrasyon, depo ve tedarik tipi ile serbest açıklama satırları atılır.
+  const KAPALI_BOLUM = new Set(['Satın alma ve garanti', 'Bakım ve kalibrasyon', 'Belgeler ve notlar', 'Özet ve kayıt', 'Kod ve açıklamalar']);
+  const KAPALI_SATIR = new Set(['Kod', 'Ad', 'Tedarik tipi', 'Depo yeri', 'Sipariş noktası', 'Tedarikçi', 'Notlar', 'ERP kodu', 'Bakım (sonraki)', 'Kalibrasyon (sonraki)', 'Garanti bitiş']);
+  return foyVerisi(kayit as never, b).bolumler.filter((bolum) => !KAPALI_BOLUM.has(bolum.baslik)).flatMap((bolum) => bolum.satirlar)
+    .filter((s) => s.deger.trim() !== '' && s.deger !== '—' && !KAPALI_SATIR.has(s.ad) && !/^Açıklama \d/.test(s.ad) && s.deger !== kod);
+}
