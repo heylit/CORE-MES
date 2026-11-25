@@ -3,7 +3,7 @@ import type { SiparisLogo } from "#paylasilan/sozlesme/satin-alma.ts";
 import type { Approval, ApprovalLimit, Currency, ExcessLine, PurchaseRequest, Quality, Quote, RequestItem, Settings, Supplier, Weights } from "./tipler.ts";
 import { COMMITTED, CRIT, OPEN, stLabel, type CritKey } from "./constants.ts";
 import { memo, S, settings } from "./store.ts";
-import { addDays, clamp, dayDiff, isNum, norm, parseNum, sum, todayStr, tsDate } from "./util.ts";
+import { addDays, clamp, dayDiff, fmtDate, isNum, norm, parseNum, sum, todayStr, tsDate } from "./util.ts";
 import { belirsizMiktarVar, miktarGirdisi } from "../../../ortak/veri/miktar.ts";
 
 /* ---------------- teklif hesabı ---------------- */
@@ -511,6 +511,13 @@ export function orderDue(o: { q: Quote; expectedDate: string; orderDate: string 
  */
 export const terminTarihi = (baz: string, gun: number | null): string => (gun === null || !baz ? "" : addDays(baz, gun));
 export const terminGunu = (baz: string, tarih: string): number | null => (!baz || !tarih ? null : dayDiff(baz, tarih));
+/** Karar aşamasında termin: gün ve siparişin verileceği günden sayılan teslim tarihi ("12 gün · 07.12.2026"); gün yoksa null. */
+export function terminMetni(q: Pick<Quote, "leadDays">, siparisGunu: string = todayStr()): string | null {
+  const l = parseNum(q.leadDays);
+  if (!isNum(l)) return null;
+  const t = terminTarihi(siparisGunu, l);
+  return t ? `${l} gün · ${fmtDate(t)}` : `${l} gün`;
+}
 export const terminTabani = (teklifTarihi: string | undefined): string => teklifTarihi || todayStr();
 
 /**

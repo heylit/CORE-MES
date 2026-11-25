@@ -6,7 +6,7 @@
 import type { PurchaseRequest, RequestItem } from "./tipler.ts";
 import { SIMGELER } from "../../../ortak/tasarim/simgeler.ts";
 import { S } from "./store.ts";
-import { lateBy, payText, supName, supplierStats, validity, vsLast, type EvalRow, type Evaluation } from "./calc.ts";
+import { lateBy, payText, terminMetni, supName, supplierStats, validity, vsLast, type EvalRow, type Evaluation } from "./calc.ts";
 import { odemeAyrintisi } from "./karar-ayrintisi.ts";
 import { secilemezAlternatif } from "./alternatif.ts";
 import { addDays, deltaHTML, esc, fmtDate, isNum, money, nf0, nfx, numIn, parseNum, pct, todayStr } from "./util.ts";
@@ -92,7 +92,7 @@ function bolumler(r: PurchaseRequest, kartlar: EvalRow[]): Bolum[] {
     },
     {
       ad: "Teslimat", simge: "truck", satirlar: [
-        { ad: "Termin", yon: "min", degerler: kartlar.map((x) => parseNum(x.q.leadDays)), hucreler: kartlar.map((x) => { const l = parseNum(x.q.leadDays), g = lateBy(r, x.q); return l === null ? "–" : `${l} gün${g ? sub(`<span class="flag bad">${g} gün geç</span>`) : ""}`; }) },
+        { ad: "Termin", yon: "min", degerler: kartlar.map((x) => parseNum(x.q.leadDays)), hucreler: kartlar.map((x) => { const l = parseNum(x.q.leadDays), g = lateBy(r, x.q); return l === null ? "–" : `${terminMetni(x.q)}${g ? sub(`<span class="flag bad">${g} gün geç</span>`) : ""}`; }) },
         { ad: "Tahmini teslim", hucreler: kartlar.map((x) => { const l = parseNum(x.q.leadDays); return l === null ? "–" : fmtDate(addDays(r.award?.orderDate || todayStr(), l)); }) },
         { ad: "Teslim şekli", hucreler: kartlar.map((x) => esc(x.q.deliveryTerm || "–")) },
         { ad: "Garanti", yon: "max", degerler: kartlar.map((x) => parseNum(x.q.warrantyMonths)), hucreler: kartlar.map((x) => { const g = parseNum(x.q.warrantyMonths); return g === null ? "–" : `${g} ay`; }) },

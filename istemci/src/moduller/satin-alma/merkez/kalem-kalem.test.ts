@@ -157,4 +157,33 @@ describe('3442-5 kalem kalem karşılaştırma ve bölme', () => {
     expect(kok.querySelector('[data-kr-kilit]')!.textContent).toContain('Onaylanmış karar değişmez');
     kapat();
   });
+
+  it('teklif toplanırken karar sayfası: pencerede "Yalnız böl" de var; kalemi böler, karar vermez ve talep değerlendirmeye geçer', async () => {
+    const t = talep({ durum: 'teklif_isteniyor' });
+    const istekler = sunucu(t);
+    const kok = document.createElement('div');
+    document.body.append(kok);
+    const kapat = ekranliBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {} });
+    await vi.waitFor(() => expect(talepSatiri(kok, t.id)).not.toBeNull());
+    talepSatiri(kok, t.id)!.click();
+    await vi.waitFor(() => expect([...kok.querySelectorAll<HTMLElement>('[role="tab"]')].find((x) => x.textContent?.includes('Karar'))).toBeTruthy());
+    [...kok.querySelectorAll<HTMLElement>('[role="tab"]')].find((x) => x.textContent?.includes('Karar'))!.click();
+    await vi.waitFor(() => expect(kok.querySelector('[data-sa-karar-matrisi]')).not.toBeNull());
+    kok.querySelector<HTMLElement>(`.sa-kr-genis [data-act="kk-bol"][data-item="${K1}"]`)!.click();
+    await vi.waitFor(() => expect(document.querySelector<HTMLElement>('#kk-kabul')?.dataset.kkKabul).toBe('tamam'));
+    const onayla = document.querySelector<HTMLButtonElement>('[data-act="kk-bol-yes"]')!;
+    const sadece = document.querySelector<HTMLButtonElement>('[data-act="kk-bol-sadece"]')!;
+    expect(onayla.textContent).toBe('Böl ve onaya gönder');
+    expect(sadece.textContent).toBe('Yalnız böl');
+    expect(sadece.disabled).toBe(true);
+    yaz(document.querySelector<HTMLInputElement>(`[data-kk-q="${QA}"]`)!, '5'); yaz(document.querySelector<HTMLInputElement>(`[data-kk-q="${QB}"]`)!, '5');
+    expect(sadece.disabled).toBe(false);
+    sadece.click();
+    await vi.waitFor(() => expect(istekler.some((i) => i.yol.endsWith('/kaydet'))).toBe(true));
+    const g = istekler.find((i) => i.yol.endsWith('/kaydet'))!.govde as Talep;
+    expect(g.kalemler.filter((x) => x.ad === 'Deneme kalem').map((x) => Number(x.miktar))).toEqual([5, 5]);
+    expect(g.karar).toBeNull();
+    expect(g.durum).toBe('degerlendirme');
+    kapat();
+  });
 });

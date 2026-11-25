@@ -9,7 +9,7 @@ import { OPEN } from "./constants.ts";
 import { SIMGELER } from "../../../ortak/tasarim/simgeler.ts";
 import { S, V, backend, canWrite, saveRequest } from "./store.ts";
 import {
-  approvalState, awardTotals, evaluate, vsLast, itemCost, itemLineCost, optimalSplit, payText, planCost, requiredApprover, supName, supplierStats, validity,
+  approvalState, awardTotals, evaluate, vsLast, itemCost, itemLineCost, optimalSplit, payText, terminMetni, planCost, requiredApprover, supName, supplierStats, validity,
   type EvalRow, type Evaluation,
 } from "./calc.ts";
 import { $, deltaHTML, esc, fmtDate, isNum, kokIcinde, money, nf0, numIn, parseNum, pct, todayStr } from "./util.ts";
@@ -92,11 +92,10 @@ function nitelik(r: PurchaseRequest, x: EvalRow): string[] {
   return fl;
 }
 function tedBaslik(r: PurchaseRequest, ev: Evaluation, x: EvalRow, kilit: boolean): string {
-  const ld = parseNum(x.q.leadDays);
   const fl = nitelik(r, x);
   return `<div class="sa-kr-ted"><span class="sa-kr-ted-ad"><b>${esc(supName(x.q))}</b>${ev.ranking[0]?.q.id === x.q.id ? ` <span class="flag good">${ik("check", 12)} önerilen</span>` : ""}</span>
     <span class="num sa-kr-net" title="Tüm kalemler, nakliye ve vade etkisi dahil net bugünkü maliyet">${money(x.c.pvTRY, "TRY", 0)}</span><span class="xs muted">net, vade etkisi dahil</span>
-    <span class="small muted">${isNum(ld) ? `${ld} gün` : "termin yok"} · ${esc(payText(x.q))}</span>
+    <span class="small muted">${terminMetni(x.q) ?? "termin yok"} · ${esc(payText(x.q))}</span>
     <span class="small muted">puan <b class="num">${nf0.format(x.score)}</b></span>
     ${fl.length ? `<span class="flags">${fl.join("")}</span>` : ""}
     <span class="row sa-kr-ted-d">${kilit ? "" : `<button class="btn sm" data-act="kr-tek" data-qid="${x.q.id}">Tümünü ver</button>`}<button class="btn sm ghost sa-kr-ikon" data-act="calc" data-qid="${x.q.id}" title="Hesabı göster" aria-label="Hesabı göster: ${esc(supName(x.q))}">${ik("lira")}</button></span></div>`;
@@ -147,7 +146,7 @@ function matris(r: PurchaseRequest, ev: Evaluation, t: Taslak, kilit: boolean): 
       ${sart("Tüm kalemler, nakliye dahil (vade etkisi hariç)", (x) => `<b class="num">${money(x.c.totalTRY, "TRY", 0)}</b>`)}
       ${sart("Nakliye ve masraf", (x) => (x.q.deliveryIncluded && !x.c.other ? "dahil" : money(x.c.ship + x.c.other, x.q.currency)))}
       ${sart("Ödeme", (x) => esc(payText(x.q)))}
-      ${sart("Termin", (x) => { const l = parseNum(x.q.leadDays); return isNum(l) ? `${l} gün` : "–"; })}
+      ${sart("Termin", (x) => terminMetni(x.q) ?? "–")}
       ${sart("Garanti", (x) => { const g = parseNum(x.q.warrantyMonths); return isNum(g) ? `${g} ay` : "–"; })}
       ${sart("Teklif geçerliliği", (x) => { const v = validity(x.q); return v === null ? "–" : v < 0 ? '<span class="flag bad">doldu</span>' : fmtDate(x.q.validUntil); })}
       ${sart("Geçmiş", (x) => { const st = sst[x.q.supplierId]; return st && st.deliveries ? `${st.deliveries} teslimat, ${pct(st.onTimeRate)} zamanında` : '<span class="faint">kayıt yok</span>'; })}
@@ -233,6 +232,15 @@ function cubuk(r: PurchaseRequest, ev: Evaluation, t: Taslak): string {
 }
 
 /** Karşılaştır adımının bütünü (teklif yoksa çağrılmaz). */
+/** Onaylayanın ekranı: kararın kalem kalem dağılımı, karar sayfasındaki matrisle aynı çizimde, salt okunur. Seçim talepteki karardan gelir (taslağa dokunulmaz). */
+export function onayDagilimiHTML(r: PurchaseRequest): string {
+  const ev = evaluate(r);
+  if (!ev.elig.length || !r.award) return "";
+  const t: Taslak = { rid: r.id, atama: kalemAtamasi(r, ev), dahil: Object.fromEntries((r.items ?? []).map((it) => [it.id, true])), gerekce: "", onceki: null };
+  return `<section class="panel sa-kr sa-kr-onay${ev.ranking.length >= 4 ? " sa-kr-cok" : ""}" data-sa-onay-dagilimi>
+    <div class="panel-h"><h2>Kararın kalem kalem dağılımı</h2><span class="small muted sa-kr-ipucu-metin">Seçili hücre: kalemin verildiği tedarikçi</span></div>
+    <div class="panel-b stack"><div class="sa-kr-genis">${matris(r, ev, t, true)}</div><div class="sa-kr-dar">${liste(r, ev, t, true)}</div></div></section>`;
+}
 export function kararSayfasiHTML(r: PurchaseRequest): string {
   const ev = evaluate(r, UI.wDraft && UI.wDraft.id === r.id ? UI.wDraft.w : null);
   if (!ev.elig.length) return "";
