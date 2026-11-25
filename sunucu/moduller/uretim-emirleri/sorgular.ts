@@ -69,3 +69,6 @@ export {
 export {
   type HazirlikMaddeSatiri, hazirlikMaddeSatirlari, hazirlikMaddesiYaz, ozelMaddeNo, ozelMaddeEkle,
 } from './sorgular/hazirlik-maddesi/sorgular.ts';
+export {
+  type SablonSurumSatiri, type SablonSatirSatiri, etkinSurumler, surumSatirlari, turuKilitle, sonSurum, surumEkle, satirEkle, type OzelFarkSatiri, ozelFarklar, ozelEkle,
+} from './sorgular/hazirlik-sablonu/sorgular.ts';

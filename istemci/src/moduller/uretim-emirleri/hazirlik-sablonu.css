@@ -1,0 +1,22 @@
+/* 3688: Adım Durumu › Şablon */
+.tc-hs { display: grid; gap: var(--b-4); min-width: 0; }
+.tc-hs-not { margin: 0 0 var(--b-2); color: var(--muted); font-size: var(--yazi-sm); max-width: 70ch; }
+.tc-hs-surum { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); color: var(--muted); font-size: var(--yazi-sm); }
+.tc-hs-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--b-1); grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr)); }
+.tc-hs-liste li { display: flex; min-block-size: var(--dokunma); padding: 0; border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); min-width: 0; }
+.tc-hs-liste li[data-gerekli="hayir"] { background: var(--panel2); color: var(--muted); }
+.tc-hs-durum { font-size: var(--yazi-xs); font-weight: 700; flex: none; }
+.tc-hs-alt { display: grid; gap: var(--b-3); justify-items: start; }
+.tc-hs-alt > :first-child { justify-self: stretch; }
+.tc-hs-acilim { margin-block-start: var(--b-4); }
+.tc-hs-acilim > summary { cursor: pointer; font-weight: 700; min-block-size: var(--dokunma); display: flex; align-items: center; }
+.tc-hs-satir { flex: 1; display: flex; align-items: center; flex-wrap: wrap; gap: var(--b-2) var(--b-3); min-block-size: var(--dokunma); padding: var(--b-1) var(--b-3); cursor: pointer; min-width: 0; }
+.tc-hs-satir:has(input:disabled) { cursor: default; }
+.tc-hs-ad { flex: 1 1 auto; min-width: 0; }
+.tc-hs-dugmeler { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-3); }
+.tc-hs-uyari { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-3); padding: var(--b-3); border: var(--cizgi-ince) solid var(--hazard); border-radius: var(--yari-2); }
+.tc-hs-liste li.tc-hs-fark { flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2) var(--b-3); padding: var(--b-2) var(--b-3); }
+.tc-hs-fark > span { flex: 1 1 14rem; min-width: 0; }
+.tc-hs-blok { display: block; margin: 0; }
+.tc-hs-acilim .tc-hs-alt { justify-items: stretch; }
+.tc-hs-acilim .tc-hs-alt > button { justify-self: start; }

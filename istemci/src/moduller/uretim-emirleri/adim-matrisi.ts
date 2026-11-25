@@ -6,8 +6,8 @@ import type { AdimMatrisiCevabi, AdimStatusu, ElleYazilanStatu, StatuTopluCevabi
 export type MatrisEmri = AdimMatrisiCevabi['emirler'][number];
 export type MatrisAdimi = MatrisEmri['adimlar'][number];
 export interface Kalem { anahtar: string; emir: MatrisEmri; adim: MatrisAdimi }
-export type Gorunum = 'emir' | 'matris' | 'tablo';
-export const GORUNUMLER: readonly Gorunum[] = ['emir', 'matris', 'tablo'];
+export type Gorunum = 'emir' | 'matris' | 'tablo' | 'sablon';
+export const GORUNUMLER: readonly Gorunum[] = ['emir', 'matris', 'tablo', 'sablon'];
 export const gorunumOku = (deger: string | null): Gorunum => (GORUNUMLER as readonly string[]).includes(deger ?? '') ? deger as Gorunum : 'emir';
 
 export const kalemAnahtari = (emirId: number, isEmriId: number): string => `${String(emirId)}:${String(isEmriId)}`;

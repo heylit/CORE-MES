@@ -12,6 +12,7 @@ import {
   makineHazirligi, onayGecerliMi, talimatHazirligi,
 } from './kurallar.ts';
 import type { HazirlikBilgisi, HazirlikHali } from './kurallar.ts';
+import { sablonGerekmezMaddeleri } from './hazirlik-sablonu.ts';
 import { IS_EMRI_DUZEYI, durduranMaddeKodlari, kapaliSistemMaddeleri } from './hazirlik-maddeleri.ts';
 import * as s from './sorgular.ts';
 import { talimatHazirlikSayilari } from './sorgular/adim/sorgular.ts';
@@ -141,6 +142,7 @@ export async function hazirliklar(db: Db, uretimEmriIdleri: readonly number[]): 
   const adlar = await kisiAdlari(db, [...new Set(emirler.flatMap((e) => e.muaf.map((x) => x.kisiId)))]);
   // 3642: emirde "gerekmez" işaretli madde emirde aranmaz; durduran madde işaretlenemez, kayıt olsa bile okunurken yok sayılır.
   const durduranlar = await durduranMaddeKodlari(db);
+  const sablonda = await sablonGerekmezMaddeleri(db, isEmriIdleri);
   const gerekmez = new Set((await hazirlikGerekmezleri(db, emirIdleri)).filter((x) => !durduranlar.has(x.madde)).map((x) => `${String(x.emriId)}:${x.madde}`));
   for (const { id, muaf } of emirler) {
     const kendi = isEmirleri.filter((i) => i.uretimEmriId === id);
@@ -148,8 +150,10 @@ export async function hazirliklar(db: Db, uretimEmriIdleri: readonly number[]): 
     sonuc.set(id, {
       maddeler: HAZIRLIK_MADDELERI.map((madde) => {
         const d = durumlar.get(madde) ?? null;
-        const durum: HazirlikHali = kapali.has(madde) || gerekmez.has(`${String(id)}:${madde}`) ? 'gerekmez' : IS_EMRI_DUZEYI.has(madde)
-          ? enKotu(acik.map((i) => elleUygula(hazirlikHali(d?.get(i), muafMi(muaf, madde, i) || onayliMi(onay, madde, i, d?.get(i)?.surum)), elleEksikMi(eksik, madde, i))))
+        // Şablon (3688): türü gerekli saymayan madde o adımda aranmaz; emir düzeyindeki madde yalnız bütün açık adımlar saymıyorsa aranmaz.
+        const sablonKapali = acik.length > 0 && acik.every((i) => sablonda.get(i)?.has(madde) === true);
+        const durum: HazirlikHali = kapali.has(madde) || gerekmez.has(`${String(id)}:${madde}`) || (!IS_EMRI_DUZEYI.has(madde) && sablonKapali) ? 'gerekmez' : IS_EMRI_DUZEYI.has(madde)
+          ? enKotu(acik.map((i) => sablonda.get(i)?.has(madde) === true ? 'gerekmez' as const : elleUygula(hazirlikHali(d?.get(i), muafMi(muaf, madde, i) || onayliMi(onay, madde, i, d?.get(i)?.surum)), elleEksikMi(eksik, madde, i))))
           : elleUygula(hazirlikHali(d?.get(id), muafMi(muaf, madde, null) || hepsiOnayli(onay, madde, acik, d?.get(id)?.surum)), acik.some((i) => elleEksikMi(eksik, madde, i)));
         return { madde, durum, muafTutulur: MUAF_TUTULUR.has(madde), isEmriDuzeyi: IS_EMRI_DUZEYI.has(madde) };
       }),
@@ -159,7 +163,7 @@ export async function hazirliklar(db: Db, uretimEmriIdleri: readonly number[]): 
         maddeler: HAZIRLIK_MADDELERI.filter((m) => IS_EMRI_DUZEYI.has(m))
           .map((madde) => {
             const b = durumlar.get(madde)?.get(i.id);
-            if (kapali.has(madde) || gerekmez.has(`${String(id)}:${madde}`)) return { madde, durum: 'gerekmez' as const };
+            if (kapali.has(madde) || gerekmez.has(`${String(id)}:${madde}`) || sablonda.get(i.id)?.has(madde) === true) return { madde, durum: 'gerekmez' as const };
             return { madde, durum: elleUygula(hazirlikHali(b, muafMi(muaf, madde, i.id) || onayliMi(onay, madde, i.id, b?.surum)), elleEksikMi(eksik, madde, i.id)) };
           }),
       })),
@@ -220,6 +224,7 @@ export async function isEmriHazirliklari(db: Db, uretimEmriId: number, isEmriIdl
   const eksik = await elleEksikler(db, isEmriIdleri);
   const sonuc = new Map(isEmriIdleri.map((i) => [i, new Map<HazirlikMaddesi, IsEmriMaddeHali>()]));
   const kapali = await kapaliSistemMaddeleri(db);
+  const sablonda = await sablonGerekmezMaddeleri(db, isEmriIdleri);
   for (const m of HAZIRLIK_MADDELERI) {
     if (kapali.has(m)) {
       for (const i of isEmriIdleri) sonuc.get(i)?.set(m, { hal: 'gerekmez', ham: 'gerekmez', surum: null });
@@ -229,6 +234,7 @@ export async function isEmriHazirliklari(db: Db, uretimEmriId: number, isEmriIdl
     const emirde = !IS_EMRI_DUZEYI.has(m);
     const durum = c && isEmriIdleri.length > 0 ? await c(db, emirde ? [uretimEmriId] : isEmriIdleri) : null;
     for (const i of isEmriIdleri) {
+      if (sablonda.get(i)?.has(m)) { sonuc.get(i)?.set(m, { hal: 'gerekmez', ham: 'gerekmez', surum: null }); continue; }
       const b = durum?.get(emirde ? uretimEmriId : i);
       const muafMu = muafMi(muaf, m, emirde ? null : i) || (emirde && muafMi(muaf, m, i));
       sonuc.get(i)?.set(m, {
