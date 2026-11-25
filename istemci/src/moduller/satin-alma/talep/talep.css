@@ -331,3 +331,7 @@
 }
 /* 3695 (Test): ayrıntı satırı "hücre tek satır" kuralını devralıyordu; uzun not tabloyu genişletiyordu. */
 .sa-talep-tablo .tc-tablo tbody > tr.sa-talep-ayrinti-satir > td { white-space: normal; }
+
+/* 3709: fason gidişi satırı; rozetler dar ekranda alta sarar, satır taşmaz. */
+.sa-gidis { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); min-width: 0; }
+.sa-gidis-rozetler { display: inline-flex; flex-wrap: wrap; gap: var(--b-1); }

@@ -1469,6 +1469,17 @@ export function parcaKarsiligi(miktar: string | null, birim: string, kart: { sto
 export const kalemKarsiligi = (miktar: string | null, birim: string, kart: { stokBirimi: string | null; birimKg: number | null } | undefined): BirimKarsiligi | null =>
   birimKarsiligi(miktar, birim, kart) ?? parcaKarsiligi(miktar, birim, kart);
 
+// 3709: fason adımın gidişi (firmaya çıkış) planın başlangıcıdır; saklanmaz. Plana girmemiş adımda en geç gidiş = gereken dönüş - termin günü
+// (kaynak "hesap"). Gereken tarih ya da termin günü yoksa gidiş null: sıfır uydurulmaz.
+export interface FasonGidisi { gidis: string | null; kaynak: 'plan' | 'hesap' | null }
+export function fasonGidisi(g: { planGidis: string | null; gerekenTarih: string | null; terminGun: number | null }): FasonGidisi {
+  if (g.planGidis !== null) return { gidis: g.planGidis, kaynak: 'plan' };
+  if (g.gerekenTarih === null || g.terminGun === null) return { gidis: null, kaynak: null };
+  const t = new Date(`${g.gerekenTarih}T00:00:00Z`);
+  t.setUTCDate(t.getUTCDate() - g.terminGun);
+  return { gidis: t.toISOString().slice(0, 10), kaynak: 'hesap' };
+}
+
 // 898 a: fason ön talep. Bitmemiş fason iş emirlerinden siparişe ya da açık talebe bağlanmamış, yoksayılmamış ve henüz firmaya gönderilmemiş
 // olanlar (gönderilmişse iş başlamıştır, ön talep geç kalmıştır). En erken gereken üstte; tarihsiz sonda.
 export function fasonOnTalepAdaylari(

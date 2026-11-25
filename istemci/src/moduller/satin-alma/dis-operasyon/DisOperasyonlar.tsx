@@ -10,6 +10,7 @@ import { tekrarKorumaliGonder, yeniIstekKimligi } from '../../../ortak/veri/iste
 import { useOturum } from '../../../ortak/veri/oturum.ts';
 import { SURE, anahtarlar, cagri } from '../talep/ortak.ts';
 import { FasonSureGrafikleri } from './FasonSureGrafikleri.tsx';
+import { GidisGecikti, gidisGeciktiMi } from '../gidis/gidis.tsx';
 import './dis-operasyonlar.css';
 
 const gun = (t: string | null) => (t === null ? '—' : `${t.slice(8, 10)}.${t.slice(5, 7)}.${t.slice(0, 4)}`);
@@ -50,7 +51,7 @@ const SUTUNLAR: Sutun<DisOperasyon>[] = [
     hucre: (x) => ikili(<span className="sa-mono sa-nowrap">{x.emirNo}</span>, [x.urun, `Op ${x.opNo}${x.adim ? ` ${x.adim}` : ''}`].filter(Boolean).join(' · ')),
     csv: (x) => [x.emirNo, x.urun, `Op ${x.opNo}`, x.adim].filter(Boolean).join(' / ') },
   { anahtar: 'firma', baslik: 'Firma', sirala: true, hucre: (x) => (x.firmaBekleniyor === true ? 'Firma bekleniyor' : (x.firmaAdi ?? 'Seçilmedi')) },
-  { anahtar: 'gidis', baslik: 'Gidiş', sirala: true, hucre: (x) => (x.gerceklesenGidis ? <span title={zaman(x.gerceklesenGidis)}>{gun(x.gerceklesenGidis)}</span> : ikili('—', x.planlananGidis ? `plan ${gun(x.planlananGidis)}` : null)) },
+  { anahtar: 'gidis', baslik: 'Gidiş', sirala: true, hucre: (x) => (x.gerceklesenGidis ? <span title={zaman(x.gerceklesenGidis)}>{gun(x.gerceklesenGidis)}</span> : x.planlananGidis ? <span className="sa-gecikme"><span>—</span><small>plan {gun(x.planlananGidis)}{gidisGeciktiMi(x.planlananGidis, false) && <> <GidisGecikti /></>}</small></span> : '—') },
   { anahtar: 'termin', baslik: 'Termin', sirala: true, hucre: (x) => ikili(gun(x.termin), x.ilkDonus ? `ilk dönüş ${gun(x.ilkDonus)}` : null) },
   { anahtar: 'adet', baslik: 'Dönen / giden', hucre: adetMetni, csv: (x) => `${x.gonderilen ?? ''}/${x.donen ?? ''}/${x.hurda ?? ''}` },
   // 2424-a c: iki ölçü yan yana; ana sayı son dönüşe göre (karneyle aynı), altında adet ağırlıklı (farklıysa).

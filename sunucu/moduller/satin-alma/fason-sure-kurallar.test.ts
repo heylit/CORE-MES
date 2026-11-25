@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminFarki, fasonTerminUyumu } from './kurallar.ts';
+import { fasonGidisi, fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminFarki, fasonTerminUyumu } from './kurallar.ts';
 import type { FasonGecmisiSatiri, FasonSureOrnegi } from './kurallar.ts';
 
 const GUN = 86_400_000;
@@ -69,4 +69,12 @@ test('termin uyumu: termin günü olmayan dışarıda; firma başına ortalama f
     gecmis({ firmaId: 4, terminGun: 2, sonDonus: an(6) }),
   ]);
   assert.deepEqual(u, [{ firmaId: 4, ornekSayisi: 1, gecKalanSayisi: 1, ortalamaFarkGun: 4 }, { firmaId: 3, ornekSayisi: 2, gecKalanSayisi: 1, ortalamaFarkGun: 0 }]);
+});
+
+test('fason gidişi (3709): plan varsa plan gidişi; yoksa gereken dönüş - termin günü (en geç); eksik veride null', () => {
+  assert.deepEqual(fasonGidisi({ planGidis: '2099-01-03', gerekenTarih: '2099-01-10', terminGun: 4 }), { gidis: '2099-01-03', kaynak: 'plan' });
+  assert.deepEqual(fasonGidisi({ planGidis: null, gerekenTarih: '2099-01-10', terminGun: 4 }), { gidis: '2099-01-06', kaynak: 'hesap' });
+  assert.deepEqual(fasonGidisi({ planGidis: null, gerekenTarih: '2099-03-02', terminGun: 7 }), { gidis: '2099-02-23', kaynak: 'hesap' }, 'ay sınırı');
+  assert.deepEqual(fasonGidisi({ planGidis: null, gerekenTarih: null, terminGun: 4 }), { gidis: null, kaynak: null });
+  assert.deepEqual(fasonGidisi({ planGidis: null, gerekenTarih: '2099-01-10', terminGun: null }), { gidis: null, kaynak: null });
 });

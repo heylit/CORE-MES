@@ -4,6 +4,7 @@ import type { FasonOnTalep, OnTalep, PlanOnTalep, SiparisOnTalep, Talebim } from
 import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Pencere, Rozet, Secim, Simge, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { ApiHatasi } from '../../../ortak/veri/api.ts';
 import { DURUM, SURE, anahtarlar, cagri, gunYaz } from './ortak.ts';
+import { GidisSatiri } from '../gidis/gidis.tsx';
 import './talep.css';
 
 // 3429-3 F3: satış siparişi kalemi yoksayılmaz; kalem siparişte değişir (yol ya da onay).
@@ -132,6 +133,7 @@ function Satir({ o, secili, sec, cevir, yoksay, bugun }: {
           <span>Uygulanacak malzeme: {o.parca ? `${o.parca.kod} ${o.parca.ad}` : (o.urun ?? '—')}</span>
           <span>Firma: {o.firmaBekleniyor === true ? 'bekleniyor (siparişte seçilir)' : (o.firmaAdi ?? 'rotada yok')}</span>
           {o.terminGun !== null && <span>Firma süresi ~{o.terminGun} gün</span>}
+          <GidisSatiri gidis={o.gidis} kaynak={o.gidisKaynagi} gerekenTarih={o.gerekenTarih} terminGun={o.terminGun} />
         </div>
       </div>
       <Eylemler cevir={cevir} yoksay={yoksay} />

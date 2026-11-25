@@ -49,7 +49,7 @@ import { islemVarMi } from '#cekirdek/yetki.ts';
 import {
   ILETILER, ISLEM, type KurKilidiIsi, emirAcikMi, kilitliDurum, basamakEsigiReddi, basamakKilidiReddi, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, oneriReddi, kurKilidiIsi, kurKilidiReddi, degisiklikReddi, gecikmeGunu, fasonKalani, sonDonusGecikmesi, agirlikliGecikme, degisiklikTuru, dortGozSonucu, onayKademesiReddi, onayKisisiIzleri, onayLimitRolleri, onayLimitleriDegistiMi, onayLimitiReddi, terminsizSiparisReddi, terminTakibi, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
   KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, siparisBekletmeReddi, talebinAlimlari, ondalikKiyas, siparisReddi, talebim, kalemSiparisTerminleri, kalemKarsiligi, talebimDuzenlenirMi, talebimKalemReddi, guncellemeReddi, guncellemeIptalleri, ikinciAlimRiski,
-  fasonKalemReddi, fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi, type KalemBagi,
+  fasonGidisi, fasonKalemReddi, fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi, type KalemBagi,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGovdeDurumu, talepEdenGorunumu, avansAsimi, gerceklesenKosul, planGerceklesenFarki, talepKartiReddi, tamGorurMu, fiyatGorurMu, fiyatsizGorunum, talasFiyatiGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
   askidakiTedarikciReddi, birimFiyati, kaliteSiparisReddi, karneTeslimOlayi, stokTutari, uygulananKgFiyati, yeniSiparisFirmalari,
   iptalOncesiTuret, iptalGeriAlmaHareketi, bilinmeyenKgSatirlari, kgEskimeHatirlatmalari, kgFiyatiEskiMi, kgFiyatiKartta, kgFiyatiYasi, kgSapanMi, kgSapmasi, kgSonAlislari, ondalikCarp, ondalikTopla, birlestirmeReddi, birlesmeProjesiReddi, birlesikTalep, emirHareketi, projeHareketi, projeReddi, siparisDagilimi, type SiparisDagilimi, type DagilimSatiri, genelGiderOrani, satirYolu, type SatirYolu, belgeGenelGiderOrani, eslemeListesiHatasi, eslemeSurumu, type EslemeDurumu, ayirmaReddi, parcaliGonderimReddi, kaynakKalemiReddi, BIRLESIK_KALEM_SINIRI, KUR_KILIDI, HATIRLATMA_ADLARI, type HatirlatmaAyarlari, type HatirlatmaTalebi, haftaIciGunleri, hatirlatmaAnahtari, hatirlatmaFarki, hatirlatmalar,
@@ -1052,6 +1052,7 @@ export async function onTalepleri(db: Db): Promise<OnTalepleriCevabi> {
   const yoksaylar = (await s.fasonYoksaylari(db)).filter((y) => acik.has(y.isEmriId));
   const liste = fasonOnTalepAdaylari(adaylar, bagli, new Set(yoksaylar.map((y) => y.isEmriId)));
   const plan = await planOnTalepleri(db);
+  const planGidisleri = await planlananGidisler(db, liste.map((x) => x.isEmriId));
   const kartlar = await malzemeOzetleri(db, [...liste.flatMap((x) => (x.malzemeNo === null ? [] : [x.malzemeNo])), ...plan.yoksaylar.map((y) => y.malzemeNo)]);
   const firmalar = await firmaOzetleri(db, [...new Set(liste.flatMap((x) => (x.firmaId === null ? [] : [x.firmaId])))]);
   const kisiler = await kisiAdlari(db, [...yoksaylar, ...plan.yoksaylar].map((y) => y.kisiId));
@@ -1065,6 +1066,7 @@ export async function onTalepleri(db: Db): Promise<OnTalepleriCevabi> {
           kaynak: 'fason' as const, isEmriId: x.isEmriId, uretimEmriId: x.uretimEmriId, emirNo: x.emirNo, opNo: x.opNo, adim: x.adim,
           parca: kart && x.malzemeNo !== null ? { no: x.malzemeNo, kod: kart.kod, ad: kart.ad ?? '' } : null, urun: x.urun,
           miktar: x.adet, birim: 'adet', gerekenTarih: x.teslim, terminGun: x.terminGun,
+          ...(() => { const g = fasonGidisi({ planGidis: planGidisleri.get(x.isEmriId) ?? null, gerekenTarih: x.teslim, terminGun: x.terminGun }); return { gidis: g.gidis, gidisKaynagi: g.kaynak }; })(),
           firmaAdi: x.firmaId === null ? null : (firmalar.get(x.firmaId)?.ad ?? null), ...(x.firmaId === null ? { firmaBekleniyor: true } : {}),
         };
       }),
