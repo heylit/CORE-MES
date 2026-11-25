@@ -1526,6 +1526,37 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     assert.match(red.govde.mesaj, /iptal edildi; malzeme istenmez/);
   });
 
+  test('kart 3716: emri iptal olan emrin yoldaki teslimi, kart açıkken de iptalken de teslim alınır', async () => {
+    const [mm, hm] = [await kart('mamul'), await kart('hammadde')];
+    const a = await istasyon();
+    const tip = (await o().sahip.tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ($1, 'Deneme tipi', 'TAL') RETURNING id", [`T37-${sira}`]))!.id;
+    const makine = (await o().sahip.tek<{ id: number }>('INSERT INTO makine (kod, ad, istasyon_id) VALUES ($1, $2, $3) RETURNING id', [`T37M-${a.id}`, 'Tezgah', a.id]))!.id;
+    if (!kisiler.has('planlama_proje')) await kisiEkle('planlama_proje', 'planlama_proje');
+    const planlamaci = (await o().vt.tx((db) => kullaniciYukle(db, kisiler.get('planlama_proje')!)))!;
+    const { uretimEmriId: e } = await o().vt.tx(async (db) => uretimEmriAc(db, planlamaci, { projeId: denemeProjeId, malzemeNo: mm, adet: 5, teslim: null, kaynakRotaRevizyonId: await revizyon(mm), isEmirleri: [{
+      sira: 1, opNo: 10, ad: 'Adım 1', operasyonTipiId: tip, kaynak: { tur: 'makine', id: makine }, ayarSuresiDk: '10', birimSureDk: '1',
+      terminGun: null, bagimlilik: 'bekleyen', devirAdedi: null, talimatSurumu: null, kontrolListesi: [], bilesenler: [{ malzemeNo: hm, miktar: '1' }],
+    }] }));
+    await malKabul(hm, '10');
+    const kabul = await kabulKonumu();
+    const refakat = await kartAc(e, hm);
+    const ac = async () => malzemeIstegiCevabi.parse((await istek('operator', 'POST', '/stok/malzeme-istekleri/ac', {
+      malzemeId: hm, miktar: '2', istasyonId: a.id, uretimEmriId: e, not: null, kaynakKimligi: randomUUID(),
+    })).govde).istek;
+    const [i1, i2] = [await ac(), await ac()];
+    const g1 = await gonder('depo', { malzemeId: hm, miktar: '2', kaynak: { konumId: kabul }, hedef: { istasyonId: a.id }, istekId: i1.id, refakatPartisiId: refakat });
+    const g2 = await gonder('depo', { malzemeId: hm, miktar: '2', kaynak: { konumId: kabul }, hedef: { istasyonId: a.id }, istekId: i2.id, refakatPartisiId: refakat });
+    assert.equal(g1.durum, 200, JSON.stringify(g1.govde));
+    assert.equal(g2.durum, 200, JSON.stringify(g2.govde));
+    await o().vt.tx((db) => emirIptalEt(db, planlamaci, e));
+    const al = (g: typeof g1, alinan: string) => istek('operator', 'POST', `/stok/teslimler/${g.govde.teslim.id}/teslim-al`, { surum: g.govde.teslim.surum, alinan });
+    assert.equal((await al(g1, '2')).durum, 200, 'kart açık, emir iptal');
+    // Kart sonradan iptal olmuşsa (elle ya da emir iptaliyle) teslim yine alınır: yoldaki malzeme kaybolmaz.
+    await o().sahip.sorgu("UPDATE stok_refakat_partisi SET durum = 'iptal', iptal_eden_kisi_id = $2, iptal_zamani = now() WHERE id = $1", [refakat, kisiler.get('yonetici')]);
+    const son = await al(g2, '2');
+    assert.equal(son.durum, 200, JSON.stringify(son.govde));
+  });
+
   test('kart #1353 istasyon sepeti: getiren kişi, rotada sonraki farklı istasyon; emirsiz malzeme rota dışı; kutuda harita', async () => {
     const ym = await kart('yarimamul');
     const [a, b] = [await istasyon(), await istasyon()];

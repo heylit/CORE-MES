@@ -1,7 +1,6 @@
 import { type Db } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, dogrulama, gecersiz } from '#cekirdek/hata.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
-import { type RefakatKartiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { DefterFarklariCevabi } from '#paylasilan/sozlesme/stok.ts';
 import {
   REFAKAT_KARTLARI_SINIRI, type LotBekleyenKartlarCevabi, type RefakatKartlariCevabi, type RefakatCiktisi, type RefakatIziCevabi, type RefakatLotaBaglaCevabi, type RefakatPartileriCevabi,
@@ -9,7 +8,7 @@ import {
 } from '#paylasilan/sozlesme/stok.ts';
 import { KOD_ONEKI, kodTuru } from '#paylasilan/kod-sozlugu.ts';
 import { malzemeOzetleri } from '../../malzemeler/disari.ts';
-import { emirMalzemeIhtiyaci, uretimEmriOzeti, refakatKarti } from '../../uretim-emirleri/disari.ts';
+import { emirMalzemeIhtiyaci, uretimEmriOzeti, refakatKarti, refakatEmirOzeti } from '../../uretim-emirleri/disari.ts';
 import { binde, bindenMetin, girdiSec, kartAdediEngeli, kartAdediOnerisi, refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli } from '../kurallar.ts';
 import * as sorgular from '../sorgular.ts';
 import { seriEklemeleri } from '../kurallar.ts';
@@ -45,17 +44,18 @@ export async function refakatPartisiOku(db: Db, id: number): Promise<RefakatPart
   if (!r) throw bulunamadi('Refakat kartı bulunamadı.');
   return { refakat: (await refakatPartileriCevir(db, [r]))[0]! };
 }
-// Refakat kartları sayfası (kart #708): emrin kartı bir kez okunur; aynı emrin kartları ürünü paylaşır. Sırayla: işlemdeki tek bağlantıda
-// sorgular eşzamanlı koşamaz.
+// Refakat kartları sayfası (kart #708, 3716): emrin özeti bir kez okunur (basım denetimi yok; iptal emrin kartı da listelenir); aynı emrin
+// kartları ürünü paylaşır. Okunamayan emir yalnız kendi satırını boşaltır. Sırayla: işlemdeki tek bağlantıda sorgular eşzamanlı koşamaz.
 export async function refakatKartlari(db: Db, durum: 'acik' | 'tumu'): Promise<RefakatKartlariCevabi> {
   const satirlar = await sorgular.refakatKartlariListe(db, durum === 'tumu', REFAKAT_KARTLARI_SINIRI + 1);
   const kartlar = await refakatPartileriCevir(db, satirlar.slice(0, REFAKAT_KARTLARI_SINIRI));
-  const emirler = new Map<number, RefakatKartiCevabi>();
-  for (const id of new Set(kartlar.map((k) => k.uretimEmriId))) emirler.set(id, await refakatKarti(db, id));
+  const emirler = new Map<number, Awaited<ReturnType<typeof refakatEmirOzeti>>>();
+  for (const id of new Set(kartlar.map((k) => k.uretimEmriId))) emirler.set(id, await refakatEmirOzeti(db, id));
   return {
     kartlar: kartlar.map((r) => {
-      const e = emirler.get(r.uretimEmriId)!;
-      return { refakat: r, urun: e.urun, adet: e.adet, teslim: e.teslim, adimSayisi: e.adimlar.length };
+      const e = emirler.get(r.uretimEmriId) ?? null;
+      if (e === null) return { refakat: r, emir: 'okunamadi' as const, urun: null, adet: null, teslim: null, adimSayisi: null };
+      return { refakat: r, emir: e.iptal ? 'iptal' as const : 'tamam' as const, urun: e.urun, adet: e.adet, teslim: e.teslim, adimSayisi: e.adimSayisi };
     }),
     sinirda: satirlar.length > REFAKAT_KARTLARI_SINIRI,
   };

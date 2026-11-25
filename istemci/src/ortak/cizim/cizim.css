@@ -11,7 +11,7 @@
   background-image: linear-gradient(var(--bp-dim2) var(--cizgi-ince), transparent var(--cizgi-ince)), linear-gradient(90deg, var(--bp-dim2) var(--cizgi-ince), transparent var(--cizgi-ince));
   background-size: var(--b-6) var(--b-6);
 }
-.tc-ay5-sahne { position: absolute; inset: 0; cursor: grab; touch-action: none; }
+.tc-ay5-sahne { position: absolute; inset: 0; inset-inline-end: var(--tc-arac-pay, 0px); cursor: grab; touch-action: none; }
 .tc-ay5-surukle { cursor: grabbing; }
 .tc-ay5-ekliyor .tc-ay5-sahne { cursor: crosshair; }
 .tc-ay5-tuval { position: absolute; inset: 0; transform-origin: 0 0; transform: translate(var(--z-x, 0), var(--z-y, 0)) scale(var(--z-k, 1)); }

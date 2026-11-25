@@ -276,7 +276,7 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
 
       <aside id="km-st-gr" className="km-st-gr" aria-label="Balon grupları">
         {resim && resim.tur === 'resim' ? (
-          <GrupPaneli resim={resim} rota={parca.data?.operasyonlar ?? []} duzenler={duzenler} secili={secili}
+          <GrupPaneli key={`${String(resim.id)}-${String(resim.gruplarSurum ?? 0)}`} resim={resim} rota={parca.data?.operasyonlar ?? []} duzenler={duzenler} secili={secili}
             secimTemizle={() => { secimAnahtariYaz((n) => n + 1); }} />
         ) : <span className="km-st-soluk">Gruplar yalnız teknik resimde tanımlanır.</span>}
       </aside>

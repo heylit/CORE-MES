@@ -658,6 +658,8 @@ export { baslatmaYetkinlikIhlali, makineYetkinlikIhlali } from './kurallar.ts';
 export { emirIdleri } from './sorgular.ts';
 // Etiket Merkezi refakat kartını basar: uçtaki kartla aynı veri. Yetki denetlemez, çağıran kendi ucunda denetler; iptal emirde CAKISMA.
 export const refakatKarti = (db: Db, emirId: number): Promise<RefakatKartiCevabi> => isEmri.refakatKarti(db, emirId);
+// Refakat kartları listesi (3716): basım denetimi olmadan emir özeti; iptal emir `iptal: true` ile gelir, okunamayan emir null.
+export const refakatEmirOzeti = (db: Db, emirId: number): Promise<isEmri.RefakatEmirOzeti | null> => isEmri.refakatEmirOzeti(db, emirId);
 
 // Saat (pano): pencerede biten emirler (istasyon son bitirme kaydından), istasyon başına duruş saniyesi (duraklatma hariç) ve emrin
 // çalışmaya son geçiş anı. Pencere [baslangic, bitis) ISO zamanıdır; veri yoksa istasyon ya da emir haritada yoktur.

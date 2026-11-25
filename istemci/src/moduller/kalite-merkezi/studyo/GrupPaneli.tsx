@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { KmResim } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import { Dugme, Girdi, OnayPenceresi, Rozet, Secim, Simge, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { hataIletisi } from '../../../ortak/veri/api.ts';
 import { degisti, govdeOlustur, grupKodu, grupsuzOperasyonlar, operasyonBagla, operasyonMetni, taslakHatasi, taslakOlustur, yeniGrupAdi, type GrupTaslagi, type RotaOperasyonu } from './gruplar.ts';
 import { useGruplariYaz } from './veri.ts';
 
-// Balon grupları ve operasyon ataması (3693): Kalite Merkezi resmin balonlarını adlı gruplara ayırır, operasyonu gruba bağlar. Atama yalnız
+// Balon grupları ve operasyon ataması (3693); resim ya da kayıtlı sürüm değişince üst bileşen anahtarla yeniden kurar (taslak kayıtlı plana döner). Kalite Merkezi resmin balonlarını adlı gruplara ayırır, operasyonu gruba bağlar. Atama yalnız
 // grup kartından yapılır; operatör ve numune formu operasyonunun grubunu kendiliğinden kullanır.
 export function GrupPaneli({ resim, rota, duzenler, secili = [], secimTemizle }: {
   resim: KmResim; rota: readonly RotaOperasyonu[]; duzenler: boolean; secili?: readonly number[]; secimTemizle?: () => void;
@@ -14,8 +14,6 @@ export function GrupPaneli({ resim, rota, duzenler, secili = [], secimTemizle }:
   const yaz = useGruplariYaz();
   const [taslak, taslakYaz] = useState<GrupTaslagi[]>(() => taslakOlustur(resim));
   const [silinecek, silinecekYaz] = useState<GrupTaslagi | null>(null);
-  // Resim ya da kayıtlı sürüm değişince (kayıt, başkasının değişikliği) taslak kayıtlı plana döner.
-  useEffect(() => { taslakYaz(taslakOlustur(resim)); }, [resim.id, resim.gruplarSurum]);
 
   const duzenlenebilir = duzenler && !resim.eski;
   const balonNolari = useMemo(() => resim.balonlar.map((b) => b.no).sort((a, b) => a - b), [resim.balonlar]);

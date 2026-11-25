@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import type {
   RefakatIziCevabi, RefakatKolAcGovdesi, RefakatLotaBaglaCevabi, RefakatLotaBaglaGovdesi, RefakatPartisi, RefakatPartisiAcGovdesi, RefakatPartisiCevabi, RefakatPartisiKartiCevabi,
@@ -96,16 +96,37 @@ function LotaBagla({ r, bagladi }: { r: RefakatPartisi; bagladi: (id: number) =>
 
 // Kart sayfasının panelindeki işlemler (2907, 2912 a): kart penceresinin işlemleri ayrı pencere açmadan panelin başındadır;
 // lota bağlama ve alt parti formu düğmeyle açılır. Yeni kart doğunca (alt parti, lota bağlanan kart) sayfa onu seçer.
-export function KartIslemleri({ id, sec }: { id: number; sec: (id: number) => void }) {
+// 3716: emri iptal ya da okunamayan kartın nedeni basım düğmesinin yanında durur (kart durumundan bağımsız). Okunamayan emirde geçici hata olabilir:
+// "Yeniden dene" listeyi yeniler, kart iptali ek onay ister (kartın hangi emre bağlı olduğu doğrulanamadı).
+type KapaliEmir = { refakat: RefakatPartisi; durum: 'iptal' | 'okunamadi' };
+const KAPALI_EMIR_NEDENI = { iptal: 'Emir iptal edildi; kart basılmaz.', okunamadi: 'Emir bilgisi şu an okunamıyor; kart basılmaz.' } as const;
+const KapaliEmirNedeni = ({ id, durum }: { id: number; durum: KapaliEmir['durum'] }) => <span id={`kapali-emir-${String(id)}`} className="tc-stok-not">{KAPALI_EMIR_NEDENI[durum]}</span>;
+function KapaliEmirIptali({ kapali, iptal, pending }: { kapali: KapaliEmir | undefined; iptal: () => void; pending: boolean }) {
+  const [onay, setOnay] = useState(false);
+  const istemci = useQueryClient();
+  const onayli = kapali?.durum === 'okunamadi';
+  return (
+    <>
+      {onayli && <Dugme simge="rotate" onClick={() => { void istemci.invalidateQueries({ queryKey: anahtarlar.hepsi }); }}>Yeniden dene</Dugme>}
+      <Dugme simge="x" yukleniyor={pending} onClick={() => (onayli && !onay ? setOnay(true) : iptal())}>{onayli && onay ? 'Evet, kartı iptal et' : 'Kartı iptal et'}</Dugme>
+      {onayli && onay && <span className="tc-stok-not" role="alert">Emir bilgisi okunamadığı için kartın hangi emre bağlı olduğu doğrulanamadı. İptal geri alınamaz.</span>}
+    </>
+  );
+}
+
+// 3716: emri iptal (ya da okunamayan) kartın basım verisi okunamaz (sunucu 409); kart listedeki haliyle gösterilir, basım kapalı, iptal açık kalır.
+export function KartIslemleri({ id, sec, kapaliEmir }: { id: number; sec: (id: number) => void; kapaliEmir?: KapaliEmir }) {
   const [form, setForm] = useState<'lot' | 'alt' | null>(null);
-  const q = useQuery({ queryKey: [...anahtarlar.hepsi, 'refakat-karti', id], queryFn: () => api.get<RefakatPartisiKartiCevabi>(`/stok/refakat-partileri/${id}/kart`) });
+  const q = useQuery({
+    queryKey: [...anahtarlar.hepsi, 'refakat-karti', id], queryFn: () => api.get<RefakatPartisiKartiCevabi>(`/stok/refakat-partileri/${id}/kart`), enabled: kapaliEmir === undefined,
+  });
   const iptal = useStokKomutu((g: { surum: number }) => api.post<RefakatPartisiCevabi>(`/stok/refakat-partileri/${id}/iptal-et`, g), 'Refakat kartı iptal edildi.');
   const merkez = useIslem('sayfa.etiket-merkezi');
   const depocu = useIslem('stok.transfer');
   const yonlendir = useNavigate();
-  if (q.isPending) return <DurumKutusu durum="yukleniyor" />;
-  if (q.isError) return <DurumKutusu durum="hata" mesaj={hataMetni(q.error)} yenile={() => void q.refetch()} />;
-  const r = q.data.refakat;
+  if (kapaliEmir === undefined && q.isPending) return <DurumKutusu durum="yukleniyor" />;
+  if (kapaliEmir === undefined && q.isError) return <DurumKutusu durum="hata" mesaj={hataMetni(q.error)} yenile={() => void q.refetch()} />;
+  const r = kapaliEmir?.refakat ?? q.data!.refakat;
   const acik = r.durum === 'acik' && r.birlestigi === null;
   const sonra = (yeni: number) => { setForm(null); sec(yeni); };
   const ac = (f: 'lot' | 'alt') => setForm(form === f ? null : f);
@@ -113,12 +134,13 @@ export function KartIslemleri({ id, sec }: { id: number; sec: (id: number) => vo
     <div className="tc-refakat-islemler">
       <div className="tc-refakat-dugmeler">
         {merkez && acik && r.partiId !== null && (
-          <Dugme tur="birincil" simge="printer" onClick={() => { void yonlendir(`/etiket-merkezi?tur=refakat-partisi&id=${String(id)}`); }}>Etiket Merkezi&apos;nde bas</Dugme>
+          <Dugme tur="birincil" simge="printer" disabled={kapaliEmir !== undefined} {...(kapaliEmir === undefined ? {} : { 'aria-describedby': `kapali-emir-${String(id)}` })} onClick={() => { void yonlendir(`/etiket-merkezi?tur=refakat-partisi&id=${String(id)}`); }}>Etiket Merkezi&apos;nde bas</Dugme>
         )}
-        {depocu && acik && r.partiId === null && <Dugme simge="tag" aria-expanded={form === 'lot'} onClick={() => ac('lot')}>Lota bağla</Dugme>}
-        {acik && r.partiId !== null && <Dugme simge="route" aria-expanded={form === 'alt'} onClick={() => ac('alt')}>Alt parti kartı</Dugme>}
+        {kapaliEmir !== undefined && <KapaliEmirNedeni id={id} durum={kapaliEmir.durum} />}
+        {depocu && acik && kapaliEmir === undefined && r.partiId === null && <Dugme simge="tag" aria-expanded={form === 'lot'} onClick={() => ac('lot')}>Lota bağla</Dugme>}
+        {acik && kapaliEmir === undefined && r.partiId !== null && <Dugme simge="route" aria-expanded={form === 'alt'} onClick={() => ac('alt')}>Alt parti kartı</Dugme>}
         {r.durum === 'acik' && Number(r.verilen) === 0 && (
-          <Dugme simge="x" yukleniyor={iptal.komut.isPending} onClick={() => iptal.komut.mutate({ surum: r.surum })}>Kartı iptal et</Dugme>
+          <KapaliEmirIptali kapali={kapaliEmir} pending={iptal.komut.isPending} iptal={() => iptal.komut.mutate({ surum: r.surum })} />
         )}
       </div>
       {r.lotaBaglanmaZamani && <p className="tc-stok-not">İstisna kartıydı; {zamanMetni(r.lotaBaglanmaZamani)} lota bağlandı.</p>}
@@ -131,11 +153,14 @@ export function KartIslemleri({ id, sec }: { id: number; sec: (id: number) => vo
 }
 
 // Kartı göster; hiç teslimi olmayan kart iptal edilir.
-export function RefakatKartPenceresi({ id: ilkId, kapat }: { id: number; kapat: () => void }) {
+export function RefakatKartPenceresi({ id: ilkId, kapat, kapaliEmir }: { id: number; kapat: () => void; kapaliEmir?: KapaliEmir }) {
   const [id, setId] = useState(ilkId);
-  const q = useQuery({ queryKey: [...anahtarlar.hepsi, 'refakat-karti', id], queryFn: () => api.get<RefakatPartisiKartiCevabi>(`/stok/refakat-partileri/${id}/kart`) });
+  const kapali = kapaliEmir !== undefined && kapaliEmir.refakat.id === id ? kapaliEmir : undefined;
+  const q = useQuery({
+    queryKey: [...anahtarlar.hepsi, 'refakat-karti', id], queryFn: () => api.get<RefakatPartisiKartiCevabi>(`/stok/refakat-partileri/${id}/kart`), enabled: kapali === undefined,
+  });
   const iptal = useStokKomutu((g: { surum: number }) => api.post<RefakatPartisiCevabi>(`/stok/refakat-partileri/${id}/iptal-et`, g), 'Refakat kartı iptal edildi.', kapat);
-  const r = q.data?.refakat;
+  const r = kapali?.refakat ?? q.data?.refakat;
   const merkez = useIslem('sayfa.etiket-merkezi');
   const depocu = useIslem('stok.transfer');
   const yonlendir = useNavigate();
@@ -143,14 +168,26 @@ export function RefakatKartPenceresi({ id: ilkId, kapat }: { id: number; kapat: 
     <Pencere acik kapat={kapat} baslik={r ? `Refakat kartı ${r.etiket}` : 'Refakat kartı'} tur="yan"
       alt={<>
         {merkez && r?.durum === 'acik' && r.partiId !== null && (
-          <Dugme tur="birincil" simge="printer" onClick={() => { void yonlendir(`/etiket-merkezi?tur=refakat-partisi&id=${String(id)}`); }}>Etiket Merkezi&apos;nde bas</Dugme>
+          <Dugme tur="birincil" simge="printer" disabled={kapali !== undefined} {...(kapali === undefined ? {} : { 'aria-describedby': `kapali-emir-${String(id)}` })} onClick={() => { void yonlendir(`/etiket-merkezi?tur=refakat-partisi&id=${String(id)}`); }}>Etiket Merkezi&apos;nde bas</Dugme>
         )}
         {r && r.durum === 'acik' && Number(r.verilen) === 0 && (
-          <Dugme tur="ikincil" simge="x" yukleniyor={iptal.komut.isPending} onClick={() => iptal.komut.mutate({ surum: r.surum })}>Kartı iptal et</Dugme>
+          <KapaliEmirIptali kapali={kapali} pending={iptal.komut.isPending} iptal={() => iptal.komut.mutate({ surum: r.surum })} />
         )}
       </>}>
-      {q.isPending && <DurumKutusu durum="yukleniyor" />}
-      {q.isError && <DurumKutusu durum="hata" mesaj={hataMetni(q.error)} yenile={() => void q.refetch()} />}
+      {kapali === undefined && q.isPending && <DurumKutusu durum="yukleniyor" />}
+      {kapali === undefined && q.isError && <DurumKutusu durum="hata" mesaj={hataMetni(q.error)} yenile={() => void q.refetch()} />}
+      {kapali !== undefined && r && (
+        <div className="tc-stok-form">
+          <p className="tc-stok-not"><KapaliEmirNedeni id={id} durum={kapali.durum} />{r.durum === 'acik' ? ' Kartı iptal edebilirsiniz.' : ' Kart iptal edildi.'}</p>
+          <div className="tc-stok-is tc-stok-okut-kaynak">
+            <div>
+              <strong>{r.etiket}</strong>
+              <span>{refakatLotSatiri(r)}</span>
+              <span>{refakatMalzemeSatiri(r)}</span>
+            </div>
+          </div>
+        </div>
+      )}
       {q.data && r && (
         <div className="tc-stok-form">
           <p className="tc-stok-not">Kart 100x150 mm. Teslimde bu kart okutulur; alan da kartı okutup alır. Aynı lotun kalanı bu kartla verilir.</p>
