@@ -59,6 +59,10 @@ async function malKabulSatirlariniYaz(
       konumVar: s.konumId !== undefined, partiVar: s.partiId !== undefined || !!(s.parti && (s.parti.tedarikciPartiNo || s.parti.dokumNo || s.parti.sertifikaNo)),
     });
     if ('hata' in satirTuru) throw dogrulama(`${o.ad ?? o.kod}: ${satirTuru.hata}`, `${alan}.${satirTuru.alan}`);
+    // 3712: dönen kart siparişin işlediği parçadan farklıysa depocunun onayı gerekir (parça bağı yoksa ya da eşleşiyorsa denetim yok).
+    if (satirTuru.tur === 'fason' && ss && ss.uygulananMalzemeNo !== null && ss.uygulananMalzemeNo !== malzemeId && s.farkliKartOnayi !== true) {
+      throw dogrulama(`${o.ad ?? o.kod}: siparişin işlediği parçadan farklı kart dönüyor; "Farklı kartla kabul et" onayı olmadan kabul edilmez.`, `${alan}.farkliKartOnayi`);
+    }
     // Fasonda satırın kartı dönen malzemedir; sipariş hizmet kartınadır (KD-009 karşılaştırması stok ve saf hizmet satırında).
     if (satirTuru.tur !== 'fason' && ss) {
       const malzemeEngeli = siparisMalzemeEngeli(malzemeId, ss.malzemeNo);
@@ -296,7 +300,11 @@ async function teslimMiktari(db: Db, ss: { birim: string; malzemeNo: number | nu
 export async function acikSiparisSatirlari(db: Db): Promise<AcikSiparisSatirlariCevabi> {
   const l = await siparisSatirlari(db);
   const malzemeNolari = [...new Set(l.flatMap((x) => (x.malzemeNo === null ? [] : [x.malzemeNo])))];
+  // 3712: hizmet satırında işlenen parçanın kartı (satın almanın uygulananMalzemeNo'su); yalnız hizmet satırında okunur.
   const kartlar = await malzemeOzetleri(db, malzemeNolari);
+  const isTuru = (x: (typeof l)[number]) => (x.malzemeNo === null ? null : kartlar.get(x.malzemeNo)?.tur ?? null);
+  const uygulananNolar = [...new Set(l.flatMap((x) => (isTuru(x) === 'hizmet' && x.uygulananMalzemeNo !== null ? [x.uygulananMalzemeNo] : [])))];
+  const uygulananKartlari = await malzemeOzetleri(db, uygulananNolar);
   // 3332: kalemin birimi ile stok birimi arasındaki dönüşüm (birim ağırlığı ve alış katsayısı karttan, iki toplu okuma).
   const bilgiler = await kartDonusumBilgileri(db, malzemeNolari);
   const donusumu = (x: (typeof l)[number]) => (x.malzemeNo === null || !bilgiler.has(x.malzemeNo) ? null : malKabulDonusumu(x.birim, bilgiler.get(x.malzemeNo)));
@@ -321,6 +329,7 @@ export async function acikSiparisSatirlari(db: Db): Promise<AcikSiparisSatirlari
       stokBirimi: x.malzemeNo === null ? null : bilgiler.get(x.malzemeNo)?.stokBirimi ?? null, donusum: donusumu(x),
       uretimEmriId: emirId, emirNo: emirNoDe(nolar, emirId), projeId, projeAdi: projeId === null ? null : projeAdi.get(projeId) ?? null,
       isEmriId: x.isEmriId, parcaRevizyonu: x.parcaRevizyonu, yururlukRevizyonu: yur,
+      uygulananMalzeme: ((k) => (k ? { no: k.id, kod: k.kod, ad: k.ad } : null))(isTuru(x) === 'hizmet' && x.uygulananMalzemeNo !== null ? uygulananKartlari.get(x.uygulananMalzemeNo) : undefined),
       revizyonUyusmuyor: revizyonUyusmuyor(x.parcaRevizyonu, yur),
     };
   }) };

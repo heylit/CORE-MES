@@ -9,6 +9,7 @@ import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { birimliMiktar } from './gorunum.ts';
 import { hataMetni, korumaliPost } from './ortak.tsx';
+import { EslesmeDurumu, IslenenBlogu, bosSatir, farkliOnaysiz, siparistenSatir } from './MalKabul.tsx';
 import { PanelMalKabul, type YazilanKabul } from './PanelMalKabul.tsx';
 import { fasonDonusGovdesi, firmadaKalan, type FasonIsi } from './TerminalFasonDonusu.tsx';
 import { bekleyenKabuller, fasonSatiriMi } from './TerminalMalKabul.tsx';
@@ -65,6 +66,8 @@ export function FasonKabulOnayi({ is, kabul, vazgec, yazildi }: { is: KabulIsi; 
   const istemci = useQueryClient();
   const kilitli = useGonderimKilidi();
   const [donmedi, donmediYaz] = useState(false);
+  // 3712: sipariş satırının işlediği parçadan farklı kart dönüyorsa Mal kabul ekranındaki aynı blok ve onay; onay yalnız o kart için geçerlidir.
+  const [onayliKart, onayliKartYaz] = useState('');
   const yaz = useMutation({
     mutationFn: (g: MalKabulGovdesi) => korumaliPost<MalKabulCevabi>('/stok/mal-kabul', g),
     onSuccess: (c, g) => {
@@ -76,6 +79,8 @@ export function FasonKabulOnayi({ is, kabul, vazgec, yazildi }: { is: KabulIsi; 
   const kalan = is.hedef ?? 0;
   const kartAdi = f ? [f.donenKart.kod, f.donenKart.ad].filter(Boolean).join(' · ') : '—';
   const gonder = (g: MalKabulGovdesi) => kilitli(() => yaz.mutateAsync(g));
+  const eslesme = { ...siparistenSatir(bosSatir(), is.satir), kart: f ? String(f.donenKart.malzemeId) : '', farkliOnay: onayliKart };
+  const onaysiz = f !== null && farkliOnaysiz(eslesme);
   return (
     <div className="tc-stok-fk" aria-label="Kabul onayı" role="group">
       <dl className="tc-stok-fd-ozet">
@@ -85,16 +90,19 @@ export function FasonKabulOnayi({ is, kabul, vazgec, yazildi }: { is: KabulIsi; 
         <div><dt>Giriş yeri</dt><dd>Karantina, karar bekliyor</dd></div>
         <div><dt>Sonra</dt><dd>GKK kuyruğu</dd></div>
       </dl>
+      {f && <IslenenBlogu s={eslesme} />}
+      {f && <EslesmeDurumu s={eslesme} degistir={(d) => { if (d.farkliOnay !== undefined) onayliKartYaz(d.farkliOnay); }} donen={kartAdi} />}
       {!f ? <p className="tc-stok-not tc-stok-uyari-yazi" role="alert">Bu işin firmada parçası bulunamadı; yalnız "Malzeme dönmedi" yazılabilir.</p> : null}
       {kabul > kalan && f ? <p className="tc-stok-fd-uyari" role="alert"><Simge ad="alert" />Firmada {kalan} adet var; en çok {kalan} kabul edilir.</p> : null}
+      {onaysiz ? <p id="tc-kabul-neden" className="tc-stok-fd-uyari" role="status"><Simge ad="alert" />Farklı kartla kabul için yukarıdaki onay bekleniyor.</p> : null}
       {yaz.isError ? <p className="tc-stok-fd-uyari" role="alert"><Simge ad="alert" />{hataMetni(yaz.error)}</p> : null}
       <div className="tc-stok-fd-alt">
         <Dugme onClick={vazgec} disabled={yaz.isPending}>Vazgeç</Dugme>
         <Dugme disabled={yaz.isPending} onClick={() => { if (!donmedi) { donmediYaz(true); return; } gonder(fasonDonusGovdesi(is.satir, 'donmedi', null, '')); }}>
           {donmedi ? 'Emin misiniz? Tekrar dokunun' : 'Malzeme dönmedi'}
         </Dugme>
-        <Dugme tur="birincil" boyut="ana" simge="check" yukleniyor={yaz.isPending} disabled={!f || kabul <= 0 || kabul > kalan || yaz.isPending}
-          onClick={() => gonder(fasonDonusGovdesi(is.satir, 'dondu', f, String(kabul)))}>Kabulü yaz</Dugme>
+        <Dugme tur="birincil" boyut="ana" simge="check" yukleniyor={yaz.isPending} disabled={!f || kabul <= 0 || kabul > kalan || yaz.isPending || onaysiz} {...(onaysiz ? { 'aria-describedby': 'tc-kabul-neden' } : {})}
+          onClick={() => gonder(fasonDonusGovdesi(is.satir, 'dondu', f, String(kabul), eslesme.farkliOnay !== '' && eslesme.farkliOnay === eslesme.kart))}>Kabulü yaz</Dugme>
       </div>
     </div>
   );

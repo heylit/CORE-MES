@@ -62,7 +62,7 @@ function sunucuKur(ag = { kopuk: false }): Cagri[] {
     if (yol.startsWith('/satin-alma-taleplerim?')) {
       const sinir = Number(new URL(yol, 'http://x').searchParams.get('sinir'));
       const hepsi = Array.from({ length: 12 }, (_, i) => talep(i + 1, i === 0
-        ? { durum: 'onayda', kaynak: 'fason', kalemler: [{ ad: 'Deneme serbest', miktar: '2', birim: 'adet', kartBekliyor: true, uygulanan: 'MM-00009 · Deneme flanş', fasonAdim: 'UE-000031 · Op 30', malzemeNo: 7 }] }
+        ? { durum: 'onayda', kaynak: 'fason', kalemler: [{ ad: 'Deneme serbest', miktar: '2', birim: 'adet', kartBekliyor: true, uygulanan: 'MM-00009 · Deneme flanş', uygulananRevizyon: 'B', uygulananKod: 'MM-00009', uygulananAd: 'Deneme flanş', fasonAdim: 'UE-000031 · Op 30', malzemeNo: 7 }] }
         : {}));
       return json(200, { talepler: hepsi.slice(0, sinir), toplam: hepsi.length } satisfies TaleplerimCevabi);
     }
@@ -652,7 +652,8 @@ describe('Planlama menüsünde Taleplerim sayfası (12.10.2026)', () => {
     const satir = screen.getByRole('button', { name: /ST-2026-001/ });
     expect(screen.getByText('Fason adım')).toBeTruthy();
     fireEvent.click(satir);
-    expect(screen.getByText('Uygulanacak malzeme: MM-00009 · Deneme flanş · Fason: UE-000031 · Op 30')).toBeTruthy();
+    // 3712: işlenen malzeme çerçeveli blokta: parça, Rev, adet ve rota adımı.
+    expect(document.querySelector('.sa-islenen')?.textContent).toBe('İşlenen malzemeDeneme flanşMM-00009Rev B2 adetUE-000031 · Op 30');
     fireEvent.click(screen.getByRole('button', { name: 'Hepsi' }));
     fireEvent.change(screen.getByLabelText('Ara'), { target: { value: 'talep 12' } });
     await waitFor(() => expect(screen.getAllByRole('button', { name: /ST-2026-0/ })).toHaveLength(1));

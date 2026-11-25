@@ -5,7 +5,7 @@ import { S, V, bump } from './store.ts';
 import { DEFAULT_SETTINGS } from './constants.ts';
 import { talepEkrana, talepSunucuya } from './tasiyici.ts';
 import { boardHTML, filteredRequests, reqTable, tabItems, talepGovdesi } from './views.ts';
-import { kalemAdiParcayla } from './kalem-bagi.ts';
+import { disIslenenMalzeme, islenenMalzemeBlogu, kalemAdiParcayla, revYaz, teklifMetniSatirlari } from './kalem-bagi.ts';
 import { poText } from './docs.ts';
 import type { OrderInfo } from './calc.ts';
 import { rfqText } from './ui.ts';
@@ -119,7 +119,7 @@ describe('uygulanacak malzeme karşılaştırma ve siparişte (2875)', () => {
     el.innerHTML = talepGovdesi(r);
     const satirlar = [...el.querySelectorAll('table.sa-kr-t tbody tr')].filter((tr) => /Deneme (kaplama hizmeti|vida)/.test(tr.textContent ?? ''))
       .map((tr) => [...tr.querySelectorAll('[data-sa-uygulanan]')].map((x) => x.textContent));
-    expect(satirlar).toEqual([['Uygulanacak malzeme: DNM-7 Deneme flanş'], []]);
+    expect(satirlar).toEqual([['İşlenen malzemeDeneme flanş DNM-740 adetUE-2026-001 · Op 30 Kaplama'], []]);
   });
 
   it('sipariş bölümünde kalem adının yanında', () => {
@@ -189,5 +189,54 @@ describe('fason metinlerinde parça revizyonu (2881)', () => {
     const m = siparisMetni(sabitsiz);
     expect(m).toContain('   Parça: DNM-7 Deneme flanş\n');
     expect(m).not.toContain('Rev');
+  });
+});
+
+// 3712: işlenen malzeme her yerde aynı blok ve tek Rev biçimi; tedarikçiye giden yüzeyde iç alan hiç üretilmez.
+describe('işlenen malzeme bloğu (3712)', () => {
+  const IC = ['UE-2026-001', 'Deneme Kaplama', 'İşlenen malzeme'];
+  const revli = { ...TALEP, kalemBaglari: [{ ...TALEP.kalemBaglari![0]!, uygulanan: { no: 7, kod: 'DNM-7', ad: 'Deneme flanş', revizyon: 'B' } }] };
+
+  it('Rev tek biçim: boşsa yazılmaz, doluysa "Rev B"', () => {
+    expect(revYaz(' B ')).toBe('Rev B');
+    expect(revYaz('')).toBe('');
+    expect(revYaz(null)).toBe('');
+    expect(revYaz(undefined)).toBe('');
+  });
+
+  it('iç blok parça, Rev, adet ve rota adımını taşır; parçasız kalemde yok', () => {
+    const r = talepEkrana(revli);
+    const el = document.createElement('div');
+    el.innerHTML = islenenMalzemeBlogu(r.items[0]!);
+    expect(el.textContent).toBe('İşlenen malzemeDeneme flanş DNM-7Rev B40 adetUE-2026-001 · Op 30 Kaplama');
+    expect(islenenMalzemeBlogu(r.items[1]!)).toBe('');
+  });
+
+  it('dış alt küme iç alanı hiç taşımaz (tip ve çıktı)', () => {
+    const r = talepEkrana(revli);
+    const d = disIslenenMalzeme(r.items[0]!)!;
+    expect(Object.keys(d).sort()).toEqual(['ad', 'adet', 'islem', 'kod', 'rev']);
+    expect(JSON.stringify(d)).not.toContain('UE-2026-001');
+    expect(JSON.stringify(d)).not.toContain('Deneme Kaplama');
+    expect(disIslenenMalzeme(r.items[1]!)).toBeNull();
+    const dis = islenenMalzemeBlogu(r.items[0]!, false);
+    for (const x of IC.slice(0, 2)) expect(dis).not.toContain(x);
+  });
+
+  it('teklif isteme metni ve teklif metni satırları iç alan içermez; Rev aynı biçimde', () => {
+    S.settings = { ...DEFAULT_SETTINGS }; S.ready = true; bump();
+    const r = talepEkrana(revli);
+    const rfq = rfqText(r, '', '2026-10-20');
+    expect(rfq).toContain('Parça: DNM-7 Deneme flanş Rev B');
+    for (const x of IC) expect(rfq).not.toContain(x);
+    for (const x of teklifMetniSatirlari(r.items[0]!)) for (const y of IC) expect(x).not.toContain(y);
+  });
+
+  it('dış blokta kartı silinmiş parça için iç "kart N" yazılmaz: kod ya da "Adsız parça"; iç blokta numara kalır', () => {
+    const adsiz = (kod: string | null) => ({ ...talepEkrana({ ...TALEP, kalemBaglari: [{ ...TALEP.kalemBaglari![0]!, uygulanan: { no: 7, kod, ad: null } }] }).items[0]! });
+    expect(islenenMalzemeBlogu(adsiz(null), false)).toContain('<b>Adsız parça</b>');
+    expect(islenenMalzemeBlogu(adsiz(null), false)).not.toContain('kart 7');
+    expect(islenenMalzemeBlogu(adsiz('DNM-7'), false)).toContain('<b>DNM-7</b>');
+    expect(islenenMalzemeBlogu(adsiz(null))).toContain('kart 7');
   });
 });

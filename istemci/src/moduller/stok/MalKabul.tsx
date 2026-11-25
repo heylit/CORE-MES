@@ -52,7 +52,11 @@ interface Satir {
   sevkKalemiId: string; sevkEtiketi: string;
   // 2099-3 b: lotun son kullanma tarihi (GGGG-AA-GG, '' girilmedi); kart SKT takipliyse sunucu zorunlu tutar.
   sonKullanma: string;
+  // 3712: hizmet siparişinin işlediği parça (satın almanın kalem bağı); dönen kart bununla eşleşmeli. farkliOnay: depocunun "farklı kartla kabul"
+  // dediği dönen kartın kimliği; kart değişirse onay düşer. Eski taslakta yok.
+  islenen?: IslenenParca | null; farkliOnay?: string;
 }
+export interface IslenenParca { no: string; etiket: string; emir: string }
 let sayac = 0;
 const bosSatir = (): Satir => ({ anahtar: ++sayac, kart: '', miktar: '', konumId: '', tedarikciPartiNo: '', dokumNo: '', sertifikaNo: '', ambalajTur: '', ambalajOlcu: '', ozelL: '', ozelW: '', ozelH: '', ambalajSayisi: '', ambalajIci: '', elleMiktar: false, siparisSatirId: '', siparisEtiketi: '',
   siparisRevizyonu: '', yururlukRevizyonu: '', revizyonUyusmuyor: false,
@@ -139,7 +143,7 @@ function FasonDonusu({ s, degistir }: { s: Satir; degistir: (d: Partial<Satir>) 
   const isler = useQuery({ queryKey: anahtarlar.liste('fason-isleri', { kutu }), enabled: kutu > 0, queryFn: () => api.get<FasonIsleriCevabi>(`/stok/fason-isleri?konumId=${kutu}`) });
   const isSec = (v: string): void => {
     const x = (isler.data?.isler ?? []).find((i) => String(i.isEmriId) === v);
-    if (!x) { degistir({ fasonIsEmriId: '', fasonIsEtiketi: '', kart: '', ...(s.elleMiktar ? {} : { miktar: '' }) }); return; }
+    if (!x) { degistir({ fasonIsEmriId: '', fasonIsEtiketi: '', kart: s.islenen?.no ?? '', ...(s.elleMiktar ? {} : { miktar: '' }) }); return; }
     const kart = `${x.donenKart.kod ?? `#${x.donenKart.malzemeId}`}${x.donenKart.ad ? ` · ${x.donenKart.ad}` : ''}`;
     degistir({
       fasonIsEmriId: v, kart: String(x.donenKart.malzemeId), miktar: fasonOnerilenAdet(x), elleMiktar: false, gidenKart: '', gidenMiktar: '', gidenParti: '', ambalajTur: '', tedarikciPartiNo: '', dokumNo: '', sertifikaNo: '', sertifikaOzet: '', sertifikaAdi: '',
@@ -155,7 +159,7 @@ function FasonDonusu({ s, degistir }: { s: Satir; degistir: (d: Partial<Satir>) 
   return (
     <>
       <div className="tc-stok-tam tc-stok-secenekler" role="group" aria-label="Hizmet dönüşü">
-        <Dugme tur={s.donus === 'fason' ? 'birincil' : 'ikincil'} simge="box" aria-pressed={s.donus === 'fason'} onClick={() => degistir({ donus: 'fason', kart: '', fasonIsEmriId: '', fasonIsEtiketi: '' })}>Fasondan malzeme döndü</Dugme>
+        <Dugme tur={s.donus === 'fason' ? 'birincil' : 'ikincil'} simge="box" aria-pressed={s.donus === 'fason'} onClick={() => degistir({ donus: 'fason', kart: s.islenen?.no ?? '', fasonIsEmriId: '', fasonIsEtiketi: '' })}>Fasondan malzeme döndü</Dugme>
         <Dugme tur={s.donus === 'hizmet' ? 'birincil' : 'ikincil'} simge="check" aria-pressed={s.donus === 'hizmet'} onClick={() => degistir({ donus: 'hizmet', kart: s.hizmetKarti })}>Malzeme dönmedi (yalnız hizmet)</Dugme>
       </div>
       {s.donus === 'fason' ? (
@@ -230,6 +234,41 @@ export function RevizyonUyarisi({ siparis, yururlukte }: { siparis: string; yuru
   );
 }
 
+// 3712: dönen kart siparişteki işlenen parçadan farklıysa (fason dönüşü) kabul ikinci bir onay ister; eşleşmede ek adım yoktur.
+export const farkliKart = (s: Satir): boolean => s.hizmetKarti !== '' && s.donus === 'fason' && !!s.islenen && s.kart !== '' && s.kart !== s.islenen.no;
+export const farkliOnaysiz = (s: Satir): boolean => farkliKart(s) && s.farkliOnay !== s.kart;
+
+export function IslenenBlogu({ s }: { s: Satir }) {
+  if (!s.islenen) return null;
+  const bil = [s.siparisRevizyonu ? `Rev ${s.siparisRevizyonu}` : '', s.siparisDonusumu ? `Kalan ${birimliMiktar(s.siparisDonusumu.kalanMiktar, s.siparisDonusumu.birim)}` : '', s.islenen.emir ? `Emir ${s.islenen.emir}` : ''].filter(Boolean);
+  return (
+    <div className="tc-stok-tam tc-stok-islenen" data-islenen={s.islenen.no}>
+      <span className="tc-stok-islenen-etk">İşlenen malzeme</span>
+      <b>{s.islenen.etiket || `#${s.islenen.no}`}</b>
+      {bil.length > 0 && <span className="tc-stok-islenen-bil">{bil.map((x) => <span key={x}>{x}</span>)}</span>}
+    </div>
+  );
+}
+
+// 3712: üç durum. Eşleşiyor (yeşil), farklı kart (amber, onay ister), malzeme dönmedi (gri; işlenen parça firmada görünür kalır).
+export function EslesmeDurumu({ s, degistir, donen }: { s: Satir; degistir: (d: Partial<Satir>) => void; donen: string }) {
+  if (!s.islenen || s.hizmetKarti === '') return null;
+  if (s.donus === 'hizmet') {
+    return <p className="tc-stok-tam tc-stok-bilgi tc-stok-bilgi-pasif" role="status"><span>Malzeme dönmedi: <strong>{s.islenen.etiket}</strong> firmada görünür kalır.</span></p>;
+  }
+  if (s.kart === '') return null;
+  if (!farkliKart(s)) return <p className="tc-stok-tam tc-stok-bilgi tc-stok-bilgi-iyi" role="status"><span>Dönen kart işlenen malzemeyle eşleşiyor.</span></p>;
+  const onayli = s.farkliOnay === s.kart;
+  return (
+    <p className="tc-stok-tam tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">
+      <span>Siparişteki işlenen malzeme <strong>{s.islenen.etiket}</strong>; dönen kart <strong>{donen}</strong>. {onayli ? 'Farklı kartla kabul onaylandı.' : 'Farklıysa kabul için onay gerekir.'}</span>
+      {onayli
+        ? <Dugme tur="ikincil" onClick={() => degistir({ farkliOnay: '' })}>Onayı kaldır</Dugme>
+        : <Dugme tur="ikincil" onClick={() => degistir({ farkliOnay: s.kart })}>Farklı kartla kabul et</Dugme>}
+    </p>
+  );
+}
+
 function SatirGirdisi({ s, konumlar, degistir, sil }: { s: Satir; konumlar: { deger: string; baslik: string }[]; degistir: (d: Partial<Satir>) => void; sil?: () => void }) {
   const o = useMalzemeOzeti(s.kart);
   const id = o.data?.ozet.id ?? 0;
@@ -251,10 +290,12 @@ function SatirGirdisi({ s, konumlar, degistir, sil }: { s: Satir; konumlar: { de
       <legend>Satır</legend>
       {id > 0 && <MalzemeResmi id={id} ad={o.data?.ozet.ad ?? o.data?.ozet.kod ?? ''} />}
       {s.siparisSatirId && (
-        <p className="tc-stok-tam tc-stok-bilgi">Sipariş satırı: <strong>{s.siparisEtiketi}</strong>{s.siparisRevizyonu && <> · Rev. <strong>{s.siparisRevizyonu}</strong></>}{' '}
-          <Dugme tur="ikincil" onClick={() => degistir({ siparisSatirId: '', siparisEtiketi: '', siparisDonusumu: null, siparisMiktari: '', ...SIPARIS_REVIZYONSUZ, hizmetKarti: '', ...(s.hizmetKarti ? { kart: '' } : {}) })}>Bağı kaldır</Dugme></p>
+        <p className="tc-stok-tam tc-stok-bilgi">Sipariş satırı: <strong>{s.siparisEtiketi}</strong>{s.siparisRevizyonu && <> · <strong>Rev {s.siparisRevizyonu}</strong></>}{' '}
+          <Dugme tur="ikincil" onClick={() => degistir({ siparisSatirId: '', siparisEtiketi: '', siparisDonusumu: null, siparisMiktari: '', ...SIPARIS_REVIZYONSUZ, hizmetKarti: '', islenen: null, farkliOnay: '', ...(s.hizmetKarti ? { kart: '' } : {}) })}>Bağı kaldır</Dugme></p>
       )}
       {s.siparisSatirId && s.revizyonUyusmuyor && <RevizyonUyarisi siparis={s.siparisRevizyonu} yururlukte={s.yururlukRevizyonu} />}
+      {s.siparisSatirId && <IslenenBlogu s={s} />}
+      <EslesmeDurumu s={s} degistir={degistir} donen={o.data?.ozet ? [o.data.ozet.kod, o.data.ozet.ad].filter(Boolean).join(' · ') : `#${s.kart}`} />
       {s.sevkKalemiId && (
         <p className="tc-stok-tam tc-stok-bilgi">Sevkiyat kalemi: <strong>{s.sevkEtiketi}</strong>{' '}
           <Dugme tur="ikincil" onClick={() => degistir({ sevkKalemiId: '', sevkEtiketi: '' })}>Bağı kaldır</Dugme></p>
@@ -301,7 +342,9 @@ function SatirGirdisi({ s, konumlar, degistir, sil }: { s: Satir; konumlar: { de
 
 export function satirGovdesi(s: Satir): MalKabulGovdesi['satirlar'][number] {
   const sevk = s.sevkKalemiId ? { sevkKalemiId: Number(s.sevkKalemiId) } : {};
-  return { ...satirGirdisi(s), ...sevk };
+  // 3712: onay yalnız o dönen kart için verilmişse gider; sunucu farklı kartı onaysız reddeder.
+  const farkli = farkliKart(s) && s.farkliOnay === s.kart ? { farkliKartOnayi: true } : {};
+  return { ...satirGirdisi(s), ...sevk, ...farkli };
 }
 function satirGirdisi(s: Satir): MalKabulGovdesi['satirlar'][number] {
   if (s.hizmetKarti && s.donus === 'hizmet') return { malzemeId: Number(s.hizmetKarti), miktar: miktarGirdisi(s.miktar), siparisSatirId: Number(s.siparisSatirId) };
@@ -377,7 +420,8 @@ function AcikSiparisler({ sec, ara, araYaz }: { sec: (x: AcikSiparisSatiri) => v
     { anahtar: 'siparis', baslik: 'Sipariş', mono: true, sabit: 'sol', hucre: (x) => x.siparisNo || x.talepNo },
     { anahtar: 'kalem', kartta: true, baslik: 'Malzeme', kes: true, hucre: (x) => x.kalemAdi },
     { anahtar: 'hizmet', baslik: 'Hizmet', hucre: (x) => (x.malzemeTur === 'hizmet' ? hizmetRozeti(x) : null) },
-    { anahtar: 'rev', baslik: 'Rev.', hucre: (x) => (x.parcaRevizyonu ? <>{x.parcaRevizyonu}{x.revizyonUyusmuyor === true && <> <Rozet ton="uyari">{`Yürürlükte ${x.yururlukRevizyonu ?? ''}`}</Rozet></>}</> : '—') },
+    { anahtar: 'islenen', kartta: true, baslik: 'İşlenen malzeme', kes: true, hucre: (x) => (x.uygulananMalzeme ? [x.uygulananMalzeme.kod, x.uygulananMalzeme.ad].filter(Boolean).join(' · ') : '—') },
+    { anahtar: 'rev', baslik: 'Revizyon', hucre: (x) => (x.parcaRevizyonu ? <>Rev {x.parcaRevizyonu}{x.revizyonUyusmuyor === true && <> <Rozet ton="uyari">{`Yürürlükte ${x.yururlukRevizyonu ?? ''}`}</Rozet></>}</> : '—') },
     { anahtar: 'tedarikci', baslik: 'Tedarikçi', kes: true, hucre: (x) => x.tedarikciAdi },
     { anahtar: 'emir', baslik: 'Üretim emri', mono: true, hucre: (x) => x.emirNo ?? '—' },
     { anahtar: 'proje', baslik: 'Proje', kes: true, hucre: (x) => x.projeAdi ?? '—' },
@@ -397,8 +441,14 @@ function AcikSiparisler({ sec, ara, araYaz }: { sec: (x: AcikSiparisSatiri) => v
 // 2877: fason dönüşü yalnız iş emrine bağlı hizmet satırıdır; iş emrisiz hizmet (kalibrasyon gibi) yalnız hizmettir.
 export const hizmetRozeti = (x: Pick<AcikSiparisSatiri, 'isEmriId'>) =>
   (x.isEmriId != null ? <Rozet ton="bilgi">Fason dönüşü</Rozet> : <Rozet ton="pasif">Hizmet</Rozet>);
-const siparistenSatir = (s: Satir, x: AcikSiparisSatiri): Satir => ({
-  ...s, ...(x.malzemeTur === 'hizmet' ? { kart: '', hizmetKarti: String(x.malzemeId), donus: 'fason' as const } : { kart: x.malzemeId === null ? s.kart : String(x.malzemeId), hizmetKarti: '' }),
+// 3712: hizmet satırında işlenen parça; dönen kart varsayılan olarak odur.
+const islenenParca = (x: AcikSiparisSatiri): IslenenParca | null => {
+  const u = x.malzemeTur === 'hizmet' ? x.uygulananMalzeme : null;
+  return u ? { no: String(u.no), etiket: [u.kod, u.ad].filter(Boolean).join(' · '), emir: x.emirNo ?? '' } : null;
+};
+export const siparistenSatir = (s: Satir, x: AcikSiparisSatiri): Satir => ({
+  ...s, ...(x.malzemeTur === 'hizmet' ? { kart: islenenParca(x)?.no ?? '', hizmetKarti: String(x.malzemeId), donus: 'fason' as const } : { kart: x.malzemeId === null ? s.kart : String(x.malzemeId), hizmetKarti: '' }),
+  islenen: islenenParca(x), farkliOnay: '',
   miktar: onerilenMiktar(x), elleMiktar: true,
   siparisSatirId: String(x.id), siparisDonusumu: { miktar: x.miktar, kalanMiktar: x.kalanMiktar, birim: x.birim, stokBirimi: x.stokBirimi ?? null, donusum: x.donusum ?? null }, siparisEtiketi: [x.siparisNo || x.talepNo, x.tedarikciAdi, x.kalemAdi].filter(Boolean).join(' · '),
   siparisRevizyonu: x.parcaRevizyonu ?? '', yururlukRevizyonu: x.yururlukRevizyonu ?? '', revizyonUyusmuyor: x.revizyonUyusmuyor === true,
@@ -552,7 +602,7 @@ export function MalKabul() {
             setEklenenBekleyenler((e) => [...e, k.id]);
             if (irsaliye === '' && k.irsaliyeNo !== '') { setIrsaliye(k.irsaliyeNo); setArananIrsaliye(k.irsaliyeNo); }
           }} />
-          <form className="tc-stok-form" onSubmit={(e) => { e.preventDefault(); const g = govdeOlustur(); kilitli(() => komut.mutateAsync(g)); }}>
+          <form className="tc-stok-form" onSubmit={(e) => { e.preventDefault(); if (satirlar.some(farkliOnaysiz)) return; const g = govdeOlustur(); kilitli(() => komut.mutateAsync(g)); }}>
             <div className="tc-stok-iki">
               <Secim etiket="Tür" value={tur} onChange={(e) => setTur(e.target.value as typeof tur)} secenekler={ELLE_MAL_KABUL_TURLERI.map((t) => ({ deger: t, baslik: MAL_KABUL_TURU[t] }))} />
               <Girdi etiket="İrsaliye no" value={irsaliye} onChange={(e) => setIrsaliye(e.target.value)} onBlur={() => setArananIrsaliye(irsaliye)} />
@@ -588,7 +638,7 @@ export function MalKabul() {
             {tur === 'satin_alma' && satirlar.some((s) => !bosMu(s) && !s.siparisSatirId) && (
               <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">Satın alma kabulünde her satır bir sipariş satırına bağlanır. Siparişi olmayan malı "Diğer" türüyle ve açıklamayla alın.</p>
             )}
-            <div className="tc-stok-sag">{taslak.durumYazisi}<SabitEylem><Dugme tur="birincil" boyut="ana" type="submit" yukleniyor={komut.isPending} disabled={satirlar.some((s) => s.sertifikaYukleniyor)}>Kabul et</Dugme></SabitEylem></div>
+            <div className="tc-stok-sag">{taslak.durumYazisi}{satirlar.some(farkliOnaysiz) && <span id="tc-kabul-neden" className="tc-stok-bilgi tc-stok-bilgi-uyari">Farklı kartla kabul için satırdaki onay bekleniyor.</span>}<SabitEylem><Dugme tur="birincil" boyut="ana" type="submit" yukleniyor={komut.isPending} disabled={satirlar.some((s) => s.sertifikaYukleniyor || farkliOnaysiz(s))} {...(satirlar.some(farkliOnaysiz) ? { 'aria-describedby': 'tc-kabul-neden' } : {})}>Kabul et</Dugme></SabitEylem></div>
             {etiket && <p className="tc-stok-bilgi"><span>{etiket.no} kaydedildi.</span><EtiketMerkeziDugmesi tur="mal-kabul" idler={[etiket.id]}>Lot etiketlerini bas</EtiketMerkeziDugmesi></p>}
             {etiket && irsaliyeBekliyor && (
               <p className="tc-stok-bilgi" role="status"><span>İrsaliye bu cihazda bekliyor; bağlantı gelince {irsaliyeBekliyor} numaralı mal kabule eklenecek.</span></p>

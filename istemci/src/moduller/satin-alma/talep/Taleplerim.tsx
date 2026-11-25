@@ -4,6 +4,7 @@ import type { Talebim } from '#paylasilan/sozlesme/satin-alma.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Simge } from '../../../ortak/arayuz/index.ts';
 import { ayrintiyiBirlestir, useKartSatirlari } from '../merkez/kart-satirlari.ts';
 import { TalepCizimleri } from './Cizimler.tsx';
+import { IslenenMalzeme } from './IslenenMalzeme.tsx';
 
 // 3437-2: kalemin daraltılmış kabul sınırı tek satırda; sınırsız kalemde (kartın sınırı) satır yok.
 const kabulOzeti = (k: NonNullable<Talebim['kalemler'][number]['kabul']>): string => (k.yalnizAyni ? 'yalnız aynı malzeme' : [
@@ -124,9 +125,8 @@ function Satir({ t, tam, duzenle }: { t: Talebim; tam: boolean; duzenle: ((t: Ta
                 <tr key={i}>
                   <td>
                     <span>{x.ad}</span>
-                    {(x.uygulanan || x.fasonAdim) && (
-                      <span className="sa-talep-not">{[x.uygulanan && `Uygulanacak malzeme: ${x.uygulanan}`, x.fasonAdim && `Fason: ${x.fasonAdim}`].filter(Boolean).join(' · ')}</span>
-                    )}
+                    <IslenenMalzeme uygulanan={x.uygulanan} kod={x.uygulananKod} ad={x.uygulananAd} revizyon={x.uygulananRevizyon} adet={x.miktar === null ? null : `${x.miktar} ${x.birim}`} fasonAdim={x.fasonAdim} />
+                    {!x.uygulanan && x.fasonAdim && <span className="sa-talep-not">Fason: {x.fasonAdim}</span>}
                     {x.aciklama && <span className="sa-talep-not">{x.aciklama}</span>}
                     {x.kabul && <span className="sa-talep-not">Kabul sınırı: {kabulOzeti(x.kabul)}</span>}
                     <OzellikAlti m={x.malzeme ?? null} />

@@ -1816,6 +1816,39 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.deepEqual(await teslimler(f.ss), [[satir, 8], [satir, -8], [yeniSatir, 3]]);
   });
 
+  test('3712: hizmet satırı işlenen parçayı kod ve adla taşır; hizmet dışı satırda null', async () => {
+    const f = await fasonHazirla();
+    const bagla = (ss: number, kart: number) => o().sahip.sorgu('UPDATE satin_alma_talep_kalemi SET uygulanan_malzeme_no = $1 WHERE id = (SELECT kalem_id FROM satin_alma_siparis_satiri WHERE id = $2)', [kart, ss]);
+    await bagla(f.ss, f.ham);
+    const sarf = await kart('sarf');
+    const ss2 = await siparisSatiri('5', 'siparis_verildi', sarf);
+    await bagla(ss2, f.ham);
+    const acik = await depo<{ satirlar: { id: number; uygulananMalzeme: { no: number; kod: string; ad: string | null } | null }[] }>('GET', '/stok/acik-siparis-satirlari');
+    const hizmet = acik.govde.satirlar.find((x) => x.id === f.ss);
+    assert.equal(hizmet?.uygulananMalzeme?.no, f.ham);
+    assert.equal(typeof hizmet?.uygulananMalzeme?.kod, 'string');
+    assert.equal(acik.govde.satirlar.find((x) => x.id === ss2)?.uygulananMalzeme, null, 'hizmet dışında revizyon kartı alternatif olabilir; gösterilmez');
+    const bagsiz = await fasonHazirla('1');
+    const acik2 = await depo<{ satirlar: { id: number; uygulananMalzeme: unknown }[] }>('GET', '/stok/acik-siparis-satirlari');
+    assert.equal(acik2.govde.satirlar.find((x) => x.id === bagsiz.ss)?.uygulananMalzeme, null, 'bağsız hizmet satırında kalemin kendi kartı işlenen parça sayılmaz');
+  });
+
+  test('3712: dönen kart siparişin işlediği parçadan farklıysa onay bayrağı olmadan reddedilir; eşleşen kart ve onaylı farklı kart kabul edilir', async () => {
+    const bagla = (ss: number, kart: number) => o().sahip.sorgu('UPDATE satin_alma_talep_kalemi SET uygulanan_malzeme_no = $1 WHERE id = (SELECT kalem_id FROM satin_alma_siparis_satiri WHERE id = $2)', [kart, ss]);
+    const f = await fasonHazirla('30');
+    await bagla(f.ss, f.ham);
+    const g = { siparisSatirId: f.ss, parti: { tedarikciPartiNo: 'FK-1' }, fason: { malzemeId: f.ham, konumId: f.fasonKonum } };
+    const red = await malKabul(f.kapli, '5', g);
+    assert.equal(red.durum, 400, JSON.stringify(red.govde));
+    assert.equal((red.govde as Hata & { alan?: string }).alan, 'satirlar.0.farkliKartOnayi');
+    assert.equal(await hareketSayisi(f.kapli), 0, 'red hiçbir şey yazmaz');
+    const onayli = await depo<MalKabulCevabi>('POST', '/stok/mal-kabul', { tur: 'satin_alma', satirlar: [{ malzemeId: f.kapli, miktar: '5', ...g, farkliKartOnayi: true }] });
+    assert.equal(onayli.durum, 200, JSON.stringify(onayli.govde));
+    await bagla(f.ss, f.kapli);
+    const eslesen = await malKabul(f.kapli, '2', { ...g, parti: { tedarikciPartiNo: 'FK-2' } });
+    assert.equal(eslesen.durum, 200, JSON.stringify(eslesen.govde));
+  });
+
   test('DEP-58 fason dönüşü: fason konumunda yetmeyen giden ONAY_GEREKLI ister ve hiçbir şey yazmaz; onayla eksiye düşer', async () => {
     const f = await fasonHazirla('3');
     const g = { siparisSatirId: f.ss, parti: { tedarikciPartiNo: 'KP-2' }, fason: { malzemeId: f.ham, konumId: f.fasonKonum } };
