@@ -74,6 +74,8 @@ export function CanliOnizleme({ o, c, p, durum, yenidenDene, etkin = true }: { o
   const [gidiyor, setGidiyor] = useState(false);
   const [kaydirilan, setKaydirilan] = useState<NonNullable<CanliyaAlOnizlemesiCevabi['oneri']> | null>(null);
   const [hepsi, setHepsi] = useState(false);
+  // Kaydır gönderildiği an düğmenin bağlı olduğu sonuç; yeni önizleme (yeni nesne) gelene kadar düğme kapalı kalır (ikinci tıklama olmaz).
+  const [kaydirmaSonucu, setKaydirmaSonucu] = useState<object | null>(null);
   const veri = durum.tur === 'hazir' ? durum.veri : durum.tur === 'yukleniyor' ? durum.onceki : null;
   const eski = durum.tur === 'yukleniyor';
   const komut = o.komut;
@@ -82,12 +84,13 @@ export function CanliOnizleme({ o, c, p, durum, yenidenDene, etkin = true }: { o
     const isler = p === null ? null : kaydirmaIsleri(c, p, oneri);
     if (komut === null || isler === null) { bildir('hata', "Bu adımlar Kokpit planında bulunamadı; Kokpit'te elle taşıyın."); return; }
     setGidiyor(true);
+    setKaydirmaSonucu(veri);
     try {
       await kilitleriKaydir(komut, c, isler, 'Kilitli adımlar kaydırıldı');
       setKaydirilan(oneri);
       bildir('tamam', 'Kilitli adımlar kaydırıldı; plan yeniden diziliyor.');
       o.yenile();
-    } catch (h) { bildir('hata', h instanceof KaydirmaHatasi ? h.message : hataIletisi(h, 'Kilitler kaydırılamadı; sayfayı yenileyip yeniden deneyin.')); } finally { setGidiyor(false); }
+    } catch (h) { bildir('hata', h instanceof KaydirmaHatasi ? h.message : hataIletisi(h, 'Kilitler kaydırılamadı; sayfayı yenileyip yeniden deneyin.')); setKaydirmaSonucu(null); } finally { setGidiyor(false); }
   };
   const geriAl = (): void => {
     if (komut?.geriAl()) { setKaydirilan(null); bildir('tamam', 'Kaydırma geri alındı.'); } else bildir('hata', 'Geri alınamadı; plan bu arada değişti.');
@@ -126,7 +129,7 @@ export function CanliOnizleme({ o, c, p, durum, yenidenDene, etkin = true }: { o
           {veri?.oneri != null && <Oneri oneri={veri.oneri} />}
           <div className="tc-pym-pa-dugmeler">
             {veri?.oneri != null && kilitYetkisi && (
-              <button type="button" className="tc-dugme tc-dugme-birincil" disabled={gidiyor || eski || komut === null} onClick={() => { void kaydir(veri.oneri!); }}>
+              <button type="button" className="tc-dugme tc-dugme-birincil" disabled={gidiyor || eski || komut === null || (kaydirmaSonucu !== null && kaydirmaSonucu === veri)} onClick={() => { void kaydir(veri.oneri!); }}>
                 <Simge ad="rotate" boyut="k" />{kaydirmaDugmesi(veri.oneri.adimlar)}
               </button>
             )}

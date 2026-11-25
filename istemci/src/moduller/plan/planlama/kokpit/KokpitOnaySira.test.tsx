@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import type { CanliyaAlOnizlemesiCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { BildirimSaglayici } from '../../../../ortak/arayuz/index.ts';
@@ -8,7 +8,7 @@ import { PLANLAMA_ISLEMI } from '../../planlama-menusu.ts';
 import { ACILIS_OLCEGI, BOS_SECIM } from '../gorunumler.ts';
 import type { CalismaKomutu } from '../kayit.ts';
 import { otomatikUygulaSifirla } from '../motor/atolye/gonder.ts';
-import { kaydirmaDugmesi, kapaliListeFarkli, onizlemeEngeli, sureMetni } from '../motor/atolye/canli-onizleme.ts';
+import { kaydirmaDugmesi, kaydirmaSaati, kapaliListeFarkli, onizlemeEngeli, ONIZLEME_BEKLEME_MS, ONIZLEME_ZAMAN_ASIMI_MS, sureMetni, useGondermeOnizlemesi } from '../motor/atolye/canli-onizleme.ts';
 import { planKurSifirla } from '../motor/coz.ts';
 import { ornekCalisma } from '../motor/ornek.ts';
 import { saatiSabitle } from '../test-saati.ts';
@@ -128,10 +128,11 @@ describe('onay sayfası: gönderme öncesi sıra denetimi (3669)', () => {
   it('denetim sürerken gönderme kapalıdır; sonuç gelince açılır', async () => {
     let bitir: (v: CanliyaAlOnizlemesiCevabi) => void = () => undefined;
     vi.spyOn(api, 'get').mockImplementation((() => Promise.reject(new Error('yok'))) as never);
-    vi.spyOn(api, 'post').mockImplementation(((yol: string) => (yol === ONIZLEME ? new Promise((r) => { bitir = r as never; }) : Promise.reject(new Error('x')))) as never);
+    const post = vi.spyOn(api, 'post').mockImplementation(((yol: string) => (yol === ONIZLEME ? new Promise((r) => { bitir = r as never; }) : Promise.reject(new Error('x')))) as never);
     sayfayiAc();
     expect((await sayfaDugmesi()).hasAttribute('disabled')).toBe(true);
     expect(screen.getByText('Sıra denetimi bitince açılır.')).toBeTruthy();
+    await waitFor(() => { expect(post.mock.calls.some((x) => x[0] === ONIZLEME)).toBe(true); });
     bitir(veri());
     await waitFor(async () => { expect((await sayfaDugmesi()).hasAttribute('disabled')).toBe(false); });
   });
@@ -148,9 +149,14 @@ describe('onay sayfası: gönderme öncesi sıra denetimi (3669)', () => {
   it('kaydırma sonrası eski ve yeni saatler, emir bitişi ve termin görünür kalır', async () => {
     sunucu(veri({ ihlaller: [IHLAL], oneri: ONERI }));
     sayfayiAc();
-    fireEvent.click(await screen.findByRole('button', { name: "OP 70'i kaydır" }, { timeout: 5000 }));
+    const kaydirDugmesi = await screen.findByRole('button', { name: "OP 70'i kaydır" }, { timeout: 5000 });
+    fireEvent.click(kaydirDugmesi);
+    // Gönderildiği andan yeni önizleme gelene kadar düğme kapalıdır (ikinci tıklama olmaz).
+    expect(kaydirDugmesi.hasAttribute('disabled')).toBe(true);
     const kutu = await waitFor(() => { const k = document.querySelector<HTMLElement>('.tc-pym-pa-kaydirildi'); if (!k) throw new Error('yok'); return k; });
     expect(kutu.textContent).toContain('21.10 Çar 08:00 → 21.10 Çar 10:30');
+    // Yazma bitip yeni önizleme gelmeden düğme yeniden etkinleşmez (K1 aralığı).
+    expect(screen.queryAllByRole('button', { name: "OP 70'i kaydır" }).every((d) => d.hasAttribute('disabled'))).toBe(true);
     expect(kutu.textContent).toContain('ORN-E-1 bitişi');
     expect(kutu.textContent).toContain('termin 30.10');
   });
@@ -207,6 +213,14 @@ describe('onay sayfası: gönderme öncesi sıra denetimi (3669)', () => {
 });
 
 describe('sıra denetimi yardımcıları', () => {
+  it('kaydırma saati çeyrek saate yukarı yuvarlanır; öncül bitişinden önceye düşmez (K2)', () => {
+    // 1184.7667 sa = 05:46: en yakına yuvarlama 05:45 (1184.75) verirdi.
+    expect(kaydirmaSaati(1184 + 46 / 60, 1000)).toBe(1184.75 + 0.25);
+    expect(kaydirmaSaati(1184.75, 1000)).toBe(1184.75);
+    expect(kaydirmaSaati(1184.7501, 1000)).toBe(1185);
+    expect(kaydirmaSaati(10, 12.1)).toBe(12.25);
+    for (const S of [5.01, 5.1, 5.24, 5.26, 5.5, 5.74, 5.76, 1184.7667]) expect(kaydirmaSaati(S, 0)).toBeGreaterThanOrEqual(S);
+  });
   it('düğme adı sonucu söyler', () => {
     expect(kaydirmaDugmesi([{ opNo: 70 }])).toBe("OP 70'i kaydır");
     expect(kaydirmaDugmesi([{ opNo: 70 }, { opNo: 80 }])).toBe("OP 70 ve OP 80'i kaydır");
@@ -223,5 +237,99 @@ describe('sıra denetimi yardımcıları', () => {
   it('kapalı liste sıradan bağımsız karşılaştırılır', () => {
     expect(kapaliListeFarkli({ kapali: ['a', 'b'] }, ['b', 'a'])).toBe(false);
     expect(kapaliListeFarkli({ kapali: ['a'] }, ['a', 'b'])).toBe(true);
+  });
+});
+
+// 3669 K1/O2: önizleme çalışma değişince eskir ve yazılan sürümle yeniden istenir.
+describe('önizleme çalışmaya bağlıdır (kaydırma sonrası ve eski sürüm)', () => {
+  afterEach(() => { vi.useRealTimers(); });
+  const ilerle = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+  function kur(postSonuclari: (CanliyaAlOnizlemesiCevabi | ApiHatasi)[]) {
+    vi.useFakeTimers();
+    const sira: string[] = [];
+    const kalan = [...postSonuclari];
+    const post = vi.spyOn(api, 'post').mockImplementation(((yol: string, g: { calismaSurumu: number }) => {
+      sira.push(`post:${String(g.calismaSurumu)}`);
+      const r = kalan.shift() ?? veri();
+      return yol === ONIZLEME ? (r instanceof ApiHatasi ? Promise.reject(r) : Promise.resolve(r)) : Promise.reject(new Error('x'));
+    }) as never);
+    let surum = 10;
+    const komut = { kaydet: vi.fn(() => { sira.push('kaydet'); surum += 1; return Promise.resolve(surum); }) } as unknown as CalismaKomutu;
+    const c1 = guncelCalisma();
+    const h = renderHook((p: { c: typeof c1 }) => useGondermeOnizlemesi({ calisma: p.c, komut, ilkSurum: 4, etkin: true, ad: 'Önizleme' }), { initialProps: { c: c1 } });
+    return { h, komut, post, sira, c1 };
+  }
+
+  it('çalışma değişince durum hemen yükleniyor olur ve kaydırma önceki sonuçla açık kalmaz; istek yazma bittikten sonra yeni sürümle gider', async () => {
+    const { h, post, sira, c1 } = kur([veri({ oneri: ONERI, ihlaller: [IHLAL] }), veri()]);
+    await ilerle(ONIZLEME_BEKLEME_MS + 10);
+    expect(h.result.current.durum.tur).toBe('hazir');
+    expect(sira).toEqual(['kaydet', 'post:11']);
+    h.rerender({ c: { ...c1, dataVer: c1.dataVer + 1 } });
+    const d = h.result.current.durum;
+    expect(d.tur).toBe('yukleniyor');
+    expect(d.tur === 'yukleniyor' && d.onceki?.oneri).toBeTruthy();
+    // Bekleme dolmadan eski çalışma için yeni istek gitmez; art arda değişim tek isteğe birleşir.
+    h.rerender({ c: { ...c1, dataVer: c1.dataVer + 2 } });
+    await ilerle(ONIZLEME_BEKLEME_MS + 10);
+    expect(post.mock.calls.length).toBe(2);
+    expect(sira).toEqual(['kaydet', 'post:11', 'kaydet', 'post:12']);
+    expect(h.result.current.durum).toEqual({ tur: 'hazir', veri: veri() });
+  });
+
+  it('eski sürüm (409) bir kez yeniden yazılıp denenir; yine olmazsa ileti ve yeniden dene kalır', async () => {
+    const cakisma = () => new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'Çalışma bu arada değişti.' } as never);
+    const a = kur([cakisma(), veri()]);
+    await ilerle(ONIZLEME_BEKLEME_MS + 1000);
+    expect(a.sira).toEqual(['kaydet', 'post:11', 'kaydet', 'post:12']);
+    expect(a.h.result.current.durum.tur).toBe('hazir');
+    a.h.unmount();
+    vi.restoreAllMocks();
+    const b = kur([cakisma(), cakisma()]);
+    await ilerle(ONIZLEME_BEKLEME_MS + 1000);
+    expect(b.post.mock.calls.length).toBe(2);
+    expect(b.h.result.current.durum).toEqual({ tur: 'hata', ileti: 'Çalışma bu arada değişti.' });
+  });
+
+  it('çalışma kaydedilemezse (null sürüm) istek gitmez ve hata söylenir', async () => {
+    vi.useFakeTimers();
+    const post = vi.spyOn(api, 'post');
+    const komut = { kaydet: () => Promise.resolve(null) } as unknown as CalismaKomutu;
+    const c = guncelCalisma();
+    const h = renderHook(() => useGondermeOnizlemesi({ calisma: c, komut, ilkSurum: 4, etkin: true, ad: 'Önizleme' }));
+    await ilerle(ONIZLEME_BEKLEME_MS + 10);
+    expect(post).not.toHaveBeenCalled();
+    expect(h.result.current.durum.tur).toBe('hata');
+  });
+  it('yanıt gelmezse zaman aşımında hata olur; geç gelen sonuç yine kabul edilir; Yeniden dene yeniden sorar', async () => {
+    vi.useFakeTimers();
+    let coz: (v: CanliyaAlOnizlemesiCevabi) => void = () => undefined;
+    const post = vi.spyOn(api, 'post').mockImplementation((() => new Promise((r) => { coz = r as typeof coz; })) as never);
+    const komut = { kaydet: () => Promise.resolve(11) } as unknown as CalismaKomutu;
+    const c = guncelCalisma();
+    const h = renderHook(() => useGondermeOnizlemesi({ calisma: c, komut, ilkSurum: 4, etkin: true, ad: 'Önizleme' }));
+    await ilerle(ONIZLEME_BEKLEME_MS + 10);
+    expect(h.result.current.durum.tur).toBe('yukleniyor');
+    await ilerle(ONIZLEME_ZAMAN_ASIMI_MS + 10);
+    expect(h.result.current.durum).toEqual({ tur: 'hata', ileti: 'Sıra denetimi zamanında dönmedi; yeniden deneyin.' });
+    expect(onizlemeEngeli(h.result.current.durum, true)).toBe('Sıra denetimi alınamadığı için kapalı; yeniden deneyin.');
+    await act(async () => { coz(veri()); await Promise.resolve(); });
+    expect(h.result.current.durum.tur).toBe('hazir');
+    expect(post.mock.calls.length).toBe(1);
+  });
+
+  it('komut nesnesi her çizimde yeni olsa da bekleme sıfırlanmaz ve tek istek gider', async () => {
+    vi.useFakeTimers();
+    const post = vi.spyOn(api, 'post').mockImplementation((() => Promise.resolve(veri())) as never);
+    const c = guncelCalisma();
+    const yeniKomut = () => ({ kaydet: () => Promise.resolve(11) }) as unknown as CalismaKomutu;
+    const h = renderHook((p: { n: number }) => useGondermeOnizlemesi({ calisma: c, komut: yeniKomut(), ilkSurum: 4, etkin: true, ad: 'Önizleme' }), { initialProps: { n: 0 } });
+    for (let i = 1; i <= 5; i++) {
+      await ilerle(ONIZLEME_BEKLEME_MS / 2);
+      h.rerender({ n: i });
+    }
+    await ilerle(ONIZLEME_BEKLEME_MS + 10);
+    expect(post.mock.calls.length).toBe(1);
+    expect(h.result.current.durum.tur).toBe('hazir');
   });
 });

@@ -55,11 +55,13 @@ function sayfayiAc(senaryolar: unknown = { canli: null, canliSurum: 3, senaryola
 }
 async function canliyaAlBas() {
   sayfayiAc();
-  fireEvent.click(await sayfaDugmesi());
+  fireEvent.click(await acikDugme());
   fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: /canlıya al/i }));
 }
 // Onay sayfasının "Planım" sekmesindeki birincil düğme (üst çubuk sayfa açılınca kalkar).
 const sayfaDugmesi = () => screen.findByRole('button', { name: 'Canlıya al' }, { timeout: 5000 });
+// Önizleme (gecikmeli) dönene kadar düğme kapalıdır; tıklama açılınca yapılır.
+const acikDugme = async () => { await waitFor(async () => { expect((await sayfaDugmesi()).hasAttribute('disabled')).toBe(false); }); return sayfaDugmesi(); };
 const pencere = (baslik: string) => screen.findByRole('dialog', { name: baslik });
 
 describe('Kokpit Onay ve canlı: çalışma planı tek komutla canlıya alınır', () => {
@@ -78,7 +80,7 @@ describe('Kokpit Onay ve canlı: çalışma planı tek komutla canlıya alınır
     expect((await sayfaDugmesi()).hasAttribute('disabled')).toBe(true);
     fireEvent.change(alan, { target: { value: 'Acil sevkiyat' } });
     expect(screen.queryByText('Gerekçe yazınca açılır.')).toBeNull();
-    fireEvent.click(await sayfaDugmesi());
+    fireEvent.click(await acikDugme());
     await waitFor(() => expect(govdeler(post)).toHaveLength(2));
     expect(govdeler(post)[0]).toMatchObject({ planSurumu: 3, dortSaatGerekcesi: null });
     expect(govdeler(post)[1]).toMatchObject({ planSurumu: 3, dortSaatGerekcesi: 'Acil sevkiyat' });
@@ -98,7 +100,7 @@ describe('Kokpit Onay ve canlı: çalışma planı tek komutla canlıya alınır
     await canliyaAlBas();
     fireEvent.click(within(await pencere('Canlı plan değişti')).getByRole('button', { name: 'Yine de canlıya al' }));
     fireEvent.change(await screen.findByRole('textbox', { name: /^Gerekçe \(zorunlu/ }), { target: { value: 'Acil sevkiyat' } });
-    fireEvent.click(await sayfaDugmesi());
+    fireEvent.click(await acikDugme());
     await waitFor(() => expect(govdeler(post)).toHaveLength(3));
     expect(govdeler(post)[2]).toMatchObject({ dortSaatGerekcesi: 'Acil sevkiyat' });
     expect(govdeler(post)[2]).not.toHaveProperty('planSurumu');

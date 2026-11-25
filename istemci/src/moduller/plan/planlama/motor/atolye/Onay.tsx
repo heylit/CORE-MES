@@ -518,7 +518,7 @@ function Planim({ K, c, p, cf, canliGeciken, plansiz, imza, bekleyen, karar, o, 
   const donDugmesi = <button type="button" className="tc-dugme" onClick={don}><Simge ad="back" boyut="k" />Kokpit'e dön</button>;
   // 3669: sunucunun yazacağı yerleşimin sıra denetimi; yazamayan rol ve güncel olmayan plan için okunmaz (gönderme zaten kapalı).
   const onizlemeEtkin = !!c && !!p && (yazP || yazC) && planGuncel(c);
-  const { durum: onizleme, yenidenDene } = useGondermeOnizlemesi({ calismaSurumu: o.depo.calismaSurumu ?? null, etkin: onizlemeEtkin, ad: 'Önizleme' });
+  const { durum: onizleme, yenidenDene } = useGondermeOnizlemesi({ calisma: c, komut: o.komut, ilkSurum: o.depo.calismaSurumu ?? null, etkin: onizlemeEtkin, ad: 'Önizleme' });
   if (!c || !p) {
     return (
       <Kart baslik="Planım" simge="eye">
