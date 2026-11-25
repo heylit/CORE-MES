@@ -130,6 +130,57 @@ export const VARSAYILAN_AYARLAR: Readonly<Record<OpType, () => Partial<IstasyonA
   montaj: () => ({ bom: [], torque: [], fmt: '{PARCA}-{YY}{WW}-{SEQ:4}', start: 1 }),
   tesviye: () => ({ checks: ['Çapak yok', 'Keskin kenar yok', 'Diş temiz'] }),
 };
+// Depo paketinin rotadan dolması (3702). Sunucu rota önerisini `tmi.depoOnerisi`nde taşır; kaynak `otoKaynak.depo`dadır ('rota' | 'sablon' | 'el').
+// Mal kabul modu şimdilik yalnız etiket ve ilerleme sözüdür; terminalde ayrı davranışı 3703'te tasarlanır.
+export interface DepoOnerisi { kaynak: string; mode: 'pick' | 'receive'; items: DepoKalemi[]; etiket: string }
+export interface OtoKaynakDepo { kaynak: 'rota' | 'sablon' | 'el'; etiket?: string; at?: number; by?: string }
+type OtoKaynakluPaket = { otoKaynak?: unknown; tmi?: unknown };
+const nesne = (v: unknown): Record<string, unknown> | null => (v !== null && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : null);
+export function depoOtoKaynagi(p: OtoKaynakluPaket | null | undefined): OtoKaynakDepo | null {
+  const d = nesne(nesne(p?.otoKaynak)?.['depo']);
+  const k = d?.['kaynak'];
+  return d !== null && (k === 'rota' || k === 'sablon' || k === 'el') ? d as unknown as OtoKaynakDepo : null;
+}
+export function depoOnerisiOku(p: OtoKaynakluPaket | null | undefined): DepoOnerisi | null {
+  const o = nesne(nesne(p?.tmi)?.['depoOnerisi']);
+  return o !== null && Array.isArray(o['items']) && (o['mode'] === 'pick' || o['mode'] === 'receive') && typeof o['etiket'] === 'string' ? o as unknown as DepoOnerisi : null;
+}
+const depoYamasi = (p: Pick<Pkg, 'st'> & OtoKaynakluPaket, o: DepoOnerisi, kaynak: 'rota' | 'el', etiket: string, an: number, by?: string): Partial<Pkg> => ({
+  st: { ...p.st, mode: o.mode, items: o.items.map((i) => ({ ...i })) }, target: Math.max(1, o.items.length),
+  otoKaynak: { ...(nesne(p.otoKaynak) ?? {}), depo: { kaynak, etiket, at: an, ...(by ? { by } : {}) } },
+});
+// Boş depo paketi açılınca öneriyle dolar: yalnız kaynak hiç yazılmamışsa ve liste boşsa. Eski pakette kaynak alanı yoktur; mod 'receive' ise
+// bu elle seçilmiştir (varsayılan toplamadır) ve dokunulmaz. Dolu liste ve elle değişmiş paket olduğu gibi kalır.
+// Yalnız taslak pakette: yayındaki paketin modu ve listesi açılışta değişmez (Risk R2); orada kaynak satırı ve "Rotaya göre yeniden uygula" kalır.
+export function depoDoldurma(p: Pick<Pkg, 'opType' | 'st' | 'id' | 'target' | 'status'> & OtoKaynakluPaket, an: number = Date.now(), by?: string): Partial<Pkg> | null {
+  if (p.status !== 'draft' || isTuru(p) !== 'depo' || depoOtoKaynagi(p) !== null) return null;
+  const o = depoOnerisiOku(p);
+  const c = istasyonAyari(p);
+  if (o === null || o.items.length === 0 || (c.items || []).length > 0 || (p.st || {})['mode'] === 'receive') return null;
+  return depoYamasi(p, o, 'rota', o.etiket, an, by);
+}
+// "Rotaya göre yeniden uygula": elle değişmiş listeyi öneriyle değiştirir (kullanıcı eylemi, geri alınır).
+export function depoYenidenUygula(p: Pick<Pkg, 'st'> & OtoKaynakluPaket, an: number = Date.now()): Partial<Pkg> | null {
+  const o = depoOnerisiOku(p);
+  return o === null || o.items.length === 0 ? null : depoYamasi(p, o, 'rota', o.etiket, an);
+}
+// Kullanıcı mod ya da listeyi değiştirdi: kaynak 'el' olur, rota önerisinin etiketi "rota önerisi" satırı için saklanır.
+export function depoElleYama(p: OtoKaynakluPaket, an: number = Date.now()): Partial<Pkg> {
+  const o = depoOtoKaynagi(p);
+  if (o?.kaynak === 'el') return {};
+  return { otoKaynak: { ...(nesne(p.otoKaynak) ?? {}), depo: { kaynak: 'el', ...(o?.etiket === undefined ? {} : { etiket: o.etiket }), at: an } } };
+}
+// Kaynak satırının metni ve tonu; tmi önerisi olmayan, şablonsuz ve elle değişmemiş boş pakette "çıkarılamadı" der.
+export function depoKaynakSatiri(p: OtoKaynakluPaket & Pick<Pkg, 'st' | 'opType' | 'id' | 'target'>): { metin: string; alt?: string; ton: 'rota' | 'el' | 'sablon' | 'yok' } | null {
+  const k = depoOtoKaynagi(p);
+  if (k?.kaynak === 'rota') return { metin: k.etiket ?? 'Rotadan', ton: 'rota' };
+  if (k?.kaynak === 'sablon') return { metin: 'Şablondan', ton: 'sablon' };
+  if (k?.kaynak === 'el') return { metin: 'Elle değiştirildi', ...(k.etiket?.startsWith('Rotadan: ') ? { alt: 'rota önerisi: ' + k.etiket.slice(9) } : {}), ton: 'el' };
+  return (istasyonAyari(p).items || []).length === 0 ? { metin: 'Rotadan çıkarılamadı, elle girin', ton: 'yok' } : null;
+}
+// Yayını durduran kalemler (`istasyonDenetimi` ile aynı ölçü): kodu ya da miktarı boş olanlar.
+export const eksikDepoKalemleri = (kalemler: readonly DepoKalemi[]): string[] => kalemler.filter((i) => !i.code || !(i.qty > 0)).map((i) => i.id);
+
 // Operatör, düzenleyici ve doğrulama aynı lotu görsün diye türetme tek yerdedir. Türe ait olmayan alan kayıtta yoksa tanımsızdır.
 export function istasyonAyari(p: Pick<Pkg, 'st' | 'opType' | 'id' | 'target'> | null | undefined): IstasyonAyari {
   const t = isTuru(p);

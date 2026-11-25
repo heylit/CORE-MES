@@ -84,6 +84,26 @@ describe('A2 Hazırlık ekranı', () => {
     expect(within(pencere).queryByText(/talaşlı/)).toBeNull();
   }, 40000);
 
+  it('3702: boş depo paketi açılınca rotadan dolar ve kayda yazılır; kaynak satırı görünür; elle değişmiş depo paketine dokunulmaz', async () => {
+    const oneri = { kaynak: 'ara', mode: 'receive', etiket: 'Rotadan: ara stok (kabul)', items: [{ id: 'rota-1', code: 'ORN-URUN-100', name: 'ORN Flanş', qty: 40, unit: 'adet', loc: '' }] };
+    const depo = { ...PAKET, id: 'tmi-ue-74', no: 'IE-DENEME-74', opType: 'depo', st: {}, plan: [], files: [], primary: null, tmi: { emirId: 7, isEmriId: 72, opNo: 10, depoOnerisi: oneri } };
+    const el = { ...depo, id: 'tmi-ue-75', no: 'IE-DENEME-75', otoKaynak: { depo: { kaynak: 'el', etiket: oneri.etiket } }, updatedAt: 1 };
+    const tesis = { wcs: [{ id: 'TAL', name: 'Deneme merkez' }], sts: [{ id: 'IST-1', name: 'Deneme depo', wc: 'TAL', t: 'depo' }], mcs: [] };
+    const istekler = sunucuKur(YONETICI, { belgeler: { pkgs: [{ kimlik: depo.id, surum: 1, govde: depo }, { kimlik: el.id, surum: 1, govde: el }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: tesis } }] } });
+    const yazim = (kimlik: string) => istekler.filter((i) => i.yol === `/arkon/belgeler/pkgs/${kimlik}/yaz`).map((i) => (i.govde as { govde: Pkg }).govde);
+    arkonAc('/arkon/hazirlik');
+    const d = await ekran();
+    await waitFor(() => { expect(yazim(depo.id).length).toBeGreaterThan(0); }, { timeout: 10000 });
+    const yazilan = yazim(depo.id).at(-1)!;
+    expect(yazilan.st).toMatchObject({ mode: 'receive' });
+    expect((yazilan.st as { items: { code: string }[] }).items.map((i) => i.code)).toEqual(['ORN-URUN-100']);
+    expect(yazilan.target).toBe(1);
+    expect((yazilan as unknown as { otoKaynak: { depo: { kaynak: string } } }).otoKaynak.depo.kaynak).toBe('rota');
+    fireEvent.click(within(d).getByRole('button', { name: /Toplama listesi/ }));
+    expect(await within(d).findByText('Rotadan: ara stok (kabul)', {}, { timeout: 10000 })).toBeTruthy();
+    expect(yazim(el.id)).toEqual([]);
+  }, 40000);
+
   it('1307 b: kontrol planı olmayan talaşlı iş uyarı onayıyla gönderilir; onay yayın geçmişine yazılır, vazgeçince yazma gitmez', async () => {
     // Arkon deposu dosya içinde paylaşılır: önceki testin yayınladığı paketle karışmasın diye ayrı kimlik.
     const planYok = { ...PAKET, id: 'tmi-ue-71', no: 'IE-DENEME-71', plan: [] };

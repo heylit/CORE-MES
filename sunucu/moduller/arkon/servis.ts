@@ -50,7 +50,7 @@ import {
   calismaDevral, hataliAdimToplamlari, makineDevral, partiKomutuReddi, planlanacakIsEmirleri, rotasizIsEmirleri, uretimEmriOzeti, aralikAdetleri, katilimSureleri, sonGirisler,
   bitenIsEmirleri, gunlukAralikAdetleri, isEmriPlanBilgileri, kisininGunlukIsEmirleri, kisininHurdaNedenleri, kisininIsEmirleri, komutOnbellegiyle, standartSureler,
   makineAyrimlari as emrinMakineAyrimlari, kisininAcikIsleri, emirlerinMalzemeIhtiyaci, adimliEmirAyrintisi, emirlerinProjeleri, isEmriDugumleri, kararliSayimiSonuclandir, isEmriZamanlari,
-  elleDurdurmaNedeni, fasonDonusuAdimlari,
+  elleDurdurmaNedeni, fasonDonusuAdimlari, emirAdimlari, adimUretimBilgileri,
   elleOnayliMaddeler, elleMaddeBul, elleMaddeEkle, elleMaddeOlayiEkle, elleMaddeler,
 } from '../uretim-emirleri/disari.ts';
 import type { Emir, Katilim } from '../uretim-emirleri/disari.ts';
@@ -58,7 +58,7 @@ import { planliDuruslarinHepsi, planliDurusSilArkon, planliDurusYaz } from '../v
 import type { ArkonDurusHedefi, PlanliDurusKaydi } from '../vardiya/disari.ts';
 import {
   ILETILER, ILETI_YENIDEN_YUKLE, cagriBildirimi, belgedenDurusa, durusBelgeKimligi, durusBelgeKimligindenId, durustenBelgeye, iletiBasi, iletiKacirildi, KONUMLU_DEPOLAR, KONUMLU_KAYITLAR, KONUMSUZ, arkonRoluSec, belgeBicimiHatasi, belgeKonumu, kayitBicimiHatasi, durusNedenleriniCevir,
-  adimEmirDurumu, emirPaketKimligi, hazirlikEksigi, parcaPaketKimligi, paketParcasi, butunPaketSablonu, parcaYayini, parcaSayimReddi, parcaOlayKarari, emirdenTaslakPaket, isEmriPaketKimligi, isEmrindenTaslakPaket, paketTuru, paketinEmri, paketIsEmri, PAKET_ADIM_SIRASI, ROTALI_EMIR_PAKETI,
+  adimEmirDurumu, emirPaketKimligi, hazirlikEksigi, parcaPaketKimligi, paketParcasi, butunPaketSablonu, parcaYayini, parcaSayimReddi, parcaOlayKarari, emirdenTaslakPaket, isEmriPaketKimligi, isEmrindenTaslakPaket, depoArdiliVar, paketTuru, paketinEmri, paketIsEmri, PAKET_ADIM_SIRASI, ROTALI_EMIR_PAKETI,
   ADIMSIZ_YAYIN, ISTASYONSUZ_YAYIN, PLANSIZ, partiKomutu, planBaslatmaReddi, yayinDenetlenir, yayinlanmamis, cizimOnayiGecer, planDurumlari, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, siraOnaylari, siraOnayiniYaz,
   KUYRUK_ILETILERI, eksiAlaniniEkle, hataliAlaniniEkle, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri,
   plansizKaynak, rotaAnahtari, sablonPaket, tabanCoz, tmiAlanlariniYaz, tmiBirlesikSurum, hurdaNedenleriniCevir, stokaBagliMi, stokDurumuyla, stokIstegiKaynagi, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, numuneTeslimAlma, numuneTeslimAlindiDamgala, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariGirdisi, lotKarariKoru, lotPaketi, lotKarariDamgala, KALITE_KARARI_ROLLERI,
@@ -73,7 +73,7 @@ import {
   donemBaslangici, donemBasarisi, ekipOrtalamasi, fazlaMesaiSaati, mesaiGunleri, ozetOranlari, ozetRozetleri, tarihEkle,
   emekVerimi, mesaiSaniyesi,
 } from './kurallar.ts';
-import type { AdimGireni, AnomaliDonemi, YoklamaDenetimi, DonemSatiri, IsEmriPaketGirdisi, DonemToplami, RotaAnahtari, NetAralik, OzetGunu, TmiPlanDurumu } from './kurallar.ts';
+import type { AdimGireni, DepoBaglami, AnomaliDonemi, YoklamaDenetimi, DonemSatiri, IsEmriPaketGirdisi, DonemToplami, RotaAnahtari, NetAralik, OzetGunu, TmiPlanDurumu } from './kurallar.ts';
 import type { ArkonDurumu, BelgeEylemi, DurusKimlikleri, DurusKodlari, GunlukSatiri, KatilimDurumu, KatilimYolu, KayitSutunlari, Konum, KonumKimlikleri, NumuneTeslimGirdisi, StokIstegiGirdisi, TmiAyari, YansimaKarari } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
@@ -374,7 +374,9 @@ async function isEmriTaslaklari(
   const ilkParcalar = await adimIlkParcaKararlari(db, girdiler.map((g) => g.isEmri.id));
   const ilkParcaSecimleri = await adimIlkParcaSecimleri(db, [...new Set(girdiler.flatMap((g) => { const r = anahtar(g.isEmri).revizyonId; return r === null ? [] : [r]; }))]);
   const kayitsizlar = girdiler.filter((g) => !kayitliKimlik.has(g.parca ? parcaPaketKimligi(g.isEmri.id, g.parca.no) : isEmriPaketKimligi(g.isEmri.id)));
-  const girenler = await adimGirenleri(db, kayitsizlar);
+  const depolar = girdiler.filter((g) => paketTuru(g.opGrubu, g.istasyon) === 'depo');
+  const girenler = await adimGirenleri(db, [...new Set([...kayitsizlar, ...depolar])]);
+  const depoBaglamlari = await depoBaglamlariOku(db, depolar);
   // Karar 732 a: kayıtsız taslak malzemenin Çizimler'de yayındaki PDF ve 3B modelini önerir; Hazırlık açınca merkezden alır (bağ yazma ucundadır).
   // 3701: kontrol planı Kalite Merkezi'nin tek balonlu resminden taslakta kendiliğinden kurulur; kişinin Kalite Merkezi'ni okuma yetkisinden bağımsızdır.
   const kmResimleri = await taslakResimleri(db, kayitsizlar.flatMap((g) => (g.sablon === null || !Array.isArray(g.sablon['plan']) || g.sablon['plan'].length === 0 ? [g.isEmri.malzemeNo] : [])));
@@ -396,7 +398,7 @@ async function isEmriTaslaklari(
     const taslak = isEmrindenTaslakPaket({ ...g, hazirlik, aql, ilkParca: ilkParcalar.get(g.isEmri.id) ?? null,
       ilkParcaSecimi: ilkParcaSecimiOku(ilkParcaSecimleri, anahtar(g.isEmri)),
       ilkParcaGerekli: ilkParcaGereksinimi(ilkParcaSecimiOku(ilkParcaSecimleri, anahtar(g.isEmri)) ?? 'her_kurulum', g.istasyon?.tip ?? null) === 'gerekli',
-      girenler: girenler.get(`${g.isEmri.uretimEmriId}:${g.isEmri.opNo}`) });
+      girenler: girenler.get(`${g.isEmri.uretimEmriId}:${g.isEmri.opNo}`), depoBaglami: depoBaglamlari.get(g.isEmri.id) });
     const butun = g.parca ? kayitliGovde.get(isEmriPaketKimligi(g.isEmri.id)) : undefined;
     const yayinli = g.sablon !== null && g.sablon === butun ? parcaYayini(taslak, butun) : taslak;
     const kimlik = String(yayinli['id']);
@@ -411,6 +413,26 @@ async function isEmriTaslaklari(
     const bekletme = bekleyen ? BEKLEME_NEDENI_ADLARI[bekleyen.neden] : null;
     sonuc.set(kimlik, sayimKaynagiAlaniniEkle(bekletmeAlaniniEkle(hataliAlaniniEkle(eksiAlaniniEkle(kuyrukAlanlariniEkle(govde, { kuyruk: kuyrukSirasi, planSaati: saatler.get(kimlik) ?? null }), adim?.eksik),
       adim?.hataliAdet ?? hatali(g.isEmri.uretimEmriId, g.isEmri.id)), bekletme), g.istasyon !== null && smartesIstasyonlari.has(g.istasyon.id)));
+  }
+  return sonuc;
+}
+
+// 3702: depo adımının rota bağlamı. Öncül fason, 3703 kabul paneliyle aynı tanımdır (`fasonDonusu`: otomatik GKK atlanarak bitmemiş fason
+// öncül; Risk R1). Ardıl dallı emirde adımın öncül listesinden (1348 a), eski emirde OP sırasıyla (`depoArdiliVar`); adım emrin adımları
+// arasında bulunamazsa bağlam yazılmaz ve paket "Rotadan çıkarılamadı" der. Ürün adı ve birimi emrin malzeme kartındandır.
+async function depoBaglamlariOku(db: Db, girdiler: readonly IsEmriPaketGirdisi[]): Promise<Map<number, DepoBaglami>> {
+  const sonuc = new Map<number, DepoBaglami>();
+  if (girdiler.length === 0) return sonuc;
+  const adimlar = await emirAdimlari(db, [...new Set(girdiler.map((g) => g.isEmri.uretimEmriId))]);
+  const bilgiler = await adimUretimBilgileri(db, [...new Set(girdiler.map((g) => g.isEmri.id))]);
+  const kartlar = await malzemeOzetleri(db, [...new Set(girdiler.map((g) => g.isEmri.malzemeNo))]);
+  for (const g of girdiler) {
+    const emrin = adimlar.filter((a) => a.uretimEmriId === g.isEmri.uretimEmriId);
+    const ardilVar = emrin.some((a) => a.isEmriId === g.isEmri.id)
+      ? depoArdiliVar(emrin.map((a) => a.opNo), bilgiler.get(g.isEmri.id)?.emirAdimlari ?? [], g.isEmri.opNo) : null;
+    if (ardilVar === null) continue;
+    const kart = kartlar.get(g.isEmri.malzemeNo);
+    sonuc.set(g.isEmri.id, { oncekiFason: g.fasonDonusu === true, ardilVar, urun: { kod: g.emir.parcaNo, ad: g.emir.parcaAd || null, birim: kart?.birim ?? null } });
   }
   return sonuc;
 }

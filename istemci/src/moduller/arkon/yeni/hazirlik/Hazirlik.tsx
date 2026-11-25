@@ -38,7 +38,7 @@ import type { KmNumunePlani } from '#paylasilan/sozlesme/kalite-merkezi-studyo.t
 import { useStudyoParcasi } from '../../../kalite-merkezi/disari.ts';
 import { useYetki } from '../../../../ortak/veri/yetki.ts';
 import { KuralSekmesi } from './KuralSekmesi.tsx';
-import {
+import { depoDoldurma,
   ADIM_SABLONLARI, IS_TURLERI, PAKET_DURUMLARI, SIKLIKLAR, TMI_KILIT, VARSAYILAN_AYARLAR, isTuru, numunePlani, numunePlaniYaz,
   olcumYontemi, onayBekliyor, onayGerekir, onayReddedildi, onayli, kmBagsizUyarisiGerekir, paketDenetimi, paketKartDurumu, planYokUyarisiGerekir, tmiIsEmri, yeniKimlik,
   beklemeEki, planDisiEki, geriCekilebilir, takipSuzgeciOku, topluGeriCekilebilir, type TakipSuzgeci,
@@ -360,6 +360,13 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
     kmOtomatik.current.add(p.id);
     void kmdenAl(karar.resim, true);
   }, [p?.id, p?.status, p?.files.length, kmParca.data, duzenler, dosyaBekliyor, merkezMesgul]);
+  // 3702: boş depo paketi rotadan dolar (kaynak hiç yazılmamış ve liste boşsa); doldurma kayda geçer. Kayıt gelene kadar liste yenilemesi
+  // eski paketi geri getirirse koşul yeniden sağlanır ve doldurma tekrarlanır; kaynak yazılınca durur (döngü yok).
+  useEffect(() => {
+    if (!p || !duzenler) return;
+    const d = depoDoldurma(p, Date.now(), benAdi());
+    if (d !== null) yama(d);
+  }, [p?.id, p?.st, p?.otoKaynak, p?.tmi, duzenler]);
   // 3689: numune planı Kalite Merkezi'ndedir; taslak pakete kendiliğinden gelir, yayındaki pakette "Güncelle" ile alınır. Terminal `samp`'ı okur.
   const kmNumuneAl = (plan: KmNumunePlani) => {
     if (!p) return;
