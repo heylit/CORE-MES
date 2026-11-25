@@ -28,7 +28,7 @@ import {
   AYRIM_YENILEME_MS, ayrimAciklamasi, kayittakiMakineler, kilitsizSecim, makineAyrimi, makineSecimiGorunur, seciliMakineler, secimOzeti, secimiDegistir,
   type MakineAyrimlari,
 } from '../../../../../../arkon/web/src/data/makine-secimi.ts';
-import { retGerekcesiMetni, sonNumuneDurumu, yeniNumuneYamasi } from '../../../../../../arkon/web/src/data/numune.ts';
+import { kmBagsizPlan, retGerekcesiMetni, sonNumuneDurumu, yeniNumuneYamasi } from '../../../../../../arkon/web/src/data/numune.ts';
 import {
   KART_YENILEME_MS, girdiAdaylari, kartDoldu, kartEmirleri, kartOkutmaKarari, refakatIsi, sayimKartAlani, baslatmaKartAlani, type KartSecimNedeni, type RefakatKarti,
 } from '../../../../../../arkon/web/src/data/refakat-karti.ts';
@@ -70,7 +70,7 @@ import { KART_DEGIL_ILETISI, KART_YOK_ILETISI, terminalOkutmasi, useElOkuyucu } 
 import { kartNumarasiGibi } from '../../../../ortak/veri/kart-degistir.ts';
 import {
   DURUM_ILETISI, DURUM_SIMGESI, EYLEM_DURUMU, URETIM_EYLEMLERI, baslangicUyarilari, bosIs, durusOnerileri, eksikTakimTabanlari, hazirlikSayisi,
-  ilkParcaKalemleri, ilkParcaKapisi, uzakKendiligindenAcilir, isSekmeleri, kararOzeti, kontrolTakvimi, mobilGorunumler, numuneAraligi, etkinIsSirasi, paketleriBirlestir, siradakiGorev, simgeSec, bekletmeGorevi, BEKLEMEDE_KAPALI,
+  bagsizNumuneBildirimi, ilkParcaKalemleri, ilkParcaKapisi, uzakKendiligindenAcilir, isSekmeleri, kararOzeti, kontrolTakvimi, mobilGorunumler, numuneAraligi, etkinIsSirasi, paketleriBirlestir, siradakiGorev, simgeSec, bekletmeGorevi, BEKLEMEDE_KAPALI,
   sonucBelgesi, takimUyarilari, tonAdi, uyariAnahtari, vardiyaHesabi, vardiyaOzeti, zamaniGelenUyarilar, hurdaUyarisi, bitisOzeti, bitirmeEksigi, tmiIlkParcaGerekli,
   type EkranSekmesi,
   hataliNedenleri, hataliUstSiniri, sekmeKarari,
@@ -1223,6 +1223,7 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
     depo.Bus.send({ type: 'sample', reqId: req.id, no: o.no, machine: MACHINE, reason });
     patch(yeniNumuneYamasi(req));
     bip('call');
+    if (kmBagsizPlan(o.pkg.plan)) { say(bagsizNumuneBildirimi(items.length, `${o.no} #${sayi(o.good)}`, ilkParcaKalemleri(o).some((k) => items.some((b) => b.id === k.id))), 'alert', 'hold'); return; }
     say(`Numune isteği kalitede · onay bekleniyor · ${items.length} ölçü · etiketle: ${o.no} #${sayi(o.good)}`, 'target', 'hold');
   };
   // Hurda yalnız nedenle yazılır (116 a).

@@ -73,7 +73,7 @@ export function TopluGonderPenceresi({ paketler, tesis, kurallar, ilerleme, kapa
                     <label key={k} className="tc-ay2-toplu-kutu">
                       <input type="checkbox" checked={onaylar.has(k)} onChange={(o) => isaretle(k, o.target.checked)} />
                       <span>
-                        <b>{u.tur === 'planYok' ? 'Kontrol planı yok' : 'Canlı planda değil'}</b> · {paketAdi(p)}{h.tur === 'kalite' ? ' · onaylanırsa kaliteye gider' : ''}
+                        <b>{u.tur === 'planYok' ? 'Kontrol planı yok' : u.tur === 'kmBagsiz' ? 'Kalite Merkezi\'ne bağlı değil' : 'Canlı planda değil'}</b> · {paketAdi(p)}{h.tur === 'kalite' ? ' · onaylanırsa kaliteye gider' : ''}
                         <small>{u.neden}</small>
                       </span>
                     </label>

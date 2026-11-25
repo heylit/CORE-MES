@@ -8,6 +8,8 @@ import { PAKET_GRUPLARI, paketGrubuOku, paketleriGrupla, type GrupAdi, type Pake
 import {
   SUZGEC_ALANLARI, paketleriSuz, suzgecOku, suzgecSayisi, suzgecSecenekleri, type PaketSuzgeci, type SuzgecAlani,
 } from '../../../../../../arkon/web/src/data/paket-suzgec.ts';
+import { KM_BAGSIZ_ILK_PARCA_UYARISI } from '../../../../../../arkon/web/src/data/numune.ts';
+import { ilkParcaKalemleri } from '../operator/kurallar.ts';
 import { ISTASYONSUZ_GONDERIM, gonderimUyarisi, istasyonsuzMu, rotaEksigi, type GonderimUyarisi } from '../../../../../../arkon/web/src/data/tmi-plan.ts';
 import { sablonUygula, tmiPaketiMi } from '../../../../../../arkon/web/src/data/yeni-paket.ts';
 import { tmiBekletme } from '../../../../../../arkon/web/src/data/bekleyen-emir.ts';
@@ -38,7 +40,7 @@ import { useYetki } from '../../../../ortak/veri/yetki.ts';
 import { KuralSekmesi } from './KuralSekmesi.tsx';
 import {
   ADIM_SABLONLARI, IS_TURLERI, PAKET_DURUMLARI, SIKLIKLAR, TMI_KILIT, VARSAYILAN_AYARLAR, isTuru, numunePlani, numunePlaniYaz,
-  olcumYontemi, onayBekliyor, onayGerekir, onayReddedildi, onayli, paketDenetimi, paketKartDurumu, planYokUyarisiGerekir, tmiIsEmri, yeniKimlik,
+  olcumYontemi, onayBekliyor, onayGerekir, onayReddedildi, onayli, kmBagsizUyarisiGerekir, paketDenetimi, paketKartDurumu, planYokUyarisiGerekir, tmiIsEmri, yeniKimlik,
   beklemeEki, planDisiEki, geriCekilebilir, takipSuzgeciOku, topluGeriCekilebilir, type TakipSuzgeci,
 } from './kurallar.ts';
 import { HazirlikListesi } from '../operator/HazirlikListesi.tsx';
@@ -192,7 +194,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
   const [klasor, klasorYaz] = useState<KlasorTutamaci | null>(null);
   const [klasorAdi, klasorAdiYaz] = useState<string | null>(null);
   const [silOnay, silOnayYaz] = useState(false);
-  const [gonderOnay, gonderOnayYaz] = useState<(GonderimUyarisi & { planYokOnayli: boolean }) | null>(null);
+  const [gonderOnay, gonderOnayYaz] = useState<{ uyari: GonderimUyarisi | null; km: boolean; planYokOnayli: boolean } | null>(null);
   const [planYokSor, planYokSorYaz] = useState(false);
   const [olcuSec, olcuSecYaz] = useState<number[]>([]);
   const [nSor, nSorYaz] = useState<number | null>(null);
@@ -414,7 +416,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
       klasorYaz(h); klasorAdiYaz(h.name); soyle('Paylaşım klasörü bağlandı: ' + h.name, 'run');
     } catch (e) { if ((e as Error).name !== 'AbortError') soyle('Klasör bağlanamadı: ' + (e as Error).message, 'stop'); }
   };
-  const yayinla = async (planOnayli = false, planYokOnayli = false) => {
+  const yayinla = async (planOnayli = false, planYokOnayli = false, kmOnayli = false) => {
     if (!p || !yayinlar) return;
     const v = paketDenetimi(p, tesis);
     if (v.some((x) => !x.ok && !x.soft)) { soyle(istasyonsuzMu(p) ? ISTASYONSUZ_GONDERIM : rotaEksigi(p) ? rotaEksigi(p) + ' · terminale gönderilemedi' : 'Eksikler var · terminale gönderilemedi', 'stop'); return; }
@@ -422,14 +424,16 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
     const planYok = planYokUyarisiGerekir(p);
     if (planYok && !planYokOnayli) { planYokSorYaz(true); return; }
     if (kayitZamani.current) { clearTimeout(kayitZamani.current); kayitZamani.current = null; }
-    if (onayGerekir(p, ayarlar.kurallar)) {
+    // 3717: plan dışı ve Kalite Merkezi bağı uyarıları tek pencerede iki madde olarak sorulur; kaliteye gidecek iş plan dışı uyarısı sormaz.
+    const kaliteyeGider = onayGerekir(p, ayarlar.kurallar);
+    const uyari = planOnayli || kaliteyeGider ? null : gonderimUyarisi(p);
+    const km = kmBagsizUyarisiGerekir(p) && !kmOnayli;
+    if (uyari || km) { gonderOnayYaz({ uyari, km, planYokOnayli }); return; }
+    if (kaliteyeGider) {
       if (onayBekliyor(p)) { soyle('Kalite onayı bekleniyor', 'hold'); return; }
       await kaliteyeYolla(p);
       soyle('Kaliteye onaya gönderildi · onaylanınca terminale gönderilebilir', 'done'); return;
     }
-    // Kart #1257: canlı planda olmayan iş onaysız gönderilmez; pencere nedeni ve plan bağlantısını gösterir.
-    const uyari = planOnayli ? null : gonderimUyarisi(p);
-    if (uyari) { gonderOnayYaz({ ...uyari, planYokOnayli }); return; }
     yayindaYaz(true);
     try { soyle(await yayinYaz(p, planYok, () => soyle('Resim ve 3B model operatör için hazırlanıyor…', 'done')), 'run'); } finally { yayindaYaz(false); }
   };
@@ -1191,7 +1195,11 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
       <TopluBenzerPenceresi plan={benzerPlan} mesgul={benzerMesgul} kapat={() => benzerPlanYaz(null)} uygula={(l) => { void topluDoldur(l); }} />
       <GeriCekPenceresi paketler={geriSor ? geriSor.l : null} sonuclar={sonuclar} mesgul={geriMesgul} kapat={() => geriSorYaz(null)} onayla={(l) => { void geriCekOnayla(l); }} />
       {gonderOnay && p ? (
-        <PlanOnayPenceresi uyari={gonderOnay} kapat={() => gonderOnayYaz(null)} gonder={() => { gonderOnayYaz(null); void yayinla(true, gonderOnay.planYokOnayli); }} plana={() => { tmiyeGit('plan'); gonderOnayYaz(null); }} />
+        <PlanOnayPenceresi
+          uyari={gonderOnay.uyari} km={gonderOnay.km} ilkParca={ilkParcaKalemleri({ pkg: p }).length > 0} kapat={() => gonderOnayYaz(null)}
+          gonder={() => { gonderOnayYaz(null); void yayinla(true, gonderOnay.planYokOnayli, true); }}
+          plana={() => { if (gonderOnay.uyari) tmiyeGit('plan'); else sekmeYaz('plan'); gonderOnayYaz(null); }}
+        />
       ) : null}
       {planYokSor && p ? (
         <KontrolPlaniYokPenceresi
@@ -1233,21 +1241,34 @@ export function KontrolPlaniYokPenceresi({ tur = 'cnc', kapat, gonder, plana }: 
 }
 
 // Kart #1257: canlı planda olmayan işi operatöre gönderirken onay penceresi (neden, plana bağlantı, "Yine de gönder").
-export function PlanOnayPenceresi({ uyari, kapat, gonder, plana }: { uyari: GonderimUyarisi; kapat: () => void; gonder: () => void; plana: () => void }) {
+export function PlanOnayPenceresi({ uyari, km, ilkParca = false, kapat, gonder, plana }: { uyari: GonderimUyarisi | null; km: boolean; ilkParca?: boolean; kapat: () => void; gonder: () => void; plana: () => void }) {
+  const baslik = uyari && km ? 'Gönderim uyarıları' : uyari ? uyari.neden : 'Kontrol planı Kalite Merkezi\'ne bağlı değil';
   return (
     <Pencere
-      acik kapat={kapat} baslik={uyari.neden}
+      acik kapat={kapat} baslik={baslik}
       alt={(
         <>
-          <Dugme tur="ikincil" simge="gantt" onClick={plana}>Plana git</Dugme>
+          <Dugme simge={uyari ? 'gantt' : 'target'} onClick={plana}>{uyari ? 'Plana git' : 'Kontrol planına git'}</Dugme>
           <Dugme tur="ikincil" onClick={kapat}>Vazgeç</Dugme>
-          <Dugme simge="next" onClick={gonder}>Yine de gönder</Dugme>
+          <Dugme tur="ikincil" simge="next" onClick={gonder}>Yine de gönder</Dugme>
         </>
       )}
     >
       <span className="tc-ay2-ust-yazi">Terminale gönder</span>
-      {uyari.taslakta ? <p>Plana git ve taslağı "Canlıya al" ile yayınla (plan canlıya alma yetkisi gerekir); iş o zaman canlı plana geçer.</p> : null}
-      <p>{uyari.gorunmez ? 'Ayar açık: iş, plan canlıya alınana kadar Üretim Terminali\'nde görünmez ve başlatılamaz.' : 'İş operatöre düşer ve plansız başlatılabilir. Plan sırası ve süreleri bu işi içermez.'}</p>
+      {uyari ? (
+        <>
+          {km ? <b>{uyari.neden}</b> : null}
+          {uyari.taslakta ? <p>Plana git ve taslağı "Canlıya al" ile yayınla (plan canlıya alma yetkisi gerekir); iş o zaman canlı plana geçer.</p> : null}
+          <p>{uyari.gorunmez ? 'Ayar açık: iş, plan canlıya alınana kadar Üretim Terminali\'nde görünmez ve başlatılamaz.' : 'İş operatöre düşer ve plansız başlatılabilir. Plan sırası ve süreleri bu işi içermez.'}</p>
+        </>
+      ) : null}
+      {km ? (
+        <>
+          {uyari ? <b>Kontrol planı Kalite Merkezi'ne bağlı değil</b> : null}
+          <p>Ölçüler Kalite Merkezi balonlarına bağlı değil: operatör numune gönderince numune Kalite Merkezi'ne açılmaz, kalitenin listesinde görünmez. Resmi planı Kalite Merkezi'nden alın.</p>
+          {ilkParca ? <p>{KM_BAGSIZ_ILK_PARCA_UYARISI}</p> : null}
+        </>
+      ) : null}
     </Pencere>
   );
 }

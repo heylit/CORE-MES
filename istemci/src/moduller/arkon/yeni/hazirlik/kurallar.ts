@@ -1,5 +1,6 @@
 import { muayeneNumunePlani, type MuayenePlani } from '../../../../../../arkon/web/src/data/muayene-lotu.ts';
 import { ISTASYONSUZ_GONDERIM, gonderimUyarisi, istasyonsuzMu, rotaEksigi, type PlanliPaket } from '../../../../../../arkon/web/src/data/tmi-plan.ts';
+import { kmBagsizPlan } from '../../../../../../arkon/web/src/data/numune.ts';
 import { tmiBekletme } from '../../../../../../arkon/web/src/data/bekleyen-emir.ts';
 import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import type { Plant, Policy } from '../cekirdek/tipler.ts';
@@ -290,7 +291,10 @@ export function istasyonDenetimi(p: Pick<Pkg, 'st' | 'opType' | 'id' | 'target' 
 }
 // 1307 b, 3701: kontrol planı eksikliği her iş türünde görevdir ve gönderimi durdurmaz; gönderen uyarıyı onaylar ve onay yayın geçmişine yazılır.
 // Kalite muayenesinde plan ayrıca zorunlu denetim maddesidir (paketDenetimi).
+export const KM_BAGSIZ_PLAN_KISA = 'Bağlı değil · numune Kalite Merkezi\'ne açılmaz, gönderirken uyarı onayı istenir';
 export const PLAN_YOK_UYARISI = 'Eksik · gönderirken uyarı onayı istenir';
+// Planda ölçü var ama hiçbiri Kalite Merkezi balonuna bağlı değil: numune Kalite Merkezi'ne açılmaz; yayınlarken uyarı onayı istenir.
+export const kmBagsizUyarisiGerekir = (p: Pick<Pkg, 'plan'>): boolean => kmBagsizPlan(p.plan);
 export const planYokUyarisiGerekir = (p: Pick<Pkg, 'plan'>): boolean => p.plan.length === 0;
 
 export function paketDenetimi(p: Pkg, tesis: Plant): Denetim[] {
@@ -311,6 +315,7 @@ export function paketDenetimi(p: Pkg, tesis: Plant): Denetim[] {
         : ty === 'kalite' ? 'En az bir kontrol noktası' : PLAN_YOK_UYARISI,
       soft: ty !== 'kalite',
     },
+    ...(kmBagsizPlan(p.plan) ? [{ k: 'plan', ok: false, l: 'Kontrol planı Kalite Merkezi\'ne bağlı', d: KM_BAGSIZ_PLAN_KISA, soft: true }] : []),
     { k: 'steps', ok: p.steps.length > 0, l: 'Operasyon adımları', d: p.steps.length ? p.steps.length + ' adım · ' + p.steps.filter((s) => s.r).length + ' zorunlu' : 'En az bir adım' },
   ]);
 }

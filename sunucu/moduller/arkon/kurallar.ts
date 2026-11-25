@@ -2056,7 +2056,7 @@ export function istekKmPlani(istek: unknown, paket: unknown): IstekKmPlani {
   const ilkParca = kapi.some((id) => istenen.has(id));
   const plan = kayitMi(paket) && Array.isArray(paket['plan']) ? paket['plan'].filter(kayitMi) : [];
   const bagli = plan.filter((b) => pozitifTamSayi(b['kmBalon']));
-  if (bagli.length === 0) return { ilkParca, km: null, uyari: null };
+  if (bagli.length === 0) return { ilkParca, km: null, uyari: ilkParca ? KM_UYARILARI.bagsizPlanIlkParca : KM_UYARILARI.bagsizPlan };
   const balonlar = [...new Set(bagli.filter((b) => istenen.has(String(b['id']))).map((b) => b['kmBalon'] as number))];
   const opNo = alanOku(alanOku(paket, 'tmi'), 'opNo');
   const bagsiz = plan.filter((b) => istenen.has(String(b['id'])) && !pozitifTamSayi(b['kmBalon'])).length;
@@ -2073,6 +2073,8 @@ export function istekKmPlani(istek: unknown, paket: unknown): IstekKmPlani {
 const pozitifTamSayi = (d: unknown): d is number => typeof d === 'number' && Number.isSafeInteger(d) && d > 0;
 
 export const KM_UYARILARI = {
+  bagsizPlanIlkParca: 'Ölçüler Kalite Merkezi\'ne bağlı değil: numune Kalite Merkezi\'ne açılmadı ve ilk parça numunesi karara bağlanamaz; Üretim Hazırlık\'ta resmi Kalite Merkezi\'nden alın.',
+  bagsizPlan: 'Ölçüler Kalite Merkezi\'ne bağlı değil: numune Kalite Merkezi\'ne açılmadı; Üretim Hazırlık\'ta resmi Kalite Merkezi\'nden alın.',
   numuneAcilmadi: 'Numune Kalite Merkezi\'ne açılamadı: ölçüler Üretim Hazırlık\'ta kaldı.',
   bagsizOlcu: (n: number) => `${String(n)} ölçünün Kalite Merkezi balonu yok: Üretim Hazırlık'ta kaldı.`,
   olcumYazilmadi: (neden: string) => `Ölçüm Kalite Merkezi'ne yazılamadı (${neden}): Üretim Hazırlık'ta kaldı.`,

@@ -4,6 +4,7 @@ import { ILK_PARCA_KARAR_BEKLIYOR_ILETISI, KALITE_MERKEZI_RET_UYARISI, ilkParcaK
 import { kalanAdet } from '../../../../../../arkon/web/src/data/sayac-halkasi.ts';
 import { TEKRAR_OLCUM } from '../../../../../../arkon/web/src/data/otomatik-numune.ts';
 import { anlikPencereler } from '../../../../../../arkon/web/src/data/vardiya-gunu.ts';
+import { KM_BAGSIZ_ILK_PARCA_UYARISI, KM_BAGSIZ_PLAN_UYARISI } from '../../../../../../arkon/web/src/data/numune.ts';
 import { yuzdeMetni } from '../../../../../../arkon/web/src/data/yuzde.ts';
 import type { MakineDurumu } from '../../../../ortak/arayuz/index.ts';
 import type { OpType } from '../hazirlik/tipler.ts';
@@ -93,6 +94,10 @@ export function etkinIsSirasi<T>(isler: readonly T[], anahtar: (x: T) => string,
 // İlk parça kapısının ölçüleri; kapının açık olup olmadığını ölçüm değil Kalite Merkezi kararı belirler (denetim #12).
 export const ilkParcaKalemleri = (o: Pick<Is, 'pkg'>): PlanItem[] =>
   (o.pkg && isTuru(o.pkg) === 'cnc' ? numunePlani(o.pkg).filter((r) => r.when === 'first' && r.gate).flatMap((r) => numuneOlculeri(o.pkg!, r)) : []);
+// 3717: bağsız planda numune isteği yazılır ama Kalite Merkezi'ne açılmaz; operatör etiketleme bilgisini de uyarıyı da görür.
+export function bagsizNumuneBildirimi(olcuSayisi: number, etiket: string, ilkParcaVar: boolean): string {
+  return `Numune isteği gönderildi · ${String(olcuSayisi)} ölçü · etiketle: ${etiket} · ${KM_BAGSIZ_PLAN_UYARISI}${ilkParcaVar ? ' ' + KM_BAGSIZ_ILK_PARCA_UYARISI : ''}`;
+}
 const gecti = (m: Meas | undefined): boolean => !!(m && (m.ok || m.dev));
 export const ilkParcaKapisi = (o: Pick<Is, 'pkg' | 'meas'>): PlanItem[] => ilkParcaKalemleri(o).filter((b) => !gecti((o.meas || {})[b.id]));
 // TMI'nin adımdaki ilk parça kapısı (sunucu `ilkParcaGereksinimi`): kontrol planı boş olsa da sağlam sayım kalite kararına kadar bekler.

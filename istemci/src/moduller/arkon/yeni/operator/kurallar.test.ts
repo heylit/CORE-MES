@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AnlikVardiya } from '../cekirdek/vardiya.ts';
 import {
+  bagsizNumuneBildirimi,
   bekletmeGorevi, bitirmeEksigi, bitisOzeti, siradakiGorev, tmiIlkParcaGerekli,
   cagriTonu, cubukDugmeleri, durumDugmeleri, sabitDugmeler, numuneAraligi, durusOnerileri, hurdaUyarisi, kalanSure, kaliteIstasyonuNumuneleri, kontrolTakvimi, lotKarariEksigi, lotKarariOku, lotSayisi, tonDurumu, vardiyaHesabi, vardiyaOzeti, type VardiyaOzetGirdisi,
   uzakKendiligindenAcilir, sekmeKarari,
@@ -239,5 +240,17 @@ describe('sekmeKarari (3719)', () => {
     expect(sekmeKarari(null)).toBe('baslangic');
     expect(sekmeKarari({ bos: false })).toBe('sifirla');
     expect(sekmeKarari({ bos: true })).toBe('koru');
+  });
+});
+
+describe('3717 bağsız planda numune bildirimi', () => {
+  it('isteğin gittiğini, etiketleme bilgisini ve Kalite Merkezi\'ne açılmadığını birlikte söyler; ilk parça varsa kilidi de', () => {
+    const m = bagsizNumuneBildirimi(2, 'ORN-UE-1 #3', false);
+    expect(m).toContain('Numune isteği gönderildi');
+    expect(m).toContain('etiketle: ORN-UE-1 #3');
+    expect(m).toContain('Kalite Merkezi\'ne açılmaz');
+    expect(m).toContain('hazırlık sorumlusuna haber verin');
+    expect(m).not.toContain('ilk parça numunesi karara bağlanamaz');
+    expect(bagsizNumuneBildirimi(1, 'ORN-UE-1 #3', true)).toContain('ilk parça numunesi karara bağlanamaz');
   });
 });

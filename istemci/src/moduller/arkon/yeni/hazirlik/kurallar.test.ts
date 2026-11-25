@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  IS_TURLERI, PLAN_YOK_UYARISI, araNumuneSikligi, istasyonAyari, istasyonDenetimi, kalemBitti, kaliteAltGorunumu, paketDenetimi, planYokUyarisiGerekir, kodaUyanKalem, numuneOlaylari, olcuUygun, olcumYontemi, toplamaSirasi, torkUygun, yapistirilanKalemler, type DepoKalemi,
+  IS_TURLERI, KM_BAGSIZ_PLAN_KISA, PLAN_YOK_UYARISI, kmBagsizUyarisiGerekir, araNumuneSikligi, istasyonAyari, istasyonDenetimi, kalemBitti, kaliteAltGorunumu, paketDenetimi, planYokUyarisiGerekir, kodaUyanKalem, numuneOlaylari, olcuUygun, olcumYontemi, toplamaSirasi, torkUygun, yapistirilanKalemler, type DepoKalemi,
 } from './kurallar.ts';
 import type { NumuneKurali, Pkg } from './tipler.ts';
 import { takimKullanimi } from './TakimKarti.tsx';
@@ -127,5 +127,31 @@ describe('kalite alt görünümü', () => {
     expect(kaliteAltGorunumu(paket('kalite', 'constructor'))).toBeNull();
     expect(kaliteAltGorunumu(paket('cnc', 'KMM'))).toBeNull();
     expect(kaliteAltGorunumu(null)).toBeNull();
+  });
+});
+
+// 3717: planın hiçbir ölçüsü Kalite Merkezi balonuna bağlı değilse numune Kalite Merkezi'ne açılmaz; paket denetiminde yumuşak satır ve yayın uyarısı.
+describe('3717 Kalite Merkezi bağı', () => {
+  const TESIS = { wcs: [{ id: 'TAL', name: 'Deneme merkez' }], sts: [{ id: 'IST-1', name: 'Deneme tezgah', wc: 'TAL', t: 'cnc' }], mcs: [] } as unknown as Parameters<typeof paketDenetimi>[1];
+  const olcu = (ek: object = {}) => ({ id: 1, nom: 'Ø20', tol: '', min: 19.9, max: 20.1, tool: '', freq: 'İlk parça', ...ek });
+  const paket = (plan: object[]): Pkg => ({
+    id: 'p1', no: 'IE-1', opType: 'cnc', st: {}, partNo: 'DN-1', part: 'Deneme', rev: 'A', op: 'Op 10', machine: 'IST-1', target: 5, cycle: 1, due: '',
+    priority: 'normal', material: '', note: '', files: [{ kind: 'pdf', name: 'a.pdf' }], primary: 'a.pdf', plan, steps: [{ id: 's', t: 'Bağla', d: '', r: true }],
+    status: 'draft', version: 0, dirty: true, createdAt: 1, updatedAt: 1, by: 'Deneme',
+  }) as unknown as Pkg;
+  const satir = (p: Pkg) => paketDenetimi(p, TESIS).find((x) => x.l === 'Kontrol planı Kalite Merkezi\'ne bağlı');
+
+  it('bağ yalnız pozitif tam sayı balon kimliğidir: 0, negatif, kesirli ve metin bağ sayılmaz', () => {
+    expect(kmBagsizUyarisiGerekir(paket([olcu()]))).toBe(true);
+    for (const kimlik of [0, -3, 1.5, '71', null]) expect(kmBagsizUyarisiGerekir(paket([olcu({ kmBalon: kimlik })])), String(kimlik)).toBe(true);
+    expect(kmBagsizUyarisiGerekir(paket([olcu({ kmBalon: 71 })]))).toBe(false);
+    expect(kmBagsizUyarisiGerekir(paket([olcu(), olcu({ id: 2, kmBalon: 72 })]))).toBe(false);
+    expect(kmBagsizUyarisiGerekir(paket([]))).toBe(false);
+  });
+
+  it('paket denetiminde yumuşak satır yalnız bağsız planda eklenir ve gönderimi durdurmaz', () => {
+    expect(satir(paket([olcu()]))).toMatchObject({ ok: false, soft: true, d: KM_BAGSIZ_PLAN_KISA });
+    expect(satir(paket([olcu({ kmBalon: 71 })]))).toBeUndefined();
+    expect(satir(paket([]))).toBeUndefined();
   });
 });

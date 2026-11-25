@@ -8,6 +8,15 @@ export function numuneReddiEksigi(olculen: number, gerekce: string | null | unde
   return (gerekce ?? '').trim() === '' ? NUMUNE_REDDI_GEREKCESIZ : null;
 }
 
+// Kontrol planının hiçbir ölçüsü Kalite Merkezi balonuna bağlı değilse numune Kalite Merkezi'ne açılamaz (sunucu kuralı: istekKmPlani).
+export const KM_BAGSIZ_PLAN_UYARISI = 'Ölçüler Kalite Merkezi\'ne bağlı değil: numune Kalite Merkezi\'ne açılmaz; hazırlık sorumlusuna haber verin.';
+// Bağsız planda ilk parça kapısı Kalite Merkezi'nde karara bağlanamaz (Arkon kalitesi de ilk parça kararını reddeder).
+export const KM_BAGSIZ_ILK_PARCA_UYARISI = 'Bu pakette ilk parça numunesi karara bağlanamaz: ilk parça kararı yalnız Kalite Merkezi numunesinde verilir.';
+export function kmBagsizPlan(plan: readonly object[] | null | undefined): boolean {
+  if (!plan || plan.length === 0) return false;
+  return !plan.some((b) => { const d = (b as { kmBalon?: unknown }).kmBalon; return typeof d === 'number' && Number.isSafeInteger(d) && d > 0; });
+}
+
 interface Numune { id: string; pkgId?: string; at?: number; status?: string; items?: number[]; results?: Record<string, { ok?: boolean; v?: unknown }>; note?: string; decidedAt?: number }
 interface PlanSatiri { id: number; nom?: string }
 
