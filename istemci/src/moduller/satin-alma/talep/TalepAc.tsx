@@ -317,7 +317,12 @@ function KalemSatiri({ tur, sira, k, emirSecenekleri, emirDegisir, degistir, kal
             : <span className="sa-talep-not">–</span>}
         </td>
         <td data-etiket="Termin"><input className="tc-alan-kutu" type="date" aria-label="Termin" value={k.termin} onChange={(e) => degistir({ termin: e.target.value })} /></td>
-        <td data-etiket="Üretim emri">
+      </tr>
+      <tr className="sa-talep-ek-satir">
+        <td colSpan={sutunSayisi} data-etiket="Açıklama">
+          <div className="sa-talep-ek">
+          <div className="sa-talep-ek-emir">
+            <span className="sa-talep-not">Üretim emri</span>
           <select className="tc-alan-kutu sa-talep-emir" aria-label="Kalemin üretim emri" value={k.emirId} disabled={!emirDegisir || k.mevcut !== null || k.isEmriId !== null}
             onChange={(e) => degistir({ emirId: e.target.value })}>
             <option value="">Bağlı değil</option>
@@ -326,11 +331,7 @@ function KalemSatiri({ tur, sira, k, emirSecenekleri, emirDegisir, degistir, kal
           </select>
           {/* Kutu dar ekranda numarayı kesebilir: tam numara ve parça altında yazılır. */}
           {emirSecenekleri.find((e) => e.deger === k.emirId) && <span className="sa-talep-not">{emirSecenekleri.find((e) => e.deger === k.emirId)!.baslik}</span>}
-        </td>
-      </tr>
-      <tr className="sa-talep-ek-satir">
-        <td colSpan={sutunSayisi} data-etiket="Açıklama">
-          <div className="sa-talep-ek">
+          </div>
             <input className="tc-alan-kutu" aria-label="Kalem açıklaması" value={k.aciklama} maxLength={500} placeholder="Ölçü, marka, kullanım yeri" onChange={(e) => degistir({ aciklama: e.target.value })} />
             <span className="sa-talep-eylem">
           {ayrintiVar && <Dugme simge={acik ? 'up' : 'down'} aria-expanded={acik} aria-controls={`ayr-${ad}`} onClick={() => acikYaz(!acik)}>Ayrıntı</Dugme>}
@@ -572,7 +573,6 @@ export function TalepAc({ taslak = null, taslakEmri = null, taslakBitti, duzenle
                 <th scope="col">Miktar</th>
                 <th scope="col">Birim</th>
                 <th scope="col">Termin</th>
-                <th scope="col">Üretim emri</th>
               </tr>
             </thead>
             <tbody>

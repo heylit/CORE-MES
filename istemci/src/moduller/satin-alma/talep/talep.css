@@ -323,3 +323,9 @@
 @media (max-width: 1023px) {
   .sa-talep .tc-dugme, .sa-talep .sa-kabul-cip, .sa-talep .sa-kabul-secim .tc-isaret { min-height: 44px; }
 }
+/* 3695: üretim emri seçicisi ikinci satırda, Açıklama'nın yanında; Termin sütunu dar. */
+.sa-talep-ek-emir { display: grid; gap: var(--b-1); flex: 1 1 14rem; min-width: 0; }
+.sa-talep-ek-emir .sa-talep-emir { width: 100%; min-width: 0; }
+@media (min-width: 1024px) {
+  .sa-talep-tablo .tc-tablo td[data-etiket='Termin'] .tc-alan-kutu { min-width: 0; width: 9.5rem; }
+}
