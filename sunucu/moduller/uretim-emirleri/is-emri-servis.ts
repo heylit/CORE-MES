@@ -2190,6 +2190,27 @@ export interface FasonHareketiOzeti {
   zaman: string;
 }
 
+// 3703: terminal mal kabul adımı fason dönüşü mü ara stok mu bilsin diye, adım düzeyinde: adımın öncülü (otomatik GKK atlanarak) bitmemiş bir fason
+// adımsa o adım fason dönüşüdür; aynı emirde başka yerde açık fason adım olması yetmez. Dönen küme fason dönüşü adımların iş emri kimlikleridir. Okuma; yetki denetlemez.
+export async function fasonDonusuAdimlari(db: Db, isler: readonly { id: number; uretimEmriId: number }[]): Promise<Set<number>> {
+  if (isler.length === 0) return new Set();
+  const hepsi = await s.isEmirleriGetir(db, [...new Set(isler.map((x) => x.uretimEmriId))]);
+  const sonuc = new Set<number>();
+  for (const { id } of isler) {
+    const adim = hepsi.find((x) => x.id === id);
+    if (adim === undefined) continue;
+    const emrin = hepsi.filter((x) => x.uretimEmriId === adim.uretimEmriId);
+    const gorulen = new Set<number>();
+    const fasonOncul = (a: typeof adim): boolean => adimOnculleri(emrin, a).some((o) => {
+      if (gorulen.has(o.adim.id)) return false;
+      gorulen.add(o.adim.id);
+      return otomatikGkkMi(o.adim) ? fasonOncul(o.adim) : fasonMu(o.adim) && o.adim.durum !== 'tamam';
+    });
+    if (fasonOncul(adim)) sonuc.add(id);
+  }
+  return sonuc;
+}
+
 export type FasonIsEmri = s.FasonIsEmri;
 export const fasonIsEmirleri = (db: Db): Promise<FasonIsEmri[]> => s.fasonIsEmirleri(db);
 

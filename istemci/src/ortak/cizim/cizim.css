@@ -51,6 +51,7 @@
 .tc-ay5-balon:focus-visible .tc-ay5-dis { stroke-width: 4; }
 /* Elle konan (sabit) balonun pimi; balon sürüklenebilir. */
 .tc-ay5-balon { touch-action: none; }
+.tc-ay5-balon .tc-ay5-kod { fill: var(--ink); font-size: var(--yazi-xl); font-weight: 700; paint-order: stroke; stroke: var(--bp-bg); stroke-width: 3; }
 .tc-ay5-balon .tc-ay5-pim { fill: var(--hazard); stroke: var(--bp-bg); stroke-width: 1.5; }
 @keyframes tc-ay5-cik { from { opacity: 0; transform: scale(.2); } }
 
@@ -137,6 +138,8 @@
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); padding: var(--b-2) var(--b-3);
   border-radius: var(--yari-3); background: var(--panel-solid); border: var(--cizgi-ince) solid var(--hazard); box-shadow: var(--shadow);
 }
+.tc-ay5-coklu { max-block-size: calc(100% - var(--b-4)); overflow-y: auto; }
+.tc-ay5-coklu-islem { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); inline-size: 100%; }
 .tc-ay5-coklu span { display: grid; } .tc-ay5-coklu small { color: var(--muted); font-size: var(--yazi-xs); }
 
 /* Çekmece (dokümanlar, ölçüm listesi, öneriler) ve özellik paneli */
@@ -355,7 +358,11 @@
   .tc-ay5-ozellik, .tc-ay5-sifre { inset-inline: var(--b-2); inset-block-end: var(--b-2); inline-size: auto; max-block-size: var(--ekran-boy-62); padding: var(--b-3); }
   .tc-ay5-nom { font-size: var(--yazi-xl); }
   .tc-ay5-cekmece, .tc-ay5-cekmece.tc-ay5-genis { inset-inline: var(--b-2); inline-size: auto; inset-block: calc(var(--b-6) * 5) var(--b-2); }
-  .tc-ay5-araclar { flex-direction: row; max-inline-size: 100%; overflow-x: auto; }
+  .tc-ay5-araclar { flex-direction: row; flex-wrap: wrap; max-inline-size: 100%; overflow: visible; }
+  .tc-ay5-alt-serit {
+    position: absolute; inset-inline: var(--b-2); inset-block-end: var(--b-2); z-index: var(--z-ust); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2);
+    padding: var(--b-2); border-radius: var(--yari-3); background: var(--panel-solid); border: var(--cizgi-ince) solid var(--edge); box-shadow: var(--shadow);
+  }
   .tc-ay5-araclar .tc-ay5-ayrac { inline-size: var(--cizgi-ince); block-size: auto; }
   .tc-ay5-ust { flex-direction: column; align-items: stretch; }
   .tc-ay5-baslik { margin-inline-end: 0; }

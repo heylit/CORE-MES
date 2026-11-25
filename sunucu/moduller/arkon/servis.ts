@@ -50,7 +50,7 @@ import {
   calismaDevral, hataliAdimToplamlari, makineDevral, partiKomutuReddi, planlanacakIsEmirleri, rotasizIsEmirleri, uretimEmriOzeti, aralikAdetleri, katilimSureleri, sonGirisler,
   bitenIsEmirleri, gunlukAralikAdetleri, isEmriPlanBilgileri, kisininGunlukIsEmirleri, kisininHurdaNedenleri, kisininIsEmirleri, komutOnbellegiyle, standartSureler,
   makineAyrimlari as emrinMakineAyrimlari, kisininAcikIsleri, emirlerinMalzemeIhtiyaci, adimliEmirAyrintisi, emirlerinProjeleri, isEmriDugumleri, kararliSayimiSonuclandir, isEmriZamanlari,
-  elleDurdurmaNedeni,
+  elleDurdurmaNedeni, fasonDonusuAdimlari,
   elleOnayliMaddeler, elleMaddeBul, elleMaddeEkle, elleMaddeOlayiEkle, elleMaddeler,
 } from '../uretim-emirleri/disari.ts';
 import type { Emir, Katilim } from '../uretim-emirleri/disari.ts';
@@ -328,6 +328,7 @@ async function isEmriTaslaklari(
   const kayitliGovde = new Map(kayitli.map((b) => [b.kimlik, b.govde]));
   const girdiler: IsEmriPaketGirdisi[] = [];
   // Makinesiz iş emrinin istasyonu iş emri başına okunmaz: hepsi tek toplu okumayla.
+  const fasonDonusuAdimlariKumesi = await fasonDonusuAdimlari(db, isEmirleri);
   const makinesizler = await isEmriOzetleri(db, isEmirleri.flatMap((ie) => (ie.kaynak?.tur === 'makine' && makineler.get(ie.kaynak.id)?.istasyonId != null ? [] : [ie.id])));
   for (const ie of isEmirleri) {
     const emir = emirler.get(ie.uretimEmriId);
@@ -347,6 +348,7 @@ async function isEmriTaslaklari(
       isEmri: ie, emir, proje: projeAdi(emir), istasyon, makineKodu: makine?.kod ?? null, revizyon, talimat: acilanTalimatlar.has(talimatAnahtari) ? talimatlar.get(talimatAnahtari) ?? null : null, sablon,
       plan: revizyonId === null ? null : planlar.get(ie.id) ?? { ...PLANSIZ, zorunlu, ...(taslakta.has(ie.id) ? { taslakta: true as const } : {}) }, ekAciklama: ie.ekAciklama ?? null,
       rotaEksik: revizyonId === null || rota.revizyonId === null ? null : rotaEksik.get(rota.revizyonId) ?? null,
+      fasonDonusu: fasonDonusuAdimlariKumesi.has(ie.id),
       opTipi: ie.operasyonTipiId === undefined ? null : tipler.get(ie.operasyonTipiId)?.kod ?? null,
       opGrubu: ie.operasyonTipiId === undefined ? null : tipler.get(ie.operasyonTipiId)?.grup ?? null,
     };

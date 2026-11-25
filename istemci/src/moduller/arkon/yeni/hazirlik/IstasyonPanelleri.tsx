@@ -8,6 +8,7 @@ import { bip } from '../cekirdek/ses.ts';
 import { useSimdi } from '../veri/baglam.ts';
 import { Cip } from './denetimler.tsx';
 import { etiketSvg, etiketYazdir } from './etiket.ts';
+import { KabulAdimPaneli } from './KabulAdimPaneli.tsx';
 import {
   cigNoktasi, kaliteAltGorunumu, kalemBitti, kodaUyanKalem, olcuUygun, olcumYontemi, ondalik, seriNo, sinirYakin, toplamaSirasi, torkUygun,
   type DepoKalemi, type IstasyonAyari, type MontajKalemi, type TorkAdimi,
@@ -28,6 +29,8 @@ export interface IstasyonKaydi {
   tes?: Record<string, number>;
   // %100 görsel kontrolde kusur nedeni başına kusurlu sayısı.
   gm?: Record<string, number>;
+  // 3703: mal kabul modundaki depo adımında şimdiye kadar kabul edilen adet (fasonda Stok'a yazılan); eksik adette iş açık kalır, sayaç sıfırlanmaz.
+  kabulYazilan?: number;
 }
 export type IsDegisikligi = (x: Order) => Partial<Order>;
 export interface PanelArayuzu {
@@ -74,7 +77,12 @@ export function KodCubugu({ okundu, kamera, yerTutucu }: { okundu: (kod: string)
   );
 }
 
-export function DepoPaneli({ api }: PanelOzellikleri) {
+// 3703: mod Mal kabul (giriş) ise toplama listesi yerine Stok kaydının özeti (KabulAdimPaneli).
+export function DepoPaneli(o: PanelOzellikleri) {
+  return o.api.ayar.mode === 'receive' ? <KabulAdimPaneli {...o} /> : <ToplamaPaneli {...o} />;
+}
+
+function ToplamaPaneli({ api }: PanelOzellikleri) {
   const { ayar, kayit } = api;
   const kalemler: DepoKalemi[] = ayar.items || [];
   const toplanan = kayit.picked || {};

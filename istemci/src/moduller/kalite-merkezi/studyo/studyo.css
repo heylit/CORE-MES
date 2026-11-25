@@ -78,7 +78,7 @@
 @media (max-width: 767px) {
   .km-st { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; height: auto; min-height: 0; }
   .km-st-mseg {
-    display: flex; gap: var(--b-1); padding: var(--b-1); border-radius: var(--yari-2); background: var(--panel2); border: var(--cizgi-ince) solid var(--edge);
+    order: 9; position: sticky; inset-block-end: var(--alt-cubuk); z-index: var(--z-ust); display: flex; gap: var(--b-1); padding: var(--b-1); border-radius: var(--yari-2); background: var(--panel2); border: var(--cizgi-ince) solid var(--edge);
   }
   .km-st-mseg button {
     flex: 1; min-height: var(--dokunma); border: 0; border-radius: var(--yari-1); background: none; color: var(--muted); font: inherit; font-weight: 700; cursor: pointer;
@@ -89,6 +89,8 @@
   .km-st-sag { grid-column: auto; grid-template-columns: minmax(0, 1fr); }
   .km-st-orta { height: calc(100dvh - var(--ust-cubuk) - var(--alt-cubuk) - var(--b-6) * 3); min-height: var(--pencere-genis); }
   .km-st-m-dosya .km-st-orta, .km-st-m-dosya .km-st-sag,
+  .km-st-m-dosya .km-st-gr, .km-st-m-resim .km-st-gr, .km-st-m-plan .km-st-gr,
+  .km-st-m-gruplar .km-st-sol, .km-st-m-gruplar .km-st-orta, .km-st-m-gruplar .km-st-sag,
   .km-st-m-resim .km-st-sol, .km-st-m-resim .km-st-sag,
   .km-st-m-plan .km-st-sol, .km-st-m-plan .km-st-orta { display: none; }
 }
@@ -102,3 +104,41 @@
 }
 .km-st-dosya:hover { border-color: color-mix(in srgb, var(--hazard) 50%, transparent); }
 .km-st-dosya input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+/* Balon grupları (3693): grup kartı, balon seçici düğmeleri ve operasyon rozetleri. */
+.km-st-gruplar { align-content: start; }
+.km-st-grup-ust { display: flex; align-items: center; justify-content: space-between; gap: var(--b-2); }
+.km-st-grup { display: grid; gap: var(--b-2); padding: var(--b-2); border-radius: var(--yari-2); background: var(--panel2); border: var(--cizgi-ince) solid var(--edge); }
+.km-st-grup-uyari { border-color: var(--stop); }
+.km-st-grup-balonlar, .km-st-grup-op { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); }
+.km-st-grup-balon {
+  min-width: var(--dokunma); min-height: var(--dokunma); border-radius: 50%; border: var(--cizgi-ince) solid var(--run); background: var(--panel);
+  color: var(--run); font: inherit; font-weight: 700; cursor: pointer;
+}
+.km-st-grup-balon.on { background: var(--hazard); border-color: var(--hazard); color: var(--ink); }
+.km-st-grup-balon:disabled { cursor: default; opacity: .7; }
+.km-st-grup-x { display: inline-grid; place-items: center; border: 0; background: none; color: inherit; cursor: pointer; }
+
+/* Gruplar: 1280'de sağ sütunun üstünde, 768'de alt satırda tam genişlikte, 360'ta kendi sekmesinde. */
+.km-st-gr { display: flex; flex-direction: column; gap: var(--b-3); min-height: 0; overflow: auto; }
+@media (min-width: 1200px) {
+  .km-st { grid-template-areas: "sol orta gr" "sol orta sag"; grid-template-rows: minmax(0, 3fr) minmax(0, 2fr); }
+  .km-st-sol { grid-area: sol; } .km-st-orta { grid-area: orta; } .km-st-gr { grid-area: gr; } .km-st-sag { grid-area: sag; }
+  .km-st-genis { grid-template-areas: "orta"; grid-template-rows: minmax(0, 1fr); }
+  .km-st-genis .km-st-gr { display: none; }
+}
+@media (min-width: 768px) and (max-width: 1199px) { .km-st-gr { grid-column: 1 / -1; } .km-st-genis .km-st-gr { display: none; } }
+/* Dar sütunda taşmasın: kart ve grup içeriği daralır, uzun düğme metni sarar. */
+.km-st-gruplar, .km-st-grup, .km-st-grup > *, .km-st-gruplar > * { min-width: 0; }
+.km-st-grup-ust { flex-wrap: wrap; }
+.km-st-grup .tc-dugme, .km-st-gruplar .tc-dugme { white-space: normal; text-align: start; max-inline-size: 100%; }
+.km-st-grup-ust > :nth-child(2) { flex: 1 1 calc(var(--b-6) * 3); }
+
+/* Arayüz bakışı (3693): rozet kartı taşırmaz, kaydıran sütunlar kaydırma çubuğunu gösterir, üyelik rengin yanında işaretle de görünür. */
+.km-st-belge { flex-wrap: wrap; min-width: 0; }
+.km-st-belge-satir > .km-st-belge { flex: 1 1 0; }
+.km-st-sol, .km-st-sag, .km-st-gr { scrollbar-width: thin; scrollbar-color: var(--muted) transparent; }
+.km-st-grup-balon { position: relative; }
+.km-st-grup-balon.on::after { content: "✓"; position: absolute; inset-block-start: calc(var(--b-1) * -1); inset-inline-end: calc(var(--b-1) * -1); font-size: var(--yazi-xs); line-height: 1; padding: 1px 3px; border-radius: 50%; background: var(--ink); color: var(--panel-solid); }
+
+@media (max-width: 767px) { .km-st-sol, .km-st-sag, .km-st-gr { padding-block-end: calc(var(--dokunma) * 2); } }

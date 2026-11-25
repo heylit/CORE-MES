@@ -201,6 +201,11 @@ export function noktaAlanlari(metin: string, etiket: string, cls: string) {
   if (!p) return null;
   return { nom: p.nomText, tol: p.tolText, min: p.min, max: p.max, tool: p.tool, gauge: p.gauge, l: etiket || p.label || olcuTuruAdi(p) };
 }
+// Serbest balon (3693): resimde ölçü yazısı olmayan kontrol; sınırı yoktur, sonucu yalnız Geçer ya da Geçmez'dir (mastar gibi).
+export function serbestAlanlari(metin: string, etiket: string) {
+  const ad = metin.trim() || etiket.trim() || 'Serbest kontrol';
+  return { nom: ad, tol: undefined, min: 0, max: 0, tool: undefined, gauge: true, l: etiket.trim() || 'Serbest' };
+}
 // Düzenlemede ölçünün resimdeki yazımı (adet "3× " biçiminden "3x "e; açık tolerans eklenir).
 export function duzenlemeMetni(b: Pick<Balon, 'nom' | 'tol'>): string {
   const tol = b.tol ?? '';

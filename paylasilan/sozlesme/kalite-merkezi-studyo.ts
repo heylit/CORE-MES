@@ -92,7 +92,11 @@ export const kmNumuneKurali = z.object({
 export const kmNumunePlani = z.object({ opNo: z.number().int().positive(), kurallar: z.array(kmNumuneKurali).max(50), surum: z.number().int().positive() });
 
 // `alinmamis`: malzeme kartına Çizim Merkezi'nde bağlı, yayındaki PDF ve 3B modelden parçaya hiç alınmamışların sayısı (1993 a); kaldırılan sayılmaz.
-export const kmStudyoParcaCevabi = z.object({ resimler: z.array(kmResim), numunePlanlari: z.array(kmNumunePlani), alinmamis: z.number().int().nonnegative() });
+// 3693: `operasyonlar` yürürlükteki rotanın operasyonlarıdır (grup atama listesi); kimlik gizli operasyon kimliği, opNo rotanın bugünkü numarasıdır.
+export const kmStudyoParcaCevabi = z.object({
+  resimler: z.array(kmResim), numunePlanlari: z.array(kmNumunePlani), alinmamis: z.number().int().nonnegative(),
+  operasyonlar: z.array(z.object({ operasyonId: z.number().int(), opNo: z.number().int(), ad: z.string().optional() })).optional(),
+});
 // Kartına bağlı yayındaki belgeler parçaya alınır; parçadan elle kaldırılmış revizyon geri getirilmez (1993 a).
 export const kmStudyoEsitlemeCevabi = z.object({ eklenen: z.number().int().nonnegative() });
 // Resim ve modeller listesi (799): parça başına etkin resim, 3B model ve balon sayısı, kuralı olan numune planı sayısı. `merkezde`:

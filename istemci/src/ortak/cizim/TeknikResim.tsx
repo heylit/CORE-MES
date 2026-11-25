@@ -1,7 +1,8 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as TepkiTusu, type PointerEvent as TepkiIsaretci, type ReactNode } from 'react';
 import { ESKI_CIZIM, type EskiCizim } from './cekirdek/cizim-merkezi.ts';
 import { ALET_ZORUNLU_ILETISI, aletSecimAnahtari, olcumAletDamgasi, seciliAlet } from './cekirdek/olcum-aleti.ts';
-import { DurumKutusu, Dugme, Girdi, Secim, Simge, useBildirim, type BildirimTonu } from '../arayuz/index.ts';
+import { DurumKutusu, Dugme, Girdi, Menu, Secim, Simge, useBildirim, type BildirimTonu } from '../arayuz/index.ts';
+import { useTelefon } from '../arayuz/telefon.ts';
 import type { SimgeAdi } from '../tasarim/simgeler.ts';
 import { useTema } from '../veri/tema.ts';
 import { bellegeKoy, cihazAyari, PDF_BELLEGI, saklanacak, type PdfKaydi } from './bellek.ts';
@@ -10,7 +11,7 @@ import { bekle, tesseract } from './kitaplik.ts';
 import { BALON_BOYLARI, BALON_KIPI_ADI, BALON_KIPLERI, balonDizimi, kilavuzCizgisi, type BalonKipi, type DizimKonumu } from './balon-dizimi.ts';
 import {
   ayarDuzelt, ayarImzasi, balonCogalt, balonlariCikar, balonYazisi, dosyaBicimi, duzenlemeMetni, enYakinYazi, gdtdenCevir, GDT_SEMBOLLERI, gdtYazimi,
-  gdtYazimiMetni, gdtyeCevir, gecmisGeri, gecmisIleri, gecmisKaydet, GORUNUS_ANAHTARLARI, KONTROL_SIKLIKLARI, modelAdiMi, noktaAlanlari, numaraDegistir,
+  gdtYazimiMetni, gdtyeCevir, gecmisGeri, serbestAlanlari, gecmisIleri, gecmisKaydet, GORUNUS_ANAHTARLARI, KONTROL_SIKLIKLARI, modelAdiMi, noktaAlanlari, numaraDegistir,
   numaralariUygula, numaraSirasi, ocrGerekir, OLCU_ALETLERI, OLCU_TURLERI, olcuTuru, olcuTuruSec, olcuYazimi, olcuYazimiMetni, olcumDegerlendir,
   olcumRaporu, onerileriEkle, SIRA_YOLU_ADI, TOL_KIPI_ADI, tolKipiSec, toleransKonumu, yeniOneriler, yontem, YONTEM_ADI,
   type Balon, type CalismaDosyasi, type Gecmis, type NumaraYolu, type Oneri, type Olcum, type OlcumYontemi, type OkumaAyari, type SiraYolu, type TolKipi,
@@ -75,6 +76,14 @@ export interface TeknikResimKontrolu {
   balonAyariYaz?: (a: BalonAyari) => void;
   // Balonun elle konan yeri ve istenen yerleşimi. Verilmezse balon listesine yazılır (balonlarYaz).
   balonYeriYaz?: (id: number, yer: Balon['yer'], yerKipi: Balon['yerKipi']) => void;
+  // 3693: balonun grup kodu ("A", "A, B") balonun yanında yazılır; Görünüm menüsünden kapatılır. Çoklu seçim değişince seçili numaralar bildirilir;
+  // `secimAnahtari` değişince seçim temizlenir. `saltOkunurNedeni` balon ekleme kapalıyken düğmenin yanında yazar.
+  grupKodlari?: Readonly<Record<number, string>>;
+  secimBildir?: (numaralar: readonly number[]) => void;
+  secimAnahtari?: number;
+  saltOkunurNedeni?: string | null;
+  // Telefonda (360) balon ekleme ve bu eylem (ör. Planı kaydet) araç çubuğunda değil alt şeritte durur.
+  altSeritEylemi?: ReactNode;
   // ADR 0032: sunucunun aynı renk imzasıyla hazırladığı sayfa görüntüsü. Verilmezse ya da boş dönerse görüntü bu cihazda çizilir.
   hazirGoruntu?: (pdf: Uint8Array, sayfa: number, imza: string) => Promise<Blob | null>;
 }
@@ -85,7 +94,7 @@ interface Mesgul { t: string; steps: string[]; i: number; pct?: number }
 // kritiklik, sıklık ve not. `kaynak` balonun bağlı olduğu resim yazısıdır.
 interface Duzenleme {
   isNew?: boolean; id?: number; x?: number; y?: number; ar?: Balon['ar']; text: string; label: string;
-  no?: string; yol?: NumaraYolu | null; tool?: string; aletElle?: boolean; m?: OlcumYontemi; crit?: boolean; freq?: string; not?: string; kaynak?: string;
+  serbest?: boolean; no?: string; yol?: NumaraYolu | null; tool?: string; aletElle?: boolean; m?: OlcumYontemi; crit?: boolean; freq?: string; not?: string; kaynak?: string;
 }
 interface GecmisDurumu { bal: readonly Balon[]; olcum?: Readonly<Record<number, Olcum>> }
 const BOS_GECMIS: Gecmis<GecmisDurumu> = { geri: [], ileri: [] };
@@ -145,7 +154,8 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
   const tasima = useRef<{ id: number; dx: number; dy: number; x: number; y: number; oynadi: boolean } | null>(null), tasindi = useRef(false);
   const [z, setZ] = useState({ k: 1, x: 0, y: 0 });
   const [dims, setDims] = useState(true), [showB, setShowB] = useState(true), [grid, setGrid] = useState(true), [hidden, setHidden] = useState(true);
-  const [adding, setAdding] = useState(false);
+  const telefon = useTelefon();
+  const [topluAcik, setTopluAcik] = useState(false), [adding, setAdding] = useState(false), [serbestEkle, setSerbestEkle] = useState(false), [kodGoster, setKodGoster] = useState(true);
   const [model3d, setModel3d] = useState<{ data: Gorunum3B; fa: number } | null>(null);
   const [fs, setFs] = useState(false);
   const [suggest, setSuggest] = useState<{ v: number; alt: number } | null>(null), [pinMode, setPinMode] = useState(false);
@@ -157,6 +167,8 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
   const [regMode, setRegMode] = useState(false), [regRect, setRegRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [pwAsk, setPwAsk] = useState<{ again: boolean; v: string } | null>(null), [lowOn, setLowOn] = useState(false), [pageTick, setPageTick] = useState(0);
   const [selMode, setSelMode] = useState(false), [msel, setMsel] = useState<number[]>([]);
+  useEffect(() => { ctl.secimBildir?.(msel); }, [msel]);
+  useEffect(() => { if (ctl.secimAnahtari !== undefined) setMsel([]); }, [ctl.secimAnahtari]);
   const [deep, setDeep] = useState<{ url: string; x: number; y: number; w: number; h: number } | null>(null);
   const [gecmis, setGecmis] = useState(BOS_GECMIS);
   const [onizleme, setOnizleme] = useState<{ yol: SiraYolu; harita: Record<number, number> } | null>(null);
@@ -345,6 +357,7 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
       const p = toVB(e.clientX, e.clientY); if (!p) return;
       // Ölçü yazısına dokunulduysa değerler yazıdan dolar.
       const yz = doc.kind === 'pdf' ? enYakinYazi(pageRef.current?.dims ?? [], p[0], p[1], doc.w * 0.012) : null;
+      if (serbestEkle) { setEdit({ isNew: true, x: p[0], y: p[1], text: '', label: '', serbest: true }); setSel(null); setAdding(false); setSerbestEkle(false); return; }
       setEdit(yz ? { isNew: true, x: yz.x, y: yz.y, ar: yz.ar, text: yz.raw, label: yz.l.replace(/ \(.*\)$/, ''), kaynak: yz.raw } : { isNew: true, x: p[0], y: p[1], text: '', label: '' });
       setSel(null); setAdding(false);
     }
@@ -533,7 +546,7 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
   const duzenle = (x: Balon, ek?: Partial<Duzenleme>) => {
     const text = duzenlemeMetni(x), p = AKTol.parse(text, { cls: doc.cls || 'm' });
     setEdit({
-      id: x.id, text, label: x.l ?? '', no: String(x.id), yol: null, tool: x.tool ?? '', aletElle: !!x.tool && !!p && p.tool !== x.tool,
+      id: x.id, text, label: x.l ?? '', serbest: !!x.gauge && !p, no: String(x.id), yol: null, tool: x.tool ?? '', aletElle: !!x.tool && !!p && p.tool !== x.tool,
       m: yontem(x), crit: !!x.crit, freq: x.freq ?? '', not: x.not ?? '', kaynak: yaziBul(x.ar)?.raw ?? '', ...ek,
     });
   };
@@ -555,7 +568,7 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
   const noCakisir = (e: Duzenleme) => { const h = hedefNo(e); return h != null && bal.some((x) => x.id === h); };
   const applyEdit = () => {
     if (!edit) return;
-    const fields = noktaAlanlari(edit.text, edit.label, doc.cls || 'm');
+    const fields = edit.serbest ? serbestAlanlari(edit.text, edit.label) : noktaAlanlari(edit.text, edit.label, doc.cls || 'm');
     if (!fields) { say('Ölçü anlaşılamadı · örn. Ø40 H7, 18 ±0.05, M8x1.25', 'hold'); return; }
     if (noCakisir(edit) && !edit.yol) { say('Numara ' + edit.no + ' başka balonda · yer değiştir ya da araya al', 'hold'); return; }
     const ek = {
@@ -765,11 +778,20 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
           {cm ? <><path className="tc-ay5-halka" d={ALTIGEN} /><path className="tc-ay5-dis" d={ALTIGEN} /></> : <><circle className="tc-ay5-halka" r="16" /><circle className="tc-ay5-dis" r="16" /></>}
           <text className={onizleme && onizleme.harita[x.id] !== x.id ? 'tc-ay5-onizleme' : undefined}>{onizleme?.harita[x.id] ?? x.id}</text>
           {ps.yer === 'sabit' && <circle className="tc-ay5-pim" cx="12" cy="-12" r="4" />}
+          {kodGoster && ctl.grupKodlari?.[x.id] ? <text className="tc-ay5-kod" x="24" y="-20">{ctl.grupKodlari[x.id]}</text> : null}
         </g>
       </g>
     );
   }) : null;
 
+  const balonEkleMenusu = onPrimary ? (
+                <Menu etiket="Balon ekle" metin="Balon ekle" simge="target" pasif={RO}
+                  ipucu={RO ? ctl.saltOkunurNedeni ?? 'Bu resimde balon eklenemez' : undefined}
+                  ogeler={[
+                    { anahtar: 'olcu', baslik: 'Ölçü yazısından (B)', simge: 'scan', sec: () => { setAdding(true); setSerbestEkle(false); setRegMode(false); setSel(null); } },
+                    { anahtar: 'serbest', baslik: 'Serbest balon (ölçüsüz, Geçer/Geçmez)', simge: 'target', sec: () => { setAdding(true); setSerbestEkle(true); setRegMode(false); setSel(null); } },
+                  ]} />
+  ) : null;
   const pin = pinSel != null ? ctl.notlar?.find((p) => p.id === pinSel) : undefined;
   const sayfaGec = (n: number) => { if (doc.file && doc.baseKey) void showPdfPage(n, doc.file, doc.baseKey).then(() => setBusy(null)); };
   const kok = ['tc-ay5-resim', fs && 'tc-ay5-tam', !dims && 'tc-ay5-olcusuz', !hidden && 'tc-ay5-gizlisiz', (adding || regMode) && 'tc-ay5-ekliyor'].filter(Boolean).join(' ');
@@ -854,17 +876,21 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
             <>
               <span className="tc-ay5-ayrac" aria-hidden="true" />
               {ctl.notBirak && onPrimary && arac('flag', pinMode, () => { setPinMode(!pinMode); setAdding(false); setSel(null); }, 'Resim üzerine geri bildirim')}
-              {!RO && onPrimary && arac('target', adding, () => { setAdding(!adding); setRegMode(false); setSel(null); }, 'Kontrol noktası ekle (B)')}
+              {!telefon && balonEkleMenusu}
+              {RO && onPrimary && ctl.saltOkunurNedeni && !telefon && <span className="tc-ay5-soluk">{ctl.saltOkunurNedeni}</span>}
               {!RO && onPrimary && bal.length > 0 && arac('clipboard-check', selMode, () => { setSelMode(!selMode); setMsel([]); setAdding(false); setRegMode(false); setPinMode(false); setSel(null); }, 'Çoklu seç · CMM / Elle')}
               {!RO && onPrimary && doc.kind === 'pdf' && arac('scan', regMode, () => { setRegMode(!regMode); setAdding(false); setPinMode(false); setSel(null); }, 'Bölge oku · ölçüyü çerçeve içine al (R)')}
               {!RO && onPrimary && gecmis.geri.length > 0 && arac('chev-left', false, () => gecmisUygula(false), 'Geri al (Ctrl+Z)')}
               {!RO && onPrimary && gecmis.ileri.length > 0 && arac('chev-right', false, () => gecmisUygula(true), 'Yinele (Ctrl+Y)')}
               {arac('list', drawer === 'insp', () => setDrawer(drawer === 'insp' ? null : 'insp'), 'Ölçüm listesi')}
-              {arac('eye', showB, () => setShowB(!showB), 'Balonları göster')}
-              {onPrimary && bal.length > 0 && arac('gear', drawer === 'balon', () => setDrawer(drawer === 'balon' ? null : 'balon'), 'Balon boyutu ve yerleşimi')}
+              <Menu etiket="Görünüm" metin="Görünüm" simge="eye" ogeler={[
+                { anahtar: 'balon', baslik: `${showB ? '☑' : '☐'} Balonları göster`, sec: () => setShowB(!showB) },
+                ...(ctl.grupKodlari ? [{ anahtar: 'kod', baslik: `${kodGoster ? '☑' : '☐'} Grup kodunu göster`, sec: () => setKodGoster(!kodGoster) }] : []),
+                { anahtar: 'izgara', baslik: `${grid ? '☑' : '☐'} Izgara`, sec: () => setGrid(!grid) },
+                ...(onPrimary && bal.length > 0 ? [{ anahtar: 'boyut', baslik: `Balon boyutu ve yerleşimi (${BALON_BOYLARI.find(([v]) => v === balonAyari.carpan)?.[1] ?? 'M'})…`, simge: 'gear' as const, sec: () => setDrawer('balon') }] : []),
+              ]} />
               {doc.kind !== 'pdf' && arac('ruler', dims, () => setDims(!dims), 'Ölçüler')}
               {doc.kind === 'step' && arac('dash', hidden, () => setHidden(!hidden), 'Gizli çizgiler')}
-              {arac('grid', grid, () => setGrid(!grid), 'Izgara')}
               <span className="tc-ay5-ayrac" aria-hidden="true" />
               {arac('zin', false, () => { const c = ctr(); zoomAt(1.3, c[0], c[1]); }, 'Yakınlaştır')}
               {arac('zout', false, () => { const c = ctr(); zoomAt(1 / 1.3, c[0], c[1]); }, 'Uzaklaştır')}
@@ -882,22 +908,34 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
       )}
       {pinMode && <div className="tc-ay5-ipucu"><Simge ad="flag" />Notu bırakmak istediğin yere dokun<Dugme onClick={() => setPinMode(false)}>Vazgeç</Dugme></div>}
       {selMode && (
-        <div className="tc-ay5-ipucu tc-ay5-coklu" onPointerDown={(e) => e.stopPropagation()}>
+        <div className="tc-ay5-ipucu tc-ay5-coklu" role="group" aria-label="Çoklu seçim" onPointerDown={(e) => e.stopPropagation()}>
           <Simge ad="clipboard-check" /><span><b>{msel.length}</b> balon seçili<small>Balona dokun ya da çerçeve çiz</small></span>
           <Dugme onClick={() => setMsel(msel.length === bal.length ? [] : bal.map((x) => x.id))}>{msel.length === bal.length ? 'Hiçbiri' : 'Tümü'}</Dugme>
-          <Dugme simge="ruler" disabled={!msel.length} onClick={() => setMeth(msel, 'man')}>Elle</Dugme>
-          <Dugme simge="box" disabled={!msel.length} onClick={() => setMeth(msel, 'cmm')}>CMM</Dugme>
-          <Dugme simge="alert" disabled={!msel.length} onClick={() => { const hepsi = msel.every((id) => bal.find((x) => x.id === id)?.crit); topluYaz(msel, (x) => ({ ...x, crit: hepsi ? undefined : true }), hepsi ? 'kritik değil' : 'kritik'); }}>Kritik</Dugme>
-          <Secim etiket="Ölçü aleti" value="" disabled={!msel.length} bosSecenek="Seç" secenekler={OLCU_ALETLERI.map((a) => ({ deger: a, baslik: a }))}
-            onChange={(e) => { const a = e.target.value; if (a) topluYaz(msel, (x) => ({ ...x, tool: a, ...(a === 'CMM' ? { m: 'cmm' as const } : {}) }), a); }} />
-          <Secim etiket="Sıklık" value="" disabled={!msel.length} bosSecenek="Seç" secenekler={KONTROL_SIKLIKLARI.map((a) => ({ deger: a, baslik: a }))}
-            onChange={(e) => { const a = e.target.value; if (a) topluYaz(msel, (x) => ({ ...x, freq: a }), a); }} />
-          <Dugme simge="trash" tur="tehlike" disabled={!msel.length} onClick={() => removeBalloons(msel)}>Sil</Dugme>
-          <Dugme tur="birincil" onClick={() => { setSelMode(false); setMsel([]); }}>Bitti</Dugme>
+          {!RO && <Dugme simge="gear" aria-expanded={topluAcik} onClick={() => setTopluAcik(!topluAcik)}>Toplu işlemler</Dugme>}
+          <Dugme tur="birincil" onClick={() => { setSelMode(false); setMsel([]); setTopluAcik(false); }}>Bitti</Dugme>
+          {topluAcik && !RO && (
+            <div className="tc-ay5-coklu-islem">
+              <Dugme simge="ruler" disabled={!msel.length} onClick={() => setMeth(msel, 'man')}>Elle</Dugme>
+              <Dugme simge="box" disabled={!msel.length} onClick={() => setMeth(msel, 'cmm')}>CMM</Dugme>
+              <Dugme simge="alert" disabled={!msel.length} onClick={() => { const hepsi = msel.every((id) => bal.find((x) => x.id === id)?.crit); topluYaz(msel, (x) => ({ ...x, crit: hepsi ? undefined : true }), hepsi ? 'kritik değil' : 'kritik'); }}>Kritik</Dugme>
+              <Secim etiket="Ölçü aleti" value="" disabled={!msel.length} bosSecenek="Seç" secenekler={OLCU_ALETLERI.map((a) => ({ deger: a, baslik: a }))}
+                onChange={(e) => { const a = e.target.value; if (a) topluYaz(msel, (x) => ({ ...x, tool: a, ...(a === 'CMM' ? { m: 'cmm' as const } : {}) }), a); }} />
+              <Secim etiket="Sıklık" value="" disabled={!msel.length} bosSecenek="Seç" secenekler={KONTROL_SIKLIKLARI.map((a) => ({ deger: a, baslik: a }))}
+                onChange={(e) => { const a = e.target.value; if (a) topluYaz(msel, (x) => ({ ...x, freq: a }), a); }} />
+              <Dugme simge="trash" tur="tehlike" disabled={!msel.length} onClick={() => removeBalloons(msel)}>Sil</Dugme>
+            </div>
+          )}
         </div>
       )}
       {regMode && <div className="tc-ay5-ipucu"><Simge ad="scan" />Okunacak ölçüyü parmağınla çerçeve içine al<Dugme onClick={() => { setRegMode(false); setRegRect(null); }}>Vazgeç</Dugme></div>}
-      {adding && <div className="tc-ay5-ipucu"><Simge ad="target" />Resimde ölçünün yanına dokun<Dugme onClick={() => setAdding(false)}>Vazgeç</Dugme></div>}
+      {telefon && !mode3d && onPrimary && !selMode && (
+        <div className="tc-ay5-alt-serit" role="group" aria-label="Balon ve plan işlemleri">
+          {balonEkleMenusu}
+          {RO && ctl.saltOkunurNedeni ? <span className="tc-ay5-soluk">{ctl.saltOkunurNedeni}</span> : null}
+          {ctl.altSeritEylemi}
+        </div>
+      )}
+      {adding && <div className="tc-ay5-ipucu"><Simge ad="target" />{serbestEkle ? 'Serbest balonun yerine dokun' : 'Resimde ölçünün yanına dokun'}<Dugme onClick={() => { setAdding(false); setSerbestEkle(false); }}>Vazgeç</Dugme></div>}
 
       {drawer === 'lib' && (
         <div className="tc-ay5-cekmece" role="dialog" aria-label="Dokümanlar" onPointerDown={(e) => e.stopPropagation()}>
@@ -1110,6 +1148,19 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
                   ))}
                 </div></div></div>
             )}
+            <div className="tc-ay5-bilgi"><span>Ölçüsüz kontrol (resimde ölçü yazısı yok): yalnız Geçer / Geçmez</span>
+              <div className="tc-ay5-dilimler">
+                <button type="button" className={`tc-ay5-dilim${edit.serbest ? ' tc-ay5-acik' : ''}`} aria-pressed={!!edit.serbest} onClick={() => yaz({ serbest: !edit.serbest })}>Serbest balon</button>
+              </div>
+            </div>
+            {edit.serbest ? (
+              <>
+                <Girdi etiket="Kontrol adı" autoFocus placeholder="örn. Yüzey kontrolü · Çapak yok" value={edit.text} onChange={(e) => yaz({ text: e.target.value })}
+                  onKeyDown={(e) => { if (e.key === 'Enter') applyEdit(); }} />
+                <Girdi etiket="Etiket (isteğe bağlı)" placeholder="örn. Görsel" value={edit.label} onChange={(e) => yaz({ label: e.target.value })} />
+              </>
+            ) : (
+              <>
             <div className="tc-ay5-dilimler" role="group" aria-label="Tür">
               {[...OLCU_TURLERI, ['gdt', 'GD&T'] as const].map(([k, ad]) => (
                 <button key={k} type="button" className={`tc-ay5-dilim${tur === k ? ' tc-ay5-acik' : ''}`} aria-pressed={tur === k} onClick={() => turSec(k)}>{ad}</button>
@@ -1169,6 +1220,8 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
                 <button type="button" className={`tc-ay5-dilim${edit.crit ? ' tc-ay5-acik' : ''}`} aria-pressed={!!edit.crit} onClick={() => yaz({ crit: !edit.crit })}><Simge ad="alert" boyut="k" />Kritik</button>
               </div>
             </div>
+              </>
+            )}
             <Girdi etiket="Not (isteğe bağlı)" placeholder="örn. boydan, iki yönde ölç" value={edit.not ?? ''} onChange={(e) => yaz({ not: e.target.value })} />
             <div className="tc-ay5-dugmeler">
               {!edit.isNew && edit.id != null && <Dugme tur="tehlike" simge="trash" aria-label="Sil" onClick={() => removeBalloon(edit.id!)} />}

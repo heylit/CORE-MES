@@ -1087,3 +1087,78 @@ describe('A1 Üretim Terminali CORE reddi bildirimi', () => {
     expect(bildirimler()).toEqual([`İş başlamadı · ${RET}`]);
   }, 40000);
 });
+
+// 3703: depo istasyonunda adım "Mal kabul (giriş)" modundaysa Kabul +1 sayar, Bitir "Kabulü yaz" penceresini açar; ara stokta Stok'a kayıt yazılmaz.
+describe('A1 Üretim Terminali mal kabul adımı (3703)', () => {
+  const kabulIsi = (hedef: number, kimlik = 97, ortak = false) => {
+    const tmi = { ...PAKET, id: `tmi-ie-${String(kimlik)}`, no: `UE-DENEME-${String(kimlik)}`, opType: 'depo', st: { mode: 'receive' }, target: hedef, malzemeNo: 305, tmi: { emirId: kimlik, isEmriId: kimlik } };
+    const deneme = { ...ISTASYONLU, kullanici: { ...ISTASYONLU.kullanici, islemler: [...ISTASYONLU.kullanici.islemler, 'stok.giris'] } } as Deneme;
+    const istekler = sunucuKur(deneme, { belgeler: { pkgs: [{ kimlik: tmi.id, surum: 1, govde: tmi }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
+    const asil = globalThis.fetch;
+    vi.stubGlobal('fetch', async (adres: string, istek?: RequestInit) => {
+      const a = String(adres);
+      if (a.endsWith('/oturum/cihaz')) return new Response(JSON.stringify(ortak ? { ortak: true, id: 1, ad: 'Deneme tableti', profil: 'istasyon' } : { ortak: false }), { status: 200 });
+      if (new RegExp(`/uretim-emirleri/${String(kimlik)}$`).test(a)) return new Response(JSON.stringify({ adimlar: [] }), { status: 200 });
+      if (a.endsWith('/stok/acik-siparis-satirlari')) return new Response(JSON.stringify({ satirlar: [] }), { status: 200 });
+      if (a.includes('/stok/konumlar')) return new Response(JSON.stringify({ satirlar: [] }), { status: 200 });
+      if (a.endsWith('/stok/mal-kabul') && istek?.method === 'POST') {
+        istekler.push({ yontem: 'POST', yol: '/stok/mal-kabul', govde: JSON.parse(String(istek.body)) });
+        return new Response(JSON.stringify({ belge: { id: 9, no: 'MK-000009', tur: 'diger', irsaliyeNo: null, zaman: '2026-11-25T10:00:00+03:00', kisiAd: 'D', satirSayisi: 1, farkSayisi: 0, duzeltilenId: null, duzeltenId: null }, hareketIdler: [1] }), { status: 200 });
+      }
+      return asil(adres, istek);
+    });
+    arkonAc('/uretim-terminali');
+    return istekler;
+  };
+  const kartlaBaslat = () => {
+    const k = screen.getByRole('dialog', { name: 'Refakat kartını okut' });
+    fireEvent.change(within(k).getByLabelText(/^Kart/), { target: { value: 'RP:5' } });
+    fireEvent.click(within(k).getByRole('button', { name: /Kartla başlat/ }));
+  };
+  const baslat = async () => {
+    await ekran();
+    const grup = () => within(screen.getByRole('group', { name: 'İş durumu' }));
+    await waitFor(() => { expect(grup().getByRole('button', { name: /Başlat/ })).toBeTruthy(); }, { timeout: 10000 });
+    await new Promise((r) => setTimeout(r, 300));
+    fireEvent.click(grup().getByRole('button', { name: /Başlat/ }));
+    kartlaBaslat();
+    return grup;
+  };
+
+  it('Kabul +1 hedefte durur ve nedenini yazar; Bitir Kabulü yaz penceresini açar, ara stokta Stok kaydı yazılmaz ve iş biter', async () => {
+    const istekler = kabulIsi(2);
+    const grup = await baslat();
+    const arti = await screen.findByRole('button', { name: 'Kabul +1' }, { timeout: 10000 });
+    fireEvent.click(arti);
+    expect((await screen.findAllByText(/Kabul \+1 · 1/)).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Toplanan \+1/)).toBeNull();
+    fireEvent.click(arti);
+    await waitFor(() => { expect((arti as HTMLButtonElement).disabled).toBe(true); }, { timeout: 10000 });
+    expect(await screen.findByText(/Hedef 2 adet; fazlası kabul edilmez/)).toBeTruthy();
+    const bitir = await waitFor(() => grup().getByRole('button', { name: /Bitir/ }), { timeout: 10000 });
+    fireEvent.click(bitir);
+    fireEvent.click(bitir);
+    const p = await screen.findByRole('dialog', { name: 'Kabulü yaz' }, { timeout: 10000 });
+    // Bitir onaydan önce işi kapatmaz.
+    expect(olaylar(istekler).some((e) => e.state === 'done')).toBe(false);
+    fireEvent.click(await within(p).findByRole('button', { name: 'Kabulü onayla' }, { timeout: 10000 }));
+    await waitFor(() => { expect(olaylar(istekler).some((e) => e.state === 'done')).toBe(true); }, { timeout: 10000 });
+    expect(istekler.some((i) => i.yol === '/stok/mal-kabul')).toBe(false);
+  }, 60000);
+
+  it('eksik adette kayıt yazılır ama iş açık kalır; sayaç sıfırlanmaz', async () => {
+    const istekler = kabulIsi(5, 98);
+    const grup = await baslat();
+    const arti = await screen.findByRole('button', { name: 'Kabul +1' }, { timeout: 10000 });
+    fireEvent.click(arti);
+    fireEvent.click(arti);
+    const bitir = await waitFor(() => grup().getByRole('button', { name: /Bitir/ }), { timeout: 10000 });
+    fireEvent.click(bitir);
+    fireEvent.click(bitir);
+    const p = await screen.findByRole('dialog', { name: 'Kabulü yaz' }, { timeout: 10000 });
+    expect(await within(p).findByText(/Yarım kabul/, undefined, { timeout: 10000 })).toBeTruthy();
+    fireEvent.click(await within(p).findByRole('button', { name: 'Kabulü onayla' }, { timeout: 10000 }));
+    expect(await screen.findByText(/Kabul edilen: 2 adet/, undefined, { timeout: 10000 })).toBeTruthy();
+    expect(olaylar(istekler).some((e) => e.state === 'done')).toBe(false);
+  }, 60000);
+});

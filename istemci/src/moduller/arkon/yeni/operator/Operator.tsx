@@ -98,6 +98,8 @@ import { IsListesi, type ListeSuzgeci } from './IsListesi.tsx';
 import { bagliMakine, cihaziBagla, cihazKimligi, planFarki } from './cihaz-bagi.ts';
 import { GUVENCE_EYLEMLERI, KartIstePenceresi, useKisiGuvencesi, type GuvenceEylemi } from './KisiGuvencesi.tsx';
 import { YerSecimi } from './YerSecimi.tsx';
+import { kabulAdimiMi, kabulHesabi } from '../hazirlik/kabul-adimi.ts';
+import { KabulNotu, KabulYazma } from './KabulYazma.tsx';
 import { BekleyenPenceresi, SayacCipi, bekleyenSayilari, kesinlesmeOzeti, useBekleyenIslemler, type Bekleyen, type CozumYolu } from './BekleyenIslemler.tsx';
 import { MalzemeCipi } from './MalzemeCipi.tsx';
 import { HAZIRLIK_MADDE_BILGISI, RotaAkisi } from '../../../uretim-emirleri/disari.ts';
@@ -128,7 +130,7 @@ const baytli = (l: readonly NonNullable<Is['pkg']>['files'][number][]): TeknikRe
 // Üretim Terminali (operator.ts App) ve "Operatör gözüyle" önizleme. Davranış eski ekranın aynısıdır; farklar DEVIR'dedir.
 // Açılışta kayıt yazılmaz: sonuç ve durum kaydı yalnız operatörün ya da makinenin değiştirdiği işte gider. Önizlemede yazma düğmesi yoktur.
 
-type Pencereler = 'hazirlik' | 'station' | 'numune' | 'scrap' | 'reason' | 'num' | 'call' | 'calltrack' | 'prepnext' | 'shift' | 'ozetim' | 'done' | 'gecis' | 'toplu' | 'isler' | 'bitir' | 'kartsec' | 'bilgi' | 'yer' | 'kartbaslat' | 'kartiste' | 'planfarki';
+type Pencereler = 'hazirlik' | 'station' | 'numune' | 'scrap' | 'reason' | 'num' | 'call' | 'calltrack' | 'prepnext' | 'shift' | 'ozetim' | 'done' | 'gecis' | 'toplu' | 'isler' | 'bitir' | 'kartsec' | 'bilgi' | 'yer' | 'kartbaslat' | 'kartiste' | 'planfarki' | 'kabul';
 type Gorunum = EkranSekmesi['id'];
 interface UyariGosterimi { list: Uyari[]; title?: string; then?: () => void }
 interface Okutma { baslik: string; ipucu?: string; okundu: (kod: string) => void }
@@ -643,6 +645,10 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
     yap: (etiket, simge, ton, f) => undoable(etiket, simge, ton, () => stUpd(f)), sessiz: (f) => stUpd(f),
     soyle: (m, ton) => say(m, 'alert', ton), okut: (x) => scanYaz(x),
   };
+  // 3703: mal kabul modundaki depo adımı: Bitir doğrudan bitirmez, "Kabulü yaz" penceresini açar (kayıt Stok'undur).
+  const kabulAdimi = !pv && kabulAdimiMi(opT, stApi.ayar);
+  const kabulBitirme = useRef(false);
+  const kabulYazilan = (stApi.kayit.kabulYazilan ?? 0);
 
   /* uyarılar */
   const ackWarns = (list: readonly Uyari[]) => {
@@ -1089,7 +1095,7 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
   const act = (a: GorevEylemi, t?: Gorev, warned?: boolean, hazir?: boolean, ekUyari?: string | null) => {
     if (URETIM_EYLEMLERI.includes(a) && (o.empty || !ok('prod.run'))) return;
     // 3392 a madde 7: ortak cihazda bitir her seferinde, başlat/sürdür/duruş 20 dk dokunulmadıysa kart ister.
-    if (GUVENCE_EYLEMLERI.has(a) && guvence.gerekir(a as GuvenceEylemi)) { kartIsteYaz({ eylem: a as GuvenceEylemi, devam: () => actRef.current(a, t, warned, hazir, ekUyari) }); ovYaz('kartiste'); return; }
+    if (GUVENCE_EYLEMLERI.has(a) && !(a === 'finish' && kabulBitirme.current) && guvence.gerekir(a as GuvenceEylemi)) { kartIsteYaz({ eylem: a as GuvenceEylemi, devam: () => actRef.current(a, t, warned, hazir, ekUyari) }); ovYaz('kartiste'); return; }
     if (bekletme && BEKLEMEDE_KAPALI.has(a)) { say(`Emir beklemede · ${bekletme}`, 'pause', 'hold'); return; }
     if (a === 'tool') { const tl = RL.prod.tools.find((x) => x.id === (t && t.toolId)); if (tl) changeTool(tl); return; }
     if (a === 'warns') { warnShowYaz({ list: RL.warns.filter((w) => w.t), title: 'Bu işin uyarıları' }); return; }
@@ -1101,10 +1107,12 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
     if (a === 'prepnext') { ovYaz('prepnext'); return; }
     if (a === 'ack') { patch({ lastDecision: { ...o.lastDecision!, ack: true } }); return; }
     if (a === 'sample') { ovYaz('numune'); return; } // hatırlatmadan Kaliteye numune penceresi (kart #1083)
-    if ((a === 'start' || a === 'finish') && !pv && talimatGecildi.current !== `${siraAnahtari(o)}:${a}`) {
+    if ((a === 'start' || a === 'finish') && !pv && !(a === 'finish' && kabulBitirme.current) && talimatGecildi.current !== `${siraAnahtari(o)}:${a}`) {
       const eksik = a === 'start' ? tlEksik.once : tlEksik.son;
       if (eksik.length) { talimatSoruYaz({ eylem: a, eksik: eksik.map((x) => ({ id: x.id, ad: x.ad })) }); return; }
     }
+    if (a === 'finish' && kabulAdimi && !kabulBitirme.current) { ovYaz('kabul'); return; }
+    kabulBitirme.current = false;
     if (a === 'finish' && !warned && bitirmeEksigi(o, hataliSayisi) > 0) { ovYaz('bitir'); return; }
     if (a === 'finish') { sonBildirim.current++; bitenEmirYaz(tmiEmirId(o.pkg)); go('done'); ovYaz('done'); return; } // açık "Geri al" bitmiş işi yeniden açmasın
     if (a === 'next') {
@@ -1160,6 +1168,19 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
     }
     const ileti = DURUM_ILETISI[a] ?? '';
     undoable(ekUyari ? uyariliBaslatmaIletisi(ileti, ekUyari) : ileti, ekUyari ? 'alert' : DURUM_SIMGESI[a] || 'play', ekUyari ? 'hold' : m === 'running' ? 'run' : m === 'paused' ? 'hold' : 'hazard', () => go(m));
+  };
+  // 3703: Stok kaydı yazıldı. Yazılan adet işin kaydında birikir; hedefe varıldıysa iş biter, eksik adette açık kalır (sayaç sıfırlanmaz).
+  const kabulYazildi = (adet: number, ileti: string) => {
+    ovYaz(null);
+    if (adet <= 0) { say(ileti, 'check'); return; }
+    const toplam = kabulYazilan + adet;
+    stApi.sessiz((x) => ({ sr: { ...(x.sr || {}), kabulYazilan: toplam } }));
+    say(ileti, 'check');
+    if (kabulHesabi(o.good, kabulYazilan, o.target).durum === 'tam') {
+      // Bayrak yalnız bu çağrı için geçerli: act erken dönse de (beklemede, yetki yok) sonraki elle Bitir yine pencereyi açsın.
+      kabulBitirme.current = true;
+      try { actRef.current('finish', undefined, true); } finally { kabulBitirme.current = false; }
+    }
   };
   const actRef = useRef(act);
   actRef.current = act;
@@ -1368,7 +1389,7 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
   // 600 a: kalite istasyonunda sayaç, toplu giriş, numune şeridi ve takım kartı yerine gelen numunelerin ve lotun Kabul/Red'i.
   const kaliteIstasyonu = ist.t === 'kalite';
   // 3388 a: depo istasyonunda stok işleri sekmesi; seçilen iş üretim görünümünün yerine bütün alanı alır.
-  const depoSekmeleri = ist.t === 'depo' && !pv ? <DepoSekmeleri secili={depoSekme} sec={depoSekmeYaz} /> : null;
+  const depoSekmeleri = ist.t === 'depo' && !pv ? <DepoSekmeleri secili={depoSekme} sec={depoSekmeYaz} kabulModu={kabulAdimi} /> : null;
   const depoIsi = depoSekmeleri && depoSekme !== 'toplama' ? <DepoIsi sekme={depoSekme} dar={dar} /> : null;
   const takimKarti = kaliteIstasyonu ? null : <TakimKarti takimlar={RL.prod.tools} is={o} degisti={changeTool} kilitli={!uretir} />;
   const analiz = <Analiz c={SC} simdi={simdi} duruslar={durusPencereleri(MACHINE, SC.sh.s, SC.sh.e, ayarlar.planliDuruslar, tesis)} nedenAdiOku={nedenAdiOku} planliMi={planliMi} />;
@@ -1459,9 +1480,9 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
   const tuslar: SayimTusu[] = [];
   // 1046 a: geniş düzende sayım tuşları üstte iki büyük tuş, düzeltme (−1) tuşları altlarında tek kısa sıra; sıra bu dizinin sırasıdır.
   const eylemVar = (e: EylemKimligi) => eylemGorunur(e, opT, yetkiVar, pv);
-  if (eylemVar('sayim-arti')) tuslar.push({ etiket: sayimArtiEtiketi(opT), simge: 'plus', ton: 'iyi', kapali: iyiArtiKapali || o.good >= o.target, bas: () => { if (!sayimOk('prod.run', iyiArtiNedeni(1))) return; shiftRef.current.good++; undoable(sayimArtiIletisi(opT, sayi(o.good + 1)), 'plus', 'run', () => patch({ good: o.good + 1 })); } });
+  if (eylemVar('sayim-arti')) tuslar.push({ etiket: kabulAdimi ? 'Kabul +1' : sayimArtiEtiketi(opT), simge: 'plus', ton: 'iyi', kapali: iyiArtiKapali || o.good >= o.target, bas: () => { if (!sayimOk('prod.run', iyiArtiNedeni(1))) return; shiftRef.current.good++; undoable(kabulAdimi ? `Kabul +1 · ${sayi(o.good + 1)}` : sayimArtiIletisi(opT, sayi(o.good + 1)), 'plus', 'run', () => patch({ good: o.good + 1 })); } });
   if (eylemVar('hatali')) tuslar.push(hataliTmi ? { etiket: 'Hatalı', simge: 'trash', ton: 'hurda', kapali: kapali || hataliGidiyor, bas: addScrap } : { etiket: 'Hurda +1', simge: 'trash', ton: 'hurda', kapali, bas: addScrap });
-  if (eylemVar('sayim-eksi')) tuslar.push({ etiket: sayimEksiEtiketi(opT), simge: 'minus', ton: 'duz', aria: sayimEksiAria(opT), kapali: iyiKapali || o.good <= 0, bas: () => { if (iyiSayimOk('prod.fix')) undoable(sayimEksiIletisi(opT, sayi(o.good - 1)), 'minus', 'idle', () => patch({ good: o.good - 1 })); } });
+  if (eylemVar('sayim-eksi')) tuslar.push({ etiket: kabulAdimi ? 'Kabul −1' : sayimEksiEtiketi(opT), simge: 'minus', ton: 'duz', aria: sayimEksiAria(opT), kapali: iyiKapali || o.good <= 0, bas: () => { if (iyiSayimOk('prod.fix')) undoable(kabulAdimi ? `Kabul −1 · ${sayi(o.good - 1)}` : sayimEksiIletisi(opT, sayi(o.good - 1)), 'minus', 'idle', () => patch({ good: o.good - 1 })); } });
   if (eylemVar('sayim-eksi')) tuslar.push({ etiket: 'Hurda −1', simge: 'minus', ton: 'hurda', aria: 'Hurda eksi bir', kapali: kapali || o.scrap <= 0, bas: () => { if (sayimOk('prod.fix')) undoable(`Hurda −1 · toplam ${sayi(o.scrap - 1)}`, 'minus', 'idle', () => patch({ scrap: o.scrap - 1 })); } });
   // 702: toplu giriş ekranda yer kaplamasın diye tuştan açılan pencerededir.
   if (eylemVar('toplu')) tuslar.push({ etiket: 'Toplu giriş', simge: 'layers', ton: 'duz', kapali, bas: () => ovYaz('toplu') });
@@ -1486,12 +1507,13 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
       {/* Kadranın solunda istasyondaki malzeme (azalır), sağında üretilen (artar); boş işte ve önizlemede çizilmez. */}
       <div className="tc-ay1-kadran-kanat">
         {o.empty || pv ? null : <MalzemeGostergesi istasyon={MACHINE} emirId={tmiEmirId(o.pkg)} />}
-        <SayacKadrani is={o} etiket={OT.cnt} birim={OT.unit} cevrim={cevrim} {...(hataliSayisi === undefined ? {} : { hatali: hataliSayisi })} duzelt={eylemVar('sayim-duzelt') ? () => { if (iyiSayimOk('prod.fix')) ovYaz('num'); } : null} />
+        <SayacKadrani is={o} etiket={kabulAdimi ? 'Kabul' : OT.cnt} birim={kabulAdimi ? 'adet' : OT.unit} cevrim={cevrim} {...(hataliSayisi === undefined ? {} : { hatali: hataliSayisi })} duzelt={eylemVar('sayim-duzelt') ? () => { if (iyiSayimOk('prod.fix')) ovYaz('num'); } : null} />
         {o.empty || pv ? null : <UretimGostergesi is={o} />}
       </div>
       {/* 693: telefonda İyi +1 ve Hurda +1 alttaki eylem çubuğunda; sayacın altında yalnız düzeltme (−1) tuşları kalır. */}
       <SayimTuslari tuslar={dar && uretir ? tuslar.filter((t) => t.simge === 'minus' || t.simge === 'layers') : tuslar} />
     </div>
+    {kabulAdimi ? <KabulNotu sayilan={o.good} yazilan={kabulYazilan} hedef={o.target} /> : null}
     {/* Sayaç boyunu içeriğinden almaz; bilgi satırı içine konunca kadranı ve tuşları sıkıştırır. Telefonda aynı bilgi eylem çubuğundadır. */}
     {!dar && smartesSayimi(o) && <p className="tc-ay1-smartes" role="status"><Simge ad="laptop" />{SMARTES_SAYIM_ILETISI}</p>}
     </>
@@ -1643,6 +1665,12 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
             }}>{`Burada başlat · ${cihazMakinesi ?? ''}`}</Dugme>
           </>}>
           <p className="tc-ay1-plan-farki"><Simge ad="alert" />Plan bu işi <b>{planMakinesi}</b> makinesine koydu; bu cihaz <b>{cihazMakinesi}</b> makinesine bağlı. Burada başlarsa iş {cihazMakinesi} makinesine yazılır, planlama farkı görür.</p>
+        </Pencere>
+      ) : null}
+      {ov === 'kabul' && kabulAdimi ? (
+        <Pencere acik kapat={() => ovYaz(null)} baslik="Kabulü yaz">
+          <KabulYazma emirNo={o.no} fasonDonusu={o.pkg?.tmi?.fasonDonusu} sayilan={o.good} yazilan={kabulYazilan} hedef={o.target}
+            vazgec={() => ovYaz(null)} yazildi={kabulYazildi} />
         </Pencere>
       ) : null}
       {ov === 'toplu' && toplu ? <Pencere acik kapat={() => ovYaz(null)} baslik="Toplu giriş">{toplu}</Pencere> : null}

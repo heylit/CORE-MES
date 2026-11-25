@@ -15,12 +15,12 @@ interface Sekme { s: DepoSekmesi; ad: string; kisa: string; simge: SimgeAdi }
 
 const sayi = (n: number | null): string => (n === null ? '' : ` · ${String(n)}`);
 
-export function DepoSekmeleri({ secili, sec }: { secili: DepoSekmesi; sec: (s: DepoSekmesi) => void }) {
+export function DepoSekmeleri({ secili, sec, kabulModu = false }: { secili: DepoSekmesi; sec: (s: DepoSekmesi) => void; kabulModu?: boolean }) {
   const islemler = useOturum().data?.islemler ?? [];
   const kabul = useBekleyenKabulSayisi();
   const yuk = useYukleSayisi();
   const sekmeler: Sekme[] = [
-    { s: 'toplama', ad: 'Toplama listesi', kisa: 'Toplama', simge: 'list' },
+    { s: 'toplama', ad: kabulModu ? 'Kabul özeti' : 'Toplama listesi', kisa: kabulModu ? 'Özet' : 'Toplama', simge: 'list' },
     ...(islemler.includes('stok.giris') ? [{ s: 'mal-kabul' as const, ad: `Mal kabul${sayi(kabul)}`, kisa: `Kabul${sayi(kabul)}`, simge: 'box' as const }] : []),
     ...(islemler.includes('stok.cikis') ? [{ s: 'yukle' as const, ad: `Yükle${sayi(yuk)}`, kisa: `Yükle${sayi(yuk)}`, simge: 'truck' as const }] : []),
   ];
