@@ -11,8 +11,8 @@ const durumRengi = (s: string) => IS_DURUMLARI[s as IsDurumu]?.durum ?? 'sirada'
 const durumAdi = (s: string): string => IS_DURUMLARI[s as IsDurumu]?.etiket ?? s;
 const terminYaz = (t: string | null | undefined): string => (t && /^\d{4}-\d{2}-\d{2}$/.test(t) ? t.split('-').reverse().join('.') : t || '—');
 
-export function SiradakiKart({ is, siradaki, ekranda, acik, yer, resim }: {
-  is: Is; siradaki: boolean; ekranda: boolean; acik: boolean; yer: IsYeriBilgisi | null; resim?: ReactNode;
+export function SiradakiKart({ is, siradaki, ekranda, acik, yer, resim, revUyumsuz = false }: {
+  is: Is; siradaki: boolean; ekranda: boolean; acik: boolean; yer: IsYeriBilgisi | null; resim?: ReactNode; revUyumsuz?: boolean;
 }) {
   const oran = is.target > 0 ? Math.min(1, Math.max(0, is.good / is.target)) : 0;
   const durum = durumRengi(is.state);
@@ -30,7 +30,8 @@ export function SiradakiKart({ is, siradaki, ekranda, acik, yer, resim }: {
         <b className="tc-ay1-sk-parca" title={is.part}>{is.part || '—'}</b>
         {projeRev ? <small className="tc-ay1-sk-proje" title={projeRev}>{projeRev}</small> : null}
         {is.empty ? null : <small className="tc-ay1-mono tc-ay1-sk-adet">{is.good} / {is.target} adet</small>}
-        {is.empty ? null : <progress className="tc-ay1-tcark-ilerleme" max={1} value={oran} aria-label="İlerleme" />}
+        {revUyumsuz ? <small className="tc-ay1-sk-uyari"><Simge ad="alert" boyut="k" />Rev uyuşmuyor</small> : null}
+        {is.empty || revUyumsuz ? null : <progress className="tc-ay1-tcark-ilerleme" max={1} value={oran} aria-label="İlerleme" />}
         <small className="tc-ay1-mono tc-ay1-sk-no" title={is.no}>{is.no}</small>
       </div>
       {acik && !is.empty ? (
@@ -90,8 +91,8 @@ export function SiradakiIsler({ isler, ekranda, bakilan, siradakiMi, yer, sec, e
         <ol ref={ol}>
           {isler.map((x, i) => (
             <li key={`${x.no}:${String(i)}`} data-bitti={x.state === 'done' ? '' : undefined}>
-              <button type="button" aria-pressed={i === odak} aria-label={`${x.no}${i === ekranda ? ' · ekranda' : ''}`} onClick={() => sec(i)}>
-                <SiradakiKart is={x} resim={x.pkg?.malzemeNo != null ? <KucukResimKutusu resim={resimler.get(x.pkg.malzemeNo)} ad={x.part || x.no} /> : undefined} siradaki={i !== ekranda && siradakiMi(i)} ekranda={i === ekranda} acik={i === odak} yer={yer(i)} />
+              <button type="button" aria-pressed={i === odak} aria-label={`${x.no}${i === ekranda ? ' · ekranda' : ''}${x.pkg?.malzemeNo != null && resimler.get(x.pkg.malzemeNo)?.revUyumu === false ? ' · revizyon uyuşmuyor' : ''}`} onClick={() => sec(i)}>
+                <SiradakiKart is={x} revUyumsuz={x.pkg?.malzemeNo != null && resimler.get(x.pkg.malzemeNo)?.revUyumu === false} resim={x.pkg?.malzemeNo != null ? <KucukResimKutusu resim={resimler.get(x.pkg.malzemeNo)} ad={x.part || x.no} /> : undefined} siradaki={i !== ekranda && siradakiMi(i)} ekranda={i === ekranda} acik={i === odak} yer={yer(i)} />
               </button>
             </li>
           ))}

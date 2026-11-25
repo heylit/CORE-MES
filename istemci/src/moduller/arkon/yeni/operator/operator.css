@@ -1616,3 +1616,7 @@ button.tc-ay1-yer { font: inherit; color: inherit; text-align: start; cursor: po
 .tc-ay1-dar .tc-ay1-sira { grid-template-columns: auto minmax(0, 1fr); column-gap: var(--b-1); }
 .tc-ay1-dar .tc-ay1-sira-ust > .tc-simge { display: none; }
 .tc-ay1-dar .tc-ay1-sira-ust small { font-size: var(--yazi-xs); text-align: center; }
+
+/* 3714-2: malzeme kartının resmi revizyona uymuyorsa operatör şeritte okur (resim üstündeki küçük rozet kapalıdır). */
+.tc-ay1-sk-uyari { display: inline-flex; align-items: center; gap: var(--b-1); color: var(--hazard-ink); font-size: var(--yazi-s); font-weight: 700; }
+.tc-ay1-dar .tc-ay1-sk-etiketler + .tc-ay1-sk-parca { margin-block-start: 0; }

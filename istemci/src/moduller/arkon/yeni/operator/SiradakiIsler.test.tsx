@@ -73,7 +73,7 @@ describe('Sıradaki işler kartı (3714)', () => {
   });
 
   it('mamulün resmi emrin paketindeki malzemeNo ile malzeme kartının küçük resminden gelir', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ resimler: [{ hedefId: 7, belgeId: 1, revizyonId: 9, harf: 'A', kareSayisi: 1, revUyumu: true }] }), { status: 200, headers: { 'content-type': 'application/json' } })));
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ resimler: [{ hedefId: 7, belgeId: 1, revizyonId: 9, harf: 'A', kareSayisi: 1, revUyumu: false }] }), { status: 200, headers: { 'content-type': 'application/json' } })));
     const resimli = { ...liste[1]!, pkg: { ...liste[1]!.pkg, malzemeNo: 7 } as unknown as Is['pkg'] };
     ciz0(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
@@ -82,6 +82,8 @@ describe('Sıradaki işler kartı (3714)', () => {
     );
     const img = await screen.findByAltText('ORN parça ORN-2', {}, { timeout: 3000 });
     expect(img.getAttribute('src')).toBe('/api/cizimler/kucuk-resim/9/0');
+    expect(screen.getByText('Rev uyuşmuyor')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'ORN-2 · revizyon uyuşmuyor' })).toBeTruthy();
     vi.unstubAllGlobals();
   });
 });
