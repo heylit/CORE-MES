@@ -1673,8 +1673,9 @@ button.tc-ay1-yer { font: inherit; color: inherit; text-align: start; cursor: po
   .tc-ay1-genis .tc-ay1-sira-eylem > .tc-dugme:first-child .tc-ay1-sira-eylem-yazi { display: none; }
   .tc-ay1-genis .tc-ay1-sira-eylem > .tc-dugme:first-child .tc-ay1-sira-eylem-kisa { display: inline; }
 }
-/* Telefonda sütun yazı ölçeğiyle büyür; dokunmatikte ipucu görünmediğinden dön düğmesi kısa "Dön" yazar. */
-.tc-ay1-dar .tc-ay1-sira > .tc-ay1-sira-eylem { grid-column: auto; inline-size: max(calc(var(--dokunma) * 1.9), calc(var(--yazi-s) * 6.5)); }
+/* Telefonda sütun sabit dardır (büyük yazıda genişlerse bakılan kart daralıp proje ve uyarı kesilir; 3714 Test K5); düğme yazısı
+   satır kırar. Dokunmatikte ipucu görünmediğinden dön düğmesi kısa "Dön" yazar. */
+.tc-ay1-dar .tc-ay1-sira > .tc-ay1-sira-eylem { grid-column: auto; inline-size: calc(var(--dokunma) * 1.9); }
 .tc-ay1-dar .tc-ay1-sira-eylem > .tc-dugme { padding-inline: var(--b-1); font-size: var(--yazi-s); }
 .tc-ay1-dar .tc-ay1-sira-eylem .tc-ay1-sira-eylem-yazi { display: none; }
 .tc-ay1-dar .tc-ay1-sira-eylem-kisa { display: inline; }
