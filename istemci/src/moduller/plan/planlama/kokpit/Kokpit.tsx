@@ -1192,7 +1192,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
           )}
         </div>
         {secIs !== null && !tur && m.isler[secIs] && emir.get(m.isler[secIs]!.job) && (
-          <AdimPanosu kip="sayfa" m={m} e={emir.get(m.isler[secIs]!.job)!} x={m.isler[secIs]!} zaman={zaman} sayim={adimSayim?.[secIs]} kapat={() => { sec(null, null); }} />
+          <AdimPanosu kip="sayfa" m={m} e={emir.get(m.isler[secIs]!.job)!} x={m.isler[secIs]!} zaman={zaman} sayim={adimSayim?.[secIs]} bolAc={elleBolAc} kapat={() => { sec(null, null); }} />
         )}
         {sorunAdimi !== null ? (
           <AdimSorunu key={sorunAdimi} c={c} m={m} isId={sorunAdimi} taslak={taslak} yazabilir={yazabilir} zaman={zaman} kapat={() => { setSorunAdimi(null); }}

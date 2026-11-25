@@ -769,7 +769,7 @@ describe('3488 c: adımı elle böl', () => {
     assert.equal(ileti(elleBolUygula(c(), bol('S1.10', [['T2', 5], ['T3', 3]]), k)), 'Parçaların toplamı 8; adımın adedi 9.');
     assert.equal(ileti(elleBolUygula(c(), bol('S1.30', [['T1', 5], ['T3', 4]]), k)), 'T1 bu adıma uygun değil.');
     assert.equal(ileti(elleBolUygula(c(), bol('S1.20', [['T1', 5], ['T3', 4]]), k)), 'Fason adım elle bölünmez.');
-    assert.equal(ileti(elleBolUygula(c({ gercek: { 'S1.10': { m: 'T1', S: 8 } } }), bol('S1.10', [['T2', 5], ['T3', 4]]), k)), 'Adım başlamış; başlamış adım bölünmez.');
+    assert.equal(ileti(elleBolUygula(c({ gercek: { 'S1.10': { m: 'T1', S: 8 } } }), bol('S1.10', [['T2', 5], ['T3', 4]]), k)), 'Çalışan tezgâh (T1) 1. pay olmalı.');
     assert.equal(ileti(elleBolUygula(c(), bol('S1.10~2', [['T2', 5], ['T3', 4]]), k)), 'Adımın kendisi bölünür, payı değil.');
     assert.equal(ileti(elleBolUygula(c(), bol('S1.40', [['T2', 5], ['T3', 4]]), k)), 'Adım emrin rotasında yok.');
     assert.equal(ileti(elleBolUygula(c(), bol('S2.10', [['T2', 1], ['T3', 1]]), k)), 'Adımın adedi bölmeye yetmiyor (en az 2).');

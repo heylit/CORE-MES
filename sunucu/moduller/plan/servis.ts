@@ -653,12 +653,22 @@ function gerceklesenler(simdi: number, acik: readonly PlanIsEmri[]): Baglam['ger
 // Yetki denetlemez; çağıran korur.
 export interface CalisanAdim {
   anahtar: string; makineId: number | null; baslangic: string | null; sayimAni: string | null; kalanDk: number; kalanVerimliDk: number;
+  // 3681: bölünmüş adımda payların sayımı (pay ilerlemesi çözücüsü bağlıysa); yoksa boş.
+  paylar?: PayIlerlemesi[];
 }
+// 3681: payın sahibi (makine ya da kişi) ve bu adımda saydığı (kişi payında kişinin, makine payında makinenin sağlamı). Sahibi Üretim Emirleri'dir
+// (adimPaylari); plan okumayı kablolama.ts'te bağlanan çözücüyle yapar, çözücü bağlı değilse payların sayımı bilinmez ve alan gelmez.
+export interface PayIlerlemesi { makineId: number | null; kisiId: number | null; sayilan: number }
+export type PayIlerlemesiCozucusu = (db: Db, isEmriIdleri: readonly number[]) => Promise<ReadonlyMap<number, readonly PayIlerlemesi[]>>;
+let payIlerlemesiCozucusu: PayIlerlemesiCozucusu | null = null;
+export const payIlerlemesiCozucusuKaydet = (c: PayIlerlemesiCozucusu | null): void => { payIlerlemesiCozucusu = c; };
 export async function calisanAdimlar(db: Db): Promise<CalisanAdim[]> {
   const iso = (t: string | null | undefined) => (t ? new Date(t).toISOString() : null);
   const acik = await planlanacakIsler(db);
   if (!acik.some((i) => calisanKalani(i) !== null)) return [];
   const kaynaklar = await kaynaklariOku(db, new Map());
+  const calisan = acik.filter((i) => calisanKalani(i) !== null);
+  const paylar = payIlerlemesiCozucusu === null ? new Map<number, readonly PayIlerlemesi[]>() : await payIlerlemesiCozucusu(db, calisan.map((i) => i.id));
   return acik.flatMap((i) => {
     const k = calisanKalani(i);
     if (k === null) return [];
@@ -667,6 +677,7 @@ export async function calisanAdimlar(db: Db): Promise<CalisanAdim[]> {
     return [{
       anahtar: `${i.emirNo}|${i.opNo}`, makineId, baslangic: iso(i.adimBaslama), sayimAni: iso(kalanBaslangici(i)),
       kalanDk: k.kalanDk, kalanVerimliDk: verimliSure(k.kalanDk, k.ayarDk, verim),
+      ...((paylar.get(i.id) ?? []).length > 0 ? { paylar: [...paylar.get(i.id)!] } : {}),
     }];
   });
 }

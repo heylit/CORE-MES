@@ -591,7 +591,9 @@ function tmiCalisanlar(durum, st, D, now) {
     const id = opOf[c.anahtar]; if (!id) continue;
     const S0 = saat(c.baslangic);
     const S = S0 == null ? now : S0; const sayim = saat(c.sayimAni);
-    y[id] = { m: c.makineId, S, kalan: Math.max(0, +c.kalanVerimliDk || 0) / 60, sayim: sayim == null ? S : Math.max(S, sayim), n: c.saglam, A: c.adet, sayimAni: c.sayimAni };
+    /* 3681: bölünmüş adımın pay ilerlemesi (tezgâh -> payın sayımı; kişi payı kisi-<id>); sunucu çözücüsü bağlı değilse yoktur */
+    const paylar = Array.isArray(c.paylar) && c.paylar.length ? Object.fromEntries(c.paylar.map(p => [p.kisiId != null ? 'kisi-' + p.kisiId : String(p.makineId), Math.max(0, +p.sayilan || 0)])) : null;
+    y[id] = { m: c.makineId, S, kalan: Math.max(0, +c.kalanVerimliDk || 0) / 60, sayim: sayim == null ? S : Math.max(S, sayim), n: c.saglam, A: c.adet, sayimAni: c.sayimAni, ...(paylar ? { paylar } : {}) };
   }
   return y;
 }
@@ -799,6 +801,29 @@ function kaynakBirlestir(D0, kayit, kaynak, bugun) {
 /* Sayım yalnız o adımın çubuğunu günceller, başka iş yerinden oynamaz (prototip zz34); plan eskimez. Planlamacının elle girdiği gerçekleşen
    sunucunun başlamış dediği adımda sunucununkiyle değişir; sunucunun artık başlamış demediği adımın sunucu kaydı silinir. y: tmiCalisanlar,
    cx: çalışmanın derlenmiş hâli (tezgâh pencereleri). S.gercek ve S.plan yerinde güncellenir. */
+/* 3681 (Risk S1, N1): bölünmüş adımda sunucunun kalanı adımın bütünüdür; kayıtlı plandaki çalışan payın bitişi derlemedeki gibi payın kalan adedine
+   oranlanır (payKalani). Dönen: oranlı gerçekleşen kayıt ve payların yeni sayılan/kalanı (kayıtlı planın pay alanları buna göre yenilenir). */
+/** @param {any} S @param {string} id @param {any} o @param {any} yeni @param {string} m @returns {{yeni:any,paylar:any[]|null}} */
+function bolunmusKalan(S, id, o, yeni, m) {
+  const kayit = S.elleBol && S.elleBol[id];
+  if (!o || !(o.parca > 0) || o.bolToplam == null || !Array.isArray(kayit)) return { yeni, paylar: null };
+  const r = /** @type {any} */ (elleBolCoz(kayit, o.bolToplam, kayit.map(x => ({ id: x.m })), { S: yeni.S, m, n: yeni.n, paylar: yeni.paylar }, String));
+  const ep = r && r.paylar && r.paylar[0]; if (!ep) return { yeni, paylar: null };
+  return { yeni: yeni.kalan == null || !isFinite(+yeni.kalan) ? yeni : { ...yeni, kalan: payKalani(yeni.kalan, o.bolToplam, yeni.n, ep.kalan) }, paylar: r.paylar };
+}
+/* Kayıtlı plandaki payların (id, id~2...) sayılan ve kalanı tezgâh eşlemesiyle yenilenir; canlıya pay adedi sayılan + kalan gider. */
+/** @param {any} ops @param {string} id @param {any[]} paylar */
+function payKayitlariniYenile(ops, id, paylar) {
+  const yeni = { ...ops };
+  for (const k of Object.keys(ops)) {
+    if (k !== id && !k.startsWith(id + '~')) continue;
+    const r = ops[k]; if (!r || !r.pay) continue;
+    const ep = paylar.find(x => String(x.m) === String(r.m)); if (!ep) continue;
+    const { sayilan, ...pay } = r.pay;
+    yeni[k] = { ...r, pay: { ...pay, kalan: ep.kalan, ...(ep.sayilan > 0 ? { sayilan: ep.sayilan } : {}) } };
+  }
+  return yeni;
+}
 /** @param {any} [S] @param {any} [y] @param {Derleme} [cx] */
 function calisanBirlestir(S, y, cx) {
   const g = clone(S.gercek || {}); let degisti = false; const yeniSapma = [];
@@ -815,9 +840,13 @@ function calisanBirlestir(S, y, cx) {
     g[id] = yeni; degisti = true;
     if (durdurulan[id]) continue;
     const M = cx && cx.M[m]; if (!r || !M) continue;
-    const C = kalanBitis(M, yeni); const o = cx.byId[id]; const c = o && (o.c.find(x => x.m === m) || o.c[0]);
+    const o = cx.byId[id]; const c = o && (o.c.find(x => x.m === m) || o.c[0]);
+    /* 3681 (Risk S1): bölünmüş adımda sunucunun kalanı adımın bütünüdür; kayıtlı plandaki çalışan payın bitişi derlemedeki gibi payın kalan adedine oranlanır (payKalani) */
+    const bk = bolunmusKalan(S, id, o, yeni, m);
+    const C = kalanBitis(M, bk.yeni);
     const Su = Math.min(adv(M.sw, yeni.S, (c && c.su) || 0), C);
-    S.plan = { ...S.plan, ops: { ...S.plan.ops, [id]: { ...r, m, S: yeni.S, Su, C, lot1: Math.min(C, Math.max(Su, r.lot1 || Su)), act: 1, pin: 1, adetN: yeni.n } } };
+    const ops0 = bk.paylar ? payKayitlariniYenile(S.plan.ops, id, bk.paylar) : S.plan.ops;
+    S.plan = { ...S.plan, ops: { ...ops0, [id]: { ...ops0[id], m, S: yeni.S, Su, C, lot1: Math.min(C, Math.max(Su, r.lot1 || Su)), act: 1, pin: 1, adetN: yeni.n } } };
     yeniSapma.push(id);
   }
   if (degisti) S.gercek = g;

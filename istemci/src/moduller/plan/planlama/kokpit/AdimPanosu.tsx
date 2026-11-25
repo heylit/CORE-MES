@@ -1,9 +1,10 @@
-import { Simge } from '../../../../ortak/arayuz/index.ts';
-import { durumYazisi, sureYaz, type KokpitEmri, type KokpitIsi, type KokpitModeli } from './kurallar.ts';
+import { Dugme, Simge } from '../../../../ortak/arayuz/index.ts';
+import { bolunemezNedeni } from './ElleBol.tsx';
+import { adimKimligi, adimPaylari, durumYazisi, payIlerlemeYazisi, payNedeni, payYazisi, sureYaz, type KokpitEmri, type KokpitIsi, type KokpitModeli } from './kurallar.ts';
 import { ilerlemeOzeti, komsuOzeti, tezgahSecenekleri, type AdimSayimi, type TasimaTahmini } from './pano.ts';
 
 // 3663: adım bilgi panosu. Seçili adımda çubuğun yanında (kip "secili"), telefonda alt sayfa (kip "sayfa"), sürüklerken sabit köşede (kip "surukle", fareyi tutmaz). Pano yalnız
-// bilgidir: tıklanır düğmesi yoktur (taşıma sürükleme, sağ tık ve ayrıntıdaki yollarla yapılır). Sunucu cevabı gelene kadar sürükleme
+// bilgidir: tıklanır düğmesi yoktur, yalnız bölünmüş adımda "Bölmeyi yönet" (3681) vardır (taşıma sürükleme, sağ tık ve ayrıntıdaki yollarla yapılır). Sunucu cevabı gelene kadar sürükleme
 // rakamları istemci tahminidir ve "tahmin" etiketi taşır.
 export interface AdimPanosuOzellikleri {
   kip: 'secili' | 'surukle' | 'sayfa';
@@ -13,20 +14,32 @@ export interface AdimPanosuOzellikleri {
   // Yalnız sürüklerken: hedef tezgâh, tahmin, sunucu cevabı (etki cümlesi sunucudansa dogrulandi true) ve geçersizlik nedeni.
   hedef?: { tezgah: string; S: number; tahmin: TasimaTahmini; etki: string; dogrulandi: boolean; neden: string | null };
   kapat?: () => void;
+  // 3681: bölünmüş adımın payları bölme penceresinden yönetilir; yetkili kişide (bol verilmişse) pano o pencereyi açan düğmeyi taşır (dokunmatikte sağ tık yoktur).
+  bolAc?: ((adimId: string) => void) | null;
   // Konum: seçili kipte Tahta çubuğa göre yerleştirir.
   yerlestir?: (el: HTMLElement | null) => void;
 }
 
 const saatYaz = (zaman: (t: number) => string, t: number): string => zaman(t).slice(-5);
 
-export function AdimPanosu({ kip, m, e, x, zaman, sayim, hedef, kapat, yerlestir }: AdimPanosuOzellikleri) {
+// 3681: pano kısa kalsın (1280x800'de çubuğun üstüne binmesin); kalan paylar bölme penceresinde.
+const PANO_PAY = 2;
+
+export function AdimPanosu({ kip, m, e, x, zaman, sayim, hedef, kapat, yerlestir, bolAc = null }: AdimPanosuOzellikleri) {
+  // 3681: telefon alt sayfasına pay kimliği (S2.a1~2) gelir; paylar ve bölme kaydı adımın kimliğiyle okunur.
+  const adimId = adimKimligi(x);
   const surukle = kip === 'surukle' && hedef !== undefined;
   const kod = (id: string): string => m.tezgahlar.find((t) => t.id === id)?.kod ?? id;
-  const il = ilerlemeOzeti(x, e.adet, sayim, m.simdi), komsu = komsuOzeti(m, e, x.id);
+  // 3681: adımın sayımı durum okumasında yoksa ama paylar sayım taşıyorsa ilerleme pay sayılanlarının toplamından gelir ("sayım yok" ile "sayılan 5" aynı panoda çelişmesin).
+  const payToplam = adimPaylari(m, adimId).reduce<number | null>((t, y) => (y.pay?.sayilan === undefined && y.sayilan === undefined ? t : (t ?? 0) + (y.pay?.sayilan ?? y.sayilan ?? 0)), null);
+  const il = ilerlemeOzeti(x, e.adet, sayim ?? (payToplam !== null ? { say: payToplam, bitti: false } : undefined), m.simdi), komsu = komsuOzeti(m, e, x.id);
   const secenek = tezgahSecenekleri(m, e, x);
   const ihlal = surukle ? hedef.neden ?? hedef.tahmin.ihlal : null;
   const adi = e.adimlar.find((a) => a.id === x.id)?.ad ?? x.ad;
   const fark = surukle ? hedef.S - x.S : 0;
+  // 3681: bölünmüş adımın payları (kaynak, adet, sayılan, süre) ve bölmenin nedeni; bölünemeyen adımda nedeni.
+  const paylar = adimPaylari(m, adimId), bolme = paylar.length > 1;
+  const bolmeNedeni = bolme ? null : m.bolme?.[adimId]?.metin ?? (x.bitti === true || x.fason ? bolunemezNedeni(x, e.adet) : null);
   return (
     <aside
       className="tc-pyq-pano" data-kip={kip} data-ihlal={ihlal !== null ? '' : undefined} aria-label={`${adi} bilgisi`} ref={yerlestir}
@@ -81,7 +94,31 @@ export function AdimPanosu({ kip, m, e, x, zaman, sayim, hedef, kapat, yerlestir
                   : <ul>{secenek.secenekler.map((s) => <li key={s.tezgah} data-pano-tezgah={s.tezgah}>{kod(s.tezgah)} <small>{zaman(s.baslangic)} · {sureYaz(s.kazanc)} erken</small></li>)}</ul>}
           </dd>
         </div>
+        {!surukle && bolme && (
+          <div data-pano="paylar">
+            <dt>Paylar</dt>
+            <dd>
+              <small data-pay-neden="">{payNedeni(x) ?? ''}</small>
+              <ul>
+                {paylar.slice(0, PANO_PAY).map((y) => (
+                  <li key={y.id} data-pay-satiri={y.id}>
+                    <b>{payYazisi(y) ?? ''}</b> {kod(y.m)}{payIlerlemeYazisi(y) ? ` · sayılan ${payIlerlemeYazisi(y) ?? ''}` : ''} <small>{sureYaz(y.C - y.S)}</small>
+                  </li>
+                ))}
+                {paylar.length > PANO_PAY && <li data-pay-daha=""><small>+{paylar.length - PANO_PAY} pay · Bölmeyi yönet'te</small></li>}
+              </ul>
+              {m.bolme?.[x.id] && <small data-pay-uygulanamadi="">Kayıtlı bölme uygulanamadı: {m.bolme[x.id]!.metin}</small>}
+            </dd>
+          </div>
+        )}
+        {!surukle && bolmeNedeni !== null && (
+          <div data-pano="bolme">
+            <dt>Bölme</dt>
+            <dd data-bolme-neden="">{m.bolme?.[x.id] ? `Kayıtlı bölme uygulanamadı: ${bolmeNedeni}` : bolmeNedeni}</dd>
+          </div>
+        )}
       </dl>
+      {!surukle && bolme && bolAc && <Dugme tur="ikincil" simge="layers" data-bol-yonet={x.id} onClick={() => { bolAc(adimKimligi(x)); }}>Bölmeyi yönet</Dugme>}
     </aside>
   );
 }

@@ -9,7 +9,7 @@ import { emirKuyrugu, emirNoParcalari } from '../ortak/emir-no.ts';
 import type { Derleme } from '../motor/kurallar.ts';
 import type { IsTasiOnizlemesi } from '../motor/atolye/gonder.ts';
 import {
-  SAAT_ENI, YAKIN_EN_AZ, adimBaglari, agacAdimBasligi, aralikYuku, durumYazisi, DURDURMA_BEKLIYOR, durusYazisi, ekMesaiYazisi, okUcu, okYolu, planliDurusYazisi, satirKimligi, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, uzakMi, yukSinifi, yukYuzdesi,
+  SAAT_ENI, YAKIN_EN_AZ, adimBaglari, adimKimligi, adimPaylari, darPanoYani, agacAdimBasligi, aralikYuku, durumYazisi, DURDURMA_BEKLIYOR, durusYazisi, ekMesaiYazisi, okUcu, okYolu, payIlerlemeYazisi, payNedeni, payYazisi, payYonleri, planliDurusYazisi, satirKimligi, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, uzakMi, yukSinifi, yukYuzdesi,
   type AdimBagi, type KokpitEmri, type KokpitIsi, type KokpitModeli, type KokpitOlcegi, type TurAdayi,
 } from './kurallar.ts';
 import {
@@ -137,6 +137,7 @@ const SURUKLE_ESIGI = 4;
 // İmleç bu kadar ms durunca sürüklenen yerin etkisi sorulur.
 const ETKI_BEKLE = 150;
 // Bu genişlikten (px) dar iş okunur genişlikte çizilir; satır en çok bu kadar şeride açılır.
+const PAY_DAR_EN = 96;
 const KISA_IS = 40, OKUNUR_EN = 64, EN_COK_SERIT = 4, HUCRE_SAYI_EN = 28;
 const hucreEtkin = (g: { yuzde: number | null; isSay: number }): boolean => g.yuzde !== null || g.isSay > 0;
 // Önizlemede yeni bitişi emrin terminini aşan işler; yalnız henüz gecikmemiş emirde (emrin bitişi terminde ya da önce). Emir başına bir kez,
@@ -220,6 +221,8 @@ export function Tahta(o: TahtaOzellikleri) {
   const ufukDisi = ufuk === null ? null : <span className="tc-pyq-ufuk-disi" aria-hidden="true" ref={(el) => { yerYaz(el, (ufuk - m.bas) * px, (m.son - ufuk) * px); }} />;
   const ufukCizgi = ufuk === null ? null : <div className="tc-pyq-ufuk" aria-hidden="true" ref={(el) => { yerYaz(el, (ufuk - m.bas) * px); }} />;
   const kap = useRef<HTMLDivElement | null>(null);
+  // 3681: panonun satır tıklamasıyla mı (tablo kipi) çubuğa basılarak mı açıldığı: yalnız çubuk yolunda "üste aç" kuralı işler.
+  const satirSecimi = useRef<string | null>(null);
   const [tasinan, setTasinan] = useState<Tasinan | null>(null);
   const [hedef, setHedef] = useState<Hedef | null>(null);
   const [menu, setMenu] = useState<{ id: string; x: number; y: number; tut: number; fis?: boolean } | null>(null);
@@ -234,6 +237,10 @@ export function Tahta(o: TahtaOzellikleri) {
   });
   const [oklar, setOklar] = useState<Ok[]>([]);
   const [ustteki, setUstteki] = useState<string | null>(null);
+  // 3681: tabloda payları açılmış bölünmüş adımlar.
+  const [acikPay, setAcikPay] = useState<ReadonlySet<string>>(new Set());
+  // Son tıklanan pay: seçili adımın paylarından yalnız bu dolu çerçeve alır, kardeşleri kesik çerçeve alır (3681).
+  const [tiklananPay, setTiklananPay] = useState<string | null>(null);
   const [etki, setEtki] = useState<Etki | null>(null);
   // 3663: kişinin kapattığı seçili adım panosu (hangi adım); başka adım seçilince yeniden açılır.
   const [panoKapali, setPanoKapali] = useState<string | null>(null);
@@ -587,12 +594,15 @@ export function Tahta(o: TahtaOzellikleri) {
     const k = kap.current, cubuk = k?.querySelector<HTMLElement>(`[data-is="${tirnakIci(isId)}"]`);
     if (!k || !cubuk) { el.hidden = true; return; }
     el.hidden = false;
-    const kr = k.getBoundingClientRect(), pay = 8, enAz = 260, bas = k.querySelector<HTMLElement>('.tc-pyq-bas')?.offsetWidth ?? 0;
+    // Liste sütununun sağı: çubuğun kendi satırındaki yapışkan sütundan ölçülür (başlıktaki ilk sütun tablo kipinde 0 genişlik verebilir).
+    const bh = cubuk.closest('.tc-pyq-satir')?.querySelector<HTMLElement>(':scope > .tc-pyq-bas') ?? k.querySelector<HTMLElement>('.tc-pyq-bas');
+    const kr = k.getBoundingClientRect(), pay = 8, enAz = 260, listeSag = Math.max(bh?.getBoundingClientRect().right ?? 0, kr.left + (bh?.offsetWidth ?? 0), 0);
     const ekranEn = document.documentElement.clientWidth, gd = gorunenDikey(k), ekranBoy = gd.alt;
-    const c = cubuk.getBoundingClientRect(), gl = Math.max(c.left, kr.left + bas, 0), gr = Math.min(c.right, kr.right, ekranEn), gt = Math.max(c.top, kr.top, gd.ust), gb = Math.min(c.bottom, kr.bottom, ekranBoy);
+    // Çubuk görünür zaman alanının dışındaysa pano gizlenir (3663: görünmeyen çubuğa bağlı kalmaz; satıra basınca tahta çubuğa kayar).
+    const c = cubuk.getBoundingClientRect(), gl = Math.max(c.left, listeSag), gr = Math.min(c.right, kr.right, ekranEn), gt = Math.max(c.top, kr.top, gd.ust), gb = Math.min(c.bottom, kr.bottom, ekranBoy);
     if (gr - gl < pay || gb - gt < pay) { el.hidden = true; return; }
     const b = { left: gl, right: gr, top: gt, bottom: gb };
-    const sag = Math.min(kr.right, ekranEn) - pay, sol = Math.max(kr.left + bas, 0) + pay;
+    const sag = Math.min(kr.right, ekranEn) - pay, sol = listeSag + pay;
     const ipucu = (): void => { el.toggleAttribute('data-kayar', el.scrollHeight > el.clientHeight + 1 && el.scrollTop + el.clientHeight < el.scrollHeight - 1); };
     el.onscroll = ipucu;
     const dar = sag - sol < (el.hasAttribute('data-alt') ? 340 : 300);
@@ -600,13 +610,24 @@ export function Tahta(o: TahtaOzellikleri) {
     if (dar) {
       // Alt sayfa çubuğu örtmesin: çubuğun üstünde ya da altında en az 160 px yer olan yanda açılır (önceki yan yeterliyse korunur).
       // Üstte açılırsa Gantt kartının üstünden başlar; sayfanın sarı üst çubuğunu ve sekmelerini örtmez.
-      const topY = Math.max(kr.top, gd.ust) + pay, roomUst = b.top - pay - topY, roomAlt = ekranBoy - 2 * pay - (b.bottom + 2 * pay), eski = el.getAttribute('data-alt'), tut = 160;
+      const topY = Math.max(kr.top, gd.ust) + pay,
+        // Satır tıklamasında üst sayfa seçili tablo satırını örtmez: bölünmüş adımın satırı payların çubuğunun üstündedir (3681).
+        satirUst = satirSecimi.current === isId ? k.querySelector<HTMLElement>(`[data-adim-satiri="${tirnakIci(isId)}"]`)?.getBoundingClientRect().top : undefined,
+        roomUst = Math.min(b.top, satirUst ?? b.top) - pay - topY, roomAlt = ekranBoy - 2 * pay - (b.bottom + 2 * pay), eski = el.getAttribute('data-alt');
       // İki yanda da az yer varsa sayfa, çubuk üst kısma gelecek kadar bir kez yumuşakça kayar (alt sayfa altta açılır).
       if (Math.max(roomUst, roomAlt) < 200 && el.dataset['kay'] !== isId) { el.dataset['kay'] = isId; window.scrollBy({ top: b.top - ekranBoy * 0.3, behavior: 'smooth' }); }
-      const yan = eski === 'ust' && roomUst >= tut ? 'ust' : eski === 'alt' && roomAlt >= tut ? 'alt' : roomUst >= roomAlt ? 'ust' : 'alt';
+      const ustGenis = b.top - pay - (gd.ust + pay), { yan, genis } = darPanoYani(roomUst, roomAlt, ustGenis, eski, satirSecimi.current === isId), oda = yan === 'ust' ? roomUst : roomAlt;
+      if (genis) {
+        const h = Math.floor(Math.max(0, Math.min(ustGenis, ekranBoy * 0.5)));
+        el.setAttribute('data-alt', 'ust');
+        el.style.maxWidth = '';
+        el.style.maxHeight = `${String(h)}px`;
+        el.style.setProperty('--y', `${String(Math.round(b.top - pay - Math.min(el.offsetHeight, h)))}px`);
+        ipucu(); return;
+      }
       el.setAttribute('data-alt', yan);
       el.style.maxWidth = '';
-      el.style.maxHeight = `${String(Math.max(0, Math.min(yan === 'ust' ? roomUst : roomAlt, ekranBoy * 0.5)))}px`;
+      el.style.maxHeight = `${String(Math.max(0, Math.min(oda, ekranBoy * 0.5)))}px`;
       el.style.setProperty('--y', `${String(Math.round(topY))}px`);
       ipucu(); return;
     }
@@ -637,13 +658,34 @@ export function Tahta(o: TahtaOzellikleri) {
       const x = Math.max(sol, Math.min(b.left, sag - en));
       if (b.top - pay - boy >= gd.ust + pay) { yon = 'ust'; yer = { x, y: b.top - pay - boy }; }
       else if (b.bottom + pay + boy <= alt) { yon = 'alt'; yer = { x, y: b.bottom + pay }; }
-      else { yon = 'alt'; yer = { x, y: Math.max(gd.ust + pay, Math.min(b.bottom + pay, alt - boy)) }; }
+      else {
+        // Pano iki yanda da sığmıyorsa çubuğu örtmez: geniş olan yanda yüksekliği sınırlanır, içinde kaydırılır (3681).
+        const ustOda = b.top - pay - (gd.ust + pay), altOda = alt - (b.bottom + pay), ustte = ustOda > altOda, oda = Math.floor(ustte ? ustOda : altOda);
+        if (oda >= 200) { el.style.maxHeight = `${String(oda)}px`; const bh = Math.min(boy, oda); yon = ustte ? 'ust' : 'alt'; yer = { x, y: ustte ? b.top - pay - bh : b.bottom + pay }; }
+        else { yon = 'alt'; yer = { x, y: Math.max(gd.ust + pay, Math.min(b.bottom + pay, alt - boy)) }; }
+      }
     }
     el.setAttribute('data-yon', yon);
     el.style.setProperty('--x', `${String(Math.round(yer.x))}px`);
     el.style.setProperty('--y', `${String(Math.round(yer.y))}px`);
     ipucu();
   };
+  // 3681: bölünmüş adımın özet satırının çubuğu yoktur; basınca paylar açılır ve tahta ilk payın çubuğuna kayar (kanca sırası için erken tanımlıdır).
+  const cubugaKaydir = (isId: string): boolean => {
+    const cubuk = kap.current?.querySelector<HTMLElement>(`[data-is="${tirnakIci(isId)}"]`);
+    if (!cubuk) return false;
+    if (typeof cubuk.scrollIntoView === 'function') cubuk.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+    // Çubuk sol bölmenin (sticky tablo) hemen sağına yaklaşır: pano sağına sığar, tablonun altında kalmaz.
+    const k = kap.current, ik = ic.current?.getBoundingClientRect();
+    if (k && ik && typeof k.scrollTo === 'function') {
+      const bas = k.querySelector<HTMLElement>('.tc-pyq-bas')?.offsetWidth ?? 0, b = cubuk.getBoundingClientRect();
+      k.scrollTo({ left: Math.max(0, b.left - ik.left - bas - 24), behavior: 'smooth' });
+    }
+    return true;
+  };
+  useEffect(() => { if (secIs !== satirSecimi.current) satirSecimi.current = null; }, [secIs]);
+  const kaydirBekleyen = useRef<string | null>(null);
+  useEffect(() => { const id = kaydirBekleyen.current; if (id !== null && cubugaKaydir(id)) kaydirBekleyen.current = null; });
   const panoOge = useRef<{ el: HTMLElement; id: string } | null>(null), panoYeni = useRef(panoYerlestir);
   panoYeni.current = panoYerlestir;
   useEffect(() => {
@@ -876,7 +918,7 @@ export function Tahta(o: TahtaOzellikleri) {
 
   const tezgahKodu = new Map(m.tezgahlar.map((t) => [t.id, t.kod]));
   // emirKaydi: emir ve adım satırının emri; adimSira: adım satırının rotadaki sırası; ara: açık emrin adım sütun başlığı (3533).
-  type Satir = { kimlik: string; bas: string; alt: string; isler: KokpitIsi[]; durum?: string; tam?: string; termin?: number | null; durus?: string; agacEmir?: string; acik?: boolean; adim?: true; ozet?: [number, number]; notlar?: readonly string[]; emirKaydi?: KokpitEmri; adimSira?: number; ara?: true; siparis?: SiparisGrubu; spOzet?: SiparisOzeti; emirCubugu?: true };
+  type Satir = { kimlik: string; bas: string; alt: string; isler: KokpitIsi[]; durum?: string; tam?: string; termin?: number | null; durus?: string; agacEmir?: string; acik?: boolean; adim?: true; ozet?: [number, number]; notlar?: readonly string[]; emirKaydi?: KokpitEmri; adimSira?: number; paylar?: readonly KokpitIsi[]; payAlt?: true; ara?: true; siparis?: SiparisGrubu; spOzet?: SiparisOzeti; emirCubugu?: true };
   const agac = goz !== 'T' ? o.agac ?? null : null;
   const satirlar0: Satir[] = goz === 'T'
     ? m.tezgahlar.map((t) => ({ kimlik: t.id, bas: t.kod, alt: t.ad, ...(suAndakiDurus(m, t.id) ? { durus: durusYazisi(suAndakiDurus(m, t.id)!, zaman) } : {}), isler: Object.values(m.isler).filter((x) => satirKimligi(x) === t.id) }))
@@ -884,7 +926,7 @@ export function Tahta(o: TahtaOzellikleri) {
       const oz = siparisOzeti(g.emirler, m.isler);
       return { kimlik: `sp:${g.kok}`, bas: g.no, alt: siparisCubukYazisi(g.emirler.length, oz), tam: g.no, termin: g.termin, isler: [], durum: oz.durum, siparis: g, spOzet: oz };
     })
-    : emirler.filter((e) => agac !== null || e.durum !== 'plansiz').map((e) => ({ kimlik: e.id, bas: `${emirKuyrugu(e.no)} · ${e.urun}`, alt: `${String(e.adet)} adet · ${durumYazisi(e)}`, tam: e.no, termin: e.termin, isler: e.adimlar.flatMap((a) => m.isler[a.id] ?? []), durum: e.durum, emirKaydi: e }));
+    : emirler.filter((e) => agac !== null || e.durum !== 'plansiz').map((e) => ({ kimlik: e.id, bas: `${emirKuyrugu(e.no)} · ${e.urun}`, alt: `${String(e.adet)} adet · ${durumYazisi(e)}`, tam: e.no, termin: e.termin, isler: e.adimlar.flatMap((a) => adimPaylari(m, a.id)), durum: e.durum, emirKaydi: e }));
   // Ağaçta açık emrin çubukları adım satırlarına iner; emrin satırında ilk başlangıçtan son bitişe özet çubuğu kalır.
   const satirlar: Satir[] = agac === null ? (kad === 'emir' ? satirlar0.map((r) => ({ ...r, emirCubugu: true as const })) : satirlar0) : satirlar0.flatMap((r): Satir[] => {
     const e = emir.get(r.kimlik);
@@ -895,9 +937,11 @@ export function Tahta(o: TahtaOzellikleri) {
     const yer = r.isler.map((x) => once?.[x.id] ?? x);
     const ozet: [number, number] | undefined = yer.length > 0 ? [Math.min(...yer.map((x) => x.S)), Math.max(...yer.map((x) => x.C))] : undefined;
     const notlar = agac.notlar?.(e) ?? [];
-    return [{ ...ana, isler: [], ...(ozet ? { ozet } : {}) }, ...(notlar.length ? [{ kimlik: `${e.id}>not`, bas: '', alt: '', isler: [], notlar }] : []), ...(tabloKipi ? [{ kimlik: `${e.id}>ust`, bas: '', alt: '', isler: [], ara: true as const, emirKaydi: e }] : []), ...e.adimlar.map((a, i): Satir => {
-      const x = m.isler[a.id];
-      return { kimlik: `${e.id}>${a.id}`, bas: agacAdimBasligi(i, a), alt: x ? `${x.fason ? 'Fason' : tezgahKodu.get(x.m) ?? x.m} · ${zaman(x.S).slice(6)}` : 'planda yeri yok', isler: x ? [x] : [], adim: true, emirKaydi: e, adimSira: i, ...(r.durum ? { durum: r.durum } : {}) };
+    return [{ ...ana, isler: [], ...(ozet ? { ozet } : {}) }, ...(notlar.length ? [{ kimlik: `${e.id}>not`, bas: '', alt: '', isler: [], notlar }] : []), ...(tabloKipi ? [{ kimlik: `${e.id}>ust`, bas: '', alt: '', isler: [], ara: true as const, emirKaydi: e }] : []), ...e.adimlar.flatMap((a, i): Satir[] => {
+      const x = m.isler[a.id], l = adimPaylari(m, a.id), bolunmus = l.length > 1;
+      // Bölünmüş adım tek satırdır (ilk başlangıç, son bitiş, toplam adet); payları açınca her pay kendi satırında çizilir (3681 A).
+      const ana: Satir = { kimlik: `${e.id}>${a.id}`, bas: agacAdimBasligi(i, a), alt: x ? `${bolunmus ? `${String(l.length)} pay` : x.fason ? 'Fason' : tezgahKodu.get(x.m) ?? x.m} · ${zaman(Math.min(...l.map((y) => y.S))).slice(6)}` : 'planda yeri yok', isler: x ? l : [], adim: true, emirKaydi: e, adimSira: i, ...(bolunmus ? { paylar: l, ozet: [Math.min(...l.map((y) => y.S)), Math.max(...l.map((y) => y.C))] as [number, number] } : {}), ...(r.durum ? { durum: r.durum } : {}) };
+      return bolunmus && acikPay.has(a.id) ? [ana, ...l.map((y): Satir => ({ kimlik: `${e.id}>${y.id}`, bas: `Pay ${payYazisi(y, true) ?? ''}`, alt: tezgahKodu.get(y.m) ?? y.m, isler: [y], adim: true, payAlt: true, emirKaydi: e, adimSira: i, ...(r.durum ? { durum: r.durum } : {}) }))] : [ana];
     })];
   });
   const hucreSirasi = hucreGunleri ? satirlar.filter((r) => hucreGunleri.has(r.kimlik)).map((r) => r.kimlik) : [];
@@ -911,6 +955,7 @@ export function Tahta(o: TahtaOzellikleri) {
   const adaySatirlari = goz !== 'T' ? null : tasinan?.fis !== undefined ? new Set(fisAdaylari(tasinan.fis)) : tasinanIs ? new Set(adaylar(tasinanIs)) : yerlestirme ? new Set(yerlestirme.tezgahlar) : null;
   const secili = secEmir ? emir.get(secEmir) : undefined;
 
+  const aktifPay = tiklananPay !== null && secIs !== null && tiklananPay.split('~')[0] === secIs ? tiklananPay : secIs;
   const isDugmesi = (x: KokpitIsi, tek = false) => {
     const e = emir.get(x.job), canli = once?.[x.id];
     const S = canli ? canli.S : x.S, C = canli ? canli.C : x.C;
@@ -927,16 +972,16 @@ export function Tahta(o: TahtaOzellikleri) {
     const gelenler = gelen?.isler.get(x.id), gelenTur = gelenler?.[0]?.baslik;
     // T5: çubuk yazısının yeri. Değişiklik işareti çubuğun sağındadır; işaretli çubuğun yazısı dışarı çıkmaz.
     const kod = goz === 'T' ? emirKuyrugu(e?.no ?? x.job) : tezgahKodu.get(x.m) ?? x.m;
-    const ek = itilen !== undefined ? `${gecikir ? 'gecikir · ' : ''}${itilen > 0 ? '+' : '−'}${sureYaz(itilen)}` : gKaydi ? (Math.abs(gKayma) > 0.01 ? `${gKayma > 0 ? '+' : '−'}${sureYaz(gKayma)}` : 'yeni tezgâh') : canli && Math.abs(kayma) > 0.25 ? `${kayma > 0 ? '+' : '−'}${sureYaz(kayma)}` : kisa ? sureYaz(C - S) : goz === 'T' ? e?.urun ?? x.ad : x.ad;
+    const ek = itilen !== undefined ? `${gecikir ? 'gecikir · ' : ''}${itilen > 0 ? '+' : '−'}${sureYaz(itilen)}` : gKaydi ? (Math.abs(gKayma) > 0.01 ? `${gKayma > 0 ? '+' : '−'}${sureYaz(gKayma)}` : 'yeni tezgâh') : canli && Math.abs(kayma) > 0.25 ? `${kayma > 0 ? '+' : '−'}${sureYaz(kayma)}` : kisa ? sureYaz(C - S) : x.pay ? `${x.ad} · ${payYazisi(x, (cizim?.en ?? gercek) < PAY_DAR_EN) ?? ''}${(cizim?.en ?? gercek) >= PAY_DAR_EN && payIlerlemeYazisi(x) ? ` · sayılan ${payIlerlemeYazisi(x) ?? ''}` : ''}` : goz === 'T' ? e?.urun ?? x.ad : x.ad;
     const cizEn = Math.max(6, cizim?.en ?? gercek), sag = gelenler ? 0 : tek ? en - ((cizS - m.bas) * px + cizEn) : cizim?.sag ?? 0;
     const etiket: EtiketYeri = etiketYeri(o.satirBoyu === 'siki' ? 0 : cizEn, sag, kod, ek);
-    const ad = `${e?.no ?? x.job} · ${x.ad} · ${zaman(x.S)} – ${zaman(x.C).slice(-5)}${e ? ` · ${durumYazisi(e)}` : ''}${x.basladi && !x.bitti && tasi ? ' · sürüyor, taşınırsa durdurulur' : ''}${x.durdurmaBekliyor ? ` · ${DURDURMA_BEKLIYOR}` : ''}`;
+    const ad = `${e?.no ?? x.job} · ${x.ad} · ${zaman(x.S)} – ${zaman(x.C).slice(-5)}${e ? ` · ${durumYazisi(e)}` : ''}${x.basladi && !x.bitti && tasi ? ' · sürüyor, taşınırsa durdurulur' : ''}${x.durdurmaBekliyor ? ` · ${DURDURMA_BEKLIYOR}` : ''}${x.pay ? ` · pay ${payYazisi(x) ?? ''}${payIlerlemeYazisi(x) ? ` · sayılan ${payIlerlemeYazisi(x) ?? ''}` : ''} · ${payNedeni(x) ?? ''}` : ''}`;
     return (
       <Fragment key={x.id}>
       <button
         type="button" className="tc-pyq-is" data-is={x.id} data-d={e?.durum ?? 'iyi'} title={ad} aria-label={ad}
-        aria-pressed={secIs === x.id} data-suruyor={x.basladi ? '' : undefined} data-emir-secili={secEmir === x.job ? '' : undefined} data-yanan={yanan?.has(x.job) ? '' : undefined} data-sonuk={uyar(x.job) && (!yanan || yanan.has(x.job)) ? undefined : ''}
-        data-sabit={neden ? '' : undefined} data-durdurma-bekliyor={x.durdurmaBekliyor ? '' : undefined} data-tasinan={tasinan?.id === x.id ? '' : undefined} data-kaydi={(canli && Math.abs(kayma) > 0.25) || itilen !== undefined || gKaydi ? '' : undefined}
+        aria-pressed={secIs === adimKimligi(x) && (x.pay === undefined || aktifPay === x.id)} data-pay={x.pay ? String(x.pay.no) : undefined} data-pay-kardes={x.pay && secIs === adimKimligi(x) && aktifPay !== x.id ? '' : undefined} data-suruyor={x.basladi ? '' : undefined} data-emir-secili={secEmir === x.job ? '' : undefined} data-yanan={yanan?.has(x.job) ? '' : undefined} data-sonuk={uyar(x.job) && (!yanan || yanan.has(x.job)) ? undefined : ''}
+        data-sabit={neden && !x.pay ? '' : undefined} data-durdurma-bekliyor={x.durdurmaBekliyor ? '' : undefined} data-tasinan={tasinan?.id === x.id ? '' : undefined} data-kaydi={(canli && Math.abs(kayma) > 0.25) || itilen !== undefined || gKaydi ? '' : undefined}
         data-kisa={kisa ? '' : undefined} data-gecikir={gecikir ? '' : undefined} data-etiket={etiket}
         ref={(el) => {
           yerYaz(el, (cizS - m.bas) * px, cizim?.en ?? gercek);
@@ -950,8 +995,9 @@ export function Tahta(o: TahtaOzellikleri) {
         data-coklu={coklu.has(x.id) ? '' : undefined}
         onClick={(ev) => {
           if (tasinan) return;
-          if (cokluSec && (ev.ctrlKey || ev.metaKey || ev.shiftKey)) { cokluSec(x.id); return; }
-          sec(x.job, x.id);
+          if (cokluSec && (ev.ctrlKey || ev.metaKey || ev.shiftKey)) { cokluSec(adimKimligi(x)); return; }
+          setTiklananPay(x.id);
+          sec(x.job, adimKimligi(x));
         }}
         onDoubleClick={(ev) => { ev.preventDefault(); tut(x.id, (ev.clientX - ev.currentTarget.getBoundingClientRect().left) / px); }}
         onContextMenu={(ev: FareOlayi<HTMLButtonElement>) => {
@@ -965,9 +1011,10 @@ export function Tahta(o: TahtaOzellikleri) {
         onPointerLeave={() => { if (imlecteki.current === x.id) imlecteki.current = null; setUstteki((u) => (u === x.id ? null : u)); }}
       >
         {x.kilitli && <Simge ad="lock" boyut="k" />}
+        {x.pay && <span className="tc-pyq-pay-simge" data-pay-simge=""><Simge ad="layers" boyut="k" /></span>}
         <b>{kod}</b>
         <span>{ek}</span>
-        {x.basladi && <i className="tc-pyq-ilerleme" ref={(el) => { el?.style.setProperty('--oran', String(Math.min(1, Math.max(0, (m.simdi - S) / Math.max(0.01, C - S))))); }} />}
+        {(x.basladi || x.pay?.sayilan !== undefined) && <i className="tc-pyq-ilerleme" data-pay-ilerleme={x.pay?.sayilan !== undefined ? '' : undefined} ref={(el) => { el?.style.setProperty('--oran', String(Math.min(1, Math.max(0, x.pay?.sayilan !== undefined ? x.pay.sayilan / Math.max(1, x.pay.adet) : (m.simdi - S) / Math.max(0.01, C - S))))); }} />}
       </button>
       {etiket === 'dis' && (
         <span className="tc-pyq-is-etiket" aria-hidden="true" data-etiket-is={x.id} ref={(el) => { yerYaz(el, (cizS - m.bas) * px + cizEn); el?.style.setProperty('--serit', String(tek ? 0 : cizim?.serit ?? 0)); }}><b>{kod}</b> <span>{ek}</span></span>
@@ -1076,14 +1123,42 @@ export function Tahta(o: TahtaOzellikleri) {
   const adimHucresi = (r: Satir, id: SutunKimligi): ReactNode => {
     const e = r.emirKaydi, a = e && r.adimSira !== undefined ? e.adimlar[r.adimSira] : undefined, x = r.isler[0];
     if (!e || !a || r.adimSira === undefined) return null;
+    // 3681: bölünmüş adımın satırı ilk başlangıcı, son bitişi ve toplam adedi yazar; pay satırı tek payı.
+    const l = r.paylar ?? r.isler, S0 = l.length ? Math.min(...l.map((y) => y.S)) : 0, C0 = l.length ? Math.max(...l.map((y) => y.C)) : 0;
     switch (id) {
-      case 'emir': return <b title={agacAdimBasligi(r.adimSira, a)}>{agacAdimBasligi(r.adimSira, a)}</b>;
-      case 'urun': return x ? <span className="tc-pyq-h-veri">{x.fason ? 'Fason' : tezgahKodu.get(x.m) ?? x.m}</span> : <Bos ad="Planda yeri yok" />;
-      case 'termin': return x ? <span className="tc-pyq-h-veri" title={zaman(x.S)}>{tarihSaat(zaman, x.S)}</span> : null;
-      case 'bitis': return x ? <span className="tc-pyq-h-veri">{sureYaz(x.C - x.S)}</span> : null;
+      case 'emir':
+        if (r.payAlt && x) return <b title={`${agacAdimBasligi(r.adimSira, a)} · pay ${payYazisi(x) ?? ''} · ${payNedeni(x) ?? ''}`}><Simge ad="layers" boyut="k" /> {r.bas}</b>;
+        return (
+          <>
+            {r.paylar && <button type="button" className="tc-pyq-pay-ac" data-pay-ac={a.id} aria-expanded={acikPay.has(a.id)} aria-label={`${agacAdimBasligi(r.adimSira, a)}: payları ${acikPay.has(a.id) ? 'gizle' : 'göster'}`} onClick={() => { setAcikPay((o) => { const y = new Set(o); if (!y.delete(a.id)) y.add(a.id); return y; }); }}><Simge ad="chev-right" boyut="k" /></button>}
+            <b title={agacAdimBasligi(r.adimSira, a)}>{agacAdimBasligi(r.adimSira, a)}</b>
+          </>
+        );
+      case 'urun': return x ? <span className="tc-pyq-h-veri">{r.paylar ? [...new Set(r.paylar.map((y) => tezgahKodu.get(y.m) ?? y.m))].join(' + ') : x.fason ? 'Fason' : tezgahKodu.get(x.m) ?? x.m}</span> : <Bos ad="Planda yeri yok" />;
+      case 'termin': return x ? <span className="tc-pyq-h-veri" title={zaman(S0)}>{tarihSaat(zaman, S0)}</span> : null;
+      case 'bitis': return x ? <span className="tc-pyq-h-veri">{sureYaz(C0 - S0)}</span> : null;
       case 'ilerleme': { const d: AdimDurumu | null = adimDurumu(x); return <span className="tc-pyq-durum" data-durum={d ?? 'yok'}><i aria-hidden="true" />{d ? ADIM_DURUMU_ADI[d] : 'Planda yok'}</span>; }
-      case 'adet': case 'fark': return null;
+      case 'adet': {
+        if (r.payAlt) return x?.pay ? <span className="tc-pyq-h-veri" data-pay-adet=""><b>{x.pay.adet} adet</b>{x.pay.sayilan !== undefined ? <small title={`sayılan ${payIlerlemeYazisi(x) ?? ''}`}>{`sayılan ${String(x.pay.sayilan)}`}</small> : null}</span> : null;
+        if (!r.paylar) return null;
+        const top = r.paylar.reduce((t, y) => t + (y.pay?.adet ?? 0), 0), say = r.paylar.map((y) => y.pay?.sayilan);
+        return <span className="tc-pyq-h-veri" data-pay-adet=""><b>{top} adet</b>{say.some((q) => q !== undefined) ? <small>{`sayılan ${String(say.reduce<number>((t, q) => t + (q ?? 0), 0))}`}</small> : null}</span>;
+      }
+      case 'fark': return null;
     }
+  };
+  // 3681: seçili adımın payı başka satırdaysa satır başlığı "N pay aşağıda / yukarıda" yazar (tezgâh görünümü).
+  const payNotu = (r: Satir): ReactNode => {
+    if (goz !== 'T' || secIs === null) return null;
+    const y = payYonleri(m, secIs, satirlar.map((q) => q.kimlik), r.kimlik);
+    const yon = [y.yukari > 0 ? `${String(y.yukari)} pay yukarıda` : '', y.asagi > 0 ? `${String(y.asagi)} pay aşağıda` : ''].filter((q) => q !== '').join(' · ');
+    if (yon === '' || !adimPaylari(m, secIs).some((q) => satirKimligi(q) === r.kimlik)) return null;
+    const hedefler = y.satirlar.map((k) => tezgahKodu.get(k) ?? k).join(', ');
+    return (
+      <button type="button" className="tc-pyq-pay-not" data-pay-not={r.kimlik} title={`${yon}: ${hedefler}; basınca o satıra gider`} aria-label={`${yon}: ${hedefler}`}
+        onClick={() => { const k = y.satirlar[0]; const el = k === undefined ? null : kap.current?.querySelector<HTMLElement>(`[data-satir="${tirnakIci(k)}"]`); if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }}
+      >{yon} · {hedefler}</button>
+    );
   };
   const tezgahHucresi = (r: Satir, id: string): ReactNode => {
     const fason = fasonlar.has(r.kimlik);
@@ -1100,6 +1175,7 @@ export function Tahta(o: TahtaOzellikleri) {
             ><Simge ad={GELEN_SIMGESI.saha} boyut="k" /></button>
           )}
           {m.mesai?.[r.kimlik]?.length ? <i className="tc-pyq-mesai-isaret" title={ekMesaiYazisi(m.mesai[r.kimlik]!, zaman)}>+ ek mesai</i> : null}
+          {payNotu(r)}
         </>
       );
       case 'ad': return r.alt ? <span title={r.alt}>{r.alt}</span> : null;
@@ -1117,23 +1193,19 @@ export function Tahta(o: TahtaOzellikleri) {
   const adimSatiriSec = (r: Satir): void => {
     const x = r.isler[0], e = r.emirKaydi;
     if (tasinan || onay || !x || !e) return;
-    if (secIs === x.id) { sec(null, null); return; }
-    sec(e.id, x.id);
-    const cubuk = kap.current?.querySelector<HTMLElement>(`[data-is="${tirnakIci(x.id)}"]`);
-    if (cubuk && typeof cubuk.scrollIntoView === 'function') cubuk.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
-    // Çubuk sol bölmenin (sticky tablo) hemen sağına yaklaşır: pano sağına sığar, tablonun altında kalmaz.
-    const k = kap.current, ik = ic.current?.getBoundingClientRect();
-    if (k && ik && cubuk && typeof k.scrollTo === 'function') {
-      const bas = k.querySelector<HTMLElement>('.tc-pyq-bas')?.offsetWidth ?? 0, b = cubuk.getBoundingClientRect();
-      k.scrollTo({ left: Math.max(0, b.left - ik.left - bas - 24), behavior: 'smooth' });
-    }
+    if (secIs === adimKimligi(x)) { sec(null, null); return; }
+    satirSecimi.current = adimKimligi(x);
+    sec(e.id, adimKimligi(x));
+    const a = r.adimSira !== undefined ? e.adimlar[r.adimSira] : undefined;
+    if (r.paylar && a && !acikPay.has(a.id)) { kaydirBekleyen.current = x.id; setAcikPay((o) => new Set(o).add(a.id)); return; }
+    cubugaKaydir(x.id);
   };
   const satirNo = new Map(satirlar.map((r, i) => [r.kimlik, i]));
   const tabloSatiri = (r: Satir): ReactNode => {
     if (!tablo) return null;
     const emirSatiri = goz === 'S' && r.emirKaydi !== undefined && !r.adim && !r.ara && !r.notlar;
     const adimSatiri = goz === 'S' && r.adim === true && r.emirKaydi !== undefined && r.isler.length > 0 && !r.ara && !r.notlar;
-    const adimSecili = adimSatiri && secIs === r.isler[0]!.id;
+    const adimSecili = adimSatiri && secIs === adimKimligi(r.isler[0]!);
     return (
       <>
         <div
@@ -1225,6 +1297,7 @@ export function Tahta(o: TahtaOzellikleri) {
                   aria-label={`${r.bas}: ${gelenYazisi(gelen.satirlar.get(r.kimlik)!)}`} onClick={(ev) => { if (!tasinan) balonAc(r.kimlik, ev.currentTarget, true); }}
                 ><Simge ad={GELEN_SIMGESI.saha} boyut="k" /></button>
               )}
+              {payNotu(r)}
               {goz === 'T' && m.mesai?.[r.kimlik]?.length ? <i className="tc-pyq-mesai-isaret" title={ekMesaiYazisi(m.mesai[r.kimlik]!, zaman)}>+ ek mesai</i> : null}
               {yuk.has(r.kimlik) && <i className="tc-pyq-yukcubuk" data-yuk={yuk.get(r.kimlik)!.sinif} ref={(el) => { el?.style.setProperty('--oran', String(yuk.get(r.kimlik)!.oran)); }} />}
               </>
@@ -1241,7 +1314,7 @@ export function Tahta(o: TahtaOzellikleri) {
               {hayaletler(r)}
               {(r.siparis || r.emirCubugu) && kademeCubugu(r)}
               {hucreGunleri?.has(r.kimlik) && gunHucreleri(r, hucreSirasi, hucreDurakAnahtari)}
-              {!r.siparis && !r.emirCubugu && !hucreGunleri?.has(r.kimlik) && r.isler.map((x) => {
+              {!r.siparis && !r.emirCubugu && !hucreGunleri?.has(r.kimlik) && !(r.paylar !== undefined && !r.payAlt) && r.isler.map((x) => {
                 const k = r.adim ? undefined : yerlesim.kumeOf.get(x.id);
                 if (k === undefined) return isDugmesi(x, r.adim);
                 return k === x.id ? kumeDugmesi(k) : null;
@@ -1304,16 +1377,17 @@ export function Tahta(o: TahtaOzellikleri) {
         {(() => {
           const x = secIs !== null && !tasinan && !menu && !hucreli ? m.isler[secIs] : undefined, e = x ? emir.get(x.job) : undefined;
           if (!x || !e || panoKapali === x.id) return null;
-          return createPortal(<AdimPanosu kip="secili" m={m} e={e} x={x} zaman={zaman} sayim={o.adimSayim?.[x.id]} kapat={() => { setPanoKapali(x.id); }} yerlestir={(el) => { if (el) { panoOge.current = { el, id: x.id }; panoYerlestir(el, x.id); } else panoOge.current = null; }} />, document.body);
+          return createPortal(<AdimPanosu kip="secili" m={m} e={e} x={x} zaman={zaman} sayim={o.adimSayim?.[x.id]} bolAc={bol ? (id) => { setPanoKapali(x.id); bol(id); } : null} kapat={() => { setPanoKapali(x.id); }} yerlestir={(el) => { if (el) { panoOge.current = { el, id: x.id }; panoYerlestir(el, x.id); } else panoOge.current = null; }} />, document.body);
         })()}
         {menu && (
           <div className="tc-pyq-menu" role="menu" aria-label={emir.get(menu.fis ? menu.id : m.isler[menu.id]?.job ?? '')?.no ?? 'İş'} ref={(el) => { if (!el) return; const k = kap.current; const alt = k ? k.scrollTop + k.clientHeight : Infinity; const y = menu.y + el.offsetHeight > alt && k ? Math.max(k.scrollTop, menu.y - el.offsetHeight) : menu.y; el.style.setProperty('--x', `${String(menu.x)}px`); el.style.setProperty('--y', `${String(y)}px`); el.querySelector('button')?.focus(); }}>
-            <button type="button" role="menuitem" onClick={() => { const x = m.isler[menu.id]; setMenu(null); if (menu.fis) sec(menu.id, null); else if (x) sec(x.job, x.id); }}><Simge ad="list" boyut="k" /><span>Ayrıntı</span></button>
+            <button type="button" role="menuitem" onClick={() => { const x = m.isler[menu.id]; setMenu(null); if (menu.fis) sec(menu.id, null); else if (x) sec(x.job, adimKimligi(x)); }}><Simge ad="list" boyut="k" /><span>Ayrıntı</span></button>
             {bol && !menu.fis && m.isler[menu.id] && (() => {
-              const neden = bolunemezNedeni(m.isler[menu.id], emir.get(m.isler[menu.id]!.job)?.adet ?? 0);
+              const adimId = adimKimligi(m.isler[menu.id]!), bx = m.isler[adimId] ?? m.isler[menu.id]!;
+              const neden = bolunemezNedeni(bx, emir.get(bx.job)?.adet ?? 0);
               return (
                 <>
-                  <button type="button" role="menuitem" data-bol-ac={menu.id} disabled={neden !== null} onClick={() => { const id = menu.id; setMenu(null); bol(id); }}><Simge ad="layers" boyut="k" /><span>Planda böl</span></button>
+                  <button type="button" role="menuitem" data-bol-ac={menu.id} disabled={neden !== null} onClick={() => { const id = adimKimligi(m.isler[menu.id]!); setMenu(null); bol(id); }}><Simge ad="layers" boyut="k" /><span>{bx.pay ? 'Bölmeyi yönet' : 'Planda böl'}</span></button>
                   {neden !== null && <small data-bol-neden={menu.id}>{neden}</small>}
                 </>
               );

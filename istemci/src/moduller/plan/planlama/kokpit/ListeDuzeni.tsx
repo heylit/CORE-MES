@@ -4,7 +4,7 @@ import type { OkunanPlan } from '../motor/kurallar.ts';
 import { bolunemezNedeni } from './ElleBol.tsx';
 import { ElleYerlestir } from './ElleYerlestir.tsx';
 import { Hamleler, type HamleOzellikleri } from './Hamleler.tsx';
-import { DURDURMA_BEKLIYOR, DURUS_OKUNMADI, adimBeklemeYazisi, adimUzamaYazisi, durumYazisi as emirDurumYazisi, durusOkunmadi, eksikNedeni, engelleyenAdim, sureYaz, type AdimBeklemesi, type EmirDurumu, type KokpitModeli, type KolNotlari } from './kurallar.ts';
+import { DURDURMA_BEKLIYOR, DURUS_OKUNMADI, adimBeklemeYazisi, adimPaylari, adimUzamaYazisi, payYazisi, durumYazisi as emirDurumYazisi, durusOkunmadi, eksikNedeni, engelleyenAdim, sureYaz, type AdimBeklemesi, type EmirDurumu, type KokpitModeli, type KolNotlari } from './kurallar.ts';
 import { adimYeri, type SiraKarti } from './yerlestirme.ts';
 import type { YerlestirmeHedefi } from './Yerlestirme.tsx';
 import { kartSonucu, listeSirasi } from './yol.ts';
@@ -140,14 +140,16 @@ export function ListeDuzeni({ m, p, kartlar, acik, ac, zaman, mesgul, planla, ye
                     const adimlar = (
                       <ol className="tc-pyq-ld-adimlar" aria-label={ayri ? `${e.no} adımları` : 'Adımlar'}>
                         {e.adimlar.map((a, i) => {
-                          const x = m.isler[a.id];
+                          const x = m.isler[a.id], paylar = adimPaylari(m, a.id);
                           // Yerleşmeyen adımı tutan adım planda varsa (ör. ufka taşan önceki adım) basınca o gösterilir.
                           const engel = x ? null : engelleyenAdim(p, m.isler, a.id);
                           const gosterilen = x ? a.id : engel;
                           const govde = (
                             <>
                               <span>{String(i + 1)}. {a.ad}</span>
-                              <small data-yeri-yok={x ? undefined : a.id}>{x ? `${x.fason ? 'Fason' : kod(x.m)} · ${zaman(x.S)} → ${zaman(x.C).slice(6)}${x.ufukDisi ? ` · ufuk sonrasında ${sureYaz(x.ufukDisi)} çalışma` : ''}` : `yeri yok: ${eksikNedeni(p, a.id)}`}</small>
+                              <small data-yeri-yok={x ? undefined : a.id}>{x ? `${paylar.length > 1 ? paylar.map((y) => `${payYazisi(y, true) ?? ''} ${kod(y.m)}`).join(' + ') : x.fason ? 'Fason' : kod(x.m)} · ${zaman(Math.min(...paylar.map((y) => y.S)))} → ${zaman(Math.max(...paylar.map((y) => y.C))).slice(6)}${x.ufukDisi ? ` · ufuk sonrasında ${sureYaz(x.ufukDisi)} çalışma` : ''}` : `yeri yok: ${eksikNedeni(p, a.id)}`}</small>
+                              {paylar.length > 1 && <small data-pay-ozet={a.id}><Simge ad="layers" boyut="k" />{paylar.map((y) => `${payYazisi(y) ?? ''}${y.pay?.sayilan !== undefined ? ` · sayılan ${String(y.pay.sayilan)}` : ''}`).join(' · ')}</small>}
+                              {m.bolme?.[a.id] && <small data-bolme-neden={a.id}>Kayıtlı bölme uygulanamadı: {m.bolme[a.id]!.metin}</small>}
                               {x?.kilitli && <small className="tc-pyq-ld-kilit" data-elle-kilit={a.id}><Simge ad="lock" boyut="k" />elle · kilitli</small>}
                               {x?.durdurmaBekliyor && <small data-durdurma-bekliyor={a.id}>{DURDURMA_BEKLIYOR}; canlıda eski yerinde</small>}
                               {x && !x.basladi && adimBekle?.[a.id] !== undefined && <small data-adim-bekle={a.id}>{adimBeklemeYazisi(m, adimBekle[a.id]!, zaman)}</small>}

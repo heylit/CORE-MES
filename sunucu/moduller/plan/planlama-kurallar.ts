@@ -21,7 +21,10 @@ export function ayarCevir(a: PlanAyari): DurumCevabi['settings'] {
 
 // Sahibinin `CalisanAdim` biçimi (plan/disari.ts). Sağlam adet emir diliminden, adet adımın adedinden (yoksa emir adedi) eklenir; dilimde olmayan adım (emir okunmadı,
 // rotasız emir değil) gelmez.
-export interface CalisanAdimKaydi { anahtar: string; makineId: number | null; baslangic: string | null; sayimAni: string | null; kalanVerimliDk: number }
+export interface CalisanAdimKaydi {
+  anahtar: string; makineId: number | null; baslangic: string | null; sayimAni: string | null; kalanVerimliDk: number;
+  paylar?: readonly { makineId: number | null; kisiId: number | null; sayilan: number }[];
+}
 export function calisanAdimlariCevir(
   adimlar: readonly CalisanAdimKaydi[], emirler: readonly EmirKaydi[], adimAdetleri: NonNullable<DurumCevabi['adimAdetleri']> = {},
 ): NonNullable<DurumCevabi['calisanAdimlar']> {
@@ -34,6 +37,7 @@ export function calisanAdimlariCevir(
     return [{
       anahtar: a.anahtar, makineId: a.makineId === null ? null : String(a.makineId), baslangic: a.baslangic, sayimAni: a.sayimAni,
       kalanVerimliDk: a.kalanVerimliDk, saglam: ie.canliAdet ?? 0, adet: adimAdetleri[a.anahtar] ?? e.adet,
+      ...(a.paylar === undefined || a.paylar.length === 0 ? {} : { paylar: a.paylar.map((p) => ({ makineId: p.makineId === null ? null : String(p.makineId), kisiId: p.kisiId === null ? null : String(p.kisiId), sayilan: p.sayilan })) }),
     }];
   });
 }
@@ -165,7 +169,7 @@ const opMetni = (anahtar: string): string => { const b = anahtar.lastIndexOf('|'
 // kalan ilk paylara) ve parça motorBolmesi taşır. Motor elle bölmeyi uygulamadıysa (iş bütün ya da başka paylarla) uyarı yazılır. Adım adedi
 // bilinmeyen ya da pay sayısından az olan bölünmüş iş yazılamaz; payı bitmiş ya da fasonda olan bölünmüş işe dokunulmaz.
 export function calismaIsleri(
-  ops: readonly { id: string; m: string; S: number; C: number; bitti: boolean; ufukDisi?: number }[], kimlik: Readonly<Record<string, string>>, planlanacak: ReadonlySet<string>,
+  ops: readonly { id: string; m: string; S: number; C: number; bitti: boolean; ufukDisi?: number; payAdet?: number; elenenPay?: number }[], kimlik: Readonly<Record<string, string>>, planlanacak: ReadonlySet<string>,
   elleBol: ReadonlyMap<string, ElleBolme> = new Map(), adimAdetleri: ReadonlyMap<string, number> = new Map(),
 ): { yazilacak: CalismaIsi[]; yazilamaz: string[]; dokunulmaz: Set<string>; uyarilar: string[] } {
   const yazilacak: CalismaIsi[] = [];
@@ -183,7 +187,9 @@ export function calismaIsleri(
     const anahtar = kimlik[kok];
     const elle = elleBol.get(kok);
     const elleli = elle !== undefined && elle.length >= 2;
-    if (paylar.some(({ r }) => r.bitti || r.m.startsWith('@'))) { if (anahtar !== undefined) dokunulmaz.add(anahtar); continue; }
+    // 3681: bölünmüş adımda bir payın bitmesi adımı kapatmaz (öteki paylar sürer, kalan yeniden bölünebilir); yalnız payları bütünüyle biten ya da fasona
+    // giden adıma dokunulmaz.
+    if (paylar.every(({ r }) => r.bitti) || paylar.some(({ r }) => r.m.startsWith('@'))) { if (anahtar !== undefined) dokunulmaz.add(anahtar); continue; }
     const kaynaklar = paylar.map(({ r }) => calismaKaynagi(r.m));
     if (kaynaklar.some((k) => k === null) || anahtar === undefined || !planlanacak.has(anahtar) || paylar.some((p, n) => p.no !== n + 1)) { yazilamaz.add(anahtar ?? kok); continue; }
     const yaz = (n: number, parca?: CalismaIsi['parca']) => {
@@ -191,16 +197,28 @@ export function calismaIsleri(
       yazilacak.push({ k: kok, anahtar, kaynak: kaynaklar[n]!, S: r.S, C: r.C, ...(parca ? { parca } : {}) });
     };
     if (paylar.length === 1) {
-      if (elleli) uyarilar.push(`${opMetni(anahtar)}: motor elle bölmeyi uygulamadı; iş bütün yazıldı.`);
+      // 3681: kalanı 0'a inen başlamamış payı motor kasten plana almadı (fazla sayım); bu bölmenin uygulanmaması değildir.
+      if (elleli && !(paylar[0]!.r.elenenPay !== undefined && paylar[0]!.r.elenenPay > 0)) uyarilar.push(`${opMetni(anahtar)}: motor elle bölmeyi uygulamadı; iş bütün yazıldı.`);
       yaz(0);
       continue;
     }
     const adet = adimAdetleri.get(anahtar);
     if (adet === undefined || !Number.isInteger(adet) || adet < paylar.length) { yazilamaz.add(anahtar); continue; }
-    const elleUygulandi = elleli && elle.length === paylar.length && paylar.every(({ r }, n) => r.m === elle[n]!.m);
+    // 3681: başlamış adımda çalışan kaynak 1. pay olur (motor onu öne alır); payla elle bölme tezgâhı üzerinden eşlenir, sırası aynı olmak zorunda değil.
+    const kalanElle = elleli ? [...elle] : [];
+    const eslesen = paylar.map(({ r }) => { const i = kalanElle.findIndex((x) => x.m === r.m); return i < 0 ? null : kalanElle.splice(i, 1)[0]!; });
+    // 3681: motor kalanı 0'a inen başlamamış payı plana almaz (elenenPay); kalan paylar elle bölmenin altkümesidir.
+    const elenen = paylar.some(({ r }) => r.elenenPay !== undefined && r.elenenPay > 0);
+    const elleUygulandi = elleli && (elle.length === paylar.length || (elenen && elle.length > paylar.length)) && eslesen.every((x) => x !== null);
     if (elleUygulandi) {
+      // 3681 (Risk N1): canlıya pay adedi sayılan + kalan olarak gider (fazla sayım payın kalanından düşülmüş); toplam adım adedini tutmuyorsa elle bölmenin orantılı kuralı.
+      const payAdetleri = paylar.map(({ r }) => r.payAdet);
+      if (payAdetleri.every((a): a is number => a !== undefined && Number.isInteger(a) && a > 0) && payAdetleri.reduce((t, a) => t + a, 0) === adet) {
+        paylar.forEach((p, n) => { yaz(n, { no: p.no, adet: payAdetleri[n]! }); });
+        continue;
+      }
       const top = elle.reduce((t, x) => t + x.adet, 0);
-      const e = elleBolmeAdetleri(elle.map((x) => x.adet), adet);
+      const e = elleBolmeAdetleri(eslesen.map((x) => x!.adet), adet);
       if (e.adetler === null) { yazilamaz.add(anahtar); continue; }
       if (e.duzeltildi) uyarilar.push(`${opMetni(anahtar)}: adım adedi ${String(adet)}, elle bölmenin toplamı ${String(top)}; paylar orana göre ${e.adetler.join(' + ')} yapıldı.`);
       paylar.forEach((p, n) => { yaz(n, { no: p.no, adet: e.adetler![n]! }); });

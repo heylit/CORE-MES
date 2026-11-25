@@ -97,16 +97,16 @@ describe('Kokpit adımı elle böl (3488 c)', () => {
   });
 
   it('bölünemeyen adımda neden yazılır ve form çıkmaz; kilitli adımda kilidin kalkacağı yazılır', () => {
-    expect(bolunemezNedeni({ basladi: true, fason: false }, 9)).toBe('Başlamış adım bölünmez');
+    expect(bolunemezNedeni({ basladi: true, fason: false }, 9)).toBeNull();
     expect(bolunemezNedeni({ basladi: false, fason: false, bitti: true }, 9)).toBe('Bitmiş adım bölünmez');
     expect(bolunemezNedeni({ basladi: false, fason: true }, 9)).toBe('Fason adım bölünmez');
     expect(bolunemezNedeni({ basladi: false, fason: false }, 1)).toBe('Adedi bölmeye yetmiyor (en az 2)');
     expect(bolunemezNedeni({ basladi: false, fason: false }, 2)).toBeNull();
     expect(bolunemezNedeni(undefined, 2)).toBeNull();
-    const baslamis = { ...M, isler: { 'ORN-1.20': { basladi: true, fason: false, kilitli: false } } } as unknown as typeof M;
+    const bitmis = { ...M, isler: { 'ORN-1.20': { basladi: true, bitti: true, fason: false, kilitli: false } } } as unknown as typeof M;
     const c = ornekCalisma() as unknown as PlanlamaCalismasi;
-    render(<ElleBol c={c} m={baslamis} isId="ORN-1.20" taslak={sahteTaslak(c.dataVer).t} yazabilir kapat={vi.fn()} />);
-    expect(document.querySelector('[data-bolunemez]')?.textContent).toBe('Başlamış adım bölünmez.');
+    render(<ElleBol c={c} m={bitmis} isId="ORN-1.20" taslak={sahteTaslak(c.dataVer).t} yazabilir kapat={vi.fn()} />);
+    expect(document.querySelector('[data-bolunemez]')?.textContent).toBe('Bitmiş adım bölünmez.');
     expect(screen.queryByRole('button', { name: 'Etkisini gör' })).toBeNull();
     cleanup();
     const kilitli = { ...M, isler: { 'ORN-1.20': { basladi: false, fason: false, kilitli: true } } } as unknown as typeof M;

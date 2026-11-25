@@ -36,7 +36,14 @@ export interface PlanIslemi {
   ikBas?: number;
   // 3457: iş ufkun sonuna kadar yerleşti; bu kadar saati ufkun dışında kaldı.
   ufukDisi?: number;
+  // 3681: bölünmüş adımın payı (1..n). adet: payın adedi; elle: elle bölme; kalan: başlamış adımda payın kalan adedi; sayilan: payın sayılmış adedi.
+  pay?: PlanPayi;
+  // 3681: bölünmemiş, başlamış adımda sayılmış adet (bölmede 1. pay bundan az olamaz).
+  sayilan?: number;
 }
+export interface PlanPayi { no: number; n: number; asil: string; adet: number; elle?: true; kalan?: number; sayilan?: number }
+// 3681 (D): motorun uygulayamadığı elle bölmenin nedeni (adım kimliği → kod ve kişiye yazı).
+export type BolmeNedenleri = Record<string, { kod: string; metin: string }>;
 export interface PlanOzeti { wT: number; late: number; n: number; suH: number | null; suN: number | null; famN: number | null; Cmax: number | null }
 // 3457: 'zaman' nedeninin motordaki alt nedeni (engine.js zamanTanisi). gerek ve mevcut saattir; m ve ad aday tezgâhtır. Eski kayıtta yok.
 export const ZAMAN_ALTLARI = ['sure', 'vardiya', 'kisi', 'hazirlik', 'ayarci', 'dolu', 'malzeme', 'bilinmiyor'] as const;
@@ -105,6 +112,8 @@ export interface OkunanPlan {
   // Motorun yerleşmeme nedeni (2516-2); eski kayıtta yok. Kişi tezgâhına yerleşen iş canlı planın makine kuyruğuna yazılmaz.
   failNeden?: Record<string, FailNedeni>;
   kisiTezgahIsleri?: string[];
+  // 3681 (D): uygulanamayan elle bölmenin nedeni; eski kayıtta yok.
+  bolme?: BolmeNedenleri;
   // Eski kayıtta yok (boş): Kokpit malzeme satırı yazmaz.
   mal?: Record<string, PlanMalzemesi[]>;
 }
@@ -134,6 +143,8 @@ export function planOku(c: PlanlamaCalismasi | null): OkunanPlan | null {
       ...(Array.isArray(r.takim) && r.takim.length ? { takim: takimOku(r.takim) } : {}),
       ...(sayi(r.ikBas) !== null ? { ikBas: r.ikBas as number } : {}),
       ...((sayi(r.ufukDisi) ?? 0) > 0 ? { ufukDisi: r.ufukDisi as number } : {}),
+      ...payOku(r.pay),
+      ...(sayi(r.sayilan) !== null ? { sayilan: r.sayilan as number } : {}),
     };
   }
   const o = p.ozet;
@@ -148,9 +159,22 @@ export function planOku(c: PlanlamaCalismasi | null): OkunanPlan | null {
     warn: Array.isArray(p.warn) ? p.warn.filter(nesne).map((w) => ({ t: metin(w.t) ?? '', j: metin(w.j) ?? metin(w.job), txt: metin(w.txt) ?? '' })) : [],
     dataVer: p.dataVer,
     failNeden: failNedenOku(p.failNeden),
+    ...(nesne(p.bolme) && Object.keys(p.bolme).length ? { bolme: bolmeOku(p.bolme) } : {}),
     mal: malOku(p.mal),
     kisiTezgahIsleri: Array.isArray(o.kisiTezgahIsleri) ? o.kisiTezgahIsleri.filter((x): x is string => typeof x === 'string') : [],
   };
+}
+function payOku(v: unknown): { pay?: PlanPayi } {
+  if (!nesne(v)) return {};
+  const no = sayi(v.no), n = sayi(v.n), adet = sayi(v.adet);
+  if (no === null || n === null || adet === null || no < 1 || n < 2) return {};
+  const kalan = sayi(v.kalan), sayilan = sayi(v.sayilan);
+  return { pay: { no, n, asil: metin(v.asil) ?? '', adet, ...(v.elle ? { elle: true as const } : {}), ...(kalan !== null ? { kalan } : {}), ...(sayilan !== null ? { sayilan } : {}) } };
+}
+function bolmeOku(v: unknown): BolmeNedenleri {
+  const l: BolmeNedenleri = {};
+  if (nesne(v)) for (const [id, x] of Object.entries(v)) if (nesne(x) && typeof x.metin === 'string') l[id] = { kod: metin(x.kod) ?? '', metin: x.metin };
+  return l;
 }
 function failNedenOku(v: unknown): Record<string, FailNedeni> {
   const l: Record<string, FailNedeni> = {};

@@ -399,7 +399,25 @@ const elleBolmeleri = (d: Nesne): Record<string, { adet: number; m: string }[]> 
     ? [[id, (l as { adet: number; m: string }[]).map((x) => ({ adet: x.adet, m: x.m }))] as const] : []))
   .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
 const elleBolImzasi = (d: Nesne): Record<string, string> => Object.fromEntries(Object.entries(elleBolmeleri(d)).map(([id, l]) => [id, l.map((x) => `${String(x.adet)}@${x.m}`).join(',')]));
-export function elleBolAdimi(deger: Nesne, isId: string): { adet: number; tezgahlar: string[] } | string {
+// 3681: başlamış adım da bölünür. Çalışan kaynak (gercek.m) 1. paydır; pay ilerlemesi gercek.paylar (tezgâh -> sayılan, sunucu pay ilerlemesi),
+// yoksa adımın sayılanı çalışan paydadır. Başlamış payın tezgâhı bölmede kalır, pay adedi sayılanın altına inmez (motor engine.js elleBolCoz aynı kural).
+export interface CalisanBilgisi { m: string; paylar: Record<string, number> }
+const payHaritasi = (g: Nesne): Record<string, number> => {
+  const h = nesne(g.paylar) ? Object.fromEntries(Object.entries(g.paylar).flatMap(([m, n]) => (typeof n === 'number' && Number.isFinite(n) && n > 0 ? [[m, n] as const] : []))) : null;
+  if (h !== null) return h;
+  const n = typeof g.n === 'number' && Number.isFinite(g.n) && g.n > 0 ? g.n : 0;
+  return n > 0 && typeof g.m === 'string' ? { [g.m]: n } : {};
+};
+export function calisanKaynak(deger: Nesne, isId: string): CalisanBilgisi | null {
+  const g = nesne(deger.gercek) ? deger.gercek[isId] : undefined;
+  return nesne(g) && g.S != null && g.C == null && typeof g.m === 'string' ? { m: g.m, paylar: payHaritasi(g) } : null;
+}
+const tezgahAdi = (deger: Nesne, m: string): string => {
+  const D = nesne(deger.D) ? deger.D : {};
+  const t = (Array.isArray(D.tezgahlar) ? D.tezgahlar : []).find((x): x is Nesne => nesne(x) && String(x.id) === m);
+  return t === undefined ? m : String(t.kod ?? t.ad ?? m);
+};
+export function elleBolAdimi(deger: Nesne, isId: string): { adet: number; tezgahlar: string[]; calisan: CalisanBilgisi | null } | string {
   if (isId.includes('~')) return 'Adımın kendisi bölünür, payı değil.';
   const D = nesne(deger.D) ? deger.D : {};
   const emirId = emirOf(isId), k = isId.slice(emirId.length + 1);
@@ -413,11 +431,28 @@ export function elleBolAdimi(deger: Nesne, isId: string): { adet: number; tezgah
   const adet = typeof opAdet === 'number' && Number.isFinite(opAdet) ? opAdet : typeof s.adet === 'number' ? s.adet : NaN;
   if (!Number.isInteger(adet) || adet < 2) return 'Adımın adedi bölmeye yetmiyor (en az 2).';
   const g = nesne(deger.gercek) ? deger.gercek[isId] : undefined;
-  if (nesne(g) && g.S != null) return 'Adım başlamış; başlamış adım bölünmez.';
+  if (nesne(g) && g.C != null) return 'Adım bitmiş; bölünmez.';
   const r = nesne(deger.plan) && nesne(deger.plan.ops) ? deger.plan.ops[isId] : undefined;
   if (nesne(r) && r.done && (r.act || r.bitti)) return 'Adım bitmiş; bölünmez.';
   const tezgahlar = (Array.isArray(o.tezgahlar) ? o.tezgahlar : []).flatMap((t) => (nesne(t) && t.id !== undefined ? [String(t.id)] : []));
-  return { adet, tezgahlar };
+  return { adet, tezgahlar, calisan: calisanKaynak(deger, isId) };
+}
+// Başlamış adımın bölmesi: çalışan tezgâh 1. pay, sayımı olan her payın tezgâhı listede, pay adedi sayılandan az değil. Sayılandan az adet yalnız
+// kayıtlı bölmedeki değişmemiş paydır (fazla sayımdan kalan pay, kaydı tutan komut yeniden reddedilmez). Neden metni bölme penceresinde görünür.
+export function baslamisBolmeNedeni(
+  deger: Nesne, calisan: CalisanBilgisi, paylar: readonly { adet: number; tezgah: string }[], kayitli: readonly { adet: number; m: string }[] | undefined,
+): string | null {
+  const ek = ['', 'in', 'nin', 'ün', 'ün', 'in', 'nın'];
+  if (paylar[0]?.tezgah !== calisan.m) return `Çalışan tezgâh (${tezgahAdi(deger, calisan.m)}) 1. pay olmalı.`;
+  for (const [m, n] of Object.entries(calisan.paylar)) {
+    if (n > 0 && !paylar.some((p) => p.tezgah === m)) return `Başlamış payın tezgâhı (${tezgahAdi(deger, m)}) bölmede kalmalı; sayımı olan pay silinemez.`;
+  }
+  for (const [i, p] of paylar.entries()) {
+    const sayilan = calisan.paylar[p.tezgah] ?? 0;
+    const eski = kayitli?.find((x) => x.m === p.tezgah)?.adet;
+    if (p.adet < sayilan && p.adet !== eski) return `Parça ${String(i + 1)}'${ek[i + 1] ?? 'in'} adedi sayılandan az (sayılan ${String(sayilan)}).`;
+  }
+  return null;
 }
 export function elleBolUygula(deger: unknown, k: { isId: string; paylar: readonly { adet: number; tezgah: string }[] }, kisi: KomutKisisi): KomutSonucu {
   if (!nesne(deger)) return { hata: { tur: 'cakisma', ileti: 'Çalışma kaydı okunamadı; sayfayı yenileyin.' } };
@@ -429,6 +464,11 @@ export function elleBolUygula(deger: unknown, k: { isId: string; paylar: readonl
   if (top !== a.adet) return { hata: { tur: 'dogrulama', ileti: `Parçaların toplamı ${String(top)}; adımın adedi ${String(a.adet)}.`, alan: 'paylar' } };
   const yeniBol = k.paylar.map((p) => ({ adet: p.adet, m: p.tezgah }));
   const eskiBol = nesne(deger.elleBol) ? deger.elleBol : {};
+  if (a.calisan !== null) {
+    const kayitli = Array.isArray(eskiBol[k.isId]) ? (eskiBol[k.isId] as { adet: number; m: string }[]) : undefined;
+    const neden = baslamisBolmeNedeni(deger, a.calisan, k.paylar, kayitli);
+    if (neden !== null) return { hata: { tur: 'dogrulama', ileti: neden, alan: 'paylar' } };
+  }
   const locks = nesne(deger.locks) ? deger.locks : {};
   const kilitler = Object.keys(locks).filter((id) => id === k.isId || id.startsWith(`${k.isId}~`));
   if (JSON.stringify(eskiBol[k.isId]) === JSON.stringify(yeniBol) && kilitler.length === 0) return { deger, degisti: false };
@@ -448,6 +488,10 @@ export function elleBolSilUygula(deger: unknown, k: { isId: string }, kisi: Komu
   if (!nesne(deger)) return { hata: { tur: 'cakisma', ileti: 'Çalışma kaydı okunamadı; sayfayı yenileyin.' } };
   const eskiBol = nesne(deger.elleBol) ? deger.elleBol : {};
   if (eskiBol[k.isId] === undefined) return { deger, degisti: false };
+  // 3681: başka payda sayım varsa bölme kaldırılamaz (sayım o payın tezgâhındadır); yalnız çalışan payda sayım varsa bütün adım olur.
+  const calisan = calisanKaynak(deger, k.isId);
+  const baska = calisan === null ? [] : Object.entries(calisan.paylar).filter(([m, n]) => m !== calisan.m && n > 0);
+  if (baska.length > 0) return { hata: { tur: 'dogrulama', ileti: `Başka payda sayım var (${tezgahAdi(deger, baska[0]![0])}); bölme kaldırılamaz, kalanı birleştirin.`, alan: 'isId' } };
   const { [k.isId]: _, ...kalan } = eskiBol;
   const yeni = kopya(deger);
   yeni.elleBol = kalan;

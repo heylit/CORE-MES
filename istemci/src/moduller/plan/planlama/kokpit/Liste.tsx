@@ -6,7 +6,7 @@ import type { CanliYer } from './Tahta.tsx';
 import type { Derleme } from '../motor/kurallar.ts';
 import { Bos, FarkRozeti, Halka } from './Tablo.tsx';
 import { SU_AN_ADI, farkOlustur, ilerleme, siralaGecikme, suAn, tarihSaat, type Siralama } from './tablo.ts';
-import { aralikYuku, bagimlilik, durumYazisi, sureYaz, durusYazisi, ekMesaiYazisi, matrisSirasi, satirKimligi, suAndakiDurus, yukYuzdesi, type KokpitEmri, type KokpitIsi, type KokpitModeli } from './kurallar.ts';
+import { aralikYuku, bagimlilik, adimPaylari, durumYazisi, payIlerlemeYazisi, payYazisi, sureYaz, durusYazisi, ekMesaiYazisi, matrisSirasi, satirKimligi, suAndakiDurus, yukYuzdesi, type KokpitEmri, type KokpitIsi, type KokpitModeli } from './kurallar.ts';
 
 // Telefonda tahtanın yerini tutan liste. Tezgâh gözü: önce plana alınacak emirler, sonra tezgâh tezgâh sıradaki işler (ilk üçü, gerisi
 // düğmeyle); Sipariş gözü: emirler, geç olan üstte. Satıra dokununca ayrıntı alttan açılır.
@@ -83,6 +83,7 @@ export function Liste({ m, cx, goz, emirler, secEmir, secIs, zaman, sec, yanan =
             <em>{e.termin === null ? <>Termin <Bos ad="yok" /></> : `Termin ${tarihSaat(zaman, e.termin)}`}</em>
           </span>
           {e.durum === 'plansiz' || e.durum === 'risk' || e.gecikme === null ? <small className="tc-pyq-kart-durum">{durumYazisi(e)}</small> : null}
+          {(() => { const b = e.adimlar.flatMap((a) => { const n = adimPaylari(m, a.id).length; return n > 1 ? [`${a.ad}: ${String(n)} paya bölündü`] : []; }); return b.length > 0 ? <small className="tc-pyq-kart-bolme" data-emir-bolme={e.id}><Simge ad="layers" boyut="k" />{b.join(' · ')}</small> : null; })()}
         </span>
         {emirNotu?.(e).map((y) => <small data-emir-not={e.id} key={y}>{y}</small>)}
       </button>
@@ -101,7 +102,7 @@ export function Liste({ m, cx, goz, emirler, secEmir, secIs, zaman, sec, yanan =
           type="button" data-d={e?.durum ?? 'iyi'} aria-current={secIs === x.id} {...isaret(x.job)} data-gelen={l.length > 0 ? '' : undefined}
           onClick={() => { sec(x.job, x.id); setCumle(l.length > 0 ? x.id : null); }}
         >
-          {simge(l)}<b>{emirKuyrugu(e?.no ?? x.job)}</b><span>{e ? `${e.urun} · ` : ''}{x.ad}</span><small>{zaman(x.S).slice(6)}{e && e.durum !== 'iyi' ? ` · ${durumYazisi(e)}` : ''}{bag ? ` · ${bag}` : ''}{kayma(x) && <em data-kayma="">{kayma(x)}</em>}</small>
+          {simge(l)}<b>{emirKuyrugu(e?.no ?? x.job)}</b><span>{e ? `${e.urun} · ` : ''}{x.ad}{x.pay && <i data-liste-pay={x.id}>{` · ${payYazisi(x) ?? ''}`}</i>}</span><small>{zaman(x.S).slice(6)}{payIlerlemeYazisi(x) === null ? '' : ` · sayılan ${payIlerlemeYazisi(x) ?? ''}`}{e && e.durum !== 'iyi' ? ` · ${durumYazisi(e)}` : ''}{bag ? ` · ${bag}` : ''}{kayma(x) && <em data-kayma="">{kayma(x)}</em>}</small>
         </button>
         {cumleSatiri(x.id, l)}
       </li>
