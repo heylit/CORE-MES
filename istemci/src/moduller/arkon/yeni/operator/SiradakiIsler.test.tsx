@@ -40,7 +40,7 @@ describe('Sıradaki işler şeridi (3338-6 a)', () => {
     // 3714 Test K4: eylem şeridin dolaysız çocuğudur (başlığın yerinde), şeridin dışında yüzen satır yoktur.
     const grup = screen.getByRole('group', { name: 'Önizleme · ekrandaki iş değişmez' });
     expect(grup.parentElement).toBe(screen.getByRole('region', { name: 'Sıradaki işler' }));
-    expect(screen.queryByText(/iş · 2\/4$/)).toBeNull();
+    expect(grup.textContent).toContain('3 iş · 2/4');
     fireEvent.click(screen.getByRole('button', { name: 'Ekrandakine dön' }));
     fireEvent.click(screen.getByRole('button', { name: 'Bu işe geç' }));
     expect(olan).toEqual(['don', 'gec']);

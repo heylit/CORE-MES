@@ -54,11 +54,15 @@ export function SiradakiKart({ is, siradaki, ekranda, acik, yer, resim, revUyums
 }
 
 // 3714 Test K4: önizleme eylemi şeridin başlık sütunundadır; şeridin dışına taşıp iş satırını ve kimliği örtmez, şeridin boyunu değiştirmez.
-function SiraOnizleme({ don, gec }: { don: () => void; gec: () => void }) {
+// 3714 fark kartı: "Önizleme" ibaresi ve sıra sayacı görünür kalır; telefonda dön düğmesi kısa "Dön" yazar.
+function SiraOnizleme({ don, gec, sayac }: { don: () => void; gec: () => void; sayac: { acik: number; sira: string } }) {
   return (
     <span className="tc-ay1-sira-eylem" role="group" aria-label="Önizleme · ekrandaki iş değişmez" title="Önizleme · ekrandaki iş değişmez">
-      <Dugme simge="back" onClick={don} aria-label="Ekrandakine dön" title="Ekrandakine dön"><span className="tc-ay1-sira-eylem-yazi">Ekrandakine dön</span></Dugme>
+      <Dugme simge="back" onClick={don} aria-label="Ekrandakine dön" title="Ekrandakine dön">
+        <span className="tc-ay1-sira-eylem-yazi">Ekrandakine dön</span><span className="tc-ay1-sira-eylem-kisa" aria-hidden="true">Dön</span>
+      </Dugme>
       <Dugme tur="birincil" simge="next" onClick={gec}>Bu işe geç</Dugme>
+      <small className="tc-ay1-sira-eylem-not"><Simge ad="eye" boyut="k" /><span>Önizleme</span><span className="tc-ay1-mono tc-ay1-sira-eylem-sayac"><span className="tc-ay1-sira-eylem-yazi">{sayac.acik} iş · </span>{sayac.sira}</span></small>
     </span>
   );
 }
@@ -99,7 +103,7 @@ export function SiradakiIsler({ isler, ekranda, bakilan, siradakiMi, yer, sec, o
   const acik = isler.filter((x) => !x.empty && x.state !== 'done').length;
   return (
     <section className="tc-ay1-sira" aria-label="Sıradaki işler" data-eylem={onizleme ? '' : undefined}>
-      {onizleme ? <SiraOnizleme don={onizleme.don} gec={onizleme.gec} /> : (
+      {onizleme ? <SiraOnizleme don={onizleme.don} gec={onizleme.gec} sayac={{ acik, sira: `${String(ekranda + 1)}/${String(isler.length)}` }} /> : (
         <span className="tc-ay1-sira-ust">
           <Simge ad="list" boyut="k" /><b>Sıradaki işler</b>
           <small className="tc-ay1-mono">{acik} iş · {ekranda + 1}/{isler.length}</small>
