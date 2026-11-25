@@ -339,6 +339,14 @@ export const sonrakiDenemeYazilir = (sonuc: GidenSonucu, bekleme: Date | null): 
 export function durduMu(g: { sonSonuc?: GidenSonucu | null; sonrakiDeneme: Date | null } | null): boolean {
   return g !== null && g.sonSonuc != null && SONUC_SINIFI[g.sonSonuc] === 'durdu' && g.sonrakiDeneme === null;
 }
+// 3704: "Yeniden gönder" bekleyen belgede yalnız "ulaşılamadı" sonucunda çıkar: köprüye ya da Logo oturumuna ulaşılamadı, istek Logo'ya hiç gitmedi.
+// "Yetkisiz" köprü anahtarının reddidir; yeniden göndermek onu düzeltmez, ayar düzelene kadar belge beklemeye devam eder. Belirsiz sonuç ve CORE'a
+// yazılamama çift gönderim riski taşır; onlar kendi kalkanıyla ya da "Logo'da kontrol et" ile ilerler.
+export const ELLE_ONE_ALINAN_SONUCLAR = ['ulasilamadi'] as const satisfies readonly GidenSonucu[];
+export const elleOneAlinabilirMi = (sonuc: GidenSonucu | null): boolean => sonuc !== null && (ELLE_ONE_ALINAN_SONUCLAR as readonly string[]).includes(sonuc);
+export const ANAHTAR_REDDI_NE_YAPMALI = 'Köprü anahtarı reddedildi; Logo bağlantı ayarındaki anahtarı kontrol edin.';
+export const BEKLEYEN_ELLE_NE_YAPMALI = 'Kendiliğinden yeniden denenir. Beklemek istemezseniz "Yeniden gönder" ile hemen sıraya alabilirsiniz.';
+
 // Tur bu belgeye bakar mı: durmamış ve bekleme dolmuş (ya da hiç beklemesi yok).
 export function denemeZamaniMi(g: { sonSonuc?: GidenSonucu | null; sonrakiDeneme: Date | null } | null, simdi: Date): boolean {
   if (g === null) return true;

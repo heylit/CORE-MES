@@ -46,12 +46,12 @@ export const sayac = (satirlar: readonly IzlemeSatiri[]): Record<IzlemeDurumu, n
   sirada: satirlar.filter((s) => s.durum === 'sirada').length,
 });
 
-// Toplu yeniden gönderim yalnız duran belgeyi, nedenine göre gruplu alır; kullanıcı yalnız düzelttiği nedenleri seçer.
+// Toplu yeniden gönderim yalnız duran belgeyi (bekleyen belge tek tek elle öne alınır), nedenine göre gruplu alır; kullanıcı yalnız düzelttiği nedenleri seçer.
 export interface NedenGrubu { neden: string; belgeler: IzlemeSatiri[] }
 export function duranGruplari(satirlar: readonly IzlemeSatiri[]): NedenGrubu[] {
   const gruplar = new Map<string, IzlemeSatiri[]>();
   for (const s of satirlar) {
-    if (!s.yenidenGonderilebilir) continue;
+    if (!s.yenidenGonderilebilir || s.durum !== 'durdu') continue;
     const neden = s.neden ?? 'Neden yazılmamış';
     gruplar.set(neden, [...(gruplar.get(neden) ?? []), s]);
   }

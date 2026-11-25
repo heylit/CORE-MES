@@ -258,6 +258,57 @@ describe('Bağlantı izleme (3313)', () => {
     }
   });
 
+  // 3704: bağlantı ya da oturum nedeniyle bekleyen belgede elle Yeniden gönder; Logo oturumu beklemedeyse bitiş saati yazılır, düğme yine açıktır.
+  const bekleyen = belge({ belge: 'siparis', belgeAdi: 'Sipariş fişi', no: 20, durum: 'yeniden-denenecek', yenidenGonderilebilir: true, neden: 'Köprüye ulaşılamadı', sonrakiDeneme: T,
+    neYapmali: 'Kendiliğinden yeniden denenir. Beklemek istemezseniz "Yeniden gönder" ile hemen sıraya alabilirsiniz.' });
+  const bekleyenLogo: LogoGidenIzlemeCevabi = { ...logo, belgeler: [...logo.belgeler, bekleyen] };
+
+  it('3704 bekleyen belgede Yeniden gönder çıkar; toplu pencere gruplarına girmez; oturum beklemesi yoksa alt not yok', async () => {
+    expect(duranGruplari(izlemeSatirlari(bekleyenLogo, smartes)).flatMap((x) => x.belgeler).some((b) => b.no === 20)).toBe(false);
+    sunucuKur(bekleyenLogo);
+    cizdir(yazmali);
+    fireEvent.click(await screen.findByText('Sipariş fişi'));
+    expect(await screen.findByRole('button', { name: 'Yeniden gönder' })).toBeTruthy();
+    expect(screen.getAllByText(/Kendiliğinden yeniden denenir/)).toHaveLength(1);
+    expect(screen.queryByText(/oturumu .* bekliyor/)).toBeNull();
+  });
+
+  it('3704 anahtarı reddedilen (yetkisiz) bekleyen belgede Yeniden gönder yok, anahtar kontrolü yazılır', async () => {
+    const reddedilen = belge({ belge: 'siparis', belgeAdi: 'Sipariş fişi', no: 21, durum: 'yeniden-denenecek', yenidenGonderilebilir: false, neden: 'Köprü anahtarı geçersiz', sonrakiDeneme: T,
+      neYapmali: 'Köprü anahtarı reddedildi; Logo bağlantı ayarındaki anahtarı kontrol edin.' });
+    sunucuKur({ ...logo, belgeler: [...logo.belgeler, reddedilen] });
+    cizdir(yazmali);
+    fireEvent.click(await screen.findByText('Sipariş fişi'));
+    expect(await screen.findByText('Köprü anahtarı reddedildi; Logo bağlantı ayarındaki anahtarı kontrol edin.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Yeniden gönder' })).toBeNull();
+  });
+
+  it('3704 Logo oturumu beklemedeyse bitiş saati yazılır ve düğme açık kalır; süresi geçmişse not yok; yetkisiz rol düğmeyi görmez', async () => {
+    const hata = (dk: number) => ({ zaman: new Date().toISOString(), adim: 'UserLogin', kod: -93, ileti: null, aciklama: null, yenidenDeneme: new Date(Date.now() + dk * 60_000).toISOString() });
+    try {
+      logoHazirlik.baglantiHatasi = hata(4);
+      sunucuKur(bekleyenLogo);
+      cizdir(yazmali);
+      fireEvent.click(await screen.findByText('Sipariş fişi'));
+      expect(await screen.findByText(/Logo oturumu \d\d:\d\d'e kadar bekliyor; şimdi gönderirseniz yine bekler\./)).toBeTruthy();
+      expect((screen.getByRole('button', { name: 'Yeniden gönder' }) as HTMLButtonElement).disabled).toBe(false);
+      cleanup();
+      logoHazirlik.baglantiHatasi = hata(-4);
+      cizdir(yazmali);
+      fireEvent.click(await screen.findByText('Sipariş fişi'));
+      await screen.findByRole('button', { name: 'Yeniden gönder' });
+      expect(screen.queryByText(/oturumu .* bekliyor/)).toBeNull();
+      cleanup();
+      logoHazirlik.baglantiHatasi = hata(4);
+      cizdir(yalnizGoren);
+      fireEvent.click(await screen.findByText('Sipariş fişi'));
+      await screen.findByText(/Sistem Ayarları yazma yetkisi ister/);
+      expect(screen.queryByRole('button', { name: 'Yeniden gönder' })).toBeNull();
+    } finally {
+      delete logoHazirlik.baglantiHatasi;
+    }
+  });
+
   it('3698 yardımcının son bağlantı hatası Logo kartında zaman, adım, kod, açıklama ve yeniden deneme saatiyle görünür; hata yoksa görünmez', async () => {
     logoHazirlik.baglantiHatasi = {
       zaman: '2026-11-25T09:14:00.000Z', adim: 'UserLogin', kod: -93, ileti: '[code=-93] Kullanıcı sayısı limiti aşılmıştır',

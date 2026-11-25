@@ -1,5 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
-import { LOGO_FIS_TURLERI, SONUCU_BILINMIYOR, denemeZamaniMi, sonrakiDenemeYazilir } from './kurallar.ts';
+import { ELLE_ONE_ALINAN_SONUCLAR, LOGO_FIS_TURLERI, SONUCU_BILINMIYOR, denemeZamaniMi, sonrakiDenemeYazilir } from './kurallar.ts';
 import type { FaturaKaydi, FisGidenDurumu, LogoTopluAlis, IrsaliyeBasligiOkuma, IrsaliyeOkumaSirasi, IrsaliyeTuru, ListeKaydi, LogoFisTuru, LogoKullanimSatiri, LogoMalzemeKarti, LogoStokSatiri, MalKabulSatiri } from './kurallar.ts';
 import { IRSALIYE_GIDEN_TURLERI } from './irsaliye-etiket-esleme.ts';
 import type { IrsaliyeGidenTuru } from './irsaliye-etiket-esleme.ts';
@@ -139,6 +139,20 @@ export async function duraniYenidenAc(db: Db, belgeTuru: BelgeTuru, no: number, 
     `UPDATE ${tablo(belgeTuru)} SET sonraki_deneme = $3
       WHERE belge_turu = $1 AND belge_no = $2${islemKosulu(belgeTuru, 4)} AND son_sonuc = 'reddedildi' AND sonraki_deneme IS NULL RETURNING 1 AS x`,
     [belgeTuru, no, simdi, ...islemDegeri(belgeTuru, islem)],
+  );
+  return r.length > 0;
+}
+
+// 3704: bekleyen belgeyi öne alır. Yalnız isteğin Logo'ya hiç gitmediği kesin olan sonuçlar (ulaşılamadı, anahtar reddi) elle öne alınır; sonraki
+// deneme bekleme dolmadan "şimdi" olur. Belirsiz sonuçlu belge buraya girmez (kendi kalkanı ve Logo'da kontrolü vardır). Koşulludur: arada tur başka
+// sonuç yazdıysa ya da bekleme zaten dolduysa hiçbir şey değişmez ve false döner.
+export async function bekleyeniOneAl(db: Db, belgeTuru: BelgeTuru, no: number, simdi: Date, islem: GidenIslemi = 'gonder'): Promise<boolean> {
+  const islemler = islemDegeri(belgeTuru, islem);
+  const r = await db.sorgu<{ x: number }>(
+    `UPDATE ${tablo(belgeTuru)} SET sonraki_deneme = $3
+      WHERE belge_turu = $1 AND belge_no = $2${islemKosulu(belgeTuru, 4)} AND son_sonuc = ANY($${4 + islemler.length}::text[])
+        AND sonraki_deneme IS NOT NULL AND sonraki_deneme > $3 RETURNING 1 AS x`,
+    [belgeTuru, no, simdi, ...islemler, [...ELLE_ONE_ALINAN_SONUCLAR]],
   );
   return r.length > 0;
 }
