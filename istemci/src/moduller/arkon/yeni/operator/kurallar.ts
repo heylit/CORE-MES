@@ -107,9 +107,14 @@ export interface NumuneYolu { istasyon: string | null; teslim: { at: number; kis
 const saatDakika = (t: number) => new Date(t).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
 export function numuneYoluGorevi(g: Gorev | null, yol: NumuneYolu | null): Gorev | null {
   if (!g || g.key !== 'pend' || !yol || yol.istasyon === null) return g;
-  if (yol.teslim === null) return { ...g, tone: 'hold', icon: 'truck', t: `Numune yolda · ${yol.istasyon}`, d: `Yolda › Kalitede › Karar · ${g.d}` };
+  if (yol.teslim === null) {
+    return { ...g, tone: 'hold', icon: 'truck', t: `Numune yolda · ${yol.istasyon}`, adimlar: [{ ad: 'Yolda', durum: 'simdi' }, { ad: 'Kalitede', durum: 'bekliyor' }, { ad: 'Karar', durum: 'bekliyor' }] };
+  }
   const kim = yol.teslim.kisi ? ` · ${yol.teslim.kisi}` : '';
-  return { ...g, tone: 'done', icon: 'cube', t: `Numune kalitede · teslim ${saatDakika(yol.teslim.at)}`, d: `Yolda ✓ › Kalitede${kim} › Karar · ${g.d}` };
+  return {
+    ...g, tone: 'done', icon: 'cube', t: `Numune kalitede · teslim ${saatDakika(yol.teslim.at)}`, d: `${g.d}${kim}`,
+    adimlar: [{ ad: 'Yolda', durum: 'bitti' }, { ad: 'Kalitede', durum: 'simdi' }, { ad: 'Karar', durum: 'bekliyor' }],
+  };
 }
 
 // 3718 a: kalite istasyonunda refakat kartı okutulunca stokta alınan teslimler bu olayla kalite görünümüne gider; görünüm yoldaki numunesini

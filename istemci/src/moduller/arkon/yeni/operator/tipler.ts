@@ -39,6 +39,8 @@ export interface Gorev {
   tone: Ton; icon: SimgeAdi; t: string; d: string;
   act?: GorevEylemi | null; btn?: string | null; act2?: GorevEylemi; btn2?: string;
   pulse?: boolean; quiet?: boolean; key?: string; dismiss?: boolean; toolId?: string; id?: number;
+  // 3718 a: numune yolu adımları (tamamlanan tikli, geçerli vurgulu, bekleyen soluk); `d` yalnız ayrıntıyı taşır.
+  adimlar?: readonly { ad: string; durum: 'bitti' | 'simdi' | 'bekliyor' }[];
 }
 
 // tmi: kontrol planında ilk parça ölçüsü yok ama TMI adımda ilk parça kararı istiyor (paketin `tmi.ilkParcaGerekli`); sağlam sayım TMI'de
