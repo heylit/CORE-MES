@@ -32,6 +32,7 @@ export function SiradakiKart({ is, siradaki, ekranda, acik, yer, resim, revUyums
         {is.empty ? null : <small className="tc-ay1-mono tc-ay1-sk-adet">{is.good} / {is.target} adet</small>}
         {revUyumsuz ? <small className="tc-ay1-sk-uyari"><Simge ad="alert" boyut="k" />Rev uyuşmuyor</small> : null}
         {is.empty || revUyumsuz ? null : <progress className="tc-ay1-tcark-ilerleme" max={1} value={oran} aria-label="İlerleme" />}
+        {is.empty ? null : <small className="tc-ay1-sk-opterm">{[is.op, terminYaz(is.due)].filter(Boolean).join(' · ')}</small>}
         <small className="tc-ay1-mono tc-ay1-sk-no" title={is.no}>{is.no}</small>
       </div>
       {acik && !is.empty ? (
