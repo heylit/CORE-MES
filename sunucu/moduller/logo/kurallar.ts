@@ -36,7 +36,8 @@ export type KopruSonucu =
   | { tur: 'basarili'; logicalRef: number | null; logoAdi?: string | null; crmKodlari?: CrmKodlari | null }
   | { tur: 'reddedildi'; ileti: string }
   | { tur: 'yetkisiz'; ileti: string }
-  | { tur: 'ulasilamadi'; ileti: string }
+  // beklemeMs: yardımcının bildirdiği kalan bekleme (503 baglanamadi); verilirse yeniden deneme o süre sonradır. baglanti: aynı hatanın ayrıntısı.
+  | { tur: 'ulasilamadi'; ileti: string; beklemeMs?: number; baglanti?: LogoBaglantiHatasi }
   | { tur: 'belirsiz'; ileti: string };
 
 export interface KopruZarfi {
@@ -98,9 +99,68 @@ function logoKayitNo(d: unknown): number | null {
 export const ESKI_YARDIMCI_OKUMA_ILETISI = 'Logo yardımcısı eski sürümde (404), bu okumayı tanımıyor; Logo bilgisayarındaki yardımcı programı güncelleyin.';
 export const ESKI_YARDIMCI_ILETISI = 'Logo bilgisayarındaki yardımcı program eski sürümde; bu işlem için güncellenmesi gerekir.';
 
+// Yardımcının 503 cevabı: Logo oturumu açılamadı, istek Logo'ya hiç gitmedi (kurulum/logo-yardimcisi.md). Gövde { neden: "baglanamadi", adim,
+// kod, ileti, beklemeSn } taşır (eski yardımcıda yalnız error metni vardır; ayrıntı boş kalır).
+export interface LogoBaglantiHatasi {
+  adim: string | null;
+  kod: number | null;
+  ileti: string | null;
+  beklemeSn: number | null;
+}
+
+const BEKLEME_SN_EN_COK = 3600;
+export function baglantiHatasiniAyikla(govde: unknown): LogoBaglantiHatasi | null {
+  if (govde === null || typeof govde !== 'object' || Array.isArray(govde)) return null;
+  const g = govde as Record<string, unknown>;
+  if (g['neden'] !== 'baglanamadi') return null;
+  const kod = g['kod'];
+  const bekleme = g['beklemeSn'];
+  return {
+    adim: metinMi(g['adim']) ? g['adim'].trim().slice(0, 40) : null,
+    kod: typeof kod === 'number' && Number.isSafeInteger(kod) ? kod : null,
+    ileti: metinMi(g['ileti']) ? kirp(g['ileti']) : null,
+    beklemeSn: typeof bekleme === 'number' && Number.isFinite(bekleme) && bekleme >= 0 ? Math.min(Math.ceil(bekleme), BEKLEME_SN_EN_COK) : null,
+  };
+}
+
+// Logo hata kodları: yalnız -93 kaynağı olan koddur (rehber §0 kural 3, kurulum/logo-yardimcisi.md; Logo'nun kendi kod belgesi bu depoda yok ve
+// açılmadı). Başka kod uydurulmaz: adımın genel açıklaması gösterilir, kod düz yazılır. Adım açıklamaları adımın adından çıkarımdır (VARSAYIM).
+const KOD_ACIKLAMALARI: Readonly<Record<number, string>> = Object.freeze({
+  [-93]: 'Logo lisansı dolu ya da oturum başka yerde açık. Logo kapanan oturumun lisansını 2-5 dakika tutar; kendiliğinden yeniden denenir.',
+});
+const ADIM_ACIKLAMALARI: Readonly<Record<string, string>> = Object.freeze({
+  Connect: 'Logo Objects Logo sunucusuna bağlanamadı.',
+  UserLogin: 'Logo kullanıcı girişi kabul edilmedi (lisans, kullanıcı adı ya da parola).',
+  CompanyLogin: 'Logo firması açılamadı (firma numarası ya da firma yetkisi).',
+  Olustur: 'Logo Objects bu bilgisayarda kayıtlı değil.',
+});
+export function baglantiHatasiAciklamasi(h: Pick<LogoBaglantiHatasi, 'adim' | 'kod'>): string | null {
+  if (h.kod !== null && KOD_ACIKLAMALARI[h.kod] !== undefined) return KOD_ACIKLAMALARI[h.kod]!;
+  return h.adim === null ? null : ADIM_ACIKLAMALARI[h.adim] ?? null;
+}
+
+function baglanamadiSonucu(durum: number, govde: KopruZarfi | null): KopruSonucu {
+  const b = baglantiHatasiniAyikla(govde);
+  if (b === null) {
+    const eski = metinMi(govde?.error) ? ` ${govde.error.trim()}` : '';
+    return { tur: 'ulasilamadi', ileti: kirp(`Köprü ${durum} verdi: Logo oturumu açılamadı, belge gönderilmedi; kendiliğinden yeniden denenir.${eski}`) };
+  }
+  const nerede = [b.adim, b.kod === null ? null : `kod ${b.kod}`].filter((p) => p !== null).join(', ');
+  const aciklama = baglantiHatasiAciklamasi(b);
+  const ileti = kirp(
+    `Logo oturumu açılamadı${nerede ? ` (${nerede})` : ''}, belge gönderilmedi; kendiliğinden yeniden denenir.${aciklama ? ` ${aciklama}` : ''}${b.ileti ? ` Logo: ${b.ileti}` : ''}`,
+  );
+  return { tur: 'ulasilamadi', ileti, baglanti: b, ...(b.beklemeSn === null || b.beklemeSn === 0 ? {} : { beklemeMs: b.beklemeSn * 1000 }) };
+}
+
+// Yeniden deneme gecikmesi: yardımcının bildirdiği kalan bekleme varsa o; yoksa belgenin artan beklemesi.
+export const kopruBeklemesi = (r: { tur: string }): number | undefined => ('beklemeMs' in r && typeof r.beklemeMs === 'number' ? r.beklemeMs : undefined);
+
 // HTTP durumu ve gövdeden sonuç. govde null: gövde JSON değildi.
+// 503 = oturum açılamadı = istek Logo'ya gitmedi (yardımcı sözleşmesi); öteki 5xx, 408 ve 429 sonucu bilinmez.
 export function cevabiYorumla(durum: number, govde: KopruZarfi | null): KopruSonucu {
   if (durum === 401 || durum === 403) return { tur: 'yetkisiz', ileti: `Köprü anahtarı reddedildi (${durum}).` };
+  if (durum === 503) return baglanamadiSonucu(durum, govde);
   if (durum >= 500 || durum === 408 || durum === 429) return { tur: 'belirsiz', ileti: `Köprü hata verdi (${durum}); işlenip işlenmediği bilinmiyor.` };
   if (govde === null) {
     return durum >= 200 && durum < 300
@@ -398,10 +458,13 @@ export function projeGovdesi(p: GonderilecekProje): { govde: { code: string; nam
 
 // Logo fiş numarası en çok 16 karakter (not 2.3); TMI numarası (SP-YYYY-NNN) sığar.
 export const FIS_NO_EN_COK = 16;
-// ORDER_STATUS: 1 öneri, 4 sevk edilebilir. TMI'de onaylanıp verilmiş sipariş Logo'da sevk edilebilir açılır (VARSAYIM).
-export const SIPARIS_LOGO_DURUMU = 4;
-// 2972-1 b: "Logo'da beklet" = 1 (öneri, kesinleşmemiş sipariş), "serbest bırak" = 4 (açılıştaki durum).
-export const SIPARIS_BEKLETME_DURUMLARI = { beklet: 1, serbest: SIPARIS_LOGO_DURUMU } as const;
+// ORDER_STATUS: 1 öneri, 4 sevk edilebilir. Yeni siparişin durumu "Logo satın alma siparişi durumu" ayarından gelir (kart 3698, kullanıcı kararı;
+// varsayılan 4) ve yalnız Logo'da yeni sipariş açılırken gider; düzenleme gönderimi durum yollamaz.
+export type LogoSiparisDurumu = 1 | 4;
+export const SIPARIS_DURUM_AYARI = 'logo.satin-alma-siparis-durumu';
+export const siparisDurumuAyardan = (deger: unknown): LogoSiparisDurumu => (deger === '1' ? 1 : 4);
+// 2972-1 b: "Logo'da beklet" = 1 (öneri, kesinleşmemiş sipariş), "serbest bırak" = 4 (sevk edilebilir); ikisi de açık komuttur, ayardan bağımsızdır.
+export const SIPARIS_BEKLETME_DURUMLARI = { beklet: 1, serbest: 4 } as const;
 // Satır türü (TYPE): 0 malzeme, 4 hizmet (not 2.3).
 const SATIR_TURU = { malzeme: 0, hizmet: 4 } as const;
 // Logo döviz türü (CURTYPE): 1 USD, 20 EUR (not 2.3). TL için döviz alanı gönderilmez. Listede olmayan para birimi gönderilmez.
@@ -445,6 +508,8 @@ export interface SiparisGovdeSecenegi {
   // Malzeme ve hizmet satırının KDV oranı (logo.kdv-orani, logo.hizmet-kdv-orani); boşsa gönderilmez.
   kdv: number | null;
   hizmetKdv: number | null;
+  // 3698: yalnız yeni sipariş açmada verilir (Logo durumu ayarı); verilmezse gövdede durum alanı olmaz.
+  durum?: LogoSiparisDurumu;
   // 3391-2 a: yalnız satış teklifinde, firma kartında seçilmiş CRM satış müşterisi kodu; yoksa yardımcı bağ sırasının ilkini kullanır.
   crmKodu?: string | null;
 }
@@ -528,7 +593,7 @@ export function siparisGovdesi(s: GonderilecekSiparis, o: SiparisGovdeSecenegi):
     if (aciklama !== null) satir[a.aciklama] = aciklama;
     satirlar.push(satir);
   }
-  const govde: Record<string, unknown> = { [a.no]: no, [a.tarih]: tarih, [a.cari]: cari, [a.durum]: SIPARIS_LOGO_DURUMU };
+  const govde: Record<string, unknown> = { [a.no]: no, [a.tarih]: tarih, [a.cari]: cari, ...(o.durum === undefined ? {} : { [a.durum]: o.durum }) };
   if (doviz !== null) {
     govde[a.doviz] = doviz;
     if (s.kur !== null && ONDALIK.test(s.kur) && olcekli(s.kur) > 0n) govde[a.kur] = Number(s.kur);

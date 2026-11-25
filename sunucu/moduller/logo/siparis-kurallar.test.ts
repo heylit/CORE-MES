@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { satirRefleriniAyikla } from './kopru.ts';
 import {
-  FIS_NO_EN_COK, iskontoAciklamasi, iskontoluFiyat, logoBirimKodu, logoTarihi, satirEslemesi, SIPARIS_ALANLARI, SIPARIS_LOGO_DURUMU, siparisGovdesi, siparisGuncellemeGovdesi,
+  FIS_NO_EN_COK, SIPARIS_BEKLETME_DURUMLARI, iskontoAciklamasi, iskontoluFiyat, logoBirimKodu, logoTarihi, satirEslemesi, SIPARIS_ALANLARI, siparisDurumuAyardan, siparisGovdesi, siparisGuncellemeGovdesi,
 } from './kurallar.ts';
 import type { GonderilecekSiparis, SiparisGovdeSecenegi } from './kurallar.ts';
 
@@ -14,14 +14,14 @@ const siparis = (ek: Partial<GonderilecekSiparis> = {}): GonderilecekSiparis => 
   ],
   ...ek,
 });
-const secenek: SiparisGovdeSecenegi = { cariKodu: 'C-0001', kdv: 20, hizmetKdv: null };
+const secenek: SiparisGovdeSecenegi = { cariKodu: 'C-0001', kdv: 20, hizmetKdv: null, durum: 4 };
 
 describe('Logo satın alma siparişi gövdesi (kullanıcının köprü notu 2.3)', () => {
   test('LGS-1: gövde alan haritasından kurulur; tarih dd.MM.yyyy, durum 4, satır türü malzeme 0 / hizmet 4, birim büyük harf, termin satırda', () => {
     const r = siparisGovdesi(siparis(), secenek);
     assert.ok('govde' in r);
     assert.deepEqual(r.govde, {
-      number: 'SP-2026-001', date: '12.10.2026', arpCode: 'C-0001', orderStatus: SIPARIS_LOGO_DURUMU,
+      number: 'SP-2026-001', date: '12.10.2026', arpCode: 'C-0001', orderStatus: 4,
       lines: [
         { type: 0, masterCode: 'HM-DEN-00001', quantity: 12.5, price: 100, unitCode: 'KG', vatRate: 20, dueDate: '20.10.2026' },
         { type: 4, masterCode: 'HZ-DEN-00001', quantity: 1, price: 250.5, unitCode: 'ADET', dueDate: '20.10.2026' },
@@ -117,11 +117,26 @@ describe('Logo satın alma siparişi gövdesi (kullanıcının köprü notu 2.3)
     const s = siparis();
     const acma = siparisGovdesi(s, secenek);
     assert.ok('govde' in acma);
-    assert.equal(acma.govde[SIPARIS_ALANLARI.durum], SIPARIS_LOGO_DURUMU);
+    assert.equal(acma.govde[SIPARIS_ALANLARI.durum], 4);
+    const oneri = siparisGovdesi(s, { ...secenek, durum: 1 });
+    assert.ok('govde' in oneri);
+    assert.equal(oneri.govde[SIPARIS_ALANLARI.durum], 1, 'ayar 1: öneri');
+    const durumsuz = siparisGovdesi(s, { cariKodu: 'C-0001', kdv: 20, hizmetKdv: null });
+    assert.ok('govde' in durumsuz);
+    assert.equal(SIPARIS_ALANLARI.durum in durumsuz.govde, false, 'durum verilmezse gövdede yok');
     const r = siparisGuncellemeGovdesi({ ...s, logoKayitNo: '90', satirlar: s.satirlar.map((x, i) => ({ ...x, logoSatirRef: i === 0 ? '91' : null })) }, secenek);
     assert.ok('govde' in r);
     assert.equal(SIPARIS_ALANLARI.durum in r.govde, false);
     assert.equal(r.govde['logicalRef'], 90);
     assert.equal((r.govde['lines'] as Record<string, unknown>[])[0]!['logicalRef'], 91);
+  });
+
+  test('3698: ayar değeri durum koduna çevrilir; tanınmayan ya da boş değer güvenli varsayılan 4\'e düşer', () => {
+    assert.equal(siparisDurumuAyardan('1'), 1);
+    assert.equal(siparisDurumuAyardan('4'), 4);
+    assert.equal(siparisDurumuAyardan(undefined), 4);
+    assert.equal(siparisDurumuAyardan('9'), 4);
+    assert.equal(SIPARIS_BEKLETME_DURUMLARI.serbest, 4);
+    assert.equal(SIPARIS_BEKLETME_DURUMLARI.beklet, 1);
   });
 });

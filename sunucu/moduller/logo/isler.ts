@@ -32,6 +32,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { tekKayitOku } from './tek-kayit.ts';
 import type { KontrolIstegi } from './kontrollu-gonder.ts';
 import { yardimciSurumunuSor } from './yardimci-surumu.ts';
+import { oturumuDene } from './oturum-denemesi.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { projeSecenekleri } from '../projeler/disari.ts';
 import { projeTuru } from './proje.ts';
@@ -237,6 +238,8 @@ export const isler = [
 
 // 3445: yönetim sayfasındaki "Bağlantıyı test et"; zamanlanmış işlerle aynı sıradan (tek oturum).
 export const siraliYardimciSurumu = (kopru: KopruIstemcisi) => sirali(() => yardimciSurumunuSor(kopru));
+// 3698: aynı testin ikinci adımı; Logo oturumu (yalnız GET, yazma yok). Yardımcı ulaşılamazsa istek atılmaz.
+export const siraliOturumDene = (kopru: KopruIstemcisi) => sirali(() => oturumuDene(kopru));
 
 // 2118: cari arama kullanıcı isteğiyle gelir; köprüye zamanlanmış işlerle aynı sıradan gider (tek oturum). Uç transaction dışında çağırır.
 export const logodaCariAra = (vt: TxAcan, metin: string): Promise<CariOkumasi<LogoCari[]>> => sirali(() => logoCariAra(vt, ortamKoprusu, metin));

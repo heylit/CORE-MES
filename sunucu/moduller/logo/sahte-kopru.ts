@@ -40,7 +40,11 @@ export type SahteSenaryo =
   // Kart açılır, cevap yolda kaybolur (bağlantı koparılır).
   | 'cevap-kayboldu'
   // Açma isteği cevapsız kalır ama kart gecikmeMs sonra yine açılır (köprünün kuyruğunda bekleyen istek).
-  | 'gec-islenen';
+  | 'gec-islenen'
+  // 3698: Logo oturumu açılamadı; açma isteği 503 ve makine okunur neden alır, kart açılmaz (istek Logo'ya gitmedi).
+  | 'oturum-yok'
+  // 3698: açma isteği 500 alır (sonucu bilinmez: yardımcı çağrı sırasında koptu); kart açılmaz.
+  | 'sunucu-hatasi';
 
 export interface SahteIstek {
   yontem: string;
@@ -54,6 +58,9 @@ export interface SahteKopru {
   anahtar: string;
   senaryo: SahteSenaryo;
   gecikmeMs: number;
+  // 3698: GET /api/session/check cevabı. 'acik': oturum açık; 'kapali': 503 neden gövdesi (senaryo 'oturum-yok' da aynı cevabı verir);
+  // 'uc-yok': eski yardımcı (404). Oturum denemesi Logo'ya yazmaz.
+  oturum: 'acik' | 'kapali' | 'uc-yok';
   // Logo'daki kartlar: kod -> logicalRef. Teste önceden kart konabilir ("kod zaten var").
   kartlar: Map<string, number>;
   // Logo'daki kartların adı (kod -> ad); "var mı" cevabında `name` olarak döner.
@@ -173,6 +180,7 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
     anahtar: secenek.anahtar ?? 'sahte-anahtar',
     senaryo: 'basari',
     gecikmeMs: 0,
+    oturum: 'acik',
     kartlar: new Map(),
     kartAdlari: new Map(),
     acilan: new Map(),
@@ -307,6 +315,16 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
       }
       if (istek.method === 'GET' && yol === '/api/Lookup/unitsets') {
         json(cevap, 200, kopru.birimSetleri);
+        return;
+      }
+      if (istek.method === 'GET' && yol === '/api/session/check') {
+        if (kopru.oturum === 'uc-yok') json(cevap, 404, { success: false, logicalRef: 0, error: 'Not found', validate: null });
+        else if (kopru.oturum === 'kapali' || kopru.senaryo === 'oturum-yok') {
+          json(cevap, 503, {
+            success: false, logicalRef: 0, error: 'Logo UserLogin false: [code=-93] Kullanıcı sayısı limiti aşılmıştır', validate: null,
+            neden: 'baglanamadi', adim: 'UserLogin', kod: -93, ileti: '[code=-93] Kullanıcı sayısı limiti aşılmıştır', beklemeSn: 240,
+          });
+        } else json(cevap, 200, { oturum: 'acik', logoSurumu: '9.9' });
         return;
       }
       // Bağlantı kontrolünün ilk adımı; ambar listesinin biçimi VARSAYIM (kontrol yalnız 2xx'e bakar).
@@ -692,6 +710,15 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
       };
       const sessizAc = (): void => { if (siparis) siparisAc(kod, satirSayisi); else kartAc(kod); };
       switch (kopru.senaryo) {
+        case 'oturum-yok':
+          json(cevap, 503, {
+            success: false, logicalRef: 0, error: 'Logo UserLogin false: [code=-93] Kullanıcı sayısı limiti aşılmıştır', validate: null,
+            neden: 'baglanamadi', adim: 'UserLogin', kod: -93, ileti: '[code=-93] Kullanıcı sayısı limiti aşılmıştır', beklemeSn: 240,
+          });
+          return;
+        case 'sunucu-hatasi':
+          json(cevap, 500, { success: false, logicalRef: 0, error: 'Yardımcıda beklenmeyen hata; işlendiği bilinmiyor.', validate: null });
+          return;
         case 'dogrulama':
           json(cevap, 200, { success: false, logicalRef: 0, error: 'Validation failed', validate: ['NAME alani zorunlu', 'UNITSETCODE gecersiz'] });
           return;

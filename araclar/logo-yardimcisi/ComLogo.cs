@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 
 namespace LogoYardimcisi
 {
@@ -13,50 +14,117 @@ namespace LogoYardimcisi
         static readonly TimeSpan YenidenDenemeBeklemesi = TimeSpan.FromMinutes(5);
 
         readonly Ayar ayar;
+        // Sınamada sahte Logo Objects nesnesi verilir (ProgID'siz); null ise gerçek COM nesnesi yaratılır.
+        readonly Func<object> uretici;
+        readonly Func<DateTime> saat;
         dynamic app;
         DateTime? sonHata;
+        LogoBaglanamadi sonBaglanamadi;
+        int? tabanKod;
+        string tabanMetin;
 
-        public ComLogo(Ayar ayar)
+        public ComLogo(Ayar ayar) : this(ayar, null, null) { }
+
+        public ComLogo(Ayar ayar, Func<object> uretici, Func<DateTime> saat)
         {
             this.ayar = ayar;
+            this.uretici = uretici;
+            this.saat = saat ?? (() => DateTime.UtcNow);
         }
 
+        // Bekleme süresindeki çağrı Logo'ya gitmez ve günlüğe yazmaz: aynı hata bekleme penceresinde bir kez, deneme anında yazılır.
         void Bagla()
         {
             if (app != null) return;
-            if (sonHata != null && DateTime.UtcNow - sonHata.Value < YenidenDenemeBeklemesi)
-                throw new LogoBaglanamadi("Logo oturumu açılamadı; Logo lisansının bırakılması bekleniyor, 5 dakika içinde yeniden denenmez.");
-            var t = Type.GetTypeFromProgID("UnityObjects.UnityApplication");
-            if (t == null) throw new LogoBaglanamadi("Logo Objects bu bilgisayarda kayıtlı değil (UnityObjects.UnityApplication).");
+            if (sonHata != null && saat() - sonHata.Value < YenidenDenemeBeklemesi)
+            {
+                var kalan = (int)Math.Ceiling((YenidenDenemeBeklemesi - (saat() - sonHata.Value)).TotalSeconds);
+                var onceki = sonBaglanamadi;
+                var e = new LogoBaglanamadi(
+                    "Logo oturumu açılamadı; Logo lisansının bırakılması bekleniyor, " + kalan.ToString(CultureInfo.InvariantCulture) + " sn içinde yeniden denenmez. Son hata: " + onceki.Message,
+                    onceki.Adim, onceki.Kod, onceki.Ayrinti);
+                e.BeklemeSn = kalan;
+                throw e;
+            }
+            var adim = "Olustur";
             dynamic a = null;
             try
             {
-                a = Activator.CreateInstance(t);
-                if (!(bool)a.Connect()) throw new LogoBaglanamadi("Logo Connect false: " + SonHata(a));
-                if (!(bool)a.UserLogin(ayar.LogoKullanici, ayar.LogoParola)) throw new LogoBaglanamadi("Logo UserLogin false: " + SonHata(a));
-                if (!(bool)a.CompanyLogin(ayar.FirmaNo)) throw new LogoBaglanamadi("Logo CompanyLogin false: " + SonHata(a));
+                if (uretici != null) a = uretici();
+                else
+                {
+                    var t = Type.GetTypeFromProgID("UnityObjects.UnityApplication");
+                    if (t == null) throw new LogoBaglanamadi("Logo Objects bu bilgisayarda kayıtlı değil (UnityObjects.UnityApplication).", adim, null, "Logo Objects kayıtlı değil (UnityObjects.UnityApplication).");
+                    a = Activator.CreateInstance(t);
+                }
+                adim = "Connect";
+                if (!(bool)a.Connect()) throw Basarisiz((object)a, adim);
+                adim = "UserLogin";
+                if (!(bool)a.UserLogin(ayar.LogoKullanici, ayar.LogoParola)) throw Basarisiz((object)a, adim);
+                adim = "CompanyLogin";
+                if (!(bool)a.CompanyLogin(ayar.FirmaNo)) throw Basarisiz((object)a, adim);
                 app = a;
                 sonHata = null;
+                sonBaglanamadi = null;
                 Gunluk.Yaz("Logo oturumu açıldı (Logo Objects " + Convert.ToString(a.Version(), CultureInfo.InvariantCulture) + ").");
             }
-            catch (LogoBaglanamadi)
+            catch (LogoBaglanamadi e)
             {
-                sonHata = DateTime.UtcNow;
+                BaglantiHatasiniKaydet(e);
                 Kapat(a);
                 throw;
             }
             catch (Exception e)
             {
-                sonHata = DateTime.UtcNow;
+                // İstisna iletisi yazılmaz (yol, kullanıcı adı taşıyabilir); yalnız tür adı.
+                var h = new LogoBaglanamadi("Logo oturumu açılamadı (" + e.GetType().Name + ").", adim, null, "Beklenmeyen hata: " + e.GetType().Name);
+                BaglantiHatasiniKaydet(h);
                 Kapat(a);
-                throw new LogoBaglanamadi("Logo oturumu açılamadı (" + e.GetType().Name + ").");
+                throw h;
             }
         }
 
-        static string SonHata(dynamic a)
+        void BaglantiHatasiniKaydet(LogoBaglanamadi e)
         {
-            try { return Convert.ToString(a.GetLastErrorString(), CultureInfo.InvariantCulture); }
+            sonHata = saat();
+            sonBaglanamadi = e;
+            Gunluk.Yaz("Logo oturumu açılamadı: adım=" + e.Adim + " kod=" + (e.Kod == null ? "yok" : e.Kod.Value.ToString(CultureInfo.InvariantCulture))
+                + " ileti=" + e.Ayrinti + " (5 dakika yeniden denenmez)");
+        }
+
+        // Logo hata kodu GetLastError'dan okunur; okunamazsa Logo'nun metnindeki "[code=-93]" kullanılır. Kullanıcı adı ve parola metinden çıkarılır.
+        LogoBaglanamadi Basarisiz(object a, string adim)
+        {
+            string metin = Gizle(SonHata(a));
+            int? kod = SonKod(a);
+            if (kod == null || kod.Value == 0)
+            {
+                var m = Regex.Match(metin, @"\[code=(-?\d+)\]");
+                int okunan;
+                if (m.Success && int.TryParse(m.Groups[1].Value, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out okunan)) kod = okunan;
+            }
+            var ayrinti = metin.Contains("[code=") || kod == null ? metin : "[code=" + kod.Value.ToString(CultureInfo.InvariantCulture) + "] " + metin;
+            return new LogoBaglanamadi("Logo " + adim + " false: " + ayrinti, adim, kod, ayrinti);
+        }
+
+        string Gizle(string metin)
+        {
+            if (string.IsNullOrEmpty(metin)) return "";
+            foreach (var gizli in new[] { ayar.LogoKullanici, ayar.LogoParola })
+                if (!string.IsNullOrEmpty(gizli)) metin = Regex.Replace(metin, Regex.Escape(gizli), "***", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            return metin;
+        }
+
+        static string SonHata(object nesne)
+        {
+            try { dynamic a = nesne; return Convert.ToString(a.GetLastErrorString(), CultureInfo.InvariantCulture); }
             catch (Exception) { return ""; }
+        }
+
+        static int? SonKod(object nesne)
+        {
+            try { dynamic a = nesne; return Convert.ToInt32(a.GetLastError(), CultureInfo.InvariantCulture); }
+            catch (Exception) { return null; }
         }
 
         static void Kapat(dynamic a)
@@ -72,6 +140,11 @@ namespace LogoYardimcisi
             if (o != null && Marshal.IsComObject(o)) Marshal.FinalReleaseComObject(o);
         }
 
+        public string OturumDene()
+        {
+            return Cagir<string>(() => Convert.ToString(app.Version(), CultureInfo.InvariantCulture));
+        }
+
         public void Dispose()
         {
             Kapat(app);
@@ -82,6 +155,9 @@ namespace LogoYardimcisi
         T Cagir<T>(Func<T> is_)
         {
             Bagla();
+            // Uygulama düzeyindeki son hata (GetLastError) önceki işlemden kalmış olabilir; işlemin başındaki değer saklanır, ret iletisine yalnız değiştiyse girer.
+            tabanKod = SonKod((object)app);
+            tabanMetin = SonHata((object)app);
             try { return is_(); }
             catch (COMException e)
             {
@@ -97,21 +173,29 @@ namespace LogoYardimcisi
             }
         }
 
-        static LogoHatasi VeriHatasi(dynamic d, string adim)
+        // ErrorDesc, ErrorDescDetail ve DBErrorDesc eskiden beri okunur; ErrorDetail (özellik adı gerçek Logo'da doğrulanmadı, yoksa atlanır) ve
+        // uygulama düzeyindeki hata (GetLastError, GetLastErrorString) eklenir. Aynı metin iki kez yazılmaz; kullanıcı adı ve parola çıkarılır.
+        LogoHatasi VeriHatasi(dynamic d, string adim)
         {
             int kod;
             try { kod = Convert.ToInt32(d.ErrorCode, CultureInfo.InvariantCulture); }
             catch (Exception) { kod = -1; }
             var parcalar = new List<string> { adim + " false" };
-            foreach (var ad in new[] { "ErrorDesc", "ErrorDescDetail", "DBErrorDesc" })
+            Action<string> ekle = delegate(string m)
             {
-                try
-                {
-                    string m = ad == "ErrorDesc" ? Convert.ToString(d.ErrorDesc) : ad == "ErrorDescDetail" ? Convert.ToString(d.ErrorDescDetail) : Convert.ToString(d.DBErrorDesc);
-                    if (!string.IsNullOrEmpty(m)) parcalar.Add(m.Trim());
-                }
-                catch (Exception) { }
-            }
+                m = Gizle(m).Trim();
+                if (m != "" && !parcalar.Contains(m)) parcalar.Add(m);
+            };
+            try { string m1 = Convert.ToString(d.ErrorDesc); ekle(m1); } catch (Exception) { }
+            try { string m2 = Convert.ToString(d.ErrorDescDetail); ekle(m2); } catch (Exception) { }
+            try { string m3 = Convert.ToString(d.ErrorDetail); ekle(m3); } catch (Exception) { }
+            try { string m4 = Convert.ToString(d.DBErrorDesc); ekle(m4); } catch (Exception) { }
+            int? uygulamaKodu = SonKod((object)app);
+            string ham = SonHata((object)app);
+            bool bu = uygulamaKodu != tabanKod || ham != tabanMetin;
+            string uygulamaMetni = bu ? Gizle(ham).Trim() : "";
+            if (bu && uygulamaKodu != null && uygulamaKodu.Value != 0) parcalar.Add("uygulama hata kodu " + uygulamaKodu.Value.ToString(CultureInfo.InvariantCulture));
+            ekle(uygulamaMetni);
             var h = new LogoHatasi(kod, string.Join(" | ", parcalar.ToArray()));
             try
             {

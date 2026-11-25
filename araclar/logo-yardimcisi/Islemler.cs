@@ -79,7 +79,7 @@ namespace LogoYardimcisi
         {
             try { return Yonlendir(yontem, yol, sorgu, govde); }
             catch (GecersizIstek e) { return Cevap.Hata(400, e.Message); }
-            catch (LogoBaglanamadi e) { return Cevap.Hata(503, e.Message); }
+            catch (LogoBaglanamadi e) { return Cevap.Baglanamadi(e); }
             catch (LogoOturumKoptu e)
             {
                 Gunluk.Yaz("Logo oturumu koptu: " + (e.InnerException == null ? "" : e.InnerException.GetType().Name));
@@ -101,6 +101,16 @@ namespace LogoYardimcisi
             return new Cevap(200, g);
         }
 
+        // 3698: salt okunur oturum denemesi. Açık oturumda yalnız sürümü sorar; kapalıysa bir kez bağlanır ya da bekleme süresindeyse son hatayı
+        // ve kalan süreyi döner (503, makine okunur neden gövdesi). Logo'ya yazmaz.
+        Cevap OturumKontrolu()
+        {
+            var g = new Dictionary<string, object>();
+            g["oturum"] = "acik";
+            g["logoSurumu"] = yaz.OturumDene();
+            return new Cevap(200, g);
+        }
+
         Cevap Yonlendir(string yontem, string yol, Dictionary<string, string> sorgu, string govde)
         {
             Match m;
@@ -108,6 +118,7 @@ namespace LogoYardimcisi
             {
                 if ((m = MalzemeVarMi.Match(yol)).Success) return MalzemeVarMiOku(Coz(m, 1));
                 if (yol == "/api/version") return SurumBilgisi();
+                if (yol == "/api/session/check") return OturumKontrolu();
                 if (yol == "/api/Material/codes") return new Cevap(200, new List<object>(oku.MalzemeKodlari()));
                 if (yol == "/api/Material/purchases") return TopluAlisFiyatlari(sorgu);
                 if (yol == "/api/Material/list") return MalzemeListesi(sorgu);

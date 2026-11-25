@@ -43,6 +43,10 @@ namespace LogoYardimcisi
 
         // Read(ref) sonrası alan dökümü (FieldName = Value), satırlar dahil. Okunamazsa null.
         List<string> AlanDokumu(int nesne, int kayit);
+
+        // 3698: oturumu (gerekirse) açar ve Logo Objects sürümünü döner; Logo'ya hiçbir şey yazmaz ve veri nesnesi açmaz.
+        // Bekleme süresindeyken yeniden bağlanmayı denemez, LogoBaglanamadi'yi (son hata, kalan süre) atar.
+        string OturumDene();
     }
 
     // 3315: Logo'daki proje kartı (kayıt numarası, kod, ad).

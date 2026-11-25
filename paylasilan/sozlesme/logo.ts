@@ -51,6 +51,18 @@ export const logoYardimciSurumu = z.object({
 });
 export type LogoYardimciSurumu = z.output<typeof logoYardimciSurumu>;
 
+// 3698: yardımcının son "Logo oturumu açılamadı" cevabı (503). adim Connect, UserLogin ya da CompanyLogin; kod Logo'nun hata kodu (okunamadıysa
+// null); aciklama yalnız kaynağı olan kod ve adım için doldurulur, başka kod düz kalır. Parola ve kullanıcı adı yardımcıda çıkarılır.
+export const logoYardimciBaglantiHatasi = z.object({
+  zaman: zamanSemasi,
+  adim: z.string().nullable(),
+  kod: z.number().int().nullable(),
+  ileti: z.string().nullable(),
+  aciklama: z.string().nullable(),
+  yenidenDeneme: zamanSemasi.nullable(),
+});
+export type LogoYardimciBaglantiHatasi = z.output<typeof logoYardimciBaglantiHatasi>;
+
 export const logoHazirlikCevabi = z.object({
   baglanti: z.enum(LOGO_BAGLANTI_DURUMLARI),
   ortam: z.object({
@@ -75,6 +87,10 @@ export const logoHazirlikCevabi = z.object({
   sonBirimSetiOkuma: zamanSemasi.nullable(),
   // 3314: son sürüm bakışı (saatte bir ve canlı kontrolde); henüz bakılmadıysa null. Alan sonradan eklendi, eski istemci görmezden gelir.
   yardimci: logoYardimciSurumu.nullable().optional(),
+  // 3698: yardımcının son bağlantı hatası; yoksa null. Alan sonradan eklendi.
+  baglantiHatasi: logoYardimciBaglantiHatasi.nullable().optional(),
+  // 3698: son 15 dakikada Logo'ya yazmadan 503 geldiyse o hata ("Logo'ya yazılamıyor"); okumaların çalışması bunu gizlemez. Alan sonradan eklendi.
+  yazilamiyor: logoYardimciBaglantiHatasi.nullable().optional(),
 });
 
 export const BAGLANTI_KONTROL_SONUCLARI = ['tamam', 'hata', 'atlandi'] as const;

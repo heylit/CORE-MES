@@ -8,7 +8,7 @@ import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { ortamKoprusu } from './baglanti.ts';
 import type { KopruIstemcisi } from './kopru.ts';
 import { YONETIM_AKISLARI, yonetimAkisi, type YonetimAkisi } from './kurallar.ts';
-import { gunlugeYaz, kapiDurumu, simdiOkuIste, siraliYardimciSurumu } from './isler.ts';
+import { gunlugeYaz, kapiDurumu, simdiOkuIste, siraliOturumDene, siraliYardimciSurumu } from './isler.ts';
 import type { TxAcan } from './servis.ts';
 import * as s from './sorgular.ts';
 import { yardimciSurumu } from './yardimci-surumu.ts';
@@ -105,7 +105,11 @@ export async function baglantiTesti(vt: TxAcan, kopru: KopruIstemcisi | null = o
   if (!acik) throw cakisma(KAPALI);
   if (kopru === null) throw cakisma(TANIMSIZ);
   const r = await siraliYardimciSurumu(kopru);
-  const sonuc = r.durum === 'bilinmiyor' ? 'hata' : 'tamam';
-  await gunlugeYaz(vt, { akis: 'baglanti', yon: 'baglanti', sonuc, sayi: null, ileti: r.ileti }, saat);
-  return { sonuc, ileti: r.ileti };
+  // 3698: iki adım ayrı yazılır. Yardımcıya ulaşılamadıysa oturum denenmez; eski yardımcıda (404) oturum denenemedi diye yazılır ve sonucu bozmaz.
+  const yardimciTamam = r.durum !== 'bilinmiyor';
+  const o = yardimciTamam ? await siraliOturumDene(kopru) : null;
+  const sonuc = !yardimciTamam || o?.durum === 'kapali' ? 'hata' : 'tamam';
+  const ileti = `Yardımcı: ${r.ileti} Logo oturumu: ${o === null ? 'denenmedi (yardımcıya ulaşılamadı).' : o.ileti}`;
+  await gunlugeYaz(vt, { akis: 'baglanti', yon: 'baglanti', sonuc, sayi: null, ileti }, saat);
+  return { sonuc, ileti };
 }

@@ -1447,6 +1447,218 @@ namespace LogoYardimcisi
             Esit(404, C(s, "PUT", "/api/Material/AddRich", null).Durum, "bilinmeyen yöntem");
         }
 
+        static void T_503_cevabi_neden_adim_kod_ileti_ve_bekleme_tasir()
+        {
+            var s = Logo();
+            s.BaglantiYok = true;
+            var c = C(s, "POST", "/api/Material/AddRich", Kart("TMI-YENI-5"));
+            Esit(503, c.Durum, "durum");
+            var z = Z(c);
+            Esit(false, z["success"], "success");
+            Esit("baglanamadi", z["neden"], "neden");
+            Esit("UserLogin", z["adim"], "adım");
+            Esit(-93, z["kod"], "kod");
+            Icerir(Convert.ToString(z["ileti"]), "Kullanıcı sayısı limiti");
+            Esit(0, z["beklemeSn"], "taze hatada bekleme 0");
+            Icerir(Hata(c), "Logo UserLogin false");
+        }
+
+        // Sahte Logo Objects: COM'suz, ComLogo'nun bağlantı ve hata okuma yollarını sınar. dynamic yalnız herkese açık türlere bağlanır.
+        public sealed class SahteUnity
+        {
+            public string GirisHatasi = "";
+            public int GirisKodu;
+            public string KullaniciMetni = "";
+            public bool Girildi;
+            public int BaglanmaSayisi;
+            public int VeriNesnesiSayisi;
+            public bool Connect() { BaglanmaSayisi++; return true; }
+            public bool UserLogin(string kullanici, string parola) { Girildi = GirisHatasi == ""; return Girildi; }
+            public bool CompanyLogin(int firma) { return true; }
+            // İşlem (veri nesnesi açıldıktan sonra) kendi uygulama hatasını bildirebilir; yoksa giriş hatası bayat kalır.
+            public int? IslemKodu;
+            public string IslemMetni = "";
+            public int GetLastError() { return VeriNesnesiSayisi > 0 && IslemKodu != null ? IslemKodu.Value : GirisKodu; }
+            public string GetLastErrorString() { return VeriNesnesiSayisi > 0 && IslemKodu != null ? IslemMetni : GirisHatasi + KullaniciMetni; }
+            public string Version() { return "9.9"; }
+            public void Disconnect() { }
+            public SahteVeri Veri;
+            public SahteVeri NewDataObject(int nesne) { VeriNesnesiSayisi++; return Veri; }
+        }
+
+        public sealed class SahteVeri
+        {
+            public int ErrorCode = 14;
+            public string ErrorDesc = "Kayit yazilamadi";
+            public string ErrorDescDetail = "";
+            public string ErrorDetail = "";
+            public string DBErrorDesc = "";
+            public bool ImportFromXmlStr(string kok, string xml) { return false; }
+            public bool Post() { return false; }
+        }
+
+        static Ayar GizliAyar()
+        {
+            return Ayar.Coz("port=4190\nanahtar=0123456789abcdef0123\nlogo_kullanici=kullanici1\nlogo_parola=parola-gizli\nfirma_no=1\ndonem_no=1\nsql_baglanti=x\n");
+        }
+
+        static string GunlukYakala(Action is_)
+        {
+            var yazici = new StringWriter();
+            var onceki = Gunluk.Cikti;
+            Gunluk.Cikti = yazici;
+            try { is_(); }
+            finally { Gunluk.Cikti = onceki; }
+            return yazici.ToString();
+        }
+
+        static LogoBaglanamadi Baglanamadi(ComLogo c)
+        {
+            try { c.XmlEkle(1, "X", "<X/>"); }
+            catch (LogoBaglanamadi e) { return e; }
+            throw new Basarisiz("LogoBaglanamadi atılmadı.");
+        }
+
+        static void T_com_baglanti_hatasi_gunluge_adim_ve_kodla_bir_kez_yazilir_parola_yazilmaz()
+        {
+            var unity = new SahteUnity { GirisHatasi = "[code=-93] Kullanici sayisi limiti asilmistir", GirisKodu = -93, KullaniciMetni = " (kullanici1 / parola-gizli)" };
+            var an = new DateTime(2026, 11, 25, 9, 0, 0, DateTimeKind.Utc);
+            var com = new ComLogo(GizliAyar(), () => unity, () => an);
+            LogoBaglanamadi ilk = null, ikinci = null, ucuncu = null;
+            var gunluk = GunlukYakala(() =>
+            {
+                ilk = Baglanamadi(com);
+                an = an.AddSeconds(120);
+                ikinci = Baglanamadi(com);
+                an = an.AddSeconds(181);
+                ucuncu = Baglanamadi(com);
+            });
+            Esit("UserLogin", ilk.Adim, "adım");
+            Esit(-93, ilk.Kod, "kod");
+            Esit(0, ilk.BeklemeSn, "taze hata");
+            Esit("UserLogin", ikinci.Adim, "bekleme: önceki adım");
+            Esit(-93, ikinci.Kod, "bekleme: önceki kod");
+            Esit(180, ikinci.BeklemeSn, "kalan 300-120 sn");
+            Icerir(ikinci.Message, "Son hata");
+            var satirlar = gunluk.Split(new[] { "\n" }, StringSplitOptions.RemoveEmptyEntries).Where(x => x.Contains("adım=UserLogin")).ToList();
+            Esit(2, satirlar.Count, "ilk deneme ve bekleme bitince yeni deneme; bekleme içindeki çağrı satır yazmaz");
+            Icerir(satirlar[0], "kod=-93");
+            Icermez(gunluk, "kullanici1");
+            Icermez(gunluk, "parola-gizli");
+            Icermez(ilk.Message + ikinci.Message + ucuncu.Message, "parola-gizli");
+            Icermez(ilk.Ayrinti, "kullanici1");
+        }
+
+        static void T_com_baglanti_kodu_metinden_okunur_ve_bekleme_icindeki_ikinci_deneme_yeni_satir_yazmaz()
+        {
+            var unity = new SahteUnity { GirisHatasi = "[code=-93] Oturum baska yerde acik", GirisKodu = 0 };
+            var an = new DateTime(2026, 11, 25, 9, 0, 0, DateTimeKind.Utc);
+            var com = new ComLogo(GizliAyar(), () => unity, () => an);
+            LogoBaglanamadi ilk = null;
+            var gunluk = GunlukYakala(() =>
+            {
+                ilk = Baglanamadi(com);
+                an = an.AddSeconds(10);
+                Baglanamadi(com);
+                an = an.AddSeconds(10);
+                Baglanamadi(com);
+            });
+            Esit(-93, ilk.Kod, "GetLastError 0 verdi: kod Logo metnindeki [code=] değerinden");
+            Esit(1, gunluk.Split(new[] { "\n" }, StringSplitOptions.RemoveEmptyEntries).Length, "5 dakika içinde tek satır");
+        }
+
+        static Cevap OturumKontrolu(ComLogo com)
+        {
+            return C(new Islemler(com, Logo(), TestAyari(), () => new DateTime(2026, 11, 25, 9, 0, 0)), "GET", "/api/session/check", null, new Dictionary<string, string>());
+        }
+
+        static void T_oturum_kontrolu_UserLogin_false_iken_neden_govdesi_doner_Logoya_yazilmaz()
+        {
+            var unity = new SahteUnity { GirisHatasi = "[code=-93] Kullanici sayisi limiti asilmistir", GirisKodu = -93 };
+            var com = new ComLogo(GizliAyar(), () => unity, () => new DateTime(2026, 11, 25, 9, 0, 0, DateTimeKind.Utc));
+            Cevap c = null;
+            GunlukYakala(() => { c = OturumKontrolu(com); });
+            Esit(503, c.Durum, "durum");
+            var z = Z(c);
+            Esit("baglanamadi", z["neden"], "neden");
+            Esit("UserLogin", z["adim"], "adım");
+            Esit(-93, z["kod"], "kod");
+            Esit(0, unity.VeriNesnesiSayisi, "veri nesnesi açılmadı: Logo'ya yazma çağrısı yok");
+        }
+
+        static void T_oturum_kontrolu_bekleme_icindeki_ikinci_cagri_baglanmaz_kalan_sureyi_doner()
+        {
+            var unity = new SahteUnity { GirisHatasi = "[code=-93] Kullanici sayisi limiti asilmistir", GirisKodu = -93 };
+            var an = new DateTime(2026, 11, 25, 9, 0, 0, DateTimeKind.Utc);
+            var com = new ComLogo(GizliAyar(), () => unity, () => an);
+            Cevap ilk = null, ikinci = null;
+            GunlukYakala(() =>
+            {
+                ilk = OturumKontrolu(com);
+                an = an.AddSeconds(120);
+                ikinci = OturumKontrolu(com);
+            });
+            Esit(0, Z(ilk)["beklemeSn"], "ilk deneme: taze hata");
+            Esit(1, unity.BaglanmaSayisi, "bekleme içindeki çağrı Logo'ya bağlanmadı");
+            Esit(503, ikinci.Durum, "durum");
+            Esit(180, Z(ikinci)["beklemeSn"], "kalan 300-120 sn");
+            Esit("UserLogin", Z(ikinci)["adim"], "önceki adım");
+        }
+
+        static void T_oturum_kontrolu_acik_oturumda_surumu_doner()
+        {
+            var unity = new SahteUnity();
+            var com = new ComLogo(GizliAyar(), () => unity, () => new DateTime(2026, 11, 25, 9, 0, 0, DateTimeKind.Utc));
+            Cevap c = null;
+            GunlukYakala(() => { c = OturumKontrolu(com); });
+            Esit(200, c.Durum, "durum");
+            Esit("acik", Z(c)["oturum"], "oturum");
+            Esit("9.9", Z(c)["logoSurumu"], "sürüm");
+            Esit(0, unity.VeriNesnesiSayisi, "yazma yok");
+        }
+
+        static void T_dogrulama_hatasi_ErrorDetail_ve_uygulama_hata_kodunu_ilete_ekler()
+        {
+            var unity = new SahteUnity { IslemKodu = 7, IslemMetni = "Uygulama: kayit kilitli" };
+            unity.Veri = new SahteVeri { ErrorDesc = "Zorunlu alan bos", ErrorDetail = "NAME alani bos birakilamaz" };
+            var com = new ComLogo(GizliAyar(), () => unity, () => DateTime.UtcNow);
+            LogoHatasi h = null;
+            GunlukYakala(() => { h = com.XmlEkle(1, "X", "<X/>"); });
+            var metin = h.ToString();
+            Esit(14, h.Kod, "veri nesnesi kodu");
+            Icerir(metin, "ImportFromXmlStr false");
+            Icerir(metin, "Zorunlu alan bos");
+            Icerir(metin, "NAME alani bos birakilamaz");
+            Icerir(metin, "uygulama hata kodu 7");
+            Icerir(metin, "Uygulama: kayit kilitli");
+        }
+
+        static void T_ret_iletisine_onceki_islemden_kalan_uygulama_hata_kodu_eklenmez()
+        {
+            var unity = new SahteUnity { GirisKodu = 7, KullaniciMetni = "Eski hata: oturum" };
+            unity.Veri = new SahteVeri { ErrorDesc = "Zorunlu alan bos" };
+            var com = new ComLogo(GizliAyar(), () => unity, () => DateTime.UtcNow);
+            LogoHatasi h = null;
+            GunlukYakala(() => { h = com.XmlEkle(1, "X", "<X/>"); });
+            var metin = h.ToString();
+            Icerir(metin, "Zorunlu alan bos");
+            Icermez(metin, "uygulama hata kodu");
+            Icermez(metin, "Eski hata");
+        }
+
+        static void T_kullanici_adi_ve_parola_maskesi_buyuk_kucuk_harfe_duyarli_degildir()
+        {
+            var unity = new SahteUnity { IslemKodu = 5, IslemMetni = "Kullanici KULLANICI1 ve PAROLA-GIZLI hatasi" };
+            unity.Veri = new SahteVeri { ErrorDesc = "Hata Kullanici1 / Parola-Gizli" };
+            var com = new ComLogo(GizliAyar(), () => unity, () => DateTime.UtcNow);
+            LogoHatasi h = null;
+            GunlukYakala(() => { h = com.XmlEkle(1, "X", "<X/>"); });
+            var metin = h.ToString();
+            Icermez(metin.ToLowerInvariant(), "kullanici1");
+            Icermez(metin.ToLowerInvariant(), "parola-gizli");
+            Icerir(metin, "***");
+        }
+
         /* ---------------- SQL ---------------- */
 
         static void T_butun_sorgular_yalniz_select_ve_firma_donem_tablolarini_kullanir()

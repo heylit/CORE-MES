@@ -103,6 +103,55 @@ describe('Bağlantı hazırlığı', () => {
     expect(within(tmiLogo).queryByText('Hazır')).toBeNull();
   });
 
+  it('3698 yardımcının son bağlantı hatası uyarı olarak zaman, adım, kod, açıklama ve yeniden deneme saatiyle görünür; yoksa uyarı yok', async () => {
+    sunucuKur();
+    cizdir(<BaglantiHazirligi />);
+    await screen.findByText('http://10.0.0.5:5149');
+    expect(screen.queryByText(/Logo oturumu açılamadı/)).toBeNull();
+    cleanup();
+    LOGO.baglantiHatasi = {
+      zaman: '2026-10-15T09:14:00.000Z', adim: 'UserLogin', kod: -93, ileti: '[code=-93] Kullanıcı sayısı limiti aşılmıştır',
+      aciklama: 'Logo lisansı dolu ya da oturum başka yerde açık.', yenidenDeneme: '2026-10-15T09:19:00.000Z',
+    };
+    try {
+      cizdir(<BaglantiHazirligi />);
+      const uyari = await screen.findByRole('alert');
+      expect(uyari.textContent).toContain('Logo oturumu açılamadı.');
+      expect(uyari.textContent).toContain('Neden: Logo lisansı dolu ya da oturum başka yerde açık.');
+      expect(uyari.textContent).toContain('15.10.2026 12:14 · UserLogin · kod -93');
+      expect(uyari.textContent).toContain('Yeniden deneme: 12:19');
+    } finally {
+      delete LOGO.baglantiHatasi;
+    }
+  });
+
+  it('3698 son 15 dakikada yazmadan 503 gelmişse "Logo\'ya yazılamıyor" uyarısı ve son neden görünür; Logo oturumu adımı ayrı satırdır', async () => {
+    LOGO.yazilamiyor = {
+      zaman: '2026-10-15T09:14:00.000Z', adim: 'UserLogin', kod: -93, ileti: '[code=-93] Kullanıcı sayısı limiti aşılmıştır',
+      aciklama: 'Logo lisansı dolu ya da oturum başka yerde açık.', yenidenDeneme: '2026-10-15T09:19:00.000Z',
+    };
+    const kontrol: LogoKontrolCevabi = {
+      zaman: '2026-10-15T11:00:00.000Z', ulasildi: true,
+      adimlar: [
+        { ad: 'Köprüye ulaşım ve anahtar (ambar listesi)', yol: '/api/Lookup/warehouses', sonuc: 'tamam', sureMs: 12, ileti: 'Cevap geldi (200).' },
+        { ad: 'Logo oturumu (Connect, UserLogin, CompanyLogin)', yol: '/api/session/check', sonuc: 'hata', sureMs: 30, ileti: 'Logo oturumu açık değil: UserLogin · kod -93' },
+      ],
+    };
+    sunucuKur(kontrol);
+    try {
+      cizdir(<BaglantiHazirligi />);
+      const uyari = await screen.findByRole('alert');
+      expect(uyari.textContent).toContain("Logo'ya yazılamıyor: oturum açılamıyor, giden belgeler bekliyor.");
+      expect(uyari.textContent).toContain('Neden:');
+      expect(uyari.textContent).toContain('UserLogin · kod -93');
+      fireEvent.click(screen.getAllByRole('button', { name: 'Bağlantıyı dene' })[0] as HTMLElement);
+      expect(await screen.findByText(/Logo oturumu \(Connect, UserLogin, CompanyLogin\)/)).toBeTruthy();
+      expect(screen.getByText(/Logo oturumu açık değil: UserLogin/)).toBeTruthy();
+    } finally {
+      delete LOGO.yazilamiyor;
+    }
+  });
+
   it('genel durum ve akış görünümü kuralları', () => {
     const tamam = { zaman: 'x', ulasildi: true, adimlar: [{ ad: 'a', sonuc: 'tamam' as const, sureMs: 1, ileti: '' }] };
     expect(genelDurum('acik', tamam).metin).toBe('Çalışmaya hazır');
