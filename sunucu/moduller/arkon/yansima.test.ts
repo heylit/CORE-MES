@@ -3457,6 +3457,56 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     assert.equal((await sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM kalite_merkezi_olcum WHERE uretim_emri_id = $1 AND numune_id IS NULL', [r.emirId]))?.n, 1, 'değişmeyen ölçü yeniden gitmez');
   });
 
+  // 3701: kontrol planı taslakta Kalite Merkezi'nin tek balonlu resminden kendiliğinden kurulur; kişinin Kalite Merkezi'ni okuma yetkisi gerekmez.
+  // Birden çok balonlu resimde seçim kişinindir, kaydedilmiş paket (kişi bilerek boşaltmış olsa da) yeniden doldurulmaz. Değerler uydurmadır.
+  test('3701: taslak plan tek balonlu resimden yetkiden bağımsız dolar; birden çok resimde ve kaydedilmiş pakette dolmaz', async () => {
+    const sahip = ortam!.sahip;
+    const r = await rotaliEmirKur();
+    const [ie1] = await isEmriIdleri(r.emirId);
+    const pkgId = ieKimligi(ie1!);
+    const resimKur = async (ad: string, balonlar: number) => {
+      const icerik = Buffer.from(`%PDF-1.4\n% km3701-${ad}-${r.emirId}\n%%EOF\n`);
+      const ozet = createHash('sha256').update(icerik).digest('hex');
+      await sahip.sorgu("INSERT INTO dosya (ozet, boyut, tur, ilk_yukleyen_id) VALUES ($1, $2, 'pdf', $3) ON CONFLICT DO NOTHING", [ozet, icerik.length, yoneticiId]);
+      const belge = (await sahip.tek<{ id: number }>("INSERT INTO belge_merkezi_belge (ad, tur, olusturan_id) VALUES ($1, 'teknik-resim', $2) RETURNING id", [ad, yoneticiId]))!.id;
+      const id = (await sahip.tek<{ id: number }>(
+        "INSERT INTO kalite_merkezi_resim (malzeme_no, tur, merkez_belge_id, ozet, ad, ekleyen_id, guncelleyen_id) VALUES ($1, 'resim', $2, $3, $4, $5, $5) RETURNING id",
+        [r.kart, belge, ozet, ad, yoneticiId]))!.id;
+      for (let no = 1; no <= balonlar; no += 1) {
+        await sahip.sorgu('INSERT INTO kalite_merkezi_balon (resim_id, no, nominal, alt, ust, kritik, guncelleyen_id) VALUES ($1, $2, $3, $4, $5, $6, $7)', [id, no, 'Ø10', '9.95', '10.05', no === 2, yoneticiId]);
+      }
+      return id;
+    };
+    // Resim yok: dokunulmaz.
+    assert.deepEqual((await paketler()).get(pkgId)!.govde['plan'], []);
+    // Balonsuz resim aday değildir.
+    await resimKur('Balonsuz', 0);
+    assert.deepEqual((await paketler()).get(pkgId)!.govde['plan'], []);
+    const resim = await resimKur('Tek', 2);
+    // Kalite Merkezi'ni okuyamayan operatör de dolu taslağı görür.
+    const dolu = (await paketler(operator)).get(pkgId)!.govde;
+    const plan = dolu['plan'] as Record<string, unknown>[];
+    assert.equal(plan.length, 2);
+    assert.deepEqual(plan.map((k) => [k['id'], k['nom'], k['min'], k['max'], k['crit'], k['gauge']]), [[1, 'Ø10', 9.95, 10.05, false, false], [2, 'Ø10', 9.95, 10.05, true, false]]);
+    assert.equal(typeof plan[0]!['kmBalon'], 'number');
+    assert.equal((dolu['kmResim'] as { id: number }).id, resim);
+    const kaynak = (dolu['otoKaynak'] as { plan: { kaynak: string; etiket: string } }).plan;
+    assert.equal(kaynak.kaynak, 'km');
+    assert.match(kaynak.etiket, /^Kendiliğinden alındı · Tek · 2 balon/);
+    assert.deepEqual((await paketler()).get(pkgId)!.govde, dolu, 'okuma yazmaz; içerik her okumada aynıdır');
+    // İkinci balonlu resim: seçim kişinindir, plan kendiliğinden gelmez.
+    const ikinci = await resimKur('Ikinci', 1);
+    const sec = (await paketler()).get(pkgId)!.govde;
+    assert.deepEqual([sec['plan'], sec['kmResim']], [[], undefined]);
+    // Kaydedilmiş paket yeniden doldurulmaz (kişi bilerek boşaltmış olabilir).
+    await sahip.sorgu('UPDATE kalite_merkezi_resim SET aktif = false WHERE id = $1', [ikinci]);
+    const yeniden = (await paketler()).get(pkgId)!.govde;
+    assert.equal((yeniden['kmResim'] as { id: number }).id, resim);
+    assert.equal((await paketYaz(pkgId, null, { ...yeniden, plan: [], kmResim: null, otoKaynak: { plan: { kaynak: 'el' } } })).durum, 200);
+    const kayitli = (await paketler()).get(pkgId)!.govde;
+    assert.deepEqual([kayitli['plan'], kayitli['kmResim'] ?? null], [[], null]);
+  });
+
   // 2131-2 a: periyodik numune RED olunca NCR açılır ve sonraki sağlam, kalite onay verene kadar karar bekler; sonraki periyodik karar
   // bekleyeni kapatır (onayda sağlama). Karar Arkon'dan da Kalite Merkezi'nden de verilebilir.
   test('2131-2 a: periyodik numune reddi NCR açar, sonraki sağlam karar bekler; Kalite Merkezi onayı bekleyeni sağlama geçirir; ilk parça kapısı yokken de', async () => {

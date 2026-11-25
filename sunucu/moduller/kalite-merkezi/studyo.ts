@@ -88,6 +88,16 @@ export async function studyoParcasi(db: Db, malzemeNo: number): Promise<KmStudyo
   return { resimler, numunePlanlari, alinmamis };
 }
 
+// Arkon taslak paketinin kendiliğinden planı: yalnız etkin balonlu resmi olan parçaların resimleri (balon ve grupla). Okuma yetkisinden bağımsızdır;
+// çağıran paketin kendisidir, kişinin Kalite Merkezi'ni okuması gerekmez (3701).
+export async function taslakResimleri(db: Db, malzemeNolari: readonly number[]): Promise<Map<number, KmResim[]>> {
+  const sonuc = new Map<number, KmResim[]>();
+  const nolar = [...new Set(malzemeNolari)];
+  if (nolar.length === 0) return sonuc;
+  for (const no of await sorgular.balonluResimParcalari(db, nolar)) sonuc.set(no, await resimlerCevabi(db, await sorgular.parcaResimleri(db, no)));
+  return sonuc;
+}
+
 // Kartına bağlı yayındaki PDF ve 3B parçaya kendiliğinden alınır (1993 a; 1306'daki elle almanın yerine). Okuma yazmadığı için alma ayrı
 // komuttur ve alan kişi satıra yazılır. Parçadan elle kaldırılmış revizyon geri getirilmez: kaldırma kalite onayıdır, eşitleme onu bozmaz.
 export async function merkezdenEsitle(db: Db, kisiId: number, malzemeNo: number): Promise<{ eklenen: number }> {

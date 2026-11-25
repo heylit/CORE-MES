@@ -72,6 +72,18 @@ describe('A2 Hazırlık ekranı', () => {
     expect(yayin?.readCfg).toMatchObject({ mesh: expect.any(String), ex: expect.any(Object) });
   }, 40000);
 
+  it('kontrol planı olmayan boya işinde uyarı penceresi talaşlı demez; türü söyler (3701)', async () => {
+    const boya = { ...PAKET, id: 'tmi-ue-72', no: 'IE-DENEME-72', plan: [], opType: 'boya' };
+    sunucuKur(YONETICI, { belgeler: { pkgs: [{ kimlik: boya.id, surum: 1, govde: boya }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
+    arkonAc('/arkon/hazirlik');
+    const d = await ekran();
+    fireEvent.click(within(d).getByRole('button', { name: /Terminale gönder/ }));
+    fireEvent.click(await within(d).findByRole('button', { name: 'Terminale gönder' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Kontrol planı yok' });
+    expect(within(pencere).getByText(/Bu işte \(boya · kaplama\) kontrol noktası yok/)).toBeTruthy();
+    expect(within(pencere).queryByText(/talaşlı/)).toBeNull();
+  }, 40000);
+
   it('1307 b: kontrol planı olmayan talaşlı iş uyarı onayıyla gönderilir; onay yayın geçmişine yazılır, vazgeçince yazma gitmez', async () => {
     // Arkon deposu dosya içinde paylaşılır: önceki testin yayınladığı paketle karışmasın diye ayrı kimlik.
     const planYok = { ...PAKET, id: 'tmi-ue-71', no: 'IE-DENEME-71', plan: [] };
@@ -231,9 +243,21 @@ describe('A2 Hazırlık ekranı', () => {
     expect(istekler.filter((i) => i.yol === MERKEZ_EKLE).length).toBe(1);
   }, 40000);
 
+  it('sunucunun Kalite Merkezi\'nden kurduğu plan, Çizim Merkezi dosyası gelince silinmez (3701)', async () => {
+    const SUNUCU_DOLU = { ...TMI_TASLAGI, id: 'tmi-ue-17', plan: [{ id: 1, kmBalon: 11, nom: 'Ø10', min: 9.95, max: 10.05, gauge: false, freq: 'İlk parça', crit: false, x: 0, y: 0 }], kmResim: { id: 12, surum: 4 } };
+    const istekler = sunucuKur(YONETICI, { belgeler: { pkgs: [{ kimlik: SUNUCU_DOLU.id, surum: 1, govde: SUNUCU_DOLU }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
+    merkezKur(istekler);
+    arkonAc('/arkon/hazirlik');
+    await ekran();
+    await waitFor(() => {
+      const yazilan = istekler.filter((i) => i.yol === `/arkon/belgeler/pkgs/${SUNUCU_DOLU.id}/yaz`).map((i) => (i.govde as { govde: Pkg }).govde);
+      expect(yazilan.some((p) => p.primary === 'deneme-b.pdf' && p.plan.length === 1 && (p.kmResim as { id?: number } | null | undefined)?.id === 12)).toBe(true);
+    }, { timeout: 10000 });
+  }, 40000);
+
   // 789, 795 a: TMI emrinin paketinde resim ve balonlar Kalite Merkezi'nden salt okunur gelir; plan maddesi balon kimliğini taşır.
   // Resim, balon ve ölçüler uydurmadır.
-  const KM_PAKETI = { ...PAKET, id: 'tmi-ue-9', no: 'IE-DENEME-3', from: 'tmi', malzemeNo: 901, plan: [] };
+  const KM_PAKETI = { ...PAKET, id: 'tmi-ue-9', no: 'IE-DENEME-3', from: 'tmi', malzemeNo: 901, plan: [], files: [], primary: null };
   const KM_BALONU = {
     id: 55, no: 1, nominal: 'Ø30', tolerans: '±0.05', alt: '29.95', ust: '30.05', alet: 'Mikrometre', siklik: null, kritik: true, yontem: 'elle',
     olcuAletiGerekir: false, tur: null, sayfa: 1, x: 10, y: 20, yaziKutusu: null, surum: 1,
@@ -253,6 +277,7 @@ describe('A2 Hazırlık ekranı', () => {
   }
   // Kalite Merkezi'ni okuyabilen roller (yönetici bütün işlemleri taşır; hazırlıkta kalite ve CAM).
   const kmOkur = (d: Deneme): Deneme => ({ ...d, kullanici: { ...d.kullanici, islemler: [...d.kullanici.islemler, 'kalite-merkezi.oku'] } });
+  const kmPaketYazimiKimlik = (l: Istek[], id: string) => l.filter((i) => i.yol === `/arkon/belgeler/pkgs/${id}/yaz`).map((i) => (i.govde as { govde: Pkg }).govde);
   const kmPaketYazimi = (l: Istek[]) => l.filter((i) => i.yol === `/arkon/belgeler/pkgs/${KM_PAKETI.id}/yaz`).map((i) => (i.govde as { govde: Pkg }).govde);
 
   it('CORE taslak paketinde Kalite Merkezi resmi ve balonları kendiliğinden gelir, kimlikleriyle; plan salt okunur', async () => {
@@ -293,17 +318,68 @@ describe('A2 Hazırlık ekranı', () => {
     expect(istekler.filter((i) => i.yol === `/arkon/belgeler/pkgs/${DOLU.id}/yaz`)).toEqual([]);
   }, 40000);
 
-  it('yayındaki CORE paketinde Kalite Merkezi resmi kendiliğinden alınmaz; Pakete al elle çalışır (3687)', async () => {
-    const YAYINDA = { ...KM_PAKETI, id: 'tmi-ue-12', no: 'IE-DENEME-6', status: 'published', version: 1, dirty: false };
+  it('yayındaki boş CORE paketine kendiliğinden yazılmaz; yalnız "Kalite Merkezi\'nden al" önerilir ve elle alınca yazılır (3701)', async () => {
+    const YAYINDA = { ...KM_PAKETI, id: 'tmi-ue-12', no: 'IE-DENEME-6', status: 'published', version: 1, dirty: false, history: [] };
     const istekler = sunucuKur(kmOkur(YONETICI), { belgeler: { pkgs: [{ kimlik: YAYINDA.id, surum: 1, govde: YAYINDA }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
     merkezKur(istekler);
     kmKur([KM_RESMI]);
     arkonAc('/arkon/hazirlik');
     const d = await ekran();
-    fireEvent.click(within(d).getByRole('button', { name: /Dokümanlar/ }));
-    const km = await within(d).findByRole('region', { name: 'Kalite Merkezi’nden' }, { timeout: 10000 });
-    expect(await within(km).findByRole('button', { name: /Pakete al/ }, { timeout: 10000 })).toBeTruthy();
+    expect(await within(d).findByText('Kalite Merkezi’nde bu parçanın resmi hazır', undefined, { timeout: 10000 })).toBeTruthy();
+    await new Promise((r) => setTimeout(r, 1000));
     expect(istekler.filter((i) => i.yol === `/arkon/belgeler/pkgs/${YAYINDA.id}/yaz`)).toEqual([]);
+    fireEvent.click(within(d).getByRole('button', { name: 'Kalite Merkezi’nden al' }));
+    await waitFor(() => {
+      const p = (istekler.filter((i) => i.yol === `/arkon/belgeler/pkgs/${YAYINDA.id}/yaz`).map((i) => (i.govde as { govde: Pkg }).govde)).at(-1);
+      expect(p?.kmResim).toEqual({ id: 12, surum: 4 });
+      expect(p?.otoKaynak?.plan?.etiket).toMatch(/^Elle alındı/);
+    }, { timeout: 10000 });
+  }, 40000);
+
+  it('elle eklenmiş PDF dosyası olan taslakta resim kendiliğinden değişmez; öneri çıkar (3701)', async () => {
+    const ELLE = { ...KM_PAKETI, id: 'tmi-ue-16', no: 'IE-DENEME-10', files: PAKET.files, primary: PAKET.primary };
+    const istekler = sunucuKur(kmOkur(YONETICI), { belgeler: { pkgs: [{ kimlik: ELLE.id, surum: 1, govde: ELLE }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
+    merkezKur(istekler);
+    kmKur([KM_RESMI]);
+    arkonAc('/arkon/hazirlik');
+    const d = await ekran();
+    expect(await within(d).findByText('Kalite Merkezi’nde bu parçanın resmi hazır', undefined, { timeout: 10000 })).toBeTruthy();
+    await new Promise((r) => setTimeout(r, 1000));
+    expect(istekler.filter((i) => i.yol === `/arkon/belgeler/pkgs/${ELLE.id}/yaz`)).toEqual([]);
+    // Elle alınca elle eklenen dosya paketten çıkmaz; Kalite Merkezi resmi yanına eklenir, ana resim elle konan kalır.
+    fireEvent.click(within(d).getByRole('button', { name: 'Kalite Merkezi’nden al' }));
+    await waitFor(() => {
+      const p = (istekler.filter((i) => i.yol === `/arkon/belgeler/pkgs/${ELLE.id}/yaz`).map((i) => (i.govde as { govde: Pkg }).govde)).at(-1);
+      expect(p?.files.map((f) => f.name)).toEqual(['deneme.pdf', 'deneme-b.pdf']);
+      expect(p?.primary).toBe('deneme.pdf');
+      expect(p?.kmResim).toEqual({ id: 12, surum: 4 });
+    }, { timeout: 10000 });
+  }, 40000);
+
+  it('balonlu birden çok etkin resim varsa plan kendiliğinden alınmaz; paket başında resim seçin uyarısı çıkar ve seçince kapanır (3701)', async () => {
+    const SEC = { ...KM_PAKETI, id: 'tmi-ue-14', no: 'IE-DENEME-8' };
+    const istekler = sunucuKur(kmOkur(YONETICI), { belgeler: { pkgs: [{ kimlik: SEC.id, surum: 1, govde: SEC }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
+    merkezKur(istekler);
+    kmKur([KM_RESMI, { ...KM_RESMI, id: 13, ad: 'Deneme kesit' }]);
+    arkonAc('/arkon/hazirlik');
+    const d = await ekran();
+    expect(await within(d).findByText('Kontrol planı için resim seçin', undefined, { timeout: 10000 })).toBeTruthy();
+    expect(istekler.filter((i) => i.yol === `/arkon/belgeler/pkgs/${SEC.id}/yaz`)).toEqual([]);
+    fireEvent.click(within(d).getByRole('button', { name: /Resimleri göster/ }));
+    const km = await within(d).findByRole('region', { name: 'Kalite Merkezi’nden' }, { timeout: 10000 });
+    fireEvent.click((await within(km).findAllByRole('button', { name: /Pakete al/ }, { timeout: 10000 }))[1]!);
+    await waitFor(() => expect(within(d).queryByText('Kontrol planı için resim seçin')).toBeNull(), { timeout: 10000 });
+    await waitFor(() => expect(kmPaketYazimiKimlik(istekler, SEC.id).at(-1)?.kmResim).toEqual({ id: 13, surum: 4 }), { timeout: 10000 });
+  }, 40000);
+
+  it('resmi ya da balonu olmayan parçada paket boş kalır ve nedeni paket başında yazar (3701)', async () => {
+    const BOS = { ...KM_PAKETI, id: 'tmi-ue-15', no: 'IE-DENEME-9' };
+    const istekler = sunucuKur(kmOkur(YONETICI), { belgeler: { pkgs: [{ kimlik: BOS.id, surum: 1, govde: BOS }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
+    kmKur([{ ...KM_RESMI, balonlar: [] }]);
+    arkonAc('/arkon/hazirlik');
+    const d = await ekran();
+    expect(await within(d).findByText(/hiçbirinde balon yok/, undefined, { timeout: 10000 })).toBeTruthy();
+    expect(istekler.filter((i) => i.yol === `/arkon/belgeler/pkgs/${BOS.id}/yaz`)).toEqual([]);
   }, 40000);
 
   it('Kalite Merkezi resmi değişince paket "değişti" gösterir; düzenleme yetkisi olmayan alamaz (reddedilen)', async () => {

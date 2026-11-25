@@ -116,6 +116,16 @@ describe('3362 Test bakışı ekleri', () => {
     expect(k['kmResim']).toEqual({ id: 4, surum: 2 });
   });
 
+  it('3701: hedef Kalite Merkezi\'nden dolduysa resim ve kontrol planı varsayılan işaretsizdir; kişi isterse işaretler', () => {
+    const hedef = paket({ id: 'h', kmResim: { id: 9, surum: 1 } });
+    const kaynak = gonderilmis({ id: 's', files: [{ name: 'r.pdf', kind: 'pdf' }] as Pkg['files'], kmResim: { id: 4, surum: 2 } });
+    expect([...varsayilanKopya(hedef, kaynak)].sort()).toEqual(['material', 'rules', 'samp', 'steps']);
+    expect(benzerKopya(hedef, kaynak, new Set<KopyaAlani>(['plan', 'resim'])).plan).toEqual(plan1);
+    expect([...varsayilanKopya(paket({ id: 'b' }), kaynak)].sort()).toContain('plan');
+    // Plan kopyalanınca Kalite Merkezi kaynak satırı kopya kaynağına döner.
+    expect(benzerKopya(paket({ id: 'b', otoKaynak: { plan: { kaynak: 'km' } } }), kaynak, new Set<KopyaAlani>(['plan'])).otoKaynak?.plan).toMatchObject({ kaynak: 'sablon', etiket: expect.stringContaining('Benzer paketten') });
+  });
+
   it('T5: aynı iş emrinin kendi (başka kimlikli) paketi aday olmaz', () => {
     const hedef = paket({ id: 'h' });
     const kendi = gonderilmis({ id: 'h-parca-1' });

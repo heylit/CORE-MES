@@ -1,5 +1,6 @@
 import { gonderimUyarisi, istasyonsuzMu, rotaEksigi, ISTASYONSUZ_GONDERIM } from '../../../../../../arkon/web/src/data/tmi-plan.ts';
 import type { Plant, Policy } from '../cekirdek/tipler.ts';
+import { kmDolduruldu } from './km-cizim.ts';
 import { isTuru, onayBekliyor, onayGerekir, paketDenetimi, planYokUyarisiGerekir } from './kurallar.ts';
 import type { Pkg, Result } from './tipler.ts';
 
@@ -18,7 +19,7 @@ export type GonderimHali =
   | { tur: 'bekliyor'; neden: string }
   | { tur: 'terminal' | 'kalite'; uyarilar: GonderimUyarisiSatiri[] };
 
-export const PLAN_YOK_NEDENI = 'Kontrol planı olmayan talaşlı iş yalnız onaylanırsa gider; onay kayda geçer.';
+export const PLAN_YOK_NEDENI = 'Kontrol planı olmayan iş yalnız onaylanırsa gider; onay kayda geçer.';
 
 export function gonderimHali(p: Pkg, tesis: Plant, kurallar: Pick<Policy, 'approval'>): GonderimHali {
   if (paketDenetimi(p, tesis).some((x) => !x.ok && !x.soft)) {
@@ -93,8 +94,10 @@ export function kopyaAcikMi(hedef: Pkg, kaynak: Pkg, k: KopyaAlani): boolean {
   if (k === 'material') return parcaAnahtari(hedef) !== null && parcaAnahtari(hedef) === parcaAnahtari(kaynak);
   return true;
 }
+// Hedef paket Kalite Merkezi'nden dolduysa (kmResim bağlı) resim ve kontrol planı varsayılan olarak alınmaz: kişi bilerek işaretlerse üzerine yazılır.
+export const KM_DOLU_ALANLARI: ReadonlySet<KopyaAlani> = new Set<KopyaAlani>(['resim', 'plan']);
 export const varsayilanKopya = (hedef: Pkg, kaynak: Pkg): Set<KopyaAlani> =>
-  new Set(KOPYA_ALANLARI.map((x) => x.k).filter((k) => kopyaAcikMi(hedef, kaynak, k)));
+  new Set(KOPYA_ALANLARI.map((x) => x.k).filter((k) => kopyaAcikMi(hedef, kaynak, k) && !(kmDolduruldu(hedef) && KM_DOLU_ALANLARI.has(k))));
 
 // Paketin doldurulmuş içeriği: toplu doldurma yalnız boş taslağı doldurur, dolu paket tek tek açılır.
 export const icerikDolu = (p: Pick<Pkg, 'steps' | 'samp' | 'rules'>): boolean => p.steps.length > 0 || (p.samp?.length ?? 0) > 0;
@@ -120,7 +123,11 @@ export function benzerKopya(hedef: Pkg, kaynak: Pkg, alanlar: ReadonlySet<KopyaA
     if (kaynak.readCfg !== undefined) sonuc.readCfg = structuredClone(kaynak.readCfg);
   }
   // Kontrol planı Kalite Merkezi balonlarıdır (789): aynı revizyonda resim bağıyla birlikte gelir.
-  if (acik('plan')) { sonuc.plan = kaynak.plan.map((b) => ({ ...b })); sonuc['kmResim'] = kaynak['kmResim'] ?? null; }
+  if (acik('plan')) {
+    sonuc.plan = kaynak.plan.map((b) => ({ ...b })); sonuc['kmResim'] = kaynak['kmResim'] ?? null;
+    // Paket başındaki "Kalite Merkezi'nden alındı" satırı artık yanlış olur: kaynak kopyadır.
+    sonuc.otoKaynak = { ...hedef.otoKaynak, plan: { kaynak: 'sablon', etiket: `Benzer paketten alındı · ${kaynak.no}`, at: Date.now() } };
+  }
   if (acik('samp')) {
     const plan = new Set((sonuc.plan ?? hedef.plan).map((b) => b.id));
     sonuc.samp = (kaynak.samp ?? []).map((s) => {

@@ -28,7 +28,10 @@ import { IstasyonDuzenleyici, TurSecici } from './IstasyonDuzenleyici.tsx';
 import { ArkonBandi } from '../ortak/SaatSeridi.tsx';
 import { IstasyonSecimi } from './IstasyonSecici.tsx';
 import { KaliteMerkeziCizimleri } from './KaliteMerkeziCizimleri.tsx';
-import { kmBagi, kmNumuneDurumu, kmNumuneKurallari, kmNumunePlani, kmPlani, kmSahibi, otomatikKmNumunesi, otomatikKmResmi } from './km-cizim.ts';
+import { ApiHatasi } from '../../../../ortak/veri/api.ts';
+import { kmAlimEtiketi, kmBagi, kmDoldurulabilir, kmDosyaElle, type KmTopluSatiri, kmNumuneDurumu, kmNumuneKurallari, kmNumunePlani, kmOtomatikKarari, kmPlani, kmSahibi, otoKaynakYaz, otomatikKmNumunesi } from './km-cizim.ts';
+import { KmPlanBilgisi } from './KmPlanBilgisi.tsx';
+import { KmTopluPenceresi, type KmTopluSonucu } from './KmTopluPenceresi.tsx';
 import type { KmNumunePlani } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import { useStudyoParcasi } from '../../../kalite-merkezi/disari.ts';
 import { useYetki } from '../../../../ortak/veri/yetki.ts';
@@ -194,6 +197,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
   const [olcuSec, olcuSecYaz] = useState<number[]>([]);
   const [nSor, nSorYaz] = useState<number | null>(null);
   const [merkezSec, merkezSecYaz] = useState(false);
+  const [kmToplu, kmTopluYaz] = useState<readonly Pkg[] | null>(null);
   const [merkezMesgul, merkezMesgulYaz] = useState(false);
   const [yayinda, yayindaYaz] = useState(false);
   const [geriSor, geriSorYaz] = useState<{ l: readonly Pkg[]; toplu: boolean } | null>(null);
@@ -304,14 +308,23 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
   };
   // 789, 795 a: Kalite Merkezi resmi belge merkezindeki dosyasıyla pakete gelir ve ana resim olur; plan onun balonlarıdır, her madde
   // Kalite Merkezi balon kimliğini taşır.
-  const kmdenAl = async (r: KmResim) => {
+  // Plan adımın operasyonuna göre süzülür (balon grubu bağlıysa yalnız o grup, 3693). Kaynak satırı (otoKaynak) yayın geçmişine yazılmaz; `by` alan kişidir.
+  // Kişi planı bilerek sıfırladı: bir daha kendiliğinden doldurulmaz.
+  const kmElle = (x: Pkg) => otoKaynakYaz(x, 'plan', { kaynak: 'el', at: Date.now(), by: benAdi() });
+  const kmdenAl = async (r: KmResim, otomatik = false) => {
     if (!p) return;
     if (!duzenler) { yetkisiz(); return; }
     merkezMesgulYaz(true);
     try {
-      const f = await depo.Server.merkezdenAl(r.merkezBelgeId), k = merkezDosyasiniKoy(p, f);
-      yama({ files: k.files, primary: f.name, plan: kmPlani(r), kmResim: { id: r.id, surum: r.surum }, partNo: p.partNo || r.ad });
-      soyle('“' + r.ad + '” Kalite Merkezi’nden alındı · ' + r.balonlar.length + ' kontrol noktası', 'run');
+      const f = await depo.Server.merkezdenAl(r.merkezBelgeId);
+      // Elle eklenmiş dosyaya dokunulmaz: Kalite Merkezi resmi yanına eklenir, ana resim elle konan kalır.
+      const elle = kmDosyaElle(p), k = elle ? { files: [...p.files.filter((x) => x.name !== f.name), f], primary: p.primary } : merkezDosyasiniKoy(p, f);
+      const opNo = typeof p.tmi?.opNo === 'number' ? p.tmi.opNo : null, plan = kmPlani(r, opNo);
+      yama({
+        files: k.files, primary: elle ? p.primary : f.name, plan, kmResim: { id: r.id, surum: r.surum }, partNo: p.partNo || r.ad,
+        ...otoKaynakYaz(p, 'plan', { kaynak: 'km', etiket: (otomatik ? 'Kendiliğinden alındı · ' : 'Elle alındı · ') + kmAlimEtiketi(r, opNo), at: Date.now(), by: benAdi() }),
+      });
+      soyle('“' + r.ad + '” Kalite Merkezi’nden alındı · ' + plan.length + ' kontrol noktası', 'run');
     } catch (e) { soyle('Kalite Merkezi resmi alınamadı: ' + (e instanceof Error ? e.message : String(e)), 'stop'); }
     merkezMesgulYaz(false);
   };
@@ -322,7 +335,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
     merkezMesgulYaz(true);
     try {
       const f = await depo.Server.merkezdenAl(belgeId), r = merkezDosyasiniKoy(p, f);
-      yama({ files: r.files, primary: r.primary, plan: r.planSifirla ? [] : p.plan, ...(r.planSifirla ? { kmResim: null } : {}), partNo: p.partNo || f.name.replace(/\.[^.]+$/, '') });
+      yama({ files: r.files, primary: r.primary, plan: r.planSifirla ? [] : p.plan, ...(r.planSifirla ? { kmResim: null, ...kmElle(p) } : {}), partNo: p.partNo || f.name.replace(/\.[^.]+$/, '') });
       soyle(f.name + (guncelleme ? ' güncellendi' : ' Çizim Merkezi’nden eklendi'), 'run');
       merkezSecYaz(false);
     } catch (e) { soyle('Çizim Merkezi’nden alınamadı: ' + (e instanceof Error ? e.message : String(e)), 'stop'); }
@@ -334,13 +347,16 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
   const kmOkunur = !!p && kmSahibi(p) && kmYetki.hazir && kmYetki.var('kalite-merkezi.oku');
   const kmParca = useStudyoParcasi(kmOkunur && typeof p?.malzemeNo === 'number' ? p.malzemeNo : null);
   const kmOtomatik = useRef(new Set<string>());
+  const kmKarari = kmParca.data ? kmOtomatikKarari(p ?? { malzemeNo: null, files: [], status: 'draft' }, kmParca.data.resimler) : null;
+  const kmOkunamadi = kmParca.isError && !(kmParca.error instanceof ApiHatasi && kmParca.error.durum === 403);
+  const kmYetkisiz = !!p && kmSahibi(p) && kmYetki.hazir && !kmYetki.var('kalite-merkezi.oku');
   const dosyaBekliyor = !!p && p.from === 'tmi' && p.files.length === 0 && !!p.malzemeCizimleri?.length;
   useEffect(() => {
     if (!p || !duzenler || !kmParca.data || dosyaBekliyor || merkezMesgul || kmOtomatik.current.has(p.id)) return;
-    const r = otomatikKmResmi(p, kmParca.data.resimler);
-    if (r === null) return;
+    const karar = kmOtomatikKarari(p, kmParca.data.resimler);
+    if (karar?.tur !== 'al') return;
     kmOtomatik.current.add(p.id);
-    void kmdenAl(r);
+    void kmdenAl(karar.resim, true);
   }, [p?.id, p?.status, p?.files.length, kmParca.data, duzenler, dosyaBekliyor, merkezMesgul]);
   // 3689: numune planı Kalite Merkezi'ndedir; taslak pakete kendiliğinden gelir, yayındaki pakette "Güncelle" ile alınır. Terminal `samp`'ı okur.
   const kmNumuneAl = (plan: KmNumunePlani) => {
@@ -353,7 +369,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
   useEffect(() => {
     if (!p || !duzenler || !kmParca.data || dosyaBekliyor || merkezMesgul || kmNumuneOtomatik.current.has(p.id)) return;
     // Resim alımı planı yeniden yazar; numune çevirisi (ölçü sıklığı etiketleri) onun bitmesini bekler.
-    if (otomatikKmResmi(p, kmParca.data.resimler) !== null) return;
+    if (kmOtomatikKarari(p, kmParca.data.resimler)?.tur === 'al') return;
     const plan = otomatikKmNumunesi(p, kmParca.data.numunePlanlari);
     if (plan === null) return;
     kmNumuneOtomatik.current.add(p.id);
@@ -377,7 +393,8 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
       const ilk = paket.files[0];
       if (ilk) {
         seciliYaz((o) => (o && o.id === p.id ? { ...o, malzemeCizimleri: undefined } : o));
-        yama({ files: paket.files, primary: paket.primary, plan: [], kmResim: null, partNo: p.partNo || ilk.name.replace(/\.[^.]+$/, '') });
+        // Sunucunun Kalite Merkezi'nden kurduğu plan (3701) dosya gelince silinmez: bağı Kalite Merkezi resmindedir, dosyada değil.
+        yama({ files: paket.files, primary: paket.primary, ...(kmBagi(p) === null ? { plan: [], kmResim: null } : {}), partNo: p.partNo || ilk.name.replace(/\.[^.]+$/, '') });
       }
       if (alinamayan.length) soyle('Çizim Merkezi’nden alınamadı: ' + alinamayan.join(', '), 'stop');
       else if (ilk) soyle(paket.files.length + ' malzeme çizimi Çizim Merkezi’nden eklendi', 'run');
@@ -387,7 +404,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
     if (!p) return;
     const files = p.files.filter((x) => x.kind !== tur);
     const primary = files.some((x) => x.name === p.primary) ? p.primary : (files[0] && files[0].name) || null;
-    yama({ files, primary, ...(primary !== p.primary ? { plan: [], kmResim: null } : {}) });
+    yama({ files, primary, ...(primary !== p.primary ? { plan: [], kmResim: null, ...kmElle(p) } : {}) });
   };
   const klasorSec = async () => {
     if (!Folder || !Folder.supported) { soyle('Bu tarayıcı klasör erişimini desteklemiyor · paket dosyası kullan', 'hold'); return; }
@@ -527,6 +544,29 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
       await yenile();
     } finally { benzerMesgulYaz(false); benzerPlanYaz(null); }
     soyle(`${String(n)} taslak benzer paketten dolduruldu${atlanan ? ` · ${String(atlanan)} atlandı` : ''}`, n ? 'run' : 'hold');
+  };
+  // 3701: boş ve bağsız paketler Kalite Merkezi'nin tek balonlu resminden dolar; resim dosyası alınamayan paket hiç değişmez ve sonuçta söylenir.
+  const kmTopluUygula = async (l: readonly KmTopluSatiri[]): Promise<KmTopluSonucu> => {
+    if (!duzenler) { yetkisiz(); return { doldu: 0, hatalar: [] }; }
+    await bekleyeniYaz();
+    let doldu = 0;
+    const hatalar: KmTopluSonucu['hatalar'] = [];
+    for (const { hedef, resim } of l) {
+      const ad = hedef.no + ' · ' + (hedef.op || 'Operasyon');
+      try {
+        const taze = (await depo.DB.get('pkgs', hedef.id).catch(() => undefined)) as Pkg | undefined;
+        if (!taze || resim === null || !kmDoldurulabilir(taze)) { hatalar.push({ paket: ad, neden: 'paket bu arada değişti' }); continue; }
+        const f = await depo.Server.merkezdenAl(resim.merkezBelgeId), k = merkezDosyasiniKoy(taze, f);
+        const opNo = typeof taze.tmi?.opNo === 'number' ? taze.tmi.opNo : null;
+        const g: Pkg = {
+          ...taze, files: k.files, primary: f.name, plan: kmPlani(resim, opNo), kmResim: { id: resim.id, surum: resim.surum }, partNo: taze.partNo || resim.ad,
+          ...otoKaynakYaz(taze, 'plan', { kaynak: 'km', etiket: 'Kendiliğinden alındı · ' + kmAlimEtiketi(resim, opNo), at: Date.now(), by: benAdi() }), dirty: true, updatedAt: Date.now(),
+        };
+        await depo.DB.put('pkgs', g); doldu++; seciliYaz((c) => (c && c.id === g.id ? g : c));
+      } catch (e) { hatalar.push({ paket: ad, neden: e instanceof Error ? e.message : 'resim dosyası alınamadı' }); }
+    }
+    await yenile();
+    return { doldu, hatalar };
   };
   const geriCekOnayla = async (l: readonly Pkg[]) => {
     geriMesgulYaz(true);
@@ -720,7 +760,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
             <TakipTablosu
               paketler={liste} sonuclar={sonuclar} hazirlik={hz.harita} hazirlikOkundu={hz.zaman !== null} suz={takipSuz} suzYaz={takipSuzSec} yayinlar={yayinlar}
               seciliId={duzenAcik && p ? p.id : null} ac={(x) => { void sec(x); }} geriCekSor={(l, toplu) => geriSorYaz({ l, toplu })}
-              duzenler={duzenler} gonderSor={gonderSorYaz} benzerSor={(l) => benzerPlanYaz(topluDoldurmaPlani(l, paketler))}
+              duzenler={duzenler} gonderSor={gonderSorYaz} benzerSor={(l) => benzerPlanYaz(topluDoldurmaPlani(l, paketler))} kmDoldurSor={kmTopluYaz}
             />
           ) : (
           <div className="tc-ay2-paketler">
@@ -759,6 +799,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                 <div><span className="tc-ay2-ust-yazi">Adım</span><b>{p.steps.length}</b></div>
               </div>
             </div>
+            <KmPlanBilgisi p={p} karar={kmKarari} okunamadi={kmOkunamadi} yetkisiz={kmYetkisiz} resimler={() => sekmeYaz('docs')} al={duzenler ? (r) => { void kmdenAl(r); } : undefined} />
             <ol className="tc-ay2-adimlar" aria-label="Hazırlık adımları">
               {SEKMELER.map((t, i) => {
                 const ok = t.id !== 'pub' && t.id !== 'tl' && tamam(t.id);
@@ -854,7 +895,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                     {p.files.length ? (
                       <Bolmeli
                         etiket="Ana resim" deger={p.primary || ''} secenekler={p.files.map((f) => [f.name, f.kind === 'pdf' ? 'PDF · ' + f.name : 'Modelden üret · ' + f.name] as const)}
-                        degistir={(ad) => yama({ primary: ad, ...(ad !== p.primary ? { plan: [], kmResim: null } : {}) })}
+                        degistir={(ad) => yama({ primary: ad, ...(ad !== p.primary ? { plan: [], kmResim: null, ...kmElle(p) } : {}) })}
                       />
                     ) : <span className="tc-ay2-soluk">Önce dosya ekle</span>}
                     <p className="tc-ay2-soluk">Ana resmi değiştirirsen kontrol planı sıfırlanır (balonlar resme bağlıdır).</p>
@@ -1146,6 +1187,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
         />
       ) : null}
       <BenzerPaketPenceresi hedef={benzerAcik ? p : null} paketler={paketler} kapat={() => benzerAcikYaz(false)} uygula={(k, a) => { void benzerUygula(k, a); }} />
+      <KmTopluPenceresi hedefler={kmToplu} kapat={() => kmTopluYaz(null)} uygula={kmTopluUygula} />
       <TopluBenzerPenceresi plan={benzerPlan} mesgul={benzerMesgul} kapat={() => benzerPlanYaz(null)} uygula={(l) => { void topluDoldur(l); }} />
       <GeriCekPenceresi paketler={geriSor ? geriSor.l : null} sonuclar={sonuclar} mesgul={geriMesgul} kapat={() => geriSorYaz(null)} onayla={(l) => { void geriCekOnayla(l); }} />
       {gonderOnay && p ? (
@@ -1153,7 +1195,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
       ) : null}
       {planYokSor && p ? (
         <KontrolPlaniYokPenceresi
-          kapat={() => planYokSorYaz(false)} gonder={() => { planYokSorYaz(false); void yayinla(false, true); }}
+          tur={isTuru(p)} kapat={() => planYokSorYaz(false)} gonder={() => { planYokSorYaz(false); void yayinla(false, true); }}
           plana={() => { planYokSorYaz(false); sekmeYaz('plan'); }}
         />
       ) : null}
@@ -1171,7 +1213,7 @@ function planYokMetni(h: object): string {
 }
 
 // 1307 b: kontrol planı olmayan talaşlı işi göndermeden önce uyarı; onay yayın geçmişine yazılır.
-export function KontrolPlaniYokPenceresi({ kapat, gonder, plana }: { kapat: () => void; gonder: () => void; plana: () => void }) {
+export function KontrolPlaniYokPenceresi({ tur = 'cnc', kapat, gonder, plana }: { tur?: OpType; kapat: () => void; gonder: () => void; plana: () => void }) {
   return (
     <Pencere
       acik kapat={kapat} baslik="Kontrol planı yok"
@@ -1184,7 +1226,7 @@ export function KontrolPlaniYokPenceresi({ kapat, gonder, plana }: { kapat: () =
       )}
     >
       <span className="tc-ay2-ust-yazi">Terminale gönder</span>
-      <p>Bu talaşlı işte kontrol noktası yok: operatör ölçü girmeden üretir, ilk parça ve numune ölçüsü istenmez.</p>
+      <p>Bu {tur === 'cnc' ? 'talaşlı işte' : `işte (${IS_TURLERI[tur].l.toLocaleLowerCase('tr')})`} kontrol noktası yok: operatör ölçü girmeden {tur === 'cnc' ? 'üretir' : 'çalışır'}, ilk parça ve numune ölçüsü istenmez.</p>
       <p>Gönderirsen uyarıyı onayladığın, adın ve zamanıyla gönderim geçmişine yazılır.</p>
     </Pencere>
   );
