@@ -266,9 +266,9 @@ export function doluKayitlar(db: Db, koleksiyon: string, kimlikler: readonly str
 
 export interface ResimSatiri {
   id: number; malzemeNo: number; tur: 'resim' | 'model'; merkezBelgeId: number; ozet: string; ad: string; revizyon: string | null;
-  aktif: boolean; surum: number; eklendi: string;
+  aktif: boolean; surum: number; gruplarSurum: number; eklendi: string;
 }
-const RESIM_SUTUNLARI = `id, malzeme_no AS "malzemeNo", tur, merkez_belge_id AS "merkezBelgeId", ozet, ad, revizyon, aktif, surum,
+const RESIM_SUTUNLARI = `id, malzeme_no AS "malzemeNo", tur, merkez_belge_id AS "merkezBelgeId", ozet, ad, revizyon, aktif, surum, gruplar_surum AS "gruplarSurum",
   ${zamanMetni('eklendi')} AS eklendi`;
 
 export function parcaResimleri(db: Db, malzemeNo: number): Promise<ResimSatiri[]> {
@@ -509,6 +509,95 @@ export async function balonlariKopyala(db: Db, kaynakResimId: number, hedefResim
     [kaynakResimId, hedefResimId, kisiId],
   );
   return r.length;
+}
+
+/* ---------------- balon grupları ve operasyon ataması (3693) ---------------- */
+
+export interface GrupSatiri { id: number; resimId: number; ad: string; balonlar: number[]; operasyonlar: number[] }
+
+// Üyelik etkin balonların numarasıyla gelir; kaldırılmış balon gruptan görünmez.
+export function resimGruplari(db: Db, resimIdleri: readonly number[]): Promise<GrupSatiri[]> {
+  if (resimIdleri.length === 0) return Promise.resolve([]);
+  return db.sorgu(
+    `SELECT g.id, g.resim_id AS "resimId", g.ad,
+        COALESCE((SELECT array_agg(b.no ORDER BY b.no) FROM kalite_merkezi_balon_grubu_uye u
+                    JOIN kalite_merkezi_balon b ON b.id = u.balon_id AND b.aktif WHERE u.grup_id = g.id), '{}') AS balonlar,
+        COALESCE((SELECT array_agg(o.operasyon_id ORDER BY o.operasyon_id) FROM kalite_merkezi_balon_grubu_operasyon o WHERE o.grup_id = g.id), '{}') AS operasyonlar
+       FROM kalite_merkezi_balon_grubu g WHERE g.resim_id = ANY($1::int[]) ORDER BY g.resim_id, lower(g.ad), g.id`,
+    [resimIdleri],
+  );
+}
+
+export async function gruplarSurumuArtir(db: Db, resimId: number, surum: number, kisiId: number): Promise<boolean> {
+  const r = await db.tek<{ id: number }>(
+    `UPDATE kalite_merkezi_resim SET gruplar_surum = gruplar_surum + 1, guncelleyen_id = $3, guncellendi = now()
+      WHERE id = $1 AND gruplar_surum = $2 RETURNING id`,
+    [resimId, surum, kisiId],
+  );
+  return r !== null;
+}
+
+export async function grupAdiTekrariVar(db: Db, adlar: readonly string[]): Promise<boolean> {
+  return (await db.tek<{ var: boolean }>(
+    'SELECT EXISTS (SELECT 1 FROM unnest($1::text[]) AS a GROUP BY lower(a) HAVING count(*) > 1) AS "var"', [adlar],
+  ))!.var;
+}
+
+export async function resimGrupKimlikleri(db: Db, resimId: number): Promise<number[]> {
+  return (await db.sorgu<{ id: number }>('SELECT id FROM kalite_merkezi_balon_grubu WHERE resim_id = $1', [resimId])).map((r) => r.id);
+}
+
+// Listede olmayan grup silinir (üyelik ve atamaları kendiliğinden kalkar); kalanların adı geçici boşaltılır ki ad değişimi (A, B yer değiştirir) çakışmasın.
+export async function gruplariHazirla(db: Db, resimId: number, kalanlar: readonly number[]): Promise<void> {
+  await db.sorgu('DELETE FROM kalite_merkezi_balon_grubu WHERE resim_id = $1 AND NOT (id = ANY($2::int[]))', [resimId, kalanlar]);
+  await db.sorgu(`UPDATE kalite_merkezi_balon_grubu SET ad = '#' || id::text WHERE resim_id = $1`, [resimId]);
+}
+
+export async function grupYaz(db: Db, resimId: number, id: number | null, ad: string, nolar: readonly number[], kisiId: number): Promise<number> {
+  const grup = id === null
+    ? (await db.tek<{ id: number }>('INSERT INTO kalite_merkezi_balon_grubu (resim_id, ad, guncelleyen_id) VALUES ($1, $2, $3) RETURNING id', [resimId, ad, kisiId]))!.id
+    : (await db.tek<{ id: number }>('UPDATE kalite_merkezi_balon_grubu SET ad = $2, guncelleyen_id = $3, guncellendi = now() WHERE id = $1 AND resim_id = $4 RETURNING id', [id, ad, kisiId, resimId]))!.id;
+  await db.sorgu('DELETE FROM kalite_merkezi_balon_grubu_uye WHERE grup_id = $1', [grup]);
+  await db.sorgu(
+    `INSERT INTO kalite_merkezi_balon_grubu_uye (grup_id, balon_id) SELECT $1, id FROM kalite_merkezi_balon WHERE resim_id = $2 AND aktif AND no = ANY($3::int[])`,
+    [grup, resimId, nolar],
+  );
+  return grup;
+}
+
+export async function atamalariYaz(db: Db, resimId: number, atamalar: readonly { operasyonId: number; grupId: number }[]): Promise<void> {
+  await db.sorgu('DELETE FROM kalite_merkezi_balon_grubu_operasyon WHERE resim_id = $1', [resimId]);
+  if (atamalar.length === 0) return;
+  await db.sorgu(
+    `INSERT INTO kalite_merkezi_balon_grubu_operasyon (resim_id, operasyon_id, grup_id) SELECT $1, o, g FROM unnest($2::int[], $3::int[]) AS t(o, g)`,
+    [resimId, atamalar.map((a) => a.operasyonId), atamalar.map((a) => a.grupId)],
+  );
+}
+
+// Revizyon geçişi: kaynak resmin grupları ve atamaları hedef resme kopyalanır; üyelik balon numarasıyla eşlenir (hedef balonlar kopyadır).
+export async function gruplariKopyala(db: Db, kaynakResimId: number, hedefResimId: number, kisiId: number): Promise<void> {
+  await db.sorgu(
+    `WITH yeni AS (
+       INSERT INTO kalite_merkezi_balon_grubu (resim_id, ad, guncelleyen_id)
+       SELECT $2, ad, $3 FROM kalite_merkezi_balon_grubu WHERE resim_id = $1 RETURNING id, ad)
+     INSERT INTO kalite_merkezi_balon_grubu_uye (grup_id, balon_id)
+     SELECT y.id, hb.id
+       FROM yeni y
+       JOIN kalite_merkezi_balon_grubu kg ON kg.resim_id = $1 AND lower(kg.ad) = lower(y.ad)
+       JOIN kalite_merkezi_balon_grubu_uye ku ON ku.grup_id = kg.id
+       JOIN kalite_merkezi_balon kb ON kb.id = ku.balon_id AND kb.aktif
+       JOIN kalite_merkezi_balon hb ON hb.resim_id = $2 AND hb.aktif AND hb.no = kb.no`,
+    [kaynakResimId, hedefResimId, kisiId],
+  );
+  await db.sorgu(
+    `INSERT INTO kalite_merkezi_balon_grubu_operasyon (resim_id, operasyon_id, grup_id)
+     SELECT $2, ko.operasyon_id, hg.id
+       FROM kalite_merkezi_balon_grubu_operasyon ko
+       JOIN kalite_merkezi_balon_grubu kg ON kg.id = ko.grup_id
+       JOIN kalite_merkezi_balon_grubu hg ON hg.resim_id = $2 AND lower(hg.ad) = lower(kg.ad)
+      WHERE ko.resim_id = $1`,
+    [kaynakResimId, hedefResimId],
+  );
 }
 
 // Plan kaydedilince balonların yeri gözden geçirilmiş sayılır (1995 a).

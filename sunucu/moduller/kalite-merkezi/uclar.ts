@@ -9,7 +9,7 @@ import {
 } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import * as servis from './servis.ts';
 import {
-  kmBalonlarGovdesi, kmMerkezBelgeleriCevabi, kmMerkezBelgeSorgusu, kmNumuneCevabi, kmNumuneIsteGovdesi, kmNumuneKarariGovdesi, kmNumunePlaniCevabi, kmNumunePlaniGovdesi, kmNumunelerCevabi,
+  kmBalonlarGovdesi, kmGruplarGovdesi, kmMerkezBelgeleriCevabi, kmMerkezBelgeSorgusu, kmNumuneCevabi, kmNumuneIsteGovdesi, kmNumuneKarariGovdesi, kmNumunePlaniCevabi, kmNumunePlaniGovdesi, kmNumunelerCevabi,
   kmOlcumGovdesi, kmOlcumlerCevabi, kmResimCevabi, kmResimEkleGovdesi, kmStudyoEmirParametresi, kmStudyoNumuneParametresi, kmStudyoOzetleriCevabi, kmStudyoParcaCevabi, kmStudyoEsitlemeCevabi, kmPlanKopyalaGovdesi,
   kmStudyoParcaParametresi, kmStudyoPlanParametresi, kmStudyoResimParametresi, kmSurumGovdesi, kmBalonCevabi, kmBalonYeriGovdesi, kmStudyoBalonParametresi,
 } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
@@ -423,6 +423,17 @@ export const uclar: Uc[] = [
     cevap: kmResimCevabi,
     isle: async ({ db, kullanici, parametre, govde }) =>
       ({ resim: await studyo.balonPlaniYaz(db, kullanici.id, parametre.resimId, govde.surum, govde.balonlar) }),
+  }),
+  // 3693: balon grupları ve operasyon ataması; planı yazan işlemle aynı yetki.
+  uc({
+    yontem: 'POST',
+    yol: '/kalite-merkezi/studyo/resimler/:resimId/gruplar',
+    yetki: 'kalite-merkezi.onayla',
+    tekrarKorumali: true,
+    parametre: kmStudyoResimParametresi,
+    govde: kmGruplarGovdesi,
+    cevap: kmResimCevabi,
+    isle: async ({ db, kullanici, parametre, govde }) => ({ resim: await studyo.gruplariYaz(db, kullanici.id, parametre.resimId, govde) }),
   }),
   // Balonun yeri planı yeniden yazmadan değişir (913 a); planı yazan işlemle aynı yetki.
   uc({
