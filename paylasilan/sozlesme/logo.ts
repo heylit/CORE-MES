@@ -89,6 +89,8 @@ export const logoHazirlikCevabi = z.object({
   yardimci: logoYardimciSurumu.nullable().optional(),
   // 3698: yardımcının son bağlantı hatası; yoksa null. Alan sonradan eklendi.
   baglantiHatasi: logoYardimciBaglantiHatasi.nullable().optional(),
+  // 3698: son 15 dakikada Logo'ya yazmadan 503 geldiyse o hata ("Logo'ya yazılamıyor"); okumaların çalışması bunu gizlemez. Alan sonradan eklendi.
+  yazilamiyor: logoYardimciBaglantiHatasi.nullable().optional(),
 });
 
 export const BAGLANTI_KONTROL_SONUCLARI = ['tamam', 'hata', 'atlandi'] as const;

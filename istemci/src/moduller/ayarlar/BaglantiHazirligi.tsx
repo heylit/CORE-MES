@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { BaglantiAkisDurumu, LogoHazirlikCevabi, LogoKontrolCevabi, LogoYardimciSurumu } from '#paylasilan/sozlesme/logo.ts';
-import { baglantiHatasiOzeti } from '#paylasilan/logo-baglanti-metni.ts';
+import { baglantiHatasiOzeti, yazilamiyorOzeti } from '#paylasilan/logo-baglanti-metni.ts';
 import type { SmartesHazirlikCevabi, SmartesKontrolCevabi } from '#paylasilan/sozlesme/smartes.ts';
 import { Dugme, DurumKutusu, Kart, Rozet, Simge, type RozetTonu } from '../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
@@ -179,14 +179,14 @@ function LogoBolumu() {
         ['Köprü anahtarı', d.ortam.anahtarTanimli ? 'Tanımlı' : 'Tanımlı değil (TMIV2_LOGO_KOPRU_ANAHTARI)'],
         ['Yardımcı sürümü', yardimciSurumMetni(d.yardimci ?? null)],
       ]}
-      uyari={d.baglantiHatasi ? `Logo oturumu açılamadı, son hata ${baglantiHatasiOzeti(d.baglantiHatasi)}` : null}
+      uyari={d.yazilamiyor ? yazilamiyorOzeti(d.yazilamiyor) : d.baglantiHatasi ? `Logo oturumu açılamadı, son hata ${baglantiHatasiOzeti(d.baglantiHatasi)}` : null}
       ayarlar={d.ayarlar.map((a) => [a.baslik, a.acik] as const)}
       gruplar={[
         { baslik: 'CORE → Logo', simge: 'upload', akislar: akis('tmi-logo') },
         { baslik: 'Logo → CORE', simge: 'download', akislar: akis('logo-tmi') },
       ]}
       kontrol={{ veri: k.data, yukleniyor: k.isFetching, hata: k.isError ? k.error : null, dene: () => { void k.refetch().then(() => h.refetch()); } }}
-      not="Deneme yalnız okur: ambar listesi, deneme malzemesinin “var mı” kaydı ve birim seti listesi. Logo’ya yazma isteği gitmez. Firma ve dönem köprünün kendi ayarındadır."
+      not="Deneme yalnız okur: ambar listesi, deneme malzemesinin “var mı” kaydı, birim seti listesi ve Logo oturumu (açma denemesi). Logo’ya yazma isteği gitmez. Firma ve dönem köprünün kendi ayarındadır."
     />
   );
 }

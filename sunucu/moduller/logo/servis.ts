@@ -10,7 +10,8 @@ import { modulAyariDegistir, sistemAyariOku } from '../ayarlar/disari.ts';
 import { firmaOzeti, firmaOzetleri, tumFirmalar } from '../musteri-tedarikci/disari.ts';
 import { logoBirimSetiKullaniliyorMu, logoKartDurumlari, logoKayitNolari, logoyaGidecekMalzemeler, malzemeLogoSonucu } from '../malzemeler/disari.ts';
 import type { LogoyaGidecekMalzeme, MalzemeLogoSonucu } from '../malzemeler/disari.ts';
-import { sonBaglantiHatasi } from './yardimci-baglanti.ts';
+import { sonBaglantiHatasi, yazmaUyarisi } from './yardimci-baglanti.ts';
+import { OTURUM_ADIMI_ADI, OTURUM_DENEME_YOLU, oturumuDene } from './oturum-denemesi.ts';
 import { yardimciSurumu, yardimciSurumunuSor } from './yardimci-surumu.ts';
 import type { KopruIstemcisi, SatirliSonuc } from './kopru.ts';
 import {
@@ -1868,6 +1869,7 @@ export async function hazirlik(db: Db, kopru: KopruIstemcisi | null, ortam: Logo
     sonBirimSetiOkuma: okuma?.sonOkuma ?? null,
     yardimci: yardimciSurumu(),
     baglantiHatasi: sonBaglantiHatasi(),
+    yazilamiyor: yazmaUyarisi(),
   };
 }
 
@@ -1877,7 +1879,7 @@ export async function kontrol(kopru: KopruIstemcisi | null, saat: () => Date = (
   if (kopru === null) {
     return {
       zaman, ulasildi: false,
-      adimlar: LOGO_KONTROL_ADIMLARI.map((a) => ({ ...a, sonuc: 'atlandi' as const, sureMs: null, ileti: 'TMIV2_LOGO_KOPRU_ADRESI ve TMIV2_LOGO_KOPRU_ANAHTARI tanımlı değil; istek atılmadı.' })),
+      adimlar: [...LOGO_KONTROL_ADIMLARI, { ad: OTURUM_ADIMI_ADI, yol: OTURUM_DENEME_YOLU }].map((a) => ({ ...a, sonuc: 'atlandi' as const, sureMs: null, ileti: 'TMIV2_LOGO_KOPRU_ADRESI ve TMIV2_LOGO_KOPRU_ANAHTARI tanımlı değil; istek atılmadı.' })),
     };
   }
   const adimlar: LogoKontrolCevabi['adimlar'] = [];
@@ -1894,6 +1896,15 @@ export async function kontrol(kopru: KopruIstemcisi | null, saat: () => Date = (
   }
   // 3314: canlı kontrol sürümü de sorar; sonuç hazırlık ve bağlantı izleme ekranında görünür.
   if (adimlar.some((a) => a.sonuc === 'tamam')) await yardimciSurumunuSor(kopru, saat);
+  // 3698: yardımcıya ulaşıldıysa Logo oturumu ayrı adım olarak denenir (okumalar SQL'le yapıldığı için öteki adımlar oturumu göstermez).
+  // "ulasildi" yardımcıya ulaşıldığını söyler; oturum kapalıyken de true kalır, adım "hata" olur.
+  const oturumBas = Date.now();
+  if (devam) {
+    const o = await oturumuDene(kopru, saat);
+    adimlar.push({ ad: OTURUM_ADIMI_ADI, yol: OTURUM_DENEME_YOLU, sonuc: o.durum === 'acik' ? 'tamam' : o.durum === 'kapali' ? 'hata' : 'atlandi', sureMs: Date.now() - oturumBas, ileti: o.ileti });
+  } else {
+    adimlar.push({ ad: OTURUM_ADIMI_ADI, yol: OTURUM_DENEME_YOLU, sonuc: 'atlandi', sureMs: null, ileti: 'Önceki adım başarısız; istek atılmadı.' });
+  }
   return { zaman, ulasildi: adimlar.some((a) => a.sonuc === 'tamam'), adimlar };
 }
 

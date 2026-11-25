@@ -56,6 +56,7 @@ oturum açılınca kendiliğinden başlaması için kullanıcının Görev Zaman
 
 - Logo oturumu ilk istekte açılır ve açık kalır (tek oturum, tek iş parçacığı; istekler sırayla işlenir).
 - Bağlantı kurulamazsa 5 dakika yeniden denenmez (Logo lisansı kapanan oturumu birkaç dakika tutar); bu sürede istekler 503 alır ve gönderilmemiş sayılır. 503 gövdesi `{"neden":"baglanamadi","adim","kod","ileti","beklemeSn"}` taşır (kalan bekleme saniye olarak); hata, kullanıcı adı ve parola olmadan, 5 dakikalık pencere başına bir günlük satırı yazar (adım, Logo kodu, metin). TMI bu cevabı "gönderilmedi, bekleme sonrası yeniden denenecek" sayar; 500, 408, 429 ve zaman aşımı "sonucu bilinmiyor" kalır.
+- `GET /api/session/check` (salt okunur): Logo oturumunu dener, Logo'ya yazmaz ve veri nesnesi açmaz. Açıksa `{"oturum":"acik","logoSurumu":"..."}`; açılamazsa 503 neden gövdesi (`adim`, `kod`, `ileti`, `beklemeSn`). Bekleme süresindeyken yeniden bağlanmayı denemez (lisans yuvasını zorlamamak için), son hatayı ve kalan süreyi döner; oturum kapalı ve bekleme yoksa bir kez bağlanır. `GET /api/version` yalnız yardımcının ayakta olduğunu gösterir, oturumu göstermez (okumalar SQL'dir). Eski yardımcıda uç yoktur (404); CORE "yardımcı eski, oturum denenemedi" yazar. Gerçek Logo'da denenmedi (doğrulanmadı).
 - Yazma sırasında oturum koparsa cevap 500'dür; TMI bunu "sonucu bilinmiyor" sayar ve önce "var mı" ile okur.
 - Tarayıcıdan gelen istek (`Origin` başlığı) ve yabancı `Host` reddedilir. Günlüğe istek gövdesi, parola ve anahtar yazılmaz.
 

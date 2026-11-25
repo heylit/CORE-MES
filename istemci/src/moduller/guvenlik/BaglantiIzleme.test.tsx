@@ -280,6 +280,26 @@ describe('Bağlantı izleme (3313)', () => {
     }
   });
 
+  it('3698 yazmadan 503 gelmişse ekranın üstünde "Logo\'ya yazılamıyor" uyarısı ve son neden görünür; yoksa görünmez', async () => {
+    logoHazirlik.yazilamiyor = {
+      zaman: '2026-11-25T09:14:00.000Z', adim: 'UserLogin', kod: -93, ileti: '[code=-93] Kullanıcı sayısı limiti aşılmıştır',
+      aciklama: 'Logo lisansı dolu ya da oturum başka yerde açık.', yenidenDeneme: '2026-11-25T09:19:00.000Z',
+    };
+    try {
+      sunucuKur();
+      cizdir(yalnizGoren);
+      const uyari = await screen.findByText(/Logo'ya yazılamıyor: oturum açılamıyor\. Son neden: .*kod -93/);
+      expect(uyari.getAttribute('class')).toBeNull();
+      cleanup();
+      delete logoHazirlik.yazilamiyor;
+      cizdir(yalnizGoren);
+      await screen.findByRole('region', { name: 'Logo yardımcısı' });
+      expect(screen.queryByText(/Logo'ya yazılamıyor/)).toBeNull();
+    } finally {
+      delete logoHazirlik.yazilamiyor;
+    }
+  });
+
   it('akışlar: okunmamış gelen akış "Henüz okunmadı", sıfır uydurulmaz', async () => {
     sunucuKur();
     cizdir(yalnizGoren);

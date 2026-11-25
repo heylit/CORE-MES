@@ -531,6 +531,11 @@ namespace LogoYardimcisi
 
         public string DisaAktar(int nesne, int kayit, string kok) { return "<" + kok + "/>"; }
         public List<string> AlanDokumu(int nesne, int kayit) { return new List<string>(); }
+        public string OturumDene()
+        {
+            if (BaglantiYok) throw new LogoBaglanamadi("Logo UserLogin false: [code=-93] Kullanıcı sayısı limiti aşılmıştır", "UserLogin", -93, "[code=-93] Kullanıcı sayısı limiti aşılmıştır");
+            return "9.9";
+        }
 
         /* ---------------- ILogoOkuma ---------------- */
 

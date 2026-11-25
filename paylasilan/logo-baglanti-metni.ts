@@ -25,6 +25,10 @@ export function baglantiHatasiMetni(h: LogoYardimciBaglantiHatasi, simdi: Date =
   };
 }
 
+// Son 15 dakikada yazmadan 503 gelmişse hazırlık kutusunda ve bağlantı izlemenin üstünde görünen uyarı. Okumaların çalışması bunu gizlemez.
+export const yazilamiyorOzeti = (h: LogoYardimciBaglantiHatasi, simdi: Date = new Date()): string =>
+  `Logo'ya yazılamıyor: oturum açılamıyor. Son neden: ${baglantiHatasiOzeti(h, simdi)}`;
+
 export const baglantiHatasiOzeti = (h: LogoYardimciBaglantiHatasi, simdi: Date = new Date()): string => {
   const m = baglantiHatasiMetni(h, simdi);
   const ek = h.aciklama !== null && h.ileti !== null ? ` Logo: ${h.ileti}` : '';

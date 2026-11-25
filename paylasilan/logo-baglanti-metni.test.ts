@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { baglantiHatasiMetni, baglantiHatasiOzeti } from './logo-baglanti-metni.ts';
+import { baglantiHatasiMetni, baglantiHatasiOzeti, yazilamiyorOzeti } from './logo-baglanti-metni.ts';
 import type { LogoYardimciBaglantiHatasi } from './sozlesme/logo.ts';
 
 const hata: LogoYardimciBaglantiHatasi = {
@@ -26,5 +26,10 @@ describe('Logo bağlantı hatası metni (3698)', () => {
   test('yeniden deneme saati geçtiyse işaretlenir', () => {
     assert.equal(baglantiHatasiMetni(hata, new Date('2026-11-25T09:20:00.000Z')).gecti, true);
     assert.match(baglantiHatasiOzeti(hata, new Date('2026-11-25T09:20:00.000Z')), /zamanı geçti/);
+  });
+  test('yazılamıyor uyarısı "Logo\'ya yazılamıyor: oturum açılamıyor" ile başlar ve son nedeni taşır', () => {
+    const m = yazilamiyorOzeti(hata, new Date('2026-11-25T09:15:00.000Z'));
+    assert.ok(m.startsWith("Logo'ya yazılamıyor: oturum açılamıyor. Son neden: 2026-11-25 12:14 · UserLogin · kod -93"));
+    assert.match(m, /Yeniden deneme: 12:19/);
   });
 });

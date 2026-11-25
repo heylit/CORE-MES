@@ -91,8 +91,8 @@ describe('LOGO-H2/H3 canlı kontrol yalnız okur', () => {
     try {
       const r = await kontrol(kopruIstemcisiKur({ adres: k.adres, anahtar: k.anahtar }, { sureMs: 5000 }), () => new Date('2026-10-15T10:00:00Z'));
       assert.equal(r.ulasildi, true);
-      assert.deepEqual(r.adimlar.map((a) => a.sonuc), ['tamam', 'tamam', 'tamam']);
-      assert.deepEqual(k.istekler.map((i) => `${i.yontem} ${i.yol}`), [...LOGO_KONTROL_ADIMLARI.map((a) => `GET ${a.yol}`), 'GET /api/version'], 'sürüm sorusu da yalnız okur');
+      assert.deepEqual(r.adimlar.map((a) => a.sonuc), ['tamam', 'tamam', 'tamam', 'tamam']);
+      assert.deepEqual(k.istekler.map((i) => `${i.yontem} ${i.yol}`), [...LOGO_KONTROL_ADIMLARI.map((a) => `GET ${a.yol}`), 'GET /api/version', 'GET /api/session/check'], 'sürüm ve oturum sorusu da yalnız okur');
       assert.ok(k.istekler.every((i) => i.anahtar === k.anahtar));
       assert.equal(k.acilan.size + k.siparisAcilan.size + k.hizmetAcilan.size, 0, 'kontrol Logo\'da kayıt açmaz');
     } finally {
@@ -105,7 +105,7 @@ describe('LOGO-H2/H3 canlı kontrol yalnız okur', () => {
     try {
       const r = await kontrol(kopruIstemcisiKur({ adres: k.adres, anahtar: 'yanlis-anahtar' }, { sureMs: 5000 }));
       assert.equal(r.ulasildi, false);
-      assert.deepEqual(r.adimlar.map((a) => a.sonuc), ['hata', 'atlandi', 'atlandi']);
+      assert.deepEqual(r.adimlar.map((a) => a.sonuc), ['hata', 'atlandi', 'atlandi', 'atlandi']);
       assert.match(r.adimlar[0]?.ileti ?? '', /anahtarı reddedildi/);
       assert.equal(k.istekler.length, 1);
     } finally {
@@ -119,7 +119,7 @@ describe('LOGO-H2/H3 canlı kontrol yalnız okur', () => {
     await k.kapat();
     const r = await kontrol(kopruIstemcisiKur({ adres, anahtar: 'gizli-anahtar-123' }, { sureMs: 2000 }));
     assert.equal(r.ulasildi, false);
-    assert.deepEqual(r.adimlar.map((a) => a.sonuc), ['hata', 'atlandi', 'atlandi']);
+    assert.deepEqual(r.adimlar.map((a) => a.sonuc), ['hata', 'atlandi', 'atlandi', 'atlandi']);
     const metin = JSON.stringify(r);
     assert.ok(!metin.includes(adres) && !metin.includes('gizli-anahtar-123'), metin);
   });

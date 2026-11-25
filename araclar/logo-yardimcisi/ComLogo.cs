@@ -20,6 +20,8 @@ namespace LogoYardimcisi
         dynamic app;
         DateTime? sonHata;
         LogoBaglanamadi sonBaglanamadi;
+        int? tabanKod;
+        string tabanMetin;
 
         public ComLogo(Ayar ayar) : this(ayar, null, null) { }
 
@@ -109,7 +111,7 @@ namespace LogoYardimcisi
         {
             if (string.IsNullOrEmpty(metin)) return "";
             foreach (var gizli in new[] { ayar.LogoKullanici, ayar.LogoParola })
-                if (!string.IsNullOrEmpty(gizli)) metin = metin.Replace(gizli, "***");
+                if (!string.IsNullOrEmpty(gizli)) metin = Regex.Replace(metin, Regex.Escape(gizli), "***", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             return metin;
         }
 
@@ -138,6 +140,11 @@ namespace LogoYardimcisi
             if (o != null && Marshal.IsComObject(o)) Marshal.FinalReleaseComObject(o);
         }
 
+        public string OturumDene()
+        {
+            return Cagir<string>(() => Convert.ToString(app.Version(), CultureInfo.InvariantCulture));
+        }
+
         public void Dispose()
         {
             Kapat(app);
@@ -148,6 +155,9 @@ namespace LogoYardimcisi
         T Cagir<T>(Func<T> is_)
         {
             Bagla();
+            // Uygulama düzeyindeki son hata (GetLastError) önceki işlemden kalmış olabilir; işlemin başındaki değer saklanır, ret iletisine yalnız değiştiyse girer.
+            tabanKod = SonKod((object)app);
+            tabanMetin = SonHata((object)app);
             try { return is_(); }
             catch (COMException e)
             {
@@ -181,8 +191,10 @@ namespace LogoYardimcisi
             try { string m3 = Convert.ToString(d.ErrorDetail); ekle(m3); } catch (Exception) { }
             try { string m4 = Convert.ToString(d.DBErrorDesc); ekle(m4); } catch (Exception) { }
             int? uygulamaKodu = SonKod((object)app);
-            string uygulamaMetni = Gizle(SonHata((object)app)).Trim();
-            if (uygulamaKodu != null && uygulamaKodu.Value != 0) parcalar.Add("uygulama hata kodu " + uygulamaKodu.Value.ToString(CultureInfo.InvariantCulture));
+            string ham = SonHata((object)app);
+            bool bu = uygulamaKodu != tabanKod || ham != tabanMetin;
+            string uygulamaMetni = bu ? Gizle(ham).Trim() : "";
+            if (bu && uygulamaKodu != null && uygulamaKodu.Value != 0) parcalar.Add("uygulama hata kodu " + uygulamaKodu.Value.ToString(CultureInfo.InvariantCulture));
             ekle(uygulamaMetni);
             var h = new LogoHatasi(kod, string.Join(" | ", parcalar.ToArray()));
             try

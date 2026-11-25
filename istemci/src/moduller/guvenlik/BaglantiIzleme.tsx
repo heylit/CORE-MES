@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { LogoBelirsizKontrolCevabi, LogoGidenIzlemeCevabi, LogoHazirlikCevabi, LogoKontrolCevabi, LogoKontrolluGonderCevabi, LogoYardimciBaglantiHatasi, LogoYardimciSurumu, LogoYenidenGonderCevabi } from '#paylasilan/sozlesme/logo.ts';
-import { baglantiHatasiOzeti } from '#paylasilan/logo-baglanti-metni.ts';
+import { baglantiHatasiOzeti, yazilamiyorOzeti } from '#paylasilan/logo-baglanti-metni.ts';
 import type { SmartesGidenIzlemeCevabi, SmartesHazirlikCevabi, SmartesYenidenGonderCevabi } from '#paylasilan/sozlesme/smartes.ts';
 import { Dugme, DurumKutusu, IsaretKutusu, Pencere, Rozet, Simge, Tablo, useBildirim, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
@@ -86,6 +86,7 @@ export function BaglantiIzleme() {
           {gonderir && gruplar.length > 0 && <Dugme simge="next" onClick={() => topluYaz(true)}>Düzelttiklerimi yeniden gönder…</Dugme>}
         </div>
       </div>
+      {logoHazirlik.data?.yazilamiyor && <DurumKutusu durum="hata" mesaj={yazilamiyorOzeti(logoHazirlik.data.yazilamiyor)} />}
       <div className="tc-izleme-kartlar">
         <BaglantiKarti ad="Logo yardımcısı" simge="laptop" baglanti={logoHazirlik.data?.baglanti} kontrolUcu="/logo/hazirlik/kontrol"
           surum={logoHazirlik.data?.yardimci ?? null} baglantiHatasi={logoHazirlik.data?.baglantiHatasi ?? null} kontrolSonrasi={() => void logoHazirlik.refetch()} />
