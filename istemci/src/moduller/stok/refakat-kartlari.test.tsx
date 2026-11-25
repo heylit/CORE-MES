@@ -11,7 +11,7 @@ const KART: RefakatPartisi = {
   partiId: 40, lotNo: 'LT-000040', tedarikciPartiNo: null, dokumNo: null, sertifikaNo: null, verilen: '10', adet: null, durum: 'acik', surum: 1, kayitZamani: '2026-10-22T10:00:00+03:00', lotaBaglanmaZamani: null,
   ust: null, birlestigi: null, birlesmeZamani: null,
 };
-const satir = (r: RefakatPartisi, urun = { kod: 'P-1', ad: 'Deneme mil' }): RefakatKartlariSatiri => ({ refakat: r, urun, adet: 10, teslim: '2026-10-30', adimSayisi: 3 });
+const satir = (r: RefakatPartisi, urun = { kod: 'P-1', ad: 'Deneme mil' }): RefakatKartlariSatiri => ({ refakat: r, emir: 'tamam', urun, adet: 10, teslim: '2026-10-30', adimSayisi: 3 });
 const LISTE = [
   satir(KART),
   satir({ ...KART, id: 13, qr: 'RP:13', etiket: 'UE-000002-P1', uretimEmriId: 2, emirNo: 'UE-000002', lotNo: null, partiId: null, verilen: '0' }, { kod: 'P-2', ad: 'Deneme flanş' }),
@@ -171,5 +171,58 @@ describe('Refakat kartları sayfası (kart #708)', () => {
     });
     ac('/stok/refakat-kartlari?kart=12');
     expect(await screen.findByRole('dialog', { name: 'Refakat kartı UE-000001-P1' })).toBeTruthy();
+  });
+  it('iptal emrin kartı "Emir iptal" rozetiyle listelenir; kart penceresi basılamaz, iptal edilebilir ve basım verisi istenmez; okunamayan emir yalnız kendi satırını boşaltır (3716)', async () => {
+    const iptalKarti = { ...KART, id: 15, qr: 'RP:15', etiket: 'UE-000003-P1', uretimEmriId: 3, emirNo: 'UE-000003', verilen: '0' };
+    const yetim = { ...KART, id: 16, qr: 'RP:16', etiket: 'UE-000004-P1', uretimEmriId: 4, emirNo: null, verilen: '0' };
+    const istekler = sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.etiket-merkezi', 'stok.transfer'] }, {
+      'GET /stok/refakat-kartlari': () => json(200, { kartlar: [
+        satir(KART),
+        { ...satir(iptalKarti), emir: 'iptal' },
+        { refakat: yetim, emir: 'okunamadi', urun: null, adet: null, teslim: null, adimSayisi: null },
+      ], sinirda: false }),
+    });
+    ac('/stok/refakat-kartlari');
+    const liste = await screen.findByRole('region', { name: 'Kartlar' });
+    const satirlar = within(liste).getAllByRole('row').slice(1).map((s) => s.textContent);
+    expect(satirlar[1]).toContain('Emir iptal');
+    expect(satirlar[1]).toContain('Açık');
+    expect(satirlar[2]).toContain('Okunamadı');
+    fireEvent.click(within(liste).getAllByRole('row')[2]!.querySelector('td[data-baslik="Ürün"]')!);
+    const pencere = await screen.findByRole('dialog', { name: 'Refakat kartı UE-000003-P1' });
+    expect(within(pencere).getByText(/Emir iptal edildi; kart basılmaz/)).toBeTruthy();
+    expect(within(pencere).getByRole('button', { name: /Etiket Merkezi/ }).getAttribute('aria-describedby')).toBe('kapali-emir-15');
+    expect((within(pencere).getByRole('button', { name: /Etiket Merkezi/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect((within(pencere).getByRole('button', { name: 'Kartı iptal et' }) as HTMLButtonElement).disabled).toBe(false);
+    expect(istekler.some((i) => i.yol.includes('/refakat-partileri/15/kart'))).toBe(false);
+  });
+  it('okunamayan emirde ürün hücresi "—", kart iptali ek onay ister, yeniden dene vardır (3716)', async () => {
+    const yetim = { ...KART, id: 16, qr: 'RP:16', etiket: 'UE-000004-P1', uretimEmriId: 4, emirNo: null, verilen: '0' };
+    sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'stok.transfer'] }, {
+      'GET /stok/refakat-kartlari': () => json(200, { kartlar: [{ refakat: yetim, emir: 'okunamadi', urun: null, adet: null, teslim: null, adimSayisi: null }], sinirda: false }),
+    });
+    ac('/stok/refakat-kartlari');
+    const liste = await screen.findByRole('region', { name: 'Kartlar' });
+    const satir1 = within(liste).getAllByRole('row')[1]!;
+    expect(satir1.querySelector('td[data-baslik="Ürün"]')!.textContent).toBe('—');
+    fireEvent.click(satir1.querySelector('td[data-baslik="Ürün"]')!);
+    const pencere = await screen.findByRole('dialog', { name: 'Refakat kartı UE-000004-P1' });
+    expect(within(pencere).getByRole('button', { name: 'Yeniden dene' })).toBeTruthy();
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kartı iptal et' }));
+    expect(within(pencere).getByRole('alert').textContent).toContain('doğrulanamadı');
+    expect(within(pencere).getByRole('button', { name: 'Evet, kartı iptal et' })).toBeTruthy();
+  });
+  it('iptal ya da okunamayan emirde seçili kartın akışı istenmez; not görünür, hata kutusu ve ikinci "Yeniden dene" yok; başlık bilinmeyeni birleştirmez (3716)', async () => {
+    const yetim = { ...KART, id: 16, qr: 'RP:16', etiket: 'UE-000004-P1', uretimEmriId: 4, emirNo: null, verilen: '0' };
+    const istekler = sunucuKur({ ...OKUYUCU, islemler: ['sayfa.stok', 'sayfa.akis'] }, {
+      'GET /stok/refakat-kartlari': () => json(200, { kartlar: [{ refakat: yetim, emir: 'okunamadi', urun: null, adet: null, teslim: null, adimSayisi: null }], sinirda: false }),
+      'GET /akis/refakat-kartlari': () => json(200, { kartlar: [] }),
+    });
+    ac('/stok/refakat-kartlari');
+    const panel = await screen.findByLabelText('Kart ayrıntısı');
+    expect(within(panel).getByText('Emir bilgisi okunamadığı için akış gösterilmez.')).toBeTruthy();
+    expect(within(panel).getAllByRole('button', { name: 'Yeniden dene' })).toHaveLength(1);
+    expect(panel.querySelector('.tc-refakat-soluk')!.textContent).toBe('Emir okunamadı · lot LT-000040');
+    expect(istekler.some((i) => i.yol.startsWith('/akis/refakat-kartlari/16'))).toBe(false);
   });
 });

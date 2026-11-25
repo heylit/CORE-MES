@@ -1150,8 +1150,12 @@ export const REFAKAT_KARTLARI_SINIRI = 200;
 export const refakatKartlariSorgusu = z.object({ durum: z.enum(['acik', 'tumu']).prefault('acik') });
 export type RefakatKartlariSorgusu = z.input<typeof refakatKartlariSorgusu>;
 export const refakatKartlariCevabi = z.object({
+  // 3716: liste basım kuralını uygulamaz. `emir`: 'tamam' okundu, 'iptal' emir iptal (kart yazdırılamaz, iptal edilebilir), 'okunamadi' emir okunamadı
+  // (yalnız o satır; ürün, adet, termin ve adım sayısı null).
   kartlar: z.array(z.object({
-    refakat: refakatPartisi, urun: refakatKartiCevabi.shape.urun, adet: refakatKartiCevabi.shape.adet, teslim: refakatKartiCevabi.shape.teslim, adimSayisi: z.number().int(),
+    refakat: refakatPartisi, emir: z.enum(['tamam', 'iptal', 'okunamadi']),
+    urun: refakatKartiCevabi.shape.urun.nullable(), adet: refakatKartiCevabi.shape.adet.nullable(), teslim: refakatKartiCevabi.shape.teslim,
+    adimSayisi: z.number().int().nullable(),
   })),
   sinirda: z.boolean(),
 });

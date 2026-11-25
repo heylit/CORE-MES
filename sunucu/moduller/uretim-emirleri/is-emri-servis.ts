@@ -1,7 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
-import { bulunamadi, cakisma, dogrulama, eskiSurum, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
+import { bulunamadi, cakisma, dogrulama, eskiSurum, gecersiz, UygulamaHatasi, yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
@@ -2292,6 +2292,18 @@ async function refakatRevizyonu(db: Db, malzemeNo: number | null): Promise<strin
   if (resim === undefined) return null;
   if (resim.taslak !== true) return resim.revKodu ?? null;
   return (await malzemeResimAnahtarlari(db, [malzemeNo])).get(malzemeNo)?.revizyon ?? null;
+}
+
+// Refakat kartları listesi (3716): basım kuralını uygulamaz; iptal emir de okunur. Emir okunamazsa (yok, arşivde ürünsüz) null döner, liste düşmez.
+export interface RefakatEmirOzeti { urun: { kod: string; ad: string }; adet: number; teslim: string | null; adimSayisi: number; iptal: boolean }
+export async function refakatEmirOzeti(db: Db, id: number): Promise<RefakatEmirOzeti | null> {
+  try {
+    const e = await adimliAyrinti(db, id);
+    return { urun: { kod: e.urun.kod, ad: e.urun.ad }, adet: e.adet, teslim: e.teslim, adimSayisi: e.isEmirleri.length, iptal: e.durum === 'iptal' };
+  } catch (h) {
+    if (h instanceof UygulamaHatasi) return null;
+    throw h;
+  }
 }
 
 // Refakat kartının verisi ayrıntıyla aynı kaynaktan gelir; alt partide üst emrin numarası da yazılır.

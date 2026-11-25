@@ -30,7 +30,7 @@ const DAGILIM_SIRASI: DagilimTuru[] = ['stok', 'yol', 'ayar', 'uretim', 'durus',
 const tonSinifi = (t: Ton): string => `tc-refakat-ton-${t}`;
 
 export const kartAramaMetni = (k: RefakatKartlariSatiri): string =>
-  kucuk([k.refakat.qr, k.refakat.etiket, k.refakat.emirNo, k.refakat.lotNo, k.urun.kod, k.urun.ad, k.refakat.malzemeKod].filter(Boolean).join(' '));
+  kucuk([k.refakat.qr, k.refakat.etiket, k.refakat.emirNo, k.refakat.lotNo, k.urun?.kod, k.urun?.ad, k.refakat.malzemeKod].filter(Boolean).join(' '));
 
 function Hap({ ton, children }: { ton: Ton; children: string }) {
   return <span className={`tc-refakat-hap ${tonSinifi(ton)}`}><span className="tc-refakat-nokta" aria-hidden="true" />{children}</span>;
@@ -38,7 +38,11 @@ function Hap({ ton, children }: { ton: Ton; children: string }) {
 
 function ListeDurumu({ k, ozet }: { k: RefakatKartlariSatiri; ozet: KartOzeti | undefined }) {
   const r = k.refakat;
-  if (r.durum === 'iptal') return <Rozet ton="pasif">İptal</Rozet>;
+  // 3716: emir rozeti kartın kendi durumunun yanında durur; kart zaten iptalse emir rozeti soluk (iş kalmadı).
+  const emirRozeti = k.emir === 'tamam' ? null : <Rozet ton={r.durum === 'iptal' ? 'pasif' : 'uyari'}>{k.emir === 'iptal' ? 'Emir iptal' : 'Okunamadı'}</Rozet>;
+  // İki rozet alt alta durur (dar liste panelinde ve 360'ta yan yana sığmaz).
+  if (r.durum === 'iptal') return <span className="tc-refakat-rozetler">{emirRozeti}<Rozet ton="pasif">İptal</Rozet></span>;
+  if (emirRozeti !== null) return <span className="tc-refakat-rozetler">{emirRozeti}<Rozet ton="tamam">Açık</Rozet></span>;
   if (r.birlestigi) return <Rozet ton="pasif">{r.birlestigi.etiket} kartına birleşti</Rozet>;
   if (r.lotNo === null) return <Rozet ton="uyari">Lot bekliyor</Rozet>;
   if (ozet === undefined) return <Rozet ton="tamam">Açık</Rozet>;
@@ -59,11 +63,11 @@ function KartListesi({ kartlar, ozetler, secili, sec, durum, setDurum, kume, set
     { anahtar: 'kart', baslik: 'Kart', sabit: 'sol', csv: (k) => k.refakat.etiket, hucre: (k) => (
       <Dugme aria-pressed={secili === k.refakat.id} onClick={(o) => { o.stopPropagation(); sec(k.refakat.id); }}><span className="mono">{k.refakat.etiket}</span></Dugme>
     ) },
-    { anahtar: 'durum', kartRozet: true, baslik: 'Şimdi', csv: false, hucre: (k) => <ListeDurumu k={k} ozet={ozetler.get(k.refakat.id)} /> },
+    { anahtar: 'simdi', kartta: true, baslik: 'Şimdi', csv: false, hucre: (k) => <ListeDurumu k={k} ozet={ozetler.get(k.refakat.id)} /> },
     { anahtar: 'sira', baslik: 'Sıradaki', mono: true, hucre: (k) => { const o = ozetler.get(k.refakat.id); return (o === undefined ? null : siradakiMetni(o)) ?? '—'; } },
-    { anahtar: 'urun', kartta: true, baslik: 'Ürün', kes: true, hucre: (k) => k.urun.ad },
+    { anahtar: 'urun', kartta: true, baslik: 'Ürün', kes: true, hucre: (k) => k.urun?.ad ?? '—' },
     { anahtar: 'emir', kartta: true, baslik: 'Üretim emri', mono: true, hucre: (k) => k.refakat.emirNo ?? '—' },
-    { anahtar: 'son', baslik: 'Son an', kes: true, hucre: (k) => { const o = ozetler.get(k.refakat.id); return o ? sonAnMetni(o) : `${k.adimSayisi} adım · ${k.refakat.lotNo ?? 'lotsuz'}`; } },
+    { anahtar: 'son', baslik: 'Son an', kes: true, hucre: (k) => { const o = ozetler.get(k.refakat.id); return o ? sonAnMetni(o) : `${k.adimSayisi === null ? '—' : `${String(k.adimSayisi)} adım`} · ${k.refakat.lotNo ?? 'lotsuz'}`; } },
   ];
   return (
     <section className="tc-refakat-panel tc-refakat-liste" aria-label="Kartlar">
@@ -334,9 +338,10 @@ export function KartAkisi({ k, sec }: { k: RefakatKartlariSatiri; sec: (id: numb
   const [gorunum, setGorunum] = useState<Gorunum>('akis');
   const [analiz, setAnaliz] = useState(false);
   const [iz, setIz] = useState(false);
-  const q = useQuery({ queryKey: [...anahtarlar.hepsi, 'kart-akisi', id], queryFn: () => api.get<KartAkisiCevabi>(`/akis/refakat-kartlari/${String(id)}`) });
+  // 3716: emri iptal ya da okunamayan kartın akışı hiç istenmez (sunucu hata verir; yeniden denemek işe yaramaz).
+  const q = useQuery({ queryKey: [...anahtarlar.hepsi, 'kart-akisi', id], queryFn: () => api.get<KartAkisiCevabi>(`/akis/refakat-kartlari/${String(id)}`), enabled: k.emir === 'tamam' });
   const d = q.data;
-  const liste = useMemo(() => (d ? asamalar(d, { urun: k.urun.ad }) : []), [d, k.urun.ad]);
+  const liste = useMemo(() => (d ? asamalar(d, { urun: k.urun?.ad ?? '' }) : []), [d, k.urun?.ad]);
   const adet = d ? kartAdedi(d) : null;
   return (
     <article className="tc-refakat-panel tc-refakat-ayrinti" aria-label="Kart ayrıntısı">
@@ -344,23 +349,27 @@ export function KartAkisi({ k, sec }: { k: RefakatKartlariSatiri; sec: (id: numb
         <div className="tc-refakat-kimlik">
           <h2 className="mono">{k.refakat.etiket}</h2>
           <div className="tc-refakat-soluk">
-            {k.urun.ad} · emir {k.adet} adet{adet !== null && `, bu kart ${String(adet)} parça`} · Emir <span className="mono">{k.refakat.emirNo ?? '—'}</span> · lot <span className="mono">{k.refakat.lotNo ?? '—'}</span>
+            {[k.urun?.ad ?? (k.emir === 'okunamadi' ? 'Emir okunamadı' : null), k.adet === null ? null : `emir ${String(k.adet)} adet${adet !== null ? `, bu kart ${String(adet)} parça` : ''}`].filter((x) => x !== null).join(' · ')}
+            {k.refakat.emirNo !== null && <> · Emir <span className="mono">{k.refakat.emirNo}</span></>}
+            {k.refakat.lotNo !== null && <> · lot <span className="mono">{k.refakat.lotNo}</span></>}
           </div>
         </div>
         <Qr metin={k.refakat.qr} boyut={72} />
       </div>
       <div className="tc-refakat-bolum">
-        <KartIslemleri id={id} sec={sec} />
+        <KartIslemleri id={id} sec={sec} {...(k.emir === 'tamam' ? {} : { kapaliEmir: { refakat: k.refakat, durum: k.emir } })} />
       </div>
-      {q.isPending && <DurumKutusu durum="yukleniyor" />}
-      {q.isError && <DurumKutusu durum="hata" mesaj={hataMetni(q.error)} yenile={() => void q.refetch()} />}
+      {k.emir === 'iptal' && <p className="tc-refakat-bolum tc-stok-not">Emir iptal edildi; akış gösterilmez.</p>}
+      {k.emir === 'okunamadi' && <p className="tc-refakat-bolum tc-stok-not">Emir bilgisi okunamadığı için akış gösterilmez.</p>}
+      {k.emir === 'tamam' && q.isPending && <DurumKutusu durum="yukleniyor" />}
+      {k.emir === 'tamam' && q.isError && <DurumKutusu durum="hata" mesaj={hataMetni(q.error)} yenile={() => void q.refetch()} />}
       {d && (
         <div className="tc-refakat-bolum">
           <RotaAdimlari liste={liste} />
         </div>
       )}
       <div className="tc-refakat-bolum tc-refakat-ac-kapa">
-        <Dugme simge="gantt" aria-expanded={analiz} onClick={() => setAnaliz(!analiz)}>Süre analizi</Dugme>
+        {k.emir === 'tamam' && <Dugme simge="gantt" aria-expanded={analiz} onClick={() => setAnaliz(!analiz)}>Süre analizi</Dugme>}
         <Dugme simge="list" aria-expanded={iz} onClick={() => setIz(!iz)}>Bağlı kartlar ve sevkler</Dugme>
       </div>
       {iz && <div className="tc-refakat-bolum"><RefakatIzi id={id} git={sec} /></div>}
@@ -371,7 +380,7 @@ export function KartAkisi({ k, sec }: { k: RefakatKartlariSatiri; sec: (id: numb
             <Sekmeler etiket="Görünüm" secili={gorunum} sec={setGorunum} sekmeler={[{ anahtar: 'akis', baslik: 'Akış', simge: 'route' }, { anahtar: 'tablo', baslik: 'Tablo', simge: 'grid' }]} />
           </div>
           <div className="tc-refakat-icerik">
-            {gorunum === 'akis' ? <AkisGorunumu liste={liste} /> : <TabloGorunumu d={d} liste={liste} urun={k.urun.ad} />}
+            {gorunum === 'akis' ? <AkisGorunumu liste={liste} /> : <TabloGorunumu d={d} liste={liste} urun={k.urun?.ad ?? ''} />}
             <p className="tc-refakat-soluk tc-refakat-kucuk">Süreler Akış Süresi hesabıdır, takvim saatiyle. Kartla sayılanlar ve kartın lotu esas alınır; adım olayları emrindir, emrin başka kartı varsa onun işi de görünebilir. Plan saatleri güncel canlı plandandır; taban, adımın ilk canlıya alındığı yerdir. Plan lead time, karta yüklemeden rotadaki son plan bitişinedir.</p>
           </div>
         </>
@@ -443,7 +452,10 @@ export function RefakatKartlari() {
           {akisOkur && seciliKart && <KartAkisi key={seciliKart.refakat.id} k={seciliKart} sec={sec} />}
         </div>
       )}
-      {pencere !== null && <RefakatKartPenceresi id={pencere} kapat={() => setPencere(null)} />}
+      {pencere !== null && (() => {
+        const p = (l.data?.kartlar ?? []).find((k) => k.refakat.id === pencere);
+        return <RefakatKartPenceresi id={pencere} kapat={() => setPencere(null)} {...(p === undefined || p.emir === 'tamam' ? {} : { kapaliEmir: { refakat: p.refakat, durum: p.emir } })} />;
+      })()}
     </section>
   );
 }
