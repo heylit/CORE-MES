@@ -57,3 +57,12 @@ describe('3688: özet ve yer tutucu', () => {
     expect(container.querySelectorAll('.tc-ay2-takip-hucre').length).toBe(12);
   });
 });
+
+describe('3688: not uzunluğu', () => {
+  it('on iki eksikte not üç adla sınırlı: kalanı sayıyla yazılır', () => {
+    const hepsi = (['cnc', 'cizim', 'yayin', 'rota', 'malzeme', 'takim-omru', 'takim-hazirla', 'makine', 'talimat', 'ek-madde', 'aparat', 'olcu-aleti'] as const).map((m) => satir(m, 'eksik'));
+    render(<HazirlikMatrisiSeridi satirlar={hepsi} />);
+    const g = screen.getByRole('group', { name: /12 eksik/ });
+    expect(g.textContent).toMatch(/Eksik: CNC · Çizim · Terminal \+9/);
+  });
+});

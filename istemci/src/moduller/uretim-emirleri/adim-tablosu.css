@@ -32,7 +32,7 @@
 .tc-at-bas { font-family: var(--font-mono); font-size: var(--yazi-s); white-space: nowrap; }
 .tc-at-durum { white-space: normal; }
 .tc-at-durum > * { margin-right: var(--b-1); vertical-align: middle; }
-.tc-at-durum .tc-rozet { display: inline-flex; align-items: center; gap: var(--b-1); white-space: normal; }
+.tc-at-durum .tc-rozet { display: inline-flex; align-items: center; gap: var(--b-1); white-space: nowrap; }
 .tc-at-smartes-dar { display: none; }
 .tc-at-satir[data-acik] > * { background: var(--panel2); }
 .tc-at-satir[data-acik] > th, .tc-at-satir[data-acik] > td { border-top-color: var(--edge2); }
@@ -56,6 +56,22 @@
 .tc-at-cip:focus-visible { outline: var(--cizgi-orta) solid var(--done); outline-offset: var(--cizgi); }
 .tc-at-fazla { color: var(--muted); font-size: var(--yazi-s); white-space: nowrap; }
 .tc-at-fazla-dar { display: none; }
+.tc-at-matris-kap { display: grid; gap: var(--b-1); justify-items: start; }
+.tc-at-matris { display: grid; grid-template-columns: repeat(6, var(--b-5)); gap: var(--b-1); }
+.tc-at-matris-ozet { font-size: var(--yazi-s); font-weight: 600; white-space: nowrap; color: var(--run); }
+.tc-at-matris-ozet[data-ton='hata'] { color: var(--stop); }
+.tc-at-matris-sira { margin: 0 0 var(--b-2); font-size: var(--yazi-xs); color: var(--muted); }
+.tc-at-hucre { --c: var(--muted); position: relative; display: inline-grid; place-items: center; inline-size: var(--b-5); block-size: var(--b-5); padding: 0; border-radius: var(--yari-1); border: var(--cizgi-ince) solid var(--edge); background: transparent; color: var(--c); cursor: pointer; }
+.tc-at-hucre .tc-at-elle-e { position: absolute; inset-block-start: calc(-1 * var(--b-1)); inset-inline-end: calc(-1 * var(--b-1)); min-width: var(--b-3); height: var(--b-3); }
+.tc-at-hucre[data-ton='tamam'] { --c: var(--run); }
+.tc-at-hucre[data-ton='uyari'] { --c: var(--hold); border-color: var(--c); }
+.tc-at-hucre[data-ton='hata'] { --c: var(--stop); border-color: var(--c); }
+.tc-at-hucre[data-ton='bilgi'] { --c: var(--done); }
+.tc-at-hucre[data-elle] { border-width: var(--cizgi-orta); }
+/* Açık hücre seçili görünür: dolu nötr zemin ve kalın çerçeve (renk tek başına değil, aria-expanded da okunur). */
+.tc-at-hucre[aria-expanded='true'] { background: var(--secili-zemin); color: var(--secili-yazi); border-color: var(--ink); box-shadow: 0 0 0 var(--cizgi-orta) var(--ink); }
+.tc-at-hucre:focus-visible { outline: var(--cizgi-orta) solid var(--done); outline-offset: var(--cizgi); }
+.tc-at-acilim [role='region']:focus { outline: none; }
 .tc-at-hazir { display: inline-flex; align-items: center; gap: var(--b-1); font-size: var(--yazi-s); color: var(--run); }
 .tc-at-bekle { color: var(--muted); font-size: var(--yazi-s); }
 
@@ -109,7 +125,7 @@
   .tc-at-fazla-dar { display: inline; }
   .tc-at-acilim-ic { grid-template-columns: minmax(0, 1fr); }
 }
-@container tc-at (max-width: 480px) {
+@container tc-at (max-width: 640px) {
   .tc-at-tablo thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
   .tc-at-tablo, .tc-at-tablo tbody { display: block; }
   .tc-at-satir { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--b-1) var(--b-2); padding: var(--b-2) var(--b-3); border-top: thin solid var(--edge); }
@@ -120,6 +136,7 @@
   .tc-at-satir .tc-at-yuva { grid-column: 3; grid-row: 1; width: auto; }
   .tc-at-satir .tc-at-durum { grid-column: 1 / -1; grid-row: 2; white-space: normal; }
   .tc-at-satir .tc-at-hazirlik { grid-column: 1 / -1; grid-row: 3; }
+  .tc-at-durum .tc-rozet { white-space: normal; }
   .tc-at-tablo tr.tc-at-ekle, .tc-at-tablo tr.tc-at-ekle-panel, .tc-at-tablo tr.tc-at-acilim { display: block; border-top: thin solid var(--edge); }
   .tc-at-tablo tr.tc-at-ekle > td, .tc-at-tablo tr.tc-at-ekle-panel > td, .tc-at-tablo tr.tc-at-acilim > td { display: block; }
   .tc-at-madde { grid-template-columns: minmax(0, 1fr); }
@@ -133,4 +150,14 @@
 @media (max-width: 1023px) {
   .tc-at-yuvalar .tc-dugme { min-height: var(--dokunma); min-width: var(--dokunma); }
   .tc-at-cip { min-height: var(--dokunma); }
+  .tc-at-hucre { inline-size: var(--dokunma); block-size: var(--dokunma); }
+  .tc-at-matris { grid-template-columns: repeat(6, var(--dokunma)); }
+}
+/* Dar ve orta kapta (tablet dahil) matris 4x3 sabit, durum rozeti sarabilir: tablo kabından geniş olmaz (dokunma kuralından sonra gelir ki onu ezsin). */
+@container tc-at (max-width: 820px) {
+  .tc-at-matris { grid-template-columns: repeat(4, max-content); }
+  .tc-at-durum .tc-rozet { white-space: normal; }
+}
+@container tc-at (max-width: 640px) {
+  .tc-at-matris { grid-template-columns: repeat(4, max-content); }
 }

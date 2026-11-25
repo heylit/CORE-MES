@@ -74,9 +74,25 @@ describe('Adım Durumu (2893, 3581): tek tablo', () => {
     expect(within(satirlar[0]!).getByText('Testere kesim')).toBeTruthy();
     expect(within(satirlar[0]!).getByText('Bitti')).toBeTruthy();
     expect(within(satirlar[1]!).getByText('Sipariş bekliyor')).toBeTruthy();
-    expect(within(satirlar[1]!).getByRole('button', { name: /OP 20 CNC kurulumu.*Eksik/ })).toBeTruthy();
+    expect(within(satirlar[1]!).getByRole('button', { name: /^OP 20 CNC kurulumu.*Eksik/ })).toBeTruthy();
+    // 3688: aynı satırda 12 maddelik matris; hücre madde adıyla okunur.
+    expect(within(satirlar[1]!).getByRole('group', { name: 'OP 20 hazırlık matrisi' })).toBeTruthy();
+    expect(within(satirlar[1]!).getByRole('button', { name: /^OP 20 CNC kurulumu.*Eksik/ })).toBeTruthy();
     const ozet = screen.getByRole('list', { name: 'Adım özeti' });
     expect(within(ozet).getByText('Bitti').closest('li')?.textContent).toContain('1');
+  });
+
+  it('3688: matris hücresine basınca ayrıntı paneli o maddeye odaklı açılır', async () => {
+    sunucuKur({ ...OKU }, yollar);
+    ac(ekran, '/adim-durumu?emir=5');
+    const hucre = await screen.findByRole('button', { name: /^OP 20 CNC kurulumu.*Eksik/ });
+    expect(hucre.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(hucre);
+    expect(hucre.getAttribute('aria-expanded')).toBe('true');
+    const bolge = await screen.findByRole('region', { name: /OP 20 .* ayrıntısı/ });
+    // Panel açılınca odak panele geçer (dar ekranda panel satırın altında kalır).
+    await waitFor(() => { expect(document.activeElement).toBe(bolge); });
+    expect(screen.getByText(/^Matris sırası:/).textContent).toMatch(/CNC/);
   });
 
   it('çipe basınca alt satır açılır: kaynak, neden, tedarik; okuyucu yazma düğmesi görmez', async () => {
