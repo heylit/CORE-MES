@@ -1,5 +1,5 @@
 import type { EmirNo } from '../ortak/emir-no.ts';
-import { acikSaat, saatOku, zamanTanisiYazisi, type Bitenler, type Derleme, type OkunanPlan } from '../motor/kurallar.ts';
+import { acikSaat, saatOku, zamanTanisiYazisi, type Bitenler, type BolmeNedenleri, type Derleme, type OkunanPlan, type PlanPayi } from '../motor/kurallar.ts';
 import { adimAdi, type PlanlamaCalismasi } from '../tipler.ts';
 
 // Kokpit'in saf kuralları (kart 3151): tahtanın, matrisin ve sorun turunun okuduğu model çalışmadan ve kayıtlı plandan kurulur.
@@ -19,7 +19,22 @@ export interface KokpitIsi {
   sira: number;
   // 3457: ufkun sonuna kadar yerleşti; bu kadar saati ufkun dışında.
   ufukDisi?: number;
+  // 3681: bölünmüş adımın payı. Birinci payın kimliği adımın kimliğidir; diğer paylar `<adım>~<no>` kimliğiyle `adim` alanında adımı taşır.
+  pay?: PlanPayi; adim?: string;
+  // Bölünmemiş, başlamış adımda sayılmış adet.
+  sayilan?: number;
 }
+// Payın bağlı olduğu adımın kimliği; bölünmemiş işte işin kendisi.
+export const adimKimligi = (x: Pick<KokpitIsi, 'id' | 'adim'>): string => x.adim ?? x.id;
+// Adımın bütün payları (birinci pay önde); bölünmemiş adımda tek iş, planda yeri yoksa boş.
+export function adimPaylari(m: Pick<KokpitModeli, 'isler'>, adim: string): KokpitIsi[] {
+  const x = m.isler[adim];
+  if (!x) return [];
+  const n = x.pay?.n ?? 1;
+  return [x, ...Array.from({ length: n - 1 }, (_, k) => m.isler[`${adim}~${String(k + 2)}`]).filter((y): y is KokpitIsi => y !== undefined)];
+}
+// Adımın bitişi: son payın bitişi (ardıl bütün payları bekler).
+export const adimSonu = (m: Pick<KokpitModeli, 'isler'>, adim: string): number | null => { const l = adimPaylari(m, adim); return l.length ? Math.max(...l.map((y) => y.C)) : null; };
 // onculler: adımın rotadaki bitmemiş öncülleri ve bağ türü (b: öncül bitince başlar, o: örtüşmeli, öncül bitmeden başlayabilir).
 export type BagTuru = 'b' | 'o';
 export interface KokpitAdimi { id: string; ad: string; adaylar: string[]; onculler?: readonly (readonly [string, BagTuru])[] }
@@ -28,8 +43,8 @@ export interface KokpitAdimi { id: string; ad: string; adaylar: string[]; oncull
 export interface AdimBagi { kimden: string; kime: string; tur: BagTuru; ters: boolean }
 export function adimBaglari(emirler: readonly KokpitEmri[], isler: Readonly<Record<string, KokpitIsi>>): AdimBagi[] {
   return emirler.flatMap((e) => e.adimlar.flatMap((a) => (a.onculler ?? []).flatMap(([kimden, tur]): AdimBagi[] => {
-    const o = isler[kimden], x = isler[a.id];
-    return o && x ? [{ kimden, kime: a.id, tur, ters: tur === 'b' && Math.round(x.S * 60) < Math.round(o.C * 60) }] : [];
+    const o = isler[kimden], x = isler[a.id], oC = adimSonu({ isler }, kimden);
+    return o && x && oC !== null ? [{ kimden, kime: a.id, tur, ters: tur === 'b' && Math.round(x.S * 60) < Math.round(oC * 60) }] : [];
   })));
 }
 // Adımın bağımlılık yazısı (3330): öncül, emrin operasyon listesindeki sıra numarasıyla (tablodaki # sütunu). uzun tablo sütunudur
@@ -108,6 +123,8 @@ export interface KokpitModeli {
   tezgahlar: KokpitTezgahi[];
   isler: Record<string, KokpitIsi>;
   emirler: KokpitEmri[];
+  // 3681 (D): motorun uygulayamadığı elle bölmenin nedeni (adım kimliği → yazı).
+  bolme?: BolmeNedenleri;
   // Tahtanın ekseni: bugünün 00:00'ı ve son işin bittiği günün sonu (en az iki hafta).
   bas: number; son: number;
   // Tezgâhın açık saat pencereleri (hamle adayı açık saate oturur); bilinmeyen tezgâh hep açık sayılır.
@@ -135,6 +152,8 @@ export function modelKur(c: PlanlamaCalismasi, p: OkunanPlan | null, cx: Derleme
   const isler: Record<string, KokpitIsi> = {};
   const bekleyen = durdurmaBekleyenler(c);
   const emirler: KokpitEmri[] = [];
+  const digerPaylar = new Map<string, [string, NonNullable<OkunanPlan>['ops'][string]][]>();
+  for (const [id, x] of Object.entries(p?.ops ?? {})) if (x.pay && x.pay.no > 1 && id.includes('~')) { const k = id.split('~')[0]!; digerPaylar.set(k, [...(digerPaylar.get(k) ?? []), [id, x]]); }
   let enSon = simdi;
   for (const j of Object.values(cx.jobs)) {
     const s = siparis.get(j.id);
@@ -143,10 +162,17 @@ export function modelKur(c: PlanlamaCalismasi, p: OkunanPlan | null, cx: Derleme
       const x = p?.ops[a.id];
       if (!x || !Number.isFinite(x.S) || !Number.isFinite(x.C)) return;
       yerlesen++;
-      isler[a.id] = { id: a.id, job: j.id, ad: a.ad, m: x.m, S: x.S, C: x.C, basladi: x.act, fason: x.fas || fasonMu(x.m), kilitli: !!c.locks[a.id], sira, ...(x.bitti ? { bitti: true } : {}), ...(bekleyen.has(a.id) ? { durdurmaBekliyor: true } : {}), ...(x.ufukDisi ? { ufukDisi: x.ufukDisi } : {}) };
+      isler[a.id] = { id: a.id, job: j.id, ad: a.ad, m: x.m, S: x.S, C: x.C, basladi: x.act, fason: x.fas || fasonMu(x.m), kilitli: !!c.locks[a.id], sira, ...(x.bitti ? { bitti: true } : {}), ...(bekleyen.has(a.id) ? { durdurmaBekliyor: true } : {}), ...(x.ufukDisi ? { ufukDisi: x.ufukDisi } : {}), ...(x.pay ? { pay: x.pay } : {}), ...(x.sayilan !== undefined ? { sayilan: x.sayilan } : {}) };
       ufukEksik += x.ufukDisi ?? 0;
       bitis = bitis === null ? x.C : Math.max(bitis, x.C);
       enSon = Math.max(enSon, x.C);
+      for (const [pid, y] of digerPaylar.get(a.id) ?? []) {
+        if (!Number.isFinite(y.S) || !Number.isFinite(y.C)) continue;
+        isler[pid] = { id: pid, adim: a.id, job: j.id, ad: a.ad, m: y.m, S: y.S, C: y.C, basladi: y.act, fason: y.fas || fasonMu(y.m), kilitli: !!c.locks[a.id], sira, ...(y.bitti ? { bitti: true } : {}), ...(y.ufukDisi ? { ufukDisi: y.ufukDisi } : {}), pay: y.pay! };
+        ufukEksik += y.ufukDisi ?? 0;
+        bitis = Math.max(bitis, y.C);
+        enSon = Math.max(enSon, y.C);
+      }
     });
     const plansiz = j.ops.length > 0 && yerlesen < j.ops.length;
     const gecikme = plansiz || bitis === null || j.due === null ? null : bitis - j.due;
@@ -170,7 +196,7 @@ export function modelKur(c: PlanlamaCalismasi, p: OkunanPlan | null, cx: Derleme
   const mesai: Record<string, (KokpitEkMesaisi & { vardiyaAd: string })[]> = {};
   for (const e of kokpitEkMesaileri(c)) if (e.gun * 24 >= bas) (mesai[e.m] ??= []).push({ ...e, vardiyaAd: vardiyaAdi(c, e.vardiya) });
   for (const l of Object.values(mesai)) l.sort((x, y) => x.gun - y.gun);
-  return { simdi, durusSonu: typeof c.durusOkumaSonu === 'string' ? saatOku(c.D, c.durusOkumaSonu) : null, tezgahlar, isler, emirler, bas, son: Math.max(bas + 14 * 24, Math.ceil(enSon / 24) * 24 + 24), acik, durus, mesai };
+  return { simdi, durusSonu: typeof c.durusOkumaSonu === 'string' ? saatOku(c.D, c.durusOkumaSonu) : null, tezgahlar, isler, emirler, ...(p?.bolme && Object.keys(p.bolme).length ? { bolme: p.bolme } : {}), bas, son: Math.max(bas + 14 * 24, Math.ceil(enSon / 24) * 24 + 24), acik, durus, mesai };
 }
 export const gunYazisi = (g: number, zaman: (t: number) => string): string => zaman(g * 24).replace(/ \d\d:\d\d$/, '');
 export const ekMesaiYazisi = (l: readonly (KokpitEkMesaisi & { vardiyaAd: string })[], zaman: (t: number) => string): string =>
@@ -285,7 +311,7 @@ export function adimBeklemesi(m: KokpitModeli, e: KokpitEmri, k: number): Beklem
   const x = m.isler[e.adimlar[k]?.id ?? ''];
   if (!x || x.basladi || x.fason) return null;
   let bas = m.simdi;
-  for (let j = 0; j < k; j++) { const y = m.isler[e.adimlar[j]?.id ?? '']; if (y) bas = Math.max(bas, y.C); }
+  for (let j = 0; j < k; j++) { const C = adimSonu(m, e.adimlar[j]?.id ?? ''); if (C !== null) bas = Math.max(bas, C); }
   if (x.S <= bas) return null;
   return { bas, son: x.S, acik: acikSure(m.acik[x.m], bas, x.S), sure: x.S - bas };
 }
@@ -336,7 +362,9 @@ export function tezgahGunundeMi(m: KokpitModeli, e: KokpitEmri, tezgah: string, 
 // --- taşıma ---
 // Çeyrek saate yuvarlanır; şimdiden önce olamaz (sunucu geçmişe konan kilidi reddeder).
 export const tasimaSaati = (S: number, simdi: number): number => Math.max(Math.ceil(simdi * 4 - 1e-9) / 4, Math.round(S * 4) / 4);
+export const PAY_TASINMAZ = 'Bölünmüş adımın payı sürüklenmez; "Bölmeyi yönet" ile değişir';
 export function tasinabilir(x: KokpitIsi): string | null {
+  if (x.adim !== undefined || x.pay?.elle) return PAY_TASINMAZ;
   return x.bitti ? 'Biten iş taşınmaz' : x.fason ? 'Fason adım tahtadan taşınmaz' : null;
 }
 // Süren işi taşımadan önce söylenen: taşıma işi durdurur.
@@ -409,7 +437,7 @@ export function planaAlAdaylari(m: KokpitModeli, e: KokpitEmri, enCok = 3): TurA
 export function onizlemeBitisi(m: KokpitModeli, e: KokpitEmri, isler: readonly { isId: string; C: number }[]): number | null {
   const yeni = new Map(isler.map((x) => [x.isId, x.C]));
   let b: number | null = null;
-  for (const a of e.adimlar) { const C = yeni.get(a.id) ?? m.isler[a.id]?.C; if (C === undefined) return null; b = b === null ? C : Math.max(b, C); }
+  for (const a of e.adimlar) { const C = yeni.get(a.id) ?? adimSonu(m, a.id) ?? undefined; if (C === undefined) return null; b = b === null ? C : Math.max(b, C); }
   return b;
 }
 
@@ -768,4 +796,31 @@ export function firmaYazilari(c: PlanlamaCalismasi, emirler: unknown, bugun: str
     });
   }
   return y;
+}
+
+// --- 3681: bölünmüş adımın payları ---
+// Çubuk ve tablo yazısı: "1/2 · 15 adet"; dar yerde yalnız "1/2". Bölünmemiş işte null.
+export const payYazisi = (x: Pick<KokpitIsi, 'pay'>, dar = false): string | null => (x.pay ? (dar ? `${String(x.pay.no)}/${String(x.pay.n)}` : `${String(x.pay.no)}/${String(x.pay.n)} · ${String(x.pay.adet)} adet`) : null);
+// Payın ilerlemesi: sayılan/adet; sayım bilinmiyorsa null (sıfır uydurulmaz).
+export const payIlerlemeYazisi = (x: Pick<KokpitIsi, 'pay'>): string | null => (x.pay?.sayilan !== undefined ? `${String(x.pay.sayilan)}/${String(x.pay.adet)}` : null);
+export const payNedeni = (x: Pick<KokpitIsi, 'pay'>): string | null => (x.pay ? (x.pay.elle ? 'elle bölündü' : 'rotada paralel böl') : null);
+// Seçili adımın başka satırlardaki payları: tezgâh görünümünde satır başlığı "N pay aşağıda / yukarıda" yazar.
+export function payYonleri(m: Pick<KokpitModeli, 'isler'>, adim: string | null, satirSirasi: readonly string[], satir: string): { asagi: number; yukari: number; satirlar: string[] } {
+  const ben = satirSirasi.indexOf(satir), n = { asagi: 0, yukari: 0, satirlar: [] as string[] };
+  if (adim === null || ben < 0) return n;
+  for (const y of adimPaylari(m, adim)) {
+    const kimlik = satirKimligi(y), k = satirSirasi.indexOf(kimlik);
+    if (k > ben) n.asagi++; else if (k >= 0 && k < ben) n.yukari++;
+    if (k >= 0 && k !== ben && !n.satirlar.includes(kimlik)) n.satirlar.push(kimlik);
+  }
+  return n;
+}
+
+// 3663/3681: dar Gantt alanında (768) pano alt sayfa olarak çubuğun üstünde ya da altında açılır. İki yanda da 200 px'ten az yer varsa ve pano
+// çubuğa basılarak açıldıysa pano kartın üstüne taşarak çubuğun üstünde açılır; satır tıklamasında (tablo kipi) kural değişmez: sol tabloyu ve satırı örtmez.
+export function darPanoYani(roomUst: number, roomAlt: number, ustGenis: number, eski: string | null, satirdan: boolean): { yan: 'ust' | 'alt'; genis: boolean } {
+  const tut = 160;
+  const ilk = eski === 'ust' && roomUst >= tut ? 'ust' : eski === 'alt' && roomAlt >= tut ? 'alt' : roomUst >= roomAlt ? 'ust' : 'alt';
+  const oda = ilk === 'ust' ? roomUst : roomAlt, genis = !satirdan && oda < 200 && ustGenis > oda;
+  return { yan: genis ? 'ust' : ilk, genis };
 }

@@ -3,7 +3,7 @@ import { Simge } from '../../../../ortak/arayuz/index.ts';
 import { AdimAdim } from './AdimAdim.tsx';
 import { EmirYonu, type EmirYonuOzellikleri } from './EmirYonu.tsx';
 import { Hamleler, type HamleOzellikleri } from './Hamleler.tsx';
-import { BEKLEME_ESIGI, adimBeklemesi, durumYazisi, enCokBekleyen, satirKimligi, sureYaz, tasinabilir, type KokpitEmri, type KokpitModeli } from './kurallar.ts';
+import { BEKLEME_ESIGI, adimBeklemesi, adimPaylari, durumYazisi, payYazisi, enCokBekleyen, satirKimligi, sureYaz, tasinabilir, type KokpitEmri, type KokpitModeli } from './kurallar.ts';
 
 // Seçili emrin ayrıntısı: adımları, yerleri ve seçili adım için tezgâh seçenekleri. Bilgisayarda tahtanın yanında, telefonda alttan açılır;
 // telefonda taşıma buradaki düğmelerle yapılır. Matriste çözüm buradadır: neden geç olduğu ve seçenekler adımlardan önce gelir.
@@ -38,7 +38,9 @@ export function Ayrinti({ m, e, secIs, zaman, uygula, surum, bekle = false, adim
               <button type="button" aria-current={secIs === a.id} disabled={!x} onClick={() => { adimSec(a.id); }}>
                 <b>{i + 1}. {a.ad}</b>
                 <small>
-                  {x ? `${kod.get(satirKimligi(x)) ?? x.m} · ${zaman(x.S).slice(6)} – ${zaman(x.C).slice(6)}${x.basladi ? ' · başladı, yerinde kalır' : ''}` : 'plansız'}
+                  {x ? (adimPaylari(m, a.id).length > 1
+                    ? `${adimPaylari(m, a.id).map((y) => `${payYazisi(y, true) ?? ''} ${kod.get(satirKimligi(y)) ?? y.m}`).join(' + ')} · ${zaman(Math.min(...adimPaylari(m, a.id).map((y) => y.S))).slice(6)} – ${zaman(Math.max(...adimPaylari(m, a.id).map((y) => y.C))).slice(6)}${x.basladi ? ' · başladı, yerinde kalır' : ''}`
+                    : `${kod.get(satirKimligi(x)) ?? x.m} · ${zaman(x.S).slice(6)} – ${zaman(x.C).slice(6)}${x.basladi ? ' · başladı, yerinde kalır' : ''}`) : 'plansız'}
                   {b !== null && b.acik >= BEKLEME_ESIGI && <em> · {sureYaz(b.sure)} bekler</em>}
                 </small>
               </button>

@@ -3,7 +3,7 @@ import { derle, girdiKur, planOku, plandanBitenler } from '../motor/kurallar.ts'
 import { ornekCalisma } from '../motor/ornek.ts';
 import {
   firmaYazilari, adimBaglari, adimBeklemesi, aralikYuku, bagimlilik, okUcu, okYolu, aramaUyar, darbogaz, emirGunleri, enCokBekleyen, tezgahGunundeMi, durumYazisi, ilkBosluk, matrisSirasi, modelKur, olcekKomsusu, onizlemeBitisi, satirKimligi, sayim, sorunlular, sureYaz,
-  acigaOtur, agacAdimBasligi, agacNotlari, emirNotlari, kolNotlari, durusOkunmadi, DURUS_OKUNMADI, durdurmaBekleyenler, durusYazisi, ekMesaiYazisi, mesaiButcesi, operatorSorunu, uygunOperatorler, vardiyaAdi, planliDurusYazisi, hucreler3B, suAndakiDurus, onayliGecSayisi, yeriDegisti, tasimaSaati, tasinabilir, turAdaylari, yukSinifi, yukYuzdesi, SAAT_ENI, YAKIN_EN_AZ, YAKIN_EN_COK, sigdirma, surguDegeri, surgudenEn, yakinOlcegi, yakinSinirla, ustBeklemeleri, ustEmirNotu, type AdimBeklemesi, type KokpitEmri, type KokpitIsi, type KokpitModeli,
+  acigaOtur, darPanoYani, agacAdimBasligi, agacNotlari, emirNotlari, kolNotlari, durusOkunmadi, DURUS_OKUNMADI, durdurmaBekleyenler, durusYazisi, ekMesaiYazisi, mesaiButcesi, operatorSorunu, uygunOperatorler, vardiyaAdi, planliDurusYazisi, hucreler3B, suAndakiDurus, onayliGecSayisi, yeriDegisti, tasimaSaati, tasinabilir, turAdaylari, yukSinifi, yukYuzdesi, SAAT_ENI, YAKIN_EN_AZ, YAKIN_EN_COK, sigdirma, surguDegeri, surgudenEn, yakinOlcegi, yakinSinirla, ustBeklemeleri, ustEmirNotu, type AdimBeklemesi, type KokpitEmri, type KokpitIsi, type KokpitModeli,
 } from './kurallar.ts';
 
 // Örnek çalışma uydurmadır: iki emir (biri geç, biri riskli), beş tezgâh, bir fason adım.
@@ -650,5 +650,19 @@ describe('ağaçta açılan emrin not satırı (3525)', () => {
   it('başlamış adımda bekleme ve parti notu yazmaz, uzama yazar; planda yeri olmayan adımın notu yoktur', () => {
     const n = { kol: { emir: {}, adim: { '2.10': 'bekliyor: parti E-2/1', '2.40': 'bekliyor: parti E-2/2' } }, adimBekle: { '2.10': { kadar: 50, neden: 'malzeme' as const }, '2.40': { kadar: 50, neden: 'kisi' as const } }, adimEk: { '2.10': 2, '2.40': 3 } };
     expect(agacNotlari(m, e, n, zaman)).toEqual(['1. Torna: uzadı +2 sa']);
+  });
+});
+
+describe('darPanoYani (3681 G1 ve 3663 satır tıklaması)', () => {
+  it('çubuğa basılınca iki yanda da 200 px altı yer varsa pano kartın üstüne taşarak üstte açılır', () => {
+    expect(darPanoYani(110, 93, 380, null, false)).toEqual({ yan: 'ust', genis: true });
+  });
+  it('satır tıklamasında (tablo kipi) kural işlemez: eski yan seçimi kalır, alt sayfa sol tabloyu örtmez', () => {
+    expect(darPanoYani(110, 93, 380, null, true)).toEqual({ yan: 'ust', genis: false });
+    expect(darPanoYani(60, 150, 380, null, true)).toEqual({ yan: 'alt', genis: false });
+  });
+  it('200 px ve üstü yerde genişleme olmaz; altında önceki yan korunsa da genişler', () => {
+    expect(darPanoYani(260, 90, 380, null, false)).toEqual({ yan: 'ust', genis: false });
+    expect(darPanoYani(170, 400, 380, 'ust', false)).toEqual({ yan: 'ust', genis: true });
   });
 });

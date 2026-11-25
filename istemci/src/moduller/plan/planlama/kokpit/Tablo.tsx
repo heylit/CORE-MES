@@ -189,7 +189,7 @@ export function olcuAdaylari(satirlar: readonly HTMLElement[], adet = 3, sutunla
 
 // 3660: açık emrin adım satırları yalnız bu sütunlarda ölçülür; Durum ve Süre yazısı ("Bekliyor", "4 gün 7 sa 30 dk") sütunu açar. Adım adı (Emir
 // sütunu) ve Tezgâh eskisi gibi ölçülmez: uzun ad sütunu şişirmez, "…" ile kısalır.
-export const ADIM_OLCULEN: ReadonlySet<string> = new Set(['bitis', 'ilerleme']);
+export const ADIM_OLCULEN: ReadonlySet<string> = new Set(['adet', 'bitis', 'ilerleme']);
 
 export function sutunlariOlc(kap: HTMLElement, satirlar: readonly HTMLElement[]): SutunOlcumu | null {
   const en: Record<string, number> = {}, baslik: Record<string, number> = {};
@@ -204,7 +204,8 @@ export function sutunlariOlc(kap: HTMLElement, satirlar: readonly HTMLElement[])
     const s2 = s.cloneNode(false) as HTMLElement, b2 = bas.cloneNode(false);
     s2.removeAttribute('data-satir');
     const g2 = izgara.cloneNode(true) as HTMLElement;
-    if (s.hasAttribute('data-agac-adim')) for (const h of [...g2.children]) if (!ADIM_OLCULEN.has((h as HTMLElement).dataset['sutun'] ?? '')) h.remove();
+    // 3681: bölünmüş adımın satırında adım adı da ölçülür (pay satırları aynı sütunda "Pay 1/2" yazar, ad "…" ile kaybolmasın).
+    if (s.hasAttribute('data-agac-adim')) for (const h of [...g2.children]) if (!ADIM_OLCULEN.has((h as HTMLElement).dataset['sutun'] ?? '') && !((h as HTMLElement).dataset['sutun'] === 'emir' && h.querySelector('[data-pay-ac]'))) h.remove();
     b2.appendChild(g2);
     s2.appendChild(b2);
     olcu.appendChild(s2);

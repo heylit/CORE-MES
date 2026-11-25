@@ -300,6 +300,27 @@
 .tc-pyq-is span { overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
 .tc-pyq-is[data-suruyor] { background: color-mix(in oklab, var(--d-sur) 12%, var(--panel-solid)); }
 .tc-pyq-ilerleme { position: absolute; left: 0; bottom: 0; width: calc(var(--oran, 0) * 100%); height: var(--kayma); background: var(--d-sur); }
+/* 3681: bölünmüş adımın payı. Simge her payda durur; sayılan adet çubuğun içinde dolar; seçili adımın bütün payları aynı çerçeveyi alır. */
+.tc-pyq-pay-simge { display: inline-flex; flex: none; color: var(--muted); }
+.tc-pyq-is[data-pay-ilerleme] .tc-pyq-ilerleme, .tc-pyq-ilerleme[data-pay-ilerleme] { background: var(--d-sur); }
+/* Seçili adımda tıklanan pay dolu çerçeve alır (aria-pressed), kardeş paylar kesik çerçeve alır. */
+.tc-pyq-is[data-pay-kardes] { outline: var(--cizgi-kalin) dashed var(--hazard); outline-offset: var(--pay-ince); z-index: 1; }
+/* Tabloda bölünmüş adımın pay düğmesi: adın solunda, açılınca döner. */
+.tc-pyq-pay-ac { display: inline-flex; align-items: center; flex: none; min-height: var(--dokunma); min-width: var(--b-5); padding: 0; border: 0; background: none; color: var(--muted); cursor: pointer; }
+.tc-pyq-pay-ac .tc-simge { transition: transform var(--hareket-sure); }
+.tc-pyq-pay-ac[aria-expanded="true"] .tc-simge { transform: rotate(90deg); }
+.tc-pyq-pay-ac:focus-visible { outline: var(--cizgi) solid var(--ink); outline-offset: var(--pay-ince); }
+.tc-pyq-elle-parca[data-kilitli] { background: var(--panel2); }
+.tc-pyq-elle-sec { display: inline-flex; align-items: center; gap: var(--b-2); flex: 1 1 100%; min-height: var(--dokunma); font-size: var(--yazi-s); color: var(--ink); cursor: pointer; }
+.tc-pyq-elle-sec input { width: var(--b-5); height: var(--b-5); flex: none; }
+.tc-pyq-elle-kilit { display: inline-flex; vertical-align: middle; margin-left: var(--b-1); color: var(--muted); }
+.tc-pyq-elle-grup { display: flex; flex-direction: column; gap: var(--b-1); padding-top: var(--b-2); border-top: var(--cizgi-ince) solid var(--edge2); }
+.tc-pyq-elle-grup h4 { margin: 0; font-size: var(--yazi-s); }
+.tc-pyq-elle-grup h4 small { color: var(--muted); font-weight: 400; }
+.tc-pyq-elle-kaldir { display: flex; flex-direction: column; align-items: flex-start; gap: var(--b-1); padding-top: var(--b-2); border-top: var(--cizgi-ince) solid var(--edge2); }
+.tc-pyq-elle-sayilan { flex: 1 1 100%; color: var(--muted); font-size: var(--yazi-xs); font-variant-numeric: tabular-nums; }
+.tc-pyq-pay-not { padding: 0; border: 0; background: none; color: var(--muted); font: inherit; font-size: var(--yazi-xs); font-weight: 600; white-space: nowrap; text-align: left; cursor: pointer; text-decoration: underline dotted; }
+.tc-pyq-pay-not:focus-visible { outline: var(--cizgi) solid var(--ink); outline-offset: var(--pay-ince); }
 .tc-pyq-is[data-sonuk] { opacity: var(--saydam-55); }
 .tc-pyq-is[data-sonuk] span { color: var(--ink); }
 .tc-pyq-is[data-yanan] { box-shadow: inset var(--kayma) 0 0 var(--renk), 0 0 0 var(--cizgi) var(--ink); z-index: 1; }
@@ -919,7 +940,7 @@
 .tc-pyq-elle-bol > header { position: sticky; top: calc(var(--b-3) * -1); z-index: 1; margin: calc(var(--b-3) * -1) calc(var(--b-3) * -1) 0; padding: var(--b-3); border-bottom: var(--cizgi-ince) solid var(--edge2); background: var(--panel-solid); }
 .tc-pyq-ayarlar.tc-pyq-elle-bol form.tc-pyq-ayar-etki { position: static; margin: 0; padding: 0; border-top: 0; background: none; }
 .tc-pyq-elle-bol form .tc-pyq-ayar-dugmeler { position: sticky; bottom: calc(var(--b-3) * -1); margin: 0 calc(var(--b-3) * -1) calc(var(--b-3) * -1); padding: var(--b-2) var(--b-3) var(--b-3); border-top: var(--cizgi-ince) solid var(--edge2); background: var(--panel-solid); }
-.tc-pyq-elle-parca legend { font-weight: 700; padding: 0 var(--b-1); }
+.tc-pyq-elle-parca legend { display: inline-flex; align-items: center; gap: var(--b-2); font-weight: 700; padding: 0 var(--b-1); }
 .tc-pyq-elle-parca .tc-pyq-ayar-alan { flex: 1 1 calc(var(--b-6) * 2); min-width: 0; }
 /* Çok emirli siparişte her emir (ana emir, partileri) başlıklı ayrı öbektir. */
 .tc-pyq-ld-emir { display: flex; flex-direction: column; gap: var(--b-1); padding-top: var(--b-2); }
@@ -1317,12 +1338,14 @@
   border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); background: var(--panel-solid); color: var(--ink);
   box-shadow: var(--shadow); font-size: var(--yazi-s);
 }
-.tc-pyq-pano[data-kip="secili"] { overflow-y: auto; position: fixed; left: var(--x, 0); top: var(--y, 0); z-index: var(--z-ust); }
+.tc-pyq-pano[data-kip="secili"] { max-height: var(--ekran-boy-70); overflow-y: auto; position: fixed; left: var(--x, 0); top: var(--y, 0); z-index: var(--z-ust); }
 .tc-pyq-pano[hidden] { display: none; }
 /* Gantt alanı dar (768): pano yüzmez, alt sayfa olur; sol menü şeridinin sağında durur, tablo örtülmez. */
 .tc-pyq-pano[data-kip="secili"][data-alt] { left: calc(var(--menu-serit) + var(--b-4)); right: var(--b-4); top: auto; bottom: var(--b-4); width: auto; max-height: var(--ekran-boy-50); }
 .tc-pyq-pano[data-kip="secili"][data-alt="ust"] { top: var(--y, var(--b-4)); bottom: auto; }
 .tc-pyq-pano[data-kayar]::after { content: ""; position: sticky; bottom: calc(-1 * var(--b-3)); flex: 0 0 auto; height: var(--b-5); margin: calc(-1 * var(--b-5)) calc(-1 * var(--b-3)) calc(-1 * var(--b-3)); background: linear-gradient(transparent, var(--panel-solid)); pointer-events: none; }
+/* 3681: pano kaydırılırken "Bölmeyi yönet" altta sabit kalır (uzun panoda kaydırmadan erişilir). */
+.tc-pyq-pano[data-kip="secili"] > [data-bol-yonet] { position: sticky; bottom: calc(-1 * var(--b-3)); flex: 0 0 auto; background: var(--panel-solid); box-shadow: 0 0 0 var(--b-2) var(--panel-solid); z-index: 1; }
 .tc-pyq-pano[data-kip="surukle"] { position: fixed; right: var(--b-4); bottom: var(--b-4); z-index: var(--z-ust); pointer-events: none; }
 .tc-pyq-pano[data-ihlal] { border-color: var(--stop); }
 .tc-pyq-pano header { display: flex; align-items: flex-start; gap: var(--b-2); }
@@ -1348,10 +1371,24 @@
   .tc-pyq-pano[data-kip="secili"] { display: none; }
   /* Telefon: tahta yok; seçili adımın bilgisi alttan açılan küçük sayfadır, ayrıntı sayfası açıksa (tek alt sayfa) görünmez. */
   .tc-pyq-pano[data-kip="sayfa"] {
-    position: fixed; left: var(--b-4); right: var(--b-4); bottom: var(--alt-cubuk); z-index: var(--z-ust); display: flex; width: auto; max-height: var(--ekran-boy-50); overflow: auto;
+    position: fixed; left: var(--b-4); right: var(--b-4); bottom: var(--alt-cubuk); z-index: var(--z-ust); display: flex; width: auto; max-height: var(--ekran-boy-70); overflow: auto;
     border-radius: var(--yari-2) var(--yari-2) 0 0;
   }
   .tc-pyq-pano[data-kip="sayfa"]:has(~ .tc-pyq-ayrinti) { display: none; }
 }
 /* Tablo rolünü taşıyan boş sahip öğe: satırlara aria-owns ile bağlıdır, yer kaplamaz. */
 .tc-pyq-tablo-sahip { position: absolute; inline-size: 0; block-size: 0; overflow: hidden; }
+.tc-pyq-liste i[data-liste-pay] { font-style: normal; color: var(--muted); }
+.tc-pyq-kart-bolme { display: inline-flex; align-items: center; gap: var(--b-1); color: var(--muted); font-size: var(--yazi-xs); }
+/* 3681: telefondaki alt sayfa panosu ve bölme penceresi kenarında gölge taşır (kaydırılacak içerik var ipucu); gölge yalnız kaydırılabilir yönde görünür. */
+.tc-pyq-pano[data-kip="sayfa"], .tc-pyq-elle-bol {
+  background:
+    linear-gradient(var(--panel-solid) 30%, transparent) top / 100% var(--b-6) no-repeat local,
+    linear-gradient(transparent, var(--panel-solid) 70%) bottom / 100% var(--b-6) no-repeat local,
+    radial-gradient(farthest-side at 50% 0, color-mix(in oklab, var(--ink) 22%, transparent), transparent) top / 100% var(--b-2) no-repeat scroll,
+    radial-gradient(farthest-side at 50% 100%, color-mix(in oklab, var(--ink) 22%, transparent), transparent) bottom / 100% var(--b-2) no-repeat scroll,
+    var(--panel-solid);
+}
+.tc-pyq-h-veri[data-pay-adet] { display: inline-flex; flex-direction: column; align-items: flex-end; min-inline-size: max-content; white-space: nowrap; }
+.tc-pyq-h-veri[data-pay-adet] b { font-weight: inherit; }
+.tc-pyq-h-veri[data-pay-adet] small { color: var(--muted); font-size: var(--yazi-xs); }
