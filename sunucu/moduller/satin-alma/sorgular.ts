@@ -252,6 +252,9 @@ export function idariTalepSatinAlmalari(db: Db, idariIdler: readonly number[]): 
 export const KALEM_EMRI = 'COALESCE(k.uretim_emri_id, kt.uretim_emri_id, t.uretim_emri_id)';
 // 3462 a: kalemin termini; kalemin kendisi, birleşik talepte kaynağın tarihi, yoksa talebin. Takma adlar KALEM_EMRI ile aynı (kt gerekmez).
 export const KALEM_TERMINI = 'coalesce(k.ihtiyac_tarihi, k.kaynak_ihtiyac_tarihi, t.ihtiyac_tarihi)';
+// Sipariş satırının geçerli termini: satırın kendi tarihi, yoksa siparişin başlık tarihi. Satır başına okuyan her sorgu (plan, mal kabul, termin
+// takibi, emir tedariki, karne) bu tek ifadeyi kullanır; "Siparişi değiştir" yalnız satırın tarihini yazar, başlığa dokunmaz. Takma adlar: s satır, p sipariş.
+export const SIPARIS_SATIRI_TERMINI = 'coalesce(s.beklenen_teslim, p.beklenen_teslim)';
 
 // 2611 a, 2637 a, 2638: filtreye uyan siparişlerin bütün satırları (masraf payı siparişin bütün malına oranlanır). Satırın genel iskontolu
 // mal tutarı, sipariş miktarı, net teslimi, kartı (kalemin katalog kartı), fason bağı (sipariş satırının ya da kalemin iş emri), emri
@@ -919,7 +922,7 @@ export function siparisSatirlariOku(db: Db, idler: readonly number[] | null): Pr
   return db.sorgu<SiparisSatiriOkuma>(
     `SELECT s.id, s.talep_id AS "talepId", t.no AS "talepNo", coalesce(p.no, p.siparis_no) AS "siparisNo", q.firma_id AS "firmaId", q.tedarikci_adi AS "tedarikciAdi",
         ${ALTERNATIF_KARTI('s')} AS "malzemeNo", k.ad AS "kalemAdi", s.miktar, greatest(s.miktar - coalesce(m.toplam, 0), 0)::text AS "kalanMiktar", s.birim,
-        coalesce(s.beklenen_teslim, p.beklenen_teslim) AS "beklenenTeslim", s.is_emri_id AS "isEmriId", s.parca_revizyonu AS "parcaRevizyonu",
+        ${SIPARIS_SATIRI_TERMINI} AS "beklenenTeslim", s.is_emri_id AS "isEmriId", s.parca_revizyonu AS "parcaRevizyonu",
         coalesce(k.uygulanan_malzeme_no, ${ALTERNATIF_KARTI('s')}) AS "revizyonMalzemeNo"
        FROM satin_alma_siparis_satiri s
        JOIN satin_alma_siparis p ON p.talep_id = s.talep_id AND p.teklif_id = s.teklif_id
@@ -930,7 +933,7 @@ export function siparisSatirlariOku(db: Db, idler: readonly number[] | null): Pr
        LEFT JOIN LATERAL (SELECT sum(x.miktar) AS toplam FROM satin_alma_teslim x WHERE x.siparis_satiri_id = s.id) m ON true
       WHERE ($1::int[] IS NULL AND t.durum = 'siparis_verildi' AND p.logo_kapatma_durumu IS NULL AND coalesce(m.toplam, 0) < s.miktar)
          OR s.id = ANY($1::int[])
-      ORDER BY coalesce(s.beklenen_teslim, p.beklenen_teslim) NULLS LAST, t.yil, t.sira, k.sira`,
+      ORDER BY ${SIPARIS_SATIRI_TERMINI} NULLS LAST, t.yil, t.sira, k.sira`,
     [idler],
   );
 }
@@ -963,7 +966,7 @@ export function alternatifSiparisSatirlari(db: Db, talepId: string): Promise<Alt
 export interface MalzemeGelisiOkuma { malzemeNo: number; tarih: string | null; miktar: string; birim: string; siparisNo: string; satirId: number; tedarikciAdi: string | null }
 export function malzemeGelisleriOku(db: Db, malzemeNolar: readonly number[]): Promise<MalzemeGelisiOkuma[]> {
   return db.sorgu<MalzemeGelisiOkuma>(
-    `SELECT ${ALTERNATIF_KARTI('s')} AS "malzemeNo", coalesce(s.beklenen_teslim, p.beklenen_teslim) AS tarih, (s.miktar - coalesce(m.toplam, 0))::text AS miktar, s.birim,
+    `SELECT ${ALTERNATIF_KARTI('s')} AS "malzemeNo", ${SIPARIS_SATIRI_TERMINI} AS tarih, (s.miktar - coalesce(m.toplam, 0))::text AS miktar, s.birim,
         coalesce(p.no, p.siparis_no) AS "siparisNo", s.id AS "satirId", nullif(q.tedarikci_adi, '') AS "tedarikciAdi"
        FROM satin_alma_siparis_satiri s
        JOIN satin_alma_siparis p ON p.talep_id = s.talep_id AND p.teklif_id = s.teklif_id
@@ -974,7 +977,7 @@ export function malzemeGelisleriOku(db: Db, malzemeNolar: readonly number[]): Pr
        LEFT JOIN LATERAL (SELECT sum(x.miktar) AS toplam FROM satin_alma_teslim x WHERE x.siparis_satiri_id = s.id) m ON true
       WHERE ${ALTERNATIF_KARTI('s')} = ANY($1::int[]) AND t.durum = 'siparis_verildi' AND p.logo_kapatma_durumu IS NULL AND coalesce(m.toplam, 0) < s.miktar
         AND k.satis_siparis_satiri_id IS NULL
-      ORDER BY ${ALTERNATIF_KARTI('s')}, coalesce(s.beklenen_teslim, p.beklenen_teslim) NULLS LAST, t.yil, t.sira, k.sira`,
+      ORDER BY ${ALTERNATIF_KARTI('s')}, ${SIPARIS_SATIRI_TERMINI} NULLS LAST, t.yil, t.sira, k.sira`,
     [[...malzemeNolar]],
   );
 }
@@ -996,7 +999,7 @@ const ONAYLI_TALEP_KALEMI = `FROM satin_alma_talep t
 export interface TalepGelisiOkuma { malzemeNo: number; tarih: string | null; miktar: string; satirId: number }
 export function talepGelisleriOku(db: Db, talepId: string): Promise<TalepGelisiOkuma[]> {
   return db.sorgu<TalepGelisiOkuma>(
-    `SELECT ${ALTERNATIF_KARTI('s')} AS "malzemeNo", coalesce(s.beklenen_teslim, p.beklenen_teslim) AS tarih, (s.miktar - coalesce(m.toplam, 0))::text AS miktar, s.id AS "satirId"
+    `SELECT ${ALTERNATIF_KARTI('s')} AS "malzemeNo", ${SIPARIS_SATIRI_TERMINI} AS tarih, (s.miktar - coalesce(m.toplam, 0))::text AS miktar, s.id AS "satirId"
        FROM satin_alma_siparis_satiri s
        JOIN satin_alma_siparis p ON p.talep_id = s.talep_id AND p.teklif_id = s.teklif_id
        JOIN satin_alma_talep t ON t.id = s.talep_id
@@ -1181,12 +1184,20 @@ export async function teslimEkle(db: Db, siparisSatirId: number, malKabulSatirId
     [siparisSatirId, malKabulSatirId, miktar, kisiId, stokMiktar]);
 }
 
-// Kart 1474: tedarikçi karnesine giden teslim olayının kaynağı. Firma siparişin teklifinden (kayıtsız tedarikçide null), termin
-// siparişin beklenen teslimi; net teslim ve artı kayıtların son zamanı satırın bütün teslimlerinden.
+// Kart 1474: tedarikçi karnesine giden teslim olayının kaynağı. Firma siparişin teklifinden (kayıtsız tedarikçide null); net teslim ve artı
+// kayıtların son zamanı satırın bütün teslimlerinden. 3711 (Risk, öneriyle): termin ilk söz verilen gündür; "Siparişi değiştir" ile ileri alınan
+// tarih tedarikçiyi aklamaz. İlk söz, satırın uygulanmış ilk termin değişikliğindeki "önce" değeridir (satırın kendi tarihi yoksa başlığınki);
+// değişiklik yoksa geçerli termindir. Güncel termin plan, takip, Taleplerim ve pano içindir.
 export interface KarneTeslimBilgisi { firmaId: number | null; termin: string | null; miktar: string; net: string; sonZaman: string | null }
 export function karneTeslimBilgisi(db: Db, siparisSatirId: number): Promise<KarneTeslimBilgisi | null> {
   return db.tek<KarneTeslimBilgisi>(
-    `SELECT q.firma_id AS "firmaId", p.beklenen_teslim::text AS termin, s.miktar::text AS miktar,
+    `SELECT q.firma_id AS "firmaId", coalesce(
+              (SELECT coalesce(nullif(o.oge ->> 'once', '')::date, p.beklenen_teslim) FROM satin_alma_siparis_degisikligi d
+                 CROSS JOIN LATERAL jsonb_array_elements(d.ozet) AS o(oge)
+                WHERE d.talep_id = s.talep_id AND d.teklif_id = s.teklif_id AND d.sonuc IN ('onaysiz', 'onaylandi')
+                  AND o.oge ->> 'alan' = 'termin' AND o.oge ->> 'kalemId' = s.kalem_id::text
+                ORDER BY d.olusturma, d.id LIMIT 1),
+              ${SIPARIS_SATIRI_TERMINI})::text AS termin, s.miktar::text AS miktar,
             coalesce((SELECT sum(miktar) FROM satin_alma_teslim WHERE siparis_satiri_id = s.id), 0)::text AS net,
             ${ISO('(SELECT max(zaman) FROM satin_alma_teslim WHERE siparis_satiri_id = s.id AND miktar > 0)')} AS "sonZaman"
        FROM satin_alma_siparis_satiri s
@@ -1224,11 +1235,13 @@ export interface PanoSayilariSatiri {
 // 2425: iş kutusunun sayımları (istemci calc.ts panoSayilari ve roles.ts ile aynı). Sipariş tedarikçi başına sayılır; Logo'da
 // kapatılmamış ve satırlarından biri tam gelmemişse açıktır. Termin beklenen teslim, yoksa sipariş tarihi + teklif termini;
 // hesaplanamayan sipariş gecikmeye ve bu haftaya girmez. Bu hafta bugün dahil önümüzdeki 7 gündür.
-const ACIK_SIPARIS_TERMINI_SQL = `SELECT COALESCE(p.beklenen_teslim, p.siparis_tarihi + q.termin_gun) AS termin
+const ACIK_SIPARIS_TERMINI_SQL = `SELECT COALESCE(a.termin, p.siparis_tarihi + q.termin_gun) AS termin
        FROM satin_alma_siparis p JOIN satin_alma_talep t ON t.id = p.talep_id AND t.durum = 'siparis_verildi'
        JOIN satin_alma_teklif q ON q.talep_id = p.talep_id AND q.id = p.teklif_id
-      WHERE p.logo_kapatma_durumu IS NULL AND EXISTS (SELECT 1 FROM satin_alma_siparis_satiri s WHERE s.talep_id = p.talep_id AND s.teklif_id = p.teklif_id
-        AND coalesce((SELECT sum(m.miktar) FROM satin_alma_teslim m WHERE m.siparis_satiri_id = s.id), 0) < s.miktar)`;
+       JOIN LATERAL (SELECT count(*) AS adet, min(${SIPARIS_SATIRI_TERMINI}) AS termin FROM satin_alma_siparis_satiri s
+         WHERE s.talep_id = p.talep_id AND s.teklif_id = p.teklif_id
+           AND coalesce((SELECT sum(m.miktar) FROM satin_alma_teslim m WHERE m.siparis_satiri_id = s.id), 0) < s.miktar) a ON a.adet > 0
+      WHERE p.logo_kapatma_durumu IS NULL`;
 const SON_ONAY_SQL = `(SELECT o.sonuc FROM satin_alma_onay o WHERE o.talep_id = t.id ORDER BY o.zaman DESC, o.id DESC LIMIT 1)`;
 export async function panoSayilari(db: Db): Promise<PanoSayilariSatiri> {
   return (await db.tek<PanoSayilariSatiri>(
@@ -1714,16 +1727,21 @@ export interface TakvimSiparisSatiri {
   satirlar: { miktar: string; teslimAlinan: string | null }[];
 }
 export function takvimSiparisleri(db: Db, baslangic: string, bitis: string): Promise<TakvimSiparisSatiri[]> {
+  // Günü açık satırların en erken geçerli termini belirler (satır tarihi siparişin başlığından önce gelir); açık satır kalmadıysa en son satır tarihi.
   return db.sorgu<TakvimSiparisSatiri>(
-    `SELECT p.id, coalesce(p.no, nullif(p.siparis_no, '')) AS no, p.beklenen_teslim::text AS "beklenenTeslim", q.firma_id AS "firmaId",
+    `SELECT p.id, coalesce(p.no, nullif(p.siparis_no, '')) AS no, g.gun::text AS "beklenenTeslim", q.firma_id AS "firmaId",
         q.tedarikci_adi AS "tedarikciAdi", t.baslik AS "talepBasligi", p.logo_kapatma_durumu IS NOT NULL AS kapali,
         coalesce((SELECT json_agg(json_build_object('miktar', s.miktar::text, 'teslimAlinan', (SELECT sum(x.miktar)::text FROM satin_alma_teslim x WHERE x.siparis_satiri_id = s.id)) ORDER BY s.id)
            FROM satin_alma_siparis_satiri s WHERE s.talep_id = p.talep_id AND s.teklif_id = p.teklif_id), '[]'::json) AS satirlar
        FROM satin_alma_siparis p
        JOIN satin_alma_talep t ON t.id = p.talep_id
        JOIN satin_alma_teklif q ON q.talep_id = p.talep_id AND q.id = p.teklif_id
-      WHERE t.durum IN ('siparis_verildi', 'teslim_alindi') AND p.beklenen_teslim BETWEEN $1::date AND $2::date
-      ORDER BY p.beklenen_teslim, p.id`,
+       CROSS JOIN LATERAL (SELECT coalesce(
+          min(${SIPARIS_SATIRI_TERMINI}) FILTER (WHERE coalesce((SELECT sum(x.miktar) FROM satin_alma_teslim x WHERE x.siparis_satiri_id = s.id), 0) < s.miktar),
+          max(${SIPARIS_SATIRI_TERMINI}), p.beklenen_teslim) AS gun
+         FROM satin_alma_siparis_satiri s WHERE s.talep_id = p.talep_id AND s.teklif_id = p.teklif_id) g
+      WHERE t.durum IN ('siparis_verildi', 'teslim_alindi') AND g.gun BETWEEN $1::date AND $2::date
+      ORDER BY g.gun, p.id`,
     [baslangic, bitis],
   );
 }
@@ -1910,7 +1928,7 @@ export function terminKalemleriOku(db: Db): Promise<TerminKalemiOkuma[]> {
      UNION ALL
      SELECT 'siparis', t.id, t.no, t.durum, to_char(${KALEM_TERMINI}, 'YYYY-MM-DD'),
         k.id, k.ad, s.birim, (s.miktar - coalesce(m.toplam, 0))::text, ${ALTERNATIF_KARTI('s')}, k.is_emri_id,
-        s.teklif_id, coalesce(p.no, p.siparis_no), to_char(p.beklenen_teslim, 'YYYY-MM-DD'), t.yil, t.sira, k.sira
+        s.teklif_id, coalesce(p.no, p.siparis_no), to_char(${SIPARIS_SATIRI_TERMINI}, 'YYYY-MM-DD'), t.yil, t.sira, k.sira
        FROM satin_alma_siparis_satiri s
        JOIN satin_alma_siparis p ON p.talep_id = s.talep_id AND p.teklif_id = s.teklif_id
        JOIN satin_alma_talep t ON t.id = s.talep_id
@@ -2057,7 +2075,7 @@ export interface EmirTedarikSatiri {
 export function emirTedarikDurumlariOku(db: Db, uretimEmriIdleri: readonly number[], isEmriIdleri: readonly number[]): Promise<EmirTedarikSatiri[]> {
   return db.sorgu<EmirTedarikSatiri>(
     `SELECT ${KALEM_EMRI} AS "uretimEmriId", coalesce(s.is_emri_id, k.is_emri_id) AS "isEmriId", ${ALTERNATIF_KARTI('s')} AS "malzemeNo",
-            t.id AS "talepId", t.no AS "talepNo", t.durum AS "talepDurumu", coalesce(p.no, nullif(p.siparis_no, '')) AS "siparisNo", p.beklenen_teslim::text AS "beklenenTeslim",
+            t.id AS "talepId", t.no AS "talepNo", t.durum AS "talepDurumu", coalesce(p.no, nullif(p.siparis_no, '')) AS "siparisNo", ${SIPARIS_SATIRI_TERMINI}::text AS "beklenenTeslim",
             s.miktar::text AS miktar, coalesce(m.toplam, 0)::text AS teslim, (p.logo_kapatma_durumu IS NOT NULL) AS kapali,
             tk.firma_id AS "firmaId"
        FROM satin_alma_talep_kalemi k

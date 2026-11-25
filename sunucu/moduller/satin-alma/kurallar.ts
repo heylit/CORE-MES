@@ -1336,10 +1336,26 @@ const talepEdeneOzelligi = (o: KalemOzelligi | undefined): Omit<KalemOzelligi, '
   const { ic: _, ...acik } = o;
   return acik;
 };
+// Kalemin sipariş termini: sipariş satırının kendi tarihi, yoksa siparişin başlık tarihi (sorgular.ts SIPARIS_SATIRI_TERMINI ile aynı kural).
+// Kalem birden çok firmaya bölünmüşse tamamı en geç paydaki günde gelir. Siparişi olmayan kalem haritada yoktur.
+export function kalemSiparisTerminleri(talepler: Iterable<Pick<Talep, 'karar'>>): Map<string, { gun: string; pay: number }> {
+  const m = new Map<string, { gun: string; pay: number }>();
+  for (const t of talepler) {
+    for (const sip of t.karar?.siparisler ?? []) {
+      for (const r of sip.satirlar) {
+        const gun = r.beklenenTeslim ?? sip.beklenenTeslim;
+        if (gun == null || gun === '') continue;
+        const onceki = m.get(r.kalemId);
+        m.set(r.kalemId, { gun: onceki === undefined || gun > onceki.gun ? gun : onceki.gun, pay: (onceki?.pay ?? 0) + 1 });
+      }
+    }
+  }
+  return m;
+}
 export function talebim(
   t: TalepCikisi, baglar: ReadonlyMap<string, KalemBagi> = new Map(), karsiliklar: ReadonlyMap<string, BirimKarsiligi> = new Map(),
   ozellikler: ReadonlyMap<string, KalemOzelligi> = new Map(), kabuller: ReadonlyMap<string, KalemKabulu> = new Map(),
-  sartli: ReadonlyMap<string, SartliAlternatif[]> = new Map(),
+  sartli: ReadonlyMap<string, SartliAlternatif[]> = new Map(), siparisTerminleri: ReadonlyMap<string, { gun: string; pay: number }> = new Map(),
 ): Talebim {
   const bag = (id: string): KalemBagi => baglar.get(id) ?? { uygulanan: null, fasonAdim: null };
   return {
@@ -1350,7 +1366,7 @@ export function talebim(
     ...(t.guncellemeGrubu === undefined ? {} : { guncellemeGrubu: t.guncellemeGrubu }),
     kaynak: t.kalemler.some((k) => bag(k.id).fasonAdim !== null) ? 'fason' : 'elle',
     kalemler: t.kalemler.map((k) => ({ id: k.id, aciklama: k.ozellik, ad: k.ad, miktar: k.miktar, birim: k.birim, kartBekliyor: k.katalogId === null,
-      uygulanan: bag(k.id).uygulanan, fasonAdim: bag(k.id).fasonAdim, ...kalemTerminEmriGorunumu(t, bag(k.id).kendi), karsilik: karsiliklar.get(k.id) ?? null, malzeme: talepEdeneOzelligi(ozellikler.get(k.id)), ...kabuller.get(k.id),
+      uygulanan: bag(k.id).uygulanan, fasonAdim: bag(k.id).fasonAdim, ...kalemTerminEmriGorunumu(t, bag(k.id).kendi), siparisTermini: siparisTerminleri.get(k.id)?.gun ?? null, ...(siparisTerminleri.has(k.id) ? { siparisPayAdedi: siparisTerminleri.get(k.id)!.pay } : {}), karsilik: karsiliklar.get(k.id) ?? null, malzeme: talepEdeneOzelligi(ozellikler.get(k.id)), ...kabuller.get(k.id),
       ...(sartli.has(k.id) ? { sartliAlternatifler: sartli.get(k.id)! } : {}) })),
   };
 }

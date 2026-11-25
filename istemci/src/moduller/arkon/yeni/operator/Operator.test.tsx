@@ -1162,3 +1162,26 @@ describe('A1 Üretim Terminali mal kabul adımı (3703)', () => {
     expect(olaylar(istekler).some((e) => e.state === 'done')).toBe(false);
   }, 60000);
 });
+
+// 3719: iş yüklenirken (istasyonun "iş yok" yer tutucusu varken) seçilen sekme, iş gelince varsayılana sıfırlanmaz.
+describe('A1 Üretim Terminali sekme yarışı (3719)', () => {
+  it('iş gelmeden seçilen Adımlar sekmesi iş yüklenince seçili kalır', async () => {
+    const tmi = { ...PAKET, id: 'tmi-ie-301', no: 'UE-DENEME-301', tmi: { emirId: 301, isEmriId: 301 } };
+    sunucuKur(ISTASYONLU, { belgeler: { pkgs: [{ kimlik: tmi.id, surum: 1, govde: tmi }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
+    const asil = globalThis.fetch;
+    let ac!: () => void;
+    const kapi = new Promise<void>((r) => { ac = r; });
+    vi.stubGlobal('fetch', async (adres: string, istek?: RequestInit) => {
+      if (String(adres).includes('/arkon/belgeler/pkgs') && (istek?.method ?? 'GET') === 'GET') await kapi;
+      return asil(adres, istek);
+    });
+    arkonAc('/uretim-terminali');
+    const adimlar = await screen.findByRole('tab', { name: /^Adımlar/ }, { timeout: 10000 });
+    fireEvent.click(adimlar);
+    await waitFor(() => { expect(adimlar.getAttribute('aria-selected')).toBe('true'); });
+    ac();
+    expect((await screen.findAllByText(/UE-DENEME-301/, {}, { timeout: 10000 })).length).toBeGreaterThan(0);
+    await new Promise((r) => setTimeout(r, 300));
+    expect(screen.getByRole('tab', { name: /^Adımlar/ }).getAttribute('aria-selected')).toBe('true');
+  });
+});

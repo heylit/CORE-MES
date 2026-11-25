@@ -40,6 +40,11 @@ export function simgeSec(ad: string | null | undefined, yedek: SimgeAdi = 'alert
 export const bosIs = (ist: Pick<IstasyonSatiri, 'l'>): Is =>
   ({ no: '—', part: 'Bu istasyona atanmış iş yok', op: ist.l, state: 'queued', good: 0, scrap: 0, target: 0, cycle: 0, due: '—', baseGood: 0, meas: {}, pins: [], empty: true });
 
+// 3719: iş değişince sekme varsayılana döner; ama istasyonun "iş yok" yer tutucusundan ilk gerçek işe geçişte kullanıcının seçtiği sekme bozulmaz
+// (iş yüklenirken tıklanan sekme sonradan sıfırlanıyordu). 'baslangic' ilk yerleşim, 'sifirla' gerçek iş değişimi, 'koru' yer tutucudan ilk işe geçiş.
+export type SekmeKarari = 'baslangic' | 'sifirla' | 'koru';
+export const sekmeKarari = (onceki: { bos: boolean } | null): SekmeKarari => (onceki === null ? 'baslangic' : onceki.bos ? 'koru' : 'sifirla');
+
 const sonucAlanlari = (r: Result) => ({
   state: r.state || 'queued', good: r.good || 0, scrap: r.scrap || 0, meas: r.meas || {}, pins: r.pins || [], baseGood: r.baseGood ?? 0,
   acks: r.acks || {}, toolsAt: r.toolsAt || {}, sr: r.sr || {}, kart: (r['kart'] as number | null | undefined) ?? null,

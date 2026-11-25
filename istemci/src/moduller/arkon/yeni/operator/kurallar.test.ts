@@ -3,7 +3,7 @@ import type { AnlikVardiya } from '../cekirdek/vardiya.ts';
 import {
   bekletmeGorevi, bitirmeEksigi, bitisOzeti, siradakiGorev, tmiIlkParcaGerekli,
   cagriTonu, cubukDugmeleri, durumDugmeleri, sabitDugmeler, numuneAraligi, durusOnerileri, hurdaUyarisi, kalanSure, kaliteIstasyonuNumuneleri, kontrolTakvimi, lotKarariEksigi, lotKarariOku, lotSayisi, tonDurumu, vardiyaHesabi, vardiyaOzeti, type VardiyaOzetGirdisi,
-  uzakKendiligindenAcilir,
+  uzakKendiligindenAcilir, sekmeKarari,
 } from './kurallar.ts';
 import type { Is, KontrolTakvimi } from './tipler.ts';
 
@@ -231,5 +231,13 @@ describe('uzakKendiligindenAcilir (3575)', () => {
     expect(uzakKendiligindenAcilir({ onizleme: true, rol: 'operator', istasyonTuru: 'cnc' })).toBe(false);
     expect(uzakKendiligindenAcilir({ onizleme: false, rol: 'admin', istasyonTuru: 'cnc' })).toBe(false);
     expect(uzakKendiligindenAcilir({ onizleme: false, rol: null, istasyonTuru: 'cnc' })).toBe(false);
+  });
+});
+
+describe('sekmeKarari (3719)', () => {
+  it('ilk yerleşimde varsayılan, gerçek iş değişiminde sıfırlama, yer tutucudan ilk işe geçişte koruma', () => {
+    expect(sekmeKarari(null)).toBe('baslangic');
+    expect(sekmeKarari({ bos: false })).toBe('sifirla');
+    expect(sekmeKarari({ bos: true })).toBe('koru');
   });
 });

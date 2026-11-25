@@ -73,7 +73,7 @@ import {
   ilkParcaKalemleri, ilkParcaKapisi, uzakKendiligindenAcilir, isSekmeleri, kararOzeti, kontrolTakvimi, mobilGorunumler, numuneAraligi, etkinIsSirasi, paketleriBirlestir, siradakiGorev, simgeSec, bekletmeGorevi, BEKLEMEDE_KAPALI,
   sonucBelgesi, takimUyarilari, tonAdi, uyariAnahtari, vardiyaHesabi, vardiyaOzeti, zamaniGelenUyarilar, hurdaUyarisi, bitisOzeti, bitirmeEksigi, tmiIlkParcaGerekli,
   type EkranSekmesi,
-  hataliNedenleri, hataliUstSiniri,
+  hataliNedenleri, hataliUstSiniri, sekmeKarari,
 } from './kurallar.ts';
 import {
   BilgiCipi, CagriCipi, etiketSayisi, DurumDugmeleri, EtkinKart, GorevKarti, IsAlanlari, IsEtiketleri, IsSatiri, Konfeti, NumuneSeridi, PlanBandi,
@@ -638,7 +638,14 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
   const opT = isTuru(o.pkg);
   const OT = IS_TURLERI[opT];
   const Panel = istasyonPaneli(opT, o.pkg);
-  useEffect(() => { tabYaz(Panel ? 'st' : 'draw'); if (dar) mvYaz((v) => (v === 'ozet' ? v : 'prod')); }, [o.no]);
+  const oncekiIs = useRef<{ bos: boolean } | null>(null);
+  useEffect(() => {
+    const karar = sekmeKarari(oncekiIs.current);
+    oncekiIs.current = { bos: o.empty === true };
+    // İş yer tutucudan ilk gerçek işe geçerken kullanıcı sekme seçtiyse (varsayılan 'draw' dışı) ona dokunulmaz; varsayılandaysa işin panelli sekmesine geçer.
+    if (karar === 'koru') { tabYaz((t) => (t === 'draw' ? (Panel ? 'st' : 'draw') : t)); return; }
+    tabYaz(Panel ? 'st' : 'draw'); if (dar) mvYaz((v) => (v === 'ozet' ? v : 'prod'));
+  }, [o.no]);
   const stUpd = (f: (x: Is) => Partial<Is>) => islerYaz((l) => l.map((x, i) => (i === aiRef.current ? { ...x, ...f(x) } : x)));
   const stApi: PanelArayuzu = {
     is: o, paket: (o.pkg || {}) as Pkg, ayar: istasyonAyari(o.pkg), kayit: (o.sr || {}) as IstasyonKaydi,

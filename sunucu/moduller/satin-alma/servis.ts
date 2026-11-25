@@ -48,7 +48,7 @@ import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import {
   ILETILER, ISLEM, type KurKilidiIsi, emirAcikMi, kilitliDurum, basamakEsigiReddi, basamakKilidiReddi, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, oneriReddi, kurKilidiIsi, kurKilidiReddi, degisiklikReddi, gecikmeGunu, fasonKalani, sonDonusGecikmesi, agirlikliGecikme, degisiklikTuru, dortGozSonucu, onayKademesiReddi, onayKisisiIzleri, onayLimitRolleri, onayLimitleriDegistiMi, onayLimitiReddi, terminsizSiparisReddi, terminTakibi, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
-  KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, siparisBekletmeReddi, talebinAlimlari, ondalikKiyas, siparisReddi, talebim, kalemKarsiligi, talebimDuzenlenirMi, talebimKalemReddi, guncellemeReddi, guncellemeIptalleri, ikinciAlimRiski,
+  KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, siparisBekletmeReddi, talebinAlimlari, ondalikKiyas, siparisReddi, talebim, kalemSiparisTerminleri, kalemKarsiligi, talebimDuzenlenirMi, talebimKalemReddi, guncellemeReddi, guncellemeIptalleri, ikinciAlimRiski,
   fasonKalemReddi, fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi, type KalemBagi,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGovdeDurumu, talepEdenGorunumu, avansAsimi, gerceklesenKosul, planGerceklesenFarki, talepKartiReddi, tamGorurMu, fiyatGorurMu, fiyatsizGorunum, talasFiyatiGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
   askidakiTedarikciReddi, birimFiyati, kaliteSiparisReddi, karneTeslimOlayi, stokTutari, uygulananKgFiyati, yeniSiparisFirmalari,
@@ -561,7 +561,9 @@ export async function taleplerim(db: Db, k: Kullanici, sinir: number): Promise<T
   const kabuller = await kalemKabulleri(db, gorunenler);
   // Şartlı alternatifler görünümden önce (teklifli tam talepten) alınır; birleştirilmiş kaynak talepte teklif birleşik taleptedir.
   const sartli = new Map(talepler.flatMap((t) => [...sartliAlternatifler(t)]));
-  return { talepler: gorunenler.map((t) => talebim(t, baglar, karsiliklar, ozellikler, kabuller, sartli)), toplam: satirlar.length };
+  // Sipariş termini yalnız tarihtir (fiyat yok); birleştirilmiş kaynak talepte sipariş birleşik taleptedir.
+  const siparisTerminleri = kalemSiparisTerminleri([...talepler, ...birlesenler.values()]);
+  return { talepler: gorunenler.map((t) => talebim(t, baglar, karsiliklar, ozellikler, kabuller, sartli, siparisTerminleri)), toplam: satirlar.length };
 }
 
 // SAT-79 (2871-1 a): talep eden kendi taslağını Taleplerim'den düzenler. Yalnız sahibi (açan ya da adına açılan) ve yalnız teklif istenmeden önce;
@@ -586,7 +588,7 @@ export async function talebimiDuzenle(db: Db, k: Kullanici, id: string, g: Taleb
   await s.kalemKabulleriYaz(db, id, kabuller);
   await s.kalemAlternatifKartlariYaz(db, id, alternatifler);
   const son = (await talepOku(db, id))!;
-  return talebim(gorunen(k, son), await kalemBagGorunumu(db, [id]), await kalemKarsiliklari(db, [son]), await kalemOzellikleri(db, [son]), await kalemKabulleri(db, [son]), sartliAlternatifler(son));
+  return talebim(gorunen(k, son), await kalemBagGorunumu(db, [id]), await kalemKarsiliklari(db, [son]), await kalemOzellikleri(db, [son]), await kalemKabulleri(db, [son]), sartliAlternatifler(son), kalemSiparisTerminleri([son]));
 }
 
 // SAT-79, SAT-80: talep edenin gönderdiği kalemler. Kimlikli kalem eski talebin kalemidir: kartı, adı ve birimi eskiden alınır, miktar ve açıklama
@@ -676,7 +678,7 @@ export async function guncellemeAc(db: Db, k: Kullanici, id: string, g: TalebimG
   await s.hareketEkle(db, id, randomUUID(), `Güncelleme talebi açıldı: ${acilan.no}`, k.id);
   await s.hareketEkle(db, g.id, randomUUID(), `${eski.no} talebinin güncellemesi olarak açıldı.`, k.id);
   const son = (await talepOku(db, g.id))!;
-  return talebim(gorunen(k, son), await kalemBagGorunumu(db, [g.id]), await kalemKarsiliklari(db, [son]), await kalemOzellikleri(db, [son]), await kalemKabulleri(db, [son]), sartliAlternatifler(son));
+  return talebim(gorunen(k, son), await kalemBagGorunumu(db, [g.id]), await kalemKarsiliklari(db, [son]), await kalemOzellikleri(db, [son]), await kalemKabulleri(db, [son]), sartliAlternatifler(son), kalemSiparisTerminleri([son]));
 }
 
 // 3437 a (dilim 2): talep eden kartın alternatif zarfını kabul sınırı olarak görür ve yalnız daraltır.
@@ -859,7 +861,7 @@ export async function alternatifIzni(db: Db, k: Kullanici, id: string, g: Altern
   const ad = t.kalemler.find((x) => x.id === g.kalemId)?.ad ?? '';
   await s.hareketEkle(db, id, randomUUID(), `${ad}: şartlı alternatif ${g.karar === 'onay' ? 'onaylandı' : 'reddedildi'}${g.notu === '' ? '' : ` (${g.notu})`}`, k.id);
   const son = (await talepOku(db, id))!;
-  return talebim(gorunen(k, son), await kalemBagGorunumu(db, [id]), await kalemKarsiliklari(db, [son]), await kalemOzellikleri(db, [son]), await kalemKabulleri(db, [son]), sartliAlternatifler(son));
+  return talebim(gorunen(k, son), await kalemBagGorunumu(db, [id]), await kalemKarsiliklari(db, [son]), await kalemOzellikleri(db, [son]), await kalemKabulleri(db, [son]), sartliAlternatifler(son), kalemSiparisTerminleri([son]));
 }
 
 // 3437 a (dilim 3b-2): karar bu kayıtta onaylanınca seçilen alternatiflerin kartı açılır (ONAYDA, açan onaylayan kişi) ya da aynı nitelikli

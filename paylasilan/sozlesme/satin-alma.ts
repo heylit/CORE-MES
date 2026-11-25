@@ -976,6 +976,10 @@ export const talebimSemasi = z.object({
     ad: z.string(), miktar: z.string().nullable(), birim: z.string(), kartBekliyor: z.boolean(), uygulanan: z.string().nullable(), fasonAdim: z.string().nullable(),
     // 3462 a: kalemin geçerli termini ve üretim emri (kendi değeri yoksa talebinki).
     ihtiyacTarihi: z.string().nullable().optional(), uretimEmriId: z.number().int().nullable().optional(), uretimEmriNo: z.string().nullable().optional(),
+    // Siparişi verilmiş kalemin geçerli teslim günü (satırın kendi tarihi, yoksa siparişin; bölünmüş kalemde en geç pay); siparişi yoksa null. Fiyat taşımaz.
+    siparisTermini: z.string().nullable().optional(),
+    // Kalem birden çok firmaya bölünmüşse pay sayısı (siparisTermini en geç paydır); bölünmemişte 1, siparişsizde gelmez.
+    siparisPayAdedi: z.number().int().optional(),
     // 2871: kg ile kartın stok birimi arasındaki karşılık (kartın birim ağırlığıyla); hesaplanamıyorsa null, uydurulmaz.
     karsilik: z.object({ miktar: z.string(), birim: z.string() }).nullable().optional(),
     // 3121: kartın kalite, durum, işlem ve ölçüsü; kartsız kalemde null.
