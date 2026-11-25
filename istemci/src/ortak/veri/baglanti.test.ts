@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from './api.ts';
-import { baglantiDonusunuDinle, baglantiDurumu, baglantiSifirla, bildirimiKapat, kuyrukKaynagi } from './baglanti.ts';
+import { baglantiDonusunuDinle, baglantiDonusunuSeyrekDinle, baglantiDurumu, baglantiSifirla, bildirimiKapat, kuyrukKaynagi } from './baglanti.ts';
 
 const KIMLIK = '0b8e4a3c-6f1d-4c2a-9e7b-3d5f1a2b4c6d';
 
@@ -88,6 +88,22 @@ describe('baglanti durumu', () => {
     await api.get('/x');
     await api.get('/x');
     expect(donunce).toHaveBeenCalledTimes(1);
+    birak();
+  });
+
+  it('seyrek donus dinleyicisi: kismi ulasilamazlikta kopuk-donus salinimi aralikta bir kez isler, sonuncuyu kaybetmez', async () => {
+    vi.useFakeTimers();
+    const donunce = vi.fn();
+    const birak = baglantiDonusunuSeyrekDinle(donunce, 10_000);
+    const salinim = async () => { agKopuk(); await api.get('/x').catch(() => undefined); sunucuCevapVerir(); await api.get('/y'); };
+    await salinim();
+    expect(donunce).toHaveBeenCalledTimes(1);
+    for (let i = 0; i < 50; i++) await salinim();
+    expect(donunce).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(10_000);
+    expect(donunce).toHaveBeenCalledTimes(2);
+    vi.advanceTimersByTime(60_000);
+    expect(donunce).toHaveBeenCalledTimes(2);
     birak();
   });
 

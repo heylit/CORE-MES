@@ -14,7 +14,7 @@ import { komutlar } from './ortak/rota/komutlar.ts';
 import { ustEylemler } from './ortak/rota/ust-eylemler.ts';
 import { rolSeritleri, ustSeritler } from './ortak/rota/ust-seritler.ts';
 import { hataIletisi } from './ortak/veri/api.ts';
-import { baglantiDonusunuDinle } from './ortak/veri/baglanti.ts';
+import { baglantiDonusunuSeyrekDinle } from './ortak/veri/baglanti.ts';
 import { useBostaCikis } from './ortak/veri/bosta-cikis.ts';
 import { useKartlaKisiDegistir } from './ortak/veri/kart-degistir.ts';
 import { useGorunum, useHareketUygula } from './ortak/veri/gorunum.ts';
@@ -151,7 +151,7 @@ export function App({ rotalar = modulRotalari, kartlar = anaSayfaKartlari }: {
   kartlar?: readonly AnaSayfaKarti[];
 }) {
   const [istemci] = useState(sorguIstemcisi);
-  useEffect(() => baglantiDonusunuDinle(() => { void istemci.invalidateQueries(); }), [istemci]);
+  useEffect(() => baglantiDonusunuSeyrekDinle(() => { void istemci.invalidateQueries(); }), [istemci]);
   return (
     <QueryClientProvider client={istemci}>
       <BildirimSaglayici>
