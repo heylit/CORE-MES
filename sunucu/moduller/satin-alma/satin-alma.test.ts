@@ -840,6 +840,9 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.deepEqual(karisik.kalemler.map((x) => [x.ihtiyacTarihi, x.uretimEmriId]), [['2026-12-10', e1], ['2026-12-20', e2]]);
     // Terminler farklı: en erken kalem dahil her kalem kendi terminini açık taşır (3475).
     assert.deepEqual((await vt().tx((db) => sorgu.kalemTerminEmirleriOku(db, [karisik.id]))).map((x) => [x.ihtiyacTarihi, x.uretimEmriId]), [['2026-12-10', e1], ['2026-12-20', e2]]);
+    // 3696: satın alma merkezi cevabı kalem terminini kalem kimliğiyle taşır (kalemi terminsiz olan talep terminini yedek alır).
+    const merkezTalep = tamam<AcilisCevabi>(await istek(c.sa, 'GET', '/satin-alma-acilis')).talepler.find((x) => x.id === karisik.id)!;
+    assert.deepEqual(merkezTalep.kalemTerminleri?.map((x) => [x.kalemId, x.ihtiyacTarihi]), karisik.kalemler.map((x) => [x.id, x.ihtiyacTarihi]));
     // Kalem emri talep emrinin yerine okunur (KALEM_EMRI): e2'nin tedarik durumunda yalnız B görünür.
     const durumlar = await vt().tx((db) => emirTedarikDurumlari(db, [e2], []));
     assert.deepEqual(durumlar.filter((x) => x.talepNo === karisik.no).map((x) => x.uretimEmriId), [e2]);

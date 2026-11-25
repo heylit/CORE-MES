@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AcilisCevabi, Talep, Teklif } from '#paylasilan/sozlesme/satin-alma.ts';
 // Uygulamadaki yükleme sırası: store önce (store ile taşıyıcı birbirini döngüsel ithal eder).
 import './store.ts';
-import { ekranliBagla, talepSatiri } from './test-ekrani.ts';
+import { ekranliBagla, sekme, talepSatiri } from './test-ekrani.ts';
 
 const K1 = '00000000-0000-4000-8000-0000000000c1';
 const K2 = '00000000-0000-4000-8000-0000000000c2';
@@ -49,6 +49,8 @@ async function ac(t: Talep): Promise<{ kok: HTMLElement; kapat: () => void }> {
   const kapat = ekranliBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {} });
   await vi.waitFor(() => expect(talepSatiri(kok, t.id)).not.toBeNull());
   talepSatiri(kok, t.id)!.click();
+  await vi.waitFor(() => expect(sekme(kok, 'compare')).not.toBeNull());
+  sekme(kok, 'compare')!.click();
   await vi.waitFor(() => expect(kok.querySelector('[data-sa-karar-matrisi]')).not.toBeNull());
   return { kok, kapat };
 }

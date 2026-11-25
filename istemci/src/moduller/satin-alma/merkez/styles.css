@@ -1023,3 +1023,10 @@
   .sa-kok .sa-kr-cubuk .btn, .sa-kok .sa-kr .btn, .sa-kok .sa-kr-dahil, .sa-kok .sa-kr-agirlik select{ min-height:var(--dokunma); }
   .sa-kok .sa-kr-cubuk .row .btn{ flex:1 1 auto; justify-content:center; }
 }
+
+/* 3696: Kalemler adımında kalite, durum, işlem, ölçü ve açıklama kalem hücresinin altında tek satırdır; tablo yana kaymaz. */
+.sa-kok table.rt.sa-oz-tek .sa-oz-alt{ display:block; }
+.sa-kok table.rt.sa-oz-tek td.lead{ min-width:12rem; overflow-wrap:anywhere; }
+.sa-kok .sa-kalem-duzenle{ margin-top:var(--b-1); }
+.sa-kok .sa-istek-ozeti{ list-style:none; margin:0; padding:var(--b-3) var(--b-4); display:flex; flex-wrap:wrap; gap:var(--b-1) var(--b-5); border-top:1px solid var(--sa-line-2); }
+.sa-kok [data-sa-faiz-yok]{ display:block; white-space:normal; overflow-wrap:anywhere; }

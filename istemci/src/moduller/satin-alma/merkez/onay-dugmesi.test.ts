@@ -35,6 +35,8 @@ async function ac(onaylayabilir: boolean): Promise<{ kok: HTMLElement; kapat: ()
   const kapat = ekranliBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {}, onaylayabilir });
   await vi.waitFor(() => expect(talepSatiri(kok, t.id)).not.toBeNull());
   talepSatiri(kok, t.id)!.click();
+  await vi.waitFor(() => expect(sekme(kok, 'approval')).not.toBeNull());
+  sekme(kok, 'approval')!.click();
   await vi.waitFor(() => expect(kok.querySelector('[data-act="approval-form"]')).not.toBeNull());
   return { kok, kapat };
 }

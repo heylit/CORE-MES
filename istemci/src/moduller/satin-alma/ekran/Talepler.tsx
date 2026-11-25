@@ -76,7 +76,7 @@ export function Talepler() {
       hucre: (r) => { const v = reqValue(r); return v.v === null ? '–' : <span className="sa-ekran-govde sa-ekran-sag"><b>{money(v.v, 'TRY', 0)}</b><small>{v.who}</small></span>; },
       csv: (r) => reqValue(r).v ?? '',
     },
-    { anahtar: 'need', baslik: 'İhtiyaç', kirilmaz: true, sirala: true, hucre: (r) => ihtiyac(r, bugun), csv: (r) => r.needDate || '' },
+    { anahtar: 'need', baslik: 'İstenen termin', kirilmaz: true, sirala: true, hucre: (r) => ihtiyac(r, bugun), csv: (r) => r.needDate || '' },
   ];
   // 3401-1 a: fiyat görmeyen okuyucuda tutar sütunu çizilmez; üstte tek kilit notu durur.
   const sutunlar = kilit ? tumSutunlar.filter((x) => x.anahtar !== 'value') : tumSutunlar;
@@ -103,7 +103,7 @@ export function Talepler() {
         : (
           <Tablo
             etiket="Talepler" sutunlar={sutunlar} satirlar={liste} satirAnahtari={(r) => r.id}
-            satirSec={(r) => { go('request', r.id); }}
+            satirSec={(r) => { go('request', r.id, 'items'); }}
             bosMesaj={hepsi.length ? 'Bu süzgece uyan talep yok.' : 'Henüz talep yok. Talepler Taleplerim sayfasından açılır.'}
             siralama={V.sort ? { alan: V.sort, yon: V.dir > 0 ? 'artan' : 'azalan' } : null}
             siralamaDegistir={(s) => degistir(() => { V.sort = s?.alan ?? ''; V.dir = s?.yon === 'azalan' ? -1 : 1; })}

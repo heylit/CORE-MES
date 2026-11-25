@@ -193,6 +193,7 @@ async function talepleriYalinKur(db: Db, satirlar: s.TalepSatiri[]): Promise<Tal
   const karsiliklar = await kalemKarsiliklari(db, [{ kalemler: a.kalemler.map((k) => ({ ...k, miktar: sade(k.miktar) })) }]);
   const ozellikler = await kalemOzellikleri(db, [{ kalemler: a.kalemler }]);
   const isaretler = await kalemAlternatifKartlari(db, satirlar.map((t) => t.id));
+  const kalemTerminleri = satirlar.length === 0 ? [] : await s.kalemTerminEmirleriOku(db, satirlar.map((t) => t.id));
   const kopyalar = satirlar.length === 0 ? [] : await s.kartKopyalariToplu(db, satirlar.map((t) => t.id));
   const cizimSayilari = await teklifTutamagi.bagSayilari(db, satirlar.map((t) => talepCizimiKaydi(t.id)));
   return satirlar.map((t) => {
@@ -213,6 +214,7 @@ async function talepleriYalinKur(db: Db, satirlar: s.TalepSatiri[]): Promise<Tal
       kalemKarsiliklari: grup(a.kalemler, t.id).flatMap((k) => { const c = karsiliklar.get(k.id); return c === undefined ? [] : [{ kalemId: k.id, ...c }]; }),
       kalemOzellikleri: grup(a.kalemler, t.id).flatMap((k) => { const o = ozellikler.get(k.id); return o === undefined ? [] : [{ kalemId: k.id, ...o }]; }),
       kalemAlternatifleri: grup(a.kalemler, t.id).flatMap((k) => { const l = isaretler.get(k.id); return l === undefined ? [] : [{ kalemId: k.id, kartlar: l }]; }),
+      kalemTerminleri: kalemTerminleri.flatMap((x) => (x.talepId === t.id && x.ihtiyacTarihi !== null ? [{ kalemId: x.kalemId, ihtiyacTarihi: x.ihtiyacTarihi }] : [])),
       siparisOzellikleri: kopyalar.filter((c) => c.talepId === t.id).map((c) => ({ kalemId: c.kalemId, teklifId: c.teklifId, ...kopyaOzelligi(c.ayrinti) })),
       teklifIstekleri: grup(a.istekler, t.id).map(at),
       teklifler: grup(a.teklifler, t.id).map((q) => ({

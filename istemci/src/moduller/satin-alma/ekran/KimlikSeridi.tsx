@@ -14,7 +14,7 @@ export function durumTonu(r: PurchaseRequest, bugun: string) {
 export function ihtiyacMetni(r: PurchaseRequest, bugun: string): string {
   const d = dayDiff(bugun, r.needDate);
   const acik = ['draft', 'rfq', 'eval', 'approval'].includes(r.status);
-  return `İhtiyaç ${fmtDate(r.needDate)}${acik ? (d < 0 ? `, ${String(-d)} gün geçti` : ` (${String(d)} gün)`) : ''}`;
+  return `İstenen termin ${fmtDate(r.needDate)}${acik ? (d < 0 ? `, ${String(-d)} gün geçti` : ` (${String(d)} gün)`) : ''}`;
 }
 
 // 3442-3: talebin başlığı kaydırmayla görünmez olunca kimliği (no, ad, durum, ihtiyaç, kalemler, adım) ince bir şeritte üstte kalır;

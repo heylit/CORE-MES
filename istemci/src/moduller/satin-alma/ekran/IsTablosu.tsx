@@ -36,7 +36,7 @@ function TeslimatHucresi({ s, bugun }: { s: IsSatiri; bugun: string }) {
   const ne = t.kaynak === 'siparis' ? 'siparişte beklenen' : t.kaynak === 'karar' ? `kararla ${nf0.format(t.gun ?? 0)} gün` : `en iyi teklif ${nf0.format(t.gun ?? 0)} gün`;
   return (
     <span className="sa-ekran-govde">
-      <span>{t.kaynak === 'siparis' ? '' : '~'}{fmtDate(t.tarih)}</span>
+      <span title={t.kaynak === 'siparis' ? undefined : 'Tahmini: en iyi tekliften hesaplandı'}>{t.kaynak === 'siparis' ? '' : <><span aria-hidden="true">~</span><span className="sr-only">tahmini </span></>}{fmtDate(t.tarih)}</span>
       <small>{ne}</small>
       {gec !== null && <Rozet ton="hata">termine {nf0.format(gec)} gün geç</Rozet>}
     </span>

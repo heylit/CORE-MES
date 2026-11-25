@@ -94,7 +94,7 @@ function nitelik(r: PurchaseRequest, x: EvalRow): string[] {
 function tedBaslik(r: PurchaseRequest, ev: Evaluation, x: EvalRow, kilit: boolean): string {
   const fl = nitelik(r, x);
   return `<div class="sa-kr-ted"><span class="sa-kr-ted-ad"><b>${esc(supName(x.q))}</b>${ev.ranking[0]?.q.id === x.q.id ? ` <span class="flag good">${ik("check", 12)} önerilen</span>` : ""}</span>
-    <span class="num sa-kr-net" title="Tüm kalemler, nakliye ve vade etkisi dahil net bugünkü maliyet">${money(x.c.pvTRY, "TRY", 0)}</span><span class="xs muted">net, vade etkisi dahil</span>
+    <span class="num sa-kr-net" title="Tüm kalemler, nakliye ve vade etkisi dahil net bugünkü maliyet">${money(x.c.pvTRY, "TRY", 0)}</span><span class="xs muted">tüm kalemler, net, vade dahil</span>
     <span class="small muted">${terminMetni(x.q) ?? "termin yok"} · ${esc(payText(x.q))}</span>
     <span class="small muted">puan <b class="num">${nf0.format(x.score)}</b></span>
     ${fl.length ? `<span class="flags">${fl.join("")}</span>` : ""}

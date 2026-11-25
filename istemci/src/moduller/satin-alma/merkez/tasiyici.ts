@@ -127,6 +127,7 @@ export function talepEkrana(t: Talep): PurchaseRequest {
         ...((k) => (k ? { karsilik: karsilikYaz(k) } : {}))(t.kalemKarsiliklari?.find((x) => x.kalemId === i.id)),
         ...((o) => (o ? { malzeme: { kalite: o.kalite, durum: o.durum, islem: o.islem, olcu: o.olcu, aciklama: o.aciklama, ayrinti: o.ayrinti } } : {}))(t.kalemOzellikleri?.find((x) => x.kalemId === i.id)),
         ...((a) => (a && a.kartlar.length > 0 ? { alternatifler: a.kartlar } : {}))(t.kalemAlternatifleri?.find((x) => x.kalemId === i.id)),
+        ...((k) => (k ? { istenenTermin: k.ihtiyacTarihi.slice(0, 10) } : {}))(t.kalemTerminleri?.find((x) => x.kalemId === i.id)),
         ...(bag?.fason ? { fason: { emirNo: bag.fason.emirNo, opNo: bag.fason.opNo, adim: bag.fason.adim, firmaAdi: bag.fason.firmaAdi } } : {}),
         // Bağ satırı her bağ türünde gelir (satış siparişi ve die yalnız kimlikle); kalem bölünürse bağ yeni satıra geçmez.
         ...(bag ? { sabit: 'bag' as const } : t.kaynaklar?.some((x) => x.kalemIdleri.includes(i.id)) ? { sabit: 'kaynak' as const } : {}),

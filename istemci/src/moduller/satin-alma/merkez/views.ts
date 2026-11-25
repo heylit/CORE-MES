@@ -267,7 +267,7 @@ export function reqTable(list: PurchaseRequest[], compact = false, sortable = fa
   const th = (k: string, label: string, cls = "") => sortable
     ? `<th class="${cls}" aria-sort="${V.sort === k ? (V.dir > 0 ? "ascending" : "descending") : "none"}"><button class="sortbtn" data-act="sort" data-k="${k}">${label}${V.sort === k ? (V.dir > 0 ? " ▲" : " ▼") : ""}</button></th>`
     : `<th class="${cls}">${label}</th>`;
-  return `<div class="tw"><table class="rt"><thead><tr>${th("no", "No")}${th("title", "Talep")}${th("status", "Durum")}${compact ? "" : th("quotes", "Teklif", "r")}${th("value", "En iyi / seçilen", "r")}${compact ? "" : th("need", "İhtiyaç")}</tr></thead><tbody>
+  return `<div class="tw"><table class="rt"><thead><tr>${th("no", "No")}${th("title", "Talep")}${th("status", "Durum")}${compact ? "" : th("quotes", "Teklif", "r")}${th("value", "En iyi / seçilen", "r")}${compact ? "" : th("need", "İstenen termin")}</tr></thead><tbody>
   ${list.map(r => {
     const tt = r.award ? awardTotals(r) : null;
     const ev = (r.quotes || []).length ? evaluate(r) : null;
@@ -356,10 +356,6 @@ export function adimSirasi(r: PurchaseRequest): number {
   }
 }
 /** Talebin aşamasına göre açık olacak bölüm */
-function defaultSection(r: PurchaseRequest): string {
-  const i = adimSirasi(r);
-  return i < 0 ? "items" : ADIMLAR[Math.min(i, SON_ADIM)]![0];
-}
 /** Liste ve panoda talebin ilerlemesi: adım başına nokta, biten yeşil, şimdiki koyu. */
 export function ilerlemeNoktalari(r: PurchaseRequest): string {
   const i = adimSirasi(r);
@@ -377,7 +373,12 @@ function kimde(r: PurchaseRequest): string | null {
   return "Satın alma";
 }
 /** Açık adım: adreste ya da sekmede seçilen, yoksa talebin şimdiki adımı. Eski "sim" ve "decision" bağlantıları karşılığına gider. */
+function defaultSection(r: PurchaseRequest): string {
+  const i = adimSirasi(r);
+  return i < 0 ? "items" : ADIMLAR[Math.min(i, SON_ADIM)]![0];
+}
 export function talepBolumu(r: PurchaseRequest): string {
+  // 3696: Talepler listesi Kalemler adımını açar (satır tıklaması sekmeyi verir); iş satırı (Bugün, Ana sayfa) sıradaki iş adımını açar.
   const tab = V.tab || defaultSection(r);
   const curI = adimSirasi(r);
   return tab === "sim" ? "compare" : tab === "decision" ? (curI >= 4 ? ADIMLAR[Math.min(curI, SON_ADIM)]![0] : "approval") : tab;
@@ -524,6 +525,30 @@ function ozellikAyrintisi(o: MalzemeOzelligi | undefined): string {
 /** 3100: miktar hücresinde ikinci satır; ayrı sütun açılmaz. */
 const karsilikAlti = (it: RequestItem): string => (it.karsilik ? `<span class="sub" data-sa-karsilik="">${esc(it.karsilik)}</span>` : "");
 /** simple: talep eden ve onaylayan için sade liste (hafıza paneli ve satın alma düzenlemesi yok) */
+/** 3696: teklif istenen tedarikçiler, istek ve son cevap tarihleri, kimden cevap geldi; teklif istenmemişse boş. */
+function teklifIstekOzeti(r: PurchaseRequest): string {
+  const rfqs = r.rfqs || [];
+  if (!rfqs.length) return "";
+  const gelen = (sid: string) => (r.quotes || []).some((q) => q.supplierId === sid);
+  return `<ul class="sa-istek-ozeti" data-sa-istek-ozeti="">${rfqs.map((x) => `<li><b>${esc(S.suppliers[x.supplierId]?.name ?? "Silinmiş tedarikçi")}</b> <span class="small muted">istendi ${fmtDate(x.sentAt)}${x.dueDate ? `, son cevap ${fmtDate(x.dueDate)}` : ""}</span> ${gelen(x.supplierId) ? '<span class="flag good">teklif geldi</span>' : x.dueDate && x.dueDate < todayStr() ? '<span class="flag bad">süre geçti</span>' : '<span class="flag mute">bekleniyor</span>'}</li>`).join("")}</ul>`;
+}
+/** 3696: kalemin istenen termini (kalemin kendisi, yoksa talebin) ve ne kadar kaldığı; açık talepte gecikme kırmızı. */
+function kalemTerminHucresi(r: PurchaseRequest, it: RequestItem): string {
+  const t = it.istenenTermin || r.needDate;
+  if (!t) return '<td data-l="İstenen termin"><span class="faint">–</span></td>';
+  const d = dayDiff(todayStr(), t), acik = OPEN.includes(r.status) && r.status !== "approval";
+  const not = acik ? (d < 0 ? `<span class="flag bad">${-d} gün geçti</span>` : `<span class="sub">${d === 0 ? "bugün" : `${d} gün var`}</span>`) : "";
+  return `<td class="num" data-l="İstenen termin" data-sa-kalem-termin="">${fmtDate(t)}${it.istenenTermin ? "" : '<span class="sub">talepten</span>'}${not}</td>`;
+}
+/** 3696: kalem başına gelen teklif sayısı ve (fiyat görünüyorsa) en düşük birim fiyatı; teklifi düzenle düğmesi Teklifler adımına götürür. */
+function kalemTeklifHucresi(r: PurchaseRequest, it: RequestItem, kilit: boolean): string {
+  const fiyatli = (r.quotes || []).filter((q) => isNum(q.prices?.[it.id]));
+  const istendi = (r.rfqs || []).length;
+  const en = fiyatli.length ? fiyatli.reduce((a, q) => (q.prices[it.id]! < a.prices[it.id]! ? q : a)) : null;
+  const metin = fiyatli.length ? `${fiyatli.length}${istendi ? ` / ${istendi}` : ""} teklif` : istendi ? `${istendi} istendi, gelmedi` : "istenmedi";
+  const duzenle = OPEN.includes(r.status) ? `<div class="sa-kalem-duzenle"><button class="btn sm ghost" data-act="tab" data-tab="quotes" aria-label="${esc(it.name)} teklifini düzenle">Teklifi düzenle</button></div>` : "";
+  return `<td data-l="Teklifler" data-sa-kalem-teklif=""><span>${metin}</span>${en && !kilit ? `<span class="sub" title="${esc(supName(en))}">en düşük ${money(en.prices[it.id]!, en.currency)}</span>` : ""}${duzenle}</td>`;
+}
 export function tabItems(r: PurchaseRequest, simple = false): string {
   const items = r.items || [];
   if (!items.length) return `<div class="panel">${empty("Kalem yok", "Teklif istemeden önce ne alınacağını miktar ve birimiyle girin.", '<button class="btn primary" data-act="edit-request">Kalem ekle</button>')}</div>`;
@@ -538,8 +563,9 @@ export function tabItems(r: PurchaseRequest, simple = false): string {
     if (last) est += last.unitTRY * (parseNum(it.qty) || 0);
     if (st) st.suppliers.forEach(s => { prevSup[s.supplierId] = prevSup[s.supplierId] || { id: s.supplierId, name: s.name, items: new Set(), wins: 0 }; prevSup[s.supplierId]!.items.add(it.name); prevSup[s.supplierId]!.wins += s.wins; });
     if (mid) Object.values(S.requests).forEach(o => { if (o.id !== r.id && o.award && o.award.lessons && (o.items || []).some(x => matOf(x) === mid)) lessons.push({ r: o, t: o.award.lessons! }); });
-    return `<tr><td class="lead"><b>${m ? matLink(mid, it.name) : esc(it.name)}</b>${m ? `<span class="sub">${esc(m.code || "")}${m.category ? ", " + esc(m.category) : ""}</span>` : '<span class="sub">katalogda yok</span>'}${it.spec ? `<span class="sub">${esc(it.spec)}</span>` : ""}${kalemBagMetinleri(it).map(t => `<span class="sub" data-sa-kalem-bagi="">${esc(t)}</span>`).join("")}${ozellikAlti(it.malzeme)}${!simple && it.materialId ? `<span class="sub" data-sa-alt-ozet="${esc(it.id)}" data-sa-alt-talep="${esc(r.id)}">Alternatif: –</span>` : ""}${(it.alternatifler ?? []).map(a => `<span class="sub" data-sa-ak="">${esc(a.ad)}${a.tur === "sartli" ? " (şartlı)" : ""}: ${esc(a.ozet)}</span>`).join("")}</td>${ozellikHucreleri(it.malzeme)}
+    return `<tr><td class="lead"><b>${m ? matLink(mid, it.name) : esc(it.name)}</b>${m ? `<span class="sub">${esc(m.code || "")}${m.category ? ", " + esc(m.category) : ""}</span>` : '<span class="sub">katalogda yok</span>'}${it.spec ? `<span class="sub">${esc(it.spec)}</span>` : ""}${kalemBagMetinleri(it).map(t => `<span class="sub" data-sa-kalem-bagi="">${esc(t)}</span>`).join("")}${ozellikAlti(it.malzeme)}${!simple && it.materialId ? `<span class="sub" data-sa-alt-ozet="${esc(it.id)}" data-sa-alt-talep="${esc(r.id)}">Alternatif: –</span>` : ""}${(it.alternatifler ?? []).map(a => `<span class="sub" data-sa-ak="">${esc(a.ad)}${a.tur === "sartli" ? " (şartlı)" : ""}: ${esc(a.ozet)}</span>`).join("")}</td>
       <td class="r num">${numIn(parseNum(it.qty))} ${esc(it.unit)}${karsilikAlti(it)}</td>
+      ${kalemTerminHucresi(r, it)}${kalemTeklifHucresi(r, it, kilit)}
       ${kilit ? "" : `<td class="r num">${last ? `${money(last.unitTRY)}<span class="sub">${esc(last.supplier)}, ${fmtDate(last.date)}</span>` : '<span class="faint">ilk alım</span>'}</td>
       <td class="r num">${st && isNum(st.avgTRY) ? money(st.avgTRY) : "–"}${st && st.quotes ? `<span class="sub">${st.quotes} teklif kaydı</span>` : ""}</td>
       <td class="r num">${last ? money(last.unitTRY * (parseNum(it.qty) || 0), "TRY", 0) : "–"}</td>`}</tr>`;
@@ -548,7 +574,7 @@ export function tabItems(r: PurchaseRequest, simple = false): string {
   const uniq: { r: PurchaseRequest; t: string }[] = []; const seen = new Set<string>(); lessons.forEach(l => { if (!seen.has(l.r.id)) { seen.add(l.r.id); uniq.push(l); } });
   return `<div class="stack">
   <div class="panel"><div class="panel-h"><h2>Kalemler</h2><span class="sub">${items.length} kalem${est && !kilit ? ", son fiyatlarla tahmini " + money(est, "TRY", 0) : ""}</span><span class="spacer"></span>${simple && r.status !== "draft" ? "" : `<button class="btn sm" data-act="edit-request">Düzenle</button>`}</div>
-    ${kilit ? kilitPaneli("Fiyat sütunları") : ""}<div class="tw"><table class="rt"><thead><tr><th>Kalem</th>${ozellikBasliklari()}<th class="r">Miktar</th>${kilit ? "" : '<th class="r">Son alış (birim)</th><th class="r">12 ay ort. teklif</th><th class="r">Tahmini tutar</th>'}</tr></thead><tbody>${rows.join("")}</tbody></table></div>${r.notes ? `<div class="panel-f small"><span class="muted">Talep notu:</span> ${esc(r.notes)}</div>` : ""}</div>
+    ${kilit ? kilitPaneli("Fiyat sütunları") : ""}<div class="tw"><table class="rt sa-oz-tek"><thead><tr><th>Kalem</th><th class="r">Miktar</th><th>İstenen termin</th><th>Teklifler</th>${kilit ? "" : '<th class="r">Son alış (birim)</th><th class="r">12 ay ort. teklif</th><th class="r">Tahmini tutar</th>'}</tr></thead><tbody>${rows.join("")}</tbody></table></div>${teklifIstekOzeti(r)}${r.notes ? `<div class="panel-f small"><span class="muted">Talep notu:</span> ${esc(r.notes)}</div>` : ""}</div>
   ${!simple && (ps.length || uniq.length) ? `<div class="callout memory"><h3>Hafıza bu kalemler hakkında ne diyor</h3>
     ${ps.length ? `<p class="small" data-sa-y="5">Bu kalemler için daha önce teklif veren tedarikçiler:</p><div class="chips" data-sa-y="20">${ps.map(p => `<button class="chip" data-act="open-sup" data-id="${p.id}">${esc(p.name)}${p.wins ? ` <span class="faint">${p.wins} kez seçildi</span>` : ""}</button>`).join("")}</div>` : ""}
     ${uniq.length ? `<p class="small" data-sa-y="14">Önceki alımlardan notlar:</p>${uniq.slice(0, 4).map(l => `<div class="note" data-sa-y="20"><span class="xs muted">${esc(l.r.no)}, ${esc(l.r.title)}</span><br>${esc(l.t)}</div>`).join("")}` : ""}
