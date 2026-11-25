@@ -81,6 +81,10 @@
 .sa-talep-adimlar > li[data-durum="bitti"]::before { background: var(--run); }
 .sa-talep-adimlar > li[data-durum="simdi"] { color: var(--ink); font-weight: 600; }
 .sa-talep-adimlar > li[data-durum="simdi"]::before { background: var(--hazard); }
+/* 520 px altında beş adım sütunu "Satın alma"yı sığdırmaz; kesmek yerine etiket iki satıra kırılır. */
+@media (max-width: 519px) {
+  .sa-talep-adimlar > li { white-space: normal; overflow: visible; overflow-wrap: anywhere; line-height: 1.2; align-content: start; }
+}
 .sa-talep-kalemler { list-style: none; margin: var(--b-2) 0 0; padding: 0; display: grid; gap: var(--b-2); }
 .sa-talep-kalemler > li { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-3); padding-top: var(--b-2); border-top: 1px solid var(--edge); }
 @media (min-width: 600px) {
