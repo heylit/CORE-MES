@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
-import { Simge } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, Simge } from '../../../../ortak/arayuz/index.ts';
 import { KucukResimKutusu, useKucukResimler } from '../../../belge-merkezi/disari.ts';
 import { IS_DURUMLARI } from '../cekirdek/sabitler.ts';
 import type { IsYeriBilgisi } from './Parcalar.tsx';
@@ -10,8 +10,10 @@ import type { Is, IsDurumu } from './tipler.ts';
 const durumRengi = (s: string) => IS_DURUMLARI[s as IsDurumu]?.durum ?? 'sirada';
 const durumAdi = (s: string): string => IS_DURUMLARI[s as IsDurumu]?.etiket ?? s;
 const terminKisa = (t: string | null | undefined): string => {
-  const m = t && /^(\d{4})-(\d{2})-(\d{2})$/.exec(t);
-  return m ? `${m[3]}.${m[2]}${Number(m[1]) === new Date().getFullYear() ? '' : `.${m[1].slice(2)}`}` : '—';
+  const m = t ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(t) : null;
+  if (!m) return '—';
+  const [, yil = '', ay = '', gun = ''] = m;
+  return `${gun}.${ay}${Number(yil) === new Date().getFullYear() ? '' : `.${yil.slice(2)}`}`;
 };
 const terminYaz = (t: string | null | undefined): string => (t && /^\d{4}-\d{2}-\d{2}$/.test(t) ? t.split('-').reverse().join('.') : t || '—');
 
@@ -51,11 +53,21 @@ export function SiradakiKart({ is, siradaki, ekranda, acik, yer, resim, revUyums
   );
 }
 
+// 3714 Test K4: önizleme eylemi şeridin başlık sütunundadır; şeridin dışına taşıp iş satırını ve kimliği örtmez, şeridin boyunu değiştirmez.
+function SiraOnizleme({ don, gec }: { don: () => void; gec: () => void }) {
+  return (
+    <span className="tc-ay1-sira-eylem" role="group" aria-label="Önizleme · ekrandaki iş değişmez" title="Önizleme · ekrandaki iş değişmez">
+      <Dugme simge="back" onClick={don} aria-label="Ekrandakine dön" title="Ekrandakine dön"><span className="tc-ay1-sira-eylem-yazi">Ekrandakine dön</span></Dugme>
+      <Dugme tur="birincil" simge="next" onClick={gec}>Bu işe geç</Dugme>
+    </span>
+  );
+}
+
 // 3338-6 a: terminalin en üstünde istasyonun işleri boydan boya, elle kayar. Ekrandaki iş ortaya gelir ve sarı çerçevelidir.
 // Karta dokunmak yalnız bakar (önizleme); geçiş "Bu işe geç" ile ve bugünkü geçiş sorusuyla olur. Biten işler soluk durur.
-export function SiradakiIsler({ isler, ekranda, bakilan, siradakiMi, yer, sec, eylem }: {
+export function SiradakiIsler({ isler, ekranda, bakilan, siradakiMi, yer, sec, onizleme }: {
   isler: readonly Is[]; ekranda: number; bakilan: number; siradakiMi: (i: number) => boolean; yer: (i: number) => IsYeriBilgisi | null;
-  sec: (i: number) => void; eylem: ReactNode;
+  sec: (i: number) => void; onizleme: { don: () => void; gec: () => void } | null;
 }) {
   const ol = useRef<HTMLOListElement>(null);
   const odak = bakilan >= 0 ? bakilan : ekranda;
@@ -86,11 +98,13 @@ export function SiradakiIsler({ isler, ekranda, bakilan, siradakiMi, yer, sec, e
   };
   const acik = isler.filter((x) => !x.empty && x.state !== 'done').length;
   return (
-    <section className="tc-ay1-sira" aria-label="Sıradaki işler" data-eylem={eylem ? '' : undefined}>
-      <span className="tc-ay1-sira-ust">
-        <Simge ad="list" boyut="k" /><b>Sıradaki işler</b>
-        <small className="tc-ay1-mono">{acik} iş · {ekranda + 1}/{isler.length}</small>
-      </span>
+    <section className="tc-ay1-sira" aria-label="Sıradaki işler" data-eylem={onizleme ? '' : undefined}>
+      {onizleme ? <SiraOnizleme don={onizleme.don} gec={onizleme.gec} /> : (
+        <span className="tc-ay1-sira-ust">
+          <Simge ad="list" boyut="k" /><b>Sıradaki işler</b>
+          <small className="tc-ay1-mono">{acik} iş · {ekranda + 1}/{isler.length}</small>
+        </span>
+      )}
       <div className="tc-ay1-sira-govde">
         <button type="button" className="tc-ra-kaydir" aria-label="Önceki işler" onClick={() => kaydir(-1)}><Simge ad="chev-left" boyut="k" /></button>
         <ol ref={ol}>
@@ -104,7 +118,6 @@ export function SiradakiIsler({ isler, ekranda, bakilan, siradakiMi, yer, sec, e
         </ol>
         <button type="button" className="tc-ra-kaydir" aria-label="Sonraki işler" onClick={() => kaydir(1)}><Simge ad="chev-right" boyut="k" /></button>
       </div>
-      {eylem ? <div className="tc-ay1-sira-eylem">{eylem}</div> : null}
     </section>
   );
 }

@@ -12,8 +12,9 @@ const render = (e: ReactElement) => ciz0(<QueryClientProvider client={new QueryC
 // 3338-6 a: istasyonun işleri şeridi. Veriler uydurmadır (ORN-).
 const is = (no: string, state: Is['state']): Is => ({ ...bosIs({ l: 'Deneme' }), empty: false, no, part: `ORN parça ${no}`, op: 'Op 20', state, target: 10, good: 2 });
 const ISLER = [is('ORN-1', 'done'), is('ORN-2', 'running'), is('ORN-3', 'queued'), is('ORN-4', 'queued')];
-const ciz = (bakilan: number, secilen: number[] = []) => render(
-  <SiradakiIsler isler={ISLER} ekranda={1} bakilan={bakilan} siradakiMi={(i) => i === 2} yer={() => null} sec={(i) => secilen.push(i)} eylem={bakilan >= 0 ? <span>Önizleme</span> : null} />,
+const ciz = (bakilan: number, secilen: number[] = [], olan: string[] = []) => render(
+  <SiradakiIsler isler={ISLER} ekranda={1} bakilan={bakilan} siradakiMi={(i) => i === 2} yer={() => null} sec={(i) => secilen.push(i)}
+    onizleme={bakilan >= 0 ? { don: () => olan.push('don'), gec: () => olan.push('gec') } : null} />,
 );
 
 describe('Sıradaki işler şeridi (3338-6 a)', () => {
@@ -28,14 +29,21 @@ describe('Sıradaki işler şeridi (3338-6 a)', () => {
     expect(screen.getByRole('button', { name: 'ORN-4' }).textContent).not.toContain('Sıradaki');
   });
 
-  it('bakılan kart basılı olur, ekrandaki olmaz; dokunuş yalnız seçimi bildirir; eylem şeridin altında', () => {
+  it('bakılan kart basılı olur, ekrandaki olmaz; dokunuş yalnız seçimi bildirir; eylem şeridin başlık sütununda', () => {
     const secilen: number[] = [];
-    ciz(3, secilen);
+    const olan: string[] = [];
+    ciz(3, secilen, olan);
     expect(screen.getByRole('button', { name: 'ORN-4' }).getAttribute('aria-pressed')).toBe('true');
     expect(screen.getByRole('button', { name: 'ORN-2 · ekranda' }).getAttribute('aria-pressed')).toBe('false');
-    expect(screen.getByText('Önizleme')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'ORN-3' }));
     expect(secilen).toEqual([2]);
+    // 3714 Test K4: eylem şeridin dolaysız çocuğudur (başlığın yerinde), şeridin dışında yüzen satır yoktur.
+    const grup = screen.getByRole('group', { name: 'Önizleme · ekrandaki iş değişmez' });
+    expect(grup.parentElement).toBe(screen.getByRole('region', { name: 'Sıradaki işler' }));
+    expect(screen.queryByText(/iş · 2\/4$/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Ekrandakine dön' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Bu işe geç' }));
+    expect(olan).toEqual(['don', 'gec']);
   });
 });
 
@@ -46,7 +54,7 @@ describe('Sıradaki işler kartı (3714)', () => {
   });
   const liste = [dolu('ORN-1', 'running'), dolu('ORN-2', 'queued')];
   const goster = (bakilan: number) => render(
-    <SiradakiIsler isler={liste} ekranda={0} bakilan={bakilan} siradakiMi={(i) => i === 1} yer={() => ({ istasyon: 'TORNA', makine: 'CNC-002', makineAd: 'DMU 50' })} sec={() => undefined} eylem={null} />,
+    <SiradakiIsler isler={liste} ekranda={0} bakilan={bakilan} siradakiMi={(i) => i === 1} yer={() => ({ istasyon: 'TORNA', makine: 'ORN-CNC-2', makineAd: 'ORN tezgah' })} sec={() => undefined} onizleme={null} />,
   );
 
   it('kartın başı parça, proje ve revizyondur; emir no en sonda gelir', () => {
@@ -61,7 +69,7 @@ describe('Sıradaki işler kartı (3714)', () => {
   it('ayrıntı (Op, Malzeme, Termin, Tezgâh) yalnız bakılan kartta açılır; termin gün.ay.yıl yazılır', () => {
     goster(1);
     const acik = screen.getByRole('button', { name: 'ORN-2' }).textContent ?? '';
-    for (const e of ['Malzeme', 'Termin', 'Tezgâh', '31.12.2026', 'CNC-002']) expect(acik).toContain(e);
+    for (const e of ['Malzeme', 'Termin', 'Tezgâh', '31.12.2026', 'ORN-CNC-2']) expect(acik).toContain(e);
     expect(screen.getByRole('button', { name: 'ORN-1 · ekranda' }).textContent).not.toContain('Malzeme');
   });
 
@@ -77,7 +85,7 @@ describe('Sıradaki işler kartı (3714)', () => {
     const resimli = { ...liste[1]!, pkg: { ...liste[1]!.pkg, malzemeNo: 7 } as unknown as Is['pkg'] };
     ciz0(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <SiradakiIsler isler={[liste[0]!, resimli]} ekranda={0} bakilan={-1} siradakiMi={() => false} yer={() => null} sec={() => undefined} eylem={null} />
+        <SiradakiIsler isler={[liste[0]!, resimli]} ekranda={0} bakilan={-1} siradakiMi={() => false} yer={() => null} sec={() => undefined} onizleme={null} />
       </QueryClientProvider>,
     );
     const img = await screen.findByAltText('ORN parça ORN-2', {}, { timeout: 3000 });

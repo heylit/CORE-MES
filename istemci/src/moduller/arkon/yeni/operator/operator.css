@@ -1283,9 +1283,7 @@ button.tc-ay1-gosterge { cursor: pointer; min-block-size: var(--dokunma); }
 .tc-ay1-sira li > button > .tc-ay1-tcark-kart { block-size: 100%; }
 .tc-ay1-sira .tc-ay1-tcark-kart[data-ekranda] { outline: var(--cizgi) solid var(--hazard); }
 .tc-ay1-sira li > button[aria-pressed='true'] > .tc-ay1-tcark-kart:not([data-ekranda]) { outline: var(--cizgi) solid var(--done); }
-.tc-ay1-sira-eylem { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2); min-width: 0; }
 .tc-ay1-genis .tc-ay1-sira { grid-template-columns: calc(var(--dokunma-ana) * 2.6) minmax(0, 1fr); align-items: center; column-gap: var(--b-3); }
-.tc-ay1-genis .tc-ay1-sira-eylem { grid-column: 1 / -1; }
 .tc-ay1-genis .tc-ay1-sira-ust { display: grid; gap: 0; }
 .tc-ay1-genis .tc-ay1-sira-ust > .tc-simge { display: none; }
 .tc-ay1-genis > .tc-ay1-aktif { flex: none; padding: var(--b-2) var(--b-3); align-items: center; }
@@ -1299,7 +1297,6 @@ button.tc-ay1-gosterge { cursor: pointer; min-block-size: var(--dokunma); }
 /* Telefonda ve tablette sayaç boyu için şerit tek sıradır: solda sayaç, sağda kartlar; kart emir no ve adettir, durum kenar rengindedir,
    ekrandaki kart çerçevelidir. Ayrıntı alttaki iş satırında ve Bilgiler'de. */
 .tc-ay1-dar .tc-ay1-sira { --tc-sira-kart: calc(var(--dokunma) * 3.6); flex: none; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--b-1) var(--b-2); padding: var(--b-1) var(--b-2); }
-.tc-ay1-dar .tc-ay1-sira-eylem { grid-column: 1 / -1; }
 .tc-ay1-dar .tc-ay1-sira-ust { display: grid; justify-items: center; gap: 0; font-size: var(--yazi-xs); }
 .tc-ay1-dar .tc-ay1-sira-ust > b { display: none; }
 .tc-ay1-dar .tc-ay1-sira .tc-ra-kaydir { display: none; }
@@ -1659,12 +1656,15 @@ button.tc-ay1-yer { font: inherit; color: inherit; text-align: start; cursor: po
 .tc-ay1-genis .tc-ay1-sira-govde { block-size: 100%; min-block-size: 0; }
 .tc-ay1-genis .tc-ay1-sira ol { align-self: stretch; }
 
-/* 3714 Test K3: "Ekrandakine dön / Bu işe geç" satırı şeridin yüksekliğinden pay almaz; şeridin altında yüzer, alttaki bölüm kaymaz. */
-.tc-ay1-sira[data-eylem] { position: relative; overflow: visible; }
-.tc-ay1-sira[data-eylem] > .tc-ay1-sira-eylem {
-  position: absolute; inset-inline: 0; inset-block-start: calc(100% + var(--b-1)); z-index: 6; padding: var(--b-2) var(--b-3);
-  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-3); background: var(--panel-solid, var(--panel)); box-shadow: var(--shadow);
-}
+/* 3714 Test K4: önizlemede "Ekrandakine dön / Bu işe geç" şeridin başlık sütununa geçer (sayaç yazısının yerine). Şeridin dışına taşmaz,
+   kimliği ve iş satırını örtmez, şeridin boyunu değiştirmez. Genişte iki düğme alt alta, telefonda "dön" yalnız simgedir. */
+.tc-ay1-sira > .tc-ay1-sira-eylem { display: grid; align-content: center; gap: var(--b-1); min-width: 0; }
+.tc-ay1-sira-eylem > .tc-dugme { min-block-size: var(--dokunma); inline-size: 100%; min-width: 0; padding-inline: var(--b-2); white-space: normal; line-height: 1.1; text-wrap: balance; }
+.tc-ay1-genis .tc-ay1-sira[data-eylem] { grid-template-columns: calc(var(--dokunma-ana) * 3.2) minmax(0, 1fr); }
+.tc-ay1-genis .tc-ay1-sira > .tc-ay1-sira-eylem { grid-column: auto; }
+.tc-ay1-dar .tc-ay1-sira > .tc-ay1-sira-eylem { grid-column: auto; inline-size: calc(var(--dokunma) * 1.9); }
+.tc-ay1-dar .tc-ay1-sira-eylem > .tc-dugme { padding-inline: var(--b-1); font-size: var(--yazi-s); }
+.tc-ay1-dar .tc-ay1-sira-eylem > .tc-dugme:first-child .tc-ay1-sira-eylem-yazi { display: none; }
 /* Sütunlar açıkça yerleşir: resim gizlenince özet kısmı 0 px'lik ilk sütuna düşmesin (3714 Test/Arayüz 0010). */
 .tc-ay1-sk-resim { grid-column: 1; }
 .tc-ay1-sk-ic { grid-column: 2; }

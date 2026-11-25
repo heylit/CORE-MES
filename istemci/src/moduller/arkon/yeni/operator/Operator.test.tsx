@@ -140,7 +140,7 @@ describe('A1 Üretim Terminali', () => {
     const ilk = within(screen.getByRole('region', { name: 'Aktif iş emri' })).getByRole('heading').textContent;
     const oteki = () => within(serit).getAllByRole('button', { pressed: false }).find((x) => /^IE-DENEME-(1|3)$/.test(x.getAttribute('aria-label') ?? ''))!;
     fireEvent.click(oteki());
-    expect(within(serit).getByText(/Önizleme · ekrandaki iş değişmez/)).toBeTruthy();
+    expect(within(serit).getByRole('group', { name: 'Önizleme · ekrandaki iş değişmez' })).toBeTruthy();
     expect(screen.getByText(/Önizleme · IE-DENEME-(1|3) · teknik resim ve adımlar salt okunur/)).toBeTruthy();
     expect(within(screen.getByRole('region', { name: 'Aktif iş emri' })).getByRole('heading').textContent).toBe(ilk);
     fireEvent.click(within(serit).getByRole('button', { name: 'Ekrandakine dön' }));
