@@ -51,6 +51,8 @@ export interface KartTeslimi {
   alinan: number; alinmayan: number; hatalar: string[]; buradakiMalzemeler: number[];
   // Alınan toplam miktar birimiyle ("40 adet"); hiçbiri alınmadıysa null.
   alinanMiktar: string | null;
+  // 3718 a: alınan teslimlerin kimlikleri; kalite istasyonu yoldaki numunesini bununla teslim alır.
+  alinanTeslimIdler: number[];
 }
 export interface TerminalKartOkutmasi {
   yetkili: boolean;
@@ -96,6 +98,7 @@ export function useTerminalKartOkutmasi(istasyonKodu: string | null): TerminalKa
       alinan: alinanlar.length, alinmayan: gelenler.length - alinanlar.length, hatalar,
       alinanMiktar: alinanlar.length === 0 ? null : birimliMiktar(toplamMiktar(alinanlar.map((x) => x.miktar)), c.malzeme.birim),
       buradakiMalzemeler: [...new Set([...alinanlar.map((t) => t.malzemeId), ...burada])],
+      alinanTeslimIdler: alinanlar.map((t) => t.id),
     };
   };
   return { yetkili, isGirdileri, kartiAl };
