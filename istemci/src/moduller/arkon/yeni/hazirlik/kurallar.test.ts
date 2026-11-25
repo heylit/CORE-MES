@@ -92,11 +92,13 @@ describe('1307 b kontrol planı görevi', () => {
     expect(planYokUyarisiGerekir(paket({ plan: [{ id: 1, nom: 'Ø20', tol: '', min: 19.9, max: 20.1, tool: '', freq: 'İlk parça' }] as Pkg['plan'] }))).toBe(false);
   });
 
-  it('kalite muayenesinde plan zorunlu kalır; öteki türlerde isteğe bağlı ve uyarı sorulmaz', () => {
+  it('kalite muayenesinde plan zorunlu denetim maddesi kalır; planı boş paket hangi türde olursa olsun uyarı onayı ister (3701)', () => {
     expect(plan(paket({ opType: 'kalite' }))).toMatchObject({ ok: false, soft: false, d: 'En az bir kontrol noktası' });
-    expect(planYokUyarisiGerekir(paket({ opType: 'kalite' }))).toBe(false);
-    expect(plan(paket({ opType: 'boya' }))).toMatchObject({ ok: false, soft: true, d: 'İsteğe bağlı' });
-    expect(planYokUyarisiGerekir(paket({ opType: 'boya' }))).toBe(false);
+    expect(plan(paket({ opType: 'boya' }))).toMatchObject({ ok: false, soft: true, d: PLAN_YOK_UYARISI });
+    for (const opType of ['cnc', 'kalite', 'depo', 'boya', 'montaj', 'tesviye'] as const) {
+      expect(planYokUyarisiGerekir(paket({ opType }))).toBe(true);
+      expect(planYokUyarisiGerekir(paket({ opType, plan: [{ id: 1, nom: 'Ø20', tol: '', min: 19.9, max: 20.1, tool: '', freq: 'İlk parça' }] as Pkg['plan'] }))).toBe(false);
+    }
   });
 });
 

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type {
   KmBalon, KmBalonlarGovdesi, KmBalonYeriGovdesi, KmMerkezBelgeleriCevabi, KmMerkezBelgesi, KmNumunelerCevabi, KmOlcumGovdesi, KmOlcumlerCevabi, KmResim, KmResimEkleGovdesi,
@@ -26,6 +26,17 @@ export function useStudyoParcasi(malzemeNo: number | null) {
     queryFn: () => api.get<KmStudyoParcaCevabi>(`/kalite-merkezi/studyo/parcalar/${String(malzemeNo)}`),
     enabled: malzemeNo !== null,
     staleTime: 30_000,
+  });
+}
+
+// Birden çok parçanın stüdyo verisi (Hazırlık toplu doldurma, 3701); anahtar tek parçayla aynıdır, önbellek paylaşılır.
+export function useStudyoParcalari(malzemeNolari: readonly number[]) {
+  return useQueries({
+    queries: malzemeNolari.map((no) => ({
+      queryKey: studyoAnahtari.parca(no),
+      queryFn: () => api.get<KmStudyoParcaCevabi>(`/kalite-merkezi/studyo/parcalar/${String(no)}`),
+      staleTime: 30_000,
+    })),
   });
 }
 

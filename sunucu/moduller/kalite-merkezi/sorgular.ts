@@ -275,6 +275,18 @@ export function parcaResimleri(db: Db, malzemeNo: number): Promise<ResimSatiri[]
   return db.sorgu(`SELECT ${RESIM_SUTUNLARI} FROM kalite_merkezi_resim WHERE malzeme_no = $1 AND aktif ORDER BY id`, [malzemeNo]);
 }
 
+// Etkin balonlu resmi olan parçalar (Arkon taslağının kendiliğinden planı için); balonsuz parçanın resim ve grup sorgusu açılmaz.
+export async function balonluResimParcalari(db: Db, malzemeNolari: readonly number[]): Promise<number[]> {
+  const satirlar = await db.sorgu<{ malzemeNo: number }>(
+    `SELECT DISTINCT r.malzeme_no AS "malzemeNo" FROM kalite_merkezi_resim r
+      WHERE r.malzeme_no = ANY($1::int[]) AND r.aktif AND r.tur = 'resim'
+        AND EXISTS (SELECT 1 FROM kalite_merkezi_balon b WHERE b.resim_id = r.id AND b.aktif)
+      ORDER BY 1`,
+    [malzemeNolari],
+  );
+  return satirlar.map((s) => s.malzemeNo);
+}
+
 // Parçaya bir kez alınmış her belge revizyonu, kaldırılmışlar dahil: eşitleme kaldırılanı geri getirmez (1993 a).
 export function parcaResimKaynaklari(db: Db, malzemeNo: number): Promise<{ merkezBelgeId: number; ozet: string }[]> {
   return db.sorgu('SELECT merkez_belge_id AS "merkezBelgeId", ozet FROM kalite_merkezi_resim WHERE malzeme_no = $1', [malzemeNo]);

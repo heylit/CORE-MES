@@ -23,7 +23,8 @@ import type { IlkParcaSecimi } from '#paylasilan/sozlesme/rota.ts';
 import { durusNedenleriniListele, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import { aletlerVeKayitlari, olcumAletiGecerliMi } from '../kalibrasyon/disari.ts';
 import { kmNumuneDegisimiGecerli, kmNumuneDegisimiGerekli } from './km-numune-ceviri.ts';
-import { studyoParcasi } from '../kalite-merkezi/disari.ts';
+import { studyoParcasi, taslakResimleri } from '../kalite-merkezi/disari.ts';
+import { kmTaslakDoldur } from './km-plan-ceviri.ts';
 import { adimIlkParcaKararlari, ilkParcaKararlari, lotKarariYaz, muayenePlaniOner, emirNumuneleri, numuneIste, numuneKarariVer, numuneOku, olcumYaz } from '../kalite-merkezi/disari.ts';
 import type { KmOlcumKaynagi, KmOlcumVerisi } from '../kalite-merkezi/disari.ts';
 import {
@@ -373,6 +374,8 @@ async function isEmriTaslaklari(
   const kayitsizlar = girdiler.filter((g) => !kayitliKimlik.has(g.parca ? parcaPaketKimligi(g.isEmri.id, g.parca.no) : isEmriPaketKimligi(g.isEmri.id)));
   const girenler = await adimGirenleri(db, kayitsizlar);
   // Karar 732 a: kayıtsız taslak malzemenin Çizimler'de yayındaki PDF ve 3B modelini önerir; Hazırlık açınca merkezden alır (bağ yazma ucundadır).
+  // 3701: kontrol planı Kalite Merkezi'nin tek balonlu resminden taslakta kendiliğinden kurulur; kişinin Kalite Merkezi'ni okuma yetkisinden bağımsızdır.
+  const kmResimleri = await taslakResimleri(db, kayitsizlar.flatMap((g) => (g.sablon === null || !Array.isArray(g.sablon['plan']) || g.sablon['plan'].length === 0 ? [g.isEmri.malzemeNo] : [])));
   const malzemeBelgeleri = await kayitlaraBagliBelgeler(db, 'malzemeler', [...new Set(kayitsizlar.map((g) => g.isEmri.malzemeNo))]);
   // 564 2 a: kalite istasyonunun lot planı; parti paketin hedef adedidir (bölünmüş işte parçanınki), aynı parça ve adet bir kez hesaplanır.
   const aqlPlanlari = new Map<string, ReturnType<typeof tmiAqlPlani>>();
@@ -396,7 +399,8 @@ async function isEmriTaslaklari(
     const yayinli = g.sablon !== null && g.sablon === butun ? parcaYayini(taslak, butun) : taslak;
     const kimlik = String(yayinli['id']);
     const oneri = kayitliKimlik.has(kimlik) ? [] : malzemeCizimleri(yayinli['files'], malzemeBelgeleri.get(g.isEmri.malzemeNo) ?? []);
-    const govde = oneri.length > 0 ? { ...yayinli, malzemeCizimleri: oneri } : yayinli;
+    const kmDolu = kayitliKimlik.has(kimlik) || typeof g.isEmri.malzemeNo !== 'number' ? null : kmTaslakDoldur(yayinli, kmResimleri.get(g.isEmri.malzemeNo) ?? []);
+    const govde = oneri.length > 0 || kmDolu !== null ? { ...(kmDolu ?? yayinli), ...(oneri.length > 0 ? { malzemeCizimleri: oneri } : {}) } : yayinli;
     // Hazırlık sırası işin bugünkü istasyonundaysa geçerlidir: plan işi başka istasyona aldıysa iş orada sırasız (plan sırasıyla) durur.
     const sira = kuyruk.get(kimlik);
     const kuyrukSirasi = sira !== undefined && g.istasyon?.id === sira.istasyonId ? { sira: sira.sira, kisi: sira.kisi, zaman: sira.zaman } : null;

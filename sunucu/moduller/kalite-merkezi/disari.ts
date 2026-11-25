@@ -38,7 +38,7 @@ export type { AqlSinifi, LotBulunani, LotKarariIstegi, MuayeneAqlAyari, MuayeneP
 // Stüdyo (595 1 b, 597 a, 600 a): teknik resim, balon, numune planı, numune ve ölçümün sahibi Kalite Merkezi'dir. Arkon kalite
 // istasyonu ve Hazırlık parçanın resim ve planını buradan okur; numuneyi, ölçümü (kaynak: operatör, kalite, CMM) ve numune kararını
 // buraya yazar. Yetkiyi ve emrin kapsamını çağıranın ucu denetler; yazan kişi kayıtta tutulur.
-export { acikNumuneler, emirNumuneleri, emirOlcumleri, numuneIste, numuneKarari, numuneOku, olcumYaz, resimDosyasi, studyoParcasi } from './studyo.ts';
+export { acikNumuneler, emirNumuneleri, emirOlcumleri, numuneIste, numuneKarari, numuneOku, olcumYaz, resimDosyasi, studyoParcasi, taslakResimleri } from './studyo.ts';
 // 2131-2 a: numune kararı; ret aynı işlemde NCR açar ve NCR'yi döner. Arkon `numuneKarari` yerine bunu çağırır.
 export { numuneKarariVer } from './servis.ts';
 export type { KmNumune, KmNumuneIstegi, KmNumuneKarari, KmOlcum, KmOlcumKaynagi, KmOlcumVerisi, KmStudyoParcaCevabi } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';

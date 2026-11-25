@@ -67,6 +67,8 @@ export interface Pkg {
   /** son yayındaki içerik imzası (arkon/web/src/data/ara-onay.ts) */ yayinImza?: Record<string, string> | null;
   /** karar 732 a: kayıtsız CORE taslağına malzemenin Çizimler'deki yayında belgeleri (sunucu önerir, Hazırlık merkezden alır) */
   malzemeCizimleri?: { belgeId: number; ad: string; tip: 'pdf' | 'model' }[];
+  /** planın, resmin ve deponun nereden geldiği (3701): 'km' Kalite Merkezi, 'rota', 'sablon', 'el' (kişi değiştirdi ya da boşalttı; bir daha doldurulmaz); yayın geçmişine yazılmaz */
+  otoKaynak?: Partial<Record<'plan' | 'resim' | 'depo', { kaynak: 'km' | 'rota' | 'sablon' | 'el'; etiket?: string; at?: Ms; by?: string }>>;
   imported?: Ms; from?: string; [k: string]: unknown;
 }
 

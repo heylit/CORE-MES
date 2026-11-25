@@ -13,6 +13,7 @@ import {
   PAKET_DURUMLARI, TAKIP_SUZGECLERI, calisiyorMu, geriCekilebilir, topluGeriCekilebilir, takipEmirleri,
   type AdimDilimi, type TakipSuzgeci,
 } from './kurallar.ts';
+import { kmDoldurulabilir } from './km-cizim.ts';
 import { topluGonderilebilir } from './toplu.ts';
 import type { Pkg, Result, Ton } from './tipler.ts';
 
@@ -35,6 +36,7 @@ interface Ozellikler {
   duzenler: boolean;
   gonderSor: (l: readonly Pkg[]) => void;
   benzerSor: (l: readonly Pkg[]) => void;
+  kmDoldurSor: (l: readonly Pkg[]) => void;
 }
 
 const saat = (ms: number) => new Date(ms).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -43,7 +45,7 @@ const DILIM_ADI: Readonly<Record<AdimDilimi, string>> = {
 };
 const BASLAMA_TONU: Readonly<Record<keyof typeof BASLAMA_DURUMLARI, Ton>> = { durur: 'stop', uyari: 'hold', hazir: 'run' };
 
-export function TakipTablosu({ paketler, sonuclar, hazirlik, hazirlikOkundu, suz, suzYaz, yayinlar, seciliId, ac, geriCekSor, duzenler, gonderSor, benzerSor }: Ozellikler) {
+export function TakipTablosu({ paketler, sonuclar, hazirlik, hazirlikOkundu, suz, suzYaz, yayinlar, seciliId, ac, geriCekSor, duzenler, gonderSor, benzerSor, kmDoldurSor }: Ozellikler) {
   const emirler = useMemo(() => takipEmirleri(paketleriGrupla(paketler, 'emir'), sonuclar, hazirlik, suz), [paketler, sonuclar, hazirlik, suz]);
   const [secili, seciliYaz] = useState<ReadonlySet<string>>(() => new Set());
   // Seçilebilir: yayındaki başlamamış iş (geri çekme) ya da gönderilebilir iş (3362-1). Başlamış iş tek tek çekilir.
@@ -56,6 +58,7 @@ export function TakipTablosu({ paketler, sonuclar, hazirlik, hazirlikOkundu, suz
   const gonderilecek = seciliPaketler().filter((p) => topluGonderilebilir(p, sonucu(p)));
   const cekilecek = seciliPaketler().filter((p) => topluGeriCekilebilir(p, sonucu(p)));
   const doldurulacak = seciliPaketler().filter((p) => p.status === 'draft');
+  const kmDoldurulacak = seciliPaketler().filter(kmDoldurulabilir);
 
   return (
     <div className="tc-ay2-takip">
@@ -67,6 +70,11 @@ export function TakipTablosu({ paketler, sonuclar, hazirlik, hazirlikOkundu, suz
           <span role="status">{gecerli.length} iş seçili</span>
           {gonderilecek.length ? <Dugme tur="birincil" simge="next" onClick={() => gonderSor(gonderilecek)}>{gonderilecek.length} işi terminale gönder</Dugme> : null}
           {duzenler && doldurulacak.length ? <Dugme tur="ikincil" simge="layers" onClick={() => benzerSor(doldurulacak)}>Benzer paketten al</Dugme> : null}
+          {duzenler ? (
+            <Dugme tur="ikincil" simge="target" disabled={!kmDoldurulacak.length} title={kmDoldurulacak.length ? undefined : 'Seçilenlerin hepsi dolu ya da Kalite Merkezi’ne bağlı'} onClick={() => kmDoldurSor(kmDoldurulacak)}>
+              Kalite Merkezi’nden doldur
+            </Dugme>
+          ) : null}
           {cekilecek.length ? <Dugme tur="tehlike" simge="rotate" onClick={() => geriCekSor(cekilecek, true)}>{cekilecek.length} işi operatörden geri çek</Dugme> : null}
           <Dugme tur="ikincil" simge="x" onClick={() => seciliYaz(new Set())}>Seçimi kaldır</Dugme>
         </div>
