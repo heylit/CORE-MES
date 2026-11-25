@@ -56,6 +56,17 @@ export async function kartAyrintiSatirlari(kart: KartKaydiKisaltmasi): Promise<{
   // Tedarikçiye giden formda yalnız teknik tanım görünür: alış, garanti, bakım, kalibrasyon, depo ve tedarik tipi ile serbest açıklama satırları atılır.
   const KAPALI_BOLUM = new Set(['Satın alma ve garanti', 'Bakım ve kalibrasyon', 'Belgeler ve notlar', 'Özet ve kayıt', 'Kod ve açıklamalar']);
   const KAPALI_SATIR = new Set(['Kod', 'Ad', 'Tedarik tipi', 'Depo yeri', 'Sipariş noktası', 'Tedarikçi', 'Notlar', 'ERP kodu', 'Bakım (sonraki)', 'Kalibrasyon (sonraki)', 'Garanti bitiş']);
+  // Seçim değerleri Türkçe adıyla gösterilir, standart kodu parantezde kalır ("Hidrojen gevrekliği giderme (ISO 9588)").
+  const { standartAdlari, standartEtiketi } = await import('./yeni/standart-adlari.ts');
+  const adlar = standartAdlari(null);
+  const trAd = new Map<string, string>();
+  for (const v of Object.values(kart.g).flatMap((x) => (Array.isArray(x) ? x : [x]))) {
+    const a = typeof v === 'string' ? adlar[v] : undefined;
+    const standartKodu = a?.en ?? a?.astm;
+    if (typeof v === 'string' && standartKodu !== undefined && standartKodu !== v) trAd.set(standartEtiketi(v, adlar, null), `${v} (${standartKodu})`);
+  }
+  const turkce = (deger: string): string => trAd.get(deger) ?? deger.split(', ').map((x) => trAd.get(x) ?? x).join(', ');
   return foyVerisi(kayit as never, b).bolumler.filter((bolum) => !KAPALI_BOLUM.has(bolum.baslik)).flatMap((bolum) => bolum.satirlar)
-    .filter((s) => s.deger.trim() !== '' && s.deger !== '—' && !KAPALI_SATIR.has(s.ad) && !/^Açıklama \d/.test(s.ad) && s.deger !== kod);
+    .filter((s) => s.deger.trim() !== '' && s.deger !== '—' && !KAPALI_SATIR.has(s.ad) && !/^Açıklama \d/.test(s.ad) && s.deger !== kod)
+    .map((s) => ({ ad: s.ad, deger: turkce(s.deger) }));
 }

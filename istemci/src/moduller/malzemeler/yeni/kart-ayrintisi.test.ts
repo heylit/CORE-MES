@@ -6,7 +6,7 @@ describe('3706-2 kartAyrintiSatirlari', () => {
     const satirlar = await kartAyrintiSatirlari({ tur: 'hizmet', g: { kat: 'isil', yon: 'Alınan', cesit: 'Hidrojen gevrekliği giderme' }, com: { ad: 'ORNEK Isıl işlem (fason)', kod: 'HZ-ORN-00001', birim: 'kg', sertifika: [] } });
     const ad = (a: string) => satirlar.find((s) => s.ad === a)?.deger;
     expect(satirlar.length).toBeGreaterThan(2);
-    expect(JSON.stringify(satirlar)).toContain('Hydrogen embrittlement relief');
+    expect(JSON.stringify(satirlar)).toContain('Hidrojen gevrekliği giderme (ISO 9588)');
     expect(JSON.stringify(satirlar)).toContain('Alınan');
     expect(ad('Kod')).toBeUndefined();
     expect(ad('Ad')).toBeUndefined();

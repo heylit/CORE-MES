@@ -639,6 +639,7 @@
 .sa-kok .sa-rfq-gun-sayi{ display:inline-flex; align-items:center; gap:var(--b-1); }
 .sa-kok .sa-rfq-gun-sayi input{ width:5rem; }
 .sa-kok .sa-rfq-gun .btn[aria-pressed="true"]{ background:var(--sa-ink); color:var(--sa-bg); border-color:var(--sa-ink); }
+@media (max-width: 1023px){ .sa-kok .sa-rfq-gun .btn, .sa-kok .sa-rfq-gun-sayi input, .sa-kok .sa-rfq-gun #rfq-due{ min-height:var(--dokunma); } }
 .sa-kok .sa-rfq-taslak{ display:flex; flex-wrap:wrap; gap:var(--b-2); align-items:center; font-weight:600; }
 .sa-kok .sa-rfq-taslak select{ flex:1 1 14rem; max-width:24rem; font-weight:400; }
 .sa-kok .sa-rfq-bekleyen{ opacity:.7; }
