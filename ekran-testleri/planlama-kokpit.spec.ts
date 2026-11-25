@@ -3274,3 +3274,160 @@ test('Kokpit erişilebilirlik: çalışma açıkken tahta ve tablo kritik ihlal 
     expect(await sahip.evaluate((e) => (e.getAttribute('aria-owns') ?? '').split(' ').every((id) => document.getElementById(id)?.getAttribute('role') === 'row'))).toBe(true);
   }
 });
+
+test('Kokpit 3663: tablo kipinde adım satırına basınca pano çubuğun yanında, çubuğu ve sol tabloyu örtmeden ekranın içinde açılır; çubuk sol tablonun altında kalmaz', async ({ page, ac }, bilgi) => {
+  await taslakSunucusu(page);
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const karsilama = page.getByRole('button', { name: 'Başlayalım' });
+  if (await karsilama.isVisible()) await karsilama.click();
+  // Telefonda tahta yok (pano alt sayfa).
+  if (bilgi.project.name === 'g360') return;
+  let satir = kokpit.locator('[data-adim-satiri]').first();
+  if (await satir.count() === 0) { await kokpit.locator('button[data-agac]').first().click(); satir = kokpit.locator('[data-adim-satiri]').first(); }
+  const id = await satir.getAttribute('data-adim-satiri');
+  await satir.click();
+  const pano = page.locator('.tc-pyq-pano[data-kip="secili"]');
+  await expect(pano).toBeVisible();
+  const olc = () => page.evaluate((isId) => {
+    const pe = document.querySelector('.tc-pyq-pano[data-kip="secili"]'), p = pe?.getBoundingClientRect(), c = document.querySelector(`.tc-pyq-tahta [data-is="${isId}"]`)?.getBoundingClientRect();
+    const bas = document.querySelector('.tc-pyq-tahta .tc-pyq-bas')?.getBoundingClientRect();
+    const sat = document.querySelector(`.tc-pyq-tablo-satir[data-adim-satiri="${isId}"]`)?.getBoundingClientRect();
+    return p && c && bas && sat && pe ? { alt: pe.hasAttribute('data-alt'), yan: pe.getAttribute('data-alt'), kt: document.querySelector('.tc-pyq-tahta')!.getBoundingClientRect().top, p: { x: p.x, r: p.right, y: p.y, b: p.bottom }, c: { x: c.x, r: c.right, y: c.y, b: c.bottom }, s: { y: sat.y, b: sat.bottom }, basSag: bas.right, en: innerWidth, boy: innerHeight, renk: getComputedStyle(pe).backgroundColor } : null;
+  }, id);
+  // Düzgün kaydırma bitince çubuk sol tablonun sağında görünür; pano opaktır, çubuğa bitişiktir ve çubuğu ve (genişte) tabloyu örtmez, ekranın içindedir.
+  // Gantt alanı dar kalırsa (768) pano yüzmez, alt sayfa olur: çubuğu ve seçili satırı örtmez.
+  await expect.poll(async () => {
+    const o = await olc();
+    if (!o) return false;
+    const yatay = o.p.x < o.c.r && o.p.r > o.c.x, dikey = o.p.y < o.c.b && o.p.b > o.c.y;
+    const opak = !/rgba|\//.test(o.renk);
+    if (o.alt) return opak && (o.yan !== 'ust' || o.p.y >= o.kt - 1) && o.c.x >= o.basSag - 1 && !(yatay && dikey) && !(o.p.y < o.s.b && o.p.b > o.s.y) && o.p.r <= o.en && o.p.b <= o.boy;
+    // Çubuğu örtmez ve ona bitişiktir (yanında ya da altında/üstünde); yanındaysa dikeyde çubukla hizalıdır.
+    const bitisik = !(yatay && dikey) && (yatay ? Math.min(Math.abs(o.p.y - o.c.b), Math.abs(o.c.y - o.p.b)) : Math.min(Math.abs(o.p.x - o.c.r), Math.abs(o.c.x - o.p.r))) <= 24;
+    return opak && bitisik && o.c.x >= o.basSag - 1 && o.p.x >= o.basSag - 1 && o.p.r <= o.en && o.p.b <= o.boy && o.p.y >= 0;
+  }, { timeout: 5_000 }).toBe(true);
+  // Çubuk sol tablonun altına kayarsa pano gizlenir (görünmeyen çubuğa bağlı kalmaz); çubuk dönünce geri gelir.
+  const tahtaKay = (d: number) => page.locator('.tc-pyq-tahta').evaluate((el, dx) => { el.scrollLeft += dx; }, d);
+  await tahtaKay(2000);
+  await expect(pano).toBeHidden();
+  await tahtaKay(-2000);
+  await expect(pano).toBeVisible();
+  const klasor = process.env['TMIV2_EKRAN_GORUNTU']?.trim();
+  if (klasor) await page.screenshot({ path: `${klasor}/pano-tablo-${bilgi.project.name}.png` });
+  expect(await pano.getAttribute('aria-label')).toMatch(/bilgisi$/);
+  await page.keyboard.press('Escape');
+  await expect(pano).toHaveCount(0);
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+});
+
+test('Kokpit 3663: 1611 genişlikte de pano sol tabloyu örtmez', async ({ page, ac }, bilgi) => {
+  const proje: string = bilgi.project.name;
+  if (proje !== 'g1280') return;
+  await page.setViewportSize({ width: 1611, height: 853 });
+  await taslakSunucusu(page);
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const karsilama = page.getByRole('button', { name: 'Başlayalım' });
+  if (await karsilama.isVisible()) await karsilama.click();
+  // Telefonda tahta yok (pano alt sayfa).
+  if (bilgi.project.name === 'g360') return;
+  let satir = kokpit.locator('[data-adim-satiri]').first();
+  if (await satir.count() === 0) { await kokpit.locator('button[data-agac]').first().click(); satir = kokpit.locator('[data-adim-satiri]').first(); }
+  const id = await satir.getAttribute('data-adim-satiri');
+  await satir.click();
+  const pano = page.locator('.tc-pyq-pano[data-kip="secili"]');
+  await expect(pano).toBeVisible();
+  const olc = () => page.evaluate((isId) => {
+    const pe = document.querySelector('.tc-pyq-pano[data-kip="secili"]'), p = pe?.getBoundingClientRect(), c = document.querySelector(`.tc-pyq-tahta [data-is="${isId}"]`)?.getBoundingClientRect();
+    const bas = document.querySelector('.tc-pyq-tahta .tc-pyq-bas')?.getBoundingClientRect();
+    const sat = document.querySelector(`.tc-pyq-tablo-satir[data-adim-satiri="${isId}"]`)?.getBoundingClientRect();
+    return p && c && bas && sat && pe ? { alt: pe.hasAttribute('data-alt'), yan: pe.getAttribute('data-alt'), kt: document.querySelector('.tc-pyq-tahta')!.getBoundingClientRect().top, p: { x: p.x, r: p.right, y: p.y, b: p.bottom }, c: { x: c.x, r: c.right, y: c.y, b: c.bottom }, s: { y: sat.y, b: sat.bottom }, basSag: bas.right, en: innerWidth, boy: innerHeight, renk: getComputedStyle(pe).backgroundColor } : null;
+  }, id);
+  // Düzgün kaydırma bitince çubuk sol tablonun sağında görünür; pano opaktır, çubuğa bitişiktir ve çubuğu ve (genişte) tabloyu örtmez, ekranın içindedir.
+  // Gantt alanı dar kalırsa (768) pano yüzmez, alt sayfa olur: çubuğu ve seçili satırı örtmez.
+  await expect.poll(async () => {
+    const o = await olc();
+    if (!o) return false;
+    const yatay = o.p.x < o.c.r && o.p.r > o.c.x, dikey = o.p.y < o.c.b && o.p.b > o.c.y;
+    const opak = !/rgba|\//.test(o.renk);
+    if (o.alt) return opak && (o.yan !== 'ust' || o.p.y >= o.kt - 1) && o.c.x >= o.basSag - 1 && !(yatay && dikey) && !(o.p.y < o.s.b && o.p.b > o.s.y) && o.p.r <= o.en && o.p.b <= o.boy;
+    // Çubuğu örtmez ve ona bitişiktir (yanında ya da altında/üstünde); yanındaysa dikeyde çubukla hizalıdır.
+    const bitisik = !(yatay && dikey) && (yatay ? Math.min(Math.abs(o.p.y - o.c.b), Math.abs(o.c.y - o.p.b)) : Math.min(Math.abs(o.p.x - o.c.r), Math.abs(o.c.x - o.p.r))) <= 24;
+    return opak && bitisik && o.c.x >= o.basSag - 1 && o.p.x >= o.basSag - 1 && o.p.r <= o.en && o.p.b <= o.boy && o.p.y >= 0;
+  }, { timeout: 5_000 }).toBe(true);
+  // Çubuk sol tablonun altına kayarsa pano gizlenir (görünmeyen çubuğa bağlı kalmaz); çubuk dönünce geri gelir.
+  const tahtaKay = (d: number) => page.locator('.tc-pyq-tahta').evaluate((el, dx) => { el.scrollLeft += dx; }, d);
+  await tahtaKay(2000);
+  await expect(pano).toBeHidden();
+  await tahtaKay(-2000);
+  await expect(pano).toBeVisible();
+  // Kaydırma sırasında pano çubuğun bir yanından öbür yanına geçmez (K1).
+  const yanlar = await page.evaluate(async (isId) => {
+    const k = document.querySelector('.tc-pyq-tahta') as HTMLElement, gorulen = new Set<string>();
+    k.scrollTo({ left: Math.max(0, k.scrollLeft - 480), behavior: 'smooth' });
+    const bit = performance.now() + 1500;
+    await new Promise<void>((coz) => { const kare = (): void => {
+      const p = document.querySelector('.tc-pyq-pano[data-kip="secili"]')?.getBoundingClientRect(), c = document.querySelector(`.tc-pyq-tahta [data-is="${isId}"]`)?.getBoundingClientRect();
+      if (p && c && !document.querySelector('.tc-pyq-pano[data-kip="secili"]')!.hasAttribute('hidden')) gorulen.add(p.x + p.width / 2 > c.x + c.width / 2 ? 'sag' : 'sol');
+      if (performance.now() < bit) requestAnimationFrame(kare); else coz();
+    }; requestAnimationFrame(kare); });
+    return [...gorulen];
+  }, id);
+  expect(yanlar.length).toBeLessThanOrEqual(1);
+  const klasor = process.env['TMIV2_EKRAN_GORUNTU']?.trim();
+  if (klasor) await page.screenshot({ path: `${klasor}/pano-tablo-g1611.png` });
+  expect(await pano.getAttribute('aria-label')).toMatch(/bilgisi$/);
+  await page.keyboard.press('Escape');
+  await expect(pano).toHaveCount(0);
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+});
+
+test('Kokpit 3663: kısa ekranda kaydırma kabı kayınca üst sayfa üst çubuğu ve sekme şeridini örtmez', async ({ page, ac }, bilgi) => {
+  const proje: string = bilgi.project.name;
+  if (proje !== 'g768') return;
+  await taslakSunucusu(page);
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await page.setViewportSize({ width: 768, height: 700 });
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  const karsilama = page.getByRole('button', { name: 'Başlayalım' });
+  if (await karsilama.isVisible()) await karsilama.click();
+  // Tüm emirler açılır; en alttaki adım satırı seçilir: çubuk tahtanın içinde aşağıdadır, sayfa üstte açılır.
+  for (const d of await kokpit.locator('button[data-agac]').all()) { if (await d.getAttribute('aria-expanded') === 'false') await d.click(); }
+  const satirlar = kokpit.locator('[data-adim-satiri]');
+  const satir = satirlar.nth(Math.min(await satirlar.count(), 4) - 1);
+  await satir.click();
+  const pano = page.locator('.tc-pyq-pano[data-kip="secili"]');
+  await expect(pano).toBeVisible();
+  // Kaydırma kabı (tc-py-gorunum) aşağı kayar: pano hiçbir kaydırma kabının üstünün yukarısına çıkmaz.
+  const kapUst = () => page.evaluate(() => {
+    let ust = 0;
+    for (let a = document.querySelector('.tc-pyq-pano[data-kip="secili"]') ? document.querySelector('.tc-pyq-tahta')!.parentElement : null; a && a !== document.body; a = a.parentElement) {
+      const oy = getComputedStyle(a).overflowY;
+      if (oy === 'auto' || oy === 'scroll' || oy === 'hidden') ust = Math.max(ust, a.getBoundingClientRect().top);
+    }
+    return ust;
+  });
+  // Gerçek planda satır çok olur; kaydırma kabı uzatılarak tahtanın üstü kabın üstünün yukarısına çıkarılır (en çok 120 px kalana kadar).
+  await page.locator('.tc-py-gorunum').evaluate((el) => { const bosluk = document.createElement('div'); bosluk.style.height = '2000px'; bosluk.setAttribute('data-bosluk', ''); el.append(bosluk); });
+  const t0 = await page.locator('.tc-pyq-tahta').evaluate((e) => e.getBoundingClientRect().top + (e.closest('.tc-py-gorunum')?.scrollTop ?? 0));
+  let denenen = 0;
+  for (const hedef of [300, 200, 120, 60]) {
+    await page.locator('.tc-py-gorunum').evaluate((el, d) => { el.scrollTop = d; }, Math.max(0, t0 - hedef));
+    await page.waitForTimeout(400);
+    if (await pano.isVisible()) {
+      denenen += 1;
+      const kutu = await pano.boundingBox(), ust = await kapUst();
+      expect(kutu).not.toBeNull();
+      expect(kutu!.y).toBeGreaterThanOrEqual(ust - 1);
+      expect(kutu!.y + kutu!.height).toBeLessThanOrEqual(700);
+    }
+  }
+  expect(denenen).toBeGreaterThanOrEqual(2);
+});
