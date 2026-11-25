@@ -70,15 +70,26 @@ export function HazirlikPaketCipi({ satirlar }: { satirlar: readonly HazirlikSat
 
 // 3688: her adımın satırında 12 maddelik hazırlık matrisi (sabit sıra: durduranlar önce). Yalnız gösterim; işaretleme Adım Durumu sayfasındadır.
 // Hücre rengi tek başına anlam taşımaz: simge ve ad (başlık ve erişilebilir ad) aynı durumu söyler.
-const MADDE_SIRASI: readonly HazirlikMaddesi[] = ['cnc', 'cizim', 'yayin', 'rota', 'malzeme', 'takim-omru', 'takim-hazirla', 'makine', 'talimat', 'ek-madde', 'aparat', 'olcu-aleti'];
+// Sıra tek kaynakta: kayıt tipi yeni maddeyi eksik bırakırsa derleme durur; test HAZIRLIK_MADDELERI ile eşitliği denetler.
+export const MADDE_SIRASI: Record<HazirlikMaddesi, number> = { cnc: 0, cizim: 1, yayin: 2, rota: 3, malzeme: 4, 'takim-omru': 5, 'takim-hazirla': 6, makine: 7, talimat: 8, 'ek-madde': 9, aparat: 10, 'olcu-aleti': 11 };
 export function HazirlikMatrisiSeridi({ satirlar }: { satirlar: readonly HazirlikSatiri[] }) {
-  const l = [...satirlar].sort((a, b) => MADDE_SIRASI.indexOf(a.madde) - MADDE_SIRASI.indexOf(b.madde));
+  const l = [...satirlar].sort((a, b) => MADDE_SIRASI[a.madde] - MADDE_SIRASI[b.madde]);
+  const g = l.map((x) => ({ x, g: gorunum(x) }));
+  const hata = g.filter((e) => e.x.hal === 'eksik' && e.g.ton === 'hata'); const uyari = g.filter((e) => e.x.hal === 'eksik' && e.g.ton === 'uyari');
+  const ozet = hata.length + uyari.length === 0 ? 'hepsi tamam' : [hata.length ? `${hata.length} eksik` : '', uyari.length ? `${uyari.length} uyarı` : ''].filter(Boolean).join(', ');
+  const ad = (e: { x: HazirlikSatiri }) => HAZIRLIK_MADDE_BILGISI[e.x.madde].kisa;
   return (
-    <span className="tc-ay2-takip-matris" role="group" aria-label="Hazırlık matrisi">
-      {l.map((x) => {
-        const g = gorunum(x); const ad = `${HAZIRLIK_MADDE_BILGISI[x.madde].ad}: ${g.ad}`;
-        return <span key={x.madde} className="tc-ay2-takip-hucre" data-ton={g.ton} title={ad} role="img" aria-label={ad}><Simge ad={g.simge} boyut="k" /></span>;
-      })}
+    <span className="tc-ay2-takip-matris" role="group" aria-label={`Hazırlık matrisi: ${ozet}`}>
+      <span className="tc-ay2-takip-hucreler">
+        {g.map((e) => {
+          const t = `${HAZIRLIK_MADDE_BILGISI[e.x.madde].ad}: ${e.g.ad}`;
+          return <span key={e.x.madde} className="tc-ay2-takip-hucre" data-ton={e.g.ton} title={t} role="img" aria-label={t}><Simge ad={e.g.simge} boyut="k" /></span>;
+        })}
+      </span>
+      <span className="tc-ay2-takip-not" aria-hidden="true">
+        {hata.length ? <span data-ton="hata">Eksik: {hata.map(ad).join(' · ')}</span> : null}
+        {uyari.length ? <span data-ton="uyari">Uyarı: {uyari.map(ad).join(' · ')}</span> : null}
+      </span>
     </span>
   );
 }

@@ -51,7 +51,7 @@ describe('3111 Hazırlık takip tablosu', () => {
   it('3688: her adımın satırında hazırlık matrisi, simge ve adla (renk tek başına değil)', async () => {
     kur(YONETICI, 'M');
     const t = await tablo();
-    const m = (await within(t).findAllByRole('group', { name: 'Hazırlık matrisi' }, { timeout: 10000 }))[0]!;
+    const m = (await within(t).findAllByRole('group', { name: /^Hazırlık matrisi/ }, { timeout: 10000 }))[0]!;
     expect(within(m).getByRole('img', { name: 'CNC kurulumu: Eksik' })).toBeTruthy();
     expect(within(m).getByRole('img', { name: 'Rota yürürlükte: Tamam' })).toBeTruthy();
   }, 40000);
