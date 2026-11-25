@@ -4,7 +4,7 @@ import { bulunamadi, cakisma, dogrulama } from '#cekirdek/hata.ts';
 import type { IkiliCevap } from '#cekirdek/uc.ts';
 import { KM_MERKEZ_BICIMLERI, kmNumuneKurali } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import type {
-  KmBalon, KmBalonGirdisi, KmBalonYerKipi, KmMerkezBelgesi, KmNumune, KmNumunePlani, KmNumuneIstegi, KmNumuneKarari, KmOlcum, KmOlcumKaynagi, KmOlcumVerisi, KmResim, KmStudyoOzeti, KmStudyoParcaCevabi,
+  KmBalon, KmBalonGirdisi, KmBalonGrubu, KmBalonYerKipi, KmGruplarGovdesi, KmMerkezBelgesi, KmNumune, KmNumunePlani, KmNumuneIstegi, KmNumuneKarari, KmOlcum, KmOlcumKaynagi, KmOlcumVerisi, KmResim, KmStudyoOzeti, KmStudyoParcaCevabi,
 } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import {
   alinanRevizyonDosyasi, kaydaBagliBelgeler, kayitlaraBagliYayindakiBelgeler, revizyonKodlari, yayindakiBelgeDosyasi, yayindakiBelgeler,
@@ -14,7 +14,7 @@ import { malzemeOzeti } from '../malzemeler/disari.ts';
 import { yururlukteOperasyonlar } from '../rota/disari.ts';
 import { kapanisSonuclari, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import {
-  STUDYO_ILETILER, balonPlaniReddi, kapanmisEmirReddi, eskiRevizyonlar, balonYeriReddi, numuneDurumu, numuneIstegiReddi, numuneKarariReddi, numunePlaniReddi, olcumIstegiReddi, olcumSonucu, studyoResimTuru,
+  STUDYO_ILETILER, balonPlaniReddi, grupPlaniReddi, kapanmisEmirReddi, eskiRevizyonlar, balonYeriReddi, numuneDurumu, numuneIstegiReddi, numuneKarariReddi, numunePlaniReddi, olcumIstegiReddi, olcumSonucu, studyoResimTuru,
 } from './kurallar.ts';
 import type { StudyoIletisi } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -52,8 +52,15 @@ async function resimlerCevabi(db: Db, satirlar: readonly sorgular.ResimSatiri[])
   const eski = new Set<number>();
   for (const no of new Set(satirlar.map((r) => r.malzemeNo))) for (const id of await parcaninEskiResimleri(db, no)) eski.add(id);
   const revizyonlar = await gosterilenRevizyonlar(db, satirlar);
-  return satirlar.map((r) => ({
+  const gruplar = await sorgular.resimGruplari(db, satirlar.map((r) => r.id));
+  const opNolari = new Map<number, number>();
+  for (const no of new Set(satirlar.map((r) => r.malzemeNo))) for (const o of await yururlukteOperasyonlar(db, [no])) opNolari.set(o.operasyonId, o.opNo);
+  return satirlar.map(({ gruplarSurum, ...r }) => ({
     ...r, revizyon: revizyonlar.get(r.id) ?? null, eski: eski.has(r.id), balonlar: balonlar.filter((b) => b.resimId === r.id).map(balonCevabi),
+    gruplarSurum,
+    gruplar: gruplar.filter((g) => g.resimId === r.id).map((g): KmBalonGrubu => ({
+      id: g.id, ad: g.ad, balonlar: g.balonlar, operasyonlar: g.operasyonlar.map((operasyonId) => ({ operasyonId, opNo: opNolari.get(operasyonId) ?? null })),
+    })),
   }));
 }
 
@@ -199,8 +206,33 @@ export async function planKopyala(db: Db, kisiId: number, hedefId: number, g: { 
   }
   if (!(await sorgular.resimSurumuArtir(db, hedefId, g.surum, kisiId))) throw cakisma(STUDYO_ILETILER.surumDegisti);
   if ((await sorgular.resimBalonlari(db, [hedefId])).length > 0) throw ret('kopyaHedefDolu');
+  if ((await sorgular.resimGrupKimlikleri(db, hedefId)).length > 0) throw ret('kopyaHedefGrupVar');
   await sorgular.balonlariKopyala(db, kaynak.id, hedefId, kisiId);
+  await sorgular.gruplariKopyala(db, kaynak.id, hedefId, kisiId);
   return resimOku(db, hedefId);
+}
+
+// 3693: grup planı resim başına bütün yazılır; sürüm gruplarSurum'dur (kontrol planının sürümü artmaz). Eski revizyonun grupları değişmez;
+// kopya yeni revizyona gider.
+export async function gruplariYaz(db: Db, kisiId: number, resimId: number, g: KmGruplarGovdesi): Promise<KmResim> {
+  const r = await sorgular.resim(db, resimId);
+  if (r === null) throw bulunamadi(STUDYO_ILETILER.resimYok);
+  if (!r.aktif) throw ret('resimPasif');
+  if ((await parcaninEskiResimleri(db, r.malzemeNo)).has(resimId)) throw ret('resimEski');
+  if (!(await sorgular.gruplarSurumuArtir(db, resimId, g.surum, kisiId))) throw cakisma(STUDYO_ILETILER.surumDegisti);
+  const balonNolari = new Set((await sorgular.resimBalonlari(db, [resimId])).map((b) => b.no));
+  const operasyonlar = new Set((await yururlukteOperasyonlar(db, [r.malzemeNo])).map((o) => o.operasyonId));
+  const red = grupPlaniReddi({
+    gruplar: g.gruplar, atamalar: g.atamalar, mevcutGruplar: new Set(await sorgular.resimGrupKimlikleri(db, resimId)), balonNolari, operasyonlar,
+  });
+  if (red !== null) throw ret(red, 'gruplar');
+  // Benzersizlik indeksi lower(ad) ile kurulu; Türkçe I gibi harf farkları da aynı kuralla (veritabanıyla) elenir, genel 409 dönmez.
+  if (await sorgular.grupAdiTekrariVar(db, g.gruplar.map((x) => x.ad))) throw ret('grupAdTekrar', 'gruplar');
+  await sorgular.gruplariHazirla(db, resimId, g.gruplar.flatMap((x) => (x.id === undefined ? [] : [x.id])));
+  const kimlikler = new Map<string, number>();
+  for (const x of g.gruplar) kimlikler.set(x.ad.toLowerCase(), await sorgular.grupYaz(db, resimId, x.id ?? null, x.ad, x.balonlar, kisiId));
+  await sorgular.atamalariYaz(db, resimId, g.atamalar.map((a) => ({ operasyonId: a.operasyonId, grupId: kimlikler.get(a.grup.toLowerCase())! })));
+  return resimOku(db, resimId);
 }
 
 // Tek balonun yeri (894 a, 913 a): plan ve resmin sürümü değişmez, numune ve ölçüm etkilenmez. Kaldırılmış resmin ya da balonun yeri yazılmaz.

@@ -49,6 +49,15 @@ export const kmBalon = z.object({
   surum: z.number().int().positive(),
 });
 
+// 3693: bir resmin (revizyonun) balonları adlı gruplara ayrılır; operasyon en çok bir gruba bağlanır, grup birden çok operasyonda kullanılabilir.
+// Üyelik balon numarasıyladır; operasyon gizli kimliğiyle bağlıdır, opNo rotanın güncel numarasıdır (rotada yoksa null).
+export const kmBalonGrubu = z.object({
+  id: z.number().int(),
+  ad: z.string(),
+  balonlar: z.array(z.number().int().positive()),
+  operasyonlar: z.array(z.object({ operasyonId: z.number().int(), opNo: z.number().int().nullable() })),
+});
+
 export const kmResim = z.object({
   id: z.number().int(),
   malzemeNo: z.number().int(),
@@ -64,6 +73,9 @@ export const kmResim = z.object({
   // Sunucu hep gönderir; isteğe bağlılık bu alanı bilmeyen okuyucular içindir.
   eski: z.boolean().optional(),
   balonlar: z.array(kmBalon),
+  // 3693: sunucu hep gönderir; isteğe bağlılık bu alanları bilmeyen okuyucular içindir. Operasyona hiç grup bağlı değilse bütün balonlar geçerlidir.
+  gruplar: z.array(kmBalonGrubu).optional(),
+  gruplarSurum: z.number().int().positive().optional(),
 });
 
 // Numune kuralı: ne zaman (ilk parça, her n parça, n dakikada bir, vardiya başı, son parça), kim ölçer (kalite, operatör), hangi
@@ -145,6 +157,19 @@ export const kmBalonGirdisi = z.object({
   yaziKutusu: z.array(sonlu).length(5).nullish(),
   yer: kmBalonYeri.nullish(),
   yerKipi: z.enum(KM_BALON_YER_KIPLERI).nullish(),
+});
+// Grup planı resim başına bütün yazılır (balon planı gibi); sürüm gruplarSurum'dur, kontrol planının sürümünü artırmaz. Grup kimliği verilirse
+// güncellenir, verilmezse eklenir; listede olmayan grup silinir ve atamaları kalkar. Atama gruba adıyla bağlanır (yeni grubun kimliği yoktur).
+export const kmBalonGrubuGirdisi = z.object({
+  id: kimlik.optional(),
+  ad: z.string().trim().min(1).max(60),
+  balonlar: z.array(z.number().int().positive().max(9999)).max(500),
+});
+export const kmGrupAtamasi = z.object({ operasyonId: kimlik, grup: z.string().trim().min(1).max(60) });
+export const kmGruplarGovdesi = z.object({
+  surum: z.number().int().positive().max(2147483647),
+  gruplar: z.array(kmBalonGrubuGirdisi).max(100),
+  atamalar: z.array(kmGrupAtamasi).max(200),
 });
 export const kmBalonlarGovdesi = z.object({ surum: z.number().int().positive().max(2147483647), balonlar: z.array(kmBalonGirdisi).max(500) });
 
@@ -231,6 +256,8 @@ export type KmMerkezBelgesi = z.output<typeof kmMerkezBelgesi>;
 export type KmMerkezBelgeleriCevabi = z.output<typeof kmMerkezBelgeleriCevabi>;
 export type KmBalonGirdisi = z.output<typeof kmBalonGirdisi>;
 export type KmBalonlarGovdesi = z.input<typeof kmBalonlarGovdesi>;
+export type KmBalonGrubu = z.output<typeof kmBalonGrubu>;
+export type KmGruplarGovdesi = z.input<typeof kmGruplarGovdesi>;
 export type KmBalonYeriGovdesi = z.input<typeof kmBalonYeriGovdesi>;
 export type KmBalonYerKipi = (typeof KM_BALON_YER_KIPLERI)[number];
 export type KmNumunePlaniGovdesi = z.input<typeof kmNumunePlaniGovdesi>;

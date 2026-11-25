@@ -806,6 +806,13 @@ export const STUDYO_ILETILER = {
   balonAcikNumunede: 'Kararı verilmemiş numunede istenen balon kaldırılamaz.',
   balonYerIkisi: 'Elle konan balon yeri ile istenen yerleşim birlikte verilmez.',
   kuralKimlikTekrar: 'Numune planında aynı kural kimliği bir kez kullanılır.',
+  grupAdTekrar: 'Bu adla grup zaten var (büyük küçük harf farkı sayılmaz).',
+  kopyaHedefGrupVar: 'Hedef resimde grup var; plan kopyalanmadan önce o grupları silin.',
+  grupBalonYok: 'Gruptaki balon numarası bu resmin etkin balonlarında yok.',
+  grupAtamaGrupYok: 'Atamadaki grup listede yok.',
+  grupAtamaTekrar: 'Bir operasyon yalnız bir gruba bağlanır.',
+  grupOperasyonYok: 'Operasyon bu parçanın yürürlükteki rotasında yok.',
+  grupKimlikGecersiz: 'Grup bu resmin grubu değil.',
   kuralBalonYok: 'Numune kuralındaki balon numarası parçanın etkin resimlerinde yok.',
 } as const;
 export type StudyoIletisi = keyof typeof STUDYO_ILETILER;
@@ -935,6 +942,23 @@ export function balonPlaniReddi(i: {
   }
   const kalan = new Set(idler);
   return i.etkinler.some((id) => !kalan.has(id) && i.acikNumunedekiler.has(id)) ? 'balonAcikNumunede' : null;
+}
+
+// 3693: grup planı. Adlar büyük küçük harf gözetmeden tekil, üyeler resmin etkin balon numaraları, atama listedeki bir gruba ve rotadaki bir
+// operasyona, operasyon başına bir kez.
+export function grupPlaniReddi(i: {
+  gruplar: readonly { id?: number | undefined; ad: string; balonlar: readonly number[] }[]; atamalar: readonly { operasyonId: number; grup: string }[];
+  mevcutGruplar: ReadonlySet<number>; balonNolari: ReadonlySet<number>; operasyonlar: ReadonlySet<number>;
+}): StudyoIletisi | null {
+  const adlar = i.gruplar.map((g) => g.ad.toLowerCase());
+  if (new Set(adlar).size !== adlar.length) return 'grupAdTekrar';
+  const idler = i.gruplar.flatMap((g) => (g.id === undefined ? [] : [g.id]));
+  if (new Set(idler).size !== idler.length || idler.some((id) => !i.mevcutGruplar.has(id))) return 'grupKimlikGecersiz';
+  if (i.gruplar.some((g) => g.balonlar.some((no) => !i.balonNolari.has(no)))) return 'grupBalonYok';
+  const ops = i.atamalar.map((a) => a.operasyonId);
+  if (new Set(ops).size !== ops.length) return 'grupAtamaTekrar';
+  if (i.atamalar.some((a) => !adlar.includes(a.grup.toLowerCase()))) return 'grupAtamaGrupYok';
+  return i.atamalar.some((a) => !i.operasyonlar.has(a.operasyonId)) ? 'grupOperasyonYok' : null;
 }
 
 // Balon yeri (894 a, 913 a): elle konan yer sabittir ve yerleşim isteğini anlamsız kılar; ikisi birlikte verilmez.

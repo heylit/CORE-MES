@@ -338,11 +338,28 @@ describe('Kalite Merkezi stüdyo (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.deepEqual([tersine.statusCode, ileti(tersine)], [400, STUDYO_ILETILER.resimEski]);
     const baskaKaynak = await kopyala(kalite, yeni.id, { kaynakResimId: resimId, surum: yeni.surum });
     assert.deepEqual([baskaKaynak.statusCode, ileti(baskaKaynak)], [400, STUDYO_ILETILER.kopyaKaynakUygunsuz]);
+    // 3693: revizyon kopyası grupları, üyeliği ve operasyon atamasını da taşır (balon numarasıyla eşlenir).
+    const grupId = (await o().sahip.tek<{ id: number }>("INSERT INTO kalite_merkezi_balon_grubu (resim_id, ad, guncelleyen_id) VALUES ($1, 'Çaplar', $2) RETURNING id", [eskiId, yonId]))!.id;
+    await o().sahip.sorgu('INSERT INTO kalite_merkezi_balon_grubu_uye (grup_id, balon_id) SELECT $1, id FROM kalite_merkezi_balon WHERE resim_id = $2 AND no = 2', [grupId, eskiId]);
+    const opId = (await o().sahip.tek<{ id: number }>('SELECT id FROM rota_op_numarasi ORDER BY id LIMIT 1'))!.id;
+    await o().sahip.sorgu('INSERT INTO kalite_merkezi_balon_grubu_operasyon (resim_id, operasyon_id, grup_id) VALUES ($1, $2, $3)', [eskiId, opId, grupId]);
+    // 3693: hedefte plan kopyalanmadan açılmış grup varsa kopya sessizce bozulmaz, açık hata verir.
+    await o().sahip.sorgu("INSERT INTO kalite_merkezi_balon_grubu (resim_id, ad, guncelleyen_id) VALUES ($1, 'Önceden', $2)", [yeni.id, yonId]);
+    const grupluHedef = await kopyala(kalite, yeni.id, { kaynakResimId: eskiId, surum: yeni.surum });
+    assert.deepEqual([grupluHedef.statusCode, ileti(grupluHedef)], [400, STUDYO_ILETILER.kopyaHedefGrupVar]);
+    await o().sahip.sorgu('DELETE FROM kalite_merkezi_balon_grubu WHERE resim_id = $1', [yeni.id]);
     const k = await kopyala(kalite, yeni.id, { kaynakResimId: eskiId, surum: yeni.surum });
     assert.equal(k.statusCode, 200, k.body);
     const kopya = (k.json() as { resim: KmResim }).resim;
     assert.deepEqual(kopya.balonlar.map((x) => [x.no, x.alt, x.ust, x.kritik, x.x, x.yerKontrol]), [[1, '4.9', '5.1', true, 10, true], [2, null, null, false, null, false]]);
     assert.equal((await parca()).resimler.find((x) => x.id === eskiId)?.balonlar.length, 2, 'eski plan yerinde kalır');
+    const kopyaGrup = await o().sahip.sorgu<{ ad: string; no: number; operasyon_id: number }>(
+      `SELECT g.ad, b.no, go.operasyon_id FROM kalite_merkezi_balon_grubu g
+         JOIN kalite_merkezi_balon_grubu_uye u ON u.grup_id = g.id JOIN kalite_merkezi_balon b ON b.id = u.balon_id
+         JOIN kalite_merkezi_balon_grubu_operasyon go ON go.grup_id = g.id AND go.resim_id = g.resim_id
+        WHERE g.resim_id = $1`, [yeni.id]);
+    assert.deepEqual(kopyaGrup.map((x) => [x.ad, x.no, x.operasyon_id]), [['Çaplar', 2, opId]], 'grup, üyelik ve atama yeni revizyona taşınır');
+    assert.equal((await o().sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM kalite_merkezi_balon_grubu WHERE resim_id = $1', [eskiId]))!.n, 1, 'eski revizyonun grubu yerinde kalır');
     const dolu = await kopyala(kalite, yeni.id, { kaynakResimId: eskiId, surum: kopya.surum });
     assert.deepEqual([dolu.statusCode, ileti(dolu)], [400, STUDYO_ILETILER.kopyaHedefDolu]);
     assert.equal((await kopyala(kalite, yeni.id, { kaynakResimId: eskiId, surum: yeni.surum })).statusCode, 409, 'eski sürümle kopya ezmez');
