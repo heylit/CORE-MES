@@ -217,11 +217,11 @@
 .sa-talep-tablo .sa-talep-sabit { position: sticky; left: 0; z-index: 1; background: var(--panel-solid); }
 /* Sıra sütunu tam ikinci sabit sütunun başladığı yerde biter: arada kayan içerik görünmesin. */
 .sa-talep-tablo th.sa-talep-sabit:first-child { box-sizing: border-box; width: var(--b-6); min-width: var(--b-6); max-width: var(--b-6); padding-inline: 0; text-align: center; }
-.sa-talep-tablo .sa-talep-malzeme { left: var(--b-6); min-width: 16rem; max-width: 22rem; white-space: normal; box-shadow: 1px 0 0 var(--edge2); }
+.sa-talep-tablo .tc-tablo td.sa-talep-malzeme { left: var(--b-6); min-width: 16rem; max-width: 22rem; white-space: normal; box-shadow: 1px 0 0 var(--edge2); }
 .sa-talep-tablo .sa-talep-malzeme .sa-talep-ara, .sa-talep-tablo .sa-talep-malzeme .sa-talep-serbest { gap: var(--b-1); }
 .sa-talep-secili-ad { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); }
 .sa-talep-etiketler { display: inline-flex; flex-wrap: wrap; gap: var(--b-1); }
-.sa-talep-alternatif { white-space: normal; min-width: 14rem; }
+.sa-talep-tablo .tc-tablo td.sa-talep-alternatif { white-space: normal; min-width: 14rem; }
 .sa-talep-alternatif-ozet { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); }
 .sa-talep-eylem { display: flex; flex-wrap: wrap; gap: var(--b-1); }
 .sa-talep-ayrinti-satir > td { white-space: normal; background: var(--panel2); }
@@ -241,7 +241,7 @@
 .sa-talep-tablo .tc-tablo td.sa-talep-miktar-hucre { white-space: normal; min-width: 14rem; max-width: 18rem; }
 .sa-talep-tablo .tc-tablo td.sa-talep-miktar-hucre > .sa-talep-not, .sa-talep-tablo .tc-tablo td:has(> .sa-talep-emir) > .sa-talep-not { display: block; margin-top: var(--b-1); }
 /* Dar ekranda her kalem bir karttır: sıra solda, alanlar etiketli alt alta; yana kaydırma gerekmez. */
-@media (max-width: 767px) {
+@media (max-width: 1023px) {
   .sa-talep-tablo { border: 0; overflow: visible; }
   .sa-talep-tablo .tc-tablo, .sa-talep-tablo .tc-tablo tbody { display: block; min-width: 0; width: 100%; }
   .sa-talep-tablo .tc-tablo thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
@@ -295,3 +295,11 @@
 .sa-ak-degisti { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); padding: var(--b-2); border: 1px solid var(--hold); border-radius: var(--yari-1); }
 .sa-ak-degisti > span:first-child { min-width: 0; flex: 1 1 20ch; overflow-wrap: anywhere; }
 .sa-ak-degisti-eylem { display: inline-flex; flex-wrap: wrap; gap: var(--b-1); }
+
+/* 3695: seçilen malzemenin bilgileri ayrı etiketli hücreler. */
+.sa-secili-malzeme { display: grid; gap: var(--b-2); }
+.sa-secili-malzeme dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); gap: var(--b-2) var(--b-4); margin: 0; }
+.sa-secili-malzeme dl > div { min-width: 0; }
+.sa-secili-malzeme dt { color: var(--muted); font-size: var(--yazi-s); }
+.sa-secili-malzeme dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.sa-alt-baslik { margin: 0; font-size: inherit; }
