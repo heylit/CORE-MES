@@ -57,6 +57,10 @@ describe('akış D: finans uçtan uca, gerçek rollerle (gerçek PostgreSQL)', (
       await rolAta(db, yoneticiId, k, rol.id);
       await rolAl(db, yoneticiId, k, yr.id);
     });
+    await giris(kullaniciAdi);
+  }
+
+  async function giris(kullaniciAdi: string): Promise<void> {
     const c = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi, parola: PAROLA } });
     assert.equal(c.statusCode, 200, `giriş ${kullaniciAdi}`);
     cerez.set(kullaniciAdi, String(c.headers['set-cookie']).split(';')[0] ?? '');
@@ -77,6 +81,7 @@ describe('akış D: finans uçtan uca, gerçek rollerle (gerçek PostgreSQL)', (
     ortam = await testVeritabaniKur('finansakisd');
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA }));
+    await giris('yonetici');
     await rolluKisi('muhasebe', 'muhasebe_finans');
     await rolluKisi('mudur', 'mudur');
     await rolluKisi('satinalma', 'satin_alma');
@@ -144,16 +149,18 @@ describe('akış D: finans uçtan uca, gerçek rollerle (gerçek PostgreSQL)', (
     assert.deepEqual([okunan.iptal, okunan.aciklama, okunan.iptalNedeni], [true, 'Peşin avans', 'Yanlış firmaya girildi']);
   });
 
-  test('CEKIRDEK-ISTEKLERI 8, FK1: çapraz kur payı ayarda okunur ve yalnız finans.ayar ile değişir; gönderilmezse korunur', async () => {
+  test('CEKIRDEK-ISTEKLERI 8, FK1: çapraz kur payı ayarda okunur ve yalnız finans.ayar ile değişir (muhasebe_finansta yok, 3673-b); gönderilmezse korunur', async () => {
     const ilk = tamam(await oku<AyarCevabi>('muhasebe', '/finans/ayar')).ayar;
     assert.equal(ilk.caprazKurPayi, '20.00');
-    const ikinci = tamam(await yaz<AyarCevabi>('muhasebe', '/finans/ayar/guncelle', ayarGovdesi(ilk, { caprazKurPayi: 35 }))).ayar;
+    const ikinci = tamam(await yaz<AyarCevabi>('yonetici', '/finans/ayar/guncelle', ayarGovdesi(ilk, { caprazKurPayi: 35 }))).ayar;
     assert.equal(ikinci.caprazKurPayi, '35.00');
     assert.equal((await vt().tek<{ p: string }>('SELECT (finans_capraz_kur_payi() * 100)::numeric(5,2)::text AS p'))?.p, '35.00');
-    const ucuncu = tamam(await yaz<AyarCevabi>('muhasebe', '/finans/ayar/guncelle', ayarGovdesi(ikinci, { nakitEsigi: 1000 }))).ayar;
+    const ucuncu = tamam(await yaz<AyarCevabi>('yonetici', '/finans/ayar/guncelle', ayarGovdesi(ikinci, { nakitEsigi: 1000 }))).ayar;
     assert.equal(ucuncu.caprazKurPayi, '35.00');
-    assert.equal((await yaz('muhasebe', '/finans/ayar/guncelle', ayarGovdesi(ucuncu, { caprazKurPayi: 0 }))).durum, 400);
-    assert.equal((await yaz('muhasebe', '/finans/ayar/guncelle', ayarGovdesi(ucuncu, { caprazKurPayi: 101 }))).durum, 400);
+    assert.equal((await yaz('yonetici', '/finans/ayar/guncelle', ayarGovdesi(ucuncu, { caprazKurPayi: 0 }))).durum, 400);
+    assert.equal((await yaz('yonetici', '/finans/ayar/guncelle', ayarGovdesi(ucuncu, { caprazKurPayi: 101 }))).durum, 400);
+    assert.equal((await yaz('muhasebe', '/finans/ayar/guncelle', ayarGovdesi(ucuncu, { caprazKurPayi: 50 }))).durum, 403, 'muhasebe_finans ayar yazamaz');
+    assert.equal((await yaz('muhasebe', '/finans/butce/belirle', { kategori: 'kira', baslangicAyi: '2026-09-01', aylikTutar: 1 })).durum, 403, 'muhasebe_finans bütçe belirleyemez');
     assert.equal((await yaz('mudur', '/finans/ayar/guncelle', ayarGovdesi(ucuncu, { caprazKurPayi: 50 }))).durum, 403);
     assert.equal(tamam(await oku<AyarCevabi>('mudur', '/finans/ayar')).ayar.caprazKurPayi, '35.00');
   });

@@ -669,12 +669,17 @@ export type LogoBelgeBagCevabi = z.output<typeof logoBelgeBagCevabi>;
 
 // ---- 3675 D2: Logo faturası ile finans belgesi eşleşmesi (yalnız okuma; finans belgesine yazılmaz) ----
 export const FATURA_ESLESME_DURUMLARI = ['eslesti', 'farkli', 'logoda-var-finansta-yok', 'finansta-var-logoda-yok', 'cari-kodu-yok'] as const;
+// Fatura türü yön ve iade bayrağından türer: satış gelirdir, alış gider; iade ters yönde yazılır (finans iadeHatasi).
+export const FATURA_ESLESME_TURLERI = ['satis', 'satis-iade', 'alis', 'alis-iade'] as const;
 export const FATURA_FARK_KODLARI = ['iptal', 'para-birimi', 'tarih', 'net', 'kdv', 'toplam'] as const;
 export const faturaEslesmeSorgusu = z.object({
   sayfa: z.coerce.number<number>().int().min(1).max(100_000).prefault(1),
   sayfaBoyu: z.coerce.number<number>().int().min(1).max(200).optional(),
   gun: z.coerce.number<number>().int().min(1).max(365).prefault(90),
   durum: z.enum(FATURA_ESLESME_DURUMLARI).optional(),
+  tur: z.enum(FATURA_ESLESME_TURLERI).optional(),
+  // Fatura no, cari kodu ya da firma adında geçen metin; büyük küçük harf gözetmez.
+  ara: z.string().trim().max(100).optional(),
 });
 const faturaLogoTarafi = z.object({ net: ondalikMetinSemasi, kdv: ondalikMetinSemasi, toplam: ondalikMetinSemasi, paraBirimi: z.string(), iptal: z.boolean() });
 const faturaFinansTarafi = z.object({ belgeId: z.number().int(), net: ondalikMetinSemasi, kdv: ondalikMetinSemasi, toplam: ondalikMetinSemasi, paraBirimi: z.string(), iptal: z.boolean() });

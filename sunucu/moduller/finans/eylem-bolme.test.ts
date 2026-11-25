@@ -25,6 +25,8 @@ const GERCEK_KLASOR = fileURLToPath(new URL('../../gocler/', import.meta.url));
 const GOC_ADI = '20261113212200_kisiler_finans_yonetim_eylemleri.sql';
 const ESKI = 'finans.yonet';
 const YENI: readonly string[] = FINANS_YONETIM_YAZMA_ISLEMLERI;
+// Bölmeden sonra kullanıcı kararıyla (3673-b, göç 20261125055000) bir rolden alınan eylemler; bölme değişmezi bunlar eklenerek ölçülür.
+const SONRADAN_ALINAN: Readonly<Record<string, readonly string[]>> = { muhasebe_finans: ['finans.ayar'] };
 
 type Yetki = string | { biri: readonly string[] };
 const ucYetkisi = (u: (typeof uclar)[number]): Yetki => u.yetki as Yetki;
@@ -124,7 +126,8 @@ describe('finans yönetim eylemlerine bölme (gerçek PostgreSQL)', () => {
     assert.equal(satirlar.some((r) => r.islemler.includes(ESKI)), true);
     for (const r of satirlar) {
       const yeni = r.islemler.filter((i) => YENI.includes(i));
-      assert.deepEqual(yeni, r.islemler.includes(ESKI) ? [...YENI].sort() : [], r.kod);
+      const beklenen = r.islemler.includes(ESKI) ? [...YENI].filter((i) => !(SONRADAN_ALINAN[r.kod] ?? []).includes(i)).sort() : [];
+      assert.deepEqual(yeni, beklenen, r.kod);
     }
   });
 
@@ -133,7 +136,7 @@ describe('finans yönetim eylemlerine bölme (gerçek PostgreSQL)', () => {
       'SELECT r.kod, coalesce(array_agg(ri.islem) FILTER (WHERE ri.islem IS NOT NULL), ARRAY[]::text[]) AS islemler FROM rol r LEFT JOIN rol_islemi ri ON ri.rol_id = r.id WHERE NOT r.yonetici GROUP BY r.kod');
     let karsilastirilan = 0;
     for (const r of satirlar) {
-      const islemler = new Set(r.islemler);
+      const islemler = new Set([...r.islemler, ...(SONRADAN_ALINAN[r.kod] ?? [])]);
       for (const u of uclar) {
         const y = ucYetkisi(u);
         if (!yetkiListesi(y).some((i) => YENI.includes(i))) continue;
@@ -175,21 +178,22 @@ describe('finans yönetim eylemleri göçü var olan veritabanında (gerçek Pos
     if (!veren || !ekli || !kisitli) throw new Error('kişi eklenemedi');
     await vt.sorgu('INSERT INTO kisi_islemi (kisi_id, islem, veren_id) VALUES ($1, $2, $3)', [ekli.id, ESKI, veren.id]);
     await vt.sorgu('INSERT INTO kisi_islem_kisiti (kisi_id, islem, alan_id) VALUES ($1, $2, $3)', [kisitli.id, ESKI, veren.id]);
-    const rolOnce = await vt.sorgu<{ rol_id: number }>('SELECT rol_id FROM rol_islemi WHERE islem = $1 ORDER BY rol_id', [ESKI]);
+    const rolOnce = await vt.sorgu<{ rol_id: number; kod: string }>('SELECT ri.rol_id, r.kod FROM rol_islemi ri JOIN rol r ON r.id = ri.rol_id WHERE ri.islem = $1 ORDER BY ri.rol_id', [ESKI]);
     assert.equal(rolOnce.length > 0, true);
 
     assert.deepEqual(await gocleriUygula(ayar, GERCEK_KLASOR, { sema }), hepsi.slice(sira));
 
-    for (const { rol_id } of rolOnce) {
+    for (const { rol_id, kod } of rolOnce) {
       const satir = await vt.sorgu<{ islem: string }>('SELECT islem FROM rol_islemi WHERE rol_id = $1 AND islem LIKE $2 ORDER BY islem', [rol_id, 'finans.%']);
-      for (const e of [ESKI, ...YENI]) assert.equal(satir.some((x) => x.islem === e), true, `rol ${rol_id}: ${e}`);
+      for (const e of [ESKI, ...YENI].filter((i) => !(SONRADAN_ALINAN[kod] ?? []).includes(i))) assert.equal(satir.some((x) => x.islem === e), true, `rol ${rol_id}: ${e}`);
     }
     const ekler = await vt.sorgu<{ islem: string; veren_id: number }>('SELECT islem, veren_id FROM kisi_islemi WHERE kisi_id = $1 ORDER BY islem', [ekli.id]);
     assert.deepEqual(ekler.map((e) => e.islem), [ESKI, ...YENI].sort());
     assert.equal(ekler.every((e) => e.veren_id === veren.id), true, 'veren korunur');
     const alinan = await vt.sorgu<{ islem: string }>('SELECT islem FROM kisi_islem_kisiti WHERE kisi_id = $1 ORDER BY islem', [kisitli.id]);
     assert.deepEqual(alinan.map((e) => e.islem), [ESKI, ...YENI].sort(), 'alınan yetki bölünmeyle geri gelmez');
+    for (const { rol_id, kod } of rolOnce) for (const e of SONRADAN_ALINAN[kod] ?? []) assert.equal((await vt.sorgu('SELECT 1 FROM rol_islemi WHERE rol_id = $1 AND islem = $2', [rol_id, e])).length, 0, `${kod}: ${e} alınmış olmalı`);
     // Eski işlem silinmez (ayrı kart); başka işlem satırına dokunulmaz.
-    assert.deepEqual(await vt.sorgu<{ rol_id: number }>('SELECT rol_id FROM rol_islemi WHERE islem = $1 ORDER BY rol_id', [ESKI]), rolOnce);
+    assert.deepEqual(await vt.sorgu<{ rol_id: number }>('SELECT rol_id FROM rol_islemi WHERE islem = $1 ORDER BY rol_id', [ESKI]), rolOnce.map(({ rol_id }) => ({ rol_id })));
   });
 });

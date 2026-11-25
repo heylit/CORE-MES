@@ -34,6 +34,8 @@ export const FINANS_IKINCI_MENU = {
       { anahtar: 'karar-araclari', baslik: 'Karar araçları', yol: '/finans/karar-araclari', simge: 'tool', islem: 'finans.oku' },
       { anahtar: 'ay-sonu', baslik: 'Ay sonu kapanışı', yol: '/finans/ay-sonu', simge: 'check', islem: 'finans.oku' },
       { anahtar: 'tahminler', baslik: 'Tahminler ve doğruluk', yol: '/finans/tahminler', simge: 'lab', islem: 'finans.oku' },
+      // 3675 D3: Logo faturaları ile finans faturalarının karşılaştırması; yalnız okuma, Logo okuması açıksa dolar.
+      { anahtar: 'logo-uyum', baslik: 'Logo uyumu', yol: '/finans/logo-uyum', simge: 'sort', islem: 'finans.oku' },
     ] },
     { baslik: 'Sistem', maddeler: [
       { anahtar: 'genel-gider', baslik: 'Genel gider oranı', yol: '/finans/genel-gider', simge: 'tag', islem: 'finans.maliyet-oku' },

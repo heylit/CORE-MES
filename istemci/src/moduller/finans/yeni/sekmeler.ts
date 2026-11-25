@@ -35,6 +35,7 @@ const yukleyiciler = {
   kayitlar: () => import('./kayitlar/index.tsx'),
   plan: () => import('./plan/index.tsx'),
   raporlar: () => import('./raporlar/index.tsx'),
+  logoUyum: () => import('./logo-uyum/index.tsx'),
   genelGider: () => import('./genel-gider.tsx'),
   saatlikMaliyet: () => import('../saatlik-maliyet/SaatlikMaliyet.tsx'),
 };
@@ -66,6 +67,7 @@ const GelirTablosu = tembel(yukleyiciler.raporlar, (m) => m.GelirTablosu);
 const KararAraclari = tembel(yukleyiciler.raporlar, (m) => m.KararAraclari);
 const AyKapanisi = tembel(yukleyiciler.raporlar, (m) => m.AyKapanisi);
 const Tahminler = tembel(yukleyiciler.raporlar, (m) => m.Tahminler);
+const LogoUyumu = tembel(yukleyiciler.logoUyum, (m) => m.LogoUyumu);
 const GenelGider = tembel(yukleyiciler.genelGider, (m) => m.GenelGider);
 const SaatlikMaliyet = tembel(yukleyiciler.saatlikMaliyet, (m) => m.SaatlikMaliyet);
 
@@ -83,13 +85,14 @@ export const EKRANLAR: Record<SekmeAnahtari, { ekran: ComponentType<EkranOzellik
   'karar-araclari': { ekran: KararAraclari, parca: 'F3' },
   'ay-sonu': { ekran: AyKapanisi, parca: 'F3' },
   tahminler: { ekran: Tahminler, parca: 'F3' },
+  'logo-uyum': { ekran: LogoUyumu, parca: 'var' },
   'genel-gider': { ekran: GenelGider, parca: 'var' },
   'saatlik-maliyet': { ekran: SaatlikMaliyet, parca: 'var' },
   ayarlar: { ekran: Ayarlar, parca: 'F4' },
 };
 
 // Finans verisini beklemeden açılan sekmeler: kendi verisini kendisi okur.
-export const VERISIZ: ReadonlySet<SekmeAnahtari> = new Set<SekmeAnahtari>(['firmalar', 'genel-gider', 'saatlik-maliyet']);
+export const VERISIZ: ReadonlySet<SekmeAnahtari> = new Set<SekmeAnahtari>(['firmalar', 'genel-gider', 'saatlik-maliyet', 'logo-uyum']);
 
 export interface YeniSekme {
   anahtar: SekmeAnahtari;
