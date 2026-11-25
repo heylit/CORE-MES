@@ -290,7 +290,7 @@ export function siparisSatirlariHTML(r: PurchaseRequest, t: Taslak): string {
     const odeme = q ? `<p class="xs muted span2">Ödeme şartı tekliften: ${q.advancePct ? `%${numIn(q.advancePct)} avans, ` : ""}${q.payDays ? `${q.payDays} gün vade` : "peşin"}</p>` : "";
     return `<section class="panel" data-sp-firma="${esc(h.quoteId)}"><div class="panel-h"><h3>${esc(firmaAdi(r, t, h.quoteId))}</h3>${h.yeni ? '<span class="flag warn">yeni firma</span>' : ""}<span class="spacer"></span><span class="num">${tutar === null || tutar === undefined ? "–" : money(tutar, "TRY", 0)}</span></div>
       <div class="panel-b"><div class="grid ${t.heads.length > 1 ? "g2" : "g4"}">
-        ${alan("poNo", "Logo / tedarikçi no", h.poNo, "text", ' maxlength="40"')}
+        ${alan("poNo", "Tedarikçi / dış sipariş no", h.poNo, "text", ' maxlength="40"')}
         ${alan("orderDate", "Sipariş tarihi", h.orderDate, "date")}
         ${alan("expectedDate", "Beklenen teslim <small>— zorunlu</small>", h.expectedDate, "date")}
         ${alan("teslimYeri", "Teslim yeri", h.teslimYeri, "text", ' maxlength="200"')}
