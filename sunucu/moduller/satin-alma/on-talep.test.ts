@@ -9,7 +9,8 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { planIhtiyaclariniYaz } from './disari.ts';
+import { planIhtiyaclariniYaz, planlananGidisCozucusu } from './disari.ts';
+import { planlananGidisCozucusuKaydet } from './servis.ts';
 import { ILETILER } from './kurallar.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -279,5 +280,20 @@ describe('satin-alma fason ön talep (898 a, gerçek PostgreSQL)', () => {
     const satir = (d.json() as DisOperasyonlarCevabi).operasyonlar.find((x) => x.isEmriId === ie.id);
     assert.deepEqual(satir && [satir.firmaId, satir.firmaAdi, satir.firmaBekleniyor, satir.fasonKonumId], [null, null, true, null]);
     await sahip.sorgu("UPDATE uretim_emri SET durum = 'iptal', iptal = now() WHERE id = $1", [e.id]);
+  });
+  test('3709: ön talep cevabında gidiş plandan gelir (kaynak plan); plan yoksa teslim - termin günü (hesap); teslim yoksa null', async () => {
+    const teslimsiz = (await fasonIsEmri({})).isEmriId;
+    const gidis = async () => new Map((await onTalepler()).onTalepler.flatMap((x) => (x.kaynak === 'fason' ? [[x.isEmriId, [x.gidis ?? null, x.gidisKaynagi ?? null]] as const] : [])));
+    const once = await gidis();
+    assert.deepEqual(once.get(acik), ['2026-10-30', 'hesap'], 'teslim 03.11 - 4 gün');
+    assert.deepEqual(once.get(teslimsiz), [null, null], 'teslim günü yoksa gidiş uydurulmaz');
+    planlananGidisCozucusu(async () => [{ isEmriId: acik, baslangic: '2026-10-28T21:30:00Z' }]);
+    try {
+      const sonra = await gidis();
+      assert.deepEqual(sonra.get(acik), ['2026-10-29', 'plan'], 'tesis günü Europe/Istanbul: 21:30Z ertesi gündür');
+      assert.deepEqual(sonra.get(teslimsiz), [null, null]);
+    } finally {
+      planlananGidisCozucusuKaydet(null);
+    }
   });
 });
