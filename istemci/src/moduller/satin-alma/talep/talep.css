@@ -329,3 +329,5 @@
 @media (min-width: 1024px) {
   .sa-talep-tablo .tc-tablo td[data-etiket='Termin'] .tc-alan-kutu { min-width: 0; width: 9.5rem; padding-inline: var(--b-2); }
 }
+/* 3695 (Test): ayrıntı satırı "hücre tek satır" kuralını devralıyordu; uzun not tabloyu genişletiyordu. */
+.sa-talep-tablo .tc-tablo tbody > tr.sa-talep-ayrinti-satir > td { white-space: normal; }
