@@ -20,6 +20,8 @@ export interface SevkSatiri {
 }
 export interface SevkBelgesi {
   no: string;
+  // Sevk tarihi YYYY-MM-DD.
+  tarih: string;
   tur: SatisTuru;
   cariKodu: string | null;
   satirlar: readonly SevkSatiri[];

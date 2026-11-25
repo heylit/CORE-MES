@@ -4,7 +4,7 @@ import { cikisKilidi, sevkKalanKontrolu, sevkOnKontrol, sevkZamaniGecerli } from
 import type { SevkBelgesi, SevkSatiri } from './satis-irsaliye-kurallari.ts';
 
 const satir = (ek: Partial<SevkSatiri> = {}): SevkSatiri => ({ sira: 1, stokKodu: 'ORN-MAM-1', miktar: '10', birim: 'ADET', ambarNo: 2, siparisSatiriLogoRef: 100, lotlu: false, stoktaki: '25', ...ek });
-const belge = (ek: Partial<SevkBelgesi> = {}): SevkBelgesi => ({ no: 'SV-ORN-1', tur: 'toptan', cariKodu: 'ORN-CARI', satirlar: [satir()], ...ek });
+const belge = (ek: Partial<SevkBelgesi> = {}): SevkBelgesi => ({ no: 'SV-ORN-1', tarih: '2026-11-25', tur: 'toptan', cariKodu: 'ORN-CARI', satirlar: [satir()], ...ek });
 
 describe('satış irsaliyesi ön kontrol', () => {
   test('tam belge gönderilebilir', () => {
