@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import type {
   AcikSiparisSatiri, AcikSiparisSatirlariCevabi, AmbalajTuru, DepoSevkSatiri, EmirTamamlamaCevabi, FasonIsleriCevabi, GozOnerisiCevabi, KonumAyrintiCevabi, KonumlarCevabi, MalKabulCevabi, MalKabulGovdesi, MalKabullerCevabi, MalKabulOzeti, MalzemeAyrintiCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Rozet, SabitEylem, Secim, Sekmeler, Tablo, useTelefon, type Sutun } from '../../ortak/arayuz/index.ts';
-import { api } from '../../ortak/veri/api.ts';
+import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useGonderimKilidi } from '../../ortak/veri/korumali-komut.ts';
 import { DosyaHatasi, dosyaYukle, KucukResimKutusu, useKucukResimler } from '../belge-merkezi/disari.ts';
 import { AMBALAJ_KATALOGU, olcuBul, olcuMetni, sigma } from './ambalaj.ts';
@@ -500,6 +500,8 @@ export function MalKabul() {
   // 3063 dilim 2: forma eklenen bekleyen irsaliyeler; mal kabulle gidince (ya da yeniden bekletilince) cihazdan silinir.
   const [eklenenBekleyenler, setEklenenBekleyenler] = useState<string[]>([]);
   const kisiId = useOturum().data?.id ?? null;
+  // Tam ekran akış sonucu kendi gösterir; komutun bildirimi o sürede çıkmaz.
+  const akisAcik = useRef(false);
   const okuma = useSayfaOkumalari(irsaliyeSayfalari);
   const [siparisAramasi, setSiparisAramasi] = useState('');
   const { komut, onayPenceresi } = useStokKomutu((g: MalKabulGovdesi) => korumaliPost<MalKabulCevabi>('/stok/mal-kabul', g).then(async (c) => {
@@ -517,7 +519,7 @@ export function MalKabul() {
     }
     setEklenenBekleyenler([]);
     return c;
-  }), 'Mal kabul kaydedildi.', () => { setSatirlar([bosSatir()]); setIrsaliye(''); setIrsaliyeTarihi(''); setArananIrsaliye(''); setIrsaliyeSayfalari([]); taslak.temizle(); });
+  }), 'Mal kabul kaydedildi.', () => { setSatirlar([bosSatir()]); setIrsaliye(''); setIrsaliyeTarihi(''); setArananIrsaliye(''); setIrsaliyeSayfalari([]); taslak.temizle(); }, () => akisAcik.current);
   const taslak = useMalKabulTaslagi({ tur, irsaliye, irsaliyeTarihi, satirlar: satirlar.map((s) => ({ ...s, sertifikaYukleniyor: false })) }, irsaliye === '' && irsaliyeTarihi === '' && satirlar.every(bosMu), komut.isPending,
     (f) => { setTur(f.tur); setIrsaliye(f.irsaliye); setIrsaliyeTarihi(f.irsaliyeTarihi ?? ''); setArananIrsaliye(f.irsaliye); setSatirlar(f.satirlar.length ? f.satirlar.map((s) => ({ ...s, anahtar: ++sayac })) : [bosSatir()]); });
   // Çift tık tek istek ve tek bildirim (STK-7).
@@ -535,6 +537,7 @@ export function MalKabul() {
     return { anahtar: s.anahtar, ad: parcalar[parcalar.length - 1] ?? s.siparisEtiketi, siparis: parcalar.slice(0, -1).join(' · '), birim: s.siparisDonusumu?.birim ?? '',
       beklenen: s.siparisDonusumu?.miktar ?? '0', kalan: s.siparisDonusumu?.kalanMiktar ?? '0', miktar: s.miktar };
   });
+  akisAcik.current = akis && telefon;
   const akisSonucu = komut.isPending ? 'gonderiyor' : komut.isSuccess ? 'basarili' : komut.isError ? 'hata' : 'bekliyor';
   return (
     <section className="tc-stok">
@@ -600,8 +603,9 @@ export function MalKabul() {
       )}
       {akis && telefon && (
         <KabulAkisi kalemler={akisKalemleri} miktarYaz={(anahtar, miktar) => setSatirlar((l) => l.map((s) => (s.anahtar === anahtar ? { ...s, miktar, elleMiktar: true } : s)))}
-          irsaliye={irsaliye} irsaliyeYaz={(no) => { setIrsaliye(no); setArananIrsaliye(no); }} sonuc={akisSonucu} hataMetni={komut.isError ? hataMetni(komut.error) : null}
+          irsaliye={irsaliye} irsaliyeYaz={(no) => { setIrsaliye(no); setArananIrsaliye(no); }} sonuc={akisSonucu} hataMetni={komut.isError ? hataIletisi(komut.error, 'Bağlantıyı kontrol edip yeniden deneyin.') : null}
           gonder={(atlanan) => { const g = govdeOlustur(atlanan); kilitli(() => komut.mutateAsync(g).catch(() => undefined)); }}
+          etiketEylemi={etiket ? <EtiketMerkeziDugmesi tur="mal-kabul" idler={[etiket.id]}>Etiket bas</EtiketMerkeziDugmesi> : null}
           kapat={() => { akisYaz(false); komut.reset(); }} ayrintili={() => { akisYaz(false); komut.reset(); }} />
       )}
       {sekme === 'yapilanlar' && <MalKabulYapilanlar />}

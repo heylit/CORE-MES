@@ -53,9 +53,14 @@ test('telefonda kalem kalem sayılır, fazla teslim uyarılır, sonuç sunucudan
   await akis.getByRole('button', { name: 'Kabul et' }).click();
   await expect(akis.getByText('Kabul kaydedilemedi. Girdiğiniz miktarlar korundu.')).toBeVisible();
   await expect(akis.getByText('Mal kabul kaydedildi')).toHaveCount(0);
+  // Hata tek yerde: sayfa içi kutu; bildirim (toast) çıkmaz.
+  await expect(page.getByRole('alert')).toHaveCount(1);
   await page.screenshot({ path: test.info().outputPath('akis-hata.png') });
   await akis.getByRole('button', { name: 'Tekrar dene' }).click();
   await expect(akis.getByText('Mal kabul kaydedildi')).toBeVisible();
+  // Başarı ekranında eski hata yok; başarı bildirimi akış metniyle çiftlenmez.
+  await expect(page.getByText('Kabul kaydedilemedi')).toHaveCount(0);
+  await expect(page.getByRole('alert')).toHaveCount(0);
   expect(govdeler[0]?.satirlar).toHaveLength(1);
   expect(govdeler[0]?.satirlar[0]?.siparisSatirId).toBe(9001);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), 'sayfa yatay taşmaz').toBeLessThanOrEqual(0);

@@ -75,4 +75,38 @@ describe('kalem kalem mal kabul akışı (kart 3676)', () => {
     rerender(<KabulAkisi kalemler={KALEMLER} miktarYaz={vi.fn()} irsaliye="" irsaliyeYaz={vi.fn()} gonder={vi.fn()} sonuc="hata" hataMetni={null} kapat={vi.fn()} ayrintili={vi.fn()} />);
     expect(screen.queryByText('Mal kabul kaydedildi')).toBeNull();
   });
+
+  it('miktar yokken gösterge sıfır uydurmaz; özet satırına dokunmak kaleme götürür ve düzeltince özete döner', () => {
+    render(<Sarmal />);
+    expect(screen.getByRole('status').textContent).toContain('—');
+    tus('4'); fireEvent.click(screen.getByRole('button', { name: 'Sonraki' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Gelmedi' }));
+    expect(screen.getByText('Sipariş açık kalır')).toBeTruthy();
+    expect(screen.getByText('Beklenen 10')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'ORN kalem B düzelt' }));
+    tus('5');
+    fireEvent.click(screen.getByRole('button', { name: 'Özete geç' }));
+    expect(screen.getByText('2 kalem kabul edilecek')).toBeTruthy();
+  });
+
+  it('hata tek yerde (sayfa içi kutu) gösterilir; Ayrıntılı gir ayrı düğmedir', () => {
+    const ayrintili = vi.fn();
+    render(<KabulAkisi kalemler={KALEMLER} miktarYaz={vi.fn()} irsaliye="" irsaliyeYaz={vi.fn()} gonder={vi.fn()} sonuc="hata" hataMetni="Bağlantıyı kontrol edip yeniden deneyin." kapat={vi.fn()} ayrintili={ayrintili} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Sonraki' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Özete geç' }));
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Ayrıntılı gir' }));
+    expect(ayrintili).toHaveBeenCalled();
+  });
+
+  it('açılınca odak katmana girer; kapanınca açan düğmeye döner', () => {
+    const { container, unmount } = render(<button type="button">Kalem kalem say</button>);
+    const acan = container.querySelector('button')!;
+    acan.focus();
+    const alt = render(<Sarmal />);
+    expect(document.querySelector('.tc-kabul-akisi')?.contains(document.activeElement)).toBe(true);
+    alt.unmount();
+    expect(document.activeElement).toBe(acan);
+    unmount();
+  });
 });
