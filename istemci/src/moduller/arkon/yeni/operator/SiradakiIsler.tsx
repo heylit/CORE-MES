@@ -86,7 +86,7 @@ export function SiradakiIsler({ isler, ekranda, bakilan, siradakiMi, yer, sec, e
   };
   const acik = isler.filter((x) => !x.empty && x.state !== 'done').length;
   return (
-    <section className="tc-ay1-sira" aria-label="Sıradaki işler">
+    <section className="tc-ay1-sira" aria-label="Sıradaki işler" data-eylem={eylem ? '' : undefined}>
       <span className="tc-ay1-sira-ust">
         <Simge ad="list" boyut="k" /><b>Sıradaki işler</b>
         <small className="tc-ay1-mono">{acik} iş · {ekranda + 1}/{isler.length}</small>
