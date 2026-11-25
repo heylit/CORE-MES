@@ -122,12 +122,13 @@ export function sevkiyatUclari(kaynak: HaritaKaynagi) {
       yontem: 'GET', yol: '/sevkiyat/isler/:id/sofor-kimligi', yetki: 'sevkiyat.oku', parametre: idParametresi, cevap: soforKimligiDurumuCevabi,
       isle: ({ db, parametre }) => servis.soforKimligiDurumu(db, parametre.id, kisiselVeriAnahtari()),
     }),
+    // Kaydet tekrar korumasına girmez: koruma istek gövdesinin özetini saklar, 11 haneli kimlik özetten çevrimdışı denenebilir; komut zaten aynı değeri yeniden yazar.
     uc({
       yontem: 'POST', yol: '/sevkiyat/isler/:id/sofor-kimligi', yetki: 'sevkiyat.is-yaz', parametre: idParametresi, govde: soforKimligiGovdesi, cevap: soforKimligiDurumuCevabi,
       isle: ({ db, kullanici, parametre, govde }) => servis.soforKimligiKaydet(db, parametre.id, govde.kimlik, kisiselVeriAnahtari(), kullanici.id),
     }),
     uc({
-      yontem: 'POST', yol: '/sevkiyat/isler/:id/sofor-kimligi/sil', yetki: 'sevkiyat.is-yaz', parametre: idParametresi, cevap: soforKimligiDurumuCevabi,
+      yontem: 'POST', yol: '/sevkiyat/isler/:id/sofor-kimligi/sil', yetki: 'sevkiyat.is-yaz', tekrarKorumali: true, parametre: idParametresi, cevap: soforKimligiDurumuCevabi,
       isle: ({ db, parametre }) => servis.soforKimligiSil(db, parametre.id),
     }),
     // Tam okuma yazma sayılır (denetim kaydı bırakır) ve tekrar korumasına girmez: cevap (kimlik) hiçbir yerde saklanmasın.

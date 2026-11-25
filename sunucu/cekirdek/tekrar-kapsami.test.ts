@@ -9,6 +9,9 @@ const KRITIK_MODULLER = ['finans', 'sevkiyat', 'stok', 'uretim-emirleri'];
 // Kural girdiğinde korumasız olan uçlar. Uç korununca (istemci çağrısı istek kimliği yollayarak) satır buradan silinir;
 // listeye yeni satır eklenmez, yeni kritik yazma ucu korumalı doğar.
 const KORUMASIZ_BORC: readonly string[] = [
+  // sevkiyat: sürücü kimliği; koruma cevabı ve gövde özetini saklar, kimlik oraya sızmasın (3694-4)
+  'POST /sevkiyat/isler/:id/sofor-kimligi',
+  'POST /sevkiyat/isler/:id/sofor-kimligi/oku',
   // finans
   'POST /finans/ayar/guncelle',
   'POST /finans/belgeler/:id/duzelt',
