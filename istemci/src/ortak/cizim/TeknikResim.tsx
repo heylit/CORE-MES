@@ -10,7 +10,7 @@ import { bekle, tesseract } from './kitaplik.ts';
 import { BALON_BOYLARI, BALON_KIPI_ADI, BALON_KIPLERI, balonDizimi, kilavuzCizgisi, type BalonKipi, type DizimKonumu } from './balon-dizimi.ts';
 import {
   ayarDuzelt, ayarImzasi, balonCogalt, balonlariCikar, balonYazisi, dosyaBicimi, duzenlemeMetni, enYakinYazi, gdtdenCevir, GDT_SEMBOLLERI, gdtYazimi,
-  gdtYazimiMetni, gdtyeCevir, gecmisGeri, gecmisIleri, gecmisKaydet, GORUNUS_ANAHTARLARI, KONTROL_SIKLIKLARI, modelAdiMi, noktaAlanlari, numaraDegistir,
+  gdtYazimiMetni, gdtyeCevir, gecmisGeri, serbestAlanlari, gecmisIleri, gecmisKaydet, GORUNUS_ANAHTARLARI, KONTROL_SIKLIKLARI, modelAdiMi, noktaAlanlari, numaraDegistir,
   numaralariUygula, numaraSirasi, ocrGerekir, OLCU_ALETLERI, OLCU_TURLERI, olcuTuru, olcuTuruSec, olcuYazimi, olcuYazimiMetni, olcumDegerlendir,
   olcumRaporu, onerileriEkle, SIRA_YOLU_ADI, TOL_KIPI_ADI, tolKipiSec, toleransKonumu, yeniOneriler, yontem, YONTEM_ADI,
   type Balon, type CalismaDosyasi, type Gecmis, type NumaraYolu, type Oneri, type Olcum, type OlcumYontemi, type OkumaAyari, type SiraYolu, type TolKipi,
@@ -85,7 +85,7 @@ interface Mesgul { t: string; steps: string[]; i: number; pct?: number }
 // kritiklik, sıklık ve not. `kaynak` balonun bağlı olduğu resim yazısıdır.
 interface Duzenleme {
   isNew?: boolean; id?: number; x?: number; y?: number; ar?: Balon['ar']; text: string; label: string;
-  no?: string; yol?: NumaraYolu | null; tool?: string; aletElle?: boolean; m?: OlcumYontemi; crit?: boolean; freq?: string; not?: string; kaynak?: string;
+  serbest?: boolean; no?: string; yol?: NumaraYolu | null; tool?: string; aletElle?: boolean; m?: OlcumYontemi; crit?: boolean; freq?: string; not?: string; kaynak?: string;
 }
 interface GecmisDurumu { bal: readonly Balon[]; olcum?: Readonly<Record<number, Olcum>> }
 const BOS_GECMIS: Gecmis<GecmisDurumu> = { geri: [], ileri: [] };
@@ -533,7 +533,7 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
   const duzenle = (x: Balon, ek?: Partial<Duzenleme>) => {
     const text = duzenlemeMetni(x), p = AKTol.parse(text, { cls: doc.cls || 'm' });
     setEdit({
-      id: x.id, text, label: x.l ?? '', no: String(x.id), yol: null, tool: x.tool ?? '', aletElle: !!x.tool && !!p && p.tool !== x.tool,
+      id: x.id, text, label: x.l ?? '', serbest: !!x.gauge && !p, no: String(x.id), yol: null, tool: x.tool ?? '', aletElle: !!x.tool && !!p && p.tool !== x.tool,
       m: yontem(x), crit: !!x.crit, freq: x.freq ?? '', not: x.not ?? '', kaynak: yaziBul(x.ar)?.raw ?? '', ...ek,
     });
   };
@@ -555,7 +555,7 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
   const noCakisir = (e: Duzenleme) => { const h = hedefNo(e); return h != null && bal.some((x) => x.id === h); };
   const applyEdit = () => {
     if (!edit) return;
-    const fields = noktaAlanlari(edit.text, edit.label, doc.cls || 'm');
+    const fields = edit.serbest ? serbestAlanlari(edit.text, edit.label) : noktaAlanlari(edit.text, edit.label, doc.cls || 'm');
     if (!fields) { say('Ölçü anlaşılamadı · örn. Ø40 H7, 18 ±0.05, M8x1.25', 'hold'); return; }
     if (noCakisir(edit) && !edit.yol) { say('Numara ' + edit.no + ' başka balonda · yer değiştir ya da araya al', 'hold'); return; }
     const ek = {
@@ -1110,6 +1110,19 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
                   ))}
                 </div></div></div>
             )}
+            <div className="tc-ay5-bilgi"><span>Ölçüsüz kontrol (resimde ölçü yazısı yok): yalnız Geçer / Geçmez</span>
+              <div className="tc-ay5-dilimler">
+                <button type="button" className={`tc-ay5-dilim${edit.serbest ? ' tc-ay5-acik' : ''}`} aria-pressed={!!edit.serbest} onClick={() => yaz({ serbest: !edit.serbest })}>Serbest balon</button>
+              </div>
+            </div>
+            {edit.serbest ? (
+              <>
+                <Girdi etiket="Kontrol adı" autoFocus placeholder="örn. Yüzey kontrolü · Çapak yok" value={edit.text} onChange={(e) => yaz({ text: e.target.value })}
+                  onKeyDown={(e) => { if (e.key === 'Enter') applyEdit(); }} />
+                <Girdi etiket="Etiket (isteğe bağlı)" placeholder="örn. Görsel" value={edit.label} onChange={(e) => yaz({ label: e.target.value })} />
+              </>
+            ) : (
+              <>
             <div className="tc-ay5-dilimler" role="group" aria-label="Tür">
               {[...OLCU_TURLERI, ['gdt', 'GD&T'] as const].map(([k, ad]) => (
                 <button key={k} type="button" className={`tc-ay5-dilim${tur === k ? ' tc-ay5-acik' : ''}`} aria-pressed={tur === k} onClick={() => turSec(k)}>{ad}</button>
@@ -1169,6 +1182,8 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
                 <button type="button" className={`tc-ay5-dilim${edit.crit ? ' tc-ay5-acik' : ''}`} aria-pressed={!!edit.crit} onClick={() => yaz({ crit: !edit.crit })}><Simge ad="alert" boyut="k" />Kritik</button>
               </div>
             </div>
+              </>
+            )}
             <Girdi etiket="Not (isteğe bağlı)" placeholder="örn. boydan, iki yönde ölç" value={edit.not ?? ''} onChange={(e) => yaz({ not: e.target.value })} />
             <div className="tc-ay5-dugmeler">
               {!edit.isNew && edit.id != null && <Dugme tur="tehlike" simge="trash" aria-label="Sil" onClick={() => removeBalloon(edit.id!)} />}

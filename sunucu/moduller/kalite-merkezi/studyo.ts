@@ -79,13 +79,14 @@ export async function studyoParcasi(db: Db, malzemeNo: number): Promise<KmStudyo
   const resimler = await resimlerCevabi(db, await sorgular.parcaResimleri(db, malzemeNo));
   // Plan yalnız Kalite Merkezi'nin kuralıyla yazılır; okunamayan plan sessizce boş sayılmaz (hata olarak görünür).
   // Plan operasyona bağlıdır; gösterilen numara rotanın bugünkü numarasıdır (3250 b), rotada olmayan operasyonda yazıldığı numara.
-  const guncel = new Map((await yururlukteOperasyonlar(db, [malzemeNo])).map((o): [number, number] => [o.operasyonId, o.opNo]));
+  const rotaOperasyonlari = await yururlukteOperasyonlar(db, [malzemeNo]);
+  const guncel = new Map(rotaOperasyonlari.map((o): [number, number] => [o.operasyonId, o.opNo]));
   const numunePlanlari = (await sorgular.numunePlanlari(db, malzemeNo))
     .map((p) => ({ opNo: (p.operasyonId === null ? undefined : guncel.get(p.operasyonId)) ?? p.opNo, kurallar: kurallarSemasi.parse(p.kurallar), surum: p.surum }))
     .sort((a, b) => a.opNo - b.opNo);
   const alinan = new Set((await sorgular.parcaResimKaynaklari(db, malzemeNo)).map((r) => resimAnahtari(r.merkezBelgeId, r.ozet)));
   const alinmamis = (await kartinYayindakiBelgeleri(db, malzemeNo)).filter((b) => !alinan.has(resimAnahtari(b.id, b.ozet))).length;
-  return { resimler, numunePlanlari, alinmamis };
+  return { resimler, numunePlanlari, alinmamis, operasyonlar: rotaOperasyonlari.map((o) => ({ operasyonId: o.operasyonId, opNo: o.opNo })) };
 }
 
 // Arkon taslak paketinin kendiliğinden planı: yalnız etkin balonlu resmi olan parçaların resimleri (balon ve grupla). Okuma yetkisinden bağımsızdır;

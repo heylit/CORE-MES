@@ -2,7 +2,7 @@ import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/rea
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type {
   KmBalon, KmBalonlarGovdesi, KmBalonYeriGovdesi, KmMerkezBelgeleriCevabi, KmMerkezBelgesi, KmNumunelerCevabi, KmOlcumGovdesi, KmOlcumlerCevabi, KmResim, KmResimEkleGovdesi,
-  KmPlanKopyalaGovdesi, KmStudyoEsitlemeCevabi, KmStudyoParcaCevabi,
+  KmPlanKopyalaGovdesi, KmGruplarGovdesi, KmStudyoEsitlemeCevabi, KmStudyoParcaCevabi,
 } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import type {
   KmCmmOnizlemeCevabi, KmCmmOnizleGovdesi, KmCmmPlaniCevabi, KmCmmYazCevabi, KmCmmYazGovdesi,
@@ -137,6 +137,19 @@ export function useBalonYeriYaz(malzemeNo: number | null) {
       });
     },
     onError: () => { if (malzemeNo !== null) void istemci.invalidateQueries({ queryKey: studyoAnahtari.parca(malzemeNo) }); },
+  });
+}
+
+// 3693: grup planı resim başına bütün yazılır; sürüm gruplarSurum'dur (kontrol planının sürümünden ayrı). Cevaptaki resim önbelleğe konur.
+export function useGruplariYaz() {
+  const istemci = useQueryClient();
+  return useMutation({
+    mutationFn: ({ resim, govde }: { resim: KmResim; govde: KmGruplarGovdesi }) => tekrarKorumaliGonder((d) => api.post<{ resim: KmResim }>(
+      `/kalite-merkezi/studyo/resimler/${String(resim.id)}/gruplar`, govde,
+      { istekKimligi: d.istekKimligi, zamanAsimiMs: d.zamanAsimiMs, ...(d.sinyal ? { sinyal: d.sinyal } : {}) },
+    )),
+    onSuccess: ({ resim }) => { parcayaKoy(istemci, resim); },
+    onError: (_h, { resim }) => { void istemci.invalidateQueries({ queryKey: studyoAnahtari.parca(resim.malzemeNo) }); },
   });
 }
 

@@ -5,7 +5,7 @@ import { BildirimSaglayici } from '../arayuz/index.ts';
 import { AKTol } from './cekirdek.ts';
 import {
   balonCikar, balonCogalt, balonlariCikar, enYakinYazi, gdtdenCevir, gdtYazimi, gdtYazimiMetni, gdtyeCevir, gecmisGeri, gecmisIleri, gecmisKaydet,
-  noktaAlanlari, numaraDegistir, numaralariUygula, numaraSirasi, olcuTuru, olcuTuruSec, olcuYazimi, olcuYazimiMetni, tolKipiSec,
+  noktaAlanlari, serbestAlanlari, numaraDegistir, numaralariUygula, numaraSirasi, olcuTuru, olcuTuruSec, olcuYazimi, olcuYazimiMetni, tolKipiSec,
   type Balon, type Gecmis, type Olcum, type OlcuYazimi,
 } from './kurallar.ts';
 import { TeknikResim, type TeknikResimKontrolu } from './TeknikResim.tsx';
@@ -111,6 +111,12 @@ describe('ölçü yazımı ve form', () => {
   it('formun yazımı noktaya ayrışır; tablo dışı uyum işaretlenir', () => {
     expect(noktaAlanlari('Ø25 H7', '', 'm')).toMatchObject({ min: 25, max: 25.021 });
     expect(AKTol.parse('Ø25 Z7', { cls: 'm' })?.unknownFit).toBe(true);
+  });
+  it('3693: serbest balon ölçü yazısı olmadan kurulur; sınırsız mastar sayılır (Geçer / Geçmez)', () => {
+    expect(noktaAlanlari('Yüzey kontrolü', '', 'm')).toBeNull();
+    expect(serbestAlanlari('  Yüzey kontrolü ', '')).toMatchObject({ nom: 'Yüzey kontrolü', gauge: true, min: 0, max: 0, l: 'Serbest' });
+    expect(serbestAlanlari('', 'Görsel')).toMatchObject({ nom: 'Görsel', l: 'Görsel' });
+    expect(serbestAlanlari('', '').nom).toBe('Serbest kontrol');
   });
 });
 

@@ -13,6 +13,7 @@ import { Resim, useKaliteFormu, type OlcumYazici } from './KaliteFormu.tsx';
 import { NUMUNE_DURUMU, numuneKuraliMetni, planGirdileri, uretimEmriKimligi } from './kurallar.ts';
 import { CmmPlani } from './CmmPlani.tsx';
 import { CmmYukle } from './CmmYukle.tsx';
+import { GrupPaneli } from './GrupPaneli.tsx';
 import { MerkezdenAl } from './MerkezdenAl.tsx';
 import { OkumaAyarlari, useOkumaAyari } from './OkumaAyarlari.tsx';
 import { useBalonPlaniYaz, useEmirNumuneleri, useMerkezdenEsitle, useOlcumYaz, usePlanKopyala, useResimAl, useResimKaldir, useStudyoParcasi } from './veri.ts';
@@ -257,6 +258,7 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
       </section>
 
       <aside id="km-st-sag" className="km-st-sag" aria-label="Numune planı ve numuneler">
+        {resim && resim.tur === 'resim' ? <GrupPaneli resim={resim} rota={parca.data?.operasyonlar ?? []} duzenler={duzenler} /> : null}
         <section className="km-st-kart">
           <span className="km-st-baslik">Numune planı</span>
           {parca.data?.numunePlanlari.length ? parca.data.numunePlanlari.map((p) => (
