@@ -1,5 +1,5 @@
 import { logoBirimKodu, logoTarihi } from './kurallar.ts';
-import { sevkOnKontrol } from './satis-irsaliye-kurallari.ts';
+import { ENGEL_ILETILERI, sevkOnKontrol } from './satis-irsaliye-kurallari.ts';
 import type { SevkBelgesi } from './satis-irsaliye-kurallari.ts';
 
 // Satış irsaliyesi köprü gövdesi (kart 3684). Kimse çağırmaz: gönderim hattı, ayar ve giden kutusu yok; açılışı gerçek Logo dökümü (kart 3683) ve
@@ -20,9 +20,10 @@ export const KONSINYE_OLCULDU = false;
 export function satisIrsaliyeGovdesi(b: SevkBelgesi): { govde: Record<string, unknown> } | { hata: string } {
   if (b.tur === 'konsinye' && !KONSINYE_OLCULDU) return { hata: "Konsinye çıkış türü Logo'da henüz ölçülmedi; gönderilmez." };
   const k = sevkOnKontrol(b);
+  const engel = k.engeller[0];
+  if (engel !== undefined) return { hata: ENGEL_ILETILERI[engel] };
   const tarih = logoTarihi(b.tarih);
-  if (tarih === null) return { hata: 'Sevk tarihi okunamadı.' };
-  if (k.engeller[0] !== undefined) return { hata: k.engeller[0] };
+  if (tarih === null) return { hata: ENGEL_ILETILERI.tarih };
   const a = SATIS_IRSALIYE_ALANLARI;
   const ambar = k.gidecek[0]?.ambarNo ?? null;
   const satirlar = k.gidecek.map((s) => ({

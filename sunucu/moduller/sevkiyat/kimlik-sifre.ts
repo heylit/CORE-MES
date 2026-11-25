@@ -4,6 +4,8 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 // sütun, göç, uç ve okuma rolü kararı (kimin tam göreceği) bekliyor. AES-256-GCM, her değere yeni rastgele nonce; biçim `1.<nonce>.<etiket>.<şifreli>` (base64url).
 const SURUM = '1';
 const ANAHTAR_BAYT = 32;
+// Kısaltılmış etiket sahtecilik payını düşürür (Risk N1): yalnız tam 16 bayt kabul edilir.
+const ETIKET_BAYT = 16;
 
 // Anahtar 32 bayt, ortam değişkeninde base64 (ad: TMIV2_KISISEL_VERI_ANAHTARI; okuyan kablolama yapar). Bozuksa null: alan kapalı kalır.
 export function anahtarCoz(base64: string | undefined): Buffer | null {
@@ -14,7 +16,7 @@ export function anahtarCoz(base64: string | undefined): Buffer | null {
 
 export function kimlikSifrele(deger: string, anahtar: Buffer): string {
   const nonce = randomBytes(12);
-  const c = createCipheriv('aes-256-gcm', anahtar, nonce);
+  const c = createCipheriv('aes-256-gcm', anahtar, nonce, { authTagLength: ETIKET_BAYT });
   const sifreli = Buffer.concat([c.update(deger, 'utf8'), c.final()]);
   return [SURUM, nonce.toString('base64url'), c.getAuthTag().toString('base64url'), sifreli.toString('base64url')].join('.');
 }
@@ -24,8 +26,10 @@ export function kimlikCoz(metin: string, anahtar: Buffer): string | null {
   const [surum, nonce, etiket, sifreli] = metin.split('.');
   if (surum !== SURUM || nonce === undefined || etiket === undefined || sifreli === undefined) return null;
   try {
-    const d = createDecipheriv('aes-256-gcm', anahtar, Buffer.from(nonce, 'base64url'));
-    d.setAuthTag(Buffer.from(etiket, 'base64url'));
+    const e = Buffer.from(etiket, 'base64url');
+    if (e.length !== ETIKET_BAYT) return null;
+    const d = createDecipheriv('aes-256-gcm', anahtar, Buffer.from(nonce, 'base64url'), { authTagLength: ETIKET_BAYT });
+    d.setAuthTag(e);
     return Buffer.concat([d.update(Buffer.from(sifreli, 'base64url')), d.final()]).toString('utf8');
   } catch { return null; }
 }

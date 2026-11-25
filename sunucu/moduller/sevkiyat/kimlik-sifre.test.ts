@@ -20,6 +20,11 @@ describe('şoför kimlik no şifreleme', () => {
     assert.equal(kimlikCoz([p[0], p[1], p[2], 'AAAA'].join('.'), anahtar), null);
     assert.equal(kimlikCoz('bozuk', anahtar), null);
   });
+  test('kısaltılmış doğrulama etiketi reddedilir (Risk N1)', () => {
+    const p = kimlikSifrele(ORN, anahtar).split('.');
+    const kisa = Buffer.from(p[2] ?? '', 'base64url').subarray(0, 4).toString('base64url');
+    assert.equal(kimlikCoz([p[0], p[1], kisa, p[3]].join('.'), anahtar), null);
+  });
   test('anahtar 32 bayt base64 olmalı; yoksa ya da kısaysa alan kapalı', () => {
     assert.equal(anahtarCoz(undefined), null);
     assert.equal(anahtarCoz(''), null);

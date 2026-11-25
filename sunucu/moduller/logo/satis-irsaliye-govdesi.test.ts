@@ -31,5 +31,7 @@ describe('satış irsaliyesi gövdesi (kapalı, kimse çağırmaz)', () => {
     assert.ok('hata' in satisIrsaliyeGovdesi(belge({ tur: 'konsinye' })));
     assert.ok('hata' in satisIrsaliyeGovdesi(belge({ cariKodu: null })));
     assert.ok('hata' in satisIrsaliyeGovdesi(belge({ tarih: 'bozuk' })));
+    assert.deepEqual(satisIrsaliyeGovdesi(belge({ tarih: '2026-02-31' })), { hata: 'Sevk tarihi geçerli bir takvim günü değil.' });
+    assert.deepEqual(satisIrsaliyeGovdesi(belge({ cariKodu: null })), { hata: 'Müşterinin Logo cari kodu yok.' });
   });
 });
