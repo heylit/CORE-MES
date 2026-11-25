@@ -126,7 +126,7 @@ INSERT INTO neden_pasif_listesi VALUES
 
 -- 1) Ad dönüşümü: kod, kurulum adı ve SmartES'teki kategori tutuyorsa; SmartES adı başka satırda yoksa.
 INSERT INTO durus_nedeni_goc_yedek (goc, neden_id, eklendi, eski_ad, eski_kategori, eski_aktif, eski_cagri_ekibi, eski_cagri_gecikme_dk, eski_surum)
-SELECT '20261125124000', d.id, false, d.ad, d.kategori, d.aktif, d.cagri_ekibi, d.cagri_gecikme_dk, d.surum
+SELECT '20261125125000', d.id, false, d.ad, d.kategori, d.aktif, d.cagri_ekibi, d.cagri_gecikme_dk, d.surum
   FROM durus_nedeni d
   JOIN neden_ad_donusumu x ON x.tur = 'durus' AND x.kod = d.kod AND x.eski_ad = d.ad
   JOIN smartes_durus_liste s ON s.ad = x.yeni_ad AND s.kategori = d.kategori
@@ -135,18 +135,18 @@ SELECT '20261125124000', d.id, false, d.ad, d.kategori, d.aktif, d.cagri_ekibi, 
 UPDATE durus_nedeni d SET ad = x.yeni_ad, surum = d.surum + 1
   FROM neden_ad_donusumu x
  WHERE x.tur = 'durus' AND x.kod = d.kod AND EXISTS (
-   SELECT 1 FROM durus_nedeni_goc_yedek y WHERE y.goc = '20261125124000' AND y.neden_id = d.id);
+   SELECT 1 FROM durus_nedeni_goc_yedek y WHERE y.goc = '20261125125000' AND y.neden_id = d.id);
 
 -- 2) Dönüşmeyen kurulum nedenleri (eşlenmeyenler ve kategorisi SmartES'ten farklı olanlar): ad aynı kalır, pasife alınır.
 INSERT INTO durus_nedeni_goc_yedek (goc, neden_id, eklendi, eski_ad, eski_kategori, eski_aktif, eski_cagri_ekibi, eski_cagri_gecikme_dk, eski_surum)
-SELECT '20261125124000', d.id, false, d.ad, d.kategori, d.aktif, d.cagri_ekibi, d.cagri_gecikme_dk, d.surum
+SELECT '20261125125000', d.id, false, d.ad, d.kategori, d.aktif, d.cagri_ekibi, d.cagri_gecikme_dk, d.surum
   FROM durus_nedeni d
  WHERE d.aktif
-   AND NOT EXISTS (SELECT 1 FROM durus_nedeni_goc_yedek y WHERE y.goc = '20261125124000' AND y.neden_id = d.id)
+   AND NOT EXISTS (SELECT 1 FROM durus_nedeni_goc_yedek y WHERE y.goc = '20261125125000' AND y.neden_id = d.id)
    AND ((d.kod, d.ad) IN (SELECT kod, eski_ad FROM neden_pasif_listesi WHERE tur = 'durus')
         OR (d.kod, d.ad) IN (SELECT kod, eski_ad FROM neden_ad_donusumu WHERE tur = 'durus'));
 UPDATE durus_nedeni d SET aktif = false, surum = d.surum + 1
- WHERE d.aktif AND EXISTS (SELECT 1 FROM durus_nedeni_goc_yedek y WHERE y.goc = '20261125124000' AND y.neden_id = d.id AND y.eski_ad = d.ad AND y.eski_aktif)
+ WHERE d.aktif AND EXISTS (SELECT 1 FROM durus_nedeni_goc_yedek y WHERE y.goc = '20261125125000' AND y.neden_id = d.id AND y.eski_ad = d.ad AND y.eski_aktif)
    AND NOT EXISTS (SELECT 1 FROM neden_ad_donusumu x WHERE x.tur = 'durus' AND x.kod = d.kod AND x.yeni_ad = d.ad);
 
 -- 3) SmartES'te olup CORE'da adı bulunmayan nedenler yeni satır olur (D-nn, listenin sonuna, çağrısız).
@@ -161,26 +161,26 @@ eklenen AS (
   SELECT 'D-' || lpad((t.kod_son + e.n)::text, 2, '0'), e.ad, e.kategori, e.aktif, t.sira_son + e.n
     FROM eksik e CROSS JOIN temel t
   RETURNING id)
-INSERT INTO durus_nedeni_goc_yedek (goc, neden_id, eklendi) SELECT '20261125124000', id, true FROM eklenen;
+INSERT INTO durus_nedeni_goc_yedek (goc, neden_id, eklendi) SELECT '20261125125000', id, true FROM eklenen;
 
 -- Hata nedenleri (fire): aynı kurallar.
 INSERT INTO hurda_nedeni_goc_yedek (goc, neden_id, eklendi, eski_ad, eski_aktif, eski_surum)
-SELECT '20261125124000', h.id, false, h.ad, h.aktif, h.surum
+SELECT '20261125125000', h.id, false, h.ad, h.aktif, h.surum
   FROM hurda_nedeni h
   JOIN neden_ad_donusumu x ON x.tur = 'hurda' AND x.kod = h.kod AND x.eski_ad = h.ad
  WHERE NOT EXISTS (SELECT 1 FROM hurda_nedeni o WHERE lower(o.ad) = lower(x.yeni_ad));
 UPDATE hurda_nedeni h SET ad = x.yeni_ad, surum = h.surum + 1
   FROM neden_ad_donusumu x
  WHERE x.tur = 'hurda' AND x.kod = h.kod AND EXISTS (
-   SELECT 1 FROM hurda_nedeni_goc_yedek y WHERE y.goc = '20261125124000' AND y.neden_id = h.id);
+   SELECT 1 FROM hurda_nedeni_goc_yedek y WHERE y.goc = '20261125125000' AND y.neden_id = h.id);
 
 INSERT INTO hurda_nedeni_goc_yedek (goc, neden_id, eklendi, eski_ad, eski_aktif, eski_surum)
-SELECT '20261125124000', h.id, false, h.ad, h.aktif, h.surum
+SELECT '20261125125000', h.id, false, h.ad, h.aktif, h.surum
   FROM hurda_nedeni h
   JOIN neden_pasif_listesi p ON p.tur = 'hurda' AND p.kod = h.kod AND p.eski_ad = h.ad
  WHERE h.aktif;
 UPDATE hurda_nedeni h SET aktif = false, surum = h.surum + 1
- WHERE h.aktif AND EXISTS (SELECT 1 FROM hurda_nedeni_goc_yedek y WHERE y.goc = '20261125124000' AND y.neden_id = h.id AND y.eski_ad = h.ad AND y.eski_aktif);
+ WHERE h.aktif AND EXISTS (SELECT 1 FROM hurda_nedeni_goc_yedek y WHERE y.goc = '20261125125000' AND y.neden_id = h.id AND y.eski_ad = h.ad AND y.eski_aktif);
 
 WITH eksik AS (
   SELECT s.*, row_number() OVER (ORDER BY s.sira) AS n
@@ -193,14 +193,14 @@ eklenen AS (
   SELECT 'H-' || lpad((t.kod_son + e.n)::text, 2, '0'), e.ad, t.sira_son + e.n
     FROM eksik e CROSS JOIN temel t
   RETURNING id)
-INSERT INTO hurda_nedeni_goc_yedek (goc, neden_id, eklendi) SELECT '20261125124000', id, true FROM eklenen;
+INSERT INTO hurda_nedeni_goc_yedek (goc, neden_id, eklendi) SELECT '20261125125000', id, true FROM eklenen;
 
 DO $$
 DECLARE
-  d_yeni int := (SELECT count(*) FROM durus_nedeni_goc_yedek WHERE goc = '20261125124000' AND eklendi);
-  d_eski int := (SELECT count(*) FROM durus_nedeni_goc_yedek WHERE goc = '20261125124000' AND NOT eklendi);
-  h_yeni int := (SELECT count(*) FROM hurda_nedeni_goc_yedek WHERE goc = '20261125124000' AND eklendi);
-  h_eski int := (SELECT count(*) FROM hurda_nedeni_goc_yedek WHERE goc = '20261125124000' AND NOT eklendi);
+  d_yeni int := (SELECT count(*) FROM durus_nedeni_goc_yedek WHERE goc = '20261125125000' AND eklendi);
+  d_eski int := (SELECT count(*) FROM durus_nedeni_goc_yedek WHERE goc = '20261125125000' AND NOT eklendi);
+  h_yeni int := (SELECT count(*) FROM hurda_nedeni_goc_yedek WHERE goc = '20261125125000' AND eklendi);
+  h_eski int := (SELECT count(*) FROM hurda_nedeni_goc_yedek WHERE goc = '20261125125000' AND NOT eklendi);
 BEGIN
   RAISE NOTICE 'durus: % eklendi, % değişti; hata: % eklendi, % değişti', d_yeni, d_eski, h_yeni, h_eski;
 END $$;

@@ -3,7 +3,7 @@ import { after, before, describe, test } from 'node:test';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 
-const GOC = '20261125124000';
+const GOC = '20261125125000';
 
 // SmartES'ten gelen 41 duruş ve (rework hariç) 18 fire adı; göç adları aynen taşır.
 describe('3692: duruş ve hata nedenleri SmartES adlarıyla eşit (gerçek PostgreSQL)', () => {
