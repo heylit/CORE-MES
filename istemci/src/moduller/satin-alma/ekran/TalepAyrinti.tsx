@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { DurumKutusu, Dugme, Menu, Rozet, SayfaBasligi, Sekmeler, Simge, type MenuOgesi } from '../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../ortak/tasarim/simgeler.ts';
 import { budgetUse, durumEtiketi } from '../merkez/calc.ts';
@@ -10,7 +11,7 @@ import { grupMetni } from '../merkez/guncelleme-grubu.ts';
 import {
   ADIMLAR, KARAR_SONRASI, TUTAR_ETIKETI, adimBilgisi, adimSirasi, basliktakiTutar, gecikmisMi, kimde, nextStep, render, talepBolumu, talepIslemleri, type NextBtn,
 } from '../merkez/views.ts';
-import { gelisGunu, kalemOzeti } from '../merkez/kimlik.ts';
+import { gelisGunu } from '../merkez/kimlik.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
 import { TalepCizimleri } from '../talep/Cizimler.tsx';
 import { KimlikSeridi, durumTonu } from './KimlikSeridi.tsx';
@@ -52,9 +53,8 @@ function Bilgiler({ r }: { r: PurchaseRequest }) {
   const bu = r.department ? budgetUse(r.department, bugun.slice(0, 4)) : null;
   const grup = grupMetni(r);
   const kutular: { ad: string; simge: SimgeAdi; deger: string; alt?: string }[] = [];
-  if (gelis) kutular.push({ ad: 'Geliş', simge: 'clock', deger: fmtDate(gelis), alt: gunMetni(dayDiff(gelis, bugun), 'gün önce', 'gün sonra') });
-  if (r.needDate) kutular.push({ ad: 'İhtiyaç', simge: 'calendar', deger: fmtDate(r.needDate), ...(acik ? { alt: gunMetni(dayDiff(bugun, r.needDate), 'gün var', 'gün geçti') } : {}) });
-  kutular.push({ ad: 'Malzeme', simge: 'box', deger: kalemOzeti(r) });
+  if (gelis) kutular.push({ ad: 'Talep tarihi', simge: 'clock', deger: fmtDate(gelis), alt: gunMetni(dayDiff(gelis, bugun), 'gün önce', 'gün sonra') });
+  if (r.needDate) kutular.push({ ad: 'İstenen termin', simge: 'calendar', deger: fmtDate(r.needDate), ...(acik ? { alt: gunMetni(dayDiff(bugun, r.needDate), 'gün var', 'gün geçti') } : {}) });
   if (r.requester || r.department) kutular.push({ ad: 'Talep eden', simge: 'user', deger: r.requester || r.department, ...(r.requester && r.department ? { alt: r.department } : {}) });
   if (r.uretimEmriNo) kutular.push({ ad: 'Üretim emri', simge: 'route', deger: r.uretimEmriNo });
   kutular.push({ ad: 'Teklif ve tutar', simge: 'lira', deger: `${String(nq)} teklif${nr ? ` / ${String(nr)} istendi` : ''}`, ...(tutar ? { alt: `${TUTAR_ETIKETI[tutar.tur]} ${money(tutar.tl, 'TRY', 0).replace(/ /g, '\u00a0')}` } : {}) });
@@ -63,7 +63,7 @@ function Bilgiler({ r }: { r: PurchaseRequest }) {
   return (
     <dl className="sa-ekran-bilgi" aria-label="Talebin bilgileri">
       {kutular.map((k) => (
-        <div key={k.ad} className={k.ad === 'İhtiyaç' && gecikmisMi(r, bugun) ? 'sa-ekran-bilgi-gec' : undefined}>
+        <div key={k.ad} className={k.ad === 'İstenen termin' && gecikmisMi(r, bugun) ? 'sa-ekran-bilgi-gec' : undefined}>
           <dt><Simge ad={k.simge} boyut="k" />{k.ad}</dt>
           <dd className="sa-ekran-bilgi-deger">{k.deger}</dd>
           {k.alt && <dd className="sa-ekran-bilgi-alt">{k.alt}</dd>}
@@ -77,6 +77,15 @@ export function TalepAyrinti() {
   // 3442-2: talebin çizimi her adımda görünür; yazan ekler. Kanca erken dönüşten önce.
   const yazar = (useOturum().data?.islemler ?? []).includes('satin-alma.yaz');
   const r = V.id ? S.requests[V.id] : undefined;
+  // K2: Kalemler adımıyla açılan talepte kalemler ilk ekranda başlar; adım şeridi (üstündeki bilgi, bant ve çizimle) en üste kayar.
+  const seritRef = useRef<HTMLDivElement>(null);
+  const acilanId = useRef<string | null>(null);
+  const kalemlerAcik = r !== undefined && talepBolumu(r) === 'items';
+  useEffect(() => {
+    if (!r || acilanId.current === r.id) return;
+    acilanId.current = r.id;
+    if (kalemlerAcik) seritRef.current?.scrollIntoView?.({ block: 'start' });
+  });
   const donus = DONUS[AYRINTI.donus] ?? 'Taleplere dön';
   const geri = (
     <div className="sa-ekran-geri">
@@ -119,7 +128,7 @@ export function TalepAyrinti() {
         {...(bant ? {} : { eylemler, ...(ana ? { birincil: { etiket: ana[1], yap: () => { calistir(ana); } } } : {}) })}
       />
       <Bilgiler r={r} />
-      <MalzemeSeridi r={r} />
+      {sec !== 'items' && <MalzemeSeridi r={r} />}
       {bant && (
         <div className={`sa-ekran-simdi${n.cls ? ` sa-ekran-simdi-${n.cls}` : ''}`} role="status">
           <Simge ad={n.cls === 'bad' ? 'alert' : n.cls === 'done' ? 'check' : 'flag'} />
@@ -136,7 +145,7 @@ export function TalepAyrinti() {
         </div>
       )}
       <div className="sa-ekran-cizim"><TalepCizimleri talepId={r.id} yazabilir={yazar && r.status !== 'cancelled'} bosGizle gorunum="satin-alma" /></div>
-      <Sekmeler etiket="Talebin adımları" secili={sec} sec={(k) => { V.tab = k; render(); }} sekmeler={sekmeler} />
+      <div ref={seritRef}><Sekmeler etiket="Talebin adımları" secili={sec} sec={(k) => { V.tab = k; render(); }} sekmeler={sekmeler} /></div>
       {bilgi[sec] && <p className="sa-ekran-adim-ozet">{sekmeler.find((s) => s.anahtar === sec)?.baslik}: {bilgi[sec]}</p>}
     </div>
   );

@@ -85,6 +85,7 @@ export function talepEkrana(t: Talep): PurchaseRequest {
     decidedAt: k.kararTarihi,
     approvals: t.onaylar.map((o): Approval => ({
       id: o.id, at: ms(o.zaman), by: kullaniciEkle(o.kisiId, o.kisiAdi), name: o.kisiAdi ?? '', decision: o.sonuc === 'onay' ? 'approved' : 'rejected', note: o.notlar,
+      ...(o.oneri ? { oneri: { atama: Object.fromEntries(o.oneri.atama.map((x) => [x.kalemId, x.teklifId])), gerekce: o.oneri.gerekce } } : {}),
     })),
     lessons: k.ogrenilenler,
     fx: Object.fromEntries(k.sabitKurlar.map((s) => [s.paraBirimi, Number(s.kur)])),
@@ -127,6 +128,7 @@ export function talepEkrana(t: Talep): PurchaseRequest {
         ...((k) => (k ? { karsilik: karsilikYaz(k) } : {}))(t.kalemKarsiliklari?.find((x) => x.kalemId === i.id)),
         ...((o) => (o ? { malzeme: { kalite: o.kalite, durum: o.durum, islem: o.islem, olcu: o.olcu, aciklama: o.aciklama, ayrinti: o.ayrinti } } : {}))(t.kalemOzellikleri?.find((x) => x.kalemId === i.id)),
         ...((a) => (a && a.kartlar.length > 0 ? { alternatifler: a.kartlar } : {}))(t.kalemAlternatifleri?.find((x) => x.kalemId === i.id)),
+        ...((k) => (k ? { istenenTermin: k.ihtiyacTarihi.slice(0, 10) } : {}))(t.kalemTerminleri?.find((x) => x.kalemId === i.id)),
         ...(bag?.fason ? { fason: { emirNo: bag.fason.emirNo, opNo: bag.fason.opNo, adim: bag.fason.adim, firmaAdi: bag.fason.firmaAdi } } : {}),
         // Bağ satırı her bağ türünde gelir (satış siparişi ve die yalnız kimlikle); kalem bölünürse bağ yeni satıra geçmez.
         ...(bag ? { sabit: 'bag' as const } : t.kaynaklar?.some((x) => x.kalemIdleri.includes(i.id)) ? { sabit: 'kaynak' as const } : {}),
@@ -242,6 +244,8 @@ export function talepSunucuya(r: PurchaseRequest): TalepGovdesi {
       digerMasraf: ond(q.otherCost || 0), teslimSekli: q.deliveryTerm ?? '', nakliyeDahil: q.deliveryIncluded, terminGun: q.leadDays, vadeGun: q.payDays || 0,
       avansYuzdesi: ond(q.advancePct || 0, 3), ...('payMethod' in q ? { odemeYontemi: q.payMethod ?? null } : {}), garantiAy: q.warrantyMonths, teknikUygun: q.compliant, notlar: q.note ?? '',
       ilkToplam: ondN(q.firstTotal ?? null), revizyon: q.revisions ?? 0,
+      // Kaynak sunucunundur ama geri gönderilmezse satın alma izi farklı çıkar ve onaylayanın kaydı 403 alır.
+      kaynak: q.source === 'siparis' ? 'siparis' as const : 'teklif' as const,
       fiyatlar: Object.entries(q.prices ?? {}).filter(([, p]) => typeof p === 'number' && !Number.isNaN(p)).map(([kalemId, p]) => ({
         kalemId, birimFiyat: ond(p),
         // Basamak yalnız ekran tuttuysa gider; gönderilmeyen alan sunucuda saklananı korur.
@@ -261,6 +265,7 @@ export function talepSunucuya(r: PurchaseRequest): TalepGovdesi {
     // Onay ve geçmiş yalnız eklenir: kişi ve zaman sunucunun.
     onaylar: (a?.approvals ?? []).map((o) => ({
       id: o.id, zaman: '', kisiId: null, kisiAdi: null, sonuc: o.decision === 'approved' ? 'onay' : 'ret', dortGozsuz: false, notlar: o.note ?? '',
+      ...(o.oneri ? { oneri: { atama: Object.entries(o.oneri.atama).map(([kalemId, teklifId]) => ({ kalemId, teklifId })), gerekce: o.oneri.gerekce } } : {}),
     })),
     hareketler: (r.log ?? []).map((h) => ({ id: h.id, zaman: '', kisiId: null, kisiAdi: null, metin: h.t })),
     senaryolar: (r.scenarios ?? []).map((s) => ({
@@ -280,6 +285,8 @@ type Veri = Entity | Settings | null;
 interface Belirsiz { d: Veri; kimlik: string }
 interface Bekleyen { mesgul: boolean; sonraki: Veri | undefined; belirsiz: Belirsiz | null; bitince?: (() => void)[] }
 const Q = new Map<string, Bekleyen>();
+// Sunucunun reddettiği son yazım; ret ekranda "yapıldı" denmesin diye tutulur (K1).
+const reddedilen = new Set<string>();
 export const YENIDEN_DENEME_MS = [2_000, 5_000, 15_000, 30_000] as const;
 
 function write(coll: Coll | 'settings', id: string, data: Veri): void {
@@ -287,6 +294,7 @@ function write(coll: Coll | 'settings', id: string, data: Veri): void {
   const w = Q.get(anahtar) ?? { mesgul: false, sonraki: undefined, belirsiz: null };
   Q.set(anahtar, w);
   w.sonraki = data;
+  reddedilen.delete(anahtar);
   if (!w.mesgul) void kuyruk(coll, id, w);
 }
 
@@ -314,6 +322,7 @@ async function kuyruk(coll: Coll | 'settings', id: string, w: Bekleyen): Promise
         continue;
       }
       w.sonraki = undefined;
+      reddedilen.add(`${coll}:${id}`);
       await hata(h);
     }
   }
@@ -715,6 +724,10 @@ export const transport: Transport = {
   write,
   // Sayfa kapanırken bekleyen yazma sıradan gönderilir (TMI isteği keepalive taşımaz; kayıp riski V-37).
   writeOnUnload: (coll, id, data) => write(coll, id, data),
+  async yazimSonucu(coll, id) {
+    await yazimBitti(coll as Coll, id);
+    return !reddedilen.has(`${coll}:${id}`);
+  },
   canWrite: () => S.ready,
   backend,
 };

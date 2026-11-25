@@ -258,6 +258,11 @@ export const kararSemasi = z.object({
 });
 
 // Onay ve geçmiş yalnız eklenir: kayıtta yeni kimlikler eklenir, var olanlar değişmez; kişi ve zaman sunucunundur.
+// 3696: onaylayanın karşı önerisi (kalem -> teklif ve gerekçe); yalnız ret kaydında durur, kararı değiştirmez. Talep eden görmez (açılış cevabı satın alma ve onaylayana gider).
+export const onayOnerisiSemasi = z.object({
+  atama: z.array(z.object({ kalemId: uuid, teklifId: uuid })).min(1).max(500),
+  gerekce: metin(2000),
+});
 export const onaySemasi = z.object({
   id: uuid,
   zaman: z.string(),
@@ -266,6 +271,7 @@ export const onaySemasi = z.object({
   sonuc: z.enum(['onay', 'ret']),
   dortGozsuz: z.boolean(),
   notlar: metin(2000),
+  oneri: onayOnerisiSemasi.nullish(),
 });
 export const hareketSemasi = z.object({
   id: uuid,
@@ -544,6 +550,8 @@ export const talepSemasi = z.object({
   kalemKarsiliklari: z.array(z.object({ kalemId: uuid, miktar: z.string(), birim: z.string() })).optional(),
   // 3121: kalemin kartından kalite, durum, işlem ve ölçü (ayrı sütunlar); kartsız kalem listede yoktur. Yalnız çıkışta.
   kalemOzellikleri: z.array(z.object({ kalemId: uuid, ...malzemeOzelligiAlanlari })).optional(),
+  // 3696: kalemin kendi istenen termini (yalnız talepten farklıysa dolar; 3462 a); listede olmayan kalem talebin terminini taşır. Yalnız çıkışta.
+  kalemTerminleri: z.array(z.object({ kalemId: uuid, ihtiyacTarihi: z.string() })).optional(),
   // 3593: kalemde talep edenin işaretlediği alternatif kartları (işaretlendiği hâliyle); işaretsiz kalem listede yoktur. Yalnız çıkışta.
   kalemAlternatifleri: z.array(z.object({ kalemId: uuid, kartlar: z.array(kalemAlternatifKartiSemasi) })).optional(),
   // 3121 (1105 a): sipariş satırında değerler siparişteki kart kopyasındandır; eski kopyada işlem ve ölçü kaydedilmemişse `kayitsiz`.

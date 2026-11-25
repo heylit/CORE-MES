@@ -20,12 +20,15 @@ import { PRESETS, UI, alternatifRozeti, faizUyarisi, kademeRozeti, render } from
 import { closeModal, eylemCalistir, openModal, toast } from "./ui.ts";
 import { bolmeKapaliNedeni, bolunemezNedeni, kalemAtamasi } from "./kalem-kalem.ts";
 import { tabSim } from "./sim.ts";
+import { oneriSeridiHTML, sonOneri } from "./onay-onerisi.ts";
 
 export const ik = (ad: keyof typeof SIMGELER, boy = 16): string =>
   `<svg width="${boy}" height="${boy}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${SIMGELER[ad]}"/></svg>`;
 
 interface Taslak { rid: string; atama: Record<string, string>; dahil: Record<string, boolean>; gerekce: string; onceki: Record<string, string> | null }
 const TASLAK: { x: Taslak | null } = { x: null };
+/** "Yok say" denen öneri kayıtları (yalnız bu oturum; öneri kaydı silinmez). */
+const GIZLI_ONERILER = new Set<string>();
 
 /** Taslağı talebin bugünkü kalemleriyle eşitler: yeni kalem (bölünen satır) atamasını kalemAtamasi'ndan alır, karara dahil başlar. */
 export function taslak(r: PurchaseRequest, ev: Evaluation): Taslak {
@@ -94,7 +97,7 @@ function nitelik(r: PurchaseRequest, x: EvalRow): string[] {
 function tedBaslik(r: PurchaseRequest, ev: Evaluation, x: EvalRow, kilit: boolean): string {
   const fl = nitelik(r, x);
   return `<div class="sa-kr-ted"><span class="sa-kr-ted-ad"><b>${esc(supName(x.q))}</b>${ev.ranking[0]?.q.id === x.q.id ? ` <span class="flag good">${ik("check", 12)} önerilen</span>` : ""}</span>
-    <span class="num sa-kr-net" title="Tüm kalemler, nakliye ve vade etkisi dahil net bugünkü maliyet">${money(x.c.pvTRY, "TRY", 0)}</span><span class="xs muted">net, vade etkisi dahil</span>
+    <span class="num sa-kr-net" title="Tüm kalemler, nakliye ve vade etkisi dahil net bugünkü maliyet">${money(x.c.pvTRY, "TRY", 0)}</span><span class="xs muted">tüm kalemler, net, vade dahil</span>
     <span class="small muted">${terminMetni(x.q) ?? "termin yok"} · ${esc(payText(x.q))}</span>
     <span class="small muted">puan <b class="num">${nf0.format(x.score)}</b></span>
     ${fl.length ? `<span class="flags">${fl.join("")}</span>` : ""}
@@ -110,10 +113,11 @@ function hucre(r: PurchaseRequest, ev: Evaluation, t: Taslak, it: RequestItem, x
   if (u === null) return '<span class="faint small">teklif yok</span>';
   const secilemez = secilemezAlternatif(x.q.altResults?.[it.id]);
   const secili = t.atama[it.id] === x.q.id, eu = enUcuzMu(ev, it, x), tutar = itemLineCost(x, it);
-  const etiket = `${it.name}, ${supName(x.q)}, birim ${money(u)}${eu ? ", en ucuz" : ""}${secili ? ", seçili" : ""}`;
-  return `<button class="sa-kr-hucre${secili ? " sec" : ""}" data-act="kr-ata" data-item="${it.id}" data-qid="${x.q.id}" aria-pressed="${secili}" ${kilit || secilemez ? "disabled" : ""} aria-label="${esc(etiket)}">
+  const onerilen = sonOneri(r)?.oneri?.atama[it.id] === x.q.id;
+  const etiket = `${it.name}, ${supName(x.q)}, birim ${money(u)}${eu ? ", en ucuz" : ""}${secili ? ", seçili" : ""}${onerilen ? ", onaylayanın önerisi" : ""}`;
+  return `<button class="sa-kr-hucre${secili ? " sec" : ""}${onerilen ? " oneri" : ""}" data-act="kr-ata" data-item="${it.id}" data-qid="${x.q.id}" aria-pressed="${secili}" ${kilit || secilemez ? "disabled" : ""} aria-label="${esc(etiket)}">
     <span class="num sa-kr-bf">${secili ? ik("check", 12) : ""}${money(u)}</span>${kademeRozeti(x.q, it)}${alternatifRozeti(x.q, it)}
-    <span class="num small muted">${tutar === null ? "" : money(tutar, "TRY", 0)}</span>${ust(x, it)}${eu ? `<span class="sa-kr-eu small">${ik("down", 12)} en ucuz</span>` : ""}</button>`;
+    <span class="num small muted">${tutar === null ? "" : money(tutar, "TRY", 0)}</span>${ust(x, it)}${eu ? `<span class="sa-kr-eu small">${ik("down", 12)} en ucuz</span>` : ""}${onerilen ? `<span class="sa-kr-oneri small">${ik("flag", 12)} önerilen</span>` : ""}</button>`;
 }
 /** Miktar ve (3100) kalem karşılığı: "10 kg (≈ 4 adet)". */
 const miktarMetni = (it: RequestItem): string => (isNum(it.qty) ? `${numIn(it.qty)} ${esc(it.unit)}${it.karsilik ? ` (${esc(it.karsilik)})` : ""}` : "miktar yok");
@@ -248,7 +252,7 @@ export function kararSayfasiHTML(r: PurchaseRequest): string {
   const kilit = kilitli(r);
   const disarida = ev.all.filter((x) => !ev.elig.includes(x));
   const cok = ev.ranking.length >= 4 ? " sa-kr-cok" : "";
-  return `${ayrilmaBagi(r)}${kilit ? "" : ayrilmaSeridi(r, t)}<section class="panel sa-kr${cok}" data-sa-karar-matrisi>
+  return `${ayrilmaBagi(r)}${oneriSeridiHTML(r, GIZLI_ONERILER)}${kilit ? "" : ayrilmaSeridi(r, t)}<section class="panel sa-kr${cok}" data-sa-karar-matrisi>
     <div class="panel-h"><h2>Teklif karşılaştırma</h2><span class="small muted sa-kr-ipucu-metin">Sütun başlığı: tek tedarikçi · hücre: kalemi o tedarikçiye ver · Böl: miktarı paylaştır</span><span class="spacer"></span>
       ${agirlikSecimi(r, ev)}${kilit || ev.elig.length < 2 ? "" : `<button class="btn sm" data-act="kr-deneme">${ik("lab", 14)} Paylaştırmayı dene</button>`}<button class="btn sm ghost sa-kr-ikon" data-act="csv" title="CSV indir" aria-label="CSV indir">${ik("download", 14)}</button></div>
     <div class="panel-b stack">${kilit && canWrite() && bolmeKapaliNedeni(r) ? `<p class="small muted" data-kr-kilit>${ik("lock", 14)} ${esc(bolmeKapaliNedeni(r)!)}</p>` : ""}${ipucu(r, ev, t, kilit)}
@@ -331,6 +335,8 @@ document.addEventListener("click", (e) => {
   if (act === "kr-ata") { t.atama[el.dataset.item!] = el.dataset.qid!; t.onceki = null; if (el.closest("#modal-root")) closeModal(); guncelle(); }
   else if (act === "kr-tek") { for (const it of r.items ?? []) if (ev.elig.some((x) => x.q.id === el.dataset.qid && itemCost(x, it) !== null && !secilemezAlternatif(x.q.altResults?.[it.id]))) t.atama[it.id] = el.dataset.qid!; t.onceki = null; guncelle(); }
   else if (act === "kr-uygula" && ev.split) { t.onceki = { ...t.atama }; Object.assign(t.atama, ev.split.plan.assign); guncelle(); }
+  else if (act === "kr-oneri-uygula") { const o = sonOneri(r)?.oneri; if (o) { t.onceki = { ...t.atama }; for (const [kalemId, teklifId] of Object.entries(o.atama)) if (ev.elig.some((x) => x.q.id === teklifId && itemCost(x, (r.items ?? []).find((i) => i.id === kalemId)!) !== null)) t.atama[kalemId] = teklifId; toast("Öneri matrise işlendi; göndermeden önce gözden geçirin"); guncelle(); } }
+  else if (act === "kr-oneri-yok") { GIZLI_ONERILER.add(el.dataset.oneri!); guncelle(); }
   else if (act === "kr-geri-al" && t.onceki) { t.atama = t.onceki; t.onceki = null; guncelle(); }
   else if (act === "kr-degistir") { const it = r.items?.find((x) => x.id === el.dataset.item); if (it) degistirPenceresi(r, it); }
   else if (act === "kr-deneme") openModal(`<div class="mh"><h2>Paylaştırma denemesi</h2><span class="spacer"></span><button class="btn ghost" data-act="close" aria-label="Kapat">${ik("x")}</button></div><div class="mb">${tabSim(r)}</div>`, "wide");

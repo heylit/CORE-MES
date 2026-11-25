@@ -127,6 +127,8 @@ export interface RequestItem {
   malzeme?: MalzemeOzelligi;
   /** 3593: talep edenin işaretlediği alternatif kartları (işaretlendiği hâliyle: ad, tür, özet). Yalnız okunur, kayıtta gönderilmez. */
   alternatifler?: { setId: number | null; ad: string; tur: 'tam' | 'ust' | 'sartli'; ozet: string }[];
+  /** 3696: kalemin kendi istenen termini (talepten farklıysa); boşsa talebin terminidir. Yalnız okunur, kayıtta gönderilmez. */
+  istenenTermin?: string;
   /** 3442-5: kimliği değişmemesi gereken kalem (parça, fason, die ya da satış siparişi bağı; birleşik talebin kaynak kalemi). Yalnız okunur. */
   sabit?: "bag" | "kaynak";
 }
@@ -188,6 +190,8 @@ export interface Approval {
   name: string;
   decision: ApprovalDecision;
   note: string;
+  /** 3696: onaylayanın karşı önerisi (kalem kimliği -> teklif kimliği); yalnız ret kaydında, kararı değiştirmez. */
+  oneri?: { atama: Record<string, string>; gerekce: string };
 }
 
 /** Kalem bazlı kararda her tedarikçiye (teklife) ayrı sipariş ve teslimat */

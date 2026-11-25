@@ -840,6 +840,9 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.deepEqual(karisik.kalemler.map((x) => [x.ihtiyacTarihi, x.uretimEmriId]), [['2026-12-10', e1], ['2026-12-20', e2]]);
     // Terminler farklı: en erken kalem dahil her kalem kendi terminini açık taşır (3475).
     assert.deepEqual((await vt().tx((db) => sorgu.kalemTerminEmirleriOku(db, [karisik.id]))).map((x) => [x.ihtiyacTarihi, x.uretimEmriId]), [['2026-12-10', e1], ['2026-12-20', e2]]);
+    // 3696: satın alma merkezi cevabı kalem terminini kalem kimliğiyle taşır (kalemi terminsiz olan talep terminini yedek alır).
+    const merkezTalep = tamam<AcilisCevabi>(await istek(c.sa, 'GET', '/satin-alma-acilis')).talepler.find((x) => x.id === karisik.id)!;
+    assert.deepEqual(merkezTalep.kalemTerminleri?.map((x) => [x.kalemId, x.ihtiyacTarihi]), karisik.kalemler.map((x) => [x.id, x.ihtiyacTarihi]));
     // Kalem emri talep emrinin yerine okunur (KALEM_EMRI): e2'nin tedarik durumunda yalnız B görünür.
     const durumlar = await vt().tx((db) => emirTedarikDurumlari(db, [e2], []));
     assert.deepEqual(durumlar.filter((x) => x.talepNo === karisik.no).map((x) => x.uretimEmriId), [e2]);
@@ -2540,6 +2543,40 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     const r = tamam<Talep>(await kaydet(c.mudur, { ...govde(t), durum: 'degerlendirme', onaylar: [{ ...ret, notlar: 'Vade kısa' }] }));
     assert.equal(r.durum, 'degerlendirme');
     await assert.rejects(ortam!.sahip.tx((db) => db.sorgu("UPDATE satin_alma_onay SET notlar = 'x' WHERE talep_id = $1", [t.id])), /yalnız ekleme/);
+  });
+
+  test('3696: oneriyle geri gönderme: öneri ret kaydıyla yazılır ve açılışta döner; onay kaydında, yabancı kalemde ve tekrarlı kalemde reddedilir', async () => {
+    const t = await kararli();
+    const oneri = { atama: [{ kalemId: t.kalemler[0]!.id, teklifId: t.teklifler[0]!.id }], gerekce: 'Termin riski için ilk tedarikçi' };
+    const kayit = { id: randomUUID(), zaman: '', kisiId: null, kisiAdi: null, dortGozsuz: false, notlar: oneri.gerekce, oneri };
+    const onayOneri = await kaydet(c.mudur, { ...govde(t), onaylar: [{ ...kayit, sonuc: 'onay' as const }] });
+    assert.deepEqual([onayOneri.statusCode, (onayOneri.json() as { mesaj?: string }).mesaj], [422, ILETILER.oneriSonuc]);
+    const yabanci = await kaydet(c.mudur, { ...govde(t), durum: 'degerlendirme', onaylar: [{ ...kayit, sonuc: 'ret' as const, oneri: { ...oneri, atama: [{ kalemId: randomUUID(), teklifId: t.teklifler[0]!.id }] } }] });
+    assert.deepEqual([yabanci.statusCode, (yabanci.json() as { mesaj?: string }).mesaj], [422, ILETILER.oneriGecersiz]);
+    const tekrar = await kaydet(c.mudur, { ...govde(t), durum: 'degerlendirme', onaylar: [{ ...kayit, sonuc: 'ret' as const, oneri: { ...oneri, atama: [...oneri.atama, ...oneri.atama] } }] });
+    assert.equal(tekrar.statusCode, 422, tekrar.body);
+    // Yetki kapısı: onaylayan satin-alma.oneri-gonder'i taşımıyorsa aynı kayıt 403 alır (kontrol kalkarsa bu test kırılır).
+    await ortam!.sahip.tx((db) => db.sorgu("DELETE FROM rol_islemi WHERE islem = 'satin-alma.oneri-gonder'"));
+    try {
+      const yetkisiz = await kaydet(c.mudur, { ...govde(t), durum: 'degerlendirme', onaylar: [{ ...kayit, sonuc: 'ret' as const }] });
+      assert.deepEqual([yetkisiz.statusCode, (yetkisiz.json() as { mesaj?: string }).mesaj], [403, ILETILER.oneriYetkisiz]);
+      // Öneri taşımayan ret, yetki olmadan da bugünkü gibi geçer.
+      assert.equal((await kaydet(c.mudur, { ...govde(t), durum: 'degerlendirme', onaylar: [{ ...kayit, id: randomUUID(), sonuc: 'ret' as const, oneri: null }] })).statusCode, 200);
+    } finally {
+      await ortam!.sahip.tx((db) => db.sorgu("INSERT INTO rol_islemi (rol_id, islem) SELECT rol_id, 'satin-alma.oneri-gonder' FROM rol_islemi WHERE islem = 'satin-alma.onayla' ON CONFLICT DO NOTHING"));
+    }
+    const t2 = await kararli();
+    const kayit2 = { ...kayit, id: randomUUID(), oneri: { ...oneri, atama: [{ kalemId: t2.kalemler[0]!.id, teklifId: t2.teklifler[0]!.id }] } };
+    const r = tamam<Talep>(await kaydet(c.mudur, { ...govde(t2), durum: 'degerlendirme', onaylar: [{ ...kayit2, sonuc: 'ret' as const }] }));
+    assert.equal(r.durum, 'degerlendirme');
+    assert.deepEqual(r.onaylar.at(-1)?.oneri, kayit2.oneri);
+    const merkez = tamam<AcilisCevabi>(await istek(c.sa, 'GET', '/satin-alma-acilis')).talepler.find((x) => x.id === t2.id)!;
+    assert.deepEqual(merkez.onaylar.at(-1)?.oneri, kayit2.oneri);
+    assert.equal(merkez.onaylar.at(-1)?.sonuc, 'ret');
+    // Talep edene giden bildirim yalnız "geri gönderildi" der: gerekçe ve önerilen tedarikçi yok.
+    const gelen = tamam<BildirimListeCevabi>(await istek(c.talep, 'GET', '/bildirimler?sayfaBoyu=100')).satirlar.filter((x) => x.tur === 'satin-alma.talep-reddedildi' && x.baslik.endsWith(`talep: ${t2.no}`));
+    assert.deepEqual(gelen.map((x) => [x.baslik, x.metin]), [[`Geri gönderilen talep: ${t2.no}`, `${t2.baslik}. Karar satın almaya geri gönderildi.`]]);
+    assert.doesNotMatch(JSON.stringify(gelen), new RegExp(oneri.gerekce));
   });
 
   test('TMI A2: onay ve ret talebi açana bildirilir, ret gerekçesiyle; karar veren almaz', async () => {

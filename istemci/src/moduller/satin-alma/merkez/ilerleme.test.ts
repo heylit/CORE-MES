@@ -76,8 +76,8 @@ describe('talebin yedi adımı (kart #939, 3467 Teklif al)', () => {
     const sekmeler = [...serit()!.querySelectorAll<HTMLElement>('[role="tab"]')];
     expect(sekmeler.map((s) => s.dataset.sekme)).toEqual(['items', 'rfq', 'quotes', 'compare', 'approval', 'order', 'delivery', 'log']);
     expect(sekmeler.map((s) => s.textContent)).toEqual(['Kalemler', 'Teklif al', 'Teklifler', 'Karar', 'Onay', 'Sipariş', 'Teslim', 'Geçmiş']);
-    expect(serit()!.querySelector('[aria-selected="true"]')?.getAttribute('data-sekme')).toBe('rfq');
-    expect(kok.querySelector('#main .sa-adim-govde')?.getAttribute('data-sec')).toBe('rfq');
+    expect(serit()!.querySelector('[aria-selected="true"]')?.getAttribute('data-sekme')).toBe('items');
+    expect(kok.querySelector('#main .sa-adim-govde')?.getAttribute('data-sec')).toBe('items');
     const kutu = kok.querySelector('.sa-ekran-simdi')!;
     expect(kutu.textContent).toContain('Şimdi yapılacak');
     expect(kutu.textContent).toContain('Bekleyen: Satın alma.');
@@ -87,6 +87,8 @@ describe('talebin yedi adımı (kart #939, 3467 Teklif al)', () => {
     expect(kutu.querySelector('[aria-label$="diğer işlemler"]')).not.toBeNull();
     expect(kok.querySelector('.tc-sbaslik-eylem')).toBeNull();
 
+    serit()!.querySelector<HTMLElement>('[data-sekme="rfq"]')!.click();
+    await vi.waitFor(() => expect(kok.querySelector('#main .sa-adim-govde')?.getAttribute('data-sec')).toBe('rfq'));
     // 3467: Teklif al adımı tedarikçi seçimi, e-posta taslağı ve kaydı adımın içinde taşır (pencere açılmaz).
     const kutucuk = () => kok.querySelector<HTMLInputElement>(`#main [data-rfq="${String(TED.firmaId)}"]`)!;
     expect(kutucuk().checked).toBe(false);

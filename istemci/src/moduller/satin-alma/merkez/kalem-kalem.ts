@@ -123,10 +123,10 @@ function bolPenceresi(r: PurchaseRequest, it: RequestItem): void {
     <div id="kk-ozet" aria-live="polite"></div>
     <div id="kk-kabul" class="small muted">Kabul sınırı denetleniyor...</div>
     ${r.status === "eval" ? "" : '<label class="f"><span>Gerekçe <small>— isteğe bağlı, karar özetine yazılır</small></span><textarea id="kk-gerekce" maxlength="2000" placeholder="Örn. termin riski için miktarın bir kısmı ikinci tedarikçiden"></textarea></label>'}
-    <p class="xs muted">Bölünen kalemin teklif fiyatı, kademesi, en az miktarı ve alternatifi yeni satırlara kopyalanır; alternatif uygunluğu yeni satırda yeniden değerlendirilir. ${r.status === "eval" ? "Karar, sayfanın altındaki çubuktan gönderilir." : "\"Böl ve onaya gönder\" kararı onaya gönderir, varsa onaylar sıfırlanır. \"Yalnız böl\" kalemi satırlara ayırır, karar vermez; onaydaki karar geri çekilir ve karar sayfanın altındaki çubuktan gönderilir."}</p>
+    <details class="xs muted" data-kk-yardim=""><summary>Bölme nasıl çalışır</summary><p>Bölünen kalemin teklif fiyatı, kademesi, en az miktarı ve alternatifi yeni satırlara kopyalanır; alternatif uygunluğu yeni satırda yeniden değerlendirilir. ${r.status === "eval" ? "Karar, sayfanın altındaki çubuktan gönderilir." : "\"Böl ve onaya gönder\" kararı onaya gönderir, varsa onaylar sıfırlanır. \"Yalnız böl\" kalemi satırlara ayırır, karar vermez; onaydaki karar geri çekilir ve karar sayfanın altındaki çubuktan gönderilir."}</p></details>
   </div><div class="mf"><button class="btn primary" data-act="kk-bol-yes" data-item="${it.id}" disabled>${r.status === "eval" ? "Böl" : "Böl ve onaya gönder"}</button>${r.status === "eval" ? "" : `<button class="btn" data-act="kk-bol-sadece" data-item="${it.id}" disabled>Yalnız böl</button>`}<button class="btn ghost" data-act="close">Vazgeç</button></div>`, true, true);
   ozetiYaz(r, it);
-  void kabulReddi(r.id, [it.id]).then((red) => {
+  void kabulReddi(r.id, [it.id]).catch(() => "Kabul sınırı okunamadı; bölme şimdilik kapalı.").then((red) => {
     const kutu = $<HTMLElement>("#kk-kabul"); if (!kutu || $<HTMLElement>(`[data-kk-pencere="${it.id}"]`) === null) return;
     kutu.textContent = red ?? ""; kutu.dataset.kkKabul = red === null ? "tamam" : "red";
     ozetiYaz(r, it);
@@ -155,9 +155,11 @@ function ozetiYaz(r: PurchaseRequest, it: RequestItem): void {
   const sadece = $<HTMLButtonElement>('[data-act="kk-bol-sadece"]');
   if (sadece) sadece.disabled = !tamam || tekPay < 2 || kabul !== "tamam";
   const kutu = $<HTMLElement>("#kk-ozet");
+  const neden = !tamam ? "Paylar kalem miktarına eşit olmalı." : tekPay < 2 ? "En az iki tedarikçiye pay verin." : kabul === undefined ? "Kabul sınırı denetleniyor." : kabul !== "tamam" ? "Kabul sınırı bölmeye izin vermiyor (aşağıdaki nota bakın)." : null;
   if (kutu) kutu.innerHTML = `<div class="note small"><div class="row"><span>Dağıtılan <b class="num">${numIn(dagitilan)} / ${numIn(it.qty)} ${esc(it.unit)}</b></span>
     ${tamam ? "" : '<span class="flag warn">toplam kalem miktarına eşit değil</span>'}${tamam && tekPay < 2 ? '<span class="flag mute">en az iki tedarikçiye pay verin</span>' : ""}
     <span class="spacer"></span><span>Kalem tutarı <b class="num">${money(toplam, "TRY", 0)}</b></span></div>
+    ${neden ? `<div class="small" data-kk-neden="">Düğmeler kapalı: ${esc(neden)}</div>` : ""}
     ${uyarilar.map((u) => `<div class="xs">${esc(u)}</div>`).join("")}</div>`;
 }
 /** Bölmenin kararı: öteki kalemler şu anki atamasını korur; tek tedarikçi kalırsa karar tektir. */

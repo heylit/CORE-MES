@@ -47,7 +47,7 @@ import { resmiTatilGunleri } from '../ik/disari.ts';
 import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import {
-  ILETILER, ISLEM, type KurKilidiIsi, emirAcikMi, kilitliDurum, basamakEsigiReddi, basamakKilidiReddi, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi, degisiklikReddi, gecikmeGunu, fasonKalani, sonDonusGecikmesi, agirlikliGecikme, degisiklikTuru, dortGozSonucu, onayKademesiReddi, onayKisisiIzleri, onayLimitRolleri, onayLimitleriDegistiMi, onayLimitiReddi, terminsizSiparisReddi, terminTakibi, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
+  ILETILER, ISLEM, type KurKilidiIsi, emirAcikMi, kilitliDurum, basamakEsigiReddi, basamakKilidiReddi, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, oneriReddi, kurKilidiIsi, kurKilidiReddi, degisiklikReddi, gecikmeGunu, fasonKalani, sonDonusGecikmesi, agirlikliGecikme, degisiklikTuru, dortGozSonucu, onayKademesiReddi, onayKisisiIzleri, onayLimitRolleri, onayLimitleriDegistiMi, onayLimitiReddi, terminsizSiparisReddi, terminTakibi, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
   KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, siparisBekletmeReddi, talebinAlimlari, ondalikKiyas, siparisReddi, talebim, kalemKarsiligi, talebimDuzenlenirMi, talebimKalemReddi, guncellemeReddi, guncellemeIptalleri, ikinciAlimRiski,
   fasonKalemReddi, fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi, type KalemBagi,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGovdeDurumu, talepEdenGorunumu, avansAsimi, gerceklesenKosul, planGerceklesenFarki, talepKartiReddi, tamGorurMu, fiyatGorurMu, fiyatsizGorunum, talasFiyatiGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
@@ -193,6 +193,7 @@ async function talepleriYalinKur(db: Db, satirlar: s.TalepSatiri[]): Promise<Tal
   const karsiliklar = await kalemKarsiliklari(db, [{ kalemler: a.kalemler.map((k) => ({ ...k, miktar: sade(k.miktar) })) }]);
   const ozellikler = await kalemOzellikleri(db, [{ kalemler: a.kalemler }]);
   const isaretler = await kalemAlternatifKartlari(db, satirlar.map((t) => t.id));
+  const kalemTerminleri = satirlar.length === 0 ? [] : await s.kalemTerminEmirleriOku(db, satirlar.map((t) => t.id));
   const kopyalar = satirlar.length === 0 ? [] : await s.kartKopyalariToplu(db, satirlar.map((t) => t.id));
   const cizimSayilari = await teklifTutamagi.bagSayilari(db, satirlar.map((t) => talepCizimiKaydi(t.id)));
   return satirlar.map((t) => {
@@ -213,6 +214,7 @@ async function talepleriYalinKur(db: Db, satirlar: s.TalepSatiri[]): Promise<Tal
       kalemKarsiliklari: grup(a.kalemler, t.id).flatMap((k) => { const c = karsiliklar.get(k.id); return c === undefined ? [] : [{ kalemId: k.id, ...c }]; }),
       kalemOzellikleri: grup(a.kalemler, t.id).flatMap((k) => { const o = ozellikler.get(k.id); return o === undefined ? [] : [{ kalemId: k.id, ...o }]; }),
       kalemAlternatifleri: grup(a.kalemler, t.id).flatMap((k) => { const l = isaretler.get(k.id); return l === undefined ? [] : [{ kalemId: k.id, kartlar: l }]; }),
+      kalemTerminleri: kalemTerminleri.flatMap((x) => (x.talepId === t.id && x.ihtiyacTarihi !== null ? [{ kalemId: x.kalemId, ihtiyacTarihi: x.ihtiyacTarihi }] : [])),
       siparisOzellikleri: kopyalar.filter((c) => c.talepId === t.id).map((c) => ({ kalemId: c.kalemId, teklifId: c.teklifId, ...kopyaOzelligi(c.ayrinti) })),
       teklifIstekleri: grup(a.istekler, t.id).map(at),
       teklifler: grup(a.teklifler, t.id).map((q) => ({
@@ -1406,6 +1408,8 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
   if (yeniOnaylar.length > 0 && (eski.durum !== 'onayda' || temel.karar === null)) {
     throw gecersiz(ILETILER.onayDurumu);
   }
+  const oneriRed = oneriReddi(yeniOnaylar, k.islemler.includes(ISLEM.oneriGonder), new Set(temel.kalemler.map((x) => x.id)), new Set(temel.teklifler.map((x) => x.id)));
+  if (oneriRed !== null) throw oneriRed.yetki ? yetkiYok(oneriRed.ileti) : gecersiz(oneriRed.ileti);
   if (siparisDuzeni === undefined && kararDegistiMi(eski.karar, temel.karar) && kararOnayliMi(eski.onaylar)) throw gecersiz(ILETILER.onayliKararDegismez);
   // 3574-1 R4: onay bekleyen sipariş varken sipariş kaydetle verilmez (öneri ya onaylanır ya reddedilir).
   if (siparisDuzeni === undefined && eski.siparisOnerisi != null && temel.durum === 'siparis_verildi' && eski.durum !== 'siparis_verildi') throw gecersiz(SIPARIS_ILETILERI.bekleyenVar);
@@ -1494,9 +1498,12 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
   const sonOnay = yeniOnaylar.at(-1);
   if (sonOnay !== undefined) {
     const ret = sonOnay.sonuc === 'ret';
+    // 3696: öneriyle geri gönderme talep edene yalnız "geri gönderildi" der; gerekçe ve önerilen tedarikçi satın alma ile onaylayanda kalır.
+    const geriGonderildi = ret && !!sonOnay.oneri;
     await bildirimGonder(db, {
       tur: ret ? 'satin-alma.talep-reddedildi' : 'satin-alma.talep-onaylandi',
-      baslik: `${ret ? 'Reddedilen' : 'Onaylanan'} talep: ${eski.no}`, metin: ret && sonOnay.notlar ? `${yazilacak.baslik}. Gerekçe: ${sonOnay.notlar}` : yazilacak.baslik,
+      baslik: `${geriGonderildi ? 'Geri gönderilen' : ret ? 'Reddedilen' : 'Onaylanan'} talep: ${eski.no}`,
+      metin: geriGonderildi ? `${yazilacak.baslik}. Karar satın almaya geri gönderildi.` : ret && sonOnay.notlar ? `${yazilacak.baslik}. Gerekçe: ${sonOnay.notlar}` : yazilacak.baslik,
       yol: '/taleplerim', kaynakKimlik: `${id}:${eski.onaylar.length + yeniOnaylar.length}`,
       kisiler: [...new Set([eski.acanKisiId, ...(eski.talepEdenKisiId === null ? [] : [eski.talepEdenKisiId])])], haric: k.id,
     });

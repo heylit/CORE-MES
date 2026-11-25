@@ -26,10 +26,10 @@ const TALEP: Talep = {
   teklifler: [
     { id: QA, firmaId: 3, tedarikciAdi: 'Deneme A', teklifTarihi: '2026-10-05', gecerlilik: '2026-10-20', paraBirimi: 'USD', kur: '41.25', iskontoYuzdesi: '2.5',
       nakliye: '450', digerMasraf: '12.75', teslimSekli: 'Fabrikamıza teslim', nakliyeDahil: false, terminGun: 7, vadeGun: 60, avansYuzdesi: '30', garantiAy: 12,
-      teknikUygun: true, notlar: 'n', ilkToplam: '1200', revizyon: 1, fiyatlar: [{ kalemId: K1, birimFiyat: '10.5' }, { kalemId: K2, birimFiyat: '7.125' }] },
+      teknikUygun: true, notlar: 'n', ilkToplam: '1200', revizyon: 1, kaynak: 'teklif', fiyatlar: [{ kalemId: K1, birimFiyat: '10.5' }, { kalemId: K2, birimFiyat: '7.125' }] },
     { id: QB, firmaId: 4, tedarikciAdi: 'Deneme B', teklifTarihi: '2026-10-06', gecerlilik: null, paraBirimi: 'TRY', kur: null, iskontoYuzdesi: '0',
       nakliye: '0', digerMasraf: '0', teslimSekli: '', nakliyeDahil: true, terminGun: null, vadeGun: 0, avansYuzdesi: '0', garantiAy: null,
-      teknikUygun: false, notlar: '', ilkToplam: null, revizyon: 0, fiyatlar: [{ kalemId: K1, birimFiyat: '420' }] },
+      teknikUygun: false, notlar: '', ilkToplam: null, revizyon: 0, kaynak: 'teklif', fiyatlar: [{ kalemId: K1, birimFiyat: '420' }] },
   ],
   karar: {
     mod: 'bolunmus', teklifId: null, bolunme: [{ kalemId: K1, teklifId: QB }, { kalemId: K2, teklifId: QA }], gerekce: 'Termin', kararVerenKisiId: 7, kararVerenAdi: 'Deneme Karar Veren',
@@ -217,6 +217,21 @@ describe('TMI taşıyıcısı', () => {
       transport.write('requests', TALEP.id, talepEkrana(TALEP));
       await vi.waitFor(() => expect(yollar).toContain('/api/satin-alma-acilis'));
       expect(yollar.filter((u) => u.endsWith('/kaydet'))).toHaveLength(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('K1 (3696): teklifin kaynağı geri gider (yoksa onaylayanın kaydı satın alma işi sayılıp 403 alır); sunucu reddedince yazım sonucu false', async () => {
+    const ekran = talepEkrana(TALEP);
+    expect(talepSunucuya(ekran).teklifler.map((q) => q.kaynak)).toEqual(['teklif', 'teklif']);
+    const siparisli = talepEkrana({ ...TALEP, teklifler: [{ ...TALEP.teklifler[0]!, kaynak: 'siparis' }, TALEP.teklifler[1]!] });
+    expect(talepSunucuya(siparisli).teklifler.map((q) => q.kaynak)).toEqual(['siparis', 'teklif']);
+    expect(await transport.yazimSonucu('requests', 'hic-yazilmadi')).toBe(true);
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ hata: { kod: 'YETKI', ileti: 'Bu değişiklik için yetkiniz yok.' } }), { status: 403, headers: { 'content-type': 'application/json' } })));
+    try {
+      transport.write('requests', TALEP.id, talepEkrana(TALEP));
+      expect(await transport.yazimSonucu('requests', TALEP.id)).toBe(false);
     } finally {
       vi.unstubAllGlobals();
     }

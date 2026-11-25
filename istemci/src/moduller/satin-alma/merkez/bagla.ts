@@ -140,7 +140,7 @@ export function merkeziBagla(kok: HTMLElement, secenek: BaglamaSecenegi): () => 
   const eylem = adrestekiTalep ? adrestekiOnayEylemi(window.location.search) : null;
   if (odakZamanlayici !== null) clearTimeout(odakZamanlayici);
   odakZamanlayici = eylem === null ? null : eylemeOdaklan(eylem, ODAK_DENEME);
-  if (adrestekiTalep) { if (V.page !== "request" || V.id !== adrestekiTalep) { V.page = "request"; V.id = adrestekiTalep; V.tab = null; } }
+  if (adrestekiTalep) { if (V.page !== "request" || V.id !== adrestekiTalep) { V.page = "request"; V.id = adrestekiTalep; V.tab = eylem === null ? null : "approval"; } }
   else if (sayfaYolu(V.page, secenek.rol) !== secenek.yol) { V.page = secenek.sayfa; V.id = null; V.tab = null; }
   setRole(secenek.rol);
   setOnaylayabilir(secenek.onaylayabilir ?? false);

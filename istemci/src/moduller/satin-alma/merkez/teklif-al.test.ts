@@ -72,8 +72,7 @@ describe('3467 Teklif al ekranı', () => {
 
     talepSatiri(kok, T1.id)!.click();
     const bolum = () => kok.querySelector('#main .sa-adim-govde')?.getAttribute('data-sec');
-    await vi.waitFor(() => expect(bolum()).toBe('rfq'));
-    sekme(kok, 'items')!.click();
+    // 3696: talep hangi girişten açılırsa açılsın Kalemler adımıyla başlar.
     await vi.waitFor(() => expect(bolum()).toBe('items'));
     // "Şimdi yapılacak"ın ana düğmesi (Teklif iste) Teklif al adımını açar.
     const ana = kok.querySelector<HTMLButtonElement>('#sa-ekran .tc-dugme-birincil')!;
