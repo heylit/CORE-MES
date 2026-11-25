@@ -35,11 +35,11 @@ function ac(istemci = new QueryClient({ defaultOptions: { queries: { retry: fals
 
 const pencere = () => screen.findByRole('dialog', { name: ACIK.metin });
 
-beforeEach(() => { window.sessionStorage.clear(); });
+beforeEach(() => { window.localStorage.clear(); });
 afterEach(() => { cleanup(); act(() => { gosteriBitir(); }); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe('Karşılama', () => {
-  it('ayardaki metinle ve kişinin adıyla çıkar; düğmeyle kapanır; aynı sekmede yeniden açılışta çıkmaz ve ayar sorulmaz', async () => {
+  it('ayardaki metinle ve kişinin adıyla çıkar; düğmeyle kapanır; aynı tarayıcıda yeniden açılışta çıkmaz ve ayar sorulmaz', async () => {
     const yollar = sunucuKur();
     ac();
     const kutu = await pencere();
@@ -62,7 +62,7 @@ describe('Karşılama', () => {
     const istemci = ac();
     await waitFor(() => expect(istemci.getQueryState(anahtarlar.karsilama)?.status).toBe('success'));
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect(window.sessionStorage.getItem('tmi.karsilama')).toBeNull();
+    expect(window.localStorage.getItem('tmi.karsilama')).toBeNull();
     act(() => { gosteriBitir(); });
     expect(await pencere()).toBeTruthy();
     expect(yollar.filter((y) => y === '/karsilama')).toEqual(['/karsilama']);
@@ -95,14 +95,14 @@ describe('Karşılama', () => {
   });
 
   it('başka kişinin işareti bu kişiyi susturmaz', async () => {
-    window.sessionStorage.setItem('tmi.karsilama', '99');
+    window.localStorage.setItem('tmi.karsilama', '99');
     sunucuKur();
     ac();
     expect((await pencere()).textContent).toContain(KISI.ad);
   });
 
   it('oturumsuz cevap (biten oturum) işareti siler; oturum sürerken işaret kalır', async () => {
-    window.sessionStorage.setItem('tmi.karsilama', String(KISI.id));
+    window.localStorage.setItem('tmi.karsilama', String(KISI.id));
     function Oturum() {
       const oturum = useOturum();
       return <p>{oturum.isSuccess ? 'okundu' : 'bekliyor'}</p>;
@@ -110,14 +110,14 @@ describe('Karşılama', () => {
     sunucuKur();
     render(<QueryClientProvider client={new QueryClient()}><Oturum /></QueryClientProvider>);
     await screen.findByText('okundu');
-    expect(window.sessionStorage.getItem('tmi.karsilama')).toBeNull();
+    expect(window.localStorage.getItem('tmi.karsilama')).toBeNull();
     cleanup();
 
-    window.sessionStorage.setItem('tmi.karsilama', String(KISI.id));
+    window.localStorage.setItem('tmi.karsilama', String(KISI.id));
     vi.stubGlobal('fetch', vi.fn(async () => json(200, { kullanici: KISI } satisfies OturumCevabi)));
     render(<QueryClientProvider client={new QueryClient()}><Oturum /></QueryClientProvider>);
     await screen.findByText('okundu');
-    expect(window.sessionStorage.getItem('tmi.karsilama')).toBe(String(KISI.id));
+    expect(window.localStorage.getItem('tmi.karsilama')).toBe(String(KISI.id));
   });
 
   it('gece saatinde gece metniyle ve koyu kartla, gündüz saatinde gündüz metniyle çıkar', async () => {
@@ -131,7 +131,7 @@ describe('Karşılama', () => {
     expect(gece.getAttribute('data-theme')).toBe('dark');
     cleanup();
 
-    window.sessionStorage.clear();
+    window.localStorage.clear();
     vi.setSystemTime(new Date(Date.UTC(2026, 9, 14, 6, 0)));
     sunucuKur({ ...ACIK, ...saatler });
     ac();
@@ -191,7 +191,7 @@ describe('Karşılama', () => {
     expect(kutu.querySelector('.tc-karsilama-bayrak')).toBeNull();
   });
 
-  it('2232: aynı sekmede o gün görülen karşılama çıkmaz; gün değişince ilk dokunuşta bir kez daha çıkar', async () => {
+  it('2232: aynı tarayıcıda o gün görülen karşılama çıkmaz; gün değişince ilk dokunuşta bir kez daha çıkar', async () => {
     gunAyarla(11, 17);
     sunucuKur();
     ac();
@@ -202,7 +202,7 @@ describe('Karşılama', () => {
     vi.setSystemTime(new Date(Date.UTC(2026, 10, 18, 7, 0)));
     fireEvent.pointerDown(document.body);
     expect(await pencere()).toBeTruthy();
-    expect(window.sessionStorage.getItem('tmi.karsilama')).toBe(`${String(KISI.id)}|2026-11-18`);
+    expect(window.localStorage.getItem('tmi.karsilama')).toBe(`${String(KISI.id)}|2026-11-18`);
   });
 });
 

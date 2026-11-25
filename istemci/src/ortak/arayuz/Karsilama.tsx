@@ -89,7 +89,7 @@ interface KarsilamaAni { ms: number; gun: string; saat: number }
 const anCoz = (ms: number): KarsilamaAni => ({ ms, gun: tesisGunu(ms), saat: Number(tesisSaati(ms).slice(11, 13)) });
 const simdi = (): KarsilamaAni => anCoz(Date.now());
 
-// Girişten sonraki ilk açılışta bir kez çıkar; ayar kapalıyken, okunamazken ya da aynı sekmede o gün görülmüşken çıkmaz.
+// Girişten sonraki ilk açılışta bir kez çıkar; ayar kapalıyken, okunamazken ya da aynı tarayıcıda o gün görülmüşken çıkmaz.
 // Kullanıcı kararı (kart 2232): açık kalan sekmede gün değişince ilk dönüşte ya da ilk dokunuşta bir kez daha çıkar.
 export function Karsilama({ kisiId, ad }: { kisiId: number; ad: string }) {
   const [an, anYaz] = useState(simdi);
