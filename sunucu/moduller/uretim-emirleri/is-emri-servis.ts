@@ -2049,6 +2049,8 @@ export interface EmirAdimi {
   durum: IsEmriSatiri['durum'];
   istasyonId: number | null;
   fason: boolean;
+  // 3705: adımın kendi operasyon tipi (zorunlu alan); rotasız ve plan dışı adımda da dolu.
+  operasyonTipiId: number;
   emirDurumu: UstEmirSatiri['durum'];
 }
 export async function emirAdimlari(db: Db, emirIdleri: readonly number[]): Promise<EmirAdimi[]> {
@@ -2058,7 +2060,7 @@ export async function emirAdimlari(db: Db, emirIdleri: readonly number[]): Promi
   if (emirler.size === 0) return [];
   return (await s.isEmirleriGetir(db, [...emirler.keys()])).map((i) => ({
     isEmriId: i.id, uretimEmriId: i.uretimEmriId, opNo: i.opNo, ad: i.ad, durum: i.durum, istasyonId: i.istasyonId,
-    fason: i.fasonFirmaId !== null || i.fasonFirmasiz, emirDurumu: emirler.get(i.uretimEmriId)!,
+    fason: i.fasonFirmaId !== null || i.fasonFirmasiz, operasyonTipiId: i.operasyonTipiId, emirDurumu: emirler.get(i.uretimEmriId)!,
   }));
 }
 

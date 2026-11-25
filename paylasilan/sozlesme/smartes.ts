@@ -161,7 +161,8 @@ export const smartesYenidenGonderGovdesi = z.object({
 }).strict();
 export type SmartesYenidenGonderGovdesi = z.input<typeof smartesYenidenGonderGovdesi>;
 // sirada: yeniden sıraya giren; durmayan: durmadığı için (gönderilmiş ya da kendiliğinden yinelenecek) dokunulmayan.
-export const smartesYenidenGonderCevabi = z.object({ sirada: z.number().int(), durmayan: z.number().int() });
+// listeDisi: gönderim listesinde olmadığı (bitmiş, taslak, fason) için atlanan; tek adımlı istekte bu durum 409'dur.
+export const smartesYenidenGonderCevabi = z.object({ sirada: z.number().int(), durmayan: z.number().int(), listeDisi: z.number().int() });
 export type SmartesYenidenGonderCevabi = z.output<typeof smartesYenidenGonderCevabi>;
 
 export type DurumCevabi = z.output<typeof durumCevabi>;
@@ -541,6 +542,8 @@ export type SmartesEmirDurumlariCevabi = z.output<typeof smartesEmirDurumlariCev
 // bugünkü eşlemeden okunur; adım henüz gönderilmediyse alanlar boştur ve durum nedenini söyler.
 export const SMARTES_ESLEME_KAYNAKLARI = ['istasyon', 'is-merkezi'] as const;
 export const SMARTES_KOD_KAYNAKLARI = ['onek', 'tip-kodu'] as const;
+// Bugünkü kuralla kod kurulamayan adımın nedeni (3705); ekran bağlantı hedefini bundan seçer.
+export const SMARTES_KOD_NEDENLERI = ['tip-yok', 'onek-yok', 'smartes-kodu-yok', 'liste-disi'] as const;
 export const SMARTES_GIDEN_EMIR_SAYFA_BOYU = 20;
 export const gidenEmirleriCevabi = z.object({
   toplam: z.number().int(),
@@ -569,6 +572,12 @@ export const gidenEmirleriCevabi = z.object({
       operasyonOneki: z.string().nullable(),
       operasyonKodu: z.string().nullable(),
       kodKaynagi: z.enum(SMARTES_KOD_KAYNAKLARI).nullable(),
+      // 3705: bugünkü kuralla gidecek kod (gönderilen kod `operasyonKodu`dur); kurulamıyorsa null ve nedeni. Eski kuralla alınmış hata: durmuş ya da
+      // yeniden denenecek adımda gönderilmeye çalışılan kod gidecek koddan farklıysa true.
+      gidecekKod: z.string().nullable(),
+      gidecekNedenKodu: z.enum(SMARTES_KOD_NEDENLERI).nullable(),
+      gidecekNeden: z.string().nullable(),
+      eskiKural: z.boolean(),
       makineKodu: z.string().nullable(),
       adet: z.number().nullable(),
       denemeSayisi: z.number().int().nullable(),

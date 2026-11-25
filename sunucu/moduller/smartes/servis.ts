@@ -19,7 +19,7 @@ import { durusNedenleriEkle, durusNedenleriniListele, hataNedenleriEkle, hurdaNe
 import { isMerkezleri, istasyonlar, makineler, operasyonTipleri, smartesSayimIstasyonlari } from '../istasyonlar/disari.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import {
-  emirAdimlari, gunlukAralikAdetleri, isEmriOzeti, isEmriOzetleri, isEmriZamanlari, makinelerdekiIsler, planlanacakIsEmirleri, smartesSayimi,
+  emirAdimlari, gunlukAralikAdetleri, isEmriOzeti, isEmriOzetleri, isEmriZamanlari, makinelerdekiIsler, planlanacakIsEmirleri, rotasizIsEmirleri, smartesSayimi,
 } from '../uretim-emirleri/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import type { IstemciHatasi, IstemciSonucu, SmartesIstemcisi } from './istemci.ts';
@@ -28,7 +28,7 @@ import {
   eksikIstegeBagliMetotlar, eksikMetotlar, geriCekilmeMs, PARAMETRE_ADIMI_ADI, parametreAdimi, KALITE_AMBAR_METOTLARI, KALITE_AMBAR_AYARI, kaliteAmbarParametreleri, kaliteOku,
   KONTROL_PENCERESI_MS, SMARTES_AKISLARI, smartesAkisDurumu, GONDERIM_TUR_SINIRI, gonderimEylemi, gonderimOzeti, IS_EMRI_METODU, isEmriDurumuOku,
   isEmriParametreleri, kapanisParametreleri, kesinRetMi, kirp, listedekiKodlar, OKUMA_METOTLARI, okumaParametreleri, okumaPenceresi, OPERASYON_LISTE_METODU, pencereAtlanmaliMi,
-  operasyonListesiKodlari, operasyonOnekleri, redOku, skalerBasariliMi, smartesIsEmriNo, smartesOperasyonKodu, sonucBilinmiyorMu, TANIM_AYARI, TANIM_LISTE_METOTLARI,
+  operasyonKoduKur, operasyonListesiKodlari, operasyonOnekleri, redOku, skalerBasariliMi, smartesIsEmriNo, smartesOperasyonKodu, sonucBilinmiyorMu, TANIM_AYARI, TANIM_LISTE_METOTLARI,
   TANIM_METOTLARI, TANIM_NIYET_SINIRI, TANIM_TUR_SINIRI, TANIM_TURLERI, tanimEylemi, tanimKoduUygunMu, tanimParametreleri, yasakMetotMu, alarmTekrarTonu,
   birikimliSayac, cizelgeParcalari, nedensizDuruslar, sayimKarsilastir, terminAsimi, bugunDilimleri, ILERLEME_ARALIGI_MS, ILERLEME_METODU, ilerlemeOku,
   ilerlemeParametreleri, MAKINE_AYARI, MAKINE_BILGI_METODU, MAKINE_LISTESI_YENILEME_MS, MAKINE_OKUMA_ARALIGI_MS, MAKINE_TUR_TAVANI_MS,
@@ -378,7 +378,11 @@ async function gidecekIsEmirleri(db: Db, bugun: string): Promise<GidecekAday[]> 
   const tipOnekleri = await eslemeHaritasi(db, 'operasyon-tipi');
   const istasyonKodu = await istasyonKoduCozucu(db);
   const makineKodlari = await eslemeHaritasi(db, 'makine');
-  const isler = await planlanacakIsEmirleri(db);
+  // Rotasız emrin adımı yeni gönderim kapsamında değildir; yalnız giden kutusunda kaydı olan (kapanmamış) adım listede kalır: durmuş adım
+  // "Yeniden gönder" ile gider, SmartES'in kabul ettiği adım bitene kadar listede durur (çıksa kapanış bildirimiyle pasif olurdu) (3705).
+  const rotasizlar = await rotasizIsEmirleri(db);
+  const takilan = new Set((await s.gidenSatirlari(db, rotasizlar.map((i) => i.id))).filter((g) => g.durum !== 'kapandi').map((g) => g.isEmriId));
+  const isler = [...(await planlanacakIsEmirleri(db)), ...rotasizlar.filter((i) => takilan.has(i.id))];
   const malzemeler = await malzemeOzetleri(db, isler.map((i) => i.malzemeNo));
   const sonuc: GidecekAday[] = [];
   for (const i of isler) {
@@ -479,12 +483,14 @@ export async function gonderimTuru(vt: Veritabani, o: TurOrtami): Promise<Gonder
       continue;
     }
     // Geçici tip (tip kodu listede aynen var) listeden yeniden hesaplanır; özet de buna göre kurulur.
+    // Bozuk birleşik kod (numaralı tip kodu, önek yok) gönderilmez ve özette de görünmez: kod boş kalır.
+    const kurulan = operasyonKoduKur(a.opNo, operasyonTipi, liste_.kodlar);
     kod = smartesOperasyonKodu(a.opNo, operasyonTipi, liste_.kodlar);
-    i = { ...cekirdek, operasyonKodu: kod ?? '' };
+    i = { ...cekirdek, operasyonKodu: kurulan.nedenKodu === 'onek-yok' ? '' : (kod ?? '') };
     p = isEmriParametreleri(i, 'yok', bugun, adetDegistiMi(g?.ozet ?? null, i.adet));
     ozet = gonderimOzeti(p);
-    if (kod === null || !liste_.kodlar.has(kod.toLowerCase())) {
-      await bekle(`SmartES'te ${kod ?? ''} operasyonu yok`, ozet);
+    if (kurulan.kod === null || kod === null) {
+      await bekle(kurulan.neden ?? `SmartES'te ${kod ?? ''} operasyonu yok`, ozet);
       continue;
     }
     if (gonderimEylemi(g, ozet, o.saat()) !== 'gonder') continue;
@@ -577,7 +583,9 @@ export async function gidenEmirleri(db: Db, q: { sayfa: number; sayfaBoyu?: numb
   const istasyonKodlari = new Map((await istasyonlar(db, { pasiflerDahil: true })).map((i) => [i.id, i.kod]));
   const tipler = new Map((await operasyonTipleri(db, { pasiflerDahil: true })).map((x) => [x.id, x.kod]));
   const tipOnekleri = await eslemeHaritasi(db, 'operasyon-tipi');
-  const tipOlan = new Map((await planlanacakIsEmirleri(db)).map((i) => [i.id, i.operasyonTipiId]));
+  // Gidecek kod bugünkü kuralla, son okunan SmartES operasyon listesine göre kurulur; liste hiç okunmadıysa (null) listede aranmaz.
+  const listeSatirlari = await s.listeSatirlari(db, 'operasyon');
+  const listedekiler = listeSatirlari.length === 0 ? null : new Set(listeSatirlari.flatMap((k) => (k.var && k.kod !== null ? [k.kod.toLowerCase()] : [])));
   const baglantiAcik = baglantiDurumu(await sistemAyariOku(db, 'smartes.baglanti'), istemci) === 'acik';
   const emirler = secilen.map(([emirId, grup]) => {
     const liste = adimlar.filter((a) => a.uretimEmriId === emirId).sort((a, b) => a.opNo - b.opNo).map((a) => {
@@ -586,8 +594,14 @@ export async function gidenEmirleri(db: Db, q: { sayfa: number; sayfaBoyu?: numb
       const gidecek = (a.emirDurumu === 'planli' || a.emirDurumu === 'basladi') && a.durum !== 'tamam' && !a.fason;
       const r = adimRozeti({ eslemeli: eslesme !== undefined, gidecek, baglantiAcik, giden: g });
       const alanlar = ozetAlanlari(g === null ? null : (g.durum === 'hata' ? (g.denenenOzet ?? g.ozet) : (g.ozet ?? g.denenenOzet)));
-      const tipId = tipOlan.get(a.isEmriId);
-      const tip = tipKodu(tipId ?? undefined, tipler, tipOnekleri);
+      // Tip adımın kendi operasyon_tipi_id'sinden gelir (rotasız ve plan dışı adım dahil).
+      const tip = tipKodu(a.operasyonTipiId, tipler, tipOnekleri);
+      const gk = operasyonKoduKur(a.opNo, tip, listedekiler);
+      const takildi = r.durum === 'durdu' || r.durum === 'yeniden-denenecek';
+      // Gönderim listesinde olmayan (bitmiş, taslak, fason) adım yeniden gönderilse de gitmez: kod hesabı yerine bu neden yazılır.
+      const listeDisi = takildi && !gidecek;
+      // Önbellekteki liste eski olabilir: kod listede yok diye kurulmamış sayılmaz, yalnız not düşülür; gönderim turu listeyi taze okur.
+      const gidecekKod = gk.nedenKodu === 'smartes-kodu-yok' ? smartesOperasyonKodu(a.opNo, tip, listedekiler) : gk.kod;
       const sayi = (ad: string): number | null => { const d = alanlar.get(ad); return d === undefined || d === '' || Number.isNaN(Number(d)) ? null : Number(d); };
       const bos = (ad: string): string | null => { const d = alanlar.get(ad); return d === undefined || d === '' ? null : d; };
       return {
@@ -598,6 +612,11 @@ export async function gidenEmirleri(db: Db, q: { sayfa: number; sayfaBoyu?: numb
         istasyonEslemesi: eslesme?.kaynak ?? null,
         operasyonTipi: tip?.kod ?? null, operasyonOneki: tip?.smartesOnek ?? null,
         operasyonKodu: bos('OperationCode'), kodKaynagi: tip === null ? null : (tip.smartesOnek === null ? 'tip-kodu' as const : 'onek' as const),
+        gidecekKod: listeDisi ? null : gidecekKod,
+        gidecekNedenKodu: listeDisi ? 'liste-disi' as const : gk.nedenKodu,
+        gidecekNeden: listeDisi ? 'Adım gönderim listesinde değil (bitmiş, taslak ya da fason); yeniden gönderilse de gitmez'
+          : gk.nedenKodu === 'smartes-kodu-yok' ? `Son okunan SmartES listesinde ${gidecekKod ?? ''} yok` : gk.neden,
+        eskiKural: takildi && !listeDisi && gidecekKod !== null && bos('OperationCode') !== gidecekKod,
         makineKodu: bos('MachineCode'), adet: sayi('Quantity'),
         denemeSayisi: g?.denemeSayisi ?? null, sonDeneme: g === null ? null : g.sonDeneme.toISOString(), sonrakiDeneme: g?.sonrakiDeneme?.toISOString() ?? null,
         neden: r.neden,
@@ -1164,10 +1183,25 @@ export async function gidenIzleme(db: Db): Promise<SmartesGidenIzlemeCevabi> {
 }
 
 // Duran iş emrini yeniden gönderme: yalnız sıraya koyar, SmartES'e istek atmaz; gönderim işi ilk turda gönderir.
-export async function duranlariYenidenGonder(db: Db, isEmirleri: readonly number[]): Promise<{ sirada: number; durmayan: number }> {
+export async function duranlariYenidenGonder(db: Db, isEmirleri: readonly number[]): Promise<{ sirada: number; durmayan: number; listeDisi: number }> {
+  const tekil = [...new Set(isEmirleri)];
+  // Hiç kabul edilmemiş (özet yok) durmuş adım gönderim listesinde değilse (bitmiş, taslak, fason) yeniden gönderilse de gitmez. Tek adımlı
+  // istek 409 ile reddedilir (ekran düğmeyi göstermez); toplu istekte (Bağlantı izleme) o adımlar atlanır ve ayrı sayılır, geçerliler sıraya girer.
+  // Kapanış bildirimi bekleyen (özetli) kayıt etkilenmez.
+  const ozetler = await isEmriOzetleri(db, tekil);
+  const adimlar = new Map((await emirAdimlari(db, [...new Set([...ozetler.values()].map((o) => o.uretimEmriId))])).map((a) => [a.isEmriId, a]));
+  const listeDisi = new Map<number, number>();
+  for (const g of await s.gidenSatirlari(db, tekil)) {
+    const a = adimlar.get(g.isEmriId);
+    if (a === undefined || g.durum !== 'hata' || g.ozet !== null) continue;
+    if (!((a.emirDurumu === 'planli' || a.emirDurumu === 'basladi') && a.durum !== 'tamam' && !a.fason)) listeDisi.set(g.isEmriId, a.opNo);
+  }
+  if (tekil.length === 1 && listeDisi.size === 1) {
+    throw cakisma(`OP ${[...listeDisi.values()][0]} gönderim listesinde değil (bitmiş, taslak ya da fason); yeniden gönderilse de SmartES'e gitmez.`);
+  }
   let sirada = 0;
-  for (const id of new Set(isEmirleri)) if (await s.gidenYenidenGonder(db, id)) sirada++;
-  return { sirada, durmayan: new Set(isEmirleri).size - sirada };
+  for (const id of tekil) if (!listeDisi.has(id) && (await s.gidenYenidenGonder(db, id))) sirada++;
+  return { sirada, durmayan: tekil.length - sirada - listeDisi.size, listeDisi: listeDisi.size };
 }
 export const giden = (db: Db, q: Sayfa): Promise<GidenCevabi> =>
   sayfaliListe(q, { say: () => s.gidenSay(db), satirlar: (d) => s.gidenListeSatirlari<Satir<GidenCevabi>>(db, d) });
