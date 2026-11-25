@@ -75,14 +75,16 @@ describe('finans ikinci kişi onayı (3673, gerçek PostgreSQL)', () => {
     await girisliKisi('muhasebe', ['sayfa.finans', 'finans.oku', 'finans.yaz', 'finans.iptal', 'finans.hesap-yonet', ...firmaIslemleri]);
     await girisliKisi('onayci', ['sayfa.finans', 'finans.oku', 'finans.onay']);
     await girisliKisi('okuyan', ['sayfa.finans', 'finans.oku']);
+    await girisliKisi('ayarci', ['sayfa.finans', 'finans.oku', 'finans.ayar']);
   });
   after(async () => { await ortam?.kaldir(); });
 
-  test('ON-01: ayar boşken hiçbir işlem onay istemez; eşiği yalnız finans.ayar yazar, sürümle', async () => {
+  test('ON-01: ayar boşken hiçbir işlem onay istemez; eşiği yalnız yönetici (finans.onay-ayar) yazar, sürümle', async () => {
     const f = await firma(); const h = await hesap();
     assert.deepEqual(tamam(await oku<AyarCevabi>('/finans/onay-ayari', 'okuyan')).ayar.esikOdeme, null);
     tamam(await yaz('/finans/odemeler/ekle', odemeGovdesi(f, h, 999999)));
     assert.equal((await yaz('/finans/onay-ayari', { surum: 1, esikOdeme: '1000', esikIptal: null, esikEsitleme: null }, 'muhasebe')).durum, 403);
+    assert.equal((await yaz('/finans/onay-ayari', { surum: 1, esikOdeme: '1000', esikIptal: null, esikEsitleme: null }, 'ayarci')).durum, 403, 'finans.ayar tek başına eşik yazdırmaz');
     assert.equal((await yaz('/finans/onay-ayari', { surum: 1, esikOdeme: '0', esikIptal: null, esikEsitleme: null }, 'yonetici')).durum, 400, 'sıfır eşik olmaz');
     const a = tamam(await esikleriYaz('1000', '5000', '400')).ayar;
     assert.deepEqual([a.esikOdeme, a.esikIptal, a.esikEsitleme, a.surum], ['1000.00', '5000.00', '400.00', 2]);
@@ -221,14 +223,34 @@ describe('finans ikinci kişi onayı (3673, gerçek PostgreSQL)', () => {
     assert.equal((await oku('/finans/onay-talepleri', 'okuyan')).durum, 200);
   });
 
-  test('ON-09: verilen çekin ödendisi, düzenli ödeme ve ödeme iptali de eşiğe bağlıdır', async () => {
+  test('ON-09: verilen çek düzenlenirken, alınan çek cirolanırken, çekle kapanan gider belgesinde, düzenli ödeme ve ödeme iptalinde kapı vardır; çekin ödendisi kapısızdır', async () => {
     const f = await firma(); const h = await hesap();
-    const c = tamam(await yaz<{ cek: { id: number; surum: number } }>('/finans/cekler/ekle', { yon: 'verilen', tur: 'cek', firmaId: f, duzenlemeTarihi: TARIH, vade: '2026-12-01', tutar: 3000 })).cek;
-    const cekGovdesi = { surum: c.surum, hesapId: h, tarih: TARIH };
-    assert.equal((await yaz(`/finans/cekler/${c.id}/odendi`, cekGovdesi)).durum, 400);
-    const tc = tamam(await talepAc('odeme', `cek:${c.id}:odendi`, cekGovdesi)).talep;
+    // Karar (kullanıcı): verilen çek düzenleme anında onay ister; çek o andan tedarikçiye verilmiş sayılır.
+    const cekGovdesi = { yon: 'verilen', tur: 'cek', firmaId: f, duzenlemeTarihi: TARIH, vade: '2026-12-01', tutar: 3000 };
+    const reddedilen = await yaz('/finans/cekler/ekle', cekGovdesi);
+    assert.equal(reddedilen.durum, 400);
+    assert.match(ileti(reddedilen), /ikinci kişinin onayını/);
+    const tc = tamam(await talepAc('odeme', 'cek:ekle', cekGovdesi)).talep;
+    assert.deepEqual([tc.tutarTl, tc.ayrinti.tarih, tc.ayrinti.tutar], ['3000.00', TARIH, '3000.00 TRY']);
     tamam(await onayla(tc));
-    tamam(await yaz(`/finans/cekler/${c.id}/odendi`, { ...cekGovdesi, onayId: tc.id }));
+    assert.equal((await yaz('/finans/cekler/ekle', { ...cekGovdesi, tutar: 3001, onayId: tc.id })).durum, 400, 'onay başka tutarda kullanılamaz');
+    const c = tamam(await yaz<{ cek: { id: number; surum: number } }>('/finans/cekler/ekle', { ...cekGovdesi, onayId: tc.id })).cek;
+    assert.equal((await yaz('/finans/cekler/ekle', { ...cekGovdesi, onayId: tc.id })).durum, 400, 'onay bir kez kullanılır');
+    tamam(await yaz(`/finans/cekler/${c.id}/odendi`, { surum: c.surum, hesapId: h, tarih: TARIH }));
+    // Eşik altı çek onaysız düzenlenir; alınan çek düzenlemesi kapıya girmez.
+    tamam(await yaz('/finans/cekler/ekle', { ...cekGovdesi, tutar: 999 }));
+    const alinan = tamam(await yaz<{ cek: { id: number; surum: number } }>('/finans/cekler/ekle', { yon: 'alinan', tur: 'cek', firmaId: f, duzenlemeTarihi: TARIH, vade: '2026-12-01', tutar: 4000 })).cek;
+    const ciro = { surum: alinan.surum, firmaId: f, tarih: TARIH, dagitimlar: [] };
+    assert.equal((await yaz(`/finans/cekler/${alinan.id}/ciro`, ciro)).durum, 400, 'ciro eşik üstünde onay ister');
+    const tg = tamam(await talepAc('odeme', `cek:${alinan.id}:ciro`, ciro)).talep;
+    tamam(await onayla(tg));
+    tamam(await yaz(`/finans/cekler/${alinan.id}/ciro`, { ...ciro, onayId: tg.id }));
+    // Çekle kapanan gider belgesi de düzenleme anında kapıdan geçer.
+    const belge = { yon: 'gider', kategori: 'mal_alimi', firmaId: f, belgeTarihi: TARIH, vade: TARIH, tutar: 2500, kdvOrani: 0, cek: { tur: 'cek', banka: 'Deneme Banka', seriNo: 'ORN-CK-1', vade: '2026-12-01' } };
+    assert.equal((await yaz('/finans/belgeler/ekle', belge)).durum, 400);
+    const tb = tamam(await talepAc('odeme', 'belge:ekle', belge)).talep;
+    tamam(await onayla(tb));
+    tamam(await yaz('/finans/belgeler/ekle', { ...belge, onayId: tb.id }));
     const d = tamam(await yaz<{ duzenli: { id: number } }>('/finans/duzenli-odemeler/ekle', { ad: 'Maaşlar', kategori: 'personel', tutar: 2000, ayinGunu: 5 }, 'yonetici')).duzenli;
     const dGovde = { tarih: TARIH, hesapId: h, yontem: 'banka' };
     assert.equal((await yaz(`/finans/duzenli-odemeler/${d.id}/odendi`, dGovde)).durum, 400, 'peşin belge kapıyı atlayamaz');
@@ -242,5 +264,9 @@ describe('finans ikinci kişi onayı (3673, gerçek PostgreSQL)', () => {
     assert.equal(o2.tutar, '950.00');
     tamam(await esikleriYaz('1000', '900', '400'));
     assert.equal((await yaz(`/finans/odemeler/${o2.id}/iptal`, { surum: o2.surum, neden: 'Yanlış' })).durum, 400, 'iptal eşiği 900: 950 onay ister');
+  });
+  test('ON-10: ikinci onayı Müdür ve Genel Müdür verebilir (göçle gelen yetki); finans.onay-ayar hiçbir role verilmez', async () => {
+    const roller = await vt().sorgu<{ kod: string; islem: string }>("SELECT r.kod, ri.islem FROM rol_islemi ri JOIN rol r ON r.id = ri.rol_id WHERE ri.islem IN ('finans.onay', 'finans.onay-ayar') AND r.kod NOT LIKE 'gecici_%' ORDER BY 1, 2");
+    assert.deepEqual(roller.map((x) => `${x.kod}:${x.islem}`), ['genel_mudur:finans.onay', 'mudur:finans.onay']);
   });
 });

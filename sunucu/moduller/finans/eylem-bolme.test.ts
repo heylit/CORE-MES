@@ -67,7 +67,6 @@ const TANIM_UCLARI: Readonly<Record<string, Yetki>> = {
   'POST /finans/butce/belirle': 'finans.ayar',
   'POST /finans/ayar/guncelle': 'finans.ayar',
   'POST /finans/toplu-ice-aktar': 'finans.ayar',
-  'POST /finans/onay-ayari': 'finans.ayar',
 };
 const ad = (u: (typeof uclar)[number]): string => `${u.yontem} ${u.yol}`;
 

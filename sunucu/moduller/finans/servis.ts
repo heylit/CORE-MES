@@ -16,7 +16,7 @@ import type { TedarikciAlacagi, TedarikciAlacaklariCevabi, TedarikciAlacagiDurum
 import { beyanIsaretHatasi, cekVadeHatasi, faizSec, gunlukSkorHesapla, ileriTarihHatasi, ILERI_BELGE_GUNU, kasaBakiyesiHatasi, kurEskiHatasi, ileriTarihliKurSirasi, pasifeAlmaEngeli, topluKurCiftiKarari, topluKurFaizKarari, vergiTakvimi } from './kurallar.ts';
 import type { FinansHamVerisi, FirmaCekirdegi } from '#paylasilan/finans-motor/donustur.ts';
 import {
-  belgeEkleGovdesi as belgeEkleSemasi, cekSonucGovdesi as cekSonucSemasi, duzenliOdendiGovdesi as duzenliOdendiSemasi, esitleGovdesi as esitleSemasi, iptalGovdesi as iptalSemasi, odemeEkleGovdesi as odemeEkleSemasi, onayliBosGovdesi as onayliBosSemasi, onayliSurumGovdesi as onayliSurumSemasi,
+  belgeEkleGovdesi as belgeEkleSemasi, cekEkleGovdesi as cekEkleSemasi, ciroGovdesi as ciroSemasi, duzenliOdendiGovdesi as duzenliOdendiSemasi, esitleGovdesi as esitleSemasi, iptalGovdesi as iptalSemasi, odemeEkleGovdesi as odemeEkleSemasi, onayliBosGovdesi as onayliBosSemasi, onayliSurumGovdesi as onayliSurumSemasi,
   amortismanCevabi, ayarCevabi, beklenenOdemelerCevabi, belgeListesiCevabi, butceListesiCevabi, cekListesiCevabi, dagilimListesiCevabi, duzenliOdemeListesiCevabi,
   esitlemeListesiCevabi, faizListesiCevabi, hesapListesiCevabi, kapanisListesiCevabi, kdvOraniListesiCevabi, kurFaizOzetiCevabi, kurListesiCevabi, mahsupListesiCevabi,
   odemeListesiCevabi, oneriListesiCevabi, sabitKiymetListesiCevabi, skorListesiCevabi, virmanListesiCevabi,
@@ -431,6 +431,8 @@ export function belgeEkle(db: Db, k: Kullanici, g: G<typeof belgeEkleGovdesi>, k
     } else if (g.cek) {
       if (g.firmaId === null) throw dogrulama('Çekli belgede firma zorunludur.', 'firmaId');
       cekVadeDenetle(g.belgeTarihi, g.cek.vade);
+      // Verilen çek düzenlendiği anda tedarikçiye verilmiş sayılır (kullanıcı kararı: düzenleme anında); ödendi anında ikinci kapı yoktur.
+      if (g.yon === 'gider' && !kapiAtla) await onayKapisi(db, k, 'odeme', 'belge:ekle', g, b.toplamTl);
       const cid = await sorgular.cekEkle(db, { yon: g.yon === 'gelir' ? 'alinan' : 'verilen', tur: g.cek.tur, firmaId: g.firmaId, banka: g.cek.banka, seriNo: g.cek.seriNo,
         duzenlemeTarihi: g.belgeTarihi, vade: g.cek.vade, paraBirimi: b.paraBirimi, kur: b.kur, tutar: b.toplam }, k.id);
       const oid = await sorgular.odemeEkle(db, { yon: g.yon, firmaId: g.firmaId, tarih: g.belgeTarihi, yontem: g.cek.tur, hesapId: null, cekId: cid,
@@ -592,6 +594,7 @@ export function cekEkle(db: Db, k: Kullanici, g: G<typeof cekEkleGovdesi>): Prom
     ileriTarihDenetle(g.duzenlemeTarihi, 'belge', 'duzenlemeTarihi');
     await firmaDenetle(db, g.firmaId, yon);
     const kur = await kayitKuru(db, g.paraBirimi, g.kur, g.duzenlemeTarihi);
+    if (g.yon === 'verilen') await onayKapisi(db, k, 'odeme', 'cek:ekle', g, tlKarsiligi(g.tutar, kur));
     const cid = await sorgular.cekEkle(db, { ...g, kur }, k.id);
     const oid = await sorgular.odemeEkle(db, { yon, firmaId: g.firmaId, tarih: g.duzenlemeTarihi, yontem: g.tur, hesapId: null, cekId: cid,
       paraBirimi: g.paraBirimi, kur, tutar: g.tutar, aciklama: null }, k.id);
@@ -624,12 +627,13 @@ export function cekKomutu(db: Db, k: Kullanici, id: number, komut: CekKomutu, g:
       case 'tahsile-ver': await yaz('tahsilde', null, null); break;
       case 'tahsil': await yaz('tahsil', g.tarih as string, g.hesapId as number); break;
       case 'odendi':
-        await onayKapisi(db, k, 'odeme', `cek:${id}:odendi`, g, c.tutarTl);
+        // Kapı düzenleme anındadır (cek:ekle ve belge:ekle); ödendi yalnız durum geçişidir.
         await yaz('odendi', g.tarih as string, g.hesapId as number);
         break;
       case 'ciro': {
         const firmaId = g.firmaId as number;
         await firmaDenetle(db, firmaId, 'gider');
+        await onayKapisi(db, k, 'odeme', `cek:${id}:ciro`, g, c.tutarTl);
         const oid = await sorgular.odemeEkle(db, { yon: 'gider', firmaId, tarih: g.tarih as string, yontem: 'ciro', hesapId: null, cekId: id,
           paraBirimi: c.paraBirimi, kur: c.kur, tutar: c.tutar, aciklama: null }, k.id);
         await dagit(db, oid, c.paraBirimi, g.dagitimlar ?? [], g.tarih as string, k.id);
@@ -1457,9 +1461,12 @@ async function onayAyrintisi(db: Db, hedef: string, govde: Record<string, unknow
     const d = await sorgular.duzenliGetir<{ ad: string; firmaId: number | null; paraBirimi: string; tutar: string }>(db, id);
     return { firma: await firma(d?.firmaId ?? null) ?? d?.ad ?? null, hesap: (await hesap(sayi(govde['hesapId'])))?.ad ?? null, tarih: metin(govde['tarih']), tutar: d ? tutar(d.tutar, d.paraBirimi) : null };
   }
-  if ((id = kimlikli(hedef, 'cek', 'odendi')) !== null) {
+  if (hedef === 'cek:ekle') {
+    return { firma: await firma(sayi(govde['firmaId'])), hesap: null, tarih: metin(govde['duzenlemeTarihi']), tutar: tutar(govde['tutar'], govde['paraBirimi']) };
+  }
+  if ((id = kimlikli(hedef, 'cek', 'ciro')) !== null) {
     const c = await sorgular.cekGetir<Cek>(db, id);
-    return { firma: await firma(c?.firmaId ?? null), hesap: (await hesap(sayi(govde['hesapId'])))?.ad ?? null, tarih: metin(govde['tarih']), tutar: c ? tutar(c.tutar, c.paraBirimi) : null };
+    return { firma: await firma(sayi(govde['firmaId'])), hesap: null, tarih: metin(govde['tarih']), tutar: c ? tutar(c.tutar, c.paraBirimi) : null };
   }
   if ((id = kimlikli(hedef, 'belge', 'iptal')) !== null) {
     const b = await sorgular.belgeGetir<Belge>(db, id);
@@ -1528,7 +1535,7 @@ async function onayHedefiCoz(db: Db, hedef: string, govde: unknown): Promise<{ t
   }
   if (hedef === 'belge:ekle') {
     const g = ayikla(belgeEkleSemasi);
-    if (g.yon !== 'gider' || !g.pesin) throw dogrulama('Yalnız peşin ödenen gider belgesi onaya bağlıdır.', 'govde');
+    if (g.yon !== 'gider' || (!g.pesin && !g.cek)) throw dogrulama('Yalnız peşin ödenen ya da çekle kapanan gider belgesi onaya bağlıdır.', 'govde');
     const kur = g.kur ?? await kayitKuru(db, g.paraBirimi, null, g.belgeTarihi);
     // Kesin toplam belge yazılınca belli olur; talep tutarı KDV dahil tahmindir ve kapı kesin tutarla yeniden karar verir.
     return { tur: 'odeme', yetki: 'finans.yaz', govde: g, tutarTl: tlKarsiligi(String(Number(g.tutar) * (1 + Number(g.kdvOrani ?? 0) / 100)), kur), esikGerekir: false };
@@ -1539,10 +1546,15 @@ async function onayHedefiCoz(db: Db, hedef: string, govde: unknown): Promise<{ t
     const g = ayikla(duzenliOdendiSemasi);
     return { tur: 'odeme', yetki: 'finans.yaz', govde: g, tutarTl: d.paraBirimi === 'TRY' ? d.tutar : tlKarsiligi(d.tutar, await kayitKuru(db, d.paraBirimi, null, g.tarih)), esikGerekir: true };
   }
-  if ((id = kimlikli(hedef, 'cek', 'odendi')) !== null) {
+  if (hedef === 'cek:ekle') {
+    const g = ayikla(cekEkleSemasi);
+    if (g.yon !== 'verilen') throw dogrulama('Yalnız verilen çek onaya bağlıdır.', 'govde');
+    return { tur: 'odeme', yetki: 'finans.yaz', govde: g, tutarTl: tlKarsiligi(g.tutar, await kayitKuru(db, g.paraBirimi, g.kur, g.duzenlemeTarihi)), esikGerekir: true };
+  }
+  if ((id = kimlikli(hedef, 'cek', 'ciro')) !== null) {
     const c = await sorgular.cekGetir<Cek>(db, id);
     if (!c) throw bulunamadi('Çek bulunamadı.');
-    return { tur: 'odeme', yetki: 'finans.yaz', govde: ayikla(cekSonucSemasi), tutarTl: c.tutarTl, esikGerekir: true };
+    return { tur: 'odeme', yetki: 'finans.yaz', govde: ayikla(ciroSemasi), tutarTl: c.tutarTl, esikGerekir: true };
   }
   if ((id = kimlikli(hedef, 'belge', 'iptal')) !== null) {
     const b = await sorgular.belgeGetir<Belge>(db, id);

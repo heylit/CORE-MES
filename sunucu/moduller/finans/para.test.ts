@@ -839,9 +839,9 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
     assert.equal(await hesapBakiyesi(h), '5000.00');
   });
 
-  test('B-012 (GUVENLIK B): finans.yaz olan kişi sekiz yönetim eyleminin her ucunda, finans.oku olan kişi her finans.yaz ucunda 403 alır', async () => {
+  test('B-012 (GUVENLIK B): finans.yaz olan kişi sekiz yönetim eyleminin ve eşik yazma işleminin her ucunda, finans.oku olan kişi her finans.yaz ucunda 403 alır', async () => {
     const yollar = (...yetkiler: string[]) => uclar.filter((u) => u.yontem === 'POST' && typeof u.yetki === 'string' && yetkiler.includes(u.yetki)).map((u) => u.yol.replace('/finans/', '').replace(':id', '1'));
-    const YONET = yollar('finans.iptal', 'finans.cek-yonet', 'finans.hesap-yonet', 'finans.oran-yaz', 'finans.sabit-kiymet', 'finans.maliyet-yaz', 'finans.duzenli-odeme', 'finans.ayar');
+    const YONET = yollar('finans.iptal', 'finans.cek-yonet', 'finans.hesap-yonet', 'finans.oran-yaz', 'finans.sabit-kiymet', 'finans.maliyet-yaz', 'finans.duzenli-odeme', 'finans.ayar', 'finans.onay-ayar');
     const YAZ = yollar('finans.yaz');
     assert.equal(YONET.length, 28);
     assert.equal(YAZ.length, 19);

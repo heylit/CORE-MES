@@ -147,13 +147,13 @@ export const mahsupCevabi = z.object({ mahsup: mahsupSemasi });
 export const cekEkleGovdesi = z.object({
   yon: z.enum(CEK_YONLERI), tur: z.enum(CEK_TURLERI), firmaId: kimlikSayisi, banka: metin(100), seriNo: metin(40),
   duzenlemeTarihi: tarihSemasi, vade: tarihSemasi, paraBirimi: paraBirimiSemasi.prefault('TRY'), kur: kurBos, tutar: tutarSemasi,
-  dagitimlar: dagitimlarSemasi,
+  dagitimlar: dagitimlarSemasi, ...onayKimligi,
 });
 export type CekEkleGovdesi = z.input<typeof cekEkleGovdesi>;
 export const cekDuzeltGovdesi = z.object({ ...beklenenSurum, banka: metin(100), seriNo: metin(40), vade: tarihSemasi });
 export const cekSonucGovdesi = z.object({ ...beklenenSurum, hesapId: kimlikSayisi, tarih: tarihSemasi, ...onayKimligi });
 export const cekTarihGovdesi = z.object({ ...beklenenSurum, tarih: tarihSemasi });
-export const ciroGovdesi = z.object({ ...beklenenSurum, firmaId: kimlikSayisi, tarih: tarihSemasi, dagitimlar: dagitimlarSemasi });
+export const ciroGovdesi = z.object({ ...beklenenSurum, firmaId: kimlikSayisi, tarih: tarihSemasi, dagitimlar: dagitimlarSemasi, ...onayKimligi });
 export const cekSemasi = z.object({
   id: z.number().int(), yon: z.enum(CEK_YONLERI), tur: z.enum(CEK_TURLERI), firmaId: z.number().int(), banka: z.string().nullable(), seriNo: z.string().nullable(),
   duzenlemeTarihi: tarihSemasi, vade: tarihSemasi, paraBirimi: z.string(), kur: numerik, tutar: numerik, tutarTl: numerik,

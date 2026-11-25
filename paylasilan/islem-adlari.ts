@@ -66,6 +66,7 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'finans.beyan-yaz': 'Vergi beyanı verildi işaretleme',
   'finans.donem-ac': 'Kilitli finans dönemini gerekçeyle açma',
   'finans.onay': 'Eşiği aşan ödeme, iptal ve bakiye eşitlemesini ikinci kişi olarak onaylama',
+  'finans.onay-ayar': 'İkinci kişi onayının eşik tutarlarını yazma',
   'finans.kur-yaz': 'Günlük kur ve faiz girme',
   'finans.maliyet-oku': 'Birim maliyetleri görme',
   'finans.oku': 'Finans kayıtlarını görme',

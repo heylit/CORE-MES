@@ -235,9 +235,9 @@ export const paraUclari = [
     isle: ({ db, sorgu }) => servis.vergiBeyanlari(db, sorgu.baslangic, sorgu.bitis) }),
   uc({ yontem: 'POST', yol: '/finans/vergi-beyani/isaretle', yetki: 'finans.beyan-yaz', tekrarKorumali: true, govde: vergiBeyaniGovdesi, cevap: vergiBeyaniGovdesi,
     isle: ({ db, kullanici, govde }) => servis.vergiBeyaniIsaretle(db, kullanici, govde, tesisGunu(new Date())) }),
-  // 3673: ikinci kişi onayı. Ayar finans.ayar; talep açma ve kullanma komutun kendi yetkisiyle; karar finans.onay (hiçbir role verilmez, yöneticide bayrakla vardır).
+  // 3673: ikinci kişi onayı. Eşik yazma finans.onay-ayar (yalnız yönetici); talep açma ve kullanma komutun kendi yetkisiyle; karar finans.onay (Müdür, Genel Müdür ve yönetici).
   uc({ yontem: 'GET', yol: '/finans/onay-ayari', yetki: 'finans.oku', cevap: onayAyariCevabi, isle: async ({ db }) => ({ ayar: await servis.onayAyariOku(db) }) }),
-  uc({ yontem: 'POST', yol: '/finans/onay-ayari', yetki: 'finans.ayar', tekrarKorumali: true, govde: onayAyariGovdesi, cevap: onayAyariCevabi,
+  uc({ yontem: 'POST', yol: '/finans/onay-ayari', yetki: 'finans.onay-ayar', tekrarKorumali: true, govde: onayAyariGovdesi, cevap: onayAyariCevabi,
     isle: async ({ db, kullanici, govde, denetimEki }) => ({ ayar: await servis.onayAyariYaz(db, kullanici, govde, denetimEki) }) }),
   uc({ yontem: 'GET', yol: '/finans/onay-talepleri', yetki: 'finans.oku', sorgu: onayTalepleriSorgusu, cevap: onayTalepleriCevabi,
     isle: async ({ db, sorgu }) => ({ talepler: await servis.onayTalepleri(db, sorgu.durum ?? null) }) }),

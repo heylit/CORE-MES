@@ -54,6 +54,7 @@ export const ROL_MATRISI = {
   genel_mudur: {
     ad: 'Genel Müdür',
     islemler: [
+      'finans.onay',
       'sayfa.toplantilar', 'toplantilar.yaz', 'toplantilar.oku',
       'arkon.amir', 'arkon.yansima-oku', 'arkon.yansima-yeniden', 'belge-merkezi.oku', 'cnc-kurulum.oku', 'cnc-kurulum.takim-degistir',
       'cnc-kurulum.yaz', 'denetim-hazirlik.oku', 'denetim-hazirlik.yaz', 'denetim.oku', 'etiket-merkezi.bas', 'etiket-merkezi.oku',
@@ -183,6 +184,7 @@ export const ROL_MATRISI = {
   mudur: {
     ad: 'Müdür',
     islemler: [
+      'finans.onay',
       'sayfa.toplantilar', 'toplantilar.yaz', 'toplantilar.oku',
       'arkon.amir', 'arkon.yansima-oku', 'arkon.yansima-yeniden', 'belge-merkezi.oku', 'cnc-kurulum.oku', 'cnc-kurulum.takim-degistir',
       'cnc-kurulum.yaz', 'denetim-hazirlik.oku', 'denetim-hazirlik.yaz', 'denetim.oku', 'durus-nedenleri.yaz', 'etiket-merkezi.bas',
@@ -424,7 +426,7 @@ export type RolKodu = keyof typeof ROL_MATRISI | typeof YONETICI_ROLU.kod;
 
 // Hiçbir role verilmez; yalnız bayraklı yönetici yapar.
 export const YALNIZ_YONETICIDE: readonly Islem[] = [
-  'arkon.yonetici', 'denetim.govde-oku', 'guvenlik.oku', 'guvenlik.yonet', 'kisiler.parola-degistir', 'kisiler.rol-yonet',
+  'arkon.yonetici', 'denetim.govde-oku', 'finans.onay-ayar', 'guvenlik.oku', 'guvenlik.yonet', 'kisiler.parola-degistir', 'kisiler.rol-yonet',
   'logo.birim-seti-yaz', 'mesaj.yonet', 'oturum.ortak-cihaz', 'plan.baslamis-diz', 'saglik.ayrinti-oku', 'sayfa.guvenlik', 'sayfa.tezgah-baglantisi', 'smartes.esleme-yaz',
 ];
 
