@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CanliyaAlOnizlemesiCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { Simge, useBildirim } from '../../../../../ortak/arayuz/index.ts';
 import { hataIletisi } from '../../../../../ortak/veri/api.ts';
+import { useEmirNo } from '../../ortak/emir-no.ts';
 import { altEkranAdresi, type PlanlamaEkranOzellikleri } from '../../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
-import { kisitAdi, saatYaz, type OkunanPlan } from '../kurallar.ts';
-import { adimAdi, gunSaat, kaydirmaDugmesi, kaydirmaIsleri, kapaliListeFarkli, KaydirmaHatasi, kilitleriKaydir, nedenCumlesi, type Ihlal, type OnizlemeDurumu } from './canli-onizleme.ts';
+import { kisitAdi, saatYaz, simdiSaati, type OkunanPlan } from '../kurallar.ts';
+import { adimAdi, gunSaat, kaydirmaDugmesi, kaydirmaIsleri, kapaliListeFarkli, KaydirmaHatasi, kilitleriKaydir, komsuAdi, komsuKilitKaymalari, nedenCumlesi, yazilanOneri, type Ihlal, type OnizlemeDurumu } from './canli-onizleme.ts';
 
 // 3669: onay sayfasında gönderme öncesi iki parça. Kalıcı satır: kapalı kısıt varken plan o kısıtları saymadan çözülür (canlıya çıkacak saatler
 // de öyle). Uyarı kartı: sunucunun yazacağı yerleşimde sıraya aykırı adım varsa gönderilmeden önce söyler; kilitli adım için kaydırma önerir
@@ -57,12 +58,26 @@ function IhlalSatiri({ c, p, i }: { c: PlanlamaCalismasi; p: OkunanPlan; i: Ihla
   );
 }
 
-function Oneri({ oneri }: { oneri: NonNullable<CanliyaAlOnizlemesiCevabi['oneri']> }) {
+export function KomsuKilitler({ komsular, D, emirNo }: { komsular: ReturnType<typeof komsuKilitKaymalari>; D: PlanlamaCalismasi['D']; emirNo: (id: string) => string }) {
+  const [hepsi, setHepsi] = useState(false);
+  if (komsular.length === 0) return null;
+  return (
+    <>
+      <p className="tc-pym-pa-kucuk">Bu adımların kilidi de kaydı:</p>
+      <ul className="tc-pym-pa-oneri">
+        {(hepsi ? komsular : komsular.slice(0, 5)).map((x) => <li key={x.k}>{`${komsuAdi(x.k, emirNo) ?? 'Başka bir kilitli adım'}: ${saatYaz(D, x.eski)} → ${saatYaz(D, x.yeni)}`}</li>)}
+      </ul>
+      {komsular.length > 5 && !hepsi && <button type="button" className="tc-dugme tc-pym-kucuk" onClick={() => { setHepsi(true); }}>{`${String(komsular.length - 5)} tane daha`}</button>}
+    </>
+  );
+}
+
+function Oneri({ oneri, yaklasik = false }: { oneri: NonNullable<CanliyaAlOnizlemesiCevabi['oneri']>; yaklasik?: boolean }) {
   return (
     <ul className="tc-pym-pa-oneri">
       {oneri.adimlar.map((a) => <li key={a.isEmriId}>{`${a.emirNo} ${adimAdi(a)}: ${gunSaat(a.eskiBaslangic)} → ${gunSaat(a.yeniBaslangic)}`}</li>)}
       {oneri.emirler.map((e) => (
-        <li key={e.emirNo}>{`${e.emirNo} bitişi: ${gunSaat(e.once)} → ${gunSaat(e.sonra)}${e.termin ? ` (termin ${e.termin.slice(8, 10)}.${e.termin.slice(5, 7)})` : ''}`}</li>
+        <li key={e.emirNo}>{`${e.emirNo} bitişi${yaklasik ? ' (yaklaşık)' : ''}: ${gunSaat(e.once)} → ${gunSaat(e.sonra)}${e.termin ? ` (termin ${e.termin.slice(8, 10)}.${e.termin.slice(5, 7)})` : ''}`}</li>
       ))}
       {oneri.kalanIhlal > 0 && <li>{`Kaydırınca ${String(oneri.kalanIhlal)} kilitsiz adım daha öncülünden önce kalır; planı Kokpit'te yeniden çözün.`}</li>}
     </ul>
@@ -73,27 +88,40 @@ export function CanliOnizleme({ o, c, p, durum, yenidenDene, etkin = true }: { o
   const { bildir } = useBildirim();
   const [gidiyor, setGidiyor] = useState(false);
   const [kaydirilan, setKaydirilan] = useState<NonNullable<CanliyaAlOnizlemesiCevabi['oneri']> | null>(null);
+  const [kilitOnce, setKilitOnce] = useState<Record<string, number>>({});
+  // Komşu kilit karşılaştırması plan yeniden dizildiği anda bir kez sabitlenir; sonradan elle değiştirilen kilit buraya girmez.
+  const [komsuSabit, setKomsuSabit] = useState<ReturnType<typeof komsuKilitKaymalari> | null>(null);
+  const planOnce = useRef<OkunanPlan | null>(null);
   const [hepsi, setHepsi] = useState(false);
   // Kaydır gönderildiği an düğmenin bağlı olduğu sonuç; yeni önizleme (yeni nesne) gelene kadar düğme kapalı kalır (ikinci tıklama olmaz).
   const [kaydirmaSonucu, setKaydirmaSonucu] = useState<object | null>(null);
   const veri = durum.tur === 'hazir' ? durum.veri : durum.tur === 'yukleniyor' ? durum.onceki : null;
   const eski = durum.tur === 'yukleniyor';
   const komut = o.komut;
+  const emirNo = useEmirNo(o.depo.receteRotaKaydi, o.depo.durum?.emirler);
   const kilitYetkisi = o.yetki.islemVar('plan.kilitle');
   const kaydir = async (oneri: NonNullable<CanliyaAlOnizlemesiCevabi['oneri']>): Promise<void> => {
     const isler = p === null ? null : kaydirmaIsleri(c, p, oneri);
     if (komut === null || isler === null) { bildir('hata', "Bu adımlar Kokpit planında bulunamadı; Kokpit'te elle taşıyın."); return; }
     setGidiyor(true);
     setKaydirmaSonucu(veri);
+    planOnce.current = p;
+    setKomsuSabit(null);
+    setKilitOnce(Object.fromEntries(Object.entries(c.locks).flatMap(([k, x]) => (typeof (x as { S?: unknown } | null)?.S === 'number' ? [[k, (x as { S: number }).S]] : []))));
     try {
       await kilitleriKaydir(komut, c, isler, 'Kilitli adımlar kaydırıldı');
-      setKaydirilan(oneri);
+      setKaydirilan(yazilanOneri(oneri, isler, simdiSaati(c, Date.now())));
       bildir('tamam', 'Kilitli adımlar kaydırıldı; plan yeniden diziliyor.');
       o.yenile();
     } catch (h) { bildir('hata', h instanceof KaydirmaHatasi ? h.message : hataIletisi(h, 'Kilitler kaydırılamadı; sayfayı yenileyip yeniden deneyin.')); setKaydirmaSonucu(null); } finally { setGidiyor(false); }
   };
+  useEffect(() => {
+    if (kaydirilan === null || komsuSabit !== null || p === null || p === planOnce.current) return;
+    setKomsuSabit(komsuKilitKaymalari(kilitOnce, c.locks, new Set(kaydirilan.adimlar.flatMap((a) => (a.k === null ? [] : [a.k])))));
+  }, [kaydirilan, komsuSabit, p, kilitOnce, c.locks]);
+  const komsular = komsuSabit ?? [];
   const geriAl = (): void => {
-    if (komut?.geriAl()) { setKaydirilan(null); bildir('tamam', 'Kaydırma geri alındı.'); } else bildir('hata', 'Geri alınamadı; plan bu arada değişti.');
+    if (komut?.geriAl()) { setKaydirilan(null); setKomsuSabit(null); bildir('tamam', 'Kaydırma geri alındı.'); } else bildir('hata', 'Geri alınamadı; plan bu arada değişti.');
   };
   // Plan veriden eskiyse denetim istenmez (etkin değil): sonsuz "yapılıyor" yerine nedeni ve çıkışı söylenir (v2 "eski" durumu).
   if (!etkin) {
@@ -141,7 +169,8 @@ export function CanliOnizleme({ o, c, p, durum, yenidenDene, etkin = true }: { o
       {kaydirilan !== null && (
         <div className="tc-pym-pa-kaydirildi" role="status">
           <strong><Simge ad="check" boyut="k" />{' Kilitli adımlar kaydırıldı'}</strong>
-          <Oneri oneri={kaydirilan} />
+          <Oneri oneri={kaydirilan} yaklasik />
+          <KomsuKilitler komsular={komsular} D={c.D} emirNo={emirNo} />
           {komut?.geriAlinabilir() === true && <button type="button" className="tc-dugme tc-pym-kucuk" onClick={geriAl}><Simge ad="back" boyut="k" />Geri al</button>}
         </div>
       )}
