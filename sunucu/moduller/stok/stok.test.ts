@@ -1849,6 +1849,26 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.equal(eslesen.durum, 200, JSON.stringify(eslesen.govde));
   });
 
+  test('3712: farklı kartla onaylı kabul düzeltmede yeniden onay istemez; düzeltmede başka farklı karta geçiş onaysız reddedilir ve hiçbir şey yazmaz', async () => {
+    const f = await fasonHazirla('30');
+    await o().sahip.sorgu('UPDATE satin_alma_talep_kalemi SET uygulanan_malzeme_no = $1 WHERE id = (SELECT kalem_id FROM satin_alma_siparis_satiri WHERE id = $2)', [f.ham, f.ss]);
+    const g = { siparisSatirId: f.ss, parti: { tedarikciPartiNo: 'FKD-1' }, fason: { malzemeId: f.ham, konumId: f.fasonKonum } };
+    const ilk = await depo<MalKabulCevabi>('POST', '/stok/mal-kabul', { tur: 'satin_alma', satirlar: [{ malzemeId: f.kapli, miktar: '5', ...g, farkliKartOnayi: true }] });
+    assert.equal(ilk.durum, 200, JSON.stringify(ilk.govde));
+    const d = await mudur<MalKabulCevabi>('POST', `/stok/mal-kabuller/${ilk.govde.belge.id}/duzelt`, { satirlar: [{ malzemeId: f.kapli, miktar: '4', ...g }] });
+    assert.equal(d.durum, 200, JSON.stringify(d.govde));
+    assert.equal(await bakiye(f.kapli, 'KABUL'), '4.000');
+    const baska = await kart('yarimamul');
+    const once = [await hareketSayisi(f.kapli), await hareketSayisi(f.ham), await bakiye(f.kapli, 'KABUL')];
+    const red = await mudur<Hata & { alan?: string }>('POST', `/stok/mal-kabuller/${d.govde.belge.id}/duzelt`, { satirlar: [{ malzemeId: baska, miktar: '4', ...g }] });
+    assert.equal(red.durum, 400, JSON.stringify(red.govde));
+    assert.equal(red.govde.alan, 'satirlar.0.farkliKartOnayi');
+    assert.equal(await hareketSayisi(baska), 0, 'red hiçbir şey yazmaz');
+    assert.deepEqual([await hareketSayisi(f.kapli), await hareketSayisi(f.ham), await bakiye(f.kapli, 'KABUL')], once, 'eski belge ters çevrilmez');
+    const onayli = await mudur<MalKabulCevabi>('POST', `/stok/mal-kabuller/${d.govde.belge.id}/duzelt`, { satirlar: [{ malzemeId: baska, miktar: '4', ...g, farkliKartOnayi: true }] });
+    assert.equal(onayli.durum, 200, JSON.stringify(onayli.govde));
+  });
+
   test('DEP-58 fason dönüşü: fason konumunda yetmeyen giden ONAY_GEREKLI ister ve hiçbir şey yazmaz; onayla eksiye düşer', async () => {
     const f = await fasonHazirla('3');
     const g = { siparisSatirId: f.ss, parti: { tedarikciPartiNo: 'KP-2' }, fason: { malzemeId: f.ham, konumId: f.fasonKonum } };

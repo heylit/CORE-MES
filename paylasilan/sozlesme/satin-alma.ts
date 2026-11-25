@@ -976,7 +976,7 @@ export const talebimSemasi = z.object({
     ad: z.string(), miktar: z.string().nullable(), birim: z.string(), kartBekliyor: z.boolean(), uygulanan: z.string().nullable(), fasonAdim: z.string().nullable(),
     // 3712: işlenen parçanın yürürlükteki revizyonu (Taleplerim bloğu); yoksa ya da parçasız kalemde alan gelmez.
     uygulananRevizyon: z.string().nullable().optional(),
-    // Taleplerim bloğunda ad ve kod ayrı yazılır; kart silinmişse ikisi de null ("uygulanan" numarayla gelir).
+    // Taleplerim bloğunda ad ve kod ayrı yazılır; kart silinmişse ya da kodu yoksa alanlar gelmez ("uygulanan" numarayla gelir).
     uygulananKod: z.string().nullable().optional(), uygulananAd: z.string().nullable().optional(),
     // 3462 a: kalemin geçerli termini ve üretim emri (kendi değeri yoksa talebinki).
     ihtiyacTarihi: z.string().nullable().optional(), uretimEmriId: z.number().int().nullable().optional(), uretimEmriNo: z.string().nullable().optional(),

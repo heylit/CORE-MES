@@ -16,7 +16,7 @@ import { depoKabulunuGeriAl } from '../../sevkiyat/disari.ts';
 import { projeAdlari } from '../../projeler/disari.ts';
 import { uretimEmriOzeti, emirDugumleri, emirlerinProjeleri, isEmriOzetleri, kapanisSonuclari } from '../../uretim-emirleri/disari.ts';
 import {
-  binde, bindenMetin, duzeltmeEngeli, partiDenetimi, partiEtiketi, partiGereksinimi, stoklanirMi, siparisBagiEngeli, siparisMalzemeEngeli, malKabulSatirTuru, fasonDonusKonumuEngeli,
+  binde, bindenMetin, duzeltmeEngeli, partiDenetimi, partiEtiketi, partiGereksinimi, stoklanirMi, siparisBagiEngeli, siparisMalzemeEngeli, malKabulSatirTuru, farkliKartOnayiGerekir, fasonDonusKonumuEngeli,
   karantinaYokIletisi, gkkGirisKonumuEngeli, malKabulKonumuEngeli, girisKontroluDuzeltmeEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, uretimGirisiHedefi,
   uretimGirisiKartEngeli, uretimGirisiKesirEngeli, sktGirisEngeli, revizyonUyusmuyor,
 } from '../kurallar.ts';
@@ -37,6 +37,7 @@ type DenetimDefteri = DenetimSecimi[];
 interface GirenSatir { satirId: number; kod: string | null; ad: string | null; birim: string | null; miktar: string; gkk: boolean; tedarikci: string | null }
 async function malKabulSatirlariniYaz(
   db: Db, malKabulId: number, tur: string, satirlar: MalKabulKomutu['satirlar'], k: Kullanici, eksiOnay: boolean, denetim: DenetimDefteri, girenler: GirenSatir[] = [],
+  oncedenKabul: ReadonlySet<string> = new Set(),
 ): Promise<number[]> {
   const kisiId = k.id;
   const kabul = await varsayilanKonum(db, 'KABUL');
@@ -59,8 +60,9 @@ async function malKabulSatirlariniYaz(
       konumVar: s.konumId !== undefined, partiVar: s.partiId !== undefined || !!(s.parti && (s.parti.tedarikciPartiNo || s.parti.dokumNo || s.parti.sertifikaNo)),
     });
     if ('hata' in satirTuru) throw dogrulama(`${o.ad ?? o.kod}: ${satirTuru.hata}`, `${alan}.${satirTuru.alan}`);
-    // 3712: dönen kart siparişin işlediği parçadan farklıysa depocunun onayı gerekir (parça bağı yoksa ya da eşleşiyorsa denetim yok).
-    if (satirTuru.tur === 'fason' && ss && ss.uygulananMalzemeNo !== null && ss.uygulananMalzemeNo !== malzemeId && s.farkliKartOnayi !== true) {
+    if (satirTuru.tur === 'fason' && ss && farkliKartOnayiGerekir({
+      siparisinParcasi: ss.uygulananMalzemeNo, donenKart: malzemeId, onay: s.farkliKartOnayi === true, oncedenKabulEdildi: oncedenKabul.has(kabulAnahtari(siparisSatirId!, malzemeId)),
+    })) {
       throw dogrulama(`${o.ad ?? o.kod}: siparişin işlediği parçadan farklı kart dönüyor; "Farklı kartla kabul et" onayı olmadan kabul edilmez.`, `${alan}.farkliKartOnayi`);
     }
     // Fasonda satırın kartı dönen malzemedir; sipariş hizmet kartınadır (KD-009 karşılaştırması stok ve saf hizmet satırında).
@@ -185,6 +187,7 @@ async function malKabulOzetiCevir(db: Db, b: sorgular.MalKabulHam): Promise<MalK
   const { kisiId, ...geri } = b;
   return { ...geri, kisiAd: kisi.get(kisiId) ?? null };
 }
+const kabulAnahtari = (siparisSatirId: number, malzemeId: number): string => `${siparisSatirId}:${malzemeId}`;
 const SERTIFIKA_PARTISIZ = 'Sertifika dosyası partiye bağlanır; satıra parti bilgisi girin.';
 function denetimiYaz(denetim: DenetimDefteri, denetimEki: (s: readonly DenetimSecimi[]) => void): void {
   if (denetim.length > 0) denetimEki(denetim);
@@ -268,7 +271,8 @@ export async function malKabulDuzelt(db: Db, k: Kullanici, id: number, g: MalKab
   const yeni = await korumali(async () => sorgular.malKabulAc(db, { no: await belgeNo(db, 'stok.mal-kabul-no', 'stok_mal_kabul'), tur: eski.tur, irsaliyeNo: eski.irsaliyeNo, irsaliyeTarihi: eski.irsaliyeTarihi, duzeltilenId: id, kisiId }));
   const denetim: DenetimDefteri = [];
   const girenler: GirenSatir[] = [];
-  hareketIdler.push(...(await malKabulSatirlariniYaz(db, yeni, eski.tur, g.satirlar, k, g.eksiOnay === true, denetim, girenler)));
+  const oncedenKabul = new Set(satirlar.flatMap((s) => (s.siparisSatirId === null ? [] : [kabulAnahtari(s.siparisSatirId, s.malzemeId)])));
+  hareketIdler.push(...(await malKabulSatirlariniYaz(db, yeni, eski.tur, g.satirlar, k, g.eksiOnay === true, denetim, girenler, oncedenKabul)));
   denetimiYaz(denetim, denetimEki);
   const belge = (await sorgular.malKabulBul(db, yeni))!;
   await gkkBekliyorBildir(db, kisiId, belge.no, girenler);
@@ -329,7 +333,9 @@ export async function acikSiparisSatirlari(db: Db): Promise<AcikSiparisSatirlari
       stokBirimi: x.malzemeNo === null ? null : bilgiler.get(x.malzemeNo)?.stokBirimi ?? null, donusum: donusumu(x),
       uretimEmriId: emirId, emirNo: emirNoDe(nolar, emirId), projeId, projeAdi: projeId === null ? null : projeAdi.get(projeId) ?? null,
       isEmriId: x.isEmriId, parcaRevizyonu: x.parcaRevizyonu, yururlukRevizyonu: yur,
-      uygulananMalzeme: ((k) => (k ? { no: k.id, kod: k.kod, ad: k.ad } : null))(isTuru(x) === 'hizmet' && x.uygulananMalzemeNo !== null ? uygulananKartlari.get(x.uygulananMalzemeNo) : undefined),
+      // Kartın özeti okunamazsa da bağ döner: sunucu denetimi ham numarayla çalışır, istemci onayı sunabilmeli.
+      uygulananMalzeme: isTuru(x) !== 'hizmet' || x.uygulananMalzemeNo === null ? null
+        : ((no, k) => (k ? { no, kod: k.kod, ad: k.ad } : { no, kod: `#${no}`, ad: null }))(x.uygulananMalzemeNo, uygulananKartlari.get(x.uygulananMalzemeNo)),
       revizyonUyusmuyor: revizyonUyusmuyor(x.parcaRevizyonu, yur),
     };
   }) };
