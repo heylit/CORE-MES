@@ -287,9 +287,9 @@ export function viewApproval(r: PurchaseRequest): string {
     <div><div class="xs muted">${esc(r.department || "Birim")} bütçesi</div><div>${butceYuzde !== null ? pct(butceYuzde) : "–"}</div><div class="xs muted">${butceYuzde !== null ? "bu alımla birlikte" : "bütçe tanımlı değil"}</div></div>
     ${onaylar.length ? `<ul class="sa-oy-gecmis">${onaylar.map(x => `<li>${simge(x.decision === "approved" ? "check" : "x")} <span><b>${x.decision === "approved" ? "Onaylandı" : "Reddedildi"}</b>, ${esc(x.name || nameOf(x.by))}, ${fmtTs(x.at)}${x.note ? `: ${esc(x.note)}` : ""}</span></li>`).join("")}</ul>` : ""}
     ${bekliyor ? `<label class="f"><span>Not <small>— ret için zorunlu</small></span><input type="text" id="ap-note" placeholder="Örn. vade kısa, tekrar pazarlık edin" data-onay-eylemi="reddet"></label>
-    <div class="row sa-oy-dugmeler" data-sa-y="14"><button class="btn good" id="ap-onayla" data-act="approve" data-onay-eylemi="onayla">${simge("check")} Onayla</button><button class="btn bad" data-act="reject">Reddet</button></div>` : ""}
+    <div class="row sa-oy-dugmeler" data-sa-y="14"><button class="btn good" id="ap-onayla" data-act="approve" data-onay-eylemi="onayla">${simge("check")} Onayla</button><button class="btn bad" data-act="reject">Reddet</button><button class="btn" data-act="oneri-penceresi">${simge("route")} Öneriyle geri gönder</button></div>` : ""}
   </div></section></aside>`;
-  const alt = bekliyor ? `<div class="sa-oy-alt" role="group" aria-label="Onay"><button class="btn good" data-act="approve">${simge("check")} Onayla</button><button class="btn bad" data-act="ret-penceresi">Reddet</button></div>` : "";
+  const alt = bekliyor ? `<div class="sa-oy-alt" role="group" aria-label="Onay"><button class="btn good" data-act="approve">${simge("check")} Onayla</button><button class="btn bad" data-act="ret-penceresi">Reddet</button><button class="btn" data-act="oneri-penceresi">${simge("route")} Öneriyle geri gönder</button></div>` : "";
   // 3574-1: onaya düşen sipariş (onaylı kararı aşan ya da yeni firmalı) aynı sayfada onaylanır.
   const oneri = !r.siparisOnerisi ? "" : r.siparisOnerisi.tur === "siparis-degistir" ? degisiklikOnerisiHTML(r, onaylayabilir(), r.siparisOnerisi.onerenId === S.me?.id)
     : siparisOnerisiHTML(r, onaylayabilir(), r.siparisOnerisi.onerenId === S.me?.id);

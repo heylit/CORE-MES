@@ -85,6 +85,7 @@ export function talepEkrana(t: Talep): PurchaseRequest {
     decidedAt: k.kararTarihi,
     approvals: t.onaylar.map((o): Approval => ({
       id: o.id, at: ms(o.zaman), by: kullaniciEkle(o.kisiId, o.kisiAdi), name: o.kisiAdi ?? '', decision: o.sonuc === 'onay' ? 'approved' : 'rejected', note: o.notlar,
+      ...(o.oneri ? { oneri: { atama: Object.fromEntries(o.oneri.atama.map((x) => [x.kalemId, x.teklifId])), gerekce: o.oneri.gerekce } } : {}),
     })),
     lessons: k.ogrenilenler,
     fx: Object.fromEntries(k.sabitKurlar.map((s) => [s.paraBirimi, Number(s.kur)])),
@@ -262,6 +263,7 @@ export function talepSunucuya(r: PurchaseRequest): TalepGovdesi {
     // Onay ve geçmiş yalnız eklenir: kişi ve zaman sunucunun.
     onaylar: (a?.approvals ?? []).map((o) => ({
       id: o.id, zaman: '', kisiId: null, kisiAdi: null, sonuc: o.decision === 'approved' ? 'onay' : 'ret', dortGozsuz: false, notlar: o.note ?? '',
+      ...(o.oneri ? { oneri: { atama: Object.entries(o.oneri.atama).map(([kalemId, teklifId]) => ({ kalemId, teklifId })), gerekce: o.oneri.gerekce } } : {}),
     })),
     hareketler: (r.log ?? []).map((h) => ({ id: h.id, zaman: '', kisiId: null, kisiAdi: null, metin: h.t })),
     senaryolar: (r.scenarios ?? []).map((s) => ({

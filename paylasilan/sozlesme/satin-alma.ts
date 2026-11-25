@@ -258,6 +258,11 @@ export const kararSemasi = z.object({
 });
 
 // Onay ve geçmiş yalnız eklenir: kayıtta yeni kimlikler eklenir, var olanlar değişmez; kişi ve zaman sunucunundur.
+// 3696: onaylayanın karşı önerisi (kalem -> teklif ve gerekçe); yalnız ret kaydında durur, kararı değiştirmez. Talep eden görmez (açılış cevabı satın alma ve onaylayana gider).
+export const onayOnerisiSemasi = z.object({
+  atama: z.array(z.object({ kalemId: uuid, teklifId: uuid })).min(1).max(500),
+  gerekce: metin(2000),
+});
 export const onaySemasi = z.object({
   id: uuid,
   zaman: z.string(),
@@ -266,6 +271,7 @@ export const onaySemasi = z.object({
   sonuc: z.enum(['onay', 'ret']),
   dortGozsuz: z.boolean(),
   notlar: metin(2000),
+  oneri: onayOnerisiSemasi.nullish(),
 });
 export const hareketSemasi = z.object({
   id: uuid,

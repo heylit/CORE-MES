@@ -104,7 +104,7 @@ test('SAT-53 #375: talep edenin görünümünde teklif, senaryo ve karar yok (se
   const h = (id: string, kisiId: number, metin: string) => ({ id, zaman: '', kisiId, kisiAdi: null, metin });
   const t = { ...T, teklifler: [q('a'), q('b'), q('c')], teklifIstekleri: [{ firmaId: 1, gonderim: '2026-10-01', sonTarih: null }],
     karar: { mod: 'bolunmus', teklifId: null, bolunme: [{ kalemId: 'k', teklifId: 'b' }], sabitKurlar: [{ paraBirimi: 'USD', kur: '41' }] },
-    onaylar: [{ id: 'o', zaman: '', kisiId: 9, kisiAdi: 'Müdür', sonuc: 'onay', dortGozsuz: false, notlar: 'Firma b 5 TL uygun' }],
+    onaylar: [{ id: 'o', zaman: '', kisiId: 9, kisiAdi: 'Müdür', sonuc: 'onay', dortGozsuz: false, notlar: 'Firma b 5 TL uygun', oneri: { atama: [{ kalemId: 'k', teklifId: 'b' }], gerekce: 'Deneme öneri gerekçesi' } }],
     hareketler: [h('h1', 5, 'Talep açıldı'), h('h2', 7, 'Firma a teklifi silindi')] } as unknown as Talep;
   const g = talepEdenGorunumu(t, 5);
   assert.deepEqual([g.teklifler, g.teklifIstekleri, g.senaryolar, g.karar], [[], t.teklifIstekleri, [], null]);
@@ -113,6 +113,8 @@ test('SAT-53 #375: talep edenin görünümünde teklif, senaryo ve karar yok (se
   assert.deepEqual(talepEdenGorunumu({ ...t, karar: { ...t.karar!, mod: 'tek', teklifId: 'c', bolunme: [] } }, 5).secilenTedarikciler, [{ firmaId: 1, ad: 'Firma c' }]);
   assert.deepEqual(talepEdenGorunumu({ ...t, karar: null }, 5).secilenTedarikciler, []);
   assert.deepEqual([g.onaylar.map((o) => [o.sonuc, o.notlar]), g.hareketler.map((x) => x.metin)], [[['onay', '']], ['Talep açıldı']]);
+  assert.deepEqual(g.onaylar.map((o) => o.oneri), [null]);
+  assert.doesNotMatch(JSON.stringify(g), /Deneme öneri gerekçesi/);
   assert.equal(tamGorurMu([ISLEM.talepAc]), false);
   assert.equal(tamGorurMu([ISLEM.onayla]), true);
 });
@@ -948,14 +950,14 @@ test('fiyatsizGorunum: onay notu, karar gerekçesi ve teklif fiyatı boşalır; 
     teklifler: [{ id: 'q1', notlar: 'Deneme teklif notu 555', fiyatlar: [{ kalemId: 'k1', birimFiyat: '1234.5' }], iskontoYuzdesi: '3', nakliye: '10', digerMasraf: '1', kur: '1', ilkToplam: '99' }],
     karar: { gerekce: 'Deneme gerekçe 888', ogrenilenler: 'Deneme ders', sabitKurlar: [{ paraBirimi: 'USD', kur: '30' }] },
     senaryolar: [{ ad: 'Deneme senaryo' }],
-    onaylar: [{ id: 'o1', kisiId: 4, sonuc: 'onay', notlar: 'Deneme gizli onay notu 777' }],
+    onaylar: [{ id: 'o1', kisiId: 4, sonuc: 'ret', notlar: 'Deneme gizli onay notu 777', oneri: { atama: [{ kalemId: 'k1', teklifId: 'q1' }], gerekce: 'Deneme gizli öneri 999' } }],
     hareketler: [{ kisiId: 5 }, { kisiId: 2 }],
   };
   const g = fiyatsizGorunum(t, 5);
-  assert.deepEqual(g.onaylar, [{ id: 'o1', kisiId: 4, sonuc: 'onay', notlar: '' }]);
+  assert.deepEqual(g.onaylar, [{ id: 'o1', kisiId: 4, sonuc: 'ret', notlar: '', oneri: null }]);
   assert.deepEqual([g.karar?.gerekce, g.karar?.ogrenilenler, g.karar?.sabitKurlar, g.senaryolar, g.hareketler], ['', '', [], [], [{ kisiId: 5 }]]);
   assert.deepEqual([g.teklifler[0]?.notlar, g.teklifler[0]?.fiyatlar, g.teklifler[0]?.iskontoYuzdesi], ['', [], null]);
-  assert.doesNotMatch(JSON.stringify(g), /777|888|555|1234\.5/);
+  assert.doesNotMatch(JSON.stringify(g), /777|888|555|999|1234\.5/);
 });
 
 test('3462 a kalemTerminEmriTuret: talep termini en erken, emir yalnız ortaksa; terminler farklıysa her kalem kendi terminini açık taşır (3475)', () => {

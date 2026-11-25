@@ -1030,3 +1030,10 @@
 .sa-kok .sa-kalem-duzenle{ margin-top:var(--b-1); }
 .sa-kok .sa-istek-ozeti{ list-style:none; margin:0; padding:var(--b-3) var(--b-4); display:flex; flex-wrap:wrap; gap:var(--b-1) var(--b-5); border-top:1px solid var(--sa-line-2); }
 .sa-kok [data-sa-faiz-yok]{ display:block; white-space:normal; overflow-wrap:anywhere; }
+/* 3696: onaylayanın karşı önerisi şeridi ve matriste işaretli hücre. */
+.sa-kok .sa-oy-oneri{ display:grid; gap:var(--b-2); }
+.sa-kok .sa-oy-oneri ul{ margin:0; padding-left:var(--b-4); }
+.sa-kok .sa-kr-hucre.oneri{ outline:2px dashed var(--sa-warn); outline-offset:-2px; }
+.sa-kok .sa-kr-oneri{ display:inline-flex; align-items:center; gap:var(--b-1); color:var(--sa-warn); font-weight:600; }
+.sa-kok .sa-oy-alt{ flex-wrap:wrap; }
+.sa-kok [data-oneri-kalem]{ width:100%; min-width:14rem; }

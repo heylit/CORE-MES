@@ -3,5 +3,5 @@
 // fatura-bagla: alış faturasını siparişe bağlar, satın alma kaydı yazmaz (muhasebe, 2077-3 a).
 // fiyat-oku: alış fiyatını, teklif ve sipariş tutarını, kg fiyatını ve alış analizini görür (3401-1 a); oku bunları açmaz.
 export const SATIN_ALMA_ISLEMLERI = [
-  'satin-alma.oku', 'satin-alma.talep-ac', 'satin-alma.yaz', 'satin-alma.onayla', 'satin-alma.ayar', 'satin-alma.fatura-bagla', 'satin-alma.fiyat-oku',
+  'satin-alma.oku', 'satin-alma.talep-ac', 'satin-alma.yaz', 'satin-alma.onayla', 'satin-alma.oneri-gonder', 'satin-alma.ayar', 'satin-alma.fatura-bagla', 'satin-alma.fiyat-oku',
 ] as const;

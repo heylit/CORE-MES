@@ -189,6 +189,7 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'satin-alma.talep-ac': 'Satın alma talebi açma',
   'satin-alma.yaz': 'Teklif ve sipariş işlemleri',
   'satin-alma.onayla': 'Satın almayı onaylama',
+  'satin-alma.oneri-gonder': 'Onayda öneriyle geri gönderme',
   'satin-alma.ayar': 'Satın alma ayarları',
   'satin-alma.fatura-bagla': 'Faturayı siparişe bağlama',
   'satin-alma.fiyat-oku': 'Satın alma fiyatlarını görme',

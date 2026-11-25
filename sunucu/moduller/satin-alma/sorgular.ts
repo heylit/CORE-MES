@@ -163,7 +163,7 @@ export async function altKayitlariOku(db: Db, idler: readonly string[]): Promise
         s.parca_revizyonu AS "parcaRevizyonu", s.beklenen_teslim::text AS "beklenenTeslim", s.notlar
       FROM satin_alma_siparis_satiri s JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
       WHERE s.talep_id = ANY($1::uuid[]) ORDER BY s.talep_id, s.teklif_id, k.sira`),
-    onaylar: await q(`SELECT talep_id AS "talepId", id, ${ISO('zaman')} AS zaman, kisi_id AS "kisiId", sonuc, dort_gozsuz AS "dortGozsuz", notlar
+    onaylar: await q(`SELECT talep_id AS "talepId", id, ${ISO('zaman')} AS zaman, kisi_id AS "kisiId", sonuc, dort_gozsuz AS "dortGozsuz", notlar, oneri
       FROM satin_alma_onay WHERE talep_id = ANY($1::uuid[]) ORDER BY zaman, id`),
     hareketler: await q(`SELECT talep_id AS "talepId", id, ${ISO('zaman')} AS zaman, kisi_id AS "kisiId", metin
       FROM satin_alma_hareket WHERE talep_id = ANY($1::uuid[]) ORDER BY zaman, id`),
@@ -504,10 +504,10 @@ export async function altKayitlariYaz(db: Db, t: TalepYazimi, yeniSiparisNo: () 
 }
 
 // Yalnız ekleme: kişi ve zaman sunucunun; aynı kimlik yeniden gelirse yok sayılır.
-export async function onayEkle(db: Db, talepId: string, o: Pick<Onay, 'id' | 'sonuc' | 'notlar'>, kisiId: number, dortGozsuz: boolean): Promise<void> {
+export async function onayEkle(db: Db, talepId: string, o: Pick<Onay, 'id' | 'sonuc' | 'notlar' | 'oneri'>, kisiId: number, dortGozsuz: boolean): Promise<void> {
   await db.sorgu(
-    `INSERT INTO satin_alma_onay (id, talep_id, kisi_id, sonuc, dort_gozsuz, notlar) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (id) DO NOTHING`,
-    [o.id, talepId, kisiId, o.sonuc, dortGozsuz, o.notlar],
+    `INSERT INTO satin_alma_onay (id, talep_id, kisi_id, sonuc, dort_gozsuz, notlar, oneri) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb) ON CONFLICT (id) DO NOTHING`,
+    [o.id, talepId, kisiId, o.sonuc, dortGozsuz, o.notlar, o.oneri ? JSON.stringify(o.oneri) : null],
   );
 }
 // Borç 36: kalem ve sipariş satırları birlikte değişir; satır kimliği korunur (mal kabul ve GKK ona bağlı). Talep sürümü önce artar,

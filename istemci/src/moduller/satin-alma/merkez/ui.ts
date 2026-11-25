@@ -22,6 +22,7 @@ import { bekletmePenceresiSiparisleri, labelTables, onAfterRender, ozellikAlti, 
 import { basamakEksigi, basamakYazabilir, reportCSV, unlinkedItems } from "./memory.ts";
 import { partileriUnut } from "./partiler.ts";
 import { kategoriNotu, rehberRozetleri, talepRehberi } from "./onayli-ekran.ts";
+import { oneriPenceresiHTML } from "./onay-onerisi.ts";
 import { rehberSirasi } from "./onayli.ts";
 import { ODEME_SEKLI, siparisTakibi, takibiUnut, takipGuncelle } from "./takip.ts";
 import { approvalFormHTML, printDoc, siparisMetniGovdesi } from "./docs.ts";
@@ -1308,6 +1309,22 @@ const ACTIONS: Record<string, Action> = {
     const aw = n.award!; aw.approvals = aw.approvals || []; aw.approvals.push({ id: uid(), at: Date.now(), by: S.me?.id ?? "", name: S.me?.name ?? "", decision: "rejected", note });
     if (el.dataset.not) closeModal();
     n.status = "eval"; saveRequest(n, `Reddedildi: ${note}`); toast("Reddedildi, değerlendirmeye döndü");
+  },
+  "oneri-penceresi": (_el, r) => {
+    if (!canWrite() || !onaylayabilir() || !r || !r.award) return;
+    openModal(oneriPenceresiHTML(r), true, true);
+    $("#oy-oneri-gerekce").focus();
+  },
+  // 3696: karar değişmez; öneri ret kaydında gider, talep değerlendirmeye döner, onaylar sıfırlanır (son kayıt ret).
+  "oneri-gonder": (_el, r) => {
+    if (!canWrite() || !onaylayabilir() || !r || !r.award) return;
+    const gerekce = $("#oy-oneri-gerekce").value.trim(); if (!gerekce) { toast("Gerekçeyi yazın."); $("#oy-oneri-gerekce").focus(); return; }
+    const atama: Record<string, string> = {};
+    document.querySelectorAll<HTMLSelectElement>("[data-oneri-kalem]").forEach((s) => { if (s.value) atama[s.dataset.oneriKalem!] = s.value; });
+    if (!Object.keys(atama).length) { toast("Önerilecek teklif bulunamadı."); return; }
+    const n = clone(r); const aw = n.award!; aw.approvals = aw.approvals || [];
+    aw.approvals.push({ id: uid(), at: Date.now(), by: S.me?.id ?? "", name: S.me?.name ?? "", decision: "rejected", note: gerekce, oneri: { atama, gerekce } });
+    closeModal(); n.status = "eval"; saveRequest(n, `Öneriyle geri gönderildi: ${gerekce}`); toast("Öneriyle geri gönderildi, değerlendirmeye döndü");
   },
   "ret-penceresi": (_el, r) => {
     if (!canWrite() || !onaylayabilir() || !r || !r.award) return;

@@ -16,6 +16,8 @@ export const ISLEM = {
   faturaBagla: 'satin-alma.fatura-bagla',
   // 3401-1 a: alış fiyatı, teklif ve sipariş tutarı, kg fiyatı, analiz ve bütçe tutarı.
   fiyatOku: 'satin-alma.fiyat-oku',
+  // 3696: onaylayan kararı değiştirmez, oneriyle geri gönderir.
+  oneriGonder: 'satin-alma.oneri-gonder',
 } as const;
 export type SatinAlmaIslemi = (typeof ISLEM)[keyof typeof ISLEM];
 
@@ -180,6 +182,9 @@ export const ILETILER = {
   bagliKayit: 'Kayıt kullanıldığı için silinemez.',
   acilisDurumu: 'Talep taslak, teklif istenen, değerlendirme ya da iptal durumuyla açılır.',
   onayDurumu: 'Onay ya da ret yalnız onaydaki ve kararı verilmiş talebe eklenir.',
+  oneriYetkisiz: 'Oneriyle geri göndermek için yetkiniz yok.',
+  oneriSonuc: 'Öneri yalnız ret kaydına eklenir; onay kararı değişmez.',
+  oneriGecersiz: 'Önerideki kalem ya da teklif bu talepte yok, ya da bir kalem birden çok kez geçiyor.',
   onaysizSiparis: 'Sipariş için kararın onaylanmış olması gerekir.',
   terminsizSiparis: 'Siparişin beklenen teslim tarihini girin: teslim tarihi olmayan sipariş oluşturulmaz.',
   kurKilidiEski: (gun: number): string => `Onay ${gun} günden eski: kur ve faiz yeniden sabitlensin diye talebi değerlendirmeye alıp yeniden onaya gönderin.`,
@@ -359,6 +364,22 @@ export function kararOzu(k: Pick<Karar, 'mod' | 'teklifId' | 'bolunme' | 'gerekc
 export const kararDegistiMi = (eski: Karar | null, yeni: Karar | null): boolean => kararOzu(eski) !== kararOzu(yeni);
 
 // B-002: karar, son onay kaydı "onay" ise onaylıdır; sonradan gelen ret onayı geçersiz kılar.
+// 3696: öneri yalnız ret kaydına, yalnız bu yetkiyle ve yalnız talebin kendi kalem ve tekliflerine yazılır; kalem başına tek öneri.
+export function oneriReddi(
+  yeniler: readonly Pick<Onay, 'sonuc' | 'oneri'>[], yetkili: boolean, kalemler: ReadonlySet<string>, teklifler: ReadonlySet<string>,
+): { yetki: boolean; ileti: string } | null {
+  for (const o of yeniler) {
+    if (!o.oneri) continue;
+    if (!yetkili) return { yetki: true, ileti: ILETILER.oneriYetkisiz };
+    if (o.sonuc !== 'ret') return { yetki: false, ileti: ILETILER.oneriSonuc };
+    const gorulen = new Set<string>();
+    for (const a of o.oneri.atama) {
+      if (!kalemler.has(a.kalemId) || !teklifler.has(a.teklifId) || gorulen.has(a.kalemId)) return { yetki: false, ileti: ILETILER.oneriGecersiz };
+      gorulen.add(a.kalemId);
+    }
+  }
+  return null;
+}
 export const kararOnayliMi = (onaylar: readonly Pick<Onay, 'sonuc'>[]): boolean => onaylar.at(-1)?.sonuc === 'onay';
 // #205 S3 b: karar bu kayıtta onaylanınca talep fişi Logo'ya gider; iptal edilen talebin fişi gitmez.
 export const talepFisiGiderMi = (eskiOnaylar: readonly Pick<Onay, 'sonuc'>[], yeniOnaylar: readonly Pick<Onay, 'sonuc'>[], durum: TalepDurumu): boolean =>
@@ -525,7 +546,7 @@ export function talepEdenGorunumu<T extends GorunumKaynagi>(t: T, kisiId: number
     }),
     secilenTedarikciler,
     teklifler: [], senaryolar: [], karar: null,
-    onaylar: t.onaylar.map((o) => ({ ...o, notlar: '' })),
+    onaylar: t.onaylar.map((o) => ({ ...o, notlar: '', oneri: null })),
     hareketler: t.hareketler.filter((h) => h.kisiId === kisiId),
   };
 }
@@ -558,7 +579,7 @@ export function fiyatsizGorunum<T extends FiyatsizAlanlar>(t: T, kisiId: number)
     teklifler: teklifler as unknown as T['teklifler'],
     karar: t.karar === null ? null : { ...t.karar, gerekce: '', ogrenilenler: '', sabitKurlar: [] },
     senaryolar: [],
-    onaylar: t.onaylar.map((o) => ({ ...o, notlar: '' })),
+    onaylar: t.onaylar.map((o) => ({ ...o, notlar: '', oneri: null })),
     hareketler: t.hareketler.filter((h) => h.kisiId === kisiId),
   };
 }

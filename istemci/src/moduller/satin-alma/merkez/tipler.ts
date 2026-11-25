@@ -190,6 +190,8 @@ export interface Approval {
   name: string;
   decision: ApprovalDecision;
   note: string;
+  /** 3696: onaylayanın karşı önerisi (kalem kimliği -> teklif kimliği); yalnız ret kaydında, kararı değiştirmez. */
+  oneri?: { atama: Record<string, string>; gerekce: string };
 }
 
 /** Kalem bazlı kararda her tedarikçiye (teklife) ayrı sipariş ve teslimat */
