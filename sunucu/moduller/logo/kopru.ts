@@ -1,6 +1,7 @@
 import type { LogoAyari } from './ayar.ts';
 import { IRSALIYE_YAZMA_UCU } from './irsaliye-etiket-esleme.ts';
 import type { IrsaliyeGidenTuru } from './irsaliye-etiket-esleme.ts';
+import { yardimciCevabiniIzle } from './yardimci-baglanti.ts';
 import { cariHareketSayfasiniAyikla, cariHareketYolu, faturaDegisenSayfasiniAyikla, faturaDegisenYolu, faturaListesiYolu, faturaSayfasiniAyikla } from './fatura-cari-sozlesmesi.ts';
 import type { CariHareketSayfasi, FaturaSayfasi, FaturaTuru } from './fatura-cari-sozlesmesi.ts';
 import { agHatasiniYorumla, belgeBulgulariniAyikla, ESKI_YARDIMCI_ILETISI, kirp, PROJE_KURULUM_ILETISI, alisFiyatlariniAyikla, topluAlisSayfasiniAyikla, geriHareketSayfasiniAyikla, malzemeHareketleriniAyikla, cariKaydiniAyikla, cariListesiniAyikla, cevabiYorumla, crmKodlariniAyikla, faturalariAyikla, malzemeKartlariniAyikla, stokToplamlariniAyikla, kullanimlariAyikla, malzemeAramasiniAyikla, ISTEK_SURESI_MS, listeKayitlariniAyikla, malKabulSatirlariniAyikla, irsaliyeRefleriniAyikla, irsaliyeSayfasiniAyikla, MALZEME_FISI_UCU, malzemeKodlariniAyikla, siparisIcerigiAyikla, varMiAdi } from './kurallar.ts';
@@ -196,7 +197,9 @@ export function kopruIstemcisiKur(ayar: LogoAyari, secenek: KopruSecenegi = {}):
         signal: AbortSignal.timeout(sureMs),
         redirect: 'error',
       });
-      return { durum: cevap.status, govde: await govdeOku(cevap) };
+      const govdesi = await govdeOku(cevap);
+      yardimciCevabiniIzle(yontem, cevap.status, govdesi);
+      return { durum: cevap.status, govde: govdesi };
     } catch (hata) {
       return agHatasiniYorumla(agHatasi(hata));
     }

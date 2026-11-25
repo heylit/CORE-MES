@@ -65,7 +65,7 @@ const SIPARIS: GonderilecekSiparis = {
     { satirId: 2, stokKodu: 'KYT-H1', hizmet: true, miktar: '1', birim: 'adet', birimFiyat: '150' },
   ],
 };
-const SECENEK: SiparisGovdeSecenegi = { cariKodu: 'CARI-A', kdv: 20, hizmetKdv: 10 };
+const SECENEK: SiparisGovdeSecenegi = { cariKodu: 'CARI-A', kdv: 20, hizmetKdv: 10, durum: 4 };
 
 test('LG-HESAP: TL sipariş: iskonto fiyata yedirilir, malzeme ve hizmet KDV ayrı, döviz alanı yok', () => {
   assert.deepEqual(siparisGovdesi(SIPARIS, SECENEK), {
@@ -79,7 +79,7 @@ test('LG-HESAP: TL sipariş: iskonto fiyata yedirilir, malzeme ve hizmet KDV ayr
 });
 
 test('LG-HESAP: dövizli sipariş: döviz türü ve kur yazılır; KDV ayarı boşsa KDV alanı yok', () => {
-  assert.deepEqual(siparisGovdesi({ ...SIPARIS, paraBirimi: 'usd', kur: '32.5', iskontoYuzdesi: '0', termin: null }, { cariKodu: 'CARI-A', kdv: null, hizmetKdv: null }), {
+  assert.deepEqual(siparisGovdesi({ ...SIPARIS, paraBirimi: 'usd', kur: '32.5', iskontoYuzdesi: '0', termin: null }, { cariKodu: 'CARI-A', kdv: null, hizmetKdv: null, durum: 4 }), {
     govde: {
       number: 'SA-0001', date: '15.10.2026', arpCode: 'CARI-A', orderStatus: 4, currencyCode: 1, rate: 32.5, lines: [
         { type: 0, masterCode: 'KYT-001', quantity: 2.5, price: 99.99, unitCode: 'KG' },

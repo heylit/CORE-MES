@@ -79,7 +79,7 @@ namespace LogoYardimcisi
         {
             try { return Yonlendir(yontem, yol, sorgu, govde); }
             catch (GecersizIstek e) { return Cevap.Hata(400, e.Message); }
-            catch (LogoBaglanamadi e) { return Cevap.Hata(503, e.Message); }
+            catch (LogoBaglanamadi e) { return Cevap.Baglanamadi(e); }
             catch (LogoOturumKoptu e)
             {
                 Gunluk.Yaz("Logo oturumu koptu: " + (e.InnerException == null ? "" : e.InnerException.GetType().Name));

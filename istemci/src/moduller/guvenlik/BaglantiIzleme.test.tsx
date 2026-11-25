@@ -258,6 +258,28 @@ describe('Bağlantı izleme (3313)', () => {
     }
   });
 
+  it('3698 yardımcının son bağlantı hatası Logo kartında zaman, adım, kod, açıklama ve yeniden deneme saatiyle görünür; hata yoksa görünmez', async () => {
+    logoHazirlik.baglantiHatasi = {
+      zaman: '2026-11-25T09:14:00.000Z', adim: 'UserLogin', kod: -93, ileti: '[code=-93] Kullanıcı sayısı limiti aşılmıştır',
+      aciklama: 'Logo lisansı dolu ya da oturum başka yerde açık.', yenidenDeneme: '2026-11-25T09:19:00.000Z',
+    };
+    try {
+      sunucuKur();
+      cizdir(yalnizGoren);
+      const kart = await screen.findByRole('region', { name: 'Logo yardımcısı' });
+      await waitFor(() => expect(within(kart).getByText('Oturum açılamadı')).toBeTruthy());
+      expect(within(kart).getByText(/2026-11-25 12:14 · UserLogin · kod -93: Logo lisansı dolu ya da oturum başka yerde açık\..*Yeniden deneme: 12:19/)).toBeTruthy();
+      cleanup();
+      delete logoHazirlik.baglantiHatasi;
+      cizdir(yalnizGoren);
+      const kart2 = await screen.findByRole('region', { name: 'Logo yardımcısı' });
+      await waitFor(() => expect(within(kart2).getByText('Açık')).toBeTruthy());
+      expect(within(kart2).queryByText('Oturum açılamadı')).toBeNull();
+    } finally {
+      delete logoHazirlik.baglantiHatasi;
+    }
+  });
+
   it('akışlar: okunmamış gelen akış "Henüz okunmadı", sıfır uydurulmaz', async () => {
     sunucuKur();
     cizdir(yalnizGoren);

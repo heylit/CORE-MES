@@ -10,12 +10,13 @@ import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { isiBirKezCalistir } from '#cekirdek/zamanlayici.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
-import { yoneticiOlustur } from '../kisiler/disari.ts';
+import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { satinAlmaIsi } from './isler.ts';
 import { kopruIstemcisiKur } from './kopru.ts';
 import { BELIRSIZ_BEKLEME_MS } from './kurallar.ts';
 import { sahteKopruAc } from './sahte-kopru.ts';
+import { baglantiHatasiniTemizle, sonBaglantiHatasi } from './yardimci-baglanti.ts';
 import type { SahteKopru } from './sahte-kopru.ts';
 import { gidenIzleme, gidenYenidenGonder, malzemeEslemesiYaz, malzemeTuru, satinAlmaTuru, yeniSurecBellegi } from './servis.ts';
 import type {
@@ -126,6 +127,7 @@ describe('Logo satın alma gönderimi (sipariş, talep, karşılama), sahte köp
   let kopru: SahteKopru;
   let kaynak: SahteKaynak;
   let firmaId = 0;
+  let yoneticiId = 0;
   let firmaSayac = 0;
   let siparisSayac = 0;
   let simdi = Date.parse('2026-10-12T10:00:00Z');
@@ -170,7 +172,7 @@ describe('Logo satın alma gönderimi (sipariş, talep, karşılama), sahte köp
   before(async () => {
     ortam = await testVeritabaniKur('logosip');
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
-    await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme Logo', kullaniciAdi: 'ls-yonetici', parola: PAROLA }));
+    yoneticiId = await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme Logo', kullaniciAdi: 'ls-yonetici', parola: PAROLA }));
     // 3313: satır kartları Logo'da bilinir (okunmuş kopya); kart bekleyen belge ayrı testte.
     await vt().sorgu(`INSERT INTO logo_malzeme_karti (logical_ref, kod, aktif, son_okuma)
       SELECT 880000 + n, k, true, now() FROM unnest($1::text[]) WITH ORDINALITY AS t (k, n)`,
@@ -706,5 +708,114 @@ describe('Logo satın alma gönderimi (sipariş, talep, karşılama), sahte köp
     assert.deepEqual(await tur(ilerleyen()), { tur: 'talep', no: t.id, sonuc: 'gonderildi' });
     assert.deepEqual(await tur(ilerleyen()), { tur: 'niyet', no: s.id });
     assert.deepEqual(await tur(ilerleyen()), { tur: 'gonderim', no: s.id, sonuc: 'gonderildi' });
+  });
+
+  test('LGS-31 (3698) 503: oturum açılamadı = gönderilmedi; "yeniden denenecek" olur (belirsiz değil), neden saklanır, bekleme bitince Logo\'da belge aranmadan gider', async () => {
+    baglantiHatasiniTemizle();
+    const s = siparisEkle();
+    const bellek = yeniSurecBellegi();
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'niyet', no: s.id });
+    kopru.senaryo = 'oturum-yok';
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'gonderim', no: s.id, sonuc: 'ulasilamadi' });
+    const g = await giden('siparis', s.id);
+    assert.equal(g?.son_sonuc, 'ulasilamadi');
+    assert.equal(g?.niyet, false, 'istek Logo\'ya gitmedi: niyet kalmaz');
+    assert.match(g?.son_hata ?? '', /^Logo oturumu açılamadı \(UserLogin, kod -93\), belge gönderilmedi; kendiliğinden yeniden denenir\. Logo lisansı dolu/);
+    const sonraki = await vt().tek<{ sonraki: Date }>(`SELECT sonraki_deneme AS sonraki FROM logo_giden WHERE belge_turu = 'siparis' AND belge_no = $1`, [s.id]);
+    assert.equal(sonraki?.sonraki.getTime(), simdi + 240_000, 'yardımcının bildirdiği kalan bekleme kadar sonra');
+    const izleme = await vt().tx((db) => gidenIzleme(db, new Date(simdi)));
+    const satir = izleme.belgeler.find((b) => b.belge === 'siparis' && b.no === s.id);
+    assert.equal(satir?.durum, 'yeniden-denenecek');
+    assert.equal(satir?.kontrolEdilebilir, false);
+    const hata = sonBaglantiHatasi();
+    assert.equal(hata?.adim, 'UserLogin');
+    assert.equal(hata?.kod, -93);
+    assert.equal(hata?.yenidenDeneme, new Date(Date.parse(hata?.zaman ?? '') + 240_000).toISOString());
+    assert.match(hata?.aciklama ?? '', /lisansı dolu/);
+    simdi += 239_000;
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'bos' }, 'bekleme bitmeden istek yok');
+    kopru.senaryo = 'basari';
+    simdi += 2_000;
+    const once = kopru.istekler.length;
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'niyet', no: s.id });
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'gonderim', no: s.id, sonuc: 'gonderildi' });
+    assert.equal(kopru.istekler.slice(once).some((i) => i.yol.startsWith('/api/Document/search')), false, 'Logo\'da belge araması yok');
+    assert.equal(kopru.siparisAcilan.get(s.no), 1);
+    assert.equal(sonBaglantiHatasi(), null, 'başarılı yazma bağlantı hatasını siler');
+  });
+
+  test('LGS-32 (3698) 500 gövdesi bugünkü gibi belirsiz kalır: niyet kalır, 5 dk beklenir, sonra numarayla bulunur', async () => {
+    const s = siparisEkle();
+    const bellek = yeniSurecBellegi();
+    await tur(ortami(bellek));
+    kopru.senaryo = 'sunucu-hatasi';
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'gonderim', no: s.id, sonuc: 'belirsiz' });
+    const g = await giden('siparis', s.id);
+    assert.equal(g?.niyet, true);
+    assert.match(g?.son_hata ?? '', /Köprü hata verdi \(500\); işlenip işlenmediği bilinmiyor/);
+    const sonraki = await vt().tek<{ sonraki: Date }>(`SELECT sonraki_deneme AS sonraki FROM logo_giden WHERE belge_turu = 'siparis' AND belge_no = $1`, [s.id]);
+    assert.equal(sonraki?.sonraki.getTime(), simdi + BELIRSIZ_BEKLEME_MS);
+    kopru.senaryo = 'basari';
+    simdi += 60_000;
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'bos' });
+    simdi += BELIRSIZ_BEKLEME_MS;
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'gonderim', no: s.id, sonuc: 'gonderildi' });
+  });
+
+  test('LGS-33 (3698) Logo sipariş durumu ayarı: ayar yokken yeni sipariş 4; "1" olunca sonraki yeni sipariş 1; güncelleme durum yollamaz; yetkisiz kişi değiştiremez; değişiklik defterde', async () => {
+    const ANAHTAR = 'logo.satin-alma-siparis-durumu';
+    const degistir = (deger: string, cerezi: string) => app.inject({
+      method: 'POST', url: `/api/ayarlar/${ANAHTAR}/degistir`, headers: { cookie: cerezi, 'istek-kimligi': randomUUID() }, payload: { deger },
+    });
+    const defter = () => ortam!.sahip.sorgu<{ islem: string; alanlar: { deger?: { eski: unknown; yeni: unknown } }; kisi_id: number | null }>(
+      `SELECT islem, alanlar, kisi_id FROM denetim_degisiklik WHERE tablo = 'ayar' AND anahtar = jsonb_build_object('anahtar', $1::text) ORDER BY id`, [ANAHTAR]);
+    const acmaDurumu = async (): Promise<unknown> => {
+      const s = siparisEkle();
+      const bellek = yeniSurecBellegi();
+      await tur(ortami(bellek));
+      assert.deepEqual(await tur(ortami(bellek)), { tur: 'gonderim', no: s.id, sonuc: 'gonderildi' });
+      const ekle = [...kopru.istekler].reverse().find((i) => i.yol === '/api/PurchaseOrder/AddRich');
+      assert.equal((ekle?.govde as { number: string }).number, s.no);
+      return (ekle?.govde as { orderStatus?: unknown }).orderStatus;
+    };
+    // Ayar hiç yazılmamış: varsayılan 4.
+    assert.equal(await acmaDurumu(), 4);
+    const ilkSip = [...kaynak.siparisler.values()][0]!;
+    // Yetkisiz kişi değiştiremez; satır ve defter satırı oluşmaz.
+    const roller = ((await app.inject({ method: 'GET', url: '/api/roller', headers: { cookie: cerez } })).json() as { roller: { id: number; yonetici: boolean | null }[] }).roller;
+    const rol = roller.find((r) => r.yonetici !== true);
+    assert.ok(rol, 'yönetici olmayan rol yok');
+    const kisiId = await vt().tx(async (db) => {
+      const id = await yoneticiOlustur(db, { ad: 'Yetkisiz Kişi', kullaniciAdi: 'ls-yetkisiz', parola: PAROLA });
+      const k = await rolAta(db, yoneticiId, id, rol.id);
+      for (const r of k.roller) if (r.id !== rol.id) await rolAl(db, yoneticiId, id, r.id);
+      return id;
+    });
+    const girisC = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi: 'ls-yetkisiz', parola: PAROLA } });
+    const yetkisizCerez = String(girisC.headers['set-cookie']).split(';')[0] ?? '';
+    assert.ok(kisiId > 0);
+    assert.equal((await degistir('1', yetkisizCerez)).statusCode, 403);
+    assert.equal((await defter()).length, 0);
+    assert.equal(await acmaDurumu(), 4, 'reddedilen değişiklik durumu değiştirmez');
+    // Yönetici değiştirir; defter kim, eski ve yeni değeri taşır.
+    assert.equal((await degistir('1', cerez)).statusCode, 200);
+    assert.deepEqual((await defter()).map((d) => ({ islem: d.islem, deger: d.alanlar.deger, kisi: d.kisi_id })), [{ islem: 'ekle', deger: { eski: null, yeni: '1' }, kisi: yoneticiId }]);
+    assert.equal(await acmaDurumu(), 1, 'sonraki yeni sipariş öneri olarak açılır');
+    // Logo'da açılmış sipariş: güncelleme gönderimi ayar "1" iken de durum yollamaz.
+    const logo = kopru.siparisler.get(ilkSip.no)!;
+    kaynak.guncellemeler.set(ilkSip.id, {
+      ...ilkSip, durum: 'bekliyor', hata: null, baglar: null, logoKayitNo: String(logo.ref), kaldirilanSatirRefleri: [],
+      satirlar: ilkSip.satirlar.map((x, i) => ({ ...x, miktar: '9', logoSatirRef: String(logo.satirlar[i]) })),
+    });
+    const once = kopru.istekler.length;
+    simdi += 3600_000;
+    assert.deepEqual(await tur(ortami()), { tur: 'guncelleme', no: ilkSip.id, sonuc: 'gonderildi' });
+    const guncelleme = kopru.istekler.slice(once).find((i) => i.yol === '/api/PurchaseOrder/UpdateRich');
+    assert.ok(guncelleme, 'güncelleme gitti');
+    assert.equal('orderStatus' in (guncelleme.govde as object), false, 'ayar yalnız ilk gönderimde uygulanır');
+    // Varsayılana dönüş de deftere düşer; yalnız sonraki gönderimler etkilenir.
+    assert.equal((await degistir('4', cerez)).statusCode, 200);
+    assert.equal((await defter()).length, 2);
+    assert.equal(await acmaDurumu(), 4);
   });
 });

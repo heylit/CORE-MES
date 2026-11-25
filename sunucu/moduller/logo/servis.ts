@@ -10,10 +10,11 @@ import { modulAyariDegistir, sistemAyariOku } from '../ayarlar/disari.ts';
 import { firmaOzeti, firmaOzetleri, tumFirmalar } from '../musteri-tedarikci/disari.ts';
 import { logoBirimSetiKullaniliyorMu, logoKartDurumlari, logoKayitNolari, logoyaGidecekMalzemeler, malzemeLogoSonucu } from '../malzemeler/disari.ts';
 import type { LogoyaGidecekMalzeme, MalzemeLogoSonucu } from '../malzemeler/disari.ts';
+import { sonBaglantiHatasi } from './yardimci-baglanti.ts';
 import { yardimciSurumu, yardimciSurumunuSor } from './yardimci-surumu.ts';
 import type { KopruIstemcisi, SatirliSonuc } from './kopru.ts';
 import {
-  BELIRSIZ_BEKLEME_MS, SONUCU_BILINMIYOR, bekletmeGovdesi, denemeZamaniMi, durduMu, durduNeYapmali, GIDEN_NE_YAPMALI, gidenBelgeAdi, gidenIzlemeDurumu, kontrolEdilebilirMi, KONTROL_NE_YAPMALI, kartBekliyorMetni, logodaOlmayanKartlar, TALEP_HIZMET_ILETISI, eklemeGovdesi, kodCakismasiMetni, guncellemeEslemesi, HIZMET_ALANLARI, kapatmaGovdesi, karsilamaGovdesi, karsilamaKaydiBul, malzemeGuncellemeGovdesi, siparisGuncellemeGovdesi, talepGovdesi, satirEslemesi, siparisGovdesi, gecerliBirimSetleri, geriCekilmeMs, hizmetGovdesi, HIZMET_AYARI, MALZEME_GONDERIM_AYARI, kartEylemi, kirp, KUYRUK_SINIRI,
+  BELIRSIZ_BEKLEME_MS, SONUCU_BILINMIYOR, bekletmeGovdesi, denemeZamaniMi, durduMu, durduNeYapmali, GIDEN_NE_YAPMALI, gidenBelgeAdi, gidenIzlemeDurumu, kontrolEdilebilirMi, KONTROL_NE_YAPMALI, kartBekliyorMetni, logodaOlmayanKartlar, TALEP_HIZMET_ILETISI, eklemeGovdesi, kodCakismasiMetni, guncellemeEslemesi, HIZMET_ALANLARI, kapatmaGovdesi, karsilamaGovdesi, karsilamaKaydiBul, malzemeGuncellemeGovdesi, siparisGuncellemeGovdesi, talepGovdesi, satirEslemesi, siparisGovdesi, gecerliBirimSetleri, geriCekilmeMs, kopruBeklemesi, siparisDurumuAyardan, SIPARIS_DURUM_AYARI, hizmetGovdesi, HIZMET_AYARI, MALZEME_GONDERIM_AYARI, kartEylemi, kirp, KUYRUK_SINIRI,
   FATURA_TUR_SINIRI, FATURA_YENIDEN_OKUMA_MS, FIS_GONDERIM_AYARI, gonderimSekli, LOGO_FIS_TURLERI, logoFisDurumu, STOK_FISI_LOGO_TURU, stokFisindenLogoFisi, kontrolAdiminiYorumla, listeOkunmaliMi, malzemeFisiGovdesi, malzemeFisiOzeti, eskiEmirFisiNo, FIS_NO_EN_COK, logoFisNumarasi, OKUMA_HATA_BEKLEME_MS, LOGO_AKISLARI, LOGO_KONTROL_ADIMLARI, logoAkisDurumu, satisSiparisiGovdesi, satisTeklifiGovdesi,
   belgeStokKodlari, CARI_ARAMA_EN_AZ, CARI_ARAMA_EN_COK, logoKodlarinaCevir, sayfaliOkumaSirasi,
 } from './kurallar.ts';
@@ -425,7 +426,7 @@ async function gonder(o: TurOrtami, kart: LogoyaGidecekMalzeme, g: GidenSatiri |
   };
   const okumaHatasi = (r: Exclude<KopruSonucu, { tur: 'basarili' }>): Yazici<GidenSonucu> =>
     // Okuma kart açmaz: niyet olduğu gibi kalır (önceki belirsiz istek hâlâ geçerli olabilir).
-    basarisiz(r.tur === 'reddedildi' ? 'reddedildi' : r.tur, `"Var mı" okuması: ${r.ileti}`, undefined);
+    basarisiz(r.tur === 'reddedildi' ? 'reddedildi' : r.tur, `"Var mı" okuması: ${r.ileti}`, undefined, kopruBeklemesi(r));
 
   if (k.varMi !== null) {
     const varMi = await k.varMi();
@@ -448,7 +449,7 @@ async function gonder(o: TurOrtami, kart: LogoyaGidecekMalzeme, g: GidenSatiri |
   if (ekle.tur === 'belirsiz') return basarisiz('belirsiz', ekle.ileti, o.saat(), BELIRSIZ_BEKLEME_MS);
   // Kesin açılmadı: niyet boşalır, sonraki deneme yine niyetle başlar.
   o.bellek.acmaIstekleri.delete(kart.no);
-  return basarisiz(ekle.tur, ekle.ileti, null);
+  return basarisiz(ekle.tur, ekle.ileti, null, kopruBeklemesi(ekle));
 }
 
 /* ---------------- Satın alma: sipariş, talep fişi, karşılama (#205 karar 1; kullanıcı kararları S1 a, S2 b, S3 b; kart #777) ---------------- */
@@ -618,6 +619,7 @@ async function siparisAcmaTuru(db: Db, o: SatinAlmaTurOrtami, kopru: KopruIstemc
   await yenidenVerilenleriAc(db, o.saat(), 'siparis', kuyruk, satirlar);
   const kdv = await sistemAyariOku(db, 'logo.kdv-orani');
   const hizmetKdv = await sistemAyariOku(db, 'logo.hizmet-kdv-orani');
+  const durum = siparisDurumuAyardan(await sistemAyariOku(db, SIPARIS_DURUM_AYARI));
   for (const sip of kuyruk) {
     const g = satirlar.get(sip.id) ?? null;
     const { anahtar, eylem } = await kalkanEylemi(o, 'siparis', sip.id, g);
@@ -631,7 +633,7 @@ async function siparisAcmaTuru(db: Db, o: SatinAlmaTurOrtami, kopru: KopruIstemc
     if ('bekliyor' in pj) { await projeBekliyor(db, o, 'siparis', sip.id, anahtar, pj.bekliyor, bildir); continue; }
     kartBekleyenBelgeler.delete(kartKaydiAnahtari('siparis', sip.id));
     const cariKodu = (await firmaOzeti(db, sip.firmaId))?.logoCariKodu ?? null;
-    const r = projeliGovde(siparisGovdesi(await logoKoduyla(db, sip), { cariKodu, kdv, hizmetKdv }), pj.kod);
+    const r = projeliGovde(siparisGovdesi(await logoKoduyla(db, sip), { cariKodu, kdv, hizmetKdv, durum }), pj.kod);
     if ('hata' in r) return { tur: 'gonderim', no: sip.id, sonuc: await basarisizAcma(db, o, 'siparis', sip.id, g, bildir, 'reddedildi', r.hata, undefined) };
     if (eylem === 'niyet-yaz') {
       // Saat bir kez okunur: belleğe yazılan değer kalıcı niyetle aynı olmazsa niyet sonraki turda taze sayılmaz.
@@ -663,7 +665,7 @@ async function siparisGonder(
   const basarisiz = (sonuc: GidenSonucu, hata: string, niyet: Date | null | undefined, bekleme?: number): Yazici<GidenSonucu> =>
     (db) => basarisizAcma(db, o, 'siparis', sip.id, g, bildir, sonuc, hata, niyet, bekleme);
   const okumaHatasi = (adim: string, r: Exclude<KopruSonucu, { tur: 'basarili' }>): Yazici<GidenSonucu> =>
-    basarisiz(r.tur === 'reddedildi' ? 'reddedildi' : r.tur, `${adim}: ${r.ileti}`, undefined);
+    basarisiz(r.tur === 'reddedildi' ? 'reddedildi' : r.tur, `${adim}: ${r.ileti}`, undefined, kopruBeklemesi(r));
   const sonucYaz = (sonuc: 'gonderildi' | 'zaten-vardi', ref: number, refler: number[] | null): Yazici<GidenSonucu> =>
     (db) => acmaSonucuYaz(db, o, 'siparis', sip.id, g, sip.satirlar, bildir, sonuc, ref, refler);
 
@@ -687,7 +689,7 @@ async function siparisGonder(
   }
   if (ekle.tur === 'belirsiz') return basarisiz('belirsiz', ekle.ileti, o.saat(), BELIRSIZ_BEKLEME_MS);
   o.bellek.acmaIstekleri.delete(anahtar);
-  return basarisiz(ekle.tur, ekle.ileti, null);
+  return basarisiz(ekle.tur, ekle.ileti, null, kopruBeklemesi(ekle));
 }
 
 // Numarayla bulma ucu olmayan belge (talep fişi, satış teklifi, tekliften satış siparişi): kalkan niyet ve belirsiz beklemedir; sonucu
@@ -753,7 +755,7 @@ async function niyetliAcmaTuru<T extends { id: number; satirlar: readonly { sati
       }
       if (ekle.tur === 'belirsiz') return basarisiz('belirsiz', ekle.ileti, o.saat(), BELIRSIZ_BEKLEME_MS);
       o.bellek.acmaIstekleri.delete(anahtar);
-      return basarisiz(ekle.tur, ekle.ileti, null);
+      return basarisiz(ekle.tur, ekle.ileti, null, kopruBeklemesi(ekle));
     };
   }
   return null;
@@ -1739,7 +1741,7 @@ async function malzemeFisiHazirla(db: Db, o: MalzemeFisiTurOrtami): Promise<TurS
       }
       if (ekle.tur === 'belirsiz') return basarisiz('belirsiz', ekle.ileti, o.saat(), BELIRSIZ_BEKLEME_MS);
       o.bellek.acmaIstekleri.delete(anahtar);
-      return basarisiz(ekle.tur, ekle.ileti, null);
+      return basarisiz(ekle.tur, ekle.ileti, null, kopruBeklemesi(ekle));
     };
   }
   return { tur: 'bos' };
@@ -1865,6 +1867,7 @@ export async function hazirlik(db: Db, kopru: KopruIstemcisi | null, ortam: Logo
     }),
     sonBirimSetiOkuma: okuma?.sonOkuma ?? null,
     yardimci: yardimciSurumu(),
+    baglantiHatasi: sonBaglantiHatasi(),
   };
 }
 

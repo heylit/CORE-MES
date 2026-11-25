@@ -40,7 +40,11 @@ export type SahteSenaryo =
   // Kart açılır, cevap yolda kaybolur (bağlantı koparılır).
   | 'cevap-kayboldu'
   // Açma isteği cevapsız kalır ama kart gecikmeMs sonra yine açılır (köprünün kuyruğunda bekleyen istek).
-  | 'gec-islenen';
+  | 'gec-islenen'
+  // 3698: Logo oturumu açılamadı; açma isteği 503 ve makine okunur neden alır, kart açılmaz (istek Logo'ya gitmedi).
+  | 'oturum-yok'
+  // 3698: açma isteği 500 alır (sonucu bilinmez: yardımcı çağrı sırasında koptu); kart açılmaz.
+  | 'sunucu-hatasi';
 
 export interface SahteIstek {
   yontem: string;
@@ -692,6 +696,15 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
       };
       const sessizAc = (): void => { if (siparis) siparisAc(kod, satirSayisi); else kartAc(kod); };
       switch (kopru.senaryo) {
+        case 'oturum-yok':
+          json(cevap, 503, {
+            success: false, logicalRef: 0, error: 'Logo UserLogin false: [code=-93] Kullanıcı sayısı limiti aşılmıştır', validate: null,
+            neden: 'baglanamadi', adim: 'UserLogin', kod: -93, ileti: '[code=-93] Kullanıcı sayısı limiti aşılmıştır', beklemeSn: 240,
+          });
+          return;
+        case 'sunucu-hatasi':
+          json(cevap, 500, { success: false, logicalRef: 0, error: 'Yardımcıda beklenmeyen hata; işlendiği bilinmiyor.', validate: null });
+          return;
         case 'dogrulama':
           json(cevap, 200, { success: false, logicalRef: 0, error: 'Validation failed', validate: ['NAME alani zorunlu', 'UNITSETCODE gecersiz'] });
           return;

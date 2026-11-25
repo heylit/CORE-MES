@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import { LOGO_AYARLARI } from '#paylasilan/ayarlar/logo.ts';
 import { logoAyariOku, yerelMi } from './ayar.ts';
 import {
-  agHatasiniYorumla, BELIRSIZ_BEKLEME_MS, denemeZamaniMi, durduMu, durduNeYapmali, GIDEN_NE_YAPMALI, TALEP_HIZMET_ILETISI, GIDEN_SONUCLARI, gidenIzlemeDurumu, SONUC_SINIFI, sonrakiDenemeYazilir, cevabiYorumla, dogrulamaMetni, ESKI_YARDIMCI_ILETISI, eklemeGovdesi, gecerliBirimSetleri, geriCekilmeMs, kartEylemi,
+  agHatasiniYorumla, baglantiHatasiAciklamasi, baglantiHatasiniAyikla, kontrolEdilebilirMi, kopruBeklemesi, BELIRSIZ_BEKLEME_MS, denemeZamaniMi, durduMu, durduNeYapmali, GIDEN_NE_YAPMALI, TALEP_HIZMET_ILETISI, GIDEN_SONUCLARI, gidenIzlemeDurumu, SONUC_SINIFI, sonrakiDenemeYazilir, cevabiYorumla, dogrulamaMetni, ESKI_YARDIMCI_ILETISI, eklemeGovdesi, gecerliBirimSetleri, geriCekilmeMs, kartEylemi,
   HIZMET_ALANLARI, HIZMET_AYARI, hizmetGovdesi, kodCakismasiMetni, LISTE_DENEME_ARALIGI_MS, LISTE_TAZELEME_MS, listeOkunmaliMi, malzemeGuncellemeGovdesi, malzemeKodlariniAyikla, OZEL_KOD, varMiAdi,
 } from './kurallar.ts';
 
@@ -60,10 +60,12 @@ describe('köprü cevabı (kart #207)', () => {
     assert.equal(cevabiYorumla(400, { success: false }).tur, 'reddedildi');
   });
 
-  test('LGB-4: 401/403 yetkisiz; 5xx, 408, 429 ve okunamayan 2xx cevabı belirsiz (Logo\'ya ulaşmış olabilir)', () => {
+  test('LGB-4: 401/403 yetkisiz; 500, 502, 408, 429 ve okunamayan 2xx cevabı belirsiz (Logo\'ya ulaşmış olabilir); 503 gönderilmedi (3698)', () => {
     assert.equal(cevabiYorumla(401, null).tur, 'yetkisiz');
     assert.equal(cevabiYorumla(403, { success: false }).tur, 'yetkisiz');
-    for (const durum of [500, 502, 503, 408, 429]) assert.equal(cevabiYorumla(durum, { success: true, logicalRef: 5 }).tur, 'belirsiz', String(durum));
+    for (const durum of [500, 502, 408, 429]) assert.equal(cevabiYorumla(durum, { success: true, logicalRef: 5 }).tur, 'belirsiz', String(durum));
+    assert.equal(cevabiYorumla(503, { success: true, logicalRef: 5 }).tur, 'ulasilamadi');
+    assert.equal(cevabiYorumla(503, null).tur, 'ulasilamadi');
     assert.equal(cevabiYorumla(200, null).tur, 'belirsiz');
     assert.equal(cevabiYorumla(200, { logicalRef: 5 }).tur, 'belirsiz');
     assert.equal(cevabiYorumla(404, null).tur, 'reddedildi');
@@ -77,6 +79,32 @@ describe('köprü cevabı (kart #207)', () => {
     assert.equal('ileti' in kayitYok && kayitYok.ileti, 'Logo reddetti: Material not found');
     const baskaDurum = cevabiYorumla(400, { success: false, error: 'Not found' });
     assert.equal('ileti' in baskaDurum && baskaDurum.ileti, 'Logo reddetti: Not found');
+  });
+
+  test('3698: 503 gövdesindeki neden, adım, kod ve bekleme okunur; -93 anlaşılır açıklanır, bilinmeyen kod düz kalır; eski yardımcının 503\'ü de gönderilmedi sayılır', () => {
+    const r = cevabiYorumla(503, { success: false, error: 'Logo UserLogin false: [code=-93] x', neden: 'baglanamadi', adim: 'UserLogin', kod: -93, ileti: '[code=-93] Kullanıcı sayısı limiti aşılmıştır', beklemeSn: 120 } as never);
+    assert.equal(r.tur, 'ulasilamadi');
+    assert.equal(kopruBeklemesi(r), 120_000);
+    assert.ok('baglanti' in r && r.baglanti?.kod === -93 && r.baglanti.adim === 'UserLogin');
+    assert.match(r.tur === 'ulasilamadi' ? r.ileti : '', /^Logo oturumu açılamadı \(UserLogin, kod -93\), belge gönderilmedi; kendiliğinden yeniden denenir\. Logo lisansı dolu ya da oturum başka yerde açık.* Logo: \[code=-93\]/);
+    const bilinmeyen = cevabiYorumla(503, { success: false, neden: 'baglanamadi', adim: 'CompanyLogin', kod: -7, ileti: 'x', beklemeSn: 0 } as never);
+    assert.equal(kopruBeklemesi(bilinmeyen), undefined, 'bekleme sıfırsa belgenin artan beklemesi geçerli');
+    assert.match(bilinmeyen.tur === 'ulasilamadi' ? bilinmeyen.ileti : '', /\(CompanyLogin, kod -7\).*firması açılamadı/);
+    assert.equal(baglantiHatasiAciklamasi({ adim: 'UserLogin', kod: -12345 }), 'Logo kullanıcı girişi kabul edilmedi (lisans, kullanıcı adı ya da parola).');
+    assert.equal(baglantiHatasiAciklamasi({ adim: null, kod: -12345 }), null, 'adımsız bilinmeyen kod: açıklama uydurulmaz');
+    const eski = cevabiYorumla(503, { success: false, error: 'Logo UserLogin false: [code=-93] x' });
+    assert.equal(eski.tur, 'ulasilamadi');
+    assert.equal(kopruBeklemesi(eski), undefined);
+    assert.equal(baglantiHatasiniAyikla({ neden: 'baska' }), null);
+    assert.equal(baglantiHatasiniAyikla({ neden: 'baglanamadi', beklemeSn: 99999 })?.beklemeSn, 3600, 'bekleme üst sınırlı');
+  });
+
+  test('3698: 503 "gönderilmedi" sınıfıdır: kontrol edilemez; 500 ve zaman aşımı belirsizdir ve talepte kontrol edilebilir', () => {
+    const talep = { belgeTuru: 'talep', islem: 'gonder', sonHata: null } as const;
+    assert.equal(kontrolEdilebilirMi({ ...talep, sonSonuc: 'ulasilamadi' }), false);
+    assert.equal(kontrolEdilebilirMi({ ...talep, sonSonuc: 'belirsiz' }), true);
+    assert.equal(cevabiYorumla(500, null).tur, 'belirsiz');
+    assert.equal(agHatasiniYorumla({ zamanAsimi: true, kod: null }).tur, 'belirsiz');
   });
 
   test('LGB-4: bağlantı kurulamadıysa istek gitmemiştir (ulasilamadi); zaman aşımı ve kopan bağlantı belirsiz; ileti adres taşımaz', () => {

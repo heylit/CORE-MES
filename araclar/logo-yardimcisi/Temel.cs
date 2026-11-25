@@ -50,9 +50,23 @@ namespace LogoYardimcisi
     }
 
     // Oturum açılamadı (lisans dolu, kimlik yanlış, Logo kurulu değil): istek Logo'ya hiç gitmedi.
+    // Adim: hangi adımda kaldığı (Olustur, Connect, UserLogin, CompanyLogin, Beklenmeyen); Kod: Logo'nun hata kodu (okunamadıysa null);
+    // Ayrinti: Logo'nun metni (kullanıcı adı ve parola çıkarılmış); BeklemeSn: yeniden denemeye kalan süre (taze hatada 0).
     public sealed class LogoBaglanamadi : Exception
     {
-        public LogoBaglanamadi(string ileti) : base(ileti) { }
+        public readonly string Adim;
+        public readonly int? Kod;
+        public readonly string Ayrinti;
+        public int BeklemeSn;
+
+        public LogoBaglanamadi(string ileti) : this(ileti, "Beklenmeyen", null, ileti) { }
+
+        public LogoBaglanamadi(string ileti, string adim, int? kod, string ayrinti) : base(ileti)
+        {
+            Adim = adim;
+            Kod = kod;
+            Ayrinti = ayrinti;
+        }
     }
 
     // Çağrı sırasında oturum koptu: işlenip işlenmediği bilinmiyor.
@@ -103,6 +117,18 @@ namespace LogoYardimcisi
         public static Cevap Hata(int durum, string hata)
         {
             return new Cevap(durum, Zarf(false, 0, hata, null));
+        }
+
+        // Oturum açılamadı: istek Logo'ya gitmedi. Eski alanlar (success, error) korunur; neden, adim, kod, ileti ve beklemeSn eklenir.
+        public static Cevap Baglanamadi(LogoBaglanamadi e)
+        {
+            var z = Zarf(false, 0, e.Message, null);
+            z["neden"] = "baglanamadi";
+            z["adim"] = e.Adim;
+            z["kod"] = e.Kod;
+            z["ileti"] = e.Ayrinti;
+            z["beklemeSn"] = e.BeklemeSn;
+            return new Cevap(503, z);
         }
 
         public static Dictionary<string, object> Zarf(bool basari, int logicalRef, string hata, string[] dogrulama)

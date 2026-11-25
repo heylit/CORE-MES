@@ -1,7 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import type { KopruIstemcisi, ProjeKurulumu } from './kopru.ts';
-import { BELIRSIZ_BEKLEME_MS, geriCekilmeMs, kartEylemi, kirp, KUYRUK_SINIRI, PROJE_AYARI, projeGovdesi } from './kurallar.ts';
+import { BELIRSIZ_BEKLEME_MS, geriCekilmeMs, kopruBeklemesi, kartEylemi, kirp, KUYRUK_SINIRI, PROJE_AYARI, projeGovdesi } from './kurallar.ts';
 import type { GidenSonucu, GonderilecekProje, KopruSonucu } from './kurallar.ts';
 import * as s from './sorgular.ts';
 import type { GidenSatiri } from './sorgular.ts';
@@ -63,7 +63,7 @@ async function gonder(o: ProjeTurOrtami, kopru: KopruIstemcisi, p: GonderilecekP
   const varMi = await kopru.projeVarMi(govde.code);
   if (kurulumMu(varMi)) return kurulumBekliyor(o, varMi.ileti);
   // Okuma proje açmaz: niyet olduğu gibi kalır.
-  if (varMi.tur !== 'basarili') return (db) => denemeYaz(db, o, p, g, varMi.tur, `"Var mı" okuması: ${varMi.ileti}`, undefined);
+  if (varMi.tur !== 'basarili') return (db) => denemeYaz(db, o, p, g, varMi.tur, `"Var mı" okuması: ${varMi.ileti}`, undefined, kopruBeklemesi(varMi));
   o.kurulum.son = null;
   // Logo'da aynı kodlu proje varsa bağlanır (eşleme tablosu yok; KURGU varsayımı).
   if (varMi.logicalRef !== null) { const ref = varMi.logicalRef; return (db) => basariYaz(db, o, p, 'zaten-vardi', ref); }
@@ -76,7 +76,7 @@ async function gonder(o: ProjeTurOrtami, kopru: KopruIstemcisi, p: GonderilecekP
   }
   if (ekle.tur === 'belirsiz') return (db) => denemeYaz(db, o, p, g, 'belirsiz', ekle.ileti, o.saat(), BELIRSIZ_BEKLEME_MS);
   o.bellek.acmaIstekleri.delete(p.id);
-  return (db) => denemeYaz(db, o, p, g, ekle.tur, ekle.ileti, null);
+  return (db) => denemeYaz(db, o, p, g, ekle.tur, ekle.ileti, null, kopruBeklemesi(ekle));
 }
 
 async function hazirla(db: Db, o: ProjeTurOrtami): Promise<TurSonucu | (() => Promise<Yazici>)> {

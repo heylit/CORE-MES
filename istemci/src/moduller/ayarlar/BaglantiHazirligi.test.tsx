@@ -103,6 +103,26 @@ describe('Bağlantı hazırlığı', () => {
     expect(within(tmiLogo).queryByText('Hazır')).toBeNull();
   });
 
+  it('3698 yardımcının son bağlantı hatası uyarı olarak zaman, adım, kod, açıklama ve yeniden deneme saatiyle görünür; yoksa uyarı yok', async () => {
+    sunucuKur();
+    cizdir(<BaglantiHazirligi />);
+    await screen.findByText('http://10.0.0.5:5149');
+    expect(screen.queryByText(/Logo oturumu açılamadı/)).toBeNull();
+    cleanup();
+    LOGO.baglantiHatasi = {
+      zaman: '2026-10-15T09:14:00.000Z', adim: 'UserLogin', kod: -93, ileti: '[code=-93] Kullanıcı sayısı limiti aşılmıştır',
+      aciklama: 'Logo lisansı dolu ya da oturum başka yerde açık.', yenidenDeneme: '2026-10-15T09:19:00.000Z',
+    };
+    try {
+      cizdir(<BaglantiHazirligi />);
+      const uyari = await screen.findByRole('alert');
+      expect(uyari.textContent).toContain('2026-10-15 12:14 · UserLogin · kod -93: Logo lisansı dolu ya da oturum başka yerde açık.');
+      expect(uyari.textContent).toContain('Yeniden deneme: 12:19');
+    } finally {
+      delete LOGO.baglantiHatasi;
+    }
+  });
+
   it('genel durum ve akış görünümü kuralları', () => {
     const tamam = { zaman: 'x', ulasildi: true, adimlar: [{ ad: 'a', sonuc: 'tamam' as const, sureMs: 1, ileti: '' }] };
     expect(genelDurum('acik', tamam).metin).toBe('Çalışmaya hazır');

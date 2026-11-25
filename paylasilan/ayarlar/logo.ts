@@ -53,6 +53,19 @@ export const LOGO_AYARLARI = {
     baslik: 'Logo: satın alma gönderimi',
     aciklama: 'Açıkken onaylı satın alma talepleri talep fişi, verilen siparişler satın alma siparişi olarak Logo\'ya gider; düzenleme, kapatma, iptal ve talep karşılaması da gider. Sipariş bekletme ve talep fişi iptali ayrı anahtarla açılır. "Logo bağlantısı" da açık olmalı. Kapalıyken "bekliyor" olarak birikir.',
   },
+  // Kart 3698 (kullanıcı kararı): satın alma siparişinin Logo'daki ORDER_STATUS değeri. Yalnız Logo'da yeni sipariş açılırken uygulanır;
+  // ayar değişince yalnız sonraki yeni siparişler etkilenir, Logo'daki siparişlere ve güncelleme gönderimlerine dokunulmaz.
+  'logo.satin-alma-siparis-durumu': {
+    modul: 'logo',
+    tur: 'secim',
+    varsayilan: '4',
+    secenekler: [
+      { deger: '1', etiket: 'Öneri (onay Logo\'da verilir)' },
+      { deger: '4', etiket: 'Sevk edilebilir' },
+    ],
+    baslik: 'Logo satın alma siparişi durumu',
+    aciklama: 'CORE\'dan Logo\'da yeni açılan satın alma siparişinin durumu. Öneri: sipariş Logo\'da öneri olarak açılır, onayı Logo\'da verilir. Sevk edilebilir: sipariş doğrudan kesinleşmiş açılır. Yalnız ilk gönderimde uygulanır; Logo\'da açılmış siparişlere ve sonraki güncellemelere dokunulmaz. "Logo bağlantısı" ve "Logo: satın alma gönderimi" da açık olmalı.',
+  },
   // Kart 3665 ve 3684: irsaliye yazma kapalı gelir; ölçüm kapısı (irsaliye-yazma-kapisi) tamamlanmadan Logo modülünün komutu da açmaz,
   // bu yüzden genel ayar ucu yazmaz (degistirenEkran).
   'logo.satin-alma-irsaliyesi': {

@@ -146,7 +146,7 @@ namespace LogoYardimcisi
 
         void Giris()
         {
-            if (BaglantiYok) throw new LogoBaglanamadi("Logo UserLogin false: [code=-93] Kullanıcı sayısı limiti aşılmıştır");
+            if (BaglantiYok) throw new LogoBaglanamadi("Logo UserLogin false: [code=-93] Kullanıcı sayısı limiti aşılmıştır", "UserLogin", -93, "[code=-93] Kullanıcı sayısı limiti aşılmıştır");
             if (Kopsun) throw new LogoOturumKoptu("Logo çağrısı sırasında COM hatası; işlendiği bilinmiyor.", null);
         }
 

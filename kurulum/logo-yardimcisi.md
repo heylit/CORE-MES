@@ -55,7 +55,7 @@ Ayar yolu `TMIV2_LOGO_YARDIMCI_AYARI` ortam değişkeniyle de verilebilir. Yard�
 oturum açılınca kendiliğinden başlaması için kullanıcının Görev Zamanlayıcı'sında "oturum açıldığında" görevi tanımlanabilir. Ctrl+C durdurur.
 
 - Logo oturumu ilk istekte açılır ve açık kalır (tek oturum, tek iş parçacığı; istekler sırayla işlenir).
-- Bağlantı kurulamazsa 5 dakika yeniden denenmez (Logo lisansı kapanan oturumu birkaç dakika tutar); bu sürede istekler 503 alır ve gönderilmemiş sayılır.
+- Bağlantı kurulamazsa 5 dakika yeniden denenmez (Logo lisansı kapanan oturumu birkaç dakika tutar); bu sürede istekler 503 alır ve gönderilmemiş sayılır. 503 gövdesi `{"neden":"baglanamadi","adim","kod","ileti","beklemeSn"}` taşır (kalan bekleme saniye olarak); hata, kullanıcı adı ve parola olmadan, 5 dakikalık pencere başına bir günlük satırı yazar (adım, Logo kodu, metin). TMI bu cevabı "gönderilmedi, bekleme sonrası yeniden denenecek" sayar; 500, 408, 429 ve zaman aşımı "sonucu bilinmiyor" kalır.
 - Yazma sırasında oturum koparsa cevap 500'dür; TMI bunu "sonucu bilinmiyor" sayar ve önce "var mı" ile okur.
 - Tarayıcıdan gelen istek (`Origin` başlığı) ve yabancı `Host` reddedilir. Günlüğe istek gövdesi, parola ve anahtar yazılmaz.
 
@@ -305,7 +305,7 @@ ile doğrulanır; fark çıkarsa yalnız yardımcı değişir:
 1. Rehberin veri sözlüğünde geçmeyen sütunlar (`SqlOkuma.cs` `Sorgular.Dogrulanmadi`): hizmet kartı türü (`SRVCARD.CARDTYPE` 1 alınan, 2 verilen),
    `STLINE` satır sütunları, talep satırını `LOGICALREF` ile okuma, satış teklifi başlık ve satır sütunları; 2116 ve 2118 okumalarının
    `ITEMS.ACTIVE`, `GNTOTST` ve `CLCARD` sütunları.
-2. Dövizli satın alma siparişinde `CURRSEL_TOTAL` 1 kalır.
+2. Dövizli satın alma siparişinde `CURRSEL_TOTAL` 2 yazılır (kod: `Islemler.cs`, dövizli sipariş; TL'de 1). Logo'da bu değerle dövizli siparişin açıldığı doğrulanmadı.
 3. Talep fişi satırlarında `INTERNAL_REFERENCE` okunabilir (satır eşleme ve karşılama için).
 4. Malzeme XML'indeki `FACTORY_PARAMS` bloğu rehberin ölçülmüş örneğinden alındı.
 5. Logo bilgisayarında .NET Framework 4.x kurulu; yardımcı yönetici olmadan kullanıcı süreci olarak çalışır.
