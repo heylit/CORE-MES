@@ -3,7 +3,8 @@
 // finans.kur-yaz: günlük kur ve faiz girer (satın alma da girer, kart #953); rakam açmaz.
 // finans.beyan-yaz: vergi son gününün beyanını "verildi" işaretler ya da işareti kaldırır (1846, TKV-2 a); rakam açmaz.
 // finans.donem-ac: kilitli finans dönemini gerekçeyle açar (3672); hiçbir role verilmez, yöneticide bayrakla vardır.
-// finans.onay: eşiği aşan ödeme, iptal ve bakiye eşitlemesinde ikinci kişi olarak karar verir (3673); hiçbir role verilmez, yöneticide bayrakla vardır.
+// finans.onay: eşiği aşan ödeme, iptal ve bakiye eşitlemesinde ikinci kişi olarak karar verir (3673); Müdür ve Genel Müdür rolüne verilir (kullanıcı kararı), yöneticide bayrakla vardır.
+// finans.onay-ayar: ikinci kişi onayının eşik tutarlarını yazar (3673, kullanıcı kararı: yalnız yönetici); hiçbir role verilmez, yöneticide bayrakla vardır.
 // finans.maliyet-oku: malzeme, istasyon ve kişi birim maliyetlerini görür (kart #1187); yazma finans.maliyet-yaz'dadır.
 // Finans yönetimi sekiz eyleme bölündü (3165 a): iptal, çek, hesap, oran, sabit kıymet, maliyet, düzenli ödeme, ayar.
 const FINANS_YONETIM_ISLEMLERI = [
@@ -24,6 +25,7 @@ export const FINANS_ISLEMLERI = [
   'finans.kur-yaz',
   'finans.maliyet-oku',
   'finans.onay',
+  'finans.onay-ayar',
   'finans.oku',
   'finans.yaz',
   ...FINANS_YONETIM_ISLEMLERI,
