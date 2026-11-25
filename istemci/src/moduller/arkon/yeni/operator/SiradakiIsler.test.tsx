@@ -35,3 +35,38 @@ describe('Sıradaki işler şeridi (3338-6 a)', () => {
     expect(secilen).toEqual([2]);
   });
 });
+
+// 3714: dar özet kart, bakılan kart genişleyip ayrıntı açar; emir no kartın en altındadır.
+describe('Sıradaki işler kartı (3714)', () => {
+  const dolu = (no: string, state: Is['state']): Is => ({
+    ...is(no, state), due: '2026-12-31', pkg: { proje: 'ORN-PRJ-04', rev: 'C', material: 'ORN-MM-00007 çelik mil' } as unknown as Is['pkg'],
+  });
+  const liste = [dolu('ORN-1', 'running'), dolu('ORN-2', 'queued')];
+  const goster = (bakilan: number) => render(
+    <SiradakiIsler isler={liste} ekranda={0} bakilan={bakilan} siradakiMi={(i) => i === 1} yer={() => ({ istasyon: 'TORNA', makine: 'CNC-002', makineAd: 'DMU 50' })} sec={() => undefined} eylem={null} />,
+  );
+
+  it('kartın başı parça, proje ve revizyondur; emir no en sonda gelir', () => {
+    goster(-1);
+    const kart = screen.getByRole('button', { name: 'ORN-2' });
+    const metin = kart.textContent ?? '';
+    expect(metin.indexOf('ORN parça ORN-2')).toBeLessThan(metin.indexOf('ORN-PRJ-04 · Rev C'));
+    expect(metin.indexOf('ORN-PRJ-04 · Rev C')).toBeLessThan(metin.lastIndexOf('ORN-2'));
+    expect(metin.endsWith('ORN-2')).toBe(true);
+  });
+
+  it('ayrıntı (Op, Malzeme, Termin, Tezgâh) yalnız bakılan kartta açılır; termin gün.ay.yıl yazılır', () => {
+    goster(1);
+    const acik = screen.getByRole('button', { name: 'ORN-2' }).textContent ?? '';
+    for (const e of ['Malzeme', 'Termin', 'Tezgâh', '31.12.2026', 'CNC-002']) expect(acik).toContain(e);
+    expect(screen.getByRole('button', { name: 'ORN-1 · ekranda' }).textContent).not.toContain('Malzeme');
+  });
+
+  it('sıradaki ve ekrandaki işte tek rozet vardır; durum çipi bakılan kartta yalnız bu rozetler yoksa görünür', () => {
+    goster(1);
+    const sirada = screen.getByRole('button', { name: 'ORN-2' }).textContent ?? '';
+    expect(sirada).toContain('Sıradaki');
+    expect(sirada).not.toMatch(/Sırada(?!ki)/);
+  });
+});
+
