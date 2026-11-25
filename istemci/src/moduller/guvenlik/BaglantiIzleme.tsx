@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { LogoBelirsizKontrolCevabi, LogoGidenIzlemeCevabi, LogoHazirlikCevabi, LogoKontrolCevabi, LogoKontrolluGonderCevabi, LogoYardimciBaglantiHatasi, LogoYardimciSurumu, LogoYenidenGonderCevabi } from '#paylasilan/sozlesme/logo.ts';
-import { baglantiHatasiSatirlari, yazilamiyorSatirlari } from '#paylasilan/logo-baglanti-metni.ts';
+import { baglantiHatasiMetni, baglantiHatasiSatirlari, yazilamiyorSatirlari } from '#paylasilan/logo-baglanti-metni.ts';
 import type { HataSatirlari } from '#paylasilan/logo-baglanti-metni.ts';
 import type { SmartesGidenIzlemeCevabi, SmartesHazirlikCevabi, SmartesYenidenGonderCevabi } from '#paylasilan/sozlesme/smartes.ts';
 import { Dugme, DurumKutusu, IsaretKutusu, Pencere, Rozet, Simge, Tablo, useBildirim, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
@@ -124,7 +124,7 @@ export function BaglantiIzleme() {
                 bosMesaj={gorunum === 'gitmeyen' ? 'Gitmeyen belge yok' : 'Bu durumda belge yok'} />
             </>
           )}
-      {secili !== null && <BelgeAyrintisi satir={secili} gonderir={gonderir} kapat={() => seciliYaz(null)} />}
+      {secili !== null && <BelgeAyrintisi satir={secili} gonderir={gonderir} oturumBekleme={oturumBeklemeSaati(logoHazirlik.data?.baglantiHatasi ?? null)} kapat={() => seciliYaz(null)} />}
       {toplu && <TopluGonderim gruplar={gruplar} kapat={() => topluYaz(false)} />}
     </div>
   );
@@ -221,7 +221,14 @@ function useKontrolluUygula() {
   });
 }
 
-function BelgeAyrintisi({ satir, gonderir, kapat }: { satir: IzlemeSatiri; gonderir: boolean; kapat: () => void }) {
+// Yardımcının oturum beklemesi sürüyorsa bitiş saati; süresi geçmişse ya da bildirilmemişse null.
+function oturumBeklemeSaati(h: LogoYardimciBaglantiHatasi | null): string | null {
+  if (h === null) return null;
+  const m = baglantiHatasiMetni(h);
+  return m.gecti ? null : m.yenidenDeneme;
+}
+
+function BelgeAyrintisi({ satir, gonderir, oturumBekleme, kapat }: { satir: IzlemeSatiri; gonderir: boolean; oturumBekleme: string | null; kapat: () => void }) {
   const gonder = useYenidenGonder(kapat);
   const kontrol = useLogoKontrol();
   const uygula = useKontrolluUygula();
@@ -263,6 +270,9 @@ function BelgeAyrintisi({ satir, gonderir, kapat }: { satir: IzlemeSatiri; gonde
         </dl>
         {kontrol.data !== undefined && <p className="tc-guvenlik-not" role="status">{kontrol.data.karar === 'yapilamadi' ? `Kontrol yapılamadı, belgeye dokunulmadı. ${kontrol.data.ileti}` : kontrol.data.ileti}</p>}
         {kontrol.isError && <p className="tc-guvenlik-not" role="status">{hataIletisi(kontrol.error, 'Kontrol edilemedi.')}</p>}
+        {satir.durum === 'yeniden-denenecek' && satir.yenidenGonderilebilir && gonderir && satir.kaynak === 'Logo' && oturumBekleme !== null && (
+          <p className="tc-guvenlik-not" role="status">{`Logo oturumu ${oturumBekleme}'e kadar bekliyor; şimdi gönderirseniz yine bekler.`}</p>
+        )}
         {satir.kontrolEdilebilir && gonderir && <p className="tc-guvenlik-not">Sonucu bilinmeyen belge önce Logo'da aranır; yeniden göndermek aynı reddi tekrar üretirdi.</p>}
         {(satir.yenidenGonderilebilir || satir.kontrolEdilebilir) && !gonderir && <p className="tc-guvenlik-not">Yeniden göndermek ya da Logo'da kontrol etmek Sistem Ayarları yazma yetkisi ister.</p>}
       </div>

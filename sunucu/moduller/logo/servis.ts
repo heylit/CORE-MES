@@ -15,7 +15,7 @@ import { OTURUM_ADIMI_ADI, OTURUM_DENEME_YOLU, oturumuDene } from './oturum-dene
 import { yardimciSurumu, yardimciSurumunuSor } from './yardimci-surumu.ts';
 import type { KopruIstemcisi, SatirliSonuc } from './kopru.ts';
 import {
-  BELIRSIZ_BEKLEME_MS, SONUCU_BILINMIYOR, bekletmeGovdesi, denemeZamaniMi, durduMu, durduNeYapmali, GIDEN_NE_YAPMALI, gidenBelgeAdi, gidenIzlemeDurumu, kontrolEdilebilirMi, KONTROL_NE_YAPMALI, kartBekliyorMetni, logodaOlmayanKartlar, TALEP_HIZMET_ILETISI, eklemeGovdesi, kodCakismasiMetni, guncellemeEslemesi, HIZMET_ALANLARI, kapatmaGovdesi, karsilamaGovdesi, karsilamaKaydiBul, malzemeGuncellemeGovdesi, siparisGuncellemeGovdesi, talepGovdesi, satirEslemesi, siparisGovdesi, gecerliBirimSetleri, geriCekilmeMs, kopruBeklemesi, siparisDurumuAyardan, SIPARIS_DURUM_AYARI, hizmetGovdesi, HIZMET_AYARI, MALZEME_GONDERIM_AYARI, kartEylemi, kirp, KUYRUK_SINIRI,
+  BELIRSIZ_BEKLEME_MS, ANAHTAR_REDDI_NE_YAPMALI, BEKLEYEN_ELLE_NE_YAPMALI, elleOneAlinabilirMi, SONUCU_BILINMIYOR, bekletmeGovdesi, denemeZamaniMi, durduMu, durduNeYapmali, GIDEN_NE_YAPMALI, gidenBelgeAdi, gidenIzlemeDurumu, kontrolEdilebilirMi, KONTROL_NE_YAPMALI, kartBekliyorMetni, logodaOlmayanKartlar, TALEP_HIZMET_ILETISI, eklemeGovdesi, kodCakismasiMetni, guncellemeEslemesi, HIZMET_ALANLARI, kapatmaGovdesi, karsilamaGovdesi, karsilamaKaydiBul, malzemeGuncellemeGovdesi, siparisGuncellemeGovdesi, talepGovdesi, satirEslemesi, siparisGovdesi, gecerliBirimSetleri, geriCekilmeMs, kopruBeklemesi, siparisDurumuAyardan, SIPARIS_DURUM_AYARI, hizmetGovdesi, HIZMET_AYARI, MALZEME_GONDERIM_AYARI, kartEylemi, kirp, KUYRUK_SINIRI,
   FATURA_TUR_SINIRI, FATURA_YENIDEN_OKUMA_MS, FIS_GONDERIM_AYARI, gonderimSekli, LOGO_FIS_TURLERI, logoFisDurumu, STOK_FISI_LOGO_TURU, stokFisindenLogoFisi, kontrolAdiminiYorumla, listeOkunmaliMi, malzemeFisiGovdesi, malzemeFisiOzeti, eskiEmirFisiNo, FIS_NO_EN_COK, logoFisNumarasi, OKUMA_HATA_BEKLEME_MS, LOGO_AKISLARI, LOGO_KONTROL_ADIMLARI, logoAkisDurumu, satisSiparisiGovdesi, satisTeklifiGovdesi,
   belgeStokKodlari, CARI_ARAMA_EN_AZ, CARI_ARAMA_EN_COK, logoKodlarinaCevir, sayfaliOkumaSirasi,
 } from './kurallar.ts';
@@ -1197,10 +1197,12 @@ export async function logodakiMalzemeOzeti(db: Db, o: { ara?: string }): Promise
 // silinmez. Değişiklik ayar geçmişine yazılır.
 const GECIS_AYARLARI = ['logo.malzeme-okumasi', 'logo.stok-okumasi'] as const;
 const GECIS_KAYNAGI = { modul: 'logo', yetki: 'ayarlar.yaz' } as const;
-// 3313: "Yeniden gönder". Yalnız duran belge (kalıcı ret) yeniden sıraya girer; belirsiz sonuçlu belge (ulaşılamadı, zaman aşımı, CORE'a
-// yazılamadı) elle gönderilmez, kendi beklemesiyle yinelenir. Belge sıradaki ilk turda gider; deneme geçmişi kalır.
+// 3313: "Yeniden gönder". Duran belge (kalıcı ret) yeniden sıraya girer. 3704: isteğin Logo'ya gitmediği kesin bekleyen belge (ulaşılamadı, anahtar
+// reddi) de elle öne alınır: CORE'daki bekleme sıfırlanır. Belirsiz sonuçlu belge (zaman aşımı, CORE'a yazılamadı) elle gönderilmez, kendi
+// kalkanıyla yinelenir. Yardımcının oturum beklemesine dokunulmaz: o sürede istek yine 503 alır ve belge yeniden bekler.
+// Belge sıradaki ilk turda gider; deneme geçmişi kalır.
 export async function gidenYenidenGonder(db: Db, g: { belge: BelgeTuru; no: number; islem?: GidenIslemi }, simdi: Date): Promise<boolean> {
-  return s.duraniYenidenAc(db, g.belge, g.no, simdi, g.islem);
+  return (await s.duraniYenidenAc(db, g.belge, g.no, simdi, g.islem)) || (await s.bekleyeniOneAl(db, g.belge, g.no, simdi, g.islem));
 }
 export async function duranlariYenidenGonder(
   db: Db, belgeler: readonly { belge: string; no: number; islem: GidenIslemi }[], simdi: Date,
@@ -1226,7 +1228,10 @@ export async function gidenIzleme(db: Db, simdi: Date): Promise<LogoGidenIzlemeC
     const durum = gidenIzlemeDurumu(g);
     return {
       belge: g.belgeTuru, belgeAdi: gidenBelgeAdi(g.belgeTuru, g.islem), no: g.belgeNo, islem: g.islem, durum, neden: g.sonHata,
-      neYapmali: kontrolEdilebilirMi(g) ? KONTROL_NE_YAPMALI : durum === 'durdu' ? (g.belgeTuru === 'proje' ? PROJE_DURDU_NE_YAPMALI : durduNeYapmali(g.sonHata)) : GIDEN_NE_YAPMALI[durum], yenidenGonderilebilir: durum === 'durdu',
+      neYapmali: kontrolEdilebilirMi(g) ? KONTROL_NE_YAPMALI : durum === 'durdu' ? (g.belgeTuru === 'proje' ? PROJE_DURDU_NE_YAPMALI : durduNeYapmali(g.sonHata))
+        : durum === 'yeniden-denenecek' && g.sonSonuc === 'yetkisiz' ? ANAHTAR_REDDI_NE_YAPMALI
+        : durum === 'yeniden-denenecek' && elleOneAlinabilirMi(g.sonSonuc) ? BEKLEYEN_ELLE_NE_YAPMALI : GIDEN_NE_YAPMALI[durum],
+      yenidenGonderilebilir: !kontrolEdilebilirMi(g) && (durum === 'durdu' || (durum === 'yeniden-denenecek' && elleOneAlinabilirMi(g.sonSonuc))),
       kontrolEdilebilir: kontrolEdilebilirMi(g), denemeSayisi: g.denemeSayisi,
       sonDeneme: zaman(g.sonDeneme), sonrakiDeneme: durum === 'durdu' ? null : zaman(g.sonrakiDeneme),
     };

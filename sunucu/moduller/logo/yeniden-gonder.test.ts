@@ -9,6 +9,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
+import { BEKLEYEN_ELLE_NE_YAPMALI, KONTROL_NE_YAPMALI, SONUCU_BILINMIYOR } from './kurallar.ts';
 import { fisIsaretle, malzemeFisiKuyrugu } from './sorgular.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -71,19 +72,20 @@ describe('Logo giden kutusu: yeniden gönder ucu (3313, gerçek PostgreSQL)', ()
       VALUES ('sarf-fisi', 5, 1, 1, 1, now(), 'reddedildi', 'Logo reddetti', NULL)`);
   });
 
-  test('T3 duran belge sıraya girer, deneme geçmişi kalır; belirsiz ve gönderilmiş belge değişmez; iz denetim kaydında', async () => {
+  test('T3 duran ve bağlantı nedeniyle bekleyen belge sıraya girer, deneme geçmişi kalır; gönderilmiş belge değişmez; iz denetim kaydında', async () => {
     const r = await gonder(yonetici, [
       { belge: 'siparis', no: 1 }, { belge: 'siparis', no: 2 }, { belge: 'talep', no: 3 }, { belge: 'malzeme', no: 4, islem: 'pasif' }, { belge: 'sarf-fisi', no: 5 },
     ]);
     assert.equal(r.statusCode, 200, r.body);
-    assert.deepEqual(r.json(), { sirada: 3, durmayan: 2 });
+    assert.deepEqual(r.json(), { sirada: 4, durmayan: 1 });
     const bir = await satir('logo_giden', 'siparis', 1);
     assert.equal(bir?.sonuc, 'reddedildi', 'son sonuç geçmiş olarak kalır');
     assert.notEqual(bir?.sonraki, null, 'sıradadır');
     assert.equal(bir?.deneme, 3, 'deneme sayısı sıfırlanmaz');
     const iki = await satir('logo_giden', 'siparis', 2);
     assert.equal(iki?.sonuc, 'ulasilamadi');
-    assert.ok((iki?.sonraki?.getTime() ?? 0) > Date.now() + 5 * 60_000, 'belirsiz sonuç elle öne alınmaz, kendi beklemesi kalır');
+    assert.ok((iki?.sonraki?.getTime() ?? Infinity) <= Date.now(), 'bağlantı nedeniyle bekleyen belge elle öne alınır');
+    assert.equal(iki?.deneme, 2, 'deneme sayısı sıfırlanmaz');
     assert.equal((await satir('logo_giden', 'talep', 3))?.sonraki, null, 'gönderilmiş belgeye dokunulmaz');
     assert.notEqual((await satir('logo_malzeme_fisi_giden', 'sarf-fisi', 5))?.sonraki, null, 'fiş giden kutusu da aynı kuralla');
     const iz = await vt().tek<{ sayi: number }>(
@@ -103,6 +105,60 @@ describe('Logo giden kutusu: yeniden gönder ucu (3313, gerçek PostgreSQL)', ()
     assert.equal((await satir('logo_giden', 'siparis', 1))?.sonraki, null, 'yineleme yeniden işlenmedi');
   });
 
+  // 3704: yalnız bağlantı ya da oturum hatasıyla bekleyen belge öne alınır; sonucu bilinmeyen belge çift kayıt riski nedeniyle öne alınmaz.
+  test('T10 bekleyen belge: yalnız ulaşılamadı öne alınır; yetkisiz (anahtar reddi), belirsiz ve yazılamadı alınmaz; vakti gelmiş belge etkisizdir; kontrol ile yeniden gönder birbirini dışlar', async () => {
+    await vt().sorgu(`INSERT INTO logo_giden (belge_turu, belge_no, deneme_sayisi, ardisik_hata, son_deneme, son_sonuc, son_hata, sonraki_deneme) VALUES
+      ('siparis', 6, 1, 1, now(), 'yetkisiz', 'Logo oturumu yetkisiz', now() + interval '20 minutes'),
+      ('talep', 7, 1, 1, now(), 'belirsiz', 'Logo yanıt vermedi', now() + interval '20 minutes'),
+      ('siparis', 8, 1, 1, now(), 'yazilamadi', 'Kayıt yazılamadı', now() + interval '20 minutes'),
+      ('siparis', 9, 1, 1, now(), 'ulasilamadi', 'Köprüye ulaşılamadı', now() - interval '1 minute'),
+      ('siparis', 10, 1, 1, now(), 'ulasilamadi', 'Köprüye ulaşılamadı', now() + interval '20 minutes')`);
+    const sonraki6 = (await satir('logo_giden', 'siparis', 6))?.sonraki?.getTime();
+    const sonraki7 = (await satir('logo_giden', 'talep', 7))?.sonraki?.getTime();
+    const sonraki9 = (await satir('logo_giden', 'siparis', 9))?.sonraki?.getTime();
+    const r = await gonder(yonetici, [{ belge: 'siparis', no: 6 }, { belge: 'talep', no: 7 }, { belge: 'siparis', no: 8 }, { belge: 'siparis', no: 9 }, { belge: 'siparis', no: 10 }]);
+    assert.deepEqual(r.json(), { sirada: 1, durmayan: 4 });
+    assert.ok(((await satir('logo_giden', 'siparis', 10))?.sonraki?.getTime() ?? Infinity) <= Date.now(), 'ulaşılamadı ile bekleyen öne alınır');
+    assert.equal((await satir('logo_giden', 'siparis', 6))?.sonraki?.getTime(), sonraki6, 'anahtarı reddedilen (yetkisiz) belge öne alınmaz');
+    assert.equal((await satir('logo_giden', 'talep', 7))?.sonraki?.getTime(), sonraki7, 'belirsiz belge kendi beklemesinde kalır');
+    assert.ok(((await satir('logo_giden', 'siparis', 8))?.sonraki?.getTime() ?? 0) > Date.now() + 5 * 60_000, 'yazılamadı belgesi kendi beklemesinde kalır');
+    assert.equal((await satir('logo_giden', 'siparis', 9))?.sonraki?.getTime(), sonraki9, 'vakti gelmiş belge zaten sırada; etkisiz');
+    const c = (await app.inject({ method: 'GET', url: '/api/logo/giden', headers: { cookie: yonetici } })).json() as { belgeler: Record<string, unknown>[] };
+    for (const b of c.belgeler) assert.ok(!(b.yenidenGonderilebilir === true && b.kontrolEdilebilir === true), `${String(b.belge)}:${String(b.no)} hem yeniden gönderilebilir hem kontrol edilebilir`);
+    const yedi = c.belgeler.find((b) => b.belge === 'talep' && b.no === 7)!;
+    assert.equal(yedi.yenidenGonderilebilir, false, 'sonucu belirsiz belgede Yeniden gönder yok');
+    assert.equal(yedi.kontrolEdilebilir, true, 'onun yerine Logo\'da kontrol var');
+    assert.equal(c.belgeler.find((b) => b.belge === 'siparis' && b.no === 8)?.yenidenGonderilebilir, false);
+    const alti = c.belgeler.find((b) => b.belge === 'siparis' && b.no === 6)!;
+    assert.equal(alti.yenidenGonderilebilir, false, 'yetkisiz sonuçta Yeniden gönder yok');
+    assert.equal(alti.neYapmali, 'Köprü anahtarı reddedildi; Logo bağlantı ayarındaki anahtarı kontrol edin.');
+    assert.equal(c.belgeler.find((b) => b.belge === 'siparis' && b.no === 10)?.yenidenGonderilebilir, true);
+  });
+
+  test('T11 kontrol dışlaması: hem durdu hem sonucu bilinmeyen belgede yalnız Logo\'da kontrol var, Yeniden gönder yok', async () => {
+    await vt().sorgu(`INSERT INTO logo_giden (belge_turu, belge_no, deneme_sayisi, ardisik_hata, son_deneme, son_sonuc, son_hata, sonraki_deneme)
+      VALUES ('talep', 11, 2, 2, now(), 'reddedildi', $1, NULL)`, [`${SONUCU_BILINMIYOR} (ORN)`]);
+    const c = (await app.inject({ method: 'GET', url: '/api/logo/giden', headers: { cookie: yonetici } })).json() as { belgeler: Record<string, unknown>[] };
+    const b = c.belgeler.find((x) => x.belge === 'talep' && x.no === 11)!;
+    assert.equal(b.durum, 'durdu');
+    assert.equal(b.kontrolEdilebilir, true);
+    assert.equal(b.yenidenGonderilebilir, false);
+    assert.equal(b.neYapmali, KONTROL_NE_YAPMALI);
+    for (const x of c.belgeler) assert.ok(!(x.yenidenGonderilebilir === true && x.kontrolEdilebilir === true), `${String(x.belge)}:${String(x.no)}`);
+  });
+
+  test('T12 bekleyen belgede Ne yapmalı: ulaşılamadı Yeniden gönder\'i söyler; belirsiz ve yazılamadı bunu söylemez', async () => {
+    await vt().sorgu(`INSERT INTO logo_giden (belge_turu, belge_no, deneme_sayisi, ardisik_hata, son_deneme, son_sonuc, son_hata, sonraki_deneme) VALUES
+      ('siparis', 8, 1, 1, now(), 'yazilamadi', 'Kayıt yazılamadı', now() + interval '20 minutes'),
+      ('siparis', 9, 1, 1, now(), 'belirsiz', 'Logo yanıt vermedi', now() + interval '20 minutes')`);
+    const c = (await app.inject({ method: 'GET', url: '/api/logo/giden', headers: { cookie: yonetici } })).json() as { belgeler: Record<string, unknown>[] };
+    const ne = (belge: string, no: number) => String(c.belgeler.find((x) => x.belge === belge && x.no === no)?.neYapmali);
+    assert.equal(ne('siparis', 2), BEKLEYEN_ELLE_NE_YAPMALI);
+    assert.match(ne('siparis', 2), /Yeniden gönder/);
+    assert.doesNotMatch(ne('siparis', 8), /Yeniden gönder/);
+    assert.doesNotMatch(ne('siparis', 9), /Yeniden gönder/);
+  });
+
   test('T9 izleme: Sistem durumu ayrıntısı olmayan 403; gitmeyen belge durum, neden ve ne yapmalı ile; gönderilmiş belge yok; tutar, fiyat ve firma yok', async () => {
     const oku = (cerez: string, url: string) => app.inject({ method: 'GET', url, headers: { cookie: cerez } });
     assert.equal((await oku(gormeyen, '/api/logo/giden')).statusCode, 403);
@@ -112,7 +168,7 @@ describe('Logo giden kutusu: yeniden gönder ucu (3313, gerçek PostgreSQL)', ()
     assert.equal(r.statusCode, 200, r.body);
     const c = r.json() as { sayac: Record<string, number>; belgeler: Record<string, unknown>[]; kesildi: boolean };
     const ozet = c.belgeler.map((b) => `${String(b.belge)}:${String(b.no)}:${String(b.islem)}:${String(b.durum)}:${String(b.yenidenGonderilebilir)}`).sort();
-    assert.deepEqual(ozet, ['malzeme:4:pasif:durdu:true', 'sarf-fisi:5:gonder:durdu:true', 'siparis:1:gonder:durdu:true', 'siparis:2:gonder:yeniden-denenecek:false']);
+    assert.deepEqual(ozet, ['malzeme:4:pasif:durdu:true', 'sarf-fisi:5:gonder:durdu:true', 'siparis:1:gonder:durdu:true', 'siparis:2:gonder:yeniden-denenecek:true']);
     assert.deepEqual(c.sayac, { durdu: 3, yenidenDenenecek: 1, kartBekliyor: 0, projeBekliyor: 0, sirada: 0 });
     assert.equal(c.kesildi, false);
     const bir = c.belgeler.find((b) => b.belge === 'siparis' && b.no === 1)!;
