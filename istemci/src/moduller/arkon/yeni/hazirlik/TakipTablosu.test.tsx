@@ -23,8 +23,8 @@ function kur(d: Deneme, ek: string, perms?: unknown) {
       kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }, ...(perms ? [{ kimlik: 'perms', surum: 1, govde: { v: perms } }] : [])],
     },
     uclar: {
-      'GET /adimli-emirler/hazirlik-ozeti': { emirler: [{ emirId: 7, hazirlik: { maddeler: [], muafiyetler: [], isEmirleri: [
-        { isEmriId: 1, opNo: 10, ad: 'Torna', bitti: false, maddeler: [] }, { isEmriId: 2, opNo: 20, ad: 'Freze', bitti: false, maddeler: [] },
+      'GET /adimli-emirler/hazirlik-ozeti': { emirler: [{ emirId: 7, hazirlik: { maddeler: [{ madde: 'cnc', durum: 'eksik', muafTutulur: true, isEmriDuzeyi: true }, { madde: 'rota', durum: 'tamam', muafTutulur: false, isEmriDuzeyi: false }], muafiyetler: [], isEmirleri: [
+        { isEmriId: 1, opNo: 10, ad: 'Torna', bitti: false, maddeler: [{ madde: 'cnc', durum: 'eksik' }] }, { isEmriId: 2, opNo: 20, ad: 'Freze', bitti: false, maddeler: [] },
         { isEmriId: 3, opNo: 30, ad: 'Taşlama', bitti: false, maddeler: [] },
       ] } }] },
     },
@@ -46,6 +46,14 @@ describe('3111 Hazırlık takip tablosu', () => {
     expect(await within(t).findByText('0/3 adım tamamlandı', undefined, { timeout: 10000 })).toBeTruthy();
     expect(within(t).getByText('Paket yok')).toBeTruthy();
     expect(within(t).getByText('Çalışıyor')).toBeTruthy();
+  }, 40000);
+
+  it('3688: her adımın satırında hazırlık matrisi, simge ve adla (renk tek başına değil)', async () => {
+    kur(YONETICI, 'M');
+    const t = await tablo();
+    const m = (await within(t).findAllByRole('group', { name: 'Hazırlık matrisi' }, { timeout: 10000 }))[0]!;
+    expect(within(m).getByRole('img', { name: 'CNC kurulumu: Eksik' })).toBeTruthy();
+    expect(within(m).getByRole('img', { name: 'Rota yürürlükte: Tamam' })).toBeTruthy();
   }, 40000);
 
   it('toplu geri çekme yalnız başlamamış yayındaki işte; onaydan sonra taslağa yazılır, çalışan iş değişmez', async () => {

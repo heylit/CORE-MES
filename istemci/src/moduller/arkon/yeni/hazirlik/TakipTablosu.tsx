@@ -8,7 +8,7 @@ import { YOK, sayi } from '../cekirdek/bicim.ts';
 import { IS_DURUMLARI } from '../cekirdek/sabitler.ts';
 import { baslamaDurumu, BASLAMA_DURUMLARI } from '../operator/HazirlikListesi.tsx';
 import { BeklemeCipi, Cip } from './denetimler.tsx';
-import { paketHazirligi } from './HazirlikTakibi.tsx';
+import { HazirlikMatrisiSeridi, paketHazirligi } from './HazirlikTakibi.tsx';
 import {
   PAKET_DURUMLARI, TAKIP_SUZGECLERI, calisiyorMu, geriCekilebilir, topluGeriCekilebilir, takipEmirleri,
   type AdimDilimi, type TakipSuzgeci,
@@ -148,6 +148,7 @@ export function TakipTablosu({ paketler, sonuclar, hazirlik, suz, suzYaz, yayinl
                         <Cip ton={BASLAMA_TONU[bd]}>{BASLAMA_DURUMLARI[bd]}</Cip>
                       </Link>
                     ) : YOK}
+                    {h ? <HazirlikMatrisiSeridi satirlar={h} /> : null}
                   </td>
                   <td data-etiket="Üretim">{r && IS_DURUMLARI[r.state] ? IS_DURUMLARI[r.state].etiket : 'Başlamadı'}</td>
                   <td data-etiket="Adet" className="tc-ay2-takip-sayi">

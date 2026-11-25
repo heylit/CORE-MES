@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { AZAMI_HAZIRLIK_EMRI as SINIR, HazirlikCevabi, HazirlikOzetiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { AZAMI_HAZIRLIK_EMRI as SINIR, HazirlikCevabi, HazirlikMaddesi, HazirlikOzetiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { tmiBitti } from '../../../../../../arkon/web/src/data/biten-is.ts';
 import { tmiEmirId } from '../../../../../../arkon/web/src/data/tmi-adim.ts';
 import { api } from '../../../../ortak/veri/api.ts';
-import { hazirlikOzeti, hazirlikSatirlari, type HazirlikSatiri, type Ton as HazirlikTonu } from '../operator/HazirlikListesi.tsx';
+import { Simge } from '../../../../ortak/arayuz/index.ts';
+import { HAZIRLIK_MADDE_BILGISI } from '../../../uretim-emirleri/disari.ts';
+import { gorunum, hazirlikOzeti, hazirlikSatirlari, type HazirlikSatiri, type Ton as HazirlikTonu } from '../operator/HazirlikListesi.tsx';
 import { Cip } from './denetimler.tsx';
 import type { Pkg, Ton } from './tipler.ts';
 
@@ -64,4 +66,19 @@ export function HazirlikPaketCipi({ satirlar }: { satirlar: readonly HazirlikSat
   if (!satirlar) return null;
   const o = hazirlikOzeti(satirlar);
   return <Cip ton={CIP_TONU[o.ton]}>{o.metin}</Cip>;
+}
+
+// 3688: her adımın satırında 12 maddelik hazırlık matrisi (sabit sıra: durduranlar önce). Yalnız gösterim; işaretleme Adım Durumu sayfasındadır.
+// Hücre rengi tek başına anlam taşımaz: simge ve ad (başlık ve erişilebilir ad) aynı durumu söyler.
+const MADDE_SIRASI: readonly HazirlikMaddesi[] = ['cnc', 'cizim', 'yayin', 'rota', 'malzeme', 'takim-omru', 'takim-hazirla', 'makine', 'talimat', 'ek-madde', 'aparat', 'olcu-aleti'];
+export function HazirlikMatrisiSeridi({ satirlar }: { satirlar: readonly HazirlikSatiri[] }) {
+  const l = [...satirlar].sort((a, b) => MADDE_SIRASI.indexOf(a.madde) - MADDE_SIRASI.indexOf(b.madde));
+  return (
+    <span className="tc-ay2-takip-matris" role="group" aria-label="Hazırlık matrisi">
+      {l.map((x) => {
+        const g = gorunum(x); const ad = `${HAZIRLIK_MADDE_BILGISI[x.madde].ad}: ${g.ad}`;
+        return <span key={x.madde} className="tc-ay2-takip-hucre" data-ton={g.ton} title={ad} role="img" aria-label={ad}><Simge ad={g.simge} boyut="k" /></span>;
+      })}
+    </span>
+  );
 }
