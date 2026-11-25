@@ -58,6 +58,7 @@ export const BEKLEME_NEDENLERI = {
   'malzeme-karti-kapali': 'Logo malzeme kartı okuması Sistem Ayarları\'nda kapalı; istek atılmıyor.',
   'stok-kapali': 'Logo stok okuması Sistem Ayarları\'nda kapalı; istek atılmıyor.',
   'kullanim-kapali': 'Logo malzeme kullanım okuması Sistem Ayarları\'nda kapalı; istek atılmıyor.',
+  'irsaliye-yazma-kapali': 'Logo irsaliye yazma ayarları ya da ölçüm kapısı kapalı; irsaliye gönderilmiyor, istek atılmıyor.',
   'irsaliye-kapali': 'Logo irsaliye okuması Sistem Ayarları\'nda kapalı; istek atılmıyor.',
   'son-alis-kapali': 'Logo son alış fiyatı kopyası Sistem Ayarları\'nda kapalı; istek atılmıyor.',
   'fatura-listesi-kapali': 'Logo fatura listesi okuması Sistem Ayarları\'nda kapalı; istek atılmıyor.',
@@ -140,6 +141,9 @@ export type TurSonucu =
   | { tur: 'mal-kabul-kapali' | 'liste-kapali' | 'fatura-kapali' | 'malzeme-fisi-kapali' | 'malzeme-karti-kapali' | 'stok-kapali' | 'kullanim-kapali' | 'irsaliye-kapali' | 'son-alis-kapali' | 'fatura-listesi-kapali' | 'cari-hareket-kapali' }
   | { tur: 'okuma'; akis: 'mal-kabul' | 'cari' | 'ambar' | 'fatura' | 'malzeme-kodu' | 'malzeme-karti' | 'stok' | 'kullanim' | 'irsaliye' | 'son-alis' | 'fatura-listesi' | 'cari-hareket'; sonuc: 'okundu' | Exclude<KopruSonucu, { tur: 'basarili' }>['tur']; sayi: number; ileti?: string }
   | { tur: 'malzeme-fisi-niyet'; no: number }
+  | { tur: 'irsaliye-yazma-kapali' }
+  | { tur: 'irsaliye-niyet'; no: number; belge: string }
+  | { tur: 'irsaliye'; no: number; belge: string; sonuc: GidenSonucu }
   | { tur: 'malzeme-fisi'; no: number; sonuc: GidenSonucu }
   | { tur: `${NiyetliBelge}-niyet`; no: number }
   | { tur: NiyetliBelge; no: number; sonuc: GidenSonucu }
@@ -557,15 +561,15 @@ async function projeBekliyor(
   await bekleyeniBildir(db, o, anahtar, projeBekliyorMetni(kod), bildir);
 }
 
-async function kalkanEylemi(o: TurOrtami, belge: BelgeTuru, id: number, g: GidenSatiri | null) {
+export async function kalkanEylemi(o: TurOrtami, belge: BelgeTuru, id: number, g: GidenSatiri | null) {
   const anahtar = bellekAnahtari(belge, id);
   const taze = g?.niyetZamani != null && o.bellek.niyetler.get(anahtar) === g.niyetZamani.getTime();
   return { anahtar, taze, eylem: kartEylemi(g, o.saat(), taze, o.bellek.acmaIstekleri.get(anahtar) ?? null) };
 }
 
-type Bildir<X> = (db: Db, x: X) => Promise<void>;
+export type Bildir<X> = (db: Db, x: X) => Promise<void>;
 
-async function basarisizAcma(
+export async function basarisizAcma(
   db: Db, o: TurOrtami, belge: BelgeTuru, id: number, g: GidenSatiri | null, bildir: Bildir<{ hata: string }>,
   sonuc: GidenSonucu, hata: string, niyet: Date | null | undefined, bekleme?: number,
 ): Promise<GidenSonucu> {

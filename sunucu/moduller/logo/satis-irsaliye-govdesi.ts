@@ -5,16 +5,15 @@ import type { SevkBelgesi } from './satis-irsaliye-kurallari.ts';
 
 // Satış irsaliyesi köprü gövdesi (kart 3684). Kimse çağırmaz: gönderim hattı, ayar ve giden kutusu yok; açılışı gerçek Logo dökümü (kart 3683) ve
 // TCKN rolü kararı bekler (kullanıcı 25.11: "eksikler kapanana kadar kapalı kalsın"). Etiketler satın alma irsaliyesinden (kart 3665) ve satış
-// belgesinden alınmış TAHMİNDİR, hiçbiri ölçülmedi; döküm gelince yalnız bu harita ve KONSINYE_OLCULDU değişir.
+// belgesinden alınmış TAHMİNDİR, hiçbiri ölçülmedi; döküm gelince yalnız bu harita ve OLCUM_DURUMU değişir.
 // Bilerek yazılmayanlar: e-irsaliye ve taşıma etiketleri (EDESPATCH, plaka, şoför; ölçülmemiş etiket yazılmaz, ADR 0017 m.5), TIME, satır SOURCEINDEX
 // (rehberde siparişte etiket değil, ölçüldü), lot (SL_DETAILS), fiyat ve iskonto (siparişten gelmesi VARSAYIM), DBOP UPD.
 export const SATIS_IRSALIYE_ALANLARI = SATIS_ETIKETLERI;
 // Belge 7.1 ve 7.8: toptan satış TRCODE 8. Konsinye çıkış 9 CORE'un kendi ölçümünü de bekliyor (`KONSINYE_TURLERI_DOGRULANDI = false`).
 export { TOPTAN_SATIS_TRCODE, KONSINYE_CIKIS_TRCODE };
-export const KONSINYE_OLCULDU = OLCUM_DURUMU.konsinyeOlculdu;
 
 export function satisIrsaliyeGovdesi(b: SevkBelgesi): { govde: Record<string, unknown> } | { hata: string } {
-  if (b.tur === 'konsinye' && !KONSINYE_OLCULDU) return { hata: "Konsinye çıkış türü Logo'da henüz ölçülmedi; gönderilmez." };
+  if (b.tur === 'konsinye' && !OLCUM_DURUMU.konsinyeOlculdu) return { hata: "Konsinye çıkış türü Logo'da henüz ölçülmedi; gönderilmez." };
   const k = sevkOnKontrol(b);
   const engel = k.engeller[0];
   if (engel !== undefined) return { hata: ENGEL_ILETILERI[engel] };
