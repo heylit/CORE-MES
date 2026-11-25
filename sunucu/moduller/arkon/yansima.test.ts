@@ -2057,7 +2057,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     // İstasyon talaşlı ve emrin CNC kurulumunda onayı yok: hazırlık uyarısı (kilit değil). Adımın ilk parça seçimi varsayılan (her kurulumda): TMI ilk parça kapısı var.
     const planSaati = (p1['tmi'] as { planSaati?: unknown }).planSaati;
     assert.ok(planSaati, 'canlı plandaki işin plan saati');
-    assert.deepEqual(p1['tmi'], { emirId: r.emirId, isEmriId: ie1, opNo: 10, plan: { canli: true, sira: 1, eslesiyor: true, kaynak: await makinesi(ie1!), zorunlu: false }, hazirlik: 'yok', ilkParcaGerekli: true, planSaati, hatali: 0 });
+    assert.deepEqual(p1['tmi'], { emirId: r.emirId, isEmriId: ie1, opNo: 10, plan: { canli: true, sira: 1, eslesiyor: true, kaynak: await makinesi(ie1!), zorunlu: false }, hazirlik: 'yok', ilkParcaGerekli: true, fasonDonusu: false, planSaati, hatali: 0 });
     assert.deepEqual(tmiPlani(p3), { canli: true, sira: 2, eslesiyor: true, kaynak: await makinesi(ie1!), zorunlu: false }, 'aynı makinede ikinci iş');
     const tek = await paketOku(ieKimligi(ie2!));
     assert.deepEqual(tek?.govde, p2);

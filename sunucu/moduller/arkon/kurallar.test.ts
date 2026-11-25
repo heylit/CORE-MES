@@ -454,6 +454,14 @@ test('CORE ilk parça kapısı paketin tmi alanında', () => {
   assert.equal('ilkParcaGerekli' in tmi(girdi()), false);
 });
 
+// 3703: depo mal kabul adımı fason dönüşü mü ara stok mu: paket bunu taşır; bilinmiyorsa (okunmadıysa) alan yazılmaz.
+test('paketin tmi alanı emrin fason adımı olup olmadığını taşır', () => {
+  const tmi = (g: Parameters<typeof isEmrindenTaslakPaket>[0]) => isEmrindenTaslakPaket(g)['tmi'] as Record<string, unknown>;
+  assert.equal(tmi(girdi({ fasonDonusu: true }))['fasonDonusu'], true);
+  assert.equal(tmi(girdi({ fasonDonusu: false }))['fasonDonusu'], false);
+  assert.equal('fasonDonusu' in tmi(girdi({})), false);
+});
+
 // 2011 a: terminal kalite istasyonunda alt görünümü adımın operasyon tipi kodu seçer; kod yoksa ya da istasyon kalite değilse alan yazılmaz.
 test('kalite istasyonunda adımın operasyon tipi kodu paketin tmi alanında', () => {
   const tmi = (g: Parameters<typeof isEmrindenTaslakPaket>[0]) => isEmrindenTaslakPaket(g)['tmi'] as Record<string, unknown>;

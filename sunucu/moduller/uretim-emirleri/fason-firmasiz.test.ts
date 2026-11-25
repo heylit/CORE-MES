@@ -14,7 +14,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { dieAc, fasonIsEmirleri, fasonIsEmriBelgesi, planlanacakIsEmirleri, uretimEmriAc } from './disari.ts';
+import { dieAc, fasonDonusuAdimlari, fasonIsEmirleri, fasonIsEmriBelgesi, planlanacakIsEmirleri, uretimEmriAc } from './disari.ts';
 import type { IsEmriGirdisi } from './disari.ts';
 import {
   FASON_FIRMA_BEKLENIYOR, FASON_KAYNAGI_SABIT, FASON_TERMINSIZ, FASON_VARSAYILAN_GUN, FIRMASIZ_KAYNAKLI, TERMIN_FASON_DISI, fasonBeklemesi, fasonGidisIhlali,
@@ -170,6 +170,16 @@ describe('2874 firmasız fason iş emri (gerçek PostgreSQL)', () => {
     assert.deepEqual(liste && [liste.firmaId, liste.terminGun], [null, 4]);
     const plan = await o().vt.okumaTx((db) => planlanacakIsEmirleri(db, { taslakDahil: true }));
     assert.deepEqual(plan.filter((p) => p.uretimEmriId === id).map((p) => p.id), [isEmriIdleri[1]], 'firmasız fason adım plana iç iş olarak girmez');
+    const ic = await ac([icAdim(1, await makineKur())]);
+    const kume = await o().vt.okumaTx((db) => fasonDonusuAdimlari(db, [
+      { id: isEmriIdleri[0]!, uretimEmriId: id }, { id: isEmriIdleri[1]!, uretimEmriId: id }, { id: ic.isEmriIdleri[0]!, uretimEmriId: ic.uretimEmriId },
+    ]));
+    assert.deepEqual([kume.has(isEmriIdleri[0]!), kume.has(isEmriIdleri[1]!), kume.has(ic.isEmriIdleri[0]!)], [false, true, false],
+      '3703: yalnız öncülü bitmemiş fason olan adım fason dönüşüdür; fason adımın kendisi ve fasonsuz emir değildir');
+    const m = await makineKur();
+    const once = await ac([icAdim(1, m), firmasizAdim(2), icAdim(3, m), { ...icAdim(4, m), bagimlilik: 'bagimsiz' }]);
+    const k2 = await o().vt.okumaTx((db) => fasonDonusuAdimlari(db, once.isEmriIdleri.map((x) => ({ id: x, uretimEmriId: once.uretimEmriId }))));
+    assert.deepEqual(once.isEmriIdleri.map((x) => k2.has(x)), [false, false, true, false], '3703: fasondan önceki ve fasona bağlı olmayan adım aynı emirde olsa da fason sayılmaz');
   });
 
   test('kısıt: firmasız adıma makine, istasyon ya da süre yazılamaz', async () => {

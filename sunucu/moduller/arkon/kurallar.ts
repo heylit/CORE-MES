@@ -282,6 +282,8 @@ export interface IsEmriPaketGirdisi {
     kaynakRotaRevizyonId?: number | null | undefined;
   };
   ekAciklama?: string | null | undefined;
+  // Emrin bitmemiş bir fason adımı var (3703): depo mal kabul adımı fason dönüşü sayılır; yoksa ara stoktur. Bilinmiyorsa (okunmadıysa) yazılmaz.
+  fasonDonusu?: boolean | undefined;
   // Adımın operasyon tipi kodu (GKK, GM, KMM...); terminal kalite görünümünde alt görünümü seçer (2011 a). Yalnız iş türü kalite olan
   // pakete yazılır.
   opTipi?: string | null | undefined;
@@ -374,7 +376,7 @@ export function isEmrindenTaslakPaket(g: IsEmriPaketGirdisi): Record<string, unk
     ...(g.girenler?.length && doluMetin(kopya['material']) === null ? { material: girenMetni(g.girenler) } : {}),
     ...(g.ilkParcaSecimi === 'yok' ? { rules: ilkParcasizKural(kopya['rules']) } : {}),
     status: 'draft', version: 0, dirty: true, createdAt: acilma, updatedAt: acilma, by: emir.acan.ad, from: 'tmi',
-    tmi: { emirId: ie.uretimEmriId, isEmriId: ie.id, opNo: ie.opNo, plan: g.plan, ...adimTuruAlanlari(ie.tur, g.ekAciklama), ...(g.rotaEksik ? { rotaEksik: g.rotaEksik } : {}), ...(g.hazirlik ? { hazirlik: g.hazirlik } : {}), ...(g.ilkParca ? { ilkParca: { karar: g.ilkParca.karar, zaman: g.ilkParca.zaman } } : {}), ...(g.ilkParcaGerekli ? { ilkParcaGerekli: true } : {}), ...(g.aql ? { aql: g.aql } : {}), ...(g.opTipi && opType === 'kalite' ? { opTipi: g.opTipi } : {}),
+    tmi: { emirId: ie.uretimEmriId, isEmriId: ie.id, opNo: ie.opNo, plan: g.plan, ...adimTuruAlanlari(ie.tur, g.ekAciklama), ...(g.rotaEksik ? { rotaEksik: g.rotaEksik } : {}), ...(g.hazirlik ? { hazirlik: g.hazirlik } : {}), ...(g.ilkParca ? { ilkParca: { karar: g.ilkParca.karar, zaman: g.ilkParca.zaman } } : {}), ...(g.ilkParcaGerekli ? { ilkParcaGerekli: true } : {}), ...(g.aql ? { aql: g.aql } : {}), ...(g.fasonDonusu === undefined ? {} : { fasonDonusu: g.fasonDonusu }), ...(g.opTipi && opType === 'kalite' ? { opTipi: g.opTipi } : {}),
       ...(g.parca ? { parca: { no: g.parca.no, adet: g.parca.adet, toplam: g.parca.toplam } } : {}), ...(g.bolunmus ? { bolunmus: true } : {}) },
   };
 }
