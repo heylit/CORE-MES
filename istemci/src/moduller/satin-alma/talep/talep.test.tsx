@@ -62,7 +62,7 @@ function sunucuKur(ag = { kopuk: false }): Cagri[] {
     if (yol.startsWith('/satin-alma-taleplerim?')) {
       const sinir = Number(new URL(yol, 'http://x').searchParams.get('sinir'));
       const hepsi = Array.from({ length: 12 }, (_, i) => talep(i + 1, i === 0
-        ? { durum: 'onayda', kaynak: 'fason', kalemler: [{ ad: 'Deneme serbest', miktar: '2', birim: 'adet', kartBekliyor: true, uygulanan: 'MM-00009 · Deneme flanş', fasonAdim: 'UE-000031 · Op 30' }] }
+        ? { durum: 'onayda', kaynak: 'fason', kalemler: [{ ad: 'Deneme serbest', miktar: '2', birim: 'adet', kartBekliyor: true, uygulanan: 'MM-00009 · Deneme flanş', fasonAdim: 'UE-000031 · Op 30', malzemeNo: 7 }] }
         : {}));
       return json(200, { talepler: hepsi.slice(0, sinir), toplam: hepsi.length } satisfies TaleplerimCevabi);
     }
@@ -504,6 +504,16 @@ describe('Planlama menüsünde Taleplerim sayfası (12.10.2026)', () => {
     await screen.findByText('ST-2026-042 açıldı; satın almaya düştü.');
     fireEvent.click(screen.getByRole('tab', { name: /^Yeni talep/ }));
     await waitFor(() => expect(emirAlani()).toBe(''));
+  });
+
+  it('3695: plan ihtiyacı satırı aynı malzeme için kişinin açık talebine bağlanır ve bağlantı listeyi açar', async () => {
+    onListe = { onTalepler: [PLAN_TALEBI], yoksayilanlar: [] };
+    sunucuKur();
+    sar(<TaleplerimSayfasi />);
+    const bag = await screen.findByRole('button', { name: 'ST-2026-001 talebini aç, durum Onayda' });
+    fireEvent.click(bag);
+    expect((await screen.findByRole('tab', { name: /Taleplerim/ })).getAttribute('aria-selected')).toBe('true');
+    expect(await screen.findByText('Deneme talep 1')).toBeTruthy();
   });
 
   it('3364: emirden gelen form açıkken emirsiz ön talep çevrilince emir alanı boş kalır', async () => {

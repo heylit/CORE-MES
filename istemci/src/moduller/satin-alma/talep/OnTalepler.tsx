@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { FasonOnTalep, OnTalep, PlanOnTalep, SiparisOnTalep } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { FasonOnTalep, OnTalep, PlanOnTalep, SiparisOnTalep, Talebim } from '#paylasilan/sozlesme/satin-alma.ts';
 import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Pencere, Rozet, Secim, Simge, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { ApiHatasi } from '../../../ortak/veri/api.ts';
-import { SURE, anahtarlar, cagri, gunYaz } from './ortak.ts';
+import { DURUM, SURE, anahtarlar, cagri, gunYaz } from './ortak.ts';
 import './talep.css';
 
 // 3429-3 F3: satış siparişi kalemi yoksayılmaz; kalem siparişte değişir (yol ya da onay).
@@ -41,9 +41,13 @@ function Eylemler({ cevir, yoksay }: { cevir: () => void; yoksay: () => void }) 
   );
 }
 
-function PlanSatiri({ o, secili, sec, cevir, yoksay, bugun }: {
+// 3695: bu malzeme için kişinin açık talepleri ön talepten izlenir; bağlantı talebin durumunu Taleplerim listesinde açar.
+const ACIK_DURUM = (t: Talebim) => t.durum !== 'teslim_alindi' && t.durum !== 'iptal';
+function PlanSatiri({ o, secili, sec, cevir, yoksay, bugun, talepler, talepteGit }: {
   o: PlanOnTalep; secili: boolean; sec: (v: boolean) => void; cevir: () => void; yoksay: () => void; bugun: Date;
+  talepler: readonly Talebim[]; talepteGit: (t: Talebim) => void;
 }) {
+  const bagli = talepler.filter((t) => ACIK_DURUM(t) && t.kalemler.some((k) => k.malzemeNo === o.malzeme.no));
   const h = o.hesap;
   return (
     <li className={`sa-ot${secili ? ' sa-ot-secili' : ''}`}>
@@ -65,6 +69,16 @@ function PlanSatiri({ o, secili, sec, cevir, yoksay, bugun }: {
           Eksik {sayi(h.eksik)}{h.siparis > 0 ? ` − açık sipariş ${sayi(h.siparis)}` : ''}{h.talep > 0 ? ` − açık talep ${sayi(h.talep)}` : ''}
           {h.yoksayilan > 0 ? ` − yoksayılan ${sayi(h.yoksayilan)}` : ''} = {sayi(o.miktar)} {o.birim}
         </div>
+        {bagli.length > 0 && (
+          <div className="sa-ot-bagli">
+            <span className="sa-talep-not">Bu malzeme için talebiniz:</span>
+            {bagli.map((t) => (
+              <Dugme key={t.id} simge="file" onClick={() => talepteGit(t)} aria-label={`${t.no} talebini aç, durum ${DURUM[t.durum].metin}`}>
+                <span className="sa-talep-no">{t.no}</span> <Rozet ton={DURUM[t.durum].ton}>{DURUM[t.durum].metin}</Rozet>
+              </Dugme>
+            ))}
+          </div>
+        )}
       </div>
       <Eylemler cevir={cevir} yoksay={yoksay} />
     </li>
@@ -127,7 +141,9 @@ function Satir({ o, secili, sec, cevir, yoksay, bugun }: {
 
 // 898 a: sistemin önerdiği ön talepler: rotadaki fason adımlar ve canlı planın malzeme eksiği. Ön talep satın almaya gitmez; "Talebe çevir"
 // formu dolu açar, gerekmeyen nedeniyle yoksayılır. Birleştirme yalnız aynı türdendir (fason hizmet, plan malzeme talebi açar).
-export function OnTalepler({ cevir }: { cevir: (l: readonly OnTalep[]) => void }) {
+export function OnTalepler({ cevir, talepler = [], talepteGit = () => undefined }: {
+  cevir: (l: readonly OnTalep[]) => void; talepler?: readonly Talebim[]; talepteGit?: (t: Talebim) => void;
+}) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const liste = useQuery({ queryKey: anahtarlar.onTalepler, queryFn: () => cagri.get('/satin-alma-on-talepleri', SURE) });
@@ -185,7 +201,7 @@ export function OnTalepler({ cevir }: { cevir: (l: readonly OnTalep[]) => void }
                 : <ul className="sa-talep-liste">{fasonlar.map((o) => <Satir key={anahtar(o)} o={o} {...satirOzellikleri(o)} />)}</ul>}
               <h3 className="sa-ot-grup"><Simge ad="box" boyut="k" /> Plan ihtiyacı <span className="sa-talep-not">canlı planın stokla, açık sipariş ve taleple karşılanmayan malzemesi</span></h3>
               {planlar.length === 0 ? <DurumKutusu durum="bos" mesaj="Canlı planda karşılanmayan malzeme yok." />
-                : <ul className="sa-talep-liste">{planlar.map((o) => <PlanSatiri key={anahtar(o)} o={o} {...satirOzellikleri(o)} />)}</ul>}
+                : <ul className="sa-talep-liste">{planlar.map((o) => <PlanSatiri key={anahtar(o)} o={o} talepler={talepler} talepteGit={talepteGit} {...satirOzellikleri(o)} />)}</ul>}
               <h3 className="sa-ot-grup"><Simge ad="file" boyut="k" /> Satış siparişi kalemleri <span className="sa-talep-not">onaylı siparişte "Satın al" yolundaki, talebi açılmamış; yoksayılmaz, sipariş tarafında değişir</span></h3>
               {satislar.length === 0 ? <DurumKutusu durum="bos" mesaj="Talebi bekleyen satış siparişi kalemi yok." />
                 : <ul className="sa-talep-liste">{satislar.map((o) => <SiparisSatiri key={anahtar(o)} o={o} {...secimOzellikleri(o)} />)}</ul>}
