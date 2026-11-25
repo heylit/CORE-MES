@@ -60,7 +60,7 @@ export {
 export {
   type RefakatPartisiHam, refakatPartisiBul, refakatPartileriBul, acikRefakatPartisi, refakatKartlariListe, emrinRefakatPartileri,
   istasyondaSatiriOlanKartlar, refakatPartisiAc, etkinRefakatPartisiBul, refakatBirlestir, altRefakatPartileri, birlesenRefakatPartileri,
-  lotunRefakatPartileri, refakatSoyu, lotunKartlari, type RefakatCiktisiHam, refakatCiktilari, type RefakatSevkiHam, refakatSevkleri, refakatPartisiIptal,
+  lotunRefakatPartileri, refakatSoyu, lotunKartlari, type RefakatCiktisiHam, refakatCiktilari, type RefakatSevkiHam, refakatSevkleri, refakatPartisiIptal, emrinAcikRefakatPartileriniKapat,
   refakatPartisiVarMi, acikIstisnaKarti, istisnaKartiAc, istisnaDusumuYaz, istisnaDusumuMu, istisnaDusumuTasi, type IstisnaDusumuHam, istisnaDusumleri,
   istisnaDusumuBagla, type LotBekleyenKartHam, lotBekleyenKartlar, refakatLotaBagla, lotunBaglamaBakiyeleri, refakatYoldakiTeslimleri,
   kartliYoldakiTeslimler, type KartSatiriHam, kartSatirlari, refakatBaslatmaYaz, emrinKartAdetleri, kollardakiAdetler,

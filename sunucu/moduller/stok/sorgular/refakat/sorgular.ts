@@ -125,6 +125,18 @@ export const refakatPartisiIptal = (db: Db, id: number, surum: number, kisiId: n
   db.tek(
     `UPDATE stok_refakat_partisi SET durum = 'iptal', iptal_eden_kisi_id = $3, iptal_zamani = now(), surum = surum + 1
       WHERE id = $1 AND surum = $2 AND durum = 'acik' RETURNING id`, [id, surum, kisiId]);
+// Emir iptal olunca emrin açık kartlarından teslimi ve üretim sayımı olmayanlar aynı işlemde kapanır (elle iptalle aynı ölçüt,
+// refakatIptalEngeli); teslimli ya da sayımlı kart iz bozulmasın diye açık kalır ve listede "Emir iptal" rozetiyle görünür. Kapalı karta dokunulmaz.
+export const emrinAcikRefakatPartileriniKapat = async (db: Db, uretimEmriId: number, kisiId: number): Promise<number> =>
+  (await db.sorgu(
+    `UPDATE stok_refakat_partisi r SET durum = 'iptal', iptal_eden_kisi_id = $2, iptal_zamani = now(), surum = surum + 1
+      WHERE r.uretim_emri_id = $1 AND r.durum = 'acik'
+        AND NOT EXISTS (SELECT 1 FROM stok_parti p WHERE p.refakat_partisi_id = r.id)
+        AND (SELECT COALESCE(sum((CASE WHEN tk.tur IN ('raf_gozu', 'kabul', 'depo_zemini') THEN 1 ELSE 0 END - CASE WHEN th.tur IN ('raf_gozu', 'kabul', 'depo_zemini') THEN 1 ELSE 0 END)
+              * CASE t.durum WHEN 'teslim' THEN t.alinan ELSE t.miktar END), 0)
+               FROM stok_teslim t JOIN stok_konum tk ON tk.id = t.kaynak_konum_id JOIN stok_konum th ON th.id = t.hedef_konum_id
+              WHERE t.uretim_emri_id = r.uretim_emri_id AND t.parti_id = r.parti_id AND t.durum IN ('yolda', 'teslim')) <= 0
+      RETURNING r.id`, [uretimEmriId, kisiId])).length;
 export const refakatPartisiVarMi = async (db: Db, id: number): Promise<boolean> => (await db.tek('SELECT 1 FROM stok_refakat_partisi WHERE id = $1', [id])) !== null;
 // ---- İstisna kartı (Soru 129, 131 a): lotsuz kart, lotsuz düşümleri ve lota bağlanması --------------------------------------------
 export const acikIstisnaKarti = (db: Db, uretimEmriId: number, malzemeId: number): Promise<RefakatPartisiHam | null> =>

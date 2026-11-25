@@ -137,12 +137,12 @@ describe('stok: refakat kartları listesi (gerçek PostgreSQL)', () => {
     const [kIptal, kKapali, kSaglam] = [await ac(iptalEmri), await ac(kapaliEmri), await ac(saglamEmri)];
     assert.equal((await istek('depo', 'POST', `/stok/refakat-partileri/${kKapali.id}/iptal-et`, { surum: kKapali.surum })).durum, 200);
 
-    // Emir iptal olunca kartlar kendiliğinden kapanmaz (3716-2'ye bağlı); liste açık kartı "iptal" emirle gösterir.
+    // Emir iptal olunca teslimsiz ve sayımsız açık kart kapanır.
     await o().vt.tx((db) => emirIptalEt(db, yonetici, iptalEmri));
     await o().vt.tx((db) => emirIptalEt(db, yonetici, kapaliEmri));
     const tumu = await liste('?durum=tumu');
     const bul = (id: number) => tumu.kartlar.find((k) => k.refakat.id === id)!;
-    assert.deepEqual([bul(kIptal.id).emir, bul(kIptal.id).refakat.durum], ['iptal', 'acik']);
+    assert.deepEqual([bul(kIptal.id).emir, bul(kIptal.id).refakat.durum], ['iptal', 'iptal']);
     assert.deepEqual([bul(kKapali.id).emir, bul(kKapali.id).refakat.durum], ['iptal', 'iptal']);
     assert.deepEqual([bul(kSaglam.id).emir, bul(kSaglam.id).refakat.durum], ['tamam', 'acik']);
 
@@ -150,15 +150,72 @@ describe('stok: refakat kartları listesi (gerçek PostgreSQL)', () => {
     const yetim = (await o().sahip.tek<{ id: number }>(
       'INSERT INTO stok_refakat_partisi (uretim_emri_id, sira, malzeme_id, parti_id, acan_kisi_id) VALUES (2147000000, 1, $1, NULL, $2) RETURNING id',
       [hm, kisiler.get('yonetici')]))!.id;
-    const acik = await liste();
+    const acik = await liste('?durum=tumu');
     const satir = (id: number) => acik.kartlar.find((k) => k.refakat.id === id)!;
     assert.equal(satir(kSaglam.id).emir, 'tamam');
     assert.equal(satir(kIptal.id).emir, 'iptal');
     assert.deepEqual([satir(kIptal.id).adet, satir(kIptal.id).adimSayisi, satir(kIptal.id).urun?.ad], [4, 1, 'Kart listesi deneme 3']);
     assert.deepEqual([satir(yetim).emir, satir(yetim).urun, satir(yetim).adet, satir(yetim).teslim, satir(yetim).adimSayisi], ['okunamadi', null, null, null, null]);
 
-    // Basım ucu 409 kalır; kart iptal edilebilir.
+    // Basım ucu 409 kalır; kapanan kart bir daha iptal edilemez.
     assert.equal((await istek('depo', 'GET', `/stok/refakat-partileri/${kIptal.id}/kart`)).durum, 409);
-    assert.equal((await istek('depo', 'POST', `/stok/refakat-partileri/${kIptal.id}/iptal-et`, { surum: (await o().sahip.tek<{ surum: number }>('SELECT surum FROM stok_refakat_partisi WHERE id = $1', [kIptal.id]))!.surum })).durum, 200);
+    assert.equal((await istek('depo', 'POST', `/stok/refakat-partileri/${kIptal.id}/iptal-et`, { surum: (await o().sahip.tek<{ surum: number }>('SELECT surum FROM stok_refakat_partisi WHERE id = $1', [kIptal.id]))!.surum })).durum, 409);
+  });
+  test('3716-2: emir iptal edilince teslimsiz ve sayımsız açık kartlar kapanır; yoldaki teslimli, sayımlı, kapalı ve başka emrin kartı değişmez', async () => {
+    const [mm, hm] = [await kart('mamul'), await kart('hammadde')];
+    const tip = (await o().sahip.tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ('RKL-3', 'Deneme tipi 3', 'TAL') RETURNING id"))!.id;
+    const projeId = (await o().sahip.tek<{ id: number }>(
+      "INSERT INTO projeler_proje (kod, ad, olusturan_id) VALUES ('STOK.RKL3', 'Deneme proje 3', $1) RETURNING id", [kisiler.get('yonetici')]))!.id;
+    const revizyon = (await o().sahip.tek<{ id: number }>(
+      `INSERT INTO rota_revizyonu (malzeme_id, malzeme_turu, harf, durum, acan_kisi_id, iptal_eden_kisi_id, iptal_etme)
+       VALUES ($1, 'mamul', 'ZX', 'iptal', $2, $2, now()) RETURNING id`, [mm, kisiler.get('yonetici')]))!.id;
+    const yonetici = (await o().vt.tx((db) => kullaniciYukle(db, kisiler.get('yonetici')!)))!;
+    const adim = {
+      sira: 1, opNo: 10, ad: 'Adım 1', operasyonTipiId: tip, kaynak: null, ayarSuresiDk: '10', birimSureDk: '1',
+      terminGun: null, bagimlilik: 'bekleyen' as const, devirAdedi: null, talimatSurumu: null, kontrolListesi: [], bilesenler: [{ malzemeNo: hm, miktar: '1' }],
+    };
+    const emirAc = async (adet: number) => (await o().vt.tx(async (db) => uretimEmriAc(db, yonetici, {
+      projeId, malzemeNo: mm, adet, teslim: '2026-12-01', kaynakRotaRevizyonId: revizyon, isEmirleri: [adim],
+    }))).uretimEmriId;
+    const [iptalEmri, saglamEmri, yoldaEmri, geriEmri] = [await emirAc(4), await emirAc(2), await emirAc(3), await emirAc(3)];
+    assert.equal((await istek('depo', 'POST', '/stok/mal-kabul', { tur: 'diger', satirlar: [{ malzemeId: hm, miktar: '20' }] })).durum, 200);
+    const lot = (await o().vt.tek<{ lot_no: string }>('SELECT lot_no FROM stok_parti WHERE malzeme_id = $1 ORDER BY id DESC LIMIT 1', [hm]))!.lot_no;
+    const ac = async (emir: number) => (await istek<RefakatPartisiCevabi>('depo', 'POST', '/stok/refakat-partileri/ac', { uretimEmriId: emir, lotKodu: `LOT:${lot}` })).govde.refakat;
+    const [kIptal, kSaglam, kYolda, kGeri] = [await ac(iptalEmri), await ac(saglamEmri), await ac(yoldaEmri), await ac(geriEmri)];
+    // Teslim ölçütü kartın lotundan emre depodan çıkan net miktardır: yoldaki teslim kartı açık tutar, geri dönen teslim (net 0) tutmaz.
+    const parti = (await o().sahip.tek<{ parti_id: number }>('SELECT parti_id FROM stok_refakat_partisi WHERE id = $1', [kYolda.id]))!.parti_id;
+    const konum = async (kod: string) => (await o().sahip.tek<{ id: number }>('SELECT id FROM stok_konum WHERE kod = $1', [kod]))!.id;
+    const [depoKonumu, uretimKonumu] = [await konum('KABUL'), await konum('URETIM')];
+    const hareket = (await o().sahip.tek<{ id: number }>('SELECT id FROM stok_hareketi WHERE malzeme_id = $1 ORDER BY id DESC LIMIT 1', [hm]))!.id;
+    let teslimSirasi = 0;
+    const teslim = async (emir: number, kaynak: number, hedef: number, durum: 'yolda' | 'teslim') => {
+      teslimSirasi += 1;
+      const kapali = durum === 'teslim';
+      await o().sahip.sorgu(
+        `INSERT INTO stok_teslim (no, kaynak_kimligi, malzeme_id, miktar, parti_id, kaynak_konum_id, hedef_konum_id, uretim_emri_id, gonderen_kisi_id, durum, alinan, hareket_id, kapatan_kisi_id, kapanis)
+         VALUES ($1, $2, $3, 2, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+        [`TS-RKL-${String(teslimSirasi)}`, `rkl-teslim-${String(teslimSirasi)}`, hm, parti, kaynak, hedef, emir, kisiler.get('yonetici'), durum,
+          kapali ? 2 : null, kapali ? hareket : null, kapali ? kisiler.get('yonetici') : null, kapali ? new Date().toISOString() : null]);
+    };
+    await teslim(yoldaEmri, depoKonumu, uretimKonumu, 'yolda');
+    await teslim(geriEmri, depoKonumu, uretimKonumu, 'teslim');
+    await teslim(geriEmri, uretimKonumu, depoKonumu, 'teslim');
+    // Aynı emrin lotsuz istisna kartı da açıktır; birleşmiş kart sayılmaz.
+    const kapali = (await o().sahip.tek<{ id: number }>(
+      "INSERT INTO stok_refakat_partisi (uretim_emri_id, sira, malzeme_id, parti_id, acan_kisi_id, durum, iptal_eden_kisi_id, iptal_zamani) VALUES ($1, 9, $2, NULL, $3, 'iptal', $3, now() - interval '1 day') RETURNING id",
+      [iptalEmri, hm, kisiler.get('yonetici')]))!.id;
+    const once = await o().sahip.tek<{ z: string; s: number }>('SELECT iptal_zamani::text AS z, surum AS s FROM stok_refakat_partisi WHERE id = $1', [kapali]);
+    // Üretim sayımı olan kart (kartla sayılmış üretim partisi) emir iptalinde açık kalır.
+    const sayimli = (await o().sahip.tek<{ id: number }>(
+      "INSERT INTO stok_refakat_partisi (uretim_emri_id, sira, malzeme_id, parti_id, acan_kisi_id) VALUES ($1, 10, $2, NULL, $3) RETURNING id",
+      [iptalEmri, mm, kisiler.get('yonetici')]))!.id;
+    await o().sahip.sorgu(
+      "INSERT INTO stok_parti (malzeme_id, lot_no, uretim_emri_id, refakat_partisi_id, acan_kisi_id) VALUES ($1, $2, $3, $4, $5)", [mm, `RKL-URT-${String(sayimli)}`, iptalEmri, sayimli, kisiler.get('yonetici')]);
+    for (const e of [iptalEmri, yoldaEmri, geriEmri]) await o().vt.tx((db) => emirIptalEt(db, yonetici, e));
+    const durum = async (id: number) => (await o().sahip.tek<{ durum: string }>('SELECT durum FROM stok_refakat_partisi WHERE id = $1', [id]))!.durum;
+    assert.deepEqual([await durum(kIptal.id), await durum(kSaglam.id), await durum(sayimli)], ['iptal', 'acik', 'acik']);
+    assert.equal(await durum(kYolda.id), 'acik', 'yoldaki teslimi olan kart açık kalır');
+    assert.equal(await durum(kGeri.id), 'iptal', 'teslimi geri dönmüş (net 0) kart kapanır');
+    assert.deepEqual(await o().sahip.tek('SELECT iptal_zamani::text AS z, surum AS s FROM stok_refakat_partisi WHERE id = $1', [kapali]), once, 'kapalı karta dokunulmaz');
   });
 });
