@@ -233,7 +233,7 @@ describe('A2 Hazırlık ekranı', () => {
 
   // 789, 795 a: TMI emrinin paketinde resim ve balonlar Kalite Merkezi'nden salt okunur gelir; plan maddesi balon kimliğini taşır.
   // Resim, balon ve ölçüler uydurmadır.
-  const KM_PAKETI = { ...PAKET, id: 'tmi-ue-9', no: 'IE-DENEME-3', from: 'tmi', malzemeNo: 901 };
+  const KM_PAKETI = { ...PAKET, id: 'tmi-ue-9', no: 'IE-DENEME-3', from: 'tmi', malzemeNo: 901, plan: [] };
   const KM_BALONU = {
     id: 55, no: 1, nominal: 'Ø30', tolerans: '±0.05', alt: '29.95', ust: '30.05', alet: 'Mikrometre', siklik: null, kritik: true, yontem: 'elle',
     olcuAletiGerekir: false, tur: null, sayfa: 1, x: 10, y: 20, yaziKutusu: null, surum: 1,
@@ -255,7 +255,7 @@ describe('A2 Hazırlık ekranı', () => {
   const kmOkur = (d: Deneme): Deneme => ({ ...d, kullanici: { ...d.kullanici, islemler: [...d.kullanici.islemler, 'kalite-merkezi.oku'] } });
   const kmPaketYazimi = (l: Istek[]) => l.filter((i) => i.yol === `/arkon/belgeler/pkgs/${KM_PAKETI.id}/yaz`).map((i) => (i.govde as { govde: Pkg }).govde);
 
-  it('CORE paketinde Dokümanlar parçanın Kalite Merkezi resmini listeler; Pakete al dosyayı ve balonları kimlikleriyle getirir, plan salt okunur', async () => {
+  it('CORE taslak paketinde Kalite Merkezi resmi ve balonları kendiliğinden gelir, kimlikleriyle; plan salt okunur', async () => {
     const istekler = sunucuKur(kmOkur(YONETICI), kmSunucusu());
     merkezKur(istekler);
     kmKur([KM_RESMI, { ...KM_RESMI, id: 13, ad: 'Kaldırılmış resim', aktif: false }]);
@@ -266,7 +266,8 @@ describe('A2 Hazırlık ekranı', () => {
     expect(await within(km).findByText('Deneme flans', undefined, { timeout: 10000 })).toBeTruthy();
     expect(within(km).queryByText('Kaldırılmış resim')).toBeNull();
     expect(within(d).queryByRole('region', { name: 'Çizim stüdyosundan' })).toBeNull();
-    fireEvent.click(within(km).getByRole('button', { name: /Pakete al/ }));
+    // 3687: taslak paket Kalite Merkezi'nin balonlu resmiyle kendiliğinden kurulur; elle "Pakete al" gerekmez.
+    expect(within(km).queryByRole('button', { name: /Pakete al/ })).toBeNull();
     await waitFor(() => {
       const p = kmPaketYazimi(istekler).at(-1);
       expect(p?.primary).toBe('deneme-b.pdf');
@@ -277,6 +278,32 @@ describe('A2 Hazırlık ekranı', () => {
     fireEvent.click(within(d).getByRole('button', { name: /Kontrol planı/ }));
     expect(await within(d).findByText(/Balonlar Kalite Merkezi’nde düzenlenir/, undefined, { timeout: 10000 })).toBeTruthy();
     expect((within(d).getByRole('button', { name: 'Ø30 sil' }) as HTMLButtonElement).disabled).toBe(true);
+  }, 40000);
+
+  it('taslakta elle girilmiş plan kalemi varsa Kalite Merkezi planı kendiliğinden alınmaz; Pakete al ile elle alınır (3687)', async () => {
+    const DOLU = { ...KM_PAKETI, id: 'tmi-ue-13', no: 'IE-DENEME-7', plan: PAKET.plan };
+    const istekler = sunucuKur(kmOkur(YONETICI), { belgeler: { pkgs: [{ kimlik: DOLU.id, surum: 1, govde: DOLU }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
+    merkezKur(istekler);
+    kmKur([KM_RESMI]);
+    arkonAc('/arkon/hazirlik');
+    const d = await ekran();
+    fireEvent.click(within(d).getByRole('button', { name: /Dokümanlar/ }));
+    const km = await within(d).findByRole('region', { name: 'Kalite Merkezi’nden' }, { timeout: 10000 });
+    expect(await within(km).findByRole('button', { name: /Pakete al/ }, { timeout: 10000 })).toBeTruthy();
+    expect(istekler.filter((i) => i.yol === `/arkon/belgeler/pkgs/${DOLU.id}/yaz`)).toEqual([]);
+  }, 40000);
+
+  it('yayındaki CORE paketinde Kalite Merkezi resmi kendiliğinden alınmaz; Pakete al elle çalışır (3687)', async () => {
+    const YAYINDA = { ...KM_PAKETI, id: 'tmi-ue-12', no: 'IE-DENEME-6', status: 'published', version: 1, dirty: false };
+    const istekler = sunucuKur(kmOkur(YONETICI), { belgeler: { pkgs: [{ kimlik: YAYINDA.id, surum: 1, govde: YAYINDA }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
+    merkezKur(istekler);
+    kmKur([KM_RESMI]);
+    arkonAc('/arkon/hazirlik');
+    const d = await ekran();
+    fireEvent.click(within(d).getByRole('button', { name: /Dokümanlar/ }));
+    const km = await within(d).findByRole('region', { name: 'Kalite Merkezi’nden' }, { timeout: 10000 });
+    expect(await within(km).findByRole('button', { name: /Pakete al/ }, { timeout: 10000 })).toBeTruthy();
+    expect(istekler.filter((i) => i.yol === `/arkon/belgeler/pkgs/${YAYINDA.id}/yaz`)).toEqual([]);
   }, 40000);
 
   it('Kalite Merkezi resmi değişince paket "değişti" gösterir; düzenleme yetkisi olmayan alamaz (reddedilen)', async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { etkinResimler, kmBagi, kmPlani, kmResimDurumu, kmSahibi } from './km-cizim.ts';
+import { etkinResimler, kmBagi, kmPlani, kmResimDurumu, kmSahibi, otomatikKmResmi } from './km-cizim.ts';
 
 // Kalite Merkezi resmi ve balonları (789, 795 a); değerler uydurmadır.
 const BALON = {
@@ -32,5 +32,17 @@ describe('Kalite Merkezi çizimi', () => {
     expect(kmSahibi({})).toBe(false);
     const r = { id: 1, malzemeNo: 5, tur: 'resim' as const, merkezBelgeId: 2, ozet: 'a', ad: 'A', revizyon: null, surum: 1, eklendi: '2026-01-01T00:00:00Z', balonlar: [] };
     expect(etkinResimler([{ ...r, aktif: true }, { ...r, id: 2, aktif: false }]).map((x) => x.id)).toEqual([1]);
+  });
+
+  // 3687: taslak, Kalite Merkezi'nin balonlu resmiyle kendiliğinden kurulur; yayındaki ya da bağı olan paket elle güncellenir.
+  it('otomatik resim: taslakta ilk etkin, güncel, balonlu resim; öteki durumlarda yok', () => {
+    const r = { id: 1, malzemeNo: 5, tur: 'resim' as const, merkezBelgeId: 2, ozet: 'a', ad: 'A', revizyon: null, aktif: true, surum: 1, eklendi: '2026-01-01T00:00:00Z', balonlar: [BALON] };
+    const taslak = { malzemeNo: 5, status: 'draft' as const, plan: [] };
+    expect(otomatikKmResmi(taslak, [{ ...r, id: 9, balonlar: [] }, { ...r, id: 8, aktif: false }, { ...r, id: 7, eski: true }, { ...r, id: 6, tur: 'model' }, r])?.id).toBe(1);
+    expect(otomatikKmResmi(taslak, [{ ...r, balonlar: [] }])).toBeNull();
+    expect(otomatikKmResmi({ ...taslak, status: 'published' as const }, [r])).toBeNull();
+    expect(otomatikKmResmi({ ...taslak, kmResim: { id: 1, surum: 1 } }, [r])).toBeNull();
+    expect(otomatikKmResmi({ ...taslak, plan: [{ id: 1 }] }, [r])).toBeNull();
+    expect(otomatikKmResmi({ malzemeNo: null, status: 'draft' as const }, [r])).toBeNull();
   });
 });
