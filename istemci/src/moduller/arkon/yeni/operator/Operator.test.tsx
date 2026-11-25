@@ -371,24 +371,39 @@ describe('A1 Üretim Terminali telefonda (618, 615-1 b)', () => {
   }, 40000);
 });
 
-describe('A1 Kaliteye numune penceresi (A4 NumunePenceresi)', () => {
-  it('kontrol planı varsa gönderir ve kapanır; plan yoksa ya da önceki numune bekliyorsa düğme kapalı', async () => {
-    const gonder = vi.fn(), kapat = vi.fn();
-    render(<NumunePenceresi istasyon="IST-1" numune={{ hazir: true, bekliyor: false, gonder }} kapat={kapat} />);
+describe('A1 Kaliteye numune penceresi (A4 NumunePenceresi; 3718 a okutma)', () => {
+  it('birincil yol kart okutmak; kartsız gönderme gerekçe seçilmeden kapalı, seçilince gerekçeyle gönderir', async () => {
+    const gonder = vi.fn(), kapat = vi.fn(), okut = vi.fn();
+    render(<NumunePenceresi istasyon="IST-1" numune={{ hazir: true, bekliyor: false, gonder, okut }} kapat={kapat} />);
     const pencere = await screen.findByRole('dialog', { name: 'Kaliteye numune · IST-1' }, { timeout: 10000 });
-    fireEvent.click(within(pencere).getByRole('button', { name: /Numune gönder/ }));
-    expect(gonder).toHaveBeenCalledTimes(1);
+    expect(within(pencere).getByRole('status').textContent).toContain('Okuyucu hazır · refakat kartı bekleniyor');
+    expect(within(pencere).queryByText(/etiketle/)).toBeNull();
+    fireEvent.click(within(pencere).getByRole('button', { name: /Kamerayla okut/ }));
+    expect(okut).toHaveBeenCalledTimes(1);
+    const kartsiz = within(pencere).getByRole('button', { name: 'Kartsız gönder' });
+    expect(kartsiz.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(kartsiz);
+    expect(gonder).not.toHaveBeenCalled();
+    const gerekce = within(pencere).getByRole('button', { name: 'Kart okunmuyor' });
+    fireEvent.click(gerekce);
+    expect(gerekce.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(kartsiz);
+    expect(gonder).toHaveBeenCalledWith({ yol: 'kartsiz', gerekce: 'Kart okunmuyor' });
     expect(kapat).toHaveBeenCalled();
-    cleanup();
-    render(<NumunePenceresi istasyon="IST-1" numune={{ hazir: false, bekliyor: false, gonder }} kapat={kapat} />);
-    expect((await screen.findByRole('button', { name: /Numune gönder/ }, { timeout: 10000 })).hasAttribute('disabled')).toBe(true);
+  });
+  it('plan yoksa ya da önceki numune bekliyorsa gönderilemez (reddedilen)', async () => {
+    const gonder = vi.fn(), kapat = vi.fn(), okut = vi.fn();
+    render(<NumunePenceresi istasyon="IST-1" numune={{ hazir: false, bekliyor: false, gonder, okut }} kapat={kapat} />);
+    expect((await screen.findByRole('button', { name: /Kamerayla okut/ }, { timeout: 10000 })).hasAttribute('disabled')).toBe(true);
     expect(screen.getByText(/kontrol planı yok/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Kartsız gönder' })).toBeNull();
     cleanup();
-    render(<NumunePenceresi istasyon="IST-1" numune={{ hazir: true, bekliyor: true, gonder }} kapat={kapat} />);
-    expect((await screen.findByRole('button', { name: /Numune gönder/ }, { timeout: 10000 })).hasAttribute('disabled')).toBe(true);
-    expect(gonder).toHaveBeenCalledTimes(1);
+    render(<NumunePenceresi istasyon="IST-1" numune={{ hazir: true, bekliyor: true, gonder, okut }} kapat={kapat} />);
+    expect((await screen.findByRole('button', { name: /Kamerayla okut/ }, { timeout: 10000 })).hasAttribute('disabled')).toBe(true);
+    expect(gonder).not.toHaveBeenCalled();
   });
 });
+
 
 // 797: "bu durumda geçen süre" sunucudaki son durum kaydından (sunucu saati) gelir; bilinmiyorsa "—" yazılır, sıfırdan sayılmaz.
 describe('797 durum süresi', () => {

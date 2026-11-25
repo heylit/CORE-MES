@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AnlikVardiya } from '../cekirdek/vardiya.ts';
 import {
-  bagsizNumuneBildirimi,
+  bagsizNumuneBildirimi, numuneGonderildiBildirimi, numuneYoluGorevi, okutulanNumuneler,
   bekletmeGorevi, bitirmeEksigi, bitisOzeti, siradakiGorev, tmiIlkParcaGerekli,
   cagriTonu, cubukDugmeleri, durumDugmeleri, sabitDugmeler, numuneAraligi, durusOnerileri, hurdaUyarisi, kalanSure, kaliteIstasyonuNumuneleri, kontrolTakvimi, lotKarariEksigi, lotKarariOku, lotSayisi, tonDurumu, vardiyaHesabi, vardiyaOzeti, type VardiyaOzetGirdisi,
   uzakKendiligindenAcilir, sekmeKarari,
@@ -245,12 +245,36 @@ describe('sekmeKarari (3719)', () => {
 
 describe('3717 bağsız planda numune bildirimi', () => {
   it('isteğin gittiğini, etiketleme bilgisini ve Kalite Merkezi\'ne açılmadığını birlikte söyler; ilk parça varsa kilidi de', () => {
-    const m = bagsizNumuneBildirimi(2, 'ORN-UE-1 #3', false);
+    const m = bagsizNumuneBildirimi(2, 'kart ORN-UE-1-P1', false);
     expect(m).toContain('Numune isteği gönderildi');
-    expect(m).toContain('etiketle: ORN-UE-1 #3');
+    expect(m).toContain('kart ORN-UE-1-P1');
+    expect(m).not.toContain('etiketle');
     expect(m).toContain('Kalite Merkezi\'ne açılmaz');
     expect(m).toContain('hazırlık sorumlusuna haber verin');
     expect(m).not.toContain('ilk parça numunesi karara bağlanamaz');
-    expect(bagsizNumuneBildirimi(1, 'ORN-UE-1 #3', true)).toContain('ilk parça numunesi karara bağlanamaz');
+    expect(bagsizNumuneBildirimi(1, 'kart ORN-UE-1-P1', true)).toContain('ilk parça numunesi karara bağlanamaz');
+  });
+});
+
+describe('3718 a: numune yolu ve okutma', () => {
+  const bekleyen = { tone: 'done' as const, icon: 'target' as const, t: 'Numune kalitede · 3 ölçü', d: 'Bekleme 02:00 · üretim devam edebilir', act: null, quiet: true, key: 'pend' };
+  it('kalite istasyonuna giden numune "Şimdi" kartında Yolda, teslimden sonra Kalitede; istasyonsuz numunede kart değişmez', () => {
+    const yolda = numuneYoluGorevi(bekleyen, { istasyon: 'ORN-KAL-1', teslim: null })!;
+    expect(yolda.t).toBe('Numune yolda · ORN-KAL-1');
+    expect(yolda.tone).toBe('hold');
+    expect(yolda.icon).toBe('truck');
+    expect(yolda.d).toMatch(/^Yolda › Kalitede › Karar · Bekleme/);
+    const kalitede = numuneYoluGorevi(bekleyen, { istasyon: 'ORN-KAL-1', teslim: { at: new Date(2026, 10, 25, 14, 12).getTime(), kisi: 'ORN Kaliteci' } })!;
+    expect(kalitede.t).toBe('Numune kalitede · teslim 14:12');
+    expect(kalitede.d).toContain('Yolda ✓ › Kalitede · ORN Kaliteci › Karar');
+    expect(numuneYoluGorevi(bekleyen, { istasyon: null, teslim: null })).toBe(bekleyen);
+    expect(numuneYoluGorevi({ ...bekleyen, key: 'ilk' }, { istasyon: 'ORN-KAL-1', teslim: null })!.key).toBe('ilk');
+    expect(numuneYoluGorevi(bekleyen, null)).toBe(bekleyen);
+  });
+  it('gönderim bildirimi elle etiket istemez; okutulan teslim yalnız kendi numunesini seçer', () => {
+    expect(numuneGonderildiBildirimi(3, 'kart ORN-UE-1-P1')).toBe('Numune kaliteye yola çıktı · 3 ölçü · kart ORN-UE-1-P1');
+    const l = [{ id: 'a', numuneTeslim: { id: 5 } }, { id: 'b', numuneTeslim: { id: 6 } }, { id: 'c' }];
+    expect(okutulanNumuneler(l, [6, 9]).map((x) => x.id)).toEqual(['b']);
+    expect(okutulanNumuneler(l, [])).toEqual([]);
   });
 });

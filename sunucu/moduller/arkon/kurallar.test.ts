@@ -9,7 +9,7 @@ import {
   belgedenDurusa, ISTASYONSUZ_YAYIN, ROTA_EKSIK_YAYIN, yayinEksigi, SIFIR_SAYIM, katilimYolu, tmidekiDurum, makineSecimi, MAKINE_SECIMI_GECERSIZ,
   cagriBildirimi, olcumAletKimligi, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, YOKLAMA_DENETIM_SURESI_MS, donemBaslangici, donemBasarisi, ekipOrtalamasi, fazlaMesaiSaati, mesaiGunleri, ozetOranlari, ozetRozetleri, tarihEkle,
 } from './kurallar.ts';
-import { dosyaTuruBul } from './kurallar.ts';
+import { dosyaTuruBul, numuneTeslimAlma, numuneTeslimAlindiDamgala } from './kurallar.ts';
 import { adimEmirDurumu, ilkParcaGereksinimi, istekKarari, istekKmPlani, kmKarariniAynala, kmOlcumGruplari, kmUyarisiniYaz, KM_UYARILARI, malzemeCizimleri, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariDamgala, lotKarariGirdisi, lotKarariKoru, lotPaketi, tmiAqlPlani, eksiAlaniniEkle, hataliAlaniniEkle, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri } from './kurallar.ts';
 import type { KatilimDurumu, TmiPlanDurumu } from './kurallar.ts';
 import { AZAMI_MAKINE_SECIMI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -653,6 +653,24 @@ test('numune teslimi (115 a, 125 a): yalnız yeni bekleyen numune isteği teslim
   assert.deepEqual(numuneTesliminiKoru({ ...istek, status: 'approved' }, { ...istek, numuneTeslim: bag }), { ...istek, status: 'approved', numuneTeslim: bag });
   assert.deepEqual(numuneTesliminiKoru({ ...istek, kaliteIstasyonu: 'SAHTE' }, { ...istek, kaliteIstasyonu: 'KAL' }), { ...istek, kaliteIstasyonu: 'KAL' }, '564 1 b: kalite istasyonu yalnız sunucudan');
   assert.deepEqual(numuneTesliminiKoru({ ...istek, kmNumune: 9, ilkParca: false, kmOlculen: 5 }, { ...istek, kmNumune: 3, ilkParca: true }), { ...istek, kmNumune: 3, ilkParca: true }, '798: Kalite Merkezi bağı yalnız sunucudan');
+});
+
+test('3718 a: kalite yoldaki numuneyi okutarak ya da düğmeyle teslim alır; damga yalnız sunucudan, ikinci teslim yok sayılır', () => {
+  const yolda = { id: 'rq1', status: 'waiting', kaliteIstasyonu: 'ORN-KAL-1', numuneTeslim: { id: 5, no: 'T-5' } };
+  assert.equal(numuneTeslimAlma({ ...yolda, teslimAl: 'okutma' }, yolda, 'quality'), 'okutma');
+  assert.equal(numuneTeslimAlma({ ...yolda, teslimAl: 'dugme' }, { ...yolda, status: 'measuring' }, 'admin'), 'dugme');
+  assert.equal(numuneTeslimAlma(yolda, yolda, 'quality'), null, 'teslim alma istenmedi');
+  assert.equal(numuneTeslimAlma({ ...yolda, teslimAl: 'dugme' }, yolda, 'operator'), 'numuneTeslimYetkisi', 'yalnız kalite rolleri');
+  assert.equal(numuneTeslimAlma({ ...yolda, teslimAl: 'el' }, yolda, 'quality'), 'numuneTeslimGecersiz');
+  assert.equal(numuneTeslimAlma({ ...yolda, teslimAl: 'dugme' }, undefined, 'quality'), 'numuneTeslimGecersiz', 'yeni istek teslim alınmış açılamaz');
+  assert.equal(numuneTeslimAlma({ ...yolda, teslimAl: 'dugme' }, { ...yolda, kaliteIstasyonu: undefined }, 'quality'), 'numuneTeslimGecersiz', '608 b: kalite istasyonu yoksa teslim adımı yok');
+  assert.equal(numuneTeslimAlma({ ...yolda, teslimAl: 'dugme' }, { ...yolda, status: 'approved' }, 'quality'), 'numuneTeslimGecersiz', 'kapanmış numune');
+  const alindi = { ...yolda, numuneTeslimAlindi: { at: 1, kisi: 'ORN Kaliteci', yol: 'okutma' } };
+  assert.equal(numuneTeslimAlma({ ...yolda, teslimAl: 'dugme' }, alindi, 'quality'), null, 'ikinci teslim yok sayılır');
+  assert.deepEqual(numuneTeslimAlindiDamgala({ ...yolda, teslimAl: 'okutma' }, 'okutma', 7, 'ORN Kaliteci'), { ...yolda, numuneTeslimAlindi: { at: 7, kisi: 'ORN Kaliteci', yol: 'okutma' } });
+  assert.deepEqual(numuneTeslimAlindiDamgala({ ...yolda, teslimAl: 'dugme' }, null, 7, 'X'), yolda, 'teslimAl kayda girmez');
+  assert.deepEqual(numuneTesliminiKoru({ ...yolda, numuneTeslimAlindi: { at: 9, kisi: 'SAHTE', yol: 'dugme' } }, yolda), yolda, 'istemci damga yazamaz');
+  assert.deepEqual(numuneTesliminiKoru({ ...yolda, status: 'approved' }, alindi), { ...alindi, status: 'approved' }, 'damga kararda korunur');
 });
 
 test('131 b: kapı açıkken ilk sağlamdan sonrası karar bekler; düzeltme ve hurda beklemez; yansıma yalnız sunucunun alanını okur', () => {

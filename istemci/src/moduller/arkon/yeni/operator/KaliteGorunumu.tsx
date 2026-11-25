@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { KAYIT_GITMEDI, KAYIT_REDDI_OLAYI } from '../../../../../../arkon/web/src/data/gonderim-hatasi.ts';
 import { aqlPlani } from '../../../../../../arkon/web/src/data/muayene-lotu.ts';
-import { numuneReddiEksigi } from '../../../../../../arkon/web/src/data/numune.ts';
+import { numuneReddiEksigi, numuneTeslimi, yoldaMi } from '../../../../../../arkon/web/src/data/numune.ts';
 import { Link } from 'react-router-dom';
 import { Dugme, Simge } from '../../../../ortak/arayuz/index.ts';
 import { useYetki } from '../../../../ortak/veri/yetki.ts';
@@ -13,7 +13,7 @@ import { FormSec } from './kalite-terminali/FormSec.tsx';
 import { KararKuyrugu } from './kalite-terminali/KararKuyrugu.tsx';
 import { kuyrukToplami } from './kalite-terminali/kurallar.ts';
 import './kalite-terminali/kalite-terminali.css';
-import { LOT_SINIFLARI, kaliteIstasyonuNumuneleri, lotKarariEksigi, lotKarariOku, lotSayisi } from './kurallar.ts';
+import { LOT_SINIFLARI, NUMUNE_KART_TESLIMI_OLAYI, kaliteIstasyonuNumuneleri, lotKarariEksigi, lotKarariOku, lotSayisi, okutulanNumuneler } from './kurallar.ts';
 import type { Is, KaliteNumunesi, LotKarari, LotSinifi, Result } from './tipler.ts';
 
 // 564 1 b, 6 a, 600 a: kalite istasyonu terminalinin orta sütunu. Sayaç yerine iki iş: "Teslim al" ile gelen numunelerin Kabul/Red'i ve
@@ -24,7 +24,7 @@ import type { Is, KaliteNumunesi, LotKarari, LotSinifi, Result } from './tipler.
 type Sekme = 'numune' | 'karar' | 'form';
 
 export function KaliteGorunumu(p: {
-  istasyon: string; is: Is; izinli: boolean; olcebilir: boolean; soyle: (metin: string, ton: 'ok' | 'stop') => void;
+  istasyon: string; is: Is; izinli: boolean; olcebilir: boolean; soyle: (metin: string, ton: 'ok' | 'stop') => void; okut?: (() => void) | null;
 }) {
   const kuyruk = useKaliteKuyrugu();
   const formlar = useTerminalFormlari();
@@ -51,8 +51,9 @@ export function KaliteGorunumu(p: {
   );
 }
 
-function NumuneVeLot({ istasyon, is: o, izinli, olcebilir, soyle, kuyrugaGec }: {
+function NumuneVeLot({ istasyon, is: o, izinli, olcebilir, soyle, kuyrugaGec, okut = null }: {
   istasyon: string; is: Is; izinli: boolean; olcebilir: boolean; soyle: (metin: string, ton: 'ok' | 'stop') => void; kuyrugaGec: (() => void) | null;
+  okut?: (() => void) | null;
 }) {
   const { depo, kisi } = useArkon();
   const [numuneler, numunelerYaz] = useState<KaliteNumunesi[]>([]);
@@ -82,6 +83,25 @@ function NumuneVeLot({ istasyon, is: o, izinli, olcebilir, soyle, kuyrugaGec }: 
     return () => window.removeEventListener(KAYIT_REDDI_OLAYI, f);
   }, [soyle, yenile]);
 
+  // 3718 a: yoldaki numuneyi kalite teslim alır (refakat kartı okutarak ya da düğmeyle); damgayı sunucu yazar, ret iletisi KAYIT_REDDI ile gelir.
+  const teslimAlabilir = izinli || olcebilir;
+  const teslimAl = useCallback(async (r: KaliteNumunesi, yol: 'okutma' | 'dugme') => {
+    if (!teslimAlabilir) return;
+    await depo.DB.put('requests', { ...r, teslimAl: yol });
+    soyle(`Numune teslim alındı · ${r.no}`, 'ok');
+    await yenile();
+  }, [depo, soyle, teslimAlabilir, yenile]);
+  useEffect(() => {
+    const f = (e: Event) => {
+      const ids = (e as CustomEvent<{ teslimIdler?: number[] }>).detail?.teslimIdler ?? [];
+      for (const r of okutulanNumuneler(numuneler.filter(yoldaMi), ids)) void teslimAl(r, 'okutma');
+    };
+    window.addEventListener(NUMUNE_KART_TESLIMI_OLAYI, f);
+    return () => window.removeEventListener(NUMUNE_KART_TESLIMI_OLAYI, f);
+  }, [numuneler, teslimAl]);
+  const yolda = numuneler.filter(yoldaMi);
+  const gelen = numuneler.filter((r) => !yoldaMi(r));
+
   const numuneKarari = async (r: KaliteNumunesi, status: 'approved' | 'rejected', not: string) => {
     if (!izinli) return;
     const n: KaliteNumunesi = { ...r, status, decidedAt: Date.now(), decidedBy: kisi?.name ?? '', note: not.trim() };
@@ -100,12 +120,25 @@ function NumuneVeLot({ istasyon, is: o, izinli, olcebilir, soyle, kuyrugaGec }: 
 
   return (
     <div className="tc-ay1-kalite">
+      {yolda.length ? (
+        <section className="tc-ay1-toplu" aria-label="Yoldaki numuneler">
+          <div className="tc-ay1-toplu-ust">
+            <Simge ad="truck" boyut="k" /><span className="tc-ay1-ust-yazi">Yolda</span>
+            <small className="tc-ay1-soluk">{sayi(yolda.length)} numune</small>
+          </div>
+          <div className="tc-ay1-not" role="note">
+            <Simge ad="scan" boyut="k" /><span>Numunenin refakat kartını okutun: yoldaki numune teslim alınır, ölçüm açılır.</span>
+            {okut ? <Dugme tur="ikincil" simge="camera" onClick={okut}>Kamerayla okut</Dugme> : null}
+          </div>
+          {yolda.map((r) => <YoldakiNumune key={r.id} r={r} teslimAlabilir={teslimAlabilir} teslimAl={() => { void teslimAl(r, 'dugme'); }} />)}
+        </section>
+      ) : null}
       <section className="tc-ay1-toplu" aria-label="Gelen numuneler">
         <div className="tc-ay1-toplu-ust">
-          <Simge ad="target" boyut="k" /><span className="tc-ay1-ust-yazi">Gelen numuneler</span>
-          <small className="tc-ay1-soluk">{numuneler.length ? `${sayi(numuneler.length)} numune bekliyor` : 'Bekleyen numune yok'}</small>
+          <Simge ad={yolda.length ? 'cube' : 'target'} boyut="k" /><span className="tc-ay1-ust-yazi">{yolda.length ? 'Teslim alındı' : 'Gelen numuneler'}</span>
+          <small className="tc-ay1-soluk">{gelen.length ? `${sayi(gelen.length)} numune bekliyor` : 'Bekleyen numune yok'}</small>
         </div>
-        {numuneler.map((r) => <NumuneSatiri key={r.id} r={r} izinli={izinli} kuyrugaGec={kuyrugaGec} olc={() => olculenYaz(r)} karar={(s, n) => { void numuneKarari(r, s, n); }} />)}
+        {gelen.map((r) => <NumuneSatiri key={r.id} r={r} izinli={izinli} kuyrugaGec={kuyrugaGec} olc={() => olculenYaz(r)} karar={(s, n) => { void numuneKarari(r, s, n); }} />)}
       </section>
       {olculen ? <NumuneOlcumu r={olculen} yazabilir={olcebilir} kapat={() => { olculenYaz(null); void yenile(); }} /> : null}
       {o.pkg && !o.empty ? <LotKarti is={o} sonuc={sonuc} izinli={izinli} ver={(lk) => { void lotKarariVer(lk); }} /> : null}
@@ -115,6 +148,12 @@ function NumuneVeLot({ istasyon, is: o, izinli, olcebilir, soyle, kuyrugaGec }: 
 
 // Ölçüm Kalite Merkezi kaydındadır; sunucu numuneye ölçülen balon sayısını yazar (`kmOlculen`). Eski numune kendi sonucunu sayar.
 const olculenSayisi = (r: KaliteNumunesi): number => { const n = (r as { kmOlculen?: unknown }).kmOlculen; return typeof n === 'number' ? n : Object.keys(r.results || {}).length; };
+const teslimMetni = (r: KaliteNumunesi): string => {
+  const t = numuneTeslimi(r);
+  if (!t) return '';
+  const z = new Date(t.at);
+  return ` · teslim alındı ${iki(z.getHours())}:${iki(z.getMinutes())}${t.kisi ? ` · ${t.kisi}` : ''}`;
+};
 const ilkParcaNumunesi = (r: KaliteNumunesi): boolean => (r as { ilkParca?: unknown }).ilkParca === true;
 
 function IlkParcaNotu({ kuyrugaGec }: { kuyrugaGec: (() => void) | null }) {
@@ -126,6 +165,22 @@ function IlkParcaNotu({ kuyrugaGec }: { kuyrugaGec: (() => void) | null }) {
   }
   return (
     <small role="note"><Simge ad="check" boyut="k" /> İlk parça kararı Kalite Merkezi'nde{kaliteMerkezi ? <> · <Link to="/kalite-merkezi">Kalite Merkezi'ni aç</Link></> : null}</small>
+  );
+}
+
+// 3718 a: yoldaki numunede ölçüm ve karar yoktur; teslim alınınca "Teslim alındı" bölümüne geçer.
+function YoldakiNumune({ r, teslimAlabilir, teslimAl }: { r: KaliteNumunesi; teslimAlabilir: boolean; teslimAl: () => void }) {
+  const t = new Date(r.at);
+  return (
+    <div className="tc-ay1-kart" data-durum="yolda">
+      <span className="tc-ay1-kart-govde">
+        <b>{r.no} · {r.part}</b>
+        <small>{r.machine} · gönderildi {iki(t.getHours())}:{iki(t.getMinutes())} · {sayi(r.items.length)} ölçü{r.reason ? ` · ${r.reason}` : ''}</small>
+      </span>
+      <span className="tc-ay1-kalite-dugmeler">
+        {teslimAlabilir ? <Dugme tur="ikincil" simge="cube" onClick={teslimAl}>Teslim al</Dugme> : null}
+      </span>
+    </div>
   );
 }
 
@@ -142,7 +197,7 @@ function NumuneSatiri({ r, izinli, kuyrugaGec, olc, karar }: {
     <div className="tc-ay1-kart" data-durum={r.status === 'measuring' ? 'ayar' : undefined}>
       <span className="tc-ay1-kart-govde">
         <b>{r.no} · {r.part}</b>
-        <small>{r.machine} · {iki(t.getHours())}:{iki(t.getMinutes())} · {r.status === 'measuring' ? 'ölçülüyor' : 'bekliyor'} · {sayi(olculen)} ölçü{r.reason ? ` · ${r.reason}` : ''}</small>
+        <small>{r.machine} · {iki(t.getHours())}:{iki(t.getMinutes())} · {r.status === 'measuring' ? 'ölçülüyor' : 'bekliyor'} · {sayi(olculen)} ölçü{r.reason ? ` · ${r.reason}` : ''}{teslimMetni(r)}</small>
         {ilk ? <IlkParcaNotu kuyrugaGec={kuyrugaGec} /> : null}
         {red ? (
           <>

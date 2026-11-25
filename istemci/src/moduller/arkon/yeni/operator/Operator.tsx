@@ -28,7 +28,8 @@ import {
   AYRIM_YENILEME_MS, ayrimAciklamasi, kayittakiMakineler, kilitsizSecim, makineAyrimi, makineSecimiGorunur, seciliMakineler, secimOzeti, secimiDegistir,
   type MakineAyrimlari,
 } from '../../../../../../arkon/web/src/data/makine-secimi.ts';
-import { kmBagsizPlan, retGerekcesiMetni, sonNumuneDurumu, yeniNumuneYamasi } from '../../../../../../arkon/web/src/data/numune.ts';
+import { gonderimMetni, kmBagsizPlan, numuneKartiKarari, retGerekcesiMetni, sonNumuneDurumu, yeniNumuneYamasi, type NumuneGonderimi } from '../../../../../../arkon/web/src/data/numune.ts';
+import { useNumuneYolu } from './numune-yolu.ts';
 import {
   KART_YENILEME_MS, girdiAdaylari, kartDoldu, kartEmirleri, kartOkutmaKarari, refakatIsi, sayimKartAlani, baslatmaKartAlani, type KartSecimNedeni, type RefakatKarti,
 } from '../../../../../../arkon/web/src/data/refakat-karti.ts';
@@ -70,7 +71,7 @@ import { KART_DEGIL_ILETISI, KART_YOK_ILETISI, terminalOkutmasi, useElOkuyucu } 
 import { kartNumarasiGibi } from '../../../../ortak/veri/kart-degistir.ts';
 import {
   DURUM_ILETISI, DURUM_SIMGESI, EYLEM_DURUMU, URETIM_EYLEMLERI, baslangicUyarilari, bosIs, durusOnerileri, eksikTakimTabanlari, hazirlikSayisi,
-  bagsizNumuneBildirimi, ilkParcaKalemleri, ilkParcaKapisi, uzakKendiligindenAcilir, isSekmeleri, kararOzeti, kontrolTakvimi, mobilGorunumler, numuneAraligi, etkinIsSirasi, paketleriBirlestir, siradakiGorev, simgeSec, bekletmeGorevi, BEKLEMEDE_KAPALI,
+  bagsizNumuneBildirimi, numuneGonderildiBildirimi, numuneYoluGorevi, NUMUNE_KART_TESLIMI_OLAYI, ilkParcaKalemleri, ilkParcaKapisi, uzakKendiligindenAcilir, isSekmeleri, kararOzeti, kontrolTakvimi, mobilGorunumler, numuneAraligi, etkinIsSirasi, paketleriBirlestir, siradakiGorev, simgeSec, bekletmeGorevi, BEKLEMEDE_KAPALI,
   sonucBelgesi, takimUyarilari, tonAdi, uyariAnahtari, vardiyaHesabi, vardiyaOzeti, zamaniGelenUyarilar, hurdaUyarisi, bitisOzeti, bitirmeEksigi, tmiIlkParcaGerekli,
   type EkranSekmesi,
   hataliNedenleri, hataliUstSiniri, sekmeKarari,
@@ -299,7 +300,7 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
 
   /* paketler */
   const pkgsRef = useRef<Record<string, Pkg>>({});
-  const live = useRef<{ o?: Is; call?: Cagri | null; sendSample?: () => Promise<void>; startCall?: (c: (typeof CAGRI_EKIPLERI)[number], note?: string) => void; mcData?: (m: Ileti) => void }>({});
+  const live = useRef<{ o?: Is; call?: Cagri | null; sendSample?: (g: NumuneGonderimi) => Promise<void>; startCall?: (c: (typeof CAGRI_EKIPLERI)[number], note?: string) => void; mcData?: (m: Ileti) => void }>({});
   const loadPkgs = async (msg?: Ileti) => {
     const pk = (await depo.DB.all('pkgs')) as Pkg[];
     pkgsRef.current = Object.fromEntries(pk.map((p) => [p.id, p]));
@@ -624,6 +625,7 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
         say(`${c.kart.etiket}: ${c.alinanMiktar === null ? 'hiçbir teslim alınmadı' : `${c.alinanMiktar} alındı`}, ${c.hatalar.length} teslim alınamadı; iş açılmadı. ${c.hatalar.join(' · ')}`, 'alert', 'stop');
         return;
       }
+      if (c.alinanTeslimIdler.length > 0) window.dispatchEvent(new CustomEvent(NUMUNE_KART_TESLIMI_OLAYI, { detail: { teslimIdler: c.alinanTeslimIdler } }));
       kartKarariRef.current(c.kart, c.kart.uretimEmriId, c.alinanMiktar, c.buradakiMalzemeler);
     }, yerelde);
     return true;
@@ -632,6 +634,18 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
   // 3155: el okuyucusu olmayan istasyonda kart kamerayla okutulur; okutma el okuyucuyla aynı yoldan geçer (2928 a).
   // El okuyucuda yok sayılan kod (personel kartı gibi) burada sessiz kalmaz: operatör düğmeye basıp bir şey okutmuştur.
   const kartiKameraylaOkut = () => scanYaz({ baslik: 'Refakat kartını okut', ipucu: 'Kartın karekodunu çerçeveye tutun', okundu: (k) => { if (!kartOkutuldu(k)) { bip('nok'); say(KART_DEGIL_ILETISI, 'alert', 'hold'); } } });
+  // 3718 a: Numune penceresi açıkken okutulan refakat kartı numuneyi gönderir (el okuyucu ya da kamera); kart bu işin emrine ait olmalı.
+  const numuneKartiOkutuldu = (kod: string): boolean => {
+    const t = terminalOkutmasi(kod);
+    if (t.tur !== 'kart') { if (kartNumarasiGibi(kod)) return false; bip('nok'); say(KART_DEGIL_ILETISI, 'alert', 'hold'); return true; }
+    const k = numuneKartiKarari(kartlar.find((x) => x.id === t.kartId), tmiEmirId(o.pkg));
+    if ('ret' in k) { bip('nok'); say(k.ret, 'alert', 'stop'); return true; }
+    ovYaz(null);
+    void sendSample({ yol: 'okutma', kart: k.kart });
+    return true;
+  };
+  useElOkuyucu(!pv && scan === null && ov === 'numune' && !!o.pkg && !o.pendingReq, numuneKartiOkutuldu);
+  const numuneKartiniKameraylaOkut = () => scanYaz({ baslik: 'Numune için refakat kartını okut', ipucu: 'Bu işin kartının karekodunu çerçeveye tutun', okundu: (k) => { numuneKartiOkutuldu(k); } });
 
   /* iş kuralları ve istasyon türü (hazırlıktan) */
   const RL = useMemo(() => isKurallari(o.pkg), [o.pkg]);
@@ -842,7 +856,8 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
   const [talimatSoru, talimatSoruYaz] = useState<{ eylem: 'start' | 'finish'; eksik: { id: number; ad: string }[] } | null>(null);
   // "Yine de" seçilen iş ve eylem bir kez daha sorulmaz.
   const talimatGecildi = useRef<string | null>(null);
-  const task0 = bekletmeGorevi(siradakiGorev(o, D, nextOrder, ilk, simdi), bekletme);
+  const numuneYolu = useNumuneYolu(depo, pv ? null : o.pendingReq);
+  const task0 = bekletmeGorevi(numuneYoluGorevi(siradakiGorev(o, D, nextOrder, ilk, simdi), numuneYolu), bekletme);
   const ertelenmis = task0 && task0.key && (snooze[task0.key] ?? 0) > simdi ? bekletmeGorevi(siradakiGorev({ ...o, _skip: true }, D, null, ilk, simdi), bekletme) : task0;
   const eskiG = eskiCizimGorevi(ertelenmis, cizimEski);
   const task: Gorev | null = eskiG && eskiG !== ertelenmis
@@ -1200,7 +1215,7 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
     islerYaz((l) => l.map((x, j) => (j === aiRef.current ? { ...x, ...('kart' in alan ? { kart: alan.kart, kartsizGerekce: null } : { kartsizGerekce: alan.kartsizGerekce }) } : x)));
     actRef.current('start', bekleyen?.t, bekleyen?.warned ?? true);
   };
-  const sendSample = async () => {
+  const sendSample = async (gonderim: NumuneGonderimi) => {
     if (!o.pkg) { say('Bu iş için kontrol planı yok', 'alert', 'hold'); return; }
     let items = D.due.filter((b) => D.who[b.id] !== 'op');
     // Numune stoktan teslim edilir (115 a): ilk parça önce sağlam sayılmış olmalı, hazırlıkta yapılan parça stokta yoktur (129).
@@ -1219,12 +1234,14 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
       id: `rq${Date.now()}`, pkgId: o.pkg.id, no: o.no, part: o.part, rev: o.pkg.rev, machine: MACHINE, by: ME, at: Date.now(), reason,
       items: items.map((b) => b.id), crit: items.some((b) => b.crit), cnt: o.good, status: 'waiting', results: {},
     };
+    // 3718 a: gönderim yolu (okutulan kart ya da kartsız gerekçe) isteğe yazılır; elle etiket istenmez.
+    (req as SampleRequest & { gonderim?: NumuneGonderimi }).gonderim = gonderim;
     await depo.DB.put('requests', req);
     depo.Bus.send({ type: 'sample', reqId: req.id, no: o.no, machine: MACHINE, reason });
     patch(yeniNumuneYamasi(req));
     bip('call');
-    if (kmBagsizPlan(o.pkg.plan)) { say(bagsizNumuneBildirimi(items.length, `${o.no} #${sayi(o.good)}`, ilkParcaKalemleri(o).some((k) => items.some((b) => b.id === k.id))), 'alert', 'hold'); return; }
-    say(`Numune isteği kalitede · onay bekleniyor · ${items.length} ölçü · etiketle: ${o.no} #${sayi(o.good)}`, 'target', 'hold');
+    if (kmBagsizPlan(o.pkg.plan)) { say(bagsizNumuneBildirimi(items.length, gonderimMetni(gonderim), ilkParcaKalemleri(o).some((k) => items.some((b) => b.id === k.id))), 'alert', 'hold'); return; }
+    say(numuneGonderildiBildirimi(items.length, gonderimMetni(gonderim)), 'truck', 'hold');
   };
   // Hurda yalnız nedenle yazılır (116 a).
   const addScrap = () => {
@@ -1531,7 +1548,7 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
       kaydet={(g) => { const tamam = topluKaydet(g); if (tamam) ovYaz(null); return tamam; }} />
   ) : null;
   const kaliteGorunumu = kaliteIstasyonu && !pv ? (
-    <KaliteGorunumu istasyon={MACHINE} is={o} izinli={yetkiVar('q.decide')} olcebilir={yetkiVar('q.meas')} soyle={(m, t) => say(m, t === 'ok' ? 'check' : 'alert', t === 'ok' ? 'run' : 'stop')} />
+    <KaliteGorunumu istasyon={MACHINE} is={o} izinli={yetkiVar('q.decide')} olcebilir={yetkiVar('q.meas')} okut={pv ? null : kartiKameraylaOkut} soyle={(m, t) => say(m, t === 'ok' ? 'check' : 'alert', t === 'ok' ? 'run' : 'stop')} />
   ) : null;
   const gorev = (mobil: boolean, ek?: ReactNode) => (
     <GorevKarti gorev={task} izinli={izinli} ertele={ertele} ek={ek}
@@ -1694,7 +1711,7 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
       ) : null}
       {ov === 'station' ? <IstasyonSecici simdiki={MACHINE} kapat={() => ovYaz(null)} sec={(id) => { if (pv) yerel.yaz('pvStation', id); else yerel.yaz('station', id); yenidenKur(); }} /> : null}
       {warnShow ? <UyariPenceresi liste={warnShow.list} {...(warnShow.title ? { baslik: warnShow.title } : {})} okudum={() => { const w = warnShow; ackWarns(w.list); warnShowYaz(null); bip('ok'); if (w.then) setTimeout(w.then, 50); }} /> : null}
-      {ov === 'numune' ? <NumunePenceresi istasyon={MACHINE} numune={{ hazir: !!o.pkg, bekliyor: !!o.pendingReq, gonder: () => { void sendSample(); } }} kapat={() => ovYaz(null)} /> : null}
+      {ov === 'numune' ? <NumunePenceresi istasyon={MACHINE} numune={{ hazir: !!o.pkg, bekliyor: !!o.pendingReq, gonder: (g) => { void sendSample(g); }, okut: pv ? null : numuneKartiniKameraylaOkut }} kapat={() => ovYaz(null)} /> : null}
       {ov === 'scrap' && hataliTmi ? <HataliPenceresi nedenler={hataliNedenleri(ayarlar.hurdaNedenleri, o.pkg)} enCok={hataliUstSiniri(o, hataliSayisi)} yukleniyor={hataliGidiyor} kapat={() => ovYaz(null)} kaydet={hataliGonder} /> : null}
       {ov === 'scrap' && !hataliTmi ? <HurdaPenceresi nedenler={ayarlar.hurdaNedenleri} kapat={() => ovYaz(null)} sec={(code) => { ovYaz(null); doScrap(code); }} /> : null}
       {ov === 'reason' ? (
