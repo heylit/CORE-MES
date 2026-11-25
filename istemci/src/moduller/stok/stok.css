@@ -874,7 +874,7 @@ button.tc-stok-bekleyen { cursor: pointer; }
 .tc-stok-fd-ozet dt { color: var(--muted); }
 .tc-stok-fd-ozet dd { margin: 0; font-weight: 600; text-align: right; }
 .tc-stok-fd-alt { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--b-2); }
-@media (max-width: 1023px) { .tc-stok-fd-alt .tc-dugme, .tc-stok-bilgi-uyari .tc-dugme { min-block-size: var(--dokunma); } }
+@media (max-width: 1023px) { .tc-stok-fd-alt .tc-dugme, .tc-stok-bilgi .tc-dugme, .tc-stok-secenekler .tc-dugme { min-block-size: var(--dokunma); } }
 .tc-stok-bekleyen .tc-rozet { white-space: nowrap; }
 @media (max-width: 479px) {
   .tc-stok-bekleyen .tc-rozet { display: none; }

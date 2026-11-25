@@ -37,7 +37,7 @@ type DenetimDefteri = DenetimSecimi[];
 interface GirenSatir { satirId: number; kod: string | null; ad: string | null; birim: string | null; miktar: string; gkk: boolean; tedarikci: string | null }
 async function malKabulSatirlariniYaz(
   db: Db, malKabulId: number, tur: string, satirlar: MalKabulKomutu['satirlar'], k: Kullanici, eksiOnay: boolean, denetim: DenetimDefteri, girenler: GirenSatir[] = [],
-  oncedenKabul: ReadonlySet<string> = new Set(),
+  oncedenKabul: ReadonlySet<string> | null = null,
 ): Promise<number[]> {
   const kisiId = k.id;
   const kabul = await varsayilanKonum(db, 'KABUL');
@@ -61,9 +61,12 @@ async function malKabulSatirlariniYaz(
     });
     if ('hata' in satirTuru) throw dogrulama(`${o.ad ?? o.kod}: ${satirTuru.hata}`, `${alan}.${satirTuru.alan}`);
     if (satirTuru.tur === 'fason' && ss && farkliKartOnayiGerekir({
-      siparisinParcasi: ss.uygulananMalzemeNo, donenKart: malzemeId, onay: s.farkliKartOnayi === true, oncedenKabulEdildi: oncedenKabul.has(kabulAnahtari(siparisSatirId!, malzemeId)),
+      siparisinParcasi: ss.uygulananMalzemeNo, donenKart: malzemeId, onay: s.farkliKartOnayi === true, oncedenKabulEdildi: oncedenKabul?.has(kabulAnahtari(siparisSatirId!, malzemeId)) ?? false,
     })) {
-      throw dogrulama(`${o.ad ?? o.kod}: siparişin işlediği parçadan farklı kart dönüyor; "Farklı kartla kabul et" onayı olmadan kabul edilmez.`, `${alan}.farkliKartOnayi`);
+      // Düzeltme formunda onay düğmesi yoktur; ileti depocuyu var olan yola yönlendirir (null: düzeltme değil).
+      throw dogrulama(oncedenKabul === null
+        ? `${o.ad ?? o.kod}: siparişin işlediği parçadan farklı kart dönüyor; "Farklı kartla kabul et" onayı olmadan kabul edilmez.`
+        : `${o.ad ?? o.kod}: düzeltmede siparişin işlediği parçadan farklı başka bir karta geçilemez; belgeyi satırsız düzeltip (iptal) mal kabulde "Farklı kartla kabul et" ile yeniden alın.`, `${alan}.farkliKartOnayi`);
     }
     // Fasonda satırın kartı dönen malzemedir; sipariş hizmet kartınadır (KD-009 karşılaştırması stok ve saf hizmet satırında).
     if (satirTuru.tur !== 'fason' && ss) {

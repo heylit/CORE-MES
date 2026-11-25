@@ -94,7 +94,7 @@ export function FasonKabulOnayi({ is, kabul, vazgec, yazildi }: { is: KabulIsi; 
       {f && <EslesmeDurumu s={eslesme} degistir={(d) => { if (d.farkliOnay !== undefined) onayliKartYaz(d.farkliOnay); }} donen={kartAdi} />}
       {!f ? <p className="tc-stok-not tc-stok-uyari-yazi" role="alert">Bu işin firmada parçası bulunamadı; yalnız "Malzeme dönmedi" yazılabilir.</p> : null}
       {kabul > kalan && f ? <p className="tc-stok-fd-uyari" role="alert"><Simge ad="alert" />Firmada {kalan} adet var; en çok {kalan} kabul edilir.</p> : null}
-      {onaysiz ? <p id="tc-kabul-neden" className="tc-stok-fd-uyari" role="status"><Simge ad="alert" />Farklı kartla kabul için yukarıdaki onay bekleniyor.</p> : null}
+      {onaysiz ? <p id="tc-kabul-neden" className="tc-stok-fd-uyari" role="status"><Simge ad="alert" />Dönen kart {kartAdi} farklı; kabul için onay bekleniyor.</p> : null}
       {yaz.isError ? <p className="tc-stok-fd-uyari" role="alert"><Simge ad="alert" />{hataMetni(yaz.error)}</p> : null}
       <div className="tc-stok-fd-alt">
         <Dugme onClick={vazgec} disabled={yaz.isPending}>Vazgeç</Dugme>

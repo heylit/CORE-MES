@@ -113,4 +113,9 @@ describe('dönen kalem eşleşme durumları (3712)', () => {
     cleanup();
     expect(goster({ ...s0, donus: 'hizmet', kart: '43' }).querySelector('.tc-stok-bilgi-pasif')?.textContent).toBe('Malzeme dönmedi: YM-DNM-42 · Deneme flanş firmada görünür kalır.');
   });
+  it('kutuya yazılırken (kart seçilmeden) durum satırı ve onay düğmesi çıkmaz', () => {
+    const c = render(<EslesmeDurumu s={{ ...s0, kart: 'ORN' }} degistir={() => undefined} donen={null} />).container;
+    expect(c.textContent).toBe('');
+    expect(c.querySelector('button')).toBeNull();
+  });
 });

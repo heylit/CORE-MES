@@ -8,7 +8,7 @@ export function IslenenMalzeme({ uygulanan, kod, ad, revizyon, adet, fasonAdim }
   return (
     <div className="sa-islenen">
       <span className="sa-islenen-etk">İşlenen malzeme</span>
-      <b>{ad || uygulanan}</b>{kod && ad ? <span className="sub">{kod}</span> : null}
+      <b>{ad || kod || uygulanan}</b>{kod && ad ? <span className="sub">{kod}</span> : null}
       {bil.length > 0 && <span className="sa-islenen-bil">{bil.map((x) => <span key={x}>{x}</span>)}</span>}
     </div>
   );

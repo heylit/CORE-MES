@@ -237,6 +237,12 @@ export function RevizyonUyarisi({ siparis, yururlukte }: { siparis: string; yuru
 // 3712: dönen kart siparişteki işlenen parçadan farklıysa (fason dönüşü) kabul ikinci bir onay ister; eşleşmede ek adım yoktur.
 export const farkliKart = (s: Satir): boolean => s.hizmetKarti !== '' && s.donus === 'fason' && !!s.islenen && s.kart !== '' && s.kart !== s.islenen.no;
 export const farkliOnaysiz = (s: Satir): boolean => farkliKart(s) && s.farkliOnay !== s.kart;
+// Çok satırlı formda depocu onayın hangi satırda eksik olduğunu görmeli; satır sırası formdaki sıradır.
+export function onayBekleyenMetni(satirlar: readonly Satir[]): string | null {
+  const sira = satirlar.flatMap((s, i) => (farkliOnaysiz(s) ? [`${String(i + 1)}.`] : []));
+  if (sira.length === 0) return null;
+  return satirlar.length === 1 ? 'Farklı kartla kabul için satırdaki onay bekleniyor.' : `Farklı kartla kabul için ${sira.join(', ')} satırdaki onay bekleniyor.`;
+}
 
 export function IslenenBlogu({ s }: { s: Satir }) {
   if (!s.islenen) return null;
@@ -251,17 +257,19 @@ export function IslenenBlogu({ s }: { s: Satir }) {
 }
 
 // 3712: üç durum. Eşleşiyor (yeşil), farklı kart (amber, onay ister), malzeme dönmedi (gri; işlenen parça firmada görünür kalır).
-export function EslesmeDurumu({ s, degistir, donen }: { s: Satir; degistir: (d: Partial<Satir>) => void; donen: string }) {
+// donen null: kutuya yazılıyor, kart henüz seçilmedi; farklı kart uyarısı ve onay düğmesi çıkmaz.
+export function EslesmeDurumu({ s, degistir, donen }: { s: Satir; degistir: (d: Partial<Satir>) => void; donen: string | null }) {
   if (!s.islenen || s.hizmetKarti === '') return null;
   if (s.donus === 'hizmet') {
     return <p className="tc-stok-tam tc-stok-bilgi tc-stok-bilgi-pasif" role="status"><span>Malzeme dönmedi: <strong>{s.islenen.etiket}</strong> firmada görünür kalır.</span></p>;
   }
   if (s.kart === '') return null;
   if (!farkliKart(s)) return <p className="tc-stok-tam tc-stok-bilgi tc-stok-bilgi-iyi" role="status"><span>Dönen kart işlenen malzemeyle eşleşiyor.</span></p>;
+  if (donen === null) return null;
   const onayli = s.farkliOnay === s.kart;
   return (
     <p className="tc-stok-tam tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">
-      <span>Siparişteki işlenen malzeme <strong>{s.islenen.etiket}</strong>; dönen kart <strong>{donen}</strong>. {onayli ? 'Farklı kartla kabul onaylandı.' : 'Farklıysa kabul için onay gerekir.'}</span>
+      <span>Siparişteki işlenen malzeme <strong>{s.islenen.etiket}</strong>; dönen kart <strong>{donen}</strong>. {onayli ? 'Farklı kartla kabul onaylandı.' : 'Kabul için onay gerekir.'}</span>
       {onayli
         ? <Dugme tur="ikincil" onClick={() => degistir({ farkliOnay: '' })}>Onayı kaldır</Dugme>
         : <Dugme tur="ikincil" onClick={() => degistir({ farkliOnay: s.kart })}>Farklı kartla kabul et</Dugme>}
@@ -295,7 +303,7 @@ function SatirGirdisi({ s, konumlar, degistir, sil }: { s: Satir; konumlar: { de
       )}
       {s.siparisSatirId && s.revizyonUyusmuyor && <RevizyonUyarisi siparis={s.siparisRevizyonu} yururlukte={s.yururlukRevizyonu} />}
       {s.siparisSatirId && <IslenenBlogu s={s} />}
-      <EslesmeDurumu s={s} degistir={degistir} donen={o.data?.ozet ? [o.data.ozet.kod, o.data.ozet.ad].filter(Boolean).join(' · ') : `#${s.kart}`} />
+      <EslesmeDurumu s={s} degistir={degistir} donen={o.data?.ozet ? [o.data.ozet.kod, o.data.ozet.ad].filter(Boolean).join(' · ') : null} />
       {s.sevkKalemiId && (
         <p className="tc-stok-tam tc-stok-bilgi">Sevkiyat kalemi: <strong>{s.sevkEtiketi}</strong>{' '}
           <Dugme tur="ikincil" onClick={() => degistir({ sevkKalemiId: '', sevkEtiketi: '' })}>Bağı kaldır</Dugme></p>
@@ -638,7 +646,7 @@ export function MalKabul() {
             {tur === 'satin_alma' && satirlar.some((s) => !bosMu(s) && !s.siparisSatirId) && (
               <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">Satın alma kabulünde her satır bir sipariş satırına bağlanır. Siparişi olmayan malı "Diğer" türüyle ve açıklamayla alın.</p>
             )}
-            <div className="tc-stok-sag">{taslak.durumYazisi}{satirlar.some(farkliOnaysiz) && <span id="tc-kabul-neden" className="tc-stok-bilgi tc-stok-bilgi-uyari">Farklı kartla kabul için satırdaki onay bekleniyor.</span>}<SabitEylem><Dugme tur="birincil" boyut="ana" type="submit" yukleniyor={komut.isPending} disabled={satirlar.some((s) => s.sertifikaYukleniyor || farkliOnaysiz(s))} {...(satirlar.some(farkliOnaysiz) ? { 'aria-describedby': 'tc-kabul-neden' } : {})}>Kabul et</Dugme></SabitEylem></div>
+            <div className="tc-stok-sag">{taslak.durumYazisi}{satirlar.some(farkliOnaysiz) && <span id="tc-kabul-neden" className="tc-stok-bilgi tc-stok-bilgi-uyari">{onayBekleyenMetni(satirlar)}</span>}<SabitEylem><Dugme tur="birincil" boyut="ana" type="submit" yukleniyor={komut.isPending} disabled={satirlar.some((s) => s.sertifikaYukleniyor || farkliOnaysiz(s))} {...(satirlar.some(farkliOnaysiz) ? { 'aria-describedby': 'tc-kabul-neden' } : {})}>Kabul et</Dugme></SabitEylem></div>
             {etiket && <p className="tc-stok-bilgi"><span>{etiket.no} kaydedildi.</span><EtiketMerkeziDugmesi tur="mal-kabul" idler={[etiket.id]}>Lot etiketlerini bas</EtiketMerkeziDugmesi></p>}
             {etiket && irsaliyeBekliyor && (
               <p className="tc-stok-bilgi" role="status"><span>İrsaliye bu cihazda bekliyor; bağlantı gelince {irsaliyeBekliyor} numaralı mal kabule eklenecek.</span></p>

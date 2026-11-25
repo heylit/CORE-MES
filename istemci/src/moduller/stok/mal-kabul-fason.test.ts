@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AcikSiparisSatiri } from '#paylasilan/sozlesme/stok.ts';
-import { bosSatir, farkliKart, farkliOnaysiz, fasonOnerilenAdet, siparistenSatir } from './MalKabul.tsx';
+import { bosSatir, farkliKart, farkliOnaysiz, fasonOnerilenAdet, onayBekleyenMetni, siparistenSatir } from './MalKabul.tsx';
 
 describe('fason dönüşü önerilen adet (319)', () => {
   it('firmada kalanı önerir: gönderilen − dönen − hurda', () => {
@@ -33,6 +33,14 @@ describe('işlenen malzeme ve dönen kart eşleşmesi (3712)', () => {
     expect(farkliOnaysiz(s)).toBe(true);
     expect(farkliOnaysiz({ ...s, farkliOnay: '57' })).toBe(false);
     expect(farkliOnaysiz({ ...s, kart: '58', farkliOnay: '57' })).toBe(true);
+  });
+
+  it('Kabul pasifken neden metni onayın eksik olduğu satırları sırasıyla adlandırır', () => {
+    const esit = siparistenSatir(bosSatir(), SATIR);
+    const farkli = { ...esit, kart: '57' };
+    expect(onayBekleyenMetni([esit])).toBeNull();
+    expect(onayBekleyenMetni([farkli])).toBe('Farklı kartla kabul için satırdaki onay bekleniyor.');
+    expect(onayBekleyenMetni([esit, farkli, { ...farkli, farkliOnay: '57' }, farkli])).toBe('Farklı kartla kabul için 2., 4. satırdaki onay bekleniyor.');
   });
 
   it('kart henüz seçilmediyse, malzeme dönmediyse ve hizmet dışı satırda onay istenmez', () => {

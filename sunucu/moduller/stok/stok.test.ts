@@ -1863,6 +1863,7 @@ describe('stok (gerçek PostgreSQL)', () => {
     const red = await mudur<Hata & { alan?: string }>('POST', `/stok/mal-kabuller/${d.govde.belge.id}/duzelt`, { satirlar: [{ malzemeId: baska, miktar: '4', ...g }] });
     assert.equal(red.durum, 400, JSON.stringify(red.govde));
     assert.equal(red.govde.alan, 'satirlar.0.farkliKartOnayi');
+    assert.match(red.govde.mesaj, /düzeltmede .* satırsız düzeltip/, 'düzeltme formunda düğme yok; ileti var olan yolu söyler');
     assert.equal(await hareketSayisi(baska), 0, 'red hiçbir şey yazmaz');
     assert.deepEqual([await hareketSayisi(f.kapli), await hareketSayisi(f.ham), await bakiye(f.kapli, 'KABUL')], once, 'eski belge ters çevrilmez');
     const onayli = await mudur<MalKabulCevabi>('POST', `/stok/mal-kabuller/${d.govde.belge.id}/duzelt`, { satirlar: [{ malzemeId: baska, miktar: '4', ...g, farkliKartOnayi: true }] });
