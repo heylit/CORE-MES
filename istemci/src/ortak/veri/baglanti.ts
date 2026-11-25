@@ -98,6 +98,23 @@ export function baglantiDonusunuDinle(donunce: () => void): () => void {
   });
 }
 
+// Kısmi ulaşılamazlıkta (bir uç düşüyor, başkaları cevap veriyor) kopuk/dönüş durumu art arda değişir; her dönüşte bütün
+// sorguları yeniden okutmak düşen ucu aralıksız yeniden istetir. Dönüş en çok `aralikMs`'de bir işlenir; aradaki
+// dönüşler tek bir gecikmeli çağrıya birleşir (veri bayat kalmaz, yalnız seyrelir).
+export const DONUS_ARALIGI_MS = 10_000;
+export function baglantiDonusunuSeyrekDinle(donunce: () => void, aralikMs: number = DONUS_ARALIGI_MS): () => void {
+  let son = Number.NEGATIVE_INFINITY;
+  let bekleyen: ReturnType<typeof setTimeout> | undefined;
+  const calistir = (): void => { bekleyen = undefined; son = Date.now(); donunce(); };
+  const birak = baglantiDonusunuDinle(() => {
+    if (bekleyen !== undefined) return;
+    const kalan = son + aralikMs - Date.now();
+    if (kalan <= 0) calistir();
+    else bekleyen = setTimeout(calistir, kalan);
+  });
+  return () => { birak(); if (bekleyen !== undefined) clearTimeout(bekleyen); bekleyen = undefined; };
+}
+
 export function baglantiDurumu(): BaglantiDurumu {
   return durum;
 }
