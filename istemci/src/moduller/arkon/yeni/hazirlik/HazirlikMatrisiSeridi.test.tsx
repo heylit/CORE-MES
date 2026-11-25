@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { HAZIRLIK_MADDE_BILGISI } from '../../../uretim-emirleri/disari.ts';
 import type { HazirlikMaddesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { HazirlikMatrisiSeridi, MADDE_SIRASI } from './HazirlikTakibi.tsx';
+import { HazirlikMatrisiSeridi, HazirlikMatrisiYerTutucu, MADDE_SIRASI } from './HazirlikTakibi.tsx';
 import type { HazirlikSatiri } from '../operator/HazirlikListesi.tsx';
 
 afterEach(cleanup);
@@ -20,7 +20,7 @@ describe('3688: hazırlık matrisi şeridi', () => {
   it('karışık gelen satırlar sabit sırada çizilir; durumlar adıyla okunur', () => {
     const girdi = [satir('olcu-aleti', 'bilinmiyor'), satir('rota', 'muaf'), satir('cnc', 'eksik'), satir('malzeme', 'gerekmez'), satir('cizim', 'tamam')];
     render(<HazirlikMatrisiSeridi satirlar={girdi} />);
-    const g = screen.getByRole('group', { name: /^Hazırlık matrisi: 1 eksik$/ });
+    const g = screen.getByRole('group', { name: /^Hazırlık matrisi: 1 eksik, 1 muaf, 1 denetlenmiyor$/ });
     const adlar = within(g).getAllByRole('img').map((e) => e.getAttribute('aria-label'));
     expect(adlar[1]).toMatch(/^Çizim revizyonu/);
     expect(adlar[4]).toMatch(/^Ölçü/i);
@@ -42,5 +42,18 @@ describe('3688: hazırlık matrisi şeridi', () => {
     render(<HazirlikMatrisiSeridi satirlar={[satir('cnc', 'tamam'), satir('cizim', 'tamam')]} />);
     const g = screen.getByRole('group', { name: 'Hazırlık matrisi: hepsi tamam' });
     expect(g.textContent).not.toMatch(/Eksik|Uyarı/);
+  });
+});
+
+describe('3688: özet ve yer tutucu', () => {
+  it('muaf ve denetlenmeyen maddeler özette sayılır; "hepsi tamam" demez', () => {
+    render(<HazirlikMatrisiSeridi satirlar={[satir('cnc', 'tamam'), satir('cizim', 'muaf'), satir('rota', 'bilinmiyor'), satir('malzeme', 'bilinmiyor'), satir('aparat', 'gerekmez')]} />);
+    expect(screen.getByRole('group', { name: 'Hazırlık matrisi: 1 muaf, 2 denetlenmiyor' })).toBeTruthy();
+  });
+
+  it('yer tutucu erişilebilirlik ağacında yok ve 12 boş hücre ayırır', () => {
+    const { container } = render(<HazirlikMatrisiYerTutucu />);
+    expect(screen.queryByRole('group')).toBeNull();
+    expect(container.querySelectorAll('.tc-ay2-takip-hucre').length).toBe(12);
   });
 });

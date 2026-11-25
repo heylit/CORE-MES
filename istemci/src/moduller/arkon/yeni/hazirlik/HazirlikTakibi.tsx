@@ -32,6 +32,7 @@ export function hazirlikEmirleri(paketler: readonly Pkg[]): number[] {
   return [...l].sort((a, b) => a - b);
 }
 
+export const hazirlikBeklenir = (p: Pkg): boolean => !bitti(p) && tmiEmirId(p) !== null;
 export function paketHazirligi(harita: ReadonlyMap<number, HazirlikCevabi>, p: Pkg): HazirlikSatiri[] | null {
   const emir = bitti(p) ? null : tmiEmirId(p);
   const v = emir === null ? undefined : harita.get(emir);
@@ -72,11 +73,24 @@ export function HazirlikPaketCipi({ satirlar }: { satirlar: readonly HazirlikSat
 // Hücre rengi tek başına anlam taşımaz: simge ve ad (başlık ve erişilebilir ad) aynı durumu söyler.
 // Sıra tek kaynakta: kayıt tipi yeni maddeyi eksik bırakırsa derleme durur; test HAZIRLIK_MADDELERI ile eşitliği denetler.
 export const MADDE_SIRASI: Record<HazirlikMaddesi, number> = { cnc: 0, cizim: 1, yayin: 2, rota: 3, malzeme: 4, 'takim-omru': 5, 'takim-hazirla': 6, makine: 7, talimat: 8, 'ek-madde': 9, aparat: 10, 'olcu-aleti': 11 };
+// Veri gelene kadar aynı yüksekliği ve aynı sarmayı ayırır: 12 boş hücre; satır veri gelince zıplamaz.
+export function HazirlikMatrisiYerTutucu() {
+  return (
+    <span className="tc-ay2-takip-matris" aria-hidden="true" data-yukleniyor="">
+      <span className="tc-ay2-takip-hucreler">{MADDE_ADLARI.map((m) => <span key={m} className="tc-ay2-takip-hucre" data-ton="pasif" />)}</span>
+      <span className="tc-ay2-takip-not" />
+    </span>
+  );
+}
+const MADDE_ADLARI = (Object.keys(MADDE_SIRASI) as HazirlikMaddesi[]).sort((a, b) => MADDE_SIRASI[a] - MADDE_SIRASI[b]);
 export function HazirlikMatrisiSeridi({ satirlar }: { satirlar: readonly HazirlikSatiri[] }) {
   const l = [...satirlar].sort((a, b) => MADDE_SIRASI[a.madde] - MADDE_SIRASI[b.madde]);
   const g = l.map((x) => ({ x, g: gorunum(x) }));
   const hata = g.filter((e) => e.x.hal === 'eksik' && e.g.ton === 'hata'); const uyari = g.filter((e) => e.x.hal === 'eksik' && e.g.ton === 'uyari');
-  const ozet = hata.length + uyari.length === 0 ? 'hepsi tamam' : [hata.length ? `${hata.length} eksik` : '', uyari.length ? `${uyari.length} uyarı` : ''].filter(Boolean).join(', ');
+  const say = (t: (e: (typeof g)[number]) => boolean) => g.filter(t).length;
+  const muaf = say((e) => e.x.hal === 'muaf'); const bilinmiyor = say((e) => e.x.hal === 'bilinmiyor');
+  const parcalar = [hata.length ? `${hata.length} eksik` : '', uyari.length ? `${uyari.length} uyarı` : '', muaf ? `${muaf} muaf` : '', bilinmiyor ? `${bilinmiyor} denetlenmiyor` : ''].filter(Boolean);
+  const ozet = parcalar.length === 0 ? 'hepsi tamam' : parcalar.join(', ');
   const ad = (e: { x: HazirlikSatiri }) => HAZIRLIK_MADDE_BILGISI[e.x.madde].kisa;
   return (
     <span className="tc-ay2-takip-matris" role="group" aria-label={`Hazırlık matrisi: ${ozet}`}>
