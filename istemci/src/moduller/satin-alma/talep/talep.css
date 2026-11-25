@@ -220,12 +220,12 @@
 .sa-talep-tablo th.sa-talep-sabit:first-child { box-sizing: border-box; width: var(--b-6); min-width: var(--b-6); max-width: var(--b-6); padding-inline: 0; text-align: center; }
 @media (min-width: 1024px) {
   .sa-talep-tablo .tc-tablo td.sa-talep-malzeme { left: var(--b-6); min-width: 12rem; max-width: 16rem; white-space: normal; box-shadow: 1px 0 0 var(--edge2); }
-  .sa-talep-tablo .tc-tablo td.sa-talep-alternatif { white-space: normal; min-width: 8rem; max-width: 12rem; }
+  .sa-talep-tablo .tc-tablo td.sa-talep-alternatif { white-space: normal; min-width: 7rem; max-width: 9rem; }
 }
 .sa-talep-tablo .sa-talep-malzeme .sa-talep-ara, .sa-talep-tablo .sa-talep-malzeme .sa-talep-serbest { gap: var(--b-1); }
 .sa-talep-secili-ad { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); }
 .sa-talep-etiketler { display: inline-flex; flex-wrap: wrap; gap: var(--b-1); }
-.sa-talep-alternatif-ozet { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); }
+.sa-talep-alternatif-ozet { display: grid; justify-items: start; gap: var(--b-1); }
 .sa-talep-eylem { display: flex; flex-wrap: wrap; gap: var(--b-1); }
 .sa-talep-ayrinti-satir > td { white-space: normal; background: var(--panel2); }
 .sa-talep-ayrinti-ic { display: grid; gap: var(--b-3); max-width: 48rem; position: sticky; left: var(--b-3); }
@@ -327,5 +327,5 @@
 .sa-talep-ek-emir { display: grid; gap: var(--b-1); flex: 1 1 14rem; min-width: 0; }
 .sa-talep-ek-emir .sa-talep-emir { width: 100%; min-width: 0; }
 @media (min-width: 1024px) {
-  .sa-talep-tablo .tc-tablo td[data-etiket='Termin'] .tc-alan-kutu { min-width: 0; width: 9.5rem; }
+  .sa-talep-tablo .tc-tablo td[data-etiket='Termin'] .tc-alan-kutu { min-width: 0; width: 9.5rem; padding-inline: var(--b-2); }
 }
