@@ -726,3 +726,23 @@ export const faturaEslesmeCevabi = z.object({
   okuma: z.object({ acik: z.boolean(), sonOkuma: zamanSemasi.nullable() }),
 });
 export type FaturaEslesmeCevabi = z.output<typeof faturaEslesmeCevabi>;
+
+// 3694 ekran dilimi: sevkiyat durağındaki Logo irsaliye durumu. acik=false iken ekran hiçbir şey göstermez ve satır dönmez.
+export const IRSALIYE_GONDERIM_DURUMLARI = ['gitmedi', 'sirada', 'gitti', 'hata', 'belirsiz'] as const;
+export type IrsaliyeGonderimDurumu = (typeof IRSALIYE_GONDERIM_DURUMLARI)[number];
+export const irsaliyeGonderimDurumuSorgusu = z.object({
+  // Sevk işi numaraları, virgülle; en çok 200.
+  no: z.string().regex(/^\d{1,9}(,\d{1,9}){0,199}$/, 'İş numaraları virgülle ayrılmış sayılar olmalı.').transform((x) => x.split(',').map(Number)),
+}).strict();
+export const irsaliyeGonderimDurumuCevabi = z.object({
+  acik: z.boolean(),
+  satirlar: z.array(z.object({
+    belgeTuru: z.enum(['satis-irsaliyesi', 'konsinye-irsaliyesi']),
+    belgeNo: z.number().int(),
+    durum: z.enum(IRSALIYE_GONDERIM_DURUMLARI),
+    kayitNo: z.string().nullable(),
+    hata: z.string().nullable(),
+    sonrakiDeneme: zamanSemasi.nullable(),
+  })),
+});
+export type IrsaliyeGonderimDurumuCevabi = z.output<typeof irsaliyeGonderimDurumuCevabi>;

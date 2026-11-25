@@ -9,7 +9,9 @@ import { hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { isBasligi } from './BekleyenIsler.tsx';
 import { sayiMetni } from './bicim.ts';
-import { kabulYolu, useDepoCikisi, useIsKomutu } from './veri.ts';
+import { LogoIrsaliyeAciklamasi, LogoIrsaliyeRozeti, logoIrsaliyeSatiri } from './LogoIrsaliyeDurumu.tsx';
+import { SoforKimligiAlani } from './SoforKimligiAlani.tsx';
+import { kabulYolu, useDepoCikisi, useIsKomutu, useLogoIrsaliyeDurumu } from './veri.ts';
 
 export interface YukDurumu { ton: RozetTonu; metin: string; cikis: TumIsSatiri | null; kabul: TumIsSatiri | null; bitti: boolean }
 
@@ -49,6 +51,10 @@ export function YukleAdimi({ veri, isler, noktalar, kalemler, aracsiz, onayli, i
   const isKomutu = useIsKomutu();
   const { bildir } = useBildirim();
   const [irsaliye, setIrsaliye] = useState<{ is: Is; no: string } | null>(null);
+  // 3694: Logo irsaliye durumu. Ayar ve ölçüm kapısı kapalıyken acik=false: rozet, açıklama ve kimlik alanı hiç çizilmez.
+  const sevkIsIdleri = veri.rotalar.flatMap((r) => r.ogeler.flatMap((o) => ('isId' in o && isler.get(o.isId)?.tur !== 'alim' && isler.has(o.isId) ? [o.isId] : [])));
+  const logoDurumu = useLogoIrsaliyeDurumu(onayli ? [...new Set(sevkIsIdleri)] : []);
+  const logoAcik = logoDurumu.data?.acik === true;
   if (!onayli) {
     return <p className="tc-sevkiyat-bos">Yükleme plan onaylanınca başlar: onayla birlikte araçtaki kalemler depoya düşer.</p>;
   }
@@ -62,8 +68,11 @@ export function YukleAdimi({ veri, isler, noktalar, kalemler, aracsiz, onayli, i
       onError: (h) => bildir('hata', hataIletisi(h, 'Çıkış yapılamadı')),
     });
   };
+  const [kimlikBekliyor, setKimlikBekliyor] = useState(false);
   const irsaliyeYaz = () => {
     if (!irsaliye) return;
+    // Yazılıp "Kimliği kaydet"e basılmamış kimlik sessizce kaybolmasın: pencere açık kalır, kullanıcı uyarılır.
+    if (kimlikBekliyor) { bildir('hata', 'Yazdığınız kimlik numarası henüz kaydedilmedi. "Kimliği kaydet"e basın ya da alanı boşaltın.'); return; }
     isKomutu.mutate({ tur: 'belge-no', id: irsaliye.is.id, govde: { belgeNo: irsaliye.no.trim() || null, surum: irsaliye.is.surum } }, {
       onSuccess: () => { bildir('tamam', 'İrsaliye no yazıldı.'); setIrsaliye(null); },
       onError: (h) => bildir('hata', hataIletisi(h, 'İrsaliye no yazılamadı')),
@@ -99,6 +108,7 @@ export function YukleAdimi({ veri, isler, noktalar, kalemler, aracsiz, onayli, i
                     {/* Kalemsiz işte depo işi yoktur; rozet satırı kalabalıklaştırmasın. */}
                     {kalemler.get(is.id)?.length ? <Rozet ton={d.ton}>{d.metin}</Rozet> : null}
                     {is.belgeNo && <Rozet ton="pasif">İrs. {is.belgeNo}</Rozet>}
+                    {logoAcik && is.tur !== 'alim' && <LogoIrsaliyeRozeti satir={logoIrsaliyeSatiri(logoDurumu.data, is.id)} />}
                     {d.cikis && cikisYapar && (
                       <Dugme tur={birincil ? 'birincil' : 'ikincil'} simge="upload" yukleniyor={cikis.isPending && cikis.variables === d.cikis.kalemId} onClick={() => cikisYap(d.cikis!)}>Çıkış yap</Dugme>
                     )}
@@ -106,6 +116,7 @@ export function YukleAdimi({ veri, isler, noktalar, kalemler, aracsiz, onayli, i
                     {isYazabilir && is.tur !== 'alim' && is.durum !== 'tamamlandi' && (
                       <Dugme simge="file" onClick={() => setIrsaliye({ is, no: is.belgeNo ?? '' })}>{is.belgeNo ? 'Değiştir' : 'İrsaliye no'}</Dugme>
                     )}
+                    {logoAcik && is.tur !== 'alim' && <LogoIrsaliyeAciklamasi satir={logoIrsaliyeSatiri(logoDurumu.data, is.id)} />}
                   </li>
                 );
               })}
@@ -134,6 +145,7 @@ export function YukleAdimi({ veri, isler, noktalar, kalemler, aracsiz, onayli, i
         <p><b>{irsaliye ? isBasligi(irsaliye.is, noktalar) : ''}</b> durağının irsaliye numarası. Logo'daki satış irsaliyesiyle bu numarayla eşleşir.</p>
         <Girdi etiket="İrsaliye no" maxLength={60} value={irsaliye?.no ?? ''} autoFocus
           onChange={(e) => setIrsaliye((x) => (x ? { ...x, no: e.target.value } : x))} onKeyDown={(e) => { if (e.key === 'Enter') irsaliyeYaz(); }} />
+        {logoAcik && irsaliye && <SoforKimligiAlani isId={irsaliye.is.id} yazabilir={isYazabilir} okuyabilir={islemler.includes('sevkiyat.sofor-kimlik-oku')} bekleyenDegisti={setKimlikBekliyor} />}
       </Pencere>
     </div>
   );
