@@ -123,8 +123,8 @@ function bolPenceresi(r: PurchaseRequest, it: RequestItem): void {
     <div id="kk-ozet" aria-live="polite"></div>
     <div id="kk-kabul" class="small muted">Kabul sınırı denetleniyor...</div>
     ${r.status === "eval" ? "" : '<label class="f"><span>Gerekçe <small>— isteğe bağlı, karar özetine yazılır</small></span><textarea id="kk-gerekce" maxlength="2000" placeholder="Örn. termin riski için miktarın bir kısmı ikinci tedarikçiden"></textarea></label>'}
-    <p class="xs muted">Bölünen kalemin teklif fiyatı, kademesi, en az miktarı ve alternatifi yeni satırlara kopyalanır; alternatif uygunluğu yeni satırda yeniden değerlendirilir. ${r.status === "eval" ? "Karar, sayfanın altındaki çubuktan gönderilir." : "Karar onaya gider, varsa onaylar sıfırlanır."}</p>
-  </div><div class="mf"><button class="btn primary" data-act="kk-bol-yes" data-item="${it.id}" disabled>${r.status === "eval" ? "Böl" : "Böl ve onaya gönder"}</button><button class="btn ghost" data-act="close">Vazgeç</button></div>`, true, true);
+    <p class="xs muted">Bölünen kalemin teklif fiyatı, kademesi, en az miktarı ve alternatifi yeni satırlara kopyalanır; alternatif uygunluğu yeni satırda yeniden değerlendirilir. ${r.status === "eval" ? "Karar, sayfanın altındaki çubuktan gönderilir." : "\"Böl ve onaya gönder\" kararı onaya gönderir, varsa onaylar sıfırlanır. \"Yalnız böl\" kalemi satırlara ayırır, karar vermez; onaydaki karar geri çekilir ve karar sayfanın altındaki çubuktan gönderilir."}</p>
+  </div><div class="mf"><button class="btn primary" data-act="kk-bol-yes" data-item="${it.id}" disabled>${r.status === "eval" ? "Böl" : "Böl ve onaya gönder"}</button>${r.status === "eval" ? "" : `<button class="btn" data-act="kk-bol-sadece" data-item="${it.id}" disabled>Yalnız böl</button>`}<button class="btn ghost" data-act="close">Vazgeç</button></div>`, true, true);
   ozetiYaz(r, it);
   void kabulReddi(r.id, [it.id]).then((red) => {
     const kutu = $<HTMLElement>("#kk-kabul"); if (!kutu || $<HTMLElement>(`[data-kk-pencere="${it.id}"]`) === null) return;
@@ -152,6 +152,8 @@ function ozetiYaz(r: PurchaseRequest, it: RequestItem): void {
   const kabul = $<HTMLElement>("#kk-kabul")?.dataset.kkKabul;
   const dugme = $<HTMLButtonElement>('[data-act="kk-bol-yes"]');
   if (dugme) dugme.disabled = !tamam || tekPay < 2 || kabul !== "tamam";
+  const sadece = $<HTMLButtonElement>('[data-act="kk-bol-sadece"]');
+  if (sadece) sadece.disabled = !tamam || tekPay < 2 || kabul !== "tamam";
   const kutu = $<HTMLElement>("#kk-ozet");
   if (kutu) kutu.innerHTML = `<div class="note small"><div class="row"><span>Dağıtılan <b class="num">${numIn(dagitilan)} / ${numIn(it.qty)} ${esc(it.unit)}</b></span>
     ${tamam ? "" : '<span class="flag warn">toplam kalem miktarına eşit değil</span>'}${tamam && tekPay < 2 ? '<span class="flag mute">en az iki tedarikçiye pay verin</span>' : ""}
@@ -229,14 +231,16 @@ document.addEventListener("click", (e) => {
   const neden = bolunemezNedeni(it) ?? bolmeKapaliNedeni(r);
   if (neden) { toast(neden); return; }
   if (el.dataset.act === "kk-bol") { bolPenceresi(r, it); return; }
-  if (el.dataset.act !== "kk-bol-yes") return;
+  if (el.dataset.act !== "kk-bol-yes" && el.dataset.act !== "kk-bol-sadece") return;
   const ev = evaluate(r);
   const ps = paylar(r, it, ev);
   if (!paylarTamam(it.qty ?? 0, ps.map((p) => p.miktar)) || ps.filter((p) => p.miktar > 0).length < 2) { toast("Miktarı en az iki tedarikçiye, toplamı kalem miktarına eşit olacak şekilde paylaştırın."); return; }
   if ($<HTMLElement>("#kk-kabul")?.dataset.kkKabul !== "tamam") { toast("Bu kalem bölünemez; kabul sınırı notuna bakın."); return; }
   const pay = Object.fromEntries(ps.filter((p) => p.miktar > 0).map((p) => [p.x.q.id, p.miktar]));
-  if (r.status === "eval") {
+  if (r.status === "eval" || el.dataset.act === "kk-bol-sadece") {
     const b = bolunmusTalep(r, it.id, pay);
+    // Yalnız böl: karar çekilir, talep değerlendirmeye döner (sunucu geçişi: teklif isteniyor ve onayda → değerlendirme).
+    b.talep.status = "eval";
     closeModal();
     saveRequest(b.talep, b.metin);
     bolmeyiTaslagaIsle(b.talep, it.id, b.atama);

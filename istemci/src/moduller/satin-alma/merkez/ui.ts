@@ -5,6 +5,7 @@ import type {
   Settings, Supplier, Weights,
 } from "./tipler.ts";
 import { CURRENCIES as CURS } from "./tipler.ts";
+import { teslimSekliSecenekleri } from "./teslim-sekli.ts";
 import { CRIT, DELIVERY, KART_SAYFASI, OPEN, COMMITTED, PRIO, QUALITY, UNITS, stLabel } from "./constants.ts";
 import {
   FIRMA_KARTLARI, S, V, backend, canWrite, persist, persistUndoable, saveMaterial, saveRequest, saveRequestUndoable, saveSupplier, settings, undoLast, UNDO,
@@ -193,7 +194,7 @@ export function quoteModal(r: PurchaseRequest, q?: Quote | null, presetSup?: str
       </fieldset>
       <fieldset class="fs"><legend>Teslimat ve garanti</legend>
         <div class="grid g2"><label class="f"><span>Termin (gün)</span><input type="number" min="0" id="q-lead" value="${parseNum(draftQ.leadDays) ?? ""}" placeholder="Siparişten teslime"></label><label class="f"><span>Termin tarihi <small>— teklif tarihinden</small></span><input type="date" id="q-lead-date" value="${esc(terminTarihi(terminTabani(draftQ.date), parseNum(draftQ.leadDays)))}"></label></div>
-        <div class="grid g2"><label class="f"><span>Garanti (ay)</span><input type="number" min="0" id="q-war" value="${parseNum(draftQ.warrantyMonths) ?? ""}"></label><label class="f"><span>Teslim şekli</span><input type="text" list="dl-dterms" id="q-dterm" value="${esc(draftQ.deliveryTerm || "")}"><datalist id="dl-dterms">${DELIVERY.map(d => `<option value="${esc(d)}">`).join("")}</datalist></label></div>
+        <div class="grid g2"><label class="f"><span>Garanti (ay)</span><input type="number" min="0" id="q-war" value="${parseNum(draftQ.warrantyMonths) ?? ""}"></label><label class="f"><span>Teslim şekli</span><select id="q-dterm">${teslimSekliSecenekleri(draftQ.deliveryTerm || "")}</select></label></div>
       </fieldset>
     </div>
     <div class="grid g3">
@@ -729,7 +730,8 @@ function bulkGrid(r: PurchaseRequest): string {
     if (kind === "cur") return `<select data-bf="${f}" data-col="${j}" data-nr="${nr}">${CURS.map(c => `<option ${v === c ? "selected" : ""}>${c}</option>`).join("")}</select>`;
     if (kind === "bool") return `<label class="chk bchk"><input type="checkbox" data-bf="${f}" data-col="${j}" data-nr="${nr}" ${v ? "checked" : ""}> evet</label>`;
     if (kind === "date") return `<input type="date" data-bf="${f}" data-col="${j}" data-nr="${nr}" value="${esc(v || "")}">`;
-    if (kind === "text") return `<input type="text" data-bf="${f}" data-col="${j}" data-nr="${nr}" value="${esc(v || "")}" ${f === "deliveryTerm" ? 'list="dl-dterms-b"' : ""}>`;
+    if (f === "deliveryTerm") return `<select data-bf="${f}" data-col="${j}" data-nr="${nr}" aria-label="${j + 1}. sütun teslim şekli">${teslimSekliSecenekleri(String(v ?? ""))}</select>`;
+    if (kind === "text") return `<input type="text" data-bf="${f}" data-col="${j}" data-nr="${nr}" value="${esc(v || "")}">`;
     return `<input type="text" inputmode="decimal" data-bf="${f}" data-col="${j}" data-nr="${nr}" value="${numIn(parseNum(v))}">`;
   };
   const head = `<tr><th class="rl">Kalem</th>${cols.map((c, j) => `<th><div class="bh"><select data-bf="supplierId" data-col="${j}" aria-label="${j + 1}. sütun tedarikçisi"><option value="">Tedarikçi seçin</option>${sups.map(s => `<option value="${s.id}" ${c.supplierId === s.id ? "selected" : ""}>${esc(s.name)}${pasifEki(s)}</option>`).join("")}${firmaKartiSecenekleri(c.supplierId)}<option value="__new" ${c.supplierId === "__new" ? "selected" : ""}>+ Kayıtsız tedarikçi (adla)</option></select>${c.qid ? "" : `<button class="btn sm ghost" data-act="bulk-rm" data-col="${j}" aria-label="Sütunu kaldır" title="Sütunu kaldır">✕</button>`}</div>${c.supplierId === "__new" ? `<input type="text" data-bf="newName" data-col="${j}" placeholder="Yeni tedarikçi adı" value="${esc(c.newName)}" data-sa-y="32">` : ""}${c.qid ? (() => { const q = (S.requests[BULK!.rid]?.quotes || []).find(x => x.id === c.qid); return `<div class="bh-acts"><span class="sub">kayıtlı${q?.revisions ? `, ${q.revisions}. revizyon` : ""}</span><button class="lnk" data-act="edit-quote" data-qid="${c.qid}">Ayrıntı</button><button class="lnk danger" data-act="del-quote" data-qid="${c.qid}">Sil</button></div>`; })() : ""}</th>`).join("")}</tr>`;
@@ -750,7 +752,7 @@ function bulkGrid(r: PurchaseRequest): string {
     <tr class="sec"><td class="rl">Birim fiyatlar (KDV hariç)</td>${cols.map(() => "<td></td>").join("")}</tr>${priceRows}
     <tr class="sec"><td class="rl">Ticari şartlar</td>${cols.map(() => "<td></td>").join("")}</tr>${termRows}
     <tr class="sec"><td class="rl">Sonuç</td>${cols.map(() => "<td></td>").join("")}</tr>${res}
-  </tbody></table></div><datalist id="dl-dterms-b">${DELIVERY.map(d => `<option value="${esc(d)}">`).join("")}</datalist>`;
+  </tbody></table></div>`;
 }
 /** Fiyat hücresi: taban fiyat, altında "miktar ve üstü, birim fiyat" kademeleri (3181). Bütün fiyat kutuları aynı sütundadır. */
 function bulkHucre(c: BulkCol, j: number, it: RequestItem, nr: number): string {

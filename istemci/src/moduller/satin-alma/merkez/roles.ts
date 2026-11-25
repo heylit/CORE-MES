@@ -12,6 +12,7 @@ import { onaylayabilecekler } from "./onaylayan.ts";
 import { approvalState, awardOrders, awardTotals, budgetUse, evaluate, lateBy, orderDue, panoSayilari, payText, requiredApprover, supName, teslimBasarimi } from "./calc.ts";
 import { addDays, dayDiff, esc, fmtDate, fmtTs, money, nf0, numIn, parseNum, pct, todayStr } from "./util.ts";
 import { empty, faizUyarisi, headerFacts, prioDot, reqChip, tabItems, tabLog, verdictReasons } from "./views.ts";
+import { onayDagilimiHTML } from "./karar-matrisi.ts";
 import { onayUyarilari, simge, teklifKartlariHTML } from "./onay-karsilastirma.ts";
 import { nameOf } from "./store.ts";
 import { geriDugmesiHTML } from "./ui.ts";
@@ -303,6 +304,7 @@ export function viewApproval(r: PurchaseRequest): string {
           ${chosenIsTop ? verdictReasons(r, ev).map(w => `<li>${esc(w)}</li>`).join("") : ""}</ul>
         ${r.award.reason ? `<div class="note"><span class="xs muted">Gerekçe</span><br>${esc(r.award.reason)}</div>` : !chosenIsTop && r.award.mode === "single" ? '<div class="note small">Önerilen teklif seçilmedi; gerekçe yazılmamış.</div>' : ""}
       </div></section>
+      ${r.award.mode === "split" ? onayDagilimiHTML(r) : ""}
       <section class="panel sa-oy-teklifler"><div class="panel-h"><h2>Teklifler yan yana</h2><span class="sub">${ev.ranking.length} teklif, karar ilk sırada</span></div><div class="panel-b stack">
         ${teklifKartlariHTML(r, ev, secilen, tt.pvTRY)}
         ${disarida.length ? `<p class="small muted">Değerlendirme dışı: ${disarida.map(x => esc(supName(x.q)) + (x.q.compliant === false ? " (teknik uygun değil)" : " (fiyat girilmemiş)")).join(", ")}</p>` : ""}

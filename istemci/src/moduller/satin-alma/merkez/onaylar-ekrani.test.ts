@@ -95,4 +95,26 @@ describe('Onay listesi tablosu (3466-2)', () => {
     expect(satir.textContent).toContain('2. sıradaki teklif');
     expect(k.querySelectorAll('.sa-oy-ozet').length).toBe(4);
   });
+
+  it('bölünmüş karar: kalem kalem dağılım salt okunur matriste, her kalemin seçili hücresi kararın tedarikçisidir', () => {
+    const q2: Quote = { ...teklif, id: 'q2', supplierId: 'f2', prices: { k1: 12, k2: 7 } };
+    const q1: Quote = { ...teklif, prices: { k1: 10, k2: 9 } };
+    const r = talep('a', {
+      items: [{ id: 'k1', materialId: null, name: 'Deneme kalem', spec: '', qty: 10, unit: 'adet' }, { id: 'k2', materialId: null, name: 'Deneme ikinci', spec: '', qty: 4, unit: 'adet' }],
+      quotes: [q1, q2],
+      award: { mode: 'split', quoteId: null, splits: { k1: 'q1', k2: 'q2' }, reason: '', by: '', decidedAt: '2026-09-02', approvals: [] },
+    });
+    kur([r]);
+    S.suppliers['f2'] = { id: 'f2', name: 'Deneme İkinci' } as Supplier;
+    const k = ciz(viewApproval(r));
+    const matris = k.querySelector('[data-sa-onay-dagilimi] .sa-kr-genis')!;
+    expect(matris).not.toBeNull();
+    const secili = (kalem: string) => matris.querySelector(`[data-kr-kalem="${kalem}"] .sa-kr-hucre.sec`)?.getAttribute('data-qid');
+    expect([secili('k1'), secili('k2')]).toEqual(['q1', 'q2']);
+    // Salt okunur: hücreler devre dışı, "Böl" ve "Tümünü ver" düğmesi yok.
+    expect([...matris.querySelectorAll('.sa-kr-hucre')].every((h) => h.hasAttribute('disabled'))).toBe(true);
+    expect(matris.querySelector('[data-act="kk-bol"], [data-act="kr-tek"]')).toBeNull();
+    // Tek tedarikçili karar bu bölümü çizmez.
+    expect(ciz(viewApproval(talep('b'))).querySelector('[data-sa-onay-dagilimi]')).toBeNull();
+  });
 });

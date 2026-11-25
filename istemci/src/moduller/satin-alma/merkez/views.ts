@@ -9,7 +9,7 @@ import {
   awardTotals, budgetUse, evaluate, lateBy, matOf, matStats, payText, priceHistory, quoteCalc, requiredApprover,
   savingsOf, spendLines, supName, supplierStats, validity, vsLast, fiyatUyarisi, type EvalRow, type Evaluation, type PriceEntry,
   awardOrders, orderDue, itemCost, itemLineCost, planCost, type OrderInfo,
-  approvalState, durumEtiketi, gecikenSiparisSayisi, siparisEtiketi,
+  approvalState, durumEtiketi, gecikenSiparisSayisi, siparisEtiketi, terminMetni,
 } from "./calc.ts";
 import {
   $, $$, addDays, clamp, dayDiff, deltaHTML, esc, fiyatKilitli, fmtDate, fmtTs, isNum, kilitPaneli, money, MONTHS, nf0, nf2, nfx, norm, numIn,
@@ -722,7 +722,7 @@ function matrixHTML(r: PurchaseRequest, ev: Evaluation): string {
   h += row("Vade avantajı", cols.map(x => x.c.faizYok ? "faiz girilmedi" : x.c.vadeGain > 0.5 ? money(x.c.vadeGain) : "–"));
   h += row("Net bugünkü maliyet", cols.map(x => money(x.c.pvTRY)), cols.map(x => x.c.covered === items.length ? x.c.pvTRY : null), "min", "key");
   h += sec("Teslimat");
-  h += row("Termin", cols.map(x => { const l = parseNum(x.q.leadDays); const late = lateBy(r, x.q); return l === null ? "–" : `${l} gün${late ? `<span class="sub"><span class="flag bad">${late} gün geç</span></span>` : ""}`; }), cols.map(x => parseNum(x.q.leadDays)), "min");
+  h += row("Termin", cols.map(x => { const l = parseNum(x.q.leadDays); const late = lateBy(r, x.q); return l === null ? "–" : `${terminMetni(x.q, (r.award && r.award.orderDate) || todayStr())}${late ? `<span class="sub"><span class="flag bad">${late} gün geç</span></span>` : ""}`; }), cols.map(x => parseNum(x.q.leadDays)), "min");
   h += row("Tahmini teslim", cols.map(x => { const l = parseNum(x.q.leadDays); return l === null ? "–" : fmtDate(addDays((r.award && r.award.orderDate) || todayStr(), l)); }));
   h += row("Teslim şekli", cols.map(x => esc(x.q.deliveryTerm || "–")), null, null, "wrap");
   h += row("Garanti", cols.map(x => isNum(parseNum(x.q.warrantyMonths)) ? parseNum(x.q.warrantyMonths) + " ay" : "–"), cols.map(x => parseNum(x.q.warrantyMonths)), "max");

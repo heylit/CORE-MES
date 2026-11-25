@@ -79,9 +79,9 @@ export function IsTablosu() {
     { anahtar: 'malzeme', baslik: 'Malzeme', sabit: 'sol', kartTamSatir: true, hucre: (s) => <Malzeme s={s} />, csv: (s) => `${s.r.no} ${s.r.title}: ${s.kalem.name}` },
     { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', kirilmaz: true, hucre: (s) => (s.kalem.qty === null ? '–' : `${nfx.format(s.kalem.qty)} ${s.kalem.unit}`), csv: (s) => (s.kalem.qty === null ? '' : `${String(s.kalem.qty)} ${s.kalem.unit}`) },
     { anahtar: 'is', baslik: 'Sıradaki iş', kirilmaz: true, hucre: (s) => <Is s={s} />, csv: (s) => IS_ADI[s.tur] },
-    { anahtar: 'gelis', baslik: 'Geliş', kirilmaz: true, hucre: (s) => <Gelis s={s} bugun={bugun} />, csv: (s) => gelisGunu(s.r) },
-    { anahtar: 'termin', baslik: 'Termin', kirilmaz: true, hucre: (s) => <Termin s={s} bugun={bugun} />, csv: (s) => s.r.needDate || '' },
-    { anahtar: 'teslimat', baslik: 'Teslimat', kirilmaz: true, hucre: (s) => <TeslimatHucresi s={s} bugun={bugun} />, csv: (s) => teslimatOf(s.r, bugun).tarih ?? '' },
+    { anahtar: 'gelis', baslik: 'Talep tarihi', kirilmaz: true, hucre: (s) => <Gelis s={s} bugun={bugun} />, csv: (s) => gelisGunu(s.r) },
+    { anahtar: 'termin', baslik: 'İstenen termin', kirilmaz: true, hucre: (s) => <Termin s={s} bugun={bugun} />, csv: (s) => s.r.needDate || '' },
+    { anahtar: 'teslimat', baslik: 'Beklenen teslim', kirilmaz: true, hucre: (s) => <TeslimatHucresi s={s} bugun={bugun} />, csv: (s) => teslimatOf(s.r, bugun).tarih ?? '' },
   ];
   return (
     <div className="sa-is-tablosu"><Tablo kip={tabloKipi} etiket="Satın alma işleri, kalem kalem" sutunlar={sutunlar} satirlar={kalemSatirlari(isSatirlari())} satirAnahtari={(s) => `${s.r.id}-${s.kalem.id}`} satirSec={ac}
