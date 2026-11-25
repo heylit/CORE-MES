@@ -1,5 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
-import type { FaturaEslesmeCevabi, FATURA_ESLESME_DURUMLARI } from '#paylasilan/sozlesme/logo.ts';
+import type { FaturaEslesmeCevabi, FATURA_ESLESME_DURUMLARI, FATURA_ESLESME_TURLERI } from '#paylasilan/sozlesme/logo.ts';
 import { FATURA_ESLESME_DURUMLARI as DURUMLAR } from '#paylasilan/sozlesme/logo.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { logoEslesmeBelgeleri } from '../finans/disari.ts';
@@ -13,7 +13,15 @@ export interface FaturaEslesmeIstegi {
   sayfaBoyu?: number | undefined;
   gun: number;
   durum?: (typeof FATURA_ESLESME_DURUMLARI)[number] | undefined;
+  tur?: (typeof FATURA_ESLESME_TURLERI)[number] | undefined;
+  ara?: string | undefined;
 }
+
+// Satış gelir, alış gider; iade ters yönde yazılır (finans iadeHatasi): gelir + iade alış iadesi, gider + iade satış iadesi.
+const faturaTuru = (x: { yon: 'gelir' | 'gider'; iade: boolean }): (typeof FATURA_ESLESME_TURLERI)[number] => {
+  if (x.yon === 'gelir') return x.iade ? 'alis-iade' : 'satis';
+  return x.iade ? 'satis-iade' : 'alis';
+};
 
 // 3675 D2: Logo fatura aynası ile finans faturalarının karşılaştırması. Yalnız okunur: ne Logo'ya ne de finans belgesine bir şey yazılır; eşleşme
 // kaydedilmez, her istekte bellekte hesaplanır. Pencere, aynanın okuduğu başlangıçtan (son 12 ayın başı) önceye inmez: ayna dışındaki faturalar
@@ -30,13 +38,22 @@ export async function faturaEslesmeListesi(db: Db, simdi: Date, q: FaturaEslesme
     paraBirimi: b.paraBirimi, tutar: b.tutar, kdvTutari: b.kdvTutari, durum: b.durum,
   }));
   const baglanamayan = finans.filter((f) => f.cariKodu === null && f.durum !== 'iptal').length;
+  const belgeFirmasi = new Map(belgeler.flatMap((b) => {
+    const ad = b.firmaId === null ? undefined : firmalar.get(b.firmaId)?.ad;
+    return ad === undefined ? [] : [[b.id, ad] as const];
+  }));
   const adlar = new Map(belgeler.flatMap((b) => {
     const k = b.firmaId === null ? undefined : firmalar.get(b.firmaId);
     return k?.logoKodu ? [[k.logoKodu.toLocaleUpperCase('tr'), k.ad] as const] : [];
   }));
-  const hepsi = faturaEslesmeleri(logo, finans).map((x) => ({
-    ...x, firmaAdi: x.cariKodu === null ? null : adlar.get(x.cariKodu.toLocaleUpperCase('tr')) ?? null,
+  // Cari kodu olmayan firmanın belgesinde Logo kodu yoktur: firma adı finans belgesinden gelir.
+  const tumu = faturaEslesmeleri(logo, finans).map((x) => ({
+    ...x, firmaAdi: (x.cariKodu === null ? null : adlar.get(x.cariKodu.toLocaleUpperCase('tr'))) ?? (x.finans === null ? null : belgeFirmasi.get(x.finans.belgeId)) ?? null,
   }));
+  // Tür ve arama sayıları da daraltır (sayaçlar listenin neyi gösterebileceğini söyler); durum yalnız listeyi daraltır.
+  const aranan = q.ara?.toLocaleLowerCase('tr') ?? '';
+  const hepsi = tumu.filter((x) => (q.tur === undefined || faturaTuru(x) === q.tur)
+    && (aranan === '' || [x.faturaNo, x.cariKodu ?? '', x.firmaAdi ?? ''].some((m) => m.toLocaleLowerCase('tr').includes(aranan))));
   const secilen = q.durum === undefined ? hepsi : hepsi.filter((x) => x.durum === q.durum);
   const boy = Math.min(q.sayfaBoyu ?? 50, 200);
   const sayfa = Math.max(1, Math.min(q.sayfa, Math.ceil(secilen.length / boy) || 1));

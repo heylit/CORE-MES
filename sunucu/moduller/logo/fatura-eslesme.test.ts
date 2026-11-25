@@ -126,7 +126,51 @@ describe('Logo fatura eşleşmesi: uç (gerçek PostgreSQL)', () => {
     assert.equal(g.baglanamayan, 0);
     assert.equal((await o().sahip.tek<{ n: string }>('SELECT count(*) AS n FROM finans_belge'))?.n, once, 'finans belgesine yazılmaz');
     assert.equal((await app.inject({ method: 'GET', url: '/api/logo/fatura-eslesme?durum=farkli', headers: { cookie: yonetici } })).json<FaturaEslesmeCevabi>().toplam, 1);
+    const oku = async (sorgu: string) => (await app.inject({ method: 'GET', url: `/api/logo/fatura-eslesme?${sorgu}`, headers: { cookie: yonetici } })).json<FaturaEslesmeCevabi>();
+    const alis = await oku('gun=30&tur=alis');
+    assert.deepEqual([alis.toplam, alis.durumlar.reduce((t, d) => t + d.sayi, 0)], [4, 4], 'dört gider faturası alıştır');
+    const satis = await oku('gun=30&tur=satis');
+    assert.deepEqual([satis.toplam, satis.durumlar.reduce((t, d) => t + d.sayi, 0)], [0, 0], 'tür sayaçları da daraltır');
+    assert.deepEqual((await oku('gun=30&ara=orn-f-2')).satirlar.map((x) => x.faturaNo), ['ORN-F-2'], 'fatura no ile arama harf gözetmez');
+    assert.equal((await oku('gun=30&ara=tedarikçi')).toplam, 4, 'firma adıyla arama (Türkçe harf)');
+    const ayrik = await oku('gun=30&ara=orn-f-1&durum=farkli');
+    assert.deepEqual([ayrik.toplam, ayrik.durumlar.find((d) => d.durum === 'eslesti')?.sayi], [0, 1], 'durum yalnız listeyi daraltır, sayaçları değil');
     assert.equal((await app.inject({ method: 'GET', url: '/api/logo/fatura-eslesme' })).statusCode, 401);
+  });
+
+  test('N1: tür süzgeci dört türü doğru eşler (iadeler yer değiştirmez): her tür yalnız kendi faturasını getirir', async () => {
+    const bugun = new Date().toISOString().slice(0, 10);
+    const turler = [['satis', 'ORN-T-1'], ['satis-iade', 'ORN-T-2'], ['alis', 'ORN-T-3'], ['alis-iade', 'ORN-T-4']] as const;
+    for (const [i, [tur, no]] of turler.entries()) {
+      await o().sahip.sorgu(
+        `INSERT INTO logo_fatura_baslik (firma, donem, logo_kayit_no, tur, fatura_no, tarih, cari_kodu, net, kdv, brut, iptal, okuma_zamani)
+         VALUES (1, 1, $1, $2, $3, $4::date, 'ORN-C-T', 100, 20, 120, false, now())`, [900 + i, tur, no, bugun]);
+    }
+    const oku = async (sorgu: string) => (await app.inject({ method: 'GET', url: `/api/logo/fatura-eslesme?gun=30&ara=ORN-T-&${sorgu}`, headers: { cookie: yonetici } })).json<FaturaEslesmeCevabi>();
+    for (const [tur, no] of turler) {
+      const c = await oku(`tur=${tur}`);
+      assert.deepEqual(c.satirlar.map((x) => x.faturaNo), [no], `${tur} yalnız ${no}`);
+    }
+    const hepsi = await oku('');
+    const yonler = Object.fromEntries(hepsi.satirlar.map((x) => [x.faturaNo, [x.yon, x.iade]]));
+    assert.deepEqual(yonler, { 'ORN-T-1': ['gelir', false], 'ORN-T-2': ['gider', true], 'ORN-T-3': ['gider', false], 'ORN-T-4': ['gelir', true] });
+  });
+
+  test('yetki: finans.oku olmayan (Logo sayfası yetkili) 403 alır, finans.oku olan 200; veri sızmaz', async () => {
+    const giris = async (kullaniciAdi: string) => String((await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi, parola: PAROLA } })).headers['set-cookie']).split(';')[0] ?? '';
+    const kisi = async (kullaniciAdi: string, rol: string, islemler: string[]) => {
+      const id = await o().vt.tx((db) => yoneticiOlustur(db, { ad: `Deneme ${kullaniciAdi}`, kullaniciAdi, parola: PAROLA }));
+      await o().vt.sorgu('INSERT INTO rol (kod, ad) VALUES ($1, $1)', [rol]);
+      await o().vt.sorgu('INSERT INTO rol_islemi (rol_id, islem) SELECT id, unnest($2::text[]) FROM rol WHERE kod = $1', [rol, islemler]);
+      await o().vt.sorgu('UPDATE kisi_rolu SET rol_id = (SELECT id FROM rol WHERE kod = $1) WHERE kisi_id = $2', [rol, id]);
+      return giris(kullaniciAdi);
+    };
+    const logoYetkili = await kisi('fe-logocu', 'fe_logocu', ['sayfa.logo', 'ayarlar.yaz']);
+    const finansOkuyan = await kisi('fe-okuyan', 'fe_okuyan', ['sayfa.finans', 'finans.oku']);
+    const reddedilen = await app.inject({ method: 'GET', url: '/api/logo/fatura-eslesme', headers: { cookie: logoYetkili } });
+    assert.equal(reddedilen.statusCode, 403);
+    assert.equal(reddedilen.body.includes('satirlar'), false);
+    assert.equal((await app.inject({ method: 'GET', url: '/api/logo/fatura-eslesme', headers: { cookie: finansOkuyan } })).statusCode, 200);
   });
 
   test('S1: finans iade uçundan gerçekten girilen alış iadesi (yön gelir) Logo alış iadesiyle eşleşir', async () => {

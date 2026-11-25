@@ -1,0 +1,124 @@
+/* 3675 D3: Logo uyumu (düzen A, satır içi açılım). Yalnız tasarım değişkenleri. Yan menü içerik genişliğini değiştirdiği için kırılmalar
+   kabın genişliğindedir: 1000 ve üstü tam tablo, 700-999 toplam sütunsuz tablo (tutarlar cari hücresinde), 700 altı kart. */
+.tc-lu { container-type: inline-size; display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; }
+.tc-lu-soluk { margin: 0; color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
+.tc-lu-gizli { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.tc-lu-ust-satir { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: var(--b-1) var(--b-4); }
+.tc-lu-okuma { display: inline-flex; align-items: center; gap: var(--b-1); }
+
+.tc-lu-serit {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2) var(--b-3); margin: 0; padding: var(--b-3);
+  border: thin solid var(--edge2); border-radius: var(--yari-2); background: var(--panel2);
+}
+.tc-lu-serit[data-ton="uyari"] { border-color: var(--hold); }
+.tc-lu-serit > span { flex: 1 1 14rem; min-width: 0; overflow-wrap: anywhere; }
+
+.tc-lu-sayac-baslik { margin-bottom: var(--b-2); font-size: var(--yazi-xs); }
+.tc-lu-sayaclar { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--b-2); }
+.tc-lu-sayac {
+  display: flex; flex-direction: column; align-items: flex-start; gap: var(--b-1); min-height: var(--dokunma); padding: var(--b-2) var(--b-3);
+  border: thin solid var(--edge2); border-radius: var(--yari-1); background: var(--panel-solid); color: var(--ink); text-align: left; cursor: pointer;
+}
+.tc-lu-sayac b { font-size: var(--yazi-xl); }
+.tc-lu-sayac[aria-pressed="true"] { background: var(--hazard); color: var(--on-hazard); border-color: var(--hazard); }
+.tc-lu-sayac[aria-pressed="true"] .tc-lu-durum { color: inherit; }
+.tc-lu-sayac:focus-visible, .tc-lu-ust:focus-visible { outline: 2px solid var(--hazard); outline-offset: 2px; }
+
+/* Durum yalnız renkle anlatılmaz: nokta ve ad birlikte. */
+.tc-lu-durum { display: inline-flex; align-items: center; gap: var(--b-2); font-size: var(--yazi-xs); font-weight: 700; white-space: nowrap; }
+.tc-lu-durum::before { content: ""; width: var(--b-2); height: var(--b-2); border-radius: var(--yari-tam); background: var(--nokta); }
+.tc-lu-durum[data-ton="run"] { --nokta: var(--run); }
+.tc-lu-durum[data-ton="hold"] { --nokta: var(--hold); }
+.tc-lu-durum[data-ton="stop"] { --nokta: var(--stop); }
+.tc-lu-durum[data-ton="done"] { --nokta: var(--done); }
+.tc-lu-durum[data-ton="muted"] { --nokta: var(--muted); }
+
+.tc-lu-suzgec { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--b-3); }
+.tc-lu-suzgec > * { flex: 1 1 10rem; min-width: 0; }
+.tc-lu-suzgec > button { flex: 0 0 auto; }
+
+.tc-lu-kutu { border: thin solid var(--edge); border-radius: var(--yari-2); background: var(--panel-solid); overflow: hidden; }
+.tc-lu-bos { display: flex; flex-direction: column; align-items: center; gap: var(--b-2); padding: var(--b-5) var(--b-4); text-align: center; }
+.tc-lu-bos p { margin: 0; color: var(--muted); }
+
+.tc-lu-bas, .tc-lu-ust {
+  display: grid; align-items: center; gap: var(--b-2); padding: 0 var(--b-3);
+  grid-template-columns: 9rem 10rem 7rem minmax(0, 1fr) 8rem 8rem 8rem var(--b-4);
+}
+.tc-lu-bas { min-height: var(--b-6); border-bottom: thin solid var(--edge2); color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; }
+.tc-lu-bas span:nth-child(5), .tc-lu-bas span:nth-child(6), .tc-lu-bas span:nth-child(7) { text-align: end; }
+.tc-lu-liste { list-style: none; margin: 0; padding: 0; }
+.tc-lu-satir { border-bottom: thin solid var(--edge); }
+.tc-lu-satir:last-child { border-bottom: 0; }
+.tc-lu-satir[data-acik="true"] { border-inline-start: var(--b-1) solid var(--hazard); background: var(--panel2); }
+.tc-lu-ust { width: 100%; min-height: var(--dokunma); padding-block: var(--b-2); background: transparent; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.tc-lu-ust:hover { background: var(--panel2); }
+.tc-lu-h-durum, .tc-lu-h-no, .tc-lu-h-cari { display: flex; flex-direction: column; align-items: flex-start; gap: var(--b-1); min-width: 0; overflow-wrap: anywhere; }
+.tc-lu-h-logo, .tc-lu-h-finans, .tc-lu-h-fark { text-align: end; }
+.tc-lu-h-fark { font-weight: 700; }
+.tc-lu-h-fark[data-fark="var"] { color: var(--hold); }
+.tc-lu-h-ozet { display: none; color: var(--muted); font-size: var(--yazi-xs); }
+.tc-lu-fark-etiket { display: none; font-family: var(--font-ana); font-weight: 400; color: var(--muted); font-size: var(--yazi-xs); }
+.tc-lu-ok { display: inline-flex; color: var(--muted); transition: transform var(--hareket-sure); }
+.tc-lu-satir[data-acik="true"] .tc-lu-ok { transform: rotate(180deg); }
+.tc-lu-etiketler { display: flex; flex-wrap: wrap; gap: var(--b-1); }
+.tc-lu-etiket, .tc-lu-isaret {
+  display: inline-block; padding: 0 var(--b-2); border: thin solid var(--hold); border-radius: var(--yari-tam); color: var(--hold);
+  font-size: var(--yazi-xs); font-weight: 600; white-space: nowrap;
+}
+.tc-lu-isaret { margin-inline-start: var(--b-2); }
+
+.tc-lu-ayrinti { display: flex; flex-direction: column; gap: var(--b-2); padding: var(--b-3); border-top: thin solid var(--edge); }
+.tc-lu-ayrinti table { width: 100%; max-width: 44rem; border-collapse: collapse; font-size: var(--yazi-s); }
+.tc-lu-ayrinti td { white-space: nowrap; }
+.tc-lu-ayrinti th, .tc-lu-ayrinti td { padding: var(--b-1) var(--b-2); border-bottom: thin solid var(--edge); text-align: end; font-weight: 400; }
+.tc-lu-ayrinti thead th { color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; border-bottom-color: var(--edge2); }
+.tc-lu-ayrinti tbody th, .tc-lu-ayrinti thead th:first-child { text-align: start; }
+.tc-lu-ayrinti tr[data-farkli="evet"] > * { color: var(--hold); font-weight: 700; }
+.tc-lu-aciklama { margin: 0; overflow-wrap: anywhere; }
+
+/* Yükleniyor iskeleti: sayfa gelince yerleşim sıçramasın. */
+.tc-lu-iskelet-sayaclar { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--b-2); }
+.tc-lu-iskelet { display: block; min-height: var(--dokunma); border-radius: var(--yari-1); background: var(--panel2); }
+.tc-lu-iskelet-satir { min-height: var(--b-6); margin: var(--b-3); }
+@media (prefers-reduced-motion: no-preference) {
+  .tc-lu-iskelet { animation: tc-lu-nabiz 1.4s ease-in-out infinite; }
+}
+@keyframes tc-lu-nabiz { 50% { opacity: .5; } }
+
+/* Orta genişlik: toplam sütunları gider, tutarlar cari hücresinin altında kısa yazılır. */
+@container (max-width: 999px) {
+  .tc-lu-bas, .tc-lu-ust { grid-template-columns: 9rem 9rem 6.5rem minmax(0, 1fr) 7.5rem var(--b-4); }
+  .tc-lu-bas span:nth-child(5), .tc-lu-bas span:nth-child(6) { display: none; }
+  .tc-lu-bas span:nth-child(7) { text-align: end; }
+  .tc-lu-h-logo, .tc-lu-h-finans { display: none; }
+  .tc-lu-h-ozet { display: block; }
+}
+/* Dar: kart; sayaçlar tek satır kayan çip, ayrıntı tablosu yığılır. */
+@container (max-width: 699px) {
+  .tc-lu-bas { display: none; }
+  .tc-lu-sayaclar { display: flex; overflow-x: auto; gap: var(--b-2); padding-bottom: var(--b-1); scroll-snap-type: x proximity; }
+  .tc-lu-sayac { flex: 0 0 auto; flex-direction: row; align-items: center; gap: var(--b-2); min-height: var(--dokunma); padding: 0 var(--b-3); scroll-snap-align: start; }
+  .tc-lu-sayac b { font-size: var(--yazi-m); }
+  .tc-lu-iskelet-sayaclar { display: flex; overflow: hidden; }
+  .tc-lu-iskelet-sayaclar .tc-lu-iskelet { flex: 0 0 8rem; }
+  .tc-lu-ust { grid-template-columns: minmax(0, 1fr) auto var(--b-4); gap: var(--b-1) var(--b-2); padding-block: var(--b-3); }
+  .tc-lu-h-durum { grid-column: 1; grid-row: 1; }
+  .tc-lu-h-no { grid-column: 2; grid-row: 1; align-items: flex-end; text-align: end; }
+  .tc-lu-ok { grid-column: 3; grid-row: 1; }
+  .tc-lu-h-cari { grid-column: 1 / -1; grid-row: 2; }
+  .tc-lu-h-tarih { display: none; }
+  .tc-lu-h-fark { grid-column: 1 / -1; grid-row: 3; text-align: start; }
+  .tc-lu-fark-etiket { display: inline; }
+  .tc-lu-suzgec > :first-child { flex-basis: 100%; }
+  .tc-lu-suzgec > :nth-child(n+2) { flex: 1 1 8rem; }
+  .tc-lu-suzgec .tc-alan-kutu, .tc-lu .tc-dugme { min-height: var(--dokunma); }
+  /* Ayrıntı: alan adı üstte, altında Logo / Finans / Fark üç hücre ve kendi etiketiyle. */
+  .tc-lu-ayrinti thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .tc-lu-ayrinti table, .tc-lu-ayrinti tbody { display: block; }
+  .tc-lu-ayrinti tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 var(--b-2); padding: var(--b-2) 0; border-bottom: thin solid var(--edge); }
+  .tc-lu-ayrinti tbody th { grid-column: 1 / -1; padding: 0 0 var(--b-1); border: 0; }
+  .tc-lu-ayrinti td { display: flex; flex-direction: column; align-items: flex-start; padding: 0; border: 0; text-align: start; font-size: var(--yazi-xs); white-space: normal; overflow-wrap: anywhere; }
+  .tc-lu-ayrinti td::before { content: attr(data-e); font-family: var(--font-ana); color: var(--muted); font-weight: 400; }
+  .tc-lu-isaret { display: inline-block; }
+}
