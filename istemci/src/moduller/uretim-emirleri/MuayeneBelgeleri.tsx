@@ -7,6 +7,7 @@ import { tekrarKorumaliGonder, yeniIstekKimligi } from '../../ortak/veri/istek-k
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { DosyaHatasi, dosyaYukle } from '../belge-merkezi/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import './muayene-belgeleri.css';
 
 // 3708: kaynağında muayene adımının belgeleri (sertifika, test raporu). Zorunlu adlar adımın operasyon tipindedir; eksik belgeyle
 // adım bitirilemez (sunucu kapısı). Dosya önce dosya ucuna yüklenir (özet), bağ komutu belge türüyle kurulur.
@@ -79,7 +80,7 @@ function Icerik({ emirId, isEmriId, v, bitti }: { emirId: number; isEmriId: numb
       {v.zorunlu.length === 0
         ? <p className="tc-emir-not">Bu muayenede zorunlu belge tanımlı değil; belge eklemek isteğe bağlıdır.</p>
         : v.eksik.length > 0
-          ? <p className="tc-ad-uyari tc-ad-uyari-hata" role="status"><Simge ad="alert" boyut="k" /><span>Eksik: {v.eksik.join(', ')}. Eksik belgeyle adım bitirilemez.</span></p>
+          ? <p className="tc-ad-uyari tc-ad-uyari-hata" role="alert"><Simge ad="alert" boyut="k" /><span>Eksik: {v.eksik.join(', ')}. Eksik belgeyle adım bitirilemez.</span></p>
           : <p className="tc-emir-not" role="status"><Simge ad="check" boyut="k" /> Zorunlu belgelerin hepsi yüklendi.</p>}
       {v.belgeler.length > 0 && (
         <ul className="tc-at-maddeler">
@@ -87,7 +88,7 @@ function Icerik({ emirId, isEmriId, v, bitti }: { emirId: number; isEmriId: numb
             <li key={b.ozet} className="tc-at-madde">
               <span className="tc-at-madde-ad">
                 <Simge ad="file" boyut="k" />
-                <span><b>{b.belgeTuru ?? 'Belge'}</b><small><a href={muayeneBelgesiAdresi(emirId, isEmriId, b.ozet)} target="_blank" rel="noreferrer">{b.ad}</a></small></span>
+                <span><b>{b.belgeTuru ?? 'Belge'}</b><small><a className="tc-mb-bag" href={muayeneBelgesiAdresi(emirId, isEmriId, b.ozet)} target="_blank" rel="noreferrer">{b.ad}</a></small></span>
               </span>
               {!bitti && (
                 <span className="tc-at-madde-eylem">

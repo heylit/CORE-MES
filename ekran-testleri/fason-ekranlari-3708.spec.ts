@@ -131,7 +131,7 @@ test.describe('3708 fason ekranları', () => {
     await pencere.getByLabel(/Grup/).selectOption('KAL');
     const alan = pencere.getByLabel(/Zorunlu belgeler/);
     await expect(alan).toBeVisible();
-    await alan.fill('Malzeme sertifikası, Test raporu');
+    await alan.fill('Malzeme sertifikası\nTest raporu');
     await alan.evaluate((el) => { el.scrollIntoView({ block: 'center' }); });
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
     await cek(page, 'operasyon-tipi-zorunlu-belgeler', bilgi);

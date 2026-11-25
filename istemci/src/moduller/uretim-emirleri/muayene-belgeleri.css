@@ -1,0 +1,2 @@
+/* 3708: belge bağlantısı dokunmatikte parmak boyunda (Arayüz). */
+.tc-mb-bag { display: inline-flex; align-items: center; min-block-size: var(--dokunma); }
