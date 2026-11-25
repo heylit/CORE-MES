@@ -41,7 +41,7 @@ function Eylemler({ cevir, yoksay }: { cevir: () => void; yoksay: () => void }) 
   );
 }
 
-// 3695: bu malzeme için kişinin açık talepleri ön talepten izlenir; bağlantı talebin durumunu Taleplerim listesinde açar.
+// 3695: bu malzeme için kişinin açık talepleri ön talepten izlenir; bağlantı Taleplerim listesini açar (talebi seçmez).
 const ACIK_DURUM = (t: Talebim) => t.durum !== 'teslim_alindi' && t.durum !== 'iptal';
 function PlanSatiri({ o, secili, sec, cevir, yoksay, bugun, talepler, talepteGit }: {
   o: PlanOnTalep; secili: boolean; sec: (v: boolean) => void; cevir: () => void; yoksay: () => void; bugun: Date;
@@ -73,7 +73,7 @@ function PlanSatiri({ o, secili, sec, cevir, yoksay, bugun, talepler, talepteGit
           <div className="sa-ot-bagli">
             <span className="sa-talep-not">Bu malzeme için talebiniz:</span>
             {bagli.map((t) => (
-              <Dugme key={t.id} simge="file" onClick={() => talepteGit(t)} aria-label={`${t.no} talebini aç, durum ${DURUM[t.durum].metin}`}>
+              <Dugme key={t.id} simge="file" onClick={() => talepteGit(t)} aria-label={`${t.no} talebini Taleplerim listesinde göster, durum ${DURUM[t.durum].metin}`}>
                 <span className="sa-talep-no">{t.no}</span> <Rozet ton={DURUM[t.durum].ton}>{DURUM[t.durum].metin}</Rozet>
               </Dugme>
             ))}

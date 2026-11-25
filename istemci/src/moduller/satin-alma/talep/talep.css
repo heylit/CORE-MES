@@ -117,7 +117,7 @@
 .sa-kabul { display: grid; gap: var(--b-2); border-top: 1px solid var(--edge); padding-top: var(--b-3); min-width: 0; }
 .sa-kabul-baslik { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2); }
 .sa-kabul-baslik > span { display: inline-flex; align-items: center; gap: var(--b-1); }
-.sa-kabul-tablo th[scope='row'] { font-weight: 600; text-align: left; }
+.sa-kabul-tablo th[scope='row'] { font-weight: 600; text-align: left; min-width: 5rem; white-space: nowrap; }
 .sa-kabul-tablo td { overflow-wrap: break-word; }
 @media (max-width: 599px) {
   .sa-kabul-tablo thead { display: none; }
@@ -217,11 +217,13 @@
 .sa-talep-tablo .sa-talep-sabit { position: sticky; left: 0; z-index: 1; background: var(--panel-solid); }
 /* Sıra sütunu tam ikinci sabit sütunun başladığı yerde biter: arada kayan içerik görünmesin. */
 .sa-talep-tablo th.sa-talep-sabit:first-child { box-sizing: border-box; width: var(--b-6); min-width: var(--b-6); max-width: var(--b-6); padding-inline: 0; text-align: center; }
-.sa-talep-tablo .tc-tablo td.sa-talep-malzeme { left: var(--b-6); min-width: 16rem; max-width: 22rem; white-space: normal; box-shadow: 1px 0 0 var(--edge2); }
+@media (min-width: 1024px) {
+  .sa-talep-tablo .tc-tablo td.sa-talep-malzeme { left: var(--b-6); min-width: 14rem; max-width: 18rem; white-space: normal; box-shadow: 1px 0 0 var(--edge2); }
+  .sa-talep-tablo .tc-tablo td.sa-talep-alternatif { white-space: normal; min-width: 11rem; }
+}
 .sa-talep-tablo .sa-talep-malzeme .sa-talep-ara, .sa-talep-tablo .sa-talep-malzeme .sa-talep-serbest { gap: var(--b-1); }
 .sa-talep-secili-ad { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); }
 .sa-talep-etiketler { display: inline-flex; flex-wrap: wrap; gap: var(--b-1); }
-.sa-talep-tablo .tc-tablo td.sa-talep-alternatif { white-space: normal; min-width: 14rem; }
 .sa-talep-alternatif-ozet { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); }
 .sa-talep-eylem { display: flex; flex-wrap: wrap; gap: var(--b-1); }
 .sa-talep-ayrinti-satir > td { white-space: normal; background: var(--panel2); }
@@ -236,9 +238,9 @@
   .sa-talep-varsayilan { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; }
 }
 /* Emir numarası aynı önekle başlar: seçim kutusu numarayı kesmeyecek kadar geniştir. */
-.sa-talep-tablo .tc-tablo td .sa-talep-emir { min-width: 16rem; }
-.sa-talep-tablo .tc-tablo td:has(> .sa-talep-emir) { white-space: normal; max-width: 18rem; }
-.sa-talep-tablo .tc-tablo td.sa-talep-miktar-hucre { white-space: normal; min-width: 14rem; max-width: 18rem; }
+.sa-talep-tablo .tc-tablo td .sa-talep-emir { min-width: 11rem; }
+.sa-talep-tablo .tc-tablo td:has(> .sa-talep-emir) { white-space: normal; max-width: 13rem; }
+.sa-talep-tablo .tc-tablo td.sa-talep-miktar-hucre { white-space: normal; min-width: 10rem; max-width: 12rem; }
 .sa-talep-tablo .tc-tablo td.sa-talep-miktar-hucre > .sa-talep-not, .sa-talep-tablo .tc-tablo td:has(> .sa-talep-emir) > .sa-talep-not { display: block; margin-top: var(--b-1); }
 /* Dar ekranda her kalem bir karttır: sıra solda, alanlar etiketli alt alta; yana kaydırma gerekmez. */
 @media (max-width: 1023px) {
@@ -302,5 +304,15 @@
 .sa-secili-malzeme dl > div { min-width: 0; }
 .sa-secili-malzeme dt { color: var(--muted); font-size: var(--yazi-s); }
 .sa-secili-malzeme dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
-.sa-alt-baslik { margin: 0; font-size: inherit; }
 .sa-ot-bagli { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); }
+/* 3695: alternatif kabulü iki seçenekli radyo grubu; her seçenek 44 px etiket. */
+.sa-kabul-kip { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: var(--b-2); border: 0; margin: 0; padding: 0; min-width: 0; }
+.sa-kabul-kip > legend { grid-column: 1 / -1; padding: 0 0 var(--b-1); font-weight: 600; }
+.sa-kabul-kip .tc-isaret { align-items: flex-start; min-height: 44px; border: 1px solid var(--edge); border-radius: var(--yari-1); padding: var(--b-2); }
+.sa-kabul-kip .tc-isaret:has(input:checked) { border-color: var(--run); }
+/* 3695: dokunma hedefi en az 44 px; onay ve radyo kutuları büyük; gizli yardımcı sayfa genişliğini büyütmesin. */
+.sa-talep { position: relative; }
+.sa-talep .tc-isaret input { width: 1.5rem; height: 1.5rem; }
+@media (max-width: 1023px) {
+  .sa-talep-tablo .tc-dugme, .sa-talep .sa-ot .tc-dugme { min-height: 44px; }
+}

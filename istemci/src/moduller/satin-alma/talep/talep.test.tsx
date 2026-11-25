@@ -510,7 +510,7 @@ describe('Planlama menüsünde Taleplerim sayfası (12.10.2026)', () => {
     onListe = { onTalepler: [PLAN_TALEBI], yoksayilanlar: [] };
     sunucuKur();
     sar(<TaleplerimSayfasi />);
-    const bag = await screen.findByRole('button', { name: 'ST-2026-001 talebini aç, durum Onayda' });
+    const bag = await screen.findByRole('button', { name: 'ST-2026-001 talebini Taleplerim listesinde göster, durum Onayda' });
     fireEvent.click(bag);
     expect((await screen.findByRole('tab', { name: /Taleplerim/ })).getAttribute('aria-selected')).toBe('true');
     expect(await screen.findByText('Deneme talep 1')).toBeTruthy();

@@ -351,15 +351,11 @@ function KalemSatiri({ tur, sira, k, emirSecenekleri, emirDegisir, degistir, kal
                 <KartArama tur="malzeme" etiket="Uygulanacak malzeme / parça" sec={(x) => degistir({ uygulanan: { no: x.no, kod: x.kod, ad: x.ad } })}
                   ipucu="İsteğe bağlı. Hizmet hangi parça ya da malzeme üzerinde yapılacak; satın alma teklif isterken bu bilgiyle gider." />
               ))}
-              {zarf !== null && (
-                <h4 className="sa-alt-baslik">Bu malzeme yerine başka malzeme kabul edilir mi?</h4>
-              )}
-              {zarf !== null && <p className="sa-talep-not">Satın alma yalnız burada izin verdiğiniz alternatiflerle teklif alır. Muadil: kalite ya da durumu eşdeğer sayılan kart. Şartlı: ancak siz onaylarsanız kabul edilir.</p>}
+              {zarf !== null && <KabulSinirlari no={zarf} kabul={k.kabul} degistir={(kabul, kabulHatali) => degistir({ kabul, kabulHatali })} />}
               {zarf !== null && (
                 <AlternatifKartlari no={zarf} sira={sira} secili={k.alternatifKartlari} onceki={k.alternatifOnceki} yeni={k.mevcut === null} degistir={alternatifDegistir}
                   yenile={k.alternatifYenile} yenileDegistir={(l) => degistir({ alternatifYenile: l })} />
               )}
-              {zarf !== null && <KabulSinirlari no={zarf} kabul={k.kabul} degistir={(kabul, kabulHatali) => degistir({ kabul, kabulHatali })} />}
             </div>
           </td>
         </tr>
