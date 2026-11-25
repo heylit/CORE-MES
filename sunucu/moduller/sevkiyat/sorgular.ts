@@ -924,3 +924,25 @@ export function belgeNoluIsler(db: Db, belgeNolar: readonly string[]): Promise<{
     [[...new Set(belgeNolar)]],
   );
 }
+
+/* ---------------- Şoför kimlik no'su (3694-4): şifreli değer, maske ve süre ---------------- */
+
+export interface SoforKimligiSatiri { sifreli: string; sonUc: string; yazilma: string }
+export function soforKimligiGetir(db: Db, isId: number): Promise<SoforKimligiSatiri | null> {
+  return db.tek<SoforKimligiSatiri>(
+    `SELECT sifreli, son_uc AS "sonUc", ${zamanMetni('yazilma')} AS yazilma FROM sevkiyat_sofor_kimligi WHERE sevkiyat_isi_id = $1`, [isId]);
+}
+export async function soforKimligiYaz(db: Db, isId: number, sifreli: string, sonUc: string, kisiId: number): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO sevkiyat_sofor_kimligi (sevkiyat_isi_id, sifreli, son_uc, yazan_kisi_id) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (sevkiyat_isi_id) DO UPDATE SET sifreli = EXCLUDED.sifreli, son_uc = EXCLUDED.son_uc, yazan_kisi_id = EXCLUDED.yazan_kisi_id, yazilma = now()`,
+    [isId, sifreli, sonUc, kisiId]);
+}
+export async function soforKimligiSil(db: Db, isId: number): Promise<boolean> {
+  return (await db.sorgu('DELETE FROM sevkiyat_sofor_kimligi WHERE sevkiyat_isi_id = $1 RETURNING 1', [isId])).length > 0;
+}
+// Sevk tarihi sınırdan eski olanlar silinir (tarih sınırın kendisi dahil değil).
+export async function soforKimlikleriniTemizle(db: Db, sinirTarih: string): Promise<number> {
+  return (await db.sorgu(
+    `DELETE FROM sevkiyat_sofor_kimligi k USING sevkiyat_isi i WHERE i.id = k.sevkiyat_isi_id AND i.tarih < $1::date RETURNING 1`, [sinirTarih])).length;
+}
