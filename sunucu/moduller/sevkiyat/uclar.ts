@@ -7,10 +7,11 @@ import {
   aracCevabi, aracGovdesi, aracGuncelleGovdesi, araclarCevabi, aramaCevabi, aramaSorgusu, bekleyenBolCevabi, bekleyenBolGovdesi, bekleyenKaldirCevabi, bekleyenlerCevabi, dagitGovdesi, gunPlaniCevabi, haritaCevabi, idParametresi, isCevabi,
   isBelgeNoGovdesi, isDurumuGovdesi, isGovdesi, isGuncelleGovdesi, kaydetGovdesi, firmaAramaCevabi, firmaAramaSorgusu, konumOnerisiCevabi, konumOnerisiSorgusu, noktaCevabi, noktaGovdesi, noktaGuncelleGovdesi, noktalarCevabi, onayGovdesi, ozetCevabi, tarihParametresi, tekRotaCevabi, tekRotaSorgusu,
   trafikCevabi, trafikSorgusu, urunSevkleriCevabi, urunSevkleriSorgusu, elleKalemGovdesi, kalemCevabi, serbestBirakCevabi, serbestBirakGovdesi, tasimaGovdesi,
-  tumIslerCevabi, tumIslerSorgusu,
+  tumIslerCevabi, tumIslerSorgusu, soforKimligiDurumuCevabi, soforKimligiGovdesi, soforKimligiOkuCevabi,
 } from '#paylasilan/sozlesme/sevkiyat.ts';
 import type { Arac, GunPlaniCevabi } from '#paylasilan/sozlesme/sevkiyat.ts';
 import { aracMaliyetsiz, gunPlaniMaliyetsiz, korunanOranlar, MALIYET_OKUMA, SERBEST_BIRAKMA_ISLEMLERI, tekRotaMaliyetsiz } from './kurallar.ts';
+import { kisiselVeriAnahtari } from './kimlik-sifre.ts';
 import * as servis from './servis.ts';
 import type { HaritaKaynagi } from './servis.ts';
 import * as tumIsler from './tum-isler.ts';
@@ -115,6 +116,24 @@ export function sevkiyatUclari(kaynak: HaritaKaynagi) {
     uc({
       yontem: 'POST', yol: '/sevkiyat/isler/ekle', yetki: 'sevkiyat.is-yaz', tekrarKorumali: true, govde: isGovdesi, cevap: isCevabi,
       isle: async ({ db, govde }) => ({ is: await servis.isEkle(db, govde) }),
+    }),
+    // ---------- şoför kimlik no'su (3694-4): maske sevkiyat.oku ile, yazma is-yaz ile, tam değer yalnız sevkiyat.sofor-kimlik-oku ile ----------
+    uc({
+      yontem: 'GET', yol: '/sevkiyat/isler/:id/sofor-kimligi', yetki: 'sevkiyat.oku', parametre: idParametresi, cevap: soforKimligiDurumuCevabi,
+      isle: ({ db, parametre }) => servis.soforKimligiDurumu(db, parametre.id, kisiselVeriAnahtari()),
+    }),
+    uc({
+      yontem: 'POST', yol: '/sevkiyat/isler/:id/sofor-kimligi', yetki: 'sevkiyat.is-yaz', parametre: idParametresi, govde: soforKimligiGovdesi, cevap: soforKimligiDurumuCevabi,
+      isle: ({ db, kullanici, parametre, govde }) => servis.soforKimligiKaydet(db, parametre.id, govde.kimlik, kisiselVeriAnahtari(), kullanici.id),
+    }),
+    uc({
+      yontem: 'POST', yol: '/sevkiyat/isler/:id/sofor-kimligi/sil', yetki: 'sevkiyat.is-yaz', parametre: idParametresi, cevap: soforKimligiDurumuCevabi,
+      isle: ({ db, parametre }) => servis.soforKimligiSil(db, parametre.id),
+    }),
+    // Tam okuma yazma sayılır (denetim kaydı bırakır) ve tekrar korumasına girmez: cevap (kimlik) hiçbir yerde saklanmasın.
+    uc({
+      yontem: 'POST', yol: '/sevkiyat/isler/:id/sofor-kimligi/oku', yetki: 'sevkiyat.sofor-kimlik-oku', parametre: idParametresi, cevap: soforKimligiOkuCevabi,
+      isle: async ({ db, parametre }) => ({ kimlik: await servis.soforKimligiTamOku(db, parametre.id, kisiselVeriAnahtari()) }),
     }),
     uc({
       yontem: 'POST', yol: '/sevkiyat/isler/:id/guncelle', yetki: 'sevkiyat.is-yaz', parametre: idParametresi, govde: isGuncelleGovdesi, cevap: isCevabi,

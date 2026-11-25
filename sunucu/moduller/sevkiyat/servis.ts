@@ -7,9 +7,10 @@ import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import type { KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
   Arac, AracGovdesi, AramaCevabi, KonumOnerisiCevabi, NoktalarCevabi, Bekleyen, BekleyenBolCevabi, BekleyenBolGovdesi, FirmaSecenegi, DagitGovdesi, GunPlaniCevabi, Harita, IsDurumuGovdesi, IsGovdesi, Is, IsCevabi, KaydetGovdesi, Nokta, NoktaGovdesi,
-  OzetCevabi, RotaHesabi, Tasima, TekRotaCevabi, TrafikCevabi, UrunSevki,
+  OzetCevabi, SoforKimligiDurumu, RotaHesabi, Tasima, TekRotaCevabi, TrafikCevabi, UrunSevki,
 } from '#paylasilan/sozlesme/sevkiyat.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
+import { kimlikCoz, kimlikGecerliMi, kimlikSifrele, KIMLIK_SAKLAMA_GUN } from './kimlik-sifre.ts';
 import { malzemeAdlari } from '../malzemeler/disari.ts';
 import { firmaAdlari, firmaAra, firmaKonumlari, firmaOzeti, firmaOzetleri, firmaVarMi, tumFirmalar } from '../musteri-tedarikci/disari.ts';
 import type { FirmaDegistiOlayi, FirmaKonumu } from '../musteri-tedarikci/disari.ts';
@@ -1038,4 +1039,51 @@ export async function kapanisSevkiyatDurumu(db: Db, uretimEmriId: number): Promi
   const emir = await uretimEmriOzeti(db, uretimEmriId);
   if (emir === null || emir.malzemeNo === null || emir.saglamAdet === null) return null;
   return kapanisSevki({ adet: emir.adet, saglamAdet: emir.saglamAdet, cikan: await sorgu.emrinCikanUrunu(db, uretimEmriId) });
+}
+
+/* ---------------- Şoför kimlik no'su (3694-4) ---------------- */
+
+const KIMLIK_KAPALI = 'Şoför kimlik alanı kapalı: sunucuda kişisel veri anahtarı tanımlı değil.';
+// Satır kimliği şifrenin ek doğrulama verisidir (Risk N2).
+const kimlikEki = (isId: number): string => `sevkiyat_isi:${String(isId)}`;
+
+async function isVarMi(db: Db, isId: number): Promise<void> {
+  const is = await sorgu.isGetir(db, isId);
+  if (!is || is.iptalEdildi) throw bulunamadi('İş bulunamadı ya da iptal edilmiş.');
+}
+
+export async function soforKimligiDurumu(db: Db, isId: number, anahtar: Buffer | null): Promise<SoforKimligiDurumu> {
+  await isVarMi(db, isId);
+  const k = await sorgu.soforKimligiGetir(db, isId);
+  return { acik: anahtar !== null, var: k !== null, maskeli: k === null ? null : `${'*'.repeat(8)}${k.sonUc}`, yazilma: k?.yazilma ?? null };
+}
+
+export async function soforKimligiKaydet(db: Db, isId: number, kimlik: string, anahtar: Buffer | null, kisiId: number): Promise<SoforKimligiDurumu> {
+  if (anahtar === null) throw gecersiz(KIMLIK_KAPALI);
+  await isVarMi(db, isId);
+  if (!kimlikGecerliMi(kimlik)) throw dogrulama('Kimlik no geçerli değil.', 'kimlik');
+  await sorgu.soforKimligiYaz(db, isId, kimlikSifrele(kimlik, anahtar, kimlikEki(isId)), kimlik.slice(-3), kisiId);
+  return soforKimligiDurumu(db, isId, anahtar);
+}
+
+// Tam değer yalnız burada çözülür. Çağıran uç yetkiyi denetler; denetim kaydını uç katmanı yazar (kim, ne zaman, hangi iş; değer yok).
+export async function soforKimligiTamOku(db: Db, isId: number, anahtar: Buffer | null): Promise<string> {
+  if (anahtar === null) throw gecersiz(KIMLIK_KAPALI);
+  const k = await sorgu.soforKimligiGetir(db, isId);
+  if (k === null) throw bulunamadi('Bu iş için şoför kimliği kayıtlı değil.');
+  const deger = kimlikCoz(k.sifreli, anahtar, kimlikEki(isId));
+  if (deger === null) throw gecersiz('Şoför kimliği çözülemedi (anahtar değişmiş ya da kayıt bozulmuş).');
+  return deger;
+}
+
+export async function soforKimligiSil(db: Db, isId: number): Promise<SoforKimligiDurumu> {
+  await sorgu.soforKimligiSil(db, isId);
+  return soforKimligiDurumu(db, isId, null);
+}
+
+// Süresi dolan kimlikler silinir: sevk tarihinden KIMLIK_SAKLAMA_GUN gün sonra. Dönüş: silinen sayısı.
+export function soforKimlikleriniTemizle(db: Db, bugun: string): Promise<number> {
+  const sinir = new Date(`${bugun}T00:00:00Z`);
+  sinir.setUTCDate(sinir.getUTCDate() - KIMLIK_SAKLAMA_GUN);
+  return sorgu.soforKimlikleriniTemizle(db, sinir.toISOString().slice(0, 10));
 }

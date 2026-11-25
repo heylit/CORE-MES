@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { gizli } from '../gizli.ts';
 import { ondalikMetinSemasi } from '../ondalik.ts';
 import { zamanSemasi } from '../zaman.ts';
 
@@ -400,3 +401,16 @@ export type AracTuru = z.output<typeof ARAC_TURU>;
 export type IsTuru = z.output<typeof IS_TURU>;
 export type NoktaTuru = z.output<typeof NOKTA_TURU>;
 export type GunTipi = z.output<typeof GUN_TIPI>;
+
+// Şoför kimlik no'su (3694-4). Yazma gövdesindeki değer gizli işaretlidir: denetim kaydına girmez. Listede yalnız maske, tam değer yalnız okuma ucunda.
+export const soforKimligiGovdesi = z.object({ kimlik: gizli(z.string().trim().regex(/^\d{11}$/, 'Kimlik no 11 haneli olmalı.')) }).strict();
+export const soforKimligiDurumuCevabi = z.object({
+  // Anahtar sunucuda tanımlı değilse alan kapalıdır: yazılamaz, okunamaz.
+  acik: z.boolean(),
+  var: z.boolean(),
+  maskeli: z.string().nullable(),
+  yazilma: zamanSemasi.nullable(),
+});
+export const soforKimligiOkuCevabi = z.object({ kimlik: z.string() });
+export type SoforKimligiGovdesi = z.output<typeof soforKimligiGovdesi>;
+export type SoforKimligiDurumu = z.output<typeof soforKimligiDurumuCevabi>;

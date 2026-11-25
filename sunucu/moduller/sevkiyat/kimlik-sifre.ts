@@ -14,15 +14,17 @@ export function anahtarCoz(base64: string | undefined): Buffer | null {
   return b.length === ANAHTAR_BAYT ? b : null;
 }
 
-export function kimlikSifrele(deger: string, anahtar: Buffer): string {
+// ek: ek doğrulama verisi (AAD, Risk N2): şifreli değer yazıldığı satıra bağlanır; başka satıra kopyalanırsa çözülmez. Verilmezse eski davranış.
+export function kimlikSifrele(deger: string, anahtar: Buffer, ek?: string): string {
   const nonce = randomBytes(12);
   const c = createCipheriv('aes-256-gcm', anahtar, nonce, { authTagLength: ETIKET_BAYT });
+  if (ek !== undefined) c.setAAD(Buffer.from(ek, 'utf8'));
   const sifreli = Buffer.concat([c.update(deger, 'utf8'), c.final()]);
   return [SURUM, nonce.toString('base64url'), c.getAuthTag().toString('base64url'), sifreli.toString('base64url')].join('.');
 }
 
 // Yanlış anahtar, bozuk ya da oynanmış değerde null; hata iletisine değer girmez.
-export function kimlikCoz(metin: string, anahtar: Buffer): string | null {
+export function kimlikCoz(metin: string, anahtar: Buffer, ek?: string): string | null {
   const [surum, nonce, etiket, sifreli] = metin.split('.');
   if (surum !== SURUM || nonce === undefined || etiket === undefined || sifreli === undefined) return null;
   try {
@@ -30,9 +32,26 @@ export function kimlikCoz(metin: string, anahtar: Buffer): string | null {
     if (e.length !== ETIKET_BAYT) return null;
     const d = createDecipheriv('aes-256-gcm', anahtar, Buffer.from(nonce, 'base64url'), { authTagLength: ETIKET_BAYT });
     d.setAuthTag(e);
+    if (ek !== undefined) d.setAAD(Buffer.from(ek, 'utf8'));
     return Buffer.concat([d.update(Buffer.from(sifreli, 'base64url')), d.final()]).toString('utf8');
   } catch { return null; }
 }
 
 // Ekranda yalnız son üç hane görünür.
 export const kimlikMaskele = (deger: string): string => (deger.length <= 3 ? '*'.repeat(deger.length) : `${'*'.repeat(deger.length - 3)}${deger.slice(-3)}`);
+
+export const KIMLIK_ANAHTARI_DEGISKENI = 'TMIV2_KISISEL_VERI_ANAHTARI';
+// Her istekte okunur (önbellek yok): anahtar yoksa ya da bozuksa alan kapalıdır (null).
+export const kisiselVeriAnahtari = (env: Readonly<Record<string, string | undefined>> = process.env): Buffer | null => anahtarCoz(env[KIMLIK_ANAHTARI_DEGISKENI]);
+
+// T.C. kimlik no biçimi ve sağlama haneleri (VARSAYIM: yaygın bilinen algoritma, resmî belgeden açılmadı). Yalnız yazarken denetlenir; yanlış girişi erken yakalar.
+export function kimlikGecerliMi(deger: string): boolean {
+  if (!/^[1-9]\d{10}$/.test(deger)) return false;
+  const h = [...deger].map(Number);
+  const tek = (h[0]! + h[2]! + h[4]! + h[6]! + h[8]!) * 7;
+  const cift = h[1]! + h[3]! + h[5]! + h[7]!;
+  if ((((tek - cift) % 10) + 10) % 10 !== h[9]) return false;
+  return h.slice(0, 10).reduce((a, b) => a + b, 0) % 10 === h[10];
+}
+// Silme süresi: sevk tarihinden sonra bu kadar gün saklanır (VARSAYIM 90).
+export const KIMLIK_SAKLAMA_GUN = 90;
