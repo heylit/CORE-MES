@@ -151,6 +151,7 @@ export function KabulSinirlari({ no, kabul, degistir }: { no: number; kabul: Kab
         {sartliVar && !k.yalnizAyni && (
           <IsaretKutusu etiket="Şartlı kalite ve durum muadillerini de kabul ediyorum (satın alma bulunca size sorulur)" checked={k.sartliKabul} onChange={(e) => sartliYaz(e.target.checked)} />
         )}
+        {!k.yalnizAyni && sartliVar && <p className="sa-talep-not">Bu kutu kalite ve durum muadil listesindeki şartlı değerleri açar; alternatif kartındaki "şartlı" rozeti ise kartın kendi türüdür ve kart ayrıca işaretlenince geçerli olur.</p>}
         <p className="sa-talep-not">{k.yalnizAyni ? 'Satın alma alternatif seçemez.' : 'Satın alma bu sınırlar içindeki alternatifi seçebilir; şartlı muadil size sorulur.'}</p>
       </div>
     </section>
