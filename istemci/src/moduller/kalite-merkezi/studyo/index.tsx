@@ -241,11 +241,11 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
 
       <section className="km-st-orta" aria-label="Teknik resim">
         <div className="km-st-orta-ust">
-          <Dugme tur="ikincil" simge="layers" aria-expanded={yanAcik} aria-controls="km-st-sol km-st-sag" onClick={yanDegistir}>
+          <Dugme tur="ikincil" simge="kanban" aria-expanded={yanAcik} aria-controls="km-st-sol km-st-sag" onClick={yanDegistir}>
             {yanAcik ? 'Yan panelleri gizle' : 'Yan panelleri göster'}
           </Dugme>
           {resim && resim.tur === 'resim' ? (
-            <Dugme tur="ikincil" simge="layers" className="km-st-gruplar-dugme" onClick={() => { if (!yanAcik) yanDegistir(); }} aria-label="Balon gruplarını göster">
+            <Dugme tur="ikincil" simge="tag" className="km-st-gruplar-dugme" onClick={() => { if (!yanAcik) yanDegistir(); }} aria-label="Balon gruplarını göster">
               {`Gruplar · ${String(resim.gruplar?.length ?? 0)}`}
             </Dugme>
           ) : null}
@@ -265,6 +265,7 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
             <Resim resim={resim} yerYaz={planDuzenler && taslak === null} okuma={okuma.okuma} kontrol={{
               ...okuma.kontrol(okumaAcik),
               grupKodlari, secimBildir: seciliYaz, secimAnahtari, saltOkunurNedeni: balonEkleNedeni,
+              altSeritEylemi: taslak !== null ? <Dugme tur="birincil" simge="check" disabled={planYaz.isPending} onClick={planKaydet}>Planı kaydet</Dugme> : null,
               balonlar: taslak ?? balonlar, balonlarYaz: (b) => { taslakYaz(b); }, olcumler: gosterilen, olcumlerYaz, saltOkunur: !planDuzenler,
             }} />
           ) : <DurumKutusu durum="bos" mesaj={bos ?? 'Resimler alınamadı.'} />}

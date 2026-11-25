@@ -78,7 +78,7 @@
 @media (max-width: 767px) {
   .km-st { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; height: auto; min-height: 0; }
   .km-st-mseg {
-    display: flex; gap: var(--b-1); padding: var(--b-1); border-radius: var(--yari-2); background: var(--panel2); border: var(--cizgi-ince) solid var(--edge);
+    order: 9; position: sticky; inset-block-end: var(--alt-cubuk); z-index: var(--z-ust); display: flex; gap: var(--b-1); padding: var(--b-1); border-radius: var(--yari-2); background: var(--panel2); border: var(--cizgi-ince) solid var(--edge);
   }
   .km-st-mseg button {
     flex: 1; min-height: var(--dokunma); border: 0; border-radius: var(--yari-1); background: none; color: var(--muted); font: inherit; font-weight: 700; cursor: pointer;
@@ -133,3 +133,10 @@
 .km-st-grup-ust { flex-wrap: wrap; }
 .km-st-grup .tc-dugme, .km-st-gruplar .tc-dugme { white-space: normal; text-align: start; max-inline-size: 100%; }
 .km-st-grup-ust > :first-child { flex: 1 1 calc(var(--b-6) * 3); }
+
+/* Arayüz bakışı (3693): rozet kartı taşırmaz, kaydıran sütunlar kaydırma çubuğunu gösterir, üyelik rengin yanında işaretle de görünür. */
+.km-st-belge { flex-wrap: wrap; min-width: 0; }
+.km-st-belge-satir > .km-st-belge { flex: 1 1 0; }
+.km-st-sol, .km-st-sag, .km-st-gr { scrollbar-width: thin; scrollbar-color: var(--muted) transparent; }
+.km-st-grup-balon { position: relative; }
+.km-st-grup-balon.on::after { content: "✓"; position: absolute; inset-block-start: calc(var(--b-1) * -1); inset-inline-end: calc(var(--b-1) * -1); font-size: var(--yazi-xs); line-height: 1; padding: 1px 3px; border-radius: 50%; background: var(--ink); color: var(--panel-solid); }

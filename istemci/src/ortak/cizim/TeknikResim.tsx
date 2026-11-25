@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { ESKI_CIZIM, type EskiCizim } from './cekirdek/cizim-merkezi.ts';
 import { ALET_ZORUNLU_ILETISI, aletSecimAnahtari, olcumAletDamgasi, seciliAlet } from './cekirdek/olcum-aleti.ts';
 import { DurumKutusu, Dugme, Girdi, Menu, Secim, Simge, useBildirim, type BildirimTonu } from '../arayuz/index.ts';
+import { useTelefon } from '../arayuz/telefon.ts';
 import type { SimgeAdi } from '../tasarim/simgeler.ts';
 import { useTema } from '../veri/tema.ts';
 import { bellegeKoy, cihazAyari, PDF_BELLEGI, saklanacak, type PdfKaydi } from './bellek.ts';
@@ -81,6 +82,8 @@ export interface TeknikResimKontrolu {
   secimBildir?: (numaralar: readonly number[]) => void;
   secimAnahtari?: number;
   saltOkunurNedeni?: string | null;
+  // Telefonda (360) balon ekleme ve bu eylem (ör. Planı kaydet) araç çubuğunda değil alt şeritte durur.
+  altSeritEylemi?: ReactNode;
   // ADR 0032: sunucunun aynı renk imzasıyla hazırladığı sayfa görüntüsü. Verilmezse ya da boş dönerse görüntü bu cihazda çizilir.
   hazirGoruntu?: (pdf: Uint8Array, sayfa: number, imza: string) => Promise<Blob | null>;
 }
@@ -151,6 +154,7 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
   const tasima = useRef<{ id: number; dx: number; dy: number; x: number; y: number; oynadi: boolean } | null>(null), tasindi = useRef(false);
   const [z, setZ] = useState({ k: 1, x: 0, y: 0 });
   const [dims, setDims] = useState(true), [showB, setShowB] = useState(true), [grid, setGrid] = useState(true), [hidden, setHidden] = useState(true);
+  const telefon = useTelefon();
   const [adding, setAdding] = useState(false), [serbestEkle, setSerbestEkle] = useState(false), [kodGoster, setKodGoster] = useState(true);
   const [model3d, setModel3d] = useState<{ data: Gorunum3B; fa: number } | null>(null);
   const [fs, setFs] = useState(false);
@@ -780,6 +784,14 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
     );
   }) : null;
 
+  const balonEkleMenusu = onPrimary ? (
+                <Menu etiket="Balon ekle" metin="Balon ekle" simge="target" pasif={RO}
+                  ipucu={RO ? ctl.saltOkunurNedeni ?? 'Bu resimde balon eklenemez' : undefined}
+                  ogeler={[
+                    { anahtar: 'olcu', baslik: 'Ölçü yazısından (B)', simge: 'scan', sec: () => { setAdding(true); setSerbestEkle(false); setRegMode(false); setSel(null); } },
+                    { anahtar: 'serbest', baslik: 'Serbest balon (ölçüsüz, Geçer/Geçmez)', simge: 'target', sec: () => { setAdding(true); setSerbestEkle(true); setRegMode(false); setSel(null); } },
+                  ]} />
+  ) : null;
   const pin = pinSel != null ? ctl.notlar?.find((p) => p.id === pinSel) : undefined;
   const sayfaGec = (n: number) => { if (doc.file && doc.baseKey) void showPdfPage(n, doc.file, doc.baseKey).then(() => setBusy(null)); };
   const kok = ['tc-ay5-resim', fs && 'tc-ay5-tam', !dims && 'tc-ay5-olcusuz', !hidden && 'tc-ay5-gizlisiz', (adding || regMode) && 'tc-ay5-ekliyor'].filter(Boolean).join(' ');
@@ -864,15 +876,8 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
             <>
               <span className="tc-ay5-ayrac" aria-hidden="true" />
               {ctl.notBirak && onPrimary && arac('flag', pinMode, () => { setPinMode(!pinMode); setAdding(false); setSel(null); }, 'Resim üzerine geri bildirim')}
-              {onPrimary && (
-                <Menu etiket="Balon ekle" metin="Balon ekle" simge="target" pasif={RO}
-                  ipucu={RO ? ctl.saltOkunurNedeni ?? 'Bu resimde balon eklenemez' : undefined}
-                  ogeler={[
-                    { anahtar: 'olcu', baslik: 'Ölçü yazısından (B)', simge: 'scan', sec: () => { setAdding(true); setSerbestEkle(false); setRegMode(false); setSel(null); } },
-                    { anahtar: 'serbest', baslik: 'Serbest balon (ölçüsüz, Geçer/Geçmez)', simge: 'target', sec: () => { setAdding(true); setSerbestEkle(true); setRegMode(false); setSel(null); } },
-                  ]} />
-              )}
-              {RO && onPrimary && ctl.saltOkunurNedeni && <span className="tc-ay5-soluk">{ctl.saltOkunurNedeni}</span>}
+              {!telefon && balonEkleMenusu}
+              {RO && onPrimary && ctl.saltOkunurNedeni && !telefon && <span className="tc-ay5-soluk">{ctl.saltOkunurNedeni}</span>}
               {!RO && onPrimary && bal.length > 0 && arac('clipboard-check', selMode, () => { setSelMode(!selMode); setMsel([]); setAdding(false); setRegMode(false); setPinMode(false); setSel(null); }, 'Çoklu seç · CMM / Elle')}
               {!RO && onPrimary && doc.kind === 'pdf' && arac('scan', regMode, () => { setRegMode(!regMode); setAdding(false); setPinMode(false); setSel(null); }, 'Bölge oku · ölçüyü çerçeve içine al (R)')}
               {!RO && onPrimary && gecmis.geri.length > 0 && arac('chev-left', false, () => gecmisUygula(false), 'Geri al (Ctrl+Z)')}
@@ -918,6 +923,13 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
         </div>
       )}
       {regMode && <div className="tc-ay5-ipucu"><Simge ad="scan" />Okunacak ölçüyü parmağınla çerçeve içine al<Dugme onClick={() => { setRegMode(false); setRegRect(null); }}>Vazgeç</Dugme></div>}
+      {telefon && !mode3d && onPrimary && (
+        <div className="tc-ay5-alt-serit" role="group" aria-label="Balon ve plan işlemleri">
+          {balonEkleMenusu}
+          {RO && ctl.saltOkunurNedeni ? <span className="tc-ay5-soluk">{ctl.saltOkunurNedeni}</span> : null}
+          {ctl.altSeritEylemi}
+        </div>
+      )}
       {adding && <div className="tc-ay5-ipucu"><Simge ad="target" />{serbestEkle ? 'Serbest balonun yerine dokun' : 'Resimde ölçünün yanına dokun'}<Dugme onClick={() => { setAdding(false); setSerbestEkle(false); }}>Vazgeç</Dugme></div>}
 
       {drawer === 'lib' && (

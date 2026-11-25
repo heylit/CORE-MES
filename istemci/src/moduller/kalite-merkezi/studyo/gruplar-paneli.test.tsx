@@ -64,4 +64,15 @@ describe('Balon grupları paneli (3693)', () => {
     expect(within(bolge).getAllByText('Op 10 · Tornalama').length).toBeGreaterThan(0);
     expect(within(bolge).getByText('Op 20 · Taşlama için bir grup bağlayın.')).toBeTruthy();
   });
+
+  it('eski revizyonda gruplar salt okunur: yeni grup, silme, ad ve operasyon düzenleme yok; kayıt çubuğu çıkmaz', async () => {
+    kmAc('resimler?parca=7', MUHENDIS, {}, secenek(resim({ eski: true })));
+    const panel = await screen.findByRole('region', { name: 'Balon grupları' });
+    expect(within(panel).getByText('Eski revizyon salt okunur; grupları güncel revizyonda düzenleyin.')).toBeTruthy();
+    expect(within(panel).queryByRole('button', { name: 'Yeni grup' })).toBeNull();
+    expect(within(panel).queryByLabelText('Grup adı')).toBeNull();
+    expect(within(panel).queryByLabelText('Operasyon bağla')).toBeNull();
+    expect(within(panel).queryByRole('button', { name: 'Kaydet' })).toBeNull();
+    expect((within(panel).getAllByRole('button', { name: '1' })[0] as HTMLButtonElement).disabled).toBe(true);
+  });
 });
