@@ -12,10 +12,7 @@ const tezgah = (cihazAdi: string, ek: Partial<Tezgah> = {}): Tezgah => ({
 
 export const ORNEK_DURUM = (): TezgahBaglantisiDurumCevabi => ({
   baglanti: 'acik', aralikSaniye: 5, varlikDurumu: 'okundu', sonDeneme: once(3), sonOkuma: once(3), sonHata: null,
-  doluluk: {
-    satirSayisi: 412_300, satirSiniri: 2_000_000, yuzde: 20.6, seviye: 'normal', diskBayt: 118_000_000, enEskiKayit: once(86_000),
-    olcum: { pencereDakika: 60, yazilan: 31_200, atlanan: 168_000, yazilanDakikada: 520, atlananDakikada: 2800 },
-  },
+  doluluk: ORNEK_DOLULUK('normal'),
   tezgahlar: [
     tezgah('ORN-T01'),
     tezgah('ORN-T04', {
@@ -70,3 +67,14 @@ export const ORNEK_AYRINTI = (): TezgahAyrintisiCevabi => ({
   bosluklar: [{ zaman: dakika(25), neden: 'tampon-asildi' }, { zaman: dakika(240), neden: 'servis-yeniden-basladi' }],
   egriBasi: dakika(60), egriSonu: new Date().toISOString(),
 });
+
+// Doluluk seviyeleri (ORN): normal %20,6, uyarı %84,0, kritik %97,2.
+export const ORNEK_DOLULUK = (seviye: 'normal' | 'uyari' | 'kritik' = 'normal'): TezgahBaglantisiDurumCevabi['doluluk'] => ({
+  normal: { satirSayisi: 412_300, satirSiniri: 2_000_000, yuzde: 20.6, seviye: 'normal' as const, diskBayt: 118_000_000, enEskiKayit: once(86_040),
+    olcum: { pencereDakika: 60, yazilan: 31_200, atlanan: 168_000, yazilanDakikada: 520, atlananDakikada: 2800 } },
+  uyari: { satirSayisi: 1_680_000, satirSiniri: 2_000_000, yuzde: 84, seviye: 'uyari' as const, diskBayt: 485_000_000, enEskiKayit: once(22_320),
+    olcum: { pencereDakika: 60, yazilan: 110_400, atlanan: 552_000, yazilanDakikada: 1840, atlananDakikada: 9200 } },
+  kritik: { satirSayisi: 1_944_000, satirSiniri: 2_000_000, yuzde: 97.2, seviye: 'kritik' as const, diskBayt: 561_800_000, enEskiKayit: once(9_090),
+    olcum: { pencereDakika: 60, yazilan: 156_000, atlanan: 786_000, yazilanDakikada: 2600, atlananDakikada: 13_100 } },
+})[seviye];
+
