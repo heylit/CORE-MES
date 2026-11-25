@@ -222,12 +222,12 @@ describe('SmartES listeleri ve eşleme önerileri (kart 3174, gerçek PostgreSQL
 
   test('SME-31: fire adı eşlemesi: öneri, bekleyen kayıt sayısı, sonuç zorunluluğu, sürüm, kaldırma ve "artık yok" uyarısı', async () => {
     fireListesi([
-      { ID: '7', NAME: 'ölçü dışı', GROUP_INFORMATION: 'ORN grup', ISOPERATOR_WELDED: 'true' },
+      { ID: '7', NAME: 'kılavuzun parça içerisinde kırılması', GROUP_INFORMATION: 'ORN grup', ISOPERATOR_WELDED: 'true' },
       { ID: '9', NAME: 'ORN bilinmeyen fire' },
     ]);
     await oku(['fire']);
-    await fireKaydi(1, 'Ölçü Dışı', '2026-11-10T08:00:00Z');
-    await fireKaydi(2, 'ölçü dışı', '2026-11-11T08:00:00Z');
+    await fireKaydi(1, 'Kılavuzun Parça İçerisinde Kırılması', '2026-11-10T08:00:00Z');
+    await fireKaydi(2, 'kılavuzun parça içerisinde kırılması', '2026-11-11T08:00:00Z');
     await fireKaydi(3, 'ORN listede olmayan', '2026-11-12T08:00:00Z');
 
     const g = await gelenAdlar('fire', okuyucu);
@@ -236,7 +236,7 @@ describe('SmartES listeleri ve eşleme önerileri (kart 3174, gerçek PostgreSQL
     assert.ok(olcu);
     assert.equal(olcu.durum, 'eslenmedi');
     assert.equal(olcu.bekleyen, 2, 'kayıt adı büyük/küçük harf ayırmadan listeye bağlanır');
-    assert.equal(olcu.oneri?.kod, 'H-01');
+    assert.equal(olcu.oneri?.kod, 'H-05');
     assert.equal(olcu.operatorKaynakli, true);
     const listeDisi = g.satirlar.find((x) => x.anahtar === 'ad:ORN listede olmayan');
     assert.equal(listeDisi?.bekleyen, 1, 'listede olmayan adla gelen kayıt kendi satırını açar');
@@ -251,7 +251,7 @@ describe('SmartES listeleri ve eşleme önerileri (kart 3174, gerçek PostgreSQL
     const ilk = await esle({ anahtar: 'id:7', nedenId, sonuc: 'hatali', surum: null });
     assert.equal(ilk.statusCode, 200, ilk.body);
     const eslenen = (ilk.json() as GelenAdlarCevabi).satirlar.find((x) => x.anahtar === 'id:7');
-    assert.deepEqual([eslenen?.durum, eslenen?.neden?.kod, eslenen?.sonuc, eslenen?.bekleyen, eslenen?.surum], ['eslendi', 'H-01', 'hatali', 0, 1]);
+    assert.deepEqual([eslenen?.durum, eslenen?.neden?.kod, eslenen?.sonuc, eslenen?.bekleyen, eslenen?.surum], ['eslendi', 'H-05', 'hatali', 0, 1]);
     // Sürümsüz ikinci yazma ve eski sürüm reddedilir; değişiklik sürümü artırır.
     assert.equal((await esle({ anahtar: 'id:7', nedenId, sonuc: 'hurda', surum: null })).statusCode, 409);
     const degisti = await esle({ anahtar: 'id:7', nedenId, sonuc: 'hurda', surum: 1 });
@@ -282,7 +282,7 @@ describe('SmartES listeleri ve eşleme önerileri (kart 3174, gerçek PostgreSQL
 
   test('SME-31: duruş adı önerileri toplu onaylanır; duruşta sonuç yazılmaz, geçersiz öneri atlanır', async () => {
     sahte.isleyiciler.set('DownTimeList', () => tablo([
-      { ID: '1', NAME: 'Mekanik Arıza' }, { ID: '2', NAME: 'malzeme bekleniyor' }, { ID: '3', NAME: 'ORN karşılıksız duruş' },
+      { ID: '1', NAME: 'Makine Arızası' }, { ID: '2', NAME: 'malzeme bekleme (depodan)' }, { ID: '3', NAME: 'ORN karşılıksız duruş' },
     ]));
     await oku(['durus']);
     const g = await gelenAdlar('durus');
@@ -303,7 +303,7 @@ describe('SmartES listeleri ve eşleme önerileri (kart 3174, gerçek PostgreSQL
 
   test('3655 B: SmartES duruş listesi CORE\'a aktarılır: aynı adlı eşlenir, yenisi SME-<id> koduyla eklenir, tekrar kayıt eklemez, var olan neden değişmez, ad farkı bildirilir', async () => {
     sahte.isleyiciler.set('DownTimeList', () => tablo([
-      { ID: '901', NAME: '  mekanik   ARIZA ', GROUP_INFORMATION: 'PLANSIZ DURUŞLAR' },
+      { ID: '901', NAME: '  makine   ARIZASI ', GROUP_INFORMATION: 'PLANSIZ DURUŞLAR' },
       { ID: '902', NAME: 'ORN Planlı bakım', GROUP_INFORMATION: 'PLANLI DURUŞLAR' },
       { ID: '903', NAME: 'ORN pasif neden', GROUP_INFORMATION: 'DİĞER', ISPASSIVE: 'true' },
       { ID: '904', NAME: 'orn planlı  bakım', GROUP_INFORMATION: 'PLANLI DURUŞLAR' },
@@ -312,7 +312,7 @@ describe('SmartES listeleri ve eşleme önerileri (kart 3174, gerçek PostgreSQL
     const aktar = (c = yonetici) => istek('POST', '/smartes/gelen-adlar/aktar', { tur: 'durus' }, c);
     const durusNedenleri = () => vt().sorgu<{ kod: string; ad: string; kategori: string; aktif: boolean }>('SELECT kod, ad, kategori, aktif FROM durus_nedeni ORDER BY sira');
     const hazir = await durusNedenleri();
-    const mekanik = hazir.find((n) => n.ad.toLocaleLowerCase('tr') === 'mekanik arıza')?.kod ?? 'YOK';
+    const mekanik = hazir.find((n) => n.ad.toLocaleLowerCase('tr') === 'makine arızası')?.kod ?? 'YOK';
 
     // Liste okunmadan aktarım yapılmaz.
     assert.equal((await aktar()).statusCode, 400);
