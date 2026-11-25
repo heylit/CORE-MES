@@ -422,7 +422,7 @@ describe('Mal kabul', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Uygula' }));
     fireEvent.change(screen.getByLabelText('Döküm no'), { target: { value: 'D-7' } });
     fireEvent.change(screen.getByLabelText('İrsaliye tarihi'), { target: { value: '2026-11-10' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Teslim al' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kabul et' }));
     await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST' && i.yol === '/stok/mal-kabul')).toBe(true));
     const g = istekler.find((i) => i.yontem === 'POST' && i.yol === '/stok/mal-kabul')!.govde as { irsaliyeTarihi: string | null; satirlar: { malzemeId: number; miktar: string; parti: { dokumNo: string } | null }[] };
     expect(g.irsaliyeTarihi).toBe('2026-11-10');
@@ -451,7 +451,7 @@ describe('Mal kabul', () => {
     expect((screen.getByLabelText(/Sayılan miktar/) as HTMLInputElement).value).toBe('12,5');
     fireEvent.click(screen.getByRole('button', { name: 'Uygula' }));
     fireEvent.change(screen.getByLabelText('Döküm no'), { target: { value: 'D-7' } });
-    const teslim = screen.getByRole('button', { name: 'Teslim al' });
+    const teslim = screen.getByRole('button', { name: 'Kabul et' });
     fireEvent.click(teslim);
     fireEvent.click(teslim);
     expect(await screen.findByText('Mal kabul kaydedildi.')).toBeTruthy();
@@ -533,7 +533,7 @@ describe('Mal kabul', () => {
     expect(screen.getByText('12 adet')).toBeTruthy();
     expect((screen.getByLabelText(/Sayılan miktar/) as HTMLInputElement).value).toBe('12');
     fireEvent.change(screen.getByLabelText(/Sayılan miktar/), { target: { value: '22' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Teslim al' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kabul et' }));
     await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST')).toBe(true));
     expect((istekler.find((i) => i.yontem === 'POST')!.govde as { satirlar: unknown[] }).satirlar[0]).toMatchObject({ malzemeId: 902, miktar: '22', siparisSatirId: 41 });
     fireEvent.click(screen.getByRole('button', { name: 'Seç' }));
@@ -563,7 +563,7 @@ describe('Mal kabul', () => {
     expect(await screen.findByText('1 eksik')).toBeTruthy();
     expect(screen.getByText('UE-2026-0012')).toBeTruthy();
     await waitFor(() => expect((screen.getAllByLabelText('Malzeme') as HTMLInputElement[]).map((k) => k.value)).toEqual(['Deneme kesme yağı · SR-911']));
-    fireEvent.click(screen.getByRole('button', { name: 'Teslim al' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kabul et' }));
     await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST')).toBe(true));
     expect((istekler.find((i) => i.yontem === 'POST')!.govde as { satirlar: unknown[] }).satirlar).toEqual([expect.objectContaining({ malzemeId: 911, miktar: '2.5' })]);
     // Kayıttan sonra önizleme yeniden okunur; eksikler ikinci kez dolmaz, form boş kalır.
@@ -578,7 +578,7 @@ describe('Mal kabul', () => {
       'GET /stok/uretim-emirleri/7/tamamlama': () => json(404, { kod: 'BULUNAMADI', mesaj: 'Üretim emri bulunamadı.' }),
     });
     ac('/stok/mal-kabul?emir=abc');
-    await screen.findByRole('button', { name: 'Teslim al' });
+    await screen.findByRole('button', { name: 'Kabul et' });
     await waitFor(() => expect(istekler.some((i) => i.yol === '/stok/acik-siparis-satirlari')).toBe(true));
     expect(istekler.some((i) => i.yol.includes('/tamamlama'))).toBe(false);
     cleanup();
@@ -611,7 +611,7 @@ describe('Mal kabul', () => {
     fireEvent.change(screen.getByLabelText('Fason kutusu'), { target: { value: '77' } });
     fireEvent.change(screen.getByLabelText('Giden miktar'), { target: { value: '20' } });
     fireEvent.change(screen.getByLabelText(/Sayılan miktar/), { target: { value: '18' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Teslim al' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kabul et' }));
     const postlar = () => istekler.filter((i) => i.yontem === 'POST').map((i) => (i.govde as { satirlar: unknown[] }).satirlar[0]);
     await waitFor(() => expect(postlar()).toHaveLength(1));
     expect(postlar()[0]).toMatchObject({ malzemeId: 904, miktar: '18', siparisSatirId: 51, fason: { malzemeId: 905, konumId: 77, miktar: '20' } });
@@ -621,7 +621,7 @@ describe('Mal kabul', () => {
     expect(screen.queryByLabelText('Fason kutusu')).toBeNull();
     expect(screen.queryByLabelText(/Konum/)).toBeNull();
     fireEvent.change(screen.getByLabelText(/Teslim alınan miktar/), { target: { value: '20' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Teslim al' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kabul et' }));
     await waitFor(() => expect(postlar()).toHaveLength(2));
     expect(postlar()[1]).toEqual({ malzemeId: 903, miktar: '20', siparisSatirId: 51 });
   });
@@ -649,7 +649,7 @@ describe('Mal kabul', () => {
     expect((screen.getByLabelText('Fason kutusu') as HTMLSelectElement).value).toBe('77');
     expect((screen.getByLabelText('Fason işi') as HTMLSelectElement).value).toBe('5');
     expect((screen.getByLabelText(/Dönen adet/) as HTMLInputElement).value).toBe('15');
-    fireEvent.click(screen.getByRole('button', { name: 'Teslim al' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kabul et' }));
     await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST')).toBe(true));
     expect((istekler.find((i) => i.yontem === 'POST')!.govde as { satirlar: unknown[] }).satirlar[0]).toMatchObject({ malzemeId: 904, miktar: '15', siparisSatirId: 51, fasonIsi: { isEmriId: 5 } });
   });
@@ -684,7 +684,7 @@ describe('Mal kabul', () => {
     expect(within(parti).getAllByRole('option').map((x) => x.textContent)).toEqual(['Seçin', 'FP-1 · 10', 'FP-2 · 4']);
     fireEvent.change(parti, { target: { value: '8' } });
     fireEvent.change(screen.getByLabelText(/Sayılan miktar/), { target: { value: '4' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Teslim al' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kabul et' }));
     await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST')).toBe(true));
     expect((istekler.find((i) => i.yontem === 'POST')!.govde as { satirlar: unknown[] }).satirlar[0]).toMatchObject({ malzemeId: 904, fason: { malzemeId: 905, konumId: 77, partiId: 8 } });
   });
@@ -717,7 +717,7 @@ describe('Mal kabul', () => {
     sunucuKur(OKUYUCU, { 'GET /stok/mal-kabuller': () => json(200, bosListe), 'GET /stok/konumlar': () => json(200, bosListe) });
     ac('/stok/mal-kabul');
     expect(await screen.findByText('Henüz mal kabul yok.')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Teslim al' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Kabul et' })).toBeNull();
   });
 });
 

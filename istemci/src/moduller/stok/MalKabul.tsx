@@ -4,7 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import type {
   AcikSiparisSatiri, AcikSiparisSatirlariCevabi, AmbalajTuru, DepoSevkSatiri, EmirTamamlamaCevabi, FasonIsleriCevabi, GozOnerisiCevabi, KonumAyrintiCevabi, KonumlarCevabi, MalKabulCevabi, MalKabulGovdesi, MalKabullerCevabi, MalKabulOzeti, MalzemeAyrintiCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
-import { Dugme, DurumKutusu, Girdi, Kart, Rozet, SabitEylem, Secim, Sekmeler, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Girdi, Kart, Rozet, SabitEylem, Secim, Sekmeler, Tablo, useTelefon, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { useGonderimKilidi } from '../../ortak/veri/korumali-komut.ts';
 import { DosyaHatasi, dosyaYukle, KucukResimKutusu, useKucukResimler } from '../belge-merkezi/disari.ts';
@@ -18,7 +18,8 @@ import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
 import { BekleyenIrsaliyeler, IrsaliyeSecici, OkunanBilgilerKutusu, bekleyenSayfasi, irsaliyeEkleYaDaBeklet, useSayfaOkumalari, type IrsaliyeSayfasi } from './IrsaliyeBelgesi.tsx';
 import { bekleyenDosyasi, bekleyeniSil, sayfalardanSakla, type BekleyenIrsaliye } from './irsaliye-kuyrugu.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
-import { BirimKarsiligi, IkinciBirimGirdisi, KalanHucresi, SiparisMiktariGirdisi, ikinciBirim, onerilenMiktar, type SiparisDonusumu } from './birim-donusumu.tsx';
+import { KabulAkisi, type AkisKalemi } from './KabulAkisi.tsx';
+import { BirimKarsiligi, IkinciBirimGirdisi, KalanHucresi, SiparisMiktariGirdisi, ikinciBirim, birimFarkli, onerilenMiktar, type SiparisDonusumu } from './birim-donusumu.tsx';
 import { MalKabulYapilanlar } from './MalKabulYapilanlar.tsx';
 import { useMalKabulTaslagi } from './MalKabulTaslagi.tsx';
 import { MalzemeSecici, useMalzemeOzeti } from './MalzemeSecici.tsx';
@@ -521,6 +522,20 @@ export function MalKabul() {
     (f) => { setTur(f.tur); setIrsaliye(f.irsaliye); setIrsaliyeTarihi(f.irsaliyeTarihi ?? ''); setArananIrsaliye(f.irsaliye); setSatirlar(f.satirlar.length ? f.satirlar.map((s) => ({ ...s, anahtar: ++sayac })) : [bosSatir()]); });
   // Çift tık tek istek ve tek bildirim (STK-7).
   const kilitli = useGonderimKilidi();
+  const govdeOlustur = (haric: readonly number[] = []): MalKabulGovdesi => ({ tur, irsaliyeNo: irsaliye, irsaliyeTarihi: irsaliyeTarihi === '' ? null : irsaliyeTarihi, taslakSil: taslak.silinsinMi(),
+    satirlar: satirlar.filter((s) => !haric.includes(s.anahtar)).map((s) => satirGovdesi(tur === 'satin_alma' ? s : { ...s, siparisSatirId: '', hizmetKarti: '' })) });
+  // 3676 dilim 2c: telefonda seçilmiş sipariş satırları kalem kalem sayılır. Akış aynı form durumunu ve aynı gönderimi kullanır; birimi
+  // siparişten farklı (dönüşümlü), hizmet, fason ve sevk satırları ayrıntılı formda kalır.
+  const telefon = useTelefon();
+  const [akis, akisYaz] = useState(false);
+  const akisaUygun = (s: Satir): boolean => tur === 'satin_alma' && s.siparisSatirId !== '' && s.hizmetKarti === '' && s.fasonIsEmriId === '' && s.sevkKalemiId === ''
+    && !!s.siparisDonusumu && !birimFarkli(s.siparisDonusumu);
+  const akisKalemleri: AkisKalemi[] = satirlar.filter(akisaUygun).map((s) => {
+    const parcalar = s.siparisEtiketi.split(' · ');
+    return { anahtar: s.anahtar, ad: parcalar[parcalar.length - 1] ?? s.siparisEtiketi, siparis: parcalar.slice(0, -1).join(' · '), birim: s.siparisDonusumu?.birim ?? '',
+      beklenen: s.siparisDonusumu?.miktar ?? '0', kalan: s.siparisDonusumu?.kalanMiktar ?? '0', miktar: s.miktar };
+  });
+  const akisSonucu = komut.isPending ? 'gonderiyor' : komut.isSuccess ? 'basarili' : komut.isError ? 'hata' : 'bekliyor';
   return (
     <section className="tc-stok">
       <SayfaBasi baslik="Mal kabul" aciklama="Depo malı sayarak teslim alır; hammaddede parti o anda girilir. Fasondan dönen malzeme hizmet siparişiyle alınır. Logo irsaliyesiyle eşleme ayrıca yapılır." />
@@ -534,7 +549,7 @@ export function MalKabul() {
             setEklenenBekleyenler((e) => [...e, k.id]);
             if (irsaliye === '' && k.irsaliyeNo !== '') { setIrsaliye(k.irsaliyeNo); setArananIrsaliye(k.irsaliyeNo); }
           }} />
-          <form className="tc-stok-form" onSubmit={(e) => { e.preventDefault(); const g = { tur, irsaliyeNo: irsaliye, irsaliyeTarihi: irsaliyeTarihi === '' ? null : irsaliyeTarihi, taslakSil: taslak.silinsinMi(), satirlar: satirlar.map((s) => satirGovdesi(tur === 'satin_alma' ? s : { ...s, siparisSatirId: '', hizmetKarti: '' })) }; kilitli(() => komut.mutateAsync(g)); }}>
+          <form className="tc-stok-form" onSubmit={(e) => { e.preventDefault(); const g = govdeOlustur(); kilitli(() => komut.mutateAsync(g)); }}>
             <div className="tc-stok-iki">
               <Secim etiket="Tür" value={tur} onChange={(e) => setTur(e.target.value as typeof tur)} secenekler={ELLE_MAL_KABUL_TURLERI.map((t) => ({ deger: t, baslik: MAL_KABUL_TURU[t] }))} />
               <Girdi etiket="İrsaliye no" value={irsaliye} onChange={(e) => setIrsaliye(e.target.value)} onBlur={() => setArananIrsaliye(irsaliye)} />
@@ -562,12 +577,15 @@ export function MalKabul() {
               const bos = l.findIndex((s) => s.kart === '' && !s.siparisSatirId);
               return bos >= 0 ? l.map((s, i) => (i === bos ? siparistenSatir(s, x) : s)) : [...l, siparistenSatir(bosSatir(), x)];
             })} />}
+            {telefon && akisKalemleri.length > 0 && (
+              <Dugme simge="list" onClick={() => { komut.reset(); akisYaz(true); }}>Kalem kalem say ve kabul et</Dugme>
+            )}
             <SatirListesi satirlar={satirlar} setSatirlar={setSatirlar} />
             {/* Soru 104 a: sunucu siparişsiz satın alma satırını reddeder; uyarı göndermeden önce söyler. */}
             {tur === 'satin_alma' && satirlar.some((s) => !bosMu(s) && !s.siparisSatirId) && (
               <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">Satın alma kabulünde her satır bir sipariş satırına bağlanır. Siparişi olmayan malı "Diğer" türüyle ve açıklamayla alın.</p>
             )}
-            <div className="tc-stok-sag">{taslak.durumYazisi}<SabitEylem><Dugme tur="birincil" boyut="ana" type="submit" yukleniyor={komut.isPending} disabled={satirlar.some((s) => s.sertifikaYukleniyor)}>Teslim al</Dugme></SabitEylem></div>
+            <div className="tc-stok-sag">{taslak.durumYazisi}<SabitEylem><Dugme tur="birincil" boyut="ana" type="submit" yukleniyor={komut.isPending} disabled={satirlar.some((s) => s.sertifikaYukleniyor)}>Kabul et</Dugme></SabitEylem></div>
             {etiket && <p className="tc-stok-bilgi"><span>{etiket.no} kaydedildi.</span><EtiketMerkeziDugmesi tur="mal-kabul" idler={[etiket.id]}>Lot etiketlerini bas</EtiketMerkeziDugmesi></p>}
             {etiket && irsaliyeBekliyor && (
               <p className="tc-stok-bilgi" role="status"><span>İrsaliye bu cihazda bekliyor; bağlantı gelince {irsaliyeBekliyor} numaralı mal kabule eklenecek.</span></p>
@@ -579,6 +597,12 @@ export function MalKabul() {
             )}
           </form>
         </Kart>
+      )}
+      {akis && telefon && (
+        <KabulAkisi kalemler={akisKalemleri} miktarYaz={(anahtar, miktar) => setSatirlar((l) => l.map((s) => (s.anahtar === anahtar ? { ...s, miktar, elleMiktar: true } : s)))}
+          irsaliye={irsaliye} irsaliyeYaz={(no) => { setIrsaliye(no); setArananIrsaliye(no); }} sonuc={akisSonucu} hataMetni={komut.isError ? hataMetni(komut.error) : null}
+          gonder={(atlanan) => { const g = govdeOlustur(atlanan); kilitli(() => komut.mutateAsync(g).catch(() => undefined)); }}
+          kapat={() => { akisYaz(false); komut.reset(); }} ayrintili={() => { akisYaz(false); komut.reset(); }} />
       )}
       {sekme === 'yapilanlar' && <MalKabulYapilanlar />}
       {onayPenceresi}

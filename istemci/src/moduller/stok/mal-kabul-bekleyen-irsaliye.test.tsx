@@ -37,7 +37,7 @@ function kur(irsaliyeEkle: () => Response): Istek[] {
     'POST /stok/mal-kabuller/5/irsaliye-ekle': irsaliyeEkle,
   });
 }
-const form = async () => (await screen.findByRole('button', { name: 'Teslim al' })).closest('form')!;
+const form = async () => (await screen.findByRole('button', { name: 'Kabul et' })).closest('form')!;
 
 describe('Mal kabulde cihazda bekleyen irsaliye (3063 dilim 2)', () => {
   it('irsaliye bağlantı yüzünden yüklenemezse mal kabule bağlı olarak cihazda bekler; uyarı yerine bekliyor bilgisi çıkar', async () => {
