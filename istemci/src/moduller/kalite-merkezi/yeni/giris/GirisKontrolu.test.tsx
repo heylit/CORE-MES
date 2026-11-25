@@ -310,3 +310,42 @@ describe('GKK listesi ve formu (1246, 3117, 3118)', () => {
     expect(t.fetch.mock.calls.some(([a]) => String(a).includes('/giris/'))).toBe(false);
   });
 });
+
+describe('GKK lot etiketi düğmesi (3713)', () => {
+  const ETIKETCI: TestKullanicisi = { ...MUHENDIS, kullanici: { ...MUHENDIS.kullanici, islemler: [...MUHENDIS.kullanici.islemler, 'sayfa.etiket-merkezi'] } };
+
+  it('Yapılan listesinde satır simgesi adlı ve Etiket Merkezi\'ni lot seçili açar; bekleyen ve karar bekleyende yok', async () => {
+    ac(ETIKETCI, 'giris-kontrolu', [GKK, KARAR]);
+    await screen.findByRole('table', { name: 'Bekleyen GKK' });
+    expect(screen.queryByRole('link', { name: /etiketini bas/ })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: /Karar bekleyen/ }));
+    await screen.findByRole('table', { name: 'Karar bekleyen' });
+    expect(screen.queryByRole('link', { name: /etiketini bas/ })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: /Yapılan/ }));
+    const tablo = await screen.findByRole('table', { name: 'Yapılan GKK' });
+    expect(within(tablo).getByRole('link', { name: 'LT-000123 etiketini bas' }).getAttribute('href')).toBe('/etiket-merkezi?tur=lot&id=4');
+  });
+
+  it('kapanan GKK formunun sonuç kartında tek "Etiketi bas" vardır; karar bekleyende düğme yerine açıklama görünür', async () => {
+    ac(ETIKETCI, 'giris-kontrolu', [GKK, KARAR]);
+    fireEvent.click(await screen.findByRole('tab', { name: /Karar bekleyen/ }));
+    fireEvent.click(await screen.findByText('MK-0002'));
+    expect(await screen.findByText('Etiket, hatalı için kalite kararı verilince basılır.')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /etiketini bas/ })).toBeNull();
+    cleanup();
+    ac(ETIKETCI, 'giris-kontrolu', [GKK]);
+    fireEvent.click(await screen.findByRole('tab', { name: /Yapılan/ }));
+    fireEvent.click(await screen.findByText('MK-0003'));
+    await screen.findByText('NCR-2026-0001');
+    expect(screen.getAllByRole('link', { name: 'LT-000123 etiketini bas' })).toHaveLength(1);
+  });
+
+  it('Etiket Merkezi sayfa yetkisi olmayan kişi düğmeyi görmez', async () => {
+    ac(MUHENDIS, 'giris-kontrolu', [GKK]);
+    fireEvent.click(await screen.findByRole('tab', { name: /Yapılan/ }));
+    await screen.findByRole('table', { name: 'Yapılan GKK' });
+    fireEvent.click(await screen.findByText('MK-0003'));
+    await screen.findByText('NCR-2026-0001');
+    expect(screen.queryByRole('link', { name: /etiketini bas/ })).toBeNull();
+  });
+});

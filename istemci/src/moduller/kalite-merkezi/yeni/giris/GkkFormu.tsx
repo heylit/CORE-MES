@@ -10,6 +10,7 @@ import { YOK, zamanKisa } from '../bicim.ts';
 import { siradakiNo, yeniKimlik } from '../veri.ts';
 import { GIRIS_ANAHTARI } from '../bugun/GirisKarari.tsx';
 import type { Sablon } from '../tipler.ts';
+import { LotEtiketiDugmesi } from './LotEtiketiDugmesi.tsx';
 import { Bilgi, MaddeKarti, MalzemeKarti, OlcuKarti, SablonBolumu, SeriKarti, type GorunenBolum, type MaddeSonucu, type Seri } from './KontrolBolumleri.tsx';
 import {
   DURUM_ADI, DURUM_TONU, GIRIS_KAYITLARI_ANAHTARI, GKK_TURU_ADI, KARAR_ADI, SONUC_ADI, girisKaydiAnahtari, gkkSonucu, miktarMetni, sonucMetni,
@@ -319,6 +320,12 @@ export function GkkFormu({ id, ncrler, sablonlar, muayeneAc, kapat }: Ozellikler
                 {k.karar === null && k.not && <div><dt>Not</dt><dd>{k.not}</dd></div>}
               </dl>
             )}
+          {k.durum === 'kapandi' && (
+            <div className="tc-km-gkk-etiket">
+              <div className="tc-km-gkk-eylem"><LotEtiketiDugmesi partiId={k.partiId} lotNo={k.partiEtiketi} /></div>
+            </div>
+          )}
+          {k.durum === 'karar_bekliyor' && <p className="tc-km-gkk-soluk">Etiket, hatalı için kalite kararı verilince basılır.</p>}
         </Kart>
 
         {k.durum === 'karar_bekliyor' && (
