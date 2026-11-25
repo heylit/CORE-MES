@@ -6,8 +6,9 @@ import { logoCariHazirlikCevabi, logoCariHazirlikSorgusu, logoCrmCevabi, logoCrm
 import { logoBelirsizKontrolCevabi, logoKontrolluGonderCevabi, logoKontrolluGonderGovdesi, logoBelirsizKontrolSorgusu } from '#paylasilan/sozlesme/logo.ts';
 import { logoTekKayitCevabi, logoTekKayitGovdesi, logoTekKayitSorgusu } from '#paylasilan/sozlesme/logo.ts';
 import { tekKayitYaz } from './tek-kayit.ts';
-import { irsaliyeCevabi, irsaliyeListesiCevabi, irsaliyeListesiSorgusu, irsaliyeParametresi, siparisLogoOzetiCevabi, siparisLogoOzetiSorgusu } from '#paylasilan/sozlesme/logo.ts';
+import { irsaliyeGonderimDurumuCevabi, irsaliyeGonderimDurumuSorgusu, irsaliyeCevabi, irsaliyeListesiCevabi, irsaliyeListesiSorgusu, irsaliyeParametresi, siparisLogoOzetiCevabi, siparisLogoOzetiSorgusu } from '#paylasilan/sozlesme/logo.ts';
 import { irsaliyeGetir, irsaliyeListesi } from './irsaliye.ts';
+import { irsaliyeGonderimDurumlari } from './irsaliye-durumu.ts';
 import { faturaEslesmeCevabi, faturaEslesmeSorgusu } from '#paylasilan/sozlesme/logo.ts';
 import { faturaEslesmeListesi } from './fatura-eslesme.ts';
 import { siparisLogoOzeti } from './siparis-ozeti.ts';
@@ -144,6 +145,16 @@ export const uclar = [
     sorgu: irsaliyeListesiSorgusu,
     cevap: irsaliyeListesiCevabi,
     isle: ({ db, sorgu }) => irsaliyeListesi(db, new Date(), sorgu),
+  }),
+  // 3694: sevk durağının Logo irsaliye durumu (giden kutusundan; Logo'ya istek atmaz). Sevkiyat ekranı okur, bu yüzden sevkiyat.oku da yeter.
+  // Ayar ve ölçüm kapısı kapalıyken acik=false döner ve ekran gizli kalır.
+  uc({
+    yontem: 'GET',
+    yol: '/logo/irsaliye-gonderim-durumu',
+    yetki: { biri: ['sevkiyat.oku', 'logo.irsaliye-oku'] },
+    sorgu: irsaliyeGonderimDurumuSorgusu,
+    cevap: irsaliyeGonderimDurumuCevabi,
+    isle: ({ db, sorgu }) => irsaliyeGonderimDurumlari(db, sorgu.no),
   }),
   uc({
     yontem: 'GET',

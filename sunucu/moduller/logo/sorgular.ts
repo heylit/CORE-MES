@@ -1317,3 +1317,10 @@ export const faturaAynaSatirlari = (db: Db, baslangic: string) => db.sorgu<Fatur
      FROM logo_fatura_baslik WHERE tarih >= $1::date ORDER BY tarih, logo_kayit_no`,
   [baslangic],
 );
+
+// Sevkiyat ekranı için: verilen sevk işlerinin giden kutusu satırları (yalnız okuma; iki sevk türü birlikte).
+export function irsaliyeGidenDurumlari(db: Db, belgeNolar: readonly number[]): Promise<(GidenSatiri & { belgeTuru: Exclude<IrsaliyeGidenTuru, 'satin-alma-irsaliyesi'>; sonrakiDenemeMetni: string | null })[]> {
+  return db.sorgu(
+    `SELECT belge_turu AS "belgeTuru", ${zamanMetni('sonraki_deneme')} AS "sonrakiDenemeMetni", ${ALANLAR} FROM logo_irsaliye_giden
+      WHERE belge_turu IN ('satis-irsaliyesi', 'konsinye-irsaliyesi') AND belge_no = ANY($1::int[]) ORDER BY belge_no, belge_turu`, [belgeNolar]);
+}

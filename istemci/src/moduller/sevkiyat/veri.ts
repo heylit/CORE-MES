@@ -3,8 +3,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   AracCevabi, AracGovdesi, ElleKalemGovdesi, AracGuncelleGovdesi, AraclarCevabi, AramaCevabi, KonumOnerisiCevabi, BekleyenBolCevabi, BekleyenBolGovdesi, BekleyenlerCevabi, DagitGovdesi, FirmaAramaCevabi, GunPlaniCevabi, HaritaCevabi, IsBelgeNoGovdesi, IsCevabi, IsDurumuGovdesi, IsGovdesi, IsGuncelleGovdesi,
   KaydetGovdesi, KalemCevabi, NoktaCevabi, NoktaGovdesi, NoktaGuncelleGovdesi, NoktalarCevabi, SerbestBirakCevabi, SerbestBirakGovdesi, Tasima, TekRotaCevabi,
-  TrafikCevabi, TumIslerCevabi,
+  SoforKimligiDurumu, TrafikCevabi, TumIslerCevabi,
 } from '#paylasilan/sozlesme/sevkiyat.ts';
+import type { IrsaliyeGonderimDurumuCevabi } from '#paylasilan/sozlesme/logo.ts';
 import type { DepoCikisCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder, yeniIstekKimligi, yenidenDenenebilirMi } from '../../ortak/veri/istek-kimligi.ts';
@@ -209,4 +210,27 @@ export function useYetki() {
   const islemler: readonly string[] = useOturum().data?.islemler ?? [];
   const sahip = (islem: string) => islemler.includes(islem);
   return { tanimYaz: sahip('sevkiyat.tanim-yaz'), isYaz: sahip('sevkiyat.is-yaz'), planYaz: sahip('sevkiyat.plan-yaz'), onayla: sahip('sevkiyat.onayla'), sahip };
+}
+
+// 3694: Logo irsaliye durumu. Ayar ve ölçüm kapısı kapalıysa sunucu acik=false döner; ekran hiçbir şey çizmez. Hata ya da yetki yoksa da gizli kalır (retry yok).
+export const useLogoIrsaliyeDurumu = (idler: readonly number[]) =>
+  useQuery({
+    queryKey: anahtarlar.logoIrsaliye(idler), enabled: idler.length > 0, staleTime: 30_000, retry: false,
+    queryFn: () => api.get<IrsaliyeGonderimDurumuCevabi>(`/logo/irsaliye-gonderim-durumu?no=${idler.join(',')}`),
+  });
+
+// 3694: şoför kimlik no'su. Okuma maskelidir; tam değer yalnız ayrı komutla gelir, önbelleğe konmaz (mutation) ve cevap hiçbir yerde saklanmaz.
+export const useSoforKimligi = (isId: number | null) =>
+  useQuery({
+    queryKey: anahtarlar.soforKimligi(isId ?? 0), enabled: isId !== null, retry: false,
+    queryFn: () => api.get<SoforKimligiDurumu>(`/sevkiyat/isler/${isId}/sofor-kimligi`),
+  });
+export function useSoforKimligiKomutu(isId: number) {
+  const istemci = useQueryClient();
+  const yenile = (c: SoforKimligiDurumu) => istemci.setQueryData(anahtarlar.soforKimligi(isId), c);
+  // Kimlik değeri (gövde ve cevap) mutation önbelleğinde kalmasın: gcTime 0; ekran işlem bitince reset ile de boşaltır.
+  const kaydet = useMutation({ gcTime: 0, mutationFn: (kimlik: string) => api.post<SoforKimligiDurumu>(`/sevkiyat/isler/${isId}/sofor-kimligi`, { kimlik }), onSuccess: yenile });
+  const sil = useMutation({ mutationFn: () => korumaliPost<SoforKimligiDurumu>(`/sevkiyat/isler/${isId}/sofor-kimligi/sil`), onSuccess: yenile });
+  const oku = useMutation({ gcTime: 0, mutationFn: () => api.post<{ kimlik: string }>(`/sevkiyat/isler/${isId}/sofor-kimligi/oku`) });
+  return { kaydet, sil, oku };
 }
