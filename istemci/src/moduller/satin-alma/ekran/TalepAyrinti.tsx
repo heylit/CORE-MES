@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { DurumKutusu, Dugme, Menu, Rozet, SayfaBasligi, Sekmeler, Simge, type MenuOgesi } from '../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../ortak/tasarim/simgeler.ts';
 import { budgetUse, durumEtiketi } from '../merkez/calc.ts';
@@ -76,6 +77,15 @@ export function TalepAyrinti() {
   // 3442-2: talebin çizimi her adımda görünür; yazan ekler. Kanca erken dönüşten önce.
   const yazar = (useOturum().data?.islemler ?? []).includes('satin-alma.yaz');
   const r = V.id ? S.requests[V.id] : undefined;
+  // K2: Kalemler adımıyla açılan talepte kalemler ilk ekranda başlar; adım şeridi (üstündeki bilgi, bant ve çizimle) en üste kayar.
+  const seritRef = useRef<HTMLDivElement>(null);
+  const acilanId = useRef<string | null>(null);
+  const kalemlerAcik = r !== undefined && talepBolumu(r) === 'items';
+  useEffect(() => {
+    if (!r || acilanId.current === r.id) return;
+    acilanId.current = r.id;
+    if (kalemlerAcik) seritRef.current?.scrollIntoView?.({ block: 'start' });
+  });
   const donus = DONUS[AYRINTI.donus] ?? 'Taleplere dön';
   const geri = (
     <div className="sa-ekran-geri">
@@ -135,7 +145,7 @@ export function TalepAyrinti() {
         </div>
       )}
       <div className="sa-ekran-cizim"><TalepCizimleri talepId={r.id} yazabilir={yazar && r.status !== 'cancelled'} bosGizle gorunum="satin-alma" /></div>
-      <Sekmeler etiket="Talebin adımları" secili={sec} sec={(k) => { V.tab = k; render(); }} sekmeler={sekmeler} />
+      <div ref={seritRef}><Sekmeler etiket="Talebin adımları" secili={sec} sec={(k) => { V.tab = k; render(); }} sekmeler={sekmeler} /></div>
       {bilgi[sec] && <p className="sa-ekran-adim-ozet">{sekmeler.find((s) => s.anahtar === sec)?.baslik}: {bilgi[sec]}</p>}
     </div>
   );

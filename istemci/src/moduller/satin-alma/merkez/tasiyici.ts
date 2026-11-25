@@ -244,6 +244,8 @@ export function talepSunucuya(r: PurchaseRequest): TalepGovdesi {
       digerMasraf: ond(q.otherCost || 0), teslimSekli: q.deliveryTerm ?? '', nakliyeDahil: q.deliveryIncluded, terminGun: q.leadDays, vadeGun: q.payDays || 0,
       avansYuzdesi: ond(q.advancePct || 0, 3), ...('payMethod' in q ? { odemeYontemi: q.payMethod ?? null } : {}), garantiAy: q.warrantyMonths, teknikUygun: q.compliant, notlar: q.note ?? '',
       ilkToplam: ondN(q.firstTotal ?? null), revizyon: q.revisions ?? 0,
+      // Kaynak sunucunundur ama geri gönderilmezse satın alma izi farklı çıkar ve onaylayanın kaydı 403 alır.
+      kaynak: q.source === 'siparis' ? 'siparis' as const : 'teklif' as const,
       fiyatlar: Object.entries(q.prices ?? {}).filter(([, p]) => typeof p === 'number' && !Number.isNaN(p)).map(([kalemId, p]) => ({
         kalemId, birimFiyat: ond(p),
         // Basamak yalnız ekran tuttuysa gider; gönderilmeyen alan sunucuda saklananı korur.
@@ -283,6 +285,8 @@ type Veri = Entity | Settings | null;
 interface Belirsiz { d: Veri; kimlik: string }
 interface Bekleyen { mesgul: boolean; sonraki: Veri | undefined; belirsiz: Belirsiz | null; bitince?: (() => void)[] }
 const Q = new Map<string, Bekleyen>();
+// Sunucunun reddettiği son yazım; ret ekranda "yapıldı" denmesin diye tutulur (K1).
+const reddedilen = new Set<string>();
 export const YENIDEN_DENEME_MS = [2_000, 5_000, 15_000, 30_000] as const;
 
 function write(coll: Coll | 'settings', id: string, data: Veri): void {
@@ -290,6 +294,7 @@ function write(coll: Coll | 'settings', id: string, data: Veri): void {
   const w = Q.get(anahtar) ?? { mesgul: false, sonraki: undefined, belirsiz: null };
   Q.set(anahtar, w);
   w.sonraki = data;
+  reddedilen.delete(anahtar);
   if (!w.mesgul) void kuyruk(coll, id, w);
 }
 
@@ -317,6 +322,7 @@ async function kuyruk(coll: Coll | 'settings', id: string, w: Bekleyen): Promise
         continue;
       }
       w.sonraki = undefined;
+      reddedilen.add(`${coll}:${id}`);
       await hata(h);
     }
   }
@@ -718,6 +724,10 @@ export const transport: Transport = {
   write,
   // Sayfa kapanırken bekleyen yazma sıradan gönderilir (TMI isteği keepalive taşımaz; kayıp riski V-37).
   writeOnUnload: (coll, id, data) => write(coll, id, data),
+  async yazimSonucu(coll, id) {
+    await yazimBitti(coll as Coll, id);
+    return !reddedilen.has(`${coll}:${id}`);
+  },
   canWrite: () => S.ready,
   backend,
 };

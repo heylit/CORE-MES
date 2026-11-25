@@ -231,9 +231,12 @@ export interface Transport {
   yenile(): Promise<void>;
   write(coll: Coll | "settings", id: string, data: Entity | Settings | null): void;
   writeOnUnload(coll: Coll, id: string, data: Entity | null): void;
+  /** Bekleyen yazım bitince döner; sunucu değişikliği reddettiyse false (ileti ve yenileme taşıyıcıda yapılır). */
+  yazimSonucu(coll: Coll | "settings", id: string): Promise<boolean>;
   canWrite(): boolean;
   backend: Backend;
 }
 export const backend: Backend = transport.backend;
+export const yazimSonucu = (coll: Coll | "settings", id: string): Promise<boolean> => transport.yazimSonucu(coll, id);
 export const init = (): Promise<void> => transport.init();
 export const yenile = (): Promise<void> => transport.yenile();
