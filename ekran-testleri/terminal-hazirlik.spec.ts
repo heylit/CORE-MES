@@ -56,6 +56,8 @@ test.describe('terminal talimat sekmesi uzun listede', () => {
     await ac('/uretim-terminali');
     const sekmeler = page.getByRole('tablist', { name: 'İş ayrıntısı' });
     const tl = sekmeler.getByRole('tab', { name: /^Talimatlar/ });
+    // İş yüklenmeden tıklanan sekme, iş numarası gelince sekmeyi varsayılana döndürür (Operator: [o.no] etkisi); önce iş görünsün.
+    await expect(page.getByText('UE-EKRAN-1').first()).toBeVisible({ timeout: 15_000 });
     await tl.click({ timeout: 15_000 });
     await expect(tl).toHaveAttribute('aria-selected', 'true');
     const liste = page.locator('.tc-ay1-talimatlar');
