@@ -99,6 +99,40 @@ export function kaydirmaIsleri(c: PlanlamaCalismasi, p: OkunanPlan, oneri: NonNu
 // Başarıdan sonra tek Geri al Kokpit'in geri almasıdır (komut başında alınan hâle döner).
 // Önerilen saat öncülün bitişinden sonraki en erken andır: çeyrek saate yukarı yuvarlanır (en yakına yuvarlamak 05:46'yı 05:45'e düşürüp adımı yine öncülden önce başlatırdı).
 export const kaydirmaSaati = (S: number, simdi: number): number => Math.max(Math.ceil(simdi * 4 - 1e-9) / 4, Math.ceil(S * 4 - 1e-9) / 4);
+// Kutuda kilide gerçekten yazılan saat gösterilir (çeyrek saate yukarı yuvarlanmış); öneri saati değil. Emir bitişi aynı emrin kayan adımlarının en büyük farkı kadar ileri alınır (yaklaşık).
+type Oneri = NonNullable<CanliyaAlOnizlemesiCevabi['oneri']>;
+export function yazilanOneri(oneri: Oneri, isler: readonly KaydirmaIsi[], simdi: number): Oneri {
+  const ileri = (iso: string | null, saat: number) => (iso === null ? null : new Date(Date.parse(iso) + saat * 3_600_000).toISOString());
+  const fark = oneri.adimlar.map((a, i) => { const s = isler[i]?.S; return s === undefined ? 0 : Math.max(0, kaydirmaSaati(s, simdi) - s); });
+  const emirFarki = new Map<string, number>();
+  oneri.adimlar.forEach((a, i) => emirFarki.set(a.emirNo, Math.max(emirFarki.get(a.emirNo) ?? 0, fark[i] ?? 0)));
+  return {
+    ...oneri,
+    adimlar: oneri.adimlar.map((a, i) => ({ ...a, yeniBaslangic: ileri(a.yeniBaslangic, fark[i] ?? 0) ?? a.yeniBaslangic, yeniBitis: ileri(a.yeniBitis, fark[i] ?? 0) ?? a.yeniBitis })),
+    emirler: oneri.emirler.map((e) => ({ ...e, sonra: ileri(e.sonra, emirFarki.get(e.emirNo) ?? 0) })),
+  };
+}
+// Kaydırma sırasında plan yeniden dizilince başka elle kilitli adımın kilidi de ilerleyebilir (aynı kaynakta çarpışma); kutuda sessiz kalmasın.
+export interface KomsuKilit { k: string; eski: number; yeni: number }
+export function komsuKilitKaymalari(once: Readonly<Record<string, number>>, simdi: Readonly<Record<string, unknown>>, haric: ReadonlySet<string>): KomsuKilit[] {
+  const l: KomsuKilit[] = [];
+  for (const [k, eski] of Object.entries(once)) {
+    const x = simdi[k];
+    const yeni = typeof x === 'object' && x !== null ? (x as { S?: unknown }).S : undefined;
+    if (haric.has(k) || typeof yeni !== 'number' || !Number.isFinite(yeni) || Math.abs(yeni - eski) <= 1 / 120) continue;
+    l.push({ k, eski, yeni });
+  }
+  return l.sort((a, b) => a.yeni - b.yeni || a.k.localeCompare(b.k));
+}
+// Adım anahtarı `<emir>.<adım>`: kullanıcı emri numarasıyla, adımı OP numarasıyla tanır. Eşleşemeyen (emir no bulunamadı ya da adım sayı değil) null döner;
+// ekran anahtar göstermez, "başka bir kilitli adım" yazar.
+export function komsuAdi(k: string, emirNo: (id: string) => string): string | null {
+  const i = k.lastIndexOf('.');
+  if (i <= 0) return null;
+  const emir = k.slice(0, i), adim = k.slice(i + 1);
+  const no = emirNo(emir);
+  return no === emir || !/^\d+$/.test(adim) ? null : `${no} OP ${adim}`;
+}
 export class KaydirmaHatasi extends Error {}
 export async function kilitleriKaydir(komut: CalismaKomutu, c: PlanlamaCalismasi, isler: readonly KaydirmaIsi[], ne: string): Promise<void> {
   const simdi = simdiSaati(c, Date.now());

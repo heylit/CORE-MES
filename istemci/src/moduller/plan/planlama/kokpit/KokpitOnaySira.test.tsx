@@ -8,7 +8,8 @@ import { PLANLAMA_ISLEMI } from '../../planlama-menusu.ts';
 import { ACILIS_OLCEGI, BOS_SECIM } from '../gorunumler.ts';
 import type { CalismaKomutu } from '../kayit.ts';
 import { otomatikUygulaSifirla } from '../motor/atolye/gonder.ts';
-import { kaydirmaDugmesi, kaydirmaSaati, kapaliListeFarkli, onizlemeEngeli, ONIZLEME_BEKLEME_MS, ONIZLEME_ZAMAN_ASIMI_MS, sureMetni, useGondermeOnizlemesi } from '../motor/atolye/canli-onizleme.ts';
+import { KomsuKilitler } from '../motor/atolye/CanliOnizleme.tsx';
+import { kaydirmaDugmesi, kaydirmaSaati, komsuAdi, komsuKilitKaymalari, yazilanOneri, kapaliListeFarkli, onizlemeEngeli, ONIZLEME_BEKLEME_MS, ONIZLEME_ZAMAN_ASIMI_MS, sureMetni, useGondermeOnizlemesi } from '../motor/atolye/canli-onizleme.ts';
 import { planKurSifirla } from '../motor/coz.ts';
 import { ornekCalisma } from '../motor/ornek.ts';
 import { saatiSabitle } from '../test-saati.ts';
@@ -213,6 +214,35 @@ describe('onay sayfası: gönderme öncesi sıra denetimi (3669)', () => {
 });
 
 describe('sıra denetimi yardımcıları', () => {
+  it('komşu kilit listesi: tek başlık, kısa satır, ilk 5 ve "N tane daha", çözülemeyen ad okunur, anahtar görünmez', () => {
+    const l = Array.from({ length: 7 }, (_, i) => ({ k: i === 6 ? 'a1' : `3${String(i)}.20`, eski: 10 + i, yeni: 10.5 + i }));
+    render(<KomsuKilitler komsular={l} D={ornekCalisma().D} emirNo={(j) => `MM-${j}`} />);
+    expect(screen.getByText('Bu adımların kilidi de kaydı:')).toBeTruthy();
+    expect(document.querySelectorAll('li').length).toBe(5);
+    expect(document.body.textContent).toContain('MM-30 OP 20: ');
+    expect(document.body.textContent).not.toContain('ileri itildi');
+    expect(document.body.textContent).not.toMatch(/\b30\.20\b/);
+    fireEvent.click(screen.getByRole('button', { name: '2 tane daha' }));
+    expect(document.querySelectorAll('li').length).toBe(7);
+    expect(document.body.textContent).toContain('Başka bir kilitli adım: ');
+  });
+  it('kutu kilide yazılan (çeyrek saate yukarı yuvarlanmış) saati ve ona göre emir bitişini gösterir (O1)', () => {
+    const o = { ...ONERI, adimlar: [{ ...ONERI.adimlar[0]!, yeniBaslangic: '2026-10-21T05:46:00.000Z', yeniBitis: '2026-10-21T06:46:00.000Z' }], emirler: [{ ...ONERI.emirler[0]!, sonra: '2026-10-21T07:46:00.000Z' }] };
+    const y = yazilanOneri(o, [{ k: 'a', tezgah: 'm', S: 1184 + 46 / 60 }], 0);
+    expect(y.adimlar[0]!.yeniBaslangic).toBe('2026-10-21T06:00:00.000Z');
+    expect(y.adimlar[0]!.yeniBitis).toBe('2026-10-21T07:00:00.000Z');
+    expect(y.emirler[0]!.sonra).toBe('2026-10-21T08:00:00.000Z');
+  });
+  it('başka kilitli adımın kayması kutuya girer; kaydırılan adımlar ve 30 sn altı fark girmez (O2)', () => {
+    const once = { '30.20': 1186.85, '27.20': 1184.75, '12.10': 5 };
+    const simdi = { '30.20': { m: 'x', S: 1187.009 }, '27.20': { m: 'x', S: 1185 }, '12.10': { m: 'x', S: 5.004 } };
+    expect(komsuKilitKaymalari(once, simdi, new Set(['27.20']))).toEqual([{ k: '30.20', eski: 1186.85, yeni: 1187.009 }]);
+    expect(komsuKilitKaymalari(once, {}, new Set())).toEqual([]);
+    expect(komsuAdi('30.20', (j) => `MM-${j}`)).toBe('MM-30 OP 20');
+    expect(komsuAdi('S3.a1', (j) => `MM-${j}`)).toBeNull();
+    expect(komsuAdi('30.20', (j) => j)).toBeNull();
+    expect(komsuAdi('yok', (j) => j)).toBeNull();
+  });
   it('kaydırma saati çeyrek saate yukarı yuvarlanır; öncül bitişinden önceye düşmez (K2)', () => {
     // 1184.7667 sa = 05:46: en yakına yuvarlama 05:45 (1184.75) verirdi.
     expect(kaydirmaSaati(1184 + 46 / 60, 1000)).toBe(1184.75 + 0.25);
