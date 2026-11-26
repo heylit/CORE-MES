@@ -48,6 +48,17 @@ function parolaSor(soru) {
   });
 }
 
+// Onay satiri ekrana yazilarak okunur (parola degildir).
+function satirSor(soru) {
+  return new Promise((coz) => {
+    process.stdout.write(soru);
+    process.stdin.setRawMode?.(false);
+    process.stdin.resume();
+    process.stdin.setEncoding('utf8');
+    process.stdin.once('data', (d) => { process.stdin.pause(); coz(String(d).split(/\r?\n/)[0]); });
+  });
+}
+
 function parmakIzi(acikPem) {
   const der = createPublicKey(acikPem).export({ type: 'spki', format: 'der' });
   const h = createHash('sha256').update(der).digest('hex').slice(0, 16).toUpperCase();
@@ -78,6 +89,11 @@ async function imzala(gizliYol, istekYol) {
   if (!gizliYol || !istekYol) dur('Kullanim: imzala <gizli.pem> <istek-dosyasi>');
   const istek = readFileSync(istekYol);
   if (istek.length === 0 || istek.length > 8192) dur('Istek dosyasi bos ya da cok buyuk.');
+  let alanlar = {};
+  try { alanlar = JSON.parse(istek.toString('utf8')); } catch { dur('Istek dosyasi CORE MES istegi degil.'); }
+  if (alanlar.tur !== 'coremes-sifirlama') dur('Istek dosyasi CORE MES sifirlama istegi degil.');
+  process.stdout.write(`\nImzalanacak istek:\n  Ortam   : ${alanlar.ortam}\n  Kurulum : ${alanlar.kurulum}\n  Son     : ${alanlar.son}\n`);
+  if ((await satirSor('Bu kurulumu SIFIRLAMAK icin imzalansin mi? (evet yazin): ')).trim().toLowerCase() !== 'evet') dur('Imzalanmadi.');
   const parola = await parolaSor('Gizli anahtar parolasi: ');
   let anahtar;
   try {
@@ -85,7 +101,6 @@ async function imzala(gizliYol, istekYol) {
   } catch {
     dur('Parola yanlis ya da dosya gizli anahtar degil.');
   }
-  process.stdout.write('\nImzalanacak istek:\n' + istek.toString('utf8') + '\n');
   const imza = sign(null, istek, anahtar);
   const izin = { surum: 1, istek: istek.toString('base64'), imza: imza.toString('base64'), parmak_izi: parmakIzi(createPublicKey(anahtar).export({ type: 'spki', format: 'pem' })) };
   const cikti = `${istekYol}.izin`;

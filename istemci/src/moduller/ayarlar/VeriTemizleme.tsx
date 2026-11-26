@@ -566,13 +566,16 @@ function IzinAdimi({ parmakIzi, izin, setIzin, kapali }: { parmakIzi: string | n
   return (
     <>
       <p className="tc-ayar-aciklama">{`Anahtar parmak izi: ${parmakIzi ?? '…'} (USB'deki anahtarınızla aynı olmalı). İstek bir saat geçerlidir ve bir kez kullanılır.`}</p>
-      <div className="tc-temizlik-cubuk">
+      <div className="tc-temizlik-izin">
         <Dugme simge="download" yukleniyor={istek.isPending} disabled={kapali} onClick={() => istek.mutate()}>İzin isteğini indir</Dugme>
         <Dugme simge="upload" disabled={kapali} onClick={() => dosya.current?.click()}>İzin dosyasını yükle</Dugme>
         <input ref={dosya} type="file" accept=".izin,application/json,text/plain" hidden aria-label="İzin dosyası"
           onChange={(o) => { const f = o.target.files?.[0]; o.target.value = ''; if (f) void oku(f); }} />
       </div>
-      <p className="tc-ayar-aciklama">İsteği USB'deki araçla imzalayın: node sifirlama-imza.mjs imzala (gizli anahtar) (istek dosyası). Gizli anahtar dosyasını yüklemeyin.</p>
+      {istek.data !== undefined && (
+        <p className="tc-temizlik-bilgi"><Rozet ton="bilgi">İstek indirildi</Rozet>{` ${new Date(istek.data.son).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })} saatine kadar geçerli.`}</p>
+      )}
+      <p className="tc-ayar-aciklama">İsteği USB'deki araçla imzalayın: node sifirlama-imza.mjs imzala (gizli anahtar) (istek dosyası). Araç izin dosyasını istek dosyasının yanına .izin uzantısıyla yazar. Gizli anahtar dosyasını yüklemeyin.</p>
       {istek.isError && <DurumKutusu durum="hata" hata={istek.error} mesaj={hataIletisi(istek.error, 'İstek alınamadı.')} />}
       {okumaHatasi && <DurumKutusu durum="hata" mesaj="Bu bir izin dosyası değil; araçtan çıkan .izin dosyasını seçin." />}
       {izin !== null && <p className="tc-temizlik-bilgi"><Rozet ton="tamam">İzin yüklendi</Rozet></p>}

@@ -164,6 +164,27 @@ describe('sıfırdan başla (gerçek PostgreSQL)', () => {
     const r2 = await sifirla(secim, { izin: eski });
     assert.equal(r2.statusCode, 409, r2.body);
     assert.match(r2.body, /süresi doldu/);
+    // Başka ortamda ya da başka kurulumda alınmış istek geçmez (veritabanı kopyası, deneme ve canlı ayrımı).
+    const ortamIzni = await izinAl();
+    const oncekiOrtam = process.env['TMIV2_ORTAM'];
+    process.env['TMIV2_ORTAM'] = oncekiOrtam === 'test' ? 'gelistirme' : 'test';
+    try {
+      const r4 = await sifirla(secim, { izin: ortamIzni });
+      assert.equal(r4.statusCode, 409, r4.body);
+      assert.match(r4.body, /başka bir ortam/);
+    } finally {
+      if (oncekiOrtam === undefined) delete process.env['TMIV2_ORTAM']; else process.env['TMIV2_ORTAM'] = oncekiOrtam;
+    }
+    const kurulumIzni = await izinAl();
+    const kimlik = (await o().sahip.tek<{ k: string }>('SELECT kimlik::text AS k FROM ayarlar_kurulum'))!.k;
+    await o().sahip.sorgu('UPDATE ayarlar_kurulum SET kimlik = gen_random_uuid()');
+    try {
+      const r5 = await sifirla(secim, { izin: kurulumIzni });
+      assert.equal(r5.statusCode, 409, r5.body);
+      assert.match(r5.body, /başka bir kurulum/);
+    } finally {
+      await o().sahip.sorgu('UPDATE ayarlar_kurulum SET kimlik = $1::uuid', [kimlik]);
+    }
     // Özet anahtarın parmak izini gösterir.
     const oz = sifirlamaOzetiCevabi.parse((await istek(yonetici, 'GET', '/veri-temizleme/sifirlama-ozeti?kullanicilar=0&tanimlar=0')).json());
     assert.match(String(oz.parmakIzi), /^[0-9A-F]{4}(-[0-9A-F]{4}){3}$/);

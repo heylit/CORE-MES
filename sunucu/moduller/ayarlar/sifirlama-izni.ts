@@ -11,10 +11,10 @@ export const SIFIRLAMA_PARMAK_IZI = '918B-1A03-FAF2-0737';
 export const SIFIRLAMA_IZIN_SURESI_MS = 60 * 60_000;
 export const SIFIRLAMA_ISTEK_TURU = 'coremes-sifirlama';
 
-// Yalnız node:test alt sürecinde koşan test kendi ürettiği anahtarı koyar; sunucu süreci bu yolu açamaz.
+// Test kendi ürettiği anahtarı koyar. Yalnız aynı süreçteki kod çağırabilir (ayar ya da uç yolu yoktur) ve canlıda reddedilir.
 let testAnahtari: string | null = null;
 export function sifirlamaTestAnahtariKoy(pem: string | null): void {
-  if (process.env['NODE_TEST_CONTEXT'] === undefined) throw new Error('Test anahtarı yalnız testte konur.');
+  if (process.env['TMIV2_ORTAM'] === 'canli') throw new Error('Test anahtarı canlıda konmaz.');
   testAnahtari = pem;
 }
 
