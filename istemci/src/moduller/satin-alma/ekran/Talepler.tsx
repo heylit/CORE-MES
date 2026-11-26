@@ -9,6 +9,8 @@ import { S, V, settings } from '../merkez/store.ts';
 import type { PurchaseRequest, RequestStatus } from '../merkez/tipler.ts';
 import { go } from '../merkez/ui.ts';
 import { dayDiff, fiyatKilitli, fmtDate, money, norm, todayStr } from '../merkez/util.ts';
+import { TalepTarihi } from './TalepTarihi.tsx';
+import { gelisGunu } from '../merkez/kimlik.ts';
 import { STATUS_FILTERS, filteredRequests, gecikmisMi, kimde, render, reqValue } from '../merkez/views.ts';
 
 // Talepler (2412-2): durum sekmeleri, ortak tablo, "Kimde bekliyor" sütunu ve tek tutar. Süzgeç ve sıra merkezin durumundadır (V);
@@ -76,6 +78,7 @@ export function Talepler() {
       hucre: (r) => { const v = reqValue(r); return v.v === null ? '–' : <span className="sa-ekran-govde sa-ekran-sag"><b>{money(v.v, 'TRY', 0)}</b><small>{v.who}</small></span>; },
       csv: (r) => reqValue(r).v ?? '',
     },
+    { anahtar: 'created', baslik: 'Talep tarihi', kirilmaz: true, sirala: true, hucre: (r) => <TalepTarihi r={r} bugun={bugun} />, csv: (r) => gelisGunu(r) },
     { anahtar: 'need', baslik: 'İstenen termin', kirilmaz: true, sirala: true, hucre: (r) => ihtiyac(r, bugun), csv: (r) => r.needDate || '' },
   ];
   // 3401-1 a: fiyat görmeyen okuyucuda tutar sütunu çizilmez; üstte tek kilit notu durur.

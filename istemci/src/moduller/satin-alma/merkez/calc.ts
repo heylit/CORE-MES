@@ -674,7 +674,7 @@ export function durumEtiketi(r: PurchaseRequest): string {
 
 /* ---------------- Siparişler sayfası (2430) ---------------- */
 export interface SiparisSatiri {
-  anahtar: string; talepId: string; talepNo: string; talepAdi: string; /** 3571: talebin çizim sayısı. */ cizimSayisi: number; orderNo: string; poNo: string; tedarikci: string; supplierId: string;
+  anahtar: string; talepId: string; talepNo: string; talepAdi: string; /** 3710: talebin açıldığı gün (YYYY-MM-DD); kayıt zamanı yoksa boş. */ talepTarihi: string; /** 3571: talebin çizim sayısı. */ cizimSayisi: number; orderNo: string; poNo: string; tedarikci: string; supplierId: string;
   /** TL, KDV hariç, iskonto ve masraf dahil (iş kutusu "Açık sipariş" tutarıyla aynı hesap); hesaplanamazsa null. */
   tutar: number | null;
   siparisTarihi: string; termin: string; teslim: string; kalem: number; gelenKalem: number; kalemAdlari: string;
@@ -696,7 +696,7 @@ export function siparisListesi(bugun: string = todayStr()): SiparisSatiri[] {
     const tutarlar = satirlar.filter((l) => l.reqId === r.id && l.supplierId === o.supplierId).map((l) => l.amount);
     const gecikme = !teslim && termin && termin < bugun ? dayDiff(termin, bugun) : null;
     return {
-      anahtar: `${r.id}:${o.qid}`, talepId: r.id, talepNo: r.no, talepAdi: r.title, cizimSayisi: r.cizimSayisi ?? 0, orderNo: o.orderNo, poNo: o.poNo, tedarikci: supName(o.q), supplierId: o.supplierId,
+      anahtar: `${r.id}:${o.qid}`, talepId: r.id, talepNo: r.no, talepAdi: r.title, talepTarihi: tsDate(r.createdAt || undefined), cizimSayisi: r.cizimSayisi ?? 0, orderNo: o.orderNo, poNo: o.poNo, tedarikci: supName(o.q), supplierId: o.supplierId,
       tutar: tutarlar.length ? sum(tutarlar) : null, siparisTarihi: o.orderDate, termin, teslim, kalem: o.items.length, gelenKalem: o.items.filter((it) => geldi(it.id)).length,
       kalemAdlari: o.items.map((it) => it.name).join(', '),
       tek: tekHat?.qty !== undefined ? { gelen: teslim ? tekHat.qty : tekHat.received ?? 0, miktar: tekHat.qty, birim: tekHat.unit ?? "" } : null,
