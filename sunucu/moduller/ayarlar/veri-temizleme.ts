@@ -2,6 +2,7 @@ import { vtSureDoldu, type Db } from '#cekirdek/db.ts';
 import type { DenetimSecimi } from '#cekirdek/uc.ts';
 import { cakisma, dogrulama, yetkiYok } from '#cekirdek/hata.ts';
 import type { SifirlaCevabi, SifirlamaIstegiCevabi, SifirlamaOzetiCevabi, TemizleCevabi, TemizlikAdaylariCevabi, TemizlikEtkisiCevabi, TemizlikKoku, TemizlikTarihi } from '#paylasilan/sozlesme/ayarlar.ts';
+import { ORTAMLAR, type Ortam } from '#paylasilan/ortam.ts';
 import { TEMIZLIK_EN_COK_KOK, TEMIZLIK_TARIHLE_EN_COK_KOK, TEMIZLIK_YEDEK_EN_ESKI_DK, type TemizlikTuru } from '#paylasilan/veri-temizleme.ts';
 import { girisDogrula, kisiBayrakliMi, kisiKullaniciAdi, kisiSecenekleri } from '../kisiler/disari.ts';
 import { SIFIRLAMA_SURE_MS, sifirlamaKapsami, sifirlamaSureIletisi, sifirlamaOzetSatirlari, temizlikEkiSatirlari, temizlikYedegiUygunMu, type SifirlamaSecimi } from './kurallar.ts';
@@ -126,7 +127,12 @@ export function denemeIsaretiKalkmaAni(db: Db, tur: TemizlikTuru): Promise<strin
 // "Sıfırdan başla" (3426 a): uygulama verisi ilk kurulum haline döner. Sıra: bayrak, imzalı izin (3728), parola, yedek, tek işlev.
 // Ortam değişkeniyle açılmaz (sunucuya erişen açabilirdi): tek açma yolu gizli anahtarla imzalanmış, tek kullanımlık izindir.
 const sifirlamaSatiri = (kisiId: number, s: SifirlamaSecimi) => ({ ...sifirlamaKapsami(s), kullanicilar: s.kullanicilar, yoneticiId: kisiId });
-const ortamAdi = (): string => process.env['TMIV2_ORTAM'] ?? '';
+// Ortam izne yazılır ve izin aynı ortamda kullanılır; boş ya da tanımsız ortamda deneme ve canlı ayrılamaz, istek de izin de reddedilir.
+function ortamAdi(): Ortam {
+  const ortam = ORTAMLAR.find((o) => o === process.env['TMIV2_ORTAM']);
+  if (ortam === undefined) throw cakisma('Sıfırdan başla kapalı: TMIV2_ORTAM tanımlı değil (gelistirme, test ya da canli olmalı).');
+  return ortam;
+}
 
 function anahtarIste(): string {
   const pem = sifirlamaDogrulamaAnahtari();

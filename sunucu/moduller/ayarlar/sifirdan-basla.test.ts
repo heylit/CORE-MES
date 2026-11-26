@@ -91,7 +91,7 @@ describe('sıfırdan başla (gerçek PostgreSQL)', () => {
     return imzala((r.json() as { metin: string }).metin, gizli);
   }
   const sifirla = async (secim: { kullanicilar: boolean; tanimlar: boolean }, ek: Record<string, unknown> = {}) =>
-    istek(yonetici, 'POST', '/veri-temizleme/sifirla', { ...secim, yedekAdi: await yedekKoy(), onay: 'SIFIRDAN BASLA', parola: PAROLA, izin: await izinAl(), ...ek });
+    istek(yonetici, 'POST', '/veri-temizleme/sifirla', { ...secim, yedekAdi: await yedekKoy(), onay: 'SIFIRDAN BASLA', parola: PAROLA, izin: 'izin' in ek ? ek['izin'] : await izinAl(), ...ek });
 
   before(async () => {
     dizin = await mkdtemp(path.join(tmpdir(), 'tmiv2-sifirlama-'));
@@ -174,6 +174,21 @@ describe('sıfırdan başla (gerçek PostgreSQL)', () => {
       assert.match(r4.body, /başka bir ortam/);
     } finally {
       if (oncekiOrtam === undefined) delete process.env['TMIV2_ORTAM']; else process.env['TMIV2_ORTAM'] = oncekiOrtam;
+    }
+    // Ortam tanımsız ya da geçersizse ne istek alınır ne izin kullanılır (deneme ile canlı ayrılamaz).
+    const tanimsizIzni = await izinAl();
+    for (const deger of [undefined, '', 'uretim']) {
+      if (deger === undefined) delete process.env['TMIV2_ORTAM']; else process.env['TMIV2_ORTAM'] = deger;
+      try {
+        const ri = await istek(yonetici, 'POST', '/veri-temizleme/sifirlama-istegi');
+        assert.equal(ri.statusCode, 409, ri.body);
+        assert.match(ri.body, /TMIV2_ORTAM tanımlı değil/);
+        const ru = await sifirla(secim, { izin: tanimsizIzni });
+        assert.equal(ru.statusCode, 409, ru.body);
+        assert.match(ru.body, /TMIV2_ORTAM tanımlı değil/);
+      } finally {
+        if (oncekiOrtam === undefined) delete process.env['TMIV2_ORTAM']; else process.env['TMIV2_ORTAM'] = oncekiOrtam;
+      }
     }
     const kurulumIzni = await izinAl();
     const kimlik = (await o().sahip.tek<{ k: string }>('SELECT kimlik::text AS k FROM ayarlar_kurulum'))!.k;
