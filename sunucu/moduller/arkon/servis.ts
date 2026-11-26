@@ -1245,10 +1245,9 @@ async function rotaAnahtarlari(
 const ilkParcaSecimiOku = (secimler: ReadonlyMap<string, IlkParcaSecimi>, rota: RotaAnahtari): IlkParcaSecimi | undefined =>
   rota.revizyonId === null ? undefined : secimler.get(`${rota.revizyonId}:${rota.opNo}`);
 
-// 744 a: adımın ilk parça seçimi emrin kaynak revizyonundaki aynı OP'li adımdadır; onaylı revizyon değişmediği için revizyon başına bir kez okunur.
-// Rotasız emirde ve rotada bulunmayan adımda (ek adım) her kurulumda sorulur.
-// 3689-2: ilk parça onayının tek kaynağı Kalite Merkezi numune planıdır (opun planı varsa yalnız o). Planı olmayan opta geçiş kuralıyla rotadaki
-// eski seçim (744 a) geçerlidir; rotasız emirde ve rotada bulunmayan adımda ilk parça istenmez.
+// 3689-2: ilk parça onayının tek kaynağı Kalite Merkezi numune planıdır. Kapılı ilk parça açar, kuralsız plan kapatır; plan yoksa ya da kapılı
+// ilk parça taşımıyorsa geçiş kuralıyla emrin kaynak revizyonundaki aynı OP'li adımın seçimi (744 a) geçerlidir; rotasız emirde ve rotada
+// bulunmayan adımda (ek adım) ilk parça istenmez. Onaylı revizyon değişmediği için seçimler revizyon başına bir kez okunur.
 async function adimIlkParcaSecimi(db: Db, onbellek: OkumaOnbellegi, isEmriId: number): Promise<IlkParcaSecimi> {
   const adim = await isEmriOzetiOku(db, onbellek, isEmriId);
   const emir = adim === null ? null : await uretimEmriOzetiOku(db, onbellek, adim.uretimEmriId);
