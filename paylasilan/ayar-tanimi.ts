@@ -13,7 +13,7 @@ export interface TurDegerleri {
 
 export type AyarTuru = keyof TurDegerleri;
 
-export const METIN_BICIMLERI = ['ag-araligi', 'tarih-araligi'] as const;
+export const METIN_BICIMLERI = ['ag-araligi', 'tarih-araligi', 'lsv2-makineleri'] as const;
 export type MetinBicimi = (typeof METIN_BICIMLERI)[number];
 
 export interface AyarSecenegi {

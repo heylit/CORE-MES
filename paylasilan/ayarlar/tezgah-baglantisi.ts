@@ -1,4 +1,5 @@
 import type { AyarTanimi } from '../ayar-tanimi.ts';
+import { LSV2_LISTESI_EN_UZUN } from '../lsv2-makineleri.ts';
 
 // Deneme (kart 3373, ADR 0033): kapalıyken ya da TMIV2_TEZGAH_MTCONNECT_ADRESI yokken hiçbir istek atılmaz.
 export const TEZGAH_BAGLANTISI_AYARLARI = {
@@ -38,7 +39,7 @@ export const TEZGAH_BAGLANTISI_AYARLARI = {
     tur: 'boolean',
     varsayilan: false,
     baslik: 'Heidenhain okuması',
-    aciklama: 'Açıkken Heidenhain kontrollü tezgâhlar LSV2 ile (TCP 19000) okuma aralığında, yalnız okunarak sorgulanır: durum, program, takım, oranlar, alarm ve ayarda adresi verilmişse parça sayacı. Makineye komut, dosya ya da PLC yazması gitmez; parola gönderilmez. Makine bağlantıyı reddederse (kapalı ya da SmartES tutuyor) zorlanmaz, sonra yeniden denenir. Makine listesi sunucunun TMIV2_TEZGAH_LSV2_MAKINELERI ortam değişkeninde yoksa açık olsa da bağlantı açılmaz.',
+    aciklama: 'Açıkken Heidenhain kontrollü tezgâhlar LSV2 ile (TCP 19000) okuma aralığında, yalnız okunarak sorgulanır: durum, program, takım, oranlar, alarm ve ayarda adresi verilmişse parça sayacı. Makineye komut, dosya ya da PLC yazması gitmez; parola gönderilmez. Makine bağlantıyı reddederse (kapalı ya da SmartES tutuyor) zorlanmaz, sonra yeniden denenir. "Heidenhain makineleri" listesi boşsa açık olsa da bağlantı açılmaz.',
   },
   // Kart 3753 (kullanıcı kararı: PLCDEBUG, koşullu): sayaç için kumandaya PLCDEBUG girişi yapılır; bu düzey PLC yazmayı da açar.
   'tezgah-baglantisi.lsv2-plc-sayaci': {
@@ -47,5 +48,16 @@ export const TEZGAH_BAGLANTISI_AYARLARI = {
     varsayilan: false,
     baslik: 'PLC sayacı okuması',
     aciklama: 'Dikkat: bu okuma kumandada yazma yetkisi de açan PLCDEBUG giriş düzeyini kullanır; CORE yalnız ayardaki sayaç adresini okuyabilir, yazma ve kontrol komutu gönderemez. Açıkken, makine listesinde sayaç adresi verilmiş makinelerde parça sayacı PLC belleğinden okunur: parolasız giriş yalnız sayaç okunurken açıktır, okunduktan hemen sonra çıkılır. Kapalıyken giriş hiç yapılmaz, sayaç boş kalır. "Heidenhain okuması" anahtarından bağımsızdır; o kapalıyken etkisizdir. İlk açılış deneme kurulumunda tek makinede yapılır.',
+  },
+  // Kart 3757: makine listesi ortam değişkeni yerine burada; yalnız yönetici değiştirir, değişiklik denetim kaydına yazılır.
+  'tezgah-baglantisi.lsv2-makineleri': {
+    modul: 'tezgah-baglantisi',
+    tur: 'metin',
+    varsayilan: '',
+    enUzun: LSV2_LISTESI_EN_UZUN,
+    bosOlabilir: true,
+    bicim: 'lsv2-makineleri',
+    baslik: 'Heidenhain makineleri',
+    aciklama: 'Makine kodu SmartES\'tekiyle aynı olmalı. Yalnız kurum içi IP; kapı her zaman 19000. Sayaç adresi isteğe bağlı (D ve 4\'ün katı). Kaydedince sonraki okumada geçerli olur; değişiklik denetim kaydına yazılır. Liste boşsa bağlantı açılmaz.',
   },
 } as const satisfies Record<string, AyarTanimi>;

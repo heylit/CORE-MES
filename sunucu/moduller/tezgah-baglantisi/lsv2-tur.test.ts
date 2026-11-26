@@ -51,6 +51,18 @@ describe('Heidenhain (LSV2) okuma turu (gerçek PostgreSQL)', () => {
     },
     saat: () => new Date(simdi), bellek, ortak, mtconnectVar: false,
   });
+  // Liste Sistem Ayarları'ndan: makine adresi uydurmadır; istemci adresi değil sahte sunucunun kapısını kullanır.
+  const ayardanTur = () => lsv2Turu(vt(), {
+    istemciKur: (m) => {
+      istemciSayisi += 1;
+      return lsv2IstemcisiKur('127.0.0.1', m.sayac, { kapi: sahte.kapi, istekSuresiMs: 500 });
+    },
+    saat: () => new Date(simdi), bellek, ortak, mtconnectVar: false,
+  });
+  const liste = async (deger: string) => {
+    const c = await app.inject({ method: 'POST', url: '/api/ayarlar/tezgah-baglantisi.lsv2-makineleri/degistir', headers: { cookie: yonetici }, payload: { deger } });
+    return c;
+  };
   const pano = async (makineler: { m: Lsv2Makinesi }[]) =>
     tezgahBaglantisiDurumCevabi.parse(await vt().tx((db) => durum(db, null, ortak, new Date(simdi), { makineler: makineler.map((x) => x.m), bellek })));
 
@@ -145,6 +157,32 @@ describe('Heidenhain (LSV2) okuma turu (gerçek PostgreSQL)', () => {
     simdi += 5_000;
     assert.deepEqual(await tur(m), { tur: 'okundu', makine: 2 });
     assert.equal(bellek.makineler.get('ORN-H09')?.ardisikHata, 2);
+  });
+
+  test('liste Sistem Ayarları\'ndan okunur; geçersiz liste kaydedilmez; listeden çıkan makinenin bağlantısı kapanır (kart 3757)', async () => {
+    await ayar('tezgah-baglantisi.lsv2-okuma', true);
+    const bozuk = await liste('ORN-H01=203.0.113.7;D10000');
+    assert.equal(bozuk.statusCode, 400, bozuk.body);
+    assert.ok(!bozuk.body.includes('203.0.113'), 'ileti adresi söylemez');
+    assert.deepEqual(await ayardanTur(), { tur: 'ayar-yok' });
+    assert.equal((await liste('ORN-H01=10.250.0.11;D10000')).statusCode, 200);
+    assert.deepEqual(await ayardanTur(), { tur: 'okundu', makine: 1 });
+    assert.equal(istemciSayisi, 1);
+    const p = tezgahBaglantisiDurumCevabi.parse(await vt().tx((db) => durum(db, null, ortak, new Date(simdi), { bellek })));
+    assert.equal(p.lsv2Baglanti, 'acik');
+    assert.equal(p.tezgahlar.find((x) => x.cihazAdi === 'ORN-H01')?.kaynak, 'lsv2');
+    // Adres değişince eski bağlantı kapanır, yenisi kurulur; liste boşalınca bağlantı ve bellek düşer, ekranda "liste yok".
+    assert.equal((await liste('ORN-H01=10.250.0.12;D10000')).statusCode, 200);
+    simdi += 5_000;
+    assert.deepEqual(await ayardanTur(), { tur: 'okundu', makine: 1 });
+    assert.equal(istemciSayisi, 2);
+    assert.equal(sahte.kabulEdilen(), 2);
+    assert.equal((await liste('')).statusCode, 200);
+    assert.deepEqual(await ayardanTur(), { tur: 'ayar-yok' });
+    assert.equal(bellek.istemciler.size, 0);
+    assert.equal(bellek.makineler.size, 0);
+    const q = tezgahBaglantisiDurumCevabi.parse(await vt().tx((db) => durum(db, null, ortak, new Date(simdi), { bellek })));
+    assert.equal(q.lsv2Baglanti, 'adres-yok');
   });
 
   test('MTConnect turu Heidenhain makinesinin son okuma anını yenilemez, aynı adlı MTConnect cihazını yazmaz', async () => {

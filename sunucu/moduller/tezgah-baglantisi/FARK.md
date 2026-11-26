@@ -8,7 +8,7 @@ Heidenhain kumandalarını LSV2 ile (TCP 19000) doğrudan, salt okunur okuma. Ye
 | `sunucu/moduller/tezgah-baglantisi/lsv2-tur.ts` (yeni) | Okuma turu: makine başına aralık ve geri çekilme, son durum, durum örneği ve değer geçmişi (MTConnect ile aynı tablolar ve süzgeç) |
 | `sunucu/moduller/tezgah-baglantisi/sahte-lsv2.ts` (yeni, yalnız test) | Yerel sahte LSV2 sunucusu; gelen telgrafları kaydeder |
 | `sunucu/moduller/tezgah-baglantisi/lsv2.test.ts`, `lsv2-tur.test.ts` (yeni) | Kabul 1-5 testleri (beyaz liste, çeviri, hata halleri, ayar, eşzamanlılık; tur gerçek PostgreSQL ile) |
-| `ayar.ts` | `TMIV2_TEZGAH_LSV2_MAKINELERI` okuyucusu `lsv2MakineleriOku` |
+| `ayar.ts` | (3757) LSV2 listesi okuyucusu kalktı; liste `paylasilan/lsv2-makineleri.ts` ile Sistem Ayarları'ndan |
 | `kurallar.ts` | LSV2 okumasının MTConnect öğelerine çevrilmesi (`lsv2Ogeleri`), değişen öğe, uyarı metinleri, alan tanımları |
 | `servis.ts`, `sorgular.ts` | MTConnect turu LSV2 adlarını atlar ve onların son okuma anını yenilemez; durum ucu `kaynak`, `uyari`, `lsv2Baglanti` verir |
 | `baglanti.ts`, `isler.ts`, `uclar.ts` | Makine listesi açılışta okunur; ayrı iş `tezgah-baglantisi-lsv2-okuma` |
@@ -32,3 +32,8 @@ SAYAC `D` ve 4'ün katı (pyLSV2 ile aynı bayt hesabı: kelime alanı başı + 
 8. Bağlanılamayan makinede son durum yalnız ilk hatada "bağlantı yok"a iner; son okuma anı ilerlemez ("eski okuma").
 9. MTConnect adresi yoksa ya da okuması kapalıysa saatlik geçmiş temizliğini LSV2 turu yapar (aynı bellek, tek temizlikçi).
 10. Kapalı makineye bağlantı reddi hata sayılmaz (iş "tamam" döner); uyarı makine kartındadır, geri çekilme 60 sn'ye kadar uzar.
+
+
+## Kart 3757: makine listesi Sistem Ayarları'nda
+
+Kullanıcı kararı "Satır satır, ağ aralığı yok" (26.11.2026). `TMIV2_TEZGAH_LSV2_MAKINELERI` kalktı; liste "Heidenhain makineleri" metin ayarıdır (biçim `lsv2-makineleri`, sunucu ve ekran aynı kuralla doğrular), her turda okunur. Listeden çıkan ya da adresi/sayacı değişen makinenin bağlantısı kapatılır. Ekranda satır satır düzenleyici (`istemci/src/moduller/ayarlar/Lsv2MakineListesi.tsx`). CLAUDE.md kırmızı çizgi satırı, ADR 0034 madde 3 ve README çapası kullanıcının yazılı onayıyla (26.11.2026 13:39) aynı committe değişti.

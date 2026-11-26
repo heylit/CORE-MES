@@ -120,3 +120,19 @@
 }
 @media (prefers-reduced-motion: reduce) { .tc-guncelleme-halka-yay { transition: none; } }
 .tc-merkez-bolum { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+
+/* Kart 3757: Heidenhain makine listesi. Geniş ekranda başlık bir kez, kutu etiketleri gizli; dar ekranda her makine ayrı kart. */
+.tc-ayar-lsv2 { flex-direction: column; align-items: stretch; }
+.tc-lsv2-form { display: flex; flex-direction: column; gap: var(--b-3); }
+.tc-lsv2-baslik, .tc-lsv2-satir {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) calc(var(--b-6) * 3); gap: var(--b-3); align-items: start;
+}
+.tc-lsv2-baslik { font-weight: 700; color: var(--muted); font-size: var(--yazi-s); }
+.tc-lsv2-satir .tc-alan-etiket { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.tc-lsv2-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-3); }
+.tc-lsv2-hata { margin: 0; color: var(--stop); font-weight: 700; }
+@media (max-width: 479px) {
+  .tc-lsv2-baslik { display: none; }
+  .tc-lsv2-satir { grid-template-columns: minmax(0, 1fr); padding: var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-2); }
+  .tc-lsv2-satir .tc-alan-etiket { position: static; width: auto; height: auto; overflow: visible; clip-path: none; white-space: normal; }
+}

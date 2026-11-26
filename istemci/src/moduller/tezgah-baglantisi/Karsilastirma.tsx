@@ -15,7 +15,7 @@ const BAGLANTI_METNI = {
   kapali: 'Okuma kapalı. Sistem Ayarları’nda “Tezgâh bağlantısı okuması (deneme)” açılınca tezgâhlar sık aralıkla (varsayılan 5 saniye) okunur.',
   'adres-yok': 'Okuma açık ama servis adresi sunucuda tanımlı değil (TMIV2_TEZGAH_MTCONNECT_ADRESI); istek atılmıyor.',
 } as const;
-const LSV2_LISTE_YOK = 'Heidenhain okuması açık ama makine listesi sunucuda tanımlı değil (TMIV2_TEZGAH_LSV2_MAKINELERI); bağlantı açılmıyor.';
+const LSV2_LISTE_YOK = 'Heidenhain okuması açık ama makine listesi boş; bağlantı açılmıyor. Sistem Ayarları\'ndan makine ekleyin.';
 
 // Karşılaştırılan beş alan iki genişlikte aynıdır: [tezgâhın değeri, SmartES'in değeri].
 // Boş değer (YOK, KAYIT_YOK) her yerde aynı yazı tipiyle; eş aralıklı yazı tipi yalnız gerçek program adında.

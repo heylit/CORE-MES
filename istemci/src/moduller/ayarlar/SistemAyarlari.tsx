@@ -25,6 +25,7 @@ import { VeriTemizleme } from './VeriTemizleme.tsx';
 import { Yedekler } from './Yedekler.tsx';
 import { FirmaKodlari } from './FirmaKodlari.tsx';
 import { KurumLogosu, SurumBilgisi } from './KurumAyarlari.tsx';
+import { Lsv2MakineListesi } from './Lsv2MakineListesi.tsx';
 import './ayarlar.css';
 
 type SayiAyari = Extract<Ayar, { tur: 'sayi' }>;
@@ -217,6 +218,7 @@ function AyarSatiri({ ayar, mesgul, degistir }: { ayar: Ayar; mesgul: boolean; d
   if (ayar.tur === 'sayi') return <SayiSatiri ayar={ayar} mesgul={mesgul} degistir={degistir} />;
   // Numara kalıpları kendi sekmesinde, sayaçlarıyla birlikte çizilir (NumaraKurallari).
   if (ayar.tur === 'numara') return null;
+  if (ayar.tur === 'metin' && ayar.bicim === 'lsv2-makineleri') return <Lsv2MakineListesi ayar={ayar} mesgul={mesgul} degistir={degistir} />;
   if (ayar.tur === 'metin') return <MetinSatiri ayar={ayar} mesgul={mesgul} degistir={degistir} />;
   if (ayar.tur === 'secim') return <SecimSatiri ayar={ayar} mesgul={mesgul} degistir={degistir} />;
   return (
