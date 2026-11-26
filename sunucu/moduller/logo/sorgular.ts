@@ -1208,6 +1208,21 @@ export async function gunlukHataSayisi(db: Db, bas: Date): Promise<number> {
   return (await db.tek<{ n: number }>("SELECT count(*)::int AS n FROM logo_akis_gunlugu WHERE sonuc = 'hata' AND zaman >= $1", [bas]))?.n ?? 0;
 }
 
+// 3736: hatalı yazma turunun nedeni. Tur tek belgeyi işler ve denemesini az önce yazmıştır: aynı tür, numara ve sonuçla en son denenen satır.
+// Deneme yazılamadıysa (sonuç "yazilamadi") satır bulunmaz ve günlük yalnız sonucun adını yazar.
+export async function sonGidenHatasi(
+  db: Db, k: { kutu: 'giden' | 'fis'; belgeler: readonly string[] | null; islem: 'gonder' | 'pasif' | null }, no: number, sonuc: string,
+): Promise<string | null> {
+  const tablo = k.kutu === 'fis' ? 'logo_malzeme_fisi_giden' : 'logo_giden';
+  const islem = k.kutu === 'giden' && k.islem !== null ? ' AND islem = $4' : '';
+  return (await db.tek<{ hata: string | null }>(
+    `SELECT son_hata AS hata FROM ${tablo}
+      WHERE belge_no = $1 AND son_sonuc = $2 AND son_hata IS NOT NULL AND ($3::text[] IS NULL OR belge_turu = ANY($3::text[]))${islem}
+      ORDER BY son_deneme DESC NULLS LAST LIMIT 1`,
+    [no, sonuc, k.belgeler === null ? null : [...k.belgeler], ...(islem === '' ? [] : [k.islem])],
+  ))?.hata ?? null;
+}
+
 // Gönderimi başarısız olup yeniden denenmeyi bekleyen belgeler, belge türüne göre.
 export function bekleyenGidenler(db: Db): Promise<{ belgeTuru: string; sayi: number }[]> {
   return db.sorgu<{ belgeTuru: string; sayi: number }>(

@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import { LOGO_AYARLARI } from '#paylasilan/ayarlar/logo.ts';
 import {
   faturalariAyikla, FIS_GONDERIM_AYARI, listeKayitlariniAyikla, LOGO_AKISLARI, LOGO_FIS_TURLERI, logoFisDurumu, malKabulSatirlariniAyikla, malzemeFisiGovdesi,
-  ESKI_YARDIMCI_ILETISI, ESKI_YARDIMCI_OKUMA_ILETISI, gunlukSatiri, eskiEmirFisiNo, logoFisNumarasi, malzemeFisiOzeti, MALZEME_FISI_TURU, MALZEME_FISI_UCU, stokFisindenLogoFisi,
+  ESKI_YARDIMCI_ILETISI, ESKI_YARDIMCI_OKUMA_ILETISI, gunlukGidenKaynagi, gunlukSatiri, eskiEmirFisiNo, logoFisNumarasi, malzemeFisiOzeti, MALZEME_FISI_TURU, MALZEME_FISI_UCU, stokFisindenLogoFisi,
 } from './kurallar.ts';
 import type { FisGidenDurumu, GonderilecekMalzemeFisi, StokFisi } from './kurallar.ts';
 
@@ -245,5 +245,30 @@ describe('3453 okuma reddinin nedeni günlük satırında', () => {
     assert.equal(satir('reddedildi', 'Logo reddetti: Dönem kapalı')?.ileti, 'Logo reddetti: Dönem kapalı', 'aynı ön ek iki kez yazılmaz');
     assert.equal(satir('yetkisiz')?.ileti, 'Logo yardımcısı anahtarı kabul etmedi');
     assert.deepEqual(satir('okundu', 'yok sayılır'), { akis: 'irsaliye', yon: 'okuma', sonuc: 'tamam', sayi: 0, ileti: null });
+  });
+});
+
+describe('3736 yazma hatasının nedeni günlük satırında', () => {
+  test('giden kutusunun nedeni sonucun adıyla yazılır; neden yoksa yalnız ad; aynı ön ek iki kez yazılmaz; başarıda neden yok', () => {
+    const satir = (sonuc: string, ileti?: string) => gunlukSatiri('logo-proje-gonderimi', { tur: 'gonderim', no: 7, sonuc, ...(ileti === undefined ? {} : { ileti }) });
+    assert.equal(satir('reddedildi', 'Dönem kapalı.')?.ileti, 'Belge 7: Logo reddetti: Dönem kapalı.');
+    assert.equal(satir('ulasilamadi', 'Bağlantı reddedildi (ECONNREFUSED).')?.ileti, 'Belge 7: Logo yardımcısına ulaşılamadı: Bağlantı reddedildi (ECONNREFUSED).');
+    assert.equal(satir('reddedildi', 'Logo reddetti: Cari kodu yok')?.ileti, 'Belge 7: Logo reddetti: Cari kodu yok');
+    assert.equal(satir('reddedildi')?.ileti, 'Belge 7: Logo reddetti');
+    assert.equal(satir('reddedildi', '   ')?.ileti, 'Belge 7: Logo reddetti');
+    assert.equal(satir('gonderildi', 'yok sayılır')?.ileti, 'Belge 7');
+  });
+  test('neden okunacak giden satırı işe ve tur türüne göre seçilir; türü bilinmeyen tur null', () => {
+    assert.deepEqual(gunlukGidenKaynagi('logo-malzeme-fisi-gonderimi', 'malzeme-fisi'), { kutu: 'fis', belgeler: null, islem: null });
+    assert.deepEqual(gunlukGidenKaynagi('logo-satin-alma-gonderimi', 'gonderim'), { kutu: 'giden', belgeler: ['siparis'], islem: 'gonder' });
+    assert.deepEqual(gunlukGidenKaynagi('logo-satin-alma-gonderimi', 'talep'), { kutu: 'giden', belgeler: ['talep'], islem: 'gonder' });
+    assert.deepEqual(gunlukGidenKaynagi('logo-satin-alma-gonderimi', 'bekletme'), { kutu: 'giden', belgeler: ['siparis-bekletme'], islem: 'gonder' });
+    assert.deepEqual(gunlukGidenKaynagi('logo-satis-gonderimi', 'siparisler-teklifi'), { kutu: 'giden', belgeler: ['siparisler-teklifi'], islem: 'gonder' });
+    assert.deepEqual(gunlukGidenKaynagi('logo-malzeme-gonderimi', 'pasif'), { kutu: 'giden', belgeler: ['malzeme', 'hizmet'], islem: 'pasif' });
+    assert.deepEqual(gunlukGidenKaynagi('logo-malzeme-gonderimi', 'guncelleme'), { kutu: 'giden', belgeler: ['malzeme-guncelleme'], islem: 'gonder' });
+    assert.deepEqual(gunlukGidenKaynagi('logo-proje-gonderimi', 'proje'), { kutu: 'giden', belgeler: ['proje'], islem: 'gonder' });
+    assert.equal(gunlukGidenKaynagi('logo-satin-alma-gonderimi', 'bilinmeyen'), null);
+    assert.equal(gunlukGidenKaynagi('logo-dis-siparis-duzeltme', 'dis-duzeltme'), null);
+    assert.equal(gunlukGidenKaynagi('logo-mal-kabul-okumasi', 'okuma'), null);
   });
 });
