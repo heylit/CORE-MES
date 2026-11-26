@@ -94,10 +94,34 @@ export function etkinIsSirasi<T>(isler: readonly T[], anahtar: (x: T) => string,
 // İlk parça kapısının ölçüleri; kapının açık olup olmadığını ölçüm değil Kalite Merkezi kararı belirler (denetim #12).
 export const ilkParcaKalemleri = (o: Pick<Is, 'pkg'>): PlanItem[] =>
   (o.pkg && isTuru(o.pkg) === 'cnc' ? numunePlani(o.pkg).filter((r) => r.when === 'first' && r.gate).flatMap((r) => numuneOlculeri(o.pkg!, r)) : []);
-// 3717: bağsız planda numune isteği yazılır ama Kalite Merkezi'ne açılmaz; operatör etiketleme bilgisini de uyarıyı da görür.
-export function bagsizNumuneBildirimi(olcuSayisi: number, etiket: string, ilkParcaVar: boolean): string {
-  return `Numune isteği gönderildi · ${String(olcuSayisi)} ölçü · etiketle: ${etiket} · ${KM_BAGSIZ_PLAN_UYARISI}${ilkParcaVar ? ' ' + KM_BAGSIZ_ILK_PARCA_UYARISI : ''}`;
+// 3717: bağsız planda numune isteği yazılır ama Kalite Merkezi'ne açılmaz; operatör uyarıyı görür. 3718 a: elle etiket yerine gönderim yolu.
+export function bagsizNumuneBildirimi(olcuSayisi: number, gonderim: string, ilkParcaVar: boolean): string {
+  return `Numune isteği gönderildi · ${String(olcuSayisi)} ölçü · ${gonderim} · ${KM_BAGSIZ_PLAN_UYARISI}${ilkParcaVar ? ' ' + KM_BAGSIZ_ILK_PARCA_UYARISI : ''}`;
 }
+// 3718 a: gönderim anının geçici bildirimi; kalıcı durum "Şimdi" kartındaki numune yolundadır.
+export const numuneGonderildiBildirimi = (olcuSayisi: number, gonderim: string): string => `Numune kaliteye yola çıktı · ${String(olcuSayisi)} ölçü · ${gonderim}`;
+
+// 3718 a: bekleyen numunenin yolu "Şimdi" kartında, aynı satırda: Yolda > Kalitede > Karar. Yalnız kalite istasyonuna giden numunede
+// (teslim adımı olan); stok kutusuna giden numunede kart bugünkü gibi kalır.
+export interface NumuneYolu { istasyon: string | null; teslim: { at: number; kisi: string } | null }
+const saatDakika = (t: number) => new Date(t).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+export function numuneYoluGorevi(g: Gorev | null, yol: NumuneYolu | null): Gorev | null {
+  if (!g || g.key !== 'pend' || !yol || yol.istasyon === null) return g;
+  if (yol.teslim === null) {
+    return { ...g, tone: 'hold', icon: 'truck', t: `Numune yolda · ${yol.istasyon}`, adimlar: [{ ad: 'Yolda', durum: 'simdi' }, { ad: 'Kalitede', durum: 'bekliyor' }, { ad: 'Karar', durum: 'bekliyor' }] };
+  }
+  const kim = yol.teslim.kisi ? ` · ${yol.teslim.kisi}` : '';
+  return {
+    ...g, tone: 'done', icon: 'cube', t: `Numune kalitede · teslim ${saatDakika(yol.teslim.at)}`, d: `${g.d}${kim}`,
+    adimlar: [{ ad: 'Yolda', durum: 'bitti' }, { ad: 'Kalitede', durum: 'simdi' }, { ad: 'Karar', durum: 'bekliyor' }],
+  };
+}
+
+// 3718 a: kalite istasyonunda refakat kartı okutulunca stokta alınan teslimler bu olayla kalite görünümüne gider; görünüm yoldaki numunesini
+// (stok teslimi alınanlardan biriyse) "okutma" yoluyla teslim alır.
+export const NUMUNE_KART_TESLIMI_OLAYI = 'arkon:numune-kart-teslimi';
+export const okutulanNumuneler = <T extends object>(numuneler: readonly T[], teslimIdler: readonly number[]): T[] =>
+  numuneler.filter((r) => { const t = (r as { numuneTeslim?: { id?: unknown } }).numuneTeslim; return typeof t?.id === 'number' && teslimIdler.includes(t.id); });
 const gecti = (m: Meas | undefined): boolean => !!(m && (m.ok || m.dev));
 export const ilkParcaKapisi = (o: Pick<Is, 'pkg' | 'meas'>): PlanItem[] => ilkParcaKalemleri(o).filter((b) => !gecti((o.meas || {})[b.id]));
 // TMI'nin adımdaki ilk parça kapısı (sunucu `ilkParcaGereksinimi`): kontrol planı boş olsa da sağlam sayım kalite kararına kadar bekler.

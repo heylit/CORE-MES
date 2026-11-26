@@ -34,6 +34,8 @@ export const ILETILER = {
   aletGecersiz: 'Seçilen ölçü aletinin kalibrasyonu geçerli değil ya da alet kullanım dışı: bu aletle ölçüm kaydedilmez.',
   ilkParcaYeniden: 'Hazırlık yeniden ilk parça onayı istedi: kalite kararına kadar ikinci sağlam parça sayılmaz.',
   ikinciKontrol: 'Kritik ölçüler ikinci kez kontrol edildi işaretlenmeden onay verilemez.',
+  numuneTeslimYetkisi: 'Numuneyi yalnız kalite teslim alır.',
+  numuneTeslimGecersiz: 'Numune teslim alınamadı: numune bu kalite istasyonuna yolda değil ya da teslim yolu bilinmiyor.',
   kisiTmide: 'Kişiler CORE\'da yönetilir (Personel).',
   ozetTutmuyor: 'Dosya içeriği özetiyle tutmuyor.',
   parcaUyusmuyor: 'Parça sayısı önceki parçalarla uyuşmuyor.',
@@ -2311,12 +2313,37 @@ export function numuneTeslimGirdisi(kimlik: string, govde: unknown, onceki: unkn
 // Teslim bağını yalnız sunucu yazar: istemcinin gönderdiği `numuneTeslim` yok sayılır, kayıtlı bağ sonraki yazımlarda (kalite kararı) korunur.
 // 564 1 b: numunenin gönderildiği kalite istasyonu (`kaliteIstasyonu`, kod) da yalnız sunucudandır; kalite istasyonu terminali bununla listeler.
 // 798: Kalite Merkezi bağı (`kmNumune`, `ilkParca`, `kmOlculen`, `kmUyari`) da yalnız sunucudandır.
-const ISTEGIN_SUNUCU_ALANLARI = ['numuneTeslim', 'kaliteIstasyonu', 'kmNumune', 'ilkParca', 'kmOlculen', 'kmUyari'] as const;
+// 3718: kalite istasyonunun teslim alması (`numuneTeslimAlindi`) da yalnız sunucudandır.
+const ISTEGIN_SUNUCU_ALANLARI = ['numuneTeslim', 'kaliteIstasyonu', 'kmNumune', 'ilkParca', 'kmOlculen', 'kmUyari', 'numuneTeslimAlindi'] as const;
 export function numuneTesliminiKoru(govde: unknown, onceki: unknown): unknown {
   if (!kayitMi(govde)) return govde;
   const gerisi = disindaKalanlar(govde, ISTEGIN_SUNUCU_ALANLARI) as Record<string, unknown>;
   const kayitli = Object.fromEntries(ISTEGIN_SUNUCU_ALANLARI.flatMap((a) => (alanOku(onceki, a) === undefined ? [] : [[a, alanOku(onceki, a)]])));
   return { ...gerisi, ...kayitli };
+}
+
+// 3718 a: kalite istasyonuna yolda giden numuneyi kalite teslim alır; ekran isteği `teslimAl` ile yazar (refakat kartı okutularak ya da
+// düğmeyle), sunucu bunu saat, kişi ve yolla `numuneTeslimAlindi` olarak damgalar ve `teslimAl`ı atar. Yalnız kalite rolleri (karar ve ölçüm
+// rolleri) alır; yalnız kalite istasyonu olan, açık (bekliyor ya da ölçülüyor) ve henüz alınmamış istek alınır. İkinci istek sessizce yok
+// sayılır (okutma ve düğme yarışında ilk gelen kalır). Kalite istasyonu yoksa (stok kutusu, 608 b) teslim alma adımı yoktur.
+export type NumuneTeslimYolu = 'okutma' | 'dugme';
+export interface NumuneTeslimAlindi { at: number; kisi: string; yol: NumuneTeslimYolu }
+const NUMUNE_TESLIM_YOLLARI: readonly NumuneTeslimYolu[] = ['okutma', 'dugme'];
+const ACIK_NUMUNE = new Set(['waiting', 'measuring']);
+export function numuneTeslimAlma(govde: unknown, onceki: unknown, rol: ArkonRolu): NumuneTeslimYolu | 'numuneTeslimYetkisi' | 'numuneTeslimGecersiz' | null {
+  const yol = alanOku(govde, 'teslimAl');
+  if (yol === undefined || yol === null) return null;
+  if (!KALITE_KARARI_ROLLERI.includes(rol)) return 'numuneTeslimYetkisi';
+  if (typeof yol !== 'string' || !(NUMUNE_TESLIM_YOLLARI as readonly string[]).includes(yol)) return 'numuneTeslimGecersiz';
+  const istasyon = alanOku(onceki, 'kaliteIstasyonu');
+  if (typeof istasyon !== 'string' || istasyon === '' || !ACIK_NUMUNE.has(String(alanOku(onceki, 'status')))) return 'numuneTeslimGecersiz';
+  return alanOku(onceki, 'numuneTeslimAlindi') === undefined ? (yol as NumuneTeslimYolu) : null;
+}
+// `teslimAl` hiçbir zaman kayda girmez; geçerli teslim alma damgayı ekler (önceki damga numuneTesliminiKoru ile zaten korunur).
+export function numuneTeslimAlindiDamgala(govde: unknown, yol: NumuneTeslimYolu | null, at: number, kisi: string): unknown {
+  if (!kayitMi(govde)) return govde;
+  const gerisi = disindaKalanlar(govde, ['teslimAl']) as Record<string, unknown>;
+  return yol === null ? gerisi : { ...gerisi, numuneTeslimAlindi: { at, kisi, yol } satisfies NumuneTeslimAlindi };
 }
 
 // 564 1 b: numunenin gideceği kalite istasyonu, emrin bu adımdan sonraki ilk kalite tipli adımının istasyonudur; yoksa null.
