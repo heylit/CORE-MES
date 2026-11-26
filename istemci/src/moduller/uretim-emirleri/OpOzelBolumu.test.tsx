@@ -6,24 +6,24 @@ import { OKUYUCU, ac, json, sunucuKur } from './test-ortak.tsx';
 
 // 3741: hücre panelinde "Bu OP'ye özel". Adlar uydurmadır.
 const ZAMAN = '2026-11-26T08:00:00.000Z';
-const MATRIS_ADIMI = (fark: number): AdimMatrisiCevabi['emirler'][number]['adimlar'][number] => ({
-  isEmriId: 12, opNo: 20, ad: 'Tornalama', durum: 'bekliyor', hedef: 40, yapilan: 0, yuzde: 0, sistemStatusu: 'baslayabilir', elle: null, sablondanFark: fark,
+const MATRIS_ADIMI = (fark: number, durum: 'bekliyor' | 'tamam' = 'bekliyor'): AdimMatrisiCevabi['emirler'][number]['adimlar'][number] => ({
+  isEmriId: 12, opNo: 20, ad: 'Tornalama', durum, hedef: 40, yapilan: 0, yuzde: 0, sistemStatusu: 'baslayabilir', elle: null, sablondanFark: fark,
   maddeler: [{ madde: 'cnc', hal: 'tamam', ham: 'tamam', elle: null }, { madde: 'aparat', hal: 'tamam', ham: 'tamam', elle: null }, { madde: 'olcu-aleti', hal: 'gerekmez', ham: 'gerekmez', elle: null }],
 });
-const matris = (fark: number): AdimMatrisiCevabi => ({
+const matris = (fark: number, durum: 'bekliyor' | 'tamam' = 'bekliyor'): AdimMatrisiCevabi => ({
   yazabilir: true,
-  emirler: [{ emirId: 1, emirNo: 'UE-1', urun: { kod: 'ORN-1', ad: 'Deneme ürün' }, durum: 'basladi', teslim: '2026-12-05', adimlar: [MATRIS_ADIMI(fark)] }],
+  emirler: [{ emirId: 1, emirNo: 'UE-1', urun: { kod: 'ORN-1', ad: 'Deneme ürün' }, durum: 'basladi', teslim: '2026-12-05', adimlar: [MATRIS_ADIMI(fark, durum)] }],
 });
 const OZEL_MADDE = {
   adimId: 901, ad: 'Özel pabuç kontrolü', aciklama: null, asama: 'hazirlik', tamam: false, kisiAdi: null, zaman: null, kaynak: null, kanit: null, kontrol: null, olcum: null,
   secim: null, fotoOzet: null, sinirDisi: null, ekleyenAdi: 'ORN-Planlama', eklenme: ZAMAN,
 } satisfies AdimDurumuCevabi['adimlar'][number]['liste'][number];
 const SABLON_MADDESI = { ...OZEL_MADDE, adimId: 902, ad: 'Şablondan gelen madde', eklenme: null, ekleyenAdi: null } satisfies AdimDurumuCevabi['adimlar'][number]['liste'][number];
-const durumCevabi = (liste: AdimDurumuCevabi['adimlar'][number]['liste'], farklar: AdimDurumuCevabi['adimlar'][number]['sablonFarklari']): AdimDurumuCevabi => ({
+const durumCevabi = (liste: AdimDurumuCevabi['adimlar'][number]['liste'], farklar: AdimDurumuCevabi['adimlar'][number]['sablonFarklari'], durum: 'bekliyor' | 'tamam' = 'bekliyor'): AdimDurumuCevabi => ({
   emirId: 1, emirNo: 'UE-1', urun: { kod: 'ORN-1', ad: 'Deneme ürün' }, adet: 40, teslim: null, durum: 'basladi', rotaYuzde: 0,
   hazirlik: { maddeler: [], muafiyetler: [], isEmirleri: [] }, yetki: { sablon: false },
   adimlar: [{
-    isEmriId: 12, opNo: 20, ad: 'Tornalama', durum: 'bekliyor', calisma: null, bagimlilik: 'bekleyen', fason: false, hedef: 40, yapilan: 0, yuzde: 0, sistemStatusu: 'baslayabilir',
+    isEmriId: 12, opNo: 20, ad: 'Tornalama', durum, calisma: null, bagimlilik: 'bekleyen', fason: false, hedef: 40, yapilan: 0, yuzde: 0, sistemStatusu: 'baslayabilir',
     nedenler: [], maddeler: [], tedarik: [], elle: null, onaylar: [], elleEksikler: [], gecmis: [], liste, sablon: null, sablonFarklari: farklar,
   }],
 });
@@ -40,10 +40,10 @@ const YAZAR = { ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.adim-durumu' 
 const ekran = [{ yol: '/adim-durumu', ekran: AdimDurumu }];
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-function kur(o: { fark?: number; sablonYazar?: boolean; durum?: AdimDurumuCevabi } = {}) {
+function kur(o: { fark?: number; sablonYazar?: boolean; durum?: AdimDurumuCevabi; bitti?: boolean } = {}) {
   const durum = o.durum ?? durumCevabi([SABLON_MADDESI, OZEL_MADDE], [{ madde: 'aparat', gerekli: true, kisiAdi: 'ORN-Müdür', an: ZAMAN, gerekce: 'Bu OP aparatla çalışır' }]);
   const istekler = sunucuKur(YAZAR, {
-    'GET /adimli-emirler/adim-matrisi': () => json(200, matris(o.fark ?? 2)),
+    'GET /adimli-emirler/adim-matrisi': () => json(200, matris(o.fark ?? 2, o.bitti === true ? 'tamam' : 'bekliyor')),
     'GET /adimli-emirler/1/adim-durumu': () => json(200, durum),
     'GET /hazirlik-maddeleri': () => json(200, MADDELER),
     'GET /hazirlik-sablonu': () => json(200, SABLON(o.sablonYazar ?? true)),
@@ -149,6 +149,27 @@ describe("Hücre paneli: Bu OP'ye özel (3741)", () => {
     expect(posts(istekler)).toHaveLength(0);
     fireEvent.change(bolum.getByLabelText('Madde adı'), { target: { value: 'Başka madde' } });
     expect((bolum.getByRole('button', { name: 'Ekle' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('biten adımda ekleme formu, şablon farkı formu, Kaldır ve Şablona dön görünmez, tek not durur; açık adımda hepsi vardır', async () => {
+    kur({ bitti: true, durum: durumCevabi([SABLON_MADDESI, OZEL_MADDE], [{ madde: 'aparat', gerekli: true, kisiAdi: 'ORN-Müdür', an: ZAMAN, gerekce: 'Bu OP aparatla çalışır' }], 'tamam') });
+    const bolum = await panelAc();
+    expect(bolum.getByText('Biten adımın listesi değişmez.')).toBeTruthy();
+    expect(bolum.queryByRole('group', { name: 'Şablon dışı madde ekle' })).toBeNull();
+    expect(bolum.queryByLabelText('Madde adı')).toBeNull();
+    expect(bolum.queryByRole('group', { name: "Şablon maddesini bu OP'de değiştir" })).toBeNull();
+    expect(bolum.queryByRole('button', { name: 'Kaldır: Özel pabuç kontrolü' })).toBeNull();
+    expect(bolum.queryByRole('button', { name: 'Şablona dön' })).toBeNull();
+    // Liste ve farklar salt okunur görünür kalır.
+    expect(bolum.getByText('Özel pabuç kontrolü')).toBeTruthy();
+    expect(bolum.getByText(/ORN-Müdür .* Bu OP aparatla çalışır/)).toBeTruthy();
+    cleanup();
+    kur();
+    const acik = await panelAc();
+    expect(acik.getByRole('group', { name: 'Şablon dışı madde ekle' })).toBeTruthy();
+    expect(acik.getByRole('group', { name: "Şablon maddesini bu OP'de değiştir" })).toBeTruthy();
+    expect(acik.getByRole('button', { name: 'Kaldır: Özel pabuç kontrolü' })).toBeTruthy();
+    expect(acik.getByRole('button', { name: 'Şablona dön' })).toBeTruthy();
   });
 
   it('şablon yazma yetkisi yoksa fark formu ve Şablona dön görünmez; madde ekleme kalır', async () => {
