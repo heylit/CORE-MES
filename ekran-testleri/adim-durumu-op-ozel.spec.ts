@@ -3,10 +3,13 @@ import { expect, tasmaOlc, test } from './ortak.ts';
 
 // Hücre panelinde "Bu OP'ye özel" (3741): şablon dışı madde ekle/kaldır adim-durumu-yaz ister, şablon maddesini bu OP'de değiştirmek ayrıca
 // projeler.sablon-yaz ister; salt okuyan yalnız listeyi görür. Hücre etiketi "şablondan N fark" sayar. Akış yazdığını geri alır.
+// Projeler aynı veritabanında paralel koşar: her proje kendi hücresine yazar, salt okuyan testi hücrenin içeriğine bağlanmaz.
 const HUCRE = /^\S+, OP \d+ .*: hazırlık/;
-const bolumAc = async (page: Page, ac: (yol: string) => Promise<void>) => {
+const HUCRE_SIRASI: Record<string, number> = { g360: 0, g768: 1, g1280: 2 };
+const hucreSec = (page: Page, proje: string) => page.getByRole('table').getByRole('button', { name: HUCRE }).nth(HUCRE_SIRASI[proje] ?? 0);
+const bolumAc = async (page: Page, ac: (yol: string) => Promise<void>, proje: string) => {
   await ac('/adim-durumu?mercek=hazirlik');
-  await page.getByRole('table').getByRole('button', { name: HUCRE }).first().click();
+  await hucreSec(page, proje).click();
   const bolum = page.getByRole('complementary', { name: 'Adım ayrıntısı' }).getByRole('region', { name: "Bu OP'ye özel" });
   await expect(bolum).toBeVisible({ timeout: 15_000 });
   await expect(bolum.getByText('Yükleniyor…')).toHaveCount(0);
@@ -15,9 +18,8 @@ const bolumAc = async (page: Page, ac: (yol: string) => Promise<void>) => {
 
 test.describe('salt okuyan', () => {
   test.use({ hesap: 'ornek.kalite' });
-  test('kalite yalnız listeyi görür, ekleme ve fark formu yok; taşmaz', async ({ page, ac, ag }) => {
-    const bolum = await bolumAc(page, ac);
-    await expect(bolum.getByText('Bu OP şablonu aynen izliyor; özel madde yok.')).toBeVisible();
+  test('kalite yalnız listeyi görür, ekleme ve fark formu yok; taşmaz', async ({ page, ac, ag }, bilgi) => {
+    const bolum = await bolumAc(page, ac, bilgi.project.name);
     await expect(bolum.getByRole('group', { name: 'Şablon dışı madde ekle' })).toHaveCount(0);
     await expect(bolum.getByRole('group', { name: "Şablon maddesini bu OP'de değiştir" })).toHaveCount(0);
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
@@ -28,8 +30,8 @@ test.describe('salt okuyan', () => {
 test.describe('planlama', () => {
   test.use({ hesap: 'ornek.planlama' });
   test('madde eklenir ve kaldırılır, şablon maddesi bu OP\'de gerekmez yapılır ve şablona dönülür; hücre farkı sayar; taşmaz', async ({ page, ac, ag }, bilgi) => {
-    const bolum = await bolumAc(page, ac);
-    const hucre = page.getByRole('table').getByRole('button', { name: HUCRE }).first();
+    const bolum = await bolumAc(page, ac, bilgi.project.name);
+    const hucre = hucreSec(page, bilgi.project.name);
     const isim = `ORN-Deneme madde ${bilgi.project.name}`;
     const ekle = bolum.getByRole('group', { name: 'Şablon dışı madde ekle' });
     await ekle.getByLabel('Madde adı').fill(isim);
