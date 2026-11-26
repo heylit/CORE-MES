@@ -28,6 +28,7 @@
     "yonetici": "node --import ./araclar/ortam-yukle.ts araclar/yonetici-olustur.ts",
     "yedek": "node --import ./araclar/ortam-yukle-goc.ts araclar/yedek.ts al",
     "yedek-anahtari": "node araclar/yedek.ts anahtar",
+    "sifirlama-imza": "node araclar/sifirlama-imza.mjs",
     "yedek-coz": "node --import ./araclar/ortam-yukle-goc.ts araclar/yedek.ts coz",
     "yavas-sorgular": "node --import ./araclar/ortam-yukle-goc.ts araclar/yavas-sorgular.ts",
     "yetki-matrisi": "node --import ./araclar/ortam-yukle-goc.ts araclar/yetki-matrisi-oku.ts",

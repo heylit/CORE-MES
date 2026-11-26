@@ -68,3 +68,13 @@ Güncelleyicinin dosyası (`yedek-dizini.json`) yalnız yol taşır; bozuk ya da
 (`güncelleyicinin dosyası bozuksa ortam okunur; ...`). Yazma izni olmayan klasör testi yok: test kapsayıcısı root çalışır, izin denenemez.
 
 Ekranda kalan: süren yedek varken düğme kapalıdır; sunucu yine 409 verir. Boş klasör gönderilmez; sunucu yine 400 verir.
+
+## Sıfırdan başla imzalı izin (3728)
+
+Ortam değişkeniyle açılmaz. Açık anahtar kodda (`sifirlama-izni.ts`, parmak izi 918B-1A03-FAF2-0737); gizli anahtar yalnız kullanıcıdadır (`araclar/sifirlama-imza.mjs`).
+
+| Uç | İşlem | Sunucudaki kurallar | İzinli test | Reddeden test |
+|---|---|---|---|---|
+| POST /veri-temizleme/sifirlama-istegi | `ayarlar.veri-temizle` + bayraklı yönetici | istek kurulum kimliği, ortam, tek kullanımlık sayı ve bir saatlik son içerir; metin aynen saklanır | `sifirdan-basla.test.ts` (her sıfırlama isteği bu uçtan alır) | `yetki ve koşullar: ...` (bayraksız 403) |
+| POST /veri-temizleme/sifirla | aynı | sıra: bayrak, izin (biçim, saklanan metinle bayt bayt eşitlik, imza, isteyen yönetici, ortam, kurulum, kullanılmamış, süresi dolmamış), parola, 30 dk yedek, tek işlev; izin aynı işlemde kullanılmış sayılır | `kullanıcılar ve tanımlar kalsın: ...` | `yetki ve koşullar: ...` (izinsiz, bozuk, başka anahtar, değiştirilmiş metin 400; süresi dolmuş 409), `kullanıcılar ve tanımlar kalsın: ...` (aynı izin ikinci kez 409) |
+| GET /veri-temizleme/sifirlama-ozeti | aynı | yalnız sayı ve anahtarın parmak izi; anahtar yoksa parmak izi null | `sıfırdan başla: ...` | `yetki ve koşullar: ...` (oturumsuz 401) |

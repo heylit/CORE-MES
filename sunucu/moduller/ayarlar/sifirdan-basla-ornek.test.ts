@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { generateKeyPairSync, sign } from 'node:crypto';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -13,6 +14,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { SIFIRLAMA_SURE_MS, sifirlamaKapsami, yedekAdi } from './kurallar.ts';
+import { sifirlamaTestAnahtariKoy } from './sifirlama-izni.ts';
 import { sifirdanBaslat } from './sorgular.ts';
 
 // Örnek veriyle sıfırlama (3433): ertelenmiş kısıtlı tablolar (rota adımı, iş emri sırası, stok defteri) doluyken
@@ -23,6 +25,9 @@ const PAROLA = 'dogru-parola-1';
 const SORGU_SURESI_MS = '60000';
 
 class GeriAl extends Error {}
+
+// 3728: test kendi anahtar çiftini üretir.
+const anahtar = generateKeyPairSync('ed25519');
 
 describe('sıfırdan başla örnek veriyle (gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
@@ -42,7 +47,7 @@ describe('sıfırdan başla örnek veriyle (gerçek PostgreSQL)', () => {
     dizin = await mkdtemp(path.join(tmpdir(), 'tmiv2-sifirlama-ornek-'));
     process.env['TMIV2_YEDEK_DIZINI'] = dizin;
     process.env['TMIV2_YEDEK_ANAHTARI'] = Buffer.alloc(32, 7).toString('base64');
-    process.env['TMIV2_SIFIRLAMA_ACIK'] = '1';
+    sifirlamaTestAnahtariKoy(anahtar.publicKey.export({ type: 'spki', format: 'pem' }).toString());
     process.env['TMIV2_PG_SORGU_SURE_MS'] = SORGU_SURESI_MS;
     ortam = await testVeritabaniKur('ayarlar_sifirlama_ornek');
     await ornekVeriYukle(ortam.vt, await modulOrnekVerileriniKesfet(), { ortam: 'gelistirme', bildir: () => undefined });
@@ -57,7 +62,7 @@ describe('sıfırdan başla örnek veriyle (gerçek PostgreSQL)', () => {
     if (dizin !== '') await rm(dizin, { recursive: true, force: true });
     delete process.env['TMIV2_YEDEK_DIZINI'];
     delete process.env['TMIV2_YEDEK_ANAHTARI'];
-    delete process.env['TMIV2_SIFIRLAMA_ACIK'];
+    sifirlamaTestAnahtariKoy(null);
     if (oncekiSorguSuresi === undefined) delete process.env['TMIV2_PG_SORGU_SURE_MS'];
     else process.env['TMIV2_PG_SORGU_SURE_MS'] = oncekiSorguSuresi;
   });
@@ -184,9 +189,15 @@ describe('sıfırdan başla örnek veriyle (gerçek PostgreSQL)', () => {
     const goc = await say('goc_kaydi');
     const ad = yedekAdi(String(process.env['TMIV2_PG_DATABASE']), 'elle', new Date());
     await writeFile(path.join(dizin, ad), 'yedek');
+    const ist = await app.inject({
+      method: 'POST', url: '/api/veri-temizleme/sifirlama-istegi', headers: { cookie: yonetici, 'istek-kimligi': '00000000-0000-4000-8000-000000000002' },
+    });
+    assert.equal(ist.statusCode, 200, ist.body);
+    const metin = Buffer.from((ist.json() as { metin: string }).metin);
+    const izin = { istek: metin.toString('base64'), imza: sign(null, metin, anahtar.privateKey).toString('base64') };
     const c = await app.inject({
       method: 'POST', url: '/api/veri-temizleme/sifirla',
-      payload: { kullanicilar: false, tanimlar: false, yedekAdi: ad, onay: 'SIFIRDAN BASLA', parola: PAROLA },
+      payload: { kullanicilar: false, tanimlar: false, yedekAdi: ad, onay: 'SIFIRDAN BASLA', parola: PAROLA, izin },
       headers: { cookie: yonetici, 'istek-kimligi': '00000000-0000-4000-8000-000000000001' },
     });
     assert.equal(c.statusCode, 200, c.body);

@@ -4,7 +4,7 @@ import {
   guncellemeParcasiCevabi, guncellemeParcasiGovdesi, guncellemeSilCevabi, guncellemeUygulamaIstegi, guncellemeUygulaParametresi, guncellemeYuklemeParametresi,
   girisSesiCevabi, gorunumCevabi, kapaliSayfalarCevabi, kapaliSayfalarGovdesi, karsilamaCevabi, kurumCevabi, kurumLogosuCevabi, kurumLogosuGovdesi, yedekAlCevabi,
   yedekDiziniCevabi, yedekDiziniGovdesi, yedekIndirSorgusu, yedekIndirmeIzniCevabi, yedekParametresi, yedeklerCevabi,
-  sifirlaCevabi, sifirlaGovdesi, sunucuSureciCevabi, yenidenBaslatCevabi, sifirlamaOzetiCevabi, sifirlamaOzetiSorgusu, temizleCevabi, temizleGovdesi, temizlikAdaylariCevabi, temizlikAdaylariSorgusu, temizlikEtkisiCevabi, temizlikEtkisiSorgusu, temizlikIsaretCevabi,
+  sifirlaCevabi, sifirlaGovdesi, sifirlamaIstegiCevabi, sunucuSureciCevabi, yenidenBaslatCevabi, sifirlamaOzetiCevabi, sifirlamaOzetiSorgusu, temizleCevabi, temizleGovdesi, temizlikAdaylariCevabi, temizlikAdaylariSorgusu, temizlikEtkisiCevabi, temizlikEtkisiSorgusu, temizlikIsaretCevabi,
   temizlikIsaretGovdesi,
   temizlikTarihleIsaretGovdesi,
   temizlikTarihSayisiCevabi,
@@ -16,7 +16,7 @@ import {
 } from './servis.ts';
 import { sunucuSureciOku, yenidenBaslatIste } from './sunucu-sureci.ts';
 import { yedekDiziniDegistir, yedekOrtaminiKur } from './yedek-dizini.ts';
-import { denemeIsaretiDegistir, denemeIsaretleTarihleUc, sifirdanBasla, sifirlamaOzeti, temizlikAdaylari, temizlikEtkisi, temizlikTarihSayisi, veriTemizle } from './veri-temizleme.ts';
+import { denemeIsaretiDegistir, denemeIsaretleTarihleUc, sifirdanBasla, sifirlamaIstegiUret, sifirlamaOzeti, temizlikAdaylari, temizlikEtkisi, temizlikTarihSayisi, veriTemizle } from './veri-temizleme.ts';
 import { elleYedekBaslat, indirmeIzniVer, yedekEkrani, yedekIndir } from './yedek.ts';
 
 export const uclar = [
@@ -319,6 +319,14 @@ export const uclar = [
     sorgu: sifirlamaOzetiSorgusu,
     cevap: sifirlamaOzetiCevabi,
     isle: ({ db, sorgu, kullanici }) => sifirlamaOzeti(db, kullanici.id, sorgu),
+  }),
+  // 3728: imzalanacak tek kullanımlık istek; satır yazar, bu yüzden komuttur.
+  uc({
+    yontem: 'POST',
+    yol: '/veri-temizleme/sifirlama-istegi',
+    yetki: 'ayarlar.veri-temizle',
+    cevap: sifirlamaIstegiCevabi,
+    isle: ({ db, kullanici }) => sifirlamaIstegiUret(db, kullanici.id, new Date()),
   }),
   // "Sıfırdan başla" (3426 a); parola sözleşmede gizlidir. Denetim kaydı (seçenekler dahil) sıfırlamadan sonra yazılır.
   uc({

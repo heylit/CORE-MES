@@ -1,11 +1,13 @@
 import { vtSureDoldu, type Db } from '#cekirdek/db.ts';
 import type { DenetimSecimi } from '#cekirdek/uc.ts';
 import { cakisma, dogrulama, yetkiYok } from '#cekirdek/hata.ts';
-import type { SifirlaCevabi, SifirlamaOzetiCevabi, TemizleCevabi, TemizlikAdaylariCevabi, TemizlikEtkisiCevabi, TemizlikKoku, TemizlikTarihi } from '#paylasilan/sozlesme/ayarlar.ts';
+import type { SifirlaCevabi, SifirlamaIstegiCevabi, SifirlamaOzetiCevabi, TemizleCevabi, TemizlikAdaylariCevabi, TemizlikEtkisiCevabi, TemizlikKoku, TemizlikTarihi } from '#paylasilan/sozlesme/ayarlar.ts';
 import { TEMIZLIK_EN_COK_KOK, TEMIZLIK_TARIHLE_EN_COK_KOK, TEMIZLIK_YEDEK_EN_ESKI_DK, type TemizlikTuru } from '#paylasilan/veri-temizleme.ts';
 import { girisDogrula, kisiBayrakliMi, kisiKullaniciAdi, kisiSecenekleri } from '../kisiler/disari.ts';
-import { SIFIRLAMA_SURE_MS, sifirlamaAcikMi, sifirlamaKapsami, sifirlamaSureIletisi, sifirlamaOzetSatirlari, temizlikEkiSatirlari, temizlikYedegiUygunMu, type SifirlamaSecimi } from './kurallar.ts';
+import { SIFIRLAMA_SURE_MS, sifirlamaKapsami, sifirlamaSureIletisi, sifirlamaOzetSatirlari, temizlikEkiSatirlari, temizlikYedegiUygunMu, type SifirlamaSecimi } from './kurallar.ts';
+import { imzaGecerliMi, izniCoz, parmakIzi, sifirlamaDogrulamaAnahtari, sifirlamaIstekMetni, yeniSifirlamaIstegi } from './sifirlama-izni.ts';
 import {
+  kurulumKimliginiOku, sifirlamaIsteginiKilitle, sifirlamaIsteginiKullan, sifirlamaIstegiYaz,
   denemeIsaretiniKaldir, denemeIsaretiniKaldirTarihle, sifirdanBaslat, sifirlamaSayilariniOku, denemeIsaretle, denemeIsaretiKalkmaAniniOku, denemeIsaretliKimlikleriOku, denemeIsaretleTarihle, temizlikTarihSayisiniOku, temizlikAdaylariniOku, temizlikEtkisiniOku, veriyiTemizle, type TemizlikKapsamSatiri,
 } from './sorgular.ts';
 import { yedekOrtaminiKur } from './yedek-dizini.ts';
@@ -121,24 +123,58 @@ export function denemeIsaretiKalkmaAni(db: Db, tur: TemizlikTuru): Promise<strin
   return denemeIsaretiKalkmaAniniOku(db, tur);
 }
 
-// "Sıfırdan başla" (3426 a): uygulama verisi ilk kurulum haline döner. Sıra temizlikle aynıdır: bayrak, parola, yedek, tek işlev.
+// "Sıfırdan başla" (3426 a): uygulama verisi ilk kurulum haline döner. Sıra: bayrak, imzalı izin (3728), parola, yedek, tek işlev.
+// Ortam değişkeniyle açılmaz (sunucuya erişen açabilirdi): tek açma yolu gizli anahtarla imzalanmış, tek kullanımlık izindir.
 const sifirlamaSatiri = (kisiId: number, s: SifirlamaSecimi) => ({ ...sifirlamaKapsami(s), kullanicilar: s.kullanicilar, yoneticiId: kisiId });
-function sifirlamaAcikIste(): void {
-  if (!sifirlamaAcikMi(process.env)) throw cakisma('Sıfırdan başla bu sunucuda kapalı; bilgi işlem TMIV2_SIFIRLAMA_ACIK=1 ile açar.');
+const ortamAdi = (): string => process.env['TMIV2_ORTAM'] ?? '';
+
+function anahtarIste(): string {
+  const pem = sifirlamaDogrulamaAnahtari();
+  if (pem === null) throw cakisma('Sıfırdan başla kapalı: imza anahtarı henüz koda girmedi.');
+  return pem;
 }
 
 export async function sifirlamaOzeti(db: Db, kisiId: number, s: SifirlamaSecimi): Promise<SifirlamaOzetiCevabi> {
   await bayrakliIste(db, kisiId);
-  sifirlamaAcikIste();
   const sayilar = await sifirlamaSayilariniOku(db, sifirlamaSatiri(kisiId, s));
-  return { satirlar: sifirlamaOzetSatirlari(sayilar), toplam: Object.values(sayilar).reduce((t, n) => t + n, 0) };
+  const pem = sifirlamaDogrulamaAnahtari();
+  return {
+    satirlar: sifirlamaOzetSatirlari(sayilar), toplam: Object.values(sayilar).reduce((t, n) => t + n, 0), parmakIzi: pem === null ? null : parmakIzi(pem),
+  };
+}
+
+// İstek bu kuruluma, bu ortama ve isteyen yöneticiye bağlıdır; bir saat geçerlidir ve bir kez kullanılır.
+export async function sifirlamaIstegiUret(db: Db, kisiId: number, simdi: Date): Promise<SifirlamaIstegiCevabi> {
+  await bayrakliIste(db, kisiId);
+  const pem = anahtarIste();
+  const istek = yeniSifirlamaIstegi(await kurulumKimliginiOku(db), ortamAdi(), simdi);
+  const metin = sifirlamaIstekMetni(istek);
+  await sifirlamaIstegiYaz(db, { sayi: istek.sayi, metin, kisiId, olusturma: simdi, son: istek.son });
+  return { metin, sayi: istek.sayi, son: istek.son, parmakIzi: parmakIzi(pem) };
+}
+
+// İmza, sunucunun sakladığı metnin baytları üzerinden doğrulanır; metin bayt bayt aynı olmalıdır. İzin kullanılmış sayılır;
+// sıfırlama düşerse işlem geri döner ve izin süresi içinde yeniden kullanılabilir.
+async function izniKullan(db: Db, kisiId: number, izin: { istek: string; imza: string }, simdi: Date): Promise<void> {
+  const pem = anahtarIste();
+  const cozulen = izniCoz(izin);
+  if (cozulen === null) throw dogrulama('İzin dosyası bozuk.', 'izin');
+  const satir = await sifirlamaIsteginiKilitle(db, cozulen.istek.sayi);
+  if (satir === null || satir.metin !== cozulen.metin) throw dogrulama('İzin bu sunucunun verdiği bir isteğe ait değil.', 'izin');
+  if (!imzaGecerliMi(cozulen.metin, cozulen.imza, pem)) throw dogrulama('İzin imzası geçersiz.', 'izin');
+  if (satir.kisiId !== kisiId) throw cakisma('İzin isteği başka bir yönetici adına alınmış.');
+  if (cozulen.istek.ortam !== ortamAdi()) throw cakisma('İzin başka bir ortam için imzalanmış.');
+  if (cozulen.istek.kurulum !== await kurulumKimliginiOku(db)) throw cakisma('İzin başka bir kurulum için imzalanmış.');
+  if (satir.kullanildi !== null) throw cakisma('Bu izin daha önce kullanıldı; yeni istek alın.');
+  if (satir.son.getTime() <= simdi.getTime()) throw cakisma('İznin süresi doldu; yeni istek alın.');
+  await sifirlamaIsteginiKullan(db, cozulen.istek.sayi, simdi);
 }
 
 export async function sifirdanBasla(
-  db: Db, kisiId: number, istek: SifirlamaSecimi & { yedekAdi: string; parola: string }, simdi: Date,
+  db: Db, kisiId: number, istek: SifirlamaSecimi & { yedekAdi: string; parola: string; izin: { istek: string; imza: string } }, simdi: Date,
 ): Promise<SifirlaCevabi> {
   await bayrakliIste(db, kisiId);
-  sifirlamaAcikIste();
+  await izniKullan(db, kisiId, istek.izin, simdi);
   await parolaVeYedekIste(db, kisiId, istek, simdi);
   const sonuc = await sifirdanBaslat(db, sifirlamaSatiri(kisiId, istek), SIFIRLAMA_SURE_MS).catch(sifirlamaHatasiniCevir);
   return { toplam: Object.values(sonuc.tablolar).reduce((t, n) => t + n, 0), yedekAdi: istek.yedekAdi };

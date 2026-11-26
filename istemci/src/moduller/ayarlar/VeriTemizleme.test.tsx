@@ -62,7 +62,10 @@ function sunucuKur(temizleCevabi: { durum: number; govde: unknown } | null = nul
     if (yol === '/yedekler/al') return json(200, { baslangic: '2026-11-17T12:00:00.600Z' });
     if (yol === '/yedekler') return json(200, YEDEKLER);
     if (yol.startsWith('/veri-temizleme/sifirlama-ozeti')) {
-      return json(200, { satirlar: [{ ad: 'Üretim emri', sayi: yol.includes('tanimlar=1') ? 7 : 8 }, { ad: 'Diğer (3 tablo)', sayi: 12 }], toplam: 20 });
+      return json(200, { satirlar: [{ ad: 'Üretim emri', sayi: yol.includes('tanimlar=1') ? 7 : 8 }, { ad: 'Diğer (3 tablo)', sayi: 12 }], toplam: 20, parmakIzi: 'AAAA-BBBB-CCCC-DDDD' });
+    }
+    if (yol === '/veri-temizleme/sifirlama-istegi') {
+      return json(200, { metin: '{"tur":"coremes-sifirlama"}', sayi: '00000000-0000-4000-8000-000000000009', son: '2026-11-26T07:00:00.000Z', parmakIzi: 'AAAA-BBBB-CCCC-DDDD' });
     }
     if (yol === '/veri-temizleme/sifirla') return json(200, { toplam: 20, yedekAdi: YEDEK_ADI });
     if (yol === '/veri-temizleme/temizle' && temizleCevabi !== null) return json(temizleCevabi.durum, temizleCevabi.govde);
@@ -70,6 +73,12 @@ function sunucuKur(temizleCevabi: { durum: number; govde: unknown } | null = nul
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
   }));
   return istekler;
+}
+
+const IZIN = { surum: 1, istek: 'eyJ0dXIiOiJjb3JlbWVzLXNpZmlybGFtYSJ9', imza: 'QUJD', parmak_izi: 'AAAA-BBBB-CCCC-DDDD' };
+async function izinYukle(icerik: string = JSON.stringify(IZIN)) {
+  const girdi = screen.getByLabelText('İzin dosyası') as HTMLInputElement;
+  fireEvent.change(girdi, { target: { files: [new File([icerik], 'istek.txt.izin', { type: 'application/json' })] } });
 }
 
 function ac(islemler: Islem[]) {
@@ -311,7 +320,22 @@ describe('Sistem Ayarları, veri temizleme', () => {
     expect((screen.getByLabelText('Parolanız') as HTMLInputElement).disabled).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Yedek al' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Devam et' }));
+    // 3728: imzalı izin. İstek indirilir; bozuk dosya reddedilir; izin yüklenmeden onay kapalıdır.
+    expect(screen.getByText(/AAAA-BBBB-CCCC-DDDD/)).toBeTruthy();
+    URL.createObjectURL = vi.fn(() => 'blob:istek');
+    URL.revokeObjectURL = vi.fn();
+    const tikla = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    fireEvent.click(screen.getByRole('button', { name: 'İzin isteğini indir' }));
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/veri-temizleme/sifirlama-istegi' && i.yontem === 'POST')).toBe(true));
+    await waitFor(() => expect(tikla).toHaveBeenCalled());
     fireEvent.change(screen.getByLabelText('Parolanız'), { target: { value: 'ornek-parola' } });
+    fireEvent.change(screen.getByLabelText('Onay için SIFIRDAN BASLA yazın'), { target: { value: 'SIFIRDAN BASLA' } });
+    expect(sifirla.disabled).toBe(true);
+    await izinYukle('bozuk');
+    expect(await screen.findByText(/Bu bir izin dosyası değil/)).toBeTruthy();
+    expect(sifirla.disabled).toBe(true);
+    await izinYukle();
+    expect(await screen.findByText('İzin yüklendi')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Onay için SIFIRDAN BASLA yazın'), { target: { value: 'TEMIZLE' } });
     expect(sifirla.disabled).toBe(true);
     fireEvent.change(screen.getByLabelText('Onay için SIFIRDAN BASLA yazın'), { target: { value: 'SIFIRDAN BASLA' } });
@@ -319,8 +343,22 @@ describe('Sistem Ayarları, veri temizleme', () => {
 
     expect(await screen.findByText('Sıfırlandı')).toBeTruthy();
     const gonderilen = istekler.find((i) => i.yol === '/veri-temizleme/sifirla');
-    expect(gonderilen?.govde).toEqual({ kullanicilar: false, tanimlar: true, yedekAdi: YEDEK_ADI, onay: 'SIFIRDAN BASLA', parola: 'ornek-parola' });
+    expect(gonderilen?.govde).toEqual({
+      kullanicilar: false, tanimlar: true, yedekAdi: YEDEK_ADI, onay: 'SIFIRDAN BASLA', parola: 'ornek-parola', izin: { istek: IZIN.istek, imza: IZIN.imza },
+    });
     expect(gonderilen?.kimlik).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it('sıfırdan başla: anahtar kurulmadıysa izin adımı kapalı olduğunu söyler', async () => {
+    sunucuKur();
+    const asil = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) =>
+      (String(adres).includes('/veri-temizleme/sifirlama-ozeti') ? json(200, { satirlar: [], toplam: 0, parmakIzi: null }) : asil(adres, secenek))));
+    ac(['ayarlar.veri-temizle']);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Veri temizleme' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Sıfırdan başla' }));
+    expect(await screen.findByText(/İmza anahtarı henüz kurulmadı/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'İzin isteğini indir' })).toBeNull();
   });
 
   it('sıfırdan başla: sunucu reddederse ileti görünür, sonuç ekranına geçilmez', async () => {
@@ -333,10 +371,14 @@ describe('Sistem Ayarları, veri temizleme', () => {
     fireEvent.click(await screen.findByRole('tab', { name: 'Sıfırdan başla' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Yedek al' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Devam et' }));
+    await izinYukle();
+    expect(await screen.findByText('İzin yüklendi')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Parolanız'), { target: { value: 'ornek-parola' } });
     fireEvent.change(screen.getByLabelText('Onay için SIFIRDAN BASLA yazın'), { target: { value: 'SIFIRDAN BASLA' } });
     fireEvent.click(screen.getByRole('button', { name: 'Sıfırla' }));
     expect(await screen.findByText(/Yedek eski/)).toBeTruthy();
+    // Reddedilen izin de düşer: yeni istek alınır.
+    expect(screen.queryByText('İzin yüklendi')).toBeNull();
     expect(screen.queryByText('Sıfırlandı')).toBeNull();
     // Yedek reddedilince yedek adımı yeniden açılır, onay kapanır.
     expect(await screen.findByRole('button', { name: 'Yedek al' })).toBeTruthy();

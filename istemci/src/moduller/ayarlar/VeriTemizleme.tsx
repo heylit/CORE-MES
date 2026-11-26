@@ -1,7 +1,7 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
-  SifirlaCevabi, SifirlamaOzetiCevabi, TemizleCevabi, TemizlikAdayi, TemizlikAdaylariCevabi, TemizlikEtkisiCevabi, TemizlikKoku, TemizlikTarihi, TemizlikTarihSayisiCevabi, YedekAlCevabi, YedeklerCevabi,
+  SifirlaCevabi, SifirlamaIstegiCevabi, SifirlamaOzetiCevabi, TemizleCevabi, TemizlikAdayi, TemizlikAdaylariCevabi, TemizlikEtkisiCevabi, TemizlikKoku, TemizlikTarihi, TemizlikTarihSayisiCevabi, YedekAlCevabi, YedeklerCevabi,
 } from '#paylasilan/sozlesme/ayarlar.ts';
 import { SIFIRLAMA_ONAY_METNI, TEMIZLIK_ONAY_METNI, TEMIZLIK_TARIHLE_EN_COK_KOK, TEMIZLIK_TURLERI, TEMIZLIK_YEDEK_EN_ESKI_DK, type TemizlikTuru } from '#paylasilan/veri-temizleme.ts';
 import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Rozet, Secim, Sekmeler, Tablo, useBildirim, type Sekme, type Sutun } from '../../ortak/arayuz/index.ts';
@@ -526,10 +526,68 @@ const KALIR = [
 ] as const;
 const bit = (b: boolean): string => (b ? '1' : '0');
 
+// 3728: araçtan çıkan izin dosyası; yalnız istek ve imza sunucuya gider. Biçim bozuksa null.
+type Izin = { istek: string; imza: string };
+function izinOku(metin: string): Izin | null {
+  try {
+    const ham = JSON.parse(metin) as Record<string, unknown>;
+    return typeof ham['istek'] === 'string' && typeof ham['imza'] === 'string' ? { istek: ham['istek'], imza: ham['imza'] } : null;
+  } catch {
+    return null;
+  }
+}
+function dosyaMetni(f: File): Promise<string> {
+  return new Promise((coz, red) => {
+    const r = new FileReader();
+    r.onload = () => { coz(String(r.result)); };
+    r.onerror = () => { red(r.error ?? new Error('Dosya okunamadı')); };
+    r.readAsText(f);
+  });
+}
+function metniIndir(ad: string, metin: string): void {
+  const url = URL.createObjectURL(new Blob([metin], { type: 'text/plain' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = ad;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// İstek indirilir, kullanıcı kendi bilgisayarında gizli anahtarla imzalar, çıkan izin dosyası yüklenir. Gizli anahtar buraya gelmez.
+function IzinAdimi({ parmakIzi, izin, setIzin, kapali }: { parmakIzi: string | null | undefined; izin: Izin | null; setIzin: (i: Izin | null) => void; kapali: boolean }) {
+  const dosya = useRef<HTMLInputElement>(null);
+  const [okumaHatasi, setOkumaHatasi] = useState(false);
+  const istek = useMutation({
+    mutationFn: () => api.post<SifirlamaIstegiCevabi>('/veri-temizleme/sifirlama-istegi', undefined, { istekKimligi: yeniIstekKimligi() }),
+    onSuccess: (c) => { setIzin(null); metniIndir(`coremes-sifirlama-istegi-${c.sayi.slice(0, 8)}.txt`, c.metin); },
+  });
+  const oku = async (f: File) => { const i = izinOku(await dosyaMetni(f).catch(() => '')); setOkumaHatasi(i === null); setIzin(i); };
+  if (parmakIzi === null) return <p className="tc-temizlik-uyari" role="note">İmza anahtarı henüz kurulmadı; sıfırlama kapalı.</p>;
+  return (
+    <>
+      <p className="tc-ayar-aciklama">{`Anahtar parmak izi: ${parmakIzi ?? '…'} (USB'deki anahtarınızla aynı olmalı). İstek bir saat geçerlidir ve bir kez kullanılır.`}</p>
+      <div className="tc-temizlik-izin">
+        <Dugme simge="download" yukleniyor={istek.isPending} disabled={kapali} onClick={() => istek.mutate()}>İzin isteğini indir</Dugme>
+        <Dugme simge="upload" disabled={kapali} onClick={() => dosya.current?.click()}>İzin dosyasını yükle</Dugme>
+        <input ref={dosya} type="file" accept=".izin,application/json,text/plain" hidden aria-label="İzin dosyası"
+          onChange={(o) => { const f = o.target.files?.[0]; o.target.value = ''; if (f) void oku(f); }} />
+      </div>
+      {istek.data !== undefined && (
+        <p className="tc-temizlik-bilgi"><Rozet ton="bilgi">İstek indirildi</Rozet>{` ${new Date(istek.data.son).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })} saatine kadar geçerli.`}</p>
+      )}
+      <p className="tc-ayar-aciklama">İsteği USB'deki araçla imzalayın: node sifirlama-imza.mjs imzala (gizli anahtar) (istek dosyası). Araç izin dosyasını istek dosyasının yanına .izin uzantısıyla yazar. Gizli anahtar dosyasını yüklemeyin.</p>
+      {istek.isError && <DurumKutusu durum="hata" hata={istek.error} mesaj={hataIletisi(istek.error, 'İstek alınamadı.')} />}
+      {okumaHatasi && <DurumKutusu durum="hata" mesaj="Bu bir izin dosyası değil; araçtan çıkan .izin dosyasını seçin." />}
+      {izin !== null && <p className="tc-temizlik-bilgi"><Rozet ton="tamam">İzin yüklendi</Rozet></p>}
+    </>
+  );
+}
+
 function SifirdanBasla() {
   const istemci = useQueryClient();
   const [secim, setSecim] = useState<SifirlamaSecimi>({ kullanicilar: false, tanimlar: false });
   const [yedekAdi, setYedekAdi] = useState<string | null>(null);
+  const [izin, setIzin] = useState<Izin | null>(null);
   const [onay, setOnay] = useState('');
   const [parola, setParola] = useState('');
   const [istekKimligi, setIstekKimligi] = useState(yeniIstekKimligi);
@@ -540,9 +598,9 @@ function SifirdanBasla() {
       `/veri-temizleme/sifirlama-ozeti?kullanicilar=${bit(secim.kullanicilar)}&tanimlar=${bit(secim.tanimlar)}`),
   });
   const sifirla = useMutation({
-    mutationFn: () => api.post<SifirlaCevabi>('/veri-temizleme/sifirla', { ...secim, yedekAdi, onay, parola }, { istekKimligi }),
-    onSuccess: (c) => { setSonuc(c); setParola(''); setOnay(''); void istemci.invalidateQueries(); },
-    onError: (h) => { if (h instanceof ApiHatasi && h.durum === 409) { setYedekAdi(null); setIstekKimligi(yeniIstekKimligi()); } },
+    mutationFn: () => api.post<SifirlaCevabi>('/veri-temizleme/sifirla', { ...secim, yedekAdi, onay, parola, izin }, { istekKimligi }),
+    onSuccess: (c) => { setSonuc(c); setParola(''); setOnay(''); setIzin(null); void istemci.invalidateQueries(); },
+    onError: (h) => { if (h instanceof ApiHatasi && h.durum === 409) { setYedekAdi(null); setIzin(null); setIstekKimligi(yeniIstekKimligi()); } },
   });
   const degistir = (k: keyof SifirlamaSecimi) => (e: { target: { checked: boolean } }) => { setSecim({ ...secim, [k]: e.target.checked }); setIstekKimligi(yeniIstekKimligi()); };
   const gonder = (olay: FormEvent) => { olay.preventDefault(); sifirla.mutate(); };
@@ -598,7 +656,9 @@ function SifirdanBasla() {
         ? <YedekAdimi ilerle={setYedekAdi} />
         : <p className="tc-temizlik-bilgi"><Rozet ton="tamam">Yedek alındı</Rozet>{' '}<span className="tc-temizlik-no">{yedekAdi}</span></p>}
       <p className="tc-ayar-aciklama">Yedek alınmadan onay açılmaz. Geri dönmek için Sistem Ayarları, Yedekler bölümünden bu yedek geri yüklenir.</p>
-      <h3 className="tc-ayar-baslik">3 Onay</h3>
+      <h3 className="tc-ayar-baslik">3 İmzalı izin</h3>
+      <IzinAdimi parmakIzi={ozet.data?.parmakIzi} izin={izin} setIzin={setIzin} kapali={yedekAdi === null || ozet.data === undefined} />
+      <h3 className="tc-ayar-baslik">4 Onay</h3>
       <p className="tc-temizlik-uyari" role="note">İşlem birkaç dakika sürebilir; diğer kullanıcıların oturumu kapanır.</p>
       <form className="tc-temizlik-onay" onSubmit={gonder}>
         <div className="tc-temizlik-suzgec">
@@ -608,7 +668,7 @@ function SifirdanBasla() {
         {sifirla.isError && <DurumKutusu durum="hata" hata={sifirla.error} mesaj={hataIletisi(sifirla.error, 'Sıfırlama yapılamadı; hiçbir kayıt silinmedi.')} />}
         <div className="tc-temizlik-cubuk">
           <Dugme type="submit" tur="tehlike" simge="trash" yukleniyor={sifirla.isPending}
-            disabled={yedekAdi === null || onay !== SIFIRLAMA_ONAY_METNI || parola === '' || ozet.data === undefined}>
+            disabled={yedekAdi === null || izin === null || onay !== SIFIRLAMA_ONAY_METNI || parola === '' || ozet.data === undefined}>
             Sıfırla
           </Dugme>
         </div>
