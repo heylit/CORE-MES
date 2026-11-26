@@ -1609,7 +1609,8 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
   // 1999 a: genişte sıradaki işin "İşi başlat" görevi alttaki ana düğmenin tekrarıdır; çizilmez.
   const simdiSeridi = (mobil: boolean) => {
     const sr = kaliteGorunumu ? null : serit;
-    const g = !mobil && o.state === 'queued' && task?.act === 'start' ? null : task;
+    // 3760: SmartES'ten üretilen işte başlat, bitir gibi görevler terminalden yapılamaz; Şimdi yuvasında düğme olarak çıkmaz.
+    const g = (!mobil && o.state === 'queued' && task?.act === 'start') || (smartesIs && typeof task?.act === 'string' && URETIM_EYLEMLERI.includes(task.act)) ? null : task;
     // 3583: Şimdi yuvası görev olmasa da yerinde durur; yükseklik görevin gelip gitmesiyle oynamaz.
     return <div className="tc-ay1-simdi" data-bos={g || sr ? undefined : ''}>{g ? gorev(mobil, sr) : sr}{!g && !sr && !task ? <p className="tc-ay1-soluk"><Simge ad="clock" boyut="k" />Şimdi: görev yok</p> : null}</div>;
   };

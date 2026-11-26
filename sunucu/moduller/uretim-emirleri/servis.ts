@@ -1077,7 +1077,7 @@ export async function emirDevam(db: Db, kisiId: number, id: number, makineIdleri
   return emirdenCevap(db, id);
 }
 
-export async function emirDurdur(db: Db, kisiId: number, id: number, durusNedeniId: number, isEmriId?: number): Promise<{ emir: Emir }> {
+export async function emirDurdur(db: Db, kisiId: number, id: number, durusNedeniId: number, isEmriId?: number): Promise<{ emir: Emir; olayId: number }> {
   const { emir, adim, istasyonId, calisma } = await komutBaglami(db, kisiId, id, isEmriId);
   const ihlal = durdurmaIhlali(emir.durum, calisma);
   if (ihlal !== null) throw cakisma(ihlal);
@@ -1086,10 +1086,16 @@ export async function emirDurdur(db: Db, kisiId: number, id: number, durusNedeni
   const nedenIhlali = neden !== null && !neden.aktif && kayitKaynaklari.has(db) ? null : durusNedeniIhlali(neden);
   if (nedenIhlali !== null) throw dogrulama(nedenIhlali, 'durusNedeniId');
   const an = await komutAni(db, id);
-  await sorgular.olayEkle(db, id, kisiId, istasyonId, 'durdur', durusNedeniId, an, adim?.id ?? null);
+  const olayId = await sorgular.olayEkle(db, id, kisiId, istasyonId, 'durdur', durusNedeniId, an, adim?.id ?? null);
   await sorgular.emrinKullanimlariniKapat(db, id, kisiId, an, adim?.id ?? null);
   await sorgular.emrinKatilimlariniKapat(db, id, an, adim?.id ?? null);
-  return emirdenCevap(db, id);
+  return { ...(await emirdenCevap(db, id)), olayId };
+}
+
+// 3760 karar 8 a: neden pasif olabilir (eşlemenin hedefi); bulunamayan neden reddedilir.
+export async function durusNedeniniDuzelt(db: Db, yazanKisiId: number, olayId: number, durusNedeniId: number, gerekce: string): Promise<boolean> {
+  if ((await durusNedeniGetir(db, durusNedeniId)) === null) throw dogrulama('Duruş nedeni bulunamadı.', 'durusNedeniId');
+  return sorgular.olayDuzeltmesiEkle(db, olayId, { durusNedeniId, kisiId: null, gerekce, yazanKisiId });
 }
 
 // Yerdeki (makine ya da makinesiz istasyon yeri) işi durdurup bu işi orada başlatır ya da devam ettirir, tek işlemde.

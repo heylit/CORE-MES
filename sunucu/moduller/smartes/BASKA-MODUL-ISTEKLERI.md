@@ -28,3 +28,5 @@ Bu iş o modüllere yazmadı; aşağıdakiler imzalı istektir.
 8. uretim-emirleri: SmartES üretim kilidi (`smartesUretiminiDenetle`, anahtar kapalıyken makine okunmaz), `smartesHareketi`, `smartesHataliKaydi` (`disari.ts`);
    SmartES kaynaklı durdurma pasif nedeni kabul eder. İstek: duruş olayının nedenini sonradan düzelten bir düzeltme kaydı (3760 karar 8; bugün olay değişmez).
 9. arkon: terminal ekranında SmartES şeridi ve kapalı düğmeler (operatör, biten iş).
+10. uretim-emirleri (karar 8 a, yazıldı): `uretim_olayi_duzeltmesi` tablosu ve `uretim_olayi_gecerli` görünümü; `durusNedeniniDuzelt` (`disari.ts`); `emirDurdur`
+    yazdığı olayın kimliğini döner. Okuyan sorgular (duruş süreleri, emir akışı, son olay, kayıt akışı) görünüme geçti.

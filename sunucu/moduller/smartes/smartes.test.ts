@@ -1355,6 +1355,19 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
       ['ayar', 'yazildi', false], ['baslat', 'yazildi', false], ['durdur', 'yazildi', true], ['devam', 'yazildi', false], ['bitir', 'yazildi', false],
     ]);
     assert.equal(await emirDurumu(), 'tamam');
+    // Karar 8 a: duruş adı sonradan eşlenince CORE olayı değişmez; düzeltme kaydı yazılır ve raporların okuduğu görünüm eşlenen nedeni verir.
+    const sahip = ortam!.sahip;
+    const eslenen = (await sahip.tek<{ id: number }>("INSERT INTO durus_nedeni (kod, ad, kategori, sira) VALUES ('ORN-MB', 'ORN Malzeme', 'plansiz', 978) RETURNING id"))!.id;
+    await sahip.sorgu(`INSERT INTO smartes_liste_kaydi (tur, anahtar, smartes_id, ad, var, ham, ilk_gorulme, son_gorulme)
+      VALUES ('durus', 'ad:ORN Malzeme bekleme', NULL, 'ORN Malzeme bekleme', true, '{}', now(), now())`);
+    const esle = await istek('POST', '/smartes/gelen-adlar/esle', { tur: 'durus', anahtar: 'ad:ORN Malzeme bekleme', nedenId: eslenen, sonuc: null, surum: null });
+    assert.equal(esle.statusCode, 200, esle.body);
+    const olay = (s: string) => sahip.tek<{ neden: number }>(
+      `SELECT durus_nedeni_id AS neden FROM ${s} WHERE emir_id = $1 AND olay = 'durdur' ORDER BY id DESC LIMIT 1`, [uretimEmriId]);
+    assert.notEqual((await olay('uretim_olayi'))?.neden, eslenen, 'olay değişmez');
+    assert.equal((await olay('uretim_olayi_gecerli'))?.neden, eslenen);
+    assert.equal((await sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM uretim_olayi_duzeltmesi d JOIN uretim_olayi o ON o.id = d.olay_id WHERE o.emir_id = $1', [uretimEmriId]))?.n, 1);
+    assert.equal((await iz()).some((h) => h.durus_eslenmemis), false);
     // SmartES'te başlangıç sonradan değişirse CORE kaydı kendiliğinden değişmez; inceleme izi bir kez düşer.
     await oku(satir(9760, ilkNo, { aktivite: 1, bitti: true, bitis: t(40), baslangic: t(1) }));
     await oku(satir(9760, ilkNo, { aktivite: 1, bitti: true, bitis: t(40), baslangic: t(1) }));

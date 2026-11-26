@@ -205,7 +205,7 @@ export function sonOlaylarGetir(db: Db, sonra: string | null, sayi: number): Pro
           ORDER BY k.zaman DESC, sira DESC, k.id DESC LIMIT $2)
          UNION ALL
          (SELECT 'o' || o.id, o.emir_id, o.is_emri_id, o.istasyon_id, o.kisi_id, o.olay, NULL, o.durus_nedeni_id, NULL, o.zaman, 1, o.id
-           FROM uretim_olayi o WHERE $1::timestamptz IS NULL OR o.zaman > $1::timestamptz
+           FROM uretim_olayi_gecerli o WHERE $1::timestamptz IS NULL OR o.zaman > $1::timestamptz
           ORDER BY o.zaman DESC, o.id DESC LIMIT $2)
          UNION ALL
          (SELECT 's' || s.id, s.emir_id, s.is_emri_id, s.istasyon_id, s.kisi_id,

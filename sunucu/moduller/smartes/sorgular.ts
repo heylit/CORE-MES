@@ -1306,13 +1306,13 @@ export async function hareketKilitle(db: Db, smartesId: number, sira: number): P
 
 export async function hareketDurumuYaz(
   db: Db, smartesId: number, sira: number,
-  d: { durum: 'kisi-bekliyor' } | { durum: 'yazildi'; kisiId: number; durusNedeniId: number | null; eslenmemis: boolean; zaman: Date } | { durum: 'hata'; hata: string },
+  d: { durum: 'kisi-bekliyor' } | { durum: 'yazildi'; kisiId: number; durusNedeniId: number | null; eslenmemis: boolean; zaman: Date; olayId: number | null } | { durum: 'hata'; hata: string },
 ): Promise<void> {
   if (d.durum === 'yazildi') {
     await db.sorgu(
-      `UPDATE smartes_hareket SET durum = 'yazildi', kisi_id = $3, durus_nedeni_id = $4, durus_eslenmemis = $5, yazilma = $6, hata = NULL
+      `UPDATE smartes_hareket SET durum = 'yazildi', kisi_id = $3, durus_nedeni_id = $4, durus_eslenmemis = $5, yazilma = $6, hata = NULL, olay_id = $7
         WHERE smartes_id = $1 AND sira = $2`,
-      [smartesId, sira, d.kisiId, d.durusNedeniId, d.eslenmemis, d.zaman],
+      [smartesId, sira, d.kisiId, d.durusNedeniId, d.eslenmemis, d.zaman, d.olayId],
     );
   } else if (d.durum === 'hata') {
     await db.sorgu("UPDATE smartes_hareket SET durum = 'hata', hata = $3 WHERE smartes_id = $1 AND sira = $2 AND durum <> 'yazildi'", [smartesId, sira, d.hata]);
@@ -1326,11 +1326,13 @@ export function hareketSayaclari(db: Db): Promise<HareketSayaci[]> {
   return db.sorgu<HareketSayaci>('SELECT durum, count(*)::int AS adet FROM smartes_hareket GROUP BY durum ORDER BY durum');
 }
 
-export async function eslenmemisDuruslariDuzelt(db: Db, ad: string, nedenId: number): Promise<number> {
-  const r = await db.sorgu(
-    "UPDATE smartes_hareket SET durus_nedeni_id = $2, durus_eslenmemis = false WHERE durus_eslenmemis AND aktivite_adi = $1 AND durum = 'yazildi' RETURNING 1",
+// Düzeltilen hareketlerin CORE duruş olayları döner (olayı bilinmeyen eski hareket yalnız izde düzelir).
+export async function eslenmemisDuruslariDuzelt(db: Db, ad: string, nedenId: number): Promise<number[]> {
+  const r = await db.sorgu<{ olayId: number | null }>(
+    `UPDATE smartes_hareket SET durus_nedeni_id = $2, durus_eslenmemis = false WHERE durus_eslenmemis AND aktivite_adi = $1 AND durum = 'yazildi'
+     RETURNING olay_id AS "olayId"`,
     [ad, nedenId]);
-  return r.length;
+  return r.flatMap((x) => (x.olayId === null ? [] : [x.olayId]));
 }
 
 /* ---------------- Geçiş izlemesi (3760) ---------------- */

@@ -110,9 +110,9 @@ export function Gecis() {
       csv: (s) => (s.tur === 'istasyon' ? s.istasyon.kod : s.makine.kod),
     },
     {
-      anahtar: 'kaynak', baslik: 'Üretim kaynağı', kartta: true,
+      anahtar: 'kaynak', baslik: 'Üretim kaynağı', kartta: true, kartTamSatir: true,
       hucre: (s) => (s.tur === 'istasyon' ? <KaynakRozeti kaynak={s.istasyon.kaynak} /> : (
-        <span className="tc-ob-eylem"><KaynakRozeti kaynak={s.makine.etkin} />{s.makine.secim === null && <span className="tc-sm-not">istasyona uyar</span>}</span>
+        <span className="tc-gecis-kaynak"><KaynakRozeti kaynak={s.makine.etkin} />{s.makine.secim === null && <span className="tc-sm-not">istasyona uyar</span>}</span>
       )),
       csv: (s) => KAYNAK_ADI[s.tur === 'istasyon' ? s.istasyon.kaynak : s.makine.etkin],
     },

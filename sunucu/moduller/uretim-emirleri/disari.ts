@@ -119,7 +119,7 @@ export type SmartesHareketi =
   | { tur: 'durdur'; an: string; durusNedeniId: number };
 export const smartesHareketi = (
   db: Db, kisiId: number, id: number, isEmriId: number, h: SmartesHareketi, kaynakKimligi: number,
-): Promise<{ emir: Emir }> => servis.smartesKaynagiyla(db, kaynakKimligi, () => servis.kayitAniyla(db, h.an, async () => {
+): Promise<{ emir: Emir; olayId?: number }> => servis.smartesKaynagiyla(db, kaynakKimligi, () => servis.kayitAniyla(db, h.an, async () => {
   switch (h.tur) {
     case 'ayar': return servis.emirAyar(db, kisiId, id, isEmriId);
     case 'baslat': return servis.emirBaslat(db, kisiId, id, h.makineIdleri, isEmriId);
@@ -129,6 +129,10 @@ export const smartesHareketi = (
     case 'bitir': return servis.emirBitir(db, kisiId, id, undefined, null, undefined, isEmriId);
   }
 }));
+// 3760 karar 8 a: yazılmış duruş olayının nedeni ayrı düzeltme kaydıyla değişir (olay değişmez; raporlar düzeltilmiş nedeni okur).
+// Olay yoksa ya da duruş değilse false. Yazan kişi düzeltmeyi yapandır.
+export const durusNedeniniDuzelt = (db: Db, yazanKisiId: number, olayId: number, durusNedeniId: number, gerekce: string): Promise<boolean> =>
+  servis.durusNedeniniDuzelt(db, yazanKisiId, olayId, durusNedeniId, gerekce);
 // 3760: onaylanan SmartES "Rework" satırı hatalı parça kaydı olur (kalite kararı bekler); terminaldeki hatalı kaydıyla aynı komut. Kişi onaylayandır;
 // SmartES kaynağıyla yazılır (SmartES engeli kalkar).
 export const smartesHataliKaydi = (

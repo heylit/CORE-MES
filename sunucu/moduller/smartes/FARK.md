@@ -82,3 +82,8 @@ Yeni modül; depoda önceki hâli yok. Brief (`SMARTES_PROMPT.md`, .NET/ASMX iç
 - Arayüz düzeltmesi (26.11): terminal kilidi yeni React terminalinde (`istemci/src/moduller/arkon/yeni/operator/Operator.tsx`): işin üretimi SmartES'ten
   geliyorsa şerit nedeni yazar, durum düğmeleri ve telefon eylem çubuğu kapalıdır, SmartES makinesi makine seçiminde kilitlidir. Eski `arkon/web` terminalindeki
   aynı değişiklik yalnız testlerde kullanılır.
+- Karar 8 a (26.11, Soru Merkezi): duruş adı sonradan eşlenince CORE'daki duruş olayına düzeltme kaydı yazılır (uretim-emirleri
+  `uretim_olayi_duzeltmesi`, yalnız eklenir; olay değişmez). Raporlar ve emir akışı olayı `uretim_olayi_gecerli` görünümünden okur (en son düzeltme geçerli).
+  SmartES izi yazdığı duruş olayını tutar (`smartes_hareket.olay_id`). Göçler `20261126172611_uretim_emirleri_olay_duzeltmesi`, `20261126172612_smartes_hareket_olay`.
+  Kişi düzeltmesi tabloda ve görünümde hazır, ama henüz yazan akış yok: yanlış kişi eşlemesinde geçmişi düzeltmek ayrı adımdır; başlat ve bitir kayıtları
+  (uretim_kaydi, makine kullanımı) bu düzeltmenin dışındadır.

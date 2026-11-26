@@ -4,7 +4,7 @@ export {
   type EmirSatiri, type KayitSatiri, birlesmeHedefleri, emirleriGetir, yeniKapananEmirleriGetir, type BitenSuzgeci, bitenEmirSay, bitenEmirleriGetir,
   emirBul, emirKilitle, emirEkle, baslamayiYaz, bitisiYaz, iptaliYaz, anAl, emrinSonAni, baslatmaKaydiVarMi, kayitEkle, type SayimYazisi, sayimEkle,
   ilkParcaOnaysiz, type KararGrubu, type KararBekleyenSatir, kararBekleyenSatirlari, kararSatirlariEkle, bitmisSaglamaEkle, kararSayaclariGetir,
-  adimKararSayaclariGetir, olayEkle, type SayacSatiri, type OlaySatiri, sayaclariGetir, islenenAdetleriGetir, kurulumOlaylariGetir, hurdaToplamlariGetir, kartliEmirHurdalari,
+  adimKararSayaclariGetir, olayDuzeltmesiEkle, olayEkle, type SayacSatiri, type OlaySatiri, sayaclariGetir, islenenAdetleriGetir, kurulumOlaylariGetir, hurdaToplamlariGetir, kartliEmirHurdalari,
   sonHurdaNedeni, sonOlaylariGetir, ayarVarMi, type SureOlaySatiri, isEmriOlaylari, type SureSayimSatiri, isEmriSayimlari, kayitlariGetir,
   malzemeKartiIzleri,
 } from './sorgular/emir/sorgular.ts';

@@ -1502,9 +1502,18 @@ describe('uretim-emirleri (gerçek PostgreSQL)', () => {
         await assert.rejects(baglanti.sorgu(sil, [emir.id]), /yalnız ekleme/, `${tablo} DELETE (${kim})`);
       }
       await assert.rejects(vt().sorgu(`TRUNCATE ${tablo}`), izinYok, `${tablo} TRUNCATE (uygulama)`);
-      await assert.rejects(sahip().sorgu(`TRUNCATE ${tablo}`), /yalnız ekleme/, `${tablo} TRUNCATE (sahip)`);
+      // Olay defterine düzeltme kaydı ve SmartES izi yabancı anahtarla bağlıdır (3760): boşaltma tetikleyiciden önce o bağa takılır; yine yapılamaz.
+      await assert.rejects(sahip().sorgu(`TRUNCATE ${tablo}`), /yalnız ekleme|referenced in a foreign key/, `${tablo} TRUNCATE (sahip)`);
     }
     assert.equal((await toplam(emir.id)).n, 1);
+    // 3760 karar 8 a: düzeltme kaydı da yalnız eklenir.
+    const olayId = (await vt().tek<{ id: number }>('SELECT id FROM uretim_olayi WHERE emir_id = $1 ORDER BY id DESC LIMIT 1', [emir.id]))!.id;
+    const kisi = (await vt().tek<{ id: number }>("SELECT id FROM kisi WHERE kullanici_adi = 'operator'"))!.id;
+    await vt().sorgu("INSERT INTO uretim_olayi_duzeltmesi (olay_id, kisi_id, gerekce, yazan_kisi_id) VALUES ($1, $2, 'ORN deneme', $2)", [olayId, kisi]);
+    for (const [kim, baglanti] of [['uygulama', vt()], ['sahip', sahip()]] as const) {
+      await assert.rejects(baglanti.sorgu('UPDATE uretim_olayi_duzeltmesi SET gerekce = gerekce WHERE olay_id = $1', [olayId]), /yalnız ekleme/, `düzeltme UPDATE (${kim})`);
+      await assert.rejects(baglanti.sorgu('DELETE FROM uretim_olayi_duzeltmesi WHERE olay_id = $1', [olayId]), /yalnız ekleme/, `düzeltme DELETE (${kim})`);
+    }
   });
 
   // UE-HD-1 (kart #1194): terminaldeki hurda -1 emirde eksi adetli düzeltmedir; toplam sıfırın altına inmez.

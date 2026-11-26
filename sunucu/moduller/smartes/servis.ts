@@ -19,7 +19,7 @@ import { durusNedenleriEkle, durusNedenleriniListele, hataNedenleriEkle, hurdaNe
 import { isMerkezleri, istasyonlar, makineler, operasyonTipleri, uretimKaynagiDegistir, uretimKaynakSecimleri, uretimKaynaklari } from '../istasyonlar/disari.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import {
-  emirAdimlari, gunlukAralikAdetleri, isEmriOzeti, isEmriOzetleri, isEmriZamanlari, makinelerdekiIsler, planlanacakIsEmirleri, rotasizIsEmirleri, smartesHareketi, smartesHataliKaydi, smartesSayimi,
+  emirAdimlari, gunlukAralikAdetleri, isEmriOzeti, isEmriOzetleri, isEmriZamanlari, makinelerdekiIsler, planlanacakIsEmirleri, rotasizIsEmirleri, durusNedeniniDuzelt, smartesHareketi, smartesHataliKaydi, smartesSayimi,
 } from '../uretim-emirleri/disari.ts';
 import { kisiAdlari, kisiSecenekleri } from '../kisiler/disari.ts';
 import type { IstemciHatasi, IstemciSonucu, SmartesIstemcisi } from './istemci.ts';
@@ -1097,9 +1097,13 @@ export async function gelenAdEsle(db: Db, kisiId: number, g: GelenAdEsleGovdesi)
       bulunamadiIletisi: 'Eşleme bulunamadı; sayfayı yenileyin.',
     });
   }
-  // 3760: bu adla "Eşlenmemiş (SmartES)" nedeniyle yazılmış duruşlar izde eşlenen nedene düzeltilir. CORE'daki duruş olayı yalnız eklenir
-  // (değişmez); düzeltilmiş neden SmartES izinde durur ve izleme oradan okur.
-  if (g.tur === 'durus') await s.eslenmemisDuruslariDuzelt(db, hedef.ad, g.nedenId);
+  // 3760 karar 8 a: bu adla "Eşlenmemiş (SmartES)" nedeniyle yazılmış duruşlar eşlenen nedene düzeltilir: CORE'da olaya düzeltme kaydı
+  // (olay değişmez, raporlar düzeltilmiş nedeni okur), izde neden. Aynı transaction'da; eşleme yazılmazsa düzeltme de yazılmaz.
+  if (g.tur === 'durus') {
+    for (const olayId of await s.eslenmemisDuruslariDuzelt(db, hedef.ad, g.nedenId)) {
+      await durusNedeniniDuzelt(db, kisiId, olayId, g.nedenId, `SmartES duruş adı eşlendi: ${hedef.ad}`.slice(0, 500));
+    }
+  }
   return gelenAdlar(db, g.tur);
 }
 
@@ -2034,8 +2038,8 @@ export async function hareketleriYaz(db: Db, zaman: Date, secenek: { smartesId?:
         const komut = h.tur === 'durdur' ? { tur: h.tur, an, durusNedeniId: durusNedeniId ?? 0 }
           : h.tur === 'baslat' || h.tur === 'devam' ? { tur: h.tur, an, ...(makineIdleri ? { makineIdleri } : {}) }
             : { tur: h.tur, an };
-        await smartesHareketi(db, kisiId, kapsam.uretimEmriId, kapsam.isEmriId, komut, h.smartesId);
-        await s.hareketDurumuYaz(db, h.smartesId, h.sira, { durum: 'yazildi', kisiId, durusNedeniId, eslenmemis, zaman });
+        const yazilan = await smartesHareketi(db, kisiId, kapsam.uretimEmriId, kapsam.isEmriId, komut, h.smartesId);
+        await s.hareketDurumuYaz(db, h.smartesId, h.sira, { durum: 'yazildi', kisiId, durusNedeniId, eslenmemis, zaman, olayId: yazilan.olayId ?? null });
       });
       if (r.tamam) {
         sonuc.yazilan++;
