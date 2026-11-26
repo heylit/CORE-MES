@@ -281,7 +281,7 @@ function compile(st){olcekKur(st.w);
       /* 3488 c: planlamacının elle bölmesi (st.elleBol, çalışmanın elleBol'u) otomatik bölmenin yerine geçer: pay sayısı, adedi ve tezgâhı
          ondandır; rotadaki "paralel böl" ve bölme ayarı aranmaz. Fason ve yeri sabit adım bölünmez; kilit payları ayrıca kilitlenir.
          3681: başlamış adım da bölünür (çalışan kaynak 1. pay, elleBolCoz); uygulanamayan bölmenin nedeni cx.bolme'de kalır, adım sessizce
-         tek parçaya dönmez. */
+         tek parçaya dönmez. Tek paylı kayıt elle birleştirmedir (3731): adım bölünmez, rotadaki "paralel böl" de uygulanmaz; yerini motor seçer. */
       const gc=st.gercek&&st.gercek[id],gB=gc&&gc.S!=null?gc:null,kayit=st.elleBol&&st.elleBol[id];
       let eb=null;
       if(Array.isArray(kayit)&&kayit.length>=2){
@@ -292,7 +292,8 @@ function compile(st){olcekKur(st.w);
         /* 3681 (Risk N2): fazla sayımla kalanı 0'a inen başlamamış pay plana girmez (en az 1 adet yer tutmaz); tek pay kalırsa adım bölünmemiş gibi yerleşir */
         if(eb){const kalan=eb.filter(x=>x.basladi||x.kalan>0);if(kalan.length<eb.length){elenen[id]=eb.length-kalan.length;eb=kalan.length>=2?kalan:null;}}
       }
-      const N=eb?eb.length:st.w.bol&&o.bol&&!o.fason&&!sabit?Math.max(1,Math.min(adaylar.length,Math.floor(ad0/Math.max(1,+o.minParti||1)),Math.max(1,+st.w.bolMaks||1))):1;
+      const birlesik=Array.isArray(kayit)&&kayit.length===1;
+      const N=eb?eb.length:birlesik?1:st.w.bol&&o.bol&&!o.fason&&!sabit?Math.max(1,Math.min(adaylar.length,Math.floor(ad0/Math.max(1,+o.minParti||1)),Math.max(1,+st.w.bolMaks||1))):1;
       if(N>1)bolunen[id]=[];
       for(let p=0;p<N;p++){
       const pid=p===0?id:id+'~'+(p+1),ep=eb?eb[p]:null,ad=ep?(ep.basladi?ep.adet:Math.max(1,ep.kalan)):N>1?Math.floor(ad0/N)+(p<ad0%N?1:0):ad0;

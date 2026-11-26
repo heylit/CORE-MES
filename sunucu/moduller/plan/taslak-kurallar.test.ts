@@ -775,6 +775,34 @@ describe('3488 c: adımı elle böl', () => {
     assert.equal(ileti(elleBolUygula(c(), bol('S2.10', [['T2', 1], ['T3', 1]]), k)), 'Adımın adedi bölmeye yetmiyor (en az 2).');
   });
 
+  // 3731: rotada "paralel böl" adımı bölme kaydı silinince motorun kendi bölmesine döner; Birleştir'in sonucu tek parçaysa kayıt tek paylı
+  // birleştirme olarak kalır (motor bölmez). Tezgâh: çalışan, yoksa plandaki ilk payın tezgâhı.
+  test('3731: paralel böl adımında bölmeyi kaldırmak tek paylı birleştirme yazar; kayıt yokken de (motorun bölmesi) birleştirir; imza görür', () => {
+    const paralel = (ek: Record<string, unknown> = {}) => c({
+      D: { siparisler: [{ id: 'S1', urun: 'U', adet: 9 }], urunler: [{ id: 'U', rota: [{ k: '10', bol: true, tezgahlar: [{ id: 'T1' }, { id: 'T2' }, { id: 'T3' }] }] }] },
+      plan: { dataVer: 3, ops: { 'S1.10': { m: 'T2', S: 8, job: 'S1' }, 'S1.10~2': { m: 'T3', S: 8, job: 'S1' } } },
+      ...ek,
+    });
+    const motorun = elleBolSilUygula(paralel(), { isId: 'S1.10' }, k);
+    assert.ok('deger' in motorun && motorun.degisti, JSON.stringify(motorun));
+    assert.deepEqual((motorun.deger as Record<string, unknown>).elleBol, { 'S1.10': [{ adet: 9, m: 'T2' }] });
+    assert.deepEqual(imza(motorun.deger).elleBol, { 'S1.10': '9@T2' });
+    assert.notEqual(dizImzasi(motorun.deger, paralel()), dizImzasi(paralel(), paralel()));
+    const b = (motorun.deger as { bekleyen: { ne: string; geri: unknown }[] }).bekleyen[0];
+    assert.deepEqual([b?.ne, b?.geri], ['Bölünmüş adım birleştirildi', [{ yol: ['elleBol'], id: 'S1.10' }]]);
+    const ayni = elleBolSilUygula(motorun.deger, { isId: 'S1.10' }, k);
+    assert.ok('deger' in ayni && !ayni.degisti, 'birleşmiş adım yeniden birleştirilmez');
+    const elle = elleBolSilUygula(paralel({ elleBol: { 'S1.10': [{ adet: 5, m: 'T3' }, { adet: 4, m: 'T1' }] } }), { isId: 'S1.10' }, k);
+    assert.ok('deger' in elle && elle.degisti);
+    assert.deepEqual((elle.deger as Record<string, unknown>).elleBol, { 'S1.10': [{ adet: 9, m: 'T2' }] });
+    const calisan = elleBolSilUygula(paralel({ gercek: { 'S1.10': { m: 'T3', S: 8, n: 2 } } }), { isId: 'S1.10' }, k);
+    assert.ok('deger' in calisan);
+    assert.deepEqual((calisan.deger as Record<string, unknown>).elleBol, { 'S1.10': [{ adet: 9, m: 'T3' }] });
+    // Elle bölme tek paylı kaydın üstüne yazılır (yeniden bölmek).
+    const yeniden = elleBolUygula(motorun.deger, bol('S1.10', [['T1', 5], ['T3', 4]]), k);
+    assert.ok('deger' in yeniden && yeniden.degisti);
+  });
+
   test('silme bölmeyi ve payların kilidini kaldırır; imza, çatışma anahtarı ve dizme imzası bölmeyi görür', () => {
     const r = elleBolUygula(c(), bol('S1.10', [['T2', 6], ['T3', 3]]), k);
     assert.ok('deger' in r);

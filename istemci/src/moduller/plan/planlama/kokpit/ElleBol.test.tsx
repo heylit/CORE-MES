@@ -75,6 +75,13 @@ describe('Kokpit adımı elle böl (3488 c)', () => {
     expect(yazilan).toEqual([{ tur: 'elle-bol-sil', isId: 'ORN-1.20' }]);
   });
 
+  it('3731: tek paylı kayıt (birleştirilmiş adım) kayıtlı bölme sayılmaz: öneri yarı yarıya, Bölmeyi kaldır yok', () => {
+    const { panel } = kur({ kayitli: [{ adet: 9, m: 'ORN-F2' }] });
+    expect(panel.querySelector('[data-kayitli-bolme]')?.textContent).toBe('yok');
+    expect(adetler(panel).map((x) => x.value)).toEqual(['5', '4']);
+    expect(within(panel).queryByRole('button', { name: 'Bölmeyi kaldır' })).toBeNull();
+  });
+
   it('yazamayan kişide form yoktur, nedeni yazar; kapat düğmesi paneli kapatır', () => {
     const { panel, kapat } = kur({ yazabilir: false });
     expect(within(panel).queryByRole('textbox')).toBeNull();

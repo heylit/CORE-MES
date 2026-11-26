@@ -135,6 +135,15 @@ describe('plan: paralel bölme planlama atölyesinde (1952 iş 2a)', () => {
     assert.deepEqual(planla({ istasyon: '10', adet: 1, split: 'tek', elleBol: { 'O1.10': [{ adet: 1, m: '100' }, { adet: 1, m: '101' }] } }).paylar, ['O1.10']);
   });
 
+  test('3731: tek paylı elle kayıt (birleştirme) rotadaki paralel bölmenin yerine geçer: adım bölünmez, yerini motor seçer', () => {
+    assert.equal(planla({ istasyon: '10', adet: 9 }).paylar.length, 3, 'kayıtsız: motorun bölmesi');
+    const { cx, paylar } = planla({ istasyon: '10', adet: 9, elleBol: { 'O1.10': [{ adet: 9, m: '101' }] } });
+    assert.deepEqual(paylar, ['O1.10']);
+    const op = cx.ops.find((o) => o.id === 'O1.10')!;
+    assert.equal(op.adet, 9);
+    assert.deepEqual(new Set(op.c.map((x) => x.m)), new Set(['100', '101', '102']));
+  });
+
   test('3488 c: bölme yazıldıktan sonra adım başlarsa kayıtlı bölme uygulanmaz; adım başladığı tezgâhta bütün kalır', () => {
     const elle = { 'O1.10': [{ adet: 6, m: '102' }, { adet: 3, m: '100' }] };
     const { cx, p, paylar } = planla({ istasyon: '10', adet: 9, split: 'tek', elleBol: elle, gercek: { 'O1.10': { m: '101', S: 0 } } });
