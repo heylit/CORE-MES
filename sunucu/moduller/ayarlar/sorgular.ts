@@ -248,3 +248,27 @@ export async function sifirdanBaslat(
   if (satir === null) throw new Error('Sıfırlama sonucu okunamadı');
   return satir.sonuc;
 }
+
+// "Sıfırdan başla" imzalı izin (3728): kurulum kimliği ve tek kullanımlık istekler.
+export async function kurulumKimliginiOku(db: Db): Promise<string> {
+  const satir = await db.tek<{ kimlik: string }>('SELECT kimlik::text AS kimlik FROM ayarlar_kurulum');
+  if (satir === null) throw new Error('Kurulum kimliği yok');
+  return satir.kimlik;
+}
+
+export async function sifirlamaIstegiYaz(db: Db, i: { sayi: string; metin: string; kisiId: number; olusturma: Date; son: string }): Promise<void> {
+  await db.sorgu('INSERT INTO ayarlar_sifirlama_istegi (sayi, metin, kisi_id, olusturma, son) VALUES ($1, $2, $3, $4, $5)',
+    [i.sayi, i.metin, i.kisiId, i.olusturma, i.son]);
+}
+
+export interface SifirlamaIstegiSatiri { metin: string; kisiId: number | null; son: Date; kullanildi: Date | null }
+
+// Satır kilitlenir: aynı izinle iki sıfırlama aynı anda gelirse ikincisi kullanılmış satırı görür.
+export async function sifirlamaIsteginiKilitle(db: Db, sayi: string): Promise<SifirlamaIstegiSatiri | null> {
+  return db.tek<SifirlamaIstegiSatiri>(
+    'SELECT metin, kisi_id AS "kisiId", son, kullanildi FROM ayarlar_sifirlama_istegi WHERE sayi = $1::uuid FOR UPDATE', [sayi]);
+}
+
+export async function sifirlamaIsteginiKullan(db: Db, sayi: string, an: Date): Promise<void> {
+  await db.sorgu('UPDATE ayarlar_sifirlama_istegi SET kullanildi = $2 WHERE sayi = $1::uuid AND kullanildi IS NULL', [sayi, an]);
+}

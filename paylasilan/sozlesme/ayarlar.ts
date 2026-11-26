@@ -413,6 +413,7 @@ export type TemizlikKoku = z.output<typeof temizlikKoku>;
 const temizlikSecimi = z.array(temizlikKoku).min(1).max(TEMIZLIK_EN_COK_KOK);
 
 const GUN = /^\d{4}-\d{2}-\d{2}$/;
+const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
 export const temizlikAdaylariSorgusu = z.object({
   tur: z.enum(TEMIZLIK_TURLERI),
   baslangic: z.string().regex(GUN).optional(),
@@ -524,6 +525,8 @@ export const sifirlamaOzetiSorgusu = z.object({ kullanicilar: bayrak, tanimlar: 
 export const sifirlamaOzetiCevabi = z.object({
   satirlar: z.array(z.object({ ad: z.string(), sayi: z.number().int().nonnegative() })),
   toplam: z.number().int().nonnegative(),
+  // 3728: imza doğrulama anahtarının parmak izi; kodda anahtar yoksa null ve sıfırlama açılmaz.
+  parmakIzi: z.string().nullable(),
 });
 export type SifirlamaOzetiCevabi = z.output<typeof sifirlamaOzetiCevabi>;
 export const sifirlaGovdesi = z.object({
@@ -532,7 +535,15 @@ export const sifirlaGovdesi = z.object({
   yedekAdi: z.string().max(120).regex(YEDEK_ADI, 'Yedek adı geçersiz.'),
   onay: z.literal(SIFIRLAMA_ONAY_METNI, { message: `Onay için ${SIFIRLAMA_ONAY_METNI} yazın.` }),
   parola: gizli(z.string().min(1, 'Parola zorunlu.').max(200)),
+  // 3728: araçtan çıkan izin dosyası (istek metni ve imzası, base64); öteki alanları yok sayılır.
+  izin: z.object({
+    istek: z.string().min(1).max(2000).regex(BASE64, 'İzin dosyası bozuk.'),
+    imza: z.string().min(1).max(200).regex(BASE64, 'İzin dosyası bozuk.'),
+  }, { message: 'İzin dosyası gerekir.' }),
 });
+// Sunucunun ürettiği, kullanıcının imzalayacağı istek: metin aynen dosyaya yazılır.
+export const sifirlamaIstegiCevabi = z.object({ metin: z.string(), sayi: z.string(), son: zamanSemasi, parmakIzi: z.string() });
+export type SifirlamaIstegiCevabi = z.output<typeof sifirlamaIstegiCevabi>;
 export const sifirlaCevabi = z.object({ toplam: z.number().int().nonnegative(), yedekAdi: z.string() });
 export type SifirlaCevabi = z.output<typeof sifirlaCevabi>;
 

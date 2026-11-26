@@ -550,7 +550,7 @@ export function temizlikYedegiUygunMu(yedek: { zaman: string; boyut: number } | 
 // Sistem: ilk kurulumda satırı olan tablolar (sistemin kendi tanımları; test göç sonrası dolu tabloları buna karşı denetler) ve
 // sistem ayarları. Numara sayaçları da kalır: yeni belge numarası Logo'daki eski belgelerle çakışmaz.
 export const SIFIRLAMA_SISTEM = [
-  'ayar', 'ayar_firma_kodu', 'ayar_numara_sayaci',
+  'ayar', 'ayar_firma_kodu', 'ayar_numara_sayaci', 'ayarlar_kurulum', 'ayarlar_sifirlama_istegi',
   'bildirim_cagri_alicisi', 'bildirim_cagri_ekibi', 'bildirim_eposta_ozel_sablon', 'bildirim_eposta_sablonu', 'bildirim_eposta_tetikleyici', 'bildirim_eposta_yukselt_rolu',
   'bildirim_kademe_ayari', 'bildirim_kademe_baslangic', 'bildirim_olay_acik', 'bildirim_onceki_hal', 'bildirim_kurali', 'bildirim_push_turu', 'bildirim_tur_ayari', 'bildirim_tur_gosterimi', 'bildirim_tur_rolu',
   'cekirdek_aylik_bolum', 'durus_nedeni', 'durus_nedeni_goc_yedek', 'etiket_merkezi_etiket_turu', 'finans_ayar', 'finans_kdv_orani', 'finans_onay_ayari', 'hurda_nedeni', 'hurda_nedeni_goc_yedek',
@@ -599,9 +599,6 @@ export function sifirlamaOzetSatirlari(sayilar: Record<string, number>): { ad: s
   const diger = digerleri.reduce((top, [, n]) => top + n, 0);
   return diger > 0 ? [...ana, { ad: `Diğer (${String(digerleri.length)} tablo)`, sayi: diger }] : ana;
 }
-
-// Varsayılan kapalı: canlı pakette de açık gelmesin; sunucu ortamında TMIV2_SIFIRLAMA_ACIK=1 ile açılır (kullanıcı denemesinden sonra).
-export const sifirlamaAcikMi = (env: Readonly<Record<string, string | undefined>>): boolean => env['TMIV2_SIFIRLAMA_ACIK']?.trim() === '1';
 
 // Sıfırlama tek ifadededir ve süresi silinen satırla doğrusal büyür (deneme ölçümü ~0,1 ms/satır): uçların ortak 10 sn sınırı
 // ~100 bin satırda kesiyordu. Bu sınır yalnız sıfırlama transaction'ında geçerlidir; ~6 milyon satıra yeter.

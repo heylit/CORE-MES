@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { generateKeyPairSync, sign, type KeyObject } from 'node:crypto';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -16,10 +17,16 @@ import {
   SIFIRLAMA_DENETIM, SIFIRLAMA_HER_ZAMAN_KISMI, SIFIRLAMA_KISI, SIFIRLAMA_SISTEM, SIFIRLAMA_TANIM, sifirlamaKapsami, yedekAdi,
 } from './kurallar.ts';
 import { butunOlaylariVeEskiKademeleriAc } from '../bildirim/disari.ts';
+import { sifirlamaTestAnahtariKoy } from './sifirlama-izni.ts';
 
 // "Sıfırdan başla" (3426 a): uygulama verisi ilk kurulum haline döner; yönetici, sistem ayarları ve seçilenler kalır.
 // Her test kendi verisini kurar: sıfırlama önceki testin bıraktığını da siler. Veriler uydurmadır.
 const PAROLA = 'dogru-parola-1';
+// 3728: test kendi anahtar çiftini üretir; gerçek gizli anahtar yalnız kullanıcıdadır.
+const anahtar = generateKeyPairSync('ed25519');
+const yabanciAnahtar = generateKeyPairSync('ed25519');
+const imzala = (metin: string, gizli: KeyObject = anahtar.privateKey) =>
+  ({ istek: Buffer.from(metin).toString('base64'), imza: sign(null, Buffer.from(metin), gizli).toString('base64') });
 
 describe('sıfırdan başla (gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
@@ -78,14 +85,19 @@ describe('sıfırdan başla (gerçek PostgreSQL)', () => {
     await o().vt.tx((db) => yoneticiOlustur(db, { ad: 'ORN Planci', kullaniciAdi, parola: PAROLA }));
     return { planci: kullaniciAdi, istasyon: ist };
   }
+  async function izinAl(cerez: string = yonetici, gizli?: KeyObject): Promise<{ istek: string; imza: string }> {
+    const r = await istek(cerez, 'POST', '/veri-temizleme/sifirlama-istegi');
+    assert.equal(r.statusCode, 200, r.body);
+    return imzala((r.json() as { metin: string }).metin, gizli);
+  }
   const sifirla = async (secim: { kullanicilar: boolean; tanimlar: boolean }, ek: Record<string, unknown> = {}) =>
-    istek(yonetici, 'POST', '/veri-temizleme/sifirla', { ...secim, yedekAdi: await yedekKoy(), onay: 'SIFIRDAN BASLA', parola: PAROLA, ...ek });
+    istek(yonetici, 'POST', '/veri-temizleme/sifirla', { ...secim, yedekAdi: await yedekKoy(), onay: 'SIFIRDAN BASLA', parola: PAROLA, izin: await izinAl(), ...ek });
 
   before(async () => {
     dizin = await mkdtemp(path.join(tmpdir(), 'tmiv2-sifirlama-'));
     process.env['TMIV2_YEDEK_DIZINI'] = dizin;
     process.env['TMIV2_YEDEK_ANAHTARI'] = Buffer.alloc(32, 7).toString('base64');
-    process.env['TMIV2_SIFIRLAMA_ACIK'] = '1';
+    sifirlamaTestAnahtariKoy(anahtar.publicKey.export({ type: 'spki', format: 'pem' }).toString());
     ortam = await testVeritabaniKur('ayarlar_sifirlama');
     // 3478: olaylar varsayılan kapalıdır; bu dosya 3478'den önceki gibi açık olaylarla çalışır.
     await ortam.vt.tx((db) => butunOlaylariVeEskiKademeleriAc(db, null));
@@ -99,7 +111,7 @@ describe('sıfırdan başla (gerçek PostgreSQL)', () => {
     if (dizin !== '') await rm(dizin, { recursive: true, force: true });
     delete process.env['TMIV2_YEDEK_DIZINI'];
     delete process.env['TMIV2_YEDEK_ANAHTARI'];
-    delete process.env['TMIV2_SIFIRLAMA_ACIK'];
+    sifirlamaTestAnahtariKoy(null);
   });
 
   test('sınıflama: ilk kurulumda satırı olan her tablo korunur; listelerdeki her tablo vardır', async () => {
@@ -123,18 +135,43 @@ describe('sıfırdan başla (gerçek PostgreSQL)', () => {
     await o().sahip.sorgu("INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, 'ayarlar.veri-temizle') ON CONFLICT DO NOTHING", [rol]);
     await o().sahip.sorgu("INSERT INTO kisi_rolu (kisi_id, rol_id) SELECT id, $2 FROM kisi WHERE kullanici_adi = $1", [planci, rol]);
     await o().sahip.sorgu("DELETE FROM kisi_rolu WHERE kisi_id = (SELECT id FROM kisi WHERE kullanici_adi = $1) AND rol_id <> $2", [planci, rol]);
-    const r = await istek(bayraksiz, 'POST', '/veri-temizleme/sifirla', { ...secim, yedekAdi: await yedekKoy(), onay: 'SIFIRDAN BASLA', parola: PAROLA });
+    assert.equal((await istek(bayraksiz, 'POST', '/veri-temizleme/sifirlama-istegi')).statusCode, 403);
+    const r = await istek(bayraksiz, 'POST', '/veri-temizleme/sifirla', { ...secim, yedekAdi: await yedekKoy(), onay: 'SIFIRDAN BASLA', parola: PAROLA, izin: await izinAl() });
     assert.equal(r.statusCode, 403, r.body);
     assert.equal((await sifirla(secim, { parola: 'yanlis' })).statusCode, 400);
     assert.equal((await sifirla(secim, { onay: 'SIFIRLA' })).statusCode, 400);
-    // Varsayılan kapalı: ortam değişkeni yoksa özet de sıfırlama da reddedilir.
-    delete process.env['TMIV2_SIFIRLAMA_ACIK'];
-    assert.equal((await istek(yonetici, 'GET', '/veri-temizleme/sifirlama-ozeti?kullanicilar=0&tanimlar=0')).statusCode, 409);
-    assert.equal((await sifirla(secim)).statusCode, 409);
-    process.env['TMIV2_SIFIRLAMA_ACIK'] = '1';
+    // 3728: izin yoksa, bozuksa, başka anahtarla imzalıysa ya da metin değiştirilmişse hiçbir şey silinmez.
+    assert.equal((await sifirla(secim, { izin: undefined })).statusCode, 400);
+    assert.equal((await sifirla(secim, { izin: { istek: 'e30=', imza: 'AAAA' } })).statusCode, 400);
+    assert.equal((await sifirla(secim, { izin: await izinAl(yonetici, yabanciAnahtar.privateKey) })).statusCode, 400);
+    const metin = Buffer.from((await izinAl()).istek, 'base64').toString();
+    // Süreyi uzatan istek: imza kendi içinde geçerli, ama saklanan metinle bayt bayt aynı değil.
+    const degisik = metin.replace(/"son":"[^"]*"/, '"son":"2099-01-01T00:00:00.000Z"');
+    assert.notEqual(degisik, metin);
+    assert.equal((await sifirla(secim, { izin: imzala(degisik) })).statusCode, 400, 'saklanan metinden farklı istek geçmez');
+    // Başka yöneticinin (burada isteyeni boş) aldığı istek bu yöneticiye geçmez.
+    const baskasi = await izinAl();
+    await o().sahip.sorgu(
+      'UPDATE ayarlar_sifirlama_istegi SET kisi_id = NULL WHERE sayi = $1',
+      [(JSON.parse(Buffer.from(baskasi.istek, 'base64').toString()) as { sayi: string }).sayi]);
+    const r3 = await sifirla(secim, { izin: baskasi });
+    assert.equal(r3.statusCode, 409, r3.body);
+    assert.match(r3.body, /başka bir yönetici/);
+    // Süresi dolmuş izin.
+    const eski = await izinAl();
+    const sayi = (JSON.parse(Buffer.from(eski.istek, 'base64').toString()) as { sayi: string }).sayi;
+    await o().sahip.sorgu("UPDATE ayarlar_sifirlama_istegi SET olusturma = now() - interval '2 hours', son = now() - interval '1 minute' WHERE sayi = $1", [sayi]);
+    const r2 = await sifirla(secim, { izin: eski });
+    assert.equal(r2.statusCode, 409, r2.body);
+    assert.match(r2.body, /süresi doldu/);
+    // Özet anahtarın parmak izini gösterir.
+    const oz = sifirlamaOzetiCevabi.parse((await istek(yonetici, 'GET', '/veri-temizleme/sifirlama-ozeti?kullanicilar=0&tanimlar=0')).json());
+    assert.match(String(oz.parmakIzi), /^[0-9A-F]{4}(-[0-9A-F]{4}){3}$/);
     assert.equal((await sifirla(secim, { yedekAdi: yedekAdi(String(process.env['TMIV2_PG_DATABASE']), 'elle', new Date(Date.now() - 2 * 3600_000)) })).statusCode, 409);
     const sonra = await sayilar();
-    for (const [t, n] of once) if (!SIFIRLAMA_DENETIM.includes(t as never) && t !== 'oturum' && t !== 'giris_denemesi' && t !== 'kisi_rolu' && t !== 'rol_islemi') assert.equal(sonra.get(t), n, t);
+    // İstekler yazılır ama hiçbiri kullanılmış sayılmaz: reddedilen sıfırlama izni tüketmez.
+    assert.equal((await o().sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM ayarlar_sifirlama_istegi WHERE kullanildi IS NOT NULL'))!.n, 0);
+    for (const [t, n] of once) if (!SIFIRLAMA_DENETIM.includes(t as never) && t !== 'oturum' && t !== 'giris_denemesi' && t !== 'kisi_rolu' && t !== 'rol_islemi' && t !== 'ayarlar_sifirlama_istegi') assert.equal(sonra.get(t), n, t);
     await o().sahip.sorgu("DELETE FROM rol_islemi WHERE rol_id = $1 AND islem = 'ayarlar.veri-temizle'", [rol]);
   });
 
@@ -180,7 +217,7 @@ describe('sıfırdan başla (gerçek PostgreSQL)', () => {
     for (const [t, n] of sonra) if (!korunur.has(t)) assert.equal(n, 0, `${t} boşalmalı`);
     assert.equal((await s.tek<{ n: number }>("SELECT count(*)::int AS n FROM bildirim_eposta_ozel_sablon WHERE ad = 'ORN Ozel'"))!.n, 1, 'özel e-posta şablonu kalmalı');
     for (const t of SIFIRLAMA_SISTEM) {
-      if (t === 'stok_konum' || t === 'rol') continue;
+      if (t === 'stok_konum' || t === 'rol' || t === 'ayarlar_sifirlama_istegi') continue;
       assert.equal(sonra.get(t), sistemOnce.get(t), `${t} değişmemeli`);
     }
     // İstasyona bağlı stok konumu istasyonla gider; deponun kendi konumları kalır.
@@ -221,8 +258,13 @@ describe('sıfırdan başla (gerçek PostgreSQL)', () => {
     const yetkiOnce = await yetkiSayisi();
     const denetimOnce = (await o().sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM denetim_kaydi'))!.n;
     assert.ok(Number(yetkiOnce) >= 2);
-    const c = await sifirla({ kullanicilar: true, tanimlar: true });
+    const izin = await izinAl();
+    const c = await sifirla({ kullanicilar: true, tanimlar: true }, { izin });
     assert.equal(c.statusCode, 200, c.body);
+    // İzin tek kullanımlıktır ve sıfırlamada kalır.
+    const tekrar = await sifirla({ kullanicilar: true, tanimlar: true }, { izin });
+    assert.equal(tekrar.statusCode, 409, tekrar.body);
+    assert.match(tekrar.body, /daha önce kullanıldı/);
     const sonra = await sayilar();
     assert.equal(sonra.get('uretim_emri'), 0);
     assert.equal(sonra.get('siparisler_siparis'), 0);
