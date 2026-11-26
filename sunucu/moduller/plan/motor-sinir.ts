@@ -48,9 +48,19 @@ export const motorYerlesimi = yerlesim.refine((r) => r.C >= r.S - 1e-9, { messag
 const motorNedeni = z.object({ kod: z.enum(['aday', 'oncul', 'zaman']), oncul: z.string().optional() }).optional().catch(undefined);
 // takvimGun: çözümün kurduğu takvim (gün; 3501 a: sığmayan iş kalınca büyür). Yerleşmeme nedeni aynı takvimle ölçülür.
 // buyumeKesildi: sığmayan iş kaldı ama süre sınırı yüzünden takvim büyütülmedi; neden iletisi ufku değil hesap süresini söyler.
+// olcu (3724): yerleşmeyen iş varken iş parçacığının aldığı ölçü; gelmeyen malzemesi ufukta karşılanmayan siparişler (525 4 a), olculer
+// isteğin fail sırasıyla motorun zamanOlcusu'dur (adayı derlenemeyen iş null). Saatler sonsuz olabilir (malzeme hiç gelmez). Bozuk ölçü
+// planı reddettirmez: düşer, neden "ölçülemedi" kalır.
+const saatDegeri = z.custom<number>((x) => typeof x === 'number' && !Number.isNaN(x));
+const saatSiniri = z.object({ gerekSaat: saatDegeri, enUzunSaat: saatDegeri }).nullable();
+const zamanOlcusu = z.object({
+  ufukGun: saatDegeri, malzemeHazirSaat: saatDegeri.nullable(),
+  adaylar: z.array(z.object({ m: z.string(), ad: z.string().nullable(), acikSaat: saatDegeri, sureSaat: saatDegeri, personelYok: z.boolean(), blok: saatSiniri, ayarci: saatSiniri })),
+});
+const yerlesmemeOlcusu = z.object({ gelmeyen: z.array(z.string()), sinirda: z.boolean(), olculer: z.array(zamanOlcusu.nullable()) }).optional().catch(undefined);
 export const motorPlani = z.object({
   ops: z.record(z.string(), motorYerlesimi), fail: z.array(z.unknown()).optional(), failNeden: z.record(z.string(), motorNedeni).optional(),
-  takvimGun: z.number().int().positive().optional(), buyumeKesildi: z.boolean().optional(),
+  takvimGun: z.number().int().positive().optional(), buyumeKesildi: z.boolean().optional(), olcu: yerlesmemeOlcusu,
 });
 
 export type MotorYerlesimi = z.output<typeof motorYerlesimi>;

@@ -426,7 +426,10 @@ export interface PlanMotoruIstegi extends PlanBenzetimi {
   kisiKuyruklari?: { kisiId: number; anahtarlar: string[] }[];
   kisiAdaylari?: { anahtar: string; kisiIdler: number[] }[];
   kisiSabitleri?: { anahtar: string; kisiId: number; baslangic: string; bitis: string }[];
+  // 3724: aynı sunucuMotoru koşusunun turları aynı nesneyi taşır; çözücü girdisini ve süre sınırını burada tutar, servis içine bakmaz.
+  oturum?: PlanMotoruOturumu;
 }
+export interface PlanMotoruOturumu { sonAn?: number; girdi?: { anahtar: string; deger: unknown } }
 // vardiyasiz (168 b): vardiyası tanımsız tezgâhtaki kuyruk işleri; malzemeBekleyen (525 4 a, 763): katı malzeme kipinde malzemesi ufukta
 // karşılanmayan siparişin işleri. İkisi de hata değildir, yerleşmemiş kalır. yerlesmeyen (981 a-1) de komutu durdurmaz; nedenler anahtara
 // göre nedenidir (örnek: öncülü yerleşmedi).
@@ -799,6 +802,7 @@ async function sunucuMotoru(db: Db, b: Baglam, taslakId: number | null, kuyrukla
   // 1036 a, 1034: yerleşmeyen kol ya da ek adım öncülünü bekleyen iş (bekleyenAdimlar) bu koşuda yerleşmez; motor onlarsız yeniden koşar.
   const sabitAnahtar = new Set([...sabitParcalar.map((x) => x.anahtar), ...calisan]);
   const bekleyen = new Map<number, YerlesmemeNedeni>();
+  const oturum: PlanMotoruOturumu = {};
   for (let tur = 0; ; tur += 1) {
     yer.clear(); makine.clear(); kisi.clear(); parca.clear(); yerlesmez.clear(); yerlesmeyen.length = 0;
     const kisiKuyrugu = kisiKuyruklari.map((q) => ({ kisiId: q.kisiId, anahtarlar: q.isler.filter((i) => !bekleyen.has(i.isId)).map((i) => anahtarOf(i.isId)!) })).filter((q) => q.anahtarlar.length > 0);
@@ -808,7 +812,7 @@ async function sunucuMotoru(db: Db, b: Baglam, taslakId: number | null, kuyrukla
     }));
     const ekler = ekAdimlar.filter((e) => !bekleyen.has(idOf.get(e.anahtar)!) || !adayli.has(idOf.get(e.anahtar)!));
     const sonuc = await planMotoru(db, {
-      ...secenek.benzetim, kip, simdi: new Date(b.simdi), sabitler: [...sabitler, ...secenek.ekSabitler ?? []], calisanlar, taslakId, ...(baglar.length > 0 ? { baglar } : {}), ...(ekler.length > 0 ? { ekAdimlar: ekler } : {}),
+      ...secenek.benzetim, kip, simdi: new Date(b.simdi), sabitler: [...sabitler, ...secenek.ekSabitler ?? []], calisanlar, taslakId, oturum, ...(baglar.length > 0 ? { baglar } : {}), ...(ekler.length > 0 ? { ekAdimlar: ekler } : {}),
       ...(fasonBekleme.length > 0 ? { fasonBekleme: fasonBekleme.filter((x) => !bekleyen.has(x.id)).map(({ anahtar, gun }) => ({ anahtar, gun })) } : {}),
       ekMesai,
       ...(kisiKuyrugu.length > 0 ? { kisiKuyruklari: kisiKuyrugu, ...(kisiAdaylari.length > 0 ? { kisiAdaylari } : {}) } : {}),
