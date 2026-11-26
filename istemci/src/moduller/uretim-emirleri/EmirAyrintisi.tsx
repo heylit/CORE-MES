@@ -24,6 +24,7 @@ import { Ilerleme } from './Ilerleme.tsx';
 import { Iplik } from './Iplik.tsx';
 import { BeklemeSeridi, BekletPenceresi, beklemeNedeni, beklemeSuresi, useBekletOgesi } from './Bekletme.tsx';
 import { RotaBekliyorSeridi } from './RotaBekliyor.tsx';
+import { ParcaRevizyonuSeridi } from './ParcaRevizyonuSeridi.tsx';
 import { GecmisGirisPenceresi, GecmisGirisSeridi, useGecmisGirisOgesi, useSonGecmisGiris } from './GecmisGiris.tsx';
 import { iplikDuraklari, konumDuraklari } from './iplik.ts';
 import { OLAY_ETIKETI, durumGosterimi, farkMetni, kayitAdedi, kayitKisisi, kayitNedeni, parcaRevMetni, saglamSayisi, zamanMetni } from './gorunum.ts';
@@ -290,6 +291,12 @@ function EmirSayfasi({ parcalar }: { parcalar?: EmirParcalari }) {
           <EmrinTerminOnerisi emirId={emir.id} />
           {bekleme && <BeklemeSeridi emirId={emir.id} bilgi={bekleme} />}
           {emir.rotaBekliyor === true && <RotaBekliyorSeridi emirId={emir.id} />}
+          {emir.malzemeNo != null && emir.parcaRevizyonu !== undefined && (
+            <ParcaRevizyonuSeridi
+              emirId={emir.id} emirNo={emir.emirNo} malzemeNo={emir.malzemeNo} surum={emir.surum}
+              parcaRevizyonu={emir.parcaRevizyonu} secimGerekli={emir.parcaRevizyonuSecimGerekli === true}
+            />
+          )}
           <YasamSeridi emir={emir} bekleme={bekleme} />
           <OzetKutulari emir={emir} veri={ayrinti.data} statu={satirEki.statu} bekleme={bekleme} kayitlariAc={() => { sekmeSec('kayitlar'); }} />
           <BekletPenceresi emirId={emir.id} emirNo={emir.emirNo} />
