@@ -16,7 +16,7 @@ import { disDuzeltmeAcik, ortamKoprusu } from './baglanti.ts';
 import { disDuzeltmeTuru, disSiparisOku } from './dis-siparis.ts';
 import type { DisDuzeltmeOrtami } from './dis-siparis.ts';
 import type { KopruIstemcisi } from './kopru.ts';
-import { IS_ARALIGI_MS, OKUMA_ISI_ARALIGI_MS, gunlukSatiri, kapiSonucu, yonetimAkisi } from './kurallar.ts';
+import { IS_ARALIGI_MS, OKUMA_ISI_ARALIGI_MS, gunlukGidenKaynagi, gunlukSatiri, kapiSonucu, yonetimAkisi } from './kurallar.ts';
 import type { YonetimAkisi } from './kurallar.ts';
 import { cariHareketTuru, faturaListesiTuru } from './fatura-cari.ts';
 import { irsaliyeTuru } from './irsaliye.ts';
@@ -98,6 +98,15 @@ export async function gunlugeYaz(vt: TxAcan, k: s.GunlukKaydi, saat: () => Date 
   }
 }
 
+// Neden okunamazsa günlük yine yazılır (yalnız sonucun adıyla); günlük bilgi içindir, turu düşürmez.
+async function nedenOku(vt: TxAcan, oku: (db: Db) => Promise<string | null>): Promise<string | null> {
+  try {
+    return await vt.tx(oku);
+  } catch {
+    return null;
+  }
+}
+
 // 3445: zamanlanmış okumaların sıklık kapısı (süreç belleği). İş her zamanki aralığıyla döner; istek ancak tur sırası gelince çıkar.
 const kapilar = new Map<string, SiklikDurumu>();
 export const kapiDurumu = (anahtar: string): SiklikDurumu => kapilar.get(anahtar) ?? yeniSiklikDurumu();
@@ -137,7 +146,15 @@ export async function kapiliTur(
     throw e;
   }
   if (kapi && d) kapilar.set(kapi.anahtar, turBitti(d, kapiSonucu(sonuc), kapi.enAzTur ?? 1, saat()));
-  const satir = gunlukSatiri(ad, sonuc as Parameters<typeof gunlukSatiri>[1]);
+  const girdi = sonuc as Parameters<typeof gunlukSatiri>[1];
+  let satir = gunlukSatiri(ad, girdi);
+  const kaynak = gunlukGidenKaynagi(ad, girdi.tur);
+  if (satir?.yon === 'yazma' && satir.sonuc === 'hata' && kaynak !== null && girdi.no !== undefined && girdi.sonuc !== undefined) {
+    const no = girdi.no;
+    const tSonuc = girdi.sonuc;
+    const neden = await nedenOku(vt, (db) => s.sonGidenHatasi(db, kaynak, no, tSonuc));
+    if (neden !== null) satir = gunlukSatiri(ad, { ...girdi, ileti: neden });
+  }
   if (satir !== null) await gunlugeYaz(vt, satir, saat);
   return beklemeyeCevir(sonuc);
 }

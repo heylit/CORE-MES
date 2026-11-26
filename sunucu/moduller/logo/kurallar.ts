@@ -2539,7 +2539,42 @@ export function gunlukSatiri(
   if (isAdi === 'logo-satin-alma-gonderimi' && r.tur === 'bekletme') akis = 'siparis-bekletme';
   const tamam = r.sonuc === 'gonderildi' || r.sonuc === 'zaten-vardi' || r.sonuc === 'silindi';
   const no = `Belge ${r.no}`;
-  return { akis, yon: 'yazma', sonuc: tamam ? 'tamam' : 'hata', sayi: null, ileti: tamam ? (r.sonuc === 'gonderildi' ? no : `${no}: ${SONUC_ADI[r.sonuc]}`) : `${no}: ${SONUC_ADI[r.sonuc] ?? r.sonuc}` };
+  if (tamam) return { akis, yon: 'yazma', sonuc: 'tamam', sayi: null, ileti: r.sonuc === 'gonderildi' ? no : `${no}: ${SONUC_ADI[r.sonuc]}` };
+  // 3736: giden kutusuna yazılan neden (Logo'nun ya da CORE'un iletisi) günlükte de görünür; yoksa yalnız sonucun adı.
+  const neden = r.ileti?.trim() ?? '';
+  const ad = SONUC_ADI[r.sonuc] ?? r.sonuc;
+  return { akis, yon: 'yazma', sonuc: 'hata', sayi: null, ileti: `${no}: ${neden === '' ? ad : okumaHataIletisi(r.sonuc, neden)}` };
+}
+
+// 3736: hatalı yazma turunun nedeni hangi giden satırından okunur: kutu, belge türleri ve işlem (logo_giden'de kart gönderimi ile pasife alma
+// ayrı satırdır). Numara belge türleri arasında çakışabilir (sipariş ve talep, teklif ve sipariş); türü bilinmeyen tur null döner ve günlük
+// yalnız sonucun adını yazar, başka belgenin nedeni yazılmaz. Fiş kutusunda numara fişin kimliğidir; tür süzülmez.
+export interface GunlukGidenKaynagi { kutu: 'giden' | 'fis'; belgeler: readonly string[] | null; islem: 'gonder' | 'pasif' | null }
+const SATIN_ALMA_BELGESI: Readonly<Record<string, string>> = {
+  gonderim: 'siparis', guncelleme: 'siparis-guncelleme', bekletme: 'siparis-bekletme', kapatma: 'siparis-kapatma', iptal: 'siparis-iptal',
+  karsilama: 'karsilama', talep: 'talep',
+};
+export function gunlukGidenKaynagi(isAdi: string, tur: string): GunlukGidenKaynagi | null {
+  const giden = (belgeler: readonly string[], islem: 'gonder' | 'pasif' = 'gonder'): GunlukGidenKaynagi => ({ kutu: 'giden', belgeler, islem });
+  switch (isAdi) {
+    case 'logo-malzeme-fisi-gonderimi':
+      return tur === 'malzeme-fisi' ? { kutu: 'fis', belgeler: null, islem: null } : null;
+    case 'logo-malzeme-gonderimi':
+      if (tur === 'gonderim') return giden(['malzeme', 'hizmet']);
+      if (tur === 'guncelleme') return giden(['malzeme-guncelleme']);
+      if (tur === 'pasif') return giden(['malzeme', 'hizmet'], 'pasif');
+      return null;
+    case 'logo-satin-alma-gonderimi': {
+      const belge = SATIN_ALMA_BELGESI[tur];
+      return belge === undefined ? null : giden([belge]);
+    }
+    case 'logo-satis-gonderimi':
+      return tur === 'siparisler-teklifi' || tur === 'siparisler-siparisi' ? giden([tur]) : null;
+    case 'logo-proje-gonderimi':
+      return tur === 'proje' ? giden(['proje']) : null;
+    default:
+      return null;
+  }
 }
 
 // Sıklık kapısına giden sonuç: kayıt geldi mi; kapalı akışta ya da bağlantı yokken null (pencere kapanır, zaman yazılmaz).

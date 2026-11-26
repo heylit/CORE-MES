@@ -22,6 +22,7 @@ import type { SurecBellegi } from './servis.ts';
 import { baglantiTesti, simdiOku, yonetimOzeti } from './yonetim.ts';
 import { baglantiHatasiniTemizle, yardimciCevabiniIzle, yazmaUyarisi } from './yardimci-baglanti.ts';
 import { hazirlik } from './servis.ts';
+import * as s from './sorgular.ts';
 
 const PAROLA = 'dogru-parola-1';
 const DK = 60_000;
@@ -185,6 +186,29 @@ describe('Logo yönetimi: sıklık kapısı, akış günlüğü ve sayfa uçlar�
     assert.ok(!ilk.includes(kopru.anahtar) && !ilk.includes(kopru.adres), ilk);
     const ikinci = g[1]!.ileti ?? '';
     assert.ok(ikinci.length <= 300 && !ikinci.includes('\n'), ikinci);
+  });
+
+  test('3736: hatalı yazma turunun günlük satırı kendi belgesinin nedenini taşır; aynı numaralı başka türün nedeni yazılmaz', async () => {
+    const neden = 'Logo reddetti: Proje kodu Logo\'da zaten kullanılıyor.';
+    const talepNedeni = 'Logo reddetti: Talep fişinde ambar yok.';
+    const deneme = (belge: s.BelgeTuru, no: number, hata: string, dk: number) => o().vt.tx((db) => s.denemeYaz(db, belge, no, {
+      zaman: new Date(simdi + dk * DK), sonuc: 'reddedildi', hata, logoKayitNo: null, niyetZamani: null, sonrakiDeneme: null, basarili: false,
+    }));
+    await deneme('proje', 41, neden, 0);
+    // Aynı numaralı talep daha yeni denendi: proje turunun günlüğü onu almamalı.
+    await deneme('talep', 41, talepNedeni, 1);
+    await kapiliTur(o().vt, 'logo-proje-gonderimi', async () => ({ tur: 'proje', no: 41, sonuc: 'reddedildi' }), undefined, saat);
+    await kapiliTur(o().vt, 'logo-proje-gonderimi', async () => ({ tur: 'proje', no: 42, sonuc: 'reddedildi' }), undefined, saat);
+    await kapiliTur(o().vt, 'logo-satin-alma-gonderimi', async () => ({ tur: 'talep', no: 41, sonuc: 'reddedildi' }), undefined, saat);
+    // Sipariş satırı yok: aynı numaralı talebin nedeni siparişe yazılmaz.
+    await kapiliTur(o().vt, 'logo-satin-alma-gonderimi', async () => ({ tur: 'gonderim', no: 41, sonuc: 'reddedildi' }), undefined, saat);
+    const g = (await gunluk()).filter((x) => x.akis === 'proje' || x.akis === 'satin-alma');
+    assert.deepEqual(g.map((x) => [x.akis, x.sonuc, x.ileti]), [
+      ['proje', 'hata', `Belge 41: ${neden}`],
+      ['proje', 'hata', 'Belge 42: Logo reddetti'],
+      ['satin-alma', 'hata', `Belge 41: ${talepNedeni}`],
+      ['satin-alma', 'hata', 'Belge 41: Logo reddetti'],
+    ]);
   });
 
   test('sayfa uçları: yalnız sayfa işlemiyle görülür, komut ayarlar.yaz ister; cevapta adres ve anahtar yok', async () => {
