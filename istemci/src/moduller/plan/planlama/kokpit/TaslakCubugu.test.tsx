@@ -44,6 +44,16 @@ describe('TaslakCubugu', () => {
     expect(t.vazgec).toHaveBeenCalledTimes(1);
   });
 
+  // 3529: Canlıya al yalnız taslakta değişiklik varken birincildir; yalnız dizme kalan taslakta ikincildir.
+  it('Canlıya al değişiklik varken birincil, yalnız dizme kalmışken ikincildir', () => {
+    ac([satir(TASI, 'a')]);
+    expect(dugme('Canlıya al').className).toContain('tc-dugme-birincil');
+    cleanup();
+    ac([satir(DIZ, 'd')]);
+    expect(screen.getByText('0 değişiklik · canlıya alınmadı')).toBeTruthy();
+    expect(dugme('Canlıya al').className).not.toContain('tc-dugme-birincil');
+  });
+
   it('artık uygulanamayan değişiklik varken Canlıya al kapalıdır ve nedeni yazılır', () => {
     const { u } = ac([satir(TASI, '3.10 → T2', 'tezgâh yok')]);
     expect(screen.getByRole('alert').textContent).toBe('Artık geçerli değil: 3.10 → T2 (tezgâh yok)');

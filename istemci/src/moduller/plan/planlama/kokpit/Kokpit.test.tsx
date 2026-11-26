@@ -374,11 +374,13 @@ describe('Kokpit', () => {
     expect(screen.queryByText(/Bırakmak için tıklayın/)).toBeNull();
   });
 
-  it('Onaya gönder yalnız gönderilebilirken birincildir: plan güncel değilken sayfanın birincili plan çubuğundadır', () => {
+  // 3529: taslakta değişiklik yokken araç çubuğundaki Onaya gönder (Canlıya al) ikincildir; gönderilebilir de olsa sayfada birincil düğme yoktur.
+  it('Onaya gönder taslakta değişiklik yokken ikincildir; gönderilemezken nedeni ipucundadır', () => {
     // Örnek çalışmada veri plandan sonra değişmiştir.
     const c = ornekCalisma();
     ac({ calisma: { ...c, dataVer: c.plan?.dataVer ?? c.dataVer } });
-    expect(screen.getByRole('button', { name: 'Onaya gönder' }).className).toContain('tc-dugme-birincil');
+    expect(screen.getByRole('button', { name: 'Onaya gönder' }).className).not.toContain('tc-dugme-birincil');
+    expect(document.querySelector('.tc-pyq-ust .tc-dugme-birincil')).toBeNull();
     cleanup();
     ac();
     const d = screen.getByRole('button', { name: 'Onaya gönder' });
@@ -866,7 +868,18 @@ describe('Kokpit', () => {
     localStorage.removeItem('coremes.kokpit-satir-boyu');
   });
 
-  // 3457-1 A: Engeller düğmesi hep durur, sayısını taşır; panel açılır, Duruş ve mesai onu kapatır, kapat düğmesi kapatır.
+  // 3529: engel yokken Engeller düğmesi çizilmez (üst çubukta yer kaplamaz); engel varken sayısıyla durur.
+  it('Engeller düğmesi engel yokken çizilmez, engel varken sayısıyla durur', () => {
+    const c = ornekCalisma();
+    ac();
+    expect(document.querySelector('.tc-pyq-ust .tc-pyq-engel-dugme')?.textContent).toMatch(/^[1-9]\d*Engeller$/);
+    cleanup();
+    ac({ calisma: { ...c, plan: c.plan === null ? null : { ...c.plan, fail: [], warn: [], failNeden: {} } } });
+    expect(screen.getByRole('button', { name: 'Plan' })).toBeTruthy();
+    expect(document.querySelector('.tc-pyq-ust .tc-pyq-engel-dugme')).toBeNull();
+  });
+
+  // 3457-1 A: Engeller düğmesi engel varken durur, sayısını taşır; panel açılır, Duruş ve mesai onu kapatır, kapat düğmesi kapatır.
   it('Engeller düğmesi paneli açar ve kapatır; Duruş ve mesai açılınca Engeller kapanır', () => {
     ac();
     const dugme = (): HTMLElement => document.querySelector<HTMLElement>('.tc-pyq-ust .tc-pyq-engel-dugme')!;
@@ -1351,17 +1364,18 @@ describe('Kokpit', () => {
     expect(screen.queryByRole('region', { name: 'Ayarın etkisi' })).toBeNull();
   });
 
-  // 3282 1b, 3561: Ayarlar artık sayfadır (panel yok); Canlıya al düğmesi birincil kalır. Onay sayfası açılınca üst çubuk yoktur.
+  // 3282 1b, 3561: Ayarlar artık sayfadır (panel yok); Canlıya al düğmesi yerinde kalır (taslak yokken ikincil, 3529). Onay sayfası açılınca üst
+  // çubuk yoktur.
   it('Ayarlar menü öğesi sayfaya gider, panel açmaz; onay sayfası açılınca üst çubuk yoktur', async () => {
     vi.spyOn(api, 'get').mockImplementation((() => Promise.reject(new Error('yok'))) as never);
     const c = ornekCalisma();
     const { git } = ac({ calisma: { ...c, dataVer: c.plan?.dataVer ?? c.dataVer }, yetki: yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz', 'plan.canliya-al']) });
     const ust = (): HTMLElement => screen.getByRole('button', { name: /^Canlıya al/ });
-    expect(ust().className).toContain('tc-dugme-birincil');
+    expect(ust().className).not.toContain('tc-dugme-birincil');
     fireEvent.click(arac('Ayarlar'));
     expect(git).toHaveBeenCalledWith('ayarlar');
     expect(screen.queryByRole('complementary', { name: 'Plan ayarları' })).toBeNull();
-    expect(ust().className).toContain('tc-dugme-birincil');
+    expect(ust().className).not.toContain('tc-dugme-birincil');
     fireEvent.click(ust());
     expect(await screen.findByText(/O zamana kadar atölye eski planı görür/, {}, { timeout: 5000 })).toBeTruthy();
     expect(document.querySelector('.tc-pyq-ust')).toBeNull();

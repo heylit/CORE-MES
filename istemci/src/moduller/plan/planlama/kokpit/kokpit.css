@@ -949,6 +949,20 @@
 .tc-pyq-ld-emir-bas b { overflow-wrap: anywhere; }
 .tc-pyq-ld-emir-bas small { color: var(--muted); font-size: var(--yazi-s); }
 .tc-pyq-ust-sade .tc-pyq-ara { flex: 1 1 calc(var(--b-6) * 6); }
+/* 3529: sade üst çubuk 1280'de tek satır. Diğer ve Engeller simgeyle (ad ipucunda ve ekran okuyucuda), arama daralabilir, bölmeler sıkı. */
+@media (max-width: 1439px) {
+  .tc-pyq-ust-sade > .tc-pyq-ok:not(.tc-pyq-ariza) > span, .tc-pyq-ust-sade .tc-pyq-diger > .tc-pyq-ok > span {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
+  .tc-pyq-ust-sade .tc-pyq-ara { flex-basis: calc(var(--b-6) * 3); min-width: calc(var(--b-6) * 3); }
+  .tc-pyq-ust-sade .tc-pyq-seg button, .tc-pyq-ust-sade .tc-pyq-suzgec button { padding: 0 var(--b-2); }
+}
+/* Telefon: arama, Plan ve Diğer ilk satırda; Canlıya al (değişiklik yokken ikincil) en altta, Engeller ve Geri al ile. */
+@media (max-width: 767px) {
+  .tc-pyq-ust-sade .tc-pyq-ara { flex-basis: calc(var(--b-6) * 4); }
+  .tc-pyq-ust-sade .tc-pyq-acilir.tc-pyq-diger { order: -2; }
+  .tc-pyq-ust-sade .tc-pyq-gonder { order: 3; }
+}
 @media (max-width: 1023px) {
   .tc-pyq-ld-ayrinti { grid-template-columns: minmax(0, 1fr); }
 }

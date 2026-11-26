@@ -772,8 +772,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   }, [geri, ileri, sorunSec, tur, secEmir, sec, okla, tasinacak, vurgu]);
 
   // --- canlıya al ---
-  // Plan güncel değilken sayfanın birincil düğmesi plan çubuğundadır (Planı kur / Uygula); Canlıya al o zaman birincil değildir ve nedeni
-  // ipucundadır.
+  // Araç çubuğundaki Canlıya al ikincildir; gönderilemezken nedeni ipucundadır. Birincil olan, taslakta değişiklik varken taslak çubuğundakidir.
   // Bölüm engel varken de açılır: müdür onaydaki planı onaylar, kontrol listesi engeli gösterir.
   const engel = gonderEngeli(c);
   const canliyaAlir = yetki.planCanliyaAl;
@@ -916,7 +915,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const agacNotu = useCallback((e: KokpitEmri) => agacNotlari(m, e, { kol, adimBekle, adimEk }, zaman), [m, kol, adimBekle, adimEk, zaman]);
   const emirNotu = useCallback((e: KokpitEmri) => emirNotlari(m, e, kol), [m, kol]);
   const listeKartlari = useMemo(() => kartlar.filter((k) => k.emirler.some((e) => gorunenKume.has(e.id))), [kartlar, gorunenKume]);
-  // Sayfada tek birincil düğme (2155-9 a): taslak varken çubuktaki Canlıya al; yoksa açık satırın düğmesi, o da yoksa araç çubuğundaki Canlıya al.
+  // Sayfada tek birincil düğme (2155-9 a): taslakta değişiklik varken çubuktaki Canlıya al; yoksa açık satırın düğmesi. Araç çubuğundaki Canlıya al
+  // ikincildir (3529): değişiklik yokken sayfayı tek bir sarı düğmeyle çağırmaz.
   const satirBirincil = !taslakVar && vurgu && satirBirincilIster(listeKartlari.find((k) => k.kok === kart));
   // Açık satırın adımına basınca iş seçilir ve tezgâhlarda görünüme gelir; seçili adıma yeniden basmak bırakır.
   const listeAdimSec = useCallback((emirId: string, isId: string): void => {
@@ -939,6 +939,13 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     </>
   );
   const listeTahtasi = listeTahtasiYap(false);
+  // Engel yokken düğme çizilmez (3529): üst çubukta yer kaplamaz. Panel açıkken sayı sıfıra düşse de kapatılabilsin diye durur.
+  const engelDugmesi = (engelOzet.toplam > 0 || engelAcik) && (
+    <button type="button" className="tc-pyq-ok tc-pyq-engel-dugme" aria-pressed={engelAcik} data-engel-var={engelOzet.toplam > 0 ? '' : undefined}
+      title="Son planda plana girmeyen adımlar ve uyarılar; nedeni ve ne yapılacağı" disabled={tur !== null || onayAcik} onClick={engelAc}>
+      <Simge ad="alert" boyut="k" /><b>{engelOzet.toplam}</b><span>Engeller</span>
+    </button>
+  );
   // Plan menüsü (3504 b): sade ve ayrıntılı Kokpit'te aynıdır. Üç fiil: Planı güncelle (sıra korunur), Baştan kur (sıra da değişir), Yerleştir
   // (yeri olmayan işe yer). İlk bakışta üç satır (3414); kısmi baştan kurma, seçili siparişi yerleştirme ve yön ayarı Diğer seçeneklerdedir.
   const planMenusu = (kapat: () => void): ReactNode => {
@@ -1020,14 +1027,11 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
               <Simge ad="clock" boyut="k" /><b>{ufukDisiSay}</b><span>Ufka sığmayan</span>
             </button>
           )}
-          <button type="button" className="tc-pyq-ok tc-pyq-engel-dugme" aria-pressed={engelAcik} data-engel-var={engelOzet.toplam > 0 ? '' : undefined}
-            title="Son planda plana girmeyen adımlar ve uyarılar; nedeni ve ne yapılacağı" disabled={tur !== null || onayAcik} onClick={engelAc}>
-            <Simge ad="alert" boyut="k" /><b>{engelOzet.toplam}</b><span>Engeller</span>
-          </button>
+          {engelDugmesi}
           <label className="tc-pyq-ara"><Simge ad="search" boyut="k" /><input type="search" value={ara} placeholder="Sipariş, emir, ürün, tezgâh" aria-label="Ara" onChange={(ev) => { setAra(ev.target.value); }} /></label>
           {yazabilir && adim > 0 && <button type="button" className="tc-pyq-ok" title="Geri al (Ctrl+Z): son değişikliğiniz" disabled={mesgul} onClick={() => { geri(); }}><Simge ad="chev-left" boyut="k" /><span>Geri al</span><Sayi n={adim} /></button>}
           {yazabilir && <Acilir ad="Plan" etiket="Plan" simge="play" sinif="tc-pyq-planla" disabled={mesgul || tur !== null}>{planMenusu}</Acilir>}
-          <Acilir ad="Diğer" etiket="Diğer" simge="wrench">
+          <Acilir ad="Diğer" etiket="Diğer" simge="wrench" sinif="tc-pyq-diger">
             {(kapat) => (
               <>
                 <button type="button" role="menuitemcheckbox" aria-checked={butunTezgahlar} onClick={() => { kapat(); setButunTezgahlar(!butunTezgahlar); }}><Simge ad="layers" boyut="k" /><span>Bütün tezgâhları göster</span></button>
@@ -1041,7 +1045,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
             )}
           </Acilir>
           {(yazabilir || canliyaAlir) && !taslakVar && (
-            <Dugme className="tc-pyq-gonder" tur={engel !== null || satirBirincil ? 'ikincil' : 'birincil'} simge={canliyaAlir ? 'check' : 'upload'} disabled={mesgul} title={engel ?? undefined} onClick={() => { setOnayTaslaktan(false); setOnayAcik(true); }}>
+            <Dugme className="tc-pyq-gonder" simge={canliyaAlir ? 'check' : 'upload'} disabled={mesgul} title={engel ?? undefined} onClick={() => { setOnayTaslaktan(false); setOnayAcik(true); }}>
               {canliyaAlir ? 'Canlıya al' : 'Onaya gönder'}<Sayi n={onayda} />
             </Dugme>
           )}
@@ -1069,10 +1073,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
             <Simge ad="wrench" boyut="k" /><b>{arizali}</b><span>Arıza</span>
           </button>
         )}
-        <button type="button" className="tc-pyq-ok tc-pyq-engel-dugme" aria-pressed={engelAcik} data-engel-var={engelOzet.toplam > 0 ? '' : undefined}
-          title="Son planda plana girmeyen adımlar ve uyarılar; nedeni ve ne yapılacağı" disabled={tur !== null || onayAcik} onClick={engelAc}>
-          <Simge ad="alert" boyut="k" /><b>{engelOzet.toplam}</b><span>Engeller</span>
-        </button>
+        {engelDugmesi}
         <label className="tc-pyq-ara"><Simge ad="search" boyut="k" /><input type="search" value={ara} placeholder="Emir, sipariş, ürün, tezgâh" aria-label="Ara" onChange={(ev) => { setAra(ev.target.value); }} /></label>
         <span className="tc-pyq-gorunum-satiri" id="tc-pyq-gorunum" data-kapali={gorunumAcik || goz !== 'T' ? undefined : ''}>
           <span className="tc-pyq-seg" role="group" aria-label="Görünüm">
@@ -1116,7 +1117,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         </Acilir>
         {/* Taslak varken canlıya alma taslak çubuğundaki tek düğmeyle yapılır (3282-5 a); burada ikinci aynı adlı düğme durmaz. */}
         {(yazabilir || canliyaAlir) && !taslakVar && (
-          <Dugme className="tc-pyq-gonder" tur={tur || engel !== null || ayarAcik || onayAcik ? 'ikincil' : 'birincil'} simge={canliyaAlir ? 'check' : 'upload'} aria-pressed={onayAcik}
+          <Dugme className="tc-pyq-gonder" simge={canliyaAlir ? 'check' : 'upload'} aria-pressed={onayAcik}
             disabled={mesgul || tur !== null} title={tur ? 'Tur bitince açılır' : engel ?? undefined} onClick={() => { setOnayTaslaktan(false); setOnayAcik(!onayAcik); }}>
             {canliyaAlir ? 'Canlıya al' : 'Onaya gönder'}<Sayi n={onayda} />
           </Dugme>

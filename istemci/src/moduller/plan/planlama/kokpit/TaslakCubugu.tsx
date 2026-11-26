@@ -7,6 +7,7 @@ import { hesapSuresiEki, useGecenSaniye } from '../motor/ust/HesapSuresi.tsx';
 // Taslak çubuğu (3282 1d-2b, 1d-3): kişinin taslağı varken üst şeridin altında durur. Değişiklik sayısı, artık uygulanamayanlar ve bayat dizme
 // burada görünür; Geri al son değişikliği, Vazgeç bütün taslağı siler. Tek birincil düğme (Canlıya al ya da Onaya gönder, 3282-5 a) taslağı
 // ortak çalışmaya yazar ve aynı adımda Onay ve canlı bölümünü açar: canlıya alma onaylı onay akışıyla kalır (dört göz, müşteri, kayma).
+// Taslakta değişiklik yokken (yalnız dizme) düğme ikincildir (3529).
 // Başkası aynı emre, tezgâha ya da plan ayarına dokunduysa önce anahtar başına "benimki / onunki" seçilir.
 
 export interface TaslakCubuguOzellikleri {
@@ -66,7 +67,7 @@ export function TaslakCubugu({ taslak, ozet, canliyaAlir, kilit = null, seritteG
       <span className="tc-pyq-taslak-dugmeler">
         <Dugme simge="chev-left" disabled={bekle || o.n === 0} onClick={() => { void taslak.geriAl(); }}>Geri al</Dugme>
         <Dugme simge="x" disabled={bekle} onClick={() => { setVazgecAcik(true); }}>Vazgeç</Dugme>
-        <Dugme tur="birincil" simge={canliyaAlir ? 'check' : 'upload'} disabled={bekle || engel !== null} title={engel ?? 'Değişikliklerinizi plana yazar, onay sayfasını açar.'} onClick={() => { void yaz(); }}>{ad}</Dugme>
+        <Dugme tur={o.n > 0 ? 'birincil' : 'ikincil'} simge={canliyaAlir ? 'check' : 'upload'} disabled={bekle || engel !== null} title={engel ?? 'Değişikliklerinizi plana yazar, onay sayfasını açar.'} onClick={() => { void yaz(); }}>{ad}</Dugme>
       </span>
       <OnayPenceresi
         acik={vazgecAcik} baslik="Değişikliklerden vazgeçilsin mi?" onayMetni="Değişiklikleri sil" tehlikeli
