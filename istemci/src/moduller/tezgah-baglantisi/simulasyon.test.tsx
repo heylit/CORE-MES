@@ -1,10 +1,13 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { ORNEK_AYRINTI } from './fikstur.ts';
 import { Simulasyon } from './Simulasyon.tsx';
 import { anDegeri, bosluktaMi, eksenleriBul, oranla, oynatmaAnlari } from './simulasyon.ts';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 const konumsuz = () => {
   const a = ORNEK_AYRINTI();
@@ -20,6 +23,12 @@ describe('simülasyon: saf kurallar', () => {
     const bos = a.alanlar.map((x) => (x.kimlik === 'zpos' ? { ...x, deger: '' } : x));
     expect(eksenleriBul(bos).find((s) => s.eksen === 'Z')?.simdi).toBeNull();
     expect(eksenleriBul(konumsuz().alanlar)).toEqual([]);
+  });
+
+  it('saat fikstür kurulurken ilerlese de eksenlerin geri oynatma anları ortaktır', () => {
+    let t = Date.parse('2026-11-24T12:00:00Z');
+    vi.spyOn(Date, 'now').mockImplementation(() => t++);
+    expect(oynatmaAnlari(eksenleriBul(ORNEK_AYRINTI().alanlar))).toHaveLength(5);
   });
 
   it('geri oynatma anı için son bilinen değer alınır; ilk noktadan önce değer yoktur; ölçek son saatin aralığıdır', () => {
