@@ -11,13 +11,13 @@ import { KAPATILABILIR_YOLLAR } from '#paylasilan/sayfalar.ts';
 import { tarihAraliginiCoz } from '#paylasilan/tarih-araligi.ts';
 import { ETKILER, gorunumCevabi, kurumLogosuSemasi, type Etki } from '#paylasilan/sozlesme/ayarlar.ts';
 import type { FirmaKodlariCevabi, FirmaKodu, FirmaKoduDuzenleGovdesi, FirmaKoduEkleGovdesi } from '#paylasilan/sozlesme/ayarlar.ts';
-import type { Ayar, AyarlarCevabi, GirisSesiCevabi, GorunumCevabi, KapaliSayfalarCevabi, KarsilamaCevabi, KurumCevabi, KurumLogosuCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
+import type { Ayar, AyarlarCevabi, GirisSesiCevabi, NumaraSayaclariCevabi, GorunumCevabi, KapaliSayfalarCevabi, KarsilamaCevabi, KurumCevabi, KurumLogosuCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { ayarDegistiBildir } from './ayar-olaylari.ts';
-import { beklenenTutarMi, degeriDogrula, gecerliDeger, listeDegeri, oncekiDeger } from './kurallar.ts';
+import { beklenenTutarMi, degeriDogrula, gecerliDeger, listeDegeri, numaraSayacGorunumu, oncekiDeger } from './kurallar.ts';
 import {
   ayarDegeriniOku, ayarDegeriniSil, ayarDegeriniYaz, ayarDegerleriniOku, ayarGuncellemeleriniOku, ayarKilitle, firmaKoduEkle as firmaKoduSatiriEkle, firmaKoduGuncelle,
-  firmaKoduIdIleOku, firmaKoduOku, firmaKodlariniKilitle, firmaKodlariniOku, sayacArtir, simdikiYilAy, varsayilanFirmaKoduOku, varsayilaniBirak,
+  firmaKoduIdIleOku, firmaKoduOku, firmaKodlariniKilitle, firmaKodlariniOku, numaraSayaclariniOku, sayacArtir, simdikiYilAy, varsayilanFirmaKoduOku, varsayilaniBirak,
 } from './sorgular.ts';
 
 const DEGISTIR_YOLU = '/ayarlar/:anahtar/degistir';
@@ -76,6 +76,21 @@ export async function numaraAl(db: Db, anahtar: NumaraAnahtari, istek: NumaraIst
     if (!(await istek.varMi(no))) return no;
   }
   throw new Error(`Numara üretilemedi: ${anahtar} kalıbında ${ATLAMA_EN_COK} dolu numara atlandı.`);
+}
+
+// 3747: her numara kalıbının kayıtlı kalıba göre bu dönemdeki sayaçları; okunamayan kalıp varsayılana dönmez, satırı sayaçsız gelir.
+export async function numaraSayaclari(db: Db): Promise<NumaraSayaclariCevabi> {
+  const saklananlar = await ayarDegerleriniOku(db);
+  const { yil, ay } = await simdikiYilAy(db);
+  const kaliplar = AYAR_ANAHTARLARI.flatMap((anahtar) => {
+    const tanim = ayarTanimi(anahtar);
+    if (tanim.tur !== 'numara') return [];
+    const { deger } = listeDegeri(anahtar, saklananlar.find((s) => s.anahtar === anahtar) ?? null);
+    return [{ anahtar, modul: tanim.modul, kalip: typeof deger === 'string' ? deger : null }];
+  });
+  const gorunum = numaraSayacGorunumu(kaliplar, [], yil, ay);
+  const satirlar = await numaraSayaclariniOku(db, gorunum.map((g) => g.anahtar), gorunum.map((g) => g.donem));
+  return { yil, ay, numaralar: numaraSayacGorunumu(kaliplar, satirlar, yil, ay).map(({ donem: _donem, ...n }) => n) };
 }
 
 export async function ayarlariListele(db: Db): Promise<AyarlarCevabi> {

@@ -2,7 +2,6 @@ import { Fragment, useId, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import { agAraligiHatasi } from '#paylasilan/ag-araligi.ts';
-import { kalipHatasi, numaraKur } from '#paylasilan/numara.ts';
 import { tarihAraligiHatasi } from '#paylasilan/tarih-araligi.ts';
 import { tesisGunBasi, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import type { Ayar, AyarDegistirGovdesi, AyarlarCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
@@ -19,6 +18,7 @@ import { BaglantiHazirligi } from './BaglantiHazirligi.tsx';
 import { EpostaAyarlari } from './EpostaAyarlari.tsx';
 import { GORUNUM_ANAHTARLARI, GorunumAyarlari } from './GorunumAyarlari.tsx';
 import { Guncelleme } from './Guncelleme.tsx';
+import { NumaraKurallari } from './NumaraKurallari.tsx';
 import { OrtakCihazlar } from './OrtakCihazlar.tsx';
 import { SayfaAyarlari } from './SayfaAyarlari.tsx';
 import { VeriTemizleme } from './VeriTemizleme.tsx';
@@ -28,7 +28,6 @@ import { KurumLogosu, SurumBilgisi } from './KurumAyarlari.tsx';
 import './ayarlar.css';
 
 type SayiAyari = Extract<Ayar, { tur: 'sayi' }>;
-type NumaraAyari = Extract<Ayar, { tur: 'numara' }>;
 type MetinAyari = Extract<Ayar, { tur: 'metin' }>;
 type SecimAyari = Extract<Ayar, { tur: 'secim' }>;
 type AyarDegeri = Ayar['deger'];
@@ -84,49 +83,6 @@ function SayiSatiri({ ayar, mesgul, degistir }: { ayar: SayiAyari; mesgul: boole
   );
 }
 
-// Önizlemedeki belge alanı değerleri yer tutucudur; gerçek değeri numarayı isteyen modül verir.
-const ORNEK_ALANLAR: Readonly<Record<string, string>> = { FIRMA: 'FRM', PROJE: 'PRJ', PARCA: 'PRC', TUR: 'HM' };
-
-export function numaraOnizlemesi(kalip: string, alanlar: readonly string[], tarih: Date): { ornek: string } | { hata: string } {
-  const hata = kalipHatasi(kalip, alanlar);
-  if (hata !== null) return { hata };
-  const ornekAlanlar = Object.fromEntries(alanlar.map((a) => [a, ORNEK_ALANLAR[a] ?? a]));
-  return { ornek: numaraKur(kalip, { yil: tarih.getFullYear(), ay: tarih.getMonth() + 1, sira: 1, alanlar: ornekAlanlar }) };
-}
-
-function NumaraSatiri({ ayar, mesgul, degistir }: { ayar: NumaraAyari; mesgul: boolean; degistir: (deger: string) => void }) {
-  const [metin, setMetin] = useState(() => ayar.deger ?? '');
-  const [kayitli, setKayitli] = useState(ayar.deger);
-  if (kayitli !== ayar.deger) { setKayitli(ayar.deger); setMetin(ayar.deger ?? ''); }
-  const temiz = metin.trim();
-  const onizleme = numaraOnizlemesi(temiz, ayar.alanlar, new Date());
-  const degisti = 'ornek' in onizleme && (temiz !== ayar.deger || ayar.gecersiz === true);
-  const kullanilabilir = ['{YYYY}', '{YY}', '{AA}', '{SAYAC:n}', ...ayar.alanlar.map((a) => `{${a}}`)].join(' ');
-  const gonder = (olay: FormEvent) => {
-    olay.preventDefault();
-    if (degisti) degistir(temiz);
-  };
-  return (
-    <li className="tc-ayar">
-      <div className="tc-ayar-metin">
-        <p className="tc-ayar-baslik">{ayar.baslik}</p>
-        <p className="tc-ayar-aciklama">{ayar.aciklama}</p>
-        <GecersizIsareti ayar={ayar} />
-      </div>
-      <form className="tc-ayar-sayi" onSubmit={gonder}>
-        <Girdi
-          etiket={ayar.baslik}
-          value={metin}
-          onChange={(olay) => setMetin(olay.target.value.toLocaleUpperCase('tr-TR'))}
-          ipucu={'ornek' in onizleme ? `Örnek: ${onizleme.ornek} · Alanlar: ${kullanilabilir}` : `Alanlar: ${kullanilabilir}`}
-          hata={'hata' in onizleme ? onizleme.hata : undefined}
-          disabled={mesgul}
-        />
-        <Dugme type="submit" tur="birincil" simge="check" disabled={mesgul || !degisti}>Kaydet</Dugme>
-      </form>
-    </li>
-  );
-}
 
 // Sunucu baştaki ve sondaki boşluğu atar; kutu aynı ölçüyle karşılaştırır ki boşluk eklemek "değişti" sayılmasın.
 function MetinSatiri({ ayar, mesgul, degistir }: { ayar: MetinAyari; mesgul: boolean; degistir: (deger: string) => void }) {
@@ -259,7 +215,8 @@ function AyarSatiri({ ayar, mesgul, degistir }: { ayar: Ayar; mesgul: boolean; d
   // Başka kayıtlarla birlikte değişen ayar (raf kodlama) burada yalnız okunur; değiştirdiği ekran adıyla gösterilir.
   if (ayar.degistirenEkran !== undefined) return <SaltOkunurSatir ayar={ayar} ekran={ayar.degistirenEkran} />;
   if (ayar.tur === 'sayi') return <SayiSatiri ayar={ayar} mesgul={mesgul} degistir={degistir} />;
-  if (ayar.tur === 'numara') return <NumaraSatiri ayar={ayar} mesgul={mesgul} degistir={degistir} />;
+  // Numara kalıpları kendi sekmesinde, sayaçlarıyla birlikte çizilir (NumaraKurallari).
+  if (ayar.tur === 'numara') return null;
   if (ayar.tur === 'metin') return <MetinSatiri ayar={ayar} mesgul={mesgul} degistir={degistir} />;
   if (ayar.tur === 'secim') return <SecimSatiri ayar={ayar} mesgul={mesgul} degistir={degistir} />;
   return (
@@ -547,7 +504,7 @@ export function SistemAyarlari({ ekranlar = ayarEkranlari }: { ekranlar?: readon
               Firma kodu ({'{FIRMA}'}) Firma kodları sekmesinde tanımlanır; kalıpta varsa her firmanın sırası ayrıdır, firma kodu boş kayıt
               varsayılan kodu alır, {'{FIRMA}'} boş kalırsa yanındaki tire de düşer. Kalıbı değiştirmek yalnız yeni kayıtları etkiler.
             </p>
-            <AyarListesi baslik="Numara kuralları" kategori="numara" />
+            <NumaraKurallari />
           </>
         )}
         {gecerli === 'formlar' && <Formlar ekranlar={formEkranlari} />}

@@ -2,7 +2,7 @@ import { ikiliCevap, ikiliCevapYaDaBos, uc } from '#cekirdek/uc.ts';
 import {
   ayarDegistirGovdesi, ayarParametresi, firmaKodlariCevabi, firmaKoduDuzenleGovdesi, firmaKoduEkleGovdesi, firmaKoduParametresi, firmaKoduSemasi, ayarSemasi, ayarlarCevabi, guncellemeIlerlemesiCevabi, guncellemePaketiSemasi, guncellemePaketleriCevabi,
   guncellemeParcasiCevabi, guncellemeParcasiGovdesi, guncellemeSilCevabi, guncellemeUygulamaIstegi, guncellemeUygulaParametresi, guncellemeYuklemeParametresi,
-  girisSesiCevabi, gorunumCevabi, kapaliSayfalarCevabi, kapaliSayfalarGovdesi, karsilamaCevabi, kurumCevabi, kurumLogosuCevabi, kurumLogosuGovdesi, yedekAlCevabi,
+  girisSesiCevabi, gorunumCevabi, kapaliSayfalarCevabi, numaraSayaclariCevabi, kapaliSayfalarGovdesi, karsilamaCevabi, kurumCevabi, kurumLogosuCevabi, kurumLogosuGovdesi, yedekAlCevabi,
   yedekDiziniCevabi, yedekDiziniGovdesi, yedekIndirSorgusu, yedekIndirmeIzniCevabi, yedekParametresi, yedeklerCevabi,
   sifirlaCevabi, sifirlaGovdesi, sifirlamaIstegiCevabi, sunucuSureciCevabi, yenidenBaslatCevabi, sifirlamaOzetiCevabi, sifirlamaOzetiSorgusu, temizleCevabi, temizleGovdesi, temizlikAdaylariCevabi, temizlikAdaylariSorgusu, temizlikEtkisiCevabi, temizlikEtkisiSorgusu, temizlikIsaretCevabi,
   temizlikIsaretGovdesi,
@@ -12,7 +12,7 @@ import {
 } from '#paylasilan/sozlesme/ayarlar.ts';
 import { ilerlemeOku, ortamdanOku, paketiSil, paketleriListele, parcaYaz, surumuSil, uygulamaIste, yuklemeyiBitir } from './guncelleme.ts';
 import {
-  ayarDegistir, ayarlariListele, firmaKoduDuzenle, firmaKoduEkle, firmaKodlari, girisLogosuOku, girisSesiOku, gorunumOku, kapaliSayfalariDegistir, kapaliSayfalariOku, karsilamaOku, kurumLogosuDegistir, kurumOku, kurumLogosuOku,
+  ayarDegistir, ayarlariListele, firmaKoduDuzenle, firmaKoduEkle, firmaKodlari, girisLogosuOku, girisSesiOku, gorunumOku, kapaliSayfalariDegistir, kapaliSayfalariOku, karsilamaOku, kurumLogosuDegistir, kurumOku, kurumLogosuOku, numaraSayaclari,
 } from './servis.ts';
 import { sunucuSureciOku, yenidenBaslatIste } from './sunucu-sureci.ts';
 import { yedekDiziniDegistir, yedekOrtaminiKur } from './yedek-dizini.ts';
@@ -26,6 +26,14 @@ export const uclar = [
     yetki: 'ayarlar.yaz',
     cevap: ayarlarCevabi,
     isle: ({ db }) => ayarlariListele(db),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/numara-sayaclari',
+    // 3747: Numara kuralları sekmesi; sekmeyi gören (ayar listesini okuyan) aynı yetkiyle okur.
+    yetki: 'ayarlar.yaz',
+    cevap: numaraSayaclariCevabi,
+    isle: ({ db }) => numaraSayaclari(db),
   }),
   uc({
     yontem: 'GET',

@@ -6,6 +6,7 @@ import {
   YEDEK_ADI, ayarDegerSemasi, guncellemeGecmisKaydi, guncellemeUygulamaIstegi, guncellemeUygulamaSonucu, paketTaramasiSemasi, type DosyaDeposuDurumu,
   type PgSurumu, type YedekAlani, type YedekTuru,
 } from '#paylasilan/sozlesme/ayarlar.ts';
+import { donemAnahtari, numaraDonemi, type NumaraDonemi } from '#paylasilan/numara.ts';
 import { tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import { zamanSemasi } from '#paylasilan/zaman.ts';
 
@@ -35,6 +36,23 @@ export function listeDegeri<A extends AyarAnahtari>(
   if (saklanan === null) return { deger: varsayilanDeger(anahtar), gecersiz: false };
   const sonuc = degeriDogrula(anahtar, saklanan.deger);
   return 'hata' in sonuc ? { deger: null, gecersiz: true } : { deger: sonuc.deger, gecersiz: false };
+}
+
+// 3747: kayıtlı kalıbın sıfırlanma dönemi ve bu dönemin sayaç satırları. Okunamayan kalıbın (null) dönemi bilinmez: "hep" sayılır ve
+// sayacı gösterilmez. Firmasız kalıbın sayacı boş firma koduyla saklanır, ekrana null gider.
+export function numaraSayacGorunumu(
+  kaliplar: readonly { anahtar: string; modul: string; kalip: string | null }[],
+  satirlar: readonly { anahtar: string; donem: string; firmaKodu: string; sonSira: number }[],
+  yil: number, ay: number,
+): { anahtar: string; modul: string; sifirlanma: NumaraDonemi; donem: string; sayaclar: { firmaKodu: string | null; sonSira: number }[] }[] {
+  return kaliplar.map(({ anahtar, modul, kalip }) => {
+    const sifirlanma = kalip === null ? 'hep' : numaraDonemi(kalip);
+    const donem = donemAnahtari(sifirlanma, yil, ay);
+    const sayaclar = kalip === null ? [] : satirlar
+      .filter((s) => s.anahtar === anahtar && s.donem === donem)
+      .map((s) => ({ firmaKodu: s.firmaKodu === '' ? null : s.firmaKodu, sonSira: s.sonSira }));
+    return { anahtar, modul, sifirlanma, donem, sayaclar };
+  });
 }
 
 // Beklenen değer verilmediyse denetlenmez; verildiyse ekranın gördüğü değerle birebir aynı olmalı (değerler ilkel: boolean, sayı, metin, null).

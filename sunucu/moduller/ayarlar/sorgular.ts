@@ -48,6 +48,16 @@ export async function simdikiYilAy(db: Db): Promise<{ yil: number; ay: number }>
   return satir;
 }
 
+// 3747: seçilen anahtar ve dönem çiftlerinin sayaçları; firmasız kalıbın firma kodu boş metindir.
+export function numaraSayaclariniOku(db: Db, anahtarlar: readonly string[], donemler: readonly string[]): Promise<{ anahtar: string; donem: string; firmaKodu: string; sonSira: number }[]> {
+  return db.sorgu<{ anahtar: string; donem: string; firmaKodu: string; sonSira: number }>(
+    `SELECT s.anahtar, s.donem, s.firma_kodu AS "firmaKodu", s.son_sira AS "sonSira"
+       FROM ayar_numara_sayaci s JOIN unnest($1::text[], $2::text[]) AS c(anahtar, donem) ON c.anahtar = s.anahtar AND c.donem = s.donem
+      ORDER BY s.anahtar, s.firma_kodu`,
+    [anahtarlar, donemler],
+  );
+}
+
 // Kalıpta {FIRMA} yoksa firma boş metindir (''); varsa her firma kendi sırasını yürütür (3399 a).
 export async function sayacArtir(db: Db, anahtar: string, donem: string, firmaKodu = ''): Promise<number> {
   const satir = await db.tek<{ sira: number }>(

@@ -1,5 +1,7 @@
 export const anahtarlar = {
   liste: ['ayarlar', 'liste'] as const,
+  numaraSayaclari: ['ayarlar', 'numara-sayaclari'] as const,
+  katalogKodSiralari: ['ayarlar', 'katalog-kod-siralari'] as const,
   saglikAyrinti: ['ayarlar', 'saglik-ayrinti'] as const,
   rolIslemleri: ['ayarlar', 'rol-islemleri'] as const,
   kisiEkIslemleri: ['ayarlar', 'kisi-ek-islemleri'] as const,

@@ -552,6 +552,11 @@ async function logodaKullanilanKodMu(db: Db, kod: string): Promise<boolean> {
   return logodaKullanilanKodlar !== null && (await logodaKullanilanKodlar(db, [kod])).length > 0;
 }
 
+// 3747: Sistem Ayarları > Numara kuralları önek başına son sırayı gösterir.
+export async function katalogKodSiralari(db: Db): Promise<{ siralar: { onek: string; sonSira: number }[] }> {
+  return { siralar: await s.katalogSiralari(db) };
+}
+
 // Sıradaki numara; Logo'da kullanılıyorsa atlanır, atlanan numara bu önekte bir daha verilmez (2089-2 a).
 async function logoyuAtlayanSira(db: Db, onek: string): Promise<number> {
   let sira = await s.katalogSiraAl(db, onek);
