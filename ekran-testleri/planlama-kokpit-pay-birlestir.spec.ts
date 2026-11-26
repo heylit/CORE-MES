@@ -80,6 +80,15 @@ for (const buyukYazi of [false, true]) {
     const tasma = async () => { expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0); };
     const onay = page.getByRole('group', { name: 'Birleştirmeyi onayla' });
     // Onay çubuğu yan menünün üstüne binmez.
+    const tahtaIcinde = async () => {
+      const r = await page.getByRole('menu').evaluate((el) => {
+        const m = el.getBoundingClientRect(), t = el.closest('.tc-pyq-tahta')!, k = t.getBoundingClientRect();
+        return { sol: m.left, sag: m.right, alt: m.bottom, tSol: k.left + t.clientLeft, tSag: k.left + t.clientLeft + t.clientWidth, tAlt: k.top + t.clientTop + t.clientHeight };
+      });
+      expect(r.sol).toBeGreaterThanOrEqual(r.tSol);
+      expect(r.sag).toBeLessThanOrEqual(r.tSag);
+      expect(r.alt).toBeLessThanOrEqual(r.tAlt);
+    };
     const menudenAyri = async () => {
       const menu = await page.getByRole('navigation', { name: 'Ana menü' }).boundingBox(), k = await onay.boundingBox();
       if (menu && k && menu.width > 0) expect(k.x).toBeGreaterThanOrEqual(menu.x + menu.width);
@@ -129,6 +138,7 @@ for (const buyukYazi of [false, true]) {
     await p3.click({ button: 'right' });
     const grup = page.getByRole('menu').getByRole('group', { name: 'Şununla birleştir' });
     await expect(grup.getByRole('menuitem')).toHaveText([/Pay 1\/3 · ORN-T1 · 20 adet\s*birleşince 30 adet/, /Pay 2\/3 · ORN-T2 · 10 adet\s*birleşince 20 adet/, /Bütün payları birleştir/]);
+    await tahtaIcinde();
     await tasma();
     await cek('1-menu');
     await grup.getByRole('menuitem', { name: /Pay 1\/3/ }).click();
@@ -178,6 +188,7 @@ for (const buyukYazi of [false, true]) {
     const tz = kokpit.getByRole('region', { name: 'Tezgâhlar' });
     await tz.locator(`.tc-pyq-is[data-is="${ADIM}~2"]`).click({ button: 'right' });
     await expect(page.getByRole('menu').getByRole('group', { name: 'Şununla birleştir' }).getByRole('menuitem')).toHaveCount(1);
+    await tahtaIcinde();
     await page.keyboard.press('Escape');
     expect(ag.hatalar).toEqual([]);
   });
