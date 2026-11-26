@@ -117,9 +117,9 @@ describe('Projeler', () => {
   it('boş listede başlangıç süzgeci (Aktif) dolu olsa da yazan ilk projeyi oradan açar; süzgeç temizlenince ileti değişir', async () => {
     const cagrilar = sunucuKur(YAZAR, undefined, { satirlar: [], toplam: 0, sayfa: 1, sayfaBoyu: 50 });
     ac();
-    const kutu = (await screen.findByText('Süzgece uyan proje yok')).closest('.tc-durum') as HTMLElement;
+    const kutu = (await screen.findByText('Aktif proje yok')).closest('.tc-durum') as HTMLElement;
     expect(await within(kutu).findByRole('button', { name: /Proje ekle/ })).toBeTruthy();
-    fireEvent.click(within(kutu).getByRole('button', { name: /Süzgeci temizle/ }));
+    fireEvent.click(within(kutu).getByRole('button', { name: /Tüm projeleri göster/ }));
     const bos = (await screen.findByText('Henüz proje yok')).closest('.tc-durum') as HTMLElement;
     expect(within(bos).queryByRole('button', { name: /Süzgeci temizle/ })).toBeNull();
     expect(within(bos).getByRole('button', { name: /Proje ekle/ })).toBeTruthy();

@@ -437,7 +437,7 @@ describe('Satış siparişi ayrıntısı', () => {
     expect(within(tablo).getByText('Rota bekliyor')).toBeTruthy();
     expect(within(tablo).getByText('Taslak')).toBeTruthy();
     expect(within(tablo).getByText('Üretilmez, emir açılmaz')).toBeTruthy();
-    expect(within(tablo).getByTitle('ORN-A-SS_2026_0006-DNM001-26-11-001').textContent).toBe('…0006-DNM001-26-11-001');
+    expect(within(tablo).getByText('ORN-A-SS_2026_0006-DNM001-26-11-001')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Proje ve emirleri aç' })).toBeNull();
   });
 

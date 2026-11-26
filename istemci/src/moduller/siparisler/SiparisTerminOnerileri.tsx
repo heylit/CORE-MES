@@ -2,13 +2,19 @@ import { useState } from 'react';
 import type { z } from 'zod';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { TerminOnerisi, TerminOnerileriCevabi, terminKarariGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { URETIM_EMRI_YAZMA_ISLEMLERI } from '#paylasilan/islemler.ts';
+import type {
+  ADIMLI_OKUMA_ISLEMLERI as SUNUCUDAKI_LISTE, TerminOnerisi, TerminOnerileriCevabi, terminKarariGovdesi,
+} from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { Dugme, Kart, OnayPenceresi, Rozet, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { tarihMetni } from './gorunum.ts';
+
+// Öneri ucunu okuyabilen işlemler; tip sözleşmedeki listeye birebir eşit olmak zorundadır (sapma derlemede yakalanır).
+const OKUMA_ISLEMLERI: typeof SUNUCUDAKI_LISTE = ['sayfa.uretim-emirleri', 'sayfa.rota', ...URETIM_EMRI_YAZMA_ISLEMLERI, 'uretim-emirleri.fason', 'plan.yaz'];
 
 // Emrin teslimi terminden kaç gün erken ya da geç (emir ayrıntısındaki öneri satırı aynı sözü kullanır).
 function terminFarkiMetni(teslim: string | null, termin: string): { metin: string; gec: boolean } {
@@ -66,10 +72,14 @@ function OneriSatiri({ siparisId, oneri, yazar }: { siparisId: number; oneri: Te
 }
 
 export function SiparisTerminOnerileri({ siparisId }: { siparisId: number }) {
-  const yazar = (useOturum().data?.islemler ?? []).includes('uretim-emirleri.duzenle');
+  const islemler = useOturum().data?.islemler ?? [];
+  const yazar = islemler.includes('uretim-emirleri.duzenle');
+  // Okuyamayan kişide istek hiç gitmez; her açılışta 403 konsolu kirletiyordu.
+  const okur = OKUMA_ISLEMLERI.some((i) => islemler.includes(i));
   const d = useQuery({
     queryKey: anahtarlar.terminOnerileri(siparisId),
     queryFn: () => api.get<TerminOnerileriCevabi>(`/uretim-emirleri/termin-onerileri?siparisId=${String(siparisId)}`),
+    enabled: okur,
   });
   const liste = d.data?.oneriler ?? [];
   if (liste.length === 0) return null;

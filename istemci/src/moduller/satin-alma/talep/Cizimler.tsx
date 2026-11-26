@@ -68,15 +68,17 @@ const cizimAlti = (c: SeciciCizimi) => [
   c.revKodu === null ? null : `Rev ${c.revKodu}`, c.kullanim === null ? null : `türev · ${KULLANIM[c.kullanim] ?? c.kullanim}`,
 ].filter(Boolean).join(' · ');
 
-// Öneri şeridi: talep kalemlerinin malzemelerine bağlı yayındaki çizimler; çizim okuyamayan kişide sunucu 404 verir, şerit çizilmez.
+// Öneri şeridi: talep kalemlerinin malzemelerine bağlı yayındaki çizimler. Çizim Merkezi'ni okuyamayan kişide istek gitmez
+// (sunucu 404 verirdi; her açılışta konsol hatası), şerit çizilmez.
 function OneriSeridi({ talepId, malzemeNolari, ekli, ekle, yukleniyor }: {
   talepId?: string; malzemeNolari?: readonly number[]; ekli: ReadonlySet<string>; ekle: (c: SecilenCizim) => void; yukleniyor: boolean;
 }) {
+  const { merkez: merkezOkur } = useKaynaklar();
   const malzeme = malzemeNolari?.length ? [...new Set(malzemeNolari)].slice(0, 50).join(',') : undefined;
   const sorgu = useQuery({
     queryKey: ['satin-alma', 'cizim-onerileri', talepId ?? null, malzeme ?? null],
     queryFn: () => cagri.get('/satin-alma-cizim-secici/cizimler', { sorgu: { ...(talepId ? { talep: talepId } : {}), ...(malzeme ? { malzeme } : {}) }, ...SURE }),
-    enabled: talepId !== undefined || malzeme !== undefined,
+    enabled: merkezOkur && (talepId !== undefined || malzeme !== undefined),
     retry: false,
   });
   const oneriler = (sorgu.data?.oneriler ?? []).filter((c) => c.pdf);

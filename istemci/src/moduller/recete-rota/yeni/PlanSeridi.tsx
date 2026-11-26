@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import type { PlanSurumCevabi } from '#paylasilan/sozlesme/plan.ts';
@@ -14,6 +15,7 @@ export const PLANLAMA_YOLU = '/plan';
 
 export function PlanSeridi({ durum, yerlesimOkunamadi }: { durum: RrDurumu; yerlesimOkunamadi: boolean }) {
   const istemci = useQueryClient();
+  const [acik, acikYaz] = useState(false);
   const canli = durum.planCanli;
   const surum = useQuery({
     queryKey: [...RR_ANAHTARI, 'plan-surum'],
@@ -27,8 +29,11 @@ export function PlanSeridi({ durum, yerlesimOkunamadi }: { durum: RrDurumu; yerl
   const s = seritDurumu(canli, yerlesimOkunamadi ? null : durum.planYerlesim, surum.data ?? null, durum.planMotoru);
   const yenile = () => { void istemci.invalidateQueries({ queryKey: anahtarlar.veri }); void surum.refetch(); };
 
+  const ekSayisi = (s.motorFarki > 0 ? 1 : 0) + s.uyarilar.length + ((canli.yersizBolmeler ?? []).length > 0 ? 1 : 0);
+
+  // Telefonda şerit ilk ekranın yarısını kaplıyordu: dar ekranda motor farkı, uyarılar ve son canlıya alma "Ayrıntı" ile açılır.
   return (
-    <div className="tc-rry-plan" data-tur={s.tur} role="status" aria-label="Plan durumu">
+    <div className="tc-rry-plan" data-tur={s.tur} data-acik={acik ? '' : undefined} role="status" aria-label="Plan durumu">
       <span className="tc-rry-plan-rozet"><Simge ad="gantt" boyut="k" />{s.rozet}</span>
       {s.degisiklik > 0 && <b>{s.degisiklik} değişiklik bekliyor</b>}
       <span>{s.parca && s.tur === 'bekliyor' ? `${s.parca}. ${s.metin}` : s.metin}</span>
@@ -44,7 +49,10 @@ export function PlanSeridi({ durum, yerlesimOkunamadi }: { durum: RrDurumu; yerl
         <Link className="tc-dugme tc-dugme-ikincil tc-dugme-normal" to={PLANLAMA_YOLU}><Simge ad="gantt" />Planlama'da aç</Link>
       )}
       <span className="tc-rry-plan-bosluk" />
-      <small>{sonCanliyaAlmaMetni(canli)}</small>
+      <small className="tc-rry-plan-son">{sonCanliyaAlmaMetni(canli)}</small>
+      <button type="button" className="tc-rry-plan-ac" aria-expanded={acik} onClick={() => { acikYaz((a) => !a); }}>
+        <Simge ad={acik ? 'up' : 'down'} boyut="k" />{acik ? 'Gizle' : ekSayisi > 0 ? `Ayrıntı (${String(ekSayisi)})` : 'Ayrıntı'}
+      </button>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import type { BagModulu, BelgeTuru, Kullanim, RevizyonDurumu } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import type { DosyaTuru } from '#paylasilan/sozlesme/dosya.ts';
-import { tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import type { RozetTonu } from '../../ortak/arayuz/index.ts';
+import { tarihSaatMetni } from '../../ortak/veri/zaman-metni.ts';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 import type { ModelBicimi } from './goruntu/model.ts';
 
@@ -70,7 +70,8 @@ export function boyutMetni(bayt: number): string {
   return `${(bayt / 1048576).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} MB`;
 }
 
-export const zamanMetni = (iso: string | null): string => (iso === null ? '—' : tesisSaati(new Date(iso)));
+// Öbür ekranlarla aynı biçim: '26.11.2026 14:05'.
+export const zamanMetni = (iso: string | null): string => tarihSaatMetni(iso);
 
 export type GorunumTuru = 'pdf' | 'resim' | 'model';
 export function gorunumTuru(t: DosyaTuru): GorunumTuru {

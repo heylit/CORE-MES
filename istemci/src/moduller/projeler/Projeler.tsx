@@ -78,6 +78,8 @@ export function Projeler() {
     csv: (p: Proje) => { const d = logo.durum(p.id); return d === null ? DURUM_METNI[p.durum] : `${DURUM_METNI[p.durum]}; Logo: ${LOGO_DURUM_ADI[d.durum]}`; },
   }));
   const suzulu = liste.suzgecler.ara.trim() !== '' || liste.suzgecler.durum !== '' || liste.suzgecler.statuId !== '';
+  // Yalnız başlangıç süzgeci (Aktif) varken "süzgece uyan yok" yeni kurulumda yanıltıyordu: ne süzüldüğü söylenir.
+  const yalnizAktif = liste.suzgecler.ara.trim() === '' && liste.suzgecler.durum === 'aktif' && liste.suzgecler.statuId === '';
 
   return (
     <Kart
@@ -117,11 +119,11 @@ export function Projeler() {
                 satirSec={(p) => { void yonlendir(`/projeler/${p.id}`); }}
                 siralama={liste.siralama}
                 siralamaDegistir={liste.siralamaDegistir}
-                bosMesaj={suzulu ? 'Süzgece uyan proje yok' : 'Henüz proje yok'}
+                bosMesaj={yalnizAktif ? 'Aktif proje yok' : suzulu ? 'Süzgece uyan proje yok' : 'Henüz proje yok'}
                 // Başlangıç süzgeci "Aktif" olduğundan yeni kurulumda da süzgeç dolu görünür; ilk projeyi açan düğme süzgeçliyken de durur.
                 bosEylem={l.isPending ? undefined : (
                   <div className="tc-durum-eylemler">
-                    {suzulu && <Dugme simge="x" onClick={liste.suzgecleriTemizle}>Süzgeci temizle</Dugme>}
+                    {suzulu && <Dugme simge="x" onClick={liste.suzgecleriTemizle}>{yalnizAktif ? 'Tüm projeleri göster' : 'Süzgeci temizle'}</Dugme>}
                     {yazabilir && <Dugme simge="plus" onClick={() => { yeniYaz(true); }}>Proje ekle</Dugme>}
                   </div>
                 )}

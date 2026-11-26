@@ -405,7 +405,7 @@ export function rfqPanelHTML(r: PurchaseRequest): string {
     ${kategoriNotu(r)}<p class="small muted">Her tedarikçiye aynı soruları sormak cevapları karşılaştırılabilir kılar. Seçtiklerinizi "istendi" olarak kaydederseniz cevap süreleri ve oranları tedarikçi karnesine işlenir.</p>
     ${sugg.length ? `<div><h4 data-sa-y="30">Hafızanın önerdikleri</h4><div class="sugg">${sugg.map(o => line(S.suppliers[o.id]!, o.why.slice(0, 2).join("; "), secili(o.id, !asked.has(o.id)))).join("")}</div></div>` : ""}
     ${others.length ? `<details ${acikDiger ? "open" : ""}><summary class="small" data-sa-y="31">Diğer tedarikçiler (${others.length})</summary><div class="sugg">${others.map(s => line(s, (s.categories || []).join(", "), secili(s.id, false))).join("")}</div></details>` : ""}
-    ${!Object.keys(S.suppliers).length ? '<div class="note small">Henüz tedarikçi kaydı yok. E-posta taslağını genel olarak kopyalayabilir ya da önce tedarikçi ekleyebilirsiniz.</div>' : ""}
+    ${!Object.keys(S.suppliers).length ? `<div class="note small" data-sa-ted-yok="">Satın almanın tedarikçi listesi boş. Firma kartı olsa da teklif istemek için firmanın burada tedarikçi olarak eklenmesi gerekir; e-posta taslağını genel olarak da kopyalayabilirsiniz.${canWrite() ? ' <button class="btn sm" data-act="new-supplier">Tedarikçi ekle</button>' : ""}</div>` : ""}
     <div class="f sa-rfq-tarih" data-sa-son-cevap=""><span id="rfq-due-baslik">Son cevap tarihi</span>
       <div class="sa-rfq-gun" role="group" aria-labelledby="rfq-due-baslik">
         ${[2, 3].map((g) => `<button type="button" class="btn sm" data-act="rfq-gun" data-gun="${g}" aria-pressed="${sonCevapGunu(t.sonTarih) === g}">+${g} gün</button>`).join("")}
