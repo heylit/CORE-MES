@@ -44,6 +44,12 @@ const kaynak = (dk = 1e7) => ({
     ek: { takvim: { hafta: { 1: { 1: [V], 2: [V], 3: [V], 4: [V], 5: [V] } }, kisiVardiyasi: {} }, makineNotu: null, kisiGorevi: null, insanliIstasyonlar: [] },
   },
 });
+// Dışarıdan çözülen söz: test olayı bekler, süreye bakmaz.
+function acik<T>(): { promise: Promise<T>; resolve: (x: T) => void } {
+  let resolve!: (x: T) => void;
+  const promise = new Promise<T>((r) => { resolve = r; });
+  return { promise, resolve };
+}
 const sayan = (db: Db) => {
   const sqller: string[] = [];
   const d: Db = {
@@ -59,21 +65,45 @@ describe('plan hesabı işlem süresine sığar (3724)', () => {
   after(async () => { await t.kaldir(); });
 
   test('HS-01: canliTut hesap sürerken işlemi boşta işlem sınırından korur; korumasız işlem kesilir', async () => {
-    // Sınır yoklama aralığının 15 katı: yavaş CI makinesinde (Windows) olay döngüsü takılsa da korunan işlem sınıra değmez.
+    // Korunan işlem sınırı yalnız yoklama hiç koşmazsa aşar: sınır yoklama aralığının 20 katı (yavaş CI'da olay döngüsü takılsa da
+    // sınıra değmez), bekleme sınırın iki katından fazla (korumasız işlem kesin kesilir).
     const tx = (is: (db: Db) => Promise<void>) => t.vt.tx(async (db) => {
-      await db.sorgu("SET LOCAL idle_in_transaction_session_timeout = '1500ms'");
+      await db.sorgu("SET LOCAL idle_in_transaction_session_timeout = '2000ms'");
       await is(db);
       await db.sorgu('SELECT 1');
     });
-    await tx(async (db) => { await canliTut(db, bekle(3500), 100); });
-    await assert.rejects(tx(async () => { await bekle(3500); }), /bağlantısı kullanılamaz|terminat|idle/i);
+    await tx(async (db) => { await canliTut(db, bekle(4500), 100); });
+    await assert.rejects(tx(async () => { await bekle(4500); }), /bağlantısı kullanılamaz|terminat|idle/i);
   });
 
-  test('HS-02: canliTut hesabın sonucunu ve hatasını aynen döndürür; süren yoklama bitmeden dönmez', async () => {
-    const { d, sqller } = sayan(t.vt);
-    assert.equal(await canliTut(d, bekle(250).then(() => 7), 50), 7);
+  // 3774: yoklama sayısı zamanlayıcıdan değil olaydan beklenir; olay döngüsü takılınca aralıklar birleşir (Windows CI), test bunu saymaz.
+  test('HS-02: canliTut hesap sürdükçe yoklar; sonucu ve hatayı aynen döndürür; süren yoklama bitmeden dönmez', async () => {
+    const ikinci = acik<void>();
+    const sqller: string[] = [];
+    const d: Db = {
+      sorgu: async <T>(sql: string) => { sqller.push(sql); if (sqller.length === 2) ikinci.resolve(); return [] as T[]; },
+      tek: async () => null,
+    };
+    assert.equal(await canliTut(d, ikinci.promise.then(() => 7), 10), 7);
     assert.ok(sqller.length >= 2 && sqller.every((s) => s === 'SELECT 1'));
-    await assert.rejects(canliTut(d, bekle(120).then(() => { throw new Error('hesap bozuk'); }), 50), /hesap bozuk/);
+    await assert.rejects(canliTut(d, Promise.reject(new Error('hesap bozuk')), 10), /hesap bozuk/);
+
+    // Hesap, yoklama sürerken biter: canliTut yoklamanın cevabını bekler, bağlantı sonraki sorguya boş döner.
+    const yoklamaBasladi = acik<void>();
+    const yoklamaBitsin = acik<void>();
+    const hesapBitsin = acik<number>();
+    const yavas: Db = {
+      sorgu: async <T>() => { yoklamaBasladi.resolve(); await yoklamaBitsin.promise; return [] as T[]; },
+      tek: async () => null,
+    };
+    let dondu = false;
+    const sonuc = canliTut(yavas, hesapBitsin.promise, 10).then((x) => { dondu = true; return x; });
+    await yoklamaBasladi.promise;
+    hesapBitsin.resolve(9);
+    await bekle(50);
+    assert.equal(dondu, false, 'süren yoklama bitmeden dönmez');
+    yoklamaBitsin.resolve();
+    assert.equal(await sonuc, 9);
   });
 
   test('HS-03: aynı oturumun ikinci turu girdiyi yeniden okumaz ve ilk turun süre sınırını taşır; başka an yeniden okur', async () => {
