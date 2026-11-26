@@ -4,13 +4,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
-import type { Ayar, AyarlarCevabi, KarsilamaCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
+import type { Ayar, AyarlarCevabi, KarsilamaCevabi, NumaraSayaclariCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
+import type { KatalogKodSiralariCevabi } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { EpostaDurumuCevabi } from '#paylasilan/sozlesme/bildirim-eposta.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import type { AyarEkrani } from '../../ortak/rota/ayar-ekranlari.ts';
 import { anahtarlar as ortakAnahtarlar } from '../../ortak/veri/anahtarlar.ts';
-import { EpostaSayfasi, SistemAyarlari, ayarKategorisi, numaraOnizlemesi, onizlemeAniCoz, sayiCoz } from './SistemAyarlari.tsx';
+import { EpostaSayfasi, SistemAyarlari, ayarKategorisi, onizlemeAniCoz, sayiCoz } from './SistemAyarlari.tsx';
+import { numaraOnizlemesi, siradakiNumara } from './NumaraKurallari.tsx';
 
 // Sunucunun gerçek cevap biçimi; başlık ve açıklama deneme metnidir.
 const DORT_GOZ: Ayar = { anahtar: 'malzemeler.dort-goz', baslik: 'Deneme dört göz', aciklama: 'Dört göz açıklaması', tur: 'boolean', deger: true };
@@ -492,10 +494,24 @@ describe('Sistem Ayarları: kategoriler', () => {
 
 describe('Sistem Ayarları: numara kuralları', () => {
   const NO: Ayar = {
-    anahtar: 'deneme.emir-no', baslik: 'Deneme emir no', aciklama: 'A', tur: 'numara', deger: 'UE-{SAYAC:6}', alanlar: ['PARCA'],
+    anahtar: 'deneme.emir-no', baslik: 'Deneme emir no', aciklama: 'Deneme açıklaması.', tur: 'numara', deger: 'UE-{SAYAC:6}', alanlar: ['PARCA'],
   };
-  const kutu = () => screen.findByRole('textbox', { name: NO.baslik });
-  const kaydet = () => within(screen.getByRole('textbox', { name: NO.baslik }).closest('form') as HTMLElement).getByRole('button', { name: 'Kaydet' });
+  const FIRMALI: Ayar = {
+    anahtar: 'deneme.siparis-no', baslik: 'Deneme sipariş no', aciklama: 'B', tur: 'numara', deger: '{FIRMA}-{YYYY}-{SAYAC:3}', alanlar: ['FIRMA'],
+  };
+  const BOS: Ayar = { anahtar: 'deneme.ziyaret-no', baslik: 'Deneme ziyaret no', aciklama: 'C', tur: 'numara', deger: 'ZY-{YY}{AA}-{SAYAC:2}', alanlar: [] };
+  const SAYACLAR = {
+    yil: 2026, ay: 11,
+    numaralar: [
+      { anahtar: NO.anahtar, modul: 'uretim-emirleri', sifirlanma: 'hep', sayaclar: [{ firmaKodu: null, sonSira: 41 }] },
+      { anahtar: FIRMALI.anahtar, modul: 'siparisler', sifirlanma: 'yil', sayaclar: [{ firmaKodu: 'FRA', sonSira: 7 }, { firmaKodu: 'FRB', sonSira: 2 }] },
+      { anahtar: BOS.anahtar, modul: 'nizamiye', sifirlanma: 'ay', sayaclar: [] },
+    ],
+  } satisfies NumaraSayaclariCevabi;
+  const SIRALAR = { siralar: [{ onek: 'HM-ORN-', sonSira: 118 }, { onek: 'YM-ORN-', sonSira: 4 }] } satisfies KatalogKodSiralariCevabi;
+  const ek = { '/numara-sayaclari': SAYACLAR, '/malzeme-katalogu-kod-siralari': SIRALAR };
+  const kutu = () => screen.findByRole('textbox', { name: `${NO.baslik} kalıbı` });
+  const satir = (ayar: Ayar) => document.querySelector(`[data-anahtar="${ayar.anahtar}"]`) as HTMLElement;
 
   it('önizleme: kalıp örnek numarayla gösterilir; bozuk kalıp iletisiyle döner', () => {
     const tarih = new Date(2026, 9, 12);
@@ -504,28 +520,79 @@ describe('Sistem Ayarları: numara kuralları', () => {
     expect('hata' in numaraOnizlemesi('{PROJE}-{SAYAC:3}', ['PARCA'], tarih)).toBe(true);
   });
 
-  it('kalıp kendi sekmesinde görünür; geçerli yeni kalıp komutuna gider, bozuk kalıp gönderilmez', async () => {
+  it('sıradaki numara sayacın bir fazlasıdır; firma kodu gerçek, öteki alanlar yer tutucudur', () => {
+    expect(siradakiNumara('{FIRMA}-{PARCA}-{YY}{AA}-{SAYAC:3}', ['FIRMA', 'PARCA'], 2026, 11, 41, 'FRA')).toBe('FRA-PRC-2611-042');
+    expect(siradakiNumara('UE-{SAYAC:6}', [], 2026, 11, 999999, null)).toBe('UE-1000000');
+  });
+
+  it('3747: her numara modülü, sıfırlanması, sayacı ve sıradaki numarasıyla; firmalı kalıp firma başına, boş sayaç uydurulmaz', async () => {
+    sunucuKur({ liste: () => json(200, { ayarlar: [DORT_GOZ, NO, FIRMALI, BOS] } satisfies AyarlarCevabi), ek });
+    ac(undefined, undefined, 'Numara kuralları');
+    const tablo = await screen.findByRole('table', { name: 'Numara kuralları ve sayaçlar' });
+    expect(within(tablo).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Modül', 'Numara', 'Kalıp', 'Sıfırlanma', 'Sayaç', 'Sıradaki numara']);
+    await within(satir(NO)).findByText('UE-000042');
+    expect(within(satir(NO)).getAllByText('Üretim emirleri').length).toBeGreaterThan(0);
+    expect(within(satir(NO)).getByText('Sıfırlanmaz')).toBeTruthy();
+    expect(within(satir(NO)).getByText('41')).toBeTruthy();
+    // Firmalı: ana satır sayaçsız, her firma kendi satırında.
+    const firmaSatirlari = within(tablo).getAllByRole('row').filter((r) => r.classList.contains('tc-numara-alt-satir'));
+    expect(firmaSatirlari.map((r) => within(r).getByRole('rowheader').textContent)).toEqual(['Firma FRA', 'Firma FRB']);
+    expect(within(firmaSatirlari[0] as HTMLElement).getByText('FRA-2026-008')).toBeTruthy();
+    expect(within(firmaSatirlari[1] as HTMLElement).getByText('FRB-2026-003')).toBeTruthy();
+    // Hiç numara verilmemiş: sayaç "-", sıradaki uydurulmaz.
+    expect(within(satir(BOS)).getByText('Her ay')).toBeTruthy();
+    expect(within(satir(BOS)).getByText('Henüz numara verilmedi')).toBeTruthy();
+    expect(within(satir(BOS)).queryByText('ZY-2611-01')).toBeNull();
+    // Numara olmayan ayar bu tabloda yok; sayaç düzenleme düğmesi yok.
+    expect(within(tablo).queryByText(DORT_GOZ.baslik)).toBeNull();
+    expect(within(tablo).queryByRole('spinbutton')).toBeNull();
+  });
+
+  it('açıklama bilgi düğmesiyle açılır; sabit biçimler salt okunur, katalog önek sıralarıyla', async () => {
+    sunucuKur({ liste: () => json(200, { ayarlar: [NO] } satisfies AyarlarCevabi), ek });
+    ac(undefined, undefined, 'Numara kuralları');
+    const bilgi = await screen.findByRole('button', { name: `Açıklama: ${NO.baslik}` });
+    const aciklama = document.getElementById(bilgi.getAttribute('aria-controls') ?? '') as HTMLElement;
+    expect(aciklama.hidden).toBe(true);
+    fireEvent.click(bilgi);
+    expect(bilgi.getAttribute('aria-expanded')).toBe('true');
+    expect(aciklama.hidden).toBe(false);
+    expect(aciklama.textContent).toContain('Deneme açıklaması.');
+    expect(aciklama.textContent).toContain('{PARCA}');
+    const sabit = screen.getByRole('list', { name: 'Sabit biçimli numaralar' });
+    expect(within(sabit).getAllByRole('listitem')).toHaveLength(9);
+    expect(within(sabit).getByText('Refakat kartı etiketi')).toBeTruthy();
+    expect(await within(sabit).findByText('Önek başına son sıra: HM-ORN- 118 · YM-ORN- 4')).toBeTruthy();
+    expect(within(sabit).queryByRole('textbox')).toBeNull();
+  });
+
+  it('kalıp düzenlenince Kaydet çıkar; geçerli yeni kalıp komutuna gider, bozuk kalıp gönderilmez; sayaçlar yenilenir', async () => {
     const istekler = sunucuKur({
       liste: () => json(200, { ayarlar: [DORT_GOZ, NO] } satisfies AyarlarCevabi),
       yazma: (_yol, govde) => json(200, { ...NO, deger: govde.deger as string } satisfies Ayar),
+      ek,
     });
     ac(undefined, undefined, 'Numara kuralları');
     expect((await kutu() as HTMLInputElement).value).toBe('UE-{SAYAC:6}');
     expect(screen.queryByRole('switch', { name: DORT_GOZ.baslik })).toBeNull();
-    expect((kaydet() as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Kaydet' })).toBeNull();
 
     fireEvent.change(await kutu(), { target: { value: 'UE-{YY}' } });
     expect(screen.getByText('Kalıpta tek bir {SAYAC:n} olmalı.')).toBeTruthy();
-    expect((kaydet() as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Kaydet' }) as HTMLButtonElement).disabled).toBe(true);
 
     fireEvent.change(await kutu(), { target: { value: 'ue-{yy}-{SAYAC:4}' } });
-    expect('hata' in numaraOnizlemesi('UE-{YY}-{SAYAC:4}', ['PARCA'], new Date())).toBe(false);
-    fireEvent.change(await kutu(), { target: { value: 'UE-{YY}-{SAYAC:4}' } });
-    fireEvent.click(kaydet());
+    expect((await kutu() as HTMLInputElement).value).toBe('UE-{YY}-{SAYAC:4}');
+    expect(screen.getByText('Örnek: UE-26-0001')).toBeTruthy();
+    const sayacOkuma = () => istekler.filter((i) => i.yol === '/numara-sayaclari').length;
+    const once = sayacOkuma();
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
     await screen.findByText('Ayar kaydedildi.');
     expect(istekler.filter((i) => i.yontem === 'POST')).toEqual([
       { yontem: 'POST', yol: '/ayarlar/deneme.emir-no/degistir', govde: { deger: 'UE-{YY}-{SAYAC:4}', beklenen: 'UE-{SAYAC:6}' } },
     ]);
+    await waitFor(() => expect(sayacOkuma()).toBeGreaterThan(once));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Kaydet' })).toBeNull());
   });
 });
 

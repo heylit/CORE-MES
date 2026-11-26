@@ -111,6 +111,9 @@ export const katalogKartlariCevabi = listeCevapSemasi(
   z.object({ kimlik: z.string(), no: z.number().int(), kayit: katalogNesnesi.nullable(), surum: z.number().int() }),
 ).extend({ an: zamanSemasi });
 export const katalogKimlikCevabi = z.object({ id: z.string() });
+// 3747: katalog kodu önek başına sayaç; sonSira o önekte verilen son sıradır (Logo'da dolu diye atlanan sıra da sayılır).
+export const katalogKodSiralariCevabi = z.object({ siralar: z.array(z.object({ onek: z.string(), sonSira: z.number().int().nonnegative() })) });
+export type KatalogKodSiralariCevabi = z.output<typeof katalogKodSiralariCevabi>;
 // 2114b: Logo'ya gönderilmiş kartın silinmesi Logo'da pasife alınmayı bekler (kart o sürede pasif; Logo'dan silinmez); öbür kart hemen silinir.
 export const katalogKartiIptalCevabi = z.object({ id: z.string(), logodaPasifeAliniyor: z.boolean() });
 export type KatalogKartiIptalCevabi = z.output<typeof katalogKartiIptalCevabi>;

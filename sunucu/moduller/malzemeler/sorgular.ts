@@ -69,6 +69,10 @@ export function katalogKartiKilitle(db: Db, kimlik: string): Promise<KatalogKart
   );
 }
 
+export function katalogSiralari(db: Db): Promise<{ onek: string; sonSira: number }[]> {
+  return db.sorgu<{ onek: string; sonSira: number }>('SELECT onek, son_sira AS "sonSira" FROM malzeme_katalog_kod_sirasi ORDER BY onek');
+}
+
 // Önek satırı yoksa açılır; satır kilidi aynı önekte eşzamanlı iki kartın aynı sırayı almasını önler.
 export async function katalogSiraAl(db: Db, onek: string): Promise<number> {
   const satir = await db.tek<{ son_sira: number }>(

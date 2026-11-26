@@ -105,6 +105,21 @@ export const ayarSemasi = z
 
 export const ayarlarCevabi = z.object({ ayarlar: z.array(ayarSemasi) });
 
+// 3747: numara kalıplarının bu dönemdeki sayaçları. Dönem kayıtlı kalıptan ve atölyenin saatinden çıkar; firmasız kalıpta firmaKodu null.
+// Sayaç verilen son sıradır: çakışan numara atlanınca da ilerler, son verilen numarayla aynı olmayabilir. Hiç numara verilmemiş
+// kalıbın sayaç listesi boştur.
+export const numaraSayaclariCevabi = z.object({
+  yil: z.number().int(),
+  ay: z.number().int().min(1).max(12),
+  numaralar: z.array(z.object({
+    anahtar: z.string(),
+    modul: z.string(),
+    sifirlanma: z.enum(['ay', 'yil', 'hep']),
+    sayaclar: z.array(z.object({ firmaKodu: z.string().nullable(), sonSira: z.number().int().positive() })),
+  })),
+});
+export type NumaraSayaclariCevabi = z.output<typeof numaraSayaclariCevabi>;
+
 // Kapalı sayfa yolları (KAPATILABILIR_YOLLAR'dan); boş liste her sayfanın açık olduğudur.
 export const kapaliSayfalarCevabi = z.object({ kapali: z.array(z.string()) });
 // Yazma tek sayfadır: eski ya da yarım yüklenmiş liste gönderen ekran öteki sayfaları açıp kapatamaz.

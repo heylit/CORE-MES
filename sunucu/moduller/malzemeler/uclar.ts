@@ -2,7 +2,7 @@ import { uc } from '#cekirdek/uc.ts';
 import {
   erpKoduDoldurCevabi, erpKoduOzetiCevabi, logoGecisCevabi, logoGecisSorgusu, logoGeriAlCevabi, logoGeriAlGovdesi, logoTopluAlGovdesi, logoTopluBaglaGovdesi, logoTopluCevabi, logoyaGonderCevabi, logoyaGonderGovdesi, logoGecisKartiCevabi,
   katalogAyarKaydetGovdesi, katalogAyarParametresi, katalogAyarlariCevabi, katalogKartiKaydetCevabi, katalogKartiKaydetGovdesi, katalogKartiRotasiCevabi,
-  katalogKartlariCevabi, katalogKartlariSorgusu, katalogKimlikCevabi, katalogKimlikParametresi, katalogSablonlariCevabi, katalogSablonuKaydetGovdesi, katalogSurumluKayitCevabi,
+  katalogKartlariCevabi, katalogKartlariSorgusu, katalogKimlikCevabi, katalogKodSiralariCevabi, katalogKimlikParametresi, katalogSablonlariCevabi, katalogSablonuKaydetGovdesi, katalogSurumluKayitCevabi,
   demirbasMakineSecenekleriCevabi, demirbasTeknikCevabi, demirbasTeknikKaydetGovdesi,
   firmaSecenekleriCevabi, firmaSecenekleriSorgusu, logoDurumuCevabi, logoGelenCevabi, logoGelenParametresi, logoGelenSorgusu, logodanAlCevabi, logodanAlGovdesi,
   arsivKaliciSilGovdesi, arsivKartiCevabi, arsivKartlariCevabi, katalogKartiIptalCevabi,
@@ -72,6 +72,8 @@ export const uclar = [
     isle: ({ db, kullanici, parametre, govde }) => servis.demirbasTeknikKaydet(db, kullanici, parametre.kimlik, govde),
   }),
   uc({ yontem: 'GET', yol: '/malzeme-demirbas-makineleri', yetki: 'malzemeler.yaz', cevap: demirbasMakineSecenekleriCevabi, isle: ({ db }) => servis.demirbasMakineSecenekleri(db) }),
+  // 3747: yalnız Sistem Ayarları'nın Numara kuralları sekmesi okur; sekmeyle aynı yetki.
+  uc({ yontem: 'GET', yol: '/malzeme-katalogu-kod-siralari', yetki: 'ayarlar.yaz', cevap: katalogKodSiralariCevabi, isle: ({ db }) => servis.katalogKodSiralari(db) }),
   uc({ yontem: 'GET', yol: '/malzeme-katalogu-sablonlari', yetki: OKUMA, cevap: katalogSablonlariCevabi, isle: ({ db, kullanici }) => servis.katalogSablonlariniGetir(db, kullanici) }),
   uc({
     yontem: 'POST', yol: '/malzeme-katalogu-sablonlari/:kimlik/kaydet', yetki: 'malzemeler.yaz', parametre: katalogKimlikParametresi,

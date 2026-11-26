@@ -5,7 +5,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { numaraAl } from './disari.ts';
-import { ayarDegistir } from './servis.ts';
+import { ayarDegistir, numaraSayaclari } from './servis.ts';
 import { simdikiYilAy } from './sorgular.ts';
 
 const bosMu = () => Promise.resolve(false);
@@ -88,6 +88,36 @@ describe('ayarlar: belge numarası (gerçek PostgreSQL)', () => {
     assert.equal(ayar.deger, 'MK-{YYYY}-{SAYAC:4}');
     // Belge alanı yalnız tanımında bildirilen belgede geçer.
     assert.equal((await kalipYaz('uretim-emirleri.emir-no', '{PARCA}-{SAYAC:3}')).deger, '{PARCA}-{SAYAC:3}');
+  });
+
+  test('3747: sayaçlar kayıtlı kalıbın bu dönemine göre okunur; firmalı kalıpta firma başına, hiç numara yoksa boş', async () => {
+    const { yil, ay } = await vt().tx((db) => simdikiYilAy(db));
+    const oku = async (anahtar: string) => (await vt().tx((db) => numaraSayaclari(db))).numaralar.find((n) => n.anahtar === anahtar);
+    assert.deepEqual(await oku('stok.lot-no'), { anahtar: 'stok.lot-no', modul: 'stok', sifirlanma: 'hep', sayaclar: [] });
+    await vt().tx((db) => numaraAl(db, 'stok.lot-no', { varMi: bosMu }));
+    await vt().tx((db) => numaraAl(db, 'stok.lot-no', { varMi: bosMu }));
+    assert.deepEqual((await oku('stok.lot-no'))?.sayaclar, [{ firmaKodu: null, sonSira: 2 }]);
+    // Dolu numara atlanınca sayaç da ilerler: ekrandaki sayaç verilen son sıradır.
+    await vt().tx((db) => numaraAl(db, 'stok.lot-no', { varMi: (n) => Promise.resolve(n === 'LT-000003') }));
+    assert.deepEqual((await oku('stok.lot-no'))?.sayaclar, [{ firmaKodu: null, sonSira: 4 }]);
+    // Aylık kalıba geçince eski dönemin sayacı gösterilmez; yeni dönem boştur.
+    await kalipYaz('stok.lot-no', 'LT-{YY}{AA}-{SAYAC:3}');
+    assert.deepEqual(await oku('stok.lot-no'), { anahtar: 'stok.lot-no', modul: 'stok', sifirlanma: 'ay', sayaclar: [] });
+    await vt().tx((db) => numaraAl(db, 'stok.lot-no', { varMi: bosMu }));
+    assert.deepEqual((await oku('stok.lot-no'))?.sayaclar, [{ firmaKodu: null, sonSira: 1 }]);
+    const yilKaydi = await vt().sorgu<{ donem: string }>("SELECT donem FROM ayar_numara_sayaci WHERE anahtar = 'stok.lot-no' ORDER BY donem");
+    assert.deepEqual(yilKaydi.map((r) => r.donem), ['-', `${yil}-${String(ay).padStart(2, '0')}`]);
+    // Firmalı kalıp: her firmanın sırası ayrı satırdır.
+    await kalipYaz('siparisler.siparis-no', '{FIRMA}-{YYYY}-{SAYAC:3}');
+    for (const FIRMA of ['FRA', 'FRB', 'FRA']) await vt().tx((db) => numaraAl(db, 'siparisler.siparis-no', { alanlar: { FIRMA }, varMi: bosMu }));
+    const siparis = await oku('siparisler.siparis-no');
+    assert.equal(siparis?.sifirlanma, 'yil');
+    assert.deepEqual(siparis?.sayaclar, [{ firmaKodu: 'FRA', sonSira: 2 }, { firmaKodu: 'FRB', sonSira: 1 }]);
+    // Her numara kalıbı listede bir kez; numara olmayan ayar yok.
+    const hepsi = (await vt().tx((db) => numaraSayaclari(db))).numaralar.map((n) => n.anahtar);
+    assert.equal(new Set(hepsi).size, hepsi.length);
+    assert.ok(hepsi.includes('uretim-emirleri.emir-no'));
+    assert.ok(!hepsi.includes('stok.yolda-suresi-dk'));
   });
 
   test('sayaç satırı biçim kısıtlarına uyar', async () => {
