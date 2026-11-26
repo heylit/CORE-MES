@@ -81,7 +81,7 @@ import {
   SayacKadrani, SayimTuslari, TopluGiris, UyariSeridi, type CevrimOlcer, type IsYeriBilgisi, type SayimTusu, type TerminalUyarisi,
 } from './Parcalar.tsx';
 import {
-  IsEylemi, IstasyonEylemi, IstasyonKarti, MakineEylemi, MakineKarti, type CarkMakinesi,
+  IstasyonEylemi, IstasyonKarti, MakineEylemi, MakineKarti, type CarkMakinesi,
 } from './Cark.tsx';
 import { SiradakiIsler } from './SiradakiIsler.tsx';
 import { eylemGorunur, sayimArtiEtiketi, sayimArtiIletisi, sayimEksiAria, sayimEksiEtiketi, sayimEksiIletisi, type EylemKimligi } from './eylemler.ts';
@@ -1617,7 +1617,7 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
   const siraSeridiVar = isler.some((x) => !x.empty) && (!dar || isler.length >= 2);
   const siraSeridi = (
     <SiradakiIsler isler={isler} ekranda={ai} bakilan={b ? bi : -1} siradakiMi={(i) => siraAnahtari(isler[i]!) === siradakiAnahtar} yer={kartYeri}
-      sec={(i) => bakYaz(i)} eylem={b ? <IsEylemi ekranda={false} don={() => bakilanYaz(null)} gec={() => isSec(bi)} /> : null} />
+      sec={(i) => bakYaz(i)} onizleme={b ? { don: () => bakilanYaz(null), gec: () => isSec(bi) } : null} />
   );
   // 3392 a: istasyon yönetimi olan kişi cihazı iki adımda bağlar; bağ cihazda saklanır, izi sunucuya yazılır (madde 11). İz yazılamazsa
   // bağ yine geçerlidir (ağ yokken kurulan tablet); kişiye söylenir.

@@ -82,14 +82,21 @@ test.describe('rota şeridi elle kayar', () => {
       await expect.poll(() => ol.evaluate((x) => x.scrollLeft)).toBeGreaterThan(once);
     }
     // 3338-6 a: üstte istasyonun işleri; ekrandaki iş şeridin ortasında. Çark yok; malzeme ve üretilen göstergeleri üst üste binmez.
+    // 3714: şerit boş pay bırakmaz; baştaki ya da sondaki iş kaydırmanın el verdiği kadar ortalanır ve tam görünür.
     const sira = page.getByRole('region', { name: 'Sıradaki işler' });
     await expect(sira).toBeVisible();
     await expect(page.getByRole('region', { name: 'İş ve makine çarkı' })).toHaveCount(0);
     const ekranda = sira.getByRole('button', { name: /· ekranda$/ });
-    await expect.poll(async () => {
-      const [k, s] = await Promise.all([ekranda.boundingBox(), sira.getByRole('list').boundingBox()]);
-      return k && s ? Math.abs(k.x + k.width / 2 - (s.x + s.width / 2)) : 999;
-    }).toBeLessThan(3);
+    await expect.poll(() => sira.getByRole('list').evaluate((ol: HTMLElement) => {
+      const li = ol.querySelector(':scope > li:has([data-ekranda])');
+      if (!li) return 999;
+      const k = li.getBoundingClientRect(), s = ol.getBoundingClientRect();
+      const istenen = ol.scrollLeft + k.left + k.width / 2 - (s.left + s.width / 2);
+      const sinirli = Math.max(0, Math.min(istenen, ol.scrollWidth - ol.clientWidth));
+      const gorunur = k.left >= s.left - 1 && k.right <= s.right + 1;
+      return gorunur ? Math.abs(sinirli - ol.scrollLeft) : 998;
+    })).toBeLessThan(3);
+    await expect(ekranda).toBeVisible();
     const [malzeme, kadran] = await Promise.all([page.getByRole('meter', { name: 'Malzeme %90' }).boundingBox(), page.locator('.tc-ay1-kadran').first().boundingBox()]);
     expect(malzeme && kadran ? malzeme.x + malzeme.width <= kadran.x + 1 : false).toBe(true);
     // Sayacın iki yanında malzeme (9 / 10 adetlik) ve üretilen göstergesi.
@@ -100,11 +107,11 @@ test.describe('rota şeridi elle kayar', () => {
       await ol.evaluate((x: HTMLElement) => { const l = x.querySelector('li[aria-current="step"]') as HTMLElement; x.scrollLeft = l.offsetLeft - x.offsetLeft - (x.clientWidth - l.offsetWidth) / 2; });
       await page.screenshot({ path: `${klasor}/rota-${bilgi.project.name}.png` });
     }
-    // İş kartında işin yeri: istasyon kodu ve makine; makinesi seçilmemiş işte bu açıkça yazar.
+    // İş kartında işin yeri: istasyon üst çubukta, makine bakılan kartta; makinesi seçilmemiş işte bu açıkça yazar.
     if (bilgi.project.name === 'g1280') {
-      const yerler = page.locator('.tc-ay1-is-yer');
-      await expect(yerler.first()).toBeVisible();
-      await expect(page.locator('.tc-ay1-is-yer').filter({ hasText: 'ORN-CNC-02' }).first()).toBeAttached();
+      const yer = sira.locator('.tc-ay1-sk-ayrinti').first();
+      await expect(yer).toBeVisible();
+      await expect(yer).toContainText(/Tezgâh\s*(ORN-CNC-02|Makine seçilmedi)/);
     }
     expect(ag.hatalar).toEqual([]);
     expect(ag.yazmalar.filter((y) => !y.includes('/arkon/iletiler'))).toEqual([]);

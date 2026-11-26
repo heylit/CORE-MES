@@ -213,14 +213,16 @@ test.describe('A1 Operatör', () => {
       await baska.click();
       await expect(baska).toHaveAttribute('aria-pressed', 'true');
       await expect(ekranda).toHaveAttribute('aria-pressed', 'false');
-      await expect(serit.getByText(/Önizleme · ekrandaki iş değişmez/)).toBeVisible();
+      await expect(serit.getByRole('group', { name: 'Önizleme · ekrandaki iş değişmez' })).toBeVisible();
+      // 3714 b: görünür kısa "Önizleme" ibaresi ve sıra sayacı düğmelerin altında.
+      await expect(serit.getByText('Önizleme', { exact: true })).toBeVisible();
       await expect(serit.getByRole('button', { name: 'Bu işe geç' })).toBeVisible();
       await expect(serit.getByText('4 iş · 1/4')).toBeVisible();
       expect(await ekranda.getAttribute('aria-label')).toBe(ekrandakiAd);
       expect(await tasma(page)).toBeLessThanOrEqual(0);
       await serit.getByRole('button', { name: 'Ekrandakine dön' }).click();
       await expect(ekranda).toHaveAttribute('aria-pressed', 'true');
-      await expect(serit.getByText(/Önizleme · ekrandaki iş değişmez/)).toHaveCount(0);
+      await expect(serit.getByRole('group', { name: 'Önizleme · ekrandaki iş değişmez' })).toHaveCount(0);
       expect(yazmalar(ag.yazmalar)).toEqual([]);
       expect(ag.hatalar).toEqual([]);
     });
