@@ -1258,7 +1258,7 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
     if (pv) { say('Önizlemede gönderilmez', 'eye', 'idle'); return; }
     const reason = elle ? 'Operatör isteği' : Array.from(new Set(items.map((b) => D.why[b.id] || b.freq || 'İlk parça'))).join(' + ');
     const req: SampleRequest = {
-      id: `rq${Date.now()}`, pkgId: o.pkg.id, no: o.no, part: o.part, rev: o.pkg.rev, machine: MACHINE, by: ME, at: Date.now(), reason,
+      id: `rq${Date.now()}`, pkgId: o.pkg.id, no: o.no, part: o.part, rev: o.pkg.rev, ...(typeof o.pkg.rotaRev === 'string' ? { rotaRev: o.pkg.rotaRev } : {}), machine: MACHINE, by: ME, at: Date.now(), reason,
       items: items.map((b) => b.id), crit: items.some((b) => b.crit), cnt: o.good, status: 'waiting', results: {},
     };
     // 3718 a: gönderim yolu (okutulan kart ya da kartsız gerekçe) isteğe yazılır; elle etiket istenmez.

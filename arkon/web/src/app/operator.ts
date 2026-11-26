@@ -467,7 +467,7 @@ export function App({ preview }) {
     if (!items.length) { say('Kontrol planında ölçü yok', 'check'); return; }
     if (preview) { say('Önizlemede gönderilmez', 'eye', 'var(--idle)'); return; }
     const reason = elle ? 'Operatör isteği' : Array.from(new Set(items.map(b => (D.why || {})[b.id] || b.freq || 'İlk parça'))).join(' + ');
-    const req = { id: 'rq' + Date.now(), pkgId: o.pkg.id, no: o.no, part: o.part, rev: o.pkg.rev, machine: MACHINE, by: ME(), at: Date.now(), reason, items: items.map(b => b.id), crit: items.some(b => b.crit), cnt: o.good, status: 'waiting', results: {} };
+    const req = { id: 'rq' + Date.now(), pkgId: o.pkg.id, no: o.no, part: o.part, rev: o.pkg.rev, ...(typeof o.pkg.rotaRev === 'string' ? { rotaRev: o.pkg.rotaRev } : {}), machine: MACHINE, by: ME(), at: Date.now(), reason, items: items.map(b => b.id), crit: items.some(b => b.crit), cnt: o.good, status: 'waiting', results: {} };
     await AKStore.DB.put('requests', req);
     AKStore.Bus.send({ type: 'sample', reqId: req.id, no: o.no, machine: MACHINE, reason });
     patch(yeniNumuneYamasi(req));
