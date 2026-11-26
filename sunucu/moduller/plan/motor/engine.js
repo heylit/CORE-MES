@@ -360,19 +360,35 @@ function matAlloc(st,jobs){
   for(const j of order){let ready=st.now;const det=[],op={};
     const kok=(j.ops||[]).filter(o=>!o.pr.length&&!o.matYok).map(o=>o.id);
     for(const r of j.malzeme||[]){const ad=r.adim!=null?j.id+'.'+r.adim:null;if(ad&&(bitti[ad]||kolDisi[ad]===2))continue;
-      const ops=ad?(j.ops||[]).some(o=>o.id===ad)?[ad]:[]:kok;
-      const need=(+r.miktar||0)*j.adet,s=sup[r.kod]||[];let rem=need,t=-1e9;const use=[];
-      for(const x of s){if(rem<=1e-9)break;if(x.kalan<=1e-9)continue;const q=Math.min(x.kalan,rem);x.kalan-=q;rem-=q;use.push({k:x.k,i:x.i,q});t=Math.max(t,x.t);if(x.k==='sa')x.jobs.push({j:j.id,q,kod:r.kod,ops});}
+      /* 3734: bölünmüş adımın payları (pay sırasıyla) satırın malzemesini sırayla paylaşır (payHazir) */
+      const paylar=ad?(j.ops||[]).filter(o=>o.id===ad||o.asil===ad).sort((a,b)=>(a.parca||1)-(b.parca||1)):[];
+      const ops=ad?paylar.map(o=>o.id):kok;
+      const need=(+r.miktar||0)*j.adet,s=sup[r.kod]||[];let rem=need,t=-1e9;const use=[],parti=[];
+      for(const x of s){if(rem<=1e-9)break;if(x.kalan<=1e-9)continue;const q=Math.min(x.kalan,rem);x.kalan-=q;rem-=q;use.push({k:x.k,i:x.i,q});parti.push({q,t:x.t,x});t=Math.max(t,x.t);}
       const eksikQ=rem>1e-9?rem:0;const tt=eksikQ?null:Math.max(t,st.now);
+      const ph=paylar.length>1?payHazir(paylar.map(o=>(+r.miktar||0)*o.adet),parti,need,st.now):null;
+      parti.forEach((u,k)=>{if(u.x.k==='sa')u.x.jobs.push({j:j.id,q:u.q,kod:r.kod,ops:ph?ops.filter((_,n)=>ph.parti[n].includes(k)):ops});});
       const kaynak=eksikQ?'eksik':tt<=st.now+1e-9&&!use.some(u=>u.k==='sa'&&po[u.i].tb)?'stok':'satın alma';
       det.push({kod:r.kod,need,t:tt,kaynak,eksikQ,use,ad:mats[r.kod]?mats[r.kod].ad:r.kod,birim:mats[r.kod]?mats[r.kod].birim:'',adim:r.adim??null,ops});
-      ready=tt==null?Infinity:Math.max(ready,tt);for(const id of ops)op[id]=tt==null?Infinity:Math.max(op[id]??st.now,tt);
+      ready=tt==null?Infinity:Math.max(ready,tt);ops.forEach((id,n)=>{const h=ph?ph.hazir[n]:tt==null?Infinity:tt;op[id]=Math.max(op[id]??st.now,h);});
       const sa=(sup[r.kod]||[]).filter(x=>x.k==='sa').reduce((a,x)=>a+x.q,0);
       summ[r.kod]=summ[r.kod]||{need:0,stok:mats[r.kod]?+mats[r.kod].stok||0:0,sa};summ[r.kod].need+=need;}
     let fiyat=0;for(const r of j.malzeme||[]){const m=mats[r.kod];if(!m||m.birimFiyat==null){fiyat=null;break;}fiyat+=m.birimFiyat*r.miktar*j.adet;}
     res[j.id]={ready,det,fiyat,op};}
   return {res,summ,po};
 }
+/* 3734: bölünmüş adımda pay başına malzeme. Paylar (pay sırasıyla) satırın gelişlerini geliş sırasıyla alır: pay kendi adedi x miktar
+   kadar, son pay kalanın tamamını (adım adedi pay toplamından farklıysa, hurda ya da sayım; bölünmemiş adım tek pay gibi bütün satırı
+   bekler). Payın hazır anı kullandığı gelişlerin en geçidir; payına geliş yetmezse eksiktir (Infinity); malzemesi sıfır olan pay
+   beklemez. pay: payların istediği miktar; parti: kullanılan gelişler sırasıyla ({q, t}); need: satırın toplamı.
+   Dönen: hazir (pay -> an), parti (pay -> kullandığı parti sıraları). */
+/** @param {number[]} pay @param {{q:number,t:number}[]} parti @param {number} need @param {number} now */
+function payHazir(pay,parti,need,now){const hazir=[],kullanan=[];let bas=0;
+  pay.forEach((q,n)=>{const son=n===pay.length-1,bit=son?need:Math.min(need,bas+Math.max(0,q));let t=now,top=0;const l=[];
+    if(bit>bas+1e-9){t=-Infinity;let c=0;for(let k=0;k<parti.length;k++){const a=c,z=c+parti[k].q;c=z;if(z<=bas+1e-9||a>=bit-1e-9)continue;l.push(k);t=Math.max(t,parti[k].t);top=Math.min(z,bit);}
+      t=top<bit-1e-9?Infinity:Math.max(t,now);}
+    hazir.push(t);kullanan.push(l);bas=Math.max(bas,bit);});
+  return {hazir,parti:kullanan};}
 /* plandan satın almaya: gerekli tarih, hızlandır, ertele; siparişi olmayan eksik için en geç sipariş tarihi */
 /** @param {any} [plan] @param {MotorDurumu} [st] */
 function satinalmaListe(plan,st){const cx=plan.cx,D=st.D,mats=Object.fromEntries((D.malzemeler||[]).map(m=>[m.kod,m]));
