@@ -41,14 +41,12 @@ describe('3131 bekletilen emrin paketi', () => {
     expect(paketleriBirlestir([], paketler, null, 'ORN-IST', 'ie-1').map((x) => x.pkg?.id)).toEqual(['ie-1']);
   });
 
-  it('Hazırlık: emir işaretle gelir; "Beklemede" süzgeci yalnız bekleyen emri, açık işleriyle gösterir', () => {
+  it('Hazırlık: bekleyen emir başlığında işaretle gelir', () => {
     const paketler = [P('a', 1, 1, 'Malzeme bekleniyor'), P('b', 1, 2, 'Malzeme bekleniyor', { status: 'draft' }), P('c', 2, 3, null)];
     const gruplar = paketleriGrupla(paketler, 'emir');
     const hepsi = takipEmirleri(gruplar, {}, new Map(), 'acik');
     expect(hepsi.map((e) => [e.no, e.bekletme])).toEqual([['ORN-UE-1', 'Malzeme bekleniyor'], ['ORN-UE-2', null]]);
-    const bekleyen = takipEmirleri(gruplar, {}, new Map(), 'beklemede');
-    expect(bekleyen.map((e) => e.no)).toEqual(['ORN-UE-1']);
-    expect(bekleyen[0]!.satirlar.map((s) => s.anahtar)).toEqual(['a', 'b']);
+    expect(hepsi[0]!.satirlar.map((s) => s.anahtar)).toEqual(['a', 'b']);
   });
 
   it('gönderim kartı: bekleyen emirde yayın serbest, operatöre devamda düştüğü söylenir', () => {

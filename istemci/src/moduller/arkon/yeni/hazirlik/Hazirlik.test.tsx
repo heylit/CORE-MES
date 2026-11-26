@@ -57,7 +57,7 @@ describe('A2 Hazırlık ekranı', () => {
     arkonAc('/arkon/hazirlik');
     const d = await ekran();
     expect(within(d).getByRole('heading', { name: /IE-DENEME-1/ })).toBeTruthy();
-    expect(within(screen.getByRole('complementary', { name: 'İş paketleri' })).getByRole('button', { name: /IE-DENEME-1/, pressed: true })).toBeTruthy();
+    expect(within(screen.getByRole('table', { name: 'Hazırlık listesi' })).getByText('IE-DENEME-1')).toBeTruthy();
     expect(yazmalar(istekler)).toEqual([]);
     fireEvent.click(within(d).getByRole('button', { name: /Terminale gönder/ }));
     const gonder = await within(d).findByRole('button', { name: 'Terminale gönder' });
@@ -548,7 +548,7 @@ describe('A2 Hazırlık ekranı', () => {
     await waitFor(() => { expect(ileti(istekler, 'pkg-removed')).toBe(true); }, { timeout: 10000 });
   }, 40000);
   // 2227: hazırlık matrisi Üretim Hazırlık listesinde. Kaynak emir ayrıntısındaki uçtur, tek okumada bütün emirler; yazma yoktur.
-  it('2227: paket kartında hazırlık çipi, Yayınla sekmesinde iş emrinin hazırlık satırları', async () => {
+  it('2227: listede eksik madde çipi, Yayınla sekmesinde iş emrinin hazırlık satırları', async () => {
     const isPaketi = { ...PAKET, id: 'tmi-ie-730', no: 'IE-DENEME-73', tmi: { emirId: 73, isEmriId: 730, opNo: 20 } };
     const biten = { ...PAKET, id: 'tmi-ie-740', no: 'IE-DENEME-74', tmi: { emirId: 74, isEmriId: 740, opNo: 10, bitti: true } };
     const istekler = sunucuKur(YONETICI, {
@@ -570,11 +570,10 @@ describe('A2 Hazırlık ekranı', () => {
     }));
     arkonAc('/arkon/hazirlik');
     const liste = await screen.findByRole('complementary', { name: 'İş paketleri' }, { timeout: 10000 });
-    expect(await within(liste).findByText('Hazırlık · 1 eksik', {}, { timeout: 10000 })).toBeTruthy();
+    expect(await within(liste).findByRole('button', { name: /^Çizim revizyonu eksik/ }, { timeout: 10000 })).toBeTruthy();
     expect(sorulan).toEqual(['73']);
     const d = await ekran();
-    const kart = within(liste).getAllByRole('button', { name: /IE-DENEME-73/ }).find((b) => b.hasAttribute('aria-pressed'));
-    fireEvent.click(kart!);
+    fireEvent.click(within(liste).getAllByRole('row').find((r) => r.hasAttribute('data-paket'))!);
     fireEvent.click(within(d).getByRole('button', { name: /Terminale gönder/ }));
     const hz = await within(d).findByRole('region', { name: 'Hazırlık' }, { timeout: 10000 });
     expect(within(hz).getByText('Çizim revizyonu')).toBeTruthy();

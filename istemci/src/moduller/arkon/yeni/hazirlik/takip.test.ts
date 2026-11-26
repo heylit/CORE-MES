@@ -23,23 +23,26 @@ describe('3111 takip tablosu', () => {
   const gruplar = paketleriGrupla(paketler, 'emir');
 
   it('payda emrin bütün adımlarıdır; paketi olmayan adım satırdır, biten sayılır', () => {
-    const [e] = takipEmirleri(gruplar, sonuclar, new Map([[7, ADIMLAR]]), 'hepsi');
+    const [e] = takipEmirleri(gruplar, sonuclar, new Map([[7, ADIMLAR]]), 'acik');
     expect(e!.dilimler).toEqual(['bitti', 'calisiyor', 'taslak', 'yok']);
     expect(e!.biten).toBe(1);
-    expect(e!.satirlar.map((s) => [s.opNo, s.paket?.id ?? null])).toEqual([[10, 'a'], [20, 'b'], [30, 'c'], [40, null]]);
+    expect(e!.satirlar.map((s) => [s.opNo, s.paket?.id ?? null])).toEqual([[20, 'b'], [30, 'c'], [40, null]]);
+    expect(takipEmirleri(gruplar, sonuclar, new Map([[7, ADIMLAR]]), 'bitti')[0]!.satirlar.map((s) => s.opNo)).toEqual([10]);
   });
 
   it('hazırlık okunmadıysa emir paketlerden kurulur', () => {
-    const [e] = takipEmirleri(gruplar, sonuclar, new Map(), 'hepsi');
+    const [e] = takipEmirleri(gruplar, sonuclar, new Map(), 'acik');
     expect(e!.dilimler).toEqual(['bitti', 'calisiyor', 'taslak']);
   });
 
   it('süzgeç: açık işler biteni gizler, paketsiz açık adım bağlam olarak kalır; yalnız paketsiz kalan emir listelenmez', () => {
     const [e] = takipEmirleri(gruplar, sonuclar, new Map([[7, ADIMLAR]]), 'acik');
     expect(e!.satirlar.map((s) => s.opNo)).toEqual([20, 30, 40]);
-    expect(takipEmirleri(gruplar, sonuclar, new Map([[7, ADIMLAR]]), 'yayinda')).toEqual([]);
-    expect(takipEmirleri(gruplar, sonuclar, new Map([[7, ADIMLAR]]), 'uretimde')[0]!.satirlar.map((s) => s.opNo)).toEqual([20]);
+    // 3606-2: "Terminalde" yayındaki ve üretimdeki işi birlikte gösterir.
+    expect(takipEmirleri(gruplar, sonuclar, new Map([[7, ADIMLAR]]), 'yayinda')[0]!.satirlar.map((s) => s.opNo)).toEqual([20]);
     expect(takipSuzgeciOku('bozuk')).toBe('acik');
+    // Eski oturumda kalan kaldırılmış süzgeç açık işlere döner.
+    for (const eski of ['hepsi', 'uretimde', 'taslak', 'beklemede']) expect(takipSuzgeciOku(eski)).toBe('acik');
   });
 
   it('3606 "Paket yok" süzgeci yalnız paketsiz açık adımları listeler; biten adım ve paketli adım girmez', () => {
@@ -47,6 +50,20 @@ describe('3111 takip tablosu', () => {
     expect(e!.satirlar.map((s) => [s.opNo, s.paket])).toEqual([[40, null]]);
     expect(takipEmirleri(gruplar, sonuclar, new Map(), 'paketsiz')).toEqual([]);
     expect(takipSuzgeciOku('paketsiz')).toBe('paketsiz');
+  });
+
+  it('3606-2 ek süzgeç: yalnız uyan paketli satır kalır, paketsiz adım bağlam olarak gösterilmez; hiç satırı kalmayan emir düşer', () => {
+    const [e] = takipEmirleri(gruplar, sonuclar, new Map([[7, ADIMLAR]]), 'durur', (s) => s.paket?.id === 'c');
+    expect(e!.satirlar.map((s) => s.paket?.id ?? null)).toEqual(['c']);
+    expect(takipEmirleri(gruplar, sonuclar, new Map([[7, ADIMLAR]]), 'uyari', () => false)).toEqual([]);
+  });
+
+  it('3606-2 iş emri dışı grupta (istasyon) emrin paketsiz adımları eklenmez, başlık grubun adıdır', () => {
+    const ist = paketleriGrupla(paketler, 'istasyon');
+    const [e] = takipEmirleri(ist, sonuclar, new Map([[7, ADIMLAR]]), 'acik', null, false);
+    expect(e!.no).toBe('ORN-IST');
+    expect(e!.satirlar.map((s) => s.paket?.id ?? null)).toEqual(['b', 'c']);
+    expect(e!.termin).toBe('');
   });
 
   it('geri çekme: taslak dışı her paket tek tek; toplu yalnız yayında ve başlamamış', () => {

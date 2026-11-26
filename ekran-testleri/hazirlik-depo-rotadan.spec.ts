@@ -22,8 +22,8 @@ test.describe('3702 Depo paketi rotadan', () => {
     await page.route('**/api/arkon/belgeler/pkgs/depo-1/yaz', (r) => { yazilanlar.push(r.request().postDataJSON()); return r.fulfill({ json: { sonuc: 'yazildi', surum: 2 } }); });
     await ac('/arkon/hazirlik');
     const duzen = page.getByRole('region', { name: 'İş paketi' });
-    // Dar genişlikte liste önce gelir: pakete dokunulunca düzenleyici açılır.
-    if (bilgi.project.name !== 'g1280') await page.getByRole('button', { name: /Op 30 · Depo/ }).first().click({ timeout: 20_000 });
+    // Hazırlık tek listedir: pakete dokunulunca düzenleyici açılır (her genişlikte).
+    await page.getByRole('button', { name: /Op 30 · Depo/ }).first().click({ timeout: 20_000 });
     await duzen.getByRole('button', { name: /Toplama listesi/ }).click({ timeout: 20_000 });
     await expect(duzen.getByText('Rotadan: girenler (toplama)')).toBeVisible();
     await expect(duzen.getByLabel('Kod').first()).toHaveValue('ORN-HAM-01');

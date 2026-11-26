@@ -33,9 +33,11 @@ function kur(d: Deneme, ek: string, perms?: unknown, ozet?: unknown) {
   return { istekler, a, b };
 }
 const yazim = (l: Istek[], id: string) => l.filter((i) => i.yol === `/arkon/belgeler/pkgs/${id}/yaz`).map((i) => (i.govde as { govde: Pkg }).govde);
+// Liste paketler okunmadan da çizilir: ilk paket satırı gelene kadar beklenir.
 const tablo = async () => {
-  fireEvent.click(await screen.findByRole('button', { name: 'Liste' }, { timeout: 10000 }));
-  return screen.findByRole('table', { name: 'Hazırlık takip tablosu' }, { timeout: 10000 });
+  const t = await screen.findByRole('table', { name: 'Hazırlık listesi' }, { timeout: 10000 });
+  await waitFor(() => { expect(t.querySelector('[data-paket]')).not.toBeNull(); }, { timeout: 10000 });
+  return t;
 };
 
 describe('3111 Hazırlık takip tablosu', () => {
@@ -48,12 +50,27 @@ describe('3111 Hazırlık takip tablosu', () => {
     expect(within(t).getByText('Çalışıyor')).toBeTruthy();
   }, 40000);
 
-  it('3688: her adımın satırında hazırlık matrisi, simge ve adla (renk tek başına değil)', async () => {
+  it('3606-2: satırda yalnız eksik madde adıyla; çip paketin Terminale gönder sekmesini açar; tamam madde yazılmaz', async () => {
     kur(YONETICI, 'M');
     const t = await tablo();
-    const m = (await within(t).findAllByRole('group', { name: /^Hazırlık matrisi/ }, { timeout: 10000 }))[0]!;
-    expect(within(m).getByRole('img', { name: 'CNC kurulumu: Eksik' })).toBeTruthy();
-    expect(within(m).getByRole('img', { name: 'Rota yürürlükte: Tamam' })).toBeTruthy();
+    const cip = await within(t).findByRole('button', { name: /^CNC kurulumu eksik/ }, { timeout: 10000 });
+    expect(cip.textContent).toBe('CNC');
+    expect(within(t).queryByRole('button', { name: /^Rota yürürlükte/ })).toBeNull();
+    expect(within(t).getByText('1/3 hazır')).toBeTruthy();
+    fireEvent.click(cip);
+    const d = await screen.findByRole('region', { name: 'İş paketi' }, { timeout: 10000 });
+    expect(within(d).getByRole('button', { name: /Terminale gönder/ }).getAttribute('aria-current')).toBe('step');
+  }, 40000);
+
+  it('3606-2: durum çipleri sayılı; Durur yalnız durduran maddesi eksik işi gösterir', async () => {
+    kur(YONETICI, 'D');
+    const t = await tablo();
+    const g = screen.getByRole('group', { name: 'İş durumu' });
+    expect((await within(g).findByRole('button', { name: /^Durur 1$/ }, { timeout: 10000 }))).toBeTruthy();
+    fireEvent.click(within(g).getByRole('button', { name: /^Durur/ }));
+    expect(within(t).getByRole('button', { name: /^Op 10/ })).toBeTruthy();
+    expect(within(t).queryByRole('button', { name: /^Op 20/ })).toBeNull();
+    expect(within(t).queryByText(/Taşlama/)).toBeNull();
   }, 40000);
 
   it('3688: okuma bitti ve veri yoksa yer tutucu da şerit de çizilmez (süresiz boş yer kalmaz)', async () => {
@@ -61,7 +78,7 @@ describe('3111 Hazırlık takip tablosu', () => {
     const t = await tablo();
     await within(t).findByText('ORN-UE-Y', undefined, { timeout: 10000 });
     await waitFor(() => { expect(t.querySelector('[data-yukleniyor]')).toBeNull(); }, { timeout: 10000 });
-    expect(within(t).queryAllByRole('group', { name: /^Hazırlık matrisi/ })).toEqual([]);
+    expect(within(t).queryAllByRole('button', { name: / eksik, / })).toEqual([]);
   }, 40000);
 
   it('toplu geri çekme yalnız başlamamış yayındaki işte; onaydan sonra taslağa yazılır, çalışan iş değişmez', async () => {
@@ -71,12 +88,26 @@ describe('3111 Hazırlık takip tablosu', () => {
     const kutuB = within(t).getByRole('checkbox', { name: /Op 20 seç/ });
     expect(kutuB.matches(':disabled')).toBe(true);
     fireEvent.click(kutuA);
-    fireEvent.click(screen.getByRole('button', { name: '1 işi operatörden geri çek' }));
+    fireEvent.click(screen.getByRole('button', { name: '1 işi geri çek' }));
     const p = await screen.findByRole('dialog', { name: 'Operatörden geri çek' });
     expect(yazim(istekler, a.id)).toEqual([]);
     fireEvent.click(within(p).getByRole('button', { name: 'Geri çek' }));
     await waitFor(() => { expect(yazim(istekler, a.id).some((x) => x.status === 'draft' && x.dirty)).toBe(true); }, { timeout: 10000 });
     expect(yazim(istekler, b.id)).toEqual([]);
+  }, 40000);
+
+  it('3606-2: seçim çubuğu tek satır; sık işlemler görünür, gerisi Diğer menüsünde; Seçimi kaldır çubuğu kapatır', async () => {
+    kur(YONETICI, 'M');
+    const t = await tablo();
+    fireEvent.click(within(t).getByRole('checkbox', { name: /Op 10 seç/ }));
+    const cubuk = screen.getByRole('toolbar', { name: 'Seçilenler' });
+    expect(within(cubuk).getByRole('button', { name: '1 işi geri çek' })).toBeTruthy();
+    expect(within(cubuk).queryByRole('button', { name: 'Seçimi kaldır' })).toBeNull();
+    fireEvent.click(within(cubuk).getByRole('button', { name: 'Seçilenler için diğer işlemler' }));
+    const menu = await screen.findByRole('menu', { name: 'Seçilenler için diğer işlemler' });
+    expect(within(menu).getByRole('menuitem', { name: 'Kalite Merkezi’nden doldur' })).toBeTruthy();
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Seçimi kaldır' }));
+    await waitFor(() => { expect(screen.queryByRole('toolbar', { name: 'Seçilenler' })).toBeNull(); });
   }, 40000);
 
   it('çalışan iş tek tek çekilir ve pencere başladığını söyler; vazgeçince yazma gitmez', async () => {
