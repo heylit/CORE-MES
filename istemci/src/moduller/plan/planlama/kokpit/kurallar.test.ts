@@ -423,6 +423,22 @@ describe('Kokpit bağ okları (3330)', () => {
     isler['1.20'] = is('1.20', 'T2', 4, 6);
     expect(adimBaglari([e], isler)[0]).toEqual({ kimden: '1.10', kime: '1.20', tur: 'b', ters: false });
   });
+  it('3730: bölünmüş öncülün her payından ardıla ok çıkar; bölünmüş ardılın her payına ok girer (ardıl bütün payları bekler)', () => {
+    const e = emir('1', { adimlar: [{ id: '1.10', ad: '', adaylar: ['T1', 'T2'] }, { id: '1.20', ad: '', adaylar: ['T1', 'T2'], onculler: [['1.10', 'b']] }] });
+    const pay = (no: number, n: number, asil: string) => ({ pay: { no, n, asil, adet: 5 }, ...(no > 1 ? { adim: asil } : {}) });
+    const isler = Object.fromEntries([
+      is('1.10', 'T1', 0, 4, pay(1, 2, '1.10')), is('1.10~2', 'T2', 0, 6, pay(2, 2, '1.10')), is('1.20', 'T1', 6, 8),
+    ].map((x) => [x.id, x]));
+    expect(adimBaglari([e], isler)).toEqual([
+      { kimden: '1.10', kime: '1.20', tur: 'b', ters: false },
+      { kimden: '1.10~2', kime: '1.20', tur: 'b', ters: false },
+    ]);
+    isler['1.20'] = is('1.20', 'T1', 5, 8, pay(1, 2, '1.20'));
+    isler['1.20~2'] = is('1.20~2', 'T2', 6, 9, pay(2, 2, '1.20'));
+    expect(adimBaglari([e], isler).map((b) => [b.kimden, b.kime, b.ters])).toEqual([
+      ['1.10', '1.20', true], ['1.10', '1.20~2', false], ['1.10~2', '1.20', true], ['1.10~2', '1.20~2', false],
+    ]);
+  });
   it('3662: öncül 12:15 biter, ardıl 12:15 başlar (aynı dakika) ters değildir; bir dakika erken başlarsa terstir', () => {
     const e = emir('1', { adimlar: [{ id: '1.10', ad: '', adaylar: ['T1'] }, { id: '1.20', ad: '', adaylar: ['T2'], onculler: [['1.10', 'b']] }] });
     const ters = (bas: number) => adimBaglari([e], Object.fromEntries([is('1.10', 'T1', 8, 12.25), is('1.20', 'T2', bas, bas + 1)].map((x) => [x.id, x])))[0]?.ters;

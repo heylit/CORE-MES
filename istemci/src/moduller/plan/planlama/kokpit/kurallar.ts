@@ -40,13 +40,19 @@ export type BagTuru = 'b' | 'o';
 export interface KokpitAdimi { id: string; ad: string; adaylar: string[]; onculler?: readonly (readonly [string, BagTuru])[] }
 // Sınır dakika çözünürlüğünde yarı açıktır (plan dakikayla yazılır, 3662): aynı dakikada biten ve başlayan adım ters sayılmaz.
 // Tahtada çizilen bağ: öncülün ve ardılın planda yeri vardır. ters: "bitince" bağlı ardıl öncülü bitmeden başlıyor (geçersiz sıra).
+// Bölünmüş adımda bağ paylar arasındadır: ardılın her payı öncülün bütün paylarını bekler (motor), ok her öncül payından her ardıl payına çizilir.
 export interface AdimBagi { kimden: string; kime: string; tur: BagTuru; ters: boolean }
 export function adimBaglari(emirler: readonly KokpitEmri[], isler: Readonly<Record<string, KokpitIsi>>): AdimBagi[] {
   return emirler.flatMap((e) => e.adimlar.flatMap((a) => (a.onculler ?? []).flatMap(([kimden, tur]): AdimBagi[] => {
-    const o = isler[kimden], x = isler[a.id], oC = adimSonu({ isler }, kimden);
-    return o && x && oC !== null ? [{ kimden, kime: a.id, tur, ters: tur === 'b' && Math.round(x.S * 60) < Math.round(oC * 60) }] : [];
+    const oC = adimSonu({ isler }, kimden);
+    if (oC === null) return [];
+    const ardillar = adimPaylari({ isler }, a.id);
+    return adimPaylari({ isler }, kimden).flatMap((o) => ardillar.map((x) => ({ kimden: o.id, kime: x.id, tur, ters: tur === 'b' && Math.round(x.S * 60) < Math.round(oC * 60) })));
   })));
 }
+// Bağın bir ucu verilen adımın (ya da payının) payı mı.
+export const bagAdimda = (b: AdimBagi, isler: Readonly<Record<string, KokpitIsi>>, adim: string): boolean =>
+  [b.kimden, b.kime].some((id) => { const x = isler[id]; return x !== undefined && adimKimligi(x) === adim; });
 // Adımın bağımlılık yazısı (3330): öncül, emrin operasyon listesindeki sıra numarasıyla (tablodaki # sütunu). uzun tablo sütunudur
 // ("1 Torna · bitince"), kisa dar ekranda ve listede adın yanındadır ("1 Torna bitince", "2 Freze ile örtüşmeli"). Bekleyen öncülü yoksa null.
 export function bagimlilik(e: Pick<KokpitEmri, 'adimlar'>, a: KokpitAdimi): { uzun: string; kisa: string } | null {
