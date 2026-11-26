@@ -680,6 +680,8 @@ export const planAyrimiCozucusu = (cozucu: servis.PlanAyrimiCozucusu | null): vo
 // 1979 (2003 c): plan, adımın canlı paylarını verir (kablolama.ts); payı olan kişi katılır, payı olan makine çalışan adıma eklenir.
 export const planPaylariCozucusu = (cozucu: servis.PlanPaylariCozucusu | null): void => servis.planPaylariCozucusuKaydet(cozucu);
 export type { PlanPayi } from './kurallar.ts';
+// 3749: plan, çalışan bölünmüş adımın pay ilerlemesini (payın sahibi ve saydığı) buradan okur (kablolama.ts).
+export const payIlerlemeleri = (db: Db, isEmriIdleri: readonly number[]) => servis.payIlerlemeleri(db, isEmriIdleri);
 // Arkon makine seçicisi: seçilen makinelerin başka emre ayrımları, başlatma ve devamın 409 kuralıyla aynı yoldan.
 export const makineAyrimlari = (db: Db, emirId: number, makineIdleri: readonly number[]) => servis.makineAyrimlari(db, emirId, makineIdleri);
 

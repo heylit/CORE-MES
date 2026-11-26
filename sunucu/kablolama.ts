@@ -32,7 +32,7 @@ import * as ortakDosyalar from './moduller/ortak-dosyalar/disari.ts';
 import * as projeler from './moduller/projeler/disari.ts';
 import * as plan from './moduller/plan/disari.ts';
 import { canliPlanOkuyucusu as takimhaneCanliPlanOkuyucusu } from './moduller/takimhane/disari.ts';
-import { acilSiparisOnaylandi, isEmriTakimHazirlaDurumlari, bakimCozucusu as planBakimCozucusu, bayatAdimBittiYansit, bayatEmirBittiYansit, bayatEmirIptalYansit, bayatFasonHareketiYansit, bayatIsEmirleriDegistiYansit, bayatSatinAlmaTerminiYansit, canliMakineAyrimlari, canliPaylar, canliPlan, malzemeKartiIzleri as planKartIzleri, malzemeMaliyetiCozucusu, planMotoruCozucusu, sunucuPlanCozucusu, tahminiMaliyetCozucusu, teklifDene } from './moduller/plan/disari.ts';
+import { acilSiparisOnaylandi, isEmriTakimHazirlaDurumlari, bakimCozucusu as planBakimCozucusu, bayatAdimBittiYansit, bayatEmirBittiYansit, bayatEmirIptalYansit, bayatFasonHareketiYansit, bayatIsEmirleriDegistiYansit, bayatSatinAlmaTerminiYansit, canliMakineAyrimlari, canliPaylar, canliPlan, payIlerlemesiCozucusu, malzemeKartiIzleri as planKartIzleri, malzemeMaliyetiCozucusu, planMotoruCozucusu, sunucuPlanCozucusu, tahminiMaliyetCozucusu, teklifDene } from './moduller/plan/disari.ts';
 import { isEmriTahminiMaliyetleri, projedeSayilanBelgeler, uretimEmriMalzemeMaliyetleri } from './moduller/proje-maliyet/disari.ts';
 import { satisSatiriAcikTalepleriKilitle, satisSatiriBagliKalemler, satisSiparisiKalemCozucusu } from './moduller/satin-alma/disari.ts';
 import { alimDinle, terminDinle as satinAlmaTerminDinle, belgeGenelGiderOranlari, emirTedarikDurumlari, kaliteDurumuCozucusu, malzemeKartiIzleri as satinAlmaKartIzleri, onayliListeCozucusu, parcaRevizyonuCozucusu as siparisParcaRevizyonuCozucusu, fasonKonumuCozucusu, planlananGidisCozucusu, emirKartKullanimiCozucusu, stokMiktariCozucusu, stokYokCozucusu, tuketimSerisiCozucusu } from './moduller/satin-alma/disari.ts';
@@ -533,6 +533,7 @@ export function sunucununBaglari(): Bag[] {
     bag('emirsiz stok çıkışı -> finans genel gider', stokCikisiCozucusu, stok.emirsizCikisTutari),
     bag('plan makine ayrımı -> üretim emirleri', uretimEmirleri.planAyrimiCozucusu, canliMakineAyrimlari),
     bag('plan payları -> üretim emirleri terminali', uretimEmirleri.planPaylariCozucusu, canliPaylar),
+    bag('pay ilerlemesi (terminal sayımı) -> plan', payIlerlemesiCozucusu, uretimEmirleri.payIlerlemeleri),
     bag('üretim emri malzeme maliyeti -> plan', malzemeMaliyetiCozucusu, uretimEmriMalzemeMaliyetleri),
     bag('sipariş onaylandı -> plan acil sipariş', siparisOnaylandiDinle, acilSiparisOnaylandi),
     // 3272: onayda proje ve emirler kendiliğinden açılır (acil siparişin emri açıldıktan sonra: o kalem yeniden açılmaz). Onay geri alınınca
