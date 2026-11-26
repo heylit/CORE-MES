@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import type {
   AcikSiparisSatiri, AcikSiparisSatirlariCevabi, AmbalajTuru, DepoSevkSatiri, EmirTamamlamaCevabi, FasonIsleriCevabi, GozOnerisiCevabi, KonumAyrintiCevabi, KonumlarCevabi, MalKabulCevabi, MalKabulGovdesi, MalKabullerCevabi, MalKabulOzeti, MalzemeAyrintiCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
-import { Dugme, DurumKutusu, Girdi, Kart, Rozet, SabitEylem, Secim, Sekmeler, Tablo, useTelefon, type Sutun } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Rozet, SabitEylem, Secim, Sekmeler, Tablo, useTelefon, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useGonderimKilidi } from '../../ortak/veri/korumali-komut.ts';
 import { DosyaHatasi, dosyaYukle, KucukResimKutusu, useKucukResimler } from '../belge-merkezi/disari.ts';
@@ -44,6 +44,8 @@ interface Satir {
   gidenParti: string;
   // Kutunun firmasındaki açık emrin fason işi: seçilince dönen kart rotadan gelir, giden iş parçasıdır ('' seçilmedi).
   fasonIsEmriId: string; fasonIsEtiketi: string;
+  // 3708: rotadaki kontrol türüne göre dönüş yolu ('' işe bağlı değil); eski taslakta yok.
+  donusYolu?: '' | 'gkk' | 'adet-hasar' | 'aktarim'; hasarAdet?: string; sonrakiFirma?: string;
   // Dış operasyonlardan gelişte (2426) kutunun işleri yüklenince seçilecek iş ('' yok).
   bekleyenFasonIsi: string;
   // Parti sertifikası (#960): dosya seçilince yüklenir; mal kabul özetiyle belgeyi açıp partiye bağlar.
@@ -60,7 +62,7 @@ export interface IslenenParca { no: string; etiket: string; emir: string }
 let sayac = 0;
 const bosSatir = (): Satir => ({ anahtar: ++sayac, kart: '', miktar: '', konumId: '', tedarikciPartiNo: '', dokumNo: '', sertifikaNo: '', ambalajTur: '', ambalajOlcu: '', ozelL: '', ozelW: '', ozelH: '', ambalajSayisi: '', ambalajIci: '', elleMiktar: false, siparisSatirId: '', siparisEtiketi: '',
   siparisRevizyonu: '', yururlukRevizyonu: '', revizyonUyusmuyor: false,
-  hizmetKarti: '', donus: 'fason', gidenKart: '', fasonKonumId: '', gidenMiktar: '', gidenParti: '', fasonIsEmriId: '', fasonIsEtiketi: '', bekleyenFasonIsi: '',
+  hizmetKarti: '', donus: 'fason', gidenKart: '', fasonKonumId: '', gidenMiktar: '', gidenParti: '', fasonIsEmriId: '', fasonIsEtiketi: '', bekleyenFasonIsi: '', donusYolu: '', hasarAdet: '',
   sertifikaOzet: '', sertifikaAdi: '', sertifikaYukleniyor: false, sevkKalemiId: '', sevkEtiketi: '', sonKullanma: '' });
 // Hiç dokunulmamış satır (kart, miktar, sipariş ve hizmet boş); emirden dolumda yerini doldurulan satırlara bırakır.
 const bosMu = (s: Satir): boolean => s.kart === '' && s.miktar === '' && s.siparisSatirId === '' && s.hizmetKarti === '' && s.sevkKalemiId === '';
@@ -135,6 +137,52 @@ function KarantinaKonumu({ s, degistir }: { s: Satir; degistir: (d: Partial<Sati
   );
 }
 
+// 3708: kaynağında muayeneli fasonda (sonraki adım fason değil) dönüş karantinasız girer; depocu yalnız adet ve hasarı sayar.
+export const HASAR_FAZLA = 'Hasarlı adet kabul edilen adetten büyük olamaz.';
+export const hasarFazlaMi = (s: Pick<Satir, 'donusYolu' | 'hasarAdet' | 'miktar'>): boolean =>
+  s.donusYolu === 'adet-hasar' && Number(s.hasarAdet ?? '0') > Number(s.miktar === '' ? '0' : s.miktar);
+// Aktarım satırı mal kabule girmez; ana Kabul et onu normal girişe çevirip sunucudan ret alırdı, depocu aktarımı yaptığını sanırdı.
+export const aktarimdaMi = (s: Pick<Satir, 'fasonIsEmriId' | 'donusYolu'>): boolean => !!s.fasonIsEmriId && s.donusYolu === 'aktarim';
+export const AKTARIM_KABULDE_YOK = 'Aktarım satırı mal kabule girmez: satırdaki "Aktarımı kaydet" ile kaydedin, sonra satırı kaldırın.';
+function HasarAdedi({ s, degistir }: { s: Satir; degistir: (d: Partial<Satir>) => void }) {
+  const fazla = hasarFazlaMi(s);
+  return (
+    <>
+      <Girdi etiket="Hasarlı adet" inputMode="numeric" value={s.hasarAdet ?? ''} onChange={(e) => degistir({ hasarAdet: e.target.value })} aria-invalid={fazla || undefined}
+        ipucu={fazla ? HASAR_FAZLA : 'Firmada kaynağında muayene yapıldı: parça karantinasız Kabul konumuna girer; hasarlı adet firmadan düşülür.'} />
+    </>
+  );
+}
+
+// 3708: sonraki adım da fasonsa parça TMI'ye dönmez; ilk firmanın bildirdiği adet sonraki firmaya aktarılır (stok hareketi yok).
+function FasonAktarimi({ isEmriId, sonrakiFirma }: { isEmriId: number; sonrakiFirma: string }) {
+  const [saglam, setSaglam] = useState('');
+  const [hurda, setHurda] = useState('0');
+  const [onay, setOnay] = useState(false);
+  const { komut } = useStokKomutu(() => korumaliPost('/stok/fason-aktarimi', { isEmriId, saglamAdet: Number(saglam), hurdaAdet: Number(hurda || '0') }), 'Aktarım kaydedildi.', () => { setSaglam(''); setOnay(false); });
+  const gecerli = saglam !== '' && Number.isInteger(Number(saglam)) && Number(saglam) >= 0;
+  const hedef = sonrakiFirma || 'sonraki firma';
+  // Alan dış mal kabul formunun içindedir: Enter formu göndermesin, aktarım onayını açsın.
+  const enter = (e: KeyboardEvent<HTMLInputElement>): void => { if (e.key === 'Enter') { e.preventDefault(); if (gecerli) setOnay(true); } };
+  return (
+    <fieldset className="tc-stok-tam tc-stok-aktarim">
+      <legend>Sonraki firmaya aktarım</legend>
+      <p className="tc-stok-bilgi"><span>Sonraki firma: <strong>{hedef}</strong>. Parça firmadan doğrudan oraya gider; mal kabule girmez, stok hareketi yazılmaz.</span></p>
+      <div className="tc-stok-iki">
+        <Girdi etiket="Sağlam adet" inputMode="numeric" value={saglam} onChange={(e) => setSaglam(e.target.value)} onKeyDown={enter} required />
+        <Girdi etiket="Hurda adet" inputMode="numeric" value={hurda} onChange={(e) => setHurda(e.target.value)} onKeyDown={enter} />
+      </div>
+      {!gecerli && <p className="tc-stok-bilgi" role="status">Sağlam adedi girin (0 ya da tam sayı); düğme o zaman açılır.</p>}
+      <div className="tc-stok-sag">
+        <Dugme tur="birincil" simge="check" onClick={() => setOnay(true)} disabled={!gecerli}>Aktarımı kaydet</Dugme>
+      </div>
+      <OnayPenceresi acik={onay} baslik="Aktarımı kaydet" onayMetni="Kaydet" yukleniyor={komut.isPending} onayla={() => komut.mutate({})} vazgec={() => setOnay(false)}>
+        <p>{saglam} sağlam, {hurda || '0'} hurda adet <strong>{hedef}</strong> firmasına aktarılacak. Kayıt geri alınmaz.</p>
+      </OnayPenceresi>
+    </fieldset>
+  );
+}
+
 function FasonDonusu({ s, degistir }: { s: Satir; degistir: (d: Partial<Satir>) => void }) {
   const kutular = useQuery({ queryKey: anahtarlar.liste('fason-kutulari', {}), queryFn: () => api.get<KonumlarCevabi>('/stok/konumlar?tur=fason&sayfaBoyu=200') });
   const kutu = Number(s.fasonKonumId);
@@ -143,10 +191,10 @@ function FasonDonusu({ s, degistir }: { s: Satir; degistir: (d: Partial<Satir>) 
   const isler = useQuery({ queryKey: anahtarlar.liste('fason-isleri', { kutu }), enabled: kutu > 0, queryFn: () => api.get<FasonIsleriCevabi>(`/stok/fason-isleri?konumId=${kutu}`) });
   const isSec = (v: string): void => {
     const x = (isler.data?.isler ?? []).find((i) => String(i.isEmriId) === v);
-    if (!x) { degistir({ fasonIsEmriId: '', fasonIsEtiketi: '', kart: s.islenen?.no ?? '', ...(s.elleMiktar ? {} : { miktar: '' }) }); return; }
+    if (!x) { degistir({ fasonIsEmriId: '', fasonIsEtiketi: '', donusYolu: '', sonrakiFirma: '', hasarAdet: '', kart: s.islenen?.no ?? '', ...(s.elleMiktar ? {} : { miktar: '' }) }); return; }
     const kart = `${x.donenKart.kod ?? `#${x.donenKart.malzemeId}`}${x.donenKart.ad ? ` · ${x.donenKart.ad}` : ''}`;
     degistir({
-      fasonIsEmriId: v, kart: String(x.donenKart.malzemeId), miktar: fasonOnerilenAdet(x), elleMiktar: false, gidenKart: '', gidenMiktar: '', gidenParti: '', ambalajTur: '', tedarikciPartiNo: '', dokumNo: '', sertifikaNo: '', sertifikaOzet: '', sertifikaAdi: '',
+      fasonIsEmriId: v, donusYolu: x.donusYolu, sonrakiFirma: x.sonrakiFirma ?? '', hasarAdet: '', konumId: '', kart: String(x.donenKart.malzemeId), miktar: fasonOnerilenAdet(x), elleMiktar: false, gidenKart: '', gidenMiktar: '', gidenParti: '', ambalajTur: '', tedarikciPartiNo: '', dokumNo: '', sertifikaNo: '', sertifikaOzet: '', sertifikaAdi: '',
       fasonIsEtiketi: `${kart}${x.statulu ? ` (OP ${x.opNo} statüsünde)` : ''}`,
     });
   };
@@ -311,9 +359,11 @@ function SatirGirdisi({ s, konumlar, degistir, sil }: { s: Satir; konumlar: { de
       {s.hizmetKarti && <FasonDonusu s={s} degistir={degistir} />}
       {s.hizmetKarti && s.donus === 'hizmet' ? (
         <Girdi etiket={`Teslim alınan miktar${o.data?.ozet.birim ? ` (${o.data.ozet.birim})` : ''}`} inputMode="decimal" value={s.miktar} onChange={(e) => degistir({ miktar: e.target.value, elleMiktar: true })} required />
+) : s.fasonIsEmriId && s.donusYolu === 'aktarim' ? (
+        <FasonAktarimi isEmriId={Number(s.fasonIsEmriId)} sonrakiFirma={s.sonrakiFirma ?? ''} />
       ) : s.fasonIsEmriId ? <>
-      <Girdi etiket="Dönen adet" inputMode="numeric" value={s.miktar} onChange={(e) => degistir({ miktar: e.target.value, elleMiktar: true })} required ipucu="Öneri firmada kalandır; saydığını yaz. Sağlam ve hatalıyı GKK ayırır." />
-      <KarantinaKonumu s={s} degistir={degistir} />
+      <Girdi etiket="Dönen adet" inputMode="numeric" value={s.miktar} onChange={(e) => degistir({ miktar: e.target.value, elleMiktar: true })} required ipucu={s.donusYolu === 'adet-hasar' ? 'Öneri firmada kalandır; saydığını yaz.' : 'Öneri firmada kalandır; saydığını yaz. Sağlam ve hatalıyı GKK ayırır.'} />
+      {s.donusYolu === 'adet-hasar' ? <HasarAdedi s={s} degistir={degistir} /> : <KarantinaKonumu s={s} degistir={degistir} />}
       </> : <>
       <MalzemeSecici etiket={s.hizmetKarti ? 'Dönen malzeme' : 'Malzeme'} deger={s.kart} degistir={(kart) => degistir({ kart })} />
       <AmbalajSecimi s={s} degistir={degistir} />
@@ -357,7 +407,7 @@ export function satirGovdesi(s: Satir): MalKabulGovdesi['satirlar'][number] {
 function satirGirdisi(s: Satir): MalKabulGovdesi['satirlar'][number] {
   if (s.hizmetKarti && s.donus === 'hizmet') return { malzemeId: Number(s.hizmetKarti), miktar: miktarGirdisi(s.miktar), siparisSatirId: Number(s.siparisSatirId) };
   if (s.hizmetKarti && s.fasonIsEmriId) {
-    return { malzemeId: Number(s.kart), miktar: miktarGirdisi(s.miktar), ...(s.konumId ? { konumId: Number(s.konumId) } : {}), parti: null, siparisSatirId: Number(s.siparisSatirId), fasonIsi: { isEmriId: Number(s.fasonIsEmriId) }, ambalaj: null };
+    return { malzemeId: Number(s.kart), miktar: miktarGirdisi(s.miktar), ...(s.konumId ? { konumId: Number(s.konumId) } : {}), parti: null, siparisSatirId: Number(s.siparisSatirId), fasonIsi: { isEmriId: Number(s.fasonIsEmriId), ...(s.donusYolu === 'adet-hasar' && Number(s.hasarAdet) > 0 ? { hasarAdet: Number(s.hasarAdet) } : {}) }, ambalaj: null };
   }
   const fason = s.hizmetKarti ? { fason: { malzemeId: Number(s.gidenKart), konumId: Number(s.fasonKonumId), ...(s.gidenMiktar ? { miktar: miktarGirdisi(s.gidenMiktar) } : {}),
     ...(s.gidenParti ? { partiId: s.gidenParti === 'yok' ? null : Number(s.gidenParti) } : {}) } } : {};
@@ -540,6 +590,7 @@ export function MalKabul() {
   // Uyarı yazarken değil, alandan çıkınca aranır.
   const [arananIrsaliye, setArananIrsaliye] = useState('');
   const [satirlar, setSatirlar] = useState<Satir[]>(() => [bosSatir()]);
+  const kabulNedeni = satirlar.some(aktarimdaMi) ? AKTARIM_KABULDE_YOK : onayBekleyenMetni(satirlar);
   const [adres, setAdres] = useSearchParams();
   // 2890: iki sekme; seçim adreste durur. Teslim alamayan kişi formu görmez, doğrudan yapılanları görür.
   const sekme: 'kabul' | 'yapilanlar' = yazabilir && adres.get('sekme') !== 'yapilanlar' ? 'kabul' : 'yapilanlar';
@@ -646,7 +697,7 @@ export function MalKabul() {
             {tur === 'satin_alma' && satirlar.some((s) => !bosMu(s) && !s.siparisSatirId) && (
               <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">Satın alma kabulünde her satır bir sipariş satırına bağlanır. Siparişi olmayan malı "Diğer" türüyle ve açıklamayla alın.</p>
             )}
-            <div className="tc-stok-sag">{taslak.durumYazisi}{satirlar.some(farkliOnaysiz) && <span id="tc-kabul-neden" className="tc-stok-bilgi tc-stok-bilgi-uyari">{onayBekleyenMetni(satirlar)}</span>}<SabitEylem><Dugme tur="birincil" boyut="ana" type="submit" yukleniyor={komut.isPending} disabled={satirlar.some((s) => s.sertifikaYukleniyor || farkliOnaysiz(s))} {...(satirlar.some(farkliOnaysiz) ? { 'aria-describedby': 'tc-kabul-neden' } : {})}>Kabul et</Dugme></SabitEylem></div>
+            <div className="tc-stok-sag">{taslak.durumYazisi}{kabulNedeni && <span id="tc-kabul-neden" className="tc-stok-bilgi tc-stok-bilgi-uyari">{kabulNedeni}</span>}<SabitEylem><Dugme tur="birincil" boyut="ana" type="submit" yukleniyor={komut.isPending} disabled={satirlar.some((s) => s.sertifikaYukleniyor || farkliOnaysiz(s) || hasarFazlaMi(s) || aktarimdaMi(s))} {...(kabulNedeni ? { 'aria-describedby': 'tc-kabul-neden' } : {})}>Kabul et</Dugme></SabitEylem></div>
             {etiket && <p className="tc-stok-bilgi"><span>{etiket.no} kaydedildi.</span><EtiketMerkeziDugmesi tur="mal-kabul" idler={[etiket.id]}>Lot etiketlerini bas</EtiketMerkeziDugmesi></p>}
             {etiket && irsaliyeBekliyor && (
               <p className="tc-stok-bilgi" role="status"><span>İrsaliye bu cihazda bekliyor; bağlantı gelince {irsaliyeBekliyor} numaralı mal kabule eklenecek.</span></p>

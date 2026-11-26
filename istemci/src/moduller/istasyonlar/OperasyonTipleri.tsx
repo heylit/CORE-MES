@@ -4,7 +4,10 @@ import type {
   IstasyonlarCevabi, OperasyonGrubu, OperasyonTipiGovdesi, OperasyonTipleriCevabi, SurumluOperasyonTipi,
 } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type { SeceneklerCevabi } from '#paylasilan/sozlesme/rota.ts';
-import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Secim, Tablo } from '../../ortak/arayuz/index.ts';
+import { CokSatir, Dugme, DurumKutusu, Girdi, IsaretKutusu, Secim, Tablo } from '../../ortak/arayuz/index.ts';
+
+const AZAMI_BELGE = 10;
+const AZAMI_BELGE_ADI = 60;
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { csvIndir } from './csv.ts';
@@ -24,6 +27,7 @@ function OperasyonTipiFormu({ kayit, kullanim, kapat }: { kayit: SurumluOperasyo
   const [ayarDk, ayarDkYaz] = useState(kayit?.varsayilanAyarDk ?? '');
   const [birimDk, birimDkYaz] = useState(kayit?.varsayilanBirimDk ?? '');
   const [istasyonId, istasyonIdYaz] = useState(kayit?.varsayilanIstasyonId == null ? '' : String(kayit.varsayilanIstasyonId));
+  const [belgeler, belgelerYaz] = useState((kayit?.zorunluBelgeler ?? []).join('\n'));
   const { kaydet, hata, mesgul } = useKayitIslemleri('/operasyon-tipleri', kapat);
   const istasyonlar = useQuery({
     queryKey: anahtarlar.istasyonlar,
@@ -32,6 +36,13 @@ function OperasyonTipiFormu({ kayit, kullanim, kapat }: { kayit: SurumluOperasyo
   const istasyonSecenekleri = (istasyonlar.data?.istasyonlar ?? [])
     .filter((i) => i.aktif || i.id === kayit?.varsayilanIstasyonId)
     .map((i) => ({ deger: String(i.id), baslik: `${i.kod} - ${i.ad}${i.aktif ? '' : ' (pasif)'}` }));
+  // 3708: zorunlu belgeler yalnız kalite tipinde (kaynağında muayene) anlamlıdır; başka grupta alan yalnız değer varsa görünür, gönderilmeyen değer sunucuda değişmez.
+  const belgeAlani = grup === 'KAL' || (kayit?.zorunluBelgeler ?? []).length > 0;
+  // Satır başına bir ad; sunucunun sınırı (10 ad, ad başına 60 harf) yazarken alanın altında gösterilir ve kayıt gönderilmez.
+  const belgeAdlari = [...new Set(belgeler.split('\n').map((b) => b.trim()).filter((b) => b !== ''))];
+  const belgeHatasi = !belgeAlani ? undefined
+    : belgeAdlari.length > AZAMI_BELGE ? `Zorunlu belgeler: en çok ${String(AZAMI_BELGE)} ad (${String(belgeAdlari.length)} yazıldı).`
+      : belgeAdlari.some((b) => b.length > AZAMI_BELGE_ADI) ? `Zorunlu belgeler: her ad en çok ${String(AZAMI_BELGE_ADI)} harf.` : undefined;
   // Kısaltma ekranda yok (kullanıcı kararı: kod zaten kısaltmadır); gönderilmediği için girilmiş değer sunucuda değişmez.
   // Varsayılanlar rota adımına öneridir; boş bırakılan "bilinmiyor" olarak gider. Ekran hepsini gönderir; boşaltılan alan null gider, sunucu yalnız gönderilmeyeni korur.
   const ortak = {
@@ -39,6 +50,7 @@ function OperasyonTipiFormu({ kayit, kullanim, kapat }: { kayit: SurumluOperasyo
     varsayilanAyarDk: ayarDk.trim() === '' ? null : ayarDk.trim().replace(',', '.'),
     varsayilanBirimDk: birimDk.trim() === '' ? null : birimDk.trim().replace(',', '.'),
     varsayilanIstasyonId: istasyonId === '' ? null : Number(istasyonId),
+    ...(belgeAlani ? { zorunluBelgeler: belgeAdlari } : {}),
   };
   // Kod yalnız değiştirilince gönderilir: gönderilmeyen kod sunucuda aynı kalır, kullanılmış tipte kilide takılmaz.
   const kodDegisti = kayit !== null && kod.trim().toLocaleUpperCase('tr-TR') !== kayit.kod;
@@ -49,7 +61,7 @@ function OperasyonTipiFormu({ kayit, kullanim, kapat }: { kayit: SurumluOperasyo
     <KayitPenceresi
       baslik={kayit ? 'Operasyon tipi düzenle' : 'Yeni operasyon tipi'}
       kapat={kapat}
-      kaydet={() => kaydet.mutate({ kayit, govde })}
+      kaydet={() => { if (belgeHatasi === undefined) kaydet.mutate({ kayit, govde }); }}
       mesgul={mesgul}
       hata={hata}
     >
@@ -81,6 +93,18 @@ function OperasyonTipiFormu({ kayit, kullanim, kapat }: { kayit: SurumluOperasyo
         onChange={(o) => istasyonIdYaz(o.target.value)}
       />
       <IsaretKutusu etiket="Aktif" checked={aktif} onChange={(o) => aktifYaz(o.target.checked)} />
+      {belgeAlani && (
+        <div className="tc-form-tam">
+          <CokSatir
+            etiket="Zorunlu belgeler"
+            value={belgeler}
+            onChange={(o) => belgelerYaz(o.target.value)}
+            rows={4}
+            hata={belgeHatasi}
+            ipucu="Her satıra bir belge adı (ör. Malzeme sertifikası). Kaynağında muayene bu belgeler yüklenmeden onaylanmaz; boşsa belge istenmez."
+          />
+        </div>
+      )}
     </KayitPenceresi>
   );
 }

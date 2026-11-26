@@ -5,6 +5,7 @@ import type { OndalikMetin } from '#paylasilan/ondalik.ts';
 import { KATALOG_TURLERI } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { EmirTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { FasonKontrol } from '#paylasilan/fason-kontrol.ts';
 import type { AgacCevabi, Bagimlilik, IlkParcaSecimi, KullanimCevabi, MakineKullanimi, RevizyonDurumu, UrunOzeti } from '#paylasilan/sozlesme/rota.ts';
 import { malzemeAra as kartAra } from '../../malzemeler/disari.ts';
 import { aletTurleri } from '../../kalibrasyon/disari.ts';
@@ -39,6 +40,8 @@ export interface RotaAdimi {
   enKucukParca: number | null;
   yenidenAyar: boolean;
   ilkParca: IlkParcaSecimi;
+  kontrolTuru: FasonKontrol;
+  muayeneSuresiSaat: OndalikMetin | null;
   adaylar: { kaynak: Kaynak; ayarSuresiDk: OndalikMetin | null; birimSureDk: OndalikMetin | null }[];
   bilesenler: { malzemeId: number; miktar: OndalikMetin; fireYuzde: OndalikMetin }[];
   yanUrunler: { malzemeId: number; miktar: OndalikMetin }[];
@@ -109,7 +112,7 @@ function revizyonKur(r: RevizyonSatiri, icerik: Icerik, talimatlar: ReadonlyMap<
       kaynak: a.kaynak === null || a.kaynak.tur === 'fason' ? null : (a.kaynak as Kaynak),
       fason: a.kaynak?.tur === 'fason' ? { firmaId: a.kaynak.id, terminGun: a.terminGun } : null,
       ayarSuresiDk: a.ayarSuresiDk, birimSureDk: a.birimSureDk, bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi, firePayiYuzde: a.firePayiYuzde,
-      makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar, ilkParca: a.ilkParca,
+      makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar, ilkParca: a.ilkParca, kontrolTuru: a.kontrolTuru, muayeneSuresiSaat: a.muayeneSuresiSaat,
       adaylar: (yazim[i]?.adaylar ?? []).map(({ kaynak, ayarSuresiDk, birimSureDk }) => ({ kaynak, ayarSuresiDk, birimSureDk })) as RotaAdimi['adaylar'],
       bilesenler: (yazim[i]?.bilesenler ?? []) as RotaAdimi['bilesenler'],
       yanUrunler: (yazim[i]?.yanUrunler ?? []) as RotaAdimi['yanUrunler'],
@@ -142,6 +145,8 @@ export interface DurumRotaAdimi {
   ayar: boolean;
   ayarDk: OndalikMetin | null;
   ilkParca: IlkParcaSecimi;
+  kontrolTuru: FasonKontrol;
+  muayeneSuresiSaat: OndalikMetin | null;
   adaylar: { kaynak: Kaynak; ayarSuresiDk: OndalikMetin | null; birimSureDk: OndalikMetin | null; islemSuresiDk: OndalikMetin | null; degisimSuresiDk: OndalikMetin | null }[];
   bilesenler: { malzemeId: number; miktar: OndalikMetin; fireYuzde: OndalikMetin }[];
   yanUrunler: { malzemeId: number; miktar: OndalikMetin }[];
@@ -186,7 +191,7 @@ export async function durumRevizyonlari(db: Db, malzemeId: number | null = null,
       adimlar: icerik.adimlar.map((a, i) => ({
         opNo: a.opNo, operasyonTipiId: a.operasyonTipiId, ad: a.ad, kaynak: a.kaynak, terminGun: a.terminGun, ayarSuresiDk: a.ayarSuresiDk,
         birimSureDk: a.birimSureDk, islemSuresiDk: a.islemSuresiDk, degisimSuresiDk: a.degisimSuresiDk, bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi,
-        firePayiYuzde: a.firePayiYuzde, makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar, ilkParca: a.ilkParca,
+        firePayiYuzde: a.firePayiYuzde, makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar, ilkParca: a.ilkParca, kontrolTuru: a.kontrolTuru, muayeneSuresiSaat: a.muayeneSuresiSaat,
         adaylar: icerik.adaylar.filter((x) => x.adimId === a.id)
           .map(({ kaynak, ayarSuresiDk, birimSureDk, islemSuresiDk, degisimSuresiDk }) => ({ kaynak, ayarSuresiDk, birimSureDk, islemSuresiDk, degisimSuresiDk })),
         bilesenler: icerik.bilesenler.filter((x) => x.adimId === a.id).map(({ malzemeId, miktar, fireYuzde }) => ({ malzemeId, miktar, fireYuzde })),

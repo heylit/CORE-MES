@@ -236,6 +236,27 @@ describe('operasyon tipleri bölümü (IS13)', () => {
     });
     // Gönderilmeyen kısaltma sunucuda değişmez: girilmiş değer silinmez.
     expect(cagrilar.find((c) => c.yontem === 'POST')?.govde).not.toHaveProperty('kisaltma');
+    // 3708: talaşlı tipte zorunlu belge alanı yoktur ve gönderilmez (sunucudaki liste değişmez).
+    expect(within(pencere).queryByLabelText(/Zorunlu belgeler/)).toBeNull();
+    expect(cagrilar.find((c) => c.yontem === 'POST')?.govde).not.toHaveProperty('zorunluBelgeler');
+  });
+
+  it('3708: kalite tipinde zorunlu belgeler satır satır girilir ve liste olarak gider; 10 addan fazlası alanın altında yazılır, gönderilmez', async () => {
+    const cagrilar = sunucuKur(YONETICI, ek);
+    goster(<Istasyonlar />, '/istasyonlar/operasyon-tipleri');
+    fireEvent.click(await screen.findByText('Eski İşlem'));
+    const pencere = await screen.findByRole('dialog');
+    const alan = within(pencere).getByLabelText(/Zorunlu belgeler/);
+    expect(alan.tagName).toBe('TEXTAREA');
+    fireEvent.change(alan, { target: { value: Array.from({ length: 11 }, (_, i) => `Belge ${String(i + 1)}`).join('\n') } });
+    expect(within(pencere).getByText('Zorunlu belgeler: en çok 10 ad (11 yazıldı).')).toBeTruthy();
+    expect(alan.getAttribute('aria-invalid')).toBe('true');
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    expect(cagrilar.some((c) => c.yontem === 'POST')).toBe(false);
+    fireEvent.change(alan, { target: { value: 'Malzeme sertifikası\n Test raporu \n\nTest raporu' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(cagrilar.some((c) => c.yontem === 'POST')).toBe(true); });
+    expect(cagrilar.find((c) => c.yontem === 'POST')?.govde).toMatchObject({ zorunluBelgeler: ['Malzeme sertifikası', 'Test raporu'], surum: 1 });
   });
 });
 

@@ -1011,3 +1011,9 @@ tr[data-bekleyen] .tc-rr1-pr-op { color: var(--hold); }
 .tc-rr1-rotayeni { border-style: dashed; flex-direction: row; align-items: center; justify-content: center; }
 /* 3644: seçili emir türü açıkça görünür. */
 .tc-rr1-rv-panel .tc-dugme[aria-pressed="true"] { background: var(--hazard); color: var(--on-hazard); border-color: var(--hazard); }
+
+/* 3708: fason adımın kontrol seçimi; kapalı seçenek yarı saydam değil, kesikli çerçeveli ve nedeni tam kontrastlı yazılıdır. */
+.tc-rr1-fkontrol { display: flex; flex-direction: column; gap: var(--b-2); margin-top: var(--b-2); }
+.tc-rr1-fkontrol-baslik { font-weight: 600; font-size: var(--yazi-s); }
+.tc-rr1-depb[aria-disabled='true'] { cursor: not-allowed; border-style: dashed; }
+.tc-rr1-depb[aria-disabled='true'] small { color: var(--ink); }

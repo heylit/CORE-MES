@@ -629,7 +629,7 @@ describe('Mal kabul', () => {
     const ozet = (id: number, tur: 'yarimamul' | 'hizmet', ad: string) => ({ ozet: { id, tur, kod: `K-${id}`, ad, onayDurumu: 'aktif', kullanilabilir: true, birim: 'adet' } } satisfies MalzemeOzetiCevabi);
     const acik = { satirlar: [{ id: 51, siparisNo: 'SA-F', talepNo: 'ST-2026-009', tedarikciAdi: 'Deneme Kaplama', malzemeId: 903, malzemeTur: 'hizmet', kalemAdi: 'Kaplama', miktar: '20', kalanMiktar: '20', birim: 'adet', beklenenTeslim: null }] } satisfies AcikSiparisSatirlariCevabi;
     const fasonKutusu = { id: 77, kod: 'FSN-01', tur: 'fason', ad: 'Deneme fasoncu', depoId: 1, depoKod: 'ANA', rafId: null, bolmeNo: null, katNo: null, sonSayim: null, aktif: true, satirSayisi: 1, haritaGozId: null, haritaAlanId: null, surum: 1 } as const;
-    const isler = { isler: [{ isEmriId: 5, emirNo: 'UE-2026-001', opNo: 30, adim: 'Kaplama', gonderilen: 20, donen: 4, hurda: 1, donenKart: { malzemeId: 904, kod: 'K-904', ad: 'Deneme mil kaplamalı', birim: 'adet' }, statulu: false }] } satisfies FasonIsleriCevabi;
+    const isler = { isler: [{ isEmriId: 5, emirNo: 'UE-2026-001', opNo: 30, adim: 'Kaplama', gonderilen: 20, donen: 4, hurda: 1, donenKart: { malzemeId: 904, kod: 'K-904', ad: 'Deneme mil kaplamalı', birim: 'adet' }, statulu: false, donusYolu: 'gkk' as const }] } satisfies FasonIsleriCevabi;
     const belge = { belge: { id: 3, no: 'MK-000003', tur: 'satin_alma', irsaliyeNo: null, zaman: '2026-10-09T09:00:00+03:00', kisiAd: 'Deneme Depocu', satirSayisi: 1, farkSayisi: 0, duzeltilenId: null, duzeltenId: null }, hareketIdler: [] };
     const istekler = sunucuKur(DEPOCU, {
       'GET /stok/konumlar': () => json(200, { satirlar: [fasonKutusu], toplam: 1, sayfa: 1, sayfaBoyu: 200 } satisfies KonumlarCevabi),
@@ -652,6 +652,83 @@ describe('Mal kabul', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Kabul et' }));
     await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST')).toBe(true));
     expect((istekler.find((i) => i.yontem === 'POST')!.govde as { satirlar: unknown[] }).satirlar[0]).toMatchObject({ malzemeId: 904, miktar: '15', siparisSatirId: 51, fasonIsi: { isEmriId: 5 } });
+  });
+  it('3708: kaynağında muayeneli fason işinde karantina konumu sorulmaz, hasarlı adet gövdeye yazılır', async () => {
+    const ozet = (id: number, tur: 'yarimamul' | 'hizmet', ad: string) => ({ ozet: { id, tur, kod: `K-${id}`, ad, onayDurumu: 'aktif', kullanilabilir: true, birim: 'adet' } } satisfies MalzemeOzetiCevabi);
+    const acik = { satirlar: [{ id: 51, siparisNo: 'SA-F', talepNo: 'ST-2026-009', tedarikciAdi: 'Deneme Kaplama', malzemeId: 903, malzemeTur: 'hizmet', kalemAdi: 'Kaplama', miktar: '20', kalanMiktar: '20', birim: 'adet', beklenenTeslim: null }] } satisfies AcikSiparisSatirlariCevabi;
+    const fasonKutusu = { id: 77, kod: 'FSN-01', tur: 'fason', ad: 'Deneme fasoncu', depoId: 1, depoKod: 'ANA', rafId: null, bolmeNo: null, katNo: null, sonSayim: null, aktif: true, satirSayisi: 1, haritaGozId: null, haritaAlanId: null, surum: 1 } as const;
+    const isler = { isler: [{ isEmriId: 5, emirNo: 'UE-2026-001', opNo: 30, adim: 'Kaplama', gonderilen: 20, donen: 4, hurda: 1, donenKart: { malzemeId: 904, kod: 'K-904', ad: 'Deneme mil kaplamalı', birim: 'adet' }, statulu: false, donusYolu: 'adet-hasar' as const }] } satisfies FasonIsleriCevabi;
+    const belge = { belge: { id: 3, no: 'MK-000003', tur: 'satin_alma', irsaliyeNo: null, zaman: '2026-10-09T09:00:00+03:00', kisiAd: 'Deneme Depocu', satirSayisi: 1, farkSayisi: 0, duzeltilenId: null, duzeltenId: null }, hareketIdler: [] };
+    const istekler = sunucuKur(DEPOCU, {
+      'GET /stok/konumlar': () => json(200, { satirlar: [fasonKutusu], toplam: 1, sayfa: 1, sayfaBoyu: 200 } satisfies KonumlarCevabi),
+      'GET /stok/konumlar/77': () => json(200, { konum: fasonKutusu, raf: null, bakiyeler: [], haritaYeri: null, zemin: null }),
+      'GET /stok/fason-isleri': () => json(200, isler),
+      'GET /stok/mal-kabuller': () => json(200, bosListe satisfies MalKabullerCevabi),
+      'GET /stok/acik-siparis-satirlari': () => json(200, acik),
+      'GET /stok/malzemeler/903/ozet': () => json(200, ozet(903, 'hizmet', 'Deneme kaplama hizmeti')),
+      'GET /stok/malzemeler/904/ozet': () => json(200, ozet(904, 'yarimamul', 'Deneme mil kaplamalı')),
+      'GET /stok/malzemeler/904': () => json(200, AYRINTI),
+      'GET /stok/malzemeler/904/goz-onerisi': () => json(200, { oneri: null }),
+      'POST /stok/mal-kabul': () => json(200, belge),
+    });
+    ac('/stok/mal-kabul?fasonIsEmri=5&siparisSatiri=51&konum=77');
+    expect(await screen.findByText('SA-F · Deneme Kaplama · Kaplama')).toBeTruthy();
+    expect(await screen.findByText(/K-904 · Deneme mil kaplamalı/)).toBeTruthy();
+    expect((screen.getByLabelText('Fason kutusu') as HTMLSelectElement).value).toBe('77');
+    expect((screen.getByLabelText('Fason işi') as HTMLSelectElement).value).toBe('5');
+    expect((screen.getByLabelText(/Dönen adet/) as HTMLInputElement).value).toBe('15');
+    expect(screen.queryByLabelText('Karantina konumu')).toBeNull();
+    expect(screen.queryByText(/GKK ayırır/)).toBeNull();
+    fireEvent.change(screen.getByLabelText(/Hasarlı adet/), { target: { value: '99' } });
+    expect(await screen.findByText('Hasarlı adet kabul edilen adetten büyük olamaz.')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Kabul et' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText(/Hasarlı adet/), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Kabul et' }));
+    await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST')).toBe(true));
+    expect((istekler.find((i) => i.yontem === 'POST')!.govde as { satirlar: unknown[] }).satirlar[0]).toMatchObject({ malzemeId: 904, miktar: '15', siparisSatirId: 51, fasonIsi: { isEmriId: 5, hasarAdet: 2 } });
+  });
+  it('3708: aktarım yolundaki fason işinde dönüş yerine sonraki firmaya aktarım formu çıkar ve aktarım ucuna yazar', async () => {
+    const ozet = (id: number, tur: 'yarimamul' | 'hizmet', ad: string) => ({ ozet: { id, tur, kod: `K-${id}`, ad, onayDurumu: 'aktif', kullanilabilir: true, birim: 'adet' } } satisfies MalzemeOzetiCevabi);
+    const acik = { satirlar: [{ id: 51, siparisNo: 'SA-F', talepNo: 'ST-2026-009', tedarikciAdi: 'Deneme Kaplama', malzemeId: 903, malzemeTur: 'hizmet', kalemAdi: 'Kaplama', miktar: '20', kalanMiktar: '20', birim: 'adet', beklenenTeslim: null }] } satisfies AcikSiparisSatirlariCevabi;
+    const fasonKutusu = { id: 77, kod: 'FSN-01', tur: 'fason', ad: 'Deneme fasoncu', depoId: 1, depoKod: 'ANA', rafId: null, bolmeNo: null, katNo: null, sonSayim: null, aktif: true, satirSayisi: 1, haritaGozId: null, haritaAlanId: null, surum: 1 } as const;
+    const isler = { isler: [{ isEmriId: 5, emirNo: 'UE-2026-001', opNo: 30, adim: 'Kaplama', gonderilen: 20, donen: 4, hurda: 1, donenKart: { malzemeId: 904, kod: 'K-904', ad: 'Deneme mil kaplamalı', birim: 'adet' }, statulu: false, donusYolu: 'aktarim' as const, sonrakiFirma: 'Deneme İkinci Firma' }] } satisfies FasonIsleriCevabi;
+    const belge = { belge: { id: 3, no: 'MK-000003', tur: 'satin_alma', irsaliyeNo: null, zaman: '2026-10-09T09:00:00+03:00', kisiAd: 'Deneme Depocu', satirSayisi: 1, farkSayisi: 0, duzeltilenId: null, duzeltenId: null }, hareketIdler: [] };
+    const istekler = sunucuKur(DEPOCU, {
+      'GET /stok/konumlar': () => json(200, { satirlar: [fasonKutusu], toplam: 1, sayfa: 1, sayfaBoyu: 200 } satisfies KonumlarCevabi),
+      'GET /stok/konumlar/77': () => json(200, { konum: fasonKutusu, raf: null, bakiyeler: [], haritaYeri: null, zemin: null }),
+      'GET /stok/fason-isleri': () => json(200, isler),
+      'GET /stok/mal-kabuller': () => json(200, bosListe satisfies MalKabullerCevabi),
+      'GET /stok/acik-siparis-satirlari': () => json(200, acik),
+      'GET /stok/malzemeler/903/ozet': () => json(200, ozet(903, 'hizmet', 'Deneme kaplama hizmeti')),
+      'GET /stok/malzemeler/904/ozet': () => json(200, ozet(904, 'yarimamul', 'Deneme mil kaplamalı')),
+      'GET /stok/malzemeler/904': () => json(200, AYRINTI),
+      'GET /stok/malzemeler/904/goz-onerisi': () => json(200, { oneri: null }),
+      'POST /stok/mal-kabul': () => json(200, belge),
+      'POST /stok/fason-aktarimi': () => json(200, { aktarimId: 1 }),
+    });
+    ac('/stok/mal-kabul?fasonIsEmri=5&siparisSatiri=51&konum=77');
+    expect(await screen.findByText('SA-F · Deneme Kaplama · Kaplama')).toBeTruthy();
+    expect(await screen.findByText(/K-904 · Deneme mil kaplamalı/)).toBeTruthy();
+    expect((screen.getByLabelText('Fason kutusu') as HTMLSelectElement).value).toBe('77');
+    expect((screen.getByLabelText('Fason işi') as HTMLSelectElement).value).toBe('5');
+    expect(screen.queryByLabelText(/Dönen adet/)).toBeNull();
+    fireEvent.change(await screen.findByLabelText(/Sağlam adet/), { target: { value: '12' } });
+    fireEvent.change(screen.getByLabelText(/Hurda adet/), { target: { value: '3' } });
+    expect(screen.getByText('Deneme İkinci Firma')).toBeTruthy();
+    // Aktarım satırı mal kabule girmez: ana Kabul et kapalı ve nedenini söyler; alanda Enter mal kabul değil aktarım onayını açar.
+    const kabul = screen.getByRole('button', { name: 'Kabul et' }) as HTMLButtonElement;
+    expect(kabul.disabled).toBe(true);
+    expect(document.getElementById(kabul.getAttribute('aria-describedby') ?? '')?.textContent).toMatch(/Aktarım satırı mal kabule girmez/);
+    fireEvent.keyDown(screen.getByLabelText(/Sağlam adet/), { key: 'Enter' });
+    expect(await screen.findByText(/12 sağlam, 3 hurda adet/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Vazgeç' }));
+    await waitFor(() => expect(screen.queryByText(/12 sağlam, 3 hurda adet/)).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Aktarımı kaydet' }));
+    expect(await screen.findByText(/12 sağlam, 3 hurda adet/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/stok/fason-aktarimi')).toBe(true));
+    expect(istekler.find((i) => i.yol === '/stok/fason-aktarimi')!.govde).toEqual({ isEmriId: 5, saglamAdet: 12, hurdaAdet: 3 });
+    expect(istekler.some((i) => i.yol === '/stok/mal-kabul')).toBe(false);
   });
   it('fason kutusunda giden kartın birden çok partisi varsa giden parti sorulur ve gövdeye yazılır; tek partide sorulmaz', async () => {
     const ozet = (id: number, tur: 'yarimamul' | 'hizmet', ad: string) => ({ ozet: { id, tur, kod: `K-${id}`, ad, onayDurumu: 'aktif', kullanilabilir: true, birim: 'adet' } } satisfies MalzemeOzetiCevabi);

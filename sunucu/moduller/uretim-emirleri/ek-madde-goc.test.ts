@@ -8,8 +8,6 @@ import { gocleriUygula } from '#cekirdek/goc.ts';
 import { testSemasiAc } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { kullaniciYukle, yoneticiOlustur } from '../kisiler/disari.ts';
-import { uretimEmriAc } from './disari.ts';
-import type { IsEmriGirdisi } from './disari.ts';
 
 // 3494-3 a: Üretim Hazırlık'ın ek maddeleri dolu tabloda emrin hazırlık listesine taşınır. Ekleyen ve zaman korunur, tamamlanmış madde
 // tamamlayanı ve zamanıyla tamam kalır, geri alınmış açık kalır, kaldırılmış taşınmaz; sıra iş emrinin var olan listesinin sonundan sürer.
@@ -50,19 +48,17 @@ describe('ek madde göçü dolu tabloda (3494-3 a, gerçek PostgreSQL)', () => {
       `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
        VALUES ('ekm-dnm-1', 'mamul', 'EKM-DNM-', 1, 'aktif', $1, $2, $2) RETURNING no`,
       [JSON.stringify({ id: 'ekm-dnm-1', com: { ad: 'Deneme mamul' } }), yonetici]))!.no;
-    const revId = (await sahip.tek<{ id: number }>(
-      "INSERT INTO rota_revizyonu (malzeme_id, malzeme_turu, harf, durum, acan_kisi_id, iptal_eden_kisi_id, iptal_etme) VALUES ($1, 'mamul', 'ZZ', 'iptal', $2, $2, now()) RETURNING id",
-      [urunNo, yonetici]))!.id;
     const im = (await sahip.tek<{ id: number }>("INSERT INTO is_merkezi (kod, ad) VALUES ('EKMM', 'Deneme Merkezi') RETURNING id"))!.id;
     const istasyon = (await sahip.tek<{ id: number }>("INSERT INTO istasyon (kod, ad, is_merkezi_id) VALUES ('EKMI', 'Deneme İstasyonu', $1) RETURNING id", [im]))!.id;
     const makine = (await sahip.tek<{ id: number }>("INSERT INTO makine (kod, ad, istasyon_id) VALUES ('EKM1', 'Tezgah', $1) RETURNING id", [istasyon]))!.id;
-    const adim = (sira: number): IsEmriGirdisi => ({
-      sira, opNo: sira * 10, ad: `Adım ${String(sira)}`, operasyonTipiId: tipId, kaynak: { tur: 'makine', id: makine },
-      ayarSuresiDk: '10', birimSureDk: '1.5', terminGun: null, bagimlilik: 'bekleyen', devirAdedi: null, talimatSurumu: null, kontrolListesi: [],
-    });
-    const { uretimEmriId: emir, isEmriIdleri: [ie1, ie2] } = await vt.tx((db) => uretimEmriAc(db, kullanici, {
-      malzemeNo: urunNo, adet: 10, teslim: null, kaynakRotaRevizyonId: revId, projeId, isEmirleri: [adim(1), adim(2)],
-    }));
+    // Eski şemada uygulama kodu (uretimEmriAc) kullanılmaz: sonraki göçlerin sütunlarını yazar. Emir ve iş emirleri doğrudan eklenir.
+    const emir = (await sahip.tek<{ id: number }>(
+      "INSERT INTO uretim_emri (parca_no, parca_ad, adet, acan_id, malzeme_no, proje_id) VALUES ('P-EKM', 'Deneme', 10, $1, $2, $3) RETURNING id", [yonetici, urunNo, projeId]))!.id;
+    const isEmri = async (sira: number): Promise<number> => (await sahip.tek<{ id: number }>(
+      `INSERT INTO uretim_emirleri_is_emri (uretim_emri_id, sira, op_no, operasyon_tipi_id, ad, makine_id, ayar_suresi_dk, birim_sure_dk)
+       VALUES ($1, $2, $3, $4, $5, $6, 10, 1.5) RETURNING id`, [emir, sira, sira * 10, tipId, `Adım ${String(sira)}`, makine]))!.id;
+    const ie1 = await isEmri(1);
+    const ie2 = await isEmri(2);
     // İlk iş emrinde göçten önce Adım Durumu'ndan eklenmiş bir liste maddesi vardır (sıra 1); ikincinin listesi boştur.
     const varOlan = (await sahip.tek<{ id: number }>(
       "INSERT INTO emir_adimi (emir_id, is_emri_id, sira, ad, asama, ekleyen_id, eklenme) VALUES ($1, $2, 1, 'Var olan liste maddesi', 'hazirlik', $3, '2026-10-30T08:00:00Z') RETURNING id",

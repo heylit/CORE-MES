@@ -14,7 +14,7 @@ const satir = (id: number, malzemeId: number | null, kalemAdi: string, malzemeTu
   birim: 'adet', beklenenTeslim: null, ...ek,
 });
 const FASON = satir(41, 950, 'ORN-Flanş', 'hizmet', { isEmriId: 77, emirNo: 'ORN-UE-1' });
-const IS = { isEmriId: 77, emirNo: 'ORN-UE-1', opNo: 40, adim: 'Kaplama', gonderilen: 60, donen: 10, hurda: 2, donenKart: { malzemeId: 960, kod: 'ORN-FL-K', ad: 'Flanş kaplamalı', birim: 'adet' }, statulu: false };
+const IS = { isEmriId: 77, emirNo: 'ORN-UE-1', opNo: 40, adim: 'Kaplama', gonderilen: 60, donen: 10, hurda: 2, donenKart: { malzemeId: 960, kod: 'ORN-FL-K', ad: 'Flanş kaplamalı', birim: 'adet' }, statulu: false, donusYolu: 'gkk' as const };
 const KABUL: KabulIsi = { satir: FASON, tur: 'fason', fason: IS, hedef: 48 };
 const BELGE = { id: 12, no: 'MK-000012', tur: 'satin_alma', irsaliyeNo: null, zaman: '2026-11-03T10:00:00+03:00', kisiAd: 'D', satirSayisi: 1, farkSayisi: 0, duzeltilenId: null, duzeltenId: null };
 

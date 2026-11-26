@@ -44,7 +44,7 @@ describe('IS11: operasyon tipi kataloğu (gerçek PostgreSQL)', () => {
     const hepsi = await vt().tx((db) => operasyonTipleri(db, { pasiflerDahil: true }));
     assert.deepEqual(hepsi.find((t) => t.kod === 'ZZ-ESKI')?.aktif, false);
     assert.deepEqual(Object.keys(hepsi[0] ?? {}).sort(), [
-      'ad', 'aktif', 'grup', 'id', 'kisaltma', 'kod', 'varsayilanAyarDk', 'varsayilanBirimDk', 'varsayilanIstasyonId',
+      'ad', 'aktif', 'grup', 'id', 'kisaltma', 'kod', 'varsayilanAyarDk', 'varsayilanBirimDk', 'varsayilanIstasyonId', 'zorunluBelgeler',
     ]);
   });
 

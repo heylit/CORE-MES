@@ -982,6 +982,8 @@ function adimCevir(a: DurumRotaAdimi, sira: number, malzemeId: number, makineIst
     ayarli: a.ayar,
     ayarDk: metindenSayi(a.ayarDk),
     ilkParca: a.ilkParca,
+    kontrolTuru: a.kontrolTuru,
+    muayeneSuresiSaat: metindenSayi(a.muayeneSuresiSaat),
     dal: a.dal,
     birlesen: a.birlesen,
     adetCarpani: a.adetCarpani,

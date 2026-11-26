@@ -14,7 +14,7 @@ import { gkkGerekenKartlar, malzemeBirimDonusumleri, malzemeKullanilabilirMi, ma
 import { siparisSatirlari, siparisSatirlarininEmri, stokBirimiBasinaKg, teslimGeriAl, teslimIsle } from '../../satin-alma/disari.ts';
 import { depoKabulunuGeriAl } from '../../sevkiyat/disari.ts';
 import { projeAdlari } from '../../projeler/disari.ts';
-import { uretimEmriOzeti, emirDugumleri, emirlerinProjeleri, isEmriOzetleri, kapanisSonuclari } from '../../uretim-emirleri/disari.ts';
+import { fasonYoluOku, isEmriOzeti, uretimEmriOzeti, emirDugumleri, emirlerinProjeleri, isEmriOzetleri, kapanisSonuclari } from '../../uretim-emirleri/disari.ts';
 import {
   binde, bindenMetin, duzeltmeEngeli, partiDenetimi, partiEtiketi, partiGereksinimi, stoklanirMi, siparisBagiEngeli, siparisMalzemeEngeli, malKabulSatirTuru, farkliKartOnayiGerekir, fasonDonusKonumuEngeli,
   karantinaYokIletisi, gkkGirisKonumuEngeli, malKabulKonumuEngeli, girisKontroluDuzeltmeEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, uretimGirisiHedefi,
@@ -85,12 +85,16 @@ async function malKabulSatirlariniYaz(
     if (s.fasonIsi !== undefined) {
       if (s.fason !== undefined) throw dogrulama('Fason işinden dönüşte giden kart ayrıca seçilmez; giden, işin parçasıdır.', `${alan}.fason`);
       if (s.partiId !== undefined || s.parti || s.ambalaj || s.sertifika) throw dogrulama('Fason işinden dönen parça emrin parçasıdır; parti, ambalaj ve sertifika girilmez.', `${alan}.parti`);
-      const konumId = s.konumId === undefined ? await sorgular.ilkKarantinaKonumu(db) : Number(s.konumId);
+      // 3708: kaynağında muayeneli fasonda dönüş karantinasız girer (yalnız adet ve hasar kontrolü); konum verilmezse Kabul konumudur.
+      const isOzeti = await isEmriOzeti(db, Number(s.fasonIsi.isEmriId));
+      const yol = isOzeti ? await fasonYoluOku(db, isOzeti.uretimEmriId, Number(s.fasonIsi.isEmriId)) : null;
+      const karantinasiz = yol?.malKabul === 'adet-hasar';
+      const konumId = s.konumId !== undefined ? Number(s.konumId) : karantinasiz ? kabul : await sorgular.ilkKarantinaKonumu(db);
       if (konumId === null) throw dogrulama(karantinaYokIletisi(await karantinaEksigiNedeni(db), 'fason'), `${alan}.konumId`);
       const konum = await aktifKonum(db, konumId, `${alan}.konumId`);
-      const karantina = fasonDonusKonumuEngeli(konum.tur);
-      if (karantina) throw dogrulama(karantina, `${alan}.konumId`);
-      const giren = await korumali(() => fasonIsindenDonus(db, kisiId, { isEmriId: Number(s.fasonIsi!.isEmriId), malzemeId, adet: binde(s.miktar), konumId, alan }));
+      const konumEngeli = karantinasiz ? malKabulKonumuEngeli(konum.tur) : fasonDonusKonumuEngeli(konum.tur);
+      if (konumEngeli) throw dogrulama(konumEngeli, `${alan}.konumId`);
+      const giren = await korumali(() => fasonIsindenDonus(db, kisiId, { isEmriId: Number(s.fasonIsi!.isEmriId), malzemeId, adet: binde(s.miktar), konumId, alan, ...(s.fasonIsi!.hasarAdet === undefined ? {} : { hasarAdet: s.fasonIsi!.hasarAdet }) }));
       const satirId = await korumali(() => sorgular.malKabulSatiriYaz(db, { malKabulId, sira: i + 1, malzemeId, miktar: bindenMetin(giren.miktar), partiId: null, konumId, hareketId: giren.hareketId, siparisSatirId, fasonCikisHareketId: null }));
       idler.push(giren.hareketId);
       if (siparisSatirId !== null) await teslimIsle(db, k, { siparisSatirId, miktar: bindenMetin(giren.miktar), malKabulSatirId: satirId });

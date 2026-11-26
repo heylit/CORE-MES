@@ -28,7 +28,7 @@ export {
   planlanacakIsEmirleriGetir, type IsEmriYazisi, isEmriEkle, onculleriSil, onculleriYaz, isaretliListeVar, bekleyenIsEmriniGuncelle, bekleyenIsEmriniSil,
   isEmriEkAciklamasiYaz, isEmriSirasiYaz, adayEkle, bilesenEkle, type BilesenIkamesi, bilesenIkameleri, ikameAdayBilesenleri, bilesenIkamesiYaz, bilesenIkamesiKaldir, emirSurumuArttir, type AdaySatiri, adaylariGetir, bilesenleriGetir, isEmriKaynagiYaz, adaySil,
   type UretimYeriYazisi, uretimYeriYaz, type UretimYeriDegisimiSatiri, uretimYeriDegisimleriGetir, uretimYeriDegisimiEkle, kisiAdimiIstasyonunuYaz,
-  isEmriBaslat, isEmriBitir, type FasonHareketiSatiri, fasonHareketleriGetir, fasonIsEmirleri, type FasonIsEmri, fasonHareketiBul, fasonHareketiEkle,
+  isEmriBaslat, isEmriBitir, type FasonHareketiSatiri, fasonHareketleriGetir, fasonAktarimiEkle, fasonIsEmirleri, type FasonIsEmri, fasonHareketiBul, fasonHareketiEkle,
 } from './sorgular/is-emri/sorgular.ts';
 export {
   type ArsivSatiri, arsivSatiri, type OzetSatiri, ozetGetir, gunlukUretimGetir, durusSureleriGetir, bitenEmirler, istasyonDurusSureleri,

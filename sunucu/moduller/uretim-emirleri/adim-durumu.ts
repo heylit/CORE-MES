@@ -17,7 +17,7 @@ import { hazirlik, isEmriHazirliklari } from './hazirlik.ts';
 import {
   ADIM_BITTI_STATU, ADIM_KAPALI_EMIR, ELLE_STATU_YOK, ISARETLI_KALDIRILMAZ, acikElleEksikler, elleEksikNedeni, elleEksikReddi, LISTE_ADIM_BITTI, LISTE_DOLU, EMIR_BEKLEMEDE_STATU, EMIR_YOK, GEREKCE_GEREK, HAL_ESKIDI, IS_EMRI_EMIRDE_YOK, LISTE_MADDESI_YOK,
   ONAY_YOK, STATU_ESKIDI, acikElleStatu, acikOnaylar, adimSistemStatusu, calismaDurumu, hazirlikOnayiReddi, kanitMetni, listeEkleReddi, listeIsaretReddi, oncekiBekleniyor,
-  listeKanitiReddi, listeKontrolu, sinirDisiMi,
+  listeKanitiReddi, listeKontrolu, otomatikMuayeneMi, sinirDisiMi,
 } from './kurallar.ts';
 import type { HazirlikHali } from './kurallar.ts';
 import * as s from './sorgular.ts';
@@ -153,7 +153,7 @@ export async function adimDurumu(db: Db, emirId: number, kullanici: Kullanici | 
       const adim = ilerleme?.adimlar[sira];
       return {
         isEmriId: i.id, opNo: i.opNo, ad: i.ad, durum: i.durum, calisma: calisma.get(i.id) ?? null, bagimlilik: i.bagimlilik,
-        fason: i.fasonFirmaId !== null, hedef: adim?.hedef ?? 0, yapilan: adim?.yapilan ?? 0, yuzde: adim?.yuzde ?? 0,
+        fason: i.fasonFirmaId !== null, muayene: otomatikMuayeneMi(i), hedef: adim?.hedef ?? 0, yapilan: adim?.yapilan ?? 0, yuzde: adim?.yuzde ?? 0,
         sistemStatusu: sistem.statu,
         nedenler: [...eksikler.map((x) => elleEksikNedeni(x.madde as HazirlikMaddesi, ad(x.kisiId))), ...sistem.nedenler],
         maddeler: [...(haller.get(i.id) ?? [])].map(([madde, h]) => ({ madde, hal: h.hal, ham: h.ham })),

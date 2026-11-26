@@ -92,7 +92,7 @@ const FASON_ACIK: AcikSiparisSatirlariCevabi = { satirlar: [
   { ...satir(41, 950, 'ORN-Flanş', 'hizmet'), kalanMiktar: '60.000', isEmriId: 77, emirNo: 'ORN-UE-1' },
   satir(42, 951, 'ORN-Saf hizmet', 'hizmet'),
 ] };
-const IS = { isEmriId: 77, emirNo: 'ORN-UE-1', opNo: 40, adim: 'Kaplama', gonderilen: 60, donen: 10, hurda: 2, donenKart: { malzemeId: 960, kod: 'ORN-FL-K', ad: 'Flanş kaplamalı', birim: 'adet' }, statulu: false };
+const IS = { isEmriId: 77, emirNo: 'ORN-UE-1', opNo: 40, adim: 'Kaplama', gonderilen: 60, donen: 10, hurda: 2, donenKart: { malzemeId: 960, kod: 'ORN-FL-K', ad: 'Flanş kaplamalı', birim: 'adet' }, statulu: false, donusYolu: 'gkk' as const };
 
 describe('fason dönüşü kuralları (3388 a)', () => {
   it('kurallar: firmada kalan, fazla adet ve gövdeler', () => {

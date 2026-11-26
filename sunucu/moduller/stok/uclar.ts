@@ -2,7 +2,7 @@ import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import { rafKodGecisiListesiCevabi, rafKodlamaDurumuCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { baslangicDenetleCevabi, baslangicDenetleGovdesi, baslangicGeriAlmaDurumu, baslangicYukleCevabi, baslangicYukleGovdesi } from '#paylasilan/sozlesme/stok.ts';
 import {
-  acikSiparisSatirlariCevabi, fasonIsleriCevabi, fasonIsleriSorgusu, cikisGovdesi, cikisOnerisiCevabi, emirTamamlaGovdesi, emirTamamlamaCevabi, cikisOnerisiSorgusu, depolarCevabi, geriAlGovdesi, topluGeriAlGovdesi, hareketCevabi, hareketlerCevabi, hareketlerSorgusu, isKutusuCevabi,
+  acikSiparisSatirlariCevabi, fasonAktarimCevabi, fasonAktarimGovdesi, fasonIsleriCevabi, fasonIsleriSorgusu, cikisGovdesi, cikisOnerisiCevabi, emirTamamlaGovdesi, emirTamamlamaCevabi, cikisOnerisiSorgusu, depolarCevabi, geriAlGovdesi, topluGeriAlGovdesi, hareketCevabi, hareketlerCevabi, hareketlerSorgusu, isKutusuCevabi,
   depoRaflariGovdesi, gozOnerisiCevabi, haritaEslemeCevabi, haritaOzetiCevabi, topluBolumDeposuCevabi, zeminCevabi, bolumDeposuGovdesi, gozStoklariSorgusu, gozStoklariCevabi, gozOzetleriCevabi, kimlikParametresi, konumAcGovdesi, panelCevabi, aylikStokDegeriCevabi, aylikStokDegeriSorgusu, stokDegeriCevabi, stokDegeriSorgusu, konumAyrintiCevabi, konumCevabi, konumDuzenleCevabi, konumDuzenleGovdesi, konumlarCevabi, konumlarSorgusu, konumMalzemeleriCevabi, konumMalzemeleriSorgusu, malzemeMiktarlariCevabi, malzemeMiktarlariSorgusu, malKabulAyrintiCevabi,
   malKabulCevabi, malKabulDuzeltGovdesi, malKabulGovdesi, malKabullerCevabi, malKabullerSorgusu, malzemeAyarGovdesi, malzemeAyrintiCevabi, malzemeKartBilgileriCevabi, partiBelgeParametresi, siparisIrsaliyeleriCevabi, siparisIrsaliyeleriSorgusu, sonPartilerCevabi, sonPartilerSorgusu,
   malzemelerCevabi, malzemelerSorgusu, malzemeOzetiCevabi, sayfaSorgusu, partiIziCevabi, partilerCevabi, partilerSorgusu, rafAcGovdesi,
@@ -119,6 +119,8 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/stok/partiler/:id/iz', yetki: OKUMA, parametre: kimlikParametresi, cevap: partiIziCevabi, isle: ({ db, parametre }) => s.partiIzi(db, parametre.id) }),
 
   uc({ yontem: 'GET', yol: '/stok/fason-isleri', yetki: 'stok.giris', sorgu: fasonIsleriSorgusu, cevap: fasonIsleriCevabi, isle: ({ db, sorgu }) => s.fasonIsleri(db, sorgu.konumId) }),
+  // 3708: kaynağında muayene (sonraki adım fason) ve kontrolsüz geçişte fason adımı aktarımla kapanır; yetki fason dönüşünü yazanla aynıdır.
+  uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/fason-aktarimi', yetki: 'stok.giris', govde: fasonAktarimGovdesi, cevap: fasonAktarimCevabi, isle: ({ db, kullanici, govde }) => s.fasonAktar(db, kullanici.id, govde) }),
   uc({ yontem: 'GET', yol: '/stok/acik-siparis-satirlari', yetki: ACIK_SIPARIS_OKUMA, cevap: acikSiparisSatirlariCevabi, isle: ({ db }) => s.acikSiparisSatirlari(db) }),
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/mal-kabul', yetki: 'stok.giris', govde: malKabulGovdesi, cevap: malKabulCevabi, isle: async ({ db, kullanici, govde, denetimEki }) => {
     s.eksiOnayiDenetle(kullanici, govde);

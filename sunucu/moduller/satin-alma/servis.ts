@@ -46,6 +46,7 @@ import { olayAlanlari } from '#paylasilan/sozlesme/bildirim-kural-sabitleri.ts';
 import { resmiTatilGunleri } from '../ik/disari.ts';
 import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
+import { fasonYolu } from '#paylasilan/fason-kontrol.ts';
 import {
   ILETILER, ISLEM, type KurKilidiIsi, emirAcikMi, kilitliDurum, basamakEsigiReddi, basamakKilidiReddi, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, oneriReddi, kurKilidiIsi, kurKilidiReddi, degisiklikReddi, gecikmeGunu, fasonKalani, sonDonusGecikmesi, agirlikliGecikme, degisiklikTuru, dortGozSonucu, onayKademesiReddi, onayKisisiIzleri, onayLimitRolleri, onayLimitleriDegistiMi, onayLimitiReddi, terminsizSiparisReddi, terminTakibi, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
   KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, siparisBekletmeReddi, talebinAlimlari, ondalikKiyas, siparisReddi, talebim, kalemSiparisTerminleri, kalemKarsiligi, talebimDuzenlenirMi, talebimKalemReddi, guncellemeReddi, guncellemeIptalleri, ikinciAlimRiski,
@@ -2801,6 +2802,7 @@ export async function disOperasyonlar(db: Db): Promise<DisOperasyonlarCevabi> {
   const emirBelgesi = new Map(dieler.flatMap((d) => (d.kaynak.tur === 'emir' ? [[d.kaynak.isEmriId, d] as const] : [])));
   const partiler = dieler.filter((d) => d.kaynak.tur === 'parti');
   const firmalar = await firmaOzetleri(db, [...new Set([...liste, ...partiler].flatMap((x) => (x.firmaId === null ? [] : [x.firmaId])))]);
+  const sonrakiFirmalar = await firmaOzetleri(db, [...new Set(liste.flatMap((x) => (x.sonrakiFirmaId === null ? [] : [x.sonrakiFirmaId])))]);
   const gun = await s.bugun(db);
   // 1849 (C17): gidiş kaydıyla aynı sıra kuralı; ekran sırası gelmemiş adımda "Gönder"i kapatır, sunucu yine reddeder.
   const gonderim = await fasonGonderimleri(db, liste.map((x) => ({ isEmriId: x.isEmriId, uretimEmriId: x.uretimEmriId, adet: x.adet })));
@@ -2811,11 +2813,13 @@ export async function disOperasyonlar(db: Db): Promise<DisOperasyonlarCevabi> {
   const kutular = fasonKonumuCozucu === null || firmaIdleri.length === 0 ? new Map<number, number>() : await fasonKonumuCozucu(db, firmaIdleri);
   return {
     hazir: true,
-    operasyonlar: liste.map(({ ilkGidis, donusler, ...x }) => {
+    operasyonlar: liste.map(({ ilkGidis, donusler, kontrolTuru, sonrakiFason, sonrakiFirmaId, ...x }) => {
+      const yol = fasonYolu(kontrolTuru, sonrakiFason);
       const kalan = fasonKalani(x.adet, x.gonderilen, x.donen, x.hurda);
       const belge = emirBelgesi.get(x.isEmriId);
       return {
-        ...x, gerceklesenGidis: ilkGidis, firmaAdi: x.firmaId === null ? null : (firmalar.get(x.firmaId)?.ad ?? null), ...(x.firmaId === null ? { firmaBekleniyor: true } : {}),
+        ...x, teslimYeri: yol.dogrudanSonrakiFirmaya ? (sonrakiFirmaId === null ? 'Sonraki firma' : (sonrakiFirmalar.get(sonrakiFirmaId)?.ad ?? 'Sonraki firma')) : 'TMI', kaynaktaMuayene: kontrolTuru === 'kaynakta',
+        gerceklesenGidis: ilkGidis, firmaAdi: x.firmaId === null ? null : (firmalar.get(x.firmaId)?.ad ?? null), ...(x.firmaId === null ? { firmaBekleniyor: true } : {}),
         planlananGidis: plan.get(x.isEmriId) ?? null, siparisSatirId: satirlar.get(x.isEmriId) ?? null,
         fasonKonumId: x.firmaId === null ? null : (kutular.get(x.firmaId) ?? null),
         gecikmeGun: gecikmeGunu(x.termin, x.ilkDonus, gun), gecikmeSonDonus: sonDonusGecikmesi(x.termin, x.sonDonus, kalan, gun),

@@ -14,7 +14,7 @@ const json = (g: unknown, durum = 200) => new Response(JSON.stringify(g), { stat
 const satir = (id: number, kalemAdi: string, malzemeTur: string, ek: Record<string, unknown> = {}) => ({
   id, siparisNo: `ORN-S-${String(id)}`, talepNo: '', tedarikciAdi: 'ORN Fason', malzemeId: id, malzemeTur, kalemAdi, miktar: '3.000', kalanMiktar: '3.000', birim: 'adet', beklenenTeslim: null, ...ek,
 });
-const IS = { isEmriId: 77, emirNo: 'ORN-UE-1', opNo: 20, adim: 'Isıl işlem', gonderilen: 5, donen: 1, hurda: 1, donenKart: { malzemeId: 960, kod: 'ORN-FL-K', ad: 'Flanş ısıl', birim: 'adet' }, statulu: false };
+const IS = { isEmriId: 77, emirNo: 'ORN-UE-1', opNo: 20, adim: 'Isıl işlem', gonderilen: 5, donen: 1, hurda: 1, donenKart: { malzemeId: 960, kod: 'ORN-FL-K', ad: 'Flanş ısıl', birim: 'adet' }, statulu: false, donusYolu: 'gkk' as const };
 const BELGE = { id: 12, no: 'MK-000012', tur: 'satin_alma', irsaliyeNo: null, zaman: '2026-11-03T10:00:00+03:00', kisiAd: 'D', satirSayisi: 1, farkSayisi: 0, duzeltilenId: null, duzeltenId: null };
 
 type Isleyici = (yol: string, govde: unknown) => Response | null;

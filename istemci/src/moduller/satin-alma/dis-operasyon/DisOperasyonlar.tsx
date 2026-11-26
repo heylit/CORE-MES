@@ -45,12 +45,17 @@ const adetMetni = (x: DisOperasyon) => {
   const alt = [kalan > 0 ? `${adet(kalan)} dışarıda` : null, x.hurda ? `${adet(x.hurda)} hurda` : null].filter(Boolean).join(' · ');
   return ikili(<span className="sa-nowrap">{adet(x.donen ?? 0)} / {adet(x.gonderilen)}</span>, alt || null);
 };
+// 3708: fason siparişinde parçanın nereye teslim edileceği ve firmada kaynağında muayene yapılacağı.
+const teslimNotu = (x: DisOperasyon): string | null => {
+  const parcalar = [x.teslimYeri ? `Teslim: ${x.teslimYeri}` : null, x.kaynaktaMuayene === true ? 'kaynağında muayene yapılacak' : null].filter(Boolean);
+  return parcalar.length > 0 ? parcalar.join(' · ') : null;
+};
 const SUTUNLAR: Sutun<DisOperasyon>[] = [
   // Ürün ayrı sütun değil, emrin altında adımla birlikte: uzun ürün ve firma adıyla da 1280'de tablo kalır (Arayüz, 2449).
   { anahtar: 'emir', baslik: 'Emir, ürün ve adım', sirala: true,
     hucre: (x) => ikili(<span className="sa-mono sa-nowrap">{x.emirNo}</span>, [x.urun, `Op ${x.opNo}${x.adim ? ` ${x.adim}` : ''}`].filter(Boolean).join(' · ')),
     csv: (x) => [x.emirNo, x.urun, `Op ${x.opNo}`, x.adim].filter(Boolean).join(' / ') },
-  { anahtar: 'firma', baslik: 'Firma', sirala: true, hucre: (x) => (x.firmaBekleniyor === true ? 'Firma bekleniyor' : (x.firmaAdi ?? 'Seçilmedi')) },
+  { anahtar: 'firma', baslik: 'Firma', sirala: true, hucre: (x) => ikili(x.firmaBekleniyor === true ? 'Firma bekleniyor' : (x.firmaAdi ?? 'Seçilmedi'), teslimNotu(x)) },
   { anahtar: 'gidis', baslik: 'Gidiş', sirala: true, hucre: (x) => (x.gerceklesenGidis ? <span title={zaman(x.gerceklesenGidis)}>{gun(x.gerceklesenGidis)}</span> : x.planlananGidis ? <span className="sa-gecikme"><span>—</span><small>plan {gun(x.planlananGidis)}{gidisGeciktiMi(x.planlananGidis, false) && <> <GidisGecikti /></>}</small></span> : '—') },
   { anahtar: 'termin', baslik: 'Termin', sirala: true, hucre: (x) => ikili(gun(x.termin), x.ilkDonus ? `ilk dönüş ${gun(x.ilkDonus)}` : null) },
   { anahtar: 'adet', baslik: 'Dönen / giden', hucre: adetMetni, csv: (x) => `${x.gonderilen ?? ''}/${x.donen ?? ''}/${x.hurda ?? ''}` },

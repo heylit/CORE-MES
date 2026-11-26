@@ -626,7 +626,9 @@ const malKabulSatirGirdisi = z.object({
   // yarı parçasıdır (firmadan düşer). `fason` ile birlikte verilmez.
   // Dönüş kaydı da buradan yazılır (kullanıcı kararı 15.10 B). 1205: miktar dönen adettir; sağlam ve hurda ayrılmaz, parça karantinaya
   // karar bekliyor girer ve kararı GKK adımı verir. Konum verilirse karantina türündedir, verilmezse ilk karantina konumu.
-  fasonIsi: z.object({ isEmriId: kimlik }).strict().optional(),
+  // 3708: kaynağında muayeneli fasonda (sonraki adım fason değil) dönüş yalnız adet ve hasar kontrolüyle girer: karantina ve GKK yok,
+  // parça serbest girer; `hasarAdet` firmada hasarlı bulunan adettir (hurda gibi firmadan düşer). Diğer yolda girilmez.
+  fasonIsi: z.object({ isEmriId: kimlik, hasarAdet: z.number().int().min(0).max(1_000_000).optional() }).strict().optional(),
   // 3712: hizmet siparişinin işlediği parçadan farklı kartın dönüşü, depocunun açık onayıyla kabul edilir; onay yoksa sunucu reddeder.
   farkliKartOnayi: z.boolean().optional(),
   // Parti sertifikası (#960): dosya önce `/dosyalar` ile yüklenir; mal kabul belgeyi açar ve satırın partisine bağlar.
@@ -645,9 +647,22 @@ export const fasonIsleriCevabi = z.object({
     gonderilen: z.number().int(), donen: z.number().int(), hurda: z.number().int(),
     donenKart: z.object({ malzemeId: z.number().int(), kod: z.string().nullable(), ad: z.string().nullable(), birim: z.string().nullable() }),
     statulu: z.boolean(),
+    // 3708: rotadaki kontrol türüne göre dönüş yolu: GKK karantinası, yalnız adet ve hasar ya da sonraki firmaya aktarım.
+    donusYolu: z.enum(['gkk', 'adet-hasar', 'aktarim']),
+    // Aktarım yolunda parçanın gideceği firma (sonraki fason adımın firması); başka yolda boş.
+    sonrakiFirma: z.string().nullable().optional(),
   })),
 });
 export type FasonIsleriCevabi = z.output<typeof fasonIsleriCevabi>;
+// 3708: kaynağında muayene (sonraki adım fason) ve kontrolsüz geçişte fason adımı, parçanın firmadan doğrudan sonraki firmaya gittiği
+// aktarım kaydıyla kapanır; stok hareketi yoktur. Hedef firma sonraki fason adımının firmasıdır (sunucu rotadan okur).
+export const fasonAktarimGovdesi = z.object({
+  isEmriId: kimlik,
+  saglamAdet: z.number().int().min(0).max(1_000_000),
+  hurdaAdet: z.number().int().min(0).max(1_000_000),
+}).strict();
+export type FasonAktarimGovdesi = z.input<typeof fasonAktarimGovdesi>;
+export const fasonAktarimCevabi = z.object({ aktarimId: z.number().int() });
 export const malKabulGovdesi = z.object({
   tur: z.enum(MAL_KABUL_TURLERI),
   irsaliyeNo: bosOlabilir(30),

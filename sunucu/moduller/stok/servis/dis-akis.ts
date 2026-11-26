@@ -1,14 +1,14 @@
 import { type Db } from '#cekirdek/db.ts';
 import { cakisma, dogrulama, gecersiz } from '#cekirdek/hata.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import type { KaliteDurumu, MalKabulKomutu, FasonIsleriCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { KaliteDurumu, MalKabulKomutu, FasonIsleriCevabi, FasonAktarimGovdesi } from '#paylasilan/sozlesme/stok.ts';
 import { type DepoCikisCevabi, type DepoSevkCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { malzemeAdlari, malzemeOzeti } from '../../malzemeler/disari.ts';
 import { firmaAdlari } from '../../musteri-tedarikci/disari.ts';
 import { sevkEdilecekKalemler } from '../../siparisler/disari.ts';
 import { acikUrunSevkliEmirler, depoBekleyenleri, depoCikisiniGeriAl, depoCikisiYaz, depoKabuluYaz, depoKalemiAl } from '../../sevkiyat/disari.ts';
 import type { DepoKalemi, FasonSevkiOlayi, UrunSevkiOlayi, UrunSevkSatiri } from '../../sevkiyat/disari.ts';
-import { emirDurumlari, fasonDonusuKaydet, fasonHareketiOzeti, fasonIsEmirleri, isEmriOzeti, uretimEmriOzeti, emirNolari } from '../../uretim-emirleri/disari.ts';
+import { emirDurumlari, fasonAktarimiKaydet, fasonDonusuKaydet, fasonYoluOku, fasonHareketiOzeti, fasonIsEmirleri, isEmriOzeti, uretimEmriOzeti, emirNolari } from '../../uretim-emirleri/disari.ts';
 import type { FasonHareketiOlayi } from '../../uretim-emirleri/disari.ts';
 import { binde, bindenMetin, stoklanirMi, kaynaklardanAl, adetMiktari, sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, sevkAciklamasi } from '../kurallar.ts';
 import type { SevkBakiyesi } from '../kurallar.ts';
@@ -392,7 +392,7 @@ export async function fasonHareketiYansit(db: Db, olay: FasonHareketiOlayi): Pro
 // yarı parça adımın statüsüne çevrilir. Girdisiz rotada emrin ürünü olduğu gibi döner. Satırın kartı dönen karttır; firmada olandan
 // fazlası gelmez, eksik firmada kalır. Dönen stok miktarı ve satırın hareketi döner.
 export async function fasonIsindenDonus(
-  db: Db, kisiId: number, d: { isEmriId: number; malzemeId: number; adet: bigint; konumId: number; alan: string },
+  db: Db, kisiId: number, d: { isEmriId: number; malzemeId: number; adet: bigint; konumId: number; alan: string; hasarAdet?: number },
 ): Promise<{ miktar: bigint; hareketId: number }> {
   const is = await isEmriOzeti(db, d.isEmriId);
   if (!is || is.kaynak?.tur !== 'fason') throw dogrulama('Fason işi bulunamadı.', `${d.alan}.fasonIsi`);
@@ -414,16 +414,21 @@ export async function fasonIsindenDonus(
   const olan = birAdet > 0n ? (firmada / birAdet) * 1000n : 0n;
   const adet = d.adet < olan ? d.adet : olan;
   if (adet <= 0n) throw dogrulama('Firmada bu işin parçası yok; gönderim Dış operasyonlardan yazılır.', `${d.alan}.fasonIsi`);
-  await fasonDonusuKaydet(db, kisiId, is.uretimEmriId, d.isEmriId, Number(adet / 1000n), 0);
+  // 3708: kaynağında muayeneli fasonda dönüş yalnız adet ve hasar kontrolüyle girer: parça serbest girer (karantina ve GKK yok).
+  const yol = await fasonYoluOku(db, is.uretimEmriId, d.isEmriId);
+  const hasar = d.hasarAdet ?? 0;
+  if (yol.malKabul !== 'adet-hasar' && hasar > 0) throw dogrulama('Hasar adedi yalnız kaynağında muayeneli fason dönüşünde girilir.', `${d.alan}.fasonIsi.hasarAdet`);
+  const kalite: KaliteDurumu = yol.malKabul === 'adet-hasar' ? 'serbest' : 'karar_bekliyor';
+  await fasonDonusuKaydet(db, kisiId, is.uretimEmriId, d.isEmriId, Number(adet / 1000n), hasar);
   const t = await yariParcayiTasi(db, kisiId, plan.yari, {
-    uretimEmriId: is.uretimEmriId, kaynaklar: konumlar, hedef: d.konumId, miktar: adetMiktari(adet, plan.yari.birim), aciklama, hedefKalite: 'karar_bekliyor',
+    uretimEmriId: is.uretimEmriId, kaynaklar: konumlar, hedef: d.konumId, miktar: adetMiktari(adet, plan.yari.birim), aciklama, hedefKalite: kalite,
   });
   if (plan.uretim === null) {
     if (t.sonHareketId === null) throw dogrulama('Firmada bu işin parçası yok.', `${d.alan}.fasonIsi`);
     return { miktar: t.tasinan, hareketId: t.sonHareketId };
   }
   const p = adet === d.adet ? plan.uretim : (await fasonDonusPlani(db, is.uretimEmriId, d.isEmriId, adet))!.uretim!;
-  const hareketId = await uretimAdiminiYaz(db, { uretimEmriId: is.uretimEmriId, kisiId, konumId: d.konumId, malzemeId: plan.urun, aciklama, kalite: 'karar_bekliyor' }, p);
+  const hareketId = await uretimAdiminiYaz(db, { uretimEmriId: is.uretimEmriId, kisiId, konumId: d.konumId, malzemeId: plan.urun, aciklama, kalite }, p);
   if (hareketId === null) throw dogrulama('Bu fason işinin adımı stoğa parça çıkarmıyor.', `${d.alan}.fasonIsi`);
   return { miktar: p.giris !== null ? p.giris.miktar : (p.cevirme?.miktar ?? adetMiktari(adet, plan.yari.birim)), hareketId };
 }
@@ -439,6 +444,50 @@ async function fasonDonusPlani(db: Db, uretimEmriId: number, isEmriId: number, a
   const donenKart = uretim.giris !== null ? (uretim.giris.malzemeId ?? urun) : yari.malzemeId;
   return { urun, yari, uretim, donenKart, statulu: uretim.giris === null };
 }
+// 3708: kaynağında muayene (sonraki adım fason) ve kontrolsüz geçişte fason adımı, parçanın sonraki firmaya gittiği aktarım kaydıyla kapanır;
+// stok hareketi yoktur (parça firmadan firmaya geçer, TMI stoğuna girmez). Yetkiyi uç (stok.giris, fason dönüşünü yazan) denetler.
+export async function fasonAktar(db: Db, kisiId: number, g: FasonAktarimGovdesi): Promise<{ aktarimId: number }> {
+  const is = await isEmriOzeti(db, g.isEmriId);
+  if (!is || is.kaynak?.tur !== 'fason') throw dogrulama('Fason işi bulunamadı.', 'isEmriId');
+  const yol = await fasonYoluOku(db, is.uretimEmriId, g.isEmriId);
+  if (yol.kapanis !== 'aktarim') throw cakisma('Bu fason adımı aktarımla kapanmaz; dönüşü mal kabulden girilir.');
+  if (yol.sonrakiFirmaId === null) throw dogrulama('Aktarım hedefi yok: sonraki fason adımının firması seçilmemiş.', 'isEmriId');
+  const hedefFirmaId = yol.sonrakiFirmaId;
+  return korumali(async () => {
+    const sonuc = await fasonAktarimiKaydet(db, kisiId, is.uretimEmriId, g.isEmriId, { saglamAdet: g.saglamAdet, hurdaAdet: g.hurdaAdet, hedefFirmaId });
+    await fasonAktarimiYansit(db, kisiId, is.uretimEmriId, g.isEmriId, is.kaynak!.id, hedefFirmaId, g.saglamAdet, g.hurdaAdet);
+    return sonuc;
+  });
+}
+// Aktarımda parça ilk firmadan ikinci firmanın Yolda konumuna geçer (gidiş gibi); hurda ilk firmadan düşer. Ürün kartı stok izlemiyorsa yansımaz.
+async function fasonAktarimiYansit(db: Db, kisiId: number, uretimEmriId: number, isEmriId: number, firmaId: number, hedefFirmaId: number, saglam: number, hurda: number): Promise<void> {
+  const emir = await uretimEmriOzeti(db, uretimEmriId);
+  if (!emir || emir.malzemeNo === null) return;
+  const kart = await malzemeOzeti(db, emir.malzemeNo);
+  if (!kart || (kart.tur !== 'mamul' && kart.tur !== 'yarimamul')) return;
+  const malzemeId = emir.malzemeNo;
+  const yari = await fasonYariParcasi(db, uretimEmriId, malzemeId, isEmriId);
+  const kaynaklar = await firmaKonumlari(db, firmaId);
+  const aciklama = `Fason aktarımı · emir ${emir.emirNo}`;
+  if (saglam > 0) {
+    const hedef = await firmaKonumuBul(db, hedefFirmaId, 'yolda');
+    const miktar = BigInt(saglam) * 1000n;
+    if (yari) await yariParcayiTasi(db, kisiId, yari, { uretimEmriId, kaynaklar, hedef, miktar: adetMiktari(miktar, yari.birim), aciklama });
+    else {
+      let kalan = miktar;
+      for (const kaynak of kaynaklar) {
+        if (kalan <= 0n) break;
+        kalan -= await emirParcasiniTasi(db, kisiId, { malzemeId, uretimEmriId, kaynak, hedef, miktar: kalan, aciklama });
+      }
+    }
+  }
+  if (hurda > 0) {
+    const miktar = BigInt(hurda) * 1000n;
+    const d = { uretimEmriId, konumlar: kaynaklar, aciklama: `${aciklama} · hurda` };
+    if (yari) await yariParcayiDus(db, kisiId, yari, { ...d, miktar: adetMiktari(miktar, yari.birim) });
+    else await emirParcasiniDus(db, kisiId, { malzemeId, ...d, miktar });
+  }
+}
 // Mal kabulün fason kutusu: firmanın açık emirlerindeki fason işleri, rotaya göre dönecek kartla (girdili emirde).
 export async function fasonIsleri(db: Db, konumId: number): Promise<FasonIsleriCevabi> {
   const konum = await sorgular.konumBul(db, konumId);
@@ -453,9 +502,12 @@ export async function fasonIsleri(db: Db, konumId: number): Promise<FasonIsleriC
     const plan = await fasonDonusPlani(db, x.uretimEmriId, x.isEmriId, 1000n);
     if (!plan) continue;
     const kart = await malzemeOzeti(db, plan.donenKart);
+    const yol = await fasonYoluOku(db, x.uretimEmriId, x.isEmriId);
+    const sonrakiFirma = yol.kapanis === 'aktarim' && yol.sonrakiFirmaId !== null ? ((await firmaAdlari(db, [yol.sonrakiFirmaId])).get(yol.sonrakiFirmaId) ?? `Firma ${String(yol.sonrakiFirmaId)}`) : null;
     sonuc.push({
       isEmriId: x.isEmriId, emirNo: x.emirNo, opNo: x.opNo, adim: x.adim, gonderilen: x.gonderilen ?? 0, donen: x.donen ?? 0, hurda: x.hurda ?? 0,
       donenKart: { malzemeId: plan.donenKart, kod: kart?.kod ?? null, ad: kart?.ad ?? null, birim: kart?.birim ?? null }, statulu: plan.statulu,
+      donusYolu: yol.kapanis === 'aktarim' ? 'aktarim' : yol.malKabul === 'adet-hasar' ? 'adet-hasar' : 'gkk', sonrakiFirma,
     });
   }
   return { isler: sonuc };

@@ -49,6 +49,16 @@ const satirOf = (emirNo: string) => screen.getByText(emirNo).closest('tr') as HT
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('Dış operasyonlar (#542)', () => {
+  it('3708: fason satırında teslim yeri ve kaynağında muayene notu görünür', async () => {
+    ac(liste(
+      satir({ teslimYeri: 'Deneme İkinci Firma', kaynaktaMuayene: true }),
+      satir({ isEmriId: 2, emirNo: 'UE-2026-002', teslimYeri: 'TMI', kaynaktaMuayene: false }),
+    ));
+    expect(await screen.findByText('UE-2026-001')).toBeTruthy();
+    expect(within(satirOf('UE-2026-001')).getByText('Teslim: Deneme İkinci Firma · kaynağında muayene yapılacak')).toBeTruthy();
+    expect(within(satirOf('UE-2026-002')).getByText('Teslim: TMI')).toBeTruthy();
+  });
+
   it('üretim emirleri bağlı değilken liste yerine bağlantının olmadığını söyler', async () => {
     ac(() => json(200, { hazir: false, operasyonlar: [], partiOperasyonlari: [] } satisfies DisOperasyonlarCevabi));
     expect(await screen.findByText(/bağlantı henüz kurulmadı/)).toBeTruthy();

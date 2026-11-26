@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { FASON_KONTROLLERI } from '../fason-kontrol.ts';
 import { ondalikMetinSemasi } from '../ondalik.ts';
 import { TOPLU_EN_COK_SATIR } from '../toplu.ts';
 import { tarihSemasi } from '../zaman.ts';
@@ -147,6 +148,9 @@ export const adimGirdisi = z.object({
   yenidenAyar: z.boolean(),
   // Gelmeyen seçim (alanı bilmeyen eski görünüm) adımın kayıtlı seçimini korur; yeni adımda "her kurulumda".
   ilkParca: z.enum(ILK_PARCA_SECIMLERI).optional(),
+  // 3708: fason adımın kontrolü; gelmeyen alan adımın kayıtlı seçimini korur (yeni adımda GKK). Muayene süresi yalnız kaynağında muayenede (saat).
+  kontrolTuru: z.enum(FASON_KONTROLLERI).optional(),
+  muayeneSuresiSaat: z.number().positive('Muayene süresi sıfırdan büyük olmalı.').max(999).nullable().optional(),
   // Gelmeyen dal ve birleşen (alanı bilmeyen eski görünüm) adımın kayıtlı değerini korur; yeni adımda ana hat, birleştirme yok.
   dal: dalAdi.nullable().optional(),
   birlesen: z.array(dalAdi).max(26).optional(),
@@ -270,6 +274,8 @@ export const adimSemasi = z.object({
   enKucukParca: z.number().int().nullable(),
   yenidenAyar: z.boolean(),
   ilkParca: z.enum(ILK_PARCA_SECIMLERI),
+  kontrolTuru: z.enum(FASON_KONTROLLERI),
+  muayeneSuresiSaat: ondalikMetinSemasi.nullable(),
   // ayarSuresiDk toplamdır: hazırlık + (ayar işaretliyse) ayar.
   hazirlikDk: ondalikMetinSemasi.nullable(),
   ayar: z.boolean(),
@@ -714,7 +720,7 @@ export const rotaAdimTopluGovdesi = z.object({
 // Excel'in açtığı yeni adımın Excel'de olmayan alanları (sayfadaki "adım ekle" ile aynı seçimler; sayfa ekranın alan adlarını kullanır).
 export const YENI_ADIM_VARSAYILANI = {
   islemSuresiDk: null, degisimSuresiDk: null, terminGun: null, bagimlilik: 'bekleyen', devirAdedi: null, firePayiYuzde: 0, makineKullanimi: 'tek',
-  enKucukParca: null, yenidenAyar: false, ilkParca: 'yok', hazirlikDk: null, ayar: true, ayarDk: null, dal: null, adetCarpani: null,
+  enKucukParca: null, yenidenAyar: false, ilkParca: 'yok', kontrolTuru: 'gkk', muayeneSuresiSaat: null, hazirlikDk: null, ayar: true, ayarDk: null, dal: null, adetCarpani: null,
 } as const;
 // taslaklar: Excel'in yazdığı (açtığı ya da değiştirdiği) taslak revizyon sayısı.
 export const rotaAdimTopluCevabi = z.object({ eklenen: z.number().int().min(0), guncellenen: z.number().int().min(0), taslaklar: z.number().int().min(0) });

@@ -1,3 +1,4 @@
+import { fasonKontrolDuzelt } from '#paylasilan/fason-kontrol.ts';
 import { kayitNoktasi } from '#cekirdek/db.ts';
 import type { Db } from '#cekirdek/db.ts';
 import type { Gunluk } from '#cekirdek/gunluk.ts';
@@ -243,7 +244,16 @@ export async function kaydet(db: Db, kullanici: Kullanici, id: number, govde: Ka
   }
   // Seçimi göndermeyen (alanı bilmeyen) ekran adımın kayıtlı seçimini silmesin; yeni adım "her kurulumda" başlar.
   const eskiSecim = new Map(mevcut.adimlar.map((m) => [m.opNo, m.ilkParca]));
-  const secimli = adimlar.map((a) => ({ ...a, ilkParca: a.ilkParca ?? (a.opNo === null ? undefined : eskiSecim.get(a.opNo)) ?? ('yok' as const) }));
+  const eskiKontrol = new Map(mevcut.adimlar.map((m) => [m.opNo, m]));
+  const secimli = adimlar.map((a, n) => {
+    // 3708: kontrol seçimini göndermeyen ekran kayıtlı seçimi korur; fason olmayan adımda ve sonraki adım fason değilken kontrolsüzde GKK'ya döner.
+    const eski = a.opNo === null ? undefined : eskiKontrol.get(a.opNo);
+    const istenen = a.kontrolTuru ?? eski?.kontrolTuru ?? 'gkk';
+    const fasonMu = (x: { kaynak: { tur: string } | null } | undefined): boolean => x?.kaynak?.tur === 'fason';
+    const duzeltilmis = fasonMu(a) ? fasonKontrolDuzelt(istenen, fasonMu(adimlar[n + 1])).kontrol : 'gkk';
+    const saat = duzeltilmis === 'kaynakta' ? (a.muayeneSuresiSaat === undefined ? (eski?.muayeneSuresiSaat ?? null) : a.muayeneSuresiSaat) : null;
+    return { ...a, ilkParca: a.ilkParca ?? (a.opNo === null ? undefined : eskiSecim.get(a.opNo)) ?? ('yok' as const), kontrolTuru: duzeltilmis, muayeneSuresiSaat: saat };
+  });
   // Dalı göndermeyen (alanı bilmeyen) ekran da kayıtlı dal ve birleştirmeyi silmesin (1248 a).
   const eskiDal = new Map(mevcut.adimlar.map((m) => [m.opNo, m]));
   const dalli = secimli.map((a) => {

@@ -1320,6 +1320,9 @@ export const disOperasyonSemasi = z.object({
   firmaAdi: z.string().nullable(),
   // 2874: fason adımın firması seçilmedi; satın alma siparişle seçer. İsteğe bağlı: sunucu her zaman yazar.
   firmaBekleniyor: z.boolean().optional(),
+  // 3708: fason siparişinde parçanın teslim yeri ("TMI" ya da ikinci firmanın adı) ve firmada kaynağında muayene yapılacağı notu; sunucu her zaman yazar.
+  teslimYeri: z.string().optional(),
+  kaynaktaMuayene: z.boolean().optional(),
   planlananGidis: tarih.nullable(),
   gerceklesenGidis: z.string().nullable(),
   termin: tarih.nullable(),

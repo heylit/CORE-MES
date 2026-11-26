@@ -521,6 +521,10 @@ export const emirHurdalari = isEmri.emirHurdalari;
 export type { EmirHurdasi } from './is-emri-servis.ts';
 export const fasonHareketiOzeti = isEmri.fasonHareketiOzeti;
 export const fasonDonusuKaydet = isEmri.fasonDonusuKaydet;
+// 3708: kaynağında muayene ve kontrolsüz geçişte fason adımını sonraki firmaya aktarım kaydıyla kapatır (stok hareketi yok).
+export const fasonAktarimiKaydet = isEmri.fasonAktarimiKaydet;
+export const fasonYoluOku = isEmri.fasonYoluOku;
+export type { FasonYolu } from '#paylasilan/fason-kontrol.ts';
 // Sevkiyat Tüm işler (960): depo çıkışı fason gidişini emre yazar (aynı transaction); yetki denetlemez, çağıran korur.
 export const fasonGidisYaz = isEmri.fasonGidisYaz;
 // Satın alma dış operasyonlar (#542 U3); yetki denetlemez, çağıran korur.
