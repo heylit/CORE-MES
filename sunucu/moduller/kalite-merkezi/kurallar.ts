@@ -461,6 +461,15 @@ export interface BekleyenEmir { id: number; emirNo: string; parcaNo: string; par
 
 export interface BekleyenAdim { isEmriId: number | null; opNo: number | null; kararBekliyor: number }
 
+// 3755: emrin parça revizyonu (sabitlenen; null seçilmemiş) ile kalitedeki etkin resimlerin revizyonları. Resimler arasında emrin revizyonu
+// yoksa ve en az birinin kodu biliniyorsa uyarı; ölçüm durmaz. `ayni` gösterim kuralıyla karşılaştırır ("R00" ile "00" aynı).
+export function kaliteResmiUyarisi(emirRev: string | null, resimRevleri: readonly (string | null)[], ayni: (a: string | null, b: string | null) => boolean): string | null {
+  if (emirRev === null) return null;
+  const bilinen = resimRevleri.filter((r): r is string => r !== null);
+  if (bilinen.length === 0 || bilinen.some((r) => ayni(r, emirRev))) return null;
+  return `Bu emir Rev ${emirRev} ile açıldı; elinizdeki resim Rev ${bilinen.join(', Rev ')}. Ölçümü Rev ${emirRev} çizimine göre yapın.`;
+}
+
 // İlk parça kararı bekleyenler: karar bekleyen sayımı olan açık emirlerin adımları, emir ve OP sırasıyla (325 a, 744 a).
 export function ilkParcaBekleyenleri(emirler: readonly BekleyenEmir[], sayaclar: ReadonlyMap<number, readonly BekleyenAdim[]>) {
   return emirler

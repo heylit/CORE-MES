@@ -103,6 +103,10 @@ export const kmIlkParcaBekleyenCevabi = z.object({
     // 744 a: satır adım başınadır; iş emirsiz eski emirde ikisi de boş.
     isEmriId: z.number().int().positive().nullable(), opNo: z.number().int().positive().nullable(),
     adet: z.number().int().positive(), kararBekleyenAdet: z.number().int().positive(),
+    // 3755: emrin parça (çizim) revizyonu ("00"; seçilmemişte null) ve çizim belgesi; kalite resmi farklı revizyondaysa uyarı. İsteğe bağlı:
+    // bu alandan önce yazılmış istemci verisi geçerli kalır.
+    parcaRevizyonu: z.string().nullable().optional(), parcaCizimBelgeId: z.number().int().positive().nullable().optional(),
+    resimUyarisi: z.string().nullable().optional(),
   })),
 });
 

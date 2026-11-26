@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import type { KmIlkParcaBekleyenCevabi, KmIlkParcaCevabi, KmIlkParcaGovdesi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { Dugme, OnayPenceresi, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder } from '../../../../ortak/veri/istek-kimligi.ts';
+import { parcaRevMetni } from '#paylasilan/sozlesme/emir-durumu.ts';
 
 type Emir = KmIlkParcaBekleyenCevabi['emirler'][number];
 type Karar = KmIlkParcaGovdesi['karar'];
@@ -54,8 +56,14 @@ export function IlkParcaKarari() {
         {emirler.map((e) => (
           <li key={satirAnahtari(e)} className="tc-km1-gorev" data-oncelik="1">
             <div className="tc-km1-gorev-metin">
-              <b>{e.emirNo}{e.opNo === null ? '' : ` | Op ${String(e.opNo)}`} | {e.parcaNo}</b>
+              <b>{e.emirNo}{e.opNo === null ? '' : ` | Op ${String(e.opNo)}`} | {e.parcaNo}{e.parcaRevizyonu === undefined ? '' : ` | ${parcaRevMetni(e.parcaRevizyonu)}`}</b>
               <small>{e.parcaAd} | emir {e.adet} adet | karar bekleyen {e.kararBekleyenAdet} adet</small>
+              {e.resimUyarisi && (
+                <span className="tc-km1-rev-uyari" role="status">
+                  <Simge ad="alert" boyut="k" />{e.resimUyarisi}
+                  {e.parcaCizimBelgeId != null && <Link to={`/cizimler/belge/${String(e.parcaCizimBelgeId)}`}>{parcaRevMetni(e.parcaRevizyonu)}&apos;ı aç</Link>}
+                </span>
+              )}
             </div>
             <span className="tc-km1-gorev-eylem">
               <Dugme tur="birincil" disabled={bekleyen !== null} yukleniyor={bekleyen === satirAnahtari(e) && karar.variables?.secim === 'onay'}
