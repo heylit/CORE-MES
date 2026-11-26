@@ -680,6 +680,11 @@ span.tc-ay2-mt-h { cursor: default; }
 .tc-ay2-rehber > summary { cursor: pointer; color: var(--muted); font-size: var(--yazi-s); font-weight: 700; min-block-size: var(--dokunma); display: flex; align-items: center; }
 .tc-ay2-rehber[open] > summary { margin-block-end: var(--b-2); }
 .tc-ay2-dosya .tc-ay2-ana-isaret { display: inline-flex; align-items: center; color: var(--hazard-ink); font-weight: 700; }
+.tc-ay2-kaynak-blok > .tc-ay2-kb { flex-wrap: nowrap; }
+.tc-ay2-kaynak-blok > .tc-ay2-kb > div { flex-basis: 0; }
+/* Paket adımı satırındaki Düzenle ve satır düğmeleri her genişlikte dokunma hedefi kadar (44 px); terminal dokunmatik de açılır */
+.tc-ay2-paket-adimi .tc-ay2-bag, .tc-ay2-paket-adimi .tc-dugme { min-block-size: var(--dokunma); min-inline-size: var(--dokunma); }
+.tc-ay2-paket-adimi .tc-ay2-bag { padding-inline: var(--b-2); }
 
 /* depo paketi: kaynak satırı (3702) */
 .tc-ay2-kaynak { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); padding: var(--b-2) var(--b-3); border-radius: var(--yari-2); background: var(--panel2); border: var(--cizgi-ince) solid var(--edge); min-width: 0; }
