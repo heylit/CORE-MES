@@ -257,7 +257,7 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
     });
     const bekleyen = async () => (await vt().tek<{ kb: number | null }>("SELECT (govde->>'tmiKararBekliyor')::int AS kb FROM arkon_kayit WHERE cid = $1", [`b006-s${n}`]))?.kb ?? null;
     await vt().sorgu("INSERT INTO arkon_belge (depo, kimlik, govde, surum, degistiren_id) VALUES ('pkgs', $1, $2, 1, $3)",
-      [paket, JSON.stringify({ id: paket, machine: 'M-B006', plan: [{ id: 1 }, { id: 2, freq: 'Her 10 parça' }] }), yoneticiId]);
+      [paket, JSON.stringify({ id: paket, machine: 'M-B006', plan: [{ id: 1 }, { id: 2, freq: 'Her 10 parça' }], rules: { q: { firstPiece: true } } }), yoneticiId]);
     const basla = await istek<{ eklenen: number }>(cerezler.operator, 'POST', '/arkon/kayitlar/events/ekle', {
       satirlar: [{ cid: 'b006-1', machine: 'M-B006', pkgId: paket, state: 'running', reason: null }], kaynak: 'g1',
     });

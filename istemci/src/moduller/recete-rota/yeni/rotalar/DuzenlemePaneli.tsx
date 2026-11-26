@@ -13,6 +13,7 @@ import {
 import { AdimSartnameleri } from './AdimSartnameleri.tsx';
 import { AdimEkipmani, useAdimEkipmanSayisi } from './AdimEkipmani.tsx';
 import { AdimTalimati } from './AdimTalimati.tsx';
+import { IlkParcaSatiri, ilkParcaOzeti, useIlkParcaDurumu } from './IlkParcaKaynagi.tsx';
 import { HamOnerisi } from './HamOnerisi.tsx';
 import { BAG_ADI, Bolme, KatBolme, AramaliSecimAlani, operasyonSecenekleri, SayiAlani, SecimAlani, type RotaEkrani, type Secim, SURE_EN_COK, useKatlar } from './ortak.tsx';
 import { useRevizyonSartnameleri, useTalimatlar } from '../sartnameler/veri.ts';
@@ -200,6 +201,7 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
   const sartnameler = useRevizyonSartnameleri(gorulen ? Number(gorulen.id) : null);
   const ekipmanSay = useAdimEkipmanSayisi(gorulen, a?.opNo ?? null);
   const talimat = useTalimatlar(Number(s.urunId), a?.opNo ?? null, gorulen ? Number(gorulen.id) : null);
+  const ilkParca = useIlkParcaDurumu(Number(s.urunId), a?.opNo ?? null, a?.ilkParca);
   if (!a || !sahip) return <BosPanel r={r} />;
   const idx = liste.indexOf(a);
   const son = idx === liste.length - 1;
@@ -260,7 +262,7 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
   const ozetAy = [`Fire %${sayi(a.rejectPct)}`, ...(fason ? [] : [
     a.split === 'bol' ? 'paralel böl' : dz.insanli(a.stationId) ? 'tek kişi' : 'tek makine',
     a.alts.length ? `${String(a.alts.length)} alternatif` : 'alternatif yok',
-    a.ilkParca !== 'yok' ? 'ilk parça onayı açık' : 'ilk parça onayı yok',
+    ilkParcaOzeti(ilkParca),
   ])].join(' · ');
   const sartSay = sartnameler.data ? (sartnameler.data.adimlar.find((x) => x.opNo === a.opNo)?.sartnameler.length ?? 0) : null;
   const talimatSurum = talimat.data?.surumler[0]?.surum ?? null;
@@ -549,8 +551,7 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
             </div>
             <IsaretKutusu etiket="Yarıda kalıp dönülünce hazırlık yeniden eklensin" checked={a.resetup} disabled={!duzen}
               onChange={(e) => { const v = e.target.checked; yaz((x) => ({ ...x, resetup: v }), 'Yeniden hazırlık değişti'); }} />
-            <IsaretKutusu etiket="Her kurulumda ilk parça onayı istensin" checked={a.ilkParca !== 'yok'} disabled={!duzen}
-              onChange={(e) => { const v = e.target.checked; yaz((x) => ({ ...x, ilkParca: v ? 'her_kurulum' : 'yok' }), 'İlk parça onayı değişti'); }} />
+            <IlkParcaSatiri malzemeNo={Number(s.urunId)} d={ilkParca} />
           </>
         )}
       </KatBolme>

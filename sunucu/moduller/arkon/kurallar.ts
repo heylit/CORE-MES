@@ -49,6 +49,7 @@ export const ILETILER = {
   lotKarariTutmadi: 'Bulunan kusurlu sayıları AQL planına göre başka karar veriyor; sayıları ya da kararı düzeltin.',
   lotPaketi: 'Lot kararı yalnız kalite istasyonundaki CORE iş emri paketinde verilir.',
   kaliteKarari: 'Bu kayıt karara bağlanmış ya da kapanmış: değiştirmek yalnız kararı veren ya da kapatan role ve yöneticiye açıktır.',
+  ilkParcaKaynagi: 'İlk parça onayı Kalite Merkezi numune planından gelir (plan yoksa rotadaki seçimden); Hazırlık\'tan değiştirilemez.',
   kmNumune: 'Numune planı Kalite Merkezi\'ndedir: pakete yalnız oradaki planın bu operasyondaki güncel sürümüyle girer, Hazırlık\'tan değiştirilemez.',
   ilkParcaKmde: 'İlk parça kararı Kalite Merkezi\'nde verilir.',
   kmNumuneYok: 'Bu numune Kalite Merkezi\'ne bağlı değil: ölçüm buradan girilmez.',
@@ -308,7 +309,7 @@ export interface IsEmriPaketGirdisi {
   hazirlik?: HazirlikEksigi | null | undefined;
   // Adımın Kalite Merkezi'ndeki son ilk parça kararı (denetim #12, 744 a): tablet ilk parça kapısını buradan okur, sunucu kapısıyla aynı kaynak.
   ilkParca?: { karar: 'onay' | 'ret'; zaman: string } | null | undefined;
-  // Adımın rotadaki ilk parça seçimi (744 a): "yok" taslağın ilk parça kuralını kapatır; kayıtlı paketin kuralı paketindir.
+  // Adımın ilk parça seçimi (3689-2: Kalite Merkezi planı, yoksa rotadaki seçim): taslağın ilk parça kuralını yazar; kayıtlı paketin kuralı paketindir.
   ilkParcaSecimi?: IlkParcaSecimi | undefined;
   // Adımda TMI'nin ilk parça kapısı var mı (rotadaki seçim ve istasyon türü, `ilkParcaGereksinimi`): sağlam sayım TMI'de karar bekler. Kontrol
   // planı boş pakette tablet kapıyı kendi planından göremez; terminal karar bekleyeni buradan söyler.
@@ -408,7 +409,7 @@ export function isEmrindenTaslakPaket(g: IsEmriPaketGirdisi): Record<string, unk
     due: ie.teslim ?? '', priority: ie.oncelik === 1 ? 'urgent' : 'normal', material: '', note: '',
     files: [], primary: null, plan: [], steps: talimatAdimlari(g.talimat), ...kopya,
     ...(g.girenler?.length && doluMetin(kopya['material']) === null ? { material: girenMetni(g.girenler) } : {}),
-    ...(g.ilkParcaSecimi === 'yok' ? { rules: ilkParcasizKural(kopya['rules']) } : {}),
+    ...(g.ilkParcaSecimi === undefined ? {} : { rules: ilkParcaKurali(kopya['rules'], g.ilkParcaSecimi !== 'yok') }),
     ...(depo.otoKaynak === null ? {} : { otoKaynak: { depo: depo.otoKaynak } }),
     status: 'draft', version: 0, dirty: true, createdAt: acilma, updatedAt: acilma, by: emir.acan.ad, from: 'tmi',
     tmi: { emirId: ie.uretimEmriId, isEmriId: ie.id, opNo: ie.opNo, plan: g.plan, ...adimTuruAlanlari(ie.tur, g.ekAciklama), ...(g.rotaEksik ? { rotaEksik: g.rotaEksik } : {}), ...(g.hazirlik ? { hazirlik: g.hazirlik } : {}), ...(g.ilkParca ? { ilkParca: { karar: g.ilkParca.karar, zaman: g.ilkParca.zaman } } : {}), ...(g.ilkParcaGerekli ? { ilkParcaGerekli: true } : {}), ...(g.aql ? { aql: g.aql } : {}), ...(g.fasonDonusu === undefined ? {} : { fasonDonusu: g.fasonDonusu }), ...(g.opTipi && opType === 'kalite' ? { opTipi: g.opTipi } : {}),
@@ -427,12 +428,27 @@ function depoTaslagi(opType: string, sablon: Record<string, unknown> | null, g: 
 }
 
 // Tablet eksik kuralı varsayılanla tamamlar (arkon/web kurallar.ts `RULES0`): şablonun öteki kuralları korunur, yalnız ilk parça kapanır.
-function ilkParcasizKural(kural: unknown): Record<string, unknown> {
+// 3689-2: paketin ilk parça kuralı kaynaktan (Kalite Merkezi planı ya da geçişte rota seçimi) yazılır; paket kendi başına açıp kapatmaz.
+function ilkParcaKurali(kural: unknown, acik: boolean): Record<string, unknown> {
   const k = kayitMi(kural) ? kural : {};
-  return { ...k, q: { ...(kayitMi(k['q']) ? k['q'] : {}), firstPiece: false } };
+  return { ...k, q: { ...(kayitMi(k['q']) ? k['q'] : {}), firstPiece: acik } };
 }
 
-// 744 a: TMI'de adımın sağlamı ilk parça kararını bekler mi. Rota seçimi "her kurulumda" ve iş talaşlıysa bekler (tanınmayan, istasyonsuz iş
+// 3689-2: paketin ilk parça kuralı (rules.q.firstPiece); yazılmamışsa kapalı (terminal `RULES0` ile aynı).
+export function ilkParcaKuraliOku(paket: unknown): boolean {
+  const q = kayitMi(paket) ? alanOku(paket['rules'], 'q') : undefined;
+  return alanOku(q, 'firstPiece') === true;
+}
+export const ilkParcaKuraliDegisti = (yeni: unknown, eski: unknown): boolean => ilkParcaKuraliOku(yeni) !== ilkParcaKuraliOku(eski);
+
+// 3689-2: ilk parça onayının tek kaynağı Kalite Merkezi numune planıdır. Planda kapılı ilk parça varsa açık, plan kuralsız ("İlk parça
+// yok") kaydedildiyse kapalı; plan yoksa ya da kapılı ilk parça taşımıyorsa (`ilkParca` null) geçiş: rotadaki eski seçim (744 a), o da yoksa istenmez.
+export function ilkParcaSecimiCoz(plan: { ilkParca: boolean | null } | undefined, rota: IlkParcaSecimi | undefined): IlkParcaSecimi {
+  if (plan !== undefined && plan.ilkParca !== null) return plan.ilkParca ? 'her_kurulum' : 'yok';
+  return rota ?? 'yok';
+}
+
+// 744 a, 3689-2: TMI'de adımın sağlamı ilk parça kararını bekler mi. Seçim (plan ya da rota) "her kurulumda" ve iş talaşlıysa bekler (tanınmayan, istasyonsuz iş
 // talaşlı sayılır, `ilkParcaOlculeri` gibi). Talaşlı olmayan adımda (kalite, depo, boya, montaj) Arkon kapısı ilk parça ölçüsü istemez; orada
 // kilit, kararı tabletten hiç sorulmayan bir bekleyiş olurdu (VARSAYIM). Tesviye rota seçimine uyar (2056 c): kontrol planı ölçüsü
 // istemez, karar Kalite Merkezi'nden gelir ve terminal bekleyişi `tmi.ilkParcaGerekli` ile söyler.
@@ -2053,14 +2069,15 @@ export const yoklamaDenetimiGecerli = (d: { an: number; imza: string }, simdi: n
 export const ISTEK_KILIT_BUTCESI_MS = 4000;
 
 // B-006 ilk parça kapısı: tabletin ilk parça kilidinin (arkon/web/src/app/operator-parcalar.ts `firstGate`, numune planı `sampOf`, kural
-// varsayılanı kurallar.ts `RULES0`: firstPiece açık) sunucu karşılığı. İlk parça Başlat'tan sonra üretilir ve normal parça gibi sayılır
+// varsayılanı kurallar.ts `RULES0`: firstPiece kapalı, 3689-2) sunucu karşılığı. İlk parça Başlat'tan sonra üretilir ve normal parça gibi sayılır
 // (kullanıcı kararları 129, 130 a): kapı Başlat'ı değil, kalite kararına kadar ilk parçadan sonraki sağlam sayımı durdurur. Yalnız talaşlı (cnc) pakette; tanınmayan iş türü talaşlı sayılır (istasyonlar.ts `opOf`).
 // Ölçeni kalite olan ölçü yalnız kalitenin karar verdiği numune isteğinden kapanır: sonuç belgesindeki ölçümü operatör de yazabildiği için kanıt sayılmaz.
 // Ölçeni operatör olan ölçü (tezgahta ölçüm kuralı) tablette olduğu gibi sonuç belgesindeki uygun ya da sapmalı ölçümle kapanır.
 const IS_TURLERI: ReadonlySet<string> = new Set(['cnc', 'kalite', 'depo', 'mark', 'boya', 'montaj', 'tesviye']);
 export interface IlkParcaOlcusu { id: string; olcen: 'q' | 'op' }
 
-export function ilkParcaOlculeri(paket: unknown): IlkParcaOlcusu[] {
+// 3689-2: `kaynak` iş emri paketinde adımın ilk parça seçimidir (Kalite Merkezi planı, yoksa rota); verilince paketteki firstPiece yerine geçer.
+export function ilkParcaOlculeri(paket: unknown, kaynak?: boolean): IlkParcaOlcusu[] {
   if (!kayitMi(paket)) return [];
   const tur = paket['opType'];
   if (typeof tur === 'string' && IS_TURLERI.has(tur) && tur !== 'cnc') return [];
@@ -2070,7 +2087,7 @@ export function ilkParcaOlculeri(paket: unknown): IlkParcaOlcusu[] {
   const kurallar = numune !== null
     ? numune.filter((r) => r['when'] === 'first' && Boolean(r['gate']))
       .map((r) => ({ olcen: Array.isArray(r['who']) && r['who'].length > 0 ? r['who'][0] : 'q', olculer: r['items'] === 'crit' ? plan.filter((b) => Boolean(b['crit'])) : Array.isArray(r['items']) ? plan.filter((b) => (r['items'] as unknown[]).includes(b['id'])) : plan }))
-    : (alanOku(q, 'firstPiece') ?? true) ? [{ olcen: alanOku(q, 'who') === 'operator' ? 'op' : 'q', olculer: plan.filter((b) => (b['freq'] || 'İlk parça') === 'İlk parça') }] : [];
+    : (kaynak ?? alanOku(q, 'firstPiece') ?? false) ? [{ olcen: alanOku(q, 'who') === 'operator' ? 'op' : 'q', olculer: plan.filter((b) => (b['freq'] || 'İlk parça') === 'İlk parça') }] : [];
   const olculer = new Map<string, 'q' | 'op'>();
   for (const k of kurallar) {
     for (const b of k.olculer) {
@@ -2094,10 +2111,10 @@ const KM_NEDEN_UZUNLUGU = 80;
 export interface KmNumuneGirdisi { opNo: number; balonlar: number[]; neden: string; parcaSayisi: number | null }
 export interface IstekKmPlani { ilkParca: boolean; km: KmNumuneGirdisi | null; uyari: string | null }
 
-export function istekKmPlani(istek: unknown, paket: unknown): IstekKmPlani {
+export function istekKmPlani(istek: unknown, paket: unknown, kaynak?: boolean): IstekKmPlani {
   const olculer = alanOku(istek, 'items');
   const istenen = new Set(Array.isArray(olculer) ? olculer.map(String) : []);
-  const kapi = ilkParcaOlculeri(paket).filter((o) => o.olcen === 'q').map((o) => o.id);
+  const kapi = ilkParcaOlculeri(paket, kaynak).filter((o) => o.olcen === 'q').map((o) => o.id);
   const ilkParca = kapi.some((id) => istenen.has(id));
   const plan = kayitMi(paket) && Array.isArray(paket['plan']) ? paket['plan'].filter(kayitMi) : [];
   const bagli = plan.filter((b) => pozitifTamSayi(b['kmBalon']));

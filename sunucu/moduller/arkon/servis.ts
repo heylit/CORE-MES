@@ -23,7 +23,7 @@ import type { IlkParcaSecimi } from '#paylasilan/sozlesme/rota.ts';
 import { durusNedenleriniListele, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import { aletlerVeKayitlari, olcumAletiGecerliMi } from '../kalibrasyon/disari.ts';
 import { kmNumuneDegisimiGecerli, kmNumuneDegisimiGerekli } from './km-numune-ceviri.ts';
-import { studyoParcasi, taslakResimleri } from '../kalite-merkezi/disari.ts';
+import { ilkParcaPlanlari, studyoParcasi, taslakResimleri } from '../kalite-merkezi/disari.ts';
 import { kmTaslakDoldur } from './km-plan-ceviri.ts';
 import { adimIlkParcaKararlari, ilkParcaKararlari, lotKarariYaz, muayenePlaniOner, emirNumuneleri, numuneIste, numuneKarariVer, numuneOku, olcumYaz } from '../kalite-merkezi/disari.ts';
 import type { KmOlcumKaynagi, KmOlcumVerisi } from '../kalite-merkezi/disari.ts';
@@ -62,7 +62,7 @@ import {
   ADIMSIZ_YAYIN, ISTASYONSUZ_YAYIN, PLANSIZ, partiKomutu, planBaslatmaReddi, yayinDenetlenir, yayinlanmamis, cizimOnayiGecer, planDurumlari, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, siraOnaylari, siraOnayiniYaz,
   KUYRUK_ILETILERI, eksiAlaniniEkle, hataliAlaniniEkle, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri,
   plansizKaynak, rotaAnahtari, sablonPaket, tabanCoz, tmiAlanlariniYaz, tmiBirlesikSurum, hurdaNedenleriniCevir, stokaBagliMi, stokDurumuyla, stokIstegiKaynagi, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, numuneTeslimAlma, numuneTeslimAlindiDamgala, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariGirdisi, lotKarariKoru, lotPaketi, lotKarariDamgala, KALITE_KARARI_ROLLERI,
-  icerikSurumu, planYokDamgala, uyariBirlestir, baslatmaKaydiKarti, guvensizCizimleriAyikla, acikIstekMi, alanOku, istekKmPlani, istekKarari, kmKarariniAynala, periyodikNumuneler, periyodikRetAcik, numuneTeslimKaynagi, kmOlcumGruplari, kmUyarisiniYaz, KM_UYARILARI, ilkParcaGereksinimi, tmiAqlPlani, iletiKonumu, kapsamdaMiKisitli, konumBosMu, kayitKonumu, kayitSutunlari, konumKimlikleri, ikinciKontrolEksik, ilkParcaOlculeri, gizliYansimaTuru, gecikmeliSayimReddi, tmiRetIletisi, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, yenidenIlkParcaTabani, ILK_PARCA_ADEDI, ilkParcaYenidenSorulur, yenidenIlkParcaAcik, yenidenKarariDamgala, yenidenKarariDegisti, kodlarAyir, konumCoz, okuyabilirMi, paketEmri, paketIstasyonuReddi, paketKonumu, paketMakinesi, tesisHaritasiKur, kayitGovdesi, kayitReddi, gunlukSatirlari, paketSuzgeciVar, silmeCakisiyorMu, sunucuIletisiMi, tesisKur, tmiAyariMi, yazimCakisiyorMu, arkonVardiyalari, arkonTatilleri, arkonAletleri, TMI_AYARLARI,
+  icerikSurumu, planYokDamgala, uyariBirlestir, baslatmaKaydiKarti, guvensizCizimleriAyikla, acikIstekMi, alanOku, istekKmPlani, istekKarari, kmKarariniAynala, periyodikNumuneler, periyodikRetAcik, numuneTeslimKaynagi, kmOlcumGruplari, kmUyarisiniYaz, KM_UYARILARI, ilkParcaGereksinimi, ilkParcaSecimiCoz, ilkParcaKuraliDegisti, ilkParcaKuraliOku, tmiAqlPlani, iletiKonumu, kapsamdaMiKisitli, konumBosMu, kayitKonumu, kayitSutunlari, konumKimlikleri, ikinciKontrolEksik, ilkParcaOlculeri, gizliYansimaTuru, gecikmeliSayimReddi, tmiRetIletisi, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, yenidenIlkParcaTabani, ILK_PARCA_ADEDI, ilkParcaYenidenSorulur, yenidenIlkParcaAcik, yenidenKarariDamgala, yenidenKarariDegisti, kodlarAyir, konumCoz, okuyabilirMi, paketEmri, paketIstasyonuReddi, paketKonumu, paketMakinesi, tesisHaritasiKur, kayitGovdesi, kayitReddi, gunlukSatirlari, paketSuzgeciVar, silmeCakisiyorMu, sunucuIletisiMi, tesisKur, tmiAyariMi, yazimCakisiyorMu, arkonVardiyalari, arkonTatilleri, arkonAletleri, TMI_AYARLARI,
   BITMIS_BITIR, DOSYA_KOTASI, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, katilimYolu, tmidekiDurum, ZATEN_CALISIYOR, GIZLI_YANSIMA_TURLERI, ILETI_HIZI, ISTEK_KILIT_BUTCESI_MS, KILIT_BEKLEME_MS, KUYRUK_DEGISIKLIK_YOK, HAZIRLIK_DEGISIKLIK_YOK, arizaCagrisi, SAYIM_ERTELEME, yansimaNedeni, yansimaSirasi, YANSIYAN_KAYITLAR, yansimaKarari, yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, alanYetkisiReddi, belgeRoluReddi, onayEskidiMi, onayIcerigi, onayOzetiDamgala, bekletmeAlaniniEkle, sayimKaynagiAlaniniEkle, bitenEmirIsareti, bitmisIsReddi, onayZorunluMu, hizSiniriAsildi, iletiReddi, kayitRoluReddi, kisiAlanlariniDoldur, yazmaReddi, yayinEksigi, yerelPaketReddi, yeniSurum, yetkiMatrisi, yuklemeKotasiHatasi,
   cizimRevizyonuReddi, malzemeCizimleri, merkezDosyaAdi, merkezDosyaTipi, merkezDurumu, paketMerkezDosyalari, merkezTuruMu, merkezdenAlabilirMi, merkezDurumunuOkuyabilirMi,
   HAZIRLIK_MADDESI_ILETILERI, hazirlikMaddesiOlayReddi, cihazBaglayabilir,
@@ -370,9 +370,13 @@ async function isEmriTaslaklari(
     }
   }
   const hazirliklar = await isEmriHazirlikDurumlari(db, girdiler.flatMap((g) => (g.istasyon?.tip === 'talasli' ? [g.isEmri.id] : [])));
-  // 744 a: ilk parça kararı ve seçimi adım başınadır; rotada bulunmayan adım (rotasız emir, ek adım) her kurulumda sorar.
+  // 744 a: ilk parça kararı ve seçimi adım başınadır. 3689-2: rotada ve planda bulunmayan adım (rotasız emir, ek adım) ilk parça istemez.
   const ilkParcalar = await adimIlkParcaKararlari(db, girdiler.map((g) => g.isEmri.id));
   const ilkParcaSecimleri = await adimIlkParcaSecimleri(db, [...new Set(girdiler.flatMap((g) => { const r = anahtar(g.isEmri).revizyonId; return r === null ? [] : [r]; }))]);
+  // 3689-2: Kalite Merkezi planı rotadaki seçimin önündedir; plan yoksa ya da kapılı ilk parça taşımıyorsa rotadaki seçim, o da yoksa ilk parça yok.
+  const kmIlkParcalar = await ilkParcaPlanlari(db, girdiler.map((g) => g.isEmri.malzemeNo));
+  const ilkParcaSecimiBul = (ie: IsEmriPaketGirdisi['isEmri']): IlkParcaSecimi =>
+    ilkParcaSecimiCoz(kmIlkParcalar.get(ie.malzemeNo)?.get(ie.opNo), ilkParcaSecimiOku(ilkParcaSecimleri, anahtar(ie)));
   const kayitsizlar = girdiler.filter((g) => !kayitliKimlik.has(g.parca ? parcaPaketKimligi(g.isEmri.id, g.parca.no) : isEmriPaketKimligi(g.isEmri.id)));
   const depolar = girdiler.filter((g) => paketTuru(g.opGrubu, g.istasyon) === 'depo');
   const girenler = await adimGirenleri(db, [...new Set([...kayitsizlar, ...depolar])]);
@@ -396,8 +400,8 @@ async function isEmriTaslaklari(
     const hazirlik = g.istasyon === null ? null : hazirlikEksigi(g.istasyon.tip, hazirliklar.get(g.isEmri.id)?.durum);
     const aql = paketTuru(g.opGrubu, g.istasyon) === 'kalite' ? aqlPlanlari.get(`${g.emir.parcaNo}\n${String(g.parca?.adet ?? g.isEmri.adimAdedi ?? g.isEmri.adet)}`) ?? null : null;
     const taslak = isEmrindenTaslakPaket({ ...g, hazirlik, aql, ilkParca: ilkParcalar.get(g.isEmri.id) ?? null,
-      ilkParcaSecimi: ilkParcaSecimiOku(ilkParcaSecimleri, anahtar(g.isEmri)),
-      ilkParcaGerekli: ilkParcaGereksinimi(ilkParcaSecimiOku(ilkParcaSecimleri, anahtar(g.isEmri)) ?? 'her_kurulum', g.istasyon?.tip ?? null) === 'gerekli',
+      ilkParcaSecimi: ilkParcaSecimiBul(g.isEmri),
+      ilkParcaGerekli: ilkParcaGereksinimi(ilkParcaSecimiBul(g.isEmri), g.istasyon?.tip ?? null) === 'gerekli',
       girenler: girenler.get(`${g.isEmri.uretimEmriId}:${g.isEmri.opNo}`), depoBaglami: depoBaglamlari.get(g.isEmri.id) });
     const butun = g.parca ? kayitliGovde.get(isEmriPaketKimligi(g.isEmri.id)) : undefined;
     const yayinli = g.sablon !== null && g.sablon === butun ? parcaYayini(taslak, butun) : taslak;
@@ -858,6 +862,11 @@ export async function belgeYaz(
   const alanReddi = alanYetkisiReddi(depo, g.govde, guncel?.govde, rol, onayZorunlu);
   if (alanReddi !== null) throw yetkiYok(ILETILER[alanReddi]);
   if (depo === 'pkgs' && kmNumuneDegisimiGerekli(g.govde, guncel?.govde) && !(await kmNumunePlaniGecerli(db, g.govde))) throw yetkiYok(ILETILER.kmNumune);
+  // 3689-2: paketin ilk parça kuralı Kalite Merkezi'nden (geçişte rotadan) gelir; iş emri paketinde başka değere çekilemez.
+  if (depo === 'pkgs' && ilkParcaKuraliDegisti(g.govde, guncel?.govde)) {
+    const isEmriId = paketIsEmri(kimlik);
+    if (isEmriId !== null && ilkParcaKuraliOku(g.govde) !== ((await adimIlkParcaSecimi(db, okumaOnbellegiKur(), isEmriId)) !== 'yok')) throw yetkiYok(ILETILER.ilkParcaKaynagi);
+  }
   const olcumAleti = olcumAletleri(depo, g.govde, guncel?.govde);
   if (olcumAleti?.eksik === true) throw dogrulama(ILETILER.aletZorunlu, 'gid');
   for (const id of olcumAleti?.aletler ?? []) if (!(await olcumAletiGecerliMi(db, id))) throw dogrulama(ILETILER.aletGecersiz, 'gid');
@@ -1221,15 +1230,21 @@ const ilkParcaSecimiOku = (secimler: ReadonlyMap<string, IlkParcaSecimi>, rota: 
 
 // 744 a: adımın ilk parça seçimi emrin kaynak revizyonundaki aynı OP'li adımdadır; onaylı revizyon değişmediği için revizyon başına bir kez okunur.
 // Rotasız emirde ve rotada bulunmayan adımda (ek adım) her kurulumda sorulur.
+// 3689-2: ilk parça onayının tek kaynağı Kalite Merkezi numune planıdır (opun planı varsa yalnız o). Planı olmayan opta geçiş kuralıyla rotadaki
+// eski seçim (744 a) geçerlidir; rotasız emirde ve rotada bulunmayan adımda ilk parça istenmez.
 async function adimIlkParcaSecimi(db: Db, onbellek: OkumaOnbellegi, isEmriId: number): Promise<IlkParcaSecimi> {
   const adim = await isEmriOzetiOku(db, onbellek, isEmriId);
   const emir = adim === null ? null : await uretimEmriOzetiOku(db, onbellek, adim.uretimEmriId);
-  if (adim === null || emir?.kaynakRotaRevizyonId == null || emir.malzemeNo == null) return 'her_kurulum';
-  const rota = (await rotaAnahtarlari(db, [{ id: isEmriId, malzemeNo: emir.malzemeNo, opNo: adim.opNo, kaynakRotaRevizyonId: emir.kaynakRotaRevizyonId }])).get(isEmriId);
+  if (adim === null || emir?.malzemeNo == null) return 'yok';
+  const malzemeNo = emir.malzemeNo;
+  const plan = (await onbellek.oku(`kmIlkParca:${malzemeNo}`, () => ilkParcaPlanlari(db, [malzemeNo]))).get(malzemeNo)?.get(adim.opNo);
+  // R1 geçiş: kapılı ilk parça taşımayan planda (`ilkParca` null) karar rotadaki seçime düşer.
+  if ((plan !== undefined && plan.ilkParca !== null) || emir.kaynakRotaRevizyonId == null) return ilkParcaSecimiCoz(plan, undefined);
+  const rota = (await rotaAnahtarlari(db, [{ id: isEmriId, malzemeNo, opNo: adim.opNo, kaynakRotaRevizyonId: emir.kaynakRotaRevizyonId }])).get(isEmriId);
   const revizyonId = rota?.revizyonId ?? null;
-  if (rota === undefined || revizyonId === null) return 'her_kurulum';
+  if (rota === undefined || revizyonId === null) return 'yok';
   const secimler = await onbellek.oku(`ilkParcaSecimleri:${revizyonId}`, () => adimIlkParcaSecimleri(db, [revizyonId]));
-  return secimler.get(`${revizyonId}:${rota.opNo}`) ?? 'her_kurulum';
+  return ilkParcaSecimiCoz(plan, secimler.get(`${revizyonId}:${rota.opNo}`));
 }
 
 async function adimIlkParcaGereksinimi(db: Db, onbellek: OkumaOnbellegi, isEmriId: number, istasyonId: number | null) {
@@ -1806,6 +1821,12 @@ export async function bekleyenleriYinele(db: Db, gunluk: Gunluk): Promise<void> 
   }
 }
 
+// 3689-2: iş emri paketinde ilk parça kapısı paketin firstPiece alanından değil adımın kaynağından (Kalite Merkezi planı, yoksa rota) okunur.
+async function paketIlkParcaKaynagi(db: Db, onbellek: OkumaOnbellegi, paketId: unknown): Promise<boolean | undefined> {
+  const isEmriId = typeof paketId === 'string' ? paketIsEmri(paketId) : null;
+  return isEmriId === null ? undefined : (await adimIlkParcaSecimi(db, onbellek, isEmriId)) !== 'yok';
+}
+
 async function istekPaketi(db: Db, istek: unknown): Promise<unknown> {
   const paketId = istek !== null && typeof istek === 'object' ? (istek as Record<string, unknown>)['pkgId'] : undefined;
   return typeof paketId === 'string' && paketId !== '' ? (await belgeBul(db, 'pkgs', paketId))?.govde : undefined;
@@ -1818,7 +1839,7 @@ async function istekPaketi(db: Db, istek: unknown): Promise<unknown> {
 // 2131: karar Kalite Merkezi'nde retde NCR açar (numuneKarariVer), parçaya ve periyodik ret kapısındaki sayıma yansır (numuneKarariniYansit).
 async function istegiKmyeBagla(db: Db, kullanici: Kullanici, kimlik: string, istek: unknown, onceki: unknown): Promise<unknown> {
   if (onceki === undefined) {
-    const plan = istekKmPlani(istek, await istekPaketi(db, istek));
+    const plan = istekKmPlani(istek, await istekPaketi(db, istek), await paketIlkParcaKaynagi(db, okumaOnbellegiKur(), (istek as Record<string, unknown> | null)?.['pkgId']));
     if (plan.ilkParca && istekKarari(istek, undefined) !== null) throw yetkiYok(ILETILER.ilkParcaKmde);
     let govde: unknown = plan.ilkParca ? { ...(istek as object), ilkParca: true } : istek;
     // Kararlı açılan istek (eski kayıt biçimi) Kalite Merkezi numunesi açmaz.
@@ -1973,7 +1994,7 @@ async function ilkParcaKapisi(db: Db, satir: Readonly<Record<string, unknown>>, 
   if (typeof paketId !== 'string' || paketId === '' || !ilkParcaSayimiAsildi(satir, ILK_PARCA_ADEDI)) return 0;
   // Yalnız kayıtlı paket: tablet taslak paketi göstermez (arkon/web/src/data/tmi-plan.ts operatoreAcik), TMI'den taslak kurmak emri okurdu.
   const paket = await onbellek.oku(`belge:pkgs:${paketId}`, () => sorgular.belge(db, 'pkgs', paketId));
-  const olculer = ilkParcaOlculeri(paket?.govde);
+  const olculer = ilkParcaOlculeri(paket?.govde, await paketIlkParcaKaynagi(db, onbellek, paketId));
   if (olculer.length === 0) return 0;
   const cid = typeof satir['cid'] === 'string' ? satir['cid'] : null;
   const sayilan = await sorgular.parcaSaglami(db, paketId, cid);

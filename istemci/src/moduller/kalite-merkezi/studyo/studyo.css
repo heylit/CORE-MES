@@ -143,3 +143,30 @@
 
 @media (max-width: 767px) { .km-st-sol, .km-st-sag, .km-st-gr { padding-block-end: calc(var(--dokunma) * 2); } }
 
+/* 3689-2 numune planı düzenleyicisi (A): sağ sütunda op akordeonu, kural iki satır. */
+.km-np { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-2); min-width: 0; }
+.km-np-oplar, .km-np-kurallar, .km-np-gecmis { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-2); min-width: 0; }
+.km-np-op { border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel); min-width: 0; }
+.km-np-op[data-acik] { border-color: var(--done); }
+.km-np-op-bas {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); width: 100%; min-height: var(--dokunma); padding: var(--b-1) var(--b-2);
+  background: none; border: 0; color: var(--ink); font: inherit; font-size: var(--yazi-s); text-align: left; cursor: pointer; min-width: 0;
+}
+.km-np-op-bas:disabled { cursor: not-allowed; opacity: .6; }
+.km-np-op-bas b { white-space: nowrap; }
+.km-np-op-ad { flex: 1 1 0; min-width: 0; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.km-np-govde { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-2); padding: 0 var(--b-2) var(--b-2); min-width: 0; font-size: var(--yazi-s); }
+.km-np-kural { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-1); padding: var(--b-2); border-radius: var(--yari-1); background: var(--panel2); min-width: 0; }
+.km-np-kural[data-hata] { outline: var(--cizgi-ince) solid var(--stop); }
+.km-np-satir { display: flex; align-items: center; gap: var(--b-1); min-width: 0; }
+.km-np-secim, .km-np-n {
+  min-height: var(--dokunma); min-width: 0; width: 100%; flex: 1 1 0; padding: 0 var(--b-1); border: var(--cizgi-ince) solid var(--edge);
+  border-radius: var(--yari-1); background: var(--bg); color: var(--ink); font: inherit; font-size: var(--yazi-s);
+}
+.km-np-n { flex: 0 0 calc(var(--b-6) * 2.5); }
+.km-np-sil { display: inline-grid; place-items: center; min-width: var(--dokunma); min-height: var(--dokunma); background: none; border: 0; color: var(--muted); cursor: pointer; }
+.km-np-araclar { display: flex; flex-wrap: wrap; gap: var(--b-2); align-items: center; }
+.km-np-uyari { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); margin: 0; color: var(--stop); font-size: var(--yazi-s); }
+.km-np-gecmis-dugme { justify-self: start; background: none; border: 0; padding: 0; color: var(--done); font: inherit; font-size: var(--yazi-s); text-decoration: underline; cursor: pointer; }
+.km-np-gecmis li { display: grid; gap: var(--b-1); }
+.km-np-eski { display: grid; gap: var(--b-2); }

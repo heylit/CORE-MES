@@ -258,3 +258,15 @@ export async function eskiOkumalariSil(db: Db, gun: number): Promise<number> {
   );
   return satirlar.length;
 }
+
+// 3689-2: bir komutun belli bir kaydı için yazılmış denetim satırları (yol kalıbı ve parametre içerimiyle), yeniden eskiye.
+export function komutKayitlari(
+  db: Db, s: { yol: string; parametre: Record<string, unknown>; sinir: number },
+): Promise<{ id: number; zaman: string; kisiId: number | null; govde: unknown }[]> {
+  return db.sorgu(
+    `SELECT d.id::int AS id, ${zamanMetni('d.zaman')} AS zaman, d.kisi_id AS "kisiId", d.govde
+       FROM denetim_kaydi d WHERE d.yol = $1 AND d.yontem = 'POST' AND d.parametre @> $2::jsonb
+      ORDER BY d.zaman DESC, d.id DESC LIMIT $3`,
+    [s.yol, JSON.stringify(s.parametre), s.sinir],
+  );
+}

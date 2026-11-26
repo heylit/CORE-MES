@@ -10,7 +10,8 @@ import { useParcaKaynaklari } from '../yeni/parcalar/kaynak.ts';
 import { MalzemeSecici } from '../yeni/parcalar/MalzemeSecici.tsx';
 import type { EkranOzellikleri, KmSayaci } from '../yeni/sekmeler.ts';
 import { Resim, useKaliteFormu, type OlcumYazici } from './KaliteFormu.tsx';
-import { NUMUNE_DURUMU, numuneKuraliMetni, planGirdileri, uretimEmriKimligi } from './kurallar.ts';
+import { NUMUNE_DURUMU, planGirdileri, uretimEmriKimligi } from './kurallar.ts';
+import { NumunePlani } from './NumunePlani.tsx';
 import { CmmPlani } from './CmmPlani.tsx';
 import { CmmYukle } from './CmmYukle.tsx';
 import { GrupPaneli } from './GrupPaneli.tsx';
@@ -283,13 +284,8 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
 
       <aside id="km-st-sag" className="km-st-sag" aria-label="Numune planı ve numuneler">
         <section className="km-st-kart">
-          <span className="km-st-baslik">Numune planı</span>
-          {parca.data?.numunePlanlari.length ? parca.data.numunePlanlari.map((p) => (
-            <div key={p.opNo} className="km-st-plan">
-              <b>Op {p.opNo}</b>
-              {p.kurallar.length ? <ul className="km-st-liste">{p.kurallar.map((k) => <li key={k.kimlik}>{numuneKuraliMetni(k)}</li>)}</ul> : <span className="km-st-soluk">Kural yok</span>}
-            </div>
-          )) : <span className="km-st-soluk">{malzemeNo === null ? 'Parça seçin.' : 'Numune planı tanımlı değil.'}</span>}
+          <span className="km-st-baslik">Numune planı · ilk parça kaynağı</span>
+          <NumunePlani malzemeNo={malzemeNo} veri={parca.data} gruplar={resim?.gruplar ?? []} duzenler={duzenler} />
         </section>
         <section className="km-st-kart">
           <span className="km-st-baslik">Numuneler{emir ? ` · ${emir.no ?? ''}` : ''}</span>

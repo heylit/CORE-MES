@@ -806,6 +806,8 @@ export const STUDYO_ILETILER = {
   balonAcikNumunede: 'Kararı verilmemiş numunede istenen balon kaldırılamaz.',
   balonYerIkisi: 'Elle konan balon yeri ile istenen yerleşim birlikte verilmez.',
   kuralKimlikTekrar: 'Numune planında aynı kural kimliği bir kez kullanılır.',
+  kapiYalnizIlk: 'Sayım kilidi (kapı) yalnız ilk parça kuralında seçilir.',
+  opRotadaYok: 'Bu operasyon parçanın yürürlükteki rotasında yok; numune planı rotadaki operasyona yazılır.',
   grupAdTekrar: 'Bu adla grup zaten var (büyük küçük harf farkı sayılmaz).',
   kopyaHedefGrupVar: 'Hedef resimde grup var; plan kopyalanmadan önce o grupları silin.',
   grupBalonYok: 'Gruptaki balon numarası bu resmin etkin balonlarında yok.',
@@ -967,10 +969,23 @@ export function balonYeriReddi(g: { yer?: readonly [number, number] | null | und
 }
 
 // Numune kuralındaki balon numaraları parçanın etkin resimlerindeki numaralardır; kural kimliği planda tekildir.
-export function numunePlaniReddi(kurallar: readonly { kimlik: string; balonlar: 'hepsi' | 'kritik' | readonly number[] }[], balonNolari: ReadonlySet<number>): StudyoIletisi | null {
+// 3689-2: ilk parça onayının tek kaynağı plandaki "ilk parça" kuralıdır; kapı (kalite kararına kadar sayım kilidi) yalnız orada seçilir.
+export function numunePlaniReddi(
+  kurallar: readonly { kimlik: string; ne?: string; kapi?: boolean | undefined; balonlar: 'hepsi' | 'kritik' | readonly number[] }[], balonNolari: ReadonlySet<number>,
+): StudyoIletisi | null {
   const kimlikler = kurallar.map((k) => k.kimlik);
   if (new Set(kimlikler).size !== kimlikler.length) return 'kuralKimlikTekrar';
+  if (kurallar.some((k) => k.kapi === true && k.ne !== 'ilk')) return 'kapiYalnizIlk';
   return kurallar.every((k) => typeof k.balonlar === 'string' || k.balonlar.every((n) => balonNolari.has(n))) ? null : 'kuralBalonYok';
+}
+
+// 3689-2 (R1 "Geçiş"): opun ilk parça durumu. Kapılı "ilk parça" kuralı varsa açık; kuralsız plan ("İlk parça yok" diye kaydedilen) kapalı.
+// Plan yoksa ya da kuralları olup kapılı ilk parçası yoksa null: bugünkü planlar kapı anlamıyla yazılmadı, kilidi sessizce kaldırmasın diye
+// çağıran geçiş kuralıyla rotadaki eski seçime bakar.
+export function plandanIlkParca(plan: { kurallar: readonly { ne: string; kapi?: boolean | undefined }[] } | null): boolean | null {
+  if (plan === null) return null;
+  if (plan.kurallar.some((k) => k.ne === 'ilk' && k.kapi === true)) return true;
+  return plan.kurallar.length === 0 ? false : null;
 }
 
 export function numuneDurumu(karar: 'onay' | 'ret' | 'sapma' | null, olcumSayisi: number): 'bekliyor' | 'olculuyor' | 'onay' | 'ret' | 'sapma' {

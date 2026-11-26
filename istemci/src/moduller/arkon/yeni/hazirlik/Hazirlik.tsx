@@ -29,7 +29,7 @@ import { ArkonBandi } from '../ortak/SaatSeridi.tsx';
 import { IstasyonSecimi } from './IstasyonSecici.tsx';
 import { KaliteMerkeziCizimleri } from './KaliteMerkeziCizimleri.tsx';
 import { ApiHatasi } from '../../../../ortak/veri/api.ts';
-import { kmAlimEtiketi, kmBagi, kmDoldurulabilir, kmDosyaElle, type KmTopluSatiri, kmNumuneDurumu, kmNumuneKurallari, kmNumunePlani, kmOtomatikKarari, kmPlani, kmSahibi, otoKaynakYaz, otomatikKmNumunesi } from './km-cizim.ts';
+import { kmAlimEtiketi, kmBagi, kmDoldurulabilir, kmDosyaElle, type KmTopluSatiri, kmIlkParcaAcik, kmNumuneDurumu, kmNumuneKurallari, kmNumunePlani, kmOtomatikKarari, kmPlani, kmSahibi, otoKaynakYaz, otomatikKmNumunesi } from './km-cizim.ts';
 import { KmPlanBilgisi } from './KmPlanBilgisi.tsx';
 import { KmTopluPenceresi, type KmTopluSonucu } from './KmTopluPenceresi.tsx';
 import type { KmNumunePlani } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
@@ -39,7 +39,7 @@ import { useStudyoParcasi } from '../../../kalite-merkezi/disari.ts';
 import { useYetki } from '../../../../ortak/veri/yetki.ts';
 import { KuralSekmesi } from './KuralSekmesi.tsx';
 import { depoDoldurma,
-  IS_TURLERI, SIKLIKLAR, TMI_KILIT, VARSAYILAN_AYARLAR, isTuru, numunePlani, numunePlaniYaz,
+  IS_TURLERI, isKurallari, SIKLIKLAR, TMI_KILIT, VARSAYILAN_AYARLAR, isTuru, numunePlani, numunePlaniYaz,
   olcumYontemi, onayBekliyor, onayGerekir, onayReddedildi, onayli, kmBagsizUyarisiGerekir, paketDenetimi, planYokUyarisiGerekir, tmiIsEmri, yeniKimlik,
   beklemeEki, planDisiEki, geriCekilebilir, takipSuzgeciOku, topluGeriCekilebilir, type TakipSuzgeci,
 } from './kurallar.ts';
@@ -369,7 +369,9 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
   const kmNumuneAl = (plan: KmNumunePlani) => {
     if (!p) return;
     if (!duzenler) { yetkisiz(); return; }
-    yama({ ...(numunePlaniYaz(p, kmNumuneKurallari(plan)) as Partial<Pkg>), kmNumune: { surum: plan.surum } });
+    // 3689-2: ilk parça kuralı da plandan gelir (Kurallar sekmesinde salt okunur).
+    const ilk = kmIlkParcaAcik(plan);
+    yama({ ...(numunePlaniYaz(p, kmNumuneKurallari(plan)) as Partial<Pkg>), kmNumune: { surum: plan.surum }, ...(ilk === null ? {} : { rules: { ...isKurallari(p), q: { ...isKurallari(p).q, firstPiece: ilk } } }) });
     soyle('Numune planı Kalite Merkezi’nden alındı · ' + plan.kurallar.length + ' kural', 'run');
   };
   const kmNumuneOtomatik = useRef(new Set<string>());
@@ -950,7 +952,10 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                 </div>
               ) : null}
               {sekme === 'st' ? <IstasyonDuzenleyici paket={p} yama={yama} /> : null}
-              {sekme === 'rules' ? <KuralSekmesi paket={p} yama={yama} sonuc={res ?? null} /> : null}
+              {sekme === 'rules' ? (() => {
+                const kmPlan = kmParca.data ? kmNumunePlani(p, kmParca.data.numunePlanlari) : null;
+                return <KuralSekmesi paket={p} yama={yama} sonuc={res ?? null} ilkParca={kmSahibi(p) ? { durum: kmOkunur && kmParca.data ? kmNumuneDurumu(p, kmPlan) : null, plan: kmPlan, duzenler, al: kmNumuneAl } : null} />;
+              })() : null}
               {sekme === 'samp' ? (() => {
                 const kmPlan = kmParca.data ? kmNumunePlani(p, kmParca.data.numunePlanlari) : null;
                 return <NumuneSekmesi paket={p} yama={yama} km={kmSahibi(p) ? { durum: kmNumuneDurumu(p, kmPlan), plan: kmPlan, yukleniyor: kmOkunur && !kmParca.data, okunur: kmOkunur, duzenler, al: kmNumuneAl } : null} />;

@@ -238,7 +238,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
   test('131 b, 229 a, 798, denetim #12: ilk parça kararı Kalite Merkezi\'nin kaydıdır; ölçümdeki Arkon numunesi karar değildir, Arkon\'da ilk parça Kabulü reddedilir; karar beklenirken sonraki sağlam bekler, ret redde, onay sağlama geçirir; ret sonrası sayım yine bekler', async () => {
     await yeniIstasyon();
     const emir = await emirAc();
-    const paket = await istek(yonetici, 'POST', `/arkon/belgeler/pkgs/${pk(emir)}/yaz`, { taban: 0, govde: { id: pk(emir), status: 'draft', machine: istasyonKodu, plan: [{ id: 1 }] }, kaynak: 'y1' });
+    const paket = await istek(yonetici, 'POST', `/arkon/belgeler/pkgs/${pk(emir)}/yaz`, { taban: 0, govde: { id: pk(emir), status: 'draft', machine: istasyonKodu, plan: [{ id: 1 }], rules: { q: { firstPiece: true } } }, kaynak: 'y1' });
     assert.equal(paket.durum, 200, JSON.stringify(paket.govde));
     const sayaclar = async () => {
       const k = (await kararSayaclari(vt(), [emir])).get(emir);
@@ -291,7 +291,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
       const c = await istek(yonetici, 'POST', `/arkon/belgeler/pkgs/${pk(emir)}/yaz`, { taban: b?.surum ?? 0, govde: { ...(b?.govde ?? {}), ...govde }, kaynak: 'y1' });
       assert.equal(c.durum, 200, JSON.stringify(c.govde));
     };
-    await yaz({ id: pk(emir), status: 'draft', machine: istasyonKodu, plan: [{ id: 1 }] });
+    await yaz({ id: pk(emir), status: 'draft', machine: istasyonKodu, plan: [{ id: 1 }], rules: { q: { firstPiece: true } } });
     const say = () => ekle(operator, 'counts', { ...sayim(emir, 'good', 1), machine: istasyonKodu });
     const karar = async () => assert.equal((await istek(yonetici, 'POST', `/kalite-merkezi/ilk-parca/${emir}/karar`, { karar: 'onay' })).durum, 200);
     assert.equal((await ekle(operator, 'events', olay(emir, 'running', { machine: istasyonKodu }))).durum, 200);
@@ -2027,7 +2027,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     assert.equal((await ilkParca(ie1!) as { karar?: string } | undefined)?.karar, 'onay');
     assert.equal(await ilkParca(ie2!), undefined, 'Op 10 kararı Op 20\'nin değildir');
     const taslak = (await paketler()).get(ieKimligi(ie1!))!.govde;
-    assert.equal(taslak['rules'], undefined, 'her kurulumda seçimi taslağa kural yazmaz (tablet varsayılanı açık)');
+    assert.deepEqual(taslak['rules'], { q: { firstPiece: true } }, '3689-2: her kurulumda seçimi taslağa açık yazılır (terminal varsayılanı kapalı)');
     const yaz = await paketYaz(ieKimligi(ie1!), null, { ...taslak, status: 'published', steps: [{ id: 's1' }], tmi: { ...(taslak['tmi'] as object), ilkParca: { karar: 'ret', zaman: 'sahte' } } });
     assert.equal(yaz.durum, 200, JSON.stringify(yaz.govde));
     assert.equal((((await paketOku(ieKimligi(ie1!)))?.govde['tmi'] as Record<string, unknown>)['ilkParca'] as { karar?: string }).karar, 'onay', 'kayıtlı pakette de sunucunun yazdığıdır; istemcinin alanı sayılmaz');
@@ -2786,7 +2786,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     const yeni2 = liste.get(ieKimligi(b2!))?.govde;
     assert.deepEqual(yeni1?.['steps'], ekler.steps);
     assert.deepEqual(yeni1?.['plan'], ekler.plan);
-    assert.deepEqual(yeni1?.['rules'], ekler.rules);
+    assert.deepEqual(yeni1?.['rules'], { ...ekler.rules, q: { firstPiece: true } }, '3689-2: ilk parça kuralı şablondan değil kaynaktan');
     assert.equal(yeni1?.['material'], 'S355');
     assert.equal(yeni1?.['status'], 'draft');
     assert.equal(yeni1?.['machine'], r2.ilk);
@@ -3650,7 +3650,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     const [y1, y2] = await isEmriIdleri(y.emirId);
     const liste = await paketler();
     assert.deepEqual(liste.get(ieKimligi(y1!))!.govde['rules'], { q: { firstPiece: false } });
-    assert.equal(liste.get(ieKimligi(y2!))!.govde['rules'], undefined);
+    assert.deepEqual(liste.get(ieKimligi(y2!))!.govde['rules'], { q: { firstPiece: true } });
     const t1 = liste.get(ieKimligi(y1!))!.govde;
     assert.equal((await paketYaz(ieKimligi(y1!), null, { ...t1, status: 'published', steps: [{ id: 's1' }], plan: [{ id: 1 }], rules: {} })).durum, 200);
     await yaz(y.ilk, 'events', ieOlay(y1!, 'running'));
@@ -3659,6 +3659,32 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     assert.equal((await kararSayaclari(vt(), [y.emirId])).get(y.emirId)?.kararBekliyor ?? 0, 0);
     assert.deepEqual(await ortam!.sahip.sorgu<{ tur: string; adet: number }>(
       "SELECT tur, sum(adet)::int AS adet FROM uretim_sayimi WHERE emir_id = $1 GROUP BY tur ORDER BY tur", [y.emirId]), [{ tur: 'saglam', adet: 7 }]);
+  });
+
+  test('3689-2: ilk parça önce Kalite Merkezi planından; kuralsız plan rotayı kapatır, plansız ya da kapısız opta rota geçerli; paketin kuralı kaynaktan başka değere çekilemez', async () => {
+    const r = await rotaliEmirKur();
+    const [ie1, ie2] = await isEmriIdleri(r.emirId);
+    await ortam!.sahip.sorgu("INSERT INTO kalite_merkezi_numune_plani (malzeme_no, op_no, kurallar, guncelleyen_id) VALUES ($1, 10, '[]'::jsonb, $2)", [r.kart, yoneticiId]);
+    // R1 geçiş: kapılı ilk parça taşımayan plan rotadaki seçimi kapatmaz.
+    await ortam!.sahip.sorgu(
+      `INSERT INTO kalite_merkezi_numune_plani (malzeme_no, op_no, kurallar, guncelleyen_id) VALUES ($1, 20, '[{"kimlik":"h","ne":"her","n":50,"kim":["operator"],"balonlar":"kritik"}]'::jsonb, $2)`,
+      [r.kart, yoneticiId]);
+    const liste = await paketler();
+    assert.deepEqual(liste.get(ieKimligi(ie1!))!.govde['rules'], { q: { firstPiece: false } }, 'kuralsız plan: ilk parça yok (rota her kurulumda dese de)');
+    assert.deepEqual(liste.get(ieKimligi(ie2!))!.govde['rules'], { q: { firstPiece: true } }, 'kapısız plan: rota seçimi geçerli');
+    const t2 = liste.get(ieKimligi(ie2!))!.govde;
+    const y2 = await paketYaz(ieKimligi(ie2!), null, { ...t2, status: 'published', steps: [{ id: 's1' }], plan: [{ id: 1 }] });
+    assert.equal(y2.durum, 200, JSON.stringify(y2.govde));
+    const kapat = await paketYaz(ieKimligi(ie2!), y2.govde.surum ?? null, { ...t2, status: 'published', steps: [{ id: 's1' }], plan: [{ id: 1 }], rules: { q: { firstPiece: false } } });
+    assert.equal(kapat.durum, 403, 'kaynak açıkken paket kapatılamaz: ' + JSON.stringify(kapat.govde));
+    const t1 = liste.get(ieKimligi(ie1!))!.govde;
+    const zorla = await paketYaz(ieKimligi(ie1!), null, { ...t1, status: 'published', steps: [{ id: 's1' }], plan: [{ id: 1 }], rules: { q: { firstPiece: true } } });
+    assert.equal(zorla.durum, 403, JSON.stringify(zorla.govde));
+    assert.equal((await paketYaz(ieKimligi(ie1!), null, { ...t1, status: 'published', steps: [{ id: 's1' }], plan: [{ id: 1 }] })).durum, 200);
+    const c1 = await ekle(operator, 'events', { ...ieOlay(ie1!, 'running'), machine: r.ilk });
+    assert.equal(c1.durum, 200, JSON.stringify(c1.govde));
+    for (const adet of [1, 4]) assert.equal((await ekle(operator, 'counts', { ...ieSayim(ie1!, 'good', adet), machine: r.ilk })).durum, 200);
+    assert.equal((await kararSayaclari(vt(), [r.emirId])).get(r.emirId)?.kararBekliyor ?? 0, 0, 'planda ilk parça yok: sayım kilitlenmez');
   });
 
   // 3718 a: yoldaki numuneyi yalnız kalite rolü teslim alır; damgayı (saat, kişi, yol) sunucu basar, `teslimAl` kayda girmez, istemcinin
