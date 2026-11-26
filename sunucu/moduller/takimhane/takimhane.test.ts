@@ -389,6 +389,52 @@ describe('takimhane (gerçek PostgreSQL)', () => {
     assert.equal(bos.durum, 400);
   });
 
+  test('3762: kartı olmayan kütüphane kalemine kesici takım kartı açılır; onay akışına uyar, kod SF-TKM- olur, aynı kaleme ikinci kart açılmaz', async () => {
+    type Acilan = { kartKimlik: number; stokKodu: string; onayDurumu: string };
+    const govde = { kimlik: 'ORN_tm_30', ad: 'Deneme freze Ø10', takimTuru: 'Parmak freze', isoKodu: 'ORN-ISO-1', capMm: 10 };
+    assert.equal((await istek('takimci', 'POST', '/takimhane/kutuphane/kart-ac', govde)).durum, 403);
+    const a = await istek<Acilan>('depo', 'POST', '/takimhane/kutuphane/kart-ac', govde);
+    assert.equal(a.durum, 200, JSON.stringify(a.govde));
+    assert.match(a.govde.stokKodu, /^SF-TKM-\d+$/);
+    const kart = await o().vt.tek<{ durum: string; kimlik: string | null; kat: string; tur: string }>(
+      `SELECT onay_durumu AS durum, cnc_kutuphane_kimligi AS kimlik, kayit->'g'->>'kat' AS kat, kayit->'g'->>'tur' AS tur, kayit->'g'->>'cap' AS cap
+         FROM malzeme_katalog_karti WHERE no = $1`, [a.govde.kartKimlik]);
+    assert.deepEqual(kart, { durum: a.govde.onayDurumu, kimlik: 'ORN_tm_30', kat: 'takim', tur: 'Parmak freze', cap: '10' });
+    const l = await istek<{ takimlar: { kartKimlik: number; kutuphaneKimligi: string | null }[] }>('depo', 'GET', '/takimhane/takimlar');
+    assert.equal(l.govde.takimlar.find((t) => t.kartKimlik === a.govde.kartKimlik)?.kutuphaneKimligi, 'ORN_tm_30');
+    assert.equal((await istek('depo', 'POST', '/takimhane/kutuphane/kart-ac', { ...govde, ad: 'Deneme freze ikinci' })).durum, 409);
+    // İptal edilen kartın bağı yeni karta geçer: kalem listede yine kartsızdır, yeniden kart açılır.
+    await o().sahip.sorgu("UPDATE malzeme_katalog_karti SET onay_durumu = 'iptal' WHERE no = $1", [a.govde.kartKimlik]);
+    const yeniden = await istek<Acilan>('depo', 'POST', '/takimhane/kutuphane/kart-ac', { ...govde, isoKodu: 'ORN-ISO-1B' });
+    assert.equal(yeniden.durum, 200, JSON.stringify(yeniden.govde));
+    assert.equal((await o().vt.tek<{ k: string | null }>('SELECT cnc_kutuphane_kimligi AS k FROM malzeme_katalog_karti WHERE no = $1', [a.govde.kartKimlik]))?.k, null);
+    // Aynı tür ve kod, başka çap: ayrı kart.
+    assert.equal((await istek('depo', 'POST', '/takimhane/kutuphane/kart-ac', { ...govde, kimlik: 'ORN_tm_35', ad: 'Deneme freze Ø12', capMm: 12 })).durum, 200);
+    assert.equal((await istek('depo', 'POST', '/takimhane/kutuphane/kart-ac', { ...govde, kimlik: 'ORN_tm_31', takimTuru: ' ' })).durum, 400);
+  });
+
+  test('3762: onay akışı kapalıyken açılan kart aktiftir ve hemen açılış girilir; açıkken onaydadır, açılış onaydan sonra', async () => {
+    const onayAkisi = (acik: boolean) => o().sahip.sorgu(`INSERT INTO malzeme_katalog_ayari (anahtar, deger, guncelleyen_kisi_id) VALUES ('genel', jsonb_build_object('onayAkisi', $1::boolean), $2)
+      ON CONFLICT (anahtar) DO UPDATE SET deger = malzeme_katalog_ayari.deger || jsonb_build_object('onayAkisi', $1::boolean)`, [acik, kisiler.get('depo')]);
+    const ac = (kimlik: string, isoKodu: string | null = `ORN-${kimlik}`) => istek<{ kartKimlik: number; onayDurumu: string }>('depo', 'POST', '/takimhane/kutuphane/kart-ac',
+      { kimlik, ad: `Deneme matkap ${kimlik}`, takimTuru: 'Matkap', isoKodu, capMm: null });
+    await onayAkisi(true);
+    const onayda = await ac('ORN_tm_33');
+    assert.equal(onayda.govde.onayDurumu, 'onayda');
+    // Kart kimliği Malzemeler'in kuralıyla tür ve özelliklerden kurulur: aynı türde ayırt eden kod yoksa aynı kart sayılır.
+    assert.equal((await ac('ORN_tm_34', 'ORN-ORN_tm_33')).durum, 409);
+    assert.equal((await giris('depo', onayda.govde.kartKimlik, await bosGoz('ORN-TH-L12'), 2)).durum, 400);
+    await onayAkisi(false);
+    try {
+      const aktif = await ac('ORN_tm_32');
+      assert.equal(aktif.durum, 200, JSON.stringify(aktif.govde));
+      assert.equal(aktif.govde.onayDurumu, 'aktif');
+      assert.equal((await giris('depo', aktif.govde.kartKimlik, await bosGoz('ORN-TH-L11'), 2)).durum, 200);
+    } finally {
+      await onayAkisi(true);
+    }
+  });
+
   test('3762: eski TKM kartı kütüphane kalemine bağlanır; bağlı kalem ikinci karta bağlanmaz; göz seçici adet vermeden dolu ya da boş der', async () => {
     const eski = await kart();
     const yeni = await bagliKart('ORN_tm_17');

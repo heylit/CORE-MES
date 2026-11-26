@@ -15,7 +15,7 @@ import { kutuphaneRaflari } from '../cnc-kurulum/disari.ts';
 import { EmirTakimDuzenleyici, EmirTakimlari } from './EmirTakimlari.tsx';
 import { type IadeDurumu } from './gosterim.ts';
 import { kutuphaneSatirlari, type KutuphaneSatiri } from './kutuphane.ts';
-import { BaglaPenceresi, GirisPenceresi, KutuphaneListesi } from './Kutuphane.tsx';
+import { BaglaPenceresi, GirisPenceresi, KartAcPenceresi, KutuphaneListesi, type PencereTuru } from './Kutuphane.tsx';
 import { BekleyenIadeCipi, KonumOzeti, KritikListe } from './Parcalar.tsx';
 import { TopluGiris } from './Toplu.tsx';
 import { TakimAyrinti } from './TakimAyrinti.tsx';
@@ -53,7 +53,11 @@ export function TakimhaneGenel() {
   const k = useKutuphane();
   const [acik, acikYaz] = useState<TakimSatiri | null>(null);
   const [pencere, pencereYaz] = useState<{ tur: 'giris' | 'bagla'; takim: TakimSatiri } | null>(null);
-  const ac = (s: KutuphaneSatiri, tur: 'giris' | 'bagla') => { if (s.takim) pencereYaz({ tur, takim: s.takim }); };
+  const [kartAcilacak, kartAcilacakYaz] = useState<KutuphaneSatiri | null>(null);
+  const ac = (s: KutuphaneSatiri, tur: PencereTuru) => {
+    if (tur === 'kart-ac') kartAcilacakYaz(s);
+    else if (s.takim) pencereYaz({ tur, takim: s.takim });
+  };
 
   if (ozet.isPending || k.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (ozet.isError || k.isError || !ozet.data || !k.satirlar || !k.takimlar) {
@@ -87,6 +91,7 @@ export function TakimhaneGenel() {
         key={pencere?.tur === 'bagla' ? `b-${String(pencere.takim.kartKimlik)}` : 'b'}
         takim={pencere?.tur === 'bagla' ? pencere.takim : null} kalemler={satirlar} kapat={() => { pencereYaz(null); }}
       />
+      <KartAcPenceresi key={kartAcilacak?.anahtar ?? 'k'} satir={kartAcilacak} kapat={() => { kartAcilacakYaz(null); }} />
     </div>
   );
 }

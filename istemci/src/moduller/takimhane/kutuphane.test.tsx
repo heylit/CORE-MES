@@ -6,8 +6,8 @@ import { MemoryRouter } from 'react-router-dom';
 import type { RafGozleriCevabi, TakimSatiri } from '#paylasilan/sozlesme/takimhane.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { CikisFormu } from './CikisIade.tsx';
-import { BAGSIZ_RAF, kalemBul, kutuphaneSatirlari, satirDurumu, satirEylemi, suz } from './kutuphane.ts';
-import { GirisPenceresi, KutuphaneListesi } from './Kutuphane.tsx';
+import { BAGSIZ_RAF, kalemBul, kutuphaneSatirlari, satirDurumu, satirEylemi, suz, takimTuruOnerisi, capOnerisi } from './kutuphane.ts';
+import { GirisPenceresi, KartAcPenceresi, KutuphaneListesi } from './Kutuphane.tsx';
 import { anahtarlar as ortakAnahtarlar } from '../../ortak/veri/anahtarlar.ts';
 
 const takim = (t: Partial<TakimSatiri> = {}): TakimSatiri => ({
@@ -36,7 +36,7 @@ describe('Takımhane kütüphanesi (3762)', () => {
       ['Freze · Parmak frezeler', 'orn-pf-10', 1], ['Freze · Parmak frezeler', 'orn-pf-12', null], [BAGSIZ_RAF, null, 2],
     ]);
     expect(s.map(satirDurumu)).toEqual(['esiksiz', 'kart-yok', 'baglanacak']);
-    expect(s.map(satirEylemi)).toEqual(['sayim', null, 'bagla']);
+    expect(s.map(satirEylemi)).toEqual(['sayim', 'kart-ac', 'bagla']);
     expect(suz(s, { suzgec: 'kartli', raf: '', ara: '' })).toHaveLength(2);
     expect(suz(s, { suzgec: 'kart-yok', raf: '', ara: '' }).map((x) => x.kimlik)).toEqual(['orn-pf-12']);
   });
@@ -110,5 +110,49 @@ describe('Takımhane kütüphanesi (3762)', () => {
     if (dugme) fireEvent.click(dugme);
     expect(pencere).toHaveBeenCalledTimes(1);
     expect(satirSec).not.toHaveBeenCalled();
+  });
+
+  it('kart yalnız kesici raflardaki kartsız kalemde açılır; takım türü addan ve raftan önerilir', () => {
+    const s = kutuphaneSatirlari([
+      { anahtar: 'tm_hole', baslik: 'Freze · Delik işleme', kalemler: [{ kimlik: 'dr1', ad: 'ORN Matkap Ø8,5', kod: null }, { kimlik: 'tp1', ad: 'ORN Kılavuz M8', kod: null }] },
+      { anahtar: 'ins', baslik: 'Kesici uçlar', kalemler: [{ kimlik: 'i1', ad: 'ORN CNMG', kod: 'ORN-CNMG' }] },
+      { anahtar: 'tl_ext', baslik: 'Torna · dış çap', kalemler: [{ kimlik: 'ex1', ad: 'ORN Dış Çap Kaba', kod: null }] },
+      { anahtar: 'h_bt40', baslik: 'Tutucular · BT40', kalemler: [{ kimlik: 'h1', ad: 'ORN Tutucu', kod: null }] },
+      { anahtar: 'tm_ind', baslik: 'Freze · Uçlu frezeler', kalemler: [{ kimlik: 'f1', ad: 'ORN Alın Frezesi', kod: null }] },
+    ], []);
+    expect(s.map(satirEylemi)).toEqual(['kart-ac', 'kart-ac', 'kart-ac', 'kart-ac', null, 'kart-ac']);
+    expect(s.map(takimTuruOnerisi)).toEqual(['Matkap', 'Kılavuz', 'Kesici uç (insert)', 'Torna kalemi', null, null]);
+    expect(['ORN Matkap Ø8,5', 'ORN Freze Ø10', 'ORN Kılavuz M8'].map(capOnerisi)).toEqual([8.5, 10, null]);
+  });
+
+  it('kart açma penceresi önerilen türle gelir; tür seçilmeden gönderilmez; kütüphane kimliğiyle açar', async () => {
+    const gonderilen: unknown[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+      gonderilen.push(JSON.parse(String(init?.body)));
+      return json({ kartKimlik: 9, stokKodu: 'SF-TKM-00009', onayDurumu: 'onayda' });
+    }));
+    const [, kartsiz] = kutuphaneSatirlari(raflar, [takim()]);
+    const kapat = vi.fn();
+    ac(<KartAcPenceresi satir={kartsiz ?? null} kapat={kapat} />);
+    expect((screen.getByLabelText('Takım türü') as HTMLSelectElement).value).toBe('Parmak freze');
+    expect((screen.getByLabelText('ISO / üretici kodu') as HTMLInputElement).value).toBe('ORN-PF-12');
+    fireEvent.change(screen.getByLabelText('Takım türü'), { target: { value: '' } });
+    expect((screen.getByRole('button', { name: 'Kartı aç' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('Takım türü'), { target: { value: 'Matkap' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Kartı aç' }));
+    await waitFor(() => { expect(kapat).toHaveBeenCalled(); });
+    expect(gonderilen).toEqual([{ kimlik: 'orn-pf-12', ad: 'ORN Freze 12', takimTuru: 'Matkap', isoKodu: 'ORN-PF-12', capMm: null }]);
+    expect(await screen.findByText(/SF-TKM-00009 açıldı; onaylanınca/)).toBeTruthy();
+  });
+
+  it('kartsız kalemde Kart aç düğmesi yalnız Malzemeler yazma yetkisinde görünür', () => {
+    const s = kutuphaneSatirlari(raflar, []);
+    ac(<KutuphaneListesi satirlar={s} satirSec={vi.fn()} ac={vi.fn()} />, ['sayfa.takimhane', 'malzemeler.yaz']);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Tümü' })[0]!);
+    expect(screen.getAllByRole('button', { name: 'Kart aç' }).length).toBeGreaterThan(0);
+    cleanup();
+    ac(<KutuphaneListesi satirlar={s} satirSec={vi.fn()} ac={vi.fn()} />, ['sayfa.takimhane', 'stok.giris']);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Tümü' })[0]!);
+    expect(screen.queryByRole('button', { name: 'Kart aç' })).toBeNull();
   });
 });

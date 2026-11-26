@@ -112,6 +112,9 @@ export async function cncKimligiBagla(db: Db, malzemeId: number, kimlik: string 
   if ((await katalogMalzemeOzeti(db, malzemeId)) === null) throw bulunamadi('Malzeme kartı bulunamadı.');
   throw gecersiz('CNC kütüphanesine yalnız sarf ve demirbaş kartı bağlanır.');
 }
+// 3762: Takımhane kütüphane kaleminden kesici takım kartı açar (Malzemeler kaydetme yolu, onay akışına uyar). Yetki denetlemez.
+export { takimKartiAc } from './servis.ts';
+export type { TakimKartiAcimi } from './servis.ts';
 // Ters yöndeki bağ (2114c): Arşiv kartın başka modüllerdeki izini sorar; modüllerin malzemeKartiIzleri işlevlerini sunucu/kablolama.ts bağlar.
 export { kartIzleriCozucusuKaydet as kartIzleriCozucusu } from './servis.ts';
 

@@ -1,7 +1,7 @@
 import { uc } from '#cekirdek/uc.ts';
 import { teslimCevabi } from '#paylasilan/sozlesme/stok.ts';
 import {
-  acikTeslimlerCevabi, cikisGovdesi, emirParametresi, emirTakimListesiSemasi, emirTakimiGovdesi, girisCevabi, girisGovdesi, kutuphaneBagGovdesi, kutuphaneCevabi,
+  acikTeslimlerCevabi, cikisGovdesi, emirParametresi, emirTakimListesiSemasi, emirTakimiGovdesi, girisCevabi, girisGovdesi, kartAcCevabi, kartAcGovdesi, kutuphaneBagGovdesi, kutuphaneCevabi,
   rafGozleriCevabi, rafGozuSorgusu, topluGirisCevabi, topluGirisGovdesi,
   aparatCevabi as aparatCevapSemasi, emirAparatCevabi as emirAparatCevapSemasi, iadeGovdesi, kartParametresi, ozellikGovdesi, seceneklerCevabi, takimSorgusu, takimhaneOzetiSemasi, takimlarCevabi,
 } from '#paylasilan/sozlesme/takimhane.ts';
@@ -72,5 +72,9 @@ export const uclar = [
   uc({
     yontem: 'POST', tekrarKorumali: true, yol: '/takimhane/takimlar/:kart/kutuphane', yetki: 'malzemeler.yaz', parametre: kartParametresi, govde: kutuphaneBagGovdesi, cevap: tamam,
     isle: ({ db, kullanici, parametre, govde }) => s.kutuphaneyeBagla(db, kullanici, parametre.kart, govde.kimlik),
+  }),
+  uc({
+    yontem: 'POST', tekrarKorumali: true, yol: '/takimhane/kutuphane/kart-ac', yetki: 'malzemeler.yaz', govde: kartAcGovdesi, cevap: kartAcCevabi,
+    isle: ({ db, kullanici, govde }) => s.kartAc(db, kullanici, govde),
   }),
 ];

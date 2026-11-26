@@ -73,6 +73,36 @@ test.describe('Takımhane kütüphanesi (3762)', () => {
     expect(ag.hatalar.filter((h) => !h.startsWith('409 POST /api/takimhane/giris') && !h.includes('status of 409'))).toEqual([]);
   });
 
+  // Dilim 2 (fark 1 a): kartsız kesici kalemde kart açılır; onay akışı açık örnek veride kart onaya düşer, satır "onay bekliyor" olur.
+  test('kartsız kesici kalemde kart açılır; kart onaya gider', async ({ page, ac, ag }, bilgi) => {
+    const genislik = page.viewportSize()?.width ?? 0;
+    const klasor = process.env['TMIV2_EKRAN_GORUNTU_KLASORU'];
+    await ac('/takimhane');
+    await page.getByRole('button', { name: 'Tümü' }).filter({ visible: true }).first().click();
+    await page.getByLabel('Kalem ara').filter({ visible: true }).first().fill('Parmak Freze Ø20');
+    const s = satir(page, 'Parmak Freze Ø20');
+    const kartAc = s.getByRole('button', { name: 'Kart aç' });
+    if (await kartAc.count() === 0) {
+      await expect(page.getByText('Kart onay bekliyor').filter({ visible: true }).first()).toBeVisible();
+      return;
+    }
+    await kartAc.click();
+    const p = page.getByRole('dialog');
+    await expect(p.getByLabel('Takım türü')).toHaveValue('Parmak freze');
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    if (klasor) await page.screenshot({ path: `${klasor}/4-kart-ac-${String(genislik)}.png` });
+    if (bilgi.project.name !== 'g1280') {
+      await p.getByRole('button', { name: 'Vazgeç' }).click();
+      expect(ag.yazmalar).toEqual([]);
+      return;
+    }
+    await p.getByRole('button', { name: 'Kartı aç' }).click();
+    await expect(page.getByText(/SF-TKM-\d+ açıldı/)).toBeVisible();
+    // Masa genişliğinde tablo satırı: "Önce bunlar" listesindeki aynı adlı öğe de satır seçicisine uyar.
+    await expect(page.getByRole('row').filter({ hasText: 'Parmak Freze Ø20' }).first()).toContainText('Kart onay bekliyor');
+    expect(ag.hatalar).toEqual([]);
+  });
+
   test('Açılış ve sayım sayfası şablon ve dosya seçimiyle açılır', async ({ page, ac, ag }) => {
     await ac('/takimhane/baslangic');
     await expect(page.getByRole('button', { name: 'Şablonu indir' })).toBeVisible();

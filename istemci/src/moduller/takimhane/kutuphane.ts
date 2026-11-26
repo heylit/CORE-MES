@@ -9,6 +9,8 @@ export const BAGSIZ_RAF = 'Kütüphaneye bağlı değil';
 export interface KutuphaneSatiri {
   anahtar: string;
   raf: string;
+  // CNC kütüphanesindeki raf anahtarı (tm_ freze, tl_ torna, ins kesici uç); eski kartta null.
+  rafAnahtari: string | null;
   // Kütüphane kalemi kimliği; eski (bağlanmamış) kartta null.
   kimlik: string | null;
   ad: string;
@@ -27,12 +29,12 @@ export function kutuphaneSatirlari(raflar: readonly KutuphaneRafi[], takimlar: r
     for (const k of r.kalemler) {
       const takim = kartlar.get(k.kimlik) ?? null;
       if (takim) kullanilan.add(k.kimlik);
-      satirlar.push({ anahtar: `k:${k.kimlik}`, raf: r.baslik, kimlik: k.kimlik, ad: k.ad, kod: k.kod, takim });
+      satirlar.push({ anahtar: `k:${k.kimlik}`, raf: r.baslik, rafAnahtari: r.anahtar, kimlik: k.kimlik, ad: k.ad, kod: k.kod, takim });
     }
   }
   for (const t of takimlar) {
     if (t.kutuphaneKimligi !== null && kullanilan.has(t.kutuphaneKimligi)) continue;
-    satirlar.push({ anahtar: `t:${String(t.kartKimlik)}`, raf: BAGSIZ_RAF, kimlik: null, ad: t.ad, kod: t.kod, takim: t });
+    satirlar.push({ anahtar: `t:${String(t.kartKimlik)}`, raf: BAGSIZ_RAF, rafAnahtari: null, kimlik: null, ad: t.ad, kod: t.kod, takim: t });
   }
   return satirlar;
 }
@@ -53,11 +55,39 @@ export const SATIR_DURUMU_TONU: Record<SatirDurumu, RozetTonu> = {
   'kart-yok': 'pasif', onayda: 'bilgi', pasif: 'pasif', baglanacak: 'uyari', ...STOK_DURUMU_TONU,
 };
 
-// Satır düğmesi: aktif kartta göze göre açılış ya da sayım; eski kartta kütüphaneye bağlama. Kartsız kalemde şimdilik düğme yok.
-export type SatirEylemi = 'acilis' | 'sayim' | 'bagla' | null;
+// Kart yalnız kesici takım raflarından açılır (freze, torna, kesici uç): kart Malzemeler'in kesici takım kategorisine girer. Tutucu,
+// aparat, ölçüm ve sarf raflarının kartı Malzemeler'de kendi kategorisinde açılır, sonra "Kaleme bağla" ile bağlanır.
+export const kesiciRafMi = (rafAnahtari: string | null): boolean => rafAnahtari !== null && /^(tm_|tl_|ins$)/.test(rafAnahtari);
+
+// Malzemeler'in kesici takım kategorisindeki "Takım türü" seçenekleri (Malzemeler istemcisi aynı katmanda olduğu için ithal edilmez;
+// liste orada değişirse burada da değişir). Kart Malzemeler'de bu seçeneklerden biriyle açılmış gibi görünür.
+export const TAKIM_TURLERI = ['Matkap', 'Parmak freze', 'Kesici uç (insert)', 'Kılavuz', 'Rayba', 'Torna kalemi', 'Testere şeridi', 'Daire testere'] as const;
+export type TakimTuru = (typeof TAKIM_TURLERI)[number];
+
+// Kart açma penceresinin önerdiği takım türü (Malzemeler'in seçenekleri); emin olunamazsa boş kalır, kullanıcı seçer.
+export function takimTuruOnerisi(s: Pick<KutuphaneSatiri, 'ad' | 'rafAnahtari'>): TakimTuru | null {
+  const ad = s.ad.toLocaleLowerCase('tr');
+  if (/kılavuz/.test(ad)) return 'Kılavuz';
+  if (/rayba/.test(ad)) return 'Rayba';
+  if (/matka[pb]/.test(ad)) return 'Matkap';
+  if (s.rafAnahtari === 'ins') return 'Kesici uç (insert)';
+  if (s.rafAnahtari?.startsWith('tl_')) return 'Torna kalemi';
+  if (s.rafAnahtari === 'tm_end') return 'Parmak freze';
+  return null;
+}
+
+// Addaki çap (Ø10, Ø6,8): kartı aynı türdeki öteki kartlardan ayırır. Bulunamazsa boş kalır.
+export function capOnerisi(ad: string): number | null {
+  const m = /Ø\s*(\d+(?:[.,]\d+)?)/.exec(ad);
+  return m?.[1] ? Number(m[1].replace(',', '.')) : null;
+}
+
+// Satır düğmesi: aktif kartta göze göre açılış ya da sayım; eski kartta kütüphaneye bağlama; kartsız kesici kalemde kart açma.
+export type SatirEylemi = 'acilis' | 'sayim' | 'bagla' | 'kart-ac' | null;
 export function satirEylemi(s: KutuphaneSatiri): SatirEylemi {
   const t = s.takim;
-  if (t === null || t.kartDurumu !== 'aktif') return null;
+  if (t === null) return s.kimlik !== null && kesiciRafMi(s.rafAnahtari) ? 'kart-ac' : null;
+  if (t.kartDurumu !== 'aktif') return null;
   if (s.kimlik === null) return 'bagla';
   return t.gozler.length === 0 ? 'acilis' : 'sayim';
 }

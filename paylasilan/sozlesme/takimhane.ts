@@ -197,6 +197,20 @@ export type TopluGirisCevabi = z.infer<typeof topluGirisCevabi>;
 // Eski TKM kartını bir kütüphane kalemine bağlar (kart verisidir; Malzemeler yazma yetkisi ister).
 export const kutuphaneBagGovdesi = z.object({ kimlik: z.string().regex(/^[A-Za-z0-9_.-]{1,64}$/) });
 
+// 3762 (fark 1 a): kütüphane kaleminden kesici takım kartı açılır; kart onay akışına uyar (akış açıksa onayda açılır, açılış onaydan sonra).
+// Takım türü Malzemeler'in kesici takım kategorisindeki "Takım türü" alanıdır; Malzemeler bu alanı serbest metin olarak saklar.
+export const kartAcGovdesi = z.object({
+  kimlik: z.string().regex(/^[A-Za-z0-9_.-]{1,64}$/),
+  ad: z.string().trim().min(1).max(120),
+  takimTuru: z.string().trim().min(1).max(60),
+  isoKodu: z.string().trim().max(60).nullable(),
+  // Kartı aynı türdeki öteki kartlardan ayıran ölçü: Malzemeler kart kimliğini tür ve özelliklerden kurar.
+  capMm: z.number().positive().max(2000).nullable(),
+});
+export type KartAcGovdesi = z.infer<typeof kartAcGovdesi>;
+export const kartAcCevabi = z.object({ kartKimlik: z.number().int(), stokKodu: z.string(), onayDurumu: z.enum(['onayda', 'aktif']) });
+export type KartAcCevabi = z.infer<typeof kartAcCevabi>;
+
 // Çıkış formunun alan ve emir seçenekleri (kişi, aktif istasyon, açık emir).
 export const seceneklerCevabi = z.object({
   kisiler: z.array(z.object({ id: z.number().int(), ad: z.string() })),

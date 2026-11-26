@@ -5,12 +5,12 @@ import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import type { TeslimCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type {
   AcikTeslim, SeceneklerCevabi, CikisGovdesi, EmirTakimiGovdesi, EmirTakimListesi, GirisCevabi, GirisGovdesi, IadeGovdesi, KategoriOzeti, KutuphaneCevabi,
-  OzellikGovdesi, RafGozleriCevabi, TakimhaneOzeti, TakimSatiri, TopluGirisCevabi, TopluGirisGovdesi,
+  KartAcCevabi, KartAcGovdesi, OzellikGovdesi, RafGozleriCevabi, TakimhaneOzeti, TakimSatiri, TopluGirisCevabi, TopluGirisGovdesi,
 } from '#paylasilan/sozlesme/takimhane.ts';
 import { cncKurulumDurumu, takimOmruDurumlari } from '../cnc-kurulum/disari.ts';
 import { aktifIstasyonlar, istasyonAdlari } from '../istasyonlar/disari.ts';
 import { kisiAdlari, kisiSecenekleri } from '../kisiler/disari.ts';
-import { cncKimligiBagla, cncKimlikliMalzemeler, malzemeAra } from '../malzemeler/disari.ts';
+import { cncKimligiBagla, cncKimlikliMalzemeler, malzemeAra, takimKartiAc } from '../malzemeler/disari.ts';
 import {
   aktifRafGozleri, alandakiTakimlar, emirAparatCikislari, takimAcilisi, takimCikisi, takimEsikleri, takimGozleri, takimGozTuru, takimIadesi, takimKonumTurToplamlari,
   takimSayimi, takimTopluDenetle, takimTopluYaz,
@@ -278,4 +278,12 @@ export async function kutuphaneyeBagla(db: Db, k: Kullanici, kartKimlik: number,
   if ((await cncKimlikliMalzemeler(db, [kimlik])).has(kimlik)) throw dogrulama('Bu kütüphane kalemi başka bir karta bağlı.', 'kimlik');
   await cncKimligiBagla(db, kartKimlik, kimlik);
   return { tamam: true };
+}
+
+// 3762 (fark 1 a): kartı olmayan kütüphane kalemine kesici takım kartı açar. Bağ kilidi altında: aynı kaleme iki kart açılmaz.
+export async function kartAc(db: Db, k: Kullanici, g: KartAcGovdesi): Promise<KartAcCevabi> {
+  if (!islemVarMi(k, 'malzemeler.yaz')) throw yetkiYok('Kart açmak Malzemeler yazma yetkisi ister.');
+  await islemKilidiAl(db, 'takimhane.kutuphane-bagi');
+  const r = await takimKartiAc(db, k, { ad: g.ad, takimTuru: g.takimTuru, isoKodu: g.isoKodu === '' ? null : g.isoKodu, capMm: g.capMm, kutuphaneKimligi: g.kimlik });
+  return { kartKimlik: r.malzemeId, stokKodu: r.stokKodu, onayDurumu: r.onayDurumu };
 }

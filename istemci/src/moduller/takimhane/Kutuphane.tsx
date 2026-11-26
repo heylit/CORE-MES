@@ -4,17 +4,18 @@ import { Dugme, Girdi, Pencere, Rozet, Secim, Tablo, useBildirim, type Sutun } f
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { useYetki } from '../../ortak/veri/yetki.ts';
-import type { GirisCevabi, RafGozleriCevabi, TakimSatiri } from '#paylasilan/sozlesme/takimhane.ts';
+import type { GirisCevabi, KartAcCevabi, RafGozleriCevabi, TakimSatiri } from '#paylasilan/sozlesme/takimhane.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { adetMetni } from './gosterim.ts';
 import { IkiGorunum, KompaktListe } from './KompaktListe.tsx';
 import {
-  BAGSIZ_RAF, LISTE_SUZGECLERI, SATIR_DURUMU_ADI, SATIR_DURUMU_TONU, satirDurumu, satirEylemi, suz,
-  type KutuphaneSatiri, type ListeSuzgeci,
+  BAGSIZ_RAF, LISTE_SUZGECLERI, SATIR_DURUMU_ADI, SATIR_DURUMU_TONU, satirDurumu, satirEylemi, suz, takimTuruOnerisi, capOnerisi, TAKIM_TURLERI,
+  type KutuphaneSatiri, type ListeSuzgeci, type TakimTuru,
 } from './kutuphane.ts';
 import './takimhane.css';
 
 const SAYFA_BOYU = 50;
+export type PencereTuru = 'giris' | 'bagla' | 'kart-ac';
 
 const gozMetni = (t: TakimSatiri | null) => {
   const ilk = t?.gozler[0];
@@ -30,10 +31,11 @@ function DurumRozeti({ s }: { s: KutuphaneSatiri }) {
 
 // Satır düğmesi yetkiye göre görünür; asıl denetim sunucudadır.
 // Düğme satırın içindedir: tıklama satır seçimine (ayrıntı penceresi) geçmez.
-function SatirDugmesi({ s, ac }: { s: KutuphaneSatiri; ac: (s: KutuphaneSatiri, e: 'giris' | 'bagla') => void }) {
+function SatirDugmesi({ s, ac }: { s: KutuphaneSatiri; ac: (s: KutuphaneSatiri, e: PencereTuru) => void }) {
   const yetki = useYetki();
   const e = satirEylemi(s);
-  const tikla = (tur: 'giris' | 'bagla') => (olay: MouseEvent) => { olay.stopPropagation(); ac(s, tur); };
+  const tikla = (tur: PencereTuru) => (olay: MouseEvent) => { olay.stopPropagation(); ac(s, tur); };
+  if (e === 'kart-ac') return yetki.var('malzemeler.yaz') ? <Dugme simge="plus" onClick={tikla('kart-ac')}>Kart aç</Dugme> : null;
   if (e === 'bagla') return yetki.var('malzemeler.yaz') ? <Dugme simge="tag" onClick={tikla('bagla')}>Kaleme bağla</Dugme> : null;
   if (e === 'acilis') return yetki.var('stok.giris') ? <Dugme simge="plus" onClick={tikla('giris')}>Açılış gir</Dugme> : null;
   if (e === 'sayim') return yetki.herhangi('stok.sayim', 'stok.giris') ? <Dugme simge="box" onClick={tikla('giris')}>Sayım</Dugme> : null;
@@ -44,7 +46,7 @@ function SatirDugmesi({ s, ac }: { s: KutuphaneSatiri; ac: (s: KutuphaneSatiri, 
 export function KutuphaneListesi({ satirlar, satirSec, ac }: {
   satirlar: readonly KutuphaneSatiri[];
   satirSec: (t: TakimSatiri) => void;
-  ac: (s: KutuphaneSatiri, e: 'giris' | 'bagla') => void;
+  ac: (s: KutuphaneSatiri, e: PencereTuru) => void;
 }) {
   const [suzgec, suzgecYaz] = useState<ListeSuzgeci>('kartli');
   const [raf, rafYaz] = useState('');
@@ -251,6 +253,54 @@ export function BaglaPenceresi({ takim, kalemler, kapat }: { takim: TakimSatiri 
             <Dugme tur="birincil" simge="tag" disabled={secili?.kimlik == null || bagla.isPending} onClick={() => { if (secili?.kimlik) bagla.mutate(secili.kimlik); }}>Bağla</Dugme>
           </div>
         </div>
+      )}
+    </Pencere>
+  );
+}
+
+// 3762 (fark 1 a): kartı olmayan kesici kaleme kart açılır. Kart Malzemeler'de açılmış gibidir (aynı kurallar, SF-TKM- kodu); onay akışı
+// açıksa onaya gider ve açılış onaydan sonra girilir. Aynı türde ayırt eden kod yoksa Malzemeler kartı mükerrer sayar.
+export function KartAcPenceresi({ satir, kapat }: { satir: KutuphaneSatiri | null; kapat: () => void }) {
+  const istemci = useQueryClient();
+  const bildirim = useBildirim();
+  const [ad, adYaz] = useState(satir?.ad ?? '');
+  const [tur, turYaz] = useState<TakimTuru | ''>(satir ? takimTuruOnerisi(satir) ?? '' : '');
+  const [iso, isoYaz] = useState(satir?.kod ?? '');
+  const [cap, capYaz] = useState(() => { const c = satir ? capOnerisi(satir.ad) : null; return c === null ? '' : String(c).replace('.', ','); });
+  const capSayi = cap.trim() === '' ? null : Number(cap.replace(',', '.'));
+  const [istekKimligi] = useState(yeniIstekKimligi);
+  const ac = useMutation({
+    mutationFn: () => api.post<KartAcCevabi>('/takimhane/kutuphane/kart-ac', {
+      kimlik: satir?.kimlik, ad: ad.trim(), takimTuru: tur, isoKodu: iso.trim() === '' ? null : iso.trim(), capMm: capSayi,
+    }, { istekKimligi }),
+    onSuccess: (c) => {
+      bildirim.bildir('tamam', c.onayDurumu === 'onayda' ? `Kart ${c.stokKodu} açıldı; onaylanınca açılış girilir.` : `Kart ${c.stokKodu} açıldı; açılış girilebilir.`);
+      void istemci.invalidateQueries({ queryKey: ['takimhane'] });
+      kapat();
+    },
+    onError: (h) => { bildirim.bildir('hata', hataIletisi(h, 'Kart açılamadı.')); },
+  });
+  const sebep = ad.trim() === '' ? 'Ad girin.' : tur === '' ? 'Takım türü seçin.'
+    : capSayi !== null && !(capSayi > 0 && capSayi <= 2000) ? 'Çap sıfırdan büyük bir sayı olur.' : null;
+  return (
+    <Pencere acik={satir !== null} kapat={kapat} baslik="Kart aç" tur="orta">
+      {satir && (
+        <form className="tc-tkm-form" onSubmit={(e) => { e.preventDefault(); if (sebep === null) ac.mutate(); }}>
+          <p className="tc-tkm-soluk">{satir.raf}</p>
+          <Girdi etiket="Ad" value={ad} maxLength={120} onChange={(e) => { adYaz(e.target.value); }} />
+          <Secim
+            etiket="Takım türü" value={tur} onChange={(e) => { turYaz(e.target.value as TakimTuru | ''); }} bosSecenek="Seçin"
+            secenekler={TAKIM_TURLERI.map((t) => ({ deger: t, baslik: t }))}
+          />
+          <Girdi etiket="Çap (mm)" inputMode="decimal" value={cap} onChange={(e) => { capYaz(e.target.value); }} />
+          <Girdi etiket="ISO / üretici kodu" value={iso} maxLength={60} onChange={(e) => { isoYaz(e.target.value); }} />
+          <p className="tc-tkm-soluk">Kart Malzemeler'de kesici takım olarak açılır (SF-TKM-), birimi adet. Aynı tür, çap ve kodda kart varsa Malzemeler aynı kart sayar. Onay akışı açıksa kart onaya gider; açılış onaydan sonra girilir.</p>
+          <div className="tc-tkm-eylemler tc-tkm-eylem-sebepli">
+            {sebep !== null && <p id="tkm-kart-sebep" className="tc-tkm-soluk">{sebep}</p>}
+            <Dugme onClick={kapat}>Vazgeç</Dugme>
+            <Dugme tur="birincil" simge="plus" type="submit" disabled={sebep !== null || ac.isPending} aria-describedby={sebep === null ? undefined : 'tkm-kart-sebep'}>Kartı aç</Dugme>
+          </div>
+        </form>
       )}
     </Pencere>
   );
