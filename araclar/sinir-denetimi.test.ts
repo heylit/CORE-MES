@@ -613,11 +613,11 @@ test('kural j: sunucu dışarıya yalnız istisna ADR\'lerinin dosyasından iste
     "const g = await globalThis.fetch(adres);",
   ];
   for (const satir of istekler) {
-    for (const dosya of ['sunucu/moduller/stok/servis.ts', 'sunucu/cekirdek/ayar.ts', 'paylasilan/sozlesme/stok.ts']) {
+    for (const dosya of ['sunucu/moduller/stok/servis.ts', 'sunucu/cekirdek/ayar.ts', 'paylasilan/sozlesme/stok.ts', 'sunucu/moduller/tezgah-baglantisi/lsv2-tur.ts']) {
       assert.deepEqual(kurallar(dosya, satir), ['j'], `${dosya}: ${satir}`);
     }
     for (const dosya of ['sunucu/moduller/logo/kopru.ts', 'sunucu/moduller/smartes/istemci.ts', 'sunucu/moduller/etiket-merkezi/gonderici.ts',
-      'sunucu/moduller/dis-kopru/baglanti.ts', 'sunucu/moduller/stok/servis.test.ts', 'istemci/src/ortak/api.ts']) {
+      'sunucu/moduller/dis-kopru/baglanti.ts', 'sunucu/moduller/tezgah-baglantisi/lsv2.ts', 'sunucu/moduller/stok/servis.test.ts', 'istemci/src/ortak/api.ts']) {
       assert.deepEqual(kurallar(dosya, satir), [], `${dosya}: ${satir}`);
     }
   }

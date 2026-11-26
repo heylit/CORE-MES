@@ -1,8 +1,7 @@
 # Çekirdek istekleri (tezgah-baglantisi, kart 3753)
 
-Bu teslim CLAUDE.md'yi ve araçları değiştirmez. Aşağıdaki iki değişiklik girmeden `npm run sinir` lsv2.ts için kural j'de kırmızıdır
-(1 ihlal: `sunucu/moduller/tezgah-baglantisi/lsv2.ts:1`). İkisi kırmızı çizgi ve korumalı dosya değişikliğidir: kullanıcının Soru Merkezi
-onayıyla ana oturum yazar.
+Durum: uygulandı (yama 0003, kullanıcı kararı 26.11.2026 "Böyle girsin"); ADR 0034 kabul. `npm run sinir` 0 ihlal.
+Aşağıdaki metin kayıt için kalır.
 
 ## 1. CLAUDE.md "Kırmızı çizgiler" istisna listesi
 Tezgah okuma (ADR 0033) maddesinin ardına, aynı satırın sonundaki noktadan önce:

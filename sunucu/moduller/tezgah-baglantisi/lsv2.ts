@@ -3,7 +3,7 @@ import type { Socket } from 'node:net';
 import { ISTEK_SURESI_MS } from './kurallar.ts';
 import type { Lsv2Hatasi, Lsv2Okumasi, Lsv2Uyarisi } from './kurallar.ts';
 
-// Heidenhain kumandalarıyla yalnız bu dosya konuşur (kart 3753; ADR taslağı teslimde). LSV2, TCP 19000, yalnız okuma. Gönderilebilen telgraflar
+// Heidenhain kumandalarıyla yalnız bu dosya konuşur (ADR 0034). LSV2, TCP 19000, yalnız okuma. Gönderilebilen telgraflar
 // aşağıdaki sabit beyaz listededir; liste dışı komut, giriş düzeyi, okuma kodu ya da PLC adresi soket yazılmadan reddedilir. Parola
 // gönderilmez. Makine bağlantıyı reddederse (kapalı ya da başka sistem tutuyor) zorlanmaz, eski oturum düşürülmeye çalışılmaz.
 // Adres hata metnine ve günlüğe girmez. Telgraf biçimi: 4 bayt uzunluk (büyük uçlu, yalnız yük), 4 harf komut, yük.
