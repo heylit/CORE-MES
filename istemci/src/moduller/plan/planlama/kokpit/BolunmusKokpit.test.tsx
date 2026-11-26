@@ -67,6 +67,15 @@ describe('Kokpit tahtası: bölünmüş adım payları (3681 A)', () => {
     expect(durum()).toEqual([['2.20', 'false', true], ['2.20~2', 'true', false]]);
   });
 
+  it('3730: bölünmüş adım seçiliyken ardıl adıma her paydan ok çizilir; ikinci paya basınca da aynı oklar', () => {
+    const oklar = () => [...document.querySelectorAll('.tc-pyq-tahta .tc-pyq-oklar [data-ok]')].map((el) => el.getAttribute('data-ok') ?? '').sort();
+    ac({ ...BOS_SECIM, siparis: '2', adim: '2.20' });
+    expect(oklar()).toEqual(['2.20>2.30', '2.20~2>2.30']);
+    cleanup();
+    ac({ ...BOS_SECIM, siparis: '2', adim: '2.20~2' });
+    expect(oklar()).toEqual(['2.20>2.30', '2.20~2>2.30']);
+  });
+
   it('telefon listesinde tezgâhtaki pay satırı pay yazısını ve sayılanı taşır; bölünmemiş satırda yoktur', () => {
     ac();
     fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: 'Tezgâhlar' }));

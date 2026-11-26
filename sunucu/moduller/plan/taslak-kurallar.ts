@@ -394,8 +394,9 @@ export function adimBeklerSilUygula(deger: unknown, k: { isId: string }, kisi: K
 // Adım emrin rotasında, fason değil, başlamamış ve bitmemiş olmalı; payların tezgâhı adımın uygun tezgâhlarından, adet toplamı adımın adedidir.
 // Adım planda yerleşmemiş olabilir (yerleşmeyen adımı bölmek bu komutun asıl işidir). Bölünen adımın ve paylarının kilidi kalkar: pay
 // tezgâhı kilidinkinden başkaysa motor payı yerleştiremezdi. Payların yeri motorundur; kişi isterse payı ayrıca taşır.
+// Tek paylı kayıt elle birleştirmedir (motor adımı bölmez); imzaya o da girer.
 const elleBolmeleri = (d: Nesne): Record<string, { adet: number; m: string }[]> => Object.fromEntries(Object.entries(nesne(d.elleBol) ? d.elleBol : {})
-  .flatMap(([id, l]) => (Array.isArray(l) && l.length >= 2 && l.every((x) => nesne(x) && typeof x.adet === 'number' && typeof x.m === 'string')
+  .flatMap(([id, l]) => (Array.isArray(l) && l.length >= 1 && l.every((x) => nesne(x) && typeof x.adet === 'number' && typeof x.m === 'string')
     ? [[id, (l as { adet: number; m: string }[]).map((x) => ({ adet: x.adet, m: x.m }))] as const] : []))
   .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
 const elleBolImzasi = (d: Nesne): Record<string, string> => Object.fromEntries(Object.entries(elleBolmeleri(d)).map(([id, l]) => [id, l.map((x) => `${String(x.adet)}@${x.m}`).join(',')]));
@@ -417,7 +418,8 @@ const tezgahAdi = (deger: Nesne, m: string): string => {
   const t = (Array.isArray(D.tezgahlar) ? D.tezgahlar : []).find((x): x is Nesne => nesne(x) && String(x.id) === m);
   return t === undefined ? m : String(t.kod ?? t.ad ?? m);
 };
-export function elleBolAdimi(deger: Nesne, isId: string): { adet: number; tezgahlar: string[]; calisan: CalisanBilgisi | null } | string {
+// paralel: rotada "paralel böl" (motor kayıt yokken adımı kendisi böler).
+export function elleBolAdimi(deger: Nesne, isId: string): { adet: number; tezgahlar: string[]; calisan: CalisanBilgisi | null; paralel: boolean } | string {
   if (isId.includes('~')) return 'Adımın kendisi bölünür, payı değil.';
   const D = nesne(deger.D) ? deger.D : {};
   const emirId = emirOf(isId), k = isId.slice(emirId.length + 1);
@@ -435,7 +437,7 @@ export function elleBolAdimi(deger: Nesne, isId: string): { adet: number; tezgah
   const r = nesne(deger.plan) && nesne(deger.plan.ops) ? deger.plan.ops[isId] : undefined;
   if (nesne(r) && r.done && (r.act || r.bitti)) return 'Adım bitmiş; bölünmez.';
   const tezgahlar = (Array.isArray(o.tezgahlar) ? o.tezgahlar : []).flatMap((t) => (nesne(t) && t.id !== undefined ? [String(t.id)] : []));
-  return { adet, tezgahlar, calisan: calisanKaynak(deger, isId) };
+  return { adet, tezgahlar, calisan: calisanKaynak(deger, isId), paralel: o.bol === true };
 }
 // Başlamış adımın bölmesi: çalışan tezgâh 1. pay, sayımı olan her payın tezgâhı listede, pay adedi sayılandan az değil. Sayılandan az adet yalnız
 // kayıtlı bölmedeki değişmemiş paydır (fazla sayımdan kalan pay, kaydı tutan komut yeniden reddedilmez). Neden metni bölme penceresinde görünür.
@@ -484,18 +486,30 @@ export function elleBolUygula(deger: unknown, k: { isId: string; paylar: readonl
   const ayrinti = `${k.isId}: ${String(k.paylar.length)} parça (${k.paylar.map((p) => `${p.tezgah} ${String(p.adet)}`).join(', ')})`;
   return { deger: isle(deger, yeni, { ne: 'Adım elle bölündü', ayrinti, isler: [emirOf(k.isId)], geri }, kisi), degisti: true };
 }
+// Bölmeyi kaldırmak (Birleştir'in tek pay bırakan sonucu da) adımı tek parça yapar. Rotada "paralel böl" adımında kaydı silmek motorun kendi
+// bölmesine döndürürdü: orada kayıt tek paylı birleştirme olur (motor bölmez; yer motorun). Tezgâhı çalışan, yoksa plandaki ilk payınki.
+const birlesikTezgah = (deger: Nesne, isId: string, a: { tezgahlar: string[]; calisan: CalisanBilgisi | null }): string | null => {
+  if (a.calisan !== null) return a.calisan.m;
+  const r = nesne(deger.plan) && nesne(deger.plan.ops) ? deger.plan.ops[isId] : undefined;
+  const m = nesne(r) && r.m != null ? String(r.m) : null;
+  return m !== null && a.tezgahlar.includes(m) ? m : a.tezgahlar[0] ?? null;
+};
 export function elleBolSilUygula(deger: unknown, k: { isId: string }, kisi: KomutKisisi): KomutSonucu {
   if (!nesne(deger)) return { hata: { tur: 'cakisma', ileti: 'Çalışma kaydı okunamadı; sayfayı yenileyin.' } };
   const eskiBol = nesne(deger.elleBol) ? deger.elleBol : {};
-  if (eskiBol[k.isId] === undefined) return { deger, degisti: false };
+  const eski = eskiBol[k.isId];
+  const a = elleBolAdimi(deger, k.isId);
+  const m = typeof a !== 'string' && a.paralel ? birlesikTezgah(deger, k.isId, a) : null;
+  const birlesik = typeof a !== 'string' && m !== null ? [{ adet: a.adet, m }] : null;
+  if (birlesik === null ? eski === undefined : Array.isArray(eski) && eski.length === 1) return { deger, degisti: false };
   // 3681: başka payda sayım varsa bölme kaldırılamaz (sayım o payın tezgâhındadır); yalnız çalışan payda sayım varsa bütün adım olur.
   const calisan = calisanKaynak(deger, k.isId);
-  const baska = calisan === null ? [] : Object.entries(calisan.paylar).filter(([m, n]) => m !== calisan.m && n > 0);
+  const baska = calisan === null ? [] : Object.entries(calisan.paylar).filter(([t, n]) => t !== calisan.m && n > 0);
   if (baska.length > 0) return { hata: { tur: 'dogrulama', ileti: `Başka payda sayım var (${tezgahAdi(deger, baska[0]![0])}); bölme kaldırılamaz, kalanı birleştirin.`, alan: 'isId' } };
   const { [k.isId]: _, ...kalan } = eskiBol;
   const yeni = kopya(deger);
-  yeni.elleBol = kalan;
-  const geri: GeriYama[] = [{ yol: ['elleBol'], id: k.isId, once: eskiBol[k.isId] }];
+  yeni.elleBol = birlesik === null ? kalan : { ...kalan, [k.isId]: birlesik };
+  const geri: GeriYama[] = [eski === undefined ? { yol: ['elleBol'], id: k.isId } : { yol: ['elleBol'], id: k.isId, once: eski }];
   // Payların kilidi de kalkar; ilk pay adımın kimliğini taşır, onun kilidi adımın kilidi olarak kalır.
   const locks = nesne(deger.locks) ? deger.locks : {};
   const paylar = Object.keys(locks).filter((id) => id.startsWith(`${k.isId}~`));
@@ -504,7 +518,8 @@ export function elleBolSilUygula(deger: unknown, k: { isId: string }, kisi: Komu
     for (const id of paylar) { delete l[id]; geri.push({ yol: ['locks'], id, once: locks[id] }); }
     yeni.locks = l;
   }
-  return { deger: isle(deger, yeni, { ne: 'Elle bölme kaldırıldı', ayrinti: k.isId, isler: [emirOf(k.isId)], geri }, kisi), degisti: true };
+  const ne = birlesik === null ? 'Elle bölme kaldırıldı' : 'Bölünmüş adım birleştirildi';
+  return { deger: isle(deger, yeni, { ne, ayrinti: k.isId, isler: [emirOf(k.isId)], geri }, kisi), degisti: true };
 }
 // Çalışmada adımın kayıtlı ilk bitişi (satıra yazılmak üzere); yoksa undefined.
 export const adimEkBitisi = (deger: unknown, isId: string): number | undefined => (nesne(deger) && nesne(deger.w) ? adimEkleri(deger.w)[isId]?.bitis0 : undefined);

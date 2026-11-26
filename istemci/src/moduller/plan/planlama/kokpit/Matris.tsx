@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Simge } from '../../../../ortak/arayuz/index.ts';
 import type { Derleme } from '../motor/kurallar.ts';
 import {
-  BEKLEME_ESIGI, MATRIS_GUNU, adimBeklemesi, aralikYuku, darbogaz, durumYazisi, emirGunleri, matrisSirasi, matrisYuku, satirKimligi, sayim, sureYaz, tezgahGunundeMi, yukYuzdesi,
+  BEKLEME_ESIGI, MATRIS_GUNU, adimBeklemesi, aralikYuku, bugunBasi, darbogaz, durumYazisi, emirGunleri, matrisSirasi, matrisYuku, satirKimligi, sayim, sureYaz, tezgahGunundeMi, yukYuzdesi,
   type KokpitEmri, type KokpitModeli, type MatrisYuku,
 } from './kurallar.ts';
 
@@ -38,12 +38,13 @@ export function Matris({ m, cx, duzen, duzenSec, emirler, secEmir, secIs, zaman,
   const [lej, setLej] = useState(false);
   const kap = useRef<HTMLDivElement | null>(null);
   const kod = useMemo(() => new Map(m.tezgahlar.map((t) => [t.id, t.kod])), [m]);
-  const gunAdi = (g: number): string => { const z = zaman(m.bas + g * 24); return `${z.slice(6, 9)} ${z.slice(0, 2)}`; };
+  const g0 = bugunBasi(m);
+  const gunAdi = (g: number): string => { const z = zaman(g0 + g * 24); return `${z.slice(6, 9)} ${z.slice(0, 2)}`; };
 
   const yuk = useMemo<YukSatiri[]>(() => {
     const isler = Object.values(m.isler);
     return m.tezgahlar.filter((t) => !t.fason).map((t) => {
-      const gunler = GUNLER.map((g) => { const y = aralikYuku(cx, isler, t.id, m.bas + g * 24, m.bas + (g + 1) * 24); return { sinif: matrisYuku(y), yuzde: yukYuzdesi(y), plan: y.plan, acik: y.acik }; });
+      const gunler = GUNLER.map((g) => { const y = aralikYuku(cx, isler, t.id, bugunBasi(m) + g * 24, bugunBasi(m) + (g + 1) * 24); return { sinif: matrisYuku(y), yuzde: yukYuzdesi(y), plan: y.plan, acik: y.acik }; });
       return { id: t.id, kod: t.kod, ad: t.ad, gunler, dolu: gunler.some((x) => x.sinif === 'tam' || x.sinif === 'dolu') };
     });
   }, [m, cx]);
@@ -53,7 +54,7 @@ export function Matris({ m, cx, duzen, duzenSec, emirler, secEmir, secIs, zaman,
     const s = new Set<string>(), e = secEmir ? m.emirler.find((x) => x.id === secEmir) : undefined;
     for (const a of e?.adimlar ?? []) {
       const x = m.isler[a.id];
-      if (x && !x.fason) for (const g of GUNLER) if (x.S < m.bas + (g + 1) * 24 && x.C > m.bas + g * 24) s.add(`${x.m}|${String(g)}`);
+      if (x && !x.fason) for (const g of GUNLER) if (x.S < bugunBasi(m) + (g + 1) * 24 && x.C > bugunBasi(m) + g * 24) s.add(`${x.m}|${String(g)}`);
     }
     return s;
   }, [m, secEmir]);

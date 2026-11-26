@@ -3,7 +3,7 @@ import { Simge } from '../../../../ortak/arayuz/index.ts';
 import type { Derleme } from '../motor/kurallar.ts';
 import { KISA_SERIT, darEkran } from './Matris.tsx';
 import {
-  MATRIS_GUNU, durumYazisi, hucreler3B, matrisSirasi, onayliGecSayisi, satirKimligi, sayim, sureYaz, tezgahGunundeMi,
+  MATRIS_GUNU, bugunBasi, durumYazisi, hucreler3B, matrisSirasi, onayliGecSayisi, satirKimligi, sayim, sureYaz, tezgahGunundeMi,
   type Hucre3B, type KokpitEmri, type KokpitModeli, type OnayliYer,
 } from './kurallar.ts';
 import { Sahne3B, ciziciAc, renkleriOku, type Bakis, type Kamera, type SahneVerisi, type Secim } from './sahne3b.ts';
@@ -63,7 +63,7 @@ export function Kokpit3B({ m, cx, once, onceDurumu, emirler, secEmir, zaman, sec
     const gruplar = [...new Set(satir.map((x) => x.t.grup ?? ''))];
     const sirali = bakis === 'D' ? satir : [...satir].sort((a, b) => gruplar.indexOf(a.t.grup ?? '') - gruplar.indexOf(b.t.grup ?? ''));
     const gunler = Array.from({ length: MATRIS_GUNU }, (_, g) => {
-      const z = zaman(m.bas + g * 24);
+      const z = zaman(bugunBasi(m) + g * 24);
       return { ad: `${z.slice(6, 9)} ${z.slice(0, 2)}`, kisa: z.slice(0, 2), kapali: satir.every((x) => x.h[g]?.yuk === null) };
     });
     return {

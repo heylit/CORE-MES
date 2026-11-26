@@ -102,7 +102,9 @@ export function ElleBol({ c, m, isId, taslak, yazabilir, kapat }: ElleBolOzellik
   const e = m.emirler.find((x) => x.adimlar.some((a) => a.id === isId));
   const a = e?.adimlar.find((x) => x.id === isId);
   const tezgahlar = (a?.adaylar ?? []).filter((t) => !fasonMu(t));
-  const kayitli = (c as unknown as { elleBol?: Record<string, { adet: number; m: string }[]> }).elleBol?.[isId] ?? null;
+  // Tek paylı kayıt bölme değil, birleştirmedir (motor adımı bölmez).
+  const kayit = (c as unknown as { elleBol?: Record<string, { adet: number; m: string }[]> }).elleBol?.[isId] ?? null;
+  const kayitli = kayit !== null && kayit.length >= 2 ? kayit : null;
   const adet = e?.adet ?? 0;
   const x = m.isler[isId], baslamis = x?.basladi === true && x.bitti !== true;
   const paylar0 = adimPaylari(m, isId);

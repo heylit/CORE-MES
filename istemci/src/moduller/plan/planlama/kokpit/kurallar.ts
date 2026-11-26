@@ -40,13 +40,19 @@ export type BagTuru = 'b' | 'o';
 export interface KokpitAdimi { id: string; ad: string; adaylar: string[]; onculler?: readonly (readonly [string, BagTuru])[] }
 // Sınır dakika çözünürlüğünde yarı açıktır (plan dakikayla yazılır, 3662): aynı dakikada biten ve başlayan adım ters sayılmaz.
 // Tahtada çizilen bağ: öncülün ve ardılın planda yeri vardır. ters: "bitince" bağlı ardıl öncülü bitmeden başlıyor (geçersiz sıra).
+// Bölünmüş adımda bağ paylar arasındadır: ardılın her payı öncülün bütün paylarını bekler (motor), ok her öncül payından her ardıl payına çizilir.
 export interface AdimBagi { kimden: string; kime: string; tur: BagTuru; ters: boolean }
 export function adimBaglari(emirler: readonly KokpitEmri[], isler: Readonly<Record<string, KokpitIsi>>): AdimBagi[] {
   return emirler.flatMap((e) => e.adimlar.flatMap((a) => (a.onculler ?? []).flatMap(([kimden, tur]): AdimBagi[] => {
-    const o = isler[kimden], x = isler[a.id], oC = adimSonu({ isler }, kimden);
-    return o && x && oC !== null ? [{ kimden, kime: a.id, tur, ters: tur === 'b' && Math.round(x.S * 60) < Math.round(oC * 60) }] : [];
+    const oC = adimSonu({ isler }, kimden);
+    if (oC === null) return [];
+    const ardillar = adimPaylari({ isler }, a.id);
+    return adimPaylari({ isler }, kimden).flatMap((o) => ardillar.map((x) => ({ kimden: o.id, kime: x.id, tur, ters: tur === 'b' && Math.round(x.S * 60) < Math.round(oC * 60) })));
   })));
 }
+// Bağın bir ucu verilen adımın (ya da payının) payı mı.
+export const bagAdimda = (b: AdimBagi, isler: Readonly<Record<string, KokpitIsi>>, adim: string): boolean =>
+  [b.kimden, b.kime].some((id) => { const x = isler[id]; return x !== undefined && adimKimligi(x) === adim; });
 // Adımın bağımlılık yazısı (3330): öncül, emrin operasyon listesindeki sıra numarasıyla (tablodaki # sütunu). uzun tablo sütunudur
 // ("1 Torna · bitince"), kisa dar ekranda ve listede adın yanındadır ("1 Torna bitince", "2 Freze ile örtüşmeli"). Bekleyen öncülü yoksa null.
 export function bagimlilik(e: Pick<KokpitEmri, 'adimlar'>, a: KokpitAdimi): { uzun: string; kisa: string } | null {
@@ -125,8 +131,11 @@ export interface KokpitModeli {
   emirler: KokpitEmri[];
   // 3681 (D): motorun uygulayamadığı elle bölmenin nedeni (adım kimliği → yazı).
   bolme?: BolmeNedenleri;
-  // Tahtanın ekseni: bugünün 00:00'ı ve son işin bittiği günün sonu (en az iki hafta).
+  // Tahtanın ekseni: bugünden önce başlamış en erken işin günü (en çok GECMIS_GUNU geriye; yoksa bugün) ve son işin bittiği günün sonu
+  // (bugünden en az iki hafta). Tahta açılışta yine şimdiye kayar.
   bas: number; son: number;
+  // Bugünün 00:00'ı: Matris, 3B ve yük yüzdeleri buradan sayar. Verilmezse bas.
+  bugun?: number;
   // Tezgâhın açık saat pencereleri (hamle adayı açık saate oturur); bilinmeyen tezgâh hep açık sayılır.
   acik: Record<string, readonly (readonly [number, number])[]>;
   // Tezgâhın duruşları (saat aralığı). ariza: makine arızası olayından gelen; değilse planlı duruş (bakım).
@@ -135,6 +144,9 @@ export interface KokpitModeli {
   mesai?: Record<string, readonly (KokpitEkMesaisi & { vardiyaAd: string })[]>;
 }
 
+// Eksen geriye en çok bu kadar gün uzar (ileriye en az iki hafta ile aynı ölçü): eski süren işin başı görünür, tahta uzayıp ağırlaşmaz.
+export const GECMIS_GUNU = 14;
+export const bugunBasi = (m: Pick<KokpitModeli, 'bas' | 'bugun'>): number => m.bugun ?? m.bas;
 const FASON_SATIRI = '@';
 export const fasonMu = (m: string): boolean => m.startsWith('@');
 
@@ -185,7 +197,9 @@ export function modelKur(c: PlanlamaCalismasi, p: OkunanPlan | null, cx: Derleme
   }
   const tezgahlar: KokpitTezgahi[] = c.D.tezgahlar.filter((t) => cx.M[t.id]).map((t) => ({ id: t.id, kod: t.kod ?? t.ad ?? t.id, ad: t.kod ? t.ad ?? '' : '', fason: false, ...(t.grup ? { grup: t.grup } : {}), ...(t.grupAd ?? t.grupKod ? { grupAdi: t.grupAd ?? t.grupKod } : {}) }));
   if (Object.values(isler).some((x) => x.fason)) tezgahlar.push({ id: FASON_SATIRI, kod: 'Fason', ad: 'dış atölye', fason: true });
-  const bas = Math.floor(simdi / 24) * 24;
+  const bugun = Math.floor(simdi / 24) * 24;
+  const enErken = Object.values(isler).reduce((t, x) => Math.min(t, x.S), bugun);
+  const bas = Math.max(bugun - GECMIS_GUNU * 24, Math.floor(enErken / 24) * 24);
   const acik = Object.fromEntries(Object.values(cx.M).map((t) => [t.id, t.sw]));
   const durus: Record<string, KokpitDurusu[]> = {};
   for (const d of cx.g.down) {
@@ -194,9 +208,9 @@ export function modelKur(c: PlanlamaCalismasi, p: OkunanPlan | null, cx: Derleme
     (durus[d.m] ??= []).push(plan ? { a: d.from, b: d.to, ariza: false, ...durusNedeni(plan) } : { a: d.from, b: d.to, ariza: true });
   }
   const mesai: Record<string, (KokpitEkMesaisi & { vardiyaAd: string })[]> = {};
-  for (const e of kokpitEkMesaileri(c)) if (e.gun * 24 >= bas) (mesai[e.m] ??= []).push({ ...e, vardiyaAd: vardiyaAdi(c, e.vardiya) });
+  for (const e of kokpitEkMesaileri(c)) if (e.gun * 24 >= bugun) (mesai[e.m] ??= []).push({ ...e, vardiyaAd: vardiyaAdi(c, e.vardiya) });
   for (const l of Object.values(mesai)) l.sort((x, y) => x.gun - y.gun);
-  return { simdi, durusSonu: typeof c.durusOkumaSonu === 'string' ? saatOku(c.D, c.durusOkumaSonu) : null, tezgahlar, isler, emirler, ...(p?.bolme && Object.keys(p.bolme).length ? { bolme: p.bolme } : {}), bas, son: Math.max(bas + 14 * 24, Math.ceil(enSon / 24) * 24 + 24), acik, durus, mesai };
+  return { simdi, durusSonu: typeof c.durusOkumaSonu === 'string' ? saatOku(c.D, c.durusOkumaSonu) : null, tezgahlar, isler, emirler, ...(p?.bolme && Object.keys(p.bolme).length ? { bolme: p.bolme } : {}), bas, bugun, son: Math.max(bugun + 14 * 24, Math.ceil(enSon / 24) * 24 + 24), acik, durus, mesai };
 }
 export const gunYazisi = (g: number, zaman: (t: number) => string): string => zaman(g * 24).replace(/ \d\d:\d\d$/, '');
 export const ekMesaiYazisi = (l: readonly (KokpitEkMesaisi & { vardiyaAd: string })[], zaman: (t: number) => string): string =>
@@ -345,9 +359,9 @@ export function darbogaz(m: KokpitModeli): Darbogaz | null {
 export interface EmirGunu { adimlar: number[]; bekle: boolean; termin: boolean; sonra: boolean }
 export function emirGunleri(m: KokpitModeli, e: KokpitEmri, gun = MATRIS_GUNU): EmirGunu[] {
   const beklemeler = e.adimlar.map((_, k) => { const b = adimBeklemesi(m, e, k); return b && b.acik >= BEKLEME_ESIGI ? { b, W: m.acik[m.isler[e.adimlar[k]?.id ?? '']?.m ?? ''] } : null; });
-  const terminGunu = e.termin === null ? null : Math.floor((e.termin - 0.01 - m.bas) / 24);
+  const g0 = bugunBasi(m), terminGunu = e.termin === null ? null : Math.floor((e.termin - 0.01 - g0) / 24);
   return Array.from({ length: gun }, (_, g) => {
-    const a = m.bas + g * 24, b = a + 24;
+    const a = g0 + g * 24, b = a + 24;
     const adimlar: number[] = [];
     e.adimlar.forEach((ad, k) => { const x = m.isler[ad.id]; if (x && x.S < b && x.C > a) adimlar.push(k); });
     const bekle = adimlar.length === 0 && beklemeler.some((w) => w !== null && acikSure(w.W, Math.max(a, w.b.bas), Math.min(b, w.b.son)) >= 1);
@@ -356,7 +370,8 @@ export function emirGunleri(m: KokpitModeli, e: KokpitEmri, gun = MATRIS_GUNU): 
 }
 // Tezgâhın o gününde (gun null: herhangi bir gün) işi olan emir mi (yük hücresi süzgeci).
 export function tezgahGunundeMi(m: KokpitModeli, e: KokpitEmri, tezgah: string, gun: number | null): boolean {
-  return e.adimlar.some((a) => { const x = m.isler[a.id]; return x !== undefined && satirKimligi(x) === tezgah && (gun === null || (x.S < m.bas + (gun + 1) * 24 && x.C > m.bas + gun * 24)); });
+  const g0 = bugunBasi(m);
+  return e.adimlar.some((a) => { const x = m.isler[a.id]; return x !== undefined && satirKimligi(x) === tezgah && (gun === null || (x.S < g0 + (gun + 1) * 24 && x.C > g0 + gun * 24)); });
 }
 
 // --- taşıma ---
@@ -399,9 +414,9 @@ export function adimSecimleri(e: Pick<KokpitEmri, 'adimlar'>, sec: Readonly<Reco
   });
 }
 // Başlama saati seçenekleri: bugünden başlayarak yedi gün, iki saatte bir 06:00-22:00; geçmiş saat yok.
-export function baslamaSaatleri(m: Pick<KokpitModeli, 'bas' | 'simdi'>, gun = 7): number[] {
-  const l: number[] = [];
-  for (let g = 0; g < gun; g++) for (let h = 6; h <= 22; h += 2) { const t = m.bas + g * 24 + h; if (t >= m.simdi) l.push(t); }
+export function baslamaSaatleri(m: Pick<KokpitModeli, 'bas' | 'bugun' | 'simdi'>, gun = 7): number[] {
+  const l: number[] = [], g0 = bugunBasi(m);
+  for (let g = 0; g < gun; g++) for (let h = 6; h <= 22; h += 2) { const t = g0 + g * 24 + h; if (t >= m.simdi) l.push(t); }
   return l;
 }
 // Emrin taşınabilen bekleyen adımları için hamle adayları: aday tezgâhların her birinde, öncül adım bittikten sonraki en erken boşluk.
@@ -495,7 +510,7 @@ export function hucreler3B(m: KokpitModeli, cx: Derleme, once: Record<string, On
   return m.tezgahlar.filter((t) => !t.fason).map((t) => {
     const M = cx.M[t.id];
     return Array.from({ length: gun }, (_, g): Hucre3B => {
-      const a = m.bas + g * 24, b = a + 24;
+      const a = bugunBasi(m) + g * 24, b = a + 24;
       const y = aralikYuku(cx, isler, t.id, a, b);
       if (y.acik <= 0 || !M) return { tezgah: t.id, gun: g, yuk: null, durum: null, degisen: null, once: null, plan: 0, acik: 0 };
       let en: HucreDurumu | null = null, degisen = 0;
