@@ -435,14 +435,15 @@ export function Tahta(o: TahtaOzellikleri) {
     setMenu(null); setTasinan({ id: ilk.id, tut: 0, fis: emirId }); setHedef(null);
   }, [onay, emir, m, planaAl, goz, uyari, fisAdaylari, olcek]);
   // vazgecer: sürükleyerek tutulan iş geçersiz yere bırakılınca tutma biter (yapışarak tutmada iş elde kalır, kişi başka yere tıklar).
-  const birlesAc = useCallback((kaynak: string, hedef: string): void => {
-    surukleniyor.current = false; birlesBirakti.current = true; setTimeout(() => { birlesBirakti.current = false; }, 0);
+  const birlesAc = useCallback((kaynak: string, hedef: string, birakarak = false): void => {
+    surukleniyor.current = false;
+    if (birakarak) { birlesBirakti.current = true; setTimeout(() => { birlesBirakti.current = false; }, 0); }
     setBirles(null); setTasinan(null); setHedef(null); setMenu(null); setBirlesOnay({ kaynak, hedef });
   }, []);
   const birak = useCallback((vazgecer = false): void => {
     if (onay || birlesOnay) return;
     if (birles) {
-      if (birles.hedef !== null) { birlesAc(birles.kaynak, birles.hedef); return; }
+      if (birles.hedef !== null) { birlesAc(birles.kaynak, birles.hedef, vazgecer); return; }
       if (!tasinan) { uyari(BIRLES_BOS); if (vazgecer) setBirles(null); return; }
       setBirles(null);
     }
