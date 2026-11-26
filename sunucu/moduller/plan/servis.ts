@@ -459,8 +459,9 @@ const emirCarpani = (b: Pick<Baglam, 'bedelAyari'>, i: Pick<Is, 'oncelik'> | nul
 // Planlanacak iş emirleri bir okuma isteğinde birden çok yoldan istenir (motor yerleşimi bağlamı, çalışan adımları, canlı özeti ve
 // planlama girdisini tek istekte kurar; liste her seferinde bütün açık adımları okur). Okuma transaction'ı tek görüntüdür: aynı seçenekle
 // ikinci okuma aynı sonucu verir, bu yüzden istek boyunca bir kez okunur. Yazma transaction'ında bellek açılmaz: araya giren yazma
-// listeyi değiştirebilir. Sonuç paylaşılır; okuyan değiştirmez.
-const okumaBellekleri = new WeakMap<Db, Map<string, Promise<PlanIsEmri[]>>>();
+// listeyi değiştirebilir. Sonuç paylaşılır; okuyan değiştirmez. Aynı bellek istekte birden çok kez kurulan başka okumaları da taşır
+// (istekBellegi: planlama kaynağı ve satın alma eki, planlama sayfasının açılışı).
+const okumaBellekleri = new WeakMap<Db, Map<string, Promise<unknown>>>();
 export async function okumaBellegiyle<T>(db: Db, is: () => Promise<T>): Promise<T> {
   if (okumaBellekleri.has(db)) return is();
   if (!await s.okumaTransactioniMi(db)) return is();
@@ -470,11 +471,14 @@ export async function okumaBellegiyle<T>(db: Db, is: () => Promise<T>): Promise<
 export function planlanacakIsler(db: Db, secenek: { taslakDahil?: boolean; fasonTahmini?: boolean; fasonGun?: number } = {}): Promise<PlanIsEmri[]> {
   const taslakDahil = secenek.taslakDahil ?? false;
   const oku = () => planlanacakIsEmirleri(db, { taslakDahil, ...(secenek.fasonGun === undefined ? {} : { fasonGun: secenek.fasonGun }), ...(secenek.fasonTahmini ? { fasonTahmini: (q: Parameters<typeof fasonSuresiTahminleri>[1]) => fasonSuresiTahminleri(db, q), fasonSiparisTermini: async (idler: readonly number[]) => new Map([...await fasonSiparisTarihleri(db, idler)].map(([id, x]) => [id, x.tarih])) } : {}) });
+  return istekBellegi(db, `isler|${String(taslakDahil)}|${String(secenek.fasonTahmini === true)}|${String(secenek.fasonGun ?? '')}`, oku);
+}
+// Bellek açık değilse (yazma transaction'ı ya da okumaBellegiyle dışı) her çağrı yeniden okur. Anahtar okumayı ve okuyanı ayırmalıdır.
+export function istekBellegi<T>(db: Db, anahtar: string, oku: () => Promise<T>): Promise<T> {
   const bellek = okumaBellekleri.get(db);
   if (bellek === undefined) return oku();
-  const anahtar = `${String(taslakDahil)}|${String(secenek.fasonTahmini === true)}|${String(secenek.fasonGun ?? '')}`;
   if (!bellek.has(anahtar)) bellek.set(anahtar, oku());
-  return bellek.get(anahtar)!;
+  return bellek.get(anahtar) as Promise<T>;
 }
 
 // Aynı istekte birden çok bağlam kurulurken (senaryo listesi: canlı ve her açık senaryo) hedefe bağlı olmayan okumalar bir kez yapılır

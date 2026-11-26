@@ -14,6 +14,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
+import { KAYNAK_OKUMA_ISLEMLERI } from './planlama-servis.ts';
 import { uclar } from './uclar.ts';
 
 const PLAN_OKUR = { biri: ['plan.oku', 'plan.yaz'] } as const;
@@ -157,6 +158,12 @@ describe('plan uç yetkileri (gerçek giriş, gerçek PostgreSQL)', () => {
       cerezAl: rolluGiris({ giris: app, vt: ortam.vt, kisiOlustur: yoneticiOlustur }),
     });
     assert.deepEqual(sapmalar, []);
+  });
+
+  // 3725: planlama çalışmasının cevabındaki kaynak dilimi bu işlemlerle verilir; ayrı kaynak ucunun kapısıyla aynı kalmalı.
+  test('planlama açılışının kaynak dilimi kaynak uçlarının işlemleriyle verilir', () => {
+    assert.deepEqual([...KAYNAK_OKUMA_ISLEMLERI], [...KAYNAK_OKUR.biri]);
+    assert.deepEqual(BEKLENEN['GET /plan/planlama-kaynagi'], KAYNAK_OKUR);
   });
 
   test('canlı farkı: kapı plan.planlama-oku, işleyici plan okumayı da ister', async () => {

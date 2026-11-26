@@ -8,7 +8,7 @@ import type {
 import { DEFTER_SAYFASI, KAPASITE_GUNU } from '#paylasilan/sozlesme/planlama.ts';
 import type { KayitlarCevabi, SilCevabi, YazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
-import { ekipler, ekipUyeleri, isMerkezleri, istasyonlar, kapasiteKaynaklari, makineDurumlari } from '../istasyonlar/disari.ts';
+import { ekipler, ekiplerinUyeleri, isMerkezleri, istasyonlar, kapasiteKaynaklari, makineDurumlari } from '../istasyonlar/disari.ts';
 import { kisiAdlari, kisiGorevleri } from '../kisiler/disari.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import {
@@ -39,7 +39,7 @@ import {
 import { type Gorunum, maliyetiGeriKoy, maliyetsizCalisma } from './maliyet-gizleme.ts';
 import { satinAlmaCalismasi } from './satin-alma-gorunumu.ts';
 import { emirTutari, satirKuru } from './kurallar.ts';
-import { calisanAdimlar, canliOzeti, okumaBellegiyle, motorNumaralariOku, planFinansmanOrani, planGenelGiderSaatBasi, planlanacakIsler, TAKVIM_GUN, type PlanGenelGideri } from './servis.ts';
+import { calisanAdimlar, canliOzeti, istekBellegi, okumaBellegiyle, motorNumaralariOku, planFinansmanOrani, planGenelGiderSaatBasi, planlanacakIsler, TAKVIM_GUN, type PlanGenelGideri } from './servis.ts';
 import * as sorgular from './sorgular.ts';
 import { teklifDenemesi, type DenemeSonucu, type TeklifTaslagi } from './teklif-denemesi.ts';
 
@@ -168,7 +168,7 @@ async function planinAndigiEmirler(db: Db): Promise<number[]> {
 // Planlama sayfasının ve Reçete ve Rota ekranının okuduğu birleşik durum: Reçete ve Rota'nın bağlı durumu ve planın alanları (canlı plan
 // ayarı, canlı özeti, başlamış adımlar). Yetkiyi uç verir; dilimlerin kapsamı Reçete ve Rota'nınkidir.
 export function planlamaKaynagi(db: Db, kullanici: Kullanici): Promise<DurumCevabi> {
-  return okumaBellegiyle(db, () => planlamaKaynagiKur(db, kullanici));
+  return okumaBellegiyle(db, () => istekBellegi(db, `planlamaKaynagi|${String(kullanici.id)}`, () => planlamaKaynagiKur(db, kullanici)));
 }
 async function planlamaKaynagiKur(db: Db, kullanici: Kullanici): Promise<DurumCevabi> {
   const { durum, emirKayitlari } = await durumVeEmirler(db, kullanici, undefined, { kapaliGun: KAPALI_EMIR_GUNU, dahil: await planinAndigiEmirler(db) });
@@ -287,10 +287,11 @@ async function kaynakOkuKur(db: Db, kullanici: Kullanici): Promise<KaynakOkumasi
   let ekipUyeleriEki: Record<string, string[]> | null = null;
   if (yetkiliMi(kullanici, ISTASYON_OKUMA)) {
     ekipUyeleriEki = {};
-    for (const e of await ekipler(db)) {
-      if (!e.aktif || e.istasyonId === null) continue;
+    const bagli = (await ekipler(db)).filter((e) => e.aktif && e.istasyonId !== null);
+    const uyeler = await ekiplerinUyeleri(db, bagli.map((e) => e.id));
+    for (const e of bagli) {
       const l = (ekipUyeleriEki[String(e.istasyonId)] ??= []);
-      for (const u of await ekipUyeleri(db, e.id)) if (!l.includes(String(u.kisiId))) l.push(String(u.kisiId));
+      for (const u of uyeler.get(e.id) ?? []) if (!l.includes(String(u.kisiId))) l.push(String(u.kisiId));
     }
   }
   // 13.4: onaylı izin ve atama payı çerçevedeki gibi kapasite okumasından; motor izinli günü devamsızlık sayar
@@ -360,7 +361,11 @@ async function siparisBedelleri(db: Db, kullanici: Kullanici): Promise<Record<st
 export async function satinAlmaEki(db: Db, kullanici: Kullanici): Promise<SatinAlmaEkiCevabi> {
   return satinAlmaEkiKur(db, kullanici, await aktifMalzemeListesi(db, kullanici));
 }
-async function satinAlmaEkiKur(db: Db, kullanici: Kullanici, malzemeler: DurumCevabi['items']): Promise<SatinAlmaEkiCevabi> {
+// Malzeme listesi kaynak okumasının (planlamaKaynagi) aktif malzeme listesiyle aynıdır (aynı sayfa sınırı); bu yüzden istekte bir kez kurulur.
+function satinAlmaEkiKur(db: Db, kullanici: Kullanici, malzemeler: DurumCevabi['items']): Promise<SatinAlmaEkiCevabi> {
+  return istekBellegi(db, `satinAlmaEki|${String(kullanici.id)}`, () => satinAlmaEkiOku(db, kullanici, malzemeler));
+}
+async function satinAlmaEkiOku(db: Db, kullanici: Kullanici, malzemeler: DurumCevabi['items']): Promise<SatinAlmaEkiCevabi> {
   if (malzemeler === null) return { acikSiparisler: null, tedarikTerminleri: null };
   return {
     acikSiparisler: yetkiliMi(kullanici, ACIK_SIPARIS_OKUMA) ? await acikSiparisGelisleri(db, malzemeler) : null,
@@ -448,6 +453,19 @@ export async function planCozumKaynagi(db: Db, simdi: number = Date.now()): Prom
 // gibi: okuyamadığı dilim kayıttaki gibi kalır). Takvim eki çerçevenin okuduğu vardiya takviminden kurulur (o uç yalnız oturum ister).
 export async function planlamaCalismasi(db: Db, kullanici: Kullanici, simdi: number = Date.now()): Promise<PlanlamaCalismasiCevabi> {
   return (await planlamaCalismasiVeGirdisi(db, kullanici, simdi)).cevap;
+}
+
+// 3725: sayfanın açılışı çalışmayla birlikte planlama kaynağını ve satın alma ekini de ister. Çalışmanın girdisi ikisini zaten okur;
+// ayrı uçlardan istenince aynı okumalar iki kez daha yapılırdı. İkisi ayrı uçlarındaki yetkiyle verilir: kaynağı okuyamayana null
+// (ayrı uçta yetki hatası, sayfa o dilimsiz açılır). Aynı okuma transaction'ında oldukları için çalışmayla aynı anı gösterirler.
+export const KAYNAK_OKUMA_ISLEMLERI: readonly Islem[] = ['sayfa.recete-rota', 'recete-rota.oku', 'recete-rota.yaz'];
+export function planlamaAcilisi(db: Db, kullanici: Kullanici, simdi: number = Date.now()): Promise<PlanlamaCalismasiCevabi> {
+  return okumaBellegiyle(db, async () => {
+    const cevap = await planlamaCalismasi(db, kullanici, simdi);
+    if (!yetkiliMi(kullanici, KAYNAK_OKUMA_ISLEMLERI)) return { ...cevap, kaynak: null, satinAlmaEki: null };
+    const kaynak = await planlamaKaynagi(db, kullanici);
+    return { ...cevap, kaynak, satinAlmaEki: await satinAlmaEkiKur(db, kullanici, kaynak.items) };
+  });
 }
 
 // 3664: çalışmayı ve değerlendirmenin girdisini tek okumadan verir; girdi okuması Reçete ve Rota, kaynak ve takvim okumalarını içerir
