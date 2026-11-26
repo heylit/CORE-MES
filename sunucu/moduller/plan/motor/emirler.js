@@ -128,17 +128,20 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
   const calisan = new Set(Object.keys(st.gercek || {}));
   /* 669 a (Motor A gibi): ileride yeri sabit iş (kilitli, dondurulmuş, bölünmüş parça) sabitYer'dedir: tezgâhın boş anını ilerletmez, önüne
      sığan kuyruk işi önce yapılır, ardılı onun bitişini bekler. Bölünmüş işin en geç biten parçası işin yeridir, öteki parçalar tezgâhı kapatır. */
-  const sabitYer = {};
+  /* 3734: işin yeri bütün parçalarına bakılarak seçilir: geçmişte başlamış bir parça (gerçekleşen sayılır) geç biten parçayı gölgelemez,
+     ardıl son parçanın bitişini bekler ve geç parçanın tezgâhı kapalı kalır. */
+  const sabitYer = {}, yeri = {};
+  const kapat = x => st.down.push({ id: 'sabit-' + st.down.length, m: x.m, from: x.S, to: x.C, neden: 'sabit' });
   for (const x of [...istek.sabitler, ...(istek.kisiSabitleri || []).map(y => Object.assign({}, y, { makineId: kisiTezgahi(y.kisiId) }))]) {
     const id = opOf[x.anahtar], m = String(x.makineId), S = tmiSaat(D, x.baslangic), C = tmiSaat(D, dakikaSonu(x.bitis));
     if (S == null || C == null || !cx.M[m]) continue;
-    if (!id || !cx.byId[id] || sira.has(id) || calisan.has(id)) { st.down.push({ id: 'sabit-' + st.down.length, m, from: S, to: C, neden: 'sabit' }); continue; }
-    if (S < st.now - 1e-9) { st.gercek[id] = { m, S, C }; continue; }
-    const o = sabitYer[id];
-    if (o && o.C >= C) { st.down.push({ id: 'sabit-' + st.down.length, m, from: S, to: C, neden: 'sabit' }); continue; }
-    if (o) st.down.push({ id: 'sabit-' + st.down.length, m: o.m, from: o.S, to: o.C, neden: 'sabit' });
-    sabitYer[id] = { m, S, C };
+    if (!id || !cx.byId[id] || sira.has(id) || calisan.has(id)) { kapat({ m, S, C }); continue; }
+    const o = yeri[id];
+    if (o && o.C >= C) { kapat({ m, S, C }); continue; }
+    if (o) kapat(o);
+    yeri[id] = { m, S, C };
   }
+  for (const id in yeri) { const y = yeri[id]; if (y.S < st.now - 1e-9) st.gercek[id] = y; else sabitYer[id] = y; }
   st.sabitYer = sabitYer;
   /* istekte geçmeyen adım: şimdi bitmiş; motor onu yalnız ardılının öncülü olarak görür. Fason adım ise (CA-2) öncülünden sonra döner:
      kuyruktaki ardılı onu bekler. */
