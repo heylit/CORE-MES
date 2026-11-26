@@ -78,7 +78,7 @@ export function SmartesEmirHucresi({ bilgi, hata }: { bilgi: SmartesEmirBilgisi 
   const telefon = useTelefon();
   const one = t && onePlan(t.durum) && t.opNo !== null ? bilgi!.adimlar.find((a) => a.opNo === t.opNo) ?? null : null;
   return (
-    <span className="tc-smartes-hucre tc-smartes-liste">
+    <span className="tc-smartes-hucre tc-smartes-emir-liste">
       <SmartesRozeti durum={t?.durum ?? null} gonderilmez={t?.gonderilmez ?? 'adim-disi'} hata={hata} ipucu={t?.neden} baslik={telefon && t?.durum != null} />
       {!hata && t?.durum === 'gonderildi' && <small className="tc-smartes-alt">{t.gonderilen}/{t.toplam} adım</small>}
       {!hata && one && <small className="tc-smartes-alt"><span className="tc-smartes-op">OP {one.opNo} {one.ad}</span>{t?.neden && <> · {t.neden}</>}</small>}
