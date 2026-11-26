@@ -155,8 +155,10 @@
 .sa-kok .tw{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
 .sa-kok table{ border-collapse:collapse; width:100%; }
 .sa-kok th, .sa-kok td{ text-align:left; padding:var(--b-2) var(--b-3); border-bottom:1px solid var(--sa-line-2); vertical-align:top; }
+/* 3748-1 tablo standardı: merkez tabloları ortak tabloyla aynı ölçüde: hücre 14 px, satır payı cihaza göre (--tablo-hucre), sağ sütunda eşit genişlikte rakam. */
+.sa-kok td{ font-size:var(--yazi-s); padding-block:var(--tablo-hucre); }
 .sa-kok th{ font-size:var(--yazi-xs); color:var(--sa-muted); font-weight:600; background:var(--sa-surface-2); white-space:nowrap; }
-.sa-kok td.r, .sa-kok th.r{ text-align:right; }
+.sa-kok td.r, .sa-kok th.r{ text-align:right; font-variant-numeric:tabular-nums; }
 .sa-kok td.num{ white-space:nowrap; }
 .sa-kok tr.click{ cursor:pointer; } .sa-kok tr.click:hover td{ background:var(--sa-surface-2); }
 .sa-kok tr:last-child td{ border-bottom:0; }

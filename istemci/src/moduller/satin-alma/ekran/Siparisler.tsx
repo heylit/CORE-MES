@@ -115,19 +115,19 @@ export function Siparisler() {
   const kilit = fiyatKilitli();
   const tumSutunlar: Sutun<SiparisSatiri>[] = [
     {
-      anahtar: 'no', baslik: 'Sipariş', mono: true, sirala: true, csv: (s) => siparisEtiketi(s),
+      anahtar: 'no', baslik: 'Sipariş', mono: true, sirala: true, sabit: 'sol', csv: (s) => siparisEtiketi(s),
       hucre: (s) => (s.poNo ? <span className="sa-ekran-govde sa-sp-kod"><span>{s.orderNo || '–'}</span><small>{s.poNo}</small></span> : <span className="sa-sp-nowrap">{s.orderNo || '–'}</span>),
     },
-    { anahtar: 'ted', baslik: 'Tedarikçi', sirala: true, hucre: (s) => <b>{s.tedarikci}</b>, csv: (s) => s.tedarikci },
+    { anahtar: 'ted', baslik: 'Tedarikçi', sirala: true, kes: true, kartta: true, hucre: (s) => <b>{s.tedarikci}</b>, csv: (s) => s.tedarikci },
     {
-      anahtar: 'talep', baslik: 'Talep', hucre: (s) => <span className="sa-ekran-govde"><span>{s.talepAdi}</span><small className="sa-sp-nowrap">{s.talepNo}
+      anahtar: 'talep', baslik: 'Talep', kes: true, hucre: (s) => <span className="sa-ekran-govde"><span>{s.talepAdi}</span><small className="sa-sp-nowrap">{s.talepNo}
         <CizimSayisi sayi={s.cizimSayisi} /></small>{s.talepTarihi && <small>{`talep ${fmtDate(s.talepTarihi)}`}</small>}</span>,
       csv: (s) => `${s.talepNo} ${s.talepAdi}`,
     },
     { anahtar: 'tutar', baslik: 'Tutar', hizala: 'sag', kirilmaz: true, sirala: true, hucre: (s) => money(s.tutar, 'TRY', 0), csv: (s) => s.tutar ?? '' },
     // Sipariş tarihi ayrı sütun değil, beklenen teslimin altında (2449 "plan" kalıbı): 1280'de tablo kipinde kalmanın payı.
     {
-      anahtar: 'beklenen', baslik: 'Beklenen teslim', sirala: true, csv: (s) => s.termin,
+      anahtar: 'beklenen', baslik: 'Beklenen teslim', sirala: true, kartta: true, csv: (s) => s.termin,
       hucre: (s) => <span className="sa-ekran-govde sa-sp-kod"><span>{fmtDate(s.termin)}</span><small>{`sipariş ${fmtDate(s.siparisTarihi)}`}</small></span>,
     },
     {
@@ -135,12 +135,12 @@ export function Siparisler() {
       hucre: (s) => <span className="sa-ekran-govde sa-sp-kod"><span>{gelenUst(s)}</span><small>{`${nfm.format(kalanSayi(s))} kalan`}</small></span>,
     },
     {
-      anahtar: 'gecikme', baslik: 'Gecikme', kirilmaz: true, sirala: true, csv: gecikmeMetni,
+      anahtar: 'gecikme', baslik: 'Gecikme', kirilmaz: true, sirala: true, kartRozet: true, csv: gecikmeMetni,
       hucre: (s) => (s.teslim ? <Rozet ton="tamam">Geldi</Rozet> : s.gecikme !== null ? <Rozet ton="hata">{`${s.gecikme} gün`}</Rozet>
         : s.buHafta ? <Rozet ton="uyari">Bu hafta</Rozet> : '–'),
     },
     {
-      anahtar: 'logo', baslik: 'Logo',
+      anahtar: 'logo', baslik: 'Logo', kartta: true,
       csv: (s) => { const l = logoDurumu(s); return [l ? [l[1], l[0] === 'hata' ? l[2] : ''].filter(Boolean).join(': ') : '', logoOzetiMetni(ozet(s), okuma)].filter(Boolean).join(' · '); },
       // Hata nedeni yalnız title'da kalmaz (dokunmatikte okunmaz); hatalı satırda Logo alanı kart kipinde de görünür.
       hucre: (s) => {
@@ -182,13 +182,14 @@ export function Siparisler() {
           const n = acik.filter(f).length;
           return sayim === 'rozet' ? { anahtar: k, baslik: l, sayi: n } : { anahtar: k, baslik: sayim === 'duz' && n > 0 ? `${l} · ${n}` : l };
         })} />
-      <Tablo etiket="Siparişler" sutunlar={sutunlar} satirlar={liste} satirAnahtari={(s) => s.anahtar}
+      <Tablo kip="kayit" etiket="Siparişler" sutunlar={sutunlar} satirlar={liste} satirAnahtari={(s) => s.anahtar}
         satirSec={(s) => { go('request', s.talepId, 'order'); }}
         siralama={siralama} siralamaDegistir={siralamaYaz}
         bosMesaj={hepsi.length === 0 ? 'Henüz verilmiş sipariş yok.' : 'Bu süzgece uyan sipariş yok.'}
         arac={{
           arama: { deger: ara, degistir: araYaz, etiket: 'Siparişlerde ara', yerTutucu: 'Sipariş no, tedarikçi, talep ya da kalem' },
           csv: { ad: 'siparisler' },
+          gorunum: { anahtar: 'satin-alma-siparisler' },
           sag: (
             <Secim etiket="Tedarikçi" value={tedarikci} onChange={(e) => { tedarikciYaz(e.target.value); }} bosSecenek="Tüm tedarikçiler"
               secenekler={tedarikciler.map(([deger, baslik]) => ({ deger, baslik }))} />
