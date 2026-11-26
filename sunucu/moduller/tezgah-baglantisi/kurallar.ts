@@ -515,3 +515,110 @@ export function sayaciOzetle(c: SatirSayaci, simdi: number): { pencereDakika: nu
   const bir = (n: number): number => Math.round((n / pencereDakika) * 10) / 10;
   return { pencereDakika, yazilan, atlanan, yazilanDakikada: bir(yazilan), atlananDakikada: bir(atlanan) };
 }
+
+// ---- Heidenhain LSV2 (kart 3753) ----
+// lsv2.ts'in okuduğu ham değerler; okunamayan alan null. Durum ve kip Heidenhain kodudur (PgmState, ExecState), metne burada çevrilir.
+export const LSV2_OKUMA_AYARI = 'tezgah-baglantisi.lsv2-okuma';
+
+export type Lsv2Uyarisi = 'kapali-ya-da-mesgul' | 'dnc-yok' | 'sayac-yetki-yok' | 'sayac-adresi-yok';
+export const LSV2_UYARI_METNI: Record<Lsv2Uyarisi, string> = {
+  'kapali-ya-da-mesgul': 'Makine kapalı ya da meşgul (bağlantı reddedildi)',
+  'dnc-yok': 'Makine DNC okumasına izin vermiyor: durum, program ve takım okunamadı',
+  'sayac-yetki-yok': 'Sayaç için yetki yok (PLC okuması daha yüksek giriş düzeyi istiyor)',
+  'sayac-adresi-yok': 'Sayaç adresi makinenin PLC belleğinde yok',
+};
+
+export interface Lsv2Hatasi {
+  sinif: number;
+  grup: number;
+  no: number;
+  metin: string;
+}
+
+export interface Lsv2Okumasi {
+  kontrol: string | null;
+  ncSurumu: string | null;
+  // ExecState: 0 elle, 1 MDI, 2 referans, 3 tek tümce, 4 otomatik.
+  kip: number | null;
+  // PgmState: 0 başladı, 1 durdu, 2 bitti, 3 iptal, 4 kesildi, 5 hata, 6 hata silindi, 7 boşta, 8 tanımsız.
+  programDurumu: number | null;
+  program: string | null;
+  // Yüzde (100 = %100).
+  ilerlemeOrani: number | null;
+  isMiliOrani: number | null;
+  takim: number | null;
+  // Kumandanın hata penceresindeki iletiler; okunamadıysa null, ileti yoksa boş.
+  hatalar: Lsv2Hatasi[] | null;
+  sayac: number | null;
+  uyarilar: Lsv2Uyarisi[];
+}
+
+const PROGRAM_DURUMU_CALISMA: Readonly<Record<number, string>> = {
+  0: 'ACTIVE', 1: 'STOPPED', 2: 'PROGRAM_COMPLETED', 3: 'STOPPED', 4: 'INTERRUPTED', 5: 'STOPPED', 6: 'READY', 7: 'READY',
+};
+const KIP_MODU: Readonly<Record<number, string>> = { 0: 'MANUAL', 1: 'MANUAL_DATA_INPUT', 2: 'MANUAL', 3: 'SEMI_AUTOMATIC', 4: 'AUTOMATIC' };
+
+// LSV2 öğeleri MTConnect adlarıyla kurulur: özet, farklar, geçmiş süzgeci ve ekranlar değişmeden çalışır. Kimlikler sabittir.
+interface Lsv2Alani { kimlik: string; tur: string; bilesen: string; kategori: AlanTanimi['kategori']; birim: string | null }
+const LSV2_ALANLARI = {
+  erisim: { kimlik: 'lsv2-erisim', tur: 'Availability', bilesen: 'Device', kategori: 'EVENT', birim: null },
+  calisma: { kimlik: 'lsv2-calisma', tur: 'Execution', bilesen: 'Path', kategori: 'EVENT', birim: null },
+  mod: { kimlik: 'lsv2-mod', tur: 'ControllerMode', bilesen: 'Controller', kategori: 'EVENT', birim: null },
+  program: { kimlik: 'lsv2-program', tur: 'Program', bilesen: 'Path', kategori: 'EVENT', birim: null },
+  sayac: { kimlik: 'lsv2-sayac', tur: 'PartCount', bilesen: 'Path', kategori: 'EVENT', birim: null },
+  takim: { kimlik: 'lsv2-takim', tur: 'ToolNumber', bilesen: 'Path', kategori: 'EVENT', birim: null },
+  ilerlemeOrani: { kimlik: 'lsv2-ilerleme-orani', tur: 'PathFeedrateOverride', bilesen: 'Path', kategori: 'SAMPLE', birim: 'PERCENT' },
+  isMiliOrani: { kimlik: 'lsv2-is-mili-orani', tur: 'RotaryVelocityOverride', bilesen: 'Rotary', kategori: 'SAMPLE', birim: 'PERCENT' },
+  alarm: { kimlik: 'lsv2-alarm', tur: 'SYSTEM', bilesen: 'Controller', kategori: 'CONDITION', birim: null },
+} as const satisfies Record<string, Lsv2Alani>;
+
+export const LSV2_ALAN_TANIMLARI: AlanTanimi[] = Object.values(LSV2_ALANLARI).map((a) => ({
+  kimlik: a.kimlik, tur: a.tur, altTur: null, bilesen: a.bilesen, bilesenAdi: null, birim: a.birim, kategori: a.kategori,
+}));
+export const LSV2_KATEGORILERI: ReadonlyMap<string, GecmisKategorisi> = new Map(LSV2_ALAN_TANIMLARI.map((a) => [a.kimlik, a.kategori]));
+
+const metin = (n: number | null): string | null => (n === null ? null : String(n));
+
+// Okuma yoksa (makineye bağlanılamadı) yalnız erişim öğesi kalır, değeri null: durum "bağlantı yok" olur, öteki değerler uydurulmaz.
+// Hata iletileri tek koşul öğesinde birleşir: ileti varsa Fault, yoksa Normal; okunamadıysa Unavailable.
+export function lsv2Ogeleri(o: Lsv2Okumasi | null, zaman: Date): TezgahOgesi[] {
+  const z = zaman.toISOString();
+  const sira = zaman.getTime();
+  const oge = (a: Lsv2Alani, deger: string | null, kosul: string | null = null): TezgahOgesi => ({
+    tur: a.tur, ad: null, bilesen: a.bilesen, deger: deger === null ? null : deger.slice(0, AZAMI_DEGER_UZUNLUGU), zaman: z, kosul, kimlik: a.kimlik, sira,
+  });
+  if (o === null) return [oge(LSV2_ALANLARI.erisim, null)];
+  const hatalar = o.hatalar;
+  const alarm = hatalar === null ? oge(LSV2_ALANLARI.alarm, null, 'Unavailable')
+    : hatalar.length === 0 ? oge(LSV2_ALANLARI.alarm, null, 'Normal')
+      : oge(LSV2_ALANLARI.alarm, hatalar.map((h) => (h.metin === '' ? `Hata ${h.no}` : h.metin)).join(' · '), 'Fault');
+  return [
+    oge(LSV2_ALANLARI.erisim, 'AVAILABLE'),
+    oge(LSV2_ALANLARI.calisma, o.programDurumu === null ? null : PROGRAM_DURUMU_CALISMA[o.programDurumu] ?? null),
+    oge(LSV2_ALANLARI.mod, o.kip === null ? null : KIP_MODU[o.kip] ?? null),
+    oge(LSV2_ALANLARI.program, o.program === null || o.program.trim() === '' ? null : o.program.trim()),
+    oge(LSV2_ALANLARI.sayac, metin(o.sayac)),
+    oge(LSV2_ALANLARI.takim, metin(o.takim)),
+    oge(LSV2_ALANLARI.ilerlemeOrani, metin(o.ilerlemeOrani)),
+    oge(LSV2_ALANLARI.isMiliOrani, metin(o.isMiliOrani)),
+    alarm,
+  ];
+}
+
+// Anlık görüntüde değeri ya da koşulu değişen (ya da ilk kez görülen) öğeler: son duruma ve değer geçmişine yalnız bunlar işlenir.
+export function lsv2Degisenler(onceki: TezgahOgeleriHaritasi, yeni: readonly TezgahOgesi[]): TezgahOgesi[] {
+  return yeni.filter((o) => {
+    const e = onceki.get(ogeAnahtari(o));
+    return e === undefined || e.deger !== o.deger || e.kosul !== o.kosul;
+  });
+}
+
+// Okuma yoksa son durum yalnız erişim öğesine iner: önceki program, sayaç ve alarm "bağlantı yok" iken gösterilmez.
+export function lsv2Durumu(onceki: TezgahOgeleriHaritasi, yeni: readonly TezgahOgesi[], okundu: boolean): TezgahOgeleriHaritasi {
+  const durum = okundu ? new Map(onceki) : new Map<string, TezgahOgesi>();
+  durumaIsle(durum, okundu ? lsv2Degisenler(onceki, yeni) : yeni);
+  return durum;
+}
+
+export const lsv2UyariMetni = (uyarilar: readonly Lsv2Uyarisi[]): string | null =>
+  (uyarilar.length === 0 ? null : uyarilar.map((u) => LSV2_UYARI_METNI[u]).join(' · '));

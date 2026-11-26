@@ -42,9 +42,9 @@ export async function eskiOrnekleriSil(db: Db, sinir: Date): Promise<void> {
   await db.sorgu('DELETE FROM tezgah_ornek WHERE zaman < $1', [sinir]);
 }
 
-// Servis cevap verdi: bilinen her tezgahın son okuma anı yenilenir (değişiklik yoksa da).
-export async function okunduYenile(db: Db, zaman: Date): Promise<void> {
-  await db.sorgu('UPDATE tezgah_okuma SET okundu = $1', [zaman]);
+// Servis cevap verdi: bilinen her tezgahın son okuma anı yenilenir (değişiklik yoksa da). Heidenhain makineleri kendi turlarında yenilenir.
+export async function okunduYenile(db: Db, zaman: Date, haric: readonly string[] = []): Promise<void> {
+  await db.sorgu('UPDATE tezgah_okuma SET okundu = $1 WHERE NOT (lower(cihaz_adi) = ANY($2::text[]))', [zaman, haric.map((a) => a.toLowerCase())]);
 }
 
 export async function ogeleriGetir(db: Db, cihazAdi: string): Promise<TezgahOgesi[] | null> {
