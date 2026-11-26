@@ -90,6 +90,12 @@
 .tc-ay2-bos b { color: var(--ink); }
 
 /* kural sekmesi */
+/* 3689-2: yayımlı pakette Kalite Merkezi planı yeniyse; düğme cümleyi bölmesin diye ayrı satırda. */
+.tc-ay2-plan-degisti {
+  display: grid; gap: var(--b-2); justify-items: start; padding: var(--b-3); border-radius: var(--yari-2);
+  border: var(--cizgi-ince) solid var(--hazard); background: var(--panel2); color: var(--ink); font-size: var(--yazi-s); min-width: 0;
+}
+.tc-ay2-plan-degisti-metin { display: flex; align-items: flex-start; gap: var(--b-2); min-width: 0; }
 .tc-ay2-uyarilar { display: grid; gap: var(--b-2); min-width: 0; }
 .tc-ay2-uyari {
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto auto; align-items: center; gap: var(--b-2); padding: var(--b-2);

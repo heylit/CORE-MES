@@ -4,17 +4,18 @@ import { bulunamadi, cakisma, dogrulama } from '#cekirdek/hata.ts';
 import type { IkiliCevap } from '#cekirdek/uc.ts';
 import { KM_MERKEZ_BICIMLERI, kmNumuneKurali } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import type {
-  KmBalon, KmBalonGirdisi, KmBalonGrubu, KmBalonYerKipi, KmGruplarGovdesi, KmMerkezBelgesi, KmNumune, KmNumunePlani, KmNumuneIstegi, KmNumuneKarari, KmOlcum, KmOlcumKaynagi, KmOlcumVerisi, KmResim, KmStudyoOzeti, KmStudyoParcaCevabi,
+  KmBalon, KmBalonGirdisi, KmBalonGrubu, KmBalonYerKipi, KmGruplarGovdesi, KmMerkezBelgesi, KmNumune, KmNumunePlani, KmNumuneIstegi, KmNumuneKarari, KmOlcum, KmOlcumKaynagi, KmOlcumVerisi, KmResim, KmStudyoOzeti, KmStudyoParcaCevabi, KmIlkParcaKaynagiCevabi, KmNumunePlaniGecmisiCevabi,
 } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import {
   alinanRevizyonDosyasi, kaydaBagliBelgeler, kayitlaraBagliYayindakiBelgeler, revizyonKodlari, yayindakiBelgeDosyasi, yayindakiBelgeler,
 } from '../belge-merkezi/disari.ts';
+import { komutGecmisi } from '../denetim/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeOzeti } from '../malzemeler/disari.ts';
 import { yururlukteOperasyonlar } from '../rota/disari.ts';
 import { kapanisSonuclari, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import {
-  STUDYO_ILETILER, balonPlaniReddi, grupPlaniReddi, kapanmisEmirReddi, eskiRevizyonlar, balonYeriReddi, numuneDurumu, numuneIstegiReddi, numuneKarariReddi, numunePlaniReddi, olcumIstegiReddi, olcumSonucu, studyoResimTuru,
+  STUDYO_ILETILER, balonPlaniReddi, grupPlaniReddi, kapanmisEmirReddi, eskiRevizyonlar, balonYeriReddi, numuneDurumu, numuneIstegiReddi, numuneKarariReddi, numunePlaniReddi, olcumIstegiReddi, plandanIlkParca, olcumSonucu, studyoResimTuru,
 } from './kurallar.ts';
 import type { StudyoIletisi } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -267,11 +268,53 @@ export async function numunePlaniYaz(
   if ((await malzemeOzeti(db, malzemeNo)) === null) throw ret('parcaYok', 'malzemeNo');
   const red = numunePlaniReddi(kurallar, new Set(await sorgular.parcaBalonNolari(db, malzemeNo)));
   if (red !== null) throw ret(red, 'kurallar');
+  // 3689-2: plan yalnız parçanın yürürlükteki rotasındaki operasyona yazılır (op listesi rotadandır).
   const o = (await yururlukteOperasyonlar(db, [malzemeNo])).find((x) => x.opNo === opNo);
-  const operasyon = o ? { id: o.operasyonId, kayitliOpNo: o.kayitliOpNo } : null;
+  if (o === undefined) throw ret('opRotadaYok', 'opNo');
+  const operasyon = { id: o.operasyonId, kayitliOpNo: o.kayitliOpNo };
   const p = await sorgular.numunePlaniYaz(db, { malzemeNo, opNo, operasyon, kurallar, surum, kisiId });
   if (p === null) throw cakisma(STUDYO_ILETILER.surumDegisti);
   return { opNo, kurallar: kurallarSemasi.parse(p.kurallar), surum: p.surum };
+}
+
+// 3689-2: ilk parça onayının tek kaynağı numune planıdır. Parça ve rotanın bugünkü OP numarası başına: plan varsa ilk parça
+// (ilk parça kuralı ve kapı) ve planın sürümü; planı olmayan op haritada yoktur (çağıran geçiş kuralıyla rotadaki eski seçime bakar).
+// Plan operasyon kimliğiyle rotanın bugünkü numarasına eşlenir (`studyoParcasi` gibi). Yetki denetlemez.
+// `ilkParca` null: plan var ama ilk parçayı belirlemez (kapılı ilk parça yok, kural var); rota seçimi geçerlidir.
+export interface IlkParcaPlani { ilkParca: boolean | null; surum: number }
+export async function ilkParcaPlanlari(db: Db, malzemeNolari: readonly number[]): Promise<Map<number, Map<number, IlkParcaPlani>>> {
+  const sonuc = new Map<number, Map<number, IlkParcaPlani>>();
+  const nolar = [...new Set(malzemeNolari)];
+  if (nolar.length === 0) return sonuc;
+  const guncel = new Map((await yururlukteOperasyonlar(db, nolar)).map((o): [number, number] => [o.operasyonId, o.opNo]));
+  for (const p of await sorgular.parcalarinNumunePlanlari(db, nolar)) {
+    const opNo = (p.operasyonId === null ? undefined : guncel.get(p.operasyonId)) ?? p.opNo;
+    const harita = sonuc.get(p.malzemeNo) ?? new Map<number, IlkParcaPlani>();
+    harita.set(opNo, { ilkParca: plandanIlkParca({ kurallar: kurallarSemasi.parse(p.kurallar) }), surum: p.surum });
+    sonuc.set(p.malzemeNo, harita);
+  }
+  return sonuc;
+}
+
+// 3689-2: rota ekranının salt okunur ilk parça satırı: yürürlükteki rotadaki her op ve planının ilk parça durumu (plan yoksa null).
+export async function ilkParcaOzeti(db: Db, malzemeNo: number): Promise<KmIlkParcaKaynagiCevabi> {
+  const planlar = (await ilkParcaPlanlari(db, [malzemeNo])).get(malzemeNo);
+  const operasyonlar = await yururlukteOperasyonlar(db, [malzemeNo]);
+  return { operasyonlar: operasyonlar.map((o) => ({ opNo: o.opNo, ad: o.ad, plan: planlar?.get(o.opNo) ?? null })) };
+}
+
+// 3689-2: planın geçmişi; her yazım denetim kaydında gövdesiyle durur (ayrı geçmiş tablosu yok). Yazılan OP numarasıyla aranır.
+export const NUMUNE_PLANI_YOLU = '/kalite-merkezi/studyo/parcalar/:malzemeNo/numune-planlari/:opNo';
+const GECMIS_SINIRI = 50;
+export async function numunePlaniGecmisi(db: Db, malzemeNo: number, opNo: number): Promise<KmNumunePlaniGecmisiCevabi> {
+  const kayitlar = await komutGecmisi(db, { yol: NUMUNE_PLANI_YOLU, parametre: { malzemeNo, opNo }, sinir: GECMIS_SINIRI });
+  return {
+    kayitlar: kayitlar.map((k) => {
+      const govde = k.govde !== null && typeof k.govde === 'object' ? (k.govde as Record<string, unknown>)['kurallar'] : undefined;
+      const kurallar = kurallarSemasi.safeParse(govde);
+      return { zaman: k.zaman, kisiAd: k.kisiAd, kurallar: kurallar.success ? kurallar.data : null };
+    }),
+  };
 }
 
 // Dosyanın sahibi belge merkezidir. Belge yeni revizyona geçince alınan revizyon verilmez (balonlar eski resmin üstündedir); yalnız

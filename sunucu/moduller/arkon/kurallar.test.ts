@@ -10,7 +10,7 @@ import {
   cagriBildirimi, olcumAletKimligi, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, YOKLAMA_DENETIM_SURESI_MS, donemBaslangici, donemBasarisi, ekipOrtalamasi, fazlaMesaiSaati, mesaiGunleri, ozetOranlari, ozetRozetleri, tarihEkle,
 } from './kurallar.ts';
 import { dosyaTuruBul, numuneTeslimAlma, numuneTeslimAlindiDamgala } from './kurallar.ts';
-import { adimEmirDurumu, ilkParcaGereksinimi, istekKarari, istekKmPlani, kmKarariniAynala, kmOlcumGruplari, kmUyarisiniYaz, KM_UYARILARI, malzemeCizimleri, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariDamgala, lotKarariGirdisi, lotKarariKoru, lotPaketi, tmiAqlPlani, eksiAlaniniEkle, hataliAlaniniEkle, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri } from './kurallar.ts';
+import { adimEmirDurumu, ilkParcaGereksinimi, ilkParcaKuraliDegisti, ilkParcaKuraliOku, ilkParcaSecimiCoz, istekKarari, istekKmPlani, kmKarariniAynala, kmOlcumGruplari, kmUyarisiniYaz, KM_UYARILARI, malzemeCizimleri, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariDamgala, lotKarariGirdisi, lotKarariKoru, lotPaketi, tmiAqlPlani, eksiAlaniniEkle, hataliAlaniniEkle, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri } from './kurallar.ts';
 import type { KatilimDurumu, TmiPlanDurumu } from './kurallar.ts';
 import { AZAMI_MAKINE_SECIMI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { ARKON_ISLEMLERI } from '#paylasilan/islemler/arkon.ts';
@@ -183,12 +183,18 @@ test('yeniden kuyruğa alma: yalnız "hatali" alınır; durum kaydı sonraki dur
 
 test('ilk parça ölçüleri tabletin numune planından çıkar (B-006): eski pakette sıklıktan, numune planında kapılı "first" kuralından', () => {
   const plan = [{ id: 1 }, { id: 2, freq: 'İlk parça' }, { id: 3, freq: 'Her 10 parça', crit: true }];
-  assert.deepEqual(ilkParcaOlculeri({ plan }), [{ id: '1', olcen: 'q' }, { id: '2', olcen: 'q' }]);
-  assert.deepEqual(ilkParcaOlculeri({ plan, rules: { q: { who: 'operator' } } }).map((o) => o.olcen), ['op', 'op']);
+  const acik = { q: { firstPiece: true } };
+  // 3689-2: kuralı yazılmamış pakette ilk parça kapısı yoktur (terminal RULES0 ile aynı).
+  assert.deepEqual(ilkParcaOlculeri({ plan }), []);
+  assert.deepEqual(ilkParcaOlculeri({ plan, rules: acik }), [{ id: '1', olcen: 'q' }, { id: '2', olcen: 'q' }]);
+  assert.deepEqual(ilkParcaOlculeri({ plan, rules: { q: { who: 'operator', firstPiece: true } } }).map((o) => o.olcen), ['op', 'op']);
   assert.deepEqual(ilkParcaOlculeri({ plan, rules: { q: { firstPiece: false } } }), []);
-  assert.deepEqual(ilkParcaOlculeri({ plan, opType: 'montaj' }), []);
-  assert.deepEqual(ilkParcaOlculeri({ plan, opType: 'tesviye' }), []);
-  assert.equal(ilkParcaOlculeri({ plan, opType: 'bilinmeyen' }).length, 2);
+  // 3689-2: iş emri paketinde kaynak (Kalite Merkezi planı, yoksa rota) paketteki alanın yerine geçer.
+  assert.equal(ilkParcaOlculeri({ plan }, true).length, 2, 'kuralsız pakette kaynak açıksa kapı var');
+  assert.deepEqual(ilkParcaOlculeri({ plan, rules: acik }, false), [], 'kaynak kapalıysa paketteki açık kural kapı açmaz');
+  assert.deepEqual(ilkParcaOlculeri({ plan, rules: acik, opType: 'montaj' }), []);
+  assert.deepEqual(ilkParcaOlculeri({ plan, rules: acik, opType: 'tesviye' }), []);
+  assert.equal(ilkParcaOlculeri({ plan, rules: acik, opType: 'bilinmeyen' }).length, 2);
   const samp = [{ when: 'first', gate: true, who: ['op', 'q'], items: 'crit' }, { when: 'first', gate: false, items: [1] }, { when: 'every', n: 5, gate: true, items: [2] }];
   assert.deepEqual(ilkParcaOlculeri({ plan, samp }), [{ id: '3', olcen: 'op' }]);
   assert.deepEqual(ilkParcaOlculeri({ plan, samp: [{ when: 'first', gate: true, items: [2] }, { when: 'first', gate: true, who: ['op'], items: [2] }] }), [{ id: '2', olcen: 'q' }]);
@@ -253,15 +259,16 @@ test('564 6 a, 600 a: kalite istasyonu lot kararı; Red ölçü ve gerekçe iste
 });
 
 test('798: numune isteği bağlı balonlarla Kalite Merkezi numunesi olur; kapıdaki kalite ölçüsü ilk parça numunesidir; bağsız plan numune açmaz', () => {
-  const paket = { tmi: { opNo: 20 }, plan: [{ id: 1, kmBalon: 71 }, { id: 2, freq: 'Her 10 parça', kmBalon: 72 }, { id: 3, freq: 'Her 10 parça' }] };
+  const paket = { tmi: { opNo: 20 }, rules: { q: { firstPiece: true } }, plan: [{ id: 1, kmBalon: 71 }, { id: 2, freq: 'Her 10 parça', kmBalon: 72 }, { id: 3, freq: 'Her 10 parça' }] };
   const istek = (items: unknown, ek: object = {}) => ({ pkgId: 'p', status: 'waiting', reason: 'İlk parça', cnt: 1, items, ...ek });
   assert.deepEqual(istekKmPlani(istek([1, 2]), paket), { ilkParca: true, km: { opNo: 20, balonlar: [71, 72], neden: 'İlk parça', parcaSayisi: 1 }, uyari: null });
   assert.deepEqual(istekKmPlani(istek([2, 3]), paket), { ilkParca: false, km: { opNo: 20, balonlar: [72], neden: 'İlk parça', parcaSayisi: 1 }, uyari: KM_UYARILARI.bagsizOlcu(1) }, '796 a: bağsız ölçü Arkon\'da kalır');
   assert.deepEqual(istekKmPlani(istek([3]), paket), { ilkParca: false, km: null, uyari: KM_UYARILARI.numuneAcilmadi });
   assert.deepEqual(istekKmPlani(istek([1]), { ...paket, tmi: {} }), { ilkParca: true, km: null, uyari: KM_UYARILARI.numuneAcilmadi }, 'adımsız paket');
-  assert.deepEqual(istekKmPlani(istek([1]), { plan: [{ id: 1 }] }), { ilkParca: true, km: null, uyari: KM_UYARILARI.bagsizPlanIlkParca }, 'Kalite Merkezi\'nden alınmamış plan: sessiz kalmaz, ilk parça kilidi yazılır');
-  assert.equal(istekKmPlani(istek([2]), { plan: [{ id: 1 }, { id: 2, freq: 'Her 10 parça' }] }).uyari, KM_UYARILARI.bagsizPlan, 'ilk parça kapısında olmayan ölçü');
-  assert.equal(istekKmPlani(istek([1]), { ...paket, rules: { q: { who: 'operator' } } }).ilkParca, false, 'operatörün ölçtüğü kapı');
+  assert.deepEqual(istekKmPlani(istek([1]), { rules: paket.rules, plan: [{ id: 1 }] }), { ilkParca: true, km: null, uyari: KM_UYARILARI.bagsizPlanIlkParca }, 'Kalite Merkezi\'nden alınmamış plan: sessiz kalmaz, ilk parça kilidi yazılır');
+  assert.equal(istekKmPlani(istek([2]), { rules: paket.rules, plan: [{ id: 1 }, { id: 2, freq: 'Her 10 parça' }] }).uyari, KM_UYARILARI.bagsizPlan, 'ilk parça kapısında olmayan ölçü');
+  assert.equal(istekKmPlani(istek([1]), { ...paket, rules: { q: { who: 'operator', firstPiece: true } } }).ilkParca, false, 'operatörün ölçtüğü kapı');
+  assert.equal(istekKmPlani(istek([1]), { ...paket, rules: undefined }).ilkParca, false, '3689-2: kuralı yazılmamış pakette ilk parça kapısı yok');
   assert.equal(istekKmPlani(istek([1], { reason: 'x'.repeat(90) }), paket).km?.neden.length, 80);
 });
 
@@ -500,8 +507,8 @@ test('3115: terminal görünümü operasyon tipi grubundan, yoksa istasyon tipin
 
 // 744 a: rotadaki "yok" seçimi taslağın ilk parça kuralını kapatır (şablonun öteki kuralları kalır); "her kurulumda" kural yazmaz. TMI kilidi
 // yalnız "her kurulumda" ve talaşlı (ya da istasyonsuz) adımdadır.
-test('744 a: adımın ilk parça seçimi taslak kuralına ve CORE kilidine', () => {
-  assert.equal(isEmrindenTaslakPaket(girdi({ ilkParcaSecimi: 'her_kurulum' }))['rules'], undefined);
+test('744 a, 3689-2: adımın ilk parça seçimi taslak kuralına ve CORE kilidine', () => {
+  assert.deepEqual(isEmrindenTaslakPaket(girdi({ ilkParcaSecimi: 'her_kurulum' }))['rules'], { q: { firstPiece: true } });
   assert.equal(isEmrindenTaslakPaket(girdi())['rules'], undefined);
   assert.deepEqual(isEmrindenTaslakPaket(girdi({ ilkParcaSecimi: 'yok' }))['rules'], { q: { firstPiece: false } });
   const sablon = { rules: { warns: ['w'], q: { who: 'operator', firstPiece: true }, prod: { scrapPct: 5 } } };
@@ -513,6 +520,21 @@ test('744 a: adımın ilk parça seçimi taslak kuralına ve CORE kilidine', () 
   // 2056 c: tesviye rota seçimine uyar.
   assert.equal(ilkParcaGereksinimi('her_kurulum', 'tesviye'), 'gerekli');
   assert.equal(ilkParcaGereksinimi('yok', 'tesviye'), 'gerekmez');
+});
+
+// 3689-2: ilk parça onayının tek kaynağı Kalite Merkezi numune planıdır; plan yoksa rotadaki eski seçim, o da yoksa ilk parça yok.
+test('3689-2: ilk parça seçimi önce Kalite Merkezi planından, geçişte rotadan', () => {
+  assert.equal(ilkParcaSecimiCoz({ ilkParca: true }, 'yok'), 'her_kurulum', 'plan açık, rota kapalı');
+  assert.equal(ilkParcaSecimiCoz({ ilkParca: false }, 'her_kurulum'), 'yok', 'plan "ilk parça yok" derse rota açık olsa da kilit yok');
+  assert.equal(ilkParcaSecimiCoz(undefined, 'her_kurulum'), 'her_kurulum', 'planı olmayan opta rotadaki eski seçim');
+  assert.equal(ilkParcaSecimiCoz({ ilkParca: null }, 'her_kurulum'), 'her_kurulum', 'R1 geçiş: kapılı ilk parça taşımayan planda rota seçimi geçerli');
+  assert.equal(ilkParcaSecimiCoz({ ilkParca: null }, undefined), 'yok');
+  assert.equal(ilkParcaSecimiCoz(undefined, 'yok'), 'yok');
+  assert.equal(ilkParcaSecimiCoz(undefined, undefined), 'yok', 'rotasız ve plansız');
+  assert.equal(ilkParcaKuraliOku({ rules: { q: { firstPiece: true } } }), true);
+  assert.equal(ilkParcaKuraliOku({}), false);
+  assert.equal(ilkParcaKuraliDegisti({ rules: { q: { firstPiece: true } } }, {}), true);
+  assert.equal(ilkParcaKuraliDegisti({ rules: { q: { firstPiece: false } } }, {}), false);
 });
 
 // 2012 a, 2026: tesviye istasyonundaki adım tesviye görünümüyle açılır (el işi: kontrol listesi; sayım ve pay ortak sayaçta).

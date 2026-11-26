@@ -111,6 +111,18 @@ export const kmStudyoOzeti = z.object({
 });
 export const kmStudyoOzetleriCevabi = z.object({ parcalar: z.array(kmStudyoOzeti) });
 export const kmNumunePlaniCevabi = z.object({ plan: kmNumunePlani });
+// 3689-2: ilk parça onayının tek kaynağı numune planıdır. Rota ekranı parçanın yürürlükteki rotasındaki her op için planın ilk parça
+// durumunu okur; plan yoksa null; `ilkParca` null ise plan ilk parçayı belirlemez (kapılı ilk parça yok): ikisinde de rotadaki eski seçim geçerli.
+export const kmIlkParcaKaynagiCevabi = z.object({
+  operasyonlar: z.array(z.object({
+    opNo: z.number().int().positive(), ad: z.string(),
+    plan: z.object({ ilkParca: z.boolean().nullable(), surum: z.number().int().positive() }).nullable(),
+  })),
+});
+// 3689-2: plan geçmişi denetim kaydındaki yazımlardan, yeniden eskiye; kurallar okunamayan eski gövdede null.
+export const kmNumunePlaniGecmisiCevabi = z.object({
+  kayitlar: z.array(z.object({ zaman: z.string(), kisiAd: z.string().nullable(), kurallar: z.array(kmNumuneKurali).nullable() })),
+});
 
 // Belge merkezindeki yayındaki resim ya da model parçaya alınır; aynı belgenin aynı dosyası ikinci kez alınmaz (var olan döner).
 export const kmResimEkleGovdesi = z.object({
@@ -250,6 +262,8 @@ export type KmBalon = z.output<typeof kmBalon>;
 export type KmResim = z.output<typeof kmResim>;
 export type KmNumuneKurali = z.output<typeof kmNumuneKurali>;
 export type KmNumunePlani = z.output<typeof kmNumunePlani>;
+export type KmIlkParcaKaynagiCevabi = z.output<typeof kmIlkParcaKaynagiCevabi>;
+export type KmNumunePlaniGecmisiCevabi = z.output<typeof kmNumunePlaniGecmisiCevabi>;
 export type KmStudyoParcaCevabi = z.output<typeof kmStudyoParcaCevabi>;
 export type KmStudyoEsitlemeCevabi = z.output<typeof kmStudyoEsitlemeCevabi>;
 export type KmPlanKopyalaGovdesi = z.input<typeof kmPlanKopyalaGovdesi>;

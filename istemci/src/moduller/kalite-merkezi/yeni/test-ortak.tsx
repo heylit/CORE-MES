@@ -7,7 +7,7 @@ import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type {
   KmDegisiklikCevabi, KmEmirKaynagi, KmEmirKaynaklariCevabi, KmKimlikCevabi, KmOlcuAletleriCevabi, KmParcaKaynagi, KmParcaKaynaklariCevabi,
 } from '#paylasilan/sozlesme/kalite-merkezi.ts';
-import type { KmNumune, KmOlcum, KmStudyoOzeti, KmStudyoParcaCevabi } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
+import type { KmNumune, KmNumunePlaniGecmisiCevabi, KmOlcum, KmStudyoOzeti, KmStudyoParcaCevabi } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import { BildirimSaglayici } from '../../../ortak/arayuz/Bildirim.tsx';
 import { KaliteMerkeziYeni } from './KaliteMerkeziYeni.tsx';
 import type { KmKoleksiyonu } from './tipler.ts';
@@ -32,7 +32,7 @@ export interface Yazma { yol: string; govde: unknown }
 // `emirler` sahiplerden gelen iş emri ve siparişler (null: uç hata verir), `parcalar` Malzemeler kartları (592); `ret` verilen yol 403 döner (izinsiz deneme).
 // `studyo`: Resim ve modeller uçları; parça malzeme kartı numarasıyla, ölçüm ve numune üretim emri kimliğiyle; `ozetler` parça listesi.
 export interface StudyoVerisi { ozetler?: KmStudyoOzeti[]; parcalar?: Record<number, KmStudyoParcaCevabi>; olcumler?: Record<number, KmOlcum[]>; numuneler?: Record<number, KmNumune[]> }
-export interface SunucuSecenegi { ret?: (yol: string) => boolean; emirler?: KmEmirKaynagi[] | null; parcalar?: KmParcaKaynagi[]; studyo?: StudyoVerisi }
+export interface SunucuSecenegi { ret?: (yol: string) => boolean; cakisma?: (yol: string) => boolean; planGecmisi?: KmNumunePlaniGecmisiCevabi['kayitlar']; emirler?: KmEmirKaynagi[] | null; parcalar?: KmParcaKaynagi[]; studyo?: StudyoVerisi }
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
@@ -57,6 +57,12 @@ export function sunucuKur(k: TestKullanicisi, kayitlar: TestKayitlari = {}, sece
       const govde: unknown = typeof istek?.body === 'string' ? JSON.parse(istek.body) : null;
       yazmalar.push({ yol, govde });
       if (secenek.ret?.(yol)) return json(403, { kod: 'YETKI', mesaj: 'Bu işlem için yetkiniz yok.' });
+      if (secenek.cakisma?.(yol)) return json(409, { kod: 'CAKISMA', mesaj: 'Kayıt değişmiş.' });
+      const plan = /\/numune-planlari\/(\d+)$/.exec(yol);
+      if (plan) {
+        const g = govde as { surum: number | null; kurallar: unknown[] };
+        return json(200, { plan: { opNo: Number(plan[1]), kurallar: g.kurallar, surum: (g.surum ?? 0) + 1 } });
+      }
       return json(200, { surum: ++surum, tamam: true });
     }
     if (yol === '/oturum') return json(200, { kullanici: k.kullanici });
@@ -66,6 +72,7 @@ export function sunucuKur(k: TestKullanicisi, kayitlar: TestKayitlari = {}, sece
       return json(200, { surum, degisiklikler: degisiklikler.filter((d) => d.surum > sonra) } satisfies KmDegisiklikCevabi);
     }
     if (yol === '/kalite-merkezi/olcu-aletleri') return json(200, { cihazlar } satisfies KmOlcuAletleriCevabi);
+    if (/\/numune-planlari\/\d+\/gecmis$/.test(yol)) return json(200, { kayitlar: secenek.planGecmisi ?? [] } satisfies KmNumunePlaniGecmisiCevabi);
     if (yol.endsWith('/gecmis')) return json(200, { surumler: [] });
     if (yol === '/kalite-merkezi/ilk-parca/bekleyenler') return json(200, { emirler: [] });
     if (yol === '/kalite-merkezi/emir-kaynaklari' && secenek.emirler === null) return json(500, { kod: 'SUNUCU', mesaj: 'Deneme hata' });

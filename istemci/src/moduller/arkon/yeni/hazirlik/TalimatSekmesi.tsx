@@ -65,6 +65,7 @@ function RotaGruplari({ liste }: { liste: readonly TmiAdim[] }) {
                         <em data-kaynak="rota">Rota</em>
                         {a.zorunlu === true ? <em data-zorunlu="">Zorunlu</em> : null}
                         {k !== null && k.tur !== 'onay' ? <em><Simge ad={TUR[k.tur].simge} boyut="k" />{TUR[k.tur].ad}{k.tur === 'olcum' && k.ad ? ` · ${k.ad}` : ''}{sinir ? ` · ${sinir}` : ''}</em> : null}
+                        {k !== null ? <em data-kontrol="operator">Operatör kontrolü (kalite onayı değil)</em> : null}
                       </span>
                     </span>
                   </li>

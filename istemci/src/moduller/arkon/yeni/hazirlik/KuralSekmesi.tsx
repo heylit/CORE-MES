@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Dugme, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
+import type { KmNumunePlani } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import { useArkon } from '../veri/baglam.ts';
+import { kmNumuneBagi, type KmNumuneDurumu } from './km-cizim.ts';
 import { Anahtar, Bolmeli, Cip, KartBasligi, Sayi } from './denetimler.tsx';
 import {
   HAZIR_UYARILAR, SEVIYELER, UYARI_ZAMANLARI, isKurallari, kuralOzeti, kurallariKopyala, parcaAilesi, yeniKimlik,
@@ -14,8 +16,13 @@ const SABLON_ANAHTARI = 'ruleTpls';
 
 // İş kuralları sekmesi (kurallar.ts RulesTab): operatör uyarıları, kalite kuralları, üretim parametreleri ve şablonlar.
 // Kural pakete yazılır (yama); şablonlar ortak kv deposundadır, hazırlıkta herkes görür.
-export function KuralSekmesi({ paket, yama, sonuc, kilitli }: {
-  paket: Pkg; yama: (ch: Partial<Pkg>) => void; sonuc?: Pick<Result, 'acks'> | null; kilitli?: boolean;
+// 3689-2: ilk parça onayının kaynağı Kalite Merkezi numune planıdır; sekmede salt okunur. durum null: plan okunamadı (yetki ya da yükleniyor).
+export interface IlkParcaKaynagi {
+  durum: KmNumuneDurumu | null; plan: KmNumunePlani | null; duzenler: boolean; al: (plan: KmNumunePlani) => void;
+}
+
+export function KuralSekmesi({ paket, yama, sonuc, kilitli, ilkParca }: {
+  paket: Pkg; yama: (ch: Partial<Pkg>) => void; sonuc?: Pick<Result, 'acks'> | null; kilitli?: boolean; ilkParca?: IlkParcaKaynagi | null;
 }) {
   const { depo } = useArkon();
   const { bildir } = useBildirim();
@@ -123,12 +130,9 @@ export function KuralSekmesi({ paket, yama, sonuc, kilitli }: {
               <span className="tc-ay2-ust-yazi">Ölçümü kim yapar</span>
               <Bolmeli etiket="Ölçümü kim yapar" deger={R.q.who} secenekler={[['quality', 'Kalite istasyonu'], ['operator', 'Operatör tezgahta']]} degistir={(who) => kaliteYaz({ who })} />
             </div>
-            <Anahtar
-              acik={R.q.firstPiece} degistir={(v) => kaliteYaz({ firstPiece: v })} kilitli={kilitli}
-              baslik="İlk parça onayı olmadan seri üretim başlamasın" aciklama="“İlk parça” sıklığındaki ölçüler kaliteden onaylanana kadar Başlat kilitli"
-            />
           </>
         )}
+        <IlkParcaSatiri acik={R.q.firstPiece} kaynak={ilkParca ?? null} surum={kmNumuneBagi(paket)?.surum ?? null} />
         <Anahtar
           acik={R.q.critTwice} degistir={(v) => kaliteYaz({ critTwice: v })} kilitli={kilitli}
           baslik="Kritik ölçüde ikinci kontrol iste" aciklama="Kalite, kritik (KK) ölçüleri onaylarken ikinci kontrolü işaretlemeli"
@@ -234,6 +238,35 @@ export function KuralSekmesi({ paket, yama, sonuc, kilitli }: {
           }) : <p className="tc-ay2-soluk">Kayıtlı şablon yok.</p>}
         </div>
       </section>
+    </div>
+  );
+}
+
+// 3689-2: ilk parça onayı paket kuralı değil, Kalite Merkezi numune planıdır; burada yalnız durumu ve kaynağı görünür. Plan pakettekinden yeniyse
+// (yayımlı paket kendiliğinden değişmez) ne değişeceği söylenir ve "Paketi güncelle" ile alınır.
+function IlkParcaSatiri({ acik, kaynak, surum }: { acik: boolean; kaynak: IlkParcaKaynagi | null; surum: number | null }) {
+  const plan = kaynak?.plan ?? null;
+  const kaynakMetni = kaynak === null ? 'Kaynak: rota seçimi (Kalite Merkezi\u2019ne bağlı olmayan paket)'
+    : kaynak.durum === 'yok' ? 'Kaynak: rota seçimi (Kalite Merkezi\u2019nde plan yokken geçerli)'
+      : `Kaynak: Kalite Merkezi numune planı${surum === null ? '' : ` · sürüm ${String(surum)}`}`;
+  const yeni = plan !== null && (kaynak?.durum === 'degisti' || kaynak?.durum === 'bagsiz') ? plan : null;
+  const yeniAcik = yeni === null ? null : yeni.kurallar.some((k) => k.ne === 'ilk' && k.kapi === true);
+  return (
+    <div className="tc-ay2-alan" aria-label="İlk parça onayı">
+      <div className="tc-ay2-bilgi">
+        <Simge ad="lock" />
+        <span><b>İlk parça onayı: {acik ? 'Açık' : 'Kapalı'}</b> · {kaynakMetni}</span>
+      </div>
+      {yeni !== null ? (
+        <div className="tc-ay2-plan-degisti" role="status">
+          <span className="tc-ay2-plan-degisti-metin">
+            <Simge ad="alert" />
+            Kalite planı değişti (sürüm {String(surum ?? '-')} → {String(yeni.surum)}). Paket eski planla çalışıyor.
+            {yeniAcik !== acik ? ` Güncellenince ilk parça onayı ${yeniAcik ? 'açılır' : 'kapanır'}.` : ''} Operatör güncellemeden sonra yeni planı görür.
+          </span>
+          {kaynak?.duzenler ? <Dugme onClick={() => kaynak.al(yeni)}>Paketi güncelle</Dugme> : null}
+        </div>
+      ) : null}
     </div>
   );
 }

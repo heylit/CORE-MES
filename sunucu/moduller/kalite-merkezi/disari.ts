@@ -7,6 +7,9 @@ export { ozet } from './servis.ts';
 export { ilkParcaKarari } from './servis.ts';
 // Arkon'un ilk parça kapısı kararı buradan okur (denetim #12): emir başına son karar; kararsız emir haritada yoktur. Yetki denetlemez.
 export { adimIlkParcaKararlari, ilkParcaKararlari } from './servis.ts';
+// 3689-2: ilk parça onayının tek kaynağı numune planıdır. Arkon ilk parça kapısını ve sayım kilidini parça ve OP başına buradan okur;
+// planı olmayan op haritada yoktur (geçiş kuralı: rotadaki eski seçim). Yetki denetlemez.
+export { ilkParcaPlanlari, type IlkParcaPlani } from './studyo.ts';
 // Askıdaki tedarikçi (karar 87): Satın alma tedarikçinin kalite onayını buradan okur. Uygulamanın tedarikçisinde firma kimliği yoktur; ad
 // ve kod döner, firmaya eşleme okuyanındır. Yetkiyi çağıranın ucu denetler.
 export { kaliteAskisindakiTedarikciler } from './servis.ts';

@@ -107,7 +107,7 @@ export const icerikDolu = (p: Pick<Pkg, 'steps' | 'samp' | 'rules'>): boolean =>
 type Kural = { q?: Record<string, unknown> } & Record<string, unknown>;
 const kayit = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
-// Hedefin değişecek alanları. İlk parça seçimi hedefin rotasından gelir (sunucu `ilkParcasizKural`): hedefte kapalıysa kapalı kalır.
+// Hedefin değişecek alanları. İlk parça seçimi hedefin kaynağından gelir (3689-2: Kalite Merkezi planı, geçişte rota): hedefinki kalır.
 // Kontrol planı taşınmazsa numune kuralındaki ölçü kimlikleri hedefin planına göre süzülür; boş kalan kural bütün ölçüleri alır.
 export function benzerKopya(hedef: Pkg, kaynak: Pkg, alanlar: ReadonlySet<KopyaAlani>): Partial<Pkg> {
   const acik = (k: KopyaAlani) => alanlar.has(k) && kopyaAcikMi(hedef, kaynak, k);
@@ -116,7 +116,9 @@ export function benzerKopya(hedef: Pkg, kaynak: Pkg, alanlar: ReadonlySet<KopyaA
   if (acik('rules') && kayit(kaynak.rules)) {
     const r = structuredClone(kaynak.rules) as Kural;
     const hq = kayit(hedef.rules) && kayit(hedef.rules['q']) ? hedef.rules['q'] : null;
-    if (hq && hq['firstPiece'] === false) r.q = { ...(kayit(r.q) ? r.q : {}), firstPiece: false };
+    const q: Record<string, unknown> = { ...(kayit(r.q) ? r.q : {}) };
+    if (hq !== null && typeof hq['firstPiece'] === 'boolean') q['firstPiece'] = hq['firstPiece']; else delete q['firstPiece'];
+    r.q = q;
     sonuc.rules = r;
   }
   if (acik('material')) sonuc.material = kaynak.material;

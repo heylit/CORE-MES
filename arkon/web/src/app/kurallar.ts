@@ -15,7 +15,7 @@ export const WARN_PRESETS = [
   { t: 'Talaş konveyörünü boşalt', lvl: 'info', when: 'interval', n: 120, ack: false }
 ];
 // Numune zamanı gelince istek kendiliğinden kaliteye düşer: operatör düğmeye basmayı unutunca numune kaçıyordu.
-export const RULES0 = { warns: [], q: { who: 'quality', firstPiece: true, nok: 'warn', band: 80, critTwice: false, autoSend: true }, prod: { scrapPct: 3, scrapMin: 20, maxPauseMin: 15, tools: [] } };
+export const RULES0 = { warns: [], q: { who: 'quality', firstPiece: false, nok: 'warn', band: 80, critTwice: false, autoSend: true }, prod: { scrapPct: 3, scrapMin: 20, maxPauseMin: 15, tools: [] } };
 export function rulesOf(p) {
   const r = (p && p.rules) || {};
   return { warns: r.warns || [], q: Object.assign({}, RULES0.q, r.q), prod: Object.assign({}, RULES0.prod, r.prod, { tools: (r.prod && r.prod.tools) || [] }) };

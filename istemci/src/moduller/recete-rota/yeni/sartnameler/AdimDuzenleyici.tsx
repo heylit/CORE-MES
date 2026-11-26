@@ -221,6 +221,7 @@ function KontrolAlani({ kontrol, zorunlu, kapali, yaz }: {
   return (
     <fieldset className="tc-st-alan tc-st-cerceve">
       <legend>Kontrol noktası</legend>
+      <p className="tc-st-soluk">Operatör kontrolü (kalite onayı değil). İlk parça onayı Kalite Merkezi numune planından gelir.</p>
       <div role="radiogroup" aria-label="Kontrol noktası türü" className="tc-st-turler">
         {KONTROL_TURLERI.map((t) => (
           <button key={t} type="button" role="radio" aria-checked={kontrol.tur === t} className="tc-st-tur" disabled={kapali}

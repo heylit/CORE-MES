@@ -195,3 +195,11 @@ export async function degisiklikAkisi(db: Db, istek: DegisiklikAkisiIstegi): Pro
     tablo: d.tablo, anahtar: d.anahtar, islem: d.islem, ...akisAlanlari(d.alanlar, istek.tablolar[d.tablo] ?? []),
   }));
 }
+
+// 3689-2: bir komutun bir kayda yazdığı gövdeler, yazan kişinin adıyla (ör. numune planı geçmişi). Yetki denetlemez: çağıran uç denetler.
+export interface KomutKaydi { zaman: string; kisiId: number | null; kisiAd: string | null; govde: unknown }
+export async function komutGecmisi(db: Db, s: { yol: string; parametre: Record<string, unknown>; sinir: number }): Promise<KomutKaydi[]> {
+  const satirlar = await sorgular.komutKayitlari(db, s);
+  const adlar = await kisiAdlari(db, satirlar.flatMap((d) => (d.kisiId === null ? [] : [d.kisiId])));
+  return satirlar.map((d) => ({ zaman: d.zaman, kisiId: d.kisiId, kisiAd: d.kisiId === null ? null : adlar.get(d.kisiId) ?? null, govde: d.govde }));
+}

@@ -10,7 +10,7 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import type {
-  KmMerkezBelgeleriCevabi, KmNumune, KmNumunePlani, KmOlcum, KmResim, KmStudyoOzetleriCevabi, KmStudyoParcaCevabi,
+  KmIlkParcaKaynagiCevabi, KmMerkezBelgeleriCevabi, KmNumune, KmNumunePlani, KmNumunePlaniGecmisiCevabi, KmOlcum, KmResim, KmStudyoOzetleriCevabi, KmStudyoParcaCevabi,
 } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import { kaydaBagla } from '../belge-merkezi/disari.ts';
 import { denetimYaz } from '../denetim/disari.ts';
@@ -587,6 +587,30 @@ describe('Kalite Merkezi stüdyo (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.deepEqual([tekrar.statusCode, ileti(tekrar)], [400, STUDYO_ILETILER.kuralKimlikTekrar]);
     const kartsiz = await yaz(kalite, '/kalite-merkezi/studyo/parcalar/999999/numune-planlari/10', { surum: null, kurallar });
     assert.deepEqual([kartsiz.statusCode, ileti(kartsiz)], [400, STUDYO_ILETILER.parcaYok]);
+  });
+
+  test('3689-2: kapı yalnız ilk parça kuralında, plan yalnız rotadaki opa; geçmiş denetim kaydından yeniden eskiye; ilk parça kaynağı op başına', async () => {
+    const yol = `/kalite-merkezi/studyo/parcalar/${flans}/numune-planlari/30`;
+    const kapiliSon = await yaz(kalite, yol, { surum: null, kurallar: [{ kimlik: 's', ne: 'son', kim: ['kalite'], balonlar: 'hepsi', kapi: true }] });
+    assert.deepEqual([kapiliSon.statusCode, ileti(kapiliSon)], [400, STUDYO_ILETILER.kapiYalnizIlk]);
+    const rotadaYok = await yaz(kalite, `/kalite-merkezi/studyo/parcalar/${flans}/numune-planlari/990`, { surum: null, kurallar: [] });
+    assert.deepEqual([rotadaYok.statusCode, ileti(rotadaYok)], [400, STUDYO_ILETILER.opRotadaYok]);
+    const ilk = await yaz(kalite, yol, { surum: null, kurallar: [{ kimlik: 'i', ne: 'ilk', kim: ['kalite'], balonlar: 'hepsi', kapi: true }] });
+    assert.equal(ilk.statusCode, 200, ilk.body);
+    const kaynak = async () => ((await oku(kalite, `/kalite-merkezi/ilk-parca/${flans}`)).json() as KmIlkParcaKaynagiCevabi).operasyonlar.find((x) => x.opNo === 30)?.plan;
+    assert.deepEqual(await kaynak(), { ilkParca: true, surum: 1 });
+    const kapisiz = await yaz(kalite, yol, { surum: 1, kurallar: [{ kimlik: 'h', ne: 'her', n: 50, kim: ['operator'], balonlar: 'kritik' }] });
+    assert.equal(kapisiz.statusCode, 200, kapisiz.body);
+    assert.deepEqual(await kaynak(), { ilkParca: null, surum: 2 }, 'R1 geçiş: kapılı ilk parça yoksa karar rotadaki seçimde kalır');
+    const bos = await yaz(kalite, yol, { surum: 2, kurallar: [] });
+    assert.equal(bos.statusCode, 200, bos.body);
+    assert.deepEqual(await kaynak(), { ilkParca: false, surum: 3 }, 'kuralsız plan: plan var, ilk parça yok');
+    assert.equal((await oku(operator, `/kalite-merkezi/ilk-parca/${flans}`)).statusCode, 403, 'Kalite Merkezi ve rota okuma yetkisi olmayan');
+    assert.equal((await oku(null, `/kalite-merkezi/ilk-parca/${flans}`)).statusCode, 401);
+    const gecmis = (await oku(kalite, `${yol}/gecmis`)).json() as KmNumunePlaniGecmisiCevabi;
+    assert.deepEqual(gecmis.kayitlar.map((k) => k.kurallar?.map((x) => x.ne) ?? null).slice(0, 3), [[], ['her'], ['ilk']], 'yeniden eskiye, reddedilen yazım yok');
+    assert.ok(gecmis.kayitlar.every((k) => typeof k.kisiAd === 'string' || k.kisiAd === null));
+    assert.equal((await oku(operator, `${yol}/gecmis`)).statusCode, 403);
   });
 
   // Risk K3: aşama 2 OP numarasını rotada yeniden dizer; numune planı numarayı değil operasyonu izlemeli.

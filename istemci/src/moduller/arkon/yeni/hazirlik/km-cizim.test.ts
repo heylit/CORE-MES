@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { etkinResimler, kmBagi, kmNumuneDurumu, kmNumuneKurallari, kmNumunePlani, kmPlani, kmResimDurumu, kmSahibi, kmAlimEtiketi, kmOtomatikKarari, kmTopluPlani, otoKaynakOku, otoKaynakYaz, otomatikKmNumunesi, type KmParcaVerisi } from './km-cizim.ts';
+import { etkinResimler, kmBagi, kmIlkParcaAcik, kmNumuneDurumu, kmNumuneKurallari, kmNumunePlani, kmPlani, kmResimDurumu, kmSahibi, kmAlimEtiketi, kmOtomatikKarari, kmTopluPlani, otoKaynakOku, otoKaynakYaz, otomatikKmNumunesi, type KmParcaVerisi } from './km-cizim.ts';
 
 // Kalite Merkezi resmi ve balonları (789, 795 a); değerler uydurmadır.
 const BALON = {
@@ -109,9 +109,17 @@ describe('Kalite Merkezi çizimi', () => {
     const t = { malzemeNo: 5, status: 'draft' as const, tmi: { opNo: 20 }, samp: [] };
     expect(otomatikKmNumunesi(t, [PLAN])?.surum).toBe(3);
     expect(otomatikKmNumunesi({ ...t, status: 'published' as const }, [PLAN])).toBeNull();
-    expect(otomatikKmNumunesi({ ...t, kmNumune: { surum: 1 } }, [PLAN])).toBeNull();
+    // 3689-2: plan değişince bağlı taslak kendiliğinden güncellenir; aynı sürümde dokunulmaz.
+    expect(otomatikKmNumunesi({ ...t, kmNumune: { surum: 1 } }, [PLAN])?.surum).toBe(3);
+    expect(otomatikKmNumunesi({ ...t, kmNumune: { surum: 3 } }, [PLAN])).toBeNull();
     expect(otomatikKmNumunesi({ ...t, samp: [{ id: 'x', when: 'first', who: ['q'], items: 'all' }] as unknown as never[] }, [PLAN])).toBeNull();
     expect(otomatikKmNumunesi({ ...t, malzemeNo: null }, [PLAN])).toBeNull();
     expect(otomatikKmNumunesi(t, [{ ...PLAN, kurallar: [] }])).toBeNull();
+  });
+  it('R1 geçiş: kapılı ilk parça açık, kuralsız plan kapalı, kapısız planda karar rotada (null)', () => {
+    const ilk = { kimlik: 'a', ne: 'ilk' as const, kim: ['kalite' as const], balonlar: 'hepsi' as const };
+    expect(kmIlkParcaAcik({ kurallar: [{ ...ilk, kapi: true }] })).toBe(true);
+    expect(kmIlkParcaAcik({ kurallar: [] })).toBe(false);
+    expect(kmIlkParcaAcik({ kurallar: [ilk] })).toBeNull();
   });
 });

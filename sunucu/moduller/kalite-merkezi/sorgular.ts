@@ -360,6 +360,16 @@ export function numunePlanlari(db: Db, malzemeNo: number): Promise<{ opNo: numbe
   );
 }
 
+export function parcalarinNumunePlanlari(
+  db: Db, malzemeNolari: readonly number[],
+): Promise<{ malzemeNo: number; opNo: number; operasyonId: number | null; kurallar: unknown; surum: number }[]> {
+  return db.sorgu(
+    `SELECT malzeme_no AS "malzemeNo", op_no AS "opNo", operasyon_id AS "operasyonId", kurallar, surum
+       FROM kalite_merkezi_numune_plani WHERE malzeme_no = ANY($1::int[]) ORDER BY malzeme_no, op_no`,
+    [malzemeNolari],
+  );
+}
+
 export interface NumuneSatiri {
   id: number; uretimEmriId: number; opNo: number; balonlar: number[]; kritik: boolean; neden: string; parcaSayisi: number | null;
   isteyenId: number; istendi: string; karar: 'onay' | 'ret' | 'sapma' | null; kararNotu: string | null; kararVerenId: number | null; kararZamani: string | null;

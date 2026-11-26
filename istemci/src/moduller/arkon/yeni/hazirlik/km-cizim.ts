@@ -152,8 +152,20 @@ export function kmNumuneDurumu(p: Readonly<Record<string, unknown>>, plan: Pick<
   return b === null ? 'bagsiz' : b.surum === plan.surum ? 'pakette' : 'degisti';
 }
 // Taslakta, bağı ve elle yazılmış kuralı olmayan pakete kendiliğinden gelir (3687 ile aynı ilke); yayındaki paket "Güncelle" ile elle alır.
+// 3689-2: Kalite Merkezi'ne bağlı taslak, plan değişince (yeni sürüm) kendiliğinden güncellenir; yayımlanmamış paketi operatör görmez.
 export function otomatikKmNumunesi(p: Readonly<Pick<Pkg, 'malzemeNo' | 'status' | 'samp'>> & Readonly<Record<string, unknown>>, planlar: readonly KmNumunePlani[]): KmNumunePlani | null {
-  if (!kmSahibi(p) || p.status !== 'draft' || kmNumuneBagi(p) !== null || (Array.isArray(p.samp) && p.samp.length > 0)) return null;
+  if (!kmSahibi(p) || p.status !== 'draft') return null;
+  const bag = kmNumuneBagi(p);
   const plan = kmNumunePlani(p, planlar);
-  return plan !== null && plan.kurallar.length > 0 ? plan : null;
+  if (plan === null) return null;
+  if (bag !== null) return bag.surum === plan.surum ? null : plan;
+  if (Array.isArray(p.samp) && p.samp.length > 0) return null;
+  return plan.kurallar.length > 0 ? plan : null;
+}
+
+// 3689-2: ilk parça onayı = opun planında "ilk parça" kuralı ve kapı açık; kuralsız plan "ilk parça yok" demektir. Kapılı ilk parça
+// taşımayan planda karar rotadaki seçimindir (null; sunucu `plandanIlkParca` ile aynı), paketin kuralına dokunulmaz.
+export function kmIlkParcaAcik(plan: Pick<KmNumunePlani, 'kurallar'>): boolean | null {
+  if (plan.kurallar.some((k) => k.ne === 'ilk' && k.kapi === true)) return true;
+  return plan.kurallar.length === 0 ? false : null;
 }

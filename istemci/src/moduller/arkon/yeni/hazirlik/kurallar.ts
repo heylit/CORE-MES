@@ -34,7 +34,8 @@ export const HAZIR_UYARILAR: readonly Omit<Uyari, 'id'>[] = [
 ];
 // 2124-1 b: numune isteğini yalnız operatör açar. İstek stokta bir parçayı kalite numune kutusuna taşıdığı için kendiliğinden açılan
 // istek, ayrılmamış parçayı kalitede gösteriyordu. Kayıtlı eski `autoSend` değeri okunmaz.
-export const VARSAYILAN_KALITE: KaliteKurallari = { who: 'quality', firstPiece: true, nok: 'warn', band: 80, critTwice: false, autoSend: false };
+// 3689-2: ilk parça kapısı yalnız Kalite Merkezi planından (geçişte rotadan) açılır; kuralı yazılmamış pakette kapalıdır.
+export const VARSAYILAN_KALITE: KaliteKurallari = { who: 'quality', firstPiece: false, nok: 'warn', band: 80, critTwice: false, autoSend: false };
 export const VARSAYILAN_URETIM: UretimKurallari = { scrapPct: 3, scrapMin: 20, maxPauseMin: 15, tools: [] };
 
 type KuralKaydi = { warns?: Uyari[]; q?: Partial<KaliteKurallari>; prod?: Partial<UretimKurallari> } | null | undefined;

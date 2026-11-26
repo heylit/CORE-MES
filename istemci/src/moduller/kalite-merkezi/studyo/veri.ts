@@ -3,6 +3,7 @@ import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type {
   KmBalon, KmBalonlarGovdesi, KmBalonYeriGovdesi, KmMerkezBelgeleriCevabi, KmMerkezBelgesi, KmNumunelerCevabi, KmOlcumGovdesi, KmOlcumlerCevabi, KmResim, KmResimEkleGovdesi,
   KmPlanKopyalaGovdesi, KmGruplarGovdesi, KmStudyoEsitlemeCevabi, KmStudyoParcaCevabi,
+  KmIlkParcaKaynagiCevabi, KmNumunePlani, KmNumunePlaniGecmisiCevabi, KmNumunePlaniGovdesi,
 } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import type {
   KmCmmOnizlemeCevabi, KmCmmOnizleGovdesi, KmCmmPlaniCevabi, KmCmmYazCevabi, KmCmmYazGovdesi,
@@ -18,7 +19,50 @@ export const studyoAnahtari = {
   acikNumuneler: ['kalite-merkezi', 'studyo', 'numuneler'] as const,
   merkezBelgeleri: (ara: string, malzemeNo: number | null) => ['kalite-merkezi', 'studyo', 'merkez-belgeleri', ara, malzemeNo] as const,
   resimDosyasi: (resimId: number, ozet: string) => ['kalite-merkezi', 'studyo', 'resim-dosyasi', resimId, ozet] as const,
+  ilkParca: (malzemeNo: number) => ['kalite-merkezi', 'ilk-parca', malzemeNo] as const,
+  planGecmisi: (malzemeNo: number, opNo: number) => ['kalite-merkezi', 'studyo', 'plan-gecmisi', malzemeNo, opNo] as const,
 };
+
+// 3689-2: ilk parça onayının tek kaynağı numune planıdır; rota ekranı op başına planın durumunu buradan okur (plan yoksa null).
+export function useIlkParcaKaynagi(malzemeNo: number | null) {
+  return useQuery({
+    queryKey: studyoAnahtari.ilkParca(malzemeNo ?? 0),
+    queryFn: () => api.get<KmIlkParcaKaynagiCevabi>(`/kalite-merkezi/ilk-parca/${String(malzemeNo)}`),
+    enabled: malzemeNo !== null && malzemeNo > 0,
+    staleTime: 30_000,
+  });
+}
+
+export function useNumunePlaniGecmisi(malzemeNo: number | null, opNo: number | null) {
+  return useQuery({
+    queryKey: studyoAnahtari.planGecmisi(malzemeNo ?? 0, opNo ?? 0),
+    queryFn: () => api.get<KmNumunePlaniGecmisiCevabi>(`/kalite-merkezi/studyo/parcalar/${String(malzemeNo)}/numune-planlari/${String(opNo)}/gecmis`),
+    enabled: malzemeNo !== null && opNo !== null,
+  });
+}
+
+// Plan op başına bütün yazılır; sürüm başkasının aynı anda yaptığı değişikliği ezmemek içindir (409 çakışma şeridi). Cevaptaki plan
+// parçanın önbelleğine konur; ilk parça kaynağı ve geçmiş yeniden okunur.
+export function useNumunePlaniYaz(malzemeNo: number | null) {
+  const istemci = useQueryClient();
+  return useMutation({
+    mutationFn: ({ opNo, surum, kurallar }: { opNo: number; surum: number | null; kurallar: KmNumunePlaniGovdesi['kurallar'] }) => tekrarKorumaliGonder((d) => api.post<{ plan: KmNumunePlani }>(
+      `/kalite-merkezi/studyo/parcalar/${String(malzemeNo)}/numune-planlari/${String(opNo)}`, { surum, kurallar } satisfies KmNumunePlaniGovdesi,
+      { istekKimligi: d.istekKimligi, zamanAsimiMs: d.zamanAsimiMs, ...(d.sinyal ? { sinyal: d.sinyal } : {}) },
+    )),
+    onSuccess: ({ plan }) => {
+      if (malzemeNo === null) return;
+      istemci.setQueryData<KmStudyoParcaCevabi>(studyoAnahtari.parca(malzemeNo), (o) => o && {
+        ...o, numunePlanlari: [...o.numunePlanlari.filter((p) => p.opNo !== plan.opNo), plan].sort((a, b) => a.opNo - b.opNo),
+      });
+    },
+    onSettled: (_c, _h, { opNo }) => {
+      if (malzemeNo === null) return;
+      void istemci.invalidateQueries({ queryKey: studyoAnahtari.ilkParca(malzemeNo) });
+      void istemci.invalidateQueries({ queryKey: studyoAnahtari.planGecmisi(malzemeNo, opNo) });
+    },
+  });
+}
 
 export function useStudyoParcasi(malzemeNo: number | null) {
   return useQuery({

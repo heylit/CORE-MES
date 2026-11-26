@@ -9,11 +9,12 @@ import {
 } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import * as servis from './servis.ts';
 import {
-  kmBalonlarGovdesi, kmGruplarGovdesi, kmMerkezBelgeleriCevabi, kmMerkezBelgeSorgusu, kmNumuneCevabi, kmNumuneIsteGovdesi, kmNumuneKarariGovdesi, kmNumunePlaniCevabi, kmNumunePlaniGovdesi, kmNumunelerCevabi,
+  kmBalonlarGovdesi, kmGruplarGovdesi, kmMerkezBelgeleriCevabi, kmMerkezBelgeSorgusu, kmIlkParcaKaynagiCevabi, kmNumuneCevabi, kmNumunePlaniGecmisiCevabi, kmNumuneIsteGovdesi, kmNumuneKarariGovdesi, kmNumunePlaniCevabi, kmNumunePlaniGovdesi, kmNumunelerCevabi,
   kmOlcumGovdesi, kmOlcumlerCevabi, kmResimCevabi, kmResimEkleGovdesi, kmStudyoEmirParametresi, kmStudyoNumuneParametresi, kmStudyoOzetleriCevabi, kmStudyoParcaCevabi, kmStudyoEsitlemeCevabi, kmPlanKopyalaGovdesi,
   kmStudyoParcaParametresi, kmStudyoPlanParametresi, kmStudyoResimParametresi, kmSurumGovdesi, kmBalonCevabi, kmBalonYeriGovdesi, kmStudyoBalonParametresi,
 } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import * as studyo from './studyo.ts';
+import { ROTA_OKUMA_ISLEMLERI } from '../rota/disari.ts';
 import { kmCmmOnizlemeCevabi, kmCmmOnizleGovdesi, kmCmmPlaniCevabi, kmCmmYazCevabi, kmCmmYazGovdesi } from '#paylasilan/sozlesme/kalite-merkezi-cmm.ts';
 import * as cmm from './cmm.ts';
 import {
@@ -445,6 +446,23 @@ export const uclar: Uc[] = [
     govde: kmBalonYeriGovdesi,
     cevap: kmBalonCevabi,
     isle: async ({ db, kullanici, parametre, govde }) => ({ balon: await studyo.balonYeriYaz(db, kullanici.id, parametre.balonId, govde) }),
+  }),
+  // 3689-2: rota ekranı ilk parçanın kaynağını gösterir; rotayı okuyan da görür (yalnız op başına açık/kapalı ve sürüm).
+  uc({
+    yontem: 'GET',
+    yol: '/kalite-merkezi/ilk-parca/:malzemeNo',
+    yetki: { biri: ['kalite-merkezi.oku', ...ROTA_OKUMA_ISLEMLERI] },
+    parametre: kmStudyoParcaParametresi,
+    cevap: kmIlkParcaKaynagiCevabi,
+    isle: async ({ db, parametre }) => studyo.ilkParcaOzeti(db, parametre.malzemeNo),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/kalite-merkezi/studyo/parcalar/:malzemeNo/numune-planlari/:opNo/gecmis',
+    yetki: 'kalite-merkezi.oku',
+    parametre: kmStudyoPlanParametresi,
+    cevap: kmNumunePlaniGecmisiCevabi,
+    isle: async ({ db, parametre }) => studyo.numunePlaniGecmisi(db, parametre.malzemeNo, parametre.opNo),
   }),
   uc({
     yontem: 'POST',
