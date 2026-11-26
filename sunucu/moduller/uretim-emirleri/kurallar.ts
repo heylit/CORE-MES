@@ -2175,3 +2175,59 @@ export function emirEskiRevizyonIhlali(r: EmirRevizyonDurumu | null, gerekce: st
   const ek = (e: string | null) => (e === null ? '' : ` (${e})`);
   return `${r.kod}${ek(r.etiket)} yürürlükteki revizyon değil; yürürlükteki ${r.yururluktekiKodu}${ek(r.yururluktekiEtiketi)}. Eski revizyonla emir açmak için gerekçe yazın.`;
 }
+
+/* ---------------- parça (çizim) revizyonu (3755) ---------------- */
+
+// Emre sabitlenebilen revizyon: kartın çizim belgesinin yayına girmiş revizyonu; kod Belge Merkezi'nin gösterdiği koddur.
+export interface ParcaRevizyonuSecenegi { revizyonId: number; durum: 'yayinda' | 'eski'; revKodu: string | null; yayinlandi: string }
+
+// Tek gösterim ve karşılaştırma kuralı: kodun başındaki "R" ya da "Rev" atılır, boşluk ve harf büyüklüğü sayılmaz ("R00" ile "00" aynıdır).
+// Ataması boş kalan kod (yalnız "R") olduğu gibi kalır.
+export function parcaRevizyonuMetni(kod: string | null | undefined): string | null {
+  const t = kod?.trim() ?? '';
+  if (t === '') return null;
+  const atilmis = t.replace(/^rev\.?\s*/iu, '').replace(/^r(?=[\s\d])\s*/iu, '').trim();
+  return atilmis === '' ? t : atilmis;
+}
+export const ayniParcaRevizyonuMu = (a: string | null | undefined, b: string | null | undefined): boolean => {
+  const x = parcaRevizyonuMetni(a);
+  const y = parcaRevizyonuMetni(b);
+  return x !== null && y !== null && x.toLocaleUpperCase('tr') === y.toLocaleUpperCase('tr');
+};
+
+export const varsayilanParcaRevizyonu = (s: readonly ParcaRevizyonuSecenegi[]): ParcaRevizyonuSecenegi | null => s.find((r) => r.durum === 'yayinda') ?? null;
+
+// Rotanın çizimi kayıtlı değildir: rota revizyonu yürürlüğe alındığı anda yayında olan çizim revizyonu sayılır (yayın zamanı o andan önce olan
+// en yeni revizyon). Yürürlüğe alınmamış rotada ya da o anda yayınlanmış çizim yoksa null.
+export function rotaninCizimRevizyonu(s: readonly ParcaRevizyonuSecenegi[], yururlugeAlma: string | null): ParcaRevizyonuSecenegi | null {
+  if (yururlugeAlma === null) return null;
+  const an = Date.parse(yururlugeAlma);
+  return [...s].filter((r) => Date.parse(r.yayinlandi) <= an).sort((a, b) => Date.parse(b.yayinlandi) - Date.parse(a.yayinlandi))[0] ?? null;
+}
+
+const revMetni = (kod: string | null): string => `Rev ${parcaRevizyonuMetni(kod) ?? '—'}`;
+
+// Açılışta uyarı, engel değil: rota başka çizim revizyonu yayındayken yürürlüğe alındı.
+export function rotaCizimFarkiUyarisi(rotaHarfi: string | null, rotaCizimi: ParcaRevizyonuSecenegi | null, secilen: ParcaRevizyonuSecenegi | null): string | null {
+  if (rotaCizimi === null || secilen === null || rotaCizimi.revizyonId === secilen.revizyonId) return null;
+  const rota = rotaHarfi === null ? 'Rota' : `Rota ${rotaHarfi}`;
+  return `${rota}, ${revMetni(rotaCizimi.revKodu)} çizimi yayındayken yürürlüğe alındı; seçilen ${revMetni(secilen.revKodu)}. Emir yine açılır; operasyonların ${revMetni(secilen.revKodu)} çizimine uyduğunu kontrol edin.`;
+}
+
+export const PARCA_REVIZYONU_YOK = 'Bu revizyon kartın çiziminde yayına girmiş revizyonlardan biri değil.';
+export const PARCA_REVIZYONU_KAPALI = 'Kapalı ya da arşivdeki emirde parça revizyonu seçilmez.';
+export const PARCA_REVIZYONU_SABIT = 'Emrin parça revizyonu seçilmiş; sabittir, değiştirilmez.';
+
+// Seçim yalnız açık (taslak, planlı, başlamış) ve revizyonu boş emirde yapılır.
+export const parcaRevizyonuAcikMi = (durum: EmirDurumu, arsiv: boolean): boolean => !arsiv && (durum === 'taslak' || durum === 'planli' || durum === 'basladi');
+export function parcaRevizyonuSecimIhlali(durum: EmirDurumu, arsiv: boolean, sabitRevizyonId: number | null): string | null {
+  if (!parcaRevizyonuAcikMi(durum, arsiv)) return PARCA_REVIZYONU_KAPALI;
+  return sabitRevizyonId === null ? null : PARCA_REVIZYONU_SABIT;
+}
+
+// Kartta emirdekinden başka bir revizyon yayındaysa onun kodu (gösterim kuralıyla); yoksa null. Revizyonsuz emirde sorulmaz.
+export function kartinYeniParcaRevizyonu(sabitRevizyonId: number | null, s: readonly ParcaRevizyonuSecenegi[]): string | null {
+  if (sabitRevizyonId === null) return null;
+  const yayinda = varsayilanParcaRevizyonu(s);
+  return yayinda === null || yayinda.revizyonId === sabitRevizyonId ? null : revMetni(yayinda.revKodu);
+}

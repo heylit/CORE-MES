@@ -33,6 +33,7 @@ import type { IstasyonDurumu, MakineAyrimi, OnculTuru, PlanPayi } from './kurall
 import { adimaGiren, birlesmeAdimiBiterMi, dalBasiAdedi, kolAdimiBaslarMi, kolSonuysaKatil, muayeneBelgeKapisi, muayeneKarariniYaz, ustuOnceKilitle } from './is-emri-servis.ts';
 import { hurdaSayimiBildir, kaliteKarariBildir, saglamSayimiBildir } from './sayim-olayi.ts';
 import { baslatmaDenetimi } from './baslatma-denetimi.ts';
+import { listeParcaRevizyonlari } from './parca-revizyonu.ts';
 import type { BaslatmaKarti } from './baslatma-denetimi.ts';
 import { adimBittiBildir, emirBittiBildir, hazirlikTamamlandiBildir } from './emir-olaylari.ts';
 import * as sorgular from './sorgular.ts';
@@ -254,10 +255,12 @@ async function izlemeyeCevir(db: Db, satirlar: readonly EmirSatiri[]): Promise<I
   const kapanislar = new Map((await sorgular.kapanisDurumlari(db, satirlar.map((s) => s.id))).map((k) => [k.uretimEmriId, kapanisSonucu(k.durum, k.saglamAdet)]));
   const birlesmeler = new Map((await sorgular.birlesmeHedefleri(db, satirlar.map((s) => s.id))).map((b) => [b.id, { id: b.hedefId, emirNo: b.hedefNo }]));
   const bekletmeler = await bekletmeHaritasi(db, satirlar);
+  const parcaRevizyonlari = await listeParcaRevizyonlari(db, satirlar.filter((s) => s.malzemeNo !== null).map((s) => s.id));
   return satirlar.map((s) => {
     const { istasyonId, acanId, ...kalan } = s;
     return {
       ...kalan,
+      ...(parcaRevizyonlari.get(s.id) ?? {}),
       ...adimlardanGorunum(s, adimlar.get(s.id) ?? []),
       kapanisSonucu: kapanislar.get(s.id) ?? null,
       birlestigiEmir: birlesmeler.get(s.id) ?? null,

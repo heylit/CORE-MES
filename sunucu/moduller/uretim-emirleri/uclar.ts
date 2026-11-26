@@ -18,6 +18,8 @@ import { emrinTerminOnerisi, siparisinTerminOnerileri, terminKarariVer } from '.
 import { adimDurumu, adimDurumuTerminal, adimMatrisi, statuTopluYaz, elleStatuKaldir, elleStatuYaz, hazirlikElleEksik, hazirlikOnayKaldir, hazirlikOnayla, hazirlikTopluYaz, listeFotografi, listeIsaretle, listeMaddesiEkle, listeMaddesiKaldir, opSablonFarkiKaldirAkis, opSablonFarkiYazAkis } from './adim-durumu.ts';
 import { aramaUclari } from './arama/uclar.ts';
 import { gecmisGeriAl, gecmisGir } from './gecmis-giris.ts';
+import { parcaRevizyonlari, parcaRevizyonuSec } from './parca-revizyonu.ts';
+import { parcaRevizyonlariCevabi, parcaRevizyonlariSorgusu, parcaRevizyonuSecGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { gecmisGeriAlGovdesi, gecmisGirisCevabi, gecmisGirisGovdesi, muayeneBelgeBaglaGovdesi, muayeneBelgeParametresi, muayeneBelgeleriCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { siparisAcilisiCevabi, siparisAcilisiGovdesi, siparisAcilisiParametresi, siparisAcilisiSonucu } from '#paylasilan/sozlesme/siparis-acilisi.ts';
 import { bolmeCozuculeri, siparisAcilisiDurumu, siparisAcilisiYap } from './siparis-acilisi.ts';
@@ -258,6 +260,15 @@ const adimliUclar = [
     yetki: { biri: ['uretim-emirleri.duzenle', 'uretim-emirleri.adim-yaz'] },
     cevap: fasonFirmalariCevabi,
     isle: async ({ db }) => ({ firmalar: await isEmri.fasonFirmalari(db) }),
+  }),
+  // 3755: emir açma, seçim penceresi ve "Kartta yeni revizyon var" uyarısının parça (çizim) revizyonu listesi; emri okuyan ya da açabilen okur.
+  uc({
+    yontem: 'GET',
+    yol: '/adimli-emirler/parca-revizyonlari',
+    yetki: { biri: [...ADIMLI_OKUMA_ISLEMLERI, 'rota.emre-kopyala'] },
+    sorgu: parcaRevizyonlariSorgusu,
+    cevap: parcaRevizyonlariCevabi,
+    isle: ({ db, sorgu }) => parcaRevizyonlari(db, sorgu.malzemeNo, sorgu.rotaRevizyonId ?? null),
   }),
   // Üretim Hazırlık listesi (2227): paket kartındaki hazırlık çipi. Yetki ve cevap emir ayrıntısındaki hazırlıkla aynıdır.
   uc({
@@ -670,6 +681,20 @@ const adimliUclar = [
     cevap: adimliEmirCevabi,
     isle: async ({ db, kullanici, parametre, govde }) => {
       await isEmri.oncelikDegistir(db, kullanici, parametre.id, govde.oncelik, govde.surum);
+      return { emir: await isEmri.adimliAyrinti(db, parametre.id) };
+    },
+  }),
+  // 3755: revizyonu seçilmemiş açık emre parça revizyonu sabitlenir; değer değişiklik defterine (emrin geçmişi) düşer.
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/parca-revizyonu',
+    yetki: 'uretim-emirleri.duzenle',
+    tekrarKorumali: true,
+    parametre: emirParametresi,
+    govde: parcaRevizyonuSecGovdesi,
+    cevap: adimliEmirCevabi,
+    isle: async ({ db, kullanici, parametre, govde }) => {
+      await parcaRevizyonuSec(db, kullanici, parametre.id, govde.revizyonId, govde.surum);
       return { emir: await isEmri.adimliAyrinti(db, parametre.id) };
     },
   }),

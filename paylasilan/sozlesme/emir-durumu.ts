@@ -40,3 +40,7 @@ export function emirDurumuGosterimi(e: { durum: EmirDurumu; kapanisSonucu?: Kapa
   }
   return EMIR_DURUMU[e.durum];
 }
+
+// 3755: "Rev" her ekranda emrin parça (çizim) revizyonudur; kod sunucudan gösterim kuralıyla gelir ("R00" -> "00"), seçilmemişte "Rev —".
+// Modüller kat sırasından bağımsız okusun diye bu zodsuz sözlüktedir.
+export const parcaRevMetni = (kod: string | null | undefined): string => `Rev ${kod ?? '—'}`;
