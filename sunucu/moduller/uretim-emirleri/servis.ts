@@ -1325,6 +1325,20 @@ export async function adimPaylari(db: Db, emirId: number, isEmriId: number): Pro
   return { paylar: cevap };
 }
 
+// 3749: plan, çalışan bölünmüş adımın pay ilerlemesini buradan okur (kablolama.ts); sayı terminalin pay penceresindekiyle aynıdır (adimPaylari).
+// Bölünmemiş adım ve sahibi belirsiz pay (makinesi de kişisi de yok) gelmez. Yetki denetlemez; çağıran korur.
+export async function payIlerlemeleri(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, { makineId: number | null; kisiId: number | null; sayilan: number }[]>> {
+  const sonuc = new Map<number, { makineId: number | null; kisiId: number | null; sayilan: number }[]>();
+  for (const isEmriId of new Set(isEmriIdleri)) {
+    const paylar = await adiminPaylari(db, isEmriId);
+    if (paylar.length === 0) continue;
+    const saglam = new Map((await sorgular.kisiSaglamlariGetir(db, isEmriId)).map((x) => [x.kisiId, x.saglam]));
+    const makineSaglami = new Map((await sorgular.makineSaglamlariGetir(db, isEmriId)).map((x) => [x.makineId, x.saglam]));
+    sonuc.set(isEmriId, payIlerlemesi(paylar, saglam, makineSaglami).flatMap((p) => (p.sayilan === null ? [] : [{ makineId: p.makineId, kisiId: p.kisiId, sayilan: p.sayilan }])));
+  }
+  return sonuc;
+}
+
 // Çalışan adıma planda payı olan makine eklenir: iş durmaz, makinenin kullanımı açılır. Makine doluysa başlatmadaki gibi reddedilir (devral).
 export async function makineEkle(db: Db, kisiId: number, id: number, isEmriId: number, makineId: number): Promise<{ emir: Emir }> {
   const { emir, adim, istasyonId, calisma } = await komutBaglami(db, kisiId, id, isEmriId);

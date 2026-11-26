@@ -6,7 +6,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
-import { emirBaslat, uretimEmriAc } from './disari.ts';
+import { emirBaslat, payIlerlemeleri, uretimEmriAc } from './disari.ts';
 import * as servis from './servis.ts';
 import type { PlanPayi } from './kurallar.ts';
 import type { IsEmriGirdisi } from './disari.ts';
@@ -150,6 +150,21 @@ describe('uretim-emirleri plan payları terminalde (gerçek PostgreSQL)', () => 
     await tx((db) => servis.emirSayim(db, ali.id, id, { tur: 'saglam', adet: 1, makineId: ikinci }, { isEmriId: ie }));
     const p = (await tx((db) => servis.adimPaylari(db, id, ie))).paylar;
     assert.deepEqual(p.map((x) => [x.no, x.sayilan, x.fazla]), [[1, 3, 0], [2, 5, 0]]);
+  });
+
+  test('3749: planın okuduğu pay ilerlemesi terminalin pay penceresiyle aynıdır; bölünmemiş adım gelmez', async () => {
+    const { id, ie, makineId, ikinci } = await calisanIs();
+    paylar = [{ no: 1, adet: 5, makineId, kisiId: null }, { no: 2, adet: 5, makineId: ikinci, kisiId: null }];
+    await tx((db) => servis.makineEkle(db, veli.id, id, ie, ikinci));
+    await tx((db) => servis.emirSayim(db, ali.id, id, { tur: 'saglam', adet: 2 }, { isEmriId: ie }));
+    await tx((db) => servis.emirSayim(db, veli.id, id, { tur: 'saglam', adet: 4 }, { isEmriId: ie }));
+    const pencere = (await tx((db) => servis.adimPaylari(db, id, ie))).paylar;
+    const plan = await tx((db) => payIlerlemeleri(db, [ie, ie]));
+    assert.deepEqual([...plan.keys()], [ie]);
+    assert.deepEqual(plan.get(ie), pencere.map((x) => ({ makineId: x.makine?.id ?? null, kisiId: x.kisi?.id ?? null, sayilan: x.sayilan })));
+    assert.deepEqual(plan.get(ie)!.map((x) => [x.makineId, x.sayilan]), [[makineId, 2], [ikinci, 4]]);
+    paylar = [];
+    assert.equal((await tx((db) => payIlerlemeleri(db, [ie]))).size, 0);
   });
 
   test('reddedilen parça makine payında sayılmaz; karar satırları sayımın makinesini taşır', async () => {
