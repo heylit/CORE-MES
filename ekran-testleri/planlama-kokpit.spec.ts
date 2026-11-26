@@ -3490,3 +3490,54 @@ for (const buyukYazi of [false, true]) {
     expect(ag.hatalar).toEqual([]);
   });
 }
+
+// 3746: plan şeridindeki değişiklik özetinin "Aç" düğmesi dar ekranda büyük yazıda (%130) kırpılmamalı. Ölçü: düğmenin kutusu, taşanı
+// kırpan her atanın (overflow görünür değil) ve pencerenin içinde. Özet tek satırda nowrap kalınca 360 %130'da düğme 28 px dışarıda kalıyordu.
+for (const buyukYazi of [false, true]) {
+  test(`Kokpit 3746: değişiklik özetinin Aç düğmesi kırpılmaz${buyukYazi ? ' (büyük yazı)' : ''}; yatay taşma yok`, async ({ page, ac, ag }, bilgi) => {
+    const proje: string = bilgi.project.name;
+    if (buyukYazi && proje !== 'g360') return;
+    if (buyukYazi) await page.addInitScript(() => { document.addEventListener('DOMContentLoaded', () => { const st = document.createElement('style'); st.textContent = ':root{--yazi-xs:15.6px;--yazi-s:18.2px;--yazi-m:20.8px;--yazi-l:23.4px}'; document.head.append(st); }); });
+    await page.route('**/api/plan/planlama-calismasi', (r) => json(r, { calisma: { ...calisma({ ...ILK }, {}), dataVer: 4 }, surum: 1 }));
+    await page.route('**/api/plan/surum', (r) => json(r, {
+      planSurumu: 3, sonCanliyaAlma: { zaman: '2026-10-19T05:00:00Z', kisi: 'ORN-Mudur' },
+      bayat: { bayat: true, sonCanliyaAlma: '2026-10-19T05:00:00Z', olaylar: [
+        { neden: 'durus', zaman: '2026-10-19T06:00:00Z', uretimEmriId: null, emirNo: null, makineId: 1, makineKod: 'F-01' },
+        { neden: 'satin-alma-termini', zaman: '2026-10-19T06:30:00Z', uretimEmriId: 3, emirNo: 'S3', makineId: null, makineKod: null },
+      ] },
+    }));
+    await page.clock.setSystemTime(new Date('2026-10-19T10:00:00+03:00'));
+    await ac('/plan/kokpit');
+    const kokpit = page.locator('.tc-pyq');
+    await expect(kokpit).toBeVisible({ timeout: 20_000 });
+    const karsilama = page.getByRole('button', { name: 'Başlayalım' });
+    if (await karsilama.isVisible()) await karsilama.click();
+    const ozet = page.getByRole('toolbar', { name: 'Plan çubuğu' }).locator('[data-degisiklik-ozeti]');
+    await expect(ozet.locator('b')).toHaveText('4 değişiklik');
+    const dugme = ozet.getByRole('button', { name: 'Değişiklikleri aç' });
+    await expect(dugme).toBeVisible();
+    const kirpik = async () => dugme.evaluate((d) => {
+      const k = d.getBoundingClientRect();
+      let sol = 0, sag = window.innerWidth;
+      for (let e = d.parentElement; e && e !== document.documentElement; e = e.parentElement) {
+        const s = getComputedStyle(e);
+        if (s.overflowX === 'visible') continue;
+        const a = e.getBoundingClientRect();
+        sol = Math.max(sol, a.left); sag = Math.min(sag, a.right);
+      }
+      return Math.max(0, Math.round(sol - k.left), Math.round(k.right - sag));
+    });
+    const ad = `${proje}${buyukYazi ? '-yazi130' : ''}`;
+    const once = await kirpik();
+    console.log(`3746 ${ad} kirpik=${String(once)}`);
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: `/tmp/tmiv2-ekran/3746-ozet-${ad}.png` });
+    expect(once).toBe(0);
+    if (proje === 'g360') expect((await dugme.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    await dugme.click();
+    await expect(page.getByRole('region', { name: 'Planı etkileyen değişiklikler' })).toBeVisible();
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    expect(ag.hatalar).toEqual([]);
+  });
+}
