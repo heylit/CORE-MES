@@ -1291,7 +1291,7 @@ export function fasonTerminUyumu(gecmis: readonly FasonGecmisiSatiri[]): FasonTe
 
 // 898 a: kalemin bağları (uygulanan parça ve fason adım) ayrı okunur; tam talep görünümüne girmez. Bağı olmayan kalemde ikisi de null.
 // kendi: 3462 a kalemin talepten farklı termini ve emri (yalnız farklı olanda gelir).
-export interface KalemBagi { uygulanan: string | null; fasonAdim: string | null; kendi?: { ihtiyacTarihi: string | null; uretimEmriId: number | null; uretimEmriNo: string | null } }
+export interface KalemBagi { uygulanan: string | null; uygulananRevizyon?: string | null; uygulananKod?: string | null; uygulananAd?: string | null; fasonAdim: string | null; kendi?: { ihtiyacTarihi: string | null; uretimEmriId: number | null; uretimEmriNo: string | null } }
 // 3121: kalemin kartından kalite, durum, işlem ve ölçü; kartsız kalemde null.
 // 3133: kalem satırında kartın dört sütunu (kalite, durum, işlem, ölçü), açıklaması ve kart föyündeki ayrıntı listesi.
 export interface KalemOzelligi {
@@ -1366,7 +1366,7 @@ export function talebim(
     ...(t.guncellemeGrubu === undefined ? {} : { guncellemeGrubu: t.guncellemeGrubu }),
     kaynak: t.kalemler.some((k) => bag(k.id).fasonAdim !== null) ? 'fason' : 'elle',
     kalemler: t.kalemler.map((k) => ({ id: k.id, aciklama: k.ozellik, ad: k.ad, miktar: k.miktar, birim: k.birim, kartBekliyor: k.katalogId === null,
-      uygulanan: bag(k.id).uygulanan, fasonAdim: bag(k.id).fasonAdim, ...kalemTerminEmriGorunumu(t, bag(k.id).kendi), siparisTermini: siparisTerminleri.get(k.id)?.gun ?? null, ...(siparisTerminleri.has(k.id) ? { siparisPayAdedi: siparisTerminleri.get(k.id)!.pay } : {}), karsilik: karsiliklar.get(k.id) ?? null, malzeme: talepEdeneOzelligi(ozellikler.get(k.id)), ...kabuller.get(k.id),
+      uygulanan: bag(k.id).uygulanan, ...(bag(k.id).uygulananRevizyon ? { uygulananRevizyon: bag(k.id).uygulananRevizyon } : {}), ...(bag(k.id).uygulananKod ? { uygulananKod: bag(k.id).uygulananKod, uygulananAd: bag(k.id).uygulananAd ?? null } : {}), fasonAdim: bag(k.id).fasonAdim, ...kalemTerminEmriGorunumu(t, bag(k.id).kendi), siparisTermini: siparisTerminleri.get(k.id)?.gun ?? null, ...(siparisTerminleri.has(k.id) ? { siparisPayAdedi: siparisTerminleri.get(k.id)!.pay } : {}), karsilik: karsiliklar.get(k.id) ?? null, malzeme: talepEdeneOzelligi(ozellikler.get(k.id)), ...kabuller.get(k.id),
       ...(sartli.has(k.id) ? { sartliAlternatifler: sartli.get(k.id)! } : {}) })),
   };
 }

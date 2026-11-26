@@ -6,17 +6,12 @@ import { gelisGunu } from '../merkez/kimlik.ts';
 import { go } from '../merkez/ui.ts';
 import { dayDiff, fmtDate, nf0, nfx, todayStr } from '../merkez/util.ts';
 import { CizimSayisi, KalemOzeti } from './KalemOzeti.tsx';
+import { TalepTarihi } from './TalepTarihi.tsx';
 
 const TUR_TONU: Record<IsTuru, RozetTonu> = { order: 'uyari', decide: 'uyari', draft: 'bilgi', quotes: 'pasif', delivery: 'bilgi', approval: 'pasif' };
 const SEKME: Record<IsTuru, string> = { order: 'order', decide: 'compare', draft: 'quotes', quotes: 'quotes', delivery: 'delivery', approval: 'approval' };
 const ac = (s: IsSatiri) => { go('request', s.r.id, SEKME[s.tur]); };
 
-function Gelis({ s, bugun }: { s: IsSatiri; bugun: string }) {
-  const g = gelisGunu(s.r);
-  if (!g) return <>–</>;
-  const once = dayDiff(g, bugun);
-  return <span className="sa-ekran-govde"><span>{fmtDate(g)}</span><small>{once === 0 ? 'bugün' : `${nf0.format(once)} gün önce`}</small></span>;
-}
 function Termin({ s, bugun }: { s: IsSatiri; bugun: string }) {
   if (!s.r.needDate) return <>–</>;
   const d = dayDiff(bugun, s.r.needDate);
@@ -79,7 +74,7 @@ export function IsTablosu() {
     { anahtar: 'malzeme', baslik: 'Malzeme', sabit: 'sol', kartTamSatir: true, hucre: (s) => <Malzeme s={s} />, csv: (s) => `${s.r.no} ${s.r.title}: ${s.kalem.name}` },
     { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', kirilmaz: true, hucre: (s) => (s.kalem.qty === null ? '–' : `${nfx.format(s.kalem.qty)} ${s.kalem.unit}`), csv: (s) => (s.kalem.qty === null ? '' : `${String(s.kalem.qty)} ${s.kalem.unit}`) },
     { anahtar: 'is', baslik: 'Sıradaki iş', kirilmaz: true, hucre: (s) => <Is s={s} />, csv: (s) => IS_ADI[s.tur] },
-    { anahtar: 'gelis', baslik: 'Talep tarihi', kirilmaz: true, hucre: (s) => <Gelis s={s} bugun={bugun} />, csv: (s) => gelisGunu(s.r) },
+    { anahtar: 'gelis', baslik: 'Talep tarihi', kirilmaz: true, hucre: (s) => <TalepTarihi r={s.r} bugun={bugun} />, csv: (s) => gelisGunu(s.r) },
     { anahtar: 'termin', baslik: 'İstenen termin', kirilmaz: true, hucre: (s) => <Termin s={s} bugun={bugun} />, csv: (s) => s.r.needDate || '' },
     { anahtar: 'teslimat', baslik: 'Beklenen teslim', kirilmaz: true, hucre: (s) => <TeslimatHucresi s={s} bugun={bugun} />, csv: (s) => teslimatOf(s.r, bugun).tarih ?? '' },
   ];

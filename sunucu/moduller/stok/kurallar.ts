@@ -469,6 +469,13 @@ export function malKabulSatirTuru(b: MalKabulSatirBilgisi): { tur: MalKabulSatir
   return { tur: 'stok' };
 }
 
+// 3712: fasondan dönen kart siparişin işlediği parçadan farklıysa depocunun onayı gerekir. Parça bağı yoksa ya da kart eşleşiyorsa
+// denetim yoktur. Düzeltmede eski belgenin aynı sipariş satırında zaten kabul edilmiş kart yeniden onay istemez: onay (ya da
+// 3712 öncesi kabul) bir kez verildi ve ekran düzeltmede onayı geri getirmez.
+export function farkliKartOnayiGerekir(b: { siparisinParcasi: number | null; donenKart: number; onay: boolean; oncedenKabulEdildi: boolean }): boolean {
+  return b.siparisinParcasi !== null && b.siparisinParcasi !== b.donenKart && !b.onay && !b.oncedenKabulEdildi;
+}
+
 // Teslim, satın almada sipariş satırının kartına düşer: başka kartın satırına bağlanan kabul, stokta bir kartı artırıp
 // satın almada başka kartın siparişini kapatırdı. Kartsız (katalogsuz) kalemin karşılaştıracak kartı yoktur.
 export function siparisMalzemeEngeli(malzemeId: number, siparisMalzemeNo: number | null): string | null {

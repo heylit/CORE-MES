@@ -4,7 +4,7 @@
  */
 import type { TeklifIstekFormuCevabi, TeklifIstekFormuIcerigi } from "#paylasilan/sozlesme/satin-alma.ts";
 import type { PurchaseRequest, RequestItem, Supplier } from "./tipler.ts";
-import { teklifMetniSatirlari } from "./kalem-bagi.ts";
+import { islenenMalzemeBlogu, teklifMetniSatirlari } from "./kalem-bagi.ts";
 import { esc, fmtDate, numIn, parseNum } from "./util.ts";
 
 export type IstekAlani = "TEDARIKCI" | "YETKILI" | "TALEP_NO" | "KONU" | "IHTIYAC" | "SON_TARIH" | "FIRMA";
@@ -65,7 +65,8 @@ export function istekFormuHTML(r: PurchaseRequest, s: Supplier | undefined, sonT
   const giris = istekMetniDoldur(icerik.giris, d), kapanis = istekMetniDoldur(icerik.kapanis, d), alt = istekMetniDoldur(icerik.alt, d);
   const antet = [kurum.adres, [kurum.telefon, kurum.eposta].filter(Boolean).join(" · "), kurum.vergi].filter(Boolean);
   const kalemler = (r.items || []).map((it, i) => {
-    const ek = teklifMetniSatirlari(it).map((t) => `<br><small>${esc(t)}</small>`).join("");
+    // 3712: parçası olan kalemde formda da aynı çerçeveli blok (dış alt küme: emir no ve firma yok); parçasız fason adımda yalnız işlem satırı.
+    const ek = it.parca ? islenenMalzemeBlogu(it, false) : teklifMetniSatirlari(it).map((t) => `<br><small>${esc(t)}</small>`).join("");
     const miktar = parseNum(it.qty);
     return `<tr><td class="r">${String(i + 1)}</td><td>${esc(it.name)}${it.spec ? `<br><small>${esc(it.spec)}</small>` : ""}${ek}${kalemMalzemesi(it, alternatif)}</td><td class="r">${miktar === null ? "–" : `${numIn(miktar)} ${esc(it.unit)}`}</td><td class="doc-bos"></td><td class="doc-bos"></td></tr>`;
   }).join("");

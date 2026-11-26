@@ -209,6 +209,20 @@ describe('satin-alma fason talebi ve dış işlem emri (2428, gerçek PostgreSQL
     await ortam!.sahip.sorgu('DELETE FROM uretim_emirleri_is_emri WHERE id = $1', [isEmriId]);
     assert.deepEqual(await kalemDiesi(t.id), [{ dieId: null, isEmriId: null }]);
   });
+  // 3712 (Test2): Taleplerim bloğu parça bağlı kalemde kod, ad ve yürürlükteki revizyonu taşır; parçasız kalemde alanlar gelmez.
+  test('3712: talebim kalemi işlenen parçanın kodunu, adını ve revizyonunu taşır; parçasız kalemde alan yok', async () => {
+    servis.parcaRevizyonuCozucusuKaydet(async (_db, nolar) => new Map(nolar.flatMap((n): [number, string][] => (n === parcaNo ? [[n, 'B']] : []))));
+    try {
+      const { isEmriId } = await fasonIsEmri();
+      const r = await istek(cerezTalep, 'POST', '/satin-alma-talepleri/hizli-ac', fasonTalebi([partiKalemi({ partiId: 900004, konumId: null }), emirKalemi(isEmriId)]));
+      assert.equal(r.statusCode, 200, r.body);
+      const [bagli, bagsiz] = (r.json() as Talebim).kalemler;
+      assert.deepEqual([bagli?.uygulananKod, bagli?.uygulananAd, bagli?.uygulananRevizyon], ['HM-SAT-00001', 'Deneme mil', 'B']);
+      assert.deepEqual([bagsiz?.uygulanan, 'uygulananKod' in bagsiz!, 'uygulananAd' in bagsiz!, 'uygulananRevizyon' in bagsiz!], [null, false, false, false]);
+    } finally {
+      servis.parcaRevizyonuCozucusuKaydet(async () => new Map());
+    }
+  });
   // 2881 (karar 2879 a): fason kaleminin revizyonu hizmet kartının değil uygulanacak parçanındır. Teklif anında yürürlükteki revizyon
   // kalem bağında gelir; sipariş satırına sipariş anında parçanın revizyonu sabitlenir; stoka giden satır revizyonun kartını taşır.
   test('2881: fason sipariş satırının revizyonu uygulanacak parçadan; teklifte o anki, siparişte sabitlenen', async () => {

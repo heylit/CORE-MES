@@ -1733,7 +1733,10 @@ async function emirKapandi(db: Db, uretimEmriId: number, kisiId: number, neden: 
   await sorgular.emrinYoldakiTeslimlerineYaz(db, uretimEmriId, 'Emir kapandı: teslimi alın ya da iptal edin');
 }
 export const emirBittiYansit = (db: Db, olay: { uretimEmriId: number; kisiId: number }): Promise<void> => emirKapandi(db, olay.uretimEmriId, olay.kisiId, 'Emir bitti');
-export const emirIptalYansit = (db: Db, olay: { uretimEmriId: number; kisiId: number }): Promise<void> => emirKapandi(db, olay.uretimEmriId, olay.kisiId, 'Emir iptal edildi');
+export async function emirIptalYansit(db: Db, olay: { uretimEmriId: number; kisiId: number }): Promise<void> {
+  await emirKapandi(db, olay.uretimEmriId, olay.kisiId, 'Emir iptal edildi');
+  await sorgular.emrinAcikRefakatPartileriniKapat(db, olay.uretimEmriId, olay.kisiId);
+}
 // Birleşen partinin ayrılanı üretimin sürdüğü üst emre geçer: malzeme başka emre kaymaz. Kaynağın bekleme isteği ve refakat kartları da hedefe geçer.
 export async function emirBirlestiYansit(db: Db, olay: { uretimEmriId: number; hedefEmirId: number; kisiId: number }): Promise<void> {
   await refakatKartlariniBirlestir(db, olay.uretimEmriId, olay.hedefEmirId, olay.kisiId);

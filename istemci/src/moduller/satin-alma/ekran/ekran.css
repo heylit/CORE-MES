@@ -10,6 +10,8 @@
 .sa-ekran-govde > small { color: var(--muted); font-size: var(--yazi-s); }
 .sa-ekran-sag { align-items: flex-end; text-align: right; }
 .sa-ekran-kimde, .sa-ekran-ihtiyac { display: inline-flex; align-items: center; gap: var(--b-1); flex-wrap: wrap; }
+/* Simge yazıyla aynı satırda kalır; dar sütunda yalnız yazı kırılır. */
+.sa-ekran-kimde { flex-wrap: nowrap; align-items: flex-start; }
 .sa-ekran-soluk { color: var(--muted); font-size: var(--yazi-s); }
 .sa-ekran-not { color: var(--muted); font-size: var(--yazi-s); margin: 0; }
 .sa-ekran-suzgecler { display: inline-flex; gap: var(--b-2); flex-wrap: wrap; }
@@ -45,6 +47,8 @@
 .sa-ekran-talepler [data-kip="kart"] td[data-baslik="No"],
 .sa-ekran-talepler [data-kip="kart"] td[data-baslik="Teklif"],
 .sa-ekran-talepler [data-kip="kart"] td[data-baslik="Tutar"] { display: none; }
+/* Kart kipinde değerler sağa yaslıdır; rozet alta kırılınca termin de sağda kalır. */
+.sa-ekran-talepler [data-kip="kart"] .sa-ekran-ihtiyac { justify-content: flex-end; }
 
 /* Talep ayrıntısında ad ve bilgi satırı kesilmez, sarılır; dar ekranda düğmeler başlığın altına iner. */
 .sa-ekran-ayrinti .tc-sbaslik-metin, .sa-ekran-ayrinti .tc-sbaslik-alt { white-space: normal; overflow: visible; }

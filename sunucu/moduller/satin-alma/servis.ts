@@ -1016,6 +1016,8 @@ async function kalemBagGorunumu(db: Db, talepIdleri: readonly string[]): Promise
   const satirlar = talepIdleri.length === 0 ? [] : await s.kalemBaglariOku(db, talepIdleri);
   const kartlar = await malzemeOzetleri(db, satirlar.flatMap((r) => (r.uygulananMalzemeNo === null ? [] : [r.uygulananMalzemeNo])));
   const ozetler = await isEmriOzetleri(db, satirlar.flatMap((r) => (r.isEmriId === null ? [] : [r.isEmriId])));
+  const uygulananNolar = [...new Set(satirlar.flatMap((r) => (r.uygulananMalzemeNo === null ? [] : [r.uygulananMalzemeNo])))];
+  const revizyonlar = uygulananNolar.length === 0 ? new Map<number, string>() : await parcaRevizyonuCozucu(db, uygulananNolar);
   const isler = new Map(satirlar.flatMap((r) => (r.isEmriId === null ? [] : [r.isEmriId])).map((id) => {
     const o = ozetler.get(id);
     return [id, o === undefined ? `#${id}` : `${o.emirNo} · Op ${o.opNo}`] as const;
@@ -1024,6 +1026,8 @@ async function kalemBagGorunumu(db: Db, talepIdleri: readonly string[]): Promise
     const kart = r.uygulananMalzemeNo === null ? undefined : kartlar.get(r.uygulananMalzemeNo);
     return [r.kalemId, {
       uygulanan: r.uygulananMalzemeNo === null ? null : kart ? `${kart.kod} · ${kart.ad ?? ''}`.trim() : `#${r.uygulananMalzemeNo}`,
+      uygulananRevizyon: r.uygulananMalzemeNo === null ? null : revizyonlar.get(r.uygulananMalzemeNo) ?? null,
+      uygulananKod: kart?.kod ?? null, uygulananAd: kart?.ad ?? null,
       fasonAdim: r.isEmriId === null ? null : isler.get(r.isEmriId)!,
     }];
   }));
