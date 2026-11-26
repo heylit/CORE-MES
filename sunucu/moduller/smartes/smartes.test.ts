@@ -1410,6 +1410,28 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     // M30 düzeltmesi sağlam sayımından düşer (ilk parça kararı bekleyen işte karar bekleyen sağlamdan).
     assert.deepEqual(sayimlar.map((x) => [x.tur === 'hurda' ? 'hurda' : 'saglam', x.adet]), [['hurda', 2], ['saglam', -1]]);
     assert.equal((await sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM uretim_emirleri_hatali_kaydi WHERE uretim_emri_id = $1', [uretimEmriId]))?.n, 1);
+
+    // Risk R1: ekran onayın yazacağı türü gösterir; ekran açıkken fire eşlemesi değişirse görülen türle onay yazılmaz.
+    await red(97605, 'ORN Kırık', 1);
+    const satir = async () => ((await istek('GET', '/smartes/adet-onaylari?gorunum=bekliyor&sayfaBoyu=200')).json() as { satirlar: { id: number; tur: string; smartesId: number }[] }).satirlar
+      .find((x) => x.smartesId === 97605)!;
+    const gorulen = await satir();
+    assert.equal(gorulen.tur, 'hurda');
+    await sahip.sorgu("UPDATE smartes_ad_esleme SET sonuc = 'sayim-duzeltme' WHERE tur = 'fire' AND ad = 'ORN Kırık'");
+    assert.equal((await satir()).tur, 'sayim-duzeltme', 'liste şimdiki eşlemeyi gösterir');
+    const eski = (await istek('POST', '/smartes/adet-onaylari/onayla', { idler: [gorulen.id], turler: { [String(gorulen.id)]: 'hurda' } })).json() as { islenen: number; hatalar: { ileti: string }[] };
+    assert.deepEqual([eski.islenen, eski.hatalar.map((h) => h.ileti)], [0, [ONAY_ILETILERI.fireTuruDegisti]]);
+    await sahip.sorgu("UPDATE smartes_ad_esleme SET sonuc = 'hurda' WHERE tur = 'fire' AND ad = 'ORN Kırık'");
+
+    // Risk R2: SmartES makinesinde sayım düzeltme yetkisi olanın eksi sayımı kilide takılmaz; artı sayım yine reddedilir.
+    const sayim = (adet: number) => vt().tx(async (db) => emirSayim(db, (await kullaniciYukle(db, yoneticiId))!, uretimEmriId, { tur: 'saglam', adet }, { isEmriId: ilk }))
+      .then(() => null, (h: Error) => h.message);
+    assert.equal(await sayim(-1), null);
+    assert.match((await sayim(1)) ?? '', /SmartES’ten gelir/);
+
+    // Risk R3: makineleri farklı kaynaktan üreten istasyonda eşlenmemiş makine kodlu satır aktarılmaz.
+    assert.equal(await red(97606, 'ORN Kırık', 1, 'ORN-ESLENMEMIS'), 0);
+
     await vt().sorgu('UPDATE makine SET uretim_kaynagi = NULL, uretim_kaynagi_gecerlilik = NULL WHERE istasyon_id = $1', [istasyonlar[0]]);
     await aktarimAc(false);
   });

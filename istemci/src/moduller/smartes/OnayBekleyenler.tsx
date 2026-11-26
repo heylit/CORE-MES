@@ -49,6 +49,8 @@ export function OnayBekleyenler() {
   const [suzgec, suzgecYaz] = useState<string>('hepsi');
   const [red, redYaz] = useState<readonly OnaySatiri[] | null>(null);
   const [neden, nedenYaz] = useState('');
+  // Toplu onayda sağlamdan düşen satır gözden kaçmasın: seçimde sayım düzeltmesi varsa önce sorulur.
+  const [topluOnay, topluOnayYaz] = useState<readonly OnaySatiri[] | null>(null);
   const liste = useQuery({
     queryKey: anahtarlar.onay('bekliyor'),
     queryFn: () => api.get<AdetOnaylariCevabi>(`/smartes/adet-onaylari?gorunum=bekliyor&sayfaBoyu=${BEKLEYEN_SAYFA_BOYU}`),
@@ -63,8 +65,11 @@ export function OnayBekleyenler() {
     void qc.invalidateQueries({ queryKey: anahtarlar.kok });
   };
   const onayla = useMutation({
-    mutationFn: (idler: number[]) => api.post<AdetKarariCevabi>('/smartes/adet-onaylari/onayla', { idler }),
-    onSuccess: (c) => { bitti(c, 'onaylandı ve üretim emrine işlendi'); },
+    // Görülen tür de gider: arada fire eşlemesi değiştiyse sunucu yazmaz.
+    mutationFn: (s: readonly OnaySatiri[]) => api.post<AdetKarariCevabi>('/smartes/adet-onaylari/onayla', {
+      idler: s.map((x) => x.id), turler: Object.fromEntries(s.map((x) => [String(x.id), x.tur])),
+    }),
+    onSuccess: (c) => { topluOnayYaz(null); bitti(c, 'onaylandı ve üretim emrine işlendi'); },
     onError: (e) => { bildir('hata', hataIletisi(e, 'Onaylanamadı')); },
   });
   const reddet = useMutation({
@@ -97,7 +102,7 @@ export function OnayBekleyenler() {
       anahtar: 'eylem', baslik: 'Karar', csv: false as const,
       hucre: (s: OnaySatiri) => (
         <span className="tc-ob-eylem">
-          <Dugme simge="check" onClick={() => { onayla.mutate([s.id]); }} disabled={onayla.isPending || s.emirId === null || s.tur === 'red'}>Onayla</Dugme>
+          <Dugme simge="check" onClick={() => { onayla.mutate([s]); }} disabled={onayla.isPending || s.emirId === null || s.tur === 'red'}>Onayla</Dugme>
           <Dugme simge="x" aria-label={`${emirMetni(s)} ${ozet(s)} kaydını reddet`} onClick={() => { redYaz([s]); }} />
         </span>
       ),
@@ -123,7 +128,7 @@ export function OnayBekleyenler() {
               bosMesaj={suzgec === 'hepsi' ? 'Onay bekleyen kayıt yok.' : 'Bu süzgeçte bekleyen kayıt yok.'}
               arac={{ suzgec: { etiket: 'Tür', secenekler: SUZGEC, secili: suzgec, sec: suzgecYaz } }}
               {...(onaylayabilir ? { toplu: { buyukSecim: true, eylemler: [
-                { anahtar: 'onayla', baslik: 'Seçilenleri onayla', simge: 'check' as const, ton: 'birincil' as const, yap: (s: readonly OnaySatiri[]) => { onayla.mutate(s.map((x) => x.id)); } },
+                { anahtar: 'onayla', baslik: 'Seçilenleri onayla', simge: 'check' as const, ton: 'birincil' as const, yap: (s: readonly OnaySatiri[]) => { if (s.some((x) => x.tur === 'sayim-duzeltme')) topluOnayYaz(s); else onayla.mutate(s); } },
                 { anahtar: 'reddet', baslik: 'Seçilenleri reddet', simge: 'x' as const, yap: (s: readonly OnaySatiri[]) => { redYaz(s); } },
               ] } } : {})}
             />
@@ -144,6 +149,18 @@ export function OnayBekleyenler() {
           </ul>
         </Kart>
       )}
+      {topluOnay !== null && (() => {
+        const duzeltmeler = topluOnay.filter((x) => x.tur === 'sayim-duzeltme');
+        const toplam = duzeltmeler.reduce((t, x) => t + x.adet, 0);
+        return (
+          <OnayPenceresi
+            acik baslik={`${topluOnay.length} kayıt onaylansın mı?`} onayMetni="Onayla" yukleniyor={onayla.isPending}
+            onayla={() => { onayla.mutate(topluOnay); }} vazgec={() => { topluOnayYaz(null); }}
+          >
+            <p className="tc-smartes-aciklama">{`${duzeltmeler.length} satır sağlamdan düşer, toplam −${toplam} adet. Sağlam sayım ve stok bu kadar azalır.`}</p>
+          </OnayPenceresi>
+        );
+      })()}
       <OnayPenceresi
         acik={red !== null} baslik={red !== null && red.length > 1 ? `${red.length} kayıt reddedilsin mi?` : 'Kayıt reddedilsin mi?'}
         onayMetni="Reddet" tehlikeli yukleniyor={reddet.isPending}

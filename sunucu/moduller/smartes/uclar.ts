@@ -176,7 +176,7 @@ export const uclar = [
     yetki: 'smartes.adet-onayla',
     govde: adetOnaylaGovdesi,
     cevap: adetKarariCevabi,
-    isle: ({ db, kullanici, govde }) => servis.adetOnayla(db, kullanici.id, govde.idler),
+    isle: ({ db, kullanici, govde }) => servis.adetOnayla(db, kullanici.id, govde.idler, govde.turler),
   }),
   uc({
     yontem: 'POST',

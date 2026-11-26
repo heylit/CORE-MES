@@ -1823,10 +1823,19 @@ export async function makineBulgulari(db: Db, istemci: SmartesIstemcisi | null, 
 // Anahtar kapalıyken başlamış satır açılınca da girmez (geçmiş toptan aktarılmaz).
 // 3760: geçerlilik satırın makinesinde çözülür (makine eşlemesi; makine "istasyona uy" ya da eşlenmemişse istasyonun kaynağı). Etkin
 // kaynak SmartES değilse null. Değeri, makinenin (ya da istasyonun) SmartES'e geçtiği an ile anahtarın açılışından geç olanıdır.
+async function karisikIstasyon(db: Db, istasyonId: number): Promise<boolean> {
+  const secim = await uretimKaynakSecimleri(db, [istasyonId]);
+  const ist = secim.istasyonlar[0]?.kaynak ?? 'terminal';
+  return secim.makineler.some((m) => m.kaynak !== null && m.kaynak !== ist);
+}
+
 async function aktarimGecerliligi(db: Db, istasyonId: number, makineKodu: string | null, zaman: Date): Promise<Date | null> {
   const acilis = await s.aktarimAcilisiYaz(db, await sistemAyariOku(db, SAYIM_AKTARIMI_AYARI), zaman);
   if (acilis === null) return null;
   const makineId = makineKodu === null ? null : koddanTekKayit(await s.eslemeler(db, 'makine'), makineKodu);
+  // Makine kodu eşlenmemişse satırın hangi makinede olduğu bilinmez: makineleri farklı kaynaktan üreten istasyonda istasyonun kaynağına
+  // düşmek terminalle çift sayım açar; satır aktarılmaz, makine eşlenince sonraki okumada girer.
+  if (makineKodu !== null && makineId === null && await karisikIstasyon(db, istasyonId)) return null;
   const etkin = (await uretimKaynaklari(db, [istasyonId])).etkin(istasyonId, makineId);
   if (etkin.kaynak !== 'smartes') return null;
   return etkin.gecerlilik !== null && etkin.gecerlilik.getTime() > acilis.getTime() ? etkin.gecerlilik : acilis;
@@ -1869,8 +1878,10 @@ export async function adetOnaylari(db: Db, q: Sayfa & { gorunum: 'bekliyor' | 'k
 // Her satır kendi kayıt noktasında işlenir: biri reddedilirse (adım çalışmıyor, emir kapalı) ötekiler yine yazılır, reddedilen nedeniyle döner
 // ve onay bekler. Sayım üretim-emirleri komutundan geçer; makine SmartES makine eşlemesinden verilir, eşlenmemişse komut seçer. Kişi onaylayandır.
 // 3760: hurda satırının türü onay anındaki fire eşlemesindendir: hurda (hurda kaydı), sayım düzeltmesi ("Fazla M30": sağlamdan düşer) ya da
-// hatalı parça ("Rework": kalite kararı bekler). Fire adı eşlenmemişse onaylanmaz.
-export async function adetOnayla(db: Db, kisiId: number, idler: readonly number[]): Promise<AdetKarariCevabi> {
+// hatalı parça ("Rework": kalite kararı bekler). Fire adı eşlenmemişse onaylanmaz. Ekran gördüğü türü gönderir; tutmazsa çakışma.
+export async function adetOnayla(
+  db: Db, kisiId: number, idler: readonly number[], beklenen: Readonly<Record<string, s.OnayTuru>> = {},
+): Promise<AdetKarariCevabi> {
   const makineler = new Map((await s.eslemeler(db, 'makine')).map((e) => [e.smartesKod, e.tmiId]));
   const fireler = new Map((await s.adEslemeleri(db, 'fire')).map((e) => [e.ad, e]));
   const hurdaKodlari = new Map((await hurdaNedenleriniListele(db, { yalnizAktif: false })).map((n) => [n.id, n.kod]));
@@ -1898,6 +1909,9 @@ export async function adetOnayla(db: Db, kisiId: number, idler: readonly number[
         const fire = satir.fireAdi === null ? undefined : fireler.get(satir.fireAdi);
         if (fire === undefined || fire.sonuc === null) throw cakisma(ONAY_ILETILERI.fireEslenmemis);
         tur = hurdaOnayTuru(fire.sonuc);
+        // Onaylayanın gördüğü tür yazılacak türdür; arada fire eşlemesi değiştiyse onay yazılmaz.
+        const gorulen = beklenen[String(id)];
+        if (gorulen !== undefined && gorulen !== tur) throw cakisma(ONAY_ILETILERI.fireTuruDegisti);
         if (satir.adet < 0 && tur !== 'sayim-duzeltme') throw cakisma(ONAY_ILETILERI.eksiFire);
         if (tur === 'sayim-duzeltme') {
           await smartesSayimi(db, kisiId, ie.uretimEmriId, { tur: 'saglam', adet: -satir.adet, ...makine }, kaynak);
@@ -1925,7 +1939,7 @@ export async function hurdaOnayinaAl(db: Db, k: RedKaydi, zaman: Date): Promise<
   const onceki = await s.redOnayToplami(db, k.smartesId);
   const fark = k.adet - onceki.toplam;
   if (fark === 0) return 0;
-  const sonuc = k.neden === null ? null : ((await s.adEslemeleri(db, 'fire')).find((e) => e.ad === k.neden)?.sonuc ?? null);
+  const sonuc = k.neden === null ? null : (new Map((await s.adEslemeleri(db, 'fire')).map((e) => [e.ad, e.sonuc])).get(k.neden) ?? null);
   await s.redOnaySatiriEkle(db, { redId: k.smartesId, tur: hurdaOnayTuru(sonuc), adet: fark, duzeltme: onceki.satir > 0, zaman });
   return 1;
 }

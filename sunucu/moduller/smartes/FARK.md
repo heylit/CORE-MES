@@ -75,3 +75,7 @@ Yeni modül; depoda önceki hâli yok. Brief (`SMARTES_PROMPT.md`, .NET/ASMX iç
 - 3655 ve 3658 bu yazıma katıldı; ikisi de main'de zaten yazılı ve testli olduğundan bu yamada ek değişiklik yok.
 - BİLMİYORUM: canlı SmartES'te ACTIVITY alan adı ve değerleri, `UsersList` alanları ve iş emri satırındaki kullanıcı alanı. Aday adlar `kurallar.ts` `ALANLAR`'da;
   ilk canlı okumada doğrulanmalı.
+- Risk düzeltmeleri (26.11): bekleyen fire satırı listede onayın yazacağı türü (fire adının şimdiki eşlemesi) gösterir; ekran gördüğü türü onayla
+  gönderir, tutmazsa onay çakışmayla döner. Toplu onayda sayım düzeltmesi varsa "N satır sağlamdan düşer, toplam −X" penceresi açılır. Sayım düzeltme
+  yetkisi olanın eksi sayımı SmartES kilidine takılmaz (SmartES makinesinde CORE'daki tek düzeltme yolu). Makineleri farklı kaynaktan üreten istasyonda
+  eşlenmemiş makine kodlu satır aktarılmaz (çift sayım). Hareket durumu "yazıldı" satırın üstüne yazılmaz. Geçiş tablosu kayıt kipinde (geniş ekranda kayar).

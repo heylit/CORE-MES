@@ -509,7 +509,8 @@ export const adetOnaylariCevabi = listeCevapSemasi(z.object({
 }));
 
 const onayKimlikleri = z.array(z.number().int().positive()).min(1).max(200);
-export const adetOnaylaGovdesi = z.object({ idler: onayKimlikleri });
+// turler: ekranın gördüğü tür (satır kimliği -> tür); fire satırında yazılacak türle tutmazsa onay çakışmayla döner.
+export const adetOnaylaGovdesi = z.object({ idler: onayKimlikleri, turler: z.record(z.string().regex(/^\d+$/), z.enum(SMARTES_ONAY_TURLERI)).optional() });
 export const adetReddetGovdesi = z.object({ idler: onayKimlikleri, neden: z.string().trim().min(1, 'Red nedeni zorunlu.').max(500, 'Red nedeni en çok 500 karakter.') });
 // Toplu karar satır satır işlenir: işlenemeyen satır (adım çalışmıyor, emir kapalı, arada karar verilmiş) nedeniyle döner, ötekiler işlenir.
 export const adetKarariCevabi = z.object({

@@ -105,12 +105,12 @@ export function Gecis() {
   const izleme = (s: Satir) => (s.tur === 'makine' && s.makine.etkin === 'smartes' ? s.makine : null);
   const sutunlar: readonly Sutun<Satir>[] = [
     {
-      anahtar: 'ad', baslik: 'İstasyon / makine', kirilmaz: true,
+      anahtar: 'ad', baslik: 'İstasyon / makine', kirilmaz: true, sabit: 'sol',
       hucre: (s) => (s.tur === 'istasyon' ? <strong>{s.istasyon.kod}</strong> : <span className="tc-sm-kod">{`↳ ${s.makine.kod}`}</span>),
       csv: (s) => (s.tur === 'istasyon' ? s.istasyon.kod : s.makine.kod),
     },
     {
-      anahtar: 'kaynak', baslik: 'Üretim kaynağı',
+      anahtar: 'kaynak', baslik: 'Üretim kaynağı', kartta: true,
       hucre: (s) => (s.tur === 'istasyon' ? <KaynakRozeti kaynak={s.istasyon.kaynak} /> : (
         <span className="tc-ob-eylem"><KaynakRozeti kaynak={s.makine.etkin} />{s.makine.secim === null && <span className="tc-sm-not">istasyona uyar</span>}</span>
       )),
@@ -129,7 +129,7 @@ export function Gecis() {
     { anahtar: 'hurda', baslik: 'Son hurda', hucre: (s) => { const m = izleme(s); return m?.sonHurda ? `${saat(m.sonHurda.zaman)} · ${m.sonHurda.adet}` : (m ? YOK : null); } },
     { anahtar: 'durus', baslik: 'Son duruş', hucre: (s) => { const m = izleme(s); return m?.sonDurus ? `${saat(m.sonDurus.zaman)} ${m.sonDurus.ad ?? ''}` : (m ? YOK : null); } },
     {
-      anahtar: 'bekleyen', baslik: 'Bekleyen',
+      anahtar: 'bekleyen', baslik: 'Bekleyen', kartta: true, kartTamSatir: true,
       hucre: (s) => {
         const m = izleme(s);
         if (m === null) return null;
@@ -143,7 +143,7 @@ export function Gecis() {
       },
     },
     ...(yazabilir ? [{
-      anahtar: 'eylem', baslik: 'İşlem', csv: false as const,
+      anahtar: 'eylem', baslik: 'İşlem', csv: false as const, sabit: 'sag' as const,
       hucre: (s: Satir) => <Dugme simge="route" onClick={() => { seciliYaz(s); }}>Değiştir</Dugme>,
     }] : []),
   ];
@@ -171,7 +171,8 @@ export function Gecis() {
                 <li><span className="tc-sm-not">Eşlenmemiş neden</span><strong>{d.eslenmemisDurus + d.eslenmemisFire}</strong><span className="tc-sm-not">{`duruş ${d.eslenmemisDurus}, fire ${d.eslenmemisFire}`}</span></li>
                 <li><span className="tc-sm-not">Eşlenmemiş kullanıcı</span><strong>{d.eslenmemisKullanici}</strong><span className="tc-sm-not">{`${d.kisiBekleyenHareket} hareket bekliyor`}</span></li>
               </ul>
-              <Tablo etiket="Üretim kaynağı geçişi" sutunlar={sutunlar} satirlar={satirlar} satirAnahtari={anahtar}
+              {/* Dokuz sütunlu izleme: geniş ekranda tablo kayar, telefonda kayıt kartı. */}
+              <Tablo etiket="Üretim kaynağı geçişi" kip="kayit" sutunlar={sutunlar} satirlar={satirlar} satirAnahtari={anahtar}
                 bosMesaj="SmartES’e eşlenmiş istasyon ya da makine yok." />
               {yazabilir && satirlar.some((s) => izleme(s)?.hataliHareket) && (
                 <Dugme simge="play" yukleniyor={yeniden.isPending} onClick={() => { yeniden.mutate(); }}>Yazılamayan hareketleri yeniden dene</Dugme>

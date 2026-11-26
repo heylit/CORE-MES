@@ -1189,12 +1189,16 @@ export interface OnayListeSatiri {
   fireAdi: string | null;
 }
 
-const ONAY_SECIMI = `SELECT o.id::int AS id, coalesce(o.smartes_id, o.red_id) AS "smartesId", o.tur, o.adet, o.duzeltme, o.durum, ${zamanMetni('o.olusma')} AS olusma,
+// Bekleyen fire satırının türü onayın yazacağı türdür: fire adının şimdiki eşlemesi (eşlenmemişse "hurda"). Aynı ada birden çok
+// eşleme (id ve ad anahtarı) varsa anahtarı en büyük olan geçerlidir; servisteki ada göre harita da öyle çözer.
+const ONAY_SECIMI = `SELECT o.id::int AS id, coalesce(o.smartes_id, o.red_id) AS "smartesId",
+       CASE WHEN o.red_id IS NOT NULL AND o.durum = 'bekliyor' THEN coalesce(fe.sonuc, 'hurda') ELSE o.tur END AS tur, o.adet, o.duzeltme, o.durum, ${zamanMetni('o.olusma')} AS olusma,
        d.is_emri_no AS "isEmriNo", g.is_emri_id AS "isEmriId", d.saglam AS "smartesSaglam", d.makine_saglam AS "makineSaglam", d.istasyon_kodu AS "istasyonKodu", d.makine_kodu AS "makineKodu",
        ${zamanMetni('d.baslangic')} AS baslangic, o.karar_veren_kisi_id AS "kararVerenKisiId", ${zamanMetni('o.karar_zamani')} AS "kararZamani",
        o.red_nedeni AS "redNedeni", d.fire_adi AS "fireAdi"
      FROM smartes_adet_onayi o
      ${ONAY_KAYNAGI}
+     LEFT JOIN LATERAL (SELECT e.sonuc FROM smartes_ad_esleme e WHERE e.tur = 'fire' AND e.ad = d.fire_adi ORDER BY e.anahtar DESC LIMIT 1) fe ON true
      ${TEK_GIDEN}`;
 
 export function onaySay(db: Db, durum: 'bekliyor' | 'karar'): Promise<number> {
@@ -1311,9 +1315,9 @@ export async function hareketDurumuYaz(
       [smartesId, sira, d.kisiId, d.durusNedeniId, d.eslenmemis, d.zaman],
     );
   } else if (d.durum === 'hata') {
-    await db.sorgu("UPDATE smartes_hareket SET durum = 'hata', hata = $3 WHERE smartes_id = $1 AND sira = $2", [smartesId, sira, d.hata]);
+    await db.sorgu("UPDATE smartes_hareket SET durum = 'hata', hata = $3 WHERE smartes_id = $1 AND sira = $2 AND durum <> 'yazildi'", [smartesId, sira, d.hata]);
   } else {
-    await db.sorgu("UPDATE smartes_hareket SET durum = 'kisi-bekliyor', hata = NULL WHERE smartes_id = $1 AND sira = $2", [smartesId, sira]);
+    await db.sorgu("UPDATE smartes_hareket SET durum = 'kisi-bekliyor', hata = NULL WHERE smartes_id = $1 AND sira = $2 AND durum <> 'yazildi'", [smartesId, sira]);
   }
 }
 

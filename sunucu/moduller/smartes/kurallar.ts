@@ -1438,7 +1438,8 @@ export const ONAY_ILETILERI = {
   isEmriYok: 'SmartES iş emri CORE iş emriyle eşleşmedi.',
   kaynakDegisti: 'Bu makinede üretim artık SmartES’ten gelmiyor; kayıt onaylanamaz, reddedin.',
   fireEslenmemis: 'Fire adı eşlenmemiş; önce Eşlemeler > Fire’de hurda, hatalı parça ya da sayım düzeltmesi olarak eşleyin.',
-  eksiFire: 'SmartES’te azalan hurda ya da hatalı parça CORE’da kendiliğinden geri alınmaz; kaydı reddedip CORE’da elle düzeltin.',
+  eksiFire: 'SmartES’te azalan hurda ya da hatalı parça CORE’da kendiliğinden geri alınmaz; kaydı reddedin, sayım düzeltme yetkisi olan kişi üretim emrinde eksi sayımla düzeltir.',
+  fireTuruDegisti: 'Bu firenin eşlemesi siz listeyi açtıktan sonra değişti; listeyi yenileyip türü kontrol edin.',
 } as const;
 
 /* ---------------- Parametre adı denetimi (kart 3368) ---------------- */

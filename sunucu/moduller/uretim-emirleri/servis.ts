@@ -418,7 +418,7 @@ async function baslatanIstasyonunuVer(
 }
 
 // Kilit, kapsam ve (kilit altında okunan) çalışma durumu: sayım ve duruş komutlarının ortak girişi. Adımı verilen komut çalışan adımda olur.
-async function komutBaglami(db: Db, kisiId: number, id: number, isEmriId?: number, secilenMakineler?: readonly number[]) {
+async function komutBaglami(db: Db, kisiId: number, id: number, isEmriId?: number, secilenMakineler?: readonly number[], smartesMuaf = false) {
   const emir = await kilitliEmir(db, id);
   const { hepsi, adim } = await komutAdimi(db, emir, isEmriId);
   const istasyonId = komutIstasyonu(emir, adim, isEmriId);
@@ -427,7 +427,7 @@ async function komutBaglami(db: Db, kisiId: number, id: number, isEmriId?: numbe
   // Varsayılan adım çalışmıyorsa (emir adımlar arasında) komut emir kuralıyla reddedilir; kayıt adımsız eski yoldan gider.
   const calisan = adim?.durum === 'calisiyor' ? adim : null;
   // 3760: devam seçilen makinede sürer; seçim yoksa adımın makinelerinde.
-  await smartesUretiminiDenetle(db, istasyonId, secilenMakineler?.length ? secilenMakineler : () => adimMakineleri(db, id, calisan ?? adim));
+  if (!smartesMuaf) await smartesUretiminiDenetle(db, istasyonId, secilenMakineler?.length ? secilenMakineler : () => adimMakineleri(db, id, calisan ?? adim));
   return { emir, hepsi, adim: calisan, istasyonId, calisma: await adimCalismasi(db, id, calisan) };
 }
 
@@ -940,7 +940,9 @@ export async function emirSayim(
   db: Db, kisiId: number, id: number, govde: SayimKaydi,
   secenek: { kararBekliyor?: boolean; duzeltebilir?: boolean; isEmriId?: number; ilkParca?: IlkParcaGereksinimi } = {},
 ): Promise<{ emir: Emir; uyari: string | null }> {
-  const { emir, hepsi, adim, istasyonId, calisma } = await komutBaglami(db, kisiId, id, secenek.isEmriId);
+  // 3760: SmartES makinesinde CORE'da kalan tek düzeltme yolu: sayım düzeltme yetkisi olanın eksi sayımı kilide takılmaz.
+  const duzeltme = secenek.duzeltebilir === true && govde.adet < 0;
+  const { emir, hepsi, adim, istasyonId, calisma } = await komutBaglami(db, kisiId, id, secenek.isEmriId, undefined, duzeltme);
   const adimId = adim?.id ?? null;
   // 327 a: ilk parçası onaylanmamış emirde (744 a: adımda) sağlam sayım, hangi yoldan gelirse gelsin, karar bekler.
   // Onaysız adımda sağlam sıfırdır: eksi düzeltme de karar bekleyeni düşer.
