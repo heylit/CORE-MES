@@ -46,6 +46,6 @@ export const TEZGAH_BAGLANTISI_AYARLARI = {
     tur: 'boolean',
     varsayilan: false,
     baslik: 'PLC sayacı okuması',
-    aciklama: 'Açıkken Heidenhain okumasında, makine listesinde sayaç adresi verilmiş makinelerde parça sayacı PLC belleğinden okunur. Bunun için kumandaya parolasız PLCDEBUG girişi yapılır: giriş yalnız sayaç okunurken açıktır, okunduktan hemen sonra çıkılır. Bu giriş düzeyi kumandada yazma yetkisi de açar; CORE yalnız ayardaki sayaç adresini okuyabilir, yazma ve kontrol komutu gönderemez. Kapalıyken giriş hiç yapılmaz, sayaç boş kalır. "Heidenhain okuması" anahtarından bağımsızdır; ilk açılış deneme kurulumunda tek makinede yapılır.',
+    aciklama: 'Dikkat: bu okuma kumandada yazma yetkisi de açan PLCDEBUG giriş düzeyini kullanır; CORE yalnız ayardaki sayaç adresini okuyabilir, yazma ve kontrol komutu gönderemez. Açıkken, makine listesinde sayaç adresi verilmiş makinelerde parça sayacı PLC belleğinden okunur: parolasız giriş yalnız sayaç okunurken açıktır, okunduktan hemen sonra çıkılır. Kapalıyken giriş hiç yapılmaz, sayaç boş kalır. "Heidenhain okuması" anahtarından bağımsızdır; o kapalıyken etkisizdir. İlk açılış deneme kurulumunda tek makinede yapılır.',
   },
 } as const satisfies Record<string, AyarTanimi>;
