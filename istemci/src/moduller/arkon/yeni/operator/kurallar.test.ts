@@ -287,10 +287,11 @@ describe('3718 a: numune yolu ve okutma', () => {
   });
   it('3744 R1: başlamış işte aynı kart ekrana getirir, başka kart (kimlikle anlaşılır) değişimi eskisi ve yenisiyle söyler', () => {
     const p1 = { id: 1, etiket: 'ORN-UE-1-P1' }, p2 = { id: 2, etiket: 'ORN-UE-1-P2' };
-    expect(basladiIletisi('ORN-UE-1', p1, p1)).toBe('İş zaten başladı: ORN-UE-1 · ekrana getirildi · sayım kartı ORN-UE-1-P1');
-    expect(basladiIletisi('ORN-UE-1', p1, p2)).toBe('Sayım kartı değişti: ORN-UE-1-P1 → ORN-UE-1-P2 · ORN-UE-1 zaten başlamıştı');
-    expect(basladiIletisi('ORN-UE-1', { id: 1, etiket: null }, p2)).toBe('Sayım kartı değişti: #1 → ORN-UE-1-P2 · ORN-UE-1 zaten başlamıştı');
-    expect(basladiIletisi('ORN-UE-1', null, p2)).toBe('Sayım kartı: ORN-UE-1-P2 · ORN-UE-1 zaten başlamıştı');
+    expect(basladiIletisi('ORN-UE-1', p1, p1)).toBe('İş zaten başladı: ORN-UE-1 · ekrana getirildi · sayım kartı P1');
+    expect(basladiIletisi('ORN-UE-1', p1, p2)).toBe('Sayım kartı P1 → P2 · ORN-UE-1 zaten başlamıştı');
+    expect(basladiIletisi('ORN-UE-1', { id: 1, etiket: null }, p2)).toBe('Sayım kartı #1 → P2 · ORN-UE-1 zaten başlamıştı');
+    expect(basladiIletisi('ORN-UE-1', null, p2)).toBe('Sayım kartı: P2 · ORN-UE-1 zaten başlamıştı');
     expect(basladiIletisi('ORN-UE-1', null, null)).toBe('İş zaten başladı: ORN-UE-1 · ekrana getirildi');
+    expect(basladiIletisi('ORN-UE-1', p1, { id: 9, etiket: 'ORN-K-9' })).toBe('Sayım kartı P1 → ORN-K-9 · ORN-UE-1 zaten başlamıştı');
   });
 });

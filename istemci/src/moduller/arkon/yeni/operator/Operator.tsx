@@ -75,7 +75,7 @@ import {
   sonucBelgesi, takimUyarilari, tonAdi, uyariAnahtari, vardiyaHesabi, vardiyaOzeti, zamaniGelenUyarilar, hurdaUyarisi, bitisOzeti, bitirmeEksigi, tmiIlkParcaGerekli,
   type EkranSekmesi,
   hataliNedenleri, hataliUstSiniri, sekmeKarari,
-  isBasladiMi, basladiIletisi,
+  isBasladiMi, basladiIletisi, BASLADI_ILETI_SURESI_MS,
 } from './kurallar.ts';
 import {
   BilgiCipi, CagriCipi, etiketSayisi, DurumDugmeleri, EtkinKart, GorevKarti, IsAlanlari, IsEtiketleri, IsSatiri, Konfeti, NumuneSeridi, PlanBandi,
@@ -137,7 +137,7 @@ type Gorunum = EkranSekmesi['id'];
 interface UyariGosterimi { list: Uyari[]; title?: string; then?: () => void }
 interface Okutma { baslik: string; ipucu?: string; okundu: (kod: string) => void }
 interface Devir { note: string; by: string; at: number }
-interface Ek { undo?: () => void; action?: { l: string; fn: () => void } }
+interface Ek { undo?: () => void; action?: { l: string; fn: () => void }; sure?: number }
 
 const BOS_TAKVIM: KontrolTakvimi = { due: [], next: null, who: {}, why: {} };
 const NUMUNE_SESI_MS = 60_000;
@@ -254,7 +254,8 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
     } else if (ek?.action) {
       const a = ek.action;
       bildir(tur, m, { eylem: { etiket: a.l, yap: a.fn } });
-    } else bildir(tur, m);
+    } else if (ek?.sure !== undefined) bildir(tur, m, { sure: ek.sure });
+    else bildir(tur, m);
   }, [bildir]);
   const sayRef = useRef(say);
   sayRef.current = say;
@@ -498,7 +499,7 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
       isGecIste(r.sira, () => {
         mvYaz('prod');
         islerYaz((l) => l.map((x, j) => (j === r.sira ? { ...x, kart, fresh: false } : x)));
-        say(basladi ? basladiIletisi(hedef.no, kartAdi(hedef.kart), kartAdi(kart)) : `İş emri açıldı: ${hedef.no} · refakat kartıyla`, 'check', 'run');
+        say(basladi ? basladiIletisi(hedef.no, kartAdi(hedef.kart), kartAdi(kart)) : `İş emri açıldı: ${hedef.no} · refakat kartıyla`, 'check', 'run', basladi ? { sure: BASLADI_ILETI_SURESI_MS } : undefined);
       });
       return;
     }
@@ -557,7 +558,7 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
     isGecIste(i, () => {
       islerYaz((l) => l.map((x, j) => (j === i ? { ...x, kart: k.id, fresh: false } : x)));
       mvYaz('prod');
-      say(`${onEk}${basladi ? basladiIletisi(hedef.no, kartAdi(hedef.kart), kartAdi(k.id, k.etiket)) : `İş emri açıldı: ${hedef.no} · ${k.etiket}`}`, 'check', 'run');
+      say(`${onEk}${basladi ? basladiIletisi(hedef.no, kartAdi(hedef.kart), kartAdi(k.id, k.etiket)) : `İş emri açıldı: ${hedef.no} · ${k.etiket}`}`, 'check', 'run', basladi ? { sure: BASLADI_ILETI_SURESI_MS } : undefined);
     });
   };
   // 1337 a: el okuyucuyla okutulan refakat kartı işi o kartla açar, başlatmaz (1062). Özet açıksa kapanır; başka pencere açıkken dinlenmez.

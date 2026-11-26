@@ -13,13 +13,13 @@ const satirAnahtari = (x: RefakatKartSatiri): string => `${x.konumId}:${x.partiI
 const yerMetni = (x: RefakatKartSatiri): string => `${x.konumAd ?? x.konumKod} · ${KONUM_ETIKETI[x.konumTur]}`;
 
 // Üretim Terminali kartın işini kişinin istasyonunda açar (Soru 134); iş orada değilse terminal sıradaki adımın istasyonunu söyler.
-// 3744: adım başlamışsa düğme işi yeniden açmaz gibi görünmez; "İşe git" terminalde çalışan işi gösterir.
+// 3744: adım başlamışsa düğme işi yeniden açmaz gibi görünmez; "İşe geç" terminalde çalışan işi gösterir.
 export function IsEmriniAc({ r, basladi = false }: { r: RefakatPartisi; basladi?: boolean }) {
   const yonlendir = useNavigate();
   if (r.durum !== 'acik') return null;
   return (
     <Dugme tur="birincil" simge={basladi ? 'next' : 'play'} onClick={() => { void yonlendir(`/uretim-terminali?emir=${String(r.uretimEmriId)}&kart=${String(r.id)}`); }}>
-      {basladi ? 'İşe git' : 'İş emrini aç'}
+      {basladi ? 'İşe geç' : 'İş emrini aç'}
     </Dugme>
   );
 }
