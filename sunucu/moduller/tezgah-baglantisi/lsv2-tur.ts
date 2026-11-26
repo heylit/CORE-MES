@@ -7,7 +7,7 @@ import {
 } from './kurallar.ts';
 import type { GecmisOgeDurumu, Lsv2Uyarisi, SuzulecekOge, TezgahOgeleriHaritasi, TezgahOgesi } from './kurallar.ts';
 import type { Lsv2Istemcisi, Lsv2Sonucu } from './lsv2.ts';
-import { temizlikTuru } from './servis.ts';
+import { lsv2ListesiOku, temizlikTuru } from './servis.ts';
 import type { TurBellegi } from './servis.ts';
 import * as s from './sorgular.ts';
 
@@ -28,18 +28,22 @@ export interface Lsv2MakineBellegi {
 
 export interface Lsv2Bellegi {
   makineler: Map<string, Lsv2MakineBellegi>;
-  istemciler: Map<string, Lsv2Istemcisi>;
+  istemciler: Map<string, { istemci: Lsv2Istemcisi; tanim: string }>;
   aralikMs: number;
 }
 
 export const yeniLsv2Bellegi = (): Lsv2Bellegi => ({ makineler: new Map(), istemciler: new Map(), aralikMs: VARSAYILAN_ARALIK_SN * 1000 });
+
+// Bağlantının dayandığı tanım: adres ya da sayaç değişince eski bağlantı kapatılır, yenisi kurulur.
+const tanimAnahtari = (m: Lsv2Makinesi): string => `${m.adres};${m.sayac === null ? '' : String(m.sayac)}`;
 
 const yeniMakineBellegi = (): Lsv2MakineBellegi => ({
   sonKontrol: null, ardisikHata: 0, calisiyor: false, uyarilar: [], sonHata: null, durum: null, suzgec: new Map(), tanimYazildi: false,
 });
 
 export interface Lsv2TurOrtami {
-  makineler: readonly Lsv2Makinesi[];
+  // Yalnız test: verilmezse liste her turda Sistem Ayarları'ndan ("Heidenhain makineleri") okunur.
+  makineler?: readonly Lsv2Makinesi[];
   istemciKur: (m: Lsv2Makinesi) => Lsv2Istemcisi;
   saat: () => Date;
   bellek: Lsv2Bellegi;
@@ -53,12 +57,24 @@ export type Lsv2TurSonucu = { tur: 'kapali' } | { tur: 'ayar-yok' } | { tur: 'ok
 
 export const LSV2_BEKLEME_NEDENLERI = {
   kapali: 'Heidenhain okuması kapalı.',
-  'ayar-yok': 'TMIV2_TEZGAH_LSV2_MAKINELERI tanımlı değil.',
+  'ayar-yok': 'Heidenhain makine listesi boş (Sistem Ayarları).',
 } as const;
 
 export function lsv2Kapat(b: Lsv2Bellegi): void {
-  for (const i of b.istemciler.values()) i.kapat();
+  for (const i of b.istemciler.values()) i.istemci.kapat();
   b.istemciler.clear();
+}
+
+// Listeden çıkan ya da adresi değişen makinenin açık bağlantısı kapatılır; belleği de düşer (ekranda kalmaz).
+function listeyiEsle(b: Lsv2Bellegi, makineler: readonly Lsv2Makinesi[]): void {
+  const tanimlar = new Map(makineler.map((m) => [m.cihazAdi, tanimAnahtari(m)]));
+  for (const [ad, i] of b.istemciler) {
+    if (tanimlar.get(ad) !== i.tanim) {
+      i.istemci.kapat();
+      b.istemciler.delete(ad);
+    }
+  }
+  for (const ad of b.makineler.keys()) if (!tanimlar.has(ad)) b.makineler.delete(ad);
 }
 
 // Zamanlanmış iş her saniye çağırır; aralığı dolan ve okunmakta olmayan makineler aynı anda okunur. Ayar kapalıysa açık bağlantılar
@@ -68,15 +84,17 @@ export async function lsv2Turu(vt: Pick<Veritabani, 'tx'>, o: Lsv2TurOrtami): Pr
   const ayarlar = await vt.tx(async (db) => ({
     acik: await sistemAyariOku(db, LSV2_OKUMA_AYARI), aralik: await sistemAyariOku(db, ARALIK_AYARI), mt: await sistemAyariOku(db, OKUMA_AYARI),
     plc: await sistemAyariOku(db, LSV2_PLC_SAYACI_AYARI),
+    liste: o.makineler ?? await lsv2ListesiOku(db),
   }));
   b.aralikMs = (ayarlar.aralik ?? VARSAYILAN_ARALIK_SN) * 1000;
   if (!ayarlar.acik) {
     lsv2Kapat(b);
     return { tur: 'kapali' };
   }
-  if (o.makineler.length === 0) return { tur: 'ayar-yok' };
+  listeyiEsle(b, ayarlar.liste);
+  if (ayarlar.liste.length === 0) return { tur: 'ayar-yok' };
   const simdi = o.saat().getTime();
-  const sirada = o.makineler.filter((m) => {
+  const sirada = ayarlar.liste.filter((m) => {
     const mb = makineBellegi(b, m.cihazAdi);
     return !mb.calisiyor && (mb.sonKontrol === null || simdi - mb.sonKontrol >= etkinAralikMs(b.aralikMs, mb.ardisikHata));
   });
@@ -100,11 +118,12 @@ async function makineyiOku(vt: Pick<Veritabani, 'tx'>, o: Lsv2TurOrtami, m: Lsv2
   mb.calisiyor = true;
   mb.sonKontrol = o.saat().getTime();
   try {
-    let istemci = b.istemciler.get(m.cihazAdi);
-    if (istemci === undefined) {
-      istemci = o.istemciKur(m);
-      b.istemciler.set(m.cihazAdi, istemci);
+    let kayit = b.istemciler.get(m.cihazAdi);
+    if (kayit === undefined) {
+      kayit = { istemci: o.istemciKur(m), tanim: tanimAnahtari(m) };
+      b.istemciler.set(m.cihazAdi, kayit);
     }
+    const istemci = kayit.istemci;
     const r = await istemci.oku({ plcSayaci });
     const zaman = o.saat();
     const sonuc = await vt.tx((db) => isle(db, m.cihazAdi, mb, r, zaman));

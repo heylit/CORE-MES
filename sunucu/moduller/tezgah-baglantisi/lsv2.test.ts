@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, test } from 'node:test';
-import { lsv2MakineleriOku, LSV2_DEGISKENI } from './ayar.ts';
 import { lsv2Ogeleri, ozetle } from './kurallar.ts';
 import { IZINLI_KOMUTLAR, lsv2IstemcisiKur, Lsv2Hatti, Lsv2YasakHatasi, telgrafKur } from './lsv2.ts';
 import type { Lsv2Komutu } from './lsv2.ts';
@@ -266,31 +265,5 @@ describe('LSV2 hata halleri (kabul 3)', () => {
     assert.equal((await smartes.oku()).tur, 'basarili', 'ilk bağlantının okuması sürer');
     smartes.kapat();
     core.kapat();
-  });
-});
-
-describe('Heidenhain makine listesi ayarı (kabul 4)', () => {
-  const oku = (deger: string | undefined) => lsv2MakineleriOku({ [LSV2_DEGISKENI]: deger });
-
-  test('boş ya da tanımsız: liste boş (bağlantı açılmaz)', () => {
-    assert.deepEqual(oku(undefined), []);
-    assert.deepEqual(oku('  '), []);
-  });
-
-  test('geçerli liste: kurum içi IP, isteğe bağlı D sayaç adresi', () => {
-    assert.deepEqual(oku('ORN-H01=127.0.0.11;D10000, ORN-H02=127.0.0.12'), [
-      { cihazAdi: 'ORN-H01', adres: '127.0.0.11', sayac: 10_000 },
-      { cihazAdi: 'ORN-H02', adres: '127.0.0.12', sayac: null },
-    ]);
-  });
-
-  test('dış adres, ad, kapı, bozuk sayaç ve tekrarlanan ad açılışı durdurur; ileti değeri söylemez', () => {
-    for (const deger of [
-      'ORN-H01=192.0.2.11', 'ORN-H01=203.0.113.7;D10000', 'ORN-H01=makine01', 'ORN-H01=orn.example', 'ORN-H01=127.0.0.11:19000',
-      'ORN-H01=127.0.0.11;D10001', 'ORN-H01=127.0.0.11;W10000', 'ORN-H01=127.0.0.11;D10000;D4', 'ORN-H01', '=127.0.0.11',
-      'ORN-H01=127.0.0.11,orn-h01=127.0.0.12', 'ORN H01=127.0.0.11',
-    ]) {
-      assert.throws(() => oku(deger), (h: Error) => h.message.startsWith(`Ortam değişkeni geçersiz: ${LSV2_DEGISKENI}`) && !h.message.includes('192.0.2') && !h.message.includes('127.0.0'), deger);
-    }
   });
 });

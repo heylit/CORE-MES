@@ -1,4 +1,4 @@
-import { lsv2MakineleriOku, tezgahAdresiOku } from './ayar.ts';
+import { tezgahAdresiOku } from './ayar.ts';
 import type { Lsv2Makinesi } from './ayar.ts';
 import { tezgahIstemcisiKur } from './istemci.ts';
 import type { TezgahIstemcisi } from './istemci.ts';
@@ -10,7 +10,5 @@ const adres = tezgahAdresiOku(process.env);
 
 export const ortamIstemcisi: TezgahIstemcisi | null = adres === null ? null : tezgahIstemcisiKur(adres);
 
-// Heidenhain makineleri (kart 3753): liste boşsa bağlantı açılmaz.
-export const lsv2Makineleri: readonly Lsv2Makinesi[] = lsv2MakineleriOku(process.env);
-export const lsv2Adlari: ReadonlySet<string> = new Set(lsv2Makineleri.map((m) => m.cihazAdi.toLowerCase()));
+// Heidenhain makine listesi Sistem Ayarları'ndadır (kart 3757); her turda okunur.
 export const lsv2IstemcisiVer = (m: Lsv2Makinesi): Lsv2Istemcisi => lsv2IstemcisiKur(m.adres, m.sayac);

@@ -25,8 +25,12 @@ yalnız okumayı kapsamalıdır.
 2. **Yalnız okuma, sabit beyaz liste.** Gönderilebilen telgraflar: `A_LG` (yalnız INSPECT, DNC, PLCDEBUG; parola alanı yok), `A_LO`
    (yüksüz ya da yalnız `PLCDEBUG` düzeyinden çıkış), `R_VR`, `R_PR` (yüksüz), `R_RI` (yalnız 23, 24, 25, 26, 27, 28, 51), `R_MB` (yalnız ayardaki sayaç adresi, 4 bayt).
    Liste dışı telgraf ve her `C_` komutu soket yazılmadan reddedilir (`lsv2.ts` `telgrafKur`; `lsv2.test.ts` "LSV2 beyaz liste").
-3. **Adres yalnız ortam değişkeninde ve kurum içi IP.** `TMIV2_TEZGAH_LSV2_MAKINELERI` (`CIHAZ=ADRES;SAYAC,...`); ad çözümlemesi ve kapı
-   yazımı yoktur, kapı sabit 19000'dir. Geçersiz ya da dış adres açılışı durdurur; ileti değeri söylemez (`ayar.ts` `lsv2MakineleriOku`).
+3. **Adres Sistem Ayarları'nda, yalnız kurum içi IPv4.** Makine listesi "Heidenhain makineleri" ayarıdır (kullanıcı kararı 3757,
+   26.11.2026: ortam değişkeni kalktı, ağ aralığı sınırı eklenmedi). Yalnız ayar değiştirebilen yönetici yazar; değişiklik denetim
+   kaydına girer ve sonraki turda geçerli olur. Ad çözümlemesi ve kapı yazımı yoktur, kapı sabit 19000'dir; adres 10/8, 172.16/12 ya da
+   192.168/16 içinde olmalıdır. Sunucu ve ekran aynı kuralla doğrular, ileti adresi söylemez (`paylasilan/lsv2-makineleri.ts`
+   `lsv2ListesiHatasi`). Bilinen risk: sunucunun hangi kurum içi IP'nin 19000 kapısına bağlanacağını artık her yönetici ekrandan seçer;
+   karşılığı sabit kapı, sabit okuma beyaz listesi, denetim kaydı ve ağ kuralıdır (19000'e yalnız CORE ve SmartES).
 4. **Parola tutulmaz.** Kodda, depoda, ayarda ve ortam değişkeninde parola yoktur; giriş parolasızdır. Yetki yetmiyorsa alan null kalır
    ve uyarı gösterilir ("yetki yok"); parola eklenmez.
 5. **Varsayılan kapalı.** `tezgah-baglantisi.lsv2-okuma` ("Heidenhain okuması") kapalıysa ya da liste boşsa bağlantı açılmaz

@@ -11,33 +11,24 @@ program, takım, ilerleme ve iş mili oranları, kumandanın hata iletileri ve (
 parça sayacı. Dosya,
 program seçme, tuş, PLC yazma ve her `C_` komutu kodla engellidir. Parola gönderilmez ve hiçbir yerde tutulmaz.
 
-### 1. Ortam değişkeni
+### 1. Makine listesi (Sistem Ayarları)
 
-Sunucunun ortamına (servis tanımı ya da `.env`) makine listesi yazılır. Biçim:
+Sistem Ayarları > Genel > "Heidenhain makineleri" listesine her makine bir satır olarak yazılır (yalnız ayar değiştirebilen yönetici):
 
-```
-TMIV2_TEZGAH_LSV2_MAKINELERI=CIHAZ=ADRES;SAYAC,CIHAZ=ADRES
-```
+- Makine kodu: SmartES'teki makine kodunun aynısı (karşılaştırma ekranı bu adla eşleşir). Harf, rakam, nokta, tire, alt çizgi.
+- IP adresi: makinenin kurum içi IPv4 adresi (10.x, 172.16-31.x, 192.168.x). Ad ve kapı yazılmaz; kapı her zaman 19000'dir.
+- Sayaç adresi (isteğe bağlı): parça sayacının PLC çift kelime adresi, `D` ve 4'ün katı sayı (ör. D10000). Boşsa sayaç boş kalır,
+  uydurulmaz. Adres makineden makineye değişir; PLC programını bilen bakım ekibinden ya da SmartES makine ayarından alınır.
 
-- `CIHAZ`: SmartES'teki makine kodunun aynısı (karşılaştırma ekranı bu adla eşleşir). Harf, rakam, nokta, tire, alt çizgi.
-- `ADRES`: makinenin kurum içi IP adresi (10.x, 172.16-31.x, 192.168.x). Ad ve kapı yazılmaz; kapı her zaman 19000'dir.
-- `SAYAC` (isteğe bağlı): parça sayacının PLC çift kelime adresi, `D` ve 4'ün katı sayı. Yazılmazsa sayaç boş kalır, uydurulmaz.
-  Adres makineden makineye değişir; PLC programını bilen bakım ekibinden ya da SmartES makine ayarından alınır.
-
-Uydurma örnek (belgeleme aralığı; olduğu gibi kullanılamaz, sunucu dış adresi reddeder):
-
-```
-TMIV2_TEZGAH_LSV2_MAKINELERI=ORN-H01=192.0.2.11;D10000,ORN-H02=192.0.2.12
-```
-
-Gerçek adres ve sayaç adresi bu belgeye, depoya, karta ya da ön izlemeye yazılmaz; yalnız sunucunun ortamında durur. Değer geçersizse
-(dış adres, ad, kapı, bozuk sayaç, aynı ad iki kez) sunucu açılmaz ve iletide kaçıncı kaydın bozuk olduğu yazar. Değişiklik sunucu
-yeniden başlayınca geçerli olur.
+Hatalı alanın altında neden yazar; hatalı listede Kaydet kapalıdır, sunucu da aynı kuralla reddeder. Kaydedince sonraki okumada
+geçerli olur, sunucu yeniden başlatılmaz; listeden çıkan ya da adresi değişen makinenin açık bağlantısı kapatılır. Değişiklik denetim
+kaydına yazılır. Gerçek adres ve sayaç adresi yalnız bu ayarda durur; depoya, karta ya da ön izlemeye yazılmaz. Ortam değişkeni
+kullanılmaz (`TMIV2_TEZGAH_LSV2_MAKINELERI` kalktı, kart 3757).
 
 ### 2. Sistem Ayarları
 
 Sistem Ayarları > Tezgâh bağlantısı > "Heidenhain okuması" açılır (varsayılan kapalı). Liste boşken açık olsa da bağlantı açılmaz;
-deneme ekranı "Heidenhain listesi yok" der. Okuma aralığı "Tezgâh bağlantısı okuma aralığı" ayarıdır.
+deneme ekranı makine listesinin boş olduğunu söyler. Okuma aralığı "Tezgâh bağlantısı okuma aralığı" ayarıdır.
 
 Parça sayacı ayrı anahtardadır: "PLC sayacı okuması" (varsayılan kapalı, "Heidenhain okuması"ndan bağımsız). Kapalıyken PLC'ye
 hiç giriş yapılmaz, sayaç boş kalır ve kartta "PLC sayacı okuması kapalı" yazar. Açıkken yalnız sayaç adresi verilmiş makinede, her
@@ -68,5 +59,5 @@ yalnız CORE sunucusu ve SmartES makinelerin 19000 kapısına erişebilsin (bug�
 | Makine kapalı ya da meşgul (bağlantı reddedildi) | Makine kapalı, ağ yolu kapalı ya da kumanda yeni bağlantıyı kabul etmiyor (ör. SmartES tutuyor) | CORE zorlamaz, aralık 60 sn'ye kadar uzar ve yeniden dener. Makine açıksa güvenlik duvarı ve SmartES bağlantı sayısı denetlenir. |
 | Makine DNC okumasına izin vermiyor | Kumandada DNC seçeneği ya da izni kapalı; durum, program, takım okunamaz | Bakımla konuşulur; CORE parola eklemez. |
 | Sayaç için yetki yok | PLC belleği okuması daha yüksek giriş düzeyi istiyor | Parola eklenmez; bakımla konuşulur. Öteki değerler okunmaya devam eder. |
-| Sayaç adresi makinenin PLC belleğinde yok | Ayardaki D adresi kelime alanının dışında | Adres bakımla doğrulanır, ayar düzeltilir, sunucu yeniden başlatılır. |
+| Sayaç adresi makinenin PLC belleğinde yok | Ayardaki D adresi kelime alanının dışında | Adres bakımla doğrulanır, "Heidenhain makineleri" listesinde düzeltilir. |
 | Makine süresinde cevap vermedi / cevabı yarım kaldı | Ağ ya da kumanda yanıtı kesildi | Bağlantı bırakılır, sonraki turda yeniden kurulur. Sürerse ağ denetlenir. |

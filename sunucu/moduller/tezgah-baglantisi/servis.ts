@@ -1,4 +1,6 @@
 import type { Db, Veritabani } from '#cekirdek/db.ts';
+import { lsv2ListesiniCoz } from '#paylasilan/lsv2-makineleri.ts';
+import type { Lsv2Makinesi } from '#paylasilan/lsv2-makineleri.ts';
 import { bulunamadi } from '#cekirdek/hata.ts';
 import { TEZGAH_TURLERI } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
 import type { TezgahAyrintisiCevabi, TezgahBaglantisiDurumCevabi, TezgahDoluluguCevabi, TezgahTuru } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
@@ -7,7 +9,7 @@ import { smartesMakineDegerleri } from '../smartes/disari.ts';
 import type { TezgahIstemcisi } from './istemci.ts';
 import type { Lsv2Bellegi } from './lsv2-tur.ts';
 import {
-  akislariOku, ARALIK_AYARI, LSV2_OKUMA_AYARI, lsv2UyariMetni, AZAMI_SAMPLE_SAYFASI, baslikOku, cihazSayisiOku, diziyiDurumaCevir, dolulukSeviyesi, dolulukYuzdesi, durumaIsle, durumdanDiziye, eskiMi,
+  akislariOku, ARALIK_AYARI, LSV2_MAKINELERI_AYARI, LSV2_OKUMA_AYARI, lsv2UyariMetni, AZAMI_SAMPLE_SAYFASI, baslikOku, cihazSayisiOku, diziyiDurumaCevir, dolulukSeviyesi, dolulukYuzdesi, durumaIsle, durumdanDiziye, eskiMi,
   etkinAralikMs, farklar, GECMIS_SAKLAMA_MS, gecmisiBosalt, gecmisiSuz, OKUMA_AYARI, ORNEK_SAKLAMA_GUNU, ozetle, sayaciArttir, sayaciOzetle, SAMPLE_SAYISI,
   SATIR_SINIRI_AYARI, sonrakiSira, tamponAsildiMi, tanimlariOku, TEMIZLIK_ARALIGI_MS, TEMIZLIK_PARCASI, TEMIZLIK_TUR_BUTCESI_MS, TEMIZLIK_TUR_PARCASI,
   varliklariOku, VARLIK_ARALIGI_MS, VARSAYILAN_ARALIK_SN, VARSAYILAN_SATIR_SINIRI, yeniSatirSayaci,
@@ -288,14 +290,19 @@ async function aralikSaniye(db: Db): Promise<number> {
 
 // Heidenhain okumasının durumu: makine listesi (ayardan) ve okuma turunun belleği.
 export interface Lsv2Durumu {
-  makineler: readonly { cihazAdi: string }[];
+  // Yalnız test: verilmezse liste Sistem Ayarları'ndan okunur.
+  makineler?: readonly { cihazAdi: string }[];
   bellek: Lsv2Bellegi;
+}
+
+export async function lsv2ListesiOku(db: Db): Promise<Lsv2Makinesi[]> {
+  return lsv2ListesiniCoz((await sistemAyariOku(db, LSV2_MAKINELERI_AYARI)) ?? '');
 }
 
 export async function durum(db: Db, istemci: TezgahIstemcisi | null, bellek: TurBellegi, simdi: Date, lsv2?: Lsv2Durumu): Promise<TezgahBaglantisiDurumCevabi> {
   const acik = await sistemAyariOku(db, OKUMA_AYARI);
   const lsv2Acik = await sistemAyariOku(db, LSV2_OKUMA_AYARI);
-  const lsv2Adlari = new Map((lsv2?.makineler ?? []).map((m) => [m.cihazAdi.toLowerCase(), m.cihazAdi]));
+  const lsv2Adlari = new Map((lsv2?.makineler ?? await lsv2ListesiOku(db)).map((m) => [m.cihazAdi.toLowerCase(), m.cihazAdi]));
   const aralik = await aralikSaniye(db);
   const satirlar = await s.okumalar(db);
   const smartes = await smartesMakineDegerleri(db);

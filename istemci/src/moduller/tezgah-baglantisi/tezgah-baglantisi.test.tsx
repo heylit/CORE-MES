@@ -79,7 +79,7 @@ describe('Tezgâh bağlantısı (deneme)', () => {
     cleanup();
     sunucuKur({ ...ORNEK_DURUM(), baglanti: 'kapali', lsv2Baglanti: 'adres-yok', tezgahlar: [], sonOkuma: null });
     ac(<Karsilastirma />);
-    expect(await screen.findByText(/TMIV2_TEZGAH_LSV2_MAKINELERI/)).toBeTruthy();
+    expect(await screen.findByText(/makine listesi boş/)).toBeTruthy();
     expect(screen.getByText(/Okuma kapalı\. Sistem Ayarları/)).toBeTruthy();
   });
 

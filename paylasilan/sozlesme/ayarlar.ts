@@ -7,6 +7,7 @@ import { gizli } from '../gizli.ts';
 import { istekKimligiMi } from '../istek-kimligi.ts';
 import { enUzunNumara, kalipHatasi } from '../numara.ts';
 import { beklenenSurum, surumSemasi } from '../surum.ts';
+import { lsv2ListesiHatasi } from '../lsv2-makineleri.ts';
 import { tarihAraligiHatasi } from '../tarih-araligi.ts';
 import { SIFIRLAMA_ONAY_METNI, TEMIZLIK_EN_COK_KOK, TEMIZLIK_ONAY_METNI, TEMIZLIK_TURLERI } from '../veri-temizleme.ts';
 import { zamanSemasi } from '../zaman.ts';
@@ -52,7 +53,8 @@ export function ayarDegerSemasi(tanim: AyarTanimi): z.ZodType<boolean | number |
       .min(bosOlabilir === true ? 0 : 1, 'Metin boş olamaz.')
       .max(tanim.enUzun, `En çok ${String(tanim.enUzun)} karakter olabilir.`)
       .superRefine((metin, ctx) => {
-        const hata = bicim === 'ag-araligi' ? agAraligiHatasi(metin) : bicim === 'tarih-araligi' ? tarihAraligiHatasi(metin) : null;
+        const hata = bicim === 'ag-araligi' ? agAraligiHatasi(metin) : bicim === 'tarih-araligi' ? tarihAraligiHatasi(metin)
+          : bicim === 'lsv2-makineleri' ? lsv2ListesiHatasi(metin) : null;
         if (hata !== null) ctx.addIssue({ code: z.ZodIssueCode.custom, message: hata });
       });
   }

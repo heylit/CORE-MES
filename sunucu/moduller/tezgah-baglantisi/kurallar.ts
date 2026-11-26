@@ -520,6 +520,7 @@ export function sayaciOzetle(c: SatirSayaci, simdi: number): { pencereDakika: nu
 // lsv2.ts'in okuduğu ham değerler; okunamayan alan null. Durum ve kip Heidenhain kodudur (PgmState, ExecState), metne burada çevrilir.
 export const LSV2_OKUMA_AYARI = 'tezgah-baglantisi.lsv2-okuma';
 export const LSV2_PLC_SAYACI_AYARI = 'tezgah-baglantisi.lsv2-plc-sayaci';
+export const LSV2_MAKINELERI_AYARI = 'tezgah-baglantisi.lsv2-makineleri';
 
 export type Lsv2Uyarisi = 'kapali-ya-da-mesgul' | 'dnc-yok' | 'sayac-yetki-yok' | 'sayac-adresi-yok' | 'sayac-kapali';
 export const LSV2_UYARI_METNI: Record<Lsv2Uyarisi, string> = {
