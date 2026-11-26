@@ -1626,6 +1626,16 @@ describe('Teklifler', () => {
     expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/teklifler/21/siparise-donustur', govde: { kdvOrani: '20.00' } });
   });
 
+  it('3767: siparişe dönüştürmede termin kabul edilen sürümün termini gelir, müşterinin istediği tarih değil', async () => {
+    const terminli = { ...TEKLIF_KABUL, istenenTarih: '2026-12-20', surumler: [{ ...SURUM_1, terminTarihi: '2026-12-17' }] } satisfies TeklifAyrintisi;
+    sunucuKur(YAZAR, (yontem, yol) => (yontem === 'GET' && yol === '/siparisler/teklifler/21' ? json(200, terminli) : undefined));
+    ac('/siparisler/teklifler/21');
+    fireEvent.click(await screen.findByRole('button', { name: 'Satış siparişine dönüştür' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Satış siparişine dönüştür' });
+    expect((within(pencere).getByLabelText(/^Termin/) as HTMLInputElement).value).toBe('2026-12-17');
+    expect(within(pencere).getByText('Kabul edilen teklifte 17.12.2026.')).toBeTruthy();
+  });
+
   it('kartsız satır için uyarı yazılır ve kart bağlama kimlikle gider', async () => {
     const istekler = sunucuKur(YAZAR, (yontem, yol) => {
       if (yontem === 'GET' && yol === '/siparisler/teklifler/21') return json(200, TEKLIF_KABUL);
