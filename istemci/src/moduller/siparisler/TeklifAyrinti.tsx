@@ -115,6 +115,8 @@ export function TeklifAyrinti() {
   // 3461: sipariş kabul edilen sürümün KDV oranıyla açılır (oransız eski sürümde genel oran, o da yoksa 20). Oran teklifteki gibi
   // finansın oranlarından seçilir; teklifteki orandan ayrılırsa uyarı yazılır.
   const kabulKdv = t.surumler.find((s) => s.surumNo === t.kabulSurumu)?.kdvOrani ?? null;
+  // Sipariş termini müşteriye verdiğimiz terminle açılır (kabul edilen sürüm); sürümde termin yoksa müşterinin istediği tarih.
+  const kabulTermin = t.surumler.find((s) => s.surumNo === t.kabulSurumu)?.terminTarihi ?? null;
   const kdvSecimli = t.kdvSecenekleri.oranlar.length > 0;
   const kdvBaslangic = (kdvSecimli ? kdvDegeri : kdvKutuMetni)(kabulKdv ?? t.kdvSecenekleri.genel ?? '20');
   const kdvSapti = kabulKdv !== null && donusum.kdvOrani.trim() !== '' && !belirsizSayi(donusum.kdvOrani) && Number(sayiGirdisi(donusum.kdvOrani)) !== Number(kabulKdv);
@@ -177,7 +179,7 @@ export function TeklifAyrinti() {
       {yazabilir && !arsivde && kabulBekleyen !== null && !iskontoBekler && <Dugme simge="check" onClick={() => dialogYaz('kabul')}>{`Sürüm ${kabulBekleyen.surumNo} kabulünü kaydet`}</Dugme>}
       {uygulanir && <Dugme tur="birincil" simge="next" onClick={() => dialogYaz('uygula')}>Siparişe uygula</Dugme>}
       {yazabilir && !arsivde && t.durum === 'verildi' && <Dugme simge="rotate" onClick={() => dialogYaz('revizyon')}>Revizyon iste</Dugme>}
-      {yazabilir && !arsivde && t.durum === 'kabul' && <Dugme tur="birincil" simge="next" onClick={() => { donusumYaz((d) => ({ ...d, ...(d.termin === '' && t.istenenTarih !== null ? { termin: t.istenenTarih } : {}), kdvOrani: kdvBaslangic })); dialogYaz('siparis'); }}>Satış siparişine dönüştür</Dugme>}
+      {yazabilir && !arsivde && t.durum === 'kabul' && <Dugme tur="birincil" simge="next" onClick={() => { donusumYaz((d) => ({ ...d, ...(d.termin === '' && (kabulTermin ?? t.istenenTarih) !== null ? { termin: kabulTermin ?? t.istenenTarih ?? '' } : {}), kdvOrani: kdvBaslangic })); dialogYaz('siparis'); }}>Satış siparişine dönüştür</Dugme>}
       {arsivlenir && <Dugme simge="box" onClick={() => dialogYaz('arsiv')}>Arşivle</Dugme>}
       {yazabilir && arsivde && <Dugme tur="birincil" simge="rotate" onClick={() => komut.mutate({ yol: 'arsivden-cikar', govde: { surum: t.surum }, basari: 'Teklif arşivden çıkarıldı.' })} yukleniyor={komut.isPending}>Arşivden çıkar</Dugme>}
       {silinir && <Dugme simge="trash" onClick={() => dialogYaz('sil')}>Teklifi sil</Dugme>}
@@ -456,7 +458,8 @@ export function TeklifAyrinti() {
           <p className="tc-sp-ipucu">Kalemler ve iskontolu fiyatlar kabul edilen sürümden alınır; sipariş taslak olarak açılır.</p>
           <Girdi etiket="Müşteri sipariş no" autoComplete="off" value={donusum.musteriSiparisNo} onChange={(o) => donusumYaz({ ...donusum, musteriSiparisNo: o.target.value })} />
           <Girdi etiket="Sipariş tarihi" type="date" required value={donusum.siparisTarihi} onChange={(o) => donusumYaz({ ...donusum, siparisTarihi: o.target.value })} />
-          <Girdi etiket="Termin" type="date" required value={donusum.termin} onChange={(o) => donusumYaz({ ...donusum, termin: o.target.value })} />
+          <Girdi etiket="Termin" type="date" required value={donusum.termin} onChange={(o) => donusumYaz({ ...donusum, termin: o.target.value })}
+            {...(kabulTermin === null ? {} : { ipucu: `Kabul edilen teklifte ${tarihMetni(kabulTermin)}.` })} />
           {kdvSecimli
             ? <Secim etiket="KDV oranı" required bosSecenek="Seçin" secenekler={kdvSecimleri(t.kdvSecenekleri.oranlar, kabulKdv ?? '')}
               {...(kabulKdv === null || kdvSapti ? {} : { ipucu: `Kabul edilen teklifte %${miktarMetni(kabulKdv)}.` })}
