@@ -4,7 +4,7 @@ import {
   belgeBicimiHatasi, bitenIsBeklenen, onayEskidiMi, onayIcerigi, onayOzetiDamgala,
   arkonRoluBul, arkonRoluSec, ILETILER, durusNedenleriniCevir, hurdaNedenleriniCevir, icerikSurumu, kayitSutunlari, silmeCakisiyorMu, tesisKur, yazimCakisiyorMu, yazmaReddi, yerelPaketReddi, yeniSurum,
   guvensizCizimleriAyikla, hizSiniriAsildi, kayitZamani, yuklemeKotasiHatasi, yansimaSirasi, yansimaNedeni, SAYIM_ERTELEME, GECICI_BEKLEME,
-  girenMetni, hazirlikEksigi, isEmrindenTaslakPaket, paketTuru, TMI_PAKET_ALANLARI, paketParcasi, parcaSayimReddi, parcaOlayKarari, parcaYayini, butunPaketSablonu, PARCA_PLANDA_YOK, PARCA_OTEKI_CALISIYOR, PARCA_OTEKILER_BITMEDI, paketinEmri, paketIsEmri, PLANSIZ, planBaslatmaReddi, yayinDenetlenir, yayinlanmamis, planDurumlari, plansizKaynak, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, sablonPaket, siraOnaylari, siraOnayiniYaz, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, tabanCoz, talimatAdimlari, tmiAlanlariniYaz, tmiBirlesikSurum, yansimaKarari,
+  girenMetni, depoArdiliVar, depoOnerisi, hazirlikEksigi, isEmrindenTaslakPaket, paketTuru, TMI_PAKET_ALANLARI, paketParcasi, parcaSayimReddi, parcaOlayKarari, parcaYayini, butunPaketSablonu, PARCA_PLANDA_YOK, PARCA_OTEKI_CALISIYOR, PARCA_OTEKILER_BITMEDI, paketinEmri, paketIsEmri, PLANSIZ, planBaslatmaReddi, yayinDenetlenir, yayinlanmamis, planDurumlari, plansizKaynak, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, sablonPaket, siraOnaylari, siraOnayiniYaz, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, tabanCoz, talimatAdimlari, tmiAlanlariniYaz, tmiBirlesikSurum, yansimaKarari,
   planYokDamgala, kendiSayimYenidenReddi, KENDI_SAYIM_YAS_SINIRI_MS, KENDI_YENIDEN_EMIRSIZ, KENDI_YENIDEN_ESKI, KENDI_YENIDEN_SONRADAN_SAYILDI, KENDI_YENIDEN_YALNIZ_RET, KENDI_YENIDEN_YALNIZ_SAYIM, yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, YENIDEN_SONRAKI_YAZILDI, yenidenIlkParcaAcik, ilkParcaOlculeri, ilkParcaSayimiAsildi, kararBekleyenAdet, periyodikNumuneler, periyodikRetAcik, KARAR_BEKLIYOR_ALANI, REFAKAT_KARTI_ALANI, uyariBirlestir, kayitGovdesi, yenidenIlkParcaTabani, yenidenKarariDamgala, ikinciKontrolEksik, okuyabilirMi, kayitReddi, iletiBasi, iletiKacirildi, yetkiMatrisi, arkonVardiyalari, arkonTatilleri, arkonAletleri,
   belgedenDurusa, ISTASYONSUZ_YAYIN, ROTA_EKSIK_YAYIN, yayinEksigi, SIFIR_SAYIM, katilimYolu, tmidekiDurum, makineSecimi, MAKINE_SECIMI_GECERSIZ,
   cagriBildirimi, olcumAletKimligi, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, YOKLAMA_DENETIM_SURESI_MS, donemBaslangici, donemBasarisi, ekipOrtalamasi, fazlaMesaiSaati, mesaiGunleri, ozetOranlari, ozetRozetleri, tarihEkle,
@@ -539,6 +539,54 @@ test('CNC hazırlık eksiği yalnız talaşlı istasyonda; kurulum kaydı yoksa 
   assert.equal('hazirlik' in (isEmrindenTaslakPaket(girdi({ hazirlik: null }))['tmi'] as Record<string, unknown>), false);
   assert.deepEqual((isEmrindenTaslakPaket(girdi({ ilkParca: { karar: 'ret', zaman: 't' } }))['tmi'] as Record<string, unknown>)['ilkParca'], { karar: 'ret', zaman: 't' });
   assert.equal('ilkParca' in (isEmrindenTaslakPaket(girdi({ ilkParca: null }))['tmi'] as Record<string, unknown>), false);
+});
+
+// 3702: depo adımının modu ve listesi rotadan; şablonun dolu listesi korunur, parça paketinde ürün miktarı payın adedidir.
+describe('depo paketi rotadan (3702)', () => {
+  const urun = { kod: 'ORN-URUN-100', ad: 'ORN Flanş', birim: 'adet' };
+  const giren = [{ kod: 'ORN-HAM-01', ad: 'ORN Çubuk', miktar: '3.5000', birim: 'kg' }, { kod: 'ORN-CIV-02', ad: null, miktar: '12.0000', birim: null }];
+  const kural = (ek: Partial<Parameters<typeof depoOnerisi>[0]> = {}) => depoOnerisi({ girenler: [], oncekiFason: false, ardilVar: true, urun, adet: 40, ...ek });
+  test('ardıl: dallı emirde öncül listesi, eski emirde OP sırası, bulunamayan adımda null', () => {
+    const op = [10, 20, 30, 40, 50];
+    // Dallı: 10 -> 30 (A dalı), 20 (B dalı başı) -> 40, 30 + 40 -> 50.
+    const dalli = [{ opNo: 10, onculOpNolari: [] }, { opNo: 20, onculOpNolari: [] }, { opNo: 30, onculOpNolari: [10] }, { opNo: 40, onculOpNolari: [20] }, { opNo: 50, onculOpNolari: [30, 40] }];
+    assert.equal(depoArdiliVar(op, dalli, 30), true);
+    assert.equal(depoArdiliVar(op, dalli, 40), true);
+    assert.equal(depoArdiliVar(op, dalli, 50), false);
+    assert.equal(depoArdiliVar([10, 20, 30], [{ opNo: 10, onculOpNolari: [] }, { opNo: 20, onculOpNolari: [10] }, { opNo: 30, onculOpNolari: [10] }], 20), false);
+    const eski = op.map((o) => ({ opNo: o, onculOpNolari: null }));
+    assert.equal(depoArdiliVar(op, eski, 30), true);
+    assert.equal(depoArdiliVar(op, [], 50), false);
+    assert.equal(depoArdiliVar(op, dalli, 60), null);
+  });
+  test('girenli adım toplama; kalemler girenlerdir (kod, ad, miktar, birim)', () => {
+    const o = kural({ girenler: giren, oncekiFason: true, ardilVar: false });
+    assert.equal(o.kaynak, 'giren'); assert.equal(o.mode, 'pick'); assert.equal(o.etiket, 'Rotadan: girenler (toplama)');
+    assert.deepEqual(o.items.map((i) => [i.code, i.name, i.qty, i.unit, i.loc]), [['ORN-HAM-01', 'ORN Çubuk', 3.5, 'kg', ''], ['ORN-CIV-02', '', 12, 'adet', '']]);
+  });
+  test('fason sonrası mal kabul, son adım toplama, ara adım mal kabul; tek kalem ürün ve adım adedi', () => {
+    for (const [ek, kaynak, mode] of [[{ oncekiFason: true }, 'fason', 'receive'], [{ ardilVar: false }, 'son', 'pick'], [{}, 'ara', 'receive'], [{ oncekiFason: true, ardilVar: false }, 'fason', 'receive']] as const) {
+      const o = kural(ek);
+      assert.equal(o.kaynak, kaynak); assert.equal(o.mode, mode);
+      assert.deepEqual(o.items.map((i) => [i.code, i.qty, i.unit]), [['ORN-URUN-100', 40, 'adet']]);
+    }
+    assert.deepEqual(kural({ urun: null }).items, []);
+  });
+  test('taslak paket: depo istasyonunda st ve kaynak rotadan, şablonun dolu kalemi değişmez, parça paketinde miktar payın adedi', () => {
+    const depo = { opGrubu: 'PAK' as const, depoBaglami: { oncekiFason: false, ardilVar: false, urun } };
+    const p = isEmrindenTaslakPaket(girdi(depo));
+    assert.deepEqual((p['st'] as { mode: string }).mode, 'pick');
+    assert.deepEqual((p['otoKaynak'] as { depo: { kaynak: string } }).depo.kaynak, 'rota');
+    assert.equal(((p['st'] as { items: { qty: number }[] }).items)[0]!.qty, 50);
+    const parca = isEmrindenTaslakPaket(girdi({ ...depo, parca: { no: 1, adet: 20, toplam: 2 } }));
+    assert.equal(((parca['st'] as { items: { qty: number }[] }).items)[0]!.qty, 20);
+    const sablon = { opType: 'depo', st: { mode: 'receive', items: [{ id: 'a', code: 'X', name: '', qty: 2, unit: 'adet', loc: 'A-1' }] } };
+    const s = isEmrindenTaslakPaket(girdi({ ...depo, sablon }));
+    assert.equal((s['st'] as { mode: string }).mode, 'receive'); assert.equal(((s['st'] as { items: unknown[] }).items).length, 1);
+    assert.equal((s['otoKaynak'] as { depo: { kaynak: string } }).depo.kaynak, 'sablon');
+    assert.equal(((s['tmi'] as { depoOnerisi: { kaynak: string } }).depoOnerisi).kaynak, 'son');
+    assert.equal('otoKaynak' in isEmrindenTaslakPaket(girdi()), false);
+  });
 });
 
 // 521 3 a (H1): kayıtsız taslağın Malzeme alanı adımın rota girenleridir; dolu şablon ve giren yoksa boş kalır.

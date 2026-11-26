@@ -317,6 +317,8 @@ export interface IsEmriPaketGirdisi {
   aql?: TmiAqlPlani | null | undefined;
   // Adımın rotadaki girenleri (521 3 a): kayıtsız taslağın Malzeme alanına yazılır (`girenMetni`); kayıtlı paket ve dolu şablon değişmez.
   girenler?: readonly AdimGireni[] | undefined;
+  // Depo adımının rota bağlamı (3702): öncülün fason olup olmadığı (`fasonDonusu` ile aynı), ardılın varlığı ve emrin ürünü. Depo olmayan pakette verilmez.
+  depoBaglami?: DepoBaglami | undefined;
   // Bölünmüş işin parçası: paket kimliği, hedef adet ve `tmi.parca` parçadandır; istasyon ve makine parçanın kaynağıdır.
   parca?: { no: number; adet: number; toplam: number } | null | undefined;
   // Bölünmüş işin bütün paketi: operatöre düşmez, parçaları düşer (kayıtlı paketin hazırlığı parçalara şablon olur).
@@ -362,25 +364,66 @@ export function girenMetni(girenler: readonly AdimGireni[]): string {
     return [g.kod, g.ad, `${miktar}${g.birim === null ? '' : ` ${g.birim}`}`].filter((p) => p !== null && p !== '').join(' · ');
   }).join('; ');
 }
+// Depo istasyonundaki adımın paketi rotadan kendiliğinden dolar (3702): girenli adım toplama; girensiz adımda öncül fasonsa mal kabul (fason
+// dönüşü), ardıl yoksa toplama (sevk), ötesi ara stok girişi (mal kabul). Miktar girenlerde emrin brüt ihtiyacı, öteki durumda adımın adedidir
+// (parça paketinde payın adedi). Raf yeri stok okuma işlevi gelene kadar boştur (BASKA-MODUL-ISTEKLERI).
+export type DepoKaynagi = 'giren' | 'fason' | 'son' | 'ara';
+export interface DepoBaglami { oncekiFason: boolean; ardilVar: boolean; urun: { kod: string; ad: string | null; birim: string | null } | null }
+export interface DepoKalemiTaslagi { id: string; code: string; name: string; qty: number; unit: string; loc: string }
+export interface DepoOnerisi { kaynak: DepoKaynagi; mode: 'pick' | 'receive'; items: DepoKalemiTaslagi[]; etiket: string }
+const DEPO_ETIKETLERI: Readonly<Record<DepoKaynagi, string>> = {
+  giren: 'Rotadan: girenler (toplama)', fason: 'Rotadan: fason dönüşü (kabul)', son: 'Rotadan: son adım, sevk (toplama)', ara: 'Rotadan: ara stok (kabul)',
+};
+export function depoOnerisi(g: DepoBaglami & { girenler: readonly AdimGireni[]; adet: number }): DepoOnerisi {
+  const kaynak: DepoKaynagi = g.girenler.length > 0 ? 'giren' : g.oncekiFason ? 'fason' : !g.ardilVar ? 'son' : 'ara';
+  const mode = kaynak === 'giren' || kaynak === 'son' ? 'pick' : 'receive';
+  const items: DepoKalemiTaslagi[] = kaynak === 'giren'
+    ? g.girenler.map((x, i) => ({ id: `rota-${i + 1}`, code: x.kod, name: x.ad ?? '', qty: Number(x.miktar), unit: x.birim ?? 'adet', loc: '' }))
+    : g.urun === null ? [] : [{ id: 'rota-1', code: g.urun.kod, name: g.urun.ad ?? '', qty: g.adet, unit: g.urun.birim ?? 'adet', loc: '' }];
+  return { kaynak, mode, items, etiket: DEPO_ETIKETLERI[kaynak] };
+}
+
+// Depo adımının ardılı var mı. Dallı emirde (1348 a) adımı öncül sayan adım; öncül listesi olmayan emirde (null, 1248 öncesi) OP sırasında
+// sonraki adım. Adım emrin adımları arasında yoksa null: öneri çıkarılmaz. Öncülün fason olup olmadığı burada değil, 3703'ün tanımından
+// (`fasonDonusu`: otomatik GKK atlanarak bitmemiş fason öncül) gelir; kabul paneli ile depo önerisi aynı karara bağlıdır.
+export function depoArdiliVar(opNolari: readonly number[], zincir: readonly { opNo: number; onculOpNolari: number[] | null }[], opNo: number): boolean | null {
+  if (!opNolari.includes(opNo)) return null;
+  const onculler = zincir.find((z) => z.opNo === opNo)?.onculOpNolari ?? null;
+  if (onculler === null) return opNolari.some((op) => op > opNo);
+  return zincir.some((z) => z.onculOpNolari?.includes(opNo) === true);
+}
+
 export function isEmrindenTaslakPaket(g: IsEmriPaketGirdisi): Record<string, unknown> {
   const { isEmri: ie, emir, istasyon, sablon } = g;
   const acilma = Date.parse(emir.acilma);
   const birim = dakika(ie.birimSureDk);
   const ayar = dakika(ie.ayarSuresiDk);
   const opType = paketTuru(g.opGrubu, istasyon);
+  const depo = depoTaslagi(opType, sablon, g, g.parca?.adet ?? ie.adimAdedi ?? ie.adet);
   const kopya = sablon === null ? {} : Object.fromEntries(SABLON_ALANLARI.filter((a) => a in sablon).map((a) => [a, sablon[a]]));
   return {
-    id: g.parca ? parcaPaketKimligi(ie.id, g.parca.no) : isEmriPaketKimligi(ie.id), no: ie.emirNo, opType, st: sablon !== null && sablon['opType'] === opType && kayitMi(sablon['st']) ? sablon['st'] : {},
+    id: g.parca ? parcaPaketKimligi(ie.id, g.parca.no) : isEmriPaketKimligi(ie.id), no: ie.emirNo, opType, st: depo.st,
     partNo: emir.parcaNo, malzemeNo: ie.malzemeNo, part: emir.parcaAd, proje: g.proje ?? '', rev: g.revizyon ?? '', op: `Op ${ie.opNo} · ${ie.ad}`,
     machine: istasyon?.kod ?? '', mc: g.makineKodu ?? '', target: g.parca?.adet ?? ie.adimAdedi ?? ie.adet, cycle: birim === null ? null : Math.round(birim * 600) / 10, setup: ayar,
     due: ie.teslim ?? '', priority: ie.oncelik === 1 ? 'urgent' : 'normal', material: '', note: '',
     files: [], primary: null, plan: [], steps: talimatAdimlari(g.talimat), ...kopya,
     ...(g.girenler?.length && doluMetin(kopya['material']) === null ? { material: girenMetni(g.girenler) } : {}),
     ...(g.ilkParcaSecimi === 'yok' ? { rules: ilkParcasizKural(kopya['rules']) } : {}),
+    ...(depo.otoKaynak === null ? {} : { otoKaynak: { depo: depo.otoKaynak } }),
     status: 'draft', version: 0, dirty: true, createdAt: acilma, updatedAt: acilma, by: emir.acan.ad, from: 'tmi',
     tmi: { emirId: ie.uretimEmriId, isEmriId: ie.id, opNo: ie.opNo, plan: g.plan, ...adimTuruAlanlari(ie.tur, g.ekAciklama), ...(g.rotaEksik ? { rotaEksik: g.rotaEksik } : {}), ...(g.hazirlik ? { hazirlik: g.hazirlik } : {}), ...(g.ilkParca ? { ilkParca: { karar: g.ilkParca.karar, zaman: g.ilkParca.zaman } } : {}), ...(g.ilkParcaGerekli ? { ilkParcaGerekli: true } : {}), ...(g.aql ? { aql: g.aql } : {}), ...(g.fasonDonusu === undefined ? {} : { fasonDonusu: g.fasonDonusu }), ...(g.opTipi && opType === 'kalite' ? { opTipi: g.opTipi } : {}),
-      ...(g.parca ? { parca: { no: g.parca.no, adet: g.parca.adet, toplam: g.parca.toplam } } : {}), ...(g.bolunmus ? { bolunmus: true } : {}) },
+      ...(g.parca ? { parca: { no: g.parca.no, adet: g.parca.adet, toplam: g.parca.toplam } } : {}), ...(g.bolunmus ? { bolunmus: true } : {}),
+      ...(depo.oneri === null ? {} : { depoOnerisi: depo.oneri }) },
   };
+}
+
+// Şablon ayarı dolu kalemliyse geçerli kalır; yoksa rota önerisi yazılır. Öneri, kayıtlı boş paketin açılışta dolması için `tmi.depoOnerisi`nde de gider.
+function depoTaslagi(opType: string, sablon: Record<string, unknown> | null, g: IsEmriPaketGirdisi, adet: number) {
+  const sablonSt = sablon !== null && sablon['opType'] === opType && kayitMi(sablon['st']) ? sablon['st'] : null;
+  if (opType !== 'depo' || g.depoBaglami === undefined) return { st: sablonSt ?? {}, oneri: null, otoKaynak: null };
+  const oneri = depoOnerisi({ ...g.depoBaglami, girenler: g.girenler ?? [], adet });
+  if (sablonSt !== null && Array.isArray(sablonSt['items']) && sablonSt['items'].length > 0) return { st: sablonSt, oneri, otoKaynak: { kaynak: 'sablon', etiket: 'Şablondan' } };
+  return { st: { ...(sablonSt ?? {}), mode: oneri.mode, items: oneri.items }, oneri, otoKaynak: { kaynak: 'rota', etiket: oneri.etiket } };
 }
 
 // Tablet eksik kuralı varsayılanla tamamlar (arkon/web kurallar.ts `RULES0`): şablonun öteki kuralları korunur, yalnız ilk parça kapanır.

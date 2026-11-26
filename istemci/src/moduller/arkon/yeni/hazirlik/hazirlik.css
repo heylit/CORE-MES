@@ -680,3 +680,13 @@ span.tc-ay2-mt-h { cursor: default; }
 .tc-ay2-rehber > summary { cursor: pointer; color: var(--muted); font-size: var(--yazi-s); font-weight: 700; min-block-size: var(--dokunma); display: flex; align-items: center; }
 .tc-ay2-rehber[open] > summary { margin-block-end: var(--b-2); }
 .tc-ay2-dosya .tc-ay2-ana-isaret { display: inline-flex; align-items: center; color: var(--hazard-ink); font-weight: 700; }
+
+/* depo paketi: kaynak satırı (3702) */
+.tc-ay2-kaynak { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); padding: var(--b-2) var(--b-3); border-radius: var(--yari-2); background: var(--panel2); border: var(--cizgi-ince) solid var(--edge); min-width: 0; }
+.tc-ay2-kaynak > small { color: var(--muted); font-size: var(--yazi-s); }
+.tc-ay2-kaynak > button { margin-inline-start: auto; }
+.tc-ay2-kaynak[data-ton="rota"] { border-color: var(--run); }
+.tc-ay2-kaynak[data-ton="el"], .tc-ay2-kaynak[data-ton="oneri"], .tc-ay2-kaynak[data-ton="yok"] { border-color: var(--hold); }
+.tc-ay2-tablo-satir[data-eksik] { border-inline-start: var(--cizgi-kalin) solid var(--hold); }
+.tc-ay2-tablo-satir input[aria-invalid="true"] { border-color: var(--hold); }
+.tc-ay2-eksik { margin: 0; color: var(--hold); font-size: var(--yazi-s); }

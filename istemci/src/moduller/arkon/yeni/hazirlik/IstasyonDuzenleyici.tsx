@@ -4,7 +4,7 @@ import { aqlPlani } from '../../../../../../arkon/web/src/data/muayene-lotu.ts';
 import { tmiPaketiMi } from '../../../../../../arkon/web/src/data/yeni-paket.ts';
 import { Anahtar, Bolmeli, KartBasligi, Sayi } from './denetimler.tsx';
 import {
-  IS_TURLERI, RAL, isTuru, istasyonAyari, seriNo, yapistirilanKalemler, yeniKimlik,
+  IS_TURLERI, RAL, depoElleYama, depoKaynakSatiri, depoYenidenUygula, eksikDepoKalemleri, isTuru, istasyonAyari, seriNo, yapistirilanKalemler, yeniKimlik,
   type DepoKalemi, type IstasyonAyari, type MontajKalemi, type TorkAdimi,
 } from './kurallar.ts';
 import type { OpType, Pkg } from './tipler.ts';
@@ -34,13 +34,16 @@ export function IstasyonDuzenleyici({ paket, yama }: { paket: Pkg; yama: Yama })
   const t = isTuru(paket);
   const c = istasyonAyari(paket);
   const [yapistir, yapistirYaz] = useState('');
-  const yaz = (ch: Partial<IstasyonAyari>) => yama({ st: { ...c, ...ch }, ...(ch.items ? { target: Math.max(1, ch.items.length) } : {}) });
+  const yaz = (ch: Partial<IstasyonAyari>) => yama({ st: { ...c, ...ch }, ...(ch.items ? { target: Math.max(1, ch.items.length) } : {}), ...(t === 'depo' ? depoElleYama(paket) : {}) });
   function satir<T extends { id: string }>(dizi: T[], anahtar: 'items' | 'bom' | 'torque', id: string, ch: Partial<T>) {
     yaz({ [anahtar]: dizi.map((x) => (x.id === id ? { ...x, ...ch } : x)) });
   }
 
   if (t === 'depo') {
     const kalemler: DepoKalemi[] = c.items || [];
+    const kaynak = depoKaynakSatiri(paket);
+    const yeniden = depoYenidenUygula(paket);
+    const eksik = new Set(eksikDepoKalemleri(kalemler));
     const ekle = () => {
       const yeni = yapistirilanKalemler(yapistir);
       if (!yeni.length) return;
@@ -51,12 +54,23 @@ export function IstasyonDuzenleyici({ paket, yama }: { paket: Pkg; yama: Yama })
       <div className="tc-ay2-kurallar">
         <section className="tc-ay2-kart tc-ay2-genis" aria-label="Toplama listesi">
           <KartBasligi simge={<Simge ad="truck" />} ton="done" baslik="Toplama listesi" aciklama="Operatör kodu okutur ya da yazar · raf sırasına göre yönlendirilir" sag={kalemler.length + ' kalem'} />
+          {kaynak && (
+            <div className="tc-ay2-kaynak" data-ton={kaynak.ton} role="status">
+              <Simge ad="route" /><b>{kaynak.metin}</b>{kaynak.alt && <small>{kaynak.alt}</small>}
+              {(kaynak.ton === 'el' || kaynak.ton === 'oneri') && yeniden && (
+                <Dugme tur="ikincil" simge="route" onClick={() => {
+                  const geri = { st: paket.st, target: paket.target, otoKaynak: (paket as { otoKaynak?: unknown }).otoKaynak } as Partial<Pkg>;
+                  yama(yeniden); bildir('tamam', 'Liste rotaya göre yeniden dolduruldu', { eylem: { etiket: 'Geri al', yap: () => yama(geri) } });
+                }}>Rotaya göre yeniden uygula</Dugme>
+              )}
+            </div>
+          )}
           <Bolmeli etiket="Mod" deger={c.mode} secenekler={[['pick', 'Toplama (çıkış)'], ['receive', 'Mal kabul (giriş)']]} degistir={(mode) => yaz({ mode })} />
           <div className="tc-ay2-tablo" data-tur="depo" role="table" aria-label="Kalemler">
             <div className="tc-ay2-tablo-bas" role="row"><span>Kod</span><span>Ad</span><span>Miktar</span><span>Birim</span><span>Raf</span><span /></div>
             {kalemler.map((it) => (
-              <div key={it.id} className="tc-ay2-tablo-satir" role="row">
-                <input className="tc-ay2-mono" aria-label="Kod" value={it.code} onChange={(e) => satir(kalemler, 'items', it.id, { code: e.target.value })} />
+              <div key={it.id} className="tc-ay2-tablo-satir" role="row" data-eksik={eksik.has(it.id) ? '' : undefined}>
+                <input className="tc-ay2-mono" aria-label="Kod" aria-invalid={!it.code || undefined} value={it.code} onChange={(e) => satir(kalemler, 'items', it.id, { code: e.target.value })} />
                 <input aria-label="Ad" value={it.name} onChange={(e) => satir(kalemler, 'items', it.id, { name: e.target.value })} />
                 <Sayi deger={it.qty} etiket="Miktar" degistir={(qty) => satir(kalemler, 'items', it.id, { qty })} />
                 <input aria-label="Birim" value={it.unit} onChange={(e) => satir(kalemler, 'items', it.id, { unit: e.target.value })} />
@@ -65,6 +79,7 @@ export function IstasyonDuzenleyici({ paket, yama }: { paket: Pkg; yama: Yama })
               </div>
             ))}
           </div>
+          {eksik.size > 0 && <p className="tc-ay2-eksik" role="alert">Yayın durur: {eksik.size} kalemde kod ya da miktar boş.</p>}
           <Dugme tur="ikincil" simge="plus" onClick={() => yaz({ items: [...kalemler, { id: yeniKimlik(), code: '', name: '', qty: 1, unit: 'adet', loc: '' }] })}>Kalem ekle</Dugme>
           <label className="tc-ay2-alan">
             <span className="tc-ay2-ust-yazi">Excel'den yapıştır · sütunlar: kod, ad, miktar, birim, raf</span>

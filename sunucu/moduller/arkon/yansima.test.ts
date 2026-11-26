@@ -1852,7 +1852,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
       'INSERT INTO vardiya_matrisi (is_merkezi_id, gun, vardiya_id) SELECT m.id, g, $1 FROM is_merkezi m, generate_series(1, 7) g ON CONFLICT DO NOTHING', [tamGunVardiyasi]);
   }
 
-  async function rotaliEmirKur(secenek: { kart?: number; ucuncuIlkte?: boolean; plansiz?: boolean; ilkParcasizOp?: number } = {}): Promise<{
+  async function rotaliEmirKur(secenek: { kart?: number; ucuncuIlkte?: boolean; plansiz?: boolean; ilkParcasizOp?: number; depo?: boolean } = {}): Promise<{
     emirId: number; ilk: string; ikinci: string; ilkId: number; ikinciId: number; kart: number; ilkMerkez: number; ikinciMerkez: number; makineKodlari: string[];
   }> {
     const sahip = ortam!.sahip;
@@ -1866,7 +1866,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
       return (await sahip.tek<{ id: number }>('INSERT INTO makine (kod, ad, istasyon_id) VALUES ($1, $2, $3) RETURNING id', [makineKodlari.at(-1), 'Tezgah', ist]))!.id;
     };
     const [m1, m2] = [await makine(ilkId), await makine(ikinciId)];
-    const tip = (await sahip.tek<{ id: number }>('INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ($1, $2, $3) RETURNING id', [`YT${(sayac += 1)}`, 'Deneme tipi', 'TAL']))!.id;
+    const tip = (await sahip.tek<{ id: number }>('INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ($1, $2, $3) RETURNING id', [`YT${(sayac += 1)}`, 'Deneme tipi', secenek.depo ? 'PAK' : 'TAL']))!.id;
     await sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('YNS-', 0) ON CONFLICT (onek) DO NOTHING");
     sayac += 1;
     const kart = secenek.kart ?? (await sahip.tek<{ no: number }>(
@@ -1883,7 +1883,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
       terminGun: null, bagimlilik: 'bekleyen' as const, devirAdedi: null, talimatSurumu: null, kontrolListesi: [],
     });
     const { uretimEmriId } = await vt().tx(async (db) => uretimEmriAc(db, (await kullaniciYukle(db, yoneticiId))!, {
-      projeId: denemeProjeId, malzemeNo: kart, adet: 20, teslim: null, kaynakRotaRevizyonId: revizyon, isEmirleri: [adim(1, m1), adim(2, m2), ...(secenek.ucuncuIlkte ? [adim(3, m1)] : [])],
+      projeId: denemeProjeId, malzemeNo: kart, adet: 20, teslim: null, kaynakRotaRevizyonId: revizyon, isEmirleri: [secenek.depo ? { ...adim(1, m1), bilesenler: [{ malzemeNo: kart, miktar: '2', fireYuzde: '0' }] } : adim(1, m1), adim(2, m2), ...(secenek.ucuncuIlkte ? [adim(3, m1)] : [])],
     }));
     await rotaAdimlariniYaz(kart, uretimEmriId, secenek.ilkParcasizOp ?? null);
     if (!secenek.plansiz) {
@@ -2736,6 +2736,42 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     const sil = await istek(yonetici, 'POST', `/arkon/belgeler/pkgs/${k}/sil`, { taban: silinecek.surum, kaynak: 'y1' });
     assert.equal(sil.durum, 200, JSON.stringify(sil.govde));
   });
+
+  test('3702: depo adımının paketi rotadan dolar: girenli adım toplama (girenler), son adım toplama (ürün ve adım adedi)', async () => {
+    const r = await rotaliEmirKur({ depo: true });
+    const [a1, a2] = await isEmriIdleri(r.emirId);
+    const liste = await paketler();
+    const p1 = liste.get(ieKimligi(a1!))!.govde as { st: { mode: string; items: { code: string; qty: number; unit: string }[] }; otoKaynak: { depo: { kaynak: string; etiket: string } } };
+    assert.equal(p1.st.mode, 'pick'); assert.equal(p1.otoKaynak.depo.kaynak, 'rota'); assert.equal(p1.otoKaynak.depo.etiket, 'Rotadan: girenler (toplama)');
+    assert.equal(p1.st.items.length, 1); assert.equal(p1.st.items[0]!.qty, 40);
+    const emir = await emirOku(r.emirId);
+    const p2 = liste.get(ieKimligi(a2!))!.govde as typeof p1;
+    assert.equal(p2.otoKaynak.depo.etiket, 'Rotadan: son adım, sevk (toplama)');
+    assert.deepEqual(p2.st.items.map((i) => [i.code, i.qty]), [[emir.parcaNo, 20]]);
+  });
+
+  test('3702 (Risk R1): fason ardındaki depo adımı, otomatik GKK araya girse de fason dönüşü (kabul) olur; 3703 kabul paneliyle aynı karar', async () => {
+    const sahip = ortam!.sahip;
+    const fasonYap = (id: number) => sahip.sorgu(
+      'UPDATE uretim_emirleri_is_emri SET fason_firmasiz = true, makine_id = NULL, kisi_id = NULL, istasyon_id = NULL, fason_firma_id = NULL, ayar_suresi_dk = NULL, birim_sure_dk = NULL WHERE id = $1', [id]);
+    type Depo = { st: { mode: string }; otoKaynak: { depo: { etiket: string } }; tmi: { fasonDonusu?: boolean; depoOnerisi?: { kaynak: string } } };
+    // fason -> otomatik GKK -> depo (son adım)
+    const r = await rotaliEmirKur({ depo: true, ucuncuIlkte: true });
+    const [f1, g2, d3] = await isEmriIdleri(r.emirId);
+    await fasonYap(f1!);
+    await sahip.sorgu("UPDATE uretim_emirleri_is_emri SET tur = 'ek', ek_aciklama = 'Otomatik GKK' WHERE id = $1", [g2]);
+    const p3 = (await paketler()).get(ieKimligi(d3!))!.govde as Depo;
+    assert.equal(p3.tmi.fasonDonusu, true);
+    assert.equal(p3.tmi.depoOnerisi?.kaynak, 'fason'); assert.equal(p3.st.mode, 'receive'); assert.equal(p3.otoKaynak.depo.etiket, 'Rotadan: fason dönüşü (kabul)');
+    // fason -> depo (ardıl var)
+    const r2 = await rotaliEmirKur({ depo: true, ucuncuIlkte: true });
+    const [h1, e2] = await isEmriIdleri(r2.emirId);
+    await fasonYap(h1!);
+    const p2 = (await paketler()).get(ieKimligi(e2!))!.govde as Depo;
+    assert.equal(p2.tmi.fasonDonusu, true);
+    assert.equal(p2.tmi.depoOnerisi?.kaynak, 'fason'); assert.equal(p2.st.mode, 'receive');
+  });
+
 
   test('yayın biçimi 2a: aynı parça ve operasyonun son yayınlanmış paketi yeni emrin taslağına şablon olur (plan, kural, adım), taslak yayında değildir; başka operasyona olmaz', async () => {
     const r1 = await rotaliEmirKur();
