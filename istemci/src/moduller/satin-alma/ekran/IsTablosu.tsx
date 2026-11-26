@@ -1,4 +1,3 @@
-import { useSyncExternalStore } from 'react';
 import { Rozet, Tablo, type RozetTonu, type Sutun } from '../../../ortak/arayuz/index.ts';
 import { PRIO } from '../merkez/constants.ts';
 import { IS_ADI, isSatirlari, kalemSatirlari, teslimatOf, termineGore, type IsSatiri, type IsTuru, type KalemSatiri } from '../merkez/is-tablosu.ts';
@@ -57,29 +56,19 @@ const Malzeme = ({ s }: { s: KalemSatiri }) => (
   </span>
 );
 // 3442-1: kullanıcı ilk sayfayı tablo olarak istedi; tablet ve masaüstünde sütun sığmasa da tablo kalır (yatay kayar, talep sütunu
-// sabit). Telefonda satırlar kart olur.
-const GENIS = '(min-width: 768px)';
-const genisMi = () => typeof window.matchMedia === 'function' && window.matchMedia(GENIS).matches;
-const genisAbone = (f: () => void) => {
-  if (typeof window.matchMedia !== 'function') return () => undefined;
-  const m = window.matchMedia(GENIS);
-  m.addEventListener('change', f);
-  return () => { m.removeEventListener('change', f); };
-};
-
+// sabit). Telefonda satırlar kompakt kayıt kartıdır (3748-1): malzeme başlık, sıradaki iş rozet, miktar ve termin altında.
 export function IsTablosu() {
-  const tabloKipi = useSyncExternalStore(genisAbone, genisMi) ? 'kaydir' : 'uyarlanir';
   const bugun = todayStr();
   const sutunlar: Sutun<KalemSatiri>[] = [
     { anahtar: 'malzeme', baslik: 'Malzeme', sabit: 'sol', kartTamSatir: true, hucre: (s) => <Malzeme s={s} />, csv: (s) => `${s.r.no} ${s.r.title}: ${s.kalem.name}` },
-    { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', kirilmaz: true, hucre: (s) => (s.kalem.qty === null ? '–' : `${nfx.format(s.kalem.qty)} ${s.kalem.unit}`), csv: (s) => (s.kalem.qty === null ? '' : `${String(s.kalem.qty)} ${s.kalem.unit}`) },
-    { anahtar: 'is', baslik: 'Sıradaki iş', kirilmaz: true, hucre: (s) => <Is s={s} />, csv: (s) => IS_ADI[s.tur] },
+    { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', kirilmaz: true, kartta: true, hucre: (s) => (s.kalem.qty === null ? '–' : `${nfx.format(s.kalem.qty)} ${s.kalem.unit}`), csv: (s) => (s.kalem.qty === null ? '' : `${String(s.kalem.qty)} ${s.kalem.unit}`) },
+    { anahtar: 'is', baslik: 'Sıradaki iş', kirilmaz: true, kartRozet: true, hucre: (s) => <Is s={s} />, csv: (s) => IS_ADI[s.tur] },
     { anahtar: 'gelis', baslik: 'Talep tarihi', kirilmaz: true, hucre: (s) => <TalepTarihi r={s.r} bugun={bugun} />, csv: (s) => gelisGunu(s.r) },
-    { anahtar: 'termin', baslik: 'İstenen termin', kirilmaz: true, hucre: (s) => <Termin s={s} bugun={bugun} />, csv: (s) => s.r.needDate || '' },
+    { anahtar: 'termin', baslik: 'İstenen termin', kirilmaz: true, kartta: true, hucre: (s) => <Termin s={s} bugun={bugun} />, csv: (s) => s.r.needDate || '' },
     { anahtar: 'teslimat', baslik: 'Beklenen teslim', kirilmaz: true, hucre: (s) => <TeslimatHucresi s={s} bugun={bugun} />, csv: (s) => teslimatOf(s.r, bugun).tarih ?? '' },
   ];
   return (
-    <div className="sa-is-tablosu"><Tablo kip={tabloKipi} etiket="Satın alma işleri, kalem kalem" sutunlar={sutunlar} satirlar={kalemSatirlari(isSatirlari())} satirAnahtari={(s) => `${s.r.id}-${s.kalem.id}`} satirSec={ac}
-      bosMesaj="Bekleyen satın alma işi yok." arac={{ csv: { ad: 'satin-alma-isleri' } }} /></div>
+    <div className="sa-is-tablosu"><Tablo kip="kayit" etiket="Satın alma işleri, kalem kalem" sutunlar={sutunlar} satirlar={kalemSatirlari(isSatirlari())} satirAnahtari={(s) => `${s.r.id}-${s.kalem.id}`} satirSec={ac}
+      bosMesaj="Bekleyen satın alma işi yok." arac={{ csv: { ad: 'satin-alma-isleri' }, gorunum: { anahtar: 'satin-alma-isleri' } }} /></div>
   );
 }

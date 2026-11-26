@@ -160,15 +160,12 @@ describe('Ana sayfadan talep (#375)', () => {
     ] })], toplam: 1 } satisfies TaleplerimCevabi)));
     sar(<Taleplerim tam />);
     fireEvent.click(await screen.findByRole('button', { name: /Deneme talep 1/ }));
-    const hucre = (ad: string) => within(screen.getByText(ad).closest('tr')!).getByText((_, e) => e?.getAttribute('data-etiket') === 'Termin' && e.tagName === 'TD').textContent;
+    const hucre = (ad: string) => within(screen.getByText(ad).closest('tr')!).getByText((_, e) => e?.getAttribute('data-baslik') === 'Termin' && e.tagName === 'TD').textContent;
     expect(hucre('Deneme çubuk')).toBe(`${g('2026-12-20')}sipariş · istenen ${g('2026-12-10')} · 10 gün geç`);
     expect(hucre('Deneme levha')).toBe(`${g('2026-12-10')}sipariş`);
     expect(hucre('Deneme flanş')).toBe(`${g('2026-12-05')}sipariş · istenen ${g('2026-12-10')}`);
     expect(hucre('Deneme burç')).toBe(g('2026-12-10'));
     expect(screen.getByTitle('Birden çok firmaya bölünmüş; en geç payın günü').textContent).toBe(g('2026-12-20'));
-    // Dar kip: kalem adının altındaki satır da istenen günü ve gecikmeyi söyler.
-    expect(screen.getByText(`Sipariş termini ${g('2026-12-20')} (en geç pay) · istenen ${g('2026-12-10')} · 10 gün geç`)).toBeTruthy();
-    expect(screen.getByText(`Sipariş termini ${g('2026-12-05')} · istenen ${g('2026-12-10')}`)).toBeTruthy();
   });
 
   it('SAT-78 (2871): Taleplerim kalemi kg karşılığını gösterir; karşılığı olmayan kalemde gösterilmez', async () => {

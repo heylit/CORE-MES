@@ -46,7 +46,7 @@ describe('3710 Talepler sade üst', () => {
 
   it('Süz menüsünden seçilen öteki durum beşinci sekme olarak görünür ve süzer', () => {
     ciz();
-    fireEvent.change(screen.getByLabelText('Durum'), { target: { value: 'received' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Durum' }), { target: { value: 'received' } });
     expect(V.status).toBe('received');
     // Ekranı merkezin aboneliği yeniden çizer (MerkezEkrani); burada elle yeniden çizilir.
     cleanup();

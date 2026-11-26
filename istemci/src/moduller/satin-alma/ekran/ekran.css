@@ -56,11 +56,6 @@
 .sa-ekran-satir > .sa-ekran-govde { flex: 1; }
 .sa-ekran-sayi { font-variant-numeric: tabular-nums; font-weight: 600; }
 
-/* 360'ta talep kartı kısa kalır (Arayüz koşulu): talep, durum, kimde ve ihtiyaç (gecikmeyle; varsayılan sıra geciken önce olduğu
-   için neden üstte olduğu görünür). No, teklif sayısı ve tutar ayrıntıdadır. */
-.sa-ekran-talepler [data-kip="kart"] td[data-baslik="No"],
-.sa-ekran-talepler [data-kip="kart"] td[data-baslik="Teklif"],
-.sa-ekran-talepler [data-kip="kart"] td[data-baslik="Tutar"] { display: none; }
 /* Kart kipinde değerler sağa yaslıdır; rozet alta kırılınca termin de sağda kalır. */
 .sa-ekran-talepler [data-kip="kart"] .sa-ekran-ihtiyac { justify-content: flex-end; }
 
@@ -85,8 +80,8 @@
 /* Kodlar (sipariş ve talep no, miktar) tireden bölünmez; ad kırılabilir. */
 .sa-sp-kod > *, .sa-sp-nowrap { white-space: nowrap; }
 .sa-sp-logo-hata { align-items: flex-start; }
-/* Siparişler kendi tablosunda arar; merkezin genel araması burada ikinci kutu olurdu. */
-.mainwrap:has(.sa-ekran-siparisler) .gsearch { display: none; }
+/* Siparişler ve Talepler kendi tablosunda arar; merkezin genel araması burada ikinci kutu olurdu. */
+.mainwrap:has(.sa-ekran-siparisler, .sa-ekran-talepler) .gsearch { display: none; }
 @media (max-width: 767px) {
   .sa-ekran-siparisler .tc-sbaslik-alt { white-space: normal; }
 }
@@ -192,3 +187,12 @@
 
 /* 3706-2: kartın satın alma iç alanları ayrı blok; tedarikçiye giden forma girmez. */
 .sa-kart-ic-baslik { grid-column: 1 / -1; margin-top: var(--b-2); padding-top: var(--b-1); border-top: 1px solid var(--line, currentColor); font-size: var(--yazi-xs); font-weight: 600; color: var(--muted); }
+
+/* 3748-1 tablo standardı: kesilen hücrede ad ve alt satır ayrı ayrı tek satırda "…" ile biter (tamamı ipucunda); alt satır 12 px gri. */
+.sa-ekran .tc-tablo-kes .sa-ekran-govde > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sa-ekran .tc-tablo td .sa-ekran-govde > small { font-size: var(--yazi-xs); }
+.sa-is-tablosu .tc-tablo td .sa-ekran-govde > small { font-size: var(--yazi-xs); }
+/* 1280'de sekiz sütun kaba 24 px sığmıyordu ve son sütun (termin) kaydırma ipucu olmadan kesiliyordu; talep adı biraz daha erken "…" ile biter. */
+@media (min-width: 1024px) {
+  .sa-ekran-talepler .tc-tablo-kap[data-kaydir] .tc-tablo-kes { max-inline-size: calc(var(--menu-genis) - var(--b-6)); }
+}

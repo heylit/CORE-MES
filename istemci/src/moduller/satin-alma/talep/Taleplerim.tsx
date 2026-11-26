@@ -1,7 +1,7 @@
 import { Fragment, useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { Talebim } from '#paylasilan/sozlesme/satin-alma.ts';
-import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Simge } from '../../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Simge, Tablo, type Sutun } from '../../../ortak/arayuz/index.ts';
 import { ayrintiyiBirlestir, useKartSatirlari } from '../merkez/kart-satirlari.ts';
 import { fmtDate, tsDate } from '../merkez/util.ts';
 import { TalepCizimleri } from './Cizimler.tsx';
@@ -48,10 +48,6 @@ function Adimlar({ t }: { t: Talebim }) {
 type Ozellik = NonNullable<Talebim['kalemler'][number]['malzeme']>;
 type OzellikAlani = 'kalite' | 'durum' | 'islem' | 'olcu' | 'aciklama';
 const OZELLIKLER: readonly [OzellikAlani, string][] = [['kalite', 'Kalite'], ['durum', 'Durum'], ['islem', 'İşlem'], ['olcu', 'Ölçü'], ['aciklama', 'Açıklama']];
-function OzellikAlti({ m }: { m: Ozellik | null }) {
-  const dolu = OZELLIKLER.flatMap(([k, b]) => (m?.[k] ? [`${b}: ${m[k]}`] : []));
-  return dolu.length ? <span className="sa-talep-not sa-talep-oz-alt">{dolu.join(' · ')}</span> : null;
-}
 // 3133: malzeme kartının föyündeki ayrıntılar kalem hücresinde açılır.
 function KartAyrintisi({ m }: { m: Ozellik | null }) {
   useKartSatirlari(m?.kart); // hazır olunca yeniden çizilir
@@ -82,6 +78,50 @@ const enGecPay = (x: TerminKalemi): string | undefined => ((x.siparisPayAdedi ??
 const talepGunu = (zaman: string) => fmtDate(tsDate(Date.parse(zaman)));
 
 export type Duzenleme = 'duzenle' | 'guncelle';
+// 3748-2: kalem tablosu ortak tablodur: sayı sağda, malzeme kartının bütün kalemlerde boş alanları gizli, dar kapta kayıt kartı.
+type Kalem = Talebim['kalemler'][number];
+const miktarYaz = (m: string) => { const n = Number(m); return Number.isFinite(n) ? n.toLocaleString('tr-TR', { maximumFractionDigits: 4 }) : m; };
+const ozellikSutunu = ([k, b]: readonly [OzellikAlani, string]): Sutun<Kalem> => ({ anahtar: k, baslik: b, bossaGizle: true, hucre: (x) => x.malzeme?.[k] ?? null });
+function KalemTablosu({ t }: { t: Talebim }) {
+  const sutunlar: Sutun<Kalem>[] = [
+    {
+      anahtar: 'kalem', baslik: 'Kalem', kartTamSatir: true, csv: (x) => x.ad,
+      hucre: (x) => (
+        <div className="sa-talep-kalem-hucre">
+          <span>{x.ad}</span>
+          <IslenenMalzeme uygulanan={x.uygulanan} kod={x.uygulananKod} ad={x.uygulananAd} revizyon={x.uygulananRevizyon} adet={x.miktar === null ? null : `${miktarYaz(x.miktar)} ${x.birim}`} fasonAdim={x.fasonAdim} />
+          {!x.uygulanan && x.fasonAdim && <span className="sa-talep-not">Fason: {x.fasonAdim}</span>}
+          {x.aciklama && <span className="sa-talep-not">{x.aciklama}</span>}
+          {x.kabul && <span className="sa-talep-not">Kabul sınırı: {kabulOzeti(x.kabul)}</span>}
+          <KartAyrintisi m={x.malzeme ?? null} />
+          <SartliAlternatifler talepId={t.id} kalem={x} />
+        </div>
+      ),
+    },
+    ...OZELLIKLER.map(ozellikSutunu),
+    {
+      anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', kirilmaz: true, csv: (x) => (x.miktar === null ? null : `${x.miktar} ${x.birim}`),
+      hucre: (x) => (x.miktar === null ? null : (
+        <span className="sa-talep-kalem-hucre">
+          <span>{`${miktarYaz(x.miktar)} ${x.birim}`}</span>
+          {x.karsilik && <span className="sa-talep-not">{karsilikYaz(x.karsilik)}</span>}
+        </span>
+      )),
+    },
+    {
+      anahtar: 'termin', baslik: 'Termin', kirilmaz: true, bossaGizle: true, csv: (x) => x.siparisTermini ?? x.ihtiyacTarihi ?? null,
+      hucre: (x) => (x.siparisTermini ? (
+        <span className="sa-talep-kalem-hucre">
+          <span title={enGecPay(x)}>{gunYaz(x.siparisTermini)}</span>
+          <span className="sa-talep-not">{['sipariş', ...terminNotlari(x)].join(' · ')}</span>
+        </span>
+      ) : x.ihtiyacTarihi ? gunYaz(x.ihtiyacTarihi) : null),
+    },
+    { anahtar: 'emir', baslik: 'Üretim emri', kirilmaz: true, bossaGizle: true, hucre: (x) => x.uretimEmriNo ?? null },
+  ];
+  return <Tablo etiket={`${t.no} kalemleri`} sutunlar={sutunlar} satirlar={t.kalemler} satirAnahtari={(x) => x.id ?? `${x.ad}:${x.miktar ?? ''}`} />;
+}
+
 function Satir({ t, tam, duzenle }: { t: Talebim; tam: boolean; duzenle: ((t: Talebim, kip: Duzenleme) => void) | undefined }) {
   const [acik, acikYaz] = useState(false);
   const d = DURUM[t.durum];
@@ -121,46 +161,7 @@ function Satir({ t, tam, duzenle }: { t: Talebim; tam: boolean; duzenle: ((t: Ta
         <Adimlar t={t} />
       </button>
       {acik && (
-        <div className="sa-talep-kalem-tablo">
-          <table className="sa-talep-kt">
-            <thead>
-              <tr><th>Kalem</th>{OZELLIKLER.map(([, b]) => <th key={b} className="sa-talep-oz">{b}</th>)}<th className="sa-talep-sag">Miktar</th><th className="sa-talep-oz">Termin</th><th className="sa-talep-oz">Üretim emri</th></tr>
-            </thead>
-            <tbody>
-              {t.kalemler.map((x, i) => (
-                <tr key={i}>
-                  <td>
-                    <span>{x.ad}</span>
-                    <IslenenMalzeme uygulanan={x.uygulanan} kod={x.uygulananKod} ad={x.uygulananAd} revizyon={x.uygulananRevizyon} adet={x.miktar === null ? null : `${x.miktar} ${x.birim}`} fasonAdim={x.fasonAdim} />
-                    {!x.uygulanan && x.fasonAdim && <span className="sa-talep-not">Fason: {x.fasonAdim}</span>}
-                    {x.aciklama && <span className="sa-talep-not">{x.aciklama}</span>}
-                    {x.kabul && <span className="sa-talep-not">Kabul sınırı: {kabulOzeti(x.kabul)}</span>}
-                    <OzellikAlti m={x.malzeme ?? null} />
-                    {(x.siparisTermini || x.ihtiyacTarihi || x.uretimEmriNo) && (
-                      <span className="sa-talep-not sa-talep-oz-alt">{[x.siparisTermini ? `Sipariş termini ${gunYaz(x.siparisTermini)}${enGecPay(x) ? ' (en geç pay)' : ''}` : x.ihtiyacTarihi && `Termin ${gunYaz(x.ihtiyacTarihi)}`, ...terminNotlari(x), x.uretimEmriNo && `Üretim emri ${x.uretimEmriNo}`].filter(Boolean).join(' · ')}</span>
-                    )}
-                    <KartAyrintisi m={x.malzeme ?? null} />
-                    <SartliAlternatifler talepId={t.id} kalem={x} />
-                  </td>
-                  {OZELLIKLER.map(([k, b]) => <td key={k} className={`sa-talep-oz sa-talep-oz-${k}`} data-etiket={b}>{x.malzeme?.[k] ?? <span className="sa-talep-bos">–</span>}</td>)}
-                  <td className="sa-talep-sag">
-                    <span className="sa-talep-no">{x.miktar === null ? '—' : `${x.miktar} ${x.birim}`}</span>
-                    {x.karsilik && <span className="sa-talep-not">{karsilikYaz(x.karsilik)}</span>}
-                  </td>
-                  <td className="sa-talep-oz" data-etiket="Termin">
-                    {x.siparisTermini ? (
-                      <>
-                        <span title={enGecPay(x)}>{gunYaz(x.siparisTermini)}</span>
-                        <span className="sa-talep-not">{['sipariş', ...terminNotlari(x)].join(' · ')}</span>
-                      </>
-                    ) : x.ihtiyacTarihi ? gunYaz(x.ihtiyacTarihi) : <span className="sa-talep-bos">–</span>}
-                  </td>
-                  <td className="sa-talep-oz" data-etiket="Üretim emri">{x.uretimEmriNo ?? <span className="sa-talep-bos">–</span>}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <div className="sa-talep-kalem-tablo"><KalemTablosu t={t} /></div>
       )}
       {acik && <div className="sa-talep-cizim-blok"><TalepCizimleri talepId={t.id} yazabilir={t.duzenlenebilir === true} /></div>}
       {acik && t.duzenlenebilir && duzenle && (

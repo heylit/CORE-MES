@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Dugme, LogoBelgeAramasi, KilitliSutunNotu, Rozet, SayfaBasligi, Secim, Sekmeler, Simge, Tablo, YETKI_ADI, tabloCsvSatirlari, type RozetTonu, type Sutun } from '../../../ortak/arayuz/index.ts';
+import { Dugme, LogoBelgeAramasi, KilitliSutunNotu, Rozet, SayfaBasligi, Secim, Sekmeler, Simge, Tablo, YETKI_ADI, tabloCsvSatirlari, useTelefon, type RozetTonu, type Sutun } from '../../../ortak/arayuz/index.ts';
 import { csvIndir } from '../../../ortak/veri/csv.ts';
 import type { SimgeAdi } from '../../../ortak/tasarim/simgeler.ts';
 import { durumEtiketi } from '../merkez/calc.ts';
@@ -92,22 +92,23 @@ export function Talepler() {
   const pano = V.view === 'board';
   const birimler = [...new Set([...(settings().departments || []).map((d) => d.name), ...hepsi.map((r) => r.department).filter(Boolean)])] as string[];
   const kilit = fiyatKilitli();
+  const telefon = useTelefon();
   const tumSutunlar: Sutun<PurchaseRequest>[] = [
-    { anahtar: 'no', baslik: 'No', hucre: (r) => r.no, mono: true, kirilmaz: true, sirala: true },
+    { anahtar: 'no', baslik: 'No', hucre: (r) => r.no, mono: true, kirilmaz: true, sirala: true, sabit: 'sol' },
     {
-      anahtar: 'title', baslik: 'Talep', sirala: true,
+      anahtar: 'title', baslik: 'Talep', sirala: true, kes: true, kartta: true,
       hucre: (r) => (
         <span className="sa-ekran-govde">
           <b>{r.priority === 'urgent' && <Rozet ton="hata">Acil</Rozet>} {r.title}</b>
-          <small>{[r.department, `${(r.items || []).length} kalem`, r.uretimEmriNo ? `emir ${r.uretimEmriNo}` : ''].filter(Boolean).join(', ')}</small>
+          <small>{[telefon ? r.no : '', r.department, `${(r.items || []).length} kalem`, r.uretimEmriNo ? `emir ${r.uretimEmriNo}` : ''].filter(Boolean).join(', ')}</small>
           {grupMetni(r) && <small><Simge ad="layers" boyut="k" /> {grupMetni(r)}</small>}
         </span>
       ),
       csv: (r) => r.title,
     },
-    { anahtar: 'status', baslik: 'Durum', sirala: true, kirilmaz: true, hucre: (r) => <Rozet ton={gecikmisMi(r, bugun) ? 'hata' : DURUM_TONU[r.status]}>{durumEtiketi(r)}</Rozet>, csv: (r) => durumEtiketi(r) },
+    { anahtar: 'status', baslik: 'Durum', sirala: true, kirilmaz: true, kartRozet: true, hucre: (r) => <Rozet ton={gecikmisMi(r, bugun) ? 'hata' : DURUM_TONU[r.status]}>{durumEtiketi(r)}</Rozet>, csv: (r) => durumEtiketi(r) },
     {
-      anahtar: 'kimde', baslik: 'Kimde bekliyor',
+      anahtar: 'kimde', baslik: 'Kimde bekliyor', kirilmaz: true,
       hucre: (r) => { const k = kimde(r); return k === null ? '–' : <span className="sa-ekran-kimde"><Simge ad={kimdeSimgesi(k)} boyut="k" />{k}</span>; },
       csv: (r) => kimde(r) ?? '',
     },
@@ -118,10 +119,12 @@ export function Talepler() {
       csv: (r) => reqValue(r).v ?? '',
     },
     { anahtar: 'created', baslik: 'Talep tarihi', kirilmaz: true, sirala: true, hucre: (r) => <TalepTarihi r={r} bugun={bugun} />, csv: (r) => gelisGunu(r) },
-    { anahtar: 'need', baslik: 'İstenen termin', kirilmaz: true, sirala: true, hucre: (r) => ihtiyac(r, bugun), csv: (r) => r.needDate || '' },
+    { anahtar: 'need', baslik: 'İstenen termin', kirilmaz: true, sirala: true, kartta: true, hucre: (r) => ihtiyac(r, bugun), csv: (r) => r.needDate || '' },
   ];
   // 3401-1 a: fiyat görmeyen okuyucuda tutar sütunu çizilmez; üstte tek kilit notu durur.
-  const sutunlar = kilit ? tumSutunlar.filter((x) => x.anahtar !== 'value') : tumSutunlar;
+  // 3748-1: telefonda kayıt kartının başlığı talebin adıdır (ilk sütun); no adın altındaki satırda yazılır, sütunu kartta görünmez ama CSV'de kalır.
+  const fiyatli = tumSutunlar.filter((x) => !(kilit && x.anahtar === 'value'));
+  const sutunlar = telefon ? [...fiyatli.filter((x) => x.anahtar !== 'no'), ...fiyatli.filter((x) => x.anahtar === 'no').map((x) => ({ ...x, kartta: false }))] : fiyatli;
   return (
     <div className="sa-ekran sa-ekran-talepler">
       <SayfaBasligi
@@ -143,13 +146,14 @@ export function Talepler() {
         ? <p className="sa-ekran-not">Akış panosu: her durumun talepleri sütununda. Liste için sağ üstteki menü.</p>
         : (
           <Tablo
-            etiket="Talepler" sutunlar={sutunlar} satirlar={liste} satirAnahtari={(r) => r.id}
+            kip="kayit" etiket="Talepler" sutunlar={sutunlar} satirlar={liste} satirAnahtari={(r) => r.id}
             satirSec={(r) => { go('request', r.id, 'items'); }}
             bosMesaj={hepsi.length ? 'Bu süzgece uyan talep yok.' : 'Henüz talep yok. Talepler Taleplerim sayfasından açılır.'}
             siralama={V.sort ? { alan: V.sort, yon: V.dir > 0 ? 'artan' : 'azalan' } : null}
             siralamaDegistir={(s) => degistir(() => { V.sort = s?.alan ?? ''; V.dir = s?.yon === 'azalan' ? -1 : 1; })}
             arac={{
               arama: { deger: V.q, degistir: (q) => degistir(() => { V.q = q; }), etiket: 'Taleplerde ara', yerTutucu: 'No, talep, kalem, tedarikçi ya da emir no' },
+              gorunum: { anahtar: 'satin-alma-talepler' },
               sag: <SuzMenusu birimler={birimler} satirlar={liste} sutunlar={sutunlar} />,
             }}
           />

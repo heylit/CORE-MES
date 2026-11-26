@@ -16,3 +16,6 @@
 /* 2397-6: basamak kaldırma dokunmayla da rahat basılır (Arayüz ön bakışı). */
 .sa-kok .btn.sa-kaldir{ min-width:var(--dokunma); min-height:var(--dokunma); justify-content:center; }
 .sa-kok .flag svg{ vertical-align:-2px; }
+
+/* 3748-1: Tedarikçiler sekmelerinin altında merkez içerik payına yukarı taşmaz; taşınca arama çubuğu sekmelerin üstüne biniyordu. */
+.sa-tedarikci-sekmeli > .sa-kok { margin-block-start: 0; }
