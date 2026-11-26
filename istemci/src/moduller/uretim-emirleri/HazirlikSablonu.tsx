@@ -3,13 +3,16 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { HazirlikSablonuCevabi, HazirlikSablonuYazGovdesi, HazirlikSablonuYazCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { CokSatir, Dugme, DurumKutusu, Kart, Rozet, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { useOturum } from '../../ortak/veri/oturum.ts';
 import { tarihSaatMetni } from '../../ortak/veri/zaman-metni.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { maddeGorunumu, useHazirlikMaddeleri } from './hazirlik-maddeleri.ts';
+import { YeniMaddePenceresi } from './YeniMaddePenceresi.tsx';
 import './hazirlik-sablonu.css';
 
 // 3688: hazırlık şablonu (Adım Durumu › Şablon). Operasyon türüne göre hangi maddenin gerekli olduğu; kaydet yeni sürüm yazar, geçmiş silinmez.
 // Gerekli olmayan madde o türün adımında "Gerekmez" görünür. Yazma yetkisi sunucudan gelir (yazar); yetkisizde yalnız okunur.
+// 3739: madde ayarı yetkisi olan yeni hazırlık maddesi ekler (Projeler'deki formla aynı uç; form oradan ithal edilemez, aynı kat).
 type Tur = HazirlikSablonuCevabi['turler'][number];
 
 const sablonAnahtari = ['uretim-emirleri', 'hazirlik-sablonu'] as const;
@@ -18,17 +21,21 @@ export function HazirlikSablonu() {
   const sorgu = useQuery({ queryKey: sablonAnahtari, queryFn: () => api.get<HazirlikSablonuCevabi>('/hazirlik-sablonu') });
   const [secili, seciliYaz] = useState<string>('varsayilan');
   const [kirli, kirliYaz] = useState(false);
+  const [yeniMadde, yeniMaddeYaz] = useState(false);
+  const maddeler = useHazirlikMaddeleri();
+  const ekleyebilir = useOturum().data?.islemler.includes('uretim-emirleri.hazirlik-ayar') === true;
   if (sorgu.isPending) return <Kart><DurumKutusu durum="yukleniyor" /></Kart>;
   if (sorgu.isError) return <Kart><DurumKutusu durum="hata" mesaj={hataIletisi(sorgu.error, 'Şablon alınamadı.')} yenile={() => { void sorgu.refetch(); }} /></Kart>;
   const turler = sorgu.data.turler;
   const tur = turler.find((t) => (t.operasyonTipiId === null ? 'varsayilan' : String(t.operasyonTipiId)) === secili) ?? turler[0];
   if (tur === undefined) return <Kart><DurumKutusu durum="bos" mesaj="Operasyon türü yok." /></Kart>;
   return (
-    <Kart baslik="Hazırlık şablonu" simge="list">
+    <Kart baslik="Hazırlık şablonu" simge="list" sag={ekleyebilir && <Dugme simge="plus" onClick={() => { yeniMaddeYaz(true); }}>Yeni madde</Dugme>}>
       <p className="tc-hs-not">Her operasyon türü için hangi hazırlık maddesinin gerekli olduğunu seçin. Gerekli olmayan madde o türün adımlarında “Gerekmez” görünür. Başlatmayı durduran maddeler (CNC, çizim, yayın) her zaman gerekli kalır. Şablonu olmayan tür, varsayılan şablonu kullanır.</p>
       <Secim etiket="Operasyon türü" value={secili} disabled={kirli} ipucu={kirli ? 'Kaydedilmemiş işaretler var: kaydedin ya da vazgeçin, sonra tür değiştirin.' : undefined} onChange={(o) => seciliYaz(o.target.value)}
         secenekler={turler.map((t) => ({ deger: t.operasyonTipiId === null ? 'varsayilan' : String(t.operasyonTipiId), baslik: `${t.ad}${t.surum === null ? '' : ` · v${String(t.surum)}`}` }))} />
       <Duzenleyici key={`${secili}:${String(tur.surum)}`} tur={tur} yazar={sorgu.data.yazar} kirli={kirliYaz} />
+      {yeniMadde && <YeniMaddePenceresi sonraki={Math.min(999, (maddeler.data?.maddeler.at(-1)?.sira ?? 0) + 10)} kapat={() => { yeniMaddeYaz(false); }} />}
     </Kart>
   );
 }
