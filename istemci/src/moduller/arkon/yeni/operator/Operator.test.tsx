@@ -77,6 +77,28 @@ describe('A1 Üretim Terminali', () => {
     await waitFor(() => { expect(sonuclar(istekler).some((r) => (r as { good?: number }).good === 2)).toBe(true); }, { timeout: 10000 });
   }, 40000);
 
+  it('3764: art arda reddedilen sayımda aynı ret tek bildirim kalır; reddedilen son sayımın "+1" bildirimi kalkar', async () => {
+    const istekler = sunucuKur(ISTASYONLU, sunucu());
+    arkonAc('/uretim-terminali');
+    const d = await ekran();
+    expect(await within(d).findByRole('heading', { name: /IE-DENEME-1/ })).toBeTruthy();
+    fireEvent.click(within(screen.getByRole('group', { name: 'İş durumu' })).getByRole('button', { name: /Başlat/ }));
+    await waitFor(() => { expect(olaylar(istekler).some((e) => e.state === 'running')).toBe(true); }, { timeout: 10000 });
+    const sayi = () => document.querySelector('.tc-ay1-kadran-sayi')?.textContent;
+    const satir = { kind: 'good', delta: 1, orderNo: PAKET.no, pkgId: PAKET.id };
+    const ret = 'Hammadde (ORN-HM-1) bu istasyonda yetmiyor; 1 eksik. Hammaddeyi bu istasyona teslim ettirin.';
+    for (const cid of ['orn-r1', 'orn-r2']) {
+      fireEvent.click(screen.getAllByRole('button', { name: /İyi \+1/ })[0]!);
+      await waitFor(() => { expect(sayi()).toBe('1'); });
+      expect(await screen.findByText(/İyi parça \+1/)).toBeTruthy();
+      window.dispatchEvent(new CustomEvent('arkon-rejected', { detail: { kind: 'counts', cid, row: satir, msg: ret } }));
+      await waitFor(() => { expect(sayi()).toBe('0'); });
+      await waitFor(() => { expect(screen.queryByText(/İyi parça \+1/)).toBeNull(); });
+    }
+    expect(screen.getAllByText(/Sayım işlenmedi, sayı geri alındı/)).toHaveLength(1);
+    await waitFor(() => { expect(sonuclar(istekler).some((r) => (r as { good?: number }).good === 0)).toBe(true); }, { timeout: 10000 });
+  }, 40000);
+
   it('üretim yetkisi olmayan kişi yalnız görür: sayım ve durum düğmeleri yok, yazma gitmez (reddedilen)', async () => {
     const istekler = sunucuKur(ISTASYONLU, sunucu([{ kimlik: 'perms', surum: 1, govde: { v: { operator: ['page.op'] } } }]));
     arkonAc('/uretim-terminali');

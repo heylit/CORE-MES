@@ -245,29 +245,40 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
   const sonBildirim = useRef(0);
   // Geri alınabilir son işlemin bildirimi iyimserdir (TMI cevabından önce verilir): TMI işlemi reddederse kaldırılır.
   const sonIyimser = useRef<number | null>(null);
-  const say = useCallback((m: string, _simge: SimgeAdi = 'check', ton: Ton = 'run', ek?: Ek) => {
+  // sonIyimser'in bildirim sırası: arkasından başka bildirim gelmediyse reddedilen son işlemin bildirimidir.
+  const sonIyimserSirasi = useRef(0);
+  const say = useCallback((m: string, _simge: SimgeAdi = 'check', ton: Ton = 'run', ek?: Ek): number => {
     const no = ++sonBildirim.current;
     const tur: BildirimTonu = ek?.undo ? (ton === 'run' ? 'tamam' : 'bilgi') : ton === 'stop' ? 'hata' : ton === 'run' ? 'tamam' : 'bilgi';
     if (ek?.undo) {
       const geri = ek.undo;
+      sonIyimserSirasi.current = no;
       sonIyimser.current = bildir(tur, m, { eylem: { etiket: 'Geri al', yap: () => { if (no === sonBildirim.current) geri(); else bildir('bilgi', 'Bu işlem artık geri alınamaz; sonraki işlem kaydedildi.'); } } });
-    } else if (ek?.action) {
+      return sonIyimser.current;
+    }
+    if (ek?.action) {
       const a = ek.action;
-      bildir(tur, m, { eylem: { etiket: a.l, yap: a.fn } });
-    } else if (ek?.sure !== undefined) bildir(tur, m, { sure: ek.sure });
-    else bildir(tur, m);
+      return bildir(tur, m, { eylem: { etiket: a.l, yap: a.fn } });
+    }
+    return ek?.sure !== undefined ? bildir(tur, m, { sure: ek.sure }) : bildir(tur, m);
   }, [bildir]);
   const sayRef = useRef(say);
   sayRef.current = say;
   // TMI reddi ekranın kendi iletisiyle söylenir, köprünün aynı ret için verdiği genel bildirim kalkar. Reddedilen durum değişikliğinde
   // iyimser "kaydedildi" bildirimi de kalkar (sayımda kalkmaz: art arda sayımlarda son bildirim reddedilen sayımın olmayabilir).
   // Bağlantı yokken bekleyen işlemin reddi ayrı bildirim olmaz: "Karar bekliyor" olarak listede ve kesinleşme özetinde söylenir.
+  // 3764: art arda reddedilen sayımlar (ör. istasyonda hammadde yok) her basışta "+1" ve hata bildirimi üst üste yığıyordu; hata kendiliğinden
+  // kapanmadığı için ekranı örtüyordu. Reddedilen sayımın "+1" bildirimi, arkasından başka bildirim gelmediyse kalkar; aynı ret metni
+  // ekranda tek bildirim olarak kalır (yenisi eskisinin yerine geçer).
+  const sonRet = useRef<{ ileti: string; no: number } | null>(null);
   const retSoyleRef = useRef<(ileti: string, msg: string | undefined, iyimserKalksin: boolean, bekledi: boolean) => void>(() => undefined);
   retSoyleRef.current = (ileti, msg, iyimserKalksin, bekledi) => {
-    if (iyimserKalksin && sonIyimser.current !== null) { kaldir(sonIyimser.current); sonIyimser.current = null; }
+    const sonIyimserinRetti = sonIyimser.current !== null && sonIyimserSirasi.current === sonBildirim.current;
+    if ((iyimserKalksin || sonIyimserinRetti) && sonIyimser.current !== null) { kaldir(sonIyimser.current); sonIyimser.current = null; }
     if (msg) tmiRetiniUstlen(msg);
     if (bekledi) return;
-    say(ileti, 'alert', 'stop');
+    if (sonRet.current?.ileti === ileti) kaldir(sonRet.current.no);
+    sonRet.current = { ileti, no: say(ileti, 'alert', 'stop') };
   };
   useEffect(() => {
     const f = (e: Event) => sayRef.current((e as CustomEvent<{ msg?: string }>).detail?.msg || CAKISMA_ILETISI, 'alert', 'hold');
