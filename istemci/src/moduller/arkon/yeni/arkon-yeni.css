@@ -92,6 +92,20 @@ html.tc-ay-tv .tc-ay > .tc-sekmeler, html.tc-ay-tv .tc-ay-baglanti, html.tc-ay-t
   .tc-ay { padding: var(--b-3); }
 }
 
+/* Dokunmatik yatay tablette (data-mobil yok) kök küçülür; hedefler ölçeğe bölünür ki ekranda yine 44 px kalsın. Fare ve
+   telefon değişmez. Ham değer kökte saklanır, çocukta bölünür: aynı öğede --dokunma kendine başvuramaz. tokens.css'in
+   :root'ta çözdüğü türevler (düğme, alan, işaret, katlar) de burada yeniden kurulur, yoksa eski değerde kalırlar. */
+@media (pointer: coarse) {
+  .tc-ay:not([data-mobil]) { --tc-ay-dokunma-ham: var(--dokunma); --tc-ay-dokunma-ana-ham: var(--dokunma-ana); }
+  .tc-ay:not([data-mobil]) > * {
+    --dokunma: calc(var(--tc-ay-dokunma-ham) / var(--tc-ay-olcek, 1));
+    --dokunma-ana: calc(var(--tc-ay-dokunma-ana-ham) / var(--tc-ay-olcek, 1));
+    --dugme-boy: var(--dokunma); --alan-boy: var(--dokunma); --isaret-boy: var(--dokunma);
+    --dokunma-x14: calc(var(--dokunma) * 1.4); --dokunma-x16: calc(var(--dokunma) * 1.6); --dokunma-x18: calc(var(--dokunma) * 1.8);
+    --dokunma-x20: calc(var(--dokunma) * 2); --dokunma-x24: calc(var(--dokunma) * 2.4);
+  }
+}
+
 /* 3614: önizlemede operasyon şeridi ve yan yana çerçeveler. */
 .tc-ay-onizleme-govde { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100%; min-height: 0; }
 .tc-ay-onizleme-serit { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); padding: var(--b-2) var(--b-5); border-bottom: 1px solid var(--edge); }
