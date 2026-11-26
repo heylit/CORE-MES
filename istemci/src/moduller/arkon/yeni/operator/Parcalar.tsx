@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { Dugme, Orb, OrbGrubu, Simge, type MakineDurumu } from '../../../../ortak/arayuz/index.ts';
 import { adimTuru } from '../../../../../../arkon/web/src/data/adim-turu.ts';
@@ -52,30 +52,70 @@ export function IsOzeti({ is, acik, degistir }: { is: Is; acik: boolean; degisti
   );
 }
 
+// Tek sıralık iş şeridinde sığmayan yazı kendiliğinden küçülür. Kod (proje, emir no, malzeme kodu, Rev, Hedef) bölünmez ve
+// daralmaz; etiket kesilmez. Ad (op, malzeme adı) basamak basamak: 1 bir yazı basamağı küçük, 2 iki satır, 3 bir basamak daha
+// küçük, 4 üç satır. Yine sığmazsa kodların yazısı da küçülür (sikisik), en son şerit ikinci sıraya geçer (tasar). Hiçbir değer
+// kesilmez; genişlik değişince yeniden ölçülür.
+const AD_BASAMAGI = 4;
+function useYaziSigdir(kok: RefObject<HTMLElement | null>, anahtar: string): void {
+  useLayoutEffect(() => {
+    const el = kok.current;
+    if (el === null) return undefined;
+    const sigdir = () => {
+      const adlar = [...el.querySelectorAll<HTMLElement>(':scope > .tc-ay1-is-alan-ad > b')];
+      const sigiyor = () => el.scrollWidth <= el.clientWidth + 1 && adlar.every((d) => d.scrollWidth <= d.clientWidth + 1 && d.scrollHeight <= d.clientHeight + 2);
+      delete el.dataset['sikisik'];
+      delete el.dataset['tasar'];
+      for (let adim = 0; adim <= AD_BASAMAGI; adim++) {
+        el.dataset['kucuk'] = String(adim);
+        if (sigiyor()) return;
+      }
+      el.dataset['sikisik'] = '';
+      if (!sigiyor()) el.dataset['tasar'] = '';
+    };
+    sigdir();
+    void document.fonts?.ready.then(sigdir);
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    let genislik = el.clientWidth;
+    const gozcu = new ResizeObserver(() => { if (el.clientWidth !== genislik) { genislik = el.clientWidth; sigdir(); } });
+    gozcu.observe(el);
+    return () => gozcu.disconnect();
+  }, [kok, anahtar]);
+}
+
 /* ── işin başlığı (664, 673 a): etiketli alanlar, terminalin her boyutunda aynı sıra; geniş düzende emir no başlıktır ── */
 export function IsAlanlari({ is, baslik = false }: { is: Is; baslik?: boolean }) {
   const pkg = is.pkg;
+  const kok = useRef<HTMLSpanElement>(null);
+  // Dokunmatikte ipucu görünmez: geniş düzendeki şeride dokununca bütün değerler tam açılır, yeniden dokununca kapanır. Telefon
+  // özetinde şerit zaten bir düğmenin içindedir; orada açılmaz.
+  const [tam, setTam] = useState(false);
+  useYaziSigdir(kok, [pkg?.proje, is.no, is.op, pkg?.partNo, is.part, pkg?.rev, is.target, tam].join('|'));
   // İşsiz istasyonda alan yok: "atanmış iş yok" ve istasyon satırı eskisi gibi düz yazılır.
   if (is.empty) return baslik ? <><h2 className="tc-ay1-is-baslik">{is.no}</h2><p>{is.part} · {is.op}</p></> : <><b>{is.no}</b><small>{is.part} · {is.op}</small></>;
   const alan = (etiket: string, deger: string | null | undefined, sinif?: string) => (
     <span className={sinif ? `tc-ay1-is-alan ${sinif}` : 'tc-ay1-is-alan'}>
       <span className="tc-ay1-ust-yazi">{etiket}</span>
-      <b>{deger || '—'}</b>
+      <b title={deger || undefined}>{deger || '—'}</b>
     </span>
   );
   return (
-    <span className="tc-ay1-is-alanlari">
-      {alan('Proje', pkg?.proje)}
-      <span className="tc-ay1-is-alan tc-ay1-is-alan-emir">
+    <span className="tc-ay1-is-alanlari" ref={kok} {...(baslik ? {
+      'data-tam': tam ? '' : undefined, role: 'button', tabIndex: 0, 'aria-expanded': tam, title: tam ? 'Kısalt' : 'Tamamını göster',
+      onClick: () => setTam((x) => !x),
+      onKeyDown: (e: KeyboardEvent<HTMLSpanElement>) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setTam((x) => !x); } },
+    } : {})}>
+      {alan('Proje', pkg?.proje, 'tc-ay1-is-alan-kisa')}
+      <span className="tc-ay1-is-alan tc-ay1-is-alan-emir tc-ay1-is-alan-kisa">
         <span className="tc-ay1-ust-yazi">Üretim emri</span>
-        {baslik ? <h2 className="tc-ay1-is-baslik">{is.no}</h2> : <b className="tc-ay1-mono">{is.no}</b>}
+        {baslik ? <h2 className="tc-ay1-is-baslik" title={is.no}>{is.no}</h2> : <b className="tc-ay1-mono" title={is.no}>{is.no}</b>}
       </span>
-      {alan('Op', is.op)}
+      {alan('Op', is.op, 'tc-ay1-is-alan-ad')}
       {/* 3126: emrin parça kodu ürünün malzeme kodudur (Adım Durumu'nda da ürün kodu); Rev rotanın revizyon harfidir. */}
-      {alan('Malzeme', pkg?.partNo, 'tc-ay1-mono')}
-      {alan('Malzeme adı', is.part)}
-      {alan('Rev', pkg?.rev)}
-      {alan('Hedef', is.target > 0 ? `${sayi(is.target)} adet` : null, 'tc-ay1-mono')}
+      {alan('Malzeme', pkg?.partNo, 'tc-ay1-mono tc-ay1-is-alan-kisa')}
+      {alan('Malzeme adı', is.part, 'tc-ay1-is-alan-ad')}
+      {alan('Rev', pkg?.rev, 'tc-ay1-is-alan-kisa')}
+      {alan('Hedef', is.target > 0 ? `${sayi(is.target)} adet` : null, 'tc-ay1-mono tc-ay1-is-alan-kisa')}
     </span>
   );
 }

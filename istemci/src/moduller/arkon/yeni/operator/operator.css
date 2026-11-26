@@ -1539,6 +1539,23 @@ button.tc-ay1-yer { font: inherit; color: inherit; text-align: start; cursor: po
 .tc-ay1-genis > .tc-ay1-aktif.tc-ay1-kimlik:not([data-bos]) .tc-ay1-is-alanlari { flex-wrap: nowrap; }
 .tc-ay1-genis > .tc-ay1-aktif.tc-ay1-kimlik .tc-ay1-is-alanlari > .tc-ay1-is-alan { display: grid; flex: 0 1 auto; min-width: 0; }
 .tc-ay1-genis > .tc-ay1-aktif.tc-ay1-kimlik .tc-ay1-is-alanlari > .tc-ay1-is-alan.tc-ay1-mono { flex: none; }
+/* İş şeridi sığdırma (Parcalar useYaziSigdir). Etiket kesilmez; kod (proje, emir no, malzeme kodu, Rev, Hedef) bölünmez ve daralmaz.
+   Ad (op, malzeme adı) data-kucuk ile küçülür ve satıra iner; sikisik kodları da küçültür, tasar şeridi ikinci sıraya alır,
+   tam dokununca bütün değerleri açar. */
+.tc-ay1-genis > .tc-ay1-aktif.tc-ay1-kimlik .tc-ay1-is-alanlari > .tc-ay1-is-alan { min-inline-size: min-content; }
+.tc-ay1-genis > .tc-ay1-aktif.tc-ay1-kimlik .tc-ay1-is-alanlari > .tc-ay1-is-alan.tc-ay1-is-alan-kisa { flex: none; }
+.tc-ay1-genis > .tc-ay1-aktif .tc-ay1-is-alanlari > .tc-ay1-is-alan > .tc-ay1-ust-yazi { overflow: visible; text-overflow: clip; }
+.tc-ay1-genis > .tc-ay1-aktif .tc-ay1-is-alanlari > .tc-ay1-is-alan-kisa > :is(b, .tc-ay1-is-baslik) { overflow: visible; text-overflow: clip; }
+.tc-ay1-genis > .tc-ay1-aktif .tc-ay1-is-alanlari:is([data-kucuk="1"], [data-kucuk="2"]) > .tc-ay1-is-alan-ad > b { font-size: var(--yazi-s); }
+.tc-ay1-genis > .tc-ay1-aktif .tc-ay1-is-alanlari:is([data-kucuk="3"], [data-kucuk="4"]) > .tc-ay1-is-alan-ad > b { font-size: var(--yazi-xs); }
+.tc-ay1-genis > .tc-ay1-aktif .tc-ay1-is-alanlari:is([data-kucuk="2"], [data-kucuk="3"], [data-kucuk="4"], [data-tam]) > .tc-ay1-is-alan-ad > b {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; line-height: 1.15; text-overflow: clip;
+}
+.tc-ay1-genis > .tc-ay1-aktif .tc-ay1-is-alanlari[data-kucuk="4"] > .tc-ay1-is-alan-ad > b { -webkit-line-clamp: 3; }
+.tc-ay1-genis > .tc-ay1-aktif .tc-ay1-is-alanlari[data-tam] > .tc-ay1-is-alan-ad > b { -webkit-line-clamp: none; }
+.tc-ay1-genis > .tc-ay1-aktif .tc-ay1-is-alanlari[data-sikisik] > .tc-ay1-is-alan-kisa > :is(b, .tc-ay1-is-baslik) { font-size: var(--yazi-xs); }
+.tc-ay1-genis > .tc-ay1-aktif.tc-ay1-kimlik:not([data-bos]) .tc-ay1-is-alanlari:is([data-tasar], [data-tam]) { flex-wrap: wrap; }
+.tc-ay1-genis > .tc-ay1-aktif .tc-ay1-is-alanlari[role="button"] { cursor: pointer; }
 /* Sayım tuşları kadranın ortasıyla hizalıdır (kadranın altında yan sayı yuvası kadar pay vardır); tek sayım tuşu ve Toplu giriş,
    üretimdeki iki tuş ve Toplu giriş ile aynı iki sıralık alanı kaplar. */
 .tc-ay1-genis .tc-ay1-sayac .tc-ay1-tuslar { margin-block-end: var(--dokunma); }
