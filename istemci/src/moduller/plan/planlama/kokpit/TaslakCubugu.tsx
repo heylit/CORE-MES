@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
-import type { TaslakCatismasi } from '#paylasilan/sozlesme/planlama.ts';
+import type { TaslakCatismaKaynagi, TaslakCatismasi } from '#paylasilan/sozlesme/planlama.ts';
 import { Dugme, OnayPenceresi, Pencere, Simge } from '../../../../ortak/arayuz/index.ts';
+import { zamanMetni } from '../../../../ortak/veri/zaman-metni.ts';
 import { taslakOzeti, type TaslakYazici } from './taslak.ts';
 import { hesapSuresiEki, useGecenSaniye } from '../motor/ust/HesapSuresi.tsx';
 
@@ -8,7 +9,9 @@ import { hesapSuresiEki, useGecenSaniye } from '../motor/ust/HesapSuresi.tsx';
 // burada görünür; Geri al son değişikliği, Vazgeç bütün taslağı siler. Tek birincil düğme (Canlıya al ya da Onaya gönder, 3282-5 a) taslağı
 // ortak çalışmaya yazar ve aynı adımda Onay ve canlı bölümünü açar: canlıya alma onaylı onay akışıyla kalır (dört göz, müşteri, kayma).
 // Taslakta değişiklik yokken (yalnız dizme) düğme ikincildir (3529).
-// Başkası aynı emre, tezgâha ya da plan ayarına dokunduysa önce anahtar başına "benimki / onunki" seçilir.
+// Araya giren değişiklik aynı emre, tezgâha ya da plan ayarına dokunduysa önce anahtar başına "benim taslağım / şimdiki plan" seçilir
+// (3733): her satır kimin, ne zaman, neyi değiştirdiğini yazar; veri yenilemesini sunucu sormaz. Başlık yalnız başka kişi varsa
+// "Başkası da değiştirdi"dir.
 
 export interface TaslakCubuguOzellikleri {
   taslak: TaslakYazici;
@@ -26,6 +29,16 @@ export interface TaslakCubuguOzellikleri {
 
 type Secim = Record<string, 'benim' | 'onun'>;
 
+const KAYNAK_SIMGESI = { ben: 'user', diger: 'users', ayar: 'gear', eksen: 'cpu' } as const;
+// Kaynaksız cevap (eski sunucu) başkasınınki sayılır.
+export const baskasiVarMi = (l: readonly TaslakCatismasi[]): boolean => l.some((c) => c.kaynaklar === undefined || c.kaynaklar.some((k) => k.sinif === 'diger'));
+export const SECENEKLER = [
+  { deger: 'benim', ad: 'Benim taslağım', ipucu: 'Taslağınızdaki değişiklik yazılır; araya giren değişikliğin üstüne geçer.' },
+  { deger: 'onun', ad: 'Şimdiki plan', ipucu: 'Araya giren değişiklik kalır; taslağınızın bu satırdaki değişikliği düşer.' },
+] as const;
+const kaynakYazisi = (k: TaslakCatismaKaynagi): string =>
+  [k.kim, ...(k.zaman === null ? [] : [zamanMetni(k.zaman)]), k.ayrinti === '' ? k.ne : `${k.ne}: ${k.ayrinti}`].join(' · ');
+
 export function TaslakCubugu({ taslak, ozet, canliyaAlir, kilit = null, seritteGuncelle = false, yazildi, onayiAc }: TaslakCubuguOzellikleri) {
   const t = taslak.cevap?.taslak ?? null;
   const o = taslakOzeti(t);
@@ -41,14 +54,19 @@ export function TaslakCubugu({ taslak, ozet, canliyaAlir, kilit = null, seritteG
   const yaz = async (s?: Secim) => {
     const r = await taslak.uygula(s);
     if (r === null) return;
-    if (r.durum === 'secim') { setCatisma(r.catismalar); setSecim((x) => Object.fromEntries(Object.entries(x).filter(([k]) => r.catismalar.some((c) => c.anahtar === k)))); return; }
+    if (r.durum === 'secim') {
+      // Sorulacak satır yoksa pencere açılmaz; canlıya alma bir kez daha seçimsiz denenir.
+      if (r.catismalar.length === 0) { if (s === undefined) await yaz({}); return; }
+      setCatisma(r.catismalar); setSecim((x) => Object.fromEntries(Object.entries(x).filter(([k]) => r.catismalar.some((c) => c.anahtar === k)))); return;
+    }
     setCatisma(null); setSecim({});
     // Onay ve canlı bölümünde vazgeçilirse taslak ortak planda kalır; bildirim bunu söyler.
-    const dusen = r.dusen > 0 ? ` ${String(r.dusen)} değişiklik başkasınınki seçildiği için düştü.` : '';
+    const dusen = r.dusen > 0 ? ` ${String(r.dusen)} değişiklik şimdiki plan seçildiği için düştü.` : '';
     yazildi(`Değişiklikleriniz plana yazıldı.${dusen} ${canliyaAlir ? 'Canlıya almak' : 'Onaya göndermek'} için onay sayfasını tamamlayın.`);
     onayiAc();
   };
   const tamam = catisma !== null && catisma.every((c) => secim[c.anahtar] !== undefined);
+  const baskasi = catisma !== null && baskasiVarMi(catisma);
 
   return (
     <div className="tc-pyq-degisim tc-pyq-taslak" role="region" aria-label="Değişiklikleriniz">
@@ -74,7 +92,7 @@ export function TaslakCubugu({ taslak, ozet, canliyaAlir, kilit = null, seritteG
         vazgec={() => { setVazgecAcik(false); }} onayla={() => { setVazgecAcik(false); void taslak.vazgec(); }}
       >{`${String(o.n)} değişiklik silinir; ortak plan değişmez.`}</OnayPenceresi>
       <Pencere
-        acik={catisma !== null} kapat={() => { setCatisma(null); }} baslik="Başkası da değiştirdi"
+        acik={catisma !== null} kapat={() => { setCatisma(null); }} baslik={baskasi ? 'Başkası da değiştirdi' : 'Siz başladıktan sonra plan değişti'}
         alt={(
           <>
             <Dugme onClick={() => { setCatisma(null); }} data-ilk-odak>Vazgeç</Dugme>
@@ -82,17 +100,24 @@ export function TaslakCubugu({ taslak, ozet, canliyaAlir, kilit = null, seritteG
           </>
         )}
       >
-        <p className="tc-pyq-not">Siz değiştirmeye başladığınızdan beri başkası aşağıdakileri değiştirdi. Her biri için hangisinin kalacağını seçin.</p>
+        <p className="tc-pyq-not">Siz değiştirmeye başladıktan sonra plan aşağıdaki yerlerde değişti. Her biri için hangisinin kalacağını seçin.</p>
         <ul className="tc-pyq-catisma">
           {(catisma ?? []).map((c) => (
             <li key={c.anahtar}>
               <fieldset>
                 <legend>{c.ad}</legend>
-                <small>{c.komutlar.join(', ')}</small>
+                {c.kaynaklar !== undefined && c.kaynaklar.length > 0 && (
+                  <ul className="tc-pyq-catisma-kaynak">
+                    {c.kaynaklar.map((k) => (
+                      <li key={`${k.sinif}-${k.kim}-${k.zaman ?? ''}-${k.ne}`}><Simge ad={KAYNAK_SIMGESI[k.sinif]} boyut="k" /><span>{kaynakYazisi(k)}</span></li>
+                    ))}
+                  </ul>
+                )}
+                <small>{`Taslağınızdaki: ${c.komutlar.join(', ')}`}</small>
                 <span className="tc-pyq-seg">
-                  {(['benim', 'onun'] as const).map((s) => (
-                    <button key={s} type="button" aria-pressed={secim[c.anahtar] === s} onClick={() => { setSecim({ ...secim, [c.anahtar]: s }); }}>
-                      {s === 'benim' ? 'Benimki' : 'Onunki'}
+                  {SECENEKLER.map((x) => (
+                    <button key={x.deger} type="button" title={x.ipucu} aria-pressed={secim[c.anahtar] === x.deger} onClick={() => { setSecim({ ...secim, [c.anahtar]: x.deger }); }}>
+                      {x.ad}
                     </button>
                   ))}
                 </span>

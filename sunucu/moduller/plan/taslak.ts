@@ -10,9 +10,11 @@ import { planaAlmaHesabi } from './plana-al.ts';
 import { PLANLAMA_ANAHTARI, planlamaCalismasi, planlamaCalismasiVeGirdisi, planlamaYaz, planlamaYazmaDenetimi } from './planlama-servis.ts';
 import * as sorgular from './sorgular.ts';
 import {
-  adimEkBitisi, dataVerOf, dizImzasi, eksenOf, imza, kapasiteKomutuMu, kilitKaydi, komutAdi, komutUygula, oynat, uygulaKarari, type DizKomutu, type KilitKaydi, type SatirKomutu, type TaslakHesaplari, type TaslakImzasi, type TaslakSatiri as Satir,
+  adimEkBitisi, araDegisiklikleri, dataVerOf, digerDegisiklikleri, dizImzasi, eksenOf, imza, kapasiteKomutuMu, kilitKaydi, komutAdi, komutUygula, oynat, uygulaKarari, veriYenilemesiMi,
+  type AraDegisiklik, type AraYazma, type DizKomutu, type KilitKaydi, type SatirKomutu, type TaslakHesaplari, type TaslakImzasi, type TaslakSatiri as Satir,
 } from './taslak-kurallar.ts';
 import { tasimaHesabi } from './tasima.ts';
+import { kisiAdlari } from '../kisiler/disari.ts';
 
 // 3282 1d: kişinin taslağı. Akış: yetki (plan.yaz, uçta ve burada; satır yalnız çağıranın kimliğiyle okunur ve yazılır), taslak sürümü,
 // komutlar güncel ortak çalışmaya sırayla oynatılır (taslak-kurallar.ts; taşıma ve plana alma hesapları burada verilir).
@@ -134,6 +136,46 @@ export async function taslaktanVazgec(db: Db, kullanici: Kullanici, g: { taslakS
   return gorunum(db, kullanici, null, simdi);
 }
 
+// 3733: taban ile şimdi arasındaki yazmalar, kaynaklarına ayrılmak için (taslak-kurallar.ts araDegisiklikleri). Fark yoksa okunmaz.
+// Kişi yazmalarının önceki ve sonraki değeri geçmişten okunur; çoksa (her biri bütün çalışmadır) ya da taban sürümü geçmişten düşmüşse
+// kaynaklar yazanlardan ve defterden, fark toplamdan kurulur.
+const ARA_OKUMA_EN_COK = 12;
+const nesneOf = (x: unknown): Record<string, unknown> => (nesneMi(x) ? x : {});
+function izBasi(deger: unknown): { ne: string; ayrinti: string } | null {
+  const iz = nesneOf(deger).iz;
+  const x = Array.isArray(iz) ? iz[0] as unknown : null;
+  return nesneMi(x) && typeof x.ne === 'string' ? { ne: x.ne, ayrinti: typeof x.ayrinti === 'string' ? x.ayrinti : '' } : null;
+}
+async function araOku(db: Db, kullanici: Kullanici, t: sorgular.TaslakSatiri, taban: TaslakImzasi, simdi: TaslakImzasi, l: readonly Satir[]): Promise<AraDegisiklik[]> {
+  const fark = digerDegisiklikleri(taban, simdi);
+  if (fark.bos && !fark.kapasiteBilinmez && !fark.mesaiBilinmez) return [];
+  const gecisler = await sorgular.planlamaGecisleri(db, PLANLAMA_ANAHTARI, t.tabanSurum);
+  const eksik = gecisler.length > 0 && gecisler[0]!.surum !== t.tabanSurum;
+  const defter = await sorgular.defterZamanlari(db, gecisler.map((g) => g.degisti));
+  const ekKisiler = eksik && l.length > 0 ? await sorgular.defterKisileri(db, new Date(l[0]!.t)) : [];
+  const ids = [...new Set([...gecisler.flatMap((g) => (g.degistirenKisiId === null ? [] : [g.degistirenKisiId])), ...ekKisiler.map((x) => x.kisiId)])];
+  const adlar = await kisiAdlari(db, ids);
+  const ad = (id: number | null): string => (id === null ? 'Bilinmiyor' : adlar.get(id) ?? 'Bilinmiyor');
+  const yazmalar = gecisler.map((g, i): AraYazma & { onceSurum: number; sonraSurum: number | null } => ({
+    kisiId: g.degistirenKisiId, kim: ad(g.degistirenKisiId), zaman: g.degisti, once: null, sonra: null,
+    defter: defter.filter((x) => x.zaman === g.degisti), onceSurum: g.surum, sonraSurum: gecisler[i + 1]?.surum ?? null,
+  }));
+  const kisiYazmalari = yazmalar.filter((y) => !veriYenilemesiMi(y));
+  if (!eksik && kisiYazmalari.length > 0 && kisiYazmalari.length <= ARA_OKUMA_EN_COK) {
+    const surumler = [...new Set(kisiYazmalari.flatMap((y) => [y.onceSurum, ...(y.sonraSurum === null ? [] : [y.sonraSurum])]))];
+    const degerler = new Map((await sorgular.planlamaGecmisDegerleri(db, PLANLAMA_ANAHTARI, surumler)).map((x) => [x.surum, x.deger]));
+    const son = kisiYazmalari.some((y) => y.sonraSurum === null) ? (await sorgular.planlamaKaydi(db, PLANLAMA_ANAHTARI))?.deger : undefined;
+    for (const y of kisiYazmalari) {
+      const once = degerler.get(y.onceSurum);
+      const sonra = y.sonraSurum === null ? son : degerler.get(y.sonraSurum);
+      if (once === undefined || sonra === undefined) continue;
+      y.once = imza(once); y.sonra = imza(sonra); y.iz = izBasi(sonra);
+    }
+  }
+  const ek: AraYazma[] = ekKisiler.map((x) => ({ kisiId: x.kisiId, kim: ad(x.kisiId), zaman: x.zaman, defter: [{ bekleyenId: 'defter', ne: x.ne, ayrinti: x.ayrinti }], once: null, sonra: null }));
+  return araDegisiklikleri(taban, simdi, [...ek, ...yazmalar], kullanici.id, eksik);
+}
+
 // Uygula (Risk K2): ortak çalışma bugünkü yazma işlemiyle (plan.yaz) ve kilitle yazılır. Çatışmanın seçimi eksikse yazılmaz, çatışmalar
 // döner. Seçimden kalan komutlardan biri artık uygulanamıyorsa hiçbiri yazılmaz; kişi o komutu geri alır ya da taslaktan vazgeçer.
 export async function taslagiUygula(db: Db, kullanici: Kullanici, g: { taslakSurumu: number; secimler?: Record<string, 'benim' | 'onun'> | undefined }, simdi: number = Date.now()): Promise<TaslakUygulaCevabi> {
@@ -144,7 +186,10 @@ export async function taslagiUygula(db: Db, kullanici: Kullanici, g: { taslakSur
   const c = await planlamaCalismasi(db, kullanici, simdi);
   if (surum === null || c.calisma === null || c.surum !== surum) throw eskiSurum();
   kilitYetkisiDenetle(kullanici, satirlar(t!.komutlar).map((x) => x.komut));
-  const k = uygulaKarari(c.calisma, t!.tabanImzasi as TaslakImzasi, satirlar(t!.komutlar), g.secimler ?? {}, kisiOf(kullanici, simdi), HESAPLAR);
+  const taban = t!.tabanImzasi as TaslakImzasi;
+  const l = satirlar(t!.komutlar);
+  const ara = await araOku(db, kullanici, t!, taban, imza(c.calisma), l);
+  const k = uygulaKarari(c.calisma, taban, l, g.secimler ?? {}, kisiOf(kullanici, simdi), HESAPLAR, ara);
   if (k.durum === 'secim') return k;
   if (k.durum === 'bozuk') throw cakisma(k.ileti);
   let calismaSurumu = surum;
