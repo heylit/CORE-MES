@@ -24,7 +24,7 @@ import { bildirimGonder } from '../../bildirim/disari.ts';
 import { basladigiGunTakvimi } from '../../vardiya/disari.ts';
 import { kisiAdlari } from '../../kisiler/disari.ts';
 import { malzemeAra, malzemeKesiti, malzemeKullanilabilirMi, malzemeNoKoddan, malzemeOzeti, malzemeOzetleri } from '../../malzemeler/disari.ts';
-import { KOMUT_ISLEMI as URETIM_ISLEMI, acikIstasyon, adimliEmirAyrintisi, emirDilimi, uretimEmriOzeti, emirlerinAdimIstasyonlari } from '../../uretim-emirleri/disari.ts';
+import { KOMUT_ISLEMI as URETIM_ISLEMI, acikIstasyon, adimliEmirAyrintisi, emirAdimlari, emirDilimi, uretimEmriOzeti, emirlerinAdimIstasyonlari } from '../../uretim-emirleri/disari.ts';
 import {
   binde, bindenMetin, cikisOnerisi, partiEtiketi, stoklanirMi, partiSec, ISTEK_GECIS_KAYNAKLARI, istekGecisEngeli, buradakiIstasyon, istekAcilisDurumu, istekKapsamindanMuafMi, istekListeEngeli, serbestMiktarEngeli,
   istekKalani, istenenFazlaNotu, yoldaSureSonu, sonrakiIstasyon, type SepetAdimi, kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN, katalogEtiketiStokKodu, geriDusmeKodlari,
@@ -870,7 +870,9 @@ export async function okutCoz(db: Db, k: Kullanici, ham: string): Promise<OkutCo
         const gelenler: TeslimHam[] = [];
         if (lotId !== null) for (const x of await sorgular.refakatYoldakiTeslimleri(db, r.uretimEmriId, lotId)) if (banaGelen(x, k.id) && await teslimAlabilir(db, k, x)) gelenler.push(x);
         const kartSatirlari = await refakatKartSatirlari(db, r.id);
-        const anaEylem = refakatAnaEylemi({ gelenSayisi: gelenler.length, kartAcik: refakat.durum === 'acik', satirIstasyonlari: kartSatirlari.map((x) => x.istasyonId), kapsamdakiIstasyonlar: istasyonlar });
+        // 3744: kartın emrinde başlamış (çalışan) adımın istasyonu; orada iş yeniden açılmaz, işe gidilir.
+        const baslamisIstasyonlar = new Set((await emirAdimlari(db, [r.uretimEmriId])).filter((a) => a.durum === 'calisiyor' && a.istasyonId !== null).map((a) => a.istasyonId!));
+        const anaEylem = refakatAnaEylemi({ gelenSayisi: gelenler.length, kartAcik: refakat.durum === 'acik', satirIstasyonlari: kartSatirlari.map((x) => x.istasyonId), kapsamdakiIstasyonlar: istasyonlar, baslamisIstasyonlar });
         bulunan = { ...m, ...(lotId === null ? { parti: null, digerIstasyonlar: [] } : {}), refakat, gelenler: await teslimleriAdlandir(db, gelenler), kartSatirlari, anaEylem };
       }
     } else if (t.tur === 'raf') {

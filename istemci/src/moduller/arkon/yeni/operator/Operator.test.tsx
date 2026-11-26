@@ -842,6 +842,24 @@ describe('A1 Üretim Terminali el okuyucu (1337 a)', () => {
     expect(screen.queryByRole('dialog', { name: 'Refakat kartını okut' })).toBeNull();
   }, 40000);
 
+  it('3744: başlamış işte okutulan refakat kartı yeniden başlatmaz, "İş zaten başladı" der', async () => {
+    const istekler = kur();
+    arkonAc('/uretim-terminali');
+    const d = await ekran();
+    expect(await within(d).findByRole('heading', { name: /UE-DENEME-8/ })).toBeTruthy();
+    await waitFor(() => { expect(kartOkundu).toBe(true); }, { timeout: 10000 });
+    await new Promise((r) => setTimeout(r, 300));
+    okut('RP:4');
+    expect(await screen.findByText(/İş emri açıldı: UE-DENEME-8 · UE-DENEME-8-P4/, {}, { timeout: 10000 })).toBeTruthy();
+    fireEvent.click(within(screen.getByRole('group', { name: 'İş durumu' })).getByRole('button', { name: /Başlat/ }));
+    await waitFor(() => { expect(olaylar(istekler).some((e) => e.state === 'running')).toBe(true); }, { timeout: 10000 });
+    const baslatma = olaylar(istekler).filter((e) => e.state === 'running').length;
+    okut('RP:4');
+    expect(await screen.findByText(/İş zaten başladı: UE-DENEME-8 · ekrana getirildi/, {}, { timeout: 10000 })).toBeTruthy();
+    await new Promise((r) => setTimeout(r, 700));
+    expect(olaylar(istekler).filter((e) => e.state === 'running')).toHaveLength(baslatma);
+  }, 40000);
+
   it('kart dışı kod ve bu istasyonun olmayan kart işi açmaz, söyler (reddedilen)', async () => {
     kur();
     arkonAc('/uretim-terminali');

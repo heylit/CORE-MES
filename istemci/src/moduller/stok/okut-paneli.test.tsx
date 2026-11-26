@@ -166,6 +166,23 @@ describe('Okutma sonucu', () => {
     expect(within(sonuc).getAllByRole('button', { name: 'İş emrini aç' })).toHaveLength(1);
   });
 
+  it('3744: başlamış adımda ana eylem "İşe git"tir; "İş emrini aç" hiç görünmez', async () => {
+    const refakat = {
+      id: 12, qr: 'RP:12', etiket: 'UE-000001-P1', uretimEmriId: 1, emirNo: 'UE-000001', sira: 1, malzemeId: 901, malzemeKod: 'SR-001', malzemeAd: 'Eldiven', birim: 'adet',
+      partiId: 4, lotNo: 'LT-000123', tedarikciPartiNo: null, dokumNo: null, sertifikaNo: null, verilen: '5', adet: null, durum: 'acik' as const, surum: 1, kayitZamani: '2026-10-22T10:00:00+03:00', lotaBaglanmaZamani: null,
+      ust: null, birlestigi: null, birlesmeZamani: null,
+    };
+    ciz(DEPO, { 'GET /stok/teslim-kutusu/kod-coz': panelKodu({ 'RP:12': PANEL_MLZ('hammadde', { parti: { id: 4, etiket: 'UE-000001-P1', uretimEmriId: null }, refakat, gelenler: [], kartSatirlari: [], anaEylem: 'ise-git' }) }) });
+    const panel = await panelAc();
+    await okut(panel, 'RP:12');
+    const sonuc = await within(panel).findByRole('region', { name: 'Okutma sonucu' });
+    expect(within(sonuc).getAllByRole('button', { name: 'İşe git' })).toHaveLength(1);
+    expect(within(panel).queryByRole('list', { name: 'Adımlar' })).toBeNull();
+    fireEvent.click(within(sonuc).getByRole('button', { name: 'Başka işlem' }));
+    expect(within(sonuc).queryByRole('button', { name: 'İş emrini aç' })).toBeNull();
+    expect(within(sonuc).getAllByRole('button', { name: 'İşe git' })).toHaveLength(1);
+  });
+
   it('raf etiketi gözleri içerikleriyle verir, seçilen göz kendi etiketiyle çözülür; eski refakat kartı uyarı verir', async () => {
     const goz = (konumId: number, kod: string) => ({ konumId, kod, ad: null, tur: 'raf_gozu' as const, istasyonId: null, satirlar: [] });
     const istekler = ciz(DEPO, { 'GET /stok/teslim-kutusu/kod-coz': panelKodu({

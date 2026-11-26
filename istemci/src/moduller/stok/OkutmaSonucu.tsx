@@ -208,7 +208,7 @@ export function OkutmaSonucu({ okunan, sec, kapat, salt = false, ust = null, sep
         )}
         {refakat && <p className="tc-stok-not">{refakatLotSatiri(refakat)} · {refakatMalzemeSatiri(refakat)}{refakat.durum === 'iptal' ? ' · kart iptal' : ''}</p>}
         {!salt && (!refakat || refakat.durum === 'iptal') && malzeme?.gelenler && malzeme.gelenler.length > 0 && <KartlaGelenler key={okunan.kod} gelenler={malzeme.gelenler} refakat={refakat} />}
-        {!salt && refakat && anaEylem === 'isi-ac' && <div className="tc-stok-eylem"><IsEmriniAc r={refakat} /></div>}
+        {!salt && refakat && (anaEylem === 'isi-ac' || anaEylem === 'ise-git') && <div className="tc-stok-eylem"><IsEmriniAc r={refakat} basladi={anaEylem === 'ise-git'} /></div>}
         {refakat && malzeme?.kartSatirlari && (!tekKart || baskaAcik) && <KartSatirlari r={refakat} satirlar={malzeme.kartSatirlari} />}
         {stokCevabi ? <StokAyrintisi c={stokCevabi} /> : malzeme && malzeme.yerler.length > 0 && (
           <ul className="tc-stok-satirlar" aria-label="Alabileceğin yerler">
@@ -222,7 +222,7 @@ export function OkutmaSonucu({ okunan, sec, kapat, salt = false, ust = null, sep
         )}
         {!salt && tekKart && <div className="tc-stok-eylem"><Dugme tur="ikincil" simge="list" aria-expanded={baskaAcik} onClick={() => setBaskaAcik((a) => !a)}>{ust !== null ? 'Diğer işlemler' : 'Başka işlem'}</Dugme></div>}
         {!salt && (!tekKart || baskaAcik) && <div className="tc-stok-eylem">
-          {refakat && anaEylem !== 'isi-ac' && <IsEmriniAc r={refakat} />}
+          {refakat && anaEylem !== 'isi-ac' && anaEylem !== 'ise-git' && <IsEmriniAc r={refakat} />}
           {malzeme && giris && <Dugme {...(ust === null ? { tur: 'birincil' as const } : {})} simge="download" onClick={() => sec('kabul')}>Mal kabul</Dugme>}
           {malzeme && sevkeder && <Dugme simge="truck" onClick={() => sec('sevk')}>Sevk</Dugme>}
           {(digerleri.length > 0 || uzakIstasyon) && <Dugme simge="scan" onClick={() => sec('okutarak-al')}>Okutarak al</Dugme>}
