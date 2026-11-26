@@ -27,6 +27,8 @@ export { talimatSurumuAdimlari } from './servis.ts';
 export { emreGelenSablonOzetleri, emreGelenSablonaAdimEkle } from './servis.ts';
 export type { KontrolNoktasi, TalimatAdimi } from '#paylasilan/sozlesme/rota.ts';
 export { acikRevizyonSayisi, adimBilesenleri, adimIlkParcaSecimleri, adimEtkinSureleri, adimEtkinSureleriToplu, durumRevizyonlari, emreKopyala, gecerliTalimat, gecerliTalimatlarToplu, revizyonOperasyonKimlikleri, girdisiEksikRevizyonlar, revizyonGetir, revizyonKunyeleri, revizyonlar, urunAgaci, yururluktekiRevizyon } from './servis.ts';
+// 3755: emrin parça revizyonu uyarısı (rotanın yürürlüğe alındığı andaki çizim); kablolamada uretim-emirleri'ne bağlanır.
+export { revizyonYururlukleri } from './servis.ts';
 // 1476-E: çok katmanlı emirde düğümün patlatmadaki rota revizyonu ve malzemesi; yetki denetlemez.
 export { patlatmaDugumleri, patlatmaRevizyonu } from './servis.ts';
 export type { PatlatmaDugumu } from './servis.ts';

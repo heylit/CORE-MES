@@ -666,14 +666,18 @@ export const emreKopyalaGovdesi = z.object({
   rotaElle: z.boolean().optional(),
   // 3438 a: kart ailesinin yürürlükteki revizyonu değilse ve emir sipariş kalemine bağlı değilse zorunlu; uretim-emirleri denetler.
   eskiRevizyonGerekcesi: z.string().trim().max(300, 'Gerekçe en çok 300 karakter.').nullish(),
+  // 3755: emre sabitlenecek parça (çizim) revizyonu; kartın çiziminin yayına girmiş bir revizyonu olmalı (uretim-emirleri denetler).
+  // Verilmezse kartın yayındaki çizimi.
+  parcaCizimRevizyonId: KIMLIK.nullish(),
 });
-export const emreKopyalaCevabi = z.object({ uretimEmriId: KIMLIK, isEmriIdleri: z.array(KIMLIK) });
+// uyarilar (3755): açılışı durdurmayan notlar (ör. rotanın çizimi seçilen parça revizyonundan farklı). İsteğe bağlı: sunucu her zaman yazar.
+export const emreKopyalaCevabi = z.object({ uretimEmriId: KIMLIK, isEmriIdleri: z.array(KIMLIK), uyarilar: z.array(z.string()).optional() });
 
 // Excel ile toplu emir (2627): her satır ürünün yürürlükteki revizyonundan emre-kopyala ile açılır, hepsi tek işlemde; biri reddedilirse
 // hiçbiri açılmaz. Çok katmanlı emir ve stoktan düğüm seçimi sayfada tek tek yapılır. Emir başına iş emirleri ve rezerve açıldığı için
 // satır sınırı genel toplu sınırdan küçüktür.
 export const EMIR_TOPLU_EN_COK = 200;
-export const emreKopyalaTopluSatiri = emreKopyalaGovdesi.omit({ cokKatmanli: true, stoktanDugumler: true, siparisSatiriId: true, siparisPartiId: true, rotaElle: true })
+export const emreKopyalaTopluSatiri = emreKopyalaGovdesi.omit({ cokKatmanli: true, stoktanDugumler: true, siparisSatiriId: true, siparisPartiId: true, rotaElle: true, parcaCizimRevizyonId: true })
   .extend({ satir: z.number().int().min(1).max(1_048_576), urunId: KIMLIK }).strict();
 export const emreKopyalaTopluGovdesi = z.object({
   satirlar: z.array(emreKopyalaTopluSatiri).min(1).max(EMIR_TOPLU_EN_COK)
