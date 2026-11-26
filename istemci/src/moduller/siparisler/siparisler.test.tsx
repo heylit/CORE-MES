@@ -197,6 +197,28 @@ describe('Satış siparişleri listesi', () => {
     expect(istekler.some((i) => i.yol.startsWith('/siparisler?'))).toBe(true);
   });
 
+  it('3768: Firma kodu (bizim kodumuz) sütunu yalnız görünen bir satırda kod varken çizilir; teklif listesi de aynı', async () => {
+    const kodlu = { ...SIPARIS_LISTESI, satirlar: [{ ...SIPARIS_TASLAK, firmaKodu: 'ORN' }, SIPARIS_ONAYLI] } satisfies SiparisListesiCevabi;
+    let kodVar = false;
+    sunucuKur(FIYAT_OKUYUCU, (yontem, yol) => {
+      if (yontem === 'GET' && yol.startsWith('/siparisler?') && kodVar) return json(200, kodlu);
+      if (yontem === 'GET' && yol.startsWith('/siparisler/teklifler?')) return json(200, TEKLIF_LISTESI);
+      return undefined;
+    });
+    ac('/siparisler');
+    await screen.findByText('SS-2026-0005');
+    expect(screen.queryByRole('columnheader', { name: 'Firma kodu' })).toBeNull();
+    cleanup();
+    kodVar = true;
+    ac('/siparisler');
+    expect(await screen.findByRole('columnheader', { name: 'Firma kodu' })).toBeTruthy();
+    expect(screen.getByText('ORN')).toBeTruthy();
+    cleanup();
+    ac('/siparisler/teklifler');
+    await screen.findByText('Deneme braket ihtiyacı');
+    expect(screen.queryByRole('columnheader', { name: 'Firma kodu' })).toBeNull();
+  });
+
   it('fiyat yetkisi olmayan listede tutar sütununu görmez (180)', async () => {
     sunucuKur(OKUYUCU, (yontem, yol) => (yontem === 'GET' && yol.startsWith('/siparisler?')
       ? json(200, { ...SIPARIS_LISTESI, satirlar: SIPARIS_LISTESI.satirlar.map((x) => ({ ...x, araToplam: null, kdvTutari: null, genelToplam: null })) })

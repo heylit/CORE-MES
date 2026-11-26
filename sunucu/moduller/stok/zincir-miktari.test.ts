@@ -13,7 +13,7 @@ import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disar
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import type { IsEmriGirdisi } from '../uretim-emirleri/disari.ts';
-import { emirlerinNetSarfi, emirlerinZincirdekiMiktari, sahipsizStatuluStoklar } from './disari.ts';
+import { emirlerinNetSarfi, emirlerinZincirdekiMiktari, isEmriMalzemeHazirliklari, sahipsizStatuluStoklar } from './disari.ts';
 import { adimStatusuCozucusuKaydet, emirBirlestiYansit, istasyonKonumuBul, kilitliYeter, uretimSayimiYansit } from './servis.ts';
 
 // B-2482-8 (2527-1): ilk adımın statüye çevirdiği hammadde emrin zincirinde sayılır; net sarfla toplamı emre verilendir. Veriler uydurmadır.
@@ -171,6 +171,20 @@ describe('stok: emrin statü zincirindeki miktarı (gerçek PostgreSQL)', () => 
   });
 
   // 3340 (T1): kilitli satır kilitsiz okunandan az kaldıysa (aynı anda başka kayıt düştü) sayım 409 ile yeniden istenir; satır eksiye inmez.
+  // 3764 a: hazırlığın malzeme maddesi sayımla aynı kaynağa bakar; depodaki hammadde "Tamam" değildir.
+  test('3764: hazırlık malzeme maddesi yalnız istasyondaki stokla tamam; depoda olan hammadde eksik (uyarı) gösterilir', async () => {
+    const [ym, hm] = [await kart('yarimamul'), await kart('hammadde')];
+    const a = await istasyon();
+    const e = await emir(ym, hm, a.makine, a.makine, 10, '0');
+    const op10 = (await o().vt.sorgu<{ id: number }>('SELECT id FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 ORDER BY op_no', [e]))[0]!.id;
+    const hal = async () => (await o().vt.okumaTx((db) => isEmriMalzemeHazirliklari(db, [op10]))).get(op10);
+    assert.deepEqual(await hal(), { durum: 'yok', secildi: true }, 'stok hiç yok');
+    await malKabul(hm, '10');
+    assert.deepEqual(await hal(), { durum: 'yok', secildi: true }, 'hammadde depoda, istasyonda değil: hazırlık Tamam demez');
+    await istasyonaTasi(hm, a.id, '10');
+    assert.deepEqual(await hal(), { durum: 'tamam', secildi: true }, 'istasyona teslim edildi');
+  });
+
   test('3340: kilitten sonra satırda istenenden az kaldıysa çakışma; yeterse geçer', async () => {
     const hm = await kart('hammadde');
     const konumId = await kabulKonumu();

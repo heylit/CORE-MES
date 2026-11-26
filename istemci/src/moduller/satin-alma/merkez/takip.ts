@@ -98,6 +98,15 @@ function logoKalemTablosu(o: OrderInfo, logo: LogoOzetleri | null): string {
     <p class="small muted">Fark: aynı sipariş satırına bağlı Logo irsaliye miktarı (iade düşülmüş) ile CORE mal kabul miktarı. Düzeltme bu ekrandan yapılmaz; Logo'da ya da Stok'ta mal kabulde yapılır.</p></details>`;
 }
 
+// 3766: vadesiz (peşin) teklifin kalan ödemesi teslimde ödenir; "Vadeli" yazılmaz. Teklifte yöntem yoksa plan banka havalesi varsayar
+// (ui.ts teklif formu); bu varsayım ekranda söylenir, teklifte yazılmış gibi görünmez.
+function odemeTuru(o: OrderInfo, p: OdemePlaniSatiri): string {
+  return p.tur === "avans" ? "Avans" : o.q.payDays ? "Vadeli" : "Peşin (teslimde)";
+}
+function odemeSekli(o: OrderInfo, p: OdemePlaniSatiri): string {
+  return !o.q.payMethod && p.yontem === "banka" ? `${ODEME_SEKLI.banka} (teklifte belirtilmedi)` : ODEME_SEKLI[p.yontem];
+}
+
 function siparisHTML(o: OrderInfo, t: SiparisTakibi, irsaliyeler: SiparisIrsaliyesi[] | null, tekil: boolean, logo: LogoOzetleri | null): string {
   const benim = irsaliyeler?.filter(x => t.satirIdleri.includes(x.siparisSatirId)) ?? null;
   const belgeler = benim === null ? null : [...new Map(benim.map(x => [x.malKabulId, x])).values()];
@@ -109,7 +118,7 @@ function siparisHTML(o: OrderInfo, t: SiparisTakibi, irsaliyeler: SiparisIrsaliy
     : satir(false, "Finans: fatura bekleniyor", "Fatura finansta girilip siparişe bağlanınca görünür");
   const plan = t.odemePlani.length
     ? `<div class="tw"><table class="rt"><thead><tr><th>Ödeme</th><th>Vade</th><th>Ödeme şekli</th><th class="r">Tutar</th></tr></thead><tbody>${t.odemePlani.map(p => `<tr>
-        <td>${p.tur === "avans" ? "Avans" : "Vadeli"}</td><td class="num">${fmtDate(p.vade)}</td><td>${esc(ODEME_SEKLI[p.yontem])}</td><td class="num r">${money(Number(p.tutar), t.paraBirimi)}</td></tr>`).join("")}</tbody></table></div>`
+        <td>${odemeTuru(o, p)}</td><td class="num">${fmtDate(p.vade)}</td><td>${esc(odemeSekli(o, p))}</td><td class="num r">${money(Number(p.tutar), t.paraBirimi)}</td></tr>`).join("")}</tbody></table></div>`
     : '<p class="small muted">Ödeme planı yok.</p>';
   const not = t.faturalar.length ? "Fatura geldi; borcun vadesi faturadadır." : "Finansa beklenen ödeme olarak düşer; tutarlar KDV dahil tahminidir.";
   return `<div class="stack" data-sa-siparis-takibi="${esc(o.qid)}">

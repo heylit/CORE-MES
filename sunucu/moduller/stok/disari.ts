@@ -375,8 +375,9 @@ export type { MalzemeKimligi } from '#paylasilan/sozlesme/kimlikler.ts';
 export { malzemeKimligi } from '#paylasilan/sozlesme/kimlikler.ts';
 export { malzemeKartiIzleri } from './sorgular.ts';
 
-// Hazırlık matrisinin malzeme maddesi (2146-1 a, yalnız uyarır): iş emrinin stoklanan her girdisinin serbest stoğu var mı (istasyon
-// ve depo; başlatmadaki girdi uyarısıyla aynı kaynak okuması, miktar değil varlık). Girdisi olmayan adımda madde gerekmez.
+// Hazırlık matrisinin malzeme maddesi (2146-1 a, yalnız uyarır): iş emrinin stoklanan her girdisinin serbest stoğu var mı (miktar değil
+// varlık). Girdisi olmayan adımda madde gerekmez. 3764 a: yalnız iş emrinin istasyonundaki stok sayılır; sayım da yalnız oradan düşer
+// (kart 3340), depodaki stok "Tamam" gösterilirken sayım reddediliyordu. İstasyonu belli olmayan iş emrinde madde eksik kalır.
 // Bağı kablolama.ts kurar; yetki denetlemez.
 export async function isEmriMalzemeHazirliklari(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, { durum: 'yok' | 'tamam'; secildi: boolean }>> {
   const planlar = await isEmriPlanBilgileri(db, isEmriIdleri);
@@ -389,7 +390,8 @@ export async function isEmriMalzemeHazirliklari(db: Db, isEmriIdleri: readonly n
     const konumId = p.istasyonId === null ? 0 : ((await sorgular.istasyonKonumu(db, p.istasyonId)) ?? 0);
     let yeterli = true;
     for (const m of girdiler) {
-      if ((await sorgular.uretimGirdiKaynaklari(db, m, null, konumId, p.uretimEmriId)).every((k) => binde(k.serbest) <= 0n)) { yeterli = false; break; }
+      const istasyonda = (await sorgular.uretimGirdiKaynaklari(db, m, null, konumId, p.uretimEmriId)).filter((k) => k.konumId === konumId);
+      if (istasyonda.every((k) => binde(k.serbest) <= 0n)) { yeterli = false; break; }
     }
     sonuc.set(id, { durum: yeterli ? 'tamam' : 'yok', secildi: true });
   }

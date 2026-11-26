@@ -145,6 +145,44 @@ describe('sipariş takibi ve ödeme planı (kart #1124)', () => {
     kapat();
   });
 
+  it('3766: peşin teklifin teslimdeki ödemesi "Vadeli" yazmaz; teklifte yöntem yoksa varsayılan havale bunu söyler', async () => {
+    const pesin: Talep = { ...TALEP, teklifler: [{ ...TALEP.teklifler[0]!, vadeGun: 0 }] };
+    const yontemli: Talep = { ...TALEP, teklifler: [{ ...TALEP.teklifler[0]!, odemeYontemi: 'cek' }] };
+    const plan = (yontem: 'banka' | 'cek'): SiparisTakibiCevabi => ({ siparisler: [{ teklifId: QA, satirIdleri: [41], paraBirimi: 'TRY', faturalar: [], kdvOrani: '20', kdvElle: false,
+      kdvSecenekleri: ['20'], odemePlani: [{ tur: 'vade', vade: '2026-12-03', yontem, tutar: '1200' }] }] });
+    const tablo = async (talep: Talep, yontem: 'banka' | 'cek'): Promise<string> => {
+      vi.stubGlobal('fetch', vi.fn(async (adres: string) => {
+        const yol = String(adres).replace('/api', '');
+        if (yol.endsWith('/siparis-takibi')) return json(plan(yontem));
+        if (yol.startsWith('/stok/siparis-irsaliyeleri')) return json({ irsaliyeler: [] });
+        return json({ ...ACILIS, talepler: [talep] });
+      }));
+      takibiUnut();
+      const kok = document.createElement('div');
+      document.body.append(kok);
+      const kapat = ekranliBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {} });
+      await vi.waitFor(() => expect(sekme(kok, 'ordered')).not.toBeNull());
+      sekme(kok, 'ordered')!.click();
+      await vi.waitFor(() => expect(talepSatiri(kok, TALEP.id)).not.toBeNull());
+      talepSatiri(kok, TALEP.id)!.click();
+      await vi.waitFor(() => expect(sekme(kok, 'order')).not.toBeNull());
+      sekme(kok, 'order')!.click();
+      await vi.waitFor(() => expect(kok.querySelector('[data-sa-takip-paneli] tbody')).not.toBeNull());
+      const metin = kok.querySelector('[data-sa-takip-paneli] tbody')!.textContent ?? '';
+      kapat();
+      document.body.innerHTML = '';
+      return metin;
+    };
+    const p = await tablo(pesin, 'banka');
+    expect(p).toContain('Peşin (teslimde)');
+    expect(p).not.toContain('Vadeli');
+    expect(p).toContain('Banka havalesi (teklifte belirtilmedi)');
+    const v = await tablo(yontemli, 'cek');
+    expect(v).toContain('Vadeli');
+    expect(v).toContain('Çek');
+    expect(v).not.toContain('belirtilmedi');
+  });
+
   it("3384 a: Logo'ya gitmiş siparişte Logo irsaliye ve fatura satırları ile kalem karşılaştırması; okuma kapalıysa tek satır", async () => {
     const LOGO = { durum: 'gonderildi', kayitNo: '501', hata: null, iptalDurumu: null, iptalHata: null, guncellemeDurumu: null, guncellemeHata: null,
       kapatmaDurumu: null, kapatmaHata: null, bekletmeIstegi: null, bekletmeDurumu: null, bekletmeHata: null };

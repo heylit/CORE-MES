@@ -120,7 +120,10 @@ export function SiparisListesi() {
     csv: (s) => SIPARIS_DURUMU[s.durum].etiket,
   };
   // Arşivde yalnız iptal edilmiş sipariş durur; hep aynı olan Durum sütunu yerine arşivleyen gösterilir.
-  const temel = SUTUNLAR.filter((k) => (fiyatGorur || k.anahtar !== 'tutar') && (!arsivde || k.anahtar !== 'durum'));
+  // 3768: Firma kodu bizim firma kodumuzdur (3399 a), müşteri kodu değil. Görünen satırların hiçbirinde yoksa sütun çizilmez: kod
+  // listesi tanımlı olmayan kurulumda boş sütun müşterinin kodu eksikmiş gibi okunuyordu.
+  const kodlu = (siparisler.data?.satirlar ?? []).some((s) => s.firmaKodu !== null);
+  const temel = SUTUNLAR.filter((k) => (fiyatGorur || k.anahtar !== 'tutar') && (!arsivde || k.anahtar !== 'durum') && (kodlu || k.anahtar !== 'firmaKodu'));
   const sutunlar = [...temel.map((k) => (k.anahtar === 'durum' ? durumSutunu : k)), logoSutunu, ...(arsivde ? [ARSIV_SUTUNU] : [])];
 
   return (

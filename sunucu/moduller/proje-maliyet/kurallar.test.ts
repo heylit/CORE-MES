@@ -136,6 +136,13 @@ describe('proje-maliyet kuralları', () => {
     assert.equal(gostergeler(kayitlar, ['isleme'], null, null, true).katkiPayi, null);
     const bos = gostergeler([], ['isleme'], 2000, 1500, true);
     assert.deepEqual([bos.plan, bos.gerceklesen, bos.katkiPayi, bos.hedef, bos.planlananKatkiOrani], [null, null, null, 1500, 0.25]);
+    // 3765: maliyet eksikken toplama giren kalemlerde tutar yoksa (yalnız fason 0) toplam ve sapma 0 TL değil, bilinmez.
+    const sifirlar = [kayit({ plan: { isleme: null, fason: 0 }, gercek: { isleme: null, fason: 0 } })];
+    const bilinmez = gostergeler(sifirlar, ['fason'], 2000, null, false);
+    assert.deepEqual([bilinmez.plan, bilinmez.gerceklesen, bilinmez.bugunePlan, bilinmez.sapma, bilinmez.hedef], [null, null, null, null, null]);
+    assert.equal(gostergeler(sifirlar, ['fason'], 2000, 1500, false).hedef, 1500);
+    // Bütün kalemler bilinip sıfırsa sıfır gerçektir.
+    assert.equal(gostergeler([kayit({ plan: { fason: 0 }, gercek: { fason: 0 } })], ['fason'], 2000, null, true).gerceklesen, 0);
   });
 
   test('PM-36 proje geliri (226 a, 225): emir adedi x satır birim fiyatı x kur; iptal siparişin satırı 0; bağlı emir yoksa, fiyat ya da kur yoksa bilinmez', () => {
