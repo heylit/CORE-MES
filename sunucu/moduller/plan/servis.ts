@@ -2040,6 +2040,14 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
             ...isgal(plandakiler(b, yerler)).filter((y) => ayniKaynak(y.kaynak, q.kaynak) && !tasinacak.has(y.isEmriId) && !sabitYer.has(y.isEmriId)),
             ...[...sabitYer.values()].filter((y) => ayniKaynak(y.kaynak, q.kaynak)),
           ];
+          // 3734: bölünmüş işin payı motorun önizlemesindeki saatinde yerleşir (Kokpit ile aynı malzeme hazır anı ve öncül sınırı); kuyruğun
+          // öteki işleri onun etrafına dizilir. Önizleme yoksa ya da yerinde sabit bir işle çakışıyorsa pay bugünkü gibi kuyruktan dizilir.
+          const onizlemede = new Map<(typeof isler)[number], Aralik>();
+          for (const i of isler) {
+            if (!tasinacak.has(i.is.id) || !i.x.parca) continue;
+            const y = onizlemeYeri(b, dolu, i.x.onizleme);
+            if (y !== null) { onizlemede.set(i, y); dolu.push(y); }
+          }
           let enErken = dk(b, new Date(q.baslangic));
           for (const i of isler) {
             if (!tasinacak.has(i.is.id)) continue;
@@ -2047,9 +2055,10 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
             if (sure === null) throw gecersiz(`${isMetni(b, i.is.id)} süresi bilinmiyor; rotada süreyi gir.`);
             // Parça öncülün son parçalarını işlemeyebilir: bitiş sınırı bölünmemiş işe konur.
             const sinir = onculSiniri(i.is, q.kaynak);
-            const yer = uzayanBosluk(dolu, takvim(b)(q.kaynak), Math.max(enErken, sinir.enErken), sure, i.x.parca ? Number.NEGATIVE_INFINITY : sinir.bitisSiniri);
+            const hazir = onizlemede.get(i);
+            const yer = hazir ?? uzayanBosluk(dolu, takvim(b)(q.kaynak), Math.max(enErken, sinir.enErken), sure, i.x.parca ? Number.NEGATIVE_INFINITY : sinir.bitisSiniri);
             if (yer === null) throw cakisma(`${kaynakMetni(b, q.kaynak)} için planlama ufkunda ${isMetni(b, i.is.id)} sığmıyor.`);
-            dolu.push(yer);
+            if (hazir === undefined) dolu.push(yer);
             const o = yeniYer.get(i.is.id);
             yeniYer.set(i.is.id, o ? { ...o, baslangic: Math.min(o.baslangic, yer.baslangic), bitis: Math.max(o.bitis, yer.bitis) } : { ...yer, kaynak: q.kaynak });
             if (i.x.parca) yerlesenParca.set(i.is.id, (yerlesenParca.get(i.is.id) ?? 0) + 1);
@@ -2114,6 +2123,14 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
   }
   if (taslak === null) throw dogrulama('Yazılacak kuyruk yok.', 'kuyruklar');
   return { cevap: { taslak: taslak.id, canli: false, yazilan, atlanan, ...(motorFarki === undefined ? {} : { motorFarki }), ...(yerlesmeyen?.length ? { yerlesmeyen } : {}) }, ekMesai };
+}
+
+// 3734: önizlemedeki aralık plan ekseninde; boşsa ya da kaynakta yerinde kalan bir işle çakışıyorsa null.
+function onizlemeYeri(b: Baglam, dolu: readonly Aralik[], o: { baslangic: string; bitis: string } | null | undefined): Aralik | null {
+  if (!o) return null;
+  const baslangic = dk(b, new Date(o.baslangic)), bitis = dk(b, new Date(o.bitis));
+  if (!(bitis > baslangic) || dolu.some((d) => d.baslangic < bitis && d.bitis > baslangic)) return null;
+  return { baslangic, bitis };
 }
 
 // Parti kolu (B7): kolun bölünme adımı üstün önceki adımını, üstün birleşme adımı kolun son adımını bekler. Kol birleşme adımını taşımaz.
