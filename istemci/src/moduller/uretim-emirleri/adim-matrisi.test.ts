@@ -3,6 +3,7 @@ import type { AdimMatrisiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts'
 import {
   BOS_SUZGEC, statuKisaAdi, aralik, duzKalemler, elleKaynagi, emirleriSuz, geriAlGovdeleri, gecerliSecim, gerekceGerekir, gerekceYeterli, gorunenStatu, gorunumOku,
   hazirlikOzeti, hazirlikOzetMetni, istekGovdeleri, kalemAnahtari, kareTonu, maddeDugmeleri, maddeGeriAlKomutu, maddeIslemi, mercekOku, oncekiDefteri, opKalemleri,
+  adimMaddesi, maddeGeriAlGovdeleri, maddeGovdeleri, maddeKarari, maddeOku, maddeSayimi, maddeYazilacaklari, tekDokunusEylemi, tekHucre,
   opSutunlari, secimiAcKapa, secimiSay, yazilacaklar, yazimOzeti, emrinKalemleri, type MatrisMaddesi,
 } from './adim-matrisi.ts';
 
@@ -26,8 +27,8 @@ describe('Adım Durumu matrisi: saf kurallar (3604)', () => {
   it('görünüm adreste: yalnız sablon ayrı sekmedir; eski emir, matris, tablo ve bilinmeyen değer Adımlar\'a düşer', () => {
     expect(['sablon', 'emir', 'matris', 'tablo', null, 'x'].map(gorunumOku)).toEqual(['sablon', 'adimlar', 'adimlar', 'adimlar', 'adimlar', 'adimlar']);
   });
-  it('mercek adreste: yalnız hazirlik Hazırlık merceğidir, gerisi Durum', () => {
-    expect(['hazirlik', 'durum', null, 'tek'].map(mercekOku)).toEqual(['hazirlik', 'durum', 'durum', 'durum']);
+  it('mercek adreste: hazirlik Hazırlık, tek Tek madde merceğidir, gerisi Durum', () => {
+    expect(['hazirlik', 'durum', null, 'tek', 'x'].map(mercekOku)).toEqual(['hazirlik', 'durum', 'durum', 'tek', 'durum']);
   });
   it('OP sütunları emirlerin op birleşimidir; ek adım kendi sütununu alır', () => {
     expect(opSutunlari(HEPSI).map((s) => s.opNo)).toEqual([10, 20, 25, 30]);
@@ -152,5 +153,80 @@ describe('Adım Durumu matrisi: kısa statü adı (3738)', () => {
       ['Bekliyor', 'Üretimde', 'Başlayabilir', 'Bitti', 'Durdu', 'Term. yok'],
     );
     expect(statuKisaAdi('cizim', 'Çizim revizyonu bekleniyor')).toBe('Çizim revizyonu bekleniyor');
+  });
+});
+
+describe('Adım Durumu matrisi: Tek madde merceği ve toplu madde işlemi (3738 dilim 2)', () => {
+  const K = (e: E, a: A) => ({ anahtar: kalemAnahtari(e.emirId, a.isEmriId), emir: e, adim: a });
+  // CNC (durduran) ve malzeme (uyaran) için her hâl: eksik, tamam, elle onaylı (muaf), elle eksik (sistemce tamam), gerekmez.
+  const EKS = adim(91, 10, 'baslayabilir', null, [madde('cnc', 'eksik'), madde('malzeme', 'eksik')]);
+  const TAM = adim(92, 20, 'baslayabilir', null, [madde('cnc', 'tamam'), madde('malzeme', 'tamam')]);
+  const ELO = adim(93, 30, 'baslayabilir', null, [madde('cnc', 'muaf', 'eksik', ELLE_ONAY), madde('malzeme', 'muaf', 'eksik', ELLE_ONAY)]);
+  const EEK = adim(94, 40, 'baslayabilir', null, [madde('cnc', 'eksik', 'tamam', ELLE_EKSIK), madde('malzeme', 'eksik', 'tamam', ELLE_EKSIK)]);
+  const GER = adim(95, 50, 'baslayabilir', null, [madde('cnc', 'gerekmez'), madde('malzeme', 'gerekmez')]);
+  const EM = emir(9, 'UE-9', [EKS, TAM, ELO, EEK, GER]);
+  const KAPALI = emir(8, 'UE-8', [adim(81, 10, 'bitti', null, [madde('cnc', 'eksik')])], 'bitti');
+  const [kEks, kTam, kElo, kEek, kGer] = EM.adimlar.map((a) => K(EM, a)) as [ReturnType<typeof K>, ReturnType<typeof K>, ReturnType<typeof K>, ReturnType<typeof K>, ReturnType<typeof K>];
+  const kKapali = K(KAPALI, KAPALI.adimlar[0] as A);
+
+  it('madde adreste: bilinmeyen ya da boş değer CNC maddesine düşer', () => {
+    expect(['cizim', 'takim-omru', 'yok', null].map(maddeOku)).toEqual(['cizim', 'takim-omru', 'cnc', 'cnc']);
+    expect(adimMaddesi(EKS, 'malzeme')?.hal).toBe('eksik');
+    expect(adimMaddesi(EKS, 'rota')).toBeNull();
+  });
+  it('hücre görünümü: elle değer hâlin yerine geçer; uyaran maddenin eksiği uyarıdır; gerekmeyen pasiftir', () => {
+    expect([EKS, TAM, ELO, EEK, GER].map((a) => tekHucre(adimMaddesi(a, 'cnc')))).toEqual([
+      { ton: 'hata', simge: 'x', ad: 'Eksik', elle: false }, { ton: 'tamam', simge: 'check', ad: 'Tamam', elle: false },
+      { ton: 'tamam', simge: 'check', ad: 'Hazır', elle: true }, { ton: 'hata', simge: 'x', ad: 'Hazır değil', elle: true },
+      { ton: 'pasif', simge: 'minus', ad: 'Gerekmez', elle: false },
+    ]);
+    expect(tekHucre(adimMaddesi(EKS, 'malzeme')).ton).toBe('uyari');
+    expect(tekHucre(adimMaddesi(EEK, 'malzeme')).ton).toBe('uyari');
+    expect(tekHucre(null).ton).toBe('pasif');
+  });
+  it('tek dokunuş: hazır olan eksik olur, eksik olan hazır olur; gerekmeyen ve olmayan maddede dokunuş yok', () => {
+    expect([EKS, TAM, ELO, EEK, GER].map((a) => tekDokunusEylemi(adimMaddesi(a, 'cnc')))).toEqual(['hazir', 'eksik', 'eksik', 'hazir', null]);
+    expect(tekDokunusEylemi(null)).toBeNull();
+  });
+  it('kalem kararı: sayım ve atlanma nedenleri; elle değeri olmayana geri al yok; kapalı emir hiçbir eylemde yazılmaz', () => {
+    const t = [kEks, kTam, kElo, kEek, kGer, kKapali];
+    expect(maddeSayimi(t, 'cnc', 'hazir')).toEqual({ yazilir: 2, atlanir: 4, nedenler: [
+      { neden: 'emir-kapali', sayi: 1 }, { neden: 'gerekmez', sayi: 1 }, { neden: 'zaten-hazir', sayi: 2 },
+    ] });
+    expect(maddeSayimi(t, 'cnc', 'eksik')).toEqual({ yazilir: 2, atlanir: 4, nedenler: [
+      { neden: 'emir-kapali', sayi: 1 }, { neden: 'gerekmez', sayi: 1 }, { neden: 'zaten-eksik', sayi: 2 },
+    ] });
+    expect(maddeSayimi(t, 'cnc', 'geri')).toEqual({ yazilir: 2, atlanir: 4, nedenler: [{ neden: 'emir-kapali', sayi: 1 }, { neden: 'elle-yok', sayi: 3 }] });
+    expect(maddeKarari(kEks, 'rota', 'hazir')).toEqual({ yazilir: false, neden: 'madde-yok' });
+    expect(maddeYazilacaklari(t, 'cnc', 'hazir').map((k) => k.adim.isEmriId)).toEqual([91, 94]);
+  });
+  it('toplu gövde: tek gerekçe bütün elle yazılan kalemlere gider; elle değeri kaldıran kalem gerekçesiz ve kaldir olarak gider; gördüğü hâli taşır', () => {
+    const g = maddeGovdeleri([kEks, kEek, kTam], 'cnc', 'hazir', '  Program elde denendi ');
+    expect(g).toEqual([{ madde: 'cnc', kalemler: [
+      { emirId: 9, isEmriId: 91, islem: 'onayla', gerekce: 'Program elde denendi', sistemHali: 'eksik' },
+      // Elle eksik olan, sistemce hazır madde: hazır yapmak elle değeri kaldırır (otomatik hâl hazır).
+      { emirId: 9, isEmriId: 94, islem: 'kaldir', gerekce: null, sistemHali: 'eksik' },
+    ] }]);
+    const eksik = maddeGovdeleri([kTam, kElo], 'malzeme', 'eksik', 'Gelmedi');
+    expect(eksik[0]?.kalemler).toEqual([
+      { emirId: 9, isEmriId: 92, islem: 'eksik', gerekce: 'Gelmedi', sistemHali: 'tamam' },
+      // Elle onaylı, sistemce eksik madde: hazır değil yapmak elle onayı kaldırır.
+      { emirId: 9, isEmriId: 93, islem: 'kaldir', gerekce: null, sistemHali: 'muaf' },
+    ]);
+    expect(maddeGovdeleri([kElo, kTam], 'cnc', 'geri', 'yok sayılır')[0]?.kalemler.map((k) => [k.isEmriId, k.islem, k.gerekce])).toEqual([[93, 'kaldir', null]]);
+  });
+  it('toplu gövde 100 kalemde parçalanır', () => {
+    const cok = Array.from({ length: 230 }, (_, i) => K(EM, adim(1000 + i, 10 + i, 'baslayabilir', null, [madde('malzeme', 'eksik')])));
+    expect(maddeGovdeleri(cok, 'malzeme', 'hazir', '').map((x) => x.kalemler.length)).toEqual([100, 100, 30]);
+  });
+  it('geri al: yazımdan önceki hâle döner: önceki elle değer gerekçesiyle, yoksa elle değer kalkar', () => {
+    // Eksik kalem hazır yazıldı: geri al elle değeri kaldırır.
+    expect(maddeGeriAlGovdeleri([kEks], 'cnc', 'hazir', 'Program elde denendi')[0]?.kalemler).toEqual([{ emirId: 9, isEmriId: 91, islem: 'kaldir', gerekce: null, sistemHali: 'eksik' }]);
+    // Sistemce tamam kalem elle eksik yazıldı: geri al elle eksiği kaldırır (önceki elle değer yok).
+    expect(maddeGeriAlGovdeleri([kTam], 'cnc', 'eksik', 'Revizyon değişti')[0]?.kalemler).toEqual([{ emirId: 9, isEmriId: 92, islem: 'kaldir', gerekce: null, sistemHali: 'tamam' }]);
+    // Elle onaylı kalemin elle değeri geri alındı: geri al onayı gerekçesiyle yeniden yazar, hâl sistemin eksik hâlidir.
+    expect(maddeGeriAlGovdeleri([kElo], 'cnc', 'geri', '')[0]?.kalemler).toEqual([{ emirId: 9, isEmriId: 93, islem: 'onayla', gerekce: 'Program elde denendi', sistemHali: 'eksik' }]);
+    // Elle eksik kalem hazır yapılıp (elle değer kalktı) geri alınınca elle eksik yeniden yazılır.
+    expect(maddeGeriAlGovdeleri([kEek], 'cnc', 'hazir', 'x')[0]?.kalemler).toEqual([{ emirId: 9, isEmriId: 94, islem: 'eksik', gerekce: null, sistemHali: 'tamam' }]);
   });
 });

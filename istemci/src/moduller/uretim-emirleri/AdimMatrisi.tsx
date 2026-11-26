@@ -2,13 +2,13 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEve
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ATLAMA_METNI, TOPLU_EK_ONAY_ESIGI, ADIM_NOTU_EN_COK } from '#paylasilan/sozlesme/adim-matrisi-kurali.ts';
-import type { AdimMatrisiCevabi, AdimStatusu, ElleYazilanStatu, StatuTopluCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { AdimMatrisiCevabi, AdimStatusu, ElleYazilanStatu, HazirlikMaddesi, StatuTopluCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Secim, Simge } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { tarihMetni } from '../../ortak/veri/zaman-metni.ts';
 import { ELLE_YAZILIR, STATU } from './adim-durumu.ts';
 import {
-  BOS_SUZGEC, adimSayisi, aralik, bul, duzKalemler, elleSayisi, emirKapali, emirleriSuz, emrinKalemleri, geriAlGovdeleri, gecerliSecim, gorunenStatu,
+  BOS_SUZGEC, adimMaddesi, adimSayisi, aralik, bul, gerekceIsteyenSayisi, maddeOku, tekDokunusEylemi, type MaddeEylemi, duzKalemler, elleSayisi, emirKapali, emirleriSuz, emrinKalemleri, geriAlGovdeleri, gecerliSecim, gorunenStatu,
   farkMetni, hazirlikOzeti, hazirlikOzetMetni, istekGovdeleri, kalemAnahtari, mercekOku, oncekiDefteri, opKalemleri, opSutunlari, secimiAcKapa, secimiSay, yazilacaklar, yazimOzeti,
   type Kalem, type MatrisEmri, type Mercek, type OncekiDefter, type Suzgec, type YazimOzeti,
 } from './adim-matrisi.ts';
@@ -16,6 +16,8 @@ import { anahtarlar } from './anahtarlar.ts';
 import { FarkRozeti, HazirlikCubugu } from './HazirlikCubugu.tsx';
 import { HucrePaneli } from './HucrePaneli.tsx';
 import { KimlikDefteri, topluGonder } from './kimlik-defteri.ts';
+import { useMaddeYazimi } from './madde-yazimi.ts';
+import { MaddeSeridi, MaddeSonSeridi, TekMaddeBari, TekMaddeHucresi } from './TekMadde.tsx';
 import './adim-matrisi.css';
 
 // Adım Durumu: tek matris (3604, 3738). Satır emir, sütun OP; hücreden ya da seçimden elle statü yazılır, "Otomatiğe dön" toplu da yapılır.
@@ -59,6 +61,12 @@ export function AdimMatrisi() {
   const mercek = mercekOku(adres.get('mercek'));
   const mercekSec = (m: Mercek) => {
     adresYaz((a) => { const y = new URLSearchParams(a); if (m === 'durum') y.delete('mercek'); else y.set('mercek', m); return y; }, { replace: true });
+    planYaz(null);
+    maddeY.planYaz(null);
+  };
+  const madde = maddeOku(adres.get('madde'));
+  const maddeSec = (m: HazirlikMaddesi) => {
+    adresYaz((a) => { const y = new URLSearchParams(a); y.set('madde', m); return y; }, { replace: true });
   };
   const genislik = useGenislik();
   const [biten, bitenYaz] = useState(false);
@@ -92,7 +100,7 @@ export function AdimMatrisi() {
   const seciliKalemler = useMemo(() => [...gecerli].flatMap((k) => { const b = bul(gorunen, k); return b === null ? [] : [b]; }), [gecerli, gorunen]);
   // Çoklu seçimde panel kapanır: tek adımın ayrıntısı seçimle ilgisizdir ve içerikten yer çalar.
   // Telefonda Çoklu seç açıkken de panel çıkmaz: alttaki yer tek çubuktur (toplu şerit).
-  const aktifKalem = aktif === null || gecerli.size > 1 || (coklu && genislik === 'dar') ? null : bul(emirler, aktif);
+  const aktifKalem = mercek === 'tek' || aktif === null || gecerli.size > 1 || (coklu && genislik === 'dar') ? null : bul(emirler, aktif);
   const sayim = statu === '' ? null : secimiSay(seciliKalemler, statu);
 
   useEffect(() => () => { if (sonSayac.current !== null) clearTimeout(sonSayac.current); }, []);
@@ -103,6 +111,31 @@ export function AdimMatrisi() {
       istemci.invalidateQueries({ queryKey: ['uretim-emirleri', 'adim-durumu'] }),
     ]);
   };
+
+  // 3738 dilim 2: Tek madde merceği yazımı. Yazımdan sonra yalnız bayat kalan kalemler seçili kalır.
+  const maddeY = useMaddeYazimi(yenile, (kalanlar, cok) => { seciliYaz(new Set(kalanlar)); if (cok) aktifYaz(null); });
+  const maddeAc = (kalemler: Kalem[], eylem: MaddeEylemi, tek: boolean) => {
+    sonYaz(null);
+    maddeY.baslat(kalemler, madde, eylem, tek, gerekceIsteyenSayisi(kalemler, madde, eylem) > 0);
+  };
+  const maddeTikla = (k: Kalem, o: MouseEvent | KeyboardEvent) => {
+    if (o.ctrlKey || o.metaKey || o.shiftKey || coklu) { tikla(k, o); return; }
+    const eylem = tekDokunusEylemi(adimMaddesi(k.adim, madde));
+    if (!yazabilir || emirKapali(k.emir) || eylem === null) return;
+    maddeAc([k], eylem, true);
+  };
+  const eksikKalemler = duz.filter((k) => !emirKapali(k.emir) && adimMaddesi(k.adim, madde)?.hal === 'eksik');
+  const eksikleriSec = () => { planYaz(null); seciliYaz(new Set(eksikKalemler.map((k) => k.anahtar))); };
+  const eksikleriOnayla = () => { eksikleriSec(); maddeAc(eksikKalemler, 'hazir', false); };
+  const maddeYenidenDene = async () => {
+    const son = maddeY.son;
+    if (son === null) return;
+    const yeni = await veri.refetch();
+    const g = (yeni.data?.emirler ?? emirler);
+    const kalemler = [...secili].flatMap((k) => { const b = bul(g, k); return b === null ? [] : [b]; });
+    maddeY.planYaz({ madde: son.madde, eylem: son.eylem, gerekce: son.gerekce, kalemler, tek: false });
+  };
+  const kalemAdi = (anahtar: string): string => { const k = bul(emirler, anahtar); return k === null ? anahtar : `${k.emir.emirNo} OP ${String(k.adim.opNo)}`; };
 
   // ----- seçim -----
   const tikla = (k: Kalem, o: MouseEvent | KeyboardEvent) => {
@@ -213,6 +246,10 @@ export function AdimMatrisi() {
     const secildi = gecerli.has(k.anahtar);
     const hz = hazirlikOzeti(k.adim);
     const hazirlikMi = mercek === 'hazirlik';
+    if (mercek === 'tek') {
+      return <TekMaddeHucresi kalem={k} madde={madde} yazabilir={yazabilir} coklu={coklu} secildi={secildi} kisa={kisa} mesgul={maddeY.mesgul}
+        tikla={(o) => { maddeTikla(k, o); }} geriAl={() => { maddeAc([k], 'geri', true); }} />;
+    }
     const ton = hazirlikMi ? (hz.eksik > 0 ? 'hata' : hz.toplam > 0 && hz.tamam === hz.toplam ? 'tamam' : 'pasif') : STATU[g].ton;
     const ad = `${hazirlikMi ? `${k.emir.emirNo}, OP ${String(k.adim.opNo)} ${k.adim.ad}: ${hazirlikOzetMetni(hz)}` : hucreAdi(k.emir, k.adim)}${k.adim.sablondanFark > 0 ? `, ${farkMetni(k.adim.sablondanFark)}` : ''}`;
     return (
@@ -280,6 +317,10 @@ export function AdimMatrisi() {
   // ----- toplu şerit -----
   const serit = () => {
     if (!yazabilir) return <div className="tc-am-serit tc-am-serit-salt" role="note"><Simge ad="lock" boyut="k" />Statü yazma yetkiniz yok. Yalnız okuyabilirsiniz.</div>;
+    if (mercek === 'tek') {
+      return <MaddeSeridi madde={madde} secili={seciliKalemler} plan={maddeY.plan} mesgul={maddeY.mesgul} baslat={(e) => { maddeAc(seciliKalemler, e, false); }}
+        temizle={temizle} planYaz={maddeY.planYaz} uygula={maddeY.uygula} />;
+    }
     if (plan !== null) return planGorunumu(plan);
     // Telefonda tek dokunuş yalnız paneli açar; toplu şerit Çoklu seç açıkken (ya da satır ve OP başlığıyla çoklu seçimde) çıkar.
     if (genislik === 'dar' && !coklu && aktifKalem !== null) return null;
@@ -375,7 +416,9 @@ export function AdimMatrisi() {
         <span className="tc-am-mercek-ad">Mercek</span>
         <Dugme aria-pressed={mercek === 'durum'} simge="gauge" onClick={() => { mercekSec('durum'); }}>Durum</Dugme>
         <Dugme aria-pressed={mercek === 'hazirlik'} simge="clipboard-check" onClick={() => { mercekSec('hazirlik'); }}>Hazırlık</Dugme>
+        <Dugme aria-pressed={mercek === 'tek'} simge="check" onClick={() => { mercekSec('tek'); }}>Tek madde</Dugme>
       </div>
+      {mercek === 'tek' && <TekMaddeBari madde={madde} maddeSec={maddeSec} eksikSayisi={eksikKalemler.length} yazabilir={yazabilir} eksikleriOnayla={eksikleriOnayla} eksikleriSec={eksikleriSec} />}
       <div className="tc-am-ust">
         <Girdi etiket="Ara" type="search" placeholder="Emir no, ürün" value={suz.arama} onChange={(o) => { suzYaz({ ...suz, arama: o.target.value }); }} />
         <div className="tc-am-suzgec" hidden={genislik === 'dar' && !suzgecAcik}>
@@ -399,6 +442,10 @@ export function AdimMatrisi() {
       <div className="tc-am-seritlar">
         {serit()}
         {sonSerit()}
+        {(mercek === 'tek' || maddeY.son !== null || maddeY.hata !== null) && (
+          <MaddeSonSeridi son={maddeY.son} hata={maddeY.hata} mesgul={maddeY.mesgul} kapat={() => { maddeY.sonYaz(null); }} geriAl={() => { void maddeY.geriAl(); }}
+            yenidenDene={() => { void maddeYenidenDene(); }} adlandir={kalemAdi} />
+        )}
         {genislik === 'dar' && panel()}
       </div>
       <div className={`tc-am-govde${aktifKalem === null ? '' : ' tc-am-panelli'}`}>
@@ -408,13 +455,21 @@ export function AdimMatrisi() {
           {veri.data && (
             bos
               ? <DurumKutusu durum="bos" mesaj={emirler.length === 0 ? 'Açık emir yok.' : 'Süzgece uyan emir yok.'} />
-              : matris(genislik !== 'genis' && mercek === 'durum')
+              : matris(genislik !== 'genis' && mercek !== 'hazirlik')
           )}
           {veri.data && !bos && (mercek === 'durum' ? (
             <ul className="tc-am-lejant" aria-label="Statü simgeleri">
               {lejant.map((x) => <li key={x}><Simge ad={STATU[x].simge} boyut="k" />{statuAdi(x)}</li>)}
               <li><span className="tc-am-e" aria-hidden="true">E</span>Elle yazıldı</li>
               {farkVar && <li><Simge ad="edit" boyut="k" />şablondan N fark</li>}
+            </ul>
+          ) : mercek === 'tek' ? (
+            <ul className="tc-am-lejant" aria-label="Madde simgeleri">
+              <li><Simge ad="check" boyut="k" />Hazır</li>
+              <li><Simge ad="x" boyut="k" />Eksik ya da hazır değil</li>
+              <li><Simge ad="lock" boyut="k" />Muaf</li>
+              <li><Simge ad="minus" boyut="k" />Gerekmez</li>
+              <li><span className="tc-am-e" aria-hidden="true">E</span>Elle yazıldı</li>
             </ul>
           ) : (
             <ul className="tc-am-lejant" aria-label="Hazırlık kareleri">

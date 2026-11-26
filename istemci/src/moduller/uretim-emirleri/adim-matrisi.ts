@@ -1,7 +1,8 @@
 import { kalemKarari, yazimSayimi, TOPLU_EN_COK_KALEM, type KalemGirdisi, type YazimSayimi } from '#paylasilan/sozlesme/adim-matrisi-kurali.ts';
-import type { AdimMatrisiCevabi, AdimStatusu, ElleYazilanStatu, StatuTopluCevabi, StatuTopluGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { AdimMatrisiCevabi, AdimStatusu, ElleYazilanStatu, HazirlikMaddesi, HazirlikTopluGovdesi, StatuTopluCevabi, StatuTopluGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 import { hedefKomutu, geriKomutu, GEREKCE_EN_AZ, type ElleKaynagi, type Komut } from './adim-tablosu.ts';
-import { MADDE } from './hazirlik-bilgisi.ts';
+import { MADDE, halGorunumu } from './hazirlik-bilgisi.ts';
 
 // Adım Durumu matrisi ve toplu tablo (3604): saf kurallar. Sayım ve karar sunucuyla aynı dosyadan (adim-matrisi-kurali.ts) gelir; ekran
 // yalnız seçimi, süzgeci ve sıralamayı bilir. Sunucu yine kalem başına karar verir.
@@ -12,10 +13,14 @@ export interface Kalem { anahtar: string; emir: MatrisEmri; adim: MatrisAdimi }
 // 3738: Adım Durumu'nda iki sekme vardır: Adımlar (tek matris) ve Hazırlık şablonu. Eski adreslerdeki `emir` ve `tablo` değeri Adımlar'a düşer.
 export type Gorunum = 'adimlar' | 'sablon';
 export const gorunumOku = (deger: string | null): Gorunum => (deger === 'sablon' ? 'sablon' : 'adimlar');
-// Matris mercekleri: Durum hücrede statüyü, Hazırlık hücrede hazırlık özetini gösterir (3738).
-export type Mercek = 'durum' | 'hazirlik';
-export const MERCEKLER: readonly Mercek[] = ['durum', 'hazirlik'];
-export const mercekOku = (deger: string | null): Mercek => (deger === 'hazirlik' ? 'hazirlik' : 'durum');
+// Matris mercekleri: Durum hücrede statüyü, Hazırlık hücrede hazırlık özetini, Tek madde seçili bir hazırlık maddesinin hâlini gösterir (3738).
+export type Mercek = 'durum' | 'hazirlik' | 'tek';
+export const MERCEKLER: readonly Mercek[] = ['durum', 'hazirlik', 'tek'];
+export const mercekOku = (deger: string | null): Mercek => (deger === 'hazirlik' || deger === 'tek' ? deger : 'durum');
+// Tek madde merceğinde bakılan madde adreste durur (`madde`); bilinmeyen değer varsayılana düşer.
+export const MADDELER = Object.keys(MADDE) as HazirlikMaddesi[];
+export const VARSAYILAN_MADDE: HazirlikMaddesi = 'cnc';
+export const maddeOku = (deger: string | null): HazirlikMaddesi => (MADDELER.find((m) => m === deger) ?? VARSAYILAN_MADDE);
 
 export const kalemAnahtari = (emirId: number, isEmriId: number): string => `${String(emirId)}:${String(isEmriId)}`;
 const kalemKur = (emir: MatrisEmri, adim: MatrisAdimi): Kalem => ({ anahtar: kalemAnahtari(emir.emirId, adim.isEmriId), emir, adim });
@@ -190,3 +195,94 @@ const KISA_STATU: Readonly<Partial<Record<AdimStatusu, string>>> = {
   beklemede: 'Bekliyor', uretimde: 'Üretimde', baslayabilir: 'Başlayabilir', bitti: 'Bitti', durdu: 'Durdu', yayin: 'Term. yok',
 };
 export const statuKisaAdi = (s: AdimStatusu, tamAd: string): string => KISA_STATU[s] ?? tamAd;
+
+// ----- 3738 dilim 2: Tek madde merceği ve toplu madde işlemi -----
+export const adimMaddesi = (a: MatrisAdimi, madde: HazirlikMaddesi): MatrisMaddesi | null => a.maddeler.find((m) => m.madde === madde) ?? null;
+const gerekmezMi = (m: MatrisMaddesi): boolean => m.ham === 'gerekmez' || m.hal === 'gerekmez';
+
+// Hücrede tek dokunuş: hazır madde "hazır değil" olur, değilse hazır olur; gerekmeyen maddede dokunuş yoktur. Elle değer varsa dokunuş onu geri
+// döndürebilir (komut kurucu hedef zaten otomatik hâlse elle değeri kaldırır).
+export type MaddeEylemi = 'hazir' | 'eksik' | 'geri';
+export const tekDokunusEylemi = (m: MatrisMaddesi | null): 'hazir' | 'eksik' | null => (m === null || gerekmezMi(m) ? null : hazirMi(m) ? 'eksik' : 'hazir');
+
+export interface TekHucre { ton: 'tamam' | 'uyari' | 'hata' | 'pasif'; simge: SimgeAdi; ad: string; elle: boolean }
+export function tekHucre(m: MatrisMaddesi | null): TekHucre {
+  if (m === null) return { ton: 'pasif', simge: 'minus', ad: 'Madde yok', elle: false };
+  if (m.elle?.tur === 'hazir') return { ton: 'tamam', simge: 'check', ad: 'Hazır', elle: true };
+  if (m.elle?.tur === 'eksik') return { ton: MADDE[m.madde].uyarir ? 'uyari' : 'hata', simge: 'x', ad: 'Hazır değil', elle: true };
+  const g = halGorunumu(m.madde, m.hal);
+  return { ton: g.ton === 'tamam' || g.ton === 'uyari' || g.ton === 'hata' ? g.ton : 'pasif', simge: g.simge, ad: g.ad, elle: false };
+}
+
+export type MaddeAtlamaNedeni = 'emir-kapali' | 'madde-yok' | 'gerekmez' | 'zaten-hazir' | 'zaten-eksik' | 'elle-yok';
+export const MADDE_ATLAMA_METNI: Readonly<Record<MaddeAtlamaNedeni, string>> = {
+  'emir-kapali': 'emir bitti ya da iptal', 'madde-yok': 'madde bu adımda yok', gerekmez: 'madde gerekmiyor', 'zaten-hazir': 'zaten hazır',
+  'zaten-eksik': 'zaten hazır değil', 'elle-yok': 'elle değer yok',
+};
+export const MADDE_ATLAMA_SIRASI: readonly MaddeAtlamaNedeni[] = ['emir-kapali', 'madde-yok', 'gerekmez', 'zaten-hazir', 'zaten-eksik', 'elle-yok'];
+// Kalem kararı ekranın sayımıyla sunucunun sonucu aynı kurala dayanır (maddeDugmeleri); sunucu yine kalem başına karar verir.
+export function maddeKarari(k: Kalem, madde: HazirlikMaddesi, eylem: MaddeEylemi): { yazilir: true } | { yazilir: false; neden: MaddeAtlamaNedeni } {
+  if (emirKapali(k.emir)) return { yazilir: false, neden: 'emir-kapali' };
+  const m = adimMaddesi(k.adim, madde);
+  if (m === null) return { yazilir: false, neden: 'madde-yok' };
+  if (eylem === 'geri') return m.elle === null ? { yazilir: false, neden: 'elle-yok' } : { yazilir: true };
+  if (gerekmezMi(m)) return { yazilir: false, neden: 'gerekmez' };
+  if (eylem === 'hazir') return hazirMi(m) ? { yazilir: false, neden: 'zaten-hazir' } : { yazilir: true };
+  return m.hal === 'eksik' ? { yazilir: false, neden: 'zaten-eksik' } : { yazilir: true };
+}
+export const maddeYazilacaklari = (kalemler: readonly Kalem[], madde: HazirlikMaddesi, eylem: MaddeEylemi): Kalem[] =>
+  kalemler.filter((k) => maddeKarari(k, madde, eylem).yazilir);
+export interface MaddeSayimi { yazilir: number; atlanir: number; nedenler: { neden: MaddeAtlamaNedeni; sayi: number }[] }
+export function maddeSayimi(kalemler: readonly Kalem[], madde: HazirlikMaddesi, eylem: MaddeEylemi): MaddeSayimi {
+  const sayi = new Map<MaddeAtlamaNedeni, number>();
+  let yazilir = 0;
+  for (const k of kalemler) {
+    const karar = maddeKarari(k, madde, eylem);
+    if (karar.yazilir) yazilir += 1; else sayi.set(karar.neden, (sayi.get(karar.neden) ?? 0) + 1);
+  }
+  return { yazilir, atlanir: kalemler.length - yazilir, nedenler: MADDE_ATLAMA_SIRASI.flatMap((neden) => (sayi.has(neden) ? [{ neden, sayi: sayi.get(neden) ?? 0 }] : [])) };
+}
+
+type TopluKalem = HazirlikTopluGovdesi['kalemler'][number];
+const komutIslemi = (yol: Komut['yol']): TopluKalem['islem'] => (yol === 'hazirlik-onayla' ? 'onayla' : yol === 'hazirlik-elle-eksik' ? 'eksik' : 'kaldir');
+const hazirlikHali = (m: MatrisMaddesi): TopluKalem['sistemHali'] => m.hal;
+// Kalemin ileri komutu: tek adımdaki komutla aynı kurucu (hedef otomatik hâlse elle değer kaldırılır). Geri eylemi elle değeri kaldırır.
+export function maddeKomutuKalem(k: Kalem, m: MatrisMaddesi, eylem: MaddeEylemi, gerekce: string | null): Komut {
+  if (eylem === 'geri') return { yol: 'hazirlik-onay-kaldir', isEmriId: k.adim.isEmriId, govde: { madde: m.madde } };
+  return maddeKomutu(k.adim, m, eylem, gerekce);
+}
+// Gerekçe yalnız durduran maddede ve elle değer yazan kalemde istenir (2893-2 b); elle değeri kaldıran kalem gerekçe istemez.
+export const gerekceIsteyenSayisi = (kalemler: readonly Kalem[], madde: HazirlikMaddesi, eylem: MaddeEylemi): number =>
+  eylem === 'geri' ? 0 : maddeYazilacaklari(kalemler, madde, eylem).filter((k) => {
+    const m = adimMaddesi(k.adim, madde);
+    return m !== null && maddeKomutuKalem(k, m, eylem, null).yol !== 'hazirlik-onay-kaldir' && gerekceGerekir(m);
+  }).length;
+const kalemGovdesi = (k: Kalem, komut: Komut, hal: TopluKalem['sistemHali']): TopluKalem => {
+  const gerekce = komut.govde.gerekce;
+  return { emirId: k.emir.emirId, isEmriId: k.adim.isEmriId, islem: komutIslemi(komut.yol), gerekce: typeof gerekce === 'string' && gerekce.trim() !== '' ? gerekce.trim() : null, sistemHali: hal };
+};
+const parcala = (kalemler: TopluKalem[], madde: HazirlikMaddesi): HazirlikTopluGovdesi[] => {
+  const govdeler: HazirlikTopluGovdesi[] = [];
+  for (let i = 0; i < kalemler.length; i += TOPLU_EN_COK_KALEM) govdeler.push({ madde, kalemler: kalemler.slice(i, i + TOPLU_EN_COK_KALEM) });
+  return govdeler;
+};
+// Tek istekte en çok TOPLU_EN_COK_KALEM kalem gider; fazlası ardışık isteklere bölünür. Tek gerekçe bütün kalemlere yazılır.
+export function maddeGovdeleri(kalemler: readonly Kalem[], madde: HazirlikMaddesi, eylem: MaddeEylemi, gerekce: string): HazirlikTopluGovdesi[] {
+  const metin = gerekce.trim() === '' ? null : gerekce.trim();
+  return parcala(maddeYazilacaklari(kalemler, madde, eylem).flatMap((k) => {
+    const m = adimMaddesi(k.adim, madde);
+    return m === null ? [] : [kalemGovdesi(k, maddeKomutuKalem(k, m, eylem, metin), hazirlikHali(m))];
+  }), madde);
+}
+// Geri al: yazılan kalemler yazımdan önceki hâle döner (önceki elle değer gerekçesiyle, yoksa elle değer kalkar). Kalem anlık görüntüsü yazımdan öncekidir.
+export function maddeGeriAlGovdeleri(yazilanlar: readonly Kalem[], madde: HazirlikMaddesi, eylem: MaddeEylemi, gerekce: string): HazirlikTopluGovdesi[] {
+  const metin = gerekce.trim() === '' ? null : gerekce.trim();
+  return parcala(yazilanlar.flatMap((k) => {
+    const m = adimMaddesi(k.adim, madde);
+    if (m === null) return [];
+    const ileri = maddeKomutuKalem(k, m, eylem, metin);
+    const geri = geriKomutu(elleKaynagi(k.adim), m, ileri);
+    const sonraki = geri.govde.sistemHali;
+    return [kalemGovdesi(k, geri, typeof sonraki === 'string' ? sonraki as TopluKalem['sistemHali'] : hazirlikHali(m))];
+  }), madde);
+}
