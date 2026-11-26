@@ -54,7 +54,7 @@ describe('Tezgâh bağlantısı (deneme)', () => {
   });
 
   it('Heidenhain makinesi kaynağıyla yazılır; okunamayan alanın nedeni uyarı olarak görünür (kart 3753)', async () => {
-    sunucuKur({ ...ORNEK_DURUM(), tezgahlar: [ORNEK_LSV2_TEZGAHI()] });
+    sunucuKur({ ...ORNEK_DURUM(), lsv2Baglanti: 'acik', tezgahlar: [ORNEK_LSV2_TEZGAHI()] });
     ac(<Karsilastirma />);
     const satir = (await screen.findByRole('rowheader', { name: /ORN-H01/ })).closest('tr') as HTMLElement;
     expect(within(satir).getByText('Heidenhain LSV2')).toBeTruthy();
@@ -68,6 +68,19 @@ describe('Tezgâh bağlantısı (deneme)', () => {
     await screen.findByRole('rowheader', { name: /ORN-T01/ });
     expect(screen.queryByText('Heidenhain LSV2')).toBeNull();
     expect(screen.queryByRole('note')).toBeNull();
+  });
+
+  it('yalnız Heidenhain okunurken MTConnect kapalı notu çıkmaz; Heidenhain listesi yoksa nedeni yazar (kart 3753)', async () => {
+    sunucuKur({ ...ORNEK_DURUM(), baglanti: 'kapali', lsv2Baglanti: 'acik', tezgahlar: [], sonOkuma: null });
+    ac(<Karsilastirma />);
+    expect(await screen.findByText(/Henüz tezgâh okunmadı/)).toBeTruthy();
+    expect(screen.getByText('MTConnect Okuma kapalı')).toBeTruthy();
+    expect(screen.queryByText(/Okuma kapalı\. Sistem Ayarları/)).toBeNull();
+    cleanup();
+    sunucuKur({ ...ORNEK_DURUM(), baglanti: 'kapali', lsv2Baglanti: 'adres-yok', tezgahlar: [], sonOkuma: null });
+    ac(<Karsilastirma />);
+    expect(await screen.findByText(/TMIV2_TEZGAH_LSV2_MAKINELERI/)).toBeTruthy();
+    expect(screen.getByText(/Okuma kapalı\. Sistem Ayarları/)).toBeTruthy();
   });
 
   it('okuma kapalıyken ve adres yokken nedenini söyler; son hata gösterilir', async () => {

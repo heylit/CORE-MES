@@ -15,6 +15,7 @@ const BAGLANTI_METNI = {
   kapali: 'Okuma kapalı. Sistem Ayarları’nda “Tezgâh bağlantısı okuması (deneme)” açılınca tezgâhlar sık aralıkla (varsayılan 5 saniye) okunur.',
   'adres-yok': 'Okuma açık ama servis adresi sunucuda tanımlı değil (TMIV2_TEZGAH_MTCONNECT_ADRESI); istek atılmıyor.',
 } as const;
+const LSV2_LISTE_YOK = 'Heidenhain okuması açık ama makine listesi sunucuda tanımlı değil (TMIV2_TEZGAH_LSV2_MAKINELERI); bağlantı açılmıyor.';
 
 // Karşılaştırılan beş alan iki genişlikte aynıdır: [tezgâhın değeri, SmartES'in değeri].
 // Boş değer (YOK, KAYIT_YOK) her yerde aynı yazı tipiyle; eş aralıklı yazı tipi yalnız gerçek program adında.
@@ -75,15 +76,17 @@ export function Karsilastirma() {
         {sorgu.isError && <DurumKutusu durum="hata" mesaj={hataIletisi(sorgu.error, 'Tezgâh değerleri alınamadı')} yenile={() => { void sorgu.refetch(); }} />}
         {v && (
           <p role="status" className="tc-tzb-ozet">
-            <Rozet ton={v.baglanti === 'acik' ? 'tamam' : 'pasif'}>{v.baglanti === 'acik' ? 'Okuma açık' : 'Okuma kapalı'}</Rozet>
+            <Rozet ton={v.baglanti === 'acik' ? 'tamam' : 'pasif'}>{v.lsv2Baglanti === 'kapali' ? '' : 'MTConnect '}{v.baglanti === 'acik' ? 'Okuma açık' : 'Okuma kapalı'}</Rozet>
             {v.lsv2Baglanti !== 'kapali' && <Rozet ton={v.lsv2Baglanti === 'acik' ? 'tamam' : 'pasif'}>{v.lsv2Baglanti === 'acik' ? 'Heidenhain okuması açık' : 'Heidenhain listesi yok'}</Rozet>}
             {tezgahlar.length > 0 && <span>{tezgahlar.length} tezgâh · {bagli} bağlı · {alarmli} alarm · {tezgahlar.filter((t) => t.farklar.length > 0).length} fark · {eskiSayisi} eski ya da bağlantısız</span>}
           </p>
         )}
         {v && <p className="tc-tzb-not"><CanliGosterge okundu={v.sonOkuma} aralikSaniye={v.aralikSaniye} /></p>}
-        {v && v.baglanti !== 'acik' && <p className="tc-tzb-not">{BAGLANTI_METNI[v.baglanti]}</p>}
+        {/* Yalnız Heidenhain okunan kurulumda MTConnect'in kapalı olması olağandır: not yalnız hiçbir kaynak okunmuyorken çıkar. */}
+        {v && v.baglanti !== 'acik' && v.lsv2Baglanti !== 'acik' && <p className="tc-tzb-not">{BAGLANTI_METNI[v.baglanti]}</p>}
+        {v && v.lsv2Baglanti === 'adres-yok' && <p className="tc-tzb-not">{LSV2_LISTE_YOK}</p>}
         {v?.sonHata != null && <p role="alert" className="tc-tzb-hata">Son okuma başarısız ({saatMetni(v.sonDeneme)}): {v.sonHata}</p>}
-        {v && v.baglanti === 'acik' && tezgahlar.length === 0 && v.sonHata === null && (
+        {v && (v.baglanti === 'acik' || v.lsv2Baglanti === 'acik') && tezgahlar.length === 0 && v.sonHata === null && (
           <p role="status" className="tc-tzb-not">Henüz tezgâh okunmadı; ilk okuma birkaç saniye içinde gelir.</p>
         )}
         {tezgahlar.length > 0 && (

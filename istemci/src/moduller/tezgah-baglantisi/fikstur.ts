@@ -12,7 +12,7 @@ const tezgah = (cihazAdi: string, ek: Partial<Tezgah> = {}): Tezgah => ({
 });
 
 export const ORNEK_DURUM = (): TezgahBaglantisiDurumCevabi => ({
-  baglanti: 'acik', lsv2Baglanti: 'acik', aralikSaniye: 5, varlikDurumu: 'okundu', sonDeneme: once(3), sonOkuma: once(3), sonHata: null,
+  baglanti: 'acik', lsv2Baglanti: 'kapali', aralikSaniye: 5, varlikDurumu: 'okundu', sonDeneme: once(3), sonOkuma: once(3), sonHata: null,
   doluluk: ORNEK_DOLULUK('normal'),
   tezgahlar: [
     tezgah('ORN-T01'),
