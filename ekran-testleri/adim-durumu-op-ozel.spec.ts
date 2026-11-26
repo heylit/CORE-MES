@@ -5,7 +5,8 @@ import { expect, tasmaOlc, test } from './ortak.ts';
 // projeler.sablon-yaz ister; salt okuyan yalnız listeyi görür. Hücre etiketi "şablondan N fark" sayar. Akış yazdığını geri alır.
 // Projeler aynı veritabanında paralel koşar: her proje kendi hücresine yazar, salt okuyan testi hücrenin içeriğine bağlanmaz.
 const HUCRE = /^\S+, OP \d+ .*: hazırlık/;
-const HUCRE_SIRASI: Record<string, number> = { g360: 0, g768: 1, g1280: 2 };
+// Örnek veride sıra: 3/OP 10, 3/OP 20, 2/OP 10 (bitti; biten adımın listesi değişmez), 2/OP 20 (çalışıyor).
+const HUCRE_SIRASI: Record<string, number> = { g360: 0, g768: 1, g1280: 3 };
 const hucreSec = (page: Page, proje: string) => page.getByRole('table').getByRole('button', { name: HUCRE }).nth(HUCRE_SIRASI[proje] ?? 0);
 const bolumAc = async (page: Page, ac: (yol: string) => Promise<void>, proje: string) => {
   await ac('/adim-durumu?mercek=hazirlik');
