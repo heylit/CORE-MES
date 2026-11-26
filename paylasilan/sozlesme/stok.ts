@@ -1563,8 +1563,9 @@ export const okutCozCevabi = z.discriminatedUnion('tur', [
     gelenler: z.array(teslim).optional(),
     // Kartın satırları (Soru 128): kart okutulunca gelir; okutma yetkisi olan herkes görür (stok okuması gerekmez).
     kartSatirlari: z.array(refakatKartSatiri).optional(),
-    // Tek kart (614 1a): refakat kartında okutmanın ana eylemi; gelen teslim varsa al, malzeme okutanın istasyonundaysa işi aç, yoksa teslim et.
-    anaEylem: z.enum(['teslim-al', 'isi-ac', 'teslim-et']).optional(),
+    // Tek kart (614 1a): refakat kartında okutmanın ana eylemi; gelen teslim varsa al, malzeme okutanın istasyonundaysa işi aç
+    // (o istasyonda adım başlamışsa işe git, 3744), yoksa teslim et.
+    anaEylem: z.enum(['teslim-al', 'isi-ac', 'ise-git', 'teslim-et']).optional(),
     // Stok okuması olana tam çözüm aynı cevapla gelir (tek istek); okuması olmayanda yoktur.
     stok: kodCozCevabi.optional(),
     baskaSepetler,

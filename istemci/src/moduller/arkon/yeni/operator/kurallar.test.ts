@@ -5,6 +5,7 @@ import {
   bekletmeGorevi, bitirmeEksigi, bitisOzeti, siradakiGorev, tmiIlkParcaGerekli,
   cagriTonu, cubukDugmeleri, durumDugmeleri, sabitDugmeler, numuneAraligi, durusOnerileri, hurdaUyarisi, kalanSure, kaliteIstasyonuNumuneleri, kontrolTakvimi, lotKarariEksigi, lotKarariOku, lotSayisi, tonDurumu, vardiyaHesabi, vardiyaOzeti, type VardiyaOzetGirdisi,
   uzakKendiligindenAcilir, sekmeKarari,
+  isBasladiMi,
 } from './kurallar.ts';
 import type { Is, KontrolTakvimi } from './tipler.ts';
 
@@ -278,5 +279,10 @@ describe('3718 a: numune yolu ve okutma', () => {
     const l = [{ id: 'a', numuneTeslim: { id: 5 } }, { id: 'b', numuneTeslim: { id: 6 } }, { id: 'c' }];
     expect(okutulanNumuneler(l, [6, 9]).map((x) => x.id)).toEqual(['b']);
     expect(okutulanNumuneler(l, [])).toEqual([]);
+  });
+  it('3744 isBasladiMi: sıradaki ve biten iş başlamamış sayılır, ötekiler başlamış', () => {
+    expect(isBasladiMi('queued')).toBe(false);
+    expect(isBasladiMi('done')).toBe(false);
+    for (const d of ['running', 'paused', 'setup', 'stopped']) expect(isBasladiMi(d)).toBe(true);
   });
 });

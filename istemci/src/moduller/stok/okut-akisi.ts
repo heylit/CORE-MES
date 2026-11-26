@@ -113,10 +113,10 @@ export function teslimGovdesi(kaynak: OkutKaynagi, hedef: OkutHedefi, miktar: st
 
 // Malzeme penceresinin üstündeki okuyucu (372 a): ilk okutmada kişi kodu Teslim et'i o kişiye hedefli açar; öteki her kod akışa girer.
 export type PanelOkutmasi = { tur: 'akis'; durum: OkutDurumu } | { tur: 'teslim-et'; hedef: OkutulanHedef };
-// Tek kart (614 1a): refakat kartının ana eylemi teslim al ya da işi aç ise akış başlamaz, iş sonuç kartından tek dokunuşla yapılır.
+// Tek kart (614 1a): refakat kartının ana eylemi teslim al, işi aç ya da işe git (3744) ise akış başlamaz, iş sonuç kartından tek dokunuşla yapılır.
 export function panelOkutuldu(d: OkutDurumu, c: OkutCozCevabi): PanelOkutmasi {
   if (d.adim === 'ne' && c.tur === 'kisi') return { tur: 'teslim-et', hedef: { yer: { istasyonId: c.istasyon.id }, alici: { kod: c.kod, ad: c.kisi.ad } } };
-  if (d.adim === 'ne' && c.tur === 'malzeme' && (c.anaEylem === 'teslim-al' || c.anaEylem === 'isi-ac')) return { tur: 'akis', durum: OKUT_BASI };
+  if (d.adim === 'ne' && c.tur === 'malzeme' && (c.anaEylem === 'teslim-al' || c.anaEylem === 'isi-ac' || c.anaEylem === 'ise-git')) return { tur: 'akis', durum: OKUT_BASI };
   return { tur: 'akis', durum: okutuldu(d, c) };
 }
 

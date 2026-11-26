@@ -779,11 +779,20 @@ describe('DEP-55 geri düşme kodları', () => {
   });
   test('614 1a tek kart: refakat kartında gelen teslim önce alınır, malzeme kapsamdaki istasyondaysa iş açılır, yoksa teslim edilir', () => {
     const kapsam = new Set([7]);
-    assert.equal(refakatAnaEylemi({ gelenSayisi: 1, kartAcik: true, satirIstasyonlari: [7], kapsamdakiIstasyonlar: kapsam }), 'teslim-al');
-    assert.equal(refakatAnaEylemi({ gelenSayisi: 0, kartAcik: true, satirIstasyonlari: [null, 7], kapsamdakiIstasyonlar: kapsam }), 'isi-ac');
-    assert.equal(refakatAnaEylemi({ gelenSayisi: 0, kartAcik: true, satirIstasyonlari: [null, 8], kapsamdakiIstasyonlar: kapsam }), 'teslim-et', 'başka istasyondaki malzeme');
-    assert.equal(refakatAnaEylemi({ gelenSayisi: 0, kartAcik: false, satirIstasyonlari: [7], kapsamdakiIstasyonlar: kapsam }), 'teslim-et', 'iptal kart iş açmaz');
-    assert.equal(refakatAnaEylemi({ gelenSayisi: 0, kartAcik: true, satirIstasyonlari: [], kapsamdakiIstasyonlar: kapsam }), 'teslim-et');
+    const bos = new Set<number>();
+    assert.equal(refakatAnaEylemi({ gelenSayisi: 1, kartAcik: true, satirIstasyonlari: [7], kapsamdakiIstasyonlar: kapsam, baslamisIstasyonlar: bos }), 'teslim-al');
+    assert.equal(refakatAnaEylemi({ gelenSayisi: 0, kartAcik: true, satirIstasyonlari: [null, 7], kapsamdakiIstasyonlar: kapsam, baslamisIstasyonlar: bos }), 'isi-ac');
+    assert.equal(refakatAnaEylemi({ gelenSayisi: 0, kartAcik: true, satirIstasyonlari: [null, 8], kapsamdakiIstasyonlar: kapsam, baslamisIstasyonlar: bos }), 'teslim-et', 'başka istasyondaki malzeme');
+    assert.equal(refakatAnaEylemi({ gelenSayisi: 0, kartAcik: false, satirIstasyonlari: [7], kapsamdakiIstasyonlar: kapsam, baslamisIstasyonlar: bos }), 'teslim-et', 'iptal kart iş açmaz');
+    assert.equal(refakatAnaEylemi({ gelenSayisi: 0, kartAcik: true, satirIstasyonlari: [], kapsamdakiIstasyonlar: kapsam, baslamisIstasyonlar: bos }), 'teslim-et');
+  });
+  test('3744 başlamış adımda refakat kartı işi yeniden açmaz, işe götürür; gelen teslim yine önce gelir', () => {
+    const kapsam = new Set([7, 9]);
+    assert.equal(refakatAnaEylemi({ gelenSayisi: 0, kartAcik: true, satirIstasyonlari: [7], kapsamdakiIstasyonlar: kapsam, baslamisIstasyonlar: new Set([7]) }), 'ise-git');
+    assert.equal(refakatAnaEylemi({ gelenSayisi: 0, kartAcik: true, satirIstasyonlari: [7], kapsamdakiIstasyonlar: kapsam, baslamisIstasyonlar: new Set([9]) }), 'isi-ac', 'başka istasyondaki başlamış adım bu işi başlamış saymaz');
+    assert.equal(refakatAnaEylemi({ gelenSayisi: 2, kartAcik: true, satirIstasyonlari: [7], kapsamdakiIstasyonlar: kapsam, baslamisIstasyonlar: new Set([7]) }), 'teslim-al');
+    assert.equal(refakatAnaEylemi({ gelenSayisi: 0, kartAcik: false, satirIstasyonlari: [7], kapsamdakiIstasyonlar: kapsam, baslamisIstasyonlar: new Set([7]) }), 'teslim-et', 'iptal kart');
+    assert.equal(refakatAnaEylemi({ gelenSayisi: 0, kartAcik: true, satirIstasyonlari: [8], kapsamdakiIstasyonlar: kapsam, baslamisIstasyonlar: new Set([8]) }), 'teslim-et', 'kapsam dışı başlamış adım');
   });
   test('kart #123 refakat partisi: etiket emir no ve sıradır; üretim lotu kart açmaz; teslimli ya da iptal kart iptal edilmez; kartla çelişen teslim reddedilir', () => {
     assert.equal(refakatEtiketi('UE-000120', 120, 2), 'UE-000120-P2');
