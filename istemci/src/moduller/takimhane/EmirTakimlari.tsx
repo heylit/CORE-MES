@@ -1,6 +1,7 @@
-import { Rozet, Simge, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
+import { useState } from 'react';
+import { AramaliSecim, Dugme, Girdi, Rozet, Simge, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { IkiGorunum, KompaktListe } from './KompaktListe.tsx';
-import type { EmirTakimListesi, EmirTakimSatiri } from '#paylasilan/sozlesme/takimhane.ts';
+import type { EmirTakimListesi, EmirTakimSatiri, TakimSatiri } from '#paylasilan/sozlesme/takimhane.ts';
 import { LISTE_DURUMU_ADI, LISTE_DURUMU_TONU } from './gosterim.ts';
 import './takimhane.css';
 
@@ -44,5 +45,48 @@ export function EmirTakimlari({ liste }: { liste: EmirTakimListesi }) {
       />
       {!liste.hazir && eksik > 0 && <p className="tc-tkm-uyari"><Simge ad="alert" boyut="k" />Eksik takım, emir başlamadan önce takımhaneden istenmeli.</p>}
     </section>
+  );
+}
+
+interface DuzenSatiri { anahtar: number; cep: string; kartKimlik: string; adet: string }
+let sayac = 0;
+const yeniSatir = (s?: Partial<DuzenSatiri>): DuzenSatiri => { sayac += 1; return { anahtar: sayac, cep: '', kartKimlik: '', adet: '1', ...s }; };
+
+// Emrin takım listesi düzenleme (3677, 3762 içinde): cep, kalem, adet. Kalem seçici yalnız aktif kartlı kütüphane kalemlerini gösterir;
+// kartı olmayan kalem önce açılışla stoğa girer.
+export function EmirTakimDuzenleyici({ liste, takimlar, kaydet, vazgec, mesgul }: {
+  liste: EmirTakimListesi;
+  takimlar: readonly TakimSatiri[];
+  kaydet: (satirlar: { cep: string; kartKimlik: number; adet: number }[]) => void;
+  vazgec: () => void;
+  mesgul: boolean;
+}) {
+  const kodla = new Map(takimlar.map((t) => [t.kod, t.kartKimlik]));
+  const [satirlar, satirlarYaz] = useState<DuzenSatiri[]>(() => (liste.satirlar.length === 0 ? [yeniSatir({ cep: 'T1' })]
+    : liste.satirlar.map((s) => yeniSatir({ cep: s.cep, kartKimlik: String(kodla.get(s.kod) ?? ''), adet: String(s.adet) }))));
+  const secenekler = takimlar.filter((t) => t.kartDurumu === 'aktif').map((t) => ({ deger: String(t.kartKimlik), baslik: t.ad, alt: t.kod }));
+  const degistir = (anahtar: number, d: Partial<DuzenSatiri>) => { satirlarYaz((l) => l.map((s) => (s.anahtar === anahtar ? { ...s, ...d } : s))); };
+  const gecerli = satirlar.every((s) => s.cep.trim() !== '' && s.kartKimlik !== '' && Number.isInteger(Number(s.adet)) && Number(s.adet) >= 1);
+  return (
+    <div className="tc-tkm-duzen">
+      {satirlar.map((s) => (
+        <div key={s.anahtar} className="tc-tkm-duzen-satir">
+          <Girdi etiket="Cep" value={s.cep} maxLength={12} onChange={(e) => { degistir(s.anahtar, { cep: e.target.value }); }} />
+          <AramaliSecim etiket="Kütüphane kalemi" secenekler={secenekler} deger={s.kartKimlik} sec={(v) => { degistir(s.anahtar, { kartKimlik: v }); }} yerTutucu="Kalem seçin" />
+          <Girdi etiket="Adet" type="number" inputMode="numeric" min={1} value={s.adet} onChange={(e) => { degistir(s.anahtar, { adet: e.target.value }); }} />
+          <Dugme simge="x" aria-label={`${s.cep || 'Satırı'} sil`} onClick={() => { satirlarYaz((l) => l.filter((x) => x.anahtar !== s.anahtar)); }}>Sil</Dugme>
+        </div>
+      ))}
+      <div className="tc-tkm-eylemler tc-tkm-sola">
+        <Dugme simge="plus" onClick={() => { satirlarYaz((l) => [...l, yeniSatir({ cep: `T${String(l.length + 1)}` })]); }}>Satır ekle</Dugme>
+      </div>
+      <p className="tc-tkm-soluk">Kartı olmayan kalem burada görünmez; önce Takımhane listesinden açılış girilir.</p>
+      <div className="tc-tkm-eylemler tc-tkm-eylem-sebepli">
+        {!gecerli && <p id="tkm-duzen-sebep" className="tc-tkm-soluk">Her satırda cep, kalem ve en az 1 adet olmalı.</p>}
+        <Dugme onClick={vazgec}>Vazgeç</Dugme>
+        <Dugme tur="birincil" simge="check" disabled={!gecerli || mesgul} aria-describedby={gecerli ? undefined : 'tkm-duzen-sebep'}
+          onClick={() => { kaydet(satirlar.map((s) => ({ cep: s.cep.trim(), kartKimlik: Number(s.kartKimlik), adet: Number(s.adet) }))); }}>Kaydet</Dugme>
+      </div>
+    </div>
   );
 }

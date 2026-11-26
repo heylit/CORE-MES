@@ -83,3 +83,29 @@ export const emirAparatCikislari = (db: Db, malzemeIdler: readonly number[]): Pr
 export const konumlardakiMalzemeler = async (db: Db): Promise<number[]> =>
   (await db.sorgu<{ id: number }>(
     `SELECT DISTINCT b.malzeme_id AS id FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id WHERE k.tur IN ('kisi', 'istasyon') AND b.miktar > 0`)).map((r) => r.id);
+
+// ---- 3762: takımın raf gözleri, açılış ve sayım -------------------------------------------------------------------------------------
+export interface TakimGozu { malzemeId: number; konumId: number; kod: string; miktar: string; partiSayisi: number }
+// Takımın dolu raf gözleri (bütün kalite durumları; eksi ya da sıfır bakiye gözü dolu saymaz).
+export const takimGozleri = (db: Db, malzemeIdler: readonly number[]): Promise<TakimGozu[]> =>
+  malzemeIdler.length === 0 ? Promise.resolve([]) : db.sorgu(
+    `SELECT b.malzeme_id AS "malzemeId", k.id AS "konumId", k.kod, sum(b.miktar)::text AS miktar, count(*)::int AS "partiSayisi"
+       FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id
+      WHERE b.malzeme_id = ANY($1::int[]) AND k.tur = 'raf_gozu' AND b.miktar > 0
+      GROUP BY b.malzeme_id, k.id, k.kod ORDER BY b.malzeme_id, sum(b.miktar) DESC, k.kod`, [[...malzemeIdler]]);
+
+export interface RafGozu { konumId: number; kod: string; ad: string | null }
+// Seçilebilir raf gözleri: aktif, raf gözü türünde. Aranan metin kodda ya da adda geçer.
+export const aktifRafGozleri = (db: Db, metin: string | null, sinir: number): Promise<RafGozu[]> =>
+  db.sorgu(
+    `SELECT id AS "konumId", kod, ad FROM stok_konum
+      WHERE aktif AND tur = 'raf_gozu' AND ($1::text IS NULL OR kod ILIKE '%' || $1 || '%' OR ad ILIKE '%' || $1 || '%')
+      ORDER BY kod LIMIT $2`, [metin, sinir]);
+export const rafGozleriKodla = (db: Db, kodlar: readonly string[]): Promise<RafGozu[]> =>
+  kodlar.length === 0 ? Promise.resolve([]) : db.sorgu(
+    `SELECT id AS "konumId", kod, ad FROM stok_konum WHERE aktif AND tur = 'raf_gozu' AND upper(kod) = ANY($1::text[])`, [kodlar.map((k) => k.toUpperCase())]);
+export const rafGozuMu = async (db: Db, konumId: number): Promise<RafGozu | null> =>
+  db.tek<RafGozu>(`SELECT id AS "konumId", kod, ad FROM stok_konum WHERE id = $1 AND aktif AND tur = 'raf_gozu'`, [konumId]);
+// Gözdeki bakiye satırları (lot başına); sayım bu satırlar üzerinden yapılır.
+export const takimGozPartileri = (db: Db, malzemeId: number, konumId: number): Promise<{ partiId: number | null; miktar: string }[]> =>
+  db.sorgu('SELECT parti_id AS "partiId", sum(miktar)::text AS miktar FROM stok_bakiye WHERE malzeme_id = $1 AND konum_id = $2 AND miktar <> 0 GROUP BY parti_id', [malzemeId, konumId]);

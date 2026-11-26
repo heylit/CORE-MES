@@ -475,4 +475,14 @@ export const takimEsikleri = (db: Db, malzemeIdler: readonly number[]) => sorgul
 export type { TakimCikisi, TakimIadesi } from './servis/takim.ts';
 export const takimCikisi = (db: Db, kullanici: Kullanici, g: servis.TakimCikisi) => servis.takimCikisi(db, kullanici, g);
 export const takimIadesi = (db: Db, kullanici: Kullanici, g: servis.TakimIadesi) => servis.takimIadesi(db, kullanici, g);
+// 3762: takımın raf gözleri, göz seçimi ve gözüne göre açılış ya da kör sayım. Yetki denetlemez; uç korur (açılış stok.giris, sayım stok.sayim).
+export type { TakimGozu, RafGozu } from './sorgular.ts';
+export type { GozTuru, TakimGirisi, TopluSatir, TopluSatirSonucu } from './servis/takim.ts';
+export const takimGozleri = (db: Db, malzemeIdler: readonly number[]) => sorgular.takimGozleri(db, malzemeIdler);
+export const aktifRafGozleri = (db: Db, metin: string | null, sinir = 300) => sorgular.aktifRafGozleri(db, metin, Math.min(Math.max(1, sinir), 1000));
+export const takimGozTuru = (db: Db, malzemeId: number, konumId: number) => servis.gozTuru(db, malzemeId, konumId);
+export const takimAcilisi = (db: Db, kullanici: Kullanici, g: servis.TakimGirisi) => servis.takimAcilisi(db, kullanici, g);
+export const takimSayimi = (db: Db, kisiId: number, g: Omit<servis.TakimGirisi, 'istekKimligi'>) => servis.takimSayimi(db, kisiId, g);
+export const takimTopluDenetle = (db: Db, satirlar: readonly servis.TopluSatir[]) => servis.takimTopluDenetle(db, satirlar);
+export const takimTopluYaz = (db: Db, kullanici: Kullanici, g: Parameters<typeof servis.takimTopluYaz>[2]) => servis.takimTopluYaz(db, kullanici, g);
 export type { IadeDurumu } from './kurallar.ts';

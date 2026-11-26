@@ -1,7 +1,8 @@
 import { uc } from '#cekirdek/uc.ts';
 import { teslimCevabi } from '#paylasilan/sozlesme/stok.ts';
 import {
-  acikTeslimlerCevabi, aktarimOnizlemeCevabi, aktarimOnizlemeGovdesi, cikisGovdesi, emirParametresi, emirTakimListesiSemasi, emirTakimiGovdesi,
+  acikTeslimlerCevabi, cikisGovdesi, emirParametresi, emirTakimListesiSemasi, emirTakimiGovdesi, girisCevabi, girisGovdesi, kutuphaneBagGovdesi, kutuphaneCevabi,
+  rafGozleriCevabi, rafGozuSorgusu, topluGirisCevabi, topluGirisGovdesi,
   aparatCevabi as aparatCevapSemasi, emirAparatCevabi as emirAparatCevapSemasi, iadeGovdesi, kartParametresi, ozellikGovdesi, seceneklerCevabi, takimSorgusu, takimhaneOzetiSemasi, takimlarCevabi,
 } from '#paylasilan/sozlesme/takimhane.ts';
 import { z } from 'zod';
@@ -49,9 +50,27 @@ export const uclar = [
     yontem: 'GET', yol: '/takimhane/emirler/:id/aparat', yetki: OKUMA, parametre: emirParametresi, cevap: emirAparatCevapSemasi,
     isle: ({ db, parametre }) => ap.emirAparatCevabi(db, parametre.id),
   }),
-  // Yalnız ön izleme: hiçbir şey yazılmaz. Başlangıç stoğu yazımı sonraki iştir (gerçek veri yalnız canlıda girer, V7).
+  // 3762: tek kütüphane (CNC), raf gözü seçimi, gözüne göre açılış ya da kör sayım. Açılış stok.giris, sayım stok.sayim ister: uç ikisinden
+  // birini, servis gözün türüne göre doğrusunu denetler (yeni işlem yok).
+  uc({ yontem: 'GET', yol: '/takimhane/kutuphane', yetki: OKUMA, cevap: kutuphaneCevabi, isle: ({ db }) => s.kutuphane(db) }),
   uc({
-    yontem: 'POST', yol: '/takimhane/baslangic/onizleme', yetki: 'stok.giris', govde: aktarimOnizlemeGovdesi, cevap: aktarimOnizlemeCevabi,
-    isle: ({ govde }) => s.aktarimOnizleme(govde.satirlar),
+    yontem: 'GET', yol: '/takimhane/raf-gozleri', yetki: { biri: ['stok.giris', 'stok.sayim', 'takimhane.cikis-iade'] }, sorgu: rafGozuSorgusu, cevap: rafGozleriCevabi,
+    isle: ({ db, sorgu }) => s.rafGozleri(db, sorgu.q ?? null, sorgu.kart ?? null),
+  }),
+  uc({
+    yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/takimhane/giris', yetki: { biri: ['stok.giris', 'stok.sayim'] }, govde: girisGovdesi, cevap: girisCevabi,
+    isle: ({ db, kullanici, govde }) => s.giris(db, kullanici, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/takimhane/toplu/denetle', yetki: { biri: ['stok.giris', 'stok.sayim'] }, govde: topluGirisGovdesi.pick({ satirlar: true }), cevap: topluGirisCevabi,
+    isle: ({ db, govde }) => s.topluDenetle(db, govde),
+  }),
+  uc({
+    yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/takimhane/toplu', yetki: 'stok.giris', govde: topluGirisGovdesi, cevap: topluGirisCevabi,
+    isle: ({ db, kullanici, govde }) => s.topluYaz(db, kullanici, govde),
+  }),
+  uc({
+    yontem: 'POST', tekrarKorumali: true, yol: '/takimhane/takimlar/:kart/kutuphane', yetki: 'malzemeler.yaz', parametre: kartParametresi, govde: kutuphaneBagGovdesi, cevap: tamam,
+    isle: ({ db, kullanici, parametre, govde }) => s.kutuphaneyeBagla(db, kullanici, parametre.kart, govde.kimlik),
   }),
 ];

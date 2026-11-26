@@ -1,4 +1,4 @@
-import type { AktarimSatiri, KonumDagilimi, TakimSatiri } from '#paylasilan/sozlesme/takimhane.ts';
+import { kutuphaneKalemiSemasi, type KonumDagilimi, type KutuphaneKalemi, type TakimSatiri } from '#paylasilan/sozlesme/takimhane.ts';
 
 // Saf iş kuralları (3613). Veritabanı ve zaman bilmez.
 export type StokDurumu = 'sifir' | 'kritik' | 'yeterli' | 'esiksiz';
@@ -36,31 +36,14 @@ export const kritikMi = (t: Pick<TakimSatiri, 'toplam' | 'kritikSeviye'>): boole
 // Takım kartı: katalog kartının stok kodu TKM ile başlar (varsayım; kategori bu işte tanımlanmaz).
 export const takimKoduMu = (kod: string): boolean => /^TKM/i.test(kod.trim());
 
-const SADE = (m: string): string => m.trim().replace(/\s+/g, ' ');
+// 3762: takım kartı = CNC kütüphanesine bağlı sarf ya da demirbaş kartı; kütüphaneye bağlanmamış eski TKM kartları da takımdır.
+export const takimKartiMi = (k: { kod: string; kutuphaneKimligi: string | null }): boolean => k.kutuphaneKimligi !== null || takimKoduMu(k.kod);
 
-// Başlangıç stoğu ön izlemesi: bulgu satır satır görünür, hiçbir şey kendiliğinden toplanmaz (aynı kod iki satırsa ikisi de işaretlenir).
-// Uygun: hiçbir satırda karar bekleyen bulgu yok. Bulgular yazmayı engeller; "bosluk" yazımda temizlenir ve engellemez.
-export function aktarimOnizle(satirlar: readonly { kod: string; ad: string; kategori: string | null; adet: number; rafKodu: string | null }[]): { satirlar: AktarimSatiri[]; uygun: boolean } {
-  const sayac = new Map<string, number>();
-  for (const s of satirlar) {
-    const k = SADE(s.kod).toLocaleUpperCase('tr-TR');
-    sayac.set(k, (sayac.get(k) ?? 0) + 1);
-  }
-  let uygun = true;
-  const sonuc = satirlar.map((s, i): AktarimSatiri => {
-    const kod = SADE(s.kod);
-    let bulgu: AktarimSatiri['bulgu'] = null;
-    let karar: string | null = null;
-    if ((sayac.get(kod.toLocaleUpperCase('tr-TR')) ?? 0) > 1) {
-      bulgu = 'yinelenen-kod'; karar = 'Aynı kod birden çok satırda; elle tek satıra indirilir (toplanmaz).'; uygun = false;
-    } else if (s.kategori === null || s.kategori.trim() === '') {
-      bulgu = 'bos-kategori'; karar = 'Kategori seçilir.'; uygun = false;
-    } else if (kod !== s.kod || SADE(s.ad) !== s.ad) {
-      bulgu = 'bosluk'; karar = 'Baştaki, sondaki ve çift boşluk temizlenir.';
-    }
-    return { satir: i + 1, kod, ad: SADE(s.ad), kategori: s.kategori === null ? null : s.kategori.trim() || null, adet: s.adet, rafKodu: s.rafKodu, bulgu, karar };
-  });
-  return { satirlar: sonuc, uygun };
+// CNC kaydındaki atölye kalemleri (`custom`): geçersiz kalem düşer, kaydın geri kalanı okunmaz.
+export function ozelKalemler(deger: unknown): KutuphaneKalemi[] {
+  const d = typeof deger === 'string' ? (() => { try { return JSON.parse(deger) as unknown; } catch { return null; } })() : deger;
+  const liste = d !== null && typeof d === 'object' && Array.isArray((d as { custom?: unknown }).custom) ? (d as { custom: unknown[] }).custom : [];
+  return liste.flatMap((k) => { const r = kutuphaneKalemiSemasi.safeParse(k); return r.success ? [r.data] : []; });
 }
 
 // ---- Aparat ayırma (kart 3651): yazılmaz, canlı plan penceresinden türetilir ------------------------------------------------------

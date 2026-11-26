@@ -117,3 +117,16 @@
 .tc-tkm-cubuk > i[data-konum="kisi"] { background: var(--done); }
 .tc-tkm-cubuk > i[data-konum="bileme"] { background: var(--hold); }
 .tc-tkm-cubuk > i[data-konum="ara"] { background: var(--stop); }
+
+/* 3762: raf gözü seçici ve emir takım düzenleyici */
+.tc-tkm-gozler { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: var(--b-2); max-height: 16rem; overflow-y: auto; }
+.tc-tkm-gozler button {
+  display: flex; justify-content: space-between; align-items: center; gap: var(--b-2); width: 100%; min-height: var(--dugme-boy); padding: 0 var(--b-3);
+  background: var(--panel); border: 1px solid var(--edge); border-radius: var(--yari-1); cursor: pointer;
+}
+.tc-tkm-gozler button[aria-pressed="true"] { border-color: var(--hazard-ink); background: var(--panel2); }
+.tc-tkm-gozler .mono, .tc-tkm-kod { white-space: nowrap; }
+.tc-tkm-eylemler.tc-tkm-sola { justify-content: flex-start; }
+.tc-tkm-duzen { display: flex; flex-direction: column; gap: var(--b-3); }
+.tc-tkm-duzen-satir { display: grid; grid-template-columns: 5rem minmax(0, 1fr) 6rem auto; gap: var(--b-2); align-items: end; }
+@media (max-width: 767px) { .tc-tkm-duzen-satir { grid-template-columns: 4rem minmax(0, 1fr) 5rem; } .tc-tkm-duzen-satir > :last-child { grid-column: 1 / -1; } }

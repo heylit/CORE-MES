@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { aktarimOnizle, aparatAyirmalari, aparatUyumu, planKaydiMi, type AparatIstegi, bosDagilim, dagilimToplami, dagilimaEkle, konumGrubu, stokDurumu, takimKoduMu } from './kurallar.ts';
+import { aparatAyirmalari, ozelKalemler, takimKartiMi, aparatUyumu, planKaydiMi, type AparatIstegi, bosDagilim, dagilimToplami, dagilimaEkle, konumGrubu, stokDurumu, takimKoduMu } from './kurallar.ts';
 
 describe('takimhane kuralları (saf)', () => {
   test('sipariş noktası yoksa durum uydurulmaz: yalnız sıfır bilinir, kalan eşiksiz', () => {
@@ -25,18 +25,18 @@ describe('takimhane kuralları (saf)', () => {
     assert.equal(takimKoduMu('CNC-TKM-1'), false);
   });
 
-  test('başlangıç ön izlemesi: yinelenen kod toplanmaz, kategorisiz yazmayı engeller, boşluk engellemez', () => {
-    const o = aktarimOnizle([
-      { kod: 'A-1', ad: 'x', kategori: 'K', adet: 1, rafKodu: null },
-      { kod: 'a-1', ad: 'y', kategori: 'K', adet: 1, rafKodu: null },
-    ]);
-    assert.equal(o.uygun, false);
-    assert.deepEqual(o.satirlar.map((s) => s.bulgu), ['yinelenen-kod', 'yinelenen-kod']);
-    const b = aktarimOnizle([{ kod: ' B-1 ', ad: 'z', kategori: 'K', adet: 1, rafKodu: null }]);
-    assert.equal(b.uygun, true);
-    assert.equal(b.satirlar[0]?.bulgu, 'bosluk');
-    assert.equal(b.satirlar[0]?.kod, 'B-1');
-    assert.equal(aktarimOnizle([{ kod: 'C', ad: 'z', kategori: '  ', adet: 1, rafKodu: null }]).uygun, false);
+  test('3762: kütüphaneye bağlı kart da, eski TKM kartı da takımdır', () => {
+    assert.equal(takimKartiMi({ kod: 'SRF-00004', kutuphaneKimligi: 'em10' }), true);
+    assert.equal(takimKartiMi({ kod: 'TKM-00001', kutuphaneKimligi: null }), true);
+    assert.equal(takimKartiMi({ kod: 'SRF-00004', kutuphaneKimligi: null }), false);
+  });
+
+  test('3762: CNC kaydının atölye kalemleri okunur; geçersiz kalem ve bozuk kayıt düşer', () => {
+    const d = { custom: [{ id: 'c_1', name: 'ORN Freze', shelf: 'tm_end', isTool: true, d: 10 }, { name: 'kimliksiz' }, 'metin'], tools: {} };
+    assert.deepEqual(ozelKalemler(d).map((k) => k.id), ['c_1']);
+    assert.deepEqual(ozelKalemler(JSON.stringify(d)).map((k) => k.id), ['c_1']);
+    assert.deepEqual(ozelKalemler('{bozuk'), []);
+    assert.deepEqual(ozelKalemler(null), []);
   });
 
   describe('aparat ayırma (3651)', () => {

@@ -236,7 +236,8 @@ describe('takimhane (gerçek PostgreSQL)', () => {
     assert.equal((await istek('takimci', 'POST', '/stok/tasima', {})).durum, 403);
     assert.equal((await istek('takimci', 'POST', '/stok/teslimler/gonder', {})).durum, 403);
     assert.equal((await istek('takimci', 'POST', `/takimhane/takimlar/${k}/ozellik`, { sinif: 'freze', capMm: 1, kesiciSayisi: 1, isoKodu: null, malzemeGruplari: [], yenidenBilenir: false, izleme: 'adet' })).durum, 403);
-    assert.equal((await istek('takimci', 'POST', '/takimhane/baslangic/onizleme', { satirlar: [] })).durum, 403);
+    assert.equal((await istek('takimci', 'POST', '/takimhane/giris', { kartKimlik: k, konumKimligi: rafKonumu, adet: 1, istekKimligi: randomUUID() })).durum, 403);
+    assert.equal((await istek('takimci', 'POST', `/takimhane/takimlar/${k}/kutuphane`, { kimlik: 'tm_x' })).durum, 403);
   });
 
   test('emir takım listesi: yetmeyen takım eksik görünür, liste hazır olmaz; aynı cepte aynı takım iki kez yazılmaz', async () => {
@@ -255,18 +256,153 @@ describe('takimhane (gerçek PostgreSQL)', () => {
     assert.equal((await istek('depo', 'GET', `/takimhane/emirler/${emir}/takimlar`)).durum, 200);
   });
 
-  test('başlangıç stoğu ön izlemesi: aynı kod toplanmaz, kategorisiz satır yazmayı engeller, boşluk temizlenir', async () => {
-    const c = await istek<{ uygun: boolean; satirlar: { bulgu: string | null }[] }>('depo', 'POST', '/takimhane/baslangic/onizleme', {
-      satirlar: [
-        { kod: 'TKM-A1', ad: 'Freze', kategori: 'Freze', adet: 3, rafKodu: null },
-        { kod: ' tkm-a1 ', ad: 'Freze', kategori: 'Freze', adet: 2, rafKodu: null },
-        { kod: 'TKM-B1', ad: 'Matkap', kategori: null, adet: 1, rafKodu: null },
-        { kod: 'TKM-C1', ad: ' Rayba  uç ', kategori: 'Rayba', adet: 1, rafKodu: null },
-      ],
+  // ---- 3762: tek kütüphane, raf gözü, açılış ve kör sayım ---------------------------------------------------------------------------
+  async function bagliKart(kimlik: string, durum = 'aktif'): Promise<number> {
+    sira += 1;
+    await o().sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('SRF-K-', 0) ON CONFLICT (onek) DO NOTHING");
+    return (await o().sahip.tek<{ no: number }>(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id, cnc_kutuphane_kimligi)
+       VALUES ($1, 'sarf', 'SRF-K-', $2, $3, $4, $5, $5, $6) RETURNING no`,
+      [`srfk-${sira}`, sira, durum, JSON.stringify({ id: `srfk-${sira}`, com: { ad: `ORN kütüphane takımı ${sira}`, birim: 'adet' } }), kisiler.get('depo'), kimlik],
+    ))!.no;
+  }
+  async function bosGoz(kod: string): Promise<number> {
+    const depo = (await o().vt.tek<{ depo: number }>('SELECT depo_id AS depo FROM stok_konum WHERE id = $1', [rafKonumu]))!.depo;
+    return (await o().sahip.tek<{ id: number }>("INSERT INTO stok_konum (depo_id, kod, tur, ad, bolme_no, kat_no) VALUES ($1, $2, 'raf_gozu', $2, 1, 1) RETURNING id", [depo, kod]))!.id;
+  }
+  type Giris = { tur: string; belgeNo: string | null; onayaGiden: number };
+  const giris = (kim: string, kartKimlik: number, konumKimligi: number, adet: number) =>
+    istek<Giris>(kim, 'POST', '/takimhane/giris', { kartKimlik, konumKimligi, adet, istekKimligi: randomUUID() });
+
+  test('3762: kütüphaneye bağlı kart TKM kodu olmadan da takım listesindedir; gözleri ve kütüphane kimliği gelir', async () => {
+    const k = await bagliKart('ORN_tm_10');
+    const goz = await bosGoz('ORN-TH-L1');
+    assert.equal((await giris('depo', k, goz, 4)).durum, 200);
+    const l = await istek<{ takimlar: { kartKimlik: number; kutuphaneKimligi: string | null; kartDurumu: string; gozler: { kod: string; adet: number }[]; konumlar: { raf: number | null } }[] }>('depo', 'GET', '/takimhane/takimlar');
+    const t = l.govde.takimlar.find((x) => x.kartKimlik === k);
+    assert.ok(t, 'bağlı kart listede');
+    assert.equal(t.kutuphaneKimligi, 'ORN_tm_10');
+    assert.equal(t.kartDurumu, 'aktif');
+    assert.deepEqual(t.gozler.map((g) => [g.kod, g.adet]), [['ORN-TH-L1', 4]]);
+    assert.equal(t.konumlar.raf, 4);
+  });
+
+  test('3762: boş göz açılıştır (başlangıç belgesi), dolu göz kör sayımdır; tür sunucuda gözden belirlenir', async () => {
+    const k = await bagliKart('ORN_tm_11');
+    const goz = await bosGoz('ORN-TH-L2');
+    const a = await giris('depo', k, goz, 6);
+    assert.equal(a.durum, 200, JSON.stringify(a.govde));
+    assert.equal(a.govde.tur, 'acilis');
+    assert.ok(a.govde.belgeNo);
+    assert.equal(await bakiye(k, goz), 6);
+    const belge = await o().vt.tek<{ tur: string }>('SELECT tur FROM stok_mal_kabul WHERE no = $1', [a.govde.belgeNo]);
+    assert.equal(belge?.tur, 'baslangic');
+    const s = await giris('depo', k, goz, 5);
+    assert.equal(s.durum, 200, JSON.stringify(s.govde));
+    assert.equal(s.govde.tur, 'sayim');
+    assert.equal(s.govde.belgeNo, null);
+    assert.ok(s.govde.onayaGiden > 0 || (await bakiye(k, goz)) === 5, 'fark ya onayda ya da yazıldı');
+  });
+
+  // İstekler üst üste binerse ikincisi kilitte bekler ve 409 alır; binmezse göz dolu görünür ve kör sayıma gider. İki sonuç da doğrudur;
+  // ölçü, gözde tek açılışın kalmasıdır (tek başlangıç belgesi, bakiye bir kat).
+  test('3762: aynı boş göze aynı anda iki açılış gelirse yalnız biri açılış olur, öteki reddedilir ya da sayıma gider', async () => {
+    const k = await bagliKart('ORN_tm_20');
+    const goz = await bosGoz('ORN-TH-L8');
+    const sonuc = await Promise.all([giris('depo', k, goz, 3), giris('depo', k, goz, 3)]);
+    const ozet = sonuc.map((r) => (r.durum === 200 ? r.govde.tur : String(r.durum))).sort();
+    assert.ok(['409|acilis', 'acilis|sayim'].includes(ozet.join('|')), JSON.stringify(sonuc.map((r) => [r.durum, r.govde])));
+    assert.equal(await bakiye(k, goz), 3);
+    const belge = await o().vt.tek<{ n: number }>(
+      `SELECT count(DISTINCT s.mal_kabul_id)::int AS n FROM stok_mal_kabul_satiri s JOIN stok_mal_kabul m ON m.id = s.mal_kabul_id AND m.tur = 'baslangic'
+        WHERE s.malzeme_id = $1 AND s.konum_id = $2`, [k, goz]);
+    assert.equal(belge?.n, 1);
+  });
+
+  test('3762: yalnız sayım yetkisi olan boş göze açılış yazamaz (403), dolu gözü sayabilir', async () => {
+    const k = await bagliKart('ORN_tm_21');
+    const bos = await bosGoz('ORN-TH-L9');
+    const dolu = await bosGoz('ORN-TH-L10');
+    assert.equal((await giris('depo', k, dolu, 2)).durum, 200);
+    await o().vt.tx(async (db) => {
+      const rolId = (await db.tek<{ id: number }>("INSERT INTO rol (kod, ad, yerlesik, yonetici) VALUES ('tkm_sayimci', 'Deneme sayımcı', false, false) RETURNING id"))!.id;
+      for (const islem of ['sayfa.takimhane', 'sayfa.stok', 'stok.sayim']) await db.sorgu('INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, $2)', [rolId, islem]);
+      const id = await yoneticiOlustur(db, { ad: 'Deneme sayımcı', kullaniciAdi: 'sayimci', parola: PAROLA });
+      const kisi = await rolAta(db, kisiler.get('depo')!, id, rolId);
+      for (const rol of kisi.roller) if (rol.id !== rolId) await rolAl(db, kisiler.get('depo')!, id, rol.id);
     });
-    assert.equal(c.durum, 200);
-    assert.equal(c.govde.uygun, false);
-    assert.deepEqual(c.govde.satirlar.map((s) => s.bulgu), ['yinelenen-kod', 'yinelenen-kod', 'bos-kategori', 'bosluk']);
+    const g = await app!.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi: 'sayimci', parola: PAROLA } });
+    assert.equal(g.statusCode, 200);
+    cerez.set('sayimci', String(g.headers['set-cookie']).split(';')[0] ?? '');
+    assert.equal((await giris('sayimci', k, bos, 1)).durum, 403);
+    assert.equal(await bakiye(k, bos), 0);
+    const s = await giris('sayimci', k, dolu, 2);
+    assert.equal(s.durum, 200, JSON.stringify(s.govde));
+    assert.equal(s.govde.tur, 'sayim');
+  });
+
+  test('3762: aktif olmayan karta, raf gözü olmayan yere ve açılışta sıfır adede giriş yapılmaz', async () => {
+    const onayda = await bagliKart('ORN_tm_12', 'onayda');
+    const goz = await bosGoz('ORN-TH-L3');
+    assert.equal((await giris('depo', onayda, goz, 1)).durum, 400);
+    const k = await bagliKart('ORN_tm_13');
+    assert.equal((await giris('depo', k, araAlan, 1)).durum, 400);
+    assert.equal((await giris('depo', k, goz, 0)).durum, 400);
+  });
+
+  test('3762: toplu giriş satır satır denetlenir; engel varken hiçbir şey yazılmaz, engelsizde açılış ve sayım birlikte yazılır', async () => {
+    const k1 = await bagliKart('ORN_tm_14');
+    const k2 = await bagliKart('ORN_tm_15');
+    const g1 = await bosGoz('ORN-TH-L4');
+    assert.equal((await giris('depo', k2, g1, 2)).durum, 200);
+    const satirlar = [
+      { sira: 2, kartKimlik: k1, gozKodu: 'orn-th-l4', adet: 3 },
+      { sira: 3, kartKimlik: k2, gozKodu: 'ORN-TH-L4', adet: 2 },
+      { sira: 4, kartKimlik: k1, gozKodu: 'ORN-TH-YOK', adet: 1 },
+    ];
+    const ozet = 'a'.repeat(64);
+    const d = await istek<{ satirlar: { sira: number; tur: string | null; hata: string | null }[]; yazildi: boolean }>('depo', 'POST', '/takimhane/toplu', { satirlar, dosyaOzeti: ozet, dosyaAdi: 'ornek-acilis.xlsx' });
+    assert.equal(d.durum, 200, JSON.stringify(d.govde));
+    assert.equal(d.govde.yazildi, false);
+    assert.deepEqual(d.govde.satirlar.map((s) => [s.sira, s.tur, s.hata !== null]), [[2, 'acilis', false], [3, 'sayim', false], [4, null, true]]);
+    assert.equal(await bakiye(k1, g1), 0, 'engel varken açılış yazılmadı');
+    const y = await istek<{ yazildi: boolean; belgeNo: string | null; sayim: number }>('depo', 'POST', '/takimhane/toplu', { satirlar: satirlar.slice(0, 2), dosyaOzeti: ozet, dosyaAdi: 'ornek-acilis.xlsx' });
+    assert.equal(y.durum, 200, JSON.stringify(y.govde));
+    assert.equal(y.govde.yazildi, true);
+    assert.ok(y.govde.belgeNo);
+    assert.equal(y.govde.sayim, 1);
+    assert.equal(await bakiye(k1, g1), 3);
+  });
+
+  test('3762: çıkış seçilen raf gözünden yapılır; takımın olmadığı göz seçilemez', async () => {
+    const k = await bagliKart('ORN_tm_16');
+    const ga = await bosGoz('ORN-TH-L5');
+    const gb = await bosGoz('ORN-TH-L6');
+    assert.equal((await giris('depo', k, ga, 5)).durum, 200);
+    assert.equal((await giris('depo', k, gb, 1)).durum, 200);
+    const c = await istek('depo', 'POST', '/takimhane/cikis', { kartKimlik: k, adet: 1, kisiId: kisiler.get('kisi-a'), istasyonId: null, uretimEmriId: null, konumKimligi: gb, istekKimligi: randomUUID() });
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    assert.equal((await teslimAl('kisi-a', teslimCevabi.parse(c.govde).teslim, '1')).durum, 200);
+    assert.equal(await bakiye(k, gb), 0, 'seçilen gözden çıktı');
+    assert.equal(await bakiye(k, ga), 5);
+    const bos = await istek('depo', 'POST', '/takimhane/cikis', { kartKimlik: k, adet: 1, kisiId: kisiler.get('kisi-a'), istasyonId: null, uretimEmriId: null, konumKimligi: rafKonumu, istekKimligi: randomUUID() });
+    assert.equal(bos.durum, 400);
+  });
+
+  test('3762: eski TKM kartı kütüphane kalemine bağlanır; bağlı kalem ikinci karta bağlanmaz; göz seçici adet vermeden dolu ya da boş der', async () => {
+    const eski = await kart();
+    const yeni = await bagliKart('ORN_tm_17');
+    assert.equal((await istek('depo', 'POST', `/takimhane/takimlar/${eski}/kutuphane`, { kimlik: 'ORN_tm_17' })).durum, 400);
+    const b = await istek('depo', 'POST', `/takimhane/takimlar/${eski}/kutuphane`, { kimlik: 'ORN_tm_18' });
+    assert.equal(b.durum, 200, JSON.stringify(b.govde));
+    assert.equal((await istek('depo', 'POST', `/takimhane/takimlar/${eski}/kutuphane`, { kimlik: 'ORN_tm_19' })).durum, 400);
+    const goz = await bosGoz('ORN-TH-L7');
+    assert.equal((await giris('depo', yeni, goz, 2)).durum, 200);
+    const r = await istek<{ gozler: { kod: string; dolu: boolean }[] }>('depo', 'GET', `/takimhane/raf-gozleri?q=ORN-TH-L&kart=${yeni}`);
+    assert.equal(r.durum, 200);
+    assert.equal(r.govde.gozler.some((g) => 'adet' in g), false);
+    assert.equal(r.govde.gozler.find((g) => g.kod === 'ORN-TH-L7')?.dolu, true);
+    assert.equal(r.govde.gozler.find((g) => g.kod === 'ORN-TH-L1')?.dolu, false);
   });
 
   // ---- 3651 aparat: ayırma yazılmaz, canlı plan penceresi ile rotadaki istekten türetilir ------------------------------------------
