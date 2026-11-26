@@ -5,7 +5,7 @@ import {
   bekletmeGorevi, bitirmeEksigi, bitisOzeti, siradakiGorev, tmiIlkParcaGerekli,
   cagriTonu, cubukDugmeleri, durumDugmeleri, sabitDugmeler, numuneAraligi, durusOnerileri, hurdaUyarisi, kalanSure, kaliteIstasyonuNumuneleri, kontrolTakvimi, lotKarariEksigi, lotKarariOku, lotSayisi, tonDurumu, vardiyaHesabi, vardiyaOzeti, type VardiyaOzetGirdisi,
   uzakKendiligindenAcilir, sekmeKarari,
-  isBasladiMi,
+  isBasladiMi, basladiIletisi,
 } from './kurallar.ts';
 import type { Is, KontrolTakvimi } from './tipler.ts';
 
@@ -284,5 +284,11 @@ describe('3718 a: numune yolu ve okutma', () => {
     expect(isBasladiMi('queued')).toBe(false);
     expect(isBasladiMi('done')).toBe(false);
     for (const d of ['running', 'paused', 'setup', 'stopped']) expect(isBasladiMi(d)).toBe(true);
+  });
+  it('3744 R1: başlamış işte aynı kart ekrana getirir, başka kart sayım kartının değiştiğini eskisi ve yenisiyle söyler', () => {
+    expect(basladiIletisi('ORN-UE-1', 'ORN-UE-1-P1', 'ORN-UE-1-P1')).toBe('İş zaten başladı: ORN-UE-1 · ekrana getirildi · sayım kartı ORN-UE-1-P1');
+    expect(basladiIletisi('ORN-UE-1', 'ORN-UE-1-P1', 'ORN-UE-1-P2')).toBe('Sayım kartı değişti: ORN-UE-1-P1 → ORN-UE-1-P2 · ORN-UE-1 zaten başlamıştı');
+    expect(basladiIletisi('ORN-UE-1', null, 'ORN-UE-1-P2')).toBe('İş zaten başladı: ORN-UE-1 · ekrana getirildi · sayım kartı ORN-UE-1-P2');
+    expect(basladiIletisi('ORN-UE-1', null, null)).toBe('İş zaten başladı: ORN-UE-1 · ekrana getirildi');
   });
 });

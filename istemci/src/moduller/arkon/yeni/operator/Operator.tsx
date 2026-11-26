@@ -75,7 +75,7 @@ import {
   sonucBelgesi, takimUyarilari, tonAdi, uyariAnahtari, vardiyaHesabi, vardiyaOzeti, zamaniGelenUyarilar, hurdaUyarisi, bitisOzeti, bitirmeEksigi, tmiIlkParcaGerekli,
   type EkranSekmesi,
   hataliNedenleri, hataliUstSiniri, sekmeKarari,
-  isBasladiMi,
+  isBasladiMi, basladiIletisi,
 } from './kurallar.ts';
 import {
   BilgiCipi, CagriCipi, etiketSayisi, DurumDugmeleri, EtkinKart, GorevKarti, IsAlanlari, IsEtiketleri, IsSatiri, Konfeti, NumuneSeridi, PlanBandi,
@@ -492,13 +492,13 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
       emirIstegi.current = null;
       kartIstegi.current = null;
       if (r.tur !== 'ac') { bip('nok'); say(`Bu emrin bu istasyonda işi yok${r.tur === 'baska-istasyon' && r.istasyon ? `, sıradaki adım: ${r.istasyon}` : ''}`, 'alert', 'stop'); return; }
-      // 3744: başlamış iş yeniden açılmış gibi söylenmez; başlarken bağlanan kart sayımın kartıdır, okutulan kart onu değiştirmez.
+      // 3744: başlamış iş yeniden açılmış gibi söylenmez; başka kart okutulduysa sayımın kartı değişir ve bu açıkça söylenir.
       const hedef = isler[r.sira]!;
       const basladi = isBasladiMi(hedef.state);
       isGecIste(r.sira, () => {
         mvYaz('prod');
-        islerYaz((l) => l.map((x, j) => (j === r.sira ? { ...x, ...(basladi && x.kart != null ? {} : { kart }), fresh: false } : x)));
-        say(basladi ? `İş zaten başladı: ${hedef.no} · ekrana getirildi` : `İş emri açıldı: ${hedef.no} · refakat kartıyla`, 'check', 'run');
+        islerYaz((l) => l.map((x, j) => (j === r.sira ? { ...x, kart, fresh: false } : x)));
+        say(basladi ? basladiIletisi(hedef.no, kartEtiketi(hedef.kart), kartEtiketi(kart)) : `İş emri açıldı: ${hedef.no} · refakat kartıyla`, 'check', 'run');
       });
       return;
     }
@@ -539,6 +539,7 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
 
   /* refakat kartları: bitmemiş işlerin kartları okunur; okunamazsa liste olduğu gibi kalır, iş kartsız da açılır */
   const [kartlar, kartlarYaz] = useState<RefakatKarti[]>([]);
+  const kartEtiketi = (id: number | null | undefined): string | null => (id == null ? null : kartlar.find((x) => x.id === id)?.etiket ?? null);
   const kartAnahtari = pv ? '' : kartEmirleri(isler.map((x) => ({ state: x.state, emirId: tmiEmirId(x.pkg) }))).join(',');
   useEffect(() => {
     if (!kartAnahtari) { kartlarYaz([]); return; }
@@ -550,11 +551,12 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
   }, [kartAnahtari, MACHINE, depo]);
   // "Aç": iş o kartla açılır (başlatılmaz); aynı işte başka kart seçilirse iş o kartla sürer.
   const kartlaAc = (i: number, k: Pick<RefakatKarti, 'id' | 'etiket'>, onEk = '') => {
-    const basladi = isBasladiMi(isler[i]!.state);
+    const hedef = isler[i]!;
+    const basladi = isBasladiMi(hedef.state);
     isGecIste(i, () => {
-      islerYaz((l) => l.map((x, j) => (j === i ? { ...x, ...(basladi && x.kart != null ? {} : { kart: k.id }), fresh: false } : x)));
+      islerYaz((l) => l.map((x, j) => (j === i ? { ...x, kart: k.id, fresh: false } : x)));
       mvYaz('prod');
-      say(basladi ? `${onEk}İş zaten başladı: ${isler[i]!.no} · ekrana getirildi` : `${onEk}İş emri açıldı: ${isler[i]!.no} · ${k.etiket}`, 'check', 'run');
+      say(`${onEk}${basladi ? basladiIletisi(hedef.no, kartEtiketi(hedef.kart), k.etiket) : `İş emri açıldı: ${hedef.no} · ${k.etiket}`}`, 'check', 'run');
     });
   };
   // 1337 a: el okuyucuyla okutulan refakat kartı işi o kartla açar, başlatmaz (1062). Özet açıksa kapanır; başka pencere açıkken dinlenmez.

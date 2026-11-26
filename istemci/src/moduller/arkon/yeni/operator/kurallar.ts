@@ -407,6 +407,12 @@ export function cubukDugmeleri(durum: string, beklemede = false): SabitDugme[] {
 // Durum düğmesinin geri alınabilir iletisi ve simgesi (act içindeki sözlükler).
 // 3744: hazırlıkta, çalışan, duraklamış ya da duruştaki iş başlamıştır; refakat kartıyla açılması yeniden başlatma değildir.
 export const isBasladiMi = (durum: string): boolean => durum !== 'queued' && durum !== 'done';
+// 3744 Risk R1: başlamış işte kart okutmak yeniden başlatma değildir. Aynı kart ekrana getirir; başka kart sayımın kartını değiştirir
+// (kart doldu, sıradaki kart) ve bu açıkça söylenir ki operatör hangi kartla saydığını bilsin.
+export function basladiIletisi(no: string, eski: string | null, yeni: string | null): string {
+  if (eski && yeni && eski !== yeni) return `Sayım kartı değişti: ${eski} → ${yeni} · ${no} zaten başlamıştı`;
+  return `İş zaten başladı: ${no} · ekrana getirildi${eski ?? yeni ? ` · sayım kartı ${eski ?? yeni}` : ''}`;
+}
 export const DURUM_ILETISI: Readonly<Record<string, string>> = { start: 'Üretim başladı', resume: 'Üretime devam', restart: 'Yeniden başlatıldı', pause: 'İş duraklatıldı', setup: 'Hazırlık süresi başladı' };
 export const DURUM_SIMGESI: Readonly<Record<string, SimgeAdi>> = { pause: 'pause', setup: 'wrench' };
 export const EYLEM_DURUMU: Readonly<Record<string, 'running' | 'paused' | 'setup'>> = { start: 'running', resume: 'running', restart: 'running', pause: 'paused', setup: 'setup' };

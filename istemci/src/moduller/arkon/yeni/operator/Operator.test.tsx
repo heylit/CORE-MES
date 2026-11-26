@@ -855,7 +855,7 @@ describe('A1 Üretim Terminali el okuyucu (1337 a)', () => {
     await waitFor(() => { expect(olaylar(istekler).some((e) => e.state === 'running')).toBe(true); }, { timeout: 10000 });
     const baslatma = olaylar(istekler).filter((e) => e.state === 'running').length;
     okut('RP:4');
-    expect(await screen.findByText(/İş zaten başladı: UE-DENEME-8 · ekrana getirildi/, {}, { timeout: 10000 })).toBeTruthy();
+    expect(await screen.findByText(/İş zaten başladı: UE-DENEME-8 · ekrana getirildi · sayım kartı UE-DENEME-8-P4/, {}, { timeout: 10000 })).toBeTruthy();
     await new Promise((r) => setTimeout(r, 700));
     expect(olaylar(istekler).filter((e) => e.state === 'running')).toHaveLength(baslatma);
   }, 40000);
