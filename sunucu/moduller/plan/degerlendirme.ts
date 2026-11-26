@@ -16,7 +16,7 @@ import { planGirdisi, type KaynakOkumasi } from './plan-girdisi.ts';
 import { planlamaGirdisi, type PlanCozumKaynagi } from './planlama-servis.ts';
 import { mesaiSaatGirdisi } from './mesai-maliyeti.ts';
 import { izlemeIletisi } from './isci-iletisi.ts';
-import { hataSonucu, hesapBasladi, isciSinirlari, type HesapSonucu } from './isci-izleme.ts';
+import { beklerkenBitti, hataSonucu, hesapBasladi, isciSinirlari, isciYeriIste, type HesapSonucu } from './isci-izleme.ts';
 
 // Planlama değerlendirmesi (Soru 357 a): planlama sayfasının tarayıcıda motoru koşturan kartları burada, sayfanın motor kancaları
 // (motor/kancalar.js) ve kart hesaplarıyla (motor/degerlendir.js) koşar. Girdi planlama çalışması ucunun birleştirdiğidir (288 a);
@@ -85,18 +85,34 @@ async function kosustur(girdi: DegerlendirmeGirdisi, simdi: number, sureMs: numb
 function calistir(girdi: DegerlendirmeGirdisi, simdi: number, sureMs: number): Promise<DegerlendirmeDonusu> {
   const son = Date.now() + sureMs;
   return new Promise((coz, reddet) => {
-    const isci = new Worker(ISCI, { eval: true, resourceLimits: isciSinirlari(), workerData: { kod: degerlendirmeKodu(), dilim: TESIS_SAAT_DILIMI, simdi, girdi, birlestirmeAdresi: BIRLESTIRME_ADRESI } });
+    // Süre ortak sınırdaki yer beklemesini de kapsar (3723).
+    const yer = isciYeriIste();
+    let isci: Worker | null = null;
+    let bitir: ((sonuc: HesapSonucu) => void) | null = null;
     let bitti = false;
-    const bitir = hesapBasladi('degerlendirme');
-    const sonlan = (f: () => void, sonuc: HesapSonucu = 'hata'): void => { if (bitti) return; bitti = true; clearTimeout(sayac); bitir(sonuc); f(); void isci.terminate(); };
+    const sonlan = (f: () => void, sonuc: HesapSonucu = 'hata'): void => {
+      if (bitti) return;
+      bitti = true;
+      clearTimeout(sayac);
+      if (bitir !== null) bitir(sonuc); else beklerkenBitti('degerlendirme', sonuc);
+      yer.birak();
+      f();
+      if (isci !== null) void isci.terminate();
+    };
     const sayac = setTimeout(() => sonlan(() => reddet(mesgul(`Planlama değerlendirmesi ${String(sureMs)} ms içinde bitmedi; daha az seçenekle ya da biraz sonra yeniden deneyin.`)), 'zaman-asimi'), sureMs);
-    isci.on('message', (s: DegerlendirmeDonusu) => { if (!izlemeIletisi(s)) sonlan(() => coz(s), 'tamam'); });
-    // 1720: tipli dilimle iş parçacığı hata verirse aynı girdi eski yolla, kalan sürede yeniden koşar (bayrak kapalıymış gibi).
-    isci.once('error', (e) => sonlan(() => {
-      if (girdi.kaynakDilimi) calistir({ ...girdi, kaynakDilimi: null }, simdi, Math.max(1, son - Date.now())).then(coz, reddet);
-      else reddet(e);
-    }, hataSonucu(e)));
-    isci.once('exit', (kodu) => sonlan(() => reddet(new Error(`Planlama değerlendirmesi iş parçacığı ${String(kodu)} koduyla kapandı.`))));
+    void yer.hazir.then(() => {
+      if (bitti) return;
+      const w = new Worker(ISCI, { eval: true, resourceLimits: isciSinirlari(), workerData: { kod: degerlendirmeKodu(), dilim: TESIS_SAAT_DILIMI, simdi, girdi, birlestirmeAdresi: BIRLESTIRME_ADRESI } });
+      isci = w;
+      bitir = hesapBasladi('degerlendirme');
+      w.on('message', (s: DegerlendirmeDonusu) => { if (!izlemeIletisi(s)) sonlan(() => coz(s), 'tamam'); });
+      // 1720: tipli dilimle iş parçacığı hata verirse aynı girdi eski yolla, kalan sürede yeniden koşar (bayrak kapalıymış gibi).
+      w.once('error', (e) => sonlan(() => {
+        if (girdi.kaynakDilimi) calistir({ ...girdi, kaynakDilimi: null }, simdi, Math.max(1, son - Date.now())).then(coz, reddet);
+        else reddet(e);
+      }, hataSonucu(e)));
+      w.once('exit', (kodu) => sonlan(() => reddet(new Error(`Planlama değerlendirmesi iş parçacığı ${String(kodu)} koduyla kapandı.`))));
+    }).catch((e: unknown) => { sonlan(() => reddet(e instanceof Error ? e : new Error(String(e)))); });
   });
 }
 

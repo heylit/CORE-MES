@@ -57,7 +57,7 @@ export function IstasyonDuzenleyici({ paket, yama }: { paket: Pkg; yama: Yama })
           {kaynak && (
             <div className="tc-ay2-kaynak" data-ton={kaynak.ton} role="status">
               <Simge ad="route" /><b>{kaynak.metin}</b>{kaynak.alt && <small>{kaynak.alt}</small>}
-              {kaynak.ton === 'el' && yeniden && (
+              {(kaynak.ton === 'el' || kaynak.ton === 'oneri') && yeniden && (
                 <Dugme tur="ikincil" simge="route" onClick={() => {
                   const geri = { st: paket.st, target: paket.target, otoKaynak: (paket as { otoKaynak?: unknown }).otoKaynak } as Partial<Pkg>;
                   yama(yeniden); bildir('tamam', 'Liste rotaya göre yeniden dolduruldu', { eylem: { etiket: 'Geri al', yap: () => yama(geri) } });

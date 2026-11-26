@@ -26,8 +26,11 @@ describe('depo paketi rotadan dolar', () => {
     expect(depoDoldurma(paket({ otoKaynak: { depo: { kaynak: 'rota' } } }))).toBeNull();
     expect(depoDoldurma(paket({ st: { mode: 'receive', items: [] } }))).toBeNull();
     expect(depoDoldurma(paket({ opType: 'cnc' }))).toBeNull();
-    // Risk R2: yayındaki boş paket açılışta dolmaz.
-    expect(depoDoldurma(paket({ status: 'published' }))).toBeNull();
+    // Risk R2: yayındaki boş paket açılışta dolmaz; kaynak satırı öneriyi gösterir ve yeniden uygulama sunulur (Test1 K1).
+    const yayinda = paket({ status: 'published' });
+    expect(depoDoldurma(yayinda)).toBeNull();
+    expect(depoKaynakSatiri(yayinda as never)).toEqual({ metin: 'Rota önerisi uygulanmadı', alt: 'rota önerisi: ara stok (kabul)', ton: 'oneri' });
+    expect(depoYenidenUygula(yayinda)).not.toBeNull();
   });
   it('rota önerisi yoksa ya da boşsa doldurulmaz ve satır "çıkarılamadı" der; bozuk öneri okunmaz', () => {
     expect(depoDoldurma(paket({ tmi: {} }))).toBeNull();

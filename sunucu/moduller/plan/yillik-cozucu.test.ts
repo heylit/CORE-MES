@@ -53,7 +53,7 @@ describe('yıllık plan çözücüsü', () => {
     assert.throws(() => yillikCozDurumu(1, is), /bulunamadı/);
   });
 
-  test('YC-05: kişi başına tek çözüm, sunucuda en çok iki; hata sonucu iletisiyle döner; okunmayan sonuç süresi dolunca silinir', async () => {
+  test('YC-05: kişi başına tek çözüm, sunucuda en çok ESZAMANLI_AZAMI; hata sonucu iletisiyle döner; okunmayan sonuç süresi dolunca silinir', async () => {
     const asili = () => new Promise<YillikCozumu>(() => undefined);
     const g = { lp: LP, sure: 5, want: [] };
     yillikCozBaslat(1, g, Date.now(), asili);

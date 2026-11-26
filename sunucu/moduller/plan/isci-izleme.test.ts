@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { Worker } from 'node:worker_threads';
-import { ISCI_BELLEK_SINIRI_MB, hataSonucu, hesapBasladi, isciSinirlari, planHesapDurumu } from './isci-izleme.ts';
+import { ISCI_BELLEK_SINIRI_MB, ISCI_HAVUZU, beklerkenBitti, hataSonucu, hesapBasladi, isciSinirlari, isciYeriIste, planHesapDurumu, yerHavuzu } from './isci-izleme.ts';
+import { teklifDenemesi } from './teklif-denemesi.ts';
 
 describe('plan iş parçacığı izlemesi', () => {
   test('hesap sayaçları: çalışan, toplam, zaman aşımı, bellek ve süre; sıfır uydurulmaz', () => {
@@ -24,5 +25,45 @@ describe('plan iş parçacığı izlemesi', () => {
     assert.equal(hataSonucu(hata), 'bellek');
     assert.equal(hataSonucu(new Error('x')), 'hata');
     assert.equal(ISCI_BELLEK_SINIRI_MB, 2048);
+  });
+
+  test('ortak sınır: en çok sınır kadar yer verilir, sıradaki geliş sırasıyla alır, bekleyen vazgeçebilir', async () => {
+    const h = yerHavuzu(2);
+    const alinan: string[] = [];
+    const a = h.yerIste(); const b = h.yerIste(); const c = h.yerIste(); const d = h.yerIste(); const e = h.yerIste();
+    for (const [ad, y] of [['a', a], ['b', b], ['c', c], ['d', d], ['e', e]] as const) void y.hazir.then(() => { alinan.push(ad); });
+    await new Promise((coz) => setImmediate(coz));
+    assert.deepEqual(alinan, ['a', 'b']);
+    assert.deepEqual(h.durum(), { calisan: 2, bekleyen: 3 });
+    d.birak();
+    assert.deepEqual(h.durum(), { calisan: 2, bekleyen: 2 });
+    a.birak();
+    a.birak();
+    await new Promise((coz) => setImmediate(coz));
+    assert.deepEqual(alinan, ['a', 'b', 'c']);
+    b.birak();
+    await new Promise((coz) => setImmediate(coz));
+    assert.deepEqual(alinan, ['a', 'b', 'c', 'e']);
+    c.birak(); e.birak();
+    assert.deepEqual(h.durum(), { calisan: 0, bekleyen: 0 });
+  });
+
+  test('ortak havuz 4 yerdir; dolu havuzda bekleyen hesap süresi dolunca iş parçacığı açmadan zaman aşımı sayılır, kurulamayan hata', async () => {
+    assert.equal(ISCI_HAVUZU, 4);
+    const dolu = Array.from({ length: ISCI_HAVUZU }, () => isciYeriIste());
+    await Promise.all(dolu.map((y) => y.hazir));
+    const once = planHesapDurumu().teklif;
+    await assert.rejects(teklifDenemesi({} as never, 30), /ms içinde bitmedi/);
+    const sonra = planHesapDurumu().teklif;
+    assert.deepEqual({ c: sonra.calisan, t: sonra.toplam - once.toplam, z: sonra.zamanAsimi - once.zamanAsimi, h: sonra.hata - once.hata, s: sonra.sonSureMs },
+      { c: 0, t: 1, z: 1, h: 0, s: once.sonSureMs });
+    for (const y of dolu) y.birak();
+    const bos = isciYeriIste();
+    await bos.hazir;
+    bos.birak();
+    const d0 = planHesapDurumu().degerlendirme;
+    beklerkenBitti('degerlendirme', 'hata');
+    const d1 = planHesapDurumu().degerlendirme;
+    assert.deepEqual({ t: d1.toplam - d0.toplam, z: d1.zamanAsimi - d0.zamanAsimi, h: d1.hata - d0.hata }, { t: 1, z: 0, h: 1 });
   });
 });

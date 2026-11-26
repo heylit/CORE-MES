@@ -39,7 +39,7 @@ import { useStudyoParcasi } from '../../../kalite-merkezi/disari.ts';
 import { useYetki } from '../../../../ortak/veri/yetki.ts';
 import { KuralSekmesi } from './KuralSekmesi.tsx';
 import { depoDoldurma,
-  ADIM_SABLONLARI, IS_TURLERI, PAKET_DURUMLARI, SIKLIKLAR, TMI_KILIT, VARSAYILAN_AYARLAR, isTuru, numunePlani, numunePlaniYaz,
+  IS_TURLERI, PAKET_DURUMLARI, SIKLIKLAR, TMI_KILIT, VARSAYILAN_AYARLAR, isTuru, numunePlani, numunePlaniYaz,
   olcumYontemi, onayBekliyor, onayGerekir, onayReddedildi, onayli, kmBagsizUyarisiGerekir, paketDenetimi, paketKartDurumu, planYokUyarisiGerekir, tmiIsEmri, yeniKimlik,
   beklemeEki, planDisiEki, geriCekilebilir, takipSuzgeciOku, topluGeriCekilebilir, type TakipSuzgeci,
 } from './kurallar.ts';
@@ -47,13 +47,13 @@ import { HazirlikListesi } from '../operator/HazirlikListesi.tsx';
 import { EkHazirlikMaddeleri } from './EkHazirlikMaddeleri.tsx';
 import { MatrisGorunumu } from './MatrisGorunumu.tsx';
 import { HazirlikPaketCipi, paketHazirligi, paketIsEmriId, useHazirlikOzeti } from './HazirlikTakibi.tsx';
-import { TalimatSekmesi, talimatSayisi, useTalimatOkuma } from './TalimatSekmesi.tsx';
+import { TalimatVeAdimlar, talimatSayisi, useTalimatOkuma } from './TalimatSekmesi.tsx';
 import { NumuneSekmesi } from './NumuneSekmesi.tsx';
 import { PlanCipi } from './PlanCipi.tsx';
 import { GeriCekPenceresi, TakipTablosu } from './TakipTablosu.tsx';
 import { BenzerPaketPenceresi, TopluBenzerPenceresi, TopluGonderPenceresi, topluDoldurmaPlani, type GonderimIlerlemesi, type TopluDoldurmaSatiri } from './TopluPencereler.tsx';
 import { benzerKopya, enIyiAday, gelecekler, gidecekMi, gonderimHali, icerikDolu, topluGonderilebilir, varsayilanKopya, type KopyaAlani } from './toplu.ts';
-import type { OpType, Pkg, PkgFile, PlanItem, Result, SampleRequest, Step, Ton } from './tipler.ts';
+import type { OpType, Pkg, PkgFile, PlanItem, Result, SampleRequest, Ton } from './tipler.ts';
 import './hazirlik.css';
 
 // Çizim parçası (A5) ağırdır; yalnız Dokümanlar ve Kontrol planı sekmesi açılınca yüklenir.
@@ -78,7 +78,7 @@ const MerkezDurumu = lazy(async () => {
 // Üretim Terminali Hazırlık (hazirlik.ts PrepApp). Paket TMI'de emir açılınca oluşur; burada resim, kontrol planı, adım, kural ve
 // istasyon ayarı hazırlanır ve operatöre yayınlanır. Değişiklik yarım saniye sonra cihaza ve sunucuya yazılır (eskisi gibi).
 
-type Sekme = 'info' | 'tl' | 'docs' | 'st' | 'plan' | 'samp' | 'steps' | 'rules' | 'pub';
+type Sekme = 'info' | 'docs' | 'st' | 'plan' | 'samp' | 'steps' | 'rules' | 'pub';
 // 3111: aynı paketler iki görünümde: kart listesi ve ayrıntı (bugünkü) ya da emir ve adım sırasıyla takip tablosu.
 type Gorunum = 'paket' | 'tablo' | 'matris';
 const GORUNUMLER: readonly (readonly [Gorunum, string, SimgeAdi])[] = [['paket', 'Kartlar', 'list'], ['tablo', 'Liste', 'grid'], ['matris', 'Matris', 'clipboard-check']];
@@ -122,8 +122,6 @@ async function hazirVeri(depo: ArkonDeposu, n: Pkg): Promise<Record<string, unkn
   return hazir;
 }
 const paketAdiKisa = (p: Pkg) => `${p.no} · ${p.op || 'Operasyon girilmedi'}`;
-// Adımın "zorunlu" alanı kayıtta eskisi gibi true/false yazılır (modelde sayı tiplidir, okuyan ekranlar doğruluğuna bakar).
-const zorunlu = (v: boolean): Step['r'] => v as unknown as Step['r'];
 
 function indir(ad: string, veri: string, tur: string) {
   const url = URL.createObjectURL(new Blob([veri], { type: tur }));
@@ -158,6 +156,12 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
   const hz = useHazirlikOzeti(paketler);
   const [secili, seciliYaz] = useState<Pkg | null>(null);
   const [sekme, sekmeYaz] = useState<Sekme>('info');
+  // Dar ekranda adım şeridi yatay kayar; seçili sekme görünür kalsın diye yalnız şerit kaydırılır (sayfa dikeyde oynamaz).
+  const adimSeridi = useRef<HTMLOListElement>(null);
+  useEffect(() => {
+    const ol = adimSeridi.current; const b = ol?.querySelector<HTMLElement>('[aria-current="step"]');
+    if (ol && b && (b.offsetLeft < ol.scrollLeft || b.offsetLeft + b.offsetWidth > ol.scrollLeft + ol.clientWidth)) ol.scrollLeft = Math.max(0, b.offsetLeft - ol.offsetLeft);
+  }, [sekme]);
   const [duzenAcik, duzenAcikYaz] = useState(false);
   const [ara, araYaz] = useState('');
   const [grup, grupYaz] = useState<PaketGrubu>(() => paketGrubuOku(yerel.oku('prepGrup')));
@@ -649,10 +653,10 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
   const talimat = useTalimatOkuma(p);
   const talimatN = talimatSayisi(talimat);
   const SEKMELER = ([
-    { id: 'info', l: 'Bilgiler' }, { id: 'tl', l: 'Talimatlar' }, { id: 'docs', l: 'Dokümanlar' },
+    { id: 'info', l: 'Bilgiler' }, { id: 'steps', l: 'Talimat ve adımlar' }, { id: 'docs', l: 'Dokümanlar' },
     p && tur !== 'cnc' ? { id: 'st', l: IS_TURLERI[tur].tab || IS_TURLERI[tur].l } : null,
     { id: 'plan', l: 'Kontrol planı' }, p && tur === 'cnc' ? { id: 'samp', l: 'Numune' } : null,
-    { id: 'steps', l: 'Adımlar' }, { id: 'rules', l: 'Kurallar' }, { id: 'pub', l: 'Terminale gönder' },
+    { id: 'rules', l: 'Kurallar' }, { id: 'pub', l: 'Terminale gönder' },
   ] as const).filter((x): x is { id: Sekme; l: string } => x !== null);
   const res = p ? sonuclar[p.id] : undefined;
   const hzSecili = p ? paketHazirligi(hz.harita, p) : null;
@@ -766,7 +770,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
             </div>
           ) : null}
           {gorunum === 'matris' ? (
-            <MatrisGorunumu paketler={liste} hazirlik={hz.harita} seciliId={duzenAcik && p ? p.id : null} ac={(x, hucre, el, madde) => { sonTik.current = el; void sec(x, hucre ? (madde === 'talimat' ? 'tl' : 'pub') : 'info'); }} />
+            <MatrisGorunumu paketler={liste} hazirlik={hz.harita} seciliId={duzenAcik && p ? p.id : null} ac={(x, hucre, el, madde) => { sonTik.current = el; void sec(x, hucre ? (madde === 'talimat' ? 'steps' : 'pub') : 'info'); }} />
           ) : gorunum === 'tablo' ? (
             <TakipTablosu
               paketler={liste} sonuclar={sonuclar} hazirlik={hz.harita} hazirlikOkundu={hz.zaman !== null} suz={takipSuz} suzYaz={takipSuzSec} yayinlar={yayinlar}
@@ -811,20 +815,20 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
               </div>
             </div>
             <KmPlanBilgisi p={p} karar={kmKarari} okunamadi={kmOkunamadi} yetkisiz={kmYetkisiz} resimler={() => sekmeYaz('docs')} al={duzenler ? (r) => { void kmdenAl(r); } : undefined} />
-            <ol className="tc-ay2-adimlar" aria-label="Hazırlık adımları">
+            <ol ref={adimSeridi} className="tc-ay2-adimlar" aria-label="Hazırlık adımları">
               {SEKMELER.map((t, i) => {
-                const ok = t.id !== 'pub' && t.id !== 'tl' && tamam(t.id);
+                const ok = t.id !== 'pub' && tamam(t.id);
                 return (
                   <li key={t.id}>
                     <button type="button" aria-current={sekme === t.id ? 'step' : undefined} data-tamam={ok ? '' : undefined} onClick={() => sekmeYaz(t.id)}>
-                      <span className="tc-ay2-adim-no">{ok ? <Simge ad="check" boyut="k" /> : i + 1}</span>{t.l}{t.id === 'tl' && talimatN !== null ? <em className="tc-ay2-rozet-sayi">{talimatN}</em> : null}
+                      <span className="tc-ay2-adim-no">{ok ? <Simge ad="check" boyut="k" /> : i + 1}</span>{t.l}{t.id === 'steps' ? <em className="tc-ay2-rozet-ikili">{talimatN !== null ? `${String(talimatN)} talimat · ` : ''}{String(p.steps.length)} adım</em> : null}
                     </button>
                   </li>
                 );
               })}
             </ol>
-            <fieldset className="tc-ay2-sekme" disabled={!duzenler && sekme !== 'pub' && sekme !== 'tl'}>
-              {!duzenler && sekme !== 'pub' && sekme !== 'tl' ? <p className="tc-ay2-bilgi"><Simge ad="lock" /><span>Paketi düzenleme yetkin yok; yalnız görüntülenir.</span></p> : null}
+            <fieldset className="tc-ay2-sekme" disabled={!duzenler && sekme !== 'pub' && sekme !== 'steps'}>
+              {!duzenler && sekme !== 'pub' && sekme !== 'steps' ? <p className="tc-ay2-bilgi"><Simge ad="lock" /><span>Paketi düzenleme yetkin yok; yalnız görüntülenir.</span></p> : null}
               {sekme === 'info' && seritAday ? (
                 <div className="tc-ay2-benzer-serit" role="note">
                   <Simge ad="layers" />
@@ -873,55 +877,56 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                   </Alan>
                 </div>
               ) : null}
-              {sekme === 'tl' ? <TalimatSekmesi paket={p} d={talimat} /> : null}
+              {sekme === 'steps' ? <TalimatVeAdimlar paket={p} d={talimat} duzenler={duzenler} yama={yama} /> : null}
               {sekme === 'docs' ? (
                 <div className="tc-ay2-kurallar">
-                  {kmPaket && typeof p.malzemeNo === 'number' ? (
-                    <KaliteMerkeziCizimleri p={p} malzemeNo={p.malzemeNo} duzenler={duzenler} mesgul={merkezMesgul} al={(r) => { void kmdenAl(r); }} />
-                  ) : null}
-                  {sunucuda ? (
-                    <section className="tc-ay2-kart tc-ay2-genis" aria-label="Çizim Merkezi’nden">
-                      <div className="tc-ay2-kb">
-                        <span className="tc-ay2-kb-simge" data-ton="done"><Simge ad="layers" /></span>
-                        <div><b>Çizim Merkezi’nden</b><small>Yayındaki PDF ve 3B model · merkezde yeni revizyon yayınlanınca burada görünür</small></div>
-                        <Dugme tur="ikincil" simge="plus" onClick={() => merkezSecYaz(true)}>Çizim Merkezi’nden ekle</Dugme>
+                  {/* 3688 d4 (seçenek A): pakette olan bir kartta, alınacak kaynaklar ötekinde; format rehberi katlı. */}
+                  <section className="tc-ay2-kart tc-ay2-genis" aria-label="Paketteki dosyalar">
+                    <div className="tc-ay2-kb"><div><b>Paketteki dosyalar</b><small>Operatörün gördüğü resim ve model</small></div></div>
+                    {([['pdf', 'PDF', 'Teknik resim', pdfF], ['model', '3B', '3B model', mdlF]] as const).map(([k, kisa, ad, f]) => (
+                      <div key={k} className="tc-ay2-dosya" role="group" aria-label={ad}>
+                        <span className="tc-ay2-dosya-turu" data-tur={k}>{kisa}</span>
+                        {f ? (
+                          <>
+                            <b>{f.name}</b><span>{boyutMetni(dosyaBoyu(f))}</span>{p.primary === f.name ? <span className="tc-ay2-ana-isaret">★ Ana resim</span> : null}
+                            {sunucuda ? <Suspense fallback={null}><MerkezDurumu f={f} mesgul={merkezMesgul} guncelle={(g) => { void merkezdenAl(Number(g.merkez), true); }} /></Suspense> : null}
+                            <button type="button" className="tc-ay2-arac" aria-label={ad + ' kaldır'} onClick={() => dosyaKaldir(k)}><Simge ad="trash" /></button>
+                          </>
+                        ) : <span className="tc-ay2-soluk">{MERKEZDEN_EKLENIR}</span>}
                       </div>
-                    </section>
-                  ) : null}
-                  {merkezSec ? <Suspense fallback={null}><MerkezSecici sec={(b) => merkezdenAl(b.id, false)} kapat={() => merkezSecYaz(false)} malzeme={p.malzemeNo ?? null} /></Suspense> : null}
-                  {([['pdf', 'PDF', 'Teknik resim', "CAD'den çıkmış PDF · ölçüler otomatik okunur", pdfF], ['model', '3B', '3B model', 'STEP önerilir · IGES, STL de olur', mdlF]] as const).map(([k, kisa, ad, acik, f]) => (
-                    <section key={k} className="tc-ay2-kart" aria-label={ad}>
-                      <div className="tc-ay2-kb"><span className="tc-ay2-dosya-turu" data-tur={k}>{kisa}</span><div><b>{ad}</b><small>{acik}</small></div></div>
-                      {f ? (
-                        <div className="tc-ay2-dosya">
-                          <Simge ad="check" /><b>{f.name}</b><span>{boyutMetni(dosyaBoyu(f))}</span>
-                          {sunucuda ? <Suspense fallback={null}><MerkezDurumu f={f} mesgul={merkezMesgul} guncelle={(g) => { void merkezdenAl(Number(g.merkez), true); }} /></Suspense> : null}
-                          <button type="button" className="tc-ay2-arac" aria-label={ad + ' kaldır'} onClick={() => dosyaKaldir(k)}><Simge ad="trash" /></button>
-                        </div>
-                      ) : <p className="tc-ay2-soluk">{MERKEZDEN_EKLENIR}</p>}
-                    </section>
-                  ))}
-                  <section className="tc-ay2-kart tc-ay2-genis" aria-label="Operatör ekranında ana resim">
-                    <span className="tc-ay2-ust-yazi">Operatör ekranında ana resim</span>
-                    {p.files.length ? (
-                      <Bolmeli
-                        etiket="Ana resim" deger={p.primary || ''} secenekler={p.files.map((f) => [f.name, f.kind === 'pdf' ? 'PDF · ' + f.name : 'Modelden üret · ' + f.name] as const)}
-                        degistir={(ad) => yama({ primary: ad, ...(ad !== p.primary ? { plan: [], kmResim: null, ...kmElle(p) } : {}) })}
-                      />
-                    ) : <span className="tc-ay2-soluk">Önce dosya ekle</span>}
-                    <p className="tc-ay2-soluk">Ana resmi değiştirirsen kontrol planı sıfırlanır (balonlar resme bağlıdır).</p>
-                  </section>
-                  <section className="tc-ay2-kart tc-ay2-genis" aria-label="Hangi 3B format?">
-                    <span className="tc-ay2-ust-yazi">Hangi 3B format?</span>
-                    <div className="tc-ay2-formatlar">
-                      {([
-                        ['STEP AP242 / AP214', 'Önerilen', 'Tam (B-rep) geometri. Çaplar, delikler, kademeler hassas okunur; teknik resim ve ölçüler üretilir. Tüm CAD\'ler verir.', 'run'],
-                        ['IGES', 'Olur', 'Eski ama yaygın; yüzey tabanlı, bazen boşluklu. STEP yoksa kullan.', 'hold'],
-                        ['STL', 'Sadece görüntü', 'Üçgen ağ; ölçüler yaklaşık. Görselleştirme için yeterli, ölçüm kaynağı olmamalı.', 'hold'],
-                        ['SLDPRT, IPT, CATPart…', 'Desteklenmez', 'Üretici formatları kapalı; CAD\'den STEP olarak dışa aktar.', 'stop'],
-                      ] as const).map(([a, b, c, t]) => <div key={a}><b>{a}</b><Cip ton={t}>{b}</Cip><p>{c}</p></div>)}
+                    ))}
+                    <div className="tc-ay2-ana-resim">
+                      <span className="tc-ay2-ust-yazi">Operatör ekranında ana resim</span>
+                      {p.files.length ? (
+                        <Bolmeli
+                          etiket="Ana resim" deger={p.primary || ''} secenekler={p.files.map((f) => [f.name, f.kind === 'pdf' ? 'PDF · ' + f.name : 'Modelden üret · ' + f.name] as const)}
+                          degistir={(ad) => yama({ primary: ad, ...(ad !== p.primary ? { plan: [], kmResim: null, ...kmElle(p) } : {}) })}
+                        />
+                      ) : <span className="tc-ay2-soluk">Önce dosya ekle</span>}
+                      {duzenler && p.files.length ? <p className="tc-ay2-soluk">Ana resmi değiştirirsen kontrol planı sıfırlanır (balonlar resme bağlıdır).</p> : null}
                     </div>
                   </section>
+                  <section className="tc-ay2-kart tc-ay2-genis" aria-label="Kaynaktan ekle">
+                    <div className="tc-ay2-kb">
+                      <div><b>Kaynaktan ekle</b><small>Kalite Merkezi ve Çizim Merkezi · merkezde yeni revizyon yayınlanınca burada görünür</small></div>
+                      {sunucuda ? <span className="tc-ay2-sag"><Dugme tur="ikincil" simge="plus" onClick={() => merkezSecYaz(true)}>Çizim Merkezi’nden ekle</Dugme></span> : null}
+                    </div>
+                    {kmPaket && typeof p.malzemeNo === 'number' ? (
+                      <KaliteMerkeziCizimleri p={p} malzemeNo={p.malzemeNo} duzenler={duzenler} mesgul={merkezMesgul} al={(r) => { void kmdenAl(r); }} gomulu />
+                    ) : null}
+                    <details className="tc-ay2-rehber">
+                      <summary>Hangi 3B format? STEP önerilir</summary>
+                      <div className="tc-ay2-formatlar">
+                        {([
+                          ['STEP AP242 / AP214', 'Önerilen', 'Tam (B-rep) geometri. Çaplar, delikler, kademeler hassas okunur; teknik resim ve ölçüler üretilir. Tüm CAD\'ler verir.', 'run'],
+                          ['IGES', 'Olur', 'Eski ama yaygın; yüzey tabanlı, bazen boşluklu. STEP yoksa kullan.', 'hold'],
+                          ['STL', 'Sadece görüntü', 'Üçgen ağ; ölçüler yaklaşık. Görselleştirme için yeterli, ölçüm kaynağı olmamalı.', 'hold'],
+                          ['SLDPRT, IPT, CATPart…', 'Desteklenmez', 'Üretici formatları kapalı; CAD\'den STEP olarak dışa aktar.', 'stop'],
+                        ] as const).map(([a, b, c, t]) => <div key={a}><b>{a}</b><Cip ton={t}>{b}</Cip><p>{c}</p></div>)}
+                      </div>
+                    </details>
+                  </section>
+                  {merkezSec ? <Suspense fallback={null}><MerkezSecici sec={(b) => merkezdenAl(b.id, false)} kapat={() => merkezSecYaz(false)} malzeme={p.malzemeNo ?? null} /></Suspense> : null}
                 </div>
               ) : null}
               {sekme === 'plan' ? (
@@ -1007,39 +1012,6 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                     </div>
                   </section>
                 </div>
-              ) : null}
-              {sekme === 'steps' ? (
-                <section className="tc-ay2-kart" aria-label="Operasyon adımları">
-                  <div className="tc-ay2-kb">
-                    <b>Operasyon adımları</b><span className="tc-ay2-ust-yazi">{p.steps.length} adım</span>
-                    <span className="tc-ay2-sag tc-ay2-satir">
-                      {Object.keys(ADIM_SABLONLARI).map((k) => (
-                        <Dugme key={k} tur="ikincil" simge="plus" onClick={() => yama({ steps: [...p.steps, ...(ADIM_SABLONLARI[k] || []).map((s): Step => ({ id: yeniKimlik(), ...s, r: zorunlu(s.r) }))] })}>{k}</Dugme>
-                      ))}
-                    </span>
-                  </div>
-                  <div className="tc-ay2-adim-listesi">
-                    {p.steps.map((s, i) => {
-                      const adimYaz = (ch: Partial<Step>) => yama({ steps: p.steps.map((x) => (x.id === s.id ? { ...x, ...ch } : x)) });
-                      return (
-                        <div key={s.id} className="tc-ay2-adim">
-                          <span className="tc-ay2-kural-no">{i + 1}</span>
-                          <div className="tc-ay2-adim-alan">
-                            <input className="tc-ay2-kalin" value={s.t} placeholder="Adım başlığı" aria-label="Adım başlığı" onChange={(e) => adimYaz({ t: e.target.value })} />
-                            <input value={s.d || ''} placeholder="Açıklama / değer" aria-label="Açıklama" onChange={(e) => adimYaz({ d: e.target.value })} />
-                          </div>
-                          <button type="button" className="tc-ay2-onay" aria-pressed={!!s.r} onClick={() => adimYaz({ r: zorunlu(!s.r) })}>Zorunlu</button>
-                          <button
-                            type="button" className="tc-ay2-arac" disabled={i === 0} aria-label="Yukarı"
-                            onClick={() => { const a = p.steps.slice(); const u = a[i - 1]; const o = a[i]; if (u && o) { a[i - 1] = o; a[i] = u; yama({ steps: a }); } }}
-                          ><Simge ad="up" /></button>
-                          <button type="button" className="tc-ay2-arac" aria-label="Sil" onClick={() => yama({ steps: p.steps.filter((x) => x.id !== s.id) })}><Simge ad="trash" /></button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <button type="button" className="tc-ay2-ekle" onClick={() => yama({ steps: [...p.steps, { id: yeniKimlik(), t: '', d: '', r: zorunlu(false) }] })}><Simge ad="plus" /><b>Adım ekle</b></button>
-                </section>
               ) : null}
               {sekme === 'st' ? <IstasyonDuzenleyici paket={p} yama={yama} /> : null}
               {sekme === 'rules' ? <KuralSekmesi paket={p} yama={yama} sonuc={res ?? null} /> : null}

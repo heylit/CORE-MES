@@ -170,13 +170,17 @@ export function depoElleYama(p: OtoKaynakluPaket, an: number = Date.now()): Part
   if (o?.kaynak === 'el') return {};
   return { otoKaynak: { ...(nesne(p.otoKaynak) ?? {}), depo: { kaynak: 'el', ...(o?.etiket === undefined ? {} : { etiket: o.etiket }), at: an } } };
 }
-// Kaynak satırının metni ve tonu; tmi önerisi olmayan, şablonsuz ve elle değişmemiş boş pakette "çıkarılamadı" der.
-export function depoKaynakSatiri(p: OtoKaynakluPaket & Pick<Pkg, 'st' | 'opType' | 'id' | 'target'>): { metin: string; alt?: string; ton: 'rota' | 'el' | 'sablon' | 'yok' } | null {
+// Kaynak satırının metni ve tonu. Kendiliğinden dolmamış (yayındaki) boş pakette öneri varsa "uygulanmadı" der ve yeniden uygulama sunulur;
+// tmi önerisi olmayan, şablonsuz ve elle değişmemiş boş pakette "çıkarılamadı" der.
+export function depoKaynakSatiri(p: OtoKaynakluPaket & Pick<Pkg, 'st' | 'opType' | 'id' | 'target'>): { metin: string; alt?: string; ton: 'rota' | 'el' | 'sablon' | 'oneri' | 'yok' } | null {
   const k = depoOtoKaynagi(p);
   if (k?.kaynak === 'rota') return { metin: k.etiket ?? 'Rotadan', ton: 'rota' };
   if (k?.kaynak === 'sablon') return { metin: 'Şablondan', ton: 'sablon' };
   if (k?.kaynak === 'el') return { metin: 'Elle değiştirildi', ...(k.etiket?.startsWith('Rotadan: ') ? { alt: 'rota önerisi: ' + k.etiket.slice(9) } : {}), ton: 'el' };
-  return (istasyonAyari(p).items || []).length === 0 ? { metin: 'Rotadan çıkarılamadı, elle girin', ton: 'yok' } : null;
+  if ((istasyonAyari(p).items || []).length > 0) return null;
+  const o = depoOnerisiOku(p);
+  if (o !== null && o.items.length > 0) return { metin: 'Rota önerisi uygulanmadı', alt: 'rota önerisi: ' + o.etiket.replace(/^Rotadan: /, ''), ton: 'oneri' };
+  return { metin: 'Rotadan çıkarılamadı, elle girin', ton: 'yok' };
 }
 // Yayını durduran kalemler (`istasyonDenetimi` ile aynı ölçü): kodu ya da miktarı boş olanlar.
 export const eksikDepoKalemleri = (kalemler: readonly DepoKalemi[]): string[] => kalemler.filter((i) => !i.code || !(i.qty > 0)).map((i) => i.id);
