@@ -219,9 +219,12 @@
 .tc-smartes-hucre { display: inline-flex; flex-direction: column; align-items: flex-start; gap: var(--b-1); min-width: 0; }
 .tc-smartes-alt { color: var(--muted); font-size: var(--yazi-xs); overflow-wrap: anywhere; text-align: left; }
 .tc-smartes-op { white-space: nowrap; }
-/* Listede uzun neden sütunu genişletmez; alt satırlara sarılır. */
-.tc-smartes-liste { max-width: var(--menu-genis); white-space: normal; }
+/* Listede uzun neden sütunu genişletmez; alt satırlara sarılır. Ad SmartES modülünün iki sütunlu .tc-smartes-liste ızgarasından ayrıdır: o kural buraya uyarsa neden sıfır genişlikte harf harf kırılır. */
+.tc-smartes-emir-liste { max-width: var(--menu-genis); white-space: normal; }
 .tc-smartes-rozet-yok { color: var(--muted); }
+/* Telefon kartında "SmartES: Yeniden denenecek" kart genişliğini aşar: rozet kesilmez, sözcük arasından alt satıra iner. */
+[data-kip="kart"][data-kompakt] .tc-tablo td[data-kart-rozet] .tc-smartes-emir-liste { max-width: 100%; }
+[data-kip="kart"][data-kompakt] .tc-tablo td[data-kart-rozet] .tc-smartes-emir-liste .tc-rozet { white-space: normal; }
 /* Telefon kartında gönderilmeyen emrin "—" işareti yer kaplamaz; okunamadı uyarısı kalır. */
 [data-kip="kart"][data-kompakt] .tc-tablo td[data-kart-rozet]:has(.tc-smartes-rozet-yok[aria-label]) { display: none; }
 /* Kart kompakt kalır: SmartES rozetinin altındaki adım ve neden satırı ayrıntı sayfasında; ekran okuyucuda kalır. */
