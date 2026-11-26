@@ -498,7 +498,7 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
       isGecIste(r.sira, () => {
         mvYaz('prod');
         islerYaz((l) => l.map((x, j) => (j === r.sira ? { ...x, kart, fresh: false } : x)));
-        say(basladi ? basladiIletisi(hedef.no, kartEtiketi(hedef.kart), kartEtiketi(kart)) : `İş emri açıldı: ${hedef.no} · refakat kartıyla`, 'check', 'run');
+        say(basladi ? basladiIletisi(hedef.no, kartAdi(hedef.kart), kartAdi(kart)) : `İş emri açıldı: ${hedef.no} · refakat kartıyla`, 'check', 'run');
       });
       return;
     }
@@ -539,7 +539,8 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
 
   /* refakat kartları: bitmemiş işlerin kartları okunur; okunamazsa liste olduğu gibi kalır, iş kartsız da açılır */
   const [kartlar, kartlarYaz] = useState<RefakatKarti[]>([]);
-  const kartEtiketi = (id: number | null | undefined): string | null => (id == null ? null : kartlar.find((x) => x.id === id)?.etiket ?? null);
+  const kartAdi = (id: number | null | undefined, etiket?: string): { id: number; etiket: string | null } | null =>
+    (id == null ? null : { id, etiket: etiket ?? kartlar.find((x) => x.id === id)?.etiket ?? null });
   const kartAnahtari = pv ? '' : kartEmirleri(isler.map((x) => ({ state: x.state, emirId: tmiEmirId(x.pkg) }))).join(',');
   useEffect(() => {
     if (!kartAnahtari) { kartlarYaz([]); return; }
@@ -556,7 +557,7 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
     isGecIste(i, () => {
       islerYaz((l) => l.map((x, j) => (j === i ? { ...x, kart: k.id, fresh: false } : x)));
       mvYaz('prod');
-      say(`${onEk}${basladi ? basladiIletisi(hedef.no, kartEtiketi(hedef.kart), k.etiket) : `İş emri açıldı: ${hedef.no} · ${k.etiket}`}`, 'check', 'run');
+      say(`${onEk}${basladi ? basladiIletisi(hedef.no, kartAdi(hedef.kart), kartAdi(k.id, k.etiket)) : `İş emri açıldı: ${hedef.no} · ${k.etiket}`}`, 'check', 'run');
     });
   };
   // 1337 a: el okuyucuyla okutulan refakat kartı işi o kartla açar, başlatmaz (1062). Özet açıksa kapanır; başka pencere açıkken dinlenmez.
