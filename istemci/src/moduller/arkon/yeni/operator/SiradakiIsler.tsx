@@ -33,7 +33,10 @@ export function SiradakiKart({ is, siradaki, ekranda, acik, yer, resim, revUyums
           {ekranda ? <span className="tc-ay1-etiket tc-ay1-tcark-ekranda">Ekranda</span> : siradaki ? <span className="tc-ay1-etiket">Sıradaki</span> : null}
           {is.urgent ? <span className="tc-ay1-etiket" data-durum="durdu">Acil</span> : null}
         </span>
+        {/* 3742: telefonda kartı op ayırır; başlık op no ve adı (iki satıra kadar), altında ürün kodu · Rev. Malzeme adı genişte kalır. */}
+        {is.empty ? null : <b className="tc-ay1-sk-op" title={is.op}>{is.op || '—'}</b>}
         <b className="tc-ay1-sk-parca" title={is.part}>{is.part || '—'}</b>
+        {is.empty ? null : <small className="tc-ay1-mono tc-ay1-sk-kod">{[is.pkg?.partNo, is.pkg?.rev ? `Rev ${is.pkg.rev}` : null].filter(Boolean).join(' · ') || '—'}</small>}
         {projeRev ? <small className="tc-ay1-sk-proje" title={projeRev}>{projeRev}</small> : null}
         {is.empty ? null : <small className="tc-ay1-mono tc-ay1-sk-adet">{is.good} / {is.target} adet</small>}
         {revUyumsuz ? <small className="tc-ay1-sk-uyari"><Simge ad="alert" boyut="k" />Rev uyuşmuyor</small> : null}

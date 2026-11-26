@@ -20,9 +20,13 @@ const useIstasyonSepetleri = (istasyonId: number | null, uretimEmriId: number | 
 });
 
 // Terminal çipi için iki sepetin sayısı (aynı okuma, aynı önbellek); okunamadıysa null.
-export function useIstasyonSepetiSayilari(istasyonId: number | null, uretimEmriId: number | null): { gelen: number; cikan: number } | null {
+// 3742: terminalin tüpleri satır değil adet gösterir (gelenAdet: alınabilecek, cikanAdet: teslim edilebilecek).
+export function useIstasyonSepetiSayilari(istasyonId: number | null, uretimEmriId: number | null): { gelen: number; cikan: number; gelenAdet: number; cikanAdet: number } | null {
   const s = useIstasyonSepetleri(istasyonId, uretimEmriId);
-  return s.data ? { gelen: s.data.gelen.bekleyen.length + s.data.gelen.yolda.length, cikan: s.data.cikan.length } : null;
+  if (!s.data) return null;
+  const topla = (l: readonly { miktar: string }[]) => l.reduce((t, x) => t + Number(x.miktar), 0);
+  const d = s.data;
+  return { gelen: d.gelen.bekleyen.length + d.gelen.yolda.length, cikan: d.cikan.length, gelenAdet: topla(d.gelen.bekleyen) + topla(d.gelen.yolda), cikanAdet: topla(d.cikan) };
 }
 
 export function IstasyonSepetleri({ istasyonId, uretimEmriId }: { istasyonId: number; uretimEmriId: number }) {
