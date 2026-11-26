@@ -1,23 +1,23 @@
+import type { Page } from '@playwright/test';
 import { expect, test } from './ortak.ts';
 
-// Adım Durumu (2893, 3581): açık emir listeden seçilir, adımlar tek tabloda satır satır görünür, ayrıntı satırın altında açılır.
-// Dar ekranda (1024 altı) emir seçilince liste gizlenir, "Emirler" düğmesi listeye döner.
+// Adım Durumu (2893, 3581, 3738): tek emrin adımları tek tabloda satır satır görünür, ayrıntı satırın altında açılır. Emir ayrıntısına matristeki
+// hücre panelinin "Emri aç" bağlantısıyla girilir; "Matris" düğmesi matrise döner.
 test.use({ hesap: 'ornek.planlama' });
 
-test('emir seçilir, adımlar ve sayaç görünür, adım ayrıntısı satırın altında açılır', async ({ page, ag, ac }) => {
+const emriAc = async (page: Page, ac: (yol: string) => Promise<void>): Promise<void> => {
   await ac('/adim-durumu');
-  const liste = page.getByRole('list', { name: 'Açık emirler' });
-  const ilk = liste.getByRole('button').first();
-  await expect(ilk).toBeVisible();
-  await ilk.click();
+  await page.getByRole('table').getByRole('button', { name: /^\S+, OP \d+/ }).first().click();
+  await page.getByRole('complementary', { name: 'Adım ayrıntısı' }).getByRole('link', { name: 'Emri aç' }).click();
   await expect(page).toHaveURL(/emir=\d+/);
+};
+
+test('matristen emir açılır, adımlar ve sayaç görünür, adım ayrıntısı satırın altında açılır', async ({ page, ag, ac }) => {
+  await emriAc(page, ac);
 
   const tablo = page.getByRole('table');
   await expect(tablo.getByRole('row').nth(1)).toBeVisible();
   await expect(page.getByRole('list', { name: 'Adım özeti' })).toBeVisible();
-  const dar = (page.viewportSize()?.width ?? 0) < 1024;
-  if (dar) await expect(liste).toBeHidden();
-  else await expect(ilk).toHaveAttribute('aria-current', 'true');
 
   const ac1 = tablo.getByRole('button', { name: /^OP \d+ .* ayrıntısı$/ }).first();
   // 3581 Test B1: tablo kapsayıcısından geniş olmaz (kapalı ve açık satırda), açma düğmesi kesilmez.
@@ -37,46 +37,18 @@ test('emir seçilir, adımlar ve sayaç görünür, adım ayrıntısı satırın
   await expect(ac1).toHaveAttribute('aria-expanded', 'false');
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), 'sayfa yatay taşmaz').toBeLessThanOrEqual(0);
 
-  if (dar) {
-    await page.getByRole('button', { name: 'Emirler' }).click();
-    await expect(liste).toBeVisible();
-    await expect(page).not.toHaveURL(/emir=/);
-  }
+  await page.getByRole('button', { name: 'Matris' }).click();
+  await expect(page.getByRole('region', { name: 'Adım matrisi' })).toBeVisible();
+  await expect(page).not.toHaveURL(/emir=/);
   expect(ag.hatalar).toEqual([]);
   expect(ag.yazmalar, 'okuma ve seçim yazmaz').toEqual([]);
-});
-
-// Uzun emir no kartın dışına taşmaz ve durum etiketiyle üst üste binmez; kısaltılmaz (tamamı okunur).
-test('uzun emir no listede tam okunur, kart dışına taşmaz, etiketle çakışmaz', async ({ page, ag, ac }) => {
-  const uzun = 'ORN-000000-XX-ORN-00001-26-11-002';
-  await page.route('**/api/adimli-emirler', async (r) => {
-    const c = await r.fetch();
-    const g = (await c.json()) as { emirler: { emirNo: string }[] };
-    await r.fulfill({ response: c, json: { ...g, emirler: g.emirler.map((e) => ({ ...e, emirNo: uzun })) } });
-  });
-  await ac('/adim-durumu');
-  const liste = page.getByRole('list', { name: 'Açık emirler' });
-  const kart = liste.getByRole('button').first();
-  await expect(kart).toBeVisible();
-  const kod = kart.locator('.tc-emir-kod');
-  await expect(kod).toHaveText(uzun);
-  const k = await kart.boundingBox();
-  const n = await kod.boundingBox();
-  const r = await kart.locator('.tc-rozet').first().boundingBox();
-  if (!k || !n || !r) throw new Error('kutu yok');
-  expect(n.x + n.width).toBeLessThanOrEqual(k.x + k.width);
-  expect(r.x + r.width).toBeLessThanOrEqual(k.x + k.width);
-  const cakisir = n.x < r.x + r.width && r.x < n.x + n.width && n.y < r.y + r.height && r.y < n.y + n.height;
-  expect(cakisir, 'emir no ile durum etiketi üst üste').toBe(false);
-  expect(ag.hatalar).toEqual([]);
 });
 
 // 3322, 3581 (müdür): hazırlık çipi satırın altını açar; Elle değiştir gerekçe ister, Vazgeç yazmaz. Yazma bu testte yapılmaz.
 test.describe('müdür', () => {
   test.use({ hesap: 'ornek.mudur' });
   test('çipe basılır, ayrıntı ve elle değiştirme alanı açılır, Vazgeç yazmaz', async ({ page, ag, ac }) => {
-    await ac('/adim-durumu');
-    await page.getByRole('list', { name: 'Açık emirler' }).getByRole('button').first().click();
+    await emriAc(page, ac);
     const cip = page.getByRole('table').getByRole('button', { name: /^OP \d+ .*Ayrıntıyı aç$/ }).first();
     await cip.scrollIntoViewIfNeeded();
     await cip.click();
@@ -98,8 +70,7 @@ test.describe('müdür', () => {
 test.describe('müdür, açılan satır', () => {
   test.use({ hesap: 'ornek.mudur' });
   test('satır açılır, madde ekleme penceresi açılıp kapanır, sayfa taşmaz', async ({ page, ag, ac }) => {
-    await ac('/adim-durumu');
-    await page.getByRole('list', { name: 'Açık emirler' }).getByRole('button').first().click();
+    await emriAc(page, ac);
     const tablo = page.getByRole('table');
     const ac1 = tablo.getByRole('button', { name: /^OP \d+ .* ayrıntısı$/ }).first();
     await ac1.click();
@@ -154,8 +125,7 @@ test.describe('müdür, türlü kontrol', () => {
       ];
       await r.fulfill({ response: c, json: { ...g, adimlar: [{ ...ilk, liste, sablon: { id: 990021, kod: 'ORN-HAZ', ad: 'ORN hazırlık' } }, ...kalan] } });
     });
-    await ac('/adim-durumu');
-    await page.getByRole('list', { name: 'Açık emirler' }).getByRole('button').first().click();
+    await emriAc(page, ac);
     const tablo = page.getByRole('table');
     await tablo.getByRole('button', { name: /^OP \d+ .* ayrıntısı$/ }).first().click();
     await expect(tablo.getByText(/25,07 mm · sınır dışı \(\+0,02\)/).filter({ visible: true })).toBeVisible();
