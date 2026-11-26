@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { parcaRevMetni } from '#paylasilan/sozlesme/emir-durumu.ts';
 import type { EmirSecenegi, HazirlikCevabi, KurulumDurumu } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import { Dugme } from '../../../../ortak/arayuz/Dugme.tsx';
 import { Simge } from '../../../../ortak/arayuz/Simge.tsx';
@@ -456,13 +457,15 @@ export function gecerliOnaylar(kayit: HazirlikCevabi | null): HazirlikCevabi['on
   const p = PS();
   return (kayit?.onaylar ?? []).filter((o) => (o.olay === 'tamam' ? p.fin?.sig === o.imza : p.done[o.adim] === o.imza));
 }
+// 3755: emrin parça (çizim) revizyonu; seçimden gelen (alanı taşımayan) emirde gösterilmez.
+const revEki = (e: EmirSecenegi): string => (e.parcaRevizyonu === undefined ? '' : ` · ${parcaRevMetni(e.parcaRevizyonu)}`);
 function OnayKaydi({ kayit, emir }: { kayit: HazirlikCevabi | null; emir: EmirSecenegi | null }) {
   const liste = gecerliOnaylar(kayit), k = kayit?.kurulum ?? null;
   const satir = (sol: string, sag: string, a: string) => <div className="tc-ck-srow" key={a}><span>{sol}</span><b>{sag}</b></div>;
   return (
     <div className="tc-ck-hz-onaylar">
       <div className="tc-ck-sh">Onay kaydı</div>
-      {emir && satir('Üretim emri', `${emir.emirNo} · ${emir.parcaNo}`, 'emir')}
+      {emir && satir('Üretim emri', `${emir.emirNo} · ${emir.parcaNo}${revEki(emir)}`, 'emir')}
       {k && satir('Kurulum tamam', `${k.kisi.ad} · ${saat(k.zaman)}${k.gecerli ? '' : ' (seçimler değişti)'}`, 'kurulum')}
       {liste.length === 0 && satir('Onaylanan adım', 'yok', 'yok')}
       {liste.map((o, i) => satir(adimAdi(o.adim), `${o.kisi.ad} · ${saat(o.zaman)}`, `${o.adim}-${String(i)}`))}
@@ -482,7 +485,7 @@ export function EmirKarti({ emir, acik, kurulum, secebilir = true }: { emir: Emi
     <div className="tc-ck-hz-emir">
       <small>Üretim emri</small>
       <b>{emir === null ? 'Seçilmedi' : `${operasyon(emir)}${acik ? '' : ' (açık değil)'}`}</b>
-      <span>{emir === null ? `${secebilir ? 'Emri Kurulum ekranında seçin' : 'Emri kurulumu yapan kişi Kurulum ekranında seçer'}; hazırlık o emrin kurulumuyla açılır.` : `${emir.parcaNo} ${emir.parcaAd} · ${String(emir.adet)} adet · ${emir.istasyon}`}</span>
+      <span>{emir === null ? `${secebilir ? 'Emri Kurulum ekranında seçin' : 'Emri kurulumu yapan kişi Kurulum ekranında seçer'}; hazırlık o emrin kurulumuyla açılır.` : `${emir.parcaNo}${revEki(emir)} ${emir.parcaAd} · ${String(emir.adet)} adet · ${emir.istasyon}`}</span>
       {emir !== null && <em className={kurulum?.gecerli === true ? 'tamam' : undefined}>{kurulumMetni(emir, kurulum)}</em>}
     </div>
   );

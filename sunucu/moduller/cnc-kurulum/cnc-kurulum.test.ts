@@ -220,7 +220,7 @@ describe('cnc-kurulum kayıt deposu (gerçek PostgreSQL)', () => {
     assert.equal(cevap.statusCode, 200, cevap.body);
     const emirler = (cevap.json() as { emirler: { id: number }[] }).emirler;
     assert.deepEqual(emirler.find((e) => e.id === op10), {
-      id: op10, uretimEmriId: acik, emirNo: `UE-${String(acik).padStart(6, '0')}`, opNo: 10, ad: 'OP10', parcaNo: 'P-CNC', parcaAd: 'Deneme mil', adet: 12, istasyon: 'Deneme torna',
+      id: op10, uretimEmriId: acik, emirNo: `UE-${String(acik).padStart(6, '0')}`, opNo: 10, ad: 'OP10', parcaNo: 'P-CNC', parcaAd: 'Deneme mil', adet: 12, istasyon: 'Deneme torna', parcaRevizyonu: null,
     });
     assert.equal(emirler.some((e) => e.id === op20 || e.id === kapaliOp), false);
     // Talaşlı olmayan (kalite) istasyondaki operasyon listede yoktur ve seçilemez.
