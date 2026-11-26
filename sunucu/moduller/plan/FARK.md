@@ -424,3 +424,9 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
   yerinde kalan bir işle çakışıyorsa bugünkü gibi kuyruktan dizilir. Kuyruğun öteki işleri payın etrafına dizilir.
 - "Malzemeye göre bölme" kartının kuralı depoda yok (DEVIR'de iz bulunmadı); gelirse pay başına malzeme `payHazir`'dadır, ikinci kez yazılmaz.
 - Test: `pay-malzemesi.test.ts` (motor), `bolunmus-canliya-al.test.ts` (gerçek PostgreSQL, yazım ve canlıya alma).
+
+## Pay ilerlemesi Üretim Emirleri'nden (3749; 2026-11-26)
+- `kablolama.ts`: `payIlerlemesiCozucusu` Üretim Emirleri'nin `payIlerlemeleri`ne bağlandı (3681'den beri bağsızdı). `calisanAdimlar` bölünmüş
+  çalışan adımda payların gerçek sayımını taşır; motor (3681 C) bütün sayımı çalışan paya yazmaz, her payın kalanı kendi sayımındandır.
+  Kokpit pay satırlarındaki "sayılan" ve Elle böl kilidi bu sayıdır; 3734-2 taşıması bununla çalışır. Terminal değişmedi.
+- Test: `pay-ilerlemesi-bagi.test.ts` (gerçek PostgreSQL, kablolama ile).
