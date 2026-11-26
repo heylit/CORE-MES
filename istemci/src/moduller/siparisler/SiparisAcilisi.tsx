@@ -27,9 +27,6 @@ export const useSiparisAcilisi = (siparisId: number, acik = true) => useQuery({
   enabled: acik,
 });
 
-// Uzun emir numarası baştan kısaltılır: ayırt eden parça (malzeme, yıl, sıra) sondadır.
-export const kisaEmirNo = (no: string, en = 22): string => (no.length <= en ? no : `…${no.slice(no.length - en + 1)}`);
-
 const malzemeMetni = (s: SiparisAcilisiSatiri): string => [s.malzemeKodu ?? `Kart ${String(s.malzemeNo)}`, s.malzemeAdi].filter(Boolean).join(' · ');
 
 function RotaRozeti({ s }: { s: SiparisAcilisiSatiri }) {
@@ -43,8 +40,9 @@ function RotaRozeti({ s }: { s: SiparisAcilisiSatiri }) {
   return <Rozet ton={s.rota!.elleDustu === true || s.rota!.seriyeDustu === true ? 'uyari' : 'tamam'}>{`${s.rota!.ad} · Rev ${s.rota!.harf}${ek}`}</Rozet>;
 }
 
+// Emir no kısaltılmaz: baştaki malzeme kodu emri ayırt eder; uzun no tirelerden alt satıra geçer.
 const sutunlar = (emirli: boolean): Sutun<SiparisAcilisiSatiri>[] => [
-  ...(emirli ? [{ anahtar: 'emir', baslik: 'Emir', mono: true, kirilmaz: true, hucre: (s: SiparisAcilisiSatiri) => (s.emir === null ? '—' : <span title={s.emir.no}>{kisaEmirNo(s.emir.no)}</span>) }] : []),
+  ...(emirli ? [{ anahtar: 'emir', baslik: 'Emir', mono: true, hucre: (s: SiparisAcilisiSatiri) => (s.emir === null ? '—' : s.emir.no) }] : []),
   { anahtar: 'kalem', baslik: 'Kalem', mono: true, kirilmaz: true, hucre: (s) => s.kalemSira },
   { anahtar: 'malzeme', baslik: 'Malzeme', hucre: malzemeMetni },
   { anahtar: 'tur', baslik: 'Tür', hucre: (s) => EMIR_TURU_ADLARI[s.emirTuru] },

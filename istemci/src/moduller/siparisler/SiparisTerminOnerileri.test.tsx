@@ -55,7 +55,7 @@ describe('Sipariş ayrıntısında termin farkı (3429-3 G)', () => {
   });
 
   it('karar yetkisi yoksa yalnız görünür; okuma yetkisi yoksa (403) ya da fark yoksa bölüm yok', async () => {
-    ciz([], { 'GET /uretim-emirleri/termin-onerileri': () => json(200, { oneriler: [ONERI] }) });
+    ciz(['sayfa.uretim-emirleri'], { 'GET /uretim-emirleri/termin-onerileri': () => json(200, { oneriler: [ONERI] }) });
     expect(await screen.findByText(/sipariş termini 10\.02\.2027/)).toBeTruthy();
     await new Promise((coz) => setTimeout(coz, 20));
     expect(screen.queryByRole('button', { name: /Teslimi|Yoksay/ })).toBeNull();
@@ -68,6 +68,14 @@ describe('Sipariş ayrıntısında termin farkı (3429-3 G)', () => {
     cleanup();
     ciz(['uretim-emirleri.duzenle'], { 'GET /uretim-emirleri/termin-onerileri': () => json(200, { oneriler: [] }) });
     await new Promise((coz) => setTimeout(coz, 20));
+    expect(screen.queryByText('Termin farkı')).toBeNull();
+  });
+
+  it('emir okuma işlemi olmayan kişide (satış) istek hiç gitmez, bölüm yok', async () => {
+    const istekler = ciz(['siparisler.yaz'], { 'GET /uretim-emirleri/termin-onerileri': () => json(200, { oneriler: [ONERI] }) });
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/oturum')).toBe(true));
+    await new Promise((coz) => setTimeout(coz, 20));
+    expect(istekler.some((i) => i.yol.startsWith('/uretim-emirleri/'))).toBe(false);
     expect(screen.queryByText('Termin farkı')).toBeNull();
   });
 });

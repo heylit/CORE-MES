@@ -259,7 +259,7 @@ export function kararSayfasiHTML(r: PurchaseRequest): string {
       <div class="sa-kr-genis">${matris(r, ev, t, kilit)}</div><div class="sa-kr-dar">${liste(r, ev, t, kilit)}</div>
       ${disarida.length ? `<p class="small muted">Değerlendirme dışı: ${disarida.map((x) => `${esc(supName(x.q))} (${x.q.compliant === false ? "teknik uygun değil" : "fiyat girilmemiş"})`).join(", ")}.</p>` : ""}
       ${faizUyarisi(ev.all.filter((x) => x.c.faizYok).map((x) => x.q.currency))}
-      <p class="small muted">Tutarlar KDV hariç. Net maliyet vade etkisi dahil, ${OPEN.includes(r.status) ? "güncel" : "sipariş günü"} kurla TL. ${ik("lira", 12)} her tedarikçinin adım adım hesabını açar.</p></div>
+      <p class="small muted">Tutarlar KDV hariç. Net maliyet vade etkisi dahil, ${OPEN.includes(r.status) ? "güncel" : "sipariş günü"} kurla TL. Her tedarikçinin adım adım hesabı için yanındaki ${ik("lira", 12)} "Hesabı göster" düğmesi.</p></div>
   </section>${kilit ? "" : cubuk(r, ev, t)}`;
 }
 

@@ -36,6 +36,18 @@
 /* Plan canlıyken motorun farkı rozetin altında ayrı satırdır (500 a). */
 .tc-rry-plan-motor { flex-basis: 100%; color: var(--muted); }
 
+/* Ayrıntı düğmesi yalnız dar ekranda görünür. */
+.tc-rry-plan-ac {
+  display: none; align-items: center; gap: var(--b-1); padding: 0; border: 0; background: none; color: inherit;
+  font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer;
+}
+
 @media (max-width: 640px) {
   .tc-rry-govde { padding-top: var(--b-3); }
+  .tc-rry-plan { gap: var(--b-1) var(--b-2); }
+  .tc-rry-plan-ac { display: inline-flex; min-height: var(--dokunma); }
+  .tc-rry-plan:not([data-acik]) .tc-rry-plan-motor,
+  .tc-rry-plan:not([data-acik]) .tc-rry-plan-uyari,
+  .tc-rry-plan:not([data-acik]) .tc-rry-plan-son,
+  .tc-rry-plan:not([data-acik]) .tc-rry-plan-bosluk { display: none; }
 }

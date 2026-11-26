@@ -128,8 +128,9 @@ describe('3571 çizimi Çizim Merkezi ve Ortak Dosyalar\'dan seçmek', () => {
     const istekler = sunucu({ kisi: KISI(['satin-alma.talep-ac']) });
     sar(<TalepCizimleri talepId={ID} yazabilir />);
     expect(await screen.findByRole('link', { name: 'ORN-cizim.pdf' })).toBeTruthy();
-    await waitFor(() => expect(istekler.some((i) => i.yol.startsWith('/satin-alma-cizim-secici/cizimler'))).toBe(true));
     expect(screen.getByRole('button', { name: 'Çizim ekle (PDF)' })).toBeTruthy();
+    // Çizim Merkezi'ni okuyamayan kişide öneri isteği hiç gitmez (eskiden her açılışta 404).
+    expect(istekler.some((i) => i.yol.startsWith('/satin-alma-cizim-secici/cizimler'))).toBe(false);
     expect(screen.queryByRole('group', { name: /Çizim Merkezi'ndeki çizimleri/ })).toBeNull();
     expect(screen.queryByText('ORN-flans')).toBeNull();
   });
