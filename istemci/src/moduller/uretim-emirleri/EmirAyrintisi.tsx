@@ -26,7 +26,7 @@ import { BeklemeSeridi, BekletPenceresi, beklemeNedeni, beklemeSuresi, useBeklet
 import { RotaBekliyorSeridi } from './RotaBekliyor.tsx';
 import { GecmisGirisPenceresi, GecmisGirisSeridi, useGecmisGirisOgesi, useSonGecmisGiris } from './GecmisGiris.tsx';
 import { iplikDuraklari, konumDuraklari } from './iplik.ts';
-import { OLAY_ETIKETI, durumGosterimi, farkMetni, kayitAdedi, kayitKisisi, kayitNedeni, saglamSayisi, zamanMetni } from './gorunum.ts';
+import { OLAY_ETIKETI, durumGosterimi, farkMetni, kayitAdedi, kayitKisisi, kayitNedeni, parcaRevMetni, saglamSayisi, zamanMetni } from './gorunum.ts';
 import './uretim-emirleri.css';
 
 type Emir = EmirAyrintiCevabi['emir'];
@@ -276,7 +276,10 @@ function EmirSayfasi({ parcalar }: { parcalar?: EmirParcalari }) {
           <div className="tc-emir-kimlik">
             {malzemeNo !== null && <KucukResimKutusu resim={resim.get(malzemeNo)} ad={emir.parcaAd} boy="orta" />}
             <div className="tc-emir-kimlik-metin">
-              <span className="tc-emir-kimlik-parca"><b>{emir.parcaNo}</b> {emir.parcaAd}</span>
+              <span className="tc-emir-kimlik-parca">
+                <b>{emir.parcaNo}</b> {emir.parcaAd}
+                {emir.parcaRevizyonu !== undefined && <> <span className="tc-emir-rev" data-bos={emir.parcaRevizyonu === null ? '' : undefined}>{parcaRevMetni(emir.parcaRevizyonu)}</span></>}
+              </span>
               <small>
                 {emir.adet} adet · {emir.istasyon?.ad ?? 'İstasyon atanmamış'} · Açan {emir.acan.ad}
                 {ayrinti.data.kolHurdasi != null && ` · Kollardaki hurda ${String(ayrinti.data.kolHurdasi)}`}
