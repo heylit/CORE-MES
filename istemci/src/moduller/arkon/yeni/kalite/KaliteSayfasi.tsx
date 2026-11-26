@@ -1,6 +1,7 @@
 import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ILETI_GITMEDI } from '../../../../../../arkon/web/src/data/gonderim-hatasi.ts';
+import { yoldaMi } from '../../../../../../arkon/web/src/data/numune.ts';
 import type { KmOlcum } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import type { Meas, Pkg, PkgFile, PlanItem, SampleRequest } from '../../../../../../arkon/shared/model.ts';
 import { Simge } from '../../../../ortak/arayuz/index.ts';
@@ -164,6 +165,7 @@ export function KaliteSayfasi() {
                   <small className="tc-ay3-not"><b>{x.machine}</b> · {x.by} · {x.reason} · {x.items.length} ölçü{kmUyarisi(x) ? ' · Kalite Merkezi uyarısı' : ''}</small>
                   <span className="tc-ay3-dugmeler">
                     <Cip renk={NUMUNE_DURUMLARI[x.status].renk}>{NUMUNE_DURUMLARI[x.status].etiket}</Cip>
+                    {yoldaMi(x) ? <Cip renk="hold">Yolda</Cip> : null}
                     {x.crit && <Cip renk="stop">Kritik</Cip>}
                     <small className="mono">{bekleme(x)}</small>
                   </span>

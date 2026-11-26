@@ -7,6 +7,7 @@ import { yerel } from '../cekirdek/yerel.ts';
 import { belgeSil, belgeYaz, useArkon, useBelgeler, useSimdi } from '../veri/baglam.ts';
 import { Cip, csvIndir, gunlugeYaz, yeniKimlik, type Soyle } from '../pano/index.tsx';
 import { aletDurumu, aletVadesi } from './kurallar.ts';
+import { KARTSIZ_NUMUNE_GEREKCELERI, type KartsizNumuneGerekcesi, type NumuneGonderimi } from '../../../../../../arkon/web/src/data/numune.ts';
 
 // Ölçü aletleri ve kalibrasyon (bakim-raporlar.ts GaugeView), ölçümde alet seçimi (olcum-aleti-secimi.ts) ve kaliteye numune penceresi
 // (NumuneOv). Sunucuya bağlı Arkon'da aletler TMI'nin Kalibrasyon sayfasındadır; sunucu yazmayı reddeder, liste salt okunurdur (A7, #518).
@@ -162,22 +163,40 @@ export function OlcuAletleri({ soyle }: { soyle: Soyle }) {
   );
 }
 
-export interface NumuneIstegi { hazir: boolean; bekliyor: boolean; gonder: () => void }
-// Kaliteye numune isteği (kart #1083): görev kartındaki hatırlatma ve ilk parça uyarısı açar. A1 kullanır.
+export interface NumuneIstegi {
+  hazir: boolean; bekliyor: boolean; gonder: (g: NumuneGonderimi) => void;
+  // 3718 a: refakat kartı kamerayla okutulur (el okuyucu pencere açıkken kendiliğinden dinlenir); yoksa düğme çıkmaz.
+  okut?: (() => void) | null;
+}
+// Kaliteye numune isteği (kart #1083; 3718 a): birincil yol bu işin refakat kartını okutmak; kart yanında değilse gerekçe seçilip kartsız
+// gönderilir. A1 kullanır.
 export function NumunePenceresi({ st, numune, kapat }: { st: string; numune: NumuneIstegi; kapat: () => void }) {
+  const [gerekce, gerekceYaz] = useState<KartsizNumuneGerekcesi | null>(null);
+  const acik = numune.hazir && !numune.bekliyor;
   return (
     <Pencere acik kapat={kapat} baslik={`Kaliteye numune · ${st}`}
       alt={(
         <>
           <Dugme boyut="ana" onClick={kapat} data-ilk-odak>Vazgeç</Dugme>
-          <Dugme boyut="ana" tur="birincil" simge="target" disabled={!numune.hazir || numune.bekliyor} onClick={() => { kapat(); numune.gonder(); }}>Numune gönder</Dugme>
+          {acik ? <Dugme boyut="ana" disabled={gerekce === null} title={gerekce === null ? 'Önce kartsız gönderme gerekçesini seçin' : undefined}
+            onClick={() => { if (gerekce === null) return; kapat(); numune.gonder({ yol: 'kartsiz', gerekce }); }}>Kartsız gönder</Dugme> : null}
+          {numune.okut ? <Dugme boyut="ana" tur="birincil" simge="camera" disabled={!acik} onClick={numune.okut}>Kamerayla okut</Dugme> : null}
         </>
       )}>
-      <p className="tc-ay3-not">
-        {!numune.hazir ? 'Bu işin kontrol planı yok; numune gönderilemez.'
-          : numune.bekliyor ? 'Önceki numune kalitede · sonuç bekleniyor.'
-          : 'Numune isteği Kalite ekranına düşer. Onay ya da red kaliteciden gelir; gönderince iş onaylanmış olmaz.'}
-      </p>
+      {!numune.hazir ? <p className="tc-ay3-not">Bu işin kontrol planı yok; numune gönderilemez.</p>
+        : numune.bekliyor ? <p className="tc-ay3-not">Önceki numune kalitede · sonuç bekleniyor.</p>
+        : (
+          <>
+            <p className="tc-ay3-not" role="status"><Simge ad="scan" /> <b>Okuyucu hazır · refakat kartı bekleniyor</b></p>
+            <p className="tc-ay3-not">Bu işin refakat kartını okutun; kart bu işin emrine aitse numune kaliteye yola çıkar. Onay ya da red kaliteciden gelir; gönderince iş onaylanmış olmaz.</p>
+            <p className="tc-ay3-not">Kart yanında değilse:</p>
+            <div className="tc-ay3-dugmeler" role="group" aria-label="Kartsız gönderme gerekçesi">
+              {KARTSIZ_NUMUNE_GEREKCELERI.map((g) => (
+                <Dugme key={g} aria-pressed={gerekce === g} onClick={() => gerekceYaz((x) => (x === g ? null : g))}>{g}</Dugme>
+              ))}
+            </div>
+          </>
+        )}
     </Pencere>
   );
 }

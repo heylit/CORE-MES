@@ -17,6 +17,36 @@ export function kmBagsizPlan(plan: readonly object[] | null | undefined): boolea
   return !plan.some((b) => { const d = (b as { kmBalon?: unknown }).kmBalon; return typeof d === 'number' && Number.isSafeInteger(d) && d > 0; });
 }
 
+// 3718 a: kalite istasyonuna yolda giden numunenin teslim alınışı (sunucu damgası `numuneTeslimAlindi`). Kalite istasyonu olmayan numune
+// (stok kutusu, 608 b) yolda sayılmaz: teslim adımı yoktur.
+export interface NumuneTeslimi { at: number; kisi: string; yol: 'okutma' | 'dugme' }
+export function numuneTeslimi(r: object | null | undefined): NumuneTeslimi | null {
+  const d = (r as { numuneTeslimAlindi?: unknown } | null | undefined)?.numuneTeslimAlindi;
+  if (!d || typeof d !== 'object') return null;
+  const { at, kisi, yol } = d as Record<string, unknown>;
+  return typeof at === 'number' && (yol === 'okutma' || yol === 'dugme') ? { at, kisi: typeof kisi === 'string' ? kisi : '', yol } : null;
+}
+export const kaliteIstasyonuOku = (r: object | null | undefined): string | null => {
+  const v = (r as { kaliteIstasyonu?: unknown } | null | undefined)?.kaliteIstasyonu;
+  return typeof v === 'string' && v !== '' ? v : null;
+};
+export const yoldaMi = (r: { status?: string; [alan: string]: unknown } | { status?: string }): boolean =>
+  (r.status === 'waiting' || r.status === 'measuring') && kaliteIstasyonuOku(r) !== null && numuneTeslimi(r) === null;
+
+// 3718 a: numune refakat kartı okutularak gönderilir; kart yanında değilse gerekçeyle kartsız gider. Gönderim yolu isteğe yazılır.
+export const KARTSIZ_NUMUNE_GEREKCELERI = ['Kart yok', 'Kart okunmuyor'] as const;
+export type KartsizNumuneGerekcesi = (typeof KARTSIZ_NUMUNE_GEREKCELERI)[number];
+export type NumuneGonderimi = { yol: 'okutma'; kart: string } | { yol: 'kartsiz'; gerekce: KartsizNumuneGerekcesi };
+export const gonderimMetni = (g: NumuneGonderimi): string => (g.yol === 'okutma' ? `kart ${g.kart}` : `kartsız: ${g.gerekce.toLocaleLowerCase('tr-TR')}`);
+export const NUMUNE_KART_BASKA_IS = (kart: string) => `${kart} bu işin kartı değil; numune gönderilmedi. Bu işin refakat kartını okutun.`;
+export const NUMUNE_KART_BILINMIYOR = 'Bu kart bu istasyonun işlerinde yok; numune gönderilmedi.';
+// Okutulan kart bu işin emrine aitse numune gider; işin emri bilinmiyorsa (TMI dışı iş) kartla eşleşmez, kartsız gönderilir.
+export function numuneKartiKarari(kart: { etiket: string; uretimEmriId: number } | null | undefined, emirId: number | null): { tamam: true; kart: string } | { ret: string } {
+  if (!kart) return { ret: NUMUNE_KART_BILINMIYOR };
+  if (emirId === null || kart.uretimEmriId !== emirId) return { ret: NUMUNE_KART_BASKA_IS(kart.etiket) };
+  return { tamam: true, kart: kart.etiket };
+}
+
 interface Numune { id: string; pkgId?: string; at?: number; status?: string; items?: number[]; results?: Record<string, { ok?: boolean; v?: unknown }>; note?: string; decidedAt?: number }
 interface PlanSatiri { id: number; nom?: string }
 

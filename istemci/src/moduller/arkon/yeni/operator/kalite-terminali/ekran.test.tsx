@@ -66,7 +66,7 @@ describe('kalite terminali sekmeleri', () => {
 
   it('ilk parça numunesi kuyruğa yönlendirir; onay iş emri adımıyla Kalite Merkezi ucuna gider (2196-1 a)', async () => {
     const { yazmalar } = sunucu(KM_ONAY, { ilk: [ilk] });
-    const { soyle } = ac([{ id: 'n1', pkgId: 'p', no: 'IE-2', part: 'D', machine: 'TOR', at: 1, status: 'waiting', results: {}, kaliteIstasyonu: 'KAL', ilkParca: true }]);
+    const { soyle } = ac([{ id: 'n1', pkgId: 'p', no: 'IE-2', part: 'D', machine: 'TOR', at: 1, status: 'waiting', results: {}, kaliteIstasyonu: 'KAL', numuneTeslimAlindi: { at: 1, kisi: 'K', yol: 'okutma' }, ilkParca: true }]);
     const not = await screen.findByRole('note');
     expect(not.textContent).toContain('İlk parça kararı karar kuyruğunda');
     fireEvent.click(within(not).getByRole('button', { name: 'Kuyruğu aç' }));

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NUMUNE_REDDI_GEREKCESIZ, NUMUNE_REDDI_OLCUSUZ, numuneDugmeleri, numuneReddiEksigi, retGerekcesiMetni, secinceOlcumeAlinir, yeniNumuneYamasi, sonNumuneDurumu } from '../../../../arkon/web/src/data/numune.ts';
+import { NUMUNE_REDDI_GEREKCESIZ, NUMUNE_REDDI_OLCUSUZ, numuneDugmeleri, numuneReddiEksigi, retGerekcesiMetni, secinceOlcumeAlinir, yeniNumuneYamasi, sonNumuneDurumu, gonderimMetni, numuneKartiKarari, numuneTeslimi, yoldaMi, NUMUNE_KART_BASKA_IS, NUMUNE_KART_BILINMIYOR } from '../../../../arkon/web/src/data/numune.ts';
 
 // Uçtan uca deneme 2. tur: kalite ilk parçayı ölçü girmeden ve gerekçesiz reddedebiliyordu; terminal yenilenince ret görünmüyordu.
 describe('ilk parça numunesi reddi', () => {
@@ -69,5 +69,27 @@ describe('numune düğmelerinin görünürlüğü', () => {
     expect(numuneDugmeleri({ olcebilir: false, karar: true })).toEqual({ olcum: false, karar: true });
     expect(numuneDugmeleri({ olcebilir: true, karar: false })).toEqual({ olcum: true, karar: false });
     expect(numuneDugmeleri({ olcebilir: false, karar: false })).toEqual({ olcum: false, karar: false });
+  });
+});
+
+// 3718 a: numune refakat kartı okutularak gönderilir; yoldaki numuneyi kalite teslim alır.
+describe('3718 a: numune kartı ve teslim', () => {
+  it('kart bu işin emrindeyse gönderir; başka emrin kartı ya da bilinmeyen kart göndermez (reddedilen)', () => {
+    expect(numuneKartiKarari({ etiket: 'ORN-UE-1-P1', uretimEmriId: 7 }, 7)).toEqual({ tamam: true, kart: 'ORN-UE-1-P1' });
+    expect(numuneKartiKarari({ etiket: 'ORN-UE-2-P1', uretimEmriId: 8 }, 7)).toEqual({ ret: NUMUNE_KART_BASKA_IS('ORN-UE-2-P1') });
+    expect(numuneKartiKarari({ etiket: 'ORN-UE-2-P1', uretimEmriId: 8 }, null)).toEqual({ ret: NUMUNE_KART_BASKA_IS('ORN-UE-2-P1') });
+    expect(numuneKartiKarari(undefined, 7)).toEqual({ ret: NUMUNE_KART_BILINMIYOR });
+  });
+  it('gönderim metni okutulan kartı ya da kartsız gerekçeyi söyler', () => {
+    expect(gonderimMetni({ yol: 'okutma', kart: 'ORN-UE-1-P1' })).toBe('kart ORN-UE-1-P1');
+    expect(gonderimMetni({ yol: 'kartsiz', gerekce: 'Kart okunmuyor' })).toBe('kartsız: kart okunmuyor');
+  });
+  it('yalnız kalite istasyonu olan, açık ve teslim alınmamış numune yoldadır', () => {
+    const r = { status: 'waiting', kaliteIstasyonu: 'ORN-KAL-1' };
+    expect(yoldaMi(r)).toBe(true);
+    expect(yoldaMi({ ...r, numuneTeslimAlindi: { at: 1, kisi: 'K', yol: 'okutma' } })).toBe(false);
+    expect(yoldaMi({ status: 'waiting' })).toBe(false);
+    expect(yoldaMi({ ...r, status: 'approved' })).toBe(false);
+    expect(numuneTeslimi({ numuneTeslimAlindi: { at: 1, kisi: 'K', yol: 'el' } })).toBeNull();
   });
 });
