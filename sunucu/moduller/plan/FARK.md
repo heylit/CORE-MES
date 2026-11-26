@@ -413,3 +413,14 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
 - `GET /plan/planlanabilirlik/rotalar`: yürürlükteki rotası olan ürünlerin bütün adımları; yalnız süre, kaynak, tezgâh vardiyası ve kişi
   vardiyası (emre bağlı yuva yok). Fason adım kontrol almaz. Yetki: iki uç da `/plan/planlama-kaynagi` ile aynı (sayfa.recete-rota okuyan).
 - Test: `planlanabilirlik-uc.test.ts` PB-01..03; `uc-yetkisi.test.ts` iki satır.
+
+## Bölünmüş adımda pay başına malzeme ve canlıya alma (3734; 2026-11-26)
+- Motor (`motor/engine.js` matAlloc, `payHazir`): bölünmüş adımın payları (pay sırasıyla) satırın gelişlerini geliş sırasıyla alır; pay kendi
+  adedi x miktar kadar, son pay kalanın tamamını. Payın hazır anı kullandığı gelişlerin en geçidir; payına geliş yetmezse eksik. Bölünmemiş
+  adım ve adımsız satır değişmedi. Satın alma satırının bağlı işlemleri (`po.jobs[].ops`) o gelişi kullanan paylardır.
+- Sunucu motoru (`motor/emirler.js`): sabit parçalı işin yeri en geç biten parçasıdır; geçmişte başlamış parça gerçekleşen sayılıp geç biten
+  parçayı gölgelemez (ardıl son parçayı bekler, geç parçanın tezgâhı kapalı kalır). Tek parçalı işte değişiklik yok.
+- Yazım (`servis.ts` kuyruklariYazIc, `onizlemeYeri`): bölünmüş işin payı önizlemedeki (motorun) saatinde yerleşir; önizleme yoksa ya da
+  yerinde kalan bir işle çakışıyorsa bugünkü gibi kuyruktan dizilir. Kuyruğun öteki işleri payın etrafına dizilir.
+- "Malzemeye göre bölme" kartının kuralı depoda yok (DEVIR'de iz bulunmadı); gelirse pay başına malzeme `payHazir`'dadır, ikinci kez yazılmaz.
+- Test: `pay-malzemesi.test.ts` (motor), `bolunmus-canliya-al.test.ts` (gerçek PostgreSQL, yazım ve canlıya alma).
