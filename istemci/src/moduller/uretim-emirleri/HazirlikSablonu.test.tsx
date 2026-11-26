@@ -65,6 +65,31 @@ describe('3688 hazırlık şablonu sayfası', () => {
     expect(cnc.disabled).toBe(true);
   });
 
+  it('3739 yeni madde: yetkisi olanda düğme görünür, form açılır, eklenen madde listede hemen görünür; yetkisizde düğme yok', async () => {
+    const eklenmis: HazirlikMaddeleriCevabi = { yazabilir: true, maddeler: [...MADDELER.maddeler, { ...madde('ozel-a', 'Boya onayı', 3), sistem: false, isEmriDuzeyi: true }] };
+    let eklendi = false;
+    const istekler = sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.adim-durumu' as const, 'uretim-emirleri.hazirlik-ayar' as const] }, {
+      'GET /adimli-emirler': () => json(200, { emirler: [] }),
+      'GET /hazirlik-maddeleri': () => json(200, eklendi ? eklenmis : MADDELER),
+      'GET /hazirlik-sablonu': () => json(200, sablon(true)),
+      'POST /hazirlik-maddeleri/ozel-ekle': () => { eklendi = true; return json(200, eklenmis); },
+    });
+    ac([{ yol: '/adim-durumu', ekran: AdimDurumu }], '/adim-durumu?gorunum=sablon');
+    expect(screen.queryByRole('checkbox', { name: /Boya onayı/ })).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: 'Yeni madde' }));
+    fireEvent.change(await screen.findByLabelText(/Madde adı/), { target: { value: 'Boya onayı' } });
+    fireEvent.change(screen.getByLabelText(/Kısa ad/), { target: { value: 'Boya' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(istekler.some((i) => i.yontem === 'POST' && i.yol === '/hazirlik-maddeleri/ozel-ekle')).toBe(true); });
+    expect(await screen.findByRole('checkbox', { name: /Boya onayı/ })).toBeTruthy();
+  });
+
+  it('3739 yeni madde düğmesi hazirlik-ayar yetkisi olmayana görünmez', async () => {
+    kur(true);
+    await screen.findByRole('checkbox', { name: /CNC kurulumu/ });
+    expect(screen.queryByRole('button', { name: 'Yeni madde' })).toBeNull();
+  });
+
   it('409 çakışmasında işaretler silinmez; güncel şablonu kişi kendisi yükler', async () => {
     sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.adim-durumu' as const] }, {
       'GET /adimli-emirler': () => json(200, { emirler: [] }),
