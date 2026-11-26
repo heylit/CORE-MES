@@ -82,7 +82,7 @@ describe('Statü görünürlüğü', () => {
     for (const ad of ['Statü kırılımı', 'Rezerve']) {
       const tablo = await screen.findByRole('table', { name: ad });
       const hucre = (await within(tablo).findByText('MM-950 · OP 10 Torna')).closest('td')!;
-      expect(hucre.querySelector('small')?.textContent).toBe('Rev A');
+      expect(hucre.querySelector('small')?.textContent).toBe('Rota A');
       expect(hucre.textContent).not.toContain('YM-001');
       expect(hucre.querySelector('.tc-rozet')).toBeNull();
     }

@@ -6,7 +6,7 @@ import { api } from '../../ortak/veri/api.ts';
 // Statü dörtlüyle okunur: o haldeki malzeme (HM, YM ya da MM), parantezde hangi mamül için, hangi rota revizyonunda ve hangi OP.
 // Aynı HM farklı mamüllerde ve aynı mamülün farklı revizyonlarında ayrı statüdür.
 export const statuEtiketi = (s: Pick<Statu, 'ad' | 'malzemeNo' | 'urunKodu' | 'revizyon'>): string => {
-  const parcalar = [s.urunKodu, s.revizyon === null ? null : `Rev ${s.revizyon}`, s.ad].filter((x): x is string => x !== null);
+  const parcalar = [s.urunKodu, s.revizyon === null ? null : `Rota ${s.revizyon}`, s.ad].filter((x): x is string => x !== null);
   return `${s.malzemeNo} (${parcalar.join(' · ')})`;
 };
 
@@ -25,7 +25,7 @@ export function useStatuParcalari(): (id: number) => { ana: string; alt: string 
   return (id) => {
     const s = statuler.get(id);
     if (!s) return { ana: `Statü #${id}`, alt: null };
-    return { ana: [s.urunKodu, s.ad].filter((x): x is string => x !== null).join(' · '), alt: s.revizyon === null ? null : `Rev ${s.revizyon}` };
+    return { ana: [s.urunKodu, s.ad].filter((x): x is string => x !== null).join(' · '), alt: s.revizyon === null ? null : `Rota ${s.revizyon}` };
   };
 }
 

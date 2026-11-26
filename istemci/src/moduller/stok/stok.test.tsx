@@ -381,7 +381,7 @@ describe('Çıkış ve onaylı eksi', () => {
     expect(await within(kirilim).findByText('MM-950 · OP 10 Tornalama')).toBeTruthy();
     const bakiye = screen.getByRole('table', { name: 'Bakiye satırları' });
     const satir = within(bakiye).getByText('C-01-01').closest('tr')!;
-    expect(within(satir).getByText('YM-900 (MM-950 · Rev B · OP 10 Tornalama)')).toBeTruthy();
+    expect(within(satir).getByText('YM-900 (MM-950 · Rota B · OP 10 Tornalama)')).toBeTruthy();
     expect(within(bakiye).getAllByRole('button', { name: 'Çıkış' })).toHaveLength(1);
     expect(within(bakiye).getAllByRole('button', { name: 'Taşı' })).toHaveLength(1);
     // Statüye geçen malzeme emre ayrılır: kırılımda rezerve toplamı, Rezerve kartında emir no ile; müdür kaldırabilir ve ayırabilir.
