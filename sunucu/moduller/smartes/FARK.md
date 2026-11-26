@@ -87,3 +87,5 @@ Yeni modül; depoda önceki hâli yok. Brief (`SMARTES_PROMPT.md`, .NET/ASMX iç
   SmartES izi yazdığı duruş olayını tutar (`smartes_hareket.olay_id`). Göçler `20261126172611_uretim_emirleri_olay_duzeltmesi`, `20261126172612_smartes_hareket_olay`.
   Kişi düzeltmesi tabloda ve görünümde hazır, ama henüz yazan akış yok: yanlış kişi eşlemesinde geçmişi düzeltmek ayrı adımdır; başlat ve bitir kayıtları
   (uretim_kaydi, makine kullanımı) bu düzeltmenin dışındadır.
+  Bilinen sınırlar (Risk M1, M2): yalnız henüz eşlenmemiş duruşlar düzeltilir; eşlenmiş bir ad başka nedene yeniden eşlenirse eski olaylar değişmez.
+  Bu yamadan önce yazılmış hareketlerde `olay_id` boştur. Kişi düzeltmesi yazılırken pay sayımının okuduğu uretim_kaydi ve makine kullanımı da kapsanmalı (R4).
