@@ -79,6 +79,11 @@ for (const buyukYazi of [false, true]) {
     const cek = async (adim: string) => { await page.waitForTimeout(500); await page.screenshot({ path: `/tmp/tmiv2-ekran/3751-${adim}-${ad}.png` }); };
     const tasma = async () => { expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0); };
     const onay = page.getByRole('group', { name: 'Birleştirmeyi onayla' });
+    // Onay çubuğu yan menünün üstüne binmez.
+    const menudenAyri = async () => {
+      const menu = await page.getByRole('navigation', { name: 'Ana menü' }).boundingBox(), k = await onay.boundingBox();
+      if (menu && k && menu.width > 0) expect(k.x).toBeGreaterThanOrEqual(menu.x + menu.width);
+    };
 
     if (proje === 'g360') {
       // Telefon: pay kartından Birleştir alt sayfası; pay ve kardeşi seçilir, onay bölümünde Uygula taslağa yazar.
@@ -130,6 +135,7 @@ for (const buyukYazi of [false, true]) {
     await expect(onay).toBeVisible();
     await expect(onay.locator('[data-onay-tur="birlestir"]')).toHaveText('Birleştir');
     await expect(onay.getByRole('status')).toContainText('10 + 20 = 30 adet · ORN-T1 tezgâhında kalır · 2 pay kalır');
+    await menudenAyri();
     await cek('2-menu-onay');
     // Esc vazgeçer: taslağa yazılmaz.
     await page.keyboard.press('Escape');
@@ -157,6 +163,7 @@ for (const buyukYazi of [false, true]) {
     await page.mouse.up();
     await expect(onay).toBeVisible();
     await expect(onay.getByRole('status')).toContainText('10 + 10 = 20 adet · ORN-T2 tezgâhında kalır');
+    await menudenAyri();
     await cek('4-birak-onay');
     await onay.getByRole('button', { name: 'Uygula' }).click();
     await expect(onay).toHaveCount(0);

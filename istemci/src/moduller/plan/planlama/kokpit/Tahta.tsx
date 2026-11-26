@@ -517,9 +517,10 @@ export function Tahta(o: TahtaOzellikleri) {
     if (!x || !satir || !alan) return;
     const kimlik = satir.dataset.satir ?? '';
     const ham = m.bas + (ev.clientX - alan.getBoundingClientRect().left) / px - tasinan.tut;
-    const adimSatiri = `${x.job}>${x.id}`;
-    const gecerli = goz === 'T' ? adaylar(x).includes(kimlik) : kimlik === x.job || kimlik === adimSatiri;
-    const hedefSatir = goz === 'T' || kimlik === adimSatiri ? kimlik : x.job;
+    // Açılmış payların satırı `pay:` önekli kimlik taşır (1. payın kimliği adımınkiyle aynı; satır anahtarı tekil kalsın).
+    const kendiSatiri = kimlik === `${x.job}>${x.id}` || kimlik === `${x.job}>pay:${x.id}`;
+    const gecerli = goz === 'T' ? adaylar(x).includes(kimlik) : kimlik === x.job || kendiSatiri;
+    const hedefSatir = goz === 'T' || kendiSatiri ? kimlik : x.job;
     // 3602: Alt basılıyken ya da onaylı plan gösterilirken yakalama ve çizgi yok. Yakalama yalnız ham saati değiştirir; geçerlilik ve komut aynı.
     let S = tasimaSaati(ham, m.simdi);
     if (ev.altKey || once) { yakalanan.current = null; setHiza((h) => (h.length === 0 ? h : [])); } else {
@@ -982,7 +983,7 @@ export function Tahta(o: TahtaOzellikleri) {
       const x = m.isler[a.id], l = adimPaylari(m, a.id), bolunmus = l.length > 1;
       // Bölünmüş adım tek satırdır (ilk başlangıç, son bitiş, toplam adet); payları açınca her pay kendi satırında çizilir (3681 A).
       const ana: Satir = { kimlik: `${e.id}>${a.id}`, bas: agacAdimBasligi(i, a), alt: x ? `${bolunmus ? `${String(l.length)} pay` : x.fason ? 'Fason' : tezgahKodu.get(x.m) ?? x.m} · ${zaman(Math.min(...l.map((y) => y.S))).slice(6)}` : 'planda yeri yok', isler: x ? l : [], adim: true, emirKaydi: e, adimSira: i, ...(bolunmus ? { paylar: l, ozet: [Math.min(...l.map((y) => y.S)), Math.max(...l.map((y) => y.C))] as [number, number] } : {}), ...(r.durum ? { durum: r.durum } : {}) };
-      return bolunmus && acikPay.has(a.id) ? [ana, ...l.map((y): Satir => ({ kimlik: `${e.id}>${y.id}`, bas: `Pay ${payYazisi(y, true) ?? ''}`, alt: tezgahKodu.get(y.m) ?? y.m, isler: [y], adim: true, payAlt: true, emirKaydi: e, adimSira: i, ...(r.durum ? { durum: r.durum } : {}) }))] : [ana];
+      return bolunmus && acikPay.has(a.id) ? [ana, ...l.map((y): Satir => ({ kimlik: `${e.id}>pay:${y.id}`, bas: `Pay ${payYazisi(y, true) ?? ''}`, alt: tezgahKodu.get(y.m) ?? y.m, isler: [y], adim: true, payAlt: true, emirKaydi: e, adimSira: i, ...(r.durum ? { durum: r.durum } : {}) }))] : [ana];
     })];
   });
   const hucreSirasi = hucreGunleri ? satirlar.filter((r) => hucreGunleri.has(r.kimlik)).map((r) => r.kimlik) : [];

@@ -1297,6 +1297,9 @@
   width: max-content; max-width: calc(100vw - var(--b-5)); max-height: var(--ekran-boy-60); overflow-y: auto;
 }
 .tc-pyq-alt-bosluk { height: calc(var(--b-6) * 3); }
+/* 3751: ortada duran panel yan menünün üstüne binmesin: genişliği iki yandan menü kadar daralır (uzun cümle sarar). */
+@media (min-width: 768px) { .tc-pyq-alt-panel { max-width: calc(100vw - 2 * var(--menu-serit) - var(--b-5)); } }
+@media (min-width: 1280px) { .tc-pyq-alt-panel { max-width: calc(100vw - 2 * var(--menu-sabit) - var(--b-5)); } }
 @media (max-width: 767px) {
   .tc-pyq-alt-bosluk { height: calc(var(--b-6) * 4); }
   .tc-pyq-alt-panel { bottom: var(--b-2); }
