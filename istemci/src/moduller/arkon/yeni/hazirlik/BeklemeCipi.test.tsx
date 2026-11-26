@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { cleanup, screen, within } from '@testing-library/react';
 import { arkonAc, sunucuKur, YONETICI } from '../test-ortak.tsx';
 import type { Pkg } from './tipler.ts';
 
@@ -16,20 +16,16 @@ const paket = (id: string, no: string, emirId: number, isEmriId: number, bekletm
 } as Pkg);
 
 describe('3131 Hazırlık bekleme işareti', () => {
-  it('kart ve tablo başlığında bekleyen emir nedeniyle işaretlenir, beklemeyen emirde işaret yok', async () => {
+  it('liste başlığında bekleyen emir nedeniyle işaretlenir, beklemeyen emirde işaret yok', async () => {
     const a = paket('tmi-ie-bk1', 'ORN-UE-BK1', 71, 711, 'Malzeme bekleniyor'), b = paket('tmi-ie-bk2', 'ORN-UE-BK2', 72, 721);
     sunucuKur(YONETICI, { belgeler: { pkgs: [a, b].map((p) => ({ kimlik: p.id, surum: 1, govde: p })), kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
     arkonAc('/arkon/hazirlik');
     const cip = await screen.findByTitle('Operatörde gizli; emir devam edince görünür.', {}, { timeout: 10000 });
     expect(cip.textContent).toBe('Beklemede · Malzeme bekleniyor');
     expect(screen.getAllByTitle('Operatörde gizli; emir devam edince görünür.')).toHaveLength(1);
-    fireEvent.click(screen.getByRole('button', { name: 'Liste' }));
-    const tablo = await screen.findByRole('table', { name: 'Hazırlık takip tablosu' }, { timeout: 10000 });
+    const tablo = await screen.findByRole('table', { name: 'Hazırlık listesi' }, { timeout: 10000 });
     const bekleyen = within(tablo).getByText('ORN-UE-BK1').closest('tr')!;
     expect(within(bekleyen).getByText('Beklemede · Malzeme bekleniyor')).toBeTruthy();
     expect(within(within(tablo).getByText('ORN-UE-BK2').closest('tr')!).queryByText(/Beklemede/)).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Beklemede' }));
-    expect(within(tablo).queryByText('ORN-UE-BK2')).toBeNull();
-    expect(within(tablo).getByText('ORN-UE-BK1')).toBeTruthy();
   }, 40000);
 });

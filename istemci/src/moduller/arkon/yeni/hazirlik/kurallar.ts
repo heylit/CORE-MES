@@ -425,14 +425,16 @@ export interface TakipSatiri {
   bitti: boolean;
 }
 // bekletme: emir beklemedeyse nedenin adı (3131); paketlerden okunur.
-export interface TakipEmri { anahtar: string; no: string; urun: string; dilimler: AdimDilimi[]; biten: number; satirlar: TakipSatiri[]; bekletme: string | null }
-export type TakipSuzgeci = 'acik' | 'yayinda' | 'uretimde' | 'taslak' | 'beklemede' | 'paketsiz' | 'bitti' | 'hepsi';
+export interface TakipEmri { anahtar: string; no: string; urun: string; rev: string; acil: boolean; termin: string; dilimler: AdimDilimi[]; biten: number; satirlar: TakipSatiri[]; bekletme: string | null }
+// 3606-2: tek liste. Durum süzgeci paketin durumu (Açık, Terminalde, Bitenler), hazırlık durumu (Durur, Uyarılı) ya da paketsiz adımdır.
+// Durur ve Uyarılı açık işlerin hazırlığına göre süzülür; bu hesap hazırlık cevabını ister ve TakipTablosu'nda yapılır (ek süzgeç).
+export type TakipSuzgeci = 'acik' | 'durur' | 'uyari' | 'yayinda' | 'paketsiz' | 'bitti';
 export const TAKIP_SUZGECLERI: readonly (readonly [TakipSuzgeci, string])[] = [
-  ['acik', 'Açık işler'], ['yayinda', 'Terminalde'], ['uretimde', 'Üretimde'], ['taslak', 'Taslak ve onayda'], ['beklemede', 'Beklemede'], ['paketsiz', 'Paket yok'], ['bitti', 'Bitenler'], ['hepsi', 'Hepsi'],
+  ['acik', 'Açık işler'], ['durur', 'Durur'], ['uyari', 'Uyarılı'], ['yayinda', 'Terminalde'], ['paketsiz', 'Paket yok'], ['bitti', 'Bitenler'],
 ];
-const SUZGEC_DURUMLARI: Readonly<Record<Exclude<TakipSuzgeci, 'hepsi' | 'paketsiz'>, readonly PaketDurumu[]>> = {
-  acik: ['draft', 'review', 'published', 'production'], yayinda: ['published'], uretimde: ['production'], taslak: ['draft', 'review'],
-  beklemede: ['draft', 'review', 'published', 'production'], bitti: ['done'],
+const SUZGEC_DURUMLARI: Readonly<Record<Exclude<TakipSuzgeci, 'paketsiz'>, readonly PaketDurumu[]>> = {
+  acik: ['draft', 'review', 'published', 'production'], durur: ['draft', 'review', 'published', 'production'], uyari: ['draft', 'review', 'published', 'production'],
+  yayinda: ['published', 'production'], bitti: ['done'],
 };
 export const takipSuzgeciOku = (d: unknown): TakipSuzgeci => (TAKIP_SUZGECLERI.some(([k]) => k === d) ? d as TakipSuzgeci : 'acik');
 
@@ -445,15 +447,18 @@ function dilim(durum: PaketDurumu, r: Pick<Result, 'state'> | null): AdimDilimi 
 interface HazirlikAdimlari { isEmirleri: readonly { isEmriId: number; opNo: number; ad: string; bitti: boolean }[] }
 
 export function takipEmirleri(
-  gruplar: readonly { anahtar: string; paketler: readonly Pkg[] }[], sonuclar: Readonly<Record<string, Result>>,
+  gruplar: readonly { anahtar: string; baslik: string; alt: string; paketler: readonly Pkg[] }[], sonuclar: Readonly<Record<string, Result>>,
   hazirlik: ReadonlyMap<number, HazirlikAdimlari>, suz: TakipSuzgeci,
+  // ek: paketli satırın ek koşulu (Durur, Uyarılı, eksik madde). Verilirse paketsiz adımlar bağlam olarak gösterilmez.
+  // emirGrubu: gruplar iş emriyse emrin paketsiz adımları hazırlık cevabından eklenir; istasyon, makine ya da parça grubunda eklenmez.
+  ek: ((s: TakipSatiri) => boolean) | null = null, emirGrubu = true,
 ): TakipEmri[] {
   const l: TakipEmri[] = [];
   for (const g of gruplar) {
     const ilk = g.paketler[0];
     if (!ilk) continue;
     const emirId = ilk.tmi && Number.isSafeInteger(ilk.tmi.emirId) ? ilk.tmi.emirId : null;
-    const adimlar = emirId === null ? undefined : hazirlik.get(emirId)?.isEmirleri;
+    const adimlar = !emirGrubu || emirId === null ? undefined : hazirlik.get(emirId)?.isEmirleri;
     const paketSatiri = (p: Pkg, sira: number): TakipSatiri => {
       const r = sonuclar[p.id] ?? null;
       const durum = paketKartDurumu(p, r);
@@ -476,13 +481,14 @@ export function takipEmirleri(
     const dilimler = satirlar.map((s) => (s.bitti ? 'bitti' : s.paket ? dilim(s.durum, s.sonuc) : 'yok'));
     // Paketsiz adım emrin bağlamıdır: "Hepsi"de ve bitmemişse "Açık işler"de görünür; yalnız paketsiz kalan emir listelenmez.
     const bekletme = g.paketler.map((p) => tmiBekletme(p)).find((b) => b !== null) ?? null;
-    // "Beklemede" süzgeci emrin işaretidir: beklemedeki emrin açık işleri ve paketsiz adımları "Açık işler" gibi.
-    if (suz === 'beklemede' && bekletme === null) continue;
     // 3606: "Paket yok" süzgeci yalnız paketsiz açık adımları listeler (paketi olan başka adımı yoksa da emir görünür).
-    const satir = satirlar.filter((s) => (suz === 'hepsi' ? true : s.paket ? suz !== 'paketsiz' && SUZGEC_DURUMLARI[suz].includes(s.durum) : (suz === 'acik' || suz === 'beklemede' || suz === 'paketsiz') && !s.bitti));
+    const satir = satirlar.filter((s) => (s.paket
+      ? suz !== 'paketsiz' && SUZGEC_DURUMLARI[suz].includes(s.durum) && (ek === null || ek(s))
+      : ek === null && (suz === 'acik' || suz === 'paketsiz') && !s.bitti));
     if (suz === 'paketsiz' ? satir.length === 0 : !satir.some((s) => s.paket)) continue;
     l.push({
-      anahtar: g.anahtar, no: ilk.no, urun: [ilk.part || 'Adsız parça', ilk.partNo].filter(Boolean).join(' · '),
+      anahtar: g.anahtar, no: emirGrubu ? ilk.no : g.baslik, urun: emirGrubu ? [ilk.part || 'Adsız parça', ilk.partNo].filter(Boolean).join(' · ') : g.alt,
+      rev: emirGrubu ? ilk.rev : '', acil: g.paketler.some((p) => p.priority === 'urgent'), termin: emirGrubu ? ilk.due : '',
       dilimler, biten: dilimler.filter((d) => d === 'bitti').length, satirlar: satir, bekletme,
     });
   }

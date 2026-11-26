@@ -1,37 +1,44 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Dugme, OnayPenceresi, Simge } from '../../../../ortak/arayuz/index.ts';
-import type { HazirlikCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { paketleriGrupla } from '../../../../../../arkon/web/src/data/paket-grup.ts';
+import { Dugme, Menu, OnayPenceresi, Simge, type MenuOgesi } from '../../../../ortak/arayuz/index.ts';
+import type { HazirlikCevabi, HazirlikMaddesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { paketleriGrupla, type GrupAdi, type PaketGrubu } from '../../../../../../arkon/web/src/data/paket-grup.ts';
 import { tmiEmirId } from '../../../../../../arkon/web/src/data/tmi-adim.ts';
+import { HAZIRLIK_MADDE_BILGISI } from '../../../uretim-emirleri/disari.ts';
 import { YOK, sayi } from '../cekirdek/bicim.ts';
 import { IS_DURUMLARI } from '../cekirdek/sabitler.ts';
-import { baslamaDurumu, BASLAMA_DURUMLARI } from '../operator/HazirlikListesi.tsx';
+import { baslamaDurumu, BASLAMA_DURUMLARI, type BaslamaDurumu, type HazirlikSatiri } from '../operator/HazirlikListesi.tsx';
 import { BeklemeCipi, Cip } from './denetimler.tsx';
-import { HazirlikMatrisiSeridi, HazirlikMatrisiYerTutucu, hazirlikBeklenir, paketHazirligi } from './HazirlikTakibi.tsx';
+import { MADDE_SIRASI, hazirlikBeklenir, paketHazirligi } from './HazirlikTakibi.tsx';
 import {
   PAKET_DURUMLARI, TAKIP_SUZGECLERI, calisiyorMu, geriCekilebilir, topluGeriCekilebilir, takipEmirleri,
-  type AdimDilimi, type TakipSuzgeci,
+  type AdimDilimi, type TakipSatiri, type TakipSuzgeci,
 } from './kurallar.ts';
 import { kmDoldurulabilir } from './km-cizim.ts';
+import { PlanCipi } from './PlanCipi.tsx';
 import { topluGonderilebilir } from './toplu.ts';
 import type { Pkg, Result, Ton } from './tipler.ts';
 
-// 3111: hazırlık paketlerini emir ve adım sırasıyla tek tabloda izlemek ve yayındakileri operatörden geri çekmek.
-// Geri çekme bugünkü "Operatörden geri çek"tir (aynı yazma, aynı yetki); burada tek satırdan ya da seçilenlerle yapılır.
-// 3362: seçilenler terminale toplu gönderilir ve boş taslaklar benzer paketten doldurulur; pencereler TopluPencereler.tsx'te.
-// Hazırlık sütunu Hazırlık matrisinin satır durumudur (aynı hesap); maddeler matristedir, burada tek rozet.
+// 3111, 3606-2: Üretim Terminali Hazırlık'ın tek listesi. Emir (ya da seçilen grup) başlığı altında her adım tek satır: adım, paket,
+// hazırlık (durum ve eksik maddelerin adı), üretim. Seçilenler terminale toplu gönderilir, benzer paketten ya da Kalite Merkezi'nden
+// doldurulur, operatörden geri çekilir (pencereler TopluPencereler.tsx'te; yazma ve yetki öncekiyle aynı).
+// Bütün maddeleri ızgarada görmek Adım Durumu sayfasındadır; burada yalnız eksik ve uyarılı maddeler adıyla görünür.
 interface Ozellikler {
   paketler: readonly Pkg[];
   sonuclar: Readonly<Record<string, Result>>;
   hazirlik: ReadonlyMap<number, HazirlikCevabi>;
-  // Okuma bitti mi (başarıyla ya da değil): bitmeden şeridin yeri ayrılır, bittikten sonra veri yoksa hiçbir şey çizilmez.
+  // Okuma bitti mi (başarıyla ya da değil): bitmeden hücrenin yeri ayrılır, bittikten sonra veri yoksa hiçbir şey çizilmez.
   hazirlikOkundu: boolean;
   suz: TakipSuzgeci;
   suzYaz: (d: TakipSuzgeci) => void;
+  // Süzgeç menüsündeki "Eksik madde" seçimi; boşsa süzülmez.
+  eksikMadde: HazirlikMaddesi | '';
+  grup: PaketGrubu;
+  grupAdi?: GrupAdi;
   yayinlar: boolean;
   seciliId: string | null;
-  ac: (p: Pkg) => void;
+  // Madde çipi paketin ilgili sekmesini açar: talimat "Talimat ve adımlar", ötekiler "Terminale gönder" (maddeler orada).
+  ac: (p: Pkg, sekme?: 'steps' | 'pub', tiklanan?: HTMLElement) => void;
   geriCekSor: (l: readonly Pkg[], toplu: boolean) => void;
   duzenler: boolean;
   gonderSor: (l: readonly Pkg[]) => void;
@@ -43,10 +50,44 @@ const saat = (ms: number) => new Date(ms).toLocaleString('tr-TR', { day: '2-digi
 const DILIM_ADI: Readonly<Record<AdimDilimi, string>> = {
   bitti: 'Tamamlandı', calisiyor: 'Çalışıyor', durdu: 'Duraklatıldı ya da durdu', sirada: 'Sırada', taslak: 'Taslak', yok: 'Paket yok',
 };
-const BASLAMA_TONU: Readonly<Record<keyof typeof BASLAMA_DURUMLARI, Ton>> = { durur: 'stop', uyari: 'hold', hazir: 'run' };
+const BASLAMA_TONU: Readonly<Record<BaslamaDurumu, Ton>> = { durur: 'stop', uyari: 'hold', hazir: 'run' };
+// Satırda en çok iki madde adı; kalanı "+N" (tamamı çipin başlığında). Durduranlar önce, sonra uyarılılar, sabit madde sırasıyla.
+const AZAMI_MADDE = 2;
+export function eksikMaddeler(l: readonly HazirlikSatiri[]): { madde: HazirlikMaddesi; durdurur: boolean }[] {
+  return l.filter((x) => x.hal === 'eksik')
+    .map((x) => ({ madde: x.madde, durdurur: !x.uyarir }))
+    .sort((a, b) => Number(b.durdurur) - Number(a.durdurur) || MADDE_SIRASI[a.madde] - MADDE_SIRASI[b.madde]);
+}
 
-export function TakipTablosu({ paketler, sonuclar, hazirlik, hazirlikOkundu, suz, suzYaz, yayinlar, seciliId, ac, geriCekSor, duzenler, gonderSor, benzerSor, kmDoldurSor }: Ozellikler) {
-  const emirler = useMemo(() => takipEmirleri(paketleriGrupla(paketler, 'emir'), sonuclar, hazirlik, suz), [paketler, sonuclar, hazirlik, suz]);
+// Satırın hazırlık durumu (null: okunamadı ya da bitmiş iş). Durur, Uyarılı ve eksik madde süzgeçleri bunu ister.
+const satirDurumu = (hz: ReadonlyMap<number, HazirlikCevabi>, x: TakipSatiri): BaslamaDurumu | null => {
+  const h = x.paket ? paketHazirligi(hz, x.paket) : null;
+  return h ? baslamaDurumu(h) : null;
+};
+export function ekSuzgec(hz: ReadonlyMap<number, HazirlikCevabi>, d: TakipSuzgeci, eksikMadde: HazirlikMaddesi | ''): ((x: TakipSatiri) => boolean) | null {
+  const durumSart = d === 'durur' || d === 'uyari' ? (x: TakipSatiri) => satirDurumu(hz, x) === d : null;
+  if (eksikMadde === '') return durumSart;
+  return (x) => {
+    const h = x.paket ? paketHazirligi(hz, x.paket) : null;
+    return !!h && h.some((m) => m.madde === eksikMadde && m.hal === 'eksik') && (durumSart === null || durumSart(x));
+  };
+}
+
+export function TakipTablosu({
+  paketler, sonuclar, hazirlik, hazirlikOkundu, suz, suzYaz, eksikMadde, grup, grupAdi, yayinlar, seciliId, ac, geriCekSor, duzenler, gonderSor, benzerSor, kmDoldurSor,
+}: Ozellikler) {
+  const gruplar = useMemo(() => paketleriGrupla(paketler, grup, grupAdi), [paketler, grup, grupAdi]);
+  const durumu = (x: TakipSatiri) => satirDurumu(hazirlik, x);
+  const emirGrubu = grup === 'emir';
+  const emirler = useMemo(
+    () => takipEmirleri(gruplar, sonuclar, hazirlik, suz, ekSuzgec(hazirlik, suz, eksikMadde), emirGrubu),
+    [gruplar, sonuclar, hazirlik, suz, eksikMadde, emirGrubu],
+  );
+  // Çipteki sayı o süzgeçte görünecek iş sayısıdır ("Paket yok"ta paketsiz adım sayısı).
+  const sayilar = useMemo(() => new Map(TAKIP_SUZGECLERI.map(([k]) => {
+    const l = takipEmirleri(gruplar, sonuclar, hazirlik, k, ekSuzgec(hazirlik, k, eksikMadde), emirGrubu).flatMap((e) => e.satirlar);
+    return [k, l.filter((x) => (k === 'paketsiz' ? !x.paket : !!x.paket)).length] as const;
+  })), [gruplar, sonuclar, hazirlik, eksikMadde, emirGrubu]);
   const [secili, seciliYaz] = useState<ReadonlySet<string>>(() => new Set());
   // Seçilebilir: yayındaki başlamamış iş (geri çekme) ya da gönderilebilir iş (3362-1). Başlamış iş tek tek çekilir.
   const secilebilirMi = (p: Pkg, r: Result | null | undefined) => topluGeriCekilebilir(p, r) || topluGonderilebilir(p, r);
@@ -60,49 +101,70 @@ export function TakipTablosu({ paketler, sonuclar, hazirlik, hazirlikOkundu, suz
   const doldurulacak = seciliPaketler().filter((p) => p.status === 'draft');
   const kmDoldurulacak = seciliPaketler().filter(kmDoldurulabilir);
 
+  // Telefonda çubuk tek satır kalsın: tek birincil işlem görünür (gönder; gönderilecek yoksa geri çek), gerisi tek menüde.
+  const cekGorunur = !gonderilecek.length && cekilecek.length > 0;
+  const digerIslemler: MenuOgesi[] = [
+    ...(cekilecek.length && !cekGorunur ? [{ anahtar: 'cek', baslik: `${String(cekilecek.length)} işi operatörden geri çek`, simge: 'rotate' as const, ton: 'tehlike' as const, sec: () => geriCekSor(cekilecek, true) }] : []),
+    ...(duzenler && doldurulacak.length ? [{ anahtar: 'benzer', baslik: 'Benzer paketten al', simge: 'layers' as const, sec: () => benzerSor(doldurulacak) }] : []),
+    ...(duzenler ? [{
+      anahtar: 'km', baslik: 'Kalite Merkezi’nden doldur', simge: 'target' as const, sec: () => kmDoldurSor(kmDoldurulacak),
+      pasif: !kmDoldurulacak.length, pasifNedeni: kmDoldurulacak.length ? undefined : 'Seçilenlerin hepsi dolu ya da Kalite Merkezi’ne bağlı',
+    }] : []),
+    { anahtar: 'kaldir', baslik: 'Seçimi kaldır', simge: 'x', sec: () => seciliYaz(new Set()) },
+  ];
+
   return (
     <div className="tc-ay2-takip">
-      <div className="tc-ay2-takip-cipler" role="group" aria-label="Paket durumu">
-        {TAKIP_SUZGECLERI.map(([k, l]) => <button key={k} type="button" className="tc-ay2-takip-cip" aria-pressed={suz === k} onClick={() => suzYaz(k)}>{l}</button>)}
+      <div className="tc-ay2-takip-cipler" role="group" aria-label="İş durumu">
+        {TAKIP_SUZGECLERI.map(([k, l]) => {
+          const n = sayilar.get(k) ?? 0;
+          return (
+            <button key={k} type="button" className="tc-ay2-takip-cip" aria-pressed={suz === k} data-sifir={n === 0 ? '' : undefined} data-ton={k === 'durur' && n ? 'stop' : undefined} onClick={() => suzYaz(k)}>
+              {l} <span className="tc-ay2-takip-cip-sayi">{n}</span>
+            </button>
+          );
+        })}
       </div>
       {yayinlar && gecerli.length ? (
         <div className="tc-ay2-takip-toplu" role="toolbar" aria-label="Seçilenler">
           <span role="status">{gecerli.length} iş seçili</span>
-          {gonderilecek.length ? <Dugme tur="birincil" simge="next" onClick={() => gonderSor(gonderilecek)}>{gonderilecek.length} işi terminale gönder</Dugme> : null}
-          {duzenler && doldurulacak.length ? <Dugme tur="ikincil" simge="layers" onClick={() => benzerSor(doldurulacak)}>Benzer paketten al</Dugme> : null}
-          {duzenler ? (
-            <Dugme tur="ikincil" simge="target" disabled={!kmDoldurulacak.length} title={kmDoldurulacak.length ? undefined : 'Seçilenlerin hepsi dolu ya da Kalite Merkezi’ne bağlı'} onClick={() => kmDoldurSor(kmDoldurulacak)}>
-              Kalite Merkezi’nden doldur
-            </Dugme>
-          ) : null}
-          {cekilecek.length ? <Dugme tur="tehlike" simge="rotate" onClick={() => geriCekSor(cekilecek, true)}>{cekilecek.length} işi operatörden geri çek</Dugme> : null}
-          <Dugme tur="ikincil" simge="x" onClick={() => seciliYaz(new Set())}>Seçimi kaldır</Dugme>
+          {gonderilecek.length ? <Dugme tur="birincil" simge="next" title={`${String(gonderilecek.length)} işi terminale gönder`} onClick={() => gonderSor(gonderilecek)}>{gonderilecek.length} işi gönder</Dugme> : null}
+          {cekGorunur ? <Dugme tur="tehlike" simge="rotate" title={`${String(cekilecek.length)} işi operatörden geri çek`} onClick={() => geriCekSor(cekilecek, true)}>{cekilecek.length} işi geri çek</Dugme> : null}
+          <Menu etiket="Seçilenler için diğer işlemler" ipucu="Diğer işlemler" ogeler={digerIslemler} />
         </div>
       ) : null}
       {emirler.length === 0 ? <p className="tc-ay2-soluk tc-ay2-bos-satir">{paketler.length ? 'Bu durumda iş yok.' : 'Paket yok.'}</p> : null}
-      <table className="tc-ay2-takip-tablo" aria-label="Hazırlık takip tablosu">
+      <table className="tc-ay2-takip-tablo" aria-label="Hazırlık listesi">
         <thead>
           <tr>
             {yayinlar ? <th scope="col" className="tc-ay2-takip-kutu"><span className="tc-gizli-etiket">Seç</span></th> : null}
-            <th scope="col">Adım</th><th scope="col" data-genis="">İstasyon</th><th scope="col">Paket</th><th scope="col">Hazırlık</th>
-            <th scope="col">Üretim</th><th scope="col" className="tc-ay2-takip-sayi">Adet</th><th scope="col" data-genis="">Son hareket</th>
+            <th scope="col">Adım</th><th scope="col">Paket</th><th scope="col">Hazırlık</th><th scope="col">Üretim</th>
             <th scope="col"><span className="tc-gizli-etiket">İşlem</span></th>
           </tr>
         </thead>
         {emirler.map((e) => {
           const emirde = e.satirlar.flatMap((s) => (s.paket && secilebilir.has(s.paket.id) ? [s.paket.id] : []));
           const hepsi = emirde.length > 0 && emirde.every((id) => secili.has(id));
+          // "Hazır" sayısı açık adımların hazırlığıdır: paketsiz ve bitmiş adım paydadadır ama hazır sayılmaz (renk tek başına anlam taşımaz).
+          const acikAdim = e.satirlar.filter((s) => !s.bitti);
+          const hazir = acikAdim.filter((s) => durumu(s) === 'hazir').length;
           return (
           <tbody key={e.anahtar}>
             <tr className="tc-ay2-takip-emir">
-              <th scope="rowgroup" colSpan={yayinlar ? 9 : 8}>
+              <th scope="rowgroup" colSpan={yayinlar ? 6 : 5}>
                 <span className="tc-ay2-takip-emir-ic">
                   {yayinlar && emirde.length ? (
-                    <input type="checkbox" className="tc-ay2-takip-emir-kutu" aria-label={`${e.no} işlerinin hepsini seç`} checked={hepsi} onChange={(o) => isaretle(emirde, o.target.checked)} />
+                    <label className="tc-ay2-takip-kutu-alan">
+                      <input type="checkbox" className="tc-ay2-takip-emir-kutu" aria-label={`${e.no} işlerinin hepsini seç`} checked={hepsi} onChange={(o) => isaretle(emirde, o.target.checked)} />
+                    </label>
                   ) : null}
-                  <b className="tc-ay2-mono">{e.no}</b><span className="tc-ay2-soluk">{e.urun}</span>
+                  <b className="tc-ay2-mono">{e.no}</b>{e.urun ? <span className="tc-ay2-soluk">{e.urun}</span> : null}
+                  {e.rev ? <span className="tc-ay2-rev">Rev {e.rev}</span> : null}
+                  {e.acil ? <Cip ton="stop">Acil</Cip> : null}
                   <BeklemeCipi neden={e.bekletme} />
                   <span className="tc-ay2-takip-ilerleme">
+                    {e.termin ? <span>Termin {e.termin}</span> : null}
+                    {hazirlikOkundu && acikAdim.length ? <span>{hazir}/{acikAdim.length} hazır</span> : null}
                     <span>{e.biten}/{e.dilimler.length} adım tamamlandı</span>
                     <span className="tc-ay2-takip-serit" role="img" aria-label={e.dilimler.map((d, i) => `${String(i + 1)}. adım ${DILIM_ADI[d]}`).join(', ')}>
                       {e.dilimler.map((d, i) => <i key={i} data-dilim={d} title={`${String(i + 1)}. adım · ${DILIM_ADI[d]}`} />)}
@@ -118,8 +180,8 @@ export function TakipTablosu({ paketler, sonuclar, hazirlik, hazirlikOkundu, suz
                   <tr key={s.anahtar} className="tc-ay2-takip-satir" data-paketsiz="">
                     {yayinlar ? <td className="tc-ay2-takip-kutu" /> : null}
                     <td data-etiket="Adım">{s.opNo !== null ? `Op ${String(s.opNo)} · ` : ''}{s.ad}</td>
-                    <td data-genis="" data-etiket="İstasyon">{YOK}</td>
-                    <td data-etiket="Paket" colSpan={6}><span className="tc-ay2-soluk">{s.bitti ? 'Paket yok · adım tamamlandı' : 'Paket yok'}</span></td>
+                    <td data-etiket="Paket" colSpan={3}><Cip ton="stop">{s.bitti ? 'Paket yok · adım tamamlandı' : 'Paket yok'}</Cip></td>
+                    <td />
                   </tr>
                 );
               }
@@ -127,49 +189,80 @@ export function TakipTablosu({ paketler, sonuclar, hazirlik, hazirlikOkundu, suz
               const d = PAKET_DURUMLARI[s.durum];
               const h = paketHazirligi(hazirlik, p);
               const bd = h ? baslamaDurumu(h) : null;
+              const eksik = h ? eksikMaddeler(h) : [];
               const emir = tmiEmirId(p);
               const toplu = yayinlar && secilebilir.has(p.id);
+              const nOlcum = r ? Object.keys(r.meas || {}).length : 0;
+              const nRed = r ? Object.values(r.meas || {}).filter((m) => !m.ok).length : 0;
+              const acikNot = r ? (r.pins || []).filter((z) => z.status !== 'done').length : 0;
+              const adi = `${p.no} Op ${String(s.opNo ?? '')}`;
               return (
-                <tr key={s.anahtar} className="tc-ay2-takip-satir" aria-selected={seciliId === p.id} onClick={() => ac(p)}>
+                <tr key={s.anahtar} className="tc-ay2-takip-satir" aria-selected={seciliId === p.id} data-paket={p.id} onClick={(o) => ac(p, undefined, o.currentTarget)}>
                   {yayinlar ? (
                     <td className="tc-ay2-takip-kutu" onClick={(o) => o.stopPropagation()}>
-                      <input
-                        type="checkbox" aria-label={`${p.no} Op ${String(s.opNo ?? '')} seç`} checked={toplu && secili.has(p.id)} disabled={!toplu}
-                        title={toplu ? undefined : geriCekilebilir(p) ? 'Başlamış iş tek tek geri çekilir' : 'İş bitti'}
-                        onChange={(o) => isaretle([p.id], o.target.checked)}
-                      />
+                      <label className="tc-ay2-takip-kutu-alan">
+                        <input
+                          type="checkbox" aria-label={`${adi} seç`} checked={toplu && secili.has(p.id)} disabled={!toplu}
+                          title={toplu ? undefined : geriCekilebilir(p) ? 'Başlamış iş tek tek geri çekilir' : 'İş bitti'}
+                          onChange={(o) => isaretle([p.id], o.target.checked)}
+                        />
+                      </label>
                     </td>
                   ) : null}
                   <td data-etiket="Adım">
-                    <button type="button" className="tc-ay2-takip-ac" onClick={(o) => { o.stopPropagation(); ac(p); }}>
-                      {p.op || (s.opNo !== null ? `Op ${String(s.opNo)}` : 'Operasyon girilmedi')}
+                    <button type="button" className="tc-ay2-takip-ac" onClick={(o) => { o.stopPropagation(); ac(p, undefined, o.currentTarget); }}>
+                      <b>{p.op || (s.opNo !== null ? `Op ${String(s.opNo)}` : 'Operasyon girilmedi')}</b>
+                      <small className="tc-ay2-mono">{p.machine || YOK}</small>
                     </button>
                   </td>
-                  <td data-genis="" data-etiket="İstasyon" className="tc-ay2-mono">{p.machine || YOK}</td>
                   <td data-etiket="Paket">
                     <span className="tc-ay2-takip-cip-satir">
                       <Cip ton={d.ton}>{d.l.replace('Paket: ', '')}</Cip>
                       {p.dirty && p.status !== 'draft' ? <Cip ton="hold">Değişiklik var</Cip> : null}
+                      <PlanCipi paket={p} />
+                      {acikNot ? <Cip ton="hazard">{acikNot} not</Cip> : null}
                     </span>
                   </td>
                   <td data-etiket="Hazırlık">
-                    {bd ? (
-                      <Link className="tc-ay2-takip-hazirlik" to={`/adim-durumu${emir === null ? '' : `?emir=${String(emir)}`}`} onClick={(o) => o.stopPropagation()} title="Adım Durumu'nda aç">
-                        <Cip ton={BASLAMA_TONU[bd]}>{BASLAMA_DURUMLARI[bd]}</Cip>
-                      </Link>
-                    ) : YOK}
-                    {h ? <HazirlikMatrisiSeridi satirlar={h} /> : !hazirlikOkundu && hazirlikBeklenir(p) ? <HazirlikMatrisiYerTutucu /> : null}
+                    <span className="tc-ay2-takip-cip-satir">
+                      {bd ? (
+                        <Link className="tc-ay2-takip-hazirlik" to={`/adim-durumu${emir === null ? '' : `?emir=${String(emir)}`}`} onClick={(o) => o.stopPropagation()} title="Adım Durumu'nda aç">
+                          <Cip ton={BASLAMA_TONU[bd]}>{BASLAMA_DURUMLARI[bd]}</Cip>
+                        </Link>
+                      ) : !hazirlikOkundu && hazirlikBeklenir(p) ? <span className="tc-ay2-takip-yer" aria-hidden="true" /> : YOK}
+                      {eksik.slice(0, AZAMI_MADDE).map((m) => (
+                        <button
+                          key={m.madde} type="button" className="tc-ay2-takip-madde" data-ton={m.durdurur ? 'stop' : 'hold'}
+                          title={`${HAZIRLIK_MADDE_BILGISI[m.madde].ad}: ${m.durdurur ? 'eksik, başlatmayı durdurur' : 'eksik, uyarıyla başlar'}`}
+                          aria-label={`${HAZIRLIK_MADDE_BILGISI[m.madde].ad} eksik, ${adi} paketini aç`}
+                          onClick={(o) => { o.stopPropagation(); ac(p, m.madde === 'talimat' ? 'steps' : 'pub', o.currentTarget); }}
+                        ><Simge ad={m.durdurur ? 'x' : 'alert'} boyut="k" />{HAZIRLIK_MADDE_BILGISI[m.madde].kisa}</button>
+                      ))}
+                      {eksik.length > AZAMI_MADDE ? (
+                        <button
+                          type="button" className="tc-ay2-takip-madde" data-ton="idle"
+                          title={eksik.slice(AZAMI_MADDE).map((m) => HAZIRLIK_MADDE_BILGISI[m.madde].ad).join(', ')}
+                          aria-label={`${String(eksik.length - AZAMI_MADDE)} eksik madde daha, ${adi} paketini aç`}
+                          onClick={(o) => { o.stopPropagation(); ac(p, 'pub', o.currentTarget); }}
+                        >+{eksik.length - AZAMI_MADDE}</button>
+                      ) : null}
+                    </span>
                   </td>
-                  <td data-etiket="Üretim">{r && IS_DURUMLARI[r.state] ? IS_DURUMLARI[r.state].etiket : 'Başlamadı'}</td>
-                  <td data-etiket="Adet" className="tc-ay2-takip-sayi">
-                    <span className="tc-ay2-mono">{r ? sayi(r.good) : YOK} / {p.target ? sayi(p.target) : YOK}</span>
-                    {r && r.scrap ? <small className="tc-ay2-kirmizi"> · {sayi(r.scrap)} hurda</small> : null}
+                  <td data-etiket="Üretim" title={r ? `Son hareket ${saat(r.at)}` : undefined}>
+                    <span className="tc-ay2-takip-uretim">
+                      <b>{r && IS_DURUMLARI[r.state] ? IS_DURUMLARI[r.state].etiket : 'Başlamadı'}</b>
+                      <small>
+                        <span className="tc-ay2-mono">{r ? sayi(r.good) : YOK} / {p.target ? sayi(p.target) : YOK}</span>
+                        {r && r.scrap ? <span className="tc-ay2-kirmizi tc-ay2-takip-tek"> · {sayi(r.scrap)} hurda</span> : null}
+                        {nOlcum ? <span className="tc-ay2-takip-tek"> · {nOlcum}/{(p.plan || []).length} ölçüldü</span> : null}
+                        {nRed ? <b className="tc-ay2-kirmizi tc-ay2-takip-tek"> · {nRed} red</b> : null}
+                      </small>
+                    </span>
                   </td>
-                  <td data-genis="" data-etiket="Son hareket">{r ? saat(r.at) : YOK}</td>
                   <td className="tc-ay2-takip-islem">
                     {yayinlar && geriCekilebilir(p) ? (
                       <button
-                        type="button" className="tc-ay2-arac" data-ton={calisiyorMu(r) ? 'stop' : undefined} title="Operatörden geri çek" aria-label={`${p.no} Op ${String(s.opNo ?? '')} operatörden geri çek`}
+                        type="button" className="tc-ay2-arac" data-ton={calisiyorMu(r) ? 'stop' : undefined} title="Operatörden geri çek" aria-label={`${adi} operatörden geri çek`}
                         onClick={(o) => { o.stopPropagation(); geriCekSor([p], false); }}
                       ><Simge ad="rotate" /></button>
                     ) : null}

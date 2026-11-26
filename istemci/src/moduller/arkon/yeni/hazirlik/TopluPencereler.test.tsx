@@ -29,9 +29,11 @@ function kur(d: Deneme, paketler: Pkg[], belgeler: { kimlik: string; surum: numb
   return istekler;
 }
 const yazim = (l: Istek[], id: string) => l.filter((i) => i.yol === `/arkon/belgeler/pkgs/${id}/yaz`).map((i) => (i.govde as { govde: Pkg }).govde);
+// Liste paketler okunmadan da çizilir: ilk paket satırı gelene kadar beklenir.
 const tablo = async () => {
-  fireEvent.click(await screen.findByRole('button', { name: 'Liste' }, { timeout: 10000 }));
-  return screen.findByRole('table', { name: 'Hazırlık takip tablosu' }, { timeout: 10000 });
+  const t = await screen.findByRole('table', { name: 'Hazırlık listesi' }, { timeout: 10000 });
+  await waitFor(() => { expect(t.querySelector('[data-paket]')).not.toBeNull(); }, { timeout: 10000 });
+  return t;
 };
 
 describe('3362-1 toplu terminale gönder', () => {
@@ -42,13 +44,17 @@ describe('3362-1 toplu terminale gönder', () => {
     const istekler = kur(YONETICI, [a, b, c]);
     const t = await tablo();
     fireEvent.click(within(t).getByRole('checkbox', { name: 'ORN-UE-T işlerinin hepsini seç' }));
-    fireEvent.click(screen.getByRole('button', { name: '3 işi terminale gönder' }));
+    fireEvent.click(screen.getByRole('button', { name: '3 işi gönder' }));
     const p = await screen.findByRole('dialog', { name: 'Terminale gönder · 3 iş seçildi' });
     expect(within(p).getByRole('region', { name: 'Gönderilemez' }).textContent).toContain('Op 30');
     const uyari = within(p).getByRole('region', { name: 'Onayınız gerekiyor' });
     expect(within(p).getByRole('button', { name: '1 işi gönder' })).toBeTruthy();
     fireEvent.click(within(uyari).getByRole('checkbox'));
+    const ozet = () => istekler.filter((i) => i.yol === '/adimli-emirler/hazirlik-ozeti').length;
+    const ozetOnce = ozet();
     fireEvent.click(within(p).getByRole('button', { name: '2 işi gönder' }));
+    // Gönderim paketin durumunu değiştirir: hazırlık özeti sayfa yenilenmeden yeniden okunur ("1 eksik" kalmaz, ekran denemesi K10).
+    await waitFor(() => { expect(ozet()).toBeGreaterThan(ozetOnce); }, { timeout: 10000 });
     await waitFor(() => {
       expect(yazim(istekler, a.id).some((x) => x.status === 'published' && !x.dirty)).toBe(true);
       expect(yazim(istekler, b.id).some((x) => x.status === 'published' && (x.history?.at(-1) as Record<string, unknown> | undefined)?.['planYok'] === true)).toBe(true);
@@ -62,7 +68,7 @@ describe('3362-1 toplu terminale gönder', () => {
     const istekler = kur(YONETICI, [a]);
     const t = await tablo();
     fireEvent.click(within(t).getByRole('checkbox', { name: /Op 10 seç/ }));
-    fireEvent.click(screen.getByRole('button', { name: '1 işi terminale gönder' }));
+    fireEvent.click(screen.getByRole('button', { name: '1 işi gönder' }));
     const p = await screen.findByRole('dialog', { name: 'Terminale gönder · 1 iş seçildi' });
     fireEvent.click(within(p).getByRole('button', { name: 'Vazgeç' }));
     await new Promise((r) => { setTimeout(r, 300); });
@@ -77,7 +83,7 @@ describe('3362-1 Test bakışı ekleri', () => {
     const istekler = kur(YONETICI, [a, b, c], belgeler);
     const t = await tablo();
     fireEvent.click(within(t).getByRole('checkbox', { name: 'ORN-UE-W işlerinin hepsini seç' }));
-    fireEvent.click(screen.getByRole('button', { name: '3 işi terminale gönder' }));
+    fireEvent.click(screen.getByRole('button', { name: '3 işi gönder' }));
     const p = await screen.findByRole('dialog', { name: 'Terminale gönder · 3 iş seçildi' });
     belgeler[1] = { kimlik: b.id, surum: 2, govde: { ...b, updatedAt: 99 } };
     belgeler[2] = { kimlik: c.id, surum: 2, govde: { ...c, plan: [] } };
@@ -98,7 +104,7 @@ describe('3362-1 Test bakışı ekleri', () => {
     });
     const t = await tablo();
     fireEvent.click(within(t).getByRole('checkbox', { name: 'ORN-UE-Z işlerinin hepsini seç' }));
-    fireEvent.click(screen.getByRole('button', { name: '3 işi terminale gönder' }));
+    fireEvent.click(screen.getByRole('button', { name: '3 işi gönder' }));
     const p = await screen.findByRole('dialog', { name: 'Terminale gönder · 3 iş seçildi' });
     fireEvent.click(within(p).getByRole('button', { name: '3 işi gönder' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Kalanları durdur' }, { timeout: 10000 }));

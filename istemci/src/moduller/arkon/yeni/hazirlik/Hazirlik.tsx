@@ -4,7 +4,7 @@ import { KAYIT_GITMEDI, KAYIT_REDDI_OLAYI } from '../../../../../../arkon/web/sr
 import { araOnayNedenleri, paketImzasi } from '../../../../../../arkon/web/src/data/ara-onay.ts';
 import { MERKEZDEN_EKLENIR, merkezDosyasiniKoy } from '../../../../ortak/cizim/cekirdek/cizim-merkezi.ts';
 import { herNParcaYap, olculeriSil } from '../../../../../../arkon/web/src/data/kontrol-plani.ts';
-import { PAKET_GRUPLARI, paketGrubuOku, paketleriGrupla, type GrupAdi, type PaketGrubu } from '../../../../../../arkon/web/src/data/paket-grup.ts';
+import { PAKET_GRUPLARI, paketGrubuOku, type GrupAdi, type PaketGrubu } from '../../../../../../arkon/web/src/data/paket-grup.ts';
 import {
   SUZGEC_ALANLARI, paketleriSuz, suzgecOku, suzgecSayisi, suzgecSecenekleri, type PaketSuzgeci, type SuzgecAlani,
 } from '../../../../../../arkon/web/src/data/paket-suzgec.ts';
@@ -12,7 +12,6 @@ import { KM_BAGSIZ_ILK_PARCA_UYARISI } from '../../../../../../arkon/web/src/dat
 import { ilkParcaKalemleri } from '../operator/kurallar.ts';
 import { ISTASYONSUZ_GONDERIM, gonderimUyarisi, istasyonsuzMu, rotaEksigi, type GonderimUyarisi } from '../../../../../../arkon/web/src/data/tmi-plan.ts';
 import { sablonUygula, tmiPaketiMi } from '../../../../../../arkon/web/src/data/yeni-paket.ts';
-import { tmiBekletme } from '../../../../../../arkon/web/src/data/bekleyen-emir.ts';
 import { YOK, sayi } from '../cekirdek/bicim.ts';
 import { IS_DURUMLARI } from '../cekirdek/sabitler.ts';
 import { bip } from '../cekirdek/ses.ts';
@@ -20,12 +19,11 @@ import { istasyonBul, istasyonListesi, makineBul } from '../cekirdek/tesis.ts';
 import { yerel } from '../cekirdek/yerel.ts';
 import type { KmResim } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import type { ResimNotu, TeknikResimKontrolu } from '../cizim/index.tsx';
-import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import type { ArkonEkranOzellikleri } from '../sayfalar.ts';
 import { useArkon, useArkonDurumu, useCakismaUyarisi, useIleti } from '../veri/baglam.ts';
 import type { ArkonDeposu, Ileti } from '../veri/depo.ts';
 import { baytiVar, dosyaBoyu, useCozulmus } from '../veri/dosyalar.ts';
-import { BeklemeCipi, Bolmeli, Cip } from './denetimler.tsx';
+import { Bolmeli, Cip } from './denetimler.tsx';
 import { IstasyonDuzenleyici, TurSecici } from './IstasyonDuzenleyici.tsx';
 import { ArkonBandi } from '../ortak/SaatSeridi.tsx';
 import { IstasyonSecimi } from './IstasyonSecici.tsx';
@@ -35,21 +33,21 @@ import { kmAlimEtiketi, kmBagi, kmDoldurulabilir, kmDosyaElle, type KmTopluSatir
 import { KmPlanBilgisi } from './KmPlanBilgisi.tsx';
 import { KmTopluPenceresi, type KmTopluSonucu } from './KmTopluPenceresi.tsx';
 import type { KmNumunePlani } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
+import type { HazirlikMaddesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { HAZIRLIK_MADDE_BILGISI } from '../../../uretim-emirleri/disari.ts';
 import { useStudyoParcasi } from '../../../kalite-merkezi/disari.ts';
 import { useYetki } from '../../../../ortak/veri/yetki.ts';
 import { KuralSekmesi } from './KuralSekmesi.tsx';
 import { depoDoldurma,
-  IS_TURLERI, PAKET_DURUMLARI, SIKLIKLAR, TMI_KILIT, VARSAYILAN_AYARLAR, isTuru, numunePlani, numunePlaniYaz,
-  olcumYontemi, onayBekliyor, onayGerekir, onayReddedildi, onayli, kmBagsizUyarisiGerekir, paketDenetimi, paketKartDurumu, planYokUyarisiGerekir, tmiIsEmri, yeniKimlik,
+  IS_TURLERI, SIKLIKLAR, TMI_KILIT, VARSAYILAN_AYARLAR, isTuru, numunePlani, numunePlaniYaz,
+  olcumYontemi, onayBekliyor, onayGerekir, onayReddedildi, onayli, kmBagsizUyarisiGerekir, paketDenetimi, planYokUyarisiGerekir, tmiIsEmri, yeniKimlik,
   beklemeEki, planDisiEki, geriCekilebilir, takipSuzgeciOku, topluGeriCekilebilir, type TakipSuzgeci,
 } from './kurallar.ts';
 import { HazirlikListesi } from '../operator/HazirlikListesi.tsx';
 import { EkHazirlikMaddeleri } from './EkHazirlikMaddeleri.tsx';
-import { MatrisGorunumu } from './MatrisGorunumu.tsx';
-import { HazirlikPaketCipi, paketHazirligi, paketIsEmriId, useHazirlikOzeti } from './HazirlikTakibi.tsx';
+import { paketHazirligi, paketIsEmriId, useHazirlikOzeti } from './HazirlikTakibi.tsx';
 import { TalimatVeAdimlar, talimatSayisi, useTalimatOkuma } from './TalimatSekmesi.tsx';
 import { NumuneSekmesi } from './NumuneSekmesi.tsx';
-import { PlanCipi } from './PlanCipi.tsx';
 import { GeriCekPenceresi, TakipTablosu } from './TakipTablosu.tsx';
 import { BenzerPaketPenceresi, TopluBenzerPenceresi, TopluGonderPenceresi, topluDoldurmaPlani, type GonderimIlerlemesi, type TopluDoldurmaSatiri } from './TopluPencereler.tsx';
 import { benzerKopya, enIyiAday, gelecekler, gidecekMi, gonderimHali, icerikDolu, topluGonderilebilir, varsayilanKopya, type KopyaAlani } from './toplu.ts';
@@ -79,9 +77,6 @@ const MerkezDurumu = lazy(async () => {
 // istasyon ayarı hazırlanır ve operatöre yayınlanır. Değişiklik yarım saniye sonra cihaza ve sunucuya yazılır (eskisi gibi).
 
 type Sekme = 'info' | 'docs' | 'st' | 'plan' | 'samp' | 'steps' | 'rules' | 'pub';
-// 3111: aynı paketler iki görünümde: kart listesi ve ayrıntı (bugünkü) ya da emir ve adım sırasıyla takip tablosu.
-type Gorunum = 'paket' | 'tablo' | 'matris';
-const GORUNUMLER: readonly (readonly [Gorunum, string, SimgeAdi])[] = [['paket', 'Kartlar', 'list'], ['tablo', 'Liste', 'grid'], ['matris', 'Matris', 'clipboard-check']];
 
 // Ağ klasörü (store.ts Folder): A0'ın depo yüzünde yok, aynı nesneden tipli okunur (A0'a istek: yüze eklensin).
 interface KlasorTutamaci { name: string }
@@ -169,16 +164,15 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
   const [suz, suzYaz] = useState<PaketSuzgeci>(() => suzgecOku(oturum.oku('prepSuzgec')));
   const suzKoy = (n: PaketSuzgeci) => { suzYaz(n); oturum.yaz('prepSuzgec', n); };
   const suzSec = (a: SuzgecAlani, d: string | undefined) => { const n = { ...suz }; if (d === undefined) delete n[a]; else n[a] = d; suzKoy(n); };
-  const [kapali, kapaliYaz] = useState<string[]>([]);
-  const [gorunum, gorunumYaz] = useState<Gorunum>(() => { const g = yerel.oku('prepGorunum'); return g === 'tablo' || g === 'matris' ? g : 'paket'; });
-  const gorunumSec = (g: Gorunum) => { gorunumYaz(g); yerel.yaz('prepGorunum', g); };
-  // 3606: dar ekranda ayrıntı matrisin altında açılır; seçimde başlığına kayılır (hareket azaltma tercihinde animasyonsuz),
-  // kapanınca odak tıklanan hücreye ya da iş adına döner.
+  // Süzgeç menüsündeki "Eksik madde" (3606-2; eski Matris görünümünün süzgeci). Oturumda hatırlanır, yeni oturum boş açılır.
+  const [eksikMadde, eksikMaddeYaz] = useState<HazirlikMaddesi | ''>(() => { const m = oturum.oku('prepEksik'); return typeof m === 'string' && Object.hasOwn(HAZIRLIK_MADDE_BILGISI, m) ? m as HazirlikMaddesi : ''; });
+  const eksikMaddeSec = (m: HazirlikMaddesi | '') => { eksikMaddeYaz(m); oturum.yaz('prepEksik', m); };
+  // Dar ekranda ayrıntı listenin yerine açılır; seçimde başlığına kayılır (hareket azaltma tercihinde animasyonsuz),
+  // kapanınca odak tıklanan satıra ya da çipe döner ve satır görünür kalır.
   const sonTik = useRef<HTMLElement | null>(null);
   useEffect(() => {
-    if (gorunum !== 'matris') return;
     if (!duzenAcik) {
-      if (sonTik.current?.isConnected) sonTik.current.focus();
+      if (sonTik.current?.isConnected) { sonTik.current.focus({ preventScroll: true }); sonTik.current.scrollIntoView?.({ block: 'nearest' }); }
       sonTik.current = null;
       return;
     }
@@ -188,7 +182,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
     el.tabIndex = -1;
     el.scrollIntoView?.({ block: 'start', behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
     el.focus({ preventScroll: true });
-  }, [gorunum, duzenAcik, secili?.id]);
+  }, [duzenAcik, secili?.id]);
   const [takipSuz, takipSuzYaz] = useState<TakipSuzgeci>(() => takipSuzgeciOku(oturum.oku('prepTakip')));
   const takipSuzSec = (d: TakipSuzgeci) => { takipSuzYaz(d); oturum.yaz('prepTakip', d); };
   const [suzAcik, suzAcikYaz] = useState(() => yerel.oku('prepSuzAcik') === true);
@@ -611,41 +605,9 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
 
   const grupAdi: GrupAdi = (tur, kod) => (tur === 'istasyon' ? istasyonBul(tesis, kod).name : makineBul(tesis, kod)?.name) || undefined;
   const liste = paketleriSuz(paketler, suz, ara);
-  const gruplar = paketleriGrupla(liste, grup, grupAdi);
-  const nSuzAlan = suzgecSayisi(suz);
+  const nSuzAlan = suzgecSayisi(suz) + (eksikMadde ? 1 : 0);
   const nSuz = nSuzAlan + (ara.trim() ? 1 : 0);
-  const katla = (k: string) => kapaliYaz((x) => (x.includes(k) ? x.filter((y) => y !== k) : [...x, k]));
-  const hepsiKapali = gruplar.length > 0 && gruplar.every((g) => kapali.includes(grup + ':' + g.anahtar));
-  const temizle = () => { suzKoy({}); araYaz(''); };
-
-  const paketKarti = (x: Pkg) => {
-    const r = sonuclar[x.id];
-    const nm = r ? Object.keys(r.meas || {}).length : 0;
-    const nb = r ? Object.values(r.meas || {}).filter((m) => !m.ok).length : 0;
-    const d = PAKET_DURUMLARI[paketKartDurumu(x, r)];
-    const acikNot = r ? (r.pins || []).filter((z) => z.status !== 'done').length : 0;
-    return (
-      <button key={x.id} type="button" className="tc-ay2-paket" aria-pressed={!!p && x.id === p.id} onClick={() => { void sec(x); }}>
-        <div className="tc-ay2-paket-no tc-ay2-mono">{x.no}</div>
-        <div className="tc-ay2-paket-ad">
-          {x.part || 'Adsız parça'}<span className="tc-ay2-rev">Rev {x.rev}</span>{x.priority === 'urgent' ? <Cip ton="stop">Acil</Cip> : null}
-        </div>
-        <div className="tc-ay2-paket-meta">
-          <span><Simge ad={IS_TURLERI[isTuru(x)].simge} boyut="k" /> {x.op || 'Operasyon girilmedi'}</span>
-          <span>{x.machine}</span><span>{x.target ? sayi(x.target) + ' adet' : 'Adet yok'}</span>
-        </div>
-        <div className="tc-ay2-paket-cipler">
-          <Cip ton={d.ton}>{d.l}</Cip>
-          <BeklemeCipi neden={tmiBekletme(x)} />
-          <PlanCipi paket={x} sira />
-          <HazirlikPaketCipi satirlar={paketHazirligi(hz.harita, x)} />
-          {x.dirty && x.status !== 'draft' ? <Cip ton="hold">Değişiklik var</Cip> : null}
-          {acikNot ? <Cip ton="hazard">{acikNot} not</Cip> : null}
-          {nm ? <span className="tc-ay2-mini">{nm}/{(x.plan || []).length} ölçüldü{nb ? <> · <b className="tc-ay2-kirmizi">{nb} red</b></> : null}</span> : null}
-        </div>
-      </button>
-    );
-  };
+  const temizle = () => { suzKoy({}); araYaz(''); eksikMaddeSec(''); };
 
   const v = p ? paketDenetimi(p, tesis) : [];
   const tamam = (k: string) => v.filter((x) => x.k === k).every((x) => x.ok || x.soft);
@@ -697,7 +659,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
   };
 
   return (
-    <div className="tc-ay2" data-duzen={duzenAcik ? '' : undefined} data-gorunum={gorunum === 'paket' ? undefined : gorunum}>
+    <div className="tc-ay2" data-duzen={duzenAcik ? '' : undefined}>
       <ArkonBandi simge="layers" baslik="Üretim Terminali Hazırlık" kisayollar={HAZIRLIK_KISAYOLLARI} alt="Kalite & proses" ekMenude ek={(
         <span className="tc-ay2-esitlemeler">
         <span className="tc-ay2-esitleme" data-acik="" title="Aynı bilgisayardaki operatör ekranlarına anında iletim"><i aria-hidden="true" />Bu bilgisayar</span>
@@ -710,11 +672,6 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
         <aside className="tc-ay2-liste" aria-label="İş paketleri">
           <div className="tc-ay2-kb">
             <b>İş paketleri</b><span className="tc-ay2-ust-yazi">{paketler.length} paket</span>
-            <div className="tc-ay2-bolmeli tc-ay2-sag tc-ay2-gorunum" role="group" aria-label="Görünüm">
-              {GORUNUMLER.map(([k, l, sm]) => (
-                <button key={k} type="button" aria-pressed={gorunum === k} onClick={() => gorunumSec(k)}><Simge ad={sm} boyut="k" />{l}</button>
-              ))}
-            </div>
           </div>
           <div className="tc-ay2-arama">
             <div className="tc-ay2-arama-kutu">
@@ -749,18 +706,15 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                   );
                 })}
               </div>
-              {gorunum !== 'paket' ? null : (<>
+              <label className="tc-ay2-alan" data-acik={eksikMadde ? '' : undefined}>
+                <span className="tc-ay2-ust-yazi">Eksik madde</span>
+                <select value={eksikMadde} onChange={(e) => eksikMaddeSec(e.target.value as HazirlikMaddesi | '')}>
+                  <option value="">Hepsi</option>
+                  {(Object.keys(HAZIRLIK_MADDE_BILGISI) as HazirlikMaddesi[]).map((m) => <option key={m} value={m}>{HAZIRLIK_MADDE_BILGISI[m].ad}</option>)}
+                </select>
+              </label>
               <span className="tc-ay2-ust-yazi">Grupla</span>
-              <div className="tc-ay2-satir">
-                <Bolmeli etiket="Paketleri grupla" deger={grup} secenekler={PAKET_GRUPLARI} degistir={grupSec} />
-                {gruplar.length > 1 ? (
-                  <button
-                    type="button" className="tc-ay2-arac" title={hepsiKapali ? 'Grupları aç' : 'Grupları kapat'} aria-label={hepsiKapali ? 'Grupları aç' : 'Grupları kapat'}
-                    onClick={() => kapaliYaz((x) => (hepsiKapali ? x.filter((y) => !y.startsWith(grup + ':')) : [...x, ...gruplar.map((g) => grup + ':' + g.anahtar)]))}
-                  ><Simge ad={hepsiKapali ? 'down' : 'up'} /></button>
-                ) : null}
-              </div>
-              </>)}
+              <Bolmeli etiket="İşleri grupla" deger={grup} secenekler={PAKET_GRUPLARI} degistir={grupSec} />
             </div>
           ) : null}
           {nSuz ? (
@@ -769,33 +723,15 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
               <button type="button" className="tc-ay2-bag" onClick={temizle}><Simge ad="x" boyut="k" />Süzgeci temizle</button>
             </div>
           ) : null}
-          {gorunum === 'matris' ? (
-            <MatrisGorunumu paketler={liste} hazirlik={hz.harita} seciliId={duzenAcik && p ? p.id : null} ac={(x, hucre, el, madde) => { sonTik.current = el; void sec(x, hucre ? (madde === 'talimat' ? 'steps' : 'pub') : 'info'); }} />
-          ) : gorunum === 'tablo' ? (
-            <TakipTablosu
-              paketler={liste} sonuclar={sonuclar} hazirlik={hz.harita} hazirlikOkundu={hz.zaman !== null} suz={takipSuz} suzYaz={takipSuzSec} yayinlar={yayinlar}
-              seciliId={duzenAcik && p ? p.id : null} ac={(x) => { void sec(x); }} geriCekSor={(l, toplu) => geriSorYaz({ l, toplu })}
-              duzenler={duzenler} gonderSor={gonderSorYaz} benzerSor={(l) => benzerPlanYaz(topluDoldurmaPlani(l, paketler))} kmDoldurSor={kmTopluYaz}
-            />
-          ) : (
-          <div className="tc-ay2-paketler">
-            {gruplar.map((g) => {
-              const k = grup + ':' + g.anahtar; const kp = kapali.includes(k);
-              return (
-                <div key={g.anahtar} className="tc-ay2-paket-grubu">
-                  <button type="button" className="tc-ay2-grup-bas" aria-expanded={!kp} onClick={() => katla(k)}>
-                    <Simge ad={kp ? 'chev-right' : 'down'} boyut="k" /><b className="tc-ay2-mono">{g.baslik}</b><small className="tc-ay2-soluk">{g.alt}</small>
-                    {grup === 'emir' ? <span className="tc-ay2-rozet-sayi">{g.paketler.length}</span> : null}
-                  </button>
-                  {kp ? null : g.paketler.map(paketKarti)}
-                </div>
-              );
-            })}
-            {paketler.length && !liste.length ? (
-              <div className="tc-ay2-soluk tc-ay2-bos-satir">Süzgece uyan paket yok.<button type="button" className="tc-ay2-bag" onClick={temizle}><Simge ad="x" boyut="k" />Süzgeci temizle</button></div>
-            ) : null}
-          </div>
-          )}
+          <TakipTablosu
+            paketler={liste} sonuclar={sonuclar} hazirlik={hz.harita} hazirlikOkundu={hz.zaman !== null} suz={takipSuz} suzYaz={takipSuzSec} eksikMadde={eksikMadde}
+            grup={grup} grupAdi={grupAdi} yayinlar={yayinlar} seciliId={duzenAcik && p ? p.id : null}
+            ac={(x, ilk, el) => { if (el) sonTik.current = el; void sec(x, ilk); }} geriCekSor={(l, toplu) => geriSorYaz({ l, toplu })}
+            duzenler={duzenler} gonderSor={gonderSorYaz} benzerSor={(l) => benzerPlanYaz(topluDoldurmaPlani(l, paketler))} kmDoldurSor={kmTopluYaz}
+          />
+          {paketler.length && !liste.length ? (
+            <div className="tc-ay2-soluk tc-ay2-bos-satir">Süzgece uyan paket yok.<button type="button" className="tc-ay2-bag" onClick={temizle}><Simge ad="x" boyut="k" />Süzgeci temizle</button></div>
+          ) : null}
         </aside>
         {p ? (
           <section className="tc-ay2-duzen" aria-label="İş paketi">

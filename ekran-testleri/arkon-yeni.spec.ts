@@ -77,8 +77,8 @@ test.describe('A2 Hazırlık', () => {
     await page.route('**/api/arkon/belgeler/pkgs', (r) => r.fulfill({ json: { belgeler: [{ kimlik: paket.id, surum: 1, govde: paket }] } }));
     await page.route('**/api/arkon/belgeler/pkgs/*/yaz', (r) => r.fulfill({ json: { sonuc: 'yazildi', surum: 2 } }));
     await ac('/arkon/hazirlik');
-    // Dar ekranda liste ile düzenleyici yer değiştirir: paket kartına basınca düzenleyici açılır.
-    await page.getByRole('complementary', { name: 'İş paketleri' }).getByRole('button', { name: /IE-EKRAN-1/, pressed: true }).click();
+    // Liste satırına basınca düzenleyici açılır (dar ekranda listenin yerine).
+    await page.getByRole('table', { name: 'Hazırlık listesi' }).getByRole('button', { name: /^Op 10/ }).click();
     const duzen = page.getByRole('region', { name: 'İş paketi' });
     await expect(duzen.getByRole('heading', { name: /IE-EKRAN-1/ })).toBeVisible();
     const adimlar = duzen.getByRole('list', { name: 'Hazırlık adımları' });
