@@ -48,6 +48,8 @@ export const planSurumu = async (db: Db, kilit = false): Promise<number> =>
   (await db.tek<{ surum: number }>(`SELECT surum FROM plan_durumu${kilit ? ' FOR UPDATE' : ''}`))!.surum;
 export const planSurumuArtir = async (db: Db): Promise<number> =>
   (await db.tek<{ surum: number }>('UPDATE plan_durumu SET surum = surum + 1 RETURNING surum'))!.surum;
+// 3724: uzun hesap boyunca işlemin bağlantısını sorgulu tutar (idle_in_transaction_session_timeout boşta bekleyeni keser).
+export const baglantiyiYokla = async (db: Db): Promise<void> => { await db.sorgu('SELECT 1'); };
 
 export async function yerlesimler(db: Db, hedef: Hedef): Promise<YerlesimSatiri[]> {
   const r = hedef === null

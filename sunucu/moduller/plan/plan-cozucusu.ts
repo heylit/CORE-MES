@@ -1,14 +1,13 @@
-import vm from 'node:vm';
 import type { Db } from '#cekirdek/db.ts';
 import { cakisma } from '#cekirdek/hata.ts';
-import { TESIS_SAAT_DILIMI } from '#paylasilan/zaman.ts';
 import { hedefMotorAyari } from './motor-ayari.ts';
 import { calismayaMotorAyari } from './motor-ayari-kurallar.ts';
 import { planAni } from './planlama-kurallar.ts';
 import { hedef, istasyonKisiVardiyasiz, istasyonPasif, makineYok, yetkinKisiYok, NEDEN_OLCULEMEDI, sureBos, yerlesmemeNedeni, zamanNedeni, type YerlesmemeNedeni, type ZamanAdayi } from './planlanamama-kurallar.ts';
 import { cozumGirdisi, type EkAdim, type PlanBenzetimi } from './plan-girdisi.ts';
-import { motorKodu, planCoz, type MotorDurumu, type MotorPlani } from './plan-motoru.ts';
+import { COZUM_SURESI_MS, planCoz, type MotorDurumu, type MotorPlani } from './plan-motoru.ts';
 import { planCozumKaynagi } from './planlama-servis.ts';
+import { baglantiyiYokla } from './sorgular.ts';
 import type { PlanMotoruCozucusu, PlanMotoruIstegi } from './servis.ts';
 
 // ADR 0018 karar 5: plan modülünün planMotoruCozucusu kaydının karşılığı. Girdiyi bu modül kurar (planlama sayfasının çalışması, Reçete ve
@@ -16,17 +15,37 @@ import type { PlanMotoruCozucusu, PlanMotoruIstegi } from './servis.ts';
 // tezgâhı kuraldan kurar (motor yerleşimi ve hızlı deneme; kuyruğun tezgâhı adaylara eklenir).
 // Motorun yerleştiremediği iş yerlesmeyen'dedir, nedeni nedenler'de (981 a-1): plan onu yerleşmemiş bırakır, ötekiler yazılır. Vardiyası
 // tanımsız tezgâhın işi vardiyasiz'dadır (168 b): plan onu uyarıyla boş bırakır, komutu durdurmaz.
+// 3724: aynı oturumun turları (servis.ts kol turu) girdiyi bir kez okur ve tek süre sınırını paylaşır: plan kilidi altındaki işlem
+// en çok COZUM_SURESI_MS çözüm bekler. Çözüm sürerken bağlantı sorgusuz kalmaz (canliTut): boşta işlem sınırı işlemi kesmez.
 export const sunucuPlanCozucusu: PlanMotoruCozucusu = async (db: Db, istek: PlanMotoruIstegi) => {
+  const oturum = istek.oturum ?? {};
+  const sonAn = oturum.sonAn ??= Date.now() + COZUM_SURESI_MS;
+  const anahtar = `${String(istek.simdi.getTime())}|${String(istek.taslakId)}`;
+  if (oturum.girdi?.anahtar !== anahtar) oturum.girdi = { anahtar, deger: await cozumKaynagi(db, istek) };
+  const kaynak = oturum.girdi.deger as CozumKaynagi;
+  return canliTut(db, coz(kaynak, { ...istek, sonAn }));
+};
+type CozumKaynagi = Parameters<typeof coz>[0];
+
+// Hesap sürerken bağlantı aralıkla sorgulanır; hesap bitince süren yoklama beklenir, bağlantı sonraki sorguya boş döner. Yoklama hatası
+// (işlem kesildi) hesabın sonucunu bekletmez, sonraki sorguda yüzeye çıkar. 5 sn: varsayılan boşta işlem sınırının (30 sn) çok altı.
+export const YOKLAMA_ARALIGI_MS = 5_000;
+export async function canliTut<T>(db: Db, is: Promise<T>, araMs: number = YOKLAMA_ARALIGI_MS): Promise<T> {
+  let suren: Promise<void> = Promise.resolve();
+  const sayac = setInterval(() => { suren = suren.then(() => baglantiyiYokla(db)).catch(() => undefined); }, araMs);
+  try { return await is; } finally { clearInterval(sayac); await suren; }
+}
+async function cozumKaynagi(db: Db, istek: PlanMotoruIstegi): Promise<CozumKaynagi> {
   const kaynak = await planCozumKaynagi(db, istek.simdi.getTime());
   // Girdi güncel motor ayarıyla gelir; taslak kendi sürümüyle dizilir (774 a).
   const { degerler } = await hedefMotorAyari(db, istek.taslakId);
-  return coz({ ...kaynak, calisma: calismayaMotorAyari(kaynak.calisma, degerler) }, istek);
-};
+  return { ...kaynak, calisma: calismayaMotorAyari(kaynak.calisma, degerler) };
+}
 
 // 686 a: ek adım alanı plan modülünün isteğine ayrıca girer; çözücü alanı olan ve olmayan isteği aynı okur.
 export async function coz(
   kaynak: { calisma: unknown; kayit: unknown; kaynak: Parameters<typeof cozumGirdisi>[0]['kaynak'] },
-  istek: PlanMotoruIstegi & { ekAdimlar?: readonly EkAdim[] } & PlanBenzetimi,
+  istek: PlanMotoruIstegi & { ekAdimlar?: readonly EkAdim[]; sonAn?: number } & PlanBenzetimi,
   cozucu: typeof planCoz = planCoz,
 ): Promise<Awaited<ReturnType<PlanMotoruCozucusu>> & { vardiyasiz: string[]; malzemeBekleyen: string[]; nedenler: Record<string, YerlesmemeNedeni> }> {
   // 1952 iş 2b: paralel bölme yalnız motor önerisindedir ('yeni'); sabit kip kuyruğun tezgâh sırasını korur, pay oraya sığmaz.
@@ -58,14 +77,14 @@ export async function coz(
   const malzemeBekleyen: string[] = [];
   const kisiYerlesimleri: KisiYerlesimi[] = [];
   if (g.sira.length === 0) return { yerlesimler: [], yerlesmeyen, vardiyasiz, malzemeBekleyen, nedenler };
-  const plan = await cozucu({ durum: g.st, kip: istek.kip, taban: g.taban });
+  const plan = await cozucu({ durum: g.st, kip: istek.kip, taban: g.taban, olcu: true, ...(istek.sonAn === undefined ? {} : { sonAn: istek.sonAn }) });
   const basarisiz = new Set((plan.fail ?? []).map(String));
-  const gelmeyen = basarisiz.size > 0 ? malzemesiGelmeyenler(g.st, plan.takvimGun) : new Set<string>();
+  const gelmeyen = new Set(plan.olcu?.gelmeyen ?? []);
   const neden = (id: string): MotorNedeni | undefined => (plan.failNeden ?? {})[id];
-  // Motorun 'zaman' nedeni aday tezgâhların ölçüsüyle ayrılır; ölçü yalnız böyle iş varken bir kez kurulur.
-  const zamanli = [...basarisiz].filter((id) => neden(id)?.kod === 'zaman' || neden(id) === undefined);
+  // Motorun 'zaman' nedeni aday tezgâhların ölçüsüyle ayrılır; ölçüyü iş parçacığı yerleşmeyen iş varken alır (3724), burada yalnız okunur.
+  const zamanli = new Set([...basarisiz].filter((id) => neden(id)?.kod === 'zaman' || neden(id) === undefined));
   let olcum: Record<string, ZamanOlcumu | null> | null = null;
-  const zaman = (id: string): ZamanOlcumu | null => { olcum ??= zamanOlcumu(g.st, zamanli, plan); return olcum[id] ?? null; };
+  const zaman = (id: string): ZamanOlcumu | null => { olcum ??= zamanOlcumu(plan); return zamanli.has(id) ? olcum[id] ?? null : null; };
   const yerlesimler: { anahtar: string; makineId: number; baslangic: string; bitis: string }[] = [];
   const parcaliYerlesimler: ParcaliYerlesim[] = [];
   for (const id of g.sira) {
@@ -165,25 +184,17 @@ function yerlesmemeNedeniOf(
 }
 
 type MotorNedeni = NonNullable<MotorPlani['failNeden']>[string];
-// Aday tezgâhların ufuktaki ölçüsü motorun derlemesinden (malzemesiGelmeyenler gibi aynı hazırlık): açık saat vardiya takvimi, tatil ve
-// kapalı gündür (workIn); işçi kısıtı checkUse'un kalıcı ret koşuludur (yetkin kişi, grup ve toplam personel ufkun hiçbir diliminde yok).
+// Aday tezgâhların ufuktaki ölçüsü motorun derlemesindendir (plan-motoru.ts olc): açık saat vardiya takvimi, tatil ve kapalı gündür
+// (workIn); işçi kısıtı checkUse'un kalıcı ret koşuludur (yetkin kişi, grup ve toplam personel ufkun hiçbir diliminde yok).
 type ZamanOlcumu = Parameters<typeof zamanNedeni>[0];
-function zamanOlcumu(durum: MotorDurumu, idler: readonly string[], plan: Pick<MotorPlani, 'takvimGun' | 'buyumeKesildi'>): Record<string, ZamanOlcumu | null> {
-  if (idler.length === 0) return {};
-  const b = vm.createContext({ GIRDI_SAAT_DILIMI: TESIS_SAAT_DILIMI }); b['self'] = b;
-  vm.runInContext(motorKodu(), b, { filename: 'plan-motoru.js' });
-  b['durum'] = durum; b['idler'] = [...idler]; b['takvimGun'] = plan.takvimGun ?? 0;
-  // 3457: ölçü motorun zamanOlcusu'dur (engine.js); Kokpit'in plan kaydı da aynısını okur. Ölçü çözümün kurduğu takvimle alınır (3501 a).
-  const ham = vm.runInContext(`(() => {
-    takvimIste(takvimGun);
-    const cx = compile(stHazirla({ ...durum, w: { ...W0, ...(durum.w || {}) } }));
-    return { sinirda: HDAYS >= TAKVIM_ENCOK, olculer: idler.map((id) => { const o = cx.byId[id]; return o ? zamanOlcusu(cx, o, null) : null; }) };
-  })()`, b) as { sinirda: boolean; olculer: ({ ufukGun: number; malzemeHazirSaat: number | null; adaylar: { m: string; ad: string | null; acikSaat: number; sureSaat: number; personelYok: boolean; blok: { gerekSaat: number; enUzunSaat: number } | null; ayarci: { gerekSaat: number; enUzunSaat: number } | null }[] } | null)[] };
-  return Object.fromEntries(idler.map((id, n) => {
-    const x = ham.olculer[n] ?? null;
-    if (x === null) return [id, null];
+function zamanOlcumu(plan: Pick<MotorPlani, 'fail' | 'olcu' | 'buyumeKesildi'>): Record<string, ZamanOlcumu | null> {
+  const o = plan.olcu;
+  if (o === undefined) return {};
+  return Object.fromEntries((plan.fail ?? []).map((ham, n) => {
+    const x = o.olculer[n] ?? null;
+    if (x === null) return [String(ham), null];
     const adaylar: ZamanAdayi[] = x.adaylar.map((a) => ({ makine: hedef('makine', a.m, a.ad), acikSaat: a.acikSaat, sureSaat: a.sureSaat, personelYok: a.personelYok, blok: a.blok, ayarci: a.ayarci }));
-    return [id, { ufukGun: x.ufukGun, malzemeHazirSaat: x.malzemeHazirSaat, adaylar, takvimSinirda: ham.sinirda, buyumeKesildi: plan.buyumeKesildi === true }];
+    return [String(ham), { ufukGun: x.ufukGun, malzemeHazirSaat: x.malzemeHazirSaat, adaylar, takvimSinirda: o.sinirda, buyumeKesildi: plan.buyumeKesildi === true }];
   }));
 }
 
@@ -224,20 +235,4 @@ export function adayNedeni(kaynak: AdayKaynagi | null, anahtar: string): Yerlesm
   }
   const makineVar = istasyon !== undefined && (d?.machines ?? []).some((m) => m.stationId === adim.stationId && m.aktif !== false);
   return makineVar || ist === null ? null : makineYok(ist);
-}
-
-// 525 4 a: katı malzeme kipinde (w.mat 'sert', K3) malzemesi stok ve satın almayla ufuk içinde karşılanmayan siparişin işleri motorda
-// yerleşmez. Bu bir çözüm hatası değildir: vardiyasız iş gibi (168 b) ayrı listede döner, plan komutu durmaz. Motor sipariş başına hazır
-// olma anını derlemede kurar (engine.js matAlloc); aynı derleme burada tekrarlanır, yalnız yerleşmeyen iş varken.
-function malzemesiGelmeyenler(durum: MotorDurumu, takvimGun: number | undefined): Set<string> {
-  if ((durum['w'] as { mat?: unknown } | undefined)?.mat !== 'sert') return new Set();
-  const b = vm.createContext({ GIRDI_SAAT_DILIMI: TESIS_SAAT_DILIMI }); b['self'] = b;
-  vm.runInContext(motorKodu(), b, { filename: 'plan-motoru.js' });
-  b['durum'] = durum; b['takvimGun'] = takvimGun ?? 0;
-  const sonuc = vm.runInContext(`(() => {
-    takvimIste(takvimGun);
-    const cx = compile(stHazirla({ ...durum, w: { ...W0, ...(durum.w || {}) } }));
-    return Object.entries(cx.mat.res).filter(([, r]) => !(r.ready < HDAYS * 24)).map(([j]) => j);
-  })()`, b) as string[];
-  return new Set(sonuc.map(String));
 }

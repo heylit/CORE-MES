@@ -49,7 +49,9 @@ export function motorYukle(): Motor {
 // ikisi de aynı girdiyle her makinede aynı planı verir. Zaman bütçeli arama (LNS) yalnız tarayıcıdaki önizlemededir.
 export const SUNUCU_KIPLERI = ['sabit', 'yeni'] as const;
 export type SunucuKipi = (typeof SUNUCU_KIPLERI)[number];
-export interface PlanIstegi { durum: MotorDurumu; kip: SunucuKipi; taban: MotorPlani | null }
+// olcu: yerleşmeyen iş kalırsa yerleşmeme ölçüsü de iş parçacığında alınır (3724); ana iş parçacığı motoru derlemez.
+// sonAn: çağıranın toplam süre sınırı (epoch ms; 3724); çözümün süresi sırada bekledikten sonra kalan süreyi aşmaz.
+export interface PlanIstegi { durum: MotorDurumu; kip: SunucuKipi; taban: MotorPlani | null; olcu?: boolean; sonAn?: number }
 export const COZUM_SURESI_MS = 60_000;
 // 3501 a: takvim büyüdükçe çözüm yeniden koşar. Sonraki turun sürenin bu payından sonra biteceği öngörülürse takvim büyütülmez; plan sığmayan
 // işleriyle döner (motor takvimliCoz). Süre aşılırsa plan hiç yazılmaz; birkaç işin yerleşmemesi ondan hafiftir.
@@ -61,12 +63,28 @@ const vm = require('node:vm');
 const b = vm.createContext({ GIRDI_SAAT_DILIMI: workerData.dilim });
 b.self = b;
 const m = vm.runInContext(workerData.kod, b, { filename: 'plan-motoru.js' });
-const { durum, kip, taban } = workerData.istek;
+const { durum, kip, taban, olcu } = workerData.istek;
 const p = m.takvimliCoz(m.stHazirla({ ...durum, w: { ...m.W0, ...(durum.w || {}) } }), kip, taban, { buyumeSonu: Date.now() + workerData.buyumeMs });
-parentPort.postMessage({ ops: p.ops, fail: p.fail || [], takvimGun: m.takvimGunu(), ...(p.buyumeKesildi ? { buyumeKesildi: true } : {}) });
+const fail = p.fail || [], takvimGun = m.takvimGunu();
+parentPort.postMessage({ ops: p.ops, fail, takvimGun, ...(p.buyumeKesildi ? { buyumeKesildi: true } : {}), ...(olcu && fail.length > 0 ? { olcu: olc(durum, fail.map(String), takvimGun) } : {}) });
+// Ölçü yeni bağlamda, çözümün kurduğu takvimle (3501 a) derlenir; çözümün bağlamındaki durum ölçüye taşınmaz. Malzeme hazır olma anı
+// (525 4 a, engine.js matAlloc) yalnız katı malzeme kipinde okunur; zaman ölçüsü motorun zamanOlcusu'dur (3457).
+function olc(durum, idler, takvimGun) {
+  const c = vm.createContext({ GIRDI_SAAT_DILIMI: workerData.dilim });
+  c.self = c;
+  vm.runInContext(workerData.kod, c, { filename: 'plan-motoru.js' });
+  c.durum = durum; c.idler = idler; c.takvimGun = takvimGun; c.sert = (durum.w || {}).mat === 'sert';
+  return vm.runInContext(\`(() => {
+    takvimIste(takvimGun);
+    const cx = compile(stHazirla({ ...durum, w: { ...W0, ...(durum.w || {}) } }));
+    const gelmeyen = sert ? Object.entries(cx.mat.res).filter(([, r]) => !(r.ready < HDAYS * 24)).map(([j]) => String(j)) : [];
+    return { gelmeyen, sinirda: HDAYS >= TAKVIM_ENCOK, olculer: idler.map((id) => { const o = cx.byId[id]; return o ? zamanOlcusu(cx, o, null) : null; }) };
+  })()\`, c);
+}
 `;
 
 // Aynı anda tek çözüm: kuyruk sırayla çalışır. Süre aşılırsa iş parçacığı durdurulur ve çağrı reddedilir.
+// 3724: sonAn'da hâlâ sırada bekleyen çağrı orada reddedilir; sırası gelince iş parçacığı açılmaz.
 let sira: Promise<unknown> = Promise.resolve();
 export function planCoz(istek: PlanIstegi, sureMs: number = COZUM_SURESI_MS, buyumeMs: number = sureMs * BUYUME_PAYI): Promise<MotorPlani> {
   if (!SUNUCU_KIPLERI.includes(istek.kip)) return Promise.reject(new Error(`Plan motoru kipi geçersiz: ${String(istek.kip)}`));
@@ -74,18 +92,34 @@ export function planCoz(istek: PlanIstegi, sureMs: number = COZUM_SURESI_MS, buy
     motorGirdisiDenetle(istek.durum);
     if (istek.taban !== null) motorPlaniDenetle(istek.taban, 'taban');
   } catch (e) { return Promise.reject(e as Error); }
-  const is = sira.then(() => calistir(istek, sureMs, buyumeMs));
+  let basladi = false, vazgecildi = false;
+  const is = sira.then(() => {
+    if (vazgecildi) throw yetismedi(sureMs);
+    basladi = true;
+    return calistir(istek, sureMs, buyumeMs);
+  });
   sira = is.catch(() => undefined);
-  return is;
+  const { sonAn } = istek;
+  if (sonAn === undefined) return is;
+  return new Promise((coz, reddet) => {
+    const sayac = setTimeout(() => { if (!basladi) { vazgecildi = true; reddet(yetismedi(sureMs)); } }, Math.max(0, sonAn - Date.now()));
+    is.then((p) => { clearTimeout(sayac); coz(p); }, (e: unknown) => { clearTimeout(sayac); reddet(e as Error); });
+  });
 }
 
+const yetismedi = (sureMs: number): Error =>
+  mesgul(`Plan ${String(Math.max(1, Math.round(sureMs / 1000)))} saniyede hesaplanamadı; plan değişmedi. Biraz sonra yeniden deneyin, yinelenirse yöneticinize bildirin.`);
+
 function calistir(istek: PlanIstegi, sureMs: number, buyumeMs: number): Promise<MotorPlani> {
+  const kalan = istek.sonAn === undefined ? sureMs : Math.min(sureMs, istek.sonAn - Date.now());
+  const ileti = yetismedi(sureMs);
+  if (kalan <= 0) return Promise.reject(ileti);
   return new Promise((coz, reddet) => {
-    const isci = new Worker(ISCI, { eval: true, resourceLimits: isciSinirlari(), workerData: { kod: motorKodu(), dilim: TESIS_SAAT_DILIMI, istek, buyumeMs } });
+    const isci = new Worker(ISCI, { eval: true, resourceLimits: isciSinirlari(), workerData: { kod: motorKodu(), dilim: TESIS_SAAT_DILIMI, istek, buyumeMs: Math.min(buyumeMs, kalan * BUYUME_PAYI) } });
     let bitti = false;
     const bitir = hesapBasladi('motor');
     const sonlan = (f: () => void, sonuc: HesapSonucu = 'hata'): void => { if (bitti) return; bitti = true; clearTimeout(sayac); bitir(sonuc); f(); void isci.terminate(); };
-    const sayac = setTimeout(() => sonlan(() => reddet(mesgul(`Plan ${String(Math.max(1, Math.round(sureMs / 1000)))} saniyede hesaplanamadı; plan değişmedi. Biraz sonra yeniden deneyin, yinelenirse yöneticinize bildirin.`)), 'zaman-asimi'), sureMs);
+    const sayac = setTimeout(() => sonlan(() => reddet(ileti), 'zaman-asimi'), kalan);
     isci.once('message', (p: unknown) => sonlan(() => {
       try { coz(motorPlaniDenetle(p)); } catch (e) { reddet(e as Error); }
     }, 'tamam'));
