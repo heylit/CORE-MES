@@ -38,7 +38,7 @@ export const ELLE_YAZILIR: readonly ElleYazilanStatu[] = ['program', 'cizim', 'm
 
 export const ADIM_DURUMU_YAZ = 'uretim-emirleri.adim-durumu-yaz';
 export const adimDurumuUcu = (emirId: number): string => `/adimli-emirler/${String(emirId)}/adim-durumu`;
-export const isEmriKomutu = (emirId: number, isEmriId: number, komut: 'statu-yaz' | 'statu-kaldir' | 'hazirlik-onayla' | 'hazirlik-elle-eksik' | 'hazirlik-onay-kaldir' | 'liste-isaretle' | 'liste-ekle' | 'liste-kaldir'): string =>
+export const isEmriKomutu = (emirId: number, isEmriId: number, komut: 'statu-yaz' | 'statu-kaldir' | 'hazirlik-onayla' | 'hazirlik-elle-eksik' | 'hazirlik-onay-kaldir' | 'liste-isaretle' | 'liste-ekle' | 'liste-kaldir' | 'sablon-farki' | 'sablon-farki-kaldir'): string =>
   `/adimli-emirler/${String(emirId)}/is-emirleri/${String(isEmriId)}/${komut}`;
 // 3249-2 a: liste maddesinin fotoğrafı; aynı kökenden, oturum çereziyle okunur.
 export const listeFotografiUcu = (emirId: number, adimId: number, ozet: string): string =>

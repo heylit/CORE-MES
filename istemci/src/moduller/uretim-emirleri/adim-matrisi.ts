@@ -150,6 +150,7 @@ export function hazirlikOzeti(a: MatrisAdimi): HazirlikOzeti {
   }
   return o;
 }
+export const farkMetni = (n: number): string => `şablondan ${String(n)} fark`;
 export const hazirlikOzetMetni = (o: HazirlikOzeti): string =>
   `hazırlık ${String(o.tamam)}/${String(o.toplam)}${o.eksik > 0 ? `, ${String(o.eksik)} eksik` : ''}${o.elle > 0 ? `, ${String(o.elle)} elle` : ''}`;
 

@@ -12,6 +12,7 @@ import {
 } from './adim-matrisi.ts';
 import { HazirlikCubugu } from './HazirlikCubugu.tsx';
 import { MADDE, halGorunumu } from './hazirlik-bilgisi.ts';
+import { OpOzelBolumu } from './OpOzelBolumu.tsx';
 
 // 3738: hücre paneli. Seçili adımın statüsü (elle yaz, otomatiğe dön) ve hazırlık maddeleri tek yerde; maddeler tek tek onaylanır, elle eksik
 // işaretlenir, elle değer geri alınır. Komutlar Adım Durumu'ndakilerle aynıdır (adim-tablosu.ts) ve aynı uçlara gider; yazma yetkisi aynıdır.
@@ -36,7 +37,7 @@ const altSatir = (m: MatrisMaddesi): string => {
   if (m.elle !== null) {
     return `Elle ${m.elle.tur === 'hazir' ? 'hazır' : 'hazır değil'}: ${m.elle.kisiAdi ?? 'Kişi'} · ${zamanMetni(m.elle.zaman)}${m.elle.gerekce === null ? '' : ` · ${m.elle.gerekce}`}`;
   }
-  if (m.hal === 'gerekmez') return 'Bu emirde gerekmiyor';
+  if (m.hal === 'gerekmez') return 'Bu OP\'de gerekmiyor';
   if (m.hal === 'tamam') return 'Sistem doğruladı';
   if (m.hal === 'eksik') return 'Sistem: eksik';
   if (m.hal === 'muaf') return 'Müdür muaf tuttu';
@@ -142,6 +143,7 @@ export function HucrePaneli({ kalem, yazabilir, katli, statuYaz, mesgul, kapat, 
         <h4>Hazırlık maddeleri</h4>
         {adim.maddeler.length === 0 ? <p className="tc-emir-not">Bu adımın hazırlık maddesi yok.</p> : <ul className="tc-am-maddeler">{adim.maddeler.map(maddeSatiri)}</ul>}
       </section>
+      <OpOzelBolumu emirId={emir.emirId} isEmriId={adim.isEmriId} duzenler={duzenler} maddeler={adim.maddeler} yenile={yenile} />
       <Link className="tc-dugme tc-dugme-ikincil tc-dugme-normal" to={`/adim-durumu?emir=${String(emir.emirId)}`}>Emri aç</Link>
     </>
   );

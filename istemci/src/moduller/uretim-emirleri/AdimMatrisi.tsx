@@ -9,11 +9,11 @@ import { tarihMetni } from '../../ortak/veri/zaman-metni.ts';
 import { ELLE_YAZILIR, STATU } from './adim-durumu.ts';
 import {
   BOS_SUZGEC, adimSayisi, aralik, bul, duzKalemler, elleSayisi, emirKapali, emirleriSuz, emrinKalemleri, geriAlGovdeleri, gecerliSecim, gorunenStatu,
-  hazirlikOzeti, hazirlikOzetMetni, istekGovdeleri, kalemAnahtari, mercekOku, oncekiDefteri, opKalemleri, opSutunlari, secimiAcKapa, secimiSay, yazilacaklar, yazimOzeti,
+  farkMetni, hazirlikOzeti, hazirlikOzetMetni, istekGovdeleri, kalemAnahtari, mercekOku, oncekiDefteri, opKalemleri, opSutunlari, secimiAcKapa, secimiSay, yazilacaklar, yazimOzeti,
   type Kalem, type MatrisEmri, type Mercek, type OncekiDefter, type Suzgec, type YazimOzeti,
 } from './adim-matrisi.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { HazirlikCubugu } from './HazirlikCubugu.tsx';
+import { FarkRozeti, HazirlikCubugu } from './HazirlikCubugu.tsx';
 import { HucrePaneli } from './HucrePaneli.tsx';
 import { KimlikDefteri, topluGonder } from './kimlik-defteri.ts';
 import './adim-matrisi.css';
@@ -214,7 +214,7 @@ export function AdimMatrisi() {
     const hz = hazirlikOzeti(k.adim);
     const hazirlikMi = mercek === 'hazirlik';
     const ton = hazirlikMi ? (hz.eksik > 0 ? 'hata' : hz.toplam > 0 && hz.tamam === hz.toplam ? 'tamam' : 'pasif') : STATU[g].ton;
-    const ad = hazirlikMi ? `${k.emir.emirNo}, OP ${String(k.adim.opNo)} ${k.adim.ad}: ${hazirlikOzetMetni(hz)}` : hucreAdi(k.emir, k.adim);
+    const ad = `${hazirlikMi ? `${k.emir.emirNo}, OP ${String(k.adim.opNo)} ${k.adim.ad}: ${hazirlikOzetMetni(hz)}` : hucreAdi(k.emir, k.adim)}${k.adim.sablondanFark > 0 ? `, ${farkMetni(k.adim.sablondanFark)}` : ''}`;
     return (
       <div className={`tc-am-hucre-kap${aktif === k.anahtar ? ' tc-am-aktif' : ''}`}>
         <button type="button" className={`tc-am-hucre tc-am-ton-${ton}${secildi ? ' tc-am-secili' : ''}${hazirlikMi ? ' tc-am-hucre-hz' : ''}`} data-am-k={k.anahtar}
@@ -225,6 +225,7 @@ export function AdimMatrisi() {
               <Simge ad={STATU[g].simge} boyut="k" />
               {!kisa && <span className="tc-am-hucre-ad">{STATU[g].ad}</span>}
               {k.adim.elle !== null && <span className="tc-am-e" aria-hidden="true">E</span>}
+              <FarkRozeti adim={k.adim} />
             </>
           )}
         </button>
@@ -366,6 +367,7 @@ export function AdimMatrisi() {
 
   const suzgecSayisi = [suz.statu !== '', suz.yalnizElle, suz.yalnizSorunlu, suz.yalnizHazirlikEksik].filter(Boolean).length;
   const suzgecEtiketi = suzgecSayisi > 0 ? `Filtre (${String(suzgecSayisi)})` : 'Filtre';
+  const farkVar = emirler.some((e) => e.adimlar.some((a) => a.sablondanFark > 0));
   const lejant = [...new Set(emirler.flatMap((e) => e.adimlar.map((a) => gorunenStatu(a))))];
   return (
     <div className={`tc-am tc-am-${genislik}`}>
@@ -412,6 +414,7 @@ export function AdimMatrisi() {
             <ul className="tc-am-lejant" aria-label="Statü simgeleri">
               {lejant.map((x) => <li key={x}><Simge ad={STATU[x].simge} boyut="k" />{statuAdi(x)}</li>)}
               <li><span className="tc-am-e" aria-hidden="true">E</span>Elle yazıldı</li>
+              {farkVar && <li><Simge ad="edit" boyut="k" />şablondan N fark</li>}
             </ul>
           ) : (
             <ul className="tc-am-lejant" aria-label="Hazırlık kareleri">
@@ -420,6 +423,7 @@ export function AdimMatrisi() {
               <li><i className="tc-am-kare tc-am-kare-muaf" />Muaf ya da elle onay</li>
               <li><i className="tc-am-kare tc-am-kare-bos" />Gerekmez ya da denetlenmiyor</li>
               <li><Simge ad="user" boyut="k" />Elle değer</li>
+              {farkVar && <li><Simge ad="edit" boyut="k" />şablondan N fark</li>}
             </ul>
           ))}
         </div>

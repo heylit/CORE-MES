@@ -181,3 +181,24 @@
 /* Telefonda süzgeç katlanır; katlı değilken sarmalayıcı yer tutmaz (alanlar üst ızgaraya girer). */
 .tc-am-suzgec { display: contents; }
 .tc-am-suzgec[hidden] { display: none; }
+
+/* 3741: hücrede "şablondan N fark" ve panelde "Bu OP'ye özel" bölümü (düğmeler 44 px). */
+.tc-am-fark { display: inline-flex; align-items: center; gap: var(--b-1); font-family: var(--font-mono); font-size: var(--yazi-xs); color: var(--muted); }
+.tc-am-ozel-liste { list-style: none; margin: 0; padding: 0; display: grid; }
+.tc-am-ozel-satir { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--b-2); align-items: center; padding: var(--b-2) 0; border-top: thin solid var(--edge); }
+.tc-am-ozel-satir:first-child { border-top: 0; }
+.tc-am-ozel-ad { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); min-inline-size: 0; }
+.tc-am-ozel-ad b { overflow-wrap: anywhere; }
+.tc-am-ozel-ad small { flex-basis: 100%; color: var(--muted); font-size: var(--yazi-xs); overflow-wrap: anywhere; }
+.tc-am-ozel-satir .tc-dugme { min-block-size: var(--dokunma); min-inline-size: var(--dokunma); }
+.tc-am-ozel-dik { grid-template-columns: minmax(0, 1fr); }
+.tc-am-ozel-satir .tc-dugme { white-space: nowrap; }
+.tc-am-ozel-eylem { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-am-ozel-ekle { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--b-2); align-items: end; }
+.tc-am-ozel-ekle .tc-dugme { min-block-size: var(--dokunma); }
+.tc-am-ozel-fark { display: grid; gap: var(--b-2); padding: var(--b-2); background: var(--panel2); border: thin dashed var(--edge2); border-radius: var(--yari-2); }
+.tc-am-ozel-fark .tc-dugme { min-block-size: var(--dokunma); justify-self: start; }
+@media (max-width: 767px) {
+  .tc-am-ozel-satir, .tc-am-ozel-ekle { grid-template-columns: minmax(0, 1fr); }
+  .tc-am-ozel-satir .tc-dugme { justify-self: end; }
+}

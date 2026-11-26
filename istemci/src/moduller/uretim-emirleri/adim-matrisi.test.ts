@@ -9,7 +9,7 @@ import {
 type E = AdimMatrisiCevabi['emirler'][number];
 type A = E['adimlar'][number];
 const adim = (isEmriId: number, opNo: number, sistemStatusu: A['sistemStatusu'], elle: A['elle'] = null, maddeler: A['maddeler'] = []): A =>
-  ({ isEmriId, opNo, ad: `Adım ${String(opNo)}`, durum: 'bekliyor', hedef: 10, yapilan: 0, yuzde: 0, sistemStatusu, elle, maddeler });
+  ({ isEmriId, opNo, ad: `Adım ${String(opNo)}`, durum: 'bekliyor', hedef: 10, yapilan: 0, yuzde: 0, sistemStatusu, elle, sablondanFark: 0, maddeler });
 const madde = (m: MatrisMaddesi['madde'], hal: MatrisMaddesi['hal'], ham: MatrisMaddesi['ham'] = hal, elle: MatrisMaddesi['elle'] = null): MatrisMaddesi => ({ madde: m, hal, ham, elle });
 const ELLE_ONAY = { tur: 'hazir', gerekce: 'Program elde denendi', kisiAdi: 'ORN-Kişi', zaman: '2026-11-23T08:00:00.000Z' } as const;
 const ELLE_EKSIK = { tur: 'eksik', gerekce: null, kisiAdi: 'ORN-Kişi', zaman: '2026-11-23T08:00:00.000Z' } as const;

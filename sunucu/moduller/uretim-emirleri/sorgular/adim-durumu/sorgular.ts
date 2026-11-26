@@ -76,6 +76,17 @@ export function listeSatirlari(db: Db, isEmriIdleri: readonly number[]): Promise
   );
 }
 
+// 3741: şablon dışı (elle eklenmiş) ve kaldırılmamış hazırlık maddeleri; matriste "şablondan N fark" sayısına girer.
+export async function elleMaddeSayilari(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, number>> {
+  if (isEmriIdleri.length === 0) return new Map();
+  const satirlar = await db.sorgu<{ isEmriId: number; say: number }>(
+    `SELECT a.is_emri_id AS "isEmriId", count(*)::int AS say FROM emir_adimi a
+      WHERE a.is_emri_id = ANY($1::int[]) AND a.asama IN ('on_hazirlik', 'hazirlik') AND a.eklenme IS NOT NULL AND ${KALDIRILMAMIS('a')} GROUP BY a.is_emri_id`,
+    [[...isEmriIdleri]],
+  );
+  return new Map(satirlar.map((x) => [x.isEmriId, x.say]));
+}
+
 export async function listeOlayiEkle(db: Db, adimId: number, kisiId: number, olay: 'tamamla' | 'geri-al' | 'kaldir'): Promise<number> {
   const satir = await db.tek<{ id: number }>(
     `INSERT INTO emir_adimi_olayi (adim_id, kisi_id, olay, kaynak) VALUES ($1, $2, $3, 'adim-durumu') RETURNING id`, [adimId, kisiId, olay],

@@ -1,4 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
+import { ISO } from '../ortak/sorgular.ts';
 
 // 3688: hazırlık şablonu operasyon türüne göre (göç 20261125124500). Sürümler ve satırlar yalnız eklenir; etkin şablon türün en yüksek sürümüdür.
 // operasyon_tipi_id NULL varsayılan şablondur (tipi olmayan adım).
@@ -54,22 +55,25 @@ export async function satirEkle(db: Db, surumId: string, x: { madde: string; ger
   );
 }
 
-export interface OzelFarkSatiri { emri_id: number; madde: string; gerekli: boolean; kisi_id: number; an: string; gerekce: string | null }
-// Emre özel fark: maddenin son kaydı "yaz" ise geçerlidir, "sil" ise yoktur.
+// is_emri_id NULL emir düzeyidir; dolu ise o operasyona özeldir (3741). Öncelik OP farkı > emir farkı > tür şablonudur; birleştirmeyi servis yapar.
+export interface OzelFarkSatiri { emri_id: number; is_emri_id: number | null; madde: string; gerekli: boolean; kisi_id: number; an: string; gerekce: string | null }
+// Fark (emir ya da OP), madde başına son kayıt "yaz" ise geçerlidir, "sil" ise yoktur.
 export function ozelFarklar(db: Db, emirIdleri: readonly number[]): Promise<OzelFarkSatiri[]> {
   if (emirIdleri.length === 0) return Promise.resolve([]);
   return db.sorgu<OzelFarkSatiri>(
-    `SELECT emri_id, madde, gerekli, kisi_id, an::text AS an, gerekce FROM (
-       SELECT DISTINCT ON (emri_id, madde) emri_id, madde, olay, gerekli, kisi_id, an, gerekce
-         FROM uretim_emirleri_hazirlik_sablonu_ozel WHERE emri_id = ANY($1::int[]) ORDER BY emri_id, madde, id DESC) x
-      WHERE olay = 'yaz' ORDER BY emri_id, madde`,
+    `SELECT emri_id, is_emri_id, madde, gerekli, kisi_id, ${ISO('an')} AS an, gerekce FROM (
+       SELECT DISTINCT ON (emri_id, COALESCE(is_emri_id, 0), madde) emri_id, is_emri_id, madde, olay, gerekli, kisi_id, an, gerekce
+         FROM uretim_emirleri_hazirlik_sablonu_ozel WHERE emri_id = ANY($1::int[]) ORDER BY emri_id, COALESCE(is_emri_id, 0), madde, id DESC) x
+      WHERE olay = 'yaz' ORDER BY emri_id, is_emri_id NULLS FIRST, madde`,
     [[...emirIdleri]],
   );
 }
 
-export async function ozelEkle(db: Db, emirId: number, madde: string, olay: 'yaz' | 'sil', kisiId: number, gerekli: boolean | null, gerekce: string | null): Promise<void> {
+export async function ozelEkle(
+  db: Db, emirId: number, isEmriId: number | null, madde: string, olay: 'yaz' | 'sil', kisiId: number, gerekli: boolean | null, gerekce: string | null,
+): Promise<void> {
   await db.sorgu(
-    `INSERT INTO uretim_emirleri_hazirlik_sablonu_ozel (emri_id, madde, olay, gerekli, kisi_id, gerekce) VALUES ($1, $2, $3, $4, $5, $6)`,
-    [emirId, madde, olay, gerekli, kisiId, gerekce],
+    `INSERT INTO uretim_emirleri_hazirlik_sablonu_ozel (emri_id, is_emri_id, madde, olay, gerekli, kisi_id, gerekce) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [emirId, isEmriId, madde, olay, gerekli, kisiId, gerekce],
   );
 }

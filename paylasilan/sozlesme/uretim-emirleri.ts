@@ -1405,6 +1405,16 @@ const listeMaddesiSemasi = z.object({
 export const adimTedarikSemasi = z.object({
   asama: z.enum(['talep', 'siparis']), fason: z.boolean(), talepNo: z.string(), siparisNo: z.string().nullable(), termin: tarihSemasi.nullable(),
 });
+// 3741: operasyona (iş emrine) özel şablon farkı. Yazma yetkisi emre özel farkla aynıdır; "Şablona dön" farkı kaldırır (defter yalnız eklenir).
+export const opSablonFarkiSemasi = z.object({ madde: hazirlikMaddeKodu, gerekli: z.boolean(), kisiAdi: z.string().nullable(), an: zamanSemasi, gerekce: z.string().nullable() });
+export const opSablonFarkiGovdesi = z.object({ madde: hazirlikMaddeKodu, gerekli: z.boolean(), gerekce: metin(450, 'Gerekçe yaz.') }).strict();
+export const opSablonFarkiKaldirGovdesi = z.object({ madde: hazirlikMaddeKodu }).strict();
+// Yazma uçlarının cevabı yalnız o OP'nin farklarıdır: ucun yetkisi şablon yazmadır, Adım Durumu okuma yetkisi aranmaz; ekran Adım Durumu'nu ayrı okur.
+export const opSablonFarklariCevabi = z.object({ isEmriId: z.number().int(), farklar: z.array(opSablonFarkiSemasi) });
+export type OpSablonFarklariCevabi = z.output<typeof opSablonFarklariCevabi>;
+export type OpSablonFarki = z.output<typeof opSablonFarkiSemasi>;
+export type OpSablonFarkiGovdesi = z.output<typeof opSablonFarkiGovdesi>;
+export type OpSablonFarkiKaldirGovdesi = z.output<typeof opSablonFarkiKaldirGovdesi>;
 export const adimDurumuCevabi = z.object({
   emirId: KIMLIK,
   emirNo: z.string(),
@@ -1448,6 +1458,8 @@ export const adimDurumuCevabi = z.object({
     liste: z.array(listeMaddesiSemasi),
     // Adımın operasyon tipinin emre gelen şablonu ("Şablona da ekle" hedefi); yoksa null.
     sablon: z.object({ id: KIMLIK, kod: z.string(), ad: z.string() }).nullable(),
+    // 3741: bu operasyona özel şablon farkı (geçerli hal); emir düzeyindeki fark buraya girmez.
+    sablonFarklari: z.array(opSablonFarkiSemasi),
     // 3708: kaynağında muayene adımı (belgeleri açılımda yüklenir). İsteğe bağlı: sunucu her zaman yazar.
     muayene: z.boolean().optional(),
   })),
@@ -1489,6 +1501,8 @@ export const adimMatrisiCevabi = z.object({
       yuzde: yuzdeSemasi,
       sistemStatusu: adimStatusu,
       elle: z.object({ statu: adimStatusu, not: z.string().nullable(), kisiAdi: z.string().nullable(), zaman: zamanSemasi }).nullable(),
+      // 3741: hücrede "şablondan N fark": bu operasyona özel şablon farkları ile elle eklenen (şablon dışı) hazırlık maddelerinin toplamı.
+      sablondanFark: z.number().int().nonnegative(),
       // 3738: adımın hazırlık maddeleri (hâl elle değeri içerir, ham içermez); elle: açık elle onay ('hazir') ya da elle "hazır değil" ('eksik').
       maddeler: z.array(z.object({
         madde: hazirlikMaddesi, hal: hazirlikHaliSemasi, ham: hazirlikHaliSemasi,
