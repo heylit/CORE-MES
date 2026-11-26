@@ -21,6 +21,11 @@ export const LOGO_IKINCI_MENU = {
     {
       maddeler: [
         { anahtar: 'yonetim', baslik: 'Yönetim', yol: '/logo', simge: 'gear', islem: 'sayfa.logo' },
+        // 3737 a: Logo'nun hazırlığı, gitmeyen belgeleri ve bütün ayarları burada da açılır (Sistem Ayarları ve Güvenlik'teki ekranların aynısı,
+        // aynı uç ve yetkiyle); her madde ekranının okuduğu ucun işlemini ister.
+        { anahtar: 'hazirlik', baslik: 'Hazırlık', yol: '/logo/hazirlik', simge: 'gauge', islem: 'saglik.ayrinti-oku' },
+        { anahtar: 'gitmeyen', baslik: 'Gitmeyen belgeler', yol: '/logo/gitmeyen', simge: 'alert', islem: 'saglik.ayrinti-oku' },
+        { anahtar: 'ayarlar', baslik: 'Tüm ayarlar', yol: '/logo/ayarlar', simge: 'list', islem: 'ayarlar.yaz' },
         { anahtar: 'gecis', baslik: 'Logo geçişi', yol: '/logo/gecis', simge: 'login', islem: 'sayfa.logo-gecisi' },
       ],
     },

@@ -6,7 +6,7 @@ import { kalipHatasi, numaraKur } from '#paylasilan/numara.ts';
 import { tarihAraligiHatasi } from '#paylasilan/tarih-araligi.ts';
 import { tesisGunBasi, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import type { Ayar, AyarDegistirGovdesi, AyarlarCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
-import { AcKapa, Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Rozet, Secim, Sekmeler, Simge, useBildirim, type Sekme } from '../../ortak/arayuz/index.ts';
+import { AcKapa, Dugme, DurumKutusu, Girdi, Kart, MerkezBaglantisi, OnayPenceresi, Rozet, Secim, Sekmeler, Simge, useBildirim, type Sekme } from '../../ortak/arayuz/index.ts';
 import { KarsilamaOnizleme } from '../../ortak/arayuz/Karsilama.tsx';
 import { ayarEkranlari, gorunenAyarEkranlari, type AyarEkrani } from '../../ortak/rota/ayar-ekranlari.ts';
 import { ApiHatasi, api, hataIletisi } from '../../ortak/veri/api.ts';
@@ -374,6 +374,12 @@ function AyarListesi({ baslik, kategori, bossaGizle = false, ek = {} }: { baslik
   );
 }
 
+// 3737 a: Logo ve SmartES sayfasının "Tüm ayarlar" maddesi. Sistem Ayarları > Bağlantılar'daki listenin aynısıdır: aynı uç, aynı
+// eşzamanlılık denetimi (beklenen değer, 409); iki yerde açık kalan ekran birbirinin değerini ezmez.
+export function BaglantiAyarlari({ sistem }: { sistem: 'logo' | 'smartes' }) {
+  return sistem === 'logo' ? <AyarListesi baslik="Logo ayarları" kategori="logo" /> : <AyarListesi baslik="SmartES ayarları" kategori="smartes" />;
+}
+
 // Modülün ayar ekranı burada da, kendi sayfasında da aynı bileşendir; değer kopyalanmaz, uçlar ve yazma yetkisi modülündür.
 // Sistem ayarı modülün ekranının başında, Sistem Ayarları'nın kendi ucuyla okunur ve yazılır (ekran anahtarı -> kategori).
 const MODUL_AYAR_LISTELERI: Readonly<Partial<Record<string, { kategori: AyarKategorisi; baslik: string }>>> = {
@@ -440,8 +446,8 @@ function Baglantilar({ ekranlar, hazirlikGorur }: { ekranlar: readonly AyarEkran
     <>
       <Sekmeler etiket="Bağlantılar" sekmeler={sekmeler} secili={secili} sec={setSecili} />
       {sabitSecili === 'hazirlik' && <BaglantiHazirligi />}
-      {sabitSecili === 'logo' && <AyarListesi baslik="Logo" kategori="logo" />}
-      {sabitSecili === 'smartes' && <AyarListesi baslik="SmartES" kategori="smartes" bossaGizle />}
+      {sabitSecili === 'logo' && <><MerkezBaglantisi sistem="logo" /><AyarListesi baslik="Logo" kategori="logo" /></>}
+      {sabitSecili === 'smartes' && <><MerkezBaglantisi sistem="smartes" /><AyarListesi baslik="SmartES" kategori="smartes" bossaGizle /></>}
       {ekranlar.filter((e) => e.anahtar === secili).map((e) => <ModulAyarlari key={e.anahtar} ekran={e} />)}
     </>
   );

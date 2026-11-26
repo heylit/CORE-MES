@@ -14,6 +14,10 @@ export const SMARTES_IKINCI_MENU = {
   gruplar: [
     { maddeler: [
       { anahtar: 'durum', baslik: 'Bağlantı durumu', yol: '/smartes', simge: 'gauge', islem: 'sayfa.smartes' },
+      // 3737 a: hazırlık, gitmeyen iş emirleri ve bütün ayarlar burada da açılır (Sistem Ayarları ve Güvenlik'teki ekranların aynısı).
+      { anahtar: 'hazirlik', baslik: 'Hazırlık', yol: '/smartes/hazirlik', simge: 'gauge', islem: 'saglik.ayrinti-oku' },
+      { anahtar: 'gitmeyen', baslik: 'Gitmeyen iş emirleri', yol: '/smartes/gitmeyen', simge: 'alert', islem: 'saglik.ayrinti-oku' },
+      { anahtar: 'ayarlar', baslik: 'Tüm ayarlar', yol: '/smartes/ayarlar', simge: 'list', islem: 'ayarlar.yaz' },
       { anahtar: 'eslemeler', baslik: 'Kod eşlemeleri', yol: '/smartes/eslemeler', simge: 'layers', islem: 'sayfa.smartes' },
     ] },
     { baslik: 'Gelen', maddeler: [

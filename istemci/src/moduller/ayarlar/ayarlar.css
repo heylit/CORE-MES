@@ -119,3 +119,4 @@
   .tc-guncelleme-halka { align-self: center; }
 }
 @media (prefers-reduced-motion: reduce) { .tc-guncelleme-halka-yay { transition: none; } }
+.tc-merkez-bolum { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
