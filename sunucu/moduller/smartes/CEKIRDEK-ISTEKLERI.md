@@ -12,3 +12,8 @@
 7. Ortak `CizgiGrafikKarti`: dikey eksenin en alt etiketi (%0) ilk tarih etiketiyle üst üste biniyor (Arayüz N10). Modülde düzeltilmedi (ortak parça).
 8. Ortak `YatayCubukKarti`: satır başına ayrı ton yok; "Nedeni girilmemiş" çubuğu öteki duruş nedenleriyle aynı renkte (Arayüz N13 ikinci yarısı).
    İstek: satıra isteğe bağlı `ton` alanı.
+
+## 3760 (ortak dosyalara yazılanlar)
+9. `paylasilan/sozlesme/smartes.ts`: `kullanici` türü, `sayim-duzeltme`, onay türleri ve Geçiş şemaları; `paylasilan/sozlesme/istasyonlar.ts`: makine kaydına
+   isteğe bağlı `uretimKaynagi`, `uretimKaynagiGecerlilik`; `paylasilan/sayfalar/smartes.ts`: ikinci menüye "Geçiş". Çekirdek (`sunucu/cekirdek`) ve yetki kaydı değişmedi;
+   yeni işlem yok (Geçiş yazma `ayarlar.yaz`).
