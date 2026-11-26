@@ -63,7 +63,7 @@ test('Sipariş onayı: açılacak proje, emir sayıları ve rota bekleyen kalem 
   expect(ag.yazmalar).toEqual([]);
 });
 
-test('"Proje ve emirler" kartı: uzun emir no kısalır, rota bekleyen emir rozetle görünür, taşma yok', async ({ page, ag, ac }) => {
+test('"Proje ve emirler" kartı: uzun emir no tam yazılır, rota bekleyen emir rozetle görünür, taşma yok', async ({ page, ag, ac }) => {
   const id = await siparisAc(page);
   ag.sifirla();
   const emirli = {
@@ -82,7 +82,7 @@ test('"Proje ve emirler" kartı: uzun emir no kısalır, rota bekleyen emir roze
   const tablo = page.getByRole('table', { name: 'Siparişin emirleri' });
   await tablo.scrollIntoViewIfNeeded();
   await expect(tablo.getByText('Rota bekliyor')).toBeVisible();
-  await expect(tablo.getByTitle(emirli.satirlar[0]!.emir!.no)).toBeVisible();
+  await expect(tablo.getByText(emirli.satirlar[0]!.emir!.no, { exact: true })).toBeVisible();
   expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
   expect(ag.hatalar).toEqual([]);
   expect(ag.yazmalar).toEqual([]);
