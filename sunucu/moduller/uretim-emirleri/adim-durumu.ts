@@ -346,6 +346,22 @@ export async function listeMaddesiEkle(
 // 3604: Adım Durumu matrisi. Açık emirlerin adımları tek okumada; hazırlık ayrıntısı, liste ve geçmiş yoktur. Sistem statüsü Adım Durumu'yla
 // aynı hesaptan (sistemHesabi) gelir; elle statü sistem statüsü değişince düşmüş sayılır.
 const MATRIS_BITEN_SAYISI = 30;
+// Elle değer: onay ve elle "hazır değil" aynı maddede birlikte olmaz (son kayıt geçerlidir); adım detayındaki okumayla aynı kural.
+function matrisMaddeleri(
+  haller: ReadonlyMap<HazirlikMaddesi, { hal: HazirlikHali; ham: HazirlikHali }> | undefined, defter: readonly s.HazirlikOnaySatiri[], adlar: ReadonlyMap<number, string>,
+): AdimMatrisiCevabi['emirler'][number]['adimlar'][number]['maddeler'] {
+  const onay = acikOnaylar(defter);
+  const eksik = acikElleEksikler(defter);
+  return [...(haller ?? [])].map(([madde, h]) => {
+    const e = eksik.get(madde);
+    const o = onay.get(madde);
+    const kayit = e ?? o;
+    return {
+      madde, hal: h.hal, ham: h.ham,
+      elle: kayit === undefined ? null : { tur: e === undefined ? 'hazir' as const : 'eksik' as const, gerekce: kayit.gerekce, kisiAdi: adlar.get(kayit.kisiId) ?? null, zaman: kayit.zaman },
+    };
+  });
+}
 export async function adimMatrisi(db: Db, kullanici: Kullanici, biten: boolean): Promise<AdimMatrisiCevabi> {
   const gizli = new Set(await denemeIsaretliKimlikler(db, 'uretim_emri'));
   const emirler = (await s.ustEmirler(db, false, null, false)).filter((e) => !gizli.has(e.id) && e.durum !== 'bitti' && e.durum !== 'iptal');
@@ -354,7 +370,9 @@ export async function adimMatrisi(db: Db, kullanici: Kullanici, biten: boolean):
   for (const e of emirler) hesaplar.set(e.id, await sistemHesabi(db, e.id, e.durum));
   const idler = [...hesaplar.values()].flatMap((h) => h.isEmirleri.map((i) => i.id));
   const defter = await s.elleStatuDefteri(db, idler);
-  const adlar = await kisiAdlari(db, [...new Set(defter.map((x) => x.kisiId))]);
+  // 3738: hazırlık maddelerinin elle değeri tek toplu okumadır; madde hâlleri sistem hesabında zaten hesaplandı.
+  const onayDefteri = await s.hazirlikOnayDefteri(db, idler);
+  const adlar = await kisiAdlari(db, [...new Set([...defter, ...onayDefteri].map((x) => x.kisiId))]);
   const sonuc: AdimMatrisiCevabi['emirler'] = [];
   for (const e of emirler) {
     const h = hesaplar.get(e.id);
@@ -369,6 +387,7 @@ export async function adimMatrisi(db: Db, kullanici: Kullanici, biten: boolean):
         return {
           isEmriId: i.id, opNo: i.opNo, ad: i.ad, durum: i.durum, hedef: adim?.hedef ?? 0, yapilan: adim?.yapilan ?? 0, yuzde: adim?.yuzde ?? 0, sistemStatusu: sistem,
           elle: elle === null || elle.statu === null ? null : { statu: statuOku(elle.statu), not: elle.aciklama, kisiAdi: adlar.get(elle.kisiId) ?? null, zaman: elle.zaman },
+          maddeler: matrisMaddeleri(h.haller.get(i.id), onayDefteri.filter((x) => x.isEmriId === i.id), adlar),
         };
       }),
     });

@@ -49,7 +49,11 @@ export const OBEKLER: readonly { obek: Obek; ad: string; simge: SimgeAdi; ton: R
 
 // 3322: elle değer iki yönlüdür. Son kayıt geçerlidir: elle "hazır" (onay) ya da elle "hazır değil"; ikisi aynı maddede birlikte olmaz.
 export type ElleDeger = { tur: 'hazir' | 'eksik'; kisiAdi: string | null; zaman: string; gerekce: string | null };
-export const elleDegeri = (a: Adim, madde: HazirlikMaddesi): ElleDeger | null => {
+// 3738: matris hücresi de aynı komutları kurar; adım ve madde için yalnız gereken alanlar istenir (Adım ve AdimMaddesi bunu sağlar).
+export type ElleKaydi = { madde: HazirlikMaddesi; gerekce: string | null; kisiAdi: string | null; zaman: string };
+export type ElleKaynagi = { isEmriId: number; onaylar: readonly ElleKaydi[]; elleEksikler: readonly ElleKaydi[] };
+export type MaddeHali = Pick<AdimMaddesi, 'madde' | 'hal' | 'ham'>;
+export const elleDegeri = (a: Pick<ElleKaynagi, 'onaylar' | 'elleEksikler'>, madde: HazirlikMaddesi): ElleDeger | null => {
   const e = a.elleEksikler.find((x) => x.madde === madde);
   if (e !== undefined) return { tur: 'eksik', kisiAdi: e.kisiAdi, zaman: e.zaman, gerekce: e.gerekce };
   const o = a.onaylar.find((x) => x.madde === madde);
@@ -76,19 +80,19 @@ export const sorunluMaddeler = (a: Adim): AdimMaddesi[] => a.maddeler.filter((m)
 export const nedenSatiri = (a: Adim): string | null => a.nedenler[0] ?? (a.tedarik[0] ? tedarikMetni(a.tedarik[0]) : null);
 
 // 3322: elle değeri hedefe götüren komut. Hedef maddenin otomatik hâliyse elle değer kaldırılır (otomatiğe döner), değilse elle yazılır.
-export const hedefKomutu = (a: Adim, m: AdimMaddesi, hedef: 'hazir' | 'eksik', gerekce: string | null): Komut => {
+export const hedefKomutu = (a: ElleKaynagi, m: MaddeHali, hedef: 'hazir' | 'eksik', gerekce: string | null): Komut => {
   const otomatik = hedef === 'hazir' ? HAZIR_HALLER.has(m.ham) : m.ham === 'eksik';
   if (otomatik && elleDegeri(a, m.madde) !== null) return { yol: 'hazirlik-onay-kaldir', isEmriId: a.isEmriId, govde: { madde: m.madde } };
   return { yol: hedef === 'hazir' ? 'hazirlik-onayla' : 'hazirlik-elle-eksik', isEmriId: a.isEmriId, govde: { madde: m.madde, gerekce, sistemHali: m.hal } };
 };
 // Geri al önceki elle değeri yeniden yazar; komuttan sonraki hâl öngörülür (sunucu eskiyse 409 verir, ekran yeniden okur).
-export const geriKomutu = (a: Adim, m: AdimMaddesi, ileri: Komut): Komut => {
+export const geriKomutu = (a: ElleKaynagi, m: MaddeHali, ileri: Komut): Komut => {
   const sonraki = ileri.yol === 'hazirlik-onay-kaldir' ? m.ham : ileri.yol === 'hazirlik-elle-eksik' ? 'eksik' : HAZIR_HALLER.has(m.ham) ? m.ham : 'muaf';
   const once = elleDegeri(a, m.madde);
   if (once === null) return { yol: 'hazirlik-onay-kaldir', isEmriId: a.isEmriId, govde: { madde: m.madde } };
   return { yol: once.tur === 'hazir' ? 'hazirlik-onayla' : 'hazirlik-elle-eksik', isEmriId: a.isEmriId, govde: { madde: m.madde, gerekce: once.gerekce, sistemHali: sonraki } };
 };
-export const hedefMesaji = (m: AdimMaddesi, hedef: 'hazir' | 'eksik'): string => `${MADDE[m.madde].ad}: elle ${hedef === 'hazir' ? 'hazır' : 'hazır değil'}`;
+export const hedefMesaji = (m: Pick<AdimMaddesi, 'madde'>, hedef: 'hazir' | 'eksik'): string => `${MADDE[m.madde].ad}: elle ${hedef === 'hazir' ? 'hazır' : 'hazır değil'}`;
 
 export const statuKaynagi = (a: Adim): string => (a.elle === null ? `Kaynak: ${STATU_KAYNAGI[a.sistemStatusu]}` : `Elle: ${a.elle.kisiAdi ?? 'kişi'}`);
 

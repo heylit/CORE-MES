@@ -1,22 +1,25 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ATLAMA_METNI, TOPLU_EK_ONAY_ESIGI, ADIM_NOTU_EN_COK } from '#paylasilan/sozlesme/adim-matrisi-kurali.ts';
 import type { AdimMatrisiCevabi, AdimStatusu, ElleYazilanStatu, StatuTopluCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Menu, Rozet, Secim, Simge, type MenuOgesi } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Secim, Simge } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
-import { tarihMetni, zamanMetni } from '../../ortak/veri/zaman-metni.ts';
-import { ELLE_YAZILIR, STATU, STATU_KAYNAGI } from './adim-durumu.ts';
+import { tarihMetni } from '../../ortak/veri/zaman-metni.ts';
+import { ELLE_YAZILIR, STATU } from './adim-durumu.ts';
 import {
   BOS_SUZGEC, adimSayisi, aralik, bul, duzKalemler, elleSayisi, emirKapali, emirleriSuz, emrinKalemleri, geriAlGovdeleri, gecerliSecim, gorunenStatu,
-  istekGovdeleri, kalemAnahtari, oncekiDefteri, opKalemleri, opSutunlari, secimiAcKapa, secimiSay, sirala, yazilacaklar, yazimOzeti,
-  type Kalem, type MatrisEmri, type OncekiDefter, type Siralama, type Suzgec, type TabloSutunu, type YazimOzeti,
+  hazirlikOzeti, hazirlikOzetMetni, istekGovdeleri, kalemAnahtari, mercekOku, oncekiDefteri, opKalemleri, opSutunlari, secimiAcKapa, secimiSay, yazilacaklar, yazimOzeti,
+  type Kalem, type MatrisEmri, type Mercek, type OncekiDefter, type Suzgec, type YazimOzeti,
 } from './adim-matrisi.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { HazirlikCubugu } from './HazirlikCubugu.tsx';
+import { HucrePaneli } from './HucrePaneli.tsx';
 import { KimlikDefteri, topluGonder } from './kimlik-defteri.ts';
 import './adim-matrisi.css';
 
-// Adım Durumu: Matris ve Tablo görünümleri (3604). Satır emir, sütun OP; hücreden ya da seçimden elle statü yazılır, "Otomatiğe dön" toplu da yapılır.
+// Adım Durumu: tek matris (3604, 3738). Satır emir, sütun OP; hücreden ya da seçimden elle statü yazılır, "Otomatiğe dön" toplu da yapılır.
+// Mercek: Durum hücrede statüyü, Hazırlık hücrede hazırlık özetini gösterir; hücre paneli statüyü ve hazırlık maddelerini düzenler.
 // Elle statü yalnız görünümdür (terminal ilerlemesini, kilidi ve planı değiştirmez); operatör terminalde onu görür, bu yüzden yazmadan önce sayım
 // gösterilir ve son yazım bir sonraki işleme kadar geri alınabilir durur.
 type Genislik = 'dar' | 'orta' | 'genis';
@@ -50,8 +53,13 @@ const hucreAdi = (e: MatrisEmri, a: MatrisEmri['adimlar'][number]): string => {
 };
 const nedenMetni = (n: keyof typeof ATLAMA_METNI): string => ATLAMA_METNI[n];
 
-export function AdimMatrisi({ gorunum }: { gorunum: 'matris' | 'tablo' }) {
+export function AdimMatrisi() {
   const istemci = useQueryClient();
+  const [adres, adresYaz] = useSearchParams();
+  const mercek = mercekOku(adres.get('mercek'));
+  const mercekSec = (m: Mercek) => {
+    adresYaz((a) => { const y = new URLSearchParams(a); if (m === 'durum') y.delete('mercek'); else y.set('mercek', m); return y; }, { replace: true });
+  };
   const genislik = useGenislik();
   const [biten, bitenYaz] = useState(false);
   const veri = useQuery({
@@ -62,7 +70,6 @@ export function AdimMatrisi({ gorunum }: { gorunum: 'matris' | 'tablo' }) {
   const [secili, seciliYaz] = useState<ReadonlySet<string>>(new Set());
   const [aktif, aktifYaz] = useState<string | null>(null);
   const [coklu, cokluYaz] = useState(false);
-  const [sira, siraYaz] = useState<Siralama>({ sutun: 'emir', yon: 1 });
   const [statu, statuYaz] = useState<ElleYazilanStatu | ''>('');
   const [not, notYaz] = useState('');
   const [plan, planYaz] = useState<Plan | null>(null);
@@ -79,7 +86,6 @@ export function AdimMatrisi({ gorunum }: { gorunum: 'matris' | 'tablo' }) {
   const gorunen = useMemo(() => emirleriSuz(emirler, suz, biten), [emirler, suz, biten]);
   const sutunlar = useMemo(() => opSutunlari(gorunen), [gorunen]);
   const duz = useMemo(() => duzKalemler(gorunen, suz), [gorunen, suz]);
-  const tabloSatirlari = useMemo(() => sirala(duz, sira, statuAdi), [duz, sira]);
   // Veri yenilenince ya da süzgeç değişince görünümde olmayan seçim düşer.
   const gecerli = useMemo(() => gecerliSecim(secili, gorunen), [secili, gorunen]);
   const seciliKalemler = useMemo(() => [...gecerli].flatMap((k) => { const b = bul(gorunen, k); return b === null ? [] : [b]; }), [gecerli, gorunen]);
@@ -101,7 +107,7 @@ export function AdimMatrisi({ gorunum }: { gorunum: 'matris' | 'tablo' }) {
     aktifYaz(k.anahtar);
     if (!yazabilir || emirKapali(k.emir)) return;
     planYaz(null);
-    const ekle = o.ctrlKey || o.metaKey || o.shiftKey || coklu || genislik === 'dar';
+    const ekle = o.ctrlKey || o.metaKey || o.shiftKey || coklu;
     if (o.shiftKey && aktif !== null) {
       const onceki = bul(gorunen, aktif);
       if (onceki !== null && onceki.emir.emirId === k.emir.emirId) {
@@ -199,26 +205,27 @@ export function AdimMatrisi({ gorunum }: { gorunum: 'matris' | 'tablo' }) {
   };
   const panelKapat = () => { const a = aktif; aktifYaz(null); odakDon(a); };
 
-  const hucreMenusu = (k: Kalem): MenuOgesi[] => [
-    ...ELLE_YAZILIR.map((x) => ({ anahtar: x, baslik: STATU[x].ad, simge: STATU[x].simge, sec: () => { hucreYaz(k, x); } })),
-    { anahtar: 'don', baslik: 'Otomatiğe dön', simge: 'rotate', sec: () => { hucreYaz(k, null); }, pasif: k.adim.elle === null, pasifNedeni: 'Elle yazılmış statü yok' },
-  ];
-
   const hucre = (k: Kalem, kisa: boolean) => {
     const g = gorunenStatu(k.adim);
-    const s = STATU[g];
     const kapali = emirKapali(k.emir);
     const secildi = gecerli.has(k.anahtar);
+    const hz = hazirlikOzeti(k.adim);
+    const hazirlikMi = mercek === 'hazirlik';
+    const ton = hazirlikMi ? (hz.eksik > 0 ? 'hata' : hz.toplam > 0 && hz.tamam === hz.toplam ? 'tamam' : 'pasif') : STATU[g].ton;
+    const ad = hazirlikMi ? `${k.emir.emirNo}, OP ${String(k.adim.opNo)} ${k.adim.ad}: ${hazirlikOzetMetni(hz)}` : hucreAdi(k.emir, k.adim);
     return (
       <div className={`tc-am-hucre-kap${aktif === k.anahtar ? ' tc-am-aktif' : ''}`}>
-        <button type="button" className={`tc-am-hucre tc-am-ton-${s.ton}${secildi ? ' tc-am-secili' : ''}`} data-am-k={k.anahtar}
-          aria-pressed={secildi} aria-label={hucreAdi(k.emir, k.adim)} title={kisa ? `${statuAdi(g)}${kapali ? ' (emir bitti, seçilemez)' : ''}` : undefined}
+        <button type="button" className={`tc-am-hucre tc-am-ton-${ton}${secildi ? ' tc-am-secili' : ''}${hazirlikMi ? ' tc-am-hucre-hz' : ''}`} data-am-k={k.anahtar}
+          aria-pressed={secildi} aria-label={ad} title={kisa && !hazirlikMi ? `${statuAdi(g)}${kapali ? ' (emir bitti, seçilemez)' : ''}` : undefined}
           onClick={(o) => { tikla(k, o); }}>
-          <Simge ad={s.simge} boyut="k" />
-          {!kisa && <span className="tc-am-hucre-ad">{s.ad}</span>}
-          {k.adim.elle !== null && <span className="tc-am-e" aria-hidden="true">E</span>}
+          {hazirlikMi ? <HazirlikCubugu adim={k.adim} /> : (
+            <>
+              <Simge ad={STATU[g].simge} boyut="k" />
+              {!kisa && <span className="tc-am-hucre-ad">{STATU[g].ad}</span>}
+              {k.adim.elle !== null && <span className="tc-am-e" aria-hidden="true">E</span>}
+            </>
+          )}
         </button>
-        {aktif === k.anahtar && yazabilir && !kapali && <Menu etiket={`${k.emir.emirNo} OP ${String(k.adim.opNo)} statü işlemleri`} ogeler={hucreMenusu(k)} />}
       </div>
     );
   };
@@ -265,108 +272,6 @@ export function AdimMatrisi({ gorunum }: { gorunum: 'matris' | 'tablo' }) {
         </tbody>
       </table>
     </div>
-  );
-
-  const emirKartlari = () => (
-    <ul className="tc-am-kartlar" aria-label="Emirler">
-      {gorunen.map((e) => (
-        <li key={e.emirId} className="tc-am-emir-karti">
-          <div className="tc-am-emir-ust">
-            <span className="tc-emir-kod">{e.emirNo}</span>
-            {e.teslim !== null && <span className="tc-am-termin">Termin {tarihMetni(e.teslim)}</span>}
-          </div>
-          <span className="tc-am-urun">{e.urun.ad}{emirKapali(e) ? ' · Emir bitti' : ''}</span>
-          <ul className="tc-am-cipler" aria-label={`${e.emirNo} adımları`}>
-            {e.adimlar.map((a) => {
-              const k = { anahtar: kalemAnahtari(e.emirId, a.isEmriId), emir: e, adim: a };
-              const g = gorunenStatu(a);
-              return (
-                <li key={a.isEmriId}>
-                  <button type="button" className={`tc-am-cip tc-am-ton-${STATU[g].ton}${gecerli.has(k.anahtar) ? ' tc-am-secili' : ''}${aktif === k.anahtar ? ' tc-am-aktif' : ''}`}
-                    data-am-k={k.anahtar} aria-pressed={gecerli.has(k.anahtar)} aria-label={hucreAdi(e, a)} onClick={(o) => { tikla(k, o); }}>
-                    <b>{a.opNo}</b><Simge ad={STATU[g].simge} boyut="k" />{a.elle !== null && <span className="tc-am-e" aria-hidden="true">E</span>}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-          {yazabilir && <Dugme onClick={() => { topluSec(emrinKalemleri(e)); }}>Emrin adımlarını seç</Dugme>}
-        </li>
-      ))}
-    </ul>
-  );
-
-  const siraDugmesi = (sutun: TabloSutunu, ad: string, sinif = '') => (
-    <th scope="col" className={sinif} aria-sort={sira.sutun === sutun ? (sira.yon === 1 ? 'ascending' : 'descending') : 'none'}>
-      <button type="button" className="tc-am-baslik tc-am-sira" onClick={() => { siraYaz({ sutun, yon: sira.sutun === sutun && sira.yon === 1 ? -1 : 1 }); }}>
-        {ad}{sira.sutun === sutun && <Simge ad={sira.yon === 1 ? 'up' : 'down'} boyut="k" />}
-      </button>
-    </th>
-  );
-  const hepsiSecili = tabloSatirlari.length > 0 && tabloSatirlari.every((k) => gecerli.has(k.anahtar));
-  const tablo = () => (
-    <div className="tc-am-kaydir" tabIndex={0} role="region" aria-label="Adım tablosu">
-      <table className="tc-am-tablo tc-am-duz">
-        <thead>
-          <tr>
-            <th scope="col" className="tc-am-onay tc-am-s1">
-              <label className="tc-am-onay-hedef">
-                <input type="checkbox" aria-label="Görünen adımların hepsini seç" checked={hepsiSecili} disabled={!yazabilir}
-                  onChange={() => { topluSec(tabloSatirlari); }} />
-              </label>
-            </th>
-            {siraDugmesi('emir', 'Emir', 'tc-am-s2')}<th scope="col">Ürün</th><th scope="col">OP</th><th scope="col">Adım</th>
-            {siraDugmesi('statu', 'Statü')}<th scope="col">Kaynak</th><th scope="col">İlerleme</th>{siraDugmesi('termin', 'Termin')}
-          </tr>
-        </thead>
-        <tbody>
-          {tabloSatirlari.map((k) => {
-            const g = gorunenStatu(k.adim);
-            const secildi = gecerli.has(k.anahtar);
-            return (
-              <tr key={k.anahtar} className={`${secildi ? 'tc-am-secili-satir' : ''}${aktif === k.anahtar ? ' tc-am-aktif-satir' : ''}`}>
-                <td className="tc-am-onay tc-am-s1">
-                  <label className="tc-am-onay-hedef">
-                    <input type="checkbox" data-am-k={k.anahtar} aria-label={`${k.emir.emirNo} OP ${String(k.adim.opNo)} seç`} checked={secildi}
-                      disabled={!yazabilir || emirKapali(k.emir)} onChange={(o) => { aktifYaz(k.anahtar); topluSec([k]); o.currentTarget.focus(); }} />
-                  </label>
-                </td>
-                <td className="tc-am-s2"><button type="button" className="tc-am-baglanti" onClick={() => { aktifYaz(k.anahtar); }}><span className="tc-emir-kod">{k.emir.emirNo}</span></button></td>
-                <td>{k.emir.urun.ad}</td>
-                <td className="tc-am-sayi">{k.adim.opNo}</td>
-                <td>{k.adim.ad}</td>
-                <td><Rozet ton={STATU[g].ton}>{statuAdi(g)}</Rozet>{k.adim.elle !== null && <span className="tc-am-e" title="Elle yazıldı">E</span>}</td>
-                <td>{k.adim.elle === null ? 'Sistem' : `Elle: ${k.adim.elle.kisiAdi ?? 'kişi'}`}</td>
-                <td className="tc-am-sayi">{k.adim.yapilan}/{k.adim.hedef}</td>
-                <td className="tc-am-sayi">{k.emir.teslim === null ? '—' : tarihMetni(k.emir.teslim)}{emirKapali(k.emir) ? ' · bitti' : ''}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-  const adimKartlari = () => (
-    <ul className="tc-am-kartlar" aria-label="Adımlar">
-      {tabloSatirlari.map((k) => {
-        const g = gorunenStatu(k.adim);
-        const secildi = gecerli.has(k.anahtar);
-        return (
-          <li key={k.anahtar} className={`tc-am-adim-karti${secildi ? ' tc-am-secili-kart' : ''}`}>
-            <label className="tc-am-onay-hedef">
-              <input type="checkbox" data-am-k={k.anahtar} aria-label={`${k.emir.emirNo} OP ${String(k.adim.opNo)} seç`} checked={secildi}
-                disabled={!yazabilir || emirKapali(k.emir)} onChange={() => { aktifYaz(k.anahtar); topluSec([k]); }} />
-            </label>
-            <button type="button" className="tc-am-adim-govde" onClick={() => { aktifYaz(k.anahtar); }}>
-              <span className="tc-am-emir-ust"><span className="tc-emir-kod">{k.emir.emirNo} · OP {k.adim.opNo}</span><span className="tc-am-termin">{k.emir.teslim === null ? '—' : tarihMetni(k.emir.teslim)}</span></span>
-              <span className="tc-am-urun">{k.emir.urun.ad} · {k.adim.ad}</span>
-              <span><Rozet ton={STATU[g].ton}>{statuAdi(g)}</Rozet>{k.adim.elle !== null && <span className="tc-am-e" title="Elle yazıldı">E</span>}</span>
-              <span className="tc-am-termin">{k.adim.elle === null ? 'Sistem' : `Elle: ${k.adim.elle.kisiAdi ?? 'kişi'}`} · {k.adim.yapilan}/{k.adim.hedef}</span>
-            </button>
-          </li>
-        );
-      })}
-    </ul>
   );
 
   // ----- toplu şerit -----
@@ -449,54 +354,20 @@ export function AdimMatrisi({ gorunum }: { gorunum: 'matris' | 'tablo' }) {
     </div>
   );
 
-  // ----- ayrıntı paneli -----
-  // 360: ayrıntı alttaki yapışan şeridin içinde katlanır; ayrı bir panel şeridin altında kalırdı.
-  const panel = () => {
-    if (aktifKalem === null) return null;
-    const { emir, adim } = aktifKalem;
-    const g = gorunenStatu(adim);
-    const katli = genislik === 'dar';
-    const baslik = `${emir.emirNo} · OP ${String(adim.opNo)} ${adim.ad}`;
-    const icerik = (
-      <>
-        <p className="tc-emir-not">{emir.urun.ad}{emir.teslim === null ? '' : ` · termin ${tarihMetni(emir.teslim)}`}</p>
-        <dl className="tc-am-ayrinti">
-          <dt>Görünen</dt><dd><Rozet ton={STATU[g].ton}>{statuAdi(g)}</Rozet></dd>
-          <dt>Sistem</dt><dd>{statuAdi(adim.sistemStatusu)}<small>{STATU_KAYNAGI[adim.sistemStatusu]}</small></dd>
-          <dt>İlerleme</dt><dd>{adim.yapilan} / {adim.hedef}</dd>
-          <dt>Elle</dt>
-          <dd>{adim.elle === null ? 'Yok (otomatik)' : <>{statuAdi(adim.elle.statu)}<small>{adim.elle.kisiAdi ?? 'Kişi'} · {zamanMetni(adim.elle.zaman)}{adim.elle.not === null || adim.elle.not === '' ? '' : ` · ${adim.elle.not}`}</small></>}</dd>
-        </dl>
-        {emirKapali(emir) && <p className="tc-emir-not">Emir bitti; elle statü yazılmaz.</p>}
-        {!yazabilir && <p className="tc-emir-not"><Simge ad="lock" boyut="k" /> Statü yazma yetkiniz yok.</p>}
-        <Link className="tc-dugme tc-dugme-ikincil tc-dugme-normal" to={`/adim-durumu?emir=${String(emir.emirId)}`}>Emri aç</Link>
-      </>
-    );
-    if (katli) {
-      return (
-        <aside className="tc-am-panel tc-am-panel-katli" aria-label="Adım ayrıntısı">
-          <details open>
-            <summary tabIndex={-1} data-ilk-odak>{baslik}</summary>
-            {icerik}
-          </details>
-          <Dugme simge="x" aria-label="Ayrıntıyı kapat" onClick={panelKapat} />
-        </aside>
-      );
-    }
-    return (
-      <aside className="tc-am-panel" aria-label="Adım ayrıntısı">
-        <div className="tc-am-panel-ust">
-          <h3 tabIndex={-1} data-ilk-odak>{baslik}</h3>
-          <Dugme simge="x" aria-label="Ayrıntıyı kapat" onClick={panelKapat} />
-        </div>
-        {icerik}
-      </aside>
-    );
-  };
+  // ----- hücre paneli -----
+  // 360: panel alttaki yapışan şeridin içinde katlanır; ayrı bir panel şeridin altında kalırdı.
+  const panel = () => aktifKalem === null ? null : (
+    <HucrePaneli key={aktifKalem.anahtar} kalem={aktifKalem} yazabilir={yazabilir} katli={genislik === 'dar'} statuYaz={hucreYaz} mesgul={mesgul} kapat={panelKapat} yenile={yenile} />
+  );
 
   const lejant = [...new Set(emirler.flatMap((e) => e.adimlar.map((a) => gorunenStatu(a))))];
   return (
     <div className={`tc-am tc-am-${genislik}`}>
+      <div className="tc-am-mercek" role="group" aria-label="Mercek">
+        <span className="tc-am-mercek-ad">Mercek</span>
+        <Dugme aria-pressed={mercek === 'durum'} simge="gauge" onClick={() => { mercekSec('durum'); }}>Durum</Dugme>
+        <Dugme aria-pressed={mercek === 'hazirlik'} simge="clipboard-check" onClick={() => { mercekSec('hazirlik'); }}>Hazırlık</Dugme>
+      </div>
       <div className="tc-am-ust">
         <Girdi etiket="Ara" type="search" placeholder="Emir no, ürün" value={suz.arama} onChange={(o) => { suzYaz({ ...suz, arama: o.target.value }); }} />
         <Secim etiket="Statü" bosSecenek="Tüm statüler" value={suz.statu} onChange={(o) => { suzYaz({ ...suz, statu: o.target.value as AdimStatusu | '' }); }}
@@ -504,10 +375,11 @@ export function AdimMatrisi({ gorunum }: { gorunum: 'matris' | 'tablo' }) {
         <div className="tc-am-isaretler">
           <IsaretKutusu etiket="Yalnız elle yazılanlar" checked={suz.yalnizElle} onChange={(o) => { suzYaz({ ...suz, yalnizElle: o.target.checked }); }} />
           <IsaretKutusu etiket="Yalnız sorunlular" checked={suz.yalnizSorunlu} onChange={(o) => { suzYaz({ ...suz, yalnizSorunlu: o.target.checked }); }} />
+          <IsaretKutusu etiket="Yalnız hazırlığı eksik olanlar" checked={suz.yalnizHazirlikEksik} onChange={(o) => { suzYaz({ ...suz, yalnizHazirlikEksik: o.target.checked }); }} />
           <IsaretKutusu etiket="Biteni göster" checked={biten} onChange={(o) => { bitenYaz(o.target.checked); }} />
         </div>
         <div className="tc-am-ust-dugmeler">
-          {genislik !== 'dar' && <Dugme aria-pressed={coklu} disabled={!yazabilir} onClick={() => { cokluYaz(!coklu); }}>Çoklu seç</Dugme>}
+          <Dugme aria-pressed={coklu} disabled={!yazabilir} onClick={() => { cokluYaz(!coklu); }}>Çoklu seç</Dugme>
           <Dugme disabled={!yazabilir || duz.length === 0} onClick={hepsiniSec}>Tümünü seç</Dugme>
         </div>
         <p className="tc-am-sayac" role="status">{veri.isPending ? 'Yükleniyor' : sayacMetni}</p>
@@ -525,14 +397,22 @@ export function AdimMatrisi({ gorunum }: { gorunum: 'matris' | 'tablo' }) {
           {veri.data && (
             bos
               ? <DurumKutusu durum="bos" mesaj={emirler.length === 0 ? 'Açık emir yok.' : 'Süzgece uyan emir yok.'} />
-              : gorunum === 'matris' ? (genislik === 'dar' ? emirKartlari() : matris(genislik === 'orta')) : (genislik === 'dar' ? adimKartlari() : tablo())
+              : matris(genislik !== 'genis' && mercek === 'durum')
           )}
-          {veri.data && !bos && (
+          {veri.data && !bos && (mercek === 'durum' ? (
             <ul className="tc-am-lejant" aria-label="Statü simgeleri">
               {lejant.map((x) => <li key={x}><Simge ad={STATU[x].simge} boyut="k" />{statuAdi(x)}</li>)}
               <li><span className="tc-am-e" aria-hidden="true">E</span>Elle yazıldı</li>
             </ul>
-          )}
+          ) : (
+            <ul className="tc-am-lejant" aria-label="Hazırlık kareleri">
+              <li><i className="tc-am-kare tc-am-kare-tamam" />Tamam</li>
+              <li><i className="tc-am-kare tc-am-kare-eksik" />Eksik</li>
+              <li><i className="tc-am-kare tc-am-kare-muaf" />Muaf ya da elle onay</li>
+              <li><i className="tc-am-kare tc-am-kare-bos" />Gerekmez ya da denetlenmiyor</li>
+              <li><Simge ad="user" boyut="k" />Elle değer</li>
+            </ul>
+          ))}
         </div>
         {genislik !== 'dar' && panel()}
       </div>

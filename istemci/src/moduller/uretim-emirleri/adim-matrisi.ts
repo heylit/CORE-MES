@@ -1,14 +1,21 @@
 import { kalemKarari, yazimSayimi, TOPLU_EN_COK_KALEM, type KalemGirdisi, type YazimSayimi } from '#paylasilan/sozlesme/adim-matrisi-kurali.ts';
 import type { AdimMatrisiCevabi, AdimStatusu, ElleYazilanStatu, StatuTopluCevabi, StatuTopluGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { hedefKomutu, geriKomutu, GEREKCE_EN_AZ, type ElleKaynagi, type Komut } from './adim-tablosu.ts';
+import { MADDE } from './hazirlik-bilgisi.ts';
 
 // Adım Durumu matrisi ve toplu tablo (3604): saf kurallar. Sayım ve karar sunucuyla aynı dosyadan (adim-matrisi-kurali.ts) gelir; ekran
 // yalnız seçimi, süzgeci ve sıralamayı bilir. Sunucu yine kalem başına karar verir.
 export type MatrisEmri = AdimMatrisiCevabi['emirler'][number];
 export type MatrisAdimi = MatrisEmri['adimlar'][number];
+export type MatrisMaddesi = MatrisAdimi['maddeler'][number];
 export interface Kalem { anahtar: string; emir: MatrisEmri; adim: MatrisAdimi }
-export type Gorunum = 'emir' | 'matris' | 'tablo' | 'sablon';
-export const GORUNUMLER: readonly Gorunum[] = ['emir', 'matris', 'tablo', 'sablon'];
-export const gorunumOku = (deger: string | null): Gorunum => (GORUNUMLER as readonly string[]).includes(deger ?? '') ? deger as Gorunum : 'emir';
+// 3738: Adım Durumu'nda iki sekme vardır: Adımlar (tek matris) ve Hazırlık şablonu. Eski adreslerdeki `emir` ve `tablo` değeri Adımlar'a düşer.
+export type Gorunum = 'adimlar' | 'sablon';
+export const gorunumOku = (deger: string | null): Gorunum => (deger === 'sablon' ? 'sablon' : 'adimlar');
+// Matris mercekleri: Durum hücrede statüyü, Hazırlık hücrede hazırlık özetini gösterir (3738).
+export type Mercek = 'durum' | 'hazirlik';
+export const MERCEKLER: readonly Mercek[] = ['durum', 'hazirlik'];
+export const mercekOku = (deger: string | null): Mercek => (deger === 'hazirlik' ? 'hazirlik' : 'durum');
 
 export const kalemAnahtari = (emirId: number, isEmriId: number): string => `${String(emirId)}:${String(isEmriId)}`;
 const kalemKur = (emir: MatrisEmri, adim: MatrisAdimi): Kalem => ({ anahtar: kalemAnahtari(emir.emirId, adim.isEmriId), emir, adim });
@@ -26,13 +33,14 @@ export function opSutunlari(emirler: readonly MatrisEmri[]): { opNo: number; ad:
   return [...adlar].map(([opNo, ad]) => ({ opNo, ad })).sort((x, y) => x.opNo - y.opNo);
 }
 
-export interface Suzgec { arama: string; statu: AdimStatusu | ''; yalnizElle: boolean; yalnizSorunlu: boolean }
-export const BOS_SUZGEC: Suzgec = { arama: '', statu: '', yalnizElle: false, yalnizSorunlu: false };
-export const suzgecAcik = (s: Suzgec): boolean => s.statu !== '' || s.yalnizElle || s.yalnizSorunlu;
+export interface Suzgec { arama: string; statu: AdimStatusu | ''; yalnizElle: boolean; yalnizSorunlu: boolean; yalnizHazirlikEksik: boolean }
+export const BOS_SUZGEC: Suzgec = { arama: '', statu: '', yalnizElle: false, yalnizSorunlu: false, yalnizHazirlikEksik: false };
+export const suzgecAcik = (s: Suzgec): boolean => s.statu !== '' || s.yalnizElle || s.yalnizSorunlu || s.yalnizHazirlikEksik;
 export function adimUyar(a: MatrisAdimi, s: Suzgec): boolean {
   if (s.statu !== '' && gorunenStatu(a) !== s.statu) return false;
   if (s.yalnizElle && a.elle === null) return false;
-  return !(s.yalnizSorunlu && !sorunlu(a));
+  if (s.yalnizSorunlu && !sorunlu(a)) return false;
+  return !(s.yalnizHazirlikEksik && hazirlikOzeti(a).eksik === 0);
 }
 // Emir satırı: aramaya uyar ve (süzgeç açıksa) en az bir adımı süzgece uyar.
 export function emirleriSuz(emirler: readonly MatrisEmri[], s: Suzgec, bitenGoster: boolean): MatrisEmri[] {
@@ -126,12 +134,52 @@ export function yazimOzeti(cevaplar: readonly StatuTopluCevabi[]): YazimOzeti {
   return o;
 }
 
-export type TabloSutunu = 'emir' | 'termin' | 'statu';
-export interface Siralama { sutun: TabloSutunu; yon: 1 | -1 }
-export function sirala(kalemler: readonly Kalem[], s: Siralama, ad: (a: AdimStatusu) => string): Kalem[] {
-  const anahtar = (k: Kalem): string => s.sutun === 'emir' ? k.emir.emirNo : s.sutun === 'termin' ? k.emir.teslim ?? '9999-12-31' : ad(gorunenStatu(k.adim));
-  return [...kalemler].sort((x, y) => {
-    const fark = anahtar(x).localeCompare(anahtar(y), 'tr', { numeric: true });
-    return (fark !== 0 ? fark : x.emir.emirNo.localeCompare(y.emir.emirNo, 'tr', { numeric: true }) || x.adim.opNo - y.adim.opNo) * s.yon;
-  });
+// ----- 3738: hazırlık özeti ve madde işlemleri -----
+// Özet: gerekli maddelerin kaçı hazır. Gerekmeyen madde ve sistemin denetlemediği ("bilinmiyor", başlatmayı durdurmaz) madde sayılmaz;
+// muaf (müdür muafiyeti ve elle onay) hazırdır, çünkü iş başlar.
+export type KareTonu = 'tamam' | 'eksik' | 'muaf' | 'bos';
+export const kareTonu = (m: MatrisMaddesi): KareTonu => m.hal === 'tamam' ? 'tamam' : m.hal === 'eksik' ? 'eksik' : m.hal === 'muaf' ? 'muaf' : 'bos';
+export interface HazirlikOzeti { tamam: number; toplam: number; eksik: number; elle: number }
+export function hazirlikOzeti(a: MatrisAdimi): HazirlikOzeti {
+  const o: HazirlikOzeti = { tamam: 0, toplam: 0, eksik: 0, elle: 0 };
+  for (const m of a.maddeler) {
+    if (m.elle !== null) o.elle += 1;
+    if (m.hal === 'gerekmez' || m.hal === 'bilinmiyor') continue;
+    o.toplam += 1;
+    if (m.hal === 'eksik') o.eksik += 1; else o.tamam += 1;
+  }
+  return o;
 }
+export const hazirlikOzetMetni = (o: HazirlikOzeti): string =>
+  `hazırlık ${String(o.tamam)}/${String(o.toplam)}${o.eksik > 0 ? `, ${String(o.eksik)} eksik` : ''}${o.elle > 0 ? `, ${String(o.elle)} elle` : ''}`;
+
+// Madde hâli ekranda hazır mı: elle değer hâlin yerine geçer (sunucu `hal`i zaten elle değeri içerir).
+const hazirMi = (m: MatrisMaddesi): boolean => m.hal === 'tamam' || m.hal === 'muaf';
+export interface MaddeDugmeleri { onayla: boolean; eksik: boolean; geriAl: boolean }
+// Gerekmeyen maddede onay ve eksik yoktur (sunucu reddeder); hazır maddeye onay, eksik maddeye eksik işareti yazılmaz (ikinci kez geçiş yok).
+export const maddeDugmeleri = (m: MatrisMaddesi): MaddeDugmeleri => ({
+  onayla: m.ham !== 'gerekmez' && m.hal !== 'gerekmez' && !hazirMi(m),
+  eksik: m.ham !== 'gerekmez' && m.hal !== 'gerekmez' && m.hal !== 'eksik',
+  geriAl: m.elle !== null,
+});
+// Durduran madde (eksikken iş emrini durdurur) elle değişirken gerekçe ister (2893-2 b); uyaran maddede gerekçe isteğe bağlıdır.
+export const gerekceGerekir = (m: Pick<MatrisMaddesi, 'madde'>): boolean => !MADDE[m.madde].uyarir;
+export const gerekceYeterli = (gerekce: string): boolean => gerekce.trim().length >= GEREKCE_EN_AZ;
+
+// Adım Durumu'ndaki komut kurucular matris verisiyle de çalışır: matris maddesinden aynı biçimde elle kaynağı kurulur.
+export function elleKaynagi(a: MatrisAdimi): ElleKaynagi {
+  const kayit = (tur: 'hazir' | 'eksik') => a.maddeler.flatMap((m) => m.elle !== null && m.elle.tur === tur
+    ? [{ madde: m.madde, gerekce: m.elle.gerekce, kisiAdi: m.elle.kisiAdi, zaman: m.elle.zaman }] : []);
+  return { isEmriId: a.isEmriId, onaylar: kayit('hazir'), elleEksikler: kayit('eksik') };
+}
+export const maddeKomutu = (a: MatrisAdimi, m: MatrisMaddesi, hedef: 'hazir' | 'eksik', gerekce: string | null): Komut => hedefKomutu(elleKaynagi(a), m, hedef, gerekce);
+// Hedefe giden komut ve gerekçe isteyip istemediği: elle değeri kaldıran komut (hedef zaten otomatik hâl) gerekçe istemez.
+export function maddeIslemi(a: MatrisAdimi, m: MatrisMaddesi, hedef: 'hazir' | 'eksik'): { komut: Komut; gerekceIster: boolean } {
+  const komut = maddeKomutu(a, m, hedef, null);
+  return { komut, gerekceIster: komut.yol !== 'hazirlik-onay-kaldir' && gerekceGerekir(m) };
+}
+export const maddeGeriAlKomutu = (a: MatrisAdimi, m: MatrisMaddesi): { ileri: Komut; geri: Komut } => {
+  const kaynak = elleKaynagi(a);
+  const ileri: Komut = { yol: 'hazirlik-onay-kaldir', isEmriId: a.isEmriId, govde: { madde: m.madde } };
+  return { ileri, geri: geriKomutu(kaynak, m, ileri) };
+};

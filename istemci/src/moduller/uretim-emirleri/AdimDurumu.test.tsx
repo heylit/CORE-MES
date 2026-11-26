@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { AdimDurumuCevabi, AdimliListeCevabi, HazirlikCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { AdimDurumu } from './AdimDurumu.tsx';
-import { UretimEmirleri } from './UretimEmirleri.tsx';
 import { OKUYUCU, ac, json, sunucuKur } from './test-ortak.tsx';
 
 const EMIR = {
@@ -41,28 +40,22 @@ const YAZAR = { ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.adim-durumu' 
 const OKU = { ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.adim-durumu' as const] };
 
 describe('Adım Durumu (2893, 3581): tek tablo', () => {
-  it('Üretim Emirleri listesi önbellekteyken açılır; iki liste birbirinin cevabını okumaz', async () => {
-    const IZLEME = {
-      id: 9, emirNo: 'EM-9', durum: 'planli', parcaNo: 'DNM-009', parcaAd: 'Deneme burç', adet: 5, istasyon: null, acan: null,
-      acilma: '2026-11-11T08:00:00+00:00', baslama: null, bitis: null, iptal: null, saglamAdet: null,
-    };
-    sunucuKur({ ...OKU }, { ...yollar, 'GET /uretim-emirleri': () => json(200, { emirler: [IZLEME] }) });
-    const Ikisi = () => <><UretimEmirleri /><AdimDurumu /></>;
-    ac([{ yol: '/ikisi', ekran: Ikisi }], '/ikisi');
-    const liste = await screen.findByRole('list', { name: 'Açık emirler' });
-    expect(within(liste).getByText('Deneme flanş')).toBeTruthy();
-    expect(within(liste).queryByText('EM-9')).toBeNull();
-    expect(await screen.findByText('EM-9')).toBeTruthy();
+  it('3738: açılış tek matristir (Adımlar); Emir, Matris ve Tablo sekmeleri yok, Hazırlık şablonu ayrı sekmedir', async () => {
+    sunucuKur({ ...OKU }, { ...yollar, 'GET /adimli-emirler/adim-matrisi': () => json(200, { yazabilir: false, emirler: [] }) });
+    ac(ekran, '/adim-durumu');
+    expect(await screen.findByText('Açık emir yok.')).toBeTruthy();
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Adımlar', 'Hazırlık şablonu']);
+    expect(screen.getByRole('tab', { name: 'Adımlar' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.queryByRole('list', { name: 'Açık emirler' })).toBeNull();
   });
 
-  it('emir seçilmeden tablo yok; arama listeyi süzer', async () => {
-    sunucuKur({ ...OKU }, yollar);
-    ac(ekran, '/adim-durumu');
-    const liste = await screen.findByRole('list', { name: 'Açık emirler' });
+  it('eski ?gorunum=emir adresi Adımlar\'a düşer; ?emir= tek emrin ayrıntısını açar, Matris geri götürür', async () => {
+    sunucuKur({ ...OKU }, { ...yollar, 'GET /adimli-emirler/adim-matrisi': () => json(200, { yazabilir: false, emirler: [] }) });
+    ac(ekran, '/adim-durumu?gorunum=emir&emir=5');
+    expect(await screen.findByRole('table')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Matris' }));
+    expect(await screen.findByText('Açık emir yok.')).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
-    fireEvent.change(screen.getByLabelText('Ara'), { target: { value: 'yok-boyle' } });
-    expect(screen.getByText('Aramaya uyan emir yok.')).toBeTruthy();
-    expect(liste.isConnected).toBe(false);
   });
 
   it('seçilen emrin adımları tek tabloda: durum, hazırlık çipleri, sayaçlar', async () => {
