@@ -212,7 +212,10 @@ export interface Gostergeler {
 export function gostergeler(
   kayitlar: readonly MaliyetKaydi[], dahil: readonly MaliyetKalemi[], gelir: number | null, butce: number | null, tam: boolean,
 ): Gostergeler {
-  if (kayitlar.length === 0) {
+  // 3765 (CLAUDE.md kural 5): maliyet tam değilken toplama giren kalemlerin hiçbirinde tutar yoksa toplam bilinmez; dahil kalemlerin
+  // sıfırı "proje maliyeti 0 TL" diye gösterilmez. Bütün kalemler bilinip sıfırsa toplam gerçekten sıfırdır.
+  const tutarVar = kayitlar.some((k) => dahil.some((kalem) => (kalemDegeri(k.plan, kalem) ?? 0) !== 0 || (kalemDegeri(k.gercek, kalem) ?? 0) !== 0));
+  if (kayitlar.length === 0 || (!tam && !tutarVar)) {
     const katkiYok = { plan: null, gerceklesen: null, bugunePlan: null, kalanPlan: null, sapma: null, katkiPayi: null, katkiOrani: null };
     const planlanan = gelir !== null && butce !== null ? bolum(gelir - butce, gelir) : null;
     return { ...katkiYok, hedef: butce, planlananKatkiOrani: planlanan };
