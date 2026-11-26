@@ -32,7 +32,7 @@ export function HazirlikSablonu() {
   const tur = turler.find((t) => (t.operasyonTipiId === null ? 'varsayilan' : String(t.operasyonTipiId)) === secili) ?? turler[0];
   if (tur === undefined) return <Kart><DurumKutusu durum="bos" mesaj="Operasyon türü yok." /></Kart>;
   return (
-    <Kart baslik="Hazırlık şablonu" simge="list" sag={ekleyebilir && <Dugme simge="plus" onClick={() => { yeniMaddeYaz(true); }}>Yeni madde</Dugme>}>
+    <Kart baslik="Hazırlık şablonu" simge="list" sag={ekleyebilir && <Dugme className="tc-hs-yeni" simge="plus" onClick={() => { yeniMaddeYaz(true); }}>Yeni madde</Dugme>}>
       <p className="tc-hs-not">Her operasyon türü için hangi hazırlık maddesinin gerekli olduğunu seçin. Gerekli olmayan madde o türün adımlarında “Gerekmez” görünür. Başlatmayı durduran maddeler (CNC, çizim, yayın) varsayılan olarak gerekli ve kilitlidir; yalnız müdür gerekçe yazarak kapatabilir. Şablonu olmayan tür, varsayılan şablonu kullanır.</p>
       <Secim etiket="Operasyon türü" value={secili} disabled={kirli} ipucu={kirli ? 'Kaydedilmemiş işaretler var: kaydedin ya da vazgeçin, sonra tür değiştirin.' : undefined} onChange={(o) => seciliYaz(o.target.value)}
         secenekler={turler.map((t) => ({ deger: t.operasyonTipiId === null ? 'varsayilan' : String(t.operasyonTipiId), baslik: `${t.ad}${t.surum === null ? '' : ` · v${String(t.surum)}`}` }))} />

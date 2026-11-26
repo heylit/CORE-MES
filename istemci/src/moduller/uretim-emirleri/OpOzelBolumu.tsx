@@ -74,7 +74,9 @@ export function OpOzelBolumu({ emirId, isEmriId, duzenler, maddeler: opMaddeleri
   }
   const ozeller = adim.liste.filter((m) => m.eklenme !== null);
   const sablonYazar = sablon.data?.yazar === true;
-  const yazar = duzenler;
+  // Biten adımın listesi ve şablon farkı değişmez (sunucu reddeder): yazma düğmeleri ve formlar çizilmez, tek not durur.
+  const bitti = adim.durum === 'tamam';
+  const yazar = duzenler && !bitti;
   const farkYazabilir = yazar && sablonYazar;
   // Etkisiz seçenek sunulmaz: "gerekmez" yalnız bu OP'de şimdi gerekli sayılan, "gerekli" yalnız şimdi gerekmeyen maddede anlamlıdır.
   // "Gerekmez" durduran maddede yazılmaz (sunucu reddeder).
@@ -118,6 +120,7 @@ export function OpOzelBolumu({ emirId, isEmriId, duzenler, maddeler: opMaddeleri
           ))}
         </ul>
       )}
+      {duzenler && bitti && <p className="tc-emir-not">Biten adımın listesi değişmez.</p>}
       {yazar && (
         <div className="tc-am-ozel-ekle" role="group" aria-label="Şablon dışı madde ekle">
           <Girdi etiket="Madde adı" placeholder="Örn. Bağlama aparatı hazır" maxLength={120} value={ad}
