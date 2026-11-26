@@ -106,8 +106,11 @@ test.describe('3708 fason ekranları', () => {
       zorunlu: ['Malzeme sertifikası', 'Test raporu'], eksik: ['Test raporu'],
       belgeler: [{ ozet: 'a'.repeat(64), ad: 'ORN-sertifika.pdf', boyut: 2000, tur: 'pdf', belgeTuru: 'Malzeme sertifikası', ekleyenId: 1, zaman: '2026-11-25T10:00:00Z' }],
     })));
+    // Emre matristeki hücre panelinin "Emri aç" bağlantısıyla girilir.
     await ac('/adim-durumu');
-    await page.getByRole('list', { name: 'Açık emirler' }).getByRole('button').first().click();
+    await page.getByRole('table').getByRole('button', { name: /^\S+, OP \d+/ }).first().click();
+    await page.getByRole('complementary', { name: 'Adım ayrıntısı' }).getByRole('link', { name: 'Emri aç' }).click();
+    await expect(page).toHaveURL(/emir=\d+/);
     const ac1 = page.getByRole('table').getByRole('button', { name: /^OP \d+ .* ayrıntısı$/ }).first();
     await ac1.click();
     const bolum = page.getByRole('region', { name: /muayene belgeleri$/ });
