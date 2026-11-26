@@ -1328,3 +1328,62 @@ export async function eslenmemisDuruslariDuzelt(db: Db, ad: string, nedenId: num
     [ad, nedenId]);
   return r.length;
 }
+
+/* ---------------- Geçiş izlemesi (3760) ---------------- */
+
+export interface MakineIzlemesi {
+  makineKodu: string;
+  sonHareketZamani: Date | null; sonHareketTuru: string | null;
+  sonDurusZamani: Date | null; sonDurusAdi: string | null;
+  kisiBekleyen: number; hataliHareket: number;
+  sonSayimZamani: Date | null; sonSayimAdedi: number | null;
+  sonHurdaZamani: Date | null; sonHurdaAdedi: number | null;
+  bekleyenOnay: number;
+}
+
+// SmartES makine kodu başına son yazılan hareket, duruş, onaylanan sayım ve hurda, bekleyen onay ve hareket sayıları.
+export function makineIzlemeleri(db: Db): Promise<MakineIzlemesi[]> {
+  return db.sorgu<MakineIzlemesi>(
+    `WITH h AS (
+       SELECT d.makine_kodu, h.tur, h.durum, h.yazilma, h.aktivite_adi FROM smartes_hareket h JOIN smartes_is_emri_durumu d USING (smartes_id)
+        WHERE d.makine_kodu IS NOT NULL),
+     o AS (
+       SELECT d.makine_kodu, o.tur, o.adet, o.durum, o.karar_zamani FROM smartes_adet_onayi o ${ONAY_KAYNAGI} WHERE d.makine_kodu IS NOT NULL),
+     kodlar AS (SELECT makine_kodu FROM h UNION SELECT makine_kodu FROM o)
+     SELECT k.makine_kodu AS "makineKodu",
+       sh.yazilma AS "sonHareketZamani", sh.tur AS "sonHareketTuru", sd.yazilma AS "sonDurusZamani", sd.aktivite_adi AS "sonDurusAdi",
+       (SELECT count(*)::int FROM h WHERE h.makine_kodu = k.makine_kodu AND h.durum = 'kisi-bekliyor') AS "kisiBekleyen",
+       (SELECT count(*)::int FROM h WHERE h.makine_kodu = k.makine_kodu AND h.durum = 'hata') AS "hataliHareket",
+       ss.karar_zamani AS "sonSayimZamani", ss.adet AS "sonSayimAdedi", su.karar_zamani AS "sonHurdaZamani", su.adet AS "sonHurdaAdedi",
+       (SELECT count(*)::int FROM o WHERE o.makine_kodu = k.makine_kodu AND o.durum = 'bekliyor') AS "bekleyenOnay"
+     FROM kodlar k
+     LEFT JOIN LATERAL (SELECT yazilma, tur FROM h WHERE h.makine_kodu = k.makine_kodu AND h.durum = 'yazildi' ORDER BY yazilma DESC LIMIT 1) sh ON true
+     LEFT JOIN LATERAL (SELECT yazilma, aktivite_adi FROM h WHERE h.makine_kodu = k.makine_kodu AND h.durum = 'yazildi' AND h.tur = 'durdur'
+                         ORDER BY yazilma DESC LIMIT 1) sd ON true
+     LEFT JOIN LATERAL (SELECT karar_zamani, adet FROM o WHERE o.makine_kodu = k.makine_kodu AND o.durum = 'onaylandi' AND o.tur = 'saglam'
+                         ORDER BY karar_zamani DESC LIMIT 1) ss ON true
+     LEFT JOIN LATERAL (SELECT karar_zamani, adet FROM o WHERE o.makine_kodu = k.makine_kodu AND o.durum = 'onaylandi' AND o.tur <> 'saglam'
+                         ORDER BY karar_zamani DESC LIMIT 1) su ON true`,
+  );
+}
+
+export interface GecisOzeti {
+  bekleyenSaglam: number; bekleyenHurda: number; bekleyenDuzeltme: number; bekleyenHatali: number;
+  eslenmemisDurus: number; eslenmemisFire: number; eslenmemisKullanici: number; kisiBekleyenHareket: number;
+}
+export async function gecisOzeti(db: Db): Promise<GecisOzeti> {
+  const r = await db.tek<GecisOzeti>(
+    `SELECT
+       (SELECT count(*)::int FROM smartes_adet_onayi WHERE durum = 'bekliyor' AND tur = 'saglam') AS "bekleyenSaglam",
+       (SELECT count(*)::int FROM smartes_adet_onayi WHERE durum = 'bekliyor' AND tur IN ('hurda', 'red')) AS "bekleyenHurda",
+       (SELECT count(*)::int FROM smartes_adet_onayi WHERE durum = 'bekliyor' AND tur = 'sayim-duzeltme') AS "bekleyenDuzeltme",
+       (SELECT count(*)::int FROM smartes_adet_onayi WHERE durum = 'bekliyor' AND tur = 'hatali') AS "bekleyenHatali",
+       (SELECT count(DISTINCT aktivite_adi)::int FROM smartes_hareket WHERE durus_eslenmemis) AS "eslenmemisDurus",
+       (SELECT count(DISTINCT r.neden)::int FROM smartes_adet_onayi o JOIN smartes_red r ON r.smartes_id = o.red_id
+         WHERE o.durum = 'bekliyor' AND r.neden IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM smartes_ad_esleme e WHERE e.tur = 'fire' AND e.ad = r.neden)) AS "eslenmemisFire",
+       (SELECT count(DISTINCT smartes_kullanici)::int FROM smartes_hareket WHERE durum = 'kisi-bekliyor') AS "eslenmemisKullanici",
+       (SELECT count(*)::int FROM smartes_hareket WHERE durum = 'kisi-bekliyor') AS "kisiBekleyenHareket"`,
+  );
+  return r!;
+}

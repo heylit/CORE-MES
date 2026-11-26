@@ -595,3 +595,53 @@ export const gidenEmirleriCevabi = z.object({
   })),
 });
 export type GidenEmirleriCevabi = z.output<typeof gidenEmirleriCevabi>;
+
+// 3760: Geçiş tablosu. Üretim kaynağı makine başına seçilir, istasyon varsayılanı verir; makinenin seçimi null ise "istasyona uy".
+// Satırlar istasyon başınadır, makineleri altındadır; izleme sütunları makinenin SmartES kayıtlarından (makine eşlemesiyle) gelir.
+export const SMARTES_URETIM_KAYNAKLARI = ['terminal', 'smartes'] as const;
+export type SmartesUretimKaynagi = (typeof SMARTES_URETIM_KAYNAKLARI)[number];
+const gecisIzlemesi = {
+  sonHareket: z.object({ zaman: zamanSemasi, tur: z.string() }).nullable(),
+  sonSayim: z.object({ zaman: zamanSemasi, adet: z.number().int() }).nullable(),
+  sonHurda: z.object({ zaman: zamanSemasi, adet: z.number().int() }).nullable(),
+  sonDurus: z.object({ zaman: zamanSemasi, ad: z.string().nullable() }).nullable(),
+  bekleyenOnay: z.number().int(),
+  kisiBekleyen: z.number().int(),
+  hataliHareket: z.number().int(),
+};
+export const gecisCevabi = z.object({
+  aktarimAcik: z.boolean(),
+  satirlar: z.array(z.object({
+    istasyonId: z.number().int(), kod: z.string(), ad: z.string(),
+    kaynak: z.enum(SMARTES_URETIM_KAYNAKLARI), gecerlilik: zamanSemasi.nullable(),
+    makineler: z.array(z.object({
+      id: z.number().int(), kod: z.string(), ad: z.string(), smartesKodu: z.string().nullable(),
+      secim: z.enum(SMARTES_URETIM_KAYNAKLARI).nullable(), etkin: z.enum(SMARTES_URETIM_KAYNAKLARI), gecerlilik: zamanSemasi.nullable(),
+      ...gecisIzlemesi,
+    })),
+  })),
+  smartesMakine: z.number().int(),
+  bekleyenOnay: z.object({ saglam: z.number().int(), hurda: z.number().int(), duzeltme: z.number().int(), hatali: z.number().int() }),
+  eslenmemisDurus: z.number().int(),
+  eslenmemisFire: z.number().int(),
+  eslenmemisKullanici: z.number().int(),
+  kisiBekleyenHareket: z.number().int(),
+});
+export type GecisCevabi = z.output<typeof gecisCevabi>;
+// makineId null: istasyonun kaynağı (kaynak null olamaz). Makinede kaynak null: istasyona uy. onizleme: yazmadan etkileneni döner.
+export const gecisDegistirGovdesi = z.object({
+  istasyonId: z.number().int().positive(), makineId: z.number().int().positive().nullable(),
+  kaynak: z.enum(SMARTES_URETIM_KAYNAKLARI).nullable(), onizleme: z.boolean().prefault(false),
+}).strict();
+export type GecisDegistirGovdesi = z.input<typeof gecisDegistirGovdesi>;
+export const gecisDegistirCevabi = z.object({
+  uygulandi: z.boolean(),
+  gecerlilik: zamanSemasi.nullable(),
+  etkilenen: z.array(z.object({
+    makineId: z.number().int(), kod: z.string(), once: z.enum(SMARTES_URETIM_KAYNAKLARI), sonra: z.enum(SMARTES_URETIM_KAYNAKLARI), calisanIs: z.string().nullable(),
+  })),
+  bekleyenOnay: z.number().int(),
+});
+export type GecisDegistirCevabi = z.output<typeof gecisDegistirCevabi>;
+export const hareketYenidenDeneCevabi = z.object({ yazilan: z.number().int(), bekleyen: z.number().int(), hatali: z.number().int() });
+export type HareketYenidenDeneCevabi = z.output<typeof hareketYenidenDeneCevabi>;

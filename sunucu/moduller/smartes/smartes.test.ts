@@ -1258,6 +1258,45 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     await aktarimAc(false);
   });
 
+  test('3760: Geçiş paneli kaynağı önizler ve uygular; önizleme yazmaz, makine seçimi istasyonu ezer; okuyucu görür, değiştiremez', async () => {
+    const { istasyonlar } = await emirKur();
+    const sahip = ortam!.sahip;
+    const [makineId] = (await sahip.sorgu<{ id: number }>('SELECT id FROM makine WHERE istasyon_id = $1', [istasyonlar[0]])).map((m) => m.id) as [number];
+    await vt().sorgu("UPDATE istasyon SET sayim_kaynagi = 'terminal', sayim_kaynagi_gecerlilik = NULL");
+    const kaynaklar = () => sahip.tek<{ ist: string; mak: string | null }>(
+      'SELECT i.sayim_kaynagi AS ist, m.uretim_kaynagi AS mak FROM makine m JOIN istasyon i ON i.id = m.istasyon_id WHERE m.id = $1', [makineId]);
+
+    const onizleme = await istek('POST', '/smartes/gecis/degistir', { istasyonId: istasyonlar[0], makineId, kaynak: 'smartes', onizleme: true });
+    assert.equal(onizleme.statusCode, 200, onizleme.body);
+    const o = onizleme.json() as { uygulandi: boolean; gecerlilik: string | null; etkilenen: { makineId: number; once: string; sonra: string }[] };
+    assert.equal(o.uygulandi, false);
+    assert.equal(o.gecerlilik, null);
+    assert.deepEqual(o.etkilenen.map((e) => [e.makineId, e.once, e.sonra]), [[makineId, 'terminal', 'smartes']]);
+    assert.deepEqual(await kaynaklar(), { ist: 'terminal', mak: null });
+
+    const uygula = await istek('POST', '/smartes/gecis/degistir', { istasyonId: istasyonlar[0], makineId, kaynak: 'smartes' });
+    assert.equal(uygula.statusCode, 200, uygula.body);
+    assert.equal((uygula.json() as { uygulandi: boolean }).uygulandi, true);
+    assert.deepEqual(await kaynaklar(), { ist: 'terminal', mak: 'smartes' });
+
+    // İstasyon SmartES'e alınınca kendi seçimi olan makine etkilenmez; istasyona "uymak" (null) istasyonun kaynağını verir.
+    const ist = await istek('POST', '/smartes/gecis/degistir', { istasyonId: istasyonlar[0], makineId: null, kaynak: 'smartes', onizleme: true });
+    assert.deepEqual((ist.json() as { etkilenen: unknown[] }).etkilenen, []);
+    assert.equal((await istek('POST', '/smartes/gecis/degistir', { istasyonId: istasyonlar[0], makineId: null, kaynak: null })).statusCode, 400);
+
+    const g = await istek('GET', '/smartes/gecis', undefined, okuyucu);
+    assert.equal(g.statusCode, 200, g.body);
+    const satir = (g.json() as { satirlar: { istasyonId: number; makineler: { id: number; secim: string | null; etkin: string }[] }[] }).satirlar
+      .find((x) => x.istasyonId === istasyonlar[0]);
+    const m = satir?.makineler.find((x) => x.id === makineId);
+    assert.deepEqual([m?.secim, m?.etkin], ['smartes', 'smartes']);
+    assert.equal((await istek('POST', '/smartes/gecis/degistir', { istasyonId: istasyonlar[0], makineId, kaynak: null }, okuyucu)).statusCode, 403);
+    assert.equal((await istek('GET', '/smartes/gecis', undefined, yetkisiz)).statusCode, 403);
+
+    assert.equal((await istek('POST', '/smartes/gecis/degistir', { istasyonId: istasyonlar[0], makineId, kaynak: null })).statusCode, 200);
+    assert.deepEqual(await kaynaklar(), { ist: 'terminal', mak: null });
+  });
+
   test('3760: SmartES hareketleri sırayla CORE emrine yazılır; eşlenmemiş kişi bekler, eşlenince aynı anla yazılır; eski emir ve terminal makinesi aktarılmaz', async () => {
     const { uretimEmriId, ilk, ikinci, istasyonlar } = await emirKur(true);
     await gonderimTuru(vt(), turOrtami());

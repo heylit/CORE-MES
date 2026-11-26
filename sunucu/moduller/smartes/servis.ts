@@ -8,7 +8,7 @@ import type {
   AlarmlarCevabi, CanliMakineAyrintisiCevabi, MakineBulgulariCevabi, CanliMakinelerCevabi, DurumCevabi, DuruslarCevabi, EslemeCevabi, EslemelerCevabi,
   GidenCevabi, SmartesEmirDurumlariCevabi, SmartesGidenIzlemeCevabi, IsEmriDurumlariCevabi, SmartesBaglantiDurumu, GelenAdEsleGovdesi, GelenAdKaldirGovdesi, GelenAdlarCevabi, GelenAdOnerileriOnaylaGovdesi, GelenAdAktarimCevabi, GelenAdAktarSonucu, GidenEmirleriCevabi,
   OnerileriOnaylaCevabi, OnerileriOnaylaGovdesi, SmartesHazirlikCevabi, SmartesKontrolCevabi, AmbarHareketleriCevabi, FireHareketleriCevabi, GelenlerCevabi,
-  HamKayitCevabi, KaliteOlcumleriCevabi, HesaplarCevabi, AdetKarariCevabi, AdetOnaylariCevabi,
+  HamKayitCevabi, KaliteOlcumleriCevabi, HesaplarCevabi, AdetKarariCevabi, AdetOnaylariCevabi, GecisCevabi, GecisDegistirCevabi, GecisDegistirGovdesi,
 } from '#paylasilan/sozlesme/smartes.ts';
 import { SMARTES_GIDEN_EMIR_SAYFA_BOYU } from '#paylasilan/sozlesme/smartes.ts';
 import type { IkinciMenuSayaclari } from '#paylasilan/sayfa-tanimi.ts';
@@ -16,7 +16,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { durusNedenleriEkle, durusNedenleriniListele, hataNedenleriEkle, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
-import { isMerkezleri, istasyonlar, makineler, operasyonTipleri, uretimKaynaklari } from '../istasyonlar/disari.ts';
+import { isMerkezleri, istasyonlar, makineler, operasyonTipleri, uretimKaynagiDegistir, uretimKaynakSecimleri, uretimKaynaklari } from '../istasyonlar/disari.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import {
   emirAdimlari, gunlukAralikAdetleri, isEmriOzeti, isEmriOzetleri, isEmriZamanlari, makinelerdekiIsler, planlanacakIsEmirleri, rotasizIsEmirleri, smartesHareketi, smartesHataliKaydi, smartesSayimi,
@@ -2034,4 +2034,78 @@ export async function hareketleriYaz(db: Db, zaman: Date, secenek: { smartesId?:
     siradakiler = sonraki.length === 0 ? [] : (await s.siradakiHareketler(db)).filter((x) => sonraki.includes(x.smartesId));
   }
   return sonuc;
+}
+
+/* ---------------- Geçiş tablosu (3760) ---------------- */
+
+const zamanYaz = (d: Date | null): string | null => (d === null ? null : d.toISOString());
+
+// İstasyon listede görünür: SmartES'e eşlenmişse, kaynağı SmartES ise ya da bir makinesi eşlenmiş ya da kendi kaynağını seçmişse.
+export async function gecis(db: Db): Promise<GecisCevabi> {
+  const [ist, mak, secim, makEsleme, istEsleme, izleme, ozet] = [
+    await istasyonlar(db, { pasiflerDahil: false }), await makineler(db, { pasiflerDahil: false }), await uretimKaynakSecimleri(db),
+    new Map((await s.eslemeler(db, 'makine')).map((e) => [e.tmiId, e.smartesKod])), new Set((await s.eslemeler(db, 'istasyon')).map((e) => e.tmiId)),
+    new Map((await s.makineIzlemeleri(db)).map((m) => [m.makineKodu, m])), await s.gecisOzeti(db),
+  ];
+  const istKaynak = new Map(secim.istasyonlar.map((i) => [i.id, i]));
+  const makKaynak = new Map(secim.makineler.map((m) => [m.id, m]));
+  const kaynaklar = await uretimKaynaklari(db);
+  let smartesMakine = 0;
+  const satirlar: GecisCevabi['satirlar'] = [];
+  for (const i of ist) {
+    const kendi = istKaynak.get(i.id) ?? { kaynak: 'terminal' as const, gecerlilik: null };
+    const makineleri = mak.filter((m) => m.istasyonId === i.id).map((m) => {
+      const etkin = kaynaklar.etkin(i.id, m.id);
+      const kod = makEsleme.get(m.id) ?? null;
+      const z = kod === null ? undefined : izleme.get(kod);
+      if (etkin.kaynak === 'smartes') smartesMakine++;
+      return {
+        id: m.id, kod: m.kod, ad: m.ad, smartesKodu: kod, secim: makKaynak.get(m.id)?.kaynak ?? null, etkin: etkin.kaynak, gecerlilik: zamanYaz(etkin.gecerlilik),
+        sonHareket: z?.sonHareketZamani ? { zaman: z.sonHareketZamani.toISOString(), tur: z.sonHareketTuru ?? '' } : null,
+        sonSayim: z?.sonSayimZamani ? { zaman: z.sonSayimZamani.toISOString(), adet: z.sonSayimAdedi ?? 0 } : null,
+        sonHurda: z?.sonHurdaZamani ? { zaman: z.sonHurdaZamani.toISOString(), adet: z.sonHurdaAdedi ?? 0 } : null,
+        sonDurus: z?.sonDurusZamani ? { zaman: z.sonDurusZamani.toISOString(), ad: z.sonDurusAdi } : null,
+        bekleyenOnay: z?.bekleyenOnay ?? 0, kisiBekleyen: z?.kisiBekleyen ?? 0, hataliHareket: z?.hataliHareket ?? 0,
+      };
+    });
+    const gorunur = istEsleme.has(i.id) || kendi.kaynak === 'smartes' || makineleri.some((m) => m.smartesKodu !== null || m.secim !== null);
+    if (gorunur) satirlar.push({ istasyonId: i.id, kod: i.kod, ad: i.ad, kaynak: kendi.kaynak, gecerlilik: zamanYaz(kendi.gecerlilik), makineler: makineleri });
+  }
+  return {
+    aktarimAcik: await sistemAyariOku(db, SAYIM_AKTARIMI_AYARI), satirlar, smartesMakine,
+    bekleyenOnay: { saglam: ozet.bekleyenSaglam, hurda: ozet.bekleyenHurda, duzeltme: ozet.bekleyenDuzeltme, hatali: ozet.bekleyenHatali },
+    eslenmemisDurus: ozet.eslenmemisDurus, eslenmemisFire: ozet.eslenmemisFire, eslenmemisKullanici: ozet.eslenmemisKullanici,
+    kisiBekleyenHareket: ozet.kisiBekleyenHareket,
+  };
+}
+
+// Değişiklik önce önizlenir: etkin kaynağı değişecek makineler, üzerlerinde çalışan iş ve kuyrukta kalan onaylar. Uygulanınca geçerlilik
+// şimdidir; terminale alınan makinede o andan sonraki SmartES satırları aktarılmaz, öncekiler yeniden işlenmez, bekleyen onaylar kuyrukta kalır
+// (onaylanamaz, reddedilir).
+export async function gecisDegistir(db: Db, g: GecisDegistirGovdesi): Promise<GecisDegistirCevabi> {
+  const secim = await uretimKaynakSecimleri(db, [g.istasyonId]);
+  const istasyon = secim.istasyonlar[0];
+  if (istasyon === undefined) throw bulunamadi('İstasyon bulunamadı.');
+  if (g.makineId !== null && !secim.makineler.some((m) => m.id === g.makineId)) throw bulunamadi('Makine bu istasyonda bulunamadı.');
+  if (g.makineId === null && g.kaynak === null) throw dogrulama('İstasyonun kaynağı Terminal ya da SmartES olur.', 'kaynak');
+  const yeniIstasyon = g.makineId === null ? (g.kaynak ?? istasyon.kaynak) : istasyon.kaynak;
+  const tumMakineler = new Map((await makineler(db, { pasiflerDahil: false })).map((m) => [m.id, m.kod]));
+  const etkilenen = secim.makineler.flatMap((m) => {
+    const once = m.kaynak ?? istasyon.kaynak;
+    const kendi = g.makineId === m.id ? g.kaynak : m.kaynak;
+    const sonra = kendi ?? yeniIstasyon;
+    return once === sonra ? [] : [{ makineId: m.id, kod: tumMakineler.get(m.id) ?? String(m.id), once, sonra }];
+  });
+  const isler = await makinelerdekiIsler(db, etkilenen.map((e) => e.makineId));
+  const kodlar = new Map((await s.eslemeler(db, 'makine')).map((e) => [e.tmiId, e.smartesKod]));
+  const izleme = new Map((await s.makineIzlemeleri(db)).map((m) => [m.makineKodu, m.bekleyenOnay]));
+  const bekleyenOnay = etkilenen.reduce((t, e) => t + (izleme.get(kodlar.get(e.makineId) ?? '') ?? 0), 0);
+  const gecerlilik = g.onizleme ? null : await uretimKaynagiDegistir(db, { istasyonId: g.istasyonId, makineId: g.makineId, kaynak: g.kaynak });
+  return {
+    uygulandi: !g.onizleme && gecerlilik !== null, gecerlilik: zamanYaz(gecerlilik), bekleyenOnay,
+    etkilenen: etkilenen.map((e) => {
+      const is = isler.get(e.makineId);
+      return { ...e, calisanIs: is === undefined ? null : `${is.emirNo}/${String(is.opNo)}` };
+    }),
+  };
 }

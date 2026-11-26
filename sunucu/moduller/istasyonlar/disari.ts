@@ -1,5 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
-import { yetkiYok } from '#cekirdek/hata.ts';
+import { bulunamadi, dogrulama, yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import type {
   AparatKapasitesi, Ekip, IsMerkezi, Istasyon, KapasiteKaynagi, Makine, MakineDurumu, MakineDurumuGovdesi, OperasyonTipi,
@@ -11,7 +11,7 @@ import * as sorgular from './sorgular.ts';
 export type {
   AparatKapasitesi, Ekip, IsMerkezi, Istasyon, IstasyonPlanAyari, KapasiteKaynagi, Makine, MakineDurumu, MakineDurumuDegeri, OperasyonTipi,
 } from '#paylasilan/sozlesme/istasyonlar.ts';
-import { MAKINE_DURUMU_ISLEMLERI, etkinUretimKaynagi, kapasiteKaynagiCoz, sentYuzdeMetni, smartesUretirMi, yuzdeSente, type EtkinKaynak } from './kurallar.ts';
+import { MAKINE_DURUMU_ISLEMLERI, etkinUretimKaynagi, kapasiteKaynagiCoz, sentYuzdeMetni, smartesUretirMi, yuzdeSente, type EtkinKaynak, type UretimKaynagi } from './kurallar.ts';
 export type { EtkinKaynak, UretimKaynagi } from './kurallar.ts';
 export { isMerkeziIzinliMi } from './kurallar.ts';
 
@@ -70,6 +70,28 @@ export async function uretimKaynaklari(db: Db, istasyonIdleri?: readonly number[
     smartesUretirMi: (istasyonId, makineIdleri) => smartesUretirMi(istasyonu(istasyonId), mak, istasyonId, makineIdleri),
     etkin: (istasyonId, makineId) => etkinUretimKaynagi(istasyonu(istasyonId), makineId === null ? null : (mak.get(makineId) ?? null)),
   };
+}
+
+// Geçiş paneli (smartes) için ham seçimler: istasyonun kaynağı ve makinelerin kendi seçimi (null: istasyona uy).
+export async function uretimKaynakSecimleri(db: Db, istasyonIdleri?: readonly number[]): Promise<{
+  istasyonlar: sorgular.IstasyonKaynakSatiri[]; makineler: sorgular.MakineKaynakSatiri[];
+}> {
+  return { istasyonlar: await sorgular.istasyonKaynaklari(db, istasyonIdleri ?? null), makineler: await sorgular.makineKaynaklari(db, istasyonIdleri ?? null) };
+}
+
+// Kaynağı değiştirir: makine verilmişse makinenin seçimi (null: istasyona uy), verilmemişse istasyonun. Makine o istasyonun olmalı.
+// Değişmediyse null; değiştiyse yeni geçerlilik.
+export async function uretimKaynagiDegistir(
+  db: Db, g: { istasyonId: number; makineId: number | null; kaynak: UretimKaynagi | null },
+): Promise<Date | null> {
+  if (g.makineId === null) {
+    if (g.kaynak === null) throw dogrulama('İstasyonun kaynağı Terminal ya da SmartES olur.', 'kaynak');
+    if ((await sorgular.istasyonKaynaklari(db, [g.istasyonId])).length === 0) throw bulunamadi('İstasyon bulunamadı.');
+    return sorgular.istasyonUretimKaynagiYaz(db, g.istasyonId, g.kaynak);
+  }
+  const makine = (await sorgular.makineKaynaklari(db, [g.istasyonId])).find((m) => m.id === g.makineId);
+  if (makine === undefined) throw bulunamadi('Makine bu istasyonda bulunamadı.');
+  return sorgular.makineUretimKaynagiYaz(db, g.makineId, g.kaynak);
 }
 
 // Aktif istasyon: kendisi de iş merkezi de aktif. Pasif iş merkezinin aktif istasyonu burada dönmez.
