@@ -13,6 +13,7 @@ import { oneriAdaylari, oneriDegerleri, teslimBagsizMi } from './oneri.ts';
 import { altEmirRotalari, altEmirTurleri, BolmePaneli, bolmeSonucu, bosBolme, type BolmeDurumu, type PartiRotaKaynagi } from './Bolme.tsx';
 import { bosCokKatman, CokKatmanPaneli, type CokKatmanSecimi } from './CokKatman.tsx';
 import { EmirAyrintisi, PlanHucresi } from './EmirAyrintisi.tsx';
+import { revizyonSecenegi, revMetni, useParcaRevizyonlari } from './ParcaRevizyonu.tsx';
 import { planMetni, tamponRozeti, turAdi } from './gorunum.ts';
 import { acilanEmir, guncelSurum, useEmirKomutu } from './komut.ts';
 import {
@@ -147,7 +148,8 @@ function EmirSatiri({ durum: d, emir: o, derinlik, secili, sira, sec }: {
   const alt = [
     ana ? `${o.kol ? `Kol ${String(o.kol.n)}→${String(o.kol.m)}` : 'Alt emir'} · ${ana.no}` : null,
     turAdi(o.tur),
-    rev ? `Rev ${rev.no}${rev.status === 'yururlukte' ? '' : ', eski rota'}` : null,
+    revMetni(o.parcaRev),
+    rev ? `Rota ${rev.no}${rev.status === 'yururlukte' ? '' : ', eski rota'}` : null,
   ].filter(Boolean).join(' · ');
   return (
     <li
@@ -191,7 +193,7 @@ export const eskiRevizyonUyarisi = (kod: string | null, r: EmirRevizyonu): strin
   return `${secilen} yürürlükte değil; yürürlükteki ${yururlukteki}. Emri eski revizyonla açmak için gerekçe yazın. Sipariş kaleminden açılıyorsa gerekçe gerekmez.`;
 };
 
-interface YeniFormDurumu { urun: string; miktar: string; baslangic: string; teslim: string; oncelik: string; durum: 'serbest' | 'taslak'; tur: string; not: string; rezerve: boolean; rota: string; revizyonGerekcesi: string }
+interface YeniFormDurumu { urun: string; miktar: string; baslangic: string; teslim: string; oncelik: string; durum: 'serbest' | 'taslak'; tur: string; not: string; rezerve: boolean; rota: string; revizyonGerekcesi: string; parcaRev: string }
 
 export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun, ilkTur = null, ilkAdet = null, ilkRota = null }: {
   durum: RrDurumu; yetki: EkranOzellikleri['yetki']; komut: ReturnType<typeof useEmirKomutu>; acildi: (id: string) => void; git: EkranOzellikleri['git'];
@@ -207,7 +209,7 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun, il
   const ilk = isGunuEkle(bugun(), 0, tatiller);
   const [f, setF] = useState<YeniFormDurumu>({
     urun: (ilkUrun !== null && urunler.some((u) => u.id === ilkUrun) ? ilkUrun : urunler[0]?.id) ?? '', miktar: ilkAdet !== null && /^\d+$/.test(ilkAdet) ? ilkAdet : '100', baslangic: ilk, teslim: isGunuEkle(ilk, 9, tatiller), oncelik: '3', durum: 'serbest',
-    tur: ilkTur !== null && ilkTur in EMIR_TURU_ADLARI ? ilkTur : 'seri', not: '', rezerve: true, rota: ilkRota !== null && /^\d+$/.test(ilkRota) ? ilkRota : '', revizyonGerekcesi: '',
+    tur: ilkTur !== null && ilkTur in EMIR_TURU_ADLARI ? ilkTur : 'seri', not: '', rezerve: true, rota: ilkRota !== null && /^\d+$/.test(ilkRota) ? ilkRota : '', revizyonGerekcesi: '', parcaRev: '',
   });
   // 3657: miktar ve teslim önerisi; elle değiştirilen alan öneriyle ezilmez. Birden çok aday satırda kullanıcı seçene kadar öneri yoktur.
   const [secilenSatir, setSecilenSatir] = useState<number | null>(null);
@@ -229,6 +231,10 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun, il
   const onizleme = usePatlatmaOnizlemesi(kokRevizyon, yetki.rotaEmreKopyala && uretilirMi(d, f.urun)).data;
   const cokKatmanVar = onizleme !== undefined && onizleme.kokRevizyon.id === kokRevizyon && (onizleme.ileti !== null || onizleme.dugumler.length > 1);
   const cokAcik = cokKatmanVar && cok.acik && onizleme.ileti === null && onizleme.engel === null;
+  // 3755: parça (çizim) revizyonu kartın Belge Merkezi çiziminden; elle seçilmediyse yayındaki. Rota çizimi farklıysa uyarı, engel değil.
+  const parca = useParcaRevizyonlari(Number.isInteger(urunNo) && urunNo > 0 ? urunNo : null, uretilirMi(d, f.urun) ? kokRevizyon : null).data;
+  const parcaSecili = f.parcaRev !== '' ? f.parcaRev : parca?.varsayilanRevizyonId == null ? '' : String(parca.varsayilanRevizyonId);
+  const parcaUyarisi = parca?.revizyonlar.find((r) => String(r.revizyonId) === parcaSecili)?.rotaUyarisi ?? null;
   const yaz = (alan: Partial<YeniFormDurumu>) => { setF({ ...f, ...alan }); setHata(null); };
   // Proje şartı form açıkken bilinsin (B-2502-3): ürün ve türün açık projesi yoksa emir gönderimde değil burada durur. Okunamazsa
   // form eskisi gibi çalışır; şartı açılışta sahibi yine denetler.
@@ -302,6 +308,7 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun, il
       // Proje penceresi bu satırı önseçili açar (kopru.ts); sunucuya gitmez.
       ...(oneri === null ? {} : { oneriSatiri: oneri.satirId }),
       ...(eskiRevizyon === null ? {} : { eskiRevizyonGerekcesi: f.revizyonGerekcesi.trim() }),
+      ...(parcaSecili === '' ? {} : { parcaCizimRevizyonId: Number(parcaSecili) }),
       ...(rotali ? { rezerve: f.rezerve } : { rotasiz: true }),
       // Rota yalnız elle seçildiyse gider; seçilmediyse sahibi emrin türünün rotasını bulur. Proje penceresinde sipariş partisi seçilince
       // tür partiden gelir, rota da o türün rotası olur (formun ilk türüne göre seçilmiş rota partiye taşınmaz).
@@ -332,7 +339,9 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun, il
       })).tamam;
     }
     acildi(id);
+    const uyarilar = (c.sonuc as { uyarilar?: string[] } | null)?.uyarilar ?? [];
     if (!rotali) komut.bildir('tamam', 'Rotasız emir açıldı: adımlarını emrin içinden ekleyin.');
+    else if (tamam && uyarilar.length > 0) komut.bildir('bilgi', `Emir açıldı. ${uyarilar.join(' ')}`);
     else if (tamam) komut.bildir('tamam', b ? 'Emir açıldı: alt emirler bağlandı.' : 'Emir açıldı.');
     else komut.bildir('hata', 'Emir açıldı ama bölünemedi; emrin içinden yeniden bölün.');
   };
@@ -341,7 +350,7 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun, il
     <section className="tc-rr3-panel" data-pencerede="" aria-label="Yeni üretim emri">
       <div className="tc-rr3-form">
         <Secim
-          etiket="Ürün" value={f.urun} onChange={(o) => { yaz({ urun: o.target.value, rota: '' }); setElle({ miktar: false, teslim: false }); setBolme(bosBolme(true)); setCok(bosCokKatman()); }}
+          etiket="Ürün" value={f.urun} onChange={(o) => { yaz({ urun: o.target.value, rota: '', parcaRev: '' }); setElle({ miktar: false, teslim: false }); setBolme(bosBolme(true)); setCok(bosCokKatman()); }}
           secenekler={urunler.map((u) => ({ deger: u.id, baslik: `${u.code} ${u.name}${uretilirMi(d, u.id) ? '' : ' (rotasız)'}` }))}
         />
       </div>
@@ -386,6 +395,13 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun, il
         {rotali && rotaSecimi === null && tekRotaMetni(rotalar.data) !== null && (
           <Girdi etiket="Rota" readOnly value={tekRotaMetni(rotalar.data) ?? ''} ipucu="Ürünün tek rotası; bütün emir türleri bunu kullanır" />
         )}
+        {parca !== undefined && parca.revizyonlar.length > 0 && (
+          <Secim
+            etiket="Parça revizyonu (çizim)" value={parcaSecili} bosSecenek={parcaSecili === '' ? 'Revizyon seçin' : undefined}
+            secenekler={parca.revizyonlar.map(revizyonSecenegi)} ipucu="Emre sabitlenir; kartta yeni revizyon yayınlansa da emir bu revizyonda kalır."
+            onChange={(o) => { yaz({ parcaRev: o.target.value }); }}
+          />
+        )}
         <Girdi etiket="Not" placeholder="Müşteri, sipariş no…" value={f.not} onChange={(o) => { yaz({ not: o.target.value }); }} />
       </div>
       {oneri !== null && (
@@ -407,6 +423,9 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun, il
               onChange={(o) => { yaz({ revizyonGerekcesi: o.target.value }); }} />
           </div>
         </>
+      )}
+      {parcaUyarisi && (
+        <p className="tc-rr3-uyari-kutu" role="status"><Simge ad="alert" /><span>{parcaUyarisi}</span></p>
       )}
       {rotali && rotaSecimi?.seriyeDusus && (
         <p className="tc-rr3-uyari-kutu" data-ton="bilgi" role="status"><Simge ad="route" /><span>{rotaSecimi.seriyeDusus}</span></p>

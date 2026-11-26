@@ -89,7 +89,7 @@ describe('3296-1 emir açılışında rota ve tür', () => {
     const form = await formAc();
     fireEvent.change(within(form).getByRole('combobox', { name: 'Emir türü' }), { target: { value: 'numune' } });
     const not = await within(form).findByRole('status');
-    expect(not.textContent).toBe('Numune türünün rotası yok. Emir Standart rotası Rev A ile açılır; emir ayrıntısında bu not kalır.');
+    expect(not.textContent).toBe('Numune türünün rotası yok. Emir Standart rotasıyla (Rota A) açılır; emir ayrıntısında bu not kalır.');
     expect((within(form).getByRole('combobox', { name: 'Rota' }) as HTMLSelectElement).value).toBe('1');
     fireEvent.click(within(form).getByRole('button', { name: 'Emri oluştur' }));
     await waitFor(() => expect(kopya(istekler)).toBeDefined());
@@ -123,7 +123,7 @@ describe('3296-1 emir açılışında rota ve tür', () => {
     fireEvent.change(within(p2).getByLabelText('Parti 2', { selector: 'input' }), { target: { value: '5' } });
     await waitFor(() => { expect((within(p1).getByRole('combobox', { name: 'Parti rotası' }) as HTMLSelectElement).disabled).toBe(false); });
     const alan = within(p1).getByRole('combobox', { name: 'Parti rotası' }) as HTMLSelectElement;
-    expect(within(alan).getAllByRole('option').map((o) => o.textContent)).toEqual(['Ana emirle aynı (Standart · Rev A)', 'ORN FAI · Rev A']);
+    expect(within(alan).getAllByRole('option').map((o) => o.textContent)).toEqual(['Ana emirle aynı (Standart · Rota A)', 'ORN FAI · Rota A']);
     fireEvent.change(alan, { target: { value: '2' } });
     fireEvent.click(within(form).getByRole('button', { name: 'Emri oluştur' }));
     await waitFor(() => expect(istekler.filter((i) => i.yol === '/adimli-emirler/62/bol')).toHaveLength(2));
@@ -145,7 +145,7 @@ describe('3296-1 emir açılışında rota ve tür', () => {
     yeniEmirAc();
     const p = await screen.findByRole('dialog', { name: 'Yeni üretim emri' });
     const rota = await within(p).findByRole('textbox', { name: 'Rota' }) as HTMLInputElement;
-    expect([rota.value, rota.readOnly]).toEqual(['Standart · Rev A', true]);
+    expect([rota.value, rota.readOnly]).toEqual(['Standart · Rota A', true]);
     expect(within(p).queryByRole('combobox', { name: 'Rota' })).toBeNull();
   });
 });

@@ -127,6 +127,8 @@ export const EMIR_KOMUTLARI: Readonly<Record<string, EmirKomutu>> = {
         // 3438 a: kart yürürlükteki revizyon değilse ekranın sorduğu neden; gerekip gerekmediğine uretim-emirleri karar verir.
         ...(typeof girdi['eskiRevizyonGerekcesi'] === 'string' && girdi['eskiRevizyonGerekcesi'].trim() !== ''
           ? { eskiRevizyonGerekcesi: girdi['eskiRevizyonGerekcesi'].trim() } : {}),
+        // 3755: formda seçilen parça (çizim) revizyonu; verilmezse sahibi kartın yayındaki çizimini sabitler.
+        ...(girdi['parcaCizimRevizyonId'] === undefined || girdi['parcaCizimRevizyonId'] === null ? {} : { parcaCizimRevizyonId: kimlik(girdi['parcaCizimRevizyonId'], 'parça revizyonu') }),
       };
       if (girdi['rotasiz'] === true) {
         const aciklama = typeof girdi['note'] === 'string' && girdi['note'].trim() !== '' ? girdi['note'].trim() : null;
@@ -294,6 +296,14 @@ export const EMIR_KOMUTLARI: Readonly<Record<string, EmirKomutu>> = {
       if (typeof emirTuru !== 'string' || emirTuru === '') throw hata(422, 'Emir türünü seçin.');
       return { yol: `/adimli-emirler/${String(kimlik(girdi['id'], 'emir'))}/emir-turu`, govde: { emirTuru, surum: ekranSurumu(girdi) }, tekrarKorumali: true };
     },
+  },
+  // 3755: revizyonu seçilmemiş açık emre parça (çizim) revizyonu sabitlenir; sahibi açık ve boş olduğunu denetler.
+  'emir-parca-revizyonu': {
+    hazirla: async (girdi) => ({
+      yol: `/adimli-emirler/${String(kimlik(girdi['id'], 'emir'))}/parca-revizyonu`,
+      govde: { revizyonId: kimlik(girdi['revizyonId'], 'parça revizyonu'), surum: ekranSurumu(girdi) },
+      tekrarKorumali: true,
+    }),
   },
   // Kolun katılma adımını değiştirir (null: birleşme planı kalkar). Adım ana emrin adımıdır (op numarası ana emrin iş emrinden gelir).
   'emir-katilma': {

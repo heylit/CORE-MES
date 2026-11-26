@@ -295,6 +295,9 @@ export interface EmirKaydi {
   oncelik: number;
   aciklama: string | null;
   kaynakRotaRevizyonId: number | null;
+  // 3755: emrin parça revizyonu (gösterim kuralıyla); alanı bilmeyen test verisinde yok.
+  parcaRevizyonKodu?: string | null | undefined;
+  parcaCizimRevizyonId?: number | null | undefined;
   durum: 'taslak' | 'planli' | 'basladi' | 'bitti' | 'iptal';
   emirTuru: string;
   acilma: string;
@@ -496,7 +499,8 @@ export function emirleriCevir(emirler: readonly EmirKaydi[], kapanislar: Readonl
     const ekAdimlar = e.kaynakRotaRevizyonId === null ? [] : ekAdimlariCevir(e.isEmirleri);
     return {
       id: String(e.id), kayitNo: e.id, no: e.emirNo, itemId: String(e.malzemeNo), qty: e.adet, start: e.baslangic, due: e.teslim, priority: e.oncelik,
-      note: e.aciklama, rev: e.kaynakRotaRevizyonId === null ? null : String(e.kaynakRotaRevizyonId), status: EMIR_DURUMU_PROTOTIP[e.durum],
+      note: e.aciklama, rev: e.kaynakRotaRevizyonId === null ? null : String(e.kaynakRotaRevizyonId), parcaRev: e.parcaRevizyonKodu ?? null, parcaRevId: e.parcaCizimRevizyonId == null ? null : String(e.parcaCizimRevizyonId),
+      status: EMIR_DURUMU_PROTOTIP[e.durum],
       created: Date.parse(e.acilma), doneAt: e.bitis === null ? null : Date.parse(e.bitis), tur: e.emirTuru,
       parentId: e.ustEmirId === null ? null : String(e.ustEmirId), kol,
       birlestigiId: e.birlestigiEmirId === null ? null : String(e.birlestigiEmirId), surum: e.surum,

@@ -13,6 +13,7 @@ import { ReworkSatirlari } from './ReworkAdimi.tsx';
 import { ArsivPenceresi, useArsivKapanisi } from './ArsiveAl.tsx';
 import { IptalPenceresi } from './IptalPenceresi.tsx';
 import { DalRozeti } from '../rotalar/PatlamisRota.tsx';
+import { ParcaRevizyonuUyarisi, ParcaRevRozeti } from './ParcaRevizyonu.tsx';
 import { IS_EMRI_DURUMU } from '#paylasilan/sozlesme/emir-durumu.ts';
 import {
   acikMi, adimDugumu, adimDurumu, altDugumAdimlari, adimPlani, canliAdimPlani, durumAdi, durumGosterimi, emirAdimlari, emirAraligi, ilerleme, planOzeti, planSirasi, plandaMi, rotaFarki, sureMetni, sureOzetiNedenleri, type AdimSureOzeti,
@@ -92,7 +93,7 @@ export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc, ka
   const sira = planSirasi(d).findIndex((x) => x.id === o.id);
   const ueAc = () => { void yonlen(`/uretim-emirleri/${String(o.kayitNo)}`); };
   const rotaMetni = o.rotasiz ? 'Rotasız'
-    : rev ? `${fark ? 'Emrin rotası' : 'Yürürlükteki'}, Rev ${rev.no}` : yururlukte ? `Yürürlükteki, Rev ${yururlukte.no}` : null;
+    : rev ? `${rev.no}, ${fark ? 'emrin rotası' : 'yürürlükteki'}` : yururlukte ? `${yururlukte.no}, yürürlükteki` : null;
   const diger: MenuOgesi[] = [
     ...(acik && yetki.emirBol && adimlar.length > 0 ? [{ anahtar: 'bol', baslik: 'Böl (parti ya da kol)', simge: 'layers' as const, sec: () => { setIslem('bol'); } }] : []),
     ...(acik && yetki.emirAdimYaz && !o.rotasiz && adimlar.length > 0 ? [{ anahtar: 'ek', baslik: 'Ek operasyon (rework, tamir, ek)', simge: 'plus' as const, sec: () => { setIslem('ek'); } }] : []),
@@ -115,6 +116,7 @@ export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc, ka
       <header className="tc-rr3-pbas">
         <Dugme className="tc-rr3-geri" simge="chev-left" onClick={kapat}>Emirler</Dugme>
         <h3 className="tc-rr3-emirno">{o.no}</h3>
+        <ParcaRevRozeti emir={o} rotaHarfi={o.rotasiz ? null : rev?.no ?? yururlukte?.no ?? null} />
         <span className="tc-rr3-durum" data-durum={o.status} data-ton={durumGosterimi(o).ton}>{durumAdi(o)}</span>
         <Dugme className="tc-rr3-kapat" simge="x" aria-label="Ayrıntıyı kapat" onClick={kapat} />
       </header>
@@ -188,6 +190,7 @@ function EmirUyarilari({ durum: d, emir: o, yetki, komut, bittiNotu = false }: {
   const seri = seriRotasiNotu(d, o, urunRotalari.data?.rotalar);
   return (
     <>
+      <ParcaRevizyonuUyarisi emir={o} yetki={yetki} komut={komut} />
       {seri && (
         <div className="tc-rr3-uyari-kutu" data-ton="bilgi" role="status"><Simge ad="route" /><span>{seri}</span></div>
       )}
@@ -195,7 +198,7 @@ function EmirUyarilari({ durum: d, emir: o, yetki, komut, bittiNotu = false }: {
         <div className="tc-rr3-uyari-kutu" role="status">
           <Simge ad="layers" />
           <span>
-            Bu emir Rev {fark.eskiNo} rotasıyla açıldı; yürürlükte Rev {fark.yeniNo} var.
+            Bu emir Rota {fark.eskiNo} ile açıldı; yürürlükte Rota {fark.yeniNo} var.
             {fark.eklenen.length > 0 && ` Rotaya eklenen: ${fark.eklenen.map((x) => `OP ${String(x.opNo)}${x.ad ? ` ${x.ad}` : ''}`).join(', ')}.`}
             {fark.cikan.length > 0 && ` Rotadan çıkan: ${fark.cikan.map((x) => `OP ${String(x)}`).join(', ')}.`}
             {' '}Başlamış ya da bitmiş adımlar değişmez.
