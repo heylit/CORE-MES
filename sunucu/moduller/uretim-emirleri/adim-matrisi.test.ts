@@ -17,6 +17,7 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import { emirBaslat, uretimEmriAc } from './disari.ts';
 import type { IsEmriGirdisi } from './disari.ts';
 import { hazirlikCozucusuKaydet } from './hazirlik.ts';
+import type { HazirlikBilgisi } from './kurallar.ts';
 import type { HazirlikCozucusu } from './hazirlik.ts';
 import { ADIM_BITTI_STATU } from './kurallar.ts';
 
@@ -251,6 +252,50 @@ describe('uretim-emirleri adım durumu matrisi (3604, gerçek PostgreSQL)', () =
     const c = await toplu({ kalemler: [kalem(a.id, a.ie[0] ?? 0, m?.adimlar[0]?.sistemStatusu ?? 'baslayabilir')] });
     assert.deepEqual(sonuclar(c), ['atlandi']);
     assert.match(c.govde.kalemler[0]?.neden ?? '', /bitti/);
+  });
+
+  test('3738: matris okuması adım başına hazırlık maddelerini ve elle değeri verir; Adım Durumu okumasıyla aynıdır', async () => {
+    const { id, ie } = await ac();
+    const [ie1 = 0] = ie;
+    const durumlar = new Map<HazirlikMaddesi, HazirlikBilgisi>([
+      ['cnc', { durum: 'tamam', secildi: true, surum: 'P1' }], ['cizim', { durum: 'tamam', secildi: true, surum: '7@a' }],
+      ['malzeme', { durum: 'yok', secildi: true }],
+    ]);
+    // Emir düzeyindeki madde (çizim) emir kimliğiyle, iş emri düzeyindeki (CNC, malzeme) ilk iş emriyle sorulur.
+    const cozucu = (m: HazirlikMaddesi): HazirlikCozucusu => async (_db, idler) =>
+      new Map(idler.filter((x) => x === (m === 'cizim' ? id : ie1)).map((x) => [x, durumlar.get(m)!]));
+    const onceki = (['cnc', 'cizim', 'malzeme'] as const).map((m) => [m, hazirlikCozucusuKaydet(m, cozucu(m))] as const);
+    try {
+      const ilk = (await matris()).emirler.find((x) => x.emirId === id)?.adimlar[0];
+      const maddeler = (a: typeof ilk) => a?.maddeler.filter((x) => ['cnc', 'cizim', 'malzeme'].includes(x.madde)).map((x) => [x.madde, x.hal, x.ham, x.elle]);
+      assert.equal(ilk?.maddeler.length, HAZIRLIK_MADDELERI.length, 'her adımda bütün maddeler (hâl: gerekmez dahil)');
+      assert.deepEqual(maddeler(ilk), [['cnc', 'tamam', 'tamam', null], ['cizim', 'tamam', 'tamam', null], ['malzeme', 'eksik', 'eksik', null]]);
+      // Elle "hazır değil" (durduran madde) ve elle onay (uyaran madde); matris elle değeri kişi, gerekçe ve türle verir.
+      const eksikYaz = await istek('planlama_proje', 'POST', `/adimli-emirler/${id}/is-emirleri/${ie1}/hazirlik-elle-eksik`, { madde: 'cizim', gerekce: 'Revizyon sorgusu bekliyor', sistemHali: 'tamam' });
+      assert.equal(eksikYaz.durum, 200, JSON.stringify(eksikYaz.govde));
+      const onayYaz = await istek('mudur', 'POST', `/adimli-emirler/${id}/is-emirleri/${ie1}/hazirlik-onayla`, { madde: 'malzeme', gerekce: null, sistemHali: 'eksik' });
+      assert.equal(onayYaz.durum, 200, JSON.stringify(onayYaz.govde));
+      const sonra = (await matris()).emirler.find((x) => x.emirId === id)?.adimlar;
+      const [a1, a2] = sonra ?? [];
+      assert.deepEqual(a1?.maddeler.find((x) => x.madde === 'cizim'), {
+        madde: 'cizim', hal: 'eksik', ham: 'tamam', elle: { tur: 'eksik', gerekce: 'Revizyon sorgusu bekliyor', kisiAdi: 'Deneme planlama_proje', zaman: a1?.maddeler.find((x) => x.madde === 'cizim')?.elle?.zaman },
+      });
+      const malzeme = a1?.maddeler.find((x) => x.madde === 'malzeme');
+      assert.deepEqual([malzeme?.hal, malzeme?.ham, malzeme?.elle?.tur, malzeme?.elle?.gerekce, malzeme?.elle?.kisiAdi], ['muaf', 'eksik', 'hazir', null, 'Deneme mudur']);
+      assert.deepEqual(a2?.maddeler.map((x) => x.elle), a2?.maddeler.map(() => null), 'öteki adımın maddelerinde elle değer yok');
+      // Adım Durumu okumasıyla aynı hâl, ham ve elle kümesi (matris tek toplu okumadır, hesap aynı).
+      const d = await oku(id);
+      for (const [i, a] of (sonra ?? []).entries()) {
+        assert.deepEqual(a.maddeler.map((x) => [x.madde, x.hal, x.ham]), (d.adimlar[i]?.maddeler ?? []).map((x) => [x.madde, x.hal, x.ham]));
+        assert.deepEqual(a.maddeler.filter((x) => x.elle !== null).map((x) => x.madde).sort(),
+          [...(d.adimlar[i]?.onaylar ?? []), ...(d.adimlar[i]?.elleEksikler ?? [])].map((x) => x.madde).sort());
+      }
+      // Elle değer kaldırılınca matris de otomatiğe döner.
+      assert.equal((await istek('planlama_proje', 'POST', `/adimli-emirler/${id}/is-emirleri/${ie1}/hazirlik-onay-kaldir`, { madde: 'cizim' })).durum, 200);
+      assert.equal((await matris()).emirler.find((x) => x.emirId === id)?.adimlar[0]?.maddeler.find((x) => x.madde === 'cizim')?.elle, null);
+    } finally {
+      for (const [m, c] of onceki) hazirlikCozucusuKaydet(m, c);
+    }
   });
 
   test('50 emirlik matris okuması ve 100 kalemlik toplu yazım (süre ölçümü)', async () => {

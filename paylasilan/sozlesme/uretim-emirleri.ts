@@ -1489,6 +1489,11 @@ export const adimMatrisiCevabi = z.object({
       yuzde: yuzdeSemasi,
       sistemStatusu: adimStatusu,
       elle: z.object({ statu: adimStatusu, not: z.string().nullable(), kisiAdi: z.string().nullable(), zaman: zamanSemasi }).nullable(),
+      // 3738: adımın hazırlık maddeleri (hâl elle değeri içerir, ham içermez); elle: açık elle onay ('hazir') ya da elle "hazır değil" ('eksik').
+      maddeler: z.array(z.object({
+        madde: hazirlikMaddesi, hal: hazirlikHaliSemasi, ham: hazirlikHaliSemasi,
+        elle: z.object({ tur: z.enum(['hazir', 'eksik']), gerekce: z.string().nullable(), kisiAdi: z.string().nullable(), zaman: zamanSemasi }).nullable(),
+      })),
     })),
   })),
   // Okuyanın yazma yetkisi (ekran seçimi kapatır; yazma ucu aynı yetkiyi sunucuda arar).

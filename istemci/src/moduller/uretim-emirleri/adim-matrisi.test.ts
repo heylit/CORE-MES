@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import type { AdimMatrisiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import {
-  BOS_SUZGEC, aralik, duzKalemler, emirleriSuz, geriAlGovdeleri, gecerliSecim, gorunenStatu, gorunumOku, istekGovdeleri, kalemAnahtari, oncekiDefteri, opKalemleri,
-  opSutunlari, secimiAcKapa, secimiSay, sirala, yazilacaklar, yazimOzeti, emrinKalemleri,
+  BOS_SUZGEC, statuKisaAdi, aralik, duzKalemler, elleKaynagi, emirleriSuz, geriAlGovdeleri, gecerliSecim, gerekceGerekir, gerekceYeterli, gorunenStatu, gorunumOku,
+  hazirlikOzeti, hazirlikOzetMetni, istekGovdeleri, kalemAnahtari, kareTonu, maddeDugmeleri, maddeGeriAlKomutu, maddeIslemi, mercekOku, oncekiDefteri, opKalemleri,
+  opSutunlari, secimiAcKapa, secimiSay, yazilacaklar, yazimOzeti, emrinKalemleri, type MatrisMaddesi,
 } from './adim-matrisi.ts';
 
 type E = AdimMatrisiCevabi['emirler'][number];
 type A = E['adimlar'][number];
-const adim = (isEmriId: number, opNo: number, sistemStatusu: A['sistemStatusu'], elle: A['elle'] = null): A =>
-  ({ isEmriId, opNo, ad: `Adım ${String(opNo)}`, durum: 'bekliyor', hedef: 10, yapilan: 0, yuzde: 0, sistemStatusu, elle });
+const adim = (isEmriId: number, opNo: number, sistemStatusu: A['sistemStatusu'], elle: A['elle'] = null, maddeler: A['maddeler'] = []): A =>
+  ({ isEmriId, opNo, ad: `Adım ${String(opNo)}`, durum: 'bekliyor', hedef: 10, yapilan: 0, yuzde: 0, sistemStatusu, elle, maddeler });
+const madde = (m: MatrisMaddesi['madde'], hal: MatrisMaddesi['hal'], ham: MatrisMaddesi['ham'] = hal, elle: MatrisMaddesi['elle'] = null): MatrisMaddesi => ({ madde: m, hal, ham, elle });
+const ELLE_ONAY = { tur: 'hazir', gerekce: 'Program elde denendi', kisiAdi: 'ORN-Kişi', zaman: '2026-11-23T08:00:00.000Z' } as const;
+const ELLE_EKSIK = { tur: 'eksik', gerekce: null, kisiAdi: 'ORN-Kişi', zaman: '2026-11-23T08:00:00.000Z' } as const;
 const emir = (emirId: number, emirNo: string, adimlar: A[], durum: E['durum'] = 'basladi', teslim: string | null = null): E =>
   ({ emirId, emirNo, urun: { kod: `ORN-${emirNo}`, ad: `Deneme ${emirNo}` }, durum, teslim, adimlar });
 const ELLE = { statu: 'malzeme', not: 'Gelmedi', kisiAdi: 'ORN-Kişi', zaman: '2026-11-23T08:00:00.000Z' } as const;
@@ -19,8 +23,11 @@ const E4 = emir(4, 'UE-4', [adim(41, 10, 'bitti')], 'bitti');
 const HEPSI = [E1, E2, E3, E4];
 
 describe('Adım Durumu matrisi: saf kurallar (3604)', () => {
-  it('görünüm adreste; bilinmeyen değer Emir görünümüne düşer', () => {
-    expect(['emir', 'matris', 'tablo', null, 'x'].map(gorunumOku)).toEqual(['emir', 'matris', 'tablo', 'emir', 'emir']);
+  it('görünüm adreste: yalnız sablon ayrı sekmedir; eski emir, matris, tablo ve bilinmeyen değer Adımlar\'a düşer', () => {
+    expect(['sablon', 'emir', 'matris', 'tablo', null, 'x'].map(gorunumOku)).toEqual(['sablon', 'adimlar', 'adimlar', 'adimlar', 'adimlar', 'adimlar']);
+  });
+  it('mercek adreste: yalnız hazirlik Hazırlık merceğidir, gerisi Durum', () => {
+    expect(['hazirlik', 'durum', null, 'tek'].map(mercekOku)).toEqual(['hazirlik', 'durum', 'durum', 'durum']);
   });
   it('OP sütunları emirlerin op birleşimidir; ek adım kendi sütununu alır', () => {
     expect(opSutunlari(HEPSI).map((s) => s.opNo)).toEqual([10, 20, 25, 30]);
@@ -81,12 +88,69 @@ describe('Adım Durumu matrisi: saf kurallar (3604)', () => {
     expect([o.yazildi, o.kaldirildi, o.atlandi]).toEqual([1, 1, 1]);
     expect(o.basarisiz).toEqual([{ anahtar: kalemAnahtari(2, 22), sonuc: 'eski', neden: 'Durum değişti' }]);
   });
-  it('sıralama: emir no, termin (teslimsiz sonda) ve statü adı; yön çevrilir', () => {
-    const k = duzKalemler([E1, E2], BOS_SUZGEC);
-    const ad = (s: string): string => s;
-    expect(sirala(k, { sutun: 'emir', yon: 1 }, ad).map((x) => x.anahtar)).toEqual(['1:11', '1:12', '1:13', '2:21', '2:22']);
-    expect(sirala(k, { sutun: 'termin', yon: 1 }, ad)[0]?.emir.emirId).toBe(2);
-    expect(sirala(k, { sutun: 'emir', yon: -1 }, ad)[0]?.anahtar).toBe('2:22');
-    expect(sirala(duzKalemler([E1, E3], BOS_SUZGEC), { sutun: 'termin', yon: 1 }, ad).at(-1)?.emir.emirId).toBe(3);
+  it('hazırlık süzgeci: eksik maddesi olmayan adımı olan emir satırdan düşer', () => {
+    const e = emir(7, 'UE-7', [adim(71, 10, 'baslayabilir', null, [madde('cnc', 'eksik'), madde('malzeme', 'tamam')]), adim(72, 20, 'baslayabilir', null, [madde('cnc', 'tamam')])]);
+    const s = { ...BOS_SUZGEC, yalnizHazirlikEksik: true };
+    expect(emirleriSuz([e, E1], s, false).map((x) => x.emirId)).toEqual([7]);
+    expect(duzKalemler([e], s).map((k) => k.anahtar)).toEqual(['7:71']);
+  });
+});
+
+describe('Adım Durumu matrisi: hazırlık özeti ve madde işlemleri (3738)', () => {
+  const OP = adim(81, 10, 'program', null, [
+    madde('cnc', 'eksik'), madde('cizim', 'tamam'), madde('rota', 'gerekmez'), madde('malzeme', 'muaf', 'eksik', ELLE_ONAY),
+    madde('makine', 'bilinmiyor'), madde('yayin', 'eksik', 'tamam', ELLE_EKSIK),
+  ]);
+  it('özet: gerekmeyen ve denetlenmeyen sayılmaz; muaf ve elle onay hazırdır; eksik ve elle sayılır', () => {
+    expect(hazirlikOzeti(OP)).toEqual({ tamam: 2, toplam: 4, eksik: 2, elle: 2 });
+    expect(hazirlikOzetMetni(hazirlikOzeti(OP))).toBe('hazırlık 2/4, 2 eksik, 2 elle');
+    expect(hazirlikOzeti(adim(82, 20, 'bitti'))).toEqual({ tamam: 0, toplam: 0, eksik: 0, elle: 0 });
+    expect(hazirlikOzetMetni(hazirlikOzeti(adim(83, 20, 'bitti', null, [madde('cnc', 'tamam')])))).toBe('hazırlık 1/1');
+  });
+  it('kare tonu hâlden: tamam, eksik, muaf; gerekmez ve bilinmiyor boş', () => {
+    expect(OP.maddeler.map(kareTonu)).toEqual(['eksik', 'tamam', 'bos', 'muaf', 'bos', 'eksik']);
+  });
+  it('düğmeler: gerekmeyene hiçbiri; hazıra onay yok; eksike eksik yok; geri al yalnız elle değerde', () => {
+    const d = (i: number) => maddeDugmeleri(OP.maddeler[i] as MatrisMaddesi);
+    expect(d(0)).toEqual({ onayla: true, eksik: false, geriAl: false });
+    expect(d(1)).toEqual({ onayla: false, eksik: true, geriAl: false });
+    expect(d(2)).toEqual({ onayla: false, eksik: false, geriAl: false });
+    expect(d(3)).toEqual({ onayla: false, eksik: true, geriAl: true });
+    expect(d(4)).toEqual({ onayla: true, eksik: true, geriAl: false });
+    expect(d(5)).toEqual({ onayla: true, eksik: false, geriAl: true });
+  });
+  it('gerekçe yalnız durduran maddede ve yalnız elle değer yazan komutta istenir; en az 5 karakter', () => {
+    expect(gerekceGerekir({ madde: 'cnc' })).toBe(true);
+    expect(gerekceGerekir({ madde: 'malzeme' })).toBe(false);
+    expect(['    ', 'dört', ' beş k '].map(gerekceYeterli)).toEqual([false, false, true]);
+    // CNC eksik: onay yazılır ve gerekçe ister; malzeme (uyaran) gerekçesiz yazılır.
+    const cnc = maddeIslemi(OP, OP.maddeler[0] as MatrisMaddesi, 'hazir');
+    expect(cnc.gerekceIster).toBe(true);
+    expect(cnc.komut).toEqual({ yol: 'hazirlik-onayla', isEmriId: 81, govde: { madde: 'cnc', gerekce: null, sistemHali: 'eksik' } });
+    const ua = adim(84, 10, 'baslayabilir', null, [madde('malzeme', 'eksik')]);
+    expect(maddeIslemi(ua, ua.maddeler[0] as MatrisMaddesi, 'hazir').gerekceIster).toBe(false);
+    // Durduran maddede sistem hazırken elle eksik yazmak da gerekçe ister.
+    const ci = maddeIslemi(OP, OP.maddeler[1] as MatrisMaddesi, 'eksik');
+    expect([ci.gerekceIster, ci.komut.yol, ci.komut.govde]).toEqual([true, 'hazirlik-elle-eksik', { madde: 'cizim', gerekce: null, sistemHali: 'tamam' }]);
+  });
+  it('elle eksik olan, sistemce hazır maddede onay elle değeri kaldırır ve gerekçe istemez (otomatiğe döner)', () => {
+    const y = maddeIslemi(OP, OP.maddeler[5] as MatrisMaddesi, 'hazir');
+    expect([y.gerekceIster, y.komut.yol, y.komut.govde]).toEqual([false, 'hazirlik-onay-kaldir', { madde: 'yayin' }]);
+  });
+  it('geri al: elle değeri kaldırır; geri komutu önceki elle değeri aynı gerekçeyle yeniden yazar', () => {
+    const { ileri, geri } = maddeGeriAlKomutu(OP, OP.maddeler[3] as MatrisMaddesi);
+    expect(ileri).toEqual({ yol: 'hazirlik-onay-kaldir', isEmriId: 81, govde: { madde: 'malzeme' } });
+    expect(geri).toEqual({ yol: 'hazirlik-onayla', isEmriId: 81, govde: { madde: 'malzeme', gerekce: 'Program elde denendi', sistemHali: 'eksik' } });
+    expect(elleKaynagi(OP).onaylar.map((x) => x.madde)).toEqual(['malzeme']);
+    expect(elleKaynagi(OP).elleEksikler.map((x) => x.madde)).toEqual(['yayin']);
+  });
+});
+
+describe('Adım Durumu matrisi: kısa statü adı (3738)', () => {
+  it('telefon rozeti için altı statünün kısa adı vardır; ötekiler tam adıyla kalır', () => {
+    expect((['beklemede', 'uretimde', 'baslayabilir', 'bitti', 'durdu', 'yayin'] as const).map((s) => statuKisaAdi(s, 'tam'))).toEqual(
+      ['Bekliyor', 'Üretimde', 'Başlayabilir', 'Bitti', 'Durdu', 'Term. yok'],
+    );
+    expect(statuKisaAdi('cizim', 'Çizim revizyonu bekleniyor')).toBe('Çizim revizyonu bekleniyor');
   });
 });

@@ -118,7 +118,7 @@
 .tc-at-smartes-hata { display: grid; gap: var(--b-1); padding: var(--b-2); border-left: var(--cizgi-orta) solid var(--stop); font-size: var(--yazi-s); overflow-wrap: anywhere; }
 .tc-at-smartes-hata b { display: inline-flex; gap: var(--b-1); align-items: center; color: var(--stop); }
 
-@container tc-at (max-width: 820px) {
+@container tc-at (max-width: 1060px) {
   .tc-at-tablo th.tc-at-yer, .tc-at-tablo td.tc-at-yer, .tc-at-tablo th.tc-at-bas, .tc-at-tablo td.tc-at-bas, .tc-at-tablo th.tc-at-smartes, .tc-at-tablo td.tc-at-smartes { display: none; }
   .tc-at-smartes-dar { display: inline; }
   .tc-at-cip-ikinci, .tc-at-fazla-genis { display: none; }
@@ -154,7 +154,7 @@
   .tc-at-matris { grid-template-columns: repeat(6, var(--dokunma)); }
 }
 /* Dar ve orta kapta (tablet dahil) matris 4x3 sabit, durum rozeti sarabilir: tablo kabından geniş olmaz (dokunma kuralından sonra gelir ki onu ezsin). */
-@container tc-at (max-width: 820px) {
+@container tc-at (max-width: 1060px) {
   .tc-at-matris { grid-template-columns: repeat(4, max-content); }
   .tc-at-durum .tc-rozet { white-space: normal; }
 }
