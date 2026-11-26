@@ -73,6 +73,8 @@ Ekranda kalan: süren yedek varken düğme kapalıdır; sunucu yine 409 verir. B
 
 Ortam değişkeniyle açılmaz. Açık anahtar kodda (`sifirlama-izni.ts`, parmak izi 918B-1A03-FAF2-0737); gizli anahtar yalnız kullanıcıdadır (`araclar/sifirlama-imza.mjs`).
 
+`TMIV2_ORTAM` zorunludur (sunucu onsuz açılmaz, `sunucu/cekirdek/ayar.ts`); istek ve izin ortama bağlıdır, ortam tanımsız ya da geçersizse ikisi de 409 ile reddedilir. Deneme ve canlı kurulum farklı `TMIV2_ORTAM` taşımalıdır; canlının yedeği denemeye dönülse de kurulum kimliği aynı kalır, ortamları ayıran bu değerdir.
+
 | Uç | İşlem | Sunucudaki kurallar | İzinli test | Reddeden test |
 |---|---|---|---|---|
 | POST /veri-temizleme/sifirlama-istegi | `ayarlar.veri-temizle` + bayraklı yönetici | istek kurulum kimliği, ortam, tek kullanımlık sayı ve bir saatlik son içerir; metin aynen saklanır | `sifirdan-basla.test.ts` (her sıfırlama isteği bu uçtan alır) | `yetki ve koşullar: ...` (bayraksız 403) |
