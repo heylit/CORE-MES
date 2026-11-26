@@ -599,6 +599,42 @@ export async function defterYaz(db: Db, kisiId: number, l: readonly DefterYazimi
   );
 }
 
+// 3733: taslağın tabanından bu yana ortak çalışmaya yapılan yazmalar. Geçmiş satırı bir sürümün değeridir; degistiren ve degisti onu
+// sonraki sürüme geçiren yazmadır (kayıt tetikleyicisi). Geçmiş anahtar başına son 50 sürümü tutar; taban sürümü düşmüş olabilir.
+export interface PlanlamaGecisi { surum: number; degistirenKisiId: number | null; degisti: string }
+export async function planlamaGecisleri(db: Db, anahtar: string, tabanSurum: number): Promise<PlanlamaGecisi[]> {
+  return db.sorgu<PlanlamaGecisi>(
+    `SELECT surum::float8 AS surum, degistiren_kisi_id AS "degistirenKisiId", to_json(degisti) #>> '{}' AS degisti
+       FROM plan_planlama_kaydi_gecmisi WHERE anahtar = $1 AND surum >= $2 ORDER BY id`,
+    [anahtar, tabanSurum],
+  );
+}
+export async function planlamaGecmisDegerleri(db: Db, anahtar: string, surumler: readonly number[]): Promise<{ surum: number; deger: unknown }[]> {
+  if (surumler.length === 0) return [];
+  return db.sorgu(
+    'SELECT surum::float8 AS surum, deger FROM plan_planlama_kaydi_gecmisi WHERE anahtar = $1 AND surum = ANY($2::bigint[])', [anahtar, surumler]);
+}
+// Defter satırı çalışma yazmasıyla aynı işlemde girer: zamanı o yazmanın geçmiş satırındaki degisti ile aynıdır.
+export interface DefterAraSatiri { bekleyenId: string; ne: string; ayrinti: string; kisiId: number; zaman: string }
+export async function defterZamanlari(db: Db, zamanlar: readonly string[]): Promise<DefterAraSatiri[]> {
+  if (zamanlar.length === 0) return [];
+  return db.sorgu<DefterAraSatiri>(
+    `SELECT bekleyen_id AS "bekleyenId", ne, ayrinti, kisi_id AS "kisiId", to_json(zaman) #>> '{}' AS zaman
+       FROM plan_degisiklik_defteri WHERE zaman = ANY($1::timestamptz[]) ORDER BY id`,
+    [zamanlar],
+  );
+}
+// Taban sürümü geçmişte yoksa: o zamandan beri defterde kişi değişikliği yazanlar (veri yenilemesi satırları ayıklanır).
+export async function defterKisileri(db: Db, sonra: Date): Promise<{ kisiId: number; ne: string; ayrinti: string; zaman: string }[]> {
+  return db.sorgu(
+    `SELECT DISTINCT ON (kisi_id) kisi_id AS "kisiId", ne, ayrinti, to_json(zaman) #>> '{}' AS zaman
+       FROM plan_degisiklik_defteri
+      WHERE zaman > $1 AND bekleyen_id NOT LIKE 'dis-%' AND bekleyen_id <> 'eski' AND bekleyen_id NOT LIKE 'plan:%'
+      ORDER BY kisi_id, id DESC`,
+    [sonra],
+  );
+}
+
 export interface DefterOkumasi { id: number; olay: DefterOlayi; bekleyenId: string; ne: string; ayrinti: string; isler: string[]; gerekce: string | null; kisiId: number; zaman: Date }
 export async function defterOku(db: Db, once: number | null, sinir: number): Promise<DefterOkumasi[]> {
   return db.sorgu<DefterOkumasi>(

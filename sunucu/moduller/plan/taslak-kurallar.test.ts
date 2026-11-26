@@ -4,8 +4,8 @@ import type { TaslakKomutu } from '#paylasilan/sozlesme/planlama.ts';
 import type { PlanaAlSonucu } from './plana-al-kurallar.ts';
 import { planAni } from './planlama-kurallar.ts';
 import {
-  DIZ_BAYAT, DIZ_ESKI_VERI, EKSEN_DEGISTI, digerDegisiklikleri, elleBolSilUygula, elleBolUygula, adimBeklerSilUygula, adimBeklerUygula, adimUzadiSilUygula, adimUzadiUygula, ayarUygula, ekMesaiSilUygula, ekMesaiUygula, operatorSorunu, catismalar, dizImzasi, dizUygula, durusSilUygula, durusUygula, emirOf, imza, kilitKaydi, kilitKaydiniAl, komutAnahtarlari, komutAdi, oynat, secimeGore, uygulaKarari, yenidenPlanlaUygula, yonUygula, kalkacakKilitler, komutUygula, baslamisIsler,
-  type DizKomutu, type TaslakHesaplari, type TaslakSatiri,
+  DIZ_BAYAT, DIZ_ESKI_VERI, SIZ_BASKA_PENCERE, araDegisiklikleri, veriYenilemesiMi, EKSEN_DEGISTI, digerDegisiklikleri, elleBolSilUygula, elleBolUygula, adimBeklerSilUygula, adimBeklerUygula, adimUzadiSilUygula, adimUzadiUygula, ayarUygula, ekMesaiSilUygula, ekMesaiUygula, operatorSorunu, catismalar, dizImzasi, dizUygula, durusSilUygula, durusUygula, emirOf, imza, kilitKaydi, kilitKaydiniAl, komutAnahtarlari, komutAdi, oynat, secimeGore, uygulaKarari, yenidenPlanlaUygula, yonUygula, kalkacakKilitler, komutUygula, baslamisIsler,
+  type AraYazma, type DizKomutu, type TaslakHesaplari, type TaslakSatiri,
 } from './taslak-kurallar.ts';
 
 // 3282 1d: taslağın saf kuralları. Veriler uydurmadır.
@@ -819,3 +819,47 @@ describe('3488 c: adımı elle böl', () => {
   });
 });
 
+
+// 3733: araya giren değişikliğin kaynağı. Veriler uydurmadır.
+describe('taslak: araya giren değişikliğin kaynağı (3733)', () => {
+  const yer = (ops: Record<string, unknown>) => calisma({ plan: { dataVer: 3, ops } });
+  const c0 = calisma(), c1 = yer({ ...calisma().plan.ops, 'S1.10': { m: 'T1', S: 9, job: 'S1' } });
+  const c2 = yer({ ...calisma().plan.ops, 'S1.10': { m: 'T1', S: 9, job: 'S1' }, 'S2.10': { m: 'T2', S: 31, job: 'S2' } });
+  const yazma = (kisiId: number, once: unknown, sonra: unknown, defter: AraYazma['defter'] = []): AraYazma =>
+    ({ kisiId, kim: `ORN-Kisi-${String(kisiId)}`, zaman: '2026-11-26T08:00:00+00:00', defter, once: imza(once), sonra: imza(sonra) });
+  const dis = { bekleyenId: 'dis-ORN-1', ne: 'Başka sayfada değişti: Malzemeler', ayrinti: 'stok boş → 2' };
+  const komutlar = [{ komut: tasi('S1.10', 'T1'), ne: 'S1 taşındı' }, { komut: { tur: 'yeniden-planla', isler: ['*'] } as TaslakKomutu, ne: 'Bütün plan baştan kurulacak' }];
+
+  test('AK-1: yalnız veri yenilemesinin (dis-) değiştirdiği yer çatışma sayılmaz; bütün planı etkileyen komut da sorulmaz', () => {
+    assert.equal(veriYenilemesiMi({ defter: [dis, { bekleyenId: 'eski', ne: '', ayrinti: '' }] }), true);
+    assert.equal(veriYenilemesiMi({ defter: [dis, { bekleyenId: '5-3', ne: 'İş taşındı', ayrinti: '' }] }), false, 'karışık yazma kişinindir');
+    assert.equal(veriYenilemesiMi({ defter: [] }), false);
+    const ara = araDegisiklikleri(imza(c0), imza(c2), [yazma(7, c0, c2, [dis])], 1);
+    assert.deepEqual(ara, []);
+    assert.deepEqual(catismalar(imza(c0), imza(c2), komutlar, ara), []);
+    assert.equal(catismalar(imza(c0), imza(c2), komutlar).length > 0, true, 'kaynaksız (eski) karar bütün farkı başkasınınki sayar');
+  });
+
+  test('AK-2/3: kişi yalnız dokunduğu anahtarda sorulur; kendi yazması "Siz (başka pencerede)", başkasınınki adıyla; geri alınan fark sorulmaz', () => {
+    const ara = araDegisiklikleri(imza(c0), imza(c2), [yazma(1, c0, c1, [{ bekleyenId: '5-3', ne: 'İş taşındı', ayrinti: 'S1.10: 8 → 9' }]), yazma(2, c1, c2)], 1);
+    const c = catismalar(imza(c0), imza(c2), [{ komut: tasi('S1.20', 'T2'), ne: 'S1.20 taşındı' }], ara);
+    assert.deepEqual(c.map((x) => [x.anahtar, x.kaynaklar?.map((y) => [y.sinif, y.kim, y.ne])]), [
+      ['emir:S1', [['ben', SIZ_BASKA_PENCERE, 'İş taşındı']]], ['tezgah:T2', [['diger', 'ORN-Kisi-2', 'Plan kaydedildi']]]]);
+    assert.deepEqual(secimeGore(imza(c0), imza(c2), [{ komut: tasi('S3.10', 'T9') }], {}, ara), [{ komut: tasi('S3.10', 'T9') }], 'dokunmayan komut sorulmaz');
+    const geri = araDegisiklikleri(imza(c0), imza(c0), [yazma(2, c0, c1), yazma(2, c1, c0)], 1);
+    assert.deepEqual(geri, []);
+  });
+
+  test('AK-4: plan ayarı yapanın adıyla, eksen kayması "Sistem" adıyla bütün planda sorulur; yazmalar bilinmezse kaynak yazanlardan kurulur', () => {
+    const ayarli = calisma({ w: { dondurma: 9, mat: 'uyari' } });
+    const a = araDegisiklikleri(imza(c0), imza(ayarli), [yazma(2, c0, ayarli, [{ bekleyenId: '6-3', ne: 'Plan ayarı değişti', ayrinti: 'Dondurma 4 → 9' }])], 1);
+    const c = catismalar(imza(c0), imza(ayarli), [{ komut: tasi('S3.10', 'T9'), ne: 'S3 taşındı' }], a);
+    assert.deepEqual(c.map((x) => [x.anahtar, x.kaynaklar?.map((y) => [y.sinif, y.kim, y.ayrinti])]), [['*', [['ayar', 'ORN-Kisi-2', 'Dondurma 4 → 9']]]]);
+    const ek = (g: string) => calisma({ D: { ...calisma().D, meta: { baslangic: g } } });
+    const e = araDegisiklikleri(imza(ek('2026-11-25')), imza(ek('2026-11-26')), [], 1);
+    assert.deepEqual(e.map((x) => [x.kaynak.sinif, x.kaynak.kim, x.kaynak.ayrinti]), [['eksen', 'Sistem', '2026-11-25 → 2026-11-26']]);
+    const bilinmez = araDegisiklikleri(imza(c0), imza(c2), [{ ...yazma(1, c0, c1), once: null, sonra: null }, { ...yazma(2, c1, c2), once: null, sonra: null }], 1, true);
+    assert.deepEqual(bilinmez.map((x) => [x.kaynak.sinif, x.kaynak.kim]), [['diger', 'ORN-Kisi-2']], 'başkası varsa bütün fark onun adıyla');
+    assert.deepEqual(araDegisiklikleri(imza(c0), imza(c2), [{ ...yazma(3, c0, c2, [dis]), once: null, sonra: null }], 1, true), [], 'eksikte de veri yenilemesi sorulmaz');
+  });
+});

@@ -1,4 +1,5 @@
-import type { TaslakAyarlari, TaslakCatismasi, TaslakKomutu } from '#paylasilan/sozlesme/planlama.ts';
+import type { TaslakAyarlari, TaslakCatismaKaynagi, TaslakCatismasi, TaslakKomutu } from '#paylasilan/sozlesme/planlama.ts';
+import { ESKI_BEKLEYEN } from './degisiklik-defteri-kurallar.ts';
 import { IZ_SINIRI, isTasi, isle, planaAl, simdiSaati, durusunIsleri, type GeriYama, type KomutKisisi, type KomutSonucu } from './atolye-komutlari-kurallar.ts';
 
 // 3282 1d: kişinin taslağının saf kuralları. Taslak komut listesidir; görünüm ve Uygula komutları güncel ortak çalışmaya sırayla yeniden
@@ -162,10 +163,89 @@ export function digerDegisiklikleri(taban: TaslakImzasi, simdi: TaslakImzasi): {
   };
 }
 
+type Diger = ReturnType<typeof digerDegisiklikleri>;
+
+// 3733: araya giren değişiklik kaynağına göre ayrılır. Taban ile şimdi arasındaki her yazma (ortak çalışmanın bir sürümünden sonrakine geçiş)
+// yazanı ve o yazmanın defter satırlarıyla gelir. Defter satırlarının hepsi veri yenilemesiyse (başka sayfanın farkı, bekleyen kimliği
+// 'dis-'; "kaynak" ya da "uygulandi") yazma çatışma sayılmaz: taslağın komutları güncel verinin üstünde oynatılır. Öteki yazmalar kişiye
+// göre: kişinin kendisi (başka pencere) ya da başkası; ikisi de yalnız komutun dokunduğu anahtarda sorulur. Plan ayarı kim yaptıysa adıyla,
+// plan ekseni kayması sistem adıyla bütün planda ('*') sorulur. Bir anahtar yalnız taban ile şimdi arasında hâlâ farklıysa sayılır.
+export const VERI_YENILEMESI_ONEKI = 'dis-';
+export const SIZ_BASKA_PENCERE = 'Siz (başka pencerede)';
+export interface AraDefterSatiri { bekleyenId: string; ne: string; ayrinti: string }
+export interface AraYazma {
+  kisiId: number | null; kim: string; zaman: string | null; defter: readonly AraDefterSatiri[];
+  // Yazmanın önceki ve sonraki imzası; okunmadıysa null (kaynak o zaman toplam farktan kurulur).
+  once: TaslakImzasi | null; sonra: TaslakImzasi | null;
+  // Defter satırı yoksa yazmanın kendi izindeki ilk satır.
+  iz?: { ne: string; ayrinti: string } | null;
+}
+export interface AraDegisiklik { kaynak: TaslakCatismaKaynagi; d: Diger }
+
+const tarafsizMi = (id: string): boolean => id === ESKI_BEKLEYEN || id.startsWith('plan:');
+export const veriYenilemesiMi = (y: Pick<AraYazma, 'defter'>): boolean =>
+  y.defter.some((x) => x.bekleyenId.startsWith(VERI_YENILEMESI_ONEKI)) && y.defter.every((x) => x.bekleyenId.startsWith(VERI_YENILEMESI_ONEKI) || tarafsizMi(x.bekleyenId));
+const AYRINTI_KISA = 120;
+const kisaAyrinti = (s: string): string => (s.length > AYRINTI_KISA ? `${s.slice(0, AYRINTI_KISA - 1)}…` : s);
+function yazmaNesi(y: AraYazma): { ne: string; ayrinti: string } {
+  const x = y.defter.find((r) => !r.bekleyenId.startsWith(VERI_YENILEMESI_ONEKI) && !tarafsizMi(r.bekleyenId)) ?? y.iz ?? null;
+  return x === null ? { ne: 'Plan kaydedildi', ayrinti: '' } : { ne: x.ne, ayrinti: kisaAyrinti(x.ayrinti) };
+}
+const bosFark = (): Diger => ({ emir: new Set(), tezgah: new Set(), kisi: new Set(), hepsi: false, bos: true, kapasiteBilinmez: false, mesaiBilinmez: false });
+const hepsiFarki = (t: Diger): Diger => ({ ...bosFark(), hepsi: true, bos: false, kapasiteBilinmez: t.kapasiteBilinmez, mesaiBilinmez: t.mesaiBilinmez });
+// Yazmanın farkı, taban ile şimdi arasında hâlâ duran farkla kesişir (geri alınan değişiklik sorulmaz); plan ayarı ayrı kaynaktır.
+function kesisim(y: Diger, t: Diger): Diger {
+  const kes = (a: Set<string>, b: Set<string>) => new Set([...a].filter((x) => b.has(x)));
+  const emir = kes(y.emir, t.emir), tezgah = kes(y.tezgah, t.tezgah), kisi = kes(y.kisi, t.kisi);
+  return { emir, tezgah, kisi, hepsi: false, bos: emir.size === 0 && tezgah.size === 0 && kisi.size === 0, kapasiteBilinmez: t.kapasiteBilinmez, mesaiBilinmez: t.mesaiBilinmez };
+}
+
+// yazmalar null: taban ile şimdi arasındaki yazmalar bilinmiyor; bütün fark başkasınınki sayılır (3733'ten önceki davranış).
+// eksik: tabana kadar uzanan geçmiş tutulmamış ya da yazmalar okunmadı; kaynaklar yazanlardan, fark toplamdan kurulur.
+export function araDegisiklikleri(taban: TaslakImzasi, simdi: TaslakImzasi, yazmalar: readonly AraYazma[] | null, kisiId: number, eksik = false): AraDegisiklik[] {
+  const t = digerDegisiklikleri(taban, simdi);
+  const ayarDegisti = taban.ayar !== simdi.ayar;
+  const eksenDegisti = taban.eksen !== undefined && taban.eksen !== (simdi.eksen ?? null);
+  const l: AraDegisiklik[] = [];
+  if (eksenDegisti) {
+    l.push({ kaynak: { sinif: 'eksen', kim: 'Sistem', zaman: null, ne: 'Plan ekseni kaydı', ayrinti: `${taban.eksen ?? '-'} → ${simdi.eksen ?? '-'}` }, d: hepsiFarki(t) });
+  }
+  if (yazmalar === null) {
+    if (ayarDegisti) l.push({ kaynak: { sinif: 'ayar', kim: 'Başkası', zaman: null, ne: 'Plan ayarı değişti', ayrinti: '' }, d: hepsiFarki(t) });
+    const d = { ...t, hepsi: false, bos: t.emir.size === 0 && t.tezgah.size === 0 && t.kisi.size === 0 };
+    if (!d.bos || d.kapasiteBilinmez || d.mesaiBilinmez) l.push({ kaynak: { sinif: 'diger', kim: 'Başkası', zaman: null, ne: 'Plan değişti', ayrinti: '' }, d });
+    return l;
+  }
+  const kisiYazmalari = yazmalar.filter((y) => !veriYenilemesiMi(y));
+  const etiket = (y: AraYazma): string => (y.kisiId === kisiId ? SIZ_BASKA_PENCERE : y.kim);
+  const kaynak = (y: AraYazma, sinif: TaslakCatismaKaynagi['sinif']): TaslakCatismaKaynagi => ({ sinif, kim: etiket(y), zaman: y.zaman, ...yazmaNesi(y) });
+  if (eksik || kisiYazmalari.some((y) => y.once === null || y.sonra === null)) {
+    if (kisiYazmalari.length === 0) return l;
+    const baskasi = kisiYazmalari.filter((y) => y.kisiId !== kisiId);
+    const temsil = baskasi.length > 0 ? baskasi : kisiYazmalari;
+    const son = temsil.at(-1)!;
+    const kim = [...new Set(temsil.map(etiket))].join(', ');
+    const ozet = { kim, zaman: son.zaman, ...yazmaNesi(son) };
+    if (ayarDegisti) l.push({ kaynak: { sinif: 'ayar', ...ozet }, d: hepsiFarki(t) });
+    const d = kesisim(t, t);
+    if (!d.bos) l.push({ kaynak: { sinif: baskasi.length > 0 ? 'diger' : 'ben', ...ozet }, d });
+    return l;
+  }
+  let ayarAciklandi = false;
+  for (const y of kisiYazmalari) {
+    const yd = digerDegisiklikleri(y.once!, y.sonra!);
+    if (ayarDegisti && y.once!.ayar !== y.sonra!.ayar) { l.push({ kaynak: kaynak(y, 'ayar'), d: hepsiFarki(t) }); ayarAciklandi = true; }
+    const d = kesisim(yd, t);
+    // Tabanında kapasite ya da ek mesai olmayan taslakta o komutlar yine sorulur (catisanAnahtarlar).
+    if (!d.bos || d.kapasiteBilinmez || d.mesaiBilinmez) l.push({ kaynak: kaynak(y, y.kisiId === kisiId ? 'ben' : 'diger'), d });
+  }
+  if (ayarDegisti && !ayarAciklandi) l.push({ kaynak: { sinif: 'ayar', kim: 'Sistem', zaman: null, ne: 'Plan ayarı değişti', ayrinti: '' }, d: hepsiFarki(t) });
+  return l;
+}
+
 const anahtarAdi = (a: string): string => (a === '*' ? 'Plan ayarı ya da bütün plan' : a.startsWith('emir:') ? `${a.slice(5)} emri`
   : a.startsWith('kisi:') ? `${a.slice(5)} numaralı operatör` : `${a.slice(7)} tezgâhı`);
 
-type Diger = ReturnType<typeof digerDegisiklikleri>;
 // Komutun çatıştığı anahtarlar: '*' komutu başkasının herhangi bir değişikliğiyle, başkasının ayar değişikliği her komutla, öteki komut
 // aynı emir ya da tezgâhla çatışır (Risk açık b: emir düzeyi yetmez, kaynak da).
 function catisanAnahtarlar(d: Diger, komut: SatirKomutu, taban: TaslakImzasi): string[] {
@@ -178,21 +258,31 @@ function catisanAnahtarlar(d: Diger, komut: SatirKomutu, taban: TaslakImzasi): s
   return ak.filter((a) => (a.startsWith('emir:') && d.emir.has(a.slice(5))) || (a.startsWith('tezgah:') && d.tezgah.has(a.slice(7)))
     || (a.startsWith('kisi:') && d.kisi.has(a.slice(5))));
 }
+const kaynakliAnahtarlar = (ara: readonly AraDegisiklik[], komut: SatirKomutu, taban: TaslakImzasi): { a: string; k: TaslakCatismaKaynagi }[] =>
+  ara.flatMap((x) => catisanAnahtarlar(x.d, komut, taban).map((a) => ({ a, k: x.kaynak })));
+const tekAnahtarlar = (ara: readonly AraDegisiklik[] | undefined, taban: TaslakImzasi, simdi: TaslakImzasi, komut: SatirKomutu): string[] =>
+  ara === undefined ? catisanAnahtarlar(digerDegisiklikleri(taban, simdi), komut, taban) : [...new Set(kaynakliAnahtarlar(ara, komut, taban).map((x) => x.a))];
 
-// Çatışmalar anahtar başına, komut adları kişinin okuyacağı satırlardır.
-export function catismalar(taban: TaslakImzasi, simdi: TaslakImzasi, komutlar: readonly { komut: SatirKomutu; ne: string }[]): TaslakCatismasi[] {
-  const d = digerDegisiklikleri(taban, simdi);
-  const m = new Map<string, string[]>();
+// Çatışmalar anahtar başına, komut adları kişinin okuyacağı satırlardır. ara verilirse (3733) her anahtar kaynaklarını taşır; verilmezse
+// bütün fark başkasınınki sayılır.
+export function catismalar(taban: TaslakImzasi, simdi: TaslakImzasi, komutlar: readonly { komut: SatirKomutu; ne: string }[], ara?: readonly AraDegisiklik[]): TaslakCatismasi[] {
+  const m = new Map<string, { komutlar: string[]; kaynaklar: TaslakCatismaKaynagi[] }>();
+  const ekle = (a: string, ne: string, k: TaslakCatismaKaynagi | null): void => {
+    const x = m.get(a) ?? { komutlar: [], kaynaklar: [] };
+    if (!x.komutlar.includes(ne)) x.komutlar.push(ne);
+    if (k !== null && !x.kaynaklar.some((y) => y.sinif === k.sinif && y.kim === k.kim && y.zaman === k.zaman && y.ne === k.ne)) x.kaynaklar.push(k);
+    m.set(a, x);
+  };
   for (const { komut, ne } of komutlar) {
-    for (const a of catisanAnahtarlar(d, komut, taban)) { const l = m.get(a) ?? []; if (!l.includes(ne)) l.push(ne); m.set(a, l); }
+    if (ara === undefined) for (const a of tekAnahtarlar(undefined, taban, simdi, komut)) ekle(a, ne, null);
+    else for (const { a, k } of kaynakliAnahtarlar(ara, komut, taban)) ekle(a, ne, k);
   }
-  return [...m].map(([anahtar, l]) => ({ anahtar, ad: anahtarAdi(anahtar), komutlar: l }));
+  return [...m].map(([anahtar, x]) => ({ anahtar, ad: anahtarAdi(anahtar), komutlar: x.komutlar, ...(ara === undefined ? {} : { kaynaklar: x.kaynaklar }) }));
 }
 
 // Seçime göre kalan komutlar: çatıştığı anahtarlardan biri 'onun' seçilen komut düşer. Seçilmemiş çatışma varsa null (seçim istenir).
-export function secimeGore<T extends { komut: SatirKomutu }>(taban: TaslakImzasi, simdi: TaslakImzasi, l: readonly T[], secim: Readonly<Record<string, 'benim' | 'onun'>>): T[] | null {
-  const d = digerDegisiklikleri(taban, simdi);
-  const anahtarlar = l.map(({ komut }) => catisanAnahtarlar(d, komut, taban));
+export function secimeGore<T extends { komut: SatirKomutu }>(taban: TaslakImzasi, simdi: TaslakImzasi, l: readonly T[], secim: Readonly<Record<string, 'benim' | 'onun'>>, ara?: readonly AraDegisiklik[]): T[] | null {
+  const anahtarlar = l.map(({ komut }) => tekAnahtarlar(ara, taban, simdi, komut));
   if (anahtarlar.some((ak) => ak.some((a) => secim[a] === undefined))) return null;
   return l.filter((_, i) => !anahtarlar[i]!.some((a) => secim[a] === 'onun'));
 }
@@ -817,10 +907,12 @@ export type UygulaKarari =
   | { durum: 'secim'; catismalar: TaslakCatismasi[] }
   | { durum: 'bozuk'; ileti: string }
   | { durum: 'yaz'; deger: unknown; uygulanan: number; dusen: number };
-export function uygulaKarari(c: unknown, taban: TaslakImzasi, l: readonly TaslakSatiri[], secim: Readonly<Record<string, 'benim' | 'onun'>>, kisi: KomutKisisi, h: TaslakHesaplari): UygulaKarari {
+// ara (3733): taban ile şimdiki imza (imza(c)) arasındaki değişikliklerin kaynakları (araDegisiklikleri). Verilmezse bütün fark
+// başkasınınki sayılır.
+export function uygulaKarari(c: unknown, taban: TaslakImzasi, l: readonly TaslakSatiri[], secim: Readonly<Record<string, 'benim' | 'onun'>>, kisi: KomutKisisi, h: TaslakHesaplari, ara?: readonly AraDegisiklik[]): UygulaKarari {
   const simdi = imza(c);
-  const kalan = secimeGore(taban, simdi, l, secim);
-  if (kalan === null) return { durum: 'secim', catismalar: catismalar(taban, simdi, l) };
+  const kalan = secimeGore(taban, simdi, l, secim, ara);
+  if (kalan === null) return { durum: 'secim', catismalar: catismalar(taban, simdi, l, ara) };
   const o = oynat(c, kalan, kisi, h);
   const bozuk = kalan.flatMap((s, i) => (o.hatalar[i] == null ? [] : [`${s.ne}: ${o.hatalar[i]!}`]));
   if (bozuk.length > 0) return { durum: 'bozuk', ileti: `Taslaktaki şu değişiklikler artık uygulanamıyor: ${bozuk.join('; ')}` };
