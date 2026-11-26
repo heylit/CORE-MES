@@ -47,6 +47,8 @@
 .sa-ekran-talepler [data-kip="kart"] td[data-baslik="No"],
 .sa-ekran-talepler [data-kip="kart"] td[data-baslik="Teklif"],
 .sa-ekran-talepler [data-kip="kart"] td[data-baslik="Tutar"] { display: none; }
+/* Kart kipinde değerler sağa yaslıdır; rozet alta kırılınca termin de sağda kalır. */
+.sa-ekran-talepler [data-kip="kart"] .sa-ekran-ihtiyac { justify-content: flex-end; }
 
 /* Talep ayrıntısında ad ve bilgi satırı kesilmez, sarılır; dar ekranda düğmeler başlığın altına iner. */
 .sa-ekran-ayrinti .tc-sbaslik-metin, .sa-ekran-ayrinti .tc-sbaslik-alt { white-space: normal; overflow: visible; }
