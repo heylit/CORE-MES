@@ -457,13 +457,15 @@ export function PreviewOv({ id, onClose }) {
 
 /* ── makine seçimi (kart #1148) ── */
 // 393 d: planın makinesi "plan" etiketiyle; başka emre ayrılmış makine kilitli, saat ve emir no ile, seçilemez.
-export function MakineSecici({ makineler, secili, atanan, ayrim = null, durum, onChange }) {
+export function MakineSecici({ makineler, secili, atanan, ayrim = null, durum, onChange, smartes = [] }) {
   if (!makineSecimiGorunur(makineler, durum)) return null;
   return html`<div className="mksec" role="group" aria-label="Çalışılacak makine">
     <span className="over">Makine</span>
     ${makineler.map(m => {
       const a = makineAyrimi(ayrim, m.id);
       if (a) return html`<button key=${m.id} type="button" className="mkchip kilit" disabled aria-disabled="true" title=${ayrimAciklamasi(a, saatMetni)}><${I} n="lock" s=${14} />${m.id}<small>${ayrimEtiketi(a, saatMetni)}</small></button>`;
+      // 3760: üretimi SmartES'ten gelen makine terminalden seçilemez; nedeni düğmenin kendisinde yazar.
+      if (smartes.includes(m.id)) return html`<button key=${m.id} type="button" className="mkchip kilit" disabled aria-disabled="true" title="Bu makinede üretim SmartES’ten gelir; terminalden seçilemez."><${I} n="lock" s=${14} />${m.id}<small>SmartES</small></button>`;
       return html`<button key=${m.id} type="button" className=${'mkchip' + (secili.includes(m.id) ? ' on' : '')} aria-pressed=${secili.includes(m.id)} title=${m.name || m.id} onClick=${() => onChange(secimiDegistir(secili, m.id))}>${m.id}${m.id === atanan ? html`<span className="mkplan">plan</span>` : null}</button>`;
     })}
     <small className="mkhint">${secimOzeti(secili, atanan)}</small>

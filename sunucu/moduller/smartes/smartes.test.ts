@@ -11,7 +11,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { emirBaslat, emirBitir, emirIptalEt, emirSayim, uretimEmriAc } from '../uretim-emirleri/disari.ts';
+import { emirBaslat, emirBitir, emirDevam, emirDuraklat, emirIptalEt, emirSayim, uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import { VARSAYILAN_AD_ALANI } from './ayar.ts';
 import { smartesEmirDurumlariCevabi } from '#paylasilan/sozlesme/smartes.ts';
 import { KALITE_AMBAR_KAYNAKLARI, ONAY_ILETILERI, yasakMetotMu } from './kurallar.ts';
@@ -1179,18 +1179,19 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
 
     // Terminal sayımı sunucuda reddedilir; onaylanan SmartES adedi aynı emre SmartES kaynağıyla yazılır.
     await assert.rejects(terminal(), /SmartES’ten gelir/);
-    // Hurda terminalde kalır: SmartES red adedi CORE'a işlenmediği için kapatılırsa hiçbir yerden yazılamazdı.
+    // 3760: hurda da SmartES'ten gelir (onay kuyruğu); terminal hurdası reddedilir.
     const neden = (await ortam!.sahip.tek<{ id: number }>("INSERT INTO hurda_nedeni (kod, ad, sira) VALUES ('ORN-SH', 'Deneme hurdası', 971) RETURNING id"))!.id;
-    await vt().tx(async (db) => emirSayim(db, (await kullaniciYukle(db, yoneticiId))!, uretimEmriId, { tur: 'hurda', adet: 1, hurdaNedeniId: neden }, { isEmriId: ilk }));
-    assert.equal((await vt().tek<{ n: number }>("SELECT count(*)::int AS n FROM uretim_sayimi WHERE emir_id = $1 AND tur = 'hurda'", [uretimEmriId]))!.n, 1);
+    await assert.rejects(vt().tx(async (db) => emirSayim(db, (await kullaniciYukle(db, yoneticiId))!, uretimEmriId, { tur: 'hurda', adet: 1, hurdaNedeniId: neden }, { isEmriId: ilk })), /SmartES’ten gelir/);
+    assert.equal((await vt().tek<{ n: number }>("SELECT count(*)::int AS n FROM uretim_sayimi WHERE emir_id = $1 AND tur = 'hurda'", [uretimEmriId]))!.n, 0);
     const onay = (await istek('POST', '/smartes/adet-onaylari/onayla', { idler: (await bekleyenler()).map((x) => x.id) })).json();
     assert.deepEqual(onay, { islenen: 2, hatalar: [] });
     assert.equal((await onayDurumu())[9102], 'onaylandi');
     assert.deepEqual((await sayimlar()).map((x) => [x.adet, x.kaynak]).sort(), [[1, null], [2, 'smartes'], [7, 'smartes']]);
 
-    // Bitirirken verilen adet de terminal sayımıdır: sayaçtan farklıysa reddedilir; adetsiz bitirme bu nedenle reddedilmez.
+    // 3760: bitirme de SmartES'ten gelir; terminalden adetli ya da adetsiz bitirme reddedilir.
     const bitir = (adet?: number) => vt().tx(async (db) => emirBitir(db, (await kullaniciYukle(db, yoneticiId))!, uretimEmriId, adet, undefined, ilk)).then(() => null, (h: Error) => h.message);
     assert.match((await bitir(15)) ?? '', /SmartES’ten gelir/);
+    assert.match((await bitir()) ?? '', /SmartES’ten gelir/);
 
     // Anahtar kapanınca aktarım durur: terminal sayar, okunan satır onaya girmez, bekleyen onaylanamaz. Kapalıyken başlamış satır açılınca da girmez.
     await oku([{ ...yeniSatir, OK: '10' }]);
@@ -1216,5 +1217,44 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     await oku([{ ...yeniSatir, OK: '14' }]);
     assert.equal((await bekleyenler()).length, bekleyenSayisi);
     assert.doesNotMatch((await bitir()) ?? '', /SmartES/);
+  });
+  test('3760: üretim kaynağı makine başına; SmartES makinesinde terminal hareketi, sayımı ve hurdası reddedilir, öteki makinede açık kalır', async () => {
+    const { uretimEmriId, ilk, istasyonlar } = await emirKur();
+    const sahip = ortam!.sahip;
+    const [smartesMakinesi] = (await sahip.sorgu<{ id: number }>('SELECT id FROM makine WHERE istasyon_id = $1', [istasyonlar[0]])).map((m) => m.id) as [number];
+    const terminalMakinesi = (await sahip.tek<{ id: number }>('INSERT INTO makine (kod, ad, istasyon_id) VALUES ($1, $2, $3) RETURNING id', [`SMK${(sayac += 1)}`, 'Tezgah', istasyonlar[0]]))!.id;
+    const kaynak = (id: number, k: 'smartes' | 'terminal' | null) =>
+      sahip.sorgu('UPDATE makine SET uretim_kaynagi = $2, uretim_kaynagi_gecerlilik = now() WHERE id = $1', [id, k]);
+    const komut = (is: (db: Db, k: NonNullable<Awaited<ReturnType<typeof kullaniciYukle>>>) => Promise<unknown>) =>
+      vt().tx(async (db) => is(db, (await kullaniciYukle(db, yoneticiId))!)).then(() => null, (h: Error) => h.message);
+    await vt().sorgu("UPDATE istasyon SET sayim_kaynagi = 'terminal', sayim_kaynagi_gecerlilik = NULL");
+    await kaynak(smartesMakinesi, 'smartes');
+
+    // Anahtar kapalıyken kaynak seçimi bir şeyi kapatmaz (canlıdaki bugünkü durum).
+    await aktarimAc(false);
+    assert.equal(await komut((db, k) => emirBaslat(db, k, uretimEmriId, [smartesMakinesi], undefined, ilk)), null);
+    assert.equal(await komut((db, k) => emirDuraklat(db, k, uretimEmriId, undefined, ilk)), null);
+
+    // Anahtar açık: SmartES makinesinde devam reddedilir; terminaldeki makinede devam açıktır, orada duraklat da açıktır.
+    await aktarimAc();
+    assert.match((await komut((db, k) => emirDevam(db, k, uretimEmriId, [smartesMakinesi], undefined, ilk))) ?? '', /SmartES’ten gelir/);
+    assert.equal(await komut((db, k) => emirDevam(db, k, uretimEmriId, [terminalMakinesi], undefined, ilk)), null);
+    assert.equal(await komut((db, k) => emirSayim(db, k, uretimEmriId, { tur: 'saglam', adet: 1 }, { isEmriId: ilk })), null);
+
+    // Çalışan makine SmartES'e alınınca sayım, hurda, duraklatma ve bitirme reddedilir.
+    await kaynak(terminalMakinesi, 'smartes');
+    const neden = (await sahip.tek<{ id: number }>("INSERT INTO hurda_nedeni (kod, ad, sira) VALUES ('ORN-3760', 'Deneme hurdası', 976) RETURNING id"))!.id;
+    for (const is of [
+      (db: Db, k: NonNullable<Awaited<ReturnType<typeof kullaniciYukle>>>) => emirSayim(db, k, uretimEmriId, { tur: 'saglam', adet: 1 }, { isEmriId: ilk }),
+      (db: Db, k: NonNullable<Awaited<ReturnType<typeof kullaniciYukle>>>) => emirSayim(db, k, uretimEmriId, { tur: 'hurda', adet: 1, hurdaNedeniId: neden }, { isEmriId: ilk }),
+      (db: Db, k: NonNullable<Awaited<ReturnType<typeof kullaniciYukle>>>) => emirDuraklat(db, k, uretimEmriId, undefined, ilk),
+      (db: Db, k: NonNullable<Awaited<ReturnType<typeof kullaniciYukle>>>) => emirBitir(db, k, uretimEmriId, undefined, undefined, ilk),
+    ]) assert.match((await komut(is)) ?? '', /SmartES’ten gelir/);
+
+    // Makine istasyona uymaya dönünce istasyonun kaynağı (terminal) geçerlidir.
+    await kaynak(terminalMakinesi, null);
+    assert.equal(await komut((db, k) => emirDuraklat(db, k, uretimEmriId, undefined, ilk)), null);
+    await kaynak(smartesMakinesi, null);
+    await aktarimAc(false);
   });
 });

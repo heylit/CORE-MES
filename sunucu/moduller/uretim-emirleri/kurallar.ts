@@ -135,6 +135,8 @@ export const calisilacakMakineler = (secilen: readonly number[] | undefined, ata
 export const BASLAMAMIS_EMIR = 'Yalnız başlamış emirde sayım ve duruş işlemi yapılır.';
 export const DURUSTA_SAYIM = 'Duruşta sayım yapılamaz; önce devam edin.';
 export const SMARTES_ISTASYONU_SAYIMI = 'Bu istasyonda sağlam adet SmartES’ten gelir; terminalden sayılmaz.';
+// 3760: SmartES'ten üretilen makinede (ya da bütün makineleri SmartES'te olan istasyonda) iş hareketi, sayım, hurda ve duruş yalnız SmartES'ten gelir.
+export const SMARTES_URETIMI = 'Bu makinede üretim SmartES’ten gelir; başlat, bitir, sayım, hurda ve duruş SmartES’ten girilir.';
 export const CALISAN_DEGIL_DURAKLAT = 'Yalnız çalışan iş duraklatılır.';
 export const DURMUS_DURDUR = 'İş zaten durmuş.';
 export const CALISAN_DEVAM = 'İş zaten çalışıyor; devam edilecek bir duruş yok.';

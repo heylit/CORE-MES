@@ -677,11 +677,11 @@ describe('istasyonlar ekranı (#1109, IS25)', () => {
     fireEvent.change(sorumlu, { target: { value: '5' } });
     fireEvent.click(within(pencere).getByRole('checkbox', { name: 'Üretim alanı' }));
     // Sayım kaynağı terminalle açılır; değişince ne zaman geçerli olacağı kaydetmeden önce yazar.
-    const kaynak = within(pencere).getByLabelText(/Sayım kaynağı/) as HTMLSelectElement;
+    const kaynak = within(pencere).getByLabelText(/Üretim kaynağı/) as HTMLSelectElement;
     expect(kaynak.value).toBe('terminal');
     expect(within(pencere).queryByText(/kaydettiğiniz andan itibaren geçerli/)).toBeNull();
     fireEvent.change(kaynak, { target: { value: 'smartes' } });
-    expect(within(pencere).getByText(/kaydettiğiniz andan itibaren geçerli.*terminalde sayım yapılmaz/)).toBeTruthy();
+    expect(within(pencere).getByText(/kaydettiğiniz andan itibaren geçerli.*terminalde başlat, sayım, hurda ve duruş yapılmaz/)).toBeTruthy();
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(1); });
     expect(POSTLAR(cagrilar)[0]).toMatchObject({

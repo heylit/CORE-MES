@@ -11,7 +11,8 @@ import * as sorgular from './sorgular.ts';
 export type {
   AparatKapasitesi, Ekip, IsMerkezi, Istasyon, IstasyonPlanAyari, KapasiteKaynagi, Makine, MakineDurumu, MakineDurumuDegeri, OperasyonTipi,
 } from '#paylasilan/sozlesme/istasyonlar.ts';
-import { MAKINE_DURUMU_ISLEMLERI, kapasiteKaynagiCoz, sentYuzdeMetni, yuzdeSente } from './kurallar.ts';
+import { MAKINE_DURUMU_ISLEMLERI, etkinUretimKaynagi, kapasiteKaynagiCoz, sentYuzdeMetni, smartesUretirMi, yuzdeSente, type EtkinKaynak } from './kurallar.ts';
+export type { EtkinKaynak, UretimKaynagi } from './kurallar.ts';
 export { isMerkeziIzinliMi } from './kurallar.ts';
 
 interface PasifSecenegi {
@@ -53,6 +54,22 @@ export const istasyonGetir = (db: Db, id: number): Promise<Istasyon | null> => s
 // Üretim emirleri terminal sayımını bu istasyonlarda reddeder; smartes yalnız bu istasyonların, geçerlilikten sonra başlamış satırını onaya alır.
 export async function smartesSayimIstasyonlari(db: Db, idler?: readonly number[]): Promise<Map<number, Date>> {
   return new Map((await sorgular.smartesSayimIstasyonlari(db, idler ?? null)).map((i) => [i.id, i.gecerlilik]));
+}
+
+// 3760: istasyonların (ve makinelerinin) üretim kaynağı; terminal komutları SmartES'ten üretilen işte reddedilir, smartes satırı yalnız
+// etkin kaynağı SmartES olan makinede geçerlilikten sonra aktarılır. Bilinmeyen istasyon terminal sayılır.
+export interface UretimKaynaklari {
+  smartesUretirMi(istasyonId: number, makineIdleri: readonly number[]): boolean;
+  etkin(istasyonId: number, makineId: number | null): EtkinKaynak;
+}
+export async function uretimKaynaklari(db: Db, istasyonIdleri?: readonly number[]): Promise<UretimKaynaklari> {
+  const ist = new Map((await sorgular.istasyonKaynaklari(db, istasyonIdleri ?? null)).map((i) => [i.id, i]));
+  const mak = new Map((await sorgular.makineKaynaklari(db, istasyonIdleri ?? null)).map((m) => [m.id, m]));
+  const istasyonu = (id: number) => ist.get(id) ?? { kaynak: 'terminal' as const, gecerlilik: null };
+  return {
+    smartesUretirMi: (istasyonId, makineIdleri) => smartesUretirMi(istasyonu(istasyonId), mak, istasyonId, makineIdleri),
+    etkin: (istasyonId, makineId) => etkinUretimKaynagi(istasyonu(istasyonId), makineId === null ? null : (mak.get(makineId) ?? null)),
+  };
 }
 
 // Aktif istasyon: kendisi de iş merkezi de aktif. Pasif iş merkezinin aktif istasyonu burada dönmez.

@@ -7,6 +7,17 @@ export interface SayimIsi { state?: string; empty?: boolean; pkg?: { tmi?: objec
 export const SMARTES_SAYIM_ILETISI = 'Bu istasyonda sayım SmartES’ten gelir';
 export const smartesSayimi = (is: SayimIsi | null | undefined): boolean => (is?.pkg?.tmi as { sayimKaynagi?: unknown } | null | undefined)?.sayimKaynagi === 'smartes';
 
+// 3760: iş SmartES'ten üretiliyorsa (işin makinesi ya da istasyonun bütün makineleri SmartES'te) terminalde başlat, bitir, sayım, hurda
+// ve duruş kapalıdır; sunucu da reddeder (uretim-emirleri SMARTES_URETIMI). Seçili makinelerden biri SmartES'teyse de öyledir.
+export const SMARTES_URETIM_ILETISI = 'Bu makinede üretim SmartES’ten gelir · başlat, bitir, sayım, hurda ve duruş SmartES’ten girilir';
+type SmartesTmi = { uretimKaynagi?: unknown; smartesMakineleri?: unknown } | null | undefined;
+export const smartesMakineleri = (is: SayimIsi | null | undefined): string[] => {
+  const m = (is?.pkg?.tmi as SmartesTmi)?.smartesMakineleri;
+  return Array.isArray(m) ? m.filter((x): x is string => typeof x === 'string') : [];
+};
+export const smartesUretimi = (is: SayimIsi | null | undefined, seciliMakineler: readonly string[] = []): boolean =>
+  (is?.pkg?.tmi as SmartesTmi)?.uretimKaynagi === 'smartes' || seciliMakineler.some((m) => smartesMakineleri(is).includes(m));
+
 export const BITMIS_IS_ILETISI = 'Bu iş bitti · sayı değişmez';
 export const BASLAMAMIS_IS_ILETISI = 'İş başlamadı · önce başlat';
 export const DURUSTA_SAYIM_ILETISI = 'Duruşta sayım yapılmaz · önce devam et';
@@ -15,8 +26,9 @@ export const HAZIRLIKTA_SAYIM_ILETISI = 'Hazırlıkta sayım yapılmaz · önce 
 // CORE sayımı yalnız başlamış ve durmamış emirde kabul eder (sunucu/moduller/uretim-emirleri/kurallar.ts sayimIhlali): ekran o durumlarda
 // düğmeyi kapatır, sayı önce değişip sonra geri dönmez. Hazırlıkta iyi parça sayılmaz (sunucu da reddeder, arkon/kurallar.ts sayimKomutu):
 // onaysız ilk parçalar işin sonunda iyi parçaya katılıyordu. Hazırlık hurdası sayılır.
-export function sayimKapaliNedeni(is: SayimIsi | null | undefined, tur: 'good' | 'scrap' = 'scrap'): string | null {
+export function sayimKapaliNedeni(is: SayimIsi | null | undefined, tur: 'good' | 'scrap' = 'scrap', seciliMakineler: readonly string[] = []): string | null {
   if (!is || is.empty || is.state === 'done') return BITMIS_IS_ILETISI;
+  if (smartesUretimi(is, seciliMakineler)) return SMARTES_URETIM_ILETISI;
   if (tur === 'good' && smartesSayimi(is)) return SMARTES_SAYIM_ILETISI;
   if (is.state === 'queued') return BASLAMAMIS_IS_ILETISI;
   if (is.state === 'setup' && tur === 'good') return HAZIRLIKTA_SAYIM_ILETISI;

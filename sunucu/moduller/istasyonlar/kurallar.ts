@@ -275,3 +275,27 @@ export const topluSirasi = <T extends { kayit: keyof typeof TOPLU_SIRASI }>(sati
 // Güncelleme satırı yalnız gelen alanları değiştirir: gönderilmeyen (undefined) alan mevcut kayıttan kalır.
 export const gelenAlanlar = <T extends object>(g: T): Partial<T> =>
   Object.fromEntries(Object.entries(g).filter(([, v]) => v !== undefined)) as Partial<T>;
+
+// 3760: üretim kaynağı makinede çözülür; makine seçmemişse (istasyona uyar) istasyonun kaynağı geçerlidir. Geçerlilik iki seçimden geç
+// olanıdır: makine istasyona uymaya döndüğü anda, istasyon o makine için o andan itibaren geçerli olur.
+export type UretimKaynagi = 'terminal' | 'smartes';
+export interface KaynakSecimi { kaynak: UretimKaynagi | null; gecerlilik: Date | null }
+export interface EtkinKaynak { kaynak: UretimKaynagi; gecerlilik: Date | null }
+export function etkinUretimKaynagi(istasyon: { kaynak: UretimKaynagi; gecerlilik: Date | null }, makine: KaynakSecimi | null): EtkinKaynak {
+  if (makine?.kaynak != null) return { kaynak: makine.kaynak, gecerlilik: makine.gecerlilik };
+  const gecler = [istasyon.gecerlilik, makine?.gecerlilik ?? null].filter((g): g is Date => g !== null);
+  return { kaynak: istasyon.kaynak, gecerlilik: gecler.length === 0 ? null : new Date(Math.max(...gecler.map((g) => g.getTime()))) };
+}
+
+// Komutun makinesi belliyse o makinelerden biri SmartES'tense iş SmartES'tendir. Makine bağlamı yoksa (hazırlık, makinesiz adım)
+// istasyonun bütün makineleri SmartES'teyse; makinesiz istasyonda istasyonun kaynağı.
+export function smartesUretirMi(
+  istasyon: { kaynak: UretimKaynagi; gecerlilik: Date | null },
+  makineler: ReadonlyMap<number, KaynakSecimi & { istasyonId: number | null }>,
+  istasyonId: number, makineIdleri: readonly number[],
+): boolean {
+  const etkin = (id: number) => etkinUretimKaynagi(istasyon, makineler.get(id) ?? null).kaynak === 'smartes';
+  if (makineIdleri.length > 0) return makineIdleri.some(etkin);
+  const istasyonunkiler = [...makineler].filter(([, m]) => m.istasyonId === istasyonId).map(([id]) => id);
+  return istasyonunkiler.length === 0 ? istasyon.kaynak === 'smartes' : istasyonunkiler.every(etkin);
+}

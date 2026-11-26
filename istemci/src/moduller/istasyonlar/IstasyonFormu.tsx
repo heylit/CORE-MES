@@ -92,19 +92,19 @@ export function IstasyonFormu({ kayit, kapat }: { kayit: SurumluIstasyon | null;
         {/* Stok yalnız işaretli istasyonda üretim alanı konumu açar (SH5 b). */}
         <IsaretKutusu etiket="Üretim alanı" checked={uretimAlani} onChange={(o) => uretimAlaniYaz(o.target.checked)} />
         <Secim
-          etiket="Sayım kaynağı"
+          etiket="Üretim kaynağı"
           secenekler={SAYIM_KAYNAGI_SECENEKLERI}
           value={sayimKaynagi}
           onChange={(o) => sayimKaynagiYaz(o.target.value as SayimKaynagi)}
           ipucu={sayimKaynagi === 'smartes'
-            ? 'Sağlam adetler SmartES’ten gelir ve onaylanınca işlenir; bu istasyonda terminalin sayım tuşları kapanır.'
-            : 'Adetleri operatör Üretim Terminali’nde sayar.'}
+            ? 'Hareket, sağlam sayım, hurda ve duruş SmartES’ten gelir; terminalde bu düğmeler kapanır. Makine kendi kaynağını seçebilir.'
+            : 'Operatör işi Üretim Terminali’nde başlatır, sayar ve bitirir.'}
         />
         {kaynakDegisti && (
           <p className="tc-form-tam tc-ist-uyari" role="status">
             Değişiklik kaydettiğiniz andan itibaren geçerli: {sayimKaynagi === 'smartes'
-              ? 'daha önce başlamış SmartES kayıtları aktarılmaz, bundan sonra terminalde sayım yapılmaz.'
-              : 'bundan sonraki SmartES adetleri aktarılmaz, sayım terminalden yapılır.'}
+              ? 'daha önce başlamış SmartES kayıtları aktarılmaz, bundan sonra terminalde başlat, sayım, hurda ve duruş yapılmaz.'
+              : 'bundan sonraki SmartES kayıtları aktarılmaz, üretim terminalden girilir.'}
             {' '}İstasyon boşken değiştirin: o an çalışan işin kalan adedi iki kaynaktan da yazılamayabilir.
           </p>
         )}

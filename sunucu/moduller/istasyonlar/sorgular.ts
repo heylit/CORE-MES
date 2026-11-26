@@ -79,6 +79,23 @@ export function istasyonBul(db: Db, id: number): Promise<Istasyon | null> {
   return db.tek<Istasyon>(`SELECT ${ISTASYON} FROM istasyon WHERE id = $1`, [id]);
 }
 
+// 3760: istasyonların ve makinelerin üretim kaynağı seçimi (makinede boş: istasyona uyar).
+export interface IstasyonKaynakSatiri { id: number; kaynak: 'terminal' | 'smartes'; gecerlilik: Date | null }
+export interface MakineKaynakSatiri { id: number; istasyonId: number | null; kaynak: 'terminal' | 'smartes' | null; gecerlilik: Date | null }
+export function istasyonKaynaklari(db: Db, idler: readonly number[] | null): Promise<IstasyonKaynakSatiri[]> {
+  return db.sorgu<IstasyonKaynakSatiri>(
+    `SELECT id, sayim_kaynagi AS kaynak, sayim_kaynagi_gecerlilik AS gecerlilik FROM istasyon WHERE $1::int[] IS NULL OR id = ANY($1::int[])`,
+    [idler],
+  );
+}
+export function makineKaynaklari(db: Db, istasyonIdleri: readonly number[] | null): Promise<MakineKaynakSatiri[]> {
+  return db.sorgu<MakineKaynakSatiri>(
+    `SELECT id, istasyon_id AS "istasyonId", uretim_kaynagi AS kaynak, uretim_kaynagi_gecerlilik AS gecerlilik FROM makine
+      WHERE aktif AND ($1::int[] IS NULL OR istasyon_id = ANY($1::int[]))`,
+    [istasyonIdleri],
+  );
+}
+
 // Sayımı SmartES'ten gelen istasyonlar ve kaynağın geçerli olduğu an (3173); terminalden sayılan istasyon dönmez.
 export function smartesSayimIstasyonlari(db: Db, idler: readonly number[] | null): Promise<{ id: number; gecerlilik: Date }[]> {
   return db.sorgu<{ id: number; gecerlilik: Date }>(

@@ -3226,10 +3226,12 @@ export function bekletmeAlaniniEkle(govde: Record<string, unknown>, neden: strin
 
 // 3173: sayımı SmartES'ten gelen istasyondaki işin paketi `tmi.sayimKaynagi: 'smartes'` taşır; terminal sayım tuşlarını kapatır ve nedenini
 // yazar. Sunucu o istasyonda terminal sayımını ayrıca reddeder. Terminalden sayılan istasyonda alan yazılmaz.
-export function sayimKaynagiAlaniniEkle(govde: Record<string, unknown>, smartes: boolean): Record<string, unknown> {
-  if (!smartes) return govde;
+export function sayimKaynagiAlaniniEkle(govde: Record<string, unknown>, smartes: boolean, smartesMakineleri: readonly string[] = []): Record<string, unknown> {
+  if (!smartes && smartesMakineleri.length === 0) return govde;
   const tmi = kayitMi(govde['tmi']) ? govde['tmi'] : {};
-  return { ...govde, tmi: { ...tmi, sayimKaynagi: 'smartes' } };
+  // 3760: iş SmartES'ten üretiliyorsa terminal hareket, sayım, hurda ve duruş düğmelerini kapatır; istasyonun SmartES makineleri
+  // başlatmada seçilemez. Eski alan (sayimKaynagi) aynı anlamla kalır.
+  return { ...govde, tmi: { ...tmi, ...(smartes ? { sayimKaynagi: 'smartes', uretimKaynagi: 'smartes' } : {}), ...(smartesMakineleri.length > 0 ? { smartesMakineleri: [...smartesMakineleri] } : {}) } };
 }
 
 // 1188: adımda girilen hatalı parçaların toplamı (uretim-emirleri `hataliAdet`) paketin `tmi.hatali` alanına yazılır; terminal bunu hurda

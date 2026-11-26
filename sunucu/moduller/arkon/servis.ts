@@ -29,7 +29,7 @@ import { adimIlkParcaKararlari, ilkParcaKararlari, lotKarariYaz, muayenePlaniOne
 import type { KmOlcumKaynagi, KmOlcumVerisi } from '../kalite-merkezi/disari.ts';
 import {
   ekipler, ekiplerinUyeleri, eskiKoddanKimlikCoz, isMerkezleri, istasyonGetir, istasyonKisiAtamalari, istasyonYetkinlikleri, makineGetir, istasyondakiMakineler, istasyonKisileri, istasyonlar, kisininIzinliIsMerkezleri, kisilerinIzinliIsMerkezleri, aktifMakineler,
-  istasyonKapasitesi, kapasiteKaynaklari, makineKisiAtamalari, makineYetkinlikleri, planAyarlari, makineler, makineDurumlari, makineDurumuYaz, operasyonTipleri, smartesSayimIstasyonlari,
+  istasyonKapasitesi, kapasiteKaynaklari, makineKisiAtamalari, makineYetkinlikleri, planAyarlari, makineler, makineDurumlari, makineDurumuYaz, operasyonTipleri, uretimKaynaklari,
 } from '../istasyonlar/disari.ts';
 import { projeAdlari } from '../projeler/disari.ts';
 import { kisiAdlari, kisiBayrakliMi, kisileriListele, kisilerinIslemleri, kisilerinRolIslemleri, kullaniciYukle } from '../kisiler/disari.ts';
@@ -391,7 +391,17 @@ async function isEmriTaslaklari(
   }
   const acikAdimi = (ie: { id: number; uretimEmriId: number }) => emirler.get(ie.uretimEmriId)?.acikAdimlar?.find((a) => a.isEmriId === ie.id);
   const hatali = await hataliToplamlari(db, girdiler.flatMap((g) => (acikAdimi(g.isEmri)?.hataliAdet === undefined ? [g.isEmri.uretimEmriId] : [])));
-  const smartesIstasyonlari = (await sistemAyariOku(db, 'smartes.sayim-aktarimi')) ? await smartesSayimIstasyonlari(db) : new Map<number, Date>();
+  const kaynaklar = (await sistemAyariOku(db, 'smartes.sayim-aktarimi')) ? await uretimKaynaklari(db) : null;
+  const istasyonMakineleri = new Map<number, { id: number; kod: string }[]>();
+  if (kaynaklar !== null) for (const m of makineler.values()) if (m.istasyonId !== null) istasyonMakineleri.set(m.istasyonId, [...(istasyonMakineleri.get(m.istasyonId) ?? []), { id: m.id, kod: m.kod }]);
+  // 3760: işin makinesi (plan kaynağı) belliyse o makinenin, değilse istasyonun bütün makinelerinin etkin kaynağı.
+  const smartesAlani = (istasyonId: number | null, makineKodu: string | null) => {
+    if (kaynaklar === null || istasyonId === null) return { smartes: false, makineler: [] as string[] };
+    const ist = istasyonMakineleri.get(istasyonId) ?? [];
+    const kodlar = ist.filter((m) => kaynaklar.etkin(istasyonId, m.id).kaynak === 'smartes').map((m) => m.kod);
+    const makine = makineKodu === null ? undefined : ist.find((m) => m.kod === makineKodu);
+    return { smartes: kaynaklar.smartesUretirMi(istasyonId, makine === undefined ? [] : [makine.id]), makineler: kodlar };
+  };
   for (const g of girdiler) {
     const hazirlik = g.istasyon === null ? null : hazirlikEksigi(g.istasyon.tip, hazirliklar.get(g.isEmri.id)?.durum);
     const aql = paketTuru(g.opGrubu, g.istasyon) === 'kalite' ? aqlPlanlari.get(`${g.emir.parcaNo}\n${String(g.parca?.adet ?? g.isEmri.adimAdedi ?? g.isEmri.adet)}`) ?? null : null;
@@ -409,10 +419,11 @@ async function isEmriTaslaklari(
     const sira = kuyruk.get(kimlik);
     const kuyrukSirasi = sira !== undefined && g.istasyon?.id === sira.istasyonId ? { sira: sira.sira, kisi: sira.kisi, zaman: sira.zaman } : null;
     const adim = acikAdimi(g.isEmri);
+    const smartes = smartesAlani(g.istasyon?.id ?? null, g.makineKodu);
     const bekleyen = emirler.get(g.isEmri.uretimEmriId)?.bekletme;
     const bekletme = bekleyen ? BEKLEME_NEDENI_ADLARI[bekleyen.neden] : null;
     sonuc.set(kimlik, sayimKaynagiAlaniniEkle(bekletmeAlaniniEkle(hataliAlaniniEkle(eksiAlaniniEkle(kuyrukAlanlariniEkle(govde, { kuyruk: kuyrukSirasi, planSaati: saatler.get(kimlik) ?? null }), adim?.eksik),
-      adim?.hataliAdet ?? hatali(g.isEmri.uretimEmriId, g.isEmri.id)), bekletme), g.istasyon !== null && smartesIstasyonlari.has(g.istasyon.id)));
+      adim?.hataliAdet ?? hatali(g.isEmri.uretimEmriId, g.isEmri.id)), bekletme), smartes.smartes, smartes.makineler));
   }
   return sonuc;
 }

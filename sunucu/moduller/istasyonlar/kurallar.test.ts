@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import type { SecimSatiri } from './kurallar.ts';
-import { isMerkeziIzinliMi, istasyonuKalkanMakineler, kapasiteKaynagiCoz, kisiteEklenemeyenler, makineYetkinligiReddi, secimGruplari, sentYuzdeMetni, tekrarsiz, yetkinlikDegisiklikleri, yetkinlikUygula } from './kurallar.ts';
+import { etkinUretimKaynagi, isMerkeziIzinliMi, smartesUretirMi, istasyonuKalkanMakineler, kapasiteKaynagiCoz, kisiteEklenemeyenler, makineYetkinligiReddi, secimGruplari, sentYuzdeMetni, tekrarsiz, yetkinlikDegisiklikleri, yetkinlikUygula } from './kurallar.ts';
 
 const satir = (id: number, kod: string, isMerkeziId: number, isMerkeziKod: string, aktif = true): SecimSatiri => ({
   id, kod, ad: `Ad ${kod}`, isMerkeziId, tip: 'talasli', aktif, isMerkeziKod, isMerkeziAd: `Merkez ${isMerkeziKod}`,
@@ -86,5 +86,29 @@ describe('makine yetkinliği (563 c)', () => {
 
   test('istasyon yetkinliği kalkınca yalnız o istasyondaki makine kayıtları kalkar', () => {
     assert.deepEqual(istasyonuKalkanMakineler([{ makineId: 1, istasyonId: 10 }, { makineId: 2, istasyonId: 11 }, { makineId: 3, istasyonId: null }], [10]), [1]);
+  });
+});
+
+describe('3760: üretim kaynağı makinede çözülür', () => {
+  const t = (s: string) => new Date(`2026-11-${s}Z`);
+  const istasyon = { kaynak: 'smartes' as const, gecerlilik: t('20T08:00:00') };
+  test('makine seçmişse onunki; istasyona uyuyorsa istasyonunki, geçerlilik ikisinin geç olanı', () => {
+    assert.deepEqual(etkinUretimKaynagi(istasyon, { kaynak: 'terminal', gecerlilik: t('21T08:00:00') }), { kaynak: 'terminal', gecerlilik: t('21T08:00:00') });
+    assert.deepEqual(etkinUretimKaynagi(istasyon, { kaynak: null, gecerlilik: t('22T08:00:00') }), { kaynak: 'smartes', gecerlilik: t('22T08:00:00') });
+    assert.deepEqual(etkinUretimKaynagi(istasyon, { kaynak: null, gecerlilik: t('19T08:00:00') }), { kaynak: 'smartes', gecerlilik: t('20T08:00:00') });
+    assert.deepEqual(etkinUretimKaynagi({ kaynak: 'terminal', gecerlilik: null }, null), { kaynak: 'terminal', gecerlilik: null });
+  });
+  test('komutun makinesi belliyse o makineler; değilse istasyonun bütün makineleri SmartES ise; makinesiz istasyonda istasyonunki', () => {
+    const makineler = new Map([
+      [1, { kaynak: null, gecerlilik: null, istasyonId: 10 }],
+      [2, { kaynak: 'terminal' as const, gecerlilik: t('21T08:00:00'), istasyonId: 10 }],
+    ]);
+    assert.equal(smartesUretirMi(istasyon, makineler, 10, [1]), true);
+    assert.equal(smartesUretirMi(istasyon, makineler, 10, [2]), false);
+    assert.equal(smartesUretirMi(istasyon, makineler, 10, [1, 2]), true, 'seçimde SmartES makinesi varsa iş SmartES\'tendir');
+    assert.equal(smartesUretirMi(istasyon, makineler, 10, []), false, 'bir makine terminaldeyse makinesiz komut açık kalır');
+    assert.equal(smartesUretirMi(istasyon, new Map([[1, makineler.get(1)!]]), 10, []), true);
+    assert.equal(smartesUretirMi(istasyon, makineler, 11, []), true, 'makinesiz istasyon');
+    assert.equal(smartesUretirMi({ kaynak: 'terminal', gecerlilik: null }, makineler, 11, []), false);
   });
 });

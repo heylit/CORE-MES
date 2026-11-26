@@ -1774,6 +1774,9 @@ table.rtbl { min-width: 0; } .rtbl td.num, .rtbl th.num { text-align: right; fon
 .mkhint { flex: 1 1 100%; font-size: 11px; color: var(--muted); }
 .mkchip small { font-size: 11px; font-weight: 600; color: var(--muted); }
 .mkchip.kilit { cursor: not-allowed; color: var(--muted); border-style: dashed; }
+/* 3760: SmartES'ten üretilen işte kapalı düğmelerin nedeni, düğmelerle aynı ekranda. */
+.smartes-serit { display: flex; gap: 8px; align-items: center; padding: 10px 12px; border: 1px dashed var(--done); border-radius: 10px; background: var(--panel2); color: var(--ink); font-size: 14px; line-height: 1.35; }
+.smartes-serit svg { color: var(--done); flex: none; }
 .mkplan { padding: 1px 6px; border-radius: 6px; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; background: color-mix(in srgb, var(--run) 18%, transparent); color: var(--run); }
 .mob .mksec { padding: 6px 8px; }
 
