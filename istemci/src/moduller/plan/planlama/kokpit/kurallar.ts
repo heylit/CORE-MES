@@ -1,3 +1,4 @@
+import type { TaslakKomutu } from '#paylasilan/sozlesme/planlama.ts';
 import type { EmirNo } from '../ortak/emir-no.ts';
 import { acikSaat, saatOku, zamanTanisiYazisi, type Bitenler, type BolmeNedenleri, type Derleme, type OkunanPlan, type PlanPayi } from '../motor/kurallar.ts';
 import { adimAdi, type PlanlamaCalismasi } from '../tipler.ts';
@@ -377,7 +378,10 @@ export function tezgahGunundeMi(m: KokpitModeli, e: KokpitEmri, tezgah: string, 
 // --- taşıma ---
 // Çeyrek saate yuvarlanır; şimdiden önce olamaz (sunucu geçmişe konan kilidi reddeder).
 export const tasimaSaati = (S: number, simdi: number): number => Math.max(Math.ceil(simdi * 4 - 1e-9) / 4, Math.round(S * 4) / 4);
-export const PAY_TASINMAZ = 'Bölünmüş adımın payı sürüklenmez; "Bölmeyi yönet" ile değişir';
+// Pay taşınmaz, kardeşine bırakılınca birleşir (3751); Tezgâhlar görünümünde kardeşler uzak satırlardadır, orada birleştirme sağ tık menüsündedir.
+export const PAY_TASINMAZ = 'Birleştirmek için kardeş payın üstüne bırakın; yerini "Bölmeyi yönet" değiştirir';
+export const PAY_TASINMAZ_TEZGAH = 'Pay burada sürüklenmez; birleştirmek için sağ tıklayıp "Şununla birleştir"i seçin ya da Emirler görünümünde kardeş payın üstüne bırakın';
+export const BIRLES_BOS = 'Kardeş payın üstüne bırakın; boş yere bırakmak payı taşımaz';
 export function tasinabilir(x: KokpitIsi): string | null {
   if (x.adim !== undefined || x.pay?.elle) return PAY_TASINMAZ;
   return x.bitti ? 'Biten iş taşınmaz' : x.fason ? 'Fason adım tahtadan taşınmaz' : null;
@@ -839,3 +843,51 @@ export function darPanoYani(roomUst: number, roomAlt: number, ustGenis: number, 
   const oda = ilk === 'ust' ? roomUst : roomAlt, genis = !satirdan && oda < 200 && ustGenis > oda;
   return { yan: genis ? 'ust' : ilk, genis };
 }
+
+// --- 3751: bölünmüş adımın paylarını birleştirme (tahtada bırakma, sağ tık menüsü, telefonda alt sayfa) ---
+// Kural Planda böl panelindekiyle aynıdır (ElleBol secilenleriBirlestir): adetler toplanır, hedef pay kendi tezgâhında kalır, öteki paylar aynen
+// kalır; komutta saat yoktur, yeri sistem seçer (3488 c). Başlamış adımda çalışan pay (1. pay) ve sayımı olan pay yalnız hedef olabilir: böyle
+// pay sürüklenip başkasına bırakılırsa hedef o olur; ikisi de böyleyse birleşmez. Tek pay kalırsa bölme kalkar (elle-bol-sil): o durumda tezgâhı
+// sunucu seçer (çalışan tezgâh, yoksa plandaki ilk pay), hedefinki korunmaz.
+export interface PayBirlesmesi {
+  kaynak: string; hedef: string; adet: number; kalan: number; komut: TaslakKomutu | null;
+  // Onay çubuğunun cümlesi ("60 + 20 = 80 adet · TZ1 tezgâhında kalır · 2 pay kalır"); hata varsa hata.
+  cumle: string; hata: string | null;
+  // Sürüklenen pay kilitli olduğu için hedef o oldu.
+  dondu: boolean;
+}
+export const IKI_KILITLI = 'İki pay da çalışıyor ya da sayımı var; birleşmez. "Bölmeyi yönet"te "Kalanı birleştir"i kullanın.';
+export function payBirlesmesi(m: Pick<KokpitModeli, 'isler' | 'tezgahlar'>, kaynakId: string, hedefId: string | 'hepsi'): PayBirlesmesi {
+  const red = (hata: string): PayBirlesmesi => ({ kaynak: kaynakId, hedef: hedefId, adet: 0, kalan: 0, komut: null, cumle: hata, hata, dondu: false });
+  const k = m.isler[kaynakId];
+  if (!k?.pay) return red('Pay planda yok; plan değişmiş olabilir.');
+  const adim = adimKimligi(k), paylar = adimPaylari(m, adim), ana = m.isler[adim];
+  if (paylar.length < 2 || !ana) return red('Adım bölünmüş değil.');
+  const baslamis = ana.basladi && ana.bitti !== true;
+  const kilitli = (y: KokpitIsi): boolean => baslamis && (y.id === adim || (y.pay?.sayilan ?? 0) > 0);
+  let secili: KokpitIsi[], hedef: KokpitIsi, dondu = false;
+  if (hedefId === 'hepsi') {
+    const kil = paylar.filter(kilitli);
+    if (kil.length > 1) return red(IKI_KILITLI);
+    secili = paylar; hedef = kil[0] ?? k;
+  } else {
+    const h = paylar.find((y) => y.id === hedefId);
+    if (!h || h.id === k.id) return red('Yalnız aynı adımın başka payına bırakılır.');
+    if (kilitli(k) && kilitli(h)) return red(IKI_KILITLI);
+    secili = [k, h]; dondu = kilitli(k); hedef = dondu ? k : h;
+  }
+  const adet = secili.reduce((t, y) => t + (y.pay?.adet ?? 0), 0);
+  const kalanlar = paylar.filter((y) => y === hedef || !secili.includes(y));
+  const kod = (id: string): string => m.tezgahlar.find((t) => t.id === id)?.kod ?? id;
+  const komut: TaslakKomutu = kalanlar.length >= 2
+    ? { tur: 'elle-bol', isId: adim, paylar: kalanlar.map((y) => ({ adet: y === hedef ? adet : y.pay?.adet ?? 0, tezgah: y.m })) }
+    : { tur: 'elle-bol-sil', isId: adim };
+  const toplam = `${secili.map((y) => String(y.pay?.adet ?? 0)).join(' + ')} = ${String(adet)} adet`;
+  const sonuc = kalanlar.length >= 2
+    ? ` · ${kod(hedef.m)} tezgâhında kalır · ${String(kalanlar.length)} pay kalır${k.pay.elle ? '' : ' · rotadaki paralel bölme elle bölmeye döner'}`
+    : ' · tek pay kalır, bölme kalkar; yerini sistem seçer';
+  const not = dondu ? ` · ${kod(k.m)} çalıştığı ya da sayımı olduğu için hedef odur` : '';
+  return { kaynak: kaynakId, hedef: hedef.id, adet, kalan: kalanlar.length, komut, cumle: `${toplam}${sonuc}${not}`, hata: null, dondu };
+}
+// Payın kısa adı: "Pay 2/3 · TZ2 · 20 adet".
+export const payAdi = (m: Pick<KokpitModeli, 'tezgahlar'>, y: KokpitIsi): string => `Pay ${payYazisi(y, true) ?? ''} · ${m.tezgahlar.find((t) => t.id === y.m)?.kod ?? y.m} · ${String(y.pay?.adet ?? 0)} adet`;

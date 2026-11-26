@@ -11,3 +11,4 @@
 - VARSAYIM (kart #1185'e bağlı): prototip emir kimliği = `uretim_emri.id` (sayı dizesi), emir no = `emir_no`, adım `seq` = `op_no`.
   Sayı olmayan kimlikli (yerel) emir ve sunucu makinesi olmayan iş yazılmaz.
 - 3401-1 a: `/plan/bedel-ayari` planı yazana açıktır ama taban bedel, finansman ve kâr riski oranı yalnız `finans.maliyet-oku` ya da `plan.bedel-ayari` olana gelir (ötekine null); eşik ve çarpanlar herkese. Çarpan geçmişi yalnız bu ikisine (satış ve planlama 403). Motor bedeli sunucuda okur, planlamacının planı kurması bundan etkilenmez.
+- 3751 (Soru Merkezi "Sürükle-bırak + menü"): Kokpit'te pay kardeşine bırakılınca birleşir; yalnız Emirler görünümünde (Tezgâhlar'da kardeşler uzak satırda, orada yalnız sağ tık menüsü), telefonda pay kartındaki alt sayfa. Komut yeni değil (elle-bol / elle-bol-sil). Tek pay kalınca tezgâhı sunucu seçer (çalışan ya da plandaki ilk pay); hedefin tezgâhı yalnız iki ve üstü pay kalınca korunur.
