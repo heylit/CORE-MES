@@ -24,19 +24,21 @@ const GEREKCE = { 'ayni-kod': 'kod aynı', 'ayni-ad': 'ad aynı', 'benzer-ad': '
 
 // Sözleşme dosyası zod taşır, istemci ondan değer ithal etmez; tip eksik ya da fazla türü yakalar.
 const TUR_ADLARI = {
-  istasyon: 'İstasyon', 'is-merkezi': 'İş merkezi', makine: 'Makine', 'operasyon-tipi': 'Operasyon tipi', 'durus-nedeni': 'Duruş nedeni',
+  istasyon: 'İstasyon', 'is-merkezi': 'İş merkezi', makine: 'Makine', 'operasyon-tipi': 'Operasyon tipi', 'durus-nedeni': 'Duruş nedeni', kullanici: 'Kullanıcı',
 } as const satisfies Record<SmartesEslemeTuru, string>;
 // Fire ve duruş SmartES'in ad listesiyle eşlenir (3174); öbür türler CORE kaydına SmartES kodu yazılarak.
 type Bolum = Exclude<SmartesEslemeTuru, 'durus-nedeni'> | 'fire' | 'durus';
 const SEKMELER: readonly { anahtar: Bolum; baslik: string }[] = [
   { anahtar: 'istasyon', baslik: 'İstasyon' }, { anahtar: 'is-merkezi', baslik: 'İş merkezi' }, { anahtar: 'makine', baslik: 'Makine' }, { anahtar: 'operasyon-tipi', baslik: 'Operasyon tipi' },
-  { anahtar: 'fire', baslik: 'Fire' }, { anahtar: 'durus', baslik: 'Duruş' },
+  { anahtar: 'fire', baslik: 'Fire' }, { anahtar: 'durus', baslik: 'Duruş' }, { anahtar: 'kullanici', baslik: 'Kullanıcı' },
 ];
+// 3760: yanlış kişi eşlemesi hareketleri o kişiye yazar; kullanıcıda seçim boş başlar, öneri yalnız ayrı düğmeyle seçilir, toplu öneri onayı yoktur.
+const ONERI_ELLE = (tur: SmartesEslemeTuru): boolean => tur === 'kullanici';
 
 function EslemeFormu({ tur, satir, liste, kapat }: { tur: SmartesEslemeTuru; satir: Satir; liste: Smartes[] | null; kapat: () => void }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
-  const [kod, kodYaz] = useState(satir.smartesKod ?? satir.oneri?.kod ?? '');
+  const [kod, kodYaz] = useState(satir.smartesKod ?? (ONERI_ELLE(tur) ? '' : (satir.oneri?.kod ?? '')));
   const [hata, hataYaz] = useState<string | null>(null);
   // Kaldırma iş emri gönderimini durdurur: tek tıkla değil, aynı pencerede ikinci onayla yapılır.
   const [kaldirSor, kaldirSorYaz] = useState(false);
@@ -102,6 +104,11 @@ function EslemeFormu({ tur, satir, liste, kapat }: { tur: SmartesEslemeTuru; sat
               ...(satir.smartesKod !== null && !liste.some((x) => x.kod === satir.smartesKod) ? [{ deger: satir.smartesKod, baslik: `${satir.smartesKod} · SmartES listesinde yok` }] : []),
               ...liste.map((x) => ({ deger: x.kod, baslik: x.ad === null ? x.kod : `${x.kod} · ${x.ad}` })),
             ]} />
+        )}
+        {ONERI_ELLE(tur) && satir.oneri !== null && kod !== satir.oneri.kod && (
+          <Dugme simge="check" onClick={() => { if (satir.oneri) kodYaz(satir.oneri.kod); }}>
+            {`Öneriyi kullan: ${satir.oneri.kod} (${GEREKCE[satir.oneri.gerekce]})`}
+          </Dugme>
         )}
         {tur === 'operasyon-tipi' && kod.trim() !== (satir.smartesKod ?? '') && (
           <p className="tc-sga-bant" role="note">
@@ -227,7 +234,7 @@ export function Eslemeler() {
                 {mirasli > 0 && <span className="tc-sm-not">{`${mirasli} istasyon iş merkezinin koduyla bağlı.`}</span>}
                 {onerili.length > 0 && <span className="tc-sm-not">{`${onerili.length} kayıt için SmartES’te aynı ya da benzer adlı karşılık bulundu.`}</span>}
               </p>
-              {yazabilir && onerili.length > 0 && (
+              {yazabilir && onerili.length > 0 && !ONERI_ELLE(tur) && (
                 <Dugme tur="birincil" simge="check" yukleniyor={onayla.isPending} onClick={() => { onayAdayYaz(onerili); }}>{`Önerilerin hepsini eşle (${onerili.length})`}</Dugme>
               )}
             </div>

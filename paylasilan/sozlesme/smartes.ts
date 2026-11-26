@@ -4,10 +4,10 @@ import { surumSemasi } from '../surum.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 
 // SmartES bağlantısı (kart #778): kod eşlemesi, okunan makine gerçekleşenleri ve iş emri giden kutusu.
-export const SMARTES_ESLEME_TURLERI = ['istasyon', 'is-merkezi', 'makine', 'operasyon-tipi', 'durus-nedeni'] as const;
+export const SMARTES_ESLEME_TURLERI = ['istasyon', 'is-merkezi', 'makine', 'operasyon-tipi', 'durus-nedeni', 'kullanici'] as const;
 export type SmartesEslemeTuru = (typeof SMARTES_ESLEME_TURLERI)[number];
 export const SMARTES_ESLEME_TURU_ADLARI: Readonly<Record<SmartesEslemeTuru, string>> = {
-  istasyon: 'İstasyon', 'is-merkezi': 'İş merkezi', makine: 'Makine', 'operasyon-tipi': 'Operasyon tipi', 'durus-nedeni': 'Duruş nedeni',
+  istasyon: 'İstasyon', 'is-merkezi': 'İş merkezi', makine: 'Makine', 'operasyon-tipi': 'Operasyon tipi', 'durus-nedeni': 'Duruş nedeni', kullanici: 'Kullanıcı',
 };
 
 export const SMARTES_BAGLANTI_DURUMLARI = ['kapali', 'acik', 'ortam-degiskeni-yok'] as const;
@@ -404,7 +404,7 @@ export const gelenAdAktarSonucu = z.object({ eklenen: z.number().int(), eslenen:
 export type GelenAdAktarSonucu = z.output<typeof gelenAdAktarSonucu>;
 
 // "Şimdi oku": SmartES'in tanım listeleri (istasyon, makine, operasyon, fire, duruş) yeniden okunur. Okunamayan liste eski haliyle kalır.
-export const SMARTES_LISTE_TURLERI = ['istasyon', 'makine', 'operasyon', 'fire', 'durus'] as const;
+export const SMARTES_LISTE_TURLERI = ['istasyon', 'makine', 'operasyon', 'fire', 'durus', 'kullanici'] as const;
 export const listeOkuCevabi = z.object({ okunan: z.array(z.enum(SMARTES_LISTE_TURLERI)), hatali: z.array(z.enum(SMARTES_LISTE_TURLERI)) });
 export type ListeOkuCevabi = z.output<typeof listeOkuCevabi>;
 

@@ -20,7 +20,7 @@ import { isler } from './isler.ts';
 import { smartesIstemcisiKur } from './istemci.ts';
 import { sahteSmartesAc, tabloCevapMetni } from './sahte-smartes.ts';
 import type { SahteCevap, SahteSmartes } from './sahte-smartes.ts';
-import { adetOnayinaAl, emirDurumlari, gonderimTuru, kaliteAmbarTuru, okumaTuru, sayimGecerliligi, tanimTuru, yeniBekleyenBellegi, yeniOkumaBellegi } from './servis.ts';
+import { adetOnayinaAl, emirDurumlari, ESLENMEMIS_DURUS, gonderimTuru, hareketleriAl, hareketleriYaz, kaliteAmbarTuru, okumaTuru, sayimGecerliligi, tanimTuru, yeniBekleyenBellegi, yeniOkumaBellegi } from './servis.ts';
 import type { TurOrtami } from './servis.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -1004,7 +1004,7 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     await hepsiSmartes();
     const kayit = (smartesId: number, isEmriNo: string, saglam: number | null, baslangic: Date | null = new Date(simdi)): IsEmriDurumuKaydi => ({
       smartesId, isEmriNo, erpId: null, istasyonKodu: null, operasyonKodu: null, makineKodu: null, stokNo: null, saglam, red: 1, makineSaglam: null,
-      makineRed: null, baslangic, bitis: null, bitti: null, erpSaglam: null, erpRed: null, ham: {},
+      makineRed: null, baslangic, bitis: null, bitti: null, erpSaglam: null, erpRed: null, aktivite: null, aktiviteAdi: null, aktiviteBaslangic: null, kullanici: null, ham: {},
     });
     const yaz = async (k: IsEmriDurumuKaydi, g: Date | null = gecerlilik) => vt().tx(async (db) => {
       await db.sorgu(
@@ -1074,7 +1074,7 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     await hepsiSmartes();
     const kayit = (smartesId: number, istasyonKodu: string): IsEmriDurumuKaydi => ({
       smartesId, isEmriNo: 'ORN-IE-ESLESMEZ', erpId: null, istasyonKodu, operasyonKodu: null, makineKodu: null, stokNo: null, saglam: 6, red: null, makineSaglam: null,
-      makineRed: null, baslangic: new Date(simdi), bitis: null, bitti: null, erpSaglam: null, erpRed: null, ham: {},
+      makineRed: null, baslangic: new Date(simdi), bitis: null, bitti: null, erpSaglam: null, erpRed: null, aktivite: null, aktiviteAdi: null, aktiviteBaslangic: null, kullanici: null, ham: {},
     });
     const dene = (k: IsEmriDurumuKaydi) => vt().tx(async (db) => {
       await db.sorgu(
@@ -1255,6 +1255,76 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     await kaynak(terminalMakinesi, null);
     assert.equal(await komut((db, k) => emirDuraklat(db, k, uretimEmriId, undefined, ilk)), null);
     await kaynak(smartesMakinesi, null);
+    await aktarimAc(false);
+  });
+
+  test('3760: SmartES hareketleri sırayla CORE emrine yazılır; eşlenmemiş kişi bekler, eşlenince aynı anla yazılır; eski emir ve terminal makinesi aktarılmaz', async () => {
+    const { uretimEmriId, ilk, ikinci, istasyonlar } = await emirKur(true);
+    await gonderimTuru(vt(), turOrtami());
+    const no = (id: number) => vt().tek<{ no: string }>('SELECT smartes_is_emri_no AS no FROM smartes_giden WHERE is_emri_id = $1', [id]).then((r) => r!.no);
+    const makineKodu = (await vt().tek<{ kod: string }>(
+      "SELECT e.smartes_kod AS kod FROM smartes_esleme e JOIN makine m ON m.id = e.tmi_id WHERE e.tur = 'makine' AND m.istasyon_id = $1", [istasyonlar[0]]))!.kod;
+    await vt().sorgu("UPDATE istasyon SET sayim_kaynagi = 'terminal', sayim_kaynagi_gecerlilik = NULL");
+    await vt().sorgu("UPDATE makine SET uretim_kaynagi = 'smartes', uretim_kaynagi_gecerlilik = '2026-01-01' WHERE istasyon_id = $1", [istasyonlar[0]]);
+    await aktarimAc();
+    const taban = Date.now() - 60 * 60_000;
+    const t = (dk: number) => new Date(taban + dk * 60_000);
+    const satir = (smartesId: number, isEmriNo: string, g: Partial<IsEmriDurumuKaydi>): IsEmriDurumuKaydi => ({
+      smartesId, isEmriNo, erpId: null, istasyonKodu: null, operasyonKodu: null, makineKodu, stokNo: null, saglam: null, red: null, makineSaglam: null,
+      makineRed: null, baslangic: t(0), bitis: null, bitti: null, erpSaglam: null, erpRed: null, aktivite: null, aktiviteAdi: null, aktiviteBaslangic: null,
+      kullanici: 'ORN-U1', ham: {}, ...g,
+    });
+    const oku = (k: IsEmriDurumuKaydi) => vt().tx(async (db) => {
+      await db.sorgu(
+        `INSERT INTO smartes_is_emri_durumu (smartes_id, is_emri_no, makine_kodu, baslangic, bitis, bitti, ham, ilk_okuma, son_okuma)
+         VALUES ($1, $2, $3, $4, $5, $6, '{}', now(), now())
+         ON CONFLICT (smartes_id) DO UPDATE SET baslangic = EXCLUDED.baslangic, bitis = EXCLUDED.bitis, bitti = EXCLUDED.bitti`,
+        [k.smartesId, k.isEmriNo, k.makineKodu, k.baslangic, k.bitis, k.bitti]);
+      const n = await hareketleriAl(db, k, new Date());
+      await hareketleriYaz(db, new Date());
+      return n;
+    });
+    const iz = () => vt().sorgu<{ tur: string; durum: string; kisi_id: number | null; an: Date; durus_eslenmemis: boolean }>(
+      'SELECT tur, durum, kisi_id, an, durus_eslenmemis FROM smartes_hareket WHERE smartes_id = 9760 ORDER BY sira');
+    const emirDurumu = async () => (await vt().tek<{ durum: string }>('SELECT durum FROM uretim_emirleri_is_emri WHERE id = $1', [ilk]))!.durum;
+    const ilkNo = await no(ilk);
+
+    // Hazırlık: kişi eşlenmemiş, hareket bekler; CORE'a bir şey yazılmaz.
+    assert.equal(await oku(satir(9760, ilkNo, { aktivite: 2 })), 1);
+    assert.deepEqual((await iz()).map((h) => [h.tur, h.durum]), [['ayar', 'kisi-bekliyor']]);
+    // Aynı satır yeniden okununca yeni hareket yok.
+    assert.equal(await oku(satir(9760, ilkNo, { aktivite: 2 })), 0);
+
+    // Toplu öneri onayı kullanıcıda kapalı; tek eşleme bekleyen hareketi SmartES'teki anla yazar.
+    assert.equal((await istek('POST', '/smartes/eslemeler/onerileri-onayla', { tur: 'kullanici', satirlar: [{ tmiId: yoneticiId, smartesKod: 'ORN-U1' }] })).statusCode, 409);
+    assert.equal((await istek('POST', '/smartes/eslemeler/ata', { tur: 'kullanici', tmiId: yoneticiId, smartesKod: 'ORN-U1', surum: null })).statusCode, 200);
+    const [ayar] = await iz();
+    assert.deepEqual([ayar?.durum, ayar?.kisi_id, ayar?.an.getTime()], ['yazildi', yoneticiId, t(0).getTime()]);
+
+    // Üretim, eşlenmemiş adla duruş, aynı duruşun yeniden okunması, devam ve bitiş.
+    await oku(satir(9760, ilkNo, { aktivite: 1, aktiviteBaslangic: t(10) }));
+    assert.equal(await emirDurumu(), 'calisiyor');
+    await oku(satir(9760, ilkNo, { aktivite: 3, aktiviteAdi: 'ORN Malzeme bekleme', aktiviteBaslangic: t(20) }));
+    assert.equal(await oku(satir(9760, ilkNo, { aktivite: 3, aktiviteAdi: 'ORN Malzeme bekleme', aktiviteBaslangic: t(20) })), 0);
+    const durus = await vt().tek<{ kod: string }>(
+      `SELECT n.kod FROM uretim_olayi o JOIN durus_nedeni n ON n.id = o.durus_nedeni_id WHERE o.emir_id = $1 AND o.olay = 'durdur' ORDER BY o.id DESC LIMIT 1`,
+      [uretimEmriId]);
+    assert.equal(durus?.kod, ESLENMEMIS_DURUS.kod, JSON.stringify(await vt().sorgu('SELECT tur, durum, hata FROM smartes_hareket WHERE smartes_id = 9760 ORDER BY sira')));
+    await oku(satir(9760, ilkNo, { aktivite: 1, aktiviteBaslangic: t(30) }));
+    await oku(satir(9760, ilkNo, { aktivite: 1, bitti: true, bitis: t(40) }));
+    assert.deepEqual((await iz()).map((h) => [h.tur, h.durum, h.durus_eslenmemis]), [
+      ['ayar', 'yazildi', false], ['baslat', 'yazildi', false], ['durdur', 'yazildi', true], ['devam', 'yazildi', false], ['bitir', 'yazildi', false],
+    ]);
+    assert.equal(await emirDurumu(), 'tamam');
+    // SmartES'te başlangıç sonradan değişirse CORE kaydı kendiliğinden değişmez; inceleme izi bir kez düşer.
+    await oku(satir(9760, ilkNo, { aktivite: 1, bitti: true, bitis: t(40), baslangic: t(1) }));
+    await oku(satir(9760, ilkNo, { aktivite: 1, bitti: true, bitis: t(40), baslangic: t(1) }));
+    assert.deepEqual((await iz()).filter((h) => h.durum === 'inceleme').map((h) => h.tur), ['zaman-degisti']);
+
+    // Eski programın emri ve terminaldeki istasyonun emri hareket üretmez.
+    assert.equal(await oku(satir(9761, 'TMI26-ORN-1', { aktivite: 1 })), 0);
+    assert.equal(await oku(satir(9762, await no(ikinci), { aktivite: 1, makineKodu: null })), 0);
+    await vt().sorgu('UPDATE makine SET uretim_kaynagi = NULL, uretim_kaynagi_gecerlilik = NULL WHERE istasyon_id = $1', [istasyonlar[0]]);
     await aktarimAc(false);
   });
 });

@@ -2,7 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import type { Dilim } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type {
-  AlarmKaydi, AmbarKaydi, DurusKaydi, EslemeTuru, IlerlemeKaydi, IsEmriDurumuKaydi, KaliteKaydi, ListeKaydi, ListeTuru, MakineDurumu, MakineOkumasi,
+  AlarmKaydi, AmbarKaydi, DurusKaydi, EslemeTuru, HareketIzi, YeniHareket, IlerlemeKaydi, IsEmriDurumuKaydi, KaliteKaydi, ListeKaydi, ListeTuru, MakineDurumu, MakineOkumasi,
   OkumaKaynagi, RedKaydi, TanimIzi, TanimKaydi, TanimTuru, CevrimKaydi, HesapTuru, OeeKaydi,
 } from './kurallar.ts';
 
@@ -1222,4 +1222,77 @@ export function gunlukSonlari(db: Db): Promise<GunlukSatiri[]> {
 
 export async function gunlukHataSayisi(db: Db, bas: Date): Promise<number> {
   return (await db.tek<{ n: number }>("SELECT count(*)::int AS n FROM smartes_akis_gunlugu WHERE sonuc = 'hata' AND zaman >= $1", [bas]))?.n ?? 0;
+}
+
+/* ---------------- hareket aktarımı (3760) ---------------- */
+
+export function hareketIzi(db: Db, smartesId: number): Promise<HareketIzi[]> {
+  return db.sorgu<HareketIzi>(
+    'SELECT sira, tur, an, aktivite_adi AS "aktiviteAdi" FROM smartes_hareket WHERE smartes_id = $1 ORDER BY sira', [smartesId]);
+}
+
+// Satır kilidi (iş emri durumu satırı) altında çağrılır: aynı satırın iki okuması aynı sırayı yazamaz.
+export async function hareketleriEkle(
+  db: Db, smartesId: number, ilkSira: number, h: readonly YeniHareket[], g: { aktivite: number | null; kullanici: string | null; zaman: Date },
+): Promise<void> {
+  let sira = ilkSira;
+  for (const x of h) {
+    const inceleme = x.tur === 'zaman-degisti';
+    await db.sorgu(
+      `INSERT INTO smartes_hareket (smartes_id, sira, tur, an, aktivite, aktivite_adi, smartes_kullanici, durum, olusma)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [smartesId, sira++, x.tur, x.an, g.aktivite, x.aktiviteAdi, g.kullanici, inceleme ? 'inceleme' : 'bekliyor', g.zaman],
+    );
+  }
+}
+
+export interface BekleyenHareket {
+  smartesId: number;
+  sira: number;
+  durum: 'bekliyor' | 'kisi-bekliyor' | 'hata';
+  tur: 'ayar' | 'baslat' | 'duraklat' | 'devam' | 'durdur' | 'bitir';
+  an: Date;
+  aktiviteAdi: string | null;
+  smartesKullanici: string | null;
+  isEmriNo: string | null;
+  makineKodu: string | null;
+  baslangic: Date | null;
+}
+
+// Satır başına yalnız sıradaki ilk bekleyen hareket: önceki yazılmadan sonraki yazılmaz. "hata"daki satır bekler (yeniden deneme ayrı).
+export function siradakiHareketler(db: Db, smartesId?: number): Promise<BekleyenHareket[]> {
+  return db.sorgu<BekleyenHareket>(
+    `SELECT DISTINCT ON (h.smartes_id) h.smartes_id AS "smartesId", h.sira, h.durum, h.tur, h.an, h.aktivite_adi AS "aktiviteAdi",
+            h.smartes_kullanici AS "smartesKullanici", d.is_emri_no AS "isEmriNo", d.makine_kodu AS "makineKodu", d.baslangic
+       FROM smartes_hareket h JOIN smartes_is_emri_durumu d USING (smartes_id)
+      WHERE h.durum IN ('bekliyor', 'kisi-bekliyor', 'hata') AND ($1::bigint IS NULL OR h.smartes_id = $1)
+      ORDER BY h.smartes_id, h.sira`,
+    [smartesId ?? null],
+  );
+}
+
+export async function hareketKilitle(db: Db, smartesId: number, sira: number): Promise<{ durum: string } | null> {
+  return db.tek<{ durum: string }>('SELECT durum FROM smartes_hareket WHERE smartes_id = $1 AND sira = $2 FOR UPDATE', [smartesId, sira]);
+}
+
+export async function hareketDurumuYaz(
+  db: Db, smartesId: number, sira: number,
+  d: { durum: 'kisi-bekliyor' } | { durum: 'yazildi'; kisiId: number; durusNedeniId: number | null; eslenmemis: boolean; zaman: Date } | { durum: 'hata'; hata: string },
+): Promise<void> {
+  if (d.durum === 'yazildi') {
+    await db.sorgu(
+      `UPDATE smartes_hareket SET durum = 'yazildi', kisi_id = $3, durus_nedeni_id = $4, durus_eslenmemis = $5, yazilma = $6, hata = NULL
+        WHERE smartes_id = $1 AND sira = $2`,
+      [smartesId, sira, d.kisiId, d.durusNedeniId, d.eslenmemis, d.zaman],
+    );
+  } else if (d.durum === 'hata') {
+    await db.sorgu("UPDATE smartes_hareket SET durum = 'hata', hata = $3 WHERE smartes_id = $1 AND sira = $2", [smartesId, sira, d.hata]);
+  } else {
+    await db.sorgu("UPDATE smartes_hareket SET durum = 'kisi-bekliyor', hata = NULL WHERE smartes_id = $1 AND sira = $2", [smartesId, sira]);
+  }
+}
+
+export interface HareketSayaci { durum: string; adet: number }
+export function hareketSayaclari(db: Db): Promise<HareketSayaci[]> {
+  return db.sorgu<HareketSayaci>('SELECT durum, count(*)::int AS adet FROM smartes_hareket GROUP BY durum ORDER BY durum');
 }

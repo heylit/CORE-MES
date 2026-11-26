@@ -1079,7 +1079,9 @@ export async function emirDurdur(db: Db, kisiId: number, id: number, durusNedeni
   const { emir, adim, istasyonId, calisma } = await komutBaglami(db, kisiId, id, isEmriId);
   const ihlal = durdurmaIhlali(emir.durum, calisma);
   if (ihlal !== null) throw cakisma(ihlal);
-  const nedenIhlali = durusNedeniIhlali(await durusNedeniGetir(db, durusNedeniId));
+  const neden = await durusNedeniGetir(db, durusNedeniId);
+  // 3760: SmartES'ten gelen duruşun eşlenmemiş adı pasif sabit nedenle yazılır (terminal listesinde görünmesin diye pasif).
+  const nedenIhlali = neden !== null && !neden.aktif && kayitKaynaklari.has(db) ? null : durusNedeniIhlali(neden);
   if (nedenIhlali !== null) throw dogrulama(nedenIhlali, 'durusNedeniId');
   const an = await komutAni(db, id);
   await sorgular.olayEkle(db, id, kisiId, istasyonId, 'durdur', durusNedeniId, an, adim?.id ?? null);

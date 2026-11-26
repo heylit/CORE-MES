@@ -108,6 +108,25 @@ export const smartesSayimi = (
 ): Promise<{ emir: Emir; uyari: string | null }> => servis.smartesKaynagiyla(db, g.onayKimligi, () => servis.kayitAniyla(db, g.an, () => servis.emirSayim(
   db, onaylayanId, id, govde, { duzeltebilir: true, isEmriId: g.isEmriId },
 )));
+// 3760: SmartES iş emri hareketi CORE komutundan geçer (aynı kurallar, aynı defter); an SmartES'teki zamandır. Terminal yetkisi ve başlatma
+// kartı istenmez (kart kuralı terminal içindir), SmartES engeli kalkar. Kişi, SmartES kullanıcısının eşlendiği kişidir. Tekillik çağıranın
+// hareket izindedir (satır kimliği ve sıra); komut reddedilirse ret aynen döner.
+export type SmartesHareketi =
+  | { tur: 'ayar' | 'duraklat' | 'bitir'; an: string }
+  | { tur: 'baslat' | 'devam'; an: string; makineIdleri?: readonly number[] }
+  | { tur: 'durdur'; an: string; durusNedeniId: number };
+export const smartesHareketi = (
+  db: Db, kisiId: number, id: number, isEmriId: number, h: SmartesHareketi, kaynakKimligi: number,
+): Promise<{ emir: Emir }> => servis.smartesKaynagiyla(db, kaynakKimligi, () => servis.kayitAniyla(db, h.an, async () => {
+  switch (h.tur) {
+    case 'ayar': return servis.emirAyar(db, kisiId, id, isEmriId);
+    case 'baslat': return servis.emirBaslat(db, kisiId, id, h.makineIdleri, isEmriId);
+    case 'duraklat': return servis.emirDuraklat(db, kisiId, id, isEmriId);
+    case 'devam': return servis.emirDevam(db, kisiId, id, h.makineIdleri, isEmriId);
+    case 'durdur': return servis.emirDurdur(db, kisiId, id, h.durusNedeniId, isEmriId);
+    case 'bitir': return servis.emirBitir(db, kisiId, id, undefined, null, undefined, isEmriId);
+  }
+}));
 // Karar bekleyen sayımı kalite kararıyla kapatır; terminal yetkisi istemez, kalite yetkisini çağıran denetler. Bekleyen yoksa adet 0.
 // isEmriId verilirse yalnız o adımın bekleyeni kapanır (744 a).
 export const kararliSayimiSonuclandir = (db: Db, kisiId: number, id: number, karar: KaliteKarari, isEmriId?: number | null): Promise<{ emir: Emir; adet: number }> =>
