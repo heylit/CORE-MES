@@ -51,7 +51,9 @@ describe('1337 a el okuyucu', () => {
     expect(terminalOkutmasi('CM1/RP:12/PRC:ORN-P1/REV:A/LOT:ORN-LT-1/ADT:50/BT:261122')).toEqual({ tur: 'kart', kartId: 12 });
     expect(terminalOkutmasi('CM1/RP:12/+3').tur).toBe('kart');
     expect(terminalOkutmasi('CM1/UE:142/REV:B').tur).toBe('baska');
-    for (const ham of ['RP:abc', 'RP:', 'RP-12', 'RP:-3', 'RP:12a', 'UE:4', 'RP:1234567890']) expect(terminalOkutmasi(ham).tur).toBe('baska');
+    // 3758 b: elle yazılan gruplu ve tireli kod da kart sayılır.
+    for (const ham of ['RP-12', 'rp 12', 'RP12', 'RP:I2']) expect(terminalOkutmasi(ham)).toEqual({ tur: 'kart', kartId: 12 });
+    for (const ham of ['RP:abc', 'RP:', 'RP-1A', 'RP:-3', 'RP:12a', 'UE:4', 'RP:1234567890']) expect(terminalOkutmasi(ham).tur).toBe('baska');
   });
 });
 

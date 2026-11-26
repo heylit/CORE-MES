@@ -32,6 +32,7 @@ const ALANLAR_TEMEL: Record<SablonTuru, { anahtar: string; ad: string }[]> = {
     { anahtar: 'adimlar', ad: 'İşlem sırası' }, { anahtar: 'rota', ad: 'Rota (adım başına satır)' }, { anahtar: 'lot', ad: 'Lot, parti, döküm, sertifika' },
     { anahtar: 'adet', ad: 'Adet' }, { anahtar: 'termin', ad: 'Termin' }, { anahtar: 'adim1Ad', ad: 'İşlem satırları (no, ad, yer, piktogram)' },
     { anahtar: 'lotNo', ad: 'Lot no' }, { anahtar: 'lotEk', ad: 'Döküm, sertifika, tedarikçi partisi' }, { anahtar: 'kopya', ad: 'Kopya sırası (n/N)' },
+    { anahtar: 'kartKodu', ad: 'Refakat kodu (elle yazılacak, RP …)' },
   ],
   istasyon: [{ anahtar: 'qr', ad: 'Kod (LOC)' }, { anahtar: 'kod', ad: 'İstasyon kodu' }, { anahtar: 'ad', ad: 'İstasyon adı' }],
   'kalite-durum': [
@@ -58,7 +59,7 @@ export const ALANLAR: Record<SablonTuru, { anahtar: string; ad: string }[]> = Ob
   Object.entries(ALANLAR_TEMEL).map(([tur, liste]) => [tur, tur === 'deneme' ? liste : [...liste, ...KOD_ALANLARI]]),
 ) as Record<SablonTuru, { anahtar: string; ad: string }[]>;
 
-type Ek = { ters?: boolean; kosul?: string };
+type Ek = { ters?: boolean; kosul?: string; mono?: boolean };
 // Kod yeri: DataMatrix (varsayılan) ya da QR; alan özet kodu (CM1) taşır, yazıcı denemesinde ikinci kod yalnız kimliği.
 const kodOge = (x: number, y: number, boyut: number, alan = 'qr', simge?: 'dm' | 'qr') => ({ tur: 'kod' as const, x, y, boyut, alan, ...(simge === undefined ? {} : { simge }) });
 const metin = (x: number, y: number, genislik: number, yukseklik: number, yaziMm: number, alan: string, kalin = false, ek: Ek = {}) =>
@@ -80,6 +81,13 @@ const refakatAdimi = (i: number) => {
     simge(90.8, y + 0.1, 3.8, `adim${i}Isaret`), kutu(4, y + 4.4, 92, 0.2, 0.2, ad),
   ];
 };
+// 3758 b: kamera kullanmayan operatör kodu terminale elle yazar. Kartın sağ altında, işlem tablosunun boş köşesinde çerçeveli
+// "REFAKAT KODU" kutusu; kod kalın, eşit aralıklı, kutuya sığana kadar küçülür. Değer (kartKodu) uzun rotada boştur (kurallar.ts).
+const refakatKodKutusu = [
+  kutu(55.5, 132.9, 42, 9.6, 0.5, 'kartKodu'),
+  metin(57.3, 133.4, 38, 2.6, 2.2, '=REFAKAT KODU:', true, { kosul: 'kartKodu' }),
+  metin(57.3, 135.6, 38.4, 6.4, 5.3, 'kartKodu', true, { mono: true }),
+];
 const DENEME_SIMGELERI = ['konum', 'raf', 'malzeme', 'lot', 'refakat', 'tezgah', 'kalite', 'hatali', 'koli', 'kumpas'];
 
 // Kart 3562 (A, kod şeridi): her şablon şerit ve gövdedir (serit.ts). Gövde sırası: tür başlığı, durum bandı, ana değer, satırlar; sığmayan satır
@@ -178,6 +186,7 @@ const SERIT_SABLONLARI: readonly Sablon[] = [
       kutu(1, 60, 98, 0.4), baslik(4, 61.6, 60, 'İŞLEM SIRASI', 'adim1Ad'),
       ...Array.from({ length: REFAKAT_ADIM_SAYISI }, (_, i) => refakatAdimi(i + 1)).flat(),
       kutu(1.5, REFAKAT_ALT_CIZGI, 97, 0.3), metin(4, REFAKAT_ALT_CIZGI + 1.4, 58, 3, 2.4, 'parti'),
+      ...refakatKodKutusu,
     ],
   }),
   // 2922 a: istasyon etiketi yer etiketinin bir boyudur; kod aynı konum kodudur (LOC), başlıkta "Teslim yeri" yazar.
@@ -255,7 +264,7 @@ export const ORNEK_DEGERLER: Record<SablonTuru, AlanDegerleri> = {
     adimlar: '10 Torna (Örnek tezgâh) · 20 Kaplama (Örnek fason, fason) · 30 Son kontrol',
     rota: ['10 Torna (Örnek tezgâh)', '20 Kaplama (Örnek fason, fason)', '30 Son kontrol'].join(SATIR_BASI), lot: 'Lot LT-000123 · Döküm D-01 · Sertifika S-01',
     lotNo: 'LT-000123', lotEk: 'Döküm D-01 · Sertifika S-01',
-    adet: '40', termin: '30.10.2026', kopya: 'Kopya 1/2',
+    adet: '40', termin: '30.10.2026', kopya: 'Kopya 1/2', kartKodu: 'RP 1234',
     ...refakatAdimlari([{ opNo: 10, ad: 'Torna', yer: 'Örnek tezgâh', fason: false }, { opNo: 20, ad: 'Kaplama', yer: 'Örnek fason', fason: true }, { opNo: 30, ad: 'Son kontrol', yer: null, fason: false }]),
   },
   istasyon: { qr: ozetOrnegi('LOC:IST-CNC-01', { AD: 'Örnek CNC tezgâhı' }), kod: 'IST-CNC-01', ad: 'Örnek CNC tezgâhı' },

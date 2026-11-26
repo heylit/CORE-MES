@@ -61,7 +61,7 @@ function Oge({ o }: { o: OnizlemeOgesi }) {
     return <path className="tc-etk-dolu" d={d} shapeRendering="crispEdges" aria-label={`${o.simge === 'qr' ? 'QR' : 'Kod'}: ${o.veri}`} />;
   }
   if (o.tur === 'simge') return <Simge ad={o.ad} karo={o.karo} x={o.x} y={o.y} boyut={o.boyut} />;
-  const sinif = ['tc-etk-yazi', o.kalin && 'tc-etk-kalin', o.ters === true && 'tc-etk-ters'].filter(Boolean).join(' ');
+  const sinif = ['tc-etk-yazi', o.kalin && 'tc-etk-kalin', o.ters === true && 'tc-etk-ters', o.mono === true && 'tc-etk-mono'].filter(Boolean).join(' ');
   return (
     <>
       {o.satirlar.map((s, i) => (

@@ -18,6 +18,12 @@ export function kodUstSiniri(genislik: number, yukseklik: number): number {
 // Şerit eni boya göre sabittir; sığmayan kod küçültülmez, alanı kırpılır (cm1Sigdir). Daha küçük matris aynı kutuda biraz büyük modülle basılır.
 export const seritEni = (genislik: number, yukseklik: number): number => (genislik < 75 ? 21 : yukseklik >= 150 ? 36 : 30);
 export const seritModulu = (genislik: number): number => (genislik < 75 ? 0.375 : 0.5);
+// 3758 b: karekod altındaki elle yazılacak kodun istenen boyu (mm) ve üstündeki "KOD" başlığı. Dar etikette (50x25) başlık yoktur.
+// Kod tek satıra sığmazsa SERIT_KOD_EN_KUCUK'e kadar küçülür, o da yetmezse ikinci satıra geçer (kesilmez).
+export const seritKodYazisi = (genislik: number, yukseklik: number): number => (genislik < 75 ? 2.2 : yukseklik >= 150 ? 4.6 : 3);
+export const SERIT_KOD_EN_KUCUK = 1.8;
+export const SERIT_KOD_BASLIGI = 1.8;
+export const seritKodBasligiVar = (genislik: number): boolean => genislik >= 75;
 export const seritKodKenari = (genislik: number, yukseklik: number): number => (kodUstSiniri(genislik, yukseklik) + 2 * KOD_KENAR_MODUL) * seritModulu(genislik);
 
 // El okuyucu klavyeyle yazar ve kod büyük harf okunur (kod-sozlugu.ts): Türkçe harf ASCII'ye, büyük harfe çevrilir; "/" ve ":" ayraçtır.

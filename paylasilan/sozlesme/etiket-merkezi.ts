@@ -49,12 +49,13 @@ export const KOD_KENAR_MODUL = 2 as const;
 
 // Ölçüler milimetredir; yazıcı noktasına sunucu çevirir.
 // kosul: verilirse öğe yalnız o alanın değeri varken basılır (alan başlığı değeri olmayan satırda kalmaz; red çerçevesi yalnız redde).
-// ters: siyah zemin üstüne beyaz yazı. simge: alanın değeri "<karo>:<piktogram>" (etiket-piktogramlari.ts), "=" ile sabit.
+// ters: siyah zemin üstüne beyaz yazı. mono: elle yazılacak kod eşit aralıklı yazıyla çizilir (önizleme ve vektör baskı; yazıcının
+// yerleşik yazısı değişmez). simge: alanın değeri "<karo>:<piktogram>" (etiket-piktogramlari.ts), "=" ile sabit.
 const mm = z.number().nonnegative();
 const kosul = z.string().optional();
 const metinOgesi = z.object({
   tur: z.literal('metin'), x: mm, y: mm, genislik: mm, yukseklik: mm,
-  yaziMm: z.number().positive(), kalin: z.boolean(), alan: z.string(), ters: z.boolean().optional(), kosul,
+  yaziMm: z.number().positive(), kalin: z.boolean(), alan: z.string(), ters: z.boolean().optional(), mono: z.boolean().optional(), kosul,
 });
 // Kod simgesi varsayılan DataMatrix'tir; QR yalnız açıkça istenirse (yazıcı denemesi) çizilir.
 export const KOD_SIMGELERI = ['dm', 'qr'] as const;
@@ -170,7 +171,7 @@ export type RaflarCevabi = z.infer<typeof raflarCevabi>;
 
 // Önizleme, yazıcıya gidenle aynı yerleşimden çıkar: metin satırlara bölünmüş, kod kare matrisiyle gelir.
 export const onizlemeOgesiSemasi = z.discriminatedUnion('tur', [
-  z.object({ tur: z.literal('metin'), x: mm, y: mm, genislik: mm, yaziMm: z.number(), kalin: z.boolean(), satirlar: z.array(z.string()), ters: z.boolean().optional() }),
+  z.object({ tur: z.literal('metin'), x: mm, y: mm, genislik: mm, yaziMm: z.number(), kalin: z.boolean(), satirlar: z.array(z.string()), ters: z.boolean().optional(), mono: z.boolean().optional() }),
   z.object({ tur: z.literal('kod'), x: mm, y: mm, boyut: mm, veri: z.string(), simge: z.enum(KOD_SIMGELERI), kareler: z.array(z.array(z.boolean())) }),
   z.object({ tur: z.literal('kutu'), x: mm, y: mm, genislik: mm, yukseklik: mm, kalinlik: mm }),
   z.object({ tur: z.literal('simge'), x: mm, y: mm, boyut: mm, ad: z.enum(PIKTOGRAM_ADLARI), karo: z.enum(KARO_TURLERI) }),

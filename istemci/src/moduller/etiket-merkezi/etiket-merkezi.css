@@ -20,6 +20,8 @@
 .tc-etk-cizgi { fill: none; stroke: var(--ink); }
 .tc-etk-yazi { fill: var(--ink); font-family: var(--font-ana); }
 .tc-etk-kalin { font-weight: 700; }
+/* 3758 b: elle yazılacak kod eşit aralıklı; sıfır noktalı, 1 ile I ayrı çizilir. */
+.tc-etk-mono { font-family: var(--font-mono); font-weight: 800; }
 .tc-etk-ters { fill: var(--panel-solid); }
 .tc-etk-oyuk-cizgi { fill: none; stroke: var(--panel-solid); }
 .tc-etk-tur { display: inline-flex; align-items: center; gap: var(--b-2); }

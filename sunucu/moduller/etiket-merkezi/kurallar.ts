@@ -1,6 +1,6 @@
 import { adresAraliktaMi, adresCoz, type AgAraligi } from '#paylasilan/ag-araligi.ts';
 import { cm1Coz, KALITE_DURUM_KODLARI, kimlikKodu } from '#paylasilan/etiket-kodu.ts';
-import { KOD_ONEKI } from '#paylasilan/kod-sozlugu.ts';
+import { KOD_ONEKI, okunurKod } from '#paylasilan/kod-sozlugu.ts';
 import { tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { KaliteDurumu } from '#paylasilan/sozlesme/stok.ts';
@@ -12,7 +12,7 @@ import { simgeCoz } from '#paylasilan/etiket-piktogramlari.ts';
 import { KALIN_GENIS, NORMAL_GENIS, OLCULEN_HARFLER } from './harf-genislikleri.ts';
 import { YAZICI_AGI_DEGISKENI } from './ag.ts';
 import { kodMatrisi } from './kod-matrisi.ts';
-import { cm1Sigdir, cm1Yaz, kodUstSiniri } from './kod-yaz.ts';
+import { SERIT_KOD_BASLIGI, SERIT_KOD_EN_KUCUK, cm1Sigdir, cm1Yaz, kodUstSiniri, seritKodBasligiVar, seritKodYazisi } from './kod-yaz.ts';
 
 // Saf kurallar: yerleşim (mm -> satır ve QR matrisi), sınır denetimi ve yazıcıya giden metnin arındırılması.
 // Kural numaraları KURAL-TEST.md'deki testlere bağlıdır.
@@ -280,6 +280,7 @@ function qrVeKodu(s: Sablon, o: SablonOgesi, qr: QrYerlesimi): OnizlemeOgesi[] {
   // Şerit (kart 3562): kod şeridin ortasındadır; kimlik kalın, en az 1,8 mm ve şerit eninde ortalanır (elle yazılacak yedek satır).
   const serit = (s.yerlesim === 'kod-seridi' || (s.yerlesim === 'serit' && s.taban !== 'raf-100x100')) && o.alan === 'qr';
   const seritGenisligi = serit ? 2 * (o.x + o.boyut / 2) - SERIT_YAN_PAY : o.boyut;
+  if (serit) return seritKodu(s, o, qr, yer, seritGenisligi);
   const istenen = serit ? (o.boyut >= 20 ? 2 : 1.8) : Math.min(KOD_ALTI_EN_BUYUK_YAZI, Math.max(KOD_ALTI_EN_KUCUK_YAZI, Math.round(o.boyut * KOD_ALTI_YAZI_ORANI * 10) / 10));
   const disari = yer >= KOD_ALTI_EN_KUCUK_YAZI;
   const yazi = disari ? Math.min(istenen, Math.floor(yer * 10) / 10) : istenen;
@@ -297,6 +298,32 @@ function qrVeKodu(s: Sablon, o: SablonOgesi, qr: QrYerlesimi): OnizlemeOgesi[] {
   }];
 }
 
+// 3758 b: şeritte karekodun altında "KOD" başlığı (dar etikette yok) ve kalın, eşit aralıklı, gruplu kod (okunurKod). Kod tek satıra
+// sığana kadar SERIT_KOD_EN_KUCUK'e iner, yetmezse ayıraçtan ikinci satıra geçer; yer yetmezse karekod o kadar küçülür. Genişlik
+// orantılı harf tablosuyla ölçülür: yazıcının yerleşik yazısı eşit aralıklı değildir ve tablo her harfi en az 0,6 sayar.
+const yuvarla2 = (v: number): number => Math.round(v * 100) / 100;
+function seritKodu(s: Sablon, o: Extract<SablonOgesi, { tur: 'kod' }>, qr: QrYerlesimi, yer: number, genislik: number): OnizlemeOgesi[] {
+  const ozet = cm1Coz(qr.veri);
+  const kod = okunurKod(ozet === null ? qr.veri : kimlikKodu(ozet));
+  const baslikH = seritKodBasligiVar(s.genislik) ? SERIT_KOD_BASLIGI * SATIR_ARALIGI + 0.1 : 0;
+  let yazi = seritKodYazisi(s.genislik, s.yukseklik);
+  while (yazi > SERIT_KOD_EN_KUCUK + 1e-9 && metinGenisligi(kod, yazi, true) > genislik + 1e-9) yazi = Math.round((yazi - 0.1) * 10) / 10;
+  const satirlar = metinGenisligi(kod, yazi, true) <= genislik + 1e-9 ? [kod] : satirlaraBol(kod, genislik, 1000, yazi, true);
+  const gereken = baslikH + satirlar.length * yazi * SATIR_ARALIGI;
+  const boyut = yuvarla2(o.boyut - Math.max(0, gereken - yer));
+  const kare: QrYerlesimi = { ...qr, x: o.x + (o.boyut - boyut) / 2, boyut };
+  const orta = o.x + o.boyut / 2;
+  const satir = (metni: string, y: number, boy: number, mono: boolean): OnizlemeOgesi => {
+    const w = Math.ceil(Math.min(genislik, metinGenisligi(metni, boy, true)) * 100) / 100;
+    return { tur: 'metin', x: Math.max(0, yuvarla2(orta - w / 2)), y: yuvarla2(y), genislik: w, yaziMm: boy, kalin: true, satirlar: [metni], ...(mono ? { mono: true } : {}) };
+  };
+  let y = o.y + boyut + KOD_ALTI_ARALIK;
+  const ogeler: OnizlemeOgesi[] = [kare];
+  if (baslikH > 0) { ogeler.push(satir('KOD', y, SERIT_KOD_BASLIGI, false)); y += baslikH; }
+  for (const m of satirlar) { ogeler.push(satir(m, y, yazi, true)); y += yazi * SATIR_ARALIGI; }
+  return ogeler;
+}
+
 // EM-26 (kart 2168): koşullu öğe yalnız koşul alanının değeri varken basılır; tanınmayan simge değeri basılmaz.
 function ogeYerlesimi(o: SablonOgesi, veri: AlanDegerleri, sade: boolean): OnizlemeOgesi | null {
   if (o.tur !== 'kod' && o.kosul !== undefined && alanDegeri(o.kosul, veri) === null) return null;
@@ -309,7 +336,7 @@ function ogeYerlesimi(o: SablonOgesi, veri: AlanDegerleri, sade: boolean): Onizl
   const metin = tekSatir(sade ? sadelestir(ham) : ham);
   const yaziMm = sigdirilmisYazi(metin, o.genislik, o.yukseklik, o.yaziMm, o.kalin);
   return {
-    tur: 'metin', x: o.x, y: o.y, genislik: o.genislik, yaziMm, kalin: o.kalin, satirlar: satirlaraBol(metin, o.genislik, o.yukseklik, yaziMm, o.kalin), ...(o.ters ? { ters: true } : {}),
+    tur: 'metin', x: o.x, y: o.y, genislik: o.genislik, yaziMm, kalin: o.kalin, satirlar: satirlaraBol(metin, o.genislik, o.yukseklik, yaziMm, o.kalin), ...(o.ters ? { ters: true } : {}), ...(o.mono ? { mono: true } : {}),
   };
 }
 
@@ -519,6 +546,7 @@ export const REFAKAT_ADIM_SAYISI = 15;
 export const REFAKAT_SATIR_ARALIGI = 5.2;
 // Alt çizgi (mm); işlem satırları ve basım satırı bu çizgiye göre yerleşir.
 export const REFAKAT_ALT_CIZGI = 143.4;
+export const REFAKAT_KOD_KUTUSU_SATIRI = 14;
 export const REFAKAT_CIKIS_SATIRI = 'Mamul deposu / sevk';
 export function refakatAdimlari(adimlar: RefakatKartiCevabi['adimlar']): Record<string, string | null> {
   const sonuc: Record<string, string | null> = {};
@@ -544,10 +572,13 @@ export function refakatAdimlari(adimlar: RefakatKartiCevabi['adimlar']): Record<
 export function refakatPartisiDegerleri(
   k: RefakatKartiCevabi, r: { qr: string; etiket: string }, lot: { lotNo: string; tedarikciPartiNo: string | null; dokumNo: string | null; sertifikaNo: string | null }, basim: Date,
 ): AlanDegerleri {
+  const temel = refakatDegerleri(k, basim);
   return {
-    ...refakatDegerleri(k, basim),
+    ...temel,
     qr: ozetKod(r.qr, { ...refakatKodAlanlari(k), LOT: lot.lotNo }, null, basim),
     emirNo: r.etiket,
+    // 3758 b: kartın sağ altındaki REFAKAT KODU kutusu 13. satırın altındadır, 14. işlem satırıyla çakışır; uzun rotada basılmaz, kod şeritte kalır.
+    kartKodu: (temel[`adim${REFAKAT_KOD_KUTUSU_SATIRI}Ad`] ?? null) === null ? okunurKod(r.qr) : null,
     lot: birlestir([`Lot ${lot.lotNo}`, lot.tedarikciPartiNo && `Parti ${lot.tedarikciPartiNo}`, lot.dokumNo && `Döküm ${lot.dokumNo}`, lot.sertifikaNo && `Sertifika ${lot.sertifikaNo}`]),
     lotNo: lot.lotNo,
     lotEk: birlestir([lot.dokumNo && `Döküm ${lot.dokumNo}`, lot.sertifikaNo && `Sertifika ${lot.sertifikaNo}`, lot.tedarikciPartiNo && `Tedarikçi partisi ${lot.tedarikciPartiNo}`]),

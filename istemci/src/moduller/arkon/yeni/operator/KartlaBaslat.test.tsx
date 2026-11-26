@@ -11,6 +11,11 @@ describe('3337-2 a: iş refakat kartıyla başlar', () => {
     expect(kartGirdisiCoz('RP:120', kartlar)).toBe(120);
     expect(kartGirdisiCoz(' ue-000120-p1 ', kartlar)).toBe(120);
     expect(kartGirdisiCoz('45', kartlar)).toBe(45);
+    // 3758 b: kartın REFAKAT KODU kutusundaki gruplu kod ve kart adı boşluk, tire, harf büyüklüğü fark etmeden çözülür.
+    expect(kartGirdisiCoz('RP 120', kartlar)).toBe(120);
+    expect(kartGirdisiCoz('rp-12O', kartlar)).toBe(120);
+    expect(kartGirdisiCoz('UE 000120 P1', kartlar)).toBe(120);
+    expect(kartGirdisiCoz('ue000120p1', kartlar)).toBe(120);
     expect(kartGirdisiCoz('LOT:ORN-1', kartlar)).toBeNull();
     expect(kartGirdisiCoz('  ', kartlar)).toBeNull();
   });
