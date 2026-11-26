@@ -20,3 +20,4 @@
 .tc-hs-blok { display: block; margin: 0; }
 .tc-hs-acilim .tc-hs-alt { justify-items: stretch; }
 .tc-hs-acilim .tc-hs-alt > button { justify-self: start; }
+.tc-hs-durdur-uyari { flex: 1 1 100%; color: var(--hazard); font-size: var(--yazi-sm); font-weight: 600; }

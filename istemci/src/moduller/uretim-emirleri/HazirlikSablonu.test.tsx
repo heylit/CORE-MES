@@ -9,8 +9,8 @@ import { OKUYUCU, ac, json, sunucuKur } from './test-ortak.tsx';
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const madde = (kod: string, ad: string, sira: number) => ({ kod, ad, kisa: ad, sira, acik: true, sistem: true, durduran: kod === 'cnc', sahip: 'ORN', isEmriDuzeyi: true, surum: 1 });
 const MADDELER: HazirlikMaddeleriCevabi = { maddeler: [madde('cnc', 'CNC kurulumu', 1), madde('aparat', 'Aparat', 2)], yazabilir: false };
-const sablon = (yazar: boolean): HazirlikSablonuCevabi => ({
-  yazar,
+const sablon = (yazar: boolean, durduranAcabilir = false): HazirlikSablonuCevabi => ({
+  yazar, durduranAcabilir,
   turler: [
     { operasyonTipiId: null, ad: 'Varsayılan (türü olmayan adım)', surum: null, kisiAdi: null, an: null, gerekce: null, satirlar: [] },
     { operasyonTipiId: 7, ad: 'ORN freze', surum: 2, kisiAdi: 'ORN Müdür', an: '2026-11-25T08:00:00.000Z', gerekce: 'ilk', satirlar: [
@@ -63,6 +63,32 @@ describe('3688 hazırlık şablonu sayfası', () => {
     expect(within(cnc.closest('li')!).getByText('Her zaman gerekli')).toBeTruthy();
     expect(cnc.checked).toBe(true);
     expect(cnc.disabled).toBe(true);
+  });
+
+  it('3740 müdür: durduran maddenin kutusu açılır, kaldırınca uyarı çıkar ve gerekçe zorunlu olur; PUT gerekçeyle gider', async () => {
+    const istekler = sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.adim-durumu' as const] }, {
+      'GET /adimli-emirler': () => json(200, { emirler: [] }),
+      'GET /hazirlik-maddeleri': () => json(200, MADDELER),
+      'GET /hazirlik-sablonu': () => json(200, sablon(true, true)),
+      'PUT /hazirlik-sablonu/7': () => json(200, { surum: 3 }),
+    });
+    ac([{ yol: '/adim-durumu', ekran: AdimDurumu }], '/adim-durumu?gorunum=sablon');
+    fireEvent.change(await screen.findByLabelText('Operasyon türü'), { target: { value: '7' } });
+    const cnc = await screen.findByRole('checkbox', { name: /CNC kurulumu/ }) as HTMLInputElement;
+    expect(cnc.disabled).toBe(false);
+    expect(screen.queryByText('Bu türdeki adımlar bu madde olmadan başlatılabilir.')).toBeNull();
+    fireEvent.click(cnc);
+    expect(screen.getByText('Bu türdeki adımlar bu madde olmadan başlatılabilir.')).toBeTruthy();
+    const kaydet = screen.getByRole('button', { name: 'Yeni sürüm kaydet' }) as HTMLButtonElement;
+    expect(kaydet.disabled).toBe(true);
+    expect(screen.getByText('Başlatmayı durduran maddeyi kapatmak için gerekçe yazın.')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/Gerekçe/), { target: { value: 'Bu tür programsız çalışır' } });
+    expect(kaydet.disabled).toBe(false);
+    fireEvent.click(kaydet);
+    await waitFor(() => { expect(istekler.some((i) => i.yontem === 'PUT')).toBe(true); });
+    const put = istekler.find((i) => i.yontem === 'PUT')!.govde as { gerekce: string; satirlar: { madde: string; gerekli: boolean }[] };
+    expect(put.gerekce).toBe('Bu tür programsız çalışır');
+    expect(put.satirlar.find((s) => s.madde === 'cnc')?.gerekli).toBe(false);
   });
 
   it('3739 yeni madde: yetkisi olanda düğme görünür, form açılır, eklenen madde listede hemen görünür; yetkisizde düğme yok', async () => {

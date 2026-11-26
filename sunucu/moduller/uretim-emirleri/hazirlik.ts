@@ -73,8 +73,10 @@ async function maddeler(db: Db, uretimEmriId: number, isEmriId: number | null, m
   const onay = await elleOnaylar(db, isEmirleri);
   const eksik = await elleEksikler(db, isEmirleri);
   const kapali = await kapaliSistemMaddeleri(db);
+  // 3740: müdürün şablonda gerekçeyle kapattığı durduran madde o türün adımını başlatmayı engellemez (görünümle aynı kaynak).
+  const sablonda = isEmriId === null ? undefined : (await sablonGerekmezMaddeleri(db, [isEmriId])).get(isEmriId);
   for (const m of HAZIRLIK_MADDELERI) {
-    if (isEmriId !== null && (hazirlikUyarirMi(m) || BASLATMADA_SORULMAZ.has(m))) continue;
+    if (isEmriId !== null && (hazirlikUyarirMi(m) || BASLATMADA_SORULMAZ.has(m) || sablonda?.has(m) === true)) continue;
     if (kapali.has(m)) { sonuc.set(m, 'gerekmez'); continue; }
     const c = cozuculer.get(m);
     if (!IS_EMRI_DUZEYI.has(m)) {

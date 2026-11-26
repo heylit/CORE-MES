@@ -6,9 +6,10 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import { kullaniciYukle, yoneticiOlustur } from '../kisiler/disari.ts';
 import { hazirlikSablonu, hazirlikSablonuOzelSil, hazirlikSablonuOzelYaz, hazirlikSablonuYaz, sablonGerekmezMaddeleri } from './hazirlik-sablonu.ts';
 import { uretimEmriAc } from './disari.ts';
-import { hazirlik } from './hazirlik.ts';
+import { hazirlik, hazirlikCozucusuKaydet, hazirlikDenetimi } from './hazirlik.ts';
+import type { HazirlikCozucusu } from './hazirlik.ts';
 import type { IsEmriGirdisi } from './disari.ts';
-import { OZEL_DURDURAN, SABLON_DEGISIKLIK_YOK, SABLON_DURDURAN, SABLON_DEGISTI, SABLON_MADDE_KAPALI, SABLON_MADDE_TEKRARI, SABLON_ROL_YOK, SABLON_TIP_YOK } from './hazirlik-sablonu-kurallari.ts';
+import { OZEL_DURDURAN, SABLON_DEGISIKLIK_YOK, SABLON_DURDURAN_GEREKCE, SABLON_DURDURAN_YETKI, SABLON_DEGISTI, SABLON_MADDE_KAPALI, SABLON_MADDE_TEKRARI, SABLON_ROL_YOK, SABLON_TIP_YOK } from './hazirlik-sablonu-kurallari.ts';
 
 // 3688: operasyon türüne göre hazırlık şablonu (sürümlü, yalnız eklenen). Adlar uydurmadır.
 describe('uretim-emirleri hazırlık şablonu (3688, gerçek PostgreSQL)', () => {
@@ -61,7 +62,36 @@ describe('uretim-emirleri hazırlık şablonu (3688, gerçek PostgreSQL)', () =>
     await assert.rejects(yaz('varsayilan', s('yok-madde'), null), (e: Error) => e.message === SABLON_MADDE_KAPALI);
     await assert.rejects(yaz('varsayilan', s('cnc', 999999), null), (e: Error) => e.message === SABLON_ROL_YOK);
     await assert.rejects(yaz('999999', s('cnc'), null), (e: Error) => e.message === SABLON_TIP_YOK);
-    await assert.rejects(yaz('varsayilan', [{ madde: 'cnc', gerekli: false, rolId: null, gun: 0 }], null, 'gerekçe olsa da'), (e: Error) => e.message === SABLON_DURDURAN);
+    await assert.rejects(yaz('varsayilan', [{ madde: 'cnc', gerekli: false, rolId: null, gun: 0 }], null), (e: Error) => e.message === SABLON_DURDURAN_GEREKCE);
+  });
+
+  // 3740 (Soru Merkezi 26.11: "Kilit kalsın, müdür açsın"): durduran madde şablonda varsayılan gerekli; yalnız müdür gerekçeyle kapatır.
+  test('durduran madde: müdür gerekçeyle kapatır; müdür olmayan ve gerekçesiz reddedilir; kayıtta kim ve neden görünür', async () => {
+    const ikinciTip = (await o().sahip.tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ('SBL-D', 'Durduran tipi', 'TAL') RETURNING id"))!.id;
+    const mudur = kisi;
+    const yazan: Kullanici = { id: kisi.id, ad: 'Yazan', islemler: ['projeler.sablon-yaz'] };
+    const kapali = [{ madde: 'cnc', gerekli: false, rolId: null, gun: 0 }, { madde: 'aparat', gerekli: true, rolId: null, gun: 0 }];
+    const yazK = (k: Kullanici, satirlar: typeof kapali, beklenen: number | null, gerekce: string | null) =>
+      o().vt.tx((db) => hazirlikSablonuYaz(db, k, String(ikinciTip), { satirlar, beklenenSurum: beklenen, gerekce }));
+    assert.ok(mudur.islemler.includes('uretim-emirleri.hazirlik-muaf'), 'yönetici müdür işlemine sahip');
+    assert.equal((await o().vt.okumaTx((db) => hazirlikSablonu(db, mudur))).durduranAcabilir, true);
+    assert.equal((await o().vt.okumaTx((db) => hazirlikSablonu(db, yazan))).durduranAcabilir, false);
+    assert.equal((await o().vt.okumaTx((db) => hazirlikSablonu(db, null))).durduranAcabilir, false);
+    await assert.rejects(yazK(yazan, kapali, null, 'gerekçe olsa da'), (e: Error) => e.message === SABLON_DURDURAN_YETKI);
+    await assert.rejects(yazK(mudur, kapali, null, null), (e: Error) => e.message === SABLON_DURDURAN_GEREKCE);
+    await assert.rejects(yazK(mudur, kapali, null, '   '), (e: Error) => e.message === SABLON_DURDURAN_GEREKCE);
+    assert.equal((await tur(ikinciTip)).surum, null, 'reddedilen yazma sürüm bırakmaz');
+    assert.deepEqual(await yazK(mudur, kapali, null, 'Bu tür CNC programsız çalışır'), { surum: 1 });
+    const t = await tur(ikinciTip);
+    assert.equal(t.satirlar.find((x) => x.madde === 'cnc')?.gerekli, false);
+    assert.equal(t.gerekce, 'Bu tür CNC programsız çalışır');
+    assert.equal(t.kisiAdi, 'Deneme Yönetici');
+    assert.ok(t.an !== null);
+    // Önceki sürümde zaten kapalı olan madde taşınırken müdür olmayan da başka maddeyi değiştirebilir; yeniden açmak herkese serbesttir.
+    const baska = [{ madde: 'cnc', gerekli: false, rolId: null, gun: 0 }, { madde: 'aparat', gerekli: false, rolId: null, gun: 0 }];
+    assert.deepEqual(await yazK(yazan, baska, 1, null), { surum: 2 });
+    assert.deepEqual(await yazK(yazan, [{ madde: 'cnc', gerekli: true, rolId: null, gun: 0 }, { madde: 'aparat', gerekli: false, rolId: null, gun: 0 }], 2, null), { surum: 3 });
+    await assert.rejects(yazK(yazan, baska, 3, 'yeniden kapatma'), (e: Error) => e.message === SABLON_DURDURAN_YETKI);
   });
 
   test('adım matrisi: türün şablonu gerekmez dediği madde o adımda gerekmez; türü şablonsuz adım varsayılana bakar', { timeout: 60000 }, async () => {
@@ -103,6 +133,20 @@ describe('uretim-emirleri hazırlık şablonu (3688, gerçek PostgreSQL)', () =>
     await assert.rejects(ozel(false, 'cnc'), (e: Error) => e.message === OZEL_DURDURAN);
     await v.tx((db) => hazirlikSablonuOzelSil(db, kisi, emir.uretimEmriId, 'aparat'));
     assert.ok((await gor()).get(idler[0]!)?.has('aparat'), 'şablona dönüldü');
+
+    // 3740 başlatma kapısı: müdürün şablonda kapattığı durduran madde o türün adımını durdurmaz; açıkken (şablonda gerekli) durdurur.
+    const eksik: HazirlikCozucusu = async (_db, ids) => new Map(ids.map((x) => [x, { durum: 'yok', secildi: true } as const]));
+    const onceki = hazirlikCozucusuKaydet('cnc', eksik);
+    try {
+      const olay = (isEmriId: number) => ({ uretimEmriId: emir.uretimEmriId, isEmriId, istasyonId: ist, kisiId: kisi.id });
+      assert.match(String(await v.okumaTx((db) => hazirlikDenetimi(db, olay(idler[0]!)))), /CNC/, 'şablonda gerekli: durdurur');
+      const surum = (await tur(tipId)).surum;
+      await yaz(String(tipId), [{ madde: 'cnc', gerekli: false, rolId: null, gun: 3 }, { madde: 'aparat', gerekli: false, rolId: null, gun: 0 }], surum, 'Bu türde program yok');
+      assert.equal(await v.okumaTx((db) => hazirlikDenetimi(db, olay(idler[0]!))), null, 'şablonda kapalı: durdurmaz');
+      assert.match(String(await v.okumaTx((db) => hazirlikDenetimi(db, olay(idler[1]!)))), /CNC/, 'başka tür etkilenmez');
+      assert.equal((await v.okumaTx((db) => hazirlik(db, emir.uretimEmriId))).isEmirleri[0]?.maddeler.find((x) => x.madde === 'cnc')?.durum, 'gerekmez');
+      await assert.rejects(ozel(false, 'cnc'), (e: Error) => e.message === OZEL_DURDURAN, 'emre özel fark durduranı yine kapatamaz');
+    } finally { hazirlikCozucusuKaydet('cnc', onceki); }
   });
 
   test('geçmiş silinemez ve değiştirilemez (yalnız eklenir)', async () => {

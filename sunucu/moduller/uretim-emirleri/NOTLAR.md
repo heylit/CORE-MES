@@ -17,7 +17,6 @@ Koddan okunamayanlar: neden, vazgeçilen yol, tuzak. En çok 30 satır; eskiyen 
   "Durdur" görünür ve 409 alır); ekran dışarıdaki yazımda.
 - Başlat ve bitir emri `FOR UPDATE` ile kilitler; aynı emre eşzamanlı iki komut sıraya girer, ikincisi güncel
   durumu görüp 409 alır.
-- Pasif istasyon: iş merkezi pasifse istasyon da pasif sayılır (`istasyonlar/disari.ts` aktif listesi).
 - Defter (`uretim_kaydi`) çok seferli üretime hazırdır: (emir, olay) benzersiz DEĞİL. Tek başlat / tek bitir
   kuralını emir durumu taşır.
 - Komutlar (başlat, bitir, sayım, duraklat, devam, durdur) ve kimlikle emir özeti `disari.ts`'te dışa açıktır: Arkon
@@ -28,3 +27,4 @@ Koddan okunamayanlar: neden, vazgeçilen yol, tuzak. En çok 30 satır; eskiyen 
   sıradakinindir (boş olabilir). Ekran durumu iş emirlerinden türer (`gorunenDurum`). Sayaç, olay ve kontrol listesi `TERMINAL_IS_EMRI`
   kapsamında okunur; defter satırları iş emri bitmeden yazılmalıdır (kapsam çalışan iş emridir).
 - Malzeme resmi (kart #688): liste ve ayrıntı küçük resmi istemcide çizim merkezinden alır (`cizimler/disari.ts` `useKucukResimler('malzemeler', malzemeNo)`, tek istek); emir cevabı değişmez, terminalin açık emir okuması büyümez. Resim okunamazsa ekran resimsiz çalışır.
+- Durduran madde şablonda varsayılan kilitli; yalnız müdür (`hazirlik-muaf`) gerekçeyle kapatır (3740, Soru Merkezi 26.11 "Kilit kalsın, müdür açsın"). Kapalı durduran başlatma kapısında da gerekmez sayılır; emre özel fark ve elle "hazır değil" işareti değişmedi.
