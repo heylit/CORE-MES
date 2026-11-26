@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -9,6 +10,7 @@ import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { anahtarlar as ortakAnahtarlar } from '../../ortak/veri/anahtarlar.ts';
 import type { Kullanici } from '../../ortak/veri/oturum.ts';
 import { BaglantiIzleme } from './BaglantiIzleme.tsx';
+import { LogoGitmeyenSayfasi, SmartesGitmeyenSayfasi } from './MerkezBolumleri.tsx';
 import { duranGruplari, izlemeSatirlari, parcalara } from './baglanti-izleme.ts';
 
 // Biçim sunucu cevabından (logo/yeniden-gonder.test.ts T9); değerler uydurma deneme değerleridir.
@@ -62,10 +64,10 @@ function sunucuKur(logoCevabi: LogoGidenIzlemeCevabi = logo, smartesCevabi: Smar
   }));
   return cagrilar;
 }
-function cizdir(islemler: Islem[]) {
+function cizdir(islemler: Islem[], ekran: ReactNode = <BaglantiIzleme />) {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   istemci.setQueryData<Kullanici>(ortakAnahtarlar.oturum, { id: 1, ad: 'Deneme', islemler });
-  return render(<QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter><BaglantiIzleme /></MemoryRouter></BildirimSaglayici></QueryClientProvider>);
+  return render(<QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter>{ekran}</MemoryRouter></BildirimSaglayici></QueryClientProvider>);
 }
 const yazmali: Islem[] = ['sayfa.guvenlik', 'saglik.ayrinti-oku', 'ayarlar.yaz'];
 const yalnizGoren: Islem[] = ['sayfa.guvenlik', 'saglik.ayrinti-oku'];
@@ -363,5 +365,40 @@ describe('Bağlantı izleme (3313)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Akışlar' }));
     expect(await screen.findByText('Henüz okunmadı')).toBeTruthy();
     expect(screen.getByText('4 · 2 hatalı')).toBeTruthy();
+  });
+});
+
+describe('Logo ve SmartES sayfasında gitmeyen belgeler (3737)', () => {
+  it('Logo sayfası yalnız Logo uçlarını çağırır, SmartES satırı ve kartı yoktur', async () => {
+    const cagrilar = sunucuKur();
+    cizdir([...yalnizGoren, 'sayfa.logo'], <LogoGitmeyenSayfasi />);
+    expect(await screen.findByText('Talep fişine hizmet satırı yazılamaz.')).toBeTruthy();
+    expect(cagrilar.some((c) => c.yol.startsWith('/smartes'))).toBe(false);
+    expect(screen.queryByText('ORN-IE-7')).toBeNull();
+    expect(screen.queryByRole('region', { name: 'SmartES' })).toBeNull();
+    expect(screen.queryByText(/sayfasını aç/)).toBeNull();
+  });
+
+  it('SmartES sayfası yalnız SmartES uçlarını çağırır', async () => {
+    const cagrilar = sunucuKur();
+    cizdir([...yalnizGoren, 'sayfa.smartes'], <SmartesGitmeyenSayfasi />);
+    expect(await screen.findByText('Servise ulaşılamadı')).toBeTruthy();
+    expect(cagrilar.some((c) => c.yol.startsWith('/logo'))).toBe(false);
+    expect(screen.queryByText('Talep fişine hizmet satırı yazılamaz.')).toBeNull();
+  });
+
+  it('ayrıntı yetkisi olmayana bölüm açılmaz, uç çağrılmaz', () => {
+    const cagrilar = sunucuKur();
+    cizdir(['sayfa.logo'], <LogoGitmeyenSayfasi />);
+    expect(screen.getByText('Bu bölümü görme yetkiniz yok.')).toBeTruthy();
+    expect(cagrilar).toEqual([]);
+  });
+
+  it('Güvenlik > Bağlantı izleme başında yalnız görülebilen sayfaya giden satır durur', async () => {
+    sunucuKur();
+    cizdir([...yalnizGoren, 'sayfa.logo']);
+    const git = await screen.findByRole('link', { name: /Logo sayfasını aç/ });
+    expect(git.getAttribute('href')).toBe('/logo');
+    expect(screen.queryByRole('link', { name: /SmartES sayfasını aç/ })).toBeNull();
   });
 });

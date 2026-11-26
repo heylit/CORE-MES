@@ -38,7 +38,9 @@ const GRUPLAR: readonly { yon: EntegrasyonYonu; baslik: string; simge: 'down' | 
   { yon: 'istek', baslik: 'Tıklayınca gidenler', simge: 'search' },
 ];
 
-const anahtar = (kok: string) => ['entegrasyon', kok] as const;
+// Özet şeridi (3737) aynı önbelleği okur: sayfadaki yönetim bölümüyle tek istek.
+export const entegrasyonAnahtari = (kok: string) => ['entegrasyon', kok] as const;
+const anahtar = entegrasyonAnahtari;
 
 function akisRozeti(a: EntegrasyonAkisi): { metin: string; ton: RozetTonu } {
   if (!a.acik) return { metin: 'Kapalı', ton: 'pasif' };

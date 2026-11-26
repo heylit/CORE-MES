@@ -5,6 +5,7 @@ import { Dugme, DurumKutusu, EntegrasyonYonetimi, Kart, Rozet, Tablo, type Rozet
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { SmartesOzeti } from './SmartesOzeti.tsx';
 import { BAGLANTI, KAYNAK_ADI, YOK, sayiMetni, zamanMetni } from './gosterim.ts';
 import './smartes.css';
 
@@ -60,7 +61,8 @@ export function BaglantiDurumu() {
 
   return (
     <div className="tc-sg-sayfa">
-    {/* 3445: bağlantı, akış ayarları ve akış günlüğü; aşağıda okunan kayıtların özeti kalır. */}
+    {/* 3737 a: başta özet şeridi. 3445: bağlantı, akış ayarları ve akış günlüğü; aşağıda okunan kayıtların özeti kalır. */}
+    <SmartesOzeti />
     <EntegrasyonYonetimi ad="SmartES" kok="/smartes" />
     <Kart
       baslik="Okunan kayıtlar"

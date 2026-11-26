@@ -4,7 +4,7 @@ import type { LogoBelirsizKontrolCevabi, LogoGidenIzlemeCevabi, LogoHazirlikCeva
 import { baglantiHatasiMetni, baglantiHatasiSatirlari, yazilamiyorSatirlari } from '#paylasilan/logo-baglanti-metni.ts';
 import type { HataSatirlari } from '#paylasilan/logo-baglanti-metni.ts';
 import type { SmartesGidenIzlemeCevabi, SmartesHazirlikCevabi, SmartesYenidenGonderCevabi } from '#paylasilan/sozlesme/smartes.ts';
-import { Dugme, DurumKutusu, IsaretKutusu, Pencere, Rozet, Simge, Tablo, useBildirim, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, IsaretKutusu, MerkezBaglantisi, Pencere, Rozet, Simge, Tablo, useBildirim, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
@@ -14,6 +14,7 @@ import { BOS, zamanMetni } from './gorunum.ts';
 import './guvenlik.css';
 
 const YENILEME_MS = 30_000;
+const NOT_BASI = { Logo: "Logo'ya", SmartES: "SmartES'e", ikisi: "Logo ve SmartES'e" } as const;
 type Gorunum = 'gitmeyen' | IzlemeDurumu | 'akislar';
 
 const SUTUNLAR: readonly Sutun<IzlemeSatiri>[] = [
@@ -60,38 +61,55 @@ function akisSatirlari(logo: LogoHazirlikCevabi | undefined, smartes: SmartesHaz
   return [...l, ...s];
 }
 
-export function BaglantiIzleme() {
+// 3737 a: Logo ve SmartES sayfası aynı ekranı yalnız kendi sistemiyle açar (kaynak); öteki sistemin ucu çağrılmaz. Kaynaksız açılış
+// (Güvenlik > Bağlantı izleme) ikisini birlikte gösterir ve başında iki sayfaya giden satır durur.
+export function BaglantiIzleme({ kaynak }: { kaynak?: 'Logo' | 'SmartES' } = {}) {
+  const logoAcik = kaynak !== 'SmartES';
+  const smartesAcik = kaynak !== 'Logo';
   const oturum = useOturum();
   const gonderir = oturum.data?.islemler.includes('ayarlar.yaz') === true;
   const [gorunum, gorunumYaz] = useState<Gorunum>('gitmeyen');
   const [secili, seciliYaz] = useState<IzlemeSatiri | null>(null);
   const [toplu, topluYaz] = useState(false);
-  const logo = useQuery({ queryKey: anahtarlar.izlemeLogo, queryFn: () => api.get<LogoGidenIzlemeCevabi>('/logo/giden'), refetchInterval: YENILEME_MS });
-  const smartes = useQuery({ queryKey: anahtarlar.izlemeSmartes, queryFn: () => api.get<SmartesGidenIzlemeCevabi>('/smartes/giden/sorunlar'), refetchInterval: YENILEME_MS });
-  const logoHazirlik = useQuery({ queryKey: anahtarlar.izlemeLogoHazirlik, queryFn: () => api.get<LogoHazirlikCevabi>('/logo/hazirlik'), refetchInterval: YENILEME_MS });
-  const smartesHazirlik = useQuery({ queryKey: anahtarlar.izlemeSmartesHazirlik, queryFn: () => api.get<SmartesHazirlikCevabi>('/smartes/hazirlik'), refetchInterval: YENILEME_MS });
-  const satirlar = izlemeSatirlari(logo.data, smartes.data);
+  const logo = useQuery({ queryKey: anahtarlar.izlemeLogo, queryFn: () => api.get<LogoGidenIzlemeCevabi>('/logo/giden'), refetchInterval: YENILEME_MS, enabled: logoAcik });
+  const smartes = useQuery({ queryKey: anahtarlar.izlemeSmartes, queryFn: () => api.get<SmartesGidenIzlemeCevabi>('/smartes/giden/sorunlar'), refetchInterval: YENILEME_MS, enabled: smartesAcik });
+  const logoHazirlik = useQuery({ queryKey: anahtarlar.izlemeLogoHazirlik, queryFn: () => api.get<LogoHazirlikCevabi>('/logo/hazirlik'), refetchInterval: YENILEME_MS, enabled: logoAcik });
+  const smartesHazirlik = useQuery({ queryKey: anahtarlar.izlemeSmartesHazirlik, queryFn: () => api.get<SmartesHazirlikCevabi>('/smartes/hazirlik'), refetchInterval: YENILEME_MS, enabled: smartesAcik });
+  const satirlar = izlemeSatirlari(logoAcik ? logo.data : undefined, smartesAcik ? smartes.data : undefined);
+  // Kapalı sorgu hep "bekliyor" görünür; yalnız açık olanlar sayılır.
+  const listeBekliyor = (logoAcik && logo.isPending) || (smartesAcik && smartes.isPending);
+  const hazirlikBekliyor = (!logoAcik || logoHazirlik.isPending) && (!smartesAcik || smartesHazirlik.isPending);
+  const logoHatasi = logoAcik && logo.isError;
+  const smartesHatasi = smartesAcik && smartes.isError;
+  const ikisiHata = (!logoAcik || logoHatasi) && (!smartesAcik || smartesHatasi);
+  const sistemAdi = kaynak ?? 'Logo ve SmartES';
   const say = sayac(satirlar);
   const gitmeyen = satirlar.length;
   const gorunen = gorunum === 'gitmeyen' || gorunum === 'akislar' ? satirlar : satirlar.filter((s) => s.durum === gorunum);
   const gruplar = duranGruplari(satirlar);
-  const yenile = () => { void logo.refetch(); void smartes.refetch(); void logoHazirlik.refetch(); void smartesHazirlik.refetch(); };
-  const kesildi = logo.data?.kesildi === true || smartes.data?.kesildi === true;
+  const yenile = () => {
+    if (logoAcik) { void logo.refetch(); void logoHazirlik.refetch(); }
+    if (smartesAcik) { void smartes.refetch(); void smartesHazirlik.refetch(); }
+  };
+  const kesildi = (logoAcik && logo.data?.kesildi === true) || (smartesAcik && smartes.data?.kesildi === true);
 
   return (
     <div className="tc-guvenlik">
+      {kaynak === undefined && <><MerkezBaglantisi sistem="logo" /><MerkezBaglantisi sistem="smartes" /></>}
       <div className="tc-izleme-ust">
-        <p className="tc-guvenlik-not">Logo ve SmartES'e giden ve gelen her akış; gitmeyen belgenin nedeni ve ne yapılacağı. Kendiliğinden yenilenir.</p>
+        <p className="tc-guvenlik-not">{NOT_BASI[kaynak ?? 'ikisi']} giden ve gelen her akış; gitmeyen belgenin nedeni ve ne yapılacağı. Kendiliğinden yenilenir.</p>
         <div className="tc-guvenlik-cipler">
           <Dugme simge="rotate" onClick={yenile}>Yenile</Dugme>
           {gonderir && gruplar.length > 0 && <Dugme simge="next" onClick={() => topluYaz(true)}>Düzelttiklerimi yeniden gönder…</Dugme>}
         </div>
       </div>
-      {logoHazirlik.data?.yazilamiyor && <HataKutusu satirlar={yazilamiyorSatirlari(logoHazirlik.data.yazilamiyor)} />}
+      {logoAcik && logoHazirlik.data?.yazilamiyor && <HataKutusu satirlar={yazilamiyorSatirlari(logoHazirlik.data.yazilamiyor)} />}
       <div className="tc-izleme-kartlar">
-        <BaglantiKarti ad="Logo yardımcısı" simge="laptop" baglanti={logoHazirlik.data?.baglanti} kontrolUcu="/logo/hazirlik/kontrol"
-          surum={logoHazirlik.data?.yardimci ?? null} baglantiHatasi={logoHazirlik.data?.baglantiHatasi ?? null} ayrintiUstte={!!logoHazirlik.data?.yazilamiyor} kontrolSonrasi={() => void logoHazirlik.refetch()} />
-        <BaglantiKarti ad="SmartES" simge="cpu" baglanti={smartesHazirlik.data?.baglanti} kontrolUcu="/smartes/hazirlik/kontrol" />
+        {logoAcik && (
+          <BaglantiKarti ad="Logo yardımcısı" simge="laptop" baglanti={logoHazirlik.data?.baglanti} kontrolUcu="/logo/hazirlik/kontrol"
+            surum={logoHazirlik.data?.yardimci ?? null} baglantiHatasi={logoHazirlik.data?.baglantiHatasi ?? null} ayrintiUstte={!!logoHazirlik.data?.yazilamiyor} kontrolSonrasi={() => void logoHazirlik.refetch()} />
+        )}
+        {smartesAcik && <BaglantiKarti ad="SmartES" simge="cpu" baglanti={smartesHazirlik.data?.baglanti} kontrolUcu="/smartes/hazirlik/kontrol" />}
         <section className="tc-izleme-kart" aria-label="Gitmeyen belgeler">
           <Simge ad="alert" />
           <div>
@@ -112,13 +130,13 @@ export function BaglantiIzleme() {
         ))}
       </div>
       {gorunum === 'akislar' ? (
-        logoHazirlik.isPending && smartesHazirlik.isPending ? <DurumKutusu durum="yukleniyor" />
-          : <Tablo etiket="Logo ve SmartES akışları" sutunlar={AKIS_SUTUNLARI} satirlar={akisSatirlari(logoHazirlik.data, smartesHazirlik.data)} satirAnahtari={(a) => a.anahtar} bosMesaj="Akış bilgisi okunamadı" />
-      ) : logo.isPending || smartes.isPending ? <DurumKutusu durum="yukleniyor" />
-        : logo.isError && smartes.isError ? <DurumKutusu durum="hata" yenile={yenile} />
+        hazirlikBekliyor ? <DurumKutusu durum="yukleniyor" />
+          : <Tablo etiket={`${sistemAdi} akışları`} sutunlar={AKIS_SUTUNLARI} satirlar={akisSatirlari(logoAcik ? logoHazirlik.data : undefined, smartesAcik ? smartesHazirlik.data : undefined)} satirAnahtari={(a) => a.anahtar} bosMesaj="Akış bilgisi okunamadı" />
+      ) : listeBekliyor ? <DurumKutusu durum="yukleniyor" />
+        : ikisiHata ? <DurumKutusu durum="hata" yenile={yenile} />
           : (
             <>
-              {(logo.isError || smartes.isError) && <p className="tc-guvenlik-not">{logo.isError ? 'Logo' : 'SmartES'} listesi okunamadı; yalnız öteki gösteriliyor.</p>}
+              {(logoHatasi || smartesHatasi) && <p className="tc-guvenlik-not">{logoHatasi ? 'Logo' : 'SmartES'} listesi okunamadı; yalnız öteki gösteriliyor.</p>}
               {kesildi && <p className="tc-guvenlik-not">Liste uzun; en eski 500 belge gösteriliyor.</p>}
               <Tablo etiket="Gitmeyen belgeler" sutunlar={SUTUNLAR} satirlar={gorunen} satirAnahtari={(s) => s.anahtar} satirSec={seciliYaz}
                 bosMesaj={gorunum === 'gitmeyen' ? 'Gitmeyen belge yok' : 'Bu durumda belge yok'} />

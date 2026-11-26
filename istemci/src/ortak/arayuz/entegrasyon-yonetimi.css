@@ -32,3 +32,22 @@
 .tc-ey-satir[aria-pressed="true"] .tc-ey-satir-ad small { color: inherit; }
 .tc-ey-ayrinti { min-width: 0; scroll-margin-top: var(--b-5); }
 .tc-ey-gunluk-ust { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--b-3); }
+/* 3737: özet şeridi. Geniş ekranda dört kutu yan yana, dar ekranda ikişer; kutu iç düzeni sayı kartınındır. */
+.tc-ey-serit { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--b-3); min-width: 0; }
+@media (max-width: 1279px) { .tc-ey-serit { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Telefonda şerit kısa kalır: kutu simgesiz, ince; dört kutu iki satırda, satırdaki kutular aynı boy ve aynı dizilişte. */
+@media (max-width: 479px) {
+  .tc-ey-serit { gap: var(--b-2); }
+  .tc-ey-serit .tc-sayi-karti { align-items: flex-start; align-content: flex-start; min-height: var(--dokunma); padding-block: var(--b-3); padding-left: var(--b-4); }
+  .tc-ey-serit .tc-sayi-simge { display: none; }
+}
+/* 3737: Logo ve SmartES sayfasına giden satır. Dar ekranda metin sarılır, bağlantı alta iner; kesilmez. */
+.tc-merkez-baglantisi {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2) var(--b-4);
+  min-height: var(--dokunma); padding: var(--b-2) var(--b-4); border: 1px solid var(--edge); border-radius: var(--yari-2);
+  background: var(--panel); color: var(--ink); text-decoration: none;
+}
+.tc-merkez-baglantisi:hover { border-color: var(--edge2); }
+.tc-merkez-baglantisi:focus-visible { outline: 2px solid var(--hazard); outline-offset: 2px; }
+.tc-merkez-baglantisi-metin { flex: 1 1 16rem; min-width: 0; font-size: var(--yazi-s); color: var(--muted); overflow-wrap: anywhere; }
+.tc-merkez-baglantisi-git { display: inline-flex; align-items: center; gap: var(--b-2); flex: none; font-weight: 700; color: var(--done); }

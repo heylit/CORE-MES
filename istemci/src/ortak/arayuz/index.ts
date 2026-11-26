@@ -61,6 +61,8 @@ export { LOGO_DURUM_ADI, LOGO_DURUM_TONU, LogoRozeti, LogoRozetHucresi, useLogoR
 export { KilitliDeger, KilitliSutunNotu, YETKI_ADI } from './KilitliDeger.tsx';
 export { LogoBelgeAramasi } from './LogoBelgeAramasi.tsx';
 export { LogoBagi } from './LogoBagi.tsx';
-export { EntegrasyonYonetimi } from './EntegrasyonYonetimi.tsx';
+export { EntegrasyonYonetimi, entegrasyonAnahtari } from './EntegrasyonYonetimi.tsx';
+export { EntegrasyonOzeti } from './EntegrasyonOzeti.tsx';
 export { SabitEylem } from './SabitEylem.tsx';
 export { useTelefon } from './telefon.ts';
+export { MerkezBaglantisi } from './MerkezBaglantisi.tsx';

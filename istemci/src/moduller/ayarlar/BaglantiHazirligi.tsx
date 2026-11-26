@@ -4,7 +4,7 @@ import type { BaglantiAkisDurumu, LogoHazirlikCevabi, LogoKontrolCevabi, LogoYar
 import { baglantiHatasiSatirlari, yazilamiyorSatirlari } from '#paylasilan/logo-baglanti-metni.ts';
 import type { HataSatirlari } from '#paylasilan/logo-baglanti-metni.ts';
 import type { SmartesHazirlikCevabi, SmartesKontrolCevabi } from '#paylasilan/sozlesme/smartes.ts';
-import { Dugme, DurumKutusu, Kart, Rozet, Simge, type RozetTonu } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Kart, MerkezBaglantisi, Rozet, Simge, type RozetTonu } from '../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
@@ -163,7 +163,8 @@ export function yardimciSurumMetni(s: LogoYardimciSurumu | null): string {
   return s.durum === 'ayni' ? 'Bu paketle aynı' : s.ileti;
 }
 
-function LogoBolumu() {
+// 3737 a: Logo ve SmartES sayfasının Hazırlık maddesi de bu bölümleri çizer (MerkezBolumleri.tsx).
+export function LogoHazirligi() {
   const h = useQuery({ queryKey: anahtarlar.logoHazirlik, queryFn: () => api.get<LogoHazirlikCevabi>('/logo/hazirlik') });
   const k = useQuery({ queryKey: anahtarlar.logoKontrol, queryFn: () => api.get<LogoKontrolCevabi>('/logo/hazirlik/kontrol'), ...DENEME });
   if (h.isPending) return <Kart baslik="Logo Tiger köprüsü"><DurumKutusu durum="yukleniyor" /></Kart>;
@@ -197,7 +198,7 @@ function LogoBolumu() {
   );
 }
 
-function SmartesBolumu() {
+export function SmartesHazirligi() {
   const h = useQuery({ queryKey: anahtarlar.smartesHazirlik, queryFn: () => api.get<SmartesHazirlikCevabi>('/smartes/hazirlik') });
   const k = useQuery({ queryKey: anahtarlar.smartesKontrol, queryFn: () => api.get<SmartesKontrolCevabi>('/smartes/hazirlik/kontrol'), ...DENEME });
   if (h.isPending) return <Kart baslik="SmartES MES"><DurumKutusu durum="yukleniyor" /></Kart>;
@@ -234,8 +235,10 @@ export function BaglantiHazirligi() {
       <p className="tc-ayar-aciklama">
         Ayarları değiştirmek için Logo ve SmartES sekmelerine geçin. Adres ve anahtar sunucunun ortam değişkenlerindedir; değişince sunucu yeniden başlatılır.
       </p>
-      <LogoBolumu />
-      <SmartesBolumu />
+      <MerkezBaglantisi sistem="logo" />
+      <LogoHazirligi />
+      <MerkezBaglantisi sistem="smartes" />
+      <SmartesHazirligi />
     </div>
   );
 }
