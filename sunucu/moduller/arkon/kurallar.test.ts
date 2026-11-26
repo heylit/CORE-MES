@@ -633,7 +633,10 @@ test('iş emri taslağı: CORE alanları rotadan ve emirden; çevrim saniye, aya
   assert.equal(p['id'], 'tmi-ie-41');
   assert.equal(p['no'], 'UE-7');
   assert.equal(p['op'], 'Op 20 · Frezeleme');
-  assert.equal(p['rev'], 'C');
+  // 3755: "rev" emrin parça revizyonudur (seçilmemişte "—"); rota harfi "rotaRev"dedir.
+  assert.equal(p['rev'], '—');
+  assert.equal(p['rotaRev'], 'C');
+  assert.equal(isEmrindenTaslakPaket(girdi({ parcaRevizyonu: '00' }))['rev'], '00');
   assert.equal(p['machine'], 'AI2');
   assert.equal(p['mc'], 'M-5');
   assert.equal(p['cycle'], 75);
@@ -666,6 +669,10 @@ test('şablon: aynı malzeme, revizyon ve operasyonun en son yayınlanmışı; r
   assert.equal(sablonPaket([eski], 900, 30, 'C'), null);
   assert.equal(sablonPaket([eski, son], 900, 20, 'D'), null);
   assert.equal(sablonPaket([{ ...eski, rev: '' }], 900, 20, null), null);
+  // 3755: yeni pakette eşleşme rota harfiyle (rotaRev); "rev" parça revizyonudur ve eşleşmeye girmez.
+  const yeni = { malzemeNo: 900, rev: '01', rotaRev: 'C', tmi: { opNo: 20 }, publishedAt: 60, steps: [{ t: 'yeni' }] };
+  assert.equal(sablonPaket([son, yeni], 900, 20, 'C'), yeni);
+  assert.equal(sablonPaket([yeni], 900, 20, '01'), null);
   const p = isEmrindenTaslakPaket(girdi({ sablon }));
   assert.deepEqual(p['steps'], son.steps);
   assert.deepEqual(p['files'], son.files);

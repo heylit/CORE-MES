@@ -272,7 +272,7 @@ export const isEmriPaketKimligi = (isEmriId: number) => `tmi-ie-${isEmriId}`;
 // Elle bölünmüş işin (kart #1572) her parçası ayrı pakettir: kendi makinesi, adedi ve sırası. Kayıt ve sayım yine iş emrine yazılır.
 export const parcaPaketKimligi = (isEmriId: number, no: number) => `tmi-ie-${isEmriId}-p${no}`;
 
-export const TMI_PAKET_ALANLARI = ['no', 'partNo', 'malzemeNo', 'part', 'proje', 'rev', 'op', 'machine', 'mc', 'target', 'cycle', 'setup', 'due', 'priority', 'tmi'] as const;
+export const TMI_PAKET_ALANLARI = ['no', 'partNo', 'malzemeNo', 'part', 'proje', 'rev', 'rotaRev', 'op', 'machine', 'mc', 'target', 'cycle', 'setup', 'due', 'priority', 'tmi'] as const;
 const SABLON_ALANLARI = ['files', 'primary', 'plan', 'steps', 'rules', 'samp', 'readCfg', 'derived', 'material', 'note'] as const;
 
 export interface IsEmriPaketGirdisi {
@@ -299,6 +299,8 @@ export interface IsEmriPaketGirdisi {
   istasyon: Istasyon | null;
   makineKodu: string | null;
   revizyon: string | null;
+  // 3755: emrin parça (çizim) revizyonu; seçilmemişte kartın yayındaki çizimi, o da yoksa null ("—").
+  parcaRevizyonu?: string | null;
   talimat: string | null;
   sablon: Record<string, unknown> | null;
   // Rotasız emrin iş emri plana girmez: plan durumu yoktur, yayınlanınca operatöre düşer.
@@ -404,7 +406,7 @@ export function isEmrindenTaslakPaket(g: IsEmriPaketGirdisi): Record<string, unk
   const kopya = sablon === null ? {} : Object.fromEntries(SABLON_ALANLARI.filter((a) => a in sablon).map((a) => [a, sablon[a]]));
   return {
     id: g.parca ? parcaPaketKimligi(ie.id, g.parca.no) : isEmriPaketKimligi(ie.id), no: ie.emirNo, opType, st: depo.st,
-    partNo: emir.parcaNo, malzemeNo: ie.malzemeNo, part: emir.parcaAd, proje: g.proje ?? '', rev: g.revizyon ?? '', op: `Op ${ie.opNo} · ${ie.ad}`,
+    partNo: emir.parcaNo, malzemeNo: ie.malzemeNo, part: emir.parcaAd, proje: g.proje ?? '', rev: g.parcaRevizyonu ?? '—', rotaRev: g.revizyon ?? '', op: `Op ${ie.opNo} · ${ie.ad}`,
     machine: istasyon?.kod ?? '', mc: g.makineKodu ?? '', target: g.parca?.adet ?? ie.adimAdedi ?? ie.adet, cycle: birim === null ? null : Math.round(birim * 600) / 10, setup: ayar,
     due: ie.teslim ?? '', priority: ie.oncelik === 1 ? 'urgent' : 'normal', material: '', note: '',
     files: [], primary: null, plan: [], steps: talimatAdimlari(g.talimat), ...kopya,
@@ -623,7 +625,10 @@ export function sablonPaket(kayitli: readonly unknown[], malzemeNo: number, opNo
   if (revizyon === null || revizyon === '') return null;
   let secilen: Record<string, unknown> | null = null;
   for (const p of kayitli) {
-    if (!kayitMi(p) || p['malzemeNo'] !== malzemeNo || p['rev'] !== revizyon || alanOku(p['tmi'], 'opNo') !== opNo || typeof p['publishedAt'] !== 'number') continue;
+    // 3755: "rev" artık parça revizyonudur; eşleşme rota harfiyle (rotaRev). Bu alandan önce kaydedilmiş pakette rota harfi "rev"dedir.
+    if (!kayitMi(p)) continue;
+    const rotaHarfi = typeof p['rotaRev'] === 'string' ? p['rotaRev'] : p['rev'];
+    if (p['malzemeNo'] !== malzemeNo || rotaHarfi !== revizyon || alanOku(p['tmi'], 'opNo') !== opNo || typeof p['publishedAt'] !== 'number') continue;
     if (secilen === null || (p['publishedAt'] as number) > (secilen['publishedAt'] as number)) secilen = p;
   }
   return secilen;

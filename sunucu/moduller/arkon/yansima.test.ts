@@ -2050,7 +2050,8 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     assert.equal(p3['op'], 'Op 30 · Adım 3');
     assert.equal(p1['cycle'], 60);
     assert.equal(p1['setup'], 10);
-    assert.equal(p1['rev'], 'A');
+    // 3755: rota harfi rotaRev'dedir; parça revizyonu (çizimsiz kartta) "—".
+    assert.deepEqual([p1['rev'], p1['rotaRev']], ['—', 'A']);
     assert.equal(p1['target'], 20);
     assert.equal(p1['malzemeNo'], r.kart);
     assert.equal(p1['status'], 'draft');
