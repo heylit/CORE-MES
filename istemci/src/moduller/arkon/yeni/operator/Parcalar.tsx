@@ -574,12 +574,18 @@ export function BilgiCipi({ n, ac }: { n: number; ac: () => void }) {
   );
 }
 // Telefonda çarkın yerine tek satır: ekrandaki iş ve sırası; dokununca çark ve işin bütün alanları pencerede açılır.
+// 3742: telefonda iş satırı kimliktir; op no ve adı büyük (iki satıra kadar), altında ürün kodu, Rev ve emir no'nun son eki.
+const emirSonEki = (no: string): string => (no.length > 12 ? `…${no.slice(-8)}` : no);
 export function IsSatiri({ is, sira, ac }: { is: Is; sira: string | null; ac: () => void }) {
+  const alt = [is.pkg?.partNo, is.pkg?.rev ? `Rev ${is.pkg.rev}` : null, is.no ? `Emir ${emirSonEki(is.no)}` : null].filter(Boolean).join(' · ');
   return (
     <button type="button" className="tc-ay1-is-satiri" onClick={ac} aria-label={`Aktif iş: ${kimlikMetni(is) || is.no} · bilgileri aç`}>
       <span>
         <span className="tc-ay1-ust-yazi">Aktif iş {is.urgent ? '· ACİL' : ''}</span>
-        <b className="tc-ay1-is-ozet-satir">{[is.no, is.op, is.pkg?.partNo, is.pkg?.rev ? `Rev ${is.pkg.rev}` : null].filter(Boolean).join(' · ')}</b>
+        {is.empty ? <b className="tc-ay1-is-ozet-satir">{is.no}</b> : <>
+          <b className="tc-ay1-is-op" title={is.op}>{is.op || is.no}</b>
+          <small className="tc-ay1-is-kod" title={is.no}>{alt}</small>
+        </>}
       </span>
       {sira ? <b className="tc-ay1-mono">{sira}</b> : null}
       <Simge ad="layers" boyut="k" />
