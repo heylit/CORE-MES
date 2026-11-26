@@ -678,6 +678,7 @@ describe('Mal kabul', () => {
     expect((screen.getByLabelText('Fason işi') as HTMLSelectElement).value).toBe('5');
     expect((screen.getByLabelText(/Dönen adet/) as HTMLInputElement).value).toBe('15');
     expect(screen.queryByLabelText('Karantina konumu')).toBeNull();
+    expect(screen.queryByText(/GKK ayırır/)).toBeNull();
     fireEvent.change(screen.getByLabelText(/Hasarlı adet/), { target: { value: '99' } });
     expect(await screen.findByText('Hasarlı adet kabul edilen adetten büyük olamaz.')).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Kabul et' }) as HTMLButtonElement).disabled).toBe(true);
@@ -714,11 +715,20 @@ describe('Mal kabul', () => {
     fireEvent.change(await screen.findByLabelText(/Sağlam adet/), { target: { value: '12' } });
     fireEvent.change(screen.getByLabelText(/Hurda adet/), { target: { value: '3' } });
     expect(screen.getByText('Deneme İkinci Firma')).toBeTruthy();
+    // Aktarım satırı mal kabule girmez: ana Kabul et kapalı ve nedenini söyler; alanda Enter mal kabul değil aktarım onayını açar.
+    const kabul = screen.getByRole('button', { name: 'Kabul et' }) as HTMLButtonElement;
+    expect(kabul.disabled).toBe(true);
+    expect(document.getElementById(kabul.getAttribute('aria-describedby') ?? '')?.textContent).toMatch(/Aktarım satırı mal kabule girmez/);
+    fireEvent.keyDown(screen.getByLabelText(/Sağlam adet/), { key: 'Enter' });
+    expect(await screen.findByText(/12 sağlam, 3 hurda adet/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Vazgeç' }));
+    await waitFor(() => expect(screen.queryByText(/12 sağlam, 3 hurda adet/)).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: 'Aktarımı kaydet' }));
     expect(await screen.findByText(/12 sağlam, 3 hurda adet/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => expect(istekler.some((i) => i.yol === '/stok/fason-aktarimi')).toBe(true));
     expect(istekler.find((i) => i.yol === '/stok/fason-aktarimi')!.govde).toEqual({ isEmriId: 5, saglamAdet: 12, hurdaAdet: 3 });
+    expect(istekler.some((i) => i.yol === '/stok/mal-kabul')).toBe(false);
   });
   it('fason kutusunda giden kartın birden çok partisi varsa giden parti sorulur ve gövdeye yazılır; tek partide sorulmaz', async () => {
     const ozet = (id: number, tur: 'yarimamul' | 'hizmet', ad: string) => ({ ozet: { id, tur, kod: `K-${id}`, ad, onayDurumu: 'aktif', kullanilabilir: true, birim: 'adet' } } satisfies MalzemeOzetiCevabi);
