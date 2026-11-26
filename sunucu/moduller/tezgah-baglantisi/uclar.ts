@@ -1,7 +1,7 @@
 import { uc } from '#cekirdek/uc.ts';
 import { tezgahAyrintisiCevabi, tezgahBaglantisiDurumCevabi, tezgahParametresi, tezgahTuruCevabi, tezgahTuruGovdesi } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
-import { ortamIstemcisi } from './baglanti.ts';
-import { turBellegi } from './isler.ts';
+import { lsv2Makineleri, ortamIstemcisi } from './baglanti.ts';
+import { lsv2Bellegi, turBellegi } from './isler.ts';
 import * as servis from './servis.ts';
 
 // Deneme ekranı okunan değerleri yalnız gösterir; tek yazma tezgâh türü seçimidir (çizim ayarı). Sayfa işlemi hiçbir role verilmez (yalnız yönetici).
@@ -11,7 +11,7 @@ export const uclar = [
     yol: '/tezgah-baglantisi/durum',
     yetki: { biri: ['sayfa.tezgah-baglantisi'] },
     cevap: tezgahBaglantisiDurumCevabi,
-    isle: ({ db }) => servis.durum(db, ortamIstemcisi, turBellegi, new Date()),
+    isle: ({ db }) => servis.durum(db, ortamIstemcisi, turBellegi, new Date(), { makineler: lsv2Makineleri, bellek: lsv2Bellegi }),
   }),
   uc({
     yontem: 'GET',

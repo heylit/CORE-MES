@@ -7,11 +7,12 @@ const once = (sn: number): string => new Date(Date.now() - sn * 1000).toISOStrin
 const tezgah = (cihazAdi: string, ek: Partial<Tezgah> = {}): Tezgah => ({
   cihazAdi, durum: 'calisiyor', calisma: 'ACTIVE', mod: 'AUTOMATIC', program: 'O1204', sayac: 148, takim: '7', isMiliHizi: 2350, isMiliYuku: 42,
   ilerleme: 180, alarm: null, okundu: once(3), eski: false,
-  smartes: { durum: 'calisiyor', program: 'O1204', sayac: 148, isMiliHizi: 2350, isMiliYuku: 41, okundu: once(30) }, farklar: [], ...ek,
+  smartes: { durum: 'calisiyor', program: 'O1204', sayac: 148, isMiliHizi: 2350, isMiliYuku: 41, okundu: once(30) }, farklar: [],
+  kaynak: 'mtconnect', uyari: null, ...ek,
 });
 
 export const ORNEK_DURUM = (): TezgahBaglantisiDurumCevabi => ({
-  baglanti: 'acik', aralikSaniye: 5, varlikDurumu: 'okundu', sonDeneme: once(3), sonOkuma: once(3), sonHata: null,
+  baglanti: 'acik', lsv2Baglanti: 'kapali', aralikSaniye: 5, varlikDurumu: 'okundu', sonDeneme: once(3), sonOkuma: once(3), sonHata: null,
   doluluk: ORNEK_DOLULUK('normal'),
   tezgahlar: [
     tezgah('ORN-T01'),
@@ -29,6 +30,13 @@ export const ORNEK_DURUM = (): TezgahBaglantisiDurumCevabi => ({
       okundu: once(1700), eski: true, smartes: { durum: 'kapali', program: null, sayac: null, isMiliHizi: null, isMiliYuku: null, okundu: once(30) },
     }),
   ],
+});
+
+// Heidenhain (LSV2) makinesi: oranlar hız değildir, iş mili hızı ve yükü gelmez; sayaç için PLC yetkisi yok.
+export const ORNEK_LSV2_TEZGAHI = (): Tezgah => tezgah('ORN-H01', {
+  kaynak: 'lsv2', program: 'TNC:/ORN/P100.h', sayac: null, takim: '12', isMiliHizi: null, isMiliYuku: null, ilerleme: null,
+  uyari: 'Sayaç için yetki yok (PLC okuması daha yüksek giriş düzeyi istiyor)',
+  smartes: { durum: 'calisiyor', program: 'TNC:/ORN/P100.h', sayac: 31, isMiliHizi: null, isMiliYuku: null, okundu: once(30) },
 });
 
 type Egri = TezgahAyrintisiCevabi['alanlar'][number]['egri'];

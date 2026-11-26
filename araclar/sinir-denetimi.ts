@@ -47,6 +47,7 @@ const DIS_ISTEK_IZINLI: readonly string[] = [
   'sunucu/moduller/etiket-merkezi/gonderici.ts', // ADR 0014
   'sunucu/moduller/dis-kopru/', // ADR 0021
   'sunucu/moduller/tezgah-baglantisi/istemci.ts', // ADR 0033
+  'sunucu/moduller/tezgah-baglantisi/lsv2.ts', // ADR 0034
 ];
 const DIS_ISTEK_J =
   /(?:(?<![.\w])|\b(?:globalThis|window|self)\.)fetch\s*\(|\bnew\s+(?:net\.)?(?:Socket|WebSocket)\s*\(|\b(?:https?|net|tls|http2|dgram)\.(?:request|get|connect|createConnection|createSocket)\s*\(|\bcreateConnection\s*\(/;

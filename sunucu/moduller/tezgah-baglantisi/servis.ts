@@ -5,8 +5,9 @@ import type { TezgahAyrintisiCevabi, TezgahBaglantisiDurumCevabi, TezgahDolulugu
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { smartesMakineDegerleri } from '../smartes/disari.ts';
 import type { TezgahIstemcisi } from './istemci.ts';
+import type { Lsv2Bellegi } from './lsv2-tur.ts';
 import {
-  akislariOku, ARALIK_AYARI, AZAMI_SAMPLE_SAYFASI, baslikOku, cihazSayisiOku, diziyiDurumaCevir, dolulukSeviyesi, dolulukYuzdesi, durumaIsle, durumdanDiziye, eskiMi,
+  akislariOku, ARALIK_AYARI, LSV2_OKUMA_AYARI, lsv2UyariMetni, AZAMI_SAMPLE_SAYFASI, baslikOku, cihazSayisiOku, diziyiDurumaCevir, dolulukSeviyesi, dolulukYuzdesi, durumaIsle, durumdanDiziye, eskiMi,
   etkinAralikMs, farklar, GECMIS_SAKLAMA_MS, gecmisiBosalt, gecmisiSuz, OKUMA_AYARI, ORNEK_SAKLAMA_GUNU, ozetle, sayaciArttir, sayaciOzetle, SAMPLE_SAYISI,
   SATIR_SINIRI_AYARI, sonrakiSira, tamponAsildiMi, tanimlariOku, TEMIZLIK_ARALIGI_MS, TEMIZLIK_PARCASI, TEMIZLIK_TUR_BUTCESI_MS, TEMIZLIK_TUR_PARCASI,
   varliklariOku, VARLIK_ARALIGI_MS, VARSAYILAN_ARALIK_SN, VARSAYILAN_SATIR_SINIRI, yeniSatirSayaci,
@@ -63,6 +64,8 @@ export interface TurOrtami {
   istemci: TezgahIstemcisi | null;
   saat: () => Date;
   bellek: TurBellegi;
+  // Heidenhain (LSV2) makinelerinin adları, küçük harfle: aynı adlı MTConnect cihazı yok sayılır, son okuma anları bu turda yenilenmez.
+  lsv2Adlari?: ReadonlySet<string>;
 }
 
 const gecmisKaydi = (cihazAdi: string, o: TezgahOgesi, okundu: Date): GecmisKaydi | null => {
@@ -139,6 +142,8 @@ async function oku(vt: Pick<Veritabani, 'tx'>, istemci: TezgahIstemcisi, o: TurO
       if (c.tur !== 'basarili') return hata(c.ileti);
       const okumalar = akislariOku(c.kok);
       if (okumalar === null) return hata('Tezgâh servisi MTConnect anlık değer cevabı döndürmedi.');
+      const lsv2 = o.lsv2Adlari;
+      const kendi = lsv2 === undefined ? okumalar : okumalar.filter((m) => !lsv2.has(m.cihazAdi.toLowerCase()));
       const baslik = baslikOku(c.kok);
       const zaman = o.saat();
       if (baslik.instanceId !== null && b.instanceId !== null && baslik.instanceId !== b.instanceId) {
@@ -155,7 +160,7 @@ async function oku(vt: Pick<Veritabani, 'tx'>, istemci: TezgahIstemcisi, o: TurO
         continue;
       }
       const taban = istenen === null;
-      const isleme = await vt.tx((db) => isle(db, b, okumalar, taban, zaman));
+      const isleme = await vt.tx((db) => isle(db, b, kendi, taban, zaman));
       // Bellek yalnız işlem kesinleşince değişir: geri alınan turda süzgeç eski haliyle kalır, aynı değerler yeniden süzülür.
       b.suzgec = isleme.suzgec;
       b.sayac = sayaciArttir(b.sayac, zaman.getTime(), isleme.yazilan, isleme.atlanan);
@@ -170,7 +175,7 @@ async function oku(vt: Pick<Veritabani, 'tx'>, istemci: TezgahIstemcisi, o: TurO
     if (yenidenBasladi) continue;
     if (b.sonrakiSira === null) return hata('Tezgâh servisinden anlık değer alınamadı.');
     const simdi = o.saat();
-    await vt.tx((db) => s.okunduYenile(db, simdi));
+    await vt.tx((db) => s.okunduYenile(db, simdi, [...(o.lsv2Adlari ?? [])]));
     await temizlikTuru(vt, b, simdi);
     return { tur: 'okundu', tezgah: b.durum.size };
   }
@@ -281,8 +286,16 @@ async function aralikSaniye(db: Db): Promise<number> {
   return (await sistemAyariOku(db, ARALIK_AYARI)) ?? VARSAYILAN_ARALIK_SN;
 }
 
-export async function durum(db: Db, istemci: TezgahIstemcisi | null, bellek: TurBellegi, simdi: Date): Promise<TezgahBaglantisiDurumCevabi> {
+// Heidenhain okumasının durumu: makine listesi (ayardan) ve okuma turunun belleği.
+export interface Lsv2Durumu {
+  makineler: readonly { cihazAdi: string }[];
+  bellek: Lsv2Bellegi;
+}
+
+export async function durum(db: Db, istemci: TezgahIstemcisi | null, bellek: TurBellegi, simdi: Date, lsv2?: Lsv2Durumu): Promise<TezgahBaglantisiDurumCevabi> {
   const acik = await sistemAyariOku(db, OKUMA_AYARI);
+  const lsv2Acik = await sistemAyariOku(db, LSV2_OKUMA_AYARI);
+  const lsv2Adlari = new Map((lsv2?.makineler ?? []).map((m) => [m.cihazAdi.toLowerCase(), m.cihazAdi]));
   const aralik = await aralikSaniye(db);
   const satirlar = await s.okumalar(db);
   const smartes = await smartesMakineDegerleri(db);
@@ -291,6 +304,7 @@ export async function durum(db: Db, istemci: TezgahIstemcisi | null, bellek: Tur
   const koddan = new Map(smartes.map((m) => [m.makineKodu.toLowerCase(), m]));
   return {
     baglanti: !acik ? 'kapali' : istemci === null ? 'adres-yok' : 'acik',
+    lsv2Baglanti: !lsv2Acik ? 'kapali' : lsv2Adlari.size === 0 ? 'adres-yok' : 'acik',
     aralikSaniye: aralik,
     varlikDurumu: await varlikDurumu(db, bellek),
     sonDeneme: bellek.sonDeneme?.toISOString() ?? null,
@@ -299,8 +313,13 @@ export async function durum(db: Db, istemci: TezgahIstemcisi | null, bellek: Tur
     doluluk: await doluluk(db, bellek, simdi),
     tezgahlar: satirlar.map((t) => {
       const m = koddan.get(t.cihazAdi.toLowerCase()) ?? null;
+      const ad = lsv2Adlari.get(t.cihazAdi.toLowerCase());
+      const mb = ad === undefined ? undefined : lsv2?.bellek.makineler.get(ad);
       return {
         ...t,
+        kaynak: ad === undefined ? 'mtconnect' as const : 'lsv2' as const,
+        // Uyarı yalnız okuma açıkken anlamlıdır; kapalıyken eski uyarı gösterilmez.
+        uyari: mb === undefined || !lsv2Acik ? null : lsv2UyariMetni(mb.uyarilar) ?? mb.sonHata,
         eski: eskiMi(t.okundu, simdi, aralik),
         smartes: m === null ? null : { durum: m.durum, program: m.program, sayac: m.sayac, isMiliHizi: m.isMiliHizi, isMiliYuku: m.isMiliYuku, okundu: m.okundu },
         farklar: m === null ? [] : farklar(t, m),

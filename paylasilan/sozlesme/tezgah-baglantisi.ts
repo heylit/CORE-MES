@@ -18,6 +18,8 @@ export const BOSLUK_NEDENLERI = ['tampon-asildi', 'servis-yeniden-basladi', 'sat
 export const DOLULUK_SEVIYELERI = ['normal', 'uyari', 'kritik'] as const;
 export const TEZGAH_VARLIK_DURUMLARI = ['bekleniyor', 'okundu', 'yok', 'hata'] as const;
 export const TEZGAH_BAGLANTI_HALLERI = ['kapali', 'adres-yok', 'acik'] as const;
+export const TEZGAH_KAYNAKLARI = ['mtconnect', 'lsv2'] as const;
+export type TezgahKaynagi = (typeof TEZGAH_KAYNAKLARI)[number];
 
 const tezgahSatiri = z.object({
   cihazAdi: z.string(),
@@ -45,6 +47,10 @@ const tezgahSatiri = z.object({
     okundu: zamanSemasi,
   }).nullable(),
   farklar: z.array(z.enum(TEZGAH_KARSILASTIRMA_ALANLARI)),
+  // Okuma kaynağı (kart 3753): ortak MTConnect servisi ya da Heidenhain kumandası (LSV2, doğrudan).
+  kaynak: z.enum(TEZGAH_KAYNAKLARI),
+  // Yalnız Heidenhain makinesinde: okunamayan alanın nedeni (kapalı ya da meşgul, DNC yok, sayaç için yetki yok); yoksa null.
+  uyari: z.string().nullable(),
 });
 
 // Değer geçmişi tablosunun doluluğu (kart 3680). Yüzde 80'de uyarı, 95'te kritik; Sistem İzleme de bu alanı okuyabilir.
@@ -71,6 +77,8 @@ export type TezgahDoluluguCevabi = z.output<typeof tezgahDoluluguSemasi>;
 
 export const tezgahBaglantisiDurumCevabi = z.object({
   baglanti: z.enum(TEZGAH_BAGLANTI_HALLERI),
+  // Heidenhain okuması (LSV2): ayar kapalı, makine listesi yok ya da açık.
+  lsv2Baglanti: z.enum(TEZGAH_BAGLANTI_HALLERI),
   // Ayardaki okuma aralığı; ekran bu aralıkta yenilenir.
   aralikSaniye: z.number().int(),
   // /assets: servis takım verisi vermiyorsa "yok"; henüz okunmadıysa "bekleniyor".

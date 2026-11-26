@@ -1,5 +1,6 @@
 .tc-tzb { container: tc-tzb / inline-size; display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
 .tc-tzb-ozet { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-3); margin: 0; }
+.tc-tzb-ozet .tc-rozet { white-space: normal; }
 .tc-tzb-not { margin: 0; color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
 .tc-tzb-mono { font-family: var(--font-mono); }
 .tc-tzb-hata { margin: 0; color: var(--stop); overflow-wrap: anywhere; }

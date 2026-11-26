@@ -7,7 +7,7 @@ import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { TezgahBaglantisiDurumCevabi } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { DolulukGostergesi } from './DolulukGostergesi.tsx';
-import { ORNEK_AYRINTI, ORNEK_DOLULUK, ORNEK_DURUM } from './fikstur.ts';
+import { ORNEK_AYRINTI, ORNEK_DOLULUK, ORNEK_DURUM, ORNEK_LSV2_TEZGAHI } from './fikstur.ts';
 import { boyutMetni, kayitYasiMetni } from './gosterim.ts';
 import { Karsilastirma } from './Karsilastirma.tsx';
 import { TezgahAyrintisi } from './TezgahAyrintisi.tsx';
@@ -51,6 +51,36 @@ describe('Tezgâh bağlantısı (deneme)', () => {
     // Sorunlu tezgâhlar üstte: alarm, fark, eski; sonra sağlıklılar.
     expect(screen.getAllByRole('rowheader').map((r) => r.textContent)).toEqual(['ORN-T05Elle veri girişi', 'ORN-T04Otomatik', 'ORN-T09', 'ORN-T01Otomatik', 'ORN-T06Otomatik']);
     expect(screen.getAllByRole('link', { name: 'ORN-T04 ayrıntısı' })[0]?.getAttribute('href')).toBe('/tezgah-baglantisi/ayrinti?tezgah=ORN-T04');
+  });
+
+  it('Heidenhain makinesi kaynağıyla yazılır; okunamayan alanın nedeni uyarı olarak görünür (kart 3753)', async () => {
+    sunucuKur({ ...ORNEK_DURUM(), lsv2Baglanti: 'acik', tezgahlar: [ORNEK_LSV2_TEZGAHI()] });
+    ac(<Karsilastirma />);
+    const satir = (await screen.findByRole('rowheader', { name: /ORN-H01/ })).closest('tr') as HTMLElement;
+    expect(within(satir).getByText('Heidenhain LSV2')).toBeTruthy();
+    expect(within(satir).getByRole('note').textContent).toBe('Sayaç için yetki yok (PLC okuması daha yüksek giriş düzeyi istiyor)');
+    expect(screen.getByText('Heidenhain okuması açık')).toBeTruthy();
+    // Kartlarda (dar ekran) da kaynak ve uyarı yazar.
+    expect(screen.getAllByText('Heidenhain LSV2')).toHaveLength(2);
+    cleanup();
+    sunucuKur(ORNEK_DURUM());
+    ac(<Karsilastirma />);
+    await screen.findByRole('rowheader', { name: /ORN-T01/ });
+    expect(screen.queryByText('Heidenhain LSV2')).toBeNull();
+    expect(screen.queryByRole('note')).toBeNull();
+  });
+
+  it('yalnız Heidenhain okunurken MTConnect kapalı notu çıkmaz; Heidenhain listesi yoksa nedeni yazar (kart 3753)', async () => {
+    sunucuKur({ ...ORNEK_DURUM(), baglanti: 'kapali', lsv2Baglanti: 'acik', tezgahlar: [], sonOkuma: null });
+    ac(<Karsilastirma />);
+    expect(await screen.findByText(/Henüz tezgâh okunmadı/)).toBeTruthy();
+    expect(screen.getByText('MTConnect Okuma kapalı')).toBeTruthy();
+    expect(screen.queryByText(/Okuma kapalı\. Sistem Ayarları/)).toBeNull();
+    cleanup();
+    sunucuKur({ ...ORNEK_DURUM(), baglanti: 'kapali', lsv2Baglanti: 'adres-yok', tezgahlar: [], sonOkuma: null });
+    ac(<Karsilastirma />);
+    expect(await screen.findByText(/TMIV2_TEZGAH_LSV2_MAKINELERI/)).toBeTruthy();
+    expect(screen.getByText(/Okuma kapalı\. Sistem Ayarları/)).toBeTruthy();
   });
 
   it('okuma kapalıyken ve adres yokken nedenini söyler; son hata gösterilir', async () => {

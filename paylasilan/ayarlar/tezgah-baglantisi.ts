@@ -32,4 +32,20 @@ export const TEZGAH_BAGLANTISI_AYARLARI = {
     baslik: 'Tezgâh değer geçmişi satır sınırı',
     aciklama: 'Tezgâh değer geçmişi tablosunun en çok satır sayısı. Temizlikte önce 24 saatten eski satırlar silinir; sınır yine aşılıyorsa en eski satırlar silinir ve zaman çizelgesine "satır sınırı" veri boşluğu yazılır. Doluluk, Tezgâh bağlantısı (deneme) ekranının üstünde görünür. Okuma kapalıyken etkisizdir.',
   },
+  // Kart 3753: Heidenhain kumandalarını LSV2 ile doğrudan okur. Makine listesi ortam değişkenindedir; liste boşken açık olsa da bağlantı açılmaz.
+  'tezgah-baglantisi.lsv2-okuma': {
+    modul: 'tezgah-baglantisi',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'Heidenhain okuması',
+    aciklama: 'Açıkken Heidenhain kontrollü tezgâhlar LSV2 ile (TCP 19000) okuma aralığında, yalnız okunarak sorgulanır: durum, program, takım, oranlar, alarm ve ayarda adresi verilmişse parça sayacı. Makineye komut, dosya ya da PLC yazması gitmez; parola gönderilmez. Makine bağlantıyı reddederse (kapalı ya da SmartES tutuyor) zorlanmaz, sonra yeniden denenir. Makine listesi sunucunun TMIV2_TEZGAH_LSV2_MAKINELERI ortam değişkeninde yoksa açık olsa da bağlantı açılmaz.',
+  },
+  // Kart 3753 (kullanıcı kararı: PLCDEBUG, koşullu): sayaç için kumandaya PLCDEBUG girişi yapılır; bu düzey PLC yazmayı da açar.
+  'tezgah-baglantisi.lsv2-plc-sayaci': {
+    modul: 'tezgah-baglantisi',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'PLC sayacı okuması',
+    aciklama: 'Dikkat: bu okuma kumandada yazma yetkisi de açan PLCDEBUG giriş düzeyini kullanır; CORE yalnız ayardaki sayaç adresini okuyabilir, yazma ve kontrol komutu gönderemez. Açıkken, makine listesinde sayaç adresi verilmiş makinelerde parça sayacı PLC belleğinden okunur: parolasız giriş yalnız sayaç okunurken açıktır, okunduktan hemen sonra çıkılır. Kapalıyken giriş hiç yapılmaz, sayaç boş kalır. "Heidenhain okuması" anahtarından bağımsızdır; o kapalıyken etkisizdir. İlk açılış deneme kurulumunda tek makinede yapılır.',
+  },
 } as const satisfies Record<string, AyarTanimi>;
