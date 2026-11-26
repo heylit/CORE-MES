@@ -1413,3 +1413,30 @@
 .tc-pyq-h-veri[data-pay-adet] { display: inline-flex; flex-direction: column; align-items: flex-end; min-inline-size: max-content; white-space: nowrap; }
 .tc-pyq-h-veri[data-pay-adet] b { font-weight: inherit; }
 .tc-pyq-h-veri[data-pay-adet] small { color: var(--muted); font-size: var(--yazi-xs); }
+/* 3751: pay birleştirme. Pay tutulur (grab), kardeşleri kesik çerçeve, üstüne gelinen kardeş (çubuk ya da sol listedeki satırın tamamı) dolu sarı
+   mıknatıs çerçevesi alır; öteki işler soluklaşır. Taşıma hayaleti ayrı kalır: onay çubuğunda "Birleştir" sarı, "Taşı" nötr etikettir. */
+.tc-pyq-is[data-pay] { cursor: grab; }
+.tc-pyq-tahta[data-birlesme] { cursor: grabbing; }
+.tc-pyq-tahta[data-birlesme] .tc-pyq-is:not([data-birles-aday]):not([data-tasinan]) { opacity: var(--saydam-45); }
+.tc-pyq-is[data-birles-aday] { outline: var(--cizgi-kalin) dashed var(--hazard); outline-offset: var(--pay-ince); z-index: 1; }
+.tc-pyq-is[data-birles-hedef] { outline: var(--cizgi-kalin) solid var(--hazard); box-shadow: 0 0 0 var(--b-1) color-mix(in oklab, var(--hazard) 40%, transparent); z-index: 2; }
+.tc-pyq-satir[data-birles-aday] > .tc-pyq-bas { box-shadow: inset var(--kayma) 0 0 var(--hazard); }
+.tc-pyq-satir[data-birles-hedef] { background: color-mix(in oklab, var(--hazard) 16%, transparent); outline: var(--cizgi-kalin) solid var(--hazard); outline-offset: calc(-1 * var(--cizgi-kalin)); }
+.tc-pyq-onay-tur { flex: none; padding: 0 var(--b-2); border-radius: var(--yari-tam); background: var(--hazard); color: var(--on-hazard); font-size: var(--yazi-xs); font-weight: 700; }
+.tc-pyq-onay-tur[data-onay-tur="tasi"] { background: var(--panel2); color: var(--ink); }
+.tc-pyq-menu-grup { display: flex; flex-direction: column; margin-top: var(--b-1); padding-top: var(--b-1); border-top: var(--cizgi-ince) solid var(--edge2); }
+.tc-pyq-menu-grup > small { padding: 0 var(--b-2); }
+.tc-pyq-menu button:disabled { opacity: var(--saydam-45); cursor: default; }
+.tc-pyq-pano-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-pyq-pay-birlestir-liste { display: flex; flex-direction: column; gap: var(--b-1); margin: 0; padding: 0; list-style: none; }
+.tc-pyq-pay-birlestir-liste button {
+  display: flex; align-items: center; gap: var(--b-2); width: 100%; min-height: var(--dokunma); padding: var(--b-1) var(--b-2); border: var(--cizgi-ince) solid var(--edge2);
+  border-radius: var(--yari-1); background: var(--panel-solid); color: var(--ink); font: inherit; font-size: var(--yazi-s); text-align: left; cursor: pointer;
+}
+.tc-pyq-pay-birlestir-liste button span { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.tc-pyq-pay-birlestir-liste button small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pyq-pay-birlestir-liste button[aria-pressed="true"] { border-color: var(--hazard); box-shadow: 0 0 0 var(--cizgi) var(--hazard); }
+.tc-pyq-pay-birlestir-liste button:disabled { opacity: var(--saydam-45); cursor: default; }
+.tc-pyq-pay-birlestir-liste button:focus-visible { outline: var(--cizgi) solid var(--ink); outline-offset: var(--pay-ince); }
+.tc-pyq-pay-birlestir .tc-pyq-aa-cipler button { font-family: inherit; }
+.tc-pyq-pay-birlestir .tc-pyq-aa-cipler button[aria-pressed="true"] { border-color: var(--hazard); background: var(--secili-zemin); color: var(--secili-yazi); }

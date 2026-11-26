@@ -16,6 +16,8 @@ export interface AdimPanosuOzellikleri {
   kapat?: () => void;
   // 3681: bölünmüş adımın payları bölme penceresinden yönetilir; yetkili kişide (bol verilmişse) pano o pencereyi açan düğmeyi taşır (dokunmatikte sağ tık yoktur).
   bolAc?: ((adimId: string) => void) | null;
+  // 3751: telefonda (sağ tık ve sürükleme yok) pay kartından birleştirme alt sayfası açılır; verilmezse düğme yok.
+  birlestirAc?: ((payId: string) => void) | null;
   // Konum: seçili kipte Tahta çubuğa göre yerleştirir.
   yerlestir?: (el: HTMLElement | null) => void;
 }
@@ -25,7 +27,7 @@ const saatYaz = (zaman: (t: number) => string, t: number): string => zaman(t).sl
 // 3681: pano kısa kalsın (1280x800'de çubuğun üstüne binmesin); kalan paylar bölme penceresinde.
 const PANO_PAY = 2;
 
-export function AdimPanosu({ kip, m, e, x, zaman, sayim, hedef, kapat, yerlestir, bolAc = null }: AdimPanosuOzellikleri) {
+export function AdimPanosu({ kip, m, e, x, zaman, sayim, hedef, kapat, yerlestir, bolAc = null, birlestirAc = null }: AdimPanosuOzellikleri) {
   // 3681: telefon alt sayfasına pay kimliği (S2.a1~2) gelir; paylar ve bölme kaydı adımın kimliğiyle okunur.
   const adimId = adimKimligi(x);
   const surukle = kip === 'surukle' && hedef !== undefined;
@@ -118,7 +120,12 @@ export function AdimPanosu({ kip, m, e, x, zaman, sayim, hedef, kapat, yerlestir
           </div>
         )}
       </dl>
-      {!surukle && bolme && bolAc && <Dugme tur="ikincil" simge="layers" data-bol-yonet={x.id} onClick={() => { bolAc(adimKimligi(x)); }}>Bölmeyi yönet</Dugme>}
+      {!surukle && bolme && birlestirAc ? (
+        <div className="tc-pyq-pano-dugmeler">
+          <Dugme tur="ikincil" simge="fit" data-birlestir-ac={x.id} onClick={() => { birlestirAc(x.id); }}>Birleştir</Dugme>
+          {bolAc && <Dugme tur="ikincil" simge="layers" data-bol-yonet={x.id} onClick={() => { bolAc(adimKimligi(x)); }}>Bölmeyi yönet</Dugme>}
+        </div>
+      ) : !surukle && bolme && bolAc && <Dugme tur="ikincil" simge="layers" data-bol-yonet={x.id} onClick={() => { bolAc(adimKimligi(x)); }}>Bölmeyi yönet</Dugme>}
     </aside>
   );
 }

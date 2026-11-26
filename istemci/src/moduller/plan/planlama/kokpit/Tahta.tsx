@@ -1,5 +1,6 @@
 import { createPortal } from 'react-dom';
 import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as FareOlayi, type PointerEvent as ImlecOlayi, type ReactNode, type KeyboardEvent as TusOlayi } from 'react';
+import type { TaslakKomutu } from '#paylasilan/sozlesme/planlama.ts';
 import { Dugme, Simge } from '../../../../ortak/arayuz/index.ts';
 import { hizaCizgileri, hizaNoktalari, hizalaYakala, type HizaCizgisi, type Yakalanan } from './hiza.ts';
 import { bolunemezNedeni } from './ElleBol.tsx';
@@ -9,7 +10,7 @@ import { emirKuyrugu, emirNoParcalari } from '../ortak/emir-no.ts';
 import type { Derleme } from '../motor/kurallar.ts';
 import type { IsTasiOnizlemesi } from '../motor/atolye/gonder.ts';
 import {
-  SAAT_ENI, YAKIN_EN_AZ, adimBaglari, adimKimligi, bagAdimda, bugunBasi, adimPaylari, darPanoYani, agacAdimBasligi, aralikYuku, durumYazisi, DURDURMA_BEKLIYOR, durusYazisi, ekMesaiYazisi, okUcu, okYolu, payIlerlemeYazisi, payNedeni, payYazisi, payYonleri, planliDurusYazisi, satirKimligi, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, uzakMi, yukSinifi, yukYuzdesi,
+  BIRLES_BOS, PAY_TASINMAZ, PAY_TASINMAZ_TEZGAH, SAAT_ENI, YAKIN_EN_AZ, adimBaglari, adimKimligi, bagAdimda, bugunBasi, adimPaylari, darPanoYani, agacAdimBasligi, aralikYuku, durumYazisi, DURDURMA_BEKLIYOR, durusYazisi, ekMesaiYazisi, okUcu, okYolu, payAdi, payBirlesmesi, payIlerlemeYazisi, payNedeni, payYazisi, payYonleri, planliDurusYazisi, satirKimligi, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, uzakMi, yukSinifi, yukYuzdesi,
   type AdimBagi, type KokpitEmri, type KokpitIsi, type KokpitModeli, type KokpitOlcegi, type TurAdayi,
 } from './kurallar.ts';
 import {
@@ -69,6 +70,9 @@ export interface TahtaOzellikleri {
   sorunBildir?: ((tezgah: string) => void) | null;
   // Planda böl (3661): işin menüsünde; yazamayan kişide ve turda null.
   bol?: ((isId: string) => void) | null;
+  // 3751: bölünmüş adımın iki payını (ya da hepsini) birleştiren komut taslağa yazılır; yazamayan kişide ve turda null. Emirler görünümünde pay
+  // kardeşinin üstüne bırakılır, iki görünümde de sağ tık menüsünde "Şununla birleştir" vardır; bırakınca ya da seçince onay çubuğu açılır.
+  birlestir?: ((k: TaslakKomutu) => void) | null;
   // Sürüklerken taşımanın etkisi (3365); yazamayan kişide ya da önizleme yokken null.
   onizle?: ((isId: string, tezgah: string, S: number) => Promise<IsTasiOnizlemesi | null>) | null;
   // Bağ okları (3365): is = üstüne gelinen ya da seçili işin önceki ve sonraki adımı; siparis = seçili siparişin (yoksa işin emrinin) bütün bağları.
@@ -190,6 +194,7 @@ export function Tahta(o: TahtaOzellikleri) {
   const yerlestirme = o.goz === 'T' ? o.yerlestirme ?? null : null;
   const yanan = o.yanan ?? null, secimiKaldir = o.secimiKaldir, onizle = o.onizle ?? null, okKipi = o.okKipi ?? 'is';
   const bol = o.bol ?? null;
+  const birlestir = o.birlestir ?? null;
   const sorunBildir = goz === 'T' ? o.sorunBildir ?? null : null;
   const gelen = o.gelen ?? null, gelenBas = o.gelenBas ?? null, eskiYer = once ? null : o.eskiYer ?? null;
   // 3533: tablo kipi. Emirler gözünde (agac) emir sütunları, Tezgâhlar gözünde tezgâh sütunları; Ay ve Yıl ölçeğinde bugünkü satır başı kalır.
@@ -226,6 +231,11 @@ export function Tahta(o: TahtaOzellikleri) {
   const [tasinan, setTasinan] = useState<Tasinan | null>(null);
   const [hedef, setHedef] = useState<Hedef | null>(null);
   const [menu, setMenu] = useState<{ id: string; x: number; y: number; tut: number; fis?: boolean } | null>(null);
+  // 3751: tutulan pay ve üstüne gelinen kardeşi (Emirler görünümü); bırakınca birlesOnay açılır, Uygula taslağa yazar, Vazgeç ya da Esc bırakır.
+  const [birles, setBirles] = useState<{ kaynak: string; hedef: string | null; suruk?: true } | null>(null);
+  const [birlesOnay, setBirlesOnay] = useState<{ kaynak: string; hedef: string } | null>(null);
+  // Bırakmanın hemen ardından gelen tıklama hedef payı seçmesin.
+  const birlesBirakti = useRef(false);
   const imlecteki = useRef<string | null>(null);
   const ic = useRef<HTMLDivElement | null>(null);
   useLayoutEffect(() => {
@@ -401,12 +411,19 @@ export function Tahta(o: TahtaOzellikleri) {
   // Onay açıkken bırakılan taşıma bekler: başka işi tutmak onu sessizce başka işe çevirmesin.
   const tut = useCallback((id: string, tutma = 0): void => {
     const x = m.isler[id];
-    if (onay || !x || !tasi) return;
+    if (onay || birlesOnay || !x || !tasi) return;
     if (uzak) { uyari(YAKINLASIN); return; }
     const neden = tasinabilir(x);
-    if (neden) { uyari(neden); return; }
+    // 3751: Emirler görünümünde açık adımın payları bitişik satırlardadır; pay tutulunca kardeşine bırakılıp birleşir.
+    const birlesir = goz !== 'T' && birlestir !== null && x.pay !== undefined && adimPaylari(m, adimKimligi(x)).length > 1;
+    if (neden) {
+      if (birlesir) { setMenu(null); setBirles({ kaynak: id, hedef: null }); return; }
+      uyari(x.pay && goz === 'T' && birlestir !== null ? PAY_TASINMAZ_TEZGAH : neden); return;
+    }
     setMenu(null); setTasinan({ id, tut: tutma }); setHedef({ satir: goz === 'T' ? satirKimligi(x) : x.job, S: x.S, gecerli: true });
-  }, [onay, m, tasi, goz, uyari, olcek]);
+    // Rotada paralel bölmenin 1. payı taşınır da: kardeşine bırakılırsa birleşir, başka yere bırakılırsa taşınır.
+    if (birlesir) setBirles({ kaynak: id, hedef: null });
+  }, [onay, birlesOnay, m, tasi, goz, uyari, olcek, birlestir]);
   const fisAdaylari = useCallback((emirId: string): string[] => (emir.get(emirId)?.adimlar[0]?.adaylar ?? []).filter((t) => !t.startsWith('@')), [emir]);
   const tutFis = useCallback((emirId: string): void => {
     const e = emir.get(emirId), ilk = e?.adimlar[0];
@@ -418,8 +435,17 @@ export function Tahta(o: TahtaOzellikleri) {
     setMenu(null); setTasinan({ id: ilk.id, tut: 0, fis: emirId }); setHedef(null);
   }, [onay, emir, m, planaAl, goz, uyari, fisAdaylari, olcek]);
   // vazgecer: sürükleyerek tutulan iş geçersiz yere bırakılınca tutma biter (yapışarak tutmada iş elde kalır, kişi başka yere tıklar).
+  const birlesAc = useCallback((kaynak: string, hedef: string): void => {
+    surukleniyor.current = false; birlesBirakti.current = true; setTimeout(() => { birlesBirakti.current = false; }, 0);
+    setBirles(null); setTasinan(null); setHedef(null); setMenu(null); setBirlesOnay({ kaynak, hedef });
+  }, []);
   const birak = useCallback((vazgecer = false): void => {
-    if (onay) return;
+    if (onay || birlesOnay) return;
+    if (birles) {
+      if (birles.hedef !== null) { birlesAc(birles.kaynak, birles.hedef); return; }
+      if (!tasinan) { uyari(BIRLES_BOS); if (vazgecer) setBirles(null); return; }
+      setBirles(null);
+    }
     const birakma = (ileti: string): void => { uyari(ileti); if (vazgecer) { setTasinan(null); setHedef(null); } };
     if (tasinan && uzak) { birakma('Bırakmak için yakınlaşın'); return; }
     if (tasinan?.fis !== undefined) {
@@ -440,7 +466,7 @@ export function Tahta(o: TahtaOzellikleri) {
     if (tezgah === x.m && Math.abs(hedef.S - x.S) <= 0.01) return;
     // Tek iş: önizleme durur, kişi Uygula ya da Vazgeç der (3531 b).
     setTasinan(tasinan); setHedef(hedef); setOnay(true);
-  }, [onay, tasinan, hedef, m, tasi, planaAl, goz, uyari, grupKaydir, coklu, olcek]);
+  }, [onay, birlesOnay, birles, birlesAc, tasinan, hedef, m, tasi, planaAl, goz, uyari, grupKaydir, coklu, olcek]);
   const vazgec = useCallback((): void => { surukleniyor.current = false; setOnay(false); setTasinan(null); setHedef(null); }, []);
   // Onay açıkken iş plandan düşerse ya da taşıma yetkisi kalkarsa çubuk çizilemez; tahta kilitli kalmasın diye taşıma bırakılır.
   useEffect(() => {
@@ -453,6 +479,14 @@ export function Tahta(o: TahtaOzellikleri) {
     setOnay(false); setTasinan(null); setHedef(null);
   }, [tasinan, hedef, m, tasi, goz]);
 
+  // 3751: imlecin altındaki kardeş pay: payın çubuğu ya da sol listedeki pay satırının tamamı (dar payda büyük hedef).
+  const birlesHedefi = (el: Element | null, kaynak: string): string | null => {
+    const k = m.isler[kaynak];
+    if (!k || !el) return null;
+    const id = el.closest<HTMLElement>('[data-is]')?.dataset['is'] ?? el.closest<HTMLElement>('[data-pay-satir]')?.dataset['paySatir'];
+    const y = id === undefined ? undefined : m.isler[id];
+    return y?.pay && y.id !== kaynak && adimKimligi(y) === adimKimligi(k) ? y.id : null;
+  };
   // Tutulan iş imleci izler: satır imlecin altındaki satırdır, saat imlecin yeri eksi tutulan noktadır (çeyrek saate oturur).
   const izle = (ev: ImlecOlayi<HTMLDivElement>): void => {
     const b = basilan.current;
@@ -461,7 +495,13 @@ export function Tahta(o: TahtaOzellikleri) {
       basilan.current = null; surukleniyor.current = true;
       if (b.id.startsWith(FIS)) tutFis(b.id.slice(FIS.length)); else tut(b.id, b.tut);
       setTasinan((t) => (t ? { ...t, suruk: true } : t));
+      setBirles((t) => (t ? { ...t, suruk: true } : t));
       return;
+    }
+    if (birles && !birlesOnay) {
+      const h = birlesHedefi(ev.target as Element, birles.kaynak);
+      if (h !== birles.hedef) setBirles({ ...birles, hedef: h });
+      if (!tasinan || h !== null) return;
     }
     if (!tasinan || onay) return;
     const x = m.isler[tasinan.id];
@@ -533,8 +573,8 @@ export function Tahta(o: TahtaOzellikleri) {
   useEffect(() => {
     const tus = (ev: KeyboardEvent): void => {
       if (ev.key === 'Escape' && balon && !tasinan && !menu) { ev.stopPropagation(); setBalon(null); return; }
-      if (ev.key === 'Escape' && (tasinan || menu)) { ev.stopPropagation(); surukleniyor.current = false; setOnay(false); setTasinan(null); setHedef(null); setMenu(null); return; }
-      if (onay) return;
+      if (ev.key === 'Escape' && (tasinan || menu || birles || birlesOnay)) { ev.stopPropagation(); surukleniyor.current = false; setOnay(false); setTasinan(null); setHedef(null); setMenu(null); setBirles(null); setBirlesOnay(null); return; }
+      if (onay || birlesOnay) return;
       if (yazimda() || ev.ctrlKey || ev.metaKey || ev.altKey) return;
       if (ev.key !== ' ' || uzak) return;
       if (tasinan) { ev.preventDefault(); birak(); return; }
@@ -548,7 +588,7 @@ export function Tahta(o: TahtaOzellikleri) {
     };
     document.addEventListener('keydown', tus, true);
     return () => { document.removeEventListener('keydown', tus, true); };
-  }, [tasinan, menu, onay, balon, tut, tutFis, birak, secIs, secEmir, emir, planaAl, m, olcek]);
+  }, [tasinan, menu, onay, balon, tut, tutFis, birak, secIs, secEmir, emir, planaAl, m, olcek, birles, birlesOnay]);
 
   // Balon dışına basınca kapanır (tahtanın dışı da; içerideki basış tahtanın tık yakalayıcısındadır).
   useEffect(() => {
@@ -955,6 +995,11 @@ export function Tahta(o: TahtaOzellikleri) {
   const adaySatirlari = goz !== 'T' ? null : tasinan?.fis !== undefined ? new Set(fisAdaylari(tasinan.fis)) : tasinanIs ? new Set(adaylar(tasinanIs)) : yerlestirme ? new Set(yerlestirme.tezgahlar) : null;
   const secili = secEmir ? emir.get(secEmir) : undefined;
 
+  const birlesKaynagi = birles ? m.isler[birles.kaynak] : undefined;
+  const birlesAdaylari = new Set(birlesKaynagi ? adimPaylari(m, adimKimligi(birlesKaynagi)).filter((y) => y.id !== birlesKaynagi.id).map((y) => y.id) : []);
+  const birlesSonucu = birles?.hedef ? payBirlesmesi(m, birles.kaynak, birles.hedef) : null;
+  const birlesOnayi = birlesOnay ? payBirlesmesi(m, birlesOnay.kaynak, birlesOnay.hedef) : null;
+  const birlesUygula = (): void => { if (birlesOnayi?.komut && birlestir) birlestir(birlesOnayi.komut); setBirlesOnay(null); };
   const aktifPay = tiklananPay !== null && secIs !== null && tiklananPay.split('~')[0] === secIs ? tiklananPay : secIs;
   const isDugmesi = (x: KokpitIsi, tek = false) => {
     const e = emir.get(x.job), canli = once?.[x.id];
@@ -981,7 +1026,7 @@ export function Tahta(o: TahtaOzellikleri) {
       <button
         type="button" className="tc-pyq-is" data-is={x.id} data-d={e?.durum ?? 'iyi'} title={ad} aria-label={ad}
         aria-pressed={secIs === adimKimligi(x) && (x.pay === undefined || aktifPay === x.id)} data-pay={x.pay ? String(x.pay.no) : undefined} data-pay-kardes={x.pay && secIs === adimKimligi(x) && aktifPay !== x.id ? '' : undefined} data-suruyor={x.basladi ? '' : undefined} data-emir-secili={secEmir === x.job ? '' : undefined} data-yanan={yanan?.has(x.job) ? '' : undefined} data-sonuk={uyar(x.job) && (!yanan || yanan.has(x.job)) ? undefined : ''}
-        data-sabit={neden && !x.pay ? '' : undefined} data-durdurma-bekliyor={x.durdurmaBekliyor ? '' : undefined} data-tasinan={tasinan?.id === x.id ? '' : undefined} data-kaydi={(canli && Math.abs(kayma) > 0.25) || itilen !== undefined || gKaydi ? '' : undefined}
+        data-sabit={neden && !x.pay ? '' : undefined} data-durdurma-bekliyor={x.durdurmaBekliyor ? '' : undefined} data-tasinan={tasinan?.id === x.id || birles?.kaynak === x.id ? '' : undefined} data-birles-aday={birlesAdaylari.has(x.id) ? '' : undefined} data-birles-hedef={birles?.hedef === x.id || birlesOnay?.hedef === x.id ? '' : undefined} data-kaydi={(canli && Math.abs(kayma) > 0.25) || itilen !== undefined || gKaydi ? '' : undefined}
         data-kisa={kisa ? '' : undefined} data-gecikir={gecikir ? '' : undefined} data-etiket={etiket}
         ref={(el) => {
           yerYaz(el, (cizS - m.bas) * px, cizim?.en ?? gercek);
@@ -994,7 +1039,7 @@ export function Tahta(o: TahtaOzellikleri) {
         }}
         data-coklu={coklu.has(x.id) ? '' : undefined}
         onClick={(ev) => {
-          if (tasinan) return;
+          if (tasinan || birles) return;
           if (cokluSec && (ev.ctrlKey || ev.metaKey || ev.shiftKey)) { cokluSec(adimKimligi(x)); return; }
           setTiklananPay(x.id);
           sec(x.job, adimKimligi(x));
@@ -1243,8 +1288,12 @@ export function Tahta(o: TahtaOzellikleri) {
 
   return (
     <div
-      className="tc-pyq-tahta" data-olcek={olcek} data-tasima={tasinan ? '' : undefined} ref={kap} onScroll={pencereyiBildir}
-      onPointerMove={izle} onClickCapture={(ev) => { if (balon && !(ev.target as Element).closest('.tc-pyq-balon, .tc-pyq-gelen')) setBalon(null); if (tasinan && !onay) { ev.preventDefault(); ev.stopPropagation(); birak(); } else if (menu && !(ev.target as Element).closest('.tc-pyq-menu')) setMenu(null); }}
+      className="tc-pyq-tahta" data-olcek={olcek} data-tasima={tasinan ? '' : undefined} data-birlesme={birles ? '' : undefined} ref={kap} onScroll={pencereyiBildir}
+      onPointerMove={izle} onClickCapture={(ev) => {
+        if (birlesBirakti.current) { birlesBirakti.current = false; ev.preventDefault(); ev.stopPropagation(); return; }
+        // Klavyeyle (Space, çift tık) tutulan pay tıklanan kardeşe bırakılır.
+        if (birles && !birlesOnay) { ev.preventDefault(); ev.stopPropagation(); const h = birlesHedefi(ev.target as Element, birles.kaynak); if (h !== null) birlesAc(birles.kaynak, h); else birak(); return; }
+        if (balon && !(ev.target as Element).closest('.tc-pyq-balon, .tc-pyq-gelen')) setBalon(null); if (tasinan && !onay) { ev.preventDefault(); ev.stopPropagation(); birak(); } else if (menu && !(ev.target as Element).closest('.tc-pyq-menu')) setMenu(null); }}
     >
       <div className="tc-pyq-ic" ref={(el) => { ic.current = el; el?.style.setProperty('--en', `${String(en)}px`); el?.style.setProperty('--gun', `${String(24 * px)}px`); }}>
         {/* Tablo rolü satırlara aria-owns ile bağlı ayrı öğededir: Gantt düğmeleri ve sütun ayracı aynı satırlarda durur, role=table içinde
@@ -1278,6 +1327,7 @@ export function Tahta(o: TahtaOzellikleri) {
         {satirlar.map((r) => (
           <div
             className="tc-pyq-satir" key={r.kimlik} data-satir={r.kimlik} data-d={r.durum} data-seritli={!tekSeritli(r) && (yerlesim.satir.get(r.kimlik) ?? 1) > 1 ? '' : undefined}
+            data-pay-satir={r.payAlt ? r.isler[0]?.id : undefined} data-birles-aday={r.payAlt && birlesAdaylari.has(r.isler[0]?.id ?? '') ? '' : undefined} data-birles-hedef={r.payAlt && r.isler[0] !== undefined && (birles?.hedef ?? birlesOnay?.hedef) === r.isler[0].id ? '' : undefined}
             data-agac-adim={r.adim ? '' : undefined} data-agac-not={r.notlar ? '' : undefined} data-agac-ara={r.ara ? '' : undefined}
             data-secili={tabloKipi && goz === 'S' && r.emirKaydi !== undefined && !r.adim && !r.ara && !r.notlar && secEmir === r.kimlik ? '' : undefined}
             ref={(el) => { el?.style.setProperty('--seritler', String(tekSeritli(r) ? 1 : yerlesim.satir.get(r.kimlik) ?? 1)); }}
@@ -1375,7 +1425,7 @@ export function Tahta(o: TahtaOzellikleri) {
           );
         })()}
         {(() => {
-          const x = secIs !== null && !tasinan && !menu && !hucreli ? m.isler[secIs] : undefined, e = x ? emir.get(x.job) : undefined;
+          const x = secIs !== null && !tasinan && !menu && !birles && !birlesOnay && !hucreli ? m.isler[secIs] : undefined, e = x ? emir.get(x.job) : undefined;
           if (!x || !e || panoKapali === x.id) return null;
           return createPortal(<AdimPanosu kip="secili" m={m} e={e} x={x} zaman={zaman} sayim={o.adimSayim?.[x.id]} bolAc={bol ? (id) => { setPanoKapali(x.id); bol(id); } : null} kapat={() => { setPanoKapali(x.id); }} yerlestir={(el) => { if (el) { panoOge.current = { el, id: x.id }; panoYerlestir(el, x.id); } else panoOge.current = null; }} />, document.body);
         })()}
@@ -1392,6 +1442,21 @@ export function Tahta(o: TahtaOzellikleri) {
                 </>
               );
             })()}
+            {birlestir && !menu.fis && m.isler[menu.id]?.pay && (() => {
+              const x = m.isler[menu.id]!, kardesler = adimPaylari(m, adimKimligi(x)).filter((y) => y.id !== x.id);
+              if (kardesler.length === 0) return null;
+              const hepsi = kardesler.length > 1 ? payBirlesmesi(m, x.id, 'hepsi') : null;
+              return (
+                <div role="group" aria-label="Şununla birleştir" className="tc-pyq-menu-grup" data-birles-menu={x.id}>
+                  <small aria-hidden="true">Şununla birleştir</small>
+                  {kardesler.map((y) => {
+                    const r = payBirlesmesi(m, x.id, y.id);
+                    return <button type="button" role="menuitem" key={y.id} data-birles-ile={y.id} disabled={r.hata !== null} onClick={() => { birlesAc(x.id, y.id); }}><Simge ad="fit" boyut="k" /><span>{payAdi(m, y)}<small>{r.hata ?? `birleşince ${String(r.adet)} adet`}</small></span></button>;
+                  })}
+                  {hepsi && <button type="button" role="menuitem" data-birles-hepsi={x.id} disabled={hepsi.hata !== null} onClick={() => { birlesAc(x.id, 'hepsi'); }}><Simge ad="fit" boyut="k" /><span>Bütün payları birleştir<small>{hepsi.hata ?? 'tek pay kalır, bölme kalkar'}</small></span></button>}
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>
@@ -1400,6 +1465,7 @@ export function Tahta(o: TahtaOzellikleri) {
         <div className="tc-pyq-alt-bosluk" aria-hidden="true" />
         {createPortal(
         <div className="tc-pyq-ipucu tc-pyq-tasima-onayi tc-pyq-alt-panel" role="group" aria-label="Taşımayı onayla">
+          {tasinanIs.pay && <b className="tc-pyq-onay-tur" data-onay-tur="tasi">Taşı</b>}
           <span role="status">{`${onayCumlesi(
             emirKuyrugu(emir.get(tasinanIs.job)?.no ?? tasinanIs.job),
             goz !== 'T' || hedef.satir === satirKimligi(tasinanIs) ? (tasinanIs.fason ? 'Fason' : tezgahKodu.get(tasinanIs.m) ?? tasinanIs.m) : tezgahKodu.get(hedef.satir) ?? hedef.satir,
@@ -1412,7 +1478,7 @@ export function Tahta(o: TahtaOzellikleri) {
         )}
         </>
       )}
-      {tasinan && !onay && tasinan.fis === undefined && hedef && (() => {
+      {tasinan && !onay && tasinan.fis === undefined && hedef && !birles?.hedef && (() => {
         const x = m.isler[tasinan.id], e = x ? emir.get(x.job) : undefined;
         if (!x || !e) return null;
         const tezgah = goz === 'T' ? hedef.satir : x.m;
@@ -1422,7 +1488,26 @@ export function Tahta(o: TahtaOzellikleri) {
         const neden = !hedef.gecerli ? 'Bu tezgâh adımın uygun tezgâhı değil.' : etkiNe?.gecerli === false ? etkiNe.ileti ?? 'Sunucu bu yere bırakmayı kabul etmez.' : null;
         return createPortal(<AdimPanosu kip="surukle" m={m} e={e} x={x} zaman={zaman} sayim={o.adimSayim?.[x.id]} hedef={{ tezgah, S: hedef.S, tahmin, etki, dogrulandi: sunucu, neden }} />, document.body);
       })()}
-      {tasinan && !onay && <p className="tc-pyq-ipucu" role="status">{tasinan.suruk ? 'Bırakın: iş taşınır' : 'Bırakmak için tıklayın ya da Space'}{grupKaydir && coklu.size > 1 && coklu.has(tasinan.id) ? ` · seçili ${String(coklu.size)} iş aynı süre kayar` : ''}{etkiNe?.gecerli === false && etkiNe.ileti ? ` · ${etkiNe.ileti}` : ''}{etkiNe?.gecerli !== false ? etkiCumlesi(etkiNe, zaman, m.simdi) : ''}{hiza.filter((c) => c.hizali).map((c) => ` · Hizalı: ${c.ad} ${zaman(c.saat).slice(-5)}`).join('')} · Esc vazgeçer</p>}
+      {birlesOnay && birlesOnayi && (
+        <>
+        <div className="tc-pyq-alt-bosluk" aria-hidden="true" />
+        {createPortal(
+        <div className="tc-pyq-ipucu tc-pyq-tasima-onayi tc-pyq-alt-panel" role="group" aria-label="Birleştirmeyi onayla" data-birles-onayi="">
+          <b className="tc-pyq-onay-tur" data-onay-tur="birlestir">Birleştir</b>
+          <span role="status">{birlesOnayi.hata ?? `${birlesOnayi.cumle} · Uygula taslağınıza yazar, plan "Canlıya al" ile değişir`}</span>
+          <Dugme onClick={() => { setBirlesOnay(null); }}>Vazgeç</Dugme>
+          <Dugme tur="birincil" simge="check" disabled={birlesOnayi.komut === null} onClick={birlesUygula} autoFocus>Uygula</Dugme>
+        </div>,
+        document.body,
+        )}
+        </>
+      )}
+      {birles && !birlesOnay && (!tasinan || birles.hedef !== null) && (
+        <p className="tc-pyq-ipucu" role="status" data-birles-ipucu="">
+          {birlesSonucu ? `Birleştir: ${birlesSonucu.hata ?? birlesSonucu.cumle} · bırakın` : `${PAY_TASINMAZ} · ${birles.suruk ? 'boş yere bırakmak taşımaz' : 'kardeş paya tıklayın'}`} · Esc vazgeçer
+        </p>
+      )}
+      {tasinan && !onay && !(birles && birles.hedef !== null) && <p className="tc-pyq-ipucu" role="status">{birles ? 'Kardeş payın üstüne bırakın: birleşir · başka yere: ' : ''}{tasinan.suruk ? 'Bırakın: iş taşınır' : 'Bırakmak için tıklayın ya da Space'}{grupKaydir && coklu.size > 1 && coklu.has(tasinan.id) ? ` · seçili ${String(coklu.size)} iş aynı süre kayar` : ''}{etkiNe?.gecerli === false && etkiNe.ileti ? ` · ${etkiNe.ileti}` : ''}{etkiNe?.gecerli !== false ? etkiCumlesi(etkiNe, zaman, m.simdi) : ''}{hiza.filter((c) => c.hizali).map((c) => ` · Hizalı: ${c.ad} ${zaman(c.saat).slice(-5)}`).join('')} · Esc vazgeçer</p>}
       {once && <p className="tc-pyq-ipucu" role="status">Onaylı plan gösteriliyor · işlerin üzerinde sizin değişikliğinizle ne kadar kaydığı yazar</p>}
     </div>
   );
