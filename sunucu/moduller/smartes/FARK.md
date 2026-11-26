@@ -79,3 +79,6 @@ Yeni modül; depoda önceki hâli yok. Brief (`SMARTES_PROMPT.md`, .NET/ASMX iç
   gönderir, tutmazsa onay çakışmayla döner. Toplu onayda sayım düzeltmesi varsa "N satır sağlamdan düşer, toplam −X" penceresi açılır. Sayım düzeltme
   yetkisi olanın eksi sayımı SmartES kilidine takılmaz (SmartES makinesinde CORE'daki tek düzeltme yolu). Makineleri farklı kaynaktan üreten istasyonda
   eşlenmemiş makine kodlu satır aktarılmaz (çift sayım). Hareket durumu "yazıldı" satırın üstüne yazılmaz. Geçiş tablosu kayıt kipinde (geniş ekranda kayar).
+- Arayüz düzeltmesi (26.11): terminal kilidi yeni React terminalinde (`istemci/src/moduller/arkon/yeni/operator/Operator.tsx`): işin üretimi SmartES'ten
+  geliyorsa şerit nedeni yazar, durum düğmeleri ve telefon eylem çubuğu kapalıdır, SmartES makinesi makine seçiminde kilitlidir. Eski `arkon/web` terminalindeki
+  aynı değişiklik yalnız testlerde kullanılır.

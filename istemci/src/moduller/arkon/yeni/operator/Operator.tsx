@@ -7,7 +7,7 @@ import { KabukUstYuvasi } from '../../../../ortak/arayuz/Kabuk.tsx';
 import { CAGRI_GERIYE_MS, acikCagri, cagriyiKur, type CagriSatiri } from '../../../../../../arkon/web/src/data/acik-cagri.ts';
 import { baslatmaUyarisi, uyariliBaslatmaIletisi } from '../../../../../../arkon/web/src/data/baslatma-uyarisi.ts';
 import {
-  baslatmaGeriAlma, baslatmaGeriUygula, durumEsitle, durumEsitleme, durumIletisi, geriAlinacakIs, sayimGeriAlma, sayimGeriUygula, sayimKapaliNedeni, smartesSayimi, SMARTES_SAYIM_ILETISI,
+  baslatmaGeriAlma, baslatmaGeriUygula, durumEsitle, durumEsitleme, durumIletisi, geriAlinacakIs, sayimGeriAlma, sayimGeriUygula, sayimKapaliNedeni, smartesMakineleri, smartesSayimi, smartesUretimi, SMARTES_SAYIM_ILETISI, SMARTES_URETIM_ILETISI,
   KUYRUK_BITTI_OLAYI, SAYIM_YENIDEN_YAZILDI_OLAYI, type DurumEsitleme, type SayimGeriAlma,
 } from '../../../../../../arkon/web/src/data/biten-is.ts';
 import { CAKISMA_ILETISI, CAKISMA_OLAYI } from '../../../../../../arkon/web/src/data/cakisma.ts';
@@ -1105,6 +1105,12 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
     if (Date.now() - retZamani.current > 1500) { retZamani.current = Date.now(); bip('nok'); say(`Yetkin yok: ${YETKI_ADLARI[k] || k}`, 'lock', 'stop'); }
     return false;
   };
+  // 3760: SmartES'ten üretilen makine seçilemez; iş SmartES'ten üretiliyorsa (iş, ya da seçili makine) hareket ve sayım düğmeleri kapalıdır,
+  // nedeni düğmelerle aynı yerde yazar. Sunucu da reddeder (uretim-emirleri SMARTES_URETIMI).
+  const smartesMk = smartesMakineleri(o);
+  const seciliSmartesDisi = kilitsizSecim(seciliMakineler(mcSel, ist.mcs), ayrim).filter((m) => !smartesMk.includes(m));
+  // Karışık istasyonda çalışan işin makinesi SmartES'teyse sunucu komutu reddeder; ileti oradan gelir.
+  const smartesIs = smartesUretimi(o);
   const kapaliNedeni = sayimKapaliNedeni(o);
   const kapali = kapaliNedeni !== null;
   const iyiKapaliNedeni = sayimKapaliNedeni(o, 'good');
@@ -1136,6 +1142,7 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
   const kartBekleyen = useRef<{ t: Gorev | undefined; warned: boolean } | null>(null);
   const act = (a: GorevEylemi, t?: Gorev, warned?: boolean, hazir?: boolean, ekUyari?: string | null) => {
     if (URETIM_EYLEMLERI.includes(a) && (o.empty || !ok('prod.run'))) return;
+    if (URETIM_EYLEMLERI.includes(a) && smartesIs) { bip('nok'); say(SMARTES_URETIM_ILETISI, 'alert', 'hold'); return; }
     // 3392 a madde 7: ortak cihazda bitir her seferinde, başlat/sürdür/duruş 20 dk dokunulmadıysa kart ister.
     if (GUVENCE_EYLEMLERI.has(a) && !(a === 'finish' && kabulBitirme.current) && guvence.gerekir(a as GuvenceEylemi)) { kartIsteYaz({ eylem: a as GuvenceEylemi, devam: () => actRef.current(a, t, warned, hazir, ekUyari) }); ovYaz('kartiste'); return; }
     if (bekletme && BEKLEMEDE_KAPALI.has(a)) { say(`Emir beklemede · ${bekletme}`, 'pause', 'hold'); return; }
@@ -1501,7 +1508,7 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
   // 790: makine seçici çarkın Makineler şerididir; kural aynıdır (iki makineden azsa seçim yok, çalışan işte değişmez, ayrılmış makine kilitli).
   // 3392 a: cihaz makineye bağlıysa operatör makine seçmez (bağı yalnız istasyon yönetimi değiştirir).
   const makineler = ist.mcs.length >= 2 && !(cihazMakinesi && !yetkiVar('prod.station')) ? ist.mcs : [];
-  const seciliMak = kilitsizSecim(seciliMakineler(mcSel, ist.mcs), ayrim);
+  const seciliMak = seciliSmartesDisi;
   const atananMak = (ayrim && ayrim.planMakinesi) || (o.pkg && o.pkg.mc);
   // 3126: üst şeritte çalışılan makine her zaman yazar: seçilen, yoksa plan ataması, tek makinede o makine. Makinesiz istasyonda kalem yok.
   const yerdekiMakine = seciliMak[0] ?? atananMak ?? (ist.mcs.length === 1 ? ist.mcs[0]!.id : null);
@@ -1520,7 +1527,8 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
     : makineSecimiGorunur(makineler, o.state) ? null : 'Çalışan işte makine değişmez; başka makine için önce durdur';
   const carkMakinesi = (m: (typeof makineler)[number]): CarkMakinesi => {
     const a = makineAyrimi(ayrim, m.id);
-    return { id: m.id, ad: m.name, secili: seciliMak.includes(m.id), plan: m.id === atananMak, kilit: a ? ayrimAciklamasi(a, saatMetni) : null };
+    const kilit = a ? ayrimAciklamasi(a, saatMetni) : smartesMk.includes(m.id) ? 'Bu makinede üretim SmartES’ten gelir; terminalden seçilemez.' : null;
+    return { id: m.id, ad: m.name, secili: seciliMak.includes(m.id), plan: m.id === atananMak, kilit };
   };
   const tuslar: SayimTusu[] = [];
   // 1046 a: geniş düzende sayım tuşları üstte iki büyük tuş, düzeltme (−1) tuşları altlarında tek kısa sıra; sıra bu dizinin sırasıdır.
@@ -1560,7 +1568,7 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
     </div>
     {kabulAdimi ? <KabulNotu sayilan={o.good} yazilan={kabulYazilan} hedef={o.target} /> : null}
     {/* Sayaç boyunu içeriğinden almaz; bilgi satırı içine konunca kadranı ve tuşları sıkıştırır. Telefonda aynı bilgi eylem çubuğundadır. */}
-    {!dar && smartesSayimi(o) && <p className="tc-ay1-smartes" role="status"><Simge ad="laptop" />{SMARTES_SAYIM_ILETISI}</p>}
+    {!dar && !smartesIs && smartesSayimi(o) && <p className="tc-ay1-smartes" role="status"><Simge ad="laptop" />{SMARTES_SAYIM_ILETISI}</p>}
     </>
   );
   const toplu = eylemVar('toplu') ? (
@@ -1590,8 +1598,10 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
   const tlNotu = !pv && uretir && (o.state === 'queued' || o.state === 'setup') && tlEksik.once.length > 0 ? (
     <button type="button" className="tc-ay1-tl-not" onClick={talimatlaraGit}><Simge ad="alert" boyut="k" />{tlEksik.once.length} zorunlu madde eksik</button>
   ) : null;
+  const smartesSeridi = smartesIs && !o.empty ? <p className="tc-ay1-smartes" role="status"><Simge ad="laptop" />{SMARTES_URETIM_ILETISI}</p> : null;
   const durumDugmeleri = (mobil: boolean) => (eylemVar('durum') ? (<>
-    <DurumDugmeleri durum={o.state} pasif={!!o.empty} beklemede={bekletme !== null} {...(mobil && !kaliteGorunumu ? { yuvalar: ['bitir' as const] } : {})} erken={(e) => say(`${e} için 1,2 sn basılı tut`, 'alert', 'hold')}
+    {smartesSeridi}
+    <DurumDugmeleri durum={o.state} pasif={!!o.empty || smartesIs} beklemede={bekletme !== null} {...(mobil && !kaliteGorunumu ? { yuvalar: ['bitir' as const] } : {})} erken={(e) => say(`${e} için 1,2 sn basılı tut`, 'alert', 'hold')}
       eylem={(d) => act(d.eylem)} />
     {tlNotu}
   </>) : !pv ? <p className="tc-ay1-soluk tc-ay1-izin">Bu rol üretim kaydı yapamaz</p> : null);
@@ -1831,7 +1841,7 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
     MV.splice(Math.max(0, MV.findIndex((x) => x.id === 'steps')), 0, { id: 'tl', l: 'Talimat', simge: 'flag', n: tlSayisi || null });
     const gor = MV.some((x) => x.id === mv) ? mv : 'prod';
     const cubuk = gor === 'prod' && uretir && !kaliteGorunumu
-      ? <EylemCubugu durum={o.state} pasif={!!o.empty} beklemede={bekletme !== null} eylem={(d) => act(d.eylem)} tuslar={tuslar.filter((t) => t.simge !== 'minus' && t.simge !== 'layers' && !(smartesSayimi(o) && t.ton === 'iyi'))} bilgi={smartesSayimi(o) ? 'Sayım SmartES’ten' : undefined} />
+      ? <EylemCubugu durum={o.state} pasif={!!o.empty || smartesIs} beklemede={bekletme !== null} eylem={(d) => act(d.eylem)} tuslar={tuslar.filter((t) => t.simge !== 'minus' && t.simge !== 'layers' && !((smartesIs || smartesSayimi(o)) && t.ton === 'iyi'))} bilgi={smartesIs ? 'Üretim SmartES’ten' : smartesSayimi(o) ? 'Sayım SmartES’ten' : undefined} />
       : null;
     return (
       <div className="tc-ay1 tc-ay1-dar" data-durum={IS_DURUM_RENGI(o.state)} data-dokunmatik="" data-cubuk={cubuk || depoIsi ? '' : undefined}>

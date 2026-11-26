@@ -477,6 +477,23 @@ describe('807 üst çubuk kısayolları', () => {
 });
 
 // Son blok: işin yerel kopyası (çalışıyor) sonraki testin açılışında sunucuya yazılır, öteki testlerden sonra durur.
+describe('A1 Üretim Terminali SmartES üretimi (3760)', () => {
+  it('işin üretimi SmartES’ten geliyorsa şerit nedeni yazar; Başlat ve Hazırlık kapalı, tıklama yazmaz', async () => {
+    const pk = { ...PAKET, id: 'tmi-ie-76', no: 'UE-DENEME-76', tmi: { emirId: 76, isEmriId: 760, sayimKaynagi: 'smartes', uretimKaynagi: 'smartes' } };
+    const istekler = sunucuKur(ISTASYONLU, { belgeler: { pkgs: [{ kimlik: pk.id, surum: 1, govde: pk }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
+    arkonAc('/uretim-terminali');
+    const d = await ekran();
+    expect(await within(d).findByRole('heading', { name: /UE-DENEME-76/ })).toBeTruthy();
+    expect(screen.getByText(/Bu makinede üretim SmartES’ten gelir/)).toBeTruthy();
+    const grup = screen.getByRole('group', { name: 'İş durumu' });
+    const baslat = within(grup).getByRole('button', { name: /Başlat/ }) as HTMLButtonElement;
+    expect(baslat.disabled).toBe(true);
+    fireEvent.click(baslat);
+    await new Promise((r) => setTimeout(r, 500));
+    expect(olaylar(istekler)).toEqual([]);
+  }, 40000);
+});
+
 describe('A1 Üretim Terminali hatalı parça (1034)', () => {
   it('CORE işinde Hurda yerine Hatalı: neden ve adetle kalite kolu açılır, hurda sayımı yazılmaz; kadranda hatalı adedi artar (1188)', async () => {
     const tmi = { ...PAKET, id: 'tmi-ie-70', no: 'UE-DENEME-7', tmi: { emirId: 7, hatali: 1 } };
