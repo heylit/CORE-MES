@@ -944,6 +944,7 @@ export const hazirlikSablonuCevabi = z.object({
     satirlar: z.array(hazirlikSablonSatiri.extend({ rolAdi: z.string().nullable() })),
   })),
   yazar: z.boolean(),
+  durduranAcabilir: z.boolean(),
 });
 export type HazirlikSablonuCevabi = z.infer<typeof hazirlikSablonuCevabi>;
 export const hazirlikSablonuYazCevabi = z.object({ surum: z.number().int() });
