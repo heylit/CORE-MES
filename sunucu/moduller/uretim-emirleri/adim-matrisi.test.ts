@@ -298,6 +298,122 @@ describe('uretim-emirleri adım durumu matrisi (3604, gerçek PostgreSQL)', () =
     }
   });
 
+  // 3738 dilim 2: tek madde mercegi ve toplu onay. Çözücü her iş emri için aynı hâli verir: cnc (durduran) ve malzeme (uyaran) eksik, çizim tamam.
+  describe('hazırlık toplu işlemi (3738 dilim 2)', () => {
+    let onceki: (readonly [HazirlikMaddesi, HazirlikCozucusu | null])[] = [];
+    before(() => {
+      const hal = new Map<HazirlikMaddesi, HazirlikBilgisi>([['cnc', { durum: 'yok', secildi: true }], ['malzeme', { durum: 'yok', secildi: true }], ['cizim', { durum: 'tamam', secildi: true, surum: '7@a' }]]);
+      onceki = (['cnc', 'malzeme', 'cizim'] as const).map((m) => [m, hazirlikCozucusuKaydet(m, async (_db, idler) => new Map(idler.map((x) => [x, hal.get(m)!])))] as const);
+    });
+    after(() => { for (const [m, c] of onceki) hazirlikCozucusuKaydet(m, c); });
+
+    const hazirlikToplu = (govde: unknown, kisi = 'planlama_proje') => istek<StatuTopluCevabi & Hata>(kisi, 'POST', '/adimli-emirler/hazirlik-toplu', govde);
+    const hk = (emirId: number, isEmriId: number, islem: 'onayla' | 'eksik' | 'kaldir', sistemHali: string, gerekce: string | null = null) => ({ emirId, isEmriId, islem, gerekce, sistemHali });
+    const maddesi = async (emirId: number, madde: HazirlikMaddesi, sira = 0) => (await matris()).emirler.find((x) => x.emirId === emirId)?.adimlar[sira]?.maddeler.find((x) => x.madde === madde);
+    const hazirlikSatiri = async (ie: readonly number[]): Promise<number> =>
+      (await o().sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM uretim_emirleri_hazirlik_onayi WHERE is_emri_id = ANY($1::int[])', [[...ie]]))?.n ?? 0;
+
+    test('yetki ve doğrulama: yazma yetkisi olmayan 403; boş, 100 üstü, bilinmeyen işlem ve alan 400; reddedilen istek defter yazmaz', async () => {
+      const a = await ac();
+      const k = [hk(a.id, a.ie[0] ?? 0, 'onayla', 'eksik', 'Program elde denendi')];
+      for (const kisi of ['operator', 'kalite']) assert.equal((await hazirlikToplu({ madde: 'cnc', kalemler: k }, kisi)).durum, 403, `${kisi} yazmaz`);
+      assert.equal((await hazirlikToplu({ madde: 'cnc', kalemler: [] })).durum, 400, 'boş seçim');
+      assert.equal((await hazirlikToplu({ madde: 'cnc', kalemler: Array.from({ length: 101 }, () => k[0]) })).durum, 400, '100 üstü');
+      assert.equal((await hazirlikToplu({ madde: 'cnc', kalemler: [{ ...k[0], islem: 'sil' }] })).durum, 400, 'bilinmeyen işlem');
+      assert.equal((await hazirlikToplu({ madde: 'cnc', kalemler: [{ ...k[0], fazla: 1 }] })).durum, 400, 'bilinmeyen alan');
+      assert.equal((await hazirlikToplu({ madde: 'yok-madde', kalemler: k })).durum, 400, 'bilinmeyen madde');
+      assert.equal(await hazirlikSatiri(a.ie), 0);
+      assert.equal((await hazirlikToplu({ madde: 'cnc', kalemler: k }, 'mudur')).durum, 200);
+    });
+
+    test('durduran madde: gerekçesiz kalem ret olur, gerekçeli kalem yazılır; tek gerekçe birçok kaleme yazılır', async () => {
+      const a = await ac();
+      const b = await ac();
+      const [a1 = 0, a2 = 0] = a.ie;
+      const [b1 = 0] = b.ie;
+      const karma = await hazirlikToplu({ madde: 'cnc', kalemler: [hk(a.id, a1, 'onayla', 'eksik', null), hk(a.id, a2, 'onayla', 'eksik', 'Program elde denendi'), hk(b.id, b1, 'onayla', 'eksik', '  kısa ')] });
+      assert.equal(karma.durum, 200, JSON.stringify(karma.govde));
+      assert.deepEqual(sonuclar(karma), ['ret', 'yazildi', 'ret']);
+      assert.match(karma.govde.kalemler[0]?.neden ?? '', /gerekçe/);
+      assert.equal((await maddesi(a.id, 'cnc', 0))?.elle, null, 'ret kalem yazılmadı');
+      assert.deepEqual([(await maddesi(a.id, 'cnc', 1))?.hal, (await maddesi(a.id, 'cnc', 1))?.elle?.gerekce], ['muaf', 'Program elde denendi']);
+      // Tek gerekçe üç kaleme: hepsi aynı gerekçeyle, kişi sunucudan.
+      const ortak = await hazirlikToplu({ madde: 'cnc', kalemler: [hk(a.id, a1, 'onayla', 'eksik', 'Revizyon sorgusu bekliyor'), hk(b.id, b1, 'onayla', 'eksik', 'Revizyon sorgusu bekliyor')] }, 'mudur');
+      assert.deepEqual(sonuclar(ortak), ['yazildi', 'yazildi']);
+      for (const [id, sira] of [[a.id, 0], [b.id, 0]] as const) {
+        const e = (await maddesi(id, 'cnc', sira))?.elle;
+        assert.deepEqual([e?.tur, e?.gerekce, e?.kisiAdi], ['hazir', 'Revizyon sorgusu bekliyor', 'Deneme mudur']);
+      }
+    });
+
+    test('kalem başına bağımsızlık: bayat hâl "eski", hedef hâlde ve kapalı emir "atlandi", olmayan iş emri "ret"; ötekiler yazılır', async () => {
+      const a = await ac();
+      const kapali = await ac();
+      await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'bitti', baslama = now(), bitis = now(), saglam_adet = 4 WHERE id = $1", [kapali.id]);
+      const [a1 = 0, a2 = 0] = a.ie;
+      const c = await hazirlikToplu({ madde: 'malzeme', kalemler: [
+        hk(a.id, a1, 'onayla', 'tamam'), // istemci tamam gördü, sunucuda eksik: bayat
+        hk(a.id, a2, 'onayla', 'eksik'),
+        hk(kapali.id, kapali.ie[0] ?? 0, 'onayla', 'eksik'),
+        hk(a.id, kapali.ie[1] ?? 0, 'onayla', 'eksik'),
+        hk(2_000_000_000, 1, 'onayla', 'eksik'),
+      ] });
+      assert.equal(c.durum, 200, JSON.stringify(c.govde));
+      assert.deepEqual(sonuclar(c), ['eski', 'yazildi', 'atlandi', 'ret', 'ret']);
+      assert.match(c.govde.kalemler[0]?.neden ?? '', /değişti/);
+      assert.equal((await maddesi(a.id, 'malzeme', 0))?.elle, null);
+      assert.equal((await maddesi(a.id, 'malzeme', 1))?.elle?.tur, 'hazir');
+      // Zaten elle hazır olana ikinci onay atlanır (hâl artık muaf); yeniden deneme güncel hâlle yazılır.
+      const yine = await hazirlikToplu({ madde: 'malzeme', kalemler: [hk(a.id, a2, 'onayla', 'muaf'), hk(a.id, a1, 'onayla', 'eksik')] });
+      assert.deepEqual(sonuclar(yine), ['atlandi', 'yazildi']);
+    });
+
+    test('uyaran madde: gerekçesiz onay, elle eksik, geri alma (önceki değer) ve elle değeri kaldırma; elle değer yokken kaldırma atlanır', async () => {
+      const a = await ac();
+      const [a1 = 0, a2 = 0] = a.ie;
+      assert.deepEqual(sonuclar(await hazirlikToplu({ madde: 'malzeme', kalemler: [hk(a.id, a1, 'onayla', 'eksik'), hk(a.id, a2, 'eksik', 'eksik', 'Gelmedi')] })), ['yazildi', 'yazildi']);
+      assert.deepEqual([(await maddesi(a.id, 'malzeme', 0))?.hal, (await maddesi(a.id, 'malzeme', 1))?.elle?.tur], ['muaf', 'eksik']);
+      // Geri al: ilk kalem elle değeri kaldırır (otomatik eksik), ikinci kalem (elle eksik) otomatik eksikle aynı: kaldır.
+      const geri = await hazirlikToplu({ madde: 'malzeme', kalemler: [hk(a.id, a1, 'kaldir', 'muaf'), hk(a.id, a2, 'kaldir', 'eksik')] });
+      assert.deepEqual(sonuclar(geri), ['kaldirildi', 'kaldirildi']);
+      assert.deepEqual([(await maddesi(a.id, 'malzeme', 0))?.hal, (await maddesi(a.id, 'malzeme', 0))?.elle], ['eksik', null]);
+      assert.deepEqual(sonuclar(await hazirlikToplu({ madde: 'malzeme', kalemler: [hk(a.id, a1, 'kaldir', 'eksik')] })), ['atlandi'], 'elle değer yok');
+      // Hâl tamam olan maddeye (çizim) onay da, gerekmeyene eksik de yazılmaz; tamam maddeye elle eksik yazılır.
+      assert.deepEqual(sonuclar(await hazirlikToplu({ madde: 'cizim', kalemler: [hk(a.id, a1, 'onayla', 'tamam')] })), ['atlandi']);
+      assert.deepEqual(sonuclar(await hazirlikToplu({ madde: 'cizim', kalemler: [hk(a.id, a1, 'eksik', 'tamam', 'Revizyon değişti')] })), ['yazildi']);
+      assert.equal((await maddesi(a.id, 'cizim', 0))?.hal, 'eksik');
+    });
+
+    test('her kalem tek adımdaki uçla aynı kaydı yazar; denetim kaydı gövdeyi tutar', async () => {
+      const a = await ac();
+      const b = await ac();
+      const toplu1 = await hazirlikToplu({ madde: 'cnc', kalemler: [hk(a.id, a.ie[0] ?? 0, 'onayla', 'eksik', 'Program elde denendi')] });
+      assert.deepEqual(sonuclar(toplu1), ['yazildi']);
+      const tek = await istek('planlama_proje', 'POST', `/adimli-emirler/${b.id}/is-emirleri/${b.ie[0] ?? 0}/hazirlik-onayla`, { madde: 'cnc', gerekce: 'Program elde denendi', sistemHali: 'eksik' });
+      assert.equal(tek.durum, 200, JSON.stringify(tek.govde));
+      const satir = (ie: number) => o().sahip.tek<{ olay: string; sistem_hali: string; gerekce: string | null; kisi: string }>(
+        'SELECT h.olay, h.sistem_hali, h.gerekce, k.ad AS kisi FROM uretim_emirleri_hazirlik_onayi h JOIN kisi k ON k.id = h.kisi_id WHERE h.is_emri_id = $1', [ie]);
+      assert.deepEqual(await satir(a.ie[0] ?? 0), await satir(b.ie[0] ?? 0), 'aynı olay, hâl, gerekçe ve kişi');
+      const kayit = await o().sahip.tek<{ govde: { kalemler?: unknown[]; madde?: string } }>("SELECT govde FROM denetim_kaydi WHERE yol = '/adimli-emirler/hazirlik-toplu' ORDER BY id DESC LIMIT 1");
+      assert.deepEqual([kayit?.govde.madde, kayit?.govde.kalemler?.length], ['cnc', 1]);
+    });
+
+    test('eşzamanlı iki toplu yazım ters sırada kilitlenmez; her kalem tam bir kez yazılır, ikincisi bayat görür', async () => {
+      const a = await ac();
+      const b = await ac();
+      const kalemler = [hk(a.id, a.ie[0] ?? 0, 'onayla', 'eksik'), hk(b.id, b.ie[0] ?? 0, 'onayla', 'eksik'), hk(a.id, a.ie[1] ?? 0, 'onayla', 'eksik')];
+      const [x, y] = await Promise.all([
+        hazirlikToplu({ madde: 'malzeme', kalemler }),
+        hazirlikToplu({ madde: 'malzeme', kalemler: [...kalemler].reverse() }, 'mudur'),
+      ]);
+      assert.deepEqual([x.durum, y.durum], [200, 200], JSON.stringify([x.govde, y.govde]));
+      const say = (c: Cevap<StatuTopluCevabi & Hata>, sonuc: string) => c.govde.kalemler.filter((k) => k.sonuc === sonuc).length;
+      assert.equal(say(x, 'yazildi') + say(y, 'yazildi'), 3, 'her kalem bir kez yazıldı');
+      assert.equal(say(x, 'eski') + say(y, 'eski'), 3, 'öteki yazım bayat gördü');
+      assert.equal(await hazirlikSatiri([a.ie[0] ?? 0, a.ie[1] ?? 0, b.ie[0] ?? 0]), 3, 'üç kalem, üç satır');
+    });
+  });
+
   test('50 emirlik matris okuması ve 100 kalemlik toplu yazım (süre ölçümü)', async () => {
     const hepsi: { id: number; ie: number[] }[] = [];
     for (let i = 0; i < 50; i += 1) hepsi.push(await ac());
@@ -311,6 +427,12 @@ describe('uretim-emirleri adım durumu matrisi (3604, gerçek PostgreSQL)', () =
     const yazma = Date.now() - t0;
     assert.equal(c.durum, 200, JSON.stringify(c.govde));
     assert.equal(c.govde.kalemler.filter((k) => k.sonuc === 'yazildi').length, 100);
-    process.stderr.write(`3604 olcum: matris okuma ${m.emirler.length} emir ${okuma} ms; toplu yazim 100 kalem ${yazma} ms\n`);
+    // 3738 dilim 2: aynı 100 kalemde hazırlık toplu işlemi (hâl denetimi her kalemde sunucudan okunur); çözücü yokken kalemler atlanır, iş yine yapılır.
+    t0 = Date.now();
+    const hz = await istek<StatuTopluCevabi & Hata>('planlama_proje', 'POST', '/adimli-emirler/hazirlik-toplu', { madde: 'malzeme', kalemler: kalemler.map((k) => ({ emirId: k.emirId, isEmriId: k.isEmriId, islem: 'onayla', gerekce: null, sistemHali: 'gerekmez' })) });
+    const hazirlikYazma = Date.now() - t0;
+    assert.equal(hz.durum, 200, JSON.stringify(hz.govde));
+    assert.equal(hz.govde.kalemler.length, 100);
+    process.stderr.write(`3604 olcum: matris okuma ${m.emirler.length} emir ${okuma} ms; toplu yazim 100 kalem ${yazma} ms; hazirlik toplu 100 kalem ${hazirlikYazma} ms\n`);
   });
 });

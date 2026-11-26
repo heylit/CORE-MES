@@ -9,13 +9,13 @@ import {
   birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMaddeleriCevabi, hazirlikMaddeParametresi, hazirlikMaddesiDegistirGovdesi, hazirlikMaddesiEkleGovdesi, hazirlikProjesiCevabi, hazirlikProjesiGovdesi, hazirlikProjesiSecenekleri, hazirlikMatrisiSorgusu, hazirlikMatrisiCevabi, hazirlikDagitGovdesi, hazirlikDagitCevabi, hazirlikMuafiyetiGovdesi, hazirlikGerekmezCevabi, hazirlikGerekmezGovdesi, hazirlikGerekmezKaldirGovdesi, hazirlikOzetiCevabi, hazirlikOzetiSorgusu, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, makineEkleGovdesi, adimPaylariCevabi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
   hataliCevabi, hataliGovdesi, hataliListeCevabi, hataliListeSorgusu, reworkAdimiGovdesi,
   disIslemEmriAcGovdesi, disIslemEmriCevabi, disIslemEmriIptalGovdesi, disIslemEmriParametresi,
-  adimDurumuCevabi, adimDurumuTerminalCevabi, adimMatrisiCevabi, adimMatrisiSorgusu, statuTopluCevabi, statuTopluGovdesi, elleStatuGovdesi, elleStatuKaldirGovdesi, hazirlikElleEksikGovdesi, hazirlikOnayiGovdesi, hazirlikOnayiKaldirGovdesi, listeEkleGovdesi, listeKaldirGovdesi, opSablonFarkiGovdesi, opSablonFarkiKaldirGovdesi, opSablonFarklariCevabi, listeFotografiParametresi, listeIsaretleGovdesi,
+  adimDurumuCevabi, adimDurumuTerminalCevabi, adimMatrisiCevabi, adimMatrisiSorgusu, statuTopluCevabi, statuTopluGovdesi, elleStatuGovdesi, elleStatuKaldirGovdesi, hazirlikElleEksikGovdesi, hazirlikOnayiGovdesi, hazirlikOnayiKaldirGovdesi, hazirlikTopluGovdesi, listeEkleGovdesi, listeKaldirGovdesi, opSablonFarkiGovdesi, opSablonFarkiKaldirGovdesi, opSablonFarklariCevabi, listeFotografiParametresi, listeIsaretleGovdesi,
   arsivOnizlemeCevabi, arsiveAlCevabi, arsiveAlGovdesi, emirKapatGovdesi, kapanisCevabi, kapanisGeriAcGovdesi, kapanisListeCevabi, kapanislarSorgusu, kapanisMuafGovdesi, kapanisOnayGovdesi, kapanisRetGovdesi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { hazirlikSablonTuruParametresi, hazirlikSablonuCevabi, hazirlikSablonuOzelCevabi, hazirlikSablonuOzelParametresi, hazirlikSablonuOzelYazGovdesi, hazirlikSablonuYazCevabi, hazirlikSablonuYazGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { ADIM_DURUMU_OKUMA_ISLEMLERI } from './kurallar.ts';
 import { emrinTerminOnerisi, siparisinTerminOnerileri, terminKarariVer } from './termin-onerisi.ts';
-import { adimDurumu, adimDurumuTerminal, adimMatrisi, statuTopluYaz, elleStatuKaldir, elleStatuYaz, hazirlikElleEksik, hazirlikOnayKaldir, hazirlikOnayla, listeFotografi, listeIsaretle, listeMaddesiEkle, listeMaddesiKaldir, opSablonFarkiKaldirAkis, opSablonFarkiYazAkis } from './adim-durumu.ts';
+import { adimDurumu, adimDurumuTerminal, adimMatrisi, statuTopluYaz, elleStatuKaldir, elleStatuYaz, hazirlikElleEksik, hazirlikOnayKaldir, hazirlikOnayla, hazirlikTopluYaz, listeFotografi, listeIsaretle, listeMaddesiEkle, listeMaddesiKaldir, opSablonFarkiKaldirAkis, opSablonFarkiYazAkis } from './adim-durumu.ts';
 import { aramaUclari } from './arama/uclar.ts';
 import { gecmisGeriAl, gecmisGir } from './gecmis-giris.ts';
 import { gecmisGeriAlGovdesi, gecmisGirisCevabi, gecmisGirisGovdesi, muayeneBelgeBaglaGovdesi, muayeneBelgeParametresi, muayeneBelgeleriCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -285,6 +285,16 @@ const adimliUclar = [
     cevap: statuTopluCevabi,
     tekrarKorumali: true,
     isle: ({ db, kullanici, govde, denetimEki }) => statuTopluYaz(db, kullanici, govde, denetimEki),
+  }),
+  // 3738 dilim 2: bir hazırlık maddesinin birçok adımda toplu elle işlemi; tek adımdaki üç uçla aynı yetki ve kural, kalem başına bağımsız karar.
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/hazirlik-toplu',
+    yetki: 'uretim-emirleri.adim-durumu-yaz',
+    govde: hazirlikTopluGovdesi,
+    cevap: statuTopluCevabi,
+    tekrarKorumali: true,
+    isle: ({ db, kullanici, govde }) => hazirlikTopluYaz(db, kullanici, govde),
   }),
   uc({
     yontem: 'GET',
