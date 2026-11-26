@@ -8,7 +8,7 @@ import { ISLEMLER } from '#paylasilan/islemler.ts';
 import { kisiGorevi, yoneticiOlustur } from '../kisiler/disari.ts';
 import { DURUM_ANAHTARI, KAYNAK_OKUMA } from '../recete-rota/disari.ts';
 import { PLANLAMA_ANAHTARI } from './disari.ts';
-import { kaynakOku, planlamaCalismasi } from './planlama-servis.ts';
+import { KAYNAK_OKUMA_ISLEMLERI, kaynakOku, planlamaAcilisi, planlamaCalismasi, planlamaKaynagi, satinAlmaEki } from './planlama-servis.ts';
 import * as sorgular from './sorgular.ts';
 
 // 1859: planlama çalışması kişi başına görev okuyordu (istek başına kişi sayısı kadar sorgu). Sorgu sayısı kişi sayısıyla büyümemeli,
@@ -27,7 +27,7 @@ describe('planlama çalışması sorgu sayısı (gerçek PostgreSQL)', () => {
       personel: [], siparisler: [], ayarlar: {} },
   };
 
-  const sorguSay = <T>(f: (db: Db) => Promise<T>): Promise<[T, number]> => vt().tx(async (db) => {
+  const sorguSay = <T>(f: (db: Db) => Promise<T>, okuma = false): Promise<[T, number]> => (okuma ? vt().okumaTx.bind(vt()) : vt().tx.bind(vt()))(async (db) => {
     let n = 0;
     const sayan = new Proxy(db, {
       get: (h, ad, al) => {
@@ -74,6 +74,23 @@ describe('planlama çalışması sorgu sayısı (gerçek PostgreSQL)', () => {
     });
     assert.deepEqual(gorev.kisiGorevi, tek);
     assert.deepEqual(eklenen.map((id) => gorev.kisiGorevi?.[String(id)]), ['Operator', null, 'Ayarci', 'Operator']);
+  });
+
+  // 3725: sayfanın açılışı kaynağı ve satın alma ekini çalışmayla birlikte alır; ikisi çalışmanın girdisinde okunduğundan sorgu eklenmez.
+  // Cevaplar ayrı uçlarınkinin aynısıdır; kaynağı okuyamayana ikisi de null (ayrı uçta yetki hatası).
+  test('açılış kaynağı ve satın alma ekini çalışmanın sorgularıyla verir; ayrı uçlarla aynıdır; yetkisize null', async () => {
+    const simdi = Date.now();
+    const [, calismaSayisi] = await sorguSay((db) => planlamaCalismasi(db, yonetici, simdi), true);
+    const [acilis, acilisSayisi] = await sorguSay((db) => planlamaAcilisi(db, yonetici, simdi), true);
+    assert.equal(acilisSayisi, calismaSayisi, `çalışma ${String(calismaSayisi)}, açılış ${String(acilisSayisi)} sorgu`);
+    assert.notEqual(acilis.kaynak, null);
+    assert.deepEqual(acilis.kaynak, await vt().okumaTx((db) => planlamaKaynagi(db, yonetici)));
+    assert.deepEqual(acilis.satinAlmaEki, await vt().okumaTx((db) => satinAlmaEki(db, yonetici)));
+    const kaynaksiz: Kullanici = { ...yonetici, islemler: ISLEMLER.filter((i) => !(KAYNAK_OKUMA_ISLEMLERI as readonly string[]).includes(i)) };
+    const yetkisiz = await vt().okumaTx((db) => planlamaAcilisi(db, kaynaksiz, simdi));
+    assert.equal(yetkisiz.kaynak, null);
+    assert.equal(yetkisiz.satinAlmaEki, null);
+    assert.notEqual(yetkisiz.calisma, null);
   });
 
   // Kokpit bitişi duruşların okunduğu pencerenin ötesine düşen emirde bunu söyler; sınırı sayfa hesaplamaz, çalışmayla gelir.

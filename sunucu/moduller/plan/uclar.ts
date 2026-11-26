@@ -230,9 +230,10 @@ export const uclar = [
   // 2311 S1: açık planlama sayfalarının kısa aralıkla sorduğu son yazan okuması ("şu an X düzenliyor").
   uc({ yontem: 'GET', yol: '/plan/planlama-calismasi/duzenleyen', yetki: PLANLAMA_OKUR, cevap: duzenleyenCevabi,
     isle: ({ db }) => planlama.planlamaDuzenleyen(db) }),
-  // Planlama sayfasının birleşmiş çalışması (288 a); planlama sayfalarını görme işlemi ister (menüdeki gibi).
+  // Planlama sayfasının birleşmiş çalışması (288 a); planlama sayfalarını görme işlemi ister (menüdeki gibi). 3725: kaynak ve satın alma
+  // eki aynı cevapla, KAYNAK_OKUR'un işlemleriyle gelir (planlamaAcilisi).
   uc({ yontem: 'GET', yol: '/plan/planlama-calismasi', yetki: PLANLAMA_OKUR, cevap: planlamaCalismasiCevabi,
-    isle: ({ db, kullanici }) => planlama.planlamaCalismasi(db, kullanici) }),
+    isle: ({ db, kullanici }) => planlama.planlamaAcilisi(db, kullanici) }),
   // 657 a: kayıt yoksa sayfa boş çalışmayı açar; kaydı yazmak gibi yalnız plan.yaz ister (925 a). Kayıt varsa dokunulmaz, var olan döner.
   uc({ yontem: 'POST', yol: '/plan/planlama-calismasi/olustur', yetki: 'plan.yaz', tekrarKorumali: true, cevap: planlamaCalismasiCevabi,
     isle: ({ db, kullanici }) => planlama.planlamaCalismasiOlustur(db, kullanici) }),

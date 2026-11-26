@@ -68,12 +68,6 @@ export const kaynakDegisikligi = z.object({
   // 3233 a: değişiklik yalnız yeni sipariş eklemekse o siparişlerin kimlikleri (sayfa yalnız onları dizdirir); başka her durumda null ya da yok.
   eklenenSiparisler: z.array(z.string()).nullable().optional(),
 });
-export const planlamaCalismasiCevabi = z.object({
-  calisma: z.record(z.string(), z.unknown()).nullable(),
-  surum: z.number().int().nullable(),
-  // Yalnız planlama sayfasının okumasında; değişiklik yoksa null ya da yok.
-  kaynakDegisikligi: kaynakDegisikligi.nullable().optional(),
-});
 
 // 499 a, 506 a: çalışma planı ile canlı plan farkı (atölyenin "canlı planla aynı" rozeti). k: motorun işlem kimliği (sipariş.k), anahtar plan
 // modülünün `emirNo|opNo`'su. Saat kıyaslanmaz (canlıya almada saati plan modülü kurar); kıyas tezgâh ve tezgâhtaki sıradır. yeni: canlıda
@@ -217,6 +211,17 @@ export const satinAlmaEkiCevabi = z.object({
       kgFiyati: z.number().nonnegative(), paraBirimi: z.string(), tlKgFiyati: z.number().nonnegative().nullable(), tlBirimFiyati: z.number().nonnegative().nullable(),
     }).nullable(),
   })).nullable().optional(),
+});
+
+export const planlamaCalismasiCevabi = z.object({
+  calisma: z.record(z.string(), z.unknown()).nullable(),
+  surum: z.number().int().nullable(),
+  // Yalnız planlama sayfasının okumasında; değişiklik yoksa null ya da yok.
+  kaynakDegisikligi: kaynakDegisikligi.nullable().optional(),
+  // 3725: yalnız planlama sayfasının okumasında (GET /plan/planlama-calismasi), ayrı uçlarındaki cevabın aynısı; ayrı uçların yetkisi
+  // olmayana null. Öteki okumalarda yok.
+  kaynak: durumCevabi.nullable().optional(),
+  satinAlmaEki: satinAlmaEkiCevabi.nullable().optional(),
 });
 
 // Planlama değerlendirmesi (Soru 357 a): planlama sayfasının tarayıcıda motoru koşturan kartları sunucuda hesaplanır. Uç yalnız okur:

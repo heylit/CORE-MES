@@ -61,6 +61,28 @@ describe('acilisOku', () => {
     expect(d.okunamayan).toEqual(['durum', 'motorUyarilari']);
   });
 
+  // 3725: sunucu kaynağı ve satın alma ekini çalışmanın cevabında verirse ayrı uçlara gidilmez.
+  it('kaynak ve satın alma eki çalışmayla gelirse ayrı uçlardan okunmaz', async () => {
+    const acikSiparisler = [{ kod: '7', miktar: 5, tarih: '2026-10-20', siparisNo: 'ORN-SA-1' }];
+    const o = okuyucu([], [], { calisma: null, surum: null, kaynak: { items: [] } as unknown as PlanlamaCalismasiCevabi['kaynak'], satinAlmaEki: { acikSiparisler, tedarikTerminleri: [] } });
+    const d = await acilisOku(o);
+    expect(d.durum).toEqual({ items: [] });
+    expect(d.acikSiparisler).toEqual(acikSiparisler);
+    expect(o.yollar).not.toContain('/plan/planlama-kaynagi');
+    expect(o.yollar).not.toContain('/plan/satin-alma-eki');
+    expect(d.okunamayan).toEqual([]);
+  });
+
+  it('çalışmanın cevabında kaynak null ise (yetki yok) dilim okunamayandır ve ayrı uca gidilmez', async () => {
+    const o = okuyucu([], [], { calisma: null, surum: null, kaynak: null, satinAlmaEki: null });
+    const d = await acilisOku(o);
+    expect(d.durum).toBeNull();
+    expect(d.acikSiparisler).toBeNull();
+    expect(d.okunamayan).toEqual(['durum']);
+    expect(o.yollar).not.toContain('/plan/planlama-kaynagi');
+    expect(o.yollar).not.toContain('/plan/satin-alma-eki');
+  });
+
   it('zorunlu okuma düşerse açılış düşer', async () => {
     await expect(acilisOku(okuyucu([], ['/recete-rota/ben']))).rejects.toThrow();
     await expect(acilisOku(okuyucu([], ['/plan/planlama-calismasi']))).rejects.toThrow();

@@ -45,17 +45,24 @@ async function dilim<T>(okuma: Promise<T>): Promise<T | null> {
   try { return await okuma; } catch { return null; }
 }
 
+// 3725: kaynak ve satın alma eki çalışmanın cevabıyla gelir (sunucu ikisini çalışmayı kurarken zaten okur). Cevap alanı taşımıyorsa
+// (alanı yazmayan sunucu) ayrı uçlarından okunur; null ise kişi okuyamaz, ayrı uca gidilmez.
+async function ekOku<T>(gelen: T | null | undefined, ayri: () => Promise<T>): Promise<T | null> {
+  return gelen === undefined ? dilim(ayri()) : gelen;
+}
+
 // ben, kayitlar ve çalışma zorunludur (eski ekran da bunlarsız açılmaz); öteki okumalar düşerse ekran o dilimsiz açılır.
 export async function acilisOku(o: Okuyucu = api): Promise<PlanlamaDeposu> {
+  const calismaOkumasi = o.get<PlanlamaCalismasiCevabi>('/plan/planlama-calismasi');
   const [ben, kayitlar, calismaCevabi, durum, planSurumu, senaryolar, uyari, satinAlma] = await Promise.all([
     o.get<BenCevabi>('/recete-rota/ben'),
     o.get<KayitlarCevabi>('/recete-rota/kayitlar'),
-    o.get<PlanlamaCalismasiCevabi>('/plan/planlama-calismasi'),
-    dilim(o.get<DurumCevabi>('/plan/planlama-kaynagi')),
+    calismaOkumasi,
+    calismaOkumasi.then((c) => ekOku(c.kaynak, () => o.get<DurumCevabi>('/plan/planlama-kaynagi')), () => null),
     dilim(o.get<PlanSurumCevabi>('/plan/surum')),
     dilim(o.get<SenaryolarCevabi>('/plan/senaryolar')),
     dilim(o.get<MotorUyarilariCevabi>('/plan/motor-uyarilari')),
-    dilim(o.get<Partial<SatinAlmaEkiCevabi> | null>('/plan/satin-alma-eki')),
+    calismaOkumasi.then((c) => ekOku<Partial<SatinAlmaEkiCevabi> | null>(c.satinAlmaEki, () => o.get('/plan/satin-alma-eki')), () => null),
   ]);
   const kayit = (anahtar: string) => kayitlar.kayitlar.find((k) => k.anahtar === anahtar && k.bicim === 'json') ?? null;
   const calisma = calismaCevabi.calisma === null ? null : calismaOku(calismaCevabi.calisma);

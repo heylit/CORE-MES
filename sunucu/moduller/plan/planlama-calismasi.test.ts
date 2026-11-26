@@ -132,9 +132,11 @@ describe('planlama çalışması ucu (gerçek PostgreSQL)', () => {
 
   test('PC-03: çalışma kaydı yoksa çalışma ve sürüm null; biçimi eskiyse çalışma null, sürüm kaydınki', async () => {
     await vt().sorgu('DELETE FROM plan_planlama_kaydi WHERE anahtar = $1', [PLANLAMA_ANAHTARI]);
-    assert.deepEqual((await oku(tam)).json(), { calisma: null, surum: null });
+    // 3725: cevap sayfanın kaynak ve satın alma ekini de taşır; burada yalnız çalışma ve sürüm sınanır.
+    const calismaVeSurum = async () => { const { calisma: c, surum: s } = (await oku(tam)).json() as PlanlamaCalismasiCevabi; return { calisma: c, surum: s }; };
+    assert.deepEqual(await calismaVeSurum(), { calisma: null, surum: null });
     const surum = await calismaYaz(calisma(1));
-    assert.deepEqual((await oku(tam)).json(), { calisma: null, surum });
+    assert.deepEqual(await calismaVeSurum(), { calisma: null, surum });
   });
 
   test('PC-04: yalnız planlama sayfalarını görme işlemi yeter; işlemi olmayan (yalnız recete-rota.yaz) 403, oturumsuz 401 alır', async () => {
