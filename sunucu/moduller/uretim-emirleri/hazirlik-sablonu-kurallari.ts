@@ -6,7 +6,8 @@ export const SABLON_ROL_YOK = 'Rol bulunamadı.';
 export const SABLON_TIP_YOK = 'Operasyon türü bulunamadı.';
 export const SABLON_DEGISTI = 'Şablon başkası tarafından değiştirildi; sayfayı yenileyip tekrar deneyin.';
 export const OZEL_DURDURAN = 'Durduran madde (CNC, çizim, yayın) bu emirde kapatılamaz.';
-export const SABLON_DURDURAN = 'Başlatmayı durduran madde (CNC, çizim, yayın) şablonda kapatılamaz.';
+export const SABLON_DURDURAN_YETKI = 'Başlatmayı durduran maddeyi (CNC, çizim, yayın) şablonda yalnız müdür kapatabilir.';
+export const SABLON_DURDURAN_GEREKCE = 'Başlatmayı durduran maddeyi kapatmak için gerekçe yazın.';
 export const SABLON_DEGISIKLIK_YOK = 'Şablonda değişiklik yok.';
 
 // Tür parametresi: "varsayilan" ya da operasyon tipi kimliği.
@@ -14,8 +15,8 @@ export const turTipi = (tur: string): number | null => (tur === TUR_VARSAYILAN ?
 
 interface Satir { madde: string; gerekli: boolean; rolId: number | null; gun: number }
 
-// Maddeler açık ve tekrarsız olmalı; roller var olmalı. Kapanan madde (gerekli=false) tür şablonunda serbesttir; durduran üç madde ne şablonda ne emirde kapatılabilir
-// (başlatma kapısı şablondan bağımsızdır; 3642 GEREKMEZ_DURDURAN ile aynı kural).
+// Maddeler açık ve tekrarsız olmalı; roller var olmalı. Kapanan madde (gerekli=false) tür şablonunda serbesttir; durduran madde şablonda varsayılan olarak
+// gerekli ve kilitlidir (3740: yalnız müdür gerekçeyle kapatır, bkz. durduranKapatmaIhlali); emirde hiçbir zaman kapatılamaz (3642).
 export function sablonIhlali(satirlar: readonly Satir[], acikMaddeler: ReadonlySet<string>, varOlanRoller: ReadonlySet<number>): string | null {
   const gorulen = new Set<string>();
   for (const s of satirlar) {
@@ -33,3 +34,16 @@ export const sablonKanonik = (satirlar: readonly Satir[]): string =>
 
 // Şablon satırında olmayan madde gerekli sayılır (yeni eklenen madde şablonu bozmaz).
 export const maddeGerekli = (satirlar: readonly Satir[], madde: string): boolean => satirlar.find((s) => s.madde === madde)?.gerekli ?? true;
+
+// 3740 (kullanıcı kararı, Soru Merkezi 26.11): "Kilit kalsın, müdür açsın". Şablon sürümünde yeni kapanan durduran madde (önceki sürümde kapalı olmayan)
+// yalnız müdürün (uretim-emirleri.hazirlik-muaf) ve gerekçeyle kapanır. Önceki sürümde zaten kapalı olan madde taşınırken kimse yeniden sorulmaz;
+// yeniden açmak herkese serbesttir (gevşetme değil, sıkılaştırmadır).
+export function durduranKapatmaIhlali(a: {
+  yeni: readonly Satir[]; onceki: readonly Satir[]; durduran: ReadonlySet<string>; mudurMu: boolean; gerekce: string | null;
+}): string | null {
+  const yeniKapanan = a.yeni.filter((x) => !x.gerekli && a.durduran.has(x.madde) && maddeGerekli(a.onceki, x.madde));
+  if (yeniKapanan.length === 0) return null;
+  if (!a.mudurMu) return SABLON_DURDURAN_YETKI;
+  if (a.gerekce === null || a.gerekce.trim() === '') return SABLON_DURDURAN_GEREKCE;
+  return null;
+}

@@ -1,5 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
-import { cakisma, dogrulama } from '#cekirdek/hata.ts';
+import { cakisma, dogrulama, yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { bulunamadi } from '#cekirdek/hata.ts';
@@ -8,7 +8,7 @@ import { operasyonTipleri } from '../istasyonlar/disari.ts';
 import { kisiAdlari, rolSecenekleri } from '../kisiler/disari.ts';
 import { durduranMaddeKodlari, hazirlikMaddeTanimlari } from './hazirlik-maddeleri.ts';
 import {
-  OZEL_DURDURAN, SABLON_DEGISIKLIK_YOK, SABLON_DURDURAN, SABLON_DEGISTI, SABLON_MADDE_KAPALI, SABLON_TIP_YOK, sablonIhlali, sablonKanonik, turTipi,
+  OZEL_DURDURAN, SABLON_DEGISIKLIK_YOK, SABLON_DURDURAN_GEREKCE, SABLON_DURDURAN_YETKI, SABLON_DEGISTI, SABLON_MADDE_KAPALI, SABLON_TIP_YOK, durduranKapatmaIhlali, sablonIhlali, sablonKanonik, turTipi,
 } from './hazirlik-sablonu-kurallari.ts';
 import * as s from './sorgular.ts';
 
@@ -16,6 +16,9 @@ import * as s from './sorgular.ts';
 // Faz 1: rol ve gün yalnız saklanır; Görevleri dağıt Projeler kalemlerini kullanmaya devam eder.
 export const SABLON_YAZMA_YETKISI = 'projeler.sablon-yaz' as const;
 export const sablonYazarMi = (k: Kullanici | null): boolean => k !== null && islemVarMi(k, SABLON_YAZMA_YETKISI);
+// 3740: durduran maddeyi şablonda kapatmak müdürün işidir (264 a ile aynı işlem); sunucu kendisi denetler, istemci yalnız bu bayrağı görür.
+export const DURDURAN_KAPATMA_YETKISI = 'uretim-emirleri.hazirlik-muaf' as const;
+export const durduranKapatabilirMi = (k: Kullanici | null): boolean => k !== null && islemVarMi(k, DURDURAN_KAPATMA_YETKISI);
 
 export async function hazirlikSablonu(db: Db, kullanici: Kullanici | null): Promise<HazirlikSablonuCevabi> {
   const surumler = await s.etkinSurumler(db);
@@ -32,7 +35,7 @@ export async function hazirlikSablonu(db: Db, kullanici: Kullanici | null): Prom
       })),
     };
   };
-  return { turler: [tur(null, 'Varsayılan (türü olmayan adım)'), ...tipler.map((t) => tur(t.id, t.ad))], yazar: sablonYazarMi(kullanici) };
+  return { turler: [tur(null, 'Varsayılan (türü olmayan adım)'), ...tipler.map((t) => tur(t.id, t.ad))], yazar: sablonYazarMi(kullanici), durduranAcabilir: durduranKapatabilirMi(kullanici) };
 }
 
 export async function hazirlikSablonuYaz(db: Db, kullanici: Kullanici, tur: string, g: HazirlikSablonuYazGovdesi): Promise<HazirlikSablonuYazCevabi> {
@@ -42,17 +45,19 @@ export async function hazirlikSablonuYaz(db: Db, kullanici: Kullanici, tur: stri
   const roller = new Set((await rolSecenekleri(db)).map((r) => r.id));
   const ihlal = sablonIhlali(g.satirlar, acik, roller);
   if (ihlal !== null) throw dogrulama(ihlal, 'satirlar');
-  // Başlatma kapısı şablondan bağımsızdır: durduran madde şablonda da kapatılamaz (emre özel kuralın aynısı).
-  const durduran = await durduranMaddeKodlari(db);
-  if (g.satirlar.some((x) => !x.gerekli && durduran.has(x.madde))) throw dogrulama(SABLON_DURDURAN, 'satirlar');
   await s.turuKilitle(db, tipId);
   const son = await s.sonSurum(db, tipId);
   if (son !== g.beklenenSurum) throw cakisma(SABLON_DEGISTI);
-  if (son !== null) {
-    const eskiSurum = (await s.etkinSurumler(db)).find((x) => x.operasyon_tipi_id === tipId);
-    const eski = eskiSurum === undefined ? [] : await s.surumSatirlari(db, [eskiSurum.id]);
-    if (sablonKanonik(eski.map((x) => ({ madde: x.madde, gerekli: x.gerekli, rolId: x.rol_id, gun: x.gun }))) === sablonKanonik(g.satirlar)) throw cakisma(SABLON_DEGISIKLIK_YOK);
-  }
+  const eskiSurum = son === null ? undefined : (await s.etkinSurumler(db)).find((x) => x.operasyon_tipi_id === tipId);
+  const eski = eskiSurum === undefined ? [] : await s.surumSatirlari(db, [eskiSurum.id]);
+  const onceki = eski.map((x) => ({ madde: x.madde, gerekli: x.gerekli, rolId: x.rol_id, gun: x.gun }));
+  // 3740: durduran madde varsayılan gerekli ve kilitlidir; yalnız müdür gerekçeyle kapatır (yetkiyi istemciye bırakmadan burada denetleriz).
+  const durduranIhlali = durduranKapatmaIhlali({
+    yeni: g.satirlar, onceki, durduran: await durduranMaddeKodlari(db), mudurMu: durduranKapatabilirMi(kullanici), gerekce: g.gerekce,
+  });
+  if (durduranIhlali === SABLON_DURDURAN_YETKI) throw yetkiYok(durduranIhlali);
+  if (durduranIhlali === SABLON_DURDURAN_GEREKCE) throw dogrulama(durduranIhlali, 'gerekce');
+  if (son !== null && sablonKanonik(onceki) === sablonKanonik(g.satirlar)) throw cakisma(SABLON_DEGISIKLIK_YOK);
   const surum = (son ?? 0) + 1;
   const id = await s.surumEkle(db, tipId, surum, kullanici.id, g.gerekce);
   for (const x of g.satirlar) await s.satirEkle(db, id, x);
@@ -73,7 +78,8 @@ export async function sablonGerekmezMaddeleri(db: Db, isEmriIdleri: readonly num
   const durduran = await durduranMaddeKodlari(db);
   for (const i of adimlar) {
     const tur = surumler.find((x) => x.operasyon_tipi_id === i.operasyonTipiId);
-    const m = new Set([...(tur === undefined ? varsayilan : kapali(tur.id))].filter((x) => !durduran.has(x)));
+    // 3740: şablonda müdürün gerekçeyle kapattığı durduran madde o türde gerekmez sayılır (kapıya da yansır); emre özel fark durduranı yine kapatamaz.
+    const m = new Set(tur === undefined ? varsayilan : kapali(tur.id));
     // Emre özel fark şablonu geçer; durduran madde emre özel kapatılamaz (3642 ile aynı kural).
     for (const f of farklar.filter((x) => x.emri_id === i.uretimEmriId)) {
       if (f.gerekli) m.delete(f.madde); else if (!durduran.has(f.madde)) m.add(f.madde);

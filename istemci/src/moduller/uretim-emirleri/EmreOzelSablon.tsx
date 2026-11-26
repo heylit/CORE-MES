@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { HazirlikSablonuCevabi, HazirlikSablonuOzelCevabi, HazirlikSablonuOzelYazGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { CokSatir, Dugme, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { yeniIstekKimligi, yenidenDenenebilirMi } from '../../ortak/veri/istek-kimligi.ts';
 import { tarihSaatMetni } from '../../ortak/veri/zaman-metni.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { maddeGorunumu, useHazirlikMaddeleri } from './hazirlik-maddeleri.ts';
@@ -27,18 +28,25 @@ export function EmreOzelSablon({ emirId }: { emirId: number }) {
     istemci.invalidateQueries({ queryKey: anahtarlar.adimDurumu(emirId) }),
     istemci.invalidateQueries({ queryKey: anahtarlar.hazirlik(emirId) }),
   ]);
+  // İki uç da tekrar korumalıdır (istek kimliği zorunlu); sonucu bilinmeyen hatadan sonra aynı kimlik, reddedilenden sonra yeni kimlik.
+  const yazKimlik = useRef<string | null>(null);
+  const donKimlik = useRef<string | null>(null);
   const yaz = useMutation({
     mutationFn: () => {
+      yazKimlik.current ??= yeniIstekKimligi();
       const govde: HazirlikSablonuOzelYazGovdesi = { gerekli: gerekli === 'evet', gerekce: gerekce.trim() };
-      return api.put<HazirlikSablonuOzelCevabi>(`/adimli-emirler/${String(emirId)}/hazirlik-sablonu-ozel/${madde}`, govde);
+      return api.put<HazirlikSablonuOzelCevabi>(`/adimli-emirler/${String(emirId)}/hazirlik-sablonu-ozel/${madde}`, govde, { istekKimligi: yazKimlik.current });
     },
-    onSuccess: async () => { bildir('tamam', 'Bu emir için şablon farkı yazıldı.'); gerekceYaz(''); maddeYaz(''); await yenile(); },
-    onError: (x) => { bildir('hata', hataIletisi(x, 'Fark yazılmadı.')); },
+    onSuccess: async () => { yazKimlik.current = null; bildir('tamam', 'Bu emir için şablon farkı yazıldı.'); gerekceYaz(''); maddeYaz(''); await yenile(); },
+    onError: (x) => { if (!yenidenDenenebilirMi(x)) yazKimlik.current = null; bildir('hata', hataIletisi(x, 'Fark yazılmadı.')); },
   });
   const don = useMutation({
-    mutationFn: (m: string) => api.post<HazirlikSablonuOzelCevabi>(`/adimli-emirler/${String(emirId)}/hazirlik-sablonu-ozel/${m}/sil`, {}),
-    onSuccess: async () => { bildir('tamam', 'Şablona dönüldü.'); await yenile(); },
-    onError: (x) => { bildir('hata', hataIletisi(x, 'Şablona dönülemedi.')); },
+    mutationFn: (m: string) => {
+      donKimlik.current ??= yeniIstekKimligi();
+      return api.post<HazirlikSablonuOzelCevabi>(`/adimli-emirler/${String(emirId)}/hazirlik-sablonu-ozel/${m}/sil`, {}, { istekKimligi: donKimlik.current });
+    },
+    onSuccess: async () => { donKimlik.current = null; bildir('tamam', 'Şablona dönüldü.'); await yenile(); },
+    onError: (x) => { if (!yenidenDenenebilirMi(x)) donKimlik.current = null; bildir('hata', hataIletisi(x, 'Şablona dönülemedi.')); },
   });
   if (fark.isPending || fark.isError) return null;
   const yazar = sablon.data?.yazar === true;
