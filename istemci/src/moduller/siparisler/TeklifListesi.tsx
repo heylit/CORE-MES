@@ -78,7 +78,10 @@ export function TeklifListesi() {
   useEffect(() => { if (teklifler.data) liste.sayfaEsitle(teklifler.data.sayfa, liste.sorgu.sayfa); }, [teklifler.data]);
   // 3344: Logo'ya gidiş rozeti, görünen satırlar için tek istek.
   const logo = useLogoRozetleri('teklif', (teklifler.data?.satirlar ?? []).map((t) => t.id));
-  const sutunlar: Sutun<Teklif>[] = [...(arsivde ? SUTUNLAR.filter((x) => x.anahtar !== 'firmaKodu') : SUTUNLAR), {
+  // 3768: Firma kodu bizim firma kodumuzdur (3399 a), müşteri kodu değil. Görünen satırların hiçbirinde yoksa sütun çizilmez: kod
+  // listesi tanımlı olmayan kurulumda boş sütun müşterinin kodu eksikmiş gibi okunuyordu.
+  const kodlu = (teklifler.data?.satirlar ?? []).some((t) => t.firmaKodu !== null);
+  const sutunlar: Sutun<Teklif>[] = [...(arsivde || !kodlu ? SUTUNLAR.filter((x) => x.anahtar !== 'firmaKodu') : SUTUNLAR), {
     anahtar: 'logo', baslik: 'Logo', hucre: (t) => <LogoRozetHucresi bilgi={logo.durum(t.id)} hata={logo.hata} />,
     csv: (t) => { const d = logo.durum(t.id); return d === null ? '' : LOGO_DURUM_ADI[d.durum]; },
   }, ...(arsivde ? [ARSIV_SUTUNU] : [])];

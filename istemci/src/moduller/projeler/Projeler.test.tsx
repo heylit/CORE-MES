@@ -94,6 +94,17 @@ describe('Projeler', () => {
     expect(screen.queryByRole('button', { name: /Düzenle/ })).toBeNull();
   });
 
+  it('3768: Firma kodu sütunu yalnız görünen bir projede kod varken çizilir (bizim kodumuz, müşteri kodu değil)', async () => {
+    sunucuKur(OKUR);
+    ac();
+    await screen.findByText('PRJ.01');
+    expect(screen.queryByRole('columnheader', { name: 'Firma kodu' })).toBeNull();
+    cleanup();
+    sunucuKur(OKUR, undefined, { ...LISTE, satirlar: [{ ...P1, firmaKodu: 'ORN' }, P2] });
+    ac();
+    expect(await screen.findByRole('columnheader', { name: 'Firma kodu' })).toBeTruthy();
+  });
+
   it('3588: bitişi geçen projede bitiş tarihinin altında ortak kademe rozeti çıkar; kademesiz projede çıkmaz', async () => {
     const liste = { satirlar: [{ ...P1, kademe: 3 }, P2], toplam: 2, sayfa: 1, sayfaBoyu: 50 } satisfies ProjeListesiCevabi;
     sunucuKur(OKUR, undefined, liste);

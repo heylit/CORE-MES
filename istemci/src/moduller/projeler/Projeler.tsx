@@ -59,7 +59,10 @@ export function Projeler() {
   // 3344: Logo'ya gidiş rozeti, görünen satırlar için tek istek.
   const logo = useLogoRozetleri('proje', (l.data?.satirlar ?? []).map((p) => p.id));
   // Proje listesi dokuz sütunla 1280'de sığmıyor: Logo durumu Durum hücresinde, "Logo: …" önekiyle proje durumunun altında.
-  const sutunlar: Sutun<Proje>[] = SUTUNLAR.map((s) => (s.anahtar !== 'durum' ? s : {
+  // 3768: Firma kodu bizim firma kodumuzdur (3399 a), müşteri kodu değil. Görünen satırların hiçbirinde yoksa sütun çizilmez: kod
+  // listesi tanımlı olmayan kurulumda boş sütun müşterinin kodu eksikmiş gibi okunuyordu.
+  const kodlu = (l.data?.satirlar ?? []).some((p) => p.firmaKodu !== null);
+  const sutunlar: Sutun<Proje>[] = SUTUNLAR.filter((s) => kodlu || s.anahtar !== 'firmaKodu').map((s) => (s.anahtar !== 'durum' ? s : {
     ...s,
     baslik: 'Durum · Logo',
     hucre: (p: Proje) => {
