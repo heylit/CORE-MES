@@ -113,10 +113,10 @@
   .sa-talep-kt .sa-talep-oz-alt { display: block; }
 }
 /* 3133: kart ayrıntısı kalem hücresinde açılır. */
-.sa-talep-kt .sa-talep-ayrinti summary { display: inline-flex; align-items: center; gap: var(--b-1); cursor: pointer; color: var(--muted); font-size: var(--yazi-s); }
-.sa-talep-kt .sa-talep-ayrinti dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--b-1) var(--b-2); margin: var(--b-1) 0 0; font-size: var(--yazi-s); }
-.sa-talep-kt .sa-talep-ayrinti dt { color: var(--muted); }
-.sa-talep-kt .sa-talep-ayrinti dd { margin: 0; overflow-wrap: anywhere; }
+.sa-talep-ayrinti summary { display: inline-flex; align-items: center; gap: var(--b-1); cursor: pointer; color: var(--muted); font-size: var(--yazi-s); }
+.sa-talep-ayrinti dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--b-1) var(--b-2); margin: var(--b-1) 0 0; font-size: var(--yazi-s); }
+.sa-talep-ayrinti dt { color: var(--muted); }
+.sa-talep-ayrinti dd { margin: 0; overflow-wrap: anywhere; }
 /* 3437-2: kalemin kabul sınırları (kartın alternatif zarfı, talep eden daraltır) */
 .sa-kabul { display: grid; gap: var(--b-2); border-top: 1px solid var(--edge); padding-top: var(--b-3); min-width: 0; }
 .sa-kabul-baslik { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2); }
@@ -339,3 +339,13 @@
 /* 3709: fason gidişi satırı; rozetler dar ekranda alta sarar, satır taşmaz. */
 .sa-gidis { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); min-width: 0; }
 .sa-gidis-rozetler { display: inline-flex; flex-wrap: wrap; gap: var(--b-1); }
+
+/* 3748-2: kalem tablosu ortak tablodur; kalem hücresinde ad, notlar ve kart ayrıntısı alt alta. */
+.sa-talep-kalem-hucre { display: flex; flex-direction: column; gap: var(--cizgi-kalin); min-width: 0; }
+.sa-talep-kalem-hucre .sa-talep-not { font-size: var(--yazi-xs); }
+.sa-talep-kalem-tablo .tc-tablo-sag .sa-talep-kalem-hucre { align-items: flex-end; }
+/* Telefonda durum süzgeci tek satırda yana kayar; alt alta dizilince listeyi ekranın altına itiyordu. */
+@media (max-width: 767px) {
+  .sa-talep-suzgec .sa-talep-tur { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+  .sa-talep-suzgec .sa-talep-tur > * { flex: none; }
+}

@@ -169,10 +169,10 @@ describe('3462 a: Taleplerim kalem termini ve üretim emri', () => {
     sar(<Taleplerim tam />);
     fireEvent.click(await screen.findByRole('button', { expanded: false }));
     const satirlar = (await screen.findAllByRole('row')).slice(1);
-    const hucre = (satir: HTMLElement, etiket: string) => satir.querySelector(`td[data-etiket="${etiket}"]`)!.textContent;
+    const hucre = (satir: HTMLElement, etiket: string) => satir.querySelector(`td[data-baslik="${etiket}"]`)!.textContent;
     expect(hucre(satirlar[0]!, 'Üretim emri')).toBe('UE-ORN-0412');
     expect(hucre(satirlar[0]!, 'Termin')).toMatch(/12\.2026|Ara/);
-    expect(hucre(satirlar[1]!, 'Üretim emri')).toBe('–');
-    expect(within(satirlar[0]!).getByText(/^Termin .* · Üretim emri UE-ORN-0412$/)).toBeTruthy();
+    // 3748-2: değeri olmayan hücre ortak tablonun boş işaretidir; dar kapta sütun başlığı hücrenin önünde yazılır (ayrı alt satır yok).
+    expect(hucre(satirlar[1]!, 'Üretim emri')).toContain('Girilmemiş');
   });
 });
