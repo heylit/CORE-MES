@@ -262,7 +262,7 @@
 /* İş türü seçimi eski .typepick düzeninde: 3x2 ızgara, simge solda iki satır boyunca (dar ekranda 2 sütun). */
 .tc-ay2-tur-secici { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--b-2); }
 .tc-ay2-tur-secici button {
-  display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--b-2); align-items: center; padding: var(--b-3);
+  display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--b-2); align-items: center; min-block-size: var(--dokunma); padding: var(--b-3);
   border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); color: var(--ink); font: inherit; text-align: start; cursor: pointer;
 }
 .tc-ay2-tur-secici button > svg { grid-row: span 2; color: var(--muted); }
@@ -325,6 +325,11 @@ button.tc-ay2-esitleme { cursor: pointer; }
 /* Genel alan seçicisi :not() ile daha güçlü; kutunun içindeki giriş ikinci çerçeve almasın. */
 .tc-ay2 .tc-ay2-arama-kutu input:not([type="checkbox"]):not([type="range"]):not([type="color"]) { flex: 1; min-width: 0; inline-size: 100%; border: 0; border-radius: 0; background: none; padding-inline: 0; }
 .tc-ay2-arama-kutu .tc-ay2-arac { border: 0; background: none; }
+/* Dokunmatik tablette araçlar ölçekle büyür (arkon-yeni.css); arama yanlarında ezilmesin diye kendi satırına geçer. */
+@media (pointer: coarse) {
+  .tc-ay:not([data-mobil]) .tc-ay2-arama { flex-wrap: wrap; }
+  .tc-ay:not([data-mobil]) .tc-ay2-arama-kutu { flex: 1 1 100%; }
+}
 .tc-ay2-suzgec { display: grid; gap: var(--b-2); padding: var(--b-3); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel); }
 .tc-ay2-suzgec-alanlar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--b-2); }
 .tc-ay2-suzgec-alanlar [data-acik] .tc-ay2-ust-yazi { color: var(--sig-yazi); }
