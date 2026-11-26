@@ -7,6 +7,8 @@ import type { AsimlarCevabi, Emir, EmirDurumu, KaliteKarari, KatilimCevabi, Refa
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { adimlardanGorunum, hazirligiKapatanEmir, SAYIM_DUZELTME_ISLEMI } from './kurallar.ts';
 import type { BaslatmaKarti } from './baslatma-denetimi.ts';
+import { hataliKaydet } from './hatali-parca.ts';
+import type { HataliCevabi, HataliKaydi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import * as isEmri from './is-emri-servis.ts';
 import * as servis from './servis.ts';
 import * as sorgularBekletme from './sorgular/bekletme/sorgular.ts';
@@ -127,6 +129,11 @@ export const smartesHareketi = (
     case 'bitir': return servis.emirBitir(db, kisiId, id, undefined, null, undefined, isEmriId);
   }
 }));
+// 3760: onaylanan SmartES "Rework" satırı hatalı parça kaydı olur (kalite kararı bekler); terminaldeki hatalı kaydıyla aynı komut. Kişi onaylayandır;
+// SmartES kaynağıyla yazılır (SmartES engeli kalkar).
+export const smartesHataliKaydi = (
+  db: Db, onaylayanId: number, id: number, govde: HataliKaydi, onayKimligi: number,
+): Promise<HataliCevabi> => servis.smartesKaynagiyla(db, onayKimligi, () => hataliKaydet(db, onaylayanId, id, govde));
 // Karar bekleyen sayımı kalite kararıyla kapatır; terminal yetkisi istemez, kalite yetkisini çağıran denetler. Bekleyen yoksa adet 0.
 // isEmriId verilirse yalnız o adımın bekleyeni kapanır (744 a).
 export const kararliSayimiSonuclandir = (db: Db, kisiId: number, id: number, karar: KaliteKarari, isEmriId?: number | null): Promise<{ emir: Emir; adet: number }> =>

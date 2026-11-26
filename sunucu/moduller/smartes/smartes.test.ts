@@ -20,7 +20,7 @@ import { isler } from './isler.ts';
 import { smartesIstemcisiKur } from './istemci.ts';
 import { sahteSmartesAc, tabloCevapMetni } from './sahte-smartes.ts';
 import type { SahteCevap, SahteSmartes } from './sahte-smartes.ts';
-import { adetOnayinaAl, emirDurumlari, ESLENMEMIS_DURUS, gonderimTuru, hareketleriAl, hareketleriYaz, kaliteAmbarTuru, okumaTuru, sayimGecerliligi, tanimTuru, yeniBekleyenBellegi, yeniOkumaBellegi } from './servis.ts';
+import { adetOnayinaAl, emirDurumlari, ESLENMEMIS_DURUS, gonderimTuru, hareketleriAl, hareketleriYaz, hurdaOnayinaAl, kaliteAmbarTuru, okumaTuru, sayimGecerliligi, tanimTuru, yeniBekleyenBellegi, yeniOkumaBellegi } from './servis.ts';
 import type { TurOrtami } from './servis.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -1324,6 +1324,53 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     // Eski programın emri ve terminaldeki istasyonun emri hareket üretmez.
     assert.equal(await oku(satir(9761, 'TMI26-ORN-1', { aktivite: 1 })), 0);
     assert.equal(await oku(satir(9762, await no(ikinci), { aktivite: 1, makineKodu: null })), 0);
+    await vt().sorgu('UPDATE makine SET uretim_kaynagi = NULL, uretim_kaynagi_gecerlilik = NULL WHERE istasyon_id = $1', [istasyonlar[0]]);
+    await aktarimAc(false);
+  });
+
+  test('3760: SmartES fireleri onay kuyruğundan geçer; hurda, "Fazla M30" sağlam düzeltmesi ve "Rework" hatalı parça olarak yazılır', async () => {
+    const { uretimEmriId, ilk, istasyonlar } = await emirKur();
+    await gonderimTuru(vt(), turOrtami());
+    const sahip = ortam!.sahip;
+    const no = (await vt().tek<{ no: string }>('SELECT smartes_is_emri_no AS no FROM smartes_giden WHERE is_emri_id = $1', [ilk]))!.no;
+    const makineKodu = (await vt().tek<{ kod: string }>(
+      "SELECT e.smartes_kod AS kod FROM smartes_esleme e JOIN makine m ON m.id = e.tmi_id WHERE e.tur = 'makine' AND m.istasyon_id = $1", [istasyonlar[0]]))!.kod;
+    await vt().sorgu("UPDATE istasyon SET sayim_kaynagi = 'terminal', sayim_kaynagi_gecerlilik = NULL");
+    await vt().tx(async (db) => {
+      const k = (await kullaniciYukle(db, yoneticiId))!;
+      await emirBaslat(db, k, uretimEmriId, undefined, undefined, ilk);
+      await emirSayim(db, k, uretimEmriId, { tur: 'saglam', adet: 5 }, { isEmriId: ilk });
+    });
+    await vt().sorgu("UPDATE makine SET uretim_kaynagi = 'smartes', uretim_kaynagi_gecerlilik = '2026-01-01' WHERE istasyon_id = $1", [istasyonlar[0]]);
+    await aktarimAc();
+    const neden = async (kod: string) => (await sahip.tek<{ id: number }>('INSERT INTO hurda_nedeni (kod, ad, sira) VALUES ($1, $1, 977) RETURNING id', [kod]))!.id;
+    const fireEsle = (ad: string, nedenId: number, sonuc: string) => sahip.sorgu(
+      "INSERT INTO smartes_ad_esleme (tur, anahtar, ad, neden_id, sonuc, guncelleyen_kisi_id) VALUES ('fire', $1, $2, $3, $4, $5)", [`ad:${ad}`, ad, nedenId, sonuc, yoneticiId]);
+    await fireEsle('ORN Kırık', await neden('ORN-K3760'), 'hurda');
+    await fireEsle('ORN Fazla M30', await neden('ORN-M3760'), 'sayim-duzeltme');
+    await fireEsle('ORN Rework', await neden('ORN-R3760'), 'hatali');
+    const red = (id: number, ad: string, adet: number, kod = makineKodu) => vt().tx(async (db) => {
+      const k = { smartesId: id, isEmriNo: no, istasyonKodu: null, makineKodu: kod, stokNo: null, adet, nedenKodu: null, neden: ad, zaman: new Date(), ham: {} };
+      await db.sorgu(
+        `INSERT INTO smartes_red (smartes_id, is_emri_no, makine_kodu, adet, neden, zaman, ham, ilk_okuma, son_okuma) VALUES ($1, $2, $3, $4, $5, $6, '{}', now(), now())
+         ON CONFLICT (smartes_id) DO UPDATE SET adet = EXCLUDED.adet`, [id, no, kod, adet, ad, k.zaman]);
+      return hurdaOnayinaAl(db, k, new Date());
+    });
+    assert.equal(await red(97601, 'ORN Kırık', 2), 1);
+    assert.equal(await red(97601, 'ORN Kırık', 2), 0, 'aynı adet ikinci kez kuyruğa girmez');
+    await red(97602, 'ORN Fazla M30', 1);
+    await red(97603, 'ORN Rework', 1);
+    await red(97604, 'ORN Eşlenmemiş', 1);
+    const bekleyen = ((await istek('GET', '/smartes/adet-onaylari?gorunum=bekliyor&sayfaBoyu=200')).json() as { satirlar: { id: number; tur: string; fireAdi: string | null; smartesId: number }[] }).satirlar
+      .filter((x) => x.smartesId >= 97601 && x.smartesId <= 97604);
+    assert.deepEqual(bekleyen.map((x) => [x.smartesId, x.tur]), [[97601, 'hurda'], [97602, 'sayim-duzeltme'], [97603, 'hatali'], [97604, 'hurda']]);
+    const onay = (await istek('POST', '/smartes/adet-onaylari/onayla', { idler: bekleyen.map((x) => x.id) })).json() as { islenen: number; hatalar: { id: number; ileti: string }[] };
+    assert.equal(onay.islenen, 3, JSON.stringify(onay.hatalar));
+    assert.deepEqual(onay.hatalar.map((h) => h.ileti), [ONAY_ILETILERI.fireEslenmemis]);
+    const sayimlar = await sahip.sorgu<{ tur: string; adet: number }>("SELECT tur, adet FROM uretim_sayimi WHERE emir_id = $1 AND kaynak = 'smartes' ORDER BY id", [uretimEmriId]);
+    // M30 düzeltmesi sağlam sayımından düşer (ilk parça kararı bekleyen işte karar bekleyen sağlamdan).
+    assert.deepEqual(sayimlar.map((x) => [x.tur === 'hurda' ? 'hurda' : 'saglam', x.adet]), [['hurda', 2], ['saglam', -1]]);
+    assert.equal((await sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM uretim_emirleri_hatali_kaydi WHERE uretim_emri_id = $1', [uretimEmriId]))?.n, 1);
     await vt().sorgu('UPDATE makine SET uretim_kaynagi = NULL, uretim_kaynagi_gecerlilik = NULL WHERE istasyon_id = $1', [istasyonlar[0]]);
     await aktarimAc(false);
   });

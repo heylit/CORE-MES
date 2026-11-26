@@ -15,7 +15,7 @@ type Satir = AdetOnaylariCevabi['satirlar'][number];
 const satir = (ek: Partial<Satir>): Satir => ({
   id: 1, smartesId: 11, tur: 'saglam', adet: 40, duzeltme: false, durum: 'bekliyor', olusma: AN,
   isEmriNo: 'ORN-IE-1', emirId: 7, emirNo: 'ORN-UE-1', opNo: 20, smartesSaglam: 40, makineSaglam: 40,
-  istasyonKodu: 'ORN-IST-1', makineKodu: 'ORN-M01', baslangic: AN, kararVeren: null, kararZamani: null, redNedeni: null, ...ek,
+  istasyonKodu: 'ORN-IST-1', makineKodu: 'ORN-M01', baslangic: AN, kararVeren: null, kararZamani: null, redNedeni: null, fireAdi: null, ...ek,
 });
 const BEKLEYEN: AdetOnaylariCevabi = { satirlar: [
   satir({}),

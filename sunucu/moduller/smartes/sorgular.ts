@@ -803,7 +803,7 @@ export interface AdEslemeSatiri {
   anahtar: string;
   ad: string;
   nedenId: number;
-  sonuc: 'hatali' | 'hurda' | null;
+  sonuc: 'hatali' | 'hurda' | 'sayim-duzeltme' | null;
   surum: number;
 }
 
@@ -822,7 +822,7 @@ export interface AdEslemeYazisi {
   anahtar: string;
   ad: string;
   nedenId: number;
-  sonuc: 'hatali' | 'hurda' | null;
+  sonuc: 'hatali' | 'hurda' | 'sayim-duzeltme' | null;
   kisiId: number;
 }
 
@@ -1106,22 +1106,34 @@ export async function tekGidenIsEmri(db: Db, isEmriNo: string | null): Promise<n
   return r?.id ?? null;
 }
 
+export type OnayTuru = 'saglam' | 'red' | 'hurda' | 'sayim-duzeltme' | 'hatali';
+
 export interface KilitliOnaySatiri {
   id: number;
-  tur: 'saglam' | 'red';
+  tur: OnayTuru;
   adet: number;
   durum: 'bekliyor' | 'onaylandi' | 'reddedildi';
   isEmriId: number | null;
   makineKodu: string | null;
   baslangic: Date | null;
+  redId: number | null;
+  fireAdi: string | null;
 }
+
+// Onay satırının kaynağı: sağlam satırı iş emri durumundan, hurda satırı SmartES red kaydından (3760). İkisi aynı sütun adlarıyla okunur.
+const ONAY_KAYNAGI = `LEFT JOIN smartes_is_emri_durumu d0 ON d0.smartes_id = o.smartes_id
+     LEFT JOIN smartes_red r ON r.smartes_id = o.red_id
+     CROSS JOIN LATERAL (SELECT coalesce(d0.is_emri_no, r.is_emri_no) AS is_emri_no, coalesce(d0.makine_kodu, r.makine_kodu) AS makine_kodu,
+       coalesce(d0.istasyon_kodu, r.istasyon_kodu) AS istasyon_kodu, d0.saglam, d0.makine_saglam, coalesce(d0.baslangic, r.zaman) AS baslangic,
+       r.neden AS fire_adi) d`;
 
 // Onay ve red aynı satırı iki kez işlemesin diye satır kilitlenir. SmartES iş emri no'su giden kutusundaki karşılığıyla CORE iş emrine bağlanır.
 export function onaySatiriKilitle(db: Db, id: number): Promise<KilitliOnaySatiri | null> {
   return db.tek<KilitliOnaySatiri>(
-    `SELECT o.id::int AS id, o.tur, o.adet, o.durum, g.is_emri_id AS "isEmriId", d.makine_kodu AS "makineKodu", d.baslangic
+    `SELECT o.id::int AS id, o.tur, o.adet, o.durum, g.is_emri_id AS "isEmriId", d.makine_kodu AS "makineKodu", d.baslangic,
+            o.red_id AS "redId", d.fire_adi AS "fireAdi"
        FROM smartes_adet_onayi o
-       JOIN smartes_is_emri_durumu d ON d.smartes_id = o.smartes_id
+       ${ONAY_KAYNAGI}
        ${TEK_GIDEN}
       WHERE o.id = $1
       FOR UPDATE OF o`,
@@ -1129,13 +1141,25 @@ export function onaySatiriKilitle(db: Db, id: number): Promise<KilitliOnaySatiri
   );
 }
 
+export async function redOnayToplami(db: Db, redId: number): Promise<{ toplam: number; satir: number }> {
+  const r = await db.tek<{ toplam: number; satir: number }>(
+    'SELECT coalesce(sum(adet), 0)::int AS toplam, count(*)::int AS satir FROM smartes_adet_onayi WHERE red_id = $1', [redId]);
+  return r ?? { toplam: 0, satir: 0 };
+}
+
+export async function redOnaySatiriEkle(
+  db: Db, y: { redId: number; tur: 'hurda' | 'hatali' | 'sayim-duzeltme'; adet: number; duzeltme: boolean; zaman: Date },
+): Promise<void> {
+  await db.sorgu('INSERT INTO smartes_adet_onayi (red_id, tur, adet, duzeltme, olusma) VALUES ($1, $2, $3, $4, $5)', [y.redId, y.tur, y.adet, y.duzeltme, y.zaman]);
+}
+
 export async function onayKarariYaz(
-  db: Db, id: number, k: { durum: 'onaylandi' | 'reddedildi'; kisiId: number; zaman: string; redNedeni: string | null },
+  db: Db, id: number, k: { durum: 'onaylandi' | 'reddedildi'; kisiId: number; zaman: string; redNedeni: string | null; tur?: OnayTuru },
 ): Promise<boolean> {
   const r = await db.tek<{ id: number }>(
-    `UPDATE smartes_adet_onayi SET durum = $2, karar_veren_kisi_id = $3, karar_zamani = $4::timestamptz, red_nedeni = $5
+    `UPDATE smartes_adet_onayi SET durum = $2, karar_veren_kisi_id = $3, karar_zamani = $4::timestamptz, red_nedeni = $5, tur = coalesce($6, tur)
       WHERE id = $1 AND durum = 'bekliyor' RETURNING id::int AS id`,
-    [id, k.durum, k.kisiId, k.zaman, k.redNedeni],
+    [id, k.durum, k.kisiId, k.zaman, k.redNedeni, k.tur ?? null],
   );
   return r !== null;
 }
@@ -1147,7 +1171,7 @@ export function bekleyenOnaySay(db: Db): Promise<number> {
 export interface OnayListeSatiri {
   id: number;
   smartesId: number;
-  tur: 'saglam' | 'red';
+  tur: OnayTuru;
   adet: number;
   duzeltme: boolean;
   durum: 'bekliyor' | 'onaylandi' | 'reddedildi';
@@ -1162,14 +1186,15 @@ export interface OnayListeSatiri {
   kararVerenKisiId: number | null;
   kararZamani: string | null;
   redNedeni: string | null;
+  fireAdi: string | null;
 }
 
-const ONAY_SECIMI = `SELECT o.id::int AS id, o.smartes_id AS "smartesId", o.tur, o.adet, o.duzeltme, o.durum, ${zamanMetni('o.olusma')} AS olusma,
+const ONAY_SECIMI = `SELECT o.id::int AS id, coalesce(o.smartes_id, o.red_id) AS "smartesId", o.tur, o.adet, o.duzeltme, o.durum, ${zamanMetni('o.olusma')} AS olusma,
        d.is_emri_no AS "isEmriNo", g.is_emri_id AS "isEmriId", d.saglam AS "smartesSaglam", d.makine_saglam AS "makineSaglam", d.istasyon_kodu AS "istasyonKodu", d.makine_kodu AS "makineKodu",
        ${zamanMetni('d.baslangic')} AS baslangic, o.karar_veren_kisi_id AS "kararVerenKisiId", ${zamanMetni('o.karar_zamani')} AS "kararZamani",
-       o.red_nedeni AS "redNedeni"
+       o.red_nedeni AS "redNedeni", d.fire_adi AS "fireAdi"
      FROM smartes_adet_onayi o
-     JOIN smartes_is_emri_durumu d ON d.smartes_id = o.smartes_id
+     ${ONAY_KAYNAGI}
      ${TEK_GIDEN}`;
 
 export function onaySay(db: Db, durum: 'bekliyor' | 'karar'): Promise<number> {
@@ -1295,4 +1320,11 @@ export async function hareketDurumuYaz(
 export interface HareketSayaci { durum: string; adet: number }
 export function hareketSayaclari(db: Db): Promise<HareketSayaci[]> {
   return db.sorgu<HareketSayaci>('SELECT durum, count(*)::int AS adet FROM smartes_hareket GROUP BY durum ORDER BY durum');
+}
+
+export async function eslenmemisDuruslariDuzelt(db: Db, ad: string, nedenId: number): Promise<number> {
+  const r = await db.sorgu(
+    "UPDATE smartes_hareket SET durus_nedeni_id = $2, durus_eslenmemis = false WHERE durus_eslenmemis AND aktivite_adi = $1 AND durum = 'yazildi' RETURNING 1",
+    [ad, nedenId]);
+  return r.length;
 }

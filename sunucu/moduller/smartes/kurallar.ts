@@ -1429,11 +1429,16 @@ export function onayaGirerMi(baslangic: Date | null, gecerlilik: Date): boolean 
   return baslangic !== null && baslangic.getTime() >= gecerlilik.getTime();
 }
 
+// 3760: fire adının eşlemesindeki sonuç onay türüdür; eşlenmemiş ad hurda sayılır (onayı eşleme ister).
+export const hurdaOnayTuru = (sonuc: 'hurda' | 'hatali' | 'sayim-duzeltme' | null): 'hurda' | 'hatali' | 'sayim-duzeltme' => sonuc ?? 'hurda';
+
 export const ONAY_ILETILERI = {
   karardaDegil: 'Kayıt artık onay beklemiyor.',
   redIslenmez: 'Red adedi fire eşlemesi gelince işlenir.',
   isEmriYok: 'SmartES iş emri CORE iş emriyle eşleşmedi.',
-  kaynakDegisti: 'Bu istasyonda sayım artık SmartES’ten gelmiyor; kayıt onaylanamaz, reddedin.',
+  kaynakDegisti: 'Bu makinede üretim artık SmartES’ten gelmiyor; kayıt onaylanamaz, reddedin.',
+  fireEslenmemis: 'Fire adı eşlenmemiş; önce Eşlemeler > Fire’de hurda, hatalı parça ya da sayım düzeltmesi olarak eşleyin.',
+  eksiFire: 'SmartES’te azalan hurda ya da hatalı parça CORE’da kendiliğinden geri alınmaz; kaydı reddedip CORE’da elle düzeltin.',
 } as const;
 
 /* ---------------- Parametre adı denetimi (kart 3368) ---------------- */

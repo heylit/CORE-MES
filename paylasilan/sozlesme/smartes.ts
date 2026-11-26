@@ -320,8 +320,9 @@ export type MakineBulgulariCevabi = z.output<typeof makineBulgulariCevabi>;
 export const SMARTES_GELEN_AD_TURLERI = ['fire', 'durus'] as const;
 export type SmartesGelenAdTuru = (typeof SMARTES_GELEN_AD_TURLERI)[number];
 export const SMARTES_AD_DURUMLARI = ['eslendi', 'eslenmedi', 'yok', 'yeni'] as const;
-// Fire eşlemesinde: hatalı kaydı (kalite kararına) ya da doğrudan hurda (stoktan fire çıkışı).
-export const SMARTES_FIRE_SONUCLARI = ['hatali', 'hurda'] as const;
+// Fire eşlemesinde: hatalı kaydı (kalite kararına), doğrudan hurda (stoktan fire çıkışı) ya da sağlamdan düşen sayım düzeltmesi
+// (3760: "Fazla M30" gibi parça fazla saymadır, hurda değil).
+export const SMARTES_FIRE_SONUCLARI = ['hatali', 'hurda', 'sayim-duzeltme'] as const;
 export type SmartesFireSonucu = (typeof SMARTES_FIRE_SONUCLARI)[number];
 
 const nedenOzeti = z.object({ id: z.number().int(), kod: z.string(), ad: z.string() });
@@ -475,12 +476,16 @@ export type GelenAdOnerileriOnaylaGovdesi = z.input<typeof gelenAdOnerileriOnayl
 export const SMARTES_ADET_ONAY_DURUMLARI = ['bekliyor', 'onaylandi', 'reddedildi'] as const;
 export type SmartesAdetOnayDurumu = (typeof SMARTES_ADET_ONAY_DURUMLARI)[number];
 
+// 3760: tür onaylanınca yazılacak kaydı söyler. Hurda türleri SmartES red kaydından gelir; fireAdi o kaydın SmartES fire adıdır.
+export const SMARTES_ONAY_TURLERI = ['saglam', 'red', 'hurda', 'sayim-duzeltme', 'hatali'] as const;
+export type SmartesOnayTuru = (typeof SMARTES_ONAY_TURLERI)[number];
+
 export const adetOnaySorgusu = z.object({ ...sayfaSorguAlanlari, gorunum: z.enum(['bekliyor', 'karar']).prefault('bekliyor') });
 
 export const adetOnaylariCevabi = listeCevapSemasi(z.object({
   id: z.number().int(),
   smartesId: z.number().int(),
-  tur: z.enum(['saglam', 'red']),
+  tur: z.enum(SMARTES_ONAY_TURLERI),
   adet: z.number().int(),
   // SmartES'te sonradan değişen adedin farkı.
   duzeltme: z.boolean(),
@@ -500,6 +505,7 @@ export const adetOnaylariCevabi = listeCevapSemasi(z.object({
   kararVeren: z.string().nullable(),
   kararZamani: zamanSemasi.nullable(),
   redNedeni: z.string().nullable(),
+  fireAdi: z.string().nullable(),
 }));
 
 const onayKimlikleri = z.array(z.number().int().positive()).min(1).max(200);

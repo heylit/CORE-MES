@@ -9,20 +9,23 @@ import { YOK, zamanMetni } from './gosterim.ts';
 import './smartes.css';
 
 type OnaySatiri = AdetOnaylariCevabi['satirlar'][number];
-type Tur = 'adet' | 'duzeltme' | 'fire';
 
 // Bekleyen liste tek sayfada; sınırı aşarsa en eskiler önce gelir, onaylandıkça sıradakiler görünür.
 const BEKLEYEN_SAYFA_BOYU = 200;
 const KARAR_SAYFA_BOYU = 10;
 
-const TUR: Record<Tur, { ad: string; ton: RozetTonu }> = {
-  adet: { ad: 'Adet', ton: 'bilgi' },
-  duzeltme: { ad: 'Düzeltme', ton: 'uyari' },
-  fire: { ad: 'Fire', ton: 'hata' },
+// 3760: tür onaylanınca yazılacak kayıttır: sağlam sayım, hurda, sağlamdan düşen sayım düzeltmesi ("Fazla M30") ya da kalite kararı bekleyen
+// hatalı parça ("Rework"). Eski "red" satırı fire eşlemesinden önce kuyruğa girmiş adettir; onaylanmaz.
+const TUR: Record<OnaySatiri['tur'], { ad: string; ton: RozetTonu; birim: string }> = {
+  saglam: { ad: 'Sağlam', ton: 'bilgi', birim: 'sağlam' },
+  hurda: { ad: 'Hurda', ton: 'hata', birim: 'hurda' },
+  'sayim-duzeltme': { ad: 'Sayım düzeltmesi', ton: 'uyari', birim: 'sağlamdan düşer' },
+  hatali: { ad: 'Hatalı parça', ton: 'uyari', birim: 'hatalı parça' },
+  red: { ad: 'Fire', ton: 'hata', birim: 'red' },
 };
-const turu = (s: OnaySatiri): Tur => (s.tur === 'red' ? 'fire' : s.duzeltme ? 'duzeltme' : 'adet');
+const HURDA_TURLERI: readonly OnaySatiri['tur'][] = ['hurda', 'sayim-duzeltme', 'hatali', 'red'];
 const isaretli = (n: number): string => (n > 0 ? `+${n.toLocaleString('tr-TR')}` : `−${Math.abs(n).toLocaleString('tr-TR')}`);
-const ozet = (s: OnaySatiri): string => `${s.duzeltme ? isaretli(s.adet) : s.adet.toLocaleString('tr-TR')} ${s.tur === 'red' ? 'red' : 'sağlam'}`;
+const ozet = (s: OnaySatiri): string => `${s.duzeltme ? isaretli(s.adet) : s.adet.toLocaleString('tr-TR')} ${TUR[s.tur].birim}`;
 const fark = (s: OnaySatiri): string | null =>
   s.makineSaglam !== null && s.smartesSaglam !== null && s.makineSaglam !== s.smartesSaglam ? `Makine sayacı ${s.makineSaglam.toLocaleString('tr-TR')}` : null;
 const emirMetni = (s: { emirNo: string | null; opNo: number | null; isEmriNo: string | null }): string =>
@@ -70,17 +73,19 @@ export function OnayBekleyenler() {
     onError: (e) => { bildir('hata', hataIletisi(e, 'Reddedilemedi')); },
   });
   const satirlar = (liste.data?.satirlar ?? []).filter((s) => suzgec === 'hepsi'
-    || (suzgec === 'farkli' ? fark(s) !== null : suzgec === 'adet' ? s.tur === 'saglam' : suzgec === 'fire' ? s.tur === 'red' : false));
+    || (suzgec === 'farkli' ? fark(s) !== null : suzgec === 'adet' ? s.tur === 'saglam' : suzgec === 'fire' ? HURDA_TURLERI.includes(s.tur) : false));
   const sutunlar: readonly Sutun<OnaySatiri>[] = [
     // İlk sütun düz metindir: seçim kutusunun erişilebilir adı ondan kurulur.
     { anahtar: 'emir', baslik: 'Üretim emri', hucre: (s) => emirMetni(s), mono: true, kirilmaz: true },
+    { anahtar: 'tur', baslik: 'Tür', hucre: (s) => <Rozet ton={TUR[s.tur].ton}>{TUR[s.tur].ad}</Rozet>, csv: (s) => TUR[s.tur].ad, kirilmaz: true },
     {
       anahtar: 'ozet', baslik: 'İşlenecek',
       hucre: (s) => {
         const f = fark(s);
         return (
           <span className="tc-ob-ozet">
-            <span className="tc-ob-eylem"><Rozet ton={TUR[turu(s)].ton}>{TUR[turu(s)].ad}</Rozet><strong>{ozet(s)}</strong>{f !== null && <Rozet ton="uyari">{f}</Rozet>}</span>
+            <span className="tc-ob-eylem">{s.duzeltme && <Rozet ton="uyari">Düzeltme</Rozet>}<strong>{ozet(s)}</strong>{f !== null && <Rozet ton="uyari">{f}</Rozet>}</span>
+            {s.fireAdi !== null && <span className="tc-sm-not">{`SmartES fire adı: ${s.fireAdi}`}</span>}
             {s.emirId === null && <span className="tc-sm-not">CORE iş emriyle eşleşmedi; onaylanamaz.</span>}
             <span className="tc-sm-not">{s.istasyonKodu ?? YOK} · {s.makineKodu ?? YOK}</span>
           </span>
@@ -92,7 +97,7 @@ export function OnayBekleyenler() {
       anahtar: 'eylem', baslik: 'Karar', csv: false as const,
       hucre: (s: OnaySatiri) => (
         <span className="tc-ob-eylem">
-          <Dugme simge="check" onClick={() => { onayla.mutate([s.id]); }} disabled={onayla.isPending || s.emirId === null || s.tur !== 'saglam'}>Onayla</Dugme>
+          <Dugme simge="check" onClick={() => { onayla.mutate([s.id]); }} disabled={onayla.isPending || s.emirId === null || s.tur === 'red'}>Onayla</Dugme>
           <Dugme simge="x" aria-label={`${emirMetni(s)} ${ozet(s)} kaydını reddet`} onClick={() => { redYaz([s]); }} />
         </span>
       ),
@@ -132,7 +137,7 @@ export function OnayBekleyenler() {
               <li key={k.id}>
                 <Rozet ton={k.durum === 'onaylandi' ? 'tamam' : 'hata'}>{k.durum === 'onaylandi' ? 'Onaylandı' : 'Reddedildi'}</Rozet>
                 <span className="tc-sm-kod">{emirMetni(k)}</span>
-                <span>{TUR[turu(k)].ad}: {ozet(k)}</span>
+                <span>{TUR[k.tur].ad}: {ozet(k)}</span>
                 <span className="tc-sm-not">{k.kararVeren ?? YOK} · {zamanMetni(k.kararZamani)}{k.redNedeni !== null && ` · ${k.redNedeni}`}</span>
               </li>
             ))}
