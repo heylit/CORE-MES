@@ -430,3 +430,10 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
   çalışan adımda payların gerçek sayımını taşır; motor (3681 C) bütün sayımı çalışan paya yazmaz, her payın kalanı kendi sayımındandır.
   Kokpit pay satırlarındaki "sayılan" ve Elle böl kilidi bu sayıdır; 3734-2 taşıması bununla çalışır. Terminal değişmedi.
 - Test: `pay-ilerlemesi-bagi.test.ts` (gerçek PostgreSQL, kablolama ile).
+## Çalışan bölünmüş adımın başlamamış payları (3734-2; 2026-11-26)
+- Yazım (`servis.ts` kuyruklariYazIc, `kalanPayKaynaklari`): adımı başlamış (basladi) bölünmüş işte sayımı olmayan paylar önizlemedeki
+  yerine gider; çalışan pay (fiili tezgâh) ve sayımı olan paylar canlıdaki yerinde kalır. Bir pay yerleşemezse iş bugünkü gibi yerinde kalır.
+  Hangi payın sayıldığı bilinmiyorsa (pay ilerlemesi çözücüsü bağlı değil) taşıma yapılmaz; çözücü bağlanana kadar davranış A4'tür.
+- Canlıya alma (`canliyaGecisKumesi`): A4 istisnası yalnız bu satırlar için; kalan payların parçası canlıdakiyle birebir aynıysa satır
+  değişebilir sayılır. Kilitli ve dondurulmuş iş, bölünmemiş çalışan iş değişmedi.
+- Test: `bolunmus-canliya-al.test.ts` 3-5 (sayımsız pay taşınır; sayımlı pay kalır; çözücü yoksa iş kalır).
