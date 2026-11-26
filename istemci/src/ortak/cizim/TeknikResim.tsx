@@ -730,8 +730,8 @@ function TeknikResimGovdesi({ kontrol, besliCubuk = false }: { kontrol: TeknikRe
   const arac = (simge: SimgeAdi, acik: boolean, f: () => void, etiket: string) => (
     <button type="button" className={`tc-ay5-arac${acik ? ' tc-ay5-acik' : ''}`} onClick={f} aria-label={etiket} aria-pressed={acik} title={etiket}><Simge ad={simge} /></button>
   );
-  const yaziliArac = (simge: SimgeAdi, acik: boolean, f: () => void, etiket: string, yazi: string) => (
-    <button type="button" className={`tc-ay5-arac tc-ay5-yazili${acik ? ' tc-ay5-acik' : ''}`} onClick={f} aria-label={etiket} aria-pressed={acik} title={etiket}>
+  const yaziliArac = (simge: SimgeAdi, acik: boolean, f: () => void, etiket: string, yazi: string, pasif = false) => (
+    <button type="button" className={`tc-ay5-arac tc-ay5-yazili${acik ? ' tc-ay5-acik' : ''}`} onClick={f} aria-label={etiket} aria-pressed={acik} title={etiket} disabled={pasif}>
       <Simge ad={simge} /><span>{yazi}</span>
     </button>
   );
@@ -807,7 +807,10 @@ function TeknikResimGovdesi({ kontrol, besliCubuk = false }: { kontrol: TeknikRe
   ];
   const isaret = (acik: boolean) => (acik ? '☑ ' : '☐ ');
   // 3759 a: beşli çubukta seyrek araçlar Diğer menüsüne iner; açık/kapalı olanlar işaretle yazılır.
+  // Resim yokken yakınlaştırma işe yaramaz; salt okunur resimde (terminal) balon eklenemez, düğme çubukta yer kaplamaz, nedeniyle menüde durur.
+  const resimYok = doc.kind === 'bos';
   const digerOgeleri: MenuOgesi[] = [
+    ...(RO && onPrimary ? [{ anahtar: 'balon-ekle', baslik: 'Balon ekle', simge: 'target' as const, pasif: true, pasifNedeni: ctl.saltOkunurNedeni ?? 'Bu resimde balon eklenemez', sec: () => undefined }] : []),
     ...gorunumOgeleri,
     { anahtar: 'dok', baslik: 'Dokümanlar', simge: 'layers', sec: () => setDrawer(drawer === 'lib' ? null : 'lib') },
     ...(ctl.notBirak && onPrimary ? [{ anahtar: 'not', baslik: isaret(pinMode) + 'Resim üzerine geri bildirim', simge: 'flag' as const, sec: () => { setPinMode(!pinMode); setAdding(false); setSel(null); } }] : []),
@@ -817,7 +820,7 @@ function TeknikResimGovdesi({ kontrol, besliCubuk = false }: { kontrol: TeknikRe
     ...(!RO && onPrimary && gecmis.ileri.length > 0 ? [{ anahtar: 'ileri', baslik: 'Yinele (Ctrl+Y)', simge: 'chev-right' as const, sec: () => gecmisUygula(true) }] : []),
     ...(doc.kind !== 'pdf' ? [{ anahtar: 'olcu', baslik: isaret(dims) + 'Ölçüler', simge: 'ruler' as const, sec: () => setDims(!dims) }] : []),
     ...(doc.kind === 'step' ? [{ anahtar: 'gizli', baslik: isaret(hidden) + 'Gizli çizgiler', simge: 'dash' as const, sec: () => setHidden(!hidden) }] : []),
-    { anahtar: 'uzak', baslik: 'Uzaklaştır', simge: 'zout', sec: () => { const c = ctr(); zoomAt(1 / 1.3, c[0], c[1]); } },
+    { anahtar: 'uzak', baslik: 'Uzaklaştır', simge: 'zout', pasif: resimYok, pasifNedeni: 'Resim yok', sec: () => { const c = ctr(); zoomAt(1 / 1.3, c[0], c[1]); } },
     { anahtar: 'odak', baslik: fs ? 'Odak modundan çık' : 'Odak modu · tam ekran', simge: fs ? 'x' : 'expand', sec: () => setFs(!fs) },
     ...(doc.kind === 'step' ? [{ anahtar: 'svg', baslik: 'Teknik resmi SVG indir', simge: 'download' as const, sec: exportSvg }] : []),
   ];
@@ -918,10 +921,10 @@ function TeknikResimGovdesi({ kontrol, besliCubuk = false }: { kontrol: TeknikRe
         <div ref={aracRef} className={`tc-ay5-araclar${besli ? ' tc-ay5-besli' : ''}`} role="toolbar" aria-label="Teknik resim araçları">
           {besli ? (
             <>
-              {balonEkleMenusu}
+              {!RO && balonEkleMenusu}
               {yaziliArac('list', drawer === 'insp', () => setDrawer(drawer === 'insp' ? null : 'insp'), 'Ölçüm listesi', 'Ölçümler')}
-              {yaziliArac('zin', false, () => { const c = ctr(); zoomAt(1.3, c[0], c[1]); }, 'Yakınlaştır', 'Yakınlaştır')}
-              {yaziliArac('fit', false, () => setZ({ k: 1, x: 0, y: 0 }), 'Sığdır', 'Sığdır')}
+              {yaziliArac('zin', false, () => { const c = ctr(); zoomAt(1.3, c[0], c[1]); }, 'Yakınlaştır', 'Yakınlaştır', resimYok)}
+              {yaziliArac('fit', false, () => setZ({ k: 1, x: 0, y: 0 }), 'Sığdır', 'Sığdır', resimYok)}
               <Menu etiket="Diğer araçlar" metin="Diğer" simge="more" ogeler={digerOgeleri} />
             </>
           ) : <>

@@ -66,6 +66,9 @@ test.describe('terminal sekmeleri ve teknik resim çubuğu', () => {
       const cubuk = page.getByRole('toolbar', { name: 'Teknik resim araçları' });
       await expect(cubuk).toHaveClass(/tc-ay5-besli/);
       await expect(cubuk.getByRole('button', { name: 'Diğer araçlar' })).toBeVisible();
+      // Örnek pakette resim yok: yakınlaştırma işe yaramaz, düğmeler pasif.
+      await expect(cubuk.getByRole('button', { name: 'Yakınlaştır' })).toBeDisabled();
+      await expect(cubuk.getByRole('button', { name: 'Sığdır' })).toBeDisabled();
       await expect(async () => {
         const o = await cubuk.evaluate((c) => {
           const kutu = c.getBoundingClientRect();

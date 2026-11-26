@@ -127,6 +127,7 @@
 }
 .tc-ay5-besli > .tc-dugme:hover { background: var(--panel2); }
 .tc-ay5-besli > .tc-ay5-arac.tc-ay5-acik { background: var(--done); color: var(--on-sig); }
+.tc-ay5-besli > .tc-ay5-arac:disabled { color: var(--faint); cursor: default; background: none; }
 .tc-ay5-dilimler { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); }
 .tc-ay5-dilim {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--b-1); min-block-size: var(--dokunma); padding: 0 var(--b-3);

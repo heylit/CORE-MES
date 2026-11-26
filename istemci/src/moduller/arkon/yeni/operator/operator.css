@@ -541,8 +541,8 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
 /* 3759 a: sekmeler sütunu eşit paylaşır, simge üstte yazı altta; beş-altı sekme 1280'de kaydırmasız sığar. Soluk gri pasif sekme
    operatöre okunmuyordu: pasif sekme de koyu yazılır, seçili olan kalın ve sarı çizgili. */
 .tc-ay1-genis .tc-ay1-sag > .tc-sekmeler > .tc-sekme {
-  flex: 1 1 0; min-inline-size: 0; flex-direction: column; justify-content: center; gap: var(--b-1);
-  min-block-size: calc(var(--dokunma-ana) + var(--b-2)); padding: var(--b-1); color: var(--ink); font-weight: 600; line-height: 1.15; white-space: normal; text-align: center;
+  flex: 1 1 0; min-inline-size: 0; flex-direction: column; justify-content: flex-start; gap: var(--b-1);
+  min-block-size: calc(var(--dokunma-ana) + var(--b-2)); padding: var(--b-2) var(--b-1) var(--b-1); color: var(--ink); font-weight: 600; line-height: 1.15; white-space: normal; text-align: center;
 }
 .tc-ay1-genis .tc-ay1-sag > .tc-sekmeler > .tc-sekme[aria-selected="true"] { font-weight: 800; }
 .tc-ay1-genis .tc-ay1-sag > .tc-sekmeler > .tc-sekme > .tc-simge { inline-size: var(--b-5); block-size: var(--b-5); }
