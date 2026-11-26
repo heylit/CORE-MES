@@ -91,6 +91,7 @@ describe('Heidenhain (LSV2) okuma turu (gerçek PostgreSQL)', () => {
 
   test('okunan makine son durum tablosuna MTConnect adlarıyla yazılır; ekranda kaynak lsv2, ayrıntıda alan tanımları var (kabul 2)', async () => {
     await ayar('tezgah-baglantisi.lsv2-okuma', true);
+    await ayar('tezgah-baglantisi.lsv2-plc-sayaci', true);
     const m = [makine('ORN-H01', sahte.kapi)];
     assert.deepEqual(await tur(m), { tur: 'okundu', makine: 1 });
     const p = await pano(m);
@@ -114,6 +115,14 @@ describe('Heidenhain (LSV2) okuma turu (gerçek PostgreSQL)', () => {
     assert.equal(sahte.kabulEdilen(), 1);
     assert.equal((await pano(m)).tezgahlar[0]?.sayac, 78);
     assert.equal(await gecmis(), 2);
+    // PLC sayacı anahtarı kapanınca PLCDEBUG girişi gitmez; sayaç boş kalır, uyarı yazılır.
+    await ayar('tezgah-baglantisi.lsv2-plc-sayaci', false);
+    const once = sahte.gelenler.length;
+    simdi += 5_000;
+    assert.deepEqual(await tur(m), { tur: 'okundu', makine: 1 });
+    assert.ok(!sahte.gelenler.slice(once).some((g) => g.komut === 'R_MB' || g.yuk.toString('latin1') === 'PLCDEBUG\0'));
+    const t2 = (await pano(m)).tezgahlar[0];
+    assert.deepEqual([t2?.sayac, t2?.uyari], [null, 'PLC sayacı okuması kapalı (Sistem Ayarları)']);
   });
 
   test('kapalı makine: "bağlantı yok", değerler null, uyarı yazılır; art arda hatada aralık uzar; öteki makine okunur (kabul 3)', async () => {

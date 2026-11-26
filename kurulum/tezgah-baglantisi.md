@@ -7,7 +7,8 @@ kumandaları (LSV2, kart 3753). İkisi de varsayılan kapalıdır ve okuma aral�
 ## Heidenhain okuması
 
 Heidenhain kontrollü tezgâhlar (TNC 6xx sınıfı) LSV2 ile, TCP 19000'den doğrudan okunur. Yalnız okuma telgrafları gider: durum, kip,
-program, takım, ilerleme ve iş mili oranları, kumandanın hata iletileri ve ayarda adresi verilmişse PLC'deki parça sayacı. Dosya,
+program, takım, ilerleme ve iş mili oranları, kumandanın hata iletileri ve (ayrı anahtar açıksa, ayarda adresi verilmişse) PLC'deki
+parça sayacı. Dosya,
 program seçme, tuş, PLC yazma ve her `C_` komutu kodla engellidir. Parola gönderilmez ve hiçbir yerde tutulmaz.
 
 ### 1. Ortam değişkeni
@@ -38,11 +39,20 @@ yeniden başlayınca geçerli olur.
 Sistem Ayarları > Tezgâh bağlantısı > "Heidenhain okuması" açılır (varsayılan kapalı). Liste boşken açık olsa da bağlantı açılmaz;
 deneme ekranı "Heidenhain listesi yok" der. Okuma aralığı "Tezgâh bağlantısı okuma aralığı" ayarıdır.
 
+Parça sayacı ayrı anahtardadır: "PLC sayacı okuması" (varsayılan kapalı, "Heidenhain okuması"ndan bağımsız). Kapalıyken PLC'ye
+hiç giriş yapılmaz, sayaç boş kalır ve kartta "PLC sayacı okuması kapalı" yazar. Açıkken yalnız sayaç adresi verilmiş makinede, her
+okumada sayaçtan hemen önce parolasız PLCDEBUG girişi yapılır ve sayaç okunur okunmaz bu düzeyden çıkılır; oturum açık bırakılmaz.
+Bu düzeyde de yalnız ayardaki sayaç adresi okunabilir; yazma ve kontrol komutu kodla engellidir. İlk açılış deneme kurulumunda, tek
+makinede yapılır (aşağıda 3. adım).
+
+**PLC sayacı okuması yazma yetkisi açan bir giriş düzeyi kullanır; makinelerin 19000 kapısına yalnız CORE ve SmartES sunucularının
+erişmesi önerilir (bilgi işlem).**
+
 ### 3. Deneme sırası
 
 1. Önce deneme kurulumunda, tek makineyle: listeye yalnız bir makine yazılır, SmartES açık kalır.
 2. Tezgâh bağlantısı (deneme) ekranında makine kartında "Heidenhain LSV2" yazar; durum ve program okunur.
-3. CORE'un sayacı ile SmartES'in sayacı karşılaştırılır (ekranda "SmartES:" satırı ve "≠ fark" işareti).
+3. "PLC sayacı okuması" açılır; CORE'un sayacı ile SmartES'in sayacı karşılaştırılır (ekranda "SmartES:" satırı ve "≠ fark" işareti).
 4. SmartES'in o makineyi okumayı sürdürdüğü SmartES ekranından doğrulanır.
 5. Sayaç eşit ve SmartES bozulmamışsa öteki makineler listeye eklenir. Fark varsa önce sayaç adresi bakımla birlikte denetlenir.
 

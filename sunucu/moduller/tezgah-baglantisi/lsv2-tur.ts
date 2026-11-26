@@ -2,7 +2,7 @@ import type { Db, Veritabani } from '#cekirdek/db.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import type { Lsv2Makinesi } from './ayar.ts';
 import {
-  ARALIK_AYARI, diziyiDurumaCevir, durumdanDiziye, etkinAralikMs, gecmisiBosalt, gecmisiSuz, LSV2_ALAN_TANIMLARI, LSV2_KATEGORILERI, LSV2_OKUMA_AYARI,
+  ARALIK_AYARI, diziyiDurumaCevir, durumdanDiziye, etkinAralikMs, gecmisiBosalt, gecmisiSuz, LSV2_ALAN_TANIMLARI, LSV2_KATEGORILERI, LSV2_OKUMA_AYARI, LSV2_PLC_SAYACI_AYARI,
   lsv2Degisenler, lsv2Durumu, lsv2Ogeleri, OKUMA_AYARI, ozetle, sayaciArttir, VARSAYILAN_ARALIK_SN,
 } from './kurallar.ts';
 import type { GecmisOgeDurumu, Lsv2Uyarisi, SuzulecekOge, TezgahOgeleriHaritasi, TezgahOgesi } from './kurallar.ts';
@@ -67,6 +67,7 @@ export async function lsv2Turu(vt: Pick<Veritabani, 'tx'>, o: Lsv2TurOrtami): Pr
   const b = o.bellek;
   const ayarlar = await vt.tx(async (db) => ({
     acik: await sistemAyariOku(db, LSV2_OKUMA_AYARI), aralik: await sistemAyariOku(db, ARALIK_AYARI), mt: await sistemAyariOku(db, OKUMA_AYARI),
+    plc: await sistemAyariOku(db, LSV2_PLC_SAYACI_AYARI),
   }));
   b.aralikMs = (ayarlar.aralik ?? VARSAYILAN_ARALIK_SN) * 1000;
   if (!ayarlar.acik) {
@@ -79,7 +80,7 @@ export async function lsv2Turu(vt: Pick<Veritabani, 'tx'>, o: Lsv2TurOrtami): Pr
     const mb = makineBellegi(b, m.cihazAdi);
     return !mb.calisiyor && (mb.sonKontrol === null || simdi - mb.sonKontrol >= etkinAralikMs(b.aralikMs, mb.ardisikHata));
   });
-  await Promise.all(sirada.map((m) => makineyiOku(vt, o, m)));
+  await Promise.all(sirada.map((m) => makineyiOku(vt, o, m, ayarlar.plc === true)));
   if (sirada.length > 0 && !(ayarlar.mt && o.mtconnectVar)) await temizlikTuru(vt, o.ortak, o.saat());
   return { tur: 'okundu', makine: sirada.length };
 }
@@ -93,7 +94,7 @@ function makineBellegi(b: Lsv2Bellegi, cihazAdi: string): Lsv2MakineBellegi {
   return mb;
 }
 
-async function makineyiOku(vt: Pick<Veritabani, 'tx'>, o: Lsv2TurOrtami, m: Lsv2Makinesi): Promise<void> {
+async function makineyiOku(vt: Pick<Veritabani, 'tx'>, o: Lsv2TurOrtami, m: Lsv2Makinesi, plcSayaci: boolean): Promise<void> {
   const b = o.bellek;
   const mb = makineBellegi(b, m.cihazAdi);
   mb.calisiyor = true;
@@ -104,7 +105,7 @@ async function makineyiOku(vt: Pick<Veritabani, 'tx'>, o: Lsv2TurOrtami, m: Lsv2
       istemci = o.istemciKur(m);
       b.istemciler.set(m.cihazAdi, istemci);
     }
-    const r = await istemci.oku();
+    const r = await istemci.oku({ plcSayaci });
     const zaman = o.saat();
     const sonuc = await vt.tx((db) => isle(db, m.cihazAdi, mb, r, zaman));
     // Bellek yalnız işlem kesinleşince değişir.

@@ -19,6 +19,7 @@ const ac = async (m: SahteMakine): Promise<SahteLsv2> => {
   return s;
 };
 const istemci = (s: SahteLsv2, sayac: number | null = D10000, sure = 1000) => lsv2IstemcisiKur('127.0.0.1', sayac, { kapi: s.kapi, istekSuresiMs: sure });
+const PLC = { plcSayaci: true } as const;
 afterEach(async () => {
   await Promise.all(sahteler.splice(0).map((s) => s.kapat()));
 });
@@ -50,6 +51,8 @@ describe('LSV2 beyaz liste (kabul 1)', () => {
     assert.throws(() => telgrafKur('R_VR', yuk(5), null), Lsv2YasakHatasi);
     assert.throws(() => telgrafKur('R_PR', yuk(1), null), Lsv2YasakHatasi);
     assert.throws(() => telgrafKur('A_LO', Buffer.from('INSPECT\0', 'latin1'), null), Lsv2YasakHatasi);
+    assert.throws(() => telgrafKur('A_LO', Buffer.from('PLCDEBUG', 'latin1'), null), Lsv2YasakHatasi);
+    assert.doesNotThrow(() => telgrafKur('A_LO', Buffer.from('PLCDEBUG\0', 'latin1'), null));
   });
 
   test('PLC belleği yalnız ayardaki sayaç adresinden, yalnız 4 bayt okunur', () => {
@@ -72,10 +75,50 @@ describe('LSV2 beyaz liste (kabul 1)', () => {
     assert.deepEqual(s.gelenler.map((g) => g.komut), ['A_LG']);
   });
 
+  test('PLCDEBUG düzeyinde de yalnız ayardaki sayaç adresi okunur; yazma ve kontrol komutu soketten çıkmaz', async () => {
+    const s = await ac(calisan());
+    const adres = kelimeBasi + D10000;
+    const hat = new Lsv2Hatti('127.0.0.1', s.kapi, 1000);
+    await hat.ac();
+    assert.equal((await hat.istek('A_LG', Buffer.from('PLCDEBUG\0', 'latin1'), adres)).kod, 'T_OK');
+    for (const komut of ['C_CC', 'C_MC', 'C_EK', 'C_LK', 'C_FL', 'C_ST', 'W_MB', 'W_PR', 'R_FL']) {
+      assert.throws(() => hat.istek(komut as Lsv2Komutu, Buffer.concat([u32(adres), yuk(4, 0, 0, 0, 1)]), adres), Lsv2YasakHatasi, komut);
+    }
+    for (const a of [adres - 4, adres + 4, kelimeBasi]) assert.throws(() => hat.istek('R_MB', Buffer.concat([u32(a), yuk(4)]), adres), Lsv2YasakHatasi);
+    assert.throws(() => hat.istek('R_MB', Buffer.concat([u32(adres), yuk(4)]), null), Lsv2YasakHatasi);
+    assert.throws(() => hat.istek('A_LG', Buffer.from('PLCDEBUG\0ORN-PAROLA\0', 'latin1'), adres), Lsv2YasakHatasi);
+    assert.equal((await hat.istek('R_MB', Buffer.concat([u32(adres), yuk(4)]), adres)).kod, 'S_MB');
+    hat.kapat();
+    assert.deepEqual(s.gelenler.map((g) => g.komut), ['A_LG', 'R_MB']);
+  });
+
+  test('PLC sayacı: giriş okumadan hemen önce, çıkış hemen sonra; anahtar kapalıyken PLCDEBUG hiç gitmez', async () => {
+    const s = await ac(calisan());
+    const i = istemci(s);
+    for (let n = 0; n < 2; n += 1) {
+      const r = await i.oku(PLC);
+      assert.equal(r.tur === 'basarili' ? r.okuma.sayac : 'hata', 148);
+    }
+    const plc = s.gelenler
+      .filter((g) => g.komut === 'R_MB' || ((g.komut === 'A_LG' || g.komut === 'A_LO') && g.yuk.length > 0 && g.yuk.toString('latin1') !== 'INSPECT\0' && g.yuk.toString('latin1') !== 'DNC\0'))
+      .map((g) => `${g.komut} ${g.yuk.toString('latin1').replace(/\0/g, '')}`.trim());
+    assert.equal(plc.length, 6);
+    assert.deepEqual(plc.filter((x) => !x.startsWith('R_MB')), ['A_LG PLCDEBUG', 'A_LO PLCDEBUG', 'A_LG PLCDEBUG', 'A_LO PLCDEBUG']);
+    assert.deepEqual(plc.map((x) => x.slice(0, 4)), ['A_LG', 'R_MB', 'A_LO', 'A_LG', 'R_MB', 'A_LO']);
+    const once = s.gelenler.length;
+    const r = await i.oku();
+    i.kapat();
+    assert.equal(r.tur, 'basarili');
+    if (r.tur !== 'basarili') return;
+    assert.equal(r.okuma.sayac, null);
+    assert.deepEqual(r.okuma.uyarilar, ['sayac-kapali']);
+    assert.ok(!s.gelenler.slice(once).some((g) => g.komut === 'R_MB' || g.yuk.toString('latin1') === 'PLCDEBUG\0'));
+  });
+
   test('tam okumada makineye giden her telgraf izin listesindedir; C_ komutu hiç gitmez', async () => {
     const s = await ac(calisan());
     const i = istemci(s);
-    assert.equal((await i.oku()).tur, 'basarili');
+    assert.equal((await i.oku(PLC)).tur, 'basarili');
     i.kapat();
     assert.ok(s.gelenler.length > 0);
     for (const g of s.gelenler) {
@@ -91,7 +134,7 @@ describe('LSV2 okuması TezgahOgesi\'ne çevrilir (kabul 2)', () => {
   test('durum, kip, program, takım, oranlar ve sayaç; özet bugünkü alanları doldurur', async () => {
     const s = await ac(calisan());
     const i = istemci(s);
-    const r = await i.oku();
+    const r = await i.oku(PLC);
     i.kapat();
     assert.equal(r.tur, 'basarili');
     if (r.tur !== 'basarili') return;
@@ -167,7 +210,7 @@ describe('LSV2 hata halleri (kabul 3)', () => {
   test('PLC yetki hatası (NO_PRIV): sayaç null, "yetki yok" uyarısı; öteki değerler okunur', async () => {
     const s = await ac({ ...calisan(), plcYetkiYok: true });
     const i = istemci(s);
-    const r = await i.oku();
+    const r = await i.oku(PLC);
     i.kapat();
     assert.equal(r.tur, 'basarili');
     if (r.tur !== 'basarili') return;
@@ -192,7 +235,7 @@ describe('LSV2 hata halleri (kabul 3)', () => {
   test('sayaç adresi kelime alanı dışındaysa PLC hiç sorgulanmaz', async () => {
     const s = await ac({ ...calisan(), kelimeSayisi: 100 });
     const i = istemci(s);
-    const r = await i.oku();
+    const r = await i.oku(PLC);
     i.kapat();
     assert.equal(r.tur, 'basarili');
     if (r.tur !== 'basarili') return;

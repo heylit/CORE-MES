@@ -22,7 +22,7 @@ Heidenhain kumandalarını LSV2 ile (TCP 19000) doğrudan, salt okunur okuma. Ye
 SAYAC `D` ve 4'ün katı (pyLSV2 ile aynı bayt hesabı: kelime alanı başı + n). Boş = kapalı. En çok 32 makine.
 
 ## Bu modül şunları varsaydı (geri alma maliyeti düşük)
-1. PLC sayacı PLCDEBUG girişi (parolasız) ister (pyLSV2 `read_plc_memory`); giriş yalnız sayaç adresi varken, R_MB'den hemen önce bir kez yapılır. Soru Merkezi'nde onay bekliyor.
+1. PLC sayacı PLCDEBUG girişi (parolasız) ister (pyLSV2 `read_plc_memory`); kullanıcı kararı (26.11): ayrı anahtar "PLC sayacı okuması" (varsayılan kapalı); giriş yalnız sayaç adresi varken, her okumada R_MB'den hemen önce yapılır, hemen sonra `A_LO PLCDEBUG` ile çıkılır; çıkış kabul edilmezse bağlantı kapatılır. Gerçek kumandada yalnız PLCDEBUG'dan çıkışın DNC oturumunu korumadığı canlı denemede görülür (doğrulanmadı).
 2. DNC girişi bağlantı başında bir kez denenir; kumanda reddederse durum, program, takım, alarm null ve "DNC" uyarısı.
 3. Kumandanın bütün hata iletileri tek koşul öğesinde Fault sayılır (durum "alarm"); Heidenhain hata sınıfları ayrılmadı (canlı denemede SmartES ile karşılaştırılacak).
 4. İlerleme ve iş mili oranı (%) hız değildir: `isMiliHizi`, `ilerleme`, `isMiliYuku` LSV2'de null kalır; oranlar ayrıntıda `PathFeedrateOverride`, `RotaryVelocityOverride` olarak görünür.

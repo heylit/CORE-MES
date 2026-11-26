@@ -23,7 +23,7 @@ yalnız okumayı kapsamalıdır.
 1. **Tek dosya, tek modül.** Tezgaha yalnız `tezgah-baglantisi` modülünün `lsv2.ts` dosyası bağlanır (`node:net`); başka dosyada istemci
    soketi yoktur (`npm run sinir` kural j izin listesi).
 2. **Yalnız okuma, sabit beyaz liste.** Gönderilebilen telgraflar: `A_LG` (yalnız INSPECT, DNC, PLCDEBUG; parola alanı yok), `A_LO`
-   (yüksüz), `R_VR`, `R_PR` (yüksüz), `R_RI` (yalnız 23, 24, 25, 26, 27, 28, 51), `R_MB` (yalnız ayardaki sayaç adresi, 4 bayt).
+   (yüksüz ya da yalnız `PLCDEBUG` düzeyinden çıkış), `R_VR`, `R_PR` (yüksüz), `R_RI` (yalnız 23, 24, 25, 26, 27, 28, 51), `R_MB` (yalnız ayardaki sayaç adresi, 4 bayt).
    Liste dışı telgraf ve her `C_` komutu soket yazılmadan reddedilir (`lsv2.ts` `telgrafKur`; `lsv2.test.ts` "LSV2 beyaz liste").
 3. **Adres yalnız ortam değişkeninde ve kurum içi IP.** `TMIV2_TEZGAH_LSV2_MAKINELERI` (`CIHAZ=ADRES;SAYAC,...`); ad çözümlemesi ve kapı
    yazımı yoktur, kapı sabit 19000'dir. Geçersiz ya da dış adres açılışı durdurur; ileti değeri söylemez (`ayar.ts` `lsv2MakineleriOku`).
@@ -45,7 +45,8 @@ yalnız okumayı kapsamalıdır.
 - CORE sunucusundan makinelerin TCP 19000'ine güvenlik duvarı izni gerekir; CNC ağının ofis ağından ayrılması önerilir
   (`kurulum/tezgah-baglantisi.md`).
 - PLC sayacı için PLCDEBUG girişi gerekir; bu giriş kumandada PLC yazmayı da açar. CORE yazma telgrafı gönderemediği için okuma kalır;
-  bu giriş düzeyi Soru Merkezi'nde ayrıca onaylanır (3753; karar beklerken kod PLCDEBUG girişini yalnız sayaç adresi verilmiş makinede yapar).
+  kullanıcı kararı (3753, 26.11.2026): giriş ayrı anahtarla ("PLC sayacı okuması", varsayılan kapalı), yalnız sayaç adresi verilmiş
+  makinede, sayaçtan hemen önce yapılır ve okunur okunmaz çıkılır (`A_LO` yalnız yüksüz ya da `PLCDEBUG`); ilk açılış tek makinede.
 - ADR 0033 değişmez; iki kaynak aynı tablolara yazar, aynı adlı cihazda LSV2 kazanır.
 
 ## Vazgeçilenler

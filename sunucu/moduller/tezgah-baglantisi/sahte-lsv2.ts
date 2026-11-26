@@ -68,7 +68,8 @@ export async function sahteLsv2Ac(makine: SahteMakine = {}): Promise<SahteLsv2> 
         return cerceve('T_OK');
       }
       case 'A_LO':
-        girisler.clear();
+        if (yuk.length === 0) girisler.clear();
+        else girisler.delete(yuk.toString('latin1').replace(/\0$/, ''));
         return cerceve('T_OK');
       case 'R_VR':
         return cerceve('S_VR', Buffer.from('ORN-TNC640\0ORN-NC 01\0ORN-PLC 01\0ORN-SPLC\0ORN-SECENEK\0', 'latin1'));

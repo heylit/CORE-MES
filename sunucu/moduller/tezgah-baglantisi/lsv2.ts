@@ -51,6 +51,9 @@ export function telgrafKur(komut: string, yuk: Uint8Array, plcAdresi: number | n
       if (!IZINLI_GIRISLER.some((g) => girisYuku(g).equals(y))) yasak('giriş düzeyi izin listesinde yok ya da parola taşıyor');
       break;
     case 'A_LO':
+      // Yüksüz çıkış ya da yalnız PLCDEBUG düzeyinden çıkış (sayaç okunduktan hemen sonra).
+      if (y.length !== 0 && !girisYuku('PLCDEBUG').equals(y)) yasak('çıkış yalnız yüksüz ya da PLCDEBUG düzeyinden');
+      break;
     case 'R_VR':
     case 'R_PR':
       if (y.length !== 0) yasak(`${komut} yük taşımaz`);
@@ -193,7 +196,8 @@ export class Lsv2Hatti {
 export type Lsv2Sonucu = { tur: 'basarili'; okuma: Lsv2Okumasi } | { tur: Lsv2HataTuru; ileti: string };
 
 export interface Lsv2Istemcisi {
-  oku(): Promise<Lsv2Sonucu>;
+  // plcSayaci: Sistem Ayarları "PLC sayacı okuması"; kapalıyken PLCDEBUG girişi hiç yapılmaz.
+  oku(secenek?: { plcSayaci?: boolean }): Promise<Lsv2Sonucu>;
   kapat(): void;
 }
 
@@ -208,7 +212,6 @@ interface Oturum {
   ncSurumu: string | null;
   plcAdresi: number | null;
   plcUyarisi: Lsv2Uyarisi | null;
-  plcGirisi: boolean | null;
 }
 
 const latin = (b: Buffer): string => b.toString('latin1').replace(/\0+$/, '').trim();
@@ -254,10 +257,10 @@ export function lsv2IstemcisiKur(adres: string, sayac: number | null, secenek: L
         else plcUyarisi = 'sayac-adresi-yok';
       } else plcUyarisi = 'sayac-adresi-yok';
     }
-    return { kontrol: parcalar[0]?.trim() || null, ncSurumu: parcalar[1]?.trim() || null, plcAdresi, plcUyarisi, plcGirisi: null };
+    return { kontrol: parcalar[0]?.trim() || null, ncSurumu: parcalar[1]?.trim() || null, plcAdresi, plcUyarisi };
   }
 
-  async function okumaYap(h: Lsv2Hatti, o: Oturum): Promise<Lsv2Okumasi> {
+  async function okumaYap(h: Lsv2Hatti, o: Oturum, plcSayaci: boolean): Promise<Lsv2Okumasi> {
     const uyarilar = new Set<Lsv2Uyarisi>();
     const oku = async (kod: number): Promise<Buffer | null> => {
       const c = await iste(h, 'R_RI', rri(kod));
@@ -278,7 +281,7 @@ export function lsv2IstemcisiKur(adres: string, sayac: number | null, secenek: L
     const tb = await oku(RRI.takim);
     const takim = tb !== null && tb.length >= 4 ? tb.readUInt32BE(0) : null;
     const hatalar = await hatalariOku(h, uyarilar);
-    const sayacDegeri = await sayacOku(h, o, uyarilar);
+    const sayacDegeri = await sayacOku(h, o, plcSayaci, uyarilar);
     return {
       kontrol: o.kontrol, ncSurumu: o.ncSurumu, kip, programDurumu, program, ilerlemeOrani: oran(0), isMiliOrani: oran(4), takim,
       hatalar, sayac: sayacDegeri, uyarilar: [...uyarilar],
@@ -303,26 +306,39 @@ export function lsv2IstemcisiKur(adres: string, sayac: number | null, secenek: L
     return liste;
   }
 
-  async function sayacOku(h: Lsv2Hatti, o: Oturum, uyarilar: Set<Lsv2Uyarisi>): Promise<number | null> {
+  // PLCDEBUG kumandada PLC yazmayı da açan giriş düzeyidir: yalnız sayaç okunurken açık kalır, okunduktan hemen sonra çıkılır.
+  // Çıkış kabul edilmezse bağlantı kapatılır; oturum hiçbir durumda PLCDEBUG düzeyinde bırakılmaz.
+  async function sayacOku(h: Lsv2Hatti, o: Oturum, plcSayaci: boolean, uyarilar: Set<Lsv2Uyarisi>): Promise<number | null> {
     if (o.plcUyarisi !== null) uyarilar.add(o.plcUyarisi);
     if (o.plcAdresi === null) return null;
-    if (o.plcGirisi === null) o.plcGirisi = (await giris(h, 'PLCDEBUG')).kod === 'T_OK';
-    if (!o.plcGirisi) {
+    if (!plcSayaci) {
+      uyarilar.add('sayac-kapali');
+      return null;
+    }
+    if ((await giris(h, 'PLCDEBUG')).kod !== 'T_OK') {
       uyarilar.add('sayac-yetki-yok');
       return null;
     }
-    const yuk = Buffer.alloc(5);
-    yuk.writeUInt32BE(o.plcAdresi, 0);
-    yuk[4] = 4;
-    const c = await iste(h, 'R_MB', yuk);
-    if (c.kod === 'S_MB' && c.icerik.length === 4) return c.icerik.readInt32LE(0);
-    if (c.kod !== 'T_ER') return beklenmeyen();
-    uyarilar.add(hataKodu(c) === HATA_KODU.yetkiYok ? 'sayac-yetki-yok' : 'sayac-adresi-yok');
-    return null;
+    let deger: number | null = null;
+    try {
+      const yuk = Buffer.alloc(5);
+      yuk.writeUInt32BE(o.plcAdresi, 0);
+      yuk[4] = 4;
+      const c = await iste(h, 'R_MB', yuk);
+      if (c.kod === 'S_MB' && c.icerik.length === 4) deger = c.icerik.readInt32LE(0);
+      else if (c.kod !== 'T_ER') beklenmeyen();
+      else uyarilar.add(hataKodu(c) === HATA_KODU.yetkiYok ? 'sayac-yetki-yok' : 'sayac-adresi-yok');
+    } finally {
+      if (h.acik) {
+        const cikis = await iste(h, 'A_LO', girisYuku('PLCDEBUG'));
+        if (cikis.kod !== 'T_OK') throw new Lsv2BaglantiHatasi('bozuk', 'Makine PLC giriş düzeyinden çıkışı kabul etmedi; bağlantı kapatıldı.');
+      }
+    }
+    return deger;
   }
 
   return {
-    async oku() {
+    async oku(secenek = {}) {
       try {
         if (hat === null || !hat.acik) {
           hat?.kapat();
@@ -333,7 +349,7 @@ export function lsv2IstemcisiKur(adres: string, sayac: number | null, secenek: L
           oturum = await oturumKur(h);
         }
         if (oturum === null) throw new Lsv2BaglantiHatasi('bozuk', 'LSV2 oturumu kurulamadı.');
-        return { tur: 'basarili', okuma: await okumaYap(hat, oturum) };
+        return { tur: 'basarili', okuma: await okumaYap(hat, oturum, secenek.plcSayaci ?? false) };
       } catch (hata) {
         hat?.kapat();
         hat = null;

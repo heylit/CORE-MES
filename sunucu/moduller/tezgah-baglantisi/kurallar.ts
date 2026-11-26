@@ -519,13 +519,15 @@ export function sayaciOzetle(c: SatirSayaci, simdi: number): { pencereDakika: nu
 // ---- Heidenhain LSV2 (kart 3753) ----
 // lsv2.ts'in okuduğu ham değerler; okunamayan alan null. Durum ve kip Heidenhain kodudur (PgmState, ExecState), metne burada çevrilir.
 export const LSV2_OKUMA_AYARI = 'tezgah-baglantisi.lsv2-okuma';
+export const LSV2_PLC_SAYACI_AYARI = 'tezgah-baglantisi.lsv2-plc-sayaci';
 
-export type Lsv2Uyarisi = 'kapali-ya-da-mesgul' | 'dnc-yok' | 'sayac-yetki-yok' | 'sayac-adresi-yok';
+export type Lsv2Uyarisi = 'kapali-ya-da-mesgul' | 'dnc-yok' | 'sayac-yetki-yok' | 'sayac-adresi-yok' | 'sayac-kapali';
 export const LSV2_UYARI_METNI: Record<Lsv2Uyarisi, string> = {
   'kapali-ya-da-mesgul': 'Makine kapalı ya da meşgul (bağlantı reddedildi)',
   'dnc-yok': 'Makine DNC okumasına izin vermiyor: durum, program ve takım okunamadı',
   'sayac-yetki-yok': 'Sayaç için yetki yok (PLC okuması daha yüksek giriş düzeyi istiyor)',
   'sayac-adresi-yok': 'Sayaç adresi makinenin PLC belleğinde yok',
+  'sayac-kapali': 'PLC sayacı okuması kapalı (Sistem Ayarları)',
 };
 
 export interface Lsv2Hatasi {
