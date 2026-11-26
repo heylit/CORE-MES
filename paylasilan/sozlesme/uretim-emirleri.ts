@@ -1536,6 +1536,24 @@ export const statuTopluCevabi = z.object({
     neden: z.string().nullable(),
   })),
 });
+// 3738 dilim 2: bir hazırlık maddesinin birçok adımda elle onayı, elle "hazır değil" işareti ya da elle değerin kaldırılması. Her kalem tek adımdaki
+// uçla (hazirlik-onayla, hazirlik-elle-eksik, hazirlik-onay-kaldir) aynı kuralla ve birbirinden bağımsız karara girer; sonuç statu-toplu ile aynı biçimdedir.
+export const HAZIRLIK_TOPLU_ISLEMLERI = ['onayla', 'eksik', 'kaldir'] as const;
+export const hazirlikTopluGovdesi = z.object({
+  madde: hazirlikMaddesi,
+  kalemler: z.array(z.object({
+    emirId: KIMLIK,
+    isEmriId: KIMLIK,
+    islem: z.enum(HAZIRLIK_TOPLU_ISLEMLERI),
+    // Elle onay ve elle eksikte kalemin gerekçesi (durduran maddede onay için zorunlu); kaldırmada yok sayılır.
+    gerekce: kisaNot,
+    // İstemcinin gördüğü madde hâli; değişmişse kalem yazılmaz ('eski').
+    sistemHali: hazirlikHaliSemasi,
+  }).strict()).min(1, 'En az bir adım seçin.').max(TOPLU_EN_COK_KALEM, `Tek seferde en çok ${String(TOPLU_EN_COK_KALEM)} adım yazılır.`),
+}).strict();
+export type HazirlikTopluGovdesi = z.input<typeof hazirlikTopluGovdesi>;
+export type HazirlikTopluIslemi = (typeof HAZIRLIK_TOPLU_ISLEMLERI)[number];
+
 export type AdimTedariki = z.output<typeof adimTedarikSemasi>;
 export type AdimStatusu = z.output<typeof adimStatusu>;
 export type ElleYazilanStatu = (typeof ELLE_YAZILAN_STATULER)[number];

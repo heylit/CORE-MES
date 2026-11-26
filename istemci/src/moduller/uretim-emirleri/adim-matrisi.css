@@ -202,3 +202,17 @@
   .tc-am-ozel-satir, .tc-am-ozel-ekle { grid-template-columns: minmax(0, 1fr); }
   .tc-am-ozel-satir .tc-dugme { justify-self: end; }
 }
+/* 3738 dilim 2: Tek madde merceği. Hücre bir dokunuşla yazar; elle değerde geri al düğmesi hücrenin içinde yan yana (44 px). */
+.tc-am-tek-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--b-2) var(--b-3); }
+.tc-am-tek-bar .tc-alan { flex: 0 1 16rem; }
+.tc-am-tek-ozet { margin: 0; align-self: center; }
+.tc-am-tek-not { flex-basis: 100%; margin: 0; }
+.tc-am-tek-kap { gap: 0; }
+.tc-am-tek { justify-content: center; }
+.tc-am-tek:disabled { cursor: default; }
+.tc-am-tek:not(:disabled):active { background: color-mix(in srgb, var(--c) 30%, transparent); }
+.tc-am-tek.tc-am-ton-pasif { color: var(--muted); background: transparent; }
+.tc-am-tek-kap .tc-am-tek-geri { min-inline-size: var(--dokunma); min-block-size: var(--dokunma); padding: 0; border-radius: 0; }
+
+/* Toplu serit, plan ve sonuc seridi dugmeleri parmak boyunda (hucreler gibi). */
+.tc-am-serit .tc-dugme, .tc-am-son .tc-dugme { min-block-size: var(--dokunma); min-inline-size: var(--dokunma); }

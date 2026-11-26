@@ -1,3 +1,4 @@
+import { kayitNoktasi } from '#cekirdek/db.ts';
 import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, dogrulama, yetkiYok } from '#cekirdek/hata.ts';
 import type { DenetimSecimi, IkiliCevap } from '#cekirdek/uc.ts';
@@ -7,7 +8,7 @@ import { ATLAMA_METNI, kalemKarari } from '#paylasilan/sozlesme/adim-matrisi-kur
 import { ADIM_STATULERI, BEKLEME_NEDENI_ADLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
   AdimDurumuCevabi, AdimMatrisiCevabi, AdimStatusu, BeklemeNedeni, CalismaDurumu, StatuTopluCevabi, StatuTopluGovdesi, StatuTopluSonucu, AdimDurumuTerminalCevabi, AdimTedariki, ElleStatuGovdesi, HazirlikElleEksikGovdesi, HazirlikMaddesi, HazirlikOnayiGovdesi,
-  HazirlikOnayiKaldirGovdesi,
+  HazirlikOnayiKaldirGovdesi, HazirlikTopluGovdesi,
   OpSablonFarkiGovdesi, OpSablonFarkiKaldirGovdesi, OpSablonFarklariCevabi, ListeEkleGovdesi, ListeKaldirGovdesi, ListeIsaretleGovdesi, ListeKontrolu,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { denetimSatiri, medyaTutamagi } from '../dosya/disari.ts';
@@ -239,6 +240,10 @@ export async function elleStatuKaldir(db: Db, kullanici: Kullanici, emirId: numb
 
 // 2893-2 b: onay, istemcinin gördüğü hâl sunucudakiyle aynıysa yazılır; onaylanan sürüm (çizim revizyonu gibi) biliniyorsa saklanır.
 export async function hazirlikOnayla(db: Db, kullanici: Kullanici, emirId: number, isEmriId: number, g: HazirlikOnayiGovdesi): Promise<AdimDurumuCevabi> {
+  await hazirlikOnayiYaz(db, kullanici, emirId, isEmriId, g);
+  return adimDurumu(db, emirId, kullanici);
+}
+async function hazirlikOnayiYaz(db: Db, kullanici: Kullanici, emirId: number, isEmriId: number, g: HazirlikOnayiGovdesi): Promise<void> {
   await yazmaHazirla(db, emirId, isEmriId);
   const madde = (await isEmriHazirliklari(db, emirId, [isEmriId])).get(isEmriId)?.get(g.madde);
   const hal = madde?.hal ?? 'bilinmiyor';
@@ -248,12 +253,15 @@ export async function hazirlikOnayla(db: Db, kullanici: Kullanici, emirId: numbe
   if (ret === GEREKCE_GEREK) throw dogrulama(ret, 'gerekce');
   if (ret !== null) throw cakisma(ret);
   await s.hazirlikOnayiEkle(db, { isEmriId, madde: g.madde, olay: 'onay', sistemHali: hal, gerekce, onaylananSurum: madde?.surum ?? null, kisiId: kullanici.id });
-  return adimDurumu(db, emirId, kullanici);
 }
 
 // 3322 (Risk K4): elle "hazır değil". Hâl denetimi onaydaki gibidir; gerekmeyen madde ve zaten elle eksik olan reddedilir. Kişi ve zaman
 // sunucudan; kaynak sürümü bilgi için saklanır, düşürmez (K3).
 export async function hazirlikElleEksik(db: Db, kullanici: Kullanici, emirId: number, isEmriId: number, g: HazirlikElleEksikGovdesi): Promise<AdimDurumuCevabi> {
+  await hazirlikElleEksikYaz(db, kullanici, emirId, isEmriId, g);
+  return adimDurumu(db, emirId, kullanici);
+}
+async function hazirlikElleEksikYaz(db: Db, kullanici: Kullanici, emirId: number, isEmriId: number, g: HazirlikElleEksikGovdesi): Promise<void> {
   const adim = await yazmaHazirla(db, emirId, isEmriId);
   const madde = (await isEmriHazirliklari(db, emirId, [isEmriId])).get(isEmriId)?.get(g.madde);
   const hal = madde?.hal ?? 'bilinmiyor';
@@ -262,15 +270,37 @@ export async function hazirlikElleEksik(db: Db, kullanici: Kullanici, emirId: nu
   if (ret !== null) throw cakisma(ret);
   const gerekce = g.gerekce === null || g.gerekce === '' ? null : g.gerekce;
   await s.hazirlikOnayiEkle(db, { isEmriId, madde: g.madde, olay: 'eksik', sistemHali: hal, gerekce, onaylananSurum: madde?.surum ?? null, kisiId: kullanici.id });
-  return adimDurumu(db, emirId, kullanici);
 }
 
 // Elle değeri (onay ya da hazır değil) kaldırır; madde otomatik hâline döner.
 export async function hazirlikOnayKaldir(db: Db, kullanici: Kullanici, emirId: number, isEmriId: number, g: HazirlikOnayiKaldirGovdesi): Promise<AdimDurumuCevabi> {
+  await hazirlikOnayiKaldirYaz(db, kullanici, emirId, isEmriId, g);
+  return adimDurumu(db, emirId, kullanici);
+}
+async function hazirlikOnayiKaldirYaz(db: Db, kullanici: Kullanici, emirId: number, isEmriId: number, g: HazirlikOnayiKaldirGovdesi): Promise<void> {
   const adim = await yazmaHazirla(db, emirId, isEmriId);
   if (!adim.onaylar.some((o) => o.madde === g.madde) && !adim.elleEksikler.some((o) => o.madde === g.madde)) throw cakisma(ONAY_YOK);
   await s.hazirlikOnayiEkle(db, { isEmriId, madde: g.madde, olay: 'kaldir', sistemHali: null, gerekce: null, onaylananSurum: null, kisiId: kullanici.id });
-  return adimDurumu(db, emirId, kullanici);
+}
+
+// 3738 dilim 2: bir maddenin birçok adımda toplu elle işlemi. Kalem başına bağımsız karar (statuTopluYaz gibi): reddedilen ya da bayat kalem yalnız kendi
+// yazısını geri alır (kayıt noktası), ötekiler yazılır. Kural her kalemde tek adımdaki işlemle aynıdır (hâl denetimi, durduran maddede gerekçe,
+// hedef hâlde olana ikinci geçiş yok). Kilitler emir, iş emri sırasıyla alınır: iki eşzamanlı toplu yazım aynı sırada kilitler, birbirini beklemeden kilitlenmez.
+export async function hazirlikTopluYaz(db: Db, kullanici: Kullanici, g: HazirlikTopluGovdesi): Promise<StatuTopluCevabi> {
+  const sirali = [...g.kalemler.entries()].sort(([, x], [, y]) => x.emirId - y.emirId || x.isEmriId - y.isEmriId);
+  const sonuc = new Map<number, { sonuc: StatuTopluSonucu; neden: string | null }>();
+  for (const [sira, k] of sirali) {
+    const r = await kayitNoktasi(db, async () => {
+      if (k.islem === 'kaldir') await hazirlikOnayiKaldirYaz(db, kullanici, k.emirId, k.isEmriId, { madde: g.madde });
+      else if (k.islem === 'onayla') await hazirlikOnayiYaz(db, kullanici, k.emirId, k.isEmriId, { madde: g.madde, gerekce: k.gerekce, sistemHali: k.sistemHali });
+      else await hazirlikElleEksikYaz(db, kullanici, k.emirId, k.isEmriId, { madde: g.madde, gerekce: k.gerekce, sistemHali: k.sistemHali });
+    });
+    if (r.tamam) sonuc.set(sira, { sonuc: k.islem === 'kaldir' ? 'kaldirildi' : 'yazildi', neden: null });
+    else if (r.hata.mesaj === HAL_ESKIDI) sonuc.set(sira, { sonuc: 'eski', neden: HAL_ESKIDI });
+    // Kural reddi (hedef hâlde, gerekmeyen madde, kapalı emir, elle değer yok) kalemin atlanmasıdır; eksik gerekçe, olmayan emir ve iş emri ret'tir.
+    else sonuc.set(sira, { sonuc: r.hata.kod === 'CAKISMA' ? 'atlandi' : 'ret', neden: r.hata.mesaj });
+  }
+  return { kalemler: g.kalemler.map((k, sira) => ({ emirId: k.emirId, isEmriId: k.isEmriId, ...(sonuc.get(sira) ?? { sonuc: 'ret' as const, neden: IS_EMRI_EMIRDE_YOK }) })) };
 }
 
 // 3249 b: ofisten hazırlık listesi işareti. Yalnız ön hazırlık ve hazırlık aşaması (Risk K5); kayıt kişi, zaman ve "Adım Durumu"
