@@ -10,8 +10,10 @@ import { hataSonucu, hesapBasladi, isciSinirlari, type HesapSonucu } from './isc
 // Uç transaction'ı 60 saniyelik çözümü bekleyemez (bekleyen işlem sınırı): başlatma kimlik döner, sonuç bellekte kısa süre tutulur.
 const HIGHS = createRequire(import.meta.url).resolve('highs');
 
-// Kişi başına aynı anda tek çözüm; bütün sunucuda en çok iki (çözücü işlemciyi tam kullanır).
-export const ESZAMANLI_AZAMI = 2;
+// Kişi başına aynı anda tek çözüm; bütün sunucuda tek (çözücü işlemciyi tam kullanır). Ağır hesapların ortak sınırında (3723) yıllık
+// çözüm değerlendirme ve teklif havuzunun dışında kendi tek yerinde koşar: 75 saniyeye varan çözüm etkileşimli hesapların yerini tutmaz,
+// onların arkasında da beklemez. İkinci çözüm beklemeden "dolu" iletisi alır.
+export const ESZAMANLI_AZAMI = 1;
 // Paketin yüklenmesi ve iş parçacığının kapanması için HiGHS'in kendi zaman sınırının üstüne pay.
 const PAY_MS = 15_000;
 // Okunmayan sonuç bu süreden sonra silinir; sayfa sonucu saniyeler içinde okur.

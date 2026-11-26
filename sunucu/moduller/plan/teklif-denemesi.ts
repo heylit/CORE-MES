@@ -8,7 +8,7 @@ import type { KaynakDilimiOkumasi } from './girdi/kaynaklar-kurallar.ts';
 import type { KaynakOkumasi } from './plan-girdisi.ts';
 import { COZUM_SURESI_MS } from './plan-motoru.ts';
 import { izlemeIletisi } from './isci-iletisi.ts';
-import { hataSonucu, hesapBasladi, isciSinirlari, type HesapSonucu } from './isci-izleme.ts';
+import { beklerkenBitti, hataSonucu, hesapBasladi, isciSinirlari, isciYeriIste, type HesapSonucu } from './isci-izleme.ts';
 
 // Satış teklifi denemesi (Y4): planın girdisi çerçevenin koduyla kurulur (motor/girdi.js), kalemler motorun acil sipariş olayıyla eklenir
 // (motor/teklif.js). Sayfanın motor kancaları (motor/kancalar.js) yüklenir (458 a). Aramasız kip: aynı girdi aynı sonuç. Çözüm olay döngüsünü tutmasın diye ayrı iş parçacığında, süre sınırıyla koşar.
@@ -108,17 +108,33 @@ export function teklifDenemesi(istek: DenemeIstegi, sureMs: number = COZUM_SURES
 function calistir(istek: DenemeIstegi, sureMs: number): Promise<DenemeSonucu | null> {
   const son = Date.now() + sureMs;
   return new Promise((coz, reddet) => {
-    const isci = new Worker(ISCI, { eval: true, resourceLimits: isciSinirlari(), workerData: { kod: denemeKodu(), dilim: TESIS_SAAT_DILIMI, istek, birlestirmeAdresi: BIRLESTIRME_ADRESI } });
+    // Süre ortak sınırdaki yer beklemesini de kapsar (3723).
+    const yer = isciYeriIste();
+    let isci: Worker | null = null;
+    let bitir: ((sonuc: HesapSonucu) => void) | null = null;
     let bitti = false;
-    const bitir = hesapBasladi('teklif');
-    const sonlan = (f: () => void, sonuc: HesapSonucu = 'hata'): void => { if (bitti) return; bitti = true; clearTimeout(sayac); bitir(sonuc); f(); void isci.terminate(); };
+    const sonlan = (f: () => void, sonuc: HesapSonucu = 'hata'): void => {
+      if (bitti) return;
+      bitti = true;
+      clearTimeout(sayac);
+      if (bitir !== null) bitir(sonuc); else beklerkenBitti('teklif', sonuc);
+      yer.birak();
+      f();
+      if (isci !== null) void isci.terminate();
+    };
     const sayac = setTimeout(() => sonlan(() => reddet(new Error(`Teklif denemesi ${String(sureMs)} ms içinde bitmedi.`)), 'zaman-asimi'), sureMs);
-    isci.on('message', (s: DenemeSonucu | null) => { if (!izlemeIletisi(s)) sonlan(() => coz(s), 'tamam'); });
-    // 1720: tipli dilimle iş parçacığı hata verirse aynı istek eski yolla, kalan sürede yeniden koşar (bayrak kapalıymış gibi).
-    isci.once('error', (e) => sonlan(() => {
-      if (istek.kaynakDilimi) calistir({ ...istek, kaynakDilimi: null }, Math.max(1, son - Date.now())).then(coz, reddet);
-      else reddet(e);
-    }, hataSonucu(e)));
-    isci.once('exit', (kodu) => sonlan(() => reddet(new Error(`Teklif denemesi iş parçacığı ${String(kodu)} koduyla kapandı.`))));
+    void yer.hazir.then(() => {
+      if (bitti) return;
+      const w = new Worker(ISCI, { eval: true, resourceLimits: isciSinirlari(), workerData: { kod: denemeKodu(), dilim: TESIS_SAAT_DILIMI, istek, birlestirmeAdresi: BIRLESTIRME_ADRESI } });
+      isci = w;
+      bitir = hesapBasladi('teklif');
+      w.on('message', (s: DenemeSonucu | null) => { if (!izlemeIletisi(s)) sonlan(() => coz(s), 'tamam'); });
+      // 1720: tipli dilimle iş parçacığı hata verirse aynı istek eski yolla, kalan sürede yeniden koşar (bayrak kapalıymış gibi).
+      w.once('error', (e) => sonlan(() => {
+        if (istek.kaynakDilimi) calistir({ ...istek, kaynakDilimi: null }, Math.max(1, son - Date.now())).then(coz, reddet);
+        else reddet(e);
+      }, hataSonucu(e)));
+      w.once('exit', (kodu) => sonlan(() => reddet(new Error(`Teklif denemesi iş parçacığı ${String(kodu)} koduyla kapandı.`))));
+    }).catch((e: unknown) => { sonlan(() => reddet(e instanceof Error ? e : new Error(String(e)))); });
   });
 }

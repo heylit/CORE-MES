@@ -50,6 +50,68 @@ export function hesapBasladi(tur: HesapTuru, simdi: () => number = Date.now): (s
   };
 }
 
+// İş parçacığı çalışmadan biten hesap (yer beklerken süre doldu ya da iş parçacığı kurulamadı): süre ölçülmedi, çalışan sayısı değişmez;
+// yalnız toplam ve sonucun sayacı artar.
+export function beklerkenBitti(tur: HesapTuru, sonuc: HesapSonucu): void {
+  const d = durum[tur];
+  d.toplam += 1;
+  if (sonuc === 'zaman-asimi') d.zamanAsimi += 1;
+  else if (sonuc === 'bellek') d.bellek += 1;
+  else if (sonuc === 'hata') d.hata += 1;
+}
+
+// Ortak üst sınır (3723): motor, değerlendirme (4 parça), teklif ve yıllık kendi kuyruklarıyla aynı anda 8 iş parçacığına çıkabiliyordu;
+// tek sunucuda veritabanı ve ana iş parçacığıyla işlemci ve bellek (8 x 2 GB) için yarışıyordu. Şimdi en çok 6: motor kendi tek yerinde
+// (plan kilidini tutan işlemin içinde koşar, başka hesabın arkasında beklemez), yıllık çözücü kendi tek yerinde (yillik-cozucu
+// ESZAMANLI_AZAMI), değerlendirme ve teklif ise bu havuzun 4 yerini geliş sırasıyla paylaşır. 4, plan seçeneklerinin parça sayısıdır:
+// tek değerlendirme bugünkü kadar sürede biter; yalnız aynı anda teklif denemesi koşarken bir parçası sıra bekler. Bekleme hesabın kendi
+// süresine dahildir. Değer VARSAYIM, canlıda ölçülmedi; sağlık ekranındaki süre ve zaman aşımı sayaçları dar kalıp kalmadığını gösterir.
+export const ISCI_HAVUZU = 4;
+
+export interface IsciYeri {
+  // Yer verilince çözülür.
+  hazir: Promise<void>;
+  // Yer verildiyse bırakır, hâlâ bekliyorsa sıradan çıkar; birden çok çağrı zararsızdır.
+  birak: () => void;
+}
+
+export interface YerHavuzu {
+  yerIste: () => IsciYeri;
+  durum: () => { calisan: number; bekleyen: number };
+}
+
+export function yerHavuzu(enCok: number): YerHavuzu {
+  let calisan = 0;
+  const sira: (() => void)[] = [];
+  const ilerlet = (): void => {
+    while (calisan < enCok && sira.length > 0) sira.shift()?.();
+  };
+  return {
+    yerIste: () => {
+      let verildi = false;
+      let birakildi = false;
+      let ver: (() => void) | null = null;
+      const hazir = new Promise<void>((coz) => {
+        ver = () => { verildi = true; calisan += 1; coz(); };
+        if (calisan < enCok && sira.length === 0) ver();
+        else sira.push(ver);
+      });
+      const birak = (): void => {
+        if (birakildi) return;
+        birakildi = true;
+        if (verildi) { calisan -= 1; ilerlet(); return; }
+        const i = ver === null ? -1 : sira.indexOf(ver);
+        if (i >= 0) sira.splice(i, 1);
+      };
+      return { hazir, birak };
+    },
+    durum: () => ({ calisan, bekleyen: sira.length }),
+  };
+}
+
+const havuz = yerHavuzu(ISCI_HAVUZU);
+export const isciYeriIste = (): IsciYeri => havuz.yerIste();
+
 // Kopya döner: okuyan sayacı değiştiremez.
 export function planHesapDurumu(): PlanHesapDurumu {
   return { motor: { ...durum.motor }, degerlendirme: { ...durum.degerlendirme }, teklif: { ...durum.teklif }, yillik: { ...durum.yillik } };
