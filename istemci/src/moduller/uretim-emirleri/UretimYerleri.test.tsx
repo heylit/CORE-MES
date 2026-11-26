@@ -35,7 +35,7 @@ const durumDan = (isEmirleri: IsEmri[]): AdimDurumuCevabi => ({
   adimlar: isEmirleri.map((a) => ({
     isEmriId: a.id, opNo: a.opNo, ad: a.ad, durum: a.durum, calisma: null, bagimlilik: 'bekleyen', fason: a.fason !== null, hedef: 10, yapilan: a.saglamAdet ?? 0,
     yuzde: 0, sistemStatusu: a.durum === 'tamam' ? 'bitti' : a.durum === 'calisiyor' ? 'uretimde' : 'baslayabilir', nedenler: [], maddeler: [], tedarik: [], elle: null,
-    onaylar: [], elleEksikler: [], gecmis: [], liste: [], sablon: null,
+    onaylar: [], elleEksikler: [], gecmis: [], liste: [], sablon: null, sablonFarklari: [],
   })),
 });
 const yollar = (isEmirleri: IsEmri[], ek: Record<string, (g: unknown) => Response> = {}) => ({

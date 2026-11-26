@@ -61,7 +61,7 @@ export {
 } from './sorgular/kapanis/sorgular.ts';
 export {
   type ElleStatuSatiri, type HazirlikOnaySatiri, elleStatuDefteri, elleStatuEkle, hazirlikOnayDefteri, hazirlikOnayiEkle, isEmriKilitle,
-  type ListeSatiri, listeSatirlari, listeOlayiEkle, listeMaddesiEkle, listeFotoKaydi,
+  type ListeSatiri, listeSatirlari, elleMaddeSayilari, listeOlayiEkle, listeMaddesiEkle, listeFotoKaydi,
 } from './sorgular/adim-durumu/sorgular.ts';
 export {
   type SiparisEmriSatiri, hazirligiTamamlananEmirler, siparisEmirleri, siparisEmirleriKilitle, acilisKaynagiYaz, kalemdenCoz, kalemeBagla, type RotaBekleyenEmir, rotaBekleyenEmirler,

@@ -9,7 +9,7 @@ type Adim = Emir['adimlar'][number];
 type Madde = Adim['maddeler'][number];
 const madde = (m: Madde['madde'], hal: Madde['hal'], ham: Madde['ham'] = hal, elle: Madde['elle'] = null): Madde => ({ madde: m, hal, ham, elle });
 const adim = (isEmriId: number, opNo: number, sistemStatusu: Adim['sistemStatusu'], elle: Adim['elle'] = null, maddeler: Adim['maddeler'] = []): Adim =>
-  ({ isEmriId, opNo, ad: opNo === 10 ? 'Kesim' : opNo === 20 ? 'Tornalama' : 'Frezeleme', durum: 'bekliyor', hedef: 40, yapilan: sistemStatusu === 'bitti' ? 40 : 0, yuzde: 0, sistemStatusu, elle, maddeler });
+  ({ isEmriId, opNo, ad: opNo === 10 ? 'Kesim' : opNo === 20 ? 'Tornalama' : 'Frezeleme', durum: 'bekliyor', hedef: 40, yapilan: sistemStatusu === 'bitti' ? 40 : 0, yuzde: 0, sistemStatusu, elle, sablondanFark: 0, maddeler });
 const emir = (emirId: number, emirNo: string, adimlar: Adim[], durum: Emir['durum'] = 'basladi'): Emir =>
   ({ emirId, emirNo, urun: { kod: `ORN-${emirNo}`, ad: `Deneme ürün ${emirNo}` }, durum, teslim: '2026-12-05', adimlar });
 const ELLE = { statu: 'malzeme', not: 'Gelmedi', kisiAdi: 'ORN-Kişi', zaman: '2026-11-23T08:00:00.000Z' } as const;

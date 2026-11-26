@@ -8,6 +8,7 @@ export const SABLON_DEGISTI = 'Şablon başkası tarafından değiştirildi; say
 export const OZEL_DURDURAN = 'Durduran madde (CNC, çizim, yayın) bu emirde kapatılamaz.';
 export const SABLON_DURDURAN_YETKI = 'Başlatmayı durduran maddeyi (CNC, çizim, yayın) şablonda yalnız müdür kapatabilir.';
 export const SABLON_DURDURAN_GEREKCE = 'Başlatmayı durduran maddeyi kapatmak için gerekçe yazın.';
+export const OP_FARKI_YOK = 'Bu operasyonda şablondan fark yok.';
 export const SABLON_DEGISIKLIK_YOK = 'Şablonda değişiklik yok.';
 
 // Tür parametresi: "varsayilan" ya da operasyon tipi kimliği.
@@ -46,4 +47,17 @@ export function durduranKapatmaIhlali(a: {
   if (!a.mudurMu) return SABLON_DURDURAN_YETKI;
   if (a.gerekce === null || a.gerekce.trim() === '') return SABLON_DURDURAN_GEREKCE;
   return null;
+}
+
+// 3741: geçerli "gerekmez" kümesi. Öncelik OP farkı > emir farkı > tür şablonu: önce emir, sonra OP farkı uygulanır (son yazan kazanır).
+// Durduran madde emirde ve OP'de kapatılamaz (kayıt olsa bile okunurken yok sayılır); "gerekli" fark şablonun kapattığını (3740) yeniden açar.
+export interface FarkMaddesi { madde: string; gerekli: boolean }
+export function gecerliKapaliMaddeler(
+  sablonKapali: ReadonlySet<string>, emirFarklari: readonly FarkMaddesi[], opFarklari: readonly FarkMaddesi[], durduran: ReadonlySet<string>,
+): Set<string> {
+  const m = new Set(sablonKapali);
+  for (const f of [...emirFarklari, ...opFarklari]) {
+    if (f.gerekli) m.delete(f.madde); else if (!durduran.has(f.madde)) m.add(f.madde);
+  }
+  return m;
 }

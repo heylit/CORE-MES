@@ -3,12 +3,13 @@ import { cakisma, dogrulama, yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { bulunamadi } from '#cekirdek/hata.ts';
-import type { HazirlikSablonuOzelCevabi, HazirlikSablonuOzelYazGovdesi, HazirlikSablonuCevabi, HazirlikSablonuYazCevabi, HazirlikSablonuYazGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { OpSablonFarki, OpSablonFarkiGovdesi, OpSablonFarkiKaldirGovdesi, HazirlikSablonuOzelCevabi, HazirlikSablonuOzelYazGovdesi, HazirlikSablonuCevabi, HazirlikSablonuYazCevabi, HazirlikSablonuYazGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { operasyonTipleri } from '../istasyonlar/disari.ts';
 import { kisiAdlari, rolSecenekleri } from '../kisiler/disari.ts';
+import { ADIM_KAPALI_EMIR, EMIR_YOK, IS_EMRI_EMIRDE_YOK, LISTE_ADIM_BITTI } from './kurallar.ts';
 import { durduranMaddeKodlari, hazirlikMaddeTanimlari } from './hazirlik-maddeleri.ts';
 import {
-  OZEL_DURDURAN, SABLON_DEGISIKLIK_YOK, SABLON_DURDURAN_GEREKCE, SABLON_DURDURAN_YETKI, SABLON_DEGISTI, SABLON_MADDE_KAPALI, SABLON_TIP_YOK, durduranKapatmaIhlali, sablonIhlali, sablonKanonik, turTipi,
+  OP_FARKI_YOK, OZEL_DURDURAN, SABLON_DEGISIKLIK_YOK, SABLON_DURDURAN_GEREKCE, SABLON_DURDURAN_YETKI, SABLON_DEGISTI, SABLON_MADDE_KAPALI, SABLON_TIP_YOK, durduranKapatmaIhlali, gecerliKapaliMaddeler, sablonIhlali, sablonKanonik, turTipi,
 } from './hazirlik-sablonu-kurallari.ts';
 import * as s from './sorgular.ts';
 
@@ -79,11 +80,13 @@ export async function sablonGerekmezMaddeleri(db: Db, isEmriIdleri: readonly num
   for (const i of adimlar) {
     const tur = surumler.find((x) => x.operasyon_tipi_id === i.operasyonTipiId);
     // 3740: şablonda müdürün gerekçeyle kapattığı durduran madde o türde gerekmez sayılır (kapıya da yansır); emre özel fark durduranı yine kapatamaz.
-    const m = new Set(tur === undefined ? varsayilan : kapali(tur.id));
-    // Emre özel fark şablonu geçer; durduran madde emre özel kapatılamaz (3642 ile aynı kural).
-    for (const f of farklar.filter((x) => x.emri_id === i.uretimEmriId)) {
-      if (f.gerekli) m.delete(f.madde); else if (!durduran.has(f.madde)) m.add(f.madde);
-    }
+    // Emre özel fark şablonu, OP farkı ikisini geçer; durduran madde emirde ve OP'de kapatılamaz (3642 ile aynı kural, 3741).
+    const m = gecerliKapaliMaddeler(
+      tur === undefined ? varsayilan : kapali(tur.id),
+      farklar.filter((x) => x.emri_id === i.uretimEmriId && x.is_emri_id === null),
+      farklar.filter((x) => x.is_emri_id === i.id),
+      durduran,
+    );
     sonuc.set(i.id, m);
   }
   return sonuc;
@@ -97,17 +100,47 @@ async function ozelEmirMadde(db: Db, emirId: number, madde: string, kapatiyor: b
   if (kapatiyor && (await durduranMaddeKodlari(db)).has(madde)) throw dogrulama(OZEL_DURDURAN, 'madde');
 }
 export async function hazirlikSablonuOzel(db: Db, emirId: number): Promise<HazirlikSablonuOzelCevabi> {
-  const f = await s.ozelFarklar(db, [emirId]);
+  const f = (await s.ozelFarklar(db, [emirId])).filter((x) => x.is_emri_id === null);
   const adlar = await kisiAdlari(db, [...new Set(f.map((x) => x.kisi_id))]);
   return { farklar: f.map((x) => ({ madde: x.madde, gerekli: x.gerekli, kisiAdi: adlar.get(x.kisi_id) ?? null, an: x.an, gerekce: x.gerekce })) };
 }
 export async function hazirlikSablonuOzelYaz(db: Db, kullanici: Kullanici, emirId: number, madde: string, g: HazirlikSablonuOzelYazGovdesi): Promise<HazirlikSablonuOzelCevabi> {
   await ozelEmirMadde(db, emirId, madde, !g.gerekli);
-  await s.ozelEkle(db, emirId, madde, 'yaz', kullanici.id, g.gerekli, g.gerekce);
+  await s.ozelEkle(db, emirId, null, madde, 'yaz', kullanici.id, g.gerekli, g.gerekce);
   return hazirlikSablonuOzel(db, emirId);
 }
 export async function hazirlikSablonuOzelSil(db: Db, kullanici: Kullanici, emirId: number, madde: string): Promise<HazirlikSablonuOzelCevabi> {
   await ozelEmirMadde(db, emirId, madde, false);
-  await s.ozelEkle(db, emirId, madde, 'sil', kullanici.id, null, null);
+  await s.ozelEkle(db, emirId, null, madde, 'sil', kullanici.id, null, null);
   return hazirlikSablonuOzel(db, emirId);
+}
+
+// 3741: operasyona (iş emrine) özel fark. Yazma yetkisi emre özel farkla aynıdır (SABLON_YAZMA_YETKISI); iz: kim, ne zaman, gerekçe.
+// Yalnız o emrin o OP'sine yazılır; tür şablonu ve emir düzeyi fark değişmez. Kilit sırası emir, iş emri (Adım Durumu yazmalarıyla aynı).
+async function opMaddeHazirla(db: Db, emirId: number, isEmriId: number, madde: string, kapatiyor: boolean): Promise<void> {
+  const e = await s.ustEmirBul(db, emirId, true);
+  if (e === null) throw bulunamadi(EMIR_YOK);
+  if (e.durum === 'bitti' || e.durum === 'iptal') throw cakisma(ADIM_KAPALI_EMIR);
+  if (!(await s.isEmriKilitle(db, isEmriId, emirId))) throw bulunamadi(IS_EMRI_EMIRDE_YOK);
+  if ((await s.isEmirleriBul(db, [isEmriId]))[0]?.durum === 'tamam') throw cakisma(LISTE_ADIM_BITTI);
+  await ozelEmirMadde(db, emirId, madde, kapatiyor);
+}
+export async function opSablonFarkiYaz(db: Db, kullanici: Kullanici, emirId: number, isEmriId: number, g: OpSablonFarkiGovdesi): Promise<void> {
+  await opMaddeHazirla(db, emirId, isEmriId, g.madde, !g.gerekli);
+  await s.ozelEkle(db, emirId, isEmriId, g.madde, 'yaz', kullanici.id, g.gerekli, g.gerekce);
+}
+// "Şablona dön": OP farkını kaldırır; farkı olmayan maddede yazılmaz.
+export async function opSablonFarkiKaldir(db: Db, kullanici: Kullanici, emirId: number, isEmriId: number, g: OpSablonFarkiKaldirGovdesi): Promise<void> {
+  await opMaddeHazirla(db, emirId, isEmriId, g.madde, false);
+  const varMi = (await s.ozelFarklar(db, [emirId])).some((x) => x.is_emri_id === isEmriId && x.madde === g.madde);
+  if (!varMi) throw bulunamadi(OP_FARKI_YOK);
+  await s.ozelEkle(db, emirId, isEmriId, g.madde, 'sil', kullanici.id, null, null);
+}
+// Emrin bütün OP farkları, iş emri kimliğine göre (Adım Durumu okuması).
+export async function opSablonFarklari(db: Db, emirId: number): Promise<Map<number, OpSablonFarki[]>> {
+  const f = (await s.ozelFarklar(db, [emirId])).filter((x): x is typeof x & { is_emri_id: number } => x.is_emri_id !== null);
+  const adlar = await kisiAdlari(db, [...new Set(f.map((x) => x.kisi_id))]);
+  const sonuc = new Map<number, OpSablonFarki[]>();
+  for (const x of f) sonuc.set(x.is_emri_id, [...(sonuc.get(x.is_emri_id) ?? []), { madde: x.madde, gerekli: x.gerekli, kisiAdi: adlar.get(x.kisi_id) ?? null, an: x.an, gerekce: x.gerekce }]);
+  return sonuc;
 }

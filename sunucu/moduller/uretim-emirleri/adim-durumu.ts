@@ -8,12 +8,13 @@ import { ADIM_STATULERI, BEKLEME_NEDENI_ADLARI } from '#paylasilan/sozlesme/uret
 import type {
   AdimDurumuCevabi, AdimMatrisiCevabi, AdimStatusu, BeklemeNedeni, CalismaDurumu, StatuTopluCevabi, StatuTopluGovdesi, StatuTopluSonucu, AdimDurumuTerminalCevabi, AdimTedariki, ElleStatuGovdesi, HazirlikElleEksikGovdesi, HazirlikMaddesi, HazirlikOnayiGovdesi,
   HazirlikOnayiKaldirGovdesi,
-  ListeEkleGovdesi, ListeKaldirGovdesi, ListeIsaretleGovdesi, ListeKontrolu,
+  OpSablonFarkiGovdesi, OpSablonFarkiKaldirGovdesi, ListeEkleGovdesi, ListeKaldirGovdesi, ListeIsaretleGovdesi, ListeKontrolu,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { denetimSatiri, medyaTutamagi } from '../dosya/disari.ts';
 import { denemeIsaretliKimlikler } from '../ayarlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { hazirlik, isEmriHazirliklari } from './hazirlik.ts';
+import { opSablonFarkiKaldir, opSablonFarkiYaz, opSablonFarklari } from './hazirlik-sablonu.ts';
 import {
   ADIM_BITTI_STATU, ADIM_KAPALI_EMIR, ELLE_STATU_YOK, ISARETLI_KALDIRILMAZ, acikElleEksikler, elleEksikNedeni, elleEksikReddi, LISTE_ADIM_BITTI, LISTE_DOLU, EMIR_BEKLEMEDE_STATU, EMIR_YOK, GEREKCE_GEREK, HAL_ESKIDI, IS_EMRI_EMIRDE_YOK, LISTE_MADDESI_YOK,
   ONAY_YOK, STATU_ESKIDI, acikElleStatu, acikOnaylar, adimSistemStatusu, calismaDurumu, hazirlikOnayiReddi, kanitMetni, listeEkleReddi, listeIsaretReddi, oncekiBekleniyor,
@@ -134,6 +135,7 @@ export async function adimDurumu(db: Db, emirId: number, kullanici: Kullanici | 
   const onayDefteri = await s.hazirlikOnayDefteri(db, idler);
   const atlamalar = await s.talimatAtlamalari(db, idler);
   const liste = await s.listeSatirlari(db, idler);
+  const opFarklari = await opSablonFarklari(db, emirId);
   const sablonlar = kaynak.sablonOzet === null ? new Map<number, { id: number; kod: string; ad: string }>() : await kaynak.sablonOzet(db, isEmirleri.map((i) => i.operasyonTipiId));
   const adlar = await kisiAdlari(db, [...new Set([
     ...[...statuDefteri, ...onayDefteri, ...atlamalar].map((x) => x.kisiId),
@@ -184,6 +186,7 @@ export async function adimDurumu(db: Db, emirId: number, kullanici: Kullanici | 
           };
         }),
         sablon: sablonlar.get(i.operasyonTipiId) ?? null,
+        sablonFarklari: opFarklari.get(i.id) ?? [],
       };
     }),
   };
@@ -373,6 +376,9 @@ export async function adimMatrisi(db: Db, kullanici: Kullanici, biten: boolean):
   // 3738: hazırlık maddelerinin elle değeri tek toplu okumadır; madde hâlleri sistem hesabında zaten hesaplandı.
   const onayDefteri = await s.hazirlikOnayDefteri(db, idler);
   const adlar = await kisiAdlari(db, [...new Set([...defter, ...onayDefteri].map((x) => x.kisiId))]);
+  // 3741: hücredeki "şablondan N fark": OP farkları ve elle eklenen maddeler tek toplu okumayla.
+  const opFarklari = await s.ozelFarklar(db, emirler.map((e) => e.id));
+  const elleMaddeler = await s.elleMaddeSayilari(db, idler);
   const sonuc: AdimMatrisiCevabi['emirler'] = [];
   for (const e of emirler) {
     const h = hesaplar.get(e.id);
@@ -387,6 +393,7 @@ export async function adimMatrisi(db: Db, kullanici: Kullanici, biten: boolean):
         return {
           isEmriId: i.id, opNo: i.opNo, ad: i.ad, durum: i.durum, hedef: adim?.hedef ?? 0, yapilan: adim?.yapilan ?? 0, yuzde: adim?.yuzde ?? 0, sistemStatusu: sistem,
           elle: elle === null || elle.statu === null ? null : { statu: statuOku(elle.statu), not: elle.aciklama, kisiAdi: adlar.get(elle.kisiId) ?? null, zaman: elle.zaman },
+          sablondanFark: opFarklari.filter((x) => x.is_emri_id === i.id).length + (elleMaddeler.get(i.id) ?? 0),
           maddeler: matrisMaddeleri(h.haller.get(i.id), onayDefteri.filter((x) => x.isEmriId === i.id), adlar),
         };
       }),
@@ -432,4 +439,14 @@ export async function statuTopluYaz(
   // Genel denetim kaydı gövdeyi (kalemleri) zaten tutar; sonuç kalem başına ek satırdır (en çok 100 satır, her biri 3 küçük alan).
   denetimEki(kalemler.map((k) => ({ isEmriId: k.isEmriId, sonuc: k.sonuc, statu: g.kalemler.find((x) => x.isEmriId === k.isEmriId)?.statu ?? null })));
   return { kalemler };
+}
+
+// 3741: operasyona özel şablon farkı yazma ve kaldırma. İkisi de emre özel farkla aynı yetkiyle (projeler.sablon-yaz) uçta aranır; cevap güncel Adım Durumu'dur.
+export async function opSablonFarkiYazAkis(db: Db, kullanici: Kullanici, emirId: number, isEmriId: number, g: OpSablonFarkiGovdesi): Promise<AdimDurumuCevabi> {
+  await opSablonFarkiYaz(db, kullanici, emirId, isEmriId, g);
+  return adimDurumu(db, emirId, kullanici);
+}
+export async function opSablonFarkiKaldirAkis(db: Db, kullanici: Kullanici, emirId: number, isEmriId: number, g: OpSablonFarkiKaldirGovdesi): Promise<AdimDurumuCevabi> {
+  await opSablonFarkiKaldir(db, kullanici, emirId, isEmriId, g);
+  return adimDurumu(db, emirId, kullanici);
 }

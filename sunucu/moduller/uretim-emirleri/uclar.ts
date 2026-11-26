@@ -9,13 +9,13 @@ import {
   birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMaddeleriCevabi, hazirlikMaddeParametresi, hazirlikMaddesiDegistirGovdesi, hazirlikMaddesiEkleGovdesi, hazirlikProjesiCevabi, hazirlikProjesiGovdesi, hazirlikProjesiSecenekleri, hazirlikMatrisiSorgusu, hazirlikMatrisiCevabi, hazirlikDagitGovdesi, hazirlikDagitCevabi, hazirlikMuafiyetiGovdesi, hazirlikGerekmezCevabi, hazirlikGerekmezGovdesi, hazirlikGerekmezKaldirGovdesi, hazirlikOzetiCevabi, hazirlikOzetiSorgusu, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, makineEkleGovdesi, adimPaylariCevabi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
   hataliCevabi, hataliGovdesi, hataliListeCevabi, hataliListeSorgusu, reworkAdimiGovdesi,
   disIslemEmriAcGovdesi, disIslemEmriCevabi, disIslemEmriIptalGovdesi, disIslemEmriParametresi,
-  adimDurumuCevabi, adimDurumuTerminalCevabi, adimMatrisiCevabi, adimMatrisiSorgusu, statuTopluCevabi, statuTopluGovdesi, elleStatuGovdesi, elleStatuKaldirGovdesi, hazirlikElleEksikGovdesi, hazirlikOnayiGovdesi, hazirlikOnayiKaldirGovdesi, listeEkleGovdesi, listeKaldirGovdesi, listeFotografiParametresi, listeIsaretleGovdesi,
+  adimDurumuCevabi, adimDurumuTerminalCevabi, adimMatrisiCevabi, adimMatrisiSorgusu, statuTopluCevabi, statuTopluGovdesi, elleStatuGovdesi, elleStatuKaldirGovdesi, hazirlikElleEksikGovdesi, hazirlikOnayiGovdesi, hazirlikOnayiKaldirGovdesi, listeEkleGovdesi, listeKaldirGovdesi, opSablonFarkiGovdesi, opSablonFarkiKaldirGovdesi, listeFotografiParametresi, listeIsaretleGovdesi,
   arsivOnizlemeCevabi, arsiveAlCevabi, arsiveAlGovdesi, emirKapatGovdesi, kapanisCevabi, kapanisGeriAcGovdesi, kapanisListeCevabi, kapanislarSorgusu, kapanisMuafGovdesi, kapanisOnayGovdesi, kapanisRetGovdesi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { hazirlikSablonTuruParametresi, hazirlikSablonuCevabi, hazirlikSablonuOzelCevabi, hazirlikSablonuOzelParametresi, hazirlikSablonuOzelYazGovdesi, hazirlikSablonuYazCevabi, hazirlikSablonuYazGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { ADIM_DURUMU_OKUMA_ISLEMLERI } from './kurallar.ts';
 import { emrinTerminOnerisi, siparisinTerminOnerileri, terminKarariVer } from './termin-onerisi.ts';
-import { adimDurumu, adimDurumuTerminal, adimMatrisi, statuTopluYaz, elleStatuKaldir, elleStatuYaz, hazirlikElleEksik, hazirlikOnayKaldir, hazirlikOnayla, listeFotografi, listeIsaretle, listeMaddesiEkle, listeMaddesiKaldir } from './adim-durumu.ts';
+import { adimDurumu, adimDurumuTerminal, adimMatrisi, statuTopluYaz, elleStatuKaldir, elleStatuYaz, hazirlikElleEksik, hazirlikOnayKaldir, hazirlikOnayla, listeFotografi, listeIsaretle, listeMaddesiEkle, listeMaddesiKaldir, opSablonFarkiKaldirAkis, opSablonFarkiYazAkis } from './adim-durumu.ts';
 import { aramaUclari } from './arama/uclar.ts';
 import { gecmisGeriAl, gecmisGir } from './gecmis-giris.ts';
 import { gecmisGeriAlGovdesi, gecmisGirisCevabi, gecmisGirisGovdesi, muayeneBelgeBaglaGovdesi, muayeneBelgeParametresi, muayeneBelgeleriCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -560,6 +560,28 @@ const adimliUclar = [
     cevap: adimDurumuCevabi,
     tekrarKorumali: true,
     isle: ({ db, kullanici, parametre, govde }) => listeMaddesiKaldir(db, kullanici, parametre.id, parametre.isEmriId, govde),
+  }),
+  // 3741: şablon maddesini yalnız bu emrin bu operasyonunda gerekli / gerekmez yapar; emre özel farkla aynı yetki (tür şablonu ve emir farkı değişmez).
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/sablon-farki',
+    yetki: SABLON_YAZMA_YETKISI,
+    parametre: isEmriParametresi,
+    govde: opSablonFarkiGovdesi,
+    cevap: adimDurumuCevabi,
+    tekrarKorumali: true,
+    isle: ({ db, kullanici, parametre, govde }) => opSablonFarkiYazAkis(db, kullanici, parametre.id, parametre.isEmriId, govde),
+  }),
+  // "Şablona dön": operasyon farkını kaldırır (defter yalnız eklenir).
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/sablon-farki-kaldir',
+    yetki: SABLON_YAZMA_YETKISI,
+    parametre: isEmriParametresi,
+    govde: opSablonFarkiKaldirGovdesi,
+    cevap: adimDurumuCevabi,
+    tekrarKorumali: true,
+    isle: ({ db, kullanici, parametre, govde }) => opSablonFarkiKaldirAkis(db, kullanici, parametre.id, parametre.isEmriId, govde),
   }),
   // Ofisten ya da terminalden eklenmiş liste fotoğrafı; Adım Durumu'nu okuyan görür.
   uc({
