@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AdimMatrisiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import {
-  BOS_SUZGEC, aralik, duzKalemler, elleKaynagi, emirleriSuz, geriAlGovdeleri, gecerliSecim, gerekceGerekir, gerekceYeterli, gorunenStatu, gorunumOku,
+  BOS_SUZGEC, statuKisaAdi, aralik, duzKalemler, elleKaynagi, emirleriSuz, geriAlGovdeleri, gecerliSecim, gerekceGerekir, gerekceYeterli, gorunenStatu, gorunumOku,
   hazirlikOzeti, hazirlikOzetMetni, istekGovdeleri, kalemAnahtari, kareTonu, maddeDugmeleri, maddeGeriAlKomutu, maddeIslemi, mercekOku, oncekiDefteri, opKalemleri,
   opSutunlari, secimiAcKapa, secimiSay, yazilacaklar, yazimOzeti, emrinKalemleri, type MatrisMaddesi,
 } from './adim-matrisi.ts';
@@ -143,5 +143,14 @@ describe('Adım Durumu matrisi: hazırlık özeti ve madde işlemleri (3738)', (
     expect(geri).toEqual({ yol: 'hazirlik-onayla', isEmriId: 81, govde: { madde: 'malzeme', gerekce: 'Program elde denendi', sistemHali: 'eksik' } });
     expect(elleKaynagi(OP).onaylar.map((x) => x.madde)).toEqual(['malzeme']);
     expect(elleKaynagi(OP).elleEksikler.map((x) => x.madde)).toEqual(['yayin']);
+  });
+});
+
+describe('Adım Durumu matrisi: kısa statü adı (3738)', () => {
+  it('telefon rozeti için altı statünün kısa adı vardır; ötekiler tam adıyla kalır', () => {
+    expect((['beklemede', 'uretimde', 'baslayabilir', 'bitti', 'durdu', 'yayin'] as const).map((s) => statuKisaAdi(s, 'tam'))).toEqual(
+      ['Bekliyor', 'Üretimde', 'Başlayabilir', 'Bitti', 'Durdu', 'Term. yok'],
+    );
+    expect(statuKisaAdi('cizim', 'Çizim revizyonu bekleniyor')).toBe('Çizim revizyonu bekleniyor');
   });
 });

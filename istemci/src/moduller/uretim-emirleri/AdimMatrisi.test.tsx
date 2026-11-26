@@ -185,10 +185,28 @@ describe('Adım Durumu matrisi (3604)', () => {
     expect(within(panel).getByRole('list').querySelectorAll('li')).toHaveLength(5);
     // Çoklu seç kapalıyken ikinci hücre ilkinin yerine geçer; açıkken seçime eklenir.
     fireEvent.click(within(tablo).getByRole('button', { name: /UE-1, OP 30 Frezeleme/ }));
-    expect(screen.getByText('1 seçili')).toBeTruthy();
+    // Telefonda tek dokunuş yalnız paneli açar: toplu şerit yok.
+    expect(screen.queryByText('1 seçili')).toBeNull();
+    // Çoklu seç açılınca panel kapanır, toplu şerit gelir.
     fireEvent.click(screen.getByRole('button', { name: 'Çoklu seç' }));
+    expect(screen.queryByRole('complementary', { name: 'Adım ayrıntısı' })).toBeNull();
+    expect(screen.getByText('1 seçili')).toBeTruthy();
     fireEvent.click(within(tablo).getByRole('button', { name: /UE-1, OP 20 Tornalama/ }));
     expect(screen.getByText('2 seçili')).toBeTruthy();
+  });
+
+  it('telefon (360): süzgeç Filtre düğmesiyle katlanır; açılınca statü ve işaret kutuları görünür, adım sayısı düğmede yazar', async () => {
+    vi.stubGlobal('matchMedia', (s: string) => ({ matches: s === '(max-width: 767px)' || s === '(max-width: 1023px)', addEventListener: () => undefined, removeEventListener: () => undefined }));
+    kur();
+    await screen.findByRole('table');
+    expect(screen.getByLabelText('Ara')).toBeTruthy();
+    expect(screen.getByLabelText('Statü').closest('[hidden]')).not.toBeNull();
+    const dugme = screen.getByRole('button', { name: 'Filtre' });
+    expect(dugme.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(dugme);
+    expect(screen.getByLabelText('Statü').closest('[hidden]')).toBeNull();
+    fireEvent.click(screen.getByLabelText('Yalnız elle yazılanlar'));
+    expect(screen.getByRole('button', { name: 'Filtre (1)' })).toBeTruthy();
   });
 
   it('mercek: Durum statüyü, Hazırlık hücrede hazırlık özetini gösterir; adreste durur', async () => {

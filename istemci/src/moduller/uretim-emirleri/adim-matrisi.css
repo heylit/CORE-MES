@@ -120,7 +120,8 @@
 }
 @media (max-width: 767px) {
   .tc-am-ust { grid-template-columns: minmax(0, 1fr); }
-  .tc-am-seritlar { top: auto; bottom: 0; order: 5; max-block-size: 70vh; overflow: auto; }
+  /* Kaydırma kabı alt çubuğun üstünde biter: şerit ve panel kabın dibine yapışır (alt çubuk payı eklenmez, çift sayılırdı). */
+  .tc-am-seritlar { top: auto; bottom: 0; order: 5; max-block-size: 60vh; overflow: auto; }
   .tc-am-panel-katli { position: relative; max-block-size: none; box-shadow: none; padding: var(--b-3); }
   .tc-am-panel-katli > .tc-dugme { position: absolute; inset-block-start: var(--b-2); inset-inline-end: var(--b-2); }
   .tc-am-panel-katli summary { min-block-size: var(--dokunma); display: flex; align-items: center; padding-inline-end: calc(var(--dokunma) + var(--b-2)); font-weight: 700; cursor: pointer; overflow-wrap: anywhere; }
@@ -176,3 +177,7 @@
   .tc-am-madde { grid-template-columns: minmax(0, 1fr); }
   .tc-am-madde-eylem { justify-content: flex-end; }
 }
+
+/* Telefonda süzgeç katlanır; katlı değilken sarmalayıcı yer tutmaz (alanlar üst ızgaraya girer). */
+.tc-am-suzgec { display: contents; }
+.tc-am-suzgec[hidden] { display: none; }

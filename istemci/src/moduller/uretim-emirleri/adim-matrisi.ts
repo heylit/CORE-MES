@@ -183,3 +183,9 @@ export const maddeGeriAlKomutu = (a: MatrisAdimi, m: MatrisMaddesi): { ileri: Ko
   const ileri: Komut = { yol: 'hazirlik-onay-kaldir', isEmriId: a.isEmriId, govde: { madde: m.madde } };
   return { ileri, geri: geriKomutu(kaynak, m, ileri) };
 };
+
+// Telefonda rozet taşmasın diye kısa ad (panel durum rozeti); listede olmayan statü tam adıyla kalır.
+const KISA_STATU: Readonly<Partial<Record<AdimStatusu, string>>> = {
+  beklemede: 'Bekliyor', uretimde: 'Üretimde', baslayabilir: 'Başlayabilir', bitti: 'Bitti', durdu: 'Durdu', yayin: 'Term. yok',
+};
+export const statuKisaAdi = (s: AdimStatusu, tamAd: string): string => KISA_STATU[s] ?? tamAd;

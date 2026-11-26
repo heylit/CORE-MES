@@ -7,7 +7,7 @@ import { ELLE_YAZILIR, STATU, STATU_KAYNAGI } from './adim-durumu.ts';
 import { useAdimKomutu } from './adim-komutu.ts';
 import { GEREKCE_EN_AZ, hedefMesaji } from './adim-tablosu.ts';
 import {
-  emirKapali, gerekceYeterli, gorunenStatu, hazirlikOzeti, hazirlikOzetMetni, maddeDugmeleri, maddeGeriAlKomutu, maddeIslemi,
+  emirKapali, gerekceYeterli, gorunenStatu, hazirlikOzeti, hazirlikOzetMetni, maddeDugmeleri, maddeGeriAlKomutu, maddeIslemi, statuKisaAdi,
   type Kalem, type MatrisMaddesi,
 } from './adim-matrisi.ts';
 import { HazirlikCubugu } from './HazirlikCubugu.tsx';
@@ -115,7 +115,7 @@ export function HucrePaneli({ kalem, yazabilir, katli, statuYaz, mesgul, kapat, 
     <>
       <p className="tc-emir-not">{emir.urun.ad}{emir.teslim === null ? '' : ` · termin ${tarihMetni(emir.teslim)}`}</p>
       <div className="tc-am-panel-durum">
-        <Rozet ton={STATU[g].ton}><Simge ad={STATU[g].simge} boyut="k" />{STATU[g].ad}</Rozet>
+        <Rozet ton={STATU[g].ton}><Simge ad={STATU[g].simge} boyut="k" />{katli ? statuKisaAdi(g, STATU[g].ad) : STATU[g].ad}</Rozet>
         <Rozet ton="pasif">{adim.elle === null ? 'otomatik' : 'elle yazıldı'}</Rozet>
         <span className="tc-am-panel-hz" aria-label={hazirlikOzetMetni(ozet)}><HazirlikCubugu adim={adim} /></span>
       </div>

@@ -70,6 +70,7 @@ export function AdimMatrisi() {
   const [secili, seciliYaz] = useState<ReadonlySet<string>>(new Set());
   const [aktif, aktifYaz] = useState<string | null>(null);
   const [coklu, cokluYaz] = useState(false);
+  const [suzgecAcik, suzgecAcikYaz] = useState(false);
   const [statu, statuYaz] = useState<ElleYazilanStatu | ''>('');
   const [not, notYaz] = useState('');
   const [plan, planYaz] = useState<Plan | null>(null);
@@ -90,7 +91,8 @@ export function AdimMatrisi() {
   const gecerli = useMemo(() => gecerliSecim(secili, gorunen), [secili, gorunen]);
   const seciliKalemler = useMemo(() => [...gecerli].flatMap((k) => { const b = bul(gorunen, k); return b === null ? [] : [b]; }), [gecerli, gorunen]);
   // Çoklu seçimde panel kapanır: tek adımın ayrıntısı seçimle ilgisizdir ve içerikten yer çalar.
-  const aktifKalem = aktif === null || gecerli.size > 1 ? null : bul(emirler, aktif);
+  // Telefonda Çoklu seç açıkken de panel çıkmaz: alttaki yer tek çubuktur (toplu şerit).
+  const aktifKalem = aktif === null || gecerli.size > 1 || (coklu && genislik === 'dar') ? null : bul(emirler, aktif);
   const sayim = statu === '' ? null : secimiSay(seciliKalemler, statu);
 
   useEffect(() => () => { if (sonSayac.current !== null) clearTimeout(sonSayac.current); }, []);
@@ -278,6 +280,8 @@ export function AdimMatrisi() {
   const serit = () => {
     if (!yazabilir) return <div className="tc-am-serit tc-am-serit-salt" role="note"><Simge ad="lock" boyut="k" />Statü yazma yetkiniz yok. Yalnız okuyabilirsiniz.</div>;
     if (plan !== null) return planGorunumu(plan);
+    // Telefonda tek dokunuş yalnız paneli açar; toplu şerit Çoklu seç açıkken (ya da satır ve OP başlığıyla çoklu seçimde) çıkar.
+    if (genislik === 'dar' && !coklu && aktifKalem !== null) return null;
     if (gecerli.size === 0) return null;
     return (
       <div className="tc-am-serit" role="region" aria-label="Toplu statü yazma">
@@ -360,6 +364,8 @@ export function AdimMatrisi() {
     <HucrePaneli key={aktifKalem.anahtar} kalem={aktifKalem} yazabilir={yazabilir} katli={genislik === 'dar'} statuYaz={hucreYaz} mesgul={mesgul} kapat={panelKapat} yenile={yenile} />
   );
 
+  const suzgecSayisi = [suz.statu !== '', suz.yalnizElle, suz.yalnizSorunlu, suz.yalnizHazirlikEksik].filter(Boolean).length;
+  const suzgecEtiketi = suzgecSayisi > 0 ? `Filtre (${String(suzgecSayisi)})` : 'Filtre';
   const lejant = [...new Set(emirler.flatMap((e) => e.adimlar.map((a) => gorunenStatu(a))))];
   return (
     <div className={`tc-am tc-am-${genislik}`}>
@@ -370,6 +376,7 @@ export function AdimMatrisi() {
       </div>
       <div className="tc-am-ust">
         <Girdi etiket="Ara" type="search" placeholder="Emir no, ürün" value={suz.arama} onChange={(o) => { suzYaz({ ...suz, arama: o.target.value }); }} />
+        <div className="tc-am-suzgec" hidden={genislik === 'dar' && !suzgecAcik}>
         <Secim etiket="Statü" bosSecenek="Tüm statüler" value={suz.statu} onChange={(o) => { suzYaz({ ...suz, statu: o.target.value as AdimStatusu | '' }); }}
           secenekler={lejant.map((x) => ({ deger: x, baslik: statuAdi(x) }))} />
         <div className="tc-am-isaretler">
@@ -378,7 +385,9 @@ export function AdimMatrisi() {
           <IsaretKutusu etiket="Yalnız hazırlığı eksik olanlar" checked={suz.yalnizHazirlikEksik} onChange={(o) => { suzYaz({ ...suz, yalnizHazirlikEksik: o.target.checked }); }} />
           <IsaretKutusu etiket="Biteni göster" checked={biten} onChange={(o) => { bitenYaz(o.target.checked); }} />
         </div>
+        </div>
         <div className="tc-am-ust-dugmeler">
+          {genislik === 'dar' && <Dugme aria-expanded={suzgecAcik} onClick={() => { suzgecAcikYaz(!suzgecAcik); }}>{suzgecEtiketi}</Dugme>}
           <Dugme aria-pressed={coklu} disabled={!yazabilir} onClick={() => { cokluYaz(!coklu); }}>Çoklu seç</Dugme>
           <Dugme disabled={!yazabilir || duz.length === 0} onClick={hepsiniSec}>Tümünü seç</Dugme>
         </div>
