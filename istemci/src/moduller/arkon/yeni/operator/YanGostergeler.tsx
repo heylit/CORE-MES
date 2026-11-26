@@ -27,11 +27,11 @@ export function MalzemeGostergesi({ istasyon, emirId }: { istasyon: string; emir
   const ipucu = `${[y.kod, y.ad].filter(Boolean).join(' · ')} · istasyonda ${miktarYazi(y.miktar)}${birim} · ${sayi(y.adetlik)} adetlik, kalan iş ${sayi(y.kalanAdet)} · ${durumMetni(durum).metin}`;
   return (
     <button type="button" className="tc-ay1-gosterge" data-ton={malzemeTonu(oran)} title={ipucu} onClick={() => isMalzemesiniAc({ istasyonId, uretimEmriId: emirId, malzemeId: null })}>
-      <span className="tc-ay1-gosterge-ad">Malzeme</span>
-      <Cubuk oran={oran} ad="Malzeme" />
-      <b>{sayi(y.adetlik)} adetlik</b>
+      <span className="tc-ay1-gosterge-ad">Elde</span>
+      <Cubuk oran={oran} ad="Elde" />
+      <b className="tc-ay1-mono">{sayi(y.adetlik)}</b>
       {/* Kalan işe yetmiyorsa eksik adet yazar (oran yeşil olsa da operatör ne kadar isteyeceğini görür); yetiyorsa miktar. */}
-      {y.adetlik < y.kalanAdet ? <small data-eksik="">{sayi(y.kalanAdet - y.adetlik)} adet eksik</small> : <small>{miktarYazi(y.miktar)}{birim}</small>}
+      {y.adetlik < y.kalanAdet ? <small data-eksik="">{sayi(y.kalanAdet - y.adetlik)} eksik</small> : <small>{miktarYazi(y.miktar)}{birim}</small>}
     </button>
   );
 }
@@ -43,8 +43,8 @@ export function UretimGostergesi({ is }: { is: Is }) {
     <div className="tc-ay1-gosterge" data-ton="bilgi">
       <span className="tc-ay1-gosterge-ad">Üretilen</span>
       <Cubuk oran={oran} ad="Üretilen" />
-      <b className="tc-ay1-mono">{sayi(is.good)} / {sayi(is.target)}</b>
-      <small>%{yuzde(oran)}</small>
+      <b className="tc-ay1-mono">{sayi(is.good)}</b>
+      <small>/ {sayi(is.target)}</small>
     </div>
   );
 }

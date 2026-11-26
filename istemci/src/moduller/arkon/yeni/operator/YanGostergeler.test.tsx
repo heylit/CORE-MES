@@ -14,13 +14,14 @@ afterEach(cleanup);
 
 // Veriler uydurmadır (ORN-).
 describe('sayacın yan göstergeleri', () => {
-  it('malzeme: kaç adetlik, kalan işe oranla dolar; tonu orana göre; dokununca malzeme paneli', () => {
+  it('malzeme (Elde): kaç adetlik, kalan işe oranla dolar; tonu orana göre; dokununca malzeme paneli', () => {
     durum.deger = { girdi: 1, eksik: 0, istendi: 0, gelen: 0, yetme: { adetlik: 9, kalanAdet: 15, miktar: '3.600', birim: 'm', kod: 'ORN-CUBUK-40', ad: null } };
     render(<MalzemeGostergesi istasyon="ORN-IST-1" emirId={42} />);
-    const m = screen.getByRole('meter', { name: 'Malzeme %60' });
+    const m = screen.getByRole('meter', { name: 'Elde %60' });
     expect(m.getAttribute('aria-valuenow')).toBe('60');
-    expect(screen.getByText('9 adetlik')).toBeTruthy();
-    expect(screen.getByText('6 adet eksik')).toBeTruthy();
+    expect(screen.getByText('9')).toBeTruthy();
+    expect(screen.getByRole('button').getAttribute('title')).toContain('9 adetlik');
+    expect(screen.getByText('6 eksik')).toBeTruthy();
     expect(screen.getByRole('button').getAttribute('data-ton')).toBe('tamam');
     fireEvent.click(screen.getByRole('button'));
     expect(durum.acilan).toEqual([{ istasyonId: 7, uretimEmriId: 42, malzemeId: null }]);
@@ -40,7 +41,8 @@ describe('sayacın yan göstergeleri', () => {
   it('üretilen: iyi / hedef ile dolar; hedefsiz işte çizilmez', () => {
     render(<UretimGostergesi is={{ good: 6, target: 15, empty: false } as Is} />);
     expect(screen.getByRole('meter', { name: 'Üretilen %40' })).toBeTruthy();
-    expect(screen.getByText('6 / 15')).toBeTruthy();
+    expect(screen.getByText('6')).toBeTruthy();
+    expect(screen.getByText('/ 15')).toBeTruthy();
     cleanup();
     render(<UretimGostergesi is={{ good: 0, target: 0, empty: false } as Is} />);
     expect(screen.queryByRole('meter')).toBeNull();

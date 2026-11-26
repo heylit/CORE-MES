@@ -110,7 +110,7 @@ import { lotEslesmesi } from './lot-eslesmesi.ts';
 import { okutulanKoduCoz, useIsGirdileri, useTerminalKartOkutmasi } from '../../../stok/disari.ts';
 import { KartSecimi } from './KartSecimi.tsx';
 import { KARTSIZ_BASLATMA_ISLEMI, KartlaBaslat } from './KartlaBaslat.tsx';
-import { BitenSepet, Sepetler } from './Sepetler.tsx';
+import { BitenSepet, SepetTupu, Sepetler } from './Sepetler.tsx';
 import { UzakMod } from './UzakMod.tsx';
 import { baytiVar, hazirPdfGoruntusu, useCozulmus } from '../veri/dosyalar.ts';
 import { ikiliOku } from '../../baglanti.ts';
@@ -1559,9 +1559,9 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
     <div className="tc-ay1-sayac">
       {/* Kadranın solunda istasyondaki malzeme (azalır), sağında üretilen (artar); boş işte ve önizlemede çizilmez. */}
       <div className="tc-ay1-kadran-kanat">
-        {o.empty || pv ? null : <MalzemeGostergesi istasyon={MACHINE} emirId={tmiEmirId(o.pkg)} />}
+        {o.empty || pv ? null : <div className="tc-ay1-kanat-cift"><MalzemeGostergesi istasyon={MACHINE} emirId={tmiEmirId(o.pkg)} /><SepetTupu istasyon={MACHINE} emirId={tmiEmirId(o.pkg)} yon="gelen" hedef={Math.max(0, o.target - o.good)} /></div>}
         <SayacKadrani is={o} etiket={kabulAdimi ? 'Kabul' : OT.cnt} birim={kabulAdimi ? 'adet' : OT.unit} cevrim={cevrim} {...(hataliSayisi === undefined ? {} : { hatali: hataliSayisi })} duzelt={eylemVar('sayim-duzelt') ? () => { if (iyiSayimOk('prod.fix')) ovYaz('num'); } : null} />
-        {o.empty || pv ? null : <UretimGostergesi is={o} />}
+        {o.empty || pv ? null : <div className="tc-ay1-kanat-cift"><UretimGostergesi is={o} /><SepetTupu istasyon={MACHINE} emirId={tmiEmirId(o.pkg)} yon="cikan" hedef={o.target} /></div>}
       </div>
       {/* 693: telefonda İyi +1 ve Hurda +1 alttaki eylem çubuğunda; sayacın altında yalnız düzeltme (−1) tuşları kalır. */}
       <SayimTuslari tuslar={dar && uretir ? tuslar.filter((t) => t.simge === 'minus' || t.simge === 'layers') : tuslar} />

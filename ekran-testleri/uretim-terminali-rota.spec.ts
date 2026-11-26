@@ -97,10 +97,10 @@ test.describe('rota şeridi elle kayar', () => {
       return gorunur ? Math.abs(sinirli - ol.scrollLeft) : 998;
     })).toBeLessThan(3);
     await expect(ekranda).toBeVisible();
-    const [malzeme, kadran] = await Promise.all([page.getByRole('meter', { name: 'Malzeme %90' }).boundingBox(), page.locator('.tc-ay1-kadran').first().boundingBox()]);
+    const [malzeme, kadran] = await Promise.all([page.getByRole('meter', { name: 'Elde %90' }).boundingBox(), page.locator('.tc-ay1-kadran').first().boundingBox()]);
     expect(malzeme && kadran ? malzeme.x + malzeme.width <= kadran.x + 1 : false).toBe(true);
-    // Sayacın iki yanında malzeme (9 / 10 adetlik) ve üretilen göstergesi.
-    await expect(page.getByRole('meter', { name: 'Malzeme %90' })).toBeVisible();
+    // Sayacın iki yanında Elde (malzeme, 9 / 10 adetlik) ve üretilen göstergesi.
+    await expect(page.getByRole('meter', { name: 'Elde %90' })).toBeVisible();
     await expect(page.getByRole('meter', { name: /^Üretilen %/ })).toBeVisible();
     const klasor = process.env['TMIV2_EKRAN_GORUNTU']?.trim();
     if (klasor) {
