@@ -17,10 +17,10 @@ export function donenEksigi(adet: string, kalan: number): string | null {
   return null;
 }
 
-export function fasonDonusGovdesi(satir: Pick<AcikSiparisSatiri, 'id' | 'malzemeId' | 'kalanMiktar'>, secim: 'dondu' | 'donmedi', is: FasonIsi | null, adet: string): MalKabulGovdesi {
+export function fasonDonusGovdesi(satir: Pick<AcikSiparisSatiri, 'id' | 'malzemeId' | 'kalanMiktar'>, secim: 'dondu' | 'donmedi', is: FasonIsi | null, adet: string, farkliKartOnayi = false): MalKabulGovdesi {
   // Sunucudan gelen kalan miktar noktalı ondalıktır; elle girilen miktar gibi çözülmez.
   if (secim === 'donmedi') {
     return { tur: 'satin_alma', satirlar: [{ malzemeId: satir.malzemeId!, miktar: satir.kalanMiktar, siparisSatirId: satir.id }] };
   }
-  return { tur: 'satin_alma', satirlar: [{ malzemeId: is!.donenKart.malzemeId, miktar: adet, parti: null, siparisSatirId: satir.id, fasonIsi: { isEmriId: is!.isEmriId }, ambalaj: null }] };
+  return { tur: 'satin_alma', satirlar: [{ malzemeId: is!.donenKart.malzemeId, miktar: adet, parti: null, siparisSatirId: satir.id, fasonIsi: { isEmriId: is!.isEmriId }, ambalaj: null, ...(farkliKartOnayi ? { farkliKartOnayi: true } : {}) }] };
 }

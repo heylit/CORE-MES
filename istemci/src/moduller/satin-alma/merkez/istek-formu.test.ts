@@ -25,6 +25,16 @@ describe('teklif isteme formu (3442-4)', () => {
     expect(metin[1]).toBe('Son tarih 22.11.2026.Saygılarımızla,');
     expect(html).not.toContain('{');
   });
+  // 3712: parçası olan fason kalem kağıtta da aynı çerçeveli blokla gelir; emir no ve firma kağıda hiç girmez.
+  it('fason kalemde işlenen malzeme bloğu; iç alan (emir no, firma) kağıtta yok', () => {
+    const r = { ...R, items: [{ id: 'k1', name: 'ORN- ısıl işlem', spec: '', qty: 120, unit: 'adet', parca: { no: 7, kod: 'ORN-PRC-7', ad: 'ORN- mil', revizyon: 'B' },
+      fason: { emirNo: 'ORN-UE-1', opNo: 30, adim: 'Isıl işlem', firmaAdi: 'ORN- Isıl A.Ş.' } }] } as unknown as PurchaseRequest;
+    const html = istekFormuHTML(r, T, '2026-11-22', ICERIK, KURUM, '', '2026-11-19');
+    const d = document.createElement('div'); d.innerHTML = html;
+    expect(d.querySelector('.doc-t .sa-islenen')?.textContent).toBe('İşlenen malzemeORN- mil ORN-PRC-7Rev B120 adetOp 30 Isıl işlem');
+    expect(html).not.toContain('ORN-UE-1');
+    expect(html).not.toContain('Isıl A.Ş.');
+  });
   it('ilgili ve tedarikçi bilinmiyorsa kutu boş kalır (tire basılmaz); antet boşluğu ayrı söylenir', () => {
     const d = document.createElement('div');
     d.innerHTML = istekFormuHTML(R, undefined, '', ICERIK, { ...KURUM, unvan: '', adres: '' }, '', '2026-11-19');

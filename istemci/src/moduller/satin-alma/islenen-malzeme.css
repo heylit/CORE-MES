@@ -1,0 +1,9 @@
+/* 3712: hizmet kaleminin işlenen malzemesi her yerde aynı çerçeveli blok (talep, karar, sipariş). */
+.sa-islenen { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--b-1) var(--b-2); margin-top: var(--b-2); padding: var(--b-2) var(--b-3); border: var(--pay-ince) solid color-mix(in srgb, var(--bp) 45%, var(--panel-solid)); border-radius: var(--yari-1); background: color-mix(in srgb, var(--bp) 10%, var(--panel-solid)); color: var(--ink); min-width: 0; }
+.sa-islenen > b { font-size: var(--yazi-s); overflow-wrap: anywhere; }
+.sa-islenen .sub { display: inline; font-size: var(--yazi-xs); font-weight: 400; color: var(--muted); }
+.sa-islenen-etk { flex: 0 0 100%; font-size: var(--yazi-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--bp); }
+.sa-islenen-bil { flex: 0 0 100%; display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-3); font-size: var(--yazi-xs); color: var(--muted); }
+/* Yazdırılan belge beyaz kağıttır; tema değişkenleri değil kağıt renkleri. */
+.doc .sa-islenen { margin-top: var(--b-2); border: 1px solid black; background: whitesmoke; color: black; }
+.doc .sa-islenen .sub, .doc .sa-islenen-etk, .doc .sa-islenen-bil { color: dimgray; }

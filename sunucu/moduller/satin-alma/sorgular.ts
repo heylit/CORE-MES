@@ -917,13 +917,15 @@ export interface SiparisSatiriOkuma {
   isEmriId: number | null; parcaRevizyonu: string | null;
   // 2881: revizyonun kartı (fasonda uygulanacak parça, değilse kalemin kartı); yürürlükteki revizyon bununla sorulur.
   revizyonMalzemeNo: number | null;
+  // 3712: kalemin kayıtlı "uygulanan parça" bağı (fason hizmette işlenen parça); bağ yoksa null. revizyonMalzemeNo kalemin kartına düşebilir, bu düşmez.
+  uygulananMalzemeNo: number | null;
 }
 export function siparisSatirlariOku(db: Db, idler: readonly number[] | null): Promise<SiparisSatiriOkuma[]> {
   return db.sorgu<SiparisSatiriOkuma>(
     `SELECT s.id, s.talep_id AS "talepId", t.no AS "talepNo", coalesce(p.no, p.siparis_no) AS "siparisNo", q.firma_id AS "firmaId", q.tedarikci_adi AS "tedarikciAdi",
         ${ALTERNATIF_KARTI('s')} AS "malzemeNo", k.ad AS "kalemAdi", s.miktar, greatest(s.miktar - coalesce(m.toplam, 0), 0)::text AS "kalanMiktar", s.birim,
         ${SIPARIS_SATIRI_TERMINI} AS "beklenenTeslim", s.is_emri_id AS "isEmriId", s.parca_revizyonu AS "parcaRevizyonu",
-        coalesce(k.uygulanan_malzeme_no, ${ALTERNATIF_KARTI('s')}) AS "revizyonMalzemeNo"
+        coalesce(k.uygulanan_malzeme_no, ${ALTERNATIF_KARTI('s')}) AS "revizyonMalzemeNo", k.uygulanan_malzeme_no AS "uygulananMalzemeNo"
        FROM satin_alma_siparis_satiri s
        JOIN satin_alma_siparis p ON p.talep_id = s.talep_id AND p.teklif_id = s.teklif_id
        JOIN satin_alma_talep t ON t.id = s.talep_id

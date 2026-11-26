@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { AcikSiparisSatiri } from '#paylasilan/sozlesme/stok.ts';
 import { DEPOCU, json, sunucuKur } from './test-ortak.tsx';
 import { FasonKabulOnayi, kabulIsleri, type KabulIsi } from './TerminalKabul.tsx';
+import { fasonDonusGovdesi } from './TerminalFasonDonusu.tsx';
 
 // 3388 a: terminalde Bitir'deki fason kabul onayı. Değerler uydurmadır.
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -72,5 +73,58 @@ describe('terminal mal kabul işleri (3388 a)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Malzeme dönmedi' }));
     fireEvent.click(screen.getByRole('button', { name: /Tekrar dokunun/ }));
     expect((await screen.findByText(/yetkiniz yok/)).textContent).toContain('yetkiniz yok');
+  });
+});
+
+// 3712: sipariş satırının işlediği parçadan farklı kart dönüyorsa terminalde de Mal kabul ekranındaki aynı blok ve onay; sunucu onaysız reddeder.
+describe('terminal fason kabulünde farklı kart onayı (3712)', () => {
+  const PARCALI = (no: number): KabulIsi => ({ ...KABUL, satir: { ...FASON, uygulananMalzeme: { no, kod: 'ORN-FL', ad: 'Flanş ham' } } });
+  const govde = (onay: boolean) => ({ tur: 'satin_alma', satirlar: [{ malzemeId: 960, miktar: '40', parti: null, siparisSatirId: 41, fasonIsi: { isEmriId: 77 }, ambalaj: null, ...(onay ? { farkliKartOnayi: true } : {}) }] });
+
+  it('gövde: onay bayrağı yalnız verilince gider; "dönmedi" gövdesinde hiç yok', () => {
+    expect(fasonDonusGovdesi(FASON, 'dondu', IS, '40')).toEqual(govde(false));
+    expect(fasonDonusGovdesi(FASON, 'dondu', IS, '40', true)).toEqual(govde(true));
+    expect(fasonDonusGovdesi(FASON, 'donmedi', null, '')).toEqual({ tur: 'satin_alma', satirlar: [{ malzemeId: 950, miktar: '60.000', siparisSatirId: 41 }] });
+  });
+
+  it('farklı kart: blok ve uyarı görünür, onaya kadar Kabulü yaz kapalı ve nedeni yazılı; onaylanınca istek gövdesinde farkliKartOnayi: true', async () => {
+    const istekler = sunucuKur(DEPOCU, { 'POST /stok/mal-kabul': () => json(200, { belge: BELGE, hareketIdler: [1] }) });
+    ac(40, PARCALI(955));
+    expect(document.querySelector('.tc-stok-islenen')?.textContent).toContain('ORN-FL · Flanş ham');
+    const yaz = screen.getByRole('button', { name: /Kabulü yaz/ }) as HTMLButtonElement;
+    expect(yaz.disabled).toBe(true);
+    expect(yaz.getAttribute('aria-describedby')).toBe('tc-kabul-neden');
+    expect(document.getElementById('tc-kabul-neden')?.textContent).toContain('onay bekleniyor');
+    fireEvent.click(yaz);
+    expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Farklı kartla kabul et' }));
+    expect((screen.getByRole('button', { name: /Kabulü yaz/ }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: /Kabulü yaz/ }));
+    await waitFor(() => expect(istekler.find((i) => i.yontem === 'POST')?.govde).toEqual(govde(true)));
+  });
+
+  it('onay geri alınır: Onayı kaldır ile Kabulü yaz yeniden kapanır, bayrak gitmez', () => {
+    sunucuKur(DEPOCU, {});
+    ac(40, PARCALI(955));
+    fireEvent.click(screen.getByRole('button', { name: 'Farklı kartla kabul et' }));
+    expect((screen.getByRole('button', { name: /Kabulü yaz/ }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Onayı kaldır' }));
+    expect((screen.getByRole('button', { name: /Kabulü yaz/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'Farklı kartla kabul et' })).toBeTruthy();
+  });
+
+  it('eşleşen kart: yeşil durum, ek adım ve bayrak yok', async () => {
+    const istekler = sunucuKur(DEPOCU, { 'POST /stok/mal-kabul': () => json(200, { belge: BELGE, hareketIdler: [1] }) });
+    ac(40, PARCALI(960));
+    expect(screen.getByText('Dönen kart işlenen malzemeyle eşleşiyor.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Farklı kartla kabul et' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Kabulü yaz/ }));
+    await waitFor(() => expect(istekler.find((i) => i.yontem === 'POST')?.govde).toEqual(govde(false)));
+  });
+
+  it('parça bağı olmayan satırda blok ve onay yok (eski davranış)', () => {
+    ac(40);
+    expect(document.querySelector('.tc-stok-islenen')).toBeNull();
+    expect((screen.getByRole('button', { name: /Kabulü yaz/ }) as HTMLButtonElement).disabled).toBe(false);
   });
 });

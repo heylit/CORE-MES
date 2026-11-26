@@ -627,6 +627,8 @@ const malKabulSatirGirdisi = z.object({
   // Dönüş kaydı da buradan yazılır (kullanıcı kararı 15.10 B). 1205: miktar dönen adettir; sağlam ve hurda ayrılmaz, parça karantinaya
   // karar bekliyor girer ve kararı GKK adımı verir. Konum verilirse karantina türündedir, verilmezse ilk karantina konumu.
   fasonIsi: z.object({ isEmriId: kimlik }).strict().optional(),
+  // 3712: hizmet siparişinin işlediği parçadan farklı kartın dönüşü, depocunun açık onayıyla kabul edilir; onay yoksa sunucu reddeder.
+  farkliKartOnayi: z.boolean().optional(),
   // Parti sertifikası (#960): dosya önce `/dosyalar` ile yüklenir; mal kabul belgeyi açar ve satırın partisine bağlar.
   sertifika: z.object({ ozet: dosyaOzeti, dosyaAdi: z.string().trim().min(1, 'Dosya adı zorunlu.').max(120) }).optional(),
   // Depo kabulü (944, 957 a): satır sevkiyatın geliş kalemini (fason dönüşü, alım, elle dönüş) kapatır; kısmi kabulde kalem açık kalır.
@@ -758,6 +760,8 @@ export const acikSiparisSatiri = z.object({
   parcaRevizyonu: z.string().nullable().optional(),
   yururlukRevizyonu: z.string().nullable().optional(),
   revizyonUyusmuyor: z.boolean().nullable().optional(),
+  // 3712: hizmet (fason) satırında işlenen parça; mal kabulde dönen kalem bununla eşleştirilir. Hizmet olmayan satırda null.
+  uygulananMalzeme: z.object({ no: z.number().int(), kod: z.string(), ad: z.string().nullable() }).nullable().optional(),
 });
 export type AcikSiparisSatiri = z.output<typeof acikSiparisSatiri>;
 export const acikSiparisSatirlariCevabi = z.object({ satirlar: z.array(acikSiparisSatiri) });

@@ -7,7 +7,7 @@ import {
   sonrakiIstasyon, statuAramasi, statuKodlari, stoksuzStatuler,
   baslatmaEksikleri, buradakiIstasyon, eksikGirdiEngeli, geriCevirmeKaliteleri, istekGecisEngeli, enKotuKalite, girdiSec, sayimArtisPlani, sayimAzalisPlani, istekAcilisDurumu, istekKapsamindanMuafMi, istekliTeslimEngeli, teslimAlimMiktariEngeli, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu, kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN,
   binde, bindenMetin, bolmeNo, cikisOnerisi, teslimLotlari, duzeltmeEngeli, dusumKarari, geriAlmaEngeli, gozKodu, ilkGirisBirlesik, kalanAmbalajAdedi, logoAmbari,
-  logoEslesmeDurumu, logoyaGiderMi, malKabulGozOnerisi, malKabulSatirTuru, rotaSirala, partiDenetimi, partiGereksinimi, partiSec, rafGozleri, sayimBekliyorMu, sayimFarki, sayimKarariEngeli, sayimOnayaGiderMi, siparisMalzemeEngeli, stokDurumu, stoklanirMi, tersYon,
+  logoEslesmeDurumu, logoyaGiderMi, malKabulGozOnerisi, malKabulSatirTuru, farkliKartOnayiGerekir, rotaSirala, partiDenetimi, partiGereksinimi, partiSec, rafGozleri, sayimBekliyorMu, sayimFarki, sayimKarariEngeli, sayimOnayaGiderMi, siparisMalzemeEngeli, stokDurumu, stoklanirMi, tersYon,
   ihtiyacToplami, kalanSarf, stokDegeri, alisFiyatlari, tamamlamaEngeli, depoKoduOner, haritaPlani, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari,
   adetMiktari, birikimliMiktar, kalanAdimAdedi, kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, tasimaKaynagi, gelenOrani, oranliAdet, type ZincirAdimi, rezerveSiniri, fasonGonderimiEksikMi, partiEtiketi, koduDegisenler,
   sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, FASON_DONUS_KARANTINA, fasonDonusKonumuEngeli, GKK_GIRIS_KARANTINA, gkkGirisKonumuEngeli, girisKontroluDuzeltmeEngeli, katalogEtiketiStokKodu, geriDusmeKodlari, siparisBagiEngeli,
@@ -249,6 +249,14 @@ describe('stok kuralları (saf)', () => {
     assert.equal(siparisMalzemeEngeli(7, 7), null);
     assert.equal(siparisMalzemeEngeli(7, null), null);
     assert.match(siparisMalzemeEngeli(7, 8) ?? '', /başka bir malzeme kartına ait/);
+  });
+  test('3712 farklı dönen kart onay ister; bağsız, eşleşen, onaylı ya da düzeltmede önceden kabul edilmiş kart istemez', () => {
+    const b = { siparisinParcasi: 7 as number | null, donenKart: 8, onay: false, oncedenKabulEdildi: false };
+    assert.equal(farkliKartOnayiGerekir(b), true);
+    assert.equal(farkliKartOnayiGerekir({ ...b, siparisinParcasi: null }), false);
+    assert.equal(farkliKartOnayiGerekir({ ...b, donenKart: 7 }), false);
+    assert.equal(farkliKartOnayiGerekir({ ...b, onay: true }), false);
+    assert.equal(farkliKartOnayiGerekir({ ...b, oncedenKabulEdildi: true }), false);
   });
   test('DEP-58 mal kabul satırı: hizmet siparişinde dönen malzeme fasondur, dönmezse saf hizmettir; karışık girdiler reddedilir', () => {
     const b = { malzemeTuru: 'yarimamul', siparisMalzemeTuru: null as string | null, siparisVar: false, fasonVar: false, konumVar: false, partiVar: false };
