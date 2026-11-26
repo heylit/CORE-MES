@@ -9,7 +9,7 @@ import { tmiEmirId } from '../data/tmi-adim';
 import { hazirlikUyarisi } from '../data/cnc-hazirlik';
 import { adimTuru } from '../data/adim-turu';
 import { parcaEtiketi } from '../data/parca';
-import { baslatmaGeriAlma, baslatmaGeriUygula, durumEsitle, durumEsitleme, durumIletisi, geriAlinacakIs, sayimGeriAlma, sayimGeriUygula, sayimKapaliNedeni, tmiBitti } from '../data/biten-is';
+import { baslatmaGeriAlma, baslatmaGeriUygula, durumEsitle, durumEsitleme, durumIletisi, geriAlinacakIs, sayimGeriAlma, sayimGeriUygula, sayimKapaliNedeni, smartesMakineleri, smartesUretimi, SMARTES_URETIM_ILETISI, tmiBitti } from '../data/biten-is';
 import { ornekIslerAcik } from '../data/ornek-isler';
 import { gecisteDuraklatilacaklar, oneAlinanSuruyor, yeniOneAlinan } from '../data/is-gecisi';
 import { ilkAcilis } from '../data/istasyon-sec';
@@ -404,6 +404,9 @@ export function App({ preview }) {
   const go = (st, note?) => { lastNoteRef.current = note || null; patch(Object.assign({ state: st }, st === 'running' && !o.startedAt ? { startedAt: Date.now() } : null)); setSince(Date.now()); setSegs(s => { const t = s.length ? s[s.length - 1].t : 0; return [...s, { f: t, t: t + .5, s: st === 'done' || st === 'queued' ? 'paused' : st, n: note }]; }); };
   const ok = k => preview || allowed(k, say);
   const istasyonAc = () => ((preview || can('prod.station') || ((MEU() || {}).sts || []).length > 0 || ok('prod.station')) && setOv('station'));
+  // 3760: SmartES makinesi seçimden düşer; iş SmartES'ten üretiliyorsa hareket ve sayım düğmeleri kapalıdır.
+  const smartesMk = smartesMakineleri(o), seciliMk = kilitsizSecim(seciliMakineler(mcSel, secilebilir()), ayrim).filter(m => !smartesMk.includes(m));
+  const smartesIs = smartesUretimi(o);
   const kapaliNedeni = sayimKapaliNedeni(o), kapali = kapaliNedeni !== null;
   const iyiKapaliNedeni = sayimKapaliNedeni(o, 'good'), iyiKapali = iyiKapaliNedeni !== null;
   const iyiArtiNedeni = n => iyiKapaliNedeni ?? ilkParcaSayimReddi(ilk.yeniden, ilk.sayilan, n), iyiArtiKapali = iyiArtiNedeni(1) !== null;
@@ -413,7 +416,8 @@ export function App({ preview }) {
   const hazirlikta = useRef(false);
   const act = (a, t?, warned?, hazir?) => {
     if (['start', 'resume', 'restart', 'pause', 'setup', 'stop', 'finish'].includes(a) && (o.empty || !ok('prod.run'))) return;
-    if (a === 'start' && !preview) { const red = baslatmaMakineReddi(machineOf(MACHINE).mcs, secilebilir(), kilitsizSecim(seciliMakineler(mcSel, secilebilir()), ayrim), (ayrim && ayrim.planMakinesi) || (o.pkg && o.pkg.mc)); if (red) { beep('nok'); say(red, 'alert', 'var(--hazard)'); return; } } // 2055 a
+    if (['start', 'resume', 'restart', 'pause', 'setup', 'stop', 'finish'].includes(a) && smartesIs) { beep('nok'); say(SMARTES_URETIM_ILETISI, 'alert', 'var(--idle)'); return; }
+    if (a === 'start' && !preview) { const red = baslatmaMakineReddi(machineOf(MACHINE).mcs, secilebilir().filter(m => !smartesMk.includes(m.id)), seciliMk, (ayrim && ayrim.planMakinesi) || (o.pkg && o.pkg.mc)); if (red) { beep('nok'); say(red, 'alert', 'var(--hazard)'); return; } } // 2055 a
     if (a === 'tool') { const tl = RL.prod.tools.find(x => x.id === (t && t.toolId)); if (tl) changeTool(tl); return; }
     if (a === 'warns') { setWarnShow({ list: RL.warns.filter(w => w.t), title: 'Bu işin uyarıları' }); return; }
     if (a === 'stop') return setOv('reason');
@@ -604,7 +608,7 @@ export function App({ preview }) {
           <${EtkinKart} o=${o} kartlar=${kartlar} />
           ${hazirlikUyarisi(o.pkg) ? html`<div className="pnote" role="status"><${I} n="alert" s=${16} /><span>${hazirlikUyarisi(o.pkg)}</span></div>` : null}
           ${o.pkg && o.pkg.note ? html`<div className="pnote"><${I} n="alert" s=${16} /><span>${o.pkg.note}</span></div>` : null}
-          <${MakineSecici} makineler=${secilebilir()} secili=${kilitsizSecim(seciliMakineler(mcSel, secilebilir()), ayrim)} atanan=${(ayrim && ayrim.planMakinesi) || (o.pkg && o.pkg.mc)} ayrim=${ayrim} durum=${preview || o.empty || !can('prod.run') ? 'running' : o.state} onChange=${setMcSel} />
+          <${MakineSecici} makineler=${secilebilir()} smartes=${smartesMk} secili=${seciliMk} atanan=${(ayrim && ayrim.planMakinesi) || (o.pkg && o.pkg.mc)} ayrim=${ayrim} durum=${preview || o.empty || !can('prod.run') ? 'running' : o.state} onChange=${setMcSel} />
           <${TaskCard} task=${task} onAct=${(a, t) => { if (a === 'measure' || a === 'drawing') setMv('draw'); act(a, t); }} onDismiss=${t => { setSnooze(s => Object.assign({}, s, { [t.key]: Date.now() + 600000 })); say('10 dakika sonra tekrar hatırlatılacak', 'clock', 'var(--idle)'); }} />
           <div className="sayac">
             <${Dial} o=${o} onEdit=${() => iyiSayimOk('prod.fix') && setOv('num')} label=${OT.cnt} unit=${OT.unit} cyc=${cycApi} />
@@ -617,7 +621,8 @@ export function App({ preview }) {
           </div>
           <${TopluPanel} key=${o.no} kalan=${o.target - o.good} disabled=${kapali} onSave=${topluKaydet} />
           </div>
-          <${Orbs} state=${o.state} disabled=${o.empty} act=${a => { if (a === 'drawing') { setMv('draw'); return; } act(a); }} />
+          ${smartesIs ? html`<div className="smartes-serit" role="status"><${I} n="rotate" s=${18} />${SMARTES_URETIM_ILETISI}</div>` : null}
+          <${Orbs} state=${o.state} disabled=${o.empty || smartesIs} act=${a => { if (a === 'drawing') { setMv('draw'); return; } act(a); }} />
         </div>
         ${mv === 'st' && Panel ? html`<div className="mpane mscroll"><${Panel} key=${o.no} api=${stApi} RL=${RL} /></div>` : null}
         <div className="mpane" style=${{ display: mv === 'draw' ? 'flex' : 'none' }}><${BlueprintM} say=${say} theme=${theme} ctl=${ctl} yuklemeYok=${true} /></div>
@@ -652,7 +657,7 @@ export function App({ preview }) {
             <div className="facts">${RL.warns.some(w => w.t) ? html`<button className="wchip" onClick=${() => act('warns')} title="Bu işin uyarıları"><${I} n="bell" s=${18} />${RL.warns.filter(w => w.t).length}</button>` : null}<div><span className="over">Çevrim</span><b>${o.cycle} sn</b></div><div><span className="over">Termin</span><b>${o.due}</b></div></div></div>
           <${EtkinKart} o=${o} kartlar=${kartlar} />
           <div className=${'glass stage' + (preview || can('prod.run') ? '' : ' noperm')} title=${preview || can('prod.run') ? null : 'Bu rol üretim kaydı yapamaz'}>
-            <${MakineSecici} makineler=${secilebilir()} secili=${kilitsizSecim(seciliMakineler(mcSel, secilebilir()), ayrim)} atanan=${(ayrim && ayrim.planMakinesi) || (o.pkg && o.pkg.mc)} ayrim=${ayrim} durum=${preview || o.empty || !can('prod.run') ? 'running' : o.state} onChange=${setMcSel} />
+            <${MakineSecici} makineler=${secilebilir()} smartes=${smartesMk} secili=${seciliMk} atanan=${(ayrim && ayrim.planMakinesi) || (o.pkg && o.pkg.mc)} ayrim=${ayrim} durum=${preview || o.empty || !can('prod.run') ? 'running' : o.state} onChange=${setMcSel} />
           <${TaskCard} task=${task} onAct=${act} onDismiss=${t => { setSnooze(s => Object.assign({}, s, { [t.key]: Date.now() + 600000 })); say('10 dakika sonra tekrar hatırlatılacak', 'clock', 'var(--idle)'); }} />
             <div className="sayac">
               <${Dial} o=${o} onEdit=${() => iyiSayimOk('prod.fix') && setOv('num')} label=${OT.cnt} unit=${OT.unit} cyc=${cycApi} />
@@ -664,7 +669,8 @@ export function App({ preview }) {
               </div>
             </div>
             <${TopluPanel} key=${o.no} kalan=${o.target - o.good} disabled=${kapali} onSave=${topluKaydet} />
-            <${Orbs} state=${o.state} disabled=${o.empty} act=${act} />
+            ${smartesIs ? html`<div className="smartes-serit" role="status"><${I} n="rotate" s=${18} />${SMARTES_URETIM_ILETISI}</div>` : null}
+            <${Orbs} state=${o.state} disabled=${o.empty || smartesIs} act=${act} />
           </div>
         </section>
         <section className="col">

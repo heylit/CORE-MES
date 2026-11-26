@@ -18,7 +18,7 @@ import {
   hataliArsivdeMi, hataliKarariIhlali, hataliKararNotuIhlali, hataliYolu, kabulKarariMi, kaliteIstasyonuSec, kaliteTipiSec, sayimIhlali, siradakiIsEmri,
 } from './kurallar.ts';
 import { hurdaSayimiBildir, saglamSayimiBildir } from './sayim-olayi.ts';
-import { emirBitir } from './servis.ts';
+import { emirBitir, smartesDenetimsiz } from './servis.ts';
 import * as s from './sorgular.ts';
 import { HATALI_LISTE_SINIRI, hataliAdimAdetleri, hataliKayitSayilari } from './sorgular/kapanis/sorgular.ts';
 import type { HataliKaydiSatiri, IsEmriSatiri } from './sorgular.ts';
@@ -115,7 +115,8 @@ export async function hataliKaydet(db: Db, kisiId: number, emirId: number, g: Ha
       { ...kalite, opNo: oplar[0]!, bagimlilik: 'bagimsiz' }, { ...rework, opNo: oplar[1]! },
       { ...rework, opNo: oplar[2]!, ad: adim.ad, ekAciklama: `OP ${adim.opNo} tekrarı`, kopya: adim },
     ]);
-    uyari = (await emirBitir(db, kisiId, emirId, undefined, null, undefined, adim.id)).uyari;
+    // 3760: hatalı adımın kapanışı kalite kararının yapısal sonucudur; SmartES'ten üretilen makinede de yazılır.
+    uyari = (await smartesDenetimsiz(db, () => emirBitir(db, kisiId, emirId, undefined, null, undefined, adim.id))).uyari;
   }
   const [kaliteId, reworkId, tekrarId] = idler;
   if (kaliteId === undefined || reworkId === undefined) throw new Error('Hatalı parça adımları eklenemedi.');

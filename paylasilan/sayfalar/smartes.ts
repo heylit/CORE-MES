@@ -19,6 +19,8 @@ export const SMARTES_IKINCI_MENU = {
       { anahtar: 'gitmeyen', baslik: 'Gitmeyen iş emirleri', yol: '/smartes/gitmeyen', simge: 'alert', islem: 'saglik.ayrinti-oku' },
       { anahtar: 'ayarlar', baslik: 'Tüm ayarlar', yol: '/smartes/ayarlar', simge: 'list', islem: 'ayarlar.yaz' },
       { anahtar: 'eslemeler', baslik: 'Kod eşlemeleri', yol: '/smartes/eslemeler', simge: 'layers', islem: 'sayfa.smartes' },
+      // 3760: üretim kaynağı (makine başına) ve aktarım izlemesi; kaynağı değiştirmek ayarlar.yaz ister.
+      { anahtar: 'gecis', baslik: 'Geçiş', yol: '/smartes/gecis', simge: 'route', islem: 'sayfa.smartes' },
     ] },
     { baslik: 'Gelen', maddeler: [
       { anahtar: 'onay-bekliyor', baslik: 'Onay bekliyor', yol: '/smartes/onay-bekleyenler', simge: 'check', islem: 'sayfa.smartes' },

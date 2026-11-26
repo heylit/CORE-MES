@@ -82,7 +82,7 @@ export function durusSureleriGetir(db: Db, gun: number): Promise<{ nedenId: numb
                       COALESCE((SELECT min(k.zaman) FROM uretim_kaydi k WHERE k.emir_id = o.emir_id AND k.is_emri_id IS NOT DISTINCT FROM o.is_emri_id
                                      AND k.olay = 'bitir' AND k.zaman >= o.zaman), 'infinity'),
                       clock_timestamp()) AS son
-               FROM uretim_olayi o
+               FROM uretim_olayi_gecerli o
               WHERE o.olay = 'durdur' AND o.zaman >= (current_date - ($1::int - 1))::timestamptz) d
       GROUP BY d.durus_nedeni_id`,
     [gun],

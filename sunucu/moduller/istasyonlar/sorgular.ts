@@ -16,7 +16,8 @@ const IS_MERKEZI = 'id, kod, ad, aciklama, aktif, surum';
 const ISTASYON = `id, kod, ad, is_merkezi_id AS "isMerkeziId", tip, sorumlu_kisi_id AS "sorumluKisiId",
   kapasite_kaynagi AS "kapasiteKaynagi", uretim_alani AS "uretimAlani", aktif, surum, sayim_kaynagi AS "sayimKaynagi", ${zamanMetni('sayim_kaynagi_gecerlilik')} AS "sayimKaynagiGecerlilik"`;
 const MAKINE = `id, kod, ad, tur, marka_model AS "markaModel", seri_no AS "seriNo", istasyon_id AS "istasyonId",
-  baglanti_turu AS "baglantiTuru", baglanti_adresi AS "baglantiAdresi", aktif, surum`;
+  baglanti_turu AS "baglantiTuru", baglanti_adresi AS "baglantiAdresi", aktif, surum, uretim_kaynagi AS "uretimKaynagi",
+  ${zamanMetni('uretim_kaynagi_gecerlilik')} AS "uretimKaynagiGecerlilik"`;
 
 export function isMerkezleriListele(db: Db, pasiflerDahil: boolean): Promise<IsMerkezi[]> {
   return db.sorgu<IsMerkezi>(`SELECT ${IS_MERKEZI} FROM is_merkezi WHERE ($1 OR aktif) ORDER BY kod`, [pasiflerDahil]);
@@ -77,6 +78,23 @@ export function uretimAlanlariniListele(db: Db, pasiflerDahil: boolean): Promise
 
 export function istasyonBul(db: Db, id: number): Promise<Istasyon | null> {
   return db.tek<Istasyon>(`SELECT ${ISTASYON} FROM istasyon WHERE id = $1`, [id]);
+}
+
+// 3760: istasyonların ve makinelerin üretim kaynağı seçimi (makinede boş: istasyona uyar).
+export interface IstasyonKaynakSatiri { id: number; kaynak: 'terminal' | 'smartes'; gecerlilik: Date | null }
+export interface MakineKaynakSatiri { id: number; istasyonId: number | null; kaynak: 'terminal' | 'smartes' | null; gecerlilik: Date | null }
+export function istasyonKaynaklari(db: Db, idler: readonly number[] | null): Promise<IstasyonKaynakSatiri[]> {
+  return db.sorgu<IstasyonKaynakSatiri>(
+    `SELECT id, sayim_kaynagi AS kaynak, sayim_kaynagi_gecerlilik AS gecerlilik FROM istasyon WHERE $1::int[] IS NULL OR id = ANY($1::int[])`,
+    [idler],
+  );
+}
+export function makineKaynaklari(db: Db, istasyonIdleri: readonly number[] | null): Promise<MakineKaynakSatiri[]> {
+  return db.sorgu<MakineKaynakSatiri>(
+    `SELECT id, istasyon_id AS "istasyonId", uretim_kaynagi AS kaynak, uretim_kaynagi_gecerlilik AS gecerlilik FROM makine
+      WHERE aktif AND ($1::int[] IS NULL OR istasyon_id = ANY($1::int[]))`,
+    [istasyonIdleri],
+  );
 }
 
 // Sayımı SmartES'ten gelen istasyonlar ve kaynağın geçerli olduğu an (3173); terminalden sayılan istasyon dönmez.
@@ -901,4 +919,24 @@ export async function malzemeKartiIzleri(db: Db, kartlar: readonly MalzemeKartiA
        FROM k JOIN istasyonlar_aparat_kapasitesi t ON t.aparat_karti_id = k.no GROUP BY k.no`,
     [...malzemeKartiIzParametreleri(kartlar)],
   );
+}
+
+// 3760: üretim kaynağı yalnız SmartES Geçiş panelinden değişir. Geçerlilik yalnız değer değişince yazılır (o andan önce başlamış SmartES
+// satırı aktarılmaz); makine "istasyona uy"a (null) dönünce de yazılır. Değer aynıysa satır değişmez, null döner.
+export async function istasyonUretimKaynagiYaz(db: Db, id: number, kaynak: 'terminal' | 'smartes'): Promise<Date | null> {
+  const r = await db.tek<{ gecerlilik: Date }>(
+    `UPDATE istasyon SET sayim_kaynagi = $2, sayim_kaynagi_gecerlilik = clock_timestamp(), surum = surum + 1
+      WHERE id = $1 AND sayim_kaynagi <> $2 RETURNING sayim_kaynagi_gecerlilik AS gecerlilik`,
+    [id, kaynak],
+  );
+  return r?.gecerlilik ?? null;
+}
+
+export async function makineUretimKaynagiYaz(db: Db, id: number, kaynak: 'terminal' | 'smartes' | null): Promise<Date | null> {
+  const r = await db.tek<{ gecerlilik: Date }>(
+    `UPDATE makine SET uretim_kaynagi = $2, uretim_kaynagi_gecerlilik = clock_timestamp(), surum = surum + 1
+      WHERE id = $1 AND uretim_kaynagi IS DISTINCT FROM $2 RETURNING uretim_kaynagi_gecerlilik AS gecerlilik`,
+    [id, kaynak],
+  );
+  return r?.gecerlilik ?? null;
 }

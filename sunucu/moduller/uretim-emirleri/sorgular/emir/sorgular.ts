@@ -299,12 +299,24 @@ export function adimKararSayaclariGetir(
 export function olayEkle(
   db: Db, emirId: number, kisiId: number, istasyonId: number, olay: 'duraklat' | 'durdur' | 'devam' | 'ayar',
   durusNedeniId: number | null, an: string, isEmriId: number | null = null,
-): Promise<unknown> {
-  return db.sorgu(
+): Promise<number> {
+  return db.tek<{ id: number }>(
     `INSERT INTO uretim_olayi (emir_id, kisi_id, istasyon_id, olay, durus_nedeni_id, zaman, is_emri_id)
-     VALUES ($1, $2, $3, $4, $5, $6::timestamptz, ${ADIM_IS_EMRI('$1', '$7')})`,
+     VALUES ($1, $2, $3, $4, $5, $6::timestamptz, ${ADIM_IS_EMRI('$1', '$7')}) RETURNING id`,
     [emirId, kisiId, istasyonId, olay, durusNedeniId, an, isEmriId],
+  ).then((r) => r!.id);
+}
+
+// 3760 karar 8 a: olay değişmez; düzeltme ayrı satırdır, raporlar uretim_olayi_gecerli görünümünden okur. Yalnız duruş olayı düzeltilir.
+export async function olayDuzeltmesiEkle(
+  db: Db, olayId: number, d: { durusNedeniId: number | null; kisiId: number | null; gerekce: string; yazanKisiId: number },
+): Promise<boolean> {
+  const r = await db.sorgu(
+    `INSERT INTO uretim_olayi_duzeltmesi (olay_id, durus_nedeni_id, kisi_id, gerekce, yazan_kisi_id)
+     SELECT o.id, $2, $3, $4, $5 FROM uretim_olayi o WHERE o.id = $1 AND ($2::int IS NULL OR o.olay = 'durdur') RETURNING 1`,
+    [olayId, d.durusNedeniId, d.kisiId, d.gerekce, d.yazanKisiId],
   );
+  return r.length > 0;
 }
 
 export interface SayacSatiri {
@@ -403,7 +415,7 @@ export async function sonHurdaNedeni(db: Db, emirId: number, isEmriId: number | 
 export function sonOlaylariGetir(db: Db, emirIdleri: readonly number[]): Promise<OlaySatiri[]> {
   return db.sorgu<OlaySatiri>(
     `SELECT DISTINCT ON (emir_id) emir_id AS "emirId", olay, durus_nedeni_id AS "durusNedeniId", ${ISO('zaman')} AS zaman
-       FROM uretim_olayi o WHERE emir_id = ANY($1::int[]) AND olay <> 'ayar'
+       FROM uretim_olayi_gecerli o WHERE emir_id = ANY($1::int[]) AND olay <> 'ayar'
         AND is_emri_id IS NOT DISTINCT FROM ${TERMINAL_IS_EMRI('o.emir_id')}
       ORDER BY emir_id, id DESC`,
     [[...emirIdleri]],
@@ -455,7 +467,7 @@ export function kayitlariGetir(db: Db, emirId: number): Promise<KayitSatiri[]> {
          FROM uretim_kaydi k WHERE k.emir_id = $1
        UNION ALL
        SELECT o.id::bigint * 3 + 1, o.emir_id, o.kisi_id, o.istasyon_id, o.olay, NULL, NULL, o.durus_nedeni_id, NULL, NULL, o.zaman, 1
-         FROM uretim_olayi o WHERE o.emir_id = $1
+         FROM uretim_olayi_gecerli o WHERE o.emir_id = $1
        UNION ALL
        SELECT s.id::bigint * 3 + 2, s.emir_id, s.kisi_id, s.istasyon_id,
               CASE WHEN s.tur = 'hurda' THEN 'hurda' WHEN s.tur = 'red' THEN 'kalite_red' WHEN s.karar THEN 'kalite_onay' ELSE 'duzeltme' END,

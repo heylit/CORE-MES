@@ -7,6 +7,7 @@ import {
   smartesKontrolCevabi, gelenAdEsleGovdesi, gelenAdKaldirGovdesi, gelenAdlarCevabi, gelenAdOnerileriOnaylaGovdesi, gelenAdSorgusu, listeOkuCevabi, gelenAdAktarimCevabi, gelenAdAktarGovdesi, gelenAdAktarSonucu,
   onerileriOnaylaCevabi, onerileriOnaylaGovdesi, ambarHareketleriCevabi, fireHareketleriCevabi, gelenlerCevabi, hamKayitCevabi, hamKayitParametresi,
   kaliteOlcumleriCevabi, hesaplarCevabi, adetKarariCevabi, adetOnaylaGovdesi, adetOnaylariCevabi, adetOnaySorgusu, adetReddetGovdesi,
+  gecisCevabi, gecisDegistirCevabi, gecisDegistirGovdesi, hareketYenidenDeneCevabi,
 } from '#paylasilan/sozlesme/smartes.ts';
 import { ortamIstemcisi, ortamOzeti } from './baglanti.ts';
 import { ADIMLI_OKUMA_ISLEMLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -175,7 +176,7 @@ export const uclar = [
     yetki: 'smartes.adet-onayla',
     govde: adetOnaylaGovdesi,
     cevap: adetKarariCevabi,
-    isle: ({ db, kullanici, govde }) => servis.adetOnayla(db, kullanici.id, govde.idler),
+    isle: ({ db, kullanici, govde }) => servis.adetOnayla(db, kullanici.id, govde.idler, govde.turler),
   }),
   uc({
     yontem: 'POST',
@@ -184,6 +185,30 @@ export const uclar = [
     govde: adetReddetGovdesi,
     cevap: adetKarariCevabi,
     isle: ({ db, kullanici, govde }) => servis.adetReddet(db, kullanici.id, govde.idler, govde.neden),
+  }),
+  // 3760: Geçiş tablosu. Kaynak değiştirmek istasyon ve makine verisini değiştirir; Aşama 1'de yalnız yönetici (ayarlar.yaz).
+  uc({
+    yontem: 'GET',
+    yol: '/smartes/gecis',
+    yetki: { biri: ['sayfa.smartes'] },
+    cevap: gecisCevabi,
+    isle: ({ db }) => servis.gecis(db),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/smartes/gecis/degistir',
+    yetki: 'ayarlar.yaz',
+    govde: gecisDegistirGovdesi,
+    cevap: gecisDegistirCevabi,
+    isle: ({ db, govde }) => servis.gecisDegistir(db, govde),
+  }),
+  // CORE'un reddettiği hareketler (ör. adım başka makinede çalışıyordu) sebep giderilince yeniden denenir.
+  uc({
+    yontem: 'POST',
+    yol: '/smartes/hareketler/yeniden-dene',
+    yetki: 'ayarlar.yaz',
+    cevap: hareketYenidenDeneCevabi,
+    isle: ({ db }) => servis.hareketleriYaz(db, new Date(), { yeniden: true }),
   }),
   uc({
     yontem: 'GET',

@@ -178,7 +178,12 @@ export const istasyonKaydiSemasi = istasyonSemasi.extend({
   // Kaynağın son değiştiği an; hiç değişmediyse boş. Bundan önce başlamış SmartES satırı aktarılmaz.
   sayimKaynagiGecerlilik: z.string().nullable().optional(),
 });
-export const makineKaydiSemasi = makineSemasi.extend(surumlu);
+// 3760: makinenin kendi üretim kaynağı seçimi (null: istasyona uy); SmartES > Geçiş'ten değişir, formda salt okunur.
+export const makineKaydiSemasi = makineSemasi.extend({
+  ...surumlu,
+  uretimKaynagi: z.enum(['terminal', 'smartes']).nullable().optional(),
+  uretimKaynagiGecerlilik: z.string().nullable().optional(),
+});
 
 // Operasyon tipi kataloğu (IS11, IS13); başka modüller `disari.ts` ile okur, ekran uçlarla yazar.
 // Gruplar malzemeler kataloğundaki kodlarla aynıdır (kullanıcı kararı İ2); sıra ekrandaki sıradır.

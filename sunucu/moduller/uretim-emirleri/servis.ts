@@ -11,14 +11,14 @@ import type {
 import { denemeIsaretliKimlikler, sistemAyariOku } from '../ayarlar/disari.ts';
 import { durusNedeniGetir, durusNedenleriniListele, hurdaNedeniGetir, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import {
-  aktifIstasyonlar, calisirMakineler, ekipler, kapasiteKaynaklari, ekipUyeleri, isMerkeziIzinliMi, istasyonGetir, istasyonKisiAtamalari, istasyonlar, kisininIzinliIsMerkezleri, makineGetir, makineYetkinlikleri, smartesSayimIstasyonlari, yetkinMi,
+  aktifIstasyonlar, calisirMakineler, ekipler, kapasiteKaynaklari, ekipUyeleri, isMerkeziIzinliMi, istasyonGetir, istasyonKisiAtamalari, istasyonlar, kisininIzinliIsMerkezleri, makineGetir, makineYetkinlikleri, uretimKaynaklari, yetkinMi,
 } from '../istasyonlar/disari.ts';
 import { kisiBayrakliMi, kisileriListele } from '../kisiler/disari.ts';
 import {
   ADIM_YOK, DEVRAL_DEGISTI, DEVRAL_DURUMU, EKIP_DISI, EMIR_YOK, IS_EMRI_YOK, ISTASYONDA_TEK, ISTASYONSUZ_ADIM, ISTASYON_DOLU, KAPSAM_DISI, KATILIM_ACIK, KATILIM_TEK_ACIK, KATILIM_YOK, MAKINEDE_AYNI_IS, MAKINEDE_TEK, MAKINE_DOLU, MAKINE_SECILEMEZ, MAKINE_SECILMELI, TERMINAL_FASON, acmaIstasyonIhlali, fasonMu,
   adimDegisiyorMu, adimIhlali, adimNotuIhlali, NOT_ROTASIZ, ayarIhlali, baslatmaIhlali, baslatmaIstasyonIhlali, baslatmaYetkinlikIhlali, bitirmeIhlali, kendiligindenMakine, makineYetkinlikIhlali, calisilacakMakineler, calismaDurumu, devamIhlali,
   duraklatmaIhlali, durdurmaIhlali, durusNedeniIhlali, hurdaNedeniIhlali, hurdaToplamIhlali, HURDA_NEDENI_YOK, katilimUyarisi, katilmaIhlali, makineDoluIhlali, saglamToplamIhlali,
-  adimlardanGorunum, isEmriSureOzeti as sureOzetiHesapla, kayitAniIhlali, sayimIhlali, SMARTES_ISTASYONU_SAYIMI, sayimYetkiIhlali, siradakiIsEmri, toplamAsimiIhlali,
+  adimlardanGorunum, isEmriSureOzeti as sureOzetiHesapla, kayitAniIhlali, sayimIhlali, SMARTES_URETIMI, sayimYetkiIhlali, siradakiIsEmri, toplamAsimiIhlali,
   ilkAyrim, kararAnlari, MAKINE_AYRIM_UFKU_DK, makineAyrildiMetni,
   ADIM_ACIK_DEGIL, ADIM_BASLAMIS, ADIM_SECILMELI, KATILIM_TEK_ACIK_IS_EMIRSIZ, adimEksigi, adimEksikleri, adimTuketimi, baslatilabilirAdimlar, eksiyleBitirmeUyarisi, kararBekleyenBitisIhlali,
   emirEksiUyarisi, adimOnculleri, oncekiBitmediIhlali, oncekiParalelAdim, sayimAsimiUyarisi, onculdenGelen, siraDisiBaslatmalar, siraDisiBaslatmaUyarisi, uyarilariBirlestir, varsayilanAdim,
@@ -80,11 +80,38 @@ export async function kayitAniyla<T>(db: Db, an: string | undefined, is: () => P
 // tür başına tekildir: aynı onay ikinci kez yazılamaz.
 const kayitKaynaklari = new WeakMap<Db, number>();
 
-// 3173: istasyonda sağlamı SmartES sayıyor mu: "SmartES: sayım aktarımı" anahtarı açık ve istasyonun sayım kaynağı SmartES.
+// 3760: iş SmartES'ten üretiliyor mu: "SmartES: üretim aktarımı" anahtarı açık ve komutun makinesinin (makine yoksa istasyonun bütün
+// makinelerinin) etkin kaynağı SmartES. SmartES'ten gelen kayıt (kaynak kapsamı) ve yapısal kalite komutu (hatalı parça) denetlenmez.
 // Toplu kayıt (komut önbelleği kapsamı) cevabı bir kez okur; kapsam dışında her komutta tazedir.
-function smartesSayarMi(db: Db, istasyonId: number): Promise<boolean> {
-  return onbellekte(db, `smartes-sayar:${istasyonId}`, async () =>
-    (await sistemAyariOku(db, 'smartes.sayim-aktarimi')) && (await smartesSayimIstasyonlari(db, [istasyonId])).size > 0);
+const denetimsizKomutlar = new WeakSet<Db>();
+export async function smartesDenetimsiz<T>(db: Db, is: () => Promise<T>): Promise<T> {
+  if (denetimsizKomutlar.has(db)) return is();
+  denetimsizKomutlar.add(db);
+  try {
+    return await is();
+  } finally {
+    denetimsizKomutlar.delete(db);
+  }
+}
+// Makineler yalnız anahtar açıkken okunur: kapalıyken (canlı) toplu kayıtta komut başına ek sorgu olmaz.
+async function smartesUretiminiDenetle(
+  db: Db, istasyonId: number, makineler: readonly number[] | (() => Promise<readonly number[]>),
+): Promise<void> {
+  if (kayitKaynaklari.has(db) || denetimsizKomutlar.has(db)) return;
+  if (!(await onbellekte(db, 'smartes-aktarim-acik', () => sistemAyariOku(db, 'smartes.sayim-aktarimi')))) return;
+  const makineIdleri = typeof makineler === 'function' ? await makineler() : makineler;
+  const anahtar = `smartes-uretir:${istasyonId}:${[...makineIdleri].sort((a, b) => a - b).join(',')}`;
+  const smartes = await onbellekte(db, anahtar, async () => (await uretimKaynaklari(db, [istasyonId])).smartesUretirMi(istasyonId, makineIdleri));
+  if (smartes) throw cakisma(SMARTES_URETIMI);
+}
+
+// Çalışan ya da duran adımın makineleri: açık kullanım, yoksa son kapanan kullanım, o da yoksa adımın atanmış makinesi.
+async function adimMakineleri(db: Db, emirId: number, adim: IsEmriSatiri | null): Promise<number[]> {
+  const acik = adim === null ? [] : (await sorgular.acikMakineleriGetir(db, [adim.id])).map((k) => k.makineId);
+  if (acik.length > 0) return acik;
+  const son = await sorgular.sonKapananMakineler(db, emirId, adim?.id ?? null);
+  if (son.length > 0) return son;
+  return adim?.makineId == null ? [] : [adim.makineId];
 }
 
 export async function smartesKaynagiyla<T>(db: Db, kaynakKimligi: number, is: () => Promise<T>): Promise<T> {
@@ -391,7 +418,7 @@ async function baslatanIstasyonunuVer(
 }
 
 // Kilit, kapsam ve (kilit altında okunan) çalışma durumu: sayım ve duruş komutlarının ortak girişi. Adımı verilen komut çalışan adımda olur.
-async function komutBaglami(db: Db, kisiId: number, id: number, isEmriId?: number) {
+async function komutBaglami(db: Db, kisiId: number, id: number, isEmriId?: number, secilenMakineler?: readonly number[], smartesMuaf = false) {
   const emir = await kilitliEmir(db, id);
   const { hepsi, adim } = await komutAdimi(db, emir, isEmriId);
   const istasyonId = komutIstasyonu(emir, adim, isEmriId);
@@ -399,6 +426,8 @@ async function komutBaglami(db: Db, kisiId: number, id: number, isEmriId?: numbe
   if (isEmriId !== undefined && adim?.durum !== 'calisiyor') throw cakisma(ADIM_ACIK_DEGIL);
   // Varsayılan adım çalışmıyorsa (emir adımlar arasında) komut emir kuralıyla reddedilir; kayıt adımsız eski yoldan gider.
   const calisan = adim?.durum === 'calisiyor' ? adim : null;
+  // 3760: devam seçilen makinede sürer; seçim yoksa adımın makinelerinde.
+  if (!smartesMuaf) await smartesUretiminiDenetle(db, istasyonId, secilenMakineler?.length ? secilenMakineler : () => adimMakineleri(db, id, calisan ?? adim));
   return { emir, hepsi, adim: calisan, istasyonId, calisma: await adimCalismasi(db, id, calisan) };
 }
 
@@ -730,6 +759,7 @@ export async function emirBaslat(
   await secimiDenetle(db, istasyonId, secim);
   await ayrimiDenetle(db, id, secim, isEmri?.makineId ?? null);
   const yer: Yer = { istasyonId, makineler: calisilacakMakineler(secim, isEmri?.makineId ?? null) };
+  await smartesUretiminiDenetle(db, istasyonId, yer.makineler);
   const makineIhlali = yer.makineler.length === 0 ? null : makineYetkinlikIhlali(kisiId, yer.makineler, await makineYetkinlikleri(db), muaf);
   if (makineIhlali !== null) throw yetkiYok(makineIhlali);
   await yeriDenetle(db, id, yer, isEmri?.id ?? null);
@@ -779,6 +809,7 @@ export async function emirAyar(db: Db, kisiId: number, id: number, isEmriId?: nu
   if (emir.malzemeNo !== null && isEmri === null) throw cakisma(ISTASYONSUZ_ADIM);
   if (isEmri !== null && fasonMu(isEmri)) throw cakisma(TERMINAL_FASON);
   if (isEmriId !== undefined && isEmri?.durum !== 'bekliyor') throw cakisma(ADIM_BASLAMIS);
+  await smartesUretiminiDenetle(db, istasyonId, isEmri?.makineId == null ? [] : [isEmri.makineId]);
   const durum = isEmriId !== undefined && emir.durum === 'basladi' ? 'planli' : emir.durum;
   const ihlal = ayarIhlali(durum, await sorgular.ayarVarMi(db, id, isEmri?.id ?? null));
   if (ihlal !== null) throw cakisma(ihlal);
@@ -822,6 +853,7 @@ export async function emirBitir(
   if (isEmriId !== undefined && adim?.durum !== 'calisiyor') throw cakisma(ADIM_ACIK_DEGIL);
   const calisan = adim?.durum === 'calisiyor' ? adim : null;
   const adimId = calisan?.id ?? null;
+  await smartesUretiminiDenetle(db, istasyonId, () => adimMakineleri(db, id, calisan));
   if (saglamAdet !== undefined && duzeltebilir !== undefined) await sayimYetkisiniDenetle(db, kisiId, id, duzeltebilir, adimId);
   if (calisan !== null) {
     const sira = oncekiBitmediIhlali(hepsi, calisan);
@@ -830,8 +862,6 @@ export async function emirBitir(
     await muayeneBelgeKapisi(db, calisan);
   }
   const sayac = await sayaclar(db, id, adimId);
-  // Bitirirken verilen adet sayaçtan farklıysa fark sağlam sayım olarak yazılır: SmartES istasyonunda bu da terminal sayımıdır.
-  if (saglamAdet !== undefined && saglamAdet !== sayac.saglam && (await smartesSayarMi(db, istasyonId))) throw cakisma(SMARTES_ISTASYONU_SAYIMI);
   // 2521 b: ilk parça kararı bekleyen parça varken adım (adımsız emirde emir) bitmez; karar Kalite Merkezi'ndedir.
   const kararIhlali = kararBekleyenBitisIhlali(sayac.kararBekliyor, calisan?.opNo ?? null);
   if (kararIhlali !== null) throw cakisma(kararIhlali);
@@ -910,7 +940,9 @@ export async function emirSayim(
   db: Db, kisiId: number, id: number, govde: SayimKaydi,
   secenek: { kararBekliyor?: boolean; duzeltebilir?: boolean; isEmriId?: number; ilkParca?: IlkParcaGereksinimi } = {},
 ): Promise<{ emir: Emir; uyari: string | null }> {
-  const { emir, hepsi, adim, istasyonId, calisma } = await komutBaglami(db, kisiId, id, secenek.isEmriId);
+  // 3760: SmartES makinesinde CORE'da kalan tek düzeltme yolu: sayım düzeltme yetkisi olanın eksi sayımı kilide takılmaz.
+  const duzeltme = secenek.duzeltebilir === true && govde.adet < 0;
+  const { emir, hepsi, adim, istasyonId, calisma } = await komutBaglami(db, kisiId, id, secenek.isEmriId, undefined, duzeltme);
   const adimId = adim?.id ?? null;
   // 327 a: ilk parçası onaylanmamış emirde (744 a: adımda) sağlam sayım, hangi yoldan gelirse gelsin, karar bekler.
   // Onaysız adımda sağlam sıfırdır: eksi düzeltme de karar bekleyeni düşer.
@@ -919,10 +951,6 @@ export async function emirSayim(
       || (secenek.ilkParca !== 'gerekmez' && (await sorgular.ilkParcaOnaysiz(db, id, secenek.ilkParca === 'gerekli' ? adimId : null))));
   const ihlal = sayimIhlali(emir.durum, calisma);
   if (ihlal !== null) throw cakisma(ihlal);
-  // 3173: sayımı SmartES'ten gelen istasyonda sağlamı yalnız onaylanan SmartES kaydı sayar; terminal (çevrimdışı kuyruktan sonradan gelen
-  // dahil) reddedilir, yoksa aynı üretim iki kez stoğa girer. Karar sunucu saatiyle verilir, cihazın kayıt anıyla değil. Hurda terminalde
-  // kalır: SmartES red adedi fire eşlemesi gelene dek CORE'a işlenmiyor, kapatılırsa hurda hiçbir yerden yazılamazdı.
-  if (govde.tur === 'saglam' && !kayitKaynaklari.has(db) && (await smartesSayarMi(db, istasyonId))) throw cakisma(SMARTES_ISTASYONU_SAYIMI);
   if (secenek.duzeltebilir !== undefined && govde.adet < 0) await sayimYetkisiniDenetle(db, kisiId, id, secenek.duzeltebilir, adimId);
   const refakatPartisiId = govde.refakatPartisiId ?? null;
   let hurdaNedeniId: number | null = null;
@@ -1029,7 +1057,7 @@ export async function emirDuraklat(db: Db, kisiId: number, id: number, isEmriId?
 
 // Duraklamış ya da durmuş iş, seçilen makinelerde; seçilmezse son durduğu makinelerde, onlar da yoksa iş emrinin makinesinde sürer.
 export async function emirDevam(db: Db, kisiId: number, id: number, makineIdleri?: readonly number[], isEmriId?: number): Promise<{ emir: Emir }> {
-  const { emir, adim: isEmri, istasyonId, calisma } = await komutBaglami(db, kisiId, id, isEmriId);
+  const { emir, adim: isEmri, istasyonId, calisma } = await komutBaglami(db, kisiId, id, isEmriId, makineIdleri);
   const ihlal = devamIhlali(emir.durum, calisma);
   if (ihlal !== null) throw cakisma(ihlal);
   await bekletmeyiDenetle(db, id);
@@ -1039,6 +1067,7 @@ export async function emirDevam(db: Db, kisiId: number, id: number, makineIdleri
   await ayrimiDenetle(db, id, makineIdleri, isEmri?.makineId ?? null);
   const son = makineIdleri === undefined ? await sorgular.sonKapananMakineler(db, id, isEmri?.id ?? null) : [];
   const yer: Yer = { istasyonId, makineler: son.length > 0 ? son : calisilacakMakineler(makineIdleri, isEmri?.makineId ?? null) };
+  await smartesUretiminiDenetle(db, istasyonId, yer.makineler);
   await yeriDenetle(db, id, yer, isEmri?.id ?? null);
   const an = await komutAni(db, id);
   await sorgular.olayEkle(db, id, kisiId, istasyonId, 'devam', null, an, isEmri?.id ?? null);
@@ -1048,17 +1077,25 @@ export async function emirDevam(db: Db, kisiId: number, id: number, makineIdleri
   return emirdenCevap(db, id);
 }
 
-export async function emirDurdur(db: Db, kisiId: number, id: number, durusNedeniId: number, isEmriId?: number): Promise<{ emir: Emir }> {
+export async function emirDurdur(db: Db, kisiId: number, id: number, durusNedeniId: number, isEmriId?: number): Promise<{ emir: Emir; olayId: number }> {
   const { emir, adim, istasyonId, calisma } = await komutBaglami(db, kisiId, id, isEmriId);
   const ihlal = durdurmaIhlali(emir.durum, calisma);
   if (ihlal !== null) throw cakisma(ihlal);
-  const nedenIhlali = durusNedeniIhlali(await durusNedeniGetir(db, durusNedeniId));
+  const neden = await durusNedeniGetir(db, durusNedeniId);
+  // 3760: SmartES'ten gelen duruşun eşlenmemiş adı pasif sabit nedenle yazılır (terminal listesinde görünmesin diye pasif).
+  const nedenIhlali = neden !== null && !neden.aktif && kayitKaynaklari.has(db) ? null : durusNedeniIhlali(neden);
   if (nedenIhlali !== null) throw dogrulama(nedenIhlali, 'durusNedeniId');
   const an = await komutAni(db, id);
-  await sorgular.olayEkle(db, id, kisiId, istasyonId, 'durdur', durusNedeniId, an, adim?.id ?? null);
+  const olayId = await sorgular.olayEkle(db, id, kisiId, istasyonId, 'durdur', durusNedeniId, an, adim?.id ?? null);
   await sorgular.emrinKullanimlariniKapat(db, id, kisiId, an, adim?.id ?? null);
   await sorgular.emrinKatilimlariniKapat(db, id, an, adim?.id ?? null);
-  return emirdenCevap(db, id);
+  return { ...(await emirdenCevap(db, id)), olayId };
+}
+
+// 3760 karar 8 a: neden pasif olabilir (eşlemenin hedefi); bulunamayan neden reddedilir.
+export async function durusNedeniniDuzelt(db: Db, yazanKisiId: number, olayId: number, durusNedeniId: number, gerekce: string): Promise<boolean> {
+  if ((await durusNedeniGetir(db, durusNedeniId)) === null) throw dogrulama('Duruş nedeni bulunamadı.', 'durusNedeniId');
+  return sorgular.olayDuzeltmesiEkle(db, olayId, { durusNedeniId, kisiId: null, gerekce, yazanKisiId });
 }
 
 // Yerdeki (makine ya da makinesiz istasyon yeri) işi durdurup bu işi orada başlatır ya da devam ettirir, tek işlemde.

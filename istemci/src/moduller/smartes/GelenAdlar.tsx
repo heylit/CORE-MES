@@ -20,6 +20,7 @@ const DURUM: Record<Satir['durum'], { metin: string; ton: RozetTonu }> = {
 const SONUC: Record<Sonuc, { metin: string; aciklama: string }> = {
   hatali: { metin: 'Hatalı (kalite kararına)', aciklama: 'Parça hatalı kaydına düşer; kalite kararı ve gerekirse yeniden işleme adımı açılır.' },
   hurda: { metin: 'Hurda (doğrudan fire)', aciklama: 'Parça hurdaya yazılır; stoktan fire çıkışı yapılır, kalite kararı beklenmez.' },
+  'sayim-duzeltme': { metin: 'Sayım düzeltmesi (sağlamdan düşer)', aciklama: 'Parça yoktur, fazla sayılmıştır (ör. tezgahın fazla M30 yollaması); onaylanınca sağlam sayımdan düşülür, hurda yazılmaz.' },
 };
 const AD: Record<SmartesGelenAdTuru, { tekil: string; neden: string }> = {
   fire: { tekil: 'Fire', neden: 'Hurda nedeni' },

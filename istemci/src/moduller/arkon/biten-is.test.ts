@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BASLAMAMIS_IS_ILETISI, BITMIS_IS_ILETISI, SMARTES_SAYIM_ILETISI, DURUSTA_SAYIM_ILETISI, HAZIRLIKTA_SAYIM_ILETISI, baslatmaGeriAlma, baslatmaGeriUygula, bitenleriAyir, durumEsitle, durumEsitleme, durumIletisi, logRetleri, gecikmeliRet, sayimGeriAlma, sayimGeriUygula, sayimKapali, sayimKapaliNedeni, tmiBitti } from '../../../../arkon/web/src/data/biten-is.ts';
+import { BASLAMAMIS_IS_ILETISI, BITMIS_IS_ILETISI, SMARTES_SAYIM_ILETISI, SMARTES_URETIM_ILETISI, smartesUretimi, DURUSTA_SAYIM_ILETISI, HAZIRLIKTA_SAYIM_ILETISI, baslatmaGeriAlma, baslatmaGeriUygula, bitenleriAyir, durumEsitle, durumEsitleme, durumIletisi, logRetleri, gecikmeliRet, sayimGeriAlma, sayimGeriUygula, sayimKapali, sayimKapaliNedeni, tmiBitti } from '../../../../arkon/web/src/data/biten-is.ts';
 
 // Kart #1194: biten işte sağlam, hurda, toplu giriş ve sayaç düzeltmesi kapalıdır.
 describe('Arkon biten iş sayaç kilidi', () => {
@@ -161,5 +161,26 @@ describe('Arkon gecikmeli sayım reddi', () => {
   it('başka kişide, oturumsuzda ve başka iletide yok', () => {
     expect([gecikmeliRet(m, '8'), gecikmeliRet(m, undefined), gecikmeliRet({ ...m, type: '$log' }, '7'), gecikmeliRet({ ...m, row: null }, '7'), gecikmeliRet(null, '7')])
       .toEqual([null, null, null, null, null]);
+  });
+});
+
+// 3760: SmartES'ten üretilen işte terminalin başlat, sayım ve hurda düğmeleri kapalıdır; nedeni yazılır.
+describe('Arkon SmartES üretimi', () => {
+  const smartesIs = { state: 'running', pkg: { tmi: { uretimKaynagi: 'smartes', smartesMakineleri: ['ORN-MK-1'] } } };
+  const karisikIs = { state: 'running', pkg: { tmi: { smartesMakineleri: ['ORN-MK-1'] } } };
+
+  it('iş SmartES makinesindeyse sağlam ve hurda kapalı, neden SmartES iletisidir', () => {
+    expect(sayimKapaliNedeni(smartesIs, 'good')).toBe(SMARTES_URETIM_ILETISI);
+    expect(sayimKapaliNedeni(smartesIs, 'scrap')).toBe(SMARTES_URETIM_ILETISI);
+  });
+
+  it('istasyonda SmartES makinesi varken terminal makinesi seçiliyse açık, SmartES makinesi seçiliyse kapalı', () => {
+    expect(smartesUretimi(karisikIs, ['ORN-MK-2'])).toBe(false);
+    expect(sayimKapaliNedeni(karisikIs, 'scrap', ['ORN-MK-2'])).toBeNull();
+    expect(smartesUretimi(karisikIs, ['ORN-MK-1'])).toBe(true);
+  });
+
+  it('biten iş SmartES olsa da biten iş iletisini gösterir', () => {
+    expect(sayimKapaliNedeni({ ...smartesIs, state: 'done' })).toBe(BITMIS_IS_ILETISI);
   });
 });

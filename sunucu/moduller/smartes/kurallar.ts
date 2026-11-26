@@ -85,6 +85,11 @@ export const ALANLAR = {
     bitti: ['IS_DONE', 'ISDONE'],
     erpSaglam: ['ISERP_OK', 'IS_ERP_OK'],
     erpRed: ['ISERP_RED', 'IS_ERP_RED'],
+    // 3760: aktif hareket (md. 40, "1, 2, 3"), adı ve kullanıcısı. Ad ve değer anlamları canlı satırda doğrulanmadı (AKTIVITE_DURUMLARI).
+    aktivite: ['ACTIVITY', 'ACTIVITY_ID'],
+    aktiviteAdi: ['ACTIVITY_NAME'],
+    aktiviteBaslangic: ['ACTIVITY_START_DATETIME', 'ACTIVITY_DATETIME'],
+    kullanici: ['USER_CODE', 'USERNAME', 'USER_NAME', 'USER_ID', 'OPERATOR_CODE'],
   },
   // DownTimeStatusListWithoutWorkOrder (md. 91): iş emrine bağlı olmadan başlatılan duruş; satırda iş emri yok, neden adla gelir.
   durus: {
@@ -153,6 +158,10 @@ export interface IsEmriDurumuKaydi {
   bitti: boolean | null;
   erpSaglam: boolean | null;
   erpRed: boolean | null;
+  aktivite: number | null;
+  aktiviteAdi: string | null;
+  aktiviteBaslangic: Date | null;
+  kullanici: string | null;
   ham: TabloSatiri;
 }
 
@@ -184,7 +193,8 @@ export function isEmriDurumuOku(s: TabloSatiri): IsEmriDurumuKaydi | null {
     smartesId: id, isEmriNo: metin(s, a.isEmriNo), erpId: metin(s, a.erpId), istasyonKodu: metin(s, a.istasyon), operasyonKodu: metin(s, a.operasyon),
     makineKodu: metin(s, a.makine), stokNo: metin(s, a.stok), saglam: adet(s, a.saglam), red: adet(s, a.red), makineSaglam: adet(s, a.makineSaglam),
     makineRed: adet(s, a.makineRed), baslangic: tarih(s, a.baslangic), bitis: tarih(s, a.bitis), bitti: bayrak(s, a.bitti),
-    erpSaglam: bayrak(s, a.erpSaglam), erpRed: bayrak(s, a.erpRed), ham: s,
+    erpSaglam: bayrak(s, a.erpSaglam), erpRed: bayrak(s, a.erpRed), aktivite: sayi(s, a.aktivite), aktiviteAdi: metin(s, a.aktiviteAdi),
+    aktiviteBaslangic: tarih(s, a.aktiviteBaslangic), kullanici: metin(s, a.kullanici), ham: s,
   };
 }
 
@@ -1034,7 +1044,7 @@ export const LISTE_TURLERI = SMARTES_LISTE_TURLERI;
 export type ListeTuru = (typeof LISTE_TURLERI)[number];
 
 export const LISTE_METOTLARI: Readonly<Record<ListeTuru, string>> = {
-  istasyon: 'WorkStationList', makine: MAKINE_LISTESI_METODU, operasyon: OPERASYON_LISTE_METODU, fire: 'RejectsList', durus: 'DownTimeList',
+  istasyon: 'WorkStationList', makine: MAKINE_LISTESI_METODU, operasyon: OPERASYON_LISTE_METODU, fire: 'RejectsList', durus: 'DownTimeList', kullanici: 'UsersList',
 };
 
 // Süzgeç parametreleri boş gider: boş süzgeç bütün listeyi döner (VARSAYIM; belge süzgeçleri zorunlu saymaz).
@@ -1050,6 +1060,8 @@ const LISTE_ALANLARI = {
   operasyon: { id: ['ID'], kod: ['CODE'], ad: ['NAME'], grup: ['WORKSTATION_INFORMATION'], operator: [], pasif: ['ISPASSIVE'] },
   fire: { id: ['ID'], kod: [], ad: ['NAME'], grup: ['GROUP_INFORMATION'], operator: ['ISOPERATOR_WELDED'], pasif: ['ISPASSIVE'] },
   durus: { id: ['ID'], kod: [], ad: ['NAME'], grup: ['GROUP_INFORMATION'], operator: ['ISOPERATOR_WELDED'], pasif: ['ISPASSIVE'] },
+  // 3760: UsersList alan adları belgede yok; adaylar sırayla denenir, ilk canlı okumada doğrulanır.
+  kullanici: { id: ['ID', 'USER_ID'], kod: ['USER_CODE', 'CODE', 'USERNAME'], ad: ['NAME', 'FULL_NAME', 'USER_NAME'], grup: [], operator: [], pasif: ['ISPASSIVE'] },
 } as const satisfies Record<ListeTuru, Record<'id' | 'kod' | 'ad' | 'grup' | 'operator' | 'pasif', readonly string[]>>;
 
 // İstasyon, makine ve operasyon SmartES koduyla eşlenir; fire ve duruşun kodu yoktur, adla gelir.
@@ -1417,11 +1429,17 @@ export function onayaGirerMi(baslangic: Date | null, gecerlilik: Date): boolean 
   return baslangic !== null && baslangic.getTime() >= gecerlilik.getTime();
 }
 
+// 3760: fire adının eşlemesindeki sonuç onay türüdür; eşlenmemiş ad hurda sayılır (onayı eşleme ister).
+export const hurdaOnayTuru = (sonuc: 'hurda' | 'hatali' | 'sayim-duzeltme' | null): 'hurda' | 'hatali' | 'sayim-duzeltme' => sonuc ?? 'hurda';
+
 export const ONAY_ILETILERI = {
   karardaDegil: 'Kayıt artık onay beklemiyor.',
   redIslenmez: 'Red adedi fire eşlemesi gelince işlenir.',
   isEmriYok: 'SmartES iş emri CORE iş emriyle eşleşmedi.',
-  kaynakDegisti: 'Bu istasyonda sayım artık SmartES’ten gelmiyor; kayıt onaylanamaz, reddedin.',
+  kaynakDegisti: 'Bu makinede üretim artık SmartES’ten gelmiyor; kayıt onaylanamaz, reddedin.',
+  fireEslenmemis: 'Fire adı eşlenmemiş; önce Eşlemeler > Fire’de hurda, hatalı parça ya da sayım düzeltmesi olarak eşleyin.',
+  eksiFire: 'SmartES’te azalan hurda ya da hatalı parça CORE’da kendiliğinden geri alınmaz; kaydı reddedin, sayım düzeltme yetkisi olan kişi üretim emrinde eksi sayımla düzeltir.',
+  fireTuruDegisti: 'Bu firenin eşlemesi siz listeyi açtıktan sonra değişti; listeyi yenileyip türü kontrol edin.',
 } as const;
 
 /* ---------------- Parametre adı denetimi (kart 3368) ---------------- */
@@ -1672,4 +1690,98 @@ export function aktarimPlani(
     bu.set(nedenAdAnahtari(ad), { kod, ad });
     return { ...taban, eylem: 'ekle', kod, kategori: aktarimKategorisi(g.grup), coreAdi: ad };
   });
+}
+
+// --- Hareket aktarımı (3760) -------------------------------------------------------
+// ACTIVITY değerinin anlamı tek yerde: belge "aktif hareket (1, 2, 3)" der; 1 üretim, 2 hazırlık, 3 arıza/duruş kullanıcının okumasıdır,
+// canlı satırda doğrulanmadı. Farklı çıkarsa yalnız bu tablo değişir. Tabloda olmayan değer hareket üretmez.
+export const AKTIVITE_DURUMLARI: Readonly<Record<number, 'uretim' | 'hazirlik' | 'durus'>> = { 1: 'uretim', 2: 'hazirlik', 3: 'durus' };
+
+export const HAREKET_ILETILERI = {
+  kapsamDisi: 'Satır artık aktarılmıyor: iş emri CORE’un değil ya da makine terminale alınmış.',
+  bilinmeyen: 'CORE hareketi yazmadı.',
+  topluKisiEslemesi: 'Kullanıcı eşlemesi toplu onaylanmaz; her kişi ayrı seçilir.',
+} as const;
+
+export type HareketTuru = 'ayar' | 'baslat' | 'duraklat' | 'devam' | 'durdur' | 'bitir';
+// CORE'daki iş durumu, yazılmış hareketlerden: planlı, hazırlıkta (ayar yazıldı), çalışıyor, duraklı, durdu, bitti.
+export type HareketDurumu = 'planli' | 'hazirlik' | 'calisiyor' | 'durakli' | 'durdu' | 'bitti';
+
+export interface HareketIzi {
+  sira: number;
+  tur: HareketTuru | 'zaman-degisti';
+  an: Date;
+  aktiviteAdi: string | null;
+}
+
+export interface YeniHareket {
+  tur: HareketTuru | 'zaman-degisti';
+  an: Date;
+  aktiviteAdi: string | null;
+}
+
+const SONRAKI_DURUM: Readonly<Record<HareketTuru, HareketDurumu>> = {
+  ayar: 'hazirlik', baslat: 'calisiyor', duraklat: 'durakli', devam: 'calisiyor', durdur: 'durdu', bitir: 'bitti',
+};
+
+export function hareketDurumu(iz: readonly HareketIzi[]): HareketDurumu {
+  let durum: HareketDurumu = 'planli';
+  for (const h of iz) if (h.tur !== 'zaman-degisti') durum = SONRAKI_DURUM[h.tur];
+  return durum;
+}
+
+// SmartES satırının istediği durum: bitiş (IS_DONE ya da END_DATETIME) her şeyden önce gelir; ACTIVITY yoksa ya da tanınmıyorsa istek yok.
+export function hedefDurum(k: Pick<IsEmriDurumuKaydi, 'aktivite' | 'bitti' | 'bitis'>): HareketDurumu | null {
+  if (k.bitti === true || k.bitis !== null) return 'bitti';
+  const a = k.aktivite === null ? undefined : AKTIVITE_DURUMLARI[k.aktivite];
+  if (a === 'uretim') return 'calisiyor';
+  if (a === 'hazirlik') return 'hazirlik';
+  if (a === 'durus') return 'durdu';
+  return null;
+}
+
+// CORE kuralları: hazırlık yalnız planlı işte bir kez açılır; durdurma yalnız çalışırken; bitiş adım çalışırken. Başlamış işte SmartES'in
+// yeniden hazırlığa geçmesi CORE'da duraklatmadır (hazırlık başlatmadan öncedir). Duruş adı değişirse duruş kapanıp yenisi açılır.
+const GECISLER: Readonly<Record<HareketDurumu, Partial<Record<HareketDurumu, readonly HareketTuru[]>>>> = {
+  planli: { hazirlik: ['ayar'], calisiyor: ['baslat'], durdu: ['baslat', 'durdur'], bitti: ['baslat', 'bitir'] },
+  hazirlik: { calisiyor: ['baslat'], durdu: ['baslat', 'durdur'], bitti: ['baslat', 'bitir'] },
+  calisiyor: { hazirlik: ['duraklat'], durdu: ['durdur'], bitti: ['bitir'] },
+  durakli: { calisiyor: ['devam'], durdu: ['devam', 'durdur'], bitti: ['bitir'] },
+  durdu: { calisiyor: ['devam'], hazirlik: ['devam', 'duraklat'], bitti: ['bitir'] },
+  bitti: {},
+};
+
+// Satırın yeni hareketleri. Zaman: ilk başlatma ve hazırlık satırın başlangıcıyla, bitiş bitişiyle, öteki geçişler hareketin başlangıcıyla
+// (alan yoksa okuma anıyla) yazılır. An geriye gidemez: önceki hareketten eski an önceki hareketin anına çekilir. Yazılmış başlangıç ya da
+// bitiş SmartES'te değişirse "zaman-degisti" izi düşer (CORE kaydı kendiliğinden değişmez); aynı değişim bir kez düşer.
+export function yeniHareketler(iz: readonly HareketIzi[], k: IsEmriDurumuKaydi, okuma: Date): YeniHareket[] {
+  const sonuc: YeniHareket[] = [];
+  const durum = hareketDurumu(iz);
+  const hedef = hedefDurum(k);
+  const son = iz.at(-1)?.an ?? null;
+  const ilkAn = (t: HareketTuru): Date => {
+    const aday = t === 'bitir' ? (k.bitis ?? k.aktiviteBaslangic ?? okuma)
+      : (t === 'ayar' || (t === 'baslat' && durum === 'planli')) ? (k.baslangic ?? k.aktiviteBaslangic ?? okuma)
+        : (k.aktiviteBaslangic ?? okuma);
+    return son !== null && aday.getTime() < son.getTime() ? son : aday;
+  };
+  if (hedef !== null && hedef !== durum) {
+    for (const t of GECISLER[durum][hedef] ?? []) sonuc.push({ tur: t, an: ilkAn(t), aktiviteAdi: t === 'durdur' ? k.aktiviteAdi : null });
+  } else if (hedef === 'durdu' && durum === 'durdu') {
+    const sonDurus = [...iz].reverse().find((h) => h.tur === 'durdur');
+    if (sonDurus && (sonDurus.aktiviteAdi ?? null) !== (k.aktiviteAdi ?? null)) {
+      const an = ilkAn('durdur');
+      sonuc.push({ tur: 'devam', an, aktiviteAdi: null }, { tur: 'durdur', an, aktiviteAdi: k.aktiviteAdi });
+    }
+  }
+  const zamanDegisti = (tur: HareketTuru, yeni: Date | null): void => {
+    const yazilan = iz.find((h) => h.tur === tur);
+    if (yazilan === undefined || yeni === null || yazilan.an.getTime() === yeni.getTime()) return;
+    const bildirilen = iz.some((h) => h.tur === 'zaman-degisti' && h.aktiviteAdi === `${tur}:${yeni.toISOString()}`);
+    if (!bildirilen) sonuc.push({ tur: 'zaman-degisti', an: okuma, aktiviteAdi: `${tur}:${yeni.toISOString()}` });
+  };
+  const ilk = iz.find((h) => h.tur === 'ayar' || h.tur === 'baslat');
+  if (ilk && ilk.tur !== 'zaman-degisti') zamanDegisti(ilk.tur, k.baslangic);
+  zamanDegisti('bitir', k.bitis);
+  return sonuc;
 }

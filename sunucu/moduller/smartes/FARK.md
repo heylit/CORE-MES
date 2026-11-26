@@ -48,3 +48,44 @@ Yeni modül; depoda önceki hâli yok. Brief (`SMARTES_PROMPT.md`, .NET/ASMX iç
   (bir saat önbellek): harf ya da alt çizgi farkıyla tek karşılığı olan ad servisin adına çevrilir; karşılığı olmayan ad ve gönderilmeyen zorunlu parametre taşma hatası iletisine
   yazılır ("... gönderilen: ...; serviste karşılığı yok: ...; serviste olup gönderilmeyen: ..."). Canlıda hata sürerse sağlık ayrıntısındaki bu satır kök nedeni verir.
   Alarm kataloğu kurulmadı.
+
+## 3760: SmartES üretimi CORE emirlerine aktarılır (26.11, "Böyle gelsin")
+- Ana anahtar `smartes.sayim-aktarimi` (varsayılan kapalı). Kapalıyken hiçbir şey kilitlenmez ve aktarılmaz; canlıdaki bugünkü durum değişmez.
+- Üretim kaynağı makine başına: makinenin kendi seçimi (`makine.uretim_kaynagi`, boş = istasyona uyar), yoksa istasyonun `sayim_kaynagi`. Kaynak yalnız
+  Geçiş sayfasında (`/smartes/gecis`) değişir: önce önizleme (etkilenen makine, üzerindeki iş, kuyrukta kalan onay), sonra uygula; geçerlilik "şimdi"dir,
+  ileri tarih verilemez. İstasyon ve makine formları kaynağı yalnız gösterir. SmartES makinesinde terminalin başlat, duraklat, devam, bitir, sayım ve hurda
+  komutları açıklamayla reddedilir; düğmeler görünür ama kapalıdır.
+- Hareketler: iş emri durumu her okunduğunda satırın ACTIVITY değeri (1 üretim, 2 ayar, 3 duruş) izle (`smartes_hareket`) karşılaştırılır; fark CORE komutuna
+  çevrilir (ayar, başlat, duraklat, devam, durdur, bitir) ve sırayla yazılır. Yalnız CORE'un gönderdiği iş emirleri ve geçerlilikten sonraki satırlar aktarılır.
+  Zaman geri gitmez; SmartES'te yazılmış hareketin zamanı sonradan değişirse CORE kaydı değişmez, "zaman değişti" izi düşer (izlemede görünür).
+  CORE komutu reddederse hareket "hata" olur, o satırdaki sonraki hareketler bekler; Geçiş sayfasındaki "Yeniden dene" ile yinelenir.
+- Kişi: SmartES kullanıcısı (`UsersList`) `kullanici` türüyle CORE kişisine eşlenir. Liste boş başlar; öneri yalnız "Öneriyi kullan" ile uygulanır, toplu eşleme yok.
+  Eşlenmemiş kullanıcının hareketi "kişi bekliyor" kalır; eşlenince aynı anla yazılır. Eşleme sonradan değişirse daha önce yazılmış hareketler eski kişide kalır
+  (CORE üretim olayı değişmez); yalnız henüz yazılmamış hareketler yeni kişiyle yazılır.
+- Duruş: eşlenmemiş SmartES duruş adı sabit "Eşlenmemiş (SmartES)" nedeniyle (kod `SMARTES-ESLM`, pasif; yoksa açılır) yazılır. İş emri dışındaki duruş yazılmaz.
+  Sınır: CORE üretim olayı yalnız eklenen defterdir; neden sonradan eşlenince yalnız SmartES izindeki neden düzelir, CORE'daki duruş olayı sabit nedende kalır
+  (karar 8 tam uygulanamadı; kullanıcıya soruldu).
+- Fire: red kaydı (`RejectsList`) okununca onay kuyruğuna "hurda" satırı olarak girer (`smartes_adet_onayi.red_id`). Onayda fire adının o anki eşlemesi uygulanır:
+  `hurda` hurda sayımı, `sayim-duzeltme` ("Fazla M30") sağlamdan düşüş, `hatali` ("Rework") hatalı parça kaydı. Eşlenmemiş fire adı onaylanamaz. SetErpOkRed çağrılmaz.
+- Alarm yalnız gösterilir; CORE'a yazılmaz.
+- Göçler: `20261126135359_istasyonlar_makine_uretim_kaynagi` (makineye iki boş olabilen sütun) ve `20261126143203_smartes_hareket_aktarimi` (tür genişletme,
+  `smartes_adet_onayi.red_id`, yeni `smartes_hareket`). Yalnız ekler; var olan veri değişmez.
+- Yeni uçlar: `GET /smartes/gecis` (`sayfa.smartes`), `POST /smartes/gecis/degistir` ve `POST /smartes/hareketler/yeniden-dene` (`ayarlar.yaz`).
+  Sözleşmede değişen: eşleme ve liste türlerine `kullanici`, fire sonucuna `sayim-duzeltme`, onay satırına `tur` ve `fireAdi`.
+- 3655 ve 3658 bu yazıma katıldı; ikisi de main'de zaten yazılı ve testli olduğundan bu yamada ek değişiklik yok.
+- BİLMİYORUM: canlı SmartES'te ACTIVITY alan adı ve değerleri, `UsersList` alanları ve iş emri satırındaki kullanıcı alanı. Aday adlar `kurallar.ts` `ALANLAR`'da;
+  ilk canlı okumada doğrulanmalı.
+- Risk düzeltmeleri (26.11): bekleyen fire satırı listede onayın yazacağı türü (fire adının şimdiki eşlemesi) gösterir; ekran gördüğü türü onayla
+  gönderir, tutmazsa onay çakışmayla döner. Toplu onayda sayım düzeltmesi varsa "N satır sağlamdan düşer, toplam −X" penceresi açılır. Sayım düzeltme
+  yetkisi olanın eksi sayımı SmartES kilidine takılmaz (SmartES makinesinde CORE'daki tek düzeltme yolu). Makineleri farklı kaynaktan üreten istasyonda
+  eşlenmemiş makine kodlu satır aktarılmaz (çift sayım). Hareket durumu "yazıldı" satırın üstüne yazılmaz. Geçiş tablosu kayıt kipinde (geniş ekranda kayar).
+- Arayüz düzeltmesi (26.11): terminal kilidi yeni React terminalinde (`istemci/src/moduller/arkon/yeni/operator/Operator.tsx`): işin üretimi SmartES'ten
+  geliyorsa şerit nedeni yazar, durum düğmeleri ve telefon eylem çubuğu kapalıdır, SmartES makinesi makine seçiminde kilitlidir. Eski `arkon/web` terminalindeki
+  aynı değişiklik yalnız testlerde kullanılır.
+- Karar 8 a (26.11, Soru Merkezi): duruş adı sonradan eşlenince CORE'daki duruş olayına düzeltme kaydı yazılır (uretim-emirleri
+  `uretim_olayi_duzeltmesi`, yalnız eklenir; olay değişmez). Raporlar ve emir akışı olayı `uretim_olayi_gecerli` görünümünden okur (en son düzeltme geçerli).
+  SmartES izi yazdığı duruş olayını tutar (`smartes_hareket.olay_id`). Göçler `20261126172611_uretim_emirleri_olay_duzeltmesi`, `20261126172612_smartes_hareket_olay`.
+  Kişi düzeltmesi tabloda ve görünümde hazır, ama henüz yazan akış yok: yanlış kişi eşlemesinde geçmişi düzeltmek ayrı adımdır; başlat ve bitir kayıtları
+  (uretim_kaydi, makine kullanımı) bu düzeltmenin dışındadır.
+  Bilinen sınırlar (Risk M1, M2): yalnız henüz eşlenmemiş duruşlar düzeltilir; eşlenmiş bir ad başka nedene yeniden eşlenirse eski olaylar değişmez.
+  Bu yamadan önce yazılmış hareketlerde `olay_id` boştur. Kişi düzeltmesi yazılırken pay sayımının okuduğu uretim_kaydi ve makine kullanımı da kapsanmalı (R4).

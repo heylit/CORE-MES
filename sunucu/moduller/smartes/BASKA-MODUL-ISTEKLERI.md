@@ -21,3 +21,12 @@ Bu iş o modüllere yazmadı; aşağıdakiler imzalı istektir.
 ## Makine bulguları (3192)
 6. uretim-emirleri: makine başına CORE duruş aralıklarını (başlangıç, bitiş, neden) veren `disari.ts` işlevi. Neden: "Nedensiz duruş" bugün
    yalnız SmartES'in kendi duruş kaydına bakıyor; operatörün CORE terminalinde girdiği duruş nedeni görülmüyor (bugün yalnız `istasyonDurusSureleri` var).
+
+## 3760: bu yamada başka modüllere yazılanlar (dış yazar, kullanıcı onayıyla "Böyle gelsin")
+7. istasyonlar: makine başına üretim kaynağı (göç `20261126135359`), `uretimKaynaklari`, `uretimKaynakSecimleri`, `uretimKaynagiDegistir` (`disari.ts`); istasyon
+   ve makine formu kaynağı salt okunur gösterir (istasyon güncelleme gövdesi kaynağı artık göndermez).
+8. uretim-emirleri: SmartES üretim kilidi (`smartesUretiminiDenetle`, anahtar kapalıyken makine okunmaz), `smartesHareketi`, `smartesHataliKaydi` (`disari.ts`);
+   SmartES kaynaklı durdurma pasif nedeni kabul eder. İstek: duruş olayının nedenini sonradan düzelten bir düzeltme kaydı (3760 karar 8; bugün olay değişmez).
+9. arkon: terminal ekranında SmartES şeridi ve kapalı düğmeler (operatör, biten iş).
+10. uretim-emirleri (karar 8 a, yazıldı): `uretim_olayi_duzeltmesi` tablosu ve `uretim_olayi_gecerli` görünümü; `durusNedeniniDuzelt` (`disari.ts`); `emirDurdur`
+    yazdığı olayın kimliğini döner. Okuyan sorgular (duruş süreleri, emir akışı, son olay, kayıt akışı) görünüme geçti.

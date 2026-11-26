@@ -50,7 +50,15 @@ describe('makine yetkinliği göçü (gerçek PostgreSQL)', () => {
 
     assert.deepEqual(await gocleriUygula(ayar, GERCEK_KLASOR, { sema }), hepsi.slice(sira));
     assert.deepEqual(await sahip.sorgu('SELECT * FROM istasyonlar_yetkinlik ORDER BY kisi_id, istasyon_id'), once.yetkinlik);
-    assert.deepEqual(await sahip.sorgu('SELECT * FROM makine ORDER BY id'), once.makine);
+    const sonra = await sahip.sorgu<Record<string, unknown>>('SELECT * FROM makine ORDER BY id');
+    assert.deepEqual(
+      sonra.map(({ uretim_kaynagi, uretim_kaynagi_gecerlilik, ...eski }) => {
+        assert.equal(uretim_kaynagi, null);
+        assert.equal(uretim_kaynagi_gecerlilik, null);
+        return eski;
+      }),
+      once.makine,
+    );
     for (const tablo of ['istasyonlar_makine_yetkinlik', 'istasyonlar_makine_yetkinlik_gecmisi', 'istasyonlar_kisi_tezgah_siniri']) {
       assert.deepEqual(await sahip.sorgu(`SELECT count(*)::int AS n FROM ${tablo}`), [{ n: 0 }], tablo);
     }

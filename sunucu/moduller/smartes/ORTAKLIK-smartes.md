@@ -14,3 +14,7 @@
 | Ambar hareketi | okunan ambar hareketi: ambar kodu, hareket türü, miktar, stok no | `smartes_ambar_hareketi` | stok modülü ile kavram ortak (ambar, hareket); bağlamada |
 | Kalite kontrol sonucu | okunan ölçüm adı, değer, sonuç, iş emri no, stok no | `smartes_kalite_kontrol` | kalite kavramı; bağlamada |
 | Tanım gönderim izi | SmartES'e tanım gönderilen istasyon ve stok kartı (kod, durum) | `smartes_tanim_giden` (`tur`, `tmi_id`, `kod`); akış izi `smartes_akis_izi` | tmi_id sahibi istasyonlar / malzemeler; yabancı anahtar yok |
+| Kişi (SmartES kullanıcısı) | SmartES kullanıcı kodu karşılığı | `smartes_esleme` (`tur = 'kullanici'`, `tmi_id` = kisi.id); `smartes_hareket.smartes_kullanici`, `kisi_id` | sahibi kisiler (yabancı anahtar `kisi`) |
+| Üretim hareketi | ACTIVITY'den türeyen CORE komut izi (tür, an, durum) | `smartes_hareket` (`smartes_id`, `sira`) | üretim olayının sahibi uretim-emirleri; smartes yalnız `disari.ts` ile yazdırır |
+| Üretim kaynağı | makine ve istasyonun Terminal/SmartES seçimi | `makine.uretim_kaynagi`, `istasyon.sayim_kaynagi` | sahibi istasyonlar; Geçiş sayfası `disari.ts` ile değiştirir |
+| Fire onayı | red kaydının onay kuyruğu satırı | `smartes_adet_onayi.red_id` | sonuç uretim-emirleri sayımına ya da hatalı parça kaydına yazılır |

@@ -23,8 +23,8 @@ export function IstasyonFormu({ kayit, kapat }: { kayit: SurumluIstasyon | null;
   const [kapasiteKaynagi, kapasiteKaynagiYaz] = useState<KapasiteKaynagi | ''>(kayit?.kapasiteKaynagi ?? '');
   const [aktif, aktifYaz] = useState(kayit?.aktif ?? true);
   const [uretimAlani, uretimAlaniYaz] = useState(kayit?.uretimAlani ?? false);
-  const [sayimKaynagi, sayimKaynagiYaz] = useState<SayimKaynagi>(kayit?.sayimKaynagi ?? 'terminal');
-  const kaynakDegisti = kayit !== null && sayimKaynagi !== (kayit.sayimKaynagi ?? 'terminal');
+  // 3760: üretim kaynağı yalnız SmartES > Geçiş'ten değişir (makine başına, zaman damgalı); burada salt okunur görünür ve gövdeye girmez.
+  const sayimKaynagi: SayimKaynagi = kayit?.sayimKaynagi ?? 'terminal';
   const [silOnayi, silOnayiYaz] = useState(false);
   const { kaydet, sil, hata, mesgul } = useKayitIslemleri('/istasyonlar', kapat);
   const kisiler = useQuery({
@@ -45,7 +45,7 @@ export function IstasyonFormu({ kayit, kapat }: { kayit: SurumluIstasyon | null;
   }));
   // Kapasite kaynağını bugün ekran zorunlu tutar (IK4; sunucu bağlamada zorunlu kılacak).
   const govde: IstasyonGovdesi | null = isMerkeziId === '' || kapasiteKaynagi === '' ? null : {
-    kod, ad, isMerkeziId: Number(isMerkeziId), tip, aktif, kapasiteKaynagi, uretimAlani, sayimKaynagi,
+    kod, ad, isMerkeziId: Number(isMerkeziId), tip, aktif, kapasiteKaynagi, uretimAlani,
     sorumluKisiId: sorumluKisiId === '' ? null : Number(sorumluKisiId),
   };
 
@@ -91,23 +91,14 @@ export function IstasyonFormu({ kayit, kapat }: { kayit: SurumluIstasyon | null;
         <IsaretKutusu etiket="Aktif" checked={aktif} onChange={(o) => aktifYaz(o.target.checked)} />
         {/* Stok yalnız işaretli istasyonda üretim alanı konumu açar (SH5 b). */}
         <IsaretKutusu etiket="Üretim alanı" checked={uretimAlani} onChange={(o) => uretimAlaniYaz(o.target.checked)} />
-        <Secim
-          etiket="Sayım kaynağı"
-          secenekler={SAYIM_KAYNAGI_SECENEKLERI}
-          value={sayimKaynagi}
-          onChange={(o) => sayimKaynagiYaz(o.target.value as SayimKaynagi)}
-          ipucu={sayimKaynagi === 'smartes'
-            ? 'Sağlam adetler SmartES’ten gelir ve onaylanınca işlenir; bu istasyonda terminalin sayım tuşları kapanır.'
-            : 'Adetleri operatör Üretim Terminali’nde sayar.'}
+        <Girdi
+          etiket="Üretim kaynağı"
+          readOnly
+          value={SAYIM_KAYNAGI_SECENEKLERI.find((x) => x.deger === sayimKaynagi)?.baslik ?? sayimKaynagi}
+          ipucu={`${sayimKaynagi === 'smartes'
+            ? 'Hareket, sağlam sayım, hurda ve duruş SmartES’ten gelir; terminalde bu düğmeler kapalıdır. Makine kendi kaynağını seçebilir.'
+            : 'Operatör işi Üretim Terminali’nde başlatır, sayar ve bitirir.'} Kaynak SmartES > Geçiş’ten değişir.`}
         />
-        {kaynakDegisti && (
-          <p className="tc-form-tam tc-ist-uyari" role="status">
-            Değişiklik kaydettiğiniz andan itibaren geçerli: {sayimKaynagi === 'smartes'
-              ? 'daha önce başlamış SmartES kayıtları aktarılmaz, bundan sonra terminalde sayım yapılmaz.'
-              : 'bundan sonraki SmartES adetleri aktarılmaz, sayım terminalden yapılır.'}
-            {' '}İstasyon boşken değiştirin: o an çalışan işin kalan adedi iki kaynaktan da yazılamayabilir.
-          </p>
-        )}
         {kayit && <div className="tc-form-tam"><GecmisDugmesi kayitlar={[{ tablo: 'istasyon', anahtar: { id: kayit.id } }]} /></div>}
       </KayitPenceresi>
       <OnayPenceresi

@@ -55,6 +55,11 @@ export function MakineFormu({ kayit, kapat }: { kayit: SurumluMakine | null; kap
         <Girdi etiket="Tür" value={tur} onChange={(o) => turYaz(o.target.value)} />
         <Girdi etiket="Marka / model" value={markaModel} onChange={(o) => markaModelYaz(o.target.value)} />
         <Girdi etiket="Seri no" value={seriNo} onChange={(o) => seriNoYaz(o.target.value)} />
+        {kayit && (
+          <Girdi etiket="Üretim kaynağı" readOnly
+            value={kayit.uretimKaynagi == null ? 'İstasyona uy' : kayit.uretimKaynagi === 'smartes' ? 'SmartES' : 'Üretim Terminali'}
+            ipucu="Makine başına seçilir; seçilmemişse istasyonun kaynağı geçerlidir. Kaynak SmartES > Geçiş’ten değişir." />
+        )}
         <Secim
           etiket="İstasyon"
           bosSecenek="İstasyonsuz"

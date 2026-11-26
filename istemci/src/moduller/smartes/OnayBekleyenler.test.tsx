@@ -15,7 +15,7 @@ type Satir = AdetOnaylariCevabi['satirlar'][number];
 const satir = (ek: Partial<Satir>): Satir => ({
   id: 1, smartesId: 11, tur: 'saglam', adet: 40, duzeltme: false, durum: 'bekliyor', olusma: AN,
   isEmriNo: 'ORN-IE-1', emirId: 7, emirNo: 'ORN-UE-1', opNo: 20, smartesSaglam: 40, makineSaglam: 40,
-  istasyonKodu: 'ORN-IST-1', makineKodu: 'ORN-M01', baslangic: AN, kararVeren: null, kararZamani: null, redNedeni: null, ...ek,
+  istasyonKodu: 'ORN-IST-1', makineKodu: 'ORN-M01', baslangic: AN, kararVeren: null, kararZamani: null, redNedeni: null, fireAdi: null, ...ek,
 });
 const BEKLEYEN: AdetOnaylariCevabi = { satirlar: [
   satir({}),
@@ -28,14 +28,14 @@ const KARARLAR: AdetOnaylariCevabi = { satirlar: [
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 interface Cagri { yol: string; yontem: string; govde: unknown }
 
-function ac(kullanici: Kullanici) {
+function ac(kullanici: Kullanici, bekleyen: AdetOnaylariCevabi = BEKLEYEN) {
   const cagrilar: Cagri[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
     const yol = adres.replace('/api', '');
     const yontem = secenek?.method ?? 'GET';
     cagrilar.push({ yol, yontem, govde: typeof secenek?.body === 'string' ? JSON.parse(secenek.body) : undefined });
     if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
-    if (yol.startsWith('/smartes/adet-onaylari?gorunum=bekliyor')) return json(200, BEKLEYEN);
+    if (yol.startsWith('/smartes/adet-onaylari?gorunum=bekliyor')) return json(200, bekleyen);
     if (yol.startsWith('/smartes/adet-onaylari?gorunum=karar')) return json(200, KARARLAR);
     if (yol === '/smartes/adet-onaylari/onayla') return json(200, { islenen: 1, hatalar: [] } satisfies AdetKarariCevabi);
     if (yol === '/smartes/adet-onaylari/reddet') return json(200, { islenen: 1, hatalar: [] } satisfies AdetKarariCevabi);
@@ -59,7 +59,7 @@ describe('SmartES Onay bekliyor (3173 b)', () => {
     expect(within(tablo).getByText('Makine sayacı 45')).toBeTruthy();
     fireEvent.click(birinci!);
     await waitFor(() => { expect(cagrilar.some((c) => c.yol === '/smartes/adet-onaylari/onayla')).toBe(true); });
-    expect(cagrilar.find((c) => c.yol === '/smartes/adet-onaylari/onayla')?.govde).toEqual({ idler: [1] });
+    expect(cagrilar.find((c) => c.yol === '/smartes/adet-onaylari/onayla')?.govde).toEqual({ idler: [1], turler: { 1: 'saglam' } });
     expect(await screen.findByText(/1 kayıt onaylandı ve üretim emrine işlendi/)).toBeTruthy();
   });
 
@@ -73,6 +73,22 @@ describe('SmartES Onay bekliyor (3173 b)', () => {
     fireEvent.change(within(pencere).getByLabelText(/Red nedeni/), { target: { value: '  ORN sayım hatalı ' } });
     fireEvent.click(within(pencere).getByRole('button', { name: 'Reddet' }));
     await waitFor(() => { expect(cagrilar.find((c) => c.yol === '/smartes/adet-onaylari/reddet')?.govde).toEqual({ idler: [1], neden: 'ORN sayım hatalı' }); });
+  });
+
+  it('3760 (Risk): toplu onayda sayım düzeltmesi varsa önce sorulur; görülen tür onayla gider', async () => {
+    const cagrilar = ac(ONAYCI, { satirlar: [
+      satir({}),
+      satir({ id: 3, smartesId: 13, tur: 'sayim-duzeltme', adet: 2, fireAdi: 'ORN Fazla M30', emirNo: 'ORN-UE-3' }),
+    ], toplam: 2, sayfa: 1 } as AdetOnaylariCevabi);
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Seç: ORN-UE-1 · Op 20' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Seç: ORN-UE-3 · Op 20' }));
+    fireEvent.click(within(screen.getByRole('toolbar', { name: 'Onay bekleyen SmartES kayıtları: toplu işlem' })).getByRole('button', { name: /Seçilenleri onayla/ }));
+    expect(await screen.findByText(/1 satır sağlamdan düşer, toplam −2 adet/)).toBeTruthy();
+    expect(cagrilar.some((c) => c.yol === '/smartes/adet-onaylari/onayla')).toBe(false);
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Onayla' }));
+    await waitFor(() => {
+      expect(cagrilar.find((c) => c.yol === '/smartes/adet-onaylari/onayla')?.govde).toEqual({ idler: [1, 3], turler: { 1: 'saglam', 3: 'sayim-duzeltme' } });
+    });
   });
 
   it('yetkisi olmayan listeyi görür, karar düğmesi görmez', async () => {

@@ -4,10 +4,10 @@ import { surumSemasi } from '../surum.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 
 // SmartES bağlantısı (kart #778): kod eşlemesi, okunan makine gerçekleşenleri ve iş emri giden kutusu.
-export const SMARTES_ESLEME_TURLERI = ['istasyon', 'is-merkezi', 'makine', 'operasyon-tipi', 'durus-nedeni'] as const;
+export const SMARTES_ESLEME_TURLERI = ['istasyon', 'is-merkezi', 'makine', 'operasyon-tipi', 'durus-nedeni', 'kullanici'] as const;
 export type SmartesEslemeTuru = (typeof SMARTES_ESLEME_TURLERI)[number];
 export const SMARTES_ESLEME_TURU_ADLARI: Readonly<Record<SmartesEslemeTuru, string>> = {
-  istasyon: 'İstasyon', 'is-merkezi': 'İş merkezi', makine: 'Makine', 'operasyon-tipi': 'Operasyon tipi', 'durus-nedeni': 'Duruş nedeni',
+  istasyon: 'İstasyon', 'is-merkezi': 'İş merkezi', makine: 'Makine', 'operasyon-tipi': 'Operasyon tipi', 'durus-nedeni': 'Duruş nedeni', kullanici: 'Kullanıcı',
 };
 
 export const SMARTES_BAGLANTI_DURUMLARI = ['kapali', 'acik', 'ortam-degiskeni-yok'] as const;
@@ -320,8 +320,9 @@ export type MakineBulgulariCevabi = z.output<typeof makineBulgulariCevabi>;
 export const SMARTES_GELEN_AD_TURLERI = ['fire', 'durus'] as const;
 export type SmartesGelenAdTuru = (typeof SMARTES_GELEN_AD_TURLERI)[number];
 export const SMARTES_AD_DURUMLARI = ['eslendi', 'eslenmedi', 'yok', 'yeni'] as const;
-// Fire eşlemesinde: hatalı kaydı (kalite kararına) ya da doğrudan hurda (stoktan fire çıkışı).
-export const SMARTES_FIRE_SONUCLARI = ['hatali', 'hurda'] as const;
+// Fire eşlemesinde: hatalı kaydı (kalite kararına), doğrudan hurda (stoktan fire çıkışı) ya da sağlamdan düşen sayım düzeltmesi
+// (3760: "Fazla M30" gibi parça fazla saymadır, hurda değil).
+export const SMARTES_FIRE_SONUCLARI = ['hatali', 'hurda', 'sayim-duzeltme'] as const;
 export type SmartesFireSonucu = (typeof SMARTES_FIRE_SONUCLARI)[number];
 
 const nedenOzeti = z.object({ id: z.number().int(), kod: z.string(), ad: z.string() });
@@ -404,7 +405,7 @@ export const gelenAdAktarSonucu = z.object({ eklenen: z.number().int(), eslenen:
 export type GelenAdAktarSonucu = z.output<typeof gelenAdAktarSonucu>;
 
 // "Şimdi oku": SmartES'in tanım listeleri (istasyon, makine, operasyon, fire, duruş) yeniden okunur. Okunamayan liste eski haliyle kalır.
-export const SMARTES_LISTE_TURLERI = ['istasyon', 'makine', 'operasyon', 'fire', 'durus'] as const;
+export const SMARTES_LISTE_TURLERI = ['istasyon', 'makine', 'operasyon', 'fire', 'durus', 'kullanici'] as const;
 export const listeOkuCevabi = z.object({ okunan: z.array(z.enum(SMARTES_LISTE_TURLERI)), hatali: z.array(z.enum(SMARTES_LISTE_TURLERI)) });
 export type ListeOkuCevabi = z.output<typeof listeOkuCevabi>;
 
@@ -475,12 +476,16 @@ export type GelenAdOnerileriOnaylaGovdesi = z.input<typeof gelenAdOnerileriOnayl
 export const SMARTES_ADET_ONAY_DURUMLARI = ['bekliyor', 'onaylandi', 'reddedildi'] as const;
 export type SmartesAdetOnayDurumu = (typeof SMARTES_ADET_ONAY_DURUMLARI)[number];
 
+// 3760: tür onaylanınca yazılacak kaydı söyler. Hurda türleri SmartES red kaydından gelir; fireAdi o kaydın SmartES fire adıdır.
+export const SMARTES_ONAY_TURLERI = ['saglam', 'red', 'hurda', 'sayim-duzeltme', 'hatali'] as const;
+export type SmartesOnayTuru = (typeof SMARTES_ONAY_TURLERI)[number];
+
 export const adetOnaySorgusu = z.object({ ...sayfaSorguAlanlari, gorunum: z.enum(['bekliyor', 'karar']).prefault('bekliyor') });
 
 export const adetOnaylariCevabi = listeCevapSemasi(z.object({
   id: z.number().int(),
   smartesId: z.number().int(),
-  tur: z.enum(['saglam', 'red']),
+  tur: z.enum(SMARTES_ONAY_TURLERI),
   adet: z.number().int(),
   // SmartES'te sonradan değişen adedin farkı.
   duzeltme: z.boolean(),
@@ -500,10 +505,12 @@ export const adetOnaylariCevabi = listeCevapSemasi(z.object({
   kararVeren: z.string().nullable(),
   kararZamani: zamanSemasi.nullable(),
   redNedeni: z.string().nullable(),
+  fireAdi: z.string().nullable(),
 }));
 
 const onayKimlikleri = z.array(z.number().int().positive()).min(1).max(200);
-export const adetOnaylaGovdesi = z.object({ idler: onayKimlikleri });
+// turler: ekranın gördüğü tür (satır kimliği -> tür); fire satırında yazılacak türle tutmazsa onay çakışmayla döner.
+export const adetOnaylaGovdesi = z.object({ idler: onayKimlikleri, turler: z.record(z.string().regex(/^\d+$/), z.enum(SMARTES_ONAY_TURLERI)).optional() });
 export const adetReddetGovdesi = z.object({ idler: onayKimlikleri, neden: z.string().trim().min(1, 'Red nedeni zorunlu.').max(500, 'Red nedeni en çok 500 karakter.') });
 // Toplu karar satır satır işlenir: işlenemeyen satır (adım çalışmıyor, emir kapalı, arada karar verilmiş) nedeniyle döner, ötekiler işlenir.
 export const adetKarariCevabi = z.object({
@@ -589,3 +596,53 @@ export const gidenEmirleriCevabi = z.object({
   })),
 });
 export type GidenEmirleriCevabi = z.output<typeof gidenEmirleriCevabi>;
+
+// 3760: Geçiş tablosu. Üretim kaynağı makine başına seçilir, istasyon varsayılanı verir; makinenin seçimi null ise "istasyona uy".
+// Satırlar istasyon başınadır, makineleri altındadır; izleme sütunları makinenin SmartES kayıtlarından (makine eşlemesiyle) gelir.
+export const SMARTES_URETIM_KAYNAKLARI = ['terminal', 'smartes'] as const;
+export type SmartesUretimKaynagi = (typeof SMARTES_URETIM_KAYNAKLARI)[number];
+const gecisIzlemesi = {
+  sonHareket: z.object({ zaman: zamanSemasi, tur: z.string() }).nullable(),
+  sonSayim: z.object({ zaman: zamanSemasi, adet: z.number().int() }).nullable(),
+  sonHurda: z.object({ zaman: zamanSemasi, adet: z.number().int() }).nullable(),
+  sonDurus: z.object({ zaman: zamanSemasi, ad: z.string().nullable() }).nullable(),
+  bekleyenOnay: z.number().int(),
+  kisiBekleyen: z.number().int(),
+  hataliHareket: z.number().int(),
+};
+export const gecisCevabi = z.object({
+  aktarimAcik: z.boolean(),
+  satirlar: z.array(z.object({
+    istasyonId: z.number().int(), kod: z.string(), ad: z.string(),
+    kaynak: z.enum(SMARTES_URETIM_KAYNAKLARI), gecerlilik: zamanSemasi.nullable(),
+    makineler: z.array(z.object({
+      id: z.number().int(), kod: z.string(), ad: z.string(), smartesKodu: z.string().nullable(),
+      secim: z.enum(SMARTES_URETIM_KAYNAKLARI).nullable(), etkin: z.enum(SMARTES_URETIM_KAYNAKLARI), gecerlilik: zamanSemasi.nullable(),
+      ...gecisIzlemesi,
+    })),
+  })),
+  smartesMakine: z.number().int(),
+  bekleyenOnay: z.object({ saglam: z.number().int(), hurda: z.number().int(), duzeltme: z.number().int(), hatali: z.number().int() }),
+  eslenmemisDurus: z.number().int(),
+  eslenmemisFire: z.number().int(),
+  eslenmemisKullanici: z.number().int(),
+  kisiBekleyenHareket: z.number().int(),
+});
+export type GecisCevabi = z.output<typeof gecisCevabi>;
+// makineId null: istasyonun kaynağı (kaynak null olamaz). Makinede kaynak null: istasyona uy. onizleme: yazmadan etkileneni döner.
+export const gecisDegistirGovdesi = z.object({
+  istasyonId: z.number().int().positive(), makineId: z.number().int().positive().nullable(),
+  kaynak: z.enum(SMARTES_URETIM_KAYNAKLARI).nullable(), onizleme: z.boolean().prefault(false),
+}).strict();
+export type GecisDegistirGovdesi = z.input<typeof gecisDegistirGovdesi>;
+export const gecisDegistirCevabi = z.object({
+  uygulandi: z.boolean(),
+  gecerlilik: zamanSemasi.nullable(),
+  etkilenen: z.array(z.object({
+    makineId: z.number().int(), kod: z.string(), once: z.enum(SMARTES_URETIM_KAYNAKLARI), sonra: z.enum(SMARTES_URETIM_KAYNAKLARI), calisanIs: z.string().nullable(),
+  })),
+  bekleyenOnay: z.number().int(),
+});
+export type GecisDegistirCevabi = z.output<typeof gecisDegistirCevabi>;
+export const hareketYenidenDeneCevabi = z.object({ yazilan: z.number().int(), bekleyen: z.number().int(), hatali: z.number().int() });
+export type HareketYenidenDeneCevabi = z.output<typeof hareketYenidenDeneCevabi>;

@@ -1,6 +1,7 @@
 import type { ModulRotasi } from '../../ortak/rota/kesif.ts';
 import { BaglantiDurumu } from './BaglantiDurumu.tsx';
 import { Eslemeler } from './Eslemeler.tsx';
+import { Gecis } from './Gecis.tsx';
 import { MakineBulgulari } from './MakineBulgulari.tsx';
 import { MakinelerCanli } from './MakinelerCanli.tsx';
 import { Hesaplar } from './Hesaplar.tsx';
@@ -11,6 +12,7 @@ import { OnayBekleyenler } from './OnayBekleyenler.tsx';
 export const rotalar: ModulRotasi[] = [
   { yol: '/smartes', ekran: BaglantiDurumu },
   { yol: '/smartes/eslemeler', ekran: Eslemeler },
+  { yol: '/smartes/gecis', ekran: Gecis },
   { yol: '/smartes/onay-bekleyenler', ekran: OnayBekleyenler },
   { yol: '/smartes/makineler', ekran: MakinelerCanli },
   { yol: '/smartes/makine-bulgulari', ekran: MakineBulgulari },

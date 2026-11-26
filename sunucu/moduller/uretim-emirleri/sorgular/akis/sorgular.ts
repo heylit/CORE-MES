@@ -50,7 +50,7 @@ export function akisOlaylariGetir(db: Db, emirId: number): Promise<AkisOlaySatir
        SELECT k.is_emri_id AS "isEmriId", k.zaman, k.olay, NULL::int AS "durusNedeniId", k.istasyon_id AS "istasyonId", k.kisi_id AS "kisiId", 0 AS defter, k.id
          FROM uretim_kaydi k WHERE k.emir_id = $1
        UNION ALL
-       SELECT o.is_emri_id, o.zaman, o.olay, o.durus_nedeni_id, o.istasyon_id, o.kisi_id, 1, o.id FROM uretim_olayi o WHERE o.emir_id = $1
+       SELECT o.is_emri_id, o.zaman, o.olay, o.durus_nedeni_id, o.istasyon_id, o.kisi_id, 1, o.id FROM uretim_olayi_gecerli o WHERE o.emir_id = $1
      ) t ORDER BY t.zaman, t.defter, t.id`,
     [emirId],
   );
@@ -280,7 +280,7 @@ export function adimSayaclariGetir(db: Db, isEmriIdleri: readonly number[]): Pro
 export function adimSonOlayi(db: Db, emirId: number, isEmriId: number | null): Promise<OlaySatiri | null> {
   return db.tek<OlaySatiri>(
     `SELECT emir_id AS "emirId", olay, durus_nedeni_id AS "durusNedeniId", ${ISO('zaman')} AS zaman
-       FROM uretim_olayi WHERE emir_id = $1 AND is_emri_id IS NOT DISTINCT FROM $2::int AND olay <> 'ayar' ORDER BY id DESC LIMIT 1`,
+       FROM uretim_olayi_gecerli WHERE emir_id = $1 AND is_emri_id IS NOT DISTINCT FROM $2::int AND olay <> 'ayar' ORDER BY id DESC LIMIT 1`,
     [emirId, isEmriId],
   );
 }

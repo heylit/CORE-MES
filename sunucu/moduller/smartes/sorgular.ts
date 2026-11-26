@@ -2,7 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import type { Dilim } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type {
-  AlarmKaydi, AmbarKaydi, DurusKaydi, EslemeTuru, IlerlemeKaydi, IsEmriDurumuKaydi, KaliteKaydi, ListeKaydi, ListeTuru, MakineDurumu, MakineOkumasi,
+  AlarmKaydi, AmbarKaydi, DurusKaydi, EslemeTuru, HareketIzi, YeniHareket, IlerlemeKaydi, IsEmriDurumuKaydi, KaliteKaydi, ListeKaydi, ListeTuru, MakineDurumu, MakineOkumasi,
   OkumaKaynagi, RedKaydi, TanimIzi, TanimKaydi, TanimTuru, CevrimKaydi, HesapTuru, OeeKaydi,
 } from './kurallar.ts';
 
@@ -803,7 +803,7 @@ export interface AdEslemeSatiri {
   anahtar: string;
   ad: string;
   nedenId: number;
-  sonuc: 'hatali' | 'hurda' | null;
+  sonuc: 'hatali' | 'hurda' | 'sayim-duzeltme' | null;
   surum: number;
 }
 
@@ -822,7 +822,7 @@ export interface AdEslemeYazisi {
   anahtar: string;
   ad: string;
   nedenId: number;
-  sonuc: 'hatali' | 'hurda' | null;
+  sonuc: 'hatali' | 'hurda' | 'sayim-duzeltme' | null;
   kisiId: number;
 }
 
@@ -1106,22 +1106,34 @@ export async function tekGidenIsEmri(db: Db, isEmriNo: string | null): Promise<n
   return r?.id ?? null;
 }
 
+export type OnayTuru = 'saglam' | 'red' | 'hurda' | 'sayim-duzeltme' | 'hatali';
+
 export interface KilitliOnaySatiri {
   id: number;
-  tur: 'saglam' | 'red';
+  tur: OnayTuru;
   adet: number;
   durum: 'bekliyor' | 'onaylandi' | 'reddedildi';
   isEmriId: number | null;
   makineKodu: string | null;
   baslangic: Date | null;
+  redId: number | null;
+  fireAdi: string | null;
 }
+
+// Onay satırının kaynağı: sağlam satırı iş emri durumundan, hurda satırı SmartES red kaydından (3760). İkisi aynı sütun adlarıyla okunur.
+const ONAY_KAYNAGI = `LEFT JOIN smartes_is_emri_durumu d0 ON d0.smartes_id = o.smartes_id
+     LEFT JOIN smartes_red r ON r.smartes_id = o.red_id
+     CROSS JOIN LATERAL (SELECT coalesce(d0.is_emri_no, r.is_emri_no) AS is_emri_no, coalesce(d0.makine_kodu, r.makine_kodu) AS makine_kodu,
+       coalesce(d0.istasyon_kodu, r.istasyon_kodu) AS istasyon_kodu, d0.saglam, d0.makine_saglam, coalesce(d0.baslangic, r.zaman) AS baslangic,
+       r.neden AS fire_adi) d`;
 
 // Onay ve red aynı satırı iki kez işlemesin diye satır kilitlenir. SmartES iş emri no'su giden kutusundaki karşılığıyla CORE iş emrine bağlanır.
 export function onaySatiriKilitle(db: Db, id: number): Promise<KilitliOnaySatiri | null> {
   return db.tek<KilitliOnaySatiri>(
-    `SELECT o.id::int AS id, o.tur, o.adet, o.durum, g.is_emri_id AS "isEmriId", d.makine_kodu AS "makineKodu", d.baslangic
+    `SELECT o.id::int AS id, o.tur, o.adet, o.durum, g.is_emri_id AS "isEmriId", d.makine_kodu AS "makineKodu", d.baslangic,
+            o.red_id AS "redId", d.fire_adi AS "fireAdi"
        FROM smartes_adet_onayi o
-       JOIN smartes_is_emri_durumu d ON d.smartes_id = o.smartes_id
+       ${ONAY_KAYNAGI}
        ${TEK_GIDEN}
       WHERE o.id = $1
       FOR UPDATE OF o`,
@@ -1129,13 +1141,25 @@ export function onaySatiriKilitle(db: Db, id: number): Promise<KilitliOnaySatiri
   );
 }
 
+export async function redOnayToplami(db: Db, redId: number): Promise<{ toplam: number; satir: number }> {
+  const r = await db.tek<{ toplam: number; satir: number }>(
+    'SELECT coalesce(sum(adet), 0)::int AS toplam, count(*)::int AS satir FROM smartes_adet_onayi WHERE red_id = $1', [redId]);
+  return r ?? { toplam: 0, satir: 0 };
+}
+
+export async function redOnaySatiriEkle(
+  db: Db, y: { redId: number; tur: 'hurda' | 'hatali' | 'sayim-duzeltme'; adet: number; duzeltme: boolean; zaman: Date },
+): Promise<void> {
+  await db.sorgu('INSERT INTO smartes_adet_onayi (red_id, tur, adet, duzeltme, olusma) VALUES ($1, $2, $3, $4, $5)', [y.redId, y.tur, y.adet, y.duzeltme, y.zaman]);
+}
+
 export async function onayKarariYaz(
-  db: Db, id: number, k: { durum: 'onaylandi' | 'reddedildi'; kisiId: number; zaman: string; redNedeni: string | null },
+  db: Db, id: number, k: { durum: 'onaylandi' | 'reddedildi'; kisiId: number; zaman: string; redNedeni: string | null; tur?: OnayTuru },
 ): Promise<boolean> {
   const r = await db.tek<{ id: number }>(
-    `UPDATE smartes_adet_onayi SET durum = $2, karar_veren_kisi_id = $3, karar_zamani = $4::timestamptz, red_nedeni = $5
+    `UPDATE smartes_adet_onayi SET durum = $2, karar_veren_kisi_id = $3, karar_zamani = $4::timestamptz, red_nedeni = $5, tur = coalesce($6, tur)
       WHERE id = $1 AND durum = 'bekliyor' RETURNING id::int AS id`,
-    [id, k.durum, k.kisiId, k.zaman, k.redNedeni],
+    [id, k.durum, k.kisiId, k.zaman, k.redNedeni, k.tur ?? null],
   );
   return r !== null;
 }
@@ -1147,7 +1171,7 @@ export function bekleyenOnaySay(db: Db): Promise<number> {
 export interface OnayListeSatiri {
   id: number;
   smartesId: number;
-  tur: 'saglam' | 'red';
+  tur: OnayTuru;
   adet: number;
   duzeltme: boolean;
   durum: 'bekliyor' | 'onaylandi' | 'reddedildi';
@@ -1162,14 +1186,19 @@ export interface OnayListeSatiri {
   kararVerenKisiId: number | null;
   kararZamani: string | null;
   redNedeni: string | null;
+  fireAdi: string | null;
 }
 
-const ONAY_SECIMI = `SELECT o.id::int AS id, o.smartes_id AS "smartesId", o.tur, o.adet, o.duzeltme, o.durum, ${zamanMetni('o.olusma')} AS olusma,
+// Bekleyen fire satırının türü onayın yazacağı türdür: fire adının şimdiki eşlemesi (eşlenmemişse "hurda"). Aynı ada birden çok
+// eşleme (id ve ad anahtarı) varsa anahtarı en büyük olan geçerlidir; servisteki ada göre harita da öyle çözer.
+const ONAY_SECIMI = `SELECT o.id::int AS id, coalesce(o.smartes_id, o.red_id) AS "smartesId",
+       CASE WHEN o.red_id IS NOT NULL AND o.durum = 'bekliyor' THEN coalesce(fe.sonuc, 'hurda') ELSE o.tur END AS tur, o.adet, o.duzeltme, o.durum, ${zamanMetni('o.olusma')} AS olusma,
        d.is_emri_no AS "isEmriNo", g.is_emri_id AS "isEmriId", d.saglam AS "smartesSaglam", d.makine_saglam AS "makineSaglam", d.istasyon_kodu AS "istasyonKodu", d.makine_kodu AS "makineKodu",
        ${zamanMetni('d.baslangic')} AS baslangic, o.karar_veren_kisi_id AS "kararVerenKisiId", ${zamanMetni('o.karar_zamani')} AS "kararZamani",
-       o.red_nedeni AS "redNedeni"
+       o.red_nedeni AS "redNedeni", d.fire_adi AS "fireAdi"
      FROM smartes_adet_onayi o
-     JOIN smartes_is_emri_durumu d ON d.smartes_id = o.smartes_id
+     ${ONAY_KAYNAGI}
+     LEFT JOIN LATERAL (SELECT e.sonuc FROM smartes_ad_esleme e WHERE e.tur = 'fire' AND e.ad = d.fire_adi ORDER BY e.anahtar DESC LIMIT 1) fe ON true
      ${TEK_GIDEN}`;
 
 export function onaySay(db: Db, durum: 'bekliyor' | 'karar'): Promise<number> {
@@ -1222,4 +1251,145 @@ export function gunlukSonlari(db: Db): Promise<GunlukSatiri[]> {
 
 export async function gunlukHataSayisi(db: Db, bas: Date): Promise<number> {
   return (await db.tek<{ n: number }>("SELECT count(*)::int AS n FROM smartes_akis_gunlugu WHERE sonuc = 'hata' AND zaman >= $1", [bas]))?.n ?? 0;
+}
+
+/* ---------------- hareket aktarımı (3760) ---------------- */
+
+export function hareketIzi(db: Db, smartesId: number): Promise<HareketIzi[]> {
+  return db.sorgu<HareketIzi>(
+    'SELECT sira, tur, an, aktivite_adi AS "aktiviteAdi" FROM smartes_hareket WHERE smartes_id = $1 ORDER BY sira', [smartesId]);
+}
+
+// Satır kilidi (iş emri durumu satırı) altında çağrılır: aynı satırın iki okuması aynı sırayı yazamaz.
+export async function hareketleriEkle(
+  db: Db, smartesId: number, ilkSira: number, h: readonly YeniHareket[], g: { aktivite: number | null; kullanici: string | null; zaman: Date },
+): Promise<void> {
+  let sira = ilkSira;
+  for (const x of h) {
+    const inceleme = x.tur === 'zaman-degisti';
+    await db.sorgu(
+      `INSERT INTO smartes_hareket (smartes_id, sira, tur, an, aktivite, aktivite_adi, smartes_kullanici, durum, olusma)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [smartesId, sira++, x.tur, x.an, g.aktivite, x.aktiviteAdi, g.kullanici, inceleme ? 'inceleme' : 'bekliyor', g.zaman],
+    );
+  }
+}
+
+export interface BekleyenHareket {
+  smartesId: number;
+  sira: number;
+  durum: 'bekliyor' | 'kisi-bekliyor' | 'hata';
+  tur: 'ayar' | 'baslat' | 'duraklat' | 'devam' | 'durdur' | 'bitir';
+  an: Date;
+  aktiviteAdi: string | null;
+  smartesKullanici: string | null;
+  isEmriNo: string | null;
+  makineKodu: string | null;
+  baslangic: Date | null;
+}
+
+// Satır başına yalnız sıradaki ilk bekleyen hareket: önceki yazılmadan sonraki yazılmaz. "hata"daki satır bekler (yeniden deneme ayrı).
+export function siradakiHareketler(db: Db, smartesId?: number): Promise<BekleyenHareket[]> {
+  return db.sorgu<BekleyenHareket>(
+    `SELECT DISTINCT ON (h.smartes_id) h.smartes_id AS "smartesId", h.sira, h.durum, h.tur, h.an, h.aktivite_adi AS "aktiviteAdi",
+            h.smartes_kullanici AS "smartesKullanici", d.is_emri_no AS "isEmriNo", d.makine_kodu AS "makineKodu", d.baslangic
+       FROM smartes_hareket h JOIN smartes_is_emri_durumu d USING (smartes_id)
+      WHERE h.durum IN ('bekliyor', 'kisi-bekliyor', 'hata') AND ($1::bigint IS NULL OR h.smartes_id = $1)
+      ORDER BY h.smartes_id, h.sira`,
+    [smartesId ?? null],
+  );
+}
+
+export async function hareketKilitle(db: Db, smartesId: number, sira: number): Promise<{ durum: string } | null> {
+  return db.tek<{ durum: string }>('SELECT durum FROM smartes_hareket WHERE smartes_id = $1 AND sira = $2 FOR UPDATE', [smartesId, sira]);
+}
+
+export async function hareketDurumuYaz(
+  db: Db, smartesId: number, sira: number,
+  d: { durum: 'kisi-bekliyor' } | { durum: 'yazildi'; kisiId: number; durusNedeniId: number | null; eslenmemis: boolean; zaman: Date; olayId: number | null } | { durum: 'hata'; hata: string },
+): Promise<void> {
+  if (d.durum === 'yazildi') {
+    await db.sorgu(
+      `UPDATE smartes_hareket SET durum = 'yazildi', kisi_id = $3, durus_nedeni_id = $4, durus_eslenmemis = $5, yazilma = $6, hata = NULL, olay_id = $7
+        WHERE smartes_id = $1 AND sira = $2`,
+      [smartesId, sira, d.kisiId, d.durusNedeniId, d.eslenmemis, d.zaman, d.olayId],
+    );
+  } else if (d.durum === 'hata') {
+    await db.sorgu("UPDATE smartes_hareket SET durum = 'hata', hata = $3 WHERE smartes_id = $1 AND sira = $2 AND durum <> 'yazildi'", [smartesId, sira, d.hata]);
+  } else {
+    await db.sorgu("UPDATE smartes_hareket SET durum = 'kisi-bekliyor', hata = NULL WHERE smartes_id = $1 AND sira = $2 AND durum <> 'yazildi'", [smartesId, sira]);
+  }
+}
+
+export interface HareketSayaci { durum: string; adet: number }
+export function hareketSayaclari(db: Db): Promise<HareketSayaci[]> {
+  return db.sorgu<HareketSayaci>('SELECT durum, count(*)::int AS adet FROM smartes_hareket GROUP BY durum ORDER BY durum');
+}
+
+// Düzeltilen hareketlerin CORE duruş olayları döner (olayı bilinmeyen eski hareket yalnız izde düzelir).
+export async function eslenmemisDuruslariDuzelt(db: Db, ad: string, nedenId: number): Promise<number[]> {
+  const r = await db.sorgu<{ olayId: number | null }>(
+    `UPDATE smartes_hareket SET durus_nedeni_id = $2, durus_eslenmemis = false WHERE durus_eslenmemis AND aktivite_adi = $1 AND durum = 'yazildi'
+     RETURNING olay_id AS "olayId"`,
+    [ad, nedenId]);
+  return r.flatMap((x) => (x.olayId === null ? [] : [x.olayId]));
+}
+
+/* ---------------- Geçiş izlemesi (3760) ---------------- */
+
+export interface MakineIzlemesi {
+  makineKodu: string;
+  sonHareketZamani: Date | null; sonHareketTuru: string | null;
+  sonDurusZamani: Date | null; sonDurusAdi: string | null;
+  kisiBekleyen: number; hataliHareket: number;
+  sonSayimZamani: Date | null; sonSayimAdedi: number | null;
+  sonHurdaZamani: Date | null; sonHurdaAdedi: number | null;
+  bekleyenOnay: number;
+}
+
+// SmartES makine kodu başına son yazılan hareket, duruş, onaylanan sayım ve hurda, bekleyen onay ve hareket sayıları.
+export function makineIzlemeleri(db: Db): Promise<MakineIzlemesi[]> {
+  return db.sorgu<MakineIzlemesi>(
+    `WITH h AS (
+       SELECT d.makine_kodu, h.tur, h.durum, h.yazilma, h.aktivite_adi FROM smartes_hareket h JOIN smartes_is_emri_durumu d USING (smartes_id)
+        WHERE d.makine_kodu IS NOT NULL),
+     o AS (
+       SELECT d.makine_kodu, o.tur, o.adet, o.durum, o.karar_zamani FROM smartes_adet_onayi o ${ONAY_KAYNAGI} WHERE d.makine_kodu IS NOT NULL),
+     kodlar AS (SELECT makine_kodu FROM h UNION SELECT makine_kodu FROM o)
+     SELECT k.makine_kodu AS "makineKodu",
+       sh.yazilma AS "sonHareketZamani", sh.tur AS "sonHareketTuru", sd.yazilma AS "sonDurusZamani", sd.aktivite_adi AS "sonDurusAdi",
+       (SELECT count(*)::int FROM h WHERE h.makine_kodu = k.makine_kodu AND h.durum = 'kisi-bekliyor') AS "kisiBekleyen",
+       (SELECT count(*)::int FROM h WHERE h.makine_kodu = k.makine_kodu AND h.durum = 'hata') AS "hataliHareket",
+       ss.karar_zamani AS "sonSayimZamani", ss.adet AS "sonSayimAdedi", su.karar_zamani AS "sonHurdaZamani", su.adet AS "sonHurdaAdedi",
+       (SELECT count(*)::int FROM o WHERE o.makine_kodu = k.makine_kodu AND o.durum = 'bekliyor') AS "bekleyenOnay"
+     FROM kodlar k
+     LEFT JOIN LATERAL (SELECT yazilma, tur FROM h WHERE h.makine_kodu = k.makine_kodu AND h.durum = 'yazildi' ORDER BY yazilma DESC LIMIT 1) sh ON true
+     LEFT JOIN LATERAL (SELECT yazilma, aktivite_adi FROM h WHERE h.makine_kodu = k.makine_kodu AND h.durum = 'yazildi' AND h.tur = 'durdur'
+                         ORDER BY yazilma DESC LIMIT 1) sd ON true
+     LEFT JOIN LATERAL (SELECT karar_zamani, adet FROM o WHERE o.makine_kodu = k.makine_kodu AND o.durum = 'onaylandi' AND o.tur = 'saglam'
+                         ORDER BY karar_zamani DESC LIMIT 1) ss ON true
+     LEFT JOIN LATERAL (SELECT karar_zamani, adet FROM o WHERE o.makine_kodu = k.makine_kodu AND o.durum = 'onaylandi' AND o.tur <> 'saglam'
+                         ORDER BY karar_zamani DESC LIMIT 1) su ON true`,
+  );
+}
+
+export interface GecisOzeti {
+  bekleyenSaglam: number; bekleyenHurda: number; bekleyenDuzeltme: number; bekleyenHatali: number;
+  eslenmemisDurus: number; eslenmemisFire: number; eslenmemisKullanici: number; kisiBekleyenHareket: number;
+}
+export async function gecisOzeti(db: Db): Promise<GecisOzeti> {
+  const r = await db.tek<GecisOzeti>(
+    `SELECT
+       (SELECT count(*)::int FROM smartes_adet_onayi WHERE durum = 'bekliyor' AND tur = 'saglam') AS "bekleyenSaglam",
+       (SELECT count(*)::int FROM smartes_adet_onayi WHERE durum = 'bekliyor' AND tur IN ('hurda', 'red')) AS "bekleyenHurda",
+       (SELECT count(*)::int FROM smartes_adet_onayi WHERE durum = 'bekliyor' AND tur = 'sayim-duzeltme') AS "bekleyenDuzeltme",
+       (SELECT count(*)::int FROM smartes_adet_onayi WHERE durum = 'bekliyor' AND tur = 'hatali') AS "bekleyenHatali",
+       (SELECT count(DISTINCT aktivite_adi)::int FROM smartes_hareket WHERE durus_eslenmemis) AS "eslenmemisDurus",
+       (SELECT count(DISTINCT r.neden)::int FROM smartes_adet_onayi o JOIN smartes_red r ON r.smartes_id = o.red_id
+         WHERE o.durum = 'bekliyor' AND r.neden IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM smartes_ad_esleme e WHERE e.tur = 'fire' AND e.ad = r.neden)) AS "eslenmemisFire",
+       (SELECT count(DISTINCT smartes_kullanici)::int FROM smartes_hareket WHERE durum = 'kisi-bekliyor') AS "eslenmemisKullanici",
+       (SELECT count(*)::int FROM smartes_hareket WHERE durum = 'kisi-bekliyor') AS "kisiBekleyenHareket"`,
+  );
+  return r!;
 }

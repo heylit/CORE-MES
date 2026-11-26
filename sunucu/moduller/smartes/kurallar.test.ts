@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
+  hareketDurumu, hedefDurum, isEmriDurumuOku, yeniHareketler,
   adetDegistiMi, alarmTekrarTonu, birikimliSayac, cizelgeParcalari, nedensizDuruslar, sayimKarsilastir, terminAsimi, alarmKimligi, alarmOku, alarmSatiri,
   ambarOku, ASGARI_PENCERE_MS, ATLAMA_ESIGI, durusOku, gonderimOzeti, isEmriParametreleri, kapanisParametreleri, kaliteOku, listedekiKodlar, okumaPenceresi,
   ORTUSME_MS, pencereAtlanmaliMi, redOku, smartesAkisDurumu, smartesMakineleri, sonucBilinmiyorMu, tanimEylemi, tanimKoduUygunMu, bugunDilimleri,
@@ -539,5 +540,53 @@ describe('Neden aktarımı: kod uzunluğu (3655 N2)', () => {
       { anahtar: 'id:12345678', smartesId: 12345678, ad: 'ORN sınırda', grup: null, pasif: false },
     ], new Map(), []);
     assert.deepEqual(plan.map((x) => [x.anahtar, x.eylem, x.kod]), [['id:5', 'ekle', 'SME-5'], ['id:123456789', 'atla', null], ['id:12345678', 'ekle', 'SME-12345678']]);
+  });
+});
+
+describe('3760: SmartES ACTIVITY satırından CORE hareketleri', () => {
+  const t = (dk: number) => new Date(Date.UTC(2026, 10, 26, 8, dk));
+  const satir = (g: Record<string, string>) => isEmriDurumuOku({ WORKORDER_STATUS_ID: '1', START_DATETIME: '2026-11-26T08:00:00Z', ...g })!;
+  const izle = (h: ReturnType<typeof yeniHareketler>, onceki: Parameters<typeof yeniHareketler>[0] = []) =>
+    [...onceki, ...h.map((x, i) => ({ sira: onceki.length + i + 1, ...x }))];
+
+  test('ACTIVITY, adı ve kullanıcısı satırdan okunur; değer anlamı tek tablodan', () => {
+    const k = satir({ ACTIVITY: '3', ACTIVITY_NAME: 'ORN Arıza', USER_CODE: 'ORN-U1' });
+    assert.deepEqual([k.aktivite, k.aktiviteAdi, k.kullanici], [3, 'ORN Arıza', 'ORN-U1']);
+    assert.deepEqual([1, 2, 3, 9].map((a) => hedefDurum({ aktivite: a, bitti: null, bitis: null })), ['calisiyor', 'hazirlik', 'durdu', null]);
+    assert.equal(hedefDurum({ aktivite: 1, bitti: true, bitis: null }), 'bitti');
+  });
+
+  test('hazırlık, üretim, duruş, devam ve bitiş sırayla hareket olur; aynı satır ikinci kez hareket üretmez', () => {
+    let iz = izle(yeniHareketler([], satir({ ACTIVITY: '2' }), t(1)));
+    assert.deepEqual(iz.map((h) => [h.tur, h.an.toISOString()]), [['ayar', t(0).toISOString()]]);
+    assert.deepEqual(yeniHareketler(iz, satir({ ACTIVITY: '2' }), t(2)), []);
+    iz = izle(yeniHareketler(iz, satir({ ACTIVITY: '1', ACTIVITY_START_DATETIME: '2026-11-26T08:10:00Z' }), t(11)), iz);
+    iz = izle(yeniHareketler(iz, satir({ ACTIVITY: '3', ACTIVITY_NAME: 'ORN Arıza' }), t(20)), iz);
+    assert.deepEqual(yeniHareketler(iz, satir({ ACTIVITY: '3', ACTIVITY_NAME: 'ORN Arıza' }), t(21)), []);
+    // Duruş adı değişince duruş kapanıp yenisi açılır.
+    iz = izle(yeniHareketler(iz, satir({ ACTIVITY: '3', ACTIVITY_NAME: 'ORN Malzeme' }), t(25)), iz);
+    iz = izle(yeniHareketler(iz, satir({ ACTIVITY: '1' }), t(30)), iz);
+    iz = izle(yeniHareketler(iz, satir({ ACTIVITY: '1', IS_DONE: 'true', END_DATETIME: '2026-11-26T08:40:00Z' }), t(41)), iz);
+    assert.deepEqual(iz.map((h) => h.tur), ['ayar', 'baslat', 'durdur', 'devam', 'durdur', 'devam', 'bitir']);
+    assert.equal(iz.find((h) => h.tur === 'baslat')?.an.toISOString(), t(10).toISOString());
+    assert.equal(iz.at(-1)?.an.toISOString(), t(40).toISOString());
+    assert.equal(hareketDurumu(iz), 'bitti');
+    assert.deepEqual(yeniHareketler(iz, satir({ ACTIVITY: '1', IS_DONE: 'true', END_DATETIME: '2026-11-26T08:40:00Z' }), t(50)), []);
+  });
+
+  test('ilk okumada bitmiş satır başlat ve bitir olur; başlamış işte hazırlığa dönüş duraklatmadır; an geri gitmez', () => {
+    assert.deepEqual(yeniHareketler([], satir({ IS_DONE: 'true', END_DATETIME: '2026-11-26T08:30:00Z' }), t(31)).map((h) => h.tur), ['baslat', 'bitir']);
+    const iz = izle(yeniHareketler([], satir({ ACTIVITY: '1' }), t(5)));
+    const geri = yeniHareketler(iz, satir({ ACTIVITY: '2', ACTIVITY_START_DATETIME: '2026-11-26T07:00:00Z' }), t(6));
+    assert.deepEqual(geri.map((h) => [h.tur, h.an.toISOString()]), [['duraklat', t(0).toISOString()]]);
+    assert.deepEqual(yeniHareketler([], satir({}), t(1)), []);
+  });
+
+  test('yazılmış başlangıç SmartES\'te değişirse düzeltme izi bir kez düşer; CORE hareketi tekrarlanmaz', () => {
+    const iz = izle(yeniHareketler([], satir({ ACTIVITY: '1' }), t(1)));
+    const degisen = satir({ ACTIVITY: '1', START_DATETIME: '2026-11-26T08:03:00Z' });
+    const d = yeniHareketler(iz, degisen, t(5));
+    assert.deepEqual(d.map((h) => [h.tur, h.aktiviteAdi]), [['zaman-degisti', `baslat:${t(3).toISOString()}`]]);
+    assert.deepEqual(yeniHareketler(izle(d, iz), degisen, t(6)), []);
   });
 });
