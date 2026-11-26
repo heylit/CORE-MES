@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { csvIndir } from '../veri/csv.ts';
 import { grupOgeleri, Tablo, tabloCsvSatirlari, type Sutun, type TabloAraci } from './Tablo.tsx';
+import { tabloTercihleriniSifirla } from '../veri/tablo-tercihi.ts';
 
 vi.mock('../veri/csv.ts', async (asil) => ({ ...await asil<object>(), csvIndir: vi.fn() }));
 
@@ -202,5 +203,54 @@ describe('Tablo grupları (3284)', () => {
     const on = vi.fn(() => <span>on</span>);
     render(<Tablo etiket="Liste" sutunlar={GS} satirlar={VERI} satirAnahtari={(s) => s.no} grup={{ yol: (s) => [s.tur], baslik: (y) => y[0], on }} />);
     expect(on).toHaveBeenCalledWith(['hm'], [VERI[0], VERI[2], VERI[3]]);
+  });
+});
+
+describe('Tablo standardı (3748)', () => {
+  afterEach(() => { cleanup(); tabloTercihleriniSifirla(); localStorage.clear(); });
+  interface K { no: number; ad: string; kalite: string | null; olcu: string | null }
+  const S3748: readonly Sutun<K>[] = [
+    { anahtar: 'ad', baslik: 'Kalem', hucre: (k) => k.ad },
+    { anahtar: 'kalite', baslik: 'Kalite', hucre: (k) => k.kalite, bossaGizle: true },
+    { anahtar: 'olcu', baslik: 'Ölçü', hucre: (k) => k.olcu, bossaGizle: true },
+  ];
+  const L: K[] = [{ no: 1, ad: 'ORN-MIL-20', kalite: null, olcu: 'Ø20' }, { no: 2, ad: 'ORN-PUL-8', kalite: '', olcu: null }];
+  const ciz = (arac?: TabloAraci<K>) => render(<Tablo etiket="Kalemler" sutunlar={S3748} satirlar={L} satirAnahtari={(k) => k.no} arac={arac} />);
+  const basliklar = () => screen.getAllByRole('columnheader').map((h) => h.textContent);
+
+  it('bütün satırlarda boş olan sütun çizilmez; bir satırda dolu olan kalır', () => {
+    ciz();
+    expect(basliklar()).toEqual(['Kalem', 'Ölçü']);
+  });
+
+  it('gizlenen sütun CSV\'de kalır', () => {
+    ciz({ csv: { ad: 'kalem' } });
+    fireEvent.click(screen.getByRole('button', { name: 'CSV' }));
+    expect(vi.mocked(csvIndir).mock.lastCall?.[1]).toEqual(['Kalem', 'Kalite', 'Ölçü']);
+  });
+
+  it('Görünüm menüsünde sütun gizlenir ve tabloya göre saklanır; ilk sütun listede yok', () => {
+    ciz({ gorunum: { anahtar: 'deneme-kalem' } });
+    fireEvent.click(screen.getByText('Görünüm'));
+    expect(screen.queryByRole('checkbox', { name: 'Kalem' })).toBeNull();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Ölçü' }));
+    expect(basliklar()).toEqual(['Kalem']);
+    expect(localStorage.getItem('tmi:tablo:sutun:deneme-kalem')).toBe('olcu');
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Ölçü' }));
+    expect(basliklar()).toEqual(['Kalem', 'Ölçü']);
+  });
+
+  it('satır aralığı seçimi kabın işaretine yazılır ve saklanır', () => {
+    const { container } = ciz({ gorunum: { anahtar: 'deneme-kalem' } });
+    expect(container.querySelector('.tc-tablo-kap')?.hasAttribute('data-yogunluk')).toBe(false);
+    fireEvent.click(screen.getByText('Görünüm'));
+    fireEvent.click(screen.getByRole('radio', { name: 'Yoğun' }));
+    expect(container.querySelector('.tc-tablo-kap')?.getAttribute('data-yogunluk')).toBe('yogun');
+    expect(localStorage.getItem('tmi:tablo:yogunluk')).toBe('yogun');
+  });
+
+  it('gorunum verilmeyen tabloda menü yok', () => {
+    ciz({ csv: { ad: 'kalem' } });
+    expect(screen.queryByText('Görünüm')).toBeNull();
   });
 });

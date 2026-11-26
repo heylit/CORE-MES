@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type HTMLAttributes, type
 import type { SimgeAdi } from '../tasarim/simgeler.ts';
 import { csvIndir, type CsvDegeri } from '../veri/csv.ts';
 import { etkiAcik } from '../veri/etki.ts';
+import { useGizliSutunlar, useYogunluk, type Yogunluk } from '../veri/tablo-tercihi.ts';
 import { sonrakiSiralama, type Siralama } from '../veri/liste-durumu.ts';
 import { Girdi } from './Alan.tsx';
 import { Dugme } from './Dugme.tsx';
@@ -37,6 +38,8 @@ export interface Sutun<S> {
   kartta?: boolean;
   // Kompakt kartta sütun başlığın yanında, etiketsiz rozet olarak durur.
   kartRozet?: boolean;
+  // 3748: listedeki bütün satırlarda boşsa (null, undefined, '') sütun çizilmez; CSV'de kalır.
+  bossaGizle?: boolean;
 }
 
 export interface TabloSuzgeci {
@@ -52,6 +55,9 @@ export interface TabloAraci<S> {
   // Ekranda görünen satırlar aktarılır; sayfalı listede bütün liste isteniyorsa `satirlar` verilir.
   csv?: { ad: string; satirlar?: readonly S[] };
   sag?: ReactNode;
+  // 3748: "Görünüm" menüsü: satır aralığı (bütün tablolar) ve bu tablonun sütunları. `anahtar` gizlenen sütunların saklandığı
+  // tablo adıdır (ekranlar arasında tekil). İlk sütun gizlenmez; gizlenen sütun CSV'de kalır.
+  gorunum?: { anahtar: string };
 }
 
 // Satırlar dıştan içe başlıklarla gruplanır (kart 3284). Grup sırası satırların ilk göründüğü sıradır; ekran satırları
@@ -182,8 +188,52 @@ export function tabloCsvSatirlari<S>(sutunlar: readonly Sutun<S>[], satirlar: re
   return { basliklar: alinan.map((s) => s.baslik), satirlar: satirlar.map((satir) => alinan.map((s) => csvHucresi(s, satir))) };
 }
 
-function AracCubugu<S>({ arac, sutunlar, satirlar }: { arac: TabloAraci<S>; sutunlar: readonly Sutun<S>[]; satirlar: readonly S[] }) {
-  const { arama, suzgec, csv, sag } = arac;
+const YOGUNLUK_SECENEKLERI: readonly [Yogunluk | null, string][] = [[null, 'Cihaza göre'], ['rahat', 'Rahat'], ['yogun', 'Yoğun']];
+
+function GorunumMenusu<S>({ sutunlar, gizli, gizle }: {
+  sutunlar: readonly Sutun<S>[]; gizli: ReadonlySet<string>; gizle: (anahtar: string, gizli: boolean) => void;
+}) {
+  const [yogunluk, yogunlukYaz] = useYogunluk();
+  const kok = useRef<HTMLDetailsElement>(null);
+  const [acik, acikYaz] = useState(false);
+  // Menü dışına basınca ya da Esc ile kapanır; odak düğmeye döner.
+  useEffect(() => {
+    if (!acik) return undefined;
+    const dis = (o: Event) => { if (kok.current && !kok.current.contains(o.target as Node)) acikYaz(false); };
+    const tus = (o: KeyboardEvent) => { if (o.key === 'Escape') { acikYaz(false); kok.current?.querySelector('summary')?.focus(); } };
+    document.addEventListener('pointerdown', dis);
+    document.addEventListener('keydown', tus);
+    return () => { document.removeEventListener('pointerdown', dis); document.removeEventListener('keydown', tus); };
+  }, [acik]);
+  const secilir = sutunlar.filter((s, i) => i > 0 && s.baslik !== '');
+  return (
+    <details ref={kok} className="tc-tablo-gorunum" open={acik} onToggle={(o) => { acikYaz(o.currentTarget.open); }}>
+      <summary className="tc-dugme tc-dugme-ikincil tc-dugme-normal"><Simge ad="eye" boyut="k" /> Görünüm</summary>
+      <div className="tc-tablo-gorunum-panel">
+        <fieldset>
+          <legend>Satır aralığı</legend>
+          {YOGUNLUK_SECENEKLERI.map(([d, b]) => (
+            <label key={b}><input type="radio" name="tc-tablo-yogunluk" checked={yogunluk === d} onChange={() => { yogunlukYaz(d); }} /> {b}</label>
+          ))}
+        </fieldset>
+        {secilir.length > 0 && (
+          <fieldset>
+            <legend>Sütunlar</legend>
+            {secilir.map((s) => (
+              <label key={s.anahtar}><input type="checkbox" checked={!gizli.has(s.anahtar)} onChange={(o) => { gizle(s.anahtar, !o.target.checked); }} /> {s.baslik}</label>
+            ))}
+          </fieldset>
+        )}
+      </div>
+    </details>
+  );
+}
+
+function AracCubugu<S>({ arac, sutunlar, satirlar, gizli, gizle }: {
+  arac: TabloAraci<S>; sutunlar: readonly Sutun<S>[]; satirlar: readonly S[];
+  gizli: ReadonlySet<string>; gizle: (anahtar: string, gizli: boolean) => void;
+}) {
+  const { arama, suzgec, csv, sag, gorunum } = arac;
   const aktarilan = csv?.satirlar ?? satirlar;
   return (
     <div className="tc-tablo-arac">
@@ -204,9 +254,10 @@ function AracCubugu<S>({ arac, sutunlar, satirlar }: { arac: TabloAraci<S>; sutu
           ))}
         </div>
       )}
-      {(csv || sag) && (
+      {(csv || sag || gorunum) && (
         <div className="tc-tablo-arac-sag">
           {sag}
+          {gorunum && <GorunumMenusu sutunlar={sutunlar} gizli={gizli} gizle={gizle} />}
           {csv && (
             <Dugme
               simge="download" disabled={aktarilan.length === 0}
@@ -310,11 +361,19 @@ function BosHucre() {
   return <span className="tc-tablo-yok" title={BOS_HUCRE_METNI}><span aria-hidden="true">—</span><span className="tc-gizli-etiket">{BOS_HUCRE_METNI}</span></span>;
 }
 
+const bosDeger = (d: ReactNode) => d === null || d === undefined || d === '';
+
 export function Tablo<S>({
-  etiket, sutunlar, satirlar, satirAnahtari, satirSec, bosMesaj, bosEylem, siralama = null, siralamaDegistir, sayfalama, mesgul = false, arac,
+  etiket, sutunlar: tumSutunlar, satirlar, satirAnahtari, satirSec, bosMesaj, bosEylem, siralama = null, siralamaDegistir, sayfalama, mesgul = false, arac,
   yukleniyor = false, satirEylemi, toplu, kip = 'uyarlanir', serit, grup,
 }: Ozellikler<S>) {
   const [katli, katliYaz] = useState<ReadonlySet<string>>(() => new Set());
+  const [gizliSutunlar, sutunGizle] = useGizliSutunlar(arac?.gorunum?.anahtar ?? null);
+  const [yogunluk] = useYogunluk();
+  // İlk sütun satırın kimliğidir: kullanıcı gizleyemez, boş olsa da çizilir.
+  const sutunlar = tumSutunlar.filter((s, i) => i === 0 || !(
+    (arac?.gorunum && gizliSutunlar.has(s.anahtar)) || (s.bossaGizle && satirlar.length > 0 && satirlar.every((r) => bosDeger(s.hucre(r))))
+  ));
   const telefon = useTelefon();
   const kayitKarti = kip === 'kayit' && telefon;
   const kaydir = kip === 'kaydir' || (kip === 'kayit' && !telefon);
@@ -400,7 +459,7 @@ export function Tablo<S>({
   };
   const alt = sayfalama && <Sayfalama {...sayfalama} degistir={sayfaDegistir} satirSayisi={satirlar.length} />;
 
-  const ust = arac && <AracCubugu arac={arac} sutunlar={sutunlar} satirlar={satirlar} />;
+  const ust = arac && <AracCubugu arac={arac} sutunlar={tumSutunlar} satirlar={satirlar} gizli={gizliSutunlar} gizle={sutunGizle} />;
 
   if (bos && yukleniyor) {
     return <>{ust}{etkiAcik('tablo-iskelet') ? <TabloIskeleti etiket={etiket} sutunlar={sutunlar} /> : <DurumKutusu durum="yukleniyor" />}</>;
@@ -482,7 +541,7 @@ export function Tablo<S>({
                 const sinif = [s.hizala === 'sag' && 'tc-tablo-sag', s.mono && 'mono', s.kirilmaz && 'tc-tablo-kirilmaz', s.kartTamSatir && 'tc-tablo-tam', kayitKarti && s === kartBasligi && 'tc-tablo-kart-baslik', sabitSinif(s)].filter(Boolean).join(' ');
                 return (
                   <td key={s.anahtar} data-baslik={s.baslik} data-kart-gizli={kartGizli(s) ? '' : undefined} data-kart-rozet={kayitKarti && rozetMi(s) && s !== kartBasligi ? '' : undefined} className={sinif || undefined}>
-                    {icerik === null || icerik === undefined || icerik === '' ? <BosHucre />
+                    {bosDeger(icerik) ? <BosHucre />
                       : kaydir && s.kes ? <span className="tc-tablo-kes" title={kesIpucu(s, satir, icerik)}>{icerik}</span> : icerik}
                   </td>
                 );
@@ -505,7 +564,7 @@ export function Tablo<S>({
   return (
     <>
       {ust}
-      <div ref={kap} className="tc-tablo-kap" data-olcer={kaydir ? undefined : ''} data-kaydir={kaydir ? '' : undefined} data-kip={kart ? 'kart' : undefined} data-kompakt={kayitKarti ? '' : undefined} data-buyuk-secim={topluAcik && toplu?.buyukSecim ? '' : undefined} aria-busy={mesgul || undefined}>
+      <div ref={kap} className="tc-tablo-kap" data-olcer={kaydir ? undefined : ''} data-kaydir={kaydir ? '' : undefined} data-kip={kart ? 'kart' : undefined} data-kompakt={kayitKarti ? '' : undefined} data-buyuk-secim={topluAcik && toplu?.buyukSecim ? '' : undefined} data-yogunluk={yogunluk ?? undefined} aria-busy={mesgul || undefined}>
         {/* Kart kipinde sütun başlığı görünmez; sıralama düğmeleri kartların üstüne taşınır. */}
         {kart && siralanan.length > 0 && (
           <div className="tc-tablo-siralar" role="group" aria-label="Sıralama">
