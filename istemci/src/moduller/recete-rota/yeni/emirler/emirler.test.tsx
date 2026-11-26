@@ -1278,3 +1278,27 @@ describe('R3 Üretim emirleri: adımın süre özeti (2571)', () => {
     expect(op(30).textContent).not.toContain('Hazırlık');
   });
 });
+
+// 3755 (Test1 B1): parça revizyonu uyarısı yalnız Reçete ve Rota'nın emir panelindedir; emir sayfasına gömülü "Adımlar" bölümü
+// çizmez (emir sayfası kendi şeridini çizer), sayfada tek uyarı kalır.
+describe('R3 parça revizyonu uyarısı (3755)', () => {
+  const liste = () => json(200, {
+    cizim: { belgeId: 9, ad: 'Deneme cizim' },
+    revizyonlar: [{ revizyonId: 12, kod: '01', durum: 'yayinda', yayinlandi: '2026-11-20T08:00:00+00:00', rotaUyarisi: null }],
+    varsayilanRevizyonId: 12, rotaCizimRevizyonId: null, rotaHarfi: null,
+  });
+  it('panelde tek uyarı ve emir sayfasına bağlantı; emir sayfasının adım bölümünde uyarı yok', async () => {
+    sunucuKur(YONETICI, { yazmalar: { 'GET /adimli-emirler/parca-revizyonlari': liste } });
+    rrAc();
+    const b = await emirAc();
+    const uyari = await within(b).findAllByText('Parça revizyonu seçilmemiş.');
+    expect(uyari).toHaveLength(1);
+    expect(within(b).getByRole('link', { name: 'Revizyonu emir sayfasında seç' }).getAttribute('href')).toBe('/uretim-emirleri/61');
+    cleanup();
+    sunucuKur(YONETICI, { yazmalar: { 'GET /adimli-emirler/parca-revizyonlari': liste } });
+    const s = await sayfa();
+    await within(s).findByRole('button', { name: 'Plana al' });
+    await new Promise((r) => { setTimeout(r, 100); });
+    expect(within(s).queryByText('Parça revizyonu seçilmemiş.')).toBeNull();
+  });
+});

@@ -1,13 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
-import { Dugme, Pencere, Secim, Simge } from '../../../../ortak/arayuz/index.ts';
+import { Link } from 'react-router-dom';
+import { Simge } from '../../../../ortak/arayuz/index.ts';
 import { api } from '../../../../ortak/veri/api.ts';
 import type { ParcaRevizyonlariCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { parcaRevMetni } from '../../../uretim-emirleri/disari.ts';
 import { tarih } from '../bicim.ts';
 import { RR_ANAHTARI } from '../veri.ts';
-import type { EkranOzellikleri } from '../sekmeler.ts';
-import type { useEmirKomutu } from './komut.ts';
 import { acikMi, type Emir } from './kurallar.ts';
 
 // 3755: "Rev" emrin parça (çizim) revizyonudur; rota revizyonu ayrı ve ikincil "Rota B" yazılır. Kod sunucudan gösterim kuralıyla gelir ("R01" -> "01").
@@ -40,11 +38,8 @@ export function ParcaRevRozeti({ emir: o, rotaHarfi }: { emir: Emir; rotaHarfi: 
   );
 }
 
-// Ayrıntıdaki uyarı: kartta yeni revizyon yayında (emir değişmez) ya da açık emirde revizyon seçilmemiş (seçim düğmesi, emir düzenleme yetkisi).
-export function ParcaRevizyonuUyarisi({ emir: o, yetki, komut }: {
-  emir: Emir; yetki: EkranOzellikleri['yetki']; komut: ReturnType<typeof useEmirKomutu>;
-}) {
-  const [secim, setSecim] = useState<string | null>(null);
+// Ayrıntıdaki uyarı: kartta yeni revizyon yayında (emir değişmez) ya da açık emirde revizyon seçilmemiş (emir sayfasına bağlantı).
+export function ParcaRevizyonuUyarisi({ emir: o }: { emir: Emir }) {
   const urunNo = Number(o.itemId);
   const liste = useParcaRevizyonlari(Number.isInteger(urunNo) ? urunNo : null, null).data;
   if (liste === undefined || liste.revizyonlar.length === 0) return null;
@@ -61,36 +56,14 @@ export function ParcaRevizyonuUyarisi({ emir: o, yetki, komut }: {
     );
   }
   if (secildi || !acikMi(o)) return null;
-  const kapat = () => { setSecim(null); };
+  // Bu panel salt okunurdur (emrin ana yeri Üretim Emirleri); seçim emrin kendi sayfasındadır.
   return (
-    <>
-      <div className="tc-rr3-uyari-kutu" role="status">
-        <Simge ad="alert" />
-        <span><b>Parça revizyonu seçilmemiş.</b> Üretimi durdurmaz; refakat kartı ve etiketler kartın güncel çizim revizyonunu basar.</span>
-        {yetki.emirDuzenle && <Dugme simge="file" onClick={() => { setSecim(''); }}>Revizyonu seç</Dugme>}
-      </div>
-      <Pencere
-        acik={secim !== null} kapat={kapat} baslik={`Parça revizyonu seç · ${o.no}`}
-        alt={(
-          <>
-            <Dugme onClick={kapat}>Vazgeç</Dugme>
-            <Dugme
-              tur="birincil" simge="check" disabled={!secim} yukleniyor={komut.mesgul}
-              onClick={() => {
-                void komut.calistir('emir-parca-revizyonu', { id: o.id, revizyonId: secim ?? '', surum: o.surum }, `${o.no}: parça revizyonu sabitlendi.`)
-                  .then((c) => { if (c.tamam) kapat(); });
-              }}
-            >
-              Kaydet
-            </Dugme>
-          </>
-        )}
-      >
-        <Secim
-          etiket="Parça revizyonu (çizim)" bosSecenek="Revizyon seçin" value={secim ?? ''} onChange={(e) => { setSecim(e.target.value); }}
-          secenekler={liste.revizyonlar.map(revizyonSecenegi)} ipucu="Seçim sonradan değişmez ve emrin geçmişine yazılır."
-        />
-      </Pencere>
-    </>
+    <div className="tc-rr3-uyari-kutu" role="status">
+      <Simge ad="alert" />
+      <span>
+        <b>Parça revizyonu seçilmemiş.</b> Üretimi durdurmaz; refakat kartı ve etiketler kartın güncel çizim revizyonunu basar.{' '}
+        <Link to={`/uretim-emirleri/${String(o.kayitNo)}`}>Revizyonu emir sayfasında seç</Link>
+      </span>
+    </div>
   );
 }

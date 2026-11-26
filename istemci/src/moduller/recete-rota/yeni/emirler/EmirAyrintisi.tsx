@@ -136,6 +136,8 @@ export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc, ka
         </div>
       </dl>
 
+      {/* Parça revizyonu uyarısı yalnız bu panelde: emir sayfası kendi şeridini çizer (EmirAdimBolumu orada gömülüdür). */}
+      <ParcaRevizyonuUyarisi emir={o} />
       <EmirUyarilari durum={d} emir={o} yetki={yetki} komut={komut} bittiNotu />
 
       <EmirYapisi durum={d} emir={o} adimlar={adimlar} yetki={yetki} komut={komut} islem={islem === 'ek' ? null : islem} islemKapat={() => { setIslem(null); }} />
@@ -190,7 +192,6 @@ function EmirUyarilari({ durum: d, emir: o, yetki, komut, bittiNotu = false }: {
   const seri = seriRotasiNotu(d, o, urunRotalari.data?.rotalar);
   return (
     <>
-      <ParcaRevizyonuUyarisi emir={o} yetki={yetki} komut={komut} />
       {seri && (
         <div className="tc-rr3-uyari-kutu" data-ton="bilgi" role="status"><Simge ad="route" /><span>{seri}</span></div>
       )}
