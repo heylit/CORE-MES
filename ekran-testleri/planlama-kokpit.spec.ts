@@ -3431,3 +3431,62 @@ test('Kokpit 3663: kısa ekranda kaydırma kabı kayınca üst sayfa üst çubu�
   }
   expect(denenen).toBeGreaterThanOrEqual(2);
 });
+
+// 3529 (karar 3505-2): üst çubuk 1280'de tek satır, 768'de en çok iki, 360'ta en çok dört satır (önce beş); büyük yazıda (%130) da. Canlıya al yalnız
+// taslakta değişiklik varken birincildir (sayfada tek birincil, 2155-9 a); Engeller sıfırken düğme çizilmez. Satır, çubuğun görünen doğrudan
+// çocuklarının dikey konumundan sayılır.
+const ustSatirSayisi = (kokpit: Locator) => kokpit.locator('.tc-pyq-ust').evaluate((ust) => {
+  const kutular = [...ust.children].map((e) => e.getBoundingClientRect()).filter((k) => k.width > 0 && k.height > 0).sort((a, b) => a.top - b.top);
+  let satir = 0, alt = -Infinity;
+  for (const k of kutular) { if (k.top >= alt - 2) { satir += 1; alt = k.bottom; } else alt = Math.max(alt, k.bottom); }
+  return satir;
+});
+const EN_COK_SATIR: Record<string, number> = { g360: 4, g768: 2, g1280: 1 };
+for (const buyukYazi of [false, true]) {
+  test(`Kokpit 3529: üst çubuk satır sayısı, Canlıya al yalnız değişiklik varken birincil, sıfır Engeller yer kaplamaz${buyukYazi ? ' (büyük yazı)' : ''}; yatay taşma yok`, async ({ page, ac, ag }, bilgi) => {
+    const proje: string = bilgi.project.name;
+    if (buyukYazi && proje !== 'g360') return;
+    if (buyukYazi) await page.addInitScript(() => { document.addEventListener('DOMContentLoaded', () => { const st = document.createElement('style'); st.textContent = ':root{--yazi-xs:15.6px;--yazi-s:18.2px;--yazi-m:20.8px;--yazi-l:23.4px}'; document.head.append(st); }); });
+    const t = await taslakSunucusu(page);
+    await temizOnizleme(page);
+    await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+    await ac('/plan/kokpit');
+    const kokpit = page.locator('.tc-pyq');
+    await expect(kokpit).toBeVisible({ timeout: 20_000 });
+    const karsilama = page.getByRole('button', { name: 'Başlayalım' });
+    if (await karsilama.isVisible()) await karsilama.click();
+    const ad = `${proje}${buyukYazi ? '-yazi130' : ''}`;
+    const cek = async (adim: string) => { await page.waitForTimeout(600); await page.screenshot({ path: `/tmp/tmiv2-ekran/3529-${adim}-${ad}.png` }); };
+    const ust = kokpit.locator('.tc-pyq-ust');
+    const enCok = EN_COK_SATIR[proje] ?? 1;
+    // Değişiklik yok: Canlıya al ikincil, sayfada birincil düğme yok; uydurma planda engel yok, Engeller düğmesi çizilmez.
+    const canli = ust.getByRole('button', { name: /^Canlıya al/ });
+    await expect(canli).toBeVisible();
+    await expect(canli).not.toHaveClass(/tc-dugme-birincil/);
+    await expect(page.locator('.tc-dugme-birincil:visible')).toHaveCount(0);
+    await expect(ust.locator('.tc-pyq-engel-dugme')).toHaveCount(0);
+    await expect(ust.getByRole('button', { name: 'Plan', exact: true })).toBeVisible();
+    await expect(ust.getByRole('button', { name: 'Diğer', exact: true })).toBeVisible();
+    const bos = await ustSatirSayisi(kokpit);
+    console.log(`3529 ${ad} degisiklik-yok satir=${String(bos)}`);
+    expect(bos).toBeLessThanOrEqual(enCok);
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    await cek('1-degisiklik-yok');
+    // Taslakta bir değişiklik: Canlıya al taslak çubuğuna geçer ve sayfanın tek birincil düğmesidir.
+    t.s.satirlar.push({ komut: { tur: 'tasi', isId: 'S2.a1', tezgah: 'M2', baslangic: 33 }, ne: 'tasi S2.a1', t: 0, hata: null });
+    t.s.taslakSurumu += 1;
+    await page.reload();
+    await expect(kokpit).toBeVisible({ timeout: 20_000 });
+    if (await karsilama.isVisible()) await karsilama.click();
+    const cubuk = kokpit.getByRole('region', { name: 'Değişiklikleriniz' });
+    await expect(cubuk.getByRole('button', { name: 'Canlıya al' })).toHaveClass(/tc-dugme-birincil/);
+    await expect(page.locator('.tc-dugme-birincil:visible')).toHaveCount(1);
+    await expect(ust.getByRole('button', { name: /^Canlıya al/ })).toHaveCount(0);
+    const taslakli = await ustSatirSayisi(kokpit);
+    console.log(`3529 ${ad} degisiklik-var satir=${String(taslakli)}`);
+    expect(taslakli).toBeLessThanOrEqual(enCok);
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    await cek('2-degisiklik-var');
+    expect(ag.hatalar).toEqual([]);
+  });
+}
