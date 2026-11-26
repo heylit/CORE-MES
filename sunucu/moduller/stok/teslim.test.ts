@@ -2671,6 +2671,11 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     assert.equal((await istek<RefakatPartisiCevabi>('depo', 'GET', `/stok/refakat-partileri/${r1.id}`)).govde.refakat.verilen, '12');
     assert.equal((await okut('operator')).anaEylem, 'isi-ac', '614 1a: malzeme okutanın istasyonunda, gelen yok: işi aç');
     assert.equal((await okut('operator_kisitli')).anaEylem, 'teslim-et', 'kapsam dışı istasyondaki malzeme işi açtırmaz');
+    // 3744: o istasyondaki adım başlamışsa iş yeniden açılmaz, işe gidilir; adım bekliyora dönünce yine işi aç.
+    await o().sahip.sorgu("UPDATE uretim_emirleri_is_emri SET durum = 'calisiyor', baslama = now(), istasyon_id = $2 WHERE uretim_emri_id = $1", [e, a.id]);
+    assert.equal((await okut('operator')).anaEylem, 'ise-git', '3744: başlamış adımda işe git');
+    await o().sahip.sorgu("UPDATE uretim_emirleri_is_emri SET durum = 'bekliyor', baslama = NULL WHERE uretim_emri_id = $1", [e]);
+    assert.equal((await okut('operator')).anaEylem, 'isi-ac');
 
     // Aynı lotun kalanı aynı kartla: parti değişmez, verilen artar.
     const g2 = await gonder('depo', { malzemeId: hm, miktar: '3', kaynak: { konumId: kabul }, hedef: { istasyonId: a.id }, refakatPartisiId: r1.id });

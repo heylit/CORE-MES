@@ -405,6 +405,20 @@ export function cubukDugmeleri(durum: string, beklemede = false): SabitDugme[] {
   return sabitDugmeler(durum, beklemede).filter((d) => d.yuva !== 'bitir').map(({ tut: _tut, ...d }) => d);
 }
 // Durum düğmesinin geri alınabilir iletisi ve simgesi (act içindeki sözlükler).
+// 3744: hazırlıkta, çalışan, duraklamış ya da duruştaki iş başlamıştır; refakat kartıyla açılması yeniden başlatma değildir.
+export const isBasladiMi = (durum: string): boolean => durum !== 'queued' && durum !== 'done';
+// 3744 Risk R1: başlamış işte kart okutmak yeniden başlatma değildir. Aynı kart ekrana getirir; başka kart sayımın kartını değiştirir
+// (kart doldu, sıradaki kart) ve bu açıkça söylenir ki operatör hangi kartla saydığını bilsin. Telefonda ileti eylem çubuğunu örter:
+// emir no bir kez yazılır, emir noyla başlayan kart etiketi yalnız son ekiyle (P2) gösterilir.
+export const BASLADI_ILETI_SURESI_MS = 8000;
+type KartAdi = { id: number; etiket: string | null };
+export function basladiIletisi(no: string, eski: KartAdi | null, yeni: KartAdi | null): string {
+  const ad = (k: KartAdi) => (k.etiket === null ? `#${String(k.id)}` : k.etiket.startsWith(`${no}-`) && k.etiket.length > no.length + 1 ? k.etiket.slice(no.length + 1) : k.etiket);
+  if (eski && yeni && eski.id !== yeni.id) return `Sayım kartı ${ad(eski)} → ${ad(yeni)} · ${no} zaten başlamıştı`;
+  if (!eski && yeni) return `Sayım kartı: ${ad(yeni)} · ${no} zaten başlamıştı`;
+  const k = eski ?? yeni;
+  return `İş zaten başladı: ${no} · ekrana getirildi${k ? ` · sayım kartı ${ad(k)}` : ''}`;
+}
 export const DURUM_ILETISI: Readonly<Record<string, string>> = { start: 'Üretim başladı', resume: 'Üretime devam', restart: 'Yeniden başlatıldı', pause: 'İş duraklatıldı', setup: 'Hazırlık süresi başladı' };
 export const DURUM_SIMGESI: Readonly<Record<string, SimgeAdi>> = { pause: 'pause', setup: 'wrench' };
 export const EYLEM_DURUMU: Readonly<Record<string, 'running' | 'paused' | 'setup'>> = { start: 'running', resume: 'running', restart: 'running', pause: 'paused', setup: 'setup' };

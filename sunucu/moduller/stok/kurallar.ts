@@ -1447,11 +1447,15 @@ export const refakatEtiketi = (emirNo: string | null, uretimEmriId: number, sira
 // Kart yalnız depoya mal kabulle girmiş lotla açılır; üretim partisi (emrin çıktısı) kaynak olmaz.
 // Tek kart (614 1a): refakat kartı okutulunca tek ana eylem. Okutana kartla yolda gelen teslim varsa önce o alınır; kartın malzemesi
 // okutanın kapsamındaki bir istasyonda duruyorsa iş açılır (iş başka istasyondaysa terminal söyler); yoksa malzeme teslim edilir.
-export type RefakatAnaEylemi = 'teslim-al' | 'isi-ac' | 'teslim-et';
-export function refakatAnaEylemi(k: { gelenSayisi: number; kartAcik: boolean; satirIstasyonlari: readonly (number | null)[]; kapsamdakiIstasyonlar: ReadonlySet<number> }): RefakatAnaEylemi {
+// 3744: o istasyondaki adım başlamışsa iş yeniden açılmaz, işe gidilir; başlatma düğmesi başlamış adımda çıkmaz.
+export type RefakatAnaEylemi = 'teslim-al' | 'isi-ac' | 'ise-git' | 'teslim-et';
+export function refakatAnaEylemi(k: {
+  gelenSayisi: number; kartAcik: boolean; satirIstasyonlari: readonly (number | null)[]; kapsamdakiIstasyonlar: ReadonlySet<number>; baslamisIstasyonlar: ReadonlySet<number>;
+}): RefakatAnaEylemi {
   if (k.gelenSayisi > 0) return 'teslim-al';
-  if (k.kartAcik && k.satirIstasyonlari.some((i) => i !== null && k.kapsamdakiIstasyonlar.has(i))) return 'isi-ac';
-  return 'teslim-et';
+  const buradakiler = k.satirIstasyonlari.filter((i): i is number => i !== null && k.kapsamdakiIstasyonlar.has(i));
+  if (!k.kartAcik || buradakiler.length === 0) return 'teslim-et';
+  return buradakiler.some((i) => k.baslamisIstasyonlar.has(i)) ? 'ise-git' : 'isi-ac';
 }
 
 export function refakatLotEngeli(lot: { uretimEmriId: number | null }): string | null {
