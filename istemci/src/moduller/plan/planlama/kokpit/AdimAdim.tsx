@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Dugme } from '../../../../ortak/arayuz/index.ts';
 import { planaAlOnizle, type PlanaAlOnizlemesi } from './plana-al.ts';
-import { adimSecimleri, baslamaSaatleri, fasonMu, sureYaz, tasimaSaati, type AdimSecimi, type KokpitEmri, type KokpitModeli, type TurAdayi } from './kurallar.ts';
+import { adimSecimleri, baslamaSaatleri, bugunBasi, fasonMu, sureYaz, tasimaSaati, type AdimSecimi, type KokpitEmri, type KokpitModeli, type TurAdayi } from './kurallar.ts';
 
 // Plansız emrin adım adım plana alınması (3229 a): her adımın karşısında rotadaki tezgâhları ve başlama saati. Seçilmeyeni sistem doldurur;
 // yerleri ve bitişi sunucu önizlemesi verir. İlk adımın tezgâhı seçilmediyse adayları sırayla denenir, emri en erken bitiren alınır.
@@ -50,7 +50,7 @@ export function AdimAdim({ m, e, zaman, uygula, surum, bekle = false }: AdimAdim
   if (!ilk) return <p className="tc-pyq-not">Emrin rotasında adım yok; plana alınamaz.</p>;
   const kod = (id: string): string => m.tezgahlar.find((t) => t.id === id)?.kod ?? id;
   // Bir haftadan uzak saat tarihiyle yazılır: yalnız gün adı yanıltır.
-  const an = (t: number): string => (t - m.bas >= 7 * 24 ? zaman(t) : zaman(t).slice(6));
+  const an = (t: number): string => (t - bugunBasi(m) >= 7 * 24 ? zaman(t) : zaman(t).slice(6));
   const oz = sonuc !== null && sonuc !== 'okunamadi' ? sonuc.oz : null;
   const yer = new Map((oz?.gecerli ? oz.isler : []).map((i) => [i.isId, i]));
   const degistir = (id: string, ek: AdimSecimi): void => {

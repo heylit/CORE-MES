@@ -9,7 +9,7 @@ import { emirKuyrugu, emirNoParcalari } from '../ortak/emir-no.ts';
 import type { Derleme } from '../motor/kurallar.ts';
 import type { IsTasiOnizlemesi } from '../motor/atolye/gonder.ts';
 import {
-  SAAT_ENI, YAKIN_EN_AZ, adimBaglari, adimKimligi, bagAdimda, adimPaylari, darPanoYani, agacAdimBasligi, aralikYuku, durumYazisi, DURDURMA_BEKLIYOR, durusYazisi, ekMesaiYazisi, okUcu, okYolu, payIlerlemeYazisi, payNedeni, payYazisi, payYonleri, planliDurusYazisi, satirKimligi, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, uzakMi, yukSinifi, yukYuzdesi,
+  SAAT_ENI, YAKIN_EN_AZ, adimBaglari, adimKimligi, bagAdimda, bugunBasi, adimPaylari, darPanoYani, agacAdimBasligi, aralikYuku, durumYazisi, DURDURMA_BEKLIYOR, durusYazisi, ekMesaiYazisi, okUcu, okYolu, payIlerlemeYazisi, payNedeni, payYazisi, payYonleri, planliDurusYazisi, satirKimligi, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, uzakMi, yukSinifi, yukYuzdesi,
   type AdimBagi, type KokpitEmri, type KokpitIsi, type KokpitModeli, type KokpitOlcegi, type TurAdayi,
 } from './kurallar.ts';
 import {
@@ -845,7 +845,7 @@ export function Tahta(o: TahtaOzellikleri) {
     const isler = Object.values(m.isler);
     for (const t of m.tezgahlar) {
       if (t.fason) continue;
-      const y = aralikYuku(cx, isler, t.id, m.bas, m.bas + 7 * 24), yuzde = yukYuzdesi(y);
+      const y = aralikYuku(cx, isler, t.id, bugunBasi(m), bugunBasi(m) + 7 * 24), yuzde = yukYuzdesi(y);
       if (yuzde !== null) k.set(t.id, { oran: Math.min(1, yuzde / 100), yuzde, sinif: yukSinifi(y), yazi: ` · 7 günde %${String(yuzde)} dolu` });
     }
     return k;

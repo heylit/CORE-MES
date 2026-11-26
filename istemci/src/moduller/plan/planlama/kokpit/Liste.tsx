@@ -6,7 +6,7 @@ import type { CanliYer } from './Tahta.tsx';
 import type { Derleme } from '../motor/kurallar.ts';
 import { Bos, FarkRozeti, Halka } from './Tablo.tsx';
 import { SU_AN_ADI, farkOlustur, ilerleme, siralaGecikme, suAn, tarihSaat, type Siralama } from './tablo.ts';
-import { aralikYuku, bagimlilik, adimPaylari, durumYazisi, payIlerlemeYazisi, payYazisi, sureYaz, durusYazisi, ekMesaiYazisi, matrisSirasi, satirKimligi, suAndakiDurus, yukYuzdesi, type KokpitEmri, type KokpitIsi, type KokpitModeli } from './kurallar.ts';
+import { aralikYuku, bagimlilik, bugunBasi, adimPaylari, durumYazisi, payIlerlemeYazisi, payYazisi, sureYaz, durusYazisi, ekMesaiYazisi, matrisSirasi, satirKimligi, suAndakiDurus, yukYuzdesi, type KokpitEmri, type KokpitIsi, type KokpitModeli } from './kurallar.ts';
 
 // Telefonda tahtanın yerini tutan liste. Tezgâh gözü: önce plana alınacak emirler, sonra tezgâh tezgâh sıradaki işler (ilk üçü, gerisi
 // düğmeyle); Sipariş gözü: emirler, geç olan üstte. Satıra dokununca ayrıntı alttan açılır.
@@ -61,7 +61,7 @@ export function Liste({ m, cx, goz, emirler, secEmir, secIs, zaman, sec, yanan =
     const hepsi = Object.values(m.isler), gorunen = hepsi.filter((x) => emir.has(x.job));
     return m.tezgahlar.map((t) => {
       const isler = gorunen.filter((x) => satirKimligi(x) === t.id).sort((a, b) => a.S - b.S);
-      const yuzde = t.fason ? null : yukYuzdesi(aralikYuku(cx, hepsi, t.id, m.bas, m.bas + 7 * 24));
+      const yuzde = t.fason ? null : yukYuzdesi(aralikYuku(cx, hepsi, t.id, bugunBasi(m), bugunBasi(m) + 7 * 24));
       return { t, isler, yuzde, durum: suAn(hepsi, t.id, suAndakiDurus(m, t.id) !== null) };
     }).filter((g) => g.isler.length > 0);
   }, [m, cx, emir]);

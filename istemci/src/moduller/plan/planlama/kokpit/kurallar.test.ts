@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { derle, girdiKur, planOku, plandanBitenler } from '../motor/kurallar.ts';
 import { ornekCalisma } from '../motor/ornek.ts';
 import {
-  firmaYazilari, adimBaglari, adimBeklemesi, aralikYuku, bagimlilik, okUcu, okYolu, aramaUyar, darbogaz, emirGunleri, enCokBekleyen, tezgahGunundeMi, durumYazisi, ilkBosluk, matrisSirasi, modelKur, olcekKomsusu, onizlemeBitisi, satirKimligi, sayim, sorunlular, sureYaz,
+  firmaYazilari, adimBaglari, baslamaSaatleri, adimBeklemesi, aralikYuku, bagimlilik, okUcu, okYolu, aramaUyar, darbogaz, emirGunleri, enCokBekleyen, tezgahGunundeMi, durumYazisi, ilkBosluk, matrisSirasi, modelKur, olcekKomsusu, onizlemeBitisi, satirKimligi, sayim, sorunlular, sureYaz,
   acigaOtur, darPanoYani, agacAdimBasligi, agacNotlari, emirNotlari, kolNotlari, durusOkunmadi, DURUS_OKUNMADI, durdurmaBekleyenler, durusYazisi, ekMesaiYazisi, mesaiButcesi, operatorSorunu, uygunOperatorler, vardiyaAdi, planliDurusYazisi, hucreler3B, suAndakiDurus, onayliGecSayisi, yeriDegisti, tasimaSaati, tasinabilir, turAdaylari, yukSinifi, yukYuzdesi, SAAT_ENI, YAKIN_EN_AZ, YAKIN_EN_COK, sigdirma, surguDegeri, surgudenEn, yakinOlcegi, yakinSinirla, ustBeklemeleri, ustEmirNotu, type AdimBeklemesi, type KokpitEmri, type KokpitIsi, type KokpitModeli,
 } from './kurallar.ts';
 
@@ -20,6 +20,29 @@ const model = (isler: KokpitIsi[], emirler: KokpitEmri[], simdi = 0): KokpitMode
 });
 
 describe('Kokpit modeli', () => {
+  it('3729: eksen geçmişe uzasa da Matris, 3B ve başlama saatleri bugünden sayar', () => {
+    const e = emir('1', { adimlar: [{ id: '1.10', ad: '', adaylar: ['T1'] }] });
+    const m = { ...model([is('1.10', 'T1', 2, 5)], [e], 1), bas: -48, bugun: 0 };
+    expect(tezgahGunundeMi(m, e, 'T1', 0)).toBe(true);
+    expect(emirGunleri(m, e, 2).map((g) => g.adimlar)).toEqual([[0], []]);
+    expect(baslamaSaatleri(m, 1)[0]).toBe(6);
+  });
+  it('3729: eksen geçmişe uzar: bugünden önce başlamış işin günü eksenin başıdır (en çok 14 gün); bugün ve ileri ölçüler bugünden kalır', () => {
+    const { c, p, cx } = ornek();
+    const ilk = Math.min(...Object.values(modelKur(c, p, cx, (id) => id).isler).map((x) => x.S));
+    const kur = (gun: number) => modelKur(c, p, { ...cx, now: cx.now + gun * 24 }, (id) => id);
+    const m = kur(7);
+    expect(m.bugun).toBe(Math.floor((cx.now + 7 * 24) / 24) * 24);
+    expect(m.bas).toBe(Math.floor(ilk / 24) * 24);
+    expect(m.bas).toBeLessThan(m.bugun!);
+    expect(Object.values(m.isler).every((x) => x.S >= m.bas)).toBe(true);
+    expect(m.son).toBeGreaterThanOrEqual(m.bugun! + 14 * 24);
+    const uzak = kur(40);
+    expect(uzak.bas).toBe(uzak.bugun! - 14 * 24);
+    // Bugünden önce işi olmayan planda eksen bugünden başlar (açılış görüntüsü aynı).
+    const bugunku = modelKur(c, p, cx, (id) => id);
+    expect(bugunku.bas).toBe(Math.min(bugunku.bugun!, Math.floor(ilk / 24) * 24));
+  });
   it('çalışmadan emirleri, işleri ve durumları kurar; fason adım tek satırda toplanır', () => {
     const { m } = ornek();
     expect(m.emirler.map((e) => [e.no, e.durum])).toEqual([['ORN-2', 'gec'], ['ORN-3', 'risk']]);
