@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { LogoBelgeAramasi, KilitliSutunNotu, Rozet, SayfaBasligi, Secim, Sekmeler, Simge, Tablo, YETKI_ADI, type RozetTonu, type Sutun } from '../../../ortak/arayuz/index.ts';
+import { Dugme, LogoBelgeAramasi, KilitliSutunNotu, Rozet, SayfaBasligi, Secim, Sekmeler, Simge, Tablo, YETKI_ADI, tabloCsvSatirlari, type RozetTonu, type Sutun } from '../../../ortak/arayuz/index.ts';
+import { csvIndir } from '../../../ortak/veri/csv.ts';
 import type { SimgeAdi } from '../../../ortak/tasarim/simgeler.ts';
 import { durumEtiketi } from '../merkez/calc.ts';
 import { PRIO } from '../merkez/constants.ts';
@@ -21,6 +22,8 @@ const DURUM_TONU: Record<RequestStatus, RozetTonu> = {
 const SEKME_SIMGESI: Record<string, SimgeAdi> = {
   open: 'clock', approval: 'clipboard-check', ordered: 'truck', late: 'alert', received: 'check', cancelled: 'x', all: 'layers',
 };
+// Sade üst (3710 D): dört sekme her zaman görünür; öteki durumlar Süz menüsünden seçilir, seçiliyken beşinci sekme olarak durur.
+const ANA_SEKMELER = ['open', 'approval', 'ordered', 'all'];
 const kimdeSimgesi = (k: string): SimgeAdi => (k.startsWith('Tedarikçi') ? 'truck' : k === 'Satın alma' ? 'cart' : 'user');
 const degistir = (f: () => void) => { f(); render(); };
 
@@ -34,6 +37,42 @@ function ihtiyac(r: PurchaseRequest, bugun: string) {
       {acik && d < 0 && <Rozet ton="hata">{-d} gün geçti</Rozet>}
       {acik && d >= 0 && d <= 7 && <Rozet ton="uyari">{d} gün</Rozet>}
     </span>
+  );
+}
+
+function SuzMenusu({ birimler, satirlar, sutunlar }: { birimler: string[]; satirlar: PurchaseRequest[]; sutunlar: Sutun<PurchaseRequest>[] }) {
+  const kutu = useRef<HTMLDetailsElement>(null);
+  // details dışarı basınca ve Esc ile kapanmaz; menü gibi davransın.
+  useEffect(() => {
+    const kapat = (o: Event) => {
+      const d = kutu.current;
+      if (!d?.open) return;
+      if (o instanceof KeyboardEvent ? o.key === 'Escape' : !d.contains(o.target as Node)) {
+        d.open = false;
+        if (o instanceof KeyboardEvent) d.querySelector('summary')?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', kapat);
+    document.addEventListener('keydown', kapat);
+    return () => { document.removeEventListener('pointerdown', kapat); document.removeEventListener('keydown', kapat); };
+  }, []);
+  const etkin = [V.prio, V.dept, ANA_SEKMELER.includes(V.status) ? '' : V.status].filter(Boolean).length;
+  return (
+    <details ref={kutu} className="sa-ekran-suz">
+      <summary className="tc-dugme">Süz ve CSV{etkin > 0 && <span className="sa-ekran-suz-sayi" aria-label={`${etkin} süzgeç etkin`}>{etkin}</span>}</summary>
+      <div className="sa-ekran-suz-panel">
+        <Secim etiket="Durum" value={V.status} onChange={(e) => degistir(() => { V.status = e.target.value; })}
+          secenekler={STATUS_FILTERS.map(([k, l]) => ({ deger: k, baslik: l }))} />
+        <Secim etiket="Öncelik" value={V.prio} onChange={(e) => degistir(() => { V.prio = e.target.value; })}
+          bosSecenek="Her öncelik" secenekler={Object.entries(PRIO).map(([k, l]) => ({ deger: k, baslik: l }))} />
+        <Secim etiket="Birim" value={birimler.find((b) => norm(b) === norm(V.dept)) ?? ''} onChange={(e) => degistir(() => { V.dept = e.target.value; })}
+          bosSecenek="Tüm birimler" secenekler={birimler.map((b) => ({ deger: b, baslik: b }))} />
+        <Dugme simge="download" disabled={satirlar.length === 0}
+          onClick={() => { const { basliklar, satirlar: veri } = tabloCsvSatirlari(sutunlar, satirlar); csvIndir('talepler', basliklar, veri); }}>
+          CSV indir ({satirlar.length} satır)
+        </Dugme>
+      </div>
+    </details>
   );
 }
 
@@ -87,7 +126,6 @@ export function Talepler() {
     <div className="sa-ekran sa-ekran-talepler">
       <SayfaBasligi
         baslik="Talepler" simge="list"
-        alt="Talepler Taleplerim'den açılır; burada teklif, karar ve sipariş yürür."
         ek={<LogoBelgeAramasi tur="talep" />}
         eylemler={[pano
           ? { anahtar: 'liste', baslik: 'Liste görünümü', simge: 'list', sec: () => degistir(() => { V.view = 'list'; }) }
@@ -98,7 +136,7 @@ export function Talepler() {
         <Sekmeler
           etiket="Talep durumu" secili={V.status}
           sec={(k) => degistir(() => { V.status = k; })}
-          sekmeler={STATUS_FILTERS.map(([k, l, f]) => ({ anahtar: k, baslik: l, simge: SEKME_SIMGESI[k] ?? 'list', sayi: hepsi.filter(f).length }))}
+          sekmeler={STATUS_FILTERS.filter(([k]) => ANA_SEKMELER.includes(k) || k === V.status).map(([k, l, f]) => ({ anahtar: k, baslik: l, simge: SEKME_SIMGESI[k] ?? 'list', sayi: hepsi.filter(f).length }))}
         />
       )}
       {pano
@@ -112,15 +150,7 @@ export function Talepler() {
             siralamaDegistir={(s) => degistir(() => { V.sort = s?.alan ?? ''; V.dir = s?.yon === 'azalan' ? -1 : 1; })}
             arac={{
               arama: { deger: V.q, degistir: (q) => degistir(() => { V.q = q; }), etiket: 'Taleplerde ara', yerTutucu: 'No, talep, kalem, tedarikçi ya da emir no' },
-              csv: { ad: 'talepler' },
-              sag: (
-                <span className="sa-ekran-suzgecler">
-                  <Secim etiket="Öncelik" value={V.prio} onChange={(e) => degistir(() => { V.prio = e.target.value; })}
-                    bosSecenek="Her öncelik" secenekler={Object.entries(PRIO).map(([k, l]) => ({ deger: k, baslik: l }))} />
-                  <Secim etiket="Birim" value={birimler.find((b) => norm(b) === norm(V.dept)) ?? ''} onChange={(e) => degistir(() => { V.dept = e.target.value; })}
-                    bosSecenek="Tüm birimler" secenekler={birimler.map((b) => ({ deger: b, baslik: b }))} />
-                </span>
-              ),
+              sag: <SuzMenusu birimler={birimler} satirlar={liste} sutunlar={sutunlar} />,
             }}
           />
         )}
