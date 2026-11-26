@@ -91,17 +91,50 @@ describe('TaslakCubugu', () => {
     const p = await screen.findByRole('dialog', { name: 'Başkası da değiştirdi' });
     const yaz = within(p).getByRole('button', { name: 'Canlıya al' });
     expect(yaz.hasAttribute('disabled')).toBe(true);
-    fireEvent.click(within(within(p).getByRole('group', { name: 'ORN-E1' })).getByRole('button', { name: 'Benimki' }));
+    fireEvent.click(within(within(p).getByRole('group', { name: 'ORN-E1' })).getByRole('button', { name: 'Benim taslağım' }));
     expect(yaz.hasAttribute('disabled')).toBe(true);
-    const onunki = within(within(p).getByRole('group', { name: 'Plan ayarı' })).getByRole('button', { name: 'Onunki' });
+    const onunki = within(within(p).getByRole('group', { name: 'Plan ayarı' })).getByRole('button', { name: 'Şimdiki plan' });
     fireEvent.click(onunki);
     expect(onunki.getAttribute('aria-pressed')).toBe('true');
     fireEvent.click(yaz);
-    await waitFor(() => { expect(yazildi).toHaveBeenCalledWith('Değişiklikleriniz plana yazıldı. 1 değişiklik başkasınınki seçildiği için düştü. Canlıya almak için onay sayfasını tamamlayın.'); });
+    await waitFor(() => { expect(yazildi).toHaveBeenCalledWith('Değişiklikleriniz plana yazıldı. 1 değişiklik şimdiki plan seçildiği için düştü. Canlıya almak için onay sayfasını tamamlayın.'); });
     expect(u.mock.calls).toEqual([[undefined], [{ 'emir:ORN-e1': 'benim', '*': 'onun' }]]);
     // Çatışma seçilene kadar Onay ve canlı açılmaz; yazılınca aynı adımda açılır.
     expect(onayiAc).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('dialog', { name: 'Başkası da değiştirdi' })).toBeNull();
+  });
+
+  // 3733: araya giren değişikliğin kaynağı.
+  it('yalnız kendi başka pencerem ve sistem varsa başlık "Siz başladıktan sonra plan değişti"; satır kim, ne zaman, neyi ve taslağımdakini yazar', async () => {
+    const catismalar = [
+      { anahtar: 'emir:ORN-e1', ad: 'ORN-E1 emri', komutlar: ['3.10 → T2'], kaynaklar: [{ sinif: 'ben' as const, kim: 'Siz (başka pencerede)', zaman: '2026-11-26T07:05:00Z', ne: 'İş taşındı', ayrinti: 'ORN-E1.10: T1 → T2' }] },
+      { anahtar: '*', ad: 'Plan ayarı ya da bütün plan', komutlar: ['Dondurma 7'], kaynaklar: [{ sinif: 'eksen' as const, kim: 'Sistem', zaman: null, ne: 'Plan ekseni kaydı', ayrinti: '2026-11-25 → 2026-11-26' }] },
+    ];
+    ac([satir(TASI, 'a')], [{ durum: 'secim', catismalar }]);
+    fireEvent.click(dugme('Canlıya al'));
+    const p = await screen.findByRole('dialog', { name: 'Siz başladıktan sonra plan değişti' });
+    const g = within(p).getByRole('group', { name: 'ORN-E1 emri' });
+    expect(within(g).getByText('Siz (başka pencerede) · 26.11 10:05 · İş taşındı: ORN-E1.10: T1 → T2')).toBeTruthy();
+    expect(within(g).getByText('Taslağınızdaki: 3.10 → T2')).toBeTruthy();
+    expect(within(within(p).getByRole('group', { name: 'Plan ayarı ya da bütün plan' })).getByText('Sistem · Plan ekseni kaydı: 2026-11-25 → 2026-11-26')).toBeTruthy();
+    expect(within(g).getByRole('button', { name: 'Benim taslağım' }).getAttribute('title')).toBe('Taslağınızdaki değişiklik yazılır; araya giren değişikliğin üstüne geçer.');
+    expect(within(g).getByRole('button', { name: 'Şimdiki plan' }).getAttribute('title')).toBe('Araya giren değişiklik kalır; taslağınızın bu satırdaki değişikliği düşer.');
+  });
+
+  it('başka kişi varsa başlık "Başkası da değiştirdi", satır adını yazar', async () => {
+    const catismalar = [{ anahtar: 'emir:ORN-e1', ad: 'ORN-E1 emri', komutlar: ['a'], kaynaklar: [{ sinif: 'diger' as const, kim: 'ORN-Kisi', zaman: '2026-11-26T07:05:00Z', ne: 'İş taşındı', ayrinti: '' }] }];
+    ac([satir(TASI, 'a')], [{ durum: 'secim', catismalar }]);
+    fireEvent.click(dugme('Canlıya al'));
+    const p = await screen.findByRole('dialog', { name: 'Başkası da değiştirdi' });
+    expect(within(p).getByText('ORN-Kisi · 26.11 10:05 · İş taşındı')).toBeTruthy();
+  });
+
+  it('sorulacak satır yoksa pencere açılmaz, canlıya alma doğrudan sürer', async () => {
+    const { u, onayiAc } = ac([satir(TASI, 'a')], [{ durum: 'secim', catismalar: [] }, { durum: 'uygulandi', calismaSurumu: 5, uygulanan: 1, dusen: 0 }]);
+    fireEvent.click(dugme('Canlıya al'));
+    await waitFor(() => { expect(onayiAc).toHaveBeenCalledTimes(1); });
+    expect(u.mock.calls).toEqual([[undefined], [{}]]);
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   // 3282-5 a: tek düğme taslağı yazar ve Onay ve canlı bölümünü açar; canlıya alma yetkisi olmayan "Onaya gönder" görür.

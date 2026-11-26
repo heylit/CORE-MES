@@ -520,7 +520,12 @@ export const taslakCevabi = z.object({
   surum: z.number().int().nullable(),
 });
 // Uygula: çatışma varsa ve seçim eksikse yazılmaz, çatışmalar döner. anahtar: 'emir:<id>', 'tezgah:<id>' ya da '*' (plan ayarı ya da yeniden dizilen plan).
-export const taslakCatismasi = z.object({ anahtar: z.string(), ad: z.string(), komutlar: z.array(z.string()) });
+// kaynaklar (3733): anahtara araya giren değişikliği kimin, ne zaman, neyle yaptığı. sinif: ben (kişinin başka penceredeki değişikliği),
+// diger (başka kişi), ayar (plan ayarı; kim yaptıysa), eksen (plan ekseni kaydı; sistem). Veri yenilemesi çatışma sayılmaz, listelenmez.
+export const taslakCatismaKaynagi = z.object({
+  sinif: z.enum(['ben', 'diger', 'ayar', 'eksen']), kim: z.string(), zaman: z.string().nullable(), ne: z.string(), ayrinti: z.string(),
+});
+export const taslakCatismasi = z.object({ anahtar: z.string(), ad: z.string(), komutlar: z.array(z.string()), kaynaklar: z.array(taslakCatismaKaynagi).optional() });
 export const taslakUygulaCevabi = z.discriminatedUnion('durum', [
   z.object({ durum: z.literal('uygulandi'), calismaSurumu: z.number().int(), uygulanan: z.number().int(), dusen: z.number().int() }),
   z.object({ durum: z.literal('secim'), catismalar: z.array(taslakCatismasi) }),
@@ -532,3 +537,4 @@ export type TaslakAyarlari = z.output<typeof taslakAyarlari>;
 export type TaslakCevabi = z.output<typeof taslakCevabi>;
 export type TaslakUygulaCevabi = z.output<typeof taslakUygulaCevabi>;
 export type TaslakCatismasi = z.output<typeof taslakCatismasi>;
+export type TaslakCatismaKaynagi = z.output<typeof taslakCatismaKaynagi>;
