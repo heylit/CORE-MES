@@ -16,6 +16,7 @@ import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disar
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { emirBaslat, uretimEmriAc } from './disari.ts';
 import type { IsEmriGirdisi } from './disari.ts';
+import { bekleyeniSil } from './is-emri-servis.ts';
 import { hazirlik, hazirlikCozucusuKaydet } from './hazirlik.ts';
 import type { HazirlikCozucusu } from './hazirlik.ts';
 import { hazirlikSablonuOzel, hazirlikSablonuOzelYaz, hazirlikSablonuYaz, sablonGerekmezMaddeleri } from './hazirlik-sablonu.ts';
@@ -211,7 +212,7 @@ describe('uretim-emirleri OP düzeyinde hazırlık farkı (3741, gerçek Postgre
     } finally { hazirlikCozucusuKaydet('cnc', onceki); hazirlikCozucusuKaydet('talimat', oncekiTalimat); }
   });
 
-  test('göç: var olan emir düzeyi satır is_emri_id boş kalır ve emir düzeyi olarak okunur; iş emri kısıtı geçersiz kimliği reddeder', async () => {
+  test('göç: var olan emir düzeyi satır is_emri_id boş kalır ve emir düzeyi olarak okunur', async () => {
     const { id, ie } = await ac();
     const kisiId = kim('mudur').id;
     await o().sahip.sorgu(
@@ -220,8 +221,26 @@ describe('uretim-emirleri OP düzeyinde hazırlık farkı (3741, gerçek Postgre
     assert.equal(eski?.is_emri_id, null);
     const h = await kapali(ie);
     assert.deepEqual([h.get(ie[0])?.has('olcu-aleti'), h.get(ie[1])?.has('olcu-aleti')], [true, true], 'eski satır bütün OP\'lerde geçerli');
-    await assert.rejects(o().sahip.sorgu(
-      "INSERT INTO uretim_emirleri_hazirlik_sablonu_ozel (emri_id, is_emri_id, madde, olay, gerekli, kisi_id) VALUES ($1, 999999999, 'aparat', 'yaz', true, $2)", [id, kisiId]),
-    /uretim_emirleri_hazirlik_sablonu_ozel_is_emri/);
+  });
+
+  // Risk R1: FK yok; fark almış bekleyen OP silinebilir, defter satırı kalır ama okunmaz.
+  test('fark almış bekleyen OP silinebilir; silindikten sonra okuma etkilenmez', async () => {
+    const { id, ie } = await ac();
+    assert.equal((await fark(id, ie[0], { madde: 'olcu-aleti', gerekli: false, gerekce: 'Birinci OP ölçüsüz' })).durum, 200);
+    assert.equal((await fark(id, ie[1], { madde: 'aparat', gerekli: true, gerekce: 'İkinci OP aparatlı' })).durum, 200);
+    await o().vt.tx((db) => bekleyeniSil(db, ie[1]));
+    const var_ = await o().sahip.tek<{ say: number }>('SELECT count(*)::int AS say FROM uretim_emirleri_is_emri WHERE id = $1', [ie[1]]);
+    assert.equal(var_?.say, 0, 'OP silindi');
+    const defter = await o().sahip.tek<{ say: number }>('SELECT count(*)::int AS say FROM uretim_emirleri_hazirlik_sablonu_ozel WHERE is_emri_id = $1', [ie[1]]);
+    assert.equal(defter?.say, 1, 'defter yalnız eklenir, satır kalır');
+    const d = await istek<AdimDurumuCevabi>('planlama_proje', 'GET', `/adimli-emirler/${id}/adim-durumu`);
+    assert.equal(d.durum, 200);
+    const ad = adimDurumuCevabi.parse(d.govde);
+    assert.deepEqual(ad.adimlar.map((a) => a.isEmriId), [ie[0]]);
+    assert.deepEqual(ad.adimlar[0]?.sablonFarklari.map((x) => x.madde), ['olcu-aleti'], 'kalan OP farkı aynen okunur');
+    const h = await kapali([ie[0]]);
+    assert.equal(h.get(ie[0])?.has('olcu-aleti'), true);
+    const m = (await matris()).emirler.find((e) => e.emirId === id);
+    assert.deepEqual(m?.adimlar.map((a) => [a.isEmriId, a.sablondanFark]), [[ie[0], 1]]);
   });
 });
