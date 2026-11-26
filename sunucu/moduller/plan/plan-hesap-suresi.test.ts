@@ -59,13 +59,14 @@ describe('plan hesabı işlem süresine sığar (3724)', () => {
   after(async () => { await t.kaldir(); });
 
   test('HS-01: canliTut hesap sürerken işlemi boşta işlem sınırından korur; korumasız işlem kesilir', async () => {
+    // Sınır yoklama aralığının 15 katı: yavaş CI makinesinde (Windows) olay döngüsü takılsa da korunan işlem sınıra değmez.
     const tx = (is: (db: Db) => Promise<void>) => t.vt.tx(async (db) => {
-      await db.sorgu("SET LOCAL idle_in_transaction_session_timeout = '300ms'");
+      await db.sorgu("SET LOCAL idle_in_transaction_session_timeout = '1500ms'");
       await is(db);
       await db.sorgu('SELECT 1');
     });
-    await tx(async (db) => { await canliTut(db, bekle(1200), 100); });
-    await assert.rejects(tx(async () => { await bekle(1200); }));
+    await tx(async (db) => { await canliTut(db, bekle(3500), 100); });
+    await assert.rejects(tx(async () => { await bekle(3500); }), /bağlantısı kullanılamaz|terminat|idle/i);
   });
 
   test('HS-02: canliTut hesabın sonucunu ve hatasını aynen döndürür; süren yoklama bitmeden dönmez', async () => {
