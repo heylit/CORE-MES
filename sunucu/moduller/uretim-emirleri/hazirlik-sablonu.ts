@@ -69,8 +69,8 @@ export async function hazirlikSablonuYaz(db: Db, kullanici: Kullanici, tur: stri
 export async function sablonGerekmezMaddeleri(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, ReadonlySet<string>>> {
   const sonuc = new Map<number, ReadonlySet<string>>();
   if (isEmriIdleri.length === 0) return sonuc;
+  // Etkin şablon sürümü olmasa da emir ve OP farkları geçerlidir (sürüm yoksa şablondan kapalı madde yok).
   const surumler = await s.etkinSurumler(db);
-  if (surumler.length === 0) return sonuc;
   const satirlar = await s.surumSatirlari(db, surumler.map((x) => x.id));
   const kapali = (surumId: string | undefined): ReadonlySet<string> => new Set(satirlar.filter((x) => x.surum_id === surumId && !x.gerekli).map((x) => x.madde));
   const varsayilan = kapali(surumler.find((x) => x.operasyon_tipi_id === null)?.id);

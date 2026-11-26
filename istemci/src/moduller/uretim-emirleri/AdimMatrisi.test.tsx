@@ -241,7 +241,7 @@ describe('Adım Durumu matrisi (3604)', () => {
     expect(satirlar.map((x) => x.querySelector('b')?.textContent)).toEqual(['CNC kurulumu', 'Çizim revizyonu', 'Rota yürürlükte', 'Malzeme (girdi stoğu)', 'Takım ömrü']);
     expect(within(satirlar[0]!).getByText('durduran')).toBeTruthy();
     expect(within(satirlar[0]!).getByText('Sistem: eksik')).toBeTruthy();
-    expect(within(satirlar[2]!).getByText('Bu emirde gerekmiyor')).toBeTruthy();
+    expect(within(satirlar[2]!).getByText('Bu OP\'de gerekmiyor')).toBeTruthy();
     expect(within(satirlar[3]!).queryByText('durduran')).toBeNull();
     expect(within(satirlar[4]!).getByText(/Elle hazır: ORN-Kişi .* Program elde denendi/)).toBeTruthy();
     // Gerekmeyen maddede hiçbir işlem yok; hazır maddeye onay, elle değersize geri al yok.

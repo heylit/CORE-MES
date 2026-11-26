@@ -8,7 +8,7 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import { HAZIRLIK_MADDELERI, adimDurumuCevabi, adimMatrisiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { HAZIRLIK_MADDELERI, adimDurumuCevabi, adimMatrisiCevabi, opSablonFarklariCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { AdimDurumuCevabi, AdimMatrisiCevabi, HazirlikMaddesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -83,8 +83,8 @@ describe('uretim-emirleri OP düzeyinde hazırlık farkı (3741, gerçek Postgre
     assert.equal(c.durum, 200, JSON.stringify(c.govde));
     return adimMatrisiCevabi.parse(c.govde);
   };
-  const fark = (id: number, ie: number, govde: unknown, kisi = 'mudur') => istek<AdimDurumuCevabi & Hata>(kisi, 'POST', `/adimli-emirler/${id}/is-emirleri/${ie}/sablon-farki`, govde);
-  const don = (id: number, ie: number, madde: string, kisi = 'mudur') => istek<AdimDurumuCevabi & Hata>(kisi, 'POST', `/adimli-emirler/${id}/is-emirleri/${ie}/sablon-farki-kaldir`, { madde });
+  const fark = (id: number, ie: number, govde: unknown, kisi = 'mudur') => istek<Record<string, unknown> & Hata>(kisi, 'POST', `/adimli-emirler/${id}/is-emirleri/${ie}/sablon-farki`, govde);
+  const don = (id: number, ie: number, madde: string, kisi = 'mudur') => istek<Record<string, unknown> & Hata>(kisi, 'POST', `/adimli-emirler/${id}/is-emirleri/${ie}/sablon-farki-kaldir`, { madde });
   const kapali = async (ie: number[]) => o().vt.okumaTx((db) => sablonGerekmezMaddeleri(db, ie));
 
   const gercekCozuculer = new Map<HazirlikMaddesi, HazirlikCozucusu | null>();
@@ -123,10 +123,14 @@ describe('uretim-emirleri OP düzeyinde hazırlık farkı (3741, gerçek Postgre
     assert.equal((await matris()).emirler.find((e) => e.emirId === id)?.adimlar[0]?.sablondanFark, 0);
     const c = await fark(id, ie[0], { madde: 'aparat', gerekli: true, gerekce: 'Bu OP aparatla çalışır' });
     assert.equal(c.durum, 200, JSON.stringify(c.govde));
-    const d = adimDurumuCevabi.parse(c.govde);
-    assert.deepEqual(d.adimlar[0]?.sablonFarklari.map((x) => [x.madde, x.gerekli, x.kisiAdi, x.gerekce]), [['aparat', true, 'Deneme mudur', 'Bu OP aparatla çalışır']]);
-    assert.ok(d.adimlar[0]?.sablonFarklari[0]?.an);
-    assert.deepEqual(d.adimlar[1]?.sablonFarklari, []);
+    // N1: yazma cevabı yalnız bu OP'nin farklarıdır; Adım Durumu (adimlar) sızmaz.
+    assert.deepEqual(Object.keys(c.govde ?? {}).sort(), ['farklar', 'isEmriId']);
+    const d = opSablonFarklariCevabi.parse(c.govde);
+    assert.equal(d.isEmriId, ie[0]);
+    assert.deepEqual(d.farklar.map((x) => [x.madde, x.gerekli, x.kisiAdi, x.gerekce]), [['aparat', true, 'Deneme mudur', 'Bu OP aparatla çalışır']]);
+    assert.ok(d.farklar[0]?.an);
+    const okuma = adimDurumuCevabi.parse((await istek<AdimDurumuCevabi>('planlama_proje', 'GET', `/adimli-emirler/${id}/adim-durumu`)).govde);
+    assert.deepEqual(okuma.adimlar[1]?.sablonFarklari, []);
     const h = await kapali(ie);
     assert.equal(h.get(ie[0])?.has('aparat'), false, 'OP 1 aparatı gerekli sayar');
     assert.equal(h.get(ie[1])?.has('aparat'), true, 'OP 2 türün şablonunu izler');
@@ -140,7 +144,7 @@ describe('uretim-emirleri OP düzeyinde hazırlık farkı (3741, gerçek Postgre
 
     const geri = await don(id, ie[0], 'aparat');
     assert.equal(geri.durum, 200, JSON.stringify(geri.govde));
-    assert.deepEqual(adimDurumuCevabi.parse(geri.govde).adimlar[0]?.sablonFarklari, []);
+    assert.deepEqual(opSablonFarklariCevabi.parse(geri.govde).farklar, []);
     assert.equal((await kapali(ie)).get(ie[0])?.has('aparat'), true, 'şablona dönüldü');
     assert.equal((await don(id, ie[0], 'aparat')).durum, 404, 'farkı olmayan maddede dönüş yazılmaz');
     const satir = await o().sahip.tek<{ say: number }>('SELECT count(*)::int AS say FROM uretim_emirleri_hazirlik_sablonu_ozel WHERE emri_id = $1', [id]);
@@ -210,6 +214,37 @@ describe('uretim-emirleri OP düzeyinde hazırlık farkı (3741, gerçek Postgre
       assert.equal(kaldir.durum, 200, JSON.stringify(kaldir.govde));
       assert.equal((await matris()).emirler.find((e) => e.emirId === id)?.adimlar[0]?.sablondanFark, 0, 'kaldırılan madde farktan düşer');
     } finally { hazirlikCozucusuKaydet('cnc', onceki); hazirlikCozucusuKaydet('talimat', oncekiTalimat); }
+  });
+
+  // Test1 K1: OP farkı hücre sayımını, panel madde satırını ve başlatma kapısını aynı kaynaktan değiştirir.
+  test('OP farkı matris maddesini ve başlatma kapısını o OP için değiştirir (emir ve iş emri düzeyi madde)', async () => {
+    const { id, ie } = await ac();
+    const cozucu = (durum: 'yok' | 'tamam'): HazirlikCozucusu => async (_db, idler) => new Map(idler.map((x) => [x, { durum, secildi: true } as const]));
+    const onceki = [hazirlikCozucusuKaydet('makine', cozucu('tamam')), hazirlikCozucusuKaydet('rota', cozucu('tamam'))];
+    try {
+      const hal = async (isEmri: number, madde: string) => (await matris()).emirler.find((e) => e.emirId === id)?.adimlar.find((a) => a.isEmriId === isEmri)?.maddeler.find((m) => m.madde === madde)?.hal;
+      assert.deepEqual([await hal(ie[0], 'makine'), await hal(ie[1], 'makine'), await hal(ie[0], 'rota')], ['tamam', 'tamam', 'tamam']);
+      assert.equal((await fark(id, ie[0], { madde: 'makine', gerekli: false, gerekce: 'Bu OP makinesiz' })).durum, 200);
+      assert.equal((await fark(id, ie[0], { madde: 'rota', gerekli: false, gerekce: 'Rota bu OP için aranmaz' })).durum, 200);
+      assert.deepEqual([await hal(ie[0], 'makine'), await hal(ie[1], 'makine')], ['gerekmez', 'tamam'], 'iş emri düzeyi madde yalnız o OP\'de gerekmez');
+      assert.deepEqual([await hal(ie[0], 'rota'), await hal(ie[1], 'rota')], ['gerekmez', 'tamam'], 'emir düzeyi madde de yalnız o OP\'de gerekmez');
+      // Görünüm ve başlatma kapısı aynı haritayı (sablonGerekmezMaddeleri) okur; kapı yalnız durduran maddeleri sorar ve OP farkı durduranı kapatamaz.
+      const h = await kapali(ie);
+      assert.deepEqual([h.get(ie[0])?.has('makine'), h.get(ie[1])?.has('makine')], [true, false]);
+    } finally {
+      hazirlikCozucusuKaydet('makine', onceki[0] ?? null);
+      hazirlikCozucusuKaydet('rota', onceki[1] ?? null);
+    }
+  });
+
+  test('aynı ad aynı OP\'ye ikinci kez eklenmez (büyük küçük harf ve boşluk önemsiz); başka OP\'ye eklenir', async () => {
+    const { id, ie } = await ac();
+    const ekle = (op: number, ad: string) => istek<AdimDurumuCevabi & Hata>('mudur', 'POST', `/adimli-emirler/${id}/is-emirleri/${op}/liste-ekle`, { ad, asama: 'hazirlik' });
+    assert.equal((await ekle(ie[0], 'Bağlama aparatı hazır')).durum, 200);
+    const ikinci = await ekle(ie[0], '  bağlama  APARATI hazır ');
+    assert.equal(ikinci.durum, 409, JSON.stringify(ikinci.govde));
+    assert.equal(ikinci.govde?.mesaj, 'Bu operasyonda aynı adlı madde zaten var.');
+    assert.equal((await ekle(ie[1], 'Bağlama aparatı hazır')).durum, 200, 'başka OP\'de aynı ad olur');
   });
 
   test('göç: var olan emir düzeyi satır is_emri_id boş kalır ve emir düzeyi olarak okunur', async () => {

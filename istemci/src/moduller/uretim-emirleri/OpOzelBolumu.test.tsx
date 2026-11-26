@@ -8,7 +8,7 @@ import { OKUYUCU, ac, json, sunucuKur } from './test-ortak.tsx';
 const ZAMAN = '2026-11-26T08:00:00.000Z';
 const MATRIS_ADIMI = (fark: number): AdimMatrisiCevabi['emirler'][number]['adimlar'][number] => ({
   isEmriId: 12, opNo: 20, ad: 'Tornalama', durum: 'bekliyor', hedef: 40, yapilan: 0, yuzde: 0, sistemStatusu: 'baslayabilir', elle: null, sablondanFark: fark,
-  maddeler: [{ madde: 'cnc', hal: 'tamam', ham: 'tamam', elle: null }, { madde: 'aparat', hal: 'gerekmez', ham: 'gerekmez', elle: null }],
+  maddeler: [{ madde: 'cnc', hal: 'tamam', ham: 'tamam', elle: null }, { madde: 'aparat', hal: 'tamam', ham: 'tamam', elle: null }, { madde: 'olcu-aleti', hal: 'gerekmez', ham: 'gerekmez', elle: null }],
 });
 const matris = (fark: number): AdimMatrisiCevabi => ({
   yazabilir: true,
@@ -32,6 +32,7 @@ const MADDELER: HazirlikMaddeleriCevabi = {
   maddeler: [
     { kod: 'cnc', ad: 'CNC programı', kisa: 'CNC', sira: 1, acik: true, sistem: true, durduran: true, sahip: 'CNC Kurulum', isEmriDuzeyi: true, surum: 1 },
     { kod: 'aparat', ad: 'Aparat', kisa: 'Aparat', sira: 2, acik: true, sistem: true, durduran: false, sahip: 'Takımhane', isEmriDuzeyi: true, surum: 1 },
+    { kod: 'olcu-aleti', ad: 'Ölçü aleti', kisa: 'Ölçü', sira: 3, acik: true, sistem: true, durduran: false, sahip: 'Kalite', isEmriDuzeyi: true, surum: 1 },
   ],
 };
 const SABLON = (yazar: boolean): HazirlikSablonuCevabi => ({ turler: [], yazar, durduranAcabilir: false });
@@ -48,8 +49,8 @@ function kur(o: { fark?: number; sablonYazar?: boolean; durum?: AdimDurumuCevabi
     'GET /hazirlik-sablonu': () => json(200, SABLON(o.sablonYazar ?? true)),
     'POST /adimli-emirler/1/is-emirleri/12/liste-ekle': () => json(200, durum),
     'POST /adimli-emirler/1/is-emirleri/12/liste-kaldir': () => json(200, durumCevabi([SABLON_MADDESI], [])),
-    'POST /adimli-emirler/1/is-emirleri/12/sablon-farki': () => json(200, durum),
-    'POST /adimli-emirler/1/is-emirleri/12/sablon-farki-kaldir': () => json(200, durumCevabi([SABLON_MADDESI, OZEL_MADDE], [])),
+    'POST /adimli-emirler/1/is-emirleri/12/sablon-farki': () => json(200, { isEmriId: 12, farklar: [] }),
+    'POST /adimli-emirler/1/is-emirleri/12/sablon-farki-kaldir': () => json(200, { isEmriId: 12, farklar: [] }),
   });
   ac(ekran, '/adim-durumu');
   return istekler;
@@ -103,7 +104,7 @@ describe("Hücre paneli: Bu OP'ye özel (3741)", () => {
     expect(posts(istekler)[1]?.govde).toEqual({ adimId: 901 });
   });
 
-  it('şablon maddesi bu OP\'de gerekmez: gerekçe zorunlu, durduran madde "gerekmez" listesinde yok; Şablona dön farkı kaldırır', async () => {
+  it('şablon maddesi bu OP\'de gerekmez: gerekçe zorunlu, durduran ve zaten gerekmeyen madde "gerekmez" listesinde yok; Şablona dön farkı kaldırır', async () => {
     const istekler = kur();
     const bolum = await panelAc();
     const uygula = bolum.getByRole('button', { name: "Bu OP'de uygula" }) as HTMLButtonElement;
@@ -118,13 +119,36 @@ describe("Hücre paneli: Bu OP'ye özel (3741)", () => {
     expect(posts(istekler)[0]?.yol).toBe('/adimli-emirler/1/is-emirleri/12/sablon-farki');
     expect(posts(istekler)[0]?.govde).toEqual({ madde: 'aparat', gerekli: false, gerekce: 'Bu iş aparatsız' });
     expect(posts(istekler)[0]?.kimlik).toMatch(/^[0-9a-f]{8}-/);
-    // "Gerekli" seçilince durduran madde de yazılabilir (şablonun kapattığını açar).
+    // "Gerekli" yalnız bu OP'de şimdi gerekmeyen maddeyi sunar (zaten gerekli olana etkisiz seçenek yok).
     fireEvent.change(bolum.getByLabelText("Bu OP'de"), { target: { value: 'evet' } });
-    expect([...(bolum.getByLabelText('Şablon maddesi') as HTMLSelectElement).options].map((x) => x.value)).toEqual(['', 'cnc', 'aparat']);
+    expect([...(bolum.getByLabelText('Şablon maddesi') as HTMLSelectElement).options].map((x) => x.value)).toEqual(['', 'olcu-aleti']);
     fireEvent.click(bolum.getByRole('button', { name: 'Şablona dön' }));
     await waitFor(() => { expect(posts(istekler)).toHaveLength(2); });
     expect(posts(istekler)[1]?.yol).toBe('/adimli-emirler/1/is-emirleri/12/sablon-farki-kaldir');
     expect(posts(istekler)[1]?.govde).toEqual({ madde: 'aparat' });
+  });
+
+  it('hücre rozeti simge ve sayı gösterir; lejantta "şablondan N fark" açıklaması vardır', async () => {
+    kur({ fark: 2 });
+    const hucre = await screen.findByRole('button', { name: /UE-1, OP 20 Tornalama/ });
+    expect(hucre.querySelector('.tc-am-fark')?.textContent).toBe('2');
+    expect(screen.getByRole('list', { name: 'Statü simgeleri' }).textContent).toMatch(/şablondan N fark/);
+    cleanup();
+    kur({ fark: 0 });
+    await screen.findByRole('button', { name: /UE-1, OP 20 Tornalama/ });
+    expect(screen.getByRole('list', { name: 'Statü simgeleri' }).textContent).not.toMatch(/şablondan N fark/);
+  });
+
+  it('aynı ad aynı OP\'ye ikinci kez eklenmez: uyarı çıkar, Ekle kapanır, istek gitmez', async () => {
+    const istekler = kur();
+    const bolum = await panelAc();
+    fireEvent.change(bolum.getByLabelText('Madde adı'), { target: { value: '  özel PABUÇ kontrolü ' } });
+    expect(bolum.getByText('Bu operasyonda aynı adlı madde zaten var.')).toBeTruthy();
+    expect((bolum.getByRole('button', { name: 'Ekle' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.keyDown(bolum.getByLabelText('Madde adı'), { key: 'Enter' });
+    expect(posts(istekler)).toHaveLength(0);
+    fireEvent.change(bolum.getByLabelText('Madde adı'), { target: { value: 'Başka madde' } });
+    expect((bolum.getByRole('button', { name: 'Ekle' }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('şablon yazma yetkisi yoksa fark formu ve Şablona dön görünmez; madde ekleme kalır', async () => {

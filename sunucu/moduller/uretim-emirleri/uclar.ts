@@ -9,7 +9,7 @@ import {
   birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMaddeleriCevabi, hazirlikMaddeParametresi, hazirlikMaddesiDegistirGovdesi, hazirlikMaddesiEkleGovdesi, hazirlikProjesiCevabi, hazirlikProjesiGovdesi, hazirlikProjesiSecenekleri, hazirlikMatrisiSorgusu, hazirlikMatrisiCevabi, hazirlikDagitGovdesi, hazirlikDagitCevabi, hazirlikMuafiyetiGovdesi, hazirlikGerekmezCevabi, hazirlikGerekmezGovdesi, hazirlikGerekmezKaldirGovdesi, hazirlikOzetiCevabi, hazirlikOzetiSorgusu, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, makineEkleGovdesi, adimPaylariCevabi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
   hataliCevabi, hataliGovdesi, hataliListeCevabi, hataliListeSorgusu, reworkAdimiGovdesi,
   disIslemEmriAcGovdesi, disIslemEmriCevabi, disIslemEmriIptalGovdesi, disIslemEmriParametresi,
-  adimDurumuCevabi, adimDurumuTerminalCevabi, adimMatrisiCevabi, adimMatrisiSorgusu, statuTopluCevabi, statuTopluGovdesi, elleStatuGovdesi, elleStatuKaldirGovdesi, hazirlikElleEksikGovdesi, hazirlikOnayiGovdesi, hazirlikOnayiKaldirGovdesi, listeEkleGovdesi, listeKaldirGovdesi, opSablonFarkiGovdesi, opSablonFarkiKaldirGovdesi, listeFotografiParametresi, listeIsaretleGovdesi,
+  adimDurumuCevabi, adimDurumuTerminalCevabi, adimMatrisiCevabi, adimMatrisiSorgusu, statuTopluCevabi, statuTopluGovdesi, elleStatuGovdesi, elleStatuKaldirGovdesi, hazirlikElleEksikGovdesi, hazirlikOnayiGovdesi, hazirlikOnayiKaldirGovdesi, listeEkleGovdesi, listeKaldirGovdesi, opSablonFarkiGovdesi, opSablonFarkiKaldirGovdesi, opSablonFarklariCevabi, listeFotografiParametresi, listeIsaretleGovdesi,
   arsivOnizlemeCevabi, arsiveAlCevabi, arsiveAlGovdesi, emirKapatGovdesi, kapanisCevabi, kapanisGeriAcGovdesi, kapanisListeCevabi, kapanislarSorgusu, kapanisMuafGovdesi, kapanisOnayGovdesi, kapanisRetGovdesi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { hazirlikSablonTuruParametresi, hazirlikSablonuCevabi, hazirlikSablonuOzelCevabi, hazirlikSablonuOzelParametresi, hazirlikSablonuOzelYazGovdesi, hazirlikSablonuYazCevabi, hazirlikSablonuYazGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -568,7 +568,7 @@ const adimliUclar = [
     yetki: SABLON_YAZMA_YETKISI,
     parametre: isEmriParametresi,
     govde: opSablonFarkiGovdesi,
-    cevap: adimDurumuCevabi,
+    cevap: opSablonFarklariCevabi,
     tekrarKorumali: true,
     isle: ({ db, kullanici, parametre, govde }) => opSablonFarkiYazAkis(db, kullanici, parametre.id, parametre.isEmriId, govde),
   }),
@@ -579,7 +579,7 @@ const adimliUclar = [
     yetki: SABLON_YAZMA_YETKISI,
     parametre: isEmriParametresi,
     govde: opSablonFarkiKaldirGovdesi,
-    cevap: adimDurumuCevabi,
+    cevap: opSablonFarklariCevabi,
     tekrarKorumali: true,
     isle: ({ db, kullanici, parametre, govde }) => opSablonFarkiKaldirAkis(db, kullanici, parametre.id, parametre.isEmriId, govde),
   }),

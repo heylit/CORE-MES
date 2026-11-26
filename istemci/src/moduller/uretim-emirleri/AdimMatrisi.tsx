@@ -225,7 +225,7 @@ export function AdimMatrisi() {
               <Simge ad={STATU[g].simge} boyut="k" />
               {!kisa && <span className="tc-am-hucre-ad">{STATU[g].ad}</span>}
               {k.adim.elle !== null && <span className="tc-am-e" aria-hidden="true">E</span>}
-              {!kisa && <FarkRozeti adim={k.adim} />}
+              <FarkRozeti adim={k.adim} />
             </>
           )}
         </button>
@@ -367,6 +367,7 @@ export function AdimMatrisi() {
 
   const suzgecSayisi = [suz.statu !== '', suz.yalnizElle, suz.yalnizSorunlu, suz.yalnizHazirlikEksik].filter(Boolean).length;
   const suzgecEtiketi = suzgecSayisi > 0 ? `Filtre (${String(suzgecSayisi)})` : 'Filtre';
+  const farkVar = emirler.some((e) => e.adimlar.some((a) => a.sablondanFark > 0));
   const lejant = [...new Set(emirler.flatMap((e) => e.adimlar.map((a) => gorunenStatu(a))))];
   return (
     <div className={`tc-am tc-am-${genislik}`}>
@@ -413,6 +414,7 @@ export function AdimMatrisi() {
             <ul className="tc-am-lejant" aria-label="Statü simgeleri">
               {lejant.map((x) => <li key={x}><Simge ad={STATU[x].simge} boyut="k" />{statuAdi(x)}</li>)}
               <li><span className="tc-am-e" aria-hidden="true">E</span>Elle yazıldı</li>
+              {farkVar && <li><Simge ad="edit" boyut="k" />şablondan N fark</li>}
             </ul>
           ) : (
             <ul className="tc-am-lejant" aria-label="Hazırlık kareleri">
@@ -421,6 +423,7 @@ export function AdimMatrisi() {
               <li><i className="tc-am-kare tc-am-kare-muaf" />Muaf ya da elle onay</li>
               <li><i className="tc-am-kare tc-am-kare-bos" />Gerekmez ya da denetlenmiyor</li>
               <li><Simge ad="user" boyut="k" />Elle değer</li>
+              {farkVar && <li><Simge ad="edit" boyut="k" />şablondan N fark</li>}
             </ul>
           ))}
         </div>

@@ -191,6 +191,8 @@
 .tc-am-ozel-ad b { overflow-wrap: anywhere; }
 .tc-am-ozel-ad small { flex-basis: 100%; color: var(--muted); font-size: var(--yazi-xs); overflow-wrap: anywhere; }
 .tc-am-ozel-satir .tc-dugme { min-block-size: var(--dokunma); min-inline-size: var(--dokunma); }
+.tc-am-ozel-dik { grid-template-columns: minmax(0, 1fr); }
+.tc-am-ozel-satir .tc-dugme { white-space: nowrap; }
 .tc-am-ozel-eylem { display: flex; flex-wrap: wrap; gap: var(--b-2); }
 .tc-am-ozel-ekle { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--b-2); align-items: end; }
 .tc-am-ozel-ekle .tc-dugme { min-block-size: var(--dokunma); }

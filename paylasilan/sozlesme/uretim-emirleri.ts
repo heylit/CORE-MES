@@ -1409,6 +1409,9 @@ export const adimTedarikSemasi = z.object({
 export const opSablonFarkiSemasi = z.object({ madde: hazirlikMaddeKodu, gerekli: z.boolean(), kisiAdi: z.string().nullable(), an: zamanSemasi, gerekce: z.string().nullable() });
 export const opSablonFarkiGovdesi = z.object({ madde: hazirlikMaddeKodu, gerekli: z.boolean(), gerekce: metin(450, 'Gerekçe yaz.') }).strict();
 export const opSablonFarkiKaldirGovdesi = z.object({ madde: hazirlikMaddeKodu }).strict();
+// Yazma uçlarının cevabı yalnız o OP'nin farklarıdır: ucun yetkisi şablon yazmadır, Adım Durumu okuma yetkisi aranmaz; ekran Adım Durumu'nu ayrı okur.
+export const opSablonFarklariCevabi = z.object({ isEmriId: z.number().int(), farklar: z.array(opSablonFarkiSemasi) });
+export type OpSablonFarklariCevabi = z.output<typeof opSablonFarklariCevabi>;
 export type OpSablonFarki = z.output<typeof opSablonFarkiSemasi>;
 export type OpSablonFarkiGovdesi = z.output<typeof opSablonFarkiGovdesi>;
 export type OpSablonFarkiKaldirGovdesi = z.output<typeof opSablonFarkiKaldirGovdesi>;

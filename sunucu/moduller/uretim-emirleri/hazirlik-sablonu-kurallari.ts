@@ -8,6 +8,7 @@ export const SABLON_DEGISTI = 'Şablon başkası tarafından değiştirildi; say
 export const OZEL_DURDURAN = 'Durduran madde (CNC, çizim, yayın) bu emirde kapatılamaz.';
 export const SABLON_DURDURAN_YETKI = 'Başlatmayı durduran maddeyi (CNC, çizim, yayın) şablonda yalnız müdür kapatabilir.';
 export const SABLON_DURDURAN_GEREKCE = 'Başlatmayı durduran maddeyi kapatmak için gerekçe yazın.';
+export const OP_MADDE_TEKRARI = 'Bu operasyonda aynı adlı madde zaten var.';
 export const OP_FARKI_YOK = 'Bu operasyonda şablondan fark yok.';
 export const SABLON_DEGISIKLIK_YOK = 'Şablonda değişiklik yok.';
 
@@ -61,3 +62,7 @@ export function gecerliKapaliMaddeler(
   }
   return m;
 }
+
+// 3741: aynı ad aynı OP'ye ikinci kez eklenmez (büyük küçük harf ve baştaki sondaki boşluk önemsiz).
+export const maddeAdiAnahtari = (ad: string): string => ad.trim().replace(/\s+/g, ' ').toLocaleLowerCase('tr');
+export const maddeAdiVarMi = (mevcut: readonly string[], ad: string): boolean => mevcut.some((m) => maddeAdiAnahtari(m) === maddeAdiAnahtari(ad));
