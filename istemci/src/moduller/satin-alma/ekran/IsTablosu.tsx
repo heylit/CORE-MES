@@ -11,6 +11,11 @@ const TUR_TONU: Record<IsTuru, RozetTonu> = { order: 'uyari', decide: 'uyari', d
 const SEKME: Record<IsTuru, string> = { order: 'order', decide: 'compare', draft: 'quotes', quotes: 'quotes', delivery: 'delivery', approval: 'approval' };
 const ac = (s: IsSatiri) => { go('request', s.r.id, SEKME[s.tur]); };
 
+/** Sıradaki iş rozeti; Talepler'de açılan satır da aynı ad ve tonla gösterir (3798). */
+export function IsRozeti({ tur }: { tur: IsTuru }) {
+  return <Rozet ton={TUR_TONU[tur]}>{IS_ADI[tur]}</Rozet>;
+}
+
 function Termin({ s, bugun }: { s: IsSatiri; bugun: string }) {
   if (!s.r.needDate) return <>–</>;
   const d = dayDiff(bugun, s.r.needDate);
@@ -40,7 +45,7 @@ function TeslimatHucresi({ s, bugun }: { s: IsSatiri; bugun: string }) {
 function Is({ s }: { s: IsSatiri }) {
   return (
     <span className="sa-ekran-govde">
-      <Rozet ton={TUR_TONU[s.tur]}>{IS_ADI[s.tur]}</Rozet>
+      <IsRozeti tur={s.tur} />
       {s.adimdaGun !== null && <small>{nf0.format(s.adimdaGun)} gündür bu adımda</small>}
     </span>
   );
