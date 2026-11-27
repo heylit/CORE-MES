@@ -43,7 +43,9 @@ describe('plan (gerçek PostgreSQL): planlama analizi ucu (2151)', () => {
     assert.ok(r.darbogaz !== null);
 
     const m = await tamam<PlanAnaliziCevabi>(c.mudur, 'GET', yol);
-    assert.deepEqual(m.istasyonlar, r.istasyonlar, 'okuma yazmaz; müdür aynı ölçüleri görür');
+    // Bu haftanın hücresi (8) kalan kapasiteyi şimdiden hesaplar; iki okuma arasında saat ilerler. Karşılaştırmada yalnız yük alınır.
+    const olcu = (l: PlanAnaliziCevabi['istasyonlar']) => l.map((s) => ({ ...s, hucreler: s.hucreler.map((h, i) => (i === 8 ? { yukDk: h.yukDk } : h)) }));
+    assert.deepEqual(olcu(m.istasyonlar), olcu(r.istasyonlar), 'okuma yazmaz; müdür aynı ölçüleri görür');
     assert.equal((await istek(c.operator, 'GET', yol)).statusCode, 403);
     assert.equal((await istek('', 'GET', yol)).statusCode, 401);
   });
