@@ -16,6 +16,7 @@ import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { degerlendirmeBaslat, degerlendirmeDurumu, degerlendirmeKodu, degerlendirmeYap, maliyetsiz, MESGUL, SONUC_OMRU_MS, type DegerlendirmeZarfi } from './degerlendirme.ts';
+import { ISCI_HAVUZU, isciYeriIste } from './isci-izleme.ts';
 import { DURUM_ANAHTARI } from '../recete-rota/disari.ts';
 import { PLANLAMA_ANAHTARI } from './disari.ts';
 import { planGirdisi, type KaynakOkumasi } from './plan-girdisi.ts';
@@ -652,13 +653,22 @@ describe('planlama değerlendirmesi: arama (457 1-3 b)', () => {
     assert.ok(Object.keys(eski).some((id) => kur[id]?.m !== eski[id]?.m || kur[id]?.S !== eski[id]?.S), 'plan kur kayıtlı yerlere bağlı kalmaz: en az bir iş yer değiştirir');
   });
 
-  test('PD-15: süre kuyruğa girişten sayılır: süre biterse iş parçacığı durdurulur, sırası gelene süre kalmadıysa koşmadan reddedilir (ikisi de meşgul)', async () => {
+  test('PD-15: süre kuyruğa girişten sayılır: süre biterse hesap durdurulur, sırası gelene süre kalmadıysa koşmadan reddedilir (ikisi de meşgul)', async () => {
     const { calisma } = buyukPlanli();
     const g = { calisma, kayit: BUYUK_KAYIT, kaynak: BUYUK_KAYNAK, bugun: '2026-10-19', istek: { tur: 'plan-secenekleri' } as const };
-    const uzun = degerlendirmeYap(g, AN, 50);
-    const sirada = degerlendirmeYap(g, AN, 1);
-    await assert.rejects(uzun, /ms içinde bitmedi/);
-    await assert.rejects(sirada, (e: Error) => e.message === MESGUL);
+    // Hesabın süresi makineye göre değişir; ilk çağrının sınırı hem hesaptan kısa hem çağrıyla kuyruğun onu başlatması arasındaki duraklamadan
+    // (yavaş makinede çöp toplama, iş parçacığının sırası) uzun olmalıydı. Ortak havuz doluyken süre yer beklerken dolar: sınır duraklamadan
+    // uzun tutulur, hesap süresine bağlı kalınmaz.
+    const dolu = Array.from({ length: ISCI_HAVUZU }, () => isciYeriIste());
+    await Promise.all(dolu.map((y) => y.hazir));
+    try {
+      const uzun = degerlendirmeYap(g, AN, 1000);
+      const sirada = degerlendirmeYap(g, AN, 1);
+      await assert.rejects(uzun, /ms içinde bitmedi/);
+      await assert.rejects(sirada, (e: Error) => e.message === MESGUL);
+    } finally {
+      for (const y of dolu) y.birak();
+    }
   });
 });
 
