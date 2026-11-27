@@ -1,19 +1,23 @@
-import { useMemo, useState, type ChangeEvent } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import type {
-  AcikTeslim, AktarimSatiri, AparatCevabi, EmirTakimListesi, SeceneklerCevabi, TakimSatiri, TakimhaneOzeti,
+  AcikTeslim, AparatCevabi, EmirTakimListesi, KutuphaneCevabi, SeceneklerCevabi, TakimSatiri, TakimhaneOzeti,
 } from '#paylasilan/sozlesme/takimhane.ts';
-import { DurumKutusu, Girdi, Kart, SayfaBasligi, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
+import { DurumKutusu, Dugme, Kart, SayfaBasligi, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
+import { useYetki } from '../../ortak/veri/yetki.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { EmirAparatlari } from './Aparat.tsx';
-import { AktarimOnizleme } from './Aktarim.tsx';
 import { AcikTeslimler, CikisFormu, IadePenceresi } from './CikisIade.tsx';
-import { EmirTakimlari } from './EmirTakimlari.tsx';
-import { stokDurumu, type IadeDurumu } from './gosterim.ts';
-import { BekleyenIadeCipi, KategoriCipleri, KonumOzeti, KritikListe, TakimTablosu } from './Parcalar.tsx';
+import { kutuphaneRaflari } from '../cnc-kurulum/disari.ts';
+import { EmirTakimDuzenleyici, EmirTakimlari } from './EmirTakimlari.tsx';
+import { type IadeDurumu } from './gosterim.ts';
+import { kutuphaneSatirlari, type KutuphaneSatiri } from './kutuphane.ts';
+import { BaglaPenceresi, GirisPenceresi, KartAcPenceresi, KutuphaneListesi, type PencereTuru } from './Kutuphane.tsx';
+import { BekleyenIadeCipi, KonumOzeti, KritikListe } from './Parcalar.tsx';
+import { TopluGiris } from './Toplu.tsx';
 import { TakimAyrinti } from './TakimAyrinti.tsx';
 import './takimhane.css';
 
@@ -26,29 +30,42 @@ function useTakimlar() {
 const aparatTakim = (a: AparatCevabi['satirlar'][number]): TakimSatiri => ({
   kartKimlik: a.kartKimlik, kod: a.kod, ad: a.ad, kategori: 'Aparat', sinif: 'diger', capMm: null, kesiciSayisi: null, isoKodu: null, malzemeGruplari: [],
   yenidenBilenir: false, izleme: 'adet', rafKodu: a.rafKodu, konumlar: a.konumlar, toplam: a.toplam, kritikSeviye: null,
+  kutuphaneKimligi: null, kartDurumu: 'aktif', gozler: [], omurYuzde: null,
 });
 
-// Ana ekran (B+C): önce neresi sıkıştı (kritik liste, nerede), altında süzülebilir takım listesi. Yeni takım kartı katalogdan açılır.
+// Takımhane listesi = CNC kütüphanesi (hazır katalog + atölyenin eklediği kalemler) ile stok kartlarının birleşimi.
+function useKutuphane() {
+  const takimlar = useTakimlar();
+  const kutuphane = useQuery({ queryKey: anahtarlar.kutuphane, queryFn: () => api.get<KutuphaneCevabi>('/takimhane/kutuphane') });
+  const raflar = useMemo(() => (kutuphane.data ? kutuphaneRaflari(kutuphane.data.ozelKalemler) : null), [kutuphane.data]);
+  const satirlar = useMemo(() => (raflar && takimlar.data ? kutuphaneSatirlari(raflar, takimlar.data.takimlar) : null), [raflar, takimlar.data]);
+  return {
+    satirlar, takimlar: takimlar.data?.takimlar ?? null,
+    isPending: takimlar.isPending || kutuphane.isPending, isError: takimlar.isError || kutuphane.isError, error: takimlar.error ?? kutuphane.error,
+    refetch: () => { void takimlar.refetch(); void kutuphane.refetch(); },
+  };
+}
+
+// Ana ekran: önce neresi sıkıştı (kritik liste, nerede), altında CNC kütüphanesinin rafları ve her kalemin raf gözü (3762).
 export function TakimhaneGenel() {
   const git = useNavigate();
   const ozet = useQuery({ queryKey: anahtarlar.ozet, queryFn: () => api.get<TakimhaneOzeti>('/takimhane/ozet') });
-  const takimlar = useTakimlar();
-  const [kategori, kategoriYaz] = useState<string | null>(null);
-  const [ara, araYaz] = useState('');
-  const [durum, durumYaz] = useState('hepsi');
+  const k = useKutuphane();
   const [acik, acikYaz] = useState<TakimSatiri | null>(null);
-  const liste = useMemo(() => (takimlar.data?.takimlar ?? []).filter((t) => {
-    const d = stokDurumu(t);
-    const durumTamam = durum === 'hepsi' || (durum === 'kritik' ? d === 'kritik' || d === 'sifir' : d === 'esiksiz');
-    const aranan = ara.trim().toLocaleLowerCase('tr');
-    return (kategori === null || t.kategori === kategori) && durumTamam && (aranan === '' || `${t.kod} ${t.ad}`.toLocaleLowerCase('tr').includes(aranan));
-  }), [takimlar.data, kategori, durum, ara]);
+  const [pencere, pencereYaz] = useState<{ tur: 'giris' | 'bagla'; takim: TakimSatiri } | null>(null);
+  const [kartAcilacak, kartAcilacakYaz] = useState<KutuphaneSatiri | null>(null);
+  const ac = (s: KutuphaneSatiri, tur: PencereTuru) => {
+    if (tur === 'kart-ac') kartAcilacakYaz(s);
+    else if (s.takim) pencereYaz({ tur, takim: s.takim });
+  };
 
-  if (ozet.isPending || takimlar.isPending) return <DurumKutusu durum="yukleniyor" />;
-  if (ozet.isError || takimlar.isError || !ozet.data || !takimlar.data) {
-    return <DurumKutusu durum="hata" hata={ozet.error ?? takimlar.error} mesaj="Takımhane yüklenemedi." yenile={() => { void ozet.refetch(); void takimlar.refetch(); }} />;
+  if (ozet.isPending || k.isPending) return <DurumKutusu durum="yukleniyor" />;
+  if (ozet.isError || k.isError || !ozet.data || !k.satirlar || !k.takimlar) {
+    return <DurumKutusu durum="hata" hata={ozet.error ?? k.error} mesaj="Takımhane yüklenemedi." yenile={() => { void ozet.refetch(); k.refetch(); }} />;
   }
   const o = ozet.data;
+  const satirlar = k.satirlar;
+  const kartli = satirlar.filter((s) => s.takim !== null).length;
   return (
     <div className="tc-tkm-yigin">
       <SayfaBasligi
@@ -59,25 +76,22 @@ export function TakimhaneGenel() {
       <div className="tc-tkm-ust-yatay">
         <Kart baslik="Şu an nerede" simge="pin"><KonumOzeti konumlar={o.konumlar} /></Kart>
         <Kart baslik="Önce bunlar" simge="alert" baslikEki={<span className="tc-tkm-soluk">{o.kritik} kritik · {o.sifir} stok yok</span>}>
-          <KritikListe takimlar={takimlar.data.takimlar} ac={acikYaz} toplam={o.kritik + o.sifir} tumu={() => { durumYaz('kritik'); }} />
+          <KritikListe takimlar={k.takimlar} ac={acikYaz} toplam={o.kritik + o.sifir} />
         </Kart>
       </div>
-      <Kart baslik="Takımlar" simge="list" baslikEki={<span className="tc-tkm-soluk">{o.esiksiz} kalemde eşik yok</span>}>
-        <div className="tc-tkm-yigin">
-          <KategoriCipleri kategoriler={o.kategoriler} kalem={o.kalem} secili={kategori} sec={kategoriYaz} />
-          <TakimTablosu
-            takimlar={liste} satirSec={acikYaz}
-            arac={{
-              arama: { deger: ara, degistir: araYaz, etiket: 'Takım ara', yerTutucu: 'Kod ya da ad' },
-              suzgec: {
-                etiket: 'Stok durumu', secili: durum, sec: durumYaz,
-                secenekler: [{ deger: 'hepsi', baslik: 'Tümü' }, { deger: 'kritik', baslik: 'Kritik ve biten' }, { deger: 'esiksiz', baslik: 'Eşik yok' }],
-              },
-            }}
-          />
-        </div>
+      <Kart baslik="Kütüphane ve stok" simge="list" baslikEki={<span className="tc-tkm-soluk">{satirlar.length} kalem · {kartli} kartlı</span>}>
+        <KutuphaneListesi satirlar={satirlar} satirSec={acikYaz} ac={ac} />
       </Kart>
       <TakimAyrinti takim={acik} kapat={() => { acikYaz(null); }} />
+      <GirisPenceresi
+        key={pencere?.tur === 'giris' ? `g-${String(pencere.takim.kartKimlik)}` : 'g'}
+        takim={pencere?.tur === 'giris' ? pencere.takim : null} kapat={() => { pencereYaz(null); }}
+      />
+      <BaglaPenceresi
+        key={pencere?.tur === 'bagla' ? `b-${String(pencere.takim.kartKimlik)}` : 'b'}
+        takim={pencere?.tur === 'bagla' ? pencere.takim : null} kalemler={satirlar} kapat={() => { pencereYaz(null); }}
+      />
+      <KartAcPenceresi key={kartAcilacak?.anahtar ?? 'k'} satir={kartAcilacak} kapat={() => { kartAcilacakYaz(null); }} />
     </div>
   );
 }
@@ -103,12 +117,12 @@ export function CikisIade() {
   const yenile = () => { void istemci.invalidateQueries({ queryKey: ['takimhane'] }); };
 
   const cikis = useMutation({
-    mutationFn: (g: { kartKimlik: number; adet: number; alici: string; emir: string }) => {
+    mutationFn: (g: { kartKimlik: number; adet: number; alici: string; emir: string; goz: string }) => {
       const istekKimligi = yeniIstekKimligi();
       const [tur, id] = g.alici.split(':');
       return api.post('/takimhane/cikis', {
         kartKimlik: g.kartKimlik, adet: g.adet, kisiId: tur === 'k' ? Number(id) : null, istasyonId: tur === 'i' ? Number(id) : null,
-        uretimEmriId: g.emir === '' ? null : Number(g.emir), istekKimligi,
+        uretimEmriId: g.emir === '' ? null : Number(g.emir), konumKimligi: g.goz === '' ? null : Number(g.goz), istekKimligi,
       }, { istekKimligi });
     },
     onSuccess: (_c, g) => { sonYaz((s) => [g.kartKimlik, ...s.filter((x) => x !== g.kartKimlik)].slice(0, 5)); bildirim.bildir('tamam', 'Çıkış kaydedildi; alan kabul edince teslim tamamlanır.'); yenile(); },
@@ -158,68 +172,65 @@ export function CikisIade() {
   );
 }
 
-// Emrin takım listesi: eksik takım emir başlamadan görünür; yalnız uyarır, başlatmayı engellemez.
+// Emrin takım listesi: eksik takım emir başlamadan görünür; yalnız uyarır, başlatmayı engellemez. Takımhane yetkisi olan listeyi düzenler.
 export function EmirTakimlariSayfasi() {
+  const istemci = useQueryClient();
+  const bildirim = useBildirim();
+  const yetki = useYetki();
   const secenekler = useQuery({ queryKey: [...anahtarlar.ozet, 'secenekler-emir'], queryFn: () => api.get<SeceneklerCevabi>('/takimhane/secenekler') });
+  const takimlar = useTakimlar();
   const [emirId, emirYaz] = useState('');
+  const [duzen, duzenYaz] = useState(false);
   const liste = useQuery({
     queryKey: anahtarlar.emirListesi(emirId), enabled: emirId !== '',
     queryFn: () => api.get<EmirTakimListesi>(`/takimhane/emirler/${emirId}/takimlar`),
   });
+  const kaydet = useMutation({
+    mutationFn: (satirlar: { cep: string; kartKimlik: number; adet: number }[]) => {
+      const istekKimligi = yeniIstekKimligi();
+      return api.post<EmirTakimListesi>(`/takimhane/emirler/${emirId}/takimlar`, { satirlar }, { istekKimligi });
+    },
+    onSuccess: (c) => { istemci.setQueryData(anahtarlar.emirListesi(emirId), c); duzenYaz(false); bildirim.bildir('tamam', 'Takım listesi kaydedildi.'); },
+    onError: (h) => { bildirim.bildir('hata', hataIletisi(h, 'Takım listesi kaydedilemedi.')); },
+  });
+  const duzenlenir = yetki.var('takimhane.cikis-iade') && takimlar.data !== undefined;
   return (
     <div className="tc-tkm-yigin">
       <SayfaBasligi baslik="Emir takımları" simge="tool" />
       <Kart baslik="Emir" simge="list">
         {secenekler.isPending ? <DurumKutusu durum="yukleniyor" /> : (
           <Secim
-            etiket="Üretim emri" value={emirId} onChange={(e) => { emirYaz(e.target.value); }} bosSecenek="Emir seçin"
+            etiket="Üretim emri" value={emirId} onChange={(e) => { emirYaz(e.target.value); duzenYaz(false); }} bosSecenek="Emir seçin"
             secenekler={(secenekler.data?.emirler ?? []).map((e) => ({ deger: String(e.id), baslik: `${e.emirNo} · ${e.parca}` }))}
           />
         )}
       </Kart>
       {liste.isError && <DurumKutusu durum="hata" hata={liste.error} mesaj="Takım listesi yüklenemedi." yenile={() => { void liste.refetch(); }} />}
-      {liste.data && (liste.data.satirlar.length === 0
-        ? <Kart><p className="tc-tkm-bos">Bu emir için takım listesi girilmemiş.</p></Kart>
-        : <Kart><EmirTakimlari liste={liste.data} /></Kart>)}
+      {liste.data && (duzen && takimlar.data ? (
+        <Kart baslik={`${liste.data.emirNo} takım listesi`} simge="edit">
+          <EmirTakimDuzenleyici liste={liste.data} takimlar={takimlar.data.takimlar} mesgul={kaydet.isPending} vazgec={() => { duzenYaz(false); }} kaydet={(s) => { kaydet.mutate(s); }} />
+        </Kart>
+      ) : (
+        <Kart sag={duzenlenir ? <Dugme simge="edit" onClick={() => { duzenYaz(true); }}>{liste.data.satirlar.length === 0 ? 'Liste gir' : 'Düzenle'}</Dugme> : undefined}>
+          {liste.data.satirlar.length === 0 ? <p className="tc-tkm-bos">Bu emir için takım listesi girilmemiş.</p> : <EmirTakimlari liste={liste.data} />}
+        </Kart>
+      ))}
       {emirId !== '' && <EmirAparatlari emirId={emirId} />}
     </div>
   );
 }
 
-// Başlangıç stoğu ön izlemesi: CSV (kod;ad;kategori;adet;raf) okunur, temizlik bulguları sunucudan gelir; hiçbir şey kaydedilmez.
-function csvSatirlari(metin: string) {
-  return metin.split(/\r?\n/).map((s) => s.trim()).filter((s) => s !== '').map((s) => {
-    const [kod = '', ad = '', kategori = '', adet = '0', raf = ''] = s.split(';');
-    return { kod, ad, kategori: kategori === '' ? null : kategori, adet: Math.max(0, Math.trunc(Number(adet) || 0)), rafKodu: raf === '' ? null : raf };
-  });
-}
-
+// Açılış ve sayım toplu girişi (3762): Excel satır satır ön izlenir; boş göz açılış, dolu göz kör sayım. Tek satır için ana listedeki düğme.
 export function BaslangicStogu() {
-  const [satirlar, satirlarYaz] = useState<AktarimSatiri[] | null>(null);
-  const [hata, hataYaz] = useState<string | null>(null);
-  const onizle = useMutation({
-    mutationFn: (metin: string) => api.post<{ satirlar: AktarimSatiri[]; uygun: boolean }>('/takimhane/baslangic/onizleme', { satirlar: csvSatirlari(metin) }),
-    onSuccess: (c) => { hataYaz(null); satirlarYaz(c.satirlar); },
-    onError: (h) => { hataYaz(hataIletisi(h, 'Dosya okunamadı.')); },
-  });
-  const sec = async (e: ChangeEvent<HTMLInputElement>) => {
-    const dosya = e.target.files?.[0];
-    if (dosya) onizle.mutate(await dosya.text());
-  };
+  const k = useKutuphane();
   return (
     <div className="tc-tkm-yigin">
-      <SayfaBasligi baslik="Başlangıç stoğu" simge="upload" />
-      <Kart baslik="Aktarım ön izlemesi" simge="file">
-        <div className="tc-tkm-yigin">
-          <Girdi etiket="CSV dosyası (kod;ad;kategori;adet;raf)" type="file" accept=".csv,text/csv" onChange={(e) => { void sec(e); }} />
-          {hata !== null && <p role="alert" className="tc-tkm-soluk">{hata}</p>}
-          {satirlar === null
-            ? <p className="tc-tkm-bos">Dosya seçilince temizlik kararları satır satır görünür.</p>
-            : <AktarimOnizleme satirlar={satirlar} vazgec={() => { satirlarYaz(null); }} />}
-          {onizle.isPending && <DurumKutusu durum="yukleniyor" />}
-        </div>
+      <SayfaBasligi baslik="Açılış ve sayım" simge="upload" />
+      <Kart baslik="Excel'den toplu giriş" simge="file">
+        {k.isPending ? <DurumKutusu durum="yukleniyor" />
+          : k.isError || !k.satirlar ? <DurumKutusu durum="hata" hata={k.error} mesaj="Kütüphane yüklenemedi." yenile={k.refetch} />
+            : <TopluGiris kalemler={k.satirlar} />}
       </Kart>
     </div>
   );
 }
-

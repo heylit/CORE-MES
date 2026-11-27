@@ -1,33 +1,52 @@
 import type { Db } from '#cekirdek/db.ts';
-import { bulunamadi, dogrulama } from '#cekirdek/hata.ts';
-import type { Kullanici } from '#cekirdek/yetki.ts';
+import { islemKilidiAl } from '#cekirdek/kilit.ts';
+import { bulunamadi, dogrulama, yetkiYok } from '#cekirdek/hata.ts';
+import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import type { TeslimCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type {
-  AcikTeslim, AktarimSatiri, SeceneklerCevabi, CikisGovdesi, EmirTakimiGovdesi, EmirTakimListesi, IadeGovdesi, KategoriOzeti, OzellikGovdesi, TakimhaneOzeti, TakimSatiri,
+  AcikTeslim, SeceneklerCevabi, CikisGovdesi, EmirTakimiGovdesi, EmirTakimListesi, GirisCevabi, GirisGovdesi, IadeGovdesi, KategoriOzeti, KutuphaneCevabi,
+  KartAcCevabi, KartAcGovdesi, OzellikGovdesi, RafGozleriCevabi, TakimhaneOzeti, TakimSatiri, TopluGirisCevabi, TopluGirisGovdesi,
 } from '#paylasilan/sozlesme/takimhane.ts';
+import { cncKurulumDurumu, takimOmruDurumlari } from '../cnc-kurulum/disari.ts';
 import { aktifIstasyonlar, istasyonAdlari } from '../istasyonlar/disari.ts';
 import { kisiAdlari, kisiSecenekleri } from '../kisiler/disari.ts';
-import { malzemeAra } from '../malzemeler/disari.ts';
-import { alandakiTakimlar, emirAparatCikislari, takimCikisi, takimEsikleri, takimIadesi, takimKonumTurToplamlari } from '../stok/disari.ts';
+import { cncKimligiBagla, cncKimlikliMalzemeler, malzemeAra, takimKartiAc } from '../malzemeler/disari.ts';
+import {
+  aktifRafGozleri, alandakiTakimlar, emirAparatCikislari, takimAcilisi, takimCikisi, takimEsikleri, takimGozleri, takimGozTuru, takimIadesi, takimKonumTurToplamlari,
+  takimSayimi, takimTopluDenetle, takimTopluYaz,
+} from '../stok/disari.ts';
 import { acikEmir, acikEmirler } from '../uretim-emirleri/disari.ts';
-import { aktarimOnizle, bosDagilim, dagilimToplami, dagilimaEkle, konumGrubu, kritikMi, stokDurumu, takimKoduMu } from './kurallar.ts';
+import { bosDagilim, dagilimToplami, dagilimaEkle, konumGrubu, kritikMi, ozelKalemler, stokDurumu, takimKoduMu } from './kurallar.ts';
 import { aparatKartKimlikleri, aparatKartListesi } from './aparat.ts';
 import * as sorgular from './sorgular.ts';
 
 const SAYFA_BOYU = 200;
 const EN_COK_SAYFA = 25;
 
-interface TakimKarti { id: number; kod: string; ad: string; kategori: string }
+interface TakimKarti { id: number; kod: string; ad: string; kategori: string; kutuphaneKimligi: string | null; durum: TakimSatiri['kartDurumu'] }
 
-// Takım kartları katalogdadır (tek kayıt): sarf ya da demirbaş türünde, stok kodu TKM ile başlayan aktif kartlar (varsayım; kategori ağacı bu işte açılmaz).
+// Takım kartları katalogdadır (tek kayıt). 3762: CNC kütüphanesine bağlı her sarf ve demirbaş kartı takımdır (taslak ve onaydakiler dahil,
+// açılışı kart aktif olunca girer); kütüphaneye bağlanmamış eski kartlar stok kodu TKM ile başlayan aktif kartlardır.
 async function takimKartlari(db: Db, metin: string | null): Promise<TakimKarti[]> {
-  const sonuc: TakimKarti[] = [];
+  const bagli = await cncKimlikliMalzemeler(db);
+  const harita = new Map<number, TakimKarti>();
+  const aranan = metin === null || metin.trim() === '' ? null : metin.trim().toLocaleLowerCase('tr-TR');
+  for (const [kimlik, k] of bagli) {
+    if (k.onayDurumu === 'iptal') continue;
+    if (aranan !== null && ![k.kod, k.ad ?? '', kimlik].some((x) => x.toLocaleLowerCase('tr-TR').includes(aranan))) continue;
+    harita.set(k.malzemeId, { id: k.malzemeId, kod: k.kod, ad: k.ad ?? k.kod, kategori: 'Kütüphane', kutuphaneKimligi: kimlik, durum: k.onayDurumu });
+  }
   for (let sayfa = 1; sayfa <= EN_COK_SAYFA; sayfa += 1) {
-    const r = await malzemeAra(db, { metin: metin === null || metin === '' ? 'TKM' : metin, turler: ['sarf', 'demirbas'], yalnizAktif: true, sayfa, sayfaBoyu: SAYFA_BOYU });
-    for (const m of r.satirlar) if (takimKoduMu(m.kod)) sonuc.push({ id: m.id, kod: m.kod, ad: m.ad ?? m.kod, kategori: m.kategoriAdi ?? m.kategori ?? 'Kategorisiz' });
+    const r = await malzemeAra(db, { metin: aranan === null ? 'TKM' : metin, turler: ['sarf', 'demirbas'], yalnizAktif: true, sayfa, sayfaBoyu: SAYFA_BOYU });
+    for (const m of r.satirlar) {
+      const var0 = harita.get(m.id);
+      const kategori = m.kategoriAdi ?? m.kategori ?? 'Kategorisiz';
+      if (var0 !== undefined) var0.kategori = kategori;
+      else if (takimKoduMu(m.kod)) harita.set(m.id, { id: m.id, kod: m.kod, ad: m.ad ?? m.kod, kategori, kutuphaneKimligi: null, durum: 'aktif' });
+    }
     if (sayfa * SAYFA_BOYU >= (r.toplam ?? 0)) break;
   }
-  return sonuc;
+  return [...harita.values()];
 }
 
 const tamSayi = (m: string): number => Math.trunc(Number(m));
@@ -38,6 +57,15 @@ export async function takimlar(db: Db, metin: string | null): Promise<TakimSatir
   const ozellikler = await sorgular.ozellikler(db, idler);
   const toplamlar = await takimKonumTurToplamlari(db, idler);
   const esikler = await takimEsikleri(db, idler);
+  // Ömür CNC'nin tezgâh yüklerindendir; kalem kimliği bağın kimliğiyle eşlenir (canlı takım öneki CNC'de olduğu gibi atılır).
+  const omur = new Map<string, number>();
+  for (const d of await takimOmruDurumlari(db, (await aktifIstasyonlar(db)).map((i) => i.id))) {
+    if (d.kalanPay === null) continue;
+    const anahtar = d.takimKimligi.replace(/^lv_/, '');
+    omur.set(anahtar, Math.min(omur.get(anahtar) ?? 100, Math.round(d.kalanPay * 100)));
+  }
+  const gozler = new Map<number, TakimSatiri['gozler']>();
+  for (const g of await takimGozleri(db, idler)) gozler.set(g.malzemeId, [...(gozler.get(g.malzemeId) ?? []), { konumKimligi: g.konumId, kod: g.kod, adet: tamSayi(g.miktar) }]);
   const ozellikHaritasi = new Map(ozellikler.map((o) => [o.kartNo, o]));
   const esikHaritasi = new Map(esikler.map((e) => [e.malzemeId, e]));
   const dagilimlar = new Map<number, ReturnType<typeof bosDagilim>>();
@@ -58,6 +86,8 @@ export async function takimlar(db: Db, metin: string | null): Promise<TakimSatir
       malzemeGruplari: (o?.malzemeGruplari ?? []) as TakimSatiri['malzemeGruplari'], yenidenBilenir: o?.yenidenBilenir ?? false,
       izleme: (o?.izleme ?? 'adet') as TakimSatiri['izleme'], rafKodu: e?.rafKodu ?? null, konumlar, toplam: dagilimToplami(konumlar),
       kritikSeviye: e?.kritikSeviye == null ? null : tamSayi(e.kritikSeviye),
+      kutuphaneKimligi: k.kutuphaneKimligi, kartDurumu: k.durum, gozler: gozler.get(k.id) ?? [],
+      omurYuzde: k.kutuphaneKimligi === null ? null : omur.get(k.kutuphaneKimligi) ?? null,
     };
   });
 }
@@ -107,7 +137,10 @@ async function kartiDenetle(db: Db, kartKimlik: number): Promise<void> {
 
 export async function cikis(db: Db, k: Kullanici, g: CikisGovdesi): Promise<TeslimCevabi> {
   await kartiDenetle(db, g.kartKimlik);
-  return takimCikisi(db, k, { malzemeId: g.kartKimlik, adet: g.adet, kisiId: g.kisiId, istasyonId: g.istasyonId, uretimEmriId: g.uretimEmriId, kaynakKimligi: `tkm:cikis:${g.istekKimligi}`.slice(0, 120) });
+  return takimCikisi(db, k, {
+    malzemeId: g.kartKimlik, adet: g.adet, kisiId: g.kisiId, istasyonId: g.istasyonId, uretimEmriId: g.uretimEmriId, kaynakKimligi: `tkm:cikis:${g.istekKimligi}`.slice(0, 120),
+    kaynakKonumId: g.konumKimligi,
+  });
 }
 
 export async function iade(db: Db, k: Kullanici, g: IadeGovdesi): Promise<TeslimCevabi> {
@@ -164,10 +197,6 @@ export async function emirTakimListesiYaz(db: Db, emirId: number, g: EmirTakimiG
   return emirTakimListesi(db, emirId);
 }
 
-export function aktarimOnizleme(satirlar: Parameters<typeof aktarimOnizle>[0]): { satirlar: AktarimSatiri[]; uygun: boolean } {
-  return aktarimOnizle(satirlar);
-}
-
 export async function secenekler(db: Db): Promise<SeceneklerCevabi> {
   const kisiler = await kisiSecenekleri(db);
   const istasyonlar = await aktifIstasyonlar(db);
@@ -177,4 +206,84 @@ export async function secenekler(db: Db): Promise<SeceneklerCevabi> {
     istasyonlar: istasyonlar.map((i) => ({ id: i.id, ad: i.ad })),
     emirler: emirler.map((e) => ({ id: e.id, emirNo: e.emirNo, parca: e.parcaAd })),
   };
+}
+
+// ---- 3762: tek kütüphane, raf gözü, açılış ve kör sayım ---------------------------------------------------------------------------
+
+// CNC kütüphanesinin atölyede eklenen kalemleri; hazır katalog istemcidedir (CNC kurulumla aynı kaynak).
+export async function kutuphane(db: Db): Promise<KutuphaneCevabi> {
+  return { ozelKalemler: ozelKalemler((await cncKurulumDurumu(db))?.deger ?? null) };
+}
+
+// Göz seçici: aktif raf gözleri; kart verilirse gözde o takımın olup olmadığı (boş: açılış, dolu: sayım). Adet dönmez: sayım kördür.
+export async function rafGozleri(db: Db, metin: string | null, kartKimlik: number | null): Promise<RafGozleriCevabi> {
+  const gozler = await aktifRafGozleri(db, metin === '' ? null : metin);
+  const dolu = kartKimlik === null ? new Set<number>() : new Set((await takimGozleri(db, [kartKimlik])).map((g) => g.konumId));
+  return { gozler: gozler.map((g) => ({ konumKimligi: g.konumId, kod: g.kod, ad: g.ad, dolu: dolu.has(g.konumId) })) };
+}
+
+async function aktifTakimKarti(db: Db, kartKimlik: number): Promise<void> {
+  const kart = (await takimKartlari(db, null)).find((k) => k.id === kartKimlik);
+  if (kart === undefined) throw bulunamadi('Takım kartı bulunamadı.');
+  if (kart.durum !== 'aktif') throw dogrulama('Kart henüz aktif değil; kart onaylanınca giriş yapılır.', 'kartKimlik');
+}
+
+// Boş gözde açılış (stok.giris), dolu gözde kör sayım (stok.sayim). Tür sunucuda gözden belirlenir; çağıranın yetkisi türe göre denetlenir.
+export async function giris(db: Db, k: Kullanici, g: GirisGovdesi): Promise<GirisCevabi> {
+  await aktifTakimKarti(db, g.kartKimlik);
+  const tur = await takimGozTuru(db, g.kartKimlik, g.konumKimligi);
+  if (tur === 'acilis') {
+    if (!islemVarMi(k, 'stok.giris')) throw yetkiYok('Açılış girişi için stok giriş yetkisi gerekir.');
+    if (g.adet <= 0) throw dogrulama('Açılışta adet sıfırdan büyük olur.', 'adet');
+    return { tur, belgeNo: (await takimAcilisi(db, k, { malzemeId: g.kartKimlik, konumId: g.konumKimligi, adet: g.adet, istekKimligi: g.istekKimligi })).belgeNo, onayaGiden: 0 };
+  }
+  if (!islemVarMi(k, 'stok.sayim')) throw yetkiYok('Sayım için stok sayım yetkisi gerekir.');
+  const r = await takimSayimi(db, k.id, { malzemeId: g.kartKimlik, konumId: g.konumKimligi, adet: g.adet });
+  return { tur, belgeNo: null, onayaGiden: r.onayaGiden };
+}
+
+async function topluKartlar(db: Db, g: Pick<TopluGirisGovdesi, 'satirlar'>): Promise<Map<number, TakimKarti>> {
+  const kartlar = new Map((await takimKartlari(db, null)).map((k) => [k.id, k]));
+  for (const s of g.satirlar) {
+    const kart = kartlar.get(s.kartKimlik);
+    if (kart === undefined) throw dogrulama(`Satır ${String(s.sira)}: takım kartı bulunamadı.`, 'satirlar');
+  }
+  return kartlar;
+}
+const pasifHatasi = (kartlar: Map<number, TakimKarti>, kartKimlik: number): string | null =>
+  kartlar.get(kartKimlik)?.durum === 'aktif' ? null : 'Kart henüz aktif değil.';
+
+export async function topluDenetle(db: Db, g: Pick<TopluGirisGovdesi, 'satirlar'>): Promise<TopluGirisCevabi> {
+  const kartlar = await topluKartlar(db, g);
+  const r = await takimTopluDenetle(db, g.satirlar.map((s) => ({ sira: s.sira, malzemeId: s.kartKimlik, gozKodu: s.gozKodu, adet: s.adet })));
+  return { satirlar: r.map((x, i) => ({ sira: x.sira, tur: x.tur, hata: pasifHatasi(kartlar, g.satirlar[i]!.kartKimlik) ?? x.hata })), yazildi: false, belgeNo: null, sayim: 0 };
+}
+
+export async function topluYaz(db: Db, k: Kullanici, g: TopluGirisGovdesi): Promise<TopluGirisCevabi> {
+  const on = await topluDenetle(db, g);
+  if (on.satirlar.some((s) => s.hata !== null)) return on;
+  if (on.satirlar.some((s) => s.tur === 'sayim') && !islemVarMi(k, 'stok.sayim')) throw yetkiYok('Dolu gözlü satırlar sayımdır; stok sayım yetkisi gerekir.');
+  const r = await takimTopluYaz(db, k, { satirlar: g.satirlar.map((s) => ({ sira: s.sira, malzemeId: s.kartKimlik, gozKodu: s.gozKodu, adet: s.adet })), dosyaOzeti: g.dosyaOzeti, dosyaAdi: g.dosyaAdi });
+  return { satirlar: r.sonuc.map((x) => ({ sira: x.sira, tur: x.tur, hata: x.hata })), yazildi: r.sonuc.every((x) => x.hata === null), belgeNo: r.belgeNo, sayim: r.sayim };
+}
+
+// Eski TKM kartını bir kütüphane kalemine bağlar. Bağ kart verisidir: CNC kurulumdaki gibi Malzemeler yazma yetkisi ister.
+export async function kutuphaneyeBagla(db: Db, k: Kullanici, kartKimlik: number, kimlik: string): Promise<{ tamam: true }> {
+  if (!islemVarMi(k, 'malzemeler.yaz')) throw yetkiYok('Kartı kütüphaneye bağlamak Malzemeler yazma yetkisi ister.');
+  // Denetim ile yazım arasında başka bir bağ girmesin: iki kişi aynı kalemi iki karta bağlayamaz.
+  await islemKilidiAl(db, 'takimhane.kutuphane-bagi');
+  const kart = (await takimKartlari(db, null)).find((x) => x.id === kartKimlik);
+  if (kart === undefined) throw bulunamadi('Takım kartı bulunamadı.');
+  if (kart.kutuphaneKimligi !== null) throw dogrulama('Kart zaten bir kütüphane kalemine bağlı.', 'kimlik');
+  if ((await cncKimlikliMalzemeler(db, [kimlik])).has(kimlik)) throw dogrulama('Bu kütüphane kalemi başka bir karta bağlı.', 'kimlik');
+  await cncKimligiBagla(db, kartKimlik, kimlik);
+  return { tamam: true };
+}
+
+// 3762 (fark 1 a): kartı olmayan kütüphane kalemine kesici takım kartı açar. Bağ kilidi altında: aynı kaleme iki kart açılmaz.
+export async function kartAc(db: Db, k: Kullanici, g: KartAcGovdesi): Promise<KartAcCevabi> {
+  if (!islemVarMi(k, 'malzemeler.yaz')) throw yetkiYok('Kart açmak Malzemeler yazma yetkisi ister.');
+  await islemKilidiAl(db, 'takimhane.kutuphane-bagi');
+  const r = await takimKartiAc(db, k, { ad: g.ad, takimTuru: g.takimTuru, isoKodu: g.isoKodu === '' ? null : g.isoKodu, capMm: g.capMm, kutuphaneKimligi: g.kimlik });
+  return { kartKimlik: r.malzemeId, stokKodu: r.stokKodu, onayDurumu: r.onayDurumu };
 }

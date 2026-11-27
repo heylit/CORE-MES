@@ -30,7 +30,7 @@ function TakimSecimi({ takimlar, son, secili, sec }: {
     return (
       <div className="tc-tkm-secili">
         <span className="tc-tkm-ad"><span className="mono">{secili.kod}</span><span>{secili.ad}</span></span>
-        <span className="tc-tkm-soluk">Rafta {secili.konumlar.raf ?? '—'} adet</span>
+        <span className="tc-tkm-soluk">Rafta {secili.konumlar.raf ?? '—'} adet{secili.gozler.length === 1 ? ` · ${secili.gozler[0]?.kod ?? ''}` : ''}</span>
         <Dugme simge="x" onClick={() => { sec(null); }}>Değiştir</Dugme>
       </div>
     );
@@ -69,7 +69,7 @@ export function CikisFormu({ takimlar, son, alicilar, emirler, gonder, ilkKart =
   son: readonly TakimSatiri[];
   alicilar: readonly Secenek[];
   emirler: readonly Secenek[];
-  gonder: (g: { kartKimlik: number; adet: number; alici: string; emir: string }) => void;
+  gonder: (g: { kartKimlik: number; adet: number; alici: string; emir: string; goz: string }) => void;
   // Emir ekranından gelen çıkışta aparat ve emir hazır seçilidir (3651).
   ilkKart?: number | null;
   ilkEmir?: string;
@@ -78,12 +78,21 @@ export function CikisFormu({ takimlar, son, alicilar, emirler, gonder, ilkKart =
   const [adet, adetYaz] = useState('1');
   const [alici, aliciYaz] = useState('');
   const [emir, emirYaz] = useState(ilkEmir);
-  const yeter = secili === null || (secili.konumlar.raf ?? 0) >= Number(adet);
+  // Raf gözü (3762): boş bırakılırsa en dolu gözden çıkar; seçilen gözde yeterli adet aranır.
+  const [goz, gozYaz] = useState('');
+  const seciliGoz = secili?.gozler.find((g) => String(g.konumKimligi) === goz) ?? null;
+  const yeter = secili === null || (seciliGoz?.adet ?? secili.konumlar.raf ?? 0) >= Number(adet);
   // Kapalı düğmenin sebebi görünür: önce takım, sonra alan, sonra adet.
-  const sebep = secili === null ? 'Takım seçin.' : alici === '' ? 'Alan seçin.' : Number(adet) < 1 ? 'Adet en az 1 olmalı.' : yeter ? null : 'Rafta bu kadar yok.';
+  const sebep = secili === null ? 'Takım seçin.' : alici === '' ? 'Alan seçin.' : Number(adet) < 1 ? 'Adet en az 1 olmalı.' : yeter ? null : seciliGoz ? 'Bu gözde bu kadar yok.' : 'Rafta bu kadar yok.';
   return (
-    <form className="tc-tkm-form" onSubmit={(e) => { e.preventDefault(); if (sebep === null && secili) gonder({ kartKimlik: secili.kartKimlik, adet: Number(adet), alici, emir }); }}>
-      <TakimSecimi takimlar={takimlar} son={son} secili={secili} sec={seciliYaz} />
+    <form className="tc-tkm-form" onSubmit={(e) => { e.preventDefault(); if (sebep === null && secili) gonder({ kartKimlik: secili.kartKimlik, adet: Number(adet), alici, emir, goz }); }}>
+      <TakimSecimi takimlar={takimlar} son={son} secili={secili} sec={(t) => { seciliYaz(t); gozYaz(''); }} />
+      {secili !== null && secili.gozler.length > 1 && (
+        <Secim
+          etiket="Raf gözü" value={goz} onChange={(e) => { gozYaz(e.target.value); }} bosSecenek="En dolu göz"
+          secenekler={secili.gozler.map((g) => ({ deger: String(g.konumKimligi), baslik: `${g.kod} · ${String(g.adet)} adet` }))}
+        />
+      )}
       <Girdi etiket="Adet" type="number" inputMode="numeric" min={1} value={adet} onChange={(e) => { adetYaz(e.target.value); }} hata={yeter ? undefined : 'Rafta bu kadar yok'} />
       <Secim etiket="Alan (kişi ya da istasyon)" value={alici} onChange={(e) => { aliciYaz(e.target.value); }} bosSecenek="Seçiniz" secenekler={alicilar} />
       <Secim etiket="Üretim emri (isteğe bağlı)" value={emir} onChange={(e) => { emirYaz(e.target.value); }} bosSecenek="Emirsiz" secenekler={emirler} />

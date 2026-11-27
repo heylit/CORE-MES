@@ -36,6 +36,13 @@ export const takimSatiriSemasi = z.object({
   konumlar: konumDagilimiSemasi,
   toplam: z.number().int(),
   kritikSeviye: z.number().int().nullable(),
+  // 3762: kartın bağlı olduğu CNC kütüphane kalemi (yoksa eski TKM kartı, kütüphaneye bağlanmamış).
+  kutuphaneKimligi: z.string().nullable(),
+  kartDurumu: z.enum(['taslak', 'onayda', 'aktif', 'pasif']),
+  // Takımın dolu raf gözleri, en doludan başlayarak.
+  gozler: z.array(z.object({ konumKimligi: z.number().int(), kod: z.string(), adet: z.number().int() })),
+  // Tezgâhlara yüklü bu kalemin en az kalan ömrü (yüzde, CNC Takım Ömrü'nden); hedefi olan yük yoksa null.
+  omurYuzde: z.number().int().min(0).max(100).nullable(),
 });
 export type TakimSatiri = z.infer<typeof takimSatiriSemasi>;
 
@@ -70,6 +77,8 @@ export const cikisGovdesi = z.object({
   kisiId: z.number().int().positive().nullable(),
   istasyonId: z.number().int().positive().nullable(),
   uretimEmriId: z.number().int().positive().nullable(),
+  // 3762: takımın çıkacağı raf gözü; verilmezse en dolu göz.
+  konumKimligi: z.number().int().positive().nullable().prefault(null),
   istekKimligi: z.string().trim().min(3).max(80),
 }).refine((g) => (g.kisiId === null) !== (g.istasyonId === null), { message: 'Alan olarak kişi ya da istasyondan biri seçilir.', path: ['kisiId'] });
 export type CikisGovdesi = z.infer<typeof cikisGovdesi>;
@@ -132,29 +141,75 @@ export const emirTakimListesiSemasi = z.object({
 });
 export type EmirTakimListesi = z.infer<typeof emirTakimListesiSemasi>;
 
-// Başlangıç stoğu ön izlemesi: temizlik kararları satır satır görünür (V7: gerçek veri yalnız canlıda girer).
-export const TEMIZLIK_BULGULARI = ['yinelenen-kod', 'bosluk', 'bos-kategori', 'malzeme-cinsi-birlesti'] as const;
-export const aktarimSatiriSemasi = z.object({
-  satir: z.number().int(),
-  kod: z.string(),
-  ad: z.string(),
-  kategori: z.string().nullable(),
-  adet: z.number().int(),
-  rafKodu: z.string().nullable(),
-  bulgu: z.enum(TEMIZLIK_BULGULARI).nullable(),
-  karar: z.string().nullable(),
-});
-export type AktarimSatiri = z.infer<typeof aktarimSatiriSemasi>;
+
 
 // Emrin takım listesini yazar: cep başına takım ve adet (CNC kurulumdan otomatik doldurma sonraki iş).
 export const emirTakimiGovdesi = z.object({
   satirlar: z.array(z.object({ cep: z.string().trim().min(1).max(12), kartKimlik: z.number().int().positive(), adet: z.number().int().positive().max(1000) })).max(200),
 });
 export type EmirTakimiGovdesi = z.infer<typeof emirTakimiGovdesi>;
-export const aktarimOnizlemeGovdesi = z.object({
-  satirlar: z.array(z.object({ kod: z.string().max(60), ad: z.string().max(200), kategori: z.string().max(80).nullable(), adet: z.number().int().min(0).max(1000000), rafKodu: z.string().max(40).nullable() })).max(5000),
+// ---- 3762: tek kütüphane, raf gözü, açılış ve kör sayım ---------------------------------------------------------------------------
+// CNC kütüphanesinin atölyede eklenen kalemleri (hazır katalog istemcidedir). Alanlar CNC kaydından olduğu gibi gelir; bilinmeyen alan düşer.
+export const kutuphaneKalemiSemasi = z.object({
+  id: z.string(), name: z.string(), code: z.string().optional(), kind: z.string().optional(), shelf: z.string().optional(), grp: z.string().optional(),
+  isTool: z.boolean().optional(), lib: z.enum(['mill', 'lathe']).optional(), cat: z.string().optional(), d: z.number().optional(), z: z.number().optional(),
 });
-export const aktarimOnizlemeCevabi = z.object({ satirlar: z.array(aktarimSatiriSemasi), uygun: z.boolean() });
+export type KutuphaneKalemi = z.infer<typeof kutuphaneKalemiSemasi>;
+export const kutuphaneCevabi = z.object({ ozelKalemler: z.array(kutuphaneKalemiSemasi) });
+export type KutuphaneCevabi = z.infer<typeof kutuphaneCevabi>;
+
+export const rafGozuSorgusu = z.object({ q: z.string().trim().max(40).optional(), kart: z.coerce.number<number>().int().positive().optional() });
+export const rafGozuSemasi = z.object({ konumKimligi: z.number().int(), kod: z.string(), ad: z.string().nullable(), dolu: z.boolean() });
+export const rafGozleriCevabi = z.object({ gozler: z.array(rafGozuSemasi) });
+export type RafGozleriCevabi = z.infer<typeof rafGozleriCevabi>;
+
+// Gözüne göre açılış (boş göz) ya da kör sayım (dolu göz). Sayımda beklenen adet gönderilmez.
+export const GIRIS_TURLERI = ['acilis', 'sayim'] as const;
+export const girisGovdesi = z.object({
+  kartKimlik: z.number().int().positive(),
+  konumKimligi: z.number().int().positive(),
+  adet: z.number().int().min(0).max(100000),
+  istekKimligi: z.string().trim().min(3).max(80),
+});
+export type GirisGovdesi = z.infer<typeof girisGovdesi>;
+export const girisCevabi = z.object({
+  tur: z.enum(GIRIS_TURLERI),
+  // Açılışta başlangıç belgesinin numarası; sayımda onaya düşen fark sayısı.
+  belgeNo: z.string().nullable(),
+  onayaGiden: z.number().int(),
+});
+export type GirisCevabi = z.infer<typeof girisCevabi>;
+
+export const topluGirisGovdesi = z.object({
+  satirlar: z.array(z.object({ sira: z.number().int().min(1).max(1_000_000), kartKimlik: z.number().int().positive(), gozKodu: z.string().trim().min(1).max(60), adet: z.number().int().min(0).max(100000) })).min(1).max(2000),
+  dosyaOzeti: z.string().regex(/^[0-9a-f]{64}$/),
+  dosyaAdi: z.string().trim().min(1).max(120),
+});
+export type TopluGirisGovdesi = z.infer<typeof topluGirisGovdesi>;
+export const topluGirisCevabi = z.object({
+  satirlar: z.array(z.object({ sira: z.number().int(), tur: z.enum(GIRIS_TURLERI).nullable(), hata: z.string().nullable() })),
+  yazildi: z.boolean(),
+  belgeNo: z.string().nullable(),
+  sayim: z.number().int(),
+});
+export type TopluGirisCevabi = z.infer<typeof topluGirisCevabi>;
+
+// Eski TKM kartını bir kütüphane kalemine bağlar (kart verisidir; Malzemeler yazma yetkisi ister).
+export const kutuphaneBagGovdesi = z.object({ kimlik: z.string().regex(/^[A-Za-z0-9_.-]{1,64}$/) });
+
+// 3762 (fark 1 a): kütüphane kaleminden kesici takım kartı açılır; kart onay akışına uyar (akış açıksa onayda açılır, açılış onaydan sonra).
+// Takım türü Malzemeler'in kesici takım kategorisindeki "Takım türü" alanıdır; Malzemeler bu alanı serbest metin olarak saklar.
+export const kartAcGovdesi = z.object({
+  kimlik: z.string().regex(/^[A-Za-z0-9_.-]{1,64}$/),
+  ad: z.string().trim().min(1).max(120),
+  takimTuru: z.string().trim().min(1).max(60),
+  isoKodu: z.string().trim().max(60).nullable(),
+  // Kartı aynı türdeki öteki kartlardan ayıran ölçü: Malzemeler kart kimliğini tür ve özelliklerden kurar.
+  capMm: z.number().positive().max(2000).nullable(),
+});
+export type KartAcGovdesi = z.infer<typeof kartAcGovdesi>;
+export const kartAcCevabi = z.object({ kartKimlik: z.number().int(), stokKodu: z.string(), onayDurumu: z.enum(['onayda', 'aktif']) });
+export type KartAcCevabi = z.infer<typeof kartAcCevabi>;
 
 // Çıkış formunun alan ve emir seçenekleri (kişi, aktif istasyon, açık emir).
 export const seceneklerCevabi = z.object({

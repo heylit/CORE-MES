@@ -12,7 +12,8 @@ import { rotalar } from './rotalar.tsx';
 
 const takim = (t: Partial<TakimSatiri> = {}): TakimSatiri => ({
   kartKimlik: 1, kod: 'ORN-TKM-1', ad: 'ORN Freze 12', kategori: 'Freze', sinif: 'freze', capMm: '12', kesiciSayisi: 4, isoKodu: null, malzemeGruplari: ['P'],
-  yenidenBilenir: true, izleme: 'adet', rafKodu: 'ORN-R1', konumlar: { raf: 5, tezgah: null, kisi: null, bileme: null, ara: null }, toplam: 5, kritikSeviye: null, ...t,
+  yenidenBilenir: true, izleme: 'adet', rafKodu: 'ORN-R1', konumlar: { raf: 5, tezgah: null, kisi: null, bileme: null, ara: null }, toplam: 5, kritikSeviye: null,
+  kutuphaneKimligi: 'orn-pf-12', kartDurumu: 'aktif', gozler: [], omurYuzde: null, ...t,
 });
 const teslim: AcikTeslim = { konumKimligi: 9, kartKimlik: 1, kod: 'ORN-TKM-1', ad: 'ORN Freze 12', adet: 3, alan: 'ORN Operatör A', alanTuru: 'kisi', verildi: null };
 

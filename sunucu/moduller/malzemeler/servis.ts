@@ -1594,3 +1594,29 @@ export async function aktifMalzemelerSinirli(db: Db, sinir: number): Promise<{ k
   const r = await s.katalogMalzemeAra(db, { metin: null, turler: [], yalnizAktif: true, hizmetYonu: null, gizli: [], sinir: sinir + 1, atla: 0 });
   return { kartlar: r.satirlar.slice(0, sinir), kesildi: r.satirlar.length > sinir };
 }
+
+// 3762 (fark 1 a): Takımhane kütüphane kaleminden kesici takım kartı açar. Kart Malzemeler'in kendi kaydetme yolundan geçer (kural,
+// kod, anahtar, onay bildirimi aynı); onay akışı açıksa kart onayda açılır, kapalıysa aktif. Kod sarf önekiyle SF-TKM-sıra olur.
+// Kütüphane kimliği karta bağlanır; kimlik iptal olmayan başka karta bağlıysa açılmaz. Yetki denetlemez: uç Malzemeler yazma yetkisini ister.
+export interface TakimKartiAcimi { ad: string; takimTuru: string; isoKodu: string | null; capMm: number | null; kutuphaneKimligi: string }
+export async function takimKartiAc(db: Db, kullanici: Kullanici, g: TakimKartiAcimi): Promise<{ malzemeId: number; stokKodu: string; onayDurumu: 'onayda' | 'aktif' }> {
+  // İptal kart listede görünmez; bağı yeni karta geçer (cncKimligiYaz eski karttan kaldırır).
+  if ((await s.cncKimlikliKartlar(db, [g.kutuphaneKimligi])).some((k) => k.onayDurumu !== 'iptal')) throw cakisma('Bu kütüphane kalemine bağlı bir kart var.');
+  const onayDurumu = katalogOnayAkisiAcikMi(await katalogGenelAyari(db)) ? 'onayda' : 'aktif';
+  const kimlik = `tkh-${randomUUID()}`;
+  const ad = g.ad.trim();
+  const kayit = {
+    id: kimlik, tur: 'sarf', onay: { durum: onayDurumu },
+    com: { kod: 'SF-TKM-1', ad, birim: 'adet' },
+    g: { kat: 'takim', tur: g.takimTuru, ...(g.capMm === null ? {} : { cap: g.capMm }), ...(g.isoKodu === null ? {} : { iso: g.isoKodu }) },
+  };
+  const r = await katalogKartiKaydet(db, kullanici, kimlik, {
+    kayit, surum: null, ozet: { benzersiz_anahtar: null, mukerrer_gerekcesi: null, aciklama_1: ad.slice(0, 200), aciklama_2: null, aciklama_3: null },
+  });
+  const kart = await s.katalogKartiKilitle(db, r.id);
+  await cncKimligiYazBagla(db, kart!.no, g.kutuphaneKimligi);
+  return { malzemeId: kart!.no, stokKodu: r.stok_kodu, onayDurumu };
+}
+async function cncKimligiYazBagla(db: Db, malzemeId: number, kimlik: string): Promise<void> {
+  if (!(await s.cncKimligiYaz(db, malzemeId, kimlik)).bagli) throw gecersiz('Kart kütüphane kalemine bağlanamadı.');
+}
