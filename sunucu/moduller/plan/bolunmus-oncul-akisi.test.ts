@@ -150,7 +150,7 @@ function ortam() {
     assert.ok(ops[kA] && String(ops[kB30]?.m).startsWith('kisi-'), JSON.stringify(Object.values(ops).map((o) => [o.job, o.m, o.S])));
     return { s1, istT, istK, t1, t2, operatorId, ikinci, a10: a10!, b10: b10!, b20: b20!, b30: b30!, kA, kB10, kB20, kB30 };
   };
-  return { DK, calismaOku, planiKaydet, bolVeUygula, yenidenPlanla, kur, kurKisi, canliyaAl, onizle, onizleYaniti, taslakYaz, baslat, ilkPayiBitir, kaydir, parcaYeri, yeri, farkDk };
+  return { DK, vt, calismaOku, planiKaydet, bolVeUygula, yenidenPlanla, kur, kurKisi, canliyaAl, onizle, onizleYaniti, taslakYaz, baslat, ilkPayiBitir, kaydir, parcaYeri, yeri, farkDk };
 }
 
 describe('plan (gerçek PostgreSQL): bölünmüş öncülde Kokpit ve canlıya alma yerleşimi aynı (3793)', () => {
@@ -242,8 +242,10 @@ describe('plan (gerçek PostgreSQL): akışlı bağda bölünmüş ardıl öncü
 });
 
 describe('plan (gerçek PostgreSQL): çalışan bölünmüş işin başlamamış payı öncülün arkasına itilir (3793)', () => {
-  const { DK, planiKaydet, bolVeUygula, kur, canliyaAl, onizle, taslakYaz, baslat, kaydir, yeri } = ortam();
-  test('OP30 bölünmüş ve 1. payı sahada çalışıyor; 2. payı Kokpit\'te OP20 bitmeden önceye çekilmişse yerinde kalan pay oynamaz, 2. pay itilir', async () => {
+  const { DK, vt, planiKaydet, bolVeUygula, kur, canliyaAl, onizle, taslakYaz, baslat, kaydir, yeri } = ortam();
+  // 3818: canlıdaki yerler önceki yazımın saatindendir; motor öncülü bu yazımda daha geç koyabilir (zaman bir dilim ilerledi). Testte canlıdaki
+  // OP20 bir dilim (15 dk) erkene alınır: pay canlıdaki OP20'ye göre değil, motorun bu yazımda koyduğu OP20'ye göre itilmeli.
+  test('OP30 bölünmüş ve 1. payı sahada çalışıyor; 2. payı Kokpit\'te OP20 bitmeden önceye çekilmişse yerinde kalan pay oynamaz, 2. pay motorun koyduğu OP20\'nin arkasına itilir', async () => {
     const k = await kur('BOE', { bagimlilik: 'bekleyen', devirAdedi: null });
     const bol30 = { [k.k30]: [{ adet: 15, m: String(k.e1) }, { adet: 15, m: String(k.e2) }] };
     const { surum: s1, plan: p1 } = await bolVeUygula({ ...k.bol10, ...bol30 });
@@ -252,6 +254,7 @@ describe('plan (gerçek PostgreSQL): çalışan bölünmüş işin başlamamış
     await baslat(k.op30, k.istE, k.e1);
     const { plan } = await bolVeUygula({ ...k.bol10, ...bol30 });
     const surum = await planiKaydet(kaydir(plan, [e2Pay], -3), { elleBol: { ...k.bol10, ...bol30 } });
+    await vt().tx((db) => db.sorgu("UPDATE plan_yerlesimi SET baslangic = baslangic - interval '15 minutes', bitis = bitis - interval '15 minutes' WHERE is_emri_id = $1", [k.op20]));
     const oz = await onizle(surum);
     assert.deepEqual(oz.itilen?.map((x) => [x.opNo, x.k]), [[30, k.k30]], JSON.stringify(oz.itilen));
     assert.deepEqual(oz.ihlaller, []);
