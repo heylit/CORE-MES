@@ -6,7 +6,7 @@ import { useEmirNo } from '../../ortak/emir-no.ts';
 import { altEkranAdresi, type PlanlamaEkranOzellikleri } from '../../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { kisitAdi, saatYaz, simdiSaati, type OkunanPlan } from '../kurallar.ts';
-import { adimAdi, gunSaat, kaydirmaDugmesi, kaydirmaIsleri, kapaliListeFarkli, KaydirmaHatasi, kilitleriKaydir, komsuAdi, komsuKilitKaymalari, nedenCumlesi, yazilanOneri, type Ihlal, type OnizlemeDurumu } from './canli-onizleme.ts';
+import { adimAdi, careCumlesi, gunSaat, itilenSatiri, kaydirmaDugmesi, kaydirmaIsleri, kapaliListeFarkli, KaydirmaHatasi, oneriYokMetni, kilitleriKaydir, komsuAdi, komsuKilitKaymalari, nedenCumlesi, yazilanOneri, type Ihlal, type OnizlemeDurumu } from './canli-onizleme.ts';
 
 // 3669: onay sayfasında gönderme öncesi iki parça. Kalıcı satır: kapalı kısıt varken plan o kısıtları saymadan çözülür (canlıya çıkacak saatler
 // de öyle). Uyarı kartı: sunucunun yazacağı yerleşimde sıraya aykırı adım varsa gönderilmeden önce söyler; kilitli adım için kaydırma önerir
@@ -48,6 +48,7 @@ function IhlalSatiri({ c, p, i }: { c: PlanlamaCalismasi; p: OkunanPlan; i: Ihla
       <strong>{`${i.emirNo} ${adimAdi(i)}`}</strong>
       <span>{i.kilitli ? 'elle kilitli ve öncülü bitmeden başlıyor.' : 'öncülü bitmeden başlıyor.'}</span>
       {neden !== null && <span>{neden}</span>}
+      {!i.kilitli && <span>{careCumlesi(i, i.k === null ? undefined : p.ops[`${i.k}~2`] !== undefined)}</span>}
       {oncul !== null && (
         <dl className="tc-pym-pa-ihlal-saat">
           <div><dt>Kokpit</dt><dd className="mono"><span>{`${adimAdi(oncul)} ${kokpit(oncOp?.C)} bitiyor`}</span><span>{`${adimAdi(i)} ${kokpit(op?.S)} başlıyor`}</span></dd></div>
@@ -145,6 +146,12 @@ export function CanliOnizleme({ o, c, p, durum, yenidenDene, etkin = true }: { o
       )}
       {durum.tur === 'yukleniyor' && <p className="tc-pym-pa-kucuk" role="status">{veri === null ? 'Sıra denetimi yapılıyor…' : 'Sıra denetimi yenileniyor; aşağıdaki sonuç eski olabilir.'}</p>}
       {veri !== null && ihlaller.length === 0 && durum.tur === 'hazir' && <p className="tc-pym-pa-kucuk" role="status"><Simge ad="check" boyut="k" />{' Sıraya aykırı adım yok.'}</p>}
+      {(veri?.itilen?.length ?? 0) > 0 && (
+        <div className="tc-pym-pa-kucuk" role="status">
+          <Simge ad="clock" boyut="k" />{` ${String(veri!.itilen!.length)} parça Kokpit'teki saatinde öncülünden önce kalıyordu; canlıya alınınca öncülün arkasına itilir.`}
+          <ul className="tc-pym-pa-oneri">{veri!.itilen!.map((x) => <li key={`${x.emirNo}|${String(x.opNo)}|${String(x.parca)}`}>{itilenSatiri(x)}</li>)}</ul>
+        </div>
+      )}
       {ihlaller.length > 0 && p !== null && (
         <div className="tc-pym-pa-ihlal-kart" role="group" aria-label="Sıraya aykırı adımlar">
           <h3><Simge ad="alert" boyut="k" />{` Canlıya alınınca ${String(ihlaller.length)} adım öncülünden önce başlar`}{eski && <span className="tc-pym-pa-eski"> · Eski olabilir</span>}</h3>
@@ -162,7 +169,7 @@ export function CanliOnizleme({ o, c, p, durum, yenidenDene, etkin = true }: { o
               </button>
             )}
             {!kilitYetkisi && <span className="tc-pym-pa-kucuk">Kilitli adımı kaydırmak plan kilitleme yetkisi ister.</span>}
-            {kilitYetkisi && veri?.oneri == null && <span className="tc-pym-pa-kucuk">{veri?.oneriNedeni ?? "Kilitsiz adım için planı Kokpit'te yeniden çözün."}</span>}
+            {kilitYetkisi && veri?.oneri == null && <span className="tc-pym-pa-kucuk">{veri?.oneriNedeni ?? oneriYokMetni(ihlaller)}</span>}
           </div>
         </div>
       )}

@@ -312,6 +312,21 @@ export function calismaDurdurulanlari(kayit: unknown): string[] {
   const d = nesne(nesne(nesne(kayit)?.['w'])?.['durdurulan']);
   return Object.keys(d ?? {});
 }
+// 3793 3a: sıraya aykırı adımın kaynağı. Emrin önceki adımlarından canlıda Kokpit'tekinden eşikten fazla geç başlayanlar kayandır; ilk kayanın
+// kaynağında Kokpit'teki saatiyle canlıdaki saati arasında yerinde kalan başka iş engeldir (en geç biteni). Kayan yoksa ihlal Kokpit planındadır.
+export type KaymaAdimi = { opNo: number; kokpit: number | null; canli: { kaynak: string; baslangic: number } | null };
+export type YerindeIs = { emirNo: string; opNo: number; kaynak: string; kaynakAdi: string; baslangic: number; bitis: number; neden: 'sahada' | 'kilitli' | 'dondurulmus' | null };
+export function kaymaNedeni(opNo: number, adimlar: readonly KaymaAdimi[], yerinde: readonly YerindeIs[], esikDk = 15) {
+  const kayan = adimlar.flatMap((a) => (a.opNo < opNo && a.kokpit !== null && a.canli !== null && a.canli.baslangic - a.kokpit > esikDk * 60_000
+    ? [{ opNo: a.opNo, kokpit: a.kokpit, canli: a.canli }] : [])).sort((x, y) => x.opNo - y.opNo);
+  const ilk = kayan[0];
+  if (ilk === undefined) return null;
+  const e = yerinde.filter((y) => y.kaynak === ilk.canli.kaynak && y.baslangic < ilk.canli.baslangic && y.bitis > ilk.kokpit).sort((x, y) => y.bitis - x.bitis)[0];
+  return {
+    ilkOp: ilk.opNo, sonOp: kayan[kayan.length - 1]!.opNo, kaymaDk: Math.round((ilk.canli.baslangic - ilk.kokpit) / 60_000),
+    engel: e === undefined ? null : { emirNo: e.emirNo, opNo: e.opNo, kaynak: e.kaynakAdi, baslangic: new Date(e.baslangic).toISOString(), bitis: new Date(e.bitis).toISOString(), neden: e.neden },
+  };
+}
 // 3414-7 a: durdurulan iş sahada hâlâ sürüyorsa canlıya alınırken yeri değişmez; her biri için işi adıyla söyleyen ileti.
 export function durdurmaBekleyenler(durdurulan: readonly string[], kimlik: Readonly<Record<string, string>>, suren: ReadonlySet<string>): string[] {
   return durdurulan.map((id) => kimlik[id]).filter((a): a is string => a !== undefined && suren.has(a))

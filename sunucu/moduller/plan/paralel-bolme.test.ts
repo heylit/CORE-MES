@@ -25,7 +25,7 @@ const adim = (seq: number, stationId: string, ek: Record<string, unknown> = {}) 
 });
 type Ayar = { istasyon: '40' | '10'; split?: 'bol' | 'tek'; minLot?: number; adet?: number; ekip?: Record<string, string[]>;
   bolmeKip?: 'otomatik' | 'kapali'; bolmeMaks?: number; kayitKip?: string; elleBol?: Record<string, { adet: number; m: string }[]>; locks?: Record<string, unknown>;
-  gercek?: Record<string, { m: string; S: number }> };
+  gercek?: Record<string, { m: string; S: number }>; down?: { m: string; from: number; to: number }[] };
 const girdi = (a: Ayar) => {
   const steps = [adim(10, a.istasyon, { split: a.split ?? 'bol', minLot: a.minLot ?? 0 }), adim(20, '30')];
   const ROTA = {
@@ -67,6 +67,7 @@ const planla = (a: Ayar) => {
   const m = motorYukle();
   const st = girdi(a).st;
   if (a.gercek) Object.assign(st.gercek as Record<string, unknown>, a.gercek);
+  if (a.down) (st.down as unknown[]).push(...a.down.map((d, i) => ({ id: `d-${String(i)}`, neden: 'ariza', ...d })));
   const cx = m.compile(m.stHazirla(st)) as { ops: { id: string; adet: number; c: { m: string }[]; pr: [string, string][] }[] };
   const p = m.schedule(st, 'yeni', null) as { ops: Record<string, Yer> };
   return { cx, p, paylar: Object.keys(p.ops).filter((id) => id.startsWith('O1.10')).sort() };
@@ -87,6 +88,21 @@ describe('plan: paralel bölme planlama atölyesinde (1952 iş 2a)', () => {
     const { p, paylar } = planla({ istasyon: '10', adet: 9 });
     assert.equal(paylar.length, 3);
     assert.deepEqual(new Set(paylar.map((id) => p.ops[id]!.m)), new Set(['100', '101', '102']));
+  });
+
+  test('3793 (istek 4): bütün paylar tek tezgâha düşüyorsa adım bölünmez', () => {
+    const { p, paylar } = planla({ istasyon: '10', adet: 9, down: [{ m: '101', from: 0, to: 5000 }, { m: '102', from: 0, to: 5000 }] });
+    assert.deepEqual(paylar, ['O1.10']);
+    assert.equal(p.ops['O1.10']!.m, '100');
+  });
+
+  test('3793 (istek 4): ayrı tezgâhlardaki paylar pay numarası sırasıyla başlar', () => {
+    for (const m of ['100', '101', '102']) {
+      const { p, paylar } = planla({ istasyon: '10', adet: 9, down: [{ m, from: 0, to: 40 }] });
+      assert.equal(paylar.length, 3);
+      const S = paylar.map((id) => p.ops[id]!.S);
+      assert.deepEqual(S, [...S].sort((x, y) => x - y), `${m} kapalıyken: ${JSON.stringify(S)}`);
+    }
   });
 
   test('pay sayısı en küçük parçayla ve bölme sınırıyla sınırlıdır; tek pay bölme değildir', () => {

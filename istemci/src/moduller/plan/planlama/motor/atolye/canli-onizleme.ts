@@ -172,13 +172,51 @@ export function nedenCumlesi(c: PlanlamaCalismasi, p: OkunanPlan, i: Ihlal): str
     : `Canlı yerleşimde ${ad} ${gunSaat(i.oncul.bitis)}'de bitiyor; ${kilit}`;
 }
 
+// 3793: kilitsiz ihlalin çaresi: adımı (bölünmüşse parçalarını) sunucunun öncül bitişinden sonraya taşımak. Öncülü bilinmiyorsa planı yeniden çözmek.
+// bolunmus: adım Kokpit'te paylıysa (bilinmiyorsa undefined) öneri parçaları ve bölmeyi kaldırmayı söyler.
+// 3793 3a: ihlalin kaynağı (emrin önceki adımları canlıda kayıyor; kayan ilk adımın kaynağında yerinde kalan iş). Kaynak bilindiğinde "yeniden
+// çözün" denmez: Kokpit aynı planı üretir.
+const ENGEL_NEDENI = { sahada: 'sahada süren', kilitli: 'kilitli', dondurulmus: 'dondurulmuş' } as const;
+export function kaymaCumlesi(i: Ihlal): string | null {
+  const n = i.neden;
+  if (n === undefined || n === null) return null;
+  const aralik = n.ilkOp === n.sonOp ? `OP ${String(n.ilkOp)}` : `OP ${String(n.ilkOp)}-OP ${String(n.sonOp)}`;
+  if (n.engel === null) return `${i.emirNo} ${aralik} canlıda Kokpit'tekinden ${sureMetni(n.kaymaDk)} geç başlıyor (Kokpit'teki yeri canlıda dolu).`;
+  const e = n.engel;
+  return `${e.kaynak} üzerinde ${e.neden === null ? 'yerinde kalan' : ENGEL_NEDENI[e.neden]} ${e.emirNo} OP ${String(e.opNo)} canlıda ${gunSaat(e.bitis)} bitişine kadar `
+    + `yerinde kalıyor; bu yüzden ${i.emirNo} ${aralik} ${sureMetni(n.kaymaDk)} kayıyor.`;
+}
+// Kilitli adım önerisi yokken düğmelerin yanındaki metin: kaynağı bilinen ihlal varsa onu söyler, yoksa yeniden çözmeyi önerir.
+export const oneriYokMetni = (l: readonly Ihlal[]): string => {
+  const k = l.map((i) => (i.kilitli ? null : kaymaCumlesi(i))).find((x) => x !== null);
+  return k ?? "Kilitsiz adım için planı Kokpit'te yeniden çözün.";
+};
+export function careCumlesi(i: Ihlal, bolunmus?: boolean): string {
+  if (i.kilitli) return `${adimAdi(i)}'in kilidini öncül bittikten sonraya kaydırın.`;
+  const kayma = kaymaCumlesi(i);
+  if (i.oncul === null) return kayma ?? `${adimAdi(i)} için planı Kokpit'te yeniden çözün.`;
+  const ne = bolunmus === true ? `${adimAdi(i)}'in parçalarını` : bolunmus === false ? `${adimAdi(i)}'i` : `${adimAdi(i)}'i (bölünmüşse parçalarını)`;
+  const kaldir = bolunmus === false ? '' : ' ya da bölmeyi kaldırın';
+  const oneri = `Öneri: ${ne} ${adimAdi(i.oncul)} canlıda bittikten sonraya, ${gunSaat(i.oncul.bitis)} ve sonrasına taşıyın${kaldir}.`;
+  return kayma === null ? oneri : `${kayma} ${oneri}`;
+}
+// 3793: sunucunun öncülün arkasına ittiği pay: Kokpit'teki saati ve canlıya yazılacak saati.
+export type ItilenPay = NonNullable<CanliyaAlOnizlemesiCevabi['itilen']>[number];
+export const itilenSatiri = (x: ItilenPay): string =>
+  `${x.emirNo} ${adimAdi(x)}${x.parca === null ? '' : ` parça ${String(x.parca)}`}: Kokpit ${gunSaat(x.onizleme)} → canlıya alınınca ${gunSaat(x.yeni)} (öncülün arkasına itildi)`;
+
 // Gönderme düğmeleri denetim bitene kadar, denetim alınamadığında ve sıraya aykırı adım varken kapalıdır (onaylı v2); neden düğmenin yanında yazılır.
 // Eski sonuç ihlal gösteriyorsa yeni sonuç gelene kadar açılmaz. Etkin değilse (yetki ya da plan güncel değil) bu denetim engel koymaz.
+// 3793: kilitli adım yoksa "kilidi kaydırın" denmez; ilk aykırı adım ve çaresi söylenir.
 export function onizlemeEngeli(d: OnizlemeDurumu, etkin = true): string | null {
   if (!etkin) return null;
   if (d.tur === 'yukleniyor') return 'Sıra denetimi bitince açılır.';
   if (d.tur === 'hata') return 'Sıra denetimi alınamadığı için kapalı; yeniden deneyin.';
-  return d.veri.ihlaller.length > 0 ? "Önce kilidi kaydırın ya da adımı Kokpit'te düzeltin." : null;
+  const l = d.veri.ihlaller;
+  if (l.length === 0) return null;
+  if (l.some((i) => i.kilitli)) return "Önce kilidi kaydırın ya da adımı Kokpit'te düzeltin.";
+  const ilk = l[0]!;
+  return `${ilk.emirNo} ${adimAdi(ilk)} öncülü bitmeden başlıyor. ${careCumlesi(ilk)}`;
 }
 export const kapaliListeFarkli = (c: Pick<PlanlamaCalismasi, 'kapali'>, sunucu: readonly string[]): boolean =>
   c.kapali.length !== sunucu.length || c.kapali.some((x) => !sunucu.includes(x));

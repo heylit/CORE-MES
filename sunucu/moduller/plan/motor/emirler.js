@@ -130,18 +130,26 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
      sığan kuyruk işi önce yapılır, ardılı onun bitişini bekler. Bölünmüş işin en geç biten parçası işin yeridir, öteki parçalar tezgâhı kapatır. */
   /* 3734: işin yeri bütün parçalarına bakılarak seçilir: geçmişte başlamış bir parça (gerçekleşen sayılır) geç biten parçayı gölgelemez,
      ardıl son parçanın bitişini bekler ve geç parçanın tezgâhı kapalı kalır. */
-  const sabitYer = {}, yeri = {};
+  /* 3793: akışlı ardıl sabit öncülün her parçasının ilk devir partisini bekler (motorun pay kuralı, engine predBound: payların lot1'inin en
+     büyüğü); yerin lot1'i parçaların ilk devir anlarının en büyüğüdür. Yoksa geçmişte başlamış sabit parça gerçekleşen sayılır, ilk partisi
+     başladığı an okunur ve akışlı ardıl öncülden önce dizilir (sıra denetimi canlıya almayı kapatır). */
+  const sabitYer = {}, yeri = {}, lotu = {};
+  const ilkParti = (id, m, S, C) => {
+    const o = cx.byId[id], M = cx.M[m], c = o && (o.c.find(x => x.m === m && !x.fas) || o.c.find(x => !x.fas));
+    return !M || !c ? C : Math.min(C, adv(M.rw, adv(M.sw, S, c.su || 0), ilkRun(o, c, cx)));
+  };
   const kapat = x => st.down.push({ id: 'sabit-' + st.down.length, m: x.m, from: x.S, to: x.C, neden: 'sabit' });
   for (const x of [...istek.sabitler, ...(istek.kisiSabitleri || []).map(y => Object.assign({}, y, { makineId: kisiTezgahi(y.kisiId) }))]) {
     const id = opOf[x.anahtar], m = String(x.makineId), S = tmiSaat(D, x.baslangic), C = tmiSaat(D, dakikaSonu(x.bitis));
     if (S == null || C == null || !cx.M[m]) continue;
     if (!id || !cx.byId[id] || sira.has(id) || calisan.has(id)) { kapat({ m, S, C }); continue; }
+    lotu[id] = Math.max(lotu[id] ?? -Infinity, ilkParti(id, m, S, C));
     const o = yeri[id];
     if (o && o.C >= C) { kapat({ m, S, C }); continue; }
     if (o) kapat(o);
     yeri[id] = { m, S, C };
   }
-  for (const id in yeri) { const y = yeri[id]; if (y.S < st.now - 1e-9) st.gercek[id] = y; else sabitYer[id] = y; }
+  for (const id in yeri) { const y = Object.assign({}, yeri[id], { lot1: Math.min(yeri[id].C, lotu[id]) }); if (y.S < st.now - 1e-9) st.gercek[id] = y; else sabitYer[id] = y; }
   st.sabitYer = sabitYer;
   /* istekte geçmeyen adım: şimdi bitmiş; motor onu yalnız ardılının öncülü olarak görür. Fason adım ise (CA-2) öncülünden sonra döner:
      kuyruktaki ardılı onu bekler. */

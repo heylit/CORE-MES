@@ -9,7 +9,7 @@ import { ACILIS_OLCEGI, BOS_SECIM } from '../gorunumler.ts';
 import type { CalismaKomutu } from '../kayit.ts';
 import { otomatikUygulaSifirla } from '../motor/atolye/gonder.ts';
 import { KomsuKilitler } from '../motor/atolye/CanliOnizleme.tsx';
-import { kaydirmaDugmesi, kaydirmaSaati, komsuAdi, komsuKilitKaymalari, yazilanOneri, kapaliListeFarkli, onizlemeEngeli, ONIZLEME_BEKLEME_MS, ONIZLEME_ZAMAN_ASIMI_MS, sureMetni, useGondermeOnizlemesi } from '../motor/atolye/canli-onizleme.ts';
+import { careCumlesi, gunSaat, itilenSatiri, kaymaCumlesi, oneriYokMetni, kaydirmaDugmesi, kaydirmaSaati, komsuAdi, komsuKilitKaymalari, yazilanOneri, kapaliListeFarkli, onizlemeEngeli, ONIZLEME_BEKLEME_MS, ONIZLEME_ZAMAN_ASIMI_MS, sureMetni, useGondermeOnizlemesi } from '../motor/atolye/canli-onizleme.ts';
 import { planKurSifirla } from '../motor/coz.ts';
 import { ornekCalisma } from '../motor/ornek.ts';
 import { saatiSabitle } from '../test-saati.ts';
@@ -263,6 +263,32 @@ describe('sıra denetimi yardımcıları', () => {
     expect(onizlemeEngeli({ tur: 'yukleniyor', onceki: veri({ ihlaller: [IHLAL] }) })).not.toBeNull();
     expect(onizlemeEngeli({ tur: 'hata', ileti: 'x' })).not.toBeNull();
     expect(onizlemeEngeli({ tur: 'hata', ileti: 'x' }, false)).toBeNull();
+  });
+  it('3793: kilitsiz ihlalde engel kilit demez; adım, öncülün canlı bitişi ve taşıma önerisi yazılır', () => {
+    const kilitsiz = { ...IHLAL, kilitli: false };
+    const e = onizlemeEngeli({ tur: 'hazir', veri: veri({ ihlaller: [kilitsiz] }) })!;
+    expect(e).not.toContain('kilidi');
+    expect(e).toContain('ORN-E-1 OP 70');
+    expect(e).toContain(gunSaat(IHLAL.oncul!.bitis));
+    expect(careCumlesi(kilitsiz)).toContain('parçalarını');
+    expect(careCumlesi(kilitsiz, true)).toBe(`Öneri: OP 70'in parçalarını OP 60 canlıda bittikten sonraya, ${gunSaat(IHLAL.oncul!.bitis)} ve sonrasına taşıyın ya da bölmeyi kaldırın.`);
+    expect(careCumlesi(kilitsiz, false)).not.toContain('bölme');
+    expect(careCumlesi({ ...kilitsiz, oncul: null })).toContain('yeniden çözün');
+    expect(onizlemeEngeli({ tur: 'hazir', veri: veri({ ihlaller: [kilitsiz, IHLAL] }) })).toContain('kilidi');
+    expect(itilenSatiri({ emirNo: 'ORN-E-1', opNo: 70, parca: 2, k: K2, onizleme: '2026-10-21T08:00:00.000Z', yeni: '2026-10-21T10:30:00.000Z' }))
+      .toBe(`ORN-E-1 OP 70 parça 2: Kokpit ${gunSaat('2026-10-21T08:00:00.000Z')} → canlıya alınınca ${gunSaat('2026-10-21T10:30:00.000Z')} (öncülün arkasına itildi)`);
+  });
+  it('3793 3a: ihlalin kaynağı bilindiğinde metin onu söyler ve "yeniden çözün" demez', () => {
+    const engel = { emirNo: 'ORN-E-9', opNo: 10, kaynak: 'ORN-T1', baslangic: '2026-10-20T05:00:00.000Z', bitis: '2026-10-21T05:40:00.000Z', neden: 'sahada' as const };
+    const kayan = { ...IHLAL, kilitli: false, neden: { ilkOp: 10, sonOp: 50, kaymaDk: 990, engel } };
+    expect(kaymaCumlesi(kayan)).toBe(`ORN-T1 üzerinde sahada süren ORN-E-9 OP 10 canlıda ${gunSaat(engel.bitis)} bitişine kadar yerinde kalıyor; bu yüzden ORN-E-1 OP 10-OP 50 16 sa 30 dk kayıyor.`);
+    expect(careCumlesi({ ...kayan, oncul: null })).not.toContain('yeniden çözün');
+    expect(careCumlesi(kayan, false)).toBe(`${kaymaCumlesi(kayan)!} Öneri: OP 70'i OP 60 canlıda bittikten sonraya, ${gunSaat(IHLAL.oncul!.bitis)} ve sonrasına taşıyın.`);
+    expect(kaymaCumlesi({ ...kayan, neden: { ...kayan.neden, engel: null } })).toContain("Kokpit'teki yeri canlıda dolu");
+    expect(kaymaCumlesi({ ...kayan, neden: null })).toBeNull();
+    expect(oneriYokMetni([kayan])).toBe(kaymaCumlesi(kayan));
+    expect(oneriYokMetni([{ ...kayan, neden: null }])).toContain('yeniden çözün');
+    expect(itilenSatiri({ emirNo: 'ORN-E-1', opNo: 60, parca: null, k: K2, onizleme: '2026-10-21T08:00:00.000Z', yeni: '2026-10-21T10:30:00.000Z' })).toMatch(/^ORN-E-1 OP 60: Kokpit/);
   });
   it('kapalı liste sıradan bağımsız karşılaştırılır', () => {
     expect(kapaliListeFarkli({ kapali: ['a', 'b'] }, ['b', 'a'])).toBe(false);

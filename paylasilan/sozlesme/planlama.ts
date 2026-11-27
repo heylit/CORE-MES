@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { HATA_KODLARI } from '../hata.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
-import { PLAN_KURALLARI, planCanliOzeti, senaryolarCevabi } from './plan.ts';
+import { PLAN_KURALLARI, itilenPay, planCanliOzeti, senaryolarCevabi } from './plan.ts';
 import { PLANLAMA_ANAHTARI_BICIMI, receteRotaDurumCevabi, yazGovdesi } from './recete-rota.ts';
 import { isTasiGovdesi, planaAlGovdesi } from './planlama-atolye.ts';
 
@@ -114,6 +114,8 @@ export const calismaTaslagiCevabi = z.object({
   ekMesai: z.object({ yazilan: z.number().int(), atlanan: z.number().int() }).optional(),
   // B-2482-14: elle bölmenin adım adedine uyarlanan ya da motorca uygulanmayan payları (iş bütün ya da motorun kendi bölmesiyle yazıldı).
   uyarilar: z.array(z.string()).optional(),
+  // 3793: öncülünün sunucudaki bitişinden önce kalan, arkasına itilen paylar.
+  itilen: z.array(itilenPay).optional(),
 });
 
 // 507 3 a (503'ün tersi): plan taslağının yerleşimleri ve kilitleri çalışmaya yazılır (eski "Çalışmaya aç"ın planı). Yalnız çalışmada

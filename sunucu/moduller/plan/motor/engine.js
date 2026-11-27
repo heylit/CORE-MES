@@ -102,6 +102,7 @@ function mask(W){const m=new Uint8Array(NS);for(const [a,b] of W){const k0=Math.
     @property {any} [bitti]
     @property {any} [wipP]
     @property {any} [sabitYer]
+    @property {Record<string, number>} [tekPay]
     @property {any} [saGecik]
     @property {any} [ggP]
     @property {any} [ayarsiz]
@@ -145,6 +146,7 @@ function mask(W){const m=new Uint8Array(NS);for(const [a,b] of W){const k0=Math.
     @property {Record<string, string>} [IKK]
     @property {Map<string, { eski: number, yeni: number }>} [kilitKaymalari]
     @property {Record<string, {kod: string, metin: string}>} bolme
+    @property {Record<string, string[]>} [otoBolunen]
     @property {any[]} ops
     @property {any} byId
     @property {Record<string, any>} jobs
@@ -252,7 +254,7 @@ function compile(st){olcekKur(st.w);
       for(let i=Math.max(0,Math.floor(a/SL+1e-9));i<Math.min(NS,Math.ceil(b/SL-1e-9));i++)cap[i]=Math.max(0,cap[i]-(+x.adet||0));}
     IK[k.id]={...k,cap};IKK[k.kart+'@'+(k.istasyon==null?'':k.istasyon)]=k.id;}
   // işlemler
-  const ops=[],jobs={},bolunen={},bolme={},elenen={};
+  const ops=[],jobs={},bolunen={},bolme={},elenen={},otoBolunen={};
   /* 3681: bölünmüş adımın başlamış paylarının gerçekleşen kaydı her derlemede yeniden kurulur (bolunmusPayKur); eskisi kalmaz */
   if(st.gercek)for(const k in st.gercek)if(st.gercek[k]&&st.gercek[k].bolPay)delete st.gercek[k];
   const tezgahAdi=m=>{const t=(D.tezgahlar||[]).find(x=>String(x.id)===String(m));return String((t&&(t.kod||t.ad))||m);};
@@ -293,8 +295,10 @@ function compile(st){olcekKur(st.w);
         if(eb){const kalan=eb.filter(x=>x.basladi||x.kalan>0);if(kalan.length<eb.length){elenen[id]=eb.length-kalan.length;eb=kalan.length>=2?kalan:null;}}
       }
       const birlesik=Array.isArray(kayit)&&kayit.length===1;
-      const N=eb?eb.length:birlesik?1:st.w.bol&&o.bol&&!o.fason&&!sabit?Math.max(1,Math.min(adaylar.length,Math.floor(ad0/Math.max(1,+o.minParti||1)),Math.max(1,+st.w.bolMaks||1))):1;
+      /* 3793 (istek 4): bütün payları tek kaynağa düşen otomatik bölme (st.tekPay, schedule) bölünmez: aynı tezgâhta iki pay iki ayar ve ters sıra demektir */
+      const N=eb?eb.length:birlesik?1:st.w.bol&&o.bol&&!o.fason&&!sabit&&!(st.tekPay&&st.tekPay[id])?Math.max(1,Math.min(adaylar.length,Math.floor(ad0/Math.max(1,+o.minParti||1)),Math.max(1,+st.w.bolMaks||1))):1;
       if(N>1)bolunen[id]=[];
+      if(N>1&&!eb)otoBolunen[id]=bolunen[id];
       for(let p=0;p<N;p++){
       const pid=p===0?id:id+'~'+(p+1),ep=eb?eb[p]:null,ad=ep?(ep.basladi?ep.adet:Math.max(1,ep.kalan)):N>1?Math.floor(ad0/N)+(p<ad0%N?1:0):ad0;
       const tb=devirPartisi(o.transfer,ad,A.transferOran);
@@ -307,7 +311,7 @@ function compile(st){olcekKur(st.w);
       const pr=(o.bag||[]).map(([k,t])=>[j.id+'.'+k,t]),prK=pr.filter(([p])=>!bitti[p]&&!kolDisi[p]);
       const ik=D.opKaynak&&Array.isArray(D.opKaynak[id])&&D.opKaynak[id].length?D.opKaynak[id]:null;
       const op={id:pid,job:j.id,k:o.k,ad:o.ad,c,sig,pr:prK,aile:o.aile||'',aparat:o.aparat||null,ik,
-        program:o.program!==false,fai:!!o.fai,adet:ad,devirAdedi:+o.transfer>0?+o.transfer:null,x,matYok:prK.length<pr.length,ayarsiz:o.ayarci===false,ayarSaat:o.ayarDk!=null&&isFinite(+o.ayarDk)?Math.max(0,+o.ayarDk)/60:null,...(N===1&&gB&&gB.n>0?{sayilan:gB.n}:{}),...(elenen[id]?{elenenPay:elenen[id]}:{}),...(N>1?{parca:p+1,parcaAdedi:N,asil:id,bolToplam:ad0,...(ep?{elle:1,bolAdet:ep.adet,kalanAdet:ep.kalan,...(ep.basladi?{sayilan:ep.sayilan}:{})}:{})}:{})};
+        program:o.program!==false,fai:!!o.fai,adet:ad,devirAdedi:+o.transfer>0?+o.transfer:null,x,matYok:prK.length<pr.length,ayarsiz:o.ayarci===false,ayarSaat:o.ayarDk!=null&&isFinite(+o.ayarDk)?Math.max(0,+o.ayarDk)/60:null,...(N===1&&gB&&gB.n>0?{sayilan:gB.n}:{}),...(elenen[id]?{elenenPay:elenen[id]}:{}),...(N>1&&!eb&&p>0?{oncekiPay:p===1?id:id+'~'+p}:{}),...(N>1?{parca:p+1,parcaAdedi:N,asil:id,bolToplam:ad0,...(ep?{elle:1,bolAdet:ep.adet,kalanAdet:ep.kalan,...(ep.basladi?{sayilan:ep.sayilan}:{})}:{})}:{})};
       if(ep&&gB)bolunmusPayKur(st,gB,ep,p,id,pid,c,ad0);
       if(N>1)bolunen[id].push(pid);
       ops.push(op);jobs[j.id].ops.push(op);}}
@@ -340,7 +344,7 @@ function compile(st){olcekKur(st.w);
   const mat=matAlloc(st,jobs);
   // program
   const progRel=A.programSaat?adv(gen,openAt(gen,st.now),A.programSaat):st.now;
-  return {st,D,A,M,days,gen,capTot,capAyar,capG,PK,FS,AP,IK,IKK,ops,byId,jobs,succ,mat,progRel,bolme};
+  return {st,D,A,M,days,gen,capTot,capAyar,capG,PK,FS,AP,IK,IKK,ops,byId,jobs,succ,mat,progRel,bolme,otoBolunen};
 }
 /** @param {MotorDurumu} [st] @param {any} [jobs] */
 function matAlloc(st,jobs){
@@ -574,6 +578,8 @@ function predBound(o,cx,ctx){
   for(const [pid,ty] of o.pr){const p=P[pid];if(!p){if(ctx.eksikli)continue;return null;}
     if(ty==='o'&&!p.fas){const t=p.lot1+tas;if(t>s){s=t;why={t:'rota',r:pid,o:1};}if(p.C+tas>fin){fin=p.C+tas;finRef=pid;}}
     else{const t=p.C+(p.fas?0:tas);if(t>s){s=t;why={t:'rota',r:pid};}}}
+  /* 3793 (istek 4): otomatik bölmenin payları pay numarası sırasıyla başlar */
+  if(o.oncekiPay){const q=P[o.oncekiPay];if(q&&q.S>s){s=q.S;why={t:'pay-sirasi',r:o.oncekiPay};}}
   const lk=st.locks[o.id];if(lk&&lk.S>s){s=lk.S;why={t:'kilit'};}
   return {s,why,fin,finRef};
 }
@@ -842,7 +848,8 @@ function takvimliCoz(st,mode,base,opt){
 }
 /** @param {MotorDurumu} [st] @param {any} [mode] @param {any} [base] @param {any} [opt] */
 function schedule(st,mode,base,opt={}){
-  const cx=opt.cx||compile(st);
+  /* 3793: tek kaynağa düştüğü için bölünmeyen adım (st.tekPay) eski derlemede hâlâ paylıysa yeniden derlenir */
+  const cx0=opt.cx||compile(st),cx=st.tekPay&&Object.keys(cx0.otoBolunen||{}).some(id=>st.tekPay[id])?compile(st):cx0;
   const ctx={P:{},av:{},lastFam:{},lastId:{},ver:{},cache:{},u:newUse(cx),fas:{},kilit:{},rnd:rng(opt.seed||7),fail:[],neden:{}};
   const all=cx.ops.filter(o=>o.c.length);let ps=0,ss=0,n=0;for(const o of all){const c=o.c.find(x=>!x.fas);if(c){ps+=c.su+c.run;ss+=c.su;n++;}}
   ctx.pbar=n?ps/n:4;ctx.sbar=n?Math.max(.1,ss/n):.5;
@@ -853,7 +860,7 @@ function schedule(st,mode,base,opt={}){
   /** @type {Record<string,{id:string,S:number,C:number}>} */const suren={};
   const surenKoy=(/** @type {any} */r)=>{const x=suren[r.m];if(!x||r.C>x.C)suren[r.m]={id:r.id,S:r.S,C:r.C};};
   for(const o of cx.ops){const b=base&&base.ops[o.id],a=g[o.id];
-    if(a&&a.S!=null){const src=b||{m:a.m,su:0,run:1,lot1:a.S};const M=cx.M[a.m||src.m];
+    if(a&&a.S!=null){const src=b||{m:a.m,su:0,run:1,lot1:a.lot1!=null?a.lot1:a.S};const M=cx.M[a.m||src.m];
       let r={...src,id:o.id,job:o.job,m:a.m||src.m,S:a.S,pin:1,act:1};
       if(a.C!=null){r.C=a.C;r.Su=Math.min(a.C,src.Su!=null?a.S+(src.Su-src.S):a.S);r.lot1=Math.min(r.C,src.lot1||r.C);r.done=1;}
       else if(M){r.Su=adv(M.sw,a.S,src.su||0);const kb=kalanBitis(M,a);if(kb!=null){r.C=kb;r.Su=Math.min(r.Su,kb);}else r.C=adv(M.rw,Math.max(r.Su,now),Math.max(0,(src.run||0)-workIn(M.rw,r.Su,now)));r.lot1=Math.max(r.Su,src.lot1||r.Su);
@@ -918,11 +925,12 @@ function schedule(st,mode,base,opt={}){
   kilitler.forEach(r=>kilitKoy(cx,ctx,r));
   /* sunucu (669 a): yeri sabit iş tam saatinde durur, tezgâhın boş anını ilerletmez (kilit gibi); ardılı bitişini bekler */
   for(const id in st.sabitYer||{}){const a=st.sabitYer[id];if(ctx.P[id]||!cx.byId[id]||!cx.M[a.m])continue;
-    kilitKoy(cx,ctx,{id,job:cx.byId[id].job,m:a.m,S:a.S,Su:a.S,C:a.C,lot1:a.C,su:0,run:a.C-a.S,pin:1,kilit:1,why:{t:'sabit'}});}
+    kilitKoy(cx,ctx,{id,job:cx.byId[id].job,m:a.m,S:a.S,Su:a.S,C:a.C,lot1:a.lot1!=null?Math.min(a.C,a.lot1):a.C,su:0,run:a.C-a.S,pin:1,kilit:1,why:{t:'sabit'}});}
   /* Tabandaki sırayı izleyen kiplerde iş zaten kilitten önceki yerindedir; yeri yalnız baştan dağıtımda ayrılır. */
   if(mode==='dagit')kilitZincirleri(cx,ctx,kilitler,opt,base);
   const U=new Set(cx.ops.filter(o=>!ctx.P[o.id]&&o.c.length).map(o=>o.id));
-  const ready=o=>o.pr.every(([p])=>ctx.P[p]);
+  /* 3793: otomatik bölmenin payı önceki payı yerleşince (ya da yerleşemeyince) hazırdır; sıra predBound'da */
+  const ready=o=>o.pr.every(([p])=>ctx.P[p])&&(!o.oncekiPay||!!ctx.P[o.oncekiPay]||!U.has(o.oncekiPay));
   if((mode==='sabit'||mode==='sabit-mc')&&base){
     const seq={};Object.values(base.ops).filter(b=>U.has(b.id)).sort((a,b)=>a.S-b.S).forEach(b=>{(seq[b.m]=seq[b.m]||[]).push(b.id);});
     // hazır olanlar arasından başvuru planında en erken başlayan önce işlenir: personel ve aparat gibi ortak kaynaklar
@@ -980,6 +988,12 @@ function schedule(st,mode,base,opt={}){
   for(const id of U){ctx.fail.push(id);const p=(cx.byId[id].pr.find(([q])=>!ctx.P[q])||[])[0];if(p)ctx.neden[id]={kod:'oncul',oncul:p};}
   const fail=[...new Set(ctx.fail)],failNeden={};for(const id of fail)failNeden[id]=ctx.neden[id]||{kod:'zaman'};
   const plan={ops:ctx.P,fail,failNeden,mode,downIds:durusDizini(st).ids};
+  /* 3793 (istek 4): otomatik bölmenin bütün payları tek kaynağa düştüyse adım bölünmeden bir kez daha dizilir (st.tekPay kalır: aynı
+     durumla sonraki dizmeler de bölmez) */
+  if(!opt.tekPayTuru){
+    const tek=Object.entries(cx.otoBolunen||{}).filter(([,l])=>{const ms=l.map(p=>ctx.P[p]&&ctx.P[p].m);return ms.length>1&&ms.every(m=>m!=null&&m===ms[0]);}).map(([id])=>id);
+    if(tek.length){st.tekPay={...(st.tekPay||{}),...Object.fromEntries(tek.map(id=>[id,1]))};return schedule(st,mode,base,{...opt,cx:compile(st),tekPayTuru:1});}
+  }
   if(!opt.noSlack)slack(plan,cx);
   plan.cx=undefined;Object.defineProperty(plan,'cx',{value:cx,enumerable:false,writable:true});
   return plan;

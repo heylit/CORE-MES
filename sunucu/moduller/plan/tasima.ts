@@ -6,6 +6,7 @@ import { tasimaItmesi, type BagTuru, type TasimaIsi, type TasimaSonucu } from '.
 // (motor da beklemez); başlamış, biten ve donuk bölgedeki iş yerinde kalır. Taşınan iş donuk bölgede olsa da elle taşınır (önceki davranış).
 // Saati geçmiş ama gerçekleşme kaydı olmayan iş (done var, act yok) bitmemiştir: taşınır, ardılı olarak itilir, öncül olarak beklenir.
 // Taşınan iş sürüyorsa (3414-6 a) durdurulmuş sayılır: takvim kalan adetle kurulur, iş sabit değildir; yapılan kısım geçmişte kalır.
+// Sahada hâlâ çalışan iş taşınmaz (3793).
 // Önizleme ve taşıma komutu aynı hesabı kullanır.
 type Nesne = Record<string, unknown>;
 const nesne = (x: unknown): x is Nesne => typeof x === 'object' && x !== null && !Array.isArray(x);
@@ -16,6 +17,12 @@ export function tasimaHesabi(calisma0: Nesne, simdi: number, g: { isId: string; 
   const ops = plan !== null && nesne(plan.ops) ? plan.ops : {};
   const tasinan = ops[g.isId];
   const durdur = nesne(tasinan) && surenIs(tasinan);
+  // 3793 (istek 5, 5a): sahada çalışan adım (sunucunun çalışıyor dediği, bitişsiz gerçekleşen) Kokpit'te taşınmaz; sunucu da taşımaz.
+  // Yalnız sahada duraklatılmış ya da durmuş adım taşınır.
+  const g0 = nesne(calisma0.gercek) ? calisma0.gercek[g.isId] : null;
+  if (durdur && nesne(g0) && g0.sunucu && g0.S != null && g0.C == null) {
+    return { gecerli: false, ileti: 'Adım sahada çalışıyor; Kokpit\'te taşınmaz. Önce terminalde durdurun ya da duraklatın, sonra taşıyın.', isler: [] };
+  }
   const w0 = nesne(calisma0.w) ? calisma0.w : {};
   const calisma = durdur ? { ...calisma0, w: { ...w0, durdurulan: { ...(nesne(w0.durdurulan) ? w0.durdurulan : {}), [g.isId]: 1 } } } : calisma0;
   const t = tasimaTakvimi(calisma, simdi);

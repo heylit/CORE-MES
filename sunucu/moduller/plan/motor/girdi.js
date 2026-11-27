@@ -827,8 +827,6 @@ function payKayitlariniYenile(ops, id, paylar) {
 /** @param {any} [S] @param {any} [y] @param {Derleme} [cx] */
 function calisanBirlestir(S, y, cx) {
   const g = clone(S.gercek || {}); let degisti = false; const yeniSapma = [];
-  /* 3414-6 a: kalanı taşınan süren adımın sayımı güncellenir ama çubuğu taşındığı yerde kalır (gerçekleşen yerine geri çekilmez) */
-  const durdurulan = S.w && S.w.durdurulan && typeof S.w.durdurulan === 'object' ? S.w.durdurulan : {};
   for (const id of Object.keys(g)) if (g[id] && g[id].sunucu && !y[id]) { delete g[id]; degisti = true; }
   for (const [id, a] of Object.entries(y)) {
     const r = S.plan && S.plan.ops[id]; const m = a.m && cx && cx.M[a.m] ? a.m : r ? r.m : a.m;
@@ -838,7 +836,6 @@ function calisanBirlestir(S, y, cx) {
     const yeni = { ...a, m, sunucu: 1, planC: g[id] && g[id].planC != null ? g[id].planC : r ? r.C : null };
     if (rrEsit(g[id], yeni)) continue;
     g[id] = yeni; degisti = true;
-    if (durdurulan[id]) continue;
     const M = cx && cx.M[m]; if (!r || !M) continue;
     const o = cx.byId[id]; const c = o && (o.c.find(x => x.m === m) || o.c[0]);
     /* 3681 (Risk S1): bölünmüş adımda sunucunun kalanı adımın bütünüdür; kayıtlı plandaki çalışan payın bitişi derlemedeki gibi payın kalan adedine oranlanır (payKalani) */
@@ -945,10 +942,12 @@ function stKur(S, ek = [], gevset = true) {
      süresine eklenir (derleme), çalışan adımda hedef bitiştir (kalanBitis). */
   /* 3414-6 a: planlamacının durdurup kalanını taşıdığı süren adım (w.durdurulan: işlem -> 1). Gerçekleşen yeri plana sabit girmez; kalan adet
      (adım adedi eksi sayılan sağlam; sayım bilinmiyorsa adedin tamamı) kilitlendiği yere dizilir, ayarı yeniden sayılır. Yapılan kısım
-     geçmişte kalır. Adım artık sürmüyorsa, bittiyse ya da kalanı yoksa kayıt etkisizdir. */
+     geçmişte kalır. Adım artık sürmüyorsa, bittiyse ya da kalanı yoksa kayıt etkisizdir.
+     3793 (5a): sahada hâlâ süren adım (sunucunun çalışan adımı) işaretli olsa da sunucudaki gibi yerinde ve son sayımdan kalan süreyle kalır;
+     işaret operatör sahada durdurunca ya da duraklatınca etkilenir (sunucu motoru da işareti okumaz, emirler.js). */
   const durdurulan = S.w && S.w.durdurulan && typeof S.w.durdurulan === 'object' ? S.w.durdurulan : {};
   for (const id in durdurulan) {
-    const a = st.gercek[id]; if (!a || a.C != null) continue;
+    const a = st.gercek[id]; if (!a || a.C != null || a.sunucu) continue;
     const kalan = isFinite(+a.A) && isFinite(+a.n) && a.A != null && a.n != null ? Math.max(0, +a.A - +a.n) : null;
     if (kalan === 0) continue;
     delete st.gercek[id];
