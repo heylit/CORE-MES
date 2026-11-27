@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { isTasi } from './atolye-komutlari-kurallar.ts';
+import { calismaIsleri } from './planlama-kurallar.ts';
 import { tasimaHesabi } from './tasima.ts';
 
 const GUN = ['pzt', 'sal', 'car', 'per', 'cum', 'cmt', 'paz'];
@@ -70,5 +71,18 @@ describe('bölünmüş adımın payını taşıma (3791)', () => {
     const r = tasimaHesabi(calisma({ 'S1.10': op('T1', 8) }), 8, { isId: 'S1.10', tezgah: 'T1', baslangic: 12 });
     assert.equal(r.gecerli, true);
     assert.equal('bolme' in r, false);
+  });
+
+  // 3734/3749: taşınan payın yeni tezgâhı bölme kaydında da yazılı olduğundan canlıya alma payı kaydıyla eşler; uyarı çıkmaz, pay adedi korunur.
+  test('taşınan pay canlıya alınır: pay adetleri bölme kaydından, yeni tezgâh ve saatiyle', () => {
+    const c = calisma(elleOps, { elleBol: bol });
+    const d = yazilan(isTasi(c, { isId: 'S1.10~2', tezgah: 'T3', baslangic: 12 }, KISI, tasimaHesabi));
+    // Canlıya alma tezgâhı sayı kimliğiyle okur (calismaKaynagi); deneme tezgâhları T1, T2... burada 101, 102... olur.
+    const sayi = (m: string): string => m.replace('T', '10');
+    const elle = new Map([['S1.10', (d.elleBol!['S1.10'] as { adet: number; m: string }[]).map((x) => ({ adet: x.adet, m: sayi(x.m) }))]]);
+    const r = calismaIsleri([{ id: 'S1.10', m: sayi('T1'), S: 8, C: 10, bitti: false }, { id: 'S1.10~2', m: sayi('T3'), S: 12, C: 14, bitti: false }], { 'S1.10': 'E1|10' }, new Set(['E1|10']), elle, new Map([['E1|10', 4]]));
+    assert.deepEqual(r.uyarilar, []);
+    assert.deepEqual(r.yazilamaz, []);
+    assert.deepEqual(r.yazilacak.map((y) => [y.parca?.no, y.parca?.adet, y.S, y.C]), [[1, 2, 8, 10], [2, 2, 12, 14]]);
   });
 });

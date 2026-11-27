@@ -49,6 +49,11 @@ async function sunucu(page: Page) {
   await page.route('**/api/plan/planlama-calismasi/duzenleyen', (r) => json(r, { kisiId: null, kisi: null, zaman: null, surum: null }));
   await page.route('**/api/plan/planlama-calismasi/gonderme-onizlemesi', (r) => json(r, { kapali: [], kilitYetkisi: true, oneri: null, oneriNedeni: null, ihlaller: [] }));
   await page.route('**/api/plan/planlama-calismasi', (r) => json(r, { calisma: calisma(ILK_BOLME), surum: 1 }));
+  // 3791: taşıma önizlemesi uydurmadır: taşınan pay istenen yerde geçerlidir, başka iş itilmez.
+  await page.route('**/api/plan/planlama-calismasi/is-tasi-onizlemesi*', (r) => {
+    const q = new URL(r.request().url()).searchParams, S = Number(q.get('baslangic'));
+    return json(r, { calismaSurumu: 1, gecerli: true, ileti: null, isler: [{ isId: q.get('isId'), tezgah: q.get('tezgah'), S, C: S + 4, eskiTezgah: 'M1', eskiS: 8, tur: 'tasinan' }] });
+  });
   await page.route('**/api/plan/taslagim', (r) => json(r, cevap()));
   await page.route('**/api/plan/taslagim/komut', (r) => {
     const k = (r.request().postDataJSON() as { komut: Komut }).komut;
@@ -88,6 +93,10 @@ for (const buyukYazi of [false, true]) {
       expect(r.sol).toBeGreaterThanOrEqual(r.tSol);
       expect(r.sag).toBeLessThanOrEqual(r.tSag);
       expect(r.alt).toBeLessThanOrEqual(r.tAlt);
+    };
+    const menudenAyri2 = async (k: ReturnType<Page['locator']>) => {
+      const menu = await page.getByRole('navigation', { name: 'Ana menü' }).boundingBox(), kb = await k.boundingBox();
+      if (menu && kb && menu.width > 0) expect(kb.x).toBeGreaterThanOrEqual(menu.x + menu.width);
     };
     const menudenAyri = async () => {
       const menu = await page.getByRole('navigation', { name: 'Ana menü' }).boundingBox(), k = await onay.boundingBox();
@@ -160,7 +169,11 @@ for (const buyukYazi of [false, true]) {
     await page.mouse.move(x0, y0);
     await page.mouse.down();
     await page.mouse.move(x0 + 20, y0, { steps: 4 });
-    await expect(kokpit.locator('[data-birles-ipucu]')).toContainText('Birleştirmek için kardeş payın üstüne bırakın');
+    await expect(kokpit.locator('[data-birles-ipucu]')).toHaveCount(0);
+    // 3791: tutulan pay hayalet çubuk olarak imleci izler; ipucu hem birleştirmeyi hem taşımayı söyler.
+    await expect(kokpit.locator('.tc-pyq-tahta[data-tasima]')).toHaveCount(1);
+    await expect(p3).toHaveAttribute('data-tasinan', '');
+    await expect(kokpit.getByRole('status').filter({ hasText: 'Kardeş payın üstüne bırakın: birleşir · başka yere: Bırakın: iş taşınır' })).toBeVisible();
     await expect(bolum.locator('.tc-pyq-is[data-birles-aday]')).toHaveCount(2);
     const satir2 = bolum.locator(`[data-pay-satir="${ADIM}~2"]`);
     const bas = await satir2.locator('.tc-pyq-bas').boundingBox();
@@ -183,10 +196,54 @@ for (const buyukYazi of [false, true]) {
     await tasma();
     await cek('5-uygulandi');
 
-    // Tezgâhlar görünümünde pay sürüklenmez; menüde birleştirme vardır.
+    // 3791: pay kendi satırında başka saate sürüklenip bırakılınca birleşme değil taşıma onayı açılır (Uygula taslağa tasi yazar).
+    const tasimaOnayi = page.getByRole('group', { name: 'Taşımayı onayla' });
+    const p2 = bolum.locator(`.tc-pyq-is[data-is="${ADIM}~2"]`);
+    // Bildirim bildirimi çubuğun üstünü örter: kapanması beklenir.
+    await expect(page.locator('.tc-bildirim')).toHaveCount(0, { timeout: 20_000 });
+    await p2.scrollIntoViewIfNeeded();
+    const k2 = await p2.boundingBox();
+    if (!k2) throw new Error('pay çubuğu yok');
+    await page.mouse.move(k2.x + k2.width - 4, k2.y + k2.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(k2.x + k2.width + 60, k2.y + k2.height / 2, { steps: 6 });
+    await expect(p2).toHaveAttribute('data-tasinan', '');
+    await cek('6-pay-surukle');
+    await page.mouse.up();
+    await expect(onay).toHaveCount(0);
+    await expect(tasimaOnayi).toBeVisible();
+    await expect(tasimaOnayi.locator('[data-onay-tur="tasi"]')).toHaveText('Taşı');
+    await menudenAyri2(tasimaOnayi);
+    await cek('7-pay-tasima-onayi');
+    await tasimaOnayi.getByRole('button', { name: 'Vazgeç' }).click();
+    await expect(tasimaOnayi).toHaveCount(0);
+    expect(s.komutlar).toHaveLength(1);
+
+    // Tezgâhlar görünümü: pay başka tezgâh satırına sürüklenir; taşıma onayı açılır, Uygula tasi komutunu yazar.
     await kokpit.getByRole('group', { name: 'Görünüm' }).getByRole('button', { name: 'Tezgâhlar' }).click();
     const tz = kokpit.getByRole('region', { name: 'Tezgâhlar' });
-    await tz.locator(`.tc-pyq-is[data-is="${ADIM}~2"]`).click({ button: 'right' });
+    const t2 = tz.locator(`.tc-pyq-is[data-is="${ADIM}~2"]`);
+    await t2.scrollIntoViewIfNeeded();
+    const kt = await t2.boundingBox();
+    const hedefSatir = tz.locator('[data-satir="M3"] .tc-pyq-alan').first();
+    const ht = await hedefSatir.boundingBox();
+    if (!kt || !ht) throw new Error('tezgâh satırı yok');
+    await page.mouse.move(kt.x + kt.width / 2, kt.y + kt.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(kt.x + kt.width / 2 + 10, kt.y + kt.height / 2, { steps: 3 });
+    await expect(kokpit.locator('.tc-pyq-tahta[data-tasima]')).toHaveCount(1);
+    await page.mouse.move(kt.x + kt.width / 2 + 10, ht.y + ht.height / 2, { steps: 8 });
+    await cek('8-tezgah-surukle');
+    await page.mouse.up();
+    await expect(tasimaOnayi).toBeVisible();
+    await expect(tasimaOnayi).toContainText('ORN-T3');
+    await cek('9-tezgah-tasima-onayi');
+    await tasimaOnayi.getByRole('button', { name: 'Uygula' }).click();
+    await expect.poll(() => s.komutlar.at(-1)).toMatchObject({ tur: 'tasi', isId: `${ADIM}~2`, tezgah: 'M3' });
+    await tasma();
+
+    // Menüde birleştirme yine vardır.
+    await t2.click({ button: 'right' });
     await expect(page.getByRole('menu').getByRole('group', { name: 'Şununla birleştir' }).getByRole('menuitem')).toHaveCount(1);
     await tahtaIcinde();
     await page.keyboard.press('Escape');
