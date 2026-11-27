@@ -98,7 +98,11 @@ test('NC/CAM sekmesi: revizyon seçili, operasyona göre programlar, program kar
   expect(await kesilenBasliklar(page)).toEqual([]);
   await page.screenshot({ path: bilgi.outputPath('proses-nc-cam.png'), fullPage: true });
   await kart.getByRole('button', { name: 'Düzenle' }).click();
-  await expect(page.getByRole('dialog', { name: /ORN1042_OP30_RC/ })).toBeVisible();
+  const form = page.getByRole('dialog', { name: /ORN1042_OP30_RC/ });
+  await expect(form).toBeVisible();
+  // Seçici dar satırda kodu kesebilir; seçilen kart kod ve adıyla açık yazılır.
+  await expect(form.getByText('ORN-TK-D10 · Parmak freze Ø10')).toBeVisible();
+  await expect(form.getByText('ORN-APR-MNG · Hassas mengene 125')).toBeVisible();
   expect((await tasmaOlc(page)).belge, 'formda yatay taşma').toBeLessThanOrEqual(0);
   await page.screenshot({ path: bilgi.outputPath('proses-nc-form.png'), fullPage: true });
   expect(ag.hatalar).toEqual([]);

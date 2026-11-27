@@ -48,6 +48,9 @@
 .tc-proses-takimlar > li { grid-template-columns: calc(var(--b-6) * 1.5) minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); align-items: baseline; }
 
 /* Form: iki sütunlu alanlar, takım ve aparat satırları. */
+.tc-proses-form-secici { display: flex; flex-direction: column; gap: var(--b-1); min-width: 0; }
+.tc-proses-form-etiket { font-size: var(--yazi-s); font-weight: 700; }
+.tc-proses-form-secici > small { color: var(--muted); font-size: var(--yazi-xs); overflow-wrap: anywhere; }
 .tc-proses-form-iki { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--b-6) * 6)), 1fr)); gap: var(--b-3); }
 .tc-proses-form-liste { display: flex; flex-direction: column; gap: var(--b-2); margin: 0; padding: var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-2); min-width: 0; }
 .tc-proses-form-satir { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--b-6) * 3)), 1fr)); align-items: end; gap: var(--b-2); padding-bottom: var(--b-2); border-bottom: 1px solid var(--edge); }

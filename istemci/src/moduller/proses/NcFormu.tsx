@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type {
   NcDurumu, NcKontrolu, NcProgramEkleGovdesi, NcProgramKaydetGovdesi, NcProgramYazmaCevabi, ProsesNcProgrami, ProsesRevizyonu,
@@ -77,6 +77,17 @@ function govdeKur(d: Degerler): Omit<NcProgramKaydetGovdesi, 'surum'> {
   };
 }
 
+// Kayıt seçicisi etiketi ekrana çizmiyor ve dar satırda seçilen kodu kesiyor: etiket üstte; satırda seçilen kart kod ve adıyla altta yazılır.
+function Alan({ etiket, secili, children }: { etiket: string; secili: SeciliKayit | null; children: ReactNode }) {
+  return (
+    <div className="tc-proses-form-secici">
+      <span className="tc-proses-form-etiket" aria-hidden="true">{etiket}</span>
+      {children}
+      {secili !== null && <small className="tc-proses-mono">{secili.kod}{secili.ad === '' ? '' : ` · ${secili.ad}`}</small>}
+    </div>
+  );
+}
+
 interface Ozellikler {
   malzemeNo: number;
   opNo: number;
@@ -127,7 +138,9 @@ export function NcFormu({ malzemeNo, opNo, opAdi, program, revizyonlar, seciliRe
           secenekler={(Object.keys(NC_DURUM) as NcDurumu[]).map((k) => ({ deger: k, baslik: NC_DURUM[k].metin }))} />
         <Secim etiket="Kontrol" {...form.alan('kontrol')} bosSecenek="Seçilmedi"
           secenekler={(Object.keys(NC_KONTROL) as NcKontrolu[]).map((k) => ({ deger: k, baslik: NC_KONTROL[k] }))} />
-        <MakineSecici etiket="Tezgâh" deger={d.makine} bosaltilabilir sec={(k) => { form.degistir({ makine: k === null ? null : { id: k.id, kod: k.kod, ad: k.ad } }); }} />
+        <Alan etiket="Tezgâh" secili={null}>
+          <MakineSecici etiket="Tezgâh" deger={d.makine} bosaltilabilir sec={(k) => { form.degistir({ makine: k === null ? null : { id: k.id, kod: k.kod, ad: k.ad } }); }} />
+        </Alan>
         <Girdi etiket="CAM çevrim süresi (dk)" inputMode="decimal" {...form.alan('cevrimSuresiDk')} />
         <Girdi etiket="CAM yazılımı" {...form.alan('camYazilimi')} />
         <Girdi etiket="CAM dosya adı" ipucu="Dosyanın kendisi yüklenmez" {...form.alan('camDosyasi')} />
@@ -139,7 +152,9 @@ export function NcFormu({ malzemeNo, opNo, opAdi, program, revizyonlar, seciliRe
         {d.takimlar.map((t, i) => (
           <div key={i} className="tc-proses-form-satir" role="group" aria-label={`Takım ${t.tNo || String(i + 1)}`}>
             <Girdi etiket="T no" value={t.tNo} onChange={(o) => { takimYaz(i, { tNo: o.target.value }); }} hata={form.hata(`takimlar.${String(i)}.tNo`)} />
-            <MalzemeSecici etiket="Takım kartı" deger={t.kart} sec={(k) => { takimYaz(i, { kart: k === null ? null : { id: k.id, kod: k.kod, ad: k.ad } }); }} />
+            <Alan etiket="Takım kartı" secili={t.kart}>
+              <MalzemeSecici etiket="Takım kartı" deger={t.kart} sec={(k) => { takimYaz(i, { kart: k === null ? null : { id: k.id, kod: k.kod, ad: k.ad } }); }} />
+            </Alan>
             <Girdi etiket="Tutucu" value={t.tutucu} onChange={(o) => { takimYaz(i, { tutucu: o.target.value }); }} />
             <Girdi etiket="Çıkıntı (mm)" inputMode="decimal" value={t.cikintiMm} onChange={(o) => { takimYaz(i, { cikintiMm: o.target.value }); }} hata={form.hata(`takimlar.${String(i)}.cikintiMm`)} />
             <Girdi etiket="İşlem" value={t.islem} onChange={(o) => { takimYaz(i, { islem: o.target.value }); }} />
@@ -155,7 +170,9 @@ export function NcFormu({ malzemeNo, opNo, opAdi, program, revizyonlar, seciliRe
         <legend>Bağlama ve aparat</legend>
         {d.aparatlar.map((a, i) => (
           <div key={i} className="tc-proses-form-satir" role="group" aria-label={`Aparat ${String(i + 1)}`}>
-            <MalzemeSecici etiket="Aparat kartı" tur="demirbas" deger={a.kart} sec={(k) => { aparatYaz(i, { kart: k === null ? null : { id: k.id, kod: k.kod, ad: k.ad } }); }} />
+            <Alan etiket="Aparat kartı" secili={a.kart}>
+              <MalzemeSecici etiket="Aparat kartı" tur="demirbas" deger={a.kart} sec={(k) => { aparatYaz(i, { kart: k === null ? null : { id: k.id, kod: k.kod, ad: k.ad } }); }} />
+            </Alan>
             <Girdi etiket="Bağlama notu" value={a.aciklama} onChange={(o) => { aparatYaz(i, { aciklama: o.target.value }); }} />
             <Dugme simge="trash" aria-label={`Aparat ${String(i + 1)} satırını sil`} onClick={() => { form.degistir({ aparatlar: d.aparatlar.filter((_, j) => j !== i) }); }} />
             {form.hata(`aparatlar.${String(i)}.malzemeId`) !== undefined && <p className="tc-proses-form-hata" role="alert">{form.hata(`aparatlar.${String(i)}.malzemeId`)}</p>}
