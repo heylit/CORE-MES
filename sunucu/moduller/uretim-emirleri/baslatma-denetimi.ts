@@ -7,7 +7,8 @@ import { hazirlikDenetimi } from './hazirlik.ts';
 // başlatmayla aynı işlemdedir.
 // 3337-2 a: terminalden gelen başlatma okutulan refakat kartını ya da yetkilinin kartsız gerekçesini taşır (ikisi birden olmaz; yetki
 // disari.ts'de denetlenir; an, kartla gelen başlatmanın kayıt anıdır). Verilmezse (iç çağrı: örnek veri) kart aranmaz; terminal yolları her zaman verir, kartsızda ikisi de null.
-export interface BaslatmaKarti { refakatPartisiId: number | null; gerekce: string | null }
+// izinId (3771 a): yetkilinin telefondan verdiği kartsız başlatma izni; başlatma komutu onu gerekçeye çevirir, stok yalnız gerekçeyi görür.
+export interface BaslatmaKarti { refakatPartisiId: number | null; gerekce: string | null; izinId?: number | null }
 export interface BaslatmaOlayi { uretimEmriId: number; isEmriId: number; istasyonId: number; kisiId: number; kart?: BaslatmaKarti; an?: string }
 export type BaslatmaDenetimi = { engel: string } | { uyari: string } | null;
 export type BaslatmaDenetcisi = (db: Db, olay: BaslatmaOlayi) => Promise<BaslatmaDenetimi>;

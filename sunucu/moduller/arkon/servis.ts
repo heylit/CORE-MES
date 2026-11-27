@@ -2210,8 +2210,9 @@ export async function makineDevralOnayla(db: Db, kullanici: Kullanici, g: Makine
   // 3337-2 a: devralma işi başlatırsa kart, devralmayı doğuran başlatma kaydındakidir; gövdede verilen önce gelir.
   const kayit = g.cid === undefined ? null : await sorgular.reddedilenBaslatmaGovdesi(db, g.cid, kullanici.id, g.emirId);
   const kayittaki = kayit === null ? { refakatPartisiId: null, gerekce: null } : baslatmaKaydiKarti(kayit);
+  const izinId = g.kartsizIzinId ?? kayittaki.izinId;
   await makineDevral(db, kullanici, g.emirId, g.kullanimId, undefined, undefined, {
-    refakatPartisiId: g.refakatPartisiId ?? kayittaki.refakatPartisiId, gerekce: g.kartsizGerekce ?? kayittaki.gerekce,
+    refakatPartisiId: g.refakatPartisiId ?? kayittaki.refakatPartisiId, gerekce: g.kartsizGerekce ?? kayittaki.gerekce, ...(izinId === undefined ? {} : { izinId }),
   });
   if (g.cid !== undefined) await sorgular.yansimaDevralindi(db, g.cid, kullanici.id, g.emirId);
   await devralmaHaliniYay(db, g.emirId, g.durdurulanEmirId);
