@@ -1023,3 +1023,5 @@ tr[data-bekleyen] .tc-rr1-pr-op { color: var(--hold); }
   border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); color: var(--muted);
 }
 .tc-rr1-ilk-parca-metin { display: flex; flex-direction: column; gap: var(--b-1); flex: 1 1 auto; min-width: 0; color: var(--ink); font-size: var(--yazi-s); }
+.tc-rr1-cevrim { align-items: end; }
+.tc-rr1-ipucu[role="status"]:empty { margin: 0; }

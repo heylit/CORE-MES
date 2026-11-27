@@ -625,6 +625,19 @@ export function fasonaCevir(a: Adim, firmaId: string | null, op: Operasyon | und
   const b: Adim = { ...a, fasonId: null, fason: false, terminGun: null, kontrolTuru: 'gkk', muayeneSuresiSaat: null };
   return b.stationId ? b : { ...b, stationId: op?.stationId ?? null };
 }
+// Çevrimde parça (3814 a): saklanan yalnız çevrimde parça ve işlem / adet. Makine çevrimi türetilir (işlem × k, iki ondalık gösterim);
+// yazılınca işlem / adet = çevrim ÷ k (dört ondalık, sunucu sütunu numeric 10,4). k değişince işlem / adet korunur. Dört ondalık yüzünden
+// gidiş-dönüşte çevrim en çok k × 0,00005 dk kayar (k = 1000: 0,05 dk); sıfıra yuvarlanan süre en küçük değer olur (sunucu sıfırı reddeder).
+export const CEVRIMDE_PARCA_EN_COK = 1000;
+export const cevrimdeParca = (a: Pick<Adim, 'cevrimdeParca'>): number => a.cevrimdeParca ?? 1;
+export const cevrimdeParcaYaz = (a: Adim, v: number | null): Adim => ({ ...a, cevrimdeParca: v === null ? 1 : Math.min(CEVRIMDE_PARCA_EN_COK, Math.max(1, Math.round(v))) });
+export const makineCevrimi = (a: Pick<Adim, 'proc' | 'cevrimdeParca'>): number | null =>
+  a.proc === null ? null : Math.round(a.proc * cevrimdeParca(a) * 100) / 100;
+export const makineCevrimiYaz = (a: Adim, v: number | null): Adim =>
+  sureYaz(a, 'proc', v === null ? null : Math.max(1, Math.round((v / cevrimdeParca(a)) * 10_000)) / 10_000);
+// Çevrimde parça yalnız adetle ölçülen işte anlamlıdır; kg, m gibi birimde alan çıkmaz. Birimi boş kart adet sayılır.
+export const adetBirimiMi = (birim: string): boolean => birim.trim() === '' || /^ad(et)?\.?$/i.test(birim.trim());
+
 export function sureYaz(a: Adim, alan: 'setup' | 'proc' | 'chg', deger: number | null): Adim {
   if (alan === 'setup') return toplamYaz(a, deger);
   const b = { ...a, [alan]: deger };
@@ -773,6 +786,8 @@ export function kaydetGovdesi(adimlar: readonly Adim[], izinliOpNolar: readonly 
       birlesen: [...adimBirlesen(s)],
       // Çarpanı taşımayan yerel taslakta alan gönderilmez: sunucu kayıtlı çarpanı korur.
       ...(s.adetCarpani === undefined ? {} : { adetCarpani: adimDali(s) === null ? null : s.adetCarpani }),
+      // Taşımayan yerel taslakta gönderilmez: sunucu kayıtlı değeri korur (3814 a). Fasonda tezgâh çevrimi yoktur.
+      ...(s.cevrimdeParca === undefined ? {} : { cevrimdeParca: fason ? 1 : s.cevrimdeParca }),
       // Çıktıyı taşımayan yerel taslakta alan gönderilmez: sunucu kayıtlı çıktıyı korur (3320 a).
       // Son adımın çıktısı ürünün kendisidir: sona taşınan adımın seçimi gönderilmez (sunucu son adımda çıktıyı reddeder).
       ...(s.ciktiId === undefined ? {} : { ciktiMalzemeId: s.ciktiId === null || son ? null : kimlik(s.ciktiId, s, 'Çıktı kalemi') }),

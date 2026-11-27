@@ -168,6 +168,9 @@ describe('uretim-emirleri iş emri kuralları', () => {
     assert.equal(isEmriFarki(eski, { ...eski, birimSureDk: '5', makineId: 4 }), 'OP 20 güncellendi (kaynak; birim süre 4,5 dk → 5 dk)');
     assert.equal(isEmriFarki(eski, { ...eski, ayarSuresiDk: null, talimatSurumu: 3, bagimlilik: 'akisli', devirAdedi: 5 }),
       'OP 20 güncellendi (hazırlık 30 dk → boş; bağımlılık; talimat)');
+    // 3814 a: çevrimde parça eski ve yeni değeriyle; alanı taşımayan eski kayıt 1 sayılır.
+    assert.equal(isEmriFarki(eski, { ...eski, cevrimdeParca: 4 }), 'OP 20 güncellendi (çevrimde parça 1 → 4)');
+    assert.equal(isEmriFarki({ ...eski, cevrimdeParca: 1 }, eski), null);
   });
 
   test('malzeme ihtiyacı: adım miktarı sonraki fire paylarıyla büyür, bileşen firesi eklenir; iş emri olmayan bileşen sayılmaz', () => {

@@ -24,15 +24,15 @@ export const ORNEK_SAYIM = (): TezgahSayimCevabi => ({
       cihazAdi: 'ORN-T01', makine: M1, cevrimdeParca: 1,
       isler: [
         {
-          baslangic: saat(8), bitis: saat(10, 30), isEmriNo: 'ORN-IE-1042', op: '20', parcaNo: 'ORN-P-100', sayacFarki: 90, tezgahAdedi: 90, denemeAyarAdedi: 4, ayarAdedi: 2,
+          baslangic: saat(8), bitis: saat(10, 30), isEmriNo: 'ORN-IE-1042', op: '20', parcaNo: 'ORN-P-100', cevrimdeParca: 2, cevrimdeParcaKaynagi: 'emir', sayacFarki: 45, tezgahAdedi: 90, denemeAyarAdedi: 4, ayarAdedi: 2,
           saglam: 86, hurda: 2, farkAdet: 2, farkYuzde: 2.3, programlar: ['ORN-P-100-OP20.NC'], programEslesmesi: 'kesin', sayacGeriGitti: false, programDegisti: false, golgeOneri: 88,
         },
         {
-          baslangic: saat(10, 40), bitis: saat(12, 10), isEmriNo: 'ORN-IE-1043', op: '10', parcaNo: 'ORN-P-210', sayacFarki: 41, tezgahAdedi: 41, denemeAyarAdedi: null, ayarAdedi: null,
+          baslangic: saat(10, 40), bitis: saat(12, 10), isEmriNo: 'ORN-IE-1043', op: '10', parcaNo: 'ORN-P-210', cevrimdeParca: 1, cevrimdeParcaKaynagi: 'emir', sayacFarki: 41, tezgahAdedi: 41, denemeAyarAdedi: null, ayarAdedi: null,
           saglam: 40, hurda: 0, farkAdet: 1, farkYuzde: 2.5, programlar: ['ORN-P-210-OP10.NC'], programEslesmesi: 'tahmin', sayacGeriGitti: false, programDegisti: true, golgeOneri: 41,
         },
         {
-          baslangic: saat(12, 20), bitis: null, isEmriNo: 'ORN-IE-1044', op: '30', parcaNo: 'ORN-P-330', sayacFarki: 12, tezgahAdedi: 12, denemeAyarAdedi: 0, ayarAdedi: null,
+          baslangic: saat(12, 20), bitis: null, isEmriNo: 'ORN-IE-1044', op: '30', parcaNo: 'ORN-P-330', cevrimdeParca: 1, cevrimdeParcaKaynagi: 'tezgah', sayacFarki: 12, tezgahAdedi: 12, denemeAyarAdedi: 0, ayarAdedi: null,
           saglam: 11, hurda: 0, farkAdet: 1, farkYuzde: 8.3, programlar: ['O1204'], programEslesmesi: 'uyusmuyor', sayacGeriGitti: true, programDegisti: null, golgeOneri: 12,
         },
       ],

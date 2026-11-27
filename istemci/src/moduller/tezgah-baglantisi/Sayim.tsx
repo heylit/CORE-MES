@@ -22,6 +22,10 @@ const sutunlar: Sutun<Is>[] = [
   { anahtar: 'is', baslik: 'İş emri · OP', mono: true, kirilmaz: true, hucre: (i) => (i.isEmriNo === null ? YOK : <Kirilmaz>{`${i.isEmriNo} · OP ${i.op ?? YOK}`}</Kirilmaz>) },
   { anahtar: 'zaman', baslik: 'Başlangıç – bitiş', kirilmaz: true, hucre: zamanAraligi },
   {
+    anahtar: 'cevrim', baslik: 'Çevrimde parça', hizala: 'sag', kirilmaz: true,
+    hucre: (i) => <span title={i.cevrimdeParcaKaynagi === 'emir' ? 'İş emri adımından' : 'Tezgâh eşlemesinden (iş emri adımı yok)'}>{i.cevrimdeParca} <span className="tc-tzb-alt">{i.cevrimdeParcaKaynagi === 'emir' ? 'emir' : 'tezgâh'}</span></span>,
+  },
+  {
     anahtar: 'tezgah', baslik: 'Tezgâh adedi', hizala: 'sag', kirilmaz: true, kartTamSatir: true,
     hucre: (i) => (
       <>
@@ -84,7 +88,7 @@ function ProgramKullanimi({ m }: { m: Makine }) {
 function MakineSayimi({ m }: { m: Makine }) {
   return (
     <section className="tc-tzb-bolum" aria-label={makineMetni(m.makine, m.cihazAdi)}>
-      <h3 className="tc-tzb-bolum-baslik"><Kirilmaz>{makineMetni(m.makine, m.cihazAdi)}</Kirilmaz><span className="tc-tzb-alt">Çevrimde {m.cevrimdeParca} parça</span></h3>
+      <h3 className="tc-tzb-bolum-baslik"><Kirilmaz>{makineMetni(m.makine, m.cihazAdi)}</Kirilmaz><span className="tc-tzb-alt">Tezgâh ayarı: çevrimde {m.cevrimdeParca} parça</span></h3>
       <Tablo etiket={`${m.cihazAdi} işleri`} sutunlar={sutunlar} satirlar={m.isler} satirAnahtari={(i) => i.baslangic} bosMesaj="Pencerede bu makinede terminalde açılmış iş yok." />
       <ProgramKullanimi m={m} />
     </section>

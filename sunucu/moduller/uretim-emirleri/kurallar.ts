@@ -811,7 +811,7 @@ export type IsEmriAlanlari = {
   opNo: number; operasyonTipiId: number; ad: string; makineId: number | null; kisiId: number | null; fasonFirmaId: number | null;
   istasyonId: number | null; ayarSuresiDk: string | null; birimSureDk: string | null; terminGun: number | null;
   bagimlilik: string; devirAdedi: number | null; firePayiYuzde: string; makineKullanimi: string; enKucukParca: number | null;
-  yenidenAyar: boolean; talimatSurumu: number | null; kontrolTuru?: string; muayeneSuresiSaat?: string | number | null;
+  yenidenAyar: boolean; talimatSurumu: number | null; kontrolTuru?: string; muayeneSuresiSaat?: string | number | null; cevrimdeParca?: number;
 };
 
 // Ondalık sütun metin gelir ("30.00" ile "30" aynıdır); karşılaştırma sayıyla, gösterim kullanıcının yazdığı biçime yakın yapılır.
@@ -835,6 +835,7 @@ export function isEmriFarki(eski: IsEmriAlanlari, yeni: IsEmriAlanlari): string 
   alan('fire payı', !sayiAyni(eski.firePayiYuzde, yeni.firePayiYuzde));
   alan('makine kullanımı', eski.makineKullanimi !== yeni.makineKullanimi || eski.enKucukParca !== yeni.enKucukParca || eski.yenidenAyar !== yeni.yenidenAyar);
   alan('talimat', eski.talimatSurumu !== yeni.talimatSurumu);
+  if ((eski.cevrimdeParca ?? 1) !== (yeni.cevrimdeParca ?? 1)) fark.push(`çevrimde parça ${String(eski.cevrimdeParca ?? 1)} → ${String(yeni.cevrimdeParca ?? 1)}`);
   alan('fason kontrolü', (eski.kontrolTuru ?? 'gkk') !== (yeni.kontrolTuru ?? 'gkk') || !sayiAyni(eski.muayeneSuresiSaat == null ? null : String(eski.muayeneSuresiSaat), yeni.muayeneSuresiSaat == null ? null : String(yeni.muayeneSuresiSaat)));
   return fark.length === 0 ? null : `OP ${yeni.opNo} güncellendi (${fark.join('; ')})`;
 }

@@ -42,6 +42,16 @@ describe('Deneme kuralları (kart 3811, 3811-2)', () => {
       [12, 8, 8, 5, 10, 1, 1, true, 1]);
   });
 
+  test('3814 a: çevrimde parça işin emir adımından gelir; OP adımsız işte tezgâh eşlemesindeki değere düşer', () => {
+    const a = artislar([satir(t('09:30:00'), null, 50), satir(t('09:31:00'), 50, 51), satir(t('09:32:00'), 51, 52), satir(t('10:31:00'), 52, 53)]);
+    const is = (bas: string, bit: string, k: number | null) => ({ bas: t(bas), bit: t(bit), isEmriNo: 'ORN-UE-1', op: '20', parcaNo: 'ORN-P100', ilkParcaOnayi: null, cevrimdeParca: k });
+    const [emirden, tezgahtan, emirdeBir] = isSayimlari([is('09:30:00', '10:00:00', 4), is('10:30:00', '11:00:00', null)], a, [], 2, { bas: t('00:00:00'), bit: t('23:59:59') }, null)
+      .concat(isSayimlari([is('09:30:00', '10:00:00', 1)], a, [], 2, { bas: t('00:00:00'), bit: t('23:59:59') }, null));
+    assert.deepEqual([emirden?.tezgahAdedi, emirden?.cevrimdeParca, emirden?.cevrimdeParcaKaynagi], [8, 4, 'emir']);
+    assert.deepEqual([tezgahtan?.tezgahAdedi, tezgahtan?.cevrimdeParca, tezgahtan?.cevrimdeParcaKaynagi], [2, 2, 'tezgah']);
+    assert.deepEqual([emirdeBir?.tezgahAdedi, emirdeBir?.cevrimdeParcaKaynagi], [2, 'emir'], 'emrin 1 değeri tezgâh ayarını ezer (tek mengeneli iş)');
+  });
+
   test('program eşleşmesi: NC alanı varsa kesin ya da uyuşmuyor; yoksa parça no ve OP ile tahmin, bulunmazsa bilinmiyor', () => {
     const p = ['TNC:\\ORN\\ORN-P100-OP10.H'];
     assert.equal(programEslesmesi(p, 'ORN-P100-OP10.H', 'ORN-P100', '10'), 'kesin');

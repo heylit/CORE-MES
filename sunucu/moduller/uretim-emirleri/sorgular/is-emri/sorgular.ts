@@ -25,6 +25,7 @@ export interface IsEmriSatiri {
   firePayiYuzde: string;
   makineKullanimi: 'tek' | 'paralel';
   enKucukParca: number | null;
+  cevrimdeParca: number;
   yenidenAyar: boolean;
   talimatSurumu: number | null;
   // 3708: fason adımın kontrol türü (rota adımından kopyalanır) ve kaynağında muayene süresi (saat, metin).
@@ -48,7 +49,7 @@ const IS_EMRI = `i.id, i.uretim_emri_id AS "uretimEmriId", i.sira, i.op_no AS "o
   i.makine_id AS "makineId", i.kisi_id AS "kisiId", i.fason_firma_id AS "fasonFirmaId", i.fason_firmasiz AS "fasonFirmasiz", i.istasyon_id AS "istasyonId",
   i.ayar_suresi_dk::text AS "ayarSuresiDk", i.birim_sure_dk::text AS "birimSureDk", i.termin_gun AS "terminGun", i.bagimlilik,
   i.devir_adedi AS "devirAdedi", i.fire_payi_yuzde::text AS "firePayiYuzde", i.makine_kullanimi AS "makineKullanimi",
-  i.en_kucuk_parca AS "enKucukParca", i.yeniden_ayar AS "yenidenAyar", i.talimat_surumu AS "talimatSurumu", i.kontrol_turu AS "kontrolTuru", i.muayene_suresi_saat::text AS "muayeneSuresiSaat", i.tur, i.ek_aciklama AS "ekAciklama", i.durum,
+  i.en_kucuk_parca AS "enKucukParca", i.cevrimde_parca AS "cevrimdeParca", i.yeniden_ayar AS "yenidenAyar", i.talimat_surumu AS "talimatSurumu", i.kontrol_turu AS "kontrolTuru", i.muayene_suresi_saat::text AS "muayeneSuresiSaat", i.tur, i.ek_aciklama AS "ekAciklama", i.durum,
   ${NULLU_ISO('i.baslama')} AS baslama, ${NULLU_ISO('i.bitis')} AS bitis, i.saglam_adet AS "saglamAdet", i.surum, ${DAL_VE_ONCUL}`;
 
 export function isEmirleriGetir(db: Db, emirIdleri: readonly number[]): Promise<IsEmriSatiri[]> {
@@ -166,6 +167,8 @@ export interface IsEmriYazisi {
   firePayiYuzde: string;
   makineKullanimi: 'tek' | 'paralel';
   enKucukParca: number | null;
+  // 3814 a: rota adımından kopyalanır; verilmezse 1 (ek adım, rotasız emir).
+  cevrimdeParca?: number;
   yenidenAyar: boolean;
   talimatSurumu: number | null;
   // 3708: verilmezse GKK (eski çağıran, ek adım).
@@ -189,10 +192,10 @@ export async function isEmriEkle(db: Db, emirId: number, y: IsEmriYazisi): Promi
   const satir = await db.tek<{ id: number }>(
     `INSERT INTO uretim_emirleri_is_emri (uretim_emri_id, sira, op_no, operasyon_tipi_id, ad, makine_id, kisi_id, fason_firma_id, istasyon_id,
        ayar_suresi_dk, birim_sure_dk, termin_gun, bagimlilik, devir_adedi, fire_payi_yuzde, makine_kullanimi, en_kucuk_parca, yeniden_ayar,
-       talimat_surumu, fason_firmasiz, tur, ek_aciklama, dugum, dugum_malzeme_id, kaynak_op_no, birim_carpani, operasyon_id, kontrol_turu, muayene_suresi_saat)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26::numeric, $27, $28, $29) RETURNING id`,
+       talimat_surumu, fason_firmasiz, tur, ek_aciklama, dugum, dugum_malzeme_id, kaynak_op_no, birim_carpani, operasyon_id, kontrol_turu, muayene_suresi_saat, cevrimde_parca)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26::numeric, $27, $28, $29, $30) RETURNING id`,
     [emirId, ...IS_EMRI_DEGERLERI(y), y.tur ?? 'rota', y.ekAciklama ?? null,
-      y.dugum?.ad ?? null, y.dugum?.malzemeNo ?? null, y.dugum?.kaynakOpNo ?? null, y.dugum?.birimCarpani ?? null, y.operasyonId ?? null, y.kontrolTuru ?? 'gkk', y.muayeneSuresiSaat ?? null],
+      y.dugum?.ad ?? null, y.dugum?.malzemeNo ?? null, y.dugum?.kaynakOpNo ?? null, y.dugum?.birimCarpani ?? null, y.operasyonId ?? null, y.kontrolTuru ?? 'gkk', y.muayeneSuresiSaat ?? null, y.cevrimdeParca ?? 1],
   );
   if (satir === null) throw new Error('İş emri eklenemedi.');
   return satir.id;
@@ -236,9 +239,9 @@ export async function bekleyenIsEmriniGuncelle(db: Db, id: number, y: IsEmriYazi
             fason_firma_id = CASE WHEN $20 AND fason_firma_id IS NOT NULL THEN fason_firma_id ELSE $8 END, istasyon_id = $9, ayar_suresi_dk = $10,
             birim_sure_dk = $11, termin_gun = $12, bagimlilik = $13, devir_adedi = $14, fire_payi_yuzde = $15, makine_kullanimi = $16,
             en_kucuk_parca = $17, yeniden_ayar = $18, talimat_surumu = $19, fason_firmasiz = $20 AND fason_firma_id IS NULL,
-            operasyon_id = coalesce($21, operasyon_id), kontrol_turu = $22, muayene_suresi_saat = $23, surum = surum + 1
+            operasyon_id = coalesce($21, operasyon_id), kontrol_turu = $22, muayene_suresi_saat = $23, cevrimde_parca = $24, surum = surum + 1
       WHERE id = $1 AND durum = 'bekliyor'`,
-    [id, ...IS_EMRI_DEGERLERI(y), y.operasyonId ?? null, y.kontrolTuru ?? 'gkk', y.muayeneSuresiSaat ?? null],
+    [id, ...IS_EMRI_DEGERLERI(y), y.operasyonId ?? null, y.kontrolTuru ?? 'gkk', y.muayeneSuresiSaat ?? null, y.cevrimdeParca ?? 1],
   );
   await db.sorgu('DELETE FROM uretim_emirleri_is_emri_adayi WHERE is_emri_id = $1', [id]);
   await db.sorgu('DELETE FROM uretim_emirleri_is_emri_bileseni WHERE is_emri_id = $1', [id]);

@@ -38,6 +38,8 @@ export interface RotaAdimi {
   firePayiYuzde: OndalikMetin;
   makineKullanimi: MakineKullanimi;
   enKucukParca: number | null;
+  // Tezgâhın bir çevrimde işlediği parça (3814 a); birim süre parça başıdır.
+  cevrimdeParca: number;
   yenidenAyar: boolean;
   ilkParca: IlkParcaSecimi;
   kontrolTuru: FasonKontrol;
@@ -112,7 +114,7 @@ function revizyonKur(r: RevizyonSatiri, icerik: Icerik, talimatlar: ReadonlyMap<
       kaynak: a.kaynak === null || a.kaynak.tur === 'fason' ? null : (a.kaynak as Kaynak),
       fason: a.kaynak?.tur === 'fason' ? { firmaId: a.kaynak.id, terminGun: a.terminGun } : null,
       ayarSuresiDk: a.ayarSuresiDk, birimSureDk: a.birimSureDk, bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi, firePayiYuzde: a.firePayiYuzde,
-      makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar, ilkParca: a.ilkParca, kontrolTuru: a.kontrolTuru, muayeneSuresiSaat: a.muayeneSuresiSaat,
+      makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, cevrimdeParca: a.cevrimdeParca, yenidenAyar: a.yenidenAyar, ilkParca: a.ilkParca, kontrolTuru: a.kontrolTuru, muayeneSuresiSaat: a.muayeneSuresiSaat,
       adaylar: (yazim[i]?.adaylar ?? []).map(({ kaynak, ayarSuresiDk, birimSureDk }) => ({ kaynak, ayarSuresiDk, birimSureDk })) as RotaAdimi['adaylar'],
       bilesenler: (yazim[i]?.bilesenler ?? []) as RotaAdimi['bilesenler'],
       yanUrunler: (yazim[i]?.yanUrunler ?? []) as RotaAdimi['yanUrunler'],
@@ -139,6 +141,8 @@ export interface DurumRotaAdimi {
   firePayiYuzde: OndalikMetin;
   makineKullanimi: MakineKullanimi;
   enKucukParca: number | null;
+  // Tezgâhın bir çevrimde işlediği parça (3814 a); birim süre parça başıdır.
+  cevrimdeParca: number;
   yenidenAyar: boolean;
   // Ayar işaretli adımda plan ayarcı arar; ayarSuresiDk hazırlık ile ayarın toplamıdır (1310 a).
   hazirlikDk: OndalikMetin | null;
@@ -191,7 +195,7 @@ export async function durumRevizyonlari(db: Db, malzemeId: number | null = null,
       adimlar: icerik.adimlar.map((a, i) => ({
         opNo: a.opNo, operasyonTipiId: a.operasyonTipiId, ad: a.ad, kaynak: a.kaynak, terminGun: a.terminGun, ayarSuresiDk: a.ayarSuresiDk,
         birimSureDk: a.birimSureDk, islemSuresiDk: a.islemSuresiDk, degisimSuresiDk: a.degisimSuresiDk, bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi,
-        firePayiYuzde: a.firePayiYuzde, makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar, ilkParca: a.ilkParca, kontrolTuru: a.kontrolTuru, muayeneSuresiSaat: a.muayeneSuresiSaat,
+        firePayiYuzde: a.firePayiYuzde, makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, cevrimdeParca: a.cevrimdeParca, yenidenAyar: a.yenidenAyar, ilkParca: a.ilkParca, kontrolTuru: a.kontrolTuru, muayeneSuresiSaat: a.muayeneSuresiSaat,
         adaylar: icerik.adaylar.filter((x) => x.adimId === a.id)
           .map(({ kaynak, ayarSuresiDk, birimSureDk, islemSuresiDk, degisimSuresiDk }) => ({ kaynak, ayarSuresiDk, birimSureDk, islemSuresiDk, degisimSuresiDk })),
         bilesenler: icerik.bilesenler.filter((x) => x.adimId === a.id).map(({ malzemeId, miktar, fireYuzde }) => ({ malzemeId, miktar, fireYuzde })),

@@ -310,8 +310,12 @@ export async function makineKullanimAraliklari(
 }
 
 // Makine başına kullanımlar iş bilgisiyle, başlama sırasıyla (3811 tezgâh denemesi, salt okuma): bitiş açık kullanımda null, OP
-// adımsız kullanımda null, ilk parça onayı adımın ilk sağlam sayımıdır (yoksa null). Penceresinde kullanımı olmayan makine haritada yoktur.
-export interface MakineIsAraligi { baslangic: string; bitis: string | null; isEmriId: number | null; isEmriNo: string; op: number | null; parcaNo: string; ilkParcaOnayi: string | null }
+// adımsız kullanımda null, ilk parça onayı adımın ilk sağlam sayımıdır (yoksa null). Çevrimde parça iş emri adımınındır (3814 a); OP adımsız
+// kullanımda null. Penceresinde kullanımı olmayan makine haritada yoktur.
+export interface MakineIsAraligi {
+  baslangic: string; bitis: string | null; isEmriId: number | null; isEmriNo: string; op: number | null; parcaNo: string; ilkParcaOnayi: string | null;
+  cevrimdeParca: number | null;
+}
 export async function makineIsAraliklari(
   db: Db, makineIdleri: readonly number[], baslangic: string, bitis: string,
 ): Promise<Map<number, MakineIsAraligi[]>> {

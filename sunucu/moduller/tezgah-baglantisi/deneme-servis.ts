@@ -115,7 +115,7 @@ async function baglamKur(db: Db, ad: DenemePenceresi, simdi: number): Promise<Ba
     const id = c.makine?.id;
     baglam.isler.set(c.cihazAdi, id === undefined ? [] : (isMap.get(id) ?? []).map((i) => ({
       bas: ms(i.baslangic), bit: i.bitis === null ? null : ms(i.bitis), isEmriNo: i.isEmriNo, op: i.op === null ? null : String(i.op), parcaNo: i.parcaNo,
-      ilkParcaOnayi: i.ilkParcaOnayi === null ? null : ms(i.ilkParcaOnayi),
+      ilkParcaOnayi: i.ilkParcaOnayi === null ? null : ms(i.ilkParcaOnayi), cevrimdeParca: i.cevrimdeParca,
     })));
     baglam.sayimlar.set(c.cihazAdi, id === undefined ? [] : (sayimMap.get(id) ?? []).map(({ zaman, ...x }) => ({ zaman: ms(zaman), ...x })));
     baglam.artis.set(c.cihazAdi, artislar(artisSatirlari.filter((a) => a.cihazAdi === c.cihazAdi).map((a) => ({ ...a, zaman: ms(a.zaman) }))));
@@ -135,7 +135,7 @@ const isSayimiOku = (b: Baglam, c: Cihaz): IsSayimi[] =>
 
 export async function sayim(db: Db, ad: DenemePenceresi, simdi = Date.now()): Promise<TezgahSayimCevabi> {
   const b = await baglamKur(db, ad, simdi);
-  const eksikler = [NC_ALANI_YOK, 'Rota adımında çevrimde parça alanı yok: makine eşlemesindeki çevrimde parça kullanılır.'];
+  const eksikler = [NC_ALANI_YOK];
   if (b.cihazlar.some((c) => c.makine === null)) eksikler.push('Eşlenmemiş tezgâhın işleri okunmaz: önce Makine eşleme.');
   return {
     pencere: b.pencere, eksikler,
@@ -217,7 +217,7 @@ export async function oee(db: Db, kullanici: Kullanici, ad: DenemePenceresi, sim
     const calismaSaniye = plan === null ? Math.round(sure(calisma) / 1000) : Math.round(sure(calisma.flatMap((p) => kes(plan, p))) / 1000);
     const isler = isSayimiOku(b, c);
     const sayimlar = b.sayimlar.get(c.cihazAdi) ?? [];
-    let standart = 0, standartli = false, adet = 0;
+    let standart = 0, standartCevrimToplami = 0, standartli = false, adet = 0;
     const isAraliklari = b.isler.get(c.cihazAdi) ?? [];
     isler.forEach((x, n) => {
       const ia = isAraliklari[n]!;
@@ -227,6 +227,7 @@ export async function oee(db: Db, kullanici: Kullanici, ad: DenemePenceresi, sim
       const stdSn = ss.reduce((t, y) => t + y.standartSaniye, 0);
       if (sureli > 0 && x.tezgahAdedi !== null) {
         standart += (stdSn / sureli) * x.tezgahAdedi;
+        standartCevrimToplami += (stdSn / sureli) * x.cevrimdeParca * x.tezgahAdedi;
         adet += x.tezgahAdedi;
         standartli = true;
       }
@@ -236,7 +237,7 @@ export async function oee(db: Db, kullanici: Kullanici, ad: DenemePenceresi, sim
     const performans = standartli ? bolum(standart, calismaSaniye) : null;
     const kalite = bolum(saglam, toplam);
     const gercek = gercekCevrim(b.artis.get(c.cihazAdi) ?? []);
-    const standartCevrim = standartli && adet > 0 ? (standart / adet) * c.cevrimdeParca : null;
+    const standartCevrim = standartli && adet > 0 ? standartCevrimToplami / adet : null;
     let hiz: number | null = null;
     if (gecmisBasi < b.aralik.bit) {
       const kimlikler = (await s.tanimlariGetir(db, c.cihazAdi)).filter((t) => t.tur === 'PathFeedrateOverride' && (t.altTur === null || t.altTur === 'PROGRAMMED')).map((t) => t.kimlik);

@@ -2446,4 +2446,33 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     const g = await vt().tx((db) => db.tek<{ g: string | null }>('SELECT eski_revizyon_gerekcesi AS g FROM uretim_emri WHERE id = $1', [k.uretimEmriId]));
     assert.equal(g?.g, 'Müşteri R01 istedi');
   });
+
+  test('3814 a: çevrimde parça adımda saklanır, göndermeyen kayıt korur, sınır dışı reddedilir; birim süre parça başı kalır ve emre kopyalanır', async () => {
+    const urun = await mamulAc();
+    const ac = await taslakAc(urun);
+    assert.equal(ac.statusCode, 200, ac.body);
+    const { id } = ac.json<KomutCevabi>();
+    const k1 = await kaydet(id, 1, [yeniAdim({ cevrimdeParca: 4, birimSureDk: 5.5 }), yeniAdim()]);
+    assert.equal(k1.statusCode, 200, k1.body);
+    const a1 = await ayrinti(id);
+    assert.deepEqual(a1.adimlar.map((a) => [a.cevrimdeParca, a.birimSureDk === null ? null : Number(a.birimSureDk)]), [[4, 5.5], [1, 2]], 'yeni adım 1; birim süre bölünmez');
+    // Alanı bilmeyen görünüm (gövdede yok) kayıtlı değeri silmez.
+    const k2 = await kaydet(id, k1.json<KomutCevabi>().surum, a1.adimlar.map(govdeye));
+    assert.equal(k2.statusCode, 200, k2.body);
+    assert.deepEqual((await ayrinti(id)).adimlar.map((a) => a.cevrimdeParca), [4, 1]);
+    for (const v of [0, 1001, 1.5]) {
+      const r = await kaydet(id, k2.json<KomutCevabi>().surum, [yeniAdim({ cevrimdeParca: v })]);
+      assert.equal(r.statusCode, 400, `${String(v)}: ${r.body}`);
+    }
+    await assert.rejects(vt().tx((db) => db.sorgu('UPDATE rota_adimi SET cevrimde_parca = 0 WHERE revizyon_id = $1', [id])), /rota_adimi_cevrimde_parca/);
+    const g = await komut(id, 'onaya-gonder', { surum: k2.json<KomutCevabi>().surum }, c.planlama);
+    assert.equal(g.statusCode, 200, g.body);
+    const o = await komut(id, 'onayla', { surum: g.json<KomutCevabi>().surum, yururlugeAl: true }, c.mudur);
+    assert.equal(o.statusCode, 200, o.body);
+    const e = await tamam<{ uretimEmriId: number }>(c.planlama, 'POST', `/rota/revizyonlar/${id}/emre-kopyala`, { projeId: denemeProjeId, adet: 10, teslim: null, taslak: true });
+    const isler = await vt().tx((db) => db.sorgu<{ k: number; birim: string }>(
+      'SELECT cevrimde_parca AS k, birim_sure_dk::text AS birim FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 ORDER BY sira', [e.uretimEmriId]));
+    assert.deepEqual(isler.map((x) => [x.k, Number(x.birim)]), [[4, 5.5], [1, 2]]);
+    await assert.rejects(vt().tx((db) => db.sorgu('UPDATE uretim_emirleri_is_emri SET cevrimde_parca = 1001 WHERE uretim_emri_id = $1', [e.uretimEmriId])), /uretim_emirleri_is_emri_cevrimde_parca/);
+  });
 });

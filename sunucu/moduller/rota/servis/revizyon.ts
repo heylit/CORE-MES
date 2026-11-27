@@ -22,7 +22,8 @@ function farkAdimlari(ayrinti: RevizyonAyrintisi['adimlar'], kimlikler: Readonly
   return ayrinti.map((a) => ({
     opNo: a.opNo, ...(kimlikler.has(a.opNo) ? { kimlik: kimlikler.get(a.opNo) } : {}), sira: a.sira, ad: a.ad, operasyonTipi: a.operasyonTipi.ad, kaynak: a.kaynak === null ? null : a.kaynak.id === null ? 'Fason, firma seçilmedi' : (a.kaynak.kod ?? a.kaynak.ad),
     ayarSuresiDk: a.ayarSuresiDk, birimSureDk: a.birimSureDk, islemSuresiDk: a.islemSuresiDk, degisimSuresiDk: a.degisimSuresiDk,
-    terminGun: a.terminGun, bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi, firePayiYuzde: a.firePayiYuzde, bilesenler: a.bilesenler.map((b) => ({ ad: b.malzeme.stokKodu ?? b.malzeme.ad, miktar: b.miktar })),
+    terminGun: a.terminGun, bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi, firePayiYuzde: a.firePayiYuzde, cevrimdeParca: a.cevrimdeParca,
+    bilesenler: a.bilesenler.map((b) => ({ ad: b.malzeme.stokKodu ?? b.malzeme.ad, miktar: b.miktar })),
   }));
 }
 
@@ -269,7 +270,9 @@ export async function kaydet(db: Db, kullanici: Kullanici, id: number, govde: Ka
       ?? (eski === undefined ? [] : (mevcut.ekipman ?? []).filter((x) => x.adimId === eski.id).map(({ tur, malzemeId, aletTuruId, aciklama, adet, asama }) => ({ tur, malzemeId, aletTuruId, aciklama, adet, asama })));
     // Çıktıyı göndermeyen (alanı bilmeyen) ekran adımın kayıtlı çıktı kartını silmesin (3320 a).
     const ciktiMalzemeId = a.ciktiMalzemeId === undefined ? eski?.ciktiMalzemeId ?? null : a.ciktiMalzemeId;
-    return { ...a, dal, birlesen: a.birlesen ?? eski?.birlesen ?? [], adetCarpani: carpan === 1 ? null : carpan, ekipman, ciktiMalzemeId };
+    // Çevrimde parçayı göndermeyen (alanı bilmeyen) ekran kayıtlı değeri korur; yeni adım 1 başlar (3814 a).
+    const cevrimdeParca = a.cevrimdeParca ?? eski?.cevrimdeParca ?? 1;
+    return { ...a, dal, birlesen: a.birlesen ?? eski?.birlesen ?? [], adetCarpani: carpan === 1 ? null : carpan, ekipman, ciktiMalzemeId, cevrimdeParca };
   });
   const carpanHatasi = dalli.findIndex((a) => a.dal === null && a.adetCarpani !== null);
   if (carpanHatasi >= 0) throw dogrulama('Adet çarpanı yalnız dal adımında girilir; ana hat bir mamul içindir.', `adimlar.${carpanHatasi}.adetCarpani`);

@@ -95,6 +95,7 @@ function adim(a: Nesne): Nesne {
     ...(a['dal'] === undefined ? {} : { dal: a['dal'] === null ? null : dal(a['dal'], 'dal') }),
     ...(a['birlesen'] === undefined ? {} : { birlesen: dallar(a['birlesen']) }),
     ...(a['adetCarpani'] === undefined ? {} : { adetCarpani: tamSayiVeyaBos(a['adetCarpani'], 'adet çarpanı') }),
+    ...(a['cevrimdeParca'] === undefined ? {} : { cevrimdeParca: tamSayi(a['cevrimdeParca'], 'çevrimde parça') }),
     ...(a['ciktiMalzemeId'] === undefined ? {} : { ciktiMalzemeId: tamSayiVeyaBos(a['ciktiMalzemeId'], 'adım çıktısı') }),
     // Hazırlık bölümü (1310 a); bölümü taşımayan adımda alanlar gönderilmez, sunucu toplamdan kurar.
     ...(a['ayar'] === undefined ? {} : {
