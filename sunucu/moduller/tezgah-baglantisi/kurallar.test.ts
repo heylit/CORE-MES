@@ -279,6 +279,11 @@ describe('Heidenhain takım tablosu çözümü (kart 3790)', () => {
     ]);
   });
 
+  test('integer sütuna sığmayan ya da eksi takım numarası atlanır (yazımı düşürmez)', () => {
+    const metin = ['BEGIN TOOL.T MM', 'T            NAME   L', '3000000000   ORN-A  +1', '-1           ORN-B  +1', '2147483647   ORN-C  +1', '[END]'].join('\n');
+    assert.deepEqual(takimTablosunuCoz(metin)?.map((t) => t.no), [2147483647]);
+  });
+
   test('başlık ya da T sütunu yoksa null', () => {
     assert.equal(takimTablosunuCoz('T NAME\n1 A\n[END]'), null);
     assert.equal(takimTablosunuCoz('BEGIN TOOL.T MM\nNAME L\nA 1\n[END]'), null);
@@ -287,8 +292,8 @@ describe('Heidenhain takım tablosu çözümü (kart 3790)', () => {
   test('geçmiş yalnız ömür, kullanılan süre ya da kilit değişen var olan takım için; ilk okumada boş', () => {
     const a = { no: 1, ad: 'ORN', boy: 1, yaricap: 1, omur: 10, kullanilan: 1, kilitli: false };
     const onceki = new Map([[1, a], [2, { ...a, no: 2 }], [3, { ...a, no: 3 }]]);
-    const yeni = [{ ...a, ad: 'ORN-B', boy: 2 }, { ...a, no: 2, kilitli: true }, { ...a, no: 3, kullanilan: 2 }, { ...a, no: 9 }];
-    assert.deepEqual(takimDegisenleri(onceki, yeni).map((t) => t.no), [2, 3]);
+    const yeni = [{ ...a, ad: 'ORN-B', boy: 2 }, { ...a, no: 2, kilitli: true }, { ...a, no: 3, omur: 5 }, { ...a, no: 4, kullanilan: 2 }, { ...a, no: 9 }];
+    assert.deepEqual(takimDegisenleri(onceki, yeni).map((t) => t.no), [2, 3], 'kullanılan süre tek başına geçmiş yazmaz');
     assert.deepEqual(takimDegisenleri(null, yeni), []);
   });
 });

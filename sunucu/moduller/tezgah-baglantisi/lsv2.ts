@@ -13,6 +13,8 @@ export const AZAMI_CERCEVE = 64 * 1024;
 export const AZAMI_HATA_ILETISI = 16;
 // Takım tablosu aktarımının üst sınırı: aşılırsa aktarım kesilemediği için bağlantı kapatılır.
 export const AZAMI_DOSYA = 2 * 1024 * 1024;
+// Boş bloklar toplamı büyütmez; hatalı kumanda aktarımı bitirmezse blok sayısı da sınırlanır.
+export const AZAMI_BLOK = 4096;
 
 // T_OK yalnız süren bir dosya aktarımında "sonraki bloğu gönder" onayıdır (yüksüz); kumandada bir şey değiştirmez.
 export const IZINLI_KOMUTLAR = ['A_LG', 'A_LO', 'R_VR', 'R_PR', 'R_RI', 'R_MB', 'R_FL', 'T_OK'] as const;
@@ -480,7 +482,7 @@ export function lsv2IstemcisiKur(adres: string, sayac: number | null, secenek: L
       let c = await iste(h, 'R_FL', dosyaYuku(TAKIM_TABLOSU));
       while (c.kod === 'S_FL') {
         toplam += c.icerik.length;
-        if (toplam > AZAMI_DOSYA) {
+        if (toplam > AZAMI_DOSYA || bloklar.length >= AZAMI_BLOK) {
           h.kapat();
           throw new Lsv2BaglantiHatasi('bozuk', 'Takım tablosu beklenenden büyük; aktarım kesildi, bağlantı kapatıldı.');
         }

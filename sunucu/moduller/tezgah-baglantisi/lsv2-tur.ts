@@ -127,6 +127,9 @@ async function makineyiOku(vt: Pick<Veritabani, 'tx'>, o: Lsv2TurOrtami, m: Lsv2
   const mb = makineBellegi(b, m.cihazAdi);
   mb.calisiyor = true;
   mb.sonKontrol = o.saat().getTime();
+  // Seyrek okuma denemesi sonucu ne olursa olsun aralığı başlatır: tablo okunamayıp bağlantı düşse de sonraki normal turlar FILE'a
+  // girmez, canlı okuma sürer.
+  if (secenek.takimTablosu === true) mb.sonSeyrek = mb.sonKontrol;
   try {
     let kayit = b.istemciler.get(m.cihazAdi);
     if (kayit === undefined) {
@@ -136,13 +139,12 @@ async function makineyiOku(vt: Pick<Veritabani, 'tx'>, o: Lsv2TurOrtami, m: Lsv2
     const istemci = kayit.istemci;
     const r = await istemci.oku(secenek);
     const zaman = o.saat();
-    const sonuc = await vt.tx((db) => isle(db, m.cihazAdi, mb, r, zaman));
+    const sonuc = await vt.tx((db) => isle(db, m.cihazAdi, mb, r, zaman, secenek.takimTablosu === true));
     // Bellek yalnız işlem kesinleşince değişir.
     mb.durum = sonuc.durum;
     mb.suzgec = sonuc.suzgec;
     if (r.tur === 'basarili') {
       mb.tanimImzasi = lsv2TanimImzasi(r.okuma);
-      if (r.okuma.takimTablosu !== undefined) mb.sonSeyrek = zaman.getTime();
     }
     o.ortak.sayac = sayaciArttir(o.ortak.sayac, zaman.getTime(), sonuc.yazilan, sonuc.atlanan);
     if (o.ortak.satirSayisi !== null) o.ortak.satirSayisi += sonuc.eklenen;
@@ -160,10 +162,11 @@ async function makineyiOku(vt: Pick<Veritabani, 'tx'>, o: Lsv2TurOrtami, m: Lsv2
   }
 }
 
-async function isle(db: Db, cihazAdi: string, mb: Lsv2MakineBellegi, r: Lsv2Sonucu, zaman: Date) {
+async function isle(db: Db, cihazAdi: string, mb: Lsv2MakineBellegi, r: Lsv2Sonucu, zaman: Date, seyrekIstendi: boolean) {
   const okundu = r.tur === 'basarili';
   if (okundu && mb.tanimImzasi !== lsv2TanimImzasi(r.okuma)) await s.tanimlariYaz(db, [{ cihazAdi, alanlar: lsv2AlanTanimlari(r.okuma) }]);
   if (okundu && r.okuma.takimTablosu !== undefined) await takimTablosunuIsle(db, cihazAdi, r.okuma, zaman);
+  if (!okundu && seyrekIstendi) await s.lsv2SeyrekYaz(db, cihazAdi, zaman, `Takım tablosu okunamadı: ${r.ileti}`);
   const kayitli = await s.ogeleriGetir(db, cihazAdi);
   const onceki = mb.durum ?? diziyiDurumaCevir(kayitli ?? []);
   const yeni = lsv2Ogeleri(okundu ? r.okuma : null, zaman);

@@ -248,8 +248,8 @@ describe('Heidenhain (LSV2) okuma turu (gerçek PostgreSQL)', () => {
     const sayi = async (tablo: string) => (await vt().tek<{ n: number }>(`SELECT count(*)::int AS n FROM ${tablo}`))?.n;
     assert.equal(await sayi('tezgah_lsv2_takim'), 3);
     assert.equal(await sayi('tezgah_lsv2_takim_gecmisi'), 0, 'ilk okuma başlangıç durumudur');
-    // Ad ve boy değişikliği geçmişe yazılmaz; kullanılan süre (1), kilit (2) değişikliği yazılır; yeni takım (4) yazılmaz.
-    sahte.makine.takimTablosu = tablo(['1    ORN-FREZE-10B    +75.4      +5            60    20', '2    ORN-MATKAP-8     +90        +4            30    30', '3    ORN-KILAVUZ      +61        +3            0     0', '4    ORN-YENI         +10        +1            0     0']);
+    // Ad, boy ve tek başına kullanılan süre (3) geçmişe yazılmaz; ömür (1), kilit (2) değişikliği yazılır; yeni takım (4) yazılmaz.
+    sahte.makine.takimTablosu = tablo(['1    ORN-FREZE-10B    +75.4      +5            45    20', '2    ORN-MATKAP-8     +90        +4            30    30', '3    ORN-KILAVUZ      +61        +3            0     5', '4    ORN-YENI         +10        +1            0     0']);
     simdi += 60_000;
     await tur(m);
     assert.equal(rfl(), 1, 'aralık (10 dk) dolmadan yeniden okunmaz');
@@ -262,13 +262,33 @@ describe('Heidenhain (LSV2) okuma turu (gerçek PostgreSQL)', () => {
     assert.equal(c.statusCode, 200, c.body);
     const tt = tezgahTakimTablosuCevabi.parse(c.json());
     assert.deepEqual([tt.seyrekAcik, tt.tani, tt.gecmisSayisi, tt.takimlar.length], [true, null, 2, 4]);
-    assert.deepEqual(tt.takimlar[0], { no: 1, ad: 'ORN-FREZE-10B', boy: 75.4, yaricap: 5, omur: 60, kullanilan: 20, kilitli: false });
+    assert.deepEqual(tt.takimlar[0], { no: 1, ad: 'ORN-FREZE-10B', boy: 75.4, yaricap: 5, omur: 45, kullanilan: 20, kilitli: false });
     // Okunamayınca son durum korunur, neden kumanda koduyla yazılır.
     sahte.makine.takimTablosu = undefined;
     simdi += 10 * 60_000;
     await tur(m);
     const t2 = tezgahTakimTablosuCevabi.parse((await app.inject({ method: 'GET', url: '/api/tezgah-baglantisi/tezgahlar/ORN-H01/takim-tablosu', headers: { cookie: yonetici } })).json());
     assert.deepEqual([t2.tani, t2.takimlar.length], ['Takım tablosu: kumanda kodu 32', 4]);
+    await ayar('tezgah-baglantisi.lsv2-seyrek-okuma', false);
+  });
+
+  test('takım tablosu 2 MB\'ı aşarsa bağlantı kapanır, neden yazılır; sonraki normal tur FILE\'a girmez ve canlı okuma yazılır', async () => {
+    await ayar('tezgah-baglantisi.lsv2-okuma', true);
+    await ayar('tezgah-baglantisi.lsv2-seyrek-okuma', true);
+    sahte.makine.blokBoyu = 65_536;
+    sahte.makine.takimTablosu = `BEGIN TOOL.T MM\n${'A'.repeat(2 * 1024 * 1024 + 10)}`;
+    const m = [makine('ORN-H01', sahte.kapi)];
+    await tur(m);
+    const fileGirisi = () => sahte.gelenler.filter((g) => g.komut === 'A_LG' && g.yuk.toString('latin1') === 'FILE\0').length;
+    assert.equal(fileGirisi(), 1);
+    const t = tezgahTakimTablosuCevabi.parse((await app.inject({ method: 'GET', url: '/api/tezgah-baglantisi/tezgahlar/ORN-H01/takim-tablosu', headers: { cookie: yonetici } })).json());
+    assert.match(t.tani ?? '', /^Takım tablosu okunamadı: Takım tablosu beklenenden büyük/);
+    simdi += 60_000;
+    sahte.makine.tumce = 77;
+    assert.deepEqual(await tur(m), { tur: 'okundu', makine: 1 });
+    assert.equal(fileGirisi(), 1, 'aralık dolmadan FILE\'a yeniden girilmez');
+    const a = tezgahAyrintisiCevabi.parse(await vt().tx((db) => ayrinti(db, 'ORN-H01', new Date(simdi))));
+    assert.equal(a.alanlar.find((x) => x.tur === 'BlockNumber')?.deger, '77');
     await ayar('tezgah-baglantisi.lsv2-seyrek-okuma', false);
   });
 });

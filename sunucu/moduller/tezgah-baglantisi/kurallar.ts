@@ -715,6 +715,8 @@ export const LSV2_SEYREK_ARALIK_AYARI = 'tezgah-baglantisi.lsv2-seyrek-aralik-dk
 export const VARSAYILAN_SEYREK_ARALIK_DK = 10;
 export const EN_AZ_SEYREK_ARALIK_DK = 2;
 export const AZAMI_TAKIM_SATIRI = 5_000;
+// takim_no sütunu integer'dır; aralık dışı numara satırı yazımı düşürmesin diye çözümde atlanır.
+export const AZAMI_TAKIM_NO = 2_147_483_647;
 export const seyrekAralikMs = (dk: number | null): number => Math.max(EN_AZ_SEYREK_ARALIK_DK, dk ?? VARSAYILAN_SEYREK_ARALIK_DK) * 60_000;
 
 const sayiMi = (s: string | undefined): number | null => {
@@ -752,7 +754,7 @@ export function takimTablosunuCoz(metin: string): Lsv2TakimSatiri[] | null {
   for (const satir of satirlar.slice(i + 1)) {
     if (satir.startsWith('[END]') || sonuc.length >= AZAMI_TAKIM_SATIRI) break;
     const no = sayiMi(hucre(satir, tNo));
-    if (no === null || !Number.isInteger(no)) continue;
+    if (no === null || !Number.isInteger(no) || no < 0 || no > AZAMI_TAKIM_NO) continue;
     const k = hucre(satir, kilit);
     sonuc.push({
       no, ad: ad === undefined ? null : bos(hucre(satir, ad) ?? null), boy: sayiMi(hucre(satir, boy)), yaricap: sayiMi(hucre(satir, yaricap)),
@@ -764,11 +766,12 @@ export function takimTablosunuCoz(metin: string): Lsv2TakimSatiri[] | null {
 
 // Geçmişe yalnız ömür (ömür sınırı ya da kullanılan süre) ya da kilit değişen takım yazılır. İlk okumada ve yeni görülen takımda
 // geçmiş satırı yazılmaz: değişiklik değil, başlangıç durumudur.
+// Kullanılan süre her kesimde artar; geçmişe yazılsa her seyrek okumada satır olurdu. Son durumda zaten vardır.
 export function takimDegisenleri(onceki: ReadonlyMap<number, Lsv2TakimSatiri> | null, yeni: readonly Lsv2TakimSatiri[]): Lsv2TakimSatiri[] {
   if (onceki === null) return [];
   return yeni.filter((t) => {
     const e = onceki.get(t.no);
-    return e !== undefined && (e.omur !== t.omur || e.kullanilan !== t.kullanilan || e.kilitli !== t.kilitli);
+    return e !== undefined && (e.omur !== t.omur || e.kilitli !== t.kilitli);
   });
 }
 
