@@ -36,9 +36,9 @@ export function BitenSepet({ istasyon, emirId }: { istasyon: string; emirId: num
 // 3742: sayacın iki yanında ikinci tüp ve küçük teslim düğmesi. Solda "Gelen" (önceki istasyondan alınabilecek adet) ve Teslim al,
 // sağda "Teslim" (burada üretilmiş, sonraki istasyona verilebilecek adet) ve Teslim et. Düğme sepet penceresini açar; komutlar
 // sepet satırlarınındır (Sepete at, Teslim al, rotaya göre gönder), yeni komut yoktur. Okunamazsa tüp boş kalır, sıfır yazılmaz.
-export function SepetTupu({ istasyon, emirId, yon, hedef }: { istasyon: string; emirId: number | null; yon: 'gelen' | 'cikan'; hedef: number }) {
+export function SepetTupu({ istasyon, emirId, urunKodu, yon, hedef }: { istasyon: string; emirId: number | null; urunKodu: string | null; yon: 'gelen' | 'cikan'; hedef: number }) {
   const { istasyonId } = useIsMalzemeDurumu(istasyon, emirId);
-  const s = useIstasyonSepetiSayilari(istasyonId, emirId);
+  const s = useIstasyonSepetiSayilari(istasyonId, emirId, urunKodu);
   const [acik, setAcik] = useState(false);
   const adet = s === null ? null : yon === 'gelen' ? s.gelenAdet : s.cikanAdet;
   const ad = yon === 'gelen' ? 'Gelen' : 'Teslim';
