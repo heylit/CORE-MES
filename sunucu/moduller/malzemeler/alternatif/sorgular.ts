@@ -1,4 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
+import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { DurumMuadili, KaliteMuadili, KapsamTuru, KullanimYeri, MuadilTuru, SetKipi, SetNiteligi, SinirDegeri, SinirNiteligi } from '#paylasilan/sozlesme/malzeme-alternatifleri.ts';
 import type { PayTuru } from '#paylasilan/sozlesme/stok-kontrol-sabitleri.ts';
@@ -168,7 +169,7 @@ export function sinirGetir(db: Db, id: number): Promise<{ id: number } | null> {
 
 // 3463: eşdeğer kartlar. Grup, ilk bağlanan kartın numarasıdır.
 // Bağlama ve çıkarma sırayla yürür: grubu kuran çıkarken grup numarası değişir, eş zamanlı bağlama eski numaraya yazıp grubu bölmesin.
-export const esdegerKilidi = (db: Db): Promise<unknown> => db.sorgu("SELECT pg_advisory_xact_lock(hashtext('malzeme_esdeger_bagi'))");
+export const esdegerKilidi = (db: Db): Promise<void> => islemKilidiAl(db, 'malzeme_esdeger_bagi');
 export async function esdegerGrubu(db: Db, no: number, kilitle = false): Promise<number | null> {
   const r = await db.tek<{ grup: number }>(`SELECT grup FROM malzeme_esdeger_bagi WHERE kart_no = $1${kilitle ? ' FOR UPDATE' : ''}`, [no]);
   return r?.grup ?? null;
@@ -215,8 +216,7 @@ export function esdegerKarti(db: Db, no: number): Promise<{ no: number; tur: str
 }
 
 // 3572 a: alternatif setleri ve seçili kartlar. Aynı ana kartın yazımları sırayla yürür (sıra ve uyan sayısı tutarlı kalsın).
-export const anaKilidi = (db: Db, anaNo: number): Promise<unknown> =>
-  db.sorgu("SELECT pg_advisory_xact_lock(hashtext('malzeme_alternatif_seti'), $1)", [anaNo]);
+export const anaKilidi = (db: Db, anaNo: number): Promise<void> => islemKilidiAl(db, 'malzeme_alternatif_seti', anaNo);
 
 export interface SetKaydi {
   id: number; anaNo: number; ad: string; tur: MuadilTuru; sira: number; kullanimYerleri: KullanimYeri[]; notu: string | null; uyanSayi: number;

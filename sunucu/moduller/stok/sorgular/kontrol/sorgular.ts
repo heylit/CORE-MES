@@ -1,4 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
+import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { ArtikDurumu } from '#paylasilan/sozlesme/stok-kontrol.ts';
 import { KULLANILABILIR_SQL } from '../ortak/sorgular.ts';
@@ -48,7 +49,7 @@ export const acikAyirmaKaynaklari = async (db: Db): Promise<AyirmaKaynagiHam[]> 
   (await db.sorgu<{ k: AyirmaKaynagiHam }>(
     `SELECT k FROM stok_ayirma_istegi i, jsonb_array_elements(i.kaynaklar) k WHERE i.durum IN ('bekliyor', 'ayrildi')`)).map((r) => r.k);
 // Aynı stok iki isteğe ayrılmasın: istek açma sırayla yürür (kısa, seyrek komut).
-export const ayirmaKilidi = (db: Db): Promise<unknown> => db.sorgu("SELECT pg_advisory_xact_lock(hashtext('stok_ayirma_istegi'))");
+export const ayirmaKilidi = (db: Db): Promise<void> => islemKilidiAl(db, 'stok_ayirma_istegi');
 export const ayirmaIstegiEkle = (db: Db, a: {
   talepId: string; kalemId: string; talepNo: string; kalemAd: string; malzemeId: number; miktar: string; birim: string; uretimEmriId: number | null;
   kaynaklar: AyirmaKaynagiHam[]; kalemSatiri: unknown; kisiId: number;

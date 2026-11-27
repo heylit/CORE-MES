@@ -1,4 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
+import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import { siralamaSql } from '#cekirdek/liste.ts';
 import type { Dilim, SiralamaIstegi, SiralamaTanimi } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
@@ -927,7 +928,7 @@ export function hazirlikGerekmezleri(db: Db, emirIdleri: readonly number[]): Pro
 }
 // Aynı (emir, madde) için işaret ve kaldırma sıralı yazılır: kilit iki eşzamanlı yazmanın arka arkaya çift satır bırakmasını önler.
 export async function hazirlikGerekmezKilitle(db: Db, emriId: number, madde: string): Promise<void> {
-  await db.sorgu('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`projeler.hazirlik-gerekmez:${String(emriId)}:${madde}`]);
+  await islemKilidiAl(db, `projeler.hazirlik-gerekmez:${madde}`, emriId);
 }
 export async function hazirlikGerekmezYaz(db: Db, emriId: number, madde: string, olay: 'isaretle' | 'kaldir', kisiId: number, gerekce: string | null): Promise<void> {
   await db.sorgu('INSERT INTO projeler_hazirlik_gerekmez (emri_id, madde, olay, kisi_id, gerekce) VALUES ($1, $2, $3, $4, $5)', [emriId, madde, olay, kisiId, gerekce]);
