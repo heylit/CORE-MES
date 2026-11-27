@@ -39,7 +39,7 @@ export const TEZGAH_BAGLANTISI_AYARLARI = {
     tur: 'boolean',
     varsayilan: false,
     baslik: 'Heidenhain okuması',
-    aciklama: 'Açıkken Heidenhain kontrollü tezgâhlar LSV2 ile (TCP 19000) okuma aralığında, yalnız okunarak sorgulanır: durum, program, takım, oranlar, alarm ve ayarda adresi verilmişse parça sayacı. Makineye komut, dosya ya da PLC yazması gitmez; parola gönderilmez. Makine bağlantıyı reddederse (kapalı ya da SmartES tutuyor) zorlanmaz, sonra yeniden denenir. "Heidenhain makineleri" listesi boşsa açık olsa da bağlantı açılmaz.',
+    aciklama: 'Açıkken Heidenhain kontrollü tezgâhlar LSV2 ile (TCP 19000) okuma aralığında, yalnız okunarak sorgulanır: durum, program ve tümce numarası, oranlar, alarm, iş milindeki takım, eksen konumları, kumanda sürümü ve ayarda adresi verilmişse parça sayacı. Makineye komut, dosya ya da PLC yazması gitmez; parola gönderilmez. Makine bağlantıyı reddederse (kapalı ya da SmartES tutuyor) zorlanmaz, sonra yeniden denenir. "Heidenhain makineleri" listesi boşsa açık olsa da bağlantı açılmaz.',
   },
   // Kart 3753 (kullanıcı kararı: PLCDEBUG, koşullu): sayaç için kumandaya PLCDEBUG girişi yapılır; bu düzey PLC yazmayı da açar.
   'tezgah-baglantisi.lsv2-plc-sayaci': {
@@ -59,5 +59,23 @@ export const TEZGAH_BAGLANTISI_AYARLARI = {
     bicim: 'lsv2-makineleri',
     baslik: 'Heidenhain makineleri',
     aciklama: 'Makine kodu SmartES\'tekiyle aynı olmalı. Yalnız kurum içi IP; kapı her zaman 19000. Sayaç adresi isteğe bağlı (D ve 4\'ün katı). Kaydedince sonraki okumada geçerli olur; değişiklik denetim kaydına yazılır. Liste boşsa bağlantı açılmaz.',
+  },
+  // Kart 3790: takım tablosu FILE giriş düzeyi ister; bu düzey kumandada yazmayı da açtığı için ayrı anahtar, varsayılan kapalı.
+  'tezgah-baglantisi.lsv2-seyrek-okuma': {
+    modul: 'tezgah-baglantisi',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'Heidenhain seyrek okuma (takım tablosu)',
+    aciklama: 'Dikkat: bu okuma kumandada dosya yazmayı da açan FILE giriş düzeyini kullanır; CORE yalnız takım tablosunu (TOOL.T) okuyabilir, dosya yükleyemez, silemez, NC programı okumaz. Açıkken takım tablosu seyrek okuma aralığında okunur: parolasız giriş yalnız tablo okunurken açıktır, okunduktan hemen sonra çıkılır. Geçmişe yalnız ömür ve kilit değişikliği yazılır. Kapalıyken giriş hiç yapılmaz. "Heidenhain okuması" kapalıyken etkisizdir.',
+  },
+  'tezgah-baglantisi.lsv2-seyrek-aralik-dk': {
+    modul: 'tezgah-baglantisi',
+    tur: 'sayi',
+    varsayilan: 10,
+    enAz: 2,
+    enCok: 240,
+    ondalik: 0,
+    baslik: 'Heidenhain seyrek okuma aralığı (dakika)',
+    aciklama: 'Takım tablosunun iki okuması arasındaki süre. Seyrek okuma kapalıyken etkisizdir.',
   },
 } as const satisfies Record<string, AyarTanimi>;

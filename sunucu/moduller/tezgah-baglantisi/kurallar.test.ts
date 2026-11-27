@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import { tezgahAdresiOku } from './ayar.ts';
 import {
   akislariOku, anlamliDegisim, baslikOku, cihazSayisiOku, diziyiDurumaCevir, dolulukSeviyesi, dolulukYuzdesi, durumaIsle, durumdanDiziye, eskiMi, etkinAralikMs, farklar,
-  gecmisiBosalt, gecmisiSuz, ozetle, sayaciArttir, sayaciOzetle, tanimlariOku, varliklariOku, yeniSatirSayaci,
+  gecmisiBosalt, gecmisiSuz, ozetle, sayaciArttir, sayaciOzetle, tanimlariOku, takimDegisenleri, takimTablosunuCoz, varliklariOku, yeniSatirSayaci,
 } from './kurallar.ts';
 import type { GecmisKategorisi, GecmisSuzgeci, SuzulecekOge, TezgahOzeti } from './kurallar.ts';
 import { currentMetni, probeMetni } from './sahte-mtconnect.ts';
@@ -267,5 +267,33 @@ describe('tezgah-baglantisi kuralları (kart 3373)', () => {
       assert.equal(sonra?.yazilan, 0);
       assert.equal(sonra?.pencereDakika, 60);
     });
+  });
+});
+
+describe('Heidenhain takım tablosu çözümü (kart 3790)', () => {
+  test('sabit genişlikli sütunlar adla bulunur; CUR.TIME eski adı da okunur; boş hücre null, kilit TL "L"', () => {
+    const metin = ['BEGIN TOOL.T MM', 'T   NAME        L        R       TL  TIME1  CUR.TIME', '5   ORN-A       +40.25   +2      L   15     3', '6               +10      +1          ', 'x   bozuk', '[END]', '7   sonra       +1       +1'].join('\r\n');
+    assert.deepEqual(takimTablosunuCoz(metin), [
+      { no: 5, ad: 'ORN-A', boy: 40.25, yaricap: 2, omur: 15, kullanilan: 3, kilitli: true },
+      { no: 6, ad: null, boy: 10, yaricap: 1, omur: null, kullanilan: null, kilitli: false },
+    ]);
+  });
+
+  test('integer sütuna sığmayan ya da eksi takım numarası atlanır (yazımı düşürmez)', () => {
+    const metin = ['BEGIN TOOL.T MM', 'T            NAME   L', '3000000000   ORN-A  +1', '-1           ORN-B  +1', '2147483647   ORN-C  +1', '[END]'].join('\n');
+    assert.deepEqual(takimTablosunuCoz(metin)?.map((t) => t.no), [2147483647]);
+  });
+
+  test('başlık ya da T sütunu yoksa null', () => {
+    assert.equal(takimTablosunuCoz('T NAME\n1 A\n[END]'), null);
+    assert.equal(takimTablosunuCoz('BEGIN TOOL.T MM\nNAME L\nA 1\n[END]'), null);
+  });
+
+  test('geçmiş yalnız ömür, kullanılan süre ya da kilit değişen var olan takım için; ilk okumada boş', () => {
+    const a = { no: 1, ad: 'ORN', boy: 1, yaricap: 1, omur: 10, kullanilan: 1, kilitli: false };
+    const onceki = new Map([[1, a], [2, { ...a, no: 2 }], [3, { ...a, no: 3 }]]);
+    const yeni = [{ ...a, ad: 'ORN-B', boy: 2 }, { ...a, no: 2, kilitli: true }, { ...a, no: 3, omur: 5 }, { ...a, no: 4, kullanilan: 2 }, { ...a, no: 9 }];
+    assert.deepEqual(takimDegisenleri(onceki, yeni).map((t) => t.no), [2, 3], 'kullanılan süre tek başına geçmiş yazmaz');
+    assert.deepEqual(takimDegisenleri(null, yeni), []);
   });
 });

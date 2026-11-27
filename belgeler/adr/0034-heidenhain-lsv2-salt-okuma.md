@@ -22,9 +22,13 @@ yalnız okumayı kapsamalıdır.
 
 1. **Tek dosya, tek modül.** Tezgaha yalnız `tezgah-baglantisi` modülünün `lsv2.ts` dosyası bağlanır (`node:net`); başka dosyada istemci
    soketi yoktur (`npm run sinir` kural j izin listesi).
-2. **Yalnız okuma, sabit beyaz liste.** Gönderilebilen telgraflar: `A_LG` (yalnız INSPECT, DNC, PLCDEBUG; parola alanı yok), `A_LO`
-   (yüksüz ya da yalnız `PLCDEBUG` düzeyinden çıkış), `R_VR`, `R_PR` (yüksüz), `R_RI` (yalnız 23, 24, 25, 26, 27, 28, 51), `R_MB` (yalnız ayardaki sayaç adresi, 4 bayt).
-   Liste dışı telgraf ve her `C_` komutu soket yazılmadan reddedilir (`lsv2.ts` `telgrafKur`; `lsv2.test.ts` "LSV2 beyaz liste").
+2. **Yalnız okuma, sabit beyaz liste.** Gönderilebilen telgraflar: `A_LG` (yalnız INSPECT, DNC, PLCDEBUG, FILE, DIAGNOSTICS; parola
+   alanı yok), `A_LO` (yüksüz ya da yalnız `PLCDEBUG`, `FILE` ve `DIAGNOSTICS` düzeyinden çıkış), `R_VR` (yüksüz ya da alt kod 1-4),
+   `R_PR` ve `R_DT` (yüksüz), `R_RI` (yalnız 22, 23, 24, 25, 26, 27, 28, 51), `R_MB` (yalnız ayardaki sayaç adresi, 4 bayt), `R_FL`
+   (yalnız sabit yol `TNC:\table\tool.t`, metin kipi), `R_DR` (yalnız tek kayıt kipi, oturumun açılış klasörü), `T_OK` (yüksüz; yalnız
+   süren bir `R_FL` ya da `R_DR` aktarımında, blok alındı onayı). Liste dışı telgraf ve her `C_` komutu soket yazılmadan reddedilir
+   (`lsv2.ts` `telgrafKur`; `lsv2.test.ts` "LSV2 beyaz liste"). NC program dosyalarının içeriği okunmaz; program listesinden yalnız ad,
+   boyut ve tarih alınır; klasör değiştirilmez (`C_DC` yoktur).
 3. **Adres Sistem Ayarları'nda, yalnız kurum içi IPv4.** Makine listesi "Heidenhain makineleri" ayarıdır (kullanıcı kararı 3757,
    26.11.2026: ortam değişkeni kalktı, ağ aralığı sınırı eklenmedi). Yalnız ayar değiştirebilen yönetici yazar; değişiklik denetim
    kaydına girer ve sonraki turda geçerli olur. Ad çözümlemesi ve kapı yazımı yoktur, kapı sabit 19000'dir; adres 10/8, 172.16/12 ya da
@@ -51,6 +55,14 @@ yalnız okumayı kapsamalıdır.
 - PLC sayacı için PLCDEBUG girişi gerekir; bu giriş kumandada PLC yazmayı da açar. CORE yazma telgrafı gönderemediği için okuma kalır;
   kullanıcı kararı (3753, 26.11.2026): giriş ayrı anahtarla ("PLC sayacı okuması", varsayılan kapalı), yalnız sayaç adresi verilmiş
   makinede, sayaçtan hemen önce yapılır ve okunur okunmaz çıkılır (`A_LO` yalnız yüksüz ya da `PLCDEBUG`); ilk açılış tek makinede.
+- Takım tablosu ve program listesi için FILE girişi gerekir (3790). Giriş ayrı anahtarla ("Heidenhain seyrek okuma (takım tablosu)",
+  varsayılan kapalı), seyrek aralıkta (varsayılan 10 dk, en az 2 dk) yalnız bu iki okuma için yapılır ve okuma biter bitmez çıkılır;
+  çıkış reddedilirse bağlantı kapatılır. Aktarım 2 MB ya da 4096 bloğu aşarsa bağlantı kapatılır. Takım geçmişine yalnız ömür sınırı ya
+  da kilit değişen takım yazılır; program listesinin geçmişi tutulmaz.
+- Kumanda saati için DIAGNOSTICS girişi gerekir (3790, kullanıcı kararı "DIAGNOSTICS ile oku"). Bu düzey kumandada tuş gönderme ve saat
+  kurmayı da açar; o komutlar beyaz listede yoktur. Giriş yalnız bağlantı başında, `R_DT` için yapılır ve hemen çıkılır; çıkış
+  reddedilirse bağlantı kapatılır. Giriş reddedilirse saat boş kalır ve neden ekranda yazar. Saat sunucudan 60 saniyeden fazla farklıysa
+  uyarı verilir; saat geçmişe yazılmaz.
 - ADR 0033 değişmez; iki kaynak aynı tablolara yazar, aynı adlı cihazda LSV2 kazanır.
 
 ## Vazgeçilenler
@@ -63,3 +75,6 @@ yalnız okumayı kapsamalıdır.
 - Gerçek TNC 640'ta telgraf biçimi, R_PR uzunluğu ve D adresinin bayt hesabı (pyLSV2 ile aynı varsayıldı); canlı benzeri denemede
   sayacın SmartES ile aynı çıktığı görülecek (3753 kabul 9).
 - SmartES bağlıyken kumandanın ikinci LSV2 bağlantısını kabul edip etmediği; DNC girişinin SmartES'in oturumunu etkileyip etkilemediği.
+- Takım tablosu yolu `TNC:\table\tool.t` ve sütun adları (T, NAME, L, R, TL, TIME1, CUR_TIME) gerçek kumandada denenmedi.
+- R_RI 22 (eksenler), 51 (takım), R_VR alt kodları, R_DR kayıt biçimi ve R_DT'nin saat dilimi pyLSV2 kaynağından alındı; gerçek
+  kumandada denenmedi. DIAGNOSTICS düzeyinin parolasız açılıp açılmadığı bilinmiyor (açılmazsa yalnız saat boş kalır).

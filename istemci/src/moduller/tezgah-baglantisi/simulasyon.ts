@@ -13,11 +13,11 @@ export interface EksenSerisi {
   nokta: Nokta[];
 }
 
-// Eksen konumu: Linear bileşeninde Position türü; eksen adı bileşen adından gelir (X, Y, Z). Servis yayınlamıyorsa liste boştur.
+// Eksen konumu: Position türü; eksen adı MTConnect'te bileşen adından (Linear X), Heidenhain'de öğe adından (Axes, ad X) gelir. Yayınlanmıyorsa liste boştur.
 export function eksenleriBul(alanlar: readonly Alan[]): EksenSerisi[] {
   const sonuc: EksenSerisi[] = [];
   for (const e of EKSENLER) {
-    const a = alanlar.find((x) => x.tur === 'Position' && x.bilesenAdi?.toUpperCase() === e);
+    const a = alanlar.find((x) => x.tur === 'Position' && (x.bilesen === 'Axes' ? x.ad : x.bilesenAdi)?.toUpperCase() === e);
     if (a === undefined) continue;
     const n = a.deger === null || a.deger.trim() === '' ? Number.NaN : Number(a.deger);
     sonuc.push({ eksen: e, birim: a.birim, simdi: Number.isFinite(n) ? n : null, nokta: a.egri });

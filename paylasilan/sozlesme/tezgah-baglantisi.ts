@@ -136,5 +136,24 @@ export const tezgahAyrintisiCevabi = z.object({
 });
 export type TezgahAyrintisiCevabi = z.output<typeof tezgahAyrintisiCevabi>;
 
+// Heidenhain takım tablosu (kart 3790): seyrek okumayla LSV2'den okunan TOOL.T son durumu. okundu null ise hiç okunmadı.
+// Program dosya listesi okunmaz (kumandada klasör değiştirmek yazma komutu ister); ekran bunu yazar.
+export const tezgahTakimTablosuCevabi = z.object({
+  cihazAdi: z.string(),
+  seyrekAcik: z.boolean(),
+  okundu: zamanSemasi.nullable(),
+  // Son seyrek okumada tablo okunamadıysa nedeni (kumanda kodu dahil); okunduysa null.
+  tani: z.string().nullable(),
+  gecmisSayisi: z.number().int(),
+  takimlar: z.array(z.object({
+    no: z.number().int(), ad: z.string().nullable(), boy: z.number().nullable(), yaricap: z.number().nullable(),
+    omur: z.number().nullable(), kullanilan: z.number().nullable(), kilitli: z.boolean().nullable(),
+  })),
+  // Oturumun açılış klasöründeki dosyalar: yalnız ad, boyut (bayt) ve tarih; içerik okunmaz. Okunamadıysa nedeni programTani'de.
+  programTani: z.string().nullable(),
+  programlar: z.array(z.object({ ad: z.string(), boyut: z.number(), tarih: zamanSemasi.nullable() })),
+});
+export type TezgahTakimTablosuCevabi = z.output<typeof tezgahTakimTablosuCevabi>;
+
 export const tezgahTuruGovdesi = z.object({ tur: z.enum(TEZGAH_TURLERI).nullable() });
 export const tezgahTuruCevabi = z.object({ tezgahTuru: z.enum(TEZGAH_TURLERI).nullable() });

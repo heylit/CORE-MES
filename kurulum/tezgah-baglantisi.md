@@ -7,9 +7,12 @@ kumandaları (LSV2, kart 3753). İkisi de varsayılan kapalıdır ve okuma aral�
 ## Heidenhain okuması
 
 Heidenhain kontrollü tezgâhlar (TNC 6xx sınıfı) LSV2 ile, TCP 19000'den doğrudan okunur. Yalnız okuma telgrafları gider: durum, kip,
-program, takım, ilerleme ve iş mili oranları, kumandanın hata iletileri ve (ayrı anahtar açıksa, ayarda adresi verilmişse) PLC'deki
-parça sayacı. Dosya,
-program seçme, tuş, PLC yazma ve her `C_` komutu kodla engellidir. Parola gönderilmez ve hiçbir yerde tutulmaz.
+program ve tümce no, ilerleme, hızlı hareket ve iş mili oranları, iş milindeki takım (boy, yarıçap), eksen konumları, kumandanın
+hata iletileri, bağlantı başında kumanda tipi, sürümler ve kumanda saati (parolasız DIAGNOSTICS girişiyle okunur, hemen çıkılır;
+sunucu saatinden 60 saniyeden fazla farkta uyarı), (ayrı anahtar açıksa, ayarda adresi verilmişse) PLC'deki parça sayacı ve
+(ayrı anahtar açıksa) seyrek aralıkta takım tablosu ve program dosya listesi. Dosya yazma, NC program içeriği, program seçme, tuş, PLC yazma ve her `C_`
+komutu kodla engellidir. Parola gönderilmez ve hiçbir yerde tutulmaz. Eksen konumu ve tümce no yalnız son durumda tutulur, geçmişe
+yazılmaz. Okunamayan her alan için kumandanın hata kodu ayrıntı ekranında "Okunamayan veri" satırında görünür (ör. "Alarm: yetki yok (kod 23)").
 
 ### 1. Makine listesi (Sistem Ayarları)
 
@@ -36,7 +39,13 @@ okumada sayaçtan hemen önce parolasız PLCDEBUG girişi yapılır ve sayaç ok
 Bu düzeyde de yalnız ayardaki sayaç adresi okunabilir; yazma ve kontrol komutu kodla engellidir. İlk açılış deneme kurulumunda, tek
 makinede yapılır (aşağıda 3. adım).
 
-**PLC sayacı okuması yazma yetkisi açan bir giriş düzeyi kullanır; makinelerin 19000 kapısına yalnız CORE ve SmartES sunucularının
+Takım tablosu ayrı anahtardadır: "Heidenhain seyrek okuma (takım tablosu)" (varsayılan kapalı) ve "Heidenhain seyrek okuma aralığı
+(dakika)" (varsayılan 10, en az 2). Açıkken her aralıkta parolasız FILE girişi yapılır, yalnız takım tablosu dosyası okunur ve hemen
+çıkılır; çıkış reddedilirse bağlantı kapatılır. Tablo ayrıntı ekranındaki "Takım tablosu" sekmesinde görünür; geçmişe yalnız ömrü ya
+da kilidi değişen takım yazılır. Aynı girişte oturumun açılış klasöründeki dosyaların yalnız adı, boyutu ve tarihi okunur (hangi klasör
+olduğu kumandaya bağlıdır; klasör değiştirilmez, dosya içeriği okunmaz).
+
+**PLC sayacı, takım tablosu ve kumanda saati okumaları yazma yetkisi açan bir giriş düzeyi kullanır; makinelerin 19000 kapısına yalnız CORE ve SmartES sunucularının
 erişmesi önerilir (bilgi işlem).**
 
 ### 3. Deneme sırası
@@ -58,6 +67,7 @@ yalnız CORE sunucusu ve SmartES makinelerin 19000 kapısına erişebilsin (bug�
 |---|---|---|
 | Makine kapalı ya da meşgul (bağlantı reddedildi) | Makine kapalı, ağ yolu kapalı ya da kumanda yeni bağlantıyı kabul etmiyor (ör. SmartES tutuyor) | CORE zorlamaz, aralık 60 sn'ye kadar uzar ve yeniden dener. Makine açıksa güvenlik duvarı ve SmartES bağlantı sayısı denetlenir. |
 | Makine DNC okumasına izin vermiyor | Kumandada DNC seçeneği ya da izni kapalı; durum, program, takım okunamaz | Bakımla konuşulur; CORE parola eklemez. |
+| Takım tablosu: yetki yok (kod 23) | FILE girişi bu kumandada izinli değil | Parola eklenmez; seyrek okuma kapatılır ya da bakımla konuşulur. Öteki değerler okunmaya devam eder. |
 | Sayaç için yetki yok | PLC belleği okuması daha yüksek giriş düzeyi istiyor | Parola eklenmez; bakımla konuşulur. Öteki değerler okunmaya devam eder. |
 | Sayaç adresi makinenin PLC belleğinde yok | Ayardaki D adresi kelime alanının dışında | Adres bakımla doğrulanır, "Heidenhain makineleri" listesinde düzeltilir. |
 | Makine süresinde cevap vermedi / cevabı yarım kaldı | Ağ ya da kumanda yanıtı kesildi | Bağlantı bırakılır, sonraki turda yeniden kurulur. Sürerse ağ denetlenir. |

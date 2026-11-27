@@ -65,9 +65,9 @@
 .tc-tzb-grup { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; padding: var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-3); background: var(--panel-solid); }
 .tc-tzb-grup-baslik { margin: 0; color: var(--muted); font-size: var(--yazi-s); font-weight: 600; }
 .tc-tzb-alanlar { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
-.tc-tzb-alan { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--b-1) var(--b-3); padding: var(--b-2) 0; border-bottom: 1px solid var(--edge); }
+.tc-tzb-alan { display: grid; grid-template-columns: minmax(min-content, 1fr) auto; gap: var(--b-1) var(--b-3); padding: var(--b-2) 0; border-bottom: 1px solid var(--edge); }
 .tc-tzb-alan:last-child { border-bottom: 0; }
-.tc-tzb-alan-ad { min-width: 0; overflow-wrap: anywhere; }
+.tc-tzb-alan-ad { min-width: 0; overflow-wrap: break-word; }
 .tc-tzb-alan-deger { text-align: right; overflow-wrap: anywhere; }
 .tc-tzb-alan-zaman { grid-column: 1 / -1; }
 .tc-tzb-alan-egri { grid-column: 1 / -1; }
@@ -78,7 +78,7 @@
 .tc-tzb-cizgi-eksen { stroke: var(--edge); stroke-width: 2px; vector-effect: non-scaling-stroke; }
 .tc-tzb-bosluk-cizgi { stroke: var(--hold); stroke-width: 2px; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
 @container tc-tzb (min-width: 700px) {
-  .tc-tzb-alan { grid-template-columns: minmax(0, 1fr) auto minmax(0, 8rem); align-items: center; }
+  .tc-tzb-alan { grid-template-columns: minmax(min-content, 1fr) auto minmax(0, 8rem); align-items: center; }
   .tc-tzb-alan-zaman { grid-column: 1 / -1; }
   .tc-tzb-alan-egri { grid-column: 3; grid-row: 1; }
 }
@@ -91,7 +91,7 @@
 .tc-tzb-gruplar { align-items: start; }
 .tc-tzb-alan-deger { min-width: 0; }
 @container tc-tzb (min-width: 700px) {
-  .tc-tzb-alan { grid-template-columns: minmax(0, 1fr) 11rem 8rem; }
+  .tc-tzb-alan { grid-template-columns: minmax(min-content, 1fr) 11rem 8rem; }
   .tc-tzb-alan-ad { grid-column: 1; }
   .tc-tzb-alan-deger { grid-column: 2; grid-row: 1; text-align: right; }
   .tc-tzb-alan-egri { grid-column: 3; grid-row: 1; }
@@ -147,3 +147,6 @@
 .tc-tzb-dol-karolar dt { color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
 .tc-tzb-dol-karolar dd { margin: 0; font-weight: 700; overflow-wrap: anywhere; }
 
+/* Uzun değerli satır (kart 3790): etiket üstte, değer tam genişlikte, sola yaslı. */
+.tc-tzb-alan.tc-tzb-alan-uzun { grid-template-columns: minmax(0, 1fr); }
+.tc-tzb-alan.tc-tzb-alan-uzun .tc-tzb-alan-ad, .tc-tzb-alan.tc-tzb-alan-uzun .tc-tzb-alan-deger { grid-column: 1; grid-row: auto; text-align: start; }

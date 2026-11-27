@@ -1,5 +1,5 @@
 import { uc } from '#cekirdek/uc.ts';
-import { tezgahAyrintisiCevabi, tezgahBaglantisiDurumCevabi, tezgahParametresi, tezgahTuruCevabi, tezgahTuruGovdesi } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
+import { tezgahAyrintisiCevabi, tezgahBaglantisiDurumCevabi, tezgahParametresi, tezgahTakimTablosuCevabi, tezgahTuruCevabi, tezgahTuruGovdesi } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
 import { ortamIstemcisi } from './baglanti.ts';
 import { lsv2Bellegi, turBellegi } from './isler.ts';
 import * as servis from './servis.ts';
@@ -20,6 +20,14 @@ export const uclar = [
     parametre: tezgahParametresi,
     cevap: tezgahAyrintisiCevabi,
     isle: ({ db, parametre }) => servis.ayrinti(db, parametre.cihazAdi, new Date(), turBellegi),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/tezgah-baglantisi/tezgahlar/:cihazAdi/takim-tablosu',
+    yetki: { biri: ['sayfa.tezgah-baglantisi'] },
+    parametre: tezgahParametresi,
+    cevap: tezgahTakimTablosuCevabi,
+    isle: ({ db, parametre }) => servis.takimTablosu(db, parametre.cihazAdi),
   }),
   uc({
     yontem: 'POST',

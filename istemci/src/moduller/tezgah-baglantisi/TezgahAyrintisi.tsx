@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import type { TezgahAyrintisiCevabi, TezgahBaglantisiDurumCevabi, TezgahTuru } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
-import { DurumKutusu, Kart, Rozet, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
+import type { TezgahAyrintisiCevabi, TezgahBaglantisiDurumCevabi, TezgahTakimTablosuCevabi, TezgahTuru } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
+import { Dugme, DurumKutusu, Kart, Rozet, Sekmeler, Simge, Tablo, useBildirim } from '../../ortak/arayuz/index.ts';
+import type { Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { CanliGosterge } from './CanliGosterge.tsx';
 import { Egri, ZamanCizgisi, ZamanEkseni } from './Egri.tsx';
 import { Simulasyon } from './Simulasyon.tsx';
-import { BILESEN_SIRASI, BOSLUK_NEDENI, DURUM, KOSUL_ADI, KOSUL_TONU, YOK, bilesenMetni, degerAdi, degerMetni, gunSaatMetni, saatMetni, sayiMetni, sorunaGoreSirala, turAdi } from './gosterim.ts';
+import { BILESEN_SIRASI, BOSLUK_NEDENI, DURUM, KOSUL_ADI, KOSUL_TONU, YOK, alanAdi, bilesenMetni, degerAdi, degerMetni, gunSaatMetni, saatMetni, sayiMetni, sorunaGoreSirala } from './gosterim.ts';
 import './tezgah-baglantisi.css';
 
 type Ayrinti = TezgahAyrintisiCevabi;
@@ -32,18 +33,30 @@ function grupla(alanlar: readonly Alan[]): { anahtar: string; baslik: string; al
   return [...harita.values()].sort((x, y) => (x.sira < 0 ? 99 : x.sira) - (y.sira < 0 ? 99 : y.sira) || x.baslik.localeCompare(y.baslik, 'tr'));
 }
 
-function AlanSatiri({ a, ayrinti }: { a: Alan; ayrinti: Ayrinti }) {
+// Tanı gibi cümle değerleri dar sütunda okunmaz: etiket üstte, değer tam genişlikte düz yazıyla.
+const UZUN_DEGER = 24;
+const uzunMu = (a: Alan): boolean => a.tur === 'Diagnosis' || (a.deger?.length ?? 0) > UZUN_DEGER;
+
+// Gruptaki bütün satırlar aynı anda değiştiyse ve eğri yoksa zaman satır satır tekrarlanmaz, grup başlığında bir kez yazılır.
+function ortakDegisme(alanlar: readonly Alan[]): string | null {
+  const ilk = alanlar[0]?.sonDegisme ?? null;
+  if (ilk === null || alanlar.length < 2) return null;
+  return alanlar.every((x) => x.sonDegisme === ilk && x.egri.length === 0) ? ilk : null;
+}
+
+function AlanSatiri({ a, ayrinti, zamanYok = false }: { a: Alan; ayrinti: Ayrinti; zamanYok?: boolean }) {
+  const uzun = uzunMu(a);
   return (
-    <li className="tc-tzb-alan">
-      <span className="tc-tzb-alan-ad" title={a.tur}>{turAdi(a.tur)}</span>
-      <span className="tc-tzb-alan-deger tc-tzb-mono" title={a.deger ?? undefined}>{degerMetni(degerAdi(a.tur, a.deger), a.birim)}</span>
+    <li className={uzun ? 'tc-tzb-alan tc-tzb-alan-uzun' : 'tc-tzb-alan'}>
+      <span className="tc-tzb-alan-ad" title={a.tur}>{alanAdi(a)}</span>
+      <span className={uzun ? 'tc-tzb-alan-deger' : 'tc-tzb-alan-deger tc-tzb-mono'} title={a.deger ?? undefined}>{degerMetni(degerAdi(a.tur, a.deger), a.birim)}</span>
       <span className="tc-tzb-alan-egri">
         {a.egri.length > 0 && <Egri nokta={a.egri} basi={ayrinti.egriBasi} sonu={ayrinti.egriSonu} bosluklar={ayrinti.bosluklar} />}
       </span>
-      <span className="tc-tzb-alan-zaman tc-tzb-alt">
+      {!zamanYok && <span className="tc-tzb-alan-zaman tc-tzb-alt">
         {a.sonDegisme === null ? YOK : `Değişti ${saatMetni(a.sonDegisme)}`}
         {a.egri.length > 0 && ` · son 1 sa ${degerMetni(String(Math.min(...a.egri.map((p) => p.deger))), a.birim)} – ${degerMetni(String(Math.max(...a.egri.map((p) => p.deger))), a.birim)}`}
-      </span>
+      </span>}
     </li>
   );
 }
@@ -65,7 +78,7 @@ function OmurMetni({ o }: { o: Ayrinti['varliklar'][number]['omurler'][number] }
   );
 }
 
-function Bolum({ simge, baslik, children }: { simge: 'cpu' | 'alert' | 'tool' | 'clock'; baslik: string; children: React.ReactNode }) {
+function Bolum({ simge, baslik, children }: { simge: 'cpu' | 'alert' | 'tool' | 'clock' | 'list'; baslik: string; children: React.ReactNode }) {
   return (
     <section className="tc-tzb-bolum" aria-label={baslik}>
       <h3 className="tc-tzb-bolum-baslik"><Simge ad={simge} boyut="k" />{baslik}</h3>
@@ -74,7 +87,7 @@ function Bolum({ simge, baslik, children }: { simge: 'cpu' | 'alert' | 'tool' | 
   );
 }
 
-function Icerik({ a }: { a: Ayrinti }) {
+function Icerik({ a, takimTablosunuAc }: { a: Ayrinti; takimTablosunuAc?: () => void }) {
   const gruplar = grupla(a.alanlar);
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
@@ -111,12 +124,15 @@ function Icerik({ a }: { a: Ayrinti }) {
         <p className="tc-tzb-not">Eğriler son bir saatin dakikalık ortalamasıdır; kesikli dikey çizgi veri boşluğudur. Ham MTConnect adı üzerine gelince görünür.</p>
         {gruplar.length === 0 && <p className="tc-tzb-not">Tezgâh henüz alan yayınlamadı.</p>}
         <div className="tc-tzb-gruplar">
-          {gruplar.map((g) => (
-            <div key={g.anahtar} className="tc-tzb-grup" role="group" aria-label={g.baslik}>
-              <h4 className="tc-tzb-grup-baslik">{g.baslik}</h4>
-              <ul className="tc-tzb-alanlar">{g.alanlar.map((x) => <AlanSatiri key={`${x.kimlik ?? ''}-${x.tur}-${x.ad ?? ''}`} a={x} ayrinti={a} />)}</ul>
-            </div>
-          ))}
+          {gruplar.map((g) => {
+            const ortak = ortakDegisme(g.alanlar);
+            return (
+              <div key={g.anahtar} className="tc-tzb-grup" role="group" aria-label={g.baslik}>
+                <h4 className="tc-tzb-grup-baslik">{g.baslik}{ortak !== null && <span className="tc-tzb-alt">Değişti {saatMetni(ortak)}</span>}</h4>
+                <ul className="tc-tzb-alanlar">{g.alanlar.map((x) => <AlanSatiri key={`${x.kimlik ?? ''}-${x.tur}-${x.ad ?? ''}`} a={x} ayrinti={a} zamanYok={ortak !== null} />)}</ul>
+              </div>
+            );
+          })}
         </div>
       </Bolum>
       <Bolum simge="alert" baslik="Koşullar">
@@ -134,7 +150,9 @@ function Icerik({ a }: { a: Ayrinti }) {
         )}
       </Bolum>
       <Bolum simge="tool" baslik="Takımlar">
-        {a.varliklar.length === 0
+        {takimTablosunuAc !== undefined
+          ? <p className="tc-tzb-not">Heidenhain takımları takım tablosundadır. <Dugme tur="ikincil" simge="tool" onClick={takimTablosunuAc}>Takım tablosunu aç</Dugme></p>
+          : a.varliklar.length === 0
           ? <p role="status" className="tc-tzb-not">{a.varlikDurumu === 'okundu' ? 'Servis takım listesi boş.' : VARLIK_METNI[a.varlikDurumu]}</p>
           : (
             <ul className="tc-tzb-yalin" aria-label="Takımlar">
@@ -152,6 +170,65 @@ function Icerik({ a }: { a: Ayrinti }) {
   );
 }
 
+type TakimSatiri = TezgahTakimTablosuCevabi['takimlar'][number];
+const ONDALIK = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 3 });
+const olcu = (n: number | null, birim: string): string => (n === null ? YOK : `${ONDALIK.format(n)} ${birim}`);
+const TAKIM_SUTUNLARI: Sutun<TakimSatiri>[] = [
+  { anahtar: 'no', baslik: 'T', hucre: (t) => t.no, mono: true, hizala: 'sag', kirilmaz: true },
+  { anahtar: 'ad', baslik: 'Ad', hucre: (t) => t.ad ?? YOK, mono: true },
+  { anahtar: 'boy', baslik: 'Boy', hucre: (t) => olcu(t.boy, 'mm'), hizala: 'sag', kirilmaz: true, csv: (t) => t.boy },
+  { anahtar: 'yaricap', baslik: 'Yarıçap', hucre: (t) => olcu(t.yaricap, 'mm'), hizala: 'sag', kirilmaz: true, csv: (t) => t.yaricap },
+  { anahtar: 'omur', baslik: 'Ömür', hucre: (t) => olcu(t.omur, 'dk'), hizala: 'sag', kirilmaz: true, csv: (t) => t.omur },
+  { anahtar: 'kullanilan', baslik: 'Kullanılan', hucre: (t) => olcu(t.kullanilan, 'dk'), hizala: 'sag', kirilmaz: true, csv: (t) => t.kullanilan },
+  {
+    anahtar: 'kilit', baslik: 'Kilit', hucre: (t) => (t.kilitli === null ? YOK : t.kilitli ? <Rozet ton="uyari">Kilitli</Rozet> : 'Açık'),
+    csv: (t) => (t.kilitli === null ? null : t.kilitli ? 'Kilitli' : 'Açık'),
+  },
+];
+
+type ProgramSatiri = TezgahTakimTablosuCevabi['programlar'][number];
+const PROGRAM_SUTUNLARI: Sutun<ProgramSatiri>[] = [
+  { anahtar: 'ad', baslik: 'Ad', hucre: (p) => p.ad, mono: true },
+  { anahtar: 'boyut', baslik: 'Boyut', hucre: (p) => `${ONDALIK.format(p.boyut)} bayt`, hizala: 'sag', kirilmaz: true, csv: (p) => p.boyut },
+  { anahtar: 'tarih', baslik: 'Tarih', hucre: (p) => (p.tarih === null ? YOK : gunSaatMetni(p.tarih)), kirilmaz: true, csv: (p) => p.tarih },
+];
+
+// Kilitli takım önce görülmeli: kilitliler üstte, kendi içinde takım numarasına göre.
+const kilitliUstte = (l: readonly TakimSatiri[]): TakimSatiri[] => [...l].sort((x, y) => Number(y.kilitli === true) - Number(x.kilitli === true) || x.no - y.no);
+
+// Heidenhain takım tablosu (kart 3790): seyrek okumayla kumandadan okunan TOOL.T; yalnız gösterilir, kumandaya bir şey yazılmaz.
+function TakimTablosu({ cihazAdi, aralikSaniye }: { cihazAdi: string; aralikSaniye: number }) {
+  const q = useQuery({
+    queryKey: anahtarlar.takimTablosu(cihazAdi),
+    queryFn: () => api.get<TezgahTakimTablosuCevabi>(`/tezgah-baglantisi/tezgahlar/${encodeURIComponent(cihazAdi)}/takim-tablosu`),
+    refetchInterval: Math.max(30, aralikSaniye) * 1000,
+    refetchIntervalInBackground: false,
+  });
+  if (q.isPending) return <DurumKutusu durum="yukleniyor" />;
+  if (q.isError) return <DurumKutusu durum="hata" mesaj={hataIletisi(q.error, 'Takım tablosu alınamadı')} yenile={() => { void q.refetch(); }} />;
+  const t = q.data;
+  return (
+    <>
+      <Bolum simge="tool" baslik="Takım tablosu">
+        <p className="tc-tzb-not" role="status">
+          {!t.seyrekAcik && 'Seyrek okuma kapalı (Sistem Ayarları > Tezgâh bağlantısı); takım tablosu okunmuyor. '}
+          {t.okundu === null ? 'Takım tablosu henüz okunmadı.' : `Son okuma ${gunSaatMetni(t.okundu)} · ömür ya da kilit değişikliği geçmişi: ${sayiMetni(t.gecmisSayisi)} kayıt`}
+        </p>
+        {t.tani !== null && <p className="tc-tzb-not"><Rozet ton="uyari">Okunamadı</Rozet> {t.tani}</p>}
+        <Tablo etiket="Takım tablosu" sutunlar={TAKIM_SUTUNLARI} satirlar={kilitliUstte(t.takimlar)} satirAnahtari={(s) => String(s.no)} bosMesaj="Takım tablosunda satır yok." />
+      </Bolum>
+      <Bolum simge="list" baslik="Program dosyaları">
+        <p className="tc-tzb-not">Kumandada oturumun açılış klasörü listelenir; hangi klasör olduğu kumandaya bağlıdır. Yalnız ad, boyut ve tarih okunur, dosya içeriği okunmaz.</p>
+        {t.programTani !== null && <p className="tc-tzb-not"><Rozet ton="uyari">Okunamadı</Rozet> {t.programTani}</p>}
+        <Tablo etiket="Program dosyaları" sutunlar={PROGRAM_SUTUNLARI} satirlar={t.programlar} satirAnahtari={(s) => s.ad} bosMesaj="Program listesi henüz okunmadı ya da klasör boş." />
+      </Bolum>
+    </>
+  );
+}
+
+type Gorunum = 'genel' | 'takim-tablosu';
+const GORUNUMLER = [{ anahtar: 'genel', baslik: 'Genel', simge: 'cpu' }, { anahtar: 'takim-tablosu', baslik: 'Takım tablosu', simge: 'tool' }] as const;
+
 // Keşif ekranı: tezgahın yayınladığı bütün alanlar bileşene göre; birimi, son değişme zamanı ve son saatin eğrisiyle.
 export function TezgahAyrintisi() {
   const [parametre, parametreYaz] = useSearchParams();
@@ -164,6 +241,8 @@ export function TezgahAyrintisi() {
   });
   const tezgahlar = sorunaGoreSirala(liste.data?.tezgahlar ?? []);
   const cihazAdi = secilen ?? tezgahlar[0]?.cihazAdi ?? null;
+  const heidenhain = tezgahlar.find((t) => t.cihazAdi === cihazAdi)?.kaynak === 'lsv2';
+  const [gorunum, gorunumYaz] = useState<Gorunum>('genel');
   const ayrinti = useQuery({
     queryKey: anahtarlar.tezgah(cihazAdi ?? ''),
     queryFn: () => api.get<TezgahAyrintisiCevabi>(`/tezgah-baglantisi/tezgahlar/${encodeURIComponent(cihazAdi ?? '')}`),
@@ -184,7 +263,7 @@ export function TezgahAyrintisi() {
             <ul className="tc-tzb-liste" aria-label="Tezgâhlar">
               {tezgahlar.map((t) => (
                 <li key={t.cihazAdi}>
-                  <button type="button" className="tc-tzb-sec" aria-pressed={t.cihazAdi === cihazAdi} onClick={() => { secilenYaz(t.cihazAdi); parametreYaz({ tezgah: t.cihazAdi }, { replace: true }); }}>
+                  <button type="button" className="tc-tzb-sec" aria-pressed={t.cihazAdi === cihazAdi} onClick={() => { secilenYaz(t.cihazAdi); gorunumYaz('genel'); parametreYaz({ tezgah: t.cihazAdi }, { replace: true }); }}>
                     <span className="tc-tzb-kod">{t.cihazAdi}</span><Rozet ton={DURUM[t.durum].ton}>{DURUM[t.durum].metin}</Rozet>
                   </button>
                 </li>
@@ -193,7 +272,8 @@ export function TezgahAyrintisi() {
             <section className="tc-tzb" aria-label={cihazAdi ?? undefined}>
               {ayrinti.isPending && <DurumKutusu durum="yukleniyor" />}
               {ayrinti.isError && <DurumKutusu durum="hata" mesaj={hataIletisi(ayrinti.error, 'Tezgâh ayrıntısı alınamadı')} yenile={() => { void ayrinti.refetch(); }} />}
-              {a && <Icerik a={a} />}
+              {a && heidenhain && <Sekmeler etiket="Tezgâh ayrıntısı görünümleri" sekmeler={GORUNUMLER} secili={gorunum} sec={gorunumYaz} />}
+              {a && (heidenhain && gorunum === 'takim-tablosu' ? <TakimTablosu cihazAdi={a.cihazAdi} aralikSaniye={a.aralikSaniye} /> : <Icerik a={a} takimTablosunuAc={heidenhain ? () => gorunumYaz('takim-tablosu') : undefined} />)}
             </section>
           </div>
         )}

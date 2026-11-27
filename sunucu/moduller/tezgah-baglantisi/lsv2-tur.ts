@@ -2,11 +2,12 @@ import type { Db, Veritabani } from '#cekirdek/db.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import type { Lsv2Makinesi } from './ayar.ts';
 import {
-  ARALIK_AYARI, diziyiDurumaCevir, durumdanDiziye, etkinAralikMs, gecmisiBosalt, gecmisiSuz, LSV2_ALAN_TANIMLARI, LSV2_KATEGORILERI, LSV2_OKUMA_AYARI, LSV2_PLC_SAYACI_AYARI,
-  lsv2Degisenler, lsv2Durumu, lsv2Ogeleri, OKUMA_AYARI, ozetle, sayaciArttir, VARSAYILAN_ARALIK_SN,
+  ARALIK_AYARI, diziyiDurumaCevir, durumdanDiziye, etkinAralikMs, gecmisiBosalt, gecmisiSuz, LSV2_KATEGORILERI, LSV2_OKUMA_AYARI, LSV2_PLC_SAYACI_AYARI,
+  LSV2_SEYREK_ARALIK_AYARI, LSV2_SEYREK_OKUMA_AYARI, lsv2AlanTanimlari, lsv2Degisenler, lsv2Durumu, lsv2GecmisteYok, lsv2Ogeleri, lsv2TanimImzasi, lsv2TaniMetni,
+  OKUMA_AYARI, ozetle, sayaciArttir, seyrekAralikMs, takimDegisenleri, VARSAYILAN_ARALIK_SN,
 } from './kurallar.ts';
-import type { GecmisOgeDurumu, Lsv2Uyarisi, SuzulecekOge, TezgahOgeleriHaritasi, TezgahOgesi } from './kurallar.ts';
-import type { Lsv2Istemcisi, Lsv2Sonucu } from './lsv2.ts';
+import type { GecmisOgeDurumu, Lsv2Okumasi, Lsv2Uyarisi, SuzulecekOge, TezgahOgeleriHaritasi, TezgahOgesi } from './kurallar.ts';
+import type { Lsv2Istemcisi, Lsv2OkumaSecenegi, Lsv2Sonucu } from './lsv2.ts';
 import { lsv2ListesiOku, temizlikTuru } from './servis.ts';
 import type { TurBellegi } from './servis.ts';
 import * as s from './sorgular.ts';
@@ -23,7 +24,10 @@ export interface Lsv2MakineBellegi {
   // Son durum; null ise henüz veritabanından okunmadı.
   durum: TezgahOgeleriHaritasi | null;
   suzgec: ReadonlyMap<string, GecmisOgeDurumu>;
-  tanimYazildi: boolean;
+  // Yazılmış alan tanımlarının imzası (eksen takımı dahil); değişince tanım yeniden yazılır.
+  tanimImzasi: string | null;
+  // Son seyrek okuma denemesi (takım tablosu); null ise bu süreçte henüz denenmedi.
+  sonSeyrek: number | null;
 }
 
 export interface Lsv2Bellegi {
@@ -38,7 +42,7 @@ export const yeniLsv2Bellegi = (): Lsv2Bellegi => ({ makineler: new Map(), istem
 const tanimAnahtari = (m: Lsv2Makinesi): string => `${m.adres};${m.sayac === null ? '' : String(m.sayac)}`;
 
 const yeniMakineBellegi = (): Lsv2MakineBellegi => ({
-  sonKontrol: null, ardisikHata: 0, calisiyor: false, uyarilar: [], sonHata: null, durum: null, suzgec: new Map(), tanimYazildi: false,
+  sonKontrol: null, ardisikHata: 0, calisiyor: false, uyarilar: [], sonHata: null, durum: null, suzgec: new Map(), tanimImzasi: null, sonSeyrek: null,
 });
 
 export interface Lsv2TurOrtami {
@@ -84,6 +88,7 @@ export async function lsv2Turu(vt: Pick<Veritabani, 'tx'>, o: Lsv2TurOrtami): Pr
   const ayarlar = await vt.tx(async (db) => ({
     acik: await sistemAyariOku(db, LSV2_OKUMA_AYARI), aralik: await sistemAyariOku(db, ARALIK_AYARI), mt: await sistemAyariOku(db, OKUMA_AYARI),
     plc: await sistemAyariOku(db, LSV2_PLC_SAYACI_AYARI),
+    seyrek: await sistemAyariOku(db, LSV2_SEYREK_OKUMA_AYARI), seyrekDk: await sistemAyariOku(db, LSV2_SEYREK_ARALIK_AYARI),
     liste: o.makineler ?? await lsv2ListesiOku(db),
   }));
   b.aralikMs = (ayarlar.aralik ?? VARSAYILAN_ARALIK_SN) * 1000;
@@ -98,7 +103,12 @@ export async function lsv2Turu(vt: Pick<Veritabani, 'tx'>, o: Lsv2TurOrtami): Pr
     const mb = makineBellegi(b, m.cihazAdi);
     return !mb.calisiyor && (mb.sonKontrol === null || simdi - mb.sonKontrol >= etkinAralikMs(b.aralikMs, mb.ardisikHata));
   });
-  await Promise.all(sirada.map((m) => makineyiOku(vt, o, m, ayarlar.plc === true)));
+  const seyrekMs = ayarlar.seyrek === true ? seyrekAralikMs(ayarlar.seyrekDk) : null;
+  await Promise.all(sirada.map((m) => {
+    const mb = makineBellegi(b, m.cihazAdi);
+    const takimTablosu = seyrekMs !== null && (mb.sonSeyrek === null || simdi - mb.sonSeyrek >= seyrekMs);
+    return makineyiOku(vt, o, m, { plcSayaci: ayarlar.plc === true, takimTablosu });
+  }));
   if (sirada.length > 0 && !(ayarlar.mt && o.mtconnectVar)) await temizlikTuru(vt, o.ortak, o.saat());
   return { tur: 'okundu', makine: sirada.length };
 }
@@ -112,11 +122,14 @@ function makineBellegi(b: Lsv2Bellegi, cihazAdi: string): Lsv2MakineBellegi {
   return mb;
 }
 
-async function makineyiOku(vt: Pick<Veritabani, 'tx'>, o: Lsv2TurOrtami, m: Lsv2Makinesi, plcSayaci: boolean): Promise<void> {
+async function makineyiOku(vt: Pick<Veritabani, 'tx'>, o: Lsv2TurOrtami, m: Lsv2Makinesi, secenek: Lsv2OkumaSecenegi): Promise<void> {
   const b = o.bellek;
   const mb = makineBellegi(b, m.cihazAdi);
   mb.calisiyor = true;
   mb.sonKontrol = o.saat().getTime();
+  // Seyrek okuma denemesi sonucu ne olursa olsun aralığı başlatır: tablo okunamayıp bağlantı düşse de sonraki normal turlar FILE'a
+  // girmez, canlı okuma sürer.
+  if (secenek.takimTablosu === true) mb.sonSeyrek = mb.sonKontrol;
   try {
     let kayit = b.istemciler.get(m.cihazAdi);
     if (kayit === undefined) {
@@ -124,13 +137,15 @@ async function makineyiOku(vt: Pick<Veritabani, 'tx'>, o: Lsv2TurOrtami, m: Lsv2
       b.istemciler.set(m.cihazAdi, kayit);
     }
     const istemci = kayit.istemci;
-    const r = await istemci.oku({ plcSayaci });
+    const r = await istemci.oku(secenek);
     const zaman = o.saat();
-    const sonuc = await vt.tx((db) => isle(db, m.cihazAdi, mb, r, zaman));
+    const sonuc = await vt.tx((db) => isle(db, m.cihazAdi, mb, r, zaman, secenek.takimTablosu === true));
     // Bellek yalnız işlem kesinleşince değişir.
     mb.durum = sonuc.durum;
     mb.suzgec = sonuc.suzgec;
-    if (r.tur === 'basarili') mb.tanimYazildi = true;
+    if (r.tur === 'basarili') {
+      mb.tanimImzasi = lsv2TanimImzasi(r.okuma);
+    }
     o.ortak.sayac = sayaciArttir(o.ortak.sayac, zaman.getTime(), sonuc.yazilan, sonuc.atlanan);
     if (o.ortak.satirSayisi !== null) o.ortak.satirSayisi += sonuc.eklenen;
     if (r.tur === 'basarili') {
@@ -147,9 +162,11 @@ async function makineyiOku(vt: Pick<Veritabani, 'tx'>, o: Lsv2TurOrtami, m: Lsv2
   }
 }
 
-async function isle(db: Db, cihazAdi: string, mb: Lsv2MakineBellegi, r: Lsv2Sonucu, zaman: Date) {
+async function isle(db: Db, cihazAdi: string, mb: Lsv2MakineBellegi, r: Lsv2Sonucu, zaman: Date, seyrekIstendi: boolean) {
   const okundu = r.tur === 'basarili';
-  if (okundu && !mb.tanimYazildi) await s.tanimlariYaz(db, [{ cihazAdi, alanlar: LSV2_ALAN_TANIMLARI }]);
+  if (okundu && mb.tanimImzasi !== lsv2TanimImzasi(r.okuma)) await s.tanimlariYaz(db, [{ cihazAdi, alanlar: lsv2AlanTanimlari(r.okuma) }]);
+  if (okundu && r.okuma.takimTablosu !== undefined) await takimTablosunuIsle(db, cihazAdi, r.okuma, zaman);
+  if (!okundu && seyrekIstendi) await s.lsv2SeyrekYaz(db, cihazAdi, zaman, `Takım tablosu okunamadı: ${r.ileti}`, `Program listesi okunamadı: ${r.ileti}`);
   const kayitli = await s.ogeleriGetir(db, cihazAdi);
   const onceki = mb.durum ?? diziyiDurumaCevir(kayitli ?? []);
   const yeni = lsv2Ogeleri(okundu ? r.okuma : null, zaman);
@@ -166,6 +183,7 @@ async function isle(db: Db, cihazAdi: string, mb: Lsv2MakineBellegi, r: Lsv2Sonu
   const adaylar: SuzulecekOge[] = [];
   const degisenKimlik = new Set(degisen.map((d) => d.kimlik));
   for (const oge of yeni) {
+    if (lsv2GecmisteYok(oge.kimlik)) continue;
     const kategori = (oge.kimlik === null ? undefined : LSV2_KATEGORILERI.get(oge.kimlik)) ?? null;
     if (kategori !== 'SAMPLE' && !degisenKimlik.has(oge.kimlik)) continue;
     const k = gecmisKaydi(cihazAdi, oge);
@@ -181,4 +199,22 @@ async function isle(db: Db, cihazAdi: string, mb: Lsv2MakineBellegi, r: Lsv2Sonu
 function gecmisKaydi(cihazAdi: string, o: TezgahOgesi) {
   if (o.kimlik === null || o.sira === null || o.zaman === null) return null;
   return { cihazAdi, kimlik: o.kimlik, sira: o.sira, zaman: new Date(o.zaman), deger: o.deger, kosul: o.kosul };
+}
+
+// Seyrek okuma: takım tablosunun ve program listesinin son durumu bütünüyle yenilenir; geçmişe yalnız ömür ya da kilidi değişen takım
+// yazılır. Okunamayanın son durumu korunur, nedeni seyrek kaydına yazılır.
+async function takimTablosunuIsle(db: Db, cihazAdi: string, o: Lsv2Okumasi, zaman: Date): Promise<void> {
+  const neden = (alan: 'takim-tablosu' | 'program-listesi', cozulemedi: string): string => {
+    const t = o.tani.find((x) => x.alan === alan);
+    return t === undefined ? cozulemedi : lsv2TaniMetni(t);
+  };
+  const satirlar = o.takimTablosu ?? null;
+  const programlar = o.programListesi ?? null;
+  await s.lsv2SeyrekYaz(db, cihazAdi, zaman, satirlar !== null ? null : neden('takim-tablosu', 'Takım tablosu çözülemedi (biçim tanınmadı)'),
+    programlar !== null ? null : neden('program-listesi', 'Program listesi okunamadı'));
+  if (programlar !== null) await s.lsv2ProgramlariYaz(db, cihazAdi, programlar, zaman);
+  if (satirlar === null) return;
+  const onceki = new Map((await s.lsv2TakimlariGetir(db, cihazAdi)).map((t) => [t.no, t]));
+  await s.lsv2TakimGecmisiYaz(db, cihazAdi, takimDegisenleri(onceki, satirlar), zaman);
+  await s.lsv2TakimlariYaz(db, cihazAdi, satirlar, zaman);
 }
