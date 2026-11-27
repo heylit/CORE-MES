@@ -20,7 +20,7 @@ export { Kabuk } from './Kabuk.tsx';
 export { PinPenceresi } from './PinPenceresi.tsx';
 export { Karsilama } from './Karsilama.tsx';
 export { AcilisGosterisi, AcilisOnizleme } from './Acilis.tsx';
-export { Tablo, tabloCsvSatirlari, type Sutun, type TabloAraci, type TabloSuzgeci } from './Tablo.tsx';
+export { Tablo, tabloCsvSatirlari, type Sutun, type TabloAraci, type TabloGrupSecenegi, type TabloSuzgeci } from './Tablo.tsx';
 export { SayfaBasligi, type BirincilEylem } from './SayfaBasligi.tsx';
 export { Yenile, gecenMetni, type YenilenenSorgu } from './Yenile.tsx';
 export { Sayfalama, type SayfalamaOzellikleri } from './Sayfalama.tsx';
