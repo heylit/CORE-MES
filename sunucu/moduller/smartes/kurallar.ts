@@ -844,6 +844,16 @@ export function makineDurumu(durumKodu: string | null, alarmVar: boolean): Makin
   return (durumKodu === null ? undefined : DURUM_KODLARI[durumKodu.trim().toLowerCase()]) ?? 'bilinmiyor';
 }
 
+// SmartES alarm yokken de alarm alanlarına yer tutucu koyar (ALARMTEXT boşluk, "0", "-"; ALARMNO 0 ya da eksi); bunlar alarm sayılmaz,
+// yoksa çalışan tezgâh "alarm" görünür.
+const ALARM_YOK_METINLERI: ReadonlySet<string> = new Set(['yok', 'alarm yok', 'no alarm', 'none', 'null', 'n/a', 'na', 'ok']);
+export function anlamliAlarmMetni(d: string | null): string | null {
+  if (d === null) return null;
+  const t = d.trim();
+  if (/^[\s0.\-_]*$/.test(t) || ALARM_YOK_METINLERI.has(t.toLocaleLowerCase('tr-TR'))) return null;
+  return t;
+}
+
 export interface MakineOkumasi {
   makineKodu: string;
   smartesMakineId: number;
@@ -871,14 +881,15 @@ export const makineBilgiParametreleri = (makineId: number): Parametreler => [['M
 export function makineBilgisiOku(s: TabloSatiri, m: AktifMakine): MakineOkumasi | null {
   const makineKodu = metin(s, ['KOD']) ?? m.kod;
   if (makineKodu === null || makineKodu.trim() === '') return null;
-  const alarmNo = adet(s, ['ALARMNO']);
-  const alarmMetni = metin(s, ['ALARMTEXT']);
-  const alarmVar = (alarmNo !== null && alarmNo !== 0) || alarmMetni !== null;
+  const no = adet(s, ['ALARMNO']);
+  const alarmNo = no !== null && no > 0 ? no : null;
+  const alarmMetni = anlamliAlarmMetni(metin(s, ['ALARMTEXT']));
+  const alarmVar = alarmNo !== null || alarmMetni !== null;
   const durumKodu = metin(s, ['CNCSTATE']);
   return {
     makineKodu, smartesMakineId: m.id, makineAdi: metin(s, ['AD']), durum: makineDurumu(durumKodu, alarmVar), durumKodu,
     mod: metin(s, ['ACTMOD']),
-    alarm: alarmVar ? [alarmNo !== null && alarmNo !== 0 ? String(alarmNo) : null, alarmMetni].filter((x) => x !== null).join(' ') : null,
+    alarm: alarmVar ? [alarmNo === null ? null : String(alarmNo), alarmMetni].filter((x) => x !== null).join(' ') : null,
     uyari: metin(s, ['CNCWARNING']), programNo: metin(s, ['PROGNO']), programAdi: metin(s, ['PROGCOMMENT', 'PROGDESCRIPTION']),
     sayac: adet(s, ['PARTS1']), sayacToplam: adet(s, ['PARTS2']), eksenHizi: adet(s, ['FSPD']), eksenOrani: adet(s, ['FOVR']),
     spindleYuku: adet(s, ['SLD']), spindleOrani: adet(s, ['SOVR']), spindleHizi: adet(s, ['SSPD']), takimCebi: adet(s, ['TOOLNUM']),

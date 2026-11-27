@@ -89,3 +89,6 @@ Yeni modül; depoda önceki hâli yok. Brief (`SMARTES_PROMPT.md`, .NET/ASMX iç
   (uretim_kaydi, makine kullanımı) bu düzeltmenin dışındadır.
   Bilinen sınırlar (Risk M1, M2): yalnız henüz eşlenmemiş duruşlar düzeltilir; eşlenmiş bir ad başka nedene yeniden eşlenirse eski olaylar değişmez.
   Bu yamadan önce yazılmış hareketlerde `olay_id` boştur. Kişi düzeltmesi yazılırken pay sayımının okuduğu uretim_kaydi ve makine kullanımı da kapsanmalı (R4).
+- 3810 (27.11): canlı makine okumasında alarm yalnız anlamlı değerle sayılır. ALARMNO 0 ya da eksi, ALARMTEXT boş, "0", "-" ya da "alarm yok"
+  anlamlı yer tutucu ise makine alarmda değildir; durum CNCSTATE karşılığından gelir. CNCSTATE karşılık tablosu hâlâ boş (belgede değer yok):
+  çalışan tezgâh "bilinmiyor" ve ham kodla görünür; karşılık ilk gerçek değer bilinince eklenir.
