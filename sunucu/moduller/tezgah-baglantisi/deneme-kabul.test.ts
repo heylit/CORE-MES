@@ -8,9 +8,9 @@ import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disar
 import { uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import type { IsEmriGirdisi } from '../uretim-emirleri/disari.ts';
 import {
-  artislar, durumCizgisi, duruslar, gercekCevrim, isSayimlari, pencereAraligi, programDegistiMi, programEslesmesi, programKullanimi,
+  artislar, durumCizgisi, duruslar, gecisOlcutleri, gercekCevrim, isSayimlari, pencereAraligi, programDegistiMi, programEslesmesi, programKullanimi,
 } from './deneme-kurallar.ts';
-import type { Artis, SayacDegisimi } from './deneme-kurallar.ts';
+import type { Artis, GecisGirdisi, IsAraligi, SayacDegisimi } from './deneme-kurallar.ts';
 import * as deneme from './deneme-servis.ts';
 import { uretimArtisiMi } from './kurallar.ts';
 import { eslemeYaz } from './sorgular.ts';
@@ -97,6 +97,47 @@ describe('Deneme kuralları (kart 3811, 3811-2)', () => {
     assert.deepEqual(pencereAraligi('dun', simdi), { bas: t('00:00:00'), bit: Date.parse('2026-04-11T00:00:00+03:00') });
     assert.equal(pencereAraligi('yedi-gun', simdi).bas, Date.parse('2026-04-05T00:00:00+03:00'));
     assert.equal(pencereAraligi('bugun', simdi).bit, simdi);
+  });
+});
+
+describe('Durum çizgisi, duruş sınıfı ve geçiş ölçütü sınırları (kart 3811)', () => {
+  const pencere = { bas: t('06:00:00'), bit: t('12:00:00') };
+  const is = (ek: Partial<IsAraligi> = {}): IsAraligi =>
+    ({ bas: t('06:00:00'), bit: t('12:00:00'), isEmriNo: 'ORN-UE-9', op: '10', parcaNo: 'ORN-P900', ilkParcaOnayi: null, ...ek });
+
+  test('tanımlı vardiyada plan dışı süre vardiya dışıdır; çalışma plan dışında da çalışmadır', () => {
+    const ornekler = [{ zaman: t('06:00:00'), durum: 'bekliyor' }, { zaman: t('09:00:00'), durum: 'calisiyor' }, { zaman: t('11:00:00'), durum: 'bekliyor' }];
+    const cizgi = durumCizgisi(ornekler, pencere, [{ bas: t('07:00:00'), bit: t('10:00:00') }]);
+    assert.deepEqual(cizgi.map((p) => [p.bas, p.bit, p.hal]), [
+      [t('06:00:00'), t('07:00:00'), 'vardiya-disi'], [t('07:00:00'), t('09:00:00'), 'bekliyor'],
+      [t('09:00:00'), t('11:00:00'), 'calisiyor'], [t('11:00:00'), t('12:00:00'), 'vardiya-disi'],
+    ]);
+  });
+
+  test('bekleme parçasıyla kesişen alarm olayı arızadır, metni gelir', () => {
+    const cizgi = [{ bas: t('07:00:00'), bit: t('07:20:00'), hal: 'bekliyor' as const }];
+    const d = duruslar(cizgi, 5, [is({ ilkParcaOnayi: t('06:30:00') })], [{ bas: t('07:10:00'), bit: t('07:15:00'), kod: 'ORN-1', metin: 'ORN eksen hatası' }], pencere.bit);
+    assert.deepEqual(d.adaylar.map((a) => [a.sinif, a.metin]), [['ariza', 'ORN eksen hatası']]);
+  });
+
+  test('ilk parça onayından önce ya da onay yokken duruş ölçümdür; onaydan sonra neden sorulur; iş yoksa iş yok', () => {
+    const cizgi = [
+      { bas: t('07:00:00'), bit: t('07:20:00'), hal: 'bekliyor' as const }, { bas: t('09:00:00'), bit: t('09:20:00'), hal: 'bekliyor' as const },
+      { bas: t('11:00:00'), bit: t('11:20:00'), hal: 'bekliyor' as const },
+    ];
+    const isler = [is({ bit: t('10:00:00'), ilkParcaOnayi: t('08:00:00') })];
+    assert.deepEqual(duruslar(cizgi, 5, isler, [], pencere.bit).adaylar.map((a) => a.sinif), ['olcum', 'neden-sorulacak', 'is-yok']);
+    assert.deepEqual(duruslar(cizgi.slice(0, 1), 5, [is()], [], pencere.bit).adaylar.map((a) => a.sinif), ['olcum']);
+  });
+
+  test('sayaç farkı ölçütü fark küçük olsa da en az 3 kapanan iş ister', () => {
+    const g = (n: number): GecisGirdisi => ({
+      eslendi: true, planliMs: 1000, baglantiYokMs: 0, kapananlar: Array.from({ length: n }, () => ({ tezgah: 10, terminal: 10 })), eslesmeler: ['tahmin'],
+      ncAlaniVar: false, alarmTani: null, saatFarkiSn: 0, saatTani: null, uretimArtisi: 1, iseBagliUretimArtisi: 1,
+    });
+    const fark = (n: number) => gecisOlcutleri(g(n)).find((o) => o.olcut === 'sayac-farki')!;
+    assert.deepEqual([fark(2).tamam, fark(2).neden], [false, 'En az 3 kapanan iş gerekir']);
+    assert.equal(fark(3).tamam, true);
   });
 });
 

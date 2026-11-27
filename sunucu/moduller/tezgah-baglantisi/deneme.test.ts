@@ -10,8 +10,10 @@ import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { adAnahtari, aktifAlarmlar, alarmFarki, eslemeOnerisi, sayacBaglami } from './kurallar.ts';
 import type { TezgahOgesi } from './kurallar.ts';
-import { alarmOlaylariniIsle, sayacDegisiminiIsle } from './servis.ts';
-import { alarmOlaylari, eskiAlarmlariSil, eskiSayacArtislariniSil, okumaYaz, sayacArtislari } from './sorgular.ts';
+import { alarmOlaylariniIsle, sayacDegisiminiIsle, temizlikTuru, yeniTurBellegi } from './servis.ts';
+import {
+  alarmOlaylari, eskiAlarmlariSil, eskiSayacArtislariniSil, okumaYaz, programSurumleri, programSurumleriYaz, sayacArtislari, sayacDegisimiYaz,
+} from './sorgular.ts';
 
 // Kart 3811: deneme sayfası, gerçek PostgreSQL. Makine kodları ve cihaz adları uydurmadır.
 const PAROLA = 'dogru-parola-1';
@@ -146,5 +148,28 @@ describe('Tezgâh deneme sayfası eşleme (gerçek PostgreSQL)', () => {
     assert.deepEqual(satirlar.map((r) => [r.onceki, r.deger, r.program, r.kip]), [[null, 5, 'ORN-P.H', 'AUTOMATIC'], [5, 6, 'ORN-P.H', 'AUTOMATIC'], [6, 0, 'ORN-P.H', 'AUTOMATIC']]);
     await vt().tx((db) => eskiSayacArtislariniSil(db, z(60)));
     assert.deepEqual((await vt().tx((db) => sayacArtislari(db, ['ORN-SAY'], z(-1), z(10)))).map((r) => r.deger), [0]);
+  });
+  test('temizlik turu 90 günden eski alarm olayını, sayaç değişimini ve yerine yenisi gelmiş program sürümünü siler; tabanı ve son sürümü bırakır', async () => {
+    const simdi = new Date('2026-11-27T12:00:00Z');
+    const once = (gun: number) => new Date(simdi.getTime() - gun * 86_400_000);
+    const bos = { program: null, kip: 'AUTOMATIC', dryrun: false, singleblock: false };
+    await vt().tx(async (db) => {
+      await alarmOlaylariniIsle(db, 'ORN-TMZ', [kosul('k1', 'Fault', 'ORN eski')], once(100));
+      await alarmOlaylariniIsle(db, 'ORN-TMZ', [kosul('k1', 'Normal')], once(99));
+      await alarmOlaylariniIsle(db, 'ORN-TMZ', [kosul('k1', 'Fault', 'ORN yakın')], once(10));
+      await sayacDegisimiYaz(db, 'ORN-TMZ', once(100), null, 1, bos);
+      await sayacDegisimiYaz(db, 'ORN-TMZ', once(95), 1, 2, bos);
+      await sayacDegisimiYaz(db, 'ORN-TMZ', once(10), 2, 3, bos);
+      await sayacDegisimiYaz(db, 'ORN-TMZ-2', once(100), null, 7, bos);
+      await programSurumleriYaz(db, 'ORN-TMZ', [{ ad: 'ORN-A.H', boyut: 10, tarih: null }, { ad: 'ORN-B.H', boyut: 30, tarih: null }], once(100));
+      await programSurumleriYaz(db, 'ORN-TMZ', [{ ad: 'ORN-A.H', boyut: 20, tarih: null }], once(95));
+    });
+    await temizlikTuru(vt(), yeniTurBellegi(), simdi);
+    const alarm = await vt().tx((db) => alarmOlaylari(db, once(200), simdi));
+    assert.deepEqual(alarm.filter((o) => o.cihazAdi === 'ORN-TMZ').map((o) => o.metin), ['ORN yakın']);
+    const sayac = await vt().tx((db) => sayacArtislari(db, ['ORN-TMZ', 'ORN-TMZ-2'], once(200), simdi));
+    assert.deepEqual(sayac.map((r) => [r.cihazAdi, r.deger]).sort(), [['ORN-TMZ', 3], ['ORN-TMZ-2', 7]]);
+    const surum = await vt().tx((db) => programSurumleri(db, ['ORN-TMZ']));
+    assert.deepEqual(surum.map((r) => [r.ad, r.boyut]).sort(), [['ORN-A.H', 20], ['ORN-B.H', 30]]);
   });
 });

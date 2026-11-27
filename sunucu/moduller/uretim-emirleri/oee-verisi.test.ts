@@ -154,6 +154,8 @@ describe('uretim-emirleri OEE okumaları (gerçek PostgreSQL)', () => {
     const { uretimEmriId: e1, isEmriIdleri: [i1, i2] } = await ac(adim(1, m1, '2'), adim(2, m1, '2'));
     await kullanim(e1, i1!, m1, '2026-04-05T07:00:00+03:00', '2026-04-05T09:00:00+03:00');
     await kullanim(e1, i2!, m1, '2026-04-05T10:00:00+03:00', null);
+    // İlk sayım hurda: ilk parça onayı ilk sağlam sayımdır, hurda sayılmaz.
+    await sayim(e1, i1!, 'hurda', 1, '2026-04-05T07:20:00+03:00');
     await sayim(e1, i1!, 'saglam', 1, '2026-04-05T07:40:00+03:00');
     await sayim(e1, i1!, 'saglam', 3, '2026-04-05T08:30:00+03:00');
     const emirNo = (await o().sahip.tek<{ no: string; parca: string }>('SELECT emir_no AS no, parca_no AS parca FROM uretim_emri WHERE id = $1', [e1]))!;
