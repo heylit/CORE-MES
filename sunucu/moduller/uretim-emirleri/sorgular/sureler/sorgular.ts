@@ -102,6 +102,35 @@ export function makineKullanimAraliklariGetir(
   );
 }
 
+// Makine kullanımları iş bilgisiyle (3811 tezgâh denemesi): kırpılmamış başlama ve bitiş (açık kullanımda null), iş emri no, OP, parça
+// no ve ilk parça onay anı (o adımın, adım yoksa emrin ilk sağlam sayımı; 327 a, 744 a ile aynı ölçü). Pencereyle kesişenler gelir.
+export interface MakineIsAraligiSatiri {
+  id: number;
+  baslangic: string;
+  bitis: string | null;
+  isEmriId: number | null;
+  isEmriNo: string;
+  op: number | null;
+  parcaNo: string;
+  ilkParcaOnayi: string | null;
+}
+export function makineIsAraliklariGetir(
+  db: Db, makineIdleri: readonly number[], baslangic: string, bitis: string,
+): Promise<MakineIsAraligiSatiri[]> {
+  return db.sorgu<MakineIsAraligiSatiri>(
+    `SELECT k.makine_id AS id, ${ISO('k.baslama')} AS baslangic, ${ISO('k.bitis')} AS bitis, k.is_emri_id AS "isEmriId",
+            e.emir_no AS "isEmriNo", i.op_no AS op, e.parca_no AS "parcaNo",
+            ${ISO(`(SELECT min(s.zaman) FROM uretim_sayimi s WHERE s.emir_id = k.emir_id AND s.tur = 'saglam'
+                     AND (k.is_emri_id IS NULL OR s.is_emri_id = k.is_emri_id))`)} AS "ilkParcaOnayi"
+       FROM uretim_emirleri_makine_kullanimi k
+       JOIN uretim_emri e ON e.id = k.emir_id
+       LEFT JOIN uretim_emirleri_is_emri i ON i.id = k.is_emri_id
+      WHERE k.makine_id = ANY($1::int[]) AND k.baslama < $3::timestamptz AND COALESCE(k.bitis, now()) > $2::timestamptz
+      ORDER BY k.makine_id, k.baslama, k.id`,
+    [[...makineIdleri], baslangic, bitis],
+  );
+}
+
 export interface MakineSayimAniSatiri {
   id: number;
   zaman: string;

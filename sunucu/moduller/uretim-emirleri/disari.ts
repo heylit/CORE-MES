@@ -21,7 +21,7 @@ import './is-olayi-bildirimi.ts';
 import {
   adimGirdileriGetir, adimUretimSatiriGetir, emirAdimZinciriGetir, akisEmriGetir, akisFasonGetir, akisIsEmirleriGetir, akisOlaylariGetir, akisSayimlariGetir, aralikAdetleriGetir, gunlukAralikAdetleriGetir, kisininGunlukIsEmirleriGetir,
   tasinanGirdiGetir, dugumleriGetir, emirBul, emirleriGetir, emirDurumlariGetir, ustEmirlerBul, isEmirleriGetir, malzemelerinAcikEmirleriGetir, siparisSatiriEmirleriGetir, isEmriPlanBilgileriGetir, isEmriZamanlariGetir, katilimSureleriGetir, kisininAcikIstasyonu, kisininAcikIsleriGetir, kisininHurdalariGetir,
-  bitenEmirler as bitenEmirlerGetir, bitenIsEmirleriGetir, calismayaGecisAnlari as gecisAnlariGetir, istasyonDurusSureleri as istasyonDuruslariGetir, kisininIsEmirleriGetir, makineKullanimAraliklariGetir, makinelerdekiIslerGetir, makineSayimAnlariGetir, makineSureleriGetir, sonGirisleriGetir, standartSureleriGetir,
+  bitenEmirler as bitenEmirlerGetir, bitenIsEmirleriGetir, calismayaGecisAnlari as gecisAnlariGetir, istasyonDurusSureleri as istasyonDuruslariGetir, kisininIsEmirleriGetir, makineIsAraliklariGetir, makineKullanimAraliklariGetir, makinelerdekiIslerGetir, makineSayimAnlariGetir, makineSureleriGetir, sonGirisleriGetir, standartSureleriGetir,
 } from './sorgular.ts';
 import type {
   AkisEmirSatiri, AkisFasonSatiri, AkisIsEmriSatiri, AkisOlaySatiri, AkisSayimSatiri, BitenIsEmriSatiri, EtkilenenEmirSatiri, IsEmriZamanSatiri, KisiAcikIsSatiri, MakinedekiIsSatiri, KisiIsEmriSatiri, SayimKirilimi,
@@ -302,6 +302,23 @@ export async function makineKullanimAraliklari(
   const sonuc = new Map<number, { baslangic: string; bitis: string }[]>();
   if (tekil.length === 0) return sonuc;
   for (const { id, ...a } of await makineKullanimAraliklariGetir(db, tekil, baslangic, bitis)) {
+    const liste = sonuc.get(id);
+    if (liste) liste.push(a);
+    else sonuc.set(id, [a]);
+  }
+  return sonuc;
+}
+
+// Makine başına kullanımlar iş bilgisiyle, başlama sırasıyla (3811 tezgâh denemesi, salt okuma): bitiş açık kullanımda null, OP
+// adımsız kullanımda null, ilk parça onayı adımın ilk sağlam sayımıdır (yoksa null). Penceresinde kullanımı olmayan makine haritada yoktur.
+export interface MakineIsAraligi { baslangic: string; bitis: string | null; isEmriId: number | null; isEmriNo: string; op: number | null; parcaNo: string; ilkParcaOnayi: string | null }
+export async function makineIsAraliklari(
+  db: Db, makineIdleri: readonly number[], baslangic: string, bitis: string,
+): Promise<Map<number, MakineIsAraligi[]>> {
+  const tekil = [...new Set(makineIdleri)];
+  const sonuc = new Map<number, MakineIsAraligi[]>();
+  if (tekil.length === 0) return sonuc;
+  for (const { id, ...a } of await makineIsAraliklariGetir(db, tekil, baslangic, bitis)) {
     const liste = sonuc.get(id);
     if (liste) liste.push(a);
     else sonuc.set(id, [a]);

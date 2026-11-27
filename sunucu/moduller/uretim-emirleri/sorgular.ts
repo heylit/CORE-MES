@@ -38,6 +38,7 @@ export {
 } from './sorgular/kullanim/sorgular.ts';
 export {
   type SayimKirilimi, aralikAdetleriGetir, gunlukAralikAdetleriGetir, katilimSureleriGetir, makineSureleriGetir, makineKullanimAraliklariGetir,
+  type MakineIsAraligiSatiri, makineIsAraliklariGetir,
   type MakineSayimAniSatiri, makineSayimAnlariGetir, sonGirisleriGetir, type CalisanIsEmriSatiri, calisanIsEmirleriGetir, type SonOlaySatiri,
   sonOlaylarGetir, kisininAcikIstasyonu, type KisiAcikIsSatiri, kisininAcikIsleriGetir, type KisiIsEmriSatiri, kisininIsEmirleriGetir,
   kisininGunlukIsEmirleriGetir, kisininHurdalariGetir, standartSureleriGetir, isEmriPlanBilgileriGetir, type IsEmriZamanSatiri, isEmriZamanlariGetir,
