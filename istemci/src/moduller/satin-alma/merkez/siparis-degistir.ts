@@ -5,16 +5,18 @@
  */
 import type { SiparisDegisikligi, SiparisDegisikligiOgesi, SiparisDegistirGovdesi } from "#paylasilan/sozlesme/satin-alma.ts";
 import type { Currency, PurchaseRequest } from "./tipler.ts";
-import { awardOrders, siparisEtiketi, supName } from "./calc.ts";
+import { awardOrders, orderDue, siparisEtiketi, supName } from "./calc.ts";
 import { esc, fmtDate, isNum, money, numIn, parseNum } from "./util.ts";
 
 export interface DSatir {
   itemId: string; name: string; qty: number; unit: string; price: number | null; exp: string; note: string; received: number; iptal: boolean;
+  /** 3802: satırın kayıtlı termini boştu (siparişinki geçiyordu); pencere siparişin terminiyle doldurur, değişmezse boş gönderir. */
+  terminSiparisin: boolean;
   ilk: { qty: number; unit: string; price: number | null; exp: string; note: string };
 }
 export interface DBaslik { payDays: number; kdv: string; teslimYeri: string; tedarikciNotu: string; icNot: string }
 export interface DTaslak {
-  talepId: string; quoteId: string; etiket: string; firma: string; currency: Currency; no: number;
+  talepId: string; quoteId: string; etiket: string; firma: string; currency: Currency; no: number; siparisTarihi: string;
   satirlar: DSatir[]; baslik: DBaslik; ilkBaslik: DBaslik; gerekce: string; teyitKisi: string; teyitTarihi: string;
   /** Logo'da irsaliyeli: miktar, fiyat, termin, iptal, vade ve KDV kilitli; notlar ve teslim yeri açık. */
   irsaliyeli: boolean;
@@ -49,14 +51,15 @@ export function degisiklikTaslagiKur(r: PurchaseRequest, quoteId: string): DTasl
     const qty = l.qty ?? it?.qty ?? 0;
     const unit = l.unit ?? it?.unit ?? "";
     const price = isNum(o.q.prices[l.itemId]) ? o.q.prices[l.itemId]! : null;
-    const exp = l.expectedDate ?? "";
+    // 3802: termin zorunlu; kayıtlı satır termini yoksa siparişin termini görünür ve denetlenir.
+    const exp = l.expectedDate || orderDue(o);
     const note = l.note ?? "";
-    return { itemId: l.itemId, name: it?.name ?? "Kalem", qty, unit, price, exp, note, received: l.received ?? 0, iptal: false, ilk: { qty, unit, price, exp, note } };
+    return { itemId: l.itemId, name: it?.name ?? "Kalem", qty, unit, price, exp, note, received: l.received ?? 0, iptal: false, terminSiparisin: !l.expectedDate, ilk: { qty, unit, price, exp, note } };
   });
   const baslik: DBaslik = { payDays: o.q.payDays ?? 0, kdv: g?.kdvOrani ?? "", teslimYeri: ord.teslimYeri ?? "", tedarikciNotu: ord.tedarikciNotu ?? "", icNot: ord.icNot ?? "" };
   const logo = o.logo;
   return {
-    talepId: r.id, quoteId, etiket: siparisEtiketi(o) || "Sipariş", firma: supName(o.q), currency: o.q.currency, no: g?.no ?? 0,
+    talepId: r.id, quoteId, etiket: siparisEtiketi(o) || "Sipariş", firma: supName(o.q), currency: o.q.currency, no: g?.no ?? 0, siparisTarihi: o.orderDate,
     satirlar, baslik, ilkBaslik: { ...baslik }, gerekce: "", teyitKisi: "", teyitTarihi: "",
     irsaliyeli: !!logo?.kayitNo && satirlar.some((x) => x.received > 0),
     kapali: logo && (logo.iptalDurumu || logo.kapatmaDurumu) ? KAPALI_SIPARIS : null,
@@ -111,6 +114,9 @@ export function degisiklikHatalari(t: DTaslak): { alan: string; ileti: string }[
     if (!isNum(s.qty) || s.qty <= 0) h.push({ alan: `sd-m-${i}`, ileti: `${s.name}: miktar sıfırdan büyük olur.` });
     else if (s.qty < s.received - 0.00005) h.push({ alan: `sd-m-${i}`, ileti: `${s.name}: miktar teslim alınan ${numIn(s.received)} altına inmez.` });
     if (s.price === null || s.price < 0) h.push({ alan: `sd-p-${i}`, ileti: `${s.name}: birim fiyat yazın.` });
+    if (t.irsaliyeli) return;
+    if (!s.exp) h.push({ alan: `sd-t-${i}`, ileti: `${s.name}: termin girin.` });
+    else if (t.siparisTarihi && s.exp < t.siparisTarihi) h.push({ alan: `sd-t-${i}`, ileti: `${s.name}: termin sipariş tarihinden (${fmtDate(t.siparisTarihi)}) önce olamaz.` });
   });
   if (t.satirlar.every((s) => s.iptal)) h.push({ alan: "sd-m-0", ileti: "Siparişin bütün satırları iptal edilemez; siparişin tamamı talep iptaliyle kalkar." });
   if (t.baslik.kdv && !/^\d{1,3}(\.\d{1,2})?$/.test(t.baslik.kdv.replace(",", "."))) h.push({ alan: "sd-kdv", ileti: "KDV oranı geçersiz (örn. 20)." });
@@ -123,7 +129,7 @@ export function degisiklikGovdesi(t: DTaslak): Omit<SiparisDegistirGovdesi, "sur
   return {
     teklifId: t.quoteId,
     satirlar: t.satirlar.map((s) => ({
-      kalemId: s.itemId, miktar: ond(s.qty), birim: s.unit, birimFiyat: ond(s.price ?? 0), beklenenTeslim: s.exp || null, notlar: s.note, iptal: s.iptal,
+      kalemId: s.itemId, miktar: ond(s.qty), birim: s.unit, birimFiyat: ond(s.price ?? 0), beklenenTeslim: s.terminSiparisin && s.exp === s.ilk.exp ? null : s.exp || null, notlar: s.note, iptal: s.iptal,
     })),
     baslik: { vadeGun: t.baslik.payDays, kdvOrani: t.baslik.kdv ? t.baslik.kdv.replace(",", ".") : null, teslimYeri: t.baslik.teslimYeri, tedarikciNotu: t.baslik.tedarikciNotu, icNot: t.baslik.icNot },
     gerekce: t.gerekce.trim(), teyitKisi: t.teyitKisi.trim(), teyitTarihi: t.teyitTarihi || null,
@@ -193,7 +199,7 @@ export function siparisDegistirHTML(t: DTaslak, secenekler: { quoteId: string; e
       <td class="r num" data-l="Teslim alınan">${numIn(s.received)} ${esc(s.unit)}</td>
       <td class="r" data-l="Miktar (${esc(s.unit)})">${eski(!ayni(s.qty, s.ilk.qty) && !s.iptal, numIn(s.ilk.qty))}<input class="num" type="text" inputmode="decimal" id="sd-m-${i}" value="${numIn(s.qty)}" aria-label="${ad} miktar"${hataliMi(`sd-m-${i}`)}${dis(kilitli || s.iptal)}>${s.received > 0 && !kilitli ? `<span class="sub">en az ${numIn(s.received)}</span>` : ""}${t.irsaliyeli ? KILIT("irsaliyeli") : ""}</td>
       <td class="r" data-l="Birim fiyat (${esc(t.currency)})">${eski(!ayni(s.price, s.ilk.price) && !s.iptal, s.ilk.price === null ? "–" : numIn(s.ilk.price))}<input class="num" type="text" inputmode="decimal" id="sd-p-${i}" value="${s.price === null ? "" : numIn(s.price)}" aria-label="${ad} birim fiyat"${hataliMi(`sd-p-${i}`)}${dis(kilitli || s.iptal)}>${t.irsaliyeli ? KILIT("irsaliyeli") : ""}</td>
-      <td data-l="Termin">${eski(s.exp !== s.ilk.exp && !s.iptal, s.ilk.exp ? fmtDate(s.ilk.exp) : "siparişin")}<input type="date" id="sd-t-${i}" value="${esc(s.exp)}" aria-label="${ad} termin"${dis(kilitli || s.iptal)}>${t.irsaliyeli ? KILIT("irsaliyeli") : ""}</td>
+      <td data-l="Termin">${eski(s.exp !== s.ilk.exp && !s.iptal, s.ilk.exp ? fmtDate(s.ilk.exp) : "siparişin")}<input type="date" required id="sd-t-${i}" value="${esc(s.exp)}" aria-label="${ad} termin"${hataliMi(`sd-t-${i}`)}${dis(kilitli || s.iptal)}>${t.irsaliyeli ? KILIT("irsaliyeli") : ""}</td>
       <td data-l="Not"><input type="text" id="sd-n-${i}" value="${esc(s.note)}" maxlength="500" aria-label="${ad} satır notu"${dis(ro || s.iptal)}></td>
       <td data-l="">${kilitli ? "" : s.iptal ? `<button class="btn sm ghost" data-act="sd-iptal" data-i="${i}" aria-label="${ad} iptalini geri al">Geri al</button>`
         : `<button class="btn sm ghost danger" data-act="sd-iptal" data-i="${i}" aria-label="${ad} satırını iptal et">Satırı iptal et</button>`}</td></tr>`;
