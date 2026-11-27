@@ -16,7 +16,7 @@ import { DUGUM_GECERSIZ, dugumGirdisiIhlali, kaynakSuresi, kararBekleyenBitisIhl
 import { LISTE_ADIM_BITTI, LISTE_DOLU, LISTE_ZATEN, kanitMetni, listeEkleReddi, listeIsaretReddi, ATLAMA_TEK_IS_EMRI, atlamaIhlali } from './kurallar.ts';
 import type { SureGirdisi, SureSayimi } from './kurallar.ts';
 import { adimSonKurulumAni } from './kurallar.ts';
-import { KARTLA_GEREKCE_BIRDEN, KARTSIZ_GEREKCE_AZAMI, KARTSIZ_GEREKCE_UZUN, KARTSIZ_YETKI_YOK, kartsizBaslatmaIhlali } from './kurallar.ts';
+import { KARTLA_GEREKCE_BIRDEN, KARTSIZ_GEREKCE_AZAMI, KARTSIZ_GEREKCE_UZUN, KARTSIZ_YETKI_YOK, kartsizBaslatmaIhlali, KARTSIZ_IZIN_BASKASI, KARTSIZ_IZIN_GECERSIZ, kartsizIzinKullanimIhlali } from './kurallar.ts';
 
 const digerleri = (haric: EmirDurumu): EmirDurumu[] => EMIR_DURUMLARI.filter((d) => d !== haric);
 
@@ -447,4 +447,14 @@ describe('adimSonKurulumAni', () => {
     assert.equal(adimSonKurulumAni(B, [o('durdur', '2026-11-24T09:00:00.000Z')]), B);
     assert.equal(adimSonKurulumAni(B, [o('devam', '2026-11-24T10:00:00.000Z'), o('durdur', '2026-11-24T09:00:00.000Z')]), '2026-11-24T10:00:00.000Z');
   });
+});
+
+test('3771 a: kartsız izin, izinden önce tarihli başlatmada ve süre dolunca kullanılmaz', () => {
+  const z = { durum: 'izin' as const, istekAn: '2026-11-27T08:00:00+03:00', kararAn: '2026-11-27T08:02:00+03:00', uretimEmriId: 5, isEmriId: 41, isteyenKisiId: 9 };
+  const b = (an: string) => ({ uretimEmriId: 5, isEmriId: 41, kisiId: 9, anMs: Date.parse(an) });
+  assert.equal(kartsizIzinKullanimIhlali(z, b('2026-11-27T08:05:00+03:00')), null);
+  assert.equal(kartsizIzinKullanimIhlali(z, { ...b('2026-11-27T08:05:00+03:00'), isEmriId: 42 }), KARTSIZ_IZIN_BASKASI, 'aynı emrin başka adımı');
+  assert.equal(kartsizIzinKullanimIhlali({ ...z, isEmriId: null }, { ...b('2026-11-27T08:05:00+03:00'), isEmriId: 42 }), null, 'adımsız istek emrin her adımında');
+  assert.equal(kartsizIzinKullanimIhlali(z, b('2026-11-27T08:01:00+03:00')), KARTSIZ_IZIN_GECERSIZ);
+  assert.equal(kartsizIzinKullanimIhlali(z, b('2026-11-27T08:13:00+03:00')), KARTSIZ_IZIN_GECERSIZ);
 });

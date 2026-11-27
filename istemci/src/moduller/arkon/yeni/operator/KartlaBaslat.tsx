@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { CokSatir, Dugme, Girdi, Pencere } from '../../../../ortak/arayuz/index.ts';
 import type { RefakatKarti } from '../../../../../../arkon/web/src/data/refakat-karti.ts';
 import { terminalOkutmasi } from './el-okuyucu.ts';
+import { YetkiliCagir } from './YetkiliCagir.tsx';
 
 // 3337-2 a: iş adımı refakat kartı okutularak ya da kart numarası girilerek başlar. Kart yoksa yalnız yetkili kişi
 // (`uretim-emirleri.kartsiz-baslat`) gerekçeyle başlatır. Son söz sunucunundur: kartın bu emrin açık kartı olduğunu orada denetler.
@@ -23,9 +24,11 @@ export function kartGirdisiCoz(ham: string, kartlar: readonly Kart[]): number | 
 }
 
 // 3337 Arayüz bakışı: bu işin kartları yalnız bilgi olarak görünür; dokunarak başlatmak kartın elde olmasını aramazdı.
-export function KartlaBaslat({ is, kartlar, yetkili, kartla, kartsiz, kamera, kapat }: {
+// 3771 a: yetkisi olmayan operatör yetkiliyi çağırır (cagri: işin CORE emri ve adımı); izin gelince `izinle` işi izinle başlatır.
+export function KartlaBaslat({ is, kartlar, yetkili, kartla, kartsiz, kamera, kapat, cagri = null, izinle }: {
   is: string; kartlar: readonly Kart[]; yetkili: boolean;
   kartla: (kartId: number) => void; kartsiz: (gerekce: string) => void; kamera: () => void; kapat: () => void;
+  cagri?: { emirId: number; isEmriId: number | null } | null; izinle?: (izinId: number) => void;
 }) {
   const [girdi, girdiYaz] = useState('');
   const [hata, hataYaz] = useState<string | null>(null);
@@ -54,7 +57,9 @@ export function KartlaBaslat({ is, kartlar, yetkili, kartla, kartsiz, kamera, ka
             ipucu="Yalnız yetkili. Gerekçe kayda geçer, kart listesinde Gerekçeli görünür." />
           <Dugme type="submit" tur="ikincil" simge="alert" disabled={gerekce.trim() === ''}>Kartsız başlat</Dugme>
         </form>
-      ) : <p className="tc-ay1-soluk">Kart yoksa yetkili kişi gerekçeyle başlatır.</p>}
+      ) : cagri !== null && izinle !== undefined
+        ? <YetkiliCagir emirId={cagri.emirId} isEmriId={cagri.isEmriId} izinle={izinle} />
+        : <p className="tc-ay1-soluk">Kart yoksa yetkili kişi gerekçeyle başlatır.</p>}
     </Pencere>
   );
 }

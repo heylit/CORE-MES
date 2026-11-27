@@ -1060,6 +1060,9 @@ test('3337-2 a: başlatma kaydı okutulan kartı ya da kartsız gerekçeyi taş�
   assert.deepEqual(kart({ kartsizGerekce: 'Kart basılamadı' }), { refakatPartisiId: null, gerekce: 'Kart basılamadı' });
   assert.deepEqual(kart({ refakatPartisiId: '12', kartsizGerekce: '  ' }), { refakatPartisiId: null, gerekce: null });
   assert.deepEqual(kart({ refakatPartisiId: -1 }), { refakatPartisiId: null, gerekce: null });
+  // 3771 a: yetkilinin telefondan verdiği izin kimliği taşınır; biçimsizse yok sayılır.
+  assert.deepEqual(kart({ kartsizIzinId: 7 }), { refakatPartisiId: null, gerekce: null, izinId: 7 });
+  assert.deepEqual(kart({ kartsizIzinId: '7' }), { refakatPartisiId: null, gerekce: null });
 });
 
 test('katılım yolu: insanlı istasyonda çalışan işe başlatma katılımdır, makinelide emre gider; duraklatma ve bitirme başkası çalışırken yalnız kendi katılımıdır', () => {

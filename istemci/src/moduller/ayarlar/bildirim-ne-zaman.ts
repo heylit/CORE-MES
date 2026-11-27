@@ -48,6 +48,7 @@ const METINLER: Readonly<Record<Exclude<BildirimTuru, KademeTuruAdi>, string>> =
   'stok.istek-teslim-edildi': 'Malzeme isteğin doğrudan teslim edilip kapanınca',
   'stok.mal-kabul-yapildi': 'Satın alma mal kabulü yapılınca, belge başına',
   'stok.gkk-bekliyor': 'Giriş kontrolü isteyen lot karantinaya girince; kontrol verilince kapanır',
+  'uretim-emirleri.kartsiz-izin-istendi': 'Operatör kart olmadan başlatmak için yetkiliyi çağırınca',
   'uretim-emirleri.adim-tamamlandi': 'Adım bitince, sıradaki adımın istasyonuna atananlara',
   'uretim-emirleri.emir-tamamlandi': 'Üretim emri bitince',
   'arkon.gec-giris': 'İş üretime planlanandan geç girince',

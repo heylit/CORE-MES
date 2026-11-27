@@ -33,9 +33,11 @@ export const sayimKartAlani = (kart: unknown): { refakatPartisiId: number } | nu
   typeof kart === 'number' && Number.isInteger(kart) && kart > 0 ? { refakatPartisiId: kart } : null;
 
 // 3337-2 a: çalışmaya geçiş kaydı işin kartını ya da yetkilinin kartsız gerekçesini taşır; sunucu adımın ilk başlatmasında denetler.
-export function baslatmaKartAlani(is: { kart?: unknown; kartsizGerekce?: unknown }): { refakatPartisiId: number } | { kartsizGerekce: string } | Record<string, never> {
+// 3771 a: kart da gerekçe de yoksa yetkilinin telefondan verdiği izin kimliği taşınır.
+export function baslatmaKartAlani(is: { kart?: unknown; kartsizGerekce?: unknown; kartsizIzinId?: unknown }): { refakatPartisiId: number } | { kartsizGerekce: string } | { kartsizIzinId: number } | Record<string, never> {
   const kart = sayimKartAlani(is.kart);
   if (kart) return kart;
+  if (typeof is.kartsizIzinId === 'number' && Number.isInteger(is.kartsizIzinId) && is.kartsizIzinId > 0) return { kartsizIzinId: is.kartsizIzinId };
   return typeof is.kartsizGerekce === 'string' && is.kartsizGerekce.trim() !== '' ? { kartsizGerekce: is.kartsizGerekce } : {};
 }
 
