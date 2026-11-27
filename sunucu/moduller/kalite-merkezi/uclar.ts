@@ -4,10 +4,11 @@ import {
   kmBelgeParametresi, kmDegisiklikCevabi, kmDegisiklikSorgusu, kmDosyaBaglaGovdesi, kmDosyaCevabi, kmDosyaParametresi,
   kmEmirKaynaklariCevabi, kmEslesmeSayimiCevabi, kmParcaKaynaklariCevabi, kmParcaKaynaklariSorgusu,
   kmHataliBekleyenCevabi, kmHataliKararCevabi, kmHataliKararGovdesi, kmHataliParametresi,
-  kmGirisBekleyenCevabi, kmGirisKayitlariCevabi, kmGirisKayitlariSorgusu, kmGirisCevabi, kmGirisGkkGovdesi, kmGirisKararGovdesi, kmGirisParametresi,
+  kmGirisBekleyenCevabi, kmFasonParametresi, kmFasonGkkKararGovdesi, kmFasonGkkKararCevabi, kmKaynaktaMuayeneOnayGovdesi, kmKaynaktaMuayeneOnayCevabi, kmGirisKayitlariCevabi, kmGirisKayitlariSorgusu, kmGirisCevabi, kmGirisGkkGovdesi, kmGirisKararGovdesi, kmGirisParametresi,
   kmGeriYukleCevabi, kmGeriYukleGovdesi, kmGecmisCevabi, kmIlkParcaBekleyenCevabi, kmIlkParcaCevabi, kmIlkParcaGovdesi, kmIlkParcaParametresi, kmKarantinaKonumlariCevabi, kmKarantinaPartileriCevabi, kmKimlikCevabi, kmOlcuAletleriCevabi, kmOnayGeriAlGovdesi, kmOnaylaCevabi, kmOnaylaGovdesi, kmOzetCevabi, kmSilGovdesi, kmSurumCevabi, kmTamamCevabi, kmTedarikciFirmalariCevabi, kmYazGovdesi,
 } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import * as servis from './servis.ts';
+import * as fasonGiris from './fason-giris.ts';
 import {
   kmBalonlarGovdesi, kmGruplarGovdesi, kmMerkezBelgeleriCevabi, kmMerkezBelgeSorgusu, kmIlkParcaKaynagiCevabi, kmNumuneCevabi, kmNumunePlaniGecmisiCevabi, kmNumuneIsteGovdesi, kmNumuneKarariGovdesi, kmNumunePlaniCevabi, kmNumunePlaniGovdesi, kmNumunelerCevabi,
   kmOlcumGovdesi, kmOlcumlerCevabi, kmResimCevabi, kmResimEkleGovdesi, kmStudyoEmirParametresi, kmStudyoNumuneParametresi, kmStudyoOzetleriCevabi, kmStudyoParcaCevabi, kmStudyoEsitlemeCevabi, kmPlanKopyalaGovdesi,
@@ -206,6 +207,27 @@ export const uclar: Uc[] = [
     sorgu: kmGirisKayitlariSorgusu,
     cevap: kmGirisKayitlariCevabi,
     isle: ({ db, sorgu }) => servis.girisKayitlariListesi(db, sorgu),
+  }),
+  // 3809: fason dönüşünün GKK'sı (adet bazında, parça parça) ve kaynağında muayene onayı; giriş kontrolüyle aynı yetki.
+  uc({
+    yontem: 'POST',
+    yol: '/kalite-merkezi/giris/fason/:isEmriId/karar',
+    yetki: 'kalite-merkezi.onayla',
+    tekrarKorumali: true,
+    parametre: kmFasonParametresi,
+    govde: kmFasonGkkKararGovdesi,
+    cevap: kmFasonGkkKararCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => fasonGiris.fasonGkkKarariVer(db, kullanici, parametre.isEmriId, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/kalite-merkezi/kaynakta-muayene/:isEmriId/onay',
+    yetki: 'kalite-merkezi.onayla',
+    tekrarKorumali: true,
+    parametre: kmFasonParametresi,
+    govde: kmKaynaktaMuayeneOnayGovdesi,
+    cevap: kmKaynaktaMuayeneOnayCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => fasonGiris.kaynaktaMuayeneOnayVer(db, kullanici, parametre.isEmriId, govde),
   }),
   uc({
     yontem: 'GET',

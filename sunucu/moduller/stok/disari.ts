@@ -64,6 +64,13 @@ export const karantinadanBirak = (db: Db, kisiId: number, g: Parameters<typeof s
 // yürür; yetkiyi çağıran korur.
 export const girisKontroluSatirlari = (db: Db, idler: readonly number[] | null) => servis.girisKontroluSatirlari(db, idler);
 export type { GirisKontroluSatiri } from './servis.ts';
+// 3809: fason dönüşünün GKK'sı (karantinada karar bekleyen, fason adımı başına) ve Kalite Merkezi'nin adet kararı (serbest ve şartlı
+// mal kabul alanına, red karantinada red). Çağıranın transaction'ında yürür; yetkiyi çağıran korur.
+export const fasonGkkSatirlari = (db: Db, a: Parameters<typeof servis.fasonGkkSatirlari>[1] = {}) => servis.fasonGkkSatirlari(db, a);
+export const fasonGkkDurumu = (db: Db, isEmriId: number) => servis.fasonGkkDurumu(db, isEmriId);
+export type { FasonGkkSatiri, FasonGkkSonucu } from './servis.ts';
+export const fasonGkkKararHareketleri = (db: Db, a: { baslangic: string; bitis: string; sinir: number }) => servis.fasonGkkKararHareketleri(db, a);
+export const fasonGkkKarari = (db: Db, kisiId: number, g: Parameters<typeof servis.fasonGkkKarari>[2]) => akistan(db, 'kalite', () => servis.fasonGkkKarari(db, kisiId, g));
 export const girisKontroluUygula = (db: Db, kisiId: number, g: Parameters<typeof servis.girisKontroluUygula>[2]) => akistan(db, 'kalite', () => servis.girisKontroluUygula(db, kisiId, g));
 // Kalite Merkezi'nin serbest bırakma seçimi için konumlar ve karantina defterindeki hareketten partiye geçiş.
 export const karantinaDisiKonumlar = (db: Db) => sorgular.karantinaDisiKonumlar(db);

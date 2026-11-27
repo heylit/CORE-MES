@@ -146,10 +146,20 @@ const ELLE_TANIMLI_TURLER = {
     baslik: 'Giriş kontrolü bekliyor', onem: 'uyari', sinif: 'gorev', alanIslemler: ['kalite-merkezi.onayla'], yol: '/kalite-merkezi/giris-kontrolu',
     varsayilan: { mesaj: false, eposta: false },
   },
+  // 3809: fason dönüşü karantinaya karar bekliyor girdi. Görevdir: Kalite Merkezi adımın bütün adedini kararlayınca stok kapatır.
+  'stok.fason-gkk-bekliyor': {
+    baslik: 'Fason dönüşü GKK bekliyor', onem: 'uyari', sinif: 'gorev', alanIslemler: ['kalite-merkezi.onayla'], yol: '/kalite-merkezi/giris-kontrolu',
+    varsayilan: { mesaj: false, eposta: false },
+  },
   // 3596: adım bitti; alıcı sıradaki adımın istasyonuna bugün atanmış kişilerdir (kayda bağlı, alan işlemi yok) ve Bildirim yönetimi'nde
   // seçilen rol ve kişiler. Operatör zili Üretim Terminali'nde görür.
   'uretim-emirleri.adim-tamamlandi': {
     baslik: 'Önceki adım tamamlandı', onem: 'bilgi', alanIslemler: [], yol: '/uretim-terminali', varsayilan: { mesaj: false, eposta: false },
+  },
+  // 3809: kaynağında muayene seçili fason adımın parçası firmaya gitti. Görevdir: Kalite Merkezi muayeneyi onaylayınca kapanır.
+  'uretim-emirleri.kaynakta-muayene-bekliyor': {
+    baslik: 'Kaynağında muayene bekliyor', onem: 'uyari', sinif: 'gorev', alanIslemler: ['kalite-merkezi.onayla'], yol: '/kalite-merkezi/giris-kontrolu',
+    varsayilan: { mesaj: false, eposta: false },
   },
   'uretim-emirleri.emir-tamamlandi': {
     baslik: 'Üretim emri tamamlandı', onem: 'bilgi', alanIslemler: ['uretim-emirleri.plana-al'], yol: '/uretim-emirleri', varsayilan: { mesaj: false, eposta: false },

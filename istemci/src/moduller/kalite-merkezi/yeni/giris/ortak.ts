@@ -1,4 +1,4 @@
-import type { KmGirisKaydi, KmGirisKarari, KmGkkTuru } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import type { KmFasonGkkSatiri, KmGirisKaydi, KmGirisKarari, KmGkkTuru, KmKaynaktaMuayeneSatiri } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { RozetTonu } from '../../../../ortak/arayuz/index.ts';
 import { YOK } from '../bicim.ts';
 
@@ -43,4 +43,36 @@ export function girisAraniyor(k: KmGirisKaydi, q: string): boolean {
   const s = sadeles(q.trim());
   if (!s) return true;
   return [k.gkkNo, k.malKabulNo, k.malzemeKod, k.malzemeAd, k.partiEtiketi, k.tedarikciAdi, k.siparisNo].some((d) => d !== null && sadeles(d).includes(s));
+}
+
+// 3809: fason dönüşü kararı. Üç sonucun adedi tam sayı ve sıfırdan büyük toplamdadır, bekleyeni aşamaz; ihlal yoksa null.
+export function fasonKararIhlali(a: { serbest: number; sartli: number; red: number }, bekleyen: number | null): string | null {
+  if (bekleyen === null) return 'Dönüşün adet karşılığı bulunamadı; karar verilemez.';
+  if ([a.serbest, a.sartli, a.red].some((x) => !Number.isInteger(x) || x < 0)) return 'Adetler sıfır ya da pozitif tam sayıdır.';
+  const toplam = a.serbest + a.sartli + a.red;
+  if (toplam === 0) return 'En az bir adede karar verin.';
+  if (toplam > bekleyen) return `Toplam ${String(toplam)} adet, bekleyen ${String(bekleyen)} adedi aşıyor.`;
+  return null;
+}
+
+// 3809: kaynağında muayene onayı. Sağlam ve red firmaya gönderilenin içindedir ve toplamı sıfır olamaz (sunucu kuralıyla aynı).
+export function muayeneOnayIhlali(saglam: number, red: number, gonderilen: number): string | null {
+  if (![saglam, red].every((x) => Number.isInteger(x) && x >= 0)) return 'Adetler sıfır ya da pozitif tam sayıdır.';
+  if (saglam + red === 0) return 'Sağlam ya da red adedini girin.';
+  if (saglam + red > gonderilen) return `Toplam ${String(saglam + red)} adet, firmaya gönderilen ${String(gonderilen)} adedi aşıyor.`;
+  return null;
+}
+
+// Bekleyen sekmesi iki kaynağı tek tabloda gösterir: satın alma lotu (mal kabul satırı) ve fason dönüşü (fason adımı).
+export type BekleyenSatir = { tur: 'satin_alma'; k: KmGirisKaydi } | { tur: 'fason'; f: KmFasonGkkSatiri };
+export const bekleyenAnahtari = (s: BekleyenSatir): string => (s.tur === 'fason' ? `f${String(s.f.fasonIsEmriId)}` : `s${String(s.k.malKabulSatirId)}`);
+export function fasonAraniyor(f: KmFasonGkkSatiri, q: string): boolean {
+  const s = sadeles(q.trim());
+  if (!s) return true;
+  return [f.emirNo, `OP ${String(f.opNo)}`, f.parcaNo, f.parcaAd, f.firmaAdi, f.malKabulNo, f.malzemeKod].some((d) => d !== null && sadeles(d).includes(s));
+}
+export function muayeneAraniyor(m: KmKaynaktaMuayeneSatiri, q: string): boolean {
+  const s = sadeles(q.trim());
+  if (!s) return true;
+  return [m.emirNo, `OP ${String(m.opNo)}`, m.parcaNo, m.parcaAd, m.firmaAdi].some((d) => d !== null && sadeles(d).includes(s));
 }

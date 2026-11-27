@@ -92,6 +92,19 @@ describe('Emirde iç ve dış üretim', () => {
     expect(within(within(tablo).getByText('Otomatik GKK').closest('tr')!).getByText('GKK (otomatik)')).toBeTruthy();
   });
 
+  it('3809: otomatik muayene adımı etiketlenir ve Kalite Merkezi\'nden kapandığı yazılır; tip eksikliği uyarısı adımların üstünde görünür', async () => {
+    const muayene = adim(25, { ad: 'Kaynağında muayene (otomatik)', tur: 'ek', ekAciklama: 'Otomatik kaynağında muayene', istasyon: null });
+    const uyari = 'GKK operasyon tipi (kod GKK, kalite grubu) tanımlı ya da aktif değil; OP 40 adımının arkasına GKK adımı konamaz.';
+    sunucuKur(OKUYUCU, yollar([adim(10), FASONDA, muayene], {
+      'GET /adimli-emirler/3': () => json(200, { emir: { ...ayrinti([adim(10), FASONDA, muayene]), kontrolUyarilari: [uyari] } }),
+    }));
+    ac(ev, '/ev/3');
+    const tablo = await screen.findByRole('table', { name: 'Operasyon adımları' });
+    const satir = within(tablo).getByText('Otomatik muayene').closest('tr')!;
+    expect(within(satir).getByText("Kalite Merkezi'nden kapanır")).toBeTruthy();
+    expect(screen.getByText(uyari)).toBeTruthy();
+  });
+
   it('fasondaki adım firmasıyla görünür ve içeri alınır; son değişikliği yapan kişi görünür', async () => {
     const istekler = sunucuKur(YAZAR, yollar([adim(10), { ...FASONDA, uretimYeriDegisimi: { yer: 'fason', kisi: { id: 7, ad: 'Deneme Planlamaci' }, zaman: '2026-10-07T08:00:00+00:00' } }], {
       'POST /adimli-emirler/3/uretim-yeri': () => json(200, { emir: ayrinti([adim(10), adim(20)]) }),

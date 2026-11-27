@@ -8,6 +8,7 @@ import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { UygulamaHatasi } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
+import type { KmGirisBekleyenCevabi, KmGirisKayitlariCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { FasonIsleriCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { sayimGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { denetimYaz } from '../denetim/disari.ts';
@@ -132,7 +133,7 @@ describe('stok fason iki adım (gerçek PostgreSQL)', () => {
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA }));
     denemeProjeId = (await ortam.sahip.tek<{ id: number }>(
       "INSERT INTO projeler_proje (kod, ad, olusturan_id) VALUES ('STOK.FASON', 'Deneme proje', $1) RETURNING id", [yoneticiId]))!.id;
-    for (const [ad, rol] of [['planlama_proje', 'planlama_proje'], ['operator', 'operator'], ['depo', 'depo']] as const) await kisiEkle(ad, rol);
+    for (const [ad, rol] of [['planlama_proje', 'planlama_proje'], ['operator', 'operator'], ['depo', 'depo'], ['kalite', 'kalite']] as const) await kisiEkle(ad, rol);
     tipId = (await ortam.sahip.tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ('SF-T', 'Deneme tipi', 'TAL') RETURNING id"))!.id;
     await ortam.sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('SF-DNM-', 0) ON CONFLICT (onek) DO NOTHING");
     urunNo = (await ortam.sahip.tek<{ no: number }>(
@@ -396,14 +397,32 @@ describe('stok fason iki adım (gerçek PostgreSQL)', () => {
 
       const tamam = await fason(id, isEmriIdleri[1]!, 'fason-tamamla', {});
       assert.equal(tamam.durum, 200, JSON.stringify(tamam.govde));
+      // 3809: GKK adımı terminalden yürütülmez; Kalite Merkezi adetle parça parça karar verir (adet x 2,5 stok miktarı), adım kendiliğinden kapanır.
+      const gkkTerminal = await terminal(id, 'baslat');
+      assert.equal(gkkTerminal.durum, 409, JSON.stringify(gkkTerminal.govde));
+      const liste = await istek<KmGirisBekleyenCevabi>('kalite', 'GET', '/kalite-merkezi/giris/bekleyenler');
+      assert.equal(liste.durum, 200, JSON.stringify(liste.govde));
+      assert.deepEqual(liste.govde.fason.filter((x) => x.uretimEmriId === id).map((x) => [x.fasonIsEmriId, x.gelen, x.gelenAdet, x.bekleyenAdet, x.gkkAdimi]), [[isEmriIdleri[1], '10', 4, 4, true]]);
+      const karar = (adet: number, sonuc: string) => istek<{ bekleyenAdet: number; adimKapandi: boolean }>('kalite', 'POST', `/kalite-merkezi/giris/fason/${String(isEmriIdleri[1])}/karar`, { [sonuc]: adet });
+      const ilk = await karar(3, 'serbest');
+      assert.equal(ilk.durum, 200, JSON.stringify(ilk.govde));
+      assert.deepEqual(ilk.govde, { bekleyenAdet: 1, adimKapandi: false });
+      assert.equal((await karar(2, 'red')).durum, 400, 'bekleyeni aşan karar verilmez');
+      const son = await karar(1, 'red');
+      assert.deepEqual(son.govde, { bekleyenAdet: 0, adimKapandi: true });
+      assert.deepEqual([await hmBakiye(krn, s20), await hmBakiye(await yer('KABUL'), s20)], [2.5, 7.5], 'serbest mal kabul alanına, red karantinada');
+      const gkkAdimi = await o().sahip.tek<{ durum: string; s: number }>(
+        "SELECT durum, saglam_adet AS s FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 AND ek_aciklama = 'Otomatik GKK'", [id]);
+      assert.deepEqual(gkkAdimi, { durum: 'tamam', s: 3 });
+      assert.deepEqual((await istek<KmGirisBekleyenCevabi>('kalite', 'GET', '/kalite-merkezi/giris/bekleyenler')).govde.fason.filter((x) => x.uretimEmriId === id), [], 'karar verilen satır listeden düşer');
       const b3 = await terminal(id, 'baslat');
       assert.equal(b3.durum, 200, JSON.stringify(b3.govde));
-      // 562 1 b, 3340: karantinadaki parça teslimsiz düşülmez; GKK kararına kadar karantinada durur, son adım istasyonunda sayım yazılmaz.
+      // 562 1 b, 3340: mal kabul alanındaki parça teslimsiz düşülmez (istasyona teslim edilir); son adım istasyonunda sayım yazılmaz.
       const red = await terminal(id, 'sayim', { tur: 'saglam', adet: 3 });
       assert.equal(red.durum, 400, JSON.stringify(red.govde));
-      assert.match((red.govde as { mesaj?: string }).mesaj ?? '', /^Önceki adımın parçası \(.+\) bu istasyonda yetmiyor; 7\.5 eksik\./);
+      assert.match((red.govde as { mesaj?: string }).mesaj ?? '', /bu istasyonda yetmiyor; 7\.5 eksik\./);
       const k3 = await konum(m3);
-      assert.deepEqual([await hmBakiye(krn, s20), await hmBakiye(k3, s20)], [10, 0], 'son adım karantinaya dokunmaz, istasyonda eksi yazılmaz');
+      assert.deepEqual([await hmBakiye(krn, s20), await hmBakiye(k3, s20)], [2.5, 0], 'son adım karantinaya dokunmaz, istasyonda eksi yazılmaz');
     } finally {
       adimStatusuCozucusuKaydet(async () => null);
       adimCiktisiCozucusuKaydet(async () => null);
@@ -474,10 +493,18 @@ describe('stok fason iki adım (gerçek PostgreSQL)', () => {
     return { id, fasonIsEmriId: isEmriIdleri[1]!, ikinciIsEmriId: isEmriIdleri[2]! };
   }
 
+  // 3809: kaynağında muayene Kalite Merkezi'nden onaylanır (göç KYM tipini açar; adım istasyonsuz girer).
+  async function muayeneOnayla(emirId: number, saglam: number, red: number): Promise<void> {
+    const m = (await o().sahip.tek<{ id: number }>("SELECT id FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 AND ek_aciklama = 'Otomatik kaynağında muayene'", [emirId]))!.id;
+    const r = await istek('kalite', 'POST', `/kalite-merkezi/kaynakta-muayene/${String(m)}/onay`, { saglam, red });
+    assert.equal(r.durum, 200, JSON.stringify(r.govde));
+  }
+
   test('3708 kaynağında muayene, sonraki adım fason değil: dönüş karantinasız ve serbest girer, hasar firmadan düşer; GKK dışı yolda hasar girilmez', async () => {
     const f = await fasonFirmaKur(true);
     const e = await kontrolluEmir(f.firmaId, 'kaynakta');
     assert.equal((await fason(e.id, e.fasonIsEmriId, 'fason-gidis', { adet: 6 })).durum, 200);
+    await muayeneOnayla(e.id, 5, 1);
     const sip = await hizmetSiparisi(f.firmaId);
     const kutuCevap = await istek<FasonIsleriCevabi>('depo', 'GET', `/stok/fason-isleri?konumId=${String(sip.kutu)}`);
     assert.equal(kutuCevap.durum, 200, JSON.stringify(kutuCevap.govde));
@@ -491,6 +518,34 @@ describe('stok fason iki adım (gerçek PostgreSQL)', () => {
     assert.equal(await bakiye('k.tur', 'karantina', e.id), 0, 'karantinaya girmez');
     const hareket = await o().sahip.tek<{ adet: number; hurda: number }>("SELECT adet, hurda_adet AS hurda FROM uretim_emirleri_fason_hareketi WHERE is_emri_id = $1 AND yon = 'donus'", [e.fasonIsEmriId]);
     assert.deepEqual(hareket, { adet: 4, hurda: 1 });
+  });
+
+  test('3809 kaynağında muayene: gidiş kaliteye görev açar; adetsiz ve gönderileni aşan onay reddedilir; onay görevi kapatır, red dönüşü sınırlar', async () => {
+    const f = await fasonFirmaKur(true);
+    const e = await kontrolluEmir(f.firmaId, 'kaynakta');
+    const taban = (await o().sahip.tek<{ id: string }>('SELECT COALESCE(max(id), 0)::text AS id FROM bildirim_kaydi'))!.id;
+    assert.equal((await fason(e.id, e.fasonIsEmriId, 'fason-gidis', { adet: 6 })).durum, 200);
+    const gorev = async () => (await o().sahip.sorgu<{ yapildi: string | null }>(
+      "SELECT yapildi::text FROM bildirim_kaydi WHERE tur = 'uretim-emirleri.kaynakta-muayene-bekliyor' AND id > $1 AND kisi_id = $2", [taban, kullanici('kalite').id])).map((g) => g.yapildi);
+    assert.deepEqual(await gorev(), [null], 'gidiş kaliteye muayene görevi açar');
+    const m = (await o().sahip.tek<{ id: number }>("SELECT id FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 AND ek_aciklama = 'Otomatik kaynağında muayene'", [e.id]))!.id;
+    const onay = (saglam: number, red: number) => istek<{ mesaj?: string }>('kalite', 'POST', `/kalite-merkezi/kaynakta-muayene/${String(m)}/onay`, { saglam, red });
+    assert.equal((await onay(0, 0)).durum, 400, 'adetsiz onay reddedilir');
+    const asan = await onay(6, 1);
+    assert.deepEqual([asan.durum, asan.govde.mesaj], [400, 'Sağlam ve red toplamı firmaya gönderilen adedi aşıyor.']);
+    assert.equal((await istek('depo', 'POST', `/kalite-merkezi/kaynakta-muayene/${String(m)}/onay`, { saglam: 5, red: 1 })).durum, 403);
+    await muayeneOnayla(e.id, 5, 1);
+    assert.equal((await gorev())[0] !== null, true, 'onay görevi kapatır');
+    assert.equal((await onay(5, 1)).durum, 409, 'onay bir kez verilir');
+    const sip = await hizmetSiparisi(f.firmaId);
+    const fazla = await istek('depo', 'POST', '/stok/mal-kabul', {
+      tur: 'satin_alma', satirlar: [{ malzemeId: urunNo, miktar: '6', siparisSatirId: sip.siparisSatirId, fasonIsi: { isEmriId: e.fasonIsEmriId } }],
+    });
+    assert.notEqual(fazla.durum, 200, 'muayenede red edilen adet sağlam dönemez');
+    const tam = await istek('depo', 'POST', '/stok/mal-kabul', {
+      tur: 'satin_alma', satirlar: [{ malzemeId: urunNo, miktar: '5', siparisSatirId: sip.siparisSatirId, fasonIsi: { isEmriId: e.fasonIsEmriId, hasarAdet: 1 } }],
+    });
+    assert.equal(tam.durum, 200, JSON.stringify(tam.govde));
   });
 
   test('3708 hasar adedi yalnız kaynağında muayeneli dönüşte girilir; GKK yolunda reddedilir', async () => {
@@ -557,10 +612,79 @@ describe('stok fason iki adım (gerçek PostgreSQL)', () => {
     const h = ayrinti.govde.emir.isEmirleri.find((i) => i.id === e.fasonIsEmriId)?.fason?.hareketler.find((x) => x.kaynak === 'aktarim');
     assert.ok(h !== undefined && h.id > 0 && h.yon === 'donus', 'aktarım satırı pozitif kimlikle gelir');
     assert.equal((await fason(e.id, e.fasonIsEmriId, 'fason-tamamla')).durum, 200);
+    await muayeneOnayla(e.id, 5, 1);
     assert.equal((await fason(e.id, e.ikinciIsEmriId, 'fason-gidis', { adet: 5 })).durum, 200);
     assert.equal(await firmada(f2.firmaId), 5, 'ikinci gidiş stoğu çiftlemez');
     const sip2 = await hizmetSiparisi(f2.firmaId);
     const d = await fasonKabulu(sip2.siparisSatirId, urunNo, 5, e.ikinciIsEmriId);
     assert.equal(d.durum, 200, JSON.stringify(d.govde));
+  });
+
+  // 3809 kabul: fason dönüşünün GKK'sı Kalite Merkezi'nde adet bazında parça parça verilir; GKK adımı kararla kendiliğinden kapanır.
+  test('3809: 9 dönen parçanın 7si serbest (4 + 3), 2si red; adım ve görev kapanır, Yapılan listesinde görünür, yetkisiz karar 403', async () => {
+    const f = await fasonFirmaKur(true);
+    const e = await fasonluEmir(f.firmaId);
+    assert.equal((await fason(e.id, e.fasonIsEmriId, 'fason-gidis', { adet: 9 })).durum, 200);
+    const sip = await hizmetSiparisi(f.firmaId);
+    const krn = await karantina();
+    const taban = (await o().sahip.tek<{ id: string }>('SELECT COALESCE(max(id), 0)::text AS id FROM bildirim_kaydi'))!.id;
+    assert.equal((await fasonKabulu(sip.siparisSatirId, urunNo, 9, e.fasonIsEmriId)).durum, 200);
+    const gorev = () => o().sahip.sorgu<{ yapildi: string | null }>(
+      "SELECT yapildi::text FROM bildirim_kaydi WHERE tur = 'stok.fason-gkk-bekliyor' AND id > $1 AND kisi_id = $2", [taban, kullanici('kalite').id]);
+    assert.deepEqual((await gorev()).map((g) => g.yapildi), [null], 'dönüş kaliteye görev açar');
+    assert.equal((await fason(e.id, e.fasonIsEmriId, 'fason-tamamla', {})).durum, 200);
+    const karar = (adet: number, sonuc: string, kim = 'kalite') =>
+      istek<{ bekleyenAdet: number; adimKapandi: boolean }>(kim, 'POST', `/kalite-merkezi/giris/fason/${String(e.fasonIsEmriId)}/karar`, { [sonuc]: adet });
+    assert.equal((await karar(1, 'serbest', 'depo')).durum, 403, 'karar kalite-merkezi.onayla ister');
+    const asan = await istek('kalite', 'POST', `/kalite-merkezi/giris/fason/${String(e.fasonIsEmriId)}/karar`, { serbest: 4, red: 6 });
+    assert.equal(asan.durum, 400, 'üç sonucun toplamı bekleyeni aşarsa karar bütünüyle reddedilir');
+    assert.equal(await kaliteli(krn, e.id, 'karar_bekliyor'), 9, 'reddedilen kararın ilk sonucu da yazılmaz');
+    assert.deepEqual((await karar(4, 'serbest')).govde, { bekleyenAdet: 5, adimKapandi: false });
+    assert.deepEqual((await karar(3, 'serbest')).govde, { bekleyenAdet: 2, adimKapandi: false });
+    assert.deepEqual((await karar(2, 'red')).govde, { bekleyenAdet: 0, adimKapandi: true });
+    assert.equal((await karar(1, 'red')).durum, 409, 'bekleyen kalmadı');
+    const kabulKonumu = (await o().sahip.tek<{ id: number }>("SELECT id FROM stok_konum WHERE kod = 'KABUL'"))!.id;
+    assert.deepEqual([await kaliteli(kabulKonumu, e.id, 'serbest'), await kaliteli(krn, e.id, 'red'), await kaliteli(krn, e.id, 'karar_bekliyor')], [7, 2, 0]);
+    const adimlar = await o().sahip.sorgu<{ op: number; durum: string; s: number | null }>(
+      'SELECT op_no AS op, durum, saglam_adet AS s FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 ORDER BY sira', [e.id]);
+    assert.deepEqual(adimlar.map((a) => [a.op, a.durum, a.s]), [[10, 'tamam', 9], [20, 'tamam', 9], [25, 'tamam', 7], [30, 'bekliyor', null]]);
+    assert.deepEqual((await gorev()).map((g) => g.yapildi !== null), [true], 'bütün adet kararlanınca görev kapanır');
+    const bugun = (await o().sahip.tek<{ g: string }>('SELECT current_date::text AS g'))!.g;
+    const yapilan = await istek<KmGirisKayitlariCevabi>('kalite', 'GET', `/kalite-merkezi/giris/kayitlar?baslangic=${bugun}&bitis=${bugun}`);
+    assert.equal(yapilan.durum, 200, JSON.stringify(yapilan.govde));
+    assert.deepEqual(yapilan.govde.fason.filter((x) => x.uretimEmriId === e.id).map((x) => [x.opNo, x.sonuc, x.miktar]).sort(),
+      [[20, 'red', '2.000'], [20, 'serbest', '3.000'], [20, 'serbest', '4.000']]);
+  });
+
+  test('3809 ters sıra: kalite bütün dönüşe önce karar verir, sonra "Fasonu tamamla" GKK adımını kapatır ve emir sonraki adıma geçer', async () => {
+    const f = await fasonFirmaKur(true);
+    const e = await fasonluEmir(f.firmaId);
+    assert.equal((await fason(e.id, e.fasonIsEmriId, 'fason-gidis', { adet: 9 })).durum, 200);
+    const sip = await hizmetSiparisi(f.firmaId);
+    assert.equal((await fasonKabulu(sip.siparisSatirId, urunNo, 9, e.fasonIsEmriId)).durum, 200);
+    const r = await istek<{ bekleyenAdet: number; adimKapandi: boolean }>('kalite', 'POST', `/kalite-merkezi/giris/fason/${String(e.fasonIsEmriId)}/karar`, { serbest: 7, red: 2 });
+    assert.deepEqual(r.govde, { bekleyenAdet: 0, adimKapandi: false }, 'fason adımı açıkken GKK adımı kapanmaz');
+    const adimlar = async () => (await o().sahip.sorgu<{ op: number; durum: string; s: number | null }>(
+      'SELECT op_no AS op, durum, saglam_adet AS s FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 ORDER BY sira', [e.id])).map((a) => [a.op, a.durum, a.s]);
+    assert.deepEqual((await adimlar())[2], [25, 'calisiyor', null]);
+    assert.equal((await fason(e.id, e.fasonIsEmriId, 'fason-tamamla', {})).durum, 200);
+    assert.deepEqual(await adimlar(), [[10, 'tamam', 9], [20, 'tamam', 9], [25, 'tamam', 7], [30, 'bekliyor', null]]);
+  });
+
+  test('3809 geçiş: arkasında otomatik GKK adımı olmayan eski emirde karar yalnız stoğu değiştirir; parça serbest kalır', async () => {
+    const f = await fasonFirmaKur(true);
+    const e = await fasonluEmir(f.firmaId);
+    assert.equal((await fason(e.id, e.fasonIsEmriId, 'fason-gidis', { adet: 9 })).durum, 200);
+    const gkk = (await o().sahip.tek<{ id: number }>("SELECT id FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 AND ek_aciklama = 'Otomatik GKK'", [e.id]))!.id;
+    await o().sahip.sorgu('DELETE FROM uretim_emirleri_is_emri WHERE id = $1', [gkk]);
+    const sip = await hizmetSiparisi(f.firmaId);
+    await karantina();
+    assert.equal((await fasonKabulu(sip.siparisSatirId, urunNo, 9, e.fasonIsEmriId)).durum, 200);
+    const liste = await istek<KmGirisBekleyenCevabi>('kalite', 'GET', '/kalite-merkezi/giris/bekleyenler');
+    assert.deepEqual(liste.govde.fason.filter((x) => x.uretimEmriId === e.id).map((x) => [x.bekleyenAdet, x.gkkAdimi]), [[9, false]], 'eski dönüş listeye kendiliğinden düşer');
+    const r = await istek<{ bekleyenAdet: number; adimKapandi: boolean }>('kalite', 'POST', `/kalite-merkezi/giris/fason/${String(e.fasonIsEmriId)}/karar`, { sartli: 9, not: 'ORN- şart' });
+    assert.deepEqual(r.govde, { bekleyenAdet: 0, adimKapandi: false });
+    const kabulKonumu = (await o().sahip.tek<{ id: number }>("SELECT id FROM stok_konum WHERE kod = 'KABUL'"))!.id;
+    assert.equal(await kaliteli(kabulKonumu, e.id, 'sartli'), 9);
   });
 });

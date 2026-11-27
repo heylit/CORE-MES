@@ -1,8 +1,8 @@
 import { bildirimGonder } from '../bildirim/disari.ts';
 import { istasyonAdlari, istasyondakiKisiler } from '../istasyonlar/disari.ts';
 import { projeNo } from '../projeler/disari.ts';
-import { adimBittiDinle, emirBittiDinle } from './emir-olaylari.ts';
-import { fasonMu, siradakiIsEmri } from './kurallar.ts';
+import { adimBittiDinle, emirBittiDinle, fasonHareketiDinle } from './emir-olaylari.ts';
+import { fasonMu, otomatikMuayeneMi, siradakiIsEmri } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
 // 3596: gerçekleşen iş olayları Bildirim Merkezi'ne. Olaylar varsayılan kapalıdır (3478-2 a); açılınca bitiren kişi kendisi almaz.
@@ -41,5 +41,25 @@ emirBittiDinle(async (db, olay) => {
     metin: `${olay.saglamAdet} / ${emir.adet} sağlam${proje === null ? '' : `, proje ${proje}`}.`,
     haric: olay.kisiId, kaynakKimlik: `emir:${emir.id}`, yol: '/uretim-emirleri',
     alanlar: { malzeme_kodu: emir.parcaNo, proje },
+  });
+});
+
+// 3809: kaynağında muayene seçili fason adımın gidişi Kalite Merkezi'ne görevdir (muayene firmada yapılır, rapor yüklenip onaylanır).
+// Görev muayene adımı başınadır: sonraki gidişler aynı görevi tazeler; onayla kapanır.
+export const kaynaktaMuayeneKaynagi = (muayeneIsEmriId: number): string => `muayene:${String(muayeneIsEmriId)}`;
+fasonHareketiDinle(async (db, olay) => {
+  const h = await s.fasonHareketiBul(db, olay.hareketId);
+  if (h === null || h.yon !== 'gidis') return;
+  const fason = await s.isEmriBul(db, h.isEmriId);
+  if (fason === null || fason.kontrolTuru !== 'kaynakta') return;
+  const adimlar = await s.isEmirleriGetir(db, [fason.uretimEmriId]);
+  const muayene = adimlar.filter((a) => a.sira > fason.sira && otomatikMuayeneMi(a)).sort((a, b) => a.sira - b.sira)[0];
+  const emir = await s.ustEmirBul(db, fason.uretimEmriId);
+  if (muayene === undefined || muayene.durum === 'tamam' || emir === null) return;
+  await bildirimGonder(db, {
+    tur: 'uretim-emirleri.kaynakta-muayene-bekliyor',
+    baslik: `Kaynağında muayene: ${emir.emirNo} · OP ${String(fason.opNo)}`.slice(0, 200),
+    metin: `${String(h.adet)} adet firmaya gitti; muayene raporu yüklenip onaylanır.`,
+    haric: olay.kisiId, kaynakKimlik: kaynaktaMuayeneKaynagi(muayene.id),
   });
 });

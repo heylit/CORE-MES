@@ -129,6 +129,8 @@ describe('Reçete ve Rota canlıya al akışı (gerçek PostgreSQL)', () => {
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA }));
     denemeProjeId = (await ortam.sahip.tek<{ id: number }>(
       "INSERT INTO projeler_proje (kod, ad, olusturan_id) VALUES ('RR.CANLI', 'Deneme proje', $1) RETURNING id", [yoneticiId]))!.id;
+    // 3809: GKK tipi aktifken fasonun arkasına istasyonsuz otomatik GKK adımı girer; bu dosya rotadaki adımların kuyruğuna bakar.
+    await ortam.sahip.sorgu("UPDATE istasyonlar_operasyon_tipi SET aktif = false WHERE kod = 'GKK'");
     c.yonetici = await girisCerezi('yonetici');
     await ortam.vt.tx((db) => db.sorgu(
       `INSERT INTO rol_islemi (rol_id, islem)

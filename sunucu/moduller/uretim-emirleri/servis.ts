@@ -26,7 +26,7 @@ import {
   MAKINE_ZATEN_ADIMDA, PAYI_YOK_MAKINE, payIlerlemesi, payiVarMi, sayimMakinesi,
   bekletmeBaslatmaIhlali, bekletmeIhlali, bekletmeKaldirmaIhlali, listeKontrolu, atlamaIhlali,
 } from './kurallar.ts';
-import { KARTSIZ_BASLATMA_ISLEMI, kartsizBaslatmaIhlali } from './kurallar.ts';
+import { KARTSIZ_BASLATMA_ISLEMI, KONTROL_ADIMI_KALITEDEN, kartsizBaslatmaIhlali, otomatikKontrolMu } from './kurallar.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { IstasyonDurumu, MakineAyrimi, OnculTuru, PlanPayi } from './kurallar.ts';
@@ -740,6 +740,7 @@ export async function emirBaslat(
   const verilen = isEmriId === undefined ? null : (hepsi.find((i) => i.id === isEmriId) ?? null);
   if (isEmriId !== undefined && verilen === null) throw bulunamadi(IS_EMRI_YOK);
   const secilen = isEmriId === undefined ? (kilitli.malzemeNo === null ? null : siradakiIsEmri(hepsi)) : verilen;
+  if (secilen !== null && otomatikKontrolMu(secilen)) throw cakisma(KONTROL_ADIMI_KALITEDEN);
   const { emir, isEmri } = await baslatanIstasyonunuVer(db, kisiId, kilitli, secilen, isEmriId);
   const istasyonId = komutIstasyonu(emir, isEmri, isEmriId);
   await kapsaminda(db, kisiId, istasyonId);
@@ -849,6 +850,7 @@ export async function emirBitir(
   await ustuOnceKilitle(db, id);
   const emir = await kilitliEmir(db, id);
   const { hepsi, adim } = await komutAdimi(db, emir, isEmriId);
+  if (adim != null && otomatikKontrolMu(adim)) throw cakisma(KONTROL_ADIMI_KALITEDEN);
   const istasyonId = komutIstasyonu(emir, adim, isEmriId);
   await kapsaminda(db, kisiId, istasyonId);
   const ihlal = bitirmeIhlali(emir.durum);

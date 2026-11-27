@@ -1936,3 +1936,25 @@ export const iadeEngeli = (durum: IadeDurumu, neden: string | null): string | nu
 // İade edilen adet teslimdeki adedi aşamaz ve sıfırdan büyük olmalı.
 export const iadeAdediEngeli = (adet: number, eldeki: number): string | null =>
   !Number.isInteger(adet) || adet < 1 ? 'İade adedi en az 1 olmalı.' : adet > eldeki ? `Elde ${String(eldeki)} adet var; fazlası iade edilemez.` : null;
+
+// ---- Fason dönüşünün GKK'sı (3809) ------------------------------------------------------------------------------------------------
+// Bekleyen: dönüşle karantinaya karar bekliyor giren eksi Kalite Merkezi'nin kararladığı; karantinadaki bakiye (elle taşınmış ya da imha
+// edilmiş olabilir) bundan azsa bakiye kadar. Eksi çıkmaz.
+export function fasonGkkBekleyeni(giren: string, kararlanan: string, bakiye: string): bigint {
+  const fark = binde(giren) - binde(kararlanan);
+  const b = binde(bakiye);
+  const bekleyen = fark < b ? fark : b;
+  return bekleyen > 0n ? bekleyen : 0n;
+}
+// Karar adetle verilir (fason dönüşü adetle girer); sıfır ya da bekleyeni aşan karar verilmez.
+export function fasonGkkKarariEngeli(bekleyenAdet: number, adet: number): string | null {
+  if (!Number.isInteger(adet) || adet <= 0) return 'Karar adedi sıfırdan büyük tam sayıdır.';
+  if (bekleyenAdet <= 0) return 'Bu fason dönüşünde karar bekleyen parça yok.';
+  if (adet > bekleyenAdet) return `Karar adedi bekleyeni aşıyor. Bekleyen: ${String(bekleyenAdet)} adet.`;
+  return null;
+}
+export const FASON_GKK_GOREVI = 'stok.fason-gkk-bekliyor';
+export const fasonGkkKaynagi = (uretimEmriId: number, opNo: number): string => `fason-gkk:${String(uretimEmriId)}:${String(opNo)}`;
+// Stok miktarının adedi: adet başına miktar (dönen kartın biriminde) bilinmiyorsa null.
+export const fasonAdedi = (miktar: bigint, adetBasina: bigint | null): number | null =>
+  adetBasina === null || adetBasina <= 0n ? null : Number(miktar / adetBasina);
