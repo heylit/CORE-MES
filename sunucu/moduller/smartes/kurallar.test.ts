@@ -191,6 +191,27 @@ describe('Canlı makine panosu kuralları (SME-34)', () => {
     assert.equal(makineBilgisiOku({ AD: 'kodsuz' }, { id: 1, kod: null }), null);
   });
 
+  test('3810: alarm yer tutucuları (boş, "0", "-", "alarm yok", ALARMNO 0 ya da eksi) alarm sayılmaz; gerçek alarm numarası ya da metni sayılır', () => {
+    const oku = (s: Record<string, string>) => makineBilgisiOku({ KOD: 'ORN-X', ...s }, { id: 1, kod: null });
+    const yoklar: Record<string, string>[] = [{ ALARMNO: '0', ALARMTEXT: '   ' }, { ALARMNO: '0', ALARMTEXT: '0' }, { ALARMTEXT: '-' }, { ALARMTEXT: '--' },
+      { ALARMNO: '-1', ALARMTEXT: 'Alarm yok' }, { ALARMNO: '00', ALARMTEXT: 'NO ALARM' }, { ALARMTEXT: 'none' }, { ALARMNO: '', ALARMTEXT: '0.0' }];
+    for (const yok of yoklar) {
+      const m = oku(yok);
+      assert.equal(m?.alarm, null, JSON.stringify(yok));
+      assert.notEqual(m?.durum, 'alarm', JSON.stringify(yok));
+    }
+    assert.equal(oku({ ALARMNO: '0', ALARMTEXT: 'ORN eksen limiti' })?.durum, 'alarm');
+    assert.equal(oku({ ALARMNO: '0', ALARMTEXT: ' ORN eksen limiti ' })?.alarm, 'ORN eksen limiti');
+    assert.equal(oku({ ALARMNO: '1001', ALARMTEXT: '-' })?.alarm, '1001');
+    assert.equal(oku({ ALARMNO: '1001', ALARMTEXT: 'ORN alarm' })?.alarm, '1001 ORN alarm');
+  });
+
+  test('3810: alarm yer tutucusu olan tezgâh durum kodunun karşılığına düşer (karşılığı yoksa bilinmiyor, kod görünür)', () => {
+    const m = makineBilgisiOku({ KOD: 'ORN-X', CNCSTATE: 'ORN-ACTIVE', ALARMNO: '0', ALARMTEXT: '-' }, { id: 1, kod: null });
+    assert.equal(m?.durum, 'bilinmiyor');
+    assert.equal(m?.durumKodu, 'ORN-ACTIVE');
+  });
+
   test('SME-34: tur sırası verilen makineden başlar ve listeyi dolanır; makine listede yoksa baştan başlanır', () => {
     const l = [{ id: 1 }, { id: 2 }, { id: 3 }];
     assert.deepEqual(turSirasi(l, null).map((m) => m.id), [1, 2, 3]);
