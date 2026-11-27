@@ -67,8 +67,7 @@ test('Okut paneli: kamera önce, kutucuklar görünür ve ekranlarını açar', 
     await expect(page.getByRole('dialog', { name: baslik })).toBeVisible();
     await page.getByRole('button', { name: 'Kameraya dön' }).click();
   }
-  // Depocunun recete-rota statü okuması 403 alıyor; degisecek.spec.ts'te ayrıca izlenir.
-  expect(ag.hatalar.filter((h) => !h.includes('/api/recete-rota/statuler') && !h.includes('status of 403'))).toEqual([]);
+  expect(ag.hatalar, 'depocu yetkisiz istek göndermez (statü listesi 403 düzeldi)').toEqual([]);
   expect(ag.yazmalar, 'paneli açmak ve sekme değiştirmek yazmaz').toEqual([]);
 });
 

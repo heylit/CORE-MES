@@ -1,4 +1,4 @@
-import { expect, test } from './ortak.ts';
+import { ADRES, expect, test } from './ortak.ts';
 
 // Reçete ve Rota menüsü ve yetki. Bölümlerin ekranı recete-rota-yeni.spec.ts'tedir; eski çerçeve 805 ile kalktı. Planlama plan modülünün
 // sayfasıdır (658 b).
@@ -40,4 +40,9 @@ test.describe('planlama rolü', () => {
     await expect(menu.locator('a[href="/plan"]').first()).toBeAttached();
     await expect(menu.locator('a[href="/plan/maliyet"]')).toHaveCount(0);
   });
+});
+
+test('menüde gizli eski /rota sayfaları kapanır ya da Reçete ve Rota\'ya yönlenir (kayit/rota A4)', async ({ page, ac }) => {
+  await ac('/rota/plan');
+  await expect(page).not.toHaveURL(`${ADRES}/rota/plan`, { timeout: 2_000 });
 });
