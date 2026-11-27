@@ -8,6 +8,7 @@ import type { RefakatKarti } from './refakat-karti';
 import { cagriEkipleriniAl } from './cagri-ekiplerim';
 import type { CagriEkiplerim } from './cagri-ekiplerim';
 import { CAKISMA_ILETISI, CAKISMA_OLAYI, merge3 } from './cakisma';
+import { yenidenYukleyici, yuklemeErtelenmeli } from './yeniden-yukleme';
 import { BLOB_BELLEK_SINIRI, blobBellegi } from './blob-bellek';
 import { logIletisiniDagit } from './log-tepki';
 import type { ImlecliOkuma } from './artimli-kayit';
@@ -557,13 +558,14 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
   const deliver = (m: BusIn | null): void => { if (!m) return; if (m.mid) { if (seen.includes(m.mid)) return; seen.push(m.mid); if (seen.length > 300) seen.shift(); } subs.forEach(f => { try { f(m); } catch (e: any) { console.warn(e); } }); };
   if (ch) ch.onmessage = (e: MessageEvent) => deliver(e.data);
   window.addEventListener('storage', e => { if (e.key === 'arkon:ping' && e.newValue) { try { deliver(JSON.parse(e.newValue)); } catch (x) {} } });
+  const sayfayiYenile = yenidenYukleyici(() => location.reload(), () => yuklemeErtelenmeli(document));
   function openBus() {
     if (SRV.es) { SRV.es.close(); SRV.es = null; }
     if (!SRV.on || !session || !session.token || (!tasiyici && typeof EventSource === 'undefined')) return;
     const es = new (tasiyici ? tasiyici.EventSource : EventSource)(SRV.base + '/api/bus?t=' + encodeURIComponent(session.token) + '&c=' + SRV.cid);
     es.onopen = () => { if (!SRV.online) { SRV.online = true; SRV.lastErr = ''; emit(); } flush(); };
     es.onerror = () => { if (SRV.online) { SRV.online = false; SRV.lastErr = 'Sunucuya ulaşılamıyor'; emit(); } };
-    es.onmessage = (e: MessageEvent) => { try { const m = JSON.parse(e.data); if (m.type === '$log') logIletisiniDagit(m, logSubs); if (m.type === '$reload') location.reload(); const ret = gecikmeliRet(m, oturumSahibi()); if (ret) gecikmeliRetDagit(ret); deliver(m); } catch (x) {} };
+    es.onmessage = (e: MessageEvent) => { try { const m = JSON.parse(e.data); if (m.type === '$log') logIletisiniDagit(m, logSubs); if (m.type === '$reload') sayfayiYenile(); const ret = gecikmeliRet(m, oturumSahibi()); if (ret) gecikmeliRetDagit(ret); deliver(m); } catch (x) {} };
     SRV.es = es;
   }
   const Bus = {
