@@ -17,7 +17,7 @@ export function RotaBekliyorSeridi({ emirId }: { emirId: number }) {
   const komut = useMutation({
     mutationFn: () => api.post<{ kaynakRevizyon: { harf: string } }>(`/rota/emirler/${String(emirId)}/bekleyen-rotayi-uygula`, {}, { istekKimligi: yeniIstekKimligi() }),
     onSuccess: async (c) => {
-      bildir('tamam', `Rota uygulandı (Rev ${c.kaynakRevizyon.harf}).`);
+      bildir('tamam', `Rota uygulandı (Rota ${c.kaynakRevizyon.harf}).`);
       await istemci.invalidateQueries({ queryKey: anahtarlar.hepsi });
     },
   });

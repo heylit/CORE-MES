@@ -88,6 +88,25 @@ describe('UretimEmirleri liste', () => {
     expect(screen.queryByRole('button', { name: /Kapanış bekliyor/ })).toBeNull();
   });
 
+  it('3755: parçada "Rev 00" ya da seçilmemişte "Rev —"; seçim isteyen açık emir için çip çıkar ve süzer, yoksa çip yok', async () => {
+    const SECILMIS = { ...PLANLI, malzemeNo: 9, parcaRevizyonu: '00', parcaRevizyonuSecimGerekli: false } as Emir;
+    const BOS = { ...BASLAMIS, malzemeNo: 9, parcaRevizyonu: null, parcaRevizyonuSecimGerekli: true } as Emir;
+    sunucuKur(OKUYUCU, { 'GET /uretim-emirleri': () => json(200, liste([SECILMIS, BOS])) });
+    ac(ekran, '/uretim-emirleri');
+    await screen.findByText('EM-1');
+    const rev = (no: string) => screen.getByText(no).closest('tr')!.querySelector('.tc-emir-rev')?.textContent;
+    expect([rev('EM-1'), rev('EM-2')]).toEqual(['Rev 00', 'Rev —']);
+    const cipler = screen.getByRole('group', { name: 'Duruma göre süz' });
+    fireEvent.click(within(cipler).getByRole('button', { name: 'Parça revizyonu seçilmemiş 1' }));
+    expect(screen.queryByText('EM-1')).toBeNull();
+    expect(screen.getByText('EM-2')).toBeTruthy();
+    cleanup();
+    sunucuKur(OKUYUCU, { 'GET /uretim-emirleri': () => json(200, liste([SECILMIS])) });
+    ac(ekran, '/uretim-emirleri');
+    await screen.findByText('EM-1');
+    expect(screen.queryByRole('button', { name: /Parça revizyonu seçilmemiş/ })).toBeNull();
+  });
+
   it('bos liste ve sunucu hatasi gosterilir', async () => {
     sunucuKur(OKUYUCU, { 'GET /uretim-emirleri': () => json(200, liste([])) });
     ac(ekran, '/uretim-emirleri');

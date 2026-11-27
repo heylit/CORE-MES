@@ -63,6 +63,8 @@ export const emirSecenegiSemasi = z.object({
   parcaAd: z.string(),
   adet: z.number().int(),
   istasyon: z.string(),
+  // 3755: emrin parça (çizim) revizyonu ("00"); seçilmemişte null ("Rev —"). Yalnız emir listesi yazar; isteğe bağlı.
+  parcaRevizyonu: z.string().nullable().optional(),
 });
 export const emirlerCevabi = z.object({ emirler: z.array(emirSecenegiSemasi) });
 

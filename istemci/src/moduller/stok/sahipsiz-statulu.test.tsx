@@ -21,7 +21,7 @@ describe('Sahipsiz statülü stok (2547 a)', () => {
     expect(within(tablo).getByRole('columnheader', { name: 'Malzeme' }).classList.contains('tc-tablo-sabit-sol')).toBe(true);
     expect(within(tablo).getByRole('columnheader', { name: 'Stok kodu' })).toBeTruthy();
     const [satir, bekleyen] = within(tablo).getAllByText('Deneme sac').map((x) => x.closest('tr')!) as [HTMLTableRowElement, HTMLTableRowElement];
-    expect(await within(satir).findByText('YM-900 (MM-950 · Rev B · OP 10 Tornalama)')).toBeTruthy();
+    expect(await within(satir).findByText('YM-900 (MM-950 · Rota B · OP 10 Tornalama)')).toBeTruthy();
     expect(within(satir).getByText('IST-01')).toBeTruthy();
     expect(within(satir).getByText('4')).toBeTruthy();
     expect(within(satir).queryByText('Karar bekliyor')).toBeNull();

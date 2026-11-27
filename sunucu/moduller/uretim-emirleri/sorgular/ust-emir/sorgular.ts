@@ -39,6 +39,10 @@ export interface UstEmirSatiri {
   // 3272: sipariş onayıyla kendiliğinden açıldı mı; yürürlükte rotası olmadığı için adımsız mı bekliyor.
   acilisKaynagi: 'siparis_onayi' | null;
   rotaBekliyor: boolean;
+  // 3755: emre sabitlenen parça (çizim) revizyonu; seçilmemiş emirde üçü de null.
+  parcaRevizyonKodu: string | null;
+  parcaCizimBelgeId: number | null;
+  parcaCizimRevizyonId: number | null;
   surum: number;
 }
 
@@ -49,7 +53,8 @@ const UST = `e.id, e.emir_no AS "emirNo", e.parca_no AS "parcaNo", e.parca_ad AS
   e.ust_emir_id AS "ustEmirId", e.bolunme_sira AS "bolunmeSira", e.birlestigi_emir_id AS "birlestigiEmirId",
   e.birlesme_op_no AS "birlesmeOpNo", e.emir_turu AS "emirTuru", e.proje_id AS "projeId", e.siparis_satiri_id AS "siparisSatiriId",
   e.teslim_bagli AS "teslimBagli", e.siparis_parti_id AS "siparisPartiId",
-  e.acilis_kaynagi AS "acilisKaynagi", e.rota_bekliyor AS "rotaBekliyor", e.surum`;
+  e.acilis_kaynagi AS "acilisKaynagi", e.rota_bekliyor AS "rotaBekliyor",
+  e.parca_revizyon_kodu AS "parcaRevizyonKodu", e.parca_cizim_belge_id AS "parcaCizimBelgeId", e.parca_cizim_revizyon_id AS "parcaCizimRevizyonId", e.surum`;
 
 // Liste iş emirli emirleri ya da arşivi verir; bugünkü adımsız (istasyonlu) emir bu listede yoktur.
 // Arşiv ve proje listesi bütün durumları verir; ana liste `hepsi` değilse yalnız açık emirleri (kart #1323).
@@ -121,18 +126,19 @@ export interface UstEmirYazisi {
   acilisKaynagi?: 'siparis_onayi' | null;
   rotaBekliyor?: boolean;
   eskiRevizyonGerekcesi?: string | null;
+  parcaRevizyonu?: { kod: string | null; belgeId: number; revizyonId: number } | null;
 }
 
 export async function ustEmirEkle(db: Db, e: UstEmirYazisi, acanId: number): Promise<number> {
   const satir = await db.tek<{ id: number }>(
     `INSERT INTO uretim_emri (parca_no, parca_ad, adet, istasyon_id, acan_id, malzeme_no, kaynak_rota_revizyonu_id, oncelik, baslangic, teslim,
        aciklama, durum, ust_emir_id, bolunme_sira, birlesme_op_no, emir_turu, emir_no, proje_id, siparis_satiri_id, patlatma_id,
-       teslim_bagli, siparis_parti_id, acilis_kaynagi, rota_bekliyor, eski_revizyon_gerekcesi)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::date, $10::date, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25) RETURNING id`,
+       teslim_bagli, siparis_parti_id, acilis_kaynagi, rota_bekliyor, eski_revizyon_gerekcesi, parca_revizyon_kodu, parca_cizim_belge_id, parca_cizim_revizyon_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::date, $10::date, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28) RETURNING id`,
     [e.parcaNo, e.parcaAd, e.adet, e.istasyonId, acanId, e.malzemeNo, e.kaynakRotaRevizyonId, e.oncelik, e.baslangic, e.teslim, e.aciklama, e.durum,
       e.ustEmirId ?? null, e.bolunmeSira ?? null, e.birlesmeOpNo ?? null, e.emirTuru, e.emirNo ?? null, e.projeId ?? null,
       e.siparisSatiriId ?? null, e.patlatmaId ?? null, e.teslimBagli ?? false, e.siparisPartiId ?? null, e.acilisKaynagi ?? null, e.rotaBekliyor ?? false,
-      e.eskiRevizyonGerekcesi ?? null],
+      e.eskiRevizyonGerekcesi ?? null, e.parcaRevizyonu?.kod ?? null, e.parcaRevizyonu?.belgeId ?? null, e.parcaRevizyonu?.revizyonId ?? null],
   );
   if (satir === null) throw new Error('Üretim emri eklenemedi.');
   return satir.id;
@@ -313,6 +319,15 @@ export function bagliTeslimleriKaydir(db: Db, satirId: number, termin: string): 
 
 export function oncelikYaz(db: Db, id: number, surum: number, oncelik: number): Promise<{ id: number } | null> {
   return db.tek('UPDATE uretim_emri SET oncelik = $3, surum = surum + 1 WHERE id = $1 AND surum = $2 RETURNING id', [id, surum, oncelik]);
+}
+
+// 3755: yalnız revizyonu boş emre yazılır (sabittir); sürüm denetlenir.
+export function parcaRevizyonuYaz(db: Db, id: number, surum: number, r: { kod: string | null; belgeId: number; revizyonId: number }): Promise<{ id: number } | null> {
+  return db.tek(
+    `UPDATE uretim_emri SET parca_revizyon_kodu = $3, parca_cizim_belge_id = $4, parca_cizim_revizyon_id = $5, surum = surum + 1
+      WHERE id = $1 AND surum = $2 AND parca_cizim_revizyon_id IS NULL RETURNING id`,
+    [id, surum, r.kod, r.belgeId, r.revizyonId],
+  );
 }
 
 export function emirTuruYaz(db: Db, id: number, surum: number, emirTuru: EmirTuru): Promise<{ id: number } | null> {

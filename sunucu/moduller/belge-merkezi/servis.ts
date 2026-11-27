@@ -563,6 +563,29 @@ export async function kayitlarinKucukResimleri(db: Db, hedefModul: BagModulu, he
   return sonuc;
 }
 
+// 3755: malzeme kartının parça çizimi (refakat kartının ve küçük resmin seçtiği belge) ve o belgenin yayına girmiş revizyonları,
+// en yenisi önde. Kod ekrandakiyle aynıdır (antet, yoksa kartın revizyonu). Çizimi olmayan ya da yalnız taslak 3B modeli olan kart haritada yoktur.
+// Yetki denetlemez.
+export interface ParcaCizimRevizyonu { revizyonId: number; sira: number; durum: 'yayinda' | 'eski'; revKodu: string | null; yayinlandi: string }
+export interface ParcaCizimi { belgeId: number; ad: string; revizyonlar: ParcaCizimRevizyonu[] }
+export async function malzemelerinParcaCizimleri(db: Db, nolar: readonly number[]): Promise<Map<number, ParcaCizimi>> {
+  const sonuc = new Map<number, ParcaCizimi>();
+  const secilen = await kayitlarinKucukResimleri(db, 'malzemeler', nolar);
+  const belgeler = [...new Set([...secilen.values()].filter((r) => r.taslak !== true).map((r) => r.belgeId))];
+  if (belgeler.length === 0) return sonuc;
+  const [satirlar, kartlar] = [await sorgular.yayinlanmisRevizyonlar(db, belgeler), await malzemeResimAnahtarlari(db, [...secilen.keys()])];
+  for (const [no, r] of secilen) {
+    if (r.taslak === true) continue;
+    const kendi = satirlar.filter((x) => x.belgeId === r.belgeId);
+    if (kendi.length === 0) continue;
+    sonuc.set(no, {
+      belgeId: r.belgeId, ad: kendi[0]?.ad ?? '',
+      revizyonlar: kendi.map((x) => ({ revizyonId: x.revizyonId, sira: x.sira, durum: x.durum, revKodu: revizyonKodu(x.antetRev, kartlar.get(no)?.revizyon), yayinlandi: x.yayinlandi })),
+    });
+  }
+  return sonuc;
+}
+
 export async function kucukResimKaresi(db: Db, revizyonId: number, kare: number): Promise<IkiliCevap> {
   const k = await sorgular.kucukResimKaresi(db, revizyonId, kare);
   const akis = k === null ? null : await dosyaTutamak.dosyaAkisi(db, onizlemeKaydi(k.belgeId, revizyonId), k.ozet);

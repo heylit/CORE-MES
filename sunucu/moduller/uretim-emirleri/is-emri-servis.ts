@@ -28,6 +28,7 @@ import type { DenetimSecimi } from '#cekirdek/uc.ts';
 import type { MuayeneBelgeBaglaGovdesi, MuayeneBelgeleriCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { denemeIsaretliKimlikler, numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { kayitlarinKucukResimleri } from '../belge-merkezi/disari.ts';
+import { acilisParcaRevizyonu, parcaRevizyonuDurumu } from './parca-revizyonu.ts';
 import { malzemeOzeti, malzemeOzetleri, malzemeResimAnahtarlari, revizyonBilgileri } from '../malzemeler/disari.ts';
 import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
 import { emrinHazirlikGorevleriniAc, isEmriHazirligiEkle } from './hazirlik-gorevi.ts';
@@ -39,7 +40,7 @@ import {
   ekAdimKaldirIhlali, kartAdimi, kartDagilimi, type KartDagilimi, kartSiniri, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, ROTASIZ_EMIR_KAPALI, PROJE_GECERSIZ, PROJE_ZORUNLU, adaySatirlar, bilesenOlabilirMi, kendiligindenSatir, projeZorunluMu, rotasizAdimDegisimIhlali, rotasizAdimEkleIhlali, URETIM_YERI_BASLAMIS, uretimYeriIhlali, fasonBeklemesi, adimAdetleri,
   adimEksigi, adimTuketimi, reworkAdimiIhlali, reworkTermini, adimOnculleri, fasonSirasindaMi, kolAdimlari, onculdenGelen, onculGirdisiIhlali, dugumGirdisiIhlali,
-  SIPARIS_ONAYI_GERI_ALINDI, TESLIM_KALEMSIZ, emirEskiRevizyonIhlali, FASON_FIRMA_BEKLENIYOR, GKK_TIPI, OTOMATIK_GKK, OTOMATIK_GKK_ADI, fasonKarneOlayi, fasonMu, talimatKontrolu, gkkFasonu, gkkTipiSec, kaliteIstasyonuSec, otomatikGkkMi, otomatikGkkYerleri, otomatikKontrolMu, otomatikMuayeneYerleri, muayeneTipiSec, OTOMATIK_MUAYENE, OTOMATIK_MUAYENE_ADI, aktarimIhlali, donusYoluIhlali, fasonDonusPayiMs, AKTARIM_HEDEFI_SONRAKI_FIRMA_DEGIL, otomatikMuayeneMi, muayeneDonusIhlali, muayeneOnayIhlali,
+  SIPARIS_ONAYI_GERI_ALINDI, TESLIM_KALEMSIZ, emirEskiRevizyonIhlali, FASON_FIRMA_BEKLENIYOR, GKK_TIPI, OTOMATIK_GKK, OTOMATIK_GKK_ADI, fasonKarneOlayi, fasonMu, talimatKontrolu, gkkFasonu, gkkTipiSec, kaliteIstasyonuSec, otomatikGkkMi, otomatikGkkYerleri, otomatikKontrolMu, otomatikMuayeneYerleri, muayeneTipiSec, OTOMATIK_MUAYENE, OTOMATIK_MUAYENE_ADI, aktarimIhlali, donusYoluIhlali, fasonDonusPayiMs, AKTARIM_HEDEFI_SONRAKI_FIRMA_DEGIL, otomatikMuayeneMi, muayeneDonusIhlali, muayeneOnayIhlali, parcaRevizyonuMetni,
 } from './kurallar.ts';
 import { emirAcildiBildir, emirBirlestiBildir, emirBittiBildir, emirIptalBildir, fasonHareketiBildir, isEmirleriDegistiBildir, isEmriKopyalandiBildir } from './emir-olaylari.ts';
 import type { AdimOnculu, BolmeDurumu, FasonDurumu, IsEmriKaynakTuru, KolDurumu, OnculTuru, UretimYeri } from './kurallar.ts';
@@ -132,6 +133,8 @@ export interface UretimEmriGirdisi {
   stoktanRezerve?: boolean;
   // 1476: emir bu patlamış rotadan açıldı (çok katmanlı); her iş emri düğümünü taşır.
   patlatmaId?: number | null;
+  // 3755: emre sabitlenecek parça (çizim) revizyonu; verilmezse kartın yayındaki çizimi, çizimi olmayan kartta boş.
+  parcaCizimRevizyonId?: number | null;
   // 3438 a: kart ailesinin yürürlükteki revizyonu değilse ve emir sipariş kalemine bağlı değilse zorunlu neden.
   eskiRevizyonGerekcesi?: string | null;
 }
@@ -280,7 +283,7 @@ const tipKimlikleri = async (db: Db): Promise<Set<number>> => new Set((await ope
 
 /* ---------------- açma ve rota uygulama (rota çağırır) ---------------- */
 
-export async function uretimEmriAc(db: Db, kullanici: Kullanici, g: UretimEmriGirdisi): Promise<{ uretimEmriId: number; isEmriIdleri: number[] }> {
+export async function uretimEmriAc(db: Db, kullanici: Kullanici, g: UretimEmriGirdisi): Promise<{ uretimEmriId: number; isEmriIdleri: number[]; uyarilar: string[] }> {
   const acanId = islemDenetle(kullanici, ['uretim-emirleri.emir-ac', 'rota.emre-kopyala']);
   const baslik = await basligiDenetle(db, g);
   girdiDenetle(g.isEmirleri);
@@ -290,7 +293,7 @@ export async function uretimEmriAc(db: Db, kullanici: Kullanici, g: UretimEmriGi
   const sirali = [...g.isEmirleri].sort((a, b) => a.sira - b.sira);
   const yazilar: IsEmriYazisi[] = [];
   for (const [i, ie] of sirali.entries()) yazilar.push(await yaziyaCevir(db, ie, i + 1, tipler));
-  const id = await basligiYaz(db, acanId, g, baslik, g.kaynakRotaRevizyonId, yazilar[0]?.istasyonId ?? null);
+  const { id, parcaUyarisi } = await basligiYaz(db, acanId, g, baslik, g.kaynakRotaRevizyonId, yazilar[0]?.istasyonId ?? null);
   const isEmriIdleri: number[] = [];
   for (const [i, ie] of sirali.entries()) {
     const yazi = yazilar[i];
@@ -304,7 +307,7 @@ export async function uretimEmriAc(db: Db, kullanici: Kullanici, g: UretimEmriGi
   // 3396 a: projeye uygulanmış şablonun hazırlık kalemleri emirle birlikte görev olur.
   if (baslik.proje !== null) await emrinHazirlikGorevleriniAc(db, acanId, id, baslik.proje.id, null);
   await emirAcildiBildir(db, { uretimEmriId: id, kisiId: acanId, stoktanRezerve: g.stoktanRezerve === true });
-  return { uretimEmriId: id, isEmriIdleri };
+  return { uretimEmriId: id, isEmriIdleri, uyarilar: parcaUyarisi === null ? [] : [parcaUyarisi] };
 }
 
 type EmirBasligi = Omit<UretimEmriGirdisi, 'kaynakRotaRevizyonId' | 'isEmirleri'>;
@@ -385,7 +388,7 @@ async function emirRevizyonu(db: Db, malzemeNo: number): Promise<EmirRevizyonu |
 async function basligiYaz(
   db: Db, acanId: number, g: EmirBasligi, b: DenetlenmisBaslik, kaynakRotaRevizyonId: number | null, istasyonId: number | null,
   ek: { acilisKaynagi: 'siparis_onayi'; rotaBekliyor: boolean } | null = null,
-): Promise<number> {
+): Promise<{ id: number; parcaUyarisi: string | null }> {
   const parcaNo = b.urun.kod.slice(0, 60);
   // Numara ve sayaç "Numara kuralları" ayarındadır; sayaç bu işlemin içinde ilerler, emir eklenmezse geri alınır.
   const emirNo = await numaraAl(db, 'uretim-emirleri.emir-no', {
@@ -393,13 +396,16 @@ async function basligiYaz(
     alanlar: { FIRMA: b.proje?.firmaKodu ?? null, PROJE: b.proje?.kod ?? null, PARCA: parcaNo },
     varMi: (no) => s.emirNoVarMi(db, no),
   });
-  return s.ustEmirEkle(db, {
+  const parca = await acilisParcaRevizyonu(db, g.malzemeNo, g.parcaCizimRevizyonId, kaynakRotaRevizyonId);
+  const id = await s.ustEmirEkle(db, {
     parcaNo, parcaAd: (b.urun.ad ?? b.urun.kod).slice(0, 120), adet: g.adet, istasyonId,
     malzemeNo: g.malzemeNo, kaynakRotaRevizyonId, oncelik: b.oncelik, baslangic: b.baslangic, teslim: b.teslim, aciklama: b.aciklama,
     durum: g.taslak === true ? 'taslak' : 'planli', emirTuru: b.emirTuru, emirNo, projeId: b.proje?.id ?? null,
     siparisSatiriId: b.siparisSatiriId, patlatmaId: g.patlatmaId ?? null, teslimBagli: b.teslimBagli, siparisPartiId: b.siparisPartiId,
     acilisKaynagi: ek?.acilisKaynagi ?? null, rotaBekliyor: ek?.rotaBekliyor ?? false, eskiRevizyonGerekcesi: b.eskiRevizyonGerekcesi,
+    parcaRevizyonu: parca.yazi,
   }, acanId);
+  return { id, parcaUyarisi: parca.uyari };
 }
 
 // E-1, 224: aktif projeler ve her birinin siparişinde emre bağlanabilecek satırlar; açma yetkisi uretimEmriAc'takiyle aynıdır.
@@ -434,7 +440,7 @@ export async function acilisSecenekleri(db: Db, kullanici: Kullanici, malzemeNo:
 export async function rotasizEmirAc(db: Db, kullanici: Kullanici, g: EmirBasligi): Promise<{ uretimEmriId: number }> {
   const acanId = islemDenetle(kullanici, ['uretim-emirleri.rotasiz-ac']);
   if (!(await sistemAyariOku(db, 'uretim-emirleri.rotasiz-emir'))) throw cakisma(ROTASIZ_EMIR_KAPALI);
-  return { uretimEmriId: await basligiYaz(db, acanId, g, await basligiDenetle(db, g), null, null) };
+  return { uretimEmriId: (await basligiYaz(db, acanId, g, await basligiDenetle(db, g), null, null)).id };
 }
 
 // UE-SA-04 (3272-2 a): sipariş onayında yürürlükte rotası olmayan kalemin emri adımsız, "rota bekliyor" ve taslak açılır. Rotasız emir
@@ -442,7 +448,7 @@ export async function rotasizEmirAc(db: Db, kullanici: Kullanici, g: EmirBasligi
 export async function rotaBekleyenEmirAc(db: Db, kullanici: Kullanici, g: EmirBasligi): Promise<{ uretimEmriId: number }> {
   const acanId = islemDenetle(kullanici, ['uretim-emirleri.emir-ac', 'rota.emre-kopyala']);
   const b = await basligiDenetle(db, g);
-  return { uretimEmriId: await basligiYaz(db, acanId, { ...g, taslak: true }, b, null, null, { acilisKaynagi: 'siparis_onayi', rotaBekliyor: true }) };
+  return { uretimEmriId: (await basligiYaz(db, acanId, { ...g, taslak: true }, b, null, null, { acilisKaynagi: 'siparis_onayi', rotaBekliyor: true })).id };
 }
 
 // UE-02 "emirlere uygula": rotanın yeni hâli güvenli kipte uygulanır. Başlamış ya da bitmiş iş emri korunur.
@@ -573,13 +579,17 @@ function fasonOzeti(hareketler: readonly FasonHareketiSatiri[]) {
   return { gonderilen, donenSaglam, donenHurda };
 }
 
+// 3755: emre sabitlenen parça revizyonu; seçilmemiş emirde null.
+export const parcaRevizyonuOf = (e: Pick<UstEmirSatiri, 'parcaRevizyonKodu' | 'parcaCizimBelgeId' | 'parcaCizimRevizyonId'>): { kod: string | null; belgeId: number; revizyonId: number } | null =>
+  (e.parcaCizimRevizyonId === null || e.parcaCizimBelgeId === null ? null : { kod: e.parcaRevizyonKodu, belgeId: e.parcaCizimBelgeId, revizyonId: e.parcaCizimRevizyonId });
+
 function ozet(e: UstEmirSatiri, kendi: readonly IsEmriSatiri[], ad: Adlar, altEmirIdleri: number[]): AdimliEmirOzeti {
   const sira = siradakiIsEmri(kendi);
   return {
     id: e.id, emirNo: e.emirNo, urun: { id: e.malzemeNo, kod: e.parcaNo, ad: e.parcaAd }, adet: e.adet, oncelik: e.oncelik,
     baslangic: e.baslangic, teslim: e.teslim, durum: gorunenDurum(e.durum, kendi.some((i) => i.durum !== 'bekliyor')), arsiv: e.arsiv,
     parti: { ustEmirId: e.ustEmirId, bolunmeSira: e.bolunmeSira, altEmirIdleri, birlestigiEmirId: e.birlestigiEmirId, birlesmeOpNo: e.birlesmeOpNo },
-    kaynakRotaRevizyonId: e.kaynakRotaRevizyonId, emirTuru: e.emirTuru, projeId: e.projeId, siparisSatiriId: e.siparisSatiriId,
+    kaynakRotaRevizyonId: e.kaynakRotaRevizyonId, parcaRevizyonu: parcaRevizyonuOf(e), emirTuru: e.emirTuru, projeId: e.projeId, siparisSatiriId: e.siparisSatiriId,
     teslimBagli: e.teslimBagli, siparisPartiId: e.siparisPartiId, rotaBekliyor: e.rotaBekliyor, adimSayisi: kendi.length, tamamAdim: kendi.filter((i) => i.durum === 'tamam').length,
     siradaki: sira === null ? null : {
       id: sira.id, opNo: sira.opNo, ad: sira.ad, durum: sira.durum, kaynak: kaynakAdi(ad, sira), istasyon: istasyonAdi(ad, sira.istasyonId),
@@ -632,6 +642,9 @@ export interface EmirDilimiSatiri {
   oncelik: number;
   aciklama: string | null;
   kaynakRotaRevizyonId: number | null;
+  // 3755: emre sabitlenen parça (çizim) revizyonunun kodu, gösterim kuralıyla ("R00" -> "00") ve revizyonu; seçilmemiş emirde ikisi de null.
+  parcaRevizyonKodu: string | null;
+  parcaCizimRevizyonId: number | null;
   durum: EmirDurumu;
   emirTuru: EmirTuru;
   acilma: string;
@@ -695,7 +708,8 @@ export async function emirDilimi(db: Db, secim?: EmirDilimiSecimi): Promise<Emir
   };
   return emirler.flatMap((e) => (e.malzemeNo === null ? [] : [{
     id: e.id, emirNo: e.emirNo, malzemeNo: e.malzemeNo, adet: e.adet, baslangic: e.baslangic, teslim: e.teslim, oncelik: e.oncelik, aciklama: e.aciklama,
-    kaynakRotaRevizyonId: e.kaynakRotaRevizyonId, emirTuru: e.emirTuru, acilma: e.acilma, bitis: e.bitis, ustEmirId: e.ustEmirId,
+    kaynakRotaRevizyonId: e.kaynakRotaRevizyonId, parcaRevizyonKodu: parcaRevizyonuMetni(e.parcaRevizyonKodu), parcaCizimRevizyonId: e.parcaCizimRevizyonId,
+    emirTuru: e.emirTuru, acilma: e.acilma, bitis: e.bitis, ustEmirId: e.ustEmirId,
     durum: gorunenDurum(e.durum, (emreGore.get(e.id) ?? []).some((i) => i.durum !== 'bekliyor')),
     bolunmeSira: e.bolunmeSira, birlestigiEmirId: e.birlestigiEmirId, birlesmeOpNo: e.birlesmeOpNo, surum: e.surum,
     bekletme: bekletmeler.get(e.id) ?? null,
@@ -782,6 +796,7 @@ export async function adimliAyrinti(db: Db, id: number): Promise<AdimliEmirAyrin
     ...ozet(e, kendi, ad, altEmirIdleri),
     isEmirleri,
     hataliDurdu: hataliDurduMu(kendi, hataliKayitlar),
+    parcaRevizyonuDurumu: await parcaRevizyonuDurumu(db, e),
     eski: eski === null ? null : {
       durum: eski.eskiDurum, istasyon: istasyonAdi(ad, eski.istasyonId), baslama: eski.baslama, bitis: eski.bitis, saglamAdet: eski.saglamAdet,
     },
@@ -1520,6 +1535,9 @@ export async function kilitliEmriBol(
     oncelik: e.oncelik, baslangic: e.baslangic, teslim: e.teslim, aciklama: e.aciklama, durum: e.durum === 'taslak' ? 'taslak' : 'planli',
     ustEmirId: id, bolunmeSira: g.adimSira, birlesmeOpNo, emirTuru: g.emirTuru ?? e.emirTuru, emirNo: kolEmirNo(e.emirNo, (await s.kolSayisi(db, id)) + 1), projeId: e.projeId,
     siparisSatiriId: e.siparisSatiriId,
+    // 3755: parti üst emrin parça revizyonuyla üretilir.
+    parcaRevizyonu: e.parcaCizimRevizyonId === null || e.parcaCizimBelgeId === null ? null
+      : { kod: e.parcaRevizyonKodu, belgeId: e.parcaCizimBelgeId, revizyonId: e.parcaCizimRevizyonId },
   }, acanId);
   const birlesmeSira = birlesmeOpNo === null ? null : kendi.find((i) => i.opNo === birlesmeOpNo)?.sira ?? null;
   await adimlariKopyala(db, acanId, altEmirId, kolAdimlari(kendi, g.adimSira, birlesmeSira), g.adimSira);
@@ -2430,7 +2448,7 @@ export async function emrinIstasyonu(db: Db, emirId: number): Promise<number | n
 }
 
 // Refakat kartındaki revizyon kodu (2907 D4): ekranlardaki kodun aynısı (yayındaki resmin anteti, yoksa kartın revizyonu; 2887 a).
-// Emirde saklanmaz, kart basıldığı andaki değerdir; rota harfi değildir. Kaynak yalnız burada seçilir.
+// Revizyonu seçilmemiş emirde kart basıldığı andaki değerdir (3755: seçilmişse emirdeki); rota harfi değildir. Kaynak yalnız burada seçilir.
 // Seçim 3B modelin taslağına düştüyse (yayına girmiş resim yok) taslağın anteti kâğıda basılmaz: kartın revizyonu, o da yoksa boş.
 async function refakatRevizyonu(db: Db, malzemeNo: number | null): Promise<string | null> {
   if (malzemeNo === null) return null;
@@ -2459,7 +2477,9 @@ export async function refakatKarti(db: Db, id: number): Promise<RefakatKartiCeva
   if (ihlal !== null) throw cakisma(ihlal);
   const ustId = e.parti?.ustEmirId ?? null;
   const ustEmirNo = ustId === null ? null : (await s.emirNolariGetir(db, [ustId]))[0]?.emirNo ?? null;
-  const rev = await refakatRevizyonu(db, (await s.ustEmirBul(db, id))?.malzemeNo ?? null);
+  // 3755: emre sabitlenen parça revizyonu basılır; seçilmemiş emirde kartın güncel çizimi (bugünkü kural). Tek gösterim kuralıyla ("R00" -> "00").
+  const satir = await s.ustEmirBul(db, id);
+  const rev = parcaRevizyonuMetni(satir?.parcaCizimRevizyonId != null ? satir.parcaRevizyonKodu : await refakatRevizyonu(db, satir?.malzemeNo ?? null));
   return {
     emirId: e.id, qr: refakatQrMetni(e.id), emirNo: e.emirNo, urun: { kod: e.urun.kod, ad: e.urun.ad }, revizyon: rev, adet: e.adet, teslim: e.teslim,
     parti: { ustEmirNo, bolunmeSira: e.parti?.bolunmeSira ?? null },

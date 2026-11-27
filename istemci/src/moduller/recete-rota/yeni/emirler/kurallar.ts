@@ -563,7 +563,7 @@ export function emirRotasi(c: UrunRotalari | undefined, tur: string, turAdi: str
   return {
     secenekler: c.rotalar.filter((r) => r.id === secili.id || yururlukte(r.id) !== null).map((r) => {
       const y = yururlukte(r.id);
-      return { deger: String(r.id), baslik: `${r.ad} · ${y === null ? 'yürürlükte değil' : `Rev ${y.harf}`}` };
+      return { deger: String(r.id), baslik: `${r.ad} · ${y === null ? 'yürürlükte değil' : `Rota ${y.harf}`}` };
     }),
     secili: String(secili.id),
     revizyonId: rev?.id ?? null,
@@ -573,7 +573,7 @@ export function emirRotasi(c: UrunRotalari | undefined, tur: string, turAdi: str
       : (secili.id === turun.id ? `${turAdi} türünün rotası` : `Elle seçildi; ${turAdi} türünün rotası ${turun.ad}`),
     uyari: rev === null ? `${secili.ad} rotasının yürürlükte revizyonu yok; emri açmak için ${seri.ad} rotasını seçin.` : null,
     seriyeDusus: secili.id === turun.id && t.seriyeDustu && rev !== null
-      ? `${seriyeDususMetni(turAdi, t.turunRotasi)}. Emir ${turun.ad} rotası Rev ${rev.harf} ile açılır; emir ayrıntısında bu not kalır.` : null,
+      ? `${seriyeDususMetni(turAdi, t.turunRotasi)}. Emir ${turun.ad} rotasıyla (Rota ${rev.harf}) açılır; emir ayrıntısında bu not kalır.` : null,
   };
 }
 
@@ -582,7 +582,7 @@ export function tekRotaMetni(c: Pick<UrunRevizyonlariCevabi, 'rotalar' | 'revizy
   if (c === undefined || c.rotalar.length !== 1) return null;
   const r = c.rotalar[0]!;
   const y = c.revizyonlar.find((x) => x.rotaId === r.id && x.durum === 'yururlukte');
-  return `${r.ad} · ${y === undefined ? 'yürürlükte değil' : `Rev ${y.harf}`}`;
+  return `${r.ad} · ${y === undefined ? 'yürürlükte değil' : `Rota ${y.harf}`}`;
 }
 
 // 3578: bölmede partinin rotası. Parti rotası boşsa sunucunun kuralıyla aynı çözülür: tür ana emirle aynıysa (ya da türün rotası ana emrinkiyse)
@@ -603,7 +603,7 @@ export function partiRotaSecimi(c: UrunRotalari | undefined, ana: AnaRota | null
   const anaGibi = ana !== null && (tur === anaTur || ana.rotaId === turun.id);
   const bosRota = anaGibi ? c.rotalar.find((r) => r.id === ana.rotaId) ?? turun : turun;
   const bosHarf = anaGibi ? ana.harf : yururlukte(turun.id)?.harf ?? null;
-  const metin = (ad: string, harf: string | null) => `${ad} · ${harf === null ? 'yürürlükte değil' : `Rev ${harf}`}`;
+  const metin = (ad: string, harf: string | null) => `${ad} · ${harf === null ? 'yürürlükte değil' : `Rota ${harf}`}`;
   const harfi = (id: number) => (ana !== null && id === ana.rotaId ? ana.harf : yururlukte(id)?.harf ?? null);
   const secenekler = c.rotalar.filter((r) => r.id !== bosRota.id && (yururlukte(r.id) !== null || r.id === ana?.rotaId))
     .map((r) => ({ deger: String(r.id), baslik: metin(r.ad, harfi(r.id)) }));
@@ -638,10 +638,10 @@ export function yeniEmirAnaRotasi(c: UrunRotalari | undefined, tur: string, seci
   const rotaId = c.rotalar.length < 2 ? c.rotalar[0]!.id : Number(emirRotasi(c, tur, tur, secilen)!.secili);
   return { rotaId, harf: c.revizyonlar.find((r) => r.rotaId === rotaId && r.durum === 'yururlukte')?.harf ?? null };
 }
-// Sonuç tablosunun ana emir satırı: "Rota · Rev X".
+// Sonuç tablosunun ana emir satırı: "Rota adı · Rota X".
 export function anaRotaMetni(c: UrunRotalari | undefined, ana: AnaRota | null): string | null {
   const r = ana === null ? undefined : c?.rotalar.find((x) => x.id === ana.rotaId);
-  return ana === null || r === undefined ? null : `${r.ad} · ${ana.harf === null ? 'yürürlükte değil' : `Rev ${ana.harf}`}`;
+  return ana === null || r === undefined ? null : `${r.ad} · ${ana.harf === null ? 'yürürlükte değil' : `Rota ${ana.harf}`}`;
 }
 
 export function yururlukteRevizyonId(d: Pick<DurumCevabi, 'routeRevs'>, urunId: string): number | null {
@@ -758,5 +758,5 @@ export function seriRotasiNotu(
   const turAdi = (EMIR_TURU_ADLARI as Record<string, string>)[o.tur] ?? o.tur;
   const rev = d.routeRevs?.find((r) => r.id === o.rev);
   if (rev === undefined || rev.rotaStandart === false) return null;
-  return `${turAdi} emri Seri rotasıyla açıldı (Rev ${rev.no}); ${turAdi} türünün kendi rotası kullanılmadı.`;
+  return `${turAdi} emri Seri rotasıyla açıldı (Rota ${rev.no}); ${turAdi} türünün kendi rotası kullanılmadı.`;
 }

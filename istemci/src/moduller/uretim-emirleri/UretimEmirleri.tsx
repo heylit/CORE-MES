@@ -7,7 +7,7 @@ import { Dugme, DurumKutusu, Kart, Rozet, Sekmeler, Tablo, Yenile, type Sutun } 
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { KucukResimKutusu, useKucukResimler } from '../belge-merkezi/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { ADIMLI_OKUMA_ISLEMLERI, durumGosterimi, saglamSayisi, seritTonu, zamanMetni } from './gorunum.ts';
+import { ADIMLI_OKUMA_ISLEMLERI, durumGosterimi, parcaRevMetni, saglamSayisi, seritTonu, zamanMetni } from './gorunum.ts';
 import { SmartesEmirHucresi, useSmartesRozetleri } from './SmartesRozeti.tsx';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { beklemeNedeniKisa, beklemeSuresi } from './Bekletme.tsx';
@@ -43,7 +43,10 @@ const sutunlar = (resimler: ReadonlyMap<number, KucukResim>, smartes: SmartesSut
   { anahtar: 'parca', kartta: true, baslik: 'Parça', hucre: (e) => (
     <span className="tc-emir-parca">
       {e.malzemeNo != null && <KucukResimKutusu resim={resimler.get(e.malzemeNo)} ad={e.parcaAd} />}
-      <span><b>{e.parcaNo}</b> {e.parcaAd}</span>
+      <span>
+        <b>{e.parcaNo}</b> {e.parcaAd}
+        {e.parcaRevizyonu !== undefined && <small className="tc-emir-alt-satir tc-emir-rev" data-bos={e.parcaRevizyonu === null ? '' : undefined}>{parcaRevMetni(e.parcaRevizyonu)}</small>}
+      </span>
     </span>
   ) },
   { anahtar: 'adet', kartta: true, baslik: 'Sağlam / adet', hizala: 'sag', kirilmaz: true, hucre: (e) => {
@@ -61,7 +64,7 @@ const sutunlar = (resimler: ReadonlyMap<number, KucukResim>, smartes: SmartesSut
 ];
 
 // Açık emir çipleri (3039): sunucudaki durumdan türetilir, yeni durum yok. "Duran" duraklatılmış ya da durmuş emirdir.
-type AcikCip = '' | 'taslak' | 'planli' | 'basladi' | 'duran' | 'beklemede';
+type AcikCip = '' | 'taslak' | 'planli' | 'basladi' | 'duran' | 'beklemede' | 'parca-rev';
 const ACIK_CIPLER: readonly { deger: AcikCip; baslik: string; uyar: (e: IzlemeEmri) => boolean }[] = [
   { deger: '', baslik: 'Tümü', uyar: () => true },
   { deger: 'taslak', baslik: 'Taslak', uyar: (e) => e.durum === 'taslak' },
@@ -71,6 +74,8 @@ const ACIK_CIPLER: readonly { deger: AcikCip; baslik: string; uyar: (e: IzlemeEm
 ];
 // Bekletme durum değil işarettir (3050 a): ayrı süzgeçtir; bekleyen emir Planlı ya da Üretimde sayısında da kalır.
 const BEKLEMEDE = { deger: 'beklemede', baslik: 'Beklemede', uyar: (e: IzlemeEmri) => e.bekletme != null } as const;
+// 3755: göç öncesi açılmış ya da çizimsiz açılmış açık emir; seçim emrin ayrıntısındadır (emir düzenleme yetkisi).
+const PARCA_REV_SECILMEMIS = { deger: 'parca-rev', baslik: 'Parça revizyonu seçilmemiş', uyar: (e: IzlemeEmri) => e.parcaRevizyonuSecimGerekli === true } as const;
 const BITEN_CIPLER: readonly { deger: '' | 'bitti' | 'iptal'; baslik: string }[] = [
   { deger: '', baslik: 'Tümü' }, { deger: 'bitti', baslik: 'Bitti' }, { deger: 'iptal', baslik: 'İptal' },
 ];
@@ -142,7 +147,7 @@ export function UretimEmirleri({ emirAcma }: { emirAcma?: EmirAcmaYuvasi }) {
     })),
   });
   const tumAcik = liste.data?.emirler ?? [];
-  const secilenCip = cip === 'beklemede' ? BEKLEMEDE : ACIK_CIPLER.find((c) => c.deger === cip) ?? ACIK_CIPLER[0]!;
+  const secilenCip = cip === 'beklemede' ? BEKLEMEDE : cip === 'parca-rev' ? PARCA_REV_SECILMEMIS : ACIK_CIPLER.find((c) => c.deger === cip) ?? ACIK_CIPLER[0]!;
   const emirler = tumAcik.filter(secilenCip.uyar).filter((e) => ara === '' || `${e.emirNo} ${e.parcaNo} ${e.parcaAd}`.toLocaleLowerCase('tr-TR').includes(ara));
   const sorgu = gorunum === 'acik' ? liste : bitenler;
   const gorunen = gorunum === 'acik' ? emirler : bitenler.data?.satirlar ?? [];
@@ -177,6 +182,12 @@ export function UretimEmirleri({ emirAcma }: { emirAcma?: EmirAcmaYuvasi }) {
           <Dugme simge="pause" aria-pressed={cip === 'beklemede'} onClick={() => { setCip('beklemede'); }}>
             {BEKLEMEDE.baslik} {tumAcik.filter(BEKLEMEDE.uyar).length}
           </Dugme>
+          {/* Seçilmemiş emir yokken çip görünmez (göçten sonra eski emirler bitince kendiliğinden kalkar). */}
+          {(cip === 'parca-rev' || tumAcik.some(PARCA_REV_SECILMEMIS.uyar)) && (
+            <Dugme simge="file" aria-pressed={cip === 'parca-rev'} onClick={() => { setCip('parca-rev'); }}>
+              {PARCA_REV_SECILMEMIS.baslik} {tumAcik.filter(PARCA_REV_SECILMEMIS.uyar).length}
+            </Dugme>
+          )}
         </div>
       )}
       {gorunum === 'bitenler' && (

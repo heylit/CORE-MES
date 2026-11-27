@@ -253,7 +253,7 @@ export async function malzemeKullanimi(db: Db, malzemeIdleri: readonly number[])
 export async function emreKopyala(db: Db, kullanici: Kullanici, id: number, g: {
   adet: number; teslim: string | null; oncelik?: number | undefined; baslangic?: string | null | undefined; aciklama?: string | null | undefined; taslak?: boolean | undefined; projeId?: number | null | undefined; siparisSatiriId?: number | null | undefined; siparisPartiId?: number | null | undefined;
   stoktanRezerve?: boolean | undefined; emirTuru?: EmirTuru | undefined; cokKatmanli?: boolean | undefined; stoktanDugumler?: readonly string[] | undefined;
-  eskiRevizyonGerekcesi?: string | null | undefined;
+  eskiRevizyonGerekcesi?: string | null | undefined; parcaCizimRevizyonId?: number | null | undefined;
 }) {
   const r = revizyonuAl(await s.revizyonOku(db, id));
   const urun = await urunOzetiAl(db, r.malzemeId);
@@ -264,7 +264,7 @@ export async function emreKopyala(db: Db, kullanici: Kullanici, id: number, g: {
   const baslik = {
     malzemeNo: r.malzemeId, adet: g.adet, teslim: g.teslim, oncelik: g.oncelik, baslangic: g.baslangic ?? null, aciklama: g.aciklama ?? null,
     ...(g.taslak ? { taslak: true } : {}), ...(g.stoktanRezerve ? { stoktanRezerve: true } : {}), ...(g.emirTuru ? { emirTuru: g.emirTuru } : {}), projeId: g.projeId ?? null, siparisSatiriId: g.siparisSatiriId ?? null, siparisPartiId: g.siparisPartiId ?? null, kaynakRotaRevizyonId: r.id,
-    eskiRevizyonGerekcesi: g.eskiRevizyonGerekcesi ?? null,
+    eskiRevizyonGerekcesi: g.eskiRevizyonGerekcesi ?? null, parcaCizimRevizyonId: g.parcaCizimRevizyonId ?? null,
   };
   if (g.cokKatmanli === true) return cokKatmanliAc(db, kullanici, r.id, r.malzemeId, rota, baslik, g.stoktanDugumler ?? [], g.emirTuru ?? null);
   if ((g.stoktanDugumler ?? []).length > 0) throw gecersiz('Stoktan karşılanan düğüm yalnız çok katmanlı emirde seçilir.');
@@ -333,6 +333,12 @@ export async function emreUygula(db: Db, kullanici: Kullanici, emirId: number) {
 
 export async function revizyonKunyeleri(db: Db, idler: readonly number[]) {
   return { revizyonlar: await s.revizyonKunyeleri(db, idler) };
+}
+
+// 3755: emrin parça revizyonu uyarısı için revizyonun harfi ve yürürlüğe alındığı an (alınmadıysa null); yetki denetlemez.
+export async function revizyonYururlukleri(db: Db, idler: readonly number[]): Promise<Map<number, { harf: string; yururlugeAlma: string | null }>> {
+  if (idler.length === 0) return new Map();
+  return new Map((await s.revizyonlariOku(db, idler)).map((r) => [r.id, { harf: r.harf, yururlugeAlma: r.yururlugeAlma }]));
 }
 
 // Malzeme seçici ve Malzemeler bölümü: arama malzemeler modülündedir; rota yalnız ürün özetine çevirir.

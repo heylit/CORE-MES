@@ -244,6 +244,10 @@ export const durumEmirSemasi = z.object({
   note: z.string().nullable(),
   // Emrin açıldığı rota revizyonunun kimliği (sunucu kimliğinin metni); revizyonu olmayan emirde null.
   rev: kimlikMetni.nullable(),
+  // 3755: emre sabitlenen parça (çizim) revizyonunun kodu, gösterim kuralıyla ("R00" -> "00"); ekranda "Rev" budur, rota ayrı "Rota B".
+  // parcaRevId: sabitlenen çizim revizyonu; null ise seçilmemiş ("Rev —"). İsteğe bağlı: sunucu her zaman yazar.
+  parcaRev: z.string().nullable().optional(),
+  parcaRevId: kimlikMetni.nullable().optional(),
   status: z.enum(DURUM_EMIR_DURUMLARI),
   // Onaylı kapanışın sonucu (1082 a): yalnız kalite ve müdür onayından sonra dolu; bitmiş ama onaylanmamış emirde null ("Üretimi bitti").
   kapanisSonucu: z.enum(['tamamlandi', 'saglamsiz']).nullable().optional(),

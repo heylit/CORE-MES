@@ -3,6 +3,7 @@ import { adrestenBolme, duzMu, rafAraligi } from './raf-kodlama.ts';
 import type { ReactNode } from 'react';
 import type { Goz, GozKalemi, YerlesimCevabi } from '#paylasilan/sozlesme/atolye.ts';
 import type { Emir } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { parcaRevMetni } from '#paylasilan/sozlesme/emir-durumu.ts';
 import { Dugme, DurumKutusu, DurumRozeti, Rozet, Tablo } from '../../ortak/arayuz/index.ts';
 import type { Sutun } from '../../ortak/arayuz/index.ts';
 import { hataIletisi } from '../../ortak/veri/api.ts';
@@ -142,13 +143,16 @@ function OburIsler({ emirler, gosterilen }: { emirler: readonly Emir[] | undefin
   );
 }
 
+// 3755: emrin parça (çizim) revizyonu; alanı yazmayan okumada (istasyonlu eski emir) hiç gösterilmez.
+const revEki = (e: Emir): string => (e.parcaRevizyonu === undefined ? '' : ` · ${parcaRevMetni(e.parcaRevizyonu)}`);
+
 function SiradakiIs({ emir, parca }: { emir: Emir | undefined; parca: ParcaModeli | undefined }) {
   if (!emir) return null;
   return (
     <>
       <dt>Sıradaki</dt>
       <dd className="tc-atolye-sirada">
-        <span className="mono">{emir.emirNo}</span> · {emir.parcaNo} · {emir.parcaAd} · {sayiMetni(emir.adet)} adet
+        <span className="mono">{emir.emirNo}</span> · {emir.parcaNo}{revEki(emir)} · {emir.parcaAd} · {sayiMetni(emir.adet)} adet
         {parca && <><br />Model: {parcaModeliMetni(parca)}</>}
       </dd>
     </>
@@ -228,7 +232,7 @@ export function OgeKarti({
           {emir ? (
             <>
               <dt>Emir</dt><dd className="mono">{emir.emirNo}</dd>
-              <dt>Parça</dt><dd>{emir.parcaNo} · {emir.parcaAd}</dd>
+              <dt>Parça</dt><dd>{emir.parcaNo}{revEki(emir)} · {emir.parcaAd}</dd>
               <dt>Adet</dt><dd className="mono">{adetMetni(emir)}</dd>
               {emir.canli?.durusNedeni && <><dt>Neden</dt><dd className="tc-atolye-neden">{emir.canli.durusNedeni.ad}</dd></>}
             </>
@@ -278,7 +282,7 @@ export function OgeKarti({
           {emir ? (
             <>
               <dt>İş emri</dt><dd>{c?.isEmri ?? 'Bilinmiyor (iş emirsiz emir ya da adımlar arası)'}</dd>
-              <dt>Parça</dt><dd>{emir.parcaNo} · {emir.parcaAd}</dd>
+              <dt>Parça</dt><dd>{emir.parcaNo}{revEki(emir)} · {emir.parcaAd}</dd>
               <dt>Adet</dt><dd className="mono">{adetMetni(emir)}</dd>
               {emir.canli?.durusNedeni && <><dt>Neden</dt><dd className="tc-atolye-neden">{emir.canli.durusNedeni.ad}</dd></>}
             </>

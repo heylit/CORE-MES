@@ -3,10 +3,10 @@
 // kendiliğinden istenmez: Hazırlık ara onayda değişikliği görür ve kararı verir (`fpRe`). Kararın anı ve o ana kadar karara bağlanmış numuneler
 // sunucuda damgalanır; kapı sunucudadır (sunucu/moduller/arkon/kurallar.ts yenidenIlkParcaAcik), ekran karşılığı ilk-parca.ts'tedir.
 
-export interface AraOnayNumunesi { id: string; pkgId?: string; rev?: string; status?: string; items?: number[]; results?: Record<string, { ok?: boolean } | undefined>; decidedAt?: number }
+export interface AraOnayNumunesi { id: string; pkgId?: string; rev?: string; rotaRev?: string; status?: string; items?: number[]; results?: Record<string, { ok?: boolean } | undefined>; decidedAt?: number }
 export interface YenidenKarar { on: boolean; key: string; why: AraOnayTuru; by?: string; at?: number; once?: string[] }
 export interface AraOnayPaketi {
-  id: string; rev?: string; plan?: unknown; steps?: unknown; files?: unknown; rules?: { warns?: unknown } | null; samp?: unknown;
+  id: string; rev?: string; rotaRev?: string; plan?: unknown; steps?: unknown; files?: unknown; rules?: { warns?: unknown } | null; samp?: unknown;
   cycle?: unknown; setup?: unknown; op?: unknown; machine?: unknown; mc?: unknown; yayinImza?: Record<string, string> | null; fpRe?: YenidenKarar | null;
 }
 export type AraOnayTuru = 'red' | 'revizyon' | 'degisiklik';
@@ -28,8 +28,9 @@ function imza(d: unknown): string {
 export const IMZA_ALANLARI = [
   ['plan', 'Kontrol planı'], ['steps', 'Operasyon adımları'], ['files', 'Dokümanlar'], ['warns', 'Uyarılar'], ['samp', 'Numune planı'],
   ['cycle', 'Çevrim süresi'], ['setup', 'Ayar süresi'], ['op', 'Operasyon'],
-  // Plan işi başka istasyona ya da makineye taşıyınca CORE paketi `machine` ve `mc` alanlarını yeniden yazar; rota revizyonu `rev`'dir.
-  ['machine', 'İstasyon'], ['mc', 'Makine'], ['rev', 'Rota revizyonu'],
+  // Plan işi başka istasyona ya da makineye taşıyınca CORE paketi `machine` ve `mc` alanlarını yeniden yazar. 3755: `rev` parça (çizim)
+  // revizyonu, `rotaRev` rota harfidir; bu alanlardan önce `rev` rota harfiydi.
+  ['machine', 'İstasyon'], ['mc', 'Makine'], ['rev', 'Parça revizyonu'], ['rotaRev', 'Rota revizyonu'],
 ] as const;
 
 export function paketImzasi(p: AraOnayPaketi): Record<string, string> {
@@ -48,13 +49,27 @@ export function araOnayNedenleri(p: AraOnayPaketi, numuneler: readonly AraOnayNu
   const son = kararliNumuneler(p, numuneler).at(-1);
   const nedenler: AraOnayNedeni[] = [];
   if (son?.status === 'rejected') nedenler.push({ tur: 'red', etiket: 'Son numune reddedildi' });
-  if (son && (son.rev ?? '') !== (p.rev ?? '')) nedenler.push({ tur: 'revizyon', etiket: `Revizyon değişti: Rev ${son.rev || '-'} → Rev ${p.rev || '-'}` });
+  if (son) {
+    // 3755: rotaRev'siz (eski) numunenin `rev`i rota harfidir; paketin rota harfiyle karşılaştırılır, parça revizyonu o numunede bilinmez.
+    const rotaHarfi = p.rotaRev ?? p.rev ?? '';
+    if (son.rotaRev === undefined) {
+      if ((son.rev ?? '') !== rotaHarfi) nedenler.push({ tur: 'revizyon', etiket: `Rota revizyonu değişti: Rota ${son.rev || '-'} → Rota ${rotaHarfi || '-'}` });
+    } else {
+      if ((son.rev ?? '') !== (p.rev ?? '')) nedenler.push({ tur: 'revizyon', etiket: `Parça revizyonu değişti: Rev ${son.rev || '-'} → Rev ${p.rev || '-'}` });
+      if (son.rotaRev !== rotaHarfi) nedenler.push({ tur: 'revizyon', etiket: `Rota revizyonu değişti: Rota ${son.rotaRev || '-'} → Rota ${rotaHarfi || '-'}` });
+    }
+  }
   const simdiki = paketImzasi(p);
   if (p.yayinImza) {
     const revizyonVar = nedenler.some((n) => n.tur === 'revizyon');
+    // rotaRev'siz yayın imzasında `rev` rota harfinin imzasıdır: rota harfiyle karşılaştırılır, parça revizyonu sorulmaz.
+    const eskiImza = p.yayinImza['rotaRev'] === undefined;
+    const karsilik = (a: string): string | undefined => (eskiImza && a === 'rev' ? imza(p.rotaRev ?? p.rev) : simdiki[a]);
     for (const [a, etiket] of IMZA_ALANLARI) {
-      if (a === 'rev' && revizyonVar) continue;
-      if (p.yayinImza[a] !== undefined && p.yayinImza[a] !== simdiki[a]) nedenler.push({ tur: a === 'rev' ? 'revizyon' : 'degisiklik', etiket: `${etiket} değişti` });
+      const revAlani = a === 'rev' || a === 'rotaRev';
+      if (revAlani && revizyonVar) continue;
+      const etiketi = eskiImza && a === 'rev' ? 'Rota revizyonu' : etiket;
+      if (p.yayinImza[a] !== undefined && p.yayinImza[a] !== karsilik(a)) nedenler.push({ tur: revAlani ? 'revizyon' : 'degisiklik', etiket: `${etiketi} değişti` });
     }
   }
   if (nedenler.length === 0) return null;

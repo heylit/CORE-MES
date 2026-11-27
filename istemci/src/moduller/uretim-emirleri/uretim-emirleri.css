@@ -251,3 +251,6 @@
 .tc-gecmis-serit-metin { display: grid; gap: var(--b-1); flex: 1 1 16rem; min-width: 0; overflow-wrap: anywhere; }
 .tc-gecmis-serit-metin ul { margin: 0; padding-inline-start: var(--b-4); }
 .tc-gecmis-serit-metin small { color: var(--muted); font-size: var(--yazi-s); }
+/* 3755: emrin parça (çizim) revizyonu; seçilmemişte ("Rev —") kesikli çerçeve. */
+.tc-emir-rev { display: inline-block; padding: 0 var(--b-1); border: thin solid var(--edge); border-radius: var(--yari-1); font-size: var(--yazi-s); font-weight: 600; white-space: nowrap; }
+.tc-emir-rev[data-bos] { border-style: dashed; color: var(--muted); font-weight: 400; }

@@ -25,16 +25,16 @@ import { siparisSatirlari } from '../satin-alma/disari.ts';
 import { siparisAyrintisi, siparisinSatirOzetleri, siparisListesi } from '../siparisler/disari.ts';
 import { girisKontroluSatirlari, girisKontroluUygula, hareketPartileri, karantinadanBirak, karantinaDisiKonumlar, partiGirisZamanlari, partiKaliteDurumuYap, partiKimlikleri, partileriBul, partilerinMalzemeleri, partilerinRedBakiyeleri, partilerinRedGirisleri } from '../stok/disari.ts';
 import {
-  acikEmirler, adimKararSayaclari, emirIdleri, emirNolari, hataliKarariVer, hataliKayitlari, isEmriOzeti, kararliSayimiSonuclandir, uretimEmriOzeti,
+  acikEmirler, adimKararSayaclari, ayniParcaRevizyonuMu, emirIdleri, emirlerinParcaRevizyonlari, emirNolari, hataliKarariVer, hataliKayitlari, isEmriOzeti, kararliSayimiSonuclandir, uretimEmriOzeti,
 } from '../uretim-emirleri/disari.ts';
 import {
-  CIHAZ_KOLEKSIYONU, GECERSIZ_CIHAZ_ALANI, ILETILER, KM_DOSYA_SINIRI, KM_MODULU, ONAY_ALANI_HATASI, UYGUNSUZLUK_KAPALI, UYGUNSUZLUK_KOLEKSIYONU, geriYuklenecekler, ilkParcaBekleyenleri, izReddi,
+  CIHAZ_KOLEKSIYONU, GECERSIZ_CIHAZ_ALANI, ILETILER, KM_DOSYA_SINIRI, KM_MODULU, ONAY_ALANI_HATASI, UYGUNSUZLUK_KAPALI, UYGUNSUZLUK_KOLEKSIYONU, geriYuklenecekler, ilkParcaBekleyenleri, izReddi, kaliteResmiUyarisi,
   HATALI_NCR_KAYNAGI, bindeMetni, ncrKarantinaMiktari, HATALI_NCR_TANIM_ONEKI, kaynakEmirBagi, ncrAcikMi, ncrKapanisMaddesi, olcumKapanisMaddesi, onayAlaniVarMi, onayDegeriGecerliMi, onayDegisiklikleri, onayiGeriAlinmis, onayliFormMu, onayliFormReddi, pinsiz, sunucuOnayi,
   OLCU_ALETI_KAYIT_ADEDI, TEDARIKCI_ASKIDA, TEDARIKCI_KOLEKSIYONU, cihazGecerliMi, kalibrasyonAletKimligi, kalibrasyonCihazi, olcuAletleriListesi, kapanmisKayitMi, kaliteSatirlari, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, arsivDegisiyor, kaynakKoleksiyonuMu, onaylaSilinirMi, karantinaIstegi, yalnizArsivDegisiyor, yeniOlcumCihazlari, yoneticiKoleksiyonuMu,
 } from './kurallar.ts';
 import { TEDARIKCI_FIRMA_ALANI, tedarikciFirmaKimligi, tedarikciFirmalari, tedarikciFirmasiMi, tedarikciOnayDurumlari as onayDurumlari } from './kurallar.ts';
 import { hataliNcrGovdesi, numuneNcrGovdesi, numuneNcrKimligi, sonOlcumler } from './kurallar.ts';
-import { numuneKarari } from './studyo.ts';
+import { gosterilenRevizyonlar, numuneKarari } from './studyo.ts';
 import type { KmNumune, KmNumuneKarari } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import { GIRIS_KARNE_ANAHTARI, girisDurumu, girisGkkEngeli, girisKarneKarari, girisNcrGovdesi, gkkKontrolEngeli, gkkNoBicimi } from './kurallar.ts';
 import { GKK_NO_TURU, gkkSablonDenetle, gkkSablonlari, gkkTuruKarttan as gkkTuru } from '#paylasilan/gkk-sablonlari.ts';
@@ -697,7 +697,26 @@ export const kayitAramaKaynaklari: readonly KayitAramaKaynagi<Db>[] = [
 
 export async function ilkParcaBekleyenListesi(db: Db): Promise<KmIlkParcaBekleyenCevabi> {
   const emirler = await acikEmirler(db);
-  return { emirler: ilkParcaBekleyenleri(emirler, await adimKararSayaclari(db, emirler.map((e) => e.id))) };
+  const satirlar = ilkParcaBekleyenleri(emirler, await adimKararSayaclari(db, emirler.map((e) => e.id)));
+  // 3755: emrin "Rev"i ve kalitedeki etkin resimlerin revizyonu; yalnız listede çıkan emirler için okunur.
+  const revler = await emirlerinParcaRevizyonlari(db, [...new Set(satirlar.map((x) => x.uretimEmriId))]);
+  const malzemesi = new Map(emirler.map((e) => [e.id, e.malzemeNo ?? null]));
+  const resimRevleri = new Map<number, (string | null)[]>();
+  for (const no of new Set(satirlar.flatMap((x) => { const n = malzemesi.get(x.uretimEmriId); return n == null ? [] : [n]; }))) {
+    const resimler = (await sorgular.parcaResimleri(db, no)).filter((r) => r.tur === 'resim');
+    const kodlar = await gosterilenRevizyonlar(db, resimler);
+    resimRevleri.set(no, resimler.map((r) => kodlar.get(r.id) ?? null));
+  }
+  return {
+    emirler: satirlar.map((x) => {
+      const rev = revler.get(x.uretimEmriId) ?? null;
+      const no = malzemesi.get(x.uretimEmriId) ?? null;
+      return {
+        ...x, parcaRevizyonu: rev?.kod ?? null, parcaCizimBelgeId: rev?.belgeId ?? null,
+        resimUyarisi: no === null ? null : kaliteResmiUyarisi(rev?.kod ?? null, resimRevleri.get(no) ?? [], ayniParcaRevizyonuMu),
+      };
+    }),
+  };
 }
 
 export async function kayitGecmisi(db: Db, koleksiyon: string, kimlik: string): Promise<KmGecmisCevabi> {

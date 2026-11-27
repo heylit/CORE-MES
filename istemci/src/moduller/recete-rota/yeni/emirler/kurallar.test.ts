@@ -430,13 +430,13 @@ describe('3247 a: emir formunda rota', () => {
     expect(emirRotasi(c, 'fai', 'FAI', '1')).toMatchObject({ secili: '1', revizyonId: 10, ipucu: 'Elle seçildi; FAI türünün rotası FAI', seriyeDusus: null });
     expect(emirRotasi(c, 'seri', 'Seri', '')!.secenekler.map((s) => s.deger)).toEqual(['1', '2']);
     const n = emirRotasi(c, 'numune', 'Numune', '3')!;
-    expect(n.secenekler.map((s) => s.baslik)).toEqual(['Seri · Rev C', 'FAI · Rev A', 'Numune · yürürlükte değil']);
+    expect(n.secenekler.map((s) => s.baslik)).toEqual(['Seri · Rota C', 'FAI · Rota A', 'Numune · yürürlükte değil']);
     expect([n.revizyonId, n.uyari]).toEqual([null, 'Numune rotasının yürürlükte revizyonu yok; emri açmak için Seri rotasını seçin.']);
   });
   it('3411 a: türün rotası yürürlükte değilse ya da yoksa Seri (Standart) seçilir ve formda düşüş söylenir', () => {
     const n = emirRotasi(c, 'numune', 'Numune', '')!;
     expect(n).toMatchObject({ secili: '1', revizyonId: 10, uyari: null, ipucu: 'Numune türü Seri rotasından açılır' });
-    expect(n.seriyeDusus).toBe('Numune rotası henüz yürürlükte değil. Emir Seri rotası Rev C ile açılır; emir ayrıntısında bu not kalır.');
+    expect(n.seriyeDusus).toBe('Numune rotası henüz yürürlükte değil. Emir Seri rotasıyla (Rota C) açılır; emir ayrıntısında bu not kalır.');
     expect(emirRotasi(c, 'prototip', 'Prototip', '')!.seriyeDusus).toMatch(/^Prototip türünün rotası yok\./);
     expect(emirRotasi(c, 'seri', 'Seri', '')!.seriyeDusus).toBeNull();
     expect(turRotasi(c, 'numune')).toMatchObject({ rota: { id: 1 }, seriyeDustu: true, turunRotasi: { id: 3 } });
@@ -446,16 +446,16 @@ describe('3247 a: emir formunda rota', () => {
   it('3578 Y2: boş seçenek gerçek sonucu yazar; ana emrin rotası eski revizyonuyla kalır ve listede tekrar etmez', () => {
     const ana = { rotaId: 1, harf: 'B' };
     const ayni = partiRotaSecimi(c, ana, 'seri', 'seri', '')!;
-    expect(ayni.bosBaslik).toBe('Ana emirle aynı (Seri · Rev B)');
-    expect(ayni.secenekler.map((s) => s.baslik)).toEqual(['FAI · Rev A']);
+    expect(ayni.bosBaslik).toBe('Ana emirle aynı (Seri · Rota B)');
+    expect(ayni.secenekler.map((s) => s.baslik)).toEqual(['FAI · Rota A']);
     expect(ayni).toMatchObject({ rotaId: 1, harf: 'B', farkli: false, secilenId: null });
     const fai = partiRotaSecimi(c, ana, 'seri', 'fai', '')!;
-    expect(fai.bosBaslik).toBe('Türün rotası (FAI · Rev A)');
-    expect(fai.secenekler.map((s) => s.baslik)).toEqual(['Seri · Rev B']);
+    expect(fai.bosBaslik).toBe('Türün rotası (FAI · Rota A)');
+    expect(fai.secenekler.map((s) => s.baslik)).toEqual(['Seri · Rota B']);
     expect(fai).toMatchObject({ rotaId: 2, harf: 'A', farkli: true });
     // Türün rotası ana emrinkiyse tür farklı olsa da ana emirle aynıdır.
-    expect(partiRotaSecimi(c, { rotaId: 2, harf: 'A' }, 'fai', 'fai', '')!.bosBaslik).toBe('Ana emirle aynı (FAI · Rev A)');
-    expect(partiRotaSecimi(c, { rotaId: 1, harf: 'B' }, 'seri', 'numune', '')!.bosBaslik).toBe('Ana emirle aynı (Seri · Rev B)');
+    expect(partiRotaSecimi(c, { rotaId: 2, harf: 'A' }, 'fai', 'fai', '')!.bosBaslik).toBe('Ana emirle aynı (FAI · Rota A)');
+    expect(partiRotaSecimi(c, { rotaId: 1, harf: 'B' }, 'seri', 'numune', '')!.bosBaslik).toBe('Ana emirle aynı (Seri · Rota B)');
   });
   it('3578: elle seçim yalnız listedeki yürürlükte rotadır; geçersiz seçim türün rotasına düşer; farkli ana emrin rotasına göre', () => {
     const ana = { rotaId: 1, harf: 'B' };
@@ -465,7 +465,7 @@ describe('3247 a: emir formunda rota', () => {
     // Türün rotası FAI iken ana emrin rotasını elle seçmek ana emirle aynıdır (kol), revizyon ana emrinkidir.
     expect(partiRotaSecimi(c, ana, 'seri', 'fai', '1')).toMatchObject({ rotaId: 1, harf: 'B', farkli: false, secilenId: 1 });
     // Ana emrin rotası bilinmiyorsa farkli sunucuya bırakılır.
-    expect(partiRotaSecimi(c, null, 'seri', 'fai', '')).toMatchObject({ bosBaslik: 'Türün rotası (FAI · Rev A)', farkli: false });
+    expect(partiRotaSecimi(c, null, 'seri', 'fai', '')).toMatchObject({ bosBaslik: 'Türün rotası (FAI · Rota A)', farkli: false });
     expect(partiRotaSecimi(undefined, ana, 'seri', 'seri', '')).toBeNull();
   });
   it('3578: yeni emir formunda ana rota Rota alanındaki seçim ya da türün rotasıdır', () => {
@@ -477,7 +477,7 @@ describe('3247 a: emir formunda rota', () => {
   it('3411 a: Seri dışı türdeki emir Seri revizyonundan açıldıysa ayrıntıda not kalır', () => {
     const d = { routeRevs: [{ id: '10', no: 'C', rotaStandart: true }, { id: '11', no: 'A', rotaStandart: false }] } as unknown as Parameters<typeof seriRotasiNotu>[0];
     const rotalar = [{ id: 1, ad: 'Seri', standart: true, surum: 1, emirTurleri: [] }, { id: 2, ad: 'Numune', standart: false, surum: 1, emirTurleri: ['numune'] }] as unknown as Parameters<typeof seriRotasiNotu>[2];
-    expect(seriRotasiNotu(d, { tur: 'numune', rev: '10' }, rotalar)).toBe('Numune emri Seri rotasıyla açıldı (Rev C); Numune türünün kendi rotası kullanılmadı.');
+    expect(seriRotasiNotu(d, { tur: 'numune', rev: '10' }, rotalar)).toBe('Numune emri Seri rotasıyla açıldı (Rota C); Numune türünün kendi rotası kullanılmadı.');
     expect(seriRotasiNotu(d, { tur: 'numune', rev: '11' }, rotalar)).toBeNull();
     expect(seriRotasiNotu(d, { tur: 'seri', rev: '10' }, rotalar)).toBeNull();
     expect(seriRotasiNotu(d, { tur: 'numune', rev: '10', rotasiz: true }, rotalar)).toBeNull();

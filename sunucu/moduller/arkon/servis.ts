@@ -47,7 +47,7 @@ import type { BagSiniri, SaklananTur } from '../dosya/disari.ts';
 import { isEmriHazirlikDurumlari } from '../cnc-kurulum/disari.ts';
 import {
   acikEmir, acikEmirler, emirAyar, emirBaslat, emirBitir, emirDevam, emirDurdur, emirDuraklat, emirDurumlari, emirOzeti, emirSayim, isEmriOzeti, isEmriOzetleri, katil, katilimAyril, katilimDuraklat, katilimlar,
-  calismaDevral, hataliAdimToplamlari, makineDevral, partiKomutuReddi, planlanacakIsEmirleri, rotasizIsEmirleri, uretimEmriOzeti, aralikAdetleri, katilimSureleri, sonGirisler,
+  calismaDevral, emirlerinBaskiRevizyonlari, hataliAdimToplamlari, makineDevral, partiKomutuReddi, planlanacakIsEmirleri, rotasizIsEmirleri, uretimEmriOzeti, aralikAdetleri, katilimSureleri, sonGirisler,
   bitenIsEmirleri, gunlukAralikAdetleri, isEmriPlanBilgileri, kisininGunlukIsEmirleri, kisininHurdaNedenleri, kisininIsEmirleri, komutOnbellegiyle, standartSureler,
   makineAyrimlari as emrinMakineAyrimlari, kisininAcikIsleri, emirlerinMalzemeIhtiyaci, adimliEmirAyrintisi, emirlerinProjeleri, isEmriDugumleri, kararliSayimiSonuclandir, isEmriZamanlari,
   elleDurdurmaNedeni, fasonDonusuAdimlari, emirAdimlari, adimUretimBilgileri,
@@ -314,6 +314,9 @@ async function isEmriTaslaklari(
   const anahtar = (ie: { id: number; malzemeNo: number; opNo: number; kaynakRotaRevizyonId?: number | null }) => anahtarlar.get(ie.id) ?? rotaAnahtari(ie, undefined, new Map());
   const rotaEksik = await girdisiEksikRevizyonlar(db, [...anahtarlar.values()].flatMap((a) => (a.revizyonId === null ? [] : [a.revizyonId])));
   const revizyonlar = new Map<number, string | null>();
+  // 3755: paketin "Rev"i emrin parça revizyonudur (rota harfi ayrı, rotaRev). Çok katmanlı emrin alt parça düğümünde emrin revizyonu o parçanın
+  // değildir: orada boş kalır ("—").
+  const parcaRevizyonlari = await emirlerinBaskiRevizyonlari(db, [...new Set(isEmirleri.map((ie) => ie.uretimEmriId))]);
   // Talimat adım başına ayrı okunmasın: listedeki bütün (malzeme, adım) anahtarlarının geçerli talimatı tek okumadır. Talimat yine yalnız
   // kayıtsız ve şablonsuz pakette o anahtar için açılır; açılan anahtar sonraki paketlerde de kullanılır.
   // Talimat iş emrinin operasyon kimliğiyle okunur (3250-2); anahtar ekrandaki (malzeme, OP) olarak kalır.
@@ -345,7 +348,8 @@ async function isEmriTaslaklari(
     const talimatAnahtari = `${rota.malzemeNo}:${rota.opNo}`;
     if (kayitsiz && sablon === null) acilanTalimatlar.add(talimatAnahtari);
     const girdi: IsEmriPaketGirdisi = {
-      isEmri: ie, emir, proje: projeAdi(emir), istasyon, makineKodu: makine?.kod ?? null, revizyon, talimat: acilanTalimatlar.has(talimatAnahtari) ? talimatlar.get(talimatAnahtari) ?? null : null, sablon,
+      isEmri: ie, emir, proje: projeAdi(emir), istasyon, makineKodu: makine?.kod ?? null, revizyon,
+      parcaRevizyonu: rota.malzemeNo === emir.malzemeNo ? parcaRevizyonlari.get(ie.uretimEmriId) ?? null : null, talimat: acilanTalimatlar.has(talimatAnahtari) ? talimatlar.get(talimatAnahtari) ?? null : null, sablon,
       plan: revizyonId === null ? null : planlar.get(ie.id) ?? { ...PLANSIZ, zorunlu, ...(taslakta.has(ie.id) ? { taslakta: true as const } : {}) }, ekAciklama: ie.ekAciklama ?? null,
       rotaEksik: revizyonId === null || rota.revizyonId === null ? null : rotaEksik.get(rota.revizyonId) ?? null,
       fasonDonusu: fasonDonusuAdimlariKumesi.has(ie.id),

@@ -80,7 +80,7 @@ export interface PartiRotaKaynagi {
   ana: string | null;
   coz: (tur: string, secilen: string) => BolmeTurRotasi | null;
 }
-const rotaMetni = (t: { ad: string; harf: string | null }) => `${t.ad} · ${t.harf === null ? 'yürürlükte değil' : `Rev ${t.harf}`}`;
+const rotaMetni = (t: { ad: string; harf: string | null }) => `${t.ad} · ${t.harf === null ? 'yürürlükte değil' : `Rota ${t.harf}`}`;
 
 const adimKisaltmasi = (opdefs: DurumCevabi['opdefs'], a: EmirAdimi | undefined): string =>
   (a ? opdefs?.find((d) => d.id === a.opId)?.abbr ?? a.ad : '?');

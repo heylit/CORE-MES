@@ -25,7 +25,7 @@ import {
 } from './kurallar.ts';
 import type { StokKalemi, TakimDurumu } from './kurallar.ts';
 import { ADIMLI_OKUMA_ISLEMLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { acikEmir, acikIsEmri, acikIsEmirleri } from '../uretim-emirleri/disari.ts';
+import { acikEmir, acikIsEmri, acikIsEmirleri, emirlerinParcaRevizyonlari } from '../uretim-emirleri/disari.ts';
 import { malzemeGeometrisi } from '../geometri/disari.ts';
 import type { AcikIsEmri } from '../uretim-emirleri/disari.ts';
 import * as sorgular from './sorgular.ts';
@@ -137,7 +137,8 @@ export async function emirler(db: Db, kullanici: Kullanici): Promise<EmirlerCeva
   const talasli = await talasliIstasyonlar(db);
   const liste = (await acikIsEmirleri(db)).filter((i) => i.istasyonId !== null && talasli.has(i.istasyonId));
   const adlar = await istasyonAdlari(db, [...new Set(liste.map((i) => i.istasyonId ?? 0))]);
-  return { emirler: liste.map((i) => secenek(i, adlar.get(i.istasyonId ?? 0) ?? '')) };
+  const revler = await emirlerinParcaRevizyonlari(db, [...new Set(liste.map((i) => i.uretimEmriId))]);
+  return { emirler: liste.map((i) => ({ ...secenek(i, adlar.get(i.istasyonId ?? 0) ?? ''), parcaRevizyonu: revler.get(i.uretimEmriId)?.kod ?? null })) };
 }
 
 export async function yaz(db: Db, kullanici: Kullanici, g: YazGovdesi): Promise<YazCevabi> {

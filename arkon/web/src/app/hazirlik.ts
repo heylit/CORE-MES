@@ -288,7 +288,7 @@ export function PrepApp() {
         </div>
         ${p ? html`<section className="col pedit" style=${mob && !mEdit ? { display: 'none' } : null}>
           ${mob ? html`<button className="mback" onClick=${() => setMEdit(false)}><${I} n="back" s=${18} />Paketler</button>` : null}
-          <div className="glass order"><div><span className="over">İş paketi · v${p.version || 0} ${p.dirty ? '· kaydedildi (yayınlanmadı)' : '· yayında'}</span><h1>${p.no}<span className="revbig">Rev ${p.rev}</span></h1><p>${p.part || 'Parça adı girilmedi'} · ${p.op} · ${p.machine}</p></div>
+          <div className="glass order"><div><span className="over">İş paketi · v${p.version || 0} ${p.dirty ? '· kaydedildi (yayınlanmadı)' : '· yayında'}</span><h1>${p.no}<span className="revbig">Rev ${p.rev}</span></h1><p>${p.part || 'Parça adı girilmedi'} · ${p.op} · ${p.machine}${p.rotaRev ? ' · Rota ' + p.rotaRev : ''}</p></div>
             <div className="facts"><button className="btn" style=${{ alignSelf: 'center' }} onClick=${openPreview}><${I} n="eye" s=${18} />Operatör gözüyle</button><div><span className="over">Hedef</span><b>${fmt(p.target || 0)}</b></div><div><span className="over">Kontrol</span><b>${p.plan.length}</b></div><div><span className="over">Adım</span><b>${p.steps.length}</b></div></div></div>
           <div className="stepper">${TABS.map((t, i) => html`<button key=${t.id} className=${'stp ' + (tab === t.id ? 'on ' : '') + (t.id !== 'pub' && done(t.id) ? 'ok' : '')} onClick=${() => setTab(t.id)}><span className="sn">${t.id !== 'pub' && done(t.id) ? html`<${I} n="check" s=${14} w=${3} />` : i + 1}</span>${t.l}</button>`)}</div>
           <div className="pbody">

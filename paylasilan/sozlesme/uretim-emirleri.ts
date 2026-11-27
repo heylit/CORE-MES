@@ -248,6 +248,10 @@ export const emirSemasi = z.object({
   bekletme: bekletmeSemasi.nullable().optional(),
   // 3272-2 a: siparişten rotasız açılmış emir rotasını bekler; adımı yoktur, planlanmaz. İsteğe bağlı: önceki istemci verisi geçerli kalır.
   rotaBekliyor: z.boolean().optional(),
+  // 3755: emrin parça (çizim) revizyonu, gösterim kuralıyla ("R00" -> "00"); seçilmemişte null. Seçim gerekli: açık, boş ve kartın çizimi var.
+  // İsteğe bağlı: yalnız izleme listeleri (GET /uretim-emirleri, bitenler, ayrıntı) yazar; iş emirsiz emirde yok, bu alandan önce yazılmış istemci verisi geçerli kalır.
+  parcaRevizyonu: z.string().nullable().optional(),
+  parcaRevizyonuSecimGerekli: z.boolean().optional(),
 });
 
 export const adimSemasi = z.object({
@@ -568,6 +572,8 @@ export const rotasizEmirGovdesi = z.object({
   siparisPartiId: KIMLIK.nullish(),
   // 3438 a: kart yürürlükteki revizyon değilse ve emir sipariş kalemine bağlı değilse zorunlu (sunucu denetler).
   eskiRevizyonGerekcesi: z.string().trim().max(300, 'Gerekçe en çok 300 karakter.').nullish(),
+  // 3755: emre sabitlenecek parça (çizim) revizyonu; verilmezse kartın yayındaki çizimi.
+  parcaCizimRevizyonId: KIMLIK.nullish(),
 }).strict();
 export const rotasizEmirCevabi = z.object({ uretimEmriId: KIMLIK });
 
@@ -654,6 +660,26 @@ export const isEmriKaynagi = z.object({
   tur: z.enum(IS_EMRI_KAYNAK_TURLERI), id: KIMLIK, kod: z.string().nullable(), ad: z.string(),
 });
 
+export const parcaRevizyonuSemasi = z.object({ kod: z.string().nullable(), belgeId: KIMLIK, revizyonId: KIMLIK });
+export type ParcaRevizyonu = z.output<typeof parcaRevizyonuSemasi>;
+// 3755: ayrıntıdaki uyarılar. yeniRevizyon: kartta emirdekinden başka revizyon yayında ("Rev 01"); secimGerekli: açık emirde revizyon boş ve
+// kartın seçilebilir çizim revizyonu var.
+export const parcaRevizyonuDurumuSemasi = z.object({ yeniRevizyon: z.string().nullable(), secimGerekli: z.boolean() });
+export type ParcaRevizyonuDurumu = z.output<typeof parcaRevizyonuDurumuSemasi>;
+// Emir açma ve seçim penceresinin listesi: kartın çiziminin yayına girmiş revizyonları (en yenisi önde); çizimsiz kartta boş.
+// Kod gösterim kuralıyladır ("R01" -> "01"). rotaCizimRevizyonId: rota yürürlüğe alındığı anda yayında olan çizim revizyonu (sorguda rota
+// verildiyse); rotaUyarisi: bu revizyon seçilirse açılışta dönecek uyarı (engel değil), yoksa null.
+export const parcaRevizyonlariSorgusu = z.object({ malzemeNo: z.coerce.number<number>().int().positive(), rotaRevizyonId: z.coerce.number<number>().int().positive().optional() });
+export const parcaRevizyonlariCevabi = z.object({
+  cizim: z.object({ belgeId: KIMLIK, ad: z.string() }).nullable(),
+  revizyonlar: z.array(z.object({ revizyonId: KIMLIK, kod: z.string().nullable(), durum: z.enum(['yayinda', 'eski']), yayinlandi: zamanSemasi, rotaUyarisi: z.string().nullable() })),
+  varsayilanRevizyonId: KIMLIK.nullable(),
+  rotaCizimRevizyonId: KIMLIK.nullable(),
+  rotaHarfi: z.string().nullable(),
+});
+export type ParcaRevizyonlariCevabi = z.output<typeof parcaRevizyonlariCevabi>;
+export const parcaRevizyonuSecGovdesi = z.object({ revizyonId: KIMLIK, surum: surumSemasi }).strict();
+
 export const adimliEmirOzeti = z.object({
   id: KIMLIK,
   emirNo: z.string(),
@@ -674,6 +700,9 @@ export const adimliEmirOzeti = z.object({
     birlesmeOpNo: KIMLIK.nullable().optional(),
   }).optional(),
   kaynakRotaRevizyonId: KIMLIK.nullable(),
+  // 3755: emre sabitlenen parça (çizim) revizyonu; seçilmemiş emirde null ("Rev —"). Kod Belge Merkezi'nin koduyla kopyalanır (antetsiz ve
+  // kart revizyonsuz çizimde null olabilir). İsteğe bağlı: sunucu her zaman yazar.
+  parcaRevizyonu: parcaRevizyonuSemasi.nullable().optional(),
   // İsteğe bağlı: sunucu her zaman yazar; arşivdeki eski emir 'seri'dir.
   emirTuru: z.enum(EMIR_TURLERI).optional(),
   // İsteğe bağlı: sunucu her zaman yazar; projesiz emirde null.
@@ -764,6 +793,8 @@ export const adimliEmirAyrintisi = adimliEmirOzeti.extend({
   // 1045 b, 1064: bütün parçası hurda ya da red olan emir durur, yeniden başlamaz; eksik adet için planlama yeni emir açar. Sunucu her
   // ayrıntıda doldurur; isteğe bağlılığı yalnız bu alanı bilmeyen öteki modüllerin test verisi içindir.
   hataliDurdu: z.boolean().optional(),
+  // 3755: isteğe bağlı; sunucu her ayrıntıda doldurur.
+  parcaRevizyonuDurumu: parcaRevizyonuDurumuSemasi.optional(),
 });
 
 export const adimliListeCevabi = z.object({ emirler: z.array(adimliEmirOzeti) });

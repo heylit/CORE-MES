@@ -43,7 +43,7 @@ import {
 } from './moduller/malzemeler/disari.ts';
 import { firmaAra, firmaDegistiDinle, firmaOzeti, firmaOzetleri, firmaPasifEngeliKaydet, logoCariAynasiKaydet, logoCariCozuculeriKaydet, logoCrmCozucusuKaydet, tumFirmalar } from './moduller/musteri-tedarikci/disari.ts';
 import { ROTA_OKUMA_ISLEMLERI, talimatSurumuAdimlari as rotaTalimatSurumuAdimlari } from './moduller/rota/disari.ts';
-import { araHalCozucusuKaydet as rotaAraHalCozucusu, opNumaralariDizildiDinle as rotaOpNumaralariDizildiDinle, emreKopyala as rotaEmreKopyala, siparisAcilisiRotasi as rotaSiparisAcilisiRotasi, revizyonunRotasi as rotaRevizyonunRotasi, durumRevizyonlari, emreGelenSablonOzetleri, emreGelenSablonaAdimEkle, emirBittiYansit as rotaEmirBittiYansit, adimBittiYansit as rotaAdimBittiYansit, emirRotaHazirliklari, isEmriAparatHazirliklari, isEmriOperasyonKodlari, isEmriKopyalandiYansit, isEmriOlcuAletiHazirliklari, malzemeKartiIzleri as rotaKartIzleri, talasliAdimSureleri, yuzeyIslemiAdimlari, yururlukteOperasyonlar } from './moduller/rota/disari.ts';
+import { araHalCozucusuKaydet as rotaAraHalCozucusu, opNumaralariDizildiDinle as rotaOpNumaralariDizildiDinle, emreKopyala as rotaEmreKopyala, siparisAcilisiRotasi as rotaSiparisAcilisiRotasi, revizyonunRotasi as rotaRevizyonunRotasi, durumRevizyonlari, emreGelenSablonOzetleri, emreGelenSablonaAdimEkle, emirBittiYansit as rotaEmirBittiYansit, adimBittiYansit as rotaAdimBittiYansit, emirRotaHazirliklari, isEmriAparatHazirliklari, isEmriOperasyonKodlari, isEmriKopyalandiYansit, isEmriOlcuAletiHazirliklari, malzemeKartiIzleri as rotaKartIzleri, talasliAdimSureleri, yuzeyIslemiAdimlari, yururlukteOperasyonlar, revizyonYururlukleri as rotaRevizyonYururlukleri } from './moduller/rota/disari.ts';
 import { talasliAdimCozucusu, yuzeyAdimlariCozucusu } from './moduller/geometri/disari.ts';
 import * as sevkiyat from './moduller/sevkiyat/disari.ts';
 import { bagliTalepCozucusu, satinAlinacakKalemler } from './moduller/siparisler/disari.ts';
@@ -671,6 +671,8 @@ export function sunucununBaglari(): Bag[] {
     bag('emre gelen şablon -> adım durumu', uretimEmirleri.sablonOzetleyiciKaydet, emreGelenSablonOzetleri),
     bag('şablona da ekle -> rota şablonu', uretimEmirleri.sablonaEkleyiciKaydet, emreGelenSablonaAdimEkle),
     bag('rota revizyonu -> hazırlık uyarısı', uretimEmirleri.rotaHazirlikCozucusu, emirRotaHazirliklari),
+    // 3755: rotanın yürürlüğe alındığı andaki çizim; emir açılışında parça revizyonu farkı uyarısı.
+    bag('rota yürürlük anı -> parça revizyonu uyarısı', uretimEmirleri.rotaYururlukCozucusuKaydet, rotaRevizyonYururlukleri),
     bag('aparat (rota adımı, stok) -> hazırlık uyarısı', uretimEmirleri.aparatHazirlikCozucusu, (db: Db, idler: readonly number[]) => isEmriAparatHazirliklari(db, idler, stok.malzemeStokDurumlari)),
     bag('açık tedarik (satın alma) -> adım durumu', uretimEmirleri.adimTedarikCozucusu, emirTedarikDurumlari),
     bag('ölçü aleti (rota adımı, kalibrasyon) -> hazırlık uyarısı', uretimEmirleri.olcuAletiHazirlikCozucusu, isEmriOlcuAletiHazirliklari),

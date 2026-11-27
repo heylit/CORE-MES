@@ -87,3 +87,5 @@ export function receteIlerlemesi(c: Pick<EmirTamamlamaCevabi, 'bilesenler'>): Re
   const yuzde = bilesenler.length === 0 ? null : Math.floor(bilesenler.reduce((t, b) => t + b.yuzde, 0) / bilesenler.length);
   return { yuzde, bilesenler };
 }
+
+export { parcaRevMetni } from '#paylasilan/sozlesme/emir-durumu.ts';

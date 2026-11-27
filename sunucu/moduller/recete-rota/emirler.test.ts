@@ -174,7 +174,7 @@ describe('recete-rota emir dilimi (gerçek PostgreSQL)', () => {
     const { emir, opStatus, opProg } = await siparis(id);
     assert.deepEqual(
       { ...emir, no: 'x', created: 0 },
-      { id: String(id), kayitNo: id, no: 'x', itemId: String(urunNo), qty: 10, start: '2030-01-02', due: '2030-01-20', priority: 2, note: 'Deneme notu', rev: String(revizyonId),
+      { id: String(id), kayitNo: id, no: 'x', itemId: String(urunNo), qty: 10, start: '2030-01-02', due: '2030-01-20', priority: 2, note: 'Deneme notu', rev: String(revizyonId), parcaRev: null, parcaRevId: null,
         status: 'serbest', created: 0, doneAt: null, tur: 'seri', parentId: null, kol: null, birlestigiId: null, surum: emir.surum },
     );
     assert.match(emir.no, /\S/);

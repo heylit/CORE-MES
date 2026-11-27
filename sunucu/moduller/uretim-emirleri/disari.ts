@@ -690,6 +690,11 @@ export { baslatmaYetkinlikIhlali, makineYetkinlikIhlali } from './kurallar.ts';
 
 // Kalite Merkezi emir numarasıyla gelen kaydı emre bağlar: numaradan kimlik; bulunamayan numara haritada yok.
 export { emirIdleri } from './sorgular.ts';
+// 3755: emre sabitlenen parça (çizim) revizyonu. Okuma: emir başına kod (gösterim kuralıyla) ya da null; tek kural ve karşılaştırma
+// ("R00" ile "00" aynıdır) buradan. Rota revizyonunun yürürlük anı kablolamada rotadan bağlanır. Yetki denetlemez.
+export { emirlerinBaskiRevizyonlari, emirlerinParcaRevizyonlari, rotaYururlukCozucusuKaydet } from './parca-revizyonu.ts';
+export type { EmrinParcaRevizyonu } from './parca-revizyonu.ts';
+export { ayniParcaRevizyonuMu, parcaRevizyonuMetni } from './kurallar.ts';
 // Etiket Merkezi refakat kartını basar: uçtaki kartla aynı veri. Yetki denetlemez, çağıran kendi ucunda denetler; iptal emirde CAKISMA.
 export const refakatKarti = (db: Db, emirId: number): Promise<RefakatKartiCevabi> => isEmri.refakatKarti(db, emirId);
 // Refakat kartları listesi (3716): basım denetimi olmadan emir özeti; iptal emir `iptal: true` ile gelir, okunamayan emir null.

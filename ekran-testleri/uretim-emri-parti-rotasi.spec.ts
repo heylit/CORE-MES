@@ -59,7 +59,7 @@ async function ikiRotaliEmir(page: Page): Promise<number> {
     await p1.getByLabel('Parti 1', { exact: true }).fill('30');
     const rota = p1.getByRole('combobox', { name: 'Parti rotası' });
     await expect(rota).toBeEnabled({ timeout: 15_000 });
-    await expect(rota.locator('option').first()).toHaveText(/^Ana emirle aynı \(.+ · Rev .+\)$/);
+    await expect(rota.locator('option').first()).toHaveText(/^Ana emirle aynı \(.+ · Rota .+\)$/);
     await rota.selectOption({ index: 1 });
     const sonuc = ayrinti.getByRole('table', { name: 'Bölme sonucu' });
     await expect(sonuc).toBeVisible();

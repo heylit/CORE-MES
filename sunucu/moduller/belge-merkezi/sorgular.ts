@@ -604,3 +604,15 @@ export function ozetliRevizyonlar(db: Db, ozet: string): Promise<OzetliRevizyon[
     [ozet],
   );
 }
+
+// 3755: emre sabitlenecek parça revizyonu seçeneği; yalnız yayına girmiş (yayında ya da eski) revizyonlar.
+export interface CizimRevizyonuSatiri { belgeId: number; ad: string; revizyonId: number; sira: number; durum: 'yayinda' | 'eski'; antetRev: string | null; yayinlandi: string }
+export function yayinlanmisRevizyonlar(db: Db, belgeIdler: readonly number[]): Promise<CizimRevizyonuSatiri[]> {
+  return db.sorgu<CizimRevizyonuSatiri>(
+    `SELECT r.belge_id AS "belgeId", b.ad, r.id AS "revizyonId", r.sira, r.durum, r.antet_rev AS "antetRev", ${zamanMetni('r.yayinlandi')} AS yayinlandi
+       FROM belge_merkezi_revizyon r JOIN belge_merkezi_belge b ON b.id = r.belge_id
+      WHERE r.belge_id = ANY($1::int[]) AND r.durum <> 'taslak'
+      ORDER BY r.belge_id, r.sira DESC`,
+    [[...belgeIdler]],
+  );
+}
