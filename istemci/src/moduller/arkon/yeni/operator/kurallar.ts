@@ -81,6 +81,13 @@ export function paketleriBirlestir(liste: readonly Is[], paketler: readonly Pkg[
     .sort((a, b) => planOnce(a[0].pkg, b[0].pkg) || a[1] - b[1]).map((x) => x[0]);
 }
 
+// Başka istasyona yayınlanan paket bu terminalin listesini değiştirmez; atölyedeki her tablet aynı anda bütün paketleri yeniden
+// çekmesin. Paket daha önce bu istasyonunsa (Hazırlık makinesini değiştirdi) ya da iletide makine yoksa liste yenilenir.
+export function paketIletisiYenilemeIster(makine: unknown, kimlik: unknown, istasyon: string, bilinen: Readonly<Record<string, { machine?: string } | undefined>>): boolean {
+  if (typeof makine !== 'string' || makine === istasyon) return true;
+  return bilinen[String(kimlik)]?.machine === istasyon;
+}
+
 // Yenilemeden sonra ekrandaki işin yeni sırası. İş listeden düştüyse (emir bekletildi, paket geri çekildi) ekran sıradaki işe geçer:
 // eski sıra kısalan listede ya yoktur ya başka işi gösterir, şerit "Önizleme" derken düğmeler başka işe yazardı (3131 Test D1).
 export function etkinIsSirasi<T>(isler: readonly T[], anahtar: (x: T) => string, etkin: string | null, onceki: number): number {

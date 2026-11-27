@@ -75,7 +75,7 @@ import {
   sonucBelgesi, takimUyarilari, tonAdi, uyariAnahtari, vardiyaHesabi, vardiyaOzeti, zamaniGelenUyarilar, hurdaUyarisi, bitisOzeti, bitirmeEksigi, tmiIlkParcaGerekli,
   type EkranSekmesi,
   hataliNedenleri, hataliUstSiniri, sekmeKarari,
-  isBasladiMi, basladiIletisi, BASLADI_ILETI_SURESI_MS,
+  isBasladiMi, basladiIletisi, BASLADI_ILETI_SURESI_MS, paketIletisiYenilemeIster,
 } from './kurallar.ts';
 import {
   BilgiCipi, CagriCipi, etiketSayisi, DurumDugmeleri, EtkinKart, GorevKarti, IsAlanlari, IsEtiketleri, IsSatiri, Konfeti, NumuneSeridi, PlanBandi,
@@ -368,7 +368,10 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
     })();
     if (pv) return;
     return depo.Bus.on((m) => {
-      if (m.type === 'pkg' || m.type === 'pkg-removed' || m.type === 'pin-resolved') void loadRef.current(m);
+      if (m.type === 'pkg' && !paketIletisiYenilemeIster(m['machine'], m['id'], MACHINE, pkgsRef.current)) {
+        bip('call');
+        say(`${String(m['machine'])} için iş terminale gönderildi · bu makine değil`, 'layers', 'idle');
+      } else if (m.type === 'pkg' || m.type === 'pkg-removed' || m.type === 'pin-resolved') void loadRef.current(m);
       if (m.type === 'pkg-order' && m['machine'] === MACHINE) void loadRef.current();
       if (m.type === '$merged' && (m.store === 'results' || m.store === 'pkgs')) void loadRef.current();
       if (m.type === 'mc' && m['st'] === MACHINE) live.current.mcData?.(m);

@@ -35,6 +35,29 @@ const sonuclar = (l: Istek[]) => l.filter((i) => i.yol === `/arkon/belgeler/resu
 const ekran = async () => screen.findByRole('region', { name: 'Aktif iş emri' }, { timeout: 10000 });
 
 describe('A1 Üretim Terminali', () => {
+  it('3777: başka istasyonun paket iletisi paketleri yeniden çekmez, yalnız bildirir; bu istasyonun ve buradan taşınan paketin iletisi çeker', async () => {
+    const istekler = sunucuKur(ISTASYONLU, sunucu());
+    arkonAc('/uretim-terminali');
+    await ekran();
+    const paketOkumasi = () => istekler.filter((i) => i.yontem === 'GET' && i.yol === '/arkon/belgeler/pkgs').length;
+    await waitFor(() => { expect(paketOkumasi()).toBeGreaterThan(0); }, { timeout: 10000 });
+    await new Promise((r) => setTimeout(r, 300));
+    const kanal = new BroadcastChannel('arkon-mes');
+    try {
+      const once = paketOkumasi();
+      kanal.postMessage({ type: 'pkg', id: 'pk-baska-1', no: 'IE-BASKA-1', rev: 'A', version: 1, machine: 'IST-9', mid: 'deneme-1' });
+      expect(await screen.findByText(/IST-9 için iş terminale gönderildi/, {}, { timeout: 5000 })).toBeTruthy();
+      await new Promise((r) => setTimeout(r, 300));
+      expect(paketOkumasi()).toBe(once);
+      kanal.postMessage({ type: 'pkg', id: PAKET.id, no: PAKET.no, rev: 'A', version: 2, machine: 'IST-9', mid: 'deneme-2' });
+      await waitFor(() => { expect(paketOkumasi()).toBe(once + 1); }, { timeout: 5000 });
+      kanal.postMessage({ type: 'pkg', id: 'pk-yeni-1', no: 'IE-YENI-1', rev: 'A', version: 1, machine: 'IST-1', mid: 'deneme-3' });
+      await waitFor(() => { expect(paketOkumasi()).toBe(once + 2); }, { timeout: 5000 });
+    } finally {
+      kanal.close();
+    }
+  }, 40000);
+
   it('açılışta yazmaz; istasyonun yayınlı işi açılır; başlatma durum kaydı yazar', async () => {
     const istekler = sunucuKur(ISTASYONLU, sunucu());
     arkonAc('/uretim-terminali');
