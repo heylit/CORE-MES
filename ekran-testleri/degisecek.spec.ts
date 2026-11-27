@@ -1,31 +1,6 @@
-import { ADRES, expect, test } from './ortak.ts';
-
 // Kayıtta DEĞİŞECEK işaretli davranışlar: test bugünkü yanlışı değil beklenen doğruyu ister ve bugün düştüğü için
-// test.fail() taşır. Kapı koşusu (npm run ekran) bunları atlar; npm run ekran:degisecek ayrıca koşar.
+// test.fail() ve { tag: '@degisecek' } taşır. Kapı koşusu (npm run ekran) bunları atlar; npm run ekran:degisecek ayrıca koşar.
 // Bir şerit düzeltince test geçer ve "beklenmedik geçti" diye görünür: o zaman test.fail() kaldırılır, etiket silinir ve
-// test kapı koşusuna girer. Kaynak satırı her testin adındadır (kayit/<modul>/akislar.md).
-const ETIKET = { tag: '@degisecek' };
-
-test.describe('Rota', () => {
-  test('A4: menüde gizli eski /rota sayfaları kapanır ya da Reçete ve Rota\'ya yönlenir', ETIKET, async ({ page, ac }) => {
-    test.fail();
-    await ac('/rota/plan');
-    await expect(page).not.toHaveURL(`${ADRES}/rota/plan`, { timeout: 2_000 });
-  });
-});
-
-test.describe('Stok', () => {
-  test.use({ hesap: 'ornek.depo' });
-  test('depocunun Hareketler ekranı ve teslim paneli yetkisiz istek göndermez (statü listesi 403)', ETIKET, async ({ page, ag, ac }) => {
-    test.fail();
-    await ac('/stok/hareketler');
-    await page.getByRole('button', { name: /^Okut(, \d+ gelen teslim)?$/ }).filter({ visible: true }).first().click();
-    const panel = page.getByRole('dialog', { name: 'Okut' });
-    for (const ad of [/^Bana gelen/, /^Elimdekiler/, /^Malzeme iste/]) {
-      await panel.getByRole('button', { name: ad }).click();
-      await page.getByRole('button', { name: 'Kameraya dön' }).click();
-    }
-    await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => { /* yoklama */ });
-    expect(ag.hatalar).toEqual([]);
-  });
-});
+// test kendi modülünün dosyasına taşınıp kapı koşusuna girer. Kaynak satırı her testin adındadır (kayit/<modul>/akislar.md).
+// Şu an bekleyen DEĞİŞECEK testi yok (Rota A4 recete-rota.spec.ts'e, Stok 403 stok.spec.ts'e girdi).
+export {};
