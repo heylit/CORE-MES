@@ -5,7 +5,8 @@ import type { Lsv2Ekseni, Lsv2Hatasi, Lsv2Okumasi, Lsv2ProgramDosyasi, Lsv2Takim
 
 // Heidenhain kumandalarıyla yalnız bu dosya konuşur (ADR 0034). LSV2, TCP 19000, yalnız okuma. Gönderilebilen telgraflar
 // aşağıdaki sabit beyaz listededir; liste dışı komut, giriş düzeyi, okuma kodu, dosya yolu ya da PLC adresi soket yazılmadan reddedilir.
-// C_ ile başlayan hiçbir komut listede yoktur. Parola gönderilmez. Makine bağlantıyı reddederse (kapalı ya da başka sistem tutuyor)
+// C_ ile başlayan tek komut C_DC'dir (klasör değiştirme): yalnız FILE düzeyinde, yalnız program listesi gezilirken, yalnız açılış
+// klasörü ve en çok 3 seviye altı için gider; kumandada program seçmez, dosya değiştirmez (kart 3811). Parola gönderilmez. Makine bağlantıyı reddederse (kapalı ya da başka sistem tutuyor)
 // zorlanmaz, eski oturum düşürülmeye çalışılmaz. Adres hata metnine ve günlüğe girmez. Telgraf biçimi: 4 bayt uzunluk (büyük uçlu,
 // yalnız yük), 4 harf komut, yük. Komut ve cevap biçimleri pyLSV2 1.2 kaynağından alınmıştır (yalnız başvuru, paket değil).
 export const LSV2_KAPISI = 19000;
@@ -15,12 +16,17 @@ export const AZAMI_HATA_ILETISI = 16;
 export const AZAMI_DOSYA = 2 * 1024 * 1024;
 // Boş bloklar toplamı büyütmez; hatalı kumanda aktarımı bitirmezse blok sayısı da sınırlanır.
 export const AZAMI_BLOK = 4096;
-// Program listesinde en çok bu kadar dosya tutulur.
-export const AZAMI_PROGRAM_DOSYASI = AZAMI_BLOK;
+// Program listesinde en çok bu kadar dosya tutulur; açılış klasörünün en çok bu kadar seviye altına inilir. Gezilen klasör sayısı da
+// sınırlıdır (her klasör bir R_DR aktarımıdır).
+export const AZAMI_PROGRAM_DOSYASI = 500;
+export const AZAMI_KLASOR_DERINLIGI = 3;
+export const AZAMI_KLASOR = 200;
+const YOL_AYRACI = '\\';
 
 // T_OK yalnız süren bir aktarımda (R_FL dosya, R_DR klasör listesi) "sonraki bloğu gönder" onayıdır (yüksüz); kumandada bir şey
-// değiştirmez. R_DT kumanda saatini, R_DR oturumun açılış klasörünün listesini okur (klasör değiştirmek C_DC ister, yoktur).
-export const IZINLI_KOMUTLAR = ['A_LG', 'A_LO', 'R_VR', 'R_PR', 'R_RI', 'R_MB', 'R_FL', 'R_DR', 'R_DT', 'T_OK'] as const;
+// değiştirmez. R_DT kumanda saatini, R_DR o anki klasörün listesini, R_DI o anki klasörün yolunu, R_FI takım tablosunun dosya
+// bilgisini okur (R_FL'den önce; kumanda reddederse kodu ekrana yazılır, R_FL gönderilmez).
+export const IZINLI_KOMUTLAR = ['A_LG', 'A_LO', 'R_VR', 'R_PR', 'R_RI', 'R_MB', 'R_FL', 'R_FI', 'R_DR', 'R_DI', 'R_DT', 'C_DC', 'T_OK'] as const;
 export type Lsv2Komutu = (typeof IZINLI_KOMUTLAR)[number];
 
 // INSPECT okuma girişidir; DNC durum ve program okuması, PLCDEBUG PLC belleği, FILE takım tablosu ve program listesi, DIAGNOSTICS
@@ -43,8 +49,8 @@ const METIN_KIPI = 0x00;
 // R_DR kipi: tek tek kayıt (pyLSV2 ParRDR.SINGLE); öteki kipler (çoklu, sürücüler) gönderilmez.
 const RDR_TEK = 0x00;
 
-// Cevap kodları ve kumandanın hata kodları (T_ER yükünün ikinci baytı).
-const HATA_KODU = { yetkiYok: 23, dncDurumu: 46, sonrakiHataYok: 57, cokFazlaBaglanti: 80 } as const;
+// Cevap kodları ve kumandanın hata kodları (T_ER yükünün ikinci baytı). 22: kumanda bu telgrafı tanımıyor (desteklemiyor).
+const HATA_KODU = { desteklemiyor: 22, yetkiYok: 23, dncDurumu: 46, sonrakiHataYok: 57, cokFazlaBaglanti: 80 } as const;
 
 // Kumandadan gelen metinler Windows-1254 (Türkçe) ile çözülür; yerleşik çözücü, yeni paket yok.
 const CP1254 = new TextDecoder('windows-1254');
@@ -66,10 +72,24 @@ export class Lsv2BaglantiHatasi extends Error {
 
 const girisYuku = (g: Lsv2Girisi): Buffer => Buffer.from(`${g}\0`, 'latin1');
 export const dosyaYuku = (yol: string): Buffer => Buffer.concat([Buffer.from(`${yol}\0`, 'latin1'), Buffer.from([METIN_KIPI])]);
+export const yolYuku = (yol: string): Buffer => Buffer.from(`${yol}\0`, 'latin1');
+const ayracli = (yol: string): string => (yol.endsWith(YOL_AYRACI) ? yol : `${yol}${YOL_AYRACI}`);
+
+// C_DC hedefi: açılış klasörünün kendisi ya da en çok 3 seviye altı. Göreli kısımda boş, "." ve ".." parça, sürücü (":") ve "/" yoktur.
+export function klasorHedefiIzinli(hedef: string, kok: string): boolean {
+  if (kok === '' || hedef.includes('\0') || hedef.includes('/')) return false;
+  const k = ayracli(kok);
+  if (hedef === k || hedef === k.slice(0, -1)) return true;
+  if (!hedef.startsWith(k)) return false;
+  const goreli = hedef.slice(k.length).replace(/\\$/, '');
+  const parcalar = goreli.split(YOL_AYRACI);
+  return parcalar.length <= AZAMI_KLASOR_DERINLIGI && parcalar.every((p) => p !== '' && p !== '.' && p !== '..' && !p.includes(':'));
+}
 
 // Beyaz liste: komut ve yükü birlikte denetlenir. plcAdresi bu bağlantıda okunabilecek tek PLC bellek adresidir (ayardaki sayaç);
-// aktarim, hatta süren bir R_FL ya da R_DR aktarımı olup olmadığıdır (T_OK yalnız o sırada gider).
-export function telgrafKur(komut: string, yuk: Uint8Array, plcAdresi: number | null, aktarim = false): Buffer {
+// aktarim, hatta süren bir R_FL ya da R_DR aktarımı olup olmadığıdır (T_OK yalnız o sırada gider). klasorKoku, süren program listesi
+// gezisinin açılış klasörüdür; C_DC yalnız gezi sırasında ve yalnız bu klasörün altına gider.
+export function telgrafKur(komut: string, yuk: Uint8Array, plcAdresi: number | null, aktarim = false, klasorKoku: string | null = null): Buffer {
   const y = Buffer.from(yuk);
   const yasak = (neden: string): never => { throw new Lsv2YasakHatasi(`LSV2 telgrafı gönderilmedi: ${neden}`); };
   if (!(IZINLI_KOMUTLAR as readonly string[]).includes(komut)) yasak(`${komut.slice(0, 8)} izin listesinde yok (yalnız okuma)`);
@@ -86,6 +106,7 @@ export function telgrafKur(komut: string, yuk: Uint8Array, plcAdresi: number | n
       break;
     case 'R_PR':
     case 'R_DT':
+    case 'R_DI':
       if (y.length !== 0) yasak(`${komut} yük taşımaz`);
       break;
     case 'R_DR':
@@ -100,6 +121,15 @@ export function telgrafKur(komut: string, yuk: Uint8Array, plcAdresi: number | n
     case 'R_FL':
       if (!IZINLI_DOSYALAR.some((d) => dosyaYuku(d).equals(y))) yasak('dosya yolu izin listesinde yok');
       break;
+    case 'R_FI':
+      if (!IZINLI_DOSYALAR.some((d) => yolYuku(d).equals(y))) yasak('dosya bilgisi yalnız takım tablosu için');
+      break;
+    case 'C_DC': {
+      const son = y.indexOf(0);
+      if (klasorKoku === null) yasak('klasör değiştirme yalnız program listesi gezisinde');
+      if (son !== y.length - 1 || !klasorHedefiIzinli(y.toString('latin1', 0, son), klasorKoku ?? '')) yasak('klasör açılış klasörünün altında değil');
+      break;
+    }
     case 'T_OK':
       if (y.length !== 0 || !aktarim) yasak('aktarım onayı yalnız süren dosya aktarımında ve yüksüz');
       break;
@@ -135,6 +165,8 @@ export class Lsv2Hatti {
   private kapandi = false;
   // Süren R_FL ya da R_DR aktarımı: S_FL ya da S_DR alındıkça açık, T_FD ya da başka cevapla kapanır.
   private aktarim = false;
+  // Süren program listesi gezisinin açılış klasörü; yalnız gezi sırasında dolu (C_DC yalnız o zaman gider).
+  private klasorKoku: string | null = null;
 
   private readonly adres: string;
   private readonly kapi: number;
@@ -178,7 +210,7 @@ export class Lsv2Hatti {
   }
 
   istek(komut: Lsv2Komutu, yuk: Uint8Array, plcAdresi: number | null): Promise<Lsv2Cevabi> {
-    const telgraf = telgrafKur(komut, yuk, plcAdresi, this.aktarim);
+    const telgraf = telgrafKur(komut, yuk, plcAdresi, this.aktarim, this.klasorKoku);
     const s = this.soket;
     if (s === null || this.kapandi) return Promise.reject(new Lsv2BaglantiHatasi('kapali', 'Makine bağlantıyı kapattı (kapalı ya da meşgul).'));
     if (this.bekleyen !== null) throw new Error('LSV2 hattında aynı anda tek istek olur.');
@@ -231,9 +263,18 @@ export class Lsv2Hatti {
     }
   }
 
+  geziBaslat(kok: string): void {
+    this.klasorKoku = kok;
+  }
+
+  geziBitir(): void {
+    this.klasorKoku = null;
+  }
+
   kapat(): void {
     this.kapandi = true;
     this.aktarim = false;
+    this.klasorKoku = null;
     this.soket?.destroy();
   }
 }
@@ -310,19 +351,36 @@ export function eksenleriCoz(b: Buffer): Lsv2Ekseni[] | null {
 }
 
 // Klasör kaydı (S_DR, pyLSV2 decode_file_system_info): 4 bayt boyut, 4 bayt Unix zamanı, 4 bayt öznitelik, sıfırla biten ad. Her blok
-// bir kayıttır. Yalnız ad, boyut ve tarih tutulur; "." ve ".." atlanır.
-export function programListesiCoz(bloklar: readonly Buffer[]): Lsv2ProgramDosyasi[] {
-  const sonuc: Lsv2ProgramDosyasi[] = [];
+// bir kayıttır. "." ve ".." ile sürücü ("TNC:") atlanır. Öznitelik bitleri kumandaya göre değişir: iTNC 530'da alt klasör 0x40, yenilerde
+// alt klasör 0x20 ve sürücü 0x10.
+export interface Lsv2KlasorKaydi extends Lsv2ProgramDosyasi { klasor: boolean }
+export function klasorKayitlariCoz(bloklar: readonly Buffer[], eskiKumanda = false): Lsv2KlasorKaydi[] {
+  const altKlasor = eskiKumanda ? 0x40 : 0x20;
+  const surucu = eskiKumanda ? 0 : 0x10;
+  const sonuc: Lsv2KlasorKaydi[] = [];
   for (const b of bloklar) {
-    if (sonuc.length >= AZAMI_PROGRAM_DOSYASI) break;
     if (b.length < 13) continue;
     const son = b.indexOf(0, 12);
     const ad = kumandaMetni(b.subarray(12, son < 0 ? undefined : son)).slice(0, 255);
-    if (ad === '' || ad === '.' || ad === '..') continue;
+    if (ad === '' || ad === '.' || ad === '..' || ad.endsWith(':') || ad.includes(YOL_AYRACI) || ad.includes('/')) continue;
+    const oznitelik = b.readUInt32BE(8);
+    if ((oznitelik & surucu) !== 0) continue;
     const zaman = b.readUInt32BE(4);
-    sonuc.push({ ad, boyut: b.readUInt32BE(0), tarih: zaman === 0 ? null : new Date(zaman * 1000).toISOString() });
+    sonuc.push({ ad, boyut: b.readUInt32BE(0), tarih: zaman === 0 ? null : new Date(zaman * 1000).toISOString(), klasor: (oznitelik & altKlasor) !== 0 });
   }
   return sonuc;
+}
+
+export const programListesiCoz = (bloklar: readonly Buffer[]): Lsv2ProgramDosyasi[] =>
+  klasorKayitlariCoz(bloklar).filter((k) => !k.klasor).slice(0, AZAMI_PROGRAM_DOSYASI).map(({ ad, boyut, tarih }) => ({ ad, boyut, tarih }));
+
+// R_DI cevabı (pyLSV2 decode_directory_info): 164. bayttan sonra sıfırla biten klasör yolu.
+const KLASOR_YOLU_BASI = 164;
+export function klasorYoluCoz(b: Buffer): string | null {
+  if (b.length <= KLASOR_YOLU_BASI) return null;
+  const son = b.indexOf(0, KLASOR_YOLU_BASI);
+  const yol = b.toString('latin1', KLASOR_YOLU_BASI, son < 0 ? undefined : son).replace(/\//g, YOL_AYRACI);
+  return yol === '' ? null : yol;
 }
 
 export function lsv2IstemcisiKur(adres: string, sayac: number | null, secenek: Lsv2Secenegi = {}): Lsv2Istemcisi {
@@ -333,6 +391,8 @@ export function lsv2IstemcisiKur(adres: string, sayac: number | null, secenek: L
   // Çıkışı bir kez reddedilen geçici düzeye bu istemci bir daha girmez (kapan-aç döngüsü olmasın). PLCDEBUG ve FILE okumaları
   // anahtarla kapatılabilir; DIAGNOSTICS (saat) yalnız burada durur.
   const cikisiReddedilen = new Set<string>();
+  // Kumandanın 22 (desteklemiyor) ile reddettiği R_RI kodları: bu istemci o okumayı bir daha istemez, tanıya yine 22 yazılır.
+  const desteklenmeyen = new Set<number>();
 
   const iste = (h: Lsv2Hatti, komut: Lsv2Komutu, yuk: Uint8Array = new Uint8Array()) => h.istek(komut, yuk, oturum?.plcAdresi ?? null);
   const giris = async (h: Lsv2Hatti, g: Lsv2Girisi): Promise<Lsv2Cevabi> => iste(h, 'A_LG', girisYuku(g));
@@ -347,6 +407,9 @@ export function lsv2IstemcisiKur(adres: string, sayac: number | null, secenek: L
     const k = hataKodu(c);
     if (k !== null && !tani.some((t) => t.alan === alan)) tani.push({ alan, kod: k });
     return k;
+  };
+  const desteklemiyorYaz = (tani: Lsv2Tanisi[], alan: Lsv2TaniAlani): void => {
+    if (!tani.some((t) => t.alan === alan)) tani.push({ alan, kod: HATA_KODU.desteklemiyor });
   };
 
   async function surumOku(h: Lsv2Hatti, tani: Lsv2Tanisi[]): Promise<Pick<Oturum, 'kontrol' | 'ncSurumu' | 'plcSurumu' | 'secenekler'>> {
@@ -431,10 +494,15 @@ export function lsv2IstemcisiKur(adres: string, sayac: number | null, secenek: L
     const uyarilar = new Set<Lsv2Uyarisi>();
     const tani: Lsv2Tanisi[] = [...o.tani];
     const oku = async (kod: number, alan: Lsv2TaniAlani): Promise<Buffer | null> => {
+      if (desteklenmeyen.has(kod)) {
+        desteklemiyorYaz(tani, alan);
+        return null;
+      }
       const c = await iste(h, 'R_RI', rri(kod));
       if (c.kod === 'S_RI') return c.icerik;
       if (c.kod !== 'T_ER') return beklenmeyen();
       const k = taniEkle(tani, alan, c);
+      if (k === HATA_KODU.desteklemiyor) desteklenmeyen.add(kod);
       if (k === HATA_KODU.yetkiYok || k === HATA_KODU.dncDurumu) uyarilar.add('dnc-yok');
       return null;
     };
@@ -458,11 +526,15 @@ export function lsv2IstemcisiKur(adres: string, sayac: number | null, secenek: L
       hatalar, sayac: sayacDegeri, uyarilar: [...uyarilar], tani, kumandaSaati: o.kumandaSaati, saatFarki: o.saatFarki,
     };
     if (o.saatFarki !== null && Math.abs(o.saatFarki) > AZAMI_SAAT_FARKI_SN) okuma.uyarilar.push('saat-farki');
-    if (s.takimTablosu === true) Object.assign(okuma, await seyrekOku(h, tani));
+    if (s.takimTablosu === true) Object.assign(okuma, await seyrekOku(h, o, tani));
     return okuma;
   }
 
   async function hatalariOku(h: Lsv2Hatti, uyarilar: Set<Lsv2Uyarisi>, tani: Lsv2Tanisi[]): Promise<Lsv2Hatasi[] | null> {
+    if (desteklenmeyen.has(RRI.ilkHata)) {
+      desteklemiyorYaz(tani, 'alarm');
+      return null;
+    }
     const liste: Lsv2Hatasi[] = [];
     let kod: number = RRI.ilkHata;
     for (let i = 0; i < AZAMI_HATA_ILETISI; i += 1) {
@@ -471,6 +543,7 @@ export function lsv2IstemcisiKur(adres: string, sayac: number | null, secenek: L
         const k = hataKodu(c);
         if (k === HATA_KODU.sonrakiHataYok) return liste;
         taniEkle(tani, 'alarm', c);
+        if (k === HATA_KODU.desteklemiyor && i === 0) desteklenmeyen.add(RRI.ilkHata);
         if (k === HATA_KODU.yetkiYok || k === HATA_KODU.dncDurumu) uyarilar.add('dnc-yok');
         return i === 0 ? null : liste;
       }
@@ -531,8 +604,9 @@ export function lsv2IstemcisiKur(adres: string, sayac: number | null, secenek: L
     });
   }
 
-  // Seyrek okuma: tek FILE oturumunda önce takım tablosu (R_FL), sonra açılış klasörünün listesi (R_DR); sonra FILE'dan çıkılır.
-  async function seyrekOku(h: Lsv2Hatti, tani: Lsv2Tanisi[]): Promise<Pick<Lsv2Okumasi, 'takimTablosu' | 'programListesi'>> {
+  // Seyrek okuma: tek FILE oturumunda önce takım tablosunun dosya bilgisi (R_FI) ve tablonun kendisi (R_FL), sonra program listesi
+  // (açılış klasörü ve alt klasörleri); sonra FILE'dan çıkılır.
+  async function seyrekOku(h: Lsv2Hatti, o: Oturum, tani: Lsv2Tanisi[]): Promise<Pick<Lsv2Okumasi, 'takimTablosu' | 'programListesi'>> {
     const g = await giris(h, 'FILE');
     if (g.kod !== 'T_OK') {
       taniEkle(tani, 'takim-tablosu', g);
@@ -541,14 +615,73 @@ export function lsv2IstemcisiKur(adres: string, sayac: number | null, secenek: L
     }
     return geciciDuzeyde(h, 'FILE', async () => {
       // Önce takım tablosu: klasör listesi sınırı aşıp bağlantıyı kapatırsa okunmuş tablo korunur. Tablo sınırı aşarsa bağlantı
-      // kapanmıştır, klasör listesi okunmaz.
-      const tablo = await aktar(h, 'R_FL', dosyaYuku(TAKIM_TABLOSU), 'S_FL', 'takim-tablosu', tani);
-      const programListesi = h.acik ? await aktar(h, 'R_DR', Uint8Array.of(RDR_TEK), 'S_DR', 'program-listesi', tani) : null;
+      // kapanmıştır, klasör listesi okunmaz. R_FI reddedilirse kodu tanıya yazılır ve R_FL gönderilmez.
+      const bilgi = await iste(h, 'R_FI', yolYuku(TAKIM_TABLOSU));
+      let tablo: Buffer[] | null = null;
+      if (bilgi.kod === 'S_FI') tablo = await aktar(h, 'R_FL', dosyaYuku(TAKIM_TABLOSU), 'S_FL', 'takim-tablosu', tani);
+      else if (bilgi.kod === 'T_ER' || bilgi.kod === 'T_BD') taniEkle(tani, 'takim-tablosu', bilgi);
+      else beklenmeyen();
+      const programListesi = h.acik ? await programlariGez(h, o, tani) : null;
       return {
-        programListesi: programListesi === null ? null : programListesiCoz(programListesi),
+        programListesi,
         takimTablosu: tablo === null ? null : takimTablosunuCoz(CP1254.decode(Buffer.concat(tablo))),
       };
     });
+  }
+
+  // Program listesi: R_DI ile açılış klasörü öğrenilir, klasörler genişlik öncelikli gezilir (C_DC ve R_DR), en çok 3 seviye ve 500
+  // dosya. Adlar açılış klasörüne göreli yoldur. İş bitince açılış klasörüne dönülür; dönülemezse bağlantı kapatılır (FILE oturumu
+  // başka klasörde bırakılmaz). Kumanda R_DI vermezse yalnız açılış klasörü listelenir.
+  async function programlariGez(h: Lsv2Hatti, o: Oturum, tani: Lsv2Tanisi[]): Promise<Lsv2ProgramDosyasi[] | null> {
+    const eski = (o.kontrol ?? '').toUpperCase().startsWith('ITNC530');
+    const di = await iste(h, 'R_DI');
+    const kok = di.kod === 'S_DI' ? klasorYoluCoz(di.icerik) : null;
+    if (kok === null) {
+      const bloklar = await aktar(h, 'R_DR', Uint8Array.of(RDR_TEK), 'S_DR', 'program-listesi', tani);
+      return bloklar === null ? null : programListesiCoz(bloklar);
+    }
+    const dosyalar: Lsv2ProgramDosyasi[] = [];
+    const kuyruk: { goreli: string; derinlik: number }[] = [{ goreli: '', derinlik: 0 }];
+    let gezilen = 0;
+    let degisti = false;
+    h.geziBaslat(kok);
+    try {
+      while (kuyruk.length > 0 && dosyalar.length < AZAMI_PROGRAM_DOSYASI && gezilen < AZAMI_KLASOR && h.acik) {
+        const k = kuyruk.shift();
+        if (k === undefined) break;
+        gezilen += 1;
+        if (k.goreli !== '') {
+          degisti = true;
+          const c = await iste(h, 'C_DC', yolYuku(`${ayracli(kok)}${k.goreli}`));
+          if (c.kod !== 'T_OK') {
+            if (c.kod !== 'T_ER' && c.kod !== 'T_BD') beklenmeyen();
+            taniEkle(tani, 'program-listesi', c);
+            continue;
+          }
+        }
+        const bloklar = await aktar(h, 'R_DR', Uint8Array.of(RDR_TEK), 'S_DR', 'program-listesi', tani);
+        if (bloklar === null) {
+          if (!h.acik || k.goreli === '') return null;
+          continue;
+        }
+        for (const kayit of klasorKayitlariCoz(bloklar, eski)) {
+          const ad = `${k.goreli}${kayit.ad}`;
+          if (kayit.klasor) {
+            if (k.derinlik < AZAMI_KLASOR_DERINLIGI) kuyruk.push({ goreli: `${ad}${YOL_AYRACI}`, derinlik: k.derinlik + 1 });
+          } else if (dosyalar.length < AZAMI_PROGRAM_DOSYASI) dosyalar.push({ ad, boyut: kayit.boyut, tarih: kayit.tarih });
+        }
+      }
+    } finally {
+      if (degisti && h.acik) {
+        const c = await iste(h, 'C_DC', yolYuku(kok)).catch(() => null);
+        if (c?.kod !== 'T_OK') {
+          h.kapat();
+          tani.push({ alan: 'program-listesi', kod: LSV2_ISTEMCI_KODU.donulemedi });
+        }
+      }
+      h.geziBitir();
+    }
+    return h.acik ? dosyalar : null;
   }
 
   // Bloklu aktarım: her bloktan sonra yüksüz T_OK, T_FD ile biter. Sınır aşılırsa aktarım kesilemediği için bağlantı kapatılır (FILE

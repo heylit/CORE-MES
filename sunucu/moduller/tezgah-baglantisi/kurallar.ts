@@ -549,10 +549,13 @@ export const LSV2_TANI_ALANI = {
 } as const;
 export type Lsv2TaniAlani = keyof typeof LSV2_TANI_ALANI;
 export interface Lsv2Tanisi { alan: Lsv2TaniAlani; kod: number }
-export const LSV2_KUMANDA_KODU: Readonly<Record<number, string>> = { 23: 'yetki yok', 46: 'DNC durumu', 57: 'sonraki hata yok', 80: 'çok fazla bağlantı' };
+export const LSV2_KUMANDA_KODU: Readonly<Record<number, string>> = { 20: 'telgraf biçimi kabul edilmedi', 22: 'kumanda desteklemiyor', 23: 'yetki yok', 46: 'DNC durumu', 57: 'sonraki hata yok', 80: 'çok fazla bağlantı' };
 // Eksi kodlar kumandadan gelmez, istemcinin kendi nedenleridir.
-export const LSV2_ISTEMCI_KODU = { beklenmeyen: -1, cikisReddedildi: -2, sinirAsildi: -3 } as const;
-const ISTEMCI_KODU_METNI: Readonly<Record<number, string>> = { [-1]: 'beklenmeyen cevap', [-2]: 'önceki çıkış reddedildiği için okunmuyor', [-3]: 'boyut sınırı aşıldı; aktarım kesildi, bağlantı kapatıldı' };
+export const LSV2_ISTEMCI_KODU = { beklenmeyen: -1, cikisReddedildi: -2, sinirAsildi: -3, donulemedi: -4 } as const;
+const ISTEMCI_KODU_METNI: Readonly<Record<number, string>> = {
+  [-1]: 'beklenmeyen cevap', [-2]: 'önceki çıkış reddedildiği için okunmuyor', [-3]: 'boyut sınırı aşıldı; aktarım kesildi, bağlantı kapatıldı',
+  [-4]: 'açılış klasörüne dönülemedi; bağlantı kapatıldı',
+};
 export function lsv2TaniMetni(t: Lsv2Tanisi): string {
   if (t.kod < 0) return `${LSV2_TANI_ALANI[t.alan]}: ${ISTEMCI_KODU_METNI[t.kod] ?? 'okunamadı'}`;
   const ad = LSV2_KUMANDA_KODU[t.kod];
@@ -676,8 +679,12 @@ export function lsv2AlanTanimlari(o: Lsv2Okumasi | null): AlanTanimi[] {
 }
 export const lsv2TanimImzasi = (o: Lsv2Okumasi | null): string => lsv2AlanTanimlari(o).map((a) => a.kimlik).join(',');
 export const LSV2_KATEGORILERI: ReadonlyMap<string, GecmisKategorisi> = new Map(LSV2_ALAN_TANIMLARI.map((a) => [a.kimlik, a.kategori]));
-// Yalnız son durumda tutulan öğeler: eksen konumu, tümce numarası, tanı ve kumanda saati geçmişe hiç yazılmaz.
-const GECMISSIZ: ReadonlySet<string> = new Set([LSV2_ALANLARI.tumce.kimlik, LSV2_ALANLARI.tani.kimlik, LSV2_ALANLARI.kumandaSaati.kimlik, LSV2_ALANLARI.saatFarki.kimlik]);
+// Yalnız son durumda tutulan öğeler: eksen konumu, tümce numarası, tanı ve kumanda saati geçmişe hiç yazılmaz. Sürüm ve seçenek
+// metinleri de yazılmaz: rakamlı metin geçmişte sayıya çevrilip anlamsız değer olur (seçenek dizisi "1.1e+175", 3811).
+const GECMISSIZ: ReadonlySet<string> = new Set([
+  LSV2_ALANLARI.tumce.kimlik, LSV2_ALANLARI.tani.kimlik, LSV2_ALANLARI.kumandaSaati.kimlik, LSV2_ALANLARI.saatFarki.kimlik,
+  LSV2_ALANLARI.kontrol.kimlik, LSV2_ALANLARI.ncSurumu.kimlik, LSV2_ALANLARI.plcSurumu.kimlik, LSV2_ALANLARI.secenekler.kimlik, LSV2_ALANLARI.lsv2Surumu.kimlik,
+]);
 export const lsv2GecmisteYok = (kimlik: string | null): boolean => kimlik === null || kimlik.startsWith(EKSEN_ONEKI) || GECMISSIZ.has(kimlik);
 
 const metin = (n: number | null): string | null => (n === null ? null : String(n));
@@ -815,3 +822,54 @@ export function lsv2Durumu(onceki: TezgahOgeleriHaritasi, yeni: readonly TezgahO
 
 export const lsv2UyariMetni = (uyarilar: readonly Lsv2Uyarisi[]): string | null =>
   (uyarilar.length === 0 ? null : uyarilar.map((u) => LSV2_UYARI_METNI[u]).join(' · '));
+
+/* ---------------- deneme sayfası (kart 3811) ---------------- */
+// Ad benzerliği: büyük harf, yalnız harf ve rakam ("CNC002" = "cnc-002"). Tek makine uyarsa öneridir; birden çok uyarsa öneri yok.
+export const adAnahtari = (ad: string): string => ad.toLocaleUpperCase('tr-TR').replace(/[^0-9A-ZÇĞİÖŞÜ]/g, '');
+export function eslemeOnerisi(cihazAdi: string, makineler: readonly { id: number; kod: string }[]): number | null {
+  const a = adAnahtari(cihazAdi);
+  if (a === '') return null;
+  const uyan = makineler.filter((m) => adAnahtari(m.kod) === a);
+  return uyan.length === 1 ? uyan[0]!.id : null;
+}
+
+// Alarm olayı (3811): Fault hâlindeki koşul ve tetiklenmiş acil stop; Warning ve Unavailable alarm değildir. Öğe başına tek açık olay.
+export const ALARM_SAKLAMA_GUNU = 90;
+export interface AktifAlarm { oge: string; kod: string | null; metin: string }
+export function aktifAlarmlar(ogeler: readonly TezgahOgesi[]): AktifAlarm[] {
+  const sonuc = new Map<string, AktifAlarm>();
+  for (const o of ogeler) {
+    const oge = o.kimlik ?? `${o.bilesen ?? ''}:${o.tur}`;
+    if (o.kosul === 'Fault') sonuc.set(oge, { oge, kod: null, metin: (o.deger ?? '').trim() || o.tur });
+    else if (o.kosul === null && o.tur === 'EmergencyStop' && o.deger === 'TRIGGERED') sonuc.set(oge, { oge, kod: null, metin: 'Acil stop' });
+  }
+  return [...sonuc.values()];
+}
+// Açık olaylarla karşılaştırma: biten (öğe artık alarmda değil ya da metni değişti) kapanır, yeni olan açılır.
+export function alarmFarki(acik: readonly AktifAlarm[], aktif: readonly AktifAlarm[]): { kapanan: string[]; acilan: AktifAlarm[] } {
+  const simdi = new Map(aktif.map((a) => [a.oge, a]));
+  const kapanan = acik.filter((a) => simdi.get(a.oge)?.metin !== a.metin).map((a) => a.oge);
+  const surer = new Set(acik.filter((a) => !kapanan.includes(a.oge)).map((a) => a.oge));
+  return { kapanan, acilan: aktif.filter((a) => !surer.has(a.oge)) };
+}
+
+// Sayaç değişimi bağlamı (3811-2): program, kip, Dryrun ve Singleblock. Dryrun ve Singleblock MTConnect'te ControllerModeOverride öğesinin
+// DRY_RUN ve SINGLE_BLOCK alt türüdür (ON/OFF); yoksa null. Heidenhain'de kip R_RI 23'ten gelir, Singleblock "tek tümce" kipidir.
+export const SAYAC_SAKLAMA_GUNU = 90;
+export interface SayacBaglami { program: string | null; kip: string | null; dryrun: boolean | null; singleblock: boolean | null }
+const acikKapali = (d: string | null | undefined): boolean | null => {
+  const t = (d ?? '').trim().toUpperCase();
+  return t === 'ON' ? true : t === 'OFF' ? false : null;
+};
+export function sayacBaglami(ozet: Pick<TezgahOzeti, 'program' | 'mod'>, ogeler: readonly TezgahOgesi[], tanimlar: readonly { kimlik: string; tur: string; altTur: string | null }[]): SayacBaglami {
+  const deger = (alt: string): boolean | null => {
+    const kimlikler = new Set(tanimlar.filter((t) => t.tur === 'ControllerModeOverride' && t.altTur === alt).map((t) => t.kimlik));
+    const o = ogeler.find((x) => x.kimlik !== null && kimlikler.has(x.kimlik));
+    return o === undefined ? null : acikKapali(o.deger);
+  };
+  return { program: ozet.program, kip: ozet.mod, dryrun: deger('DRY_RUN'), singleblock: deger('SINGLE_BLOCK') };
+}
+// Üretim artışı: kip otomatik, Dryrun ve Singleblock kapalı. Kip okunamıyorsa (null) üretim sayılır; Dryrun ya da Singleblock okunamıyorsa
+// kapalı sayılır. Yarı otomatik (Heidenhain tek tümce) ve elle kipler deneme/ayardır.
+export const uretimArtisiMi = (b: Pick<SayacBaglami, 'kip' | 'dryrun' | 'singleblock'>): boolean =>
+  (b.kip === null || b.kip.toUpperCase() === 'AUTOMATIC') && b.dryrun !== true && b.singleblock !== true;

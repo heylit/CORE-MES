@@ -1,6 +1,10 @@
 import { uc } from '#cekirdek/uc.ts';
 import { tezgahAyrintisiCevabi, tezgahBaglantisiDurumCevabi, tezgahParametresi, tezgahTakimTablosuCevabi, tezgahTuruCevabi, tezgahTuruGovdesi } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
+import {
+  denemeSorgusu, tezgahDurusCevabi, tezgahEslemeCevabi, tezgahEslemeGovdesi, tezgahGecisCevabi, tezgahOeeCevabi, tezgahSayimCevabi,
+} from '#paylasilan/sozlesme/tezgah-deneme.ts';
 import { ortamIstemcisi } from './baglanti.ts';
+import * as deneme from './deneme-servis.ts';
 import { lsv2Bellegi, turBellegi } from './isler.ts';
 import * as servis from './servis.ts';
 
@@ -37,5 +41,56 @@ export const uclar = [
     govde: tezgahTuruGovdesi,
     cevap: tezgahTuruCevabi,
     isle: ({ db, parametre, govde }) => servis.turAta(db, parametre.cihazAdi, govde.tur),
+  }),
+  // Deneme sayfası (kart 3811): eşleme ve makine başına deneme ayarları; yalnız bu modülün tablosuna yazar.
+  uc({
+    yontem: 'GET',
+    yol: '/tezgah-baglantisi/deneme/esleme',
+    yetki: { biri: ['sayfa.tezgah-baglantisi'] },
+    cevap: tezgahEslemeCevabi,
+    isle: ({ db }) => deneme.esleme(db),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/tezgah-baglantisi/deneme/esleme/:cihazAdi/kaydet',
+    yetki: { biri: ['sayfa.tezgah-baglantisi'] },
+    parametre: tezgahParametresi,
+    govde: tezgahEslemeGovdesi,
+    cevap: tezgahEslemeCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => deneme.eslemeKaydet(db, kullanici, parametre.cihazAdi, govde),
+  }),
+  // Gölge hesaplar: yalnız okur, hiçbir tabloya yazmaz.
+  uc({
+    yontem: 'GET',
+    yol: '/tezgah-baglantisi/deneme/sayim',
+    yetki: { biri: ['sayfa.tezgah-baglantisi'] },
+    sorgu: denemeSorgusu,
+    cevap: tezgahSayimCevabi,
+    isle: ({ db, sorgu }) => deneme.sayim(db, sorgu.pencere),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/tezgah-baglantisi/deneme/durus',
+    yetki: { biri: ['sayfa.tezgah-baglantisi'] },
+    sorgu: denemeSorgusu,
+    cevap: tezgahDurusCevabi,
+    isle: ({ db, sorgu }) => deneme.durus(db, sorgu.pencere),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/tezgah-baglantisi/deneme/oee',
+    yetki: { biri: ['sayfa.tezgah-baglantisi'] },
+    sorgu: denemeSorgusu,
+    cevap: tezgahOeeCevabi,
+    isle: ({ db, kullanici, sorgu }) => deneme.oee(db, kullanici, sorgu.pencere),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/tezgah-baglantisi/deneme/gecis',
+    yetki: { biri: ['sayfa.tezgah-baglantisi'] },
+    // Pencere her zaman son 7 gündür; ekranın gönderdiği pencere yok sayılır.
+    sorgu: denemeSorgusu,
+    cevap: tezgahGecisCevabi,
+    isle: ({ db }) => deneme.gecis(db),
   }),
 ];

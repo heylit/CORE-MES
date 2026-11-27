@@ -4,7 +4,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
-import { aralikAdetleri, kirilimStandartSureleri, makineKullanimAraliklari, makineSayimAnlari, makineSureleri, uretimEmriAc } from './disari.ts';
+import { aralikAdetleri, kirilimStandartSureleri, makineIsAraliklari, makineKullanimAraliklari, makineSayimAnlari, makineSureleri, uretimEmriAc } from './disari.ts';
 import type { IsEmriGirdisi } from './disari.ts';
 
 // OEE'nin zamanlı okumaları (643, 644): kullanım parçaları ve an an sayım, mevcut toplam okumalarla aynı yere ve aynı toplama düşer.
@@ -147,5 +147,26 @@ describe('uretim-emirleri OEE okumaları (gerçek PostgreSQL)', () => {
       assert.deepEqual({ standartSaniye: Math.round(topla((a) => a.standartSaniye)), suresizSaglam: topla((a) => a.suresizSaglam) }, standart.get(m));
     }
     assert.equal((await makineSayimAnlari(o().vt, [], bas, bit)).size, 0);
+  });
+
+  test('iş aralıkları (3811): kırpılmamış başlama ve bitiş, iş emri no, OP, parça no, adımın ilk sağlam anı; yazmaz', async () => {
+    const m1 = await makineKur();
+    const { uretimEmriId: e1, isEmriIdleri: [i1, i2] } = await ac(adim(1, m1, '2'), adim(2, m1, '2'));
+    await kullanim(e1, i1!, m1, '2026-04-05T07:00:00+03:00', '2026-04-05T09:00:00+03:00');
+    await kullanim(e1, i2!, m1, '2026-04-05T10:00:00+03:00', null);
+    // İlk sayım hurda: ilk parça onayı ilk sağlam sayımdır, hurda sayılmaz.
+    await sayim(e1, i1!, 'hurda', 1, '2026-04-05T07:20:00+03:00');
+    await sayim(e1, i1!, 'saglam', 1, '2026-04-05T07:40:00+03:00');
+    await sayim(e1, i1!, 'saglam', 3, '2026-04-05T08:30:00+03:00');
+    const emirNo = (await o().sahip.tek<{ no: string; parca: string }>('SELECT emir_no AS no, parca_no AS parca FROM uretim_emri WHERE id = $1', [e1]))!;
+    const once = await o().sahip.tek<{ n: string }>('SELECT (SELECT count(*) FROM uretim_sayimi) + (SELECT count(*) FROM uretim_emirleri_makine_kullanimi) AS n');
+    const a = (await makineIsAraliklari(o().vt, [m1], '2026-04-05T08:00:00+03:00', '2026-04-05T11:00:00+03:00')).get(m1)!;
+    assert.deepEqual(a.map((x) => [ms(x.baslangic), x.bitis === null ? null : ms(x.bitis), x.isEmriId, x.isEmriNo, x.op, x.parcaNo, x.ilkParcaOnayi === null ? null : ms(x.ilkParcaOnayi)]), [
+      [ms('2026-04-05T07:00:00+03:00'), ms('2026-04-05T09:00:00+03:00'), i1, emirNo.no, 10, emirNo.parca, ms('2026-04-05T07:40:00+03:00')],
+      [ms('2026-04-05T10:00:00+03:00'), null, i2, emirNo.no, 20, emirNo.parca, null],
+    ]);
+    const sonra = await o().sahip.tek<{ n: string }>('SELECT (SELECT count(*) FROM uretim_sayimi) + (SELECT count(*) FROM uretim_emirleri_makine_kullanimi) AS n');
+    assert.equal(sonra?.n, once?.n);
+    assert.equal((await makineIsAraliklari(o().vt, [], '2026-04-05T08:00:00+03:00', '2026-04-05T11:00:00+03:00')).size, 0);
   });
 });

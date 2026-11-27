@@ -45,3 +45,23 @@ Beyaz liste genişledi (R_RI 22, R_VR alt kodları, A_LG/A_LO FILE, R_FL yalnız
 Risk bakışı (3790, B1-B2): seyrek okuma denemesi sonucu ne olursa olsun aralığı başlatır, okuma düşerse neden seyrek kaydına yazılır (sonraki normal turlar FILE'a girmez); integer'a sığmayan takım numarası çözümde atlanır; aktarımda blok sayısı 4096 ile sınırlı; takım geçmişine kullanılan süre tek başına satır yazmaz (yalnız ömür TIME1 ya da kilit).
 
 Kullanıcı kararları (27.11, Soru Merkezi): T_OK yalnız süren R_FL ya da R_DR aktarımında; program listesi oturumun açılış klasöründen (R_DR tek kayıt kipi, C_DC yok; ad, boyut, tarih; yeni tablo `tezgah_lsv2_program`, `tezgah_lsv2_seyrek.program_tani`); kumanda saati bağlantı başında DIAGNOSTICS girişiyle R_DT, hemen çıkış, 60 sn üstü farkta uyarı, geçmişe yazılmaz.
+
+## Kart 3811 ve 3811-2: tezgâh verisi deneme sayfası (gölge mod)
+
+Yeni ikinci menü grubu "Deneme": Makine eşleme, Sayım, Duruş ve alarm, OEE, Geçiş hazırlığı (yalnız `sayfa.tezgah-baglantisi`, yönetici). Hesaplar yalnız okur; üretim emrine, duruşa, stoka ve OEE modülüne yazılmaz (kabul testi `deneme-kabul.test.ts` öteki modüllerin bütün tablolarının içeriğini önce ve sonra karşılaştırır). Yeni tablolar (yalnız ekleyen göç): `tezgah_makine_esleme` (cihaz→makine, çevrimde parça, duruş eşiği), `tezgah_alarm_olayi` (Fault ve tetiklenmiş acil stop; Warning alarm değil; 90 gün), `tezgah_sayac_artisi` (her sayaç değişimi program, kip, Dryrun, Singleblock ile; 90 gün), `tezgah_program_surumu` (Heidenhain program dosyası boyut/tarih sürümleri). Uçlar: `GET /tezgah-baglantisi/deneme/{esleme,sayim,durus,oee,gecis}?pencere=bugun|dun|yedi-gun`, `POST /tezgah-baglantisi/deneme/esleme/:cihazAdi/kaydet`.
+
+Başka modülden okuma (disari.ts): `uretim-emirleri.makineIsAraliklari` (yeni, salt okuma: kullanım aralığı, iş emri no, OP, parça no, ilk parça onay anı; kullanıcı kararı S5 a), `uretim-emirleri.makineSayimAnlari`, `vardiya.calismaTakvimleri`, `oee.makineOeeleri`, `istasyonlar.makineler`, `kisiler.kisiAdlari`.
+
+LSV2 (kullanıcı kararları S1-S3 a, 27.11; CLAUDE.md ve ADR 0034 yazılı onayla): program listesi R_DI ile açılış klasörü, C_DC ile en çok 3 seviye alt klasör ve 500 dosya, sonra açılış klasörüne dönüş (dönülemezse bağlantı kapanır); C_DC yalnız gezi sırasında ve yalnız açılış klasörünün altına gider. Takım tablosunda önce R_FI; reddedilirse kodu yazılır, R_FL gönderilmez. Kumandanın 22 ile reddettiği R_RI okuması (alarm, takım) "kumanda desteklemiyor" yazılır ve bir daha istenmez. Sürüm ve seçenek metinleri geçmişe sayı olarak yazılmaz.
+
+## Bu modül şunları varsaydı (3811, geri alma maliyeti düşük)
+1. Rota adımında "NC program" ve "çevrimde parça" alanı yok: program eşleşmesi tahmindir (programda parça no ve OP aranır), çevrimde parça Makine eşleme ekranından gelir; ölçüt h "ölçülemiyor" kalır (koordinatör 27.11: rotaya göç eklenmez; 3800'ün NC program kaydı main'e girince kesin eşleşmenin kaynağı o olabilir).
+2. Kip okunamıyorsa artış üretim sayılır; Dryrun ya da Singleblock okunamıyorsa kapalı sayılır.
+3. Fark = tezgâh adedi − (terminal sağlam + hurda); geçişte öneri = bu farkın eksi olmayan kısmı.
+4. Duruş sınıfı: alarm hâli ya da alarm olayı arıza; açık iş yoksa iş yok; iş var, ilk parça onayı yoksa ölçüm; gerisi neden sorulacak. Kayıtsız duruş: terminalde makine kullanımı açıkken tezgâhın durduğu süre.
+5. Vardiyası tanımlanmamış makinede planlı süre bilinmiyor (null); çizgide vardiya dışı gösterilmez.
+6. Performans: işin terminal sayımından adet başına standart süre × tezgâh adedi / çalışma süresi; önerilen standart, gerçek çevrim standarttan %10'dan fazla saparsa gösterilir.
+7. MTConnect saat farkı: tezgâh çalışırken son okumadaki en yeni öğe zamanı − okuma anı (okuma aralığı kadar şaşar).
+8. "Program değişti": işin onaylı program bilgisi işin programla ilk eşleştiği andaki sürümdür (o günün sonu değil).
+9. Alarm olayının iş emri okurken makine kullanımından bulunur (tabloda tutulmaz).
+10. Program listesinde en çok 200 klasör gezilir (500 dosya sınırına ek güvenlik).

@@ -9,13 +9,30 @@ import { smartesMakineDegerleri } from '../smartes/disari.ts';
 import type { TezgahIstemcisi } from './istemci.ts';
 import type { Lsv2Bellegi } from './lsv2-tur.ts';
 import {
-  akislariOku, ARALIK_AYARI, LSV2_MAKINELERI_AYARI, LSV2_OKUMA_AYARI, LSV2_SEYREK_OKUMA_AYARI, lsv2UyariMetni, AZAMI_SAMPLE_SAYFASI, baslikOku, cihazSayisiOku, diziyiDurumaCevir, dolulukSeviyesi, dolulukYuzdesi, durumaIsle, durumdanDiziye, eskiMi,
+  akislariOku, aktifAlarmlar, SAYAC_SAKLAMA_GUNU, sayacBaglami, ALARM_SAKLAMA_GUNU, alarmFarki, ARALIK_AYARI, LSV2_MAKINELERI_AYARI, LSV2_OKUMA_AYARI, LSV2_SEYREK_OKUMA_AYARI, lsv2UyariMetni, AZAMI_SAMPLE_SAYFASI, baslikOku, cihazSayisiOku, diziyiDurumaCevir, dolulukSeviyesi, dolulukYuzdesi, durumaIsle, durumdanDiziye, eskiMi,
   etkinAralikMs, farklar, GECMIS_SAKLAMA_MS, gecmisiBosalt, gecmisiSuz, OKUMA_AYARI, ORNEK_SAKLAMA_GUNU, ozetle, sayaciArttir, sayaciOzetle, SAMPLE_SAYISI,
   SATIR_SINIRI_AYARI, sonrakiSira, tamponAsildiMi, tanimlariOku, TEMIZLIK_ARALIGI_MS, TEMIZLIK_PARCASI, TEMIZLIK_TUR_BUTCESI_MS, TEMIZLIK_TUR_PARCASI,
   varliklariOku, VARLIK_ARALIGI_MS, VARSAYILAN_ARALIK_SN, VARSAYILAN_SATIR_SINIRI, yeniSatirSayaci,
 } from './kurallar.ts';
-import type { GecmisKaydi, GecmisKategorisi, GecmisOgeDurumu, SatirSayaci, SuzulecekOge, TezgahOgeleriHaritasi, TezgahOgesi, TezgahOkumasi } from './kurallar.ts';
+import type { GecmisKaydi, GecmisKategorisi, GecmisOgeDurumu, SatirSayaci, SuzulecekOge, TezgahOgeleriHaritasi, TezgahOgesi, TezgahOkumasi, TezgahOzeti } from './kurallar.ts';
 import * as s from './sorgular.ts';
+
+// Alarm olayları (3811): okuma yazılınca açık olaylarla karşılaştırılır; bitenler kapanır, yeniler açılır. O anki iş emri okurken
+// makine kullanımından bulunur.
+export async function alarmOlaylariniIsle(db: Db, cihazAdi: string, ogeler: readonly TezgahOgesi[], zaman: Date): Promise<void> {
+  const { kapanan, acilan } = alarmFarki(await s.acikAlarmlar(db, cihazAdi), aktifAlarmlar(ogeler));
+  await s.alarmlariKapat(db, cihazAdi, kapanan, zaman);
+  await s.alarmlariAc(db, cihazAdi, acilan, zaman);
+}
+
+// Sayaç değişimi (3811-2): okunan sayaç son kayıtlı değerden farklıysa bağlamıyla yazılır; cihazın ilk okuması taban satırıdır.
+export async function sayacDegisiminiIsle(db: Db, cihazAdi: string, ozet: TezgahOzeti, ogeler: readonly TezgahOgesi[], zaman: Date): Promise<void> {
+  if (ozet.sayac === null) return;
+  const son = await s.sonSayac(db, cihazAdi);
+  if (son === ozet.sayac) return;
+  const baglam = son === null ? { program: ozet.program, kip: ozet.mod, dryrun: null, singleblock: null } : sayacBaglami(ozet, ogeler, await s.tanimlariGetir(db, cihazAdi));
+  await s.sayacDegisimiYaz(db, cihazAdi, zaman, son, ozet.sayac, baglam);
+}
 
 // Süreç belleği: /probe süreç başına ve servis yeniden başlayınca okunur; son sıra, son durum ve tur zamanlaması burada durur.
 // Sunucu yeniden başlayınca sıfırlanır (ilk tur /current ile başlar).
@@ -204,6 +221,8 @@ async function isle(db: Db, b: TurBellegi, okumalar: readonly TezgahOkumasi[], t
     const ozet = ozetle(ogeler);
     if ((await s.oncekiDurum(db, okuma.cihazAdi)) !== ozet.durum) await s.ornekYaz(db, okuma.cihazAdi, zaman, ozet.durum, ozet.sayac);
     await s.okumaYaz(db, okuma.cihazAdi, ozet, ogeler, zaman);
+    await alarmOlaylariniIsle(db, okuma.cihazAdi, ogeler, zaman);
+    await sayacDegisiminiIsle(db, okuma.cihazAdi, ozet, ogeler, zaman);
   }
   const suzulen = gecmisiSuz(b.suzgec, adaylar, zaman);
   const bosalan = gecmisiBosalt(suzulen.suzgec, zaman);
@@ -232,6 +251,9 @@ export async function temizlikTuru(vt: Pick<Veritabani, 'tx'>, b: TurBellegi, si
     await vt.tx(async (db) => {
       await s.bosluklariTemizle(db, new Date(simdi.getTime() - GECMIS_SAKLAMA_MS));
       await s.eskiOrnekleriSil(db, new Date(simdi.getTime() - ORNEK_SAKLAMA_GUNU * 86_400_000));
+      await s.eskiAlarmlariSil(db, new Date(simdi.getTime() - ALARM_SAKLAMA_GUNU * 86_400_000));
+      await s.eskiSayacArtislariniSil(db, new Date(simdi.getTime() - SAYAC_SAKLAMA_GUNU * 86_400_000));
+      await s.eskiProgramSurumleriniSil(db, new Date(simdi.getTime() - SAYAC_SAKLAMA_GUNU * 86_400_000));
     });
     b.temizlik = { surer: true, asama: 'yas', sonZaman: null };
   }
