@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import type { TaslakKomutu } from '#paylasilan/sozlesme/planlama.ts';
 import { Dugme, Simge } from '../../../../ortak/arayuz/index.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
-import { EtkiBolumu, useEtki } from './etki.tsx';
+import { EtkiBolumu, sonKomutAyniMi, useEtki } from './etki.tsx';
 import { adimPaylari, fasonMu, payNedeni, type KokpitModeli } from './kurallar.ts';
 import type { TaslakYazici } from './taslak.ts';
 
@@ -131,7 +131,7 @@ export function ElleBol({ c, m, isId, taslak, yazabilir, kapat, onizleme = null 
   const [secili, setSecili] = useState<number[]>([]);
   const [hedef, setHedef] = useState(0);
   const [ham, setHam] = useState<string | null>(null);
-  const { durum, dene, uygula, vazgec } = useEtki({ c, taslak, sonuc: (s) => { if (s === 'uygulandi' && onizleme !== null) kapat(); } });
+  const { durum, dene, uygula, vazgec, yazilan } = useEtki({ c, taslak, sonuc: (s) => { if (s === 'uygulandi' && onizleme !== null) kapat(); } });
   const etkideki = durum.tur === 'etki' ? durum.e : null;
   const tahtada = onizleme !== null && etkideki !== null && plandaPayVar(etkideki.plan, isId);
   const son = useRef({ uygula, vazgec });
@@ -147,7 +147,7 @@ export function ElleBol({ c, m, isId, taslak, yazabilir, kapat, onizleme = null 
     return () => { onizleme(null); };
   }, [onizleme, tahtada, etkideki, isId]);
   // Panel başka bir yerden kapanırsa (öteki panel açılırsa) görünmeyen bölme taslakta kalmasın.
-  useEffect(() => () => { if (tahtadaRef.current) void taslakRef.current?.geriAl(false, false); }, []);
+  useEffect(() => () => { const t = taslakRef.current; if (tahtadaRef.current && t && sonKomutAyniMi(t, yazilan.current)) void t.geriAl(false, false); }, [yazilan]);
   const gizliydi = useRef(false);
   useEffect(() => {
     if (gizliydi.current && !tahtada) kok.current?.querySelector<HTMLElement>('input')?.focus();

@@ -379,12 +379,12 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   }, [taslak, yazabilir, bildir, c, m.isler]);
   // Yeniden planlama isteği taslağa kendi satırıyla yazılır (Geri onu ve dizmesini birlikte alır); plan taslağın görünümünde yeniden dizilir.
   const yenidenPlanla = useCallback(async (isler: readonly string[], ileti: string, kilitKaldir = false, baslamisDiz = false): Promise<boolean> => {
-    if (!taslak || !yazabilir || isler.length === 0) return false;
+    if (!taslak || !yazabilir || salt || isler.length === 0) return false;
     // Sonuç dizme bitince söylenir: komut yazıldığında plan henüz yeniden dizilmemiştir (kişi düğmenin işe yaradığını bitişte görür).
     const tamam = await taslak.yaz({ tur: 'yeniden-planla', isler: [...isler], ...(kilitKaldir ? { kilitKaldir: true } : {}), ...(baslamisDiz ? { baslamisDiz: true } : {}) });
     if (tamam) planlaIletisi(`${ileti} Geri al ile alınır.`);
     return tamam;
-  }, [taslak, yazabilir, planlaIletisi]);
+  }, [taslak, yazabilir, salt, planlaIletisi]);
   const planlaIste = useCallback((t: PlanlaIstegi['tur']) => { setPlanla((p) => ({ n: (p?.n ?? 0) + 1, tur: t })); }, []);
 
   // Tahtadan bırakılan iş: önce sunucu önizlemesi. Geçersiz yer yazılmaz; emri terminden sonraya atan taşıma onay ister.
@@ -465,7 +465,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const turKarar = useCallback((uygulandi: boolean) => {
     setTur((t) => (t && t.i < t.idler.length ? { ...t, i: t.i + 1, gecmis: [...t.gecmis, { i: t.i, uygulandi }], ileri: [] } : t));
   }, []);
-  const hamleUygula = useMemo(() => (yazabilir && !mesgul ? (a: TurAdayi, gecBirakir: boolean, geriOzeti?: GeriOzeti): void => {
+  const hamleUygula = useMemo(() => (yazabilir && !mesgul && !salt ? (a: TurAdayi, gecBirakir: boolean, geriOzeti?: GeriOzeti): void => {
     const al = a.planaAl !== undefined;
     const e = emir.get(a.planaAl ?? m.isler[a.isId]?.job ?? '');
     // Teslimden geriye yerleştirme emrin yönünü de değiştirir: her zaman onay sorulur (3318, Arayüz ön bakışı).
@@ -485,7 +485,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
       return;
     }
     void yaz(a).then((tamam) => { if (tamam && tur) turKarar(true); });
-  } : null), [yazabilir, mesgul, emir, m, tur, yaz, turKarar, zaman]);
+  } : null), [yazabilir, mesgul, salt, emir, m, tur, yaz, turKarar, zaman]);
 
   // --- geri ---
   // Geri taslağın son değişikliğini (ve ardından gelen dizmeyi) alır; plan yeniden dizilir. İleri (3365) geri alınanı taslağa yeniden yazar.
@@ -1271,10 +1271,10 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
           ) : (
             <>
           <ListeDuzeni
-            m={m} p={p} kartlar={listeKartlari} acik={vurgu ? kart : null} zaman={zaman} mesgul={mesgul} hamle={yazabilir ? hamleUygula : null} surum={surum} malzemeBekleyen={malzeme?.bekleyen} kolPartileri={kol.partiler} kol={kol} adimBekle={adimBekle} adimEk={adimEk} adimSorunu={adimSorunu}
+            m={m} p={p} kartlar={listeKartlari} acik={vurgu ? kart : null} zaman={zaman} mesgul={mesgul} hamle={yazabilir && !salt ? hamleUygula : null} surum={surum} malzemeBekleyen={malzeme?.bekleyen} kolPartileri={kol.partiler} kol={kol} adimBekle={adimBekle} adimEk={adimEk} adimSorunu={adimSorunu}
             ac={(k) => { if (k === null) secimiKaldir(); else { sec(null, null); setKart(k); setVurgu(true); } }}
-            planla={yazabilir && c.plan !== null ? (k) => { void yenidenPlanla(k.emirler.filter((e) => e.durum === 'plansiz').map((e) => e.id), `${k.siparis?.no ?? k.emirler[0]?.no ?? ''} planlandı.`); } : null}
-            yenidenPlanla={yazabilir && c.plan !== null ? (k) => { void yenidenPlanla(k.emirler.map((e) => e.id), `${k.siparis?.no ?? k.emirler[0]?.no ?? ''} yeniden planlandı.`); } : null}
+            planla={yazabilir && !salt && c.plan !== null ? (k) => { void yenidenPlanla(k.emirler.filter((e) => e.durum === 'plansiz').map((e) => e.id), `${k.siparis?.no ?? k.emirler[0]?.no ?? ''} planlandı.`); } : null}
+            yenidenPlanla={yazabilir && !salt && c.plan !== null ? (k) => { void yenidenPlanla(k.emirler.map((e) => e.id), `${k.siparis?.no ?? k.emirler[0]?.no ?? ''} yeniden planlandı.`); } : null}
             tahta={listeTahtasi} satirBirincil={satirBirincil} adimSec={listeAdimSec} seciliIs={secIs}
             tasi={yazabilir && !tur && !salt ? tasiDene : null} bol={elleBolAc} bolAcik={bolAdimi} bolunmus={bolunmus} malzemeAni={malzemeAni} hedef={setYerHedefi} secimiBirak={() => { sec(null, null); }}
           />
@@ -1311,7 +1311,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
             <EmirAdimlari
               firma={firma} plan={p}
               key={seciliKart.kok} m={m} kart={seciliKart} zaman={zaman} uygula={tur ? null : hamleUygula} surum={surum} adimAc={adimAc}
-              hedef={setYerHedefi} taslakVar={taslakVar} yon={{ c, taslak, yazabilir }} vurgu={secIs} neden={tahtasiz(goz)}
+              hedef={setYerHedefi} taslakVar={taslakVar} yon={{ c, taslak, yazabilir: yazabilir && !salt }} vurgu={secIs} neden={tahtasiz(goz)}
               secIs={tasinacak} tasi={yazabilir && !tur && !salt ? tasiDene : null} birak={birak}
               saatGirdisi={saatGirdisi} planla={planla} planlaDurumu={setPlanlaDurumu} adimSorunu={adimSorunu} bol={elleBolAc} bolAcik={bolAdimi} bolunmus={bolunmus} adimEk={adimEk} adimBekle={adimBekle} kol={kol} malzeme={malzeme}
             />

@@ -60,6 +60,35 @@ describe('Planda böl önizleme isteği (3792)', () => {
     expect((within(panel).getAllByLabelText('Adet') as HTMLInputElement[]).map((x) => x.value)).toEqual(['8', '1']);
   });
 
+  it('Vazgeç yalnız kendi komutunu geri alır: araya başka komut yazıldıysa geri alma yapılmaz, panel döner ve uyarır (B1)', async () => {
+    const { t, onizleme, panel } = kur(BOLUNMUS_PLAN);
+    fireEvent.click(within(panel).getByRole('button', { name: 'Etkisini gör' }));
+    await waitFor(() => { expect(onizleme).toHaveBeenLastCalledWith(expect.objectContaining({ isId: 'ORN-1.20' })); });
+    // Taslağın son değişikliği bölme değil: araya yeniden planlama yazıldı.
+    t.cevap = { taslak: { surum: 3, satirlar: [{ komut: { tur: 'elle-bol', isId: 'ORN-1.20' } }, { komut: { tur: 'yeniden-planla', isler: ['ORN-1'] } }] } } as never;
+    onizleme.mock.lastCall![0]!.vazgec();
+    await waitFor(() => { expect(panel.hasAttribute('hidden')).toBe(false); });
+    expect(t.geriAl).not.toHaveBeenCalled();
+    expect(onizleme).toHaveBeenLastCalledWith(null);
+    expect(panel.textContent).toContain('Vazgeç onu geri almaz');
+  });
+
+  it('son değişiklik bu bölmeyse Vazgeç geri alır; panel kapanırken de aynı doğrulama yapılır (B1)', async () => {
+    const a = kur(BOLUNMUS_PLAN);
+    fireEvent.click(within(a.panel).getByRole('button', { name: 'Etkisini gör' }));
+    await waitFor(() => { expect(a.onizleme).toHaveBeenLastCalledWith(expect.objectContaining({ isId: 'ORN-1.20' })); });
+    a.t.cevap = { taslak: { surum: 2, satirlar: [{ komut: { tur: 'yeniden-planla', isler: ['ORN-1'] } }, { komut: { tur: 'elle-bol', isId: 'ORN-1.20' } }] } } as never;
+    a.onizleme.mock.lastCall![0]!.vazgec();
+    await waitFor(() => { expect(a.t.geriAl).toHaveBeenCalledWith(false, false); });
+    cleanup();
+    const b = kur(BOLUNMUS_PLAN);
+    fireEvent.click(within(b.panel).getByRole('button', { name: 'Etkisini gör' }));
+    await waitFor(() => { expect(b.onizleme).toHaveBeenLastCalledWith(expect.objectContaining({ isId: 'ORN-1.20' })); });
+    b.t.cevap = { taslak: { surum: 3, satirlar: [{ komut: { tur: 'elle-bol', isId: 'ORN-1.20' } }, { komut: { tur: 'yeniden-planla', isler: ['ORN-1'] } }] } } as never;
+    cleanup();
+    expect(b.t.geriAl).not.toHaveBeenCalled();
+  });
+
   it('tek paylı sonuç (bölme kalkıyor) tahtaya verilmez: etki panelde kalır', async () => {
     const { onizleme, panel } = kur({ ozet: { wT: 20, late: 0, n: 2 }, ops: { 'ORN-1.20': {} } });
     fireEvent.click(within(panel).getByRole('button', { name: 'Etkisini gör' }));

@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { TaslakKomutu } from '#paylasilan/sozlesme/planlama.ts';
 import { Dugme } from '../../../../ortak/arayuz/index.ts';
 import { bekleyenListesi } from '../kayit.ts';
 import { degerlendirmeHatasi } from '../siparis/degerlendirme.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import { etkiSatirlari, ozetOku, type PlanOzeti } from '../ayarlar/alanlar.ts';
-import type { TaslakYazici } from './taslak.ts';
+import { dizmeMi, type TaslakYazici } from './taslak.ts';
 
 // Ayar ya da emrin yönü gibi planı yeniden dizen değişiklik önce etkisiyle gösterilir (3282 1b, 1c, 1d-2b): değişiklik kişinin taslağına
 // komut olarak yazılır, sunucu planı taslağın görünümünde yeniden dizer (plan-uygula), önce ve sonra gösterilir. "Uygula" o dizmeyi
@@ -22,8 +22,21 @@ export interface EtkiSecenekleri {
   sonuc: (s: 'uygulandi' | 'tazele') => void;
 }
 
+// Geri alma son değişikliği alır (LIFO); araya başka komut yazıldıysa Vazgeç onu geri almasın: taslağın son (dizme olmayan) değişikliği
+// bu etkinin yazdığı komut mu? Komutlar tür ve (varsa) iş / emir kimliğiyle eşlenir.
+export function sonKomutAyniMi(taslak: Pick<TaslakYazici, 'cevap'>, k: TaslakKomutu | null): boolean {
+  const son = [...(taslak.cevap?.taslak?.satirlar ?? [])].reverse().find((x) => !dizmeMi(x));
+  // Taslakta değişiklik görünmüyorsa karşılaştıracak bir şey yoktur (geri alma zaten bir şey almaz).
+  if (son === undefined) return true;
+  if (k === null) return false;
+  const a = son.komut as Record<string, unknown>, b = k as Record<string, unknown>;
+  return a['tur'] === b['tur'] && a['isId'] === b['isId'] && a['emirId'] === b['emirId'];
+}
+export const SON_KOMUT_FARKLI = 'Taslağa bu arada başka bir değişiklik yazıldı; Vazgeç onu geri almaz. Değişiklik taslakta kaldı: taslak çubuğundaki Geri al ile sırayla alın.';
+
 export function useEtki({ c, taslak, sonuc }: EtkiSecenekleri) {
   const [durum, setDurum] = useState<EtkiDurumu>({ tur: 'duzen' });
+  const yazilan = useRef<TaslakKomutu | null>(null);
 
   // isler: yeniden dizilecek siparişler; verilmezse bütün plan.
   const dene = async (k: TaslakKomutu, isler: readonly string[] = ['*']) => {
@@ -31,6 +44,7 @@ export function useEtki({ c, taslak, sonuc }: EtkiSecenekleri) {
     const once = c.plan === null ? null : ozetOku(c.plan);
     const oteki = bekleyenListesi(c).length;
     if (!(await taslak.yaz(k, false))) return;
+    yazilan.current = k;
     if (c.plan === null) { sonuc('tazele'); setDurum({ tur: 'duzen' }); return; }
     setDurum({ tur: 'hesap' });
     try {
@@ -49,10 +63,11 @@ export function useEtki({ c, taslak, sonuc }: EtkiSecenekleri) {
     else setDurum({ tur: 'hata', ileti: 'Taslak bu arada değişti; değişiklik taslakta kaldı, plan yeniden dizilince görünür.' });
   };
   const vazgec = async () => {
+    if (taslak !== null && !sonKomutAyniMi(taslak, yazilan.current)) { setDurum({ tur: 'hata', ileti: SON_KOMUT_FARKLI }); return; }
     if (taslak !== null && (await taslak.geriAl(false, false))) { sonuc('tazele'); setDurum({ tur: 'duzen' }); }
     else setDurum({ tur: 'hata', ileti: 'Değişiklik geri alınamadı; taslak çubuğundaki Geri al ile alın.' });
   };
-  return { durum, setDurum, dene, uygula, vazgec };
+  return { durum, setDurum, dene, uygula, vazgec, yazilan };
 }
 
 export function EtkiBolumu({ ad, e, uygula, vazgec }: { ad: string; e: Etki; uygula: () => void; vazgec: () => void }) {
