@@ -602,3 +602,10 @@ describe('Kart 3790 okumalar ve tanı', () => {
     assert.equal(r.tur === 'basarili' ? r.okuma.hatalar?.[0]?.metin : '', 'Aık İşğ');
   });
 });
+
+describe('LSV2 metin öğeleri geçmişe yazılmaz (3811)', () => {
+  test('sürüm ve seçenek metinleri yalnız son durumda kalır; sayısal öğeler geçmişe girer', () => {
+    for (const k of ['lsv2-secenekler', 'lsv2-kumanda-tipi', 'lsv2-nc-surumu', 'lsv2-plc-surumu', 'lsv2-protokol-surumu']) assert.ok(lsv2GecmisteYok(k), k);
+    assert.equal(lsv2GecmisteYok('lsv2-takim'), false);
+  });
+});

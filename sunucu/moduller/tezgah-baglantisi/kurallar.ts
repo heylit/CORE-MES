@@ -676,8 +676,12 @@ export function lsv2AlanTanimlari(o: Lsv2Okumasi | null): AlanTanimi[] {
 }
 export const lsv2TanimImzasi = (o: Lsv2Okumasi | null): string => lsv2AlanTanimlari(o).map((a) => a.kimlik).join(',');
 export const LSV2_KATEGORILERI: ReadonlyMap<string, GecmisKategorisi> = new Map(LSV2_ALAN_TANIMLARI.map((a) => [a.kimlik, a.kategori]));
-// Yalnız son durumda tutulan öğeler: eksen konumu, tümce numarası, tanı ve kumanda saati geçmişe hiç yazılmaz.
-const GECMISSIZ: ReadonlySet<string> = new Set([LSV2_ALANLARI.tumce.kimlik, LSV2_ALANLARI.tani.kimlik, LSV2_ALANLARI.kumandaSaati.kimlik, LSV2_ALANLARI.saatFarki.kimlik]);
+// Yalnız son durumda tutulan öğeler: eksen konumu, tümce numarası, tanı ve kumanda saati geçmişe hiç yazılmaz. Sürüm ve seçenek
+// metinleri de yazılmaz: rakamlı metin geçmişte sayıya çevrilip anlamsız değer olur (seçenek dizisi "1.1e+175", 3811).
+const GECMISSIZ: ReadonlySet<string> = new Set([
+  LSV2_ALANLARI.tumce.kimlik, LSV2_ALANLARI.tani.kimlik, LSV2_ALANLARI.kumandaSaati.kimlik, LSV2_ALANLARI.saatFarki.kimlik,
+  LSV2_ALANLARI.kontrol.kimlik, LSV2_ALANLARI.ncSurumu.kimlik, LSV2_ALANLARI.plcSurumu.kimlik, LSV2_ALANLARI.secenekler.kimlik, LSV2_ALANLARI.lsv2Surumu.kimlik,
+]);
 export const lsv2GecmisteYok = (kimlik: string | null): boolean => kimlik === null || kimlik.startsWith(EKSEN_ONEKI) || GECMISSIZ.has(kimlik);
 
 const metin = (n: number | null): string | null => (n === null ? null : String(n));
@@ -815,3 +819,13 @@ export function lsv2Durumu(onceki: TezgahOgeleriHaritasi, yeni: readonly TezgahO
 
 export const lsv2UyariMetni = (uyarilar: readonly Lsv2Uyarisi[]): string | null =>
   (uyarilar.length === 0 ? null : uyarilar.map((u) => LSV2_UYARI_METNI[u]).join(' · '));
+
+/* ---------------- deneme sayfası (kart 3811) ---------------- */
+// Ad benzerliği: büyük harf, yalnız harf ve rakam ("CNC002" = "cnc-002"). Tek makine uyarsa öneridir; birden çok uyarsa öneri yok.
+export const adAnahtari = (ad: string): string => ad.toLocaleUpperCase('tr-TR').replace(/[^0-9A-ZÇĞİÖŞÜ]/g, '');
+export function eslemeOnerisi(cihazAdi: string, makineler: readonly { id: number; kod: string }[]): number | null {
+  const a = adAnahtari(cihazAdi);
+  if (a === '') return null;
+  const uyan = makineler.filter((m) => adAnahtari(m.kod) === a);
+  return uyan.length === 1 ? uyan[0]!.id : null;
+}

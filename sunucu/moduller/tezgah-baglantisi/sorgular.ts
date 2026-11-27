@@ -280,3 +280,36 @@ export function lsv2ProgramlariGetir(db: Db, cihazAdi: string): Promise<Lsv2Prog
     [cihazAdi],
   );
 }
+
+/* ---------------- deneme sayfası (kart 3811) ---------------- */
+export interface EslemeSatiri {
+  cihazAdi: string;
+  makineId: number | null;
+  cevrimdeParca: number;
+  durusEsigiDk: number;
+  degistirenKisiId: number;
+  degisti: string;
+}
+
+export function eslemeleriGetir(db: Db): Promise<EslemeSatiri[]> {
+  return db.sorgu<EslemeSatiri>(
+    `SELECT cihaz_adi AS "cihazAdi", makine_id AS "makineId", cevrimde_parca AS "cevrimdeParca", durus_esigi_dk AS "durusEsigiDk",
+            degistiren_kisi_id AS "degistirenKisiId", ${zamanMetni('degisti')} AS degisti
+       FROM tezgah_makine_esleme ORDER BY cihaz_adi`,
+  );
+}
+
+export async function eslemeYaz(
+  db: Db, cihazAdi: string, e: { makineId: number | null; cevrimdeParca: number; durusEsigiDk: number }, kisiId: number,
+): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO tezgah_makine_esleme (cihaz_adi, makine_id, cevrimde_parca, durus_esigi_dk, degistiren_kisi_id) VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (cihaz_adi) DO UPDATE SET makine_id = EXCLUDED.makine_id, cevrimde_parca = EXCLUDED.cevrimde_parca,
+       durus_esigi_dk = EXCLUDED.durus_esigi_dk, degistiren_kisi_id = EXCLUDED.degistiren_kisi_id, degisti = now()`,
+    [cihazAdi, e.makineId, e.cevrimdeParca, e.durusEsigiDk, kisiId],
+  );
+}
+
+export async function makineninEslemesi(db: Db, makineId: number): Promise<string | null> {
+  return (await db.tek<{ cihazAdi: string }>('SELECT cihaz_adi AS "cihazAdi" FROM tezgah_makine_esleme WHERE makine_id = $1', [makineId]))?.cihazAdi ?? null;
+}

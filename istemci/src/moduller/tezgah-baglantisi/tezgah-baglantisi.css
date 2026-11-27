@@ -150,3 +150,26 @@
 /* Uzun değerli satır (kart 3790): etiket üstte, değer tam genişlikte, sola yaslı. */
 .tc-tzb-alan.tc-tzb-alan-uzun { grid-template-columns: minmax(0, 1fr); }
 .tc-tzb-alan.tc-tzb-alan-uzun .tc-tzb-alan-ad, .tc-tzb-alan.tc-tzb-alan-uzun .tc-tzb-alan-deger { grid-column: 1; grid-row: auto; text-align: start; }
+
+/* Deneme bölümleri (3811) */
+.tc-tzb-bolum { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; }
+.tc-tzb-bolum-baslik { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--b-2) var(--b-3); margin: 0; font-size: var(--yazi-m); }
+.tc-tzb-bolum-baslik .tc-tzb-alt { display: inline; font-weight: 400; }
+.tc-tzb-eksikler { display: flex; flex-direction: column; gap: var(--b-1); margin: 0; padding: var(--b-3) var(--b-4); list-style: none; border: 1px solid var(--edge); border-radius: var(--yari-3); background: var(--panel2); color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
+.tc-tzb-cizgi { display: block; width: 100%; height: var(--b-6); border: 1px solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); }
+.tc-tzb-cizgi-calisiyor { fill: var(--run); background: var(--run); }
+.tc-tzb-cizgi-bekliyor { fill: var(--hold); background: var(--hold); }
+.tc-tzb-cizgi-alarm { fill: var(--stop); background: var(--stop); }
+.tc-tzb-cizgi-baglanti-yok { fill: var(--faint); background: var(--faint); }
+.tc-tzb-cizgi-vardiya-disi { fill: var(--panel2); background: var(--panel2); }
+.tc-tzb-lejant { display: flex; flex-wrap: wrap; gap: var(--b-2) var(--b-4); margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: var(--yazi-s); }
+.tc-tzb-lejant li { display: inline-flex; align-items: center; gap: var(--b-2); }
+.tc-tzb-lejant-renk { display: inline-block; width: var(--b-4); height: var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-2); }
+.tc-tzb-kartlar-hep { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr)); }
+.tc-tzb-olcutler { display: flex; flex-direction: column; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+.tc-tzb-olcutler li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 var(--b-2); align-items: start; color: var(--run); }
+.tc-tzb-olcutler li > span { color: var(--ink); }
+.tc-tzb-olcutler li > .tc-tzb-alt { grid-column: 2; color: var(--muted); overflow-wrap: anywhere; }
+.tc-tzb-olcutler li.tc-tzb-eksik { color: var(--hold); }
+.tc-tzb-fark-deger { color: var(--hold); font-weight: 700; }
+.tc-tzb-sayi-girdi { width: 6rem; max-width: 100%; }
