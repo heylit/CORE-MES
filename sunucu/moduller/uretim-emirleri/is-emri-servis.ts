@@ -93,6 +93,8 @@ export interface IsEmriGirdisi {
   firePayiYuzde?: string;
   makineKullanimi?: 'tek' | 'paralel';
   enKucukParca?: number | null;
+  // 3814 a: tezgâhın bir çevrimde işlediği parça; verilmezse 1.
+  cevrimdeParca?: number;
   yenidenAyar?: boolean;
   // 3708: rota adımının kontrol türü ve muayene süresi (saat); verilmezse GKK.
   kontrolTuru?: FasonKontrol;
@@ -182,7 +184,7 @@ async function yaziyaCevir(db: Db, g: IsEmriGirdisi, sira: number, tipler: Set<n
     // 3607: kişi kaynağında rotadaki istasyon önce gelir (kaynagiYaz ile aynı kural); makinede makinenin istasyonu.
     istasyonId: g.fasonFirmasiz === true ? null : g.kaynak?.tur === 'kisi' ? (g.istasyonId ?? k.istasyonId ?? null) : (k.istasyonId ?? g.istasyonId ?? null), ayarSuresiDk: g.ayarSuresiDk, birimSureDk: g.birimSureDk,
     terminGun: g.terminGun, bagimlilik: g.bagimlilik, devirAdedi: g.devirAdedi, firePayiYuzde: g.firePayiYuzde ?? '0',
-    makineKullanimi: g.makineKullanimi ?? 'tek', enKucukParca: g.enKucukParca ?? null, yenidenAyar: g.yenidenAyar ?? true,
+    makineKullanimi: g.makineKullanimi ?? 'tek', enKucukParca: g.enKucukParca ?? null, cevrimdeParca: g.cevrimdeParca ?? 1, yenidenAyar: g.yenidenAyar ?? true,
     kontrolTuru: g.kontrolTuru ?? 'gkk', muayeneSuresiSaat: g.muayeneSuresiSaat ?? null,
     talimatSurumu: g.talimatSurumu, dugum: g.dugum ?? null, operasyonId: g.operasyonId ?? null,
   };
@@ -1362,7 +1364,7 @@ const isEmriYazisi = (i: IsEmriSatiri, kaynaksiz: boolean, sira = i.sira): IsEmr
   sira, opNo: i.opNo, operasyonTipiId: i.operasyonTipiId, ad: i.ad,
   makineId: kaynaksiz ? null : i.makineId, kisiId: kaynaksiz ? null : i.kisiId, fasonFirmaId: i.fasonFirmaId, fasonFirmasiz: i.fasonFirmasiz, istasyonId: kaynaksiz ? null : i.istasyonId,
   ayarSuresiDk: i.ayarSuresiDk, birimSureDk: i.birimSureDk, terminGun: i.terminGun, bagimlilik: i.bagimlilik, devirAdedi: i.devirAdedi,
-  firePayiYuzde: i.firePayiYuzde, makineKullanimi: i.makineKullanimi, enKucukParca: i.enKucukParca, yenidenAyar: i.yenidenAyar, talimatSurumu: i.talimatSurumu,
+  firePayiYuzde: i.firePayiYuzde, makineKullanimi: i.makineKullanimi, enKucukParca: i.enKucukParca, cevrimdeParca: i.cevrimdeParca, yenidenAyar: i.yenidenAyar, talimatSurumu: i.talimatSurumu,
   kontrolTuru: i.kontrolTuru, muayeneSuresiSaat: i.muayeneSuresiSaat,
   tur: i.tur, ekAciklama: i.ekAciklama,
 });
@@ -1701,7 +1703,10 @@ export async function reworkAdimiYaz(db: Db, kullanici: Kullanici, emirId: numbe
     terminGun: r.terminGun, bagimlilik: adim.bagimlilik, devirAdedi: null, talimatSurumu: null, kontrolListesi: [],
   };
   girdiDenetle([girdi]);
-  await bekleyeniGuncelle(db, adim.id, { ...(await yaziyaCevir(db, girdi, adim.sira, await tipKimlikleri(db))), tur: 'rework', ekAciklama: r.aciklama ?? adim.ekAciklama });
+  // Rework aynı adımı yeniden işler: bağlama (çevrimde parça) adımınki kalır (3814 a).
+  await bekleyeniGuncelle(db, adim.id, {
+    ...(await yaziyaCevir(db, girdi, adim.sira, await tipKimlikleri(db))), tur: 'rework', ekAciklama: r.aciklama ?? adim.ekAciklama, cevrimdeParca: adim.cevrimdeParca,
+  });
   if ((await s.surumArtir(db, emirId, e.surum)) === null) throw eskiSurum();
   await siradakiIstasyonuYaz(db, emirId);
   await isEmirleriDegistiBildir(db, { uretimEmriId: emirId, kisiId });
@@ -1824,7 +1829,8 @@ export async function rotasizAdimDuzenle(db: Db, kullanici: Kullanici, id: numbe
   const eskiBilesenler = await s.bilesenleriGetir(db, [i.id]);
   const aciklama = g.aciklama !== undefined ? g.aciklama || null : i.ekAciklama;
   // Güncelleme adayları, bileşenleri ve kontrol listesini siler; verilmeyenler yeniden yazılır (rotasız adımda aday ve liste yoktur).
-  await bekleyeniGuncelle(db, i.id, await rotasizAdimYazisi(db, yeni, i.sira, aciklama));
+  // Rotasız adım düzenlemesi çevrimde parçayı taşımaz: kayıtlı değer kalır (3814 a).
+  await bekleyeniGuncelle(db, i.id, { ...(await rotasizAdimYazisi(db, yeni, i.sira, aciklama)), cevrimdeParca: i.cevrimdeParca });
   if (i.tur === 'ek') await s.isEmriEkAciklamasiYaz(db, i.id, aciklama);
   if (g.bilesenler !== undefined) await bilesenleriYaz(db, i.id, g.bilesenler);
   else for (const b of eskiBilesenler) await s.bilesenEkle(db, i.id, b);

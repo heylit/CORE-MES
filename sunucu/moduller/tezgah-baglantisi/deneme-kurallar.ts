@@ -60,12 +60,14 @@ export function programEslesmesi(programlar: readonly string[], ncProgram: strin
 }
 
 /* ---------------- sayım ---------------- */
-export interface IsAraligi { bas: number; bit: number | null; isEmriNo: string; op: string | null; parcaNo: string; ilkParcaOnayi: number | null }
+// cevrimdeParca: iş emri adımının değeri (3814 a); OP adımsız kullanımda null, sayım tezgâh eşlemesindeki değere düşer.
+export interface IsAraligi { bas: number; bit: number | null; isEmriNo: string; op: string | null; parcaNo: string; ilkParcaOnayi: number | null; cevrimdeParca?: number | null }
 export interface SayimAni { zaman: number; saglam: number; hurda: number; red: number; standartSaniye: number; suresizSaglam: number }
 export interface ProgramSurumu { ad: string; boyut: number; tarih: string | null; ilkGoruldu: number }
 
 export interface IsSayimi {
   baslangic: number; bitis: number | null; isEmriNo: string; op: string | null; parcaNo: string;
+  cevrimdeParca: number; cevrimdeParcaKaynagi: 'emir' | 'tezgah';
   sayacFarki: number | null; tezgahAdedi: number | null; denemeAyarAdedi: number | null; ayarAdedi: number | null;
   saglam: number | null; hurda: number | null; farkAdet: number | null; farkYuzde: number | null;
   programlar: string[]; programEslesmesi: ProgramEslesmesi; sayacGeriGitti: boolean; programDegisti: boolean | null; golgeOneri: number | null;
@@ -96,12 +98,13 @@ export function isSayimlari(
   surumler: readonly ProgramSurumu[] | null, ncProgrami: (i: IsAraligi) => string | null = () => null,
 ): IsSayimi[] {
   return isler.map((i) => {
+    const k = i.cevrimdeParca ?? cevrimdeParca;
     const bit = isBitisi(i, pencere.bit);
     const ici = artis.filter((a) => a.zaman >= i.bas && a.zaman < bit);
     const uretim = ici.filter((a) => a.uretim);
     const toplam = (l: readonly Artis[]) => l.reduce((t, a) => t + a.adet, 0);
     const sayaciVar = ici.length > 0 || artis.some((a) => a.zaman < bit);
-    const tezgahAdedi = sayaciVar ? toplam(uretim) * cevrimdeParca : null;
+    const tezgahAdedi = sayaciVar ? toplam(uretim) * k : null;
     const s = sayimlar.filter((x) => x.zaman >= i.bas && x.zaman < bit);
     const saglam = s.length === 0 ? null : s.reduce((t, x) => t + x.saglam, 0);
     const hurda = s.length === 0 ? null : s.reduce((t, x) => t + x.hurda, 0);
@@ -113,10 +116,11 @@ export function isSayimlari(
     const ilkProgram = uretim.find((a) => a.program !== null)?.program ?? null;
     return {
       baslangic: i.bas, bitis: i.bit, isEmriNo: i.isEmriNo, op: i.op, parcaNo: i.parcaNo,
+      cevrimdeParca: k, cevrimdeParcaKaynagi: i.cevrimdeParca == null ? 'tezgah' : 'emir',
       sayacFarki: sayaciVar ? toplam(ici) : null,
       tezgahAdedi,
-      denemeAyarAdedi: sayaciVar ? toplam(ici.filter((a) => !a.uretim)) * cevrimdeParca : null,
-      ayarAdedi: i.ilkParcaOnayi === null || !sayaciVar ? null : toplam(uretim.filter((a) => a.zaman < (i.ilkParcaOnayi ?? 0))) * cevrimdeParca,
+      denemeAyarAdedi: sayaciVar ? toplam(ici.filter((a) => !a.uretim)) * k : null,
+      ayarAdedi: i.ilkParcaOnayi === null || !sayaciVar ? null : toplam(uretim.filter((a) => a.zaman < (i.ilkParcaOnayi ?? 0))) * k,
       saglam, hurda, farkAdet,
       farkYuzde: farkAdet === null || terminal === null || terminal === 0 ? null : (farkAdet / terminal) * 100,
       programlar, programEslesmesi: eslesme, sayacGeriGitti: ici.some((a) => a.geriGitti),

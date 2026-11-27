@@ -7,6 +7,7 @@ import {
 } from './kurallar.ts';
 import { adimCarpani, adimOnculleri, birlesebilenDallar, birlesenYaz, carpanYaz, dalliRota, dalYaz } from './kurallar.ts';
 import { hazirlikBolumu, hazirlikYaz, sureYaz, toplamdanBolum } from './kurallar.ts';
+import { adetBirimiMi, cevrimdeParca, cevrimdeParcaYaz, makineCevrimi, makineCevrimiYaz } from './kurallar.ts';
 import { hamGirdisiVar, hamOneriMiktari, onerilebilirKartlar } from './kurallar.ts';
 import { adimAdi, turKisa, yerelTur } from './kurallar.ts';
 import { catalFarki, dalBilgileri, dalCarpaniYaz, dalEtiketi, dalHatasi, kolaEkle, kolaTasi, kollariBirlestir, dalYerlesimi, katilanDalEkle, serbestDal, seritteKaydir, seritteYerlestir } from './kurallar.ts';
@@ -608,5 +609,53 @@ describe('2558-3 adımın erişilebilir adı', () => {
   it('3252 b: adım sıradaki OP numarasıyla okunur; yeni adım da kayıtta alacağı numarayla', () => {
     expect(adimAdi({ seq: 20 })).toBe('OP 20');
     expect(adimAdi({ seq: 30 })).toBe('OP 30');
+  });
+});
+
+// 3814 a: saklanan yalnız çevrimde parça ve işlem / adet; makine çevrimi türetilir.
+describe('çevrimde parça ve makine çevrimi', () => {
+  const opBul = (id: string) => (id === '21' ? op('21') : undefined);
+  it('sıfır ve boş çevrimde parça 1 olur; fasona çevrilince çevrimde parça görünür biçimde 1e döner, iç üretime dönüş onu geri getirmez', () => {
+    expect(cevrimdeParca(cevrimdeParcaYaz(adim('a', 10), 0))).toBe(1);
+    expect(cevrimdeParca(cevrimdeParcaYaz(adim('a', 10), null))).toBe(1);
+    const f = fasonaCevir(cevrimdeParcaYaz(adim('a', 10), 4), '7', opBul('21'));
+    expect(f.cevrimdeParca).toBe(1);
+    expect(fasonaCevir(f, null, opBul('21')).cevrimdeParca).toBe(1);
+    expect(fasonaCevir(adim('a', 10), '7', opBul('21')).cevrimdeParca).toBe(adim('a', 10).cevrimdeParca);
+  });
+  it('makine çevrimi yazılınca işlem / adet = çevrim ÷ k (4 ondalık); k değişince işlem / adet korunur, çevrim yeniden gösterilir', () => {
+    const a = cevrimdeParcaYaz(adim('a', 10, { proc: 22 }), 4);
+    expect(a.proc).toBe(22);
+    const b = makineCevrimiYaz(a, 22);
+    expect([b.proc, makineCevrimi(b), b.cycle]).toEqual([5.5, 22, 5.5]);
+    const c = cevrimdeParcaYaz(b, 2);
+    expect([c.proc, makineCevrimi(c)]).toEqual([5.5, 11]);
+    const d = makineCevrimiYaz(cevrimdeParcaYaz(b, 3), 22);
+    expect([d.proc, makineCevrimi(d)]).toEqual([7.3333, 22]);
+  });
+  it('k = 1000 gidiş-dönüşü en çok 0,05 dk kayar (4 ondalık saklama); sıfıra yuvarlanmaz; boş k 1, sınır 1-1000', () => {
+    const a = makineCevrimiYaz(cevrimdeParcaYaz(adim('a', 10), 1000), 22.37);
+    expect(Math.abs((makineCevrimi(a) ?? 0) - 22.37)).toBeLessThanOrEqual(0.05);
+    expect(makineCevrimiYaz(cevrimdeParcaYaz(adim('a', 10), 1000), 0.01).proc).toBe(0.0001);
+    expect(cevrimdeParca(cevrimdeParcaYaz(adim('a', 10), null))).toBe(1);
+    expect(cevrimdeParca(cevrimdeParcaYaz(adim('a', 10), 5000))).toBe(1000);
+    expect(cevrimdeParca(adim('a', 10))).toBe(1);
+    expect(makineCevrimi(adim('a', 10, { proc: null }))).toBeNull();
+  });
+  it('geçersiz giriş metinle reddedilir', () => {
+    expect(sayiAlaniHatasi('0', 1000, false, true)).toBe('1 ya da daha büyük tam sayı girin.');
+    expect(sayiAlaniHatasi('1,5', 1000, false, true)).toBe('1 ya da daha büyük tam sayı girin.');
+    expect(sayiAlaniHatasi('1001', 1000, false, true)).toBe('En çok 1.000 olabilir.');
+    expect(sayiAlaniHatasi('4', 1000, false, true)).toBeNull();
+  });
+  it('yalnız adetle ölçülen kartta çıkar', () => {
+    expect(['', 'adet', 'ADET', 'ad', 'Ad.'].map(adetBirimiMi)).toEqual([true, true, true, true, true]);
+    expect(['kg', 'm', 'mm'].map(adetBirimiMi)).toEqual([false, false, false]);
+  });
+  it('kaydet gövdesi: taşıyan adımda gider, fasonda 1; taşımayan adımda gitmez (sunucu kayıtlıyı korur)', () => {
+    const g = kaydetGovdesi([adim('a', 10, { cevrimdeParca: 4 }), adim('b', 20), adim('c', 30, { stationId: null, fasonId: '7', cevrimdeParca: 4 })], [10, 20, 30], opBul);
+    expect(g[0]).toMatchObject({ cevrimdeParca: 4 });
+    expect(g[1]).not.toHaveProperty('cevrimdeParca');
+    expect(g[2]).toMatchObject({ cevrimdeParca: 1 });
   });
 });

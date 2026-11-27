@@ -5,7 +5,7 @@ import { KONTROLSUZ_SONRAKI_FASON_DEGIL, fasonKontrolDuzelt, fasonKontrolSecileb
 import { miktar as miktarMetni, sayi, YOK } from '../bicim.ts';
 import {
   seritKomsusu, seritteKaydir, adimBirlesen, adimCarpani, adimDali, adimGuncelle, adimOnculleri, adimSil, adimSurukle, akisKarti, bagimlilikYaz, BAGIMLILIK_SIRASI, birlesebilenDallar, birlesenYaz,
-  cevrimToplami, DAL_HARFLERI, dalBilgileri, dalCarpaniYaz, dalEtiketi, dalYaz, kollariBirlestir, serbestDal, degisimOrani, fasonaCevir, fasonMu,
+  adetBirimiMi, cevrimdeParca, cevrimdeParcaYaz, CEVRIMDE_PARCA_EN_COK, makineCevrimi, makineCevrimiYaz, cevrimToplami, DAL_HARFLERI, dalBilgileri, dalCarpaniYaz, dalEtiketi, dalYaz, kollariBirlestir, serbestDal, degisimOrani, fasonaCevir, fasonMu,
   girenTekrarIletisi, girenTekrari, hazirlikBolumu, hazirlikYaz, istasyonYaz, kartBasligi, katalogaDon, katalogdanFarkli, kucuk, malzemeMaliyetiSonucu, operasyonYaz, rotaEksikleri,
   fasonKontrolSorunlari, sirali, statuNo, sureYaz, tasinanMalzeme, tuketilenAdimlar, TUR_ADI, turKisa,
   type Adim, type Malzeme,
@@ -124,7 +124,7 @@ function UretimYeri({ r, s, a, duzen }: { r: RotaEkrani; s: { urunId: string }; 
           <b>İç üretim</b>
         </button>
         <button type="button" className={`tc-rr1-depb${fason ? ' tc-rr1-on' : ''}`} aria-pressed={fason} disabled={!duzen} title="Fason firmada yapılır; termin gün olarak girilir."
-          onClick={() => { if (!fason) yaz((x) => fasonaCevir(x, null, op, true), 'Dış üretime alındı'); }}>
+          onClick={() => { if (!fason) yaz((x) => fasonaCevir(x, null, op, true), cevrimdeParca(a) > 1 ? `Dış üretime alındı; çevrimde parça ${String(cevrimdeParca(a))} → 1` : 'Dış üretime alındı'); }}>
           <b>Dış üretim (fason)</b>
         </button>
       </div>
@@ -202,7 +202,11 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
   const ekipmanSay = useAdimEkipmanSayisi(gorulen, a?.opNo ?? null);
   const talimat = useTalimatlar(Number(s.urunId), a?.opNo ?? null, gorulen ? Number(gorulen.id) : null);
   const ilkParca = useIlkParcaDurumu(Number(s.urunId), a?.opNo ?? null, a?.ilkParca);
+  // Çevrimde parçası yeni değişen adım: işlem / adet korunduğu söylenir; başka adıma geçince düşer.
+  const [kDegisenAdim, kDegisenAdimYaz] = useState<string | null>(null);
   if (!a || !sahip) return <BosPanel r={r} />;
+  const kDegisti = kDegisenAdim === a.id;
+  const kDegistiYaz = (v: boolean) => { kDegisenAdimYaz(v ? a.id : null); };
   const idx = liste.indexOf(a);
   const son = idx === liste.length - 1;
   const duzen = dz.duzenlenebilir(s.urunId);
@@ -211,6 +215,7 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
   const im = ist ? h.isMerkezi.get(ist.wcId) : undefined;
   const fason = fasonMu(a);
   const birim = sahip.unit ?? '';
+  const k = adetBirimiMi(birim) ? cevrimdeParca(a) : 1;
   const yaz = (f: (x: Adim) => Adim, metin: string) => { dz.degistir(s.urunId, (l) => adimGuncelle(l, a.id, f), metin); };
   const eksik = rotaEksikleri(liste, dz.malzemeVar, dz.opAdi).find((x) => x.adimId === a.id);
   const istasyonlar = [...h.istasyon.values()].filter((x) => x.aktif || x.id === a.stationId);
@@ -250,6 +255,7 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
     ...(hb.hazirlik ? [`hazırlık ${sayi(hb.hazirlik)} dk`] : []),
     ...(hb.ayarli ? [`ayar ${hb.ayarDk === null ? YOK : sayi(hb.ayarDk)} dk`] : []),
     ...(a.proc !== null ? [`işlem ${sayi(a.proc)} dk/${birim || 'adet'}`] : []),
+    ...(k > 1 ? [`çevrimde ${String(k)} parça`] : []),
   ];
   const fasonFirma = fason && a.fasonId ? (dz.durum.fasonFirms ?? []).find((f) => f.id === a.fasonId) : undefined;
   const yer = fason ? `Fason${fasonFirma ? ` · ${fasonFirma.code ?? fasonFirma.name}` : ' · firma seçilmedi'}${a.terminGun ? ` · termin ${String(a.terminGun)} gün` : ''}`
@@ -352,10 +358,25 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
               <SayiAlani etiket={`İşlem / ${birim || 'adet'}`} enCok={SURE_EN_COK} deger={a.proc} kapali={!duzen} yaz={(v) => { yaz((x) => sureYaz(x, 'proc', v), 'İşlem süresi değişti'); }} />
               <SayiAlani etiket={`Değişim / ${birim || 'adet'}`} enCok={SURE_EN_COK} deger={a.chg} kapali={!duzen} yerTutucu="boş" yaz={(v) => { yaz((x) => sureYaz(x, 'chg', v), 'Değişim süresi değişti'); }} />
             </div>
+            {adetBirimiMi(birim) && (
+              // Çevrimde parça (3814 a): tezgâh bir çevrimde k parça işler; işlem / adet parça başı kalır, plan değişmez.
+              <div className="tc-rr1-sure4 tc-rr1-cevrim">
+                <SayiAlani etiket="Çevrimde parça" deger={k} kapali={!duzen} tamSayi enCok={CEVRIMDE_PARCA_EN_COK} yerTutucu="1"
+                  yaz={(v) => { yaz((x) => cevrimdeParcaYaz(x, v), 'Çevrimde parça değişti'); kDegistiYaz(true); }} />
+                {k > 1 && (
+                  <SayiAlani etiket="Makine çevrimi (dk)" enCok={SURE_EN_COK} deger={makineCevrimi(a)} kapali={!duzen}
+                    yaz={(v) => { yaz((x) => makineCevrimiYaz(x, v), 'Makine çevrimi değişti'); kDegistiYaz(false); }} />
+                )}
+              </div>
+            )}
+            <p className="tc-rr1-ipucu" role="status">
+              {kDegisti && k > 1 ? `İşlem / adet ${a.proc === null ? YOK : `${sayi(a.proc)} dk`} korundu; bağlama değiştiyse makine çevrimini yeniden yazın.` : ''}
+            </p>
             <IsaretKutusu etiket="Ayarcı gerekir (ayar süresi ayarcıyla planlanır)" checked={hb.ayarli} disabled={!duzen}
               onChange={(e) => { const v = e.target.checked; yaz((x) => hazirlikYaz(x, { ayarli: v }), v ? 'Ayar eklendi' : 'Ayar kaldırıldı'); }} />
             <p className="tc-rr1-ipucu tc-rr1-satirnot">
-              {`Toplam hazırlık ${a.setup === null ? YOK : `${sayi(a.setup)} dk`} · çevrim ${sayi(cevrimToplami(a.proc, a.chg))} dk`}
+              {`Toplam hazırlık ${a.setup === null ? YOK : `${sayi(a.setup)} dk`} · parça başı süre ${sayi(cevrimToplami(a.proc, a.chg))} dk`}
+              {k > 1 && makineCevrimi(a) !== null ? ` · makine çevrimi ${sayi(makineCevrimi(a) ?? 0)} dk, ${String(k)} parça` : ''}
               {(() => { const o = degisimOrani(a.proc, a.chg); return o === null ? '' : ` · değişim %${sayi(Math.round(o * 10) / 10)}`; })()}{' '}
               <button type="button" className="tc-rr1-linkbtn" onClick={() => { r.git('sureler'); }}>Süreler bölümü</button>
               {duzen && op && katalogdanFarkli(a, op) && (

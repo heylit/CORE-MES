@@ -991,6 +991,7 @@ function adimCevir(a: DurumRotaAdimi, sira: number, malzemeId: number, makineIst
     dal: a.dal,
     birlesen: a.birlesen,
     adetCarpani: a.adetCarpani,
+    cevrimdeParca: a.cevrimdeParca,
     ...(a.ciktiYazili ? { ciktiId: kimlik(a.ciktiMalzemeId) } : {}),
     onculler: a.onculler === null ? null : a.onculler.flatMap((o) => {
       const seq = seqOf.get(o.opNo);

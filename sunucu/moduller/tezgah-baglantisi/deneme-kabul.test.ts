@@ -42,6 +42,16 @@ describe('Deneme kuralları (kart 3811, 3811-2)', () => {
       [12, 8, 8, 5, 10, 1, 1, true, 1]);
   });
 
+  test('3814 a: çevrimde parça işin emir adımından gelir; OP adımsız işte tezgâh eşlemesindeki değere düşer', () => {
+    const a = artislar([satir(t('09:30:00'), null, 50), satir(t('09:31:00'), 50, 51), satir(t('09:32:00'), 51, 52), satir(t('10:31:00'), 52, 53)]);
+    const is = (bas: string, bit: string, k: number | null) => ({ bas: t(bas), bit: t(bit), isEmriNo: 'ORN-UE-1', op: '20', parcaNo: 'ORN-P100', ilkParcaOnayi: null, cevrimdeParca: k });
+    const [emirden, tezgahtan, emirdeBir] = isSayimlari([is('09:30:00', '10:00:00', 4), is('10:30:00', '11:00:00', null)], a, [], 2, { bas: t('00:00:00'), bit: t('23:59:59') }, null)
+      .concat(isSayimlari([is('09:30:00', '10:00:00', 1)], a, [], 2, { bas: t('00:00:00'), bit: t('23:59:59') }, null));
+    assert.deepEqual([emirden?.tezgahAdedi, emirden?.cevrimdeParca, emirden?.cevrimdeParcaKaynagi], [8, 4, 'emir']);
+    assert.deepEqual([tezgahtan?.tezgahAdedi, tezgahtan?.cevrimdeParca, tezgahtan?.cevrimdeParcaKaynagi], [2, 2, 'tezgah']);
+    assert.deepEqual([emirdeBir?.tezgahAdedi, emirdeBir?.cevrimdeParcaKaynagi], [2, 'emir'], 'emrin 1 değeri tezgâh ayarını ezer (tek mengeneli iş)');
+  });
+
   test('program eşleşmesi: NC alanı varsa kesin ya da uyuşmuyor; yoksa parça no ve OP ile tahmin, bulunmazsa bilinmiyor', () => {
     const p = ['TNC:\\ORN\\ORN-P100-OP10.H'];
     assert.equal(programEslesmesi(p, 'ORN-P100-OP10.H', 'ORN-P100', '10'), 'kesin');
@@ -149,6 +159,7 @@ describe('Deneme sayfası kabul senaryosu (kart 3811, gerçek PostgreSQL)', () =
   let yoneticiId = 0;
   let parcaNo = '';
   let emirNo = '';
+  let ilkIsEmri = 0;
   const simdi = Date.parse('2026-04-11T12:00:00+03:00');
   const o = (): TestVeritabani => {
     if (!ortam) throw new Error('Test veritabanı açılamadı (TMIV2_PG_* ve TMIV2_PG_TEST_DATABASE ayarlarını denetleyin).');
@@ -190,6 +201,7 @@ describe('Deneme sayfası kabul senaryosu (kart 3811, gerçek PostgreSQL)', () =
     }));
     const emir = (await ortam.sahip.tek<{ no: string; parca: string }>('SELECT emir_no AS no, parca_no AS parca FROM uretim_emri WHERE id = $1', [e]))!;
     emirNo = emir.no;
+    ilkIsEmri = i1!;
     parcaNo = emir.parca;
     const kullanim = (isEmriId: number, bas: string, bit: string) => ortam!.sahip.sorgu(
       `INSERT INTO uretim_emirleri_makine_kullanimi (emir_id, is_emri_id, istasyon_id, makine_id, kisi_id, baslama, bitis, kapatan_id)
@@ -276,5 +288,22 @@ describe('Deneme sayfası kabul senaryosu (kart 3811, gerçek PostgreSQL)', () =
     assert.deepEqual([olcut.get('esleme')?.tamam, olcut.get('is-eslesmesi')?.tamam, olcut.get('uyusmazlik')?.tamam, olcut.get('uyusmazlik')?.neden, g.hazir],
       [true, true, false, 'NC program alanı yok; ölçülemiyor', false]);
     assert.equal(olcut.get('sayac-farki')?.tamam, false, 'iki kapanan iş üçten az');
+  });
+
+  test('3814 a: çevrimde parça 2 ve 1 olan iki işte standart çevrim çevrim başına ağırlıklı ortalamadır', async () => {
+    await o().sahip.sorgu('UPDATE uretim_emirleri_is_emri SET cevrimde_parca = 2 WHERE id = $1', [ilkIsEmri]);
+    try {
+      const [sy, oe] = await o().vt.tx(async (db) => [
+        tezgahSayimCevabi.parse(await deneme.sayim(db, 'dun', simdi)),
+        tezgahOeeCevabi.parse(await deneme.oee(db, yonetici, 'dun', simdi)),
+      ] as const);
+      const m = sy.makineler.find((x) => x.cihazAdi === 'ORN-T1')!;
+      assert.deepEqual(m.isler.map((i) => [i.tezgahAdedi, i.cevrimdeParca, i.cevrimdeParcaKaynagi]), [[46, 2, 'emir'], [3, 1, 'emir']]);
+      const oo = oe.makineler.find((x) => x.cihazAdi === 'ORN-T1')!;
+      // İş 1: 23 çevrim x 2 parça x 60 sn; iş 2: 3 çevrim x 1 parça x 60 sn; (2760 + 180) / 26 çevrim.
+      assert.ok(Math.abs((oo.standartCevrimSaniye ?? 0) - 2940 / 26) < 1e-6, String(oo.standartCevrimSaniye));
+    } finally {
+      await o().sahip.sorgu('UPDATE uretim_emirleri_is_emri SET cevrimde_parca = 1 WHERE id = $1', [ilkIsEmri]);
+    }
   });
 });

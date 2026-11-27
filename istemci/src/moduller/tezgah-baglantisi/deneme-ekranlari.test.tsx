@@ -111,6 +111,27 @@ describe('Tezgâh bağlantısı deneme ekranları (kart 3811)', () => {
     expect((screen.getByText('ORN-IE-1042 · OP 20') as HTMLElement).className).toContain('tc-tzb-kirilmaz');
   });
 
+  it('3814 a Sayım: çevrimde parçanın kaynağı görünür yazılır; emir adımı 1 iken tezgâh ayarı büyükse yalnız o satır işaretlenir', async () => {
+    const asil = CEVAP['sayim']!;
+    CEVAP['sayim'] = () => {
+      const c = ORNEK_SAYIM();
+      c.makineler[0]!.cevrimdeParca = 4;
+      return c;
+    };
+    try {
+      ac(<Sayim />);
+      await screen.findByText('ORN-IE-1042 · OP 20');
+      expect(screen.getAllByText('emir adımı')).toHaveLength(2);
+      expect(screen.getByText('tezgâh ayarı (adım yok)')).toBeTruthy();
+      const uyari = screen.getAllByText('tezgâhta 4');
+      expect(uyari).toHaveLength(1);
+      expect(uyari[0]!.parentElement?.querySelector('svg')).toBeTruthy();
+      expect(within(uyari[0]!.closest('tr')!).getByText('ORN-IE-1043 · OP 10')).toBeTruthy();
+    } finally {
+      CEVAP['sayim'] = asil;
+    }
+  });
+
   it('Sayım: program eşleşmesi dört durumda ayrı rozet metni taşır, Deneme/ayar sütunu ve Program değişti notu görünür', async () => {
     ac(<Sayim />);
     await screen.findByText('ORN-IE-1042 · OP 20');

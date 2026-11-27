@@ -51,6 +51,9 @@ export const tezgahSayimCevabi = z.object({
       isEmriNo: z.string().nullable(),
       op: z.string().nullable(),
       parcaNo: z.string().nullable(),
+      // Sayacı parçaya çeviren değer: iş emri adımınınki (3814 a), OP adımsız kullanımda tezgâh eşlemesininki.
+      cevrimdeParca: z.number().int().positive(),
+      cevrimdeParcaKaynagi: z.enum(['emir', 'tezgah']),
       // Tezgâh sayacının aralıktaki artışı (geri gidişte taban yenilenir); okunamadıysa null.
       sayacFarki: z.number().int().nullable(),
       // Üretim artışı (kip otomatik, Dryrun ve Singleblock kapalı) × çevrimde parça.

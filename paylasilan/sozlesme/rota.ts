@@ -156,6 +156,8 @@ export const adimGirdisi = z.object({
   birlesen: z.array(dalAdi).max(26).optional(),
   // Dal çarpanı (1257 a): bir mamul için bu dal adımında kaç adet işlenir; boş ya da 1 aynıdır. Gelmeyen alan kayıtlı değeri korur.
   adetCarpani: z.number().int().min(1, 'Adet çarpanı en az 1.').max(1000, 'Adet çarpanı en çok 1000.').nullable().optional(),
+  // Tezgâhın bir çevrimde işlediği parça (3814 a); birim süre parça başı kalır. Gelmeyen alan kayıtlı değeri korur, yeni adımda 1.
+  cevrimdeParca: z.number().int('Çevrimde parça tam sayı olmalı.').min(1, 'Çevrimde parça en az 1.').max(1000, 'Çevrimde parça en çok 1000.').optional(),
   // Hazırlık bölümü (1310 a): ayarSuresiDk = hazırlık + ayar olarak sunucuda hesaplanır. Gelmeyen bölüm (eski görünüm) yalnız toplamı yollar;
   // ayar kapalıyken gelen ayar süresi yok sayılır.
   hazirlikDk: sure(99_999).nullable().optional(),
@@ -284,6 +286,7 @@ export const adimSemasi = z.object({
   birlesen: z.array(dalAdi),
   // Boş: 1 (ana hat ve çarpansız dal adımı).
   adetCarpani: z.number().int().nullable(),
+  cevrimdeParca: z.number().int(),
   // Türetilmiş öncüller: null tek hatlı rotadır (bağımlılık kuralı), boş dizi hiçbir adımı beklemez.
   onculler: z.array(oncul).nullable(),
   adaylar: z.array(z.object({
@@ -724,7 +727,7 @@ export const rotaAdimTopluGovdesi = z.object({
 // Excel'in açtığı yeni adımın Excel'de olmayan alanları (sayfadaki "adım ekle" ile aynı seçimler; sayfa ekranın alan adlarını kullanır).
 export const YENI_ADIM_VARSAYILANI = {
   islemSuresiDk: null, degisimSuresiDk: null, terminGun: null, bagimlilik: 'bekleyen', devirAdedi: null, firePayiYuzde: 0, makineKullanimi: 'tek',
-  enKucukParca: null, yenidenAyar: false, ilkParca: 'yok', kontrolTuru: 'gkk', muayeneSuresiSaat: null, hazirlikDk: null, ayar: true, ayarDk: null, dal: null, adetCarpani: null,
+  enKucukParca: null, yenidenAyar: false, ilkParca: 'yok', kontrolTuru: 'gkk', muayeneSuresiSaat: null, hazirlikDk: null, ayar: true, ayarDk: null, dal: null, adetCarpani: null, cevrimdeParca: 1,
 } as const;
 // taslaklar: Excel'in yazdığı (açtığı ya da değiştirdiği) taslak revizyon sayısı.
 export const rotaAdimTopluCevabi = z.object({ eklenen: z.number().int().min(0), guncellenen: z.number().int().min(0), taslaklar: z.number().int().min(0) });

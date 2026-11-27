@@ -113,13 +113,14 @@ export interface MakineIsAraligiSatiri {
   op: number | null;
   parcaNo: string;
   ilkParcaOnayi: string | null;
+  cevrimdeParca: number | null;
 }
 export function makineIsAraliklariGetir(
   db: Db, makineIdleri: readonly number[], baslangic: string, bitis: string,
 ): Promise<MakineIsAraligiSatiri[]> {
   return db.sorgu<MakineIsAraligiSatiri>(
     `SELECT k.makine_id AS id, ${ISO('k.baslama')} AS baslangic, ${ISO('k.bitis')} AS bitis, k.is_emri_id AS "isEmriId",
-            e.emir_no AS "isEmriNo", i.op_no AS op, e.parca_no AS "parcaNo",
+            e.emir_no AS "isEmriNo", i.op_no AS op, e.parca_no AS "parcaNo", i.cevrimde_parca AS "cevrimdeParca",
             ${ISO(`(SELECT min(s.zaman) FROM uretim_sayimi s WHERE s.emir_id = k.emir_id AND s.tur = 'saglam'
                      AND (k.is_emri_id IS NULL OR s.is_emri_id = k.is_emri_id))`)} AS "ilkParcaOnayi"
        FROM uretim_emirleri_makine_kullanimi k

@@ -861,6 +861,7 @@ export interface FarkAdimi {
   bagimlilik: Bagimlilik;
   devirAdedi: number | null;
   firePayiYuzde: string;
+  cevrimdeParca?: number;
   bilesenler: readonly { ad: string; miktar: string }[];
 }
 
@@ -895,6 +896,7 @@ export function revizyonFarki(eski: readonly FarkAdimi[], yeni: readonly FarkAdi
     alan('bağımlılık', BAGIMLILIK_ADI[e.bagimlilik], BAGIMLILIK_ADI[y.bagimlilik]);
     alan('devir adedi', e.devirAdedi, y.devirAdedi);
     alan('fire payı', e.firePayiYuzde, y.firePayiYuzde);
+    alan('çevrimde parça', e.cevrimdeParca ?? 1, y.cevrimdeParca ?? 1);
     const bm = (l: readonly { ad: string; miktar: string }[]) => l.map((b) => `${b.ad} x ${b.miktar}`).sort().join(', ');
     alan('bileşenler', bm(e.bilesenler) || null, bm(y.bilesenler) || null);
   }

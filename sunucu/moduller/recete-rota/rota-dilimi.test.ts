@@ -138,7 +138,7 @@ describe('recete-rota rota dilimi (gerçek PostgreSQL)', () => {
     const [s1, s2, s3] = rev.data.steps;
     assert.deepEqual(s1, {
       id: `${String(urun)}-o10`, opNo: 10, seq: 10, opId: String(tipId), name: 'Birinci', stationId: String(istA), machineId: String(makineA), kisiId: null, fasonId: null, fason: false, terminGun: null,
-      setup: 10, proc: 3, chg: 1, cycle: 4, dep: 'bagimli', depQty: null, rejectPct: 2, split: 'bol', minLot: 5, resetup: false, hazirlik: 0, ayarli: true, ayarDk: 10, ilkParca: 'yok', kontrolTuru: 'gkk', muayeneSuresiSaat: null, dal: null, birlesen: [], adetCarpani: null, ciktiId: null, onculler: null,
+      setup: 10, proc: 3, chg: 1, cycle: 4, dep: 'bagimli', depQty: null, rejectPct: 2, split: 'bol', minLot: 5, resetup: false, hazirlik: 0, ayarli: true, ayarDk: 10, ilkParca: 'yok', kontrolTuru: 'gkk', muayeneSuresiSaat: null, dal: null, birlesen: [], adetCarpani: null, cevrimdeParca: 1, ciktiId: null, onculler: null,
       alts: [String(istB)], altTimes: { [String(istB)]: { setup: 5, cycle: 6 } },
       digerAdaylar: [{ tur: 'makine', id: String(makineB), setup: 0, proc: 7, chg: null, cycle: 7 }],
       ins: [{ itemId: String(hammadde), qty: 2, scrap: 5 }], outs: [{ itemId: String(yanUrun), qty: 0.5, kind: 'yan' }],
@@ -288,7 +288,7 @@ describe('recete-rota rota dilimi (gerçek PostgreSQL)', () => {
   test('RRR-6 (2681, Veri V2): firmasız fason adım fason true ve fasonId null çevrilir ("null" metni yok); firmalı fason firmasıyla', () => {
     const adim = (opNo: number, kaynak: DurumRotaAdimi['kaynak']): DurumRotaAdimi => ({
       opNo, operasyonTipiId: 1, ad: 'Kaplama', kaynak, terminGun: 5, ayarSuresiDk: null, birimSureDk: null, islemSuresiDk: null, degisimSuresiDk: null,
-      bagimlilik: 'bekleyen', devirAdedi: null, firePayiYuzde: '0', makineKullanimi: 'tek', enKucukParca: null, yenidenAyar: true, kontrolTuru: 'gkk', muayeneSuresiSaat: null, hazirlikDk: null,
+      bagimlilik: 'bekleyen', devirAdedi: null, firePayiYuzde: '0', makineKullanimi: 'tek', enKucukParca: null, cevrimdeParca: 1, yenidenAyar: true, kontrolTuru: 'gkk', muayeneSuresiSaat: null, hazirlikDk: null,
       ayar: false, ayarDk: null, ilkParca: 'her_kurulum', adaylar: [], bilesenler: [], yanUrunler: [], dal: null, adetCarpani: null, birlesen: [], onculler: null,
       ciktiMalzemeId: null, ciktiYazili: false,
     });

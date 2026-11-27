@@ -407,6 +407,7 @@ export interface AdimSatiri {
   firePayiYuzde: string;
   makineKullanimi: MakineKullanimi;
   enKucukParca: number | null;
+  cevrimdeParca: number;
   yenidenAyar: boolean;
   ilkParca: IlkParcaSecimi;
   kontrolTuru: FasonKontrol;
@@ -457,7 +458,7 @@ export async function iceriklerOku(db: Db, revizyonIdleri: readonly number[]): P
             istasyon_id AS "istasyonId", fason_firma_id AS "fasonFirmaId", fason_firmasiz AS "fasonFirmasiz", ayar_suresi_dk AS "ayarSuresiDk", birim_sure_dk AS "birimSureDk", termin_gun AS "terminGun",
             islem_suresi_dk AS "islemSuresiDk", degisim_suresi_dk AS "degisimSuresiDk",
             bagimlilik, devir_adedi AS "devirAdedi",
-            fire_payi_yuzde AS "firePayiYuzde", makine_kullanimi AS "makineKullanimi", en_kucuk_parca AS "enKucukParca",
+            fire_payi_yuzde AS "firePayiYuzde", makine_kullanimi AS "makineKullanimi", en_kucuk_parca AS "enKucukParca", cevrimde_parca AS "cevrimdeParca",
             yeniden_ayar AS "yenidenAyar", ilk_parca AS "ilkParca", kontrol_turu AS "kontrolTuru", muayene_suresi_saat AS "muayeneSuresiSaat", hazirlik_dk AS "hazirlikDk", ayar, ayar_dk AS "ayarDk",
             d.dal, coalesce(d.birlesen, '{}') AS birlesen, d.adet_carpani AS "adetCarpani",
             c.cikti_malzeme_id AS "ciktiMalzemeId", c.adim_id IS NOT NULL AS "ciktiYazili"
@@ -550,6 +551,7 @@ export interface AdimYazimi {
   firePayiYuzde: number | string;
   makineKullanimi: MakineKullanimi;
   enKucukParca: number | null;
+  cevrimdeParca: number;
   yenidenAyar: boolean;
   ilkParca: IlkParcaSecimi;
   kontrolTuru: FasonKontrol;
@@ -574,11 +576,11 @@ export async function adimYaz(db: Db, revizyonId: number, malzemeId: number, a: 
   const satir = await db.tek<{ id: number }>(
     `INSERT INTO rota_adimi (revizyon_id, malzeme_id, op_no, sira, operasyon_tipi_id, ad, makine_id, kisi_id, fason_firma_id, ayar_suresi_dk,
                              birim_sure_dk, termin_gun, bagimlilik, devir_adedi, fire_payi_yuzde, makine_kullanimi, en_kucuk_parca, yeniden_ayar,
-                             islem_suresi_dk, degisim_suresi_dk, istasyon_id, ilk_parca, hazirlik_dk, ayar, ayar_dk, fason_firmasiz, operasyon_id, kontrol_turu, muayene_suresi_saat)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29) RETURNING id`,
+                             islem_suresi_dk, degisim_suresi_dk, istasyon_id, ilk_parca, hazirlik_dk, ayar, ayar_dk, fason_firmasiz, operasyon_id, kontrol_turu, muayene_suresi_saat, cevrimde_parca)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30) RETURNING id`,
     [revizyonId, malzemeId, a.opNo, a.sira, a.operasyonTipiId, a.ad, makineSutunu(a.kaynak), kisiSutunu(a.kaynak), fasonSutunu(a.kaynak),
       a.ayarSuresiDk, a.birimSureDk, a.terminGun, a.bagimlilik, a.devirAdedi, a.firePayiYuzde, a.makineKullanimi, a.enKucukParca, a.yenidenAyar,
-      a.islemSuresiDk, a.degisimSuresiDk, istasyonSutunu(a.kaynak), a.ilkParca, a.hazirlikDk, a.ayar, a.ayarDk, firmasizSutunu(a.kaynak), a.operasyonId, a.kontrolTuru, a.muayeneSuresiSaat],
+      a.islemSuresiDk, a.degisimSuresiDk, istasyonSutunu(a.kaynak), a.ilkParca, a.hazirlikDk, a.ayar, a.ayarDk, firmasizSutunu(a.kaynak), a.operasyonId, a.kontrolTuru, a.muayeneSuresiSaat, a.cevrimdeParca],
   );
   const adimId = satir!.id;
   if (a.adaylar.length) {

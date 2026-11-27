@@ -387,6 +387,9 @@ describe('fark', () => {
     const yeni = [{ ...temel, opNo: 20, sira: 1, ad: 'Frezeleme' }, { ...temel, sira: 2, birimSureDk: '2.5' }];
     assert.deepEqual(revizyonFarki([temel], yeni), ['OP 20 eklendi: Frezeleme', 'OP 10 birim süre: 2 -> 2.5']);
     assert.deepEqual(revizyonFarki([temel, { ...temel, opNo: 20, ad: 'X' }], [{ ...temel, opNo: 20, ad: 'X' }, temel]), ['Adım sırası değişti']);
+    // 3814 a: çevrimde parça farkı; alanı taşımayan eski adım 1 sayılır.
+    assert.deepEqual(revizyonFarki([temel], [{ ...temel, cevrimdeParca: 4 }]), ['OP 10 çevrimde parça: 1 -> 4']);
+    assert.deepEqual(revizyonFarki([temel], [{ ...temel, cevrimdeParca: 1 }]), []);
     assert.deepEqual(revizyonFarki([temel], []), ['OP 10 çıkarıldı: Tornalama']);
   });
   test('3250-2 R4: adımlar operasyon kimliğiyle eşlenir; araya ekleme sonrakilerin numarasını kaydırır ama onları değişmiş göstermez', () => {
