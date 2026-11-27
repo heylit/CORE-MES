@@ -87,6 +87,7 @@ describe('Heidenhain (LSV2) okuma turu (gerçek PostgreSQL)', () => {
     await vt().sorgu('DELETE FROM tezgah_lsv2_takim');
     await vt().sorgu('DELETE FROM tezgah_lsv2_takim_gecmisi');
     await vt().sorgu('DELETE FROM tezgah_lsv2_seyrek');
+    await vt().sorgu('DELETE FROM tezgah_lsv2_program');
   });
   afterEach(async () => {
     lsv2Kapat(bellek);
@@ -238,8 +239,10 @@ describe('Heidenhain (LSV2) okuma turu (gerçek PostgreSQL)', () => {
     sahte.makine.takimTablosu = tablo(['1    ORN-FREZE-10     +75.5      +5            60    12.5', '2    ORN-MATKAP-8     +90        +4         L  30    30', '3    ORN-KILAVUZ      +60        +3            0     0']);
     const m = [makine('ORN-H01', sahte.kapi)];
     await tur(m);
+    sahte.makine.programlar = [{ ad: 'ORN-P100.H', boyut: 1200, zaman: Date.parse('2026-11-20T08:00:00Z') / 1000 }];
     const rfl = () => sahte.gelenler.filter((g) => g.komut === 'R_FL').length;
     assert.equal(rfl(), 0);
+    assert.ok(!sahte.gelenler.some((g) => g.komut === 'R_DR'), 'anahtar kapalıyken program listesi de okunmaz');
     assert.ok(!sahte.gelenler.some((g) => g.yuk.toString('latin1') === 'FILE\0'));
     await ayar('tezgah-baglantisi.lsv2-seyrek-okuma', true);
     simdi += 5_000;
@@ -262,6 +265,8 @@ describe('Heidenhain (LSV2) okuma turu (gerçek PostgreSQL)', () => {
     assert.equal(c.statusCode, 200, c.body);
     const tt = tezgahTakimTablosuCevabi.parse(c.json());
     assert.deepEqual([tt.seyrekAcik, tt.tani, tt.gecmisSayisi, tt.takimlar.length], [true, null, 2, 4]);
+    assert.deepEqual([tt.programTani, tt.programlar.map((p) => ({ ...p, tarih: p.tarih === null ? null : new Date(p.tarih).toISOString() }))],
+      [null, [{ ad: 'ORN-P100.H', boyut: 1200, tarih: '2026-11-20T08:00:00.000Z' }]]);
     assert.deepEqual(tt.takimlar[0], { no: 1, ad: 'ORN-FREZE-10B', boy: 75.4, yaricap: 5, omur: 45, kullanilan: 20, kilitli: false });
     // Okunamayınca son durum korunur, neden kumanda koduyla yazılır.
     sahte.makine.takimTablosu = undefined;
@@ -269,6 +274,7 @@ describe('Heidenhain (LSV2) okuma turu (gerçek PostgreSQL)', () => {
     await tur(m);
     const t2 = tezgahTakimTablosuCevabi.parse((await app.inject({ method: 'GET', url: '/api/tezgah-baglantisi/tezgahlar/ORN-H01/takim-tablosu', headers: { cookie: yonetici } })).json());
     assert.deepEqual([t2.tani, t2.takimlar.length], ['Takım tablosu: kumanda kodu 32', 4]);
+    assert.deepEqual([t2.programTani, t2.programlar.length], [null, 1]);
     await ayar('tezgah-baglantisi.lsv2-seyrek-okuma', false);
   });
 

@@ -76,7 +76,7 @@ const TUR_ADI: Record<string, string> = {
   Temperature: 'Sıcaklık', Block: 'Satır', Line: 'Satır no',
   PathFeedrateOverride: 'İlerleme oranı', RotaryVelocityOverride: 'İş mili oranı', RapidOverride: 'Hızlı hareket oranı', BlockNumber: 'Tümce no',
   ToolIndex: 'İndeks', ToolAxis: 'Takım ekseni', ToolLength: 'Boy', ToolRadius: 'Yarıçap', ControlType: 'Kumanda tipi', NcVersion: 'NC sürümü',
-  PlcVersion: 'PLC sürümü', Options: 'Seçenekler', Lsv2Version: 'LSV2 sürümü', MaxBlockLength: 'En büyük telgraf', Diagnosis: 'Okunamayan veri',
+  PlcVersion: 'PLC sürümü', Options: 'Seçenekler', Lsv2Version: 'LSV2 sürümü', MaxBlockLength: 'En büyük telgraf', Diagnosis: 'Okunamayan veri', ControlClock: 'Kumanda saati', ClockOffset: 'Saat farkı',
 };
 // Eksen konumu öğesi eksen adını taşır (Heidenhain): "X konumu".
 export const alanAdi = (a: { tur: string; ad: string | null; bilesen: string | null }): string =>
@@ -90,7 +90,12 @@ const DEGER_ADI: Record<string, string> = {
 };
 const ADLANDIRILAN_TURLER = new Set(['Availability', 'Execution', 'ControllerMode', 'EmergencyStop']);
 // Yalnız sabit sözlüklü türlerin değeri çevrilir; program adı, sayaç gibi serbest değerler olduğu gibi kalır.
-export const degerAdi = (tur: string, deger: string | null): string | null => (deger !== null && ADLANDIRILAN_TURLER.has(tur) ? DEGER_ADI[deger] ?? deger : deger);
+export const degerAdi = (tur: string, deger: string | null): string | null => {
+  if (deger === null) return null;
+  // Kumanda saati ISO zamandır; gün ve saatle yazılır.
+  if (tur === 'ControlClock') return Number.isNaN(Date.parse(deger)) ? deger : gunSaatMetni(deger);
+  return ADLANDIRILAN_TURLER.has(tur) ? DEGER_ADI[deger] ?? deger : deger;
+};
 
 // Kayıt yoksa "kayıt yok", tezgâhtan değer gelmiyorsa "—".
 export const KAYIT_YOK = 'kayıt\u00a0yok';

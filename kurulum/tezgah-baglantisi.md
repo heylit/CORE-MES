@@ -8,8 +8,9 @@ kumandaları (LSV2, kart 3753). İkisi de varsayılan kapalıdır ve okuma aral�
 
 Heidenhain kontrollü tezgâhlar (TNC 6xx sınıfı) LSV2 ile, TCP 19000'den doğrudan okunur. Yalnız okuma telgrafları gider: durum, kip,
 program ve tümce no, ilerleme, hızlı hareket ve iş mili oranları, iş milindeki takım (boy, yarıçap), eksen konumları, kumandanın
-hata iletileri, bağlantı başında kumanda tipi ve sürümler, (ayrı anahtar açıksa, ayarda adresi verilmişse) PLC'deki parça sayacı ve
-(ayrı anahtar açıksa) seyrek aralıkta takım tablosu. Dosya yazma, NC program içeriği, program seçme, tuş, PLC yazma ve her `C_`
+hata iletileri, bağlantı başında kumanda tipi, sürümler ve kumanda saati (parolasız DIAGNOSTICS girişiyle okunur, hemen çıkılır;
+sunucu saatinden 60 saniyeden fazla farkta uyarı), (ayrı anahtar açıksa, ayarda adresi verilmişse) PLC'deki parça sayacı ve
+(ayrı anahtar açıksa) seyrek aralıkta takım tablosu ve program dosya listesi. Dosya yazma, NC program içeriği, program seçme, tuş, PLC yazma ve her `C_`
 komutu kodla engellidir. Parola gönderilmez ve hiçbir yerde tutulmaz. Eksen konumu ve tümce no yalnız son durumda tutulur, geçmişe
 yazılmaz. Okunamayan her alan için kumandanın hata kodu ayrıntı ekranında "Okunamayan veri" satırında görünür (ör. "Alarm: yetki yok (kod 23)").
 
@@ -41,9 +42,10 @@ makinede yapılır (aşağıda 3. adım).
 Takım tablosu ayrı anahtardadır: "Heidenhain seyrek okuma (takım tablosu)" (varsayılan kapalı) ve "Heidenhain seyrek okuma aralığı
 (dakika)" (varsayılan 10, en az 2). Açıkken her aralıkta parolasız FILE girişi yapılır, yalnız takım tablosu dosyası okunur ve hemen
 çıkılır; çıkış reddedilirse bağlantı kapatılır. Tablo ayrıntı ekranındaki "Takım tablosu" sekmesinde görünür; geçmişe yalnız ömrü ya
-da kilidi değişen takım yazılır. Program dosya listesi okunmaz (kumandada klasör değiştirmek yazma komutu ister).
+da kilidi değişen takım yazılır. Aynı girişte oturumun açılış klasöründeki dosyaların yalnız adı, boyutu ve tarihi okunur (hangi klasör
+olduğu kumandaya bağlıdır; klasör değiştirilmez, dosya içeriği okunmaz).
 
-**PLC sayacı okuması ve takım tablosu okuması yazma yetkisi açan bir giriş düzeyi kullanır; makinelerin 19000 kapısına yalnız CORE ve SmartES sunucularının
+**PLC sayacı, takım tablosu ve kumanda saati okumaları yazma yetkisi açan bir giriş düzeyi kullanır; makinelerin 19000 kapısına yalnız CORE ve SmartES sunucularının
 erişmesi önerilir (bilgi işlem).**
 
 ### 3. Deneme sırası

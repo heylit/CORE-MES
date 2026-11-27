@@ -522,13 +522,16 @@ export const LSV2_OKUMA_AYARI = 'tezgah-baglantisi.lsv2-okuma';
 export const LSV2_PLC_SAYACI_AYARI = 'tezgah-baglantisi.lsv2-plc-sayaci';
 export const LSV2_MAKINELERI_AYARI = 'tezgah-baglantisi.lsv2-makineleri';
 
-export type Lsv2Uyarisi = 'kapali-ya-da-mesgul' | 'dnc-yok' | 'sayac-yetki-yok' | 'sayac-adresi-yok' | 'sayac-kapali';
+// Kumanda saati bundan fazla saparsa uyarı verilir (kart 3790).
+export const AZAMI_SAAT_FARKI_SN = 60;
+export type Lsv2Uyarisi = 'kapali-ya-da-mesgul' | 'dnc-yok' | 'sayac-yetki-yok' | 'sayac-adresi-yok' | 'sayac-kapali' | 'saat-farki';
 export const LSV2_UYARI_METNI: Record<Lsv2Uyarisi, string> = {
   'kapali-ya-da-mesgul': 'Makine kapalı ya da meşgul (bağlantı reddedildi)',
   'dnc-yok': 'Makine DNC okumasına izin vermiyor: durum, program ve takım okunamadı',
   'sayac-yetki-yok': 'Sayaç için yetki yok (PLC okuması daha yüksek giriş düzeyi istiyor)',
   'sayac-adresi-yok': 'Sayaç adresi makinenin PLC belleğinde yok',
   'sayac-kapali': 'PLC sayacı okuması kapalı (Sistem Ayarları)',
+  'saat-farki': `Kumanda saati sunucu saatinden ${String(AZAMI_SAAT_FARKI_SN)} saniyeden fazla farklı`,
 };
 
 export interface Lsv2Hatasi {
@@ -542,7 +545,7 @@ export interface Lsv2Hatasi {
 // kod sayıyla kalır; değer uydurulmaz.
 export const LSV2_TANI_ALANI = {
   kip: 'Çalışma kipi', 'program-durumu': 'Program durumu', program: 'Seçili program', oranlar: 'Oranlar', alarm: 'Alarm', takim: 'Takım',
-  eksenler: 'Eksenler', surum: 'Kumanda sürümü', parametre: 'Sistem parametreleri', sayac: 'Sayaç', 'takim-tablosu': 'Takım tablosu',
+  eksenler: 'Eksenler', surum: 'Kumanda sürümü', parametre: 'Sistem parametreleri', sayac: 'Sayaç', 'takim-tablosu': 'Takım tablosu', saat: 'Kumanda saati', 'program-listesi': 'Program listesi',
 } as const;
 export type Lsv2TaniAlani = keyof typeof LSV2_TANI_ALANI;
 export interface Lsv2Tanisi { alan: Lsv2TaniAlani; kod: number }
@@ -601,8 +604,20 @@ export interface Lsv2Okumasi {
   sayac: number | null;
   uyarilar: Lsv2Uyarisi[];
   tani: Lsv2Tanisi[];
+  // Bağlantı başında DIAGNOSTICS düzeyinde okunan kumanda saati (ISO) ve sunucu saatine göre farkı (saniye); okunamadıysa null.
+  kumandaSaati: string | null;
+  saatFarki: number | null;
   // Yalnız seyrek okuma turunda: okunan takım tablosu; okunamadıysa null (neden tanıda), bu turda okunmadıysa undefined.
   takimTablosu?: Lsv2TakimSatiri[] | null;
+  // Yalnız seyrek okuma turunda: oturumun açılış klasöründeki dosyalar (ad, boyut, tarih); içerik okunmaz.
+  programListesi?: Lsv2ProgramDosyasi[] | null;
+}
+
+export interface Lsv2ProgramDosyasi {
+  ad: string;
+  boyut: number;
+  // Kumandanın verdiği değişme zamanı (ISO).
+  tarih: string | null;
 }
 
 const PROGRAM_DURUMU_CALISMA: Readonly<Record<number, string>> = {
@@ -635,6 +650,8 @@ const LSV2_ALANLARI = {
   lsv2Surumu: { kimlik: 'lsv2-protokol-surumu', tur: 'Lsv2Version', bilesen: 'Control', kategori: 'EVENT', birim: null },
   enBuyukBlok: { kimlik: 'lsv2-en-buyuk-blok', tur: 'MaxBlockLength', bilesen: 'Control', kategori: 'EVENT', birim: 'BYTE' },
   tani: { kimlik: 'lsv2-tani', tur: 'Diagnosis', bilesen: 'Control', kategori: 'EVENT', birim: null },
+  kumandaSaati: { kimlik: 'lsv2-kumanda-saati', tur: 'ControlClock', bilesen: 'Control', kategori: 'EVENT', birim: null },
+  saatFarki: { kimlik: 'lsv2-saat-farki', tur: 'ClockOffset', bilesen: 'Control', kategori: 'EVENT', birim: 'SECOND' },
   alarm: { kimlik: 'lsv2-alarm', tur: 'SYSTEM', bilesen: 'Controller', kategori: 'CONDITION', birim: null },
 } as const satisfies Record<string, Lsv2Alani>;
 
@@ -655,9 +672,9 @@ export function lsv2AlanTanimlari(o: Lsv2Okumasi | null): AlanTanimi[] {
 }
 export const lsv2TanimImzasi = (o: Lsv2Okumasi | null): string => lsv2AlanTanimlari(o).map((a) => a.kimlik).join(',');
 export const LSV2_KATEGORILERI: ReadonlyMap<string, GecmisKategorisi> = new Map(LSV2_ALAN_TANIMLARI.map((a) => [a.kimlik, a.kategori]));
-// Yalnız son durumda tutulan öğeler: eksen konumu, tümce numarası ve tanı geçmişe hiç yazılmaz.
-export const lsv2GecmisteYok = (kimlik: string | null): boolean =>
-  kimlik === null || kimlik.startsWith(EKSEN_ONEKI) || kimlik === LSV2_ALANLARI.tumce.kimlik || kimlik === LSV2_ALANLARI.tani.kimlik;
+// Yalnız son durumda tutulan öğeler: eksen konumu, tümce numarası, tanı ve kumanda saati geçmişe hiç yazılmaz.
+const GECMISSIZ: ReadonlySet<string> = new Set([LSV2_ALANLARI.tumce.kimlik, LSV2_ALANLARI.tani.kimlik, LSV2_ALANLARI.kumandaSaati.kimlik, LSV2_ALANLARI.saatFarki.kimlik]);
+export const lsv2GecmisteYok = (kimlik: string | null): boolean => kimlik === null || kimlik.startsWith(EKSEN_ONEKI) || GECMISSIZ.has(kimlik);
 
 const metin = (n: number | null): string | null => (n === null ? null : String(n));
 const bos = (s: string | null): string | null => (s === null || s.trim() === '' ? null : s.trim());
@@ -704,6 +721,8 @@ export function lsv2Ogeleri(o: Lsv2Okumasi | null, zaman: Date): TezgahOgesi[] {
     oge(LSV2_ALANLARI.secenekler, bos(o.secenekler)),
     oge(LSV2_ALANLARI.lsv2Surumu, metin(o.lsv2Surumu)),
     oge(LSV2_ALANLARI.enBuyukBlok, metin(o.enBuyukBlok)),
+    oge(LSV2_ALANLARI.kumandaSaati, o.kumandaSaati),
+    oge(LSV2_ALANLARI.saatFarki, metin(o.saatFarki)),
     oge(LSV2_ALANLARI.tani, o.tani.length === 0 ? null : o.tani.map(lsv2TaniMetni).join(' · ')),
     alarm,
   ];

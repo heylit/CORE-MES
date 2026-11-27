@@ -186,6 +186,13 @@ const TAKIM_SUTUNLARI: Sutun<TakimSatiri>[] = [
   },
 ];
 
+type ProgramSatiri = TezgahTakimTablosuCevabi['programlar'][number];
+const PROGRAM_SUTUNLARI: Sutun<ProgramSatiri>[] = [
+  { anahtar: 'ad', baslik: 'Ad', hucre: (p) => p.ad, mono: true },
+  { anahtar: 'boyut', baslik: 'Boyut', hucre: (p) => `${ONDALIK.format(p.boyut)} bayt`, hizala: 'sag', kirilmaz: true, csv: (p) => p.boyut },
+  { anahtar: 'tarih', baslik: 'Tarih', hucre: (p) => (p.tarih === null ? YOK : gunSaatMetni(p.tarih)), kirilmaz: true, csv: (p) => p.tarih },
+];
+
 // Kilitli takım önce görülmeli: kilitliler üstte, kendi içinde takım numarasına göre.
 const kilitliUstte = (l: readonly TakimSatiri[]): TakimSatiri[] => [...l].sort((x, y) => Number(y.kilitli === true) - Number(x.kilitli === true) || x.no - y.no);
 
@@ -211,7 +218,9 @@ function TakimTablosu({ cihazAdi, aralikSaniye }: { cihazAdi: string; aralikSani
         <Tablo etiket="Takım tablosu" sutunlar={TAKIM_SUTUNLARI} satirlar={kilitliUstte(t.takimlar)} satirAnahtari={(s) => String(s.no)} bosMesaj="Takım tablosunda satır yok." />
       </Bolum>
       <Bolum simge="list" baslik="Program dosyaları">
-        <p className="tc-tzb-not">Program dosya listesi okunmuyor: kumandada program klasörüne geçmek yazma komutu istiyor (yalnız okuma kuralı).</p>
+        <p className="tc-tzb-not">Kumandada oturumun açılış klasörü listelenir; hangi klasör olduğu kumandaya bağlıdır. Yalnız ad, boyut ve tarih okunur, dosya içeriği okunmaz.</p>
+        {t.programTani !== null && <p className="tc-tzb-not"><Rozet ton="uyari">Okunamadı</Rozet> {t.programTani}</p>}
+        <Tablo etiket="Program dosyaları" sutunlar={PROGRAM_SUTUNLARI} satirlar={t.programlar} satirAnahtari={(s) => s.ad} bosMesaj="Program listesi henüz okunmadı ya da klasör boş." />
       </Bolum>
     </>
   );

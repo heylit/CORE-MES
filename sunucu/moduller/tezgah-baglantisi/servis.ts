@@ -404,5 +404,6 @@ export async function takimTablosu(db: Db, cihazAdi: string): Promise<TezgahTaki
   return {
     cihazAdi, seyrekAcik: (await sistemAyariOku(db, LSV2_SEYREK_OKUMA_AYARI)) === true, okundu: seyrek?.okundu ?? null, tani: seyrek?.takimTani ?? null,
     gecmisSayisi: await s.lsv2TakimGecmisiSay(db, cihazAdi), takimlar: await s.lsv2TakimlariGetir(db, cihazAdi),
+    programTani: seyrek?.programTani ?? null, programlar: await s.lsv2ProgramlariGetir(db, cihazAdi),
   };
 }

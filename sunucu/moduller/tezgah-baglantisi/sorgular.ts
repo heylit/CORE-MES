@@ -1,7 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { TezgahDurumu } from '#paylasilan/sozlesme/tezgah-baglantisi.ts';
-import type { AlanTanimi, GecmisKaydi, GecmisKategorisi, Lsv2TakimSatiri, OmurDegeri, TezgahOgesi, TezgahOzeti, TezgahTanimi, TezgahVarligi } from './kurallar.ts';
+import type { AlanTanimi, GecmisKaydi, GecmisKategorisi, Lsv2ProgramDosyasi, Lsv2TakimSatiri, OmurDegeri, TezgahOgesi, TezgahOzeti, TezgahTanimi, TezgahVarligi } from './kurallar.ts';
 
 export interface OkumaSatiri extends TezgahOzeti {
   cihazAdi: string;
@@ -247,14 +247,36 @@ export async function lsv2TakimGecmisiSay(db: Db, cihazAdi: string): Promise<num
   return (await db.tek<{ n: number }>('SELECT count(*)::int AS n FROM tezgah_lsv2_takim_gecmisi WHERE cihaz_adi = $1', [cihazAdi]))?.n ?? 0;
 }
 
-export async function lsv2SeyrekYaz(db: Db, cihazAdi: string, zaman: Date, takimTani: string | null): Promise<void> {
+export async function lsv2SeyrekYaz(db: Db, cihazAdi: string, zaman: Date, takimTani: string | null, programTani: string | null): Promise<void> {
   await db.sorgu(
-    `INSERT INTO tezgah_lsv2_seyrek (cihaz_adi, okundu, takim_tani) VALUES ($1, $2, $3)
-     ON CONFLICT (cihaz_adi) DO UPDATE SET okundu = EXCLUDED.okundu, takim_tani = EXCLUDED.takim_tani`,
-    [cihazAdi, zaman, takimTani?.slice(0, 200) ?? null],
+    `INSERT INTO tezgah_lsv2_seyrek (cihaz_adi, okundu, takim_tani, program_tani) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (cihaz_adi) DO UPDATE SET okundu = EXCLUDED.okundu, takim_tani = EXCLUDED.takim_tani, program_tani = EXCLUDED.program_tani`,
+    [cihazAdi, zaman, takimTani?.slice(0, 200) ?? null, programTani?.slice(0, 200) ?? null],
   );
 }
 
-export function lsv2SeyrekGetir(db: Db, cihazAdi: string): Promise<{ okundu: string; takimTani: string | null } | null> {
-  return db.tek(`SELECT ${zamanMetni('okundu')} AS okundu, takim_tani AS "takimTani" FROM tezgah_lsv2_seyrek WHERE cihaz_adi = $1`, [cihazAdi]);
+export function lsv2SeyrekGetir(db: Db, cihazAdi: string): Promise<{ okundu: string; takimTani: string | null; programTani: string | null } | null> {
+  return db.tek(
+    `SELECT ${zamanMetni('okundu')} AS okundu, takim_tani AS "takimTani", program_tani AS "programTani" FROM tezgah_lsv2_seyrek WHERE cihaz_adi = $1`,
+    [cihazAdi],
+  );
+}
+
+// Program listesi son durumu makine başına bütünüyle yenilenir (geçmiş tutulmaz).
+export async function lsv2ProgramlariYaz(db: Db, cihazAdi: string, dosyalar: readonly Lsv2ProgramDosyasi[], zaman: Date): Promise<void> {
+  await db.sorgu('DELETE FROM tezgah_lsv2_program WHERE cihaz_adi = $1', [cihazAdi]);
+  if (dosyalar.length === 0) return;
+  await db.sorgu(
+    `INSERT INTO tezgah_lsv2_program (cihaz_adi, ad, boyut, tarih, okundu)
+     SELECT $1, * , $5 FROM unnest($2::text[], $3::bigint[], $4::timestamptz[])
+     ON CONFLICT DO NOTHING`,
+    [cihazAdi, dosyalar.map((d) => d.ad), dosyalar.map((d) => d.boyut), dosyalar.map((d) => d.tarih), zaman],
+  );
+}
+
+export function lsv2ProgramlariGetir(db: Db, cihazAdi: string): Promise<Lsv2ProgramDosyasi[]> {
+  return db.sorgu<Lsv2ProgramDosyasi>(
+    `SELECT ad, boyut::float8 AS boyut, ${zamanMetni('tarih')} AS tarih FROM tezgah_lsv2_program WHERE cihaz_adi = $1 ORDER BY ad`,
+    [cihazAdi],
+  );
 }

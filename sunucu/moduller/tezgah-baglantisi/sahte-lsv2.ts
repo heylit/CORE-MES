@@ -31,10 +31,16 @@ export interface SahteMakine {
   takimTablosu?: string;
   blokBoyu?: number;
   fileYetkiYok?: boolean;
+  // Açılış klasörünün kayıtları (R_DR): ad, boyut, Unix saniyesi. Verilmezse R_DR 32 döner. Ham kayıt bloğu da verilebilir.
+  programlar?: { ad: string; boyut: number; zaman: number }[];
+  programBloklari?: Buffer[];
+  // Kumanda saati (R_DT, Unix saniyesi); verilmezse sunucu saati. DIAGNOSTICS girişi reddedilebilir.
+  saat?: number;
+  diagYetkiYok?: boolean;
   // Aktarımın ortasında (ikinci blokta) verilecek cevap: T_ER ya da hiç cevap.
   aktarimHatasi?: 'hata' | 'cevapsiz' | 'beklenmeyen';
   // Bu düzeyden çıkış reddedilir (T_ER).
-  cikisReddi?: 'PLCDEBUG' | 'FILE';
+  cikisReddi?: 'PLCDEBUG' | 'FILE' | 'DIAGNOSTICS';
   // R_VR alt kodlarını tanımayan eski kumanda.
   eskiSurum?: boolean;
   // PLC çift kelime değerleri, kelime alanına göre bayt numarasıyla (D10000 -> 10000).
@@ -48,6 +54,8 @@ export interface SahteMakine {
   // R_RI cevabında: yarım çerçeve gönderip bağlantıyı kapatır ya da hiç cevap vermez.
   bozuk?: 'yarim' | 'cevapsiz';
 }
+
+interface Aktarim { kalan: Buffer | null; blok: number; kayitlar: Buffer[] | null }
 
 export interface SahteLsv2 {
   kapi: number;
@@ -75,9 +83,18 @@ export async function sahteLsv2Ac(makine: SahteMakine = {}): Promise<SahteLsv2> 
   const soketler = new Set<Socket>();
   let kabul = 0;
 
-  const cevap = (girisler: Set<string>, hataSirasi: { n: number }, aktarim: { kalan: Buffer | null; blok: number }, komut: string, yuk: Buffer): Buffer | null => {
+  const cevap = (girisler: Set<string>, hataSirasi: { n: number }, aktarim: Aktarim, komut: string, yuk: Buffer): Buffer | null => {
     const m = makine;
     const sonrakiBlok = (): Buffer => {
+      if (aktarim.kayitlar !== null) {
+        const k = aktarim.kayitlar.shift();
+        if (k === undefined) {
+          aktarim.kayitlar = null;
+          aktarim.kalan = null;
+          return cerceve('T_FD');
+        }
+        return cerceve('S_DR', k);
+      }
       const k = aktarim.kalan ?? Buffer.alloc(0);
       if (k.length === 0) {
         aktarim.kalan = null;
@@ -93,6 +110,7 @@ export async function sahteLsv2Ac(makine: SahteMakine = {}): Promise<SahteLsv2> 
         if (g === 'DNC' && m.dncYok) return hata(23);
         if (g === 'PLCDEBUG' && m.plcYetkiYok) return hata(23);
         if (g === 'FILE' && m.fileYetkiYok) return hata(23);
+        if (g === 'DIAGNOSTICS' && m.diagYetkiYok) return hata(23);
         girisler.add(g);
         return cerceve('T_OK');
       }
@@ -168,6 +186,26 @@ export async function sahteLsv2Ac(makine: SahteMakine = {}): Promise<SahteLsv2> 
         aktarim.blok = 0;
         return sonrakiBlok();
       }
+      case 'R_DT': {
+        if (!girisler.has('DIAGNOSTICS')) return hata(23);
+        const b = Buffer.alloc(4);
+        b.writeUInt32BE(m.saat ?? Math.floor(Date.now() / 1000), 0);
+        return cerceve('S_DT', b);
+      }
+      case 'R_DR': {
+        if (!girisler.has('FILE')) return hata(23);
+        const kayitlar = m.programBloklari ?? m.programlar?.map((p) => {
+          const b = Buffer.alloc(12);
+          b.writeUInt32BE(p.boyut, 0);
+          b.writeUInt32BE(p.zaman, 4);
+          return Buffer.concat([b, Buffer.from(`${p.ad}\0`, 'latin1')]);
+        });
+        if (kayitlar === undefined) return hata(32);
+        aktarim.kayitlar = [...kayitlar];
+        aktarim.kalan = Buffer.alloc(0);
+        aktarim.blok = 0;
+        return sonrakiBlok();
+      }
       case 'T_OK':
         if (aktarim.kalan === null) return hata(21);
         aktarim.blok += 1;
@@ -197,7 +235,7 @@ export async function sahteLsv2Ac(makine: SahteMakine = {}): Promise<SahteLsv2> 
     s.on('error', () => undefined);
     const girisler = new Set<string>();
     const hataSirasi = { n: 0 };
-    const aktarim: { kalan: Buffer | null; blok: number } = { kalan: null, blok: 0 };
+    const aktarim: Aktarim = { kalan: null, blok: 0, kayitlar: null };
     let tampon = Buffer.alloc(0);
     s.on('data', (parca: Buffer) => {
       tampon = Buffer.concat([tampon, parca]);

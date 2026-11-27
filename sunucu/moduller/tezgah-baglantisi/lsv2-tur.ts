@@ -166,7 +166,7 @@ async function isle(db: Db, cihazAdi: string, mb: Lsv2MakineBellegi, r: Lsv2Sonu
   const okundu = r.tur === 'basarili';
   if (okundu && mb.tanimImzasi !== lsv2TanimImzasi(r.okuma)) await s.tanimlariYaz(db, [{ cihazAdi, alanlar: lsv2AlanTanimlari(r.okuma) }]);
   if (okundu && r.okuma.takimTablosu !== undefined) await takimTablosunuIsle(db, cihazAdi, r.okuma, zaman);
-  if (!okundu && seyrekIstendi) await s.lsv2SeyrekYaz(db, cihazAdi, zaman, `Takım tablosu okunamadı: ${r.ileti}`);
+  if (!okundu && seyrekIstendi) await s.lsv2SeyrekYaz(db, cihazAdi, zaman, `Takım tablosu okunamadı: ${r.ileti}`, `Program listesi okunamadı: ${r.ileti}`);
   const kayitli = await s.ogeleriGetir(db, cihazAdi);
   const onceki = mb.durum ?? diziyiDurumaCevir(kayitli ?? []);
   const yeni = lsv2Ogeleri(okundu ? r.okuma : null, zaman);
@@ -201,12 +201,18 @@ function gecmisKaydi(cihazAdi: string, o: TezgahOgesi) {
   return { cihazAdi, kimlik: o.kimlik, sira: o.sira, zaman: new Date(o.zaman), deger: o.deger, kosul: o.kosul };
 }
 
-// Seyrek okuma: takım tablosunun son durumu bütünüyle yenilenir; geçmişe yalnız ömür ya da kilidi değişen takım yazılır.
-// Okunamadıysa son durum korunur, nedeni seyrek kaydına yazılır.
+// Seyrek okuma: takım tablosunun ve program listesinin son durumu bütünüyle yenilenir; geçmişe yalnız ömür ya da kilidi değişen takım
+// yazılır. Okunamayanın son durumu korunur, nedeni seyrek kaydına yazılır.
 async function takimTablosunuIsle(db: Db, cihazAdi: string, o: Lsv2Okumasi, zaman: Date): Promise<void> {
-  const tani = o.tani.find((t) => t.alan === 'takim-tablosu');
+  const neden = (alan: 'takim-tablosu' | 'program-listesi', cozulemedi: string): string => {
+    const t = o.tani.find((x) => x.alan === alan);
+    return t === undefined ? cozulemedi : lsv2TaniMetni(t);
+  };
   const satirlar = o.takimTablosu ?? null;
-  await s.lsv2SeyrekYaz(db, cihazAdi, zaman, satirlar !== null ? null : tani === undefined ? 'Takım tablosu çözülemedi (biçim tanınmadı)' : lsv2TaniMetni(tani));
+  const programlar = o.programListesi ?? null;
+  await s.lsv2SeyrekYaz(db, cihazAdi, zaman, satirlar !== null ? null : neden('takim-tablosu', 'Takım tablosu çözülemedi (biçim tanınmadı)'),
+    programlar !== null ? null : neden('program-listesi', 'Program listesi okunamadı'));
+  if (programlar !== null) await s.lsv2ProgramlariYaz(db, cihazAdi, programlar, zaman);
   if (satirlar === null) return;
   const onceki = new Map((await s.lsv2TakimlariGetir(db, cihazAdi)).map((t) => [t.no, t]));
   await s.lsv2TakimGecmisiYaz(db, cihazAdi, takimDegisenleri(onceki, satirlar), zaman);

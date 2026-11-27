@@ -125,6 +125,8 @@ export const ORNEK_LSV2_AYRINTI = (): TezgahAyrintisiCevabi => {
       l('lsv2-is-mili-orani', 'RotaryVelocityOverride', 'Rotary', '95', 'PERCENT'),
       l('lsv2-protokol-surumu', 'Lsv2Version', 'Control', '4'),
       l('lsv2-en-buyuk-blok', 'MaxBlockLength', 'Control', '4096', 'BYTE'),
+      l('lsv2-kumanda-saati', 'ControlClock', 'Control', once(1)),
+      l('lsv2-saat-farki', 'ClockOffset', 'Control', '2', 'SECOND'),
       l('lsv2-tani', 'Diagnosis', 'Control', 'Alarm: yetki yok (kod 23)'),
     ],
   };
@@ -136,5 +138,10 @@ export const ORNEK_TAKIM_TABLOSU = (seyrekAcik = true): TezgahTakimTablosuCevabi
     { no: 1, ad: 'ORN-FREZE-10', boy: 75.5, yaricap: 5, omur: 60, kullanilan: 12.5, kilitli: false },
     { no: 2, ad: 'ORN-MATKAP-8', boy: 90, yaricap: 4, omur: 30, kullanilan: 30, kilitli: true },
     { no: 12, ad: 'ORN-KILAVUZ-M6', boy: 60.25, yaricap: 3, omur: null, kullanilan: null, kilitli: false },
+  ] : [],
+  programTani: null,
+  programlar: seyrekAcik ? [
+    { ad: 'ORN-P100.H', boyut: 12_480, tarih: once(3 * 24 * 3600) },
+    { ad: 'ORN-P200.H', boyut: 3_400, tarih: once(26 * 3600) },
   ] : [],
 });

@@ -149,6 +149,9 @@ export const tezgahTakimTablosuCevabi = z.object({
     no: z.number().int(), ad: z.string().nullable(), boy: z.number().nullable(), yaricap: z.number().nullable(),
     omur: z.number().nullable(), kullanilan: z.number().nullable(), kilitli: z.boolean().nullable(),
   })),
+  // Oturumun açılış klasöründeki dosyalar: yalnız ad, boyut (bayt) ve tarih; içerik okunmaz. Okunamadıysa nedeni programTani'de.
+  programTani: z.string().nullable(),
+  programlar: z.array(z.object({ ad: z.string(), boyut: z.number(), tarih: zamanSemasi.nullable() })),
 });
 export type TezgahTakimTablosuCevabi = z.output<typeof tezgahTakimTablosuCevabi>;
 

@@ -262,6 +262,8 @@ describe('Geçmiş doluluğu göstergesi (kart 3680)', () => {
     expect(within(screen.getByRole('group', { name: 'Yol' })).getByText('Tümce no')).toBeTruthy();
     expect(screen.queryByText(/eksen konumu göndermiyor/)).toBeNull();
     expect(within(kumanda).getAllByText(/Değişti/)).toHaveLength(1);
+    expect(within(kumanda).getByText('Kumanda saati')).toBeTruthy();
+    expect(within(kumanda).getByText('Saat farkı')).toBeTruthy();
     expect(screen.getByText(/Heidenhain takımları takım tablosundadır/)).toBeTruthy();
     expect(screen.queryByText(/\/assets/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Takım tablosunu aç/ }));
@@ -270,7 +272,10 @@ describe('Geçmiş doluluğu göstergesi (kart 3680)', () => {
     expect(within(tablo).getByText('Kilitli')).toBeTruthy();
     expect(within(tablo).getAllByRole('row')[1]?.textContent).toContain('ORN-MATKAP-8');
     expect(screen.getByText(/ömür ya da kilit değişikliği geçmişi: 6 kayıt/)).toBeTruthy();
-    expect(screen.getByText(/Program dosya listesi okunmuyor/)).toBeTruthy();
+    const programlar = screen.getByRole('table', { name: 'Program dosyaları' });
+    expect(within(programlar).getByText('ORN-P100.H')).toBeTruthy();
+    expect(within(programlar).getByText('12.480 bayt')).toBeTruthy();
+    expect(screen.getByText(/açılış klasörü listelenir/)).toBeTruthy();
     cleanup();
     seyrek = false;
     ac(<TezgahAyrintisi />);

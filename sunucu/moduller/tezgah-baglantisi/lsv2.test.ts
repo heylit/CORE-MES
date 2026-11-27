@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, test } from 'node:test';
-import { lsv2Ogeleri, lsv2TaniMetni, ozetle } from './kurallar.ts';
+import { lsv2GecmisteYok, lsv2Ogeleri, lsv2TaniMetni, ozetle } from './kurallar.ts';
 import { dosyaYuku, IZINLI_KOMUTLAR, lsv2IstemcisiKur, Lsv2Hatti, Lsv2YasakHatasi, TAKIM_TABLOSU, telgrafKur } from './lsv2.ts';
 import type { Lsv2Komutu } from './lsv2.ts';
 import { sahteLsv2Ac } from './sahte-lsv2.ts';
@@ -36,9 +36,9 @@ describe('LSV2 beyaz liste (kabul 1)', () => {
     }
   });
 
-  test('giriş yalnız INSPECT, DNC, PLCDEBUG ve FILE; parola eklenemez', () => {
-    for (const g of ['INSPECT', 'DNC', 'PLCDEBUG', 'FILE']) assert.doesNotThrow(() => telgrafKur('A_LG', Buffer.from(`${g}\0`, 'latin1'), null));
-    for (const g of ['FILE\0ORN-PAROLA\0', 'FILESYS\0', 'FILEPLC\0', 'MONITOR\0', 'DIAGNOSTICS\0', 'DATA\0', 'OSZI\0', 'PLCDEBUG\0ORN-PAROLA\0', 'INSPECT']) {
+  test('giriş yalnız INSPECT, DNC, PLCDEBUG, FILE ve DIAGNOSTICS; parola eklenemez', () => {
+    for (const g of ['INSPECT', 'DNC', 'PLCDEBUG', 'FILE', 'DIAGNOSTICS']) assert.doesNotThrow(() => telgrafKur('A_LG', Buffer.from(`${g}\0`, 'latin1'), null));
+    for (const g of ['FILE\0ORN-PAROLA\0', 'DIAGNOSTICS\0ORN-PAROLA\0', 'FILESYS\0', 'FILEPLC\0', 'MONITOR\0', 'DSP\0', 'DATA\0', 'OSZI\0', 'PLCDEBUG\0ORN-PAROLA\0', 'INSPECT']) {
       assert.throws(() => telgrafKur('A_LG', Buffer.from(g, 'latin1'), null), Lsv2YasakHatasi, g);
     }
   });
@@ -99,7 +99,7 @@ describe('LSV2 beyaz liste (kabul 1)', () => {
       assert.equal(r.tur === 'basarili' ? r.okuma.sayac : 'hata', 148);
     }
     const plc = s.gelenler
-      .filter((g) => g.komut === 'R_MB' || ((g.komut === 'A_LG' || g.komut === 'A_LO') && g.yuk.length > 0 && g.yuk.toString('latin1') !== 'INSPECT\0' && g.yuk.toString('latin1') !== 'DNC\0'))
+      .filter((g) => g.komut === 'R_MB' || ((g.komut === 'A_LG' || g.komut === 'A_LO') && g.yuk.toString('latin1') === 'PLCDEBUG\0'))
       .map((g) => `${g.komut} ${g.yuk.toString('latin1').replace(/\0/g, '')}`.trim());
     assert.equal(plc.length, 6);
     assert.deepEqual(plc.filter((x) => !x.startsWith('R_MB')), ['A_LG PLCDEBUG', 'A_LO PLCDEBUG', 'A_LG PLCDEBUG', 'A_LO PLCDEBUG']);
@@ -125,7 +125,9 @@ describe('LSV2 beyaz liste (kabul 1)', () => {
       assert.ok(!g.komut.startsWith('C_'));
     }
     const girisler = s.gelenler.filter((g) => g.komut === 'A_LG').map((g) => g.yuk.toString('latin1'));
-    assert.deepEqual(girisler, ['INSPECT\0', 'DNC\0', 'PLCDEBUG\0']);
+    assert.deepEqual(girisler, ['INSPECT\0', 'DNC\0', 'DIAGNOSTICS\0', 'PLCDEBUG\0']);
+    const m = metinler(s);
+    assert.deepEqual(m.slice(m.indexOf('A_LG DIAGNOSTICS|'), m.indexOf('A_LG DIAGNOSTICS|') + 3), ['A_LG DIAGNOSTICS|', 'R_DT', 'A_LO DIAGNOSTICS|']);
   });
 });
 
@@ -280,6 +282,7 @@ const TABLO = [
 const tamOkuma = (): SahteMakine => ({
   ...calisan(), tumce: 345, eksenler: [{ ad: 'X', deger: '+12.500' }, { ad: 'Y', deger: '-3.25' }, { ad: 'Z', deger: '+100' }],
   takimAyrintisi: { indeks: 1, eksen: 2, boy: 75.5, yaricap: 5 }, takimTablosu: TABLO, blokBoyu: 64,
+  programlar: [{ ad: 'ORN-P100.H', boyut: 1200, zaman: Date.parse('2026-11-20T08:00:00Z') / 1000 }, { ad: 'ORN-P200.H', boyut: 3400, zaman: Date.parse('2026-11-21T09:30:00Z') / 1000 }],
 });
 const metinler = (s: SahteLsv2) => s.gelenler.map((g) => `${g.komut} ${g.yuk.toString('latin1').replace(/\0/g, '|')}`.trim());
 
@@ -343,7 +346,7 @@ describe('Kart 3790 beyaz liste: yalnız A_LG, A_LO, R_ okumaları ve aktarım o
 });
 
 describe('Kart 3790 giriş düzeyleri: FILE ve PLCDEBUG her yolda kapanır', () => {
-  test('başarı: FILE girişi, R_FL, bloklar arası T_OK, T_FD, hemen FILE çıkışı', async () => {
+  test('başarı: FILE girişi, R_DR ve R_FL, bloklar arası T_OK, T_FD, hemen FILE çıkışı', async () => {
     const s = await ac(tamOkuma());
     const i = istemci(s);
     const r = await i.oku({ takimTablosu: true });
@@ -352,16 +355,22 @@ describe('Kart 3790 giriş düzeyleri: FILE ve PLCDEBUG her yolda kapanır', () 
     const bas = m.indexOf('A_LG FILE|');
     assert.ok(bas >= 0);
     const dilim = m.slice(bas);
-    assert.equal(dilim[1], `R_FL ${TAKIM_TABLOSU}||`);
+    assert.equal(dilim[1], 'R_DR |');
+    const rfl = dilim.indexOf(`R_FL ${TAKIM_TABLOSU}||`);
+    assert.deepEqual(dilim.slice(2, rfl), ['T_OK', 'T_OK'], 'iki klasör kaydı: her kayıttan sonra T_OK');
     const cikis = dilim.indexOf('A_LO FILE|');
-    assert.ok(cikis > 1);
-    assert.ok(dilim.slice(2, cikis).every((x) => x === 'T_OK'));
-    assert.ok(cikis - 2 >= 2, 'tablo birden çok blokta gelir');
+    assert.ok(dilim.slice(rfl + 1, cikis).every((x) => x === 'T_OK'));
+    assert.ok(cikis - rfl - 1 >= 2, 'tablo birden çok blokta gelir');
+    assert.equal(cikis, dilim.length - 1, 'FILE çıkışından sonra telgraf yok');
     assert.equal(r.tur === 'basarili' ? r.okuma.takimTablosu?.length : -1, 3);
+    assert.deepEqual(r.tur === 'basarili' ? r.okuma.programListesi : null, [
+      { ad: 'ORN-P100.H', boyut: 1200, tarih: '2026-11-20T08:00:00.000Z' },
+      { ad: 'ORN-P200.H', boyut: 3400, tarih: '2026-11-21T09:30:00.000Z' },
+    ]);
   });
 
   test('T_ER (dosya yok ya da aktarım ortasında hata): tanı yazılır, FILE çıkışı yine yapılır', async () => {
-    for (const m of [{ ...tamOkuma(), takimTablosu: undefined }, { ...tamOkuma(), aktarimHatasi: 'hata' as const }]) {
+    for (const m of [{ ...tamOkuma(), takimTablosu: undefined, programlar: undefined }, { ...tamOkuma(), aktarimHatasi: 'hata' as const, programlar: undefined }]) {
       const s = await ac(m);
       const i = istemci(s);
       const r = await i.oku({ takimTablosu: true });
@@ -370,6 +379,8 @@ describe('Kart 3790 giriş düzeyleri: FILE ve PLCDEBUG her yolda kapanır', () 
       if (r.tur !== 'basarili') return;
       assert.equal(r.okuma.takimTablosu, null);
       assert.equal(r.okuma.tani.find((t) => t.alan === 'takim-tablosu')?.kod, m.takimTablosu === undefined ? 32 : 33);
+      assert.equal(r.okuma.programListesi, null);
+      assert.equal(r.okuma.tani.find((t) => t.alan === 'program-listesi')?.kod, 32);
       assert.equal(metinler(s).at(-1), 'A_LO FILE|');
     }
   });
@@ -382,6 +393,55 @@ describe('Kart 3790 giriş düzeyleri: FILE ve PLCDEBUG her yolda kapanır', () 
     assert.equal(r.tur, 'bozuk');
     const m = metinler(s);
     assert.ok(m.indexOf('A_LO FILE|') > m.findIndex((x) => x.startsWith('R_FL')), m.join(' / '));
+  });
+
+  test('kumanda saati: DIAGNOSTICS girişi, R_DT, hemen çıkış; 60 sn üstü farkta uyarı; giriş reddinde tanı, çıkış reddinde bağlantı kapanır', async () => {
+    const ileri = Math.floor(Date.now() / 1000) + 120;
+    const s = await ac({ ...tamOkuma(), saat: ileri });
+    const i = istemci(s);
+    const r = await i.oku();
+    i.kapat();
+    assert.equal(r.tur, 'basarili');
+    if (r.tur !== 'basarili') return;
+    assert.equal(r.okuma.kumandaSaati, new Date(ileri * 1000).toISOString());
+    assert.ok(r.okuma.saatFarki !== null && r.okuma.saatFarki >= 118 && r.okuma.saatFarki <= 121, String(r.okuma.saatFarki));
+    assert.ok(r.okuma.uyarilar.includes('saat-farki'));
+    const og = lsv2Ogeleri(r.okuma, ZAMAN);
+    assert.equal(og.find((x) => x.kimlik === 'lsv2-kumanda-saati')?.deger, r.okuma.kumandaSaati);
+    assert.ok(lsv2GecmisteYok('lsv2-kumanda-saati') && lsv2GecmisteYok('lsv2-saat-farki'));
+
+    const s2 = await ac({ ...tamOkuma(), diagYetkiYok: true });
+    const i2 = istemci(s2);
+    const r2 = await i2.oku();
+    i2.kapat();
+    assert.equal(r2.tur, 'basarili');
+    if (r2.tur !== 'basarili') return;
+    assert.deepEqual([r2.okuma.kumandaSaati, r2.okuma.saatFarki, r2.okuma.uyarilar.includes('saat-farki')], [null, null, false]);
+    assert.deepEqual(r2.okuma.tani.find((t) => t.alan === 'saat'), { alan: 'saat', kod: 23 });
+    assert.ok(!s2.gelenler.some((g) => g.komut === 'R_DT'));
+
+    const s3 = await ac({ ...tamOkuma(), cikisReddi: 'DIAGNOSTICS' });
+    const i3 = istemci(s3);
+    const r3 = await i3.oku();
+    assert.equal(r3.tur, 'bozuk');
+    await new Promise((coz) => setTimeout(coz, 50));
+    assert.equal(s3.baglantiSayisi(), 0);
+    i3.kapat();
+  });
+
+  test('R_DR yalnız tek kayıt kipinde; T_OK süren R_DR aktarımında da gider; program içeriği hiç istenmez', async () => {
+    assert.doesNotThrow(() => telgrafKur('R_DR', Uint8Array.of(0), null));
+    for (const y of [Uint8Array.of(1), Uint8Array.of(2), new Uint8Array(), Uint8Array.of(0, 0)]) assert.throws(() => telgrafKur('R_DR', y, null), Lsv2YasakHatasi);
+    assert.throws(() => telgrafKur('R_DT', Uint8Array.of(0), null), Lsv2YasakHatasi);
+    assert.throws(() => telgrafKur('R_FL', dosyaYuku('TNC:\\nc_prog\\ORN-P100.H'), null), Lsv2YasakHatasi);
+    const s = await ac({ ...tamOkuma(), programBloklari: [Buffer.alloc(13), Buffer.concat([Buffer.alloc(12), Buffer.from('..\0', 'latin1')]), Buffer.concat([Buffer.from([0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0]), Buffer.from([0x4f, 0x52, 0x4e, 0xfd, 0])])] });
+    const i = istemci(s);
+    const r = await i.oku({ takimTablosu: true });
+    i.kapat();
+    assert.equal(r.tur, 'basarili');
+    if (r.tur !== 'basarili') return;
+    assert.deepEqual(r.okuma.programListesi, [{ ad: 'ORNı', boyut: 7, tarih: null }], 'boş ad ve .. atlanır, ad 1254 ile çözülür, sıfır zaman null');
+    assert.deepEqual(s.gelenler.filter((g) => g.komut === 'R_FL').map((g) => g.yuk.toString('latin1').split('\0')[0]), [TAKIM_TABLOSU]);
   });
 
   test('PLCDEBUG girişinden sonra R_MB T_ER verirse sayaç null, tanı yazılır, PLCDEBUG çıkışı yapılır', async () => {
