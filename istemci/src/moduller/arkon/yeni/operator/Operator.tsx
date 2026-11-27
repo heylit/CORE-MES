@@ -1446,7 +1446,7 @@ function OperatorEkrani({ onizleme, onizlemeIstasyonu, yenidenKur }: { onizleme:
   const takimKarti = kaliteIstasyonu ? null : <TakimKarti takimlar={RL.prod.tools} is={o} degisti={changeTool} kilitli={!uretir} />;
   const analiz = <Analiz c={SC} simdi={simdi} duruslar={durusPencereleri(MACHINE, SC.sh.s, SC.sh.e, ayarlar.planliDuruslar, tesis)} nedenAdiOku={nedenAdiOku} planliMi={planliMi} />;
   const resim = !telefon
-    ? <div className="tc-ay1-resim"><Suspense fallback={null}><TeknikResim kontrol={onizResimKontrolu ?? resimKontrolu} /></Suspense></div>
+    ? <div className="tc-ay1-resim"><Suspense fallback={null}><TeknikResim kontrol={onizResimKontrolu ?? resimKontrolu} besliCubuk /></Suspense></div>
     : b
       ? <OlcuListesi plan={b.pkg ? b.pkg.plan : []} operatorOlcer={b.pkg ? b.pkg.plan.map((x) => x.id) : []} siradaki={[]} olcumler={{}} aletler={aletler} odak={null} saltOkunur yaz={() => undefined} bildir={olcumBildir} />
       : <OlcuListesi plan={o.pkg ? o.pkg.plan : []} operatorOlcer={opIds} siradaki={D.due.map((x) => x.id)} olcumler={o.meas || {}} aletler={aletler} odak={odak}

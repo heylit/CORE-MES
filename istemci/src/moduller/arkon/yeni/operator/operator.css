@@ -538,9 +538,19 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
 /* Sekme şeridi yatay kaydığı için (overflow-x) esnek sütunda en küçük yüksekliği sıfırdır; uzun bölme (Hazırlık listesi) onu
    çizgi kalınlığına ezer, öteki sekmeler görünmez olur. Şerit büzülmez; uzun içerik sütunun kendi kaydırmasıyla okunur. */
 .tc-ay1-genis .tc-ay1-sag > .tc-sekmeler { flex: none; }
-/* Beş sekme (Hazırlık dahil) 1280'de sığsın: simgeler gizlenir, yazı kalır; hiçbir sekme kaydırmayla saklanmaz. */
-.tc-ay1-genis .tc-ay1-sag > .tc-sekmeler:has(> .tc-sekme:nth-of-type(5)) .tc-sekme { padding-inline: var(--b-3); }
-.tc-ay1-genis .tc-ay1-sag > .tc-sekmeler:has(> .tc-sekme:nth-of-type(5)) .tc-sekme > .tc-simge { display: none; }
+/* 3759 a: sekmeler sütunu eşit paylaşır, simge üstte yazı altta; beş-altı sekme 1280'de kaydırmasız sığar. Soluk gri pasif sekme
+   operatöre okunmuyordu: pasif sekme de koyu yazılır, seçili olan kalın ve sarı çizgili. */
+.tc-ay1-genis .tc-ay1-sag > .tc-sekmeler > .tc-sekme {
+  flex: 1 1 0; min-inline-size: 0; flex-direction: column; justify-content: flex-start; gap: var(--b-1);
+  min-block-size: calc(var(--dokunma-ana) + var(--b-2)); padding: var(--b-2) var(--b-1) var(--b-1); color: var(--ink); font-weight: 600; line-height: 1.15; white-space: normal; text-align: center;
+}
+.tc-ay1-genis .tc-ay1-sag > .tc-sekmeler > .tc-sekme[aria-selected="true"] { font-weight: 800; }
+.tc-ay1-genis .tc-ay1-sag > .tc-sekmeler > .tc-sekme > .tc-simge { inline-size: var(--b-5); block-size: var(--b-5); }
+/* Dar sağ sütunda (1024'te menü açıkken) en uzun sekme adı ("Talimatlar") sekme genişliğine sığsın diye yazı küçülür. */
+.tc-ay1-genis .tc-ay1-sag > .tc-sekmeler { container: tc-sekmeler / inline-size; }
+@container tc-sekmeler (max-width: 520px) {
+  .tc-ay1-genis .tc-ay1-sag > .tc-sekmeler > .tc-sekme { font-size: var(--yazi-xs); }
+}
 .tc-ay1-genis .tc-ay1-resim { min-block-size: 0; }
 .tc-ay1-genis .tc-ay1-aktif { flex-wrap: nowrap; }
 .tc-ay1-genis .tc-ay1-aktif > div:first-child { flex: 1 1 0; }
@@ -1711,3 +1721,9 @@ button.tc-ay1-yer { font: inherit; color: inherit; text-align: start; cursor: po
 .tc-ay1-sk-resim { grid-column: 1; }
 .tc-ay1-sk-ic { grid-column: 2; }
 .tc-ay1-dar .tc-ay1-sk-ic { grid-column: 1; }
+/* 3759 a: beşli araç çubuğu tek sütun; araç 48 px, beşi 1366x768'deki en kısa resim bölmesine kaydırmasız sığar. Rota boy alınca
+   öteki araçları alçaltan kural (44'ün altı) bu çubuğa uygulanmaz. */
+.tc-ay1-genis .tc-ay1-resim .tc-ay5-araclar.tc-ay5-besli {
+  --tc-arac-boy: calc(var(--dokunma) + var(--b-1)); gap: 0; grid-auto-columns: var(--dokunma-x18); margin-block: var(--b-2);
+}
+.tc-ay1-genis .tc-ay1-resim .tc-ay5-araclar.tc-ay5-besli > :is(.tc-ay5-arac, .tc-dugme) { block-size: var(--tc-arac-boy); min-block-size: 0; }

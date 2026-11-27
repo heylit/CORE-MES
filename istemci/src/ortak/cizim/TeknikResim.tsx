@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as TepkiTusu, type PointerEvent as TepkiIsaretci, type ReactNode } from 'react';
 import { ESKI_CIZIM, type EskiCizim } from './cekirdek/cizim-merkezi.ts';
 import { ALET_ZORUNLU_ILETISI, aletSecimAnahtari, olcumAletDamgasi, seciliAlet } from './cekirdek/olcum-aleti.ts';
-import { DurumKutusu, Dugme, Girdi, Menu, Secim, Simge, useBildirim, type BildirimTonu } from '../arayuz/index.ts';
+import { DurumKutusu, Dugme, Girdi, Menu, Secim, Simge, useBildirim, type BildirimTonu, type MenuOgesi } from '../arayuz/index.ts';
 import { useTelefon } from '../arayuz/telefon.ts';
 import type { SimgeAdi } from '../tasarim/simgeler.ts';
 import { useTema } from '../veri/tema.ts';
@@ -132,7 +132,9 @@ function indir(ad: string, veri: string, tur: string): void {
   setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 500);
 }
 
-function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
+// besliCubuk (3759 a): dokunmatik terminalde araç çubuğu sık dört araçtır (Balon ekle, Ölçümler, Yakınlaştır, Sığdır), her biri yazılı;
+// gerisi "Diğer" menüsündedir. Dar resim bölmesinde dokuz simgeli çubuk ve yazılı menü düğmeleri sığmıyordu.
+function TeknikResimGovdesi({ kontrol, besliCubuk = false }: { kontrol: TeknikResimKontrolu; besliCubuk?: boolean }) {
   const { onbellek, aletler, ayarlar: cihaz, ses: bip } = useCizimOrtami();
   const depo = useMemo(() => ({ Cache: onbellek }), [onbellek]);
   const { bildir: bildirim } = useBildirim();
@@ -728,6 +730,11 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
   const arac = (simge: SimgeAdi, acik: boolean, f: () => void, etiket: string) => (
     <button type="button" className={`tc-ay5-arac${acik ? ' tc-ay5-acik' : ''}`} onClick={f} aria-label={etiket} aria-pressed={acik} title={etiket}><Simge ad={simge} /></button>
   );
+  const yaziliArac = (simge: SimgeAdi, acik: boolean, f: () => void, etiket: string, yazi: string, pasif = false) => (
+    <button type="button" className={`tc-ay5-arac tc-ay5-yazili${acik ? ' tc-ay5-acik' : ''}`} onClick={f} aria-label={etiket} aria-pressed={acik} title={etiket} disabled={pasif}>
+      <Simge ad={simge} /><span>{yazi}</span>
+    </button>
+  );
   const balonSinifi = (x: Balon) => {
     const mm = meas[x.id];
     return ['tc-ay5-balon', yontem(x) === 'cmm' && 'tc-ay5-cmm', msel.includes(x.id) && 'tc-ay5-cokluda', sel === x.id && 'tc-ay5-secili',
@@ -792,6 +799,31 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
                     { anahtar: 'serbest', baslik: 'Serbest balon (ölçüsüz, Geçer/Geçmez)', simge: 'target', sec: () => { setAdding(true); setSerbestEkle(true); setRegMode(false); setSel(null); } },
                   ]} />
   ) : null;
+  const gorunumOgeleri: MenuOgesi[] = [
+    { anahtar: 'balon', baslik: `${showB ? '☑' : '☐'} Balonları göster`, sec: () => setShowB(!showB) },
+    ...(ctl.grupKodlari ? [{ anahtar: 'kod', baslik: `${kodGoster ? '☑' : '☐'} Grup kodunu göster`, sec: () => setKodGoster(!kodGoster) }] : []),
+    { anahtar: 'izgara', baslik: `${grid ? '☑' : '☐'} Izgara`, sec: () => setGrid(!grid) },
+    ...(onPrimary && bal.length > 0 ? [{ anahtar: 'boyut', baslik: `Balon boyutu ve yerleşimi (${BALON_BOYLARI.find(([v]) => v === balonAyari.carpan)?.[1] ?? 'M'})…`, simge: 'gear' as const, sec: () => setDrawer('balon') }] : []),
+  ];
+  const isaret = (acik: boolean) => (acik ? '☑ ' : '☐ ');
+  // 3759 a: beşli çubukta seyrek araçlar Diğer menüsüne iner; açık/kapalı olanlar işaretle yazılır.
+  // Resim yokken yakınlaştırma işe yaramaz; salt okunur resimde (terminal) balon eklenemez, düğme çubukta yer kaplamaz, nedeniyle menüde durur.
+  const resimYok = doc.kind === 'bos';
+  const digerOgeleri: MenuOgesi[] = [
+    ...(RO && onPrimary ? [{ anahtar: 'balon-ekle', baslik: 'Balon ekle', simge: 'target' as const, pasif: true, pasifNedeni: ctl.saltOkunurNedeni ?? 'Bu resimde balon eklenemez', sec: () => undefined }] : []),
+    ...gorunumOgeleri,
+    { anahtar: 'dok', baslik: 'Dokümanlar', simge: 'layers', sec: () => setDrawer(drawer === 'lib' ? null : 'lib') },
+    ...(ctl.notBirak && onPrimary ? [{ anahtar: 'not', baslik: isaret(pinMode) + 'Resim üzerine geri bildirim', simge: 'flag' as const, sec: () => { setPinMode(!pinMode); setAdding(false); setSel(null); } }] : []),
+    ...(!RO && onPrimary && bal.length > 0 ? [{ anahtar: 'coklu', baslik: isaret(selMode) + 'Çoklu seç · CMM / Elle', simge: 'clipboard-check' as const, sec: () => { setSelMode(!selMode); setMsel([]); setAdding(false); setRegMode(false); setPinMode(false); setSel(null); } }] : []),
+    ...(!RO && onPrimary && doc.kind === 'pdf' ? [{ anahtar: 'bolge', baslik: isaret(regMode) + 'Bölge oku (R)', simge: 'scan' as const, sec: () => { setRegMode(!regMode); setAdding(false); setPinMode(false); setSel(null); } }] : []),
+    ...(!RO && onPrimary && gecmis.geri.length > 0 ? [{ anahtar: 'geri', baslik: 'Geri al (Ctrl+Z)', simge: 'chev-left' as const, sec: () => gecmisUygula(false) }] : []),
+    ...(!RO && onPrimary && gecmis.ileri.length > 0 ? [{ anahtar: 'ileri', baslik: 'Yinele (Ctrl+Y)', simge: 'chev-right' as const, sec: () => gecmisUygula(true) }] : []),
+    ...(doc.kind !== 'pdf' ? [{ anahtar: 'olcu', baslik: isaret(dims) + 'Ölçüler', simge: 'ruler' as const, sec: () => setDims(!dims) }] : []),
+    ...(doc.kind === 'step' ? [{ anahtar: 'gizli', baslik: isaret(hidden) + 'Gizli çizgiler', simge: 'dash' as const, sec: () => setHidden(!hidden) }] : []),
+    { anahtar: 'uzak', baslik: 'Uzaklaştır', simge: 'zout', pasif: resimYok, pasifNedeni: 'Resim yok', sec: () => { const c = ctr(); zoomAt(1 / 1.3, c[0], c[1]); } },
+    { anahtar: 'odak', baslik: fs ? 'Odak modundan çık' : 'Odak modu · tam ekran', simge: fs ? 'x' : 'expand', sec: () => setFs(!fs) },
+    ...(doc.kind === 'step' ? [{ anahtar: 'svg', baslik: 'Teknik resmi SVG indir', simge: 'download' as const, sec: exportSvg }] : []),
+  ];
   const pin = pinSel != null ? ctl.notlar?.find((p) => p.id === pinSel) : undefined;
   const sayfaGec = (n: number) => { if (doc.file && doc.baseKey) void showPdfPage(n, doc.file, doc.baseKey).then(() => setBusy(null)); };
   // Dikey araç çubuğu çizimin üstünde durur; çizim (sığdır ve yakınlaştırma dahil) sahnenin çubuk dışında kalan genişliğine göre yerleşsin diye
@@ -810,6 +842,7 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
     ro.observe(a); ro.observe(k);
     return () => { ro.disconnect(); };
   }, [mode3d, telefon, onPrimary, fs]);
+  const besli = besliCubuk && !mode3d && !telefon;
   const kok = ['tc-ay5-resim', fs && 'tc-ay5-tam', !dims && 'tc-ay5-olcusuz', !hidden && 'tc-ay5-gizlisiz', (adding || regMode) && 'tc-ay5-ekliyor'].filter(Boolean).join(' ');
   const tolKonumu = b && m && typeof m.v === 'number' ? toleransKonumu(b, m.v) : null;
 
@@ -885,7 +918,16 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
             </div>
           )}
         </div>
-        <div ref={aracRef} className="tc-ay5-araclar" role="toolbar" aria-label="Teknik resim araçları">
+        <div ref={aracRef} className={`tc-ay5-araclar${besli ? ' tc-ay5-besli' : ''}`} role="toolbar" aria-label="Teknik resim araçları">
+          {besli ? (
+            <>
+              {!RO && balonEkleMenusu}
+              {yaziliArac('list', drawer === 'insp', () => setDrawer(drawer === 'insp' ? null : 'insp'), 'Ölçüm listesi', 'Ölçümler')}
+              {yaziliArac('zin', false, () => { const c = ctr(); zoomAt(1.3, c[0], c[1]); }, 'Yakınlaştır', 'Yakınlaştır', resimYok)}
+              {yaziliArac('fit', false, () => setZ({ k: 1, x: 0, y: 0 }), 'Sığdır', 'Sığdır', resimYok)}
+              <Menu etiket="Diğer araçlar" metin="Diğer" simge="more" ogeler={digerOgeleri} />
+            </>
+          ) : <>
           {arac(fs ? 'x' : 'expand', fs, () => setFs(!fs), fs ? 'Odak modundan çık' : 'Odak modu · tam ekran')}
           {arac('layers', drawer === 'lib', () => setDrawer(drawer === 'lib' ? null : 'lib'), 'Dokümanlar')}
           {!mode3d && (
@@ -899,12 +941,7 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
               {!RO && onPrimary && gecmis.geri.length > 0 && arac('chev-left', false, () => gecmisUygula(false), 'Geri al (Ctrl+Z)')}
               {!RO && onPrimary && gecmis.ileri.length > 0 && arac('chev-right', false, () => gecmisUygula(true), 'Yinele (Ctrl+Y)')}
               {arac('list', drawer === 'insp', () => setDrawer(drawer === 'insp' ? null : 'insp'), 'Ölçüm listesi')}
-              <Menu etiket="Görünüm" metin="Görünüm" simge="eye" ogeler={[
-                { anahtar: 'balon', baslik: `${showB ? '☑' : '☐'} Balonları göster`, sec: () => setShowB(!showB) },
-                ...(ctl.grupKodlari ? [{ anahtar: 'kod', baslik: `${kodGoster ? '☑' : '☐'} Grup kodunu göster`, sec: () => setKodGoster(!kodGoster) }] : []),
-                { anahtar: 'izgara', baslik: `${grid ? '☑' : '☐'} Izgara`, sec: () => setGrid(!grid) },
-                ...(onPrimary && bal.length > 0 ? [{ anahtar: 'boyut', baslik: `Balon boyutu ve yerleşimi (${BALON_BOYLARI.find(([v]) => v === balonAyari.carpan)?.[1] ?? 'M'})…`, simge: 'gear' as const, sec: () => setDrawer('balon') }] : []),
-              ]} />
+              <Menu etiket="Görünüm" metin="Görünüm" simge="eye" ogeler={gorunumOgeleri} />
               {doc.kind !== 'pdf' && arac('ruler', dims, () => setDims(!dims), 'Ölçüler')}
               {doc.kind === 'step' && arac('dash', hidden, () => setHidden(!hidden), 'Gizli çizgiler')}
               <span className="tc-ay5-ayrac" aria-hidden="true" />
@@ -914,6 +951,7 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
               {doc.kind === 'step' && arac('download', false, exportSvg, 'Teknik resmi SVG indir')}
             </>
           )}
+          </>}
         </div>
       </div>
       {!mode3d && (

@@ -118,6 +118,16 @@
 .tc-ay5-arac:hover { background: var(--panel2); }
 .tc-ay5-arac.tc-ay5-acik { background: var(--done); color: var(--on-sig); }
 .tc-ay5-ayrac { display: block; flex: none; block-size: var(--cizgi-ince); inline-size: 100%; background: var(--edge); }
+/* 3759 a: beşli çubuk; her araç simgesi ve kısa yazısıyla, menü düğmeleri (Balon ekle, Diğer) de aynı biçimde. */
+.tc-ay5-besli > :is(.tc-ay5-arac, .tc-dugme) {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--b-1);
+  inline-size: var(--dokunma-x18); block-size: auto; min-block-size: var(--dokunma); padding: var(--b-1);
+  border: 0; border-radius: var(--yari-2); background: none; color: var(--ink);
+  font-size: var(--yazi-xs); font-weight: 700; line-height: 1.1; white-space: normal; text-align: center;
+}
+.tc-ay5-besli > .tc-dugme:hover { background: var(--panel2); }
+.tc-ay5-besli > .tc-ay5-arac.tc-ay5-acik { background: var(--done); color: var(--on-sig); }
+.tc-ay5-besli > .tc-ay5-arac:disabled { color: var(--faint); cursor: default; background: none; }
 .tc-ay5-dilimler { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); }
 .tc-ay5-dilim {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--b-1); min-block-size: var(--dokunma); padding: 0 var(--b-3);
