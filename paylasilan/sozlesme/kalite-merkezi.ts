@@ -251,14 +251,86 @@ export const kmGirisKaydi = z.object({
   not: z.string().nullable(),
 });
 export type KmGirisKaydi = z.output<typeof kmGirisKaydi>;
-export const kmGirisBekleyenCevabi = z.object({ kayitlar: z.array(kmGirisKaydi) });
+// 3809: fason dönüşünün GKK'sı, fason adımı (emir ve OP) başına; aynı adımın birden çok dönüşü tek satırda birikir, son mal kabul no
+// gösterilir. Miktarlar dönen kartın stok birimindedir; karar adetle verilir. gkkAdimi yoksa (3809 öncesi emir) karar yalnız stoğu değiştirir.
+export const KM_FASON_GKK_SONUCLARI = ['serbest', 'sartli', 'red'] as const;
+export const kmFasonGkkSatiri = z.object({
+  fasonIsEmriId: z.number().int(),
+  uretimEmriId: z.number().int(),
+  emirNo: z.string(),
+  opNo: z.number().int(),
+  parcaNo: z.string(),
+  parcaAd: z.string(),
+  firmaAdi: z.string().nullable(),
+  malzemeKod: z.string().nullable(),
+  malzemeAd: z.string().nullable(),
+  birim: z.string().nullable(),
+  gelen: ondalikMetinSemasi,
+  bekleyen: ondalikMetinSemasi,
+  // Adet karşılığı (adet başına miktar bulunamazsa null; karar verilemez).
+  gelenAdet: z.number().int().nullable(),
+  bekleyenAdet: z.number().int().nullable(),
+  sonZaman: zamanSemasi,
+  malKabulNo: z.string().nullable(),
+  gkkAdimi: z.boolean(),
+});
+export type KmFasonGkkSatiri = z.output<typeof kmFasonGkkSatiri>;
+// 3809: kaynağında muayene görevi: fason adımı firmaya gitmiş, muayene adımı onaylanmamış.
+export const kmKaynaktaMuayeneSatiri = z.object({
+  muayeneIsEmriId: z.number().int(),
+  fasonIsEmriId: z.number().int(),
+  uretimEmriId: z.number().int(),
+  emirNo: z.string(),
+  opNo: z.number().int(),
+  parcaNo: z.string(),
+  parcaAd: z.string(),
+  firmaAdi: z.string().nullable(),
+  gonderilen: z.number().int(),
+  ilkGidis: zamanSemasi,
+  sureSaat: z.string().nullable(),
+  zorunlu: z.array(z.string()),
+  eksik: z.array(z.string()),
+  yuklenen: z.number().int(),
+});
+export type KmKaynaktaMuayeneSatiri = z.output<typeof kmKaynaktaMuayeneSatiri>;
+export const kmGirisBekleyenCevabi = z.object({
+  kayitlar: z.array(kmGirisKaydi),
+  fason: z.array(kmFasonGkkSatiri),
+  kaynakta: z.array(kmKaynaktaMuayeneSatiri),
+});
+export const kmFasonParametresi = z.object({ isEmriId: z.coerce.number<number>().int().positive().max(2147483647) });
+const tamAdet = z.number().int('Adet tam sayıdır.').min(0).max(1_000_000);
+// Tek kararda üç sonucun adedi birlikte yazılır (aynı işlem); toplam en az bir adettir ve bekleyeni aşamaz (sunucu denetler).
+export const kmFasonGkkKararGovdesi = z.object({
+  serbest: tamAdet.default(0),
+  sartli: tamAdet.default(0),
+  red: tamAdet.default(0),
+  not: z.string().trim().max(500, 'Not en çok 500 karakter olur.').nullish().transform((d) => (d ? d : null)),
+}).strict().refine((g) => g.serbest + g.sartli + g.red > 0, { message: 'Karar adedi sıfırdan büyük olmalı.', path: ['serbest'] });
+export type KmFasonGkkKararGovdesi = z.input<typeof kmFasonGkkKararGovdesi>;
+export const kmFasonGkkKararCevabi = z.object({ bekleyenAdet: z.number().int(), adimKapandi: z.boolean() });
+export type KmFasonGkkKararCevabi = z.output<typeof kmFasonGkkKararCevabi>;
+export const kmKaynaktaMuayeneOnayGovdesi = z.object({ saglam: tamAdet, red: tamAdet }).strict();
+export type KmKaynaktaMuayeneOnayGovdesi = z.input<typeof kmKaynaktaMuayeneOnayGovdesi>;
+export const kmKaynaktaMuayeneOnayCevabi = z.object({ uretimEmriId: z.number().int() });
+// 3809: Yapılan sekmesindeki fason GKK kararları (hareket başına; en yeni üstte).
+export const kmFasonGkkKarari = z.object({
+  uretimEmriId: z.number().int(),
+  emirNo: z.string().nullable(),
+  opNo: z.number().int(),
+  sonuc: z.enum(KM_FASON_GKK_SONUCLARI),
+  miktar: ondalikMetinSemasi,
+  kisiAd: z.string().nullable(),
+  zaman: zamanSemasi,
+});
+export type KmFasonGkkKarari = z.output<typeof kmFasonGkkKarari>;
 export const kmGirisParametresi = z.object({ malKabulSatirId: z.coerce.number<number>().int().positive().max(2147483647) });
 // 3117: kapanan GKK'lar (Yapılan listesi); gün aralığı GKK zamanına göredir, ikisi de dahil; en yeni üstte, en çok
 // KM_GIRIS_KAYIT_SINIRI satır (sınıra değince `sinirda`).
 export const KM_GIRIS_KAYIT_SINIRI = 500;
 export const kmGirisKayitlariSorgusu = z.object({ baslangic: tarihSemasi, bitis: tarihSemasi }).strict()
   .refine((s) => s.baslangic <= s.bitis, { message: 'Başlangıç bitişten sonra olamaz.', path: ['baslangic'] });
-export const kmGirisKayitlariCevabi = z.object({ kayitlar: z.array(kmGirisKaydi), sinirda: z.boolean() });
+export const kmGirisKayitlariCevabi = z.object({ kayitlar: z.array(kmGirisKaydi), fason: z.array(kmFasonGkkKarari), sinirda: z.boolean() });
 export type KmGirisKayitlariCevabi = z.output<typeof kmGirisKayitlariCevabi>;
 export const kmGirisKararGovdesi = z.object({
   karar: z.enum(KM_GIRIS_KARARLARI),

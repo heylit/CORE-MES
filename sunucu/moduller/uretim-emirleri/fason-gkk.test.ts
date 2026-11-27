@@ -7,7 +7,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import { kullaniciYukle, yoneticiOlustur } from '../kisiler/disari.ts';
 import { uretimEmriAc } from './disari.ts';
 import type { IsEmriGirdisi } from './disari.ts';
-import { fasonGidis, planlanacakIsEmirleri } from './is-emri-servis.ts';
+import { adimliAyrinti, fasonGidis, planlanacakIsEmirleri } from './is-emri-servis.ts';
 import { OTOMATIK_GKK, OTOMATIK_GKK_ADI } from './kurallar.ts';
 
 // 1208 ve 1225: fason adımının arkasında GKK yoksa emre otomatik GKK girer; kalite istasyonu yoksa girmez; plana girmez.
@@ -69,13 +69,24 @@ describe('uretim-emirleri otomatik GKK (1205, 1208; gerçek PostgreSQL)', () => 
   });
   after(async () => { await ortam?.kaldir(); });
 
-  test('kalite istasyonu yokken GKK girmez; varken fason arkasına kalite istasyonunda girer, açılış cevabı yalnız verilen adımları sayar', async () => {
+  // 3809: kalite istasyonu şartı kalktı. Adım tipin varsayılan istasyonunda, o yoksa istasyonsuz girer; tip yoksa adım girmez, emir ayrıntısı uyarır.
+  test('GKK kalite istasyonu yokken istasyonsuz, tipin varsayılan istasyonu varsa onda girer; tip pasifse girmez ve ayrıntı uyarır; açılış cevabı yalnız verilen adımları sayar', async () => {
     const { makine } = await istasyon('talasli');
-    const once = await ac([ic(10, makine), fason(20), ic(30, makine)]);
-    assert.deepEqual((await adimlari(once.id)).map((a) => a.op), [10, 20, 30]);
+    const istasyonsuz = await ac([ic(10, makine), fason(20), ic(30, makine)]);
+    const ilk = await adimlari(istasyonsuz.id);
+    assert.deepEqual(ilk.map((a) => [a.op, a.ist]), [[10, ilk[0]!.ist], [20, null], [25, null], [30, ilk[3]!.ist]], 'istasyonsuz kurulumda GKK istasyonsuz girer');
+    assert.deepEqual((await tx((db) => adimliAyrinti(db, istasyonsuz.id))).kontrolUyarilari, []);
+
+    await o().sahip.sorgu("UPDATE istasyonlar_operasyon_tipi SET aktif = false WHERE kod = 'GKK'");
+    const tipsiz = await ac([ic(10, makine), fason(20), ic(30, makine)]);
+    assert.deepEqual((await adimlari(tipsiz.id)).map((a) => a.op), [10, 20, 30], 'tip yoksa adım girmez');
+    assert.match((await tx((db) => adimliAyrinti(db, tipsiz.id))).kontrolUyarilari?.[0] ?? '', /kod GKK.*OP 20/, 'sessiz atlama yerine uyarı');
+    await o().sahip.sorgu("UPDATE istasyonlar_operasyon_tipi SET aktif = true WHERE kod = 'GKK'");
 
     const kalite = await istasyon('kalite');
+    await o().sahip.sorgu("UPDATE istasyonlar_operasyon_tipi SET varsayilan_istasyon_id = $1 WHERE kod = 'GKK'", [kalite.ist]);
     const e = await ac([ic(10, makine), fason(20), ic(30, makine)]);
+    await o().sahip.sorgu("UPDATE istasyonlar_operasyon_tipi SET varsayilan_istasyon_id = NULL WHERE kod = 'GKK'");
     const adimlar = await adimlari(e.id);
     assert.deepEqual(adimlar.map((a) => [a.op, a.tur]), [[10, 'rota'], [20, 'rota'], [25, 'ek'], [30, 'rota']]);
     assert.deepEqual([adimlar[2]!.ad, adimlar[2]!.aciklama, adimlar[2]!.ist], [OTOMATIK_GKK_ADI, OTOMATIK_GKK, kalite.ist]);

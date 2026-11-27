@@ -51,6 +51,7 @@ const ADIMLI_OZET_OKUMA = { biri: [...ADIMLI_OKUMA_ISLEMLERI, 'plan.oku'] } as c
 const KATILIM_OKUMA = { biri: [...ADIMLI_OKUMA_ISLEMLERI, 'terminal.uret'] } as const;
 // Açık emir listesini Stok'un emir seçicisi ve Fabrika Haritası da okur; terminal listeyi kullanmaz, emirle işi olmayan rol okumaz.
 const ADIM_DURUMU_OKUMA = { biri: ADIM_DURUMU_OKUMA_ISLEMLERI } as const;
+const MUAYENE_BELGESI_YAZMA = { biri: ['uretim-emirleri.fason', 'kalite-merkezi.onayla'] } as const;
 const LISTE_OKUMA = { biri: [...ADIMLI_OKUMA_ISLEMLERI, 'sayfa.stok', 'sayfa.atolye'] } as const;
 
 const emirUclari = [
@@ -963,19 +964,19 @@ const adimliUclar = [
     isle: async ({ db, parametre }) => ({ fason: await isEmri.siradakiFason(db, parametre.id) }),
   }),
   // 3708: kaynağında muayene adımının belgeleri; zorunlu belge eksikken adım bitirilemez (servis.emirBitir). Adım Durumu'nu okuyan
-  // (kalite dahil) belgeleri görür ve açar; bağlama ve kaldırma fason yetkisindedir.
+  // (kalite dahil) belgeleri görür ve açar; bağlama ve kaldırma fason yetkisinde ve (3809) muayeneyi onaylayan kalitededir.
   uc({
     yontem: 'GET', yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/muayene-belgeleri', yetki: ADIM_DURUMU_OKUMA,
     parametre: isEmriParametresi, cevap: muayeneBelgeleriCevabi,
     isle: ({ db, parametre }) => isEmri.muayeneBelgeleri(db, parametre.id, parametre.isEmriId),
   }),
   uc({
-    yontem: 'POST', yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/muayene-belgeleri', yetki: 'uretim-emirleri.fason', tekrarKorumali: true,
+    yontem: 'POST', yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/muayene-belgeleri', yetki: MUAYENE_BELGESI_YAZMA, tekrarKorumali: true,
     parametre: isEmriParametresi, govde: muayeneBelgeBaglaGovdesi, cevap: muayeneBelgeleriCevabi,
     isle: ({ db, kullanici, parametre, govde, denetimEki }) => isEmri.muayeneBelgeBagla(db, kullanici, parametre.id, parametre.isEmriId, govde, denetimEki),
   }),
   uc({
-    yontem: 'POST', yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/muayene-belgeleri/:ozet/kaldir', yetki: 'uretim-emirleri.fason', tekrarKorumali: true,
+    yontem: 'POST', yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/muayene-belgeleri/:ozet/kaldir', yetki: MUAYENE_BELGESI_YAZMA, tekrarKorumali: true,
     parametre: muayeneBelgeParametresi, cevap: muayeneBelgeleriCevabi,
     isle: ({ db, parametre, denetimEki }) => isEmri.muayeneBelgeKaldir(db, parametre.id, parametre.isEmriId, parametre.ozet, denetimEki),
   }),

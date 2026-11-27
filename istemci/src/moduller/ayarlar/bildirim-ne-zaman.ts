@@ -47,6 +47,8 @@ const METINLER: Readonly<Record<Exclude<BildirimTuru, KademeTuruAdi>, string>> =
   'stok.istek-hazir': 'Malzeme isteğin hazırlanmaya başlayınca',
   'stok.istek-teslim-edildi': 'Malzeme isteğin doğrudan teslim edilip kapanınca',
   'stok.mal-kabul-yapildi': 'Satın alma mal kabulü yapılınca, belge başına',
+  'uretim-emirleri.kaynakta-muayene-bekliyor': 'Kaynağında muayene seçili fason adımın parçası firmaya gidince; Kalite Merkezi onaylayınca kapanır',
+  'stok.fason-gkk-bekliyor': 'Fason dönüşü karantinaya karar bekliyor girince; Kalite Merkezi bütün adedi kararlayınca kapanır',
   'stok.gkk-bekliyor': 'Giriş kontrolü isteyen lot karantinaya girince; kontrol verilince kapanır',
   'uretim-emirleri.adim-tamamlandi': 'Adım bitince, sıradaki adımın istasyonuna atananlara',
   'uretim-emirleri.emir-tamamlandi': 'Üretim emri bitince',

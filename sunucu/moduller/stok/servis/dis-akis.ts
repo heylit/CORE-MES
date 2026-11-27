@@ -10,7 +10,8 @@ import { acikUrunSevkliEmirler, depoBekleyenleri, depoCikisiniGeriAl, depoCikisi
 import type { DepoKalemi, FasonSevkiOlayi, UrunSevkiOlayi, UrunSevkSatiri } from '../../sevkiyat/disari.ts';
 import { emirDurumlari, fasonAktarimiKaydet, fasonDonusuKaydet, fasonYoluOku, fasonHareketiOzeti, fasonIsEmirleri, isEmriOzeti, uretimEmriOzeti, emirNolari } from '../../uretim-emirleri/disari.ts';
 import type { FasonHareketiOlayi } from '../../uretim-emirleri/disari.ts';
-import { binde, bindenMetin, stoklanirMi, kaynaklardanAl, adetMiktari, sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, sevkAciklamasi } from '../kurallar.ts';
+import { bildirimGonder } from '../../bildirim/disari.ts';
+import { binde, bindenMetin, stoklanirMi, kaynaklardanAl, adetMiktari, sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, sevkAciklamasi, FASON_GKK_GOREVI, fasonGkkKaynagi } from '../kurallar.ts';
 import type { SevkBakiyesi } from '../kurallar.ts';
 import * as sorgular from '../sorgular.ts';
 import { anaDepo } from './depo.ts';
@@ -423,6 +424,13 @@ export async function fasonIsindenDonus(
   const t = await yariParcayiTasi(db, kisiId, plan.yari, {
     uretimEmriId: is.uretimEmriId, kaynaklar: konumlar, hedef: d.konumId, miktar: adetMiktari(adet, plan.yari.birim), aciklama, hedefKalite: kalite,
   });
+  // 3809: karantinaya karar bekliyor giren dönüş Kalite Merkezi'ne görevdir; aynı adımın sonraki dönüşü aynı görevi tazeler.
+  if (kalite === 'karar_bekliyor') {
+    await bildirimGonder(db, {
+      tur: FASON_GKK_GOREVI, baslik: `Fason dönüşü GKK bekliyor: ${is.emirNo} · OP ${String(is.opNo)}`.slice(0, 200),
+      metin: `${String(adet / 1000n)} adet karantinada, kalite kararı bekliyor.`, haric: kisiId, kaynakKimlik: fasonGkkKaynagi(is.uretimEmriId, is.opNo),
+    });
+  }
   if (plan.uretim === null) {
     if (t.sonHareketId === null) throw dogrulama('Firmada bu işin parçası yok.', `${d.alan}.fasonIsi`);
     return { miktar: t.tasinan, hareketId: t.sonHareketId };
@@ -431,6 +439,16 @@ export async function fasonIsindenDonus(
   const hareketId = await uretimAdiminiYaz(db, { uretimEmriId: is.uretimEmriId, kisiId, konumId: d.konumId, malzemeId: plan.urun, aciklama, kalite }, p);
   if (hareketId === null) throw dogrulama('Bu fason işinin adımı stoğa parça çıkarmıyor.', `${d.alan}.fasonIsi`);
   return { miktar: p.giris !== null ? p.giris.miktar : (p.cevirme?.miktar ?? adetMiktari(adet, plan.yari.birim)), hareketId };
+}
+// 3809: fason dönüşünün verilen adedinin stok miktarı (dönen kartın biriminde, binde); GKK kararı adetle verilir, stok bu miktarla yazar.
+export async function fasonDonusMiktari(db: Db, isEmriId: number, adet: bigint): Promise<bigint | null> {
+  const is = await isEmriOzeti(db, isEmriId);
+  if (!is) return null;
+  const plan = await fasonDonusPlani(db, is.uretimEmriId, isEmriId, adet);
+  if (!plan) return null;
+  const p = plan.uretim;
+  if (p === null) return adetMiktari(adet, plan.yari.birim);
+  return p.giris !== null ? p.giris.miktar : (p.cevirme?.miktar ?? adetMiktari(adet, plan.yari.birim));
 }
 // Fason adımının dönüş planı: yarı parça, adımın sayım planı ve dönen kart. Emrin ürünü gidiyorsa (girdisiz rota) plan yoktur, ürün döner.
 async function fasonDonusPlani(db: Db, uretimEmriId: number, isEmriId: number, adet: bigint) {

@@ -40,7 +40,7 @@ import {
   ekAdimKaldirIhlali, kartAdimi, kartDagilimi, type KartDagilimi, kartSiniri, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, ROTASIZ_EMIR_KAPALI, PROJE_GECERSIZ, PROJE_ZORUNLU, adaySatirlar, bilesenOlabilirMi, kendiligindenSatir, projeZorunluMu, rotasizAdimDegisimIhlali, rotasizAdimEkleIhlali, URETIM_YERI_BASLAMIS, uretimYeriIhlali, fasonBeklemesi, adimAdetleri,
   adimEksigi, adimTuketimi, reworkAdimiIhlali, reworkTermini, adimOnculleri, fasonSirasindaMi, kolAdimlari, onculdenGelen, onculGirdisiIhlali, dugumGirdisiIhlali,
-  SIPARIS_ONAYI_GERI_ALINDI, TESLIM_KALEMSIZ, emirEskiRevizyonIhlali, FASON_FIRMA_BEKLENIYOR, GKK_TIPI, OTOMATIK_GKK, OTOMATIK_GKK_ADI, fasonKarneOlayi, fasonMu, talimatKontrolu, gkkFasonu, gkkTipiSec, kaliteIstasyonuSec, otomatikGkkMi, otomatikGkkYerleri, otomatikKontrolMu, otomatikMuayeneYerleri, muayeneTipiSec, OTOMATIK_MUAYENE, OTOMATIK_MUAYENE_ADI, aktarimIhlali, donusYoluIhlali, fasonDonusPayiMs, AKTARIM_HEDEFI_SONRAKI_FIRMA_DEGIL, otomatikMuayeneMi, muayeneDonusIhlali, muayeneOnayIhlali, parcaRevizyonuMetni,
+  SIPARIS_ONAYI_GERI_ALINDI, TESLIM_KALEMSIZ, emirEskiRevizyonIhlali, FASON_FIRMA_BEKLENIYOR, GKK_TIPI, OTOMATIK_GKK, OTOMATIK_GKK_ADI, fasonKarneOlayi, fasonMu, talimatKontrolu, gkkFasonu, gkkTipiSec, kontrolIstasyonuSec, kontrolAdimiUyarilari, otomatikGkkMi, otomatikGkkYerleri, otomatikKontrolMu, otomatikMuayeneYerleri, muayeneTipiSec, OTOMATIK_MUAYENE, OTOMATIK_MUAYENE_ADI, aktarimIhlali, donusYoluIhlali, fasonDonusPayiMs, AKTARIM_HEDEFI_SONRAKI_FIRMA_DEGIL, otomatikMuayeneMi, muayeneDonusIhlali, muayeneOnayIhlali, parcaRevizyonuMetni,
 } from './kurallar.ts';
 import { emirAcildiBildir, emirBirlestiBildir, emirBittiBildir, emirIptalBildir, fasonHareketiBildir, isEmirleriDegistiBildir, isEmriKopyalandiBildir } from './emir-olaylari.ts';
 import type { AdimOnculu, BolmeDurumu, FasonDurumu, IsEmriKaynakTuru, KolDurumu, OnculTuru, UretimYeri } from './kurallar.ts';
@@ -799,6 +799,7 @@ export async function adimliAyrinti(db: Db, id: number): Promise<AdimliEmirAyrin
     isEmirleri,
     hataliDurdu: hataliDurduMu(kendi, hataliKayitlar),
     parcaRevizyonuDurumu: await parcaRevizyonuDurumu(db, e),
+    kontrolUyarilari: await kontrolUyarilariOku(db, kendi),
     eski: eski === null ? null : {
       durum: eski.eskiDurum, istasyon: istasyonAdi(ad, eski.istasyonId), baslama: eski.baslama, bitis: eski.bitis, saglamAdet: eski.saglamAdet,
     },
@@ -1085,7 +1086,7 @@ export async function fasonFirmasiniSiparistenYaz(db: Db, kisiId: number, isEmri
 /* ---------------- fason (UE3; kullanıcı kararı c: her gidiş ve dönüş ayrı satır) ---------------- */
 
 // 2721 2/3 b: arşive alınan emrin fasondaki parçası açık kalır; yalnız dönüşü yazılır (gidiş ve tamamlama açık emirde).
-async function fasonBaglami(db: Db, emirId: number, isEmriId: number, donus = false) {
+export async function fasonBaglami(db: Db, emirId: number, isEmriId: number, donus = false) {
   const e = await kilitliUstEmir(db, emirId);
   const acik = acikEmirIhlali(e.durum, e.arsiv);
   if (acik !== null && !(donus && arsivdeFasonDonusuAcik(e.durum, e.arsiv, (await s.kapanisBul(db, emirId)) !== null))) throw cakisma(acik);
@@ -1215,7 +1216,7 @@ export async function fasonYoluOku(db: Db, emirId: number, isEmriId: number): Pr
 // 3708: kaynağında muayene adımı bitince karar fason adımını kapatır. Sonraki adım da fasonsa aktarım kaydı yazılır: sağlam, muayenenin sağlam
 // adedi; hurda, fasona gönderilenden hesabı kapanmayan ve sağlam sayılmayan adet (red). Sonraki adım fason değilse dönüş mal kabulden girer
 // (yalnız adet ve hasar), burada yazılacak kayıt yoktur. Sonraki firma seçilmediyse kayıt yazılmaz; aktarım elle girilir.
-export async function muayeneKarariniYaz(db: Db, kisiId: number, emirId: number, muayeneAdimi: IsEmriSatiri, saglamAdet: number): Promise<void> {
+export async function muayeneKarariniYaz(db: Db, kisiId: number, emirId: number, muayeneAdimi: IsEmriSatiri, saglamAdet: number, redAdet?: number): Promise<void> {
   if (!otomatikMuayeneMi(muayeneAdimi)) return;
   const hepsi = await s.isEmirleriGetir(db, [emirId]);
   const fason = hepsi.filter((i) => i.sira < muayeneAdimi.sira && fasonMu(i)).sort((a, b) => b.sira - a.sira)[0];
@@ -1225,7 +1226,8 @@ export async function muayeneKarariniYaz(db: Db, kisiId: number, emirId: number,
   const kalan = durum.gonderilen - durum.donenSaglam - durum.donenHurda - (durum.firmadaHatali ?? 0);
   const saglam = Math.min(saglamAdet, kalan);
   // Hurda, muayenenin kendi saydığı red ve hurdadır; henüz sayılmamış (dönmemiş ya da muayeneye gelmemiş) parça hurda yazılmaz.
-  const sayac = (await s.adimSayaclariGetir(db, [muayeneAdimi.id]))[0];
+  // 3809: Kalite Merkezi'nin onayı redi kendisi verir (istasyonsuz adımda sayım satırı yoktur).
+  const sayac = redAdet === undefined ? (await s.adimSayaclariGetir(db, [muayeneAdimi.id]))[0] : { hurda: 0, red: redAdet };
   const hurda = Math.min((sayac?.hurda ?? 0) + (sayac?.red ?? 0), kalan - saglam);
   if (saglam + hurda <= 0) return;
   await fasonAktarimiKaydet(db, kisiId, emirId, fason.id, { saglamAdet: saglam, hurdaAdet: hurda, hedefFirmaId: sonraki.fasonFirmaId });
@@ -1585,8 +1587,15 @@ export async function adimlariKoy(db: Db, kisiId: number, emirId: number, onceki
 const gkkTipiId = async (db: Db): Promise<number | null> =>
   (await operasyonTipleri(db, { pasiflerDahil: true })).find((t) => t.kod === GKK_TIPI && t.grup === 'KAL')?.id ?? null;
 
-// Otomatik GKK kalite istasyonundadır (tipin varsayılanı ya da ilk aktif kalite istasyonu). Aktif GKK tipi ya da kalite istasyonu
-// yoksa adım girmez: istasyonsuz adım terminalden başlamaz ve emri durdururdu; eksik GKK rotada uyarı olarak kalır.
+// 3809: otomatik GKK ve muayene adımı Kalite Merkezi'nin kararıyla ilerler (terminalden başlamaz); istasyonu tipin varsayılanıdır, yoksa
+// istasyonsuz girer. Tip yoksa adım girmez; emir ayrıntısı ve rota bunu uyarı olarak gösterir (kontrolAdimiUyarilari).
+// 3809: fason adımı GKK ya da kaynağında muayene seçmiş ama tip eksik olduğundan kontrol adımı konamamışsa emirde uyarı çıkar.
+async function kontrolUyarilariOku(db: Db, adimlar: readonly IsEmriSatiri[]): Promise<string[]> {
+  if (!adimlar.some((a) => a.tur === 'rota' && fasonMu(a) && (a.kontrolTuru === 'gkk' || a.kontrolTuru === 'kaynakta'))) return [];
+  const tipler = await operasyonTipleri(db);
+  return kontrolAdimiUyarilari(adimlar, { gkk: gkkTipiSec(tipler) !== null, kaynakta: muayeneTipiSec(tipler) !== null });
+}
+
 export async function otomatikGkkKoy(db: Db, kisiId: number, emirId: number): Promise<void> {
   const tipler = await operasyonTipleri(db);
   const gkk = gkkTipiSec(tipler);
@@ -1601,8 +1610,7 @@ export async function otomatikGkkKoy(db: Db, kisiId: number, emirId: number): Pr
     ...(muayene === null ? [] : otomatikMuayeneYerleri(hepsi, muayene.id).map((y) => ({ y, tip: muayene, ad: OTOMATIK_MUAYENE_ADI, aciklama: OTOMATIK_MUAYENE }))),
   ];
   for (const k of kurulacak) {
-    const istasyonId = kaliteIstasyonuSec(k.tip, istasyonlar, null);
-    if (istasyonId === null) continue;
+    const istasyonId = kontrolIstasyonuSec(k.tip, istasyonlar);
     const fason = hepsi.find((a) => a.opNo === k.y.oncekiOpNo);
     // Muayene süresi saat olarak rotadan gelir; planın girdisi dakikadır (fason adımın bitişinde başlar, kalite kişisinin işi).
     const sureDk = k.aciklama === OTOMATIK_MUAYENE && fason?.muayeneSuresiSaat != null ? String(Number(fason.muayeneSuresiSaat) * 60) : null;
@@ -2063,7 +2071,8 @@ async function acikAdimlar<R extends number | null>(
   db: Db, taslakDahil: boolean, revizyonUyar: (r: number | null) => r is R, fasonTahmini?: FasonTahmini, fasonSiparisTermini?: FasonSiparisTermini, fasonGun?: number,
 ): Promise<(Omit<PlanIsEmri, 'kaynakRotaRevizyonId'> & { kaynakRotaRevizyonId: R })[]> {
   // 1208: otomatik GKK plana girmez (fason adımı gibi): kaynaksız ve süresizdir, girse ardılını bekletirdi; fasonun beklemesi ardıla geçer.
-  const satirlar = (await s.planlanacakIsEmirleriGetir(db, taslakDahil)).filter((i) => !otomatikGkkMi(i));
+  // 3809: istasyonsuz otomatik muayene de girmez (kaynaksız ek adım ardılını bekletirdi); istasyonu olan muayene süresiyle girer.
+  const satirlar = (await s.planlanacakIsEmirleriGetir(db, taslakDahil)).filter((i) => !otomatikGkkMi(i) && !(otomatikMuayeneMi(i) && i.istasyonId === null));
   const emirIdleri = [...new Set(satirlar.map((i) => i.emir.id))];
   const agac = await s.altPartilerGetir(db, emirIdleri);
   const butun = await s.isEmirleriGetir(db, emirIdleri);

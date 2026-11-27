@@ -97,6 +97,9 @@ describe('uretim-emirleri hazırlık, uyaran maddeler (2146-1 a, gerçek Postgre
     planlamaci = await kisiEkle('planlama_proje', 'planlama_proje');
     mudur = await kisiEkle('mudur', 'mudur');
     tipId = (await ortam.sahip.tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ('HZU-T', 'Deneme tipi', 'TAL') RETURNING id"))!.id;
+    // 3809: GKK tipi aktifken fasonun arkasına istasyonsuz otomatik GKK adımı girer; bu dosya fason ve sıra kurallarına bakar, GKK
+    // adımı fason-gkk.test.ts ve fason-kontrol-akis.test.ts'de sınanır.
+    await ortam.sahip.sorgu("UPDATE istasyonlar_operasyon_tipi SET aktif = false WHERE kod = 'GKK'");
     await ortam.sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('HZU-DNM-', 0) ON CONFLICT (onek) DO NOTHING");
     urunNo = (await ortam.sahip.tek<{ no: number }>(
       `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)

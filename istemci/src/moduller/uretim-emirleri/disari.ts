@@ -21,3 +21,4 @@ export const URETIM_EMIRLERI_ONBELLEGI = anahtarlar.hepsi;
 export { KartEmirOzeti, useEmirAdimlari } from './KartEmirOzeti.tsx';
 // Adım tablosu (3581): Reçete ve Rota emrin adım satırlarını (alt emir, ek adım, plan saati) verir, tabloyu bu modül çizer.
 export type { AdimTablosuYuvasi, EklemeYuvasi, TabloSatiri } from './AdimTablosu.tsx';
+export { MuayeneBelgeleri, useMuayeneBelgeleri } from './MuayeneBelgeleri.tsx';

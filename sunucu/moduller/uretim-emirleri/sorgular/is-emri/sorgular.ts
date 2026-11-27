@@ -432,6 +432,16 @@ export function isEmriBaslat(db: Db, id: number, an: string): Promise<unknown> {
   );
 }
 
+// 3809: açık emirlerde bitmemiş otomatik kontrol adımları (ek açıklamasıyla); Kalite Merkezi'nin görev listesi içindir.
+export function acikKontrolAdimlari(db: Db, ekAciklama: string): Promise<{ id: number; uretimEmriId: number }[]> {
+  return db.sorgu(
+    `SELECT i.id, i.uretim_emri_id AS "uretimEmriId" FROM uretim_emirleri_is_emri i JOIN uretim_emri e ON e.id = i.uretim_emri_id
+      WHERE NOT e.arsiv AND e.durum IN ('planli', 'basladi') AND i.tur = 'ek' AND i.ek_aciklama = $1 AND i.durum <> 'tamam'
+      ORDER BY i.uretim_emri_id, i.sira`,
+    [ekAciklama],
+  );
+}
+
 export function isEmriBitir(db: Db, id: number, saglamAdet: number, an: string): Promise<unknown> {
   return db.sorgu(
     `UPDATE uretim_emirleri_is_emri SET durum = 'tamam', bitis = $3::timestamptz, saglam_adet = $2, surum = surum + 1

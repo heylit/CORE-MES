@@ -795,6 +795,8 @@ export const adimliEmirAyrintisi = adimliEmirOzeti.extend({
   hataliDurdu: z.boolean().optional(),
   // 3755: isteğe bağlı; sunucu her ayrıntıda doldurur.
   parcaRevizyonuDurumu: parcaRevizyonuDurumuSemasi.optional(),
+  // 3809: fason adımının kontrol adımı (GKK ya da kaynağında muayene) tip eksikliğinden konamadıysa uyarı cümleleri; isteğe bağlı.
+  kontrolUyarilari: z.array(z.string()).optional(),
 });
 
 export const adimliListeCevabi = z.object({ emirler: z.array(adimliEmirOzeti) });

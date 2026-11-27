@@ -184,6 +184,9 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
       "INSERT INTO projeler_proje (kod, ad, olusturan_id) VALUES ('UE.ISEMRI', 'Deneme proje', $1) RETURNING id", [yoneticiId]))!.id;
     for (const [ad, rol] of [['planlama_proje', 'planlama_proje'], ['operator', 'operator'], ['depo', 'depo']] as const) await kisiEkle(ad, rol);
     tipId = (await ortam.sahip.tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ('IE-T', 'Deneme tipi', 'TAL') RETURNING id"))!.id;
+    // 3809: GKK tipi aktifken fasonun arkasına istasyonsuz otomatik GKK adımı girer; bu dosya fason ve sıra kurallarına bakar, GKK
+    // adımı fason-gkk.test.ts ve fason-kontrol-akis.test.ts'de sınanır.
+    await ortam.sahip.sorgu("UPDATE istasyonlar_operasyon_tipi SET aktif = false WHERE kod = 'GKK'");
     firmaId = (await ortam.sahip.tek<{ id: number }>(
       "INSERT INTO musteri_tedarikci_firma (ad, tur, olusturan_id, fason) VALUES ('Deneme Fason', 'tedarikci', $1, true) RETURNING id", [yoneticiId]))!.id;
     urunNo = await kartKur('mamul');
