@@ -13,7 +13,7 @@ Testler: `kurallar.test.ts` (saf), `markalama.test.ts` (gerçek PostgreSQL), `is
 | Önizleme: emirsiz istekte {EMIR} yer tutucusu, emir kapsamında yeni emrin ilk numaraları | `MRK-U11` |
 | MRK-07 Seri yalnız açık emirde, tanımın malzemesinin emrinde | `MRK-U3` (422) |
 | MRK-08 Tanım var olan malzemeye açılır; (malzeme, op, teknik resim revizyonu, emir) tekil, revizyon harften ve boşluktan bağımsız; sürüm denetimi | `MRK-U2`; `MRK-U17`; dizin `markalama_tanimi_anahtar_tekil` |
-| MRK-14 İşin tanımı: emre özel, emrin teknik resim revizyonuna ait, revizyonsuz genel; başka revizyonun tanımı kullanılmaz; pasif tanım sayılmaz | `MRK-14`; `MRK-U17`; `MRK-U18` |
+| MRK-14 İşin tanımı: emre özel (emrin bugünkü revizyonuyla), emrin teknik resim revizyonuna ait, revizyonsuz genel; başka revizyonun tanımı kullanılmaz; pasif tanım sayılmaz | `MRK-14`; `MRK-U17`; `MRK-U18` |
 | MRK-15 Emre özel tanım açık, aynı malzemenin emrine açılır; revizyonu emrin sabitlenmiş revizyonudur | `MRK-15`; `MRK-U17` (400, alan yolu) |
 | MRK-16 Emre özel tanım yalnız kendi emrinde, revizyonlu tanım yalnız o revizyonla sabitlenmiş emirde seri verir | `MRK-U17` (422) |
 | Emir araması (emir no, parça no; tam eşleşme önde) ve emrin adımları (markalama istasyonundaki adım işaretli) | `MRK-U17` |

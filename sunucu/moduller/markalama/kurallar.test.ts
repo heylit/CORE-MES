@@ -111,6 +111,8 @@ describe('markalama kuralları', () => {
     assert.deepEqual(tanimSec([aday(1, { aktif: false })], 5, null), { durum: 'tanim-yok' }, 'pasif tanım sayılmaz');
     assert.deepEqual(tanimSec([], 5, 'B'), { durum: 'tanim-yok' });
     assert.deepEqual(tanimSec([aday(8, { uretimEmriId: 5, aktif: false }), genel], 5, null), { durum: 'bulundu', id: 1 }, 'pasif emre özel tanım genele düşer');
+    assert.deepEqual(tanimSec([ozel, genel], 5, 'C'), { durum: 'bulundu', id: 1 }, 'emrin revizyonu değiştiyse eski emre özel tanım kullanılmaz');
+    assert.deepEqual(tanimSec([aday(9, { uretimEmriId: 5, cizimRevizyonKodu: 'C' }), ozel], 5, 'B'), { durum: 'bulundu', id: 4 }, 'aynı emre iki revizyonlu tanımdan emrin revizyonundaki');
   });
 
   test('MRK-15: emre özel tanımın revizyonu emrinkidir', () => {

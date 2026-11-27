@@ -158,7 +158,8 @@ export type TanimSecimi = { durum: 'bulundu'; id: number } | { durum: 'tanim-yok
 export function tanimSec(adaylar: readonly TanimAdayi[], emirId: number, emirRevizyonu: string | null): TanimSecimi {
   const aktif = adaylar.filter((a) => a.aktif && (a.uretimEmriId === null || a.uretimEmriId === emirId));
   const rev = revizyonAnahtari(emirRevizyonu);
-  const emreOzel = aktif.find((a) => a.uretimEmriId === emirId);
+  // Emre özel tanım emrin bugünkü revizyonuyla eşleşmeli: emrin revizyonu sonradan değişirse eski biçim kullanılmaz, genele düşülür.
+  const emreOzel = aktif.find((a) => a.uretimEmriId === emirId && revizyonAnahtari(a.cizimRevizyonKodu) === rev);
   if (emreOzel !== undefined) return { durum: 'bulundu', id: emreOzel.id };
   const genel = aktif.filter((a) => a.uretimEmriId === null);
   const revizyonlu = rev === null ? undefined : genel.find((a) => revizyonAnahtari(a.cizimRevizyonKodu) === rev);
