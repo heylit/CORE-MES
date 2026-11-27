@@ -26,7 +26,9 @@ export interface TasimaGirdisi {
   tezgahAdi: (m: string) => string;
 }
 export interface TasimaSatiri { isId: string; tezgah: string; S: number; C: number; eskiTezgah: string; eskiS: number; tur: 'tasinan' | 'itilen' | 'cekilen' }
-export type TasimaSonucu = { gecerli: true; ileti: string | null; isler: TasimaSatiri[] } | { gecerli: false; ileti: string; isler: [] };
+// bolme: payın taşınması adımın elle bölme kaydını da yazar (3791): kayıt payların adedi ve tezgâhıdır, taşınan payın tezgâhı yenidir.
+export interface PayBolmesi { adim: string; kayit: { adet: number; m: string }[] }
+export type TasimaSonucu = { gecerli: true; ileti: string | null; isler: TasimaSatiri[]; bolme?: PayBolmesi } | { gecerli: false; ileti: string; isler: [] };
 
 const E = 1e-6;
 const ADIM = 0.25;

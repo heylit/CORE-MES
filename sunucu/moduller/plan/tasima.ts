@@ -1,6 +1,6 @@
 import { tasimaTakvimi } from './plan-girdisi.ts';
 import { surenIs, surenKalani } from './atolye-komutlari-kurallar.ts';
-import { tasimaItmesi, type BagTuru, type TasimaIsi, type TasimaSonucu } from './tasima-kurallar.ts';
+import { tasimaItmesi, type BagTuru, type PayBolmesi, type TasimaIsi, type TasimaSonucu } from './tasima-kurallar.ts';
 
 // Elle taşımanın girdisi (2790): işler çalışmanın planından, takvim ve aynı emrin öncülleri motorun derlemesinden. Biten adım beklenmez
 // (motor da beklemez); başlamış, biten ve donuk bölgedeki iş yerinde kalır. Taşınan iş donuk bölgede olsa da elle taşınır (önceki davranış).
@@ -12,7 +12,35 @@ type Nesne = Record<string, unknown>;
 const nesne = (x: unknown): x is Nesne => typeof x === 'object' && x !== null && !Array.isArray(x);
 const E = 1e-9;
 
-export function tasimaHesabi(calisma0: Nesne, simdi: number, g: { isId: string; tezgah: string; baslangic: number }): TasimaSonucu {
+// 3791: bölünmüş adımın payı da taşınır. Pay motorda ayrı işlemdir (adım kimliği, adım~2...) ve yeri kilitle sabitlenir; ama payın tezgâhını
+// adımın elle bölme kaydı (elleBol) belirler, kilit onu değiştirmez. Bu yüzden başka tezgâha taşınan payın kaydı yeni tezgâhla yazılır; rotadaki
+// "paralel böl" payı da elle bölmeye döner (bölme kaydı olmayınca pay kilidi adımı tek parçaya indirirdi, engine.js compile). Kayıt planın
+// pay bilgisinden (ops[..].pay) kurulur: payların sırası ve adedi aynen korunur. Pay değilse null; kurulamazsa neden metni.
+export function payBolmesi(calisma: Nesne, g: { isId: string; tezgah: string }): PayBolmesi | string | null {
+  const plan = nesne(calisma.plan) ? calisma.plan : null;
+  const ops = plan !== null && nesne(plan.ops) ? plan.ops : {};
+  const r = ops[g.isId];
+  if (!nesne(r) || !nesne(r.pay) || typeof r.pay.asil !== 'string' || typeof r.pay.n !== 'number' || r.pay.n < 2) return null;
+  const adim = r.pay.asil;
+  const kayit: { adet: number; m: string }[] = [];
+  for (let k = 1; k <= r.pay.n; k++) {
+    const id = k === 1 ? adim : `${adim}~${String(k)}`, y = ops[id];
+    if (!nesne(y) || !nesne(y.pay) || typeof y.pay.adet !== 'number' || typeof y.m !== 'string') return 'Bölünmüş adımın payları planda eksik; sayfayı yenileyin.';
+    kayit.push({ adet: y.pay.adet, m: id === g.isId ? g.tezgah : y.m });
+  }
+  const eski = nesne(calisma.elleBol) ? calisma.elleBol[adim] : undefined;
+  const ayni = Array.isArray(eski) && JSON.stringify(eski) === JSON.stringify(kayit);
+  if (String(r.m) !== g.tezgah && (Boolean(r.act) || (typeof r.pay.sayilan === 'number' && r.pay.sayilan > 0))) return 'Başlamış ya da sayımı olan payın tezgâhı bölmede kalır; payı aynı tezgâhta başka saate taşıyın.';
+  return ayni ? null : { adim, kayit };
+}
+export function tasimaHesabi(calisma1: Nesne, simdi: number, g: { isId: string; tezgah: string; baslangic: number }): TasimaSonucu {
+  const bolme = payBolmesi(calisma1, g);
+  if (typeof bolme === 'string') return { gecerli: false, ileti: bolme, isler: [] };
+  const calisma0 = bolme === null ? calisma1 : { ...calisma1, elleBol: { ...(nesne(calisma1.elleBol) ? calisma1.elleBol : {}), [bolme.adim]: bolme.kayit } };
+  const sonuc = pay0(calisma0, simdi, g);
+  return bolme !== null && sonuc.gecerli ? { ...sonuc, bolme } : sonuc;
+}
+function pay0(calisma0: Nesne, simdi: number, g: { isId: string; tezgah: string; baslangic: number }): TasimaSonucu {
   const plan = nesne(calisma0.plan) ? calisma0.plan : null;
   const ops = plan !== null && nesne(plan.ops) ? plan.ops : {};
   const tasinan = ops[g.isId];
