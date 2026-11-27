@@ -24,18 +24,27 @@ export const ORNEK_SAYIM = (): TezgahSayimCevabi => ({
       cihazAdi: 'ORN-T01', makine: M1, cevrimdeParca: 1,
       isler: [
         {
-          baslangic: saat(8), bitis: saat(10, 30), isEmriNo: 'ORN-IE-1042', op: '20', parcaNo: 'ORN-P-100', sayacFarki: 90, tezgahAdedi: 90, ayarAdedi: 2,
-          saglam: 86, hurda: 2, farkAdet: 2, farkYuzde: 2.3, programlar: ['ORN-P-100-OP20.NC'], programEslesmesi: 'uyusuyor', sayacGeriGitti: false, golgeOneri: 88,
+          baslangic: saat(8), bitis: saat(10, 30), isEmriNo: 'ORN-IE-1042', op: '20', parcaNo: 'ORN-P-100', sayacFarki: 90, tezgahAdedi: 90, denemeAyarAdedi: 4, ayarAdedi: 2,
+          saglam: 86, hurda: 2, farkAdet: 2, farkYuzde: 2.3, programlar: ['ORN-P-100-OP20.NC'], programEslesmesi: 'kesin', sayacGeriGitti: false, programDegisti: false, golgeOneri: 88,
         },
         {
-          baslangic: saat(10, 40), bitis: null, isEmriNo: 'ORN-IE-1043', op: '10', parcaNo: 'ORN-P-210', sayacFarki: 41, tezgahAdedi: 41, ayarAdedi: null,
-          saglam: 40, hurda: 0, farkAdet: 1, farkYuzde: 2.5, programlar: ['O1204'], programEslesmesi: 'uyusmuyor', sayacGeriGitti: true, golgeOneri: 41,
+          baslangic: saat(10, 40), bitis: saat(12, 10), isEmriNo: 'ORN-IE-1043', op: '10', parcaNo: 'ORN-P-210', sayacFarki: 41, tezgahAdedi: 41, denemeAyarAdedi: null, ayarAdedi: null,
+          saglam: 40, hurda: 0, farkAdet: 1, farkYuzde: 2.5, programlar: ['ORN-P-210-OP10.NC'], programEslesmesi: 'tahmin', sayacGeriGitti: false, programDegisti: true, golgeOneri: 41,
         },
+        {
+          baslangic: saat(12, 20), bitis: null, isEmriNo: 'ORN-IE-1044', op: '30', parcaNo: 'ORN-P-330', sayacFarki: 12, tezgahAdedi: 12, denemeAyarAdedi: 0, ayarAdedi: null,
+          saglam: 11, hurda: 0, farkAdet: 1, farkYuzde: 8.3, programlar: ['O1204'], programEslesmesi: 'uyusmuyor', sayacGeriGitti: true, programDegisti: null, golgeOneri: 12,
+        },
+      ],
+      programKullanimi: [
+        { program: 'ORN-P-100-OP20.NC', ilk: saat(8), son: saat(10, 30), uretimArtisi: 90, denemeArtisi: 4, isEmirleri: ['ORN-IE-1042'] },
+        { program: 'ORN-P-210-OP10.NC', ilk: saat(10, 40), son: saat(12, 10), uretimArtisi: 41, denemeArtisi: 0, isEmirleri: ['ORN-IE-1043', 'ORN-IE-1045'] },
+        { program: 'O1204', ilk: saat(13), son: saat(14, 20), uretimArtisi: 6, denemeArtisi: 3, isEmirleri: [] },
       ],
     },
     {
       cihazAdi: 'ORNM002', makine: null, cevrimdeParca: 2,
-      isler: [],
+      isler: [], programKullanimi: [],
     },
   ],
 });
@@ -109,6 +118,8 @@ export const ORNEK_GECIS = (): TezgahGecisCevabi => ({
         { olcut: 'program-eslesmesi', tamam: false, deger: '%50', neden: '1 işte program adında parça numarası yok' },
         { olcut: 'alarm-okunuyor', tamam: true, deger: 'Fault koşulları okunuyor', neden: null },
         { olcut: 'saat-farki', tamam: true, deger: '2 sn', neden: null },
+        { olcut: 'is-eslesmesi', tamam: false, deger: '%88', neden: '1 üretim artışı hiçbir işe bağlanmadı' },
+        { olcut: 'uyusmazlik', tamam: false, deger: null, neden: 'NC program alanı yok; ölçülemiyor' },
       ],
     },
     {
@@ -120,6 +131,8 @@ export const ORNEK_GECIS = (): TezgahGecisCevabi => ({
         { olcut: 'program-eslesmesi', tamam: false, deger: null, neden: 'eşleme onaylı değil' },
         { olcut: 'alarm-okunuyor', tamam: false, deger: null, neden: 'kumanda desteklemiyor (kod 22)' },
         { olcut: 'saat-farki', tamam: false, deger: '59 dk', neden: 'kumanda saati ileri' },
+        { olcut: 'is-eslesmesi', tamam: false, deger: null, neden: 'eşleme onaylı değil' },
+        { olcut: 'uyusmazlik', tamam: false, deger: null, neden: 'eşleme onaylı değil' },
       ],
     },
   ],

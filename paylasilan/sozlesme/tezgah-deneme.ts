@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { zamanSemasi } from '../zaman.ts';
-import { DENEME_PENCERELERI, GECIS_OLCUTLERI } from './tezgah-deneme-sabitleri.ts';
+import { DENEME_PENCERELERI, GECIS_OLCUTLERI, PROGRAM_ESLESMELERI } from './tezgah-deneme-sabitleri.ts';
 
 export * from './tezgah-deneme-sabitleri.ts';
 
@@ -37,7 +37,6 @@ export const tezgahEslemeGovdesi = z.object({
 });
 
 /* ---------------- Sayım ---------------- */
-export const PROGRAM_ESLESMELERI = ['uyusuyor', 'uyusmuyor', 'bilinmiyor'] as const;
 export const tezgahSayimCevabi = z.object({
   pencere: pencereSemasi,
   eksikler: eksiklerSemasi,
@@ -54,7 +53,10 @@ export const tezgahSayimCevabi = z.object({
       parcaNo: z.string().nullable(),
       // Tezgâh sayacının aralıktaki artışı (geri gidişte taban yenilenir); okunamadıysa null.
       sayacFarki: z.number().int().nullable(),
+      // Üretim artışı (kip otomatik, Dryrun ve Singleblock kapalı) × çevrimde parça.
       tezgahAdedi: z.number().int().nullable(),
+      // Üretim sayılmayan artış (deneme, ayar, tek tümce, Dryrun) × çevrimde parça.
+      denemeAyarAdedi: z.number().int().nullable(),
       // İlk parça onayına kadarki artış; onay anı bilinmiyorsa null.
       ayarAdedi: z.number().int().nullable(),
       saglam: z.number().int().nullable(),
@@ -64,8 +66,14 @@ export const tezgahSayimCevabi = z.object({
       programlar: z.array(z.string()),
       programEslesmesi: z.enum(PROGRAM_ESLESMELERI),
       sayacGeriGitti: z.boolean(),
+      // Heidenhain: işin onaylı program dosyasının boyutu ya da tarihi sonradan değişti; ölçülemiyorsa (MTConnect, liste yok) null.
+      programDegisti: z.boolean().nullable(),
       // Geçiş açık olsaydı operatöre öneri olarak düşecek adet; hiçbir yere yazılmaz.
       golgeOneri: z.number().int().nullable(),
+    })),
+    // Makinede pencerede sayaç artışı görülen programlar; isEmirleri boşsa program hiçbir işe bağlanmadı.
+    programKullanimi: z.array(z.object({
+      program: z.string(), ilk: zamanSemasi, son: zamanSemasi, uretimArtisi: z.number().int(), denemeArtisi: z.number().int(), isEmirleri: z.array(z.string()),
     })),
   })),
 });

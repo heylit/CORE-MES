@@ -8,10 +8,10 @@ import { tezgahEslemeCevabi } from '#paylasilan/sozlesme/tezgah-deneme.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { adAnahtari, aktifAlarmlar, alarmFarki, eslemeOnerisi } from './kurallar.ts';
+import { adAnahtari, aktifAlarmlar, alarmFarki, eslemeOnerisi, sayacBaglami } from './kurallar.ts';
 import type { TezgahOgesi } from './kurallar.ts';
-import { alarmOlaylariniIsle } from './servis.ts';
-import { alarmOlaylari, eskiAlarmlariSil, okumaYaz } from './sorgular.ts';
+import { alarmOlaylariniIsle, sayacDegisiminiIsle } from './servis.ts';
+import { alarmOlaylari, eskiAlarmlariSil, eskiSayacArtislariniSil, okumaYaz, sayacArtislari } from './sorgular.ts';
 
 // Kart 3811: deneme sayfası, gerçek PostgreSQL. Makine kodları ve cihaz adları uydurmadır.
 const PAROLA = 'dogru-parola-1';
@@ -42,6 +42,15 @@ describe('Alarm olayı kuralı (kart 3811)', () => {
     const f = alarmFarki(acik, [{ oge: 'k1', kod: null, metin: 'A' }, { oge: 'k3', kod: null, metin: 'C2' }, { oge: 'k4', kod: null, metin: 'D' }]);
     assert.deepEqual(f.kapanan, ['k2', 'k3']);
     assert.deepEqual(f.acilan.map((x) => x.oge), ['k3', 'k4']);
+  });
+});
+
+describe('Sayaç bağlamı (kart 3811-2)', () => {
+  test('Dryrun ve Singleblock ControllerModeOverride alt türünden ON/OFF okunur; yoksa null', () => {
+    const tanim = [{ kimlik: 'dry', tur: 'ControllerModeOverride', altTur: 'DRY_RUN' }, { kimlik: 'sb', tur: 'ControllerModeOverride', altTur: 'SINGLE_BLOCK' }];
+    const oge = (kimlik: string, deger: string): TezgahOgesi => ({ tur: 'ControllerModeOverride', ad: null, bilesen: 'Path', deger, zaman: null, kosul: null, kimlik, sira: null });
+    assert.deepEqual(sayacBaglami({ program: 'ORN.H', mod: 'AUTOMATIC' }, [oge('dry', 'ON'), oge('sb', 'OFF')], tanim), { program: 'ORN.H', kip: 'AUTOMATIC', dryrun: true, singleblock: false });
+    assert.deepEqual(sayacBaglami({ program: null, mod: null }, [], tanim), { program: null, kip: null, dryrun: null, singleblock: null });
   });
 });
 
@@ -125,5 +134,17 @@ describe('Tezgâh deneme sayfası eşleme (gerçek PostgreSQL)', () => {
     });
     const kalan = await vt().tx((db) => alarmOlaylari(db, t(-60), t(60)));
     assert.deepEqual(kalan.filter((o) => o.cihazAdi === 'ORN-ALM').map((o) => [o.metin, o.bitis]), [['ORN yeni', null]]);
+  });
+
+  test('sayaç değişimi: ilk okuma taban, aynı değer yazılmaz, artış ve geri gidiş bağlamıyla yazılır; tabanı temizlik silmez', async () => {
+    const ozet = (sayac: number) => ({ durum: 'calisiyor' as const, calisma: 'ACTIVE', mod: 'AUTOMATIC', program: 'ORN-P.H', sayac, takim: null, isMiliHizi: null, isMiliYuku: null, ilerleme: null, alarm: null });
+    const z = (dk: number) => new Date(Date.parse('2026-11-27T10:00:00Z') + dk * 60_000);
+    await vt().tx(async (db) => {
+      for (const [dk, n] of [[0, 5], [1, 5], [2, 6], [3, 0]] as const) await sayacDegisiminiIsle(db, 'ORN-SAY', ozet(n), [], z(dk));
+    });
+    const satirlar = await vt().tx((db) => sayacArtislari(db, ['ORN-SAY'], z(-1), z(10)));
+    assert.deepEqual(satirlar.map((r) => [r.onceki, r.deger, r.program, r.kip]), [[null, 5, 'ORN-P.H', 'AUTOMATIC'], [5, 6, 'ORN-P.H', 'AUTOMATIC'], [6, 0, 'ORN-P.H', 'AUTOMATIC']]);
+    await vt().tx((db) => eskiSayacArtislariniSil(db, z(60)));
+    assert.deepEqual((await vt().tx((db) => sayacArtislari(db, ['ORN-SAY'], z(-1), z(10)))).map((r) => r.deger), [0]);
   });
 });

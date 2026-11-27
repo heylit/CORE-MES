@@ -110,4 +110,37 @@ describe('Tezgâh bağlantısı deneme ekranları (kart 3811)', () => {
     expect(not.parentElement?.querySelector('svg')).toBeTruthy();
     expect((screen.getByText('ORN-IE-1042 · OP 20') as HTMLElement).className).toContain('tc-tzb-kirilmaz');
   });
+
+  it('Sayım: program eşleşmesi dört durumda ayrı rozet metni taşır, Deneme/ayar sütunu ve Program değişti notu görünür', async () => {
+    ac(<Sayim />);
+    await screen.findByText('ORN-IE-1042 · OP 20');
+    expect(screen.getByText('Uyuşuyor (kesin)')).toBeTruthy();
+    expect(screen.getByText('Uyuşuyor (tahmin)')).toBeTruthy();
+    expect(screen.getByText('Uyuşmuyor')).toBeTruthy();
+    expect(screen.getAllByRole('columnheader', { name: 'Deneme/ayar' }).length).toBeGreaterThan(0);
+    const degisti = screen.getAllByText('Program değişti');
+    expect(degisti).toHaveLength(1);
+    expect(degisti[0]!.parentElement?.querySelector('svg')).toBeTruthy();
+    expect(screen.getByText(/Dryrun ve Singleblock kapalı/)).toBeTruthy();
+    expect(screen.getByText(/adımın NC program alanı yokken tahmindir/)).toBeTruthy();
+  });
+
+  it('Sayım: program kullanımı bağlı işleri virgülle yazar, işe bağlanmayan programlar ayrı listededir; boş makinede bölüm yok', async () => {
+    ac(<Sayim />);
+    await screen.findByText('ORN-IE-1042 · OP 20');
+    expect(screen.getByRole('heading', { name: 'Program kullanımı' })).toBeTruthy();
+    expect(screen.getByText('ORN-IE-1043, ORN-IE-1045')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Hiçbir işe bağlanmayan programlar' })).toBeTruthy();
+    const bagsiz = screen.getByRole('table', { name: 'ORN-T01 işe bağlanmayan programlar' });
+    expect(within(bagsiz).getByText('O1204')).toBeTruthy();
+    expect(within(bagsiz).queryByText('ORN-P-100-OP20.NC')).toBeNull();
+    expect(screen.getAllByRole('heading', { name: 'Program kullanımı' })).toHaveLength(1);
+  });
+
+  it('Geçiş: iş eşleşmesi ve uyuşmazlık ölçütleri eşiklerle yazılır; ölçülemeyen ölçüt nedenini söyler', async () => {
+    ac(<GecisHazirligi />);
+    expect((await screen.findAllByText('Üretim artışlarının %95’inden fazlası bir iş emrine bağlı')).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('“Uyuşmuyor” oranı %2’nin altında').length).toBeGreaterThan(0);
+    expect(screen.getByText(/Eksik · değer yok · NC program alanı yok; ölçülemiyor/)).toBeTruthy();
+  });
 });

@@ -323,11 +323,11 @@ export async function alarmlariKapat(db: Db, cihazAdi: string, ogeler: readonly 
   await db.sorgu('UPDATE tezgah_alarm_olayi SET bitis = GREATEST($3, baslangic) WHERE cihaz_adi = $1 AND oge = ANY($2::text[]) AND bitis IS NULL', [cihazAdi, [...ogeler], zaman]);
 }
 
-export async function alarmlariAc(db: Db, cihazAdi: string, alarmlar: readonly { oge: string; kod: string | null; metin: string }[], zaman: Date, isEmriNo: string | null): Promise<void> {
+export async function alarmlariAc(db: Db, cihazAdi: string, alarmlar: readonly { oge: string; kod: string | null; metin: string }[], zaman: Date): Promise<void> {
   for (const a of alarmlar) {
     await db.sorgu(
-      'INSERT INTO tezgah_alarm_olayi (cihaz_adi, oge, kod, metin, baslangic, is_emri_no) VALUES ($1, $2, $3, left($4, 1000), $5, $6)',
-      [cihazAdi, a.oge, a.kod, a.metin, zaman, isEmriNo],
+      'INSERT INTO tezgah_alarm_olayi (cihaz_adi, oge, kod, metin, baslangic) VALUES ($1, $2, $3, left($4, 1000), $5)',
+      [cihazAdi, a.oge, a.kod, a.metin, zaman],
     );
   }
 }
@@ -336,11 +336,99 @@ export async function eskiAlarmlariSil(db: Db, sinir: Date): Promise<void> {
   await db.sorgu('DELETE FROM tezgah_alarm_olayi WHERE bitis IS NOT NULL AND bitis < $1', [sinir]);
 }
 
-export interface AlarmOlayiSatiri { cihazAdi: string; kod: string | null; metin: string; baslangic: string; bitis: string | null; isEmriNo: string | null }
+export interface AlarmOlayiSatiri { cihazAdi: string; kod: string | null; metin: string; baslangic: string; bitis: string | null }
 export function alarmOlaylari(db: Db, baslangic: Date, bitis: Date): Promise<AlarmOlayiSatiri[]> {
   return db.sorgu<AlarmOlayiSatiri>(
-    `SELECT cihaz_adi AS "cihazAdi", kod, metin, ${zamanMetni('baslangic')} AS baslangic, ${zamanMetni('bitis')} AS bitis, is_emri_no AS "isEmriNo"
+    `SELECT cihaz_adi AS "cihazAdi", kod, metin, ${zamanMetni('baslangic')} AS baslangic, ${zamanMetni('bitis')} AS bitis
        FROM tezgah_alarm_olayi WHERE baslangic < $2 AND COALESCE(bitis, $2) > $1 ORDER BY baslangic, id`,
     [baslangic, bitis],
+  );
+}
+
+/* ---------------- sayaç artışı ve program sürümü (kart 3811-2) ---------------- */
+export async function sonSayac(db: Db, cihazAdi: string): Promise<number | null> {
+  const r = await db.tek<{ deger: string }>('SELECT deger FROM tezgah_sayac_artisi WHERE cihaz_adi = $1 ORDER BY zaman DESC, id DESC LIMIT 1', [cihazAdi]);
+  return r === null ? null : Number(r.deger);
+}
+
+export async function sayacDegisimiYaz(
+  db: Db, cihazAdi: string, zaman: Date, onceki: number | null, deger: number, b: { program: string | null; kip: string | null; dryrun: boolean | null; singleblock: boolean | null },
+): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO tezgah_sayac_artisi (cihaz_adi, zaman, onceki, deger, program, kip, dryrun, singleblock)
+     VALUES ($1, $2, $3, $4, left($5, 500), left($6, 60), $7, $8)`,
+    [cihazAdi, zaman, onceki, deger, b.program, b.kip, b.dryrun, b.singleblock],
+  );
+}
+
+export async function eskiSayacArtislariniSil(db: Db, sinir: Date): Promise<void> {
+  // Cihazın son satırı tabandır, silinmez (yoksa sonraki okuma aradaki artışı göremezdi).
+  await db.sorgu(
+    `DELETE FROM tezgah_sayac_artisi a WHERE a.zaman < $1
+       AND EXISTS (SELECT 1 FROM tezgah_sayac_artisi b WHERE b.cihaz_adi = a.cihaz_adi AND (b.zaman, b.id) > (a.zaman, a.id))`,
+    [sinir],
+  );
+}
+
+export interface SayacArtisiSatiri { cihazAdi: string; zaman: string; onceki: number | null; deger: number; program: string | null; kip: string | null; dryrun: boolean | null; singleblock: boolean | null }
+// Penceredeki değişimler; pencere başından önceki son satır da gelir (taban).
+export function sayacArtislari(db: Db, cihazlar: readonly string[], baslangic: Date, bitis: Date): Promise<SayacArtisiSatiri[]> {
+  return db.sorgu<SayacArtisiSatiri>(
+    `SELECT cihaz_adi AS "cihazAdi", ${zamanMetni('zaman')} AS zaman, onceki::float8 AS onceki, deger::float8 AS deger, program, kip, dryrun, singleblock
+       FROM tezgah_sayac_artisi WHERE cihaz_adi = ANY($1::text[]) AND zaman >= $2 AND zaman < $3
+     ORDER BY cihaz_adi, zaman, id`,
+    [[...cihazlar], baslangic, bitis],
+  );
+}
+
+export async function programSurumleriYaz(db: Db, cihazAdi: string, dosyalar: readonly Lsv2ProgramDosyasi[], zaman: Date): Promise<void> {
+  if (dosyalar.length === 0) return;
+  await db.sorgu(
+    `INSERT INTO tezgah_program_surumu (cihaz_adi, ad, boyut, tarih, ilk_goruldu)
+     SELECT $1, * , $5 FROM unnest($2::text[], $3::bigint[], $4::timestamptz[])
+     ON CONFLICT DO NOTHING`,
+    [cihazAdi, dosyalar.map((d) => d.ad), dosyalar.map((d) => d.boyut), dosyalar.map((d) => d.tarih), zaman],
+  );
+}
+
+export async function eskiProgramSurumleriniSil(db: Db, sinir: Date): Promise<void> {
+  // Yalnız yerine yenisi gelmiş eski sürüm silinir; bir dosyanın en yeni sürümü kalır.
+  await db.sorgu(
+    `DELETE FROM tezgah_program_surumu a WHERE a.ilk_goruldu < $1
+       AND EXISTS (SELECT 1 FROM tezgah_program_surumu b WHERE b.cihaz_adi = a.cihaz_adi AND b.ad = a.ad AND b.ilk_goruldu > a.ilk_goruldu AND b.ilk_goruldu < $1)`,
+    [sinir],
+  );
+}
+
+export interface ProgramSurumuSatiri { cihazAdi: string; ad: string; boyut: number; tarih: string | null; ilkGoruldu: string }
+export function programSurumleri(db: Db, cihazlar: readonly string[]): Promise<ProgramSurumuSatiri[]> {
+  return db.sorgu<ProgramSurumuSatiri>(
+    `SELECT cihaz_adi AS "cihazAdi", ad, boyut::float8 AS boyut, ${zamanMetni('tarih')} AS tarih, ${zamanMetni('ilk_goruldu')} AS "ilkGoruldu"
+       FROM tezgah_program_surumu WHERE cihaz_adi = ANY($1::text[]) ORDER BY cihaz_adi, ad, ilk_goruldu, id`,
+    [[...cihazlar]],
+  );
+}
+
+export interface DurumOrnegiSatiri { cihazAdi: string; zaman: string; durum: TezgahDurumu }
+// Penceredeki durum örnekleri ve her cihazın pencereden önceki son örneği (pencere başındaki hâl).
+export function durumOrnekleri(db: Db, cihazlar: readonly string[], baslangic: Date, bitis: Date): Promise<DurumOrnegiSatiri[]> {
+  return db.sorgu<DurumOrnegiSatiri>(
+    `SELECT * FROM (
+       SELECT DISTINCT ON (cihaz_adi) cihaz_adi AS "cihazAdi", ${zamanMetni('zaman')} AS zaman, durum
+         FROM tezgah_ornek WHERE cihaz_adi = ANY($1::text[]) AND zaman < $2 ORDER BY cihaz_adi, zaman DESC, id DESC) once
+     UNION ALL
+     SELECT cihaz_adi, ${zamanMetni('zaman')}, durum FROM tezgah_ornek WHERE cihaz_adi = ANY($1::text[]) AND zaman >= $2 AND zaman < $3
+     ORDER BY 1, 2`,
+    [[...cihazlar], baslangic, bitis],
+  );
+}
+
+// Seçili öğelerin sayı değerleri penceresinde (değer geçmişi 24 saattir), zaman sırasıyla.
+export function sayiDegerleri(db: Db, cihazAdi: string, kimlikler: readonly string[], baslangic: Date, bitis: Date): Promise<{ zaman: string; deger: number }[]> {
+  return db.sorgu(
+    `SELECT ${zamanMetni('zaman')} AS zaman, deger::float8 AS deger FROM tezgah_deger_gecmisi
+      WHERE cihaz_adi = $1 AND data_item_id = ANY($2::text[]) AND zaman >= $3 AND zaman < $4 AND kosul IS NULL AND deger ~ '${SAYI_KALIBI}'
+      ORDER BY zaman, sira`,
+    [cihazAdi, [...kimlikler], baslangic, bitis],
   );
 }

@@ -852,3 +852,24 @@ export function alarmFarki(acik: readonly AktifAlarm[], aktif: readonly AktifAla
   const surer = new Set(acik.filter((a) => !kapanan.includes(a.oge)).map((a) => a.oge));
   return { kapanan, acilan: aktif.filter((a) => !surer.has(a.oge)) };
 }
+
+// Sayaç değişimi bağlamı (3811-2): program, kip, Dryrun ve Singleblock. Dryrun ve Singleblock MTConnect'te ControllerModeOverride öğesinin
+// DRY_RUN ve SINGLE_BLOCK alt türüdür (ON/OFF); yoksa null. Heidenhain'de kip R_RI 23'ten gelir, Singleblock "tek tümce" kipidir.
+export const SAYAC_SAKLAMA_GUNU = 90;
+export interface SayacBaglami { program: string | null; kip: string | null; dryrun: boolean | null; singleblock: boolean | null }
+const acikKapali = (d: string | null | undefined): boolean | null => {
+  const t = (d ?? '').trim().toUpperCase();
+  return t === 'ON' ? true : t === 'OFF' ? false : null;
+};
+export function sayacBaglami(ozet: Pick<TezgahOzeti, 'program' | 'mod'>, ogeler: readonly TezgahOgesi[], tanimlar: readonly { kimlik: string; tur: string; altTur: string | null }[]): SayacBaglami {
+  const deger = (alt: string): boolean | null => {
+    const kimlikler = new Set(tanimlar.filter((t) => t.tur === 'ControllerModeOverride' && t.altTur === alt).map((t) => t.kimlik));
+    const o = ogeler.find((x) => x.kimlik !== null && kimlikler.has(x.kimlik));
+    return o === undefined ? null : acikKapali(o.deger);
+  };
+  return { program: ozet.program, kip: ozet.mod, dryrun: deger('DRY_RUN'), singleblock: deger('SINGLE_BLOCK') };
+}
+// Üretim artışı: kip otomatik, Dryrun ve Singleblock kapalı. Kip okunamıyorsa (null) üretim sayılır; Dryrun ya da Singleblock okunamıyorsa
+// kapalı sayılır. Yarı otomatik (Heidenhain tek tümce) ve elle kipler deneme/ayardır.
+export const uretimArtisiMi = (b: Pick<SayacBaglami, 'kip' | 'dryrun' | 'singleblock'>): boolean =>
+  (b.kip === null || b.kip.toUpperCase() === 'AUTOMATIC') && b.dryrun !== true && b.singleblock !== true;

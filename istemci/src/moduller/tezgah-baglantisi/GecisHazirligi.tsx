@@ -12,6 +12,8 @@ export const OLCUT_ADI: Record<GecisOlcutu, string> = {
   'program-eslesmesi': `Program eşleşmesi ${yuzde(GECIS_ESIKLERI.programEslesmesi)}’in üstünde`,
   'alarm-okunuyor': 'Alarm okunuyor',
   'saat-farki': `Kumanda saati farkı ${GECIS_ESIKLERI.saatFarkiSn} sn’nin altında`,
+  'is-eslesmesi': `Üretim artışlarının ${yuzde(GECIS_ESIKLERI.isEslesmesi)}’inden fazlası bir iş emrine bağlı`,
+  uyusmazlik: `“Uyuşmuyor” oranı ${yuzde(GECIS_ESIKLERI.uyusmazlik)}’nin altında`,
 };
 
 type Makine = TezgahGecisCevabi['makineler'][number];
