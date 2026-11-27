@@ -9,7 +9,7 @@ import {
   surumNotu, taramaSayilari,
 } from './paket.ts';
 
-const kayit = (konu: string, govde: string): string => `${konu}\x1f${govde}\n\x1e\n`;
+const kayit = (konu: string, govde: string, sha = ''): string => `${konu}\x1f${govde}\n\x1f${sha}\x1e\n`;
 
 test('sürüm adı tesis gününden çıkar; aynı gün sonraki yayın sırayı artırır', () => {
   // UTC'de 11 Ekim, İstanbul'da 12 Ekim.
@@ -23,6 +23,22 @@ test('değişiklik listesi yalnız PR birleşmelerinden ve başlığından çık
     + kayit('Merge #840 into batch', '')
     + kayit('Merge pull request #12 from heylit/x', '');
   assert.deepEqual(degisiklikleriAyikla(gunluk), ['#879: satin-alma: dis islemler sayfasi', '#12']);
+});
+
+test('sıkıştırılmış PR ve toplu birleşmedeki kart commit\'i de değişiklik sayılır; dal içi birleşme sayılmaz', () => {
+  const gunluk = kayit('Show Uretim Terminali Hazirlik as one list (3606-2) (#2466)', '* ilk commit\n* ikinci commit', '3e523a4')
+    + kayit('Hide write controls on finished steps (3741)', '', '99d1ee2')
+    + kayit('Merge pull request #2351 from heylit/x', 'Toplu birlesme (3263)', 'aea83a7')
+    + kayit('Merge branch \'main\' into x', '', '1111111')
+    + kayit('Merge #840 into batch', '', '3333333')
+    + kayit('Merge split step pays in the Kokpit (3751)', '', '86a00a8')
+    + kayit('Read counter (#12) twice', '', '2222222');
+  assert.deepEqual(degisiklikleriAyikla(gunluk), [
+    '#2466: Show Uretim Terminali Hazirlik as one list (3606-2)', '99d1ee2: Hide write controls on finished steps (3741)',
+    '#2351: Toplu birlesme (3263)', '86a00a8: Merge split step pays in the Kokpit (3751)', '2222222: Read counter (#12) twice',
+  ]);
+  assert.match(surumNotu({ surum: '2026.11.27-1', commit: 'd'.repeat(40), tarih: '2026-11-27T05:00:00.000Z', oncekiYayin: '2026.11.26-2', yeniGocler: [], not: null, gunluk }),
+    /## Değişiklikler \(5\)\n\n- #2466: Show Uretim Terminali Hazirlik as one list \(3606-2\)\n- 99d1ee2: Hide write controls/);
 });
 
 test('değişiklik listesi bildirim sınırlarını aşmaz', () => {
