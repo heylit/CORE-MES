@@ -50,13 +50,15 @@ describe('3111 Hazırlık takip tablosu', () => {
     expect(within(t).getByText('Çalışıyor')).toBeTruthy();
   }, 40000);
 
-  it('3606-2: satırda yalnız eksik madde adıyla; çip paketin Terminale gönder sekmesini açar; tamam madde yazılmaz', async () => {
+  it('3816: madde sütunu hâli yazar; emir satırı operasyonların en kötüsü; eksik hücre paketin Terminale gönder sekmesini açar; emir geneli madde "emirle aynı"', async () => {
     kur(YONETICI, 'M');
     const t = await tablo();
-    const cip = await within(t).findByRole('button', { name: /^CNC kurulumu eksik/ }, { timeout: 10000 });
-    expect(cip.textContent).toBe('CNC');
-    expect(within(t).queryByRole('button', { name: /^Rota yürürlükte/ })).toBeNull();
-    expect(within(t).getByText('1/3 hazır')).toBeTruthy();
+    const cip = await within(t).findByRole('button', { name: /^ORN-UE-M Op 10 NC: CNC kurulumu eksik/ }, { timeout: 10000 });
+    expect(cip.textContent).toBe('Eksik');
+    expect(within(t).getByRole('button', { name: /^ORN-UE-M NC: CNC kurulumu eksik/ })).toBeTruthy();
+    expect(within(t).queryByRole('button', { name: /Rota yürürlükte/ })).toBeNull();
+    expect(within(t).getAllByText('↑ emirle aynı').length).toBeGreaterThan(0);
+    expect(within(t).getByText('Eksik · 1/3')).toBeTruthy();
     fireEvent.click(cip);
     const d = await screen.findByRole('region', { name: 'İş paketi' }, { timeout: 10000 });
     expect(within(d).getByRole('button', { name: /Terminale gönder/ }).getAttribute('aria-current')).toBe('step');
@@ -67,7 +69,7 @@ describe('3111 Hazırlık takip tablosu', () => {
     const t = await tablo();
     const g = screen.getByRole('group', { name: 'İş durumu' });
     expect(await within(g).findByRole('button', { name: /^Plan bağsız 1$/ }, { timeout: 10000 })).toBeTruthy();
-    fireEvent.click(within(t).getByRole('button', { name: /kontrol planı Kalite Merkezi’ne bağlı değil/ }));
+    fireEvent.click(within(t).getByRole('button', { name: /^ORN-UE-K Op 10: kontrol planı Kalite Merkezi’ne bağlı değil/ }));
     expect(within(g).getByRole('button', { name: /^Plan bağsız/ }).getAttribute('aria-pressed')).toBe('true');
     expect(within(t).getByRole('button', { name: /^Op 10/ })).toBeTruthy();
     expect(within(t).queryByRole('button', { name: /^Op 20/ })).toBeNull();
@@ -139,5 +141,21 @@ describe('3111 Hazırlık takip tablosu', () => {
     expect(within(t).getAllByText('ORN-UE-D').length).toBeGreaterThan(0);
     expect(within(t).queryByRole('checkbox')).toBeNull();
     expect(within(t).queryByRole('button', { name: /geri çek/ })).toBeNull();
+  }, 40000);
+
+  // Depo dosya içinde paylaşılır: ikinci emri açan bu test en sonda durur (öncekiler tek emir görür).
+  it('3816: birden çok emirde operasyonlar kapalı gelir; emir satırı açar, "Bütün operasyonları aç" hepsini açar', async () => {
+    kur(YONETICI, 'C', undefined, undefined, { no: 'ORN-UE-C8', tmi: { emirId: 8, isEmriId: 1, opNo: 10 } } as Partial<Pkg>);
+    const t = await screen.findByRole('table', { name: 'Hazırlık listesi' }, { timeout: 10000 });
+    const ac = await within(t).findByRole('button', { name: 'ORN-UE-C8 operasyonlarını aç' }, { timeout: 10000 });
+    expect(ac.getAttribute('aria-expanded')).toBe('false');
+    expect(t.querySelector('[data-paket="tmi-ie-C1"]')).toBeNull();
+    fireEvent.click(ac);
+    expect(t.querySelector('[data-paket="tmi-ie-C1"]')).not.toBeNull();
+    fireEvent.click(within(t).getByRole('button', { name: 'ORN-UE-C8 operasyonlarını kapat' }));
+    expect(t.querySelector('[data-paket="tmi-ie-C1"]')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Bütün operasyonları aç' }));
+    expect(t.querySelector('[data-paket="tmi-ie-C1"]')).not.toBeNull();
+    expect(t.querySelector('[data-paket="tmi-ie-C2"]')).not.toBeNull();
   }, 40000);
 });
