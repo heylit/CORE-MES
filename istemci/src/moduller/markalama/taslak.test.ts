@@ -29,10 +29,10 @@ describe('markalama taslak denetimi', () => {
     expect(alanFormuHatasi(alan({ icerik: 'sabit', sabitMetin: ' ' }))).toBe('Sabit metin boş.');
   });
 
-  it('yeni tanımda op no zorunludur; hata markanın sırası ve adıyla döner', () => {
+  it('yeni tanımda operasyon seçimi zorunludur; hata markanın sırası ve adıyla döner', () => {
     const t = { yeni: true, opNo: '40', baslangicSirasi: '1', alanlar: [alan()] };
     expect(taslakHatasi(t)).toBeNull();
-    expect(taslakHatasi({ ...t, opNo: '' })).toBe('Rota operasyon no girilmeli.');
+    expect(taslakHatasi({ ...t, opNo: '' })).toBe('Operasyon seçilmeli.');
     expect(taslakHatasi({ ...t, opNo: '0' })).toBe('Rota operasyon no 0\'dan büyük tam sayı olmalı.');
     expect(taslakHatasi({ ...t, yeni: false, opNo: '' })).toBeNull();
     expect(taslakHatasi({ ...t, baslangicSirasi: '0' })).toBe('Başlangıç sırası 1 ya da daha büyük tam sayı olmalı.');

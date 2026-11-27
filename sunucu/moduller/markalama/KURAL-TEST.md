@@ -12,7 +12,11 @@ Testler: `kurallar.test.ts` (saf), `markalama.test.ts` (gerçek PostgreSQL), `is
 | MRK-06 Doğrulama yalnız bu tanımın birimi; hurda doğrulanmaz; yinelenen okutma olay yazmaz | `MRK-U4` |
 | Önizleme: emirsiz istekte {EMIR} yer tutucusu, emir kapsamında yeni emrin ilk numaraları | `MRK-U11` |
 | MRK-07 Seri yalnız açık emirde, tanımın malzemesinin emrinde | `MRK-U3` (422) |
-| MRK-08 Tanım var olan malzemeye açılır; (malzeme, op) tekil; sürüm denetimi | `MRK-U2` |
+| MRK-08 Tanım var olan malzemeye açılır; (malzeme, op, teknik resim revizyonu, emir) tekil, revizyon harften ve boşluktan bağımsız; sürüm denetimi | `MRK-U2`; `MRK-U17`; dizin `markalama_tanimi_anahtar_tekil` |
+| MRK-14 İşin tanımı: emre özel (emrin bugünkü revizyonuyla), emrin teknik resim revizyonuna ait, revizyonsuz genel; başka revizyonun tanımı kullanılmaz; pasif tanım sayılmaz | `MRK-14`; `MRK-U17`; `MRK-U18` |
+| MRK-15 Emre özel tanım açık, aynı malzemenin emrine açılır; revizyonu emrin sabitlenmiş revizyonudur | `MRK-15`; `MRK-U17` (400, alan yolu) |
+| MRK-16 Seri yalnız emrin o operasyonu için seçilen tanımdan verilir (emre özel ya da revizyonlu varken genel 422); emre özel tanım yalnız kendi emrinde, revizyonlu tanım yalnız o revizyonda | `MRK-U17` (422) |
+| Emir araması (emir no, parça no; tam eşleşme önde) ve emrin adımları (markalama istasyonundaki adım işaretli) | `MRK-U17` |
 | MRK-09 Başlangıç sırası değişince: malzeme ve yıl kapsamında başlamış sayaç ileri alınır, geri alma reddedilir; emir kapsamında yeni emirde geçer | `MRK-09`; `MRK-U10` |
 | MRK-10 Ölçü, sabit ondalığa yuvarlanınca 0'a ya da sınır dışına düşmez (yükseklik, derinlik, en, boy, açı, merkez) | `MRK-10`; `MRK-U9` (400, alan yolu) |
 | MRK-11 Seri no en çok 80 karakter: kayıtta en uzun açık emirle, markalamada gerçek numarayla | `MRK-11`; `MRK-U9` (kayıtta 400, markalamada 422) |
@@ -20,7 +24,7 @@ Testler: `kurallar.test.ts` (saf), `markalama.test.ts` (gerçek PostgreSQL), `is
 | Pasif tanım seri vermez, listede kalır, geri etkinleşir | `MRK-U12` |
 | İzleme: seri parçası (harften bağımsız, tam eşleşme önde), tanım süzgeci, olayda kişi adı ve hurda nedeni; olmayan emrin özeti 404 | `MRK-U13` |
 | Genel arama (Ctrl K) `seri` türü: parçayla, harften bağımsız, tam eşleşme önde; yol Seri izleme | `MRK-U14` |
-| Aynı malzemede aynı seri şablonlu ikinci tanım (pasif dahil) eklenemez ve kayıtta o şablona çevrilemez (MRK-2, karar a) | `MRK-U15` |
+| Aynı malzemede aynı seri şablonu yalnız aynı operasyonun revizyon ve emir varyantında, aynı sayaç kapsamıyla kullanılır; başka operasyon ya da başka sayaç reddedilir, pasif tanım da sayılır (MRK-2, karar a; 3788 Daralt) | `MRK-2`; `MRK-U15`; `MRK-U19` |
 | Seri tekil, sayaç tekrar korumalı | `MRK-U3`; kısıt `markalama_birimi_seri_tekil` |
 | Olay defteri yalnız eklenir | `MRK-U6` (UPDATE, DELETE, TRUNCATE reddedilir) |
 | 3B yer: nokta ve normal yere, düzlem normale döner, açı normal çevresinde | `sahne.test.ts` |

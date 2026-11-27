@@ -1,11 +1,11 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
-  birimAyrintisiCevabi, birimSemasi, birimSorgusu, birimlerCevabi, dogrulaGovdesi, durumGovdesi, emirOzetiCevabi, emirOzetiSorgusu, emirParametresi,
-  idParametresi, markalaGovdesi, onizlemeCevabi, onizlemeSorgusu, tanimAktiflikGovdesi, tanimEkleGovdesi, tanimKaydetGovdesi, tanimSemasi, tanimSorgusu,
+  birimAyrintisiCevabi, birimSemasi, birimSorgusu, birimlerCevabi, dogrulaGovdesi, durumGovdesi, emirAraCevabi, emirAraSorgusu, emirOzetiCevabi,
+  emirOzetiSorgusu, emirParametresi, idParametresi, isTanimiCevabi, isTanimiSorgusu, malzemeParametresi, operasyonlarCevabi, markalaGovdesi, onizlemeCevabi, onizlemeSorgusu, tanimAktiflikGovdesi, tanimEkleGovdesi, tanimKaydetGovdesi, tanimSemasi, tanimSorgusu,
   tanimEmirleriCevabi, tanimlarCevabi,
 } from '#paylasilan/sozlesme/markalama.ts';
 import {
-  birimGetir, birimler, dogrula, durumDegistir, emirOzeti, markala, onizleme, tanimAktiflik, tanimEkle, tanimEmirleri, tanimGetir, tanimKaydet,
+  birimGetir, birimler, dogrula, durumDegistir, emirAra, emirOperasyonlari, emirOzeti, isTanimi, malzemeOperasyonlari, markala, onizleme, tanimAktiflik, tanimEkle, tanimEmirleri, tanimGetir, tanimKaydet,
   tanimlar,
 } from './servis.ts';
 
@@ -66,6 +66,23 @@ export const uclar = [
   uc({
     yontem: 'GET', yol: '/markalama/birimler/:id', yetki: OKUMA, parametre: idParametresi, cevap: birimAyrintisiCevabi,
     isle: ({ db, parametre }) => birimGetir(db, parametre.id),
+  }),
+  // 3788: Tanımlar ve markalama terminali emirden başlar; okuma sayfayı görenedir (rota ve emir okuması bu modülden geçer).
+  uc({
+    yontem: 'GET', yol: '/markalama/emir-ara', yetki: OKUMA, sorgu: emirAraSorgusu, cevap: emirAraCevabi,
+    isle: ({ db, sorgu }) => emirAra(db, sorgu.metin),
+  }),
+  uc({
+    yontem: 'GET', yol: '/markalama/emirler/:emirId/operasyonlar', yetki: OKUMA, parametre: emirParametresi, cevap: operasyonlarCevabi,
+    isle: ({ db, parametre }) => emirOperasyonlari(db, parametre.emirId),
+  }),
+  uc({
+    yontem: 'GET', yol: '/markalama/emirler/:emirId/tanim', yetki: OKUMA, parametre: emirParametresi, sorgu: isTanimiSorgusu, cevap: isTanimiCevabi,
+    isle: ({ db, parametre, sorgu }) => isTanimi(db, parametre.emirId, sorgu.opNo),
+  }),
+  uc({
+    yontem: 'GET', yol: '/markalama/malzemeler/:malzemeId/operasyonlar', yetki: OKUMA, parametre: malzemeParametresi, cevap: operasyonlarCevabi,
+    isle: ({ db, parametre }) => malzemeOperasyonlari(db, parametre.malzemeId),
   }),
   uc({
     yontem: 'GET', yol: '/markalama/emirler/:emirId/ozet', yetki: OKUMA, parametre: emirParametresi, sorgu: emirOzetiSorgusu,

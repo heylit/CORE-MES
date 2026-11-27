@@ -74,3 +74,21 @@
 .tc-mrk-bilgi dd { margin: 0; overflow-wrap: anywhere; }
 .tc-mrk-gecmis { margin: 0; padding-inline-start: var(--b-5); display: flex; flex-direction: column; gap: var(--b-2); }
 .tc-mrk-gecmis li { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+
+/* 3788: emir ve operasyon seçimi; seri verilemeyen durum uyarısı. */
+.tc-mrk-uyari { margin: 0; padding: var(--b-2) var(--b-3); border: 1px solid var(--hold); border-radius: var(--yari-1); color: var(--ink); overflow-wrap: anywhere; }
+.tc-mrk-ops { display: flex; flex-direction: column; gap: var(--b-2); align-items: flex-start; min-width: 0; }
+.tc-mrk-ops-liste { display: flex; flex-direction: column; gap: var(--b-2); width: 100%; min-width: 0; }
+.tc-mrk-op {
+  display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content; align-items: center; gap: var(--b-3); min-height: var(--dokunma);
+  padding: var(--b-2) var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-1); background: var(--panel); color: var(--ink);
+  font: inherit; text-align: start; cursor: pointer;
+}
+.tc-mrk-op:hover { border-color: var(--bp); }
+.tc-mrk-op-secili { border-color: var(--bp); background: var(--bp-dim2); }
+.tc-mrk-op-no { font-weight: 700; }
+.tc-mrk-op-ad { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 480px) {
+  .tc-mrk-op { grid-template-columns: max-content minmax(0, 1fr); }
+  .tc-mrk-op > :last-child { grid-column: 2; justify-self: start; }
+}

@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import type { IstasyonSecimiCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type {
-  BirimlerCevabi, EmirOzetiCevabi, MarkalaGovdesi, MarkalamaBirimi, MarkalamaTanimi, OnizlemeCevabi, TanimEmirleriCevabi, TanimlarCevabi,
+  BirimlerCevabi, EmirOzetiCevabi, EmirSecimi, IsTanimiCevabi, MarkalaGovdesi, MarkalamaBirimi, MarkalamaTanimi, OnizlemeCevabi,
+  OperasyonlarCevabi,
 } from '#paylasilan/sozlesme/markalama.ts';
 import {
   Dugme, DurumKutusu, Kart, KodOkuyucu, OnayPenceresi, Qr, Rozet, Secim, Tablo, useBildirim, type Sutun,
@@ -13,6 +15,8 @@ import { useOturum } from '../../ortak/veri/oturum.ts';
 import { zamanMetni } from '../../ortak/veri/zaman-metni.ts';
 import { BIRIM_DURUMLARI, DURUM_ADLARI, DURUM_TONLARI, YONTEM_ADLARI } from './adlar.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { EmirArama, OperasyonListesi } from './IsSecimi.tsx';
+import { IS_TANIMI_YOK_ILETISI } from './TerminalMarkalama.ts';
 import { ModelPaneli } from './ModelPaneli.tsx';
 import { yaziOlculeri } from './taslak.ts';
 import './markalama.css';
@@ -151,21 +155,58 @@ function Calisma({ tanim, emirId, istasyonId, yazabilir }: {
   );
 }
 
-function EmirSecimi({ tanim, emirId, sec }: { tanim: MarkalamaTanimi; emirId: number | null; sec: (id: number | null) => void }) {
-  const emirler = useQuery({
-    queryKey: anahtarlar.emirler(tanim.id),
-    queryFn: () => api.get<TanimEmirleriCevabi>(`/markalama/tanimlar/${tanim.id}/emirler`),
+const ISTASYON_ANAHTARI = 'markalama.terminal.istasyon';
+// İstasyon cihaza bağlıdır: lazerin yanındaki bilgisayar her açılışta aynı istasyonu sorar olmasın. Saklama kapalıysa her açılışta seçilir.
+function kayitliIstasyon(): number | null {
+  try { const v = window.localStorage.getItem(ISTASYON_ANAHTARI); return v === null ? null : Number(v) || null; } catch { return null; }
+}
+function istasyonuSakla(id: number | null): void {
+  try { if (id === null) window.localStorage.removeItem(ISTASYON_ANAHTARI); else window.localStorage.setItem(ISTASYON_ANAHTARI, String(id)); } catch { /* saklama kapalı */ }
+}
+
+
+// 3788: markalama terminali emirden başlar. Emir okutulur; emrin markalama istasyonundaki adımı tekse kendiliğinden seçilir, tanımı
+// sunucu emre özel, emrin teknik resim revizyonu ve revizyonsuz genel sırasıyla bulur. Seri verilemeyen durum nedeniyle yazılır.
+function EmirIsi({ emir, istasyonId, yazabilir, tanimYazabilir }: { emir: EmirSecimi; istasyonId: number | null; yazabilir: boolean; tanimYazabilir: boolean }) {
+  const [opNo, opNoYaz] = useState<number | null>(null);
+  const ops = useQuery({
+    queryKey: anahtarlar.emirOperasyonlari(emir.id),
+    queryFn: () => api.get<OperasyonlarCevabi>(`/markalama/emirler/${emir.id}/operasyonlar`),
   });
+  const markalamadakiler = (ops.data?.operasyonlar ?? []).filter((o) => o.markalama === true);
+  const [tekOp] = markalamadakiler;
+  const seciliOp = opNo ?? (markalamadakiler.length === 1 && tekOp !== undefined ? tekOp.opNo : null);
+  const is = useQuery({
+    queryKey: anahtarlar.isTanimi(emir.id, seciliOp ?? 0),
+    queryFn: () => api.get<IsTanimiCevabi>(`/markalama/emirler/${emir.id}/tanim?opNo=${seciliOp ?? 0}`),
+    enabled: seciliOp !== null,
+  });
+  const op = ops.data?.operasyonlar.find((o) => o.opNo === seciliOp);
   return (
     <>
-      <Secim
-        etiket="Üretim emri"
-        secenekler={(emirler.data?.emirler ?? []).map((e) => ({ deger: String(e.id), baslik: `${e.emirNo} · ${e.adet} adet` }))}
-        bosSecenek={emirler.isPending ? 'Emirler okunuyor' : (emirler.data?.emirler.length ?? 0) === 0 ? 'Açık emir yok' : 'Emir seçin'}
-        value={emirId === null ? '' : String(emirId)}
-        onChange={(o) => sec(o.target.value === '' ? null : Number(o.target.value))}
-      />
-      {emirler.isError && <p className="tc-mrk-hata" role="alert">{hataIletisi(emirler.error, 'Emirler okunamadı')}</p>}
+      <Kart baslik={`${emir.emirNo} · ${emir.malzemeKodu ?? `#${emir.malzemeId}`}`} simge="tag"
+        sag={emir.cizimRevizyonKodu === null ? undefined : <Rozet ton="bilgi">Teknik resim Rev {emir.cizimRevizyonKodu}</Rozet>}
+      >
+        {ops.isPending && <p className="tc-mrk-ipucu">Emrin adımları okunuyor…</p>}
+        {ops.isError && <p className="tc-mrk-hata" role="alert">{hataIletisi(ops.error, 'Emrin adımları okunamadı')}</p>}
+        {ops.data && markalamadakiler.length === 0 && (
+          <p className="tc-mrk-uyari" role="alert">Bu emirde markalama istasyonuna giden adım yok. Doğru emri okuttuğunuzu denetleyin ya da adımı aşağıdan seçin.</p>
+        )}
+        {ops.data && (markalamadakiler.length !== 1 || opNo !== null) && (
+          <OperasyonListesi kaynak={{ emirId: emir.id }} secili={seciliOp} sec={(o) => opNoYaz(o.opNo)} adimsizNotu={false} />
+        )}
+        {op !== undefined && <p className="tc-mrk-ipucu"><b className="mono">OP{op.opNo}</b> {op.ad}{op.istasyonKodu === null ? '' : ` · ${op.istasyonKodu}`}</p>}
+        {is.isError && <p className="tc-mrk-hata" role="alert">{hataIletisi(is.error, 'Markalama tanımı okunamadı')}</p>}
+        {is.data && is.data.durum !== 'bulundu' && (
+          <p className="tc-mrk-uyari" role="alert">
+            {IS_TANIMI_YOK_ILETISI[is.data.durum]}{tanimYazabilir && <> <Link to="/markalama">Tanım yaz</Link></>}
+          </p>
+        )}
+        {is.data?.tanim && is.data.tanim.uretimEmriId !== null && <p className="tc-mrk-ipucu">Bu emre özel tanım kullanılıyor.</p>}
+      </Kart>
+      {is.data?.tanim && seciliOp !== null && (
+        <Calisma key={`${is.data.tanim.id}:${emir.id}`} tanim={is.data.tanim} emirId={emir.id} istasyonId={istasyonId} yazabilir={yazabilir} />
+      )}
     </>
   );
 }
@@ -173,45 +214,33 @@ function EmirSecimi({ tanim, emirId, sec }: { tanim: MarkalamaTanimi; emirId: nu
 export function Istasyon() {
   const oturum = useOturum();
   const yazabilir = oturum.data?.islemler.includes('markalama.seri-ver') === true;
-  const [secim, secimYaz] = useState<{ tanimId: number | null; emirId: number | null }>({ tanimId: null, emirId: null });
-  const [istasyonId, istasyonIdYaz] = useState<number | null>(null);
-  const liste = useQuery({ queryKey: anahtarlar.tanimlar, queryFn: () => api.get<TanimlarCevabi>('/markalama/tanimlar') });
+  const tanimYazabilir = oturum.data?.islemler.includes('markalama.tanim-yaz') === true;
+  const [emir, emirYaz] = useState<EmirSecimi | null>(null);
+  const [istasyonId, istasyonIdYaz] = useState<number | null>(kayitliIstasyon);
   const istasyonlar = useQuery({ queryKey: anahtarlar.istasyonlar, queryFn: () => api.get<IstasyonSecimiCevabi>('/istasyonlar/secim') });
   const istasyonSecenekleri = (istasyonlar.data?.gruplar ?? []).flatMap((g) => g.istasyonlar.filter((i) => i.aktif && i.tip === 'markalama').map((i) => ({
     deger: String(i.id), baslik: `${g.isMerkeziAd} · ${i.ad}`,
   })));
-  if (liste.isPending) return <DurumKutusu durum="yukleniyor" />;
-  if (liste.isError) return <DurumKutusu durum="hata" yenile={() => { void liste.refetch(); }} />;
-  const etkinler = liste.data.tanimlar.filter((t) => t.aktif);
-  const tanim = etkinler.find((t) => t.id === secim.tanimId);
+  // Saklanan istasyon artık markalama istasyonu değilse (pasif ya da tipi değişti) seçili sayılmaz.
+  const gecerliIstasyon = istasyonlar.data === undefined || istasyonSecenekleri.some((o) => o.deger === String(istasyonId)) ? istasyonId : null;
   return (
     <div className="tc-mrk-sayfa">
-      <Kart baslik="Markalama istasyonu" simge="tag">
+      <Kart baslik="Markalama terminali" simge="scan">
+        {emir === null
+          ? <EmirArama etiket="Emri ya da refakat kartını okut" sec={emirYaz} />
+          : <Dugme simge="x" boyut="ana" onClick={() => emirYaz(null)}>Başka emir</Dugme>}
         <div className="tc-mrk-satir">
           <Secim
-            etiket="Parça ve operasyon"
-            secenekler={etkinler.map((t) => ({ deger: String(t.id), baslik: `${t.malzemeKodu ?? `#${t.malzemeId}`} · Op ${t.opNo}` }))}
-            bosSecenek={etkinler.length === 0 ? 'Markalama tanımı yok' : 'Seçin'}
-            value={secim.tanimId === null ? '' : String(secim.tanimId)}
-            onChange={(o) => secimYaz({ tanimId: o.target.value === '' ? null : Number(o.target.value), emirId: null })}
-          />
-          {tanim && <EmirSecimi key={tanim.id} tanim={tanim} emirId={secim.emirId} sec={(emirId) => secimYaz((o) => ({ ...o, emirId }))} />}
-          <Secim
-            etiket="İstasyon"
+            etiket="Bu cihazın istasyonu"
             secenekler={istasyonSecenekleri}
             bosSecenek={istasyonlar.isPending ? 'İstasyonlar okunuyor' : istasyonSecenekleri.length === 0 ? 'Markalama istasyonu yok' : 'Seçin'}
-            value={istasyonId === null ? '' : String(istasyonId)}
-            onChange={(o) => istasyonIdYaz(o.target.value === '' ? null : Number(o.target.value))}
+            value={gecerliIstasyon === null ? '' : String(gecerliIstasyon)}
+            onChange={(o) => { const id = o.target.value === '' ? null : Number(o.target.value); istasyonIdYaz(id); istasyonuSakla(id); }}
           />
         </div>
         {istasyonlar.isError && <p className="tc-mrk-hata" role="alert">{hataIletisi(istasyonlar.error, 'İstasyonlar okunamadı')}</p>}
       </Kart>
-      {tanim && secim.emirId !== null && (
-        <Calisma
-          key={`${tanim.id}:${secim.emirId}`} tanim={tanim} emirId={secim.emirId} istasyonId={istasyonId}
-          yazabilir={yazabilir}
-        />
-      )}
+      {emir !== null && <EmirIsi key={emir.id} emir={emir} istasyonId={gecerliIstasyon} yazabilir={yazabilir} tanimYazabilir={tanimYazabilir} />}
     </div>
   );
 }

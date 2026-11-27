@@ -11,4 +11,8 @@ export const anahtarlar = {
   modelDosyasi: (belgeId: number, revizyonId: number) => ['markalama', 'model-dosyasi', belgeId, revizyonId] as const,
   malzemeAra: (metin: string) => ['markalama', 'malzeme-ara', metin] as const,
   hurdaNedenleri: ['markalama', 'hurda-nedenleri'] as const,
+  emirAra: (metin: string) => ['markalama', 'emir-ara', metin] as const,
+  emirOperasyonlari: (emirId: number) => ['markalama', 'emir-operasyonlari', emirId] as const,
+  malzemeOperasyonlari: (malzemeId: number) => ['markalama', 'malzeme-operasyonlari', malzemeId] as const,
+  isTanimi: (emirId: number, opNo: number) => ['markalama', 'is-tanimi', emirId, opNo] as const,
 };
