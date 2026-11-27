@@ -85,6 +85,23 @@ test.describe('sayaç tüpleri ve teslim düğmeleri', () => {
     });
   }
 
+  // Düzeltme tuşlu sayaçta (yönetici) 1600x1000'de yanlar küçük düzendedir: tüp adları ipucundadır, birbirine binmez.
+  test.describe('düzeltme tuşlarıyla', () => {
+    test.use({ hesap: 'ornek.yonetici' });
+    test('1600x1000: tüp adları ve altyazıları birbirine binmez', async ({ page, ac }, bilgi) => {
+      test.skip(bilgi.project.name !== 'g1280', 'pencere boyu testin kendisinde');
+      await page.setViewportSize({ width: 1600, height: 1000 });
+      await page.addInitScript(() => { localStorage.setItem('arkon:station', JSON.stringify('ORN-TORNA-1')); });
+      await kur(page, true);
+      await ac('/uretim-terminali');
+      await olc(page);
+      const yazilar = await page.getByRole('region', { name: 'Üretim Terminali' }).locator('.tc-ay1-kanat-cift .tc-ay1-gosterge > :is(.tc-ay1-gosterge-ad, small, b):visible').evaluateAll(
+        (l) => l.map((e) => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height, t: e.textContent }; }),
+      );
+      for (const [i, a] of yazilar.entries()) for (const b of yazilar.slice(i + 1)) expect(kesisir(a, b), `${a.t ?? ''} / ${b.t ?? ''} biniyor`).toBe(false);
+    });
+  });
+
   test('%130 yazıda tüp adları ve düğmeler okunur, ekrandan taşmaz', async ({ page, ac }, bilgi) => {
     test.skip(bilgi.project.name !== 'g360', 'telefon düzeni');
     await kur(page, true);

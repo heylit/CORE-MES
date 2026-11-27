@@ -1773,6 +1773,7 @@ button.tc-ay1-yer { font: inherit; color: inherit; text-align: start; cursor: po
   .tc-ay1-genis .tc-ay1-kanat-cift .tc-ay1-tup-dugme .tc-simge { display: none; }
   .tc-ay1-genis .tc-ay1-tup-uzun { display: none; }
   .tc-ay1-genis .tc-ay1-tup-kisa { display: inline; }
+  .tc-ay1-genis .tc-ay1-kanat-cift .tc-ay1-gosterge-ad, .tc-ay1-genis .tc-ay1-kanat-cift .tc-ay1-gosterge > small { display: none; }
 }
 /* Telefonda ileti sayım çubuğunu (İyi +1, Hatalı) örtmesin: terminal açıkken bildirim üstte durur. Üstteki ileti başlık düğmelerini
    örter: dokunuş iletinin yazısından alttaki düğmelere geçer, uzun ileti üç satırda kesilir. */
