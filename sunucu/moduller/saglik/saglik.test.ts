@@ -107,6 +107,13 @@ function asiliVt(): Veritabani {
   return { sorgu: asili, tek: asili, tx: asili, okumaTx: asili, kapat: async () => undefined };
 }
 
+// Ölçer örneği, ayrı döngü turlarına düşen iki zamanlayıcı tikinden çıkar. Tek uzun bekleme,
+// yüklü CI makinesinde tek tura sıkışıp örneksiz kalabilir; kısa ardışık beklemeler her biri
+// yeni bir tur açtığı için en az bir örnek bırakır.
+async function olcerTurlariniBekle(): Promise<void> {
+  for (let i = 0; i < 6; i++) await new Promise((coz) => setTimeout(coz, 30));
+}
+
 test('sızıntı denetimi gerçekten kırmızı olabilir: bilinen sızıntılı gövdeler fırlatır, temiz gövde geçer', () => {
   sizintiDenetle(JSON.stringify({ durum: 'ok' }), SAHTE);
   const sizintilar = [
@@ -166,7 +173,7 @@ function sahteSaglikliVt(): Veritabani {
 test('olay döngüsü ölçeri: ilk okumada ölçüm başlar ve null; sonra örnekten 99. yüzdelik, her okumada sıfırlanır', async () => {
   const olc = olayDongusuOlceri();
   assert.equal(olc(), null);
-  await new Promise((coz) => setTimeout(coz, 120));
+  await olcerTurlariniBekle();
   const deger = olc();
   assert.equal(typeof deger === 'number' && deger >= 0, true);
   assert.equal(olc(), null);
@@ -391,7 +398,7 @@ describe('sağlık (gerçek PostgreSQL)', () => {
     assert.equal(Number.isInteger(ilk.bellek.rssBayt) && ilk.bellek.rssBayt > 0, true);
     assert.equal(Number.isInteger(ilk.bellek.yiginBayt) && ilk.bellek.yiginBayt > 0, true);
     assert.equal(Number.isInteger(ilk.vtBaglantiSayisi) && ilk.vtBaglantiSayisi >= 1, true);
-    await new Promise((coz) => setTimeout(coz, 120));
+    await olcerTurlariniBekle();
     const ikinci = (await ayrintiIste(app, yoneticiCerezi)).json();
     assert.equal(typeof ikinci.olayDongusuGecikmeMs === 'number' && ikinci.olayDongusuGecikmeMs >= 0, true);
   });
