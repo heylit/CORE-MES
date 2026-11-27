@@ -17,7 +17,9 @@ import { girdiSaati, girdidenSaat } from '../ic/veri/kurallar.ts';
 import { emirKuyrugu, useEmirNo } from '../ortak/emir-no.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import { AdimSorunu } from './AdimSorunu.tsx';
-import { ElleBol } from './ElleBol.tsx';
+import { ElleBol, type BolOnizlemeIstegi } from './ElleBol.tsx';
+import { BolOnayi, BolSuzgeci } from './BolOnayi.tsx';
+import { bolOnizlemesiKur } from './bol-onizleme.ts';
 import { PayBirlestir } from './PayBirlestir.tsx';
 import { Ayarlar } from './Ayarlar.tsx';
 import { useBitinceBildir } from './bitince-bildir.ts';
@@ -175,10 +177,24 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const [iyimser, setIyimser] = useState<IyimserKatman | null>(null);
   const [tumNot, setTumNot] = useState(false);
   const mSunucu = useMemo(() => modelKur(c, p, cx, emirNo), [c, p, cx, emirNo]);
-  const m = useMemo(() => iyimserUygula(mSunucu, iyimser), [mSunucu, iyimser]);
+  // 3792: Planda böl > Etkisini gör: sunucunun bölünmüş planı tahtada taslak olarak görünür (plan değişmez); eski model karşılaştırma içindir.
+  const [bolIstegi, setBolIstegi] = useState<BolOnizlemeIstegi | null>(null);
+  const mOn = useMemo(() => {
+    if (bolIstegi === null) return null;
+    const cOn = { ...c, plan: { ...bolIstegi.plan, dataVer: typeof bolIstegi.plan['dataVer'] === 'number' ? bolIstegi.plan['dataVer'] : c.dataVer } } as PlanlamaCalismasi;
+    const pOn = planOku(cOn);
+    return pOn === null ? null : modelKur(cOn, pOn, cx, emirNo);
+  }, [bolIstegi, c, cx, emirNo]);
+  const m = useMemo(() => iyimserUygula(mOn ?? mSunucu, iyimser), [mOn, mSunucu, iyimser]);
   const malzeme = useMemo(() => emirMalzemeleri(c, p, o.depo.acikSiparisler, cx.now), [c, p, o.depo.acikSiparisler, cx.now]);
   const malzemeAni = useMemo(() => adimMalzemeAnlari(malzeme, m.emirler), [malzeme, m.emirler]);
   const zaman = useCallback((t: number) => saatYaz(c.D, t), [c]);
+  const bolOn = useMemo(() => (bolIstegi !== null && mOn !== null ? bolOnizlemesiKur(mSunucu, mOn, bolIstegi.isId, zaman) : null), [bolIstegi, mOn, mSunucu, zaman]);
+  // Önizleme sürerken tahta salt okunurdur ve Canlıya al kapalıdır.
+  const salt = bolOn !== null;
+  // Telefonda önizleme "yalnız etkilenen tezgâhlar" süzgeciyle açılır; süzgeç yalnız tahtanın satırlarını daraltır.
+  const [bolSuz, setBolSuz] = useState(darEkran);
+  const mTahta = useMemo(() => (bolOn !== null && bolSuz && bolOn.tezgahlar.size < m.tezgahlar.length ? { ...m, tezgahlar: m.tezgahlar.filter((t) => bolOn.tezgahlar.has(t.id)) } : m), [m, bolOn, bolSuz]);
   const saatGirdisi = useMemo(() => ({ yaz: (t: number) => girdiSaati(c.D, t), oku: (v: string) => girdidenSaat(c.D, v) }), [c]);
   const emir = useMemo(() => new Map(m.emirler.map((e) => [e.id, e])), [m]);
 
@@ -866,7 +882,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   // planda olmayan kartta tahta solmaz: yerleştirirken dolu yerler olduğu gibi görünür.
   const yanan = useMemo(() => { const k = !vurgu || kart === null ? undefined : kartlar.find((x) => x.kok === kart); return k && k.yerlesen > 0 ? new Set(k.emirler.map((e) => e.id)) : null; }, [vurgu, kart, kartlar]);
   const yananTahta = gelenYanan?.k ?? yanan;
-  const gelenOz = tur ? {} : { gelen, gelenBas, eskiYer }, gelenListe = tur ? {} : { gelen, eskiYer };
+  const eskiYerGoster = bolOn === null ? eskiYer : bolOn.kayanEski;
+  const gelenOz = tur ? {} : { gelen, gelenBas, eskiYer: eskiYerGoster, bolOnizleme: bolOn }, gelenListe = tur ? {} : { gelen, eskiYer: eskiYerGoster };
   // Okların açıklaması tahtada ok olabilecekken görünür: seçili iş (Seçili iş) ya da seçili sipariş veya iş (Seçili sipariş).
   // T6: kalabalık tahtada "Oklar: seçili sipariş" yalnız seçili emri çizer; menü açıklaması bunu söyler (klasik tahta: Tezgâh ya da Sipariş gözü).
   const okYogun = gorunenSatirSayisi(goz === 'T' ? 'T' : 'S', m.tezgahlar.length, emirSirali, null) > YOGUN_SATIR;
@@ -885,6 +902,39 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     setSaatEni(r.px); setOlcek(yakinOlcegi(r.px)); setOdak(r.odak);
   }, [coklu, secIs, secEmir, yanan, m, bildir, goz]);
   sigdirSon.current = sigdir;
+  // 3792: önizleme açılınca paylar ve kayan iş görünüme gelir (telefonda ölçek küçülür, kapanınca eski ölçek döner); Esc önizlemeyi iptal eder.
+  const bolOncesi = useRef<{ saatEni: number | null; olcek: KokpitOlcegi; odak: number | null } | null>(null);
+  const bolAcik = bolOn !== null;
+  const bolIlk = bolOn?.isId ?? null, bolBas = bolOn?.aralik.bas ?? 0, bolSon = bolOn?.aralik.son ?? 0;
+  useEffect(() => {
+    if (!bolAcik) {
+      const o = bolOncesi.current;
+      if (o !== null) { bolOncesi.current = null; setSaatEni(o.saatEni); setOlcek(o.olcek); setOdak(o.odak); }
+      return;
+    }
+    setBolSuz(darEkran());
+    if (bolIlk !== null) setGoster(bolIlk);
+    if (!darEkran()) return;
+    const k = document.querySelector<HTMLElement>('.tc-pyq-tahta'), ad = k?.querySelector<HTMLElement>('.tc-pyq-bas')?.offsetWidth ?? 0;
+    const gorunen = (k?.clientWidth ?? 0) - ad - ODAK_PAYI;
+    const r = sigdirma(bolBas, bolSon, gorunen > 0 ? gorunen : SIGDIRMA_ENI);
+    bolOncesi.current ??= { saatEni, olcek, odak };
+    setSaatEni(r.px); setOlcek(yakinOlcegi(r.px)); setOdak(r.odak);
+    // yalnız önizleme açılırken ya da aralığı değişirken
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bolAcik, bolIlk, bolBas, bolSon]);
+  const bolVazgec = bolIstegi?.vazgec;
+  useEffect(() => {
+    if (bolVazgec === undefined || !bolAcik) return;
+    const kapat = (ev: KeyboardEvent): void => {
+      if (ev.key !== 'Escape' || document.querySelector('[role="dialog"], [role="alertdialog"]') !== null) return;
+      ev.stopPropagation(); bolVazgec();
+    };
+    window.addEventListener('keydown', kapat);
+    return () => { window.removeEventListener('keydown', kapat); };
+  }, [bolVazgec, bolAcik]);
+  // Önizleme kurulamadıysa (adım modelde yok) panel gizli kalmasın: bölme geri alınır, panel döner.
+  useEffect(() => { if (bolIstegi !== null && !bolAcik) bolIstegi.vazgec(); }, [bolIstegi, bolAcik]);
   const secimiKaldir = useCallback(() => { sec(null, null); setVurgu(false); setGelenYanan(null); }, [sec]);
   const kartSec = useCallback((k: string) => { setGelenYanan(null); if (k === kart && vurgu) secimiKaldir(); else { setKart(k); setVurgu(true); } }, [kart, vurgu, secimiKaldir]);
   // Liste düzeninde sorun paneli açık sipariş satırındaki adımdan açılır: satır kapanınca, başka sipariş açılınca ya da görünüm değişince
@@ -922,15 +972,15 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
     ? (isId: string): void => { setAyarAcik(false); setAyarYon(null); setKapasiteAcik(false); setSorunTezgahi(null); setEngelAcik(false); setSorunAdimi(isId); }
     : null;
   // Elle böl (3488 c): yerleşmeyen adımın satırından açılır; öteki paneller kapanır.
-  const elleBolAc = yazabilir && !tur
+  const elleBolAc = yazabilir && !tur && !salt
     ? (isId: string): void => { setAyarAcik(false); setAyarYon(null); setKapasiteAcik(false); setSorunTezgahi(null); setEngelAcik(false); setSorunAdimi(null); setBirlesPayi(null); setBolAdimi(isId); }
     : null;
   // 3751: pay birleştirme komutu (elle-bol ya da elle-bol-sil) taslağa yazılır, plan taslakta dizilir; Geri ile alınır, Canlıya al ile plana geçer.
-  const birlestirYaz = useMemo(() => (yazabilir && !tur && taslak ? async (k: TaslakKomutu): Promise<boolean> => {
+  const birlestirYaz = useMemo(() => (yazabilir && !tur && !salt && taslak ? async (k: TaslakKomutu): Promise<boolean> => {
     const tamam = await taslak.yaz(k);
     if (tamam) bildir('bilgi', 'Paylar birleştirildi, taslağınıza yazıldı; Geri al ile alınır, plan "Canlıya al" ile değişir.');
     return tamam;
-  } : null), [yazabilir, tur, taslak, bildir]);
+  } : null), [yazabilir, tur, salt, taslak, bildir]);
   const birlestirTahta = useMemo(() => (birlestirYaz ? (k: TaslakKomutu): void => { void birlestirYaz(k); } : null), [birlestirYaz]);
   const birlestirAc = birlestirYaz
     ? (payId: string): void => { setAyarAcik(false); setAyarYon(null); setKapasiteAcik(false); setSorunTezgahi(null); setEngelAcik(false); setSorunAdimi(null); setBolAdimi(null); setBirlesPayi(payId); }
@@ -957,11 +1007,11 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
       {sonucCubugu}
       {genelSerit}
       {panelli(<Tahta
-        hucreAc={tur ? null : hucreAc} hucreSecili={hucre} pencereDeposu={pencereDeposu} ufukSonu={ufukSonu} satirBoyu={satirBoyu} kumeAc={(S) => { olcekSec('G', S); }} adimSayim={adimSayim} m={m} cx={cx} goz="T" olcek={olcek} emirler={gorunen} tablo={tezgahTablosu ? tablo : null} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
-        tasi={yazabilir && !tur ? tasiDene : null} planaAl={yazabilir && !tur ? planaAlDene : null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
+        hucreAc={tur ? null : hucreAc} hucreSecili={hucre} pencereDeposu={pencereDeposu} ufukSonu={ufukSonu} satirBoyu={satirBoyu} kumeAc={(S) => { olcekSec('G', S); }} adimSayim={adimSayim} m={mTahta} cx={cx} goz="T" olcek={olcek} emirler={gorunen} tablo={tezgahTablosu ? tablo : null} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
+        tasi={yazabilir && !tur && !salt ? tasiDene : null} planaAl={yazabilir && !tur && !salt ? planaAlDene : null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
         yerlestirme={tur ? null : yerHedefi} yanan={tur ? null : yananTahta} secimiKaldir={gelenYanan ? () => { setGelenYanan(null); } : listedeSecimKalir}
-        sorunBildir={null} bol={elleBolAc} birlestir={birlestirTahta} onizle={tur ? null : onizle} okKipi={tur ? 'yok' : okKipi}
-        coklu={coklu.size > 1 ? coklu : undefined} saatEni={saatEni} cokluSec={yazabilir && !tur ? cokluSec : null} grupKaydir={yazabilir && !tur ? grupKaydir : null} malzeme={malzeme} {...gelenOz}
+        sorunBildir={null} bol={elleBolAc} birlestir={birlestirTahta} onizle={tur || salt ? null : onizle} okKipi={tur ? 'yok' : okKipi}
+        coklu={coklu.size > 1 ? coklu : undefined} saatEni={saatEni} cokluSec={yazabilir && !tur && !salt ? cokluSec : null} grupKaydir={yazabilir && !tur && !salt ? grupKaydir : null} malzeme={malzeme} {...gelenOz}
       />, 'T')}
       <Liste m={m} cx={cx} goz="T" emirler={gorunen} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} yanan={tur ? null : yananTahta} sorunBildir={null} {...gelenListe} />
     </>
@@ -1073,7 +1123,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
             )}
           </Acilir>
           {(yazabilir || canliyaAlir) && !taslakVar && (
-            <Dugme className="tc-pyq-gonder" simge={canliyaAlir ? 'check' : 'upload'} disabled={mesgul} title={engel ?? undefined} onClick={() => { setOnayTaslaktan(false); setOnayAcik(true); }}>
+            <Dugme className="tc-pyq-gonder" simge={canliyaAlir ? 'check' : 'upload'} disabled={mesgul || salt} title={engel ?? undefined} onClick={() => { setOnayTaslaktan(false); setOnayAcik(true); }}>
               {canliyaAlir ? 'Canlıya al' : 'Onaya gönder'}<Sayi n={onayda} />
             </Dugme>
           )}
@@ -1146,7 +1196,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         {/* Taslak varken canlıya alma taslak çubuğundaki tek düğmeyle yapılır (3282-5 a); burada ikinci aynı adlı düğme durmaz. */}
         {(yazabilir || canliyaAlir) && !taslakVar && (
           <Dugme className="tc-pyq-gonder" simge={canliyaAlir ? 'check' : 'upload'} aria-pressed={onayAcik}
-            disabled={mesgul || tur !== null} title={tur ? 'Tur bitince açılır' : engel ?? undefined} onClick={() => { setOnayTaslaktan(false); setOnayAcik(!onayAcik); }}>
+            disabled={mesgul || tur !== null || salt} title={tur ? 'Tur bitince açılır' : engel ?? undefined} onClick={() => { setOnayTaslaktan(false); setOnayAcik(!onayAcik); }}>
             {canliyaAlir ? 'Canlıya al' : 'Onaya gönder'}<Sayi n={onayda} />
           </Dugme>
         )}
@@ -1164,10 +1214,14 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
       )}
       {taslak && !onayAcik && (
         <TaslakCubugu
-          taslak={taslak} canliyaAlir={canliyaAlir} seritteGuncelle={yetki.planYaz && ortakCalisma !== null && ortakCalisma.plan !== null && !planGuncel(ortakCalisma)} kilit={tur ? 'Tur bitince açılır' : ayarEtkisi ? 'Önce ayarı planlayın ya da vazgeçin.' : null} yazildi={(ileti) => { bildir('bilgi', ileti); yenile(); }}
+          taslak={taslak} canliyaAlir={canliyaAlir} seritteGuncelle={yetki.planYaz && ortakCalisma !== null && ortakCalisma.plan !== null && !planGuncel(ortakCalisma)} kilit={tur ? 'Tur bitince açılır' : ayarEtkisi ? 'Önce ayarı planlayın ya da vazgeçin.' : salt ? 'Bölme uygulanınca ya da vazgeçilince açılır.' : null} onizleme={salt} yazildi={(ileti) => { bildir('bilgi', ileti); yenile(); }}
           onayiAc={() => { sec(null, null); setAyarAcik(false); setSorunAdimi(null); setOnayTaslaktan(true); setOnayAcik(true); }}
           ozet={DURUMLAR.map((d) => <span key={d} data-d={d}>{DURUM_ADI[d]} {ilk.current[d]} → {say[d]}</span>)}
         />
+      )}
+      {bolOn !== null && !onayAcik && bolOn.tezgahlar.size < m.tezgahlar.length && <BolSuzgeci say={bolOn.tezgahlar.size} suz={bolSuz} sec={setBolSuz} />}
+      {bolOn !== null && !onayAcik && bolIstegi !== null && (
+        <BolOnayi o={bolOn} bekle={taslak?.mesgul === true} duzenle={bolIstegi.vazgec} vazgec={bolIstegi.vazgec} uygula={bolIstegi.uygula} />
       )}
       {onayAcik ? (
         <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
@@ -1196,9 +1250,9 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
               {yolIzi}
               {genelSerit}
               <Tahta
-                siparisler={siparisler} kademeZorla={eKademe} kademeIn={tur ? null : kademeIn} pencereDeposu={pencereDeposu} ufukSonu={ufukSonu} satirBoyu={satirBoyu} kumeAc={(S) => { olcekSec('G', S); }} adimSayim={adimSayim} m={m} cx={cx} goz="S" olcek={olcek} emirler={emirSirali} tablo={tablo} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
-                tasi={yazabilir && !tur ? tasiDene : null} planaAl={null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
-                yerlestirme={null} yanan={tur ? null : gelenYanan?.k ?? null} sorunBildir={null} bol={elleBolAc} birlestir={birlestirTahta} onizle={tur ? null : onizle} okKipi={tur ? 'yok' : okKipi}
+                siparisler={siparisler} kademeZorla={eKademe} kademeIn={tur ? null : kademeIn} pencereDeposu={pencereDeposu} ufukSonu={ufukSonu} satirBoyu={satirBoyu} kumeAc={(S) => { olcekSec('G', S); }} adimSayim={adimSayim} m={mTahta} cx={cx} goz="S" olcek={olcek} emirler={emirSirali} tablo={tablo} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
+                tasi={yazabilir && !tur && !salt ? tasiDene : null} planaAl={null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
+                yerlestirme={null} yanan={tur ? null : gelenYanan?.k ?? null} sorunBildir={null} bol={elleBolAc} birlestir={birlestirTahta} onizle={tur || salt ? null : onizle} okKipi={tur ? 'yok' : okKipi}
                 saatEni={saatEni} malzeme={malzeme} agac={{ acik: agacAcik, ac: agacAc, notlar: agacNotu }} {...gelenOz}
                 {...(gelenYanan ? { secimiKaldir: () => { setGelenYanan(null); } } : {})}
               />
@@ -1214,7 +1268,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
             planla={yazabilir && c.plan !== null ? (k) => { void yenidenPlanla(k.emirler.filter((e) => e.durum === 'plansiz').map((e) => e.id), `${k.siparis?.no ?? k.emirler[0]?.no ?? ''} planlandı.`); } : null}
             yenidenPlanla={yazabilir && c.plan !== null ? (k) => { void yenidenPlanla(k.emirler.map((e) => e.id), `${k.siparis?.no ?? k.emirler[0]?.no ?? ''} yeniden planlandı.`); } : null}
             tahta={listeTahtasi} satirBirincil={satirBirincil} adimSec={listeAdimSec} seciliIs={secIs}
-            tasi={yazabilir && !tur ? tasiDene : null} bol={elleBolAc} bolAcik={bolAdimi} bolunmus={bolunmus} malzemeAni={malzemeAni} hedef={setYerHedefi} secimiBirak={() => { sec(null, null); }}
+            tasi={yazabilir && !tur && !salt ? tasiDene : null} bol={elleBolAc} bolAcik={bolAdimi} bolunmus={bolunmus} malzemeAni={malzemeAni} hedef={setYerHedefi} secimiBirak={() => { sec(null, null); }}
           />
           {butunTezgahlar && !vurgu && <section className="tc-pyq-bolum tc-pyq-bolum-plan" aria-label="Tezgâhlar"><h2>Tezgâhlar</h2>{listeTahtasi}</section>}
             </>
@@ -1234,7 +1288,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
           <Engeller gruplar={engelGruplari} ozet={engelOzet} ufukSonu={zaman(ufukSonu)} kapat={() => { setEngelAcik(false); }}
             emirGoster={(e) => { setEngelAcik(false); sec(e, null); }} mesaiAc={() => { setEngelAcik(false); setKapasiteAcik(true); }} acabilir={yetki.islemVar} />
         ) : bolAdimi !== null ? (
-          <ElleBol key={bolAdimi} c={c} m={m} isId={bolAdimi} taslak={taslak} yazabilir={yazabilir} kapat={() => { setBolAdimi(null); }} />
+          <ElleBol key={bolAdimi} c={c} m={m} isId={bolAdimi} taslak={taslak} yazabilir={yazabilir} kapat={() => { setBolAdimi(null); }} onizleme={setBolIstegi} />
         ) : birlesPayi !== null ? (
           <PayBirlestir key={birlesPayi} m={m} payId={birlesPayi} uygula={birlestirYaz} kapat={() => { setBirlesPayi(null); }} />
         ) : null}
@@ -1250,7 +1304,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
               firma={firma} plan={p}
               key={seciliKart.kok} m={m} kart={seciliKart} zaman={zaman} uygula={tur ? null : hamleUygula} surum={surum} adimAc={adimAc}
               hedef={setYerHedefi} taslakVar={taslakVar} yon={{ c, taslak, yazabilir }} vurgu={secIs} neden={tahtasiz(goz)}
-              secIs={tasinacak} tasi={yazabilir && !tur ? tasiDene : null} birak={birak}
+              secIs={tasinacak} tasi={yazabilir && !tur && !salt ? tasiDene : null} birak={birak}
               saatGirdisi={saatGirdisi} planla={planla} planlaDurumu={setPlanlaDurumu} adimSorunu={adimSorunu} bol={elleBolAc} bolAcik={bolAdimi} bolunmus={bolunmus} adimEk={adimEk} adimBekle={adimBekle} kol={kol} malzeme={malzeme}
             />
           )}
@@ -1271,11 +1325,11 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
                 {goz !== 'T' && yolIzi}
                 {genelSerit}
                 {panelli(<Tahta
-                  siparisler={siparisler} kademeZorla={eKademe} kademeIn={tur ? null : kademeIn} hucreAc={tur ? null : hucreAc} hucreSecili={hucre} pencereDeposu={pencereDeposu} ufukSonu={ufukSonu} satirBoyu={satirBoyu} kumeAc={(S) => { olcekSec('G', S); }} adimSayim={adimSayim} m={m} cx={cx} goz={goz} olcek={olcek} emirler={emirSirali} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
-                  tasi={yazabilir && !tur ? tasiDene : null} planaAl={yazabilir && !tur ? planaAlDene : null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
+                  siparisler={siparisler} kademeZorla={eKademe} kademeIn={tur ? null : kademeIn} hucreAc={tur ? null : hucreAc} hucreSecili={hucre} pencereDeposu={pencereDeposu} ufukSonu={ufukSonu} satirBoyu={satirBoyu} kumeAc={(S) => { olcekSec('G', S); }} adimSayim={adimSayim} m={mTahta} cx={cx} goz={goz} olcek={olcek} emirler={emirSirali} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
+                  tasi={yazabilir && !tur && !salt ? tasiDene : null} planaAl={yazabilir && !tur && !salt ? planaAlDene : null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
                   yerlestirme={tur ? null : yerHedefi} yanan={tur ? null : yananTahta} secimiKaldir={secimiKaldir}
-                  sorunBildir={sorunBildir} bol={elleBolAc} birlestir={birlestirTahta} onizle={tur ? null : onizle} okKipi={tur ? 'yok' : okKipi}
-                  coklu={coklu.size > 1 ? coklu : undefined} saatEni={saatEni} cokluSec={yazabilir && !tur ? cokluSec : null} grupKaydir={yazabilir && !tur ? grupKaydir : null} malzeme={malzeme} {...gelenOz}
+                  sorunBildir={sorunBildir} bol={elleBolAc} birlestir={birlestirTahta} onizle={tur || salt ? null : onizle} okKipi={tur ? 'yok' : okKipi}
+                  coklu={coklu.size > 1 ? coklu : undefined} saatEni={saatEni} cokluSec={yazabilir && !tur && !salt ? cokluSec : null} grupKaydir={yazabilir && !tur && !salt ? grupKaydir : null} malzeme={malzeme} {...gelenOz}
                 />, goz)}
                 <Liste m={m} cx={cx} goz={goz} emirler={emirSirali} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} yanan={tur ? null : yananTahta} sorunBildir={sorunBildir} {...gelenListe} />
                 <ul className="tc-pyq-aciklama" aria-label="Renk açıklaması">
@@ -1303,7 +1357,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
           <Engeller gruplar={engelGruplari} ozet={engelOzet} ufukSonu={zaman(ufukSonu)} kapat={() => { setEngelAcik(false); }}
             emirGoster={(e) => { setEngelAcik(false); sec(e, null); }} mesaiAc={() => { setEngelAcik(false); setKapasiteAcik(true); }} acabilir={yetki.islemVar} />
         ) : bolAdimi !== null ? (
-          <ElleBol key={bolAdimi} c={c} m={m} isId={bolAdimi} taslak={taslak} yazabilir={yazabilir} kapat={() => { setBolAdimi(null); }} />
+          <ElleBol key={bolAdimi} c={c} m={m} isId={bolAdimi} taslak={taslak} yazabilir={yazabilir} kapat={() => { setBolAdimi(null); }} onizleme={setBolIstegi} />
         ) : birlesPayi !== null ? (
           <PayBirlestir key={birlesPayi} m={m} payId={birlesPayi} uygula={birlestirYaz} kapat={() => { setBirlesPayi(null); }} />
         ) : null}

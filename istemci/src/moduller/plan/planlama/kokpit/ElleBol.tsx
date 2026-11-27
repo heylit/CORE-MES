@@ -89,6 +89,16 @@ export function bolunemezNedeni(x: { basladi: boolean; bitti?: boolean; fason: b
   return null;
 }
 
+// 3792: Etkisini gör sonrası bölünmüş plan tahtada taslak olarak görünür; panel gizlenir (değerleri durur) ve Kokpit bu isteği çizer.
+// Vazgeç ve Düzenle bölme komutunu taslaktan geri alır, panel girilen değerlerle yeniden görünür.
+export interface BolOnizlemeIstegi { isId: string; plan: Record<string, unknown>; uygula: () => void; vazgec: () => void }
+// Sunucunun planında adım iki ya da daha çok paylıysa tahtada gösterilir; tek parçaya dönen bölme (Bölmeyi kaldır) panelde etkisiyle kalır.
+export function plandaPayVar(plan: Record<string, unknown> | undefined, isId: string): boolean {
+  const ops = plan?.['ops'];
+  if (typeof ops !== 'object' || ops === null) return false;
+  return Object.keys(ops).filter((k) => k === isId || k.startsWith(`${isId}~`)).length >= 2;
+}
+
 export interface ElleBolOzellikleri {
   c: PlanlamaCalismasi;
   m: Pick<KokpitModeli, 'emirler' | 'tezgahlar' | 'isler'> & Partial<Pick<KokpitModeli, 'bolme'>>;
@@ -96,9 +106,10 @@ export interface ElleBolOzellikleri {
   taslak: TaslakYazici | null;
   yazabilir: boolean;
   kapat: () => void;
+  onizleme?: ((o: BolOnizlemeIstegi | null) => void) | null;
 }
 
-export function ElleBol({ c, m, isId, taslak, yazabilir, kapat }: ElleBolOzellikleri) {
+export function ElleBol({ c, m, isId, taslak, yazabilir, kapat, onizleme = null }: ElleBolOzellikleri) {
   const e = m.emirler.find((x) => x.adimlar.some((a) => a.id === isId));
   const a = e?.adimlar.find((x) => x.id === isId);
   const tezgahlar = (a?.adaylar ?? []).filter((t) => !fasonMu(t));
@@ -120,7 +131,28 @@ export function ElleBol({ c, m, isId, taslak, yazabilir, kapat }: ElleBolOzellik
   const [secili, setSecili] = useState<number[]>([]);
   const [hedef, setHedef] = useState(0);
   const [ham, setHam] = useState<string | null>(null);
-  const { durum, dene, uygula, vazgec } = useEtki({ c, taslak, sonuc: () => undefined });
+  const { durum, dene, uygula, vazgec } = useEtki({ c, taslak, sonuc: (s) => { if (s === 'uygulandi' && onizleme !== null) kapat(); } });
+  const etkideki = durum.tur === 'etki' ? durum.e : null;
+  const tahtada = onizleme !== null && etkideki !== null && plandaPayVar(etkideki.plan, isId);
+  const son = useRef({ uygula, vazgec });
+  son.current = { uygula, vazgec };
+  const tahtadaRef = useRef(false);
+  tahtadaRef.current = tahtada;
+  const taslakRef = useRef(taslak);
+  taslakRef.current = taslak;
+  useEffect(() => {
+    if (onizleme === null || !tahtada || etkideki === null || etkideki.plan === undefined) return;
+    const plan = etkideki.plan;
+    onizleme({ isId, plan, uygula: () => { void son.current.uygula(etkideki); }, vazgec: () => { void son.current.vazgec(); } });
+    return () => { onizleme(null); };
+  }, [onizleme, tahtada, etkideki, isId]);
+  // Panel başka bir yerden kapanırsa (öteki panel açılırsa) görünmeyen bölme taslakta kalmasın.
+  useEffect(() => () => { if (tahtadaRef.current) void taslakRef.current?.geriAl(false, false); }, []);
+  const gizliydi = useRef(false);
+  useEffect(() => {
+    if (gizliydi.current && !tahtada) kok.current?.querySelector<HTMLElement>('input')?.focus();
+    gizliydi.current = tahtada;
+  }, [tahtada]);
   const kilitli = !yazabilir || taslak === null || taslak.mesgul || durum.tur === 'hesap' || durum.tur === 'etki';
   const d = parcaDenetimi(l, adet);
   const tek = l.length === 1;
@@ -162,7 +194,7 @@ export function ElleBol({ c, m, isId, taslak, yazabilir, kapat }: ElleBolOzellik
   const sayimliPay = l.findIndex((p, i) => i > 0 && sayilanDe(p) > 0);
 
   return (
-    <aside ref={kok} className="tc-pyq-ayrinti tc-pyq-ayarlar tc-pyq-elle-bol" aria-label="Planda böl">
+    <aside ref={kok} className="tc-pyq-ayrinti tc-pyq-ayarlar tc-pyq-elle-bol" aria-label="Planda böl" hidden={tahtada}>
       <header>
         <div><b>Planda böl{a ? ` · ${a.ad}` : ''}</b>{e && <small>{e.no} · {adet} adet</small>}</div>
         <button type="button" className="tc-pyq-simge-dugme" aria-label="Planda bölmeyi kapat" onClick={kapat}><Simge ad="x" boyut="k" /></button>
@@ -180,7 +212,7 @@ export function ElleBol({ c, m, isId, taslak, yazabilir, kapat }: ElleBolOzellik
           {kilitliAdim && yok === null && <p className="tc-pyq-not" data-kilit-kalkar="">Uygulayınca adımın kilidi kalkar; parçaların yerini sistem seçer.</p>}
           {baslamis && yok === null && <p className="tc-pyq-not" data-baslamis-not="">Adım başladı: çalışan tezgâh 1. paydır, yaptığı iş yerinde kalır. Sayımı olan payın tezgâhı sabittir, adedi sayılandan az olamaz; yalnız kalan {kalan} adet paylaştırılır.</p>}
           {tezgahlar.length < 1 && <p className="tc-pyq-not">Bu adımın uygun tezgâhı yok; bölünemez.</p>}
-          {durum.tur === 'etki' ? <EtkiBolumu ad="Bölmenin etkisi" e={durum.e} uygula={() => { void uygula(durum.e); }} vazgec={() => { void vazgec(); }} /> : yazabilir && yok === null && tezgahlar.length > 0 && (
+          {durum.tur === 'etki' && !tahtada ? <EtkiBolumu ad="Bölmenin etkisi" e={durum.e} uygula={() => { void uygula(durum.e); }} vazgec={() => { void vazgec(); }} /> : yazabilir && yok === null && tezgahlar.length > 0 && (
             <form className="tc-pyq-ayar-etki" noValidate aria-label="Parçalar" onSubmit={gonder}>
               {l.map((p, i) => {
                 const kil = kilitliPay(l, i, baslamis), sayilan = sayilanDe(p);

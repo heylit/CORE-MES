@@ -11,7 +11,8 @@ import type { TaslakYazici } from './taslak.ts';
 // komut olarak yazılır, sunucu planı taslağın görünümünde yeniden dizer (plan-uygula), önce ve sonra gösterilir. "Uygula" o dizmeyi
 // taslağa yazar, "Vazgeç" komutu taslaktan geri alır. Ortak çalışma taslak "Plana yaz"ılınca değişir. Plan yoksa değişiklik yalnız yazılır.
 
-export type Etki = { is: string; once: PlanOzeti | null; sonra: PlanOzeti; oteki: number };
+// plan: sunucunun döndüğü bütün plan (3792: Planda böl tahtada taslak olarak gösterir); yalnız özet isteyenler yok sayar.
+export type Etki = { is: string; once: PlanOzeti | null; sonra: PlanOzeti; oteki: number; plan?: Record<string, unknown> };
 export type EtkiDurumu = { tur: 'duzen' } | { tur: 'hesap' } | { tur: 'etki'; e: Etki } | { tur: 'hata'; ileti: string };
 
 export interface EtkiSecenekleri {
@@ -34,9 +35,10 @@ export function useEtki({ c, taslak, sonuc }: EtkiSecenekleri) {
     setDurum({ tur: 'hesap' });
     try {
       const d = await taslak.degerlendir({ tur: 'plan-uygula', isler: [...isler] });
-      const sonra = d.cevap.sonuc.tur === 'plan-uygula' ? ozetOku(d.cevap.sonuc.plan) : null;
+      const plan = d.cevap.sonuc.tur === 'plan-uygula' ? d.cevap.sonuc.plan : null;
+      const sonra = plan === null ? null : ozetOku(plan);
       if (sonra === null) { setDurum({ tur: 'hata', ileti: 'Plan hesaplanırken veri değişti; etki gösterilemedi. Değişiklik taslakta kaldı.' }); return; }
-      setDurum({ tur: 'etki', e: { is: d.is, once, sonra, oteki } });
+      setDurum({ tur: 'etki', e: { is: d.is, once, sonra, oteki, ...(plan === null ? {} : { plan }) } });
     } catch (h) {
       setDurum({ tur: 'hata', ileti: degerlendirmeHatasi(h).metin });
     }

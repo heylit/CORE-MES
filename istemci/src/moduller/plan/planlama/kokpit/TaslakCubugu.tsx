@@ -23,6 +23,8 @@ export interface TaslakCubuguOzellikleri {
   kilit?: string | null;
   // Şeritte Planı güncelle bekliyorsa (veri değişti) taslağın kendi düğmesi çizilmez: ekranda tek Planı güncelle durur (3504 b).
   seritteGuncelle?: boolean;
+  // 3792: Planda böl önizlemesi sürerken şerit tek satırda önizlemeyi ve Canlıya al'ın neden kapalı olduğunu söyler; Geri al ve Vazgeç de kapalıdır.
+  onizleme?: boolean;
   yazildi: (ileti: string) => void;
   onayiAc: () => void;
 }
@@ -39,7 +41,7 @@ export const SECENEKLER = [
 const kaynakYazisi = (k: TaslakCatismaKaynagi): string =>
   [k.kim, ...(k.zaman === null ? [] : [zamanMetni(k.zaman)]), k.ayrinti === '' ? k.ne : `${k.ne}: ${k.ayrinti}`].join(' · ');
 
-export function TaslakCubugu({ taslak, ozet, canliyaAlir, kilit = null, seritteGuncelle = false, yazildi, onayiAc }: TaslakCubuguOzellikleri) {
+export function TaslakCubugu({ taslak, ozet, canliyaAlir, kilit = null, seritteGuncelle = false, onizleme = false, yazildi, onayiAc }: TaslakCubuguOzellikleri) {
   const t = taslak.cevap?.taslak ?? null;
   const o = taslakOzeti(t);
   const [vazgecAcik, setVazgecAcik] = useState(false);
@@ -69,8 +71,9 @@ export function TaslakCubugu({ taslak, ozet, canliyaAlir, kilit = null, seritteG
   const baskasi = catisma !== null && baskasiVarMi(catisma);
 
   return (
-    <div className="tc-pyq-degisim tc-pyq-taslak" role="region" aria-label="Değişiklikleriniz">
-      <b>{o.n} değişiklik · canlıya alınmadı</b>
+    <div className="tc-pyq-degisim tc-pyq-taslak" role="region" aria-label="Değişiklikleriniz" data-onizleme={onizleme ? '' : undefined}>
+      {onizleme ? <b>Önizleme: bölmenin taslağı · plan değişmedi</b> : <b>{o.n} değişiklik · canlıya alınmadı</b>}
+      {onizleme && <span data-onizleme-neden="">{`${String(o.n)} değişiklik canlıya alınmadı · Canlıya al, bölme uygulanınca ya da vazgeçilince açılır`}</span>}
       {ozet}
       {taslak.diziliyor ? <span><span role="status">Güncelleniyor</span>{hesapSuresiEki(gecen) !== null && <span aria-hidden="true">{hesapSuresiEki(gecen)}</span>}</span> : taslak.mesgul && <span role="status">Yazılıyor</span>}
       {o.bozuk.map((b, i) => (
@@ -83,8 +86,8 @@ export function TaslakCubugu({ taslak, ozet, canliyaAlir, kilit = null, seritteG
         </span>
       )}
       <span className="tc-pyq-taslak-dugmeler">
-        <Dugme simge="chev-left" disabled={bekle || o.n === 0} onClick={() => { void taslak.geriAl(); }}>Geri al</Dugme>
-        <Dugme simge="x" disabled={bekle} onClick={() => { setVazgecAcik(true); }}>Vazgeç</Dugme>
+        <Dugme simge="chev-left" disabled={bekle || onizleme || o.n === 0} onClick={() => { void taslak.geriAl(); }}>Geri al</Dugme>
+        <Dugme simge="x" disabled={bekle || onizleme} onClick={() => { setVazgecAcik(true); }}>Vazgeç</Dugme>
         <Dugme tur={o.n > 0 ? 'birincil' : 'ikincil'} simge={canliyaAlir ? 'check' : 'upload'} disabled={bekle || engel !== null} title={engel ?? 'Değişikliklerinizi plana yazar, onay sayfasını açar.'} onClick={() => { void yaz(); }}>{ad}</Dugme>
       </span>
       <OnayPenceresi

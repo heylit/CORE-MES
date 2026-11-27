@@ -37,6 +37,8 @@ import {
 // Ay ve Yıl'da satırlar yük hücrelerine döner; hücre o güne iner.
 
 export type TahtaGozu = 'T' | 'S';
+import { MakasSimgesi } from './BolOnayi.tsx';
+import type { BolOnizlemesi } from './bol-onizleme.ts';
 export interface CanliYer { m: string; S: number; C: number }
 export interface TahtaOzellikleri {
   m: KokpitModeli; cx: Derleme; goz: TahtaGozu; olcek: KokpitOlcegi;
@@ -95,6 +97,8 @@ export interface TahtaOzellikleri {
   gelenBas?: ((isId: string) => void) | null;
   // "Planı güncelle"den hemen önceki iş yerleri (3532, Risk R2): verilince iş yeni yerinde çizilir, eski yeri kesik hayalettir, çubukta kayma yazar.
   eskiYer?: Readonly<Record<string, CanliYer>> | null;
+  // 3792: Planda böl önizlemesi: bölmenin payları taslak çubuğu, bölünen adımın eski yeri satırın alt şeridinde taramalı "eski yer" olur.
+  bolOnizleme?: BolOnizlemesi | null;
   // 3533: sol bölme sütunlu tablodur (Emirler gözünde agac ile, Tezgâhlar gözünde tek başına). Verilmezse bugünkü iki satırlık yazı.
   tablo?: TabloDurumu | null;
   // Gantt dilim 1 (T1): motorun ufkunun sonu (saat). Tahtanın içindeyse kesik çizgi ve "Plan ufku" yazısı, ötesi taralı.
@@ -196,7 +200,7 @@ export function Tahta(o: TahtaOzellikleri) {
   const bol = o.bol ?? null;
   const birlestir = o.birlestir ?? null;
   const sorunBildir = goz === 'T' ? o.sorunBildir ?? null : null;
-  const gelen = o.gelen ?? null, gelenBas = o.gelenBas ?? null, eskiYer = once ? null : o.eskiYer ?? null;
+  const gelen = o.gelen ?? null, gelenBas = o.gelenBas ?? null, eskiYer = once ? null : o.eskiYer ?? null, bolOn = once ? null : o.bolOnizleme ?? null;
   // 3533: tablo kipi. Emirler gözünde (agac) emir sütunları, Tezgâhlar gözünde tezgâh sütunları; Ay ve Yıl ölçeğinde bugünkü satır başı kalır.
   const tablo = o.tablo ?? null;
   const kad = goz !== 'T' && o.siparisler ? o.kademeZorla ?? kademe(olcek) : 'adim';
@@ -1029,6 +1033,7 @@ export function Tahta(o: TahtaOzellikleri) {
         type="button" className="tc-pyq-is" data-is={x.id} data-d={e?.durum ?? 'iyi'} title={ad} aria-label={ad}
         aria-pressed={secIs === adimKimligi(x) && (x.pay === undefined || aktifPay === x.id)} data-pay={x.pay ? String(x.pay.no) : undefined} data-pay-kardes={x.pay && secIs === adimKimligi(x) && aktifPay !== x.id ? '' : undefined} data-suruyor={x.basladi ? '' : undefined} data-emir-secili={secEmir === x.job ? '' : undefined} data-yanan={yanan?.has(x.job) ? '' : undefined} data-sonuk={uyar(x.job) && (!yanan || yanan.has(x.job)) ? undefined : ''}
         data-sabit={neden && !x.pay ? '' : undefined} data-durdurma-bekliyor={x.durdurmaBekliyor ? '' : undefined} data-tasinan={tasinan?.id === x.id || birles?.kaynak === x.id ? '' : undefined} data-birles-aday={birlesAdaylari.has(x.id) ? '' : undefined} data-birles-hedef={birles?.hedef === x.id || birlesOnay?.hedef === x.id ? '' : undefined} data-kaydi={(canli && Math.abs(kayma) > 0.25) || itilen !== undefined || gKaydi ? '' : undefined}
+        data-taslak={bolOn?.taslak.has(x.id) ? '' : undefined}
         data-kisa={kisa ? '' : undefined} data-gecikir={gecikir ? '' : undefined} data-etiket={etiket}
         ref={(el) => {
           yerYaz(el, (cizS - m.bas) * px, cizim?.en ?? gercek);
@@ -1058,9 +1063,10 @@ export function Tahta(o: TahtaOzellikleri) {
         onPointerLeave={() => { if (imlecteki.current === x.id) imlecteki.current = null; setUstteki((u) => (u === x.id ? null : u)); }}
       >
         {x.kilitli && <Simge ad="lock" boyut="k" />}
-        {x.pay && <span className="tc-pyq-pay-simge" data-pay-simge=""><Simge ad="layers" boyut="k" /></span>}
+        {x.pay && <span className="tc-pyq-pay-simge" data-pay-simge="">{bolOn?.taslak.has(x.id) ? <MakasSimgesi /> : <Simge ad="layers" boyut="k" />}</span>}
         <b>{kod}</b>
         <span>{ek}</span>
+        {bolOn?.taslak.has(x.id) && <small className="tc-pyq-taslak-rozet" data-taslak-rozet="">taslak</small>}
         {(x.basladi || x.pay?.sayilan !== undefined) && <i className="tc-pyq-ilerleme" data-pay-ilerleme={x.pay?.sayilan !== undefined ? '' : undefined} ref={(el) => { el?.style.setProperty('--oran', String(Math.min(1, Math.max(0, x.pay?.sayilan !== undefined ? x.pay.sayilan / Math.max(1, x.pay.adet) : (m.simdi - S) / Math.max(0.01, C - S))))); }} />}
       </button>
       {etiket === 'dis' && (
@@ -1288,6 +1294,17 @@ export function Tahta(o: TahtaOzellikleri) {
     });
   };
 
+  // 3792: bölünen adımın eski yeri; bölmeden önceki tezgâhının satırında, çubukların altındaki ince şeritte. Renge ek olarak yazı ve taramayla ayrılır.
+  const bolEskileri = (r: { kimlik: string; isler: readonly KokpitIsi[] }) => {
+    if (!bolOn) return null;
+    const kok = m.isler[bolOn.isId];
+    return bolOn.eski.flatMap((y) => {
+      if (goz === 'T' ? !kok || satirKimligi({ ...kok, m: y.m }) !== r.kimlik : !r.isler.some((x) => adimKimligi(x) === bolOn.isId)) return [];
+      const yazi = `eski yer · ${tezgahKodu.get(y.m) ?? y.m} ${zaman(y.S).slice(6)}–${zaman(y.C).slice(-5)}`;
+      return [<span className="tc-pyq-hayalet tc-pyq-eski tc-pyq-eski-alt" key={`bol-eski-${y.id}`} data-bol-eski={y.id} title={yazi} ref={(el) => { yerYaz(el, (y.S - m.bas) * px, Math.max((y.C - y.S) * px, OKUNUR_EN)); }}>{yazi}</span>];
+    });
+  };
+
   return (
     <div
       className="tc-pyq-tahta" data-olcek={olcek} data-tasima={tasinan ? '' : undefined} data-birlesme={birles ? '' : undefined} ref={kap} onScroll={pencereyiBildir}
@@ -1364,6 +1381,7 @@ export function Tahta(o: TahtaOzellikleri) {
               {r.agacEmir !== undefined && !r.ozet && r.isler.length === 0 && <span className="tc-pyq-agac-bos" data-agac-bos>planda yeri yok</span>}
               {r.notlar?.map((y) => <p className="tc-pyq-not" key={y}>{y}</p>)}
               {hayaletler(r)}
+              {bolEskileri(r)}
               {(r.siparis || r.emirCubugu) && kademeCubugu(r)}
               {hucreGunleri?.has(r.kimlik) && gunHucreleri(r, hucreSirasi, hucreDurakAnahtari)}
               {!r.siparis && !r.emirCubugu && !hucreGunleri?.has(r.kimlik) && !(r.paylar !== undefined && !r.payAlt) && r.isler.map((x) => {
