@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { isTasi } from './atolye-komutlari-kurallar.ts';
 import { calismaIsleri } from './planlama-kurallar.ts';
-import { tasimaHesabi } from './tasima.ts';
+import { KARDES_TEZGAHI, tasimaHesabi } from './tasima.ts';
 
 const GUN = ['pzt', 'sal', 'car', 'per', 'cum', 'cmt', 'paz'];
 const adim = (k: string, tezgahlar: string[], ek: Record<string, unknown> = {}) => ({ k, ad: `OP ${k}`, tezgahlar: tezgahlar.map((id) => ({ id, cevrim: 60, ayar: 0 })), transfer: 1, bag: [], ...ek });
@@ -84,5 +84,18 @@ describe('bölünmüş adımın payını taşıma (3791)', () => {
     assert.deepEqual(r.uyarilar, []);
     assert.deepEqual(r.yazilamaz, []);
     assert.deepEqual(r.yazilacak.map((y) => [y.parca?.no, y.parca?.adet, y.S, y.C]), [[1, 2, 8, 10], [2, 2, 12, 14]]);
+  });
+
+  // Risk N1: sayım tezgâh anahtarıyla paylaştırılır; sayımsız pay sayımı olan kardeşin tezgâhına konursa plan eksik kurulurdu.
+  test('başlamış adımda sayımsız payı sayımı olan kardeşin tezgâhına taşımak reddedilir; başka tezgâh ve aynı tezgâhta saat serbest', () => {
+    const suren = { 'S1.10': { ...op('T1', 8, { act: 1 }), ...pay(1, 2, 2, { elle: 1, sayilan: 1 }) }, 'S1.10~2': { ...op('T2', 8), ...pay(2, 2, 2, { elle: 1 }) } };
+    const c = calisma(suren, { elleBol: bol, gercek: { 'S1.10': { m: 'T1', S: 8, C: null, n: 1 } } });
+    const r = tasimaHesabi(c, 8, { isId: 'S1.10~2', tezgah: 'T1', baslangic: 12 });
+    assert.equal(r.gecerli, false);
+    assert.equal(r.ileti, KARDES_TEZGAHI);
+    assert.equal(tasimaHesabi(c, 8, { isId: 'S1.10~2', tezgah: 'T3', baslangic: 12 }).gecerli, true);
+    assert.equal(tasimaHesabi(c, 8, { isId: 'S1.10~2', tezgah: 'T2', baslangic: 12 }).gecerli, true);
+    // Başlamamış adımda aynı tezgâhta iki pay serbest.
+    assert.equal(tasimaHesabi(calisma(elleOps, { elleBol: bol }), 8, { isId: 'S1.10~2', tezgah: 'T1', baslangic: 12 }).gecerli, true);
   });
 });

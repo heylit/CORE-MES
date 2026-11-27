@@ -16,21 +16,28 @@ const E = 1e-9;
 // adımın elle bölme kaydı (elleBol) belirler, kilit onu değiştirmez. Bu yüzden başka tezgâha taşınan payın kaydı yeni tezgâhla yazılır; rotadaki
 // "paralel böl" payı da elle bölmeye döner (bölme kaydı olmayınca pay kilidi adımı tek parçaya indirirdi, engine.js compile). Kayıt planın
 // pay bilgisinden (ops[..].pay) kurulur: payların sırası ve adedi aynen korunur. Pay değilse null; kurulamazsa neden metni.
+export const KARDES_TEZGAHI = 'Başlamış adımda payı sayımı olan kardeş payın tezgâhına taşıyamazsınız (sayım iki paya yazılır, plan eksik kurulur); başka tezgâh seçin ya da payları birleştirin.';
 export function payBolmesi(calisma: Nesne, g: { isId: string; tezgah: string }): PayBolmesi | string | null {
   const plan = nesne(calisma.plan) ? calisma.plan : null;
   const ops = plan !== null && nesne(plan.ops) ? plan.ops : {};
   const r = ops[g.isId];
   if (!nesne(r) || !nesne(r.pay) || typeof r.pay.asil !== 'string' || typeof r.pay.n !== 'number' || r.pay.n < 2) return null;
   const adim = r.pay.asil;
-  const kayit: { adet: number; m: string }[] = [];
+  const kayit: { adet: number; m: string }[] = [], ids: string[] = [];
   for (let k = 1; k <= r.pay.n; k++) {
     const id = k === 1 ? adim : `${adim}~${String(k)}`, y = ops[id];
     if (!nesne(y) || !nesne(y.pay) || typeof y.pay.adet !== 'number' || typeof y.m !== 'string') return 'Bölünmüş adımın payları planda eksik; sayfayı yenileyin.';
+    ids.push(id);
     kayit.push({ adet: y.pay.adet, m: id === g.isId ? g.tezgah : y.m });
   }
   const eski = nesne(calisma.elleBol) ? calisma.elleBol[adim] : undefined;
   const ayni = Array.isArray(eski) && JSON.stringify(eski) === JSON.stringify(kayit);
   if (String(r.m) !== g.tezgah && (Boolean(r.act) || (typeof r.pay.sayilan === 'number' && r.pay.sayilan > 0))) return 'Başlamış ya da sayımı olan payın tezgâhı bölmede kalır; payı aynı tezgâhta başka saate taşıyın.';
+  // Başlamış adımda motor sayımı tezgâh anahtarıyla paylaştırır (engine.js elleBolCoz): sayımsız payı kardeşin tezgâhına koymak sayımı iki
+  // paya birden verir ve plan o kadar adet eksik kurulur.
+  const gc = nesne(calisma.gercek) ? calisma.gercek[adim] : undefined;
+  const kardesTezgahi = ids.some((id) => id !== g.isId && String((ops[id] as Nesne).m) === g.tezgah);
+  if (String(r.m) !== g.tezgah && nesne(gc) && gc.S != null && gc.C == null && kardesTezgahi) return KARDES_TEZGAHI;
   return ayni ? null : { adim, kayit };
 }
 export function tasimaHesabi(calisma1: Nesne, simdi: number, g: { isId: string; tezgah: string; baslangic: number }): TasimaSonucu {
