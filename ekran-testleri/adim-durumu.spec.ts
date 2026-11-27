@@ -8,7 +8,10 @@ test.use({ hesap: 'ornek.planlama' });
 const emriAc = async (page: Page, ac: (yol: string) => Promise<void>): Promise<void> => {
   await ac('/adim-durumu');
   await page.getByRole('table').getByRole('button', { name: /^\S+, OP \d+/ }).first().click();
-  await page.getByRole('complementary', { name: 'Adım ayrıntısı' }).getByRole('link', { name: 'Emri aç' }).click();
+  const panel = page.getByRole('complementary', { name: 'Adım ayrıntısı' });
+  // "Bu OP'ye özel" bölümü panel açıldıktan sonra yüklenir ve "Emri aç"ı aşağı iter; yüklenirken basılırsa tık kayar, adres değişmez.
+  await expect(panel.getByRole('region', { name: 'Bu OP\'ye özel' }).getByText('Yükleniyor…')).toHaveCount(0);
+  await panel.getByRole('link', { name: 'Emri aç' }).click();
   await expect(page).toHaveURL(/emir=\d+/);
 };
 
